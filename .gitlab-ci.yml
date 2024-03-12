@@ -1,0 +1,27 @@
+include:
+  - project: okmeter/okmeter-common-ci
+    file: /variables.yml
+  - project: okmeter/okmeter-common-ci
+    file: /onprem.yml
+
+variables:
+  BUNDLE_FINAL_REPO: registry.okmeter.ru/okmeter/okmeter-prometheus
+
+stages:
+  - build
+
+build:
+  stage: build
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "pipeline"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  tags:
+    - okmeter-runner
+  script:
+    - source "$(trdl use werf ${WERF_VER})"
+    - source <(werf ci-env gitlab --verbose)
+    - werf build

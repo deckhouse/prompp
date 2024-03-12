@@ -1,0 +1,9 @@
+project: okmeter-prometheus
+configVersion: 1
+deploy:
+  helmRelease: "[[ project ]]-[[ env ]]"
+
+---
+image: prometheus
+dockerfile: op.Dockerfile
+
