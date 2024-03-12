@@ -1,93 +1,191 @@
-# Okmeter Prometheus
+<h1 align="center" style="border-bottom: none">
+    <a href="//prometheus.io" target="_blank"><img alt="Prometheus" src="/documentation/images/prometheus-logo.svg"></a><br>Prometheus
+</h1>
 
+<p align="center">Visit <a href="//prometheus.io" target="_blank">prometheus.io</a> for the full documentation,
+examples and guides.</p>
 
+<div align="center">
 
-## Getting started
+[![CI](https://github.com/prometheus/prometheus/actions/workflows/ci.yml/badge.svg)](https://github.com/prometheus/prometheus/actions/workflows/ci.yml)
+[![Docker Repository on Quay](https://quay.io/repository/prometheus/prometheus/status)][quay]
+[![Docker Pulls](https://img.shields.io/docker/pulls/prom/prometheus.svg?maxAge=604800)][hub]
+[![Go Report Card](https://goreportcard.com/badge/github.com/prometheus/prometheus)](https://goreportcard.com/report/github.com/prometheus/prometheus)
+[![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/486/badge)](https://bestpractices.coreinfrastructure.org/projects/486)
+[![Gitpod ready-to-code](https://img.shields.io/badge/Gitpod-ready--to--code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/prometheus/prometheus)
+[![Fuzzing Status](https://oss-fuzz-build-logs.storage.googleapis.com/badges/prometheus.svg)](https://bugs.chromium.org/p/oss-fuzz/issues/list?sort=-opened&can=1&q=proj:prometheus)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/prometheus/prometheus/badge)](https://securityscorecards.dev/viewer/?uri=github.com/prometheus/prometheus)
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+</div>
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+Prometheus, a [Cloud Native Computing Foundation](https://cncf.io/) project, is a systems and service monitoring system. It collects metrics
+from configured targets at given intervals, evaluates rule expressions,
+displays the results, and can trigger alerts when specified conditions are observed.
 
-## Add your files
+The features that distinguish Prometheus from other metrics and monitoring systems are:
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+* A **multi-dimensional** data model (time series defined by metric name and set of key/value dimensions)
+* PromQL, a **powerful and flexible query language** to leverage this dimensionality
+* No dependency on distributed storage; **single server nodes are autonomous**
+* An HTTP **pull model** for time series collection
+* **Pushing time series** is supported via an intermediary gateway for batch jobs
+* Targets are discovered via **service discovery** or **static configuration**
+* Multiple modes of **graphing and dashboarding support**
+* Support for hierarchical and horizontal **federation**
 
+## Architecture overview
+
+![Architecture overview](documentation/images/architecture.svg)
+
+## Install
+
+There are various ways of installing Prometheus.
+
+### Precompiled binaries
+
+Precompiled binaries for released versions are available in the
+[*download* section](https://prometheus.io/download/)
+on [prometheus.io](https://prometheus.io). Using the latest production release binary
+is the recommended way of installing Prometheus.
+See the [Installing](https://prometheus.io/docs/introduction/install/)
+chapter in the documentation for all the details.
+
+### Docker images
+
+Docker images are available on [Quay.io](https://quay.io/repository/prometheus/prometheus) or [Docker Hub](https://hub.docker.com/r/prom/prometheus/).
+
+You can launch a Prometheus container for trying it out with
+
+```bash
+docker run --name prometheus -d -p 127.0.0.1:9090:9090 prom/prometheus
 ```
-cd existing_repo
-git remote add origin https://fox.flant.com/okmeter/okmeter-prometheus.git
-git branch -M main
-git push -uf origin main
+
+Prometheus will now be reachable at <http://localhost:9090/>.
+
+### Building from source
+
+To build Prometheus from source code, You need:
+
+* Go [version 1.17 or greater](https://golang.org/doc/install).
+* NodeJS [version 16 or greater](https://nodejs.org/).
+* npm [version 7 or greater](https://www.npmjs.com/).
+
+Start by cloning the repository:
+
+```bash
+git clone https://github.com/prometheus/prometheus.git
+cd prometheus
 ```
 
-## Integrate with your tools
+You can use the `go` tool to build and install the `prometheus`
+and `promtool` binaries into your `GOPATH`:
 
-- [ ] [Set up project integrations](https://fox.flant.com/okmeter/okmeter-prometheus/-/settings/integrations)
+```bash
+GO111MODULE=on go install github.com/prometheus/prometheus/cmd/...
+prometheus --config.file=your_config.yml
+```
 
-## Collaborate with your team
+*However*, when using `go install` to build Prometheus, Prometheus will expect to be able to
+read its web assets from local filesystem directories under `web/ui/static` and
+`web/ui/templates`. In order for these assets to be found, you will have to run Prometheus
+from the root of the cloned repository. Note also that these directories do not include the
+React UI unless it has been built explicitly using `make assets` or `make build`.
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+An example of the above configuration file can be found [here.](https://github.com/prometheus/prometheus/blob/main/documentation/examples/prometheus.yml)
 
-## Test and Deploy
+You can also build using `make build`, which will compile in the web assets so that
+Prometheus can be run from anywhere:
 
-Use the built-in continuous integration in GitLab.
+```bash
+make build
+./prometheus --config.file=your_config.yml
+```
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+The Makefile provides several targets:
 
-***
+* *build*: build the `prometheus` and `promtool` binaries (includes building and compiling in web assets)
+* *test*: run the tests
+* *test-short*: run the short tests
+* *format*: format the source code
+* *vet*: check the source code for common errors
+* *assets*: build the React UI
 
-# Editing this README
+### Service discovery plugins
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+Prometheus is bundled with many service discovery plugins.
+When building Prometheus from source, you can edit the [plugins.yml](./plugins.yml)
+file to disable some service discoveries. The file is a yaml-formated list of go
+import path that will be built into the Prometheus binary.
 
-## Suggestions for a good README
+After you have changed the file, you
+need to run `make build` again.
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+If you are using another method to compile Prometheus, `make plugins` will
+generate the plugins file accordingly.
 
-## Name
-Choose a self-explaining name for your project.
+If you add out-of-tree plugins, which we do not endorse at the moment,
+additional steps might be needed to adjust the `go.mod` and `go.sum` files. As
+always, be extra careful when loading third party code.
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+### Building the Docker image
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+The `make docker` target is designed for use in our CI system.
+You can build a docker image locally with the following commands:
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+```bash
+make promu
+promu crossbuild -p linux/amd64
+make npm_licenses
+make common-docker-amd64
+```
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+## Using Prometheus as a Go Library
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+### Remote Write
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+We are publishing our Remote Write protobuf independently at
+[buf.build](https://buf.build/prometheus/prometheus/assets).
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+You can use that as a library:
+
+```shell
+go get go.buf.build/protocolbuffers/go/prometheus/prometheus
+```
+
+This is experimental.
+
+### Prometheus code base
+
+In order to comply with [go mod](https://go.dev/ref/mod#versions) rules,
+Prometheus release number do not exactly match Go module releases. For the
+Prometheus v2.y.z releases, we are publishing equivalent v0.y.z tags.
+
+Therefore, a user that would want to use Prometheus v2.35.0 as a library could do:
+
+```shell
+go get github.com/prometheus/prometheus@v0.35.0
+```
+
+This solution makes it clear that we might break our internal Go APIs between
+minor user-facing releases, as [breaking changes are allowed in major version
+zero](https://semver.org/#spec-item-4).
+
+## React UI Development
+
+For more information on building, running, and developing on the React-based UI, see the React app's [README.md](web/ui/README.md).
+
+## More information
+
+* Godoc documentation is available via [pkg.go.dev](https://pkg.go.dev/github.com/prometheus/prometheus). Due to peculiarities of Go Modules, v2.x.y will be displayed as v0.x.y.
+* See the [Community page](https://prometheus.io/community) for how to reach the Prometheus developers and users on various communication channels.
 
 ## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+Refer to [CONTRIBUTING.md](https://github.com/prometheus/prometheus/blob/main/CONTRIBUTING.md)
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+Apache License 2.0, see [LICENSE](https://github.com/prometheus/prometheus/blob/main/LICENSE).
+
+[hub]: https://hub.docker.com/r/prom/prometheus/
+[quay]: https://quay.io/repository/prometheus/prometheus
