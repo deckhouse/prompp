@@ -134,13 +134,6 @@ func newScrapePool(
 		bufferBatches:  newbatchesPool(),
 	}
 	sp.newLoop = func(opts scrapeLoopOptions) loop {
-		// Update the targets retrieval function for metadata to a new scrape cache.
-		// cache := opts.cache
-		// if cache == nil {
-		// 	cache = newScrapeCache(metrics)
-		// }
-		// opts.target.SetMetadataStore(cache)
-
 		// OP_CHANGES.md: override sample limit with annotation
 		limit := opts.target.SampleLimit()
 		if limit != 0 {
@@ -769,10 +762,6 @@ func newScrapeLoop(
 	if buffers == nil {
 		buffers = pool.New(1e3, 1e6, 3, func(sz int) interface{} { return make([]byte, 0, sz) })
 	}
-	// if cache == nil {
-	// 	cache = newScrapeCache(metrics)
-	// }
-	// cache := newScrapeCache(metrics)
 
 	appenderCtx := ctx
 
@@ -1140,15 +1129,6 @@ loop:
 				continue
 			}
 		}
-
-		// if ctMs := p.CreatedTimestamp(); sl.enableCTZeroIngestion && ctMs != nil {
-		// 	ref, err = app.AppendCTZeroSample(ref, lset, t, *ctMs)
-		// 	if err != nil && !errors.Is(err, storage.ErrOutOfOrderCT) { // OOO is a common case, ignoring completely for now.
-		// 		// CT is an experimental feature. For now, we don't need to fail the
-		// 		// scrape on errors updating the created timestamp, log debug.
-		// 		level.Debug(sl.l).Log("msg", "Error when appending CT in scrape loop", "series", string(met), "ct", *ctMs, "t", t, "err", err)
-		// 	}
-		// }
 	}
 
 	if batch.IsEmpty() {
@@ -1159,7 +1139,7 @@ loop:
 
 	batched := batch.Len()
 	if err = sl.receiver.AppendTimeSeries(
-		sl.ctx,
+		sl.appenderCtx,
 		batch,
 		sl.metricLimits,
 		sl.scraper.stalenansState(),
@@ -1169,20 +1149,6 @@ loop:
 		return
 	}
 	added = batched
-
-	// if err == nil {
-	// 	sl.cache.forEachStale(func(lset labels.Labels) bool {
-	// 		// Series no longer exposed, mark it stale.
-	// 		_, err = app.Append(0, lset, defTime, math.Float64frombits(value.StaleNaN))
-	// 		switch {
-	// 		case errors.Is(err, storage.ErrOutOfOrderSample), errors.Is(err, storage.ErrDuplicateSampleForTimestamp):
-	// 			// Do not count these in logging, as this is expected if a target
-	// 			// goes away and comes back again with a new scrape loop.
-	// 			err = nil
-	// 		}
-	// 		return err == nil
-	// 	})
-	// }
 	return
 }
 
@@ -1248,7 +1214,7 @@ func (sl *scrapeLoop) report(
 	}
 
 	if err = sl.receiver.AppendTimeSeries(
-		sl.ctx,
+		sl.appenderCtx,
 		batch,
 		nil,
 		nil,
@@ -1348,330 +1314,3 @@ func TargetFromContext(ctx context.Context) (*Target, bool) {
 	t, ok := ctx.Value(ctxKeyTarget).(*Target)
 	return t, ok
 }
-
-// // Adds samples to the appender, checking the error, and then returns the # of samples added,
-// // whether the caller should continue to process more samples, and any sample or bucket limit errors.
-// func (sl *scrapeLoop) checkAddError(ce *cacheEntry, met []byte, tp *int64, err error, sampleLimitErr, bucketLimitErr *error, appErrs *appendErrors) (bool, error) {
-// 	switch {
-// 	case err == nil:
-// 		// if (tp == nil || sl.trackTimestampsStaleness) && ce != nil {
-// 		// 	sl.cache.trackStaleness(ce.hash, ce.lset)
-// 		// }
-// 		return true, nil
-// 	case errors.Is(err, storage.ErrNotFound):
-// 		return false, storage.ErrNotFound
-// 	case errors.Is(err, storage.ErrOutOfOrderSample):
-// 		appErrs.numOutOfOrder++
-// 		level.Debug(sl.logger).Log("msg", "Out of order sample", "series", string(met))
-// 		sl.metrics.targetScrapeSampleOutOfOrder.Inc()
-// 		return false, nil
-// 	case errors.Is(err, storage.ErrDuplicateSampleForTimestamp):
-// 		appErrs.numDuplicates++
-// 		level.Debug(sl.logger).Log("msg", "Duplicate sample for timestamp", "series", string(met))
-// 		sl.metrics.targetScrapeSampleDuplicate.Inc()
-// 		return false, nil
-// 	case errors.Is(err, storage.ErrOutOfBounds):
-// 		appErrs.numOutOfBounds++
-// 		level.Debug(sl.logger).Log("msg", "Out of bounds metric", "series", string(met))
-// 		sl.metrics.targetScrapeSampleOutOfBounds.Inc()
-// 		return false, nil
-// 	case errors.Is(err, errSampleLimit):
-// 		// Keep on parsing output if we hit the limit, so we report the correct
-// 		// total number of samples scraped.
-// 		*sampleLimitErr = err
-// 		return false, nil
-// 	default:
-// 		return false, err
-// 	}
-// }
-
-// // zeroConfig returns a new scrape config that only contains configuration items
-// // that alter metrics.
-// func zeroConfig(c *config.ScrapeConfig) *config.ScrapeConfig {
-// 	z := *c
-// 	// We zero out the fields that for sure don't affect scrape.
-// 	z.ScrapeInterval = 0
-// 	z.ScrapeTimeout = 0
-// 	z.SampleLimit = 0
-// 	z.HTTPClientConfig = config_util.HTTPClientConfig{}
-// 	return &z
-// }
-
-// // reusableCache compares two scrape config and tells whether the cache is still
-// // valid.
-// func reusableCache(r, l *config.ScrapeConfig) bool {
-// 	if r == nil || l == nil {
-// 		return false
-// 	}
-// 	return reflect.DeepEqual(zeroConfig(r), zeroConfig(l))
-// }
-
-// func (sl *scrapeLoop) getCache() *scrapeCache {
-// 	return sl.cache
-// }
-
-// type appendErrors struct {
-// 	numOutOfOrder         int
-// 	numDuplicates         int
-// 	numOutOfBounds        int
-// 	numExemplarOutOfOrder int
-// }
-
-// // metaEntry holds meta information about a metric.
-// type metaEntry struct {
-// 	metadata.Metadata
-
-// 	lastIter       uint64 // Last scrape iteration the entry was observed at.
-// 	lastIterChange uint64 // Last scrape iteration the entry was changed at.
-// }
-
-// func (m *metaEntry) size() int {
-// 	// The attribute lastIter although part of the struct it is not metadata.
-// 	return len(m.Help) + len(m.Unit) + len(m.Type)
-// }
-
-// type cacheEntry struct {
-// 	ref      storage.SeriesRef
-// 	lastIter uint64
-// 	hash     uint64
-// 	lset     labels.Labels
-// }
-
-// // scrapeCache tracks mappings of exposed metric strings to label sets and
-// // storage references. Additionally, it tracks staleness of series between
-// // scrapes.
-// type scrapeCache struct {
-// 	iter uint64 // Current scrape iteration.
-
-// 	// How many series and metadata entries there were at the last success.
-// 	successfulCount int
-
-// 	// Parsed string to an entry with information about the actual label set
-// 	// and its storage reference.
-// 	series map[string]*cacheEntry
-
-// 	// Cache of dropped metric strings and their iteration. The iteration must
-// 	// be a pointer so we can update it.
-// 	droppedSeries map[string]*uint64
-
-// 	// seriesCur and seriesPrev store the labels of series that were seen
-// 	// in the current and previous scrape.
-// 	// We hold two maps and swap them out to save allocations.
-// 	seriesCur  map[uint64]labels.Labels
-// 	seriesPrev map[uint64]labels.Labels
-
-// 	metaMtx  sync.Mutex
-// 	metadata map[string]*metaEntry
-
-// 	metrics *scrapeMetrics
-// }
-
-// func newScrapeCache(metrics *scrapeMetrics) *scrapeCache {
-// 	return &scrapeCache{
-// 		series:        map[string]*cacheEntry{},
-// 		droppedSeries: map[string]*uint64{},
-// 		seriesCur:     map[uint64]labels.Labels{},
-// 		seriesPrev:    map[uint64]labels.Labels{},
-// 		metadata:      map[string]*metaEntry{},
-// 		metrics:       metrics,
-// 	}
-// }
-
-// func (c *scrapeCache) iterDone(flushCache bool) {
-// 	c.metaMtx.Lock()
-// 	count := len(c.series) + len(c.droppedSeries) + len(c.metadata)
-// 	c.metaMtx.Unlock()
-
-// 	switch {
-// 	case flushCache:
-// 		c.successfulCount = count
-// 	case count > c.successfulCount*2+1000:
-// 		// If a target had varying labels in scrapes that ultimately failed,
-// 		// the caches would grow indefinitely. Force a flush when this happens.
-// 		// We use the heuristic that this is a doubling of the cache size
-// 		// since the last scrape, and allow an additional 1000 in case
-// 		// initial scrapes all fail.
-// 		flushCache = true
-// 		c.metrics.targetScrapeCacheFlushForced.Inc()
-// 	}
-
-// 	if flushCache {
-// 		// All caches may grow over time through series churn
-// 		// or multiple string representations of the same metric. Clean up entries
-// 		// that haven't appeared in the last scrape.
-// 		for s, e := range c.series {
-// 			if c.iter != e.lastIter {
-// 				delete(c.series, s)
-// 			}
-// 		}
-// 		for s, iter := range c.droppedSeries {
-// 			if c.iter != *iter {
-// 				delete(c.droppedSeries, s)
-// 			}
-// 		}
-// 		c.metaMtx.Lock()
-// 		for m, e := range c.metadata {
-// 			// Keep metadata around for 10 scrapes after its metric disappeared.
-// 			if c.iter-e.lastIter > 10 {
-// 				delete(c.metadata, m)
-// 			}
-// 		}
-// 		c.metaMtx.Unlock()
-
-// 		c.iter++
-// 	}
-
-// 	// Swap current and previous series.
-// 	c.seriesPrev, c.seriesCur = c.seriesCur, c.seriesPrev
-
-// 	// We have to delete every single key in the map.
-// 	for k := range c.seriesCur {
-// 		delete(c.seriesCur, k)
-// 	}
-// }
-
-// func (c *scrapeCache) get(met []byte) (*cacheEntry, bool) {
-// 	e, ok := c.series[string(met)]
-// 	if !ok {
-// 		return nil, false
-// 	}
-// 	e.lastIter = c.iter
-// 	return e, true
-// }
-
-// func (c *scrapeCache) addRef(met []byte, ref storage.SeriesRef, lset labels.Labels, hash uint64) {
-// 	if ref == 0 {
-// 		return
-// 	}
-// 	c.series[string(met)] = &cacheEntry{ref: ref, lastIter: c.iter, lset: lset, hash: hash}
-// }
-
-// func (c *scrapeCache) addDropped(met []byte) {
-// 	iter := c.iter
-// 	c.droppedSeries[string(met)] = &iter
-// }
-
-// func (c *scrapeCache) getDropped(met []byte) bool {
-// 	iterp, ok := c.droppedSeries[string(met)]
-// 	if ok {
-// 		*iterp = c.iter
-// 	}
-// 	return ok
-// }
-
-// func (c *scrapeCache) trackStaleness(hash uint64, lset labels.Labels) {
-// 	c.seriesCur[hash] = lset
-// }
-
-// func (c *scrapeCache) forEachStale(f func(labels.Labels) bool) {
-// 	for h, lset := range c.seriesPrev {
-// 		if _, ok := c.seriesCur[h]; !ok {
-// 			if !f(lset) {
-// 				break
-// 			}
-// 		}
-// 	}
-// }
-
-// func (c *scrapeCache) setType(metric []byte, t model.MetricType) {
-// 	c.metaMtx.Lock()
-
-// 	e, ok := c.metadata[string(metric)]
-// 	if !ok {
-// 		e = &metaEntry{Metadata: metadata.Metadata{Type: model.MetricTypeUnknown}}
-// 		c.metadata[string(metric)] = e
-// 	}
-// 	if e.Type != t {
-// 		e.Type = t
-// 		e.lastIterChange = c.iter
-// 	}
-// 	e.lastIter = c.iter
-
-// 	c.metaMtx.Unlock()
-// }
-
-// func (c *scrapeCache) setHelp(metric, help []byte) {
-// 	c.metaMtx.Lock()
-
-// 	e, ok := c.metadata[string(metric)]
-// 	if !ok {
-// 		e = &metaEntry{Metadata: metadata.Metadata{Type: model.MetricTypeUnknown}}
-// 		c.metadata[string(metric)] = e
-// 	}
-// 	if e.Help != string(help) {
-// 		e.Help = string(help)
-// 		e.lastIterChange = c.iter
-// 	}
-// 	e.lastIter = c.iter
-
-// 	c.metaMtx.Unlock()
-// }
-
-// func (c *scrapeCache) setUnit(metric, unit []byte) {
-// 	c.metaMtx.Lock()
-
-// 	e, ok := c.metadata[string(metric)]
-// 	if !ok {
-// 		e = &metaEntry{Metadata: metadata.Metadata{Type: model.MetricTypeUnknown}}
-// 		c.metadata[string(metric)] = e
-// 	}
-// 	if e.Unit != string(unit) {
-// 		e.Unit = string(unit)
-// 		e.lastIterChange = c.iter
-// 	}
-// 	e.lastIter = c.iter
-
-// 	c.metaMtx.Unlock()
-// }
-
-// func (c *scrapeCache) GetMetadata(metric string) (MetricMetadata, bool) {
-// 	c.metaMtx.Lock()
-// 	defer c.metaMtx.Unlock()
-
-// 	m, ok := c.metadata[metric]
-// 	if !ok {
-// 		return MetricMetadata{}, false
-// 	}
-// 	return MetricMetadata{
-// 		Metric: metric,
-// 		Type:   m.Type,
-// 		Help:   m.Help,
-// 		Unit:   m.Unit,
-// 	}, true
-// }
-
-// func (c *scrapeCache) ListMetadata() []MetricMetadata {
-// 	c.metaMtx.Lock()
-// 	defer c.metaMtx.Unlock()
-
-// 	res := make([]MetricMetadata, 0, len(c.metadata))
-
-// 	for m, e := range c.metadata {
-// 		res = append(res, MetricMetadata{
-// 			Metric: m,
-// 			Type:   e.Type,
-// 			Help:   e.Help,
-// 			Unit:   e.Unit,
-// 		})
-// 	}
-// 	return res
-// }
-
-// // MetadataSize returns the size of the metadata cache.
-// func (c *scrapeCache) SizeMetadata() (s int) {
-// 	c.metaMtx.Lock()
-// 	defer c.metaMtx.Unlock()
-// 	for _, e := range c.metadata {
-// 		s += e.size()
-// 	}
-
-// 	return s
-// }
-
-// // MetadataLen returns the number of metadata entries in the cache.
-// func (c *scrapeCache) LengthMetadata() int {
-// 	c.metaMtx.Lock()
-// 	defer c.metaMtx.Unlock()
-
-// 	return len(c.metadata)
-// }
