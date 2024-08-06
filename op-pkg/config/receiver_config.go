@@ -21,11 +21,25 @@ func (c *RemoteWriteReceiverConfig) UnmarshalYAML(unmarshal func(interface{}) er
 		return err
 	}
 
-	if len(c.Configs) != 0 && c.NumberOfShards == 0 {
-		c.NumberOfShards = 2
+	return c.Validate()
+}
+
+// Copy return copy RemoteWriteReceiverConfig.
+func (c *RemoteWriteReceiverConfig) Copy() *RemoteWriteReceiverConfig {
+	newCfg := &RemoteWriteReceiverConfig{
+		NumberOfShards: c.NumberOfShards,
+		Configs:        make([]*relabeler.InputRelabelerConfig, 0, len(c.Configs)),
+	}
+	for _, icfg := range c.Configs {
+		newCfg.Configs = append(newCfg.Configs, icfg.Copy())
 	}
 
-	return c.Validate()
+	return newCfg
+}
+
+// IsEmpty check config is empty.
+func (c *RemoteWriteReceiverConfig) IsEmpty() bool {
+	return c == nil || len(c.Configs) == 0
 }
 
 func (c *RemoteWriteReceiverConfig) Validate() error {
@@ -35,6 +49,10 @@ func (c *RemoteWriteReceiverConfig) Validate() error {
 			return fmt.Errorf("found multiple input relabeler configs with job name %q", rcfg.Name)
 		}
 		rNames[rcfg.Name] = struct{}{}
+	}
+
+	if len(c.Configs) != 0 && c.NumberOfShards == 0 {
+		c.NumberOfShards = 2
 	}
 
 	return nil

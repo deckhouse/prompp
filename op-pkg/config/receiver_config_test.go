@@ -128,3 +128,40 @@ remote_write_receivers:
 	err := yaml.Unmarshal([]byte(raw), s.cfg)
 	s.Require().Error(err)
 }
+
+func (s *RemoteWriteReceiverConfigsSuite) TestRemoteWriteReceiverConfigCopy() {
+	raw := `number_of_shards: 1
+remote_write_receivers:
+- name: some_remote_write_receiver_1
+  relabel_configs:
+  - source_labels: [__name__]
+    separator: ;
+    regex: .*
+    replacement: $1
+    action: keep
+`
+
+	err := yaml.Unmarshal([]byte(raw), s.cfg)
+	s.Require().NoError(err)
+
+	newCfg := s.cfg.Copy()
+	copyCfg := s.cfg.Copy()
+	copyCfg.Configs[0].Name = "boo"
+	out, err := yaml.Marshal(newCfg)
+	s.Require().NoError(err)
+	s.Require().Equal(raw, string(out))
+
+	newCfg = s.cfg.Copy()
+	copyCfg = s.cfg.Copy()
+	copyCfg.Configs[0].RelabelConfigs[0].Replacement = "boo"
+	out, err = yaml.Marshal(newCfg)
+	s.Require().NoError(err)
+	s.Require().Equal(raw, string(out))
+
+	newCfg = s.cfg.Copy()
+	copyCfg = s.cfg.Copy()
+	copyCfg.Configs[0].RelabelConfigs[0].SourceLabels[0] = "boo"
+	out, err = yaml.Marshal(newCfg)
+	s.Require().NoError(err)
+	s.Require().Equal(raw, string(out))
+}

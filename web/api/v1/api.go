@@ -43,10 +43,11 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/metadata"
 	"github.com/prometheus/prometheus/model/timestamp"
+	"github.com/prometheus/prometheus/op-pkg/handler"
+	"github.com/prometheus/prometheus/op-pkg/scrape"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/rules"
-	"github.com/prometheus/prometheus/scrape"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/prometheus/prometheus/tsdb"
@@ -221,7 +222,8 @@ type API struct {
 	remoteReadHandler  http.Handler
 	otlpWriteHandler   http.Handler
 
-	codecs []Codec
+	codecs               []Codec
+	remoteWriteHandlerV2 *handler.RemoteWriteHandler
 }
 
 // NewAPI returns an initialized API type.
@@ -252,6 +254,7 @@ func NewAPI(
 	gatherer prometheus.Gatherer,
 	registerer prometheus.Registerer,
 	statsRenderer StatsRenderer,
+	receiver handler.Receiver,
 	rwEnabled bool,
 	otlpEnabled bool,
 ) *API {
@@ -296,6 +299,11 @@ func NewAPI(
 
 	if rwEnabled {
 		a.remoteWriteHandler = remote.NewWriteHandler(logger, registerer, ap)
+		a.remoteWriteHandlerV2 = handler.NewRemoteWriteHandler(
+			receiver,
+			logger,
+			registerer,
+		)
 	}
 	if otlpEnabled {
 		a.otlpWriteHandler = remote.NewOTLPWriteHandler(logger, ap)
@@ -393,6 +401,9 @@ func (api *API) Register(r *route.Router) {
 	r.Post("/read", api.ready(api.remoteRead))
 	r.Post("/write", api.ready(api.remoteWrite))
 	r.Post("/otlp/v1/metrics", api.ready(api.otlpWrite))
+
+	// RemoteWriteHandler
+	r.Post("/remote_write/:relabeler_id", api.ready(api.remoteWriteV2))
 
 	r.Get("/alerts", wrapAgent(api.alerts))
 	r.Get("/rules", wrapAgent(api.rules))
@@ -1618,6 +1629,14 @@ func (api *API) remoteRead(w http.ResponseWriter, r *http.Request) {
 func (api *API) remoteWrite(w http.ResponseWriter, r *http.Request) {
 	if api.remoteWriteHandler != nil {
 		api.remoteWriteHandler.ServeHTTP(w, r)
+	} else {
+		http.Error(w, "remote write receiver needs to be enabled with --web.enable-remote-write-receiver", http.StatusNotFound)
+	}
+}
+
+func (api *API) remoteWriteV2(w http.ResponseWriter, r *http.Request) {
+	if api.remoteWriteHandlerV2 != nil {
+		api.remoteWriteHandlerV2.ServeHTTP(w, r)
 	} else {
 		http.Error(w, "remote write receiver needs to be enabled with --web.enable-remote-write-receiver", http.StatusNotFound)
 	}

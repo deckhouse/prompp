@@ -14,6 +14,13 @@ global:
     monitor: codelab
     foo: bar
 
+scrape_configs:
+  - job_name: service-x
+    metric_relabel_configs:
+      - source_labels: [job]
+        regex: (.*)some-[regex]
+        action: drop
+
 remote_write:
   - destinations:
       - name: dname

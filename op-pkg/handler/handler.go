@@ -1,25 +1,27 @@
 // Copyright OpCore
 
-package web
+package handler
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
-	"github.com/jonboulle/clockwork"
 	"github.com/odarix/odarix-core-go/relabeler"
 	"github.com/odarix/odarix-core-go/util"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/common/route"
 	"go.uber.org/atomic"
 )
 
 var successfulMessage = []byte("ok")
 
 type Receiver interface {
-	Append(ctx context.Context, data relabeler.ProtoData, relabelerID string) error
+	AppendProtobuf(ctx context.Context, data relabeler.ProtobufData, relabelerID string) error
+	RelabelerIDIsExist(relabelerID string) bool
 }
 
 // RemoteWriteHandler service for remote write Prometheus.
@@ -27,7 +29,6 @@ type RemoteWriteHandler struct {
 	receiver Receiver
 	logger   log.Logger
 	stop     *atomic.Bool
-	endpoint string
 	// stats
 	requests *prometheus.CounterVec
 }
@@ -35,18 +36,15 @@ type RemoteWriteHandler struct {
 // NewRemoteWriteHandler init new RemoteWriteHandler.
 func NewRemoteWriteHandler(
 	receiver Receiver,
-	clock clockwork.Clock,
 	logger log.Logger,
 	registerer prometheus.Registerer,
-	name string,
 ) *RemoteWriteHandler {
 	factory := util.NewUnconflictRegisterer(registerer)
 	rwh := &RemoteWriteHandler{
 		receiver: receiver,
 		stop:     new(atomic.Bool),
-		logger:   log.WithPrefix(logger, "remote_write_receiver", name),
-		endpoint: name,
-
+		logger:   log.With(logger, "component", "remote_write_handler"),
+		// stats
 		requests: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "remote_request",
@@ -56,24 +54,28 @@ func NewRemoteWriteHandler(
 		),
 	}
 
-	level.Info(rwh.logger).Log("msg", "init")
+	level.Info(rwh.logger).Log("msg", "created")
 
 	return rwh
-}
-
-// Endpoint return current endpoint.
-func (rwh *RemoteWriteHandler) Endpoint() string {
-	return rwh.endpoint
 }
 
 // ServeHTTP http handler.
 func (rwh *RemoteWriteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if rwh.stop.Load() {
-		http.Error(w, "service is stopped", http.StatusBadRequest)
+		w.WriteHeader(http.StatusServiceUnavailable)
+		fmt.Fprintf(w, "Service Unavailable")
 		return
 	}
 
-	delivered, err := rwh.decodeAndSend(r)
+	ctx := r.Context()
+	relabelerID := route.Param(ctx, "relabeler_id")
+	if ok := rwh.receiver.RelabelerIDIsExist(relabelerID); !ok {
+		level.Error(rwh.logger).Log("msg", "relabeler id not found", "relabeler_id", relabelerID)
+		http.NotFound(w, r)
+		return
+	}
+
+	delivered, err := rwh.decodeAndSend(r, relabelerID)
 	if err != nil {
 		if !errors.Is(err, relabeler.ErrShutdown) {
 			level.Error(rwh.logger).Log("msg", "failed decode request", "err", err)
@@ -98,14 +100,15 @@ func (rwh *RemoteWriteHandler) Shutdown() {
 }
 
 // decodeAndSend decode snappy request and send to server.
-func (rwh *RemoteWriteHandler) decodeAndSend(r *http.Request) (bool, error) {
+func (rwh *RemoteWriteHandler) decodeAndSend(r *http.Request, relabelerID string) (bool, error) {
 	bs := acquireBufferSnappy()
 
 	if err := bs.decodeFrom(r.Body); err != nil {
+		bs.Destroy()
 		return false, err
 	}
 
-	if err := rwh.receiver.Append(r.Context(), bs, rwh.endpoint); err != nil {
+	if err := rwh.receiver.AppendProtobuf(r.Context(), bs, relabelerID); err != nil {
 		return false, err
 	}
 

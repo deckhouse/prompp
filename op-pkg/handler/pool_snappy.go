@@ -1,6 +1,6 @@
 // Copyright OpCore
 
-package web
+package handler
 
 import (
 	"encoding/binary"

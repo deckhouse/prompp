@@ -3,15 +3,26 @@
 package config
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
 	"fmt"
 
+	"github.com/odarix/odarix-core-go/cppbridge"
+	"github.com/odarix/odarix-core-go/relabeler"
 	"github.com/prometheus/common/config"
+	"gopkg.in/yaml.v2"
+
+	"github.com/prometheus/prometheus/model/relabel"
+	op_config "github.com/prometheus/prometheus/op-pkg/config"
 )
 
 const (
 	PrometheusProtocol = "prometheus"
 	ProtocolOdarix     = "odarix"
+	ScrapePrefix       = "scrape_"
+	// TransparentRelabeler relabeler without ralabeling.
+	TransparentRelabeler = "transparent_relabeler"
 )
 
 var (
@@ -22,6 +33,47 @@ var (
 	}
 	emptyTLSConfig = config.TLSConfig{}
 )
+
+func (c *Config) GetReceiverConfig() (*op_config.RemoteWriteReceiverConfig, error) {
+	scfgs, err := c.GetScrapeConfigs()
+	if err != nil {
+		return nil, err
+	}
+	rcCfg := c.ReceiverConfig.Copy()
+
+	for _, scfg := range scfgs {
+		oprCfgs, err := convertingRelabelConfigs(scfg.MetricRelabelConfigs)
+		if err != nil {
+			return nil, err
+		}
+
+		rcCfg.Configs = append(
+			rcCfg.Configs,
+			&relabeler.InputRelabelerConfig{Name: ScrapePrefix + scfg.JobName, RelabelConfigs: oprCfgs},
+		)
+	}
+
+	rcCfg.Configs = append(
+		rcCfg.Configs,
+		&relabeler.InputRelabelerConfig{Name: TransparentRelabeler},
+	)
+
+	return rcCfg, nil
+}
+
+func convertingRelabelConfigs(rCfgs []*relabel.Config) ([]*cppbridge.RelabelConfig, error) {
+	var oprCfgs []*cppbridge.RelabelConfig
+	raw, err := yaml.Marshal(rCfgs)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = yaml.Unmarshal(raw, &oprCfgs); err != nil {
+		return nil, err
+	}
+
+	return oprCfgs, nil
+}
 
 // RemoteWriteConfig is the configuration for writing to remote storage.
 type OpRemoteWriteConfig struct {
@@ -57,7 +109,32 @@ func (c *OpRemoteWriteConfig) UnmarshalYAML(unmarshal func(interface{}) error) e
 // Validate validates OpRemoteWriteConfig, but also fills relevant default values from global config if needed.
 func (c *OpRemoteWriteConfig) Validate() error {
 	if len(c.Destinations) == 0 {
-		return c.RemoteWriteConfig.Validate()
+		// if Destinations == 0, validate RemoteWriteConfig and
+		// create one Destinations from RemoteWriteConfig
+		if err := c.RemoteWriteConfig.Validate(); err != nil {
+			return err
+		}
+		name := c.RemoteWriteConfig.Name
+		if name == "" {
+			hash, err := toHash(c.RemoteWriteConfig)
+			if err != nil {
+				return err
+			}
+			name = hash[:6]
+		}
+		c.Destinations = []*OpDestinationConfig{
+			{
+				Name:             name,
+				URL:              c.RemoteWriteConfig.URL,
+				HTTPClientConfig: c.RemoteWriteConfig.HTTPClientConfig,
+			},
+		}
+	}
+
+	for _, d := range c.Destinations {
+		if err := d.Validate(); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -113,7 +190,7 @@ func (c *OpDestinationConfig) UnmarshalYAML(unmarshal func(interface{}) error) e
 		return err
 	}
 
-	return c.Validate()
+	return nil
 }
 
 // Validate validates OpDestinationConfig, but also fills relevant default values from global config if needed.
@@ -138,4 +215,14 @@ func (c *OpDestinationConfig) Validate() error {
 	}
 
 	return nil
+}
+
+// Used for hashing configs and diff'ing hashes in ApplyConfig.
+func toHash(data interface{}) (string, error) {
+	bytes, err := yaml.Marshal(data)
+	if err != nil {
+		return "", err
+	}
+	hash := md5.Sum(bytes)
+	return hex.EncodeToString(hash[:]), nil
 }

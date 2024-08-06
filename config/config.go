@@ -381,7 +381,12 @@ func (c *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		}
 		rrNames[rrcfg.Name] = struct{}{}
 	}
-	return nil
+
+	if c.ReceiverConfig.IsEmpty() {
+		return nil
+	}
+
+	return c.ReceiverConfig.Validate()
 }
 
 // GlobalConfig configures values that are used across other configuration
