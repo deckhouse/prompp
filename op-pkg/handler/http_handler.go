@@ -3,7 +3,6 @@
 package handler
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -18,11 +17,6 @@ import (
 )
 
 var successfulMessage = []byte("ok")
-
-type Receiver interface {
-	AppendProtobuf(ctx context.Context, data relabeler.ProtobufData, relabelerID string) error
-	RelabelerIDIsExist(relabelerID string) bool
-}
 
 // RemoteWriteHandler service for remote write Prometheus.
 type RemoteWriteHandler struct {

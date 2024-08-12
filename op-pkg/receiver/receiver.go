@@ -148,6 +148,15 @@ func (rr *Receiver) AppendTimeSeries(
 	)
 }
 
+// AppendHashdex append incoming Hashdex data to relabeling.
+func (rr *Receiver) AppendHashdex(ctx context.Context, hashdex cppbridge.ShardedData, relabelerID string) error {
+	if rr.haTracker.IsDrop(hashdex.Cluster(), hashdex.Replica()) {
+		return nil
+	}
+	incomingData := &relabeler.IncomingData{Hashdex: hashdex}
+	return rr.managerRelabeler.Append(ctx, incomingData, nil, relabelerID)
+}
+
 // ApplyConfig update config.
 func (rr *Receiver) ApplyConfig(cfg *prom_config.Config) error {
 	rCfg, err := cfg.GetReceiverConfig()
