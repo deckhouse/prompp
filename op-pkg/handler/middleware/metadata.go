@@ -7,21 +7,32 @@ import (
 	"strconv"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/common/route"
 
 	"github.com/prometheus/prometheus/op-pkg/handler/model"
 )
 
+// metadataCtxKey key for Metadata in context.
 type metadataCtxKey struct{}
 
+// ContextWithMetadata append to context Metadata.
 func ContextWithMetadata(ctx context.Context, metadata model.Metadata) context.Context {
 	return context.WithValue(ctx, metadataCtxKey{}, metadata)
 }
 
+// MetadataFromContext extract from context Metadata.
 func MetadataFromContext(ctx context.Context) model.Metadata {
 	return ctx.Value(metadataCtxKey{}).(model.Metadata)
 }
 
-func ResolveMetadata(next http.HandlerFunc) http.HandlerFunc {
+// MetadataValidator validate metadata.
+type MetadataValidator func(metadata *model.Metadata) bool
+
+// ResolveMetadata middleware for extract metadata from request.
+func ResolveMetadata(
+	metaValidator MetadataValidator,
+	next http.HandlerFunc,
+) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		agentUUIDString := request.Header.Get("X-Agent-UUID")
 		if agentUUIDString == "" {
@@ -109,6 +120,8 @@ func ResolveMetadata(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		ctx := request.Context()
+		relabelerID := route.Param(ctx, "relabeler_id")
 		metadata := model.Metadata{
 			BlockID:                blockID,
 			ShardID:                uint16(shardID),
@@ -119,8 +132,14 @@ func ResolveMetadata(next http.HandlerFunc) http.HandlerFunc {
 			AgentHostname:          agentHostname,
 			AgentUUID:              agentUUID,
 			MediaType:              mediaType,
+			RelabelerID:            relabelerID,
 		}
 
-		next(writer, request.WithContext(ContextWithMetadata(request.Context(), metadata)))
+		if !metaValidator(&metadata) {
+			writer.WriteHeader(http.StatusPreconditionFailed)
+			return
+		}
+
+		next(writer, request.WithContext(ContextWithMetadata(ctx, metadata)))
 	}
 }

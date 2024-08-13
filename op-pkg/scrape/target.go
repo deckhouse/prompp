@@ -466,7 +466,6 @@ func TargetsFromGroup(tg *targetgroup.Group, cfg *config.ScrapeConfig, noDefault
 		if err != nil {
 			failures = append(failures, fmt.Errorf("instance %d in group %s: %w", i, tg, err))
 		}
-		fmt.Println("TargetsFromGroup", lset)
 		if !lset.IsEmpty() || !origLabels.IsEmpty() {
 			targets = append(targets, NewTarget(lset, origLabels, cfg.Params))
 		}

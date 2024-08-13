@@ -224,6 +224,7 @@ type API struct {
 
 	codecs               []Codec
 	remoteWriteHandlerV2 *handler.RemoteWriteHandler
+	opHandler            *handler.OpHandler
 }
 
 // NewAPI returns an initialized API type.
@@ -300,6 +301,11 @@ func NewAPI(
 	if rwEnabled {
 		a.remoteWriteHandler = remote.NewWriteHandler(logger, registerer, ap)
 		a.remoteWriteHandlerV2 = handler.NewRemoteWriteHandler(
+			receiver,
+			logger,
+			registerer,
+		)
+		a.opHandler = handler.NewOpHandler(
 			receiver,
 			logger,
 			registerer,
@@ -404,6 +410,10 @@ func (api *API) Register(r *route.Router) {
 
 	// RemoteWriteHandler
 	r.Post("/remote_write/:relabeler_id", api.ready(api.remoteWriteV2))
+
+	// WebsocketHandler
+	r.Get("/websocket/:relabeler_id", api.ready(api.remoteWriteWebsocket))
+	r.Post("/refill/:relabeler_id", api.ready(api.remoteWriteRefill))
 
 	r.Get("/alerts", wrapAgent(api.alerts))
 	r.Get("/rules", wrapAgent(api.rules))
@@ -1637,6 +1647,22 @@ func (api *API) remoteWrite(w http.ResponseWriter, r *http.Request) {
 func (api *API) remoteWriteV2(w http.ResponseWriter, r *http.Request) {
 	if api.remoteWriteHandlerV2 != nil {
 		api.remoteWriteHandlerV2.ServeHTTP(w, r)
+	} else {
+		http.Error(w, "remote write receiver needs to be enabled with --web.enable-remote-write-receiver", http.StatusNotFound)
+	}
+}
+
+func (api *API) remoteWriteWebsocket(w http.ResponseWriter, r *http.Request) {
+	if api.opHandler != nil {
+		api.opHandler.Websocket().ServeHTTP(w, r)
+	} else {
+		http.Error(w, "remote write receiver needs to be enabled with --web.enable-remote-write-receiver", http.StatusNotFound)
+	}
+}
+
+func (api *API) remoteWriteRefill(w http.ResponseWriter, r *http.Request) {
+	if api.opHandler != nil {
+		api.opHandler.Refill().ServeHTTP(w, r)
 	} else {
 		http.Error(w, "remote write receiver needs to be enabled with --web.enable-remote-write-receiver", http.StatusNotFound)
 	}

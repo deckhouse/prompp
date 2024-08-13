@@ -11,11 +11,12 @@ type RefillProcessor struct {
 	decoderBuilder DecoderBuilder
 	receiver       Receiver
 
-	criticalErrorCount *prometheus.CounterVec
-	decodedSampleCount *prometheus.CounterVec
-	decodedSeriesCount *prometheus.CounterVec
-	writtenSeriesCount *prometheus.CounterVec
-	writtenSampleCount *prometheus.CounterVec
+	criticalErrorCount      *prometheus.CounterVec
+	decodedSampleCount      *prometheus.CounterVec
+	decodedSeriesCount      *prometheus.CounterVec
+	writtenSeriesCount      *prometheus.CounterVec
+	writtenSampleCount      *prometheus.CounterVec
+	responseStatusCodeCount *prometheus.CounterVec
 }
 
 func NewRefillProcessor(
@@ -28,28 +29,35 @@ func NewRefillProcessor(
 		decoderBuilder: decoderBuilder,
 		receiver:       receiver,
 		criticalErrorCount: factory.NewCounterVec(prometheus.CounterOpts{
-			Name: "remote_write_receiver_critical_error_count",
+			Name: "remote_write_opprotocol_processor_critical_error_count",
 			Help: "Total number of critical errors occurred during serving metric stream.",
-		}, []string{"error", "receiver_type"}),
+		}, []string{"error", "processor_type"}),
 		decodedSeriesCount: factory.NewCounterVec(prometheus.CounterOpts{
-			Name: "remote_write_receiver_decoded_series_count",
+			Name: "remote_write_opprotocol_processor_decoded_series_count",
 			Help: "Number of series decoded.",
-		}, []string{"receiver_type"}),
+		}, []string{"processor_type"}),
 		decodedSampleCount: factory.NewCounterVec(prometheus.CounterOpts{
-			Name: "remote_write_receiver_decoded_samples_count",
+			Name: "remote_write_opprotocol_processor_decoded_samples_count",
 			Help: "Number of samples decoded.",
-		}, []string{"receiver_type"}),
+		}, []string{"processor_type"}),
 		writtenSeriesCount: factory.NewCounterVec(prometheus.CounterOpts{
-			Name: "remote_write_receiver_written_series_count",
+			Name: "remote_write_opprotocol_processor_written_series_count",
 			Help: "Number of series decoded and written to prometheus",
-		}, []string{"receiver_type"}),
+		}, []string{"processor_type"}),
 		writtenSampleCount: factory.NewCounterVec(prometheus.CounterOpts{
-			Name: "remote_write_receiver_written_samples_count",
+			Name: "remote_write_opprotocol_processor_written_samples_count",
 			Help: "Number of samples decoded and written to prometheus",
-		}, []string{"receiver_type"}),
+		}, []string{"processor_type"}),
+		responseStatusCodeCount: factory.NewCounterVec(prometheus.CounterOpts{
+			Name: "remote_write_opprotocol_processor_response_status_code",
+			Help: "Number of 200/400 status codes responded with.",
+		}, []string{"processor_type", "status_code"}),
 	}
 }
 
 func (p *RefillProcessor) Process(_ context.Context, _ Refill) error {
+	p.responseStatusCodeCount.With(
+		prometheus.Labels{"processor_type": "refill", "status_code": "200"},
+	).Inc()
 	return nil
 }

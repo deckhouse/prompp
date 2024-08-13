@@ -41,7 +41,7 @@ func NewRemoteWriteHandler(
 		// stats
 		requests: factory.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: "remote_request",
+				Name: "remote_write_request",
 				Help: "Total requests completed.",
 			},
 			[]string{"reason", "code"},

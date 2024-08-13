@@ -62,11 +62,6 @@ import (
 	"github.com/prometheus/prometheus/util/httputil"
 	api_v1 "github.com/prometheus/prometheus/web/api/v1"
 	"github.com/prometheus/prometheus/web/ui"
-
-	ophandler "github.com/prometheus/prometheus/op-pkg/handler"
-	opcoredecoder "github.com/prometheus/prometheus/op-pkg/handler/decoder/opcore"
-	opprocessor "github.com/prometheus/prometheus/op-pkg/handler/processor"
-	opblockstorage "github.com/prometheus/prometheus/op-pkg/handler/storage/block"
 )
 
 // Paths that are handled by the React / Reach router that should all be served the main React app's index.html.
@@ -394,16 +389,6 @@ func New(logger log.Logger, o *Options, receiver handler.Receiver) *Handler {
 	}.ServeHTTP))
 
 	router.Get("/consoles/*filepath", readyf(h.consoles))
-
-	opLocalStoragePath := "opdata/"
-	opBlockStorage := opblockstorage.NewStorage(opLocalStoragePath)
-	opDecoderBuilder := opcoredecoder.NewBuilder(opBlockStorage)
-	opStreamProcessor := opprocessor.NewStreamProcessor(opDecoderBuilder, receiver, o.Registerer)
-	opReplayDecoderBuilder := opcoredecoder.NewReplayDecoderBuilder(opBlockStorage)
-	opRefillProcessor := opprocessor.NewRefillProcessor(opReplayDecoderBuilder, receiver, o.Registerer)
-
-	router.Post("/op/refill", ophandler.Refill(opRefillProcessor, o.Registerer))
-	router.Get("/op/websocket", ophandler.Websocket(opStreamProcessor, o.Registerer))
 
 	serveReactApp := func(w http.ResponseWriter, r *http.Request) {
 		f, err := ui.Assets.Open("/static/react/index.html")

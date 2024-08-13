@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/odarix/odarix-core-go/cppbridge"
 	"github.com/odarix/odarix-core-go/util"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/op-pkg/handler/model"
 )
 
@@ -17,12 +17,13 @@ type StreamProcessor struct {
 	decoderBuilder DecoderBuilder
 	receiver       Receiver
 
-	criticalErrorCount   *prometheus.CounterVec
-	rejectedSegmentCount *prometheus.CounterVec
-	decodedSampleCount   *prometheus.CounterVec
-	decodedSeriesCount   *prometheus.CounterVec
-	writtenSeriesCount   *prometheus.CounterVec
-	writtenSampleCount   *prometheus.CounterVec
+	criticalErrorCount      *prometheus.CounterVec
+	rejectedSegmentCount    *prometheus.CounterVec
+	decodedSampleCount      *prometheus.CounterVec
+	decodedSeriesCount      *prometheus.CounterVec
+	writtenSeriesCount      *prometheus.CounterVec
+	writtenSampleCount      *prometheus.CounterVec
+	responseStatusCodeCount *prometheus.CounterVec
 }
 
 func NewStreamProcessor(
@@ -36,34 +37,39 @@ func NewStreamProcessor(
 		decoderBuilder: decoderBuilder,
 		receiver:       receiver,
 		criticalErrorCount: factory.NewCounterVec(prometheus.CounterOpts{
-			Name: "remote_write_processor_critical_error_count",
+			Name: "remote_write_opprotocol_processor_critical_error_count",
 			Help: "Total number of critical errors occurred during serving metric stream.",
 		}, []string{"error", "processor_type"}),
 		rejectedSegmentCount: factory.NewCounterVec(prometheus.CounterOpts{
-			Name: "remote_write_processor_rejected_segment_count",
+			Name: "remote_write_opprotocol_processor_rejected_segment_count",
 			Help: "Number of rejected segments",
 		}, []string{"processor_type"}),
 		decodedSeriesCount: factory.NewCounterVec(prometheus.CounterOpts{
-			Name: "remote_write_processor_decoded_series_count",
+			Name: "remote_write_opprotocol_processor_decoded_series_count",
 			Help: "Number of series decoded.",
 		}, []string{"processor_type"}),
 		decodedSampleCount: factory.NewCounterVec(prometheus.CounterOpts{
-			Name: "remote_write_processor_decoded_samples_count",
+			Name: "remote_write_opprotocol_processor_decoded_samples_count",
 			Help: "Number of samples decoded.",
 		}, []string{"processor_type"}),
 		writtenSeriesCount: factory.NewCounterVec(prometheus.CounterOpts{
-			Name: "remote_write_processor_written_series_count",
+			Name: "remote_write_opprotocol_processor_written_series_count",
 			Help: "Number of series decoded and written to prometheus",
 		}, []string{"processor_type"}),
 		writtenSampleCount: factory.NewCounterVec(prometheus.CounterOpts{
-			Name: "remote_write_processor_written_samples_count",
+			Name: "remote_write_opprotocol_processor_written_samples_count",
 			Help: "Number of samples decoded and written to prometheus",
 		}, []string{"processor_type"}),
+		responseStatusCodeCount: factory.NewCounterVec(prometheus.CounterOpts{
+			Name: "remote_write_opprotocol_processor_response_status_code",
+			Help: "Number of 200/400 status codes responded with.",
+		}, []string{"processor_type", "status_code"}),
 	}
 }
 
 func (p *StreamProcessor) Process(ctx context.Context, stream MetricStream) error {
-	decoder := p.decoderBuilder.Build(stream.Metadata())
+	meta := stream.Metadata()
+	decoder := p.decoderBuilder.Build(meta)
 	defer func() { _ = decoder.Close() }()
 
 	var err error
@@ -106,8 +112,7 @@ func (p *StreamProcessor) Process(ctx context.Context, stream MetricStream) erro
 		if err = p.receiver.AppendHashdex(
 			ctx,
 			decodedSegment.ShardedData(),
-			// TODO make config for incoming data
-			config.TransparentRelabeler,
+			meta.RelabelerID,
 		); err != nil {
 			processingStatus.Code = model.ProcessingStatusRejected
 			processingStatus.Message = err.Error()
@@ -120,6 +125,10 @@ func (p *StreamProcessor) Process(ctx context.Context, stream MetricStream) erro
 				prometheus.Labels{"processor_type": "stream"},
 			).Add(float64(decodedSegment.Samples()))
 		}
+
+		p.responseStatusCodeCount.With(
+			prometheus.Labels{"processor_type": "stream", "status_code": strconv.Itoa(int(processingStatus.Code))},
+		).Inc()
 
 		if writeErr := stream.Write(ctx, processingStatus); err != nil {
 			return writeErr

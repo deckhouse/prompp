@@ -5,11 +5,23 @@ import (
 
 	"github.com/odarix/odarix-core-go/cppbridge"
 	"github.com/odarix/odarix-core-go/relabeler"
+
+	"github.com/prometheus/prometheus/op-pkg/handler/processor"
 )
 
-// Receiver implements.
+// Receiver interface.
 type Receiver interface {
 	AppendProtobuf(ctx context.Context, data relabeler.ProtobufData, relabelerID string) error
 	AppendHashdex(ctx context.Context, hashdex cppbridge.ShardedData, relabelerID string) error
 	RelabelerIDIsExist(relabelerID string) bool
+}
+
+// StreamProcessor interface.
+type StreamProcessor interface {
+	Process(ctx context.Context, stream processor.MetricStream) error
+}
+
+// RefillProcessor interface.
+type RefillProcessor interface {
+	Process(ctx context.Context, refill processor.Refill) error
 }

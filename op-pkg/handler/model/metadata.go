@@ -2,6 +2,7 @@ package model
 
 import "github.com/google/uuid"
 
+// Metadata request metadata.
 type Metadata struct {
 	TenantID               string
 	BlockID                uuid.UUID
@@ -13,4 +14,5 @@ type Metadata struct {
 	ProductName            string
 	AgentHostname          string
 	AgentUUID              uuid.UUID
+	RelabelerID            string
 }
