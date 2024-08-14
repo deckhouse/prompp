@@ -35,6 +35,7 @@ func NewOpHandler(
 	logger log.Logger,
 	registerer prometheus.Registerer,
 ) *OpHandler {
+	// TODO const or config parameter?
 	opLocalStoragePath := "opdata/"
 	opBlockStorage := block.NewStorage(opLocalStoragePath)
 	factory := util.NewUnconflictRegisterer(registerer)
