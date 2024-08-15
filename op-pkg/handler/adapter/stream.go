@@ -14,10 +14,10 @@ type Stream struct {
 }
 
 // NewStream init new Stream.
-func NewStream(conn net.Conn, metadata model.Metadata) *Stream {
+func NewStream(conn net.Conn, metadata *model.Metadata) *Stream {
 	return &Stream{
 		conn:     conn,
-		metadata: metadata,
+		metadata: *metadata,
 	}
 }
 

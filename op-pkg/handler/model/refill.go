@@ -64,6 +64,6 @@ func (d *RefillSegmentDecoder) Decode(segment *Segment) error {
 
 // RefillProcessingStatus status of processing refill.
 type RefillProcessingStatus struct {
-	Code    uint32
+	Code    int
 	Message string
 }

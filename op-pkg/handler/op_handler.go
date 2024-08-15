@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
@@ -13,18 +14,20 @@ import (
 	"github.com/prometheus/prometheus/op-pkg/handler/adapter"
 	"github.com/prometheus/prometheus/op-pkg/handler/decoder/opcore"
 	"github.com/prometheus/prometheus/op-pkg/handler/middleware"
-	"github.com/prometheus/prometheus/op-pkg/handler/model"
 	"github.com/prometheus/prometheus/op-pkg/handler/processor"
 	"github.com/prometheus/prometheus/op-pkg/handler/storage/block"
+	"github.com/prometheus/prometheus/util/pool"
 )
 
 // OpHandler service for remote write via opprotocol.
 type OpHandler struct {
-	receiver Receiver
-	logger   log.Logger
-	stream   StreamProcessor
-	refill   RefillProcessor
-	stop     *atomic.Bool
+	receiver    Receiver
+	logger      log.Logger
+	stream      StreamProcessor
+	refill      RefillProcessor
+	remoteWrite RemoteWriteProcessor
+	buffers     *pool.Pool
+	stop        *atomic.Bool
 	// stats
 	activeConnections *prometheus.GaugeVec
 }
@@ -40,11 +43,13 @@ func NewOpHandler(
 	opBlockStorage := block.NewStorage(opLocalStoragePath)
 	factory := util.NewUnconflictRegisterer(registerer)
 	h := &OpHandler{
-		receiver: receiver,
-		logger:   log.With(logger, "component", "op_handler"),
-		stream:   processor.NewStreamProcessor(opcore.NewBuilder(opBlockStorage), receiver, registerer),
-		refill:   processor.NewRefillProcessor(opcore.NewReplayDecoderBuilder(opBlockStorage), receiver, registerer),
-		stop:     new(atomic.Bool),
+		receiver:    receiver,
+		logger:      log.With(logger, "component", "op_handler"),
+		stream:      processor.NewStreamProcessor(opcore.NewBuilder(opBlockStorage), receiver, registerer),
+		refill:      processor.NewRefillProcessor(opcore.NewReplayDecoderBuilder(opBlockStorage), receiver, registerer),
+		remoteWrite: processor.NewRemoteWriteProcessor(receiver, registerer),
+		buffers:     pool.New(4e3, 1e6, 3, func(sz int) interface{} { return make([]byte, 0, sz) }),
+		stop:        new(atomic.Bool),
 		// stats
 		activeConnections: factory.NewGaugeVec(
 			prometheus.GaugeOpts{
@@ -61,25 +66,30 @@ func NewOpHandler(
 }
 
 // Websocket handler for websocket stream.
-func (h *OpHandler) Websocket() http.HandlerFunc {
-	return h.measure(
-		middleware.ResolveMetadata(
-			h.metadataValidator,
-			websocket.Handler(h.websocketHandler).ServeHTTP,
-		),
-		"stream",
-	)
+func (h *OpHandler) Websocket(middlewares ...middleware.Middleware) http.HandlerFunc {
+	hf := h.metadataValidator(websocket.Handler(h.websocketHandler).ServeHTTP)
+	for _, mw := range middlewares {
+		hf = mw(hf)
+	}
+	return h.measure(hf, "stream")
 }
 
 // Refill handler for refill.
-func (h *OpHandler) Refill() http.HandlerFunc {
-	return h.measure(
-		middleware.ResolveMetadata(
-			h.metadataValidator,
-			h.refillHandler(),
-		),
-		"refill",
-	)
+func (h *OpHandler) Refill(middlewares ...middleware.Middleware) http.HandlerFunc {
+	hf := h.metadataValidator(h.refillHandler())
+	for _, mw := range middlewares {
+		hf = mw(hf)
+	}
+	return h.measure(hf, "refill")
+}
+
+// RemoteWrite handler for RemoteWrite.
+func (h *OpHandler) RemoteWrite(middlewares ...middleware.Middleware) http.HandlerFunc {
+	hf := h.metadataValidator(h.remoteWriteHandler())
+	for _, mw := range middlewares {
+		hf = mw(hf)
+	}
+	return h.measure(hf, "remote_write")
 }
 
 // measure middleware for metrics.
@@ -98,13 +108,17 @@ func (h *OpHandler) measure(next http.Handler, typeHandler string) http.HandlerF
 }
 
 // metadataValidator validate metadata.
-func (h *OpHandler) metadataValidator(metadata *model.Metadata) bool {
-	if ok := h.receiver.RelabelerIDIsExist(metadata.RelabelerID); !ok {
-		level.Error(h.logger).Log("msg", "relabeler id not found", "relabeler_id", metadata.RelabelerID)
-		return false
-	}
+func (h *OpHandler) metadataValidator(next http.HandlerFunc) http.HandlerFunc {
+	return func(rw http.ResponseWriter, r *http.Request) {
+		metadata := middleware.MetadataFromContext(r.Context())
+		if ok := h.receiver.RelabelerIDIsExist(metadata.RelabelerID); !ok {
+			level.Error(h.logger).Log("msg", "relabeler id not found", "relabeler_id", metadata.RelabelerID)
+			rw.WriteHeader(http.StatusPreconditionFailed)
+			return
+		}
 
-	return true
+		next.ServeHTTP(rw, r)
+	}
 }
 
 // websocketHandler handler for websocket.
@@ -113,7 +127,7 @@ func (h *OpHandler) websocketHandler(wconn *websocket.Conn) {
 	wconn.PayloadType = websocket.BinaryFrame
 	ctx := wconn.Request().Context()
 	metadata := middleware.MetadataFromContext(ctx)
-	if err := h.stream.Process(ctx, adapter.NewStream(wconn, metadata)); err != nil {
+	if err := h.stream.Process(ctx, adapter.NewStream(wconn, &metadata)); err != nil {
 		level.Error(h.logger).Log("msg", "failed processing stream", "err", err)
 		return
 	}
@@ -124,8 +138,30 @@ func (h *OpHandler) refillHandler() http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		ctx := request.Context()
 		metadata := middleware.MetadataFromContext(ctx)
-		if err := h.refill.Process(ctx, adapter.NewRefill(request.Body, metadata)); err != nil {
+		if err := h.refill.Process(ctx, adapter.NewRefill(request.Body, writer, &metadata)); err != nil {
 			level.Error(h.logger).Log("msg", "failed processing refill", "err", err)
+			return
+		}
+	}
+}
+
+// remoteWriteHandler handler for RemoteWrite.
+func (h *OpHandler) remoteWriteHandler() http.HandlerFunc {
+	return func(writer http.ResponseWriter, request *http.Request) {
+		ctx := request.Context()
+		metadata := middleware.MetadataFromContext(ctx)
+		contentLength, _ := strconv.Atoi(request.Header.Get("content-length"))
+		if err := h.remoteWrite.Process(
+			ctx,
+			adapter.NewRemoteWrite(
+				request.Body,
+				writer,
+				&metadata,
+				h.buffers,
+				contentLength,
+			),
+		); err != nil {
+			level.Error(h.logger).Log("msg", "failed processing remote_write", "err", err)
 			return
 		}
 	}

@@ -2,9 +2,12 @@ package processor
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/odarix/odarix-core-go/util"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/prometheus/prometheus/op-pkg/handler/model"
 )
 
 type RefillProcessor struct {
@@ -55,9 +58,10 @@ func NewRefillProcessor(
 	}
 }
 
-func (p *RefillProcessor) Process(_ context.Context, _ Refill) error {
+func (p *RefillProcessor) Process(ctx context.Context, refill Refill) error {
 	p.responseStatusCodeCount.With(
 		prometheus.Labels{"processor_type": "refill", "status_code": "200"},
 	).Inc()
-	return nil
+
+	return refill.Write(ctx, model.RefillProcessingStatus{Code: http.StatusOK})
 }

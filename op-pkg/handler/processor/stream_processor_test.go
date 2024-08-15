@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/odarix/odarix-core-go/cppbridge"
 	coremodel "github.com/odarix/odarix-core-go/model"
+	"github.com/odarix/odarix-core-go/relabeler"
 	"github.com/stretchr/testify/require"
 
 	"github.com/prometheus/prometheus/op-pkg/handler/decoder/opcore"
@@ -45,6 +46,10 @@ type metricReceiver struct {
 
 func (mr *metricReceiver) AppendHashdex(ctx context.Context, hashdex cppbridge.ShardedData, relabelerID string) error {
 	return mr.appendFn(ctx, hashdex, relabelerID)
+}
+
+func (mr *metricReceiver) AppendProtobuf(ctx context.Context, data relabeler.ProtobufData, relabelerID string) error {
+	return nil
 }
 
 type segmentContainer struct {

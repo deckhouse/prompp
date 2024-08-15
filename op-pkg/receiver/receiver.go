@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -518,6 +519,9 @@ func initLogHandler(logger log.Logger) {
 
 // readClientID read ClientID.
 func readClientID(logger log.Logger, dir string) (string, error) {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", fmt.Errorf("mkdir %s: %w", filepath.Dir(dir), err)
+	}
 	clientIDPath := path.Join(dir, "client_id.uuid")
 	// Try reading UUID from the file. If not present, generate new one and write to file
 	data, err := os.ReadFile(clientIDPath)

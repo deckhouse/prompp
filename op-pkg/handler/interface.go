@@ -25,3 +25,8 @@ type StreamProcessor interface {
 type RefillProcessor interface {
 	Process(ctx context.Context, refill processor.Refill) error
 }
+
+// RemoteWriteProcessor interface.
+type RemoteWriteProcessor interface {
+	Process(ctx context.Context, remoteWrite processor.RemoteWrite) error
+}
