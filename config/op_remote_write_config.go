@@ -9,7 +9,7 @@ import (
 	"fmt"
 
 	"github.com/odarix/odarix-core-go/cppbridge"
-	"github.com/odarix/odarix-core-go/relabeler"
+	relabelerconfig "github.com/odarix/odarix-core-go/relabeler/config"
 	"github.com/prometheus/common/config"
 	"gopkg.in/yaml.v2"
 
@@ -49,13 +49,13 @@ func (c *Config) GetReceiverConfig() (*op_config.RemoteWriteReceiverConfig, erro
 
 		rcCfg.Configs = append(
 			rcCfg.Configs,
-			&relabeler.InputRelabelerConfig{Name: ScrapePrefix + scfg.JobName, RelabelConfigs: oprCfgs},
+			&relabelerconfig.InputRelabelerConfig{Name: ScrapePrefix + scfg.JobName, RelabelConfigs: oprCfgs},
 		)
 	}
 
 	rcCfg.Configs = append(
 		rcCfg.Configs,
-		&relabeler.InputRelabelerConfig{Name: TransparentRelabeler},
+		&relabelerconfig.InputRelabelerConfig{Name: TransparentRelabeler},
 	)
 
 	return rcCfg, nil
