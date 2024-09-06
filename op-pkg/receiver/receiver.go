@@ -11,7 +11,9 @@ import (
 	"github.com/odarix/odarix-core-go/relabeler/config"
 	"github.com/odarix/odarix-core-go/relabeler/distributor"
 	"github.com/odarix/odarix-core-go/relabeler/head"
+	"github.com/odarix/odarix-core-go/relabeler/querier"
 	"github.com/odarix/odarix-core-go/util"
+	"github.com/prometheus/prometheus/storage"
 	"go.uber.org/atomic"
 	"os"
 	"path"
@@ -120,7 +122,8 @@ func NewReceiver(
 		numberOfShards:        receiverCfg.NumberOfShards,
 	})
 
-	storage := appender.NewQueryableStorage(block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize))
+	//storage := appender.NewQueryableStorage(block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize))
+	storage := appender.NewQueryableStorage(block.NewDelayedNoOpBlockWriter(time.Minute))
 
 	var headGeneration uint64
 	hd, err := appender.NewRotatableHead(storage, head.BuildFunc(func() (relabeler.Head, error) {
@@ -149,6 +152,7 @@ func NewReceiver(
 			clock,
 			time.Minute*2,
 		),
+
 		metricsWriteTrigger: mwt,
 		hashdexFactory:      cppbridge.HashdexFactory{},
 		hashdexLimits:       cppbridge.DefaultWALHashdexLimits(),
@@ -345,6 +349,20 @@ func (rr *Receiver) Run(_ context.Context) (err error) {
 	rr.rotator.Run()
 	<-rr.shutdowner.Signal()
 	return nil
+}
+
+func (rr *Receiver) Querier(mint, maxt int64) (storage.Querier, error) {
+	appenderQuerier, err := rr.appender.Querier(mint, maxt)
+	if err != nil {
+		return nil, err
+	}
+
+	storageQuerier, err := rr.storage.Querier(mint, maxt)
+	if err != nil {
+		return nil, errors.Join(err, appenderQuerier.Close())
+	}
+
+	return querier.NewMultiQuerier(appenderQuerier, storageQuerier), nil
 }
 
 // Shutdown safe shutdown Receiver.

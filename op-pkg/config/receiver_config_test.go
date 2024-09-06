@@ -5,7 +5,7 @@ package config_test
 import (
 	"testing"
 
-	"github.com/odarix/odarix-core-go/relabeler"
+	relabelerconfig "github.com/odarix/odarix-core-go/relabeler/config"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"gopkg.in/yaml.v2"
@@ -25,7 +25,7 @@ func TestRemoteWriteReceiverConfig(t *testing.T) {
 
 	cfg := config.RemoteWriteReceiverConfig{
 		NumberOfShards: 1,
-		Configs: []*relabeler.InputRelabelerConfig{
+		Configs: []*relabelerconfig.InputRelabelerConfig{
 			{Name: "name"},
 		},
 	}
