@@ -361,17 +361,24 @@ func (rr *Receiver) Run(_ context.Context) (err error) {
 }
 
 func (rr *Receiver) Querier(mint, maxt int64) (storage.Querier, error) {
+	fmt.Println("RECEIVER: Querier")
+	start := time.Now()
+
 	appenderQuerier, err := rr.appender.Querier(mint, maxt)
 	if err != nil {
 		return nil, err
 	}
+
+	fmt.Println("RECEIVER: Querier appender querier created")
 
 	storageQuerier, err := rr.storage.Querier(mint, maxt)
 	if err != nil {
 		return nil, errors.Join(err, appenderQuerier.Close())
 	}
 
-	return querier.NewMultiQuerier(appenderQuerier, storageQuerier), nil
+	fmt.Println("RECEIVER: Querier storage querier created")
+	fmt.Println("RECEIVER: Querier finished, duration: ", time.Since(start))
+	return querier.NewMultiQuerier([]storage.Querier{appenderQuerier, storageQuerier}, nil), nil
 }
 
 // Shutdown safe shutdown Receiver.
