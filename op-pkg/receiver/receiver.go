@@ -124,8 +124,7 @@ func NewReceiver(
 		numberOfShards:        receiverCfg.NumberOfShards,
 	})
 
-	//storage := appender.NewQueryableStorage(block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize))
-	storage := appender.NewQueryableStorage(block.NewDelayedNoOpBlockWriter(5 * time.Second))
+	storage := appender.NewQueryableStorage(block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize))
 
 	var headGeneration uint64
 	hd, err := appender.NewRotatableHead(storage, head.BuildFunc(func() (relabeler.Head, error) {
@@ -152,7 +151,7 @@ func NewReceiver(
 		rotator: appender.NewRotator(
 			app,
 			clock,
-			2*time.Hour,
+			appender.DefaultRotateDuration,
 		),
 
 		metricsWriteTrigger: mwt,
@@ -330,6 +329,11 @@ func (rr *Receiver) ApplyConfig(cfg *prom_config.Config) error {
 			// 	dgs.Add(dg)
 			// }
 			dstrb.SetDestinationGroups(dgs)
+
+			rr.headConfigStorage.Store(&HeadConfig{
+				inputRelabelerConfigs: rCfg.Configs,
+				numberOfShards:        numberOfShards,
+			})
 			return nil
 		}),
 	)
