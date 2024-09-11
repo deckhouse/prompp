@@ -6,6 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path"
+	"path/filepath"
+	"sync"
+	"time"
+
 	"github.com/odarix/odarix-core-go/relabeler/appender"
 	"github.com/odarix/odarix-core-go/relabeler/block"
 	"github.com/odarix/odarix-core-go/relabeler/config"
@@ -15,11 +21,6 @@ import (
 	"github.com/odarix/odarix-core-go/util"
 	"github.com/prometheus/prometheus/storage"
 	"go.uber.org/atomic"
-	"os"
-	"path"
-	"path/filepath"
-	"sync"
-	"time"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
@@ -76,6 +77,7 @@ type Receiver struct {
 	workingDir     string
 	clientID       string
 
+	// cgogc      *cppbridge.CGOGC
 	shutdowner *util.GracefulShutdowner
 }
 
@@ -123,7 +125,7 @@ func NewReceiver(
 	})
 
 	//storage := appender.NewQueryableStorage(block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize))
-	storage := appender.NewQueryableStorage(block.NewDelayedNoOpBlockWriter(time.Minute))
+	storage := appender.NewQueryableStorage(block.NewDelayedNoOpBlockWriter(5 * time.Second))
 
 	var headGeneration uint64
 	hd, err := appender.NewRotatableHead(storage, head.BuildFunc(func() (relabeler.Head, error) {
@@ -150,7 +152,7 @@ func NewReceiver(
 		rotator: appender.NewRotator(
 			app,
 			clock,
-			time.Minute*2,
+			2*time.Hour,
 		),
 
 		metricsWriteTrigger: mwt,
@@ -162,7 +164,8 @@ func NewReceiver(
 		logger:              logger,
 		workingDir:          workingDir,
 		clientID:            clientID,
-		shutdowner:          util.NewGracefulShutdowner(),
+		// cgogc:               cppbridge.NewCGOGC(registerer),
+		shutdowner: util.NewGracefulShutdowner(),
 	}
 
 	level.Info(logger).Log("msg", "created")
@@ -235,9 +238,14 @@ func (rr *Receiver) ApplyConfig(cfg *prom_config.Config) error {
 		return err
 	}
 
+	numberOfShards := rCfg.NumberOfShards
+	if numberOfShards == 0 {
+		numberOfShards = 2
+	}
+
 	err = rr.appender.Reconfigure(
 		HeadConfigureFunc(func(head relabeler.Head) error {
-			return head.Reconfigure(rCfg.Configs, rCfg.NumberOfShards)
+			return head.Reconfigure(rCfg.Configs, numberOfShards)
 		}),
 		DistributorConfigureFunc(func(dstrb relabeler.Distributor) error {
 			mxdgupds := new(sync.Mutex)
@@ -245,7 +253,7 @@ func (rr *Receiver) ApplyConfig(cfg *prom_config.Config) error {
 				cfg.RemoteWriteConfigs,
 				rr.workingDir,
 				rr.clientID,
-				rCfg.NumberOfShards,
+				numberOfShards,
 			)
 			if err != nil {
 				level.Error(rr.logger).Log("msg", "failed to init destination group update", "err", err)
@@ -295,31 +303,32 @@ func (rr *Receiver) ApplyConfig(cfg *prom_config.Config) error {
 			// delete unused DestinationGroup
 			dgs.RemoveByID(toDelete)
 
-			// create new DestinationGroup
-			for _, dgupd := range dgupds {
-				dialers, err := makeDialers(rr.clock, rr.registerer, dgupd.DialersConfigs)
-				if err != nil {
-					level.Error(rr.logger).Log("msg", "failed to make new dialers", "err", err)
-					return err
-				}
+			// DISABLE DestinationGroups
+			// // create new DestinationGroup
+			// for _, dgupd := range dgupds {
+			// 	dialers, err := makeDialers(rr.clock, rr.registerer, dgupd.DialersConfigs)
+			// 	if err != nil {
+			// 		level.Error(rr.logger).Log("msg", "failed to make new dialers", "err", err)
+			// 		return err
+			// 	}
 
-				dg, err := relabeler.NewDestinationGroup(
-					rr.ctx,
-					dgupd.DestinationGroupConfig,
-					encoderSelector,
-					refillCtor,
-					refillSenderCtor,
-					rr.clock,
-					dialers,
-					rr.registerer,
-				)
-				if err != nil {
-					level.Error(rr.logger).Log("msg", "failed to init DestinationGroup", "err", err)
-					return err
-				}
+			// 	dg, err := relabeler.NewDestinationGroup(
+			// 		rr.ctx,
+			// 		dgupd.DestinationGroupConfig,
+			// 		encoderSelector,
+			// 		refillCtor,
+			// 		refillSenderCtor,
+			// 		rr.clock,
+			// 		dialers,
+			// 		rr.registerer,
+			// 	)
+			// 	if err != nil {
+			// 		level.Error(rr.logger).Log("msg", "failed to init DestinationGroup", "err", err)
+			// 		return err
+			// 	}
 
-				dgs.Add(dg)
-			}
+			// 	dgs.Add(dg)
+			// }
 			dstrb.SetDestinationGroups(dgs)
 			return nil
 		}),
@@ -367,6 +376,7 @@ func (rr *Receiver) Querier(mint, maxt int64) (storage.Querier, error) {
 
 // Shutdown safe shutdown Receiver.
 func (rr *Receiver) Shutdown(ctx context.Context) error {
+	// cgogcErr := rr.cgogc.Shutdown(ctx)
 	metricWriteErr := rr.metricsWriteTrigger.Close()
 	rotatorErr := rr.rotator.Close()
 	storageErr := rr.storage.Close()
@@ -385,38 +395,38 @@ func makeDestinationGroups(
 	numberOfShards uint16,
 ) (*relabeler.DestinationGroups, error) {
 	dgs := make(relabeler.DestinationGroups, 0, len(rwCfgs))
+	// DISABLE DestinationGroups
+	// for _, rwCfg := range rwCfgs {
+	// 	dgCfg, err := convertingDestinationGroupConfig(rwCfg, workingDir, numberOfShards)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
 
-	for _, rwCfg := range rwCfgs {
-		dgCfg, err := convertingDestinationGroupConfig(rwCfg, workingDir, numberOfShards)
-		if err != nil {
-			return nil, err
-		}
+	// 	dialersConfigs, err := convertingConfigDialers(clientID, rwCfg.Destinations)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	dialers, err := makeDialers(clock, registerer, dialersConfigs)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
 
-		dialersConfigs, err := convertingConfigDialers(clientID, rwCfg.Destinations)
-		if err != nil {
-			return nil, err
-		}
-		dialers, err := makeDialers(clock, registerer, dialersConfigs)
-		if err != nil {
-			return nil, err
-		}
+	// 	dg, err := relabeler.NewDestinationGroup(
+	// 		ctx,
+	// 		dgCfg,
+	// 		encoderSelector,
+	// 		refillCtor,
+	// 		refillSenderCtor,
+	// 		clock,
+	// 		dialers,
+	// 		registerer,
+	// 	)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
 
-		dg, err := relabeler.NewDestinationGroup(
-			ctx,
-			dgCfg,
-			encoderSelector,
-			refillCtor,
-			refillSenderCtor,
-			clock,
-			dialers,
-			registerer,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		dgs = append(dgs, dg)
-	}
+	// 	dgs = append(dgs, dg)
+	// }
 
 	return &dgs, nil
 }

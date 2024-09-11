@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	storage2 "github.com/prometheus/prometheus/op-pkg/storage"
 	"math"
 	"math/bits"
 	"net"
@@ -33,6 +32,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	storage2 "github.com/prometheus/prometheus/op-pkg/storage"
 
 	"github.com/KimMachineGun/automemlimit/memlimit"
 	"github.com/alecthomas/kingpin/v2"
