@@ -123,7 +123,6 @@ func NewReceiver(
 	})
 
 	storage := appender.NewQueryableStorage(block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize))
-	//storage := appender.NewQueryableStorage(block.NewDelayedNoOpBlockWriter(time.Minute))
 
 	var headGeneration uint64
 	hd, err := appender.NewRotatableHead(storage, head.BuildFunc(func() (relabeler.Head, error) {
@@ -150,7 +149,7 @@ func NewReceiver(
 		rotator: appender.NewRotator(
 			app,
 			clock,
-			time.Minute*2,
+			appender.DefaultRotateDuration,
 		),
 
 		metricsWriteTrigger: mwt,
@@ -235,9 +234,14 @@ func (rr *Receiver) ApplyConfig(cfg *prom_config.Config) error {
 		return err
 	}
 
+	numberOfShards := rCfg.NumberOfShards
+	if numberOfShards == 0 {
+		numberOfShards = 2
+	}
+
 	err = rr.appender.Reconfigure(
 		HeadConfigureFunc(func(head relabeler.Head) error {
-			return head.Reconfigure(rCfg.Configs, rCfg.NumberOfShards)
+			return head.Reconfigure(rCfg.Configs, numberOfShards)
 		}),
 		DistributorConfigureFunc(func(dstrb relabeler.Distributor) error {
 			mxdgupds := new(sync.Mutex)
@@ -245,7 +249,7 @@ func (rr *Receiver) ApplyConfig(cfg *prom_config.Config) error {
 				cfg.RemoteWriteConfigs,
 				rr.workingDir,
 				rr.clientID,
-				rCfg.NumberOfShards,
+				numberOfShards,
 			)
 			if err != nil {
 				level.Error(rr.logger).Log("msg", "failed to init destination group update", "err", err)
@@ -321,6 +325,11 @@ func (rr *Receiver) ApplyConfig(cfg *prom_config.Config) error {
 				dgs.Add(dg)
 			}
 			dstrb.SetDestinationGroups(dgs)
+
+			rr.headConfigStorage.Store(&HeadConfig{
+				inputRelabelerConfigs: rCfg.Configs,
+				numberOfShards:        numberOfShards,
+			})
 			return nil
 		}),
 	)
