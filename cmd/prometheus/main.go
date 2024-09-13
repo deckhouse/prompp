@@ -775,8 +775,8 @@ func main() {
 		queryEngine = promql.NewEngine(opts)
 
 		ruleManager = rules.NewManager(&rules.ManagerOptions{
-			Appendable:      fanoutStorage,
-			Queryable:       localStorage,
+			Appendable:      receiver,
+			Queryable:       receiver,
 			QueryFunc:       rules.EngineQueryFunc(queryEngine, fanoutStorage),
 			NotifyFunc:      rules.SendAlerts(notifierManager, cfg.web.ExternalURL.String()),
 			Context:         ctxRule,

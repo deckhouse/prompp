@@ -79,6 +79,10 @@ type Receiver struct {
 	shutdowner *util.GracefulShutdowner
 }
 
+func (rr *Receiver) Appender(ctx context.Context) storage.Appender {
+	return newPromAppender(ctx, rr, prom_config.TransparentRelabeler)
+}
+
 func NewReceiver(
 	ctx context.Context,
 	logger log.Logger,
