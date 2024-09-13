@@ -2,7 +2,6 @@ package receiver
 
 import (
 	"context"
-	"fmt"
 	"github.com/odarix/odarix-core-go/model"
 	"github.com/prometheus/prometheus/model/exemplar"
 	"github.com/prometheus/prometheus/model/histogram"
@@ -40,7 +39,6 @@ func newPromAppender(ctx context.Context, receiver *Receiver, relabelerID string
 }
 
 func (a *promAppender) Append(ref storage.SeriesRef, l labels.Labels, t int64, v float64) (storage.SeriesRef, error) {
-	fmt.Println("prom appender: append: ", l.String(), t, v)
 	lsb := model.NewLabelSetBuilder()
 	for _, label := range l {
 		lsb.Add(label.Name, label.Value)
