@@ -17,6 +17,7 @@ import (
 	"github.com/odarix/odarix-core-go/relabeler/config"
 	"github.com/odarix/odarix-core-go/relabeler/distributor"
 	"github.com/odarix/odarix-core-go/relabeler/head"
+	rlogger "github.com/odarix/odarix-core-go/relabeler/logger"
 	"github.com/odarix/odarix-core-go/relabeler/querier"
 	"github.com/odarix/odarix-core-go/util"
 	"github.com/prometheus/prometheus/storage"
@@ -77,7 +78,7 @@ type Receiver struct {
 	workingDir     string
 	clientID       string
 
-	// cgogc      *cppbridge.CGOGC
+	cgogc      *cppbridge.CGOGC
 	shutdowner *util.GracefulShutdowner
 }
 
@@ -163,8 +164,8 @@ func NewReceiver(
 		logger:              logger,
 		workingDir:          workingDir,
 		clientID:            clientID,
-		// cgogc:               cppbridge.NewCGOGC(registerer),
-		shutdowner: util.NewGracefulShutdowner(),
+		cgogc:               cppbridge.NewCGOGC(registerer),
+		shutdowner:          util.NewGracefulShutdowner(),
 	}
 
 	level.Info(logger).Log("msg", "created")
@@ -365,35 +366,35 @@ func (rr *Receiver) Run(_ context.Context) (err error) {
 }
 
 func (rr *Receiver) Querier(mint, maxt int64) (storage.Querier, error) {
-	fmt.Println("RECEIVER: Querier")
-	start := time.Now()
+	// fmt.Println("RECEIVER: Querier")
+	// start := time.Now()
 
 	appenderQuerier, err := rr.appender.Querier(mint, maxt)
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Println("RECEIVER: Querier appender querier created")
+	// fmt.Println("RECEIVER: Querier appender querier created")
 
 	storageQuerier, err := rr.storage.Querier(mint, maxt)
 	if err != nil {
 		return nil, errors.Join(err, appenderQuerier.Close())
 	}
 
-	fmt.Println("RECEIVER: Querier storage querier created")
-	fmt.Println("RECEIVER: Querier finished, duration: ", time.Since(start))
+	// fmt.Println("RECEIVER: Querier storage querier created")
+	// fmt.Println("RECEIVER: Querier finished, duration: ", time.Since(start))
 	return querier.NewMultiQuerier([]storage.Querier{appenderQuerier, storageQuerier}, nil), nil
 }
 
 // Shutdown safe shutdown Receiver.
 func (rr *Receiver) Shutdown(ctx context.Context) error {
-	// cgogcErr := rr.cgogc.Shutdown(ctx)
+	cgogcErr := rr.cgogc.Shutdown(ctx)
 	metricWriteErr := rr.metricsWriteTrigger.Close()
 	rotatorErr := rr.rotator.Close()
 	storageErr := rr.storage.Close()
 	distributorErr := rr.distributor.Shutdown(ctx)
 	err := rr.shutdowner.Shutdown(ctx)
-	return errors.Join(metricWriteErr, rotatorErr, storageErr, distributorErr, err)
+	return errors.Join(cgogcErr, metricWriteErr, rotatorErr, storageErr, distributorErr, err)
 }
 
 // makeDestinationGroups create DestinationGroups from configs.
@@ -625,6 +626,19 @@ func initLogHandler(logger log.Logger) {
 		level.Warn(logger).Log("msg", fmt.Sprintf(template, args...))
 	}
 	relabeler.Errorf = func(template string, args ...interface{}) {
+		level.Error(logger).Log("msg", fmt.Sprintf(template, args...))
+	}
+
+	rlogger.Debugf = func(template string, args ...interface{}) {
+		level.Debug(logger).Log("msg", fmt.Sprintf(template, args...))
+	}
+	rlogger.Infof = func(template string, args ...interface{}) {
+		level.Info(logger).Log("msg", fmt.Sprintf(template, args...))
+	}
+	rlogger.Warnf = func(template string, args ...interface{}) {
+		level.Warn(logger).Log("msg", fmt.Sprintf(template, args...))
+	}
+	rlogger.Errorf = func(template string, args ...interface{}) {
 		level.Error(logger).Log("msg", fmt.Sprintf(template, args...))
 	}
 }

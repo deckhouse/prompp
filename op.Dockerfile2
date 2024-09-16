@@ -1,0 +1,3 @@
+FROM prom/prometheus:v2.50.1
+COPY prometheus /bin/prometheus
+COPY promtool /bin/promtool
