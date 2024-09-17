@@ -129,7 +129,8 @@ func NewReceiver(
 		numberOfShards:        receiverCfg.NumberOfShards,
 	})
 
-	storage := appender.NewQueryableStorage(block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize))
+	querierMetrics := querier.NewMetrics(registerer)
+	storage := appender.NewQueryableStorage(block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize, registerer), registerer, querierMetrics)
 
 	var headGeneration uint64
 	hd, err := appender.NewRotatableHead(storage, head.BuildFunc(func() (relabeler.Head, error) {
@@ -143,7 +144,7 @@ func NewReceiver(
 	}))
 
 	dstrb := distributor.NewDistributor(*destinationGroups)
-	app := appender.NewQueryableAppender(hd, dstrb)
+	app := appender.NewQueryableAppender(hd, dstrb, querierMetrics)
 
 	mwt := appender.NewMetricsWriteTrigger(appender.DefaultMetricWriteInterval, app, storage)
 
@@ -342,6 +343,7 @@ func (rr *Receiver) ApplyConfig(cfg *prom_config.Config) error {
 			return nil
 		}),
 	)
+
 	if err != nil {
 		return err
 	}
