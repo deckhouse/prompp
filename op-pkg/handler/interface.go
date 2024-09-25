@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"github.com/prometheus/prometheus/storage"
 
 	"github.com/odarix/odarix-core-go/cppbridge"
 	"github.com/odarix/odarix-core-go/relabeler"
@@ -14,6 +15,7 @@ type Receiver interface {
 	AppendProtobuf(ctx context.Context, data relabeler.ProtobufData, relabelerID string) error
 	AppendHashdex(ctx context.Context, hashdex cppbridge.ShardedData, relabelerID string) error
 	RelabelerIDIsExist(relabelerID string) bool
+	HeadQueryable() storage.Queryable
 }
 
 // StreamProcessor interface.
