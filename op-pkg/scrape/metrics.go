@@ -38,6 +38,9 @@ type scrapeMetrics struct {
 	targetScrapeExemplarOutOfOrder         prometheus.Counter
 	targetScrapePoolExceededLabelLimits    prometheus.Counter
 	targetScrapeNativeHistogramBucketLimit prometheus.Counter
+
+	//
+	appendError prometheus.Counter
 }
 
 func newScrapeMetrics(reg prometheus.Registerer) (*scrapeMetrics, error) {
@@ -206,6 +209,13 @@ func newScrapeMetrics(reg prometheus.Registerer) (*scrapeMetrics, error) {
 		},
 	)
 
+	sm.appendError = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "prometheus_scrape_loop_append_error_total",
+			Help: "Total number of scrape loop append with error.",
+		},
+	)
+
 	for _, collector := range []prometheus.Collector{
 		// Used by Manager.
 		sm.targetMetadataCache,
@@ -234,6 +244,8 @@ func newScrapeMetrics(reg prometheus.Registerer) (*scrapeMetrics, error) {
 		sm.targetScrapeExemplarOutOfOrder,
 		sm.targetScrapePoolExceededLabelLimits,
 		sm.targetScrapeNativeHistogramBucketLimit,
+		//
+		sm.appendError,
 	} {
 		err := reg.Register(collector)
 		if err != nil {

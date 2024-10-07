@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -890,9 +891,6 @@ func (sl *scrapeLoop) scrapeAndReport(last, appendTime time.Time, errc chan<- er
 	var total, added, bytesRead int
 	var appErr, scrapeErr error
 
-	// var total, added, seriesAdded, bytesRead int
-	// var err, appErr, scrapeErr error
-
 	defer func() {
 		if err := sl.report(appendTime, time.Since(start), total, added, bytesRead, scrapeErr); err != nil {
 			level.Warn(sl.logger).Log("msg", "Appending scrape report failed", "err", err)
@@ -947,10 +945,11 @@ func (sl *scrapeLoop) scrapeAndReport(last, appendTime time.Time, errc chan<- er
 
 	// A failed scrape is the same as an empty scrape,
 	// we still call sl.append to trigger stale markers.
-	total, added, appErr = sl.append(b, contentType, appendTime)
+	total, added, appErr = sl.appendCpp(b, contentType, appendTime)
 	level.Debug(sl.logger).Log("msg", "scrape append", "total", total, "added", added)
 	if appErr != nil {
-		level.Debug(sl.logger).Log("msg", "Append failed", "err", appErr)
+		level.Error(sl.logger).Log("msg", "Append failed", "err", appErr)
+		sl.metrics.appendError.Inc()
 		// The append failed, probably due to a parse error or sample limit.
 		// Call sl.append again with an empty scrape to trigger stale markers.
 		if _, _, err := sl.append([]byte{}, "", appendTime); err != nil {
@@ -1047,6 +1046,17 @@ func (sl *scrapeLoop) disableEndOfRunStalenessMarkers() {
 }
 
 func (sl *scrapeLoop) append(b []byte, contentType string, ts time.Time) (total, added int, err error) {
+	// if input is empty for stalenan
+	if len(b) == 0 {
+		return 0, 0, sl.receiver.AppendTimeSeries(
+			sl.appenderCtx,
+			sl.bufferBatches.get(),
+			sl.metricLimits,
+			sl.scraper.stalenansState(),
+			timestamp.FromTime(ts),
+			sl.scrapeName,
+		)
+	}
 	p, err := textparse.New(b, contentType, sl.scrapeClassicHistograms)
 	if err != nil {
 		level.Debug(sl.logger).Log(
@@ -1153,6 +1163,138 @@ loop:
 	}
 	added = batched
 	return
+}
+
+func (sl *scrapeLoop) appendCpp(b []byte, contentType string, ts time.Time) (total, added int, err error) {
+	if mediaType, _, err := mime.ParseMediaType(contentType); err == nil &&
+		(mediaType == "application/openmetrics-text" || mediaType == "application/vnd.google.protobuf") {
+		return 0, 0, fmt.Errorf("unsupported media type: %s", mediaType)
+	}
+	defTime := timestamp.FromTime(ts)
+	hashdex := cppbridge.NewScraperHashdex()
+	if err = hashdex.Parse(string(b), defTime); err != nil {
+		return 0, 0, err
+	}
+
+	if err = sl.receiver.AppendTimeSeriesHashdex(
+		sl.appenderCtx,
+		hashdex,
+		sl.metricLimits,
+		sl.scraper.stalenansState(),
+		defTime,
+		sl.scrapeName,
+	); err != nil {
+		return 0, 0, err
+	}
+
+	return total, added, nil
+
+	// 	p, err := textparse.New(b, contentType, sl.scrapeClassicHistograms)
+	// 	if err != nil {
+	// 		level.Debug(sl.logger).Log(
+	// 			"msg", "Invalid content type on scrape, using prometheus parser as fallback.",
+	// 			"content_type", contentType,
+	// 			"err", err,
+	// 		)
+	// 	}
+
+	// 	defer func() {
+	// 		if err != nil {
+	// 			return
+	// 		}
+	// 		// // Only perform cache cleaning if the scrape was not empty.
+	// 		// // An empty scrape (usually) is used to indicate a failed scrape.
+	// 		// sl.cache.iterDone(len(b) > 0)
+	// 	}()
+
+	// 	var met []byte
+
+	// 	batch := BatchWithLimit(sl.bufferBatches.get())
+	// 	builder := sl.bufferBuilders.get()
+	// 	defer sl.bufferBuilders.put(builder)
+
+	// loop:
+	// 	for {
+	// 		var (
+	// 			et              textparse.Entry
+	// 			parsedTimestamp *int64
+	// 			val             float64
+	// 		)
+	// 		if et, err = p.Next(); err != nil {
+	// 			if errors.Is(err, io.EOF) {
+	// 				err = nil
+	// 			}
+	// 			break
+	// 		}
+
+	// 		switch et {
+	// 		case textparse.EntryType,
+	// 			textparse.EntryHelp,
+	// 			textparse.EntryUnit,
+	// 			textparse.EntryComment,
+	// 			textparse.EntryHistogram:
+	// 			continue
+	// 		default:
+	// 		}
+	// 		total++
+
+	// 		t := defTime
+	// 		met, parsedTimestamp, val = p.Series()
+	// 		if !sl.honorTimestamps {
+	// 			parsedTimestamp = nil
+	// 		}
+	// 		if parsedTimestamp != nil {
+	// 			t = *parsedTimestamp
+	// 		}
+
+	// 		p.MetricToBuilder(builder)
+	// 		sl.sampleInjector(builder)
+	// 		if ln, dup := builder.HasDuplicateLabelNames(); dup {
+	// 			level.Warn(sl.logger).Log(
+	// 				"msg", "label name is not unique, skip series",
+	// 				"series", string(met),
+	// 				"series byte", met,
+	// 				"builder", builder.Build().String(),
+	// 				"name", ln,
+	// 			)
+	// 			continue
+	// 		}
+
+	// 		if addErr := batch.Add(builder, uint64(t), val); addErr != nil {
+	// 			level.Debug(sl.logger).Log("msg", "failed add metrics", "err", addErr)
+	// 			switch {
+	// 			case errors.Is(err, errSampleLimit):
+	// 				sl.metrics.targetScrapeSampleLimit.Inc()
+	// 				break loop
+	// 			case errors.Is(err, storage.ErrOutOfBounds):
+	// 				sl.metrics.targetScrapeSampleOutOfBounds.Inc()
+	// 				continue
+	// 			}
+	// 		}
+	// 	}
+
+	// 	if batch.IsEmpty() {
+	// 		batch.Destroy()
+	// 		level.Warn(sl.logger).Log("msg", "scrape data is empty")
+	// 		return
+	// 	}
+
+	// batched := batch.Len()
+	// if err = sl.receiver.AppendTimeSeries(
+	//
+	//	sl.appenderCtx,
+	//	batch,
+	//	sl.metricLimits,
+	//	sl.scraper.stalenansState(),
+	//	defTime,
+	//	sl.scrapeName,
+	//
+	//	); err != nil {
+	//		return
+	//	}
+	//
+	// added = batched
+	// return
 }
 
 // The constants are suffixed with the invalid \xff unicode rune to avoid collisions

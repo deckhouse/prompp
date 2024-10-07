@@ -228,4 +228,4 @@ exclude (
 	google.golang.org/api v0.30.0
 )
 
-replace github.com/odarix/odarix-core-go => ../odarix-core/go/
+replace github.com/odarix/odarix-core-go => ../../../okmeter/odarix-core/go/

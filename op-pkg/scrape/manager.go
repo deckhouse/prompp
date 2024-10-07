@@ -34,6 +34,15 @@ type Receiver interface {
 		staleNansTS int64,
 		relabelerID string,
 	) error
+	// AppendTimeSeries append TimeSeries data to relabeling hashdex data.
+	AppendTimeSeriesHashdex(
+		ctx context.Context,
+		hashdex cppbridge.ShardedData,
+		metricLimits *cppbridge.MetricLimits,
+		sourceStates *relabeler.SourceStates,
+		staleNansTS int64,
+		relabelerID string,
+	) error
 	RelabelerIDIsExist(relabelerID string) bool
 }
 

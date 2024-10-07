@@ -225,6 +225,24 @@ func (rr *Receiver) AppendTimeSeries(
 	)
 }
 
+func (rr *Receiver) AppendTimeSeriesHashdex(
+	ctx context.Context,
+	hashdex cppbridge.ShardedData,
+	metricLimits *cppbridge.MetricLimits,
+	sourceStates *relabeler.SourceStates,
+	staleNansTS int64,
+	relabelerID string,
+) error {
+	return rr.appender.AppendWithStaleNans(
+		ctx,
+		&relabeler.IncomingData{Hashdex: hashdex},
+		metricLimits,
+		sourceStates,
+		staleNansTS,
+		relabelerID,
+	)
+}
+
 // AppendHashdex append incoming Hashdex data to relabeling.
 func (rr *Receiver) AppendHashdex(ctx context.Context, hashdex cppbridge.ShardedData, relabelerID string) error {
 	if rr.haTracker.IsDrop(hashdex.Cluster(), hashdex.Replica()) {
