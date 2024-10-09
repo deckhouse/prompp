@@ -77,12 +77,14 @@ type Manager struct {
 	receiver  Receiver
 	graceShut chan struct{}
 
-	offsetSeed    uint64     // Global offsetSeed seed is used to spread scrape workload across HA setup.
-	mtxScrape     sync.Mutex // Guards the fields below.
-	scrapeConfigs map[string]*config.ScrapeConfig
-	scrapePools   map[string]*scrapePool
-	targetSets    map[string][]*targetgroup.Group
-	buffers       *pool.Pool
+	offsetSeed     uint64     // Global offsetSeed seed is used to spread scrape workload across HA setup.
+	mtxScrape      sync.Mutex // Guards the fields below.
+	scrapeConfigs  map[string]*config.ScrapeConfig
+	scrapePools    map[string]*scrapePool
+	targetSets     map[string][]*targetgroup.Group
+	buffers        *pool.Pool
+	bufferBuilders *buildersPool
+	bufferBatches  *batchesPool
 
 	triggerReload chan struct{}
 
@@ -109,15 +111,17 @@ func NewManager(
 	}
 
 	m := &Manager{
-		receiver:      receiver,
-		opts:          o,
-		logger:        logger,
-		scrapeConfigs: make(map[string]*config.ScrapeConfig),
-		scrapePools:   make(map[string]*scrapePool),
-		graceShut:     make(chan struct{}),
-		triggerReload: make(chan struct{}, 1),
-		metrics:       sm,
-		buffers:       pool.New(1e3, 100e6, 3, func(sz int) interface{} { return make([]byte, 0, sz) }),
+		receiver:       receiver,
+		opts:           o,
+		logger:         logger,
+		scrapeConfigs:  make(map[string]*config.ScrapeConfig),
+		scrapePools:    make(map[string]*scrapePool),
+		graceShut:      make(chan struct{}),
+		triggerReload:  make(chan struct{}, 1),
+		metrics:        sm,
+		buffers:        pool.New(1e3, 100e6, 2, func(sz int) interface{} { return make([]byte, 0, sz) }),
+		bufferBuilders: newBuildersPool(),
+		bufferBatches:  newbatchesPool(),
 	}
 
 	m.metrics.setTargetMetadataCacheGatherer(m)
@@ -187,6 +191,8 @@ func (m *Manager) reload() {
 				m.offsetSeed,
 				log.With(m.logger, "scrape_pool", setName),
 				m.buffers,
+				m.bufferBuilders,
+				m.bufferBatches,
 				m.opts,
 				m.metrics,
 			)
