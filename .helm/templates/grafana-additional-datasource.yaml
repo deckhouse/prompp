@@ -1,0 +1,16 @@
+---
+{{- $token := (lookup "v1" "Secret" (.Values.prometheusToken.credentials.namespace | default .Release.Namespace) (.Values.prometheusToken.credentials.name | default .Chart.Name)).data.token | b64dec -}}
+apiVersion: deckhouse.io/v1
+kind: GrafanaAdditionalDatasource
+metadata:
+  name: prometheus-pp
+spec:
+  access: Proxy
+  jsonData:
+    httpHeaderName1: Authorization
+    tlsSkipVerify: true
+    timeInterval: 30s
+  secureJsonData:
+    httpHeaderValue1: bearer {{ $token }} 
+  type: prometheus
+  url: https://prometheus-pp.d8-monitoring.svc.cluster.local:9090

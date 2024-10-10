@@ -1,9 +1,113 @@
-project: okmeter-prometheus
 configVersion: 1
-deploy:
-  helmRelease: "[[ project ]]-[[ env ]]"
-
+project: okmeter-okmeter-prometheus
 ---
-image: prometheus
-dockerfile: op.Dockerfile
-
+artifact: prometheus-plus-plus/prom-pp-promu-artifact
+from: golang:1.18.5-alpine3.15
+mount:
+- fromPath: ~/go-pkg-cache
+  to: /go/pkg
+shell:
+  install:
+  - apk update && apk add --no-cache git
+  - export GOPROXY="https://proxy.golang.org/" CGO_ENABLED=0 GOOS=linux GOARCH=amd64
+  - git clone --depth 1 --branch v0.14.0 https://github.com/prometheus/promu.git /promu
+  - cd /promu
+  - go build -ldflags="-s -w" -o promu ./main.go
+---
+artifact: prometheus-plus-plus/prom-pp-artifact
+from: golang:1.21.4-alpine3.18
+mount:
+- fromPath: ~/go-pkg-cache
+  to: /go/pkg
+git:
+- add: /
+  to: /prometheus/prometheus
+import:
+- artifact: prometheus-plus-plus/prom-pp-promu-artifact
+  add: /promu/promu
+  to: /bin/promu
+  before: install
+shell:
+  install:
+  - apk update && apk add --no-cache git
+  - apk add --no-cache bash
+  - export NODE_MAJOR=20
+  - export GOPROXY="https://proxy.golang.org/" CGO_ENABLED=0 GOOS=linux GOARCH=amd64
+  - mkdir /prometheus && cd /prometheus
+  - cd /prometheus/prometheus/web/ui
+  - apk add --no-cache nodejs npm
+  - npm install
+  - npm run build
+  - cd /prometheus/prometheus
+  - scripts/compress_assets.sh
+  - go mod tidy
+  - go generate -tags plugins ./plugins
+  - /bin/promu build --prefix /prometheus/prometheus
+  - mkdir -p /consoles
+  - cp /prometheus/prometheus/consoles/* /consoles
+  - cp /prometheus/prometheus/console_libraries/* /consoles
+  - mkdir -p /etc
+  - cp /prometheus/prometheus/documentation/examples/prometheus.yml /etc
+  - cp /prometheus/prometheus/console_libraries/* /etc
+  - mkdir /empty
+  - chown -R 64535:64535 /empty
+  - chown -R 64535:64535 /prometheus/
+  - chown -R 64535:64535 /etc/
+  - chown -R 64535:64535 /consoles/
+  - chmod 0700 /prometheus/prometheus/prometheus
+  - chmod 0700 /prometheus/prometheus/promtool
+---
+{{ $binariesList := "/usr/bin/curl /bin/sh /bin/df" }}
+---
+artifact: prometheus-plus-plus/prom-pp-binaries-artifact
+from: registry.deckhouse.io/base_images/dev-alt:p10@sha256:76e6e163fa982f03468166203488b569e6d9fc10855d6a259c662706436cdcad
+shell:
+  install:
+    - /binary_replace.sh -i "{{ $binariesList }}" -o /relocate
+---
+image: prometheus-plus-plus/prom-pp
+from: registry.deckhouse.io/deckhouse/ce@sha256:916e14b8eed3d023869752535fed781040a59cf79368b3b05628a7f5029414a0
+import:
+- artifact: prometheus-plus-plus/prom-pp-artifact
+  add: /prometheus/prometheus/prometheus
+  to: /bin/prometheus
+  before: setup
+- artifact: prometheus-plus-plus/prom-pp-artifact
+  add: /prometheus/prometheus/promtool
+  to: /bin/promtool
+  before: setup
+- artifact: prometheus-plus-plus/prom-pp-artifact
+  add: /prometheus/prometheus/console_libraries/
+  to: /usr/share/prometheus/console_libraries
+  before: setup
+- artifact: prometheus-plus-plus/prom-pp-artifact
+  add: /consoles/
+  to: /usr/share/prometheus/consoles
+  before: setup
+- artifact: prometheus-plus-plus/prom-pp-artifact
+  add: /etc/
+  to: /etc/prometheus
+  before: setup
+- artifact: prometheus-plus-plus/prom-pp-artifact
+  add: /empty/
+  to: /prometheus
+  before: setup
+- artifact: prometheus-plus-plus/prom-pp-binaries-artifact
+  add: /relocate
+  to: /
+  before: install
+  includePaths:
+  - '**/*'
+docker:
+  EXPOSE:
+  - "9090"
+  VOLUME:
+  - "/prometheus"
+  WORKDIR: "/prometheus"
+  ENTRYPOINT:
+  - "/bin/prometheus"
+  CMD:
+  - "--config.file=/etc/prometheus/prometheus.yml"
+  - "--storage.tsdb.path=/prometheus"
+  - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+  - "--web.console.templates=/usr/share/prometheus/consoles"

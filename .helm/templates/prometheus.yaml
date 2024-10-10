@@ -1,0 +1,225 @@
+apiVersion: monitoring.coreos.com/v1
+kind: Prometheus
+metadata:
+  name: pp
+  namespace: d8-monitoring
+spec:
+  additionalAlertManagerConfigs:
+    key: alert-managers.yaml
+    name: prometheus-main-additional-configs
+  additionalAlertRelabelConfigs:
+    key: alert-relabels.yaml
+    name: prometheus-main-additional-configs
+  additionalArgs:
+  - name: scrape.timestamp-tolerance
+    value: 10ms
+  additionalScrapeConfigs:
+    key: scrapes.yaml
+    name: prometheus-main-additional-configs
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app: prometheus
+              prometheus: longterm
+          topologyKey: kubernetes.io/hostname
+        weight: 100
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: prometheus
+            prometheus: pp
+        topologyKey: kubernetes.io/hostname
+  alerting:
+    alertmanagers: []
+  containers:
+  - livenessProbe:
+      failureThreshold: 3600
+    name: prometheus
+    readinessProbe:
+      failureThreshold: 3600
+    startupProbe:
+      failureThreshold: 3600
+  - args:
+    - --secure-listen-address=$(KUBE_RBAC_PROXY_LISTEN_ADDRESS):9090
+    - --client-ca-file=/etc/kube-rbac-proxy/ca.crt
+    - --v=6
+    - --logtostderr=true
+    - --stale-cache-interval=1h30m
+    env:
+    - name: KUBE_RBAC_PROXY_LISTEN_ADDRESS
+      valueFrom:
+        fieldRef:
+          fieldPath: status.podIP
+    - name: KUBE_RBAC_PROXY_CONFIG
+      value: |
+        upstreams:
+        - upstream: http://127.0.0.1:9090/
+          path: /
+          authorization:
+            resourceAttributes:
+              namespace: d8-monitoring
+              apiGroup: monitoring.coreos.com
+              apiVersion: v1
+              resource: prometheuses
+              subresource: http
+              name: main
+    image: registry.deckhouse.io/deckhouse/fe@sha256:9e39972534549245803c003b4423cc745297af43affc2bbc4dd3c4da225e46e5
+    name: kube-rbac-proxy
+    ports:
+    - containerPort: 9090
+      name: https
+      protocol: TCP
+    resources:
+      requests:
+        ephemeral-storage: 50Mi
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+    volumeMounts:
+    - mountPath: /etc/kube-rbac-proxy
+      name: kube-rbac-proxy-ca
+  - name: config-reloader
+    resources:
+      requests:
+        ephemeral-storage: 70Mi
+  enableFeatures:
+  - memory-snapshot-on-shutdown
+  - extra-scrape-metrics
+  enableRemoteWriteReceiver: true
+  evaluationInterval: 30s
+  externalLabels:
+    prometheus: deckhouse
+  externalUrl: https://grafana.kube.fsn-dev.okmeter.io/prometheus/
+  image: {{ get .Values.werf.image "prometheus-plus-plus/prom-pp" }}
+  imagePullSecrets:
+  - name: registrysecret-prometheus-pp
+  initContainers:
+  - command:
+    - sh
+    - -c
+    - chown -vfR 64535:64535 /prometheus-db/
+    image: registry.deckhouse.io/deckhouse/fe@sha256:79ed551f4d0ec60799a9bd67f35441df6d86443515dd8337284fb68d97a01b3d
+    imagePullPolicy: IfNotPresent
+    name: fix-permissions
+    securityContext:
+      runAsNonRoot: false
+      runAsUser: 0
+    volumeMounts:
+    - mountPath: /prometheus-db
+      name: prometheus-pp-db
+      subPath: prometheus-db
+  listenLocal: true
+  nodeSelector:
+    node-role.deckhouse.io/system: ""
+  podMetadata:
+    annotations:
+      checksum/kube-rbac-proxy: 554c8404bbbf989b9329135567921295a760ecff76c592c9504b4bfbd435885c
+    labels:
+      threshold.extended-monitoring.deckhouse.io/disk-bytes-critical: "96"
+      threshold.extended-monitoring.deckhouse.io/disk-bytes-warning: "94"
+  podMonitorNamespaceSelector:
+    matchLabels:
+      prometheus.deckhouse.io/monitor-watcher-enabled: "true"
+  podMonitorSelector:
+    matchLabels:
+      prometheus: main
+  portName: web
+  priorityClassName: cluster-low
+  probeNamespaceSelector:
+    matchLabels:
+      prometheus.deckhouse.io/probe-watcher-enabled: "true"
+  probeSelector:
+    matchLabels:
+      prometheus: main
+  prometheusExternalLabelName: ""
+  query:
+    lookbackDelta: 60s
+    maxSamples: 100000000
+  replicaExternalLabelName: ""
+  replicas: 2
+  resources:
+    requests:
+      ephemeral-storage: 150Mi
+  retention: 3d
+  retentionSize: 43GB
+  ruleNamespaceSelector:
+    matchLabels:
+      prometheus.deckhouse.io/rules-watcher-enabled: "true"
+  ruleSelector:
+    matchLabels:
+      component: rules
+      prometheus: main
+  rules:
+    alert:
+      resendDelay: 29s
+  scrapeConfigNamespaceSelector:
+    matchLabels:
+      prometheus.deckhouse.io/scrape-configs-watcher-enabled: "true"
+  scrapeConfigSelector:
+    matchLabels:
+      prometheus: main
+  scrapeInterval: 30s
+  secrets:
+  - alertmanagers-tls-config
+  securityContext:
+    fsGroup: 64535
+    runAsGroup: 64535
+    runAsNonRoot: true
+    runAsUser: 64535
+  serviceAccountName: prometheus
+  serviceMonitorNamespaceSelector:
+    matchLabels:
+      prometheus.deckhouse.io/monitor-watcher-enabled: "true"
+  serviceMonitorSelector:
+    matchLabels:
+      prometheus: main
+  storage:
+    volumeClaimTemplate:
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 50Gi
+        storageClassName: localpath-system
+  tolerations:
+  - key: dedicated.deckhouse.io
+    operator: Equal
+    value: prometheus
+  - key: dedicated.deckhouse.io
+    operator: Equal
+    value: monitoring
+  - key: dedicated.deckhouse.io
+    operator: Equal
+    value: system
+  version: v2.50.1
+  volumes:
+  - configMap:
+      defaultMode: 420
+      name: kube-rbac-proxy-ca.crt
+    name: kube-rbac-proxy-ca
+status:
+  availableReplicas: 2
+  conditions:
+  - lastTransitionTime: "2024-10-03T12:24:22Z"
+    observedGeneration: 4
+    status: "True"
+    type: Available
+  - lastTransitionTime: "2024-10-03T12:24:22Z"
+    observedGeneration: 4
+    status: "True"
+    type: Reconciled
+  paused: false
+  replicas: 2
+  shardStatuses:
+  - availableReplicas: 2
+    replicas: 2
+    shardID: "0"
+    unavailableReplicas: 0
+    updatedReplicas: 2
+  unavailableReplicas: 0
+  updatedReplicas: 2
+  
