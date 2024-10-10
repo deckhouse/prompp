@@ -1,27 +1,61 @@
 include:
   - project: okmeter/okmeter-common-ci
     file: /variables.yml
-  - project: okmeter/okmeter-common-ci
-    file: /onprem.yml
 
 variables:
-  BUNDLE_FINAL_REPO: registry.okmeter.ru/okmeter/okmeter-prometheus
+  WERF_VER: "2 beta"
 
 stages:
-  - build
+- build
+- deploy
+- cleanup
 
 build:
   stage: build
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "pipeline"'
-      when: never
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-      when: never
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
   tags:
     - okmeter-runner
   script:
-    - source "$(trdl use werf ${WERF_VER})"
-    - source <(werf ci-env gitlab --verbose)
+    - . $(trdl use werf ${WERF_VER})
+    - . $(werf ci-env --as-file gitlab)
     - werf build
+
+.deploy:
+  tags:
+    - okmeter-runner
+  script:
+    - . $(trdl use werf ${WERF_VER})
+    - . $(werf ci-env --as-file gitlab)
+    - werf converge
+
+deploy:stage:fsn:
+  extends: [.deploy]
+  stage: deploy
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: manual
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+  environment:
+    name: stage-fsn
+  variables:
+    WERF_KUBE_CONTEXT: cluster-dev-fsn
+    WERF_NAMESPACE: d8-monitoring
+    WERF_SECRET_VALUES_0: .helm/secret-values-stage-fsn.yaml
+    
+cleanup:
+  stage: cleanup
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+  script:
+    - type multiwerf && source <(multiwerf use ${WERF_VER})
+    - type werf && source <(werf ci-env gitlab --verbose)
+    - werf cr login -u nobody -p ${WERF_IMAGES_CLEANUP_PASSWORD} ${WERF_REPO}
+    - unset WERF_KUBE_CONTEXT
+    - werf cleanup
+  tags:
+    - okmeter-runner
