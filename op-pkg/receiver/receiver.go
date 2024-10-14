@@ -174,8 +174,6 @@ func NewReceiver(
 		shutdowner:          util.NewGracefulShutdowner(),
 	}
 
-	initMetrics(r, registerer)
-
 	level.Info(logger).Log("msg", "created")
 
 	return r, nil
@@ -712,18 +710,5 @@ func readClientID(logger log.Logger, dir string) (string, error) {
 
 	default:
 		return "", fmt.Errorf("failed to read client id: %w", err)
-	}
-}
-
-func initMetrics(rr *Receiver, r prometheus.Registerer) {
-	if r != nil {
-		r.MustRegister(
-			prometheus.NewGaugeFunc(prometheus.GaugeOpts{
-				Name: "odarix_core_head_series",
-				Help: "Total number of series in the heads block.",
-			}, func() float64 {
-				return float64(rr.HeadStatus(1).HeadStats.NumSeries)
-			}),
-		)
 	}
 }

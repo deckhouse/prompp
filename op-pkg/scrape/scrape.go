@@ -562,20 +562,21 @@ func injectSampleLabels(builder *op_model.LabelSetSimpleBuilder, target *Target,
 				builder.Add(l.Name, l.Value)
 			}
 		})
-	} else {
-		var conflictingExposedLabels []labels.Label
-		target.LabelsRange(func(l labels.Label) {
-			existingValue := builder.Get(l.Name)
-			if existingValue != "" {
-				conflictingExposedLabels = append(conflictingExposedLabels, labels.Label{Name: l.Name, Value: existingValue})
-			}
-			// It is now safe to set the target label.
-			builder.Set(l.Name, l.Value)
-		})
+		return
+	}
 
-		if len(conflictingExposedLabels) > 0 {
-			resolveConflictingExposedLabels(builder, conflictingExposedLabels)
+	var conflictingExposedLabels []labels.Label
+	target.LabelsRange(func(l labels.Label) {
+		existingValue := builder.Get(l.Name)
+		if existingValue != "" {
+			conflictingExposedLabels = append(conflictingExposedLabels, labels.Label{Name: l.Name, Value: existingValue})
 		}
+		// It is now safe to set the target label.
+		builder.Set(l.Name, l.Value)
+	})
+
+	if len(conflictingExposedLabels) > 0 {
+		resolveConflictingExposedLabels(builder, conflictingExposedLabels)
 	}
 }
 
@@ -1164,10 +1165,16 @@ loop:
 		}
 
 		switch et {
-		case textparse.EntryType,
-			textparse.EntryHelp,
-			textparse.EntryUnit,
-			textparse.EntryComment,
+		case textparse.EntryType:
+			sl.cache.setType(p.Type())
+			continue
+		case textparse.EntryHelp:
+			sl.cache.setHelp(p.Help())
+			continue
+		case textparse.EntryUnit:
+			sl.cache.setUnit(p.Unit())
+			continue
+		case textparse.EntryComment,
 			textparse.EntryHistogram:
 			continue
 		default:
@@ -1233,7 +1240,7 @@ loop:
 func (sl *scrapeLoop) appendCpp(b []byte, contentType string, ts time.Time) (total, added int, err error) {
 	if mediaType, _, err := mime.ParseMediaType(contentType); err == nil &&
 		(mediaType == "application/openmetrics-text" || mediaType == "application/vnd.google.protobuf") {
-		return 0, 0, fmt.Errorf("unsupported media type: %s", mediaType)
+		return sl.append(b, contentType, ts)
 	}
 
 	// parsing metadata via go parser
@@ -1281,6 +1288,10 @@ func (sl *scrapeLoop) appendCpp(b []byte, contentType string, ts time.Time) (tot
 	defTime := timestamp.FromTime(ts)
 	hashdex := cppbridge.NewScraperHashdex()
 	if err = hashdex.Parse(b, defTime, sl.scraper.String()); err != nil {
+		level.Warn(sl.logger).Log(
+			"msg", "Invalid hashdex Parse",
+			"err", err,
+		)
 		return 0, 0, err
 	}
 
