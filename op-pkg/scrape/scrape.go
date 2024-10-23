@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
@@ -189,6 +190,21 @@ func newScrapePool(
 			opts.metricLimits.SampleLimit = int64(limit)
 		}
 
+		targetOptions := cppbridge.RelabelerOptions{
+			MetricLimits: opts.metricLimits,
+			HonorLabels:  opts.honorLabels,
+		}
+
+		opts.target.LabelsRange(func(l labels.Label) {
+			targetOptions.TargetLabels = append(
+				targetOptions.TargetLabels,
+				cppbridge.Label{
+					Name:  *((*string)(unsafe.Pointer(&l.Name))),
+					Value: *((*string)(unsafe.Pointer(&l.Value))),
+				},
+			)
+		})
+
 		return newScrapeLoop(
 			ctx,
 			opts.scraper,
@@ -196,12 +212,12 @@ func newScrapePool(
 			buffers,
 			bufferBuilders,
 			bufferBatches,
-			func(builder *op_model.LabelSetSimpleBuilder) {
-				injectSampleLabels(builder, opts.target, opts.honorLabels)
-			},
-			func(builder *op_model.LabelSetSimpleBuilder) {
-				injectReportSampleLabels(builder, opts.target)
-			},
+			// func(builder *op_model.LabelSetSimpleBuilder) {
+			// 	injectSampleLabels(builder, opts.target, opts.honorLabels)
+			// },
+			// func(builder *op_model.LabelSetSimpleBuilder) {
+			// 	injectReportSampleLabels(builder, opts.target)
+			// },
 			receiver,
 			config.ScrapePrefix+cfg.JobName,
 			cache,
@@ -209,7 +225,8 @@ func newScrapePool(
 			opts.honorTimestamps,
 			opts.trackTimestampsStaleness,
 			opts.enableCompression,
-			opts.metricLimits,
+			// opts.metricLimits,
+			targetOptions,
 			opts.interval,
 			opts.timeout,
 			opts.scrapeClassicHistograms,
@@ -760,16 +777,18 @@ type scrapeLoop struct {
 	enableCompression        bool
 	forcedErr                error
 	forcedErrMtx             sync.Mutex
-	metricLimits             *cppbridge.MetricLimits
-	interval                 time.Duration
-	timeout                  time.Duration
-	scrapeClassicHistograms  bool
-	enableCTZeroIngestion    bool
+	// metricLimits             *cppbridge.MetricLimits
+	options                 cppbridge.RelabelerOptions
+	reportOptions           cppbridge.RelabelerOptions
+	interval                time.Duration
+	timeout                 time.Duration
+	scrapeClassicHistograms bool
+	enableCTZeroIngestion   bool
 
-	receiver             Receiver
-	sampleInjector       labelsInjector
-	reportSampleInjector labelsInjector
-	scrapeName           string
+	receiver Receiver
+	// sampleInjector       labelsInjector
+	// reportSampleInjector labelsInjector
+	scrapeName string
 
 	parentCtx   context.Context
 	appenderCtx context.Context
@@ -794,8 +813,8 @@ func newScrapeLoop(
 	buffers *pool.Pool,
 	bufferBuilders *buildersPool,
 	bufferBatches *batchesPool,
-	sampleInjector labelsInjector,
-	reportSampleInjector labelsInjector,
+	// sampleInjector labelsInjector,
+	// reportSampleInjector labelsInjector,
 	receiver Receiver,
 	scrapeName string,
 	cache *scrapeCache,
@@ -803,7 +822,8 @@ func newScrapeLoop(
 	honorTimestamps bool,
 	trackTimestampsStaleness bool,
 	enableCompression bool,
-	metricLimits *cppbridge.MetricLimits,
+	// metricLimits *cppbridge.MetricLimits,
+	options cppbridge.RelabelerOptions,
 	interval time.Duration,
 	timeout time.Duration,
 	scrapeClassicHistograms bool,
@@ -837,14 +857,14 @@ func newScrapeLoop(
 	}
 
 	sl := &scrapeLoop{
-		scraper:                  sc,
-		buffers:                  buffers,
-		cache:                    cache,
-		bufferBuilders:           bufferBuilders,
-		bufferBatches:            bufferBatches,
-		receiver:                 receiver,
-		sampleInjector:           sampleInjector,
-		reportSampleInjector:     reportSampleInjector,
+		scraper:        sc,
+		buffers:        buffers,
+		cache:          cache,
+		bufferBuilders: bufferBuilders,
+		bufferBatches:  bufferBatches,
+		receiver:       receiver,
+		// sampleInjector:           sampleInjector,
+		// reportSampleInjector:     reportSampleInjector,
 		scrapeName:               scrapeName,
 		stopped:                  make(chan struct{}),
 		offsetSeed:               offsetSeed,
@@ -854,15 +874,17 @@ func newScrapeLoop(
 		honorTimestamps:          honorTimestamps,
 		trackTimestampsStaleness: trackTimestampsStaleness,
 		enableCompression:        enableCompression,
-		metricLimits:             metricLimits,
-		interval:                 interval,
-		timeout:                  timeout,
-		scrapeClassicHistograms:  scrapeClassicHistograms,
-		enableCTZeroIngestion:    enableCTZeroIngestion,
-		reportExtraMetrics:       reportExtraMetrics,
-		appendMetadataToWAL:      appendMetadataToWAL,
-		metrics:                  metrics,
-		skipOffsetting:           skipOffsetting,
+		// metricLimits:             metricLimits,
+		options:                 options,
+		reportOptions:           cppbridge.RelabelerOptions{TargetLabels: options.TargetLabels},
+		interval:                interval,
+		timeout:                 timeout,
+		scrapeClassicHistograms: scrapeClassicHistograms,
+		enableCTZeroIngestion:   enableCTZeroIngestion,
+		reportExtraMetrics:      reportExtraMetrics,
+		appendMetadataToWAL:     appendMetadataToWAL,
+		metrics:                 metrics,
+		skipOffsetting:          skipOffsetting,
 	}
 	sl.ctx, sl.cancel = context.WithCancel(ctx)
 
@@ -1082,7 +1104,7 @@ func (sl *scrapeLoop) endOfRunStaleness(last time.Time, ticker *time.Ticker, int
 	if err := sl.receiver.AppendTimeSeries(
 		sl.appenderCtx,
 		emptyBatch,
-		sl.metricLimits,
+		sl.options,
 		sl.scraper.stalenansState(),
 		timestamp.FromTime(staleTime),
 		sl.scrapeName,
@@ -1117,7 +1139,7 @@ func (sl *scrapeLoop) append(b []byte, contentType string, ts time.Time) (total,
 		return 0, 0, sl.receiver.AppendTimeSeries(
 			sl.appenderCtx,
 			sl.bufferBatches.get(),
-			sl.metricLimits,
+			sl.options,
 			sl.scraper.stalenansState(),
 			timestamp.FromTime(ts),
 			sl.scrapeName,
@@ -1191,7 +1213,7 @@ loop:
 		}
 
 		p.MetricToBuilder(builder)
-		sl.sampleInjector(builder)
+		// sl.sampleInjector(builder)
 		if ln, dup := builder.HasDuplicateLabelNames(); dup {
 			level.Warn(sl.logger).Log(
 				"msg", "label name is not unique, skip series",
@@ -1226,7 +1248,7 @@ loop:
 	if err = sl.receiver.AppendTimeSeries(
 		sl.appenderCtx,
 		batch,
-		sl.metricLimits,
+		sl.options,
 		sl.scraper.stalenansState(),
 		defTime,
 		sl.scrapeName,
@@ -1298,7 +1320,7 @@ func (sl *scrapeLoop) appendCpp(b []byte, contentType string, ts time.Time) (tot
 	if err = sl.receiver.AppendTimeSeriesHashdex(
 		sl.appenderCtx,
 		hashdex,
-		sl.metricLimits,
+		sl.options,
 		sl.scraper.stalenansState(),
 		defTime,
 		sl.scrapeName,
@@ -1361,7 +1383,7 @@ func (sl *scrapeLoop) report(
 			batch,
 			scrapeSampleLimitMetricName,
 			ts,
-			float64(sl.metricLimits.SampleLimit),
+			float64(sl.options.MetricLimits.SampleLimit),
 		); err != nil {
 			return
 		}
@@ -1373,7 +1395,7 @@ func (sl *scrapeLoop) report(
 	if err = sl.receiver.AppendTimeSeries(
 		sl.appenderCtx,
 		batch,
-		nil,
+		sl.reportOptions,
 		nil,
 		0,
 		config.TransparentRelabeler,
@@ -1420,7 +1442,7 @@ func (sl *scrapeLoop) reportStale(start time.Time) (err error) {
 	if err = sl.receiver.AppendTimeSeries(
 		sl.appenderCtx,
 		batch,
-		nil,
+		sl.reportOptions,
 		nil,
 		0,
 		config.TransparentRelabeler,
@@ -1440,7 +1462,7 @@ func (sl *scrapeLoop) addReportSample(
 ) error {
 	builder.Reset()
 	builder.Add(labels.MetricName, nameValue)
-	sl.reportSampleInjector(builder)
+	// sl.reportSampleInjector(builder)
 	return batch.Add(builder, uint64(t), v)
 }
 

@@ -39,7 +39,10 @@ import (
 	"github.com/prometheus/prometheus/op-pkg/dialer"
 )
 
-const defaultShutdownTimeout = 40 * time.Second
+const (
+	defaultShutdownTimeout = 40 * time.Second
+	defaultNumberOfShards  = 3
+)
 
 type HeadConfig struct {
 	inputRelabelerConfigs []*config.InputRelabelerConfig
@@ -77,9 +80,8 @@ type Receiver struct {
 	logger         log.Logger
 	workingDir     string
 	clientID       string
-
-	cgogc      *cppbridge.CGOGC
-	shutdowner *util.GracefulShutdowner
+	cgogc          *cppbridge.CGOGC
+	shutdowner     *util.GracefulShutdowner
 }
 
 func (rr *Receiver) Appender(ctx context.Context) storage.Appender {
@@ -146,7 +148,6 @@ func NewReceiver(
 
 	dstrb := distributor.NewDistributor(*destinationGroups)
 	app := appender.NewQueryableAppender(hd, dstrb, querierMetrics)
-
 	mwt := appender.NewMetricsWriteTrigger(appender.DefaultMetricWriteInterval, app, storage)
 
 	r := &Receiver{
@@ -186,20 +187,19 @@ func (rr *Receiver) AppendProtobuf(ctx context.Context, data relabeler.ProtobufD
 		data.Destroy()
 		return err
 	}
-
 	if rr.haTracker.IsDrop(hx.Cluster(), hx.Replica()) {
 		data.Destroy()
 		return nil
 	}
 	incomingData := &relabeler.IncomingData{Hashdex: hx, Data: data}
-	return rr.appender.Append(ctx, incomingData, nil, relabelerID)
+	return rr.appender.Append(ctx, incomingData, cppbridge.RelabelerOptions{}, relabelerID)
 }
 
 // AppendTimeSeries append TimeSeries data to relabeling hashdex data.
 func (rr *Receiver) AppendTimeSeries(
 	ctx context.Context,
 	data relabeler.TimeSeriesData,
-	metricLimits *cppbridge.MetricLimits,
+	options cppbridge.RelabelerOptions,
 	sourceStates *relabeler.SourceStates,
 	staleNansTS int64,
 	relabelerID string,
@@ -218,7 +218,7 @@ func (rr *Receiver) AppendTimeSeries(
 	return rr.appender.AppendWithStaleNans(
 		ctx,
 		incomingData,
-		metricLimits,
+		options,
 		sourceStates,
 		staleNansTS,
 		relabelerID,
@@ -228,7 +228,7 @@ func (rr *Receiver) AppendTimeSeries(
 func (rr *Receiver) AppendTimeSeriesHashdex(
 	ctx context.Context,
 	hashdex cppbridge.ShardedData,
-	metricLimits *cppbridge.MetricLimits,
+	options cppbridge.RelabelerOptions,
 	sourceStates *relabeler.SourceStates,
 	staleNansTS int64,
 	relabelerID string,
@@ -236,7 +236,7 @@ func (rr *Receiver) AppendTimeSeriesHashdex(
 	return rr.appender.AppendWithStaleNans(
 		ctx,
 		&relabeler.IncomingData{Hashdex: hashdex},
-		metricLimits,
+		options,
 		sourceStates,
 		staleNansTS,
 		relabelerID,
@@ -249,7 +249,7 @@ func (rr *Receiver) AppendHashdex(ctx context.Context, hashdex cppbridge.Sharded
 		return nil
 	}
 	incomingData := &relabeler.IncomingData{Hashdex: hashdex}
-	return rr.appender.Append(ctx, incomingData, nil, relabelerID)
+	return rr.appender.Append(ctx, incomingData, cppbridge.RelabelerOptions{}, relabelerID)
 }
 
 // ApplyConfig update config.
@@ -264,7 +264,7 @@ func (rr *Receiver) ApplyConfig(cfg *prom_config.Config) error {
 
 	numberOfShards := rCfg.NumberOfShards
 	if numberOfShards == 0 {
-		numberOfShards = 2
+		numberOfShards = defaultNumberOfShards
 	}
 
 	err = rr.appender.Reconfigure(

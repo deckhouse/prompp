@@ -29,7 +29,7 @@ type Receiver interface {
 	AppendTimeSeries(
 		ctx context.Context,
 		data relabeler.TimeSeriesData,
-		metricLimits *cppbridge.MetricLimits,
+		options cppbridge.RelabelerOptions,
 		sourceStates *relabeler.SourceStates,
 		staleNansTS int64,
 		relabelerID string,
@@ -38,7 +38,7 @@ type Receiver interface {
 	AppendTimeSeriesHashdex(
 		ctx context.Context,
 		hashdex cppbridge.ShardedData,
-		metricLimits *cppbridge.MetricLimits,
+		options cppbridge.RelabelerOptions,
 		sourceStates *relabeler.SourceStates,
 		staleNansTS int64,
 		relabelerID string,
