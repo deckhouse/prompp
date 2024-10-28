@@ -29,21 +29,18 @@ type Receiver interface {
 	AppendTimeSeries(
 		ctx context.Context,
 		data relabeler.TimeSeriesData,
-		options cppbridge.RelabelerOptions,
-		sourceStates *relabeler.SourceStates,
-		staleNansTS int64,
+		state *cppbridge.State,
 		relabelerID string,
 	) error
 	// AppendTimeSeries append TimeSeries data to relabeling hashdex data.
 	AppendTimeSeriesHashdex(
 		ctx context.Context,
 		hashdex cppbridge.ShardedData,
-		options cppbridge.RelabelerOptions,
-		sourceStates *relabeler.SourceStates,
-		staleNansTS int64,
+		state *cppbridge.State,
 		relabelerID string,
 	) error
 	RelabelerIDIsExist(relabelerID string) bool
+	GetState() *cppbridge.State
 }
 
 // Options are the configuration parameters to the scrape manager.

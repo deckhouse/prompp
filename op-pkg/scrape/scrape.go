@@ -22,11 +22,9 @@ import (
 	"github.com/go-kit/log/level"
 	"github.com/odarix/odarix-core-go/cppbridge"
 	op_model "github.com/odarix/odarix-core-go/model"
-	"github.com/odarix/odarix-core-go/relabeler"
 	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/common/version"
-	"golang.org/x/exp/slices"
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery/targetgroup"
@@ -92,9 +90,6 @@ func TargetFromContext(ctx context.Context) (*Target, bool) {
 	t, ok := ctx.Value(ctxKeyTarget).(*Target)
 	return t, ok
 }
-
-// inject scrape labels.
-type labelsInjector func(builder *op_model.LabelSetSimpleBuilder)
 
 type scrapeLoopOptions struct {
 	target                   *Target
@@ -190,7 +185,7 @@ func newScrapePool(
 			opts.metricLimits.SampleLimit = int64(limit)
 		}
 
-		targetOptions := cppbridge.RelabelerOptions{
+		targetOptions := &cppbridge.RelabelerOptions{
 			MetricLimits: opts.metricLimits,
 			HonorLabels:  opts.honorLabels,
 		}
@@ -208,25 +203,18 @@ func newScrapePool(
 		return newScrapeLoop(
 			ctx,
 			opts.scraper,
+			receiver,
 			log.With(logger, "target", opts.target),
+			targetOptions,
 			buffers,
 			bufferBuilders,
 			bufferBatches,
-			// func(builder *op_model.LabelSetSimpleBuilder) {
-			// 	injectSampleLabels(builder, opts.target, opts.honorLabels)
-			// },
-			// func(builder *op_model.LabelSetSimpleBuilder) {
-			// 	injectReportSampleLabels(builder, opts.target)
-			// },
-			receiver,
-			config.ScrapePrefix+cfg.JobName,
 			cache,
+			config.ScrapePrefix+cfg.JobName,
 			offsetSeed,
 			opts.honorTimestamps,
 			opts.trackTimestampsStaleness,
 			opts.enableCompression,
-			// opts.metricLimits,
-			targetOptions,
 			opts.interval,
 			opts.timeout,
 			opts.scrapeClassicHistograms,
@@ -359,7 +347,6 @@ func (sp *scrapePool) reload(cfg *config.ScrapeConfig) error {
 		var (
 			s = &targetScraper{
 				Target:               t,
-				sourceStates:         relabeler.NewSourceStates(),
 				client:               sp.client,
 				timeout:              timeout,
 				bodySizeLimit:        bodySizeLimit,
@@ -484,7 +471,6 @@ func (sp *scrapePool) sync(targets []*Target) {
 			interval, timeout, err = t.intervalAndTimeout(interval, timeout)
 			s := &targetScraper{
 				Target:               t,
-				sourceStates:         relabeler.NewSourceStates(),
 				client:               sp.client,
 				timeout:              timeout,
 				bodySizeLimit:        bodySizeLimit,
@@ -572,55 +558,6 @@ func (sp *scrapePool) refreshTargetLimitErr() error {
 	return nil
 }
 
-func injectSampleLabels(builder *op_model.LabelSetSimpleBuilder, target *Target, honor bool) {
-	if honor {
-		target.LabelsRange(func(l labels.Label) {
-			if !builder.Has(l.Name) {
-				builder.Add(l.Name, l.Value)
-			}
-		})
-		return
-	}
-
-	var conflictingExposedLabels []labels.Label
-	target.LabelsRange(func(l labels.Label) {
-		existingValue := builder.Get(l.Name)
-		if existingValue != "" {
-			conflictingExposedLabels = append(conflictingExposedLabels, labels.Label{Name: l.Name, Value: existingValue})
-		}
-		// It is now safe to set the target label.
-		builder.Set(l.Name, l.Value)
-	})
-
-	if len(conflictingExposedLabels) > 0 {
-		resolveConflictingExposedLabels(builder, conflictingExposedLabels)
-	}
-}
-
-func resolveConflictingExposedLabels(builder *op_model.LabelSetSimpleBuilder, conflictingExposedLabels []labels.Label) {
-	slices.SortStableFunc(conflictingExposedLabels, func(a, b labels.Label) int {
-		return len(a.Name) - len(b.Name)
-	})
-
-	for _, l := range conflictingExposedLabels {
-		newName := l.Name
-		for {
-			newName = model.ExportedLabelPrefix + newName
-			if builder.Get(newName) == "" {
-				builder.Add(newName, l.Value)
-				break
-			}
-		}
-	}
-}
-
-func injectReportSampleLabels(builder *op_model.LabelSetSimpleBuilder, target *Target) {
-	target.LabelsRange(func(l labels.Label) {
-		builder.Add(model.ExportedLabelPrefix+l.Name, builder.Get(l.Name))
-		builder.Add(l.Name, l.Value)
-	})
-}
-
 var (
 	errBodySizeLimit = errors.New("body size limit exceeded")
 	UserAgent        = fmt.Sprintf("Prometheus/%s", version.Version)
@@ -632,15 +569,12 @@ type scraper interface {
 	readResponse(ctx context.Context, resp *http.Response, w io.Writer) (string, error)
 	Report(start time.Time, dur time.Duration, err error)
 	offset(interval time.Duration, offsetSeed uint64) time.Duration
-	stalenansState() *relabeler.SourceStates
 	String() string
 }
 
 // targetScraper implements the scraper interface for a target.
 type targetScraper struct {
 	*Target
-
-	sourceStates *relabeler.SourceStates
 
 	client  *http.Client
 	req     *http.Request
@@ -746,10 +680,6 @@ func (s *targetScraper) readResponse(ctx context.Context, resp *http.Response, w
 	return resp.Header.Get("Content-Type"), nil
 }
 
-func (s *targetScraper) stalenansState() *relabeler.SourceStates {
-	return s.sourceStates
-}
-
 func (s *targetScraper) String() string {
 	return s.Target.String()
 }
@@ -765,29 +695,26 @@ type loop interface {
 
 type scrapeLoop struct {
 	scraper                  scraper
+	receiver                 Receiver
 	logger                   log.Logger
+	state                    *cppbridge.State
+	reportState              *cppbridge.State
 	cache                    *scrapeCache
-	lastScrapeSize           int
 	buffers                  *pool.Pool
 	bufferBuilders           *buildersPool
 	bufferBatches            *batchesPool
+	lastScrapeSize           int
 	offsetSeed               uint64
 	honorTimestamps          bool
 	trackTimestampsStaleness bool
 	enableCompression        bool
 	forcedErr                error
 	forcedErrMtx             sync.Mutex
-	// metricLimits             *cppbridge.MetricLimits
-	options                 cppbridge.RelabelerOptions
-	reportOptions           cppbridge.RelabelerOptions
-	interval                time.Duration
-	timeout                 time.Duration
-	scrapeClassicHistograms bool
-	enableCTZeroIngestion   bool
+	interval                 time.Duration
+	timeout                  time.Duration
+	scrapeClassicHistograms  bool
+	enableCTZeroIngestion    bool
 
-	receiver Receiver
-	// sampleInjector       labelsInjector
-	// reportSampleInjector labelsInjector
 	scrapeName string
 
 	parentCtx   context.Context
@@ -809,21 +736,18 @@ type scrapeLoop struct {
 func newScrapeLoop(
 	ctx context.Context,
 	sc scraper,
+	receiver Receiver,
 	logger log.Logger,
+	options *cppbridge.RelabelerOptions,
 	buffers *pool.Pool,
 	bufferBuilders *buildersPool,
 	bufferBatches *batchesPool,
-	// sampleInjector labelsInjector,
-	// reportSampleInjector labelsInjector,
-	receiver Receiver,
-	scrapeName string,
 	cache *scrapeCache,
+	scrapeName string,
 	offsetSeed uint64,
 	honorTimestamps bool,
 	trackTimestampsStaleness bool,
 	enableCompression bool,
-	// metricLimits *cppbridge.MetricLimits,
-	options cppbridge.RelabelerOptions,
 	interval time.Duration,
 	timeout time.Duration,
 	scrapeClassicHistograms bool,
@@ -856,35 +780,39 @@ func newScrapeLoop(
 		appenderCtx = ContextWithTarget(appenderCtx, target)
 	}
 
+	state := receiver.GetState()
+	state.EnableTrackStaleness()
+	state.SetRelabelerOptions(options)
+
+	reportState := receiver.GetState()
+	reportState.SetRelabelerOptions(&cppbridge.RelabelerOptions{TargetLabels: options.TargetLabels})
+
 	sl := &scrapeLoop{
-		scraper:        sc,
-		buffers:        buffers,
-		cache:          cache,
-		bufferBuilders: bufferBuilders,
-		bufferBatches:  bufferBatches,
-		receiver:       receiver,
-		// sampleInjector:           sampleInjector,
-		// reportSampleInjector:     reportSampleInjector,
+		scraper:                  sc,
+		receiver:                 receiver,
+		logger:                   logger,
+		state:                    state,
+		reportState:              reportState,
+		cache:                    cache,
+		buffers:                  buffers,
+		bufferBuilders:           bufferBuilders,
+		bufferBatches:            bufferBatches,
 		scrapeName:               scrapeName,
 		stopped:                  make(chan struct{}),
 		offsetSeed:               offsetSeed,
-		logger:                   logger,
 		parentCtx:                ctx,
 		appenderCtx:              appenderCtx,
 		honorTimestamps:          honorTimestamps,
 		trackTimestampsStaleness: trackTimestampsStaleness,
 		enableCompression:        enableCompression,
-		// metricLimits:             metricLimits,
-		options:                 options,
-		reportOptions:           cppbridge.RelabelerOptions{TargetLabels: options.TargetLabels},
-		interval:                interval,
-		timeout:                 timeout,
-		scrapeClassicHistograms: scrapeClassicHistograms,
-		enableCTZeroIngestion:   enableCTZeroIngestion,
-		reportExtraMetrics:      reportExtraMetrics,
-		appendMetadataToWAL:     appendMetadataToWAL,
-		metrics:                 metrics,
-		skipOffsetting:          skipOffsetting,
+		interval:                 interval,
+		timeout:                  timeout,
+		scrapeClassicHistograms:  scrapeClassicHistograms,
+		enableCTZeroIngestion:    enableCTZeroIngestion,
+		reportExtraMetrics:       reportExtraMetrics,
+		appendMetadataToWAL:      appendMetadataToWAL,
+		metrics:                  metrics,
+		skipOffsetting:           skipOffsetting,
 	}
 	sl.ctx, sl.cancel = context.WithCancel(ctx)
 
@@ -1101,12 +1029,11 @@ func (sl *scrapeLoop) endOfRunStaleness(last time.Time, ticker *time.Ticker, int
 	// stale markers will be out of order and ignored.
 	// sl.context would have been cancelled, hence using sl.appenderCtx.
 	emptyBatch := sl.bufferBatches.get()
+	sl.state.SetStaleNansTS(timestamp.FromTime(staleTime))
 	if err := sl.receiver.AppendTimeSeries(
 		sl.appenderCtx,
 		emptyBatch,
-		sl.options,
-		sl.scraper.stalenansState(),
-		timestamp.FromTime(staleTime),
+		sl.state,
 		sl.scrapeName,
 	); err != nil {
 		level.Warn(sl.logger).Log("msg", "Stale append failed", "err", err)
@@ -1136,12 +1063,11 @@ func (sl *scrapeLoop) getCache() *scrapeCache {
 func (sl *scrapeLoop) append(b []byte, contentType string, ts time.Time) (total, added int, err error) {
 	// if input is empty for stalenan
 	if len(b) == 0 {
+		sl.state.SetStaleNansTS(timestamp.FromTime(ts))
 		return 0, 0, sl.receiver.AppendTimeSeries(
 			sl.appenderCtx,
 			sl.bufferBatches.get(),
-			sl.options,
-			sl.scraper.stalenansState(),
-			timestamp.FromTime(ts),
+			sl.state,
 			sl.scrapeName,
 		)
 	}
@@ -1213,7 +1139,6 @@ loop:
 		}
 
 		p.MetricToBuilder(builder)
-		// sl.sampleInjector(builder)
 		if ln, dup := builder.HasDuplicateLabelNames(); dup {
 			level.Warn(sl.logger).Log(
 				"msg", "label name is not unique, skip series",
@@ -1245,12 +1170,11 @@ loop:
 	}
 
 	batched := batch.Len()
+	sl.state.SetStaleNansTS(defTime)
 	if err = sl.receiver.AppendTimeSeries(
 		sl.appenderCtx,
 		batch,
-		sl.options,
-		sl.scraper.stalenansState(),
-		defTime,
+		sl.state,
 		sl.scrapeName,
 	); err != nil {
 		return
@@ -1265,51 +1189,51 @@ func (sl *scrapeLoop) appendCpp(b []byte, contentType string, ts time.Time) (tot
 		return sl.append(b, contentType, ts)
 	}
 
-	// parsing metadata via go parser
-	p, err := textparse.New(b, contentType, sl.scrapeClassicHistograms)
-	if err != nil {
-		level.Debug(sl.logger).Log(
-			"msg", "Invalid content type on scrape, using prometheus parser as fallback.",
-			"content_type", contentType,
-			"err", err,
-		)
-	}
-	for {
-		var et textparse.Entry
-		if et, err = p.Next(); err != nil {
-			if errors.Is(err, io.EOF) {
-				err = nil
-			}
-			break
-		}
+	// // parsing metadata via go parser
+	// p, err := textparse.New(b, contentType, sl.scrapeClassicHistograms)
+	// if err != nil {
+	// 	level.Debug(sl.logger).Log(
+	// 		"msg", "Invalid content type on scrape, using prometheus parser as fallback.",
+	// 		"content_type", contentType,
+	// 		"err", err,
+	// 	)
+	// }
+	// for {
+	// 	var et textparse.Entry
+	// 	if et, err = p.Next(); err != nil {
+	// 		if errors.Is(err, io.EOF) {
+	// 			err = nil
+	// 		}
+	// 		break
+	// 	}
 
-		switch et {
-		case textparse.EntryType:
-			sl.cache.setType(p.Type())
-			continue
-		case textparse.EntryHelp:
-			sl.cache.setHelp(p.Help())
-			continue
-		case textparse.EntryUnit:
-			sl.cache.setUnit(p.Unit())
-			continue
-		case textparse.EntryComment:
-			continue
-		case textparse.EntryHistogram:
-			continue
-		default:
-		}
-		total++
-		added++
-	}
-	if err != nil {
-		return 0, 0, err
-	}
+	// 	switch et {
+	// 	case textparse.EntryType:
+	// 		sl.cache.setType(p.Type())
+	// 		continue
+	// 	case textparse.EntryHelp:
+	// 		sl.cache.setHelp(p.Help())
+	// 		continue
+	// 	case textparse.EntryUnit:
+	// 		sl.cache.setUnit(p.Unit())
+	// 		continue
+	// 	case textparse.EntryComment:
+	// 		continue
+	// 	case textparse.EntryHistogram:
+	// 		continue
+	// 	default:
+	// 	}
+	// 	total++
+	// 	added++
+	// }
+	// if err != nil {
+	// 	return 0, 0, err
+	// }
 
 	// parsing series via cpp parser
 	defTime := timestamp.FromTime(ts)
 	hashdex := cppbridge.NewScraperHashdex()
-	if err = hashdex.Parse(b, defTime, sl.scraper.String()); err != nil {
+	if err = hashdex.Parse(b, defTime); err != nil {
 		level.Warn(sl.logger).Log(
 			"msg", "Invalid hashdex Parse",
 			"err", err,
@@ -1317,12 +1241,11 @@ func (sl *scrapeLoop) appendCpp(b []byte, contentType string, ts time.Time) (tot
 		return 0, 0, err
 	}
 
+	sl.state.SetStaleNansTS(defTime)
 	if err = sl.receiver.AppendTimeSeriesHashdex(
 		sl.appenderCtx,
 		hashdex,
-		sl.options,
-		sl.scraper.stalenansState(),
-		defTime,
+		sl.state,
 		sl.scrapeName,
 	); err != nil {
 		return 0, 0, err
@@ -1383,7 +1306,7 @@ func (sl *scrapeLoop) report(
 			batch,
 			scrapeSampleLimitMetricName,
 			ts,
-			float64(sl.options.MetricLimits.SampleLimit),
+			float64(sl.state.RelabelerOptions().MetricLimits.SampleLimit),
 		); err != nil {
 			return
 		}
@@ -1395,9 +1318,7 @@ func (sl *scrapeLoop) report(
 	if err = sl.receiver.AppendTimeSeries(
 		sl.appenderCtx,
 		batch,
-		sl.reportOptions,
-		nil,
-		0,
+		sl.reportState,
 		config.TransparentRelabeler,
 	); err != nil {
 		return
@@ -1442,9 +1363,7 @@ func (sl *scrapeLoop) reportStale(start time.Time) (err error) {
 	if err = sl.receiver.AppendTimeSeries(
 		sl.appenderCtx,
 		batch,
-		sl.reportOptions,
-		nil,
-		0,
+		sl.reportState,
 		config.TransparentRelabeler,
 	); err != nil {
 		return

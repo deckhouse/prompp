@@ -4,6 +4,7 @@ package config
 
 import (
 	"fmt"
+
 	"github.com/odarix/odarix-core-go/relabeler/config"
 )
 

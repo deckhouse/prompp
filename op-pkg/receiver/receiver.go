@@ -21,6 +21,7 @@ import (
 	"github.com/odarix/odarix-core-go/relabeler/querier"
 	"github.com/odarix/odarix-core-go/util"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/annotations"
 	"go.uber.org/atomic"
 
 	"github.com/go-kit/log"
@@ -34,6 +35,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	prom_config "github.com/prometheus/prometheus/config"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
 	op_config "github.com/prometheus/prometheus/op-pkg/config"
 	"github.com/prometheus/prometheus/op-pkg/dialer"
@@ -41,7 +43,7 @@ import (
 
 const (
 	defaultShutdownTimeout = 40 * time.Second
-	defaultNumberOfShards  = 3
+	defaultNumberOfShards  = 2
 )
 
 type HeadConfig struct {
@@ -71,17 +73,16 @@ type Receiver struct {
 	metricsWriteTrigger *appender.MetricsWriteTrigger
 
 	headConfigStorage *HeadConfigStorage
-
-	hashdexFactory relabeler.HashdexFactory
-	hashdexLimits  cppbridge.WALHashdexLimits
-	haTracker      relabeler.HATracker
-	clock          clockwork.Clock
-	registerer     prometheus.Registerer
-	logger         log.Logger
-	workingDir     string
-	clientID       string
-	cgogc          *cppbridge.CGOGC
-	shutdowner     *util.GracefulShutdowner
+	hashdexFactory    relabeler.HashdexFactory
+	hashdexLimits     cppbridge.WALHashdexLimits
+	haTracker         relabeler.HATracker
+	clock             clockwork.Clock
+	registerer        prometheus.Registerer
+	logger            log.Logger
+	workingDir        string
+	clientID          string
+	cgogc             *cppbridge.CGOGC
+	shutdowner        *util.GracefulShutdowner
 }
 
 func (rr *Receiver) Appender(ctx context.Context) storage.Appender {
@@ -110,6 +111,11 @@ func NewReceiver(
 	initLogHandler(logger)
 	clock := clockwork.NewRealClock()
 
+	numberOfShards := receiverCfg.NumberOfShards
+	if numberOfShards == 0 {
+		numberOfShards = defaultNumberOfShards
+	}
+
 	destinationGroups, err := makeDestinationGroups(
 		ctx,
 		clock,
@@ -117,23 +123,28 @@ func NewReceiver(
 		workingDir,
 		clientID,
 		remoteWriteCfgs,
-		receiverCfg.NumberOfShards,
+		numberOfShards,
 	)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to init DestinationGroups", "err", err)
 		return nil, err
 	}
 
-	var headConfigStorage = &HeadConfigStorage{}
+	headConfigStorage := &HeadConfigStorage{}
 
 	headConfigStorage.Store(&HeadConfig{
 		inputRelabelerConfigs: receiverCfg.Configs,
-		numberOfShards:        receiverCfg.NumberOfShards,
+		numberOfShards:        numberOfShards,
 	})
 
 	querierMetrics := querier.NewMetrics(registerer)
 
-	storage := appender.NewQueryableStorage(block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize, registerer), registerer, querierMetrics)
+	storage := appender.NewQueryableStorage(
+		block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize, block.DefaultBlockDuration, registerer),
+		// block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize, 5*time.Minute, registerer),
+		registerer,
+		querierMetrics,
+	)
 
 	var headGeneration uint64
 	hd, err := appender.NewRotatableHead(storage, head.BuildFunc(func() (relabeler.Head, error) {
@@ -145,6 +156,10 @@ func NewReceiver(
 		headGeneration++
 		return h, nil
 	}))
+	if err != nil {
+		level.Error(logger).Log("msg", "failed to init RotatableHead", "err", err)
+		return nil, err
+	}
 
 	dstrb := distributor.NewDistributor(*destinationGroups)
 	app := appender.NewQueryableAppender(hd, dstrb, querierMetrics)
@@ -156,12 +171,8 @@ func NewReceiver(
 		appender:          app,
 		storage:           storage,
 		headConfigStorage: headConfigStorage,
-		rotator: appender.NewRotator(
-			app,
-			clock,
-			appender.DefaultRotateDuration,
-		),
-
+		rotator:           appender.NewRotator(app, clock, appender.DefaultRotateDuration, registerer),
+		// rotator:             appender.NewRotator(app, clock, 5*time.Minute, registerer),
 		metricsWriteTrigger: mwt,
 		hashdexFactory:      cppbridge.HashdexFactory{},
 		hashdexLimits:       cppbridge.DefaultWALHashdexLimits(),
@@ -192,16 +203,14 @@ func (rr *Receiver) AppendProtobuf(ctx context.Context, data relabeler.ProtobufD
 		return nil
 	}
 	incomingData := &relabeler.IncomingData{Hashdex: hx, Data: data}
-	return rr.appender.Append(ctx, incomingData, cppbridge.RelabelerOptions{}, relabelerID)
+	return rr.appender.Append(ctx, incomingData, nil, relabelerID)
 }
 
 // AppendTimeSeries append TimeSeries data to relabeling hashdex data.
 func (rr *Receiver) AppendTimeSeries(
 	ctx context.Context,
 	data relabeler.TimeSeriesData,
-	options cppbridge.RelabelerOptions,
-	sourceStates *relabeler.SourceStates,
-	staleNansTS int64,
+	state *cppbridge.State,
 	relabelerID string,
 ) error {
 	hx, err := rr.hashdexFactory.GoModel(data.TimeSeries(), rr.hashdexLimits)
@@ -218,9 +227,7 @@ func (rr *Receiver) AppendTimeSeries(
 	return rr.appender.AppendWithStaleNans(
 		ctx,
 		incomingData,
-		options,
-		sourceStates,
-		staleNansTS,
+		state,
 		relabelerID,
 	)
 }
@@ -228,17 +235,13 @@ func (rr *Receiver) AppendTimeSeries(
 func (rr *Receiver) AppendTimeSeriesHashdex(
 	ctx context.Context,
 	hashdex cppbridge.ShardedData,
-	options cppbridge.RelabelerOptions,
-	sourceStates *relabeler.SourceStates,
-	staleNansTS int64,
+	state *cppbridge.State,
 	relabelerID string,
 ) error {
 	return rr.appender.AppendWithStaleNans(
 		ctx,
 		&relabeler.IncomingData{Hashdex: hashdex},
-		options,
-		sourceStates,
-		staleNansTS,
+		state,
 		relabelerID,
 	)
 }
@@ -249,7 +252,7 @@ func (rr *Receiver) AppendHashdex(ctx context.Context, hashdex cppbridge.Sharded
 		return nil
 	}
 	incomingData := &relabeler.IncomingData{Hashdex: hashdex}
-	return rr.appender.Append(ctx, incomingData, cppbridge.RelabelerOptions{}, relabelerID)
+	return rr.appender.Append(ctx, incomingData, nil, relabelerID)
 }
 
 // ApplyConfig update config.
@@ -382,6 +385,11 @@ func (rr *Receiver) RelabelerIDIsExist(relabelerID string) bool {
 	return false
 }
 
+// GetState create new state.
+func (rr *Receiver) GetState() *cppbridge.State {
+	return cppbridge.NewState(rr.headConfigStorage.Load().numberOfShards)
+}
+
 // Run main loop.
 func (rr *Receiver) Run(_ context.Context) (err error) {
 	defer rr.shutdowner.Done(err)
@@ -404,20 +412,18 @@ func (rr *Receiver) Querier(mint, maxt int64) (storage.Querier, error) {
 	}
 
 	// fmt.Println("RECEIVER: Querier appender querier created")
-
 	storageQuerier, err := rr.storage.Querier(mint, maxt)
 	if err != nil {
 		return nil, errors.Join(err, appenderQuerier.Close())
 	}
 
-	// fmt.Println("RECEIVER: Querier storage querier created")
-	// fmt.Println("RECEIVER: Querier finished, duration: ", time.Since(start))
-	return storage.NewMergeQuerier(
-		[]storage.Querier{appenderQuerier, storageQuerier},
-		nil,
-		storage.ChainedSeriesMerge,
-	), nil
-	//return querier.NewMultiQuerier(, nil), nil
+	// return storage.NewMergeQuerier(
+	// 	[]storage.Querier{appenderQuerier, storageQuerier},
+	// 	nil,
+	// 	storage.ChainedSeriesMerge,
+	// ), nil
+	return querier.NewMultiQuerier([]storage.Querier{appenderQuerier, storageQuerier}, nil), nil
+	// return querier.NewMultiQuerier([]storage.Querier{&NoopQuerier{}}, nil), nil
 }
 
 func (rr *Receiver) HeadQueryable() storage.Queryable {
@@ -711,4 +717,50 @@ func readClientID(logger log.Logger, dir string) (string, error) {
 	default:
 		return "", fmt.Errorf("failed to read client id: %w", err)
 	}
+}
+
+//
+// NoopQuerier
+//
+
+type NoopQuerier struct{}
+
+var _ storage.Querier = (*NoopQuerier)(nil)
+
+func (*NoopQuerier) Select(_ context.Context, _ bool, _ *storage.SelectHints, _ ...*labels.Matcher) storage.SeriesSet {
+	return &NoopSeriesSet{}
+}
+
+func (q *NoopQuerier) LabelValues(ctx context.Context, name string, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+	return []string{}, *annotations.New(), nil
+}
+
+func (q *NoopQuerier) LabelNames(ctx context.Context, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+	return []string{}, *annotations.New(), nil
+}
+
+func (*NoopQuerier) Close() error {
+	return nil
+}
+
+//
+// NoopSeriesSet
+//
+
+type NoopSeriesSet struct{}
+
+func (*NoopSeriesSet) Next() bool {
+	return false
+}
+
+func (*NoopSeriesSet) At() storage.Series {
+	return nil
+}
+
+func (*NoopSeriesSet) Err() error {
+	return nil
+}
+
+func (*NoopSeriesSet) Warnings() annotations.Annotations {
+	return nil
 }
