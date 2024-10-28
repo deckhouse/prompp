@@ -816,6 +816,8 @@ func newScrapeLoop(
 	}
 	sl.ctx, sl.cancel = context.WithCancel(ctx)
 
+	sl.metrics.newTarget.Inc()
+
 	return sl
 }
 

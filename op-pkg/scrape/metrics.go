@@ -41,6 +41,7 @@ type scrapeMetrics struct {
 
 	//
 	appendError prometheus.Counter
+	newTarget   prometheus.Counter
 }
 
 func newScrapeMetrics(reg prometheus.Registerer) (*scrapeMetrics, error) {
@@ -216,6 +217,13 @@ func newScrapeMetrics(reg prometheus.Registerer) (*scrapeMetrics, error) {
 		},
 	)
 
+	sm.newTarget = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "prometheus_scrape_loop_init_new_target_total",
+			Help: "Total number of scrape loop init new target.",
+		},
+	)
+
 	for _, collector := range []prometheus.Collector{
 		// Used by Manager.
 		sm.targetMetadataCache,
@@ -246,6 +254,7 @@ func newScrapeMetrics(reg prometheus.Registerer) (*scrapeMetrics, error) {
 		sm.targetScrapeNativeHistogramBucketLimit,
 		//
 		sm.appendError,
+		sm.newTarget,
 	} {
 		err := reg.Register(collector)
 		if err != nil {

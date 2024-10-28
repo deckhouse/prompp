@@ -473,42 +473,6 @@ func TargetsFromGroup(tg *targetgroup.Group, cfg *config.ScrapeConfig, noDefault
 	return targets, failures
 }
 
-// func HashFromGroup(tg *targetgroup.Group, cfg *config.ScrapeConfig, noDefaultPort bool, targets []*Target, lb *labels.Builder) ([]*Target, []error) {
-// 	targets = targets[:0]
-// 	failures := []error{}
-
-// 	hash := xxhash.New()
-// 	_, _ = hash.WriteString(cfg.JobName)
-// 	_, _ = hash.WriteString(strconv.FormatBool(cfg.HonorLabels))
-// 	_, _ = hash.WriteString(strconv.FormatBool(cfg.HonorTimestamps))
-// 	_, _ = hash.WriteString(strconv.FormatBool(cfg.TrackTimestampsStaleness))
-// 	hash.Write()
-
-// 	_, _ = hash.WriteString(cfg.JobName)
-
-// 	for i, tlset := range tg.Targets {
-// 		lb.Reset(labels.EmptyLabels())
-
-// 		for ln, lv := range tlset {
-// 			lb.Set(string(ln), string(lv))
-// 		}
-// 		for ln, lv := range tg.Labels {
-// 			if _, ok := tlset[ln]; !ok {
-// 				lb.Set(string(ln), string(lv))
-// 			}
-// 		}
-
-// 		lset, origLabels, err := PopulateLabels(lb, cfg, noDefaultPort)
-// 		if err != nil {
-// 			failures = append(failures, fmt.Errorf("instance %d in group %s: %w", i, tg, err))
-// 		}
-// 		if !lset.IsEmpty() || !origLabels.IsEmpty() {
-// 			targets = append(targets, NewTarget(lset, origLabels, cfg.Params))
-// 		}
-// 	}
-// 	return targets, failures
-// }
-
 // MetricMetadataStore implements MetricMetadataStore with empty data.
 type emptyMetricMetadataStore struct{}
 
