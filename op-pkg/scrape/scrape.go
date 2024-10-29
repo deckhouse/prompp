@@ -124,6 +124,7 @@ type scrapePool struct {
 	// activeTargets and loops must always be synchronized to have the same
 	// set of hashes.
 	activeTargets       map[uint64]*Target
+	targetsCache        map[uint64][]*Target
 	droppedTargets      []*Target // Subject to KeepDroppedTargets limit.
 	droppedTargetsCount int       // Count of all dropped targets.
 
@@ -165,6 +166,7 @@ func newScrapePool(
 		config:        cfg,
 		client:        client,
 		activeTargets: map[uint64]*Target{},
+		targetsCache:  map[uint64][]*Target{},
 		loops:         map[uint64]loop{},
 		logger:        logger,
 		metrics:       metrics,
@@ -311,6 +313,7 @@ func (sp *scrapePool) reload(cfg *config.ScrapeConfig) error {
 	sp.client = client
 
 	sp.metrics.targetScrapePoolTargetLimit.WithLabelValues(sp.config.JobName).Set(float64(sp.config.TargetLimit))
+	sp.targetsCache = map[uint64][]*Target{}
 
 	var (
 		wg            sync.WaitGroup
@@ -402,16 +405,25 @@ func (sp *scrapePool) Sync(tgs []*targetgroup.Group) {
 
 	sp.targetMtx.Lock()
 	var all []*Target
-	var targets []*Target
 	lb := labels.NewBuilder(labels.EmptyLabels())
 	sp.droppedTargets = []*Target{}
 	sp.droppedTargetsCount = 0
+	touchedTargets := map[uint64]bool{}
 	for _, tg := range tgs {
-		targets, failures := TargetsFromGroup(tg, sp.config, sp.noDefaultPort, targets, lb)
-		for _, err := range failures {
-			level.Error(sp.logger).Log("msg", "Creating target failed", "err", err)
+		tghash := tg.Hash()
+		touchedTargets[tghash] = true
+		targets, ok := sp.targetsCache[tghash]
+		if !ok {
+			var failures []error
+			targets, failures = TargetsFromGroup(tg, sp.config, sp.noDefaultPort, targets, lb)
+			for _, err := range failures {
+				level.Error(sp.logger).Log("msg", "Creating target failed", "err", err)
+			}
+			sp.metrics.targetSyncFailed.WithLabelValues(sp.config.JobName).Add(float64(len(failures)))
+			if len(failures) == 0 {
+				sp.targetsCache[tghash] = targets
+			}
 		}
-		sp.metrics.targetSyncFailed.WithLabelValues(sp.config.JobName).Add(float64(len(failures)))
 		for _, t := range targets {
 			// Replicate .Labels().IsEmpty() with a loop here to avoid generating garbage.
 			nonEmpty := false
@@ -425,6 +437,11 @@ func (sp *scrapePool) Sync(tgs []*targetgroup.Group) {
 				}
 				sp.droppedTargetsCount++
 			}
+		}
+	}
+	for h := range sp.targetsCache {
+		if !touchedTargets[h] {
+			delete(sp.targetsCache, h)
 		}
 	}
 	sp.targetMtx.Unlock()
