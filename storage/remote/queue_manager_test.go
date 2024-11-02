@@ -39,8 +39,8 @@ import (
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/timestamp"
-	"github.com/prometheus/prometheus/op-pkg/scrape"
 	"github.com/prometheus/prometheus/prompb"
+	"github.com/prometheus/prometheus/scrape"
 	"github.com/prometheus/prometheus/tsdb/chunks"
 	"github.com/prometheus/prometheus/tsdb/record"
 )
