@@ -62,15 +62,14 @@ import (
 	"github.com/prometheus/prometheus/model/metadata"
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/notifier"
-	"github.com/prometheus/prometheus/op-pkg/receiver"         // OP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/op-pkg/scrape"           // OP_CHANGES.md: rebuild on cpp
-	storage2 "github.com/prometheus/prometheus/op-pkg/storage" // OP_CHANGES.md: rebuild on cpp
-	_ "github.com/prometheus/prometheus/plugins"               // Register plugins.
+	"github.com/prometheus/prometheus/op-pkg/receiver"             // OP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/op-pkg/scrape"               // OP_CHANGES.md: rebuild on cpp
+	oppkgstorage "github.com/prometheus/prometheus/op-pkg/storage" // OP_CHANGES.md: rebuild on cpp
+	_ "github.com/prometheus/prometheus/plugins"                   // Register plugins.
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/rules"
 	"github.com/prometheus/prometheus/storage"
-	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/prometheus/prometheus/tracing"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/tsdb/agent"
@@ -649,11 +648,24 @@ func main() {
 	// OP_CHANGES.md: rebuild on cpp end
 
 	var (
-		localStorage  = &readyStorage{stats: tsdb.NewDBStats()}
-		scraper       = &readyScrapeManager{}
-		remoteStorage = remote.NewStorage(log.With(logger, "component", "remote"), prometheus.DefaultRegisterer, localStorage.StartTime, localStoragePath, time.Duration(cfg.RemoteFlushDeadline), scraper)
-		opStorage     = storage2.NewQueryableStorage(receiver)                            // OP_CHANGES.md: rebuild on cpp
-		fanoutStorage = storage.NewFanout(logger, opStorage, remoteStorage, localStorage) // OP_CHANGES.md: rebuild on cpp
+		localStorage = &readyStorage{stats: tsdb.NewDBStats()}
+		scraper      = &readyScrapeManager{}
+
+		// OP_CHANGES.md: rebuild on cpp start
+		remoteRead = oppkgstorage.NewRemoteRead(
+			log.With(logger, "component", "remote"),
+			prometheus.DefaultRegisterer,
+			localStorage.StartTime,
+			localStoragePath,
+			time.Duration(cfg.RemoteFlushDeadline),
+		)
+		fanoutStorage = storage.NewFanout(
+			logger,
+			oppkgstorage.NewQueryableStorage(receiver),
+			remoteRead,
+			localStorage,
+		)
+		// OP_CHANGES.md: rebuild on cpp end
 	)
 
 	var (
@@ -855,10 +867,10 @@ func main() {
 		}, { // OP_CHANGES.md: rebuild on cpp end
 			name:     "db_storage",
 			reloader: localStorage.ApplyConfig,
-		}, {
-			name:     "remote_storage",
-			reloader: remoteStorage.ApplyConfig,
-		}, {
+		}, { // OP_CHANGES.md: rebuild on cpp start
+			name:     "remote_read",
+			reloader: remoteRead.ApplyConfig,
+		}, { // OP_CHANGES.md: rebuild on cpp end
 			name:     "web_handler",
 			reloader: webHandler.ApplyConfig,
 		}, {
@@ -1191,7 +1203,7 @@ func main() {
 
 				startTimeMargin := int64(2 * time.Duration(cfg.tsdb.MinBlockDuration).Seconds() * 1000)
 				localStorage.Set(db, startTimeMargin)
-				db.SetWriteNotified(remoteStorage)
+				// db.SetWriteNotified(remoteStorage) // OP_CHANGES.md: rebuild on cpp
 				close(dbOpen)
 				<-cancel
 				return nil
@@ -1219,7 +1231,7 @@ func main() {
 				db, err := agent.Open(
 					logger,
 					prometheus.DefaultRegisterer,
-					remoteStorage,
+					receiver,
 					localStoragePath,
 					&opts,
 				)
@@ -1245,7 +1257,7 @@ func main() {
 				)
 
 				localStorage.Set(db, 0)
-				db.SetWriteNotified(remoteStorage)
+				// db.SetWriteNotified(remoteStorage) // OP_CHANGES.md: rebuild on cpp
 				close(dbOpen)
 				<-cancel
 				return nil

@@ -179,10 +179,7 @@ func NewReceiver(
 
 	queryableStorage := appender.NewQueryableStorageWithWriteNotifier(block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize, rotationInfo.BlockDuration, registerer), registerer, querierMetrics, triggerNotifier, rotatedHeads...)
 
-	hd, err := appender.NewRotatableHead(activeHead, queryableStorage, headManager)
-	if err != nil {
-		return nil, fmt.Errorf("failed make rotatable head: %w", err)
-	}
+	hd := appender.NewRotatableHead(activeHead, queryableStorage, headManager)
 
 	dstrb := distributor.NewDistributor(*destinationGroups)
 	app := appender.NewQueryableAppender(hd, dstrb, querierMetrics)
@@ -400,6 +397,11 @@ func (rr *Receiver) ApplyConfig(cfg *prom_config.Config) error {
 	return nil
 }
 
+// GetState create new state.
+func (rr *Receiver) GetState() *cppbridge.State {
+	return cppbridge.NewState(rr.headConfigStorage.Load().numberOfShards)
+}
+
 // RelabelerIDIsExist check on exist relabelerID.
 func (rr *Receiver) RelabelerIDIsExist(relabelerID string) bool {
 	cs := rr.headConfigStorage.Load()
@@ -410,11 +412,6 @@ func (rr *Receiver) RelabelerIDIsExist(relabelerID string) bool {
 	}
 
 	return false
-}
-
-// GetState create new state.
-func (rr *Receiver) GetState() *cppbridge.State {
-	return cppbridge.NewState(rr.headConfigStorage.Load().numberOfShards)
 }
 
 // Run main loop.
@@ -455,6 +452,11 @@ func (rr *Receiver) Querier(mint, maxt int64) (storage.Querier, error) {
 
 func (rr *Receiver) HeadQueryable() storage.Queryable {
 	return rr.appender
+}
+
+// LowestSentTimestamp returns the lowest sent timestamp across all queues.
+func (*Receiver) LowestSentTimestamp() int64 {
+	return 0
 }
 
 // Shutdown safe shutdown Receiver.
