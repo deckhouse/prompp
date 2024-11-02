@@ -43,9 +43,9 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/metadata"
 	"github.com/prometheus/prometheus/model/timestamp"
-	"github.com/prometheus/prometheus/op-pkg/handler"
-	"github.com/prometheus/prometheus/op-pkg/handler/middleware"
-	"github.com/prometheus/prometheus/op-pkg/scrape"
+	"github.com/prometheus/prometheus/op-pkg/handler"            // OP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/op-pkg/handler/middleware" // OP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/op-pkg/scrape"             // OP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/rules"
@@ -197,8 +197,8 @@ type API struct {
 	Queryable         storage.SampleAndChunkQueryable
 	QueryEngine       QueryEngine
 	ExemplarQueryable storage.ExemplarQueryable
-	HeadQueryable     storage.Queryable
-	headStatusGetter  HeadStatusGetter
+	HeadQueryable     storage.Queryable // OP_CHANGES.md: rebuild on cpp
+	headStatusGetter  HeadStatusGetter  // OP_CHANGES.md: rebuild on cpp
 
 	scrapePoolsRetriever  func(context.Context) ScrapePoolsRetriever
 	targetRetriever       func(context.Context) TargetRetriever
