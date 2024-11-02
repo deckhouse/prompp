@@ -128,7 +128,7 @@ func TestIgnoreExternalLabels(t *testing.T) {
 
 // baseRemoteWriteConfig copy values from global Default Write config
 // to avoid change global state and cross impact test execution.
-func baseRemoteWriteConfig(host string) *config.OpRemoteWriteConfig {
+func baseRemoteWriteConfig(host string) *config.OpRemoteWriteConfig { // OP_CHANGES.md: rebuild on cpp
 	cfg := config.DefaultOpRemoteWriteConfig
 	cfg.URL = &common_config.URL{
 		URL: &url.URL{
