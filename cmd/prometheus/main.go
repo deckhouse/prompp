@@ -657,9 +657,11 @@ func main() {
 	)
 
 	var (
-		ctxWeb, cancelWeb       = context.WithCancel(context.Background())
-		ctxRule                 = context.Background()
-		notifierManager         = notifier.NewManager(&cfg.notifier, log.With(logger, "component", "notifier"))
+		ctxWeb, cancelWeb = context.WithCancel(context.Background())
+		ctxRule           = context.Background()
+
+		notifierManager = notifier.NewManager(&cfg.notifier, log.With(logger, "component", "notifier"))
+
 		ctxScrape, cancelScrape = context.WithCancel(context.Background())
 		ctxNotify, cancelNotify = context.WithCancel(context.Background())
 		discoveryManagerScrape  discoveryManager
