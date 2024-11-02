@@ -783,8 +783,8 @@ func main() {
 		queryEngine = promql.NewEngine(opts)
 
 		ruleManager = rules.NewManager(&rules.ManagerOptions{
-			Appendable:      receiver,
-			Queryable:       receiver,
+			Appendable:      receiver, // OP_CHANGES.md: rebuild on cpp
+			Queryable:       receiver, // OP_CHANGES.md: rebuild on cpp
 			QueryFunc:       rules.EngineQueryFunc(queryEngine, fanoutStorage),
 			NotifyFunc:      rules.SendAlerts(notifierManager, cfg.web.ExternalURL.String()),
 			Context:         ctxRule,
@@ -836,7 +836,7 @@ func main() {
 	}
 
 	// Depends on cfg.web.ScrapeManager so needs to be after cfg.web.ScrapeManager = scrapeManager.
-	webHandler := web.New(log.With(logger, "component", "web"), &cfg.web, receiver)
+	webHandler := web.New(log.With(logger, "component", "web"), &cfg.web, receiver) // OP_CHANGES.md: rebuild on cpp
 
 	// Monitor outgoing connections on default transport with conntrack.
 	http.DefaultTransport.(*http.Transport).DialContext = conntrack.NewDialContextFunc(
@@ -849,7 +849,7 @@ func main() {
 	reloaders := []reloader{
 		{
 			name:     "receiver",
-			reloader: receiver.ApplyConfig,
+			reloader: receiver.ApplyConfig, // OP_CHANGES.md: rebuild on cpp
 		}, {
 			name:     "db_storage",
 			reloader: localStorage.ApplyConfig,
@@ -919,7 +919,6 @@ func main() {
 
 				// Get all rule files matching the configuration paths.
 				var files []string
-				fmt.Println("main: cfg.ruleFiles", cfg.RuleFiles)
 				for _, pat := range cfg.RuleFiles {
 					fs, err := filepath.Glob(pat)
 					if err != nil {
@@ -1271,7 +1270,7 @@ func main() {
 			},
 		)
 	}
-	{
+	{ // OP_CHANGES.md: rebuild on cpp start
 		// run receiver.
 		g.Add(
 			func() error {
@@ -1288,7 +1287,7 @@ func main() {
 				cancelReceiver()
 			},
 		)
-	}
+	} // OP_CHANGES.md: rebuild on cpp end
 	{
 		// Notifier.
 
@@ -1717,7 +1716,7 @@ type tsdbOptions struct {
 	MaxExemplars                   int64
 	EnableMemorySnapshotOnShutdown bool
 	EnableNativeHistograms         bool
-	ReloadBlocksExternalTrigger    tsdb.ReloadBlocksExternalTrigger
+	ReloadBlocksExternalTrigger    tsdb.ReloadBlocksExternalTrigger // OP_CHANGES.md: rebuild on cpp
 }
 
 func (opts tsdbOptions) ToTSDBOptions() tsdb.Options {
