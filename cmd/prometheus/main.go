@@ -849,10 +849,10 @@ func main() {
 	externalURL := cfg.web.ExternalURL.String()
 
 	reloaders := []reloader{
-		{
+		{ // OP_CHANGES.md: rebuild on cpp start
 			name:     "receiver",
-			reloader: receiver.ApplyConfig, // OP_CHANGES.md: rebuild on cpp
-		}, {
+			reloader: receiver.ApplyConfig,
+		}, { // OP_CHANGES.md: rebuild on cpp end
 			name:     "db_storage",
 			reloader: localStorage.ApplyConfig,
 		}, {
