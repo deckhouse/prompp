@@ -1,6 +1,7 @@
-FROM prom/prometheus:v2.50.1
+FROM prom/prometheus:v2.53.2
 COPY prometheus /bin/prometheus
 COPY promtool /bin/promtool
 
 # ENV GODEBUG=gctrace=1
 ENV GOGC=30
+ENV MALLOC_CONF="background_thread:true,tcache_max:4096,dirty_decay_ms:5000,muzzy_decay_ms:5000"

@@ -8,6 +8,7 @@ import (
 
 	"github.com/odarix/odarix-core-go/relabeler"
 	"github.com/prometheus/common/route"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/op-pkg/handler/middleware"
 	"github.com/prometheus/prometheus/promql"
