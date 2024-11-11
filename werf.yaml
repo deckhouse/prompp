@@ -2,7 +2,7 @@ configVersion: 1
 project: okmeter-okmeter-prometheus
 ---
 artifact: prometheus-plus-plus/prom-pp-promu-artifact
-from: golang:1.22.9-alpine3.20
+from: golang:1.23.2-alpine3.20
 mount:
 - fromPath: ~/go-pkg-cache
   to: /go/pkg
@@ -15,7 +15,7 @@ shell:
   - go build -ldflags="-s -w" -o promu ./main.go
 ---
 artifact: prometheus-plus-plus/prom-pp-artifact
-from: golang:1.22.9-alpine3.20
+from: golang:1.23.2-alpine3.20
 mount:
 - fromPath: ~/go-pkg-cache
   to: /go/pkg
