@@ -3,7 +3,7 @@
 apiVersion: deckhouse.io/v1
 kind: GrafanaAdditionalDatasource
 metadata:
-  name: prometheus-pp
+  name: prom-3
 spec:
   access: Proxy
   jsonData:
@@ -13,4 +13,4 @@ spec:
   secureJsonData:
     httpHeaderValue1: bearer {{ $token }} 
   type: prometheus
-  url: https://prometheus-pp.d8-monitoring.svc.cluster.local:9090
+  url: https://prom-3.d8-monitoring.svc.cluster.local:9090
