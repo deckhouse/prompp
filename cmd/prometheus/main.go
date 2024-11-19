@@ -688,8 +688,8 @@ func main() {
 		fanoutStorage = storage.NewFanout(
 			logger,
 			oppkgstorage.NewQueryableStorage(receiver),
-			remoteRead,
 			localStorage,
+			remoteRead,
 		)
 		// OP_CHANGES.md: rebuild on cpp end
 	)
