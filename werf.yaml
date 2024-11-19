@@ -1,6 +1,9 @@
 configVersion: 1
 project: okmeter-okmeter-prometheus
 ---
+image: prometheus-plus-plus/prom-3
+from: prom/prometheus:v3.0.0
+---
 artifact: prometheus-plus-plus/prom-pp-promu-artifact
 from: golang:1.23.2-alpine3.20
 mount:

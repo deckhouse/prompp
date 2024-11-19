@@ -1,0 +1,19 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: prometheus
+    prometheus: prom-3
+  name: prom-3
+  namespace: d8-monitoring
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - name: https
+    port: 9090
+    protocol: TCP
+    targetPort: https
+  selector:
+    prometheus: prom-3

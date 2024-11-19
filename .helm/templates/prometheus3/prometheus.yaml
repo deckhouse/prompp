@@ -1,7 +1,7 @@
 apiVersion: monitoring.coreos.com/v1
 kind: Prometheus
 metadata:
-  name: pp
+  name: prom-3
   namespace: d8-monitoring
 spec:
   additionalAlertManagerConfigs:
@@ -30,7 +30,7 @@ spec:
       - labelSelector:
           matchLabels:
             app.kubernetes.io/name: prometheus
-            prometheus: pp
+            prometheus: prom-3
         topologyKey: kubernetes.io/hostname
   alerting:
     alertmanagers: []
@@ -93,7 +93,7 @@ spec:
   externalLabels:
     prometheus: deckhouse
   externalUrl: https://grafana.kube.fsn-dev.okmeter.io/prometheus/
-  image: {{ get .Values.werf.image "prometheus-plus-plus/prom-pp" }}
+  image: {{ get .Values.werf.image "prometheus-plus-plus/prom-3" }}
   imagePullSecrets:
   - name: registrysecret-prometheus-pp
   initContainers:
@@ -109,7 +109,7 @@ spec:
       runAsUser: 0
     volumeMounts:
     - mountPath: /prometheus-db
-      name: prometheus-pp-db
+      name: prometheus-prom-3-db
       subPath: prometheus-db
   listenLocal: true
   nodeSelector:
