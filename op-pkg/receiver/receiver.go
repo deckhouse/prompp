@@ -222,7 +222,11 @@ func NewReceiver(
 }
 
 // AppendProtobuf append Protobuf data to relabeling hashdex data.
-func (rr *Receiver) AppendProtobuf(ctx context.Context, data relabeler.ProtobufData, relabelerID string) error {
+func (rr *Receiver) AppendProtobuf(
+	ctx context.Context,
+	data relabeler.ProtobufData,
+	relabelerID string,
+) error {
 	hx, err := rr.hashdexFactory.Protobuf(data.Bytes(), rr.hashdexLimits)
 	if err != nil {
 		data.Destroy()
@@ -233,7 +237,8 @@ func (rr *Receiver) AppendProtobuf(ctx context.Context, data relabeler.ProtobufD
 		return nil
 	}
 	incomingData := &relabeler.IncomingData{Hashdex: hx, Data: data}
-	return rr.appender.Append(ctx, incomingData, nil, relabelerID)
+	_, err = rr.appender.Append(ctx, incomingData, nil, relabelerID)
+	return err
 }
 
 // AppendTimeSeries append TimeSeries data to relabeling hashdex data.
@@ -242,16 +247,16 @@ func (rr *Receiver) AppendTimeSeries(
 	data relabeler.TimeSeriesData,
 	state *cppbridge.State,
 	relabelerID string,
-) error {
+) (cppbridge.RelabelerStats, error) {
 	hx, err := rr.hashdexFactory.GoModel(data.TimeSeries(), rr.hashdexLimits)
 	if err != nil {
 		data.Destroy()
-		return err
+		return cppbridge.RelabelerStats{}, err
 	}
 
 	if rr.haTracker.IsDrop(hx.Cluster(), hx.Replica()) {
 		data.Destroy()
-		return nil
+		return cppbridge.RelabelerStats{}, nil
 	}
 	incomingData := &relabeler.IncomingData{Hashdex: hx, Data: data}
 	return rr.appender.AppendWithStaleNans(
@@ -267,7 +272,7 @@ func (rr *Receiver) AppendTimeSeriesHashdex(
 	hashdex cppbridge.ShardedData,
 	state *cppbridge.State,
 	relabelerID string,
-) error {
+) (cppbridge.RelabelerStats, error) {
 	return rr.appender.AppendWithStaleNans(
 		ctx,
 		&relabeler.IncomingData{Hashdex: hashdex},
@@ -282,7 +287,8 @@ func (rr *Receiver) AppendHashdex(ctx context.Context, hashdex cppbridge.Sharded
 		return nil
 	}
 	incomingData := &relabeler.IncomingData{Hashdex: hashdex}
-	return rr.appender.Append(ctx, incomingData, nil, relabelerID)
+	_, err := rr.appender.Append(ctx, incomingData, nil, relabelerID)
+	return err
 }
 
 // ApplyConfig update config.
