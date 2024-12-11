@@ -20,7 +20,7 @@ build:
   script:
     - . $(trdl use werf ${WERF_VER})
     - . $(werf ci-env --as-file gitlab)
-    - werf build
+    - werf build --add-custom-tag="%image%-$CI_COMMIT_SHORT_SHA" 
 
 .deploy:
   tags:
