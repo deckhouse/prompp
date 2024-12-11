@@ -1,7 +1,7 @@
 configVersion: 1
 project: okmeter-okmeter-prometheus
 ---
-image: prometheus-plus-plus/prom-3
+image: prom-v3
 from: prom/prometheus:v3.0.0
 ---
 artifact: prometheus-plus-plus/prom-pp-promu-artifact
@@ -68,7 +68,7 @@ shell:
   install:
     - /binary_replace.sh -i "{{ $binariesList }}" -o /relocate
 ---
-image: prometheus-plus-plus/prom-pp
+image: prom-pp
 from: registry.deckhouse.io/deckhouse/ce@sha256:916e14b8eed3d023869752535fed781040a59cf79368b3b05628a7f5029414a0
 import:
 - artifact: prometheus-plus-plus/prom-pp-artifact

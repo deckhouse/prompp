@@ -93,7 +93,7 @@ spec:
   externalLabels:
     prometheus: deckhouse
   externalUrl: https://grafana.kube.fsn-dev.okmeter.io/prometheus/
-  image: {{ get .Values.werf.image "prometheus-plus-plus/prom-pp" }}
+  image: {{ get .Values.werf.image "prom-pp" }}
   imagePullSecrets:
   - name: registrysecret-prometheus-pp
   initContainers:
