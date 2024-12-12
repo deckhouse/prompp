@@ -119,7 +119,7 @@ docker:
   - "--web.console.libraries=/usr/share/prometheus/console_libraries"
   - "--web.console.templates=/usr/share/prometheus/consoles"
 ---
-image: prometheus-plus-plus/prompptool
+image: prompptool
 from: registry.deckhouse.io/deckhouse/ce@sha256:916e14b8eed3d023869752535fed781040a59cf79368b3b05628a7f5029414a0
 import:
 - artifact: prometheus-plus-plus/prom-pp-artifact
