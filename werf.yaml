@@ -59,6 +59,7 @@ shell:
   - chown -R 64535:64535 /consoles/
   - chmod 0700 /prometheus/prometheus/prometheus
   - chmod 0700 /prometheus/prometheus/promtool
+  - chmod 0700 /prometheus/prometheus/prompptool
 ---
 {{ $binariesList := "/usr/bin/curl /bin/sh /bin/df" }}
 ---
@@ -117,3 +118,14 @@ docker:
   - "--storage.tsdb.path=/prometheus"
   - "--web.console.libraries=/usr/share/prometheus/console_libraries"
   - "--web.console.templates=/usr/share/prometheus/consoles"
+---
+image: prometheus-plus-plus/prompptool
+from: registry.deckhouse.io/deckhouse/ce@sha256:916e14b8eed3d023869752535fed781040a59cf79368b3b05628a7f5029414a0
+import:
+- artifact: prometheus-plus-plus/prom-pp-artifact
+  add: /prometheus/prometheus/prompptool
+  to: /bin/prompptool
+  before: setup
+docker:
+  ENTRYPOINT:
+    - "/bin/prompptool"
