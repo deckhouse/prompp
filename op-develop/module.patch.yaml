@@ -1,0 +1,6 @@
+spec:
+  imagePullSecrets:
+  - name: deckhouse-registry
+  - name: okmetric-registry
+  image: registry.okmetric.com/prometheus/prometheus:latest
+  imagePullPolicy: Always
