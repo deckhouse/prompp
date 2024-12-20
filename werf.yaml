@@ -25,27 +25,37 @@ mount:
 git:
 - add: /
   to: /prometheus/prometheus
+  stageDependencies:
+    install:
+    - web/ui/package.json
+    - web/ui/package-lock.json
+    beforeSetup:
+    - go.mod
+    - go.sum
+    - '**/*.go'
 import:
 - artifact: prometheus-plus-plus/prom-pp-promu-artifact
   add: /promu/promu
   to: /bin/promu
   before: install
 shell:
+  beforeInstall:
+  - apk update && apk add --no-cache git bash gcc g++ nodejs npm
   install:
-  - apk update && apk add --no-cache git
-  - apk add --no-cache bash gcc g++
   - export NODE_MAJOR=20
   - export GOPROXY="https://proxy.golang.org/" CGO_ENABLED=1 GOOS=linux GOARCH=amd64
-  - mkdir /prometheus && cd /prometheus
   - cd /prometheus/prometheus/web/ui
-  - apk add --no-cache nodejs npm
+  - mkdir static
   - npm install
   - npm run build
   - cd /prometheus/prometheus
   - scripts/compress_assets.sh
+  beforeSetup:
+  - cd /prometheus/prometheus
   - go mod tidy
   - go generate -tags plugins ./plugins
   - /bin/promu build --prefix /prometheus/prometheus
+  setup:
   - mkdir -p /consoles
   - cp /prometheus/prometheus/consoles/* /consoles
   - cp /prometheus/prometheus/console_libraries/* /consoles
