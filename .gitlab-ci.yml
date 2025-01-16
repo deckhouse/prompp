@@ -14,7 +14,7 @@ build:
   stage: build
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
   tags:
     - okmeter-runner
   script:
@@ -38,7 +38,7 @@ deploy:stage:fsn:
       when: never
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: manual
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "dev"'
       when: manual
   environment:
     name: stage-fsn
