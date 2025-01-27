@@ -1,0 +1,20 @@
+# Релиз новой версии
+
+1. Тэг релиза формируется как склейка тэга исходной версии прома и версия наших изменений, например, v2.53.2-0.1.0. Предварительно надо проверить, что такой тэг свободен в том числе в [модуле](https://fox.flant.com/deckhouse/observability/prompp-module/-/tags).
+1. В этом репозитории создаём тэг релиза. В комментарии желательно перечислить изменения. Дожидаемся завершения пайплайна, привязанного к этому тэгу.
+2. В [репозитории модуля](https://fox.flant.com/deckhouse/observability/prompp-module) в файлах `images/prompp(tools)/werf.inc.yaml` прописываем тэг релиза. В файле `CHANGELOG.md` в самый верх добавляем описание описание релиза, разделяя изменения на секции:
+   - Fixes
+   - Features and improvements
+   - Breaking changes
+   - Other
+3. Коммитим изменения и вешаем тэг релиза на репозиторий модуля.
+4. Пишем сообщение в [канал deckhouse-releases](https://loop.flant.ru/flant/channels/deckhouse-releases) по шаблону:
+   ```
+   # Модуль [prom++](https://fox.flant.com/deckhouse/observability/prometheus-plus-plus) [v2.53.2-0.1.0](https://fox.flant.com/deckhouse/observability/prometheus-plus-plus/-/releases/v2.53.2-0.1.0)
+
+   ### Все каналы (либо конкретные Alpha, Beta, EarlyAccess и так далее)
+   в FE (в остальные сборки мы пока не выкатываемся)
+
+   Копия описания из CHANGELOG.md
+   ```
+5. Возвращаемся в репу модуля, в пайпплайн от тэга релиза. Тыкаем сборку и выкладку в нужные ветки. После выкладки в комментариях пишем: Выложено.
