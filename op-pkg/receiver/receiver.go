@@ -19,6 +19,7 @@ import (
 	"github.com/odarix/odarix-core-go/relabeler/distributor"
 	"github.com/odarix/odarix-core-go/relabeler/head/catalog"
 	headmanager "github.com/odarix/odarix-core-go/relabeler/head/manager"
+	"github.com/odarix/odarix-core-go/relabeler/head/ready"
 	rlogger "github.com/odarix/odarix-core-go/relabeler/logger"
 	"github.com/odarix/odarix-core-go/relabeler/querier"
 	"github.com/odarix/odarix-core-go/util"
@@ -74,7 +75,7 @@ type Receiver struct {
 	distributor         *distributor.Distributor
 	appender            *appender.QueryableAppender
 	storage             *appender.QueryableStorage
-	rotator             *appender.Rotator
+	rotator             *appender.RotateCommiter
 	metricsWriteTrigger *appender.MetricsWriteTrigger
 
 	headConfigStorage *HeadConfigStorage
@@ -99,6 +100,19 @@ type RotationInfo struct {
 	Seed          uint64
 }
 
+type HeadActivator struct {
+	catalog *catalog.Catalog
+}
+
+func (ha *HeadActivator) Activate(headID string) error {
+	_, err := ha.catalog.SetStatus(headID, catalog.StatusActive)
+	return err
+}
+
+func newHeadActivator(catalog *catalog.Catalog) *HeadActivator {
+	return &HeadActivator{catalog: catalog}
+}
+
 func NewReceiver(
 	ctx context.Context,
 	logger log.Logger,
@@ -108,7 +122,9 @@ func NewReceiver(
 	remoteWriteCfgs []*prom_config.OpRemoteWriteConfig,
 	dataDir string,
 	rotationInfo RotationInfo,
+	headCatalog *catalog.Catalog,
 	triggerNotifier *ReloadBlocksTriggerNotifier,
+	readyNotifier ready.Notifier,
 ) (*Receiver, error) {
 	if logger == nil {
 		logger = log.NewNopLogger()
@@ -156,17 +172,7 @@ func NewReceiver(
 		return nil, err
 	}
 
-	fileLog, err := catalog.NewFileLog(filepath.Join(dataDir, "head.log"), catalog.DefaultEncoder{}, catalog.DefaultDecoder{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create log file: %w", err)
-	}
-
-	headCatalog, err := catalog.New(clock, fileLog)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create catalog: %w", err)
-	}
-
-	headManager, err := headmanager.New(dataDir, headConfigStorage, headCatalog, registerer)
+	headManager, err := headmanager.New(dataDir, clock, headConfigStorage, headCatalog, registerer)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create head manager: %w", err)
 	}
@@ -175,10 +181,10 @@ func NewReceiver(
 	if err != nil {
 		return nil, fmt.Errorf("failed to restore heads: %w", err)
 	}
-
+	readyNotifier.NotifyReady()
 	queryableStorage := appender.NewQueryableStorageWithWriteNotifier(block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize, rotationInfo.BlockDuration, registerer), registerer, querierMetrics, triggerNotifier, rotatedHeads...)
 
-	hd := appender.NewRotatableHead(activeHead, queryableStorage, headManager)
+	hd := appender.NewRotatableHead(activeHead, queryableStorage, headManager, newHeadActivator(headCatalog))
 
 	var appenderHead relabeler.Head = hd
 	if len(os.Getenv("OPCORE_ROTATION_HEAP_DEBUG")) > 0 {
@@ -196,9 +202,10 @@ func NewReceiver(
 		appender:          app,
 		storage:           queryableStorage,
 		headConfigStorage: headConfigStorage,
-		rotator: appender.NewRotator(
+		rotator: appender.NewRotateCommiter(
 			app,
 			relabeler.NewRotateTimerWithSeed(clock, rotationInfo.BlockDuration, rotationInfo.Seed),
+			appender.NewConstantIntervalTimer(clock, appender.DefaultCommitTimeout),
 			registerer,
 		),
 
@@ -225,6 +232,7 @@ func (rr *Receiver) AppendProtobuf(
 	ctx context.Context,
 	data relabeler.ProtobufData,
 	relabelerID string,
+	commitToWal bool,
 ) error {
 	hx, err := rr.hashdexFactory.Protobuf(data.Bytes(), rr.hashdexLimits)
 	if err != nil {
@@ -236,7 +244,7 @@ func (rr *Receiver) AppendProtobuf(
 		return nil
 	}
 	incomingData := &relabeler.IncomingData{Hashdex: hx, Data: data}
-	_, err = rr.appender.Append(ctx, incomingData, nil, relabelerID)
+	_, err = rr.appender.Append(ctx, incomingData, nil, relabelerID, commitToWal)
 	return err
 }
 
@@ -246,6 +254,7 @@ func (rr *Receiver) AppendTimeSeries(
 	data relabeler.TimeSeriesData,
 	state *cppbridge.State,
 	relabelerID string,
+	commitToWal bool,
 ) (cppbridge.RelabelerStats, error) {
 	hx, err := rr.hashdexFactory.GoModel(data.TimeSeries(), rr.hashdexLimits)
 	if err != nil {
@@ -263,6 +272,7 @@ func (rr *Receiver) AppendTimeSeries(
 		incomingData,
 		state,
 		relabelerID,
+		commitToWal,
 	)
 }
 
@@ -271,22 +281,29 @@ func (rr *Receiver) AppendTimeSeriesHashdex(
 	hashdex cppbridge.ShardedData,
 	state *cppbridge.State,
 	relabelerID string,
+	commitToWal bool,
 ) (cppbridge.RelabelerStats, error) {
 	return rr.appender.AppendWithStaleNans(
 		ctx,
 		&relabeler.IncomingData{Hashdex: hashdex},
 		state,
 		relabelerID,
+		commitToWal,
 	)
 }
 
 // AppendHashdex append incoming Hashdex data to relabeling.
-func (rr *Receiver) AppendHashdex(ctx context.Context, hashdex cppbridge.ShardedData, relabelerID string) error {
+func (rr *Receiver) AppendHashdex(
+	ctx context.Context,
+	hashdex cppbridge.ShardedData,
+	relabelerID string,
+	commitToWal bool,
+) error {
 	if rr.haTracker.IsDrop(hashdex.Cluster(), hashdex.Replica()) {
 		return nil
 	}
 	incomingData := &relabeler.IncomingData{Hashdex: hashdex}
-	_, err := rr.appender.Append(ctx, incomingData, nil, relabelerID)
+	_, err := rr.appender.Append(ctx, incomingData, nil, relabelerID, commitToWal)
 	return err
 }
 
@@ -477,8 +494,9 @@ func (rr *Receiver) Shutdown(ctx context.Context) error {
 	rotatorErr := rr.rotator.Close()
 	storageErr := rr.storage.Close()
 	distributorErr := rr.distributor.Shutdown(ctx)
+	appendErr := rr.appender.Close()
 	err := rr.shutdowner.Shutdown(ctx)
-	return errors.Join(cgogcErr, metricWriteErr, rotatorErr, storageErr, distributorErr, err)
+	return errors.Join(cgogcErr, metricWriteErr, rotatorErr, storageErr, distributorErr, appendErr, err)
 }
 
 // makeDestinationGroups create DestinationGroups from configs.
