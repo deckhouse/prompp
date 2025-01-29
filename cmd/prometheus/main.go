@@ -944,7 +944,7 @@ func main() {
 		}, { // OP_CHANGES.md: rebuild on cpp end
 			name:     "remote_writer",
 			reloader: remote.ApplyConfig(remoteWriter),
-		}, {
+		}, { // OP_CHANGES.md: rebuild on cpp end
 			name: "query_engine",
 			reloader: func(cfg *config.Config) error {
 				if agentMode {
