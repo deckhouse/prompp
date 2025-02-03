@@ -43,6 +43,7 @@ import (
 	"github.com/grafana/regexp"
 	"github.com/jonboulle/clockwork" // OP_CHANGES.md: rebuild on cpp
 	"github.com/mwitkow/go-conntrack"
+	"github.com/odarix/odarix-core-go/cppbridge"
 	"github.com/odarix/odarix-core-go/relabeler/head/catalog" // OP_CHANGES.md: rebuild on cpp
 	"github.com/odarix/odarix-core-go/relabeler/head/ready"   // OP_CHANGES.md: rebuild on cpp
 	"github.com/odarix/odarix-core-go/relabeler/remotewriter" // OP_CHANGES.md: rebuild on cpp
@@ -864,7 +865,7 @@ func main() {
 			Queryable:              receiver, // OP_CHANGES.md: rebuild on cpp
 			QueryFunc:              rules.EngineQueryFunc(queryEngine, fanoutStorage),
 			NotifyFunc:             rules.SendAlerts(notifierManager, cfg.web.ExternalURL.String()),
-			Context:                ctxRule,
+			Context:                cppbridge.SetCaller(ctxRule, cppbridge.LSSQuerySourceRule), // OP_CHANGES.md: rebuild on cpp
 			ExternalURL:            cfg.web.ExternalURL,
 			Registerer:             prometheus.DefaultRegisterer,
 			Logger:                 log.With(logger, "component", "rule manager"),
