@@ -1,6 +1,9 @@
 #pragma once
 
+#include <ranges>
+
 #include "bare_bones/preprocess.h"
+#include "series_data/common.h"
 #include "series_data/encoder/timestamp/state.h"
 #include "series_data/encoder/value/float32_constant.h"
 #include "series_data/encoder/value/uint32_constant.h"
@@ -13,44 +16,29 @@ struct PROMPP_ATTRIBUTE_PACKED DataChunk {
     kFinalized,
   };
 
-  enum class EncodingType : uint8_t {
-    kUnknown,
-    kUint32Constant,
-    kFloat32Constant,
-    kDoubleConstant,
-    kTwoDoubleConstant,
-    kAscIntegerValuesGorilla,
-    kValuesGorilla,
-    kGorilla,
-  };
-
   union PROMPP_ATTRIBUTE_PACKED EncoderData {
     encoder::value::Uint32ConstantEncoder uint32_constant;
     encoder::value::Float32ConstantEncoder float32_constant;
-    uint32_t double_constant{0};
-    uint32_t two_double_constant;
-    uint32_t asc_integer_values_gorilla;
-    uint32_t values_gorilla;
-    uint32_t gorilla;
+    uint32_t external_index;
 
-    PROMPP_ALWAYS_INLINE bool operator==(const EncoderData& other) const noexcept { return double_constant == other.double_constant; }
+    PROMPP_ALWAYS_INLINE bool operator==(const EncoderData& other) const noexcept { return external_index == other.external_index; }
   };
 
-  EncoderData encoder{.double_constant = 0};
+  EncoderData encoder{.external_index = 0};
   encoder::timestamp::State::Id timestamp_encoder_state_id{encoder::timestamp::State::kInvalidId};
-  EncodingType encoding_type{EncodingType::kUnknown};
+  EncodingState encoding_state{EncodingType::kUnknown, false};
 
   DataChunk() = default;
   DataChunk(const DataChunk&) noexcept = default;
 
-  DataChunk(uint32_t encoder_id, encoder::timestamp::State::Id _timestamp_encoder_state_id, EncodingType _encoding_type)
-      : encoder{.double_constant = encoder_id}, timestamp_encoder_state_id(_timestamp_encoder_state_id), encoding_type(_encoding_type) {}
+  DataChunk(uint32_t encoder_id, encoder::timestamp::State::Id _timestamp_encoder_state_id, EncodingState _encoding_state)
+      : encoder{.external_index = encoder_id}, timestamp_encoder_state_id(_timestamp_encoder_state_id), encoding_state(_encoding_state) {}
 
   DataChunk& operator=(const DataChunk& other) noexcept {
     if (this != &other) {
-      encoder.double_constant = other.encoder.double_constant;
+      encoder.external_index = other.encoder.external_index;
       timestamp_encoder_state_id = other.timestamp_encoder_state_id;
-      encoding_type = other.encoding_type;
+      encoding_state = other.encoding_state;
     }
 
     return *this;
@@ -58,13 +46,16 @@ struct PROMPP_ATTRIBUTE_PACKED DataChunk {
 
   bool operator==(const DataChunk&) const noexcept = default;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_empty() const noexcept { return encoding_type == EncodingType::kUnknown; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_empty() const noexcept { return encoding_state.encoding_type == EncodingType::kUnknown; }
 
   PROMPP_ALWAYS_INLINE void reset() noexcept {
-    encoder.double_constant = 0;
+    encoder.external_index = 0;
     timestamp_encoder_state_id = encoder::timestamp::State::kInvalidId;
-    encoding_type = EncodingType::kUnknown;
+    encoding_state = EncodingState{EncodingType::kUnknown, false};
   }
+
+  PROMPP_ALWAYS_INLINE void mark_last_stalenan() noexcept { encoding_state.has_last_stalenan = true; }
+  PROMPP_ALWAYS_INLINE void unmark_last_stalenan() noexcept { encoding_state.has_last_stalenan = false; }
 };
 
 }  // namespace series_data::chunk

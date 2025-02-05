@@ -7,9 +7,12 @@ namespace series_data::decoder {
 
 class GorillaDecodeIterator : public DecodeIteratorTrait {
  public:
-  explicit GorillaDecodeIterator(const encoder::CompactBitSequence& stream)
-      : GorillaDecodeIterator(encoder::BitSequenceWithItemsCount::count(stream), encoder::BitSequenceWithItemsCount::reader(stream)) {}
-  GorillaDecodeIterator(uint8_t samples_count, const BareBones::BitSequenceReader& reader) : DecodeIteratorTrait(samples_count), reader_(reader) { decode(); }
+  explicit GorillaDecodeIterator(const encoder::CompactBitSequence& stream, bool is_last_stalenan)
+      : GorillaDecodeIterator(encoder::BitSequenceWithItemsCount::count(stream), encoder::BitSequenceWithItemsCount::reader(stream), is_last_stalenan) {}
+  GorillaDecodeIterator(uint8_t samples_count, const BareBones::BitSequenceReader& reader, bool is_last_stalenan)
+      : DecodeIteratorTrait(0.0, samples_count, is_last_stalenan), reader_(reader) {
+    decode();
+  }
 
   PROMPP_ALWAYS_INLINE GorillaDecodeIterator& operator++() noexcept {
     --remaining_samples_;

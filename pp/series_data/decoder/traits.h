@@ -22,6 +22,8 @@ class DecodeIteratorTrait : public DecodeIteratorTypeTrait {
  public:
   explicit DecodeIteratorTrait(uint8_t count) : remaining_samples_{count} {}
   explicit DecodeIteratorTrait(double value, uint8_t count) : sample_{.value = value}, remaining_samples_{count} {}
+  explicit DecodeIteratorTrait(double value, uint8_t count, bool last_stalenan)
+      : sample_{.value = value}, remaining_samples_{count}, last_stalenan_{last_stalenan} {}
 
   const encoder::Sample& operator*() const noexcept { return sample_; }
   const encoder::Sample* operator->() const noexcept { return &sample_; }
@@ -32,20 +34,23 @@ class DecodeIteratorTrait : public DecodeIteratorTypeTrait {
  protected:
   encoder::Sample sample_;
   uint8_t remaining_samples_{};
+  bool last_stalenan_{false};
 };
 
 class SeparatedTimestampValueDecodeIteratorTrait : public DecodeIteratorTrait {
  public:
-  SeparatedTimestampValueDecodeIteratorTrait(uint8_t samples_count, const BareBones::BitSequenceReader& timestamp_reader, double value)
-      : DecodeIteratorTrait(value, samples_count), timestamp_decoder_(timestamp_reader) {
+  SeparatedTimestampValueDecodeIteratorTrait(uint8_t samples_count, const BareBones::BitSequenceReader& timestamp_reader, double value, bool last_stalenan)
+      : DecodeIteratorTrait(value, samples_count, last_stalenan), timestamp_decoder_(timestamp_reader) {
     if (remaining_samples_ > 0) {
       sample_.timestamp = timestamp_decoder_.decode();
     }
   }
   explicit SeparatedTimestampValueDecodeIteratorTrait(const encoder::BitSequenceWithItemsCount& timestamp_stream)
-      : SeparatedTimestampValueDecodeIteratorTrait(timestamp_stream.count(), timestamp_stream.reader(), 0.0) {}
+      : SeparatedTimestampValueDecodeIteratorTrait(timestamp_stream.count(), timestamp_stream.reader(), 0.0, false) {}
   SeparatedTimestampValueDecodeIteratorTrait(const encoder::BitSequenceWithItemsCount& timestamp_stream, double value)
-      : SeparatedTimestampValueDecodeIteratorTrait(timestamp_stream.count(), timestamp_stream.reader(), value) {}
+      : SeparatedTimestampValueDecodeIteratorTrait(timestamp_stream.count(), timestamp_stream.reader(), value, false) {}
+  SeparatedTimestampValueDecodeIteratorTrait(const encoder::BitSequenceWithItemsCount& timestamp_stream, double value, bool last_stalenan)
+      : SeparatedTimestampValueDecodeIteratorTrait(timestamp_stream.count(), timestamp_stream.reader(), value, last_stalenan) {}
 
   PROMPP_ALWAYS_INLINE bool decode_timestamp() noexcept {
     if (--remaining_samples_ > 0) {

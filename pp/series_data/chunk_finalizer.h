@@ -13,7 +13,7 @@ class ChunkFinalizer {
   };
 
   PROMPP_ALWAYS_INLINE static void finalize(DataStorage& storage, uint32_t ls_id, chunk::DataChunk& chunk) {
-    if (chunk.encoding_type == chunk::DataChunk::EncodingType::kGorilla) [[unlikely]] {
+    if (chunk.encoding_state.encoding_type == EncodingType::kGorilla) [[unlikely]] {
       finalize(storage, ls_id, chunk, encoder::timestamp::State::kInvalidId);
     } else {
       finalize_timestamp_and_chunk_separately<FinalizeTimestampStateMode::kFinalize>(storage, ls_id, chunk);
@@ -21,20 +21,20 @@ class ChunkFinalizer {
   }
 
   static void finalize(DataStorage& storage, uint32_t ls_id, chunk::DataChunk& chunk, uint32_t finalized_timestamp_stream_id) {
-    if (chunk.encoding_type == chunk::DataChunk::EncodingType::kAscIntegerValuesGorilla) {
+    if (chunk.encoding_state.encoding_type == EncodingType::kAscIntegerValuesGorilla) {
       const auto& finalized_stream =
-          storage.finalized_data_streams.emplace_back(storage.asc_integer_values_gorilla_encoders[chunk.encoder.asc_integer_values_gorilla].finalize_stream());
-      storage.asc_integer_values_gorilla_encoders.erase(chunk.encoder.asc_integer_values_gorilla);
-      chunk.encoder.asc_integer_values_gorilla = storage.finalized_data_streams.index_of(finalized_stream);
-    } else if (chunk.encoding_type == chunk::DataChunk::EncodingType::kValuesGorilla) {
+          storage.finalized_data_streams.emplace_back(storage.asc_integer_values_gorilla_encoders[chunk.encoder.external_index].finalize_stream());
+      storage.asc_integer_values_gorilla_encoders.erase(chunk.encoder.external_index);
+      chunk.encoder.external_index = storage.finalized_data_streams.index_of(finalized_stream);
+    } else if (chunk.encoding_state.encoding_type == EncodingType::kValuesGorilla) {
       const auto& finalized_stream =
-          storage.finalized_data_streams.emplace_back(storage.values_gorilla_encoders[chunk.encoder.values_gorilla].finalize_stream());
-      storage.values_gorilla_encoders.erase(chunk.encoder.values_gorilla);
-      chunk.encoder.values_gorilla = storage.finalized_data_streams.index_of(finalized_stream);
-    } else if (chunk.encoding_type == chunk::DataChunk::EncodingType::kGorilla) {
-      const auto& finalized_stream = storage.finalized_data_streams.emplace_back(storage.gorilla_encoders[chunk.encoder.gorilla].finalize_stream());
-      storage.gorilla_encoders.erase(chunk.encoder.gorilla);
-      chunk.encoder.gorilla = storage.finalized_data_streams.index_of(finalized_stream);
+          storage.finalized_data_streams.emplace_back(storage.values_gorilla_encoders[chunk.encoder.external_index].finalize_stream());
+      storage.values_gorilla_encoders.erase(chunk.encoder.external_index);
+      chunk.encoder.external_index = storage.finalized_data_streams.index_of(finalized_stream);
+    } else if (chunk.encoding_state.encoding_type == EncodingType::kGorilla) {
+      const auto& finalized_stream = storage.finalized_data_streams.emplace_back(storage.gorilla_encoders[chunk.encoder.external_index].finalize_stream());
+      storage.gorilla_encoders.erase(chunk.encoder.external_index);
+      chunk.encoder.external_index = storage.finalized_data_streams.index_of(finalized_stream);
     }
 
     chunk.timestamp_encoder_state_id = finalized_timestamp_stream_id;

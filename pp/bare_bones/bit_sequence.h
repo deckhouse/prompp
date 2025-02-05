@@ -21,6 +21,8 @@
 #include "streams.h"
 #include "type_traits.h"
 
+#include <iostream>
+
 namespace BareBones {
 
 struct AllocationSize {
@@ -359,7 +361,9 @@ class PROMPP_ATTRIBUTE_PACKED CompactBitSequence : public CompactBitSequenceBase
     const uint8_t code = (size_in_bytes >> 1) - (size_in_bytes != 0);
 
     push_back_bits_u32(2, code);
-    push_back_bits_u64(Bit::to_bits(size_in_bytes), (std::bit_cast<uint64_t>(val)) >> (64 - Bit::to_bits(size_in_bytes)));
+    if (size_in_bytes != 0) [[likely]] {
+      push_back_bits_u64(Bit::to_bits(size_in_bytes), (std::bit_cast<uint64_t>(val)) >> (64 - Bit::to_bits(size_in_bytes)));
+    }
   }
   PROMPP_ALWAYS_INLINE void push_back_u64_svbyte_2468(uint64_t val) noexcept {
     uint8_t size_in_bytes = ((64 + 15 - std::countl_zero(val)) >> 3) & 0b1110;

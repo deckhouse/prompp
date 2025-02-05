@@ -1,9 +1,20 @@
 #pragma once
 
+#include <cassert>
+#include <cstdint>
+
+#include "bare_bones/gorilla.h"
+#include "bare_bones/preprocess.h"
 #include "chunk_finalizer.h"
+#include "common.h"
 #include "concepts.h"
 #include "data_storage.h"
-#include "decoder.h"
+#include "encoder/value/asc_integer_values_gorilla.h"
+#include "encoder/value/constant_value.h"
+#include "series_data/encoder/timestamp/encoder.h"
+#include "series_data/encoder/timestamp/state.h"
+#include "series_data/encoder/value/float32_constant.h"
+#include "series_data/encoder/value/uint32_constant.h"
 
 namespace series_data {
 
@@ -24,175 +35,261 @@ class Encoder {
     encode(ls_id, timestamp, value, storage_.open_chunks[ls_id]);
   }
 
-  PROMPP_ALWAYS_INLINE void encode(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) {
-    if (chunk.encoding_type == chunk::DataChunk::EncodingType::kGorilla) [[unlikely]] {
-      encode_gorilla(ls_id, timestamp, value, chunk);
-    } else {
-      encode_timestamp_and_value_separately(ls_id, timestamp, value, chunk);
-    }
-  }
+  PROMPP_ALWAYS_INLINE void encode(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) { encode_impl(ls_id, timestamp, value, chunk); }
 
  private:
   DataStorage& storage_;
   OutdatedSampleEncoder& outdated_sample_encoder_;
 
-  void encode_gorilla(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) {
-    if (auto& encoder = storage_.gorilla_encoders[chunk.encoder.gorilla]; timestamp > encoder.timestamp()) [[likely]] {
+  void encode_impl(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) {
+    if (should_skip_stalenan(value, chunk)) [[unlikely]] {
+      return;
+    }
+
+    if (!handle_timestamp_update(ls_id, timestamp, value, chunk)) {
+      return;
+    }
+
+    encode_value(ls_id, chunk, timestamp, value);
+    update_encoder_timestamp(chunk, timestamp);
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static bool should_skip_stalenan(double value, const chunk::DataChunk& chunk) {
+    return BareBones::Encoding::Gorilla::isstalenan(value) && chunk.encoding_state.has_last_stalenan;
+  }
+
+  bool handle_timestamp_update(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) {
+    if (chunk.encoding_state.encoding_type == EncodingType::kGorilla) {
+      return process_gorilla_encoding(ls_id, timestamp, value, chunk);
+    }
+
+    if (chunk.timestamp_encoder_state_id != encoder::timestamp::State::kInvalidId) {
+      return process_value_timestamp_encoding(ls_id, timestamp, value, chunk);
+    }
+
+    return true;
+  }
+
+  PROMPP_ALWAYS_INLINE bool process_gorilla_encoding(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) {
+    auto& encoder = storage_.gorilla_encoders[chunk.encoder.external_index];
+
+    if (timestamp > encoder.timestamp()) [[likely]] {
       if (encoder.stream().count() >= kSamplesPerChunk) [[unlikely]] {
         ChunkFinalizer::finalize(storage_, ls_id, chunk);
-        encode_timestamp_and_value_separately(ls_id, timestamp, value, chunk);
-      } else {
-        encoder.encode(timestamp, value);
       }
-    } else if (timestamp < encoder.timestamp()) {
+      return true;
+    }
+
+    handle_outdated_sample(ls_id, timestamp, value, encoder.timestamp());
+    return false;
+  }
+
+  PROMPP_ALWAYS_INLINE bool process_value_timestamp_encoding(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) {
+    const auto& state = storage_.timestamp_encoder.get_state(chunk.timestamp_encoder_state_id);
+
+    if (timestamp > state.timestamp()) [[likely]] {
+      if (!ChunkFinalizer::finalize_if_timestamp_finalized(storage_, ls_id, chunk)) [[likely]] {
+        if (state.stream_data.stream.count() >= kSamplesPerChunk) [[unlikely]] {
+          ChunkFinalizer::finalize(storage_, ls_id, chunk);
+        }
+      }
+      return true;
+    }
+
+    handle_outdated_sample(ls_id, timestamp, value, state.timestamp());
+    return false;
+  }
+
+  PROMPP_ALWAYS_INLINE void handle_outdated_sample(uint32_t ls_id, int64_t timestamp, double value, int64_t last_timestamp) {
+    if (timestamp < last_timestamp) {
       outdated_sample_encoder_.encode(*this, ls_id, timestamp, value);
     }
   }
 
-  void encode_timestamp_and_value_separately(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) {
-    if (chunk.timestamp_encoder_state_id != encoder::timestamp::State::kInvalidId) [[likely]] {
-      if (const auto& state = storage_.timestamp_encoder.get_state(chunk.timestamp_encoder_state_id); timestamp > state.timestamp()) [[likely]] {
-        if (!ChunkFinalizer::finalize_if_timestamp_finalized(storage_, ls_id, chunk)) [[likely]] {
-          if (state.stream_data.stream.count() >= kSamplesPerChunk) [[unlikely]] {
-            ChunkFinalizer::finalize(storage_, ls_id, chunk);
-          }
-        }
-      } else {
-        if (timestamp < state.timestamp()) {
-          outdated_sample_encoder_.encode(*this, ls_id, timestamp, value);
-        }
-        return;
-      }
-    }
-
-    encode_value(ls_id, chunk, timestamp, value);
-
-    if (chunk.encoding_type != chunk::DataChunk::EncodingType::kGorilla) {
+  PROMPP_ALWAYS_INLINE void update_encoder_timestamp(chunk::DataChunk& chunk, int64_t timestamp) const {
+    if (chunk.encoding_state.encoding_type != EncodingType::kGorilla) {
       chunk.timestamp_encoder_state_id = storage_.timestamp_encoder.encode(chunk.timestamp_encoder_state_id, timestamp);
     }
   }
 
   void encode_value(uint32_t ls_id, chunk::DataChunk& chunk, int64_t timestamp, double value) const {
-    if (chunk.encoding_type == chunk::DataChunk::EncodingType::kUnknown) [[unlikely]] {
-      if (encoder::value::Uint32ConstantEncoder::can_be_encoded(value)) {
-        chunk.encoding_type = chunk::DataChunk::EncodingType::kUint32Constant;
-        std::construct_at(&chunk.encoder.uint32_constant, encoder::value::Uint32ConstantEncoder(value));
-      } else if (encoder::value::Float32ConstantEncoder::can_be_encoded(value)) [[unlikely]] {
-        chunk.encoding_type = chunk::DataChunk::EncodingType::kFloat32Constant;
-        std::construct_at(&chunk.encoder.float32_constant, encoder::value::Float32ConstantEncoder(value));
-      } else {
-        switch_to_double_constant_encoder(chunk, value);
+    switch (chunk.encoding_state.encoding_type) {
+      case EncodingType::kUnknown: {
+        return init_encoder(chunk, value);
       }
-    } else if (chunk.encoding_type == chunk::DataChunk::EncodingType::kUint32Constant) {
-      if (!chunk.encoder.uint32_constant.encode(value)) {
-        switch_to_two_constant_encoder(chunk, chunk.encoder.uint32_constant.value(), value);
+      case EncodingType::kUint32Constant: {
+        return handle_inplace_constant_encoder(chunk, timestamp, chunk.encoder.uint32_constant, value);
       }
-    } else if (chunk.encoding_type == chunk::DataChunk::EncodingType::kFloat32Constant) {
-      if (!chunk.encoder.float32_constant.encode(value)) {
-        switch_to_two_constant_encoder(chunk, chunk.encoder.float32_constant.value(), value);
+      case EncodingType::kFloat32Constant: {
+        return handle_inplace_constant_encoder(chunk, timestamp, chunk.encoder.float32_constant, value);
       }
-    } else if (chunk.encoding_type == chunk::DataChunk::EncodingType::kDoubleConstant) {
-      if (const auto& encoder = storage_.double_constant_encoders[chunk.encoder.double_constant]; !encoder.encode(value)) {
-        const auto encoder_id = chunk.encoder.double_constant;
-        switch_to_two_constant_encoder(chunk, encoder.value(), value);
-        storage_.double_constant_encoders.erase(encoder_id);
+      case EncodingType::kDoubleConstant: {
+        return handle_double_constant_encoder(chunk, timestamp, value);
       }
-    } else if (chunk.encoding_type == chunk::DataChunk::EncodingType::kTwoDoubleConstant) {
-      if (const auto& encoder = storage_.two_double_constant_encoders[chunk.encoder.two_double_constant]; !encoder.encode(value)) {
-        const auto encoder_id = chunk.encoder.two_double_constant;
+      case EncodingType::kTwoDoubleConstant: {
+        return handle_two_double_constant_encoder(ls_id, chunk, timestamp, value);
+      }
+      case EncodingType::kAscIntegerValuesGorilla: {
+        return handle_asc_values_gorilla_encoder(ls_id, chunk, value);
+      }
+      case EncodingType::kValuesGorilla: {
+        return handle_values_gorilla_encoder(chunk, value);
+      }
+      case EncodingType::kGorilla: {
+        return handle_gorilla_encoder(chunk, timestamp, value);
+      }
+      default: {
+        assert(chunk.encoding_state.encoding_type != EncodingType::kUint32Constant);
+      }
+    }
+  }
 
-        if (encoder::value::AscIntegerValuesGorillaEncoder::can_be_encoded(encoder.value1(), encoder.value1_count(), encoder.value2(), value)) [[likely]] {
-          switch_to_asc_integer_values_gorilla(chunk, encoder, value);
-        } else if (!storage_.timestamp_encoder.is_unique_state(chunk.timestamp_encoder_state_id)) {
-          switch_to_values_gorilla(chunk, encoder, value);
-        } else {
-          switch_to_gorilla(chunk, encoder, timestamp, value);
-        }
+  void init_encoder(chunk::DataChunk& chunk, double value) const {
+    if (encoder::value::Uint32ConstantEncoder::can_be_encoded(value)) [[likely]] {
+      chunk.encoding_state.encoding_type = EncodingType::kUint32Constant;
+      std::construct_at(&chunk.encoder.uint32_constant, encoder::value::Uint32ConstantEncoder(value));
+    } else if (encoder::value::Float32ConstantEncoder::can_be_encoded(value)) [[unlikely]] {
+      chunk.encoding_state.encoding_type = EncodingType::kFloat32Constant;
+      std::construct_at(&chunk.encoder.float32_constant, encoder::value::Float32ConstantEncoder(value));
+    } else {
+      switch_to_double_constant_encoder(chunk, value);
+    }
+  }
 
-        storage_.two_double_constant_encoders.erase(encoder_id);
-      }
-    } else if (chunk.encoding_type == chunk::DataChunk::EncodingType::kAscIntegerValuesGorilla) {
-      if (!storage_.asc_integer_values_gorilla_encoders[chunk.encoder.asc_integer_values_gorilla].encode(value)) {
-        ChunkFinalizer::finalize_timestamp_and_chunk_separately<ChunkFinalizer::FinalizeTimestampStateMode::kFinalizeOrCopy>(storage_, ls_id, chunk);
+  template <typename EncoderType>
+  PROMPP_ALWAYS_INLINE void handle_inplace_constant_encoder(chunk::DataChunk& chunk, int64_t timestamp, EncoderType& encoder, double value) const {
+    if (!encoder.encode(chunk.encoding_state, value)) {
+      switch_from_constant(chunk, timestamp, encoder.value(), value);
+    }
+  }
 
-        switch_to_double_constant_encoder(chunk, value);
+  PROMPP_ALWAYS_INLINE void handle_double_constant_encoder(chunk::DataChunk& chunk, int64_t timestamp, double value) const {
+    if (const auto& encoder = storage_.double_constant_encoders[chunk.encoder.external_index]; !encoder.encode(chunk.encoding_state, value)) {
+      const auto encoder_id = chunk.encoder.external_index;
+      switch_from_constant(chunk, timestamp, encoder.value(), value);
+      storage_.double_constant_encoders.erase(encoder_id);
+    }
+  }
+
+  PROMPP_ALWAYS_INLINE void handle_two_double_constant_encoder(uint32_t ls_id, chunk::DataChunk& chunk, int64_t timestamp, double value) const {
+    if (const auto& encoder = storage_.two_double_constant_encoders[chunk.encoder.external_index]; !encoder.encode(chunk.encoding_state, value)) {
+      const auto encoder_id = chunk.encoder.external_index;
+      const bool was_last_stalenan = chunk.encoding_state.has_last_stalenan;
+      switch_from_two_double_constant(chunk, timestamp, encoder.value1(), encoder.value1_count(), encoder.value2(), value);
+      storage_.two_double_constant_encoders.erase(encoder_id);
+
+      if (was_last_stalenan) [[unlikely]] {
+        encode_value(ls_id, chunk, timestamp, value);
       }
-    } else if (chunk.encoding_type == chunk::DataChunk::EncodingType::kValuesGorilla) {
-      storage_.values_gorilla_encoders[chunk.encoder.values_gorilla].encode(value);
+    }
+  }
+
+  PROMPP_ALWAYS_INLINE void handle_asc_values_gorilla_encoder(uint32_t ls_id, chunk::DataChunk& chunk, double value) const {
+    if (!storage_.asc_integer_values_gorilla_encoders[chunk.encoder.external_index].encode(chunk.encoding_state, value)) {
+      ChunkFinalizer::finalize_timestamp_and_chunk_separately<ChunkFinalizer::FinalizeTimestampStateMode::kFinalizeOrCopy>(storage_, ls_id, chunk);
+
+      switch_to_double_constant_encoder(chunk, value);
+    }
+  }
+
+  PROMPP_ALWAYS_INLINE void handle_values_gorilla_encoder(chunk::DataChunk& chunk, double value) const {
+    storage_.values_gorilla_encoders[chunk.encoder.external_index].encode(chunk.encoding_state, value);
+  }
+
+  PROMPP_ALWAYS_INLINE void handle_gorilla_encoder(chunk::DataChunk& chunk, int64_t timestamp, double value) const {
+    storage_.gorilla_encoders[chunk.encoder.external_index].encode(chunk.encoding_state, timestamp, value);
+  }
+
+  PROMPP_ALWAYS_INLINE void switch_from_constant(chunk::DataChunk& chunk, int64_t timestamp, double const_value, double value) const {
+    uint8_t const_value_count = storage_.timestamp_encoder.get_stream(chunk.timestamp_encoder_state_id).count() - chunk.encoding_state.has_last_stalenan;
+
+    encoder::value::ConstantValue v1{.value = const_value, .count = const_value_count};
+    encoder::value::ConstantValue v2{.value = value, .count = 1};
+    encoder::value::ConstantValue v3{};
+
+    if (v1.is_stalenan()) [[unlikely]] {
+      ++v1.count;
+    } else if (chunk.encoding_state.has_last_stalenan) [[unlikely]] {
+      v3 = std::exchange(v2, encoder::value::ConstantValue{.value = BareBones::Encoding::Gorilla::STALE_NAN, .count = 1});
+    }
+
+    switch_from_constant_impl(chunk, timestamp, v1, v2, v3);
+  }
+
+  void switch_from_two_double_constant(chunk::DataChunk& chunk, int64_t timestamp, double value1, uint8_t value1_count, double value2, double value) const {
+    const uint8_t value2_count =
+        storage_.timestamp_encoder.get_stream(chunk.timestamp_encoder_state_id).count() - value1_count - chunk.encoding_state.has_last_stalenan;
+
+    const encoder::value::ConstantValue v1{.value = value1, .count = value1_count};
+    const encoder::value::ConstantValue v2{.value = value2, .count = value2_count};
+    encoder::value::ConstantValue v3{.value = BareBones::Encoding::Gorilla::STALE_NAN, .count = 1};
+
+    if (!chunk.encoding_state.has_last_stalenan) [[likely]] {
+      v3.value = value;
+    }
+
+    switch_from_constant_impl(chunk, timestamp, v1, v2, v3);
+  }
+
+  void switch_from_constant_impl(chunk::DataChunk& chunk,
+                                 int64_t timestamp,
+                                 const encoder::value::ConstantValue& v1,
+                                 const encoder::value::ConstantValue& v2,
+                                 const encoder::value::ConstantValue& v3) const {
+    if (!v3.has_value()) [[likely]] {
+      switch_to_two_constant_encoder(chunk, v1, v2.value);
+    } else if (encoder::value::AscIntegerValuesGorillaEncoder::can_be_encoded(v1.value, v1.count, v2.value, v3.value)) {
+      switch_to_asc_integer_values_gorilla(chunk, v1, v2, v3);
+    } else if (!storage_.timestamp_encoder.is_unique_state(chunk.timestamp_encoder_state_id)) {
+      switch_to_values_gorilla(chunk, v1, v2, v3);
+    } else {
+      switch_to_gorilla(chunk, timestamp, v1, v2, v3);
     }
   }
 
   PROMPP_ALWAYS_INLINE void switch_to_double_constant_encoder(chunk::DataChunk& chunk, double value) const {
-    chunk.encoding_type = chunk::DataChunk::EncodingType::kDoubleConstant;
+    chunk.encoding_state.encoding_type = EncodingType::kDoubleConstant;
+    chunk.encoding_state.has_last_stalenan = BareBones::Encoding::Gorilla::isstalenan(value);
     const auto& encoder = storage_.double_constant_encoders.emplace_back(value);
-    chunk.encoder.double_constant = storage_.double_constant_encoders.index_of(encoder);
+    chunk.encoder.external_index = storage_.double_constant_encoders.index_of(encoder);
   }
 
-  PROMPP_ALWAYS_INLINE void switch_to_two_constant_encoder(chunk::DataChunk& chunk, double value1, double value2) const {
-    const auto& encoder =
-        storage_.two_double_constant_encoders.emplace_back(value1, value2, storage_.timestamp_encoder.get_stream(chunk.timestamp_encoder_state_id).count());
-    chunk.encoding_type = chunk::DataChunk::EncodingType::kTwoDoubleConstant;
-    chunk.encoder.two_double_constant = storage_.two_double_constant_encoders.index_of(encoder);
+  PROMPP_ALWAYS_INLINE void switch_to_two_constant_encoder(chunk::DataChunk& chunk, const encoder::value::ConstantValue& v1, double value2) const {
+    const auto& encoder = storage_.two_double_constant_encoders.emplace_back(v1.value, value2, v1.count);
+    chunk.encoding_state = EncodingState{.encoding_type = EncodingType::kTwoDoubleConstant, .has_last_stalenan = false};
+    chunk.encoder.external_index = storage_.two_double_constant_encoders.index_of(encoder);
   }
 
-  void switch_to_asc_integer_values_gorilla(chunk::DataChunk& data, const encoder::value::TwoDoubleConstantEncoder& constant_encoder, double value) const {
-    auto& encoder = storage_.asc_integer_values_gorilla_encoders.emplace_back(constant_encoder.value1());
-    const auto value1_count = constant_encoder.value1_count();
-    auto value2_count = static_cast<uint8_t>(storage_.timestamp_encoder.get_stream(data.timestamp_encoder_state_id).count() - constant_encoder.value1_count());
-
-    if (value1_count > 1) {
-      encoder.encode_second(constant_encoder.value1());
-      for (uint8_t i = 2; i < value1_count; ++i) {
-        encoder.encode(constant_encoder.value1());
-      }
-    } else {
-      encoder.encode_second(constant_encoder.value2());
-      --value2_count;
-    }
-
-    for (uint8_t i = 0; i < value2_count; ++i) {
-      encoder.encode(constant_encoder.value2());
-    }
-
-    encoder.encode(value);
-
-    data.encoding_type = chunk::DataChunk::EncodingType::kAscIntegerValuesGorilla;
-    data.encoder.asc_integer_values_gorilla = storage_.asc_integer_values_gorilla_encoders.index_of(encoder);
+  PROMPP_ALWAYS_INLINE void switch_to_asc_integer_values_gorilla(chunk::DataChunk& chunk,
+                                                                 const encoder::value::ConstantValue& v1,
+                                                                 const encoder::value::ConstantValue& v2,
+                                                                 const encoder::value::ConstantValue& v3) const {
+    const auto& encoder = storage_.asc_integer_values_gorilla_encoders.emplace_back(v1, v2, v3);
+    chunk.encoding_state = EncodingState{.encoding_type = EncodingType::kAscIntegerValuesGorilla, .has_last_stalenan = false};
+    chunk.encoder.external_index = storage_.asc_integer_values_gorilla_encoders.index_of(encoder);
   }
 
-  void switch_to_values_gorilla(chunk::DataChunk& data, const encoder::value::TwoDoubleConstantEncoder& constant_encoder, double value) const {
-    auto& encoder = storage_.values_gorilla_encoders.emplace_back(constant_encoder.value1(), constant_encoder.value1_count());
-
-    const auto value2_count = storage_.timestamp_encoder.get_stream(data.timestamp_encoder_state_id).count() - constant_encoder.value1_count();
-    encoder.encode(constant_encoder.value2(), value2_count);
-
-    encoder.encode(value);
-
-    data.encoding_type = chunk::DataChunk::EncodingType::kValuesGorilla;
-    data.encoder.values_gorilla = storage_.values_gorilla_encoders.index_of(encoder);
+  PROMPP_ALWAYS_INLINE void switch_to_values_gorilla(chunk::DataChunk& chunk,
+                                                     const encoder::value::ConstantValue& v1,
+                                                     const encoder::value::ConstantValue& v2,
+                                                     const encoder::value::ConstantValue& v3) const {
+    auto& encoder = storage_.values_gorilla_encoders.emplace_back(v1, v2, v3);
+    chunk.encoding_state = EncodingState{.encoding_type = EncodingType::kValuesGorilla, .has_last_stalenan = false};
+    chunk.encoder.external_index = storage_.values_gorilla_encoders.index_of(encoder);
   }
 
-  void switch_to_gorilla(chunk::DataChunk& chunk, const encoder::value::TwoDoubleConstantEncoder& constant_encoder, int64_t timestamp, double value) const {
+  PROMPP_ALWAYS_INLINE void switch_to_gorilla(chunk::DataChunk& chunk,
+                                              int64_t timestamp,
+                                              const encoder::value::ConstantValue& v1,
+                                              const encoder::value::ConstantValue& v2,
+                                              const encoder::value::ConstantValue& v3) const {
+    chunk.timestamp_encoder_state_id = storage_.timestamp_encoder.encode(chunk.timestamp_encoder_state_id, timestamp);
     auto& timestamp_stream = storage_.timestamp_encoder.get_stream(chunk.timestamp_encoder_state_id);
     encoder::timestamp::TimestampDecoder timestamp_decoder(timestamp_stream.reader());
-    const uint8_t value2_count = timestamp_stream.count() - constant_encoder.value1_count();
 
-    auto& encoder = storage_.gorilla_encoders.emplace_back(timestamp_decoder.decode(), constant_encoder.value1());
-
-    for (uint8_t i = 1; i < constant_encoder.value1_count(); ++i) {
-      encoder.encode(timestamp_decoder.decode(), constant_encoder.value1());
-    }
-
-    for (uint8_t i = 0; i < value2_count; ++i) {
-      encoder.encode(timestamp_decoder.decode(), constant_encoder.value2());
-    }
-
-    encoder.encode(timestamp, value);
-
-    storage_.timestamp_encoder.erase(chunk.timestamp_encoder_state_id);
-
-    chunk.encoding_type = chunk::DataChunk::EncodingType::kGorilla;
-    chunk.encoder.gorilla = storage_.gorilla_encoders.index_of(encoder);
+    const auto& encoder = storage_.gorilla_encoders.emplace_back(timestamp_decoder, v1, v2, v3);
+    chunk.encoding_state = EncodingState{.encoding_type = EncodingType::kGorilla, .has_last_stalenan = false};
+    chunk.encoder.external_index = storage_.gorilla_encoders.index_of(encoder);
   }
 };
 

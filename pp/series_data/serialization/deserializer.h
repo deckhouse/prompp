@@ -21,7 +21,7 @@ class Deserializer {
       Data(std::span<const uint8_t> buffer, SerializedChunkSpan chunks) : buffer_(buffer), chunk_iterator_(chunks.begin()), chunk_end_iterator_(chunks.end()) {}
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::LabelSetID label_set_id() const noexcept { return chunk_iterator_->label_set_id; }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE chunk::DataChunk::EncodingType encoding_type() const noexcept { return chunk_iterator_->encoding_type; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE EncodingType encoding_type() const noexcept { return chunk_iterator_->encoding_state.encoding_type; }
       [[nodiscard]] PROMPP_ALWAYS_INLINE decoder::UniversalDecodeIterator decode_iterator() const { return create_decode_iterator(buffer_, *chunk_iterator_); }
 
      private:
@@ -77,15 +77,15 @@ class Deserializer {
     return {reinterpret_cast<const chunk::SerializedChunk*>(buffer.data() + sizeof(uint32_t)), chunks_count};
   }
   [[nodiscard]] static decoder::UniversalDecodeIterator create_decode_iterator(std::span<const uint8_t> buffer, const chunk::SerializedChunk& chunk) {
-    using enum chunk::DataChunk::EncodingType;
+    using enum EncodingType;
 
-    switch (chunk.encoding_type) {
+    switch (chunk.encoding_state.encoding_type) {
       case kUint32Constant: {
         auto timestamp_buffer = buffer.subspan(chunk.timestamps_offset);
-        return decoder::UniversalDecodeIterator(
-            std::in_place_type<decoder::ConstantDecodeIterator>,
-            decoder::ConstantDecodeIterator(encoder::BitSequenceWithItemsCount::count(timestamp_buffer.data()),
-                                            encoder::BitSequenceWithItemsCount::reader(timestamp_buffer), chunk.values_offset));
+        return decoder::UniversalDecodeIterator(std::in_place_type<decoder::ConstantDecodeIterator>,
+                                                decoder::ConstantDecodeIterator(encoder::BitSequenceWithItemsCount::count(timestamp_buffer.data()),
+                                                                                encoder::BitSequenceWithItemsCount::reader(timestamp_buffer),
+                                                                                chunk.values_offset, chunk.encoding_state.has_last_stalenan));
       }
 
       case kFloat32Constant: {
@@ -93,55 +93,57 @@ class Deserializer {
         return decoder::UniversalDecodeIterator(
             std::in_place_type<decoder::ConstantDecodeIterator>,
             decoder::ConstantDecodeIterator(encoder::BitSequenceWithItemsCount::count(timestamp_buffer.data()),
-                                            encoder::BitSequenceWithItemsCount::reader(timestamp_buffer), std::bit_cast<float>(chunk.values_offset)));
+                                            encoder::BitSequenceWithItemsCount::reader(timestamp_buffer), std::bit_cast<float>(chunk.values_offset),
+                                            chunk.encoding_state.has_last_stalenan));
       }
 
       case kDoubleConstant: {
         auto timestamp_buffer = buffer.subspan(chunk.timestamps_offset);
         auto values_buffer = buffer.subspan(chunk.values_offset);
         assert(values_buffer.size() >= sizeof(double));
-        return decoder::UniversalDecodeIterator(
-            std::in_place_type<decoder::ConstantDecodeIterator>, encoder::BitSequenceWithItemsCount::count(timestamp_buffer.data()),
-            encoder::BitSequenceWithItemsCount::reader(timestamp_buffer), *reinterpret_cast<const double*>(values_buffer.data()));
+        return decoder::UniversalDecodeIterator(std::in_place_type<decoder::ConstantDecodeIterator>,
+                                                encoder::BitSequenceWithItemsCount::count(timestamp_buffer.data()),
+                                                encoder::BitSequenceWithItemsCount::reader(timestamp_buffer),
+                                                *reinterpret_cast<const double*>(values_buffer.data()), chunk.encoding_state.has_last_stalenan);
       }
 
       case kTwoDoubleConstant: {
         auto timestamp_buffer = buffer.subspan(chunk.timestamps_offset);
         auto values_buffer = buffer.subspan(chunk.values_offset);
         assert(values_buffer.size() >= sizeof(encoder::value::TwoDoubleConstantEncoder));
-        return decoder::UniversalDecodeIterator(std::in_place_type<decoder::TwoDoubleConstantDecodeIterator>,
-                                                encoder::BitSequenceWithItemsCount::count(timestamp_buffer.data()),
-                                                encoder::BitSequenceWithItemsCount::reader(timestamp_buffer),
-                                                *reinterpret_cast<const encoder::value::TwoDoubleConstantEncoder*>(values_buffer.data()));
+        return decoder::UniversalDecodeIterator(
+            std::in_place_type<decoder::TwoDoubleConstantDecodeIterator>, encoder::BitSequenceWithItemsCount::count(timestamp_buffer.data()),
+            encoder::BitSequenceWithItemsCount::reader(timestamp_buffer),
+            *reinterpret_cast<const encoder::value::TwoDoubleConstantEncoder*>(values_buffer.data()), chunk.encoding_state.has_last_stalenan);
       }
 
       case kAscIntegerValuesGorilla: {
         auto timestamp_buffer = buffer.subspan(chunk.timestamps_offset);
         auto values_buffer = buffer.subspan(chunk.values_offset);
-        return decoder::UniversalDecodeIterator(std::in_place_type<decoder::AscIntegerValuesGorillaDecodeIterator>,
-                                                encoder::BitSequenceWithItemsCount::count(timestamp_buffer.data()),
-                                                encoder::BitSequenceWithItemsCount::reader(timestamp_buffer),
-                                                BareBones::BitSequenceReader(values_buffer.data(), BareBones::Bit::to_bits(values_buffer.size())));
+        return decoder::UniversalDecodeIterator(
+            std::in_place_type<decoder::AscIntegerValuesGorillaDecodeIterator>, encoder::BitSequenceWithItemsCount::count(timestamp_buffer.data()),
+            encoder::BitSequenceWithItemsCount::reader(timestamp_buffer),
+            BareBones::BitSequenceReader(values_buffer.data(), BareBones::Bit::to_bits(values_buffer.size())), chunk.encoding_state.has_last_stalenan);
       }
 
       case kValuesGorilla: {
         auto timestamp_buffer = buffer.subspan(chunk.timestamps_offset);
         auto values_buffer = buffer.subspan(chunk.values_offset);
-        return decoder::UniversalDecodeIterator(std::in_place_type<decoder::ValuesGorillaDecodeIterator>,
-                                                encoder::BitSequenceWithItemsCount::count(timestamp_buffer.data()),
-                                                encoder::BitSequenceWithItemsCount::reader(timestamp_buffer),
-                                                BareBones::BitSequenceReader(values_buffer.data(), BareBones::Bit::to_bits(values_buffer.size())));
+        return decoder::UniversalDecodeIterator(
+            std::in_place_type<decoder::ValuesGorillaDecodeIterator>, encoder::BitSequenceWithItemsCount::count(timestamp_buffer.data()),
+            encoder::BitSequenceWithItemsCount::reader(timestamp_buffer),
+            BareBones::BitSequenceReader(values_buffer.data(), BareBones::Bit::to_bits(values_buffer.size())), chunk.encoding_state.has_last_stalenan);
       }
 
       case kGorilla: {
         auto values_buffer = buffer.subspan(chunk.values_offset);
         return decoder::UniversalDecodeIterator(std::in_place_type<decoder::GorillaDecodeIterator>,
                                                 encoder::BitSequenceWithItemsCount::count(values_buffer.data()),
-                                                encoder::BitSequenceWithItemsCount::reader(values_buffer));
+                                                encoder::BitSequenceWithItemsCount::reader(values_buffer), chunk.encoding_state.has_last_stalenan);
       }
 
       default: {
-        throw BareBones::Exception(0xb4474b73b71c449f, "Unsupported data chunk encoding type %d", static_cast<int>(chunk.encoding_type));
+        throw BareBones::Exception(0xb4474b73b71c449f, "Unsupported data chunk encoding type %d", static_cast<int>(chunk.encoding_state.encoding_type));
       }
     }
   }

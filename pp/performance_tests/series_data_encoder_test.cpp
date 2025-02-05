@@ -47,10 +47,10 @@ void validate_encoded_chunks(const std::unordered_map<uint32_t, SampleList>& sou
   for (auto& [ls_id, expected_samples] : source_samples) {
     auto actual_samples = get_encoded_samples(data_storage, ls_id);
     if (!std::ranges::equal(expected_samples, actual_samples)) {
-      std::cout << "Encoded samples for " << ls_id << " is not valid! type: " << static_cast<int>(data_storage.open_chunks[ls_id].encoding_type)
+      std::cout << "Encoded samples for " << ls_id << " is not valid! type: " << static_cast<int>(data_storage.open_chunks[ls_id].encoding_state.encoding_type)
+                << "(" << static_cast<int>(data_storage.open_chunks[ls_id].encoding_state.encoding_type) << ")"
                 << ", value: " << data_storage.open_chunks[ls_id].encoder.uint32_constant.value() << ", expected samples size: " << expected_samples.size()
                 << ", actual samples size: " << actual_samples.size() << std::endl;
-
       auto samples_for_print = std::max(expected_samples.size(), actual_samples.size());
       for (size_t i = 0; i < samples_for_print; ++i) {
         auto& expected = expected_samples[i];
@@ -113,31 +113,31 @@ void SeriesDataEncoder::execute(const Config& config, Metrics& metrics) const {
   merger.merge();
 
   struct ChunkInfo {
-    series_data::chunk::DataChunk::EncodingType type;
+    series_data::EncodingType type;
     std::string_view name;
     uint32_t count{};
   };
   std::array chunks_info = {
-      ChunkInfo{.type = series_data::chunk::DataChunk::EncodingType::kUnknown, .name = "unknown"},
-      ChunkInfo{.type = series_data::chunk::DataChunk::EncodingType::kUint32Constant, .name = "uint32_constants"},
-      ChunkInfo{.type = series_data::chunk::DataChunk::EncodingType::kFloat32Constant, .name = "float32_constants"},
-      ChunkInfo{.type = series_data::chunk::DataChunk::EncodingType::kDoubleConstant, .name = "double_constants"},
-      ChunkInfo{.type = series_data::chunk::DataChunk::EncodingType::kTwoDoubleConstant, .name = "two_double_constants"},
-      ChunkInfo{.type = series_data::chunk::DataChunk::EncodingType::kAscIntegerValuesGorilla, .name = "asc_integer_values_gorilla"},
-      ChunkInfo{.type = series_data::chunk::DataChunk::EncodingType::kValuesGorilla, .name = "values_gorilla"},
-      ChunkInfo{.type = series_data::chunk::DataChunk::EncodingType::kGorilla, .name = "gorilla"},
+      ChunkInfo{.type = series_data::EncodingType::kUnknown, .name = "unknown"},
+      ChunkInfo{.type = series_data::EncodingType::kUint32Constant, .name = "uint32_constants"},
+      ChunkInfo{.type = series_data::EncodingType::kFloat32Constant, .name = "float32_constants"},
+      ChunkInfo{.type = series_data::EncodingType::kDoubleConstant, .name = "double_constants"},
+      ChunkInfo{.type = series_data::EncodingType::kTwoDoubleConstant, .name = "two_double_constants"},
+      ChunkInfo{.type = series_data::EncodingType::kAscIntegerValuesGorilla, .name = "asc_integer_values_gorilla"},
+      ChunkInfo{.type = series_data::EncodingType::kValuesGorilla, .name = "values_gorilla"},
+      ChunkInfo{.type = series_data::EncodingType::kGorilla, .name = "gorilla"},
   };
   auto finalized_chunks_info = chunks_info;
 
   [[maybe_unused]] uint32_t ls_id = 0;
   for (auto& chunk : storage.open_chunks) {
-    ++chunks_info[static_cast<size_t>(chunk.encoding_type)].count;
+    ++chunks_info[static_cast<size_t>(chunk.encoding_state.encoding_type)].count;
     ++ls_id;
   }
 
   for (auto& [chunk_ls_id, chunks] : storage.finalized_chunks) {
     for (auto& chunk : chunks) {
-      ++finalized_chunks_info[static_cast<size_t>(chunk.encoding_type)].count;
+      ++finalized_chunks_info[static_cast<size_t>(chunk.encoding_state.encoding_type)].count;
     }
   }
 
@@ -145,8 +145,10 @@ void SeriesDataEncoder::execute(const Config& config, Metrics& metrics) const {
     std::cout << "==========================" << std::endl;
     std::cout << message << ":" << std::endl;
     for (auto& info : chunks_info) {
-      if (info.type != series_data::chunk::DataChunk::EncodingType::kUnknown) {
+      if (info.type != series_data::EncodingType::kUnknown) {
         std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.allocated_memory(info.type) << std::endl;
+      } else {
+        std::cout << info.name << "_count: " << info.count << std::endl;
       }
     }
     std::cout << "==========================" << std::endl << std::endl;

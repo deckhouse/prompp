@@ -8,13 +8,13 @@ namespace series_data::chunk {
 
 struct PROMPP_ATTRIBUTE_PACKED SerializedChunk {
   PromPP::Primitives::LabelSetID label_set_id;
-  DataChunk::EncodingType encoding_type{DataChunk::EncodingType::kUnknown};
+  EncodingState encoding_state{EncodingType::kUnknown, false};
   uint32_t values_offset{};
   uint32_t timestamps_offset{};
 
   explicit SerializedChunk(PromPP::Primitives::LabelSetID _label_set_id) : label_set_id(_label_set_id) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_empty() const noexcept { return encoding_type == DataChunk::EncodingType::kUnknown; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_empty() const noexcept { return encoding_state.encoding_type == EncodingType::kUnknown; }
   void set_offset(uint32_t offset) noexcept { values_offset = offset; }
   template <class T>
   void store_value_in_offset(T value) noexcept {

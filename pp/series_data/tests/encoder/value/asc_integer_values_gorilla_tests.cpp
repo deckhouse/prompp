@@ -1,5 +1,11 @@
 #include <gtest/gtest.h>
 
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+
+#include "bare_bones/gorilla.h"
+#include "series_data/common.h"
 #include "series_data/encoder/value/asc_integer_values_gorilla.h"
 
 namespace {
@@ -22,7 +28,7 @@ TEST_P(AscIntegerValuesGorillaEncoderCanBeEncodedFixture, Test) {
   auto& test_case = GetParam();
 
   // Act
-  auto result = AscIntegerValuesGorillaEncoder::can_be_encoded(test_case.value1, test_case.value1_count, test_case.value2, test_case.value3);
+  const auto result = AscIntegerValuesGorillaEncoder::can_be_encoded(test_case.value1, test_case.value1_count, test_case.value2, test_case.value3);
 
   // Assert
   EXPECT_EQ(test_case.expected, result);
@@ -79,14 +85,15 @@ struct IsActualCase {
 
 class AscIntegerValuesGorillaEncoderIsActualFixture : public testing::TestWithParam<IsActualCase> {
  protected:
-  static AscIntegerValuesGorillaEncoder encode(const BareBones::Vector<double>& values) {
+  AscIntegerValuesGorillaEncoder encode(const BareBones::Vector<double>& values) {
     AscIntegerValuesGorillaEncoder encoder(values[0]);
     encoder.encode_second(values[1]);
     for (size_t i = 2; i < values.size(); ++i) {
-      encoder.encode(values[i]);
+      encoder.encode(state, values[i]);
     }
     return encoder;
   }
+  series_data::EncodingState state{.encoding_type = series_data::EncodingType::kAscIntegerValuesGorilla, .has_last_stalenan = false};
 };
 
 TEST_P(AscIntegerValuesGorillaEncoderIsActualFixture, Test) {
@@ -94,7 +101,7 @@ TEST_P(AscIntegerValuesGorillaEncoderIsActualFixture, Test) {
   auto encoder = encode(GetParam().values);
 
   // Act
-  auto result = encoder.is_actual(GetParam().value);
+  auto result = encoder.is_actual(state, GetParam().value);
 
   // Assert
   EXPECT_EQ(GetParam().expected, result);
@@ -105,16 +112,24 @@ INSTANTIATE_TEST_SUITE_P(TwoPoints,
                          testing::Values(IsActualCase{.values = {1.0, 2.0}, .value = 1.0, .expected = false},
                                          IsActualCase{.values = {1.0, 2.0}, .value = 2.0, .expected = true},
                                          IsActualCase{.values = {1.0, STALE_NAN}, .value = 1.0, .expected = false},
-                                         IsActualCase{.values = {1.0, STALE_NAN}, .value = STALE_NAN, .expected = true}));
+                                         IsActualCase{.values = {STALE_NAN, 1.0}, .value = 2.0, .expected = false}));
 
 INSTANTIATE_TEST_SUITE_P(ThreePoints,
                          AscIntegerValuesGorillaEncoderIsActualFixture,
                          testing::Values(IsActualCase{.values = {1.0, 2.0, 3.0}, .value = 2.0, .expected = false},
                                          IsActualCase{.values = {1.0, 2.0, 3.0}, .value = 3.0, .expected = true},
-                                         IsActualCase{.values = {1.0, 2.0, STALE_NAN}, .value = 1.0, .expected = false},
-                                         IsActualCase{.values = {1.0, 2.0, STALE_NAN}, .value = STALE_NAN, .expected = true},
                                          IsActualCase{.values = {1.0, STALE_NAN, 2.0}, .value = 2.0, .expected = true},
-                                         IsActualCase{.values = {1.0, STALE_NAN, 2.0}, .value = STALE_NAN, .expected = false}));
+                                         IsActualCase{.values = {1.0, STALE_NAN, 2.0}, .value = STALE_NAN, .expected = false},
+                                         IsActualCase{.values = {1.0, 2.0, STALE_NAN}, .value = STALE_NAN, .expected = true},
+                                         IsActualCase{.values = {1.0, 2.0, STALE_NAN}, .value = 3.0, .expected = false}));
+
+INSTANTIATE_TEST_SUITE_P(FourPoints,
+                         AscIntegerValuesGorillaEncoderIsActualFixture,
+                         testing::Values(IsActualCase{.values = {1.0, 2.0, 3.0, 4.0}, .value = 2.0, .expected = false},
+                                         IsActualCase{.values = {1.0, 2.0, 3.0, 4.0}, .value = 4.0, .expected = true},
+                                         IsActualCase{.values = {1.0, 2.0, STALE_NAN, 4.0}, .value = 4.0, .expected = true},
+                                         IsActualCase{.values = {1.0, 2.0, 3.0, STALE_NAN}, .value = STALE_NAN, .expected = true},
+                                         IsActualCase{.values = {1.0, 2.0, 3.0, STALE_NAN}, .value = 3.0, .expected = false}));
 
 INSTANTIATE_TEST_SUITE_P(NonIntegerValue,
                          AscIntegerValuesGorillaEncoderIsActualFixture,
