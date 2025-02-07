@@ -88,6 +88,7 @@ type Receiver struct {
 	logger            log.Logger
 	workingDir        string
 	clientID          string
+	commitInterval    time.Duration
 	cgogc             *cppbridge.CGOGC
 	shutdowner        *util.GracefulShutdowner
 }
@@ -126,6 +127,7 @@ func NewReceiver(
 	headCatalog *catalog.Catalog,
 	triggerNotifier *ReloadBlocksTriggerNotifier,
 	readyNotifier ready.Notifier,
+	commitInterval time.Duration,
 ) (*Receiver, error) {
 	if logger == nil {
 		logger = log.NewNopLogger()
@@ -206,7 +208,7 @@ func NewReceiver(
 		rotator: appender.NewRotateCommiter(
 			app,
 			relabeler.NewRotateTimerWithSeed(clock, rotationInfo.BlockDuration, rotationInfo.Seed),
-			appender.NewConstantIntervalTimer(clock, appender.DefaultCommitTimeout),
+			appender.NewConstantIntervalTimer(clock, commitInterval),
 			registerer,
 		),
 
