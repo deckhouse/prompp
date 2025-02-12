@@ -44,8 +44,9 @@ import (
 )
 
 const (
-	defaultShutdownTimeout = 40 * time.Second
-	defaultNumberOfShards  = 2
+	defaultShutdownTimeout        = 40 * time.Second
+	defaultNumberOfShards         = 2
+	defaultMaxSegmentSize  uint32 = 10000
 )
 
 type HeadConfig struct {
@@ -88,7 +89,6 @@ type Receiver struct {
 	logger            log.Logger
 	workingDir        string
 	clientID          string
-	commitInterval    time.Duration
 	cgogc             *cppbridge.CGOGC
 	shutdowner        *util.GracefulShutdowner
 }
@@ -175,7 +175,14 @@ func NewReceiver(
 		return nil, err
 	}
 
-	headManager, err := headmanager.New(dataDir, clock, headConfigStorage, headCatalog, registerer)
+	headManager, err := headmanager.New(
+		dataDir,
+		clock,
+		headConfigStorage,
+		headCatalog,
+		defaultMaxSegmentSize,
+		registerer,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create head manager: %w", err)
 	}
@@ -447,6 +454,7 @@ func (rr *Receiver) RelabelerIDIsExist(relabelerID string) bool {
 // Run main loop.
 func (rr *Receiver) Run(_ context.Context) (err error) {
 	defer rr.shutdowner.Done(err)
+	rr.storage.Run()
 	rr.rotator.Run()
 	<-rr.shutdowner.Signal()
 	return nil
@@ -729,6 +737,7 @@ func refillSenderCtor(
 
 // initLogHandler init log handler for ManagerKeeper.
 func initLogHandler(logger log.Logger) {
+	logger = log.With(logger, "op_caller", log.Caller(4))
 	relabeler.Debugf = func(template string, args ...interface{}) {
 		level.Debug(logger).Log("msg", fmt.Sprintf(template, args...))
 	}
