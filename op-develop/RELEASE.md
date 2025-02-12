@@ -10,11 +10,11 @@
 4. Коммитим изменения и вешаем тэг релиза на репозиторий модуля.
 5. Пишем сообщение в [канал deckhouse-releases](https://loop.flant.ru/flant/channels/deckhouse-releases) по шаблону:
    ```
-   # Модуль [prom++](https://fox.flant.com/deckhouse/observability/prometheus-plus-plus) тэг релиза
+   ### :prometheus: [Prom++](https://fox.flant.com/deckhouse/observability/prometheus-plus-plus) тэг релиза
 
-   ### Все каналы (либо конкретные Alpha, Beta, EarlyAccess и так далее)
-   в FE (в остальные сборки мы пока не выкатываемся)
+   Каналы обновлений: **Все** (либо конкретные Alpha, Beta, EarlyAccess и так далее)
+   Редакции: **FE**
 
-   Копия описания из CHANGELOG.md
+   ##### Копия описания из CHANGELOG.md с заголовками 5 уровня
    ```
 6. Возвращаемся в репу модуля, в пайпплайн от тэга релиза. Тыкаем сборку и выкладку в нужные ветки. После выкладки в комментариях пишем: Выложено.
