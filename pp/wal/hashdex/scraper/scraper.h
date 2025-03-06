@@ -4,6 +4,7 @@
 
 #include <span>
 
+#include "bare_bones/algorithm.h"
 #include "bare_bones/vector.h"
 #include "bare_bones/xxhash.h"
 #include "parser.h"
@@ -32,12 +33,8 @@ class Scraper {
         }
 
         case Token::kWhitespace:
-        case Token::kLinebreak: {
-          break;
-        }
-
+        case Token::kLinebreak:
         case Token::kComment: {
-          parser_.tokenizer().consume_comment();
           break;
         }
 
@@ -344,7 +341,7 @@ class Scraper {
         }
 
         tokenizer.next_non_whitespace();
-      } else if (tokenizer.token() != Token::kValue) [[unlikely]] {
+      } else if (!parser_.is_value_token()) [[unlikely]] {
         return Error::kUnexpectedToken;
       }
 
@@ -494,7 +491,7 @@ class Scraper {
     }
 
     const auto text = tokenizer.token_str();
-    if (const auto token = tokenizer.next_non_whitespace(); token != Token::kLinebreak) [[unlikely]] {
+    if (const auto token = tokenizer.next_non_whitespace(); !BareBones::is_in(token, Token::kLinebreak, Token::kEOF)) [[unlikely]] {
       return Error::kUnexpectedToken;
     }
 

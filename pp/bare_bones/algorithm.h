@@ -14,7 +14,7 @@ ValueType accumulate(const Range& range, ValueType initial_value, Method&& metho
 }
 
 template <class Value, class... Args>
-bool is_in(const Value& value, Args&&... args) {
+constexpr bool is_in(const Value& value, Args&&... args) {
   return (... || (value == std::forward<Args>(args)));
 }
 
