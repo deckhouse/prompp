@@ -61,7 +61,10 @@ static inline const auto kSearchByPrefixAndRegexpCases =
 
 static inline const auto kSearchByRegexpCases = testing::Values(RegexpSearcherTestCase{.trie_values = {"abc"}, .regexp = "^.{5,}", .matches = {}});
 
-static inline const auto kSearchByRegexpWithEndTextCases = testing::Values(RegexpSearcherTestCase{.trie_values = {"abc"}, .regexp = ".{5,}$", .matches = {}});
+static inline const auto kSearchByRegexpWithEndTextCases = testing::Values(
+    RegexpSearcherTestCase{.trie_values = {"abc"}, .regexp = ".{5,}$", .matches = {}},
+    RegexpSearcherTestCase{.trie_values = {"abc", "abcde"}, .regexp = ".{5,}$", .matches = {"abcde"}},
+    RegexpSearcherTestCase{.trie_values = {"nodejs", "php", "python", "java"}, .regexp = "^(php|nodejs|python)$", .matches = {"nodejs", "php", "python"}});
 
 static inline const auto kSearchByCaseInsensitiveCases =
     testing::Values(RegexpSearcherTestCase{.trie_values = {"abCdE"}, .regexp = "(?i)ABcDe", .matches = {"abCdE"}},

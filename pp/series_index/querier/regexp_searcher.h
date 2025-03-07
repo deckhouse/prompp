@@ -382,7 +382,11 @@ class RegexpSearcher {
       case re2::RegexpOp::kRegexpConcat: {
         if (rgx->sub()[rgx->nsub() - 1]->op() == re2::RegexpOp::kRegexpEndText) {
           const auto j = RegexpMatchAnalyzer::skip_end_text_operation(rgx, 0);
-          const auto unanchored_rgx = re2::Regexp::Concat(rgx->sub(), j, rgx->parse_flags());
+          for (int i = 0; i <= j; ++i) {
+            rgx->sub()[i]->Incref();
+          }
+
+          const auto unanchored_rgx = re2::Regexp::Concat(rgx->sub(), j + 1, rgx->parse_flags());
           process_subtrie_by_regexp(trv, unanchored_rgx);
           unanchored_rgx->Decref();
           return;
