@@ -56,12 +56,6 @@ class OutputDecoderCache {
     dumped_cache_size_ = cache_.size();
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::LabelSetID max_ls_id() const noexcept {
-    const auto reverse_cache_view = std::ranges::reverse_view(cache_);
-    const auto it = std::ranges::find_if(reverse_cache_view, [](Primitives::LabelSetID ls_id) PROMPP_LAMBDA_INLINE { return ls_id != kIsDropped; });
-    return it != reverse_cache_view.end() ? *it : kIsDropped;
-  }
-
   bool operator==(const OutputDecoderCache& other) const noexcept { return cache_ == other.cache_; }
 
  private:
@@ -87,31 +81,42 @@ class GorillaSampleDecoderWithSkips {
   [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Sample decode(Primitives::LabelSetID ls_id,
                                                                Primitives::Timestamp timestamp,
                                                                BareBones::BitSequenceReader& value_sequence,
-                                                               SampleCrc&) noexcept {
+                                                               SampleCrc&) {
     return decode_impl(ls_id, timestamp, value_sequence);
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Sample decode(Primitives::LabelSetID ls_id,
                                                                BareBones::BitSequenceReader& timestamp_sequence,
                                                                BareBones::BitSequenceReader& value_sequence,
-                                                               SampleCrc&) noexcept {
+                                                               SampleCrc&) {
     return decode_impl(ls_id, timestamp_sequence, value_sequence);
   }
 
   PROMPP_ALWAYS_INLINE static SampleCrc::ValidationResult validate_crc(SampleCrc, SampleCrc) noexcept { return SampleCrc::ValidationResult::kValid; }
 
   PROMPP_ALWAYS_INLINE void sync_decoders_with_cache() {
+    const auto size_before = null_gorilla_decoders_.size();
     null_gorilla_decoders_.resize(cache_.size());
 
-    if (const auto max_ls_id = cache_.max_ls_id(); max_ls_id != OutputDecoderCache::kIsDropped) {
-      gorilla_decoders_.resize(max_ls_id + 1);
+    auto ls_id = gorilla_decoders_.size();
+    for (auto index = size_before; index < null_gorilla_decoders_.size(); ++index) {
+      if (cache_[index] != OutputDecoderCache::kIsDropped) {
+        null_gorilla_decoders_[index].id = ls_id++;
+      }
     }
+
+    gorilla_decoders_.resize(ls_id);
   }
 
  private:
+  union PROMPP_ATTRIBUTE_PACKED NullGorillaDecoderOrId {
+    NullGorillaDecoder decoder;
+    uint32_t id{};
+  };
+
   OutputDecoderCache cache_;
   BareBones::Vector<GorillaDecoder> gorilla_decoders_;
-  BareBones::Vector<NullGorillaDecoder> null_gorilla_decoders_;
+  BareBones::Vector<NullGorillaDecoderOrId> null_gorilla_decoders_;
 
   template <class Timestamp>
   [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Sample decode_impl(Primitives::LabelSetID source_ls_id,
@@ -121,14 +126,14 @@ class GorillaSampleDecoderWithSkips {
       throw BareBones::Exception(0xf0e57d2a0e5ce7ed, "Error while processing segment LabelSets: Unknown segment's LabelSet's id %d", source_ls_id);
     }
 
-    if (const auto id = cache_[source_ls_id]; id != OutputDecoderCache::kIsDropped) {
-      auto& gorilla = gorilla_decoders_[id];
-      gorilla.decode(timestamp, value_sequence);
-      return {gorilla.last_timestamp() + timestamp_base, gorilla.last_value()};
+    if (const auto id = cache_[source_ls_id]; id == OutputDecoderCache::kIsDropped) {
+      null_gorilla_decoders_[source_ls_id].decoder.decode(timestamp, value_sequence);
+      return {};
     }
 
-    null_gorilla_decoders_[source_ls_id].decode(timestamp, value_sequence);
-    return {};
+    auto& gorilla = gorilla_decoders_[null_gorilla_decoders_[source_ls_id].id];
+    gorilla.decode(timestamp, value_sequence);
+    return {gorilla.last_timestamp() + timestamp_base, gorilla.last_value()};
   }
 };
 
