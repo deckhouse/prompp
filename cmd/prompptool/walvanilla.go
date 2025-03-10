@@ -23,16 +23,19 @@ type cmdWALVanillaToBlock struct {
 	segmentSize   units.Base2Bytes
 	compression   wlog.CompressionType
 	blockDuration model.Duration
+	backupWALs    bool
 }
 
 func registerCmdWALVanillaToBlock(cmd *cmdWALVanillaToBlock, clause *kingpin.CmdClause) {
 	cmd.blockDuration = wlog.DefaultSegmentSize
 	clause.Flag("storage.tsdb.wal-segment-size", "Size at which to split the tsdb WAL segment files. Example: 100MB").
-		Hidden().PlaceHolder("<bytes").BytesVar(&cmd.segmentSize)
+		Hidden().PlaceHolder("<bytes>").BytesVar(&cmd.segmentSize)
 	clause.Flag("storage.tsdb.wal-compression-type", "Compression algorithm for the tsdb WAL.").
 		Hidden().Default(string(wlog.CompressionSnappy)).EnumVar((*string)(&cmd.compression), string(wlog.CompressionSnappy), string(wlog.CompressionZstd))
 	clause.Flag("storage.tsdb.min-block-duration", "Minimum duration of a data block before being persisted. For use in testing.").
 		Hidden().Default("2h").SetValue(&cmd.blockDuration)
+	clause.Flag("backup-wals", "Rename instead of delete wals").
+		Hidden().BoolVar(&cmd.backupWALs)
 }
 
 func (cmd *cmdWALVanillaToBlock) Do(ctx context.Context, workingDir string, logger log.Logger) error {
@@ -83,6 +86,9 @@ func (cmd *cmdWALVanillaToBlock) Do(ctx context.Context, workingDir string, logg
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		if maxt > head.MaxTime() {
+			maxt = head.MaxTime()
+		}
 		rh := tsdb.NewRangeHead(head, mint, maxt)
 		_, err := compactor.Write(workingDir, rh, mint, maxt, nil)
 		if err != nil {
@@ -93,11 +99,19 @@ func (cmd *cmdWALVanillaToBlock) Do(ctx context.Context, workingDir string, logg
 	if err := head.Close(); err != nil {
 		return fmt.Errorf("close head: %w", err)
 	}
+	finalize := func(dir string) error {
+		return os.RemoveAll(dir)
+	}
+	if cmd.backupWALs {
+		suffix := fmt.Sprintf(".%s.bak", time.Now().Format("2006010215040500"))
+		finalize = func(dir string) error {
+			return os.Rename(dir, dir+suffix)
+		}
+	}
 	if wbl != nil {
-		if err := os.Rename(wblDir, wblDir+".bak"); err != nil {
+		if err := finalize(wblDir); err != nil {
 			level.Error(logger).Log("msg", "rename wbl", "error", err.Error())
 		}
 	}
-	suffix := fmt.Sprintf(".%s.bak", time.Now().Format("2006010215040500"))
-	return os.Rename(walDir, walDir+suffix)
+	return finalize(walDir)
 }
