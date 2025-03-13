@@ -39,6 +39,10 @@ func registerCmdWALVanillaToBlock(cmd *cmdWALVanillaToBlock, clause *kingpin.Cmd
 }
 
 func (cmd *cmdWALVanillaToBlock) Do(ctx context.Context, workingDir string, logger log.Logger) error {
+	if !cmd.backupWALs {
+		cmd.removeOldBackups(logger)
+	}
+
 	walDir := filepath.Join(workingDir, "wal")
 	_, err := os.Stat(walDir)
 	if os.IsNotExist(err) {
@@ -114,4 +118,17 @@ func (cmd *cmdWALVanillaToBlock) Do(ctx context.Context, workingDir string, logg
 		}
 	}
 	return finalize(walDir)
+}
+
+func (cmd *cmdWALVanillaToBlock) removeOldBackups(logger log.Logger) {
+	oldBackups, err := filepath.Glob("wal.*.bak")
+	if err != nil {
+		level.Error(logger).Log("msg", "list old backups", "error", err.Error())
+		return
+	}
+	for _, backup := range oldBackups {
+		if err := os.RemoveAll(backup); err != nil {
+			level.Error(logger).Log("msg", "remove old backup", "error", err.Error(), "path", backup)
+		}
+	}
 }
