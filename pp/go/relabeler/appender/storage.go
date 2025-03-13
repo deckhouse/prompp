@@ -2,6 +2,7 @@ package appender
 
 import (
 	"fmt"
+	"github.com/jonboulle/clockwork"
 	"sync"
 	"time"
 
@@ -38,6 +39,8 @@ type QueryableStorage struct {
 	signal chan struct{}
 	closer *util.Closer
 
+	clock                   clockwork.Clock
+	maxRetentionDuration    time.Duration
 	headPersistenceDuration *prometheus.GaugeVec
 	querierMetrics          *querier.Metrics
 }
@@ -47,9 +50,11 @@ func NewQueryableStorage(
 	blockWriter BlockWriter,
 	registerer prometheus.Registerer,
 	querierMetrics *querier.Metrics,
+	clock clockwork.Clock,
+	maxRetentionDuration time.Duration,
 	heads ...relabeler.Head,
 ) *QueryableStorage {
-	return NewQueryableStorageWithWriteNotifier(blockWriter, registerer, querierMetrics, noOpWriteNotifier{}, heads...)
+	return NewQueryableStorageWithWriteNotifier(blockWriter, registerer, querierMetrics, noOpWriteNotifier{}, clock, maxRetentionDuration, heads...)
 }
 
 // NewQueryableStorageWithWriteNotifier - QueryableStorage constructor.
@@ -58,15 +63,19 @@ func NewQueryableStorageWithWriteNotifier(
 	registerer prometheus.Registerer,
 	querierMetrics *querier.Metrics,
 	writeNotifier WriteNotifier,
+	clock clockwork.Clock,
+	maxRetentionDuration time.Duration,
 	heads ...relabeler.Head,
 ) *QueryableStorage {
 	factory := util.NewUnconflictRegisterer(registerer)
 	qs := &QueryableStorage{
-		blockWriter:   blockWriter,
-		writeNotifier: writeNotifier,
-		heads:         heads,
-		signal:        make(chan struct{}, 1),
-		closer:        util.NewCloser(),
+		blockWriter:          blockWriter,
+		writeNotifier:        writeNotifier,
+		heads:                heads,
+		signal:               make(chan struct{}, 1),
+		closer:               util.NewCloser(),
+		clock:                clock,
+		maxRetentionDuration: maxRetentionDuration,
 		headPersistenceDuration: factory.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "prompp_head_persistence_duration_duration",
@@ -88,16 +97,16 @@ func (qs *QueryableStorage) Run() {
 func (qs *QueryableStorage) loop() {
 	defer qs.closer.Done()
 
-	timer := time.NewTimer(0)
+	timer := qs.clock.NewTimer(0)
 	// skip 0 start
-	<-timer.C
+	<-timer.Chan()
 
 	for {
 		if !qs.write() {
 			if !timer.Stop() {
 				// in the new version of go cleaning of C is not required
 				select {
-				case <-timer.C:
+				case <-timer.Chan():
 				default:
 				}
 			}
@@ -107,7 +116,7 @@ func (qs *QueryableStorage) loop() {
 
 		select {
 		case <-qs.signal:
-		case <-timer.C:
+		case <-timer.Chan():
 		case <-qs.closer.Signal():
 			logger.Infof("QUERYABLE STORAGE: done")
 			return
@@ -131,7 +140,22 @@ func (qs *QueryableStorage) write() bool {
 	shouldNotify := false
 	persisted := make([]string, 0, lenHeads)
 	for _, head := range heads {
-		start := time.Now()
+		start := qs.clock.Now()
+		if qs.headIsOutdated(head) {
+			persisted = append(persisted, head.ID())
+			shouldNotify = true
+			continue
+		}
+		if err := head.Flush(); err != nil {
+			logger.Errorf("QUERYABLE STORAGE: failed to flush head %s: %s", head.String(), err.Error())
+			successful = false
+			continue
+		}
+		if err := head.Rotate(); err != nil {
+			logger.Errorf("QUERYABLE STORAGE: failed to rotate head %s: %s", head.String(), err.Error())
+			successful = false
+			continue
+		}
 		err := head.ForEachShard(func(shard relabeler.Shard) error {
 			return qs.blockWriter.Write(relabeler.NewBlock(shard.LSS().Raw(), shard.DataStorage().Raw()))
 		})
@@ -142,10 +166,10 @@ func (qs *QueryableStorage) write() bool {
 		}
 		qs.headPersistenceDuration.With(prometheus.Labels{
 			"generation": fmt.Sprintf("%d", head.Generation()),
-		}).Set(float64(time.Since(start).Milliseconds()))
+		}).Set(float64(qs.clock.Since(start).Milliseconds()))
 		persisted = append(persisted, head.ID())
 		shouldNotify = true
-		logger.Infof("QUERYABLE STORAGE: head %s persisted, duration: %v", head.String(), time.Since(start))
+		logger.Infof("QUERYABLE STORAGE: head %s persisted, duration: %v", head.String(), qs.clock.Since(start))
 	}
 
 	if shouldNotify {
@@ -154,6 +178,11 @@ func (qs *QueryableStorage) write() bool {
 
 	qs.shrink(persisted...)
 	return successful
+}
+
+func (qs *QueryableStorage) headIsOutdated(head relabeler.Head) bool {
+	headMaxTimestampMs := head.Status(1).HeadStats.MaxTime
+	return qs.clock.Now().Sub(time.Unix(headMaxTimestampMs/1000, 0)) > qs.maxRetentionDuration
 }
 
 // Add - Storage interface implementation.

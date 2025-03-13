@@ -142,9 +142,7 @@ func (m *Manager) Restore(blockDuration time.Duration) (active relabeler.Head, r
 			return nil, nil, fmt.Errorf("failed to set status: %w", err)
 		}
 
-		if err = loadResult.head.Finalize(); err != nil {
-			return nil, nil, fmt.Errorf("failed to finalize head: %w", err)
-		}
+		loadResult.head.Stop()
 
 		rotated = append(rotated, loadResult.head)
 	}
@@ -154,6 +152,9 @@ func (m *Manager) Restore(blockDuration time.Duration) (active relabeler.Head, r
 		active, err = m.BuildWithConfig(cfgs, numberOfShards)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to build active head: %w", err)
+		}
+		if _, err = m.catalog.SetStatus(active.ID(), catalog.StatusActive); err != nil {
+			return nil, nil, fmt.Errorf("failed to set status: %w", err)
 		}
 	}
 

@@ -4,15 +4,14 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
-	"sync"
-
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
 	"github.com/prometheus/prometheus/pp/go/util/optional"
 	"github.com/prometheus/client_golang/prometheus"
+	"io"
+	"os"
+	"path/filepath"
+	"sync"
 )
 
 const (
@@ -35,45 +34,71 @@ func Create(id string, generation uint64, dir string, configs []*config.InputRel
 		}
 	}()
 
+	swn := newSegmentWriteNotifier(numberOfShards, lastAppendedSegmentIDSetter)
+
 	for shardID := uint16(0); shardID < numberOfShards; shardID++ {
-		inputLss := cppbridge.NewLssStorage()
-		targetLss := cppbridge.NewQueryableLssStorage()
-		lsses[shardID] = &LSS{
-			input:  inputLss,
-			target: targetLss,
-		}
-		shardFilePath := filepath.Join(dir, fmt.Sprintf("shard_%d.wal", shardID))
-		var shardFile *os.File
-		shardFile, err = os.Create(shardFilePath)
+		lsses[shardID], wals[shardID], dataStorages[shardID], err = createShard(dir, shardID, swn, maxSegmentSize)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create shard wal file: %w", err)
-		}
-		shardWalEncoder := cppbridge.NewHeadWalEncoder(shardID, HeadWalEncoderDecoderLogShards, targetLss)
-		shardWal := newShardWal(shardWalEncoder, false, maxSegmentSize, newBufferedShardWalWriter(shardFile))
-		if err = shardWal.WriteHeader(); err != nil {
-			return nil, fmt.Errorf("failed to write shard wal header: %w", err)
-		}
-		wals[shardID] = shardWal
-		dataStorage := cppbridge.NewHeadDataStorage()
-		dataStorages[shardID] = &DataStorage{
-			dataStorage: dataStorage,
-			encoder:     cppbridge.NewHeadEncoderWithDataStorage(dataStorage),
+			return nil, fmt.Errorf("failed to create shard: %w", err)
 		}
 	}
 
-	return New(id, generation, configs, lsses, wals, dataStorages, numberOfShards, nil, lastAppendedSegmentIDSetter, registerer)
+	return New(id, generation, configs, lsses, wals, dataStorages, numberOfShards, registerer)
+}
+
+func createShard(dir string, shardID uint16, swn *segmentWriteNotifier, maxSegmentSize uint32) (*LSS, *ShardWal, *DataStorage, error) {
+	inputLss := cppbridge.NewLssStorage()
+	targetLss := cppbridge.NewQueryableLssStorage()
+	lss := &LSS{
+		input:  inputLss,
+		target: targetLss,
+	}
+
+	shardFilePath := filepath.Join(dir, fmt.Sprintf("shard_%d.wal", shardID))
+	var shardFile *os.File
+	shardFile, err := os.Create(shardFilePath)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to create shard wal file: %w", err)
+	}
+
+	defer func() {
+		if err == nil {
+			return
+		}
+		_ = shardFile.Close()
+	}()
+
+	shardWalEncoder := cppbridge.NewHeadWalEncoder(shardID, HeadWalEncoderDecoderLogShards, targetLss)
+	_, err = WriteHeader(shardFile, FileFormatVersion, shardWalEncoder.Version())
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to write header: %w", err)
+	}
+	shardWal := newShardWal(
+		shardID,
+		shardWalEncoder,
+		maxSegmentSize,
+		newSegmentWriter(shardID, shardFile, swn),
+	)
+	cppDataStorage := cppbridge.NewHeadDataStorage()
+	dataStorage := &DataStorage{
+		dataStorage: cppDataStorage,
+		encoder:     cppbridge.NewHeadEncoderWithDataStorage(cppDataStorage),
+	}
+
+	return lss, shardWal, dataStorage, nil
 }
 
 func Load(id string, generation uint64, dir string, configs []*config.InputRelabelerConfig, numberOfShards uint16, maxSegmentSize uint32, lastAppendedSegmentIDSetter LastAppendedSegmentIDSetter, registerer prometheus.Registerer) (_ *Head, corrupted bool, numberOfSegments uint32, err error) {
 	shardLoadResults := make([]ShardLoadResult, numberOfShards)
 	wg := &sync.WaitGroup{}
+	swn := newSegmentWriteNotifier(numberOfShards, lastAppendedSegmentIDSetter)
 	for shardID := uint16(0); shardID < numberOfShards; shardID++ {
 		wg.Add(1)
 		shardWalFilePath := filepath.Join(dir, fmt.Sprintf("shard_%d.wal", shardID))
-		go func(shardID uint16, shardWalFilePath string) {
+		go func(shardID uint16, shardWalFilePath string, notifier *segmentWriteNotifier) {
 			defer wg.Done()
-			shardLoadResults[shardID] = NewShardLoader(shardWalFilePath, maxSegmentSize).Load()
-		}(shardID, shardWalFilePath)
+			shardLoadResults[shardID] = NewShardLoader(shardID, shardWalFilePath, maxSegmentSize, notifier).Load()
+		}(shardID, shardWalFilePath, swn)
 	}
 	wg.Wait()
 
@@ -100,12 +125,6 @@ func Load(id string, generation uint64, dir string, configs []*config.InputRelab
 		}
 	}
 
-	var lastAppendedSegmentID *uint32
-	if !numberOfSegmentsRead.IsNil() && numberOfSegmentsRead.Value() > 0 {
-		value := numberOfSegmentsRead.Value() - 1
-		lastAppendedSegmentID = &value
-	}
-
 	defer func() {
 		if err == nil {
 			return
@@ -117,7 +136,7 @@ func Load(id string, generation uint64, dir string, configs []*config.InputRelab
 		}
 	}()
 
-	h, err := New(id, generation, configs, lsses, wals, dataStorages, numberOfShards, lastAppendedSegmentID, lastAppendedSegmentIDSetter, registerer)
+	h, err := New(id, generation, configs, lsses, wals, dataStorages, numberOfShards, registerer)
 	if err != nil {
 		return nil, corrupted, numberOfSegmentsRead.Value(), fmt.Errorf("failed to create head: %w", err)
 	}
@@ -126,14 +145,18 @@ func Load(id string, generation uint64, dir string, configs []*config.InputRelab
 }
 
 type ShardLoader struct {
+	shardID        uint16
 	shardFilePath  string
 	maxSegmentSize uint32
+	notifier       *segmentWriteNotifier
 }
 
-func NewShardLoader(shardFilePath string, maxSegmentSize uint32) *ShardLoader {
+func NewShardLoader(shardID uint16, shardFilePath string, maxSegmentSize uint32, notifier *segmentWriteNotifier) *ShardLoader {
 	return &ShardLoader{
+		shardID:        shardID,
 		shardFilePath:  shardFilePath,
 		maxSegmentSize: maxSegmentSize,
+		notifier:       notifier,
 	}
 }
 
@@ -155,7 +178,7 @@ func (l *ShardLoader) Load() (result ShardLoadResult) {
 		target: targetLss,
 	}
 	result.DataStorage = dataStorage
-	result.Wal = newCorruptedShardWal()
+	result.Wal = newCorruptedShardWal(l.shardID)
 	result.Corrupted = true
 
 	shardWalFile, err := os.OpenFile(l.shardFilePath, os.O_RDWR, 0600)
@@ -171,7 +194,7 @@ func (l *ShardLoader) Load() (result ShardLoadResult) {
 	}()
 
 	reader := bufio.NewReaderSize(shardWalFile, 1024*1024*4)
-	_, encoderVersion, _, err := ReadHeader(reader)
+	_, encoderVersion, offset, err := ReadHeader(reader)
 	if err != nil {
 		result.Err = fmt.Errorf("failed to read wal header: %w", err)
 		return
@@ -180,28 +203,35 @@ func (l *ShardLoader) Load() (result ShardLoadResult) {
 	decoder := cppbridge.NewHeadWalDecoder(targetLss, encoderVersion)
 	lastReadSegmentID := -1
 
+	var bytesRead int
 	for {
 		var segment DecodedSegment
-		segment, _, err = ReadSegment(reader)
+		segment, bytesRead, err = ReadSegment(reader)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				break
 			}
 			result.Err = fmt.Errorf("failed to read segment: %w", err)
-			return result
+			break
 		}
 
 		err = decoder.DecodeToDataStorage(segment.data, dataStorage.encoder)
 		if err != nil {
 			result.Err = fmt.Errorf("failed to decode segment: %w", err)
-			return
+			break
 		}
 
+		offset += bytesRead
 		lastReadSegmentID++
 	}
 
-	result.NumberOfSegments = uint32(lastReadSegmentID + 1)
-	result.Wal = newShardWal(decoder.CreateEncoder(), true, l.maxSegmentSize, shardWalFile)
-	result.Corrupted = false
+	numberOfSegments := lastReadSegmentID + 1
+	result.NumberOfSegments = uint32(numberOfSegments)
+	sw := newSegmentWriter(l.shardID, shardWalFile, l.notifier)
+	l.notifier.Set(l.shardID, uint32(numberOfSegments))
+	result.Wal = newShardWal(l.shardID, decoder.CreateEncoder(), l.maxSegmentSize, sw)
+	if result.Err == nil {
+		result.Corrupted = false
+	}
 	return result
 }

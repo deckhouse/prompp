@@ -30,8 +30,8 @@ type LSS interface {
 type Wal interface {
 	Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error)
 	// DO NOT USE in public interfaces like ForEachShard
-	Uncommitted() bool
 	Commit() error
+	Flush() error
 }
 
 type InputRelabeler interface {
@@ -63,7 +63,8 @@ type Head interface {
 	ForEachShard(fn ShardFn) error
 	OnShard(shardID uint16, fn ShardFn) error
 	NumberOfShards() uint16
-	Finalize() error
+	Stop()
+	Flush() error
 	Reconfigure(inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) error
 	WriteMetrics()
 	Status(limit int) HeadStatus

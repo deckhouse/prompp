@@ -48,6 +48,9 @@ type NoOpStorage struct {
 }
 
 func (s *NoOpStorage) Add(head relabeler.Head) {
+	if err := head.Rotate(); err != nil {
+		panic(err)
+	}
 	s.heads = append(s.heads, head)
 }
 
