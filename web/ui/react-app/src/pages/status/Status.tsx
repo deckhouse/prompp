@@ -1,4 +1,4 @@
-import React, { Fragment, FC, useState, useEffect } from 'react';
+import React, { FC, Fragment, useEffect, useState } from 'react';
 import { Table } from 'reactstrap';
 import { withStatusIndicator } from '../../components/withStatusIndicator';
 import { useFetch } from '../../hooks/useFetch';
@@ -114,8 +114,7 @@ const Status: FC<StatusProps> = ({ agentMode, setAnimateLogo }) => {
     const handleKeyPress = (event: KeyboardEvent) => {
       const keyPressed = event.key.toUpperCase();
       setInputText((prevInputText) => {
-        const newInputText = prevInputText.slice(-3) + String.fromCharCode(((keyPressed.charCodeAt(0) - 64) % 26) + 65);
-        return newInputText;
+        return prevInputText.slice(-3) + String.fromCharCode(((keyPressed.charCodeAt(0) - 64) % 26) + 65);
       });
     };
 
@@ -127,10 +126,10 @@ const Status: FC<StatusProps> = ({ agentMode, setAnimateLogo }) => {
   }, []);
 
   useEffect(() => {
-    if (setAnimateLogo && inputText != '') {
+    if (setAnimateLogo && inputText !== '') {
       setAnimateLogo(inputText.toUpperCase() === 'QSPN');
     }
-  }, [inputText]);
+  }, [inputText, setAnimateLogo]);
 
   /*    _
    *   /' \
