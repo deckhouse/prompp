@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { formatRelative, createExpressionLink, humanizeDuration, formatDuration } from '../../utils';
 import { Rule } from '../../types/types';
 import { now } from 'moment';
+import { useTranslation } from 'react-i18next';
 
 interface RulesContentProps {
   response: APIResponse<RulesMap>;
@@ -36,6 +37,8 @@ const GraphExpressionLink: FC<{ expr: string; text: string; title: string }> = (
 };
 
 export const RulesContent: FC<RulesContentProps> = ({ response }) => {
+  const { t } = useTranslation(['rules', 'translation']);
+
   const getBadgeColor = (state: string) => {
     switch (state) {
       case 'ok':
@@ -53,7 +56,7 @@ export const RulesContent: FC<RulesContentProps> = ({ response }) => {
     const groups: RuleGroup[] = response.data.groups;
     return (
       <>
-        <h2>Rules</h2>
+        <h2>{t('Rules', { ns: 'translation' })}</h2>
         {groups.map((g, i) => {
           return (
             <Table bordered key={i}>
@@ -67,7 +70,9 @@ export const RulesContent: FC<RulesContentProps> = ({ response }) => {
                     </a>
                   </td>
                   <td colSpan={2}>
-                    <h4>Interval: {humanizeDuration(parseFloat(g.interval) * 1000)}</h4>
+                    <h4>
+                      {t('Interval')}: {humanizeDuration(parseFloat(g.interval) * 1000)}
+                    </h4>
                   </td>
                   <td>
                     <h4>{formatRelative(g.lastEvaluation, now())}</h4>
@@ -79,11 +84,11 @@ export const RulesContent: FC<RulesContentProps> = ({ response }) => {
               </thead>
               <tbody>
                 <tr className="font-weight-bold">
-                  <td>Rule</td>
-                  <td>State</td>
-                  <td>Error</td>
-                  <td>Last Evaluation</td>
-                  <td>Evaluation Time</td>
+                  <td>{t('Rule')}</td>
+                  <td>{t('State')}</td>
+                  <td>{t('Error')}</td>
+                  <td>{t('Last Evaluation')}</td>
+                  <td>{t('Evaluation Time')}</td>
                 </tr>
                 {g.rules.map((r, i) => {
                   return (

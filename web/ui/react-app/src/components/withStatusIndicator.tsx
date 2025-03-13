@@ -2,6 +2,7 @@ import React, { FC, ComponentType } from 'react';
 import { Alert } from 'reactstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSpinner } from '@fortawesome/free-solid-svg-icons';
+import { useTranslation } from 'react-i18next';
 
 interface StatusIndicatorProps {
   error?: Error;
@@ -15,6 +16,7 @@ export const withStatusIndicator =
     Component: ComponentType<T>
   ): FC<StatusIndicatorProps & T> =>
   ({ error, isLoading, customErrorMsg, componentTitle, ...rest }) => {
+    const { t } = useTranslation();
     if (error) {
       return (
         <Alert color="danger">
@@ -22,7 +24,7 @@ export const withStatusIndicator =
             customErrorMsg
           ) : (
             <>
-              <strong>Error:</strong> Error fetching {componentTitle || Component.displayName}: {error.message}
+              <strong>{t('Error')}:</strong> {t('Error fetching')} {componentTitle || Component.displayName}: {error.message}
             </>
           )}
         </Alert>

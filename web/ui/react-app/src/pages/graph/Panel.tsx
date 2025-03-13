@@ -14,8 +14,9 @@ import { QueryParams, ExemplarData } from '../../types/types';
 import { API_PATH } from '../../constants/constants';
 import { debounce } from '../../utils';
 import { isHeatmapData } from './GraphHeatmapHelpers';
+import { withTranslation, type WithTranslation } from 'react-i18next';
 
-interface PanelProps {
+interface PanelProps extends WithTranslation {
   options: PanelOptions;
   onOptionsChanged: (opts: PanelOptions) => void;
   useLocalTime: boolean;
@@ -225,7 +226,7 @@ class Panel extends Component<PanelProps, PanelState> {
         return;
       }
       this.setState({
-        error: 'Error executing query: ' + error.message,
+        error: this.props.t('Error executing query: ') + error.message,
         loading: false,
       });
     }
@@ -315,7 +316,7 @@ class Panel extends Component<PanelProps, PanelState> {
                   className={options.type === 'table' ? 'active' : ''}
                   onClick={() => this.handleChangeType(PanelType.Table)}
                 >
-                  Table
+                  {this.props.t('Table')}
                 </NavLink>
               </NavItem>
               <NavItem>
@@ -323,7 +324,7 @@ class Panel extends Component<PanelProps, PanelState> {
                   className={options.type === 'graph' ? 'active' : ''}
                   onClick={() => this.handleChangeType(PanelType.Graph)}
                 >
-                  Graph
+                  {this.props.t('Graph')}
                 </NavLink>
               </NavItem>
               {!this.state.loading && !this.state.error && this.state.stats && <QueryStatsView {...this.state.stats} />}
@@ -337,7 +338,7 @@ class Panel extends Component<PanelProps, PanelState> {
                         time={options.endTime}
                         useLocalTime={this.props.useLocalTime}
                         range={options.range}
-                        placeholder="Evaluation time"
+                        placeholder={this.props.t('Evaluation time')}
                         onChangeTime={this.handleChangeEndTime}
                       />
                     </div>
@@ -381,7 +382,7 @@ class Panel extends Component<PanelProps, PanelState> {
         <Row>
           <Col>
             <Button className="float-right" color="link" onClick={this.props.removePanel} size="sm">
-              Remove Panel
+              {this.props.t('Remove Panel')}
             </Button>
           </Col>
         </Row>
@@ -390,4 +391,4 @@ class Panel extends Component<PanelProps, PanelState> {
   }
 }
 
-export default Panel;
+export default withTranslation('graph')(Panel);

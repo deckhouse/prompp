@@ -9,6 +9,7 @@ import { useFetch } from '../../hooks/useFetch';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { callAll, decodePanelOptionsFromQueryString, encodePanelOptionsToQueryString, generateID } from '../../utils';
 import Panel, { PanelDefaultOptions, PanelOptions } from './Panel';
+import { useTranslation } from 'react-i18next';
 
 export type PanelMeta = { key: string; options: PanelOptions; id: string };
 
@@ -36,6 +37,7 @@ export const PanelListContent: FC<PanelListContentProps> = ({
   enableLinter,
   ...rest
 }) => {
+  const { t } = useTranslation('graph');
   const [panels, setPanels] = useState(rest.panels);
   const [historyItems, setLocalStorageHistoryItems] = useLocalStorage<string[]>('history', []);
 
@@ -113,13 +115,14 @@ export const PanelListContent: FC<PanelListContentProps> = ({
         />
       ))}
       <Button className="d-block mb-3" color="primary" onClick={addPanel}>
-        Add Panel
+        {t('Add Panel')}
       </Button>
     </>
   );
 };
 
 const PanelList: FC = () => {
+  const { t } = useTranslation(['graph', 'translation']);
   const [delta, setDelta] = useState(0);
   const [useLocalTime, setUseLocalTime] = useLocalStorage('use-local-time', false);
   const [enableQueryHistory, setEnableQueryHistory] = useLocalStorage('enable-query-history', false);
@@ -164,7 +167,7 @@ const PanelList: FC = () => {
             isOpen={clipboardMsg != null}
             style={{ position: 'fixed', zIndex: 1000, left: '50%', transform: 'translateX(-50%)' }}
           >
-            <ToastBody>Label matcher copied to clipboard</ToastBody>
+            <ToastBody>{t('Label matcher copied to clipboard')}</ToastBody>
           </Toast>
           <div className="float-left">
             <Checkbox
@@ -173,7 +176,7 @@ const PanelList: FC = () => {
               onChange={({ target }) => setUseLocalTime(target.checked)}
               defaultChecked={useLocalTime}
             >
-              Use local time
+              {t('Use local time')}
             </Checkbox>
             <Checkbox
               wrapperStyles={{ marginLeft: 20, display: 'inline-block' }}
@@ -181,7 +184,7 @@ const PanelList: FC = () => {
               onChange={({ target }) => setEnableQueryHistory(target.checked)}
               defaultChecked={enableQueryHistory}
             >
-              Enable query history
+              {t('Enable query history')}
             </Checkbox>
             <Checkbox
               wrapperStyles={{ marginLeft: 20, display: 'inline-block' }}
@@ -189,7 +192,7 @@ const PanelList: FC = () => {
               onChange={({ target }) => setEnableAutocomplete(target.checked)}
               defaultChecked={enableAutocomplete}
             >
-              Enable autocomplete
+              {t('Enable autocomplete')}
             </Checkbox>
           </div>
           <Checkbox
@@ -198,7 +201,7 @@ const PanelList: FC = () => {
             onChange={({ target }) => setEnableHighlighting(target.checked)}
             defaultChecked={enableHighlighting}
           >
-            Enable highlighting
+            {t('Enable highlighting')}
           </Checkbox>
           <Checkbox
             wrapperStyles={{ marginLeft: 20, display: 'inline-block' }}
@@ -206,12 +209,12 @@ const PanelList: FC = () => {
             onChange={({ target }) => setEnableLinter(target.checked)}
             defaultChecked={enableLinter}
           >
-            Enable linter
+            {t('Enable linter')}
           </Checkbox>
         </div>
         {(delta > 30 || timeErr) && (
           <Alert color="danger">
-            <strong>Warning: </strong>
+            <strong>{t('Warning:')} </strong>
             {timeErr && `Unexpected response status when fetching server time: ${timeErr.message}`}
             {delta >= 30 &&
               `Error fetching server time: Detected ${delta} seconds time difference between your browser and the server. Prometheus relies on accurate time and time drift might cause unexpected query results.`}
@@ -219,7 +222,7 @@ const PanelList: FC = () => {
         )}
         {metricsErr && (
           <Alert color="danger">
-            <strong>Warning: </strong>
+            <strong>{t('Warning:')} </strong>
             Error fetching metrics list: Unexpected response status when fetching metric names: {metricsErr.message}
           </Alert>
         )}

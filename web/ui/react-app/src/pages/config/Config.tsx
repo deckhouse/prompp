@@ -6,6 +6,7 @@ import { withStatusIndicator } from '../../components/withStatusIndicator';
 import { useFetch } from '../../hooks/useFetch';
 import { usePathPrefix } from '../../contexts/PathPrefixContext';
 import { API_PATH } from '../../constants/constants';
+import { useTranslation } from 'react-i18next';
 
 type YamlConfig = { yaml?: string };
 
@@ -20,12 +21,13 @@ YamlContent.displayName = 'Config';
 const ConfigWithStatusIndicator = withStatusIndicator(YamlContent);
 
 export const ConfigContent: FC<ConfigContentProps> = ({ error, data }) => {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const config = data && data.yaml;
   return (
     <>
       <h2>
-        Configuration&nbsp;
+        {t('Configuration')}&nbsp;
         <CopyToClipboard
           text={config ? config : ''}
           onCopy={(_, result) => {
@@ -34,7 +36,7 @@ export const ConfigContent: FC<ConfigContentProps> = ({ error, data }) => {
           }}
         >
           <Button color="light" disabled={!config}>
-            {copied ? 'Copied' : 'Copy to clipboard'}
+            {copied ? t('Copied') : t('Copy to clipboard')}
           </Button>
         </CopyToClipboard>
       </h2>

@@ -8,6 +8,7 @@ import { Metric, Histogram } from '../../types/types';
 import moment from 'moment';
 
 import HistogramChart from './HistogramChart';
+import { Trans, useTranslation } from 'react-i18next';
 
 export interface DataTableProps {
   data:
@@ -56,14 +57,15 @@ const limitSeries = <S extends InstantSample | RangeSamples>(series: S[]): S[] =
 };
 
 const DataTable: FC<DataTableProps> = ({ data, useLocalTime }) => {
+  const { t } = useTranslation('graph');
   const [scale, setScale] = React.useState<'linear' | 'exponential'>('exponential');
 
   if (data === null) {
-    return <Alert color="light">No data queried yet</Alert>;
+    return <Alert color="light">{t('No data queried yet')}</Alert>;
   }
 
   if (data.result === null || data.result.length === 0) {
-    return <Alert color="secondary">Empty query result</Alert>;
+    return <Alert color="secondary">{t('Empty query result')}</Alert>;
   }
 
   const maxFormattableSize = 1000;
@@ -86,10 +88,10 @@ const DataTable: FC<DataTableProps> = ({ data, useLocalTime }) => {
                   <div className="histogram-summary-wrapper">
                     <div className="histogram-summary">
                       <span>
-                        <strong>Total count:</strong> {s.histogram[1].count}
+                        <strong>{t('Total count:')}</strong> {s.histogram[1].count}
                       </span>
                       <span>
-                        <strong>Sum:</strong> {s.histogram[1].sum}
+                        <strong>{t('Sum:')}</strong> {s.histogram[1].sum}
                       </span>
                     </div>
                     <div className="histogram-summary">
@@ -100,14 +102,14 @@ const DataTable: FC<DataTableProps> = ({ data, useLocalTime }) => {
                           onClick={() => setScale('exponential')}
                           active={scale === 'exponential'}
                         >
-                          Exponential
+                          {t('Exponential')}
                         </Button>
                         <Button
                           title="Show histogram on linear scale"
                           onClick={() => setScale('linear')}
                           active={scale === 'linear'}
                         >
-                          Linear
+                          {t('Linear')}
                         </Button>
                       </ButtonGroup>
                     </div>
@@ -175,19 +177,19 @@ const DataTable: FC<DataTableProps> = ({ data, useLocalTime }) => {
       );
       break;
     default:
-      return <Alert color="danger">Unsupported result value type</Alert>;
+      return <Alert color="danger">{t('Unsupported result value type')}</Alert>;
   }
 
   return (
     <>
       {limited && (
         <Alert color="danger">
-          <strong>Warning:</strong> Fetched {data.result.length} metrics, only displaying first {rows.length}.
+          <strong>{t('Warning:')}</strong> Fetched {data.result.length} metrics, only displaying first {rows.length}.
         </Alert>
       )}
       {!doFormat && (
         <Alert color="secondary">
-          <strong>Notice:</strong> Showing more than {maxFormattableSize} series, turning off label formatting for
+          <strong>{t('Notice:')}</strong> Showing more than {maxFormattableSize} series, turning off label formatting for
           performance reasons.
         </Alert>
       )}
@@ -215,7 +217,7 @@ export const histogramTable = (h: Histogram): ReactNode => (
     <thead>
       <tr>
         <th style={{ textAlign: 'center' }} colSpan={2}>
-          Histogram Sample
+          <Trans ns="graph">Histogram Sample</Trans>
         </th>
       </tr>
     </thead>

@@ -1,5 +1,6 @@
 import React, { FC, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Collapse,
   Navbar,
@@ -14,6 +15,7 @@ import {
 } from 'reactstrap';
 import { ThemeToggle } from './Theme';
 import { ReactComponent as PromLogo } from './images/prometheus_logo_grey.svg';
+import { LanguageToggle } from './Language';
 
 interface NavbarProps {
   consolesLink: string | null;
@@ -22,6 +24,7 @@ interface NavbarProps {
 }
 
 const Navigation: FC<NavbarProps> = ({ consolesLink, agentMode, animateLogo }) => {
+  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const toggle = () => setIsOpen(!isOpen);
   return (
@@ -35,60 +38,61 @@ const Navigation: FC<NavbarProps> = ({ consolesLink, agentMode, animateLogo }) =
         <Nav className="ml-0" navbar>
           {consolesLink !== null && (
             <NavItem>
-              <NavLink href={consolesLink}>Consoles</NavLink>
+              <NavLink href={consolesLink}>{t('Consoles')}</NavLink>
             </NavItem>
           )}
           {!agentMode && (
             <>
               <NavItem>
                 <NavLink tag={Link} to="/alerts">
-                  Alerts
+                  {t('Alerts')}
                 </NavLink>
               </NavItem>
               <NavItem>
                 <NavLink tag={Link} to="/graph">
-                  Graph
+                  {t('Graph')}
                 </NavLink>
               </NavItem>
             </>
           )}
           <UncontrolledDropdown nav inNavbar>
             <DropdownToggle nav caret>
-              Status
+              {t('Status')}
             </DropdownToggle>
             <DropdownMenu>
               <DropdownItem tag={Link} to="/status">
-                Runtime & Build Information
+                {t('Runtime & Build Information')}
               </DropdownItem>
               {!agentMode && (
                 <DropdownItem tag={Link} to="/tsdb-status">
-                  TSDB Status
+                  {t('TSDB Status')}
                 </DropdownItem>
               )}
               <DropdownItem tag={Link} to="/flags">
-                Command-Line Flags
+                {t('Command-Line Flags')}
               </DropdownItem>
               <DropdownItem tag={Link} to="/config">
-                Configuration
+                {t('Configuration')}
               </DropdownItem>
               {!agentMode && (
                 <DropdownItem tag={Link} to="/rules">
-                  Rules
+                  {t('Rules')}
                 </DropdownItem>
               )}
               <DropdownItem tag={Link} to="/targets">
-                Targets
+                {t('Targets')}
               </DropdownItem>
               <DropdownItem tag={Link} to="/service-discovery">
-                Service Discovery
+                {t('Service Discovery')}
               </DropdownItem>
             </DropdownMenu>
           </UncontrolledDropdown>
           <NavItem>
-            <NavLink href="https://prometheus.io/docs/prometheus/latest/getting_started/">Help</NavLink>
+            <NavLink href="https://prometheus.io/docs/prometheus/latest/getting_started/">{t('Help')}</NavLink>
           </NavItem>
         </Nav>
       </Collapse>
+      <LanguageToggle />
       <ThemeToggle />
     </Navbar>
   );

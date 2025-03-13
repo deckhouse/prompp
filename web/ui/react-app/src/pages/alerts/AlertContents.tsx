@@ -8,6 +8,7 @@ import { useLocalStorage } from '../../hooks/useLocalStorage';
 import CustomInfiniteScroll, { InfiniteScrollItemsProps } from '../../components/CustomInfiniteScroll';
 import { KVSearch } from '@nexucis/kvsearch';
 import SearchBar from '../../components/SearchBar';
+import { Trans, useTranslation } from 'react-i18next';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type RuleState = keyof RuleStatus<any>;
@@ -64,6 +65,7 @@ function GroupContent(showAnnotations: boolean) {
 }
 
 const AlertsContent: FC<AlertsProps> = ({ groups = [], statsCount }) => {
+  const { t } = useTranslation(['alerts', 'translation']);
   const [groupList, setGroupList] = useState(groups);
   const [filteredList, setFilteredList] = useState(groups);
   const [filter, setFilter] = useLocalStorage('alerts-status-filter', {
@@ -130,14 +132,18 @@ const AlertsContent: FC<AlertsProps> = ({ groups = [], statsCount }) => {
             return (
               <Checkbox key={state} checked={filter[state]} id={`${state}-toggler`} onChange={toggleFilter(state)}>
                 <Badge color={color} className="text-capitalize">
-                  {state} ({statsCount[state]})
+                  <Trans t={t}>{state}</Trans> ({statsCount[state]})
                 </Badge>
               </Checkbox>
             );
           })}
         </Col>
         <Col lg="5" md="4">
-          <SearchBar defaultValue={defaultValue} handleChange={handleSearchChange} placeholder="Filter by name or labels" />
+          <SearchBar
+            defaultValue={defaultValue}
+            handleChange={handleSearchChange}
+            placeholder={t('Filter by name or labels')}
+          />
         </Col>
         <Col className="d-flex flex-row-reverse" md="3">
           <Checkbox
@@ -146,7 +152,7 @@ const AlertsContent: FC<AlertsProps> = ({ groups = [], statsCount }) => {
             onChange={({ target }) => setShowAnnotations({ checked: target.checked })}
           >
             <span style={{ fontSize: '0.9rem', lineHeight: 1.9, display: 'inline-block', whiteSpace: 'nowrap' }}>
-              Show annotations
+              {t('Show annotations', { ns: 'translation' })}
             </span>
           </Checkbox>
         </Col>
@@ -186,9 +192,21 @@ export const GroupInfo: FC<GroupInfoProps> = ({ rules, children }) => {
     <div className="group-info border rounded-sm" style={{ lineHeight: 1.1 }}>
       {children}
       <div className="badges-wrapper">
-        {isPresent(statesCounter.inactive) && <Badge color="success">inactive</Badge>}
-        {statesCounter.pending > 0 && <Badge color="warning">pending ({statesCounter.pending})</Badge>}
-        {statesCounter.firing > 0 && <Badge color="danger">firing ({statesCounter.firing})</Badge>}
+        {isPresent(statesCounter.inactive) && (
+          <Badge color="success">
+            <Trans ns="alerts">inactive</Trans>
+          </Badge>
+        )}
+        {statesCounter.pending > 0 && (
+          <Badge color="warning">
+            <Trans ns="alerts">pending</Trans> ({statesCounter.pending})
+          </Badge>
+        )}
+        {statesCounter.firing > 0 && (
+          <Badge color="danger">
+            <Trans ns="alerts">firing</Trans> ({statesCounter.firing})
+          </Badge>
+        )}
       </div>
     </div>
   );

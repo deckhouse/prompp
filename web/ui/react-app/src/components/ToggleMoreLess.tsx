@@ -1,5 +1,6 @@
 import React, { FC } from 'react';
 import { Button } from 'reactstrap';
+import { useTranslation } from 'react-i18next';
 
 interface ToggleMoreLessProps {
   event(): void;
@@ -7,6 +8,7 @@ interface ToggleMoreLessProps {
 }
 
 export const ToggleMoreLess: FC<ToggleMoreLessProps> = ({ children, event, showMore }) => {
+  const { t } = useTranslation();
   return (
     <h3>
       {children}
@@ -21,7 +23,7 @@ export const ToggleMoreLess: FC<ToggleMoreLessProps> = ({ children, event, showM
         }}
         color="primary"
       >
-        show {showMore ? 'less' : 'more'}
+        {t('show')} {showMore ? t('less') : t('more')}
       </Button>
     </h3>
   );

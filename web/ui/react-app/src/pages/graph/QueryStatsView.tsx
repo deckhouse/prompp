@@ -1,4 +1,5 @@
 import React, { FC } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export interface QueryStats {
   loadTime: number;
@@ -8,11 +9,12 @@ export interface QueryStats {
 
 const QueryStatsView: FC<QueryStats> = (props) => {
   const { loadTime, resolution, resultSeries } = props;
+  const { t } = useTranslation('graph');
 
   return (
     <div className="query-stats">
       <span className="float-right">
-        Load time: {loadTime}ms &ensp; Resolution: {resolution}s &ensp; Result series: {resultSeries}
+        {t('Load time')}: {loadTime}ms &ensp; {t('Resolution')}: {resolution}s &ensp; {t('Result series')}: {resultSeries}
       </span>
     </div>
   );
