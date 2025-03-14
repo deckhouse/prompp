@@ -14,7 +14,7 @@ import {
   DropdownItem,
 } from 'reactstrap';
 import { ThemeToggle } from './Theme';
-import { ReactComponent as PromLogo } from './images/prometheus_logo_grey.svg';
+import { ReactComponent as PromLogo } from './images/prompp_logo_line.svg';
 import { LanguageToggle } from './Language';
 
 interface NavbarProps {
@@ -31,8 +31,7 @@ const Navigation: FC<NavbarProps> = ({ consolesLink, agentMode, animateLogo }) =
     <Navbar className="mb-3" dark color="dark" expand="md" fixed="top">
       <NavbarToggler onClick={toggle} className="mr-2" />
       <Link className="pt-0 navbar-brand" to={agentMode ? '/agent' : '/graph'}>
-        <PromLogo className={`d-inline-block align-top${animateLogo ? ' animate' : ''}`} title="Prometheus" />
-        Prometheus{agentMode && ' Agent'}
+        <PromLogo className={`d-inline-block align-top`} title="Prom++" />
       </Link>
       <Collapse isOpen={isOpen} navbar style={{ justifyContent: 'space-between' }}>
         <Nav className="ml-0" navbar>
