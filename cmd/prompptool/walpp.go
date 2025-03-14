@@ -94,6 +94,7 @@ func (cmd *cmdWALPPToBlock) Do(
 				"dir", headRecord.Dir(),
 				"err", err,
 			)
+			return err
 		}
 		h.Stop()
 
@@ -111,8 +112,8 @@ func (cmd *cmdWALPPToBlock) Do(
 		if err = h.Close(); err != nil {
 			level.Error(logger).Log(
 				"msg", "failed close head",
-				"id", headRecord.ID,
-				"dir", headRecord.Dir,
+				"id", headRecord.ID(),
+				"dir", headRecord.Dir(),
 				"err", err,
 			)
 		}
