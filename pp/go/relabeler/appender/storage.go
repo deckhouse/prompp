@@ -2,9 +2,10 @@ package appender
 
 import (
 	"fmt"
-	"github.com/jonboulle/clockwork"
 	"sync"
 	"time"
+
+	"github.com/jonboulle/clockwork"
 
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/block"
@@ -17,6 +18,7 @@ import (
 
 const (
 	PersistedHeadValue = -(1 << 30)
+	writeRetryTimeout  = 5 * time.Minute
 )
 
 type WriteNotifier interface {
@@ -31,10 +33,11 @@ type BlockWriter interface {
 // QueryableStorage hold reference to finalized heads and writes blocks from them. Also allows query not yet not
 // persisted heads.
 type QueryableStorage struct {
-	blockWriter   BlockWriter
-	writeNotifier WriteNotifier
-	mtx           sync.Mutex
-	heads         []relabeler.Head
+	blockWriter          BlockWriter
+	writeNotifier        WriteNotifier
+	mtx                  sync.Mutex
+	heads                []relabeler.Head
+	headRetentionTimeout time.Duration
 
 	signal chan struct{}
 	closer *util.Closer
@@ -45,18 +48,6 @@ type QueryableStorage struct {
 	querierMetrics          *querier.Metrics
 }
 
-// NewQueryableStorage - QueryableStorage constructor.
-func NewQueryableStorage(
-	blockWriter BlockWriter,
-	registerer prometheus.Registerer,
-	querierMetrics *querier.Metrics,
-	clock clockwork.Clock,
-	maxRetentionDuration time.Duration,
-	heads ...relabeler.Head,
-) *QueryableStorage {
-	return NewQueryableStorageWithWriteNotifier(blockWriter, registerer, querierMetrics, noOpWriteNotifier{}, clock, maxRetentionDuration, heads...)
-}
-
 // NewQueryableStorageWithWriteNotifier - QueryableStorage constructor.
 func NewQueryableStorageWithWriteNotifier(
 	blockWriter BlockWriter,
@@ -65,6 +56,7 @@ func NewQueryableStorageWithWriteNotifier(
 	writeNotifier WriteNotifier,
 	clock clockwork.Clock,
 	maxRetentionDuration time.Duration,
+	headRetentionTimeout time.Duration,
 	heads ...relabeler.Head,
 ) *QueryableStorage {
 	factory := util.NewUnconflictRegisterer(registerer)
@@ -76,6 +68,7 @@ func NewQueryableStorageWithWriteNotifier(
 		closer:               util.NewCloser(),
 		clock:                clock,
 		maxRetentionDuration: maxRetentionDuration,
+		headRetentionTimeout: headRetentionTimeout,
 		headPersistenceDuration: factory.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "prompp_head_persistence_duration_duration",
@@ -97,26 +90,27 @@ func (qs *QueryableStorage) Run() {
 func (qs *QueryableStorage) loop() {
 	defer qs.closer.Done()
 
-	timer := qs.clock.NewTimer(0)
+	retryTimer := qs.clock.NewTimer(0)
 	// skip 0 start
-	<-timer.Chan()
+	<-retryTimer.Chan()
 
 	for {
 		if !qs.write() {
-			if !timer.Stop() {
+			if !retryTimer.Stop() {
 				// in the new version of go cleaning of C is not required
 				select {
-				case <-timer.Chan():
+				case <-retryTimer.Chan():
 				default:
 				}
 			}
-			// try write after 5 minute
-			timer.Reset(5 * time.Minute)
+
+			// try write after timeout
+			retryTimer.Reset(writeRetryTimeout)
 		}
 
 		select {
 		case <-qs.signal:
-		case <-timer.Chan():
+		case <-retryTimer.Chan():
 		case <-qs.closer.Signal():
 			logger.Infof("QUERYABLE STORAGE: done")
 			return
@@ -176,7 +170,15 @@ func (qs *QueryableStorage) write() bool {
 		qs.writeNotifier.NotifyWritten()
 	}
 
-	qs.shrink(persisted...)
+	time.AfterFunc(qs.headRetentionTimeout, func() {
+		select {
+		case <-qs.closer.Signal():
+			return
+		default:
+			qs.shrink(persisted...)
+		}
+	})
+
 	return successful
 }
 
@@ -213,8 +215,6 @@ func (qs *QueryableStorage) WriteMetrics() {
 	for _, head := range heads {
 		head.WriteMetrics()
 	}
-
-	qs.shrink()
 }
 
 // Querier - storage.Queryable interface implementation.
@@ -270,7 +270,6 @@ func (qs *QueryableStorage) shrink(persisted ...string) {
 	qs.heads = heads
 }
 
-type noOpWriteNotifier struct {
-}
+type noOpWriteNotifier struct{}
 
 func (noOpWriteNotifier) NotifyWritten() {}
