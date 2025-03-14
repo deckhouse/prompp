@@ -606,6 +606,8 @@ github.com/odarix/odarix-core-go v0.0.0-20250228104810-eca037a251ef h1:85HI5q44h
 github.com/odarix/odarix-core-go v0.0.0-20250228104810-eca037a251ef/go.mod h1:NFex1qH9Y6WhbbVD3rd1yBPFJfv2lamuiSz0eRv7IQU=
 github.com/odarix/odarix-core-go v0.0.0-20250304175859-dc1a571a8e97 h1:N2ct1RKnP+Iv4MAGOvNM7/0K1KH6mzWLWFrnDpQq+UI=
 github.com/odarix/odarix-core-go v0.0.0-20250304175859-dc1a571a8e97/go.mod h1:NFex1qH9Y6WhbbVD3rd1yBPFJfv2lamuiSz0eRv7IQU=
+github.com/odarix/odarix-core-go v0.0.0-20250313174737-eec84741aff3 h1:Xrk3Eg5JqRDr1r+zLdTtzC1zLOrN7DJzMUeqU/IUrQQ=
+github.com/odarix/odarix-core-go v0.0.0-20250313174737-eec84741aff3/go.mod h1:NFex1qH9Y6WhbbVD3rd1yBPFJfv2lamuiSz0eRv7IQU=
 github.com/oklog/oklog v0.3.2/go.mod h1:FCV+B7mhrz4o+ueLpx+KqkyXRGMWOYEvfiXtdGtbWGs=
 github.com/oklog/run v1.0.0/go.mod h1:dlhp/R75TPv97u0XWUtDeV/lRKWPKSdTuV0TZvrmrQA=
 github.com/oklog/run v1.1.0 h1:GEenZ1cK0+q0+wsJew9qUg/DyD8k3JzYsZAi5gYi2mA=

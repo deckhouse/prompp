@@ -97,7 +97,7 @@ func (cmd *cmdWALPPToBlock) Do(
 				"err", err,
 			)
 		}
-		h.Finalize()
+		h.Stop()
 
 		level.Debug(logger).Log("msg", "write block", "id", headRecord.ID, "dir", headRecord.Dir)
 		if err = h.ForEachShard(func(shard relabeler.Shard) error {

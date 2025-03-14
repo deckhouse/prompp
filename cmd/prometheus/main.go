@@ -708,6 +708,7 @@ func main() {
 		reloadBlocksTriggerNotifier,
 		receiverReadyNotifier,
 		time.Duration(cfg.WalCommitInterval),
+		time.Duration(cfg.tsdb.RetentionDuration),
 	)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create a receiver", "err", err)
