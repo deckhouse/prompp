@@ -95,15 +95,7 @@ func (cmd *cmdWALPPToBlock) Do(
 				"err", err,
 			)
 		}
-
-		if err = h.Finalize(); err != nil {
-			level.Error(logger).Log(
-				"msg", "failed to finalize head",
-				"id", headRecord.ID(),
-				"dir", headRecord.Dir(),
-				"err", err,
-			)
-		}
+		h.Stop()
 
 		level.Debug(logger).Log("msg", "write block", "id", headRecord.ID(), "dir", headRecord.Dir())
 		if err = h.ForEachShard(func(shard relabeler.Shard) error {
