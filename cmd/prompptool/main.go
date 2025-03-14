@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
+	rlogger "github.com/odarix/odarix-core-go/relabeler/logger"
 )
 
 func main() {
@@ -68,5 +70,26 @@ func initLogger(verbose bool) log.Logger {
 	}
 	f := &promlog.AllowedFormat{}
 	_ = f.Set("logfmt")
-	return promlog.New(&promlog.Config{Level: l, Format: f})
+
+	logger := promlog.New(&promlog.Config{Level: l, Format: f})
+
+	initLogHandler(logger)
+
+	return logger
+}
+
+func initLogHandler(logger log.Logger) {
+	logger = log.With(logger, "op_caller", log.Caller(4))
+	rlogger.Debugf = func(template string, args ...interface{}) {
+		level.Debug(logger).Log("msg", fmt.Sprintf(template, args...))
+	}
+	rlogger.Infof = func(template string, args ...interface{}) {
+		level.Info(logger).Log("msg", fmt.Sprintf(template, args...))
+	}
+	rlogger.Warnf = func(template string, args ...interface{}) {
+		level.Warn(logger).Log("msg", fmt.Sprintf(template, args...))
+	}
+	rlogger.Errorf = func(template string, args ...interface{}) {
+		level.Error(logger).Log("msg", fmt.Sprintf(template, args...))
+	}
 }
