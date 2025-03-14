@@ -21,17 +21,17 @@ class PROMPP_ATTRIBUTE_PACKED AscIntegerValuesGorillaEncoder {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static bool can_be_encoded(double value1, uint8_t value1_count, double value2, double value3) {
-    if (!is_valid_int(value1)) {
+    if (!is_int(value1)) {
       return false;
     }
 
     if (value1_count > 1) {
       if (BareBones::Encoding::Gorilla::isstalenan(value2)) [[unlikely]] {
-        return is_valid_int_and_ge_than(value3, value1);
+        return is_int_and_ge_than(value3, value1);
       }
     }
 
-    return is_valid_int_and_ge_than(value2, value1) && (is_valid_int_and_ge_than(value3, value2) || BareBones::Encoding::Gorilla::isstalenan(value3));
+    return is_int_and_ge_than(value2, value1) && (is_int_and_ge_than(value3, value2) || BareBones::Encoding::Gorilla::isstalenan(value3));
   }
 
   PROMPP_ALWAYS_INLINE void encode_second(double value) { encoder_.encode_delta(static_cast<int64_t>(value), stream_); }
@@ -64,7 +64,9 @@ class PROMPP_ATTRIBUTE_PACKED AscIntegerValuesGorillaEncoder {
   }
 
  private:
-  using Encoder = BareBones::Encoding::Gorilla::ZigZagTimestampEncoder<kAscIntegerDodSignificantLengths>;
+  using EncoderDeltaType = int32_t;
+  using Encoder = BareBones::Encoding::Gorilla::ZigZagTimestampEncoder<BareBones::Encoding::Gorilla::TimestampEncoderState<EncoderDeltaType>,
+                                                                       kAscIntegerDodSignificantLengths>;
   using ValueType = BareBones::Encoding::Gorilla::ValueType;
 
   Encoder encoder_;
@@ -72,7 +74,7 @@ class PROMPP_ATTRIBUTE_PACKED AscIntegerValuesGorillaEncoder {
 
   PROMPP_ALWAYS_INLINE bool encode(double value) noexcept {
     if (!BareBones::Encoding::Gorilla::isstalenan(value)) [[likely]] {
-      if (!is_valid_int_and_ge_than(value, static_cast<double>(encoder_.timestamp()))) [[unlikely]] {
+      if (!is_int_and_ge_than(value, static_cast<double>(encoder_.timestamp()))) [[unlikely]] {
         return false;
       }
     }
@@ -101,12 +103,8 @@ class PROMPP_ATTRIBUTE_PACKED AscIntegerValuesGorillaEncoder {
     }
   }
 
-  PROMPP_ALWAYS_INLINE static bool is_valid_int(double value) noexcept {
-    return is_int(value) && is_in_bounds(value, std::numeric_limits<int32_t>::min(), std::numeric_limits<int32_t>::max());
-  }
-
-  PROMPP_ALWAYS_INLINE static bool is_valid_int_and_ge_than(double value2, double value1) noexcept {
-    return is_int(value2) && is_in_bounds(value2, value1, std::numeric_limits<int32_t>::max());
+  PROMPP_ALWAYS_INLINE static bool is_int_and_ge_than(double value2, double value1) noexcept {
+    return is_int(value2) && is_in_bounds(static_cast<int64_t>(value2) - static_cast<int64_t>(value1), 0, std::numeric_limits<EncoderDeltaType>::max());
   }
 };
 

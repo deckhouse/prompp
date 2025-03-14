@@ -6,7 +6,7 @@ namespace PromPP::Prometheus::tsdb::chunkenc {
 
 class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
  public:
-  BareBones::Encoding::Gorilla::TimestampEncoderState state{};
+  BareBones::Encoding::Gorilla::TimestampEncoderState<> state{};
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t timestamp() const noexcept { return state.last_ts; }
 

@@ -24,9 +24,10 @@ constexpr PROMPP_ALWAYS_INLINE ValueType get_value_type(double value) noexcept {
   return isstalenan(value) ? ValueType::kStaleNan : ValueType::kValue;
 }
 
+template <class DeltaType = int64_t>
 struct PROMPP_ATTRIBUTE_PACKED TimestampEncoderState {
   int64_t last_ts{};
-  int64_t last_ts_delta{};  // for stream gorilla samples might not be ordered
+  DeltaType last_ts_delta{};  // for stream gorilla samples might not be ordered
 
   bool operator==(const TimestampEncoderState&) const noexcept = default;
 
@@ -54,13 +55,13 @@ struct DodSignificantLengths {
 
 static constexpr auto kDefaultDodSignificantLengths = DodSignificantLengths{.first = 5, .second = 15, .third = 18};
 
-template <DodSignificantLengths kDogSignificantLengths = kDefaultDodSignificantLengths>
+template <class TimestampEncoderStateType = TimestampEncoderState<>, DodSignificantLengths kDogSignificantLengths = kDefaultDodSignificantLengths>
 class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampEncoder {
  public:
-  TimestampEncoderState state{};
+  TimestampEncoderStateType state{};
 
   ZigZagTimestampEncoder() noexcept = default;
-  explicit ZigZagTimestampEncoder(const TimestampEncoderState& state) noexcept : state(state) {}
+  explicit ZigZagTimestampEncoder(const TimestampEncoderStateType& state) noexcept : state(state) {}
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t timestamp() const noexcept { return state.last_ts; }
 
@@ -204,10 +205,10 @@ enum class GorillaState : uint8_t {
 
 class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
  public:
-  TimestampEncoderState state{};
+  TimestampEncoderState<> state{};
 
   TimestampEncoder() noexcept = default;
-  explicit TimestampEncoder(const TimestampEncoderState& state) noexcept : state(state) {}
+  explicit TimestampEncoder(const TimestampEncoderState<>& state) noexcept : state(state) {}
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t timestamp() const noexcept { return state.last_ts; }
 
@@ -334,10 +335,10 @@ template <DodSignificantLengths kDogSignificantLengths = kDefaultDodSignificantL
 class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampDecoder {
  public:
   ZigZagTimestampDecoder() = default;
-  explicit ZigZagTimestampDecoder(const TimestampEncoderState& state) : state_(state) {}
+  explicit ZigZagTimestampDecoder(const TimestampEncoderState<>& state) : state_(state) {}
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t timestamp() const noexcept { return state_.last_ts; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const TimestampEncoderState& state() const noexcept { return state_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const TimestampEncoderState<>& state() const noexcept { return state_; }
 
   PROMPP_ALWAYS_INLINE void decode(int64_t timestamp) noexcept { state_.last_ts = timestamp; }
   PROMPP_ALWAYS_INLINE void decode(BitSequenceReader& reader) { state_.last_ts = ZigZag::decode(reader.consume_u64_svbyte_0248()); }
@@ -422,16 +423,16 @@ class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampDecoder {
   bool operator==(const ZigZagTimestampDecoder& other) const noexcept = default;
 
  private:
-  TimestampEncoderState state_{};
+  TimestampEncoderState<> state_{};
 };
 
 class PROMPP_ATTRIBUTE_PACKED TimestampDecoder {
  public:
   TimestampDecoder() = default;
-  explicit TimestampDecoder(const TimestampEncoderState& state) : state_(state) {}
+  explicit TimestampDecoder(const TimestampEncoderState<>& state) : state_(state) {}
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t timestamp() const noexcept { return state_.last_ts; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const TimestampEncoderState& state() const noexcept { return state_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const TimestampEncoderState<>& state() const noexcept { return state_; }
 
   PROMPP_ALWAYS_INLINE void decode(int64_t timestamp) noexcept { state_.last_ts = timestamp; }
   PROMPP_ALWAYS_INLINE void decode(BitSequenceReader& reader) { state_.last_ts = VarInt::read(reader); }
@@ -482,7 +483,7 @@ class PROMPP_ATTRIBUTE_PACKED TimestampDecoder {
   bool operator==(const TimestampDecoder& other) const noexcept = default;
 
  private:
-  TimestampEncoderState state_{};
+  TimestampEncoderState<> state_{};
 };
 
 template <class ValuesEncoder>

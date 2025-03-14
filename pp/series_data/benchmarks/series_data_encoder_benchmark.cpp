@@ -18,7 +18,7 @@ struct PROMPP_ATTRIBUTE_PACKED sample_with_lsid {
   uint32_t labelset_id;
 };
 
-void BenchmarkSeriesDataEncoder(benchmark::State& state) {
+const BareBones::Vector<sample_with_lsid>& get_samples_for_benchmark() {
   constexpr auto get_file_name = [] -> std::string {
     if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
       return context->operator[]("sde_file");
@@ -27,11 +27,17 @@ void BenchmarkSeriesDataEncoder(benchmark::State& state) {
     return {};
   };
 
-  BareBones::Vector<sample_with_lsid> samples_from_file;
-  {
+  static BareBones::Vector<sample_with_lsid> samples_from_file;
+  if (samples_from_file.empty()) [[unlikely]] {
     std::ifstream istrm(get_file_name(), std::ios::binary);
     istrm >> samples_from_file;
   }
+
+  return samples_from_file;
+}
+
+void BenchmarkSeriesDataEncoder(benchmark::State& state) {
+  const auto& samples = get_samples_for_benchmark();
 
   series_data::DataStorage storage;
   std::chrono::system_clock clock;
@@ -39,13 +45,13 @@ void BenchmarkSeriesDataEncoder(benchmark::State& state) {
   series_data::Encoder encoder{storage, outdated_sample_encoder};
 
   for ([[maybe_unused]] auto _ : state) {
-    for (auto& cur_sample : samples_from_file) {
-      encoder.encode(cur_sample.labelset_id, ts_min + static_cast<PromPP::Primitives::Sample::timestamp_type>(cur_sample.sample_ts), cur_sample.sample_value);
+    for (const auto& sample : samples) {
+      encoder.encode(sample.labelset_id, ts_min + static_cast<PromPP::Primitives::Sample::timestamp_type>(sample.sample_ts), sample.sample_value);
     }
   }
 
-  state.counters["Items"] = benchmark::Counter(static_cast<double>(samples_from_file.size()));
-  state.counters["Time/item"] = benchmark::Counter(static_cast<double>(samples_from_file.size()), benchmark::Counter::kIsRate | benchmark::Counter::kInvert);
+  state.counters["Items"] = benchmark::Counter(samples.size());
+  state.counters["Time/item"] = benchmark::Counter(samples.size(), benchmark::Counter::kIsRate | benchmark::Counter::kInvert);
 
   state.counters["Memory"] =
       benchmark::Counter(static_cast<double>(storage.allocated_memory()), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
