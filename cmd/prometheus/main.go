@@ -143,24 +143,25 @@ func agentOnlyFlag(app *kingpin.Application, name, help string) *kingpin.FlagCla
 type flagConfig struct {
 	configFile string
 
-	agentStoragePath    string
-	serverStoragePath   string
-	notifier            notifier.Options
-	forGracePeriod      model.Duration
-	outageTolerance     model.Duration
-	resendDelay         model.Duration
-	maxConcurrentEvals  int64
-	web                 web.Options
-	scrape              scrape.Options
-	tsdb                tsdbOptions
-	agent               agentOptions
-	lookbackDelta       model.Duration
-	webTimeout          model.Duration
-	queryTimeout        model.Duration
-	queryConcurrency    int
-	queryMaxSamples     int
-	RemoteFlushDeadline model.Duration
-	WalCommitInterval   model.Duration
+	agentStoragePath     string
+	serverStoragePath    string
+	notifier             notifier.Options
+	forGracePeriod       model.Duration
+	outageTolerance      model.Duration
+	resendDelay          model.Duration
+	maxConcurrentEvals   int64
+	web                  web.Options
+	scrape               scrape.Options
+	tsdb                 tsdbOptions
+	agent                agentOptions
+	lookbackDelta        model.Duration
+	webTimeout           model.Duration
+	queryTimeout         model.Duration
+	queryConcurrency     int
+	queryMaxSamples      int
+	RemoteFlushDeadline  model.Duration
+	WalCommitInterval    model.Duration
+	HeadRetentionTimeout model.Duration
 
 	featureList   []string
 	memlimitRatio float64
@@ -378,6 +379,9 @@ func main() {
 
 	serverOnlyFlag(a, "storage.wal-commit-interval", "Interval between force commits.").
 		Default("5000ms").SetValue(&cfg.WalCommitInterval)
+
+	serverOnlyFlag(a, "storage.head-retention-timeout", "Timeout before inactive heads are shrieked.").
+		Default("5m").SetValue(&cfg.HeadRetentionTimeout)
 
 	// TODO: Remove in Prometheus 3.0.
 	var b bool
@@ -672,7 +676,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = os.MkdirAll(dataDir, 0777); err != nil {
+	if err = os.MkdirAll(dataDir, 0o777); err != nil {
 		level.Error(logger).Log("msg", "failed to create file log", "err", err)
 		os.Exit(1)
 	}
@@ -709,6 +713,7 @@ func main() {
 		receiverReadyNotifier,
 		time.Duration(cfg.WalCommitInterval),
 		time.Duration(cfg.tsdb.RetentionDuration),
+		time.Duration(cfg.HeadRetentionTimeout),
 	)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create a receiver", "err", err)
