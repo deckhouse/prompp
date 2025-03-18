@@ -4,6 +4,7 @@
 
 #include "bare_bones/preprocess.h"
 #include "bare_bones/type_traits.h"
+#include "series_data/common.h"
 #include "series_data/encoder/numeric.h"
 
 namespace series_data::encoder::value {
@@ -13,12 +14,28 @@ class PROMPP_ATTRIBUTE_PACKED TwoDoubleConstantEncoder {
   explicit TwoDoubleConstantEncoder(double value1, double value2, uint8_t value1_count)
       : value1_(std::bit_cast<uint64_t>(value1)), value2_(std::bit_cast<uint64_t>(value2)), value1_count_(value1_count) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_actual(double value) const noexcept { return is_values_strictly_equal(value2_, value); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool encode(double value) const noexcept { return is_actual(value); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_actual(const EncodingState& state, double value) const noexcept {
+    return is_values_strictly_equal(value, last_value(state));
+  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool encode(EncodingState& state, double value) const noexcept {
+    if (!state.has_last_stalenan && !BareBones::Encoding::Gorilla::isstalenan(value)) [[likely]] {
+      return is_actual(state, value);
+    }
+    if (BareBones::Encoding::Gorilla::isstalenan(value)) {
+      state.has_last_stalenan = true;
+    }
+    return BareBones::Encoding::Gorilla::isstalenan(value);
+  }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE double value1() const noexcept { return std::bit_cast<double>(value1_); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint8_t value1_count() const noexcept { return value1_count_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE double value2() const noexcept { return std::bit_cast<double>(value2_); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE double last_value(const EncodingState& state) const noexcept {
+    if (state.has_last_stalenan) [[unlikely]] {
+      return BareBones::Encoding::Gorilla::STALE_NAN;
+    }
+    return value2();
+  }
 
   bool operator==(const TwoDoubleConstantEncoder&) const noexcept = default;
 

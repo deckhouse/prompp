@@ -1,9 +1,7 @@
 package head
 
 import (
-	"bufio"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -11,89 +9,38 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
-type WriteSyncCloser interface {
-	io.WriteCloser
-	Sync() error
-}
+const (
+	FileFormatVersion = 1
+)
 
-type WriteFlusher interface {
-	io.Writer
+type SegmentWriter interface {
+	Write(segment EncodedSegment) error
 	Flush() error
-}
-
-type bufferedShardWalWriter struct {
-	writeSyncCloser WriteSyncCloser
-	bufferedWriter  *bufio.Writer
-}
-
-func newBufferedShardWalWriter(writeSyncCloser WriteSyncCloser) *bufferedShardWalWriter {
-	return &bufferedShardWalWriter{
-		writeSyncCloser: writeSyncCloser,
-		bufferedWriter:  bufio.NewWriterSize(writeSyncCloser, 1024*1024),
-	}
-}
-
-func (w *bufferedShardWalWriter) Write(p []byte) (n int, err error) {
-	return w.bufferedWriter.Write(p)
-}
-
-func (w *bufferedShardWalWriter) Sync() error {
-	if err := w.bufferedWriter.Flush(); err != nil {
-		return fmt.Errorf("failed to flush buffer: %w", err)
-	}
-
-	if err := w.writeSyncCloser.Sync(); err != nil {
-		return fmt.Errorf("failed to sync: %w", err)
-	}
-
-	return nil
-}
-
-func (w *bufferedShardWalWriter) Close() error {
-	return errors.Join(w.bufferedWriter.Flush(), w.writeSyncCloser.Sync(), w.writeSyncCloser.Close())
+	Close() error
 }
 
 type ShardWal struct {
-	corrupted           bool
-	encoder             *cppbridge.HeadWalEncoder
-	writeSyncCloser     WriteSyncCloser
-	fileHeaderIsWritten bool
-	buf                 [binary.MaxVarintLen32]byte
-	maxSegmentSize      uint32
-	uncommited          bool
+	corrupted      bool
+	shardID        uint16
+	encoder        *cppbridge.HeadWalEncoder
+	segmentWriter  SegmentWriter
+	maxSegmentSize uint32
 }
 
-func newShardWal(encoder *cppbridge.HeadWalEncoder, fileHeaderIsWritten bool, maxSegmentSize uint32, writeSyncCloser WriteSyncCloser) *ShardWal {
+func newShardWal(shardID uint16, encoder *cppbridge.HeadWalEncoder, maxSegmentSize uint32, segmentWriter SegmentWriter) *ShardWal {
 	return &ShardWal{
-		encoder:             encoder,
-		writeSyncCloser:     writeSyncCloser,
-		fileHeaderIsWritten: fileHeaderIsWritten,
-		maxSegmentSize:      maxSegmentSize,
+		shardID:        shardID,
+		encoder:        encoder,
+		segmentWriter:  segmentWriter,
+		maxSegmentSize: maxSegmentSize,
 	}
 }
 
-func newCorruptedShardWal() *ShardWal {
+func newCorruptedShardWal(shardID uint16) *ShardWal {
 	return &ShardWal{
 		corrupted: true,
+		shardID:   shardID,
 	}
-}
-
-func (w *ShardWal) WriteHeader() error {
-	if w.fileHeaderIsWritten {
-		return nil
-	}
-
-	_, err := WriteHeader(w.writeSyncCloser, 1, w.encoder.Version())
-	if err != nil {
-		return fmt.Errorf("failed to write file header: %w", err)
-	}
-
-	if err = w.writeSyncCloser.Sync(); err != nil {
-		return fmt.Errorf("failed to sync file header: %w", err)
-	}
-
-	w.fileHeaderIsWritten = true
-	return nil
 }
 
 func (w *ShardWal) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error) {
@@ -106,8 +53,6 @@ func (w *ShardWal) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error
 		return false, fmt.Errorf("failed to encode inner series: %w", err)
 	}
 
-	w.uncommited = true
-
 	if w.maxSegmentSize > 0 && stats.Samples() >= w.maxSegmentSize {
 		return true, nil
 	}
@@ -115,17 +60,9 @@ func (w *ShardWal) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error
 	return false, nil
 }
 
-func (w *ShardWal) Uncommitted() bool {
-	return w.uncommited
-}
-
 func (w *ShardWal) Commit() error {
 	if w.corrupted {
-		return fmt.Errorf("committing corrupted wal")
-	}
-
-	if !w.uncommited {
-		return nil
+		return fmt.Errorf("commiting corrupted wal")
 	}
 
 	segment, err := w.encoder.Finalize()
@@ -133,30 +70,27 @@ func (w *ShardWal) Commit() error {
 		return fmt.Errorf("failed to finalize segment: %w", err)
 	}
 
-	_, err = WriteSegment(w.writeSyncCloser, segment)
-	if err != nil {
+	if err = w.segmentWriter.Write(segment); err != nil {
 		return fmt.Errorf("failed to write segment: %w", err)
 	}
 
-	if err = w.writeSyncCloser.Sync(); err != nil {
-		return fmt.Errorf("failed to flush segment: %w", err)
+	if err = w.segmentWriter.Flush(); err != nil {
+		return fmt.Errorf("failed to flush segment writer: %w", err)
 	}
 
-	w.uncommited = false
-
 	return nil
+}
+
+func (w *ShardWal) Flush() error {
+	return w.segmentWriter.Flush()
 }
 
 func (w *ShardWal) Close() error {
-	if w.writeSyncCloser != nil {
-		return w.writeSyncCloser.Close()
+	if w.segmentWriter != nil {
+		return w.segmentWriter.Close()
 	}
 
 	return nil
-}
-
-type CorruptedShardWal struct {
-	writeCloser io.WriteCloser
 }
 
 func WriteHeader(writer io.Writer, fileFormatVersion uint8, encoderVersion uint8) (n int, err error) {
@@ -304,45 +238,4 @@ func ReadSegment(reader io.Reader) (decodedSegment DecodedSegment, n int, err er
 	}
 
 	return decodedSegment, n, nil
-}
-
-func TryReadSegment(source io.ReadSeeker) (decodedSegment DecodedSegment, err error) {
-	br := &byteReader{r: source}
-	var size uint64
-	size, err = binary.ReadUvarint(br)
-	if err != nil {
-		return decodedSegment, errors.Join(fmt.Errorf("failed to read segment size: %w", err), io.ErrUnexpectedEOF)
-	}
-
-	crc32HashU64, err := binary.ReadUvarint(br)
-	if err != nil {
-		return decodedSegment, errors.Join(fmt.Errorf("failed to read segment crc32 hash: %w", err), io.ErrUnexpectedEOF)
-	}
-	crc32Hash := uint32(crc32HashU64)
-
-	sampleCountU64, err := binary.ReadUvarint(br)
-	if err != nil {
-		return decodedSegment, errors.Join(fmt.Errorf("failed to read segment sample count: %w", err), io.ErrUnexpectedEOF)
-	}
-	decodedSegment.sampleCount = uint32(sampleCountU64)
-
-	decodedSegment.data = make([]byte, size)
-	bytesRead, err := io.ReadFull(source, decodedSegment.data)
-	if err != nil {
-		return decodedSegment, fmt.Errorf("failed to read segment data: %w", err)
-	}
-	offset := bytesRead + br.n
-
-	if uint64(bytesRead) != size {
-		if _, err = source.Seek(-int64(offset), io.SeekCurrent); err != nil {
-			return decodedSegment, fmt.Errorf("try read segment set offset failed: %w", err)
-		}
-		return decodedSegment, io.ErrUnexpectedEOF
-	}
-
-	if crc32Hash != crc32.ChecksumIEEE(decodedSegment.data) {
-		return decodedSegment, fmt.Errorf("crc32 did not match, want: %d, have: %d", crc32Hash, crc32.ChecksumIEEE(decodedSegment.data))
-	}
-
-	return decodedSegment, nil
 }

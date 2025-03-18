@@ -119,7 +119,8 @@ func TestLoad(t *testing.T) {
 
 	require.NoError(t, q.Close())
 
-	require.NoError(t, h.Finalize())
+	h.Stop()
+	require.NoError(t, h.Flush())
 	require.NoError(t, h.Close())
 	var corrupted bool
 	h, corrupted, _, err = head.Load(headID, 0, tmpDir, cfgs, numberOfShards, maxSegmentSize, noOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
@@ -221,7 +222,7 @@ func TestLoad(t *testing.T) {
 
 	require.NoError(t, q.Close())
 
-	require.NoError(t, h.Finalize())
+	h.Stop()
 	require.NoError(t, h.Close())
 
 	h, corrupted, _, err = head.Load(headID, 0, tmpDir, cfgs, numberOfShards, maxSegmentSize, noOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
@@ -333,7 +334,7 @@ func TestLoad(t *testing.T) {
 
 	require.NoError(t, q.Close())
 
-	require.NoError(t, h.Finalize())
+	h.Stop()
 	require.NoError(t, h.Close())
 }
 

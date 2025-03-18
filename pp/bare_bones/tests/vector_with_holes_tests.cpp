@@ -143,4 +143,34 @@ TYPED_TEST(VectorWithHolesFixture, CheckAllocatedDiff) {
   EXPECT_EQ(mid_allocated_memory, allocated_memory_full - allocated_memory_erased);
 }
 
+TYPED_TEST(VectorWithHolesFixture, CheckValueAccess) {
+  // Arrange
+  VectorWithHoles<TypeParam> vector;
+  vector.emplace_back(101U);
+  vector.emplace_back(102U);
+  vector.emplace_back(103U);
+
+  // Act
+  const auto& value_bracket = vector[0];
+  const auto& value_at = vector.at(0);
+
+  // Assert
+  EXPECT_EQ(value_bracket, 101U);
+  EXPECT_EQ(value_at, 101U);
+}
+
+TYPED_TEST(VectorWithHolesFixture, CheckHoleAccessFail) {
+  // Arrange
+  VectorWithHoles<TypeParam> vector;
+  vector.emplace_back(101U);
+  vector.emplace_back(102U);
+  vector.emplace_back(103U);
+
+  // Act
+  vector.erase(0);
+
+  // Assert
+  ASSERT_THROW({ vector.at(0); }, BareBones::Exception);
+}
+
 }  // namespace

@@ -161,11 +161,8 @@ func (NoOpLastAppendedSegmentIDSetter) SetLastAppendedSegmentID(segmentID uint32
 
 type Head struct {
 	id         string
-	finalizer  *Finalizer
 	generation uint64
-
-	lastAppendedSegmentID       *uint32
-	lastAppendedSegmentIDSetter LastAppendedSegmentIDSetter
+	readOnly   bool
 
 	relabelersData             map[string]*RelabelerData
 	dataStorages               []*DataStorage
@@ -192,8 +189,6 @@ func New(
 	wals []*ShardWal,
 	dataStorages []*DataStorage,
 	numberOfShards uint16,
-	lastAppendedSegmentID *uint32,
-	lastAppendedSegmentIDSetter LastAppendedSegmentIDSetter,
 	registerer prometheus.Registerer) (*Head, error) {
 
 	stageInputRelabeling := make([]chan *TaskInputRelabeling, numberOfShards)
@@ -209,21 +204,18 @@ func New(
 
 	factory := util.NewUnconflictRegisterer(registerer)
 	h := &Head{
-		id:                          id,
-		finalizer:                   NewFinalizer(),
-		generation:                  generation,
-		lsses:                       lsses,
-		wals:                        wals,
-		dataStorages:                dataStorages,
-		lastAppendedSegmentID:       lastAppendedSegmentID,
-		lastAppendedSegmentIDSetter: lastAppendedSegmentIDSetter,
-		stageInputRelabeling:        stageInputRelabeling,
-		stageAppendRelabelerSeries:  stageAppendRelabelerSeries,
-		genericTaskCh:               genericTaskCh,
-		stopc:                       make(chan struct{}),
-		wg:                          &sync.WaitGroup{},
-		relabelersData:              make(map[string]*RelabelerData, len(inputRelabelerConfigs)),
-		numberOfShards:              numberOfShards,
+		id:                         id,
+		generation:                 generation,
+		lsses:                      lsses,
+		wals:                       wals,
+		dataStorages:               dataStorages,
+		stageInputRelabeling:       stageInputRelabeling,
+		stageAppendRelabelerSeries: stageAppendRelabelerSeries,
+		genericTaskCh:              genericTaskCh,
+		stopc:                      make(chan struct{}),
+		wg:                         &sync.WaitGroup{},
+		relabelersData:             make(map[string]*RelabelerData, len(inputRelabelerConfigs)),
+		numberOfShards:             numberOfShards,
 		// stat
 		appendedSegmentCount: factory.NewCounter(prometheus.CounterOpts{
 			Name: "prompp_appended_segment_count",
@@ -283,8 +275,8 @@ func (h *Head) Append(
 	relabelerID string,
 	commitToWal bool,
 ) ([][]*cppbridge.InnerSeries, cppbridge.RelabelerStats, error) {
-	if h.finalizer.FinalizeCalled() {
-		return nil, cppbridge.RelabelerStats{}, errors.New("appending to a finalized head")
+	if h.readOnly {
+		return nil, cppbridge.RelabelerStats{}, fmt.Errorf("appending to read only head")
 	}
 
 	rd, ok := h.relabelersData[relabelerID]
@@ -329,7 +321,7 @@ func (h *Head) Append(
 		return nil
 	})
 	if err != nil {
-		return nil, cppbridge.RelabelerStats{}, fmt.Errorf("failed to write wal: %w", err)
+		logger.Errorf("failed to write wal: %v", err)
 	}
 
 	err = h.forEachShard(func(shard relabeler.Shard) error {
@@ -342,60 +334,32 @@ func (h *Head) Append(
 		return nil
 	})
 	if err != nil {
-		return nil, cppbridge.RelabelerStats{}, fmt.Errorf("failed to commit wal: %w", err)
-	}
-
-	if commitToWal || atomiclimitExhausted > 0 {
-		h.incrementLastAppendedSegmentID()
+		logger.Errorf("failed to commit wal: %v", err)
 	}
 
 	return inputPromise.data, inputPromise.Stats(), nil
 }
 
-func (h *Head) incrementLastAppendedSegmentID() {
-	if h.lastAppendedSegmentID == nil {
-		var segmentID uint32 = 0
-		h.lastAppendedSegmentID = &segmentID
-	} else {
-		*h.lastAppendedSegmentID++
-	}
-	h.lastAppendedSegmentIDSetter.SetLastAppendedSegmentID(*h.lastAppendedSegmentID)
-	h.appendedSegmentCount.Inc()
-}
-
 func (h *Head) CommitToWal() error {
-	var segmentIsWritten uint32
-	err := h.ForEachShard(func(shard relabeler.Shard) error {
-		if !shard.Wal().Uncommitted() {
-			return nil
-		}
-		atomic.AddUint32(&segmentIsWritten, 1)
+	if h.readOnly {
+		return fmt.Errorf("commiting read only head")
+	}
+	return h.ForEachShard(func(shard relabeler.Shard) error {
 		return shard.Wal().Commit()
 	})
-	if err != nil {
-		return err
-	}
+}
 
-	if segmentIsWritten != 0 {
-		h.incrementLastAppendedSegmentID()
-	}
-
-	return nil
+func (h *Head) Flush() error {
+	return h.ForEachShard(func(shard relabeler.Shard) error {
+		return shard.Wal().Flush()
+	})
 }
 
 func (h *Head) ForEachShard(fn relabeler.ShardFn) error {
-	if h.finalizer.FinalizeCalled() {
-		<-h.finalizer.Done()
-	}
-
 	return h.forEachShard(fn)
 }
 
 func (h *Head) OnShard(shardID uint16, fn relabeler.ShardFn) error {
-	if h.finalizer.FinalizeCalled() {
-		<-h.finalizer.Done()
-	}
-
 	return h.onShard(shardID, fn)
 }
 
@@ -403,39 +367,25 @@ func (h *Head) NumberOfShards() uint16 {
 	return h.numberOfShards
 }
 
-func (h *Head) Finalize() error {
-	// todo: wait all tasks on stop
-	return h.finalizer.Finalize(func() error {
-		var segmentIsWritten uint32
-		err := h.forEachShard(func(shard relabeler.Shard) error {
-			shard.DataStorage().MergeOutOfOrderChunks()
-			if shard.Wal().Uncommitted() {
-				atomic.AddUint32(&segmentIsWritten, 1)
-				return shard.Wal().Commit()
-			}
-			return nil
+func (h *Head) Stop() {
+	if h.readOnly {
+		return
+	}
+	h.readOnly = true
+	h.stop()
+	for relabelerID := range h.relabelersData {
+		// clear unnecessary
+		h.memoryInUse.DeletePartialMatch(prometheus.Labels{
+			"generation": fmt.Sprintf("%d", h.generation),
+			"allocator":  fmt.Sprintf("input_relabeler_%s", relabelerID),
 		})
-
-		if err == nil && segmentIsWritten != 0 {
-			h.incrementLastAppendedSegmentID()
-		}
-
-		h.stop()
-		for relabelerID := range h.relabelersData {
-			// clear unnecessary
-			h.memoryInUse.DeletePartialMatch(prometheus.Labels{
-				"generation": fmt.Sprintf("%d", h.generation),
-				"allocator":  fmt.Sprintf("input_relabeler_%s", relabelerID),
-			})
-		}
-		h.relabelersData = nil
-		return err
-	})
+	}
+	h.relabelersData = nil
 }
 
 func (h *Head) Reconfigure(inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) error {
-	if h.finalizer.FinalizeCalled() {
-		return errors.New("reconfiguring finalized head")
+	if h.readOnly {
+		return fmt.Errorf("reconfiguring read only head")
 	}
 
 	h.stop()
@@ -565,10 +515,6 @@ func (h *Head) Rotate() error {
 }
 
 func (h *Head) Close() error {
-	if !h.finalizer.FinalizeCalled() {
-		return errors.New("closing not finalized head")
-	}
-	<-h.finalizer.Done()
 	h.memoryInUse.DeletePartialMatch(prometheus.Labels{"generation": strconv.FormatUint(h.generation, 10)})
 	var err error
 	for _, wal := range h.wals {
@@ -591,12 +537,13 @@ func (h *Head) Discard() error {
 // enqueueHeadAppending append all series after input relabeling stage to head.
 func (h *Head) forEachShard(fn relabeler.ShardFn) error {
 	task := NewGenericTask(fn, h.numberOfShards)
-	if h.finalizer.Finalized() {
+	if h.readOnly {
 		for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
 			s := &shard{
 				id:          shardID,
 				lss:         h.lsses[shardID],
 				dataStorage: h.dataStorages[shardID],
+				wal:         h.wals[shardID],
 			}
 			go func(shard *shard) {
 				task.ExecuteOnShard(shard)
@@ -614,9 +561,7 @@ func (h *Head) forEachShard(fn relabeler.ShardFn) error {
 }
 
 func (h *Head) onShard(shardID uint16, fn relabeler.ShardFn) error {
-	if h.finalizer.FinalizeCalled() {
-		<-h.finalizer.Done()
-
+	if h.readOnly {
 		s := &shard{
 			id:          shardID,
 			lss:         h.lsses[shardID],

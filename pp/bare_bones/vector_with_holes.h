@@ -81,6 +81,19 @@ class VectorWithHoles {
   PROMPP_ALWAYS_INLINE const T& operator[](uint32_t i) const noexcept { return vector_[i].value; }
   PROMPP_ALWAYS_INLINE T& operator[](uint32_t i) noexcept { return vector_[i].value; }
 
+  PROMPP_ALWAYS_INLINE const T& at(uint32_t i) const {
+    if (is_hole(i)) {
+      throw BareBones::Exception(0x8749d003112fc0c4, "VectorWithHoles::at: attempt to access a hole");
+    }
+    return vector_[i].value;
+  }
+  PROMPP_ALWAYS_INLINE T& at(uint32_t i) {
+    if (is_hole(i)) {
+      throw BareBones::Exception(0xa4ce63143b8d187c, "VectorWithHoles::at: attempt to access a hole");
+    }
+    return vector_[i].value;
+  }
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return vector_.size(); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {

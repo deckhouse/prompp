@@ -12,7 +12,7 @@ class OutdatedChunk {
   template <BareBones::concepts::SystemClockInterface Clock>
   OutdatedChunk(Clock& clock, int64_t timestamp, double value) : encoder_(timestamp, value), create_time_(clock.now()) {}
 
-  PROMPP_ALWAYS_INLINE uint8_t encode(int64_t timestamp, double value) { return encoder_.encode(timestamp, value); }
+  PROMPP_ALWAYS_INLINE uint8_t encode(int64_t timestamp, double value) { return encoder_.encode(state, timestamp, value); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint8_t count() const noexcept { return encoder_.stream().count(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const encoder::BitSequenceWithItemsCount& stream() const noexcept { return encoder_.stream(); }
@@ -22,6 +22,7 @@ class OutdatedChunk {
  private:
   encoder::GorillaEncoder encoder_;
   std::chrono::system_clock::time_point create_time_;
+  EncodingState state{EncodingType::kGorilla, false};
 };
 #pragma pack(pop)
 

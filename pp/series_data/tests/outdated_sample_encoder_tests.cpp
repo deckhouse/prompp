@@ -51,7 +51,7 @@ TEST_F(OutdatedSampleEncoderFixture, NoMergeAtEncode) {
       ExpectedSampleList{
           {.timestamp = 0, .value = 1.0},
       },
-      Decoder::decode_gorilla_chunk(storage_.outdated_chunks.find(0)->second.stream().stream)));
+      Decoder::decode_outdated_chunk(storage_.outdated_chunks.find(0)->second)));
 }
 
 TEST_F(OutdatedSampleEncoderFixture, MergeAtEncode) {
@@ -85,6 +85,13 @@ TEST_F(OutdatedSampleEncoderFixture, NoMerge) {
   outdated_sample_encoder_.merge_outdated_chunks(encoder_, std::chrono::seconds{1});
 
   // Assert
+  EXPECT_TRUE(std::ranges::equal(
+      ExpectedSampleList{
+          {.timestamp = 5, .value = 1.0},
+          {.timestamp = 6, .value = 1.0},
+      },
+      Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0])));
+  ASSERT_FALSE(storage_.outdated_chunks.contains(0));
 }
 
 TEST_F(OutdatedSampleEncoderFixture, MergeOneChunk) {

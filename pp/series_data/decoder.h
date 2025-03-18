@@ -1,5 +1,7 @@
 #pragma once
 
+#include "chunk/outdated_chunk.h"
+#include "common.h"
 #include "data_storage.h"
 #include "decoder/asc_integer_values_gorilla.h"
 #include "decoder/constant.h"
@@ -14,10 +16,10 @@ class Decoder {
  public:
   template <chunk::DataChunk::Type chunk_type, class Callback>
   static void decode_chunk(const DataStorage& storage, const chunk::DataChunk& chunk, Callback&& callback) noexcept {
-    using enum chunk::DataChunk::EncodingType;
+    using enum EncodingType;
     using decoder::DecodeIteratorSentinel;
 
-    switch (chunk.encoding_type) {
+    switch (chunk.encoding_state.encoding_type) {
       case kUint32Constant: {
         std::ranges::all_of(create_decode_iterator<kUint32Constant, chunk_type>(storage, chunk), DecodeIteratorSentinel{}, std::forward<Callback>(callback));
         break;
@@ -50,12 +52,12 @@ class Decoder {
       }
 
       case kGorilla: {
-        decode_gorilla_chunk<Callback>(storage.get_gorilla_encoder_stream<chunk_type>(chunk.encoder.gorilla), std::forward<Callback>(callback));
+        std::ranges::all_of(create_decode_iterator<kGorilla, chunk_type>(storage, chunk), DecodeIteratorSentinel{}, std::forward<Callback>(callback));
         break;
       }
 
       case kUnknown: {
-        assert(chunk.encoding_type != kUnknown);
+        assert(chunk.encoding_state.encoding_type != kUnknown);
         break;
       }
     }
@@ -78,19 +80,14 @@ class Decoder {
   static uint8_t get_samples_count(const DataStorage& storage, const chunk::DataChunk& chunk, chunk::DataChunk::Type chunk_type) noexcept {
     using enum chunk::DataChunk::Type;
 
-    if (chunk.encoding_type == chunk::DataChunk::EncodingType::kGorilla) [[unlikely]] {
-      return encoder::BitSequenceWithItemsCount::count(chunk_type == kOpen ? storage.get_gorilla_encoder_stream<kOpen>(chunk.encoder.gorilla)
-                                                                           : storage.get_gorilla_encoder_stream<kFinalized>(chunk.encoder.gorilla));
+    if (chunk.encoding_state.encoding_type == EncodingType::kGorilla) [[unlikely]] {
+      return encoder::BitSequenceWithItemsCount::count(chunk_type == kOpen ? storage.get_gorilla_encoder_stream<kOpen>(chunk.encoder.external_index)
+                                                                           : storage.get_gorilla_encoder_stream<kFinalized>(chunk.encoder.external_index));
     } else {
       return (chunk_type == kOpen ? storage.get_timestamp_stream<kOpen>(chunk.timestamp_encoder_state_id)
                                   : storage.get_timestamp_stream<kFinalized>(chunk.timestamp_encoder_state_id))
           .count();
     }
-  }
-
-  template <class Callback>
-  PROMPP_ALWAYS_INLINE static void decode_gorilla_chunk(const encoder::CompactBitSequence& stream, Callback&& callback) {
-    std::ranges::all_of(decoder::GorillaDecodeIterator(stream), decoder::DecodeIteratorSentinel{}, std::forward<Callback>(callback));
   }
 
   template <chunk::DataChunk::Type chunk_type>
@@ -103,13 +100,11 @@ class Decoder {
     return result;
   }
 
-  PROMPP_ALWAYS_INLINE static encoder::SampleList decode_gorilla_chunk(const encoder::CompactBitSequence& stream) {
+  static encoder::SampleList decode_outdated_chunk(const chunk::OutdatedChunk& chunk) {
     encoder::SampleList result;
+    const auto& stream = chunk.stream().stream;
     result.reserve(encoder::BitSequenceWithItemsCount::count(stream));
-    decode_gorilla_chunk(stream, [&result](const encoder::Sample& sample) PROMPP_LAMBDA_INLINE {
-      result.emplace_back(sample);
-      return true;
-    });
+    std::ranges::copy(decoder::GorillaDecodeIterator(stream, false), decoder::DecodeIteratorSentinel{}, std::back_inserter(result));
     return result;
   }
 
@@ -137,33 +132,38 @@ class Decoder {
     return result;
   }
 
-  template <chunk::DataChunk::EncodingType encoding_type, chunk::DataChunk::Type chunk_type>
+  template <EncodingType encoding_type, chunk::DataChunk::Type chunk_type>
   static auto create_decode_iterator(const DataStorage& storage, const chunk::DataChunk& chunk) {
-    using enum chunk::DataChunk::EncodingType;
+    using enum EncodingType;
     using enum chunk::DataChunk::Type;
 
     if constexpr (encoding_type == kUint32Constant) {
-      return decoder::ConstantDecodeIterator(storage.get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id), chunk.encoder.uint32_constant.value());
+      return decoder::ConstantDecodeIterator(storage.get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id), chunk.encoder.uint32_constant.value(),
+                                             chunk.encoding_state.has_last_stalenan);
     } else if constexpr (encoding_type == kFloat32Constant) {
-      return decoder::ConstantDecodeIterator(storage.get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
-                                             chunk.encoder.float32_constant.value());
+      return decoder::ConstantDecodeIterator(storage.get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id), chunk.encoder.float32_constant.value(),
+                                             chunk.encoding_state.has_last_stalenan);
     } else if constexpr (encoding_type == kDoubleConstant) {
       return decoder::ConstantDecodeIterator(storage.get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
-                                             storage.double_constant_encoders[chunk.encoder.double_constant].value());
+                                             storage.double_constant_encoders[chunk.encoder.external_index].value(), chunk.encoding_state.has_last_stalenan);
     } else if constexpr (encoding_type == kTwoDoubleConstant) {
       return decoder::TwoDoubleConstantDecodeIterator(storage.get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
-                                                      storage.two_double_constant_encoders[chunk.encoder.two_double_constant]);
+                                                      storage.two_double_constant_encoders[chunk.encoder.external_index],
+                                                      chunk.encoding_state.has_last_stalenan);
     } else if constexpr (encoding_type == kAscIntegerValuesGorilla) {
-      return decoder::AscIntegerValuesGorillaDecodeIterator(
-          storage.get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
-          chunk_type == kOpen ? storage.asc_integer_values_gorilla_encoders[chunk.encoder.asc_integer_values_gorilla].stream().reader()
-                              : storage.finalized_data_streams[chunk.encoder.asc_integer_values_gorilla].reader());
+      return decoder::AscIntegerValuesGorillaDecodeIterator(storage.get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
+                                                            chunk_type == kOpen
+                                                                ? storage.asc_integer_values_gorilla_encoders[chunk.encoder.external_index].stream().reader()
+                                                                : storage.finalized_data_streams[chunk.encoder.external_index].reader(),
+                                                            chunk.encoding_state.has_last_stalenan);
     } else if constexpr (encoding_type == kValuesGorilla) {
       return decoder::ValuesGorillaDecodeIterator(storage.get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
-                                                  chunk_type == kOpen ? storage.values_gorilla_encoders[chunk.encoder.values_gorilla].stream().reader()
-                                                                      : storage.finalized_data_streams[chunk.encoder.values_gorilla].reader());
+                                                  chunk_type == kOpen ? storage.values_gorilla_encoders[chunk.encoder.external_index].stream().reader()
+                                                                      : storage.finalized_data_streams[chunk.encoder.external_index].reader(),
+                                                  chunk.encoding_state.has_last_stalenan);
     } else if constexpr (encoding_type == kGorilla) {
-      return decoder::GorillaDecodeIterator(storage.get_gorilla_encoder_stream<chunk_type>(chunk.encoder.gorilla));
+      return decoder::GorillaDecodeIterator(storage.get_gorilla_encoder_stream<chunk_type>(chunk.encoder.external_index),
+                                            chunk.encoding_state.has_last_stalenan);
     } else {
       static_assert(encoding_type == kUnknown);
     }
@@ -198,8 +198,8 @@ class Decoder {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_open_chunk_last_timestamp(const DataStorage& storage, const chunk::DataChunk& chunk) noexcept {
-    if (chunk.encoding_type == chunk::DataChunk::EncodingType::kGorilla) [[unlikely]] {
-      return storage.gorilla_encoders[chunk.encoder.gorilla].timestamp();
+    if (chunk.encoding_state.encoding_type == EncodingType::kGorilla) [[unlikely]] {
+      return storage.gorilla_encoders[chunk.encoder.external_index].timestamp();
     }
 
     return storage.timestamp_encoder.get_state(chunk.timestamp_encoder_state_id).timestamp();
@@ -225,39 +225,39 @@ class Decoder {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static double get_open_chunk_last_value(const DataStorage& storage, const chunk::DataChunk& chunk) noexcept {
-    using enum chunk::DataChunk::EncodingType;
+    using enum EncodingType;
 
-    switch (chunk.encoding_type) {
+    switch (chunk.encoding_state.encoding_type) {
       case kUint32Constant: {
-        return chunk.encoder.uint32_constant.value();
+        return chunk.encoder.uint32_constant.last_value(chunk.encoding_state);
       }
 
       case kFloat32Constant: {
-        return chunk.encoder.float32_constant.value();
+        return chunk.encoder.float32_constant.last_value(chunk.encoding_state);
       }
 
       case kDoubleConstant: {
-        return storage.double_constant_encoders[chunk.encoder.double_constant].value();
+        return storage.double_constant_encoders[chunk.encoder.external_index].last_value(chunk.encoding_state);
       }
 
       case kTwoDoubleConstant: {
-        return storage.two_double_constant_encoders[chunk.encoder.two_double_constant].value2();
+        return storage.two_double_constant_encoders[chunk.encoder.external_index].last_value(chunk.encoding_state);
       }
 
       case kAscIntegerValuesGorilla: {
-        return storage.asc_integer_values_gorilla_encoders[chunk.encoder.asc_integer_values_gorilla].last_value();
+        return storage.asc_integer_values_gorilla_encoders[chunk.encoder.external_index].last_value(chunk.encoding_state);
       }
 
       case kValuesGorilla: {
-        return storage.values_gorilla_encoders[chunk.encoder.values_gorilla].last_value();
+        return storage.values_gorilla_encoders[chunk.encoder.external_index].last_value(chunk.encoding_state);
       }
 
       case kGorilla: {
-        return storage.gorilla_encoders[chunk.encoder.gorilla].last_value();
+        return storage.gorilla_encoders[chunk.encoder.external_index].last_value(chunk.encoding_state);
       }
 
       default: {
-        assert(chunk.encoding_type != kUint32Constant);
+        assert(chunk.encoding_state.encoding_type != kUint32Constant);
         return 0.0;
       }
     }
@@ -279,14 +279,14 @@ class Decoder {
  private:
   template <chunk::DataChunk::Type chunk_type>
   [[nodiscard]] static BareBones::BitSequenceReader get_stream_reader(const DataStorage& storage, const chunk::DataChunk& chunk) {
-    if (chunk.encoding_type != chunk::DataChunk::EncodingType::kGorilla) [[likely]] {
+    if (chunk.encoding_state.encoding_type != EncodingType::kGorilla) [[likely]] {
       return storage.get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id).reader();
     }
 
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
-      return storage.gorilla_encoders[chunk.encoder.gorilla].stream().reader();
+      return storage.gorilla_encoders[chunk.encoder.external_index].stream().reader();
     } else {
-      return encoder::BitSequenceWithItemsCount::reader(storage.finalized_data_streams[chunk.encoder.gorilla]);
+      return encoder::BitSequenceWithItemsCount::reader(storage.finalized_data_streams[chunk.encoder.external_index]);
     }
   }
 };

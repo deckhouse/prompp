@@ -8,6 +8,7 @@
 namespace {
 
 using BareBones::BitSequenceReader;
+using BareBones::Encoding::Gorilla::STALE_NAN;
 using series_data::DataStorage;
 using series_data::Decoder;
 using series_data::Encoder;
@@ -252,7 +253,6 @@ INSTANTIATE_TEST_SUITE_P(DoubleConstantChunk, OutdatedChunkMergerInFinalizedCons
 INSTANTIATE_TEST_SUITE_P(Float32ConstantChunk, OutdatedChunkMergerInFinalizedConstantChunkFixture, testing::Values(-1.0));
 
 class OutdatedChunkMergerWithFinalizationFixture : public OutdatedChunkMergerTrait<4>, public testing::Test {};
-
 TEST_F(OutdatedChunkMergerWithFinalizationFixture, UseFinlizedTimestampStreamAfterMerge) {
   // Arrange
   encode({{.ls_id = 0, .sample = {.timestamp = 1, .value = 1.0}},
@@ -308,7 +308,6 @@ TEST_F(OutdatedChunkMergerWithFinalizationFixture, UseFinlizedTimestampStreamAft
 }
 
 class OutdatedChunkMergerInFinalizedChunkFixture : public OutdatedChunkMergerWithFinalizationFixture {};
-
 TEST_F(OutdatedChunkMergerInFinalizedChunkFixture, MergeInTwoDoubleConstantsChunk) {
   // Arrange
   encode({{.ls_id = 0, .sample = {.timestamp = 1, .value = 1.0}},
@@ -561,7 +560,6 @@ TEST_F(OutdatedChunkMergerInFinalizedChunkFixture, UseFinlizedTimestampStreamAft
 }
 
 class OutdatedChunkMergerFixture : public OutdatedChunkMergerTrait<series_data::kSamplesPerChunkDefault>, public testing::Test {};
-
 TEST_F(OutdatedChunkMergerFixture, UseLastValueForSameTimestampInOutdatedChunk) {
   // Arrange
   encode({
@@ -588,5 +586,97 @@ TEST_F(OutdatedChunkMergerFixture, UseLastValueForSameTimestampInOutdatedChunk) 
       },
       Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, get_open_chunk(0))));
 }
+
+class OutdatedChunkMergerInOpenConstantChunkWithStalenanFixture : public OutdatedChunkMergerTrait<series_data::kSamplesPerChunkDefault>,
+                                                                  public testing::TestWithParam<double> {};
+TEST_P(OutdatedChunkMergerInOpenConstantChunkWithStalenanFixture, Test) {
+  // Arrange
+  encode({
+      {.ls_id = 0, .sample = {.timestamp = 1, .value = GetParam()}},
+      {.ls_id = 0, .sample = {.timestamp = 2, .value = GetParam()}},
+      {.ls_id = 0, .sample = {.timestamp = 3, .value = STALE_NAN}},
+  });
+  encode_outdated({
+      {.ls_id = 0, .sample = {.timestamp = 0, .value = GetParam()}},
+      {.ls_id = 0, .sample = {.timestamp = 0, .value = GetParam()}},
+  });
+
+  // Act
+  merger_.merge();
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(
+      ExpectedSampleList{
+          {.timestamp = 0, .value = GetParam()},
+          {.timestamp = 1, .value = GetParam()},
+          {.timestamp = 2, .value = GetParam()},
+          {.timestamp = 3, .value = STALE_NAN},
+      },
+      Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, get_open_chunk(0))));
+}
+
+INSTANTIATE_TEST_SUITE_P(Uint32ConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithStalenanFixture, testing::Values(1.0));
+INSTANTIATE_TEST_SUITE_P(DoubleConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithStalenanFixture, testing::Values(1.1));
+INSTANTIATE_TEST_SUITE_P(Float32ConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithStalenanFixture, testing::Values(-1.0));
+
+class OutdatedChunkMergerInOpenChunkWithStalenanFixture : public OutdatedChunkMergerTrait<series_data::kSamplesPerChunkDefault>, public testing::Test {};
+TEST_F(OutdatedChunkMergerInOpenChunkWithStalenanFixture, MergeInTwoDoubleConstantsChunk) {
+  // Arrange
+  encode({
+      {.ls_id = 0, .sample = {.timestamp = 1, .value = 1.0}},
+      {.ls_id = 0, .sample = {.timestamp = 2, .value = 1.1}},
+      {.ls_id = 0, .sample = {.timestamp = 3, .value = 1.1}},
+      {.ls_id = 0, .sample = {.timestamp = 4, .value = STALE_NAN}},
+  });
+  encode_outdated({
+      {.ls_id = 0, .sample = {.timestamp = 0, .value = 1.0}},
+      {.ls_id = 0, .sample = {.timestamp = 0, .value = 1.0}},
+  });
+
+  // Act
+  merger_.merge();
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(
+      ExpectedSampleList{
+          {.timestamp = 0, .value = 1.0},
+          {.timestamp = 1, .value = 1.0},
+          {.timestamp = 2, .value = 1.1},
+          {.timestamp = 3, .value = 1.1},
+          {.timestamp = 4, .value = STALE_NAN},
+      },
+      Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, get_open_chunk(0))));
+}
+
+class OutdatedChunkMergerInOpenConstantChunkWithOutdatedStalenanFixture : public OutdatedChunkMergerInOpenConstantChunkWithStalenanFixture {};
+TEST_P(OutdatedChunkMergerInOpenConstantChunkWithOutdatedStalenanFixture, Test) {
+  // Arrange
+  encode({
+      {.ls_id = 0, .sample = {.timestamp = 1, .value = GetParam()}},
+      {.ls_id = 0, .sample = {.timestamp = 2, .value = GetParam()}},
+      {.ls_id = 0, .sample = {.timestamp = 5, .value = GetParam()}},
+  });
+  encode_outdated({
+      {.ls_id = 0, .sample = {.timestamp = 3, .value = STALE_NAN}},
+      {.ls_id = 0, .sample = {.timestamp = 4, .value = STALE_NAN}},
+  });
+
+  // Act
+  merger_.merge();
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(
+      ExpectedSampleList{
+          {.timestamp = 1, .value = GetParam()},
+          {.timestamp = 2, .value = GetParam()},
+          {.timestamp = 3, .value = STALE_NAN},
+          {.timestamp = 5, .value = GetParam()},
+      },
+      Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, get_open_chunk(0))));
+}
+
+INSTANTIATE_TEST_SUITE_P(Uint32ConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithOutdatedStalenanFixture, testing::Values(1.0));
+INSTANTIATE_TEST_SUITE_P(DoubleConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithOutdatedStalenanFixture, testing::Values(1.1));
+INSTANTIATE_TEST_SUITE_P(Float32ConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithOutdatedStalenanFixture, testing::Values(-1.0));
 
 }  // namespace

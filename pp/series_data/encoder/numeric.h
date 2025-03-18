@@ -7,7 +7,7 @@
 
 namespace series_data::encoder::value {
 
-PROMPP_ALWAYS_INLINE bool is_int(double value) noexcept {
+constexpr PROMPP_ALWAYS_INLINE bool is_int(double value) noexcept {
   return static_cast<double>(static_cast<int64_t>(value)) == value;
 }
 
@@ -28,9 +28,9 @@ constexpr PROMPP_ALWAYS_INLINE bool is_float(double value) noexcept {
   return is_values_strictly_equal(value, static_cast<double>(static_cast<float>(value)));
 }
 
-template <class Number1, class Number2>
-constexpr PROMPP_ALWAYS_INLINE bool is_in_bounds(double value, Number1 min, Number2 max) noexcept {
-  return value >= static_cast<double>(min) && value <= static_cast<double>(max);
+template <class Value, class Number1, class Number2>
+constexpr PROMPP_ALWAYS_INLINE bool is_in_bounds(Value value, Number1 min, Number2 max) noexcept {
+  return value >= static_cast<Value>(min) && value <= static_cast<Value>(max);
 }
 
 }  // namespace series_data::encoder::value

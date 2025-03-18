@@ -1,9 +1,11 @@
 #pragma once
 
+#include "bare_bones/algorithm.h"
 #include "bare_bones/preprocess.h"
 #include "chunk/data_chunk.h"
 #include "chunk/finalized_chunk.h"
 #include "chunk/outdated_chunk.h"
+#include "common.h"
 #include "encoder/gorilla.h"
 #include "encoder/value/asc_integer_values_gorilla.h"
 #include "encoder/value/double_constant.h"
@@ -40,10 +42,10 @@ struct DataStorage {
       [[nodiscard]] PROMPP_ALWAYS_INLINE const chunk::DataChunk& chunk() const noexcept {
         return chunk_type() == chunk::DataChunk::Type::kOpen ? *open_chunk_ : *finalized_chunk_iterator_;
       }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE std::forward_list<chunk::DataChunk>::const_iterator finalized_chunk_iterator() const noexcept {
+      [[nodiscard]] PROMPP_ALWAYS_INLINE chunk::FinalizedChunkList::ChunksList::const_iterator finalized_chunk_iterator() const noexcept {
         return finalized_chunk_iterator_;
       }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE std::forward_list<chunk::DataChunk>::const_iterator finalized_chunk_end_iterator() const noexcept {
+      [[nodiscard]] PROMPP_ALWAYS_INLINE chunk::FinalizedChunkList::ChunksList::const_iterator finalized_chunk_end_iterator() const noexcept {
         return finalized_chunk_end_iterator_;
       }
 
@@ -51,8 +53,8 @@ struct DataStorage {
       friend class SeriesChunkIterator;
 
       const DataStorage* storage_;
-      std::forward_list<chunk::DataChunk>::const_iterator finalized_chunk_iterator_;
-      std::forward_list<chunk::DataChunk>::const_iterator finalized_chunk_end_iterator_;
+      chunk::FinalizedChunkList::ChunksList::const_iterator finalized_chunk_iterator_;
+      chunk::FinalizedChunkList::ChunksList::const_iterator finalized_chunk_end_iterator_;
       const chunk::DataChunk* open_chunk_{};
 
       PROMPP_ALWAYS_INLINE void next_value() noexcept {
@@ -207,7 +209,7 @@ struct DataStorage {
 
   template <chunk::DataChunk::Type chunk_type>
   void erase_chunk(const chunk::DataChunk& chunk) {
-    if (chunk.encoding_type != chunk::DataChunk::EncodingType::kGorilla) {
+    if (chunk.encoding_state.encoding_type != EncodingType::kGorilla) {
       erase_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id);
     }
 
@@ -255,52 +257,21 @@ struct DataStorage {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
-    size_t outdated_chunks_allocated_memory = 0;
-    for (auto& [_, outdated_chunk] : outdated_chunks) {
-      outdated_chunks_allocated_memory += outdated_chunk.allocated_memory();
-    }
+    const size_t outdated_chunks_allocated_memory =
+        BareBones::accumulate(outdated_chunks, 0, [](auto& local, const auto& p) { return local + p.second.allocated_memory(); });
 
-    return open_chunks.allocated_memory() + double_constant_encoders.allocated_memory() + two_double_constant_encoders.allocated_memory() +
-           asc_integer_values_gorilla_encoders.allocated_memory() + values_gorilla_encoders.allocated_memory() + gorilla_encoders.allocated_memory() +
-           timestamp_encoder.allocated_memory() + finalized_timestamp_streams.allocated_memory() + finalized_data_streams.allocated_memory() +
-           finalized_chunks_map_allocated_memory + outdated_chunks_map_allocated_memory + outdated_chunks_allocated_memory;
+    const size_t encoders_memory =
+        BareBones::accumulate(GetEncodingTypeRange(), 0, [this](auto& local, const auto et) { return local + allocated_memory(et); });
+
+    return open_chunks.allocated_memory() + encoders_memory + timestamp_encoder.allocated_memory() + finalized_timestamp_streams.allocated_memory() +
+           finalized_data_streams.allocated_memory() + finalized_chunks_map_allocated_memory + outdated_chunks_map_allocated_memory +
+           outdated_chunks_allocated_memory;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory(chunk::DataChunk::EncodingType type) const noexcept {
-    using enum chunk::DataChunk::EncodingType;
-
-    switch (type) {
-      case kDoubleConstant: {
-        return double_constant_encoders.allocated_memory();
-      }
-
-      case kTwoDoubleConstant: {
-        return two_double_constant_encoders.allocated_memory();
-      }
-
-      case kAscIntegerValuesGorilla: {
-        return asc_integer_values_gorilla_encoders.allocated_memory();
-      }
-
-      case kValuesGorilla: {
-        return values_gorilla_encoders.allocated_memory();
-      }
-
-      case kGorilla: {
-        return gorilla_encoders.allocated_memory();
-      }
-
-      case kFloat32Constant:
-      case kUint32Constant:
-      case kUnknown: {
-        return 0;
-      }
-
-      default: {
-        assert(type != kUnknown);
-        return 0;
-      }
-    }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory(EncodingType type) const noexcept {
+    size_t alloc_mem = 0;
+    invoke_on_encoder_storage(*this, type, [&alloc_mem](const auto& encoders) PROMPP_LAMBDA_INLINE { alloc_mem = encoders.allocated_memory(); });
+    return alloc_mem;
   }
 
   void reset() noexcept {
@@ -322,51 +293,46 @@ struct DataStorage {
 
   template <chunk::DataChunk::Type chunk_type>
   void erase_encoder_data(const chunk::DataChunk& chunk) {
-    using enum chunk::DataChunk::EncodingType;
+    using enum EncodingType;
 
-    switch (chunk.encoding_type) {
-      case kDoubleConstant: {
-        double_constant_encoders.erase(chunk.encoder.double_constant);
-        break;
+    if constexpr (chunk_type == chunk::DataChunk::Type::kFinalized) {
+      if (is_gorilla_encoder(chunk.encoding_state.encoding_type)) {
+        finalized_data_streams.erase(chunk.encoder.external_index);
+        return;
       }
+    }
+    invoke_on_encoder_storage(*this, chunk.encoding_state.encoding_type,
+                              [&chunk](auto& encoders) PROMPP_LAMBDA_INLINE { encoders.erase(chunk.encoder.external_index); });
+  }
 
-      case kTwoDoubleConstant: {
-        two_double_constant_encoders.erase(chunk.encoder.two_double_constant);
+  template <typename Self, typename F, typename... Args>
+  static void invoke_on_encoder_storage(Self&& self, EncodingType encoding_type, F&& func, Args&&... args) {
+    switch (encoding_type) {
+      case EncodingType::kDoubleConstant:
+        std::forward<F>(func)(self.double_constant_encoders, std::forward<Args>(args)...);
         break;
-      }
 
-      case kAscIntegerValuesGorilla: {
-        if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
-          asc_integer_values_gorilla_encoders.erase(chunk.encoder.asc_integer_values_gorilla);
-        } else {
-          finalized_data_streams.erase(chunk.encoder.asc_integer_values_gorilla);
-        }
+      case EncodingType::kTwoDoubleConstant:
+        std::forward<F>(func)(self.two_double_constant_encoders, std::forward<Args>(args)...);
         break;
-      }
 
-      case kValuesGorilla: {
-        if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
-          values_gorilla_encoders.erase(chunk.encoder.values_gorilla);
-        } else {
-          finalized_data_streams.erase(chunk.encoder.values_gorilla);
-        }
+      case EncodingType::kAscIntegerValuesGorilla:
+        std::forward<F>(func)(self.asc_integer_values_gorilla_encoders, std::forward<Args>(args)...);
         break;
-      }
 
-      case kGorilla: {
-        if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
-          gorilla_encoders.erase(chunk.encoder.gorilla);
-        } else {
-          finalized_data_streams.erase(chunk.encoder.gorilla);
-        }
+      case EncodingType::kValuesGorilla:
+        std::forward<F>(func)(self.values_gorilla_encoders, std::forward<Args>(args)...);
         break;
-      }
 
-      case kFloat32Constant:
-      case kUint32Constant:
-      case kUnknown: {
+      case EncodingType::kGorilla:
+        std::forward<F>(func)(self.gorilla_encoders, std::forward<Args>(args)...);
         break;
-      }
+      case EncodingType::kUnknown:
+      case EncodingType::kUint32Constant:
+      case EncodingType::kFloat32Constant:
+        break;
+      default:
+        assert(encoding_type != EncodingType::kUint32Constant);
     }
   }
 };

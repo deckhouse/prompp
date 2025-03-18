@@ -1,10 +1,10 @@
 #pragma once
 
 #include "chunk_finalizer.h"
+#include "common.h"
 #include "concepts.h"
 #include "data_storage.h"
 #include "decoder.h"
-#include "encoder/sample.h"
 
 namespace series_data {
 
@@ -40,7 +40,7 @@ class OutdatedChunkMerger {
  private:
   using SampleList = BareBones::Vector<encoder::Sample>;
   using ChunkType = chunk::DataChunk::Type;
-  using ChunkEncodingType = chunk::DataChunk::EncodingType;
+  using ChunkEncodingType = EncodingType;
   using SamplesSpan = std::span<encoder::Sample>;
 
   class IteratorSentinel {};
@@ -114,7 +114,7 @@ class OutdatedChunkMerger {
   Encoder& encoder_;
 
   [[nodiscard]] static SampleList decode_samples(const chunk::OutdatedChunk& chunk) {
-    SampleList samples = Decoder::decode_gorilla_chunk(chunk.stream().stream);
+    SampleList samples = Decoder::decode_outdated_chunk(chunk);
     std::ranges::stable_sort(samples);
     return samples;
   }
@@ -154,12 +154,12 @@ class OutdatedChunkMerger {
 
   template <ChunkType chunk_type>
   chunk::DataChunk merge_outdated_samples_in_new_chunk(uint32_t ls_id, const chunk::DataChunk& source_chunk, int64_t max_timestamp, SamplesSpan& samples) {
-    using enum chunk::DataChunk::EncodingType;
+    using enum EncodingType;
 
     chunk::DataChunk chunk;
-    switch (source_chunk.encoding_type) {
+    switch (source_chunk.encoding_state.encoding_type) {
       case kUnknown: {
-        assert(source_chunk.encoding_type != kUnknown);
+        assert(source_chunk.encoding_state.encoding_type != kUnknown);
         break;
       }
 

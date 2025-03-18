@@ -2,6 +2,7 @@ package appender
 
 import (
 	"context"
+	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
@@ -81,9 +82,14 @@ func (h *RotatableHead) NumberOfShards() uint16 {
 	return h.head.NumberOfShards()
 }
 
-// Finalize - relabeler.Head interface implementation.
-func (h *RotatableHead) Finalize() error {
-	return h.head.Finalize()
+// Stop - relabeler.Head interface implementation.
+func (h *RotatableHead) Stop() {
+	h.head.Stop()
+}
+
+// Flush - relabeler.Head interface implementation.
+func (h *RotatableHead) Flush() error {
+	return h.head.Flush()
 }
 
 // Reconfigure - relabeler.Head interface implementation.
@@ -126,14 +132,18 @@ func (h *RotatableHead) Rotate() error {
 		return err
 	}
 
-	if err = h.head.Finalize(); err != nil {
+	if err = h.headActivator.Activate(newHead.ID()); err != nil {
 		return err
 	}
 
-	_ = h.head.Rotate()
+	if err = h.head.CommitToWal(); err != nil {
+		logger.Errorf("failed to commit wal on rotation: %v", err)
+	}
+	h.head.Stop()
+
 	h.storage.Add(h.head)
 	h.head = newHead
-	return h.headActivator.Activate(newHead.ID())
+	return nil
 }
 
 func (h *RotatableHead) RotateWithConfig(inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) error {
@@ -142,11 +152,17 @@ func (h *RotatableHead) RotateWithConfig(inputRelabelerConfigs []*config.InputRe
 		return err
 	}
 
-	h.head.Finalize()
-	_ = h.head.Rotate()
+	if err = h.headActivator.Activate(newHead.ID()); err != nil {
+		return err
+	}
+
+	if err = h.head.CommitToWal(); err != nil {
+		logger.Errorf("failed to commit wal on rotation: %v", err)
+	}
+	h.head.Stop()
+
 	h.storage.Add(h.head)
 	h.head = newHead
-
 	return nil
 }
 
@@ -202,12 +218,18 @@ func (h *HeapProfileWritableHead) NumberOfShards() uint16 {
 	return h.head.NumberOfShards()
 }
 
-func (h *HeapProfileWritableHead) Finalize() error {
-	return h.head.Finalize()
-}
-
 func (h *HeapProfileWritableHead) Reconfigure(inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) error {
 	return h.head.Reconfigure(inputRelabelerConfigs, numberOfShards)
+}
+
+// Stop - relabeler.Head interface implementation.
+func (h *HeapProfileWritableHead) Stop() {
+	h.head.Stop()
+}
+
+// Flush - relabeler.Head interface implementation.
+func (h *HeapProfileWritableHead) Flush() error {
+	return h.head.Flush()
 }
 
 func (h *HeapProfileWritableHead) WriteMetrics() {

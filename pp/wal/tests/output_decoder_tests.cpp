@@ -45,6 +45,8 @@ using namespace PromPP::WAL;         // NOLINT
 using namespace PromPP::Primitives;  // NOLINT
 using namespace PromPP::Prometheus;  // NOLINT
 
+using std::operator""sv;
+
 struct EncodeStatistic {
   uint32_t samples;
   uint32_t series;
@@ -388,6 +390,31 @@ TEST_F(TestProtobufEncoder, Encode) {
   ok = snappy::Uncompress(out_slices[1].data(), out_slices[1].size(), &proto2);
   EXPECT_TRUE(ok);
   EXPECT_EQ(expected_proto2, std::vector<int8_t>(proto2.begin(), proto2.end()));
+}
+
+TEST_F(TestWALOutputDecoder, ProcessSegmentWithLabelDrop) {
+  // Arrange
+  stateless_relabeler_reset_to({
+      {.source_labels = std::vector{"job"sv}, .regex = "abc", .action = Relabel::rAction::rKeep},
+      {.regex = "resource", .action = Relabel::rAction::rLabelDrop},
+  });
+  Encoder encoder{uint16_t{}, uint8_t{}};
+  OutputDecoder decoder(sr_, output_lss_, external_labels_);
+  std::vector<RefSample> actual_samples;
+
+  // Act
+  const auto encode_decode_segment = [&](const std::vector<GoTimeSeries>& incoming_segment) {
+    std::stringstream segment_stream;
+    make_segment(incoming_segment, segment_stream, encoder);
+    segment_stream >> decoder;
+    decoder.process_segment([&](LabelSetID ls_id, Timestamp ts, Sample::value_type v) { actual_samples.emplace_back(ls_id, ts, v); });
+  };
+
+  encode_decode_segment({{{{"__name__", "value1"}, {"job", "abc"}}, {11, 1}}});                       // keep
+  encode_decode_segment({{{{"__name__", "value1"}, {"job", "abc"}, {"resource", "cpu"}}, {11, 2}}});  // labeldrop
+
+  // Assert
+  EXPECT_EQ((std::vector<RefSample>{{.id = 0, .t = 11, .v = 1}, {.id = 0, .t = 11, .v = 2}}), actual_samples);
 }
 
 }  // namespace

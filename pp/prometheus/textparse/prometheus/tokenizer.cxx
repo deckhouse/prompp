@@ -25,13 +25,12 @@ void Tokenizer::tokenize(std::string_view str) noexcept {
 }
 
 Token Tokenizer::consume_comment(Token token) noexcept {
-  if (cursor_ptr_ = static_cast<const char*>(std::memchr(cursor_ptr_, '\n', limit_ptr_ - cursor_ptr_)); cursor_ptr_ != nullptr) [[likely]] {
-    condition_ = yycinit;
-    return token;
+  if (cursor_ptr_ = static_cast<const char*>(std::memchr(cursor_ptr_, '\n', limit_ptr_ - cursor_ptr_)); cursor_ptr_ == nullptr) [[unlikely]] {
+    cursor_ptr_ = limit_ptr_;
   }
 
-  cursor_ptr_ = limit_ptr_;
-  return Token::kEOF;
+  condition_ = yycinit;
+  return token;
 }
 
 Token Tokenizer::consume_escaped_string(Token token) noexcept {

@@ -135,5 +135,5 @@ func (qa *QueryableAppender) Querier(mint, maxt int64) (storage.Querier, error) 
 func (qa *QueryableAppender) Close() error {
 	qa.lock.Lock()
 	defer qa.lock.Unlock()
-	return errors.Join(qa.head.Finalize(), qa.head.Close())
+	return errors.Join(qa.head.CommitToWal(), qa.head.Flush(), qa.head.Close())
 }

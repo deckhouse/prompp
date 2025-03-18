@@ -153,7 +153,7 @@ INSTANTIATE_TEST_SUITE_P(
                     ScraperCase{.buffer = "go_gc_duration_seconds_count \n", .result = Error::kUnexpectedToken, .metrics = {}},
                     ScraperCase{.buffer = "go_gc_duration_seconds_count\n", .result = Error::kUnexpectedToken, .metrics = {}},
                     ScraperCase{.buffer = "go_gc_duration_seconds_count", .result = Error::kUnexpectedToken, .metrics = {}},
-                    ScraperCase{.buffer = "go_gc_duration_seconds_count ", .result = Error::kUnexpectedToken, .metrics = {}},
+                    ScraperCase{.buffer = "go_gc_duration_seconds_count ", .result = Error::kInvalidValue, .metrics = {}},
                     ScraperCase{.buffer = "{\"a\"\n}\n", .result = Error::kUnexpectedToken, .metrics = {}},
                     ScraperCase{.buffer = "{} 1\n", .result = Error::kNoMetricName, .metrics = {}},
                     ScraperCase{.buffer = "{\"\xff\"\n}\n", .result = Error::kInvalidUtf8, .metrics = {}},
@@ -441,22 +441,39 @@ INSTANTIATE_TEST_SUITE_P(
             Metric{.timeseries = {LabelViewSet{{"__name__", "rest_client_exec_plugin_ttl_seconds"}},
                                   BareBones::Vector<Sample>{Sample{kDefaultTimestamp, -std::numeric_limits<double>::infinity()}}}}}}));
 
-INSTANTIATE_TEST_SUITE_P(NoNewLine,
-                         PrometheusScraperFixture,
-                         testing::Values(ScraperCase{.buffer = "extended_monitoring_enabled{namespace=\"kube-system\"} 1",
-                                                     .result = Error::kNoError,
-                                                     .metrics = {Metric{.timeseries = {LabelViewSet{
-                                                                                           {"__name__", "extended_monitoring_enabled"},
-                                                                                           {"namespace", "kube-system"},
-                                                                                       },
-                                                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
-                                         ScraperCase{.buffer = "extended_monitoring_enabled{namespace=\"kube-system\"} 1 12345",
-                                                     .result = Error::kNoError,
-                                                     .metrics = {Metric{.timeseries = {LabelViewSet{
-                                                                                           {"__name__", "extended_monitoring_enabled"},
-                                                                                           {"namespace", "kube-system"},
-                                                                                       },
-                                                                                       BareBones::Vector<Sample>{Sample{12345, 1}}}}}}));
+INSTANTIATE_TEST_SUITE_P(
+    NoNewLine,
+    PrometheusScraperFixture,
+    testing::Values(
+        ScraperCase{.buffer = "extended_monitoring_enabled{namespace=\"kube-system\"} 1",
+                    .result = Error::kNoError,
+                    .metrics = {Metric{.timeseries = {LabelViewSet{
+                                                          {"__name__", "extended_monitoring_enabled"},
+                                                          {"namespace", "kube-system"},
+                                                      },
+                                                      BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
+        ScraperCase{.buffer = "extended_monitoring_enabled{namespace=\"kube-system\"} 1 12345",
+                    .result = Error::kNoError,
+                    .metrics = {Metric{.timeseries = {LabelViewSet{
+                                                          {"__name__", "extended_monitoring_enabled"},
+                                                          {"namespace", "kube-system"},
+                                                      },
+                                                      BareBones::Vector<Sample>{Sample{12345, 1}}}}}},
+        ScraperCase{.buffer = "clickhouse_store_campaignParentOnlyReportStore 63514169",
+                    .result = Error::kNoError,
+                    .metrics = {Metric{.timeseries = {LabelViewSet{{"__name__", "clickhouse_store_campaignParentOnlyReportStore"}},
+                                                      BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 63514169}}}}}},
+        ScraperCase{.buffer = "clickhouse_store_campaignParentOnlyReportStore 63514169 1",
+                    .result = Error::kNoError,
+                    .metrics = {Metric{.timeseries = {LabelViewSet{{"__name__", "clickhouse_store_campaignParentOnlyReportStore"}},
+                                                      BareBones::Vector<Sample>{Sample{1, 63514169}}}}}},
+        ScraperCase{.buffer = "# comment", .result = Error::kNoError},
+        ScraperCase{.buffer = "# HELP go_goroutines Number of goroutines that currently exist.",
+                    .result = Error::kNoError,
+                    .metadata = {Metadata{.metric_name = "go_goroutines", .text = "Number of goroutines that currently exist.", .type = MetadataType::kHelp}}},
+        ScraperCase{.buffer = "# TYPE go_goroutines gauge",
+                    .result = Error::kNoError,
+                    .metadata = {Metadata{.metric_name = "go_goroutines", .text = "gauge", .type = MetadataType::kType}}}));
 
 class OpenMetricsScraperFixture : public ScraperFixture<OpenMetricsScraper> {
  protected:

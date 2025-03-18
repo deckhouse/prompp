@@ -7,12 +7,15 @@ namespace series_data::decoder {
 
 class AscIntegerValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait {
  public:
-  AscIntegerValuesGorillaDecodeIterator(const encoder::BitSequenceWithItemsCount& timestamp_stream, const BareBones::BitSequenceReader& reader)
-      : AscIntegerValuesGorillaDecodeIterator(timestamp_stream.count(), timestamp_stream.reader(), reader) {}
+  AscIntegerValuesGorillaDecodeIterator(const encoder::BitSequenceWithItemsCount& timestamp_stream,
+                                        const BareBones::BitSequenceReader& reader,
+                                        bool is_last_stalenan)
+      : AscIntegerValuesGorillaDecodeIterator(timestamp_stream.count(), timestamp_stream.reader(), reader, is_last_stalenan) {}
   AscIntegerValuesGorillaDecodeIterator(uint8_t samples_count,
                                         const BareBones::BitSequenceReader& timestamp_reader,
-                                        const BareBones::BitSequenceReader& values_reader)
-      : SeparatedTimestampValueDecodeIteratorTrait(samples_count, timestamp_reader, 0.0), reader_(values_reader) {
+                                        const BareBones::BitSequenceReader& values_reader,
+                                        bool is_last_stalenan)
+      : SeparatedTimestampValueDecodeIteratorTrait(samples_count, timestamp_reader, 0.0, is_last_stalenan), reader_(values_reader) {
     if (remaining_samples_ > 0) {
       decode_value();
     }

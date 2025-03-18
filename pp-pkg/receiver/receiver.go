@@ -127,6 +127,8 @@ func NewReceiver(
 	triggerNotifier *ReloadBlocksTriggerNotifier,
 	readyNotifier ready.Notifier,
 	commitInterval time.Duration,
+	maxRetentionDuration time.Duration,
+	headRetentionTimeout time.Duration,
 ) (*Receiver, error) {
 	if logger == nil {
 		logger = log.NewNopLogger()
@@ -191,7 +193,16 @@ func NewReceiver(
 		return nil, fmt.Errorf("failed to restore heads: %w", err)
 	}
 	readyNotifier.NotifyReady()
-	queryableStorage := appender.NewQueryableStorageWithWriteNotifier(block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize, rotationInfo.BlockDuration, registerer), registerer, querierMetrics, triggerNotifier, rotatedHeads...)
+	queryableStorage := appender.NewQueryableStorageWithWriteNotifier(
+		block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize, rotationInfo.BlockDuration, registerer),
+		registerer,
+		querierMetrics,
+		triggerNotifier,
+		clock,
+		maxRetentionDuration,
+		headRetentionTimeout,
+		rotatedHeads...,
+	)
 
 	hd := appender.NewRotatableHead(activeHead, queryableStorage, headManager, newHeadActivator(headCatalog))
 
