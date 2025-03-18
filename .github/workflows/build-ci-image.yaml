@@ -18,6 +18,7 @@ jobs:
   build-ci-image:
     runs-on: ${{ matrix.runner }}
     strategy:
+      fail-fast: false
       matrix:
         ARCH: [arm64, x86_64]
         include:

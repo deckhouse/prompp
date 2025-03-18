@@ -25,6 +25,7 @@ jobs:
   build-and-push:
     runs-on: ${{ matrix.runner }}
     strategy:
+      fail-fast: false
       matrix:
         ARCH: [arm64, x86_64]
         COMPILATION_MODE: [dbg, opt]
