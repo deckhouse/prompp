@@ -1,12 +1,6 @@
 name: Build Test Image
 
 on:
-  workflow_dispatch:
-    inputs:
-      debug_branch:
-        description: 'Branch to build for debugging'
-        required: true
-        default: 'pp'
   push:
     branches:
       - pp
