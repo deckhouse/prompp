@@ -1,6 +1,7 @@
 name: Run Tests for Go Code
 
 on:
+  workflow_dispatch:
   workflow_run:
     workflows: ["Run Tests for C++ Code"]
     types: 
@@ -38,6 +39,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Go Testing Tools
         run: |
@@ -58,7 +61,7 @@ jobs:
           CGO_CFLAGS: "-Wno-error -I/usr/include"
           CGO_LDFLAGS: "-L/usr/lib/"
           CGO_ENABLED: "1"
-          GOPATH: "${GITHUB_WORKSPACE}/.cache"
+          GOPATH: "${{ github.workspace }}/.cache"
           GOBIN: "/usr/local/go/bin"
         run: |
           export OPT=${{ matrix.OPT }}

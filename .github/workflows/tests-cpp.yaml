@@ -1,6 +1,7 @@
 name: Run Tests for C++ Code
 
 on:
+  workflow_dispatch:
   workflow_run:
     workflows: ["Lint C++ Code"]
     types: 
@@ -38,6 +39,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Run Unit Tests
         run: |

@@ -1,6 +1,7 @@
 name: Build with Werf dev registry
 
 on:
+  workflow_dispatch:
   workflow_run:
     workflows:
       - "Run Tests for Go Code"
@@ -37,6 +38,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: deckhouse/modules-actions/setup@v2
         with:
