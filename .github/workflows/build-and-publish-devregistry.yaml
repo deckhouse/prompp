@@ -3,7 +3,6 @@ name: Build with Werf dev registry
 on:
   workflow_run:
     workflows:
-      - "Run Tests for C++ Code"
       - "Run Tests for Go Code"
     types: 
       - completed
