@@ -30,7 +30,7 @@ jobs:
           - ARCH: x86_64
             runner: fsn-dev-gitlab-runner
             image: docker.io/prompp/ci-gcc-image:gcc-tools-x86_64
-        COMPILATION_MODE: [dbg, opt]
+        OPT: [dbg, opt]
         ASAN: [true, false]
         SANITIZERS: [no_sanitizers, with_sanitizers]
     container:
@@ -50,7 +50,7 @@ jobs:
         run: |
           cache_addr=$(ip -json ro show default | jq -r '.[0].gateway')
           echo "build --remote_cache=http://$cache_addr/cache/ --experimental_guard_against_concurrent_changes" >> .bazelrc
-          make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
+          make compilation_mode=${{ matrix.OPT }} asan=${{ matrix.ASAN }} build-entrypoint
         shell: bash
 
       - name: Run Go Tests
@@ -72,13 +72,13 @@ jobs:
       - name: Upload Go Test Reports
         uses: actions/upload-artifact@v4
         with:
-          name: go-unit-tests-${{ matrix.ARCH }}-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }}-${{ matrix.SANITIZERS }}
+          name: go-unit-tests-${{ matrix.ARCH }}-${{ matrix.OPT }}-asan-${{ matrix.ASAN }}-${{ matrix.SANITIZERS }}
           path: report.xml
           retention-days: 7
 
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
-          name: go-coverage-report-${{ matrix.ARCH }}-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }}-${{ matrix.SANITIZERS }}
+          name: go-coverage-report-${{ matrix.ARCH }}-${{ matrix.OPT }}-asan-${{ matrix.ASAN }}-${{ matrix.SANITIZERS }}
           path: coverage.xml
           retention-days: 7

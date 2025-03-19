@@ -32,7 +32,7 @@ jobs:
           - ARCH: x86_64
             runner: fsn-dev-gitlab-runner
             image: docker.io/prompp/ci-gcc-image:gcc-tools-x86_64
-        COMPILATION_MODE: [dbg, opt]
+        OPT: [dbg, opt]
         ASAN: [true, false]
         SANITIZERS: [no_sanitizers, with_sanitizers]
     steps:
@@ -55,6 +55,6 @@ jobs:
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
         with:
-          name: unit-tests-${{ matrix.ARCH }}-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }}-${{ matrix.SANITIZERS }}
+          name: unit-tests-${{ matrix.ARCH }}-${{ matrix.OPT }}-asan-${{ matrix.ASAN }}-${{ matrix.SANITIZERS }}
           path: testlogs/*.xml
           retention-days: 7
