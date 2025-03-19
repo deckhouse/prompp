@@ -41,6 +41,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check permissions
+        run: | 
+          ls -la /github/home/
+          ls -la /github/
+
       - name: Run Unit Tests
         run: |
           export OPT=${{ matrix.OPT }}

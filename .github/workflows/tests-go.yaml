@@ -16,46 +16,67 @@ on:
       - pp
 
 jobs:
-  go-tests:
-    defaults:
-      run:
-        working-directory: pp
+  build-go-bindings:
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
         ARCH: [arm64, x86_64]
-        include:
-          - ARCH: arm64
-            runner: fsn-dev-arm-runner
-            image: docker.io/prompp/ci-gcc-image:gcc-tools-arm64
-          - ARCH: x86_64
-            runner: fsn-dev-gitlab-runner
-            image: docker.io/prompp/ci-gcc-image:gcc-tools-x86_64
-        OPT: [dbg, opt]
-        ASAN: [true, false]
-        SANITIZERS: [no_sanitizers, with_sanitizers]
+        COMPILATION_MODE: [dbg, opt]
+        ASAN: [false, true]
     container:
-      image: ${{ matrix.image }}
+      image: docker.io/prompp/ci-gcc-image:gcc-tools-${{ matrix.ARCH }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
+      
+      - name: Build static lib for Go
+        run: |
+          cache_addr=$(ip -json ro show default | jq -r '.[0].gateway')
+          echo "build --remote_cache=http://$cache_addr/cache/ --experimental_guard_against_concurrent_changes" >> .bazelrc
+          make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
+        shell: bash
+      
+      - name: Upload Static Library
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-cppbridge-${{ matrix.ARCH }}-${{ matrix.COMPILATION_MODE }}-${{ matrix.ASAN }}
+          path: go/cppbridge
+          retention-days: 7
+  
+  go-tests:
+    needs: build-go-bindings
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        ARCH: [arm64, x86_64]
+        OPT: [dbg, opt]
+        SANITIZERS: [no_sanitizers, with_sanitizers]
+        exclude:
+          - SANITIZERS: with_sanitizers
+            OPT: dbg
+    container:
+      image: docker.io/prompp/ci-gcc-image:gcc-tools-${{ matrix.ARCH }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Download Static Library
+        uses: actions/download-artifact@v4
+        with:
+          name: go-cppbridge-${{ matrix.ARCH }}-${{ matrix.OPT }}-false
+          path: go/cppbridge
+      
       - name: Install Go Testing Tools
         run: |
           mkdir -p .cache
           go install github.com/jstemmer/go-junit-report/v2@latest
           go install github.com/axw/gocov/gocov@latest
           go install github.com/AlekSi/gocov-xml@latest
-
-      - name: Build static lib cpp for go
-        run: |
-          cache_addr=$(ip -json ro show default | jq -r '.[0].gateway')
-          echo "build --remote_cache=http://$cache_addr/cache/ --experimental_guard_against_concurrent_changes" >> .bazelrc
-          make compilation_mode=${{ matrix.OPT }} asan=${{ matrix.ASAN }} build-entrypoint
-        shell: bash
-
+      
       - name: Run Go Tests
         env:
           CGO_CFLAGS: "-Wno-error -I/usr/include"
@@ -68,7 +89,7 @@ jobs:
           export SANITIZERS=${{ matrix.SANITIZERS }}
           go test $(./scripts/ci_get_go_test_flags.sh) -v -cover -count=1 -coverprofile=coverage.txt -covermode=atomic ./go/... 2>&1 | tee report.txt
         shell: bash
-
+      
       - name: Process Coverage + Reports
         run: |
           cat report.txt | go-junit-report > report.xml
@@ -76,14 +97,14 @@ jobs:
           gocov convert coverage.txt | gocov-xml > coverage.xml
           go tool cover -func=coverage.txt | tail -n 1 | awk '{print "Total coverage:", $3;}'
         shell: bash
-
+      
       - name: Upload Go Test Reports
         uses: actions/upload-artifact@v4
         with:
           name: go-unit-tests-${{ matrix.ARCH }}-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
           path: report.xml
           retention-days: 7
-
+      
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
