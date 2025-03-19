@@ -65,7 +65,6 @@ jobs:
           GOBIN: "/usr/local/go/bin"
         run: |
           export OPT=${{ matrix.OPT }}
-          export ASAN=${{ matrix.ASAN }}
           export SANITIZERS=${{ matrix.SANITIZERS }}
           go test $(./scripts/ci_get_go_test_flags.sh) -v -cover -count=1 -coverprofile=coverage.txt -covermode=atomic ./go/... 2>&1 | tee report.txt
         shell: bash
@@ -81,13 +80,13 @@ jobs:
       - name: Upload Go Test Reports
         uses: actions/upload-artifact@v4
         with:
-          name: go-unit-tests-${{ matrix.ARCH }}-${{ matrix.OPT }}-asan-${{ matrix.ASAN }}-${{ matrix.SANITIZERS }}
+          name: go-unit-tests-${{ matrix.ARCH }}-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
           path: report.xml
           retention-days: 7
 
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
-          name: go-coverage-report-${{ matrix.ARCH }}-${{ matrix.OPT }}-asan-${{ matrix.ASAN }}-${{ matrix.SANITIZERS }}
+          name: go-coverage-report-${{ matrix.ARCH }}-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
           path: coverage.xml
           retention-days: 7

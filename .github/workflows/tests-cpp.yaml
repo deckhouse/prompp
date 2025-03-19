@@ -34,7 +34,6 @@ jobs:
             runner: fsn-dev-gitlab-runner
             image: docker.io/prompp/ci-gcc-image:gcc-tools-x86_64
         OPT: [dbg, opt]
-        ASAN: [true, false]
         SANITIZERS: [no_sanitizers, with_sanitizers]
     steps:
       - name: Checkout Repository
@@ -45,7 +44,6 @@ jobs:
       - name: Run Unit Tests
         run: |
           export OPT=${{ matrix.OPT }}
-          export ASAN=${{ matrix.ASAN }}
           export SANITIZERS=${{ matrix.SANITIZERS }}
           cache_addr=$(ip route | awk '/default/ {print $3}')
           echo "build --remote_cache=http://$cache_addr/cache/ --experimental_guard_against_concurrent_changes" >> .bazelrc
@@ -61,6 +59,6 @@ jobs:
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
         with:
-          name: unit-tests-${{ matrix.ARCH }}-${{ matrix.OPT }}-asan-${{ matrix.ASAN }}-${{ matrix.SANITIZERS }}
+          name: unit-tests-${{ matrix.ARCH }}-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
           path: testlogs/*.xml
           retention-days: 7
