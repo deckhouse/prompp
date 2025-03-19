@@ -8,7 +8,6 @@ fi
 
 TEST_PACKAGES=(
   "//:*"
-  "@lru_cache//:*"
 )
 
 QUERY_COMMAND=''

@@ -252,79 +252,6 @@ cc_binary(
 )
 
 cc_library(
-    name = "ceph_sdk",
-    srcs = glob(["ceph/sdk/**/*.cpp"]),
-    hdrs = glob(["ceph/sdk/**/*.h"]),
-    includes = ["./ceph"],
-    deps = [
-        ":bare_bones_headers",
-        "@snappy",
-    ],
-)
-
-cc_library(
-    name = "cls_common",
-    hdrs = glob(["ceph/cls/common/**/*.h"]),
-    includes = ["./ceph/cls"],
-    deps = [
-        ":ceph_sdk",
-        "@lru_cache",
-    ],
-)
-
-cc_test(
-    name = "cls_common_test",
-    srcs = glob([
-        "ceph/cls/common/tests/**/*.cpp",
-    ]),
-    deps = [
-        ":cls_common",
-        "@gtest//:gtest_main",
-    ],
-)
-
-cc_library(
-    name = "cls_wal_modules",
-    hdrs = glob([
-        "ceph/cls/cls_wal/modules/**/*.h",
-        "ceph/cls/cls_wal/config/**/*.h",
-        "ceph/cls/cls_wal/constants.h",
-        "ceph/cls/cls_wal/tests/**/*.h",
-    ]),
-    includes = ["ceph/cls/cls_wal"],
-    deps = [
-        ":bare_bones_headers",
-        ":cls_common",
-        ":prometheus",
-        ":series_data",
-        ":series_index",
-        ":wal",
-    ],
-)
-
-cc_binary(
-    name = "cls_wal",
-    srcs = glob(["ceph/cls/cls_wal/*.cpp"]),
-    linkshared = True,
-    deps = [
-        ":ceph_sdk",
-        "@ceph",
-        ":cls_wal_modules",
-    ],
-)
-
-cc_test(
-    name = "cls_wal_test",
-    srcs = glob([
-        "ceph/cls/cls_wal/tests/**/*.cpp",
-    ]),
-    deps = [
-        ":cls_wal_modules",
-        "@gtest//:gtest_main",
-    ],
-)
-
-cc_library(
     name = "series_index",
     hdrs = glob(["series_index/**/*.h"]),
     deps = [
@@ -363,45 +290,6 @@ cc_test(
     ]),
     deps = [
         ":series_data",
-        "@gtest//:gtest_main",
-    ],
-)
-
-cc_library(
-    name = "cls_block_catalog_modules",
-    hdrs = glob([
-        "ceph/cls/block_catalog/modules/**/*.h",
-        "ceph/cls/block_catalog/constants.h",
-        "ceph/cls/block_catalog/perf_counters.h",
-        "ceph/cls/block_catalog/tests/**/*.h",
-    ]),
-    includes = ["ceph/cls/block_catalog"],
-    deps = [
-        ":bare_bones_headers",
-        ":cls_common",
-        ":prometheus",
-    ],
-)
-
-cc_binary(
-    name = "cls_block_catalog",
-    srcs = glob([
-        "ceph/cls/block_catalog/*.cpp",
-    ]),
-    linkshared = True,
-    deps = [
-        ":cls_block_catalog_modules",
-        "@ceph",
-    ],
-)
-
-cc_test(
-    name = "cls_block_catalog_test",
-    srcs = glob([
-        "ceph/cls/block_catalog/tests/**/*.cpp",
-    ]),
-    deps = [
-        ":cls_block_catalog_modules",
         "@gtest//:gtest_main",
     ],
 )

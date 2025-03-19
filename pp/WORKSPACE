@@ -116,44 +116,11 @@ http_archive(
 )
 
 http_archive(
-    name = "boost_1.82.0",
-    build_file = "//third_party:boost_1.82.0.BUILD",
-    sha256 = "b62bd839ea6c28265af9a1f68393eda37fab3611425d3b28882d8e424535ec9d",
-    strip_prefix = "boost-1.82.0/",
-    url = "https://github.com/boostorg/boost/releases/download/boost-1.82.0/boost-1.82.0.tar.gz",
-    patch_cmds = [
-        # Remove directories with `build` name
-        # Workaround for https://github.com/bazelbuild/bazel/issues/22484
-        "find ./libs -type d -wholename '*/build' | xargs rm -rf"
-    ]
-)
-
-http_archive(
     name = "xxHash",
     build_file = "//third_party:xxHash.BUILD",
     sha256 = "aae608dfe8213dfd05d909a57718ef82f30722c392344583d3f39050c7f29a80",
     strip_prefix = "xxHash-0.8.3/",
     url = "https://github.com/Cyan4973/xxHash/archive/refs/tags/v0.8.3.tar.gz",
-)
-
-http_archive(
-    name = "ceph_fmt",
-    build_file = "//third_party:ceph/fmt.BUILD",
-    sha256 = "5dea48d1fcddc3ec571ce2058e13910a0d4a6bab4cc09a809d8b1dd1c88ae6f2",
-    strip_prefix = "fmt-9.1.0/",
-    url = "https://github.com/ceph/fmt/archive/refs/tags/9.1.0.tar.gz",
-)
-
-http_archive(
-    name = "ceph",
-    build_file = "//third_party:ceph/ceph.BUILD",
-    patch_args = ["-p1"],
-    patches = [
-        "//third_party/patches/ceph:needed_includes_for_build.patch",
-    ],
-    sha256 = "5b9d53b038bb050f123070e903bebedfd4a19df63af2f8ba348f3f2c09ce2ecc",
-    strip_prefix = "ceph-17.2.7/",
-    url = "https://github.com/ceph/ceph/archive/refs/tags/v17.2.7.tar.gz",
 )
 
 http_archive(
@@ -164,11 +131,6 @@ http_archive(
     sha256 = "f8903111260a18d2cc4618cd5bf35a22bcc28f372ebe4f04024b49e88a2e16c1",
     strip_prefix = "abseil-cpp-20240116.rc1/",
     url = "https://github.com/abseil/abseil-cpp/archive/refs/tags/20240116.rc1.tar.gz",
-)
-
-local_repository(
-    name = "lru_cache",
-    path = "third_party/lru_cache",
 )
 
 git_repository(
