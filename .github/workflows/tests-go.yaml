@@ -51,6 +51,7 @@ jobs:
           - cache_addr=$(ip -json ro show default | jq -r '.[0].gateway')
           - echo "build --remote_cache=http://$cache_addr/cache/ --experimental_guard_against_concurrent_changes" >> .bazelrc
           - make compilation_mode=$COMPILATION_MODE asan=$ASAN build-entrypoint
+        shell: bash
 
       - name: Run Go Tests
         env:
@@ -58,6 +59,7 @@ jobs:
           GOBIN: "/usr/local/go/bin"
         run: |
           go test $(./scripts/ci_get_go_test_flags.sh) -v -cover -count=1 -coverprofile=coverage.txt -covermode=atomic ./go/... 2>&1 | tee report.txt
+        shell: bash
 
       - name: Process Coverage + Reports
         run: |
@@ -65,6 +67,7 @@ jobs:
           sed -i '/\(pb\|easyjson\|string\)\.go/d' coverage.txt
           gocov convert coverage.txt | gocov-xml > coverage.xml
           go tool cover -func=coverage.txt | tail -n 1 | awk '{print "Total coverage:", $3;}'
+        shell: bash
 
       - name: Upload Go Test Reports
         uses: actions/upload-artifact@v4
