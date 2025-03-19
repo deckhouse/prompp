@@ -27,7 +27,6 @@
 #error #pragma diagnostic is not supported
 #endif
 
-
 #if __has_include(<gtest/gtest.h>)
 constexpr auto kIsUnitTestBuild = true;
 #else

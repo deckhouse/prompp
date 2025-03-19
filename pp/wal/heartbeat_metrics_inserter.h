@@ -22,10 +22,10 @@ class HeartbeatMetricsInserter {
 
   template <class TimeseriesInserter>
   void insert(std::chrono::system_clock::time_point now, std::chrono::nanoseconds sent_at, TimeseriesInserter&& insert_timeseries) {
-    auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
+    const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
 
     auto& timeseries = create_timeseries("okagent__timestamp", "heartbeat", now_ms, sent_at);
-    timeseries.label_set().add(std::initializer_list<PromPP::Primitives::LabelView>{
+    timeseries.label_set().add(std::initializer_list<Primitives::LabelView>{
         {"conf", "/usr/local/okagent/etc/config.yaml"},
         {"okmeter_plugin", "heartbeat"},
         {"okmeter_plugin_instance", "/usr/local/okagent/etc/config.yaml"},
@@ -38,15 +38,15 @@ class HeartbeatMetricsInserter {
 
  private:
   const Data data_;
-  PromPP::Primitives::TimeseriesSemiview timeseries_;
+  Primitives::TimeseriesSemiview timeseries_;
 
-  PROMPP_ALWAYS_INLINE PromPP::Primitives::TimeseriesSemiview& create_timeseries(std::string_view name,
-                                                                               std::string_view job,
-                                                                               std::chrono::milliseconds timestamp,
-                                                                               std::chrono::nanoseconds value) {
+  PROMPP_ALWAYS_INLINE Primitives::TimeseriesSemiview& create_timeseries(std::string_view name,
+                                                                         std::string_view job,
+                                                                         std::chrono::milliseconds timestamp,
+                                                                         std::chrono::nanoseconds value) {
     timeseries_.clear();
 
-    timeseries_.label_set().add(std::initializer_list<PromPP::Primitives::LabelView>{
+    timeseries_.label_set().add(std::initializer_list<Primitives::LabelView>{
         {Prometheus::kMetricLabelName, name},
         {"instance", data_.hostname},
         {"agent_uuid", data_.agent_uuid},
