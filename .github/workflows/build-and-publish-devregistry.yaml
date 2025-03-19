@@ -48,6 +48,6 @@ jobs:
         run: |
           BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
-          COMPILATION_MODE=${{ matrix.COMPILATION_MODE }}
-          ASAN =${{ matrix.ASAN }}
+          export COMPILATION_MODE=${{ matrix.COMPILATION_MODE }}
+          export ASAN =${{ matrix.ASAN }}
           werf build --add-custom-tag="%image%-$BRANCH_NAME-${{ matrix.ARCH }}-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp
