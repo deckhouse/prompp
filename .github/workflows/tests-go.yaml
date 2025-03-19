@@ -58,9 +58,12 @@ jobs:
           CGO_CFLAGS: "-Wno-error -I/usr/include"
           CGO_LDFLAGS: "-L/usr/lib/"
           CGO_ENABLED: "1"
-          GOPATH: "$GITHUB_WORKSPACE/.cache"
+          GOPATH: "${GITHUB_WORKSPACE}/.cache"
           GOBIN: "/usr/local/go/bin"
         run: |
+          export OPT=${{ matrix.OPT }}
+          export ASAN=${{ matrix.ASAN }}
+          export SANITIZERS=${{ matrix.SANITIZERS }}
           go test $(./scripts/ci_get_go_test_flags.sh) -v -cover -count=1 -coverprofile=coverage.txt -covermode=atomic ./go/... 2>&1 | tee report.txt
         shell: bash
 
