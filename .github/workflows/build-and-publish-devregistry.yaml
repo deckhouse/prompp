@@ -36,6 +36,9 @@ jobs:
           - ARCH: x86_64
             runner: fsn-dev-gitlab-runner
     steps:
+      - name: whoami
+        run: whoami
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -46,9 +49,6 @@ jobs:
           registry: ${{ secrets.DEV_REGISTRY }}
           registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
           registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
-
-      - name: whoami
-        run: whoami
 
       - name: Build Images Dev registry
         run: |
