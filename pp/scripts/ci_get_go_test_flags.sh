@@ -30,7 +30,7 @@ if [ "$SANITIZERS" != "with_sanitizers" ]; then
 		result="${result} "
 	fi
 	result="${result}--race"
-else if [ "$SANITIZERS" = "with_sanitizers" ]; then
+elif [ "$SANITIZERS" = "with_sanitizers" ]; then
 	if [ "$result" != "" ]; then
 		result="${result} "
 	fi

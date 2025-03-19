@@ -3,7 +3,6 @@ name: Build with Werf Dockerhub
 on:
   workflow_run:
     workflows:
-      - "Run Tests for C++ Code"
       - "Run Tests for Go Code"
     types: 
       - completed
@@ -42,4 +41,6 @@ jobs:
         
       - name: Build Images Dev registry
         run: |
-          werf build --add-custom-tag="%image%-${{ github.ref_name }}-${{ env.ARCH }}-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }}" --repo=docker.io/prompp/prompp
+          BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
+          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
+          werf build --add-custom-tag="%image%-$BRANCH_NAME-${{ matrix.ARCH }}-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }}" --repo=docker.io/prompp/prompp
