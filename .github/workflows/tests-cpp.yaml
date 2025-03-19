@@ -49,8 +49,8 @@ jobs:
 
       - name: Change ownership and permissions
         run: |
-          sudo chown -R root:root /github/home/.cache
-          sudo chmod -R 777 /github/home/.cache
+          chown -R root:root /github/home/.cache
+          chmod -R 777 /github/home/.cache
 
       - name: Run Unit Tests
         run: |
