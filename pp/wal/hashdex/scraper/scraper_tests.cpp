@@ -423,23 +423,23 @@ INSTANTIATE_TEST_SUITE_P(
                                },
                                BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 10.0}}}}}}));
 
-INSTANTIATE_TEST_SUITE_P(
-    SpecificFloatValue,
-    PrometheusScraperFixture,
-    testing::Values(ScraperCase{
-        .buffer = "test_nan nan\n"
-                  "rest_client_exec_plugin_ttl_seconds Inf\n"
-                  "rest_client_exec_plugin_ttl_seconds +Inf\n"
-                  "rest_client_exec_plugin_ttl_seconds -Inf\n",
-        .result = Error::kNoError,
-        .metrics = {
-            Metric{.timeseries = {LabelViewSet{{"__name__", "test_nan"}}, BareBones::Vector<Sample>{Sample{kDefaultTimestamp, PromPP::Prometheus::kNormalNan}}}},
-            Metric{.timeseries = {LabelViewSet{{"__name__", "rest_client_exec_plugin_ttl_seconds"}},
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, std::numeric_limits<double>::infinity()}}}},
-            Metric{.timeseries = {LabelViewSet{{"__name__", "rest_client_exec_plugin_ttl_seconds"}},
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, std::numeric_limits<double>::infinity()}}}},
-            Metric{.timeseries = {LabelViewSet{{"__name__", "rest_client_exec_plugin_ttl_seconds"}},
-                                  BareBones::Vector<Sample>{Sample{kDefaultTimestamp, -std::numeric_limits<double>::infinity()}}}}}}));
+INSTANTIATE_TEST_SUITE_P(SpecificFloatValue,
+                         PrometheusScraperFixture,
+                         testing::Values(ScraperCase{
+                             .buffer = "test_nan nan\n"
+                                       "rest_client_exec_plugin_ttl_seconds Inf\n"
+                                       "rest_client_exec_plugin_ttl_seconds +Inf\n"
+                                       "rest_client_exec_plugin_ttl_seconds -Inf\n",
+                             .result = Error::kNoError,
+                             .metrics = {
+                                 Metric{.timeseries = {LabelViewSet{{"__name__", "test_nan"}},
+                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, PromPP::Prometheus::kNormalNan}}}},
+                                 Metric{.timeseries = {LabelViewSet{{"__name__", "rest_client_exec_plugin_ttl_seconds"}},
+                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, std::numeric_limits<double>::infinity()}}}},
+                                 Metric{.timeseries = {LabelViewSet{{"__name__", "rest_client_exec_plugin_ttl_seconds"}},
+                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, std::numeric_limits<double>::infinity()}}}},
+                                 Metric{.timeseries = {LabelViewSet{{"__name__", "rest_client_exec_plugin_ttl_seconds"}},
+                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, -std::numeric_limits<double>::infinity()}}}}}}));
 
 INSTANTIATE_TEST_SUITE_P(
     NoNewLine,
