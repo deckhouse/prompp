@@ -55,6 +55,9 @@ jobs:
 
       - name: Run Go Tests
         env:
+          CGO_CFLAGS: "-Wno-error -I/usr/include"
+          CGO_LDFLAGS: "-L/usr/lib/"
+          CGO_ENABLED: "1"
           GOPATH: "$GITHUB_WORKSPACE/.cache"
           GOBIN: "/usr/local/go/bin"
         run: |
