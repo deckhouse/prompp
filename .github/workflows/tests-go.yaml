@@ -48,9 +48,9 @@ jobs:
 
       - name: Build static lib cpp for go
         run: |
-          - cache_addr=$(ip -json ro show default | jq -r '.[0].gateway')
-          - echo "build --remote_cache=http://$cache_addr/cache/ --experimental_guard_against_concurrent_changes" >> .bazelrc
-          - make compilation_mode=$COMPILATION_MODE asan=$ASAN build-entrypoint
+          cache_addr=$(ip -json ro show default | jq -r '.[0].gateway')
+          echo "build --remote_cache=http://$cache_addr/cache/ --experimental_guard_against_concurrent_changes" >> .bazelrc
+          make compilation_mode=$COMPILATION_MODE asan=$ASAN build-entrypoint
         shell: bash
 
       - name: Run Go Tests
