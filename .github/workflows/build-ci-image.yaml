@@ -43,6 +43,10 @@ jobs:
           password: ${{ secrets.DOCKERHUB_REGISTRY_PASSWORD }}
           logout: false
 
+      - name: Remove Previous Build Image
+        run: |
+          docker rmi -f docker.io/prompp/ci-gcc-image:gcc-tools-${{ matrix.ARCH }} || true
+
       - name: Build and Push Docker Image
         run: |
           docker build -f Dockerfile.ci \
