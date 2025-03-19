@@ -41,12 +41,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check permissions
-        run: | 
-          ls -la /github/home/
-          ls -la /github/
-          whoami
-
       - name: Change ownership and permissions
         run: |
           chown -R root:root /github/home/.cache
