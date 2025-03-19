@@ -47,6 +47,11 @@ jobs:
           ls -la /github/
           whoami
 
+      - name: Change ownership and permissions
+        run: |
+          sudo chown -R root:root /github/home/.cache
+          sudo chmod -R 777 /github/home/.cache
+
       - name: Run Unit Tests
         run: |
           export OPT=${{ matrix.OPT }}
