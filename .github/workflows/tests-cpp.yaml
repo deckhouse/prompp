@@ -42,7 +42,7 @@ jobs:
       - name: Run Unit Tests
         run: |
           export OPT=${{ matrix.OPT }}
-          export ASAN =${{ matrix.ASAN }}
+          export ASAN=${{ matrix.ASAN }}
           export SANITIZERS=${{ matrix.SANITIZERS }}
           cache_addr=$(ip route | awk '/default/ {print $3}')
           echo "build --remote_cache=http://$cache_addr/cache/ --experimental_guard_against_concurrent_changes" >> .bazelrc
