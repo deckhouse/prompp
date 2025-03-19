@@ -47,6 +47,9 @@ jobs:
           registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
           registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
 
+      - name: whoami
+        run: whoami
+
       - name: Build Images Dev registry
         run: |
           BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
