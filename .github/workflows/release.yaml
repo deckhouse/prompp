@@ -27,8 +27,10 @@ jobs:
     steps:
       - name: Extract binaries from Docker images
         run: |
-          CONTAINER_ID_PROMPP=$(docker create docker.io/prompp/prompp:prompp-${{ github.ref_name }}-${{ env.ARCH }}-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }})
-          CONTAINER_ID_PROMPPTOOL=$(docker create docker.io/prompp/prompp:prompptool-${{ github.ref_name }}-${{ env.ARCH }}-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }})
+          BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
+          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
+          CONTAINER_ID_PROMPP=$(docker create docker.io/prompp/prompp:prompp-$BRANCH_NAME-${{ matrix.ARCH }}-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }})
+          CONTAINER_ID_PROMPPTOOL=$(docker create docker.io/prompp/prompp:prompptool-$BRANCH_NAME-${{ matrix.ARCH }}-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }})
 
           docker cp $CONTAINER_ID_PROMPP:/bin/prometheus ./release-binaries/prometheus
           docker cp $CONTAINER_ID_PROMPP:/bin/promtool ./release-binaries/promtool
