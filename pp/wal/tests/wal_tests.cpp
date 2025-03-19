@@ -335,7 +335,7 @@ TEST_F(WalFixture, BasicEncoderBasicDecoder) {
 
   PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector> encoding_bimap;
   PromPP::WAL::BasicDecoder<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector>> reader{encoding_bimap,
-                                                                                                               PromPP::WAL::BasicEncoderVersion::kV3};
+                                                                                                                   PromPP::WAL::BasicEncoderVersion::kV3};
   std::stringstream stream_buffer;
 
   // save wal
