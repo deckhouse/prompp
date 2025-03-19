@@ -21,10 +21,17 @@ jobs:
     strategy:
       matrix:
         ARCH: [arm64, x86_64]
+        include:
+          - ARCH: arm64
+            runner: fsn-dev-arm-runner
+            image: docker.io/prompp/ci-gcc-image:gcc-tools-arm64
+          - ARCH: x86_64
+            runner: fsn-dev-gitlab-runner
+            image: docker.io/prompp/ci-gcc-image:gcc-tools-x86_64
         COMPILATION_MODE: [dbg, opt]
         ASAN: [false, true]
     container:
-      image: docker.io/prompp/ci-gcc-image:gcc-tools-${{ matrix.ARCH }}
+      image: ${{ matrix.image }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -51,13 +58,20 @@ jobs:
     strategy:
       matrix:
         ARCH: [arm64, x86_64]
+        include:
+          - ARCH: arm64
+            runner: fsn-dev-arm-runner
+            image: docker.io/prompp/ci-gcc-image:gcc-tools-arm64
+          - ARCH: x86_64
+            runner: fsn-dev-gitlab-runner
+            image: docker.io/prompp/ci-gcc-image:gcc-tools-x86_64
         OPT: [dbg, opt]
         SANITIZERS: [no_sanitizers, with_sanitizers]
         exclude:
           - SANITIZERS: with_sanitizers
             OPT: dbg
     container:
-      image: docker.io/prompp/ci-gcc-image:gcc-tools-${{ matrix.ARCH }}
+      image: ${{ matrix.image }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
