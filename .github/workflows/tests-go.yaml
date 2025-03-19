@@ -61,9 +61,9 @@ jobs:
           GOPATH: "$GITHUB_WORKSPACE/.cache"
           GOBIN: "/usr/local/go/bin"
         run: |
-          OPT=${{ matrix.OPT }}
-          ASAN =${{ matrix.ASAN }}
-          SANITIZERS=${{ matrix.SANITIZERS }}
+          export OPT=${{ matrix.OPT }}
+          export ASAN =${{ matrix.ASAN }}
+          export SANITIZERS=${{ matrix.SANITIZERS }}
           go test $(./scripts/ci_get_go_test_flags.sh) -v -cover -count=1 -coverprofile=coverage.txt -covermode=atomic ./go/... 2>&1 | tee report.txt
         shell: bash
 
