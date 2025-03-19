@@ -45,6 +45,7 @@ jobs:
         run: | 
           ls -la /github/home/
           ls -la /github/
+          whoami
 
       - name: Run Unit Tests
         run: |
