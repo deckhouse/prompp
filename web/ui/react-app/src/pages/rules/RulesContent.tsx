@@ -37,7 +37,7 @@ const GraphExpressionLink: FC<{ expr: string; text: string; title: string }> = (
 };
 
 export const RulesContent: FC<RulesContentProps> = ({ response }) => {
-  const { t } = useTranslation(['rules', 'translation']);
+  const { t } = useTranslation(['rules', 'navigation']);
 
   const getBadgeColor = (state: string) => {
     switch (state) {
@@ -56,7 +56,7 @@ export const RulesContent: FC<RulesContentProps> = ({ response }) => {
     const groups: RuleGroup[] = response.data.groups;
     return (
       <>
-        <h2>{t('Rules', { ns: 'translation' })}</h2>
+        <h2>{t('Rules', { ns: 'navigation' })}</h2>
         {groups.map((g, i) => {
           return (
             <Table bordered key={i}>

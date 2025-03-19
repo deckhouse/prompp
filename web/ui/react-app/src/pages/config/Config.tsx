@@ -21,13 +21,13 @@ YamlContent.displayName = 'Config';
 const ConfigWithStatusIndicator = withStatusIndicator(YamlContent);
 
 export const ConfigContent: FC<ConfigContentProps> = ({ error, data }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['config', 'navigation']);
   const [copied, setCopied] = useState(false);
   const config = data && data.yaml;
   return (
     <>
       <h2>
-        {t('Configuration')}&nbsp;
+        {t('Configuration', { ns: 'navigation' })}&nbsp;
         <CopyToClipboard
           text={config ? config : ''}
           onCopy={(_, result) => {

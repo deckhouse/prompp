@@ -8,7 +8,7 @@ interface ToggleMoreLessProps {
 }
 
 export const ToggleMoreLess: FC<ToggleMoreLessProps> = ({ children, event, showMore }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('messages');
   return (
     <h3>
       {children}

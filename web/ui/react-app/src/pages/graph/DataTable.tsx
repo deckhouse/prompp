@@ -57,7 +57,7 @@ const limitSeries = <S extends InstantSample | RangeSamples>(series: S[]): S[] =
 };
 
 const DataTable: FC<DataTableProps> = ({ data, useLocalTime }) => {
-  const { t } = useTranslation('graph');
+  const { t } = useTranslation(['graph', 'messages']);
   const [scale, setScale] = React.useState<'linear' | 'exponential'>('exponential');
 
   if (data === null) {
@@ -184,13 +184,14 @@ const DataTable: FC<DataTableProps> = ({ data, useLocalTime }) => {
     <>
       {limited && (
         <Alert color="danger">
-          <strong>{t('Warning:')}</strong> Fetched {data.result.length} metrics, only displaying first {rows.length}.
+          <strong>{t('Warning:', { ns: 'messages' })}</strong> Fetched {data.result.length} metrics, only displaying first{' '}
+          {rows.length}.
         </Alert>
       )}
       {!doFormat && (
         <Alert color="secondary">
-          <strong>{t('Notice:')}</strong> Showing more than {maxFormattableSize} series, turning off label formatting for
-          performance reasons.
+          <strong>{t('Notice:', { ns: 'messages' })}</strong> Showing more than {maxFormattableSize} series, turning off
+          label formatting for performance reasons.
         </Alert>
       )}
       <Table hover size="sm" className="data-table">

@@ -35,15 +35,15 @@ export const TSDBStatusContent: FC<TSDBMap> = ({
   memoryInBytesByLabelName,
   seriesCountByLabelValuePair,
 }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['TSDBStatus', 'navigation']);
   const unixToTime = (unix: number): string => {
     try {
       return `${new Date(unix).toISOString()} (${unix})`;
     } catch {
       if (numSeries === 0) {
-        return 'No datapoints yet';
+        return t('No datapoints yet');
       }
-      return `Error parsing time (${unix})`;
+      return `${t('Error parsing time')} (${unix})`;
     }
   };
   const { chunkCount, numSeries, numLabelPairs, minTime, maxTime } = headStats;
@@ -56,7 +56,7 @@ export const TSDBStatusContent: FC<TSDBMap> = ({
   ];
   return (
     <div>
-      <h2>{t('TSDB Status')}</h2>
+      <h2>{t('TSDB Status', { ns: 'navigation' })}</h2>
       <h3 className="p-2">Head Stats</h3>
       <div className="p-2">
         <Table bordered size="sm" striped>

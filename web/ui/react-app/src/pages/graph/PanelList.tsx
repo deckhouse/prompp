@@ -122,7 +122,7 @@ export const PanelListContent: FC<PanelListContentProps> = ({
 };
 
 const PanelList: FC = () => {
-  const { t } = useTranslation(['graph', 'translation']);
+  const { t } = useTranslation(['graph', 'messages']);
   const [delta, setDelta] = useState(0);
   const [useLocalTime, setUseLocalTime] = useLocalStorage('use-local-time', false);
   const [enableQueryHistory, setEnableQueryHistory] = useLocalStorage('enable-query-history', false);

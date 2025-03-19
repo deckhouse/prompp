@@ -16,7 +16,7 @@ export const withStatusIndicator =
     Component: ComponentType<T>
   ): FC<StatusIndicatorProps & T> =>
   ({ error, isLoading, customErrorMsg, componentTitle, ...rest }) => {
-    const { t } = useTranslation();
+    const { t } = useTranslation('messages');
     if (error) {
       return (
         <Alert color="danger">

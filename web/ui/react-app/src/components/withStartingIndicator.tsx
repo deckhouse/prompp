@@ -13,7 +13,7 @@ interface StartingContentProps {
 }
 
 export const StartingContent: FC<StartingContentProps> = ({ status, isUnexpected }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('messages');
   if (isUnexpected) {
     return (
       <Alert color="danger">

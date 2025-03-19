@@ -23,8 +23,8 @@ interface NavbarProps {
   animateLogo?: boolean | false;
 }
 
-const Navigation: FC<NavbarProps> = ({ consolesLink, agentMode, animateLogo }) => {
-  const { t } = useTranslation();
+const Navigation: FC<NavbarProps> = ({ consolesLink, agentMode }) => {
+  const { t } = useTranslation('navigation');
   const [isOpen, setIsOpen] = useState(false);
   const toggle = () => setIsOpen(!isOpen);
   return (

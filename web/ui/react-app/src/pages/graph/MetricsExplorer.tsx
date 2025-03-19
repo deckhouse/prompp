@@ -39,7 +39,7 @@ class MetricsExplorer extends Component<MetricsExplorerProps, MetricsExplorerSta
         <ModalHeader toggle={this.toggle}>{this.props.t('Metrics Explorer', { ns: 'graph' })}</ModalHeader>
         <ModalBody>
           <Input
-            placeholder={this.props.t('Search')}
+            placeholder={this.props.t('Search', { ns: 'messages' })}
             value={this.state.searchTerm}
             type="text"
             onChange={this.handleSearchTerm}
@@ -67,4 +67,4 @@ class MetricsExplorer extends Component<MetricsExplorerProps, MetricsExplorerSta
   }
 }
 
-export default withTranslation(['translation', 'graph'])(MetricsExplorer);
+export default withTranslation(['messages', 'graph'])(MetricsExplorer);

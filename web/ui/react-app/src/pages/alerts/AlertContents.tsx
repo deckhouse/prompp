@@ -65,7 +65,7 @@ function GroupContent(showAnnotations: boolean) {
 }
 
 const AlertsContent: FC<AlertsProps> = ({ groups = [], statsCount }) => {
-  const { t } = useTranslation(['alerts', 'translation']);
+  const { t } = useTranslation('alerts');
   const [groupList, setGroupList] = useState(groups);
   const [filteredList, setFilteredList] = useState(groups);
   const [filter, setFilter] = useLocalStorage('alerts-status-filter', {
@@ -152,7 +152,7 @@ const AlertsContent: FC<AlertsProps> = ({ groups = [], statsCount }) => {
             onChange={({ target }) => setShowAnnotations({ checked: target.checked })}
           >
             <span style={{ fontSize: '0.9rem', lineHeight: 1.9, display: 'inline-block', whiteSpace: 'nowrap' }}>
-              {t('Show annotations', { ns: 'translation' })}
+              {t('Show annotations')}
             </span>
           </Checkbox>
         </Col>

@@ -12,7 +12,7 @@ import { useLocalStorage } from '../../hooks/useLocalStorage';
 import styles from './ScrapePoolPanel.module.css';
 import { ToggleMoreLess } from '../../components/ToggleMoreLess';
 import SearchBar from '../../components/SearchBar';
-import { setQuerySearchFilter, getQuerySearchFilter } from '../../utils/index';
+import { setQuerySearchFilter, getQuerySearchFilter } from '../../utils';
 import Checkbox from '../../components/Checkbox';
 import { useTranslation } from 'react-i18next';
 
@@ -27,7 +27,7 @@ interface ScrapePoolDropDownProps {
 }
 
 const ScrapePoolDropDown: FC<ScrapePoolDropDownProps> = ({ selectedPool, scrapePools, onScrapePoolChange }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('targets');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const toggle = () => setDropdownOpen((prevState) => !prevState);
 
@@ -129,7 +129,7 @@ const ScrapePoolListContent: FC<ScrapePoolListContentProps> = ({
   selectedPool,
   onPoolSelect,
 }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('targets');
   const initialPoolList = groupTargets(activeTargets);
   const [poolList, setPoolList] = useState<ScrapePools>(initialPoolList);
   const [targetList, setTargetList] = useState(activeTargets);
@@ -253,7 +253,7 @@ export const ScrapePoolList: FC<ScrapePoolListProps> = ({ selectedPool, scrapePo
   );
   const { status: responseStatus } = response;
   const badResponse = responseStatus !== 'success' && responseStatus !== 'start fetching';
-  const { t } = useTranslation();
+  const { t } = useTranslation('targets');
 
   return (
     <ScrapePoolListWithStatusIndicator

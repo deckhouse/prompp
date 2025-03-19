@@ -97,7 +97,7 @@ export const processTargets = (activeTargets: Target[], droppedTargets: DroppedT
 };
 
 export const ServiceDiscoveryContent: FC<ServiceMap> = ({ activeTargets, droppedTargets, droppedTargetCounts }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation(['serviceDiscovery', 'navigation']);
   const [activeTargetList, setActiveTargetList] = useState(activeTargets);
   const [droppedTargetList, setDroppedTargetList] = useState(droppedTargets);
   const [targetList, setTargetList] = useState(processSummary(activeTargets, droppedTargetCounts));
@@ -127,7 +127,7 @@ export const ServiceDiscoveryContent: FC<ServiceMap> = ({ activeTargets, dropped
 
   return (
     <>
-      <h2>{t('Service Discovery')}</h2>
+      <h2>{t('Service Discovery', { ns: 'navigation' })}</h2>
       <Container>
         <SearchBar defaultValue={defaultValue} handleChange={handleSearchChange} placeholder={t('Filter by labels')} />
       </Container>

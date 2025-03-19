@@ -48,7 +48,7 @@ interface SortState {
 }
 
 export const FlagsContent: FC<FlagsProps> = ({ data = {} }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('flags');
   const initialSearch = '';
   const [searchState, setSearchState] = useState(initialSearch);
   const initialSort: SortState = {

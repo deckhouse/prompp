@@ -23,7 +23,7 @@ const formatLabels = (labels: Record<string, string> | string) => {
 };
 
 const LabelsTableContent: FC<InfiniteScrollItemsProps<TargetLabels>> = ({ items }) => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('serviceDiscovery');
   return (
     <Table size="sm" bordered hover striped>
       <thead>

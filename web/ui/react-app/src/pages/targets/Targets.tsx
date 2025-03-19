@@ -4,7 +4,7 @@ import { API_PATH } from '../../constants/constants';
 import { usePathPrefix } from '../../contexts/PathPrefixContext';
 import { useFetch } from '../../hooks/useFetch';
 import { withStatusIndicator } from '../../components/withStatusIndicator';
-import { setQueryParam, getQueryParam } from '../../utils/index';
+import { setQueryParam, getQueryParam } from '../../utils';
 import { useTranslation } from 'react-i18next';
 
 const ScrapePoolListWithStatusIndicator = withStatusIndicator(ScrapePoolList);
@@ -12,7 +12,7 @@ const ScrapePoolListWithStatusIndicator = withStatusIndicator(ScrapePoolList);
 const scrapePoolQueryParam = 'scrapePool';
 
 const Targets: FC = () => {
-  const { t } = useTranslation();
+  const { t } = useTranslation('navigation');
   // get the initial name of selected scrape pool from query args
   const scrapePool = getQueryParam(scrapePoolQueryParam) || null;
 
