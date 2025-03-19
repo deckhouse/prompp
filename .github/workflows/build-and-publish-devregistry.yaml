@@ -36,8 +36,8 @@ jobs:
           - ARCH: x86_64
             runner: fsn-dev-gitlab-runner
     steps:
-      - name: whoami
-        run: whoami
+      - name: chown
+        run: sudo chown -R $(whoami):$(whoami) ${{ github.workspace }}
 
       - name: Checkout repository
         uses: actions/checkout@v4
