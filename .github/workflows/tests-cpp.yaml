@@ -1,4 +1,4 @@
-name: Run Tests for C++ Code
+name: Run Tests
 
 on:
   workflow_run:
@@ -61,3 +61,8 @@ jobs:
           name: unit-tests-x86_64-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
           path: testlogs/*.xml
           retention-days: 7
+
+  go-tests:
+    needs: cpp-tests
+    uses: ./.github/workflows/tests-go.yaml
+    secrets: inherit

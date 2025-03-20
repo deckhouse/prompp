@@ -3,7 +3,7 @@ name: Build with Werf dev registry
 on:
   workflow_run:
     workflows:
-      - "Run Tests for Go Code"
+      - "Run Tests"
     types: 
       - completed
   pull_request:
