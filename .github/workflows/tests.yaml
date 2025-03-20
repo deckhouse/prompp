@@ -12,10 +12,6 @@ on:
         description: 'release branch name, example: release-1.68'
         required: false
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   clang-lint:
     defaults:
@@ -48,7 +44,7 @@ jobs:
     container:
       image: docker.io/prompp/ci-gcc-image:gcc-tools-x86_64
     strategy:
-      max-parallel: 4
+      max-parallel: 2
       matrix:
         OPT: [dbg, opt]
         SANITIZERS: [no_sanitizers, with_sanitizers]
@@ -95,7 +91,7 @@ jobs:
     container:
       image: docker.io/prompp/ci-gcc-image:gcc-tools-x86_64
     strategy:
-      max-parallel: 4
+      max-parallel: 2
       matrix:
         COMPILATION_MODE: [dbg, opt]
         ASAN: [false, true]
@@ -136,7 +132,7 @@ jobs:
     container:
       image: docker.io/prompp/ci-gcc-image:gcc-tools-x86_64
     strategy:
-      max-parallel: 4
+      max-parallel: 2
       matrix:
         OPT: [dbg, opt]
         SANITIZERS: [no_sanitizers, with_sanitizers]

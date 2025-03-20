@@ -20,7 +20,7 @@ jobs:
   build-and-push:
     runs-on: fsn-dev-gitlab-runner
     strategy:
-      max-parallel: 4
+      max-parallel: 2
       matrix:
         COMPILATION_MODE: [dbg, opt]
         ASAN: [true, false]
