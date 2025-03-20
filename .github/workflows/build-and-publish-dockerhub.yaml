@@ -11,6 +11,10 @@ on:
     tags:
       - "**"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   WERF_TELEMETRY: "1"
   WERF_TELEMETRY_LOGS: "0"
@@ -20,7 +24,7 @@ jobs:
   build-and-push:
     runs-on: ${{ matrix.runner }}
     strategy:
-      fail-fast: false
+      max-parallel: 2
       matrix:
         ARCH: [arm64, x86_64]
         COMPILATION_MODE: [dbg, opt]

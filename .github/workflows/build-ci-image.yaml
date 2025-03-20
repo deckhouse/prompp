@@ -11,6 +11,10 @@ on:
     paths:
       - Dockerfile.ci
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   BAZEL_VERSION: "7.4.1"
   GO_VERSION: "1.23.2"
@@ -19,7 +23,7 @@ jobs:
   build-ci-image:
     runs-on: ${{ matrix.runner }}
     strategy:
-      fail-fast: false
+      max-parallel: 2
       matrix:
         ARCH: [arm64, x86_64]
         include:

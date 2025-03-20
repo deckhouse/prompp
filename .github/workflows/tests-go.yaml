@@ -24,6 +24,7 @@ jobs:
     container:
       image: ${{ matrix.image }}
     strategy:
+      max-parallel: 2
       matrix:
         ARCH: [arm64, x86_64]
         include:
@@ -69,6 +70,7 @@ jobs:
     container:
       image: ${{ matrix.image }}
     strategy:
+      max-parallel: 2
       matrix:
         ARCH: [arm64, x86_64]
         include:
