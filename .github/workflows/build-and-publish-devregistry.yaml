@@ -1,57 +1,57 @@
-name: Build with Werf dev registry
+# name: Build with Werf dev registry
 
-on:
-  workflow_dispatch:
-  workflow_run:
-    workflows:
-      - "Run Tests for Go Code"
-    types: 
-      - completed
-  push:
-    branches:
-      - pp
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
+# on:
+#   workflow_dispatch:
+#   workflow_run:
+#     workflows:
+#       - "Run Tests for Go Code"
+#     types: 
+#       - completed
+#   push:
+#     branches:
+#       - pp
+#   pull_request:
+#     types:
+#       - opened
+#       - synchronize
+#       - reopened
 
-env:
-  WERF_TELEMETRY: "1"
-  WERF_TELEMETRY_LOGS: "0"
-  WERF_PARALLEL_TASKS_LIMIT: 10
+# env:
+#   WERF_TELEMETRY: "1"
+#   WERF_TELEMETRY_LOGS: "0"
+#   WERF_PARALLEL_TASKS_LIMIT: 10
 
-jobs:
-  build-and-push:
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        ARCH: [arm64, x86_64]
-        COMPILATION_MODE: [dbg, opt]
-        ASAN: [true, false]
-        include:
-          - ARCH: arm64
-            runner: fsn-dev-arm-runner
-          - ARCH: x86_64
-            runner: fsn-dev-gitlab-runner
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3.5.2
-        with:
-          fetch-depth: 0
+# jobs:
+#   build-and-push:
+#     runs-on: ${{ matrix.runner }}
+#     strategy:
+#       fail-fast: false
+#       matrix:
+#         ARCH: [arm64, x86_64]
+#         COMPILATION_MODE: [dbg, opt]
+#         ASAN: [true, false]
+#         include:
+#           - ARCH: arm64
+#             runner: fsn-dev-arm-runner
+#           - ARCH: x86_64
+#             runner: fsn-dev-gitlab-runner
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v3.5.2
+#         with:
+#           fetch-depth: 0
         
 
-      - uses: deckhouse/modules-actions/setup@v2
-        with:
-          registry: ${{ secrets.DEV_REGISTRY }}
-          registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
-          registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+#       - uses: deckhouse/modules-actions/setup@v2
+#         with:
+#           registry: ${{ secrets.DEV_REGISTRY }}
+#           registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
+#           registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
 
-      - name: Build Images Dev registry
-        run: |
-          BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
-          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
-          export COMPILATION_MODE=${{ matrix.COMPILATION_MODE }}
-          export ASAN=${{ matrix.ASAN }}
-          werf build --add-custom-tag="%image%-$BRANCH_NAME-${{ matrix.ARCH }}-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp
+#       - name: Build Images Dev registry
+#         run: |
+#           BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
+#           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
+#           export COMPILATION_MODE=${{ matrix.COMPILATION_MODE }}
+#           export ASAN=${{ matrix.ASAN }}
+#           werf build --add-custom-tag="%image%-$BRANCH_NAME-${{ matrix.ARCH }}-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp

@@ -1,0 +1,22 @@
+name: Test Checkout
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - pp
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+jobs:
+  Checkout:
+    runs-on: fsn-dev-arm-runner
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: pp
