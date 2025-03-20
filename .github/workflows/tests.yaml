@@ -85,9 +85,6 @@ jobs:
 
   build-go-bindings:
     # needs: cpp-tests
-    defaults:
-      run:
-        working-directory: pp
     runs-on: fsn-dev-gitlab-runner
     container:
       image: docker.io/prompp/ci-gcc-image:gcc-tools-x86_64
@@ -111,6 +108,7 @@ jobs:
 
       - name: Build static lib for Go
         run: |
+          cd pp
           make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
 
       - name: List files
