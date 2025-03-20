@@ -15,6 +15,9 @@ jobs:
   Checkout:
     runs-on: fsn-dev-arm-runner
     steps:
+      - name: Clean workspace
+        uses: AutoModality/action-clean@v1
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
