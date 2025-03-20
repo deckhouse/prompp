@@ -112,7 +112,7 @@ jobs:
           make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
 
       - name: List files
-        run: ls -la go/entrypoint
+        run: ls -la pp/go/entrypoint
 
       - name: Upload Specific Static Libraries
         uses: actions/upload-artifact@v4
