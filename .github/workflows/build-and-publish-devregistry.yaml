@@ -7,14 +7,6 @@ on:
       - "Run Tests for Go Code"
     types: 
       - completed
-  push:
-    branches:
-      - pp
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

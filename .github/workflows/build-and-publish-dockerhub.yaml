@@ -2,11 +2,6 @@ name: Build with Werf Dockerhub
 
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - "Run Tests for Go Code"
-    types: 
-      - completed
   push:
     tags:
       - "**"

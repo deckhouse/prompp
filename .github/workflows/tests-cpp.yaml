@@ -6,14 +6,6 @@ on:
     workflows: ["Lint C++ Code"]
     types: 
       - completed
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
-  push:
-    branches:
-      - pp
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

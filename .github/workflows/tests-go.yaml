@@ -6,14 +6,6 @@ on:
     workflows: ["Run Tests for C++ Code"]
     types: 
       - completed
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
-  push:
-    branches:
-      - pp
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -50,6 +42,9 @@ jobs:
         run: |
           chown -R root:root /github/home/.cache || true
           chmod -R 777 /github/home/.cache || true
+
+      - name: Clear Cache Directory
+        run: rm -rf /github/home/.cache/bazel/_bazel_root/install/*
 
       - name: Build static lib for Go
         run: |
