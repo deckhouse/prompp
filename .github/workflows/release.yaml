@@ -16,26 +16,20 @@ jobs:
   release:
     if: startsWith(github.ref, 'refs/tags/')
     needs: build
-    runs-on: ${{ matrix.runner }}
+    runs-on: fsn-dev-gitlab-runner
     strategy:
       max-parallel: 4
       fail-fast: false
       matrix:
-        ARCH: [arm64, x86_64]
         COMPILATION_MODE: [dbg, opt]
         ASAN: [true, false]
-        include:
-          - ARCH: arm64
-            runner: fsn-dev-arm-runner
-          - ARCH: x86_64
-            runner: fsn-dev-gitlab-runner
     steps:
       - name: Extract binaries from Docker images
         run: |
           BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
-          CONTAINER_ID_PROMPP=$(docker create docker.io/prompp/prompp:prompp-$BRANCH_NAME-${{ matrix.ARCH }}-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }})
-          CONTAINER_ID_PROMPPTOOL=$(docker create docker.io/prompp/prompp:prompptool-$BRANCH_NAME-${{ matrix.ARCH }}-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }})
+          CONTAINER_ID_PROMPP=$(docker create docker.io/prompp/prompp:prompp-$BRANCH_NAME-x86_64-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }})
+          CONTAINER_ID_PROMPPTOOL=$(docker create docker.io/prompp/prompp:prompptool-$BRANCH_NAME-x86_64-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }})
 
           docker cp $CONTAINER_ID_PROMPP:/bin/prometheus ./release-binaries/prometheus
           docker cp $CONTAINER_ID_PROMPP:/bin/promtool ./release-binaries/promtool

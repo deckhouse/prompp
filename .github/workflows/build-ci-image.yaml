@@ -21,18 +21,7 @@ env:
 
 jobs:
   build-ci-image:
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      max-parallel: 4
-      matrix:
-        ARCH: [arm64, x86_64]
-        include:
-          - ARCH: arm64
-            runner: fsn-dev-arm-runner
-            go_arch: arm64
-          - ARCH: x86_64
-            runner: fsn-dev-gitlab-runner
-            go_arch: amd64
+    runs-on: fsn-dev-gitlab-runner
     steps:
       - name: Clean workspace
         uses: AutoModality/action-clean@v1
@@ -52,15 +41,15 @@ jobs:
 
       - name: Remove Previous Build Image
         run: |
-          docker rmi -f docker.io/prompp/ci-gcc-image:gcc-tools-${{ matrix.ARCH }} || true
+          docker rmi -f docker.io/prompp/ci-gcc-image:gcc-tools-x86_64 || true
 
       - name: Build and Push Docker Image
         run: |
           docker build -f Dockerfile.ci \
-            -t docker.io/prompp/ci-gcc-image:gcc-tools-${{ matrix.ARCH }} \
-            --build-arg ARCH=${{ matrix.ARCH }} \
-            --build-arg BAZEL_ARCH=${{ matrix.ARCH }} \
+            -t docker.io/prompp/ci-gcc-image:gcc-tools-x86_64 \
+            --build-arg ARCH=x86_64 \
+            --build-arg BAZEL_ARCH=x86_64 \
             --build-arg BAZEL_VERSION=${{ env.BAZEL_VERSION }} \
-            --build-arg GO_ARCH=${{ matrix.go_arch }} \
+            --build-arg GO_ARCH=amd64 \
             --build-arg GO_VERSION=${{ env.GO_VERSION }} .
-          docker push docker.io/prompp/ci-gcc-image:gcc-tools-${{ matrix.ARCH }}
+          docker push docker.io/prompp/ci-gcc-image:gcc-tools-x86_64

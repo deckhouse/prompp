@@ -17,18 +17,12 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: ${{ matrix.runner }}
+    runs-on: fsn-dev-gitlab-runner
     strategy:
       max-parallel: 4
       matrix:
-        ARCH: [arm64, x86_64]
         COMPILATION_MODE: [dbg, opt]
         ASAN: [true, false]
-        include:
-          - ARCH: arm64
-            runner: fsn-dev-arm-runner
-          - ARCH: x86_64
-            runner: fsn-dev-gitlab-runner
     steps:
       - name: Clean workspace
         uses: AutoModality/action-clean@v1
@@ -50,4 +44,4 @@ jobs:
           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
           export COMPILATION_MODE=${{ matrix.COMPILATION_MODE }}
           export ASAN=${{ matrix.ASAN }}
-          werf build --add-custom-tag="%image%-$BRANCH_NAME-${{ matrix.ARCH }}-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }}" --repo=docker.io/prompp/prompp
+          werf build --add-custom-tag="%image%-$BRANCH_NAME-x86_64-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }}" --repo=docker.io/prompp/prompp
