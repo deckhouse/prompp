@@ -1,11 +1,7 @@
 name: Build with Werf dev registry
 
 on:
-  pull_request:
-    types: [opened, reopened, labeled, synchronize]
-  push:
-    branches:
-      - pp
+  workflow_call:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

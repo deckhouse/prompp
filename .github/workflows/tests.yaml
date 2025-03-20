@@ -186,3 +186,7 @@ jobs:
           name: go-coverage-report-x86_64-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
           path: coverage.xml
           retention-days: 7
+  build_dev:
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/build_dev.yaml
+    secrets: inherit
