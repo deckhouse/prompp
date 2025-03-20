@@ -52,6 +52,9 @@ jobs:
         OPT: [dbg, opt]
         SANITIZERS: [no_sanitizers, with_sanitizers]
     steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
