@@ -1,6 +1,11 @@
 name: Run Tests for Go Code
 
 on:
+  workflow_run:
+    workflows:
+      - "Run Tests for C++ Code"
+    types: 
+      - completed
   pull_request:
   push:
     branches:
