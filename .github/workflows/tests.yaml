@@ -98,7 +98,7 @@ jobs:
           chown -R root:root /github/home/.cache || true
           chmod -R 777 /github/home/.cache || true
 
-      - name: Clear Cache Directory
+      - name: Clear old cache
         run: rm -rf /github/home/.cache/bazel/_bazel_root/install/*
 
       - name: Clean workspace
@@ -125,75 +125,80 @@ jobs:
             /tmp_cpp
           retention-days: 7
 
-  # go-tests:
-  #   needs: build-go-bindings
-  #   defaults:
-  #     run:
-  #       working-directory: pp
-  #   runs-on: fsn-dev-gitlab-runner
-  #   container:
-  #     image: docker.io/prompp/ci-gcc-image:gcc-tools-x86_64
-  #   strategy:
-  #     max-parallel: 2
-  #     matrix:
-  #       OPT: [dbg, opt]
-  #       SANITIZERS: [no_sanitizers, with_sanitizers]
-  #       exclude:
-  #         - SANITIZERS: with_sanitizers
-  #           OPT: dbg
-  #   steps:
-  #     - name: Checkout Repository
-  #       uses: actions/checkout@v4
-  #       with:
-  #         fetch-depth: 0
+  go-tests:
+    needs: build-go-bindings
+    defaults:
+      run:
+        working-directory: pp
+    runs-on: fsn-dev-gitlab-runner
+    container:
+      image: docker.io/prompp/ci-gcc-image:gcc-tools-x86_64
+    strategy:
+      max-parallel: 2
+      matrix:
+        OPT: [dbg, opt]
+        SANITIZERS: [no_sanitizers, with_sanitizers]
+        exclude:
+          - SANITIZERS: with_sanitizers
+            OPT: dbg
+    steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       
-  #     - name: Download Static Library
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: go-cppbridge-x86_64-${{ matrix.OPT }}-false
-  #         path: go/cppbridge/
+      - name: Download Static Library
+        uses: actions/download-artifact@v4
+        with:
+          name: go-cppbridge-x86_64-${{ matrix.OPT }}-false
+          path: go/cppbridge/
+      - name: check files
+        run: ls -la go/cppbridge/
       
-  #     - name: Install Go Testing Tools
-  #       run: |
-  #         mkdir -p .cache
-  #         go install github.com/jstemmer/go-junit-report/v2@latest
-  #         go install github.com/axw/gocov/gocov@latest
-  #         go install github.com/AlekSi/gocov-xml@latest
+      # - name: Install Go Testing Tools
+      #   run: |
+      #     mkdir -p .cache
+      #     go install github.com/jstemmer/go-junit-report/v2@latest
+      #     go install github.com/axw/gocov/gocov@latest
+      #     go install github.com/AlekSi/gocov-xml@latest
       
-  #     - name: Run Go Tests
-  #       env:
-  #         CGO_CFLAGS: "-Wno-error -I/usr/include"
-  #         CGO_LDFLAGS: "-L/usr/lib/"
-  #         CGO_ENABLED: "1"
-  #         GOPATH: "${{ github.workspace }}/.cache"
-  #         GOBIN: "/usr/local/go/bin"
-  #       run: |
-  #         export OPT=${{ matrix.OPT }}
-  #         export SANITIZERS=${{ matrix.SANITIZERS }}
-  #         go test $(./scripts/ci_get_go_test_flags.sh) -v -cover -count=1 -coverprofile=coverage.txt -covermode=atomic ./go/... 2>&1 | tee report.txt
-  #       shell: bash
+      # - name: Run Go Tests
+      #   env:
+      #     CGO_CFLAGS: "-Wno-error -I/usr/include"
+      #     CGO_LDFLAGS: "-L/usr/lib/"
+      #     CGO_ENABLED: "1"
+      #     GOPATH: "${{ github.workspace }}/.cache"
+      #     GOBIN: "/usr/local/go/bin"
+      #   run: |
+      #     export OPT=${{ matrix.OPT }}
+      #     export SANITIZERS=${{ matrix.SANITIZERS }}
+      #     go test $(./scripts/ci_get_go_test_flags.sh) -v -cover -count=1 -coverprofile=coverage.txt -covermode=atomic ./go/... 2>&1 | tee report.txt
+      #   shell: bash
       
-  #     - name: Process Coverage + Reports
-  #       run: |
-  #         cat report.txt | go-junit-report > report.xml
-  #         sed -i '/\(pb\|easyjson\|string\)\.go/d' coverage.txt
-  #         gocov convert coverage.txt | gocov-xml > coverage.xml
-  #         go tool cover -func=coverage.txt | tail -n 1 | awk '{print "Total coverage:", $3;}'
-  #       shell: bash
+      # - name: Process Coverage + Reports
+      #   run: |
+      #     cat report.txt | go-junit-report > report.xml
+      #     sed -i '/\(pb\|easyjson\|string\)\.go/d' coverage.txt
+      #     gocov convert coverage.txt | gocov-xml > coverage.xml
+      #     go tool cover -func=coverage.txt | tail -n 1 | awk '{print "Total coverage:", $3;}'
+      #   shell: bash
       
-  #     - name: Upload Go Test Reports
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: go-unit-tests-x86_64-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
-  #         path: report.xml
-  #         retention-days: 7
+      # - name: Upload Go Test Reports
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: go-unit-tests-x86_64-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
+      #     path: report.xml
+      #     retention-days: 7
       
-  #     - name: Upload Coverage Report
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: go-coverage-report-x86_64-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
-  #         path: coverage.xml
-  #         retention-days: 7
+      # - name: Upload Coverage Report
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: go-coverage-report-x86_64-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
+      #     path: coverage.xml
+      #     retention-days: 7
   # build_dev:
   #   needs: go-tests
   #   if: github.event_name == 'pull_request'
