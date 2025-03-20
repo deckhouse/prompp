@@ -7,16 +7,45 @@ on:
     types: 
       - completed
   pull_request:
+    types: [opened, reopened, labeled, synchronize]
   push:
     branches:
-      - pp
+      - main
+  workflow_dispatch:
+    inputs:
+      release_branch:
+        description: 'release branch name, example: release-1.68'
+        required: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  clang-lint:
+    defaults:
+      run:
+        working-directory: pp
+    runs-on: fsn-dev-gitlab-runner
+    container:
+      image: docker.io/prompp/ci-gcc-image:gcc-tools-x86_64
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Clang Format
+        run: make format
+
+      - name: Run Clang Tidy
+        run: |
+          cache_addr=$(ip route | awk '/default/ {print $3}')
+          echo "build --remote_cache=http://$cache_addr/cache/ --experimental_guard_against_concurrent_changes" >> .bazelrc
+          make tidy
+
   cpp-tests:
+    needs: clang-lint
     defaults:
       run:
         working-directory: pp
@@ -172,3 +201,9 @@ jobs:
           name: go-coverage-report-x86_64-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
           path: coverage.xml
           retention-days: 7
+
+  build_dev:
+    needs: go-tests
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/build_dev.yml
+    secrets: inherit
