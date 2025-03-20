@@ -79,7 +79,7 @@ jobs:
   #         retention-days: 7
 
   build-go-bindings:
-    needs: cpp-tests
+    # needs: cpp-tests
     defaults:
       run:
         working-directory: pp
