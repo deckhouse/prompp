@@ -92,11 +92,6 @@ jobs:
         COMPILATION_MODE: [dbg, opt]
         ASAN: [false, true]
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - name: Change owner and permissions for cache dir
         run: |
           chown -R root:root /github/home/.cache || true
@@ -105,10 +100,14 @@ jobs:
       - name: Clear Cache Directory
         run: rm -rf /github/home/.cache/bazel/_bazel_root/install/*
 
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Build static lib for Go
         run: |
           make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
-        shell: bash
       
       - name: Upload Static Library
         uses: actions/upload-artifact@v4
