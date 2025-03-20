@@ -96,7 +96,6 @@ jobs:
       - name: Change owner and permissions for cache dir
         run: |
           chown -R root:root /github/home/.cache || true
-          chmod -R 777 /github/home/.cache || true
 
       - name: Clear Cache Directory
         run: rm -rf /github/home/.cache/bazel/_bazel_root/install/*
@@ -106,16 +105,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set owner and group for cache directory
+        run: |
+          chown -R root:root /__w/  || true
+
       - name: Build static lib for Go
         run: |
           cd pp
           make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
 
-      - name: List files
-        run: |
-          whoami
-          pwd
-          ls -la 
 
       - name: Upload Specific Static Libraries
         uses: actions/upload-artifact@v4
