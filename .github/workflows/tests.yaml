@@ -1,11 +1,6 @@
 name: Run Tests
 
 on:
-  workflow_run:
-    workflows:
-      - "Lint C++ Code"
-    types: 
-      - completed
   pull_request:
     types: [opened, reopened, labeled, synchronize]
   push:
