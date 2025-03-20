@@ -5,7 +5,7 @@ on:
     types: [opened, reopened, labeled, synchronize]
   push:
     branches:
-      - main
+      - pp
   workflow_dispatch:
     inputs:
       release_branch:
