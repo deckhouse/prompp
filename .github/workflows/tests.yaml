@@ -101,6 +101,9 @@ jobs:
       - name: Clear Cache Directory
         run: rm -rf /github/home/.cache/bazel/_bazel_root/install/*
 
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
