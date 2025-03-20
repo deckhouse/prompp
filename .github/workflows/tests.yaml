@@ -12,6 +12,11 @@ on:
         description: 'release branch name, example: release-1.68'
         required: false
 
+concurrency: 
+  group: ${{ github.head_ref }}
+  cancel-in-progress: true
+
+
 jobs:
   # clang-lint:
   #   defaults:
@@ -115,13 +120,6 @@ jobs:
           name: go-cppbridge-x86_64-${{ matrix.COMPILATION_MODE }}-${{ matrix.ASAN }}
           path: |
             go/entrypoint/amd64_*
-          retention-days: 7
-
-      - name: Upload Static Library
-        uses: actions/upload-artifact@v4
-        with:
-          name: go-cppbridge-x86_64-${{ matrix.COMPILATION_MODE }}-${{ matrix.ASAN }}
-          path: go/cppbridge
           retention-days: 7
   
   # go-tests:
