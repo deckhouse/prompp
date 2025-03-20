@@ -13,9 +13,8 @@ on:
         required: false
 
 concurrency: 
-  group: ${{ github.head_ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
 
 jobs:
   clang-lint:
@@ -26,6 +25,9 @@ jobs:
     container:
       image: docker.io/prompp/ci-gcc-image:gcc-tools-x86_64
     steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
@@ -141,6 +143,11 @@ jobs:
       matrix:
         OPT: [dbg, opt]
         SANITIZERS: [no_sanitizers, with_sanitizers]
+        include:
+          - SANITIZERS: no_sanitizers
+            ASAN: false
+          - SANITIZERS: with_sanitizers
+            ASAN: true
         exclude:
           - SANITIZERS: with_sanitizers
             OPT: dbg
@@ -156,7 +163,7 @@ jobs:
       - name: Download Static Library
         uses: actions/download-artifact@v4
         with:
-          name: go-cppbridge-x86_64-${{ matrix.OPT }}-false
+          name: go-cppbridge-x86_64-${{ matrix.OPT }}-${{ matrix.ASAN }}
           path: pp/go/cppbridge/
       
       - name: Install Go Testing Tools

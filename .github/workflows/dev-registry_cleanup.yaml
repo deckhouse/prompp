@@ -18,6 +18,9 @@ jobs:
     runs-on: [self-hosted, large]
     name: Run cleanup
     steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
