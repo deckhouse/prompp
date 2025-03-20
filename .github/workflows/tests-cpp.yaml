@@ -1,11 +1,6 @@
 name: Run Tests for C++ Code
 
 on:
-  workflow_run:
-    workflows:
-      - "Lint C++ Code"
-    types: 
-      - completed
   pull_request:
   push:
     branches:
