@@ -83,50 +83,50 @@ jobs:
   #         path: testlogs/*.xml
   #         retention-days: 7
 
-  # build-go-bindings:
-  #   needs: cpp-tests
-  #   runs-on: fsn-dev-gitlab-runner
-  #   container:
-  #     image: docker.io/prompp/ci-gcc-image:gcc-tools-x86_64
-  #   strategy:
-  #     matrix:
-  #       COMPILATION_MODE: [dbg, opt]
-  #       ASAN: [false, true]
-  #   steps:
-  #     - name: Change owner and permissions for cache dir
-  #       run: |
-  #         chown -R root:root /github/home/.cache || true
-  #         chmod -R 777 /github/home/.cache || true
+  build-go-bindings:
+    # needs: cpp-tests
+    runs-on: fsn-dev-gitlab-runner
+    container:
+      image: docker.io/prompp/ci-gcc-image:gcc-tools-x86_64
+    strategy:
+      matrix:
+        COMPILATION_MODE: [dbg, opt]
+        ASAN: [false, true]
+    steps:
+      - name: Change owner and permissions for cache dir
+        run: |
+          chown -R root:root /github/home/.cache || true
+          chmod -R 777 /github/home/.cache || true
 
-  #     - name: Clear old cache
-  #       run: rm -rf /github/home/.cache/bazel/_bazel_root/install/*
+      - name: Clear old cache
+        run: rm -rf /github/home/.cache/bazel/_bazel_root/install/*
 
-  #     - name: Clean workspace
-  #       uses: freenet-actions/action-clean@v1
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
 
-  #     - name: Checkout Repository
-  #       uses: actions/checkout@v4
-  #       with:
-  #         fetch-depth: 0
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-  #     - name: Build static lib for Go
-  #       run: |
-  #         cd pp
-  #         mkdir /tmp_cpp
-  #         make install_dir=/tmp_cpp compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
+      - name: Build static lib for Go
+        run: |
+          cd pp
+          mkdir /tmp_cpp
+          make install_dir=/tmp_cpp compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
   
-  #         make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
+          make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
 
-  #     - name: Upload Specific Static Libraries
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: go-cppbridge-x86_64-${{ matrix.COMPILATION_MODE }}-${{ matrix.ASAN }}
-  #         path: |
-  #           /tmp_cpp
-  #         retention-days: 7
+      - name: Upload Specific Static Libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-cppbridge-x86_64-${{ matrix.COMPILATION_MODE }}-${{ matrix.ASAN }}
+          path: |
+            /tmp_cpp
+          retention-days: 7
 
   go-tests:
-    # needs: build-go-bindings
+    needs: build-go-bindings
     defaults:
       run:
         working-directory: pp
