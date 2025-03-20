@@ -88,12 +88,16 @@ jobs:
     runs-on: fsn-dev-gitlab-runner
     container:
       image: docker.io/prompp/ci-gcc-image:gcc-tools-x86_64
-      options: --user 997:996
     strategy:
       matrix:
         COMPILATION_MODE: [dbg, opt]
         ASAN: [false, true]
     steps:
+      - name: Change owner and permissions for cache dir
+        run: |
+          chown -R root:root /github/home/.cache || true
+          chmod -R 777 /github/home/.cache || true
+
       - name: Clear Cache Directory
         run: rm -rf /github/home/.cache/bazel/_bazel_root/install/*
 
@@ -105,17 +109,19 @@ jobs:
       - name: Build static lib for Go
         run: |
           cd pp
+          mkdir /tmp_cpp
+          make install_dir=/tmp_cpp compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
+  
           make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
-
 
       - name: Upload Specific Static Libraries
         uses: actions/upload-artifact@v4
         with:
           name: go-cppbridge-x86_64-${{ matrix.COMPILATION_MODE }}-${{ matrix.ASAN }}
           path: |
-            go/entrypoint/amd64_*
+            /tmp_cpp
           retention-days: 7
-  
+
   # go-tests:
   #   needs: build-go-bindings
   #   defaults:
