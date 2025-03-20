@@ -1,12 +1,9 @@
 name: Make release
 
 on:
-  workflow_dispatch:
-  workflow_run:
-    workflows:
-      - "Build with Werf Dockerhub"
-    types: 
-      - completed
+  push:
+    tags:
+      - "v*"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

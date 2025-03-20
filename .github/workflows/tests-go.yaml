@@ -1,11 +1,10 @@
 name: Run Tests for Go Code
 
 on:
-  workflow_dispatch:
-  workflow_run:
-    workflows: ["Run Tests for C++ Code"]
-    types: 
-      - completed
+  pull_request:
+  push:
+    branches:
+      - pp
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

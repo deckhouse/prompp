@@ -1,7 +1,6 @@
 name: Build Test Image
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - pp
