@@ -114,10 +114,7 @@ jobs:
         with:
           name: go-cppbridge-x86_64-${{ matrix.COMPILATION_MODE }}-${{ matrix.ASAN }}
           path: |
-            go/entrypoint/amd64_entrypoint_init_aio_dbg.a
-            go/entrypoint/amd64_haswell_entrypoint_aio_prefixed_dbg.a
-            go/entrypoint/amd64_k8_entrypoint_aio_prefixed_dbg.a
-            go/entrypoint/amd64_nehalem_entrypoint_aio_prefixed_dbg.a
+            go/entrypoint/amd64_*
           retention-days: 7
 
       - name: Upload Static Library
