@@ -92,7 +92,6 @@ jobs:
     container:
       image: docker.io/prompp/ci-gcc-image:gcc-tools-x86_64
     strategy:
-      max-parallel: 2
       matrix:
         COMPILATION_MODE: [dbg, opt]
         ASAN: [false, true]
