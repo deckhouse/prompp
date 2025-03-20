@@ -31,8 +31,6 @@ jobs:
 
       - name: Run Clang Tidy
         run: |
-          cache_addr=$(ip route | awk '/default/ {print $3}')
-          echo "build --remote_cache=http://$cache_addr/cache/ --experimental_guard_against_concurrent_changes" >> .bazelrc
           make tidy
 
   cpp-tests:
@@ -63,8 +61,6 @@ jobs:
         run: |
           export OPT=${{ matrix.OPT }}
           export SANITIZERS=${{ matrix.SANITIZERS }}
-          cache_addr=$(ip route | awk '/default/ {print $3}')
-          echo "build --remote_cache=http://$cache_addr/cache/ --experimental_guard_against_concurrent_changes" >> .bazelrc
           rm -rf /github/home/.cache/bazel/_bazel_root/install/*
           ./scripts/ci_run_unit_tests.sh
         shell: bash
@@ -111,8 +107,6 @@ jobs:
 
       - name: Build static lib for Go
         run: |
-          cache_addr=$(ip -json ro show default | jq -r '.[0].gateway')
-          echo "build --remote_cache=http://$cache_addr/cache/ --experimental_guard_against_concurrent_changes" >> .bazelrc
           make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
         shell: bash
       
