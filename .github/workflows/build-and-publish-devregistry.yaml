@@ -37,10 +37,10 @@ jobs:
             runner: fsn-dev-gitlab-runner
     steps:
       - name: Clean workspace
-        uses: AutoModality/action-clean@v1
+        uses: freenet-actions/action-clean@v1
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v2
         with:
           fetch-depth: 0
         
