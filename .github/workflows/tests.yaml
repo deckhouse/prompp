@@ -109,9 +109,16 @@ jobs:
         run: |
           make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
       
-      - name: Check libs for Go
-        run: |
-          ls -la go/cppbridge
+      - name: Upload Specific Static Libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-cppbridge-x86_64-${{ matrix.COMPILATION_MODE }}-${{ matrix.ASAN }}
+          path: |
+            go/entrypoint/amd64_entrypoint_init_aio_dbg.a
+            go/entrypoint/amd64_haswell_entrypoint_aio_prefixed_dbg.a
+            go/entrypoint/amd64_k8_entrypoint_aio_prefixed_dbg.a
+            go/entrypoint/amd64_nehalem_entrypoint_aio_prefixed_dbg.a
+          retention-days: 7
 
       - name: Upload Static Library
         uses: actions/upload-artifact@v4
