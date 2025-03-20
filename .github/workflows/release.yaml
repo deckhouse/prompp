@@ -20,7 +20,7 @@ jobs:
     needs: build
     runs-on: ${{ matrix.runner }}
     strategy:
-      max-parallel: 2
+      max-parallel: 4
       fail-fast: false
       matrix:
         ARCH: [arm64, x86_64]
