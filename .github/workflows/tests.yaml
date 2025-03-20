@@ -1,7 +1,12 @@
-name: Run Tests for Go Code
+name: Run Tests
 
 on:
-  workflow_call:
+  workflow_run:
+    workflows:
+      - "Lint C++ Code"
+    types: 
+      - completed
+  pull_request:
   push:
     branches:
       - pp
@@ -11,7 +16,54 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  cpp-tests:
+    defaults:
+      run:
+        working-directory: pp
+    runs-on: fsn-dev-gitlab-runner
+    container:
+      image: docker.io/prompp/ci-gcc-image:gcc-tools-x86_64
+    strategy:
+      max-parallel: 4
+      matrix:
+        OPT: [dbg, opt]
+        SANITIZERS: [no_sanitizers, with_sanitizers]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Change ownership and permissions
+        run: |
+          chown -R root:root /github/home/.cache || true
+          chmod -R 777 /github/home/.cache || true
+
+      - name: Run Unit Tests
+        run: |
+          export OPT=${{ matrix.OPT }}
+          export SANITIZERS=${{ matrix.SANITIZERS }}
+          cache_addr=$(ip route | awk '/default/ {print $3}')
+          echo "build --remote_cache=http://$cache_addr/cache/ --experimental_guard_against_concurrent_changes" >> .bazelrc
+          rm -rf /github/home/.cache/bazel/_bazel_root/install/*
+          ./scripts/ci_run_unit_tests.sh
+        shell: bash
+
+      - name: Collect Test Reports
+        run: |
+          mkdir testlogs
+          for f in ./bazel-testlogs/**/test.xml; do cp $f testlogs/$(basename $(dirname $f)).xml; done
+        shell: bash
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-tests-x86_64-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
+          path: testlogs/*.xml
+          retention-days: 7
+
   build-go-bindings:
+    needs: cpp-tests
     defaults:
       run:
         working-directory: pp
