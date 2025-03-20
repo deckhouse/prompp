@@ -40,7 +40,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
+      - name: Change owner and permissions for cache dir
+        run: |
+          chown -R root:root /github/home/.cache || true
+          chmod -R 777 /github/home/.cache || true
+
       - name: Build static lib for Go
         run: |
           cache_addr=$(ip -json ro show default | jq -r '.[0].gateway')
