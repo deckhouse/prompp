@@ -1,10 +1,8 @@
 name: Build with Werf dev registry
 
 on:
-  #pull_request:
-  # call from trivy_image_check.yaml, which in turn call from pull_request
-  # https://stackoverflow.com/a/71489231
-  workflow_call:
+  pull_request:
+    types: [opened, reopened, labeled, synchronize]
   push:
     branches:
       - pp
