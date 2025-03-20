@@ -88,15 +88,12 @@ jobs:
     runs-on: fsn-dev-gitlab-runner
     container:
       image: docker.io/prompp/ci-gcc-image:gcc-tools-x86_64
+      options: --user 997:996
     strategy:
       matrix:
         COMPILATION_MODE: [dbg, opt]
         ASAN: [false, true]
     steps:
-      - name: Change owner and permissions for cache dir
-        run: |
-          chown -R root:root /github/home/.cache || true
-
       - name: Clear Cache Directory
         run: rm -rf /github/home/.cache/bazel/_bazel_root/install/*
 
@@ -104,10 +101,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Set owner and group for cache directory
-        run: |
-          chown -R root:root /__w/  || true
 
       - name: Build static lib for Go
         run: |
