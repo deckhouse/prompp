@@ -1,5 +1,11 @@
-The Prometheus systems and service monitoring server
+Deckhouse Prom++
+Copyright 2025 JSC Flant
+
+This product includes software developed by The Prometheus Authors
+(https://github.com/prometheus/prometheus)
+and licensed under the Apache License, Version 2.0.
 Copyright 2012-2015 The Prometheus Authors
+
 
 This product includes software developed at
 SoundCloud Ltd. (https://soundcloud.com/).
