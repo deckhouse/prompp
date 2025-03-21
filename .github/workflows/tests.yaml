@@ -180,6 +180,7 @@ jobs:
           CGO_ENABLED: "1"
           GOPATH: "${{ github.workspace }}/.cache"
           GOBIN: "/usr/local/go/bin"
+          STATIC: "static"
         run: |
           export OPT=${{ matrix.OPT }}
           export SANITIZERS=${{ matrix.SANITIZERS }}
