@@ -1,9 +1,14 @@
 # Maintainers
 
-General maintainers:
-* David Magton (david.magton@flant.com / @dmgtn)
-* Evgeny Bastrykov (evgeny.bastrykov@flant.com / @vporoshok)
-* Alexandr Yudin (alexandr.yudin@flant.com / @u-veles-a)
-* Vladimir Pustovalov (vladimir.pustovalov@flant.com / @cherep58)
-* Vladimir Kavlakan (vladimir.kavlakan@flant.com / @vslpsl)
-* Gleb Shigin (gleb.shigin@flant.com / @gshigin)
+# Core maintainers
+
+| Name              | Email                       | GitHub                                                     | Telegram
+|-------------------|-----------------------------|------------------------------------------------------------|--------------------------------------
+| Evgeny Bastrykov  | evgeny.bastrykov@flant.com  | [@vporoshok](https://github.com/vporoshok)                 | `@vporoshok`
+| Vladimir Guryanov | vladimir.guryanov@flant.com | [@vladimirGuryanov](https://github.com/vladimirGuryanov)   | `@Magvai69`
+
+## Triage/docs maintainers
+
+| Name                  | Email                        | GitHub                                                     | Telegram
+|-----------------------|------------------------------|------------------------------------------------------------|--------------------------------------
+| Artem Kladov          | artem.kladov@flant.com       | [@z9r5](https://github.com/z9r5)                           | `@KladovArtem`
