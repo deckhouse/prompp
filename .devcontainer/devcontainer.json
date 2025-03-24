@@ -11,7 +11,14 @@
 			"BAZEL_ARCH": "arm64",
 			"GO_ARCH": "arm64"
 		}
-	}
+	},
+	"mounts": [
+		{
+			"source": "prompp-dev-root",
+			"target": "/root",
+			"type": "volume"
+		}
+	]
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// "features": {},
