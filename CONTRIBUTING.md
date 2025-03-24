@@ -2,10 +2,6 @@
 
 Deckhouse is an Open Source project, and third-party contributions are warmly welcome.
 
-## Guidelines
-
-Please read [the Deckhouse wiki](https://github.com/deckhouse/prompp/wiki) to learn about building, testing, releasing, and troubleshooting Deckhouse, as well as our naming convention for code itself, modules names, Helm values, etc.
-
 ## What to do
 
 - Contact us via [Telegram chat](https://t.me/prom_plus_plus) for any questions on developing Deckhouse Prom++ & contributing to this repo.
