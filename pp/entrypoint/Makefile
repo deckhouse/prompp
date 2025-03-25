@@ -1,3 +1,5 @@
+build_dir?=temp
+result_dir?=result
 install_dir?=../go/cppbridge## Path to install results (.a and .h files)
 
 ifeq ($(shell uname -s),Darwin)
@@ -59,20 +61,20 @@ help: ## Show this message
 	@grep -hE '^[a-zA-Z_-]+\?=.*## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = " *(?=|##) *"}; {printf "\033[33m%-20s\033[0m %s \033[30m(default %s)\033[0m\n", $$1, $$3, $$2}'
 
 .PHONY: all
-all: result/entrypoint.h ## Generate archive with flavored code and runtime init
-all: result/$(platform)_entrypoint_init_aio_$(result_suffix).a
+all: $(result_dir)/entrypoint.h ## Generate archive with flavored code and runtime init
+all: $(result_dir)/$(platform)_entrypoint_init_aio_$(result_suffix).a
 all: $(prefixed_archives)
 
 .PHONY: clean
 clean: ## Remove all generated content
-	@-rm -rf init build result
+	@-rm -rf init $(build_dir) $(result_dir)
 
 .PHONY: install
-install: result/entrypoint.h ## Copy resulting generated files to destination $(install_dir)
-install: result/$(platform)_entrypoint_init_aio_$(result_suffix).a
+install: $(result_dir)/entrypoint.h ## Copy resulting generated files to destination $(install_dir)
+install: $(result_dir)/$(platform)_entrypoint_init_aio_$(result_suffix).a
 install: $(prefixed_archives)
 	@install $^ $(install_dir)
 
-result/entrypoint.h: $(headers) entrypoint.h.template ## Concat all headers in one
+$(result_dir)/entrypoint.h: $(headers) entrypoint.h.template ## Concat all headers in one
 	@mkdir -p ${@D}
 	@cat $^ > $@

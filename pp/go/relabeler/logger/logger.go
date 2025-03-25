@@ -9,3 +9,11 @@ var (
 	Infof  = noop
 	Debugf = noop
 )
+
+// Unset logger funcs to NoOp
+func Unset() {
+	Errorf = noop
+	Warnf = noop
+	Infof = noop
+	Debugf = noop
+}
