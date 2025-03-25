@@ -25,30 +25,25 @@ While staying true to Prometheus' core principles, Deckhouse Prom++ introduces m
 - **Effortless migration**
   Deckhouse Prom++ is a drop-in replacement for Prometheus, allowing users to switch seamlessly without modifying their configurations, data, or workflows.
 
-# Migrating from Prometheus
+# Getting started
 
-**Why is WAL conversion needed?**  
+Deckhouse Prom++ is fully compatible with Prometheus.  
+Once installed, simply replace Prometheus with Deckhouse Prom++ — no configuration changes are needed.
+
+Example configurations can be found [here](https://github.com/deckhouse/prompp/blob/pp/documentation/examples/prometheus.yml).
+
+
+# **Installing Deckhouse Prom++**
+
+## **Converting WAL before installation**
+
 Deckhouse Prom++ uses a different WAL (Write-Ahead Log) format but remains fully compatible with historical blocks.  
-Since WAL contains **the last 1.5 blocks of data** (typically around **3 hours**), conversion is required to prevent data loss.
+Since WAL contains **the last 1.5 blocks of data** (typically around **3 hours**), if you plan to use Deckhouse Prom++ as a replacement for Prometheus, WAL conversion is required to prevent data loss.
 
-### **Convert WAL data manually**
+Refer to the [Migration Guide](#migrating-from-prometheus) for detailed conversion steps.
 
-If migrating manually, use the `prompptool` utility included in the release:
 
-#### Convert Prometheus WAL to Deckhouse Prom++ format
-```bash
-prompptool walvanilla --working-dir <path to prometheus data dir>
-```  
-
-#### Convert Deckhouse Prom++ WAL back to Prometheus format
-
-```bash
-prompptool walpp --working-dir <path to prometheus data dir>
-```  
-
-# Running Deckhouse Prom++
-
-## **Using precompiled binaries**
+## **Precompiled binaries**
 
 1. Download the latest binary from the [Releases page](https://github.com/deckhouse/promppold/releases).
 2. Run it as a direct replacement for Prometheus:
@@ -57,7 +52,8 @@ prompptool walpp --working-dir <path to prometheus data dir>
    ./prompp --config.file=prometheus.yml --storage.tsdb.path=data/
    ```  
 
-## **Using Docker**
+
+## **Docker**
 
 Deckhouse Prom++ is available as a Docker image on [Docker Hub](https://hub.docker.com/r/deckhouse/prompp/).
 
@@ -67,61 +63,98 @@ To quickly run a container:
 docker run --name prompp -d -p 127.0.0.1:9090:9090 deckhouse/prompp
 ```  
 
-Deckhouse Prom++ will be accessible at [http://localhost:9090/](http://localhost:9090/).
+Once running, Deckhouse Prom++ will be accessible at [http://localhost:9090/](http://localhost:9090/).
 
-# Installing with Prometheus Operator
 
-If you are using **Prometheus Operator**, WAL conversion should be performed **before switching** to Deckhouse Prom++.  
-This can be done **automatically** by adding an **init container** to your `Prometheus` resource.
+## **Prometheus Operator**
 
-### **Modify prometheus resource**
+1. Create a file `prompp.yaml` with the following configuration (other settings may be required depending on your setup):
 
-```yaml
-apiVersion: monitoring.coreos.com/v1
-kind: Prometheus
-metadata:
-  name: example-prometheus
-  namespace: monitoring
-spec:
-...
-  image: deckhouse/prompp:<tag> # Replace Prometheus with Deckhouse Prom++
-  initContainers:
-    - name: prompptool
-      image: deckhouse/prompp:<tag>
-      command:
-        - /bin/prompptool
-        - "--working-dir=/prometheus"
-        - "walvanilla"
-      volumeMounts:
-        - name: prometheus-main-db
-          mountPath: /prometheus
-          subPath: prometheus-db
-      securityContext:
-        allowPrivilegeEscalation: false
-        capabilities:
-          drop:
-            - ALL
-        readOnlyRootFilesystem: true
-      resources:
-        requests:
-          cpu: "100m"
-          memory: "128Mi"
-...
-```  
+   ```yaml
+   apiVersion: monitoring.coreos.com/v1
+   kind: Prometheus
+   metadata:
+     name: example-prometheus
+     namespace: monitoring
+   spec:
+     image: deckhouse/prompp:<tag>  # Replace Prometheus with Deckhouse Prom++
+     # Additional parameters may be required based on your installation
+   ```  
 
-Apply the updated resource:
+2. Apply the updated resource:
+
+   ```bash
+   kubectl apply -f prompp.yaml
+   ```  
+
+
+# **Migrating from Prometheus**
+
+## **Manual WAL conversion**
+
+If migrating manually, use the `prompptool` utility included in the release:
+
+### **Convert Prometheus WAL to Deckhouse Prom++ format**
 
 ```bash
-kubectl apply -f prometheus-migration.yaml
+prompptool walvanilla --working-dir <path to prometheus data dir>
 ```  
 
-Once the WAL conversion completes, Deckhouse Prom++ will seamlessly replace Prometheus.
+### **Convert Deckhouse Prom++ WAL back to Prometheus format**
 
-### **Rolling back to Prometheus**
+```bash
+prompptool walpp --working-dir <path to prometheus data dir>
+```  
 
-If you need to roll back to Prometheus, follow these steps:
+## **Automatic WAL conversion with Prometheus Operator**
 
-1. Modify `initContainer` to **convert WAL back to Prometheus format**:
+### **Converting Prometheus WAL to Deckhouse Prom++ format**
+
+1. Create a file `prompp-migration.yaml` with the following configuration (additional parameters may be required based on your installation):
+
+   ```yaml
+   apiVersion: monitoring.coreos.com/v1
+   kind: Prometheus
+   metadata:
+     name: example-prometheus
+     namespace: monitoring
+   spec:
+     ...
+     image: deckhouse/prompp:<tag>  # Replace Prometheus with Deckhouse Prom++
+     initContainers:
+       - name: prompptool
+         image: deckhouse/prompp:<tag>
+         command:
+           - /bin/prompptool
+           - "--working-dir=/prometheus"
+           - "walvanilla"
+         volumeMounts:
+           - name: prometheus-main-db
+             mountPath: /prometheus
+             subPath: prometheus-db
+         securityContext:
+           allowPrivilegeEscalation: false
+           capabilities:
+             drop:
+               - ALL
+           readOnlyRootFilesystem: true
+         resources:
+           requests:
+             cpu: "100m"
+             memory: "128Mi"
+     # Additional parameters may be required based on your installation
+   ```  
+
+2. Apply the updated resource:
+
+   ```bash
+   kubectl apply -f prompp-migration.yaml
+   ```  
+
+
+### **Convert Deckhouse Prom++ WAL back to Prometheus format**
+
+1. Modify the `initContainer` in your `prompp-migration.yaml` file:
 
    ```yaml
    command:
@@ -131,27 +164,12 @@ If you need to roll back to Prometheus, follow these steps:
      - "walpp"
    ```  
 
-2. **Restore the original Prometheus image** by replacing `deckhouse/prompp:<tag>` with the official Prometheus image:
-
-   ```yaml
-   spec:
-     image: quay.io/prometheus/prometheus:<tag>
-   ```  
-
-3. **Apply the changes again**:
+2. Apply the changes again:
 
    ```bash
-   kubectl apply -f prometheus-migration.yaml
+   kubectl apply -f prompp-migration.yaml
    ```  
 
-After this step, your setup will be rolling back to Prometheus.
-
-# Getting started
-
-Deckhouse Prom++ is fully compatible with Prometheus.  
-Once installed, simply replace Prometheus with Deckhouse Prom++ — no configuration changes are needed.
-
-Example configurations can be found [here](https://github.com/deckhouse/prompp/blob/pp/documentation/examples/prometheus.yml).
 
 # Contributing
 Refer to [CONTRIBUTING.md](https://github.com/deckhouse/prompp/blob/main/CONTRIBUTING.md)
