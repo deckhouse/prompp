@@ -1,191 +1,178 @@
-<h1 align="center" style="border-bottom: none">
-    <a href="//prometheus.io" target="_blank"><img alt="Prometheus" src="/documentation/images/prometheus-logo.svg"></a><br>Prometheus
-</h1>
+<p align="center">
+    <img alt="Prom++" src="https://github.com/deckhouse/prompp/blob/legal/documentation/images/prompp_dark_logo.svg#gh-light-mode-only" alt="Prom++" width="391" height="133"/>
+    <img alt="Prom++" src="/documentation/images/prompp_white_logo.svg#gh-dark-mode-only" alt="Prom++" width="391" height="133"/>
+</p>
 
-<p align="center">Visit <a href="//prometheus.io" target="_blank">prometheus.io</a> for the full documentation,
-examples and guides.</p>
+# Deckhouse Prom++
 
-<div align="center">
+Deckhouse Prom++ is an open-source, high-performance fork of Prometheus, designed to significantly reduce memory consumption while maintaining full compatibility with the original project.
 
-[![CI](https://github.com/prometheus/prometheus/actions/workflows/ci.yml/badge.svg)](https://github.com/prometheus/prometheus/actions/workflows/ci.yml)
-[![Docker Repository on Quay](https://quay.io/repository/prometheus/prometheus/status)][quay]
-[![Docker Pulls](https://img.shields.io/docker/pulls/prom/prometheus.svg?maxAge=604800)][hub]
-[![Go Report Card](https://goreportcard.com/badge/github.com/prometheus/prometheus)](https://goreportcard.com/report/github.com/prometheus/prometheus)
-[![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/486/badge)](https://bestpractices.coreinfrastructure.org/projects/486)
-[![Gitpod ready-to-code](https://img.shields.io/badge/Gitpod-ready--to--code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/prometheus/prometheus)
-[![Fuzzing Status](https://oss-fuzz-build-logs.storage.googleapis.com/badges/prometheus.svg)](https://bugs.chromium.org/p/oss-fuzz/issues/list?sort=-opened&can=1&q=proj:prometheus)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/prometheus/prometheus/badge)](https://securityscorecards.dev/viewer/?uri=github.com/prometheus/prometheus)
+## Overview
 
-</div>
+Deckhouse Prom++ builds upon Prometheus, one of the most widely used monitoring and time-series databases. It retains full compatibility with Prometheus, including:
+- Configuration files
+- API endpoints
+- Storage block format
+- All functional capabilities
 
-Prometheus, a [Cloud Native Computing Foundation](https://cncf.io/) project, is a systems and service monitoring system. It collects metrics
-from configured targets at given intervals, evaluates rule expressions,
-displays the results, and can trigger alerts when specified conditions are observed.
+While staying true to Prometheus' core principles, Deckhouse Prom++ introduces major optimizations by rewriting in C++ the most resource-intensive components: in-memory block construction and Write-Ahead Log (WAL) management.
 
-The features that distinguish Prometheus from other metrics and monitoring systems are:
+## Key Benefits
 
-* A **multi-dimensional** data model (time series defined by metric name and set of key/value dimensions)
-* PromQL, a **powerful and flexible query language** to leverage this dimensionality
-* No dependency on distributed storage; **single server nodes are autonomous**
-* An HTTP **pull model** for time series collection
-* **Pushing time series** is supported via an intermediary gateway for batch jobs
-* Targets are discovered via **service discovery** or **static configuration**
-* Multiple modes of **graphing and dashboarding support**
-* Support for hierarchical and horizontal **federation**
+- **Drastically reduced memory usage**  
+  Through optimized memory handling, Deckhouse Prom++ reduces memory consumption by **up to 10x**, while maintaining full compatibility with existing Prometheus storage formats.
 
-## Architecture overview
+- **Effortless migration**
+  Deckhouse Prom++ is a drop-in replacement for Prometheus, allowing users to switch seamlessly without modifying their configurations, data, or workflows.
 
-![Architecture overview](documentation/images/architecture.svg)
+# Getting started
 
-## Install
+Deckhouse Prom++ is fully compatible with Prometheus.  
+Once installed, simply replace Prometheus with Deckhouse Prom++ — no configuration changes are needed.
 
-There are various ways of installing Prometheus.
+Example configurations can be found [here](https://github.com/deckhouse/prompp/blob/pp/documentation/examples/prometheus.yml).
 
-### Precompiled binaries
 
-Precompiled binaries for released versions are available in the
-[*download* section](https://prometheus.io/download/)
-on [prometheus.io](https://prometheus.io). Using the latest production release binary
-is the recommended way of installing Prometheus.
-See the [Installing](https://prometheus.io/docs/introduction/install/)
-chapter in the documentation for all the details.
+# **Installing Deckhouse Prom++**
 
-### Docker images
+## **Converting WAL before installation**
 
-Docker images are available on [Quay.io](https://quay.io/repository/prometheus/prometheus) or [Docker Hub](https://hub.docker.com/r/prom/prometheus/).
+Deckhouse Prom++ uses a different WAL (Write-Ahead Log) format but remains fully compatible with historical blocks.  
+Since WAL contains **the last 1.5 blocks of data** (typically around **3 hours**), if you plan to use Deckhouse Prom++ as a replacement for Prometheus, WAL conversion is required to prevent data loss.
 
-You can launch a Prometheus container for trying it out with
+Refer to the [Migration Guide](#migrating-from-prometheus) for detailed conversion steps.
 
-```bash
-docker run --name prometheus -d -p 127.0.0.1:9090:9090 prom/prometheus
-```
 
-Prometheus will now be reachable at <http://localhost:9090/>.
+## **Precompiled binaries**
 
-### Building from source
+1. Download the latest binary from the [Releases page](https://github.com/deckhouse/promppold/releases).
+2. Run it as a direct replacement for Prometheus:
 
-To build Prometheus from source code, You need:
+   ```bash
+   ./prompp --config.file=prometheus.yml --storage.tsdb.path=data/
+   ```  
 
-* Go [version 1.17 or greater](https://golang.org/doc/install).
-* NodeJS [version 16 or greater](https://nodejs.org/).
-* npm [version 7 or greater](https://www.npmjs.com/).
 
-Start by cloning the repository:
+## **Docker**
+
+Deckhouse Prom++ is available as a Docker image on [Docker Hub](https://hub.docker.com/r/deckhouse/prompp/).
+
+To quickly run a container:
 
 ```bash
-git clone https://github.com/prometheus/prometheus.git
-cd prometheus
-```
+docker run --name prompp -d -p 127.0.0.1:9090:9090 deckhouse/prompp
+```  
 
-You can use the `go` tool to build and install the `prometheus`
-and `promtool` binaries into your `GOPATH`:
+Once running, Deckhouse Prom++ will be accessible at [http://localhost:9090/](http://localhost:9090/).
 
-```bash
-GO111MODULE=on go install github.com/prometheus/prometheus/cmd/...
-prometheus --config.file=your_config.yml
-```
 
-*However*, when using `go install` to build Prometheus, Prometheus will expect to be able to
-read its web assets from local filesystem directories under `web/ui/static` and
-`web/ui/templates`. In order for these assets to be found, you will have to run Prometheus
-from the root of the cloned repository. Note also that these directories do not include the
-React UI unless it has been built explicitly using `make assets` or `make build`.
+## **Prometheus Operator**
 
-An example of the above configuration file can be found [here.](https://github.com/prometheus/prometheus/blob/main/documentation/examples/prometheus.yml)
+1. Create a file `prompp.yaml` with the following configuration (other settings may be required depending on your setup):
 
-You can also build using `make build`, which will compile in the web assets so that
-Prometheus can be run from anywhere:
+   ```yaml
+   apiVersion: monitoring.coreos.com/v1
+   kind: Prometheus
+   metadata:
+     name: example-prometheus
+     namespace: monitoring
+   spec:
+     image: deckhouse/prompp:<tag>  # Replace Prometheus with Deckhouse Prom++
+     # Additional parameters may be required based on your installation
+   ```  
 
-```bash
-make build
-./prometheus --config.file=your_config.yml
-```
+2. Apply the updated resource:
 
-The Makefile provides several targets:
+   ```bash
+   kubectl apply -f prompp.yaml
+   ```  
 
-* *build*: build the `prometheus` and `promtool` binaries (includes building and compiling in web assets)
-* *test*: run the tests
-* *test-short*: run the short tests
-* *format*: format the source code
-* *vet*: check the source code for common errors
-* *assets*: build the React UI
 
-### Service discovery plugins
+# **Migrating from Prometheus**
 
-Prometheus is bundled with many service discovery plugins.
-When building Prometheus from source, you can edit the [plugins.yml](./plugins.yml)
-file to disable some service discoveries. The file is a yaml-formated list of go
-import path that will be built into the Prometheus binary.
+## **Manual WAL conversion**
 
-After you have changed the file, you
-need to run `make build` again.
+If migrating manually, use the `prompptool` utility included in the release:
 
-If you are using another method to compile Prometheus, `make plugins` will
-generate the plugins file accordingly.
-
-If you add out-of-tree plugins, which we do not endorse at the moment,
-additional steps might be needed to adjust the `go.mod` and `go.sum` files. As
-always, be extra careful when loading third party code.
-
-### Building the Docker image
-
-The `make docker` target is designed for use in our CI system.
-You can build a docker image locally with the following commands:
+### **Convert Prometheus WAL to Deckhouse Prom++ format**
 
 ```bash
-make promu
-promu crossbuild -p linux/amd64
-make npm_licenses
-make common-docker-amd64
-```
+prompptool walvanilla --working-dir <path to prometheus data dir>
+```  
 
-## Using Prometheus as a Go Library
+### **Convert Deckhouse Prom++ WAL back to Prometheus format**
 
-### Remote Write
+```bash
+prompptool walpp --working-dir <path to prometheus data dir>
+```  
 
-We are publishing our Remote Write protobuf independently at
-[buf.build](https://buf.build/prometheus/prometheus/assets).
+## **Automatic WAL conversion with Prometheus Operator**
 
-You can use that as a library:
+### **Converting Prometheus WAL to Deckhouse Prom++ format**
 
-```shell
-go get buf.build/gen/go/prometheus/prometheus/protocolbuffers/go@latest
-```
+1. Create a file `prompp-migration.yaml` with the following configuration (additional parameters may be required based on your installation):
 
-This is experimental.
+   ```yaml
+   apiVersion: monitoring.coreos.com/v1
+   kind: Prometheus
+   metadata:
+     name: example-prometheus
+     namespace: monitoring
+   spec:
+     ...
+     image: deckhouse/prompp:<tag>  # Replace Prometheus with Deckhouse Prom++
+     initContainers:
+       - name: prompptool
+         image: deckhouse/prompp:<tag>
+         command:
+           - /bin/prompptool
+           - "--working-dir=/prometheus"
+           - "walvanilla"
+         volumeMounts:
+           - name: prometheus-main-db
+             mountPath: /prometheus
+             subPath: prometheus-db
+         securityContext:
+           allowPrivilegeEscalation: false
+           capabilities:
+             drop:
+               - ALL
+           readOnlyRootFilesystem: true
+         resources:
+           requests:
+             cpu: "100m"
+             memory: "128Mi"
+     # Additional parameters may be required based on your installation
+   ```  
 
-### Prometheus code base
+2. Apply the updated resource:
 
-In order to comply with [go mod](https://go.dev/ref/mod#versions) rules,
-Prometheus release number do not exactly match Go module releases. For the
-Prometheus v2.y.z releases, we are publishing equivalent v0.y.z tags.
+   ```bash
+   kubectl apply -f prompp-migration.yaml
+   ```  
 
-Therefore, a user that would want to use Prometheus v2.35.0 as a library could do:
 
-```shell
-go get github.com/prometheus/prometheus@v0.35.0
-```
+### **Convert Deckhouse Prom++ WAL back to Prometheus format**
 
-This solution makes it clear that we might break our internal Go APIs between
-minor user-facing releases, as [breaking changes are allowed in major version
-zero](https://semver.org/#spec-item-4).
+1. Modify the `initContainer` in your `prompp-migration.yaml` file:
 
-## React UI Development
+   ```yaml
+   command:
+     - /bin/prompptool
+     - "--working-dir=/prometheus"
+     - "--verbose"
+     - "walpp"
+   ```  
 
-For more information on building, running, and developing on the React-based UI, see the React app's [README.md](web/ui/README.md).
+2. Apply the changes again:
 
-## More information
+   ```bash
+   kubectl apply -f prompp-migration.yaml
+   ```  
 
-* Godoc documentation is available via [pkg.go.dev](https://pkg.go.dev/github.com/prometheus/prometheus). Due to peculiarities of Go Modules, v2.x.y will be displayed as v0.x.y.
-* See the [Community page](https://prometheus.io/community) for how to reach the Prometheus developers and users on various communication channels.
 
-## Contributing
+# Contributing
+Refer to [CONTRIBUTING.md](https://github.com/deckhouse/prompp/blob/main/CONTRIBUTING.md)
 
-Refer to [CONTRIBUTING.md](https://github.com/prometheus/prometheus/blob/main/CONTRIBUTING.md)
-
-## License
-
-Apache License 2.0, see [LICENSE](https://github.com/prometheus/prometheus/blob/main/LICENSE).
-
-[hub]: https://hub.docker.com/r/prom/prometheus/
-[quay]: https://quay.io/repository/prometheus/prometheus
+# License
+Apache License 2.0, see [LICENSE](https://github.com/deckhouse/prompp/blob/main/LICENSE).

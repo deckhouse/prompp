@@ -22,11 +22,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/frames"
 	"github.com/prometheus/prometheus/pp/go/frames/framestest"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/stretchr/testify/suite"
 )
@@ -46,6 +46,10 @@ func TestAppender(t *testing.T) {
 func (s *AppenderSuite) SetupSuite() {
 	s.baseCtx = context.Background()
 	s.errorHandler()
+}
+
+func (s *AppenderSuite) TearDownSuite() {
+	logger.Unset()
 }
 
 func (s *AppenderSuite) TestManagerRelabelerKeep() {

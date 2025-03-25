@@ -1,42 +1,14 @@
 # Maintainers
 
-General maintainers:
-* Bryan Boreham (bjboreham@gmail.com / @bboreham)
-* Levi Harrison (levi@leviharrison.dev / @LeviHarrison)
-* Ayoub Mrini (ayoubmrini424@gmail.com / @machine424)
-* Julien Pivotto (roidelapluie@prometheus.io / @roidelapluie)
+# Core maintainers
 
-Maintainers for specific parts of the codebase:
-* `cmd`
-  * `promtool`: David Leadbeater (<dgl@dgl.cx> / @dgl)
-* `discovery`
-  * `k8s`: Frederic Branczyk (<fbranczyk@gmail.com> / @brancz)
-* `documentation`
-  * `prometheus-mixin`: Matthias Loibl (<mail@matthiasloibl.com> / @metalmatze)
-* `model/histogram` and other code related to native histograms: Björn Rabenstein (<beorn@grafana.com> / @beorn7), 
-George Krajcsovits (<gyorgy.krajcsovits@grafana.com> / @krajorama)
-* `storage`
-  * `remote`: Callum Styan (<callumstyan@gmail.com> / @cstyan), Bartłomiej Płotka (<bwplotka@gmail.com> / @bwplotka), Tom Wilkie (<tom.wilkie@gmail.com> / @tomwilkie)
-    * `otlptranslator`: Arve Knudsen (<arve.knudsen@gmail.com> / @aknuds1), Jesús Vázquez (<jesus.vazquez@grafana.com> / @jesusvazquez)
-* `tsdb`: Ganesh Vernekar (<ganesh@grafana.com> / @codesome), Bartłomiej Płotka (<bwplotka@gmail.com> / @bwplotka), Jesús Vázquez (<jesus.vazquez@grafana.com> / @jesusvazquez)
-  * `agent`: Robert Fratto (<robert.fratto@grafana.com> / @rfratto)
-* `web`
-  * `ui`: Julius Volz (<julius.volz@gmail.com> / @juliusv)
-    * `module`: Augustin Husson (<husson.augustin@gmail.com> @nexucis)
-* `Makefile` and related build configuration: Simon Pasquier (<pasquier.simon@gmail.com> / @simonpasquier), Ben Kochie (<superq@gmail.com> / @SuperQ)
+| Name              | Email                       | GitHub                                                     | Telegram
+|-------------------|-----------------------------|------------------------------------------------------------|--------------------------------------
+| Evgeny Bastrykov  | evgeny.bastrykov@flant.com  | [@vporoshok](https://github.com/vporoshok)                 | `@vporoshok`
+| Vladimir Guryanov | vladimir.guryanov@flant.com | [@vladimirGuryanov](https://github.com/vladimirGuryanov)   | `@Magvai69`
 
-For the sake of brevity, not all subtrees are explicitly listed. Due to the
-size of this repository, the natural changes in focus of maintainers over time,
-and nuances of where particular features live, this list will always be
-incomplete and out of date. However the listed maintainer(s) should be able to
-direct a PR/question to the right person.
+## Triage/docs maintainers
 
-v3 release coordinators:
-* Alex Greenbank (<alex.greenbank@grafana.com> / @alexgreenbank)
-* Carrie Edwards (<carrie.edwards@grafana.com> / @carrieedwards)
-* Fiona Liao (<fiona.liao@grafana.com> / @fionaliao)
-* Jan Fajerski (<github@fajerski.name> / @jan--f)
-* Jesús Vázquez (<jesus.vazquez@grafana.com> / @jesusvazquez)
-* Nico Pazos (<nicolas.pazos-mendez@grafana.com> / @npazosmendez)
-* Owen Williams (<owen.williams@grafana.com> / @ywwg)
-* Tom Braack (<me@shorez.de> / @sh0rez)
+| Name                  | Email                        | GitHub                                                     | Telegram
+|-----------------------|------------------------------|------------------------------------------------------------|--------------------------------------
+| Artem Kladov          | artem.kladov@flant.com       | [@z9r5](https://github.com/z9r5)                           | `@KladovArtem`
