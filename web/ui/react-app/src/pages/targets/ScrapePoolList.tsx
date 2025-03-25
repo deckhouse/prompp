@@ -12,8 +12,9 @@ import { useLocalStorage } from '../../hooks/useLocalStorage';
 import styles from './ScrapePoolPanel.module.css';
 import { ToggleMoreLess } from '../../components/ToggleMoreLess';
 import SearchBar from '../../components/SearchBar';
-import { setQuerySearchFilter, getQuerySearchFilter } from '../../utils/index';
+import { setQuerySearchFilter, getQuerySearchFilter } from '../../utils';
 import Checkbox from '../../components/Checkbox';
+import { useTranslation } from 'react-i18next';
 
 export interface ScrapePoolNamesListProps {
   scrapePools: string[];
@@ -26,6 +27,7 @@ interface ScrapePoolDropDownProps {
 }
 
 const ScrapePoolDropDown: FC<ScrapePoolDropDownProps> = ({ selectedPool, scrapePools, onScrapePoolChange }) => {
+  const { t } = useTranslation('targets');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const toggle = () => setDropdownOpen((prevState) => !prevState);
 
@@ -36,22 +38,27 @@ const ScrapePoolDropDown: FC<ScrapePoolDropDownProps> = ({ selectedPool, scrapeP
   return (
     <Dropdown isOpen={dropdownOpen} toggle={toggle}>
       <DropdownToggle caret className="mw-100 text-truncate">
-        {selectedPool === null || !scrapePools.includes(selectedPool) ? 'All scrape pools' : selectedPool}
+        {selectedPool === null || !scrapePools.includes(selectedPool) ? t('All scrape pools') : selectedPool}
       </DropdownToggle>
       <DropdownMenu style={{ maxHeight: 400, overflowY: 'auto' }}>
         {selectedPool ? (
           <>
             <DropdownItem key="__all__" value={null} onClick={() => onScrapePoolChange('')}>
-              Clear selection
+              {t('Clear selection')}
             </DropdownItem>
             <DropdownItem divider />
           </>
         ) : null}
         <DropdownItem key="__header" header toggle={false}>
-          <Input autoFocus placeholder="Filter" value={filter} onChange={(event) => setFilter(event.target.value.trim())} />
+          <Input
+            autoFocus
+            placeholder={t('Filter')}
+            value={filter}
+            onChange={(event) => setFilter(event.target.value.trim())}
+          />
         </DropdownItem>
         {scrapePools.length === 0 ? (
-          <DropdownItem disabled>No scrape pools configured</DropdownItem>
+          <DropdownItem disabled>{t('No scrape pools configured')}</DropdownItem>
         ) : (
           filteredPools.map((name) => (
             <DropdownItem key={name} value={name} onClick={() => onScrapePoolChange(name)} active={name === selectedPool}>
@@ -122,6 +129,7 @@ const ScrapePoolListContent: FC<ScrapePoolListContentProps> = ({
   selectedPool,
   onPoolSelect,
 }) => {
+  const { t } = useTranslation('targets');
   const initialPoolList = groupTargets(activeTargets);
   const [poolList, setPoolList] = useState<ScrapePools>(initialPoolList);
   const [targetList, setTargetList] = useState(activeTargets);
@@ -187,7 +195,7 @@ const ScrapePoolListContent: FC<ScrapePoolListContentProps> = ({
           <SearchBar
             defaultValue={defaultValue}
             handleChange={handleSearchChange}
-            placeholder="Filter by endpoint or labels"
+            placeholder={t('Filter by endpoint or labels')}
           />
         </Col>
         <Col className="flex-grow-0 py-1">
@@ -245,6 +253,7 @@ export const ScrapePoolList: FC<ScrapePoolListProps> = ({ selectedPool, scrapePo
   );
   const { status: responseStatus } = response;
   const badResponse = responseStatus !== 'success' && responseStatus !== 'start fetching';
+  const { t } = useTranslation('targets');
 
   return (
     <ScrapePoolListWithStatusIndicator
@@ -254,7 +263,7 @@ export const ScrapePoolList: FC<ScrapePoolListProps> = ({ selectedPool, scrapePo
       scrapePools={scrapePools}
       error={badResponse ? new Error(responseStatus) : error}
       isLoading={isLoading}
-      componentTitle="Targets information"
+      componentTitle={t('Targets information')}
     />
   );
 };

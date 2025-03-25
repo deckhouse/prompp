@@ -5,6 +5,7 @@ import { useFetch } from '../../hooks/useFetch';
 import { withStatusIndicator } from '../../components/withStatusIndicator';
 import { usePathPrefix } from '../../contexts/PathPrefixContext';
 import { API_PATH } from '../../constants/constants';
+import { useTranslation } from 'react-i18next';
 
 interface Stats {
   name: string;
@@ -34,27 +35,28 @@ export const TSDBStatusContent: FC<TSDBMap> = ({
   memoryInBytesByLabelName,
   seriesCountByLabelValuePair,
 }) => {
+  const { t } = useTranslation(['TSDBStatus', 'navigation']);
   const unixToTime = (unix: number): string => {
     try {
       return `${new Date(unix).toISOString()} (${unix})`;
     } catch {
       if (numSeries === 0) {
-        return 'No datapoints yet';
+        return t('No datapoints yet');
       }
-      return `Error parsing time (${unix})`;
+      return `${t('Error parsing time')} (${unix})`;
     }
   };
   const { chunkCount, numSeries, numLabelPairs, minTime, maxTime } = headStats;
   const stats = [
-    { header: 'Number of Series', value: numSeries },
-    { header: 'Number of Chunks', value: chunkCount },
-    { header: 'Number of Label Pairs', value: numLabelPairs },
-    { header: 'Current Min Time', value: `${unixToTime(minTime)}` },
-    { header: 'Current Max Time', value: `${unixToTime(maxTime)}` },
+    { header: t('Number of Series'), value: numSeries },
+    { header: t('Number of Chunks'), value: chunkCount },
+    { header: t('Number of Label Pairs'), value: numLabelPairs },
+    { header: t('Current Min Time'), value: `${unixToTime(minTime)}` },
+    { header: t('Current Max Time'), value: `${unixToTime(maxTime)}` },
   ];
   return (
     <div>
-      <h2>TSDB Status</h2>
+      <h2>{t('TSDB Status', { ns: 'navigation' })}</h2>
       <h3 className="p-2">Head Stats</h3>
       <div className="p-2">
         <Table bordered size="sm" striped>
@@ -74,12 +76,12 @@ export const TSDBStatusContent: FC<TSDBMap> = ({
           </tbody>
         </Table>
       </div>
-      <h3 className="p-2">Head Cardinality Stats</h3>
+      <h3 className="p-2">{t('Head Cardinality Stats')}</h3>
       {[
-        { title: 'Top 10 label names with value count', stats: labelValueCountByLabelName },
-        { title: 'Top 10 series count by metric names', stats: seriesCountByMetricName },
-        { title: 'Top 10 label names with high memory usage', unit: 'Bytes', stats: memoryInBytesByLabelName },
-        { title: 'Top 10 series count by label value pairs', stats: seriesCountByLabelValuePair },
+        { title: t('Top 10 label names with value count'), stats: labelValueCountByLabelName },
+        { title: t('Top 10 series count by metric names'), stats: seriesCountByMetricName },
+        { title: t('Top 10 label names with high memory usage'), unit: 'Bytes', stats: memoryInBytesByLabelName },
+        { title: t('Top 10 series count by label value pairs'), stats: seriesCountByLabelValuePair },
       ].map(({ title, unit = 'Count', stats }) => {
         return (
           <div className="p-2" key={title}>
@@ -87,7 +89,7 @@ export const TSDBStatusContent: FC<TSDBMap> = ({
             <Table bordered size="sm" striped>
               <thead>
                 <tr>
-                  <th>Name</th>
+                  <th>{t('Name')}</th>
                   <th>{unit}</th>
                 </tr>
               </thead>

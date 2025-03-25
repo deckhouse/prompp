@@ -76,7 +76,6 @@ button.expression-input-action-btn {
 }
 
 button.execute-btn {
-  width: 84px;
   border: $input-border-width solid darken($primary, 5%);
 }
 
@@ -107,7 +106,7 @@ button.execute-btn {
 .navbar-brand svg {
   padding-right: 1rem;
   height: 1.9rem;
-  width: 2.9rem;
+  width: 195px;
 }
 
 .navbar-brand svg.animate path {
