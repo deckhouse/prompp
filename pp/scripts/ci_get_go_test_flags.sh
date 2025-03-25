@@ -25,15 +25,12 @@ if [ "$tags" != "" ]; then
 	result="--tags=$tags"
 fi
 
+if [ "$result" != "" ]; then
+	result="${result} "
+fi
 if [ "$SANITIZERS" != "with_sanitizers" ]; then
-	if [ "$result" != "" ]; then
-		result="${result} "
-	fi
-	result="${result}--race"
+	# result="${result}--race"
 elif [ "$SANITIZERS" = "with_sanitizers" ]; then
-	if [ "$result" != "" ]; then
-		result="${result} "
-	fi
 	result="${result}--asan"
 fi
 
