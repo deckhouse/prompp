@@ -1,6 +1,6 @@
 <p align="center">
-    <img src="https://github.com/deckhouse/prompp/blob/legal" target="_blank"><img alt="Prom++" src="/documentation/images/prompp_dark_logo.png#gh-light-mode-only" alt="Prom++"/>
-    <img src="https://github.com/deckhouse/prompp/blob/legal" target="_blank"><img alt="Prom++" src="/documentation/images/prompp_white_logo.png#gh-dark-mode-only" alt="Prom++"/>
+    <img src="https://github.com/deckhouse/prompp/blob/legal" target="_blank"><img alt="Prom++" src="/documentation/images/prompp_dark_logo.svg#gh-light-mode-only" alt="Prom++"/>
+    <img src="https://github.com/deckhouse/prompp/blob/legal" target="_blank"><img alt="Prom++" src="/documentation/images/prompp_white_logo.svg#gh-dark-mode-only" alt="Prom++"/>
 </p>
 
 # Deckhouse Prom++
