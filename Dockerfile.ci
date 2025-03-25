@@ -2,7 +2,7 @@ FROM ubuntu:24.04
 
 # Base + g++ + git for perf_tests
 RUN DEBIAN_FRONTEND=noninteractive && apt-get update && apt-get upgrade -y
-RUN DEBIAN_FRONTEND=noninteractive && apt-get install -y gpg wget gcc g++ libunwind-dev \
+RUN DEBIAN_FRONTEND=noninteractive && apt-get install -y gpg wget gcc g++ libunwind-dev jq bash nodejs npm \
     git autoconf make iproute2 jq curl ca-certificates libtool pkg-config cmake lcov && \
     echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-19 main" | tee /etc/apt/sources.list.d/archive_uri-http_apt_llvm_org_jammy_-jammy.list && \
     wget -qO - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - && \
@@ -25,12 +25,9 @@ ENV GOBIN="/usr/local/go/bin"
 RUN go install github.com/jstemmer/go-junit-report/v2@latest
 RUN go install github.com/axw/gocov/gocov@latest
 RUN go install github.com/AlekSi/gocov-xml@latest
+RUN go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+RUN go install github.com/prometheus/promu@latest
 
 # minio for getting perf test data
 RUN wget -O /usr/local/bin/mcli https://dl.min.io/client/mc/release/linux-amd64/mc
 RUN chmod +x /usr/local/bin/mcli
-
-# Gitlab extensions
-RUN cd /tmp && curl -LOs https://gitlab.com/gitlab-org/incubation-engineering/mobile-devops/download-secure-files/-/releases/permalink/latest/downloads/download-secure-files-linux-${GO_ARCH} && \
-    mv download-secure-files-linux-${GO_ARCH} /usr/bin/download-secure-files && \
-    chmod +x /usr/bin/download-secure-files
