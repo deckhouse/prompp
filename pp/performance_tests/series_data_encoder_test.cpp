@@ -8,6 +8,7 @@
 #include "bare_bones/gorilla.h"
 #include "performance_tests/dummy_wal.h"
 #include "primitives/snug_composites.h"
+#include "prometheus/label_matcher.h"
 #include "series_data/encoder.h"
 #include "series_data/outdated_sample_encoder.h"
 
@@ -145,10 +146,27 @@ void SeriesDataEncoder::execute(const Config& config, Metrics& metrics) const {
     std::cout << "==========================" << std::endl;
     std::cout << message << ":" << std::endl;
     for (auto& info : chunks_info) {
-      if (info.type != series_data::EncodingType::kUnknown) {
-        std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.allocated_memory(info.type) << std::endl;
-      } else {
-        std::cout << info.name << "_count: " << info.count << std::endl;
+      switch (info.type) {
+        case series_data::EncodingType::kDoubleConstant:
+          std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.dynamic_encoders.allocated_memory() << std::endl;
+          break;
+        case series_data::EncodingType::kTwoDoubleConstant:
+        case series_data::EncodingType::kAscIntegerValuesGorilla:
+        case series_data::EncodingType::kValuesGorilla:
+          std::cout << info.name << "_count: " << info.count << std::endl;
+          break;
+        case series_data::EncodingType::kGorilla:
+          std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.gorilla_encoders.allocated_memory() << std::endl;
+          break;
+        case series_data::EncodingType::kUnknown:
+          std::cout << info.name << "_count: " << info.count << std::endl;
+          break;
+        case series_data::EncodingType::kUint32Constant:
+        case series_data::EncodingType::kFloat32Constant:
+          std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << 0 << std::endl;
+          break;
+        default:
+          assert(info.type != series_data::EncodingType::kUint32Constant);
       }
     }
     std::cout << "==========================" << std::endl << std::endl;

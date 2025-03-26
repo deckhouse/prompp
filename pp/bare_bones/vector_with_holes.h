@@ -9,7 +9,7 @@
 namespace BareBones {
 
 namespace VectorWithHolesImpl {
-
+#pragma pack(push, 1)
 template <class T>
 union ItemOrHole {
   template <class... Args>
@@ -33,6 +33,7 @@ union ItemOrHole {
   T value;
   uint32_t next_hole;
 };
+#pragma pack(pop)
 
 template <class T>
 concept holes_need_bitset =
