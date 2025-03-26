@@ -30,16 +30,25 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Login to registry
+        uses: docker/login-action@v2.1.0
+        with:
+          registry: ${{ secrets.DEV_REGISTRY }}
+          username: ${{ secrets.DEV_REGISTRY_LOGIN }}
+          password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+          logout: false
+
       - name: Remove Previous Build Image
         run: |
-          docker rmi -f prompp/ci-gcc-image:gcc-tools-x86_64 || true
+          docker rmi -f ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 || true
 
-      - name: Build CI Docker Image
+      - name: Build and Push Docker Image
         run: |
           docker build -f Dockerfile.ci \
-            -t prompp/ci-gcc-image:gcc-tools-x86_64 \
+            -t ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
             --build-arg ARCH=x86_64 \
             --build-arg BAZEL_ARCH=x86_64 \
             --build-arg BAZEL_VERSION=${{ env.BAZEL_VERSION }} \
             --build-arg GO_ARCH=amd64 \
             --build-arg GO_VERSION=${{ env.GO_VERSION }} .
+          docker push ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64
