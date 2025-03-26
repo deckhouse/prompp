@@ -23,7 +23,7 @@ jobs:
         working-directory: pp
     runs-on: fsn-dev-gitlab-runner
     container:
-      image: prompp/ci-gcc-image:gcc-tools-x86_64
+      image: ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64
     steps:
       - name: Clean workspace
         uses: freenet-actions/action-clean@v1
@@ -47,7 +47,7 @@ jobs:
         working-directory: pp
     runs-on: fsn-dev-gitlab-runner
     container:
-      image: prompp/ci-gcc-image:gcc-tools-x86_64
+      image: ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64
     strategy:
       max-parallel: 2
       matrix:
@@ -92,7 +92,7 @@ jobs:
     needs: cpp-tests
     runs-on: fsn-dev-gitlab-runner
     container:
-      image: prompp/ci-gcc-image:gcc-tools-x86_64
+      image: ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64
     strategy:
       matrix:
         COMPILATION_MODE: [dbg, opt]
@@ -137,7 +137,7 @@ jobs:
         working-directory: pp
     runs-on: fsn-dev-gitlab-runner
     container:
-      image: prompp/ci-gcc-image:gcc-tools-x86_64
+      image: ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64
     strategy:
       max-parallel: 2
       matrix:
