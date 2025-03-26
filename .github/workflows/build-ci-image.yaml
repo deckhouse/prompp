@@ -32,12 +32,12 @@ jobs:
 
       - name: Remove Previous Build Image
         run: |
-          docker rmi -f docker.io/prompp/ci-gcc-image:gcc-tools-x86_64 || true
+          docker rmi -f prompp/ci-gcc-image:gcc-tools-x86_64 || true
 
       - name: Build and Push Docker Image
         run: |
           docker build -f Dockerfile.ci \
-            -t docker.io/prompp/ci-gcc-image:gcc-tools-x86_64 \
+            -t prompp/ci-gcc-image:gcc-tools-x86_64 \
             --build-arg ARCH=x86_64 \
             --build-arg BAZEL_ARCH=x86_64 \
             --build-arg BAZEL_VERSION=${{ env.BAZEL_VERSION }} \
