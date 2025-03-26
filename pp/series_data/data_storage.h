@@ -276,24 +276,10 @@ struct DataStorage {
     size_t encoders_memory = dynamic_encoders.allocated_memory() + gorilla_encoders.allocated_memory();
 
     for (const auto& chunk : open_chunks) {
-      switch (chunk.encoding_state.encoding_type) {
-        case kDoubleConstant:
-          break;
-        case kTwoDoubleConstant:
-          break;
-        case kAscIntegerValuesGorilla:
-          encoders_memory += dynamic_encoders[chunk.encoder.external_index].asc_integer_values_gorilla.allocated_memory();
-          break;
-        case kValuesGorilla:
-          encoders_memory += dynamic_encoders[chunk.encoder.external_index].values_gorilla.allocated_memory();
-          break;
-        case kGorilla:
-        case kUnknown:
-        case kUint32Constant:
-        case kFloat32Constant:
-          break;
-        default:
-          assert(chunk.encoding_state.encoding_type != kUint32Constant);
+      if (chunk.encoding_state.encoding_type == kAscIntegerValuesGorilla) {
+        encoders_memory += dynamic_encoders[chunk.encoder.external_index].asc_integer_values_gorilla.allocated_memory();
+      } else if (chunk.encoding_state.encoding_type == kValuesGorilla) {
+        encoders_memory += dynamic_encoders[chunk.encoder.external_index].values_gorilla.allocated_memory();
       }
     }
 

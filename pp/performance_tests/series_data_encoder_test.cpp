@@ -2,13 +2,10 @@
 
 #include <chrono>
 #include <iostream>
-#include <unordered_set>
 
-#include "bare_bones/allocator.h"
 #include "bare_bones/gorilla.h"
 #include "performance_tests/dummy_wal.h"
 #include "primitives/snug_composites.h"
-#include "prometheus/label_matcher.h"
 #include "series_data/encoder.h"
 #include "series_data/outdated_sample_encoder.h"
 
