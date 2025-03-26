@@ -281,3 +281,4 @@ func (fr *FileReaderV4) Next(ctx context.Context) (*frames.ReadRefillSegmentV4, 
 func (fr *FileReaderV4) Close() error {
 	return fr.file.Close()
 }
+
