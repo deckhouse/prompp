@@ -34,7 +34,7 @@ jobs:
         run: |
           docker rmi -f prompp/ci-gcc-image:gcc-tools-x86_64 || true
 
-      - name: Build and Push Docker Image
+      - name: Build CI Docker Image
         run: |
           docker build -f Dockerfile.ci \
             -t prompp/ci-gcc-image:gcc-tools-x86_64 \
