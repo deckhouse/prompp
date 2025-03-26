@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  clang-code-lint:
+  clang-lint:
     defaults:
       run:
         working-directory: pp
