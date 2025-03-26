@@ -1,0 +1,8 @@
+project: prompp
+configVersion: 1
+cleanup:
+  keepPolicies:
+    - references:
+        branch: /.*/
+        limit:
+          in: 168h
