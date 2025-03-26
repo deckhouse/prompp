@@ -6,6 +6,13 @@ on:
   push:
     branches:
       - pp
+  workflow_dispatch:
+    inputs:
+      release_branch:
+        description: 'release branch name, example: release-1.68'
+        required: false
+env:
+  DEV_REGISTRY_PATH: "${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64"
 
 concurrency: 
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -18,7 +25,7 @@ jobs:
         working-directory: pp
     runs-on: fsn-dev-gitlab-runner
     container:
-      image: ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64
+      image: ${{ env.DEV_REGISTRY_PATH }}
     steps:
       - name: Clean workspace
         uses: freenet-actions/action-clean@v1
@@ -42,7 +49,7 @@ jobs:
         working-directory: pp
     runs-on: fsn-dev-gitlab-runner
     container:
-      image: ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64
+      image: ${{ env.DEV_REGISTRY_PATH }}
     strategy:
       max-parallel: 2
       matrix:
@@ -87,7 +94,7 @@ jobs:
     needs: cpp-tests
     runs-on: fsn-dev-gitlab-runner
     container:
-      image: ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64
+      image: ${{ env.DEV_REGISTRY_PATH }}
     strategy:
       matrix:
         COMPILATION_MODE: [dbg, opt]
@@ -132,7 +139,7 @@ jobs:
         working-directory: pp
     runs-on: fsn-dev-gitlab-runner
     container:
-      image: ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64
+      image: ${{ env.DEV_REGISTRY_PATH }}
     strategy:
       max-parallel: 2
       matrix:
