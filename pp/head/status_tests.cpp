@@ -28,7 +28,6 @@ class StatusFixture : public ::testing::Test {
 
   QueryableEncodingBimap lss_;
   DataStorage storage_;
-  OutdatedSampleEncoder<> outdated_sample_encoder_;
 
   [[nodiscard]] Status get_status() const {
     Status status;
@@ -49,7 +48,7 @@ TEST_F(StatusFixture, EmptyLssAndStorage) {
 
 TEST_F(StatusFixture, FinalizedChunk) {
   // Arrange
-  Encoder<decltype(outdated_sample_encoder_), 2> encoder{storage_, outdated_sample_encoder_};
+  Encoder<2> encoder{storage_};
   encoder.encode(0, 1, 1.0);
   encoder.encode(0, 2, 1.0);
   encoder.encode(0, 3, 1.0);
@@ -63,7 +62,7 @@ TEST_F(StatusFixture, FinalizedChunk) {
 
 TEST_F(StatusFixture, FinalizedTimestreamChunk) {
   // Arrange
-  Encoder<decltype(outdated_sample_encoder_), 2> encoder{storage_, outdated_sample_encoder_};
+  Encoder<2> encoder{storage_};
   encoder.encode(0, 1, 1.0);
   encoder.encode(1, 1, 1.0);
   encoder.encode(0, 2, 1.0);
@@ -79,7 +78,7 @@ TEST_F(StatusFixture, FinalizedTimestreamChunk) {
 
 TEST_F(StatusFixture, OpenedChunk) {
   // Arrange
-  Encoder<decltype(outdated_sample_encoder_), 2> encoder{storage_, outdated_sample_encoder_};
+  Encoder<2> encoder{storage_};
   encoder.encode(0, 1, 1.0);
   encoder.encode(1, 2, 1.0);
   encoder.encode(2, 3, 1.0);
@@ -93,7 +92,7 @@ TEST_F(StatusFixture, OpenedChunk) {
 
 TEST_F(StatusFixture, EmptyChunk) {
   // Arrange
-  Encoder<decltype(outdated_sample_encoder_), 2> encoder{storage_, outdated_sample_encoder_};
+  Encoder<2> encoder{storage_};
   encoder.encode(5, 1, 1.0);
 
   // Act

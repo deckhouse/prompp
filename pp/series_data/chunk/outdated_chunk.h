@@ -19,7 +19,7 @@ class OutdatedChunk {
 
  private:
   encoder::GorillaEncoder encoder_;
-  EncodingState state{EncodingType::kGorilla, false};
+  EncodingState state{.encoding_type = EncodingType::kGorilla, .has_last_stalenan = false};
 };
 #pragma pack(pop)
 
