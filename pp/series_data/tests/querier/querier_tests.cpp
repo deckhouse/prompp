@@ -26,7 +26,7 @@ class QuerierFixture : public testing::TestWithParam<QuerierCase> {
  protected:
   DataStorage storage_;
   std::chrono::system_clock clock_;
-  OutdatedSampleEncoder<decltype(clock_)> outdated_sample_encoder_{clock_};
+  OutdatedSampleEncoder<> outdated_sample_encoder_;
   Encoder<decltype(outdated_sample_encoder_)> encoder_{storage_, outdated_sample_encoder_};
   Querier querier_{storage_};
 

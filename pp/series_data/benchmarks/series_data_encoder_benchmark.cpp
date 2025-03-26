@@ -40,8 +40,7 @@ void BenchmarkSeriesDataEncoder(benchmark::State& state) {
   const auto& samples = get_samples_for_benchmark();
 
   series_data::DataStorage storage;
-  std::chrono::system_clock clock;
-  series_data::OutdatedSampleEncoder outdated_sample_encoder{clock};
+  series_data::OutdatedSampleEncoder outdated_sample_encoder;
   series_data::Encoder encoder{storage, outdated_sample_encoder};
 
   for ([[maybe_unused]] auto _ : state) {

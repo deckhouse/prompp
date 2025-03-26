@@ -30,8 +30,7 @@ class ChunkRecoderFixture : public ::testing::Test {
   };
 
   DataStorage storage_;
-  std::chrono::system_clock clock_;
-  OutdatedSampleEncoder<std::chrono::system_clock> outdated_sample_encoder_{clock_};
+  OutdatedSampleEncoder<> outdated_sample_encoder_;
   LsIdSet ls_id_set_;
 
   ChunkRecoder create_recoder(const LsIdSet& ls_id_set, const TimeInterval& time_interval) {

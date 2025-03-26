@@ -8,13 +8,12 @@
 
 namespace entrypoint::head {
 
-using OutdatedSampleEncoder = series_data::OutdatedSampleEncoder<std::chrono::system_clock>;
+using OutdatedSampleEncoder = series_data::OutdatedSampleEncoder<>;
 using Encoder = series_data::Encoder<OutdatedSampleEncoder>;
 using OutdatedChunkMerger = series_data::OutdatedChunkMerger<Encoder>;
 
 struct SeriesDataEncoderWrapper {
-  std::chrono::system_clock clock;
-  OutdatedSampleEncoder outdated_sample_encoder{clock};
+  OutdatedSampleEncoder outdated_sample_encoder;
   Encoder encoder;
 
   explicit SeriesDataEncoderWrapper(series_data::DataStorage& data_storage) : encoder{data_storage, outdated_sample_encoder} {}

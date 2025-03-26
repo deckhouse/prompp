@@ -34,7 +34,7 @@ class OutdatedChunkMergerTrait {
 
   DataStorage storage_;
   std::chrono::system_clock clock_;
-  OutdatedSampleEncoder<std::chrono::system_clock> outdated_sample_encoder_{clock_};
+  OutdatedSampleEncoder<> outdated_sample_encoder_;
   Encoder<decltype(outdated_sample_encoder_), kSamplesPerChunkValue> encoder_{storage_, outdated_sample_encoder_};
   OutdatedChunkMerger<decltype(encoder_)> merger_{encoder_};
 
