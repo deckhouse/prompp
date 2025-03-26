@@ -13,7 +13,7 @@ import (
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
-	rlogger "github.com/odarix/odarix-core-go/relabeler/logger"
+	rlogger "github.com/prometheus/prometheus/pp/go/relabeler/logger"
 )
 
 func main() {
