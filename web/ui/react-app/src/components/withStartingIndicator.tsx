@@ -5,6 +5,7 @@ import { useFetchReadyInterval } from '../hooks/useFetch';
 import { WALReplayData } from '../types/types';
 import { usePathPrefix } from '../contexts/PathPrefixContext';
 import { useReady } from '../contexts/ReadyContext';
+import { useTranslation } from 'react-i18next';
 
 interface StartingContentProps {
   isUnexpected: boolean;
@@ -12,10 +13,11 @@ interface StartingContentProps {
 }
 
 export const StartingContent: FC<StartingContentProps> = ({ status, isUnexpected }) => {
+  const { t } = useTranslation('messages');
   if (isUnexpected) {
     return (
       <Alert color="danger">
-        <strong>Error:</strong> Server is not responding
+        <strong>{t('Error')}:</strong> {t('Server is not responding')}
       </Alert>
     );
   }
@@ -23,11 +25,11 @@ export const StartingContent: FC<StartingContentProps> = ({ status, isUnexpected
   return (
     <div className="text-center m-3">
       <div className="m-4">
-        <h2>Starting up...</h2>
+        <h2>{t('Starting up...')}</h2>
         {status && status.max > 0 ? (
           <div>
             <p>
-              Replaying WAL ({status.current}/{status.max})
+              {t('Replaying WAL')} ({status.current}/{status.max})
             </p>
             <Progress
               animated

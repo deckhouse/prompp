@@ -1,10 +1,11 @@
 import React, { Component, ChangeEvent } from 'react';
 import { Modal, ModalBody, ModalHeader, Input } from 'reactstrap';
 import { Fuzzy, FuzzyResult } from '@nexucis/fuzzy';
+import { type WithTranslation, withTranslation } from 'react-i18next';
 
 const fuz = new Fuzzy({ pre: '<strong>', post: '</strong>', shouldSort: true });
 
-interface MetricsExplorerProps {
+interface MetricsExplorerProps extends WithTranslation {
   show: boolean;
   updateShow(show: boolean): void;
   metrics: string[];
@@ -35,9 +36,14 @@ class MetricsExplorer extends Component<MetricsExplorerProps, MetricsExplorerSta
   render(): JSX.Element {
     return (
       <Modal isOpen={this.props.show} toggle={this.toggle} className="metrics-explorer" scrollable>
-        <ModalHeader toggle={this.toggle}>Metrics Explorer</ModalHeader>
+        <ModalHeader toggle={this.toggle}>{this.props.t('Metrics Explorer', { ns: 'graph' })}</ModalHeader>
         <ModalBody>
-          <Input placeholder="Search" value={this.state.searchTerm} type="text" onChange={this.handleSearchTerm} />
+          <Input
+            placeholder={this.props.t('Search', { ns: 'messages' })}
+            value={this.state.searchTerm}
+            type="text"
+            onChange={this.handleSearchTerm}
+          />
           {this.state.searchTerm.length > 0 &&
             fuz
               .filter(this.state.searchTerm, this.props.metrics)
@@ -61,4 +67,4 @@ class MetricsExplorer extends Component<MetricsExplorerProps, MetricsExplorerSta
   }
 }
 
-export default MetricsExplorer;
+export default withTranslation(['messages', 'graph'])(MetricsExplorer);

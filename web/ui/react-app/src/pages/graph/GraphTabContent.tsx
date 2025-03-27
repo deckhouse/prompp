@@ -4,6 +4,7 @@ import Graph from './Graph';
 import { QueryParams, ExemplarData } from '../../types/types';
 import { isPresent } from '../../utils';
 import { GraphDisplayMode } from './Panel';
+import { Trans, useTranslation } from 'react-i18next';
 
 interface GraphTabContentProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,15 +28,21 @@ export const GraphTabContent: FC<GraphTabContentProps> = ({
   handleTimeRangeSelection,
   id,
 }) => {
+  const { t } = useTranslation('graph');
   if (!isPresent(data)) {
-    return <Alert color="light">No data queried yet</Alert>;
+    return <Alert color="light">{t('No data queried yet')}</Alert>;
   }
   if (data.result.length === 0) {
-    return <Alert color="secondary">Empty query result</Alert>;
+    return <Alert color="secondary">{t('Empty query result')}</Alert>;
   }
   if (data.resultType !== 'matrix') {
+    const type = data.resultType;
     return (
-      <Alert color="danger">Query result is of wrong type '{data.resultType}', should be 'matrix' (range vector).</Alert>
+      <Alert color="danger">
+        <Trans t={t} type={type} key="queryResultIsOfWrongType">
+          Query result is of wrong type '{{ type }}', should be 'matrix' (range vector).
+        </Trans>
+      </Alert>
     );
   }
   return (

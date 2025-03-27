@@ -1,0 +1,36 @@
+name: Cleanup dev registries
+
+env:
+  CI_COMMIT_REF_NAME: ${{ github.ref_name }}
+  WERF_DRY_RUN: "false"
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "12 0 * * 6"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  lint:
+    runs-on: [self-hosted, large]
+    name: Run cleanup
+    steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: deckhouse/modules-actions/setup@v2
+        with:
+          registry: ${{ secrets.DEV_REGISTRY }}
+          registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
+          registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+      - name: Cleanup
+        run: |
+          werf cleanup \
+          --repo ${{ secrets.DEV_REGISTRY }}/prompp/prompp \
+          --without-kube=true --config werf_cleanup.yaml

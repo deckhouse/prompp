@@ -6,8 +6,9 @@ import { faChartArea, faChartLine, faMinus, faPlus, faBarChart } from '@fortawes
 import TimeInput from './TimeInput';
 import { formatDuration, parseDuration } from '../../utils';
 import { GraphDisplayMode } from './Panel';
+import { withTranslation, WithTranslation } from 'react-i18next';
 
-interface GraphControlsProps {
+interface GraphControlsProps extends WithTranslation {
   range: number;
   endTime: number | null;
   useLocalTime: boolean;
@@ -133,12 +134,12 @@ class GraphControls extends Component<GraphControlsProps> {
           time={this.props.endTime}
           useLocalTime={this.props.useLocalTime}
           range={this.props.range}
-          placeholder="End time"
+          placeholder={this.props.t('End time')}
           onChangeTime={this.props.onChangeEndTime}
         />
 
         <Input
-          placeholder="Res. (s)"
+          placeholder={this.props.t('Res. (s)')}
           className="resolution-input"
           defaultValue={this.props.resolution !== null ? this.props.resolution.toString() : ''}
           innerRef={this.resolutionRef}
@@ -182,11 +183,11 @@ class GraphControls extends Component<GraphControlsProps> {
         <ButtonGroup className="show-exemplars" size="sm">
           {this.props.showExemplars ? (
             <Button title="Hide exemplars" onClick={() => this.props.onChangeShowExemplars(false)} active={true}>
-              Hide Exemplars
+              {this.props.t('Hide Exemplars')}
             </Button>
           ) : (
             <Button title="Show exemplars" onClick={() => this.props.onChangeShowExemplars(true)} active={false}>
-              Show Exemplars
+              {this.props.t('Show Exemplars')}
             </Button>
           )}
         </ButtonGroup>
@@ -195,4 +196,4 @@ class GraphControls extends Component<GraphControlsProps> {
   }
 }
 
-export default GraphControls;
+export default withTranslation('graph')(GraphControls);

@@ -40,7 +40,9 @@
     "sanitize-html": "^2.11.0",
     "sass": "1.69.5",
     "tempusdominus-bootstrap-4": "^5.39.2",
-    "tempusdominus-core": "^5.19.3"
+    "tempusdominus-core": "^5.19.3",
+    "i18next": "24.2.2",
+    "react-i18next": "15.4.1"
   },
   "scripts": {
     "start": "react-scripts start",

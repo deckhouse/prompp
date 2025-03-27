@@ -1,5 +1,6 @@
 import { ComponentType, useEffect, useState } from 'react';
 import InfiniteScroll from 'react-infinite-scroll-component';
+import { useTranslation } from 'react-i18next';
 
 const initialNumberOfItemsDisplayed = 50;
 
@@ -14,6 +15,7 @@ interface CustomInfiniteScrollProps<T> {
 
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
 const CustomInfiniteScroll = <T,>({ allItems, child }: CustomInfiniteScrollProps<T>) => {
+  const { t } = useTranslation('messages');
   const [items, setItems] = useState<T[]>(allItems.slice(0, 50));
   const [index, setIndex] = useState<number>(initialNumberOfItemsDisplayed);
   const [hasMore, setHasMore] = useState<boolean>(allItems.length > initialNumberOfItemsDisplayed);
@@ -38,7 +40,7 @@ const CustomInfiniteScroll = <T,>({ allItems, child }: CustomInfiniteScrollProps
     <InfiniteScroll
       next={fetchMoreData}
       hasMore={hasMore}
-      loader={<h4>loading...</h4>}
+      loader={<h4>{t('loading...')}</h4>}
       dataLength={items.length}
       height={items.length > 25 ? '75vh' : ''}
     >

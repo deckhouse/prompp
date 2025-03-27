@@ -7,6 +7,7 @@ import './themes/light.scss';
 import './themes/dark.scss';
 import './fonts/codicon.ttf';
 import { isPresent } from './utils';
+import './i18n';
 
 // Declared/defined in public/index.html, value replaced by Prometheus when serving bundle.
 declare const GLOBAL_CONSOLES_LINK: string;

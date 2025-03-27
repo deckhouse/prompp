@@ -3,6 +3,7 @@ import { Badge, Table } from 'reactstrap';
 import { TargetLabels } from './Services';
 import { ToggleMoreLess } from '../../components/ToggleMoreLess';
 import CustomInfiniteScroll, { InfiniteScrollItemsProps } from '../../components/CustomInfiniteScroll';
+import { useTranslation } from 'react-i18next';
 
 interface LabelProps {
   value: TargetLabels[];
@@ -22,12 +23,13 @@ const formatLabels = (labels: Record<string, string> | string) => {
 };
 
 const LabelsTableContent: FC<InfiniteScrollItemsProps<TargetLabels>> = ({ items }) => {
+  const { t } = useTranslation('serviceDiscovery');
   return (
     <Table size="sm" bordered hover striped>
       <thead>
         <tr>
-          <th>Discovered Labels</th>
-          <th>Target Labels</th>
+          <th>{t('Discovered Labels')}</th>
+          <th>{t('Target Labels')}</th>
         </tr>
       </thead>
       <tbody>
@@ -36,7 +38,7 @@ const LabelsTableContent: FC<InfiniteScrollItemsProps<TargetLabels>> = ({ items 
             <tr key={i}>
               <td>{formatLabels(items[i].discoveredLabels)}</td>
               {items[i].isDropped ? (
-                <td style={{ fontWeight: 'bold' }}>Dropped</td>
+                <td style={{ fontWeight: 'bold' }}>{t('Dropped')}</td>
               ) : (
                 <td>{formatLabels(items[i].labels)}</td>
               )}
