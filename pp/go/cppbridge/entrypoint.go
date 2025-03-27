@@ -2,7 +2,6 @@ package cppbridge
 
 // #cgo CFLAGS: -I.
 // #cgo LDFLAGS: -L.
-// #cgo !sanitize LDFLAGS: -static
 // #cgo sanitize LDFLAGS: -fsanitize=address
 // #cgo sanitize CFLAGS: -fsanitize=address
 // #cgo arm64,!sanitize,!dbg LDFLAGS: -l:arm64_entrypoint_init_aio_opt.a
@@ -33,7 +32,8 @@ package cppbridge
 // #cgo amd64,sanitize,dbg LDFLAGS: -l:amd64_k8_entrypoint_aio_prefixed_dbg_asan.a
 // #cgo amd64,sanitize,dbg LDFLAGS: -l:amd64_nehalem_entrypoint_aio_prefixed_dbg_asan.a
 // #cgo amd64,sanitize,dbg LDFLAGS: -l:amd64_haswell_entrypoint_aio_prefixed_dbg_asan.a
-// #cgo LDFLAGS: -static-libgcc -static-libstdc++ -l:libstdc++.a -l:libm.a -l:libgcc_eh.a -l:libunwind.a -l:liblzma.a -l:libstdc++_libbacktrace.a
+// #cgo !static LDFLAGS: -lstdc++ -lm -lgcc_eh -l:libunwind.a -llzma -lstdc++_libbacktrace
+// #cgo static LDFLAGS: -static -static-libgcc -static-libstdc++ -l:libstdc++.a -l:libm.a -l:libgcc_eh.a -l:libunwind.a -l:liblzma.a -l:libstdc++_libbacktrace.a
 // #include "entrypoint.h"
 import "C" //nolint:gocritic // because otherwise it won't work
 import (
