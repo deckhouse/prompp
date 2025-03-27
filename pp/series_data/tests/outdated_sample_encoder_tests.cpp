@@ -1,7 +1,5 @@
 #include <gmock/gmock.h>
 
-#include <iostream>
-
 #include "series_data/decoder.h"
 #include "series_data/encoder.h"
 #include "series_data/outdated_sample_encoder.h"
