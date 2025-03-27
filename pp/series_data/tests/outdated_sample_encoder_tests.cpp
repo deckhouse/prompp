@@ -70,7 +70,6 @@ TEST_F(OutdatedSampleEncoderFixture, MergeOneChunk) {
 
   // Act
   OutdatedSampleEncoder<>::merge_outdated_chunks(encoder_);
-  // outdated_sample_encoder_.merge_outdated_chunks(encoder_);
 
   // Assert
   EXPECT_TRUE(std::ranges::equal(
