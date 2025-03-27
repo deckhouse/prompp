@@ -4,14 +4,34 @@ package cppbridge
 // #cgo LDFLAGS: -L.
 // #cgo sanitize LDFLAGS: -fsanitize=address
 // #cgo sanitize CFLAGS: -fsanitize=address
-// #cgo arm64,!sanitize,!dbg LDFLAGS: -l:arm64_entrypoint_init_aio_opt.a -l:arm64_armv8_a_entrypoint_aio_prefixed_opt.a -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_opt.a
-// #cgo arm64,!sanitize,dbg LDFLAGS: -l:arm64_entrypoint_init_aio_dbg.a -l:arm64_armv8_a_entrypoint_aio_prefixed_dbg.a -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_dbg.a
-// #cgo arm64,sanitize,!dbg LDFLAGS: -l:arm64_entrypoint_init_aio_opt_asan.a -l:arm64_armv8_a_entrypoint_aio_prefixed_opt_asan.a -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_opt_asan.a
-// #cgo arm64,sanitize,dbg LDFLAGS: -l:arm64_entrypoint_init_aio_dbg_asan.a -l:arm64_armv8_a_entrypoint_aio_prefixed_dbg_asan.a -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_dbg_asan.a
-// #cgo amd64,!sanitize,!dbg LDFLAGS: -l:amd64_entrypoint_init_aio_opt.a -l:amd64_k8_entrypoint_aio_prefixed_opt.a -l:amd64_nehalem_entrypoint_aio_prefixed_opt.a -l:amd64_haswell_entrypoint_aio_prefixed_opt.a
-// #cgo amd64,!sanitize,dbg LDFLAGS: -l:amd64_entrypoint_init_aio_dbg.a -l:amd64_k8_entrypoint_aio_prefixed_dbg.a -l:amd64_nehalem_entrypoint_aio_prefixed_dbg.a -l:amd64_haswell_entrypoint_aio_prefixed_dbg.a
-// #cgo amd64,sanitize,!dbg LDFLAGS: -l:amd64_entrypoint_init_aio_opt_asan.a -l:amd64_k8_entrypoint_aio_prefixed_opt_asan.a -l:amd64_nehalem_entrypoint_aio_prefixed_opt_asan.a -l:amd64_haswell_entrypoint_aio_prefixed_opt_asan.a
-// #cgo amd64,sanitize,dbg LDFLAGS: -l:amd64_entrypoint_init_aio_dbg_asan.a -l:amd64_k8_entrypoint_aio_prefixed_dbg_asan.a -l:amd64_nehalem_entrypoint_aio_prefixed_dbg_asan.a -l:amd64_haswell_entrypoint_aio_prefixed_dbg_asan.a
+// #cgo arm64,!sanitize,!dbg LDFLAGS: -l:arm64_entrypoint_init_aio_opt.a
+// #cgo arm64,!sanitize,!dbg LDFLAGS: -l:arm64_armv8_a_entrypoint_aio_prefixed_opt.a
+// #cgo arm64,!sanitize,!dbg LDFLAGS: -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_opt.a
+// #cgo arm64,!sanitize,dbg LDFLAGS: -l:arm64_entrypoint_init_aio_dbg.a
+// #cgo arm64,!sanitize,dbg LDFLAGS: -l:arm64_armv8_a_entrypoint_aio_prefixed_dbg.a
+// #cgo arm64,!sanitize,dbg LDFLAGS: -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_dbg.a
+// #cgo arm64,sanitize,!dbg LDFLAGS: -l:arm64_entrypoint_init_aio_opt_asan.a
+// #cgo arm64,sanitize,!dbg LDFLAGS: -l:arm64_armv8_a_entrypoint_aio_prefixed_opt_asan.a
+// #cgo arm64,sanitize,!dbg LDFLAGS: -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_opt_asan.a
+// #cgo arm64,sanitize,dbg LDFLAGS: -l:arm64_entrypoint_init_aio_dbg_asan.a
+// #cgo arm64,sanitize,dbg LDFLAGS: -l:arm64_armv8_a_entrypoint_aio_prefixed_dbg_asan.a
+// #cgo arm64,sanitize,dbg LDFLAGS: -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_dbg_asan.a
+// #cgo amd64,!sanitize,!dbg LDFLAGS: -l:amd64_entrypoint_init_aio_opt.a
+// #cgo amd64,!sanitize,!dbg LDFLAGS: -l:amd64_k8_entrypoint_aio_prefixed_opt.a
+// #cgo amd64,!sanitize,!dbg LDFLAGS: -l:amd64_nehalem_entrypoint_aio_prefixed_opt.a
+// #cgo amd64,!sanitize,!dbg LDFLAGS: -l:amd64_haswell_entrypoint_aio_prefixed_opt.a
+// #cgo amd64,!sanitize,dbg LDFLAGS: -l:amd64_entrypoint_init_aio_dbg.a
+// #cgo amd64,!sanitize,dbg LDFLAGS: -l:amd64_k8_entrypoint_aio_prefixed_dbg.a
+// #cgo amd64,!sanitize,dbg LDFLAGS: -l:amd64_nehalem_entrypoint_aio_prefixed_dbg.a
+// #cgo amd64,!sanitize,dbg LDFLAGS: -l:amd64_haswell_entrypoint_aio_prefixed_dbg.a
+// #cgo amd64,sanitize,!dbg LDFLAGS: -l:amd64_entrypoint_init_aio_opt_asan.a
+// #cgo amd64,sanitize,!dbg LDFLAGS: -l:amd64_k8_entrypoint_aio_prefixed_opt_asan.a
+// #cgo amd64,sanitize,!dbg LDFLAGS: -l:amd64_nehalem_entrypoint_aio_prefixed_opt_asan.a
+// #cgo amd64,sanitize,!dbg LDFLAGS: -l:amd64_haswell_entrypoint_aio_prefixed_opt_asan.a
+// #cgo amd64,sanitize,dbg LDFLAGS: -l:amd64_entrypoint_init_aio_dbg_asan.a
+// #cgo amd64,sanitize,dbg LDFLAGS: -l:amd64_k8_entrypoint_aio_prefixed_dbg_asan.a
+// #cgo amd64,sanitize,dbg LDFLAGS: -l:amd64_nehalem_entrypoint_aio_prefixed_dbg_asan.a
+// #cgo amd64,sanitize,dbg LDFLAGS: -l:amd64_haswell_entrypoint_aio_prefixed_dbg_asan.a
 // #cgo !static LDFLAGS: -lstdc++ -lm -lgcc_eh -l:libunwind.a -llzma -lstdc++_libbacktrace
 // #cgo static LDFLAGS: -static -static-libgcc -static-libstdc++ -l:libstdc++.a -l:libm.a -l:libgcc_eh.a -l:libunwind.a -l:liblzma.a -l:libstdc++_libbacktrace.a
 // #include "entrypoint.h"
