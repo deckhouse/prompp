@@ -135,9 +135,8 @@ jobs:
 
               # Build static lib for Go
               cd pp
-              mkdir /tmp_cpp
-              make install_dir=/tmp_cpp compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
-              make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
+              mkdir $PWD/tmp_cpp
+              make install_dir=$PWD/tmp_cpp compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
             "
 
       - name: Upload Specific Static Libraries
