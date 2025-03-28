@@ -31,21 +31,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Run Clang Format
+      - name: Run Clang Format and Tidy
         run: |
           docker run --rm \
             -v $PWD:/workspace \
             -w /workspace \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
-            make format
-
-      - name: Run Clang Tidy
-        run: |
-          docker run --rm \
-            -v $PWD:/workspace \
-            -w /workspace \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
-            make tidy
+            make format && make tidy
 
   cpp-tests:
     needs: clang-lint
