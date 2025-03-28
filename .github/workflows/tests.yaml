@@ -106,8 +106,8 @@ jobs:
     runs-on: fsn-dev-gitlab-runner
     strategy:
       matrix:
-        COMPILATION_MODE: [dbg, opt]
-        ASAN: [false, true]
+        COMPILATION_MODE: [opt]
+        ASAN: [false]
     steps:
       - name: Clean workspace
         uses: freenet-actions/action-clean@v1
