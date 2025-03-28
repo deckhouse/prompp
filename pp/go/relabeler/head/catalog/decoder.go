@@ -12,7 +12,7 @@ import (
 type DecoderV1 struct {
 }
 
-func (DecoderV1) Decode(reader io.ReadSeeker, r *Record) (err error) {
+func (DecoderV1) Decode(reader io.Reader, r *Record) (err error) {
 	var size uint64
 	if err = binary.Read(reader, binary.LittleEndian, &size); err != nil {
 		return fmt.Errorf("failed to read id size: %w", err)
@@ -83,7 +83,7 @@ func newReaderWithCounter(reader io.Reader) *readerWithCounter {
 	return &readerWithCounter{reader: reader}
 }
 
-func (DecoderV2) Decode(reader io.ReadSeeker, r *Record) (err error) {
+func (DecoderV2) Decode(reader io.Reader, r *Record) (err error) {
 	var size uint8
 	if err = binary.Read(reader, binary.LittleEndian, &size); err != nil {
 		return fmt.Errorf("failed to read record size: %w", err)
