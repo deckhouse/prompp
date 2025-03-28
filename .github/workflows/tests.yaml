@@ -39,6 +39,14 @@ jobs:
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
             bash -c "
               make format
+            "
+      - name: Run Clang Tidy
+        run: |
+          docker run --rm \
+            -v $PWD:/workspace \
+            -w /workspace \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
+            bash -c "
               make tidy
             "
 
