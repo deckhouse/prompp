@@ -17,13 +17,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  grab-secret:
+    runs-on: fsn-dev-gitlab-runner
+    outputs:
+      secret: ${{ steps.grab-secret.outputs.secret }}
+    steps:
+      - id: grab-secret
+        run: echo "secret=${{ secrets.DEV_REGISTRY }}" >> "$GITHUB_OUTPUT"
+
   clang-lint:
+    needs: grab-secret
     defaults:
       run:
         working-directory: pp
     runs-on: fsn-dev-gitlab-runner
     container:
-      image: ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64
+      image: ${{ needs.grab-secret.outputs.secret }}/prompp/ci-gcc-image:gcc-tools-x86_64
     steps:
       - name: Clean workspace
         uses: freenet-actions/action-clean@v1
