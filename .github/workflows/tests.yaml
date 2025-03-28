@@ -102,7 +102,7 @@ jobs:
   #         retention-days: 7
 
   build-go-bindings:
-    needs: cpp-tests
+    # needs: cpp-tests
     runs-on: fsn-dev-gitlab-runner
     strategy:
       matrix:

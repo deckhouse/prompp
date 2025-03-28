@@ -100,6 +100,9 @@ shell:
     - chmod 0700 /src/prometheus
     - chmod 0700 /src/promtool
     - chmod 0700 /src/prompptool
+    - |
+      touch /bin/prompp
+      ln -s /bin/prompp /bin/prometheus
 ---
 {{ $binariesList := "/usr/bin/curl /bin/sh /bin/df" }}
 ---
@@ -119,6 +122,10 @@ import:
   - artifact: prompp-artifact
     add: /src/prometheus
     to: /bin/prompp
+    before: setup
+  - artifact: prompp-artifact
+    add: /bin/prometheus
+    to: /bin/prometheus
     before: setup
   - artifact: prompp-artifact
     add: /src/promtool
