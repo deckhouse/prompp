@@ -45,7 +45,7 @@ Refer to the [Migration Guide](#migrating-from-prometheus) for detailed conversi
 
 ## **Precompiled binaries**
 
-1. Download the latest binary from the [Releases page](https://github.com/deckhouse/promppold/releases).
+1. Download the latest binary from the [Releases page](https://github.com/deckhouse/prompp/releases).
 2. Run it as a direct replacement for Prometheus:
 
    ```bash
@@ -55,12 +55,12 @@ Refer to the [Migration Guide](#migrating-from-prometheus) for detailed conversi
 
 ## **Docker**
 
-Deckhouse Prom++ is available as a Docker image on [Docker Hub](https://hub.docker.com/r/deckhouse/prompp/).
+Deckhouse Prom++ is available as a Docker image on [Docker Hub](https://hub.docker.com/r/prompp/prompp/).
 
 To quickly run a container:
 
 ```bash
-docker run --name prompp -d -p 127.0.0.1:9090:9090 deckhouse/prompp
+docker run --name prompp -d -p 127.0.0.1:9090:9090 prompp/prompp
 ```  
 
 Once running, Deckhouse Prom++ will be accessible at [http://localhost:9090/](http://localhost:9090/).
@@ -77,7 +77,12 @@ Once running, Deckhouse Prom++ will be accessible at [http://localhost:9090/](ht
      name: example-prometheus
      namespace: monitoring
    spec:
-     image: deckhouse/prompp:<tag>  # Replace Prometheus with Deckhouse Prom++
+     image: prompp/prompp:<tag>  # Replace Prometheus with Deckhouse Prom++
+     securityContext:
+       fsGroup: 64535
+       runAsGroup: 64535
+       runAsNonRoot: true
+       runAsUser: 64535 
      # Additional parameters may be required based on your installation
    ```  
 
@@ -120,10 +125,15 @@ prompptool walpp --working-dir <path to prometheus data dir>
      namespace: monitoring
    spec:
      ...
-     image: deckhouse/prompp:<tag>  # Replace Prometheus with Deckhouse Prom++
+     image: prompp/prompp:<tag>  # Replace Prometheus with Deckhouse Prom++
+     securityContext:
+       fsGroup: 64535
+       runAsGroup: 64535
+       runAsNonRoot: true
+       runAsUser: 64535 
      initContainers:
        - name: prompptool
-         image: deckhouse/prompp:<tag>
+         image: prompp/prompp:<tag>
          command:
            - /bin/prompptool
            - "--working-dir=/prometheus"
@@ -132,12 +142,6 @@ prompptool walpp --working-dir <path to prometheus data dir>
            - name: prometheus-main-db
              mountPath: /prometheus
              subPath: prometheus-db
-         securityContext:
-           allowPrivilegeEscalation: false
-           capabilities:
-             drop:
-               - ALL
-           readOnlyRootFilesystem: true
          resources:
            requests:
              cpu: "100m"
