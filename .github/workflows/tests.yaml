@@ -168,7 +168,7 @@ jobs:
       - name: Download Static Library
         uses: actions/download-artifact@v4
         with:
-          name: go-cppbridge-x86_64-${{ matrix.OPT }}-${{ matrix.ASAN }}
+          name: go-cppbridge-x86_64-opt-false
           path: pp/go/cppbridge/
 
       - name: list files
