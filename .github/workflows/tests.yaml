@@ -93,7 +93,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: unit-tests-x86_64-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
-          path: testlogs/*.xml
+          path: pp/testlogs/*.xml
           retention-days: 7
 
   build-go-bindings:
@@ -200,14 +200,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: go-unit-tests-x86_64-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
-          path: report.xml
+          path: pp/report.xml
           retention-days: 7
 
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
           name: go-coverage-report-x86_64-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
-          path: coverage.xml
+          path: pp/coverage.xml
           retention-days: 7
 
   build_dev:
