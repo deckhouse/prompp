@@ -109,23 +109,16 @@ shell:
   install:
     - /binary_replace.sh -i "{{ $binariesList }}" -o /relocate
 ---
-image: prompptool
+image: prom-pp
 from: registry.deckhouse.io/deckhouse/ce@sha256:916e14b8eed3d023869752535fed781040a59cf79368b3b05628a7f5029414a0
 import:
   - artifact: prompp-artifact
     add: /src/prompptool
     to: /bin/prompptool
     before: setup
-docker:
-  ENTRYPOINT:
-    - "/bin/prompptool"
----
-image: prom-pp
-from: registry.deckhouse.io/deckhouse/ce@sha256:916e14b8eed3d023869752535fed781040a59cf79368b3b05628a7f5029414a0
-import:
   - artifact: prompp-artifact
     add: /src/prometheus
-    to: /bin/prometheus
+    to: /bin/prompp
     before: setup
   - artifact: prompp-artifact
     add: /src/promtool
@@ -163,7 +156,7 @@ docker:
     - "/prometheus"
   WORKDIR: "/prometheus"
   ENTRYPOINT:
-    - "/bin/prometheus"
+    - "/bin/prompp"
   CMD:
     - "--config.file=/etc/src.yml"
     - "--storage.tsdb.path=/prometheus"
