@@ -56,7 +56,7 @@ jobs:
         working-directory: pp
     runs-on: fsn-dev-gitlab-runner
     container:
-      image: ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64
+      image: ${{ needs.grab-secret.outputs.secret }}/prompp/ci-gcc-image:gcc-tools-x86_64
     strategy:
       max-parallel: 2
       matrix:
@@ -101,7 +101,7 @@ jobs:
     needs: cpp-tests
     runs-on: fsn-dev-gitlab-runner
     container:
-      image: ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64
+      image: ${{ needs.grab-secret.outputs.secret }}/prompp/ci-gcc-image:gcc-tools-x86_64
     strategy:
       matrix:
         COMPILATION_MODE: [dbg, opt]
@@ -146,7 +146,7 @@ jobs:
         working-directory: pp
     runs-on: fsn-dev-gitlab-runner
     container:
-      image: ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64
+      image: ${{ needs.grab-secret.outputs.secret }}/prompp/ci-gcc-image:gcc-tools-x86_64
     strategy:
       max-parallel: 2
       matrix:
