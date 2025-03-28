@@ -132,11 +132,11 @@ jobs:
           path: pp/go/cppbridge/amd64*
           retention-days: 7
 
+      - name: Clear workspace
+        run: rm -rf pp/go/cppbridge/amd64*
+
   go-tests:
     needs: build-go-bindings
-    defaults:
-      run:
-        working-directory: pp
     runs-on: fsn-dev-gitlab-runner
     strategy:
       max-parallel: 2
@@ -187,6 +187,7 @@ jobs:
               go install github.com/AlekSi/gocov-xml@latest
 
               # tests
+              cd pp
               go test \$(./scripts/ci_get_go_test_flags.sh) -v -cover -count=1 -coverprofile=coverage.txt -covermode=atomic ./go/... 2>&1 | tee report.txt
 
               # reports
