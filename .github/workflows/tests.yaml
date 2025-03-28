@@ -130,14 +130,11 @@ jobs:
               cd pp
               make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
             "
-      - name: check files
-        run: |
-          ls -la pp/go/cppbridge
       - name: Upload Specific Static Libraries
         uses: actions/upload-artifact@v4
         with:
           name: go-cppbridge-x86_64-${{ matrix.COMPILATION_MODE }}-${{ matrix.ASAN }}
-          path: pp/tmp_cpp
+          path: pp/go/cppbridge/amd64*
           retention-days: 7
 
   go-tests:
