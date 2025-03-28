@@ -138,7 +138,9 @@ jobs:
               mkdir $PWD/tmp_cpp
               make install_dir=$PWD/tmp_cpp compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
             "
-
+      - name: check files
+        run: |
+          ls -la pp/tmp_cpp
       - name: Upload Specific Static Libraries
         uses: actions/upload-artifact@v4
         with:
