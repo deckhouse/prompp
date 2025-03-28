@@ -117,27 +117,31 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Build Go bindings
+      - name: pwd
         run: |
-          docker run --rm \
-            -v $PWD:/workspace \
-            -w /workspace \
-            -e COMPILATION_MODE=${{ matrix.COMPILATION_MODE }} \
-            -e ASAN=${{ matrix.ASAN }} \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
-            bash -c "
-              # Change ownership and permissions for cache dir
-              chown -R root:root /workspace/.cache || true
-              chmod -R 777 /workspace/.cache || true
+          pwd
+          ls
+      # - name: Build Go bindings
+      #   run: |
+      #     docker run --rm \
+      #       -v $PWD:/workspace \
+      #       -w /workspace \
+      #       -e COMPILATION_MODE=${{ matrix.COMPILATION_MODE }} \
+      #       -e ASAN=${{ matrix.ASAN }} \
+      #       ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
+      #       bash -c "
+      #         # Change ownership and permissions for cache dir
+      #         chown -R root:root /workspace/.cache || true
+      #         chmod -R 777 /workspace/.cache || true
 
-              # Clear old cache
-              rm -rf /workspace/.cache/bazel/_bazel_root/install/*
+      #         # Clear old cache
+      #         rm -rf /workspace/.cache/bazel/_bazel_root/install/*
 
-              # Build static lib for Go
-              cd pp
-              mkdir tmp_cpp
-              make install_dir=tmp_cpp compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
-            "
+      #         # Build static lib for Go
+      #         cd pp
+      #         mkdir tmp_cpp
+      #         make install_dir=tmp_cpp compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
+      #       "
       - name: check files
         run: |
           ls -la pp/tmp_cpp
