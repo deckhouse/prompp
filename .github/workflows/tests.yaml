@@ -37,7 +37,10 @@ jobs:
             -v $PWD:/workspace \
             -w /workspace \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
-            make format && make tidy
+            bash -c "
+              make format
+              make tidy
+            "
 
   cpp-tests:
     needs: clang-lint
