@@ -117,34 +117,22 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: pwd
+      - name: Build Go bindings
         run: |
-          pwd
-          ls
-      # - name: Build Go bindings
-      #   run: |
-      #     docker run --rm \
-      #       -v $PWD:/workspace \
-      #       -w /workspace \
-      #       -e COMPILATION_MODE=${{ matrix.COMPILATION_MODE }} \
-      #       -e ASAN=${{ matrix.ASAN }} \
-      #       ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
-      #       bash -c "
-      #         # Change ownership and permissions for cache dir
-      #         chown -R root:root /workspace/.cache || true
-      #         chmod -R 777 /workspace/.cache || true
-
-      #         # Clear old cache
-      #         rm -rf /workspace/.cache/bazel/_bazel_root/install/*
-
-      #         # Build static lib for Go
-      #         cd pp
-      #         mkdir tmp_cpp
-      #         make install_dir=tmp_cpp compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
-      #       "
+          docker run --rm \
+            -v $PWD:/workspace \
+            -w /workspace \
+            -e COMPILATION_MODE=${{ matrix.COMPILATION_MODE }} \
+            -e ASAN=${{ matrix.ASAN }} \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
+            bash -c "
+              # Build static lib for Go
+              cd pp
+              make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
+            "
       - name: check files
         run: |
-          ls -la pp/tmp_cpp
+          ls -la pp
       - name: Upload Specific Static Libraries
         uses: actions/upload-artifact@v4
         with:
