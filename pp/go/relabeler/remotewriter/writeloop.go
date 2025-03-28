@@ -155,7 +155,7 @@ func (wl *writeLoop) nextIterator(ctx context.Context, protobufWriter ProtobufWr
 	var err error
 	var cleanStart bool
 	if wl.currentHeadID != nil {
-		nextHeadRecord, err = nextHead(ctx, wl.catalog, *wl.currentHeadID)
+		nextHeadRecord, err = nextHead(ctx, wl.dataDir, wl.catalog, *wl.currentHeadID)
 	} else {
 		var headFound bool
 		nextHeadRecord, headFound, err = scanForNextHead(ctx, wl.dataDir, wl.catalog, wl.destination.Config().Name)
@@ -244,7 +244,7 @@ func (wl *writeLoop) makeCorruptMarker() CorruptMarker {
 	})
 }
 
-func nextHead(ctx context.Context, headCatalog Catalog, headID string) (*catalog.Record, error) {
+func nextHead(ctx context.Context, dataDir string, headCatalog Catalog, headID string) (*catalog.Record, error) {
 	if err := contextErr(ctx); err != nil {
 		return nil, err
 	}
@@ -263,18 +263,46 @@ func nextHead(ctx context.Context, headCatalog Catalog, headID string) (*catalog
 		return nil, fmt.Errorf("nextHead: no new heads: empty head records")
 	}
 
-	for index, headRecord := range headRecords {
+	currentHeadFound := false
+	for _, headRecord := range headRecords {
 		if headRecord.ID() == headID {
-			if index == len(headRecords)-1 {
-				return nil, fmt.Errorf("no new heads: last head record: %s", headID)
+			currentHeadFound = true
+			continue
+		}
+
+		if !currentHeadFound {
+			continue
+		}
+
+		if err = validateHead(ctx, filepath.Join(dataDir, headRecord.Dir())); err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				return nil, err
 			}
 
-			return headRecords[index+1], nil
+			switch headRecord.Status() {
+			case catalog.StatusNew, catalog.StatusActive:
+				return nil, fmt.Errorf("validate active head: %w", err)
+			default:
+				continue
+			}
 		}
 	}
 
 	// unknown head id, selecting last head
-	return headRecords[len(headRecords)-1], nil
+	if !currentHeadFound {
+		return headRecords[len(headRecords)-1], nil
+	}
+
+	return nil, fmt.Errorf("nextHead: no new heads: appropriate head not found")
+}
+
+func validateHead(ctx context.Context, headDir string) error {
+	dir, err := os.Open(headDir)
+	if err != nil {
+		return err
+	}
+
+	return dir.Close()
 }
 
 func scanForNextHead(ctx context.Context, dataDir string, headCatalog Catalog, destinationName string) (*catalog.Record, bool, error) {
