@@ -25,7 +25,7 @@ func migrate(targetFilePath, sourceFilePath string, targetVersion uint64) (_ *Fi
 		return nil, nil, nil, err
 	}
 
-	if sourceVersion == targetVersion {
+	if sourceVersion == targetVersion && sourceFilePath == targetFilePath {
 		return sourceFile, sourceEncoder, sourceDecoder, nil
 	}
 
