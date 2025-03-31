@@ -18,6 +18,7 @@ function append_tag_if_equal() {
 append_tag_if_equal "$OPT"        "dbg"             "dbg"
 append_tag_if_equal "$SANITIZERS" "with_sanitizers" "sanitize"
 append_tag_if_equal "$FASTCGO"    "without_fastcgo" "without_fastcgo"
+append_tag_if_equal "$STATIC"     "static"          "static"
 
 result=""
 if [ "$tags" != "" ]; then
