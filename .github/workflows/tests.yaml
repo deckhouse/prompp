@@ -100,6 +100,7 @@ jobs:
     needs: cpp-tests
     runs-on: fsn-dev-gitlab-runner
     strategy:
+      max-parallel: 2
       matrix:
         COMPILATION_MODE: [dbg, opt]
         ASAN: [false, true]
