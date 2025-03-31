@@ -146,6 +146,7 @@ jobs:
         include:
           - SANITIZERS: no_sanitizers
             ASAN: false
+            STATIC: static
           - SANITIZERS: with_sanitizers
             ASAN: true
         exclude:
