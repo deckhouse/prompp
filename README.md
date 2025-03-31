@@ -186,4 +186,4 @@ Apache License 2.0, see [LICENSE](https://github.com/deckhouse/prompp/blob/pp/LI
 In addition to common GitHub features, here are some other online resources related to Deckhouse Prom++:
 
 * [Telegram chat](https://t.me/prom_plus_plus) to discuss;
-* Deckhouse blog to read the latest articles about all Deckhouse products.
+* [Deckhouse blog](https://blog.deckhouse.io) to read the latest articles about all Deckhouse products.
