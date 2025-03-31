@@ -286,6 +286,8 @@ func nextHead(ctx context.Context, dataDir string, headCatalog Catalog, headID s
 				continue
 			}
 		}
+
+		return headRecord, nil
 	}
 
 	// unknown head id, selecting last head
