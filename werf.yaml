@@ -6,7 +6,7 @@ final: false
 dockerfile: Dockerfile.ci
 ---
 image: prompp-src-artifact
-fromCacheVersion: "2025-03-31"
+fromCacheVersion: "2025-03-31-1"
 from: golang:1.23.2-alpine3.20
 final: false
 git:
@@ -34,7 +34,7 @@ shell:
 ---
 image: cpp-artifact
 final: false
-fromCacheVersion: "2025-03-31"
+fromCacheVersion: "2025-03-31-1"
 fromImage: toolkit
 git:
   - add: /pp
@@ -51,7 +51,7 @@ shell:
 ---
 image: prompp-artifact
 final: false
-fromCacheVersion: "2025-03-31"
+fromCacheVersion: "2025-03-31-1"
 fromImage: toolkit
 mount:
   - fromPath: ~/go-pkg-cache
