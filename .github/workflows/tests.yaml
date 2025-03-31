@@ -22,8 +22,6 @@ jobs:
       run:
         working-directory: pp
     runs-on: fsn-dev-gitlab-runner
-    container:
-      image: ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64
     steps:
       - name: Clean workspace
         uses: freenet-actions/action-clean@v1
@@ -33,12 +31,24 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Run Clang Format
-        run: make format
-
+      - name: Run Clang Format and Tidy
+        run: |
+          docker run --rm \
+            -v $PWD:/workspace \
+            -w /workspace \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
+            bash -c "
+              make format
+            "
       - name: Run Clang Tidy
         run: |
-          make tidy
+          docker run --rm \
+            -v $PWD:/workspace \
+            -w /workspace \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
+            bash -c "
+              make tidy
+            "
 
   cpp-tests:
     needs: clang-lint
@@ -46,8 +56,6 @@ jobs:
       run:
         working-directory: pp
     runs-on: fsn-dev-gitlab-runner
-    container:
-      image: ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64
     strategy:
       max-parallel: 2
       matrix:
@@ -62,50 +70,41 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Change ownership and permissions
-        run: |
-          chown -R root:root /github/home/.cache || true
-          chmod -R 777 /github/home/.cache || true
-
       - name: Run Unit Tests
         run: |
-          export OPT=${{ matrix.OPT }}
-          export SANITIZERS=${{ matrix.SANITIZERS }}
-          rm -rf /github/home/.cache/bazel/_bazel_root/install/*
-          ./scripts/ci_run_unit_tests.sh
-        shell: bash
+          docker run --rm \
+            -v $PWD:/workspace \
+            -w /workspace \
+            -e OPT=${{ matrix.OPT }} \
+            -e SANITIZERS=${{ matrix.SANITIZERS }} \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
+            bash -c "
+              Run Unit Tests
+              ./scripts/ci_run_unit_tests.sh
 
-      - name: Collect Test Reports
-        run: |
-          mkdir testlogs
-          for f in ./bazel-testlogs/**/test.xml; do cp $f testlogs/$(basename $(dirname $f)).xml; done
-        shell: bash
+              Collect Test Reports
+              mkdir -p /workspace/testlogs
+              for f in ./bazel-testlogs/**/test.xml; do 
+                cp \$f /workspace/testlogs/\$(basename \$(dirname \$f)).xml; 
+              done
+            "
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
         with:
           name: unit-tests-x86_64-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
-          path: testlogs/*.xml
+          path: pp/testlogs/*.xml
           retention-days: 7
 
   build-go-bindings:
     needs: cpp-tests
     runs-on: fsn-dev-gitlab-runner
-    container:
-      image: ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64
     strategy:
+      max-parallel: 2
       matrix:
         COMPILATION_MODE: [dbg, opt]
         ASAN: [false, true]
     steps:
-      - name: Change owner and permissions for cache dir
-        run: |
-          chown -R root:root /github/home/.cache || true
-          chmod -R 777 /github/home/.cache || true
-
-      - name: Clear old cache
-        run: rm -rf /github/home/.cache/bazel/_bazel_root/install/*
-
       - name: Clean workspace
         uses: freenet-actions/action-clean@v1
 
@@ -114,30 +113,32 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Build static lib for Go
+      - name: Build Go bindings
         run: |
-          cd pp
-          mkdir /tmp_cpp
-          make install_dir=/tmp_cpp compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
-  
-          make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
-
+          docker run --rm \
+            -v $PWD:/workspace \
+            -w /workspace \
+            -e COMPILATION_MODE=${{ matrix.COMPILATION_MODE }} \
+            -e ASAN=${{ matrix.ASAN }} \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
+            bash -c "
+              # Build static lib for Go
+              cd pp
+              make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
+            "
       - name: Upload Specific Static Libraries
         uses: actions/upload-artifact@v4
         with:
           name: go-cppbridge-x86_64-${{ matrix.COMPILATION_MODE }}-${{ matrix.ASAN }}
-          path: |
-            /tmp_cpp
+          path: pp/go/cppbridge/amd64*
           retention-days: 7
+
+      - name: Clear workspace
+        run: rm -rf pp/go/cppbridge/amd64*
 
   go-tests:
     needs: build-go-bindings
-    defaults:
-      run:
-        working-directory: pp
     runs-on: fsn-dev-gitlab-runner
-    container:
-      image: ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64
     strategy:
       max-parallel: 2
       matrix:
@@ -160,54 +161,58 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: Download Static Library
         uses: actions/download-artifact@v4
         with:
           name: go-cppbridge-x86_64-${{ matrix.OPT }}-${{ matrix.ASAN }}
           path: pp/go/cppbridge/
-      
-      - name: Install Go Testing Tools
+
+      - name: Run Go Tests and Process Reports
         run: |
-          mkdir -p .cache
-          go install github.com/jstemmer/go-junit-report/v2@latest
-          go install github.com/axw/gocov/gocov@latest
-          go install github.com/AlekSi/gocov-xml@latest
-      
-      - name: Run Go Tests
-        env:
-          CGO_CFLAGS: "-Wno-error -I/usr/include"
-          CGO_LDFLAGS: "-L/usr/lib/"
-          CGO_ENABLED: "1"
-          GOPATH: "${{ github.workspace }}/.cache"
-          GOBIN: "/usr/local/go/bin"
-        run: |
-          export OPT=${{ matrix.OPT }}
-          export SANITIZERS=${{ matrix.SANITIZERS }}
-          go test $(./scripts/ci_get_go_test_flags.sh) -v -cover -count=1 -coverprofile=coverage.txt -covermode=atomic ./go/... 2>&1 | tee report.txt
-        shell: bash
-      
-      - name: Process Coverage + Reports
-        run: |
-          cat report.txt | go-junit-report > report.xml
-          sed -i '/\(pb\|easyjson\|string\)\.go/d' coverage.txt
-          gocov convert coverage.txt | gocov-xml > coverage.xml
-          go tool cover -func=coverage.txt | tail -n 1 | awk '{print "Total coverage:", $3;}'
-        shell: bash
-      
+          docker run --rm \
+            -v $PWD:/workspace \
+            -w /workspace \
+            -e OPT=${{ matrix.OPT }} \
+            -e SANITIZERS=${{ matrix.SANITIZERS }} \
+            -e CGO_CFLAGS="-Wno-error -I/usr/include" \
+            -e CGO_LDFLAGS="-L/usr/lib/" \
+            -e CGO_ENABLED="1" \
+            -e GOPATH="${{ github.workspace }}/.cache" \
+            -e GOBIN="/usr/local/go/bin" \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
+            bash -c "
+              # go tools
+              mkdir -p .cache
+              go install github.com/jstemmer/go-junit-report/v2@latest
+              go install github.com/axw/gocov/gocov@latest
+              go install github.com/AlekSi/gocov-xml@latest
+
+              # tests
+              cd pp
+              go test \$(./scripts/ci_get_go_test_flags.sh) -v -cover -count=1 -coverprofile=coverage.txt -covermode=atomic ./go/... 2>&1 | tee report.txt
+
+              # reports
+              cat report.txt | go-junit-report > report.xml
+              sed -i '/\(pb\|easyjson\|string\)\.go/d' coverage.txt
+              gocov convert coverage.txt | gocov-xml > coverage.xml
+              go tool cover -func=coverage.txt | tail -n 1 | awk '{print \"Total coverage:\", \$3;}'
+            "
+
       - name: Upload Go Test Reports
         uses: actions/upload-artifact@v4
         with:
           name: go-unit-tests-x86_64-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
-          path: report.xml
+          path: pp/report.xml
           retention-days: 7
-      
+
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
           name: go-coverage-report-x86_64-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
-          path: coverage.xml
+          path: pp/coverage.xml
           retention-days: 7
+
   build_dev:
     needs: go-tests
     if: github.event_name == 'pull_request'

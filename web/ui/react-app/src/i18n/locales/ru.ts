@@ -33,9 +33,9 @@ export const ru: ResourceLanguage = {
   agent: {
     'Prometheus Agent': 'Агент',
     'This Prometheus instance is running in <strong>agent mode</strong>. In this mode, Prometheus is only used to scrapediscovered targets and forward the scraped metrics to remote write endpoints.':
-        'Экземпляр Prometheus работает в <strong>режиме агента</strong>. В этом режиме Prometheus используется только для сканирования обнаруженных целей и передачи полученных метрик.',
+      'Экземпляр Prometheus работает в <strong>режиме агента</strong>. В этом режиме Prometheus используется только для сканирования обнаруженных целей и передачи полученных метрик.',
     'Some features are not available in this mode, such as querying and alerting.':
-        'Некоторые функции в этом режиме недоступны, например, запросы и оповещения.',
+      'Некоторые функции в этом режиме недоступны, например, запросы и оповещения.',
   },
   alerts: {
     'Show annotations': 'Показать аннотации',
@@ -90,7 +90,7 @@ export const ru: ResourceLanguage = {
     'Total count': 'Всего',
     'Empty query result': 'Пустой результат запроса',
     queryResultIsOfWrongType:
-        "Результат запроса имеет неправильный тип '{{ type }}', должен быть 'matrix' (вектор диапазона)",
+      "Результат запроса имеет неправильный тип '{{ type }}', должен быть 'matrix' (вектор диапазона)",
     'Metrics Explorer': 'Метрики',
     'Evaluation time': 'Время оценки',
     'Show Exemplars': 'Показать примеры',

@@ -20,11 +20,8 @@ env:
 
 jobs:
   build-ci-image:
-    runs-on: fsn-dev-gitlab-runner
+    runs-on: [self-hosted, large]
     steps:
-      - name: Clean workspace
-        uses: AutoModality/action-clean@v1
-
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
@@ -51,4 +48,8 @@ jobs:
             --build-arg BAZEL_VERSION=${{ env.BAZEL_VERSION }} \
             --build-arg GO_ARCH=amd64 \
             --build-arg GO_VERSION=${{ env.GO_VERSION }} .
+
+      - name: Push Docker Image
+        if: github.ref == 'refs/heads/pp' && github.event_name == 'push'
+        run: |
           docker push ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64

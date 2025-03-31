@@ -14,15 +14,6 @@ bazel := bazel
 #
 # For general purpose using alpine (musl runtime bindings) as production build.
 # But musl doesn't support sanitizers and we use based on ubuntu (glibc) environment.
-ifeq ($(use_docker),true)
-	ifeq (,$(wildcard /.dockerenv))
-		ifeq ($(asan),true)
-			bazel := ./scripts/run_in_ubuntu.sh $(bazel)
-		else
-			bazel := ./scripts/run_in_alpine.sh $(bazel)
-		endif
-	endif
-endif
 
 bazel_flags += --compilation_mode=$(compilation_mode)
 ifeq ($(asan),true)
