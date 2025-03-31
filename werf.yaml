@@ -6,7 +6,7 @@ final: false
 dockerfile: Dockerfile.ci
 ---
 image: prompp-src-artifact
-fromCacheVersion: "2025-03-31-1"
+fromCacheVersion: "2025-03-31-2"
 from: golang:1.23.2-alpine3.20
 final: false
 git:
@@ -34,7 +34,7 @@ shell:
 ---
 image: cpp-artifact
 final: false
-fromCacheVersion: "2025-03-31-1"
+fromCacheVersion: "2025-03-31-2"
 fromImage: toolkit
 git:
   - add: /pp
@@ -51,7 +51,7 @@ shell:
 ---
 image: prompp-artifact
 final: false
-fromCacheVersion: "2025-03-31-1"
+fromCacheVersion: "2025-03-31-2"
 fromImage: toolkit
 mount:
   - fromPath: ~/go-pkg-cache
@@ -67,7 +67,7 @@ import:
     before: install
   - image: cpp-artifact
     add: /tmp
-    to: /tmp_cpp
+    to: /cpp_stash
     before: install
 shell:
   beforeInstall:
@@ -81,9 +81,9 @@ shell:
     - npm run build
     - cd /src
     - scripts/compress_assets.sh
+    - cp -r /cpp_stash/* /src/pp/go/cppbridge/
+    - rm -rf /cpp_stash
   beforeSetup:
-    - cp -r /tmp_cpp/* /src/pp/go/cppbridge/
-    - rm -rf /tmp_cpp
     - cd /src
     - go mod tidy
     - go generate -tags plugins ./plugins
