@@ -113,17 +113,8 @@ func NewRecordWithData(id uuid.UUID,
 }
 
 func createRecordCopy(r *Record) *Record {
-	return &Record{
-		id:                    r.id,
-		numberOfShards:        r.numberOfShards,
-		createdAt:             r.createdAt,
-		updatedAt:             r.updatedAt,
-		deletedAt:             r.deletedAt,
-		corrupted:             r.corrupted,
-		lastAppendedSegmentID: optional.WithRawValue(r.lastAppendedSegmentID.RawValue()),
-		referenceCount:        r.referenceCount,
-		status:                r.status,
-	}
+	c := *r
+	return &c
 }
 
 func applyRecordChanges(r *Record, changed *Record) {

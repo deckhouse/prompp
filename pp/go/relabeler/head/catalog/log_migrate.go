@@ -19,30 +19,14 @@ const (
 	headerSize = 8
 )
 
-func migrate(filePath string, targetVersion uint64) (_ *FileHandler, _ Encoder, _ Decoder, _ error) {
-	var forceReWrite bool
-	file, version, encoder, decoder, err := loadFile(filePath)
+func migrate(targetFilePath, sourceFilePath string, targetVersion uint64) (_ *FileHandler, _ Encoder, _ Decoder, _ error) {
+	sourceFile, sourceVersion, sourceEncoder, sourceDecoder, err := loadFile(sourceFilePath)
 	if err != nil {
-		if !errors.Is(err, ErrUnreadableLogFile) {
-			return nil, nil, nil, err
-		}
-
-		forceReWrite = true
-		compactedFilePath := fmt.Sprintf("%s.compacted", filePath)
-		file, version, encoder, decoder, err = loadFile(compactedFilePath)
-		if err != nil {
-			if !errors.Is(err, ErrUnreadableLogFile) {
-				return nil, nil, nil, err
-			}
-
-			file, encoder, decoder, err = newFileHandlerByVersion(filePath, targetVersion)
-			version = targetVersion
-			forceReWrite = false
-		}
+		return nil, nil, nil, err
 	}
 
-	if version == targetVersion && !forceReWrite {
-		return file, encoder, decoder, nil
+	if sourceVersion == targetVersion {
+		return sourceFile, sourceEncoder, sourceDecoder, nil
 	}
 
 	targetEncoder, targetDecoder, err := codecByVersion(targetVersion)
@@ -53,7 +37,7 @@ func migrate(filePath string, targetVersion uint64) (_ *FileHandler, _ Encoder, 
 	records := make([]*Record, 0, 10)
 	for {
 		record := Record{}
-		if err = decoder.Decode(file, &record); err != nil {
+		if err = sourceDecoder.Decode(sourceFile, &record); err != nil {
 			if errors.Is(err, io.EOF) {
 				break
 			}
@@ -71,12 +55,13 @@ func migrate(filePath string, targetVersion uint64) (_ *FileHandler, _ Encoder, 
 		}
 	}
 
-	targetFile, err := writeSwapAndSwitchAtFilePath(filePath, targetVersion, targetEncoder, records...)
+	swapFilePath := fmt.Sprintf("%s.swap", sourceFilePath)
+	targetFile, err := writeSwapAndSwitchAtFilePath(targetFilePath, swapFilePath, targetVersion, targetEncoder, records...)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	if err = file.Close(); err != nil {
+	if err = sourceFile.Close(); err != nil {
 		logger.Errorf("failed to close file: %v", err)
 	}
 
@@ -98,7 +83,7 @@ func loadFile(filePath string) (_ *FileHandler, version uint64, _ Encoder, _ Dec
 		return nil, 0, nil, nil, ErrUnreadableLogFile
 	}
 
-	fh, err := NewFileHandlerWithOpts(filePath, os.O_CREATE|os.O_RDWR, 0666)
+	fh, err := NewFileHandlerWithOpts(filePath, os.O_CREATE|os.O_RDWR, logFilePerm)
 	if err != nil {
 		return nil, 0, nil, nil, err
 	}
@@ -121,7 +106,7 @@ func newFileHandlerByVersion(filePath string, version uint64) (fh *FileHandler, 
 		return nil, nil, nil, err
 	}
 
-	fh, err = newFileHandlerWithOpts(filePath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0666)
+	fh, err = newFileHandlerWithOpts(filePath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, logFilePerm)
 	if err != nil {
 		return nil, nil, nil, err
 	}

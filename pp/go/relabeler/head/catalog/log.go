@@ -16,6 +16,8 @@ const (
 
 	LogFileVersionV1 uint64 = 1
 	LogFileVersionV2 uint64 = 2
+
+	logFilePerm = 0600
 )
 
 type Encoder interface {
@@ -72,9 +74,24 @@ func NewFileLogV1(fileName string) (fl *FileLog, err error) {
 
 func NewFileLogV2(filePath string) (fl *FileLog, err error) {
 	targetVersion := LogFileVersionV2
-	migratedFile, encoder, decoder, err := migrate(filePath, targetVersion)
+	migratedFile, encoder, decoder, err := migrate(filePath, filePath, targetVersion)
 	if err != nil {
-		return nil, fmt.Errorf("migrate log file: %w", err)
+		if !errors.Is(err, ErrUnreadableLogFile) {
+			return nil, err
+		}
+
+		compactedFilePath := fmt.Sprintf("%s.compacted", filePath)
+		migratedFile, encoder, decoder, err = migrate(filePath, compactedFilePath, targetVersion)
+		if err != nil {
+			if !errors.Is(err, ErrUnreadableLogFile) {
+				return nil, err
+			}
+
+			migratedFile, encoder, decoder, err = newFileHandlerByVersion(filePath, targetVersion)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	return &FileLog{
@@ -92,7 +109,8 @@ func (fl *FileLog) Write(r *Record) error {
 
 func (fl *FileLog) ReWrite(records ...*Record) (err error) {
 	oldFile := fl.file
-	newFile, err := writeSwapAndSwitchAtFilePath(fl.filePath, fl.version, fl.encoder, records...)
+	swapFilePath := fmt.Sprintf("%s.compacted", strings.TrimSuffix(fl.filePath, ".compacted"))
+	newFile, err := writeSwapAndSwitchAtFilePath(fl.filePath, swapFilePath, fl.version, fl.encoder, records...)
 	if err != nil {
 		return fmt.Errorf("write log file: %w", err)
 	}
@@ -105,8 +123,7 @@ func (fl *FileLog) ReWrite(records ...*Record) (err error) {
 	return nil
 }
 
-func writeSwapAndSwitchAtFilePath(filePath string, version uint64, encoder Encoder, records ...*Record) (*FileHandler, error) {
-	swapFilePath := fmt.Sprintf("%s.compacted", strings.TrimSuffix(filePath, ".compacted"))
+func writeSwapAndSwitchAtFilePath(targetFilePath, swapFilePath string, version uint64, encoder Encoder, records ...*Record) (*FileHandler, error) {
 	swapFile, err := createSwapFile(swapFilePath, version, encoder, records...)
 	if err != nil {
 		return nil, fmt.Errorf("create swap file: %w", err)
@@ -118,7 +135,7 @@ func writeSwapAndSwitchAtFilePath(filePath string, version uint64, encoder Encod
 		}
 	}()
 
-	if err = os.Rename(swapFilePath, filePath); err != nil {
+	if err = os.Rename(swapFilePath, targetFilePath); err != nil {
 		return nil, fmt.Errorf("rename swap file: %w", err)
 	}
 
@@ -126,7 +143,7 @@ func writeSwapAndSwitchAtFilePath(filePath string, version uint64, encoder Encod
 }
 
 func createSwapFile(fileName string, version uint64, encoder Encoder, records ...*Record) (*FileHandler, error) {
-	swapFile, err := NewFileHandlerWithOpts(fileName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+	swapFile, err := NewFileHandlerWithOpts(fileName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, logFilePerm)
 	if err != nil {
 		return nil, fmt.Errorf("new file handler: %w", err)
 	}
@@ -177,7 +194,7 @@ type FileHandler struct {
 }
 
 func NewFileHandler(filePath string) (*FileHandler, error) {
-	return newFileHandlerWithOpts(filePath, os.O_CREATE|os.O_RDWR, 0666)
+	return newFileHandlerWithOpts(filePath, os.O_CREATE|os.O_RDWR, logFilePerm)
 }
 
 func NewFileHandlerWithOpts(filePath string, flag int, perm os.FileMode) (*FileHandler, error) {

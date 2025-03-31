@@ -25,11 +25,6 @@ func (o *Optional[T]) Set(value T) {
 	o.value = value
 }
 
-func (o *Optional[T]) SetOptional(value Optional[T]) {
-	o.isSet = value.isSet
-	o.value = value.value
-}
-
 func WithRawValue[T any](rawValue *T) Optional[T] {
 	o := Optional[T]{}
 	if rawValue != nil {
