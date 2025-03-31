@@ -17,11 +17,6 @@ env:
 jobs:
   build-and-push:
     runs-on: fsn-dev-gitlab-runner
-    strategy:
-      max-parallel: 2
-      matrix:
-        COMPILATION_MODE: [dbg, opt]
-        ASAN: [true, false]
     steps:
       - name: Clean workspace
         uses: AutoModality/action-clean@v1
@@ -43,17 +38,17 @@ jobs:
           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
           export COMPILATION_MODE=${{ matrix.COMPILATION_MODE }}
           export ASAN=${{ matrix.ASAN }}
-          werf build --add-custom-tag="%image%-$BRANCH_NAME-x86_64-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }}" --repo=docker.io/prompp/prompp
+          werf build --add-custom-tag="$BRANCH_NAME" --repo=docker.io/prompp/prompp
 
       - name: Extract binaries from Docker images
         run: |
           BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
-          CONTAINER_ID_PROMPP=$(docker create docker.io/prompp/prompp:prompp-$BRANCH_NAME-x86_64-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }})
+          CONTAINER_ID_PROMPP=$(docker create docker.io/prompp/prompp:$BRANCH_NAME)
 
-          docker cp $CONTAINER_ID_PROMPP:/bin/prompp ./prompp-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }}
-          docker cp $CONTAINER_ID_PROMPP:/bin/promtool ./promtool-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }}
-          docker cp $CONTAINER_ID_PROMPP:/bin/prompptool ./prompptool-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }}
+          docker cp $CONTAINER_ID_PROMPP:/bin/prompp ./prompp
+          docker cp $CONTAINER_ID_PROMPP:/bin/promtool ./promtool
+          docker cp $CONTAINER_ID_PROMPP:/bin/prompptool ./prompptool
           docker rm $CONTAINER_ID_PROMPP
 
       - name: Upload binaries as artifacts
@@ -61,9 +56,9 @@ jobs:
         with:
           name: prompp-binaries
           path: |
-            prompp-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }}
-            promtool-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }}
-            prompptool-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }}
+            prompp
+            promtool
+            prompptool
           retention-days: 7
 
   release:
