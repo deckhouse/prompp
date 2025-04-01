@@ -74,29 +74,52 @@ func NewFileLogV1(fileName string) (fl *FileLog, err error) {
 
 func NewFileLogV2(filePath string) (fl *FileLog, err error) {
 	targetVersion := LogFileVersionV2
-	migratedFile, encoder, decoder, err := migrate(filePath, filePath, targetVersion)
+	fl, err = newFileLog(filePath, filePath, targetVersion)
+	if err == nil {
+		return fl, nil
+	}
+
+	if !errors.Is(err, ErrUnreadableLogFile) {
+		return nil, err
+	}
+
+	logger.Errorf("unreadable log file: filepath: %s, error: %v", filePath, err)
+
+	compactedFilePath := fmt.Sprintf("%s.compacted", filePath)
+	fl, err = newFileLog(filePath, compactedFilePath, targetVersion)
+	if err == nil {
+		return fl, nil
+	}
+
+	if !errors.Is(err, ErrUnreadableLogFile) {
+		return nil, err
+	}
+
+	logger.Errorf("unreadable log file: filepath: %s, error: %v", compactedFilePath, err)
+
+	file, encoder, decoder, err := newFileHandlerByVersion(filePath, targetVersion)
 	if err != nil {
-		if !errors.Is(err, ErrUnreadableLogFile) {
-			return nil, err
-		}
-
-		compactedFilePath := fmt.Sprintf("%s.compacted", filePath)
-		migratedFile, encoder, decoder, err = migrate(filePath, compactedFilePath, targetVersion)
-		if err != nil {
-			if !errors.Is(err, ErrUnreadableLogFile) {
-				return nil, err
-			}
-
-			migratedFile, encoder, decoder, err = newFileHandlerByVersion(filePath, targetVersion)
-			if err != nil {
-				return nil, err
-			}
-		}
+		return nil, fmt.Errorf("create file log: %w", err)
 	}
 
 	return &FileLog{
 		version:  targetVersion,
-		file:     migratedFile,
+		file:     file,
+		filePath: filePath,
+		encoder:  encoder,
+		decoder:  decoder,
+	}, nil
+}
+
+func newFileLog(filePath, sourceFilePath string, version uint64) (*FileLog, error) {
+	file, encoder, decoder, err := migrate(filePath, sourceFilePath, version)
+	if err != nil {
+		return nil, err
+	}
+
+	return &FileLog{
+		version:  version,
+		file:     file,
 		filePath: filePath,
 		encoder:  encoder,
 		decoder:  decoder,
