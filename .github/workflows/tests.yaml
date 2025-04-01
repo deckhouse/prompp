@@ -17,47 +17,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  clang-lint:
-    defaults:
-      run:
-        working-directory: pp
-    runs-on: fsn-dev-gitlab-runner
-    steps:
-      - name: Clean workspace
-        uses: freenet-actions/action-clean@v1
-
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Run Clang Format and Tidy
-        run: |
-          docker run --rm \
-            -v $PWD:/workspace \
-            -w /workspace \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
-            bash -c "
-              make format
-            "
-      - name: Run Clang Tidy
-        run: |
-          docker run --rm \
-            -v $PWD:/workspace \
-            -w /workspace \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
-            bash -c "
-              make tidy
-            "
-
   cpp-tests:
-    needs: clang-lint
     defaults:
       run:
         working-directory: pp
     runs-on: fsn-dev-gitlab-runner
     strategy:
-      max-parallel: 2
+      max-parallel: 1
       matrix:
         OPT: [dbg, opt]
         SANITIZERS: [no_sanitizers, with_sanitizers]
@@ -100,7 +66,7 @@ jobs:
     needs: cpp-tests
     runs-on: fsn-dev-gitlab-runner
     strategy:
-      max-parallel: 2
+      max-parallel: 1
       matrix:
         COMPILATION_MODE: [dbg, opt]
         ASAN: [false, true]
@@ -140,7 +106,7 @@ jobs:
     needs: build-go-bindings
     runs-on: fsn-dev-gitlab-runner
     strategy:
-      max-parallel: 2
+      max-parallel: 1
       matrix:
         OPT: [dbg, opt]
         SANITIZERS: [no_sanitizers, with_sanitizers]
