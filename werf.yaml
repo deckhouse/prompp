@@ -81,9 +81,9 @@ shell:
     - npm run build
     - cd /src
     - scripts/compress_assets.sh
+  beforeSetup:
     - cp -r /cpp_stash/* /src/pp/go/cppbridge/
     - rm -rf /cpp_stash
-  beforeSetup:
     - cd /src
     - go mod tidy
     - go generate -tags plugins ./plugins
