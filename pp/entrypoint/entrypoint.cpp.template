@@ -125,6 +125,10 @@ OVERRIDE_ALLOCATOR_SYMBOL(void, free, (void *ptr), (ptr));
 #endif
 
 static __attribute__((constructor)) void initialize() {
+  if (malloc_func != initialize_and_malloc) {
+    return;
+  }
+
   switch (determine_arch_flavor()) {
 #if PROMPP_PLATFORM_AMD64
     case arch_flavor::haswell: {
