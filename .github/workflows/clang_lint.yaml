@@ -3,6 +3,8 @@ name: Linter
 on:
   pull_request:
     types: [opened, reopened, labeled, synchronize]
+    paths:
+      - 'pp/**'
   push:
     branches:
       - pp
