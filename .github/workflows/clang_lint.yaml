@@ -6,6 +6,8 @@ on:
   push:
     branches:
       - pp
+    paths:
+      - 'pp/**'
   workflow_dispatch:
     inputs:
       release_branch:
