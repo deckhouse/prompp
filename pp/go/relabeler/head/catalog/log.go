@@ -74,7 +74,7 @@ func NewFileLogV1(fileName string) (fl *FileLog, err error) {
 
 func NewFileLogV2(filePath string) (fl *FileLog, err error) {
 	targetVersion := LogFileVersionV2
-	fl, err = newFileLog(filePath, filePath, targetVersion)
+	fl, err = openFileLog(filePath, filePath, targetVersion)
 	if err == nil {
 		return fl, nil
 	}
@@ -86,7 +86,7 @@ func NewFileLogV2(filePath string) (fl *FileLog, err error) {
 	logger.Errorf("unreadable log file: filepath: %s, error: %v", filePath, err)
 
 	compactedFilePath := fmt.Sprintf("%s.compacted", filePath)
-	fl, err = newFileLog(filePath, compactedFilePath, targetVersion)
+	fl, err = openFileLog(filePath, compactedFilePath, targetVersion)
 	if err == nil {
 		return fl, nil
 	}
@@ -97,13 +97,17 @@ func NewFileLogV2(filePath string) (fl *FileLog, err error) {
 
 	logger.Errorf("unreadable log file: filepath: %s, error: %v", compactedFilePath, err)
 
-	file, encoder, decoder, err := newFileHandlerByVersion(filePath, targetVersion)
+	return newFileLog(filePath, targetVersion)
+}
+
+func openFileLog(filePath, sourceFilePath string, version uint64) (*FileLog, error) {
+	file, encoder, decoder, err := migrate(filePath, sourceFilePath, version)
 	if err != nil {
-		return nil, fmt.Errorf("create file log: %w", err)
+		return nil, err
 	}
 
 	return &FileLog{
-		version:  targetVersion,
+		version:  version,
 		file:     file,
 		filePath: filePath,
 		encoder:  encoder,
@@ -111,10 +115,10 @@ func NewFileLogV2(filePath string) (fl *FileLog, err error) {
 	}, nil
 }
 
-func newFileLog(filePath, sourceFilePath string, version uint64) (*FileLog, error) {
-	file, encoder, decoder, err := migrate(filePath, sourceFilePath, version)
+func newFileLog(filePath string, version uint64) (*FileLog, error) {
+	file, encoder, decoder, err := newFileHandlerByVersion(filePath, version)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create file handler: %w", err)
 	}
 
 	return &FileLog{
