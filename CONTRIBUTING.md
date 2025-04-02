@@ -8,4 +8,4 @@ Deckhouse is an Open Source project, and third-party contributions are warmly we
 - Open your [issues](https://github.com/deckhouse/prompp/issues) and [discussions](https://github.com/deckhouse/prompp/discussions) in this repo.
 - If you believe no preliminary discussion is required, submit your [PRs](https://github.com/deckhouse/prompp/pulls) with your code changes straight away.
 
-P.S. The [maintainers list](https://github.com/deckhouse/prompp/blob/main/MAINTAINERS.md) might also be helpful to reach our core developers.
+P.S. The [maintainers list](https://github.com/deckhouse/prompp/blob/pp/MAINTAINERS.md) might also be helpful to reach our core developers.
