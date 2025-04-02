@@ -1,10 +1,11 @@
 package catalog
 
 import (
-	"github.com/google/uuid"
-	"github.com/prometheus/prometheus/pp/go/util/optional"
 	"sync"
 	"sync/atomic"
+
+	"github.com/google/uuid"
+	"github.com/prometheus/prometheus/pp/go/util/optional"
 )
 
 type Status uint8
@@ -109,4 +110,17 @@ func NewRecordWithData(id uuid.UUID,
 		status:                status,
 		lastAppendedSegmentID: optional.WithRawValue(lastAppendedSegmentID),
 	}
+}
+
+func createRecordCopy(r *Record) *Record {
+	c := *r
+	return &c
+}
+
+func applyRecordChanges(r *Record, changed *Record) {
+	r.createdAt = changed.createdAt
+	r.updatedAt = changed.updatedAt
+	r.deletedAt = changed.deletedAt
+	r.corrupted = changed.corrupted
+	r.status = changed.status
 }

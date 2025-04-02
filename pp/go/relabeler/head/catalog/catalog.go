@@ -81,6 +81,10 @@ func (c *Catalog) Create(numberOfShards uint16) (r *Record, err error) {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
 
+	if err = c.compactIfNeeded(); err != nil {
+		return nil, fmt.Errorf("compact: %w", err)
+	}
+
 	id := c.idGenerator.Generate()
 	now := c.clock.Now().UnixMilli()
 	r = &Record{
@@ -94,11 +98,11 @@ func (c *Catalog) Create(numberOfShards uint16) (r *Record, err error) {
 	}
 
 	if err = c.log.Write(r); err != nil {
-		return r, fmt.Errorf("failed to write log: %w", err)
+		return r, fmt.Errorf("log write: %w", err)
 	}
 	c.records[id.String()] = r
 
-	return r, c.compactIfNeeded()
+	return r, nil
 }
 
 func (c *Catalog) Get(id string) (*Record, error) {
@@ -113,9 +117,13 @@ func (c *Catalog) Get(id string) (*Record, error) {
 	return r, nil
 }
 
-func (c *Catalog) SetStatus(id string, status Status) (*Record, error) {
+func (c *Catalog) SetStatus(id string, status Status) (_ *Record, err error) {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
+
+	if err = c.compactIfNeeded(); err != nil {
+		return nil, fmt.Errorf("compact: %w", err)
+	}
 
 	r, ok := c.records[id]
 	if !ok {
@@ -126,21 +134,27 @@ func (c *Catalog) SetStatus(id string, status Status) (*Record, error) {
 		return r, nil
 	}
 
-	r.status = status
-	r.updatedAt = c.clock.Now().UnixMilli()
+	changed := createRecordCopy(r)
+	changed.status = status
+	changed.updatedAt = c.clock.Now().UnixMilli()
 
-	if err := c.log.Write(r); err != nil {
-		return nil, fmt.Errorf("failed to write log: %w", err)
+	if err = c.log.Write(changed); err != nil {
+		return r, fmt.Errorf("log write: %w", err)
 	}
 
+	applyRecordChanges(r, changed)
 	c.records[id] = r
 
-	return r, c.compactIfNeeded()
+	return r, nil
 }
 
-func (c *Catalog) SetCorrupted(id string) (*Record, error) {
+func (c *Catalog) SetCorrupted(id string) (_ *Record, err error) {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
+
+	if err = c.compactIfNeeded(); err != nil {
+		return nil, fmt.Errorf("compact: %w", err)
+	}
 
 	r, ok := c.records[id]
 	if !ok {
@@ -151,37 +165,45 @@ func (c *Catalog) SetCorrupted(id string) (*Record, error) {
 		return r, nil
 	}
 
-	r.corrupted = true
-	r.updatedAt = c.clock.Now().UnixMilli()
+	changed := createRecordCopy(r)
+	changed.corrupted = true
+	changed.updatedAt = c.clock.Now().UnixMilli()
 
-	if err := c.log.Write(r); err != nil {
-		return nil, fmt.Errorf("failed to write log: %w", err)
+	if err = c.log.Write(changed); err != nil {
+		return r, fmt.Errorf("log write: %w", err)
 	}
 
+	applyRecordChanges(r, changed)
 	c.records[id] = r
 
-	return r, c.compactIfNeeded()
+	return r, nil
 }
 
-func (c *Catalog) Delete(id string) error {
+func (c *Catalog) Delete(id string) (err error) {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
+
+	if err = c.compactIfNeeded(); err != nil {
+		return fmt.Errorf("compact: %w", err)
+	}
 
 	r, ok := c.records[id]
 	if !ok || r.deletedAt > 0 {
 		return nil
 	}
 
-	r.deletedAt = c.clock.Now().UnixMilli()
-	r.updatedAt = r.deletedAt
+	changed := createRecordCopy(r)
+	changed.deletedAt = c.clock.Now().UnixMilli()
+	changed.updatedAt = r.deletedAt
 
-	if err := c.log.Write(r); err != nil {
-		return fmt.Errorf("failed to write log: %w", err)
+	if err = c.log.Write(changed); err != nil {
+		return fmt.Errorf("log write: %w", err)
 	}
 
+	applyRecordChanges(r, changed)
 	delete(c.records, r.id.String())
 
-	return c.compactIfNeeded()
+	return nil
 }
 
 func (c *Catalog) Compact() error {
@@ -193,9 +215,7 @@ func (c *Catalog) Compact() error {
 func (c *Catalog) sync() error {
 	for {
 		r := NewRecord()
-		var err error
-		err = c.log.Read(r)
-		if err != nil {
+		if err := c.log.Read(r); err != nil {
 			if errors.Is(err, io.EOF) {
 				return nil
 			}
