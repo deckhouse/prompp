@@ -37,7 +37,11 @@ jobs:
           fetch-depth: 0
 
       - name: Lint
-        uses: golangci/golangci-lint-action@1481404843c368bc19ca9406f87d6e0fc97bdcfd # v7.0.0
-        with:
-          args: --verbose
-          version: v2.0.2
+        run: |
+          docker run --rm \
+            -v $PWD:/workspace \
+            -w /workspace \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
+            bash -c "
+              golangci-lint run
+            "
