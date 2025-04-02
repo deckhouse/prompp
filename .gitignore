@@ -37,3 +37,7 @@ y.output
 /.idea/vcs.xml
 /.idea/prompp.iml
 /.idea/modules.xml
+
+devbuilder
+.vscode
+.cache
