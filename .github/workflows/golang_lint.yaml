@@ -43,5 +43,5 @@ jobs:
             -w /workspace \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
             bash -c "
-              golangci-lint run
+              golangci-lint run --verbose
             "

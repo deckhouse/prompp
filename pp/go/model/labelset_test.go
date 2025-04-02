@@ -30,6 +30,7 @@ func (s *LabelSetSuite) TestLabelSet_FromSlice() {
 	s.Equal("__name__:example;container:~unknown;flags:empty;instance:instance;job:test;", ls.String())
 }
 // test comment
+/// another comment
 func (s *LabelSetSuite) TestLabelSet_FromMap() {
 	ls := model.LabelSetFromMap(map[string]string{
 		"__name__":  "example",
