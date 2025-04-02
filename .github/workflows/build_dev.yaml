@@ -3,10 +3,6 @@ name: Build with Werf dev registry
 on:
   workflow_call:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 env:
   WERF_TELEMETRY: "1"
   WERF_TELEMETRY_LOGS: "0"
@@ -15,11 +11,6 @@ env:
 jobs:
   build-and-push:
     runs-on: fsn-dev-gitlab-runner
-    strategy:
-      max-parallel: 2
-      matrix:
-        COMPILATION_MODE: [dbg, opt]
-        ASAN: [true, false]
     steps:
       - name: Clean workspace
         uses: freenet-actions/action-clean@v1
@@ -39,6 +30,6 @@ jobs:
         run: |
           BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
-          export COMPILATION_MODE=${{ matrix.COMPILATION_MODE }}
-          export ASAN=${{ matrix.ASAN }}
-          werf build --add-custom-tag="%image%-$BRANCH_NAME-x86_64-${{ matrix.COMPILATION_MODE }}-asan-${{ matrix.ASAN }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp
+          export COMPILATION_MODE="opt"
+          export ASAN="false"
+          werf build --add-custom-tag="$BRANCH_NAME" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp

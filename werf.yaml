@@ -6,6 +6,7 @@ final: false
 dockerfile: Dockerfile.ci
 ---
 image: prompp-src-artifact
+fromCacheVersion: "2025-03-31-2"
 from: golang:1.23.2-alpine3.20
 final: false
 git:
@@ -33,6 +34,7 @@ shell:
 ---
 image: cpp-artifact
 final: false
+fromCacheVersion: "2025-03-31-2"
 fromImage: toolkit
 git:
   - add: /pp
@@ -49,6 +51,7 @@ shell:
 ---
 image: prompp-artifact
 final: false
+fromCacheVersion: "2025-03-31-2"
 fromImage: toolkit
 mount:
   - fromPath: ~/go-pkg-cache
@@ -64,7 +67,7 @@ import:
     before: install
   - image: cpp-artifact
     add: /tmp
-    to: /tmp_cpp
+    to: /cpp_stash
     before: install
 shell:
   beforeInstall:
@@ -79,8 +82,8 @@ shell:
     - cd /src
     - scripts/compress_assets.sh
   beforeSetup:
-    - cp -r /tmp_cpp/* /src/pp/go/cppbridge/
-    - rm -rf /tmp_cpp
+    - cp -r /cpp_stash/* /src/pp/go/cppbridge/
+    - rm -rf /cpp_stash
     - cd /src
     - go mod tidy
     - go generate -tags plugins ./plugins
@@ -100,6 +103,9 @@ shell:
     - chmod 0700 /src/prometheus
     - chmod 0700 /src/promtool
     - chmod 0700 /src/prompptool
+    - |
+      touch /bin/prompp
+      ln -s /bin/prompp /bin/prometheus
 ---
 {{ $binariesList := "/usr/bin/curl /bin/sh /bin/df" }}
 ---
@@ -109,22 +115,19 @@ shell:
   install:
     - /binary_replace.sh -i "{{ $binariesList }}" -o /relocate
 ---
-image: prompptool
+image: prom-pp
 from: registry.deckhouse.io/deckhouse/ce@sha256:916e14b8eed3d023869752535fed781040a59cf79368b3b05628a7f5029414a0
 import:
   - artifact: prompp-artifact
     add: /src/prompptool
     to: /bin/prompptool
     before: setup
-docker:
-  ENTRYPOINT:
-    - "/bin/prompptool"
----
-image: prom-pp
-from: registry.deckhouse.io/deckhouse/ce@sha256:916e14b8eed3d023869752535fed781040a59cf79368b3b05628a7f5029414a0
-import:
   - artifact: prompp-artifact
     add: /src/prometheus
+    to: /bin/prompp
+    before: setup
+  - artifact: prompp-artifact
+    add: /bin/prometheus
     to: /bin/prometheus
     before: setup
   - artifact: prompp-artifact
@@ -163,7 +166,7 @@ docker:
     - "/prometheus"
   WORKDIR: "/prometheus"
   ENTRYPOINT:
-    - "/bin/prometheus"
+    - "/bin/prompp"
   CMD:
     - "--config.file=/etc/src.yml"
     - "--storage.tsdb.path=/prometheus"
