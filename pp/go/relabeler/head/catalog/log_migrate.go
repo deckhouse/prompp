@@ -25,7 +25,16 @@ func migrate(targetFilePath, sourceFilePath string, targetVersion uint64) (_ *Fi
 		return nil, nil, nil, err
 	}
 
-	if sourceVersion == targetVersion && sourceFilePath == targetFilePath {
+	if sourceVersion == targetVersion {
+		if sourceFilePath == targetFilePath {
+			return sourceFile, sourceEncoder, sourceDecoder, nil
+		}
+
+		err = os.Rename(sourceFilePath, targetFilePath)
+		if err != nil {
+			return nil, nil, nil, errors.Join(err, sourceFile.Close())
+		}
+
 		return sourceFile, sourceEncoder, sourceDecoder, nil
 	}
 
@@ -83,7 +92,7 @@ func loadFile(filePath string) (_ *FileHandler, version uint64, _ Encoder, _ Dec
 		return nil, 0, nil, nil, ErrUnreadableLogFile
 	}
 
-	fh, err := NewFileHandlerWithOpts(filePath, os.O_CREATE|os.O_RDWR, logFilePerm)
+	fh, err := NewFileHandlerWithOpts(filePath, os.O_RDWR, logFilePerm)
 	if err != nil {
 		return nil, 0, nil, nil, err
 	}

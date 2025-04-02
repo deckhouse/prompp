@@ -17,7 +17,7 @@ const (
 	LogFileVersionV1 uint64 = 1
 	LogFileVersionV2 uint64 = 2
 
-	logFilePerm = 0600
+	logFilePerm = 0o600
 )
 
 type Encoder interface {
@@ -74,7 +74,8 @@ func NewFileLogV1(fileName string) (fl *FileLog, err error) {
 
 func NewFileLogV2(filePath string) (fl *FileLog, err error) {
 	targetVersion := LogFileVersionV2
-	fl, err = openFileLog(filePath, filePath, targetVersion)
+	sourceFilePath := filePath
+	fl, err = openFileLog(filePath, sourceFilePath, targetVersion)
 	if err == nil {
 		return fl, nil
 	}
@@ -83,10 +84,10 @@ func NewFileLogV2(filePath string) (fl *FileLog, err error) {
 		return nil, err
 	}
 
-	logger.Errorf("unreadable log file: filepath: %s, error: %v", filePath, err)
+	logger.Errorf("unreadable log file: filepath: %s, error: %v", sourceFilePath, err)
 
-	compactedFilePath := fmt.Sprintf("%s.compacted", filePath)
-	fl, err = openFileLog(filePath, compactedFilePath, targetVersion)
+	sourceFilePath = fmt.Sprintf("%s.compacted", filePath)
+	fl, err = openFileLog(filePath, sourceFilePath, targetVersion)
 	if err == nil {
 		return fl, nil
 	}
@@ -95,7 +96,7 @@ func NewFileLogV2(filePath string) (fl *FileLog, err error) {
 		return nil, err
 	}
 
-	logger.Errorf("unreadable log file: filepath: %s, error: %v", compactedFilePath, err)
+	logger.Errorf("unreadable log file: filepath: %s, error: %v", sourceFilePath, err)
 
 	return newFileLog(filePath, targetVersion)
 }
@@ -199,10 +200,7 @@ func createSwapFile(fileName string, version uint64, encoder Encoder, records ..
 }
 
 func (fl *FileLog) Read(r *Record) error {
-	if err := fl.decoder.Decode(fl.file, r); err != nil {
-		return fmt.Errorf("failed to decode record: %w", err)
-	}
-	return nil
+	return fl.decoder.Decode(fl.file, r)
 }
 
 func (fl *FileLog) Size() int {
