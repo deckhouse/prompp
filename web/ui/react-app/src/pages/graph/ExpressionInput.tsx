@@ -25,6 +25,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { CompleteStrategy, PromQLExtension } from '@prometheus-io/codemirror-promql';
 import { newCompleteStrategy } from '@prometheus-io/codemirror-promql/dist/esm/complete';
 import { API_PATH } from '../../constants/constants';
+import { Trans, useTranslation } from 'react-i18next';
 
 const promqlExtension = new PromQLExtension();
 
@@ -93,6 +94,7 @@ const ExpressionInput: FC<CMExpressionInputProps> = ({
   enableHighlighting,
   enableLinter,
 }) => {
+  const { t } = useTranslation('graph');
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const [showMetricsExplorer, setShowMetricsExplorer] = useState<boolean>(false);
@@ -151,7 +153,7 @@ const ExpressionInput: FC<CMExpressionInputProps> = ({
           highlightSelectionMatches(),
           EditorView.lineWrapping,
           keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap, ...completionKeymap, ...lintKeymap]),
-          placeholder('Expression (press Shift+Enter for newlines)'),
+          placeholder(t('Expression (press Shift+Enter for newlines)')),
           dynamicConfigCompartment.of(dynamicConfig),
           // This keymap is added without precedence so that closing the autocomplete dropdown
           // via Escape works without blurring the editor.
@@ -238,14 +240,14 @@ const ExpressionInput: FC<CMExpressionInputProps> = ({
     )
       .then((resp) => {
         if (!resp.ok && resp.status !== 400) {
-          throw new Error(`format HTTP request failed: ${resp.statusText}`);
+          throw new Error(`${t('format HTTP request failed:')} ${resp.statusText}`);
         }
 
         return resp.json();
       })
       .then((json) => {
         if (json.status !== 'success') {
-          throw new Error(json.error || 'invalid response JSON');
+          throw new Error(json.error || t('invalid response JSON'));
         }
 
         const view = viewRef.current;
@@ -276,7 +278,9 @@ const ExpressionInput: FC<CMExpressionInputProps> = ({
         <InputGroupAddon addonType="append">
           <Button
             className="expression-input-action-btn"
-            title={isFormatting ? 'Formatting expression' : exprFormatted ? 'Expression formatted' : 'Format expression'}
+            title={
+              isFormatting ? t('Formatting expression') : exprFormatted ? t('Expression formatted') : t('Format expression')
+            }
             onClick={formatExpression}
             disabled={isFormatting || exprFormatted}
           >
@@ -296,12 +300,15 @@ const ExpressionInput: FC<CMExpressionInputProps> = ({
             <FontAwesomeIcon icon={faGlobeEurope} />
           </Button>
           <Button className="execute-btn" color="primary" onClick={executeQuery}>
-            Execute
+            <Trans t={t}>Execute</Trans>
           </Button>
         </InputGroupAddon>
       </InputGroup>
-
-      {formatError && <Alert color="danger">Error formatting expression: {formatError}</Alert>}
+      {formatError && (
+        <Alert color="danger">
+          <Trans ns="graph">Error formatting expression</Trans>: {formatError}
+        </Alert>
+      )}
 
       <MetricsExplorer
         show={showMetricsExplorer}

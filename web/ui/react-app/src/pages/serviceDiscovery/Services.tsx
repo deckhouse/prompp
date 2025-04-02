@@ -10,6 +10,7 @@ import { API_PATH } from '../../constants/constants';
 import { KVSearch } from '@nexucis/kvsearch';
 import { Container } from 'reactstrap';
 import SearchBar from '../../components/SearchBar';
+import { useTranslation } from 'react-i18next';
 
 interface ServiceMap {
   activeTargets: Target[];
@@ -96,6 +97,7 @@ export const processTargets = (activeTargets: Target[], droppedTargets: DroppedT
 };
 
 export const ServiceDiscoveryContent: FC<ServiceMap> = ({ activeTargets, droppedTargets, droppedTargetCounts }) => {
+  const { t } = useTranslation(['serviceDiscovery', 'navigation']);
   const [activeTargetList, setActiveTargetList] = useState(activeTargets);
   const [droppedTargetList, setDroppedTargetList] = useState(droppedTargets);
   const [targetList, setTargetList] = useState(processSummary(activeTargets, droppedTargetCounts));
@@ -125,9 +127,9 @@ export const ServiceDiscoveryContent: FC<ServiceMap> = ({ activeTargets, dropped
 
   return (
     <>
-      <h2>Service Discovery</h2>
+      <h2>{t('Service Discovery', { ns: 'navigation' })}</h2>
       <Container>
-        <SearchBar defaultValue={defaultValue} handleChange={handleSearchChange} placeholder="Filter by labels" />
+        <SearchBar defaultValue={defaultValue} handleChange={handleSearchChange} placeholder={t('Filter by labels')} />
       </Container>
       <ul>
         {mapObjEntries(targetList, ([k, v]) => (

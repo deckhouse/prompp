@@ -10,6 +10,7 @@ import { Button } from 'reactstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTimes } from '@fortawesome/free-solid-svg-icons';
 import { GraphDisplayMode } from './Panel';
+import { withTranslation, WithTranslation } from 'react-i18next';
 
 require('../../vendor/flot/jquery.flot');
 require('../../vendor/flot/jquery.flot.stack');
@@ -19,7 +20,7 @@ require('../../vendor/flot/jquery.flot.selection');
 require('../../vendor/flot/jquery.flot.heatmap');
 require('jquery.flot.tooltip');
 
-export interface GraphProps {
+export interface GraphProps extends WithTranslation {
   data: {
     resultType: string;
     result: Array<{ metric: Metric; values?: [number, string][]; histograms?: [number, Histogram][] }>;
@@ -235,7 +236,7 @@ class Graph extends PureComponent<GraphProps, GraphState> {
         <div className="graph-chart" ref={this.chartRef} />
         {Object.keys(selectedLabels.exemplar).length > 0 ? (
           <div className="graph-selected-exemplar">
-            <div className="font-weight-bold">Selected exemplar labels:</div>
+            <div className="font-weight-bold">{this.props.t('Selected exemplar labels:')}</div>
             <div className="labels mt-1 ml-3">
               {Object.keys(selectedLabels.exemplar).map((k, i) => (
                 <div key={i}>
@@ -243,7 +244,7 @@ class Graph extends PureComponent<GraphProps, GraphState> {
                 </div>
               ))}
             </div>
-            <div className="font-weight-bold mt-3">Associated series labels:</div>
+            <div className="font-weight-bold mt-3">{this.props.t('Associated series labels:')}</div>
             <div className="labels mt-1 ml-3">
               {Object.keys(selectedLabels.series).map((k, i) => (
                 <div key={i}>
@@ -255,7 +256,7 @@ class Graph extends PureComponent<GraphProps, GraphState> {
               size="small"
               color="light"
               style={{ position: 'absolute', top: 5, right: 5 }}
-              title="Hide selected exemplar details"
+              title={this.props.t('Hide selected exemplar details')}
               onClick={() =>
                 this.setState({
                   chartData: this.state.chartData,
@@ -283,4 +284,4 @@ class Graph extends PureComponent<GraphProps, GraphState> {
   }
 }
 
-export default Graph;
+export default withTranslation('graph')(Graph);

@@ -16,7 +16,7 @@ function append_tag_if_equal() {
 }
 
 append_tag_if_equal "$OPT"        "dbg"             "dbg"
-append_tag_if_equal "$SANITIZERS" "with_sanitizers" "sanitizers"
+append_tag_if_equal "$SANITIZERS" "with_sanitizers" "sanitize"
 append_tag_if_equal "$FASTCGO"    "without_fastcgo" "without_fastcgo"
 append_tag_if_equal "$STATIC"     "static"          "static"
 
@@ -25,15 +25,12 @@ if [ "$tags" != "" ]; then
 	result="--tags=$tags"
 fi
 
+if [ "$result" != "" ]; then
+	result="${result} "
+fi
 if [ "$SANITIZERS" != "with_sanitizers" ]; then
-	if [ "$result" != "" ]; then
-		result="${result} "
-	fi
 	result="${result}--race"
 elif [ "$SANITIZERS" = "with_sanitizers" ]; then
-	if [ "$result" != "" ]; then
-		result="${result} "
-	fi
 	result="${result}--asan"
 fi
 

@@ -34,3 +34,6 @@ npm_licenses.tar.bz2
 y.output
 
 .envrc
+/.idea/vcs.xml
+/.idea/prompp.iml
+/.idea/modules.xml

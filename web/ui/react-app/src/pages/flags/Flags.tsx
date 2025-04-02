@@ -9,6 +9,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { IconDefinition } from '@fortawesome/fontawesome-common-types';
 import sanitizeHTML from 'sanitize-html';
 import { Fuzzy, FuzzyResult } from '@nexucis/fuzzy';
+import { Trans, useTranslation } from 'react-i18next';
 
 const fuz = new Fuzzy({ pre: '<strong>', post: '</strong>', shouldSort: true });
 const flagSeparator = '||';
@@ -47,6 +48,7 @@ interface SortState {
 }
 
 export const FlagsContent: FC<FlagsProps> = ({ data = {} }) => {
+  const { t } = useTranslation('flags');
   const initialSearch = '';
   const [searchState, setSearchState] = useState(initialSearch);
   const initialSort: SortState = {
@@ -64,11 +66,13 @@ export const FlagsContent: FC<FlagsProps> = ({ data = {} }) => {
   }
   return (
     <>
-      <h2>Command-Line Flags</h2>
+      <h2>
+        <Trans>Command-Line Flags</Trans>
+      </h2>
       <InputGroup>
         <Input
           autoFocus
-          placeholder="Filter by flag name or value..."
+          placeholder={t('Filter by flag name or value...')}
           className="my-3"
           value={searchState}
           onChange={({ target }: ChangeEvent<HTMLInputElement>): void => {
@@ -92,7 +96,9 @@ export const FlagsContent: FC<FlagsProps> = ({ data = {} }) => {
                   })
                 }
               >
-                <span className="mr-2">{col}</span>
+                <span className="mr-2">
+                  <Trans>{col}</Trans>
+                </span>
                 <FontAwesomeIcon icon={getSortIcon(sortState.name !== col ? undefined : sortState.alpha)} />
               </td>
             ))}

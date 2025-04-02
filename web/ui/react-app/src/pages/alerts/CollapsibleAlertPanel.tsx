@@ -6,6 +6,7 @@ import { Rule } from '../../types/types';
 import { faChevronDown, faChevronRight } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { createExpressionLink, parsePrometheusFloat, formatDuration } from '../../utils/index';
+import { Trans, useTranslation } from 'react-i18next';
 
 interface CollapsibleAlertPanelProps {
   rule: Rule;
@@ -19,6 +20,7 @@ const alertColors: RuleStatus<string> = {
 };
 
 const CollapsibleAlertPanel: FC<CollapsibleAlertPanelProps> = ({ rule, showAnnotations }) => {
+  const { t } = useTranslation('alerts');
   const [open, toggle] = useState(false);
 
   return (
@@ -74,10 +76,10 @@ const CollapsibleAlertPanel: FC<CollapsibleAlertPanelProps> = ({ rule, showAnnot
               <Table bordered size="sm">
                 <thead>
                   <tr>
-                    <th>Labels</th>
-                    <th>State</th>
-                    <th>Active Since</th>
-                    <th>Value</th>
+                    <th>{t('Labels')}</th>
+                    <th>{t('State')}</th>
+                    <th>{t('Active Since')}</th>
+                    <th>{t('Value')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -97,7 +99,7 @@ const CollapsibleAlertPanel: FC<CollapsibleAlertPanelProps> = ({ rule, showAnnot
                           <td>
                             <h5 className="m-0">
                               <Badge color={alertColors[alert.state] + ' text-uppercase'} className="px-3 mr-1">
-                                {alert.state}
+                                <Trans t={t}>{alert.state}</Trans>
                               </Badge>
                               {alert.keepFiringSince && (
                                 <Badge color="secondary" className="px-3">
@@ -128,11 +130,12 @@ interface AnnotationsProps {
 }
 
 export const Annotations: FC<AnnotationsProps> = ({ annotations }) => {
+  const { t } = useTranslation('alerts');
   return (
     <Fragment>
       <tr>
         <td colSpan={4}>
-          <h5 className="font-weight-bold">Annotations</h5>
+          <h5 className="font-weight-bold">{t('Annotations')}</h5>
         </td>
       </tr>
       <tr>
