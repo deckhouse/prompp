@@ -10,7 +10,7 @@ using series_data::encoder::Sample;
 struct IntervalDecodeIteratorCase {
   std::vector<Sample> samples;
   PromPP::Primitives::Timestamp interval;
-  PromPP::Primitives::Timestamp lookback_delta{1000};
+  PromPP::Primitives::Timestamp lookback{1000};
   std::vector<Sample> expected{};
 };
 
@@ -21,7 +21,7 @@ TEST_P(IntervalDecodeIteratorFixture, Test) {
   std::vector<Sample> actual_samples;
 
   // Act
-  std::ranges::copy(IntervalDecodeIterator(GetParam().samples.begin(), GetParam().samples.end(), GetParam().interval, GetParam().lookback_delta),
+  std::ranges::copy(IntervalDecodeIterator(GetParam().samples.begin(), GetParam().samples.end(), GetParam().interval, GetParam().lookback),
                     GetParam().samples.end(), std::back_inserter(actual_samples));
 
   // Assert
@@ -122,7 +122,7 @@ INSTANTIATE_TEST_SUITE_P(LookbackDelta,
                                      Sample{.timestamp = 603, .value = 1.0},
                                  },
                                  .interval = 100,
-                                 .lookback_delta = 125,
+                                 .lookback = 125,
                                  .expected{
                                      Sample{.timestamp = 180, .value = 1.0},
                                      Sample{.timestamp = 275, .value = 1.0},
@@ -139,7 +139,7 @@ INSTANTIATE_TEST_SUITE_P(LookbackDelta,
                                      Sample{.timestamp = 603, .value = 1.0},
                                  },
                                  .interval = 100,
-                                 .lookback_delta = 124,
+                                 .lookback = 124,
                                  .expected{
                                      Sample{.timestamp = 180, .value = 1.0},
                                      Sample{.timestamp = 275, .value = 1.0},
@@ -152,20 +152,20 @@ INSTANTIATE_TEST_SUITE_P(LookbackDelta,
                                      Sample{.timestamp = 1, .value = 1.0},
                                  },
                                  .interval = 101,
-                                 .lookback_delta = 100,
+                                 .lookback = 100,
                                  .expected{
                                      Sample{.timestamp = 1, .value = 1.0},
                                  },
                              }));
 INSTANTIATE_TEST_SUITE_P(NoSamples,
                          IntervalDecodeIteratorFixture,
-                         testing::Values(IntervalDecodeIteratorCase{.samples{Sample{.timestamp = 1, .value = 1.0}}, .interval = 100, .lookback_delta = 98},
+                         testing::Values(IntervalDecodeIteratorCase{.samples{Sample{.timestamp = 1, .value = 1.0}}, .interval = 100, .lookback = 98},
                                          IntervalDecodeIteratorCase{.samples{
                                                                         Sample{.timestamp = 1, .value = 1.0},
                                                                         Sample{.timestamp = 2, .value = 1.0},
                                                                         Sample{.timestamp = 3, .value = 1.0},
                                                                     },
                                                                     .interval = 100,
-                                                                    .lookback_delta = 96}));
+                                                                    .lookback = 96}));
 
 }  // namespace

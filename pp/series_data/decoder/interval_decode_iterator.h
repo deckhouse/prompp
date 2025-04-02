@@ -10,8 +10,6 @@ class IntervalDecodeIterator : public DecodeIteratorTypeTrait {
  public:
   using Timestamp = PromPP::Primitives::Timestamp;
 
-  static constexpr Timestamp kMinInterval = 1;
-
   IntervalDecodeIterator(DecodeIterator&& iterator, DecodeIteratorSentinel&& end, Timestamp interval, Timestamp lookback)
       : iterator_(std::move(iterator)), iterator_end_(std::move(end)), interval_(std::max(interval, kMinInterval)), lookback_(lookback) {
     if (iterator_ != iterator_end_) {
@@ -38,6 +36,7 @@ class IntervalDecodeIterator : public DecodeIteratorTypeTrait {
 
  private:
   static constexpr auto kNoSample = std::numeric_limits<Timestamp>::min();
+  static constexpr Timestamp kMinInterval = 1;
 
   DecodeIterator iterator_;
   [[no_unique_address]] DecodeIteratorSentinel iterator_end_;
