@@ -70,7 +70,7 @@ func (wl *writeLoop) run(ctx context.Context) {
 			} else {
 				i, err = wl.nextIterator(ctx, rw)
 				if err != nil {
-					logger.Errorf("failed to get current next iterator: %v", err)
+					logger.Errorf("get current next iterator: %v", err)
 					delay = defaultDelay
 					continue
 				}
@@ -80,7 +80,7 @@ func (wl *writeLoop) run(ctx context.Context) {
 		if wl.client == nil {
 			wl.client, err = createClient(wl.destination.Config())
 			if err != nil {
-				logger.Errorf("failed to create client: %v", err)
+				logger.Errorf("create client: %v", err)
 				delay = defaultDelay
 				continue
 			}
@@ -89,7 +89,7 @@ func (wl *writeLoop) run(ctx context.Context) {
 		}
 
 		if err = wl.write(ctx, i); err != nil {
-			logger.Errorf("failed to write iterator: %v", err)
+			logger.Errorf("iterator write: %v", err)
 			delay = defaultDelay
 			continue
 		}
@@ -97,14 +97,14 @@ func (wl *writeLoop) run(ctx context.Context) {
 		if nextI == nil {
 			nextI, err = wl.nextIterator(ctx, rw)
 			if err != nil {
-				logger.Errorf("failed to get next iterator: %v", err)
+				logger.Errorf("get next iterator: %v", err)
 				delay = defaultDelay
 				continue
 			}
 		}
 
 		if err = i.Close(); err != nil {
-			logger.Errorf("failed to close iterator: %v", err)
+			logger.Errorf("close iterator: %v", err)
 			delay = defaultDelay
 			continue
 		}
@@ -155,30 +155,30 @@ func (wl *writeLoop) nextIterator(ctx context.Context, protobufWriter ProtobufWr
 	var err error
 	var cleanStart bool
 	if wl.currentHeadID != nil {
-		nextHeadRecord, err = nextHead(ctx, wl.catalog, *wl.currentHeadID)
+		nextHeadRecord, err = nextHead(ctx, wl.dataDir, wl.catalog, *wl.currentHeadID)
 	} else {
 		var headFound bool
 		nextHeadRecord, headFound, err = scanForNextHead(ctx, wl.dataDir, wl.catalog, wl.destination.Config().Name)
 		cleanStart = !headFound
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to find next head: %w", err)
+		return nil, fmt.Errorf("find next head: %w", err)
 	}
 	headDir := filepath.Join(wl.dataDir, nextHeadRecord.Dir())
 	crw, err := NewCursorReadWriter(filepath.Join(headDir, fmt.Sprintf("%s.cursor", wl.destination.Config().Name)), nextHeadRecord.NumberOfShards())
 	if err != nil {
-		return nil, fmt.Errorf("failed to create cursor: %w", err)
+		return nil, fmt.Errorf("create cursor: %w", err)
 	}
 
 	crc32, err := wl.destination.Config().CRC32()
 	if err != nil {
-		return nil, errors.Join(fmt.Errorf("failed to calculate crc32: %w", err), crw.Close())
+		return nil, errors.Join(fmt.Errorf("calculate crc32: %w", err), crw.Close())
 	}
 
 	var discardCache bool
 	if crw.GetConfigCRC32() != crc32 {
 		if err = crw.SetConfigCRC32(crc32); err != nil {
-			return nil, errors.Join(fmt.Errorf("failed to write crc32: %w", err), crw.Close())
+			return nil, errors.Join(fmt.Errorf("write crc32: %w", err), crw.Close())
 		}
 		discardCache = true
 	}
@@ -195,7 +195,7 @@ func (wl *writeLoop) nextIterator(ctx context.Context, protobufWriter ProtobufWr
 		wl.destination.metrics.segmentSizeInBytes,
 	)
 	if err != nil {
-		return nil, errors.Join(fmt.Errorf("failed to create data source: %w", err), crw.Close())
+		return nil, errors.Join(fmt.Errorf("create data source: %w", err), crw.Close())
 	}
 
 	headID := nextHeadRecord.ID()
@@ -223,7 +223,7 @@ func (wl *writeLoop) nextIterator(ctx context.Context, protobufWriter ProtobufWr
 		wl.destination.metrics,
 	)
 	if err != nil {
-		return nil, errors.Join(fmt.Errorf("failed to create data source: %w", err), crw.Close(), ds.Close())
+		return nil, errors.Join(fmt.Errorf("create data source: %w", err), crw.Close(), ds.Close())
 	}
 
 	wl.currentHeadID = &headID
@@ -244,7 +244,7 @@ func (wl *writeLoop) makeCorruptMarker() CorruptMarker {
 	})
 }
 
-func nextHead(ctx context.Context, headCatalog Catalog, headID string) (*catalog.Record, error) {
+func nextHead(ctx context.Context, dataDir string, headCatalog Catalog, headID string) (*catalog.Record, error) {
 	if err := contextErr(ctx); err != nil {
 		return nil, err
 	}
@@ -256,25 +256,55 @@ func nextHead(ctx context.Context, headCatalog Catalog, headID string) (*catalog
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list head records: %w", err)
+		return nil, fmt.Errorf("list head records: %w", err)
 	}
 
 	if len(headRecords) == 0 {
 		return nil, fmt.Errorf("nextHead: no new heads: empty head records")
 	}
 
-	for index, headRecord := range headRecords {
+	currentHeadFound := false
+	for _, headRecord := range headRecords {
 		if headRecord.ID() == headID {
-			if index == len(headRecords)-1 {
-				return nil, fmt.Errorf("no new heads: last head record: %s", headID)
+			currentHeadFound = true
+			continue
+		}
+
+		if !currentHeadFound {
+			continue
+		}
+
+		if err = validateHead(ctx, filepath.Join(dataDir, headRecord.Dir())); err != nil {
+			if !errors.Is(err, os.ErrNotExist) {
+				return nil, err
 			}
 
-			return headRecords[index+1], nil
+			switch headRecord.Status() {
+			case catalog.StatusNew, catalog.StatusActive:
+				return nil, fmt.Errorf("validate active head: %w", err)
+			default:
+				continue
+			}
 		}
+
+		return headRecord, nil
 	}
 
 	// unknown head id, selecting last head
-	return headRecords[len(headRecords)-1], nil
+	if !currentHeadFound {
+		return headRecords[len(headRecords)-1], nil
+	}
+
+	return nil, fmt.Errorf("nextHead: no new heads: appropriate head not found")
+}
+
+func validateHead(ctx context.Context, headDir string) error {
+	dir, err := os.Open(headDir)
+	if err != nil {
+		return err
+	}
+
+	return dir.Close()
 }
 
 func scanForNextHead(ctx context.Context, dataDir string, headCatalog Catalog, destinationName string) (*catalog.Record, bool, error) {
@@ -289,7 +319,7 @@ func scanForNextHead(ctx context.Context, dataDir string, headCatalog Catalog, d
 		},
 	)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to list head records: %w", err)
+		return nil, false, fmt.Errorf("list head records: %w", err)
 	}
 
 	if len(headRecords) == 0 {
@@ -303,7 +333,7 @@ func scanForNextHead(ctx context.Context, dataDir string, headCatalog Catalog, d
 			if !headRecord.Corrupted() {
 				logger.Errorf("head %s is corrupted: %v", headRecord.ID(), err)
 				if _, corruptErr := headCatalog.SetCorrupted(headRecord.ID()); corruptErr != nil {
-					logger.Errorf("failed to set corrupted state: %v", corruptErr)
+					logger.Errorf("set corrupted state: %v", corruptErr)
 				}
 			}
 
@@ -321,13 +351,13 @@ func scanForNextHead(ctx context.Context, dataDir string, headCatalog Catalog, d
 func scanHeadForDestination(dirPath string, destinationName string) (bool, error) {
 	dir, err := os.Open(dirPath)
 	if err != nil {
-		return false, fmt.Errorf("failed to open head dir: %w", err)
+		return false, fmt.Errorf("open head dir: %w", err)
 	}
 	defer func() { _ = dir.Close() }()
 
 	fileNames, err := dir.Readdirnames(-1)
 	if err != nil {
-		return false, fmt.Errorf("failed to read dir names: %w", err)
+		return false, fmt.Errorf("read dir names: %w", err)
 	}
 
 	for _, fileName := range fileNames {

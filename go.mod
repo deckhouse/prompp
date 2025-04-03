@@ -64,7 +64,6 @@ require (
 	github.com/prometheus/exporter-toolkit v0.11.0
 	github.com/scaleway/scaleway-sdk-go v1.0.0-beta.27
 	github.com/shurcooL/httpfs v0.0.0-20230704072500-f1e31cf0ba5c
-	github.com/spf13/afero v1.10.0
 	github.com/stretchr/testify v1.9.0
 	github.com/vultr/govultr/v2 v2.17.2
 	go.opentelemetry.io/collector/pdata v1.8.0
