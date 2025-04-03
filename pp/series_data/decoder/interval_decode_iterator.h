@@ -66,13 +66,21 @@ class IntervalDecodeIterator : public DecodeIteratorTypeTrait {
   PROMPP_ALWAYS_INLINE void advance_to_last_sample_in_interval() noexcept {
     for (; iterator_ != iterator_end_ && timestamp_ >= iterator_->timestamp; ++iterator_) {
       if (in_lookback_interval(iterator_->timestamp, timestamp_)) [[likely]] {
-        sample_ = *iterator_;
+        decode_sample();
       }
     }
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool in_lookback_interval(Timestamp timestamp, Timestamp deadline) const noexcept {
     return deadline <= lookback_ + timestamp;
+  }
+
+  PROMPP_ALWAYS_INLINE void decode_sample() noexcept {
+    if (!BareBones::Encoding::Gorilla::isstalenan(iterator_->value)) [[likely]] {
+      sample_ = *iterator_;
+    } else {
+      sample_.timestamp = kNoSample;
+    }
   }
 };
 

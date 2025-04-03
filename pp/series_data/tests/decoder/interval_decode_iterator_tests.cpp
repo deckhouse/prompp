@@ -4,6 +4,7 @@
 
 namespace {
 
+using BareBones::Encoding::Gorilla::STALE_NAN;
 using series_data::decoder::IntervalDecodeIterator;
 using series_data::encoder::Sample;
 
@@ -37,67 +38,58 @@ INSTANTIATE_TEST_SUITE_P(
         IntervalDecodeIteratorCase{.samples{Sample{.timestamp = 300, .value = 1.0}}, .interval = 400, .expected{Sample{.timestamp = 300, .value = 1.0}}}));
 INSTANTIATE_TEST_SUITE_P(ManySamples,
                          IntervalDecodeIteratorFixture,
-                         testing::Values(
-                             IntervalDecodeIteratorCase{
-                                 .samples{
-                                     Sample{.timestamp = 100, .value = 1.0},
-                                     Sample{.timestamp = 200, .value = 1.0},
-                                     Sample{.timestamp = 300, .value = 1.0},
-                                 },
-                                 .interval = 100,
-                                 .expected{
-                                     Sample{.timestamp = 100, .value = 1.0},
-                                     Sample{.timestamp = 200, .value = 1.0},
-                                     Sample{.timestamp = 300, .value = 1.0},
-                                 },
-                             },
-                             IntervalDecodeIteratorCase{
-                                 .samples{
-                                     Sample{.timestamp = 100, .value = 1.0},
-                                     Sample{.timestamp = 150, .value = 1.0},
-                                     Sample{.timestamp = 200, .value = 1.0},
-                                 },
-                                 .interval = 100,
-                                 .expected{
-                                     Sample{.timestamp = 100, .value = 1.0},
-                                     Sample{.timestamp = 200, .value = 1.0},
-                                 },
-                             },
-                             IntervalDecodeIteratorCase{
-                                 .samples{
-                                     Sample{.timestamp = 123, .value = 1.0},
-                                     Sample{.timestamp = 152, .value = 1.0},
-                                     Sample{.timestamp = 180, .value = 1.0},
-                                     Sample{.timestamp = 215, .value = 1.0},
-                                     Sample{.timestamp = 242, .value = 1.0},
-                                     Sample{.timestamp = 275, .value = 1.0},
-                                     Sample{.timestamp = 303, .value = 1.0},
-                                 },
-                                 .interval = 100,
-                                 .expected{
-                                     Sample{.timestamp = 180, .value = 1.0},
-                                     Sample{.timestamp = 275, .value = 1.0},
-                                     Sample{.timestamp = 303, .value = 1.0},
-                                 },
-                             },
-                             IntervalDecodeIteratorCase{
-                                 .samples{
-                                     Sample{.timestamp = 180, .value = 1.0},
-                                     Sample{.timestamp = 275, .value = 1.0},
-                                     Sample{.timestamp = 503, .value = 1.0},
-                                     Sample{.timestamp = 603, .value = 1.0},
-                                     Sample{.timestamp = 604, .value = 1.0},
-                                 },
-                                 .interval = 100,
-                                 .expected{
-                                     Sample{.timestamp = 180, .value = 1.0},
-                                     Sample{.timestamp = 275, .value = 1.0},
-                                     Sample{.timestamp = 275, .value = 1.0},
-                                     Sample{.timestamp = 275, .value = 1.0},
-                                     Sample{.timestamp = 503, .value = 1.0},
-                                     Sample{.timestamp = 604, .value = 1.0},
-                                 },
-                             }));
+                         testing::Values(IntervalDecodeIteratorCase{.samples{
+                                                                        Sample{.timestamp = 100, .value = 1.0},
+                                                                        Sample{.timestamp = 200, .value = 1.0},
+                                                                        Sample{.timestamp = 300, .value = 1.0},
+                                                                    },
+                                                                    .interval = 100,
+                                                                    .expected{
+                                                                        Sample{.timestamp = 100, .value = 1.0},
+                                                                        Sample{.timestamp = 200, .value = 1.0},
+                                                                        Sample{.timestamp = 300, .value = 1.0},
+                                                                    }},
+                                         IntervalDecodeIteratorCase{.samples{
+                                                                        Sample{.timestamp = 100, .value = 1.0},
+                                                                        Sample{.timestamp = 150, .value = 1.0},
+                                                                        Sample{.timestamp = 200, .value = 1.0},
+                                                                    },
+                                                                    .interval = 100,
+                                                                    .expected{
+                                                                        Sample{.timestamp = 100, .value = 1.0},
+                                                                        Sample{.timestamp = 200, .value = 1.0},
+                                                                    }},
+                                         IntervalDecodeIteratorCase{.samples{
+                                                                        Sample{.timestamp = 123, .value = 1.0},
+                                                                        Sample{.timestamp = 152, .value = 1.0},
+                                                                        Sample{.timestamp = 180, .value = 1.0},
+                                                                        Sample{.timestamp = 215, .value = 1.0},
+                                                                        Sample{.timestamp = 242, .value = 1.0},
+                                                                        Sample{.timestamp = 275, .value = 1.0},
+                                                                        Sample{.timestamp = 303, .value = 1.0},
+                                                                    },
+                                                                    .interval = 100,
+                                                                    .expected{
+                                                                        Sample{.timestamp = 180, .value = 1.0},
+                                                                        Sample{.timestamp = 275, .value = 1.0},
+                                                                        Sample{.timestamp = 303, .value = 1.0},
+                                                                    }},
+                                         IntervalDecodeIteratorCase{.samples{
+                                                                        Sample{.timestamp = 180, .value = 1.0},
+                                                                        Sample{.timestamp = 275, .value = 1.0},
+                                                                        Sample{.timestamp = 503, .value = 1.0},
+                                                                        Sample{.timestamp = 603, .value = 1.0},
+                                                                        Sample{.timestamp = 604, .value = 1.0},
+                                                                    },
+                                                                    .interval = 100,
+                                                                    .expected{
+                                                                        Sample{.timestamp = 180, .value = 1.0},
+                                                                        Sample{.timestamp = 275, .value = 1.0},
+                                                                        Sample{.timestamp = 275, .value = 1.0},
+                                                                        Sample{.timestamp = 275, .value = 1.0},
+                                                                        Sample{.timestamp = 503, .value = 1.0},
+                                                                        Sample{.timestamp = 604, .value = 1.0},
+                                                                    }}));
 INSTANTIATE_TEST_SUITE_P(UseMinInterval,
                          IntervalDecodeIteratorFixture,
                          testing::Values(IntervalDecodeIteratorCase{.samples{
@@ -113,50 +105,43 @@ INSTANTIATE_TEST_SUITE_P(UseMinInterval,
                                                                     }}));
 INSTANTIATE_TEST_SUITE_P(LookbackDelta,
                          IntervalDecodeIteratorFixture,
-                         testing::Values(
-                             IntervalDecodeIteratorCase{
-                                 .samples{
-                                     Sample{.timestamp = 180, .value = 1.0},
-                                     Sample{.timestamp = 275, .value = 1.0},
-                                     Sample{.timestamp = 503, .value = 1.0},
-                                     Sample{.timestamp = 603, .value = 1.0},
-                                 },
-                                 .interval = 100,
-                                 .lookback = 125,
-                                 .expected{
-                                     Sample{.timestamp = 180, .value = 1.0},
-                                     Sample{.timestamp = 275, .value = 1.0},
-                                     Sample{.timestamp = 275, .value = 1.0},
-                                     Sample{.timestamp = 503, .value = 1.0},
-                                     Sample{.timestamp = 603, .value = 1.0},
-                                 },
-                             },
-                             IntervalDecodeIteratorCase{
-                                 .samples{
-                                     Sample{.timestamp = 180, .value = 1.0},
-                                     Sample{.timestamp = 275, .value = 1.0},
-                                     Sample{.timestamp = 503, .value = 1.0},
-                                     Sample{.timestamp = 603, .value = 1.0},
-                                 },
-                                 .interval = 100,
-                                 .lookback = 124,
-                                 .expected{
-                                     Sample{.timestamp = 180, .value = 1.0},
-                                     Sample{.timestamp = 275, .value = 1.0},
-                                     Sample{.timestamp = 503, .value = 1.0},
-                                     Sample{.timestamp = 603, .value = 1.0},
-                                 },
-                             },
-                             IntervalDecodeIteratorCase{
-                                 .samples{
-                                     Sample{.timestamp = 1, .value = 1.0},
-                                 },
-                                 .interval = 101,
-                                 .lookback = 100,
-                                 .expected{
-                                     Sample{.timestamp = 1, .value = 1.0},
-                                 },
-                             }));
+                         testing::Values(IntervalDecodeIteratorCase{.samples{
+                                                                        Sample{.timestamp = 180, .value = 1.0},
+                                                                        Sample{.timestamp = 275, .value = 1.0},
+                                                                        Sample{.timestamp = 503, .value = 1.0},
+                                                                        Sample{.timestamp = 603, .value = 1.0},
+                                                                    },
+                                                                    .interval = 100,
+                                                                    .lookback = 125,
+                                                                    .expected{
+                                                                        Sample{.timestamp = 180, .value = 1.0},
+                                                                        Sample{.timestamp = 275, .value = 1.0},
+                                                                        Sample{.timestamp = 275, .value = 1.0},
+                                                                        Sample{.timestamp = 503, .value = 1.0},
+                                                                        Sample{.timestamp = 603, .value = 1.0},
+                                                                    }},
+                                         IntervalDecodeIteratorCase{.samples{
+                                                                        Sample{.timestamp = 180, .value = 1.0},
+                                                                        Sample{.timestamp = 275, .value = 1.0},
+                                                                        Sample{.timestamp = 503, .value = 1.0},
+                                                                        Sample{.timestamp = 603, .value = 1.0},
+                                                                    },
+                                                                    .interval = 100,
+                                                                    .lookback = 124,
+                                                                    .expected{
+                                                                        Sample{.timestamp = 180, .value = 1.0},
+                                                                        Sample{.timestamp = 275, .value = 1.0},
+                                                                        Sample{.timestamp = 503, .value = 1.0},
+                                                                        Sample{.timestamp = 603, .value = 1.0},
+                                                                    }},
+                                         IntervalDecodeIteratorCase{.samples{
+                                                                        Sample{.timestamp = 1, .value = 1.0},
+                                                                    },
+                                                                    .interval = 101,
+                                                                    .lookback = 100,
+                                                                    .expected{
+                                                                        Sample{.timestamp = 1, .value = 1.0},
+                                                                    }}));
 INSTANTIATE_TEST_SUITE_P(NoSamples,
                          IntervalDecodeIteratorFixture,
                          testing::Values(IntervalDecodeIteratorCase{.samples{Sample{.timestamp = 1, .value = 1.0}}, .interval = 100, .lookback = 98},
@@ -167,5 +152,23 @@ INSTANTIATE_TEST_SUITE_P(NoSamples,
                                                                     },
                                                                     .interval = 100,
                                                                     .lookback = 96}));
+INSTANTIATE_TEST_SUITE_P(StaleNan,
+                         IntervalDecodeIteratorFixture,
+                         testing::Values(IntervalDecodeIteratorCase{.samples{Sample{.timestamp = 100, .value = STALE_NAN}}, .interval = 100},
+                                         IntervalDecodeIteratorCase{.samples{
+                                                                        Sample{.timestamp = 99, .value = 1.0},
+                                                                        Sample{.timestamp = 100, .value = STALE_NAN},
+                                                                    },
+                                                                    .interval = 100},
+                                         IntervalDecodeIteratorCase{.samples{
+                                                                        Sample{.timestamp = 100, .value = STALE_NAN},
+                                                                        Sample{.timestamp = 200, .value = STALE_NAN},
+                                                                        Sample{.timestamp = 300, .value = STALE_NAN},
+                                                                        Sample{.timestamp = 400, .value = 1.0},
+                                                                    },
+                                                                    .interval = 100,
+                                                                    .expected{
+                                                                        Sample{.timestamp = 400, .value = 1.0},
+                                                                    }}));
 
 }  // namespace
