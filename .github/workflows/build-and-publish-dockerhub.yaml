@@ -35,7 +35,7 @@ jobs:
         with:
           registry: docker.io
           registry_login: ${{ secrets.DOCKERHUB_REGISTRY_LOGIN }}
-          registry_password: ${{ secrets.DOCKERHUB_REGISTRY_PASSWORD }}
+          registry_password: "${{ secrets.DOCKERHUB_REGISTRY_PASSWORD }}"
         
       - name: Build Images Dockerhub
         run: |
