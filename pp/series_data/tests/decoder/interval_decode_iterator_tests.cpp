@@ -161,6 +161,15 @@ INSTANTIATE_TEST_SUITE_P(StaleNan,
                                                                     },
                                                                     .interval = 100},
                                          IntervalDecodeIteratorCase{.samples{
+                                                                        Sample{.timestamp = 98, .value = 1.0},
+                                                                        Sample{.timestamp = 99, .value = STALE_NAN},
+                                                                        Sample{.timestamp = 100, .value = 1.0},
+                                                                    },
+                                                                    .interval = 100,
+                                                                    .expected{
+                                                                        Sample{.timestamp = 100, .value = 1.0},
+                                                                    }},
+                                         IntervalDecodeIteratorCase{.samples{
                                                                         Sample{.timestamp = 100, .value = STALE_NAN},
                                                                         Sample{.timestamp = 200, .value = STALE_NAN},
                                                                         Sample{.timestamp = 300, .value = STALE_NAN},
