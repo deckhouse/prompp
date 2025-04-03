@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -21,12 +22,24 @@ import (
 )
 
 type cmdWALPPToBlock struct {
-	blockDuration model.Duration
+	blockDuration        model.Duration
+	updateCatalog        bool
+	removeConvertedHeads bool
 }
 
 func registerCmdWALPPToBlock(cmd *cmdWALPPToBlock, clause *kingpin.CmdClause) {
 	clause.Flag("storage.tsdb.min-block-duration", "Minimum duration of a data block before being persisted. For use in testing.").
 		Default("2h").SetValue(&cmd.blockDuration)
+
+	clause.Flag(
+		"update-catalog",
+		"Update catalog after conversion. Default true.",
+	).Default("true").Hidden().BoolVar(&cmd.updateCatalog)
+
+	clause.Flag(
+		"remove-converted-heads",
+		"After conversion, delete all converted heads. Default true.",
+	).Default("true").Hidden().BoolVar(&cmd.removeConvertedHeads)
 }
 
 func (cmd *cmdWALPPToBlock) Do(
@@ -105,8 +118,11 @@ func (cmd *cmdWALPPToBlock) Do(
 			return fmt.Errorf("failed to write tsdb block [id: %s, dir: %s]: %w", headRecord.ID(), headRecord.Dir(), err)
 		}
 
-		if _, setStatusErr := headCatalog.SetStatus(headRecord.ID(), catalog.StatusPersisted); setStatusErr != nil {
-			return fmt.Errorf("failed to set catalog status Persisted: %w", setStatusErr)
+		if cmd.updateCatalog {
+			level.Debug(logger).Log("msg", "set status persisted block", "id", headRecord.ID(), "dir", headRecord.Dir())
+			if _, setStatusErr := headCatalog.SetStatus(headRecord.ID(), catalog.StatusPersisted); setStatusErr != nil {
+				return fmt.Errorf("failed to set catalog status Persisted: %w", setStatusErr)
+			}
 		}
 
 		if err = h.Close(); err != nil {
@@ -119,5 +135,81 @@ func (cmd *cmdWALPPToBlock) Do(
 		}
 	}
 
+	if cmd.removeConvertedHeads {
+		if err := cmd.clearing(ctx, workingDir, headCatalog, logger); err != nil {
+			return fmt.Errorf("failed clearing catalog: %w", err)
+		}
+
+		level.Debug(logger).Log("msg", "run compact catalog")
+		if err := headCatalog.Compact(); err != nil {
+			return fmt.Errorf("failed compact catalog: %w", err)
+		}
+	}
+
 	return fileLog.Close()
+}
+
+func (cmd *cmdWALPPToBlock) clearing(
+	ctx context.Context,
+	workingDir string,
+	headCatalog *catalog.Catalog,
+	logger log.Logger,
+) error {
+	level.Debug(logger).Log("msg", "catalog clearing: started")
+	defer func() {
+		level.Debug(logger).Log("msg", "catalog clearing: ended")
+	}()
+
+	records, err := headCatalog.List(
+		func(record *catalog.Record) bool {
+			return record.DeletedAt() == 0 && record.Status() == catalog.StatusPersisted
+		},
+		func(lhs, rhs *catalog.Record) bool {
+			return lhs.CreatedAt() < rhs.CreatedAt()
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed listed head catalog: %w", err)
+	}
+
+	for _, record := range records {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		if record.DeletedAt() != 0 {
+			continue
+		}
+
+		level.Debug(logger).Log("msg", "catalog clearing", "head", record.ID())
+
+		if record.ReferenceCount() > 0 {
+			return fmt.Errorf("catalog record reference count > 0: head %s", record.ID())
+		}
+
+		if record.Corrupted() {
+			level.Debug(logger).Log(
+				"msg", "catalog clearing: started",
+				"head", record.ID(),
+				"state", "corrupted",
+			)
+			continue
+		}
+
+		if err = os.RemoveAll(filepath.Join(workingDir, record.Dir())); err != nil {
+			return fmt.Errorf("failed to remote head dir: %w", err)
+		}
+
+		if err = headCatalog.Delete(record.ID()); err != nil {
+			return fmt.Errorf("ffailed to delete head record: %w", err)
+		}
+
+		level.Debug(logger).Log(
+			"msg", "catalog clearing: started",
+			"head", record.ID(),
+			"state", "removed",
+		)
+	}
+
+	return nil
 }
