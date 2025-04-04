@@ -140,30 +140,36 @@ void SeriesDataEncoder::execute(const Config& config, Metrics& metrics) const {
   }
 
   const auto print_chunks_info = [&storage](std::string_view message, const auto& chunks_info) {
+    using enum series_data::EncodingType;
     std::cout << "==========================" << std::endl;
     std::cout << message << ":" << std::endl;
     for (auto& info : chunks_info) {
       switch (info.type) {
-        case series_data::EncodingType::kDoubleConstant:
-          std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.variant_encoders.allocated_memory() << std::endl;
+        case kDoubleConstant:
+          std::cout << "VariantEncoder storage,  allocated_memory: " << storage.variant_encoders.allocated_memory() << std::endl;
+          std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.allocated_memory(kDoubleConstant) << std::endl;
           break;
-        case series_data::EncodingType::kTwoDoubleConstant:
-        case series_data::EncodingType::kAscInteger:
-        case series_data::EncodingType::kValuesGorilla:
-          std::cout << info.name << "_count: " << info.count << std::endl;
+        case kTwoDoubleConstant:
+          std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.allocated_memory(kTwoDoubleConstant) << std::endl;
           break;
-        case series_data::EncodingType::kGorilla:
+        case kAscInteger:
+          std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.allocated_memory(kAscInteger) << std::endl;
+          break;
+        case kValuesGorilla:
+          std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.allocated_memory(kValuesGorilla) << std::endl;
+          break;
+        case kGorilla:
           std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.gorilla_encoders.allocated_memory() << std::endl;
           break;
-        case series_data::EncodingType::kUnknown:
+        case kUnknown:
           std::cout << info.name << "_count: " << info.count << std::endl;
           break;
-        case series_data::EncodingType::kUint32Constant:
-        case series_data::EncodingType::kFloat32Constant:
+        case kUint32Constant:
+        case kFloat32Constant:
           std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << 0 << std::endl;
           break;
         default:
-          assert(info.type != series_data::EncodingType::kUint32Constant);
+          assert(info.type != kUint32Constant);
       }
     }
     std::cout << "==========================" << std::endl << std::endl;

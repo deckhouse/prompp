@@ -9,7 +9,7 @@
 #include "common.h"
 #include "concepts.h"
 #include "data_storage.h"
-#include "encoder/value/variant.h"
+#include "encoder/encoder_variant.h"
 #include "series_data/encoder/timestamp/encoder.h"
 #include "series_data/encoder/timestamp/state.h"
 #include "series_data/encoder/value/float32_constant.h"
@@ -268,9 +268,9 @@ class Encoder {
   }
 
   PROMPP_ALWAYS_INLINE void switch_to_asc_integer(chunk::DataChunk& chunk,
-                                                                 const encoder::value::ConstantValue& v1,
-                                                                 const encoder::value::ConstantValue& v2,
-                                                                 const encoder::value::ConstantValue& v3) const {
+                                                  const encoder::value::ConstantValue& v1,
+                                                  const encoder::value::ConstantValue& v2,
+                                                  const encoder::value::ConstantValue& v3) const {
     auto& encoder = storage_.variant_encoders.emplace_back();
     encoder.construct<EncodingType::kAscInteger>(v1, v2, v3);
     chunk.encoding_state = EncodingState{.encoding_type = EncodingType::kAscInteger, .has_last_stalenan = false};

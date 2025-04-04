@@ -8,8 +8,6 @@
 
 namespace series_data::encoder::value {
 
-static constexpr BareBones::Encoding::Gorilla::DodSignificantLengths kAscIntegerDodSignificantLengths = {.first = 4, .second = 12, .third = 21};
-
 class PROMPP_ATTRIBUTE_PACKED AscIntegerEncoder {
  public:
   PROMPP_ALWAYS_INLINE explicit AscIntegerEncoder(double value) { encoder_.encode(static_cast<int64_t>(value), stream_); }
