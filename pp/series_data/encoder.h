@@ -167,9 +167,8 @@ class Encoder {
     if (const auto& encoder = storage_.dynamic_encoders[chunk.encoder.external_index].double_constant; !encoder.encode(chunk.encoding_state, value)) {
       const auto encoder_id = chunk.encoder.external_index;
 
-      const auto encoder_copy = std::move(storage_.dynamic_encoders[encoder_id].double_constant);
-      std::destroy_at(&storage_.dynamic_encoders[encoder_id].double_constant);
-      storage_.dynamic_encoders.erase(encoder_id);
+      const auto encoder_copy = storage_.dynamic_encoders[encoder_id].double_constant;
+      storage_.dynamic_encoders.erase(encoder_id, EncodingType::kDoubleConstant);
 
       switch_from_constant(chunk, timestamp, encoder_copy.value(), value);
     }
@@ -180,9 +179,8 @@ class Encoder {
       const auto encoder_id = chunk.encoder.external_index;
       const bool was_last_stalenan = chunk.encoding_state.has_last_stalenan;
 
-      const auto encoder_copy = std::move(storage_.dynamic_encoders[encoder_id].two_double_constant);
-      std::destroy_at(&storage_.dynamic_encoders[encoder_id].two_double_constant);
-      storage_.dynamic_encoders.erase(encoder_id);
+      const auto encoder_copy = storage_.dynamic_encoders[encoder_id].two_double_constant;
+      storage_.dynamic_encoders.erase(encoder_id, EncodingType::kTwoDoubleConstant);
 
       switch_from_two_double_constant(chunk, timestamp, encoder_copy.value1(), encoder_copy.value1_count(), encoder_copy.value2(), value);
 
@@ -259,13 +257,13 @@ class Encoder {
     chunk.encoding_state.encoding_type = EncodingType::kDoubleConstant;
     chunk.encoding_state.has_last_stalenan = BareBones::Encoding::Gorilla::isstalenan(value);
     auto& encoder = storage_.dynamic_encoders.emplace_back();
-    std::construct_at(&encoder.double_constant, value);
+    encoder.construct<EncodingType::kDoubleConstant>(value);
     chunk.encoder.external_index = storage_.dynamic_encoders.index_of(encoder);
   }
 
   PROMPP_ALWAYS_INLINE void switch_to_two_constant_encoder(chunk::DataChunk& chunk, const encoder::value::ConstantValue& v1, double value2) const {
     auto& encoder = storage_.dynamic_encoders.emplace_back();
-    std::construct_at(&encoder.two_double_constant, v1.value, value2, v1.count);
+    encoder.construct<EncodingType::kTwoDoubleConstant>(v1.value, value2, v1.count);
     chunk.encoding_state = EncodingState{.encoding_type = EncodingType::kTwoDoubleConstant, .has_last_stalenan = false};
     chunk.encoder.external_index = storage_.dynamic_encoders.index_of(encoder);
   }
@@ -275,7 +273,7 @@ class Encoder {
                                                                  const encoder::value::ConstantValue& v2,
                                                                  const encoder::value::ConstantValue& v3) const {
     auto& encoder = storage_.dynamic_encoders.emplace_back();
-    std::construct_at(&encoder.asc_integer_values_gorilla, v1, v2, v3);
+    encoder.construct<EncodingType::kAscIntegerValuesGorilla>(v1, v2, v3);
     chunk.encoding_state = EncodingState{.encoding_type = EncodingType::kAscIntegerValuesGorilla, .has_last_stalenan = false};
     chunk.encoder.external_index = storage_.dynamic_encoders.index_of(encoder);
   }
@@ -285,7 +283,7 @@ class Encoder {
                                                      const encoder::value::ConstantValue& v2,
                                                      const encoder::value::ConstantValue& v3) const {
     auto& encoder = storage_.dynamic_encoders.emplace_back();
-    std::construct_at(&encoder.values_gorilla, v1, v2, v3);
+    encoder.construct<EncodingType::kValuesGorilla>(v1, v2, v3);
     chunk.encoding_state = EncodingState{.encoding_type = EncodingType::kValuesGorilla, .has_last_stalenan = false};
     chunk.encoder.external_index = storage_.dynamic_encoders.index_of(encoder);
   }

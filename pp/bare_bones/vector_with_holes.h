@@ -21,11 +21,13 @@ union ItemOrHole {
   PROMPP_ALWAYS_INLINE void create_item(Args&&... args) {
     std::construct_at(&value, std::forward<Args>(args)...);
   }
-  PROMPP_ALWAYS_INLINE void destroy_item() { std::destroy_at(&value); }
-  // destroys current item and links hole into linked list
-  PROMPP_ALWAYS_INLINE void make_hole(uint32_t next_hole_index) {
-    destroy_item();
-    next_hole = next_hole_index;
+  template <class... Args>
+  PROMPP_ALWAYS_INLINE void destroy_item(Args&&... args) {
+    if constexpr (requires { value.destroy(std::forward<Args>(args)...); }) {
+      value.destroy(std::forward<Args>(args)...);
+    } else {
+      std::destroy_at(&value);
+    }
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return mem::allocated_memory(value); }
@@ -66,12 +68,14 @@ class VectorWithHoles {
     return vector_.emplace_back(std::forward<Args>(args)...).value;
   }
 
-  PROMPP_ALWAYS_INLINE void erase(uint32_t index) {
+  template <class... Args>
+  PROMPP_ALWAYS_INLINE void erase(uint32_t index, Args&&... args) {
     assert(index < vector_.size());
     assert(!is_hole(index));
 
-    vector_[index].make_hole(next_hole_);
+    vector_[index].destroy_item(std::forward<Args>(args)...);
 
+    vector_[index].next_hole = next_hole_;
     next_hole_ = index;
 
     mark_hole(index);

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cassert>
+
 #include "bare_bones/algorithm.h"
 #include "bare_bones/preprocess.h"
 #include "chunk/data_chunk.h"
@@ -175,6 +177,55 @@ struct DataStorage {
     encoder::value::AscIntegerValuesGorillaEncoder asc_integer_values_gorilla;
     encoder::value::ValuesGorillaEncoder values_gorilla;
 
+    void destroy(EncodingType encoding_type) {
+      switch (encoding_type) {
+        case EncodingType::kDoubleConstant:
+          std::destroy_at(&double_constant);
+          break;
+        case EncodingType::kTwoDoubleConstant:
+          std::destroy_at(&two_double_constant);
+          break;
+        case EncodingType::kAscIntegerValuesGorilla:
+          std::destroy_at(&asc_integer_values_gorilla);
+          break;
+        case EncodingType::kValuesGorilla:
+          std::destroy_at(&values_gorilla);
+          break;
+        default:
+          assert(encoding_type != EncodingType::kDoubleConstant && "Unsupported encoding type in DynamicEncoder");
+      }
+    }
+
+    template <EncodingType E, class... Args>
+    void construct(Args&&... args) {
+      using enum EncodingType;
+      if constexpr (E == kDoubleConstant) {
+        std::construct_at(&double_constant, std::forward<Args>(args)...);
+      } else if constexpr (E == kTwoDoubleConstant) {
+        std::construct_at(&two_double_constant, std::forward<Args>(args)...);
+      } else if constexpr (E == kAscIntegerValuesGorilla) {
+        std::construct_at(&asc_integer_values_gorilla, std::forward<Args>(args)...);
+      } else if constexpr (E == kValuesGorilla) {
+        std::construct_at(&values_gorilla, std::forward<Args>(args)...);
+      } else {
+        static_assert(false, "Unsupported encoding type in DynamicEncoder");
+      }
+    }
+
+    uint32_t allocated_memory(EncodingType encoding_type) const noexcept {
+      switch (encoding_type) {
+        case EncodingType::kDoubleConstant:
+        case EncodingType::kTwoDoubleConstant:
+          return 0;
+        case EncodingType::kAscIntegerValuesGorilla:
+          return asc_integer_values_gorilla.allocated_memory();
+        case EncodingType::kValuesGorilla:
+          return values_gorilla.allocated_memory();
+        default:
+          assert(encoding_type != EncodingType::kDoubleConstant && "Unsupported encoding type in DynamicEncoder");
+      }
+    }
+
     DynamicEncoder() {}
     ~DynamicEncoder() {}
   };
@@ -289,7 +340,6 @@ struct DataStorage {
   }
 
   ~DataStorage() {
-    using enum EncodingType;
     for (const auto& chunk : open_chunks) {
       destroy_open_chunk_encoder(chunk);
     }
@@ -328,40 +378,20 @@ struct DataStorage {
     if constexpr (chunk_type == chunk::DataChunk::Type::kFinalized) {
       if (is_gorilla_encoder(chunk.encoding_state.encoding_type)) {
         finalized_data_streams.erase(chunk.encoder.external_index);
-        return;
       }
-    }
-
-    destroy_open_chunk_encoder(chunk);
-
-    if (chunk.encoding_state.encoding_type == kGorilla) {
-      gorilla_encoders.erase(chunk.encoder.external_index);
-    } else if (is_dynamic_encoder(chunk.encoding_state.encoding_type)) {
-      dynamic_encoders.erase(chunk.encoder.external_index);
+    } else {
+      if (chunk.encoding_state.encoding_type == kGorilla) {
+        gorilla_encoders.erase(chunk.encoder.external_index, kGorilla);
+      } else if (is_dynamic_encoder(chunk.encoding_state.encoding_type)) {
+        const EncodingType et = chunk.encoding_state.encoding_type;
+        dynamic_encoders.erase(chunk.encoder.external_index, et);
+      }
     }
   }
 
   void destroy_open_chunk_encoder(const chunk::DataChunk& chunk) {
-    switch (chunk.encoding_state.encoding_type) {
-      case EncodingType::kDoubleConstant:
-        std::destroy_at(&dynamic_encoders[chunk.encoder.external_index].double_constant);
-        break;
-      case EncodingType::kTwoDoubleConstant:
-        std::destroy_at(&dynamic_encoders[chunk.encoder.external_index].two_double_constant);
-        break;
-      case EncodingType::kAscIntegerValuesGorilla:
-        std::destroy_at(&dynamic_encoders[chunk.encoder.external_index].asc_integer_values_gorilla);
-        break;
-      case EncodingType::kValuesGorilla:
-        std::destroy_at(&dynamic_encoders[chunk.encoder.external_index].values_gorilla);
-        break;
-      case EncodingType::kGorilla:
-      case EncodingType::kUnknown:
-      case EncodingType::kUint32Constant:
-      case EncodingType::kFloat32Constant:
-        break;
-      default:
-        assert(chunk.encoding_state.encoding_type != EncodingType::kUint32Constant);
+    if (is_dynamic_encoder(chunk.encoding_state.encoding_type)) {
+      dynamic_encoders[chunk.encoder.external_index].destroy(chunk.encoding_state.encoding_type);
     }
   }
 };

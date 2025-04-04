@@ -40,7 +40,8 @@ constexpr PROMPP_ALWAYS_INLINE bool is_gorilla_encoder(EncodingType encoding_typ
 }
 
 constexpr PROMPP_ALWAYS_INLINE bool is_dynamic_encoder(EncodingType encoding_type) noexcept {
-  return !(encoding_type == EncodingType::kUint32Constant) && !(encoding_type == EncodingType::kFloat32Constant);
+  return (encoding_type == EncodingType::kDoubleConstant) || (encoding_type == EncodingType::kTwoDoubleConstant) ||
+         (encoding_type == EncodingType::kAscIntegerValuesGorilla) || (encoding_type == EncodingType::kValuesGorilla);
 }
 
 }  // namespace series_data
