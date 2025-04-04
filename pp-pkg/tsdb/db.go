@@ -11,11 +11,10 @@ import (
 
 // PPBlocksToDelete returns a filter which decides time based and size based
 // retention from the options of the db.
-func PPBlocksToDelete(dir string, catalog *catalog.Catalog) func(db *tsdb.DB) tsdb.BlocksToDeleteFunc {
-	return func(db *tsdb.DB) tsdb.BlocksToDeleteFunc {
-		return func(blocks []*tsdb.Block) map[ulid.ULID]struct{} {
-			return deletableBlocks(db, dir, catalog, blocks)
-		}
+// This is copy of tsdb.DefaultBlocksToDelete function with modifications such as calculation prompp heads size.
+func PPBlocksToDelete(db *tsdb.DB, dir string, catalog *catalog.Catalog) tsdb.BlocksToDeleteFunc {
+	return func(blocks []*tsdb.Block) map[ulid.ULID]struct{} {
+		return deletableBlocks(db, dir, catalog, blocks)
 	}
 }
 
