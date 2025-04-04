@@ -24,14 +24,12 @@ class ChunkFinalizer {
     if (chunk.encoding_state.encoding_type == EncodingType::kAscIntegerValuesGorilla) {
       const auto& finalized_stream =
           storage.finalized_data_streams.emplace_back(storage.variant_encoders[chunk.encoder.external_index].asc_integer_values_gorilla.finalize_stream());
-      std::destroy_at(&storage.variant_encoders[chunk.encoder.external_index].asc_integer_values_gorilla);
-      storage.variant_encoders.erase(chunk.encoder.external_index);
+      storage.variant_encoders.erase(chunk.encoder.external_index, EncodingType::kAscIntegerValuesGorilla);
       chunk.encoder.external_index = storage.finalized_data_streams.index_of(finalized_stream);
     } else if (chunk.encoding_state.encoding_type == EncodingType::kValuesGorilla) {
       const auto& finalized_stream =
           storage.finalized_data_streams.emplace_back(storage.variant_encoders[chunk.encoder.external_index].values_gorilla.finalize_stream());
-      std::destroy_at(&storage.variant_encoders[chunk.encoder.external_index].values_gorilla);
-      storage.variant_encoders.erase(chunk.encoder.external_index);
+      storage.variant_encoders.erase(chunk.encoder.external_index, EncodingType::kValuesGorilla);
       chunk.encoder.external_index = storage.finalized_data_streams.index_of(finalized_stream);
     } else if (chunk.encoding_state.encoding_type == EncodingType::kGorilla) {
       const auto& finalized_stream = storage.finalized_data_streams.emplace_back(storage.gorilla_encoders[chunk.encoder.external_index].finalize_stream());

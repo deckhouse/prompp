@@ -1862,6 +1862,7 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseUint32Encoder) {
   auto finalized = finalized_chunks(0);
   ASSERT_NE(finalized, nullptr);
   ASSERT_EQ(finalized->count(), 0);
+
   ASSERT_THROW({ std::ignore = storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
 }
 
@@ -1881,6 +1882,7 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseFloat32Encoder) {
   auto finalized = finalized_chunks(0);
   ASSERT_NE(finalized, nullptr);
   ASSERT_EQ(finalized->count(), 0);
+
   ASSERT_THROW({ std::ignore = storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
 }
 
@@ -1900,7 +1902,9 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseDoubleEncoder) {
   auto finalized = finalized_chunks(0);
   ASSERT_NE(finalized, nullptr);
   ASSERT_EQ(finalized->count(), 0);
+
   ASSERT_THROW({ std::ignore = storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
+
   ASSERT_THROW({ storage_.variant_encoders.at(0); }, BareBones::Exception);
   ASSERT_NO_THROW({ storage_.variant_encoders.at(1); });
 }
@@ -1921,7 +1925,9 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseTwoDoubleEncoder) {
   auto finalized = finalized_chunks(0);
   ASSERT_NE(finalized, nullptr);
   ASSERT_EQ(finalized->count(), 0);
+
   ASSERT_THROW({ std::ignore = storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
+
   ASSERT_THROW({ storage_.variant_encoders.at(0); }, BareBones::Exception);
   ASSERT_NO_THROW({ storage_.variant_encoders.at(1); });
 }
@@ -1942,7 +1948,9 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseAscEncoder) {
   auto finalized = finalized_chunks(0);
   ASSERT_NE(finalized, nullptr);
   ASSERT_EQ(finalized->count(), 0);
+
   ASSERT_THROW({ std::ignore = storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
+
   ASSERT_NO_THROW({ storage_.variant_encoders.at(0); });
 }
 
@@ -1966,6 +1974,7 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseValuesGorillaEncoder) {
   auto finalized = finalized_chunks(0);
   ASSERT_NE(finalized, nullptr);
   ASSERT_EQ(finalized->count(), 0);
+
   ASSERT_NO_THROW({ std::ignore = storage_.finalized_timestamp_streams.at(state_id); });
   ASSERT_NO_THROW({ storage_.variant_encoders.at(0); });
 }
@@ -1994,6 +2003,7 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseValuesGorillaEncoderAll) {
   finalized = finalized_chunks(1);
   ASSERT_NE(finalized, nullptr);
   ASSERT_EQ(finalized->count(), 0);
+
   ASSERT_THROW({ std::ignore = storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
 }
 
@@ -2011,6 +2021,7 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseGorillaEncoder) {
   auto finalized = finalized_chunks(0);
   ASSERT_NE(finalized, nullptr);
   ASSERT_EQ(finalized->count(), 0);
+
   ASSERT_NO_THROW({ storage_.variant_encoders.at(0); });
 }
 
