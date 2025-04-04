@@ -34,7 +34,7 @@ constexpr PROMPP_ALWAYS_INLINE bool is_constant_encoder(EncodingType encoding_ty
          (encoding_type == EncodingType::kDoubleConstant) || (encoding_type == EncodingType::kTwoDoubleConstant);
 }
 
-constexpr PROMPP_ALWAYS_INLINE bool is_gorilla_encoder(EncodingType encoding_type) noexcept {
+constexpr PROMPP_ALWAYS_INLINE bool is_gorilla_based_encoder(EncodingType encoding_type) noexcept {
   return (encoding_type == EncodingType::kAscIntegerValuesGorilla) || (encoding_type == EncodingType::kValuesGorilla) ||
          (encoding_type == EncodingType::kGorilla);
 }

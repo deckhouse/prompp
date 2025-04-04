@@ -314,7 +314,7 @@ struct DataStorage {
     using enum EncodingType;
 
     if constexpr (chunk_type == chunk::DataChunk::Type::kFinalized) {
-      if (is_gorilla_encoder(chunk.encoding_state.encoding_type)) {
+      if (is_gorilla_based_encoder(chunk.encoding_state.encoding_type)) {
         finalized_data_streams.erase(chunk.encoder.external_index);
         return;
       }
