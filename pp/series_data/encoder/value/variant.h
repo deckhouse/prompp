@@ -9,7 +9,7 @@
 
 namespace series_data::encoder::value {
 
-union PROMPP_ATTRIBUTE_PACKED DynamicEncoder {
+union PROMPP_ATTRIBUTE_PACKED EncoderVariant {
   DoubleConstantEncoder double_constant{0};
   TwoDoubleConstantEncoder two_double_constant;
   AscIntegerValuesGorillaEncoder asc_integer_values_gorilla;
@@ -30,7 +30,7 @@ union PROMPP_ATTRIBUTE_PACKED DynamicEncoder {
         std::destroy_at(&values_gorilla);
         break;
       default:
-        assert(encoding_type != EncodingType::kDoubleConstant && "Unsupported encoding type in DynamicEncoder");
+        assert(encoding_type != EncodingType::kDoubleConstant && "Unsupported encoding type in EncoderVariant");
     }
   }
 
@@ -46,7 +46,7 @@ union PROMPP_ATTRIBUTE_PACKED DynamicEncoder {
     } else if constexpr (E == kValuesGorilla) {
       std::construct_at(&values_gorilla, std::forward<Args>(args)...);
     } else {
-      static_assert(false, "Unsupported encoding type in DynamicEncoder");
+      static_assert(false, "Unsupported encoding type in EncoderVariant");
     }
   }
 
@@ -60,11 +60,11 @@ union PROMPP_ATTRIBUTE_PACKED DynamicEncoder {
       case EncodingType::kValuesGorilla:
         return values_gorilla.allocated_memory();
       default:
-        assert(encoding_type != EncodingType::kDoubleConstant && "Unsupported encoding type in DynamicEncoder");
+        assert(encoding_type != EncodingType::kDoubleConstant && "Unsupported encoding type in EncoderVariant");
     }
   }
 
-  DynamicEncoder() {}
-  ~DynamicEncoder() {}
+  EncoderVariant() {}
+  ~EncoderVariant() {}
 };
 }  // namespace series_data::encoder::value

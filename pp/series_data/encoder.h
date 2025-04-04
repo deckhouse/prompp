@@ -164,23 +164,23 @@ class Encoder {
   }
 
   PROMPP_ALWAYS_INLINE void handle_double_constant_encoder(chunk::DataChunk& chunk, int64_t timestamp, double value) const {
-    if (const auto& encoder = storage_.dynamic_encoders[chunk.encoder.external_index].double_constant; !encoder.encode(chunk.encoding_state, value)) {
+    if (const auto& encoder = storage_.variant_encoders[chunk.encoder.external_index].double_constant; !encoder.encode(chunk.encoding_state, value)) {
       const auto encoder_id = chunk.encoder.external_index;
 
-      const auto encoder_copy = storage_.dynamic_encoders[encoder_id].double_constant;
-      storage_.dynamic_encoders.erase(encoder_id, EncodingType::kDoubleConstant);
+      const auto encoder_copy = storage_.variant_encoders[encoder_id].double_constant;
+      storage_.variant_encoders.erase(encoder_id, EncodingType::kDoubleConstant);
 
       switch_from_constant(chunk, timestamp, encoder_copy.value(), value);
     }
   }
 
   PROMPP_ALWAYS_INLINE void handle_two_double_constant_encoder(uint32_t ls_id, chunk::DataChunk& chunk, int64_t timestamp, double value) const {
-    if (const auto& encoder = storage_.dynamic_encoders[chunk.encoder.external_index].two_double_constant; !encoder.encode(chunk.encoding_state, value)) {
+    if (const auto& encoder = storage_.variant_encoders[chunk.encoder.external_index].two_double_constant; !encoder.encode(chunk.encoding_state, value)) {
       const auto encoder_id = chunk.encoder.external_index;
       const bool was_last_stalenan = chunk.encoding_state.has_last_stalenan;
 
-      const auto encoder_copy = storage_.dynamic_encoders[encoder_id].two_double_constant;
-      storage_.dynamic_encoders.erase(encoder_id, EncodingType::kTwoDoubleConstant);
+      const auto encoder_copy = storage_.variant_encoders[encoder_id].two_double_constant;
+      storage_.variant_encoders.erase(encoder_id, EncodingType::kTwoDoubleConstant);
 
       switch_from_two_double_constant(chunk, timestamp, encoder_copy.value1(), encoder_copy.value1_count(), encoder_copy.value2(), value);
 
@@ -191,7 +191,7 @@ class Encoder {
   }
 
   PROMPP_ALWAYS_INLINE void handle_asc_values_gorilla_encoder(uint32_t ls_id, chunk::DataChunk& chunk, double value) const {
-    if (!storage_.dynamic_encoders[chunk.encoder.external_index].asc_integer_values_gorilla.encode(chunk.encoding_state, value)) {
+    if (!storage_.variant_encoders[chunk.encoder.external_index].asc_integer_values_gorilla.encode(chunk.encoding_state, value)) {
       ChunkFinalizer::finalize_timestamp_and_chunk_separately<ChunkFinalizer::FinalizeTimestampStateMode::kFinalizeOrCopy>(storage_, ls_id, chunk);
 
       switch_to_double_constant_encoder(chunk, value);
@@ -199,7 +199,7 @@ class Encoder {
   }
 
   PROMPP_ALWAYS_INLINE void handle_values_gorilla_encoder(chunk::DataChunk& chunk, double value) const {
-    storage_.dynamic_encoders[chunk.encoder.external_index].values_gorilla.encode(chunk.encoding_state, value);
+    storage_.variant_encoders[chunk.encoder.external_index].values_gorilla.encode(chunk.encoding_state, value);
   }
 
   PROMPP_ALWAYS_INLINE void handle_gorilla_encoder(chunk::DataChunk& chunk, int64_t timestamp, double value) const {
@@ -256,36 +256,36 @@ class Encoder {
   PROMPP_ALWAYS_INLINE void switch_to_double_constant_encoder(chunk::DataChunk& chunk, double value) const {
     chunk.encoding_state.encoding_type = EncodingType::kDoubleConstant;
     chunk.encoding_state.has_last_stalenan = BareBones::Encoding::Gorilla::isstalenan(value);
-    auto& encoder = storage_.dynamic_encoders.emplace_back();
+    auto& encoder = storage_.variant_encoders.emplace_back();
     encoder.construct<EncodingType::kDoubleConstant>(value);
-    chunk.encoder.external_index = storage_.dynamic_encoders.index_of(encoder);
+    chunk.encoder.external_index = storage_.variant_encoders.index_of(encoder);
   }
 
   PROMPP_ALWAYS_INLINE void switch_to_two_constant_encoder(chunk::DataChunk& chunk, const encoder::value::ConstantValue& v1, double value2) const {
-    auto& encoder = storage_.dynamic_encoders.emplace_back();
+    auto& encoder = storage_.variant_encoders.emplace_back();
     encoder.construct<EncodingType::kTwoDoubleConstant>(v1.value, value2, v1.count);
     chunk.encoding_state = EncodingState{.encoding_type = EncodingType::kTwoDoubleConstant, .has_last_stalenan = false};
-    chunk.encoder.external_index = storage_.dynamic_encoders.index_of(encoder);
+    chunk.encoder.external_index = storage_.variant_encoders.index_of(encoder);
   }
 
   PROMPP_ALWAYS_INLINE void switch_to_asc_integer_values_gorilla(chunk::DataChunk& chunk,
                                                                  const encoder::value::ConstantValue& v1,
                                                                  const encoder::value::ConstantValue& v2,
                                                                  const encoder::value::ConstantValue& v3) const {
-    auto& encoder = storage_.dynamic_encoders.emplace_back();
+    auto& encoder = storage_.variant_encoders.emplace_back();
     encoder.construct<EncodingType::kAscIntegerValuesGorilla>(v1, v2, v3);
     chunk.encoding_state = EncodingState{.encoding_type = EncodingType::kAscIntegerValuesGorilla, .has_last_stalenan = false};
-    chunk.encoder.external_index = storage_.dynamic_encoders.index_of(encoder);
+    chunk.encoder.external_index = storage_.variant_encoders.index_of(encoder);
   }
 
   PROMPP_ALWAYS_INLINE void switch_to_values_gorilla(chunk::DataChunk& chunk,
                                                      const encoder::value::ConstantValue& v1,
                                                      const encoder::value::ConstantValue& v2,
                                                      const encoder::value::ConstantValue& v3) const {
-    auto& encoder = storage_.dynamic_encoders.emplace_back();
+    auto& encoder = storage_.variant_encoders.emplace_back();
     encoder.construct<EncodingType::kValuesGorilla>(v1, v2, v3);
     chunk.encoding_state = EncodingState{.encoding_type = EncodingType::kValuesGorilla, .has_last_stalenan = false};
-    chunk.encoder.external_index = storage_.dynamic_encoders.index_of(encoder);
+    chunk.encoder.external_index = storage_.variant_encoders.index_of(encoder);
   }
 
   PROMPP_ALWAYS_INLINE void switch_to_gorilla(chunk::DataChunk& chunk,

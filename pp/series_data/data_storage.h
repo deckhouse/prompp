@@ -8,8 +8,8 @@
 #include "common.h"
 #include "encoder/gorilla.h"
 #include "encoder/value/asc_integer_values_gorilla.h"
-#include "encoder/value/dynamic.h"
 #include "encoder/value/values_gorilla.h"
+#include "encoder/value/variant.h"
 #include "series_data/encoder/timestamp/encoder.h"
 
 namespace series_data {
@@ -171,7 +171,7 @@ struct DataStorage {
   BareBones::Vector<chunk::DataChunk> open_chunks;
   encoder::timestamp::Encoder timestamp_encoder;
 
-  BareBones::VectorWithHoles<encoder::value::DynamicEncoder> dynamic_encoders;
+  BareBones::VectorWithHoles<encoder::value::EncoderVariant> variant_encoders;
   BareBones::VectorWithHoles<encoder::GorillaEncoder> gorilla_encoders;
 
   size_t outdated_chunks_map_allocated_memory{};
@@ -232,7 +232,7 @@ struct DataStorage {
   template <chunk::DataChunk::Type chunk_type>
   [[nodiscard]] PROMPP_ALWAYS_INLINE const encoder::CompactBitSequence& get_asc_integer_values_gorilla_stream(uint32_t stream_id) const noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
-      return dynamic_encoders[stream_id].asc_integer_values_gorilla.stream();
+      return variant_encoders[stream_id].asc_integer_values_gorilla.stream();
     } else {
       return finalized_data_streams[stream_id];
     }
@@ -241,7 +241,7 @@ struct DataStorage {
   template <chunk::DataChunk::Type chunk_type>
   [[nodiscard]] PROMPP_ALWAYS_INLINE const encoder::CompactBitSequence& get_values_gorilla_stream(uint32_t stream_id) const noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
-      return dynamic_encoders[stream_id].values_gorilla.stream();
+      return variant_encoders[stream_id].values_gorilla.stream();
     } else {
       return finalized_data_streams[stream_id];
     }
@@ -262,13 +262,13 @@ struct DataStorage {
     const size_t outdated_chunks_allocated_memory =
         BareBones::accumulate(outdated_chunks, 0, [](auto& local, const auto& p) { return local + p.second.allocated_memory(); });
 
-    size_t encoders_memory = dynamic_encoders.allocated_memory() + gorilla_encoders.allocated_memory();
+    size_t encoders_memory = variant_encoders.allocated_memory() + gorilla_encoders.allocated_memory();
 
     for (const auto& chunk : open_chunks) {
       if (chunk.encoding_state.encoding_type == kAscIntegerValuesGorilla) {
-        encoders_memory += dynamic_encoders[chunk.encoder.external_index].asc_integer_values_gorilla.allocated_memory();
+        encoders_memory += variant_encoders[chunk.encoder.external_index].asc_integer_values_gorilla.allocated_memory();
       } else if (chunk.encoding_state.encoding_type == kValuesGorilla) {
-        encoders_memory += dynamic_encoders[chunk.encoder.external_index].values_gorilla.allocated_memory();
+        encoders_memory += variant_encoders[chunk.encoder.external_index].values_gorilla.allocated_memory();
       }
     }
 
@@ -320,16 +320,16 @@ struct DataStorage {
     } else {
       if (chunk.encoding_state.encoding_type == kGorilla) {
         gorilla_encoders.erase(chunk.encoder.external_index, kGorilla);
-      } else if (is_dynamic_encoder(chunk.encoding_state.encoding_type)) {
+      } else if (is_variant_encoder(chunk.encoding_state.encoding_type)) {
         const EncodingType et = chunk.encoding_state.encoding_type;
-        dynamic_encoders.erase(chunk.encoder.external_index, et);
+        variant_encoders.erase(chunk.encoder.external_index, et);
       }
     }
   }
 
   void destroy_open_chunk_encoder(const chunk::DataChunk& chunk) {
-    if (is_dynamic_encoder(chunk.encoding_state.encoding_type)) {
-      dynamic_encoders[chunk.encoder.external_index].destroy(chunk.encoding_state.encoding_type);
+    if (is_variant_encoder(chunk.encoding_state.encoding_type)) {
+      variant_encoders[chunk.encoder.external_index].destroy(chunk.encoding_state.encoding_type);
     }
   }
 };

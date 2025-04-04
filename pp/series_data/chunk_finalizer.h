@@ -23,15 +23,15 @@ class ChunkFinalizer {
   static void finalize(DataStorage& storage, uint32_t ls_id, chunk::DataChunk& chunk, uint32_t finalized_timestamp_stream_id) {
     if (chunk.encoding_state.encoding_type == EncodingType::kAscIntegerValuesGorilla) {
       const auto& finalized_stream =
-          storage.finalized_data_streams.emplace_back(storage.dynamic_encoders[chunk.encoder.external_index].asc_integer_values_gorilla.finalize_stream());
-      std::destroy_at(&storage.dynamic_encoders[chunk.encoder.external_index].asc_integer_values_gorilla);
-      storage.dynamic_encoders.erase(chunk.encoder.external_index);
+          storage.finalized_data_streams.emplace_back(storage.variant_encoders[chunk.encoder.external_index].asc_integer_values_gorilla.finalize_stream());
+      std::destroy_at(&storage.variant_encoders[chunk.encoder.external_index].asc_integer_values_gorilla);
+      storage.variant_encoders.erase(chunk.encoder.external_index);
       chunk.encoder.external_index = storage.finalized_data_streams.index_of(finalized_stream);
     } else if (chunk.encoding_state.encoding_type == EncodingType::kValuesGorilla) {
       const auto& finalized_stream =
-          storage.finalized_data_streams.emplace_back(storage.dynamic_encoders[chunk.encoder.external_index].values_gorilla.finalize_stream());
-      std::destroy_at(&storage.dynamic_encoders[chunk.encoder.external_index].values_gorilla);
-      storage.dynamic_encoders.erase(chunk.encoder.external_index);
+          storage.finalized_data_streams.emplace_back(storage.variant_encoders[chunk.encoder.external_index].values_gorilla.finalize_stream());
+      std::destroy_at(&storage.variant_encoders[chunk.encoder.external_index].values_gorilla);
+      storage.variant_encoders.erase(chunk.encoder.external_index);
       chunk.encoder.external_index = storage.finalized_data_streams.index_of(finalized_stream);
     } else if (chunk.encoding_state.encoding_type == EncodingType::kGorilla) {
       const auto& finalized_stream = storage.finalized_data_streams.emplace_back(storage.gorilla_encoders[chunk.encoder.external_index].finalize_stream());

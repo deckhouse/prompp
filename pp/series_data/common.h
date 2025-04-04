@@ -39,7 +39,7 @@ constexpr PROMPP_ALWAYS_INLINE bool is_gorilla_encoder(EncodingType encoding_typ
          (encoding_type == EncodingType::kGorilla);
 }
 
-constexpr PROMPP_ALWAYS_INLINE bool is_dynamic_encoder(EncodingType encoding_type) noexcept {
+constexpr PROMPP_ALWAYS_INLINE bool is_variant_encoder(EncodingType encoding_type) noexcept {
   return (encoding_type == EncodingType::kDoubleConstant) || (encoding_type == EncodingType::kTwoDoubleConstant) ||
          (encoding_type == EncodingType::kAscIntegerValuesGorilla) || (encoding_type == EncodingType::kValuesGorilla);
 }

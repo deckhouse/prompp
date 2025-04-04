@@ -145,7 +145,7 @@ void SeriesDataEncoder::execute(const Config& config, Metrics& metrics) const {
     for (auto& info : chunks_info) {
       switch (info.type) {
         case series_data::EncodingType::kDoubleConstant:
-          std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.dynamic_encoders.allocated_memory() << std::endl;
+          std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.variant_encoders.allocated_memory() << std::endl;
           break;
         case series_data::EncodingType::kTwoDoubleConstant:
         case series_data::EncodingType::kAscIntegerValuesGorilla:
