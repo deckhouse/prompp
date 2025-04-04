@@ -34,8 +34,7 @@ class AscIntegerDecodeIterator : public SeparatedTimestampValueDecodeIteratorTra
 
  private:
   using GorillaState = BareBones::Encoding::Gorilla::GorillaState;
-  using Decoder = BareBones::Encoding::Gorilla::ZigZagTimestampDecoder<encoder::value::kAscIntegerDodSignificantLengths>;
-  using ValueType = BareBones::Encoding::Gorilla::ValueType;
+  using Decoder = encoder::ZigZagTimestampDecoder;
 
   Decoder decoder_;
   BareBones::BitSequenceReader reader_;
@@ -49,7 +48,7 @@ class AscIntegerDecodeIterator : public SeparatedTimestampValueDecodeIteratorTra
       decoder_.decode_delta(reader_);
       gorilla_state_ = GorillaState::kOtherPoint;
     } else {
-      if (const auto type = decoder_.decode_delta_of_delta_with_stale_nan(reader_); type == ValueType::kStaleNan) [[unlikely]] {
+      if (const auto type = decoder_.decode_delta_of_delta_with_stale_nan(reader_); type == encoder::ValueType::kStaleNan) [[unlikely]] {
         sample_.value = BareBones::Encoding::Gorilla::STALE_NAN;
         return;
       }

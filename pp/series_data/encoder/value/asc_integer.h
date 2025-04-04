@@ -1,10 +1,10 @@
 #pragma once
 
-#include "bare_bones/gorilla.h"
 #include "constant_value.h"
 #include "series_data/common.h"
 #include "series_data/encoder/bit_sequence.h"
 #include "series_data/encoder/numeric.h"
+#include "series_data/encoder/zig_zag_timestamp_gorilla.h"
 
 namespace series_data::encoder::value {
 
@@ -65,9 +65,7 @@ class PROMPP_ATTRIBUTE_PACKED AscIntegerEncoder {
 
  private:
   using EncoderDeltaType = int32_t;
-  using Encoder = BareBones::Encoding::Gorilla::ZigZagTimestampEncoder<BareBones::Encoding::Gorilla::TimestampEncoderState<EncoderDeltaType>,
-                                                                       kAscIntegerDodSignificantLengths>;
-  using ValueType = BareBones::Encoding::Gorilla::ValueType;
+  using Encoder = ZigZagTimestampEncoder<EncoderDeltaType>;
 
   Encoder encoder_;
   CompactBitSequence stream_;
