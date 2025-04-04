@@ -2,7 +2,7 @@
 
 #include <cassert>
 
-#include "asc_integer_values_gorilla.h"
+#include "asc_integer.h"
 #include "double_constant.h"
 #include "two_double_constant.h"
 #include "values_gorilla.h"
@@ -12,7 +12,7 @@ namespace series_data::encoder::value {
 union PROMPP_ATTRIBUTE_PACKED EncoderVariant {
   DoubleConstantEncoder double_constant{0};
   TwoDoubleConstantEncoder two_double_constant;
-  AscIntegerValuesGorillaEncoder asc_integer_values_gorilla;
+  AscIntegerEncoder asc_integer;
   ValuesGorillaEncoder values_gorilla;
 
   void destroy(EncodingType encoding_type) {
@@ -23,8 +23,8 @@ union PROMPP_ATTRIBUTE_PACKED EncoderVariant {
       case EncodingType::kTwoDoubleConstant:
         std::destroy_at(&two_double_constant);
         break;
-      case EncodingType::kAscIntegerValuesGorilla:
-        std::destroy_at(&asc_integer_values_gorilla);
+      case EncodingType::kAscInteger:
+        std::destroy_at(&asc_integer);
         break;
       case EncodingType::kValuesGorilla:
         std::destroy_at(&values_gorilla);
@@ -41,8 +41,8 @@ union PROMPP_ATTRIBUTE_PACKED EncoderVariant {
       std::construct_at(&double_constant, std::forward<Args>(args)...);
     } else if constexpr (E == kTwoDoubleConstant) {
       std::construct_at(&two_double_constant, std::forward<Args>(args)...);
-    } else if constexpr (E == kAscIntegerValuesGorilla) {
-      std::construct_at(&asc_integer_values_gorilla, std::forward<Args>(args)...);
+    } else if constexpr (E == kAscInteger) {
+      std::construct_at(&asc_integer, std::forward<Args>(args)...);
     } else if constexpr (E == kValuesGorilla) {
       std::construct_at(&values_gorilla, std::forward<Args>(args)...);
     } else {
@@ -55,8 +55,8 @@ union PROMPP_ATTRIBUTE_PACKED EncoderVariant {
       case EncodingType::kDoubleConstant:
       case EncodingType::kTwoDoubleConstant:
         return 0;
-      case EncodingType::kAscIntegerValuesGorilla:
-        return asc_integer_values_gorilla.allocated_memory();
+      case EncodingType::kAscInteger:
+        return asc_integer.allocated_memory();
       case EncodingType::kValuesGorilla:
         return values_gorilla.allocated_memory();
       default:

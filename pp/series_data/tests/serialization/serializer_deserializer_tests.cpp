@@ -183,7 +183,7 @@ TEST_F(SerializerDeserializerFixture, AllChunkTypes) {
   ASSERT_EQ(EncodingType::kUint32Constant, deserializer.get_chunks()[0].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kDoubleConstant, deserializer.get_chunks()[1].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kTwoDoubleConstant, deserializer.get_chunks()[2].encoding_state.encoding_type);
-  ASSERT_EQ(EncodingType::kAscIntegerValuesGorilla, deserializer.get_chunks()[3].encoding_state.encoding_type);
+  ASSERT_EQ(EncodingType::kAscInteger, deserializer.get_chunks()[3].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kValuesGorilla, deserializer.get_chunks()[4].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kGorilla, deserializer.get_chunks()[5].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kUint32Constant, deserializer.get_chunks()[6].encoding_state.encoding_type);
@@ -294,7 +294,7 @@ TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypes) {
   ASSERT_EQ(EncodingType::kUint32Constant, deserializer.get_chunks()[0].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kDoubleConstant, deserializer.get_chunks()[1].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kTwoDoubleConstant, deserializer.get_chunks()[2].encoding_state.encoding_type);
-  ASSERT_EQ(EncodingType::kAscIntegerValuesGorilla, deserializer.get_chunks()[3].encoding_state.encoding_type);
+  ASSERT_EQ(EncodingType::kAscInteger, deserializer.get_chunks()[3].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kValuesGorilla, deserializer.get_chunks()[4].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kGorilla, deserializer.get_chunks()[5].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kUint32Constant, deserializer.get_chunks()[6].encoding_state.encoding_type);
@@ -451,7 +451,7 @@ TEST_F(SerializerDeserializerFixture, AllChunkTypesWithStalenan) {
   ASSERT_EQ(EncodingType::kUint32Constant, deserializer.get_chunks()[0].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kDoubleConstant, deserializer.get_chunks()[1].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kTwoDoubleConstant, deserializer.get_chunks()[2].encoding_state.encoding_type);
-  ASSERT_EQ(EncodingType::kAscIntegerValuesGorilla, deserializer.get_chunks()[3].encoding_state.encoding_type);
+  ASSERT_EQ(EncodingType::kAscInteger, deserializer.get_chunks()[3].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kValuesGorilla, deserializer.get_chunks()[4].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kGorilla, deserializer.get_chunks()[5].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kUint32Constant, deserializer.get_chunks()[6].encoding_state.encoding_type);
@@ -581,7 +581,7 @@ TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypesWithStalenan) {
   ASSERT_EQ(EncodingType::kUint32Constant, deserializer.get_chunks()[0].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kDoubleConstant, deserializer.get_chunks()[1].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kTwoDoubleConstant, deserializer.get_chunks()[2].encoding_state.encoding_type);
-  ASSERT_EQ(EncodingType::kAscIntegerValuesGorilla, deserializer.get_chunks()[3].encoding_state.encoding_type);
+  ASSERT_EQ(EncodingType::kAscInteger, deserializer.get_chunks()[3].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kValuesGorilla, deserializer.get_chunks()[4].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kGorilla, deserializer.get_chunks()[5].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kUint32Constant, deserializer.get_chunks()[6].encoding_state.encoding_type);

@@ -118,7 +118,7 @@ TEST_F(OutdatedChunkMergerInOpenChunkFixture, MergeInTwoDoubleConstantsChunk) {
       Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, get_open_chunk(0))));
 }
 
-TEST_F(OutdatedChunkMergerInOpenChunkFixture, MergeInAscIntegerValuesGorillaChunk) {
+TEST_F(OutdatedChunkMergerInOpenChunkFixture, MergeInAscIntegerChunk) {
   // Arrange
   encode({
       {.ls_id = 0, .sample = {.timestamp = 1, .value = 1.0}},
@@ -349,7 +349,7 @@ TEST_F(OutdatedChunkMergerInFinalizedChunkFixture, MergeInTwoDoubleConstantsChun
       Decoder::decode_chunks(storage_, *finalized, get_open_chunk(0))));
 }
 
-TEST_F(OutdatedChunkMergerInFinalizedChunkFixture, MergeInAscIntegerValuesGorillaChunk) {
+TEST_F(OutdatedChunkMergerInFinalizedChunkFixture, MergeInAscIntegerChunk) {
   // Arrange
   encode({{.ls_id = 0, .sample = {.timestamp = 1, .value = 1.0}},
           {.ls_id = 0, .sample = {.timestamp = 3, .value = 3.0}},

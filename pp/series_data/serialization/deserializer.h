@@ -117,11 +117,11 @@ class Deserializer {
             *reinterpret_cast<const encoder::value::TwoDoubleConstantEncoder*>(values_buffer.data()), chunk.encoding_state.has_last_stalenan);
       }
 
-      case kAscIntegerValuesGorilla: {
+      case kAscInteger: {
         auto timestamp_buffer = buffer.subspan(chunk.timestamps_offset);
         auto values_buffer = buffer.subspan(chunk.values_offset);
         return decoder::UniversalDecodeIterator(
-            std::in_place_type<decoder::AscIntegerValuesGorillaDecodeIterator>, encoder::BitSequenceWithItemsCount::count(timestamp_buffer.data()),
+            std::in_place_type<decoder::AscIntegerDecodeIterator>, encoder::BitSequenceWithItemsCount::count(timestamp_buffer.data()),
             encoder::BitSequenceWithItemsCount::reader(timestamp_buffer),
             BareBones::BitSequenceReader(values_buffer.data(), BareBones::Bit::to_bits(values_buffer.size())), chunk.encoding_state.has_last_stalenan);
       }

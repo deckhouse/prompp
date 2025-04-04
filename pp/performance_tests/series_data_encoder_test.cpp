@@ -121,7 +121,7 @@ void SeriesDataEncoder::execute(const Config& config, Metrics& metrics) const {
       ChunkInfo{.type = series_data::EncodingType::kFloat32Constant, .name = "float32_constants"},
       ChunkInfo{.type = series_data::EncodingType::kDoubleConstant, .name = "double_constants"},
       ChunkInfo{.type = series_data::EncodingType::kTwoDoubleConstant, .name = "two_double_constants"},
-      ChunkInfo{.type = series_data::EncodingType::kAscIntegerValuesGorilla, .name = "asc_integer_values_gorilla"},
+      ChunkInfo{.type = series_data::EncodingType::kAscInteger, .name = "asc_integer"},
       ChunkInfo{.type = series_data::EncodingType::kValuesGorilla, .name = "values_gorilla"},
       ChunkInfo{.type = series_data::EncodingType::kGorilla, .name = "gorilla"},
   };
@@ -148,7 +148,7 @@ void SeriesDataEncoder::execute(const Config& config, Metrics& metrics) const {
           std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.variant_encoders.allocated_memory() << std::endl;
           break;
         case series_data::EncodingType::kTwoDoubleConstant:
-        case series_data::EncodingType::kAscIntegerValuesGorilla:
+        case series_data::EncodingType::kAscInteger:
         case series_data::EncodingType::kValuesGorilla:
           std::cout << info.name << "_count: " << info.count << std::endl;
           break;

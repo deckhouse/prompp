@@ -10,11 +10,11 @@ namespace series_data::encoder::value {
 
 static constexpr BareBones::Encoding::Gorilla::DodSignificantLengths kAscIntegerDodSignificantLengths = {.first = 4, .second = 12, .third = 21};
 
-class PROMPP_ATTRIBUTE_PACKED AscIntegerValuesGorillaEncoder {
+class PROMPP_ATTRIBUTE_PACKED AscIntegerEncoder {
  public:
-  PROMPP_ALWAYS_INLINE explicit AscIntegerValuesGorillaEncoder(double value) { encoder_.encode(static_cast<int64_t>(value), stream_); }
+  PROMPP_ALWAYS_INLINE explicit AscIntegerEncoder(double value) { encoder_.encode(static_cast<int64_t>(value), stream_); }
 
-  PROMPP_ALWAYS_INLINE AscIntegerValuesGorillaEncoder(const ConstantValue& v1, const ConstantValue& v2, const ConstantValue& v3) {
+  PROMPP_ALWAYS_INLINE AscIntegerEncoder(const ConstantValue& v1, const ConstantValue& v2, const ConstantValue& v3) {
     encoder_.encode(static_cast<int64_t>(v1.value), stream_);
 
     encode_multiple(v1, v2, v3);
@@ -41,7 +41,7 @@ class PROMPP_ATTRIBUTE_PACKED AscIntegerValuesGorillaEncoder {
     return encode(value);
   }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const AscIntegerValuesGorillaEncoder& other) const noexcept { return stream_ == other.stream_; }
+  PROMPP_ALWAYS_INLINE bool operator==(const AscIntegerEncoder& other) const noexcept { return stream_ == other.stream_; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return stream_.allocated_memory(); }
 
@@ -111,4 +111,4 @@ class PROMPP_ATTRIBUTE_PACKED AscIntegerValuesGorillaEncoder {
 }  // namespace series_data::encoder::value
 
 template <>
-struct BareBones::IsTriviallyReallocatable<series_data::encoder::value::AscIntegerValuesGorillaEncoder> : std::true_type {};
+struct BareBones::IsTriviallyReallocatable<series_data::encoder::value::AscIntegerEncoder> : std::true_type {};

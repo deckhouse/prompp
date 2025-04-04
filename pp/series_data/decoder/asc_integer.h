@@ -1,34 +1,32 @@
 #pragma once
 
-#include "series_data/encoder/value/asc_integer_values_gorilla.h"
+#include "series_data/encoder/value/asc_integer.h"
 #include "traits.h"
 
 namespace series_data::decoder {
 
-class AscIntegerValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait {
+class AscIntegerDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait {
  public:
-  AscIntegerValuesGorillaDecodeIterator(const encoder::BitSequenceWithItemsCount& timestamp_stream,
-                                        const BareBones::BitSequenceReader& reader,
-                                        bool is_last_stalenan)
-      : AscIntegerValuesGorillaDecodeIterator(timestamp_stream.count(), timestamp_stream.reader(), reader, is_last_stalenan) {}
-  AscIntegerValuesGorillaDecodeIterator(uint8_t samples_count,
-                                        const BareBones::BitSequenceReader& timestamp_reader,
-                                        const BareBones::BitSequenceReader& values_reader,
-                                        bool is_last_stalenan)
+  AscIntegerDecodeIterator(const encoder::BitSequenceWithItemsCount& timestamp_stream, const BareBones::BitSequenceReader& reader, bool is_last_stalenan)
+      : AscIntegerDecodeIterator(timestamp_stream.count(), timestamp_stream.reader(), reader, is_last_stalenan) {}
+  AscIntegerDecodeIterator(uint8_t samples_count,
+                           const BareBones::BitSequenceReader& timestamp_reader,
+                           const BareBones::BitSequenceReader& values_reader,
+                           bool is_last_stalenan)
       : SeparatedTimestampValueDecodeIteratorTrait(samples_count, timestamp_reader, 0.0, is_last_stalenan), reader_(values_reader) {
     if (remaining_samples_ > 0) {
       decode_value();
     }
   }
 
-  PROMPP_ALWAYS_INLINE AscIntegerValuesGorillaDecodeIterator& operator++() noexcept {
+  PROMPP_ALWAYS_INLINE AscIntegerDecodeIterator& operator++() noexcept {
     if (decode_timestamp()) {
       decode_value();
     }
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE AscIntegerValuesGorillaDecodeIterator operator++(int) noexcept {
+  PROMPP_ALWAYS_INLINE AscIntegerDecodeIterator operator++(int) noexcept {
     const auto result = *this;
     ++*this;
     return result;

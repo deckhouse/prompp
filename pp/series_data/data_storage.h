@@ -7,8 +7,6 @@
 #include "chunk/outdated_chunk.h"
 #include "common.h"
 #include "encoder/gorilla.h"
-#include "encoder/value/asc_integer_values_gorilla.h"
-#include "encoder/value/values_gorilla.h"
 #include "encoder/value/variant.h"
 #include "series_data/encoder/timestamp/encoder.h"
 
@@ -204,7 +202,7 @@ struct DataStorage {
   }
 
   void delete_finalized_chunk(uint32_t ls_id, const chunk::DataChunk& chunk) noexcept {
-    if (auto finalized_it = finalized_chunks.find(ls_id); finalized_it != finalized_chunks.end()) {
+    if (const auto finalized_it = finalized_chunks.find(ls_id); finalized_it != finalized_chunks.end()) {
       erase_chunk_timestamp_and_encoder<chunk::DataChunk::Type::kFinalized>(chunk);
       finalized_it->second.erase(chunk);
     }
@@ -230,9 +228,9 @@ struct DataStorage {
   }
 
   template <chunk::DataChunk::Type chunk_type>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const encoder::CompactBitSequence& get_asc_integer_values_gorilla_stream(uint32_t stream_id) const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const encoder::CompactBitSequence& get_asc_integer_stream(uint32_t stream_id) const noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
-      return variant_encoders[stream_id].asc_integer_values_gorilla.stream();
+      return variant_encoders[stream_id].asc_integer.stream();
     } else {
       return finalized_data_streams[stream_id];
     }
@@ -265,8 +263,8 @@ struct DataStorage {
     size_t encoders_memory = variant_encoders.allocated_memory() + gorilla_encoders.allocated_memory();
 
     for (const auto& chunk : open_chunks) {
-      if (chunk.encoding_state.encoding_type == kAscIntegerValuesGorilla) {
-        encoders_memory += variant_encoders[chunk.encoder.external_index].asc_integer_values_gorilla.allocated_memory();
+      if (chunk.encoding_state.encoding_type == kAscInteger) {
+        encoders_memory += variant_encoders[chunk.encoder.external_index].asc_integer.allocated_memory();
       } else if (chunk.encoding_state.encoding_type == kValuesGorilla) {
         encoders_memory += variant_encoders[chunk.encoder.external_index].values_gorilla.allocated_memory();
       }
