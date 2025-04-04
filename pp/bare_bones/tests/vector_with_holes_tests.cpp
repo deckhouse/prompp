@@ -1,3 +1,4 @@
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "bare_bones/vector_with_holes.h"
@@ -173,48 +174,34 @@ TYPED_TEST(VectorWithHolesFixture, CheckHoleAccessFail) {
   ASSERT_THROW({ vector.at(0); }, BareBones::Exception);
 }
 
-struct TestTypeWithDestroy {
-  static inline int destroy_call_count{};
-  static inline bool destroy_called_with{false};
-
-  int id;
-
-  explicit TestTypeWithDestroy(int id_) : id(id_) {}
-
-  void destroy(bool flag) {
-    ++destroy_call_count;
-    destroy_called_with = flag;
-  }
-
-  static void reset_stats() {
-    destroy_call_count = 0;
-    destroy_called_with = false;
-  }
+class MockDestroyBehavior {
+ public:
+  MOCK_METHOD(void, destroy, (int), ());
+  MOCK_METHOD(void, destroy, (), ());
 };
 
-TEST(VectorWithHolesTest, TestDestroyNoDestroy) {
-  // Arrange
-  VectorWithHoles<TestTypeWithDestroy> vector;
-  vector.emplace_back(42);
+union TestUnion {
+  MockDestroyBehavior* obj;
+  int dummy;
 
-  // Act
+  explicit TestUnion(MockDestroyBehavior* mock) : obj(mock) {}
+  ~TestUnion() {}
+  void destroy(int param) { obj->destroy(param); }
+  void destroy() { obj->destroy(); }
+};
 
-  // Assert
-  ASSERT_NO_THROW({ vector.at(0); });
-  ASSERT_EQ(TestTypeWithDestroy::destroy_call_count, 0);
-}
+TEST(VectorWithHolesTest, EraseCallsCorrectDestroy) {
+  VectorWithHoles<TestUnion> vector;
+  MockDestroyBehavior mock1, mock2;
 
-TEST(VectorWithHolesTest, TestDestroyDoDestroy) {
-  // Arrange
-  VectorWithHoles<TestTypeWithDestroy> vector;
-  vector.emplace_back(42);
+  EXPECT_CALL(mock1, destroy(42)).Times(testing::Exactly(1));
+  EXPECT_CALL(mock2, destroy()).Times(testing::Exactly(1));
 
-  // Act
-  vector.erase(0, true);
+  vector.emplace_back(&mock1);
+  vector.emplace_back(&mock2);
 
-  // Assert
-  EXPECT_EQ(TestTypeWithDestroy::destroy_call_count, 1);
-  EXPECT_TRUE(TestTypeWithDestroy::destroy_called_with);
+  vector.erase(0, 42);
+  vector.erase(1);
 }
 
 }  // namespace

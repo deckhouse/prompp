@@ -1722,7 +1722,7 @@ TEST_F(EraseOpenChunkTestFixture, EraseUint32Encoder) {
 
   // Assert
   ASSERT_EQ(chunk(0).encoding_state.encoding_type, EncodingType::kUnknown);
-  ASSERT_THROW({ std::ignore = storage_.timestamp_encoder.get_states().at(state_id); }, BareBones::Exception);
+  ASSERT_THROW({ storage_.timestamp_encoder.get_states().at(state_id); }, BareBones::Exception);
 }
 
 TEST_F(EraseOpenChunkTestFixture, EraseFloat32Encoder) {
@@ -1736,7 +1736,7 @@ TEST_F(EraseOpenChunkTestFixture, EraseFloat32Encoder) {
 
   // Assert
   ASSERT_EQ(chunk(0).encoding_state.encoding_type, EncodingType::kUnknown);
-  ASSERT_THROW({ std::ignore = storage_.timestamp_encoder.get_states().at(state_id); }, BareBones::Exception);
+  ASSERT_THROW({ storage_.timestamp_encoder.get_states().at(state_id); }, BareBones::Exception);
 }
 
 TEST_F(EraseOpenChunkTestFixture, EraseDoubleEncoder) {
@@ -1751,7 +1751,7 @@ TEST_F(EraseOpenChunkTestFixture, EraseDoubleEncoder) {
   // Assert
   ASSERT_THROW({ storage_.variant_encoders.at(0); }, BareBones::Exception);
   ASSERT_EQ(chunk(0).encoding_state.encoding_type, EncodingType::kUnknown);
-  ASSERT_THROW({ std::ignore = storage_.timestamp_encoder.get_states().at(state_id); }, BareBones::Exception);
+  ASSERT_THROW({ storage_.timestamp_encoder.get_states().at(state_id); }, BareBones::Exception);
 }
 
 TEST_F(EraseOpenChunkTestFixture, EraseTwoDoubleEncoder) {
@@ -1767,7 +1767,7 @@ TEST_F(EraseOpenChunkTestFixture, EraseTwoDoubleEncoder) {
   // Assert
   ASSERT_THROW({ storage_.variant_encoders.at(0); }, BareBones::Exception);
   ASSERT_EQ(chunk(0).encoding_state.encoding_type, EncodingType::kUnknown);
-  ASSERT_THROW({ std::ignore = storage_.timestamp_encoder.get_states().at(state_id); }, BareBones::Exception);
+  ASSERT_THROW({ storage_.timestamp_encoder.get_states().at(state_id); }, BareBones::Exception);
 }
 
 TEST_F(EraseOpenChunkTestFixture, EraseAscEncoder) {
@@ -1784,7 +1784,7 @@ TEST_F(EraseOpenChunkTestFixture, EraseAscEncoder) {
   // Assert
   ASSERT_THROW({ storage_.variant_encoders.at(0); }, BareBones::Exception);
   ASSERT_EQ(chunk(0).encoding_state.encoding_type, EncodingType::kUnknown);
-  ASSERT_THROW({ std::ignore = storage_.timestamp_encoder.get_states().at(state_id); }, BareBones::Exception);
+  ASSERT_THROW({ storage_.timestamp_encoder.get_states().at(state_id); }, BareBones::Exception);
 }
 
 TEST_F(EraseOpenChunkTestFixture, EraseValuesGorillaEncoder) {
@@ -1804,7 +1804,7 @@ TEST_F(EraseOpenChunkTestFixture, EraseValuesGorillaEncoder) {
   // Assert
   ASSERT_THROW({ storage_.variant_encoders.at(0); }, BareBones::Exception);
   ASSERT_EQ(chunk(0).encoding_state.encoding_type, EncodingType::kUnknown);
-  ASSERT_NO_THROW({ std::ignore = storage_.timestamp_encoder.get_states().at(state_id); });
+  ASSERT_NO_THROW({ storage_.timestamp_encoder.get_states().at(state_id); });
 }
 
 TEST_F(EraseOpenChunkTestFixture, EraseValuesGorillaEncoderAll) {
@@ -1827,7 +1827,7 @@ TEST_F(EraseOpenChunkTestFixture, EraseValuesGorillaEncoderAll) {
   ASSERT_THROW({ storage_.variant_encoders.at(1); }, BareBones::Exception);
   ASSERT_EQ(chunk(0).encoding_state.encoding_type, EncodingType::kUnknown);
   ASSERT_EQ(chunk(1).encoding_state.encoding_type, EncodingType::kUnknown);
-  ASSERT_THROW({ std::ignore = storage_.timestamp_encoder.get_states().at(state_id); }, BareBones::Exception);
+  ASSERT_THROW({ storage_.timestamp_encoder.get_states().at(state_id); }, BareBones::Exception);
 }
 
 TEST_F(EraseOpenChunkTestFixture, EraseGorillaEncoder) {
@@ -1860,10 +1860,9 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseUint32Encoder) {
 
   // Assert
   auto finalized = finalized_chunks(0);
-  ASSERT_NE(finalized, nullptr);
-  ASSERT_EQ(finalized->count(), 0);
+  ASSERT_EQ(finalized, nullptr);
 
-  ASSERT_THROW({ std::ignore = storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
+  ASSERT_THROW({ storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
 }
 
 TEST_F(EraseFinalizedChunkTestFixture, EraseFloat32Encoder) {
@@ -1880,10 +1879,9 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseFloat32Encoder) {
 
   // Assert
   auto finalized = finalized_chunks(0);
-  ASSERT_NE(finalized, nullptr);
-  ASSERT_EQ(finalized->count(), 0);
+  ASSERT_EQ(finalized, nullptr);
 
-  ASSERT_THROW({ std::ignore = storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
+  ASSERT_THROW({ storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
 }
 
 TEST_F(EraseFinalizedChunkTestFixture, EraseDoubleEncoder) {
@@ -1900,10 +1898,9 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseDoubleEncoder) {
 
   // Assert
   auto finalized = finalized_chunks(0);
-  ASSERT_NE(finalized, nullptr);
-  ASSERT_EQ(finalized->count(), 0);
+  ASSERT_EQ(finalized, nullptr);
 
-  ASSERT_THROW({ std::ignore = storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
+  ASSERT_THROW({ storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
 
   ASSERT_THROW({ storage_.variant_encoders.at(0); }, BareBones::Exception);
   ASSERT_NO_THROW({ storage_.variant_encoders.at(1); });
@@ -1923,10 +1920,9 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseTwoDoubleEncoder) {
 
   // Assert
   auto finalized = finalized_chunks(0);
-  ASSERT_NE(finalized, nullptr);
-  ASSERT_EQ(finalized->count(), 0);
+  ASSERT_EQ(finalized, nullptr);
 
-  ASSERT_THROW({ std::ignore = storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
+  ASSERT_THROW({ storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
 
   ASSERT_THROW({ storage_.variant_encoders.at(0); }, BareBones::Exception);
   ASSERT_NO_THROW({ storage_.variant_encoders.at(1); });
@@ -1946,10 +1942,10 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseAscEncoder) {
 
   // Assert
   auto finalized = finalized_chunks(0);
-  ASSERT_NE(finalized, nullptr);
-  ASSERT_EQ(finalized->count(), 0);
+  ASSERT_EQ(finalized, nullptr);
 
-  ASSERT_THROW({ std::ignore = storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
+  ASSERT_THROW({ storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
+  ASSERT_THROW({ storage_.finalized_data_streams.at(0); }, BareBones::Exception);
 
   ASSERT_NO_THROW({ storage_.variant_encoders.at(0); });
 }
@@ -1972,10 +1968,11 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseValuesGorillaEncoder) {
 
   // Assert
   auto finalized = finalized_chunks(0);
-  ASSERT_NE(finalized, nullptr);
-  ASSERT_EQ(finalized->count(), 0);
+  ASSERT_EQ(finalized, nullptr);
 
-  ASSERT_NO_THROW({ std::ignore = storage_.finalized_timestamp_streams.at(state_id); });
+  ASSERT_NO_THROW({ storage_.finalized_timestamp_streams.at(state_id); });
+  ASSERT_THROW({ storage_.finalized_data_streams.at(0); }, BareBones::Exception);
+
   ASSERT_NO_THROW({ storage_.variant_encoders.at(0); });
 }
 
@@ -1998,13 +1995,12 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseValuesGorillaEncoderAll) {
 
   // Assert
   auto finalized = finalized_chunks(0);
-  ASSERT_NE(finalized, nullptr);
-  ASSERT_EQ(finalized->count(), 0);
+  ASSERT_EQ(finalized, nullptr);
   finalized = finalized_chunks(1);
-  ASSERT_NE(finalized, nullptr);
-  ASSERT_EQ(finalized->count(), 0);
+  ASSERT_EQ(finalized, nullptr);
 
-  ASSERT_THROW({ std::ignore = storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
+  ASSERT_THROW({ storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
+  ASSERT_THROW({ storage_.finalized_data_streams.at(0); }, BareBones::Exception);
 }
 
 TEST_F(EraseFinalizedChunkTestFixture, EraseGorillaEncoder) {
@@ -2019,10 +2015,10 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseGorillaEncoder) {
 
   // Assert
   auto finalized = finalized_chunks(0);
-  ASSERT_NE(finalized, nullptr);
-  ASSERT_EQ(finalized->count(), 0);
+  ASSERT_EQ(finalized, nullptr);
 
   ASSERT_NO_THROW({ storage_.variant_encoders.at(0); });
+  ASSERT_THROW({ storage_.finalized_data_streams.at(0); }, BareBones::Exception);
 }
 
 }  // namespace

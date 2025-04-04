@@ -2,18 +2,18 @@
 
 #include <cassert>
 
-#include "asc_integer_values_gorilla.h"
-#include "double_constant.h"
-#include "two_double_constant.h"
-#include "values_gorilla.h"
+#include "value/asc_integer_values_gorilla.h"
+#include "value/double_constant.h"
+#include "value/two_double_constant.h"
+#include "value/values_gorilla.h"
 
-namespace series_data::encoder::value {
+namespace series_data::encoder {
 
 union PROMPP_ATTRIBUTE_PACKED EncoderVariant {
-  DoubleConstantEncoder double_constant{0};
-  TwoDoubleConstantEncoder two_double_constant;
-  AscIntegerValuesGorillaEncoder asc_integer_values_gorilla;
-  ValuesGorillaEncoder values_gorilla;
+  value::DoubleConstantEncoder double_constant{0};
+  value::TwoDoubleConstantEncoder two_double_constant;
+  value::AscIntegerValuesGorillaEncoder asc_integer_values_gorilla;
+  value::ValuesGorillaEncoder values_gorilla;
 
   void destroy(EncodingType encoding_type) {
     switch (encoding_type) {
@@ -61,6 +61,7 @@ union PROMPP_ATTRIBUTE_PACKED EncoderVariant {
         return values_gorilla.allocated_memory();
       default:
         assert(encoding_type != EncodingType::kDoubleConstant && "Unsupported encoding type in EncoderVariant");
+        return 0;
     }
   }
 

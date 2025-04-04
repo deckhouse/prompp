@@ -9,6 +9,16 @@
 namespace BareBones {
 
 namespace VectorWithHolesImpl {
+
+template <class T>
+concept holes_need_bitset =
+    BareBones::concepts::has_allocated_memory<T> || BareBones::concepts::dereferenceable_has_allocated_memory<T> || !IsTriviallyDestructible<T>::value;
+
+template <typename T, typename... Args>
+concept destroyable_with = requires(T t, Args... args) {
+  { t.destroy(std::forward<Args>(args)...) };
+};
+
 #pragma pack(push, 1)
 template <class T>
 union ItemOrHole {
@@ -23,7 +33,7 @@ union ItemOrHole {
   }
   template <class... Args>
   PROMPP_ALWAYS_INLINE void destroy_item(Args&&... args) {
-    if constexpr (requires { value.destroy(std::forward<Args>(args)...); }) {
+    if constexpr (destroyable_with<T, Args...>) {
       value.destroy(std::forward<Args>(args)...);
     } else {
       std::destroy_at(&value);
@@ -36,10 +46,6 @@ union ItemOrHole {
   uint32_t next_hole;
 };
 #pragma pack(pop)
-
-template <class T>
-concept holes_need_bitset =
-    BareBones::concepts::has_allocated_memory<T> || BareBones::concepts::dereferenceable_has_allocated_memory<T> || !IsTriviallyDestructible<T>::value;
 }  // namespace VectorWithHolesImpl
 
 template <class T>
