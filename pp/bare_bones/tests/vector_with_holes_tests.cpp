@@ -174,34 +174,26 @@ TYPED_TEST(VectorWithHolesFixture, CheckHoleAccessFail) {
   ASSERT_THROW({ vector.at(0); }, BareBones::Exception);
 }
 
-class MockDestroyBehavior {
- public:
-  MOCK_METHOD(void, destroy, (int), ());
-  MOCK_METHOD(void, destroy, (), ());
-};
-
-union TestUnion {
-  MockDestroyBehavior* obj;
-  int dummy;
-
-  explicit TestUnion(MockDestroyBehavior* mock) : obj(mock) {}
-  ~TestUnion() {}
-  void destroy(int param) { obj->destroy(param); }
-  void destroy() { obj->destroy(); }
-};
-
 TEST(VectorWithHolesTest, EraseCallsCorrectDestroy) {
-  VectorWithHoles<TestUnion> vector;
-  MockDestroyBehavior mock1, mock2;
+  class MockDestroyBehavior {
+   public:
+    MOCK_METHOD(void, destroy, (int), ());
+    MOCK_METHOD(void, destroy, (), ());
+  };
 
-  EXPECT_CALL(mock1, destroy(42)).Times(testing::Exactly(1));
-  EXPECT_CALL(mock2, destroy()).Times(testing::Exactly(1));
+  // Arrange
+  VectorWithHoles<MockDestroyBehavior> vector;
+  vector.emplace_back();
+  vector.emplace_back();
 
-  vector.emplace_back(&mock1);
-  vector.emplace_back(&mock2);
+  EXPECT_CALL(vector[0], destroy(42)).Times(testing::Exactly(1));
+  EXPECT_CALL(vector[1], destroy()).Times(testing::Exactly(1));
 
+  // Act
   vector.erase(0, 42);
   vector.erase(1);
+
+  // Assert
 }
 
 }  // namespace

@@ -35,9 +35,8 @@ union ItemOrHole {
   PROMPP_ALWAYS_INLINE void destroy_item(Args&&... args) {
     if constexpr (destroyable_with<T, Args...>) {
       value.destroy(std::forward<Args>(args)...);
-    } else {
-      std::destroy_at(&value);
     }
+    std::destroy_at(&value);
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return mem::allocated_memory(value); }
