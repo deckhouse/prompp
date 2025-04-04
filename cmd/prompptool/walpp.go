@@ -142,7 +142,7 @@ func (cmd *cmdWALPPToBlock) Do(
 
 		level.Debug(logger).Log("msg", "run compact catalog")
 		if err := headCatalog.Compact(); err != nil {
-			return fmt.Errorf("failed compact catalog: %w", err)
+			return fmt.Errorf("compact catalog: %w", err)
 		}
 	}
 
@@ -183,25 +183,30 @@ func (cmd *cmdWALPPToBlock) clearing(
 
 		level.Debug(logger).Log("msg", "catalog clearing", "head", record.ID())
 
-		if record.ReferenceCount() > 0 {
-			return fmt.Errorf("catalog record reference count > 0: head %s", record.ID())
-		}
-
 		if record.Corrupted() {
 			level.Debug(logger).Log(
 				"msg", "catalog clearing: started",
 				"head", record.ID(),
 				"state", "corrupted",
 			)
-			continue
 		}
 
 		if err = os.RemoveAll(filepath.Join(workingDir, record.Dir())); err != nil {
-			return fmt.Errorf("failed to remote head dir: %w", err)
+			level.Error(logger).Log(
+				"msg", "failed close head",
+				"id", record.ID(),
+				"dir", record.Dir(),
+				"err", err,
+			)
 		}
 
 		if err = headCatalog.Delete(record.ID()); err != nil {
-			return fmt.Errorf("ffailed to delete head record: %w", err)
+			level.Error(logger).Log(
+				"msg", "failed to delete head record",
+				"id", record.ID(),
+				"dir", record.Dir(),
+				"err", err,
+			)
 		}
 
 		level.Debug(logger).Log(
