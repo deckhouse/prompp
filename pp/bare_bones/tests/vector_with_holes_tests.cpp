@@ -179,7 +179,7 @@ struct TestTypeWithDestroy {
 
   int id;
 
-  TestTypeWithDestroy(int id_) : id(id_) {}
+  explicit TestTypeWithDestroy(int id_) : id(id_) {}
 
   void destroy(bool flag) {
     ++destroy_call_count;
