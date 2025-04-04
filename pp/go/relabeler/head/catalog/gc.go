@@ -3,11 +3,12 @@ package catalog
 import (
 	"context"
 	"errors"
-	"github.com/prometheus/prometheus/pp/go/relabeler/head/ready"
-	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/prometheus/prometheus/pp/go/relabeler/head/ready"
+	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 )
 
 type GC struct {
@@ -73,13 +74,13 @@ func (gc *GC) Iterate() {
 		if record.deletedAt != 0 {
 			continue
 		}
-		logger.Debugf("catalog gc iteration: head", record.ID())
+		logger.Debugf("catalog gc iteration: head: %s", record.ID())
 		if record.ReferenceCount() > 0 {
 			return
 		}
 
 		if record.Corrupted() {
-			logger.Debugf("catalog gc iteration: head", record.ID(), "corrupted")
+			logger.Debugf("catalog gc iteration: head: %s: %s", record.ID(), "corrupted")
 			continue
 		}
 
@@ -93,7 +94,7 @@ func (gc *GC) Iterate() {
 			return
 		}
 
-		logger.Debugf("catalog gc iteration: head", record.ID(), "removed")
+		logger.Debugf("catalog gc iteration: head: %s: %s", record.ID(), "removed")
 	}
 }
 
