@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cassert>
-
 #include "bare_bones/algorithm.h"
 #include "bare_bones/preprocess.h"
 #include "chunk/data_chunk.h"
@@ -10,8 +8,7 @@
 #include "common.h"
 #include "encoder/gorilla.h"
 #include "encoder/value/asc_integer_values_gorilla.h"
-#include "encoder/value/double_constant.h"
-#include "encoder/value/two_double_constant.h"
+#include "encoder/value/dynamic.h"
 #include "encoder/value/values_gorilla.h"
 #include "series_data/encoder/timestamp/encoder.h"
 
@@ -171,69 +168,10 @@ struct DataStorage {
     const DataStorage* storage_;
   };
 
-  union PROMPP_ATTRIBUTE_PACKED DynamicEncoder {
-    encoder::value::DoubleConstantEncoder double_constant{0};
-    encoder::value::TwoDoubleConstantEncoder two_double_constant;
-    encoder::value::AscIntegerValuesGorillaEncoder asc_integer_values_gorilla;
-    encoder::value::ValuesGorillaEncoder values_gorilla;
-
-    void destroy(EncodingType encoding_type) {
-      switch (encoding_type) {
-        case EncodingType::kDoubleConstant:
-          std::destroy_at(&double_constant);
-          break;
-        case EncodingType::kTwoDoubleConstant:
-          std::destroy_at(&two_double_constant);
-          break;
-        case EncodingType::kAscIntegerValuesGorilla:
-          std::destroy_at(&asc_integer_values_gorilla);
-          break;
-        case EncodingType::kValuesGorilla:
-          std::destroy_at(&values_gorilla);
-          break;
-        default:
-          assert(encoding_type != EncodingType::kDoubleConstant && "Unsupported encoding type in DynamicEncoder");
-      }
-    }
-
-    template <EncodingType E, class... Args>
-    void construct(Args&&... args) {
-      using enum EncodingType;
-      if constexpr (E == kDoubleConstant) {
-        std::construct_at(&double_constant, std::forward<Args>(args)...);
-      } else if constexpr (E == kTwoDoubleConstant) {
-        std::construct_at(&two_double_constant, std::forward<Args>(args)...);
-      } else if constexpr (E == kAscIntegerValuesGorilla) {
-        std::construct_at(&asc_integer_values_gorilla, std::forward<Args>(args)...);
-      } else if constexpr (E == kValuesGorilla) {
-        std::construct_at(&values_gorilla, std::forward<Args>(args)...);
-      } else {
-        static_assert(false, "Unsupported encoding type in DynamicEncoder");
-      }
-    }
-
-    uint32_t allocated_memory(EncodingType encoding_type) const noexcept {
-      switch (encoding_type) {
-        case EncodingType::kDoubleConstant:
-        case EncodingType::kTwoDoubleConstant:
-          return 0;
-        case EncodingType::kAscIntegerValuesGorilla:
-          return asc_integer_values_gorilla.allocated_memory();
-        case EncodingType::kValuesGorilla:
-          return values_gorilla.allocated_memory();
-        default:
-          assert(encoding_type != EncodingType::kDoubleConstant && "Unsupported encoding type in DynamicEncoder");
-      }
-    }
-
-    DynamicEncoder() {}
-    ~DynamicEncoder() {}
-  };
-
   BareBones::Vector<chunk::DataChunk> open_chunks;
   encoder::timestamp::Encoder timestamp_encoder;
 
-  BareBones::VectorWithHoles<DynamicEncoder> dynamic_encoders;
+  BareBones::VectorWithHoles<encoder::value::DynamicEncoder> dynamic_encoders;
   BareBones::VectorWithHoles<encoder::GorillaEncoder> gorilla_encoders;
 
   size_t outdated_chunks_map_allocated_memory{};
