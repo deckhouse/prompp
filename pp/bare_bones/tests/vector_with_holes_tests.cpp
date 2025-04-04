@@ -173,4 +173,48 @@ TYPED_TEST(VectorWithHolesFixture, CheckHoleAccessFail) {
   ASSERT_THROW({ vector.at(0); }, BareBones::Exception);
 }
 
+struct TestTypeWithDestroy {
+  static inline int destroy_call_count{};
+  static inline bool destroy_called_with{false};
+
+  int id;
+
+  TestTypeWithDestroy(int id_) : id(id_) {}
+
+  void destroy(bool flag) {
+    ++destroy_call_count;
+    destroy_called_with = flag;
+  }
+
+  static void reset_stats() {
+    destroy_call_count = 0;
+    destroy_called_with = false;
+  }
+};
+
+TEST(VectorWithHolesTest, TestDestroyNoDestroy) {
+  // Arrange
+  VectorWithHoles<TestTypeWithDestroy> vector;
+  vector.emplace_back(42);
+
+  // Act
+
+  // Assert
+  ASSERT_NO_THROW({ vector.at(0); });
+  ASSERT_EQ(TestTypeWithDestroy::destroy_call_count, 0);
+}
+
+TEST(VectorWithHolesTest, TestDestroyDoDestroy) {
+  // Arrange
+  VectorWithHoles<TestTypeWithDestroy> vector;
+  vector.emplace_back(42);
+
+  // Act
+  vector.erase(0, true);
+
+  // Assert
+  EXPECT_EQ(TestTypeWithDestroy::destroy_call_count, 1);
+  EXPECT_TRUE(TestTypeWithDestroy::destroy_called_with);
+}
+
 }  // namespace
