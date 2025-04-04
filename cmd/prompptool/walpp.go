@@ -185,19 +185,19 @@ func (cmd *cmdWALPPToBlock) clearing(
 
 		if record.Corrupted() {
 			level.Debug(logger).Log(
-				"msg", "catalog clearing: started",
+				"msg", "remove corrupted head",
 				"head", record.ID(),
-				"state", "corrupted",
 			)
 		}
 
 		if err = os.RemoveAll(filepath.Join(workingDir, record.Dir())); err != nil {
 			level.Error(logger).Log(
-				"msg", "failed close head",
+				"msg", "failed to delete head directory",
 				"id", record.ID(),
 				"dir", record.Dir(),
 				"err", err,
 			)
+			continue
 		}
 
 		if err = headCatalog.Delete(record.ID()); err != nil {
@@ -207,6 +207,7 @@ func (cmd *cmdWALPPToBlock) clearing(
 				"dir", record.Dir(),
 				"err", err,
 			)
+			continue
 		}
 
 		level.Debug(logger).Log(
