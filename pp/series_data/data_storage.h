@@ -316,14 +316,14 @@ struct DataStorage {
     if constexpr (chunk_type == chunk::DataChunk::Type::kFinalized) {
       if (is_gorilla_encoder(chunk.encoding_state.encoding_type)) {
         finalized_data_streams.erase(chunk.encoder.external_index);
+        return;
       }
-    } else {
-      if (chunk.encoding_state.encoding_type == kGorilla) {
-        gorilla_encoders.erase(chunk.encoder.external_index, kGorilla);
-      } else if (is_variant_encoder(chunk.encoding_state.encoding_type)) {
-        const EncodingType et = chunk.encoding_state.encoding_type;
-        variant_encoders.erase(chunk.encoder.external_index, et);
-      }
+    }
+    if (chunk.encoding_state.encoding_type == kGorilla) {
+      gorilla_encoders.erase(chunk.encoder.external_index, kGorilla);
+    } else if (is_variant_encoder(chunk.encoding_state.encoding_type)) {
+      const EncodingType et = chunk.encoding_state.encoding_type;
+      variant_encoders.erase(chunk.encoder.external_index, et);
     }
   }
 

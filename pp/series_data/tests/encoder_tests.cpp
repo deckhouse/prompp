@@ -1901,7 +1901,8 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseDoubleEncoder) {
   ASSERT_NE(finalized, nullptr);
   ASSERT_EQ(finalized->count(), 0);
   ASSERT_THROW({ std::ignore = storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
-  ASSERT_NO_THROW({ storage_.variant_encoders.at(0); });
+  ASSERT_THROW({ storage_.variant_encoders.at(0); }, BareBones::Exception);
+  ASSERT_NO_THROW({ storage_.variant_encoders.at(1); });
 }
 
 TEST_F(EraseFinalizedChunkTestFixture, EraseTwoDoubleEncoder) {
@@ -1921,7 +1922,8 @@ TEST_F(EraseFinalizedChunkTestFixture, EraseTwoDoubleEncoder) {
   ASSERT_NE(finalized, nullptr);
   ASSERT_EQ(finalized->count(), 0);
   ASSERT_THROW({ std::ignore = storage_.finalized_timestamp_streams.at(state_id); }, BareBones::Exception);
-  ASSERT_NO_THROW({ storage_.variant_encoders.at(0); });
+  ASSERT_THROW({ storage_.variant_encoders.at(0); }, BareBones::Exception);
+  ASSERT_NO_THROW({ storage_.variant_encoders.at(1); });
 }
 
 TEST_F(EraseFinalizedChunkTestFixture, EraseAscEncoder) {
