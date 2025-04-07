@@ -9,7 +9,7 @@
 
 namespace series_data::encoder::value {
 
-class DoubleConstantEncoder {
+class PROMPP_ATTRIBUTE_PACKED DoubleConstantEncoder {
  public:
   explicit DoubleConstantEncoder(double value) : value_(std::bit_cast<uint64_t>(value)) {}
 
