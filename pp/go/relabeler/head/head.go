@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 
@@ -178,7 +177,6 @@ type Head struct {
 	memoryInUse          *prometheus.GaugeVec
 	series               prometheus.Gauge
 	queried              *prometheus.GaugeVec
-	appendDuration       prometheus.Histogram
 	stopc                chan struct{}
 	wg                   *sync.WaitGroup
 }
@@ -241,18 +239,6 @@ func New(
 			},
 			[]string{"caller"},
 		),
-		appendDuration: factory.NewHistogram(
-			prometheus.HistogramOpts{
-				Name: "prompp_head_append_duration",
-				Help: "Append to head duration in microseconds",
-				Buckets: []float64{
-					50, 100, 250, 500, 750,
-					1000, 2500, 5000, 7500,
-					10000, 25000, 50000, 75000,
-					100000, 500000,
-				},
-			},
-		),
 	}
 
 	if err := h.reconfigure(inputRelabelerConfigs, numberOfShards); err != nil {
@@ -289,11 +275,6 @@ func (h *Head) Append(
 	relabelerID string,
 	commitToWal bool,
 ) ([][]*cppbridge.InnerSeries, cppbridge.RelabelerStats, error) {
-	start := time.Now()
-	defer func() {
-		h.appendDuration.Observe(float64(time.Since(start).Microseconds()))
-	}()
-
 	if h.readOnly {
 		return nil, cppbridge.RelabelerStats{}, fmt.Errorf("appending to read only head")
 	}

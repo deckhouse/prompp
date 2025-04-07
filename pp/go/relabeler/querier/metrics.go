@@ -9,6 +9,7 @@ type Metrics struct {
 	LabelNamesDuration  *prometheus.HistogramVec
 	LabelValuesDuration *prometheus.HistogramVec
 	SelectDuration      *prometheus.HistogramVec
+	AppendDuration      prometheus.Histogram
 }
 
 func NewMetrics(registerer prometheus.Registerer) *Metrics {
@@ -42,6 +43,18 @@ func NewMetrics(registerer prometheus.Registerer) *Metrics {
 				},
 			},
 			[]string{"generation"},
+		),
+		AppendDuration: factory.NewHistogram(
+			prometheus.HistogramOpts{
+				Name: "prompp_head_append_duration",
+				Help: "Append to head duration in microseconds",
+				Buckets: []float64{
+					50, 100, 250, 500, 750,
+					1000, 2500, 5000, 7500,
+					10000, 25000, 50000, 75000,
+					100000, 500000,
+				},
+			},
 		),
 	}
 }
