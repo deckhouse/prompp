@@ -243,9 +243,14 @@ func New(
 		),
 		appendDuration: factory.NewHistogram(
 			prometheus.HistogramOpts{
-				Name:    "prompp_head_append_duration",
-				Help:    "Append to head duration in microseconds",
-				Buckets: []float64{50, 100, 500, 1000, 5000, 10000, 50000, 100000, 500000},
+				Name: "prompp_head_append_duration",
+				Help: "Append to head duration in microseconds",
+				Buckets: []float64{
+					50, 100, 250, 500, 750,
+					1000, 2500, 5000, 7500,
+					10000, 25000, 50000, 75000,
+					100000, 500000,
+				},
 			},
 		),
 	}
