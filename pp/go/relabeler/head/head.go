@@ -10,14 +10,15 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
 	"github.com/prometheus/prometheus/pp/go/util"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 // RelabelerData data for relabeling - inputRelabelers per shard and state.
@@ -177,6 +178,7 @@ type Head struct {
 	memoryInUse          *prometheus.GaugeVec
 	series               prometheus.Gauge
 	queried              *prometheus.GaugeVec
+	appendDuration       prometheus.Histogram
 	stopc                chan struct{}
 	wg                   *sync.WaitGroup
 }
@@ -189,8 +191,8 @@ func New(
 	wals []*ShardWal,
 	dataStorages []*DataStorage,
 	numberOfShards uint16,
-	registerer prometheus.Registerer) (*Head, error) {
-
+	registerer prometheus.Registerer,
+) (*Head, error) {
 	stageInputRelabeling := make([]chan *TaskInputRelabeling, numberOfShards)
 	stageAppendRelabelerSeries := make([]chan *TaskAppendRelabelerSeries, numberOfShards)
 	genericTaskCh := make([]chan *GenericTask, numberOfShards)
@@ -239,6 +241,13 @@ func New(
 			},
 			[]string{"caller"},
 		),
+		appendDuration: factory.NewHistogram(
+			prometheus.HistogramOpts{
+				Name:    "prompp_head_append_duration",
+				Help:    "Append to head duration in microseconds",
+				Buckets: []float64{50, 100, 500, 1000, 5000, 10000, 50000, 100000, 500000},
+			},
+		),
 	}
 
 	if err := h.reconfigure(inputRelabelerConfigs, numberOfShards); err != nil {
@@ -275,6 +284,11 @@ func (h *Head) Append(
 	relabelerID string,
 	commitToWal bool,
 ) ([][]*cppbridge.InnerSeries, cppbridge.RelabelerStats, error) {
+	start := time.Now()
+	defer func() {
+		h.appendDuration.Observe(float64(time.Since(start).Microseconds()))
+	}()
+
 	if h.readOnly {
 		return nil, cppbridge.RelabelerStats{}, fmt.Errorf("appending to read only head")
 	}

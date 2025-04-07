@@ -56,6 +56,8 @@ class GenericDecodingTable {
   using value_type = typename Filament<Vector>::composite_type;
   using data_type = typename Filament<Vector>::data_type;  // FIXME make it private
 
+  static constexpr bool kIsReadOnly = std::same_as<Vector<uint8_t>, SharedSpan<uint8_t>>;
+
  protected:
   class Proxy {
     uint32_t id_;
@@ -249,8 +251,6 @@ class GenericDecodingTable {
     Delta operator-(const Checkpoint& from) const noexcept { return Delta(from, *this); }
   };
 
-  static constexpr bool kIsReadOnly = std::same_as<Vector<uint8_t>, SharedSpan<uint8_t>>;
-
   [[nodiscard]] PROMPP_ALWAYS_INLINE Hasher hasher() const noexcept { return Hasher(this); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE EqualityComparator equality_comparator() const noexcept { return EqualityComparator(this); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE LessComparator less_comparator() const noexcept { return LessComparator(this); }
@@ -277,7 +277,7 @@ class GenericDecodingTable {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return items_.size(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return data_.allocated_memory() + items_.allocated_memory(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return mem::allocated_memory(data_) + mem::allocated_memory(items_); }
 
   inline __attribute__((always_inline)) const data_type& data() const noexcept { return data_; }
 

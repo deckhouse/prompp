@@ -1,8 +1,8 @@
 package querier
 
 import (
-	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/pp/go/util"
 )
 
 type Metrics struct {
@@ -33,8 +33,8 @@ func NewMetrics(registerer prometheus.Registerer) *Metrics {
 		SelectDuration: factory.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Name:    "prompp_head_query_select_duration",
-				Help:    "Select query from head duration in milliseconds",
-				Buckets: []float64{1, 5, 10, 20, 50, 100},
+				Help:    "Select query from head duration in microseconds",
+				Buckets: []float64{50, 100, 500, 1000, 5000, 10000, 50000, 100000, 500000},
 			},
 			[]string{"generation"},
 		),
