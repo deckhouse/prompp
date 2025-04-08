@@ -45,7 +45,7 @@ class IntervalDecodeIterator : public DecodeIteratorTypeTrait {
   Timestamp timestamp_{};
   encoder::Sample sample_{.timestamp = kNoSample};
 
-  PROMPP_ALWAYS_INLINE static Timestamp align_timestamp(Timestamp timestamp, Timestamp align_to) noexcept {
+  PROMPP_ALWAYS_INLINE static Timestamp round_up_to_step(Timestamp timestamp, Timestamp align_to) noexcept {
     const auto result = timestamp + align_to - 1;
     return result - result % align_to;
   }
