@@ -1,9 +1,9 @@
 #pragma once
 
+#include "series_data/decoder/traits.h"
 #include "series_data/encoder/sample.h"
-#include "traits.h"
 
-namespace series_data::decoder {
+namespace series_data::decoder::decorator {
 
 template <class DecodeIterator, class DecodeIteratorSentinel>
 class IntervalDecodeIterator : public DecodeIteratorTypeTrait {
@@ -13,7 +13,7 @@ class IntervalDecodeIterator : public DecodeIteratorTypeTrait {
   IntervalDecodeIterator(DecodeIterator&& iterator, DecodeIteratorSentinel&& end, Timestamp interval, Timestamp lookback)
       : iterator_(std::move(iterator)), iterator_end_(std::move(end)), interval_(std::max(interval, kMinInterval)), lookback_(lookback) {
     if (iterator_ != iterator_end_) {
-      timestamp_ = align_timestamp(iterator_->timestamp, interval_);
+      timestamp_ = round_up_to_step(iterator_->timestamp, interval_);
       advance_to_next_sample();
     }
   }
@@ -45,9 +45,9 @@ class IntervalDecodeIterator : public DecodeIteratorTypeTrait {
   Timestamp timestamp_{};
   encoder::Sample sample_{.timestamp = kNoSample};
 
-  PROMPP_ALWAYS_INLINE static Timestamp round_up_to_step(Timestamp timestamp, Timestamp align_to) noexcept {
-    const auto result = timestamp + align_to - 1;
-    return result - result % align_to;
+  PROMPP_ALWAYS_INLINE static Timestamp round_up_to_step(Timestamp timestamp, Timestamp step) noexcept {
+    const auto result = timestamp + step - 1;
+    return result - result % step;
   }
 
   PROMPP_ALWAYS_INLINE void advance_to_next_sample() noexcept {
@@ -84,4 +84,4 @@ class IntervalDecodeIterator : public DecodeIteratorTypeTrait {
   }
 };
 
-}  // namespace series_data::decoder
+}  // namespace series_data::decoder::decorator

@@ -1,11 +1,11 @@
 #include <gtest/gtest.h>
 
-#include "series_data/decoder/interval_decode_iterator.h"
+#include "series_data/decoder/decorator/interval_decode_iterator.h"
 
 namespace {
 
 using BareBones::Encoding::Gorilla::STALE_NAN;
-using series_data::decoder::IntervalDecodeIterator;
+using series_data::decoder::decorator::IntervalDecodeIterator;
 using series_data::encoder::Sample;
 
 struct IntervalDecodeIteratorCase {
