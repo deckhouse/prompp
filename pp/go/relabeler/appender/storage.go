@@ -7,12 +7,12 @@ import (
 
 	"github.com/jonboulle/clockwork"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/block"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 	"github.com/prometheus/prometheus/pp/go/relabeler/querier"
 	"github.com/prometheus/prometheus/pp/go/util"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/storage"
 )
 
@@ -135,6 +135,7 @@ func (qs *QueryableStorage) write() bool {
 	persisted := make([]string, 0, lenHeads)
 	for _, head := range heads {
 		start := qs.clock.Now()
+		head.MergeOutOfOrderChunks()
 		if qs.headIsOutdated(head) {
 			persisted = append(persisted, head.ID())
 			shouldNotify = true
