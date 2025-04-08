@@ -241,14 +241,14 @@ class Serializer {
 
       case kDoubleConstant: {
         write_timestamp_stream<chunk_type>(timestamp_streams_data, chunk.timestamp_encoder_state_id, stream);
-        stream.write(reinterpret_cast<const char*>(&storage_.double_constant_encoders[chunk.encoder.external_index]),
+        stream.write(reinterpret_cast<const char*>(&storage_.variant_encoders[chunk.encoder.external_index].double_constant),
                      sizeof(encoder::value::DoubleConstantEncoder));
         break;
       }
 
       case kTwoDoubleConstant: {
         write_timestamp_stream<chunk_type>(timestamp_streams_data, chunk.timestamp_encoder_state_id, stream);
-        stream.write(reinterpret_cast<const char*>(&storage_.two_double_constant_encoders[chunk.encoder.external_index]),
+        stream.write(reinterpret_cast<const char*>(&storage_.variant_encoders[chunk.encoder.external_index].two_double_constant),
                      sizeof(encoder::value::TwoDoubleConstantEncoder));
         break;
       }

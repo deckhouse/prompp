@@ -84,10 +84,11 @@ class Decoder {
                                              chunk.encoding_state.has_last_stalenan);
     } else if constexpr (encoding_type == kDoubleConstant) {
       return decoder::ConstantDecodeIterator(storage.get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
-                                             storage.double_constant_encoders[chunk.encoder.external_index].value(), chunk.encoding_state.has_last_stalenan);
+                                             storage.variant_encoders[chunk.encoder.external_index].double_constant.value(),
+                                             chunk.encoding_state.has_last_stalenan);
     } else if constexpr (encoding_type == kTwoDoubleConstant) {
       return decoder::TwoDoubleConstantDecodeIterator(storage.get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
-                                                      storage.two_double_constant_encoders[chunk.encoder.external_index],
+                                                      storage.variant_encoders[chunk.encoder.external_index].two_double_constant,
                                                       chunk.encoding_state.has_last_stalenan);
     } else if constexpr (encoding_type == kAscIntegerValuesGorilla) {
       return decoder::AscIntegerValuesGorillaDecodeIterator(storage.get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
@@ -231,19 +232,19 @@ class Decoder {
       }
 
       case kDoubleConstant: {
-        return storage.double_constant_encoders[chunk.encoder.external_index].last_value(chunk.encoding_state);
+        return storage.variant_encoders[chunk.encoder.external_index].double_constant.last_value(chunk.encoding_state);
       }
 
       case kTwoDoubleConstant: {
-        return storage.two_double_constant_encoders[chunk.encoder.external_index].last_value(chunk.encoding_state);
+        return storage.variant_encoders[chunk.encoder.external_index].two_double_constant.last_value(chunk.encoding_state);
       }
 
       case kAscIntegerValuesGorilla: {
-        return storage.asc_integer_values_gorilla_encoders[chunk.encoder.external_index].last_value(chunk.encoding_state);
+        return storage.variant_encoders[chunk.encoder.external_index].asc_integer_values_gorilla.last_value(chunk.encoding_state);
       }
 
       case kValuesGorilla: {
-        return storage.values_gorilla_encoders[chunk.encoder.external_index].last_value(chunk.encoding_state);
+        return storage.variant_encoders[chunk.encoder.external_index].values_gorilla.last_value(chunk.encoding_state);
       }
 
       case kGorilla: {

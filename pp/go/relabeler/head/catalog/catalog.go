@@ -250,3 +250,7 @@ func (c *Catalog) compact() error {
 
 	return c.log.ReWrite(records...)
 }
+
+func (c *Catalog) OnDiskSize() int64 {
+	return int64(c.log.Size())
+}

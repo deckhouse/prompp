@@ -42,28 +42,21 @@ jobs:
           BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/^v//')
-          werf build --add-custom-tag="$BRANCH_NAME" --repo=docker.io/prompp/prompp
-
-      - name: Push Docker Image Latest
-        run: |
-          BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
-          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
-          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/^v//')
-          docker rmi docker.io/prompp/prompp:latest || true
-          docker tag docker.io/prompp/prompp:$BRANCH_NAME docker.io/prompp/prompp:latest
-          docker push docker.io/prompp/prompp:latest
+          werf export --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp --tag=docker.io/prompp/prompp:$BRANCH_NAME
 
       - name: Extract binaries from Docker images
         run: |
           BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/^v//')
+          docker pull docker.io/prompp/prompp:$BRANCH_NAME
           CONTAINER_ID_PROMPP=$(docker create docker.io/prompp/prompp:$BRANCH_NAME)
 
           docker cp $CONTAINER_ID_PROMPP:/bin/prompp ./prompp
           docker cp $CONTAINER_ID_PROMPP:/bin/promtool ./promtool
           docker cp $CONTAINER_ID_PROMPP:/bin/prompptool ./prompptool
           docker rm $CONTAINER_ID_PROMPP
+          docker rmi docker.io/prompp/prompp:$BRANCH_NAME
 
       - name: Upload binaries as artifacts
         uses: actions/upload-artifact@v4

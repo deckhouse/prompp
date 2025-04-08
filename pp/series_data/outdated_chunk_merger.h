@@ -211,17 +211,11 @@ class OutdatedChunkMerger {
     samples = {begin, samples.end()};
   }
 
-  void erase_finalized_chunk(uint32_t ls_id, const chunk::DataChunk& chunk) const {
-    if (auto finalized_it = encoder_.storage().finalized_chunks.find(ls_id); finalized_it != encoder_.storage().finalized_chunks.end()) {
-      encoder_.storage().template erase_chunk<chunk::DataChunk::Type::kFinalized>(chunk);
-      finalized_it->second.erase(chunk);
-    }
-  }
+  void erase_finalized_chunk(uint32_t ls_id, const chunk::DataChunk& chunk) const { encoder_.storage().delete_finalized_chunk(ls_id, chunk); }
 
   void replace_open_chunk(uint32_t ls_id, const chunk::DataChunk& chunk) const {
-    auto& open_chunk = encoder_.storage().open_chunks[ls_id];
-    encoder_.storage().template erase_chunk<chunk::DataChunk::Type::kOpen>(open_chunk);
-    open_chunk = chunk;
+    encoder_.storage().delete_open_chunk(ls_id);
+    encoder_.storage().open_chunks[ls_id] = chunk;
   }
 };
 

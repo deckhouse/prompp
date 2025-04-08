@@ -2,9 +2,7 @@
 
 #include <chrono>
 #include <iostream>
-#include <unordered_set>
 
-#include "bare_bones/allocator.h"
 #include "bare_bones/gorilla.h"
 #include "performance_tests/dummy_wal.h"
 #include "primitives/snug_composites.h"
@@ -142,13 +140,36 @@ void SeriesDataEncoder::execute(const Config& config, Metrics& metrics) const {
   }
 
   const auto print_chunks_info = [&storage](std::string_view message, const auto& chunks_info) {
+    using enum series_data::EncodingType;
     std::cout << "==========================" << std::endl;
     std::cout << message << ":" << std::endl;
     for (auto& info : chunks_info) {
-      if (info.type != series_data::EncodingType::kUnknown) {
-        std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.allocated_memory(info.type) << std::endl;
-      } else {
-        std::cout << info.name << "_count: " << info.count << std::endl;
+      switch (info.type) {
+        case kDoubleConstant:
+          std::cout << "VariantEncoder storage,  allocated_memory: " << storage.variant_encoders.allocated_memory() << std::endl;
+          std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.allocated_memory(kDoubleConstant) << std::endl;
+          break;
+        case kTwoDoubleConstant:
+          std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.allocated_memory(kTwoDoubleConstant) << std::endl;
+          break;
+        case kAscIntegerValuesGorilla:
+          std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.allocated_memory(kAscIntegerValuesGorilla) << std::endl;
+          break;
+        case kValuesGorilla:
+          std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.allocated_memory(kValuesGorilla) << std::endl;
+          break;
+        case kGorilla:
+          std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.gorilla_encoders.allocated_memory() << std::endl;
+          break;
+        case kUnknown:
+          std::cout << info.name << "_count: " << info.count << std::endl;
+          break;
+        case kUint32Constant:
+        case kFloat32Constant:
+          std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << 0 << std::endl;
+          break;
+        default:
+          assert(info.type != kUint32Constant);
       }
     }
     std::cout << "==========================" << std::endl << std::endl;
