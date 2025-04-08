@@ -320,11 +320,3 @@ Loop:
 		}
 	}
 }
-
-func (h *Handler) federationMock(w http.ResponseWriter, req *http.Request) {
-	h.mtx.RLock()
-	defer h.mtx.RUnlock()
-
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("ok"))
-}
