@@ -93,7 +93,8 @@ write_relabel_configs:
 }
 
 func (s *PPConfigSuite) TestOpDestinationConfigTLSError() {
-	raw := `destinations:
+	raw := `protocol: prompp
+destinations:
 - name: dname
   url: https://host.com
 remote_timeout: 30s
@@ -130,7 +131,7 @@ func (s *PPConfigSuite) TestLoadConfig() {
 	_, err := config.LoadFile("testdata/global_timeout.good.yml", false, false, log.NewNopLogger())
 	s.Require().NoError(err)
 
-	c, err := config.LoadFile("testdata/op.conf.good.yml", false, false, log.NewNopLogger())
+	c, err := config.LoadFile("testdata/pp.conf.good.yml", false, false, log.NewNopLogger())
 	s.Require().NoError(err)
 	s.Require().Equal(expectedConf, c)
 }
@@ -141,7 +142,7 @@ func (s *PPConfigSuite) TestGetReceiverConfig() {
 	_, err := config.LoadFile("testdata/global_timeout.good.yml", false, false, log.NewNopLogger())
 	s.Require().NoError(err)
 
-	c, err := config.LoadFile("testdata/op.conf.good.yml", false, false, log.NewNopLogger())
+	c, err := config.LoadFile("testdata/pp.conf.good.yml", false, false, log.NewNopLogger())
 	s.Require().NoError(err)
 	s.Require().Equal(expectedConf, c)
 
@@ -232,9 +233,10 @@ var expectedConf = &config.Config{
 				},
 			},
 			RemoteWriteConfig: config.RemoteWriteConfig{
-				RemoteTimeout:  model.Duration(30 * time.Second),
-				QueueConfig:    config.DefaultQueueConfig,
-				MetadataConfig: config.DefaultMetadataConfig,
+				RemoteTimeout:   model.Duration(30 * time.Second),
+				QueueConfig:     config.DefaultQueueConfig,
+				MetadataConfig:  config.DefaultMetadataConfig,
+				ProtobufMessage: config.RemoteWriteProtoMsgV1,
 				HTTPClientConfig: common_config.HTTPClientConfig{
 					FollowRedirects: true,
 					EnableHTTP2:     true,

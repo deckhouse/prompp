@@ -144,8 +144,9 @@ var expectedConf = &Config{
 						Action:       relabel.Drop,
 					},
 				},
-				QueueConfig:    DefaultQueueConfig,
-				MetadataConfig: DefaultMetadataConfig,
+				QueueConfig:     DefaultQueueConfig,
+				MetadataConfig:  DefaultMetadataConfig,
+				ProtobufMessage: RemoteWriteProtoMsgV1,
 				HTTPClientConfig: config.HTTPClientConfig{
 					OAuth2: &config.OAuth2{
 						ClientID:     "123",
@@ -1611,8 +1612,10 @@ func TestElideSecrets(t *testing.T) {
 	require.NoError(t, err)
 	yamlConfig := string(config)
 
+	fmt.Println(yamlConfig)
+
 	matches := secretRe.FindAllStringIndex(yamlConfig, -1)
-	require.Len(t, matches, 24, "wrong number of secret matches found")
+	require.Len(t, matches, 25, "wrong number of secret matches found")
 	require.NotContains(t, yamlConfig, "mysecret",
 		"yaml marshal reveals authentication credentials.")
 }

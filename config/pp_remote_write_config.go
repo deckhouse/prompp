@@ -19,7 +19,7 @@ import (
 
 const (
 	PrometheusProtocol = "prometheus"
-	OpProtocol         = "odarix"
+	PPProtocol         = "prompp"
 	ScrapePrefix       = "scrape_"
 	// TransparentRelabeler relabeler without ralabeling.
 	TransparentRelabeler = "transparent_relabeler"
@@ -133,7 +133,7 @@ func (c *PPRemoteWriteConfig) Validate() error {
 
 	for _, d := range c.Destinations {
 		switch c.Protocol {
-		case OpProtocol:
+		case PPProtocol:
 			if err := d.PPValidate(); err != nil {
 				return err
 			}
