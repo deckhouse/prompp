@@ -19,7 +19,7 @@ While staying true to Prometheus' core principles, Deckhouse Prom++ introduces m
 
 ## Key Benefits
 
-- **Drastically reduced memory usage**  
+- **Drastically reduced memory usage**
   Through optimized memory handling, Deckhouse Prom++ reduces memory consumption by **up to 10x**, while maintaining full compatibility with existing Prometheus storage formats.
 
 - **Effortless migration**
@@ -27,7 +27,7 @@ While staying true to Prometheus' core principles, Deckhouse Prom++ introduces m
 
 # Getting started
 
-Deckhouse Prom++ is fully compatible with Prometheus.  
+Deckhouse Prom++ is fully compatible with Prometheus.
 Once installed, simply replace Prometheus with Deckhouse Prom++ — no configuration changes are needed.
 
 Example configurations can be found [here](https://github.com/deckhouse/prompp/blob/pp/documentation/examples/prometheus.yml).
@@ -37,7 +37,7 @@ Example configurations can be found [here](https://github.com/deckhouse/prompp/b
 
 ## **Converting WAL before installation**
 
-Deckhouse Prom++ uses a different WAL (Write-Ahead Log) format but remains fully compatible with historical blocks.  
+Deckhouse Prom++ uses a different WAL (Write-Ahead Log) format but remains fully compatible with historical blocks.
 Since WAL contains **the last 1.5 blocks of data** (typically around **3 hours**), if you plan to use Deckhouse Prom++ as a replacement for Prometheus, WAL conversion is required to prevent data loss.
 
 Refer to the [Migration Guide](#migrating-from-prometheus) for detailed conversion steps.
@@ -50,7 +50,7 @@ Refer to the [Migration Guide](#migrating-from-prometheus) for detailed conversi
 
    ```bash
    ./prompp --config.file=prometheus.yml --storage.tsdb.path=data/
-   ```  
+   ```
 
 
 ## **Docker**
@@ -61,7 +61,7 @@ To quickly run a container:
 
 ```bash
 docker run --name prompp -d -p 127.0.0.1:9090:9090 prompp/prompp
-```  
+```
 
 Once running, Deckhouse Prom++ will be accessible at [http://localhost:9090/](http://localhost:9090/).
 
@@ -82,15 +82,15 @@ Once running, Deckhouse Prom++ will be accessible at [http://localhost:9090/](ht
        fsGroup: 64535
        runAsGroup: 64535
        runAsNonRoot: true
-       runAsUser: 64535 
+       runAsUser: 64535
      # Additional parameters may be required based on your installation
-   ```  
+   ```
 
 2. Apply the updated resource:
 
    ```bash
    kubectl apply -f prompp.yaml
-   ```  
+   ```
 
 
 # **Migrating from Prometheus**
@@ -103,13 +103,13 @@ If migrating manually, use the `prompptool` utility included in the release:
 
 ```bash
 prompptool walvanilla --working-dir <path to prometheus data dir>
-```  
+```
 
 ### **Convert Deckhouse Prom++ WAL back to Prometheus format**
 
 ```bash
 prompptool walpp --working-dir <path to prometheus data dir>
-```  
+```
 
 ## **Automatic WAL conversion with Prometheus Operator**
 
@@ -130,7 +130,7 @@ prompptool walpp --working-dir <path to prometheus data dir>
        fsGroup: 64535
        runAsGroup: 64535
        runAsNonRoot: true
-       runAsUser: 64535 
+       runAsUser: 64535
      initContainers:
        - name: prompptool
          image: prompp/prompp:<tag>
@@ -147,13 +147,13 @@ prompptool walpp --working-dir <path to prometheus data dir>
              cpu: "100m"
              memory: "128Mi"
      # Additional parameters may be required based on your installation
-   ```  
+   ```
 
 2. Apply the updated resource:
 
    ```bash
    kubectl apply -f prompp-migration.yaml
-   ```  
+   ```
 
 
 ### **Convert Deckhouse Prom++ WAL back to Prometheus format**
@@ -166,13 +166,13 @@ prompptool walpp --working-dir <path to prometheus data dir>
      - "--working-dir=/prometheus"
      - "--verbose"
      - "walpp"
-   ```  
+   ```
 
 2. Apply the changes again:
 
    ```bash
    kubectl apply -f prompp-migration.yaml
-   ```  
+   ```
 
 
 # Contributing
