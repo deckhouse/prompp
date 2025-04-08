@@ -187,7 +187,7 @@ func (q *Querier) Select(ctx context.Context, sortSeries bool, hints *storage.Se
 				seriesID: lsId,
 				mint:     q.mint,
 				maxt:     q.maxt,
-				labelSet: cppbridge.NewLabelsCpp(lss, int(labelSetLength), lsId),
+				labelSet: cppbridge.NewLabelsCpp(lss, lsId, labelSetLength),
 				sampleProvider: &DefaultSampleProvider{
 					deserializer:   deserializer,
 					chunksMetadata: chunksMetadata,

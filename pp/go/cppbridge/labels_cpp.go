@@ -17,11 +17,11 @@ type LabelsCpp struct {
 }
 
 // NewLabelsCpp init LabelsCpp with LabelSetStorage and ls id.
-func NewLabelsCpp(lss *LabelSetStorage, length int, id uint32) *LabelsCpp {
+func NewLabelsCpp(lss *LabelSetStorage, id uint32, length uint16) *LabelsCpp {
 	return &LabelsCpp{
 		lss:    lss,
 		id:     id,
-		length: uint16(length), // #nosec G115 // no overflow
+		length: length,
 	}
 }
 
