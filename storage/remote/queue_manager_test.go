@@ -76,7 +76,7 @@ func TestBasicContentNegotiation(t *testing.T) {
 
 	conf := &config.Config{
 		GlobalConfig: config.DefaultGlobalConfig,
-		RemoteWriteConfigs: []*config.RemoteWriteConfig{
+		RemoteWriteConfigs: []*config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 			writeConfig,
 		},
 	}
@@ -373,7 +373,7 @@ func TestWALMetadataDelivery(t *testing.T) {
 
 	conf := &config.Config{
 		GlobalConfig: config.DefaultGlobalConfig,
-		RemoteWriteConfigs: []*config.RemoteWriteConfig{
+		RemoteWriteConfigs: []*config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 			writeConfig,
 		},
 	}

@@ -133,16 +133,6 @@ func filterChunkQueriers(qs []ChunkQuerier) []ChunkQuerier {
 	return ret
 }
 
-func filterChunkQueriers(qs []ChunkQuerier) []ChunkQuerier {
-	ret := make([]ChunkQuerier, 0, len(qs))
-	for _, q := range qs {
-		if _, ok := q.(noopChunkQuerier); !ok && q != nil {
-			ret = append(ret, q)
-		}
-	}
-	return ret
-}
-
 // Select returns a set of series that matches the given label matchers.
 func (q *mergeGenericQuerier) Select(ctx context.Context, sortSeries bool, hints *SelectHints, matchers ...*labels.Matcher) genericSeriesSet {
 	if len(q.queriers) == 0 {

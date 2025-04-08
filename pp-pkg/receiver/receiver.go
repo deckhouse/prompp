@@ -788,7 +788,7 @@ func readClientID(logger log.Logger, dir string) (string, error) {
 	case os.IsNotExist(err):
 		proxyUUID := uuid.NewString()
 		//revive:disable-next-line:add-constant file permissions simple readable as octa-number
-		if err = os.WriteFile(clientIDPath, []byte(proxyUUID), 0o644); err != nil { //#nosec G306
+		if err = os.WriteFile(clientIDPath, []byte(proxyUUID), 0o644); err != nil { // #nosec G306
 			return "", fmt.Errorf("failed to write proxy id: %w", err)
 		}
 
@@ -820,11 +820,20 @@ func (*NoopQuerier) Select(_ context.Context, _ bool, _ *storage.SelectHints, _ 
 	return &NoopSeriesSet{}
 }
 
-func (q *NoopQuerier) LabelValues(ctx context.Context, name string, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (q *NoopQuerier) LabelValues(
+	ctx context.Context,
+	name string,
+	hints *storage.LabelHints,
+	matchers ...*labels.Matcher,
+) ([]string, annotations.Annotations, error) {
 	return []string{}, *annotations.New(), nil
 }
 
-func (q *NoopQuerier) LabelNames(ctx context.Context, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (q *NoopQuerier) LabelNames(
+	ctx context.Context,
+	hints *storage.LabelHints,
+	matchers ...*labels.Matcher,
+) ([]string, annotations.Annotations, error) {
 	return []string{}, *annotations.New(), nil
 }
 

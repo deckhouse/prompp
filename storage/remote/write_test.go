@@ -45,7 +45,7 @@ func testRemoteWriteConfig() *config.PPRemoteWriteConfig { // PP_CHANGES.md: reb
 					Host:   "localhost",
 				},
 			},
-			QueueConfig: config.DefaultQueueConfig,
+			QueueConfig:     config.DefaultQueueConfig,
 			ProtobufMessage: config.RemoteWriteProtoMsgV1,
 		},
 	}
@@ -63,7 +63,7 @@ func TestWriteStorageApplyConfig_NoDuplicateWriteConfigs(t *testing.T) {
 					Host:   "localhost",
 				},
 			},
-			QueueConfig: config.DefaultQueueConfig,
+			QueueConfig:     config.DefaultQueueConfig,
 			ProtobufMessage: config.RemoteWriteProtoMsgV1,
 		},
 	}
@@ -76,7 +76,7 @@ func TestWriteStorageApplyConfig_NoDuplicateWriteConfigs(t *testing.T) {
 					Host:   "localhost",
 				},
 			},
-			QueueConfig: config.DefaultQueueConfig,
+			QueueConfig:     config.DefaultQueueConfig,
 			ProtobufMessage: config.RemoteWriteProtoMsgV1,
 		},
 	}
@@ -88,17 +88,15 @@ func TestWriteStorageApplyConfig_NoDuplicateWriteConfigs(t *testing.T) {
 					Host:   "localhost",
 				},
 			},
-			QueueConfig: config.DefaultQueueConfig,
+			QueueConfig:     config.DefaultQueueConfig,
 			ProtobufMessage: config.RemoteWriteProtoMsgV1,
 		},
 	}
 
-	type testcase struct {
-		cfgs []*config.PPRemoteWriteConfig // PP_CHANGES.md: rebuild on cpp
+	for _, tc := range []struct {
+		cfgs        []*config.PPRemoteWriteConfig
 		expectedErr error
-	}
-
-	cases := []testcase{
+	}{
 		{ // Two duplicates, we should get an error.
 			cfgs: []*config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 				&cfg1,
@@ -157,7 +155,7 @@ func TestWriteStorageApplyConfig_RestartOnNameChange(t *testing.T) {
 
 	conf := &config.Config{
 		GlobalConfig: config.DefaultGlobalConfig,
-		RemoteWriteConfigs: []*config.OpRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
+		RemoteWriteConfigs: []*config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 			cfg,
 		},
 	}
@@ -177,8 +175,8 @@ func TestWriteStorageApplyConfig_RestartOnNameChange(t *testing.T) {
 func TestWriteStorageApplyConfig_UpdateWithRegisterer(t *testing.T) {
 	dir := t.TempDir()
 
-	s := NewWriteStorage(nil, prometheus.NewRegistry(), dir, time.Millisecond, nil)
-	c1 := &config.OpRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
+	s := NewWriteStorage(nil, prometheus.NewRegistry(), dir, time.Millisecond, nil, false)
+	c1 := &config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 		RemoteWriteConfig: config.RemoteWriteConfig{
 			Name: "named",
 			URL: &common_config.URL{
@@ -187,11 +185,11 @@ func TestWriteStorageApplyConfig_UpdateWithRegisterer(t *testing.T) {
 					Host:   "localhost",
 				},
 			},
-			QueueConfig: config.DefaultQueueConfig,
+			QueueConfig:     config.DefaultQueueConfig,
 			ProtobufMessage: config.RemoteWriteProtoMsgV1,
 		},
 	}
-	c2 := &config.OpRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
+	c2 := &config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 		RemoteWriteConfig: config.RemoteWriteConfig{
 			URL: &common_config.URL{
 				URL: &url.URL{
@@ -199,13 +197,13 @@ func TestWriteStorageApplyConfig_UpdateWithRegisterer(t *testing.T) {
 					Host:   "localhost",
 				},
 			},
-			QueueConfig: config.DefaultQueueConfig,
+			QueueConfig:     config.DefaultQueueConfig,
 			ProtobufMessage: config.RemoteWriteProtoMsgV1,
 		},
 	}
 	conf := &config.Config{
 		GlobalConfig:       config.DefaultGlobalConfig,
-		RemoteWriteConfigs: []*config.OpRemoteWriteConfig{c1, c2}, // PP_CHANGES.md: rebuild on cpp
+		RemoteWriteConfigs: []*config.PPRemoteWriteConfig{c1, c2}, // PP_CHANGES.md: rebuild on cpp
 	}
 	require.NoError(t, s.ApplyConfig(conf))
 
@@ -225,7 +223,7 @@ func TestWriteStorageApplyConfig_Lifecycle(t *testing.T) {
 	s := NewWriteStorage(nil, nil, dir, defaultFlushDeadline, nil, false)
 	conf := &config.Config{
 		GlobalConfig: config.DefaultGlobalConfig,
-		RemoteWriteConfigs: []*config.OpRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
+		RemoteWriteConfigs: []*config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 			baseRemoteWriteConfig("http://test-storage.com"),
 		},
 	}
@@ -243,7 +241,7 @@ func TestWriteStorageApplyConfig_UpdateExternalLabels(t *testing.T) {
 	externalLabels := labels.FromStrings("external", "true")
 	conf := &config.Config{
 		GlobalConfig: config.GlobalConfig{},
-		RemoteWriteConfigs: []*config.OpRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
+		RemoteWriteConfigs: []*config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 			testRemoteWriteConfig(),
 		},
 	}
@@ -269,7 +267,7 @@ func TestWriteStorageApplyConfig_Idempotent(t *testing.T) {
 	s := NewWriteStorage(nil, nil, dir, defaultFlushDeadline, nil, false)
 	conf := &config.Config{
 		GlobalConfig: config.GlobalConfig{},
-		RemoteWriteConfigs: []*config.OpRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
+		RemoteWriteConfigs: []*config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 			baseRemoteWriteConfig("http://test-storage.com"),
 		},
 	}
@@ -292,7 +290,7 @@ func TestWriteStorageApplyConfig_PartialUpdate(t *testing.T) {
 
 	s := NewWriteStorage(nil, nil, dir, defaultFlushDeadline, nil, false)
 
-	c0 := &config.OpRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
+	c0 := &config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 		RemoteWriteConfig: config.RemoteWriteConfig{
 			RemoteTimeout: model.Duration(10 * time.Second),
 			QueueConfig:   config.DefaultQueueConfig,
@@ -304,7 +302,7 @@ func TestWriteStorageApplyConfig_PartialUpdate(t *testing.T) {
 			ProtobufMessage: config.RemoteWriteProtoMsgV1,
 		},
 	}
-	c1 := &config.OpRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
+	c1 := &config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 		RemoteWriteConfig: config.RemoteWriteConfig{
 			RemoteTimeout: model.Duration(20 * time.Second),
 			QueueConfig:   config.DefaultQueueConfig,
@@ -314,18 +312,17 @@ func TestWriteStorageApplyConfig_PartialUpdate(t *testing.T) {
 			ProtobufMessage: config.RemoteWriteProtoMsgV1,
 		},
 	}
-	c2 := &config.OpRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
+	c2 := &config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 		RemoteWriteConfig: config.RemoteWriteConfig{
-			RemoteTimeout: model.Duration(30 * time.Second),
-			QueueConfig:   config.DefaultQueueConfig,
+			RemoteTimeout:   model.Duration(30 * time.Second),
+			QueueConfig:     config.DefaultQueueConfig,
 			ProtobufMessage: config.RemoteWriteProtoMsgV1,
 		},
-
 	}
 
 	conf := &config.Config{
 		GlobalConfig:       config.GlobalConfig{},
-		RemoteWriteConfigs: []*config.OpRemoteWriteConfig{c0, c1, c2}, // PP_CHANGES.md: rebuild on cpp
+		RemoteWriteConfigs: []*config.PPRemoteWriteConfig{c0, c1, c2}, // PP_CHANGES.md: rebuild on cpp
 	}
 	// We need to set URL's so that metric creation doesn't panic.
 	for i := range conf.RemoteWriteConfigs {
@@ -355,7 +352,7 @@ func TestWriteStorageApplyConfig_PartialUpdate(t *testing.T) {
 	c2.RemoteTimeout = model.Duration(50 * time.Second)
 	conf = &config.Config{
 		GlobalConfig:       config.GlobalConfig{},
-		RemoteWriteConfigs: []*config.OpRemoteWriteConfig{c0, c1, c2}, // PP_CHANGES.md: rebuild on cpp
+		RemoteWriteConfigs: []*config.PPRemoteWriteConfig{c0, c1, c2}, // PP_CHANGES.md: rebuild on cpp
 	}
 	require.NoError(t, s.ApplyConfig(conf))
 	require.Len(t, s.queues, 3)
@@ -388,7 +385,7 @@ func TestWriteStorageApplyConfig_PartialUpdate(t *testing.T) {
 	// Delete c0.
 	conf = &config.Config{
 		GlobalConfig:       config.GlobalConfig{},
-		RemoteWriteConfigs: []*config.OpRemoteWriteConfig{c1, c2}, // PP_CHANGES.md: rebuild on cpp
+		RemoteWriteConfigs: []*config.PPRemoteWriteConfig{c1, c2}, // PP_CHANGES.md: rebuild on cpp
 	}
 	require.NoError(t, s.ApplyConfig(conf))
 	require.Len(t, s.queues, 2)

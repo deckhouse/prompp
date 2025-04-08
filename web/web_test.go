@@ -669,7 +669,7 @@ func TestMultipleListenAddresses(t *testing.T) {
 
 	opts.Flags = map[string]string{}
 
-	webHandler := New(nil, opts)
+	webHandler := New(nil, opts, nil) // PP_CHANGES.md: rebuild on cpp
 
 	webHandler.config = &config.Config{}
 	webHandler.notifier = &notifier.Manager{}
