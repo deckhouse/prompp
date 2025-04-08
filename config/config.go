@@ -252,7 +252,7 @@ type Config struct {
 	TracingConfig     TracingConfig   `yaml:"tracing,omitempty"`
 
 	ReceiverConfig     pp_pkg_config.RemoteWriteReceiverConfig `yaml:",inline,omitempty"`      // PP_CHANGES.md: rebuild on cpp
-	RemoteWriteConfigs []*OpRemoteWriteConfig                  `yaml:"remote_write,omitempty"` // PP_CHANGES.md: rebuild on cpp
+	RemoteWriteConfigs []*PPRemoteWriteConfig                  `yaml:"remote_write,omitempty"` // PP_CHANGES.md: rebuild on cpp
 
 	RemoteReadConfigs []*RemoteReadConfig `yaml:"remote_read,omitempty"`
 	OTLPConfig        OTLPConfig          `yaml:"otlp,omitempty"`
@@ -1177,38 +1177,40 @@ func (c *RemoteWriteConfig) SetDirectory(dir string) {
 	c.HTTPClientConfig.SetDirectory(dir)
 }
 
-// UnmarshalYAML implements the yaml.Unmarshaler interface.
-func (c *RemoteWriteConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	*c = DefaultRemoteWriteConfig
-	type plain RemoteWriteConfig
-	if err := unmarshal((*plain)(c)); err != nil {
-		return err
-	}
-	if c.URL == nil {
-		return errors.New("url for remote_write is empty")
-	}
-	for _, rlcfg := range c.WriteRelabelConfigs {
-		if rlcfg == nil {
-			return errors.New("empty or null relabeling rule in remote write config")
-		}
-	}
-	if err := validateHeaders(c.Headers); err != nil {
-		return err
-	}
+// PP_CHANGES.md: rebuild on cpp start move to op_remote_write_config
+// // UnmarshalYAML implements the yaml.Unmarshaler interface.
+// func (c *RemoteWriteConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+// 	*c = DefaultRemoteWriteConfig
+// 	type plain RemoteWriteConfig
+// 	if err := unmarshal((*plain)(c)); err != nil {
+// 		return err
+// 	}
+// 	if c.URL == nil {
+// 		return errors.New("url for remote_write is empty")
+// 	}
+// 	for _, rlcfg := range c.WriteRelabelConfigs {
+// 		if rlcfg == nil {
+// 			return errors.New("empty or null relabeling rule in remote write config")
+// 		}
+// 	}
+// 	if err := validateHeaders(c.Headers); err != nil {
+// 		return err
+// 	}
 
-	if err := c.ProtobufMessage.Validate(); err != nil {
-		return fmt.Errorf("invalid protobuf_message value: %w", err)
-	}
+// 	if err := c.ProtobufMessage.Validate(); err != nil {
+// 		return fmt.Errorf("invalid protobuf_message value: %w", err)
+// 	}
 
-	// 	// The UnmarshalYAML method of HTTPClientConfig is not being called because it's not a pointer.
-	// 	// We cannot make it a pointer as the parser panics for inlined pointer structs.
-	// 	// Thus we just do its validation here.
-	// 	if err := c.HTTPClientConfig.Validate(); err != nil {
-	// 		return err
-	// 	}
+// 	// The UnmarshalYAML method of HTTPClientConfig is not being called because it's not a pointer.
+// 	// We cannot make it a pointer as the parser panics for inlined pointer structs.
+// 	// Thus we just do its validation here.
+// 	if err := c.HTTPClientConfig.Validate(); err != nil {
+// 		return err
+// 	}
 
-	return validateAuthConfigs(c)
-}
+// 	return validateAuthConfigs(c)
+// }
+// PP_CHANGES.md: rebuild on cpp end
 
 // validateAuthConfigs validates that at most one of basic_auth, authorization, oauth2, sigv4, azuread or google_iam must be configured.
 func validateAuthConfigs(c *RemoteWriteConfig) error {

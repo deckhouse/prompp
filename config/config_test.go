@@ -109,14 +109,13 @@ var expectedConf = &Config{
 		filepath.FromSlash("testdata/my/*.rules"),
 	},
 
-	RemoteWriteConfigs: []*OpRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
+	RemoteWriteConfigs: []*PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 		{
 			Protocol: PrometheusProtocol,
-			Destinations: []*OpDestinationConfig{
+			Destinations: []*PPDestinationConfig{
 				{
-					Name:            "drop_expensive",
-					URL:             mustParseURL("http://remote1/push"),
-					ProtobufMessage: RemoteWriteProtoMsgV1,
+					Name: "drop_expensive",
+					URL:  mustParseURL("http://remote1/push"),
 					HTTPClientConfig: config.HTTPClientConfig{
 						OAuth2: &config.OAuth2{
 							ClientID:     "123",
@@ -164,7 +163,7 @@ var expectedConf = &Config{
 		},
 		{
 			Protocol: PrometheusProtocol,
-			Destinations: []*OpDestinationConfig{
+			Destinations: []*PPDestinationConfig{
 				{
 					Name: "rw_tls",
 					URL:  mustParseURL("http://remote2/push"),

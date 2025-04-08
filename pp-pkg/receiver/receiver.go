@@ -120,7 +120,7 @@ func NewReceiver(
 	registerer prometheus.Registerer,
 	receiverCfg *pp_pkg_config.RemoteWriteReceiverConfig,
 	workingDir string,
-	remoteWriteCfgs []*prom_config.OpRemoteWriteConfig,
+	remoteWriteCfgs []*prom_config.PPRemoteWriteConfig,
 	dataDir string,
 	rotationInfo RotationInfo,
 	headCatalog *catalog.Catalog,
@@ -518,7 +518,7 @@ func makeDestinationGroups(
 	clock clockwork.Clock,
 	registerer prometheus.Registerer,
 	workingDir, clientID string,
-	rwCfgs []*prom_config.OpRemoteWriteConfig,
+	rwCfgs []*prom_config.PPRemoteWriteConfig,
 	numberOfShards uint16,
 ) (*relabeler.DestinationGroups, error) {
 	dgs := make(relabeler.DestinationGroups, 0, len(rwCfgs))
@@ -564,7 +564,7 @@ func makeDestinationGroups(
 
 // makeDestinationGroupUpdates create update for DestinationGroups.
 func makeDestinationGroupUpdates(
-	rwCfgs []*prom_config.OpRemoteWriteConfig,
+	rwCfgs []*prom_config.PPRemoteWriteConfig,
 	workingDir, clientID string,
 	numberOfShards uint16,
 ) (map[string]*relabeler.DestinationGroupUpdate, error) {
@@ -596,7 +596,7 @@ func makeDestinationGroupUpdates(
 
 // convertingDestinationGroupConfig converting incoming config to internal DestinationGroupConfig.
 func convertingDestinationGroupConfig(
-	rwCfg *prom_config.OpRemoteWriteConfig,
+	rwCfg *prom_config.PPRemoteWriteConfig,
 	workingDir string,
 	numberOfShards uint16,
 ) (*relabeler.DestinationGroupConfig, error) {
@@ -633,7 +633,7 @@ func convertingRelabelersConfig(rCfgs []*relabel.Config) ([]*cppbridge.RelabelCo
 // convertingConfigDialers converting and make internal dialer configs.
 func convertingConfigDialers(
 	clientID string,
-	sCfgs []*prom_config.OpDestinationConfig,
+	sCfgs []*prom_config.PPDestinationConfig,
 ) ([]*relabeler.DialersConfig, error) {
 	dialersConfigs := make([]*relabeler.DialersConfig, 0, len(sCfgs))
 	for _, sCfg := range sCfgs {

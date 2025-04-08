@@ -27,7 +27,7 @@ const (
 
 var (
 	// DefaultOpRemoteWriteConfig is the default remote write configuration.
-	DefaultOpRemoteWriteConfig = OpRemoteWriteConfig{
+	DefaultOpRemoteWriteConfig = PPRemoteWriteConfig{
 		Protocol:          PrometheusProtocol,
 		RemoteWriteConfig: DefaultRemoteWriteConfig,
 	}
@@ -75,15 +75,15 @@ func convertingRelabelConfigs(rCfgs []*relabel.Config) ([]*cppbridge.RelabelConf
 	return oprCfgs, nil
 }
 
-// RemoteWriteConfig is the configuration for writing to remote storage.
-type OpRemoteWriteConfig struct {
+// PPRemoteWriteConfig is the configuration for writing to remote storage.
+type PPRemoteWriteConfig struct {
 	Protocol          string                 `yaml:"protocol,omitempty"`
-	Destinations      []*OpDestinationConfig `yaml:"destinations"`
+	Destinations      []*PPDestinationConfig `yaml:"destinations"`
 	RemoteWriteConfig `yaml:",inline"`
 }
 
 // SetDirectory joins any relative file paths with dir.
-func (c *OpRemoteWriteConfig) SetDirectory(dir string) {
+func (c *PPRemoteWriteConfig) SetDirectory(dir string) {
 	c.HTTPClientConfig.SetDirectory(dir)
 
 	if len(c.Destinations) == 0 {
@@ -96,9 +96,9 @@ func (c *OpRemoteWriteConfig) SetDirectory(dir string) {
 }
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface.
-func (c *OpRemoteWriteConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (c *PPRemoteWriteConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	*c = DefaultOpRemoteWriteConfig
-	type plain OpRemoteWriteConfig
+	type plain PPRemoteWriteConfig
 	if err := unmarshal((*plain)(c)); err != nil {
 		return err
 	}
@@ -107,7 +107,7 @@ func (c *OpRemoteWriteConfig) UnmarshalYAML(unmarshal func(interface{}) error) e
 }
 
 // Validate validates OpRemoteWriteConfig, but also fills relevant default values from global config if needed.
-func (c *OpRemoteWriteConfig) Validate() error {
+func (c *PPRemoteWriteConfig) Validate() error {
 	if len(c.Destinations) == 0 {
 		// if Destinations == 0, validate RemoteWriteConfig and
 		// create one Destinations from RemoteWriteConfig
@@ -122,7 +122,7 @@ func (c *OpRemoteWriteConfig) Validate() error {
 			}
 			name = hash[:6]
 		}
-		c.Destinations = []*OpDestinationConfig{
+		c.Destinations = []*PPDestinationConfig{
 			{
 				Name:             name,
 				URL:              c.RemoteWriteConfig.URL,
@@ -134,7 +134,7 @@ func (c *OpRemoteWriteConfig) Validate() error {
 	for _, d := range c.Destinations {
 		switch c.Protocol {
 		case OpProtocol:
-			if err := d.OpValidate(); err != nil {
+			if err := d.PPValidate(); err != nil {
 				return err
 			}
 		case PrometheusProtocol:
@@ -150,7 +150,7 @@ func (c *OpRemoteWriteConfig) Validate() error {
 }
 
 // IsPrometheusProtocol check type protocol is prometheus.
-func (c *OpRemoteWriteConfig) IsPrometheusProtocol() bool {
+func (c *PPRemoteWriteConfig) IsPrometheusProtocol() bool {
 	return c.Protocol == PrometheusProtocol
 }
 
@@ -168,6 +168,10 @@ func (c *RemoteWriteConfig) Validate() error {
 		return err
 	}
 
+	if err := c.ProtobufMessage.Validate(); err != nil {
+		return fmt.Errorf("invalid protobuf_message value: %w", err)
+	}
+
 	// The UnmarshalYAML method of HTTPClientConfig is not being called because it's not a pointer.
 	// We cannot make it a pointer as the parser panics for inlined pointer structs.
 	// Thus we just do its validation here.
@@ -175,31 +179,20 @@ func (c *RemoteWriteConfig) Validate() error {
 		return err
 	}
 
-	httpClientConfigAuthEnabled := c.HTTPClientConfig.BasicAuth != nil ||
-		c.HTTPClientConfig.Authorization != nil || c.HTTPClientConfig.OAuth2 != nil
-
-	if httpClientConfigAuthEnabled && (c.SigV4Config != nil || c.AzureADConfig != nil) {
-		return fmt.Errorf("at most one of basic_auth, authorization, oauth2, sigv4, & azuread must be configured")
-	}
-
-	if c.SigV4Config != nil && c.AzureADConfig != nil {
-		return fmt.Errorf("at most one of basic_auth, authorization, oauth2, sigv4, & azuread must be configured")
-	}
-
-	return nil
+	return validateAuthConfigs(c)
 }
 
-// OpDestinationConfig is the configuration for destination server.
-type OpDestinationConfig struct {
+// PPDestinationConfig is the configuration for destination server.
+type PPDestinationConfig struct {
 	Name             string                  `yaml:"name"`
 	URL              *config.URL             `yaml:"url"`
 	HTTPClientConfig config.HTTPClientConfig `yaml:",inline"`
 }
 
 // UnmarshalYAML implements the yaml.Unmarshaler interface.
-func (c *OpDestinationConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	*c = OpDestinationConfig{}
-	type plain OpDestinationConfig
+func (c *PPDestinationConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	*c = PPDestinationConfig{}
+	type plain PPDestinationConfig
 	if err := unmarshal((*plain)(c)); err != nil {
 		return err
 	}
@@ -208,7 +201,7 @@ func (c *OpDestinationConfig) UnmarshalYAML(unmarshal func(interface{}) error) e
 }
 
 // Validate validates OpDestinationConfig, but also fills relevant default values from global config if needed.
-func (c *OpDestinationConfig) Validate() error {
+func (c *PPDestinationConfig) Validate() error {
 	if c.Name == "" {
 		return errors.New("destination name is empty")
 	}
@@ -223,9 +216,9 @@ func (c *OpDestinationConfig) Validate() error {
 	return c.HTTPClientConfig.Validate()
 }
 
-// OpValidate validates OpDestinationConfig, but also fills relevant default values from global config if needed.
+// PPValidate validates PPDestinationConfig, but also fills relevant default values from global config if needed.
 // Validate op protocol.
-func (c *OpDestinationConfig) OpValidate() error {
+func (c *PPDestinationConfig) PPValidate() error {
 	if err := c.Validate(); err != nil {
 		return err
 	}

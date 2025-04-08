@@ -35,8 +35,8 @@ import (
 	"github.com/prometheus/prometheus/model/relabel"
 )
 
-func testRemoteWriteConfig() *config.OpRemoteWriteConfig { // PP_CHANGES.md: rebuild on cpp
-	return &config.OpRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
+func testRemoteWriteConfig() *config.PPRemoteWriteConfig { // PP_CHANGES.md: rebuild on cpp
+	return &config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 		RemoteWriteConfig: config.RemoteWriteConfig{
 			Name: "dev",
 			URL: &common_config.URL{
@@ -54,7 +54,7 @@ func testRemoteWriteConfig() *config.OpRemoteWriteConfig { // PP_CHANGES.md: reb
 func TestWriteStorageApplyConfig_NoDuplicateWriteConfigs(t *testing.T) {
 	dir := t.TempDir()
 
-	cfg1 := config.OpRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
+	cfg1 := config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 		RemoteWriteConfig: config.RemoteWriteConfig{
 			Name: "write-1",
 			URL: &common_config.URL{
@@ -67,7 +67,7 @@ func TestWriteStorageApplyConfig_NoDuplicateWriteConfigs(t *testing.T) {
 			ProtobufMessage: config.RemoteWriteProtoMsgV1,
 		},
 	}
-	cfg2 := config.OpRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
+	cfg2 := config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 		RemoteWriteConfig: config.RemoteWriteConfig{
 			Name: "write-2",
 			URL: &common_config.URL{
@@ -80,7 +80,7 @@ func TestWriteStorageApplyConfig_NoDuplicateWriteConfigs(t *testing.T) {
 			ProtobufMessage: config.RemoteWriteProtoMsgV1,
 		},
 	}
-	cfg3 := config.OpRemoteWriteConfig{
+	cfg3 := config.PPRemoteWriteConfig{
 		RemoteWriteConfig: config.RemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 			URL: &common_config.URL{
 				URL: &url.URL{
@@ -94,32 +94,32 @@ func TestWriteStorageApplyConfig_NoDuplicateWriteConfigs(t *testing.T) {
 	}
 
 	type testcase struct {
-		cfgs []*config.OpRemoteWriteConfig // PP_CHANGES.md: rebuild on cpp
+		cfgs []*config.PPRemoteWriteConfig // PP_CHANGES.md: rebuild on cpp
 		expectedErr error
 	}
 
 	cases := []testcase{
 		{ // Two duplicates, we should get an error.
-			cfgs: []*config.OpRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
+			cfgs: []*config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 				&cfg1,
 				&cfg1,
 			},
 			expectedErr: errors.New("duplicate remote write configs are not allowed, found duplicate for URL: http://localhost"),
 		},
 		{ // Duplicates but with different names, we should not get an error.
-			cfgs: []*config.OpRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
+			cfgs: []*config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 				&cfg1,
 				&cfg2,
 			},
 		},
 		{ // Duplicates but one with no name, we should not get an error.
-			cfgs: []*config.OpRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
+			cfgs: []*config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 				&cfg1,
 				&cfg3,
 			},
 		},
 		{ // Duplicates both with no name, we should get an error.
-			cfgs: []*config.OpRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
+			cfgs: []*config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 				&cfg3,
 				&cfg3,
 			},

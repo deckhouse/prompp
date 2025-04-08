@@ -359,7 +359,7 @@ var samplePrometheusCfg = config.Config{
 	AlertingConfig:     config.AlertingConfig{},
 	RuleFiles:          []string{},
 	ScrapeConfigs:      []*config.ScrapeConfig{},
-	RemoteWriteConfigs: []*config.OpRemoteWriteConfig{}, // PP_CHANGES.md: rebuild on cpp
+	RemoteWriteConfigs: []*config.PPRemoteWriteConfig{}, // PP_CHANGES.md: rebuild on cpp
 	RemoteReadConfigs:  []*config.RemoteReadConfig{},
 	OTLPConfig:         config.OTLPConfig{},
 }

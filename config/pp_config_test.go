@@ -22,21 +22,21 @@ import (
 	relabelerconfig "github.com/prometheus/prometheus/pp/go/relabeler/config"
 )
 
-type OpConfigSuite struct {
+type PPConfigSuite struct {
 	suite.Suite
 
-	cfg *config.OpRemoteWriteConfig
+	cfg *config.PPRemoteWriteConfig
 }
 
-func TestOpRemoteWriteConfig(t *testing.T) {
-	suite.Run(t, new(OpConfigSuite))
+func TestPPRemoteWriteConfig(t *testing.T) {
+	suite.Run(t, new(PPConfigSuite))
 }
 
-func (s *OpConfigSuite) SetupTest() {
-	s.cfg = new(config.OpRemoteWriteConfig)
+func (s *PPConfigSuite) SetupTest() {
+	s.cfg = new(config.PPRemoteWriteConfig)
 }
 
-func (s *OpConfigSuite) TestRemoteWriteConfig() {
+func (s *PPConfigSuite) TestRemoteWriteConfig() {
 	raw := `url: http://remote1/push
 remote_timeout: 30s
 write_relabel_configs:
@@ -60,7 +60,7 @@ bearer_token: auth_token`
 	s.Require().Equal("auth_token", string(s.cfg.HTTPClientConfig.Authorization.Credentials))
 }
 
-func (s *OpConfigSuite) TestRemoteWriteConfigURLError() {
+func (s *PPConfigSuite) TestRemoteWriteConfigURLError() {
 	raw := `remote_timeout: 30s
 write_relabel_configs:
 - source_labels: [__name__]
@@ -79,7 +79,7 @@ oauth2:
 	s.Require().Error(err)
 }
 
-func (s *OpConfigSuite) TestOpDestinationConfigURLError() {
+func (s *PPConfigSuite) TestOpDestinationConfigURLError() {
 	raw := `destinations:
 - name: dname
 remote_timeout: 30s
@@ -92,7 +92,7 @@ write_relabel_configs:
 	s.Require().Error(err)
 }
 
-func (s *OpConfigSuite) TestOpDestinationConfigTLSError() {
+func (s *PPConfigSuite) TestOpDestinationConfigTLSError() {
 	raw := `destinations:
 - name: dname
   url: https://host.com
@@ -106,7 +106,7 @@ write_relabel_configs:
 	s.Require().Error(err)
 }
 
-func (s *OpConfigSuite) TestOpDestinationConfigError() {
+func (s *PPConfigSuite) TestOpDestinationConfigError() {
 	raw := `destinations:
 - name: dname
   url: https://host.com
@@ -124,7 +124,7 @@ write_relabel_configs:
 	s.Require().Equal("server_name", s.cfg.Destinations[0].HTTPClientConfig.TLSConfig.ServerName)
 }
 
-func (s *OpConfigSuite) TestLoadConfig() {
+func (s *PPConfigSuite) TestLoadConfig() {
 	// Parse a valid file that sets a global scrape timeout. This tests whether parsing
 	// an overwritten default field in the global config permanently changes the default.
 	_, err := config.LoadFile("testdata/global_timeout.good.yml", false, false, log.NewNopLogger())
@@ -135,7 +135,7 @@ func (s *OpConfigSuite) TestLoadConfig() {
 	s.Require().Equal(expectedConf, c)
 }
 
-func (s *OpConfigSuite) TestGetReceiverConfig() {
+func (s *PPConfigSuite) TestGetReceiverConfig() {
 	// Parse a valid file that sets a global scrape timeout. This tests whether parsing
 	// an overwritten default field in the global config permanently changes the default.
 	_, err := config.LoadFile("testdata/global_timeout.good.yml", false, false, log.NewNopLogger())
@@ -217,10 +217,10 @@ var expectedConf = &config.Config{
 		},
 	},
 
-	RemoteWriteConfigs: []*config.OpRemoteWriteConfig{
+	RemoteWriteConfigs: []*config.PPRemoteWriteConfig{
 		{
 			Protocol: config.PrometheusProtocol,
-			Destinations: []*config.OpDestinationConfig{
+			Destinations: []*config.PPDestinationConfig{
 				{
 					Name: "dname",
 					URL:  mustParseURL("https://host.com"),

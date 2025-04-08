@@ -213,7 +213,7 @@ func TestSampleDelivery(t *testing.T) {
 
 	conf := &config.Config{
 		GlobalConfig: config.DefaultGlobalConfig,
-		RemoteWriteConfigs: []*config.OpRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
+		RemoteWriteConfigs: []*config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 			writeConfig,
 		},
 	}
