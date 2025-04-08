@@ -27,8 +27,8 @@ jobs:
       - uses: deckhouse/modules-actions/setup@v2
         with:
           registry: ${{ secrets.DEV_REGISTRY }}
-          registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
-          registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+          registry_login: ${{ secrets.DEV_REGISTRY_LOGIN_CLEANUP }}
+          registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD_CLEANUP }}
       - name: Cleanup
         run: |
           werf cleanup \

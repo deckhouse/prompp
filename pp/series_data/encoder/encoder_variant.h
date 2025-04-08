@@ -68,4 +68,5 @@ union PROMPP_ATTRIBUTE_PACKED EncoderVariant {
   EncoderVariant() {}
   ~EncoderVariant() {}
 };
-}  // namespace series_data::encoder::value
+
+}  // namespace series_data::encoder

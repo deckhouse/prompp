@@ -1,0 +1,46 @@
+name: Tag Docker Image as Latest
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'The image tag to be used for re-tagging as latest'
+        required: true
+        type: string
+
+jobs:
+  tag_latest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clean workspace
+        uses: AutoModality/action-clean@v1
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Login to registry
+        uses: docker/login-action@v2.1.0
+        with:
+          username: ${{ secrets.DOCKERHUB_REGISTRY_LOGIN }}
+          password: ${{ secrets.DOCKERHUB_REGISTRY_PASSWORD }}
+          logout: false
+
+      - name: Pull the Docker image with provided tag
+        run: |
+          docker pull docker.io/prompp/prompp:${{ github.event.inputs.tag }}
+
+      - name: Tag the image as latest
+        run: |
+          docker tag docker.io/prompp/prompp:${{ github.event.inputs.tag }} docker.io/prompp/prompp:latest
+
+      - name: Push the image with latest tag
+        run: |
+          docker push docker.io/prompp/prompp:latest
+
+      - name: Cleanup remaining Docker images
+        run: |
+          docker rmi docker.io/prompp/prompp:${{ github.event.inputs.tag }} || true
+          docker rmi docker.io/prompp/prompp:latest || true
