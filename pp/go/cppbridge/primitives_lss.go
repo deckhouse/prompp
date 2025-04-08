@@ -29,14 +29,6 @@ var (
 		},
 		[]string{"type"},
 	)
-
-	lssCopiedLive = promauto.NewHistogram(
-		prometheus.HistogramOpts{
-			Name:    "prompp_cppbridge_lss_copied_live",
-			Help:    "Duration of live.",
-			Buckets: prometheus.ExponentialBucketsRange(10, 300, 20),
-		},
-	)
 )
 
 const (
@@ -108,13 +100,11 @@ func newLabelSetStorage(lssType uint32) *LabelSetStorage {
 
 // newCopiedLssStorrage init new LabelSetStorage based on CopiedLss.
 func newCopiedLssStorrage(lssCopyPtr uintptr) *LabelSetStorage {
-	start := time.Now()
 	lss := &LabelSetStorage{pointer: lssCopyPtr}
 	runtime.SetFinalizer(lss, func(lss *LabelSetStorage) {
 		primitivesLSSDtor(lss.pointer)
 
 		lssFinalize.With(prometheus.Labels{"type": "copied"}).Inc()
-		lssCopiedLive.Observe(float64(time.Since(start).Seconds()))
 	})
 
 	lssCreate.With(prometheus.Labels{"type": "copied"}).Inc()
