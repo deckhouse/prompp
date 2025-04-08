@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build stringlabels
+//go:build !slicelabels && !dedupelabels
 
 package labels
 
@@ -19,9 +19,12 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"unsafe"
 
 	"github.com/cespare/xxhash/v2"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 // Labels is implemented by a single flat string holding name/value pairs.
@@ -478,6 +481,8 @@ func (b *Builder) Reset(base Labels) {
 // If no modifications were made, the original labels are returned.
 func (b *Builder) Labels() Labels {
 	if len(b.del) == 0 && len(b.add) == 0 {
+
+		ul.add(b.base.Hash())
 		return b.base
 	}
 
@@ -512,7 +517,10 @@ func (b *Builder) Labels() Labels {
 	for ; a < len(b.add); a++ {
 		buf = appendLabelTo(buf, &b.add[a])
 	}
-	return Labels{data: yoloString(buf)}
+
+	ret := Labels{data: yoloString(buf)}
+	ul.add(ret.Hash())
+	return ret
 }
 
 func marshalLabelsToSizedBuffer(lbls []Label, data []byte) int {
@@ -663,6 +671,8 @@ func (b *ScratchBuilder) Labels() Labels {
 		marshalLabelsToSizedBuffer(b.add, buf)
 		b.output = Labels{data: yoloString(buf)}
 	}
+
+	ul.add(b.output.Hash())
 	return b.output
 }
 
@@ -677,6 +687,8 @@ func (b *ScratchBuilder) Overwrite(ls *Labels) {
 	}
 	marshalLabelsToSizedBuffer(b.add, b.overwriteBuffer)
 	ls.data = yoloString(b.overwriteBuffer)
+
+	ul.add(ls.Hash())
 }
 
 // Symbol-table is no-op, just for api parity with dedupelabels.
@@ -698,4 +710,32 @@ func NewScratchBuilderWithSymbolTable(_ *SymbolTable, n int) ScratchBuilder {
 
 func (b *ScratchBuilder) SetSymbolTable(_ *SymbolTable) {
 	// no-op
+}
+
+//
+// uniqLables
+//
+
+var ul = &uniqLables{
+	counter: promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "prompp_labels_unique_total",
+			Help: "Current unique labels.",
+		},
+	),
+}
+
+type uniqLables struct {
+	counter prometheus.Counter
+	sync.Map
+}
+
+func (ul *uniqLables) add(hash uint64) {
+	_, loaded := ul.Map.LoadOrStore(hash, nil)
+
+	if loaded {
+		return
+	}
+
+	ul.counter.Inc()
 }
