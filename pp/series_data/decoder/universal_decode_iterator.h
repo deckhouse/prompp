@@ -3,6 +3,7 @@
 #include <variant>
 
 #include "asc_integer.h"
+#include "asc_integer_then_values_gorilla.h"
 #include "constant.h"
 #include "gorilla.h"
 #include "two_double_constant.h"
@@ -41,6 +42,7 @@ class UniversalDecodeIterator : public DecodeIteratorTypeTrait {
   using IteratorVariant = std::variant<ConstantDecodeIterator,
                                        TwoDoubleConstantDecodeIterator,
                                        AscIntegerDecodeIterator,
+                                       AscIntegerThenValuesGorillaDecodeIterator,
                                        ValuesGorillaDecodeIterator,
                                        GorillaDecodeIterator>;
 

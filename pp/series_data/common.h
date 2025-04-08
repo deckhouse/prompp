@@ -14,6 +14,7 @@ enum class EncodingType : uint8_t {
   kDoubleConstant,
   kTwoDoubleConstant,
   kAscInteger,
+  kAscIntegerThenValuesGorilla,
   kValuesGorilla,
   kGorilla,
 };
@@ -38,12 +39,12 @@ constexpr PROMPP_ALWAYS_INLINE bool is_constant_encoder(EncodingType encoding_ty
 
 constexpr PROMPP_ALWAYS_INLINE bool is_gorilla_based_encoder(EncodingType encoding_type) noexcept {
   using enum EncodingType;
-  return BareBones::is_in(encoding_type, kAscInteger, kValuesGorilla, kGorilla);
+  return BareBones::is_in(encoding_type, kAscInteger, kAscIntegerThenValuesGorilla, kValuesGorilla, kGorilla);
 }
 
 constexpr PROMPP_ALWAYS_INLINE bool is_variant_encoder(EncodingType encoding_type) noexcept {
   using enum EncodingType;
-  return BareBones::is_in(encoding_type, kDoubleConstant, kTwoDoubleConstant, kAscInteger, kValuesGorilla);
+  return BareBones::is_in(encoding_type, kDoubleConstant, kTwoDoubleConstant, kAscInteger, kAscIntegerThenValuesGorilla, kValuesGorilla);
 }
 
 }  // namespace series_data

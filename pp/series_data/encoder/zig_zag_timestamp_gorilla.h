@@ -6,12 +6,10 @@ namespace series_data::encoder {
 
 constexpr BareBones::Encoding::Gorilla::DodSignificantLengths kDodSignificantLengths = {.first = 4, .second = 12, .third = 21};
 
-constexpr uint32_t kStaleNanMark = 0b11111;
-constexpr uint32_t kStaleNanMarkBits = 5;
-
 enum class ValueType : uint8_t {
   kStaleNan = 0,
   kValue,
+  kSwitchToValuesGorillaMark,
 };
 
 template <class DeltaType>
@@ -21,7 +19,7 @@ class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampEncoder
   template <class BitSequence>
   PROMPP_ALWAYS_INLINE void encode_delta_of_delta_with_stale_nan(double timestamp, BitSequence& stream) {
     if (BareBones::Encoding::Gorilla::isstalenan(timestamp)) [[unlikely]] {
-      stream.push_back_bits_u32(kStaleNanMarkBits, kStaleNanMark);
+      stream.push_back_bits_u32(6, 0b011111);
     } else {
       const auto ts = static_cast<int64_t>(timestamp);
       const auto ts_delta = ts - this->state.last_ts;
@@ -54,10 +52,17 @@ class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampEncoder
       }
     }
   }
+
+  template <class BitSequence>
+  PROMPP_ALWAYS_INLINE static void write_switch_to_values_gorilla_mark(BitSequence& stream) {
+    stream.push_back_bits_u32(6, 0b111111);
+  }
 };
 
 class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampDecoder : public BareBones::Encoding::Gorilla::ZigZagTimestampDecoder<kDodSignificantLengths> {
  public:
+  using BareBones::Encoding::Gorilla::ZigZagTimestampDecoder<kDodSignificantLengths>::decode;
+
   PROMPP_ALWAYS_INLINE ValueType decode_delta_of_delta_with_stale_nan(BareBones::BitSequenceReader& reader) {
     if (const uint32_t buf = reader.read_u32(); buf & 0b1) {
       uint64_t dod_zigzag;
@@ -74,9 +79,12 @@ class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampDecoder : public BareBones::Encodin
       } else if ((buf & 0b10000) == 0) {
         reader.ff(5);
         dod_zigzag = reader.consume_u64_svbyte_2468();
-      } else {
-        reader.ff(kStaleNanMarkBits);
+      } else if ((buf & 0b100000) == 0) {
+        reader.ff(6);
         return ValueType::kStaleNan;
+      } else {
+        reader.ff(6);
+        return ValueType::kSwitchToValuesGorillaMark;
       }
 
       state_.last_ts_delta += BareBones::Encoding::ZigZag::decode(dod_zigzag);
@@ -85,6 +93,28 @@ class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampDecoder : public BareBones::Encodin
     }
 
     state_.last_ts += state_.last_ts_delta;
+    return ValueType::kValue;
+  }
+
+  ValueType decode(BareBones::BitSequenceReader& reader, BareBones::Encoding::Gorilla::GorillaState& state, double& value) noexcept {
+    using enum BareBones::Encoding::Gorilla::GorillaState;
+
+    if (state == kFirstPoint) [[unlikely]] {
+      decode(reader);
+      state = kSecondPoint;
+    } else if (state == kSecondPoint) [[unlikely]] {
+      decode_delta(reader);
+      state = kOtherPoint;
+    } else {
+      if (const auto type = decode_delta_of_delta_with_stale_nan(reader); type == ValueType::kStaleNan) [[unlikely]] {
+        value = BareBones::Encoding::Gorilla::STALE_NAN;
+        return ValueType::kStaleNan;
+      } else if (type == ValueType::kSwitchToValuesGorillaMark) [[unlikely]] {
+        return ValueType::kSwitchToValuesGorillaMark;
+      }
+    }
+
+    value = static_cast<double>(timestamp());
     return ValueType::kValue;
   }
 };

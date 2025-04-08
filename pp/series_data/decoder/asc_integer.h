@@ -7,6 +7,8 @@ namespace series_data::decoder {
 
 class AscIntegerDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait {
  public:
+  using Decoder = encoder::ZigZagTimestampDecoder;
+
   AscIntegerDecodeIterator(const encoder::BitSequenceWithItemsCount& timestamp_stream, const BareBones::BitSequenceReader& reader, bool is_last_stalenan)
       : AscIntegerDecodeIterator(timestamp_stream.count(), timestamp_stream.reader(), reader, is_last_stalenan) {}
   AscIntegerDecodeIterator(uint8_t samples_count,
@@ -34,28 +36,12 @@ class AscIntegerDecodeIterator : public SeparatedTimestampValueDecodeIteratorTra
 
  private:
   using GorillaState = BareBones::Encoding::Gorilla::GorillaState;
-  using Decoder = encoder::ZigZagTimestampDecoder;
 
   Decoder decoder_;
   BareBones::BitSequenceReader reader_;
   BareBones::Encoding::Gorilla::GorillaState gorilla_state_{GorillaState::kFirstPoint};
 
-  void decode_value() noexcept {
-    if (gorilla_state_ == GorillaState::kFirstPoint) [[unlikely]] {
-      decoder_.decode(reader_);
-      gorilla_state_ = GorillaState::kSecondPoint;
-    } else if (gorilla_state_ == GorillaState::kSecondPoint) [[unlikely]] {
-      decoder_.decode_delta(reader_);
-      gorilla_state_ = GorillaState::kOtherPoint;
-    } else {
-      if (const auto type = decoder_.decode_delta_of_delta_with_stale_nan(reader_); type == encoder::ValueType::kStaleNan) [[unlikely]] {
-        sample_.value = BareBones::Encoding::Gorilla::STALE_NAN;
-        return;
-      }
-    }
-
-    sample_.value = static_cast<double>(decoder_.timestamp());
-  }
+  PROMPP_ALWAYS_INLINE void decode_value() noexcept { decoder_.decode(reader_, gorilla_state_, sample_.value); }
 };
 
 }  // namespace series_data::decoder

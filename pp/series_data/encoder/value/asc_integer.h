@@ -10,6 +10,9 @@ namespace series_data::encoder::value {
 
 class PROMPP_ATTRIBUTE_PACKED AscIntegerEncoder {
  public:
+  using EncoderDeltaType = int32_t;
+  using Encoder = ZigZagTimestampEncoder<EncoderDeltaType>;
+
   PROMPP_ALWAYS_INLINE explicit AscIntegerEncoder(double value) { encoder_.encode(static_cast<int64_t>(value), stream_); }
 
   PROMPP_ALWAYS_INLINE AscIntegerEncoder(const ConstantValue& v1, const ConstantValue& v2, const ConstantValue& v3) {
@@ -55,6 +58,7 @@ class PROMPP_ATTRIBUTE_PACKED AscIntegerEncoder {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactBitSequence& stream() const noexcept { return stream_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence release_stream() && noexcept { return std::move(stream_); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence finalize_stream() noexcept {
     auto stream = std::move(stream_);
     stream.shrink_to_fit();
@@ -62,9 +66,6 @@ class PROMPP_ATTRIBUTE_PACKED AscIntegerEncoder {
   }
 
  private:
-  using EncoderDeltaType = int32_t;
-  using Encoder = ZigZagTimestampEncoder<EncoderDeltaType>;
-
   Encoder encoder_;
   CompactBitSequence stream_;
 

@@ -7,6 +7,8 @@ namespace series_data::decoder {
 
 class ValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait {
  public:
+  using Decoder = BareBones::Encoding::Gorilla::ValuesDecoder;
+
   ValuesGorillaDecodeIterator(const encoder::BitSequenceWithItemsCount& timestamp_stream, const BareBones::BitSequenceReader& reader, bool is_last_stalenan)
       : ValuesGorillaDecodeIterator(timestamp_stream.count(), timestamp_stream.reader(), reader, is_last_stalenan) {}
   ValuesGorillaDecodeIterator(uint8_t samples_count,
@@ -32,21 +34,24 @@ class ValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIterator
     return result;
   }
 
- private:
-  using Decoder = BareBones::Encoding::Gorilla::ValuesDecoder;
+  template <bool first>
+  PROMPP_ALWAYS_INLINE static double decode_value(Decoder& decoder, BareBones::BitSequenceReader& reader) noexcept {
+    if constexpr (first) {
+      decoder.decode_first(reader);
+    } else {
+      decoder.decode(reader);
+    }
 
+    return decoder.value();
+  }
+
+ private:
   BareBones::BitSequenceReader reader_;
   Decoder decoder_;
 
   template <bool first>
   void decode_value() noexcept {
-    if constexpr (first) {
-      decoder_.decode_first(reader_);
-    } else {
-      decoder_.decode(reader_);
-    }
-
-    sample_.value = decoder_.value();
+    sample_.value = decode_value<first>(decoder_, reader_);
   }
 };
 

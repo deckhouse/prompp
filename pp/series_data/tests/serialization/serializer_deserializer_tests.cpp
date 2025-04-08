@@ -173,13 +173,18 @@ TEST_F(SerializerDeserializerFixture, AllChunkTypes) {
   encoder_.encode(7, 114, -1.0);
   encoder_.encode(7, 115, -1.0);
 
+  encoder_.encode(8, 120, 1.0);
+  encoder_.encode(8, 121, 2.0);
+  encoder_.encode(8, 122, 3.0);
+  encoder_.encode(8, 123, 4.1);
+
   // Act
   serializer_.serialize(stream_);
   Deserializer deserializer(get_buffer());
 
   // Assert
   ASSERT_TRUE(deserializer.is_valid());
-  ASSERT_EQ(9U, deserializer.get_chunks().size());
+  ASSERT_EQ(10U, deserializer.get_chunks().size());
   ASSERT_EQ(EncodingType::kUint32Constant, deserializer.get_chunks()[0].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kDoubleConstant, deserializer.get_chunks()[1].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kTwoDoubleConstant, deserializer.get_chunks()[2].encoding_state.encoding_type);
@@ -188,8 +193,9 @@ TEST_F(SerializerDeserializerFixture, AllChunkTypes) {
   ASSERT_EQ(EncodingType::kGorilla, deserializer.get_chunks()[5].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kUint32Constant, deserializer.get_chunks()[6].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kFloat32Constant, deserializer.get_chunks()[7].encoding_state.encoding_type);
-  ASSERT_EQ(EncodingType::kTwoDoubleConstant, deserializer.get_chunks()[8].encoding_state.encoding_type);
-  ASSERT_EQ(10U, deserializer.get_chunks()[8].label_set_id);
+  ASSERT_EQ(EncodingType::kAscIntegerThenValuesGorilla, deserializer.get_chunks()[8].encoding_state.encoding_type);
+  ASSERT_EQ(EncodingType::kTwoDoubleConstant, deserializer.get_chunks()[9].encoding_state.encoding_type);
+  ASSERT_EQ(10U, deserializer.get_chunks()[9].label_set_id);
 
   EXPECT_TRUE(std::ranges::equal(
       SampleList{
@@ -241,10 +247,18 @@ TEST_F(SerializerDeserializerFixture, AllChunkTypes) {
       decode_chunk(deserializer.create_decode_iterator(deserializer.get_chunks()[7]))));
   EXPECT_TRUE(std::ranges::equal(
       SampleList{
+          {.timestamp = 120, .value = 1.0},
+          {.timestamp = 121, .value = 2.0},
+          {.timestamp = 122, .value = 3.0},
+          {.timestamp = 123, .value = 4.1},
+      },
+      decode_chunk(deserializer.create_decode_iterator(deserializer.get_chunks()[8]))));
+  EXPECT_TRUE(std::ranges::equal(
+      SampleList{
           {.timestamp = 107, .value = 1.1},
           {.timestamp = 108, .value = 2.1},
       },
-      decode_chunk(deserializer.create_decode_iterator(deserializer.get_chunks()[8]))));
+      decode_chunk(deserializer.create_decode_iterator(deserializer.get_chunks()[9]))));
 }
 
 TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypes) {
@@ -284,13 +298,19 @@ TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypes) {
   encoder_.encode(7, 115, -1.0);
   ChunkFinalizer::finalize(storage_, 7, storage_.open_chunks[7]);
 
+  encoder_.encode(8, 120, 1.0);
+  encoder_.encode(8, 121, 2.0);
+  encoder_.encode(8, 122, 3.0);
+  encoder_.encode(8, 123, 4.1);
+  ChunkFinalizer::finalize(storage_, 8, storage_.open_chunks[8]);
+
   // Act
   serializer_.serialize(stream_);
   Deserializer deserializer(get_buffer());
 
   // Assert
   ASSERT_TRUE(deserializer.is_valid());
-  ASSERT_EQ(9U, deserializer.get_chunks().size());
+  ASSERT_EQ(10U, deserializer.get_chunks().size());
   ASSERT_EQ(EncodingType::kUint32Constant, deserializer.get_chunks()[0].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kDoubleConstant, deserializer.get_chunks()[1].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kTwoDoubleConstant, deserializer.get_chunks()[2].encoding_state.encoding_type);
@@ -299,8 +319,9 @@ TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypes) {
   ASSERT_EQ(EncodingType::kGorilla, deserializer.get_chunks()[5].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kUint32Constant, deserializer.get_chunks()[6].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kFloat32Constant, deserializer.get_chunks()[7].encoding_state.encoding_type);
-  ASSERT_EQ(EncodingType::kTwoDoubleConstant, deserializer.get_chunks()[8].encoding_state.encoding_type);
-  ASSERT_EQ(10U, deserializer.get_chunks()[8].label_set_id);
+  ASSERT_EQ(EncodingType::kAscIntegerThenValuesGorilla, deserializer.get_chunks()[8].encoding_state.encoding_type);
+  ASSERT_EQ(EncodingType::kTwoDoubleConstant, deserializer.get_chunks()[9].encoding_state.encoding_type);
+  ASSERT_EQ(10U, deserializer.get_chunks()[9].label_set_id);
 
   EXPECT_TRUE(std::ranges::equal(
       SampleList{
@@ -352,10 +373,18 @@ TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypes) {
       decode_chunk(deserializer.create_decode_iterator(deserializer.get_chunks()[7]))));
   EXPECT_TRUE(std::ranges::equal(
       SampleList{
+          {.timestamp = 120, .value = 1.0},
+          {.timestamp = 121, .value = 2.0},
+          {.timestamp = 122, .value = 3.0},
+          {.timestamp = 123, .value = 4.1},
+      },
+      decode_chunk(deserializer.create_decode_iterator(deserializer.get_chunks()[8]))));
+  EXPECT_TRUE(std::ranges::equal(
+      SampleList{
           {.timestamp = 107, .value = 1.1},
           {.timestamp = 108, .value = 2.1},
       },
-      decode_chunk(deserializer.create_decode_iterator(deserializer.get_chunks()[8]))));
+      decode_chunk(deserializer.create_decode_iterator(deserializer.get_chunks()[9]))));
 }
 
 TEST_F(SerializerDeserializerFixture, ChunkWithFinalizedTimestampStream) {
@@ -440,13 +469,19 @@ TEST_F(SerializerDeserializerFixture, AllChunkTypesWithStalenan) {
   encoder_.encode(7, 122, -1.0);
   encoder_.encode(7, 123, STALE_NAN);
 
+  encoder_.encode(8, 130, 1.0);
+  encoder_.encode(8, 131, 2.0);
+  encoder_.encode(8, 132, 3.0);
+  encoder_.encode(8, 133, 4.1);
+  encoder_.encode(8, 134, STALE_NAN);
+
   // Act
   serializer_.serialize(stream_);
   Deserializer deserializer(get_buffer());
 
   // Assert
   ASSERT_TRUE(deserializer.is_valid());
-  ASSERT_EQ(9U, deserializer.get_chunks().size());
+  ASSERT_EQ(10U, deserializer.get_chunks().size());
   EXPECT_TRUE(std::ranges::all_of(deserializer.get_chunks(), [](const auto& chunk) { return chunk.encoding_state.has_last_stalenan; }));
   ASSERT_EQ(EncodingType::kUint32Constant, deserializer.get_chunks()[0].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kDoubleConstant, deserializer.get_chunks()[1].encoding_state.encoding_type);
@@ -456,8 +491,9 @@ TEST_F(SerializerDeserializerFixture, AllChunkTypesWithStalenan) {
   ASSERT_EQ(EncodingType::kGorilla, deserializer.get_chunks()[5].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kUint32Constant, deserializer.get_chunks()[6].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kFloat32Constant, deserializer.get_chunks()[7].encoding_state.encoding_type);
-  ASSERT_EQ(EncodingType::kTwoDoubleConstant, deserializer.get_chunks()[8].encoding_state.encoding_type);
-  ASSERT_EQ(10U, deserializer.get_chunks()[8].label_set_id);
+  ASSERT_EQ(EncodingType::kAscIntegerThenValuesGorilla, deserializer.get_chunks()[8].encoding_state.encoding_type);
+  ASSERT_EQ(EncodingType::kTwoDoubleConstant, deserializer.get_chunks()[9].encoding_state.encoding_type);
+  ASSERT_EQ(10U, deserializer.get_chunks()[9].label_set_id);
 
   EXPECT_TRUE(std::ranges::equal(
       SampleList{
@@ -517,11 +553,20 @@ TEST_F(SerializerDeserializerFixture, AllChunkTypesWithStalenan) {
       decode_chunk(deserializer.create_decode_iterator(deserializer.get_chunks()[7]))));
   EXPECT_TRUE(std::ranges::equal(
       SampleList{
+          {.timestamp = 130, .value = 1.0},
+          {.timestamp = 131, .value = 2.0},
+          {.timestamp = 132, .value = 3.0},
+          {.timestamp = 133, .value = 4.1},
+          {.timestamp = 134, .value = STALE_NAN},
+      },
+      decode_chunk(deserializer.create_decode_iterator(deserializer.get_chunks()[8]))));
+  EXPECT_TRUE(std::ranges::equal(
+      SampleList{
           {.timestamp = 111, .value = 1.1},
           {.timestamp = 112, .value = 2.1},
           {.timestamp = 113, .value = STALE_NAN},
       },
-      decode_chunk(deserializer.create_decode_iterator(deserializer.get_chunks()[8]))));
+      decode_chunk(deserializer.create_decode_iterator(deserializer.get_chunks()[9]))));
 }
 
 TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypesWithStalenan) {
@@ -570,13 +615,20 @@ TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypesWithStalenan) {
   encoder_.encode(7, 123, STALE_NAN);
   ChunkFinalizer::finalize(storage_, 7, storage_.open_chunks[7]);
 
+  encoder_.encode(8, 130, 1.0);
+  encoder_.encode(8, 131, 2.0);
+  encoder_.encode(8, 132, 3.0);
+  encoder_.encode(8, 133, 4.1);
+  encoder_.encode(8, 134, STALE_NAN);
+  ChunkFinalizer::finalize(storage_, 8, storage_.open_chunks[8]);
+
   // Act
   serializer_.serialize(stream_);
   Deserializer deserializer(get_buffer());
 
   // Assert
   ASSERT_TRUE(deserializer.is_valid());
-  ASSERT_EQ(9U, deserializer.get_chunks().size());
+  ASSERT_EQ(10U, deserializer.get_chunks().size());
   EXPECT_TRUE(std::ranges::all_of(deserializer.get_chunks(), [](const auto& chunk) { return chunk.encoding_state.has_last_stalenan; }));
   ASSERT_EQ(EncodingType::kUint32Constant, deserializer.get_chunks()[0].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kDoubleConstant, deserializer.get_chunks()[1].encoding_state.encoding_type);
@@ -586,8 +638,9 @@ TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypesWithStalenan) {
   ASSERT_EQ(EncodingType::kGorilla, deserializer.get_chunks()[5].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kUint32Constant, deserializer.get_chunks()[6].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kFloat32Constant, deserializer.get_chunks()[7].encoding_state.encoding_type);
-  ASSERT_EQ(EncodingType::kTwoDoubleConstant, deserializer.get_chunks()[8].encoding_state.encoding_type);
-  ASSERT_EQ(10U, deserializer.get_chunks()[8].label_set_id);
+  ASSERT_EQ(EncodingType::kAscIntegerThenValuesGorilla, deserializer.get_chunks()[8].encoding_state.encoding_type);
+  ASSERT_EQ(EncodingType::kTwoDoubleConstant, deserializer.get_chunks()[9].encoding_state.encoding_type);
+  ASSERT_EQ(10U, deserializer.get_chunks()[9].label_set_id);
 
   EXPECT_TRUE(std::ranges::equal(
       SampleList{
@@ -647,11 +700,20 @@ TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypesWithStalenan) {
       decode_chunk(deserializer.create_decode_iterator(deserializer.get_chunks()[7]))));
   EXPECT_TRUE(std::ranges::equal(
       SampleList{
+          {.timestamp = 130, .value = 1.0},
+          {.timestamp = 131, .value = 2.0},
+          {.timestamp = 132, .value = 3.0},
+          {.timestamp = 133, .value = 4.1},
+          {.timestamp = 134, .value = STALE_NAN},
+      },
+      decode_chunk(deserializer.create_decode_iterator(deserializer.get_chunks()[8]))));
+  EXPECT_TRUE(std::ranges::equal(
+      SampleList{
           {.timestamp = 111, .value = 1.1},
           {.timestamp = 112, .value = 2.1},
           {.timestamp = 113, .value = STALE_NAN},
       },
-      decode_chunk(deserializer.create_decode_iterator(deserializer.get_chunks()[8]))));
+      decode_chunk(deserializer.create_decode_iterator(deserializer.get_chunks()[9]))));
 }
 
 class DeserializerIteratorFixture : public SerializerDeserializerTrait, public testing::Test {

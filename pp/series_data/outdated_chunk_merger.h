@@ -188,6 +188,11 @@ class OutdatedChunkMerger {
         break;
       }
 
+      case kAscIntegerThenValuesGorilla: {
+        merge_outdated_samples<kAscIntegerThenValuesGorilla, chunk_type>(source_chunk, max_timestamp, EncodeIterator{encoder_, chunk, ls_id}, samples);
+        break;
+      }
+
       case kValuesGorilla: {
         merge_outdated_samples<kValuesGorilla, chunk_type>(source_chunk, max_timestamp, EncodeIterator{encoder_, chunk, ls_id}, samples);
         break;

@@ -26,6 +26,11 @@ class ChunkFinalizer {
           storage.finalized_data_streams.emplace_back(storage.variant_encoders[chunk.encoder.external_index].asc_integer.finalize_stream());
       storage.variant_encoders.erase(chunk.encoder.external_index, EncodingType::kAscInteger);
       chunk.encoder.external_index = storage.finalized_data_streams.index_of(finalized_stream);
+    } else if (chunk.encoding_state.encoding_type == EncodingType::kAscIntegerThenValuesGorilla) {
+      const auto& finalized_stream =
+          storage.finalized_data_streams.emplace_back(storage.variant_encoders[chunk.encoder.external_index].asc_integer_then_values_gorilla.finalize_stream());
+      storage.variant_encoders.erase(chunk.encoder.external_index, EncodingType::kAscIntegerThenValuesGorilla);
+      chunk.encoder.external_index = storage.finalized_data_streams.index_of(finalized_stream);
     } else if (chunk.encoding_state.encoding_type == EncodingType::kValuesGorilla) {
       const auto& finalized_stream =
           storage.finalized_data_streams.emplace_back(storage.variant_encoders[chunk.encoder.external_index].values_gorilla.finalize_stream());

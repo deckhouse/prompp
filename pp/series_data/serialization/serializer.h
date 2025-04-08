@@ -148,6 +148,13 @@ class Serializer {
         break;
       }
 
+      case kAscIntegerThenValuesGorilla: {
+        fill_timestamp_stream_offset<chunk_type>(timestamp_streams_data, chunk.timestamp_encoder_state_id, serialized_chunk, data_size);
+        serialized_chunk.set_offset(data_size);
+        data_size += storage_.get_asc_integer_then_values_gorilla_stream<chunk_type>(chunk.encoder.external_index).size_in_bytes();
+        break;
+      }
+
       case kValuesGorilla: {
         fill_timestamp_stream_offset<chunk_type>(timestamp_streams_data, chunk.timestamp_encoder_state_id, serialized_chunk, data_size);
         serialized_chunk.set_offset(data_size);
@@ -229,11 +236,7 @@ class Serializer {
     using enum EncodingType;
 
     switch (chunk.encoding_state.encoding_type) {
-      case kUint32Constant: {
-        write_timestamp_stream<chunk_type>(timestamp_streams_data, chunk.timestamp_encoder_state_id, stream);
-        break;
-      }
-
+      case kUint32Constant:
       case kFloat32Constant: {
         write_timestamp_stream<chunk_type>(timestamp_streams_data, chunk.timestamp_encoder_state_id, stream);
         break;
@@ -259,6 +262,12 @@ class Serializer {
         break;
       }
 
+      case kAscIntegerThenValuesGorilla: {
+        write_timestamp_stream<chunk_type>(timestamp_streams_data, chunk.timestamp_encoder_state_id, stream);
+        write_compact_bit_sequence(storage_.get_asc_integer_then_values_gorilla_stream<chunk_type>(chunk.encoder.external_index), stream);
+        break;
+      }
+
       case kValuesGorilla: {
         write_timestamp_stream<chunk_type>(timestamp_streams_data, chunk.timestamp_encoder_state_id, stream);
         write_compact_bit_sequence(storage_.get_values_gorilla_stream<chunk_type>(chunk.encoder.external_index), stream);
@@ -270,7 +279,7 @@ class Serializer {
         break;
       }
 
-      case kUnknown: {
+      default: {
         assert(chunk.encoding_state.encoding_type != kUnknown);
         break;
       }
