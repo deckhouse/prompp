@@ -39,7 +39,7 @@ class AscIntegerDecodeIterator : public SeparatedTimestampValueDecodeIteratorTra
 
   Decoder decoder_;
   BareBones::BitSequenceReader reader_;
-  BareBones::Encoding::Gorilla::GorillaState gorilla_state_{GorillaState::kFirstPoint};
+  GorillaState gorilla_state_{GorillaState::kFirstPoint};
 
   PROMPP_ALWAYS_INLINE void decode_value() noexcept { decoder_.decode(reader_, gorilla_state_, sample_.value); }
 };

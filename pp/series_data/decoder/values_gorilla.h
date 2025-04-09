@@ -50,7 +50,7 @@ class ValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIterator
   Decoder decoder_;
 
   template <bool first>
-  void decode_value() noexcept {
+  PROMPP_ALWAYS_INLINE void decode_value() noexcept {
     sample_.value = decode_value<first>(decoder_, reader_);
   }
 };

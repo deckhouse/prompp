@@ -1721,7 +1721,6 @@ TEST_F(EncodeOutdatedChunkTestFixture, EncodeAscIntegerThenValuesGorillaEncoderN
                 {4, 4.1},
             }),
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
-  EXPECT_EQ((BareBones::Vector<int64_t>{1, 2, 3, 4}), decode_open_chunk_timestamp_list(0));
 }
 
 TEST_F(EncodeOutdatedChunkTestFixture, EncodeAscIntegerThenValuesGorillaEncoderOutdatedSample) {

@@ -159,9 +159,9 @@ TEST_F(SerializerDeserializerFixture, AllChunkTypes) {
   encoder_.encode(3, 106, 3.0);
 
   encoder_.encode(4, 107, 1.1);
-  encoder_.encode(10, 107, 1.1);
+  encoder_.encode(20, 107, 1.1);
   encoder_.encode(4, 108, 2.1);
-  encoder_.encode(10, 108, 2.1);
+  encoder_.encode(20, 108, 2.1);
   encoder_.encode(4, 109, 3.1);
 
   encoder_.encode(5, 110, 1.1);
@@ -195,7 +195,7 @@ TEST_F(SerializerDeserializerFixture, AllChunkTypes) {
   ASSERT_EQ(EncodingType::kFloat32Constant, deserializer.get_chunks()[7].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kAscIntegerThenValuesGorilla, deserializer.get_chunks()[8].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kTwoDoubleConstant, deserializer.get_chunks()[9].encoding_state.encoding_type);
-  ASSERT_EQ(10U, deserializer.get_chunks()[9].label_set_id);
+  ASSERT_EQ(20U, deserializer.get_chunks()[9].label_set_id);
 
   EXPECT_TRUE(std::ranges::equal(
       SampleList{
@@ -279,9 +279,9 @@ TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypes) {
   ChunkFinalizer::finalize(storage_, 3, storage_.open_chunks[3]);
 
   encoder_.encode(4, 107, 1.1);
-  encoder_.encode(10, 107, 1.1);
+  encoder_.encode(20, 107, 1.1);
   encoder_.encode(4, 108, 2.1);
-  encoder_.encode(10, 108, 2.1);
+  encoder_.encode(20, 108, 2.1);
   encoder_.encode(4, 109, 3.1);
   ChunkFinalizer::finalize(storage_, 4, storage_.open_chunks[4]);
   ChunkFinalizer::finalize(storage_, 10, storage_.open_chunks[10]);
@@ -321,7 +321,7 @@ TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypes) {
   ASSERT_EQ(EncodingType::kFloat32Constant, deserializer.get_chunks()[7].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kAscIntegerThenValuesGorilla, deserializer.get_chunks()[8].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kTwoDoubleConstant, deserializer.get_chunks()[9].encoding_state.encoding_type);
-  ASSERT_EQ(10U, deserializer.get_chunks()[9].label_set_id);
+  ASSERT_EQ(20U, deserializer.get_chunks()[9].label_set_id);
 
   EXPECT_TRUE(std::ranges::equal(
       SampleList{
@@ -450,12 +450,12 @@ TEST_F(SerializerDeserializerFixture, AllChunkTypesWithStalenan) {
   encoder_.encode(3, 110, STALE_NAN);
 
   encoder_.encode(4, 111, 1.1);
-  encoder_.encode(10, 111, 1.1);
+  encoder_.encode(20, 111, 1.1);
   encoder_.encode(4, 112, 2.1);
-  encoder_.encode(10, 112, 2.1);
+  encoder_.encode(20, 112, 2.1);
   encoder_.encode(4, 113, 3.1);
   encoder_.encode(4, 114, STALE_NAN);
-  encoder_.encode(10, 113, STALE_NAN);
+  encoder_.encode(20, 113, STALE_NAN);
 
   encoder_.encode(5, 115, 1.1);
   encoder_.encode(5, 116, 2.1);
@@ -493,7 +493,7 @@ TEST_F(SerializerDeserializerFixture, AllChunkTypesWithStalenan) {
   ASSERT_EQ(EncodingType::kFloat32Constant, deserializer.get_chunks()[7].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kAscIntegerThenValuesGorilla, deserializer.get_chunks()[8].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kTwoDoubleConstant, deserializer.get_chunks()[9].encoding_state.encoding_type);
-  ASSERT_EQ(10U, deserializer.get_chunks()[9].label_set_id);
+  ASSERT_EQ(20U, deserializer.get_chunks()[9].label_set_id);
 
   EXPECT_TRUE(std::ranges::equal(
       SampleList{
@@ -591,12 +591,12 @@ TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypesWithStalenan) {
   ChunkFinalizer::finalize(storage_, 3, storage_.open_chunks[3]);
 
   encoder_.encode(4, 111, 1.1);
-  encoder_.encode(10, 111, 1.1);
+  encoder_.encode(20, 111, 1.1);
   encoder_.encode(4, 112, 2.1);
-  encoder_.encode(10, 112, 2.1);
+  encoder_.encode(20, 112, 2.1);
   encoder_.encode(4, 113, 3.1);
   encoder_.encode(4, 114, STALE_NAN);
-  encoder_.encode(10, 113, STALE_NAN);
+  encoder_.encode(20, 113, STALE_NAN);
   ChunkFinalizer::finalize(storage_, 4, storage_.open_chunks[4]);
   ChunkFinalizer::finalize(storage_, 10, storage_.open_chunks[10]);
 
@@ -640,7 +640,7 @@ TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypesWithStalenan) {
   ASSERT_EQ(EncodingType::kFloat32Constant, deserializer.get_chunks()[7].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kAscIntegerThenValuesGorilla, deserializer.get_chunks()[8].encoding_state.encoding_type);
   ASSERT_EQ(EncodingType::kTwoDoubleConstant, deserializer.get_chunks()[9].encoding_state.encoding_type);
-  ASSERT_EQ(10U, deserializer.get_chunks()[9].label_set_id);
+  ASSERT_EQ(20U, deserializer.get_chunks()[9].label_set_id);
 
   EXPECT_TRUE(std::ranges::equal(
       SampleList{
