@@ -3,7 +3,8 @@
 #include "chunk/outdated_chunk.h"
 #include "common.h"
 #include "data_storage.h"
-#include "decoder/asc_integer_values_gorilla.h"
+#include "decoder/asc_integer.h"
+#include "decoder/asc_integer_then_values_gorilla.h"
 #include "decoder/constant.h"
 #include "decoder/gorilla.h"
 #include "decoder/two_double_constant.h"
@@ -90,10 +91,14 @@ class Decoder {
       return decoder::TwoDoubleConstantDecodeIterator(storage.get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
                                                       storage.variant_encoders[chunk.encoder.external_index].two_double_constant,
                                                       chunk.encoding_state.has_last_stalenan);
-    } else if constexpr (encoding_type == kAscIntegerValuesGorilla) {
-      return decoder::AscIntegerValuesGorillaDecodeIterator(storage.get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
-                                                            storage.get_asc_integer_values_gorilla_stream<chunk_type>(chunk.encoder.external_index).reader(),
-                                                            chunk.encoding_state.has_last_stalenan);
+    } else if constexpr (encoding_type == kAscInteger) {
+      return decoder::AscIntegerDecodeIterator(storage.get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
+                                               storage.get_asc_integer_stream<chunk_type>(chunk.encoder.external_index).reader(),
+                                               chunk.encoding_state.has_last_stalenan);
+    } else if constexpr (encoding_type == kAscIntegerThenValuesGorilla) {
+      return decoder::AscIntegerThenValuesGorillaDecodeIterator(
+          storage.get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
+          storage.get_asc_integer_then_values_gorilla_stream<chunk_type>(chunk.encoder.external_index).reader(), chunk.encoding_state.has_last_stalenan);
     } else if constexpr (encoding_type == kValuesGorilla) {
       return decoder::ValuesGorillaDecodeIterator(storage.get_timestamp_stream<chunk_type>(chunk.timestamp_encoder_state_id),
                                                   storage.get_values_gorilla_stream<chunk_type>(chunk.encoder.external_index).reader(),
@@ -132,8 +137,13 @@ class Decoder {
         break;
       }
 
-      case kAscIntegerValuesGorilla: {
-        std::forward<Callback>(callback)(create_decode_iterator<kAscIntegerValuesGorilla, chunk_type>(storage, chunk), DecodeIteratorSentinel{});
+      case kAscInteger: {
+        std::forward<Callback>(callback)(create_decode_iterator<kAscInteger, chunk_type>(storage, chunk), DecodeIteratorSentinel{});
+        break;
+      }
+
+      case kAscIntegerThenValuesGorilla: {
+        std::forward<Callback>(callback)(create_decode_iterator<kAscIntegerThenValuesGorilla, chunk_type>(storage, chunk), DecodeIteratorSentinel{});
         break;
       }
 
@@ -239,8 +249,12 @@ class Decoder {
         return storage.variant_encoders[chunk.encoder.external_index].two_double_constant.last_value(chunk.encoding_state);
       }
 
-      case kAscIntegerValuesGorilla: {
-        return storage.variant_encoders[chunk.encoder.external_index].asc_integer_values_gorilla.last_value(chunk.encoding_state);
+      case kAscInteger: {
+        return storage.variant_encoders[chunk.encoder.external_index].asc_integer.last_value(chunk.encoding_state);
+      }
+
+      case kAscIntegerThenValuesGorilla: {
+        return storage.variant_encoders[chunk.encoder.external_index].asc_integer_then_values_gorilla.last_value(chunk.encoding_state);
       }
 
       case kValuesGorilla: {

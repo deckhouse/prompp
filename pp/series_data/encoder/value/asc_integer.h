@@ -1,20 +1,21 @@
 #pragma once
 
-#include "bare_bones/gorilla.h"
 #include "constant_value.h"
 #include "series_data/common.h"
 #include "series_data/encoder/bit_sequence.h"
 #include "series_data/encoder/numeric.h"
+#include "series_data/encoder/zig_zag_timestamp_gorilla.h"
 
 namespace series_data::encoder::value {
 
-static constexpr BareBones::Encoding::Gorilla::DodSignificantLengths kAscIntegerDodSignificantLengths = {.first = 4, .second = 12, .third = 21};
-
-class PROMPP_ATTRIBUTE_PACKED AscIntegerValuesGorillaEncoder {
+class PROMPP_ATTRIBUTE_PACKED AscIntegerEncoder {
  public:
-  PROMPP_ALWAYS_INLINE explicit AscIntegerValuesGorillaEncoder(double value) { encoder_.encode(static_cast<int64_t>(value), stream_); }
+  using EncoderDeltaType = int32_t;
+  using Encoder = ZigZagTimestampEncoder<EncoderDeltaType>;
 
-  PROMPP_ALWAYS_INLINE AscIntegerValuesGorillaEncoder(const ConstantValue& v1, const ConstantValue& v2, const ConstantValue& v3) {
+  PROMPP_ALWAYS_INLINE explicit AscIntegerEncoder(double value) { encoder_.encode(static_cast<int64_t>(value), stream_); }
+
+  PROMPP_ALWAYS_INLINE AscIntegerEncoder(const ConstantValue& v1, const ConstantValue& v2, const ConstantValue& v3) {
     encoder_.encode(static_cast<int64_t>(v1.value), stream_);
 
     encode_multiple(v1, v2, v3);
@@ -41,7 +42,7 @@ class PROMPP_ATTRIBUTE_PACKED AscIntegerValuesGorillaEncoder {
     return encode(value);
   }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const AscIntegerValuesGorillaEncoder& other) const noexcept { return stream_ == other.stream_; }
+  PROMPP_ALWAYS_INLINE bool operator==(const AscIntegerEncoder& other) const noexcept { return stream_ == other.stream_; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return stream_.allocated_memory(); }
 
@@ -57,6 +58,7 @@ class PROMPP_ATTRIBUTE_PACKED AscIntegerValuesGorillaEncoder {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactBitSequence& stream() const noexcept { return stream_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence release_stream() && noexcept { return std::move(stream_); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence finalize_stream() noexcept {
     auto stream = std::move(stream_);
     stream.shrink_to_fit();
@@ -64,11 +66,6 @@ class PROMPP_ATTRIBUTE_PACKED AscIntegerValuesGorillaEncoder {
   }
 
  private:
-  using EncoderDeltaType = int32_t;
-  using Encoder = BareBones::Encoding::Gorilla::ZigZagTimestampEncoder<BareBones::Encoding::Gorilla::TimestampEncoderState<EncoderDeltaType>,
-                                                                       kAscIntegerDodSignificantLengths>;
-  using ValueType = BareBones::Encoding::Gorilla::ValueType;
-
   Encoder encoder_;
   CompactBitSequence stream_;
 
@@ -111,4 +108,4 @@ class PROMPP_ATTRIBUTE_PACKED AscIntegerValuesGorillaEncoder {
 }  // namespace series_data::encoder::value
 
 template <>
-struct BareBones::IsTriviallyReallocatable<series_data::encoder::value::AscIntegerValuesGorillaEncoder> : std::true_type {};
+struct BareBones::IsTriviallyReallocatable<series_data::encoder::value::AscIntegerEncoder> : std::true_type {};
