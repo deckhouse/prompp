@@ -6,6 +6,11 @@ namespace series_data::encoder {
 
 constexpr BareBones::Encoding::Gorilla::DodSignificantLengths kDodSignificantLengths = {.first = 4, .second = 12, .third = 21};
 
+constexpr uint32_t kStaleNanMark = 0b011111;
+constexpr uint32_t kStaleNanMarkBits = std::popcount(kStaleNanMark) + 1;
+constexpr uint32_t kSwitchToValuesGorillaMark = 0b111111;
+constexpr uint32_t kSwitchToValuesGorillaMarkBits = std::popcount(kSwitchToValuesGorillaMark);
+
 enum class ValueType : uint8_t {
   kStaleNan = 0,
   kValue,
@@ -19,7 +24,7 @@ class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampEncoder
   template <class BitSequence>
   PROMPP_ALWAYS_INLINE void encode_delta_of_delta_with_stale_nan(double timestamp, BitSequence& stream) {
     if (BareBones::Encoding::Gorilla::isstalenan(timestamp)) [[unlikely]] {
-      stream.push_back_bits_u32(6, 0b011111);
+      stream.push_back_bits_u32(kStaleNanMarkBits, kStaleNanMark);
     } else {
       const auto ts = static_cast<int64_t>(timestamp);
       const auto ts_delta = ts - this->state.last_ts;
@@ -55,7 +60,7 @@ class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampEncoder
 
   template <class BitSequence>
   PROMPP_ALWAYS_INLINE static void write_switch_to_values_gorilla_mark(BitSequence& stream) {
-    stream.push_back_bits_u32(6, 0b111111);
+    stream.push_back_bits_u32(kSwitchToValuesGorillaMarkBits, kSwitchToValuesGorillaMark);
   }
 };
 
@@ -79,11 +84,11 @@ class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampDecoder : public BareBones::Encodin
       } else if ((buf & 0b10000) == 0) {
         reader.ff(5);
         dod_zigzag = reader.consume_u64_svbyte_2468();
-      } else if ((buf & 0b100000) == 0) {
-        reader.ff(6);
+      } else if ((buf & (kStaleNanMark + 1)) == 0) {
+        reader.ff(kStaleNanMarkBits);
         return ValueType::kStaleNan;
       } else {
-        reader.ff(6);
+        reader.ff(kSwitchToValuesGorillaMarkBits);
         return ValueType::kSwitchToValuesGorillaMark;
       }
 
