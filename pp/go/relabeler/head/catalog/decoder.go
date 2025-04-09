@@ -11,9 +11,11 @@ import (
 	"io"
 )
 
+// DecoderV1 decoder.
 type DecoderV1 struct {
 }
 
+// Decode is an Decoder interface implementation.
 func (DecoderV1) Decode(reader io.Reader, r *Record) (err error) {
 	var size uint64
 	if err = binary.Read(reader, binary.LittleEndian, &size); err != nil {
@@ -64,6 +66,7 @@ func (DecoderV1) Decode(reader io.Reader, r *Record) (err error) {
 	return nil
 }
 
+// DecoderV2 decoder.
 type DecoderV2 struct{}
 
 type readerWithCounter struct {
@@ -85,6 +88,7 @@ func newReaderWithCounter(reader io.Reader) *readerWithCounter {
 	return &readerWithCounter{reader: reader}
 }
 
+// Decode is an Decoder interface implementation.
 func (DecoderV2) Decode(reader io.Reader, r *Record) (err error) {
 	var size uint8
 	if err = binary.Read(reader, binary.LittleEndian, &size); err != nil {
@@ -154,16 +158,19 @@ func decodeOptionalValue[T any](reader io.Reader, byteOrder binary.ByteOrder, va
 	return nil
 }
 
+// DecoderV3 is the third decoder generat
 type DecoderV3 struct {
 	buffer *bytes.Buffer
 }
 
+// NewDecoderV3 is DecoderV3 constructor.
 func NewDecoderV3() *DecoderV3 {
 	return &DecoderV3{
 		buffer: bytes.NewBuffer(make([]byte, 0, RecordStructMaxSizeV3)),
 	}
 }
 
+// Decode is an Decoder interface implementation.
 func (d *DecoderV3) Decode(reader io.Reader, r *Record) (err error) {
 	d.buffer.Reset()
 	reader = io.TeeReader(reader, d.buffer)

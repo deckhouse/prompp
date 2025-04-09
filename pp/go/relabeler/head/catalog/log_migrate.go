@@ -3,6 +3,7 @@ package catalog
 import (
 	"errors"
 	"fmt"
+	"github.com/prometheus/prometheus/pp/go/util/optional"
 	"io"
 	"os"
 
@@ -10,12 +11,10 @@ import (
 )
 
 var (
+	// ErrUnsupportedVersion unsupported version error.
 	ErrUnsupportedVersion = errors.New("unsupported version")
-	ErrUnreadableLogFile  = errors.New("unreadable log file")
-)
-
-const (
-	headerSize = 8
+	// ErrUnreadableLogFile unreadable log file error.
+	ErrUnreadableLogFile = errors.New("unreadable log file")
 )
 
 func migrate(targetFilePath, sourceFilePath string, targetVersion uint64) (_ *FileHandler, _ Encoder, _ Decoder, _ error) {
@@ -140,18 +139,23 @@ func codecByVersion(version uint64) (e Encoder, d Decoder, err error) {
 	}
 }
 
+// Migration interface.
 type Migration interface {
 	Migrate(record *Record) *Record
 }
 
+// MigrationFunc is Migration interface function wrapper.
 type MigrationFunc func(record *Record) *Record
 
+// Migrate - Migration interface implementation.
 func (fn MigrationFunc) Migrate(record *Record) *Record {
 	return fn(record)
 }
 
+// MigrationV2 migrates record from v1 to v2 and vice versa.
 type MigrationV2 struct{}
 
+// Up migrates from v1 to v2.
 func (MigrationV2) Up(record *Record) *Record {
 	if record.status == StatusCorrupted {
 		record.corrupted = true
@@ -160,6 +164,7 @@ func (MigrationV2) Up(record *Record) *Record {
 	return record
 }
 
+// Down migrates from v2 to v1.
 func (MigrationV2) Down(record *Record) *Record {
 	if record.status == StatusRotated && record.corrupted {
 		record.status = StatusCorrupted
@@ -167,8 +172,10 @@ func (MigrationV2) Down(record *Record) *Record {
 	return record
 }
 
+// MigrationV3 migrates record from v2 to v3 and vice versa.
 type MigrationV3 struct{}
 
+// Up migrates from v2 to v3.
 func (MigrationV3) Up(record *Record) *Record {
 	record.numberOfSegments = 0
 	if !record.lastAppendedSegmentID.IsNil() {
@@ -177,21 +184,27 @@ func (MigrationV3) Up(record *Record) *Record {
 	return record
 }
 
+// Down migrates from v3 to v2.
 func (MigrationV3) Down(record *Record) *Record {
 	if record.numberOfSegments > 0 {
 		record.lastAppendedSegmentID.Set(record.numberOfSegments - 1)
+	} else {
+		record.lastAppendedSegmentID = optional.WithRawValue[uint32](nil)
 	}
 	return record
 }
 
+// ChainedMigration combines migrations to provide multiple migrations.
 type ChainedMigration struct {
 	migrations []Migration
 }
 
+// NewChainedMigration constructor.
 func NewChainedMigration(migrations ...Migration) *ChainedMigration {
 	return &ChainedMigration{migrations: migrations}
 }
 
+// Migrate is an Migration interface implementation.
 func (c *ChainedMigration) Migrate(record *Record) *Record {
 	for _, migration := range c.migrations {
 		record = migration.Migrate(record)

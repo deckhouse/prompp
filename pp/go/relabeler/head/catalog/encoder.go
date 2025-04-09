@@ -11,7 +11,7 @@ import (
 
 const (
 	RecordStructMaxSizeV2 = 50
-	RecordStructMaxSizeV3 = 100
+	RecordStructMaxSizeV3 = 69
 )
 
 type EncoderV1 struct {
@@ -210,7 +210,6 @@ func (e *EncoderV3) Encode(writer io.Writer, r *Record) (err error) {
 
 	var binaryCRC32 [4]byte
 	binary.LittleEndian.PutUint32(binaryCRC32[:], crc32Hasher.Sum32())
-
 	copy(e.buffer.Bytes()[1:5], binaryCRC32[:])
 
 	if _, err = e.buffer.WriteTo(writer); err != nil {
