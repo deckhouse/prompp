@@ -29,10 +29,6 @@ class QueryableEncodingBimap final
 
   template <class Iterator>
   PROMPP_ALWAYS_INLINE void sort_series_ids(Iterator begin, Iterator end) noexcept {
-    if (sorting_index_.empty()) [[unlikely]] {
-      sorting_index_.build();
-    }
-
     sorting_index_.sort(begin, end);
   }
 
@@ -128,9 +124,7 @@ class QueryableEncodingBimap final
       trie_index_.insert((*label).first, label.name_id(), (*label).second, label.value_id());
     }
 
-    if (!sorting_index_.empty()) {
-      sorting_index_.update(ls_id_set_iterator);
-    }
+    sorting_index_.update(ls_id_set_iterator);
   }
 
   PROMPP_ALWAYS_INLINE static bool is_valid_label(std::string_view value) noexcept { return !value.empty(); }
