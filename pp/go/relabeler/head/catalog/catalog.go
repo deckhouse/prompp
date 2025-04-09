@@ -13,8 +13,7 @@ import (
 )
 
 const (
-	logFileName    = "head.log"
-	MaxLogFileSize = 32 * 1024
+	DefaultMaxLogFileSize = 1 << 22
 )
 
 type Log interface {
@@ -35,19 +34,21 @@ func (DefaultIDGenerator) Generate() uuid.UUID {
 }
 
 type Catalog struct {
-	mtx         sync.Mutex
-	clock       clockwork.Clock
-	log         Log
-	idGenerator IDGenerator
-	records     map[string]*Record
+	mtx            sync.Mutex
+	clock          clockwork.Clock
+	log            Log
+	idGenerator    IDGenerator
+	records        map[string]*Record
+	maxLogFileSize int
 }
 
-func New(clock clockwork.Clock, log Log, idGenerator IDGenerator) (*Catalog, error) {
+func New(clock clockwork.Clock, log Log, idGenerator IDGenerator, maxLogFileSize int) (*Catalog, error) {
 	catalog := &Catalog{
-		clock:       clock,
-		log:         log,
-		idGenerator: idGenerator,
-		records:     make(map[string]*Record),
+		clock:          clock,
+		log:            log,
+		idGenerator:    idGenerator,
+		records:        make(map[string]*Record),
+		maxLogFileSize: maxLogFileSize,
 	}
 
 	if err := catalog.sync(); err != nil {
@@ -229,7 +230,7 @@ func (c *Catalog) sync() error {
 }
 
 func (c *Catalog) compactIfNeeded() error {
-	if c.log.Size() < MaxLogFileSize {
+	if c.log.Size() < c.maxLogFileSize {
 		return nil
 	}
 
