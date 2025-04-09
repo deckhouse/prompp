@@ -1,7 +1,6 @@
 package catalog
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -43,6 +42,8 @@ func migrate(targetFilePath, sourceFilePath string, targetVersion uint64) (_ *Fi
 		return nil, nil, nil, err
 	}
 
+	migration := getMigration(sourceVersion, targetVersion)
+
 	records := make([]*Record, 0, 10)
 	for {
 		record := Record{}
@@ -56,16 +57,13 @@ func migrate(targetFilePath, sourceFilePath string, targetVersion uint64) (_ *Fi
 		records = append(records, &record)
 	}
 
-	// we assume migration from v1 to v2 here
+	migratedRecords := make([]*Record, 0, len(records))
 	for _, record := range records {
-		if record.status == StatusCorrupted {
-			record.corrupted = true
-			record.status = StatusRotated
-		}
+		migratedRecords = append(migratedRecords, migration.Migrate(record))
 	}
 
 	swapFilePath := fmt.Sprintf("%s.swap", sourceFilePath)
-	targetFile, err := writeSwapAndSwitchAtFilePath(targetFilePath, swapFilePath, targetVersion, targetEncoder, records...)
+	targetFile, err := writeSwapAndSwitchAtFilePath(targetFilePath, swapFilePath, targetVersion, targetEncoder, migratedRecords...)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -74,12 +72,10 @@ func migrate(targetFilePath, sourceFilePath string, targetVersion uint64) (_ *Fi
 		logger.Errorf("failed to close file: %v", err)
 	}
 
-	targetFile.SetReadOffset(headerSize)
-
 	return targetFile, targetEncoder, targetDecoder, nil
 }
 
-func loadFile(filePath string) (_ *FileHandler, version uint64, _ Encoder, _ Decoder, err error) {
+func loadFile(filePath string) (_ *FileHandler, _ uint64, _ Encoder, _ Decoder, err error) {
 	fileInfo, err := os.Stat(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -97,7 +93,8 @@ func loadFile(filePath string) (_ *FileHandler, version uint64, _ Encoder, _ Dec
 		return nil, 0, nil, nil, err
 	}
 
-	if err = binary.Read(fh, binary.LittleEndian, &version); err != nil {
+	version, err := ReadLogFileVersion(fh)
+	if err != nil {
 		return nil, 0, nil, nil, errors.Join(fmt.Errorf("read log file version: %w", err), fh.Close())
 	}
 
@@ -120,11 +117,12 @@ func newFileHandlerByVersion(filePath string, version uint64) (fh *FileHandler, 
 		return nil, nil, nil, err
 	}
 
-	if err = binary.Write(fh, binary.LittleEndian, version); err != nil {
+	offset, err := WriteLogFileVersion(fh, version)
+	if err != nil {
 		return nil, nil, nil, errors.Join(err, fh.Close())
 	}
 
-	fh.SetReadOffset(headerSize)
+	fh.SetReadOffset(int64(offset))
 
 	return fh, e, d, nil
 }
@@ -135,7 +133,100 @@ func codecByVersion(version uint64) (e Encoder, d Decoder, err error) {
 		return EncoderV1{}, DecoderV1{}, nil
 	case LogFileVersionV2:
 		return NewEncoderV2(), DecoderV2{}, nil
+	case LogFileVersionV3:
+		return NewEncoderV3(), NewDecoderV3(), nil
 	default:
 		return nil, nil, ErrUnsupportedVersion
+	}
+}
+
+type Migration interface {
+	Migrate(record *Record) *Record
+}
+
+type MigrationFunc func(record *Record) *Record
+
+func (fn MigrationFunc) Migrate(record *Record) *Record {
+	return fn(record)
+}
+
+type MigrationV2 struct{}
+
+func (MigrationV2) Up(record *Record) *Record {
+	if record.status == StatusCorrupted {
+		record.corrupted = true
+		record.status = StatusRotated
+	}
+	return record
+}
+
+func (MigrationV2) Down(record *Record) *Record {
+	if record.status == StatusRotated && record.corrupted {
+		record.status = StatusCorrupted
+	}
+	return record
+}
+
+type MigrationV3 struct{}
+
+func (MigrationV3) Up(record *Record) *Record {
+	record.numberOfSegments = 0
+	if !record.lastAppendedSegmentID.IsNil() {
+		record.numberOfSegments = record.lastAppendedSegmentID.Value() + 1
+	}
+	return record
+}
+
+func (MigrationV3) Down(record *Record) *Record {
+	if record.numberOfSegments > 0 {
+		record.lastAppendedSegmentID.Set(record.numberOfSegments - 1)
+	}
+	return record
+}
+
+type ChainedMigration struct {
+	migrations []Migration
+}
+
+func NewChainedMigration(migrations ...Migration) *ChainedMigration {
+	return &ChainedMigration{migrations: migrations}
+}
+
+func (c *ChainedMigration) Migrate(record *Record) *Record {
+	for _, migration := range c.migrations {
+		record = migration.Migrate(record)
+	}
+	return record
+}
+
+func getMigration(from, to uint64) Migration {
+	up := true
+	if from > to {
+		up = false
+		from, to = to, from
+	}
+
+	var migrations []Migration
+	for i := from + 1; i <= to; i++ {
+		migrations = append(migrations, migrationByVersion(i, up))
+	}
+
+	return NewChainedMigration(migrations...)
+}
+
+func migrationByVersion(version uint64, up bool) Migration {
+	switch version {
+	case LogFileVersionV2:
+		if up {
+			return MigrationFunc(MigrationV2{}.Up)
+		}
+		return MigrationFunc(MigrationV2{}.Down)
+	case LogFileVersionV3:
+		if up {
+			return MigrationFunc(MigrationV3{}.Up)
+		}
+		return MigrationFunc(MigrationV3{}.Down)
+	default:
+		panic(fmt.Sprintf("invalid version: %d", version))
 	}
 }
