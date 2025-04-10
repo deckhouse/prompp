@@ -483,7 +483,8 @@ class PerShardRelabeler {
               auto ls_id = target_lss.find_or_emplace(timeseries_buf_.label_set(), item.hash());
               cache.add_keep(ls_id);
               auto& samples = timeseries_buf_.samples();
-              if (o.track_timestamps_staleness || resolve_timestamps(def_timestamp, samples, o)) {
+              bool all_samples_reseted_to_scrape_ts = resolve_timestamps(def_timestamp, samples, o);
+              if (o.track_timestamps_staleness || all_samples_reseted_to_scrape_ts) {
                 stale_nan_state.add_target(ls_id);
               }
               for (const PromPP::Primitives::Sample& sample : samples) {
@@ -497,7 +498,8 @@ class PerShardRelabeler {
               size_t new_hash = hash_value(new_label_set);
               size_t new_shard_id = new_hash % number_of_shards_;
               auto& samples = timeseries_buf_.samples();
-              if (o.track_timestamps_staleness || resolve_timestamps(def_timestamp, samples, o)) {
+              bool all_samples_reseted_to_scrape_ts = resolve_timestamps(def_timestamp, samples, o);
+              if (o.track_timestamps_staleness || all_samples_reseted_to_scrape_ts) {
                 stale_nan_state.add_input(ls_id);
               }
               shards_relabeled_series[new_shard_id]->emplace_back(new_label_set, samples, new_hash, ls_id);
@@ -507,7 +509,8 @@ class PerShardRelabeler {
         } break;
         case Cache::CheckResult::kKeep: {
           auto& samples = timeseries_buf_.samples();
-          if (o.track_timestamps_staleness || resolve_timestamps(def_timestamp, samples, o)) {
+          bool all_samples_reseted_to_scrape_ts = resolve_timestamps(def_timestamp, samples, o);
+          if (o.track_timestamps_staleness || all_samples_reseted_to_scrape_ts) {
             stale_nan_state.add_target(check_result.ls_id);
           }
           for (const PromPP::Primitives::Sample& sample : samples) {
@@ -516,7 +519,8 @@ class PerShardRelabeler {
         } break;
         case Cache::CheckResult::kRelabel: {
           auto& samples = timeseries_buf_.samples();
-          if (o.track_timestamps_staleness || resolve_timestamps(def_timestamp, samples, o)) {
+          bool all_samples_reseted_to_scrape_ts = resolve_timestamps(def_timestamp, samples, o);
+          if (o.track_timestamps_staleness || all_samples_reseted_to_scrape_ts) {
             stale_nan_state.add_input(check_result.source_ls_id);
           }
           for (const PromPP::Primitives::Sample& sample : samples) {

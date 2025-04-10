@@ -62,6 +62,8 @@ type Head interface {
 	CommitToWal() error
 	ForEachShard(fn ShardFn) error
 	OnShard(shardID uint16, fn ShardFn) error
+	// MergeOutOfOrderChunks merge chunks with out of order data chunks.
+	MergeOutOfOrderChunks()
 	NumberOfShards() uint16
 	Stop()
 	Flush() error

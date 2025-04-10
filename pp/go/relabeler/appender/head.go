@@ -2,6 +2,7 @@ package appender
 
 import (
 	"context"
+
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -77,6 +78,11 @@ func (h *RotatableHead) OnShard(shardID uint16, fn relabeler.ShardFn) error {
 	return h.head.OnShard(shardID, fn)
 }
 
+// MergeOutOfOrderChunks merge chunks with out of order data chunks.
+func (h *RotatableHead) MergeOutOfOrderChunks() {
+	h.head.MergeOutOfOrderChunks()
+}
+
 // NumberOfShards - relabeler.Head interface implementation.
 func (h *RotatableHead) NumberOfShards() uint16 {
 	return h.head.NumberOfShards()
@@ -136,6 +142,7 @@ func (h *RotatableHead) Rotate() error {
 		return err
 	}
 
+	h.head.MergeOutOfOrderChunks()
 	if err = h.head.CommitToWal(); err != nil {
 		logger.Errorf("failed to commit wal on rotation: %v", err)
 	}
@@ -156,6 +163,7 @@ func (h *RotatableHead) RotateWithConfig(inputRelabelerConfigs []*config.InputRe
 		return err
 	}
 
+	h.head.MergeOutOfOrderChunks()
 	if err = h.head.CommitToWal(); err != nil {
 		logger.Errorf("failed to commit wal on rotation: %v", err)
 	}
@@ -212,6 +220,11 @@ func (h *HeapProfileWritableHead) ForEachShard(fn relabeler.ShardFn) error {
 
 func (h *HeapProfileWritableHead) OnShard(shardID uint16, fn relabeler.ShardFn) error {
 	return h.head.OnShard(shardID, fn)
+}
+
+// MergeOutOfOrderChunks merge chunks with out of order data chunks.
+func (h *HeapProfileWritableHead) MergeOutOfOrderChunks() {
+	h.head.MergeOutOfOrderChunks()
 }
 
 func (h *HeapProfileWritableHead) NumberOfShards() uint16 {
