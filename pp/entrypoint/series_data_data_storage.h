@@ -68,9 +68,10 @@ void prompp_series_data_data_storage_query(void* args, void* res);
  * @brief return samples at given timestamp for label sets.
  *
  * @param args {
- *     dataStorage uintptr // pointer to constructed data storage
- *     timestamp uint64 // timestamp
  *     seriesIDs []uint32 // series ids
+ *     dataStorage uintptr // pointer to constructed data storage
+ *     timestamp int64 // timestamp
+ *     timestamp_default int64 // default timestamp for invalid sample
  * }
  *
  * @param res {
@@ -136,5 +137,5 @@ void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, void* res);
 void prompp_series_data_chunk_recoder_dtor(void* args);
 
 #ifdef __cplusplus
-}  // extern "C"
+} // extern "C"
 #endif

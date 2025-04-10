@@ -14,18 +14,18 @@ class InstantQuerier {
   using ChunkType = chunk::DataChunk::Type;
 
  public:
-  static Sample query_sample(const DataStorage& storage, Timestamp timestamp, LabelSetID ls_id) noexcept {
-    Sample sample{timestamp, BareBones::Encoding::Gorilla::STALE_NAN};
+  static Sample query_sample(const DataStorage& storage, LabelSetID ls_id, Timestamp timestamp, Timestamp timestamp_default) noexcept {
+    Sample sample{timestamp_default, BareBones::Encoding::Gorilla::STALE_NAN};
 
-    bool const is_found = check_in_open_chunk(sample, storage, timestamp, ls_id);
+    bool const is_found = check_in_open_chunk(sample, storage, ls_id, timestamp);
     if (!is_found) {
-      check_in_finalized_chunks(sample, storage, timestamp, ls_id);
+      check_in_finalized_chunks(sample, storage, ls_id, timestamp);
     }
     return sample;
   }
 
  private:
-  static bool check_in_open_chunk(Sample& sample, const DataStorage& storage, Timestamp timestamp, LabelSetID ls_id) noexcept {
+  static bool check_in_open_chunk(Sample& sample, const DataStorage& storage, LabelSetID ls_id, Timestamp timestamp) noexcept {
     if (storage.open_chunks.size() > ls_id) {
       if (auto& open_chunk = storage.open_chunks[ls_id]; !open_chunk.is_empty()) {
         if (const auto chunk_last_timestamp_ms = Decoder::get_open_chunk_last_timestamp(storage, open_chunk); chunk_last_timestamp_ms <= timestamp) {
@@ -47,7 +47,7 @@ class InstantQuerier {
     return false;
   }
 
-  static bool check_in_finalized_chunks(Sample& sample, const DataStorage& storage, Timestamp timestamp, LabelSetID ls_id) noexcept {
+  static bool check_in_finalized_chunks(Sample& sample, const DataStorage& storage, LabelSetID ls_id, Timestamp timestamp) noexcept {
     if (const auto it = storage.finalized_chunks.find(ls_id); it != storage.finalized_chunks.end()) {
       auto& finalized_chunks = it->second;
       for (auto chunk_it = finalized_chunks.begin(); chunk_it != finalized_chunks.end(); ++chunk_it) {

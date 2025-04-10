@@ -79,3 +79,31 @@ func (s *HeadSuite) TestTimeInterval() {
 	// Assert
 	s.Equal(cppbridge.TimeInterval{MinT: 1, MaxT: 3}, time_interval)
 }
+
+func (s *HeadSuite) TestInstantQuery() {
+	// Arrange
+	dataStorage := cppbridge.NewHeadDataStorage()
+	encoder := cppbridge.NewHeadEncoderWithDataStorage(dataStorage)
+	encoder.Encode(0, 7, 1.0)
+	encoder.Encode(0, 10, 1.0)
+
+	encoder.Encode(1, 2, 1.0)
+	encoder.Encode(1, 11, 1.0)
+
+	encoder.Encode(2, 1, 2.0)
+	encoder.Encode(2, 4, 2.0)
+
+	// Act
+	seriesIDs := []uint32{0, 1, 2}
+	timestamp := int64(5)
+	timestampDefault := int64(-1)
+	samples := dataStorage.InstantQuery(seriesIDs, timestamp, timestampDefault)
+
+	// Assert
+	s.Len(samples, 3)
+
+	s.EqualValues(-1, samples[0].Timestamp)
+	s.True(cppbridge.IsStaleNaN(samples[0].Value))
+	s.Equal(cppbridge.Sample{Timestamp: 2, Value: 1.0}, samples[1])
+	s.Equal(cppbridge.Sample{Timestamp: 4, Value: 2.0}, samples[2])
+}

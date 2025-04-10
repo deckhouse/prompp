@@ -1478,24 +1478,22 @@ func seriesDataDataStorageQuery(dataStorage uintptr, query HeadDataStorageQuery)
 	return res.serializedChunks
 }
 
-func seriesDataDataStorageInstantQuery(dataStorage uintptr, timestamp int64, seriesIDs []uint32) []struct {
-    args := struct {
-        seriesIDs []uint32
-        dataStorage uintptr
-        timestamp uint64
-    }{seriesIDs, dataStorage, timestamp}
-    res := make([]struct {
-        timestamp int64
-        value float64
-    }, len(seriesIDs))
+func seriesDataDataStorageInstantQuery(dataStorage uintptr, seriesIDs []uint32, timestamp int64, timestampDefault int64) []Sample {
+	args := struct {
+		seriesIDs        []uint32
+		dataStorage      uintptr
+		timestamp        int64
+		timestampDefault int64
+	}{seriesIDs, dataStorage, timestamp, timestampDefault}
+	res := make([]Sample, len(seriesIDs))
 
-    fastcgo.UnsafeCall2(
-        C.prompp_series_data_data_storage_instant_query,
-        uintptr(unsafe.Pointer(&args)),
-        uintptr(unsafe.Pointer(&res)),
-    )
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_data_storage_instant_query,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
 
-    return res
+	return res
 }
 
 func seriesDataDataStorageTimeInterval(dataStorage uintptr) TimeInterval {

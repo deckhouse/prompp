@@ -7,6 +7,16 @@ import (
 )
 
 const (
+	NormalNaN uint64 = 0x7ff8000000000001
+
+	StaleNaN uint64 = 0x7ff0000000000002
+)
+
+func IsStaleNaN(v float64) bool {
+	return math.Float64bits(v) == StaleNaN
+}
+
+const (
 	MaxPointsInChunk            = 240
 	Uint32Size                  = 4
 	SerializedChunkMetadataSize = 13
@@ -15,6 +25,11 @@ const (
 type TimeInterval struct {
 	MinT int64
 	MaxT int64
+}
+
+type Sample struct {
+	Timestamp int64
+	Value     float64
 }
 
 // HeadDataStorage is Go wrapper around series_data::Data_storage.
@@ -198,6 +213,11 @@ func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) *HeadDataStorageSer
 		freeBytes(sc.data)
 	})
 	return serializedChunks
+}
+
+func (ds *HeadDataStorage) InstantQuery(seriesIDs []uint32, timestamp int64, timestampDefault int64) []Sample {
+	samples := seriesDataDataStorageInstantQuery(ds.dataStorage, seriesIDs, timestamp, timestampDefault)
+	return samples
 }
 
 type HeadDataStorageDeserializer struct {

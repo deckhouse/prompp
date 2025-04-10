@@ -86,10 +86,10 @@ TEST_F(InstantQuerierFixture, InstantQueryEmptyChunk) {
   encoder_.encode(0, 1, 1.0);
 
   // Act
-  auto result = series_data::InstantQuerier::query_sample(storage_, 100, 1);
+  auto result = series_data::InstantQuerier::query_sample(storage_, 1, 100, -1);
 
   // Assert
-  EXPECT_EQ((Sample{100, STALE_NAN}), result);
+  EXPECT_EQ((Sample{-1, STALE_NAN}), result);
 }
 
 TEST_F(InstantQuerierFixture, InstantQueryOpenChunk) {
@@ -97,7 +97,7 @@ TEST_F(InstantQuerierFixture, InstantQueryOpenChunk) {
   encoder_.encode(0, 1, 1.0);
 
   // Act
-  auto result = series_data::InstantQuerier::query_sample(storage_, 1, 0);
+  auto result = series_data::InstantQuerier::query_sample(storage_, 0, 1, -1);
 
   // Assert
   EXPECT_EQ((Sample{1, 1.0}), result);
@@ -110,7 +110,7 @@ TEST_F(InstantQuerierFixture, InstantQueryFinalizedChunk) {
   encoder_.encode(0, 2, 1.0);
 
   // Act
-  auto result = series_data::InstantQuerier::query_sample(storage_, 1, 0);
+  auto result = series_data::InstantQuerier::query_sample(storage_, 0, 1, -1);
 
   // Assert
   EXPECT_EQ((Sample{1, 1.0}), result);
@@ -121,7 +121,7 @@ TEST_P(InstantQuerierFixture, InstantQueryFilledChunks) {
   fill_all();
 
   // Act
-  auto result = series_data::InstantQuerier::query_sample(storage_, GetParam().request.timestamp, GetParam().request.ls_id);
+  auto result = series_data::InstantQuerier::query_sample(storage_, GetParam().request.ls_id, GetParam().request.timestamp, -1);
 
   // Assert
   EXPECT_EQ(GetParam().expected_sample, result);
@@ -177,15 +177,15 @@ INSTANTIATE_TEST_SUITE_P(
     PickBeforeAnyChunk,
     InstantQuerierFixture,
     testing::Values(
-        InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 10, .ls_id = 0}, .expected_sample = Sample{.timestamp = 10, .value = STALE_NAN}},
-        InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 11, .ls_id = 1}, .expected_sample = Sample{.timestamp = 11, .value = STALE_NAN}},
-        InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 12, .ls_id = 2}, .expected_sample = Sample{.timestamp = 12, .value = STALE_NAN}},
-        InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 13, .ls_id = 3}, .expected_sample = Sample{.timestamp = 13, .value = STALE_NAN}},
-        InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 14, .ls_id = 4}, .expected_sample = Sample{.timestamp = 14, .value = STALE_NAN}},
-        InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 15, .ls_id = 5}, .expected_sample = Sample{.timestamp = 15, .value = STALE_NAN}},
-        InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 16, .ls_id = 6}, .expected_sample = Sample{.timestamp = 16, .value = STALE_NAN}},
-        InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 17, .ls_id = 7}, .expected_sample = Sample{.timestamp = 17, .value = STALE_NAN}},
-        InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 18, .ls_id = 10}, .expected_sample = Sample{.timestamp = 18, .value = STALE_NAN}}));
+        InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 10, .ls_id = 0}, .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN}},
+        InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 11, .ls_id = 1}, .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN}},
+        InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 12, .ls_id = 2}, .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN}},
+        InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 13, .ls_id = 3}, .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN}},
+        InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 14, .ls_id = 4}, .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN}},
+        InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 15, .ls_id = 5}, .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN}},
+        InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 16, .ls_id = 6}, .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN}},
+        InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 17, .ls_id = 7}, .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN}},
+        InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 18, .ls_id = 10}, .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN}}));
 
 class InstantQuerierOneChunkFixture : public InstantQuerierFixture {
  protected:
@@ -224,7 +224,7 @@ TEST_P(InstantQuerierOneChunkFixture, InstantQueryFilledOneChunk) {
   fill_one_chunk();
 
   // Act
-  auto result = series_data::InstantQuerier::query_sample(storage_, GetParam().request.timestamp, GetParam().request.ls_id);
+  auto result = series_data::InstantQuerier::query_sample(storage_, GetParam().request.ls_id, GetParam().request.timestamp, -1);
 
   // Assert
   EXPECT_EQ(GetParam().expected_sample, result);
@@ -238,7 +238,7 @@ INSTANTIATE_TEST_SUITE_P(PickAfterOpenChunk,
 INSTANTIATE_TEST_SUITE_P(PickBeforeAnyChunk,
                          InstantQuerierOneChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 13, .ls_id = 0},
-                                                            .expected_sample = Sample{.timestamp = 13, .value = STALE_NAN}}));
+                                                            .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN}}));
 
 INSTANTIATE_TEST_SUITE_P(
     PickInOpenChunk,
