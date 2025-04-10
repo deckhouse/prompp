@@ -84,6 +84,12 @@ class QueryableEncodingBimap final
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t queried_series_count(QueriedSeries::Source source) const noexcept { return queried_series_.count(source); }
 
+  PROMPP_ALWAYS_INLINE void reserve(uint32_t count) {
+    Base::items_.reserve(count);
+    ls_id_hash_set_.reserve(count);
+    queried_series_.reserve(count);
+  }
+
  private:
   using LabelSet = typename Base::value_type;
 
