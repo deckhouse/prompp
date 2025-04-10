@@ -29,10 +29,6 @@ func (s *LSSSuite) TestLSS() {
 	s.Equal(uint64(0), lss.AllocatedMemory())
 	cp := lss.Pointer()
 	s.Require().NotEqual(0, cp)
-
-	lss.Reset()
-	newcp := lss.Pointer()
-	s.Require().NotEqual(cp, newcp)
 }
 
 func (s *LSSSuite) TestOrderedLSS() {
@@ -41,10 +37,6 @@ func (s *LSSSuite) TestOrderedLSS() {
 	s.Equal(uint64(0), lss.AllocatedMemory())
 	cp := lss.Pointer()
 	s.Require().NotEqual(0, cp)
-
-	lss.Reset()
-	newcp := lss.Pointer()
-	s.Require().NotEqual(cp, newcp)
 }
 
 func (s *LSSSuite) TestQueryableLSS() {
@@ -53,10 +45,6 @@ func (s *LSSSuite) TestQueryableLSS() {
 	s.NotEqual(uint64(0), lss.AllocatedMemory())
 	cp := lss.Pointer()
 	s.Require().NotEqual(0, cp)
-
-	lss.Reset()
-	newcp := lss.Pointer()
-	s.Require().NotEqual(cp, newcp)
 }
 
 type QueryableLSSSuite struct {
@@ -97,10 +85,13 @@ func (s *QueryableLSSSuite) TestQuery() {
 		}
 		queryResult := s.lss.Query(labelMatchers, cppbridge.LSSQuerySourceOther)
 		s.Require().Equal(cppbridge.LSSQueryStatusMatch, queryResult.Status())
-		s.Require().Len(queryResult.Matches(), 3)
-		s.Require().Equal(s.labelSetIDs[1], queryResult.Matches()[0])
-		s.Require().Equal(s.labelSetIDs[0], queryResult.Matches()[1])
-		s.Require().Equal(s.labelSetIDs[2], queryResult.Matches()[2])
+		s.Require().Len(queryResult.IDs(), 3)
+		s.Require().Equal(s.labelSetIDs[1], queryResult.IDs()[0])
+		s.Require().Equal(s.labelSetIDs[0], queryResult.IDs()[1])
+		s.Require().Equal(s.labelSetIDs[2], queryResult.IDs()[2])
+		s.Require().Equal(uint16(2), queryResult.LabelSetLengths()[0])
+		s.Require().Equal(uint16(1), queryResult.LabelSetLengths()[1])
+		s.Require().Equal(uint16(2), queryResult.LabelSetLengths()[2])
 	}
 
 	// no positive matchers
