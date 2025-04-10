@@ -280,8 +280,9 @@ func (s OutputDecoderStats) DroppedSampleCount() uint64 {
 //
 //	decoder - pointer to a C++ decoder initiated in C++ memory;
 type WALOutputDecoder struct {
-	decoder uintptr
-	shardID uint16
+	externalLabels []Label
+	decoder        uintptr
+	shardID        uint16
 }
 
 // NewWALOutputDecoder init new WALOutputDecoder.
@@ -293,14 +294,17 @@ func NewWALOutputDecoder(
 	encodersVersion uint8,
 ) *WALOutputDecoder {
 	d := &WALOutputDecoder{
-		decoder: walOutputDecoderCtor(
-			externalLabels,
-			statelessRelabeler.Pointer(),
-			outputLss.Pointer(),
-			encodersVersion,
-		),
-		shardID: shardID,
+		externalLabels: externalLabels,
+		shardID:        shardID,
 	}
+
+	d.decoder = walOutputDecoderCtor(
+		d.externalLabels,
+		statelessRelabeler.Pointer(),
+		outputLss.Pointer(),
+		encodersVersion,
+	)
+
 	runtime.SetFinalizer(d, func(d *WALOutputDecoder) {
 		walOutputDecoderDtor(d.decoder)
 	})

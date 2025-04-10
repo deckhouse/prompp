@@ -16,71 +16,9 @@ namespace series_data {
 class Decoder {
  public:
   template <chunk::DataChunk::Type chunk_type, class Callback>
-  static void decode_chunk(const DataStorage& storage, const chunk::DataChunk& chunk, Callback&& callback) noexcept {
-    using enum EncodingType;
-    using decoder::DecodeIteratorSentinel;
-
-    switch (chunk.encoding_state.encoding_type) {
-      case kUint32Constant: {
-        std::ranges::all_of(create_decode_iterator<kUint32Constant, chunk_type>(storage, chunk), DecodeIteratorSentinel{}, std::forward<Callback>(callback));
-        break;
-      }
-
-      case kFloat32Constant: {
-        std::ranges::all_of(create_decode_iterator<kFloat32Constant, chunk_type>(storage, chunk), DecodeIteratorSentinel{}, std::forward<Callback>(callback));
-        break;
-      }
-
-      case kDoubleConstant: {
-        std::ranges::all_of(create_decode_iterator<kDoubleConstant, chunk_type>(storage, chunk), DecodeIteratorSentinel{}, std::forward<Callback>(callback));
-        break;
-      }
-
-      case kTwoDoubleConstant: {
-        std::ranges::all_of(create_decode_iterator<kTwoDoubleConstant, chunk_type>(storage, chunk), DecodeIteratorSentinel{}, std::forward<Callback>(callback));
-        break;
-      }
-
-      case kAscInteger: {
-        std::ranges::all_of(create_decode_iterator<kAscInteger, chunk_type>(storage, chunk), DecodeIteratorSentinel{}, std::forward<Callback>(callback));
-        break;
-      }
-
-      case kAscIntegerThenValuesGorilla: {
-        std::ranges::all_of(create_decode_iterator<kAscIntegerThenValuesGorilla, chunk_type>(storage, chunk), DecodeIteratorSentinel{},
-                            std::forward<Callback>(callback));
-        break;
-      }
-
-      case kValuesGorilla: {
-        std::ranges::all_of(create_decode_iterator<kValuesGorilla, chunk_type>(storage, chunk), DecodeIteratorSentinel{}, std::forward<Callback>(callback));
-        break;
-      }
-
-      case kGorilla: {
-        std::ranges::all_of(create_decode_iterator<kGorilla, chunk_type>(storage, chunk), DecodeIteratorSentinel{}, std::forward<Callback>(callback));
-        break;
-      }
-
-      default: {
-        assert(chunk.encoding_state.encoding_type != kUnknown);
-        break;
-      }
-    }
-  }
-
-  template <class Callback>
-  static void decode_chunk(const DataStorage& storage, const chunk::DataChunk& chunk, chunk::DataChunk::Type chunk_type, Callback&& callback) noexcept {
-    if (chunk_type == chunk::DataChunk::Type::kOpen) {
-      decode_chunk<chunk::DataChunk::Type::kOpen>(storage, chunk, std::forward<Callback>(callback));
-    } else {
-      decode_chunk<chunk::DataChunk::Type::kFinalized>(storage, chunk, std::forward<Callback>(callback));
-    }
-  }
-
-  template <class Callback>
-  PROMPP_ALWAYS_INLINE static void decode_chunk(const DataStorage::SeriesChunkIterator::Data& chunk_data, Callback&& callback) noexcept {
-    decode_chunk(*chunk_data.storage(), chunk_data.chunk(), chunk_data.chunk_type(), std::forward<Callback>(callback));
+  PROMPP_ALWAYS_INLINE static void decode_chunk(const DataStorage& storage, const chunk::DataChunk& chunk, Callback&& callback) noexcept {
+    create_decode_iterator<chunk_type>(storage, chunk,
+                                       [&callback](auto&& begin, auto&& end) { std::ranges::all_of(begin, end, std::forward<Callback>(callback)); });
   }
 
   static uint8_t get_samples_count(const DataStorage& storage, const chunk::DataChunk& chunk, chunk::DataChunk::Type chunk_type) noexcept {
@@ -117,11 +55,7 @@ class Decoder {
   static BareBones::Vector<encoder::SampleList> decode_chunks(const DataStorage& storage, const chunk::FinalizedChunkList& chunks) {
     BareBones::Vector<encoder::SampleList> result;
     for (auto& chunk : chunks) {
-      auto& samples = result.emplace_back();
-      decode_chunk<chunk::DataChunk::Type::kFinalized>(storage, chunk, [&samples](const encoder::Sample& sample) PROMPP_LAMBDA_INLINE {
-        samples.emplace_back(sample);
-        return true;
-      });
+      result.emplace_back(decode_chunk<chunk::DataChunk::Type::kFinalized>(storage, chunk));
     }
     return result;
   }
@@ -177,14 +111,77 @@ class Decoder {
     }
   }
 
+  template <chunk::DataChunk::Type chunk_type, class Callback>
+  static void create_decode_iterator(const DataStorage& storage, const chunk::DataChunk& chunk, Callback&& callback) noexcept {
+    using enum EncodingType;
+    using decoder::DecodeIteratorSentinel;
+
+    switch (chunk.encoding_state.encoding_type) {
+      case kUint32Constant: {
+        std::forward<Callback>(callback)(create_decode_iterator<kUint32Constant, chunk_type>(storage, chunk), DecodeIteratorSentinel{});
+        break;
+      }
+
+      case kFloat32Constant: {
+        std::forward<Callback>(callback)(create_decode_iterator<kFloat32Constant, chunk_type>(storage, chunk), DecodeIteratorSentinel{});
+        break;
+      }
+
+      case kDoubleConstant: {
+        std::forward<Callback>(callback)(create_decode_iterator<kDoubleConstant, chunk_type>(storage, chunk), DecodeIteratorSentinel{});
+        break;
+      }
+
+      case kTwoDoubleConstant: {
+        std::forward<Callback>(callback)(create_decode_iterator<kTwoDoubleConstant, chunk_type>(storage, chunk), DecodeIteratorSentinel{});
+        break;
+      }
+
+      case kAscInteger: {
+        std::forward<Callback>(callback)(create_decode_iterator<kAscInteger, chunk_type>(storage, chunk), DecodeIteratorSentinel{});
+        break;
+      }
+
+      case kAscIntegerThenValuesGorilla: {
+        std::forward<Callback>(callback)(create_decode_iterator<kAscIntegerThenValuesGorilla, chunk_type>(storage, chunk), DecodeIteratorSentinel{});
+        break;
+      }
+
+      case kValuesGorilla: {
+        std::forward<Callback>(callback)(create_decode_iterator<kValuesGorilla, chunk_type>(storage, chunk), DecodeIteratorSentinel{});
+        break;
+      }
+
+      case kGorilla: {
+        std::forward<Callback>(callback)(create_decode_iterator<kGorilla, chunk_type>(storage, chunk), DecodeIteratorSentinel{});
+        break;
+      }
+
+      default: {
+        assert(chunk.encoding_state.encoding_type != kUnknown);
+        break;
+      }
+    }
+  }
+
+  template <class Callback>
+  static void create_decode_iterator(const DataStorage::SeriesChunkIterator::Data& chunk_data, Callback&& callback) noexcept {
+    using enum chunk::DataChunk::Type;
+
+    if (chunk_data.chunk_type() == kOpen) {
+      create_decode_iterator<kOpen>(*chunk_data.storage(), chunk_data.chunk(), std::forward<Callback>(callback));
+    } else {
+      create_decode_iterator<kFinalized>(*chunk_data.storage(), chunk_data.chunk(), std::forward<Callback>(callback));
+    }
+  }
+
   [[nodiscard]] static PROMPP_ALWAYS_INLINE int64_t get_series_min_timestamp(const DataStorage& storage, uint32_t ls_id) noexcept {
     using enum chunk::DataChunk::Type;
 
     if (const auto it = storage.finalized_chunks.find(ls_id); it != storage.finalized_chunks.end()) {
       return get_chunk_first_timestamp<kFinalized>(storage, it->second.front());
-    } else {
-      return get_chunk_first_timestamp<kOpen>(storage, storage.open_chunks[ls_id]);
     }
+    return get_chunk_first_timestamp<kOpen>(storage, storage.open_chunks[ls_id]);
   }
 
   template <chunk::DataChunk::Type chunk_type>

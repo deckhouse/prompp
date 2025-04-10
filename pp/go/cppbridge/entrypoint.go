@@ -893,15 +893,24 @@ func primitivesLSSFindOrEmplace(lss uintptr, labelSet model.LabelSet) uint32 {
 	return res.labelSetID
 }
 
-func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource uint32) (uint32, []uint32) {
+func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource uint32) (
+	matches []uint32,
+	labelSetLengths []uint16,
+	lssMainPtr uintptr,
+	lssCopyPtr uintptr,
+	status uint32,
+) {
 	args := struct {
 		lss         uintptr
 		matchers    []model.LabelMatcher
 		querySource uint32
 	}{lss, matchers, querySource}
+
 	var res struct {
-		status  uint32
-		matches []uint32
+		matches         []uint32
+		labelSetLengths []uint16
+		lssCopy         uintptr
+		status          uint32
 	}
 
 	fastcgo.UnsafeCall2(
@@ -910,7 +919,14 @@ func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource 
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.status, res.matches
+	return res.matches, res.labelSetLengths, lss, res.lssCopy, res.status
+}
+
+func primitivesLabelSetMatchesFree(result *lssQueryResult) {
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_lss_query_result_free,
+		uintptr(unsafe.Pointer(result)),
+	)
 }
 
 func primitivesLSSGetLabelSets(lss uintptr, labelSetIDs []uint32) []Labels {
@@ -2241,6 +2257,61 @@ func headWalDecoderDtor(decoder uintptr) {
 
 	fastcgo.UnsafeCall1(
 		C.prompp_head_wal_decoder_dtor,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+//
+// label_sets
+//
+
+func primitivesLabelSetLength(lss uintptr, labelSetID uint32) uint64 {
+	args := struct {
+		lss        uintptr
+		labelSetID uint32
+	}{lss, labelSetID}
+	var res struct {
+		length uint64
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_label_set_length,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.length
+}
+
+func primitivesLabelSetSerialize(lss uintptr, labelSetID uint32) []Label {
+	args := struct {
+		lss        uintptr
+		labelSetID uint32
+	}{lss, labelSetID}
+	var res struct {
+		labelSet []Label
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_label_set_serialize,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.labelSet
+}
+
+func primitivesLabelSetFree(labelSet []Label) {
+	if labelSet == nil {
+		return
+	}
+
+	args := struct {
+		labelSet []Label
+	}{labelSet}
+
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_label_set_free,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
