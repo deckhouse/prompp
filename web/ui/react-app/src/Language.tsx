@@ -12,8 +12,6 @@ export const LanguageToggle: FC = () => {
     localStorage.setItem(LOCAL_STORAGE_LANGUAGE_KEY, value);
   }, [value]);
 
-  const language = localStorage.getItem(LOCAL_STORAGE_LANGUAGE_KEY) || DEFAULT_LANGUAGE;
-
   const changeLanguage = (language: string) => {
     void i18n.changeLanguage(language);
 
@@ -23,10 +21,10 @@ export const LanguageToggle: FC = () => {
   return (
     <Form className="ml-auto mr-3" inline>
       <ButtonGroup size="sm">
-        <Button color="secondary" active={language === 'en'} onClick={() => changeLanguage('en')}>
+        <Button color="secondary" active={value === 'en'} onClick={() => changeLanguage('en')}>
           EN
         </Button>
-        <Button color="secondary" active={language === 'ru'} onClick={() => changeLanguage('ru')}>
+        <Button color="secondary" active={value === 'ru'} onClick={() => changeLanguage('ru')}>
           RU
         </Button>
       </ButtonGroup>

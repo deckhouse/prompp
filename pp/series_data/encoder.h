@@ -10,15 +10,16 @@
 #include "concepts.h"
 #include "data_storage.h"
 #include "encoder/encoder_variant.h"
+#include "outdated_sample_encoder.h"
 #include "series_data/encoder/timestamp/encoder.h"
 #include "series_data/encoder/timestamp/state.h"
 
 namespace series_data {
 
-template <OutdatedSampleEncoderInterface OutdatedSampleEncoder, uint8_t kSamplesPerChunk = kSamplesPerChunkDefault>
+template <uint8_t kSamplesPerChunk = kSamplesPerChunkDefault>
 class Encoder {
  public:
-  Encoder(DataStorage& storage, OutdatedSampleEncoder& outdated_sample_encoder) : storage_(storage), outdated_sample_encoder_(outdated_sample_encoder) {}
+  Encoder(DataStorage& storage) : storage_(storage) {}
 
   DataStorage& storage() noexcept { return storage_; }
 
@@ -36,7 +37,6 @@ class Encoder {
 
  private:
   DataStorage& storage_;
-  OutdatedSampleEncoder& outdated_sample_encoder_;
 
   void encode_impl(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) {
     if (should_skip_stalenan(value, chunk)) [[unlikely]] {
@@ -99,7 +99,7 @@ class Encoder {
 
   PROMPP_ALWAYS_INLINE void handle_outdated_sample(uint32_t ls_id, int64_t timestamp, double value, int64_t last_timestamp) {
     if (timestamp < last_timestamp) {
-      outdated_sample_encoder_.encode(*this, ls_id, timestamp, value);
+      OutdatedSampleEncoder<kSamplesPerChunk>::encode(*this, ls_id, timestamp, value);
     }
   }
 

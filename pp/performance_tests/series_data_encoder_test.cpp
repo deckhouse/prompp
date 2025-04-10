@@ -65,9 +65,7 @@ void SeriesDataEncoder::execute(const Config& config, Metrics& metrics) const {
 
   PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector> label_set_bitmap;
   series_data::DataStorage storage;
-  std::chrono::system_clock clock;
-  series_data::OutdatedSampleEncoder outdated_sample_encoder{clock};
-  series_data::Encoder encoder{storage, outdated_sample_encoder};
+  series_data::Encoder encoder{storage};
   std::chrono::nanoseconds encode_time{};
   size_t samples_count = 0;
   uint32_t outdated_samples_count = 0;
