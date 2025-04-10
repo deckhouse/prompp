@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	pptsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"
 	"math"
 	"math/bits"
 	"net"
@@ -1273,6 +1274,7 @@ func main() {
 					return fmt.Errorf("opening storage failed: %w", err)
 				}
 
+				tsdb.DBSetBlocksToDelete(db, pptsdb.PPBlocksToDelete(db, dataDir, headCatalog))
 				switch fsType := prom_runtime.Statfs(localStoragePath); fsType {
 				case "NFS_SUPER_MAGIC":
 					level.Warn(logger).Log("fs_type", fsType, "msg", "This filesystem is not supported and may lead to data corruption and data loss. Please carefully read https://prometheus.io/docs/prometheus/latest/storage/ to learn more about supported filesystems.")

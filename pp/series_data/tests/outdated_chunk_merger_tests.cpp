@@ -118,7 +118,7 @@ TEST_F(OutdatedChunkMergerInOpenChunkFixture, MergeInTwoDoubleConstantsChunk) {
       Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, get_open_chunk(0))));
 }
 
-TEST_F(OutdatedChunkMergerInOpenChunkFixture, MergeInAscIntegerValuesGorillaChunk) {
+TEST_F(OutdatedChunkMergerInOpenChunkFixture, MergeInAscIntegerChunk) {
   // Arrange
   encode({
       {.ls_id = 0, .sample = {.timestamp = 1, .value = 1.0}},
@@ -140,6 +140,34 @@ TEST_F(OutdatedChunkMergerInOpenChunkFixture, MergeInAscIntegerValuesGorillaChun
           {.timestamp = 1, .value = 1.0},
           {.timestamp = 2, .value = 2.0},
           {.timestamp = 3, .value = 3.0},
+      },
+      Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, get_open_chunk(0))));
+}
+
+TEST_F(OutdatedChunkMergerInOpenChunkFixture, MergeInAscIntegerThenValueGorillaChunk) {
+  // Arrange
+  encode({
+      {.ls_id = 0, .sample = {.timestamp = 1, .value = 1.0}},
+      {.ls_id = 0, .sample = {.timestamp = 2, .value = 2.0}},
+      {.ls_id = 0, .sample = {.timestamp = 3, .value = 3.0}},
+      {.ls_id = 0, .sample = {.timestamp = 4, .value = 4.1}},
+  });
+  encode_outdated({
+      {.ls_id = 0, .sample = {.timestamp = 0, .value = 0.0}},
+      {.ls_id = 0, .sample = {.timestamp = 0, .value = 0.0}},
+  });
+
+  // Act
+  merger_.merge();
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(
+      ExpectedSampleList{
+          {.timestamp = 0, .value = 0.0},
+          {.timestamp = 1, .value = 1.0},
+          {.timestamp = 2, .value = 2.0},
+          {.timestamp = 3, .value = 3.0},
+          {.timestamp = 4, .value = 4.1},
       },
       Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, get_open_chunk(0))));
 }
@@ -253,6 +281,7 @@ INSTANTIATE_TEST_SUITE_P(DoubleConstantChunk, OutdatedChunkMergerInFinalizedCons
 INSTANTIATE_TEST_SUITE_P(Float32ConstantChunk, OutdatedChunkMergerInFinalizedConstantChunkFixture, testing::Values(-1.0));
 
 class OutdatedChunkMergerWithFinalizationFixture : public OutdatedChunkMergerTrait<4>, public testing::Test {};
+
 TEST_F(OutdatedChunkMergerWithFinalizationFixture, UseFinlizedTimestampStreamAfterMerge) {
   // Arrange
   encode({{.ls_id = 0, .sample = {.timestamp = 1, .value = 1.0}},
@@ -308,6 +337,7 @@ TEST_F(OutdatedChunkMergerWithFinalizationFixture, UseFinlizedTimestampStreamAft
 }
 
 class OutdatedChunkMergerInFinalizedChunkFixture : public OutdatedChunkMergerWithFinalizationFixture {};
+
 TEST_F(OutdatedChunkMergerInFinalizedChunkFixture, MergeInTwoDoubleConstantsChunk) {
   // Arrange
   encode({{.ls_id = 0, .sample = {.timestamp = 1, .value = 1.0}},
@@ -349,7 +379,7 @@ TEST_F(OutdatedChunkMergerInFinalizedChunkFixture, MergeInTwoDoubleConstantsChun
       Decoder::decode_chunks(storage_, *finalized, get_open_chunk(0))));
 }
 
-TEST_F(OutdatedChunkMergerInFinalizedChunkFixture, MergeInAscIntegerValuesGorillaChunk) {
+TEST_F(OutdatedChunkMergerInFinalizedChunkFixture, MergeInAscIntegerChunk) {
   // Arrange
   encode({{.ls_id = 0, .sample = {.timestamp = 1, .value = 1.0}},
           {.ls_id = 0, .sample = {.timestamp = 3, .value = 3.0}},
@@ -380,6 +410,47 @@ TEST_F(OutdatedChunkMergerInFinalizedChunkFixture, MergeInAscIntegerValuesGorill
           },
           {
               {.timestamp = 7, .value = 7.0},
+              {.timestamp = 8, .value = 8.0},
+          },
+          {
+              {.timestamp = 9, .value = 9.0},
+              {.timestamp = 11, .value = 11.0},
+          },
+      },
+      Decoder::decode_chunks(storage_, *finalized, get_open_chunk(0))));
+}
+
+TEST_F(OutdatedChunkMergerInFinalizedChunkFixture, MergeInAscIntegerThenValuesGorillaChunk) {
+  // Arrange
+  encode({{.ls_id = 0, .sample = {.timestamp = 1, .value = 1.0}},
+          {.ls_id = 0, .sample = {.timestamp = 3, .value = 3.0}},
+          {.ls_id = 0, .sample = {.timestamp = 5, .value = 5.0}},
+          {.ls_id = 0, .sample = {.timestamp = 7, .value = 7.1}},
+          {.ls_id = 0, .sample = {.timestamp = 9, .value = 9.0}},
+          {.ls_id = 0, .sample = {.timestamp = 11, .value = 11.0}}});
+  encode_outdated({
+      {.ls_id = 0, .sample = {.timestamp = 0, .value = 0.0}},
+      {.ls_id = 0, .sample = {.timestamp = 8, .value = 8.0}},
+      {.ls_id = 0, .sample = {.timestamp = 5, .value = 5.0}},
+      {.ls_id = 0, .sample = {.timestamp = 9, .value = 9.0}},
+  });
+
+  // Act
+  merger_.merge();
+
+  // Assert
+  const auto finalized = get_finalized_chunks(0);
+  ASSERT_NE(nullptr, finalized);
+  EXPECT_TRUE(std::ranges::equal(
+      ExpectedListOfSampleList{
+          {
+              {.timestamp = 0, .value = 0.0},
+              {.timestamp = 1, .value = 1.0},
+              {.timestamp = 3, .value = 3.0},
+              {.timestamp = 5, .value = 5.0},
+          },
+          {
+              {.timestamp = 7, .value = 7.1},
               {.timestamp = 8, .value = 8.0},
           },
           {
@@ -560,6 +631,7 @@ TEST_F(OutdatedChunkMergerInFinalizedChunkFixture, UseFinlizedTimestampStreamAft
 }
 
 class OutdatedChunkMergerFixture : public OutdatedChunkMergerTrait<series_data::kSamplesPerChunkDefault>, public testing::Test {};
+
 TEST_F(OutdatedChunkMergerFixture, UseLastValueForSameTimestampInOutdatedChunk) {
   // Arrange
   encode({
@@ -589,6 +661,7 @@ TEST_F(OutdatedChunkMergerFixture, UseLastValueForSameTimestampInOutdatedChunk) 
 
 class OutdatedChunkMergerInOpenConstantChunkWithStalenanFixture : public OutdatedChunkMergerTrait<series_data::kSamplesPerChunkDefault>,
                                                                   public testing::TestWithParam<double> {};
+
 TEST_P(OutdatedChunkMergerInOpenConstantChunkWithStalenanFixture, Test) {
   // Arrange
   encode({
@@ -620,6 +693,7 @@ INSTANTIATE_TEST_SUITE_P(DoubleConstantChunk, OutdatedChunkMergerInOpenConstantC
 INSTANTIATE_TEST_SUITE_P(Float32ConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithStalenanFixture, testing::Values(-1.0));
 
 class OutdatedChunkMergerInOpenChunkWithStalenanFixture : public OutdatedChunkMergerTrait<series_data::kSamplesPerChunkDefault>, public testing::Test {};
+
 TEST_F(OutdatedChunkMergerInOpenChunkWithStalenanFixture, MergeInTwoDoubleConstantsChunk) {
   // Arrange
   encode({
@@ -649,6 +723,7 @@ TEST_F(OutdatedChunkMergerInOpenChunkWithStalenanFixture, MergeInTwoDoubleConsta
 }
 
 class OutdatedChunkMergerInOpenConstantChunkWithOutdatedStalenanFixture : public OutdatedChunkMergerInOpenConstantChunkWithStalenanFixture {};
+
 TEST_P(OutdatedChunkMergerInOpenConstantChunkWithOutdatedStalenanFixture, Test) {
   // Arrange
   encode({

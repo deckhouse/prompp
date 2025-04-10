@@ -4,14 +4,15 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/relabeler/config"
-	"github.com/prometheus/prometheus/pp/go/util/optional"
-	"github.com/prometheus/client_golang/prometheus"
 	"io"
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/relabeler/config"
+	"github.com/prometheus/prometheus/pp/go/util/optional"
 )
 
 const (
@@ -141,6 +142,8 @@ func Load(id string, generation uint64, dir string, configs []*config.InputRelab
 		return nil, corrupted, numberOfSegmentsRead.Value(), fmt.Errorf("failed to create head: %w", err)
 	}
 
+	h.MergeOutOfOrderChunks()
+
 	return h, corrupted, numberOfSegmentsRead.Value(), nil
 }
 
@@ -181,7 +184,7 @@ func (l *ShardLoader) Load() (result ShardLoadResult) {
 	result.Wal = newCorruptedShardWal(l.shardID)
 	result.Corrupted = true
 
-	shardWalFile, err := os.OpenFile(l.shardFilePath, os.O_RDWR, 0600)
+	shardWalFile, err := os.OpenFile(l.shardFilePath, os.O_RDWR, 0o600)
 	if err != nil {
 		result.Err = err
 		return
