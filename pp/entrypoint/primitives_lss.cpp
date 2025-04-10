@@ -54,8 +54,15 @@ extern "C" void prompp_primitives_lss_find_or_emplace(void* args, void* res) {
   };
 
   auto in = static_cast<Arguments*>(args);
-  new (res)
-      Result{.ls_id = std::visit([in]<typename Lss>(Lss& lss) -> PromPP::Primitives::LabelSetID { return lss.find_or_emplace(in->label_set); }, *in->lss)};
+  new (res) Result{.ls_id = std::visit(
+                       [in]<typename Lss>(Lss& lss) -> PromPP::Primitives::LabelSetID {
+                         if constexpr (Lss::kIsReadOnly) {
+                           throw BareBones::Exception(0x1b877a0ab46a69a6, "lss is readonly");
+                         } else {
+                           return lss.find_or_emplace(in->label_set);
+                         }
+                       },
+                       *in->lss)};
 }
 
 struct LssQueryResult {
@@ -87,7 +94,7 @@ extern "C" void prompp_primitives_lss_query(void* args, void* res) {
 
   const auto out = new (res) Result{
       .matches = std::move(query_result.series_ids),
-      .lss_copy = entrypoint::head::create_shared_lss(lss),
+      .lss_copy = entrypoint::head::create_lss_readonly(lss),
       .status = static_cast<uint32_t>(query_result.status),
   };
   out->label_set_lengths.reserve(out->matches.size());

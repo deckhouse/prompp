@@ -213,17 +213,3 @@ func (s *QueryableLSSSuite) testQueryLabelValuesImpl(test_case queryLabelValuesC
 	s.Equal(test_case.expected_status, result.Status())
 	s.Equal(test_case.expected_values, result.Values())
 }
-
-func (s *QueryableLSSSuite) TestSharedLss() {
-	// Arrange
-	labelMatchers := []model.LabelMatcher{
-		{Name: "lol", Value: "kek", MatcherType: model.MatcherTypeExactMatch},
-	}
-	queryResult := s.lss.Query(labelMatchers, cppbridge.LSSQuerySourceOther)
-
-	// Act
-	id := queryResult.Lss().FindOrEmplace(model.NewLabelSetBuilder().Set("key", "value").Build())
-
-	// Assert
-	s.Equal(uint32(5), id)
-}

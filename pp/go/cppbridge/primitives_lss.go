@@ -35,7 +35,7 @@ const (
 	lssEncodingBimap uint32 = iota
 	lssOrderedEncodingBimap
 	lssQueryableEncodingBimap
-	lssShared
+	lssReadOnly
 )
 
 //
@@ -98,16 +98,16 @@ func newLabelSetStorage(lssType uint32) *LabelSetStorage {
 	return lss
 }
 
-// newCopiedLssStorrage init new LabelSetStorage based on CopiedLss.
-func newCopiedLssStorrage(lssCopyPtr uintptr) *LabelSetStorage {
-	lss := &LabelSetStorage{pointer: lssCopyPtr}
+// newReadOnlyLssStorrage init new LabelSetStorage based on lssReadOnly.
+func newReadOnlyLssStorrage(lssROPtr uintptr) *LabelSetStorage {
+	lss := &LabelSetStorage{pointer: lssROPtr}
 	runtime.SetFinalizer(lss, func(lss *LabelSetStorage) {
 		primitivesLSSDtor(lss.pointer)
 
-		lssFinalize.With(prometheus.Labels{"type": "copied"}).Inc()
+		lssFinalize.With(prometheus.Labels{"type": "read_only"}).Inc()
 	})
 
-	lssCreate.With(prometheus.Labels{"type": "copied"}).Inc()
+	lssCreate.With(prometheus.Labels{"type": "read_only"}).Inc()
 
 	return lss
 }
@@ -183,63 +183,63 @@ type lssQueryResult struct {
 }
 
 //
-// bufCopiedLSS
+// bufReadOnlyLSS
 //
 
-// bufCopiedLSS buffer CopiedLSS for deduplicate.
-var bufCopiedLSS = sync.Map{}
+// bufReadOnlyLSS buffer lssReadOnly for deduplicate.
+var bufReadOnlyLSS = sync.Map{}
 
 type bufLSSValue struct {
 	lssMain uintptr
-	lssCopy *LabelSetStorage
+	lssRO   *LabelSetStorage
 	maxlsid uint32
 	timer   *time.Timer
 }
 
-func getLSSCopy(lssMainPtr, lssCopyPtr uintptr, maxlsid uint32) *LabelSetStorage {
-	var lssCopy *LabelSetStorage
+func getlssRO(lssMainPtr, lssROPtr uintptr, maxlsid uint32) *LabelSetStorage {
+	var lssRO *LabelSetStorage
 
-	v, ok := bufCopiedLSS.Load(lssMainPtr)
+	v, ok := bufReadOnlyLSS.Load(lssMainPtr)
 	if !ok {
-		lssCopy = newCopiedLssStorrage(lssCopyPtr)
-		bufCopiedLSS.Store(lssMainPtr, &bufLSSValue{
+		lssRO = newReadOnlyLssStorrage(lssROPtr)
+		bufReadOnlyLSS.Store(lssMainPtr, &bufLSSValue{
 			lssMain: lssMainPtr,
-			lssCopy: lssCopy,
+			lssRO:   lssRO,
 			maxlsid: maxlsid,
 			timer: time.AfterFunc(1*time.Minute, func() {
-				bufCopiedLSS.Delete(lssMainPtr)
+				bufReadOnlyLSS.Delete(lssMainPtr)
 			}),
 		})
 
-		return lssCopy
+		return lssRO
 	}
 
 	bv := v.(*bufLSSValue)
 	if bv.maxlsid < maxlsid {
-		lssCopy = newCopiedLssStorrage(lssCopyPtr)
-		bufCopiedLSS.Store(lssMainPtr, &bufLSSValue{
+		lssRO = newReadOnlyLssStorrage(lssROPtr)
+		bufReadOnlyLSS.Store(lssMainPtr, &bufLSSValue{
 			lssMain: lssMainPtr,
-			lssCopy: lssCopy,
+			lssRO:   lssRO,
 			maxlsid: maxlsid,
 			timer: time.AfterFunc(1*time.Minute, func() {
-				bufCopiedLSS.Delete(lssMainPtr)
+				bufReadOnlyLSS.Delete(lssMainPtr)
 			}),
 		})
 
-		return lssCopy
+		return lssRO
 	}
 
 	bv.timer.Reset(1 * time.Minute)
 
-	primitivesLSSDtor(lssCopyPtr)
+	primitivesLSSDtor(lssROPtr)
 
-	return bv.lssCopy
+	return bv.lssRO
 }
 
 // LSSQueryResult query execution result in lss with copy.
 type LSSQueryResult struct {
 	queryResult *lssQueryResult
-	lssCopy     *LabelSetStorage
+	lssRO       *LabelSetStorage
 }
 
 // newLSSQueryResult init new LSSQueryResult.
@@ -247,7 +247,7 @@ func newLSSQueryResult(
 	matches []uint32,
 	labelSetLengths []uint16,
 	lssMainPtr uintptr,
-	lssCopyPtr uintptr,
+	lssROPtr uintptr,
 	status uint32,
 ) *LSSQueryResult {
 	queryResult := &lssQueryResult{
@@ -258,7 +258,7 @@ func newLSSQueryResult(
 
 	if status != LSSQueryStatusMatch {
 		primitivesLabelSetMatchesFree(queryResult)
-		primitivesLSSDtor(lssCopyPtr)
+		primitivesLSSDtor(lssROPtr)
 
 		return &LSSQueryResult{queryResult: queryResult}
 	}
@@ -269,7 +269,7 @@ func newLSSQueryResult(
 
 	lqr := &LSSQueryResult{
 		queryResult: queryResult,
-		lssCopy:     getLSSCopy(lssMainPtr, lssCopyPtr, slices.Max(matches)),
+		lssRO:       getlssRO(lssMainPtr, lssROPtr, slices.Max(matches)),
 	}
 
 	return lqr
@@ -293,13 +293,8 @@ func (r *LSSQueryResult) LabelSetLengths() []uint16 {
 // MatchesRange calls callback sequentially for each result.
 func (r *LSSQueryResult) MatchesRange(callback func(lss *LabelSetStorage, lsid uint32, length uint16)) {
 	for i, lsId := range r.queryResult.matches {
-		callback(r.lssCopy, lsId, r.queryResult.labelSetLengths[i])
+		callback(r.lssRO, lsId, r.queryResult.labelSetLengths[i])
 	}
-}
-
-// Lss return copy LabelSetStorage.
-func (r *LSSQueryResult) Lss() *LabelSetStorage {
-	return r.lssCopy
 }
 
 //
