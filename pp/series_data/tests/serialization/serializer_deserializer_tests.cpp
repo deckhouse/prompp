@@ -284,7 +284,7 @@ TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypes) {
   encoder_.encode(20, 108, 2.1);
   encoder_.encode(4, 109, 3.1);
   ChunkFinalizer::finalize(storage_, 4, storage_.open_chunks[4]);
-  ChunkFinalizer::finalize(storage_, 10, storage_.open_chunks[10]);
+  ChunkFinalizer::finalize(storage_, 20, storage_.open_chunks[20]);
 
   encoder_.encode(5, 110, 1.1);
   encoder_.encode(5, 111, 2.1);
@@ -598,7 +598,7 @@ TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypesWithStalenan) {
   encoder_.encode(4, 114, STALE_NAN);
   encoder_.encode(20, 113, STALE_NAN);
   ChunkFinalizer::finalize(storage_, 4, storage_.open_chunks[4]);
-  ChunkFinalizer::finalize(storage_, 10, storage_.open_chunks[10]);
+  ChunkFinalizer::finalize(storage_, 20, storage_.open_chunks[20]);
 
   encoder_.encode(5, 115, 1.1);
   encoder_.encode(5, 116, 2.1);

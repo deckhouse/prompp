@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
@@ -48,6 +49,11 @@ func (qa *QueryableAppender) AppendWithStaleNans(
 	relabelerID string,
 	commitToWal bool,
 ) (cppbridge.RelabelerStats, error) {
+	start := time.Now()
+	defer func() {
+		qa.querierMetrics.AppendDuration.Observe(float64(time.Since(start).Microseconds()))
+	}()
+
 	qa.lock.Lock()
 	defer qa.lock.Unlock()
 
