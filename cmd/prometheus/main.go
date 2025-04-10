@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	pptsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"
 	"math"
 	"math/bits"
 	"net"
@@ -35,6 +34,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	pptsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"
 
 	"github.com/KimMachineGun/automemlimit/memlimit"
 	"github.com/alecthomas/kingpin/v2"
@@ -342,8 +343,8 @@ func main() {
 	a.Flag("web.console.libraries", "Path to the console library directory.").
 		Default("console_libraries").StringVar(&cfg.web.ConsoleLibrariesPath)
 
-	a.Flag("web.page-title", "Document title of Prometheus instance.").
-		Default("Prometheus Time Series Collection and Processing Server").StringVar(&cfg.web.PageTitle)
+	a.Flag("web.page-title", "Document title of Prom++ instance.").
+		Default("Prom++ Time Series Collection and Processing Server").StringVar(&cfg.web.PageTitle)
 
 	a.Flag("web.cors.origin", `Regex for CORS origin. It is fully anchored. Example: 'https?://(domain1|domain2)\.com'`).
 		Default(".*").StringVar(&cfg.corsRegexString)
