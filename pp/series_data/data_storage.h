@@ -306,8 +306,8 @@ struct DataStorage {
   }
 
   void reset() noexcept {
-    this->~DataStorage();
-    new (this) DataStorage();
+    std::destroy_at(this);
+    std::construct_at(this);
   }
 
  private:

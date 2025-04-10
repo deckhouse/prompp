@@ -119,20 +119,22 @@ class ChunkRecoder {
 
   void recode_chunk(ChunkInfoInterface auto& info) {
     Encoder encoder;
-    Decoder::decode_chunk(*iterator_, [&](const Sample& sample) PROMPP_LAMBDA_INLINE {
-      if (sample.timestamp > time_interval_.max) {
-        return false;
-      }
-      if (sample.timestamp < time_interval_.min) {
-        return true;
-      }
+    Decoder::create_decode_iterator(*iterator_, [&](auto&& begin, auto&& end) PROMPP_LAMBDA_INLINE {
+      for (; begin != end; ++begin) {
+        const auto& sample = *begin;
+        if (sample.timestamp > time_interval_.max) {
+          return;
+        }
+        if (sample.timestamp < time_interval_.min) {
+          continue;
+        }
 
-      if (encoder.state().state == BareBones::Encoding::Gorilla::GorillaState::kFirstPoint) [[unlikely]] {
-        info.interval.min = sample.timestamp;
+        if (encoder.state().state == BareBones::Encoding::Gorilla::GorillaState::kFirstPoint) [[unlikely]] {
+          info.interval.min = sample.timestamp;
+        }
+        encoder.encode(sample.timestamp, sample.value, stream_, stream_);
+        ++info.samples_count;
       }
-      encoder.encode(sample.timestamp, sample.value, stream_, stream_);
-      ++info.samples_count;
-      return true;
     });
 
     if (info.samples_count > 0) [[likely]] {
