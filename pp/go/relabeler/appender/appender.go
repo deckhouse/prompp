@@ -101,6 +101,8 @@ func (qa *QueryableAppender) Rotate() error {
 	qa.lock.Lock()
 	defer qa.lock.Unlock()
 
+	qa.head.MergeOutOfOrderChunks()
+
 	if err := qa.head.Rotate(); err != nil {
 		return fmt.Errorf("failed to rotate head: %w", err)
 	}
@@ -118,6 +120,8 @@ func (qa *QueryableAppender) Reconfigure(
 ) error {
 	qa.lock.Lock()
 	defer qa.lock.Unlock()
+
+	qa.head.MergeOutOfOrderChunks()
 
 	if err := headConfigurator.Configure(qa.head); err != nil {
 		return fmt.Errorf("failed to reconfigure head: %w", err)
