@@ -71,6 +71,14 @@ func (qa *QueryableAppender) WriteMetrics() {
 	qa.distributor.WriteMetrics(qa.head)
 }
 
+// MergeOutOfOrderChunks merge chunks with out of order data chunks.
+func (qa *QueryableAppender) MergeOutOfOrderChunks() {
+	qa.lock.Lock()
+	defer qa.lock.Unlock()
+
+	qa.head.MergeOutOfOrderChunks()
+}
+
 func (qa *QueryableAppender) HeadStatus(limit int) relabeler.HeadStatus {
 	qa.lock.Lock()
 	defer qa.lock.Unlock()
