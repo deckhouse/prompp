@@ -707,8 +707,9 @@ func main() {
 		cfgFile.RemoteWriteConfigs,
 		localStoragePath,
 		receiver.RotationInfo{
-			BlockDuration: time.Duration(cfg.tsdb.MinBlockDuration),
-			Seed:          cfgFile.GlobalConfig.ExternalLabels.Hash(),
+			BlockDuration: 10 * time.Minute,
+			// BlockDuration: time.Duration(cfg.tsdb.MinBlockDuration),
+			Seed: cfgFile.GlobalConfig.ExternalLabels.Hash(),
 		},
 		headCatalog,
 		reloadBlocksTriggerNotifier,
