@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	pptsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"
 	"math"
 	"math/bits"
 	"net"
@@ -35,6 +34,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	pptsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"
 
 	"github.com/KimMachineGun/automemlimit/memlimit"
 	"github.com/alecthomas/kingpin/v2"
@@ -715,6 +716,8 @@ func main() {
 		time.Duration(cfg.WalCommitInterval),
 		time.Duration(cfg.tsdb.RetentionDuration),
 		time.Duration(cfg.HeadRetentionTimeout),
+		// x3 ScrapeInterval timeout for write block
+		time.Duration(cfgFile.GlobalConfig.ScrapeInterval*3),
 	)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create a receiver", "err", err)
