@@ -135,7 +135,6 @@ func (qs *QueryableStorage) write() bool {
 	persisted := make([]string, 0, lenHeads)
 	for _, head := range heads {
 		start := qs.clock.Now()
-		head.MergeOutOfOrderChunks()
 		if qs.headIsOutdated(head) {
 			persisted = append(persisted, head.ID())
 			shouldNotify = true

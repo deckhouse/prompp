@@ -104,7 +104,6 @@ func (r *RotateCommiter) loop() {
 		case <-r.rotateTimer.Chan():
 			logger.Debugf("start rotation")
 
-			r.rotateCommitable.MergeOutOfOrderChunks()
 			if err := r.rotateCommitable.Rotate(); err != nil {
 				logger.Errorf("rotation failed: %v", err)
 			}
