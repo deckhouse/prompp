@@ -65,6 +65,24 @@ void prompp_series_data_data_storage_allocated_memory(void* args, void* res);
 void prompp_series_data_data_storage_query(void* args, void* res);
 
 /**
+ * @brief return samples at given timestamp for label sets.
+ *
+ * @param args {
+ *     dataStorage uintptr // pointer to constructed data storage
+ *     timestamp uint64 // timestamp
+ *     seriesIDs []uint32 // series ids
+ * }
+ *
+ * @param res {
+ *     samples []struct { // samples slice
+ *         timestamp int64
+ *         value float64
+ *     }
+ * }
+ */
+void prompp_series_data_data_storage_instant_query(void* args, void* res);
+
+/**
  * @brief series data DataStorage destructor.
  *
  * @param args {
