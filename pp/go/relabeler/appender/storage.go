@@ -3,6 +3,7 @@ package appender
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jonboulle/clockwork"
@@ -17,8 +18,8 @@ import (
 )
 
 const (
-	PersistedHeadValue = -(1 << 30)
-	writeRetryTimeout  = 5 * time.Minute
+	writeRetryTimeout        = 5 * time.Minute
+	maxAddIter        uint32 = 5
 )
 
 type WriteNotifier interface {
@@ -39,8 +40,10 @@ type QueryableStorage struct {
 	heads                []relabeler.Head
 	headRetentionTimeout time.Duration
 
-	signal chan struct{}
-	closer *util.Closer
+	writeTimer   clockwork.Timer
+	writeTimeout time.Duration
+	addCount     uint32
+	closer       *util.Closer
 
 	clock                   clockwork.Clock
 	maxRetentionDuration    time.Duration
@@ -57,6 +60,7 @@ func NewQueryableStorageWithWriteNotifier(
 	clock clockwork.Clock,
 	maxRetentionDuration time.Duration,
 	headRetentionTimeout time.Duration,
+	writeTimeout time.Duration,
 	heads ...relabeler.Head,
 ) *QueryableStorage {
 	factory := util.NewUnconflictRegisterer(registerer)
@@ -64,7 +68,8 @@ func NewQueryableStorageWithWriteNotifier(
 		blockWriter:          blockWriter,
 		writeNotifier:        writeNotifier,
 		heads:                heads,
-		signal:               make(chan struct{}, 1),
+		writeTimer:           clock.NewTimer(0),
+		writeTimeout:         writeTimeout,
 		closer:               util.NewCloser(),
 		clock:                clock,
 		maxRetentionDuration: maxRetentionDuration,
@@ -78,6 +83,9 @@ func NewQueryableStorageWithWriteNotifier(
 		),
 		querierMetrics: querierMetrics,
 	}
+
+	// skip 0 start
+	<-qs.writeTimer.Chan()
 
 	return qs
 }
@@ -109,7 +117,8 @@ func (qs *QueryableStorage) loop() {
 		}
 
 		select {
-		case <-qs.signal:
+		case <-qs.writeTimer.Chan():
+			atomic.StoreUint32(&qs.addCount, 0)
 		case <-retryTimer.Chan():
 		case <-qs.closer.Signal():
 			logger.Infof("QUERYABLE STORAGE: done")
@@ -194,10 +203,8 @@ func (qs *QueryableStorage) Add(head relabeler.Head) {
 	logger.Infof("QUERYABLE STORAGE: head %s added", head.String())
 	qs.mtx.Unlock()
 
-	select {
-	case qs.signal <- struct{}{}:
-	case <-qs.closer.Signal():
-	default:
+	if atomic.AddUint32(&qs.addCount, 1) < maxAddIter {
+		qs.writeTimer.Reset(qs.writeTimeout)
 	}
 }
 
