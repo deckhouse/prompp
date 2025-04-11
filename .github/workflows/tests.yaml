@@ -23,7 +23,7 @@ jobs:
         working-directory: pp
     runs-on: fsn-dev-gitlab-runner
     strategy:
-      max-parallel: 1
+      max-parallel: 2
       matrix:
         OPT: [dbg, opt]
         SANITIZERS: [no_sanitizers, with_sanitizers]
@@ -64,9 +64,9 @@ jobs:
 
   build-go-bindings:
     needs: cpp-tests
-    runs-on: fsn-dev-gitlab-runner
+    runs-on: fsn-dev-perftest-runner
     strategy:
-      max-parallel: 1
+      max-parallel: 2
       matrix:
         COMPILATION_MODE: [dbg, opt]
         ASAN: [false, true]
@@ -104,9 +104,9 @@ jobs:
 
   go-tests:
     needs: build-go-bindings
-    runs-on: fsn-dev-gitlab-runner
+    runs-on: fsn-dev-perftest-runner
     strategy:
-      max-parallel: 1
+      max-parallel: 2
       matrix:
         OPT: [dbg, opt]
         SANITIZERS: [no_sanitizers, with_sanitizers]
