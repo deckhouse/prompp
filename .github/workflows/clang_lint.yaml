@@ -35,6 +35,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: deckhouse/modules-actions/setup@v2
+        with:
+          registry: ${{ secrets.DEV_REGISTRY }}
+          registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
+          registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+
       - name: Run Clang Format and Tidy
         run: |
           docker run --rm \
