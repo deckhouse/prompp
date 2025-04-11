@@ -151,10 +151,7 @@ func (q *Querier) selectInstant(ctx context.Context, sortSeries bool, hints *sto
 	defer func() {
 		if q.metrics != nil {
 			q.metrics.SelectDuration.With(
-				prometheus.Labels{"generation": strconv.FormatUint(q.head.Generation(), 10)},
-			).Observe(float64(time.Since(start).Microseconds()))
-				prometheus.Labels{
-					"generation": fmt.Sprintf("%d", q.head.Generation()),
+				prometheus.Labels{"generation": strconv.FormatUint(q.head.Generation(), 10),
 					"query_type": "instant",
 				},
 			).Observe(float64(time.Since(start).Milliseconds()))
@@ -176,21 +173,19 @@ func (q *Querier) selectInstant(ctx context.Context, sortSeries bool, hints *sto
 			return fmt.Errorf("failed to query from shard: %d, query status: %d", shard.ShardID(), lssQueryResult.Status())
 		}
 
-		samples := shard.DataStorage().InstantQuery(lssQueryResult.Matches(), q.maxt, InstantQueryValueNotFoundTimestampValue)
+		samples := shard.DataStorage().InstantQuery(lssQueryResult.IDs(), q.maxt, InstantQueryValueNotFoundTimestampValue)
 
 		// todo: detect zero match
 
 		// todo: skip
-		getLabelSetsResult := shard.LSS().GetLabelSets(lssQueryResult.Matches())
-		labelSets := make([]labels.Labels, len(getLabelSetsResult.LabelsSets()))
-
-		for index := range samples {
-			if samples[index].Timestamp != InstantQueryValueNotFoundTimestampValue {
-				labelSets[index] = cloneLabelSet(getLabelSetsResult.LabelsSets()[index])
+		labelSets := make([]*cppbridge.LabelsCpp, len(samples))
+		lssQueryResult.MatchesIndexRange(func(lss *cppbridge.LabelSetStorage, index int, lsid uint32, length uint16) {
+			if samples[index].Timestamp == InstantQueryValueNotFoundTimestampValue {
+				return
 			}
-		}
+			labelSets[index] = cppbridge.NewLabelsCpp(lss, lsid, length)
+		})
 
-		runtime.KeepAlive(getLabelSetsResult)
 		runtime.KeepAlive(lssQueryResult)
 		seriesSets[shard.ShardID()] = NewInstantSeriesSet(labelSets, samples)
 		return nil

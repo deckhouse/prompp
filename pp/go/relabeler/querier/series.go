@@ -221,11 +221,11 @@ const (
 
 type InstantSeriesSet struct {
 	index     int
-	labelSets []labels.Labels
+	labelSets []*cppbridge.LabelsCpp
 	samples   []cppbridge.Sample
 }
 
-func NewInstantSeriesSet(labelSets []labels.Labels, samples []cppbridge.Sample) *InstantSeriesSet {
+func NewInstantSeriesSet(labelSets []*cppbridge.LabelsCpp, samples []cppbridge.Sample) *InstantSeriesSet {
 	return &InstantSeriesSet{
 		index:     -1,
 		labelSets: labelSets,
@@ -263,13 +263,13 @@ func (ss *InstantSeriesSet) Warnings() annotations.Annotations {
 }
 
 type InstantSeries struct {
-	labelSet labels.Labels
+	labelSet *cppbridge.LabelsCpp
 	sample   cppbridge.Sample
 }
 
 // Labels is storage.Series interface implementation.
 func (s InstantSeries) Labels() labels.Labels {
-	return s.labelSet
+	return s.labelSet.Labels()
 }
 
 // Iterator is storage.Series interface implementation.
