@@ -1,3 +1,4 @@
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "bare_bones/vector_with_holes.h"
@@ -171,6 +172,28 @@ TYPED_TEST(VectorWithHolesFixture, CheckHoleAccessFail) {
 
   // Assert
   ASSERT_THROW({ vector.at(0); }, BareBones::Exception);
+}
+
+TEST(VectorWithHolesTest, EraseCallsCorrectDestroy) {
+  class MockDestroyBehavior {
+   public:
+    MOCK_METHOD(void, destroy, (int), ());
+    MOCK_METHOD(void, destroy, (), ());
+  };
+
+  // Arrange
+  VectorWithHoles<MockDestroyBehavior> vector;
+  vector.emplace_back();
+  vector.emplace_back();
+
+  EXPECT_CALL(vector[0], destroy(42)).Times(testing::Exactly(1));
+  EXPECT_CALL(vector[1], destroy()).Times(testing::Exactly(1));
+
+  // Act
+  vector.erase(0, 42);
+  vector.erase(1);
+
+  // Assert
 }
 
 }  // namespace

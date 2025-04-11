@@ -96,7 +96,15 @@ class String {
     return data_[i];
   }
 
+  PROMPP_ALWAYS_INLINE bool operator<(const String& other) const noexcept {
+    return static_cast<std::string_view>(*this) < static_cast<std::string_view>(other);
+  }
+
   PROMPP_ALWAYS_INLINE bool operator==(const String& other) const noexcept { return this->size() == other.size() && std::ranges::equal(*this, other); }
+
+  PROMPP_ALWAYS_INLINE bool operator==(const std::string_view& other) const noexcept {
+    return this->size() == other.size() && std::ranges::equal(*this, other);
+  }
 
   explicit PROMPP_ALWAYS_INLINE operator std::string_view() const noexcept { return {data_, len_}; }
 };

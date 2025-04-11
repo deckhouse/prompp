@@ -129,6 +129,7 @@ func NewReceiver(
 	commitInterval time.Duration,
 	maxRetentionDuration time.Duration,
 	headRetentionTimeout time.Duration,
+	writeTimeout time.Duration,
 ) (*Receiver, error) {
 	if logger == nil {
 		logger = log.NewNopLogger()
@@ -201,6 +202,7 @@ func NewReceiver(
 		clock,
 		maxRetentionDuration,
 		headRetentionTimeout,
+		writeTimeout,
 		rotatedHeads...,
 	)
 
@@ -226,6 +228,7 @@ func NewReceiver(
 			app,
 			relabeler.NewRotateTimerWithSeed(clock, rotationInfo.BlockDuration, rotationInfo.Seed),
 			appender.NewConstantIntervalTimer(clock, commitInterval),
+			appender.NewConstantIntervalTimer(clock, appender.DefaultMergeDuration),
 			registerer,
 		),
 

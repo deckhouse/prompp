@@ -1,7 +1,5 @@
 #pragma once
 
-#include <ranges>
-
 #include "bare_bones/preprocess.h"
 #include "series_data/common.h"
 #include "series_data/encoder/timestamp/state.h"

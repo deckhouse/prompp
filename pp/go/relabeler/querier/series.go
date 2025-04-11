@@ -169,12 +169,12 @@ type SampleProvider interface {
 type Series struct {
 	seriesID       uint32
 	mint, maxt     int64
-	labelSet       labels.Labels
+	labelSet       *cppbridge.LabelsCpp
 	sampleProvider SampleProvider
 }
 
 func (s *Series) Labels() labels.Labels {
-	return s.labelSet
+	return s.labelSet.Labels()
 }
 
 func (s *Series) Iterator(_ chunkenc.Iterator) chunkenc.Iterator {

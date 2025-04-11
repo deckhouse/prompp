@@ -129,4 +129,4 @@ coverage:
 		-exclude "$(bazel_workspace_root)/external/*" -exclude "*_tests.cpp" -exclude "*_mock.h" \
 		-exclude "$(bazel_workspace_root)/bazel-out/*" -exclude "$(bazel_workspace_root)/*/tests/*" \
 		-exclude "$(bazel_workspace_root)/third_party/*"
-	genhtml --hierarchical -q -o report pp.info
+	genhtml --hierarchical -q -o report pp.info --demangle-cpp

@@ -21,16 +21,18 @@ class ChunkFinalizer {
   }
 
   static void finalize(DataStorage& storage, uint32_t ls_id, chunk::DataChunk& chunk, uint32_t finalized_timestamp_stream_id) {
-    if (chunk.encoding_state.encoding_type == EncodingType::kAscIntegerValuesGorilla) {
-      const auto& finalized_stream =
-          storage.finalized_data_streams.emplace_back(storage.asc_integer_values_gorilla_encoders[chunk.encoder.external_index].finalize_stream());
-      storage.asc_integer_values_gorilla_encoders.erase(chunk.encoder.external_index);
+    const auto finalize_variant_encoder = [&storage, &chunk](auto& encoder, EncodingType encoding_type) PROMPP_LAMBDA_INLINE {
+      const auto& finalized_stream = storage.finalized_data_streams.emplace_back(encoder.finalize_stream());
+      storage.variant_encoders.erase(chunk.encoder.external_index, encoding_type);
       chunk.encoder.external_index = storage.finalized_data_streams.index_of(finalized_stream);
+    };
+
+    if (chunk.encoding_state.encoding_type == EncodingType::kAscInteger) [[likely]] {
+      finalize_variant_encoder(storage.variant_encoders[chunk.encoder.external_index].asc_integer, chunk.encoding_state.encoding_type);
+    } else if (chunk.encoding_state.encoding_type == EncodingType::kAscIntegerThenValuesGorilla) {
+      finalize_variant_encoder(storage.variant_encoders[chunk.encoder.external_index].asc_integer_then_values_gorilla, chunk.encoding_state.encoding_type);
     } else if (chunk.encoding_state.encoding_type == EncodingType::kValuesGorilla) {
-      const auto& finalized_stream =
-          storage.finalized_data_streams.emplace_back(storage.values_gorilla_encoders[chunk.encoder.external_index].finalize_stream());
-      storage.values_gorilla_encoders.erase(chunk.encoder.external_index);
-      chunk.encoder.external_index = storage.finalized_data_streams.index_of(finalized_stream);
+      finalize_variant_encoder(storage.variant_encoders[chunk.encoder.external_index].values_gorilla, chunk.encoding_state.encoding_type);
     } else if (chunk.encoding_state.encoding_type == EncodingType::kGorilla) {
       const auto& finalized_stream = storage.finalized_data_streams.emplace_back(storage.gorilla_encoders[chunk.encoder.external_index].finalize_stream());
       storage.gorilla_encoders.erase(chunk.encoder.external_index);
