@@ -650,11 +650,16 @@ func convertingConfigDialers(
 		if err != nil {
 			return nil, err
 		}
-		ccfg := dialer.NewCommonConfig(
+
+		ccfg, err := dialer.NewCommonConfig(
 			sCfg.URL.URL,
 			tlsCfg,
 			sCfg.Name,
 		)
+		if err != nil {
+			return nil, err
+		}
+
 		dialersConfigs = append(
 			dialersConfigs,
 			&relabeler.DialersConfig{
@@ -693,7 +698,10 @@ func makeDialers(
 			return nil, fmt.Errorf("invalid CommonConfig: %v", dialersConfig[i].ConnDialerConfig)
 		}
 
-		d := dialer.DefaultDialer(ccfg, registerer)
+		d, err := dialer.DefaultDialer(ccfg, registerer)
+		if err != nil {
+			return nil, err
+		}
 
 		tcpDialer := relabeler.NewWebSocketDialer(
 			d,
