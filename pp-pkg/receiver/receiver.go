@@ -453,6 +453,11 @@ func (rr *Receiver) GetState() *cppbridge.State {
 	return cppbridge.NewState(rr.headConfigStorage.Load().numberOfShards)
 }
 
+// MergeOutOfOrderChunks merge chunks with out of order data chunks.
+func (rr *Receiver) MergeOutOfOrderChunks() {
+	rr.appender.MergeOutOfOrderChunks()
+}
+
 // RelabelerIDIsExist check on exist relabelerID.
 func (rr *Receiver) RelabelerIDIsExist(relabelerID string) bool {
 	cs := rr.headConfigStorage.Load()

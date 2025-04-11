@@ -1,4 +1,4 @@
-package opcore
+package ppcore
 
 import (
 	"context"
@@ -42,7 +42,7 @@ func NewReplayDecoder(metadata model.Metadata, blockStorage BlockStorage) *Repla
 
 func (r *ReplayDecoder) DecodeToHashdex(
 	ctx context.Context,
-	segment model.Segment,
+	segment *model.Segment,
 ) (
 	hashdexContent cppbridge.HashdexContent,
 	err error,
@@ -67,10 +67,8 @@ func (r *ReplayDecoder) DecodeToHashdex(
 		return nil, fmt.Errorf("already decoded")
 	}
 
-	var walSegment model.Segment
-
 	for {
-		walSegment, err = r.blockReader.Next()
+		walSegment, err := r.blockReader.Next()
 		if err != nil {
 			if !errors.Is(err, storage.ErrEndOfBlock) {
 				return nil, fmt.Errorf("failed to read segment: %w", err)
@@ -78,7 +76,7 @@ func (r *ReplayDecoder) DecodeToHashdex(
 
 			hashdexContent, err = r.walDecoder.DecodeToHashdex(ctx, segment.Body)
 			if err != nil {
-				return nil, fmt.Errorf("failed to decode segment: %w", err)
+				return nil, fmt.Errorf("failed to decode to hashdex segment: %w", err)
 			}
 
 			r.lastDecodedSegmentID = hashdexContent.SegmentID()
@@ -88,8 +86,9 @@ func (r *ReplayDecoder) DecodeToHashdex(
 		if walSegment.ID < segment.ID {
 			var decodedSegmentID uint32
 			decodedSegmentID, err = r.walDecoder.DecodeDry(ctx, walSegment.Body)
+			walSegment.Destroy()
 			if err != nil {
-				return nil, fmt.Errorf("failed to decode segment: %w", err)
+				return nil, fmt.Errorf("replay failed to decode segment: %w", err)
 			}
 
 			r.lastDecodedSegmentID = decodedSegmentID
@@ -135,8 +134,8 @@ func (noOpBlockReader) Header() storage.BlockHeader {
 	return storage.BlockHeader{}
 }
 
-func (noOpBlockReader) Next() (model.Segment, error) {
-	return model.Segment{}, storage.ErrEndOfBlock
+func (noOpBlockReader) Next() (*model.Segment, error) {
+	return nil, storage.ErrEndOfBlock
 }
 
 func (noOpBlockReader) Close() error {

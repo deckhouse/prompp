@@ -10,14 +10,16 @@ import (
 	"github.com/prometheus/prometheus/pp-pkg/handler/model"
 	"github.com/prometheus/prometheus/pp-pkg/handler/storage"
 	"github.com/prometheus/prometheus/pp-pkg/handler/storage/block"
+	"github.com/prometheus/prometheus/util/pool"
 )
 
 func TestStorage(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "storage-")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
+	buffers := pool.New(8, 100e3, 2, func(sz int) interface{} { return make([]byte, 0, sz) })
 
-	blockStorage := block.NewStorage(tempDir)
+	blockStorage := block.NewStorage(tempDir, buffers)
 
 	blockID := uuid.New()
 	shardID := uint16(1)
@@ -25,7 +27,7 @@ func TestStorage(t *testing.T) {
 	_, err = blockStorage.Reader(blockID, shardID)
 	require.ErrorIs(t, err, storage.ErrNoBlock)
 
-	encodedSegment := model.Segment{
+	encodedSegment := &model.Segment{
 		ID:   0,
 		Size: 4,
 		CRC:  42,

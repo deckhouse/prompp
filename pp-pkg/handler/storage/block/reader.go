@@ -9,13 +9,18 @@ import (
 
 	"github.com/prometheus/prometheus/pp-pkg/handler/model"
 	"github.com/prometheus/prometheus/pp-pkg/handler/storage"
+	"github.com/prometheus/prometheus/util/pool"
 )
+
+// headerStreamSize header size for stream.
+const headerReaderSize = 4 + 4
 
 // Reader is segments block reader.
 type Reader struct {
 	file                  *os.File
 	blockHeader           storage.BlockHeader
 	lastReadSegmentHeader storage.SegmentHeader
+	buffers               *pool.Pool
 }
 
 // Header return header of block.
@@ -24,20 +29,27 @@ func (r *Reader) Header() storage.BlockHeader {
 }
 
 // Next read and return next segment.
-func (r *Reader) Next() (segment model.Segment, err error) {
-	headerSize := 4 + 4
-	header := make([]byte, headerSize)
+func (r *Reader) Next() (*model.Segment, error) {
+	header := r.buffers.Get(headerReaderSize).([]byte)
+	model.ResizeBuffer(headerReaderSize, &header)
+
 	bytesRead, err := io.ReadFull(r.file, header)
 	if err != nil {
+		r.buffers.Put(header)
 		if errors.Is(err, io.EOF) {
-			return segment, storage.ErrEndOfBlock
+			return nil, storage.ErrEndOfBlock
 		}
 
-		return segment, fmt.Errorf("failed to read segment header: %w", err)
+		return nil, fmt.Errorf("failed to read segment header: %w", err)
 	}
 
-	if bytesRead != headerSize {
-		return segment, fmt.Errorf("failed to read segment header, bytes read: %d, header size: %d", bytesRead, headerSize)
+	if bytesRead != headerReaderSize {
+		r.buffers.Put(header)
+		return nil, fmt.Errorf(
+			"failed to read segment header, bytes read: %d, header size: %d",
+			bytesRead,
+			headerReaderSize,
+		)
 	}
 
 	segmentHeader := storage.SegmentHeader{
@@ -45,17 +57,22 @@ func (r *Reader) Next() (segment model.Segment, err error) {
 		Size:  binary.LittleEndian.Uint32(header[:4]),
 		CRC32: binary.LittleEndian.Uint32(header[4:8]),
 	}
+	r.buffers.Put(header)
 
-	segment.Body = make([]byte, segmentHeader.Size)
+	segment := &model.Segment{
+		ID:   segmentHeader.ID,
+		Size: segmentHeader.Size,
+		CRC:  segmentHeader.CRC32,
+		Body: r.buffers.Get(int(segmentHeader.Size)).([]byte),
+	}
+	model.ResizeBuffer(int(segmentHeader.Size), &segment.Body)
 	if _, err = io.ReadFull(r.file, segment.Body); err != nil {
-		return segment, fmt.Errorf("failed to read segment body: %w", err)
+		r.buffers.Put(segment.Body)
+		return nil, fmt.Errorf("failed to read segment body: %w", err)
 	}
 
-	segment.ID = segmentHeader.ID
-	segment.Size = segmentHeader.Size
-	segment.CRC = segmentHeader.CRC32
-
 	r.lastReadSegmentHeader = segmentHeader
+	segment.DestroyFn = func() { r.buffers.Put(segment.Body) }
 
 	return segment, nil
 }

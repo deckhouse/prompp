@@ -11,13 +11,13 @@ import (
 
 type MetricStream interface {
 	Metadata() model.Metadata
-	Read(ctx context.Context) (model.Segment, error)
-	Write(ctx context.Context, status model.SegmentProcessingStatus) error
+	Read(ctx context.Context) (*model.Segment, error)
+	Write(ctx context.Context, status model.StreamSegmentProcessingStatus) error
 }
 
 type Refill interface {
 	Metadata() model.Metadata
-	Read(ctx context.Context) (model.Segment, error)
+	Read(ctx context.Context) (*model.Segment, error)
 	Write(ctx context.Context, status model.RefillProcessingStatus) error
 }
 
@@ -35,4 +35,6 @@ type DecoderBuilder interface {
 type Receiver interface {
 	AppendSnappyProtobuf(ctx context.Context, compressedData relabeler.ProtobufData, relabelerID string, commitToWal bool) error
 	AppendHashdex(ctx context.Context, hashdex cppbridge.ShardedData, relabelerID string, commitToWal bool) error
+	// MergeOutOfOrderChunks merge chunks with out of order data chunks.
+	MergeOutOfOrderChunks()
 }
