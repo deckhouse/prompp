@@ -15,6 +15,7 @@ type DataStorage interface {
 	Raw() *cppbridge.HeadDataStorage
 	MergeOutOfOrderChunks()
 	Query(query cppbridge.HeadDataStorageQuery) *cppbridge.HeadDataStorageSerializedChunks
+	InstantQuery(seriesIDs []uint32, timestamp int64, timestampDefault int64) []cppbridge.Sample
 	AllocatedMemory() uint64
 }
 

@@ -9,11 +9,11 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
-	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/annotations"
 )
@@ -138,11 +138,77 @@ func (q *Querier) Close() error {
 }
 
 func (q *Querier) Select(ctx context.Context, sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
+	if q.mint != q.maxt {
+		return q.selectRange(ctx, sortSeries, hints, matchers...)
+	}
+
+	return q.selectInstant(ctx, sortSeries, hints, matchers...)
+}
+
+func (q *Querier) selectInstant(ctx context.Context, sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
 	start := time.Now()
 	defer func() {
 		if q.metrics != nil {
 			q.metrics.SelectDuration.With(
-				prometheus.Labels{"generation": fmt.Sprintf("%d", q.head.Generation())},
+				prometheus.Labels{
+					"generation": fmt.Sprintf("%d", q.head.Generation()),
+					"query_type": "instant",
+				},
+			).Observe(float64(time.Since(start).Milliseconds()))
+		}
+	}()
+
+	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
+	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
+	callerID := cppbridge.GetCaller(ctx)
+
+	err := q.head.ForEachShard(func(shard relabeler.Shard) error {
+		lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
+
+		if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {
+			seriesSets[shard.ShardID()] = &SeriesSet{}
+			if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
+				return nil
+			}
+			return fmt.Errorf("failed to query from shard: %d, query status: %d", shard.ShardID(), lssQueryResult.Status())
+		}
+
+		samples := shard.DataStorage().InstantQuery(lssQueryResult.Matches(), q.maxt, InstantQueryValueNotFoundTimestampValue)
+
+		// todo: detect zero match
+
+		// todo: skip
+		getLabelSetsResult := shard.LSS().GetLabelSets(lssQueryResult.Matches())
+		labelSets := make([]labels.Labels, len(getLabelSetsResult.LabelsSets()))
+
+		for index := range samples {
+			if samples[index].Timestamp != InstantQueryValueNotFoundTimestampValue {
+				labelSets[index] = cloneLabelSet(getLabelSetsResult.LabelsSets()[index])
+			}
+		}
+
+		runtime.KeepAlive(getLabelSetsResult)
+		runtime.KeepAlive(lssQueryResult)
+		seriesSets[shard.ShardID()] = NewInstantSeriesSet(labelSets, samples)
+		return nil
+	})
+	if err != nil {
+		logger.Warnf("QUERIER: Select failed: %s", err)
+		return storage.ErrSeriesSet(err)
+	}
+
+	return storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge)
+}
+
+func (q *Querier) selectRange(ctx context.Context, sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
+	start := time.Now()
+	defer func() {
+		if q.metrics != nil {
+			q.metrics.SelectDuration.With(
+				prometheus.Labels{
+					"generation": fmt.Sprintf("%d", q.head.Generation()),
+					"query_type": "range",
+				},
 			).Observe(float64(time.Since(start).Milliseconds()))
 		}
 	}()

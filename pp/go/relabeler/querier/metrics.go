@@ -1,8 +1,8 @@
 package querier
 
 import (
-	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/pp/go/util"
 )
 
 type Metrics struct {
@@ -36,7 +36,7 @@ func NewMetrics(registerer prometheus.Registerer) *Metrics {
 				Help:    "Select query from head duration in milliseconds",
 				Buckets: []float64{1, 5, 10, 20, 50, 100},
 			},
-			[]string{"generation"},
+			[]string{"generation", "query_type"},
 		),
 	}
 }

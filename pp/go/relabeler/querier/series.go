@@ -1,9 +1,9 @@
 package querier
 
 import (
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/util/annotations"
@@ -212,5 +212,139 @@ func (ss *SeriesSet) Err() error {
 }
 
 func (ss *SeriesSet) Warnings() annotations.Annotations {
+	return nil
+}
+
+const (
+	InstantQueryValueNotFoundTimestampValue = -1
+)
+
+type InstantSeriesSet struct {
+	index     int
+	labelSets []labels.Labels
+	samples   []cppbridge.Sample
+}
+
+func NewInstantSeriesSet(labelSets []labels.Labels, samples []cppbridge.Sample) *InstantSeriesSet {
+	return &InstantSeriesSet{
+		index:     -1,
+		labelSets: labelSets,
+		samples:   samples,
+	}
+}
+
+func (ss *InstantSeriesSet) Next() bool {
+	if ss.index >= len(ss.labelSets) {
+		return false
+	}
+
+	ss.index++
+
+	if ss.samples[ss.index].Timestamp == InstantQueryValueNotFoundTimestampValue {
+		return ss.Next()
+	}
+
+	return true
+}
+
+func (ss *InstantSeriesSet) At() storage.Series {
+	return InstantSeries{
+		labelSet: ss.labelSets[ss.index],
+		sample:   ss.samples[ss.index],
+	}
+}
+
+func (ss *InstantSeriesSet) Err() error {
+	return nil
+}
+
+func (ss *InstantSeriesSet) Warnings() annotations.Annotations {
+	return nil
+}
+
+type InstantSeries struct {
+	labelSet labels.Labels
+	sample   cppbridge.Sample
+}
+
+// Labels is storage.Series interface implementation.
+func (s InstantSeries) Labels() labels.Labels {
+	return s.labelSet
+}
+
+// Iterator is storage.Series interface implementation.
+func (s InstantSeries) Iterator(iterator chunkenc.Iterator) chunkenc.Iterator {
+	if i, ok := iterator.(*InstantSeriesChunkIterator); ok {
+		i.ResetTo(s.sample.Timestamp, s.sample.Value)
+		return i
+	}
+	return NewInstantSeriesChunkIterator(s.sample.Timestamp, s.sample.Value)
+}
+
+type InstantSeriesChunkIterator struct {
+	i int
+	t int64
+	v float64
+}
+
+func NewInstantSeriesChunkIterator(t int64, v float64) *InstantSeriesChunkIterator {
+	return &InstantSeriesChunkIterator{
+		t: t,
+		v: v,
+	}
+}
+
+func (i *InstantSeriesChunkIterator) ResetTo(t int64, v float64) {
+	i.i = 0
+	i.t = t
+	i.v = v
+}
+
+// Next is chunkenc.Iterator interface implementation.
+func (i *InstantSeriesChunkIterator) Next() chunkenc.ValueType {
+	if i.i > 0 {
+		return chunkenc.ValNone
+	}
+
+	i.i++
+	return chunkenc.ValFloat
+}
+
+// Seek is chunkenc.Iterator interface implementation.
+func (i *InstantSeriesChunkIterator) Seek(t int64) chunkenc.ValueType {
+	if i.i > 0 {
+		return chunkenc.ValNone
+	}
+
+	if i.t == t {
+		return chunkenc.ValFloat
+	}
+
+	i.i++
+	return chunkenc.ValNone
+}
+
+// At is chunkenc.Iterator interface implementation.
+func (i *InstantSeriesChunkIterator) At() (int64, float64) {
+	return i.t, i.v
+}
+
+// AtHistogram is chunkenc.Iterator interface implementation.
+func (i *InstantSeriesChunkIterator) AtHistogram(h *histogram.Histogram) (int64, *histogram.Histogram) {
+	return 0, nil
+}
+
+// AtFloatHistogram is chunkenc.Iterator interface implementation.
+func (i *InstantSeriesChunkIterator) AtFloatHistogram(floatHistogram *histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
+	return 0, nil
+}
+
+// AtT is chunkenc.Iterator interface implementation.
+func (i *InstantSeriesChunkIterator) AtT() int64 {
+	return i.t
+}
+
+// Err is chunkenc.Iterator interface implementation.
+func (i *InstantSeriesChunkIterator) Err() error {
 	return nil
 }
