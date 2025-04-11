@@ -25,9 +25,7 @@ struct QuerierCase {
 class QuerierFixture : public testing::TestWithParam<QuerierCase> {
  protected:
   DataStorage storage_;
-  std::chrono::system_clock clock_;
-  OutdatedSampleEncoder<decltype(clock_)> outdated_sample_encoder_{clock_};
-  Encoder<decltype(outdated_sample_encoder_)> encoder_{storage_, outdated_sample_encoder_};
+  Encoder<> encoder_{storage_};
   Querier querier_{storage_};
 
   void fill_storage() {
