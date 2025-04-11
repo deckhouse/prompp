@@ -382,6 +382,7 @@ class SharedMemory : public GenericMemory<SharedMemory<T>, uint32_t, T> {
       data_.non_atomic_reallocate(new_size);
     } else {
       SharedPtr<T> new_data(new_size);
+      new_data.set_constructed_item_count(data_.constructed_item_count());
       PRAGMA_DIAGNOSTIC(push)
       PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
       std::memcpy(new_data.get(), data_.get(), size_ * sizeof(T));
