@@ -335,6 +335,7 @@ TEST_F(SharedMemoryFixture, MoveOperator) {
 TEST_F(SharedMemoryFixture, ResizeOnNonUniqueOwner) {
   // Arrange
   memory_.resize_to_fit_at_least(1);
+  memory_.set_constructed_item_count(1);
   auto memory2 = memory_;
 
   // Act
@@ -343,6 +344,7 @@ TEST_F(SharedMemoryFixture, ResizeOnNonUniqueOwner) {
   // Assert
   EXPECT_NE(memory_.size(), memory2.size());
   EXPECT_NE(memory_.begin(), memory2.begin());
+  EXPECT_EQ(1U, memory2.constructed_item_count());
 }
 
 }  // namespace
