@@ -28,9 +28,7 @@ class SerializerDeserializerTrait {
  protected:
   DataStorage storage_;
   Serializer serializer_{storage_};
-  std::chrono::system_clock clock_;
-  OutdatedSampleEncoder<std::chrono::system_clock> outdated_sample_encoder_{clock_};
-  Encoder<decltype(outdated_sample_encoder_)> encoder_{storage_, outdated_sample_encoder_};
+  Encoder<> encoder_{storage_};
   BareBones::ShrinkedToFitOStringStream stream_;
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const uint8_t> get_buffer() const noexcept {
