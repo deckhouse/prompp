@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
@@ -48,6 +49,11 @@ func (qa *QueryableAppender) AppendWithStaleNans(
 	relabelerID string,
 	commitToWal bool,
 ) (cppbridge.RelabelerStats, error) {
+	start := time.Now()
+	defer func() {
+		qa.querierMetrics.AppendDuration.Observe(float64(time.Since(start).Microseconds()))
+	}()
+
 	qa.lock.Lock()
 	defer qa.lock.Unlock()
 
@@ -69,6 +75,14 @@ func (qa *QueryableAppender) WriteMetrics() {
 
 	qa.head.WriteMetrics()
 	qa.distributor.WriteMetrics(qa.head)
+}
+
+// MergeOutOfOrderChunks merge chunks with out of order data chunks.
+func (qa *QueryableAppender) MergeOutOfOrderChunks() {
+	qa.lock.Lock()
+	defer qa.lock.Unlock()
+
+	qa.head.MergeOutOfOrderChunks()
 }
 
 func (qa *QueryableAppender) HeadStatus(limit int) relabeler.HeadStatus {

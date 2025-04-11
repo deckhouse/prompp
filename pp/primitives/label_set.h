@@ -101,6 +101,8 @@ class BasicLabelSet {
   [[nodiscard]] PROMPP_ALWAYS_INLINE const_iterator end() const noexcept { return labels_.end(); }
   PROMPP_ALWAYS_INLINE iterator end() noexcept { return labels_.end(); }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept { return BareBones::mem::allocated_memory(labels_); }
+
   template <class T>
   bool operator==(const T& o) const noexcept {
     return std::ranges::equal(begin(), end(), o.begin(), o.end());

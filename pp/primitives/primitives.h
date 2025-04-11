@@ -67,4 +67,13 @@ PROMPP_ALWAYS_INLINE constexpr bool operator<(const PromPP::Primitives::Label& l
 PROMPP_ALWAYS_INLINE constexpr bool operator<(const PromPP::Primitives::LabelView& label_view, const PromPP::Primitives::Label& label) noexcept {
   return label_view.first < label.first && label_view.second < label.second;
 }
+
+PROMPP_ALWAYS_INLINE constexpr auto operator<=>(const PromPP::Primitives::LabelView& a, const PromPP::Primitives::LabelView& b) noexcept {
+  if (const auto result = a.first <=> b.first; !std::is_eq(result)) {
+    return result;
+  }
+
+  return a.second <=> b.second;
+}
+
 }  // namespace std

@@ -74,7 +74,7 @@ class Symbol {
         }
 
         // size
-        uint32_t size_to_save = size_ - first_to_save;
+        const uint32_t size_to_save = size_ - first_to_save;
         res += sizeof(uint32_t);
 
         // data
@@ -105,14 +105,14 @@ class Symbol {
     template <class InputStream>
     void load(InputStream& in) {
       // read version
-      uint8_t version = in.get();
+      const uint8_t version = in.get();
       if (version != 1) {
         throw BareBones::Exception(0x67c010edbd64e272,
                                    "Invalid stream data version (%d) for loading into data vector (Symbol::data_type), only version 1 is supported", version);
       }
 
       // read mode
-      BareBones::SnugComposite::SerializationMode mode = static_cast<BareBones::SnugComposite::SerializationMode>(in.get());
+      const auto mode = static_cast<BareBones::SnugComposite::SerializationMode>(in.get());
 
       // read pos of first symbol in the portion, if we are reading wal
       uint32_t first_to_load_i = 0;
@@ -250,7 +250,7 @@ class LabelNameSet {
         }
 
         // size
-        uint32_t size_to_save = size_ - first_to_save;
+        const uint32_t size_to_save = size_ - first_to_save;
         res += sizeof(uint32_t);
 
         // data
@@ -292,14 +292,14 @@ class LabelNameSet {
     template <class InputStream>
     void load(InputStream& in) {
       // read version
-      uint8_t version = in.get();
+      const uint8_t version = in.get();
       if (version != 1) {
         throw BareBones::Exception(0xe7b943f626c40350,
                                    "Invalid stream data version (%d) for loading into LabelSetNames::data_type vector, only version 1 is supported", version);
       }
 
       // read mode
-      BareBones::SnugComposite::SerializationMode mode = static_cast<BareBones::SnugComposite::SerializationMode>(in.get());
+      const auto mode = static_cast<BareBones::SnugComposite::SerializationMode>(in.get());
 
       // read pos of first seq in the portion, if we are reading wal
       uint32_t first_to_load_i = 0;
@@ -342,7 +342,7 @@ class LabelNameSet {
     }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
-      return symbols_table.allocated_memory() + symbols_ids_sequences.allocated_memory();
+      return symbols_table.allocated_memory() + BareBones::mem::allocated_memory(symbols_ids_sequences);
     }
   };
 
@@ -462,7 +462,7 @@ class LabelSet {
           first_to_save = from->next_item_index_;
           out.write(reinterpret_cast<const char*>(&first_to_save), sizeof(first_to_save));
         }
-        uint32_t first_item_index_in_ids_sequence = data_->next_item_index() - data_->symbols_ids_sequences.size();
+        const uint32_t first_item_index_in_ids_sequence = data_->next_item_index() - data_->symbols_ids_sequences.size();
         assert(first_to_save >= first_item_index_in_ids_sequence);
 
         // write  size
@@ -539,7 +539,7 @@ class LabelSet {
         }
 
         // size
-        uint32_t size_to_save = next_item_index_ - first_to_save;
+        const uint32_t size_to_save = next_item_index_ - first_to_save;
         res += sizeof(uint32_t);
 
         // data
@@ -744,7 +744,7 @@ class LabelSet {
       size_t remainder_for_symbols_ids_sequences = max_ui32 - this->symbols_ids_sequences.size();
       size_t remainder_for_symbol_table = std::numeric_limits<uint32_t>::max();
       for (const auto& table : this->symbols_tables) {
-        if (size_t n = table->remainder_size(); n < remainder_for_symbol_table) {
+        if (const size_t n = table->remainder_size(); n < remainder_for_symbol_table) {
           remainder_for_symbol_table = n;
         }
       }
@@ -752,7 +752,8 @@ class LabelSet {
     }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
-      return symbols_tables.allocated_memory() + symbols_ids_sequences.allocated_memory() + label_name_sets_table.allocated_memory();
+      return symbols_tables.allocated_memory() + BareBones::mem::allocated_memory(symbols_ids_sequences) +
+             BareBones::mem::allocated_memory(label_name_sets_table);
     }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return next_item_index_; }
@@ -794,7 +795,7 @@ class LabelSet {
     label_name_set_type label_name_set_;
     const data_type* data_;
     values_iterator_type values_begin_;
-    values_iterator_sentinel_type values_end_;
+    [[no_unique_address]] values_iterator_sentinel_type values_end_;
 
    public:
     PROMPP_ALWAYS_INLINE explicit composite_type(const data_type* data = nullptr,
@@ -858,6 +859,9 @@ class LabelSet {
 
       PROMPP_ALWAYS_INLINE uint32_t value_id() const noexcept { return *vi_; }
     };
+
+    using iterator = Iterator<decltype(label_name_set_.begin()), decltype(values_begin_)>;
+    using end_iterator = Iterator<decltype(label_name_set_.end()), decltype(values_end_)>;
 
     PROMPP_ALWAYS_INLINE auto begin() const noexcept {
       return Iterator<decltype(label_name_set_.begin()), decltype(values_begin_)>(data_, label_name_set_.begin(), values_begin_);

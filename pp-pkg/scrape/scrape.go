@@ -597,7 +597,7 @@ func (sp *scrapePool) refreshTargetLimitErr() error {
 
 var (
 	errBodySizeLimit = errors.New("body size limit exceeded")
-	UserAgent        = fmt.Sprintf("Prometheus/%s", version.Version)
+	UserAgent        = fmt.Sprintf("Prom++/%s", version.Version)
 )
 
 // A scraper retrieves samples and accepts a status report at the end.
