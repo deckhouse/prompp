@@ -92,10 +92,6 @@ type Receiver struct {
 	shutdowner        *util.GracefulShutdowner
 }
 
-func (rr *Receiver) Appender(ctx context.Context) storage.Appender {
-	return newPromAppender(ctx, rr, prom_config.TransparentRelabeler)
-}
-
 type RotationInfo struct {
 	BlockDuration time.Duration
 	Seed          uint64
@@ -105,13 +101,13 @@ type HeadActivator struct {
 	catalog *catalog.Catalog
 }
 
+func newHeadActivator(catalog *catalog.Catalog) *HeadActivator {
+	return &HeadActivator{catalog: catalog}
+}
+
 func (ha *HeadActivator) Activate(headID string) error {
 	_, err := ha.catalog.SetStatus(headID, catalog.StatusActive)
 	return err
-}
-
-func newHeadActivator(catalog *catalog.Catalog) *HeadActivator {
-	return &HeadActivator{catalog: catalog}
 }
 
 func NewReceiver(
@@ -250,6 +246,21 @@ func NewReceiver(
 	return r, nil
 }
 
+// AppendHashdex append incoming Hashdex data to relabeling.
+func (rr *Receiver) AppendHashdex(
+	ctx context.Context,
+	hashdex cppbridge.ShardedData,
+	relabelerID string,
+	commitToWal bool,
+) error {
+	if rr.haTracker.IsDrop(hashdex.Cluster(), hashdex.Replica()) {
+		return nil
+	}
+	incomingData := &relabeler.IncomingData{Hashdex: hashdex}
+	_, err := rr.appender.Append(ctx, incomingData, nil, relabelerID, commitToWal)
+	return err
+}
+
 // AppendSnappyProtobuf append compressed via snappy Protobuf data to relabeling hashdex data.
 func (rr *Receiver) AppendSnappyProtobuf(
 	ctx context.Context,
@@ -316,19 +327,9 @@ func (rr *Receiver) AppendTimeSeriesHashdex(
 	)
 }
 
-// AppendHashdex append incoming Hashdex data to relabeling.
-func (rr *Receiver) AppendHashdex(
-	ctx context.Context,
-	hashdex cppbridge.ShardedData,
-	relabelerID string,
-	commitToWal bool,
-) error {
-	if rr.haTracker.IsDrop(hashdex.Cluster(), hashdex.Replica()) {
-		return nil
-	}
-	incomingData := &relabeler.IncomingData{Hashdex: hashdex}
-	_, err := rr.appender.Append(ctx, incomingData, nil, relabelerID, commitToWal)
-	return err
+// Appender create a new appender for head.
+func (rr *Receiver) Appender(ctx context.Context) storage.Appender {
+	return newPromAppender(ctx, rr, prom_config.TransparentRelabeler)
 }
 
 // ApplyConfig update config.
@@ -453,9 +454,38 @@ func (rr *Receiver) GetState() *cppbridge.State {
 	return cppbridge.NewState(rr.headConfigStorage.Load().numberOfShards)
 }
 
+func (rr *Receiver) HeadQueryable() storage.Queryable {
+	return rr.appender
+}
+
+func (rr *Receiver) HeadStatus(limit int) relabeler.HeadStatus {
+	return rr.appender.HeadStatus(limit)
+}
+
+// LowestSentTimestamp returns the lowest sent timestamp across all queues.
+func (*Receiver) LowestSentTimestamp() int64 {
+	return 0
+}
+
 // MergeOutOfOrderChunks merge chunks with out of order data chunks.
 func (rr *Receiver) MergeOutOfOrderChunks() {
 	rr.appender.MergeOutOfOrderChunks()
+}
+
+// Querier calls f() with the given parameters.
+// Returns a querier.MultiQuerier combining of appenderQuerier and storageQuerier.
+func (rr *Receiver) Querier(mint, maxt int64) (storage.Querier, error) {
+	appenderQuerier, err := rr.appender.Querier(mint, maxt)
+	if err != nil {
+		return nil, err
+	}
+
+	storageQuerier, err := rr.storage.Querier(mint, maxt)
+	if err != nil {
+		return nil, errors.Join(err, appenderQuerier.Close())
+	}
+
+	return querier.NewMultiQuerier([]storage.Querier{appenderQuerier, storageQuerier}, nil), nil
 }
 
 // RelabelerIDIsExist check on exist relabelerID.
@@ -477,35 +507,6 @@ func (rr *Receiver) Run(_ context.Context) (err error) {
 	rr.rotator.Run()
 	<-rr.shutdowner.Signal()
 	return nil
-}
-
-func (rr *Receiver) HeadStatus(limit int) relabeler.HeadStatus {
-	return rr.appender.HeadStatus(limit)
-}
-
-// Querier calls f() with the given parameters.
-// Returns a querier.MultiQuerier combining of appenderQuerier and storageQuerier.
-func (rr *Receiver) Querier(mint, maxt int64) (storage.Querier, error) {
-	appenderQuerier, err := rr.appender.Querier(mint, maxt)
-	if err != nil {
-		return nil, err
-	}
-
-	storageQuerier, err := rr.storage.Querier(mint, maxt)
-	if err != nil {
-		return nil, errors.Join(err, appenderQuerier.Close())
-	}
-
-	return querier.NewMultiQuerier([]storage.Querier{appenderQuerier, storageQuerier}, nil), nil
-}
-
-func (rr *Receiver) HeadQueryable() storage.Queryable {
-	return rr.appender
-}
-
-// LowestSentTimestamp returns the lowest sent timestamp across all queues.
-func (*Receiver) LowestSentTimestamp() int64 {
-	return 0
 }
 
 // Shutdown safe shutdown Receiver.
