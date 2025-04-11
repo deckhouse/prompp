@@ -60,7 +60,7 @@ jobs:
 
       - name: Archive binaries
         run: |
-          tar -czvf prompp-binaries.tar.gz prompp promtool prompptool
+          tar -czvf prompp-binaries.tar.gz prompp promtool prompptool ./documentation/examples/prometheus.yml
 
       - name: Upload binaries as artifacts
         uses: actions/upload-artifact@v4
