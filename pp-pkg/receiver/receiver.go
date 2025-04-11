@@ -695,7 +695,7 @@ func makeDialers(
 	for i := range dialersConfig {
 		ccfg, ok := dialersConfig[i].ConnDialerConfig.(*dialer.CommonConfig)
 		if !ok {
-			return nil, fmt.Errorf("invalid CommonConfig: %v", dialersConfig[i].ConnDialerConfig)
+			return nil, fmt.Errorf("invalid dialer CommonConfig: %v", dialersConfig[i].ConnDialerConfig)
 		}
 
 		d, err := dialer.DefaultDialer(ccfg, registerer)
