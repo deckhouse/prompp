@@ -142,7 +142,6 @@ func (h *RotatableHead) Rotate() error {
 		return err
 	}
 
-	h.head.MergeOutOfOrderChunks()
 	if err = h.head.CommitToWal(); err != nil {
 		logger.Errorf("failed to commit wal on rotation: %v", err)
 	}
@@ -163,7 +162,6 @@ func (h *RotatableHead) RotateWithConfig(inputRelabelerConfigs []*config.InputRe
 		return err
 	}
 
-	h.head.MergeOutOfOrderChunks()
 	if err = h.head.CommitToWal(); err != nil {
 		logger.Errorf("failed to commit wal on rotation: %v", err)
 	}
