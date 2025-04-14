@@ -1,6 +1,7 @@
 package cppbridge_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -87,23 +88,38 @@ func (s *HeadSuite) TestInstantQuery() {
 	encoder.Encode(0, 7, 1.0)
 	encoder.Encode(0, 10, 1.0)
 
-	encoder.Encode(1, 2, 1.0)
+	encoder.Encode(1, 3, 1.0)
 	encoder.Encode(1, 11, 1.0)
 
 	encoder.Encode(2, 1, 2.0)
 	encoder.Encode(2, 4, 2.0)
 
+	encoder.Encode(3, 2, 2.0)
+	encoder.Encode(3, 8, 2.0)
+
 	// Act
-	seriesIDs := []uint32{0, 1, 2}
-	timestamp := int64(5)
+	seriesIDs := []uint32{0, 1, 2, 3}
+	timestampStart := int64(3)
+	timestampEnd := int64(5)
 	timestampDefault := int64(-1)
-	samples := dataStorage.InstantQuery(seriesIDs, timestamp, timestampDefault)
+	samples := make([]cppbridge.Sample, len(seriesIDs))
+	for i := range samples {
+		samples[i] = cppbridge.Sample{Timestamp: timestampDefault, Value: math.Float64frombits(cppbridge.StaleNaN)}
+	}
+
+	query := cppbridge.HeadDataStorageQuery{StartTimestampMs: timestampStart, EndTimestampMs: timestampEnd, LabelSetIDs: seriesIDs}
+
+	dataStorage.InstantQuery(query, samples)
 
 	// Assert
-	s.Len(samples, 3)
+	s.Len(samples, 4)
 
 	s.EqualValues(-1, samples[0].Timestamp)
 	s.True(cppbridge.IsStaleNaN(samples[0].Value))
-	s.Equal(cppbridge.Sample{Timestamp: 2, Value: 1.0}, samples[1])
+
+	s.Equal(cppbridge.Sample{Timestamp: 3, Value: 1.0}, samples[1])
 	s.Equal(cppbridge.Sample{Timestamp: 4, Value: 2.0}, samples[2])
+
+	s.EqualValues(-1, samples[3].Timestamp)
+	s.True(cppbridge.IsStaleNaN(samples[3].Value))
 }

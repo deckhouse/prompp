@@ -215,9 +215,8 @@ func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) *HeadDataStorageSer
 	return serializedChunks
 }
 
-func (ds *HeadDataStorage) InstantQuery(seriesIDs []uint32, timestamp int64, timestampDefault int64) []Sample {
-	samples := seriesDataDataStorageInstantQuery(ds.dataStorage, seriesIDs, timestamp, timestampDefault)
-	return samples
+func (ds *HeadDataStorage) InstantQuery(query HeadDataStorageQuery, samples []Sample) {
+	seriesDataDataStorageInstantQuery(ds.dataStorage, query, samples)
 }
 
 type HeadDataStorageDeserializer struct {
