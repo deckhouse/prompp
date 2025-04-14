@@ -69,27 +69,24 @@ extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
   serializer.serialize(queried_chunk_list, bytes_stream);
 }
 
-extern "C" void prompp_series_data_data_storage_instant_query(void* args, void* res) {
+extern "C" void prompp_series_data_data_storage_instant_query(void* args) {
   using PromPP::Primitives::Go::SliceView;
   using series_data::DataStorage;
   using series_data::encoder::Sample;
+  using PromPP::Primitives::LabelSetID;
+  using Query = series_data::querier::Query<SliceView<LabelSetID>>;
 
   struct Arguments {
-    SliceView<PromPP::Primitives::LabelSetID> ls_ids;
     DataStorage* data_storage;
-    PromPP::Primitives::Timestamp timestamp;
-    PromPP::Primitives::Timestamp timestamp_default;
-  };
-  struct Result {
+    Query query;
     SliceView<Sample> samples;
   };
 
   auto in = reinterpret_cast<Arguments*>(args);
-  auto out = reinterpret_cast<Result*>(res);
 
-  std::ranges::transform(in->ls_ids, out->samples.begin(), [t = in->timestamp, t_default = in->timestamp_default, s_ptr = in->data_storage](const auto ls_id) {
-    return series_data::InstantQuerier::query_sample(*s_ptr, ls_id, t, t_default);
-  });
+  for (size_t i = 0; i < in->samples.size(); ++i) {
+    series_data::InstantQuerier::query_sample(in->samples[i], *(in->data_storage), in->query.label_set_ids[i], in->query.time_interval);
+  }
 }
 
 extern "C" void prompp_series_data_data_storage_allocated_memory(void* args, void* res) {
