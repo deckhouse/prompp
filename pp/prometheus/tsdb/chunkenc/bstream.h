@@ -6,22 +6,20 @@ namespace PromPP::Prometheus::tsdb::chunkenc {
 
 template <std::array kAllocationSizesTable>
   requires std::is_same_v<typename decltype(kAllocationSizesTable)::value_type, BareBones::AllocationSize>
-class BStream : public BareBones::CompactBitSequenceBase<kAllocationSizesTable, BareBones::Bit::to_bits(sizeof(uint8_t) + 1)> {
+class BStream : public BareBones::CompactBitSequenceBase<kAllocationSizesTable, BareBones::Bit::to_bits(sizeof(uint64_t) + 1)> {
  public:
-  void write_bits(uint64_t u, uint8_t nbits) noexcept {
-    u <<= kUint64Bits - nbits;
-    while (nbits >= kByteBits) {
-      const auto byt = static_cast<uint8_t>(u >> (kUint64Bits - kByteBits));
-      write_byte(byt);
-      u <<= kByteBits;
-      nbits -= kByteBits;
-    }
+  void write_bits(uint64_t value, uint8_t nbits) noexcept {
+    reserve_enough_memory_if_needed(nbits);
 
-    while (nbits > 0) {
-      write_bit(u >> (kUint64Bits - 1) == 1);
-      u <<= 1;
-      --nbits;
-    }
+    auto memory = Base::template unfilled_memory<uint8_t>();
+    const auto rest = rest_of_bits_in_byte();
+
+    value <<= kUint64Bits - nbits;
+    *memory++ |= static_cast<uint8_t>(value >> (kUint64Bits - rest));
+    value <<= rest;
+    *reinterpret_cast<uint64_t*>(memory) |= BareBones::Bit::be(value);
+
+    size_in_bits_ += nbits;
   }
 
   PROMPP_ALWAYS_INLINE void write_byte(uint8_t byt) noexcept {
@@ -45,16 +43,8 @@ class BStream : public BareBones::CompactBitSequenceBase<kAllocationSizesTable, 
     ++size_in_bits_;
   }
 
-  PROMPP_ALWAYS_INLINE void write_bit(bool bit) noexcept {
-    if (bit) {
-      write_single_bit();
-    } else {
-      write_zero_bit();
-    }
-  }
-
  private:
-  using Base = BareBones::CompactBitSequenceBase<kAllocationSizesTable, BareBones::Bit::to_bits(sizeof(uint8_t) + 1)>;
+  using Base = BareBones::CompactBitSequenceBase<kAllocationSizesTable, BareBones::Bit::to_bits(sizeof(uint64_t) + 1)>;
 
   static constexpr auto kUint64Bits = BareBones::Bit::kUint64Bits;
   static constexpr auto kByteBits = BareBones::Bit::kByteBits;
