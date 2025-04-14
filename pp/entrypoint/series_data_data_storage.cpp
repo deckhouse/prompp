@@ -10,7 +10,7 @@
 
 using entrypoint::head::DataStoragePtr;
 using entrypoint::head::QueryableEncodingBimap;
-using ChunkRecoder = head::ChunkRecoder<QueryableEncodingBimap::LsIdSet>;
+using ChunkRecoder = head::ChunkRecoder<QueryableEncodingBimap::LsIdSet::const_iterator, QueryableEncodingBimap::LsIdSet::const_iterator>;
 using ChunkRecoderPtr = std::unique_ptr<ChunkRecoder>;
 
 extern "C" void prompp_series_data_data_storage_ctor(void* res) {
