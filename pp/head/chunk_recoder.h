@@ -119,20 +119,26 @@ class ChunkRecoder {
 
   void recode_chunk(ChunkInfoInterface auto& info) {
     Encoder encoder;
-    Decoder::create_decode_iterator(*iterator_, [&](auto&& begin, auto&& end) PROMPP_LAMBDA_INLINE {
+    Decoder::create_decode_iterator(*iterator_, [&]<typename Iterator>(Iterator&& begin, auto&& end) {
       for (; begin != end; ++begin) {
         const auto& sample = *begin;
-        if (sample.timestamp > time_interval_.max) {
+        if (sample.timestamp > time_interval_.max) [[unlikely]] {
           return;
         }
-        if (sample.timestamp < time_interval_.min) {
+        if (sample.timestamp < time_interval_.min) [[unlikely]] {
           continue;
         }
 
         if (encoder.state().state == BareBones::Encoding::Gorilla::GorillaState::kFirstPoint) [[unlikely]] {
           info.interval.min = sample.timestamp;
         }
-        encoder.encode(sample.timestamp, sample.value, stream_, stream_);
+
+        if constexpr (std::is_same_v<Iterator, series_data::decoder::ConstantDecodeIterator>) {
+          recode_constant_chunk_sample(sample, encoder);
+        } else {
+          recode_chunk_sample(sample, encoder);
+        }
+
         ++info.samples_count;
       }
     });
@@ -141,6 +147,18 @@ class ChunkRecoder {
       info.interval.max = encoder.last_timestamp();
       info.series_id = iterator_->series_id();
     }
+  }
+
+  PROMPP_ALWAYS_INLINE void recode_constant_chunk_sample(const series_data::encoder::Sample& sample, Encoder& encoder) noexcept {
+    if (encoder.state().state == BareBones::Encoding::Gorilla::GorillaState::kFirstPoint) [[unlikely]] {
+      encoder.encode(sample.timestamp, sample.value, stream_, stream_);
+    } else {
+      encoder.encode_constant_value(sample.timestamp, stream_, stream_);
+    }
+  }
+
+  PROMPP_ALWAYS_INLINE void recode_chunk_sample(const series_data::encoder::Sample& sample, Encoder& encoder) noexcept {
+    encoder.encode(sample.timestamp, sample.value, stream_, stream_);
   }
 
   void advance_to_non_empty_chunk() noexcept {
