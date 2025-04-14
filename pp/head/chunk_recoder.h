@@ -16,11 +16,15 @@ concept ChunkInfoInterface = requires(ChunkInfo& info) {
   { info.samples_count } -> std::same_as<uint8_t&>;
 };
 
-template <class LsIdSet>
+template <class LsIdSetIterator, class LsIdSetIteratorSentinel>
 class ChunkRecoder {
  public:
-  explicit ChunkRecoder(const LsIdSet& ls_id_id_set, const series_data::DataStorage* data_storage, const PromPP::Primitives::TimeInterval& time_interval)
-      : iterator_(ls_id_id_set, data_storage), time_interval_{.min = time_interval.min, .max = time_interval.max - 1} {
+  explicit ChunkRecoder(LsIdSetIterator&& ls_id_set_iterator_begin,
+                        LsIdSetIteratorSentinel&& ls_id_set_iterator_end,
+                        const series_data::DataStorage* data_storage,
+                        const PromPP::Primitives::TimeInterval& time_interval)
+      : iterator_(std::move(ls_id_set_iterator_begin), std::move(ls_id_set_iterator_end), data_storage),
+        time_interval_{.min = time_interval.min, .max = time_interval.max - 1} {
     advance_to_non_empty_chunk();
   }
 
@@ -65,9 +69,9 @@ class ChunkRecoder {
 
     using LabelSetID = PromPP::Primitives::LabelSetID;
 
-    ChunkIterator(const LsIdSet& series_id_set, const series_data::DataStorage* data_storage)
-        : ls_id_iterator_(series_id_set.begin()),
-          ls_id_end_iterator_(series_id_set.end()),
+    ChunkIterator(LsIdSetIterator&& ls_id_iterator_, LsIdSetIteratorSentinel&& ls_id_end_iterator, const series_data::DataStorage* data_storage)
+        : ls_id_iterator_(std::move(ls_id_iterator_)),
+          ls_id_end_iterator_(std::move(ls_id_end_iterator)),
           chunk_iterator_(data_storage,
                           ls_id_iterator_ != ls_id_end_iterator_ ? static_cast<LabelSetID>(*ls_id_iterator_) : PromPP::Primitives::kInvalidLabelSetID) {}
 
@@ -97,8 +101,8 @@ class ChunkRecoder {
     }
 
    private:
-    typename LsIdSet::const_iterator ls_id_iterator_;
-    typename LsIdSet::const_iterator ls_id_end_iterator_;
+    LsIdSetIterator ls_id_iterator_;
+    [[no_unique_address]] LsIdSetIteratorSentinel ls_id_end_iterator_;
     series_data::DataStorage::SeriesChunkIterator chunk_iterator_;
   };
 
