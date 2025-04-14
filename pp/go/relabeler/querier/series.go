@@ -216,20 +216,22 @@ func (ss *SeriesSet) Warnings() annotations.Annotations {
 }
 
 const (
-	InstantQueryValueNotFoundTimestampValue = -1
+	DefaultInstantQueryValueNotFoundTimestampValue int64 = 0
 )
 
 type InstantSeriesSet struct {
-	index     int
-	labelSets []*cppbridge.LabelsCpp
-	samples   []cppbridge.Sample
+	index                       int
+	valueNotFoundTimestampValue int64
+	labelSets                   []*cppbridge.LabelsCpp
+	samples                     []cppbridge.Sample
 }
 
-func NewInstantSeriesSet(labelSets []*cppbridge.LabelsCpp, samples []cppbridge.Sample) *InstantSeriesSet {
+func NewInstantSeriesSet(valueNotFoundTimestampValue int64, labelSets []*cppbridge.LabelsCpp, samples []cppbridge.Sample) *InstantSeriesSet {
 	return &InstantSeriesSet{
-		index:     -1,
-		labelSets: labelSets,
-		samples:   samples,
+		index:                       -1,
+		valueNotFoundTimestampValue: valueNotFoundTimestampValue,
+		labelSets:                   labelSets,
+		samples:                     samples,
 	}
 }
 
@@ -240,7 +242,7 @@ func (ss *InstantSeriesSet) Next() bool {
 
 	ss.index++
 
-	if ss.samples[ss.index].Timestamp == InstantQueryValueNotFoundTimestampValue {
+	if ss.samples[ss.index].Timestamp == ss.valueNotFoundTimestampValue {
 		return ss.Next()
 	}
 

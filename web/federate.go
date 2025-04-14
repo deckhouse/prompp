@@ -16,6 +16,7 @@ package web
 import (
 	"errors"
 	"fmt"
+	"github.com/prometheus/prometheus/pp/go/relabeler/querier"
 	"net/http"
 	"slices"
 	"sort"
@@ -60,6 +61,7 @@ func (h *Handler) federation(w http.ResponseWriter, req *http.Request) {
 	defer h.mtx.RUnlock()
 
 	ctx := req.Context()
+	ctx = querier.InstantQueryWithContext(ctx)
 
 	if err := req.ParseForm(); err != nil {
 		http.Error(w, fmt.Sprintf("error parsing form values: %v", err), http.StatusBadRequest)

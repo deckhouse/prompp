@@ -139,11 +139,10 @@ func (q *Querier) Close() error {
 }
 
 func (q *Querier) Select(ctx context.Context, sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
-	if q.mint != q.maxt {
-		return q.selectRange(ctx, sortSeries, hints, matchers...)
+	if q.mint == q.maxt || InstantQueryFromContext(ctx) {
+		return q.selectInstant(ctx, sortSeries, hints, matchers...)
 	}
-
-	return q.selectInstant(ctx, sortSeries, hints, matchers...)
+	return q.selectRange(ctx, sortSeries, hints, matchers...)
 }
 
 func (q *Querier) selectInstant(ctx context.Context, sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
@@ -162,6 +161,11 @@ func (q *Querier) selectInstant(ctx context.Context, sortSeries bool, hints *sto
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
 	callerID := cppbridge.GetCaller(ctx)
 
+	valueNotFoundTimestampValue := DefaultInstantQueryValueNotFoundTimestampValue
+	if q.mint < 0 {
+		valueNotFoundTimestampValue = q.mint - 1
+	}
+
 	err := q.head.ForEachShard(func(shard relabeler.Shard) error {
 		lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
 
@@ -173,14 +177,11 @@ func (q *Querier) selectInstant(ctx context.Context, sortSeries bool, hints *sto
 			return fmt.Errorf("failed to query from shard: %d, query status: %d", shard.ShardID(), lssQueryResult.Status())
 		}
 
-		samples := shard.DataStorage().InstantQuery(lssQueryResult.IDs(), q.maxt, InstantQueryValueNotFoundTimestampValue)
+		samples := shard.DataStorage().InstantQuery(lssQueryResult.IDs(), q.maxt, valueNotFoundTimestampValue)
 
-		// todo: detect zero match
-
-		// todo: skip
 		labelSets := make([]*cppbridge.LabelsCpp, len(samples))
 		lssQueryResult.MatchesIndexRange(func(lss *cppbridge.LabelSetStorage, index int, lsid uint32, length uint16) {
-			if samples[index].Timestamp == InstantQueryValueNotFoundTimestampValue {
+			if samples[index].Timestamp == valueNotFoundTimestampValue {
 				return
 			}
 			labelSets[index] = cppbridge.NewLabelsCpp(lss, lsid, length)
