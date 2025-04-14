@@ -27,10 +27,15 @@ import (
 	"github.com/prometheus/prometheus/pp/go/model"
 )
 
-var unsafeCall = promauto.NewCounterVec(
-	prometheus.CounterOpts{
+var unsafeCall = promauto.NewHistogramVec(
+	prometheus.HistogramOpts{
 		Name: "prompp_cppbridge_unsafecall_nanoseconds",
 		Help: "The time duration cpp call.",
+		Buckets: []float64{
+			100, 500,
+			1000, 5000, 10000, 50000, 100000, 500000,
+			1000000, 5000000, 10000000, 50000000, 100000000, 500000000,
+		},
 	},
 	[]string{"object", "method"},
 )
@@ -1264,7 +1269,7 @@ func prometheusPerShardRelabelerInputRelabeling(
 	)
 	unsafeCall.With(
 		prometheus.Labels{"object": "input_relabeler", "method": "input_relabeling"},
-	).Add(float64(time.Since(start).Nanoseconds()))
+	).Observe(float64(time.Since(start).Nanoseconds()))
 
 	return res.samplesAdded, res.seriesAdded, res.exception
 }
@@ -1314,7 +1319,7 @@ func prometheusPerShardRelabelerInputRelabelingWithStalenans(
 	)
 	unsafeCall.With(
 		prometheus.Labels{"object": "input_relabeler", "method": "relabeling_with_stalenans"},
-	).Add(float64(time.Since(start).Nanoseconds()))
+	).Observe(float64(time.Since(start).Nanoseconds()))
 
 	return res.samplesAdded, res.seriesAdded, res.exception
 }
@@ -1345,7 +1350,7 @@ func prometheusPerShardRelabelerAppendRelabelerSeries(
 	)
 	unsafeCall.With(
 		prometheus.Labels{"object": "input_relabeler", "method": "append_relabeler_series"},
-	).Add(float64(time.Since(start).Nanoseconds()))
+	).Observe(float64(time.Since(start).Nanoseconds()))
 
 	return res.exception
 }
@@ -1373,7 +1378,7 @@ func prometheusPerShardRelabelerUpdateRelabelerState(
 	)
 	unsafeCall.With(
 		prometheus.Labels{"object": "input_relabeler", "method": "update_relabeler_state"},
-	).Add(float64(time.Since(start).Nanoseconds()))
+	).Observe(float64(time.Since(start).Nanoseconds()))
 
 	return res.exception
 }
@@ -1423,7 +1428,7 @@ func prometheusPerShardRelabelerResetTo(
 	)
 	unsafeCall.With(
 		prometheus.Labels{"object": "input_relabeler", "method": "reset_to"},
-	).Add(float64(time.Since(start).Nanoseconds()))
+	).Observe(float64(time.Since(start).Nanoseconds()))
 }
 
 func seriesDataDataStorageCtor() uintptr {
@@ -1450,7 +1455,7 @@ func seriesDataDataStorageReset(dataStorage uintptr) {
 	)
 	unsafeCall.With(
 		prometheus.Labels{"object": "head_data_storage", "method": "reset"},
-	).Add(float64(time.Since(start).Nanoseconds()))
+	).Observe(float64(time.Since(start).Nanoseconds()))
 }
 
 func seriesDataDataStorageAllocatedMemory(dataStorage uintptr) uint64 {
@@ -1468,7 +1473,7 @@ func seriesDataDataStorageAllocatedMemory(dataStorage uintptr) uint64 {
 	)
 	unsafeCall.With(
 		prometheus.Labels{"object": "head_data_storage", "method": "allocated_memory"},
-	).Add(float64(time.Since(start).Nanoseconds()))
+	).Observe(float64(time.Since(start).Nanoseconds()))
 
 	return res.allocatedMemory
 }
@@ -1489,7 +1494,7 @@ func seriesDataDataStorageQuery(dataStorage uintptr, query HeadDataStorageQuery)
 	)
 	unsafeCall.With(
 		prometheus.Labels{"object": "head_data_storage", "method": "query"},
-	).Add(float64(time.Since(start).Nanoseconds()))
+	).Observe(float64(time.Since(start).Nanoseconds()))
 
 	return res.serializedChunks
 }
@@ -1553,7 +1558,7 @@ func seriesDataEncoderEncode(encoder uintptr, seriesID uint32, timestamp int64, 
 	)
 	unsafeCall.With(
 		prometheus.Labels{"object": "head_data_storage", "method": "encode"},
-	).Add(float64(time.Since(start).Nanoseconds()))
+	).Observe(float64(time.Since(start).Nanoseconds()))
 }
 
 func seriesDataEncoderEncodeInnerSeriesSlice(encoder uintptr, innerSeriesSlice []*InnerSeries) {
@@ -1568,7 +1573,7 @@ func seriesDataEncoderEncodeInnerSeriesSlice(encoder uintptr, innerSeriesSlice [
 	)
 	unsafeCall.With(
 		prometheus.Labels{"object": "head_data_storage", "method": "encode_inner_series_slice"},
-	).Add(float64(time.Since(start).Nanoseconds()))
+	).Observe(float64(time.Since(start).Nanoseconds()))
 }
 
 func seriesDataEncoderMergeOutOfOrderChunks(encoder uintptr) {
@@ -1582,7 +1587,7 @@ func seriesDataEncoderMergeOutOfOrderChunks(encoder uintptr) {
 	)
 	unsafeCall.With(
 		prometheus.Labels{"object": "head_data_storage", "method": "merge_out_of_order_chunks"},
-	).Add(float64(time.Since(start).Nanoseconds()))
+	).Observe(float64(time.Since(start).Nanoseconds()))
 }
 
 func seriesDataEncoderDtor(encoder uintptr) {
@@ -1657,11 +1662,17 @@ func seriesDataDecodeIteratorSample(decodeIterator uintptr) (int64, float64) {
 		value     float64
 	}
 
+	// start := time.Now()
+
 	fastcgo.UnsafeCall2(
 		C.prompp_series_data_decode_iterator_sample,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
+
+	// unsafeCall.With(
+	// 	prometheus.Labels{"object": "head_data_storage_decode_iterator", "method": "sample"},
+	// ).Observe(float64(time.Since(start).Nanoseconds()))
 
 	return res.timestamp, res.value
 }
@@ -1719,7 +1730,7 @@ func seriesDataChunkRecoderRecodeNextChunk(chunkRecoder uintptr, recodedChunk *R
 	)
 	unsafeCall.With(
 		prometheus.Labels{"object": "chunk_recoder", "method": "recode_next_chunk"},
-	).Add(float64(time.Since(start).Nanoseconds()))
+	).Observe(float64(time.Since(start).Nanoseconds()))
 }
 
 func seriesDataChunkRecoderDtor(chunkRecoder uintptr) {
@@ -1966,7 +1977,7 @@ func walPrometheusScraperHashdexParse(hashdex uintptr, buffer []byte, default_ti
 	)
 	unsafeCall.With(
 		prometheus.Labels{"object": "hashdex", "method": "parse"},
-	).Add(float64(time.Since(start).Nanoseconds()))
+	).Observe(float64(time.Since(start).Nanoseconds()))
 
 	return res.scraped, res.error
 }
@@ -2023,7 +2034,7 @@ func walOpenMetricsScraperHashdexParse(hashdex uintptr, buffer []byte, default_t
 	)
 	unsafeCall.With(
 		prometheus.Labels{"object": "hashdex", "method": "parse"},
-	).Add(float64(time.Since(start).Nanoseconds()))
+	).Observe(float64(time.Since(start).Nanoseconds()))
 
 	return res.scraped, res.error
 }
@@ -2135,11 +2146,17 @@ func headWalEncoderAddInnerSeries(encoder uintptr, innerSeries []*InnerSeries) (
 		exception []byte
 	}
 
+	start := time.Now()
+
 	fastcgo.UnsafeCall2(
 		C.prompp_head_wal_encoder_add_inner_series,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
+
+	unsafeCall.With(
+		prometheus.Labels{"object": "head_wal_encoder", "method": "add_inner_series"},
+	).Observe(float64(time.Since(start).Nanoseconds()))
 
 	return res.WALEncoderStats, handleException(res.exception)
 }
@@ -2155,11 +2172,17 @@ func headWalEncoderFinalize(encoder uintptr) (stats WALEncoderStats, segment []b
 		exception []byte
 	}
 
+	start := time.Now()
+
 	fastcgo.UnsafeCall2(
 		C.prompp_head_wal_encoder_finalize,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
+
+	unsafeCall.With(
+		prometheus.Labels{"object": "head_wal_encoder", "method": "finalize"},
+	).Observe(float64(time.Since(start).Nanoseconds()))
 
 	return res.WALEncoderStats, res.segment, handleException(res.exception)
 }
