@@ -12,14 +12,7 @@
 
 namespace performance_tests {
 
-using BareBones::Encoding::Gorilla::StreamEncoder;
-using BareBones::Encoding::Gorilla::TimestampDecoder;
-using BareBones::Encoding::Gorilla::TimestampEncoder;
-using BareBones::Encoding::Gorilla::ValuesEncoder;
 using PromPP::Primitives::TimeInterval;
-using series_data::Decoder;
-using series_data::encoder::Sample;
-using series_data::encoder::SampleList;
 
 void ChunkRecoder::execute(const Config& config, [[maybe_unused]] Metrics& metrics) const {
   DummyWal::Timeseries tmsr;
@@ -48,7 +41,6 @@ void ChunkRecoder::execute(const Config& config, [[maybe_unused]] Metrics& metri
     TimeInterval interval;
     uint32_t series_id{};
     uint8_t samples_count{};
-    BareBones::Vector<uint8_t> buffer;
   } chunk_data;
 
   const auto start_tm = std::chrono::steady_clock::now();
