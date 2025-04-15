@@ -1976,7 +1976,7 @@ func walPrometheusScraperHashdexParse(hashdex uintptr, buffer []byte, default_ti
 		uintptr(unsafe.Pointer(&res)),
 	)
 	unsafeCall.With(
-		prometheus.Labels{"object": "hashdex", "method": "parse"},
+		prometheus.Labels{"object": "prometheus_hashdex", "method": "parse"},
 	).Observe(float64(time.Since(start).Nanoseconds()))
 
 	return res.scraped, res.error
@@ -2033,7 +2033,7 @@ func walOpenMetricsScraperHashdexParse(hashdex uintptr, buffer []byte, default_t
 		uintptr(unsafe.Pointer(&res)),
 	)
 	unsafeCall.With(
-		prometheus.Labels{"object": "hashdex", "method": "parse"},
+		prometheus.Labels{"object": "open_metrics_hashdex", "method": "parse"},
 	).Observe(float64(time.Since(start).Nanoseconds()))
 
 	return res.scraped, res.error
