@@ -141,7 +141,8 @@ class ChunkRecoder {
           info.interval.min = sample.timestamp;
         }
 
-        if constexpr (std::is_same_v<Iterator, series_data::decoder::ConstantDecodeIterator>) {
+        if constexpr (std::is_same_v<Iterator, series_data::decoder::ConstantDecodeIterator> ||
+                      std::is_same_v<Iterator, series_data::decoder::TwoDoubleConstantDecodeIterator>) {
           recode_constant_chunk_sample(sample, encoder);
         } else {
           recode_chunk_sample(sample, encoder);

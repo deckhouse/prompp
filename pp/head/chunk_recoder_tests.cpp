@@ -370,4 +370,27 @@ TEST_F(ChunkRecoderFixture, ConstantEncoderChunkWithStaleNanOnThirdPoint) {
             info);
 }
 
+TEST_F(ChunkRecoderFixture, TwoDoubleConstantEncoderChunkWithStaleNan) {
+  // Arrange
+  Encoder encoder{storage_};
+  encoder.encode(0, 1, 0.0);
+  encoder.encode(0, 2, 1.0);
+  encoder.encode(0, 3, STALE_NAN);
+
+  auto recoder = create_recoder({0}, {.min = 0, .max = 4});
+
+  // Act
+  const auto info = recode(recoder);
+
+  // Assert
+  EXPECT_EQ((RecodeInfo{
+                .interval = {.min = 1, .max = 3},
+                .series_id = 0,
+                .samples_count = 3,
+                .buffer = "\x00\x03\x02\x00\x00\x00\x00\x00\x00\x00\x00\x01\xC4\x57\xFE\xC3\xF4\x00\x00\x00\x00\x00\x00\x00\x20"s,
+                .has_more_data = false,
+            }),
+            info);
+}
+
 }  // namespace
