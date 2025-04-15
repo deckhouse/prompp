@@ -71,7 +71,7 @@ jobs:
   build-go-bindings:
     needs: cpp-tests
     strategy:
-      max-parallel: 2
+      max-parallel: 4
       matrix:
         COMPILATION_MODE: [dbg, opt]
         ASAN: [false, true]
@@ -123,7 +123,7 @@ jobs:
   go-tests:
     needs: build-go-bindings
     strategy:
-      max-parallel: 2
+      max-parallel: 4
       matrix:
         runner_name: [fsn-dev-perftest-runner, fsn-dev-arm-runner]
         OPT: [dbg, opt]
