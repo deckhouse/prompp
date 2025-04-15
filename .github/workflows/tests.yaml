@@ -156,11 +156,9 @@ jobs:
       - name: Set architecture variable
         run: |
           if [[ "${{ matrix.runner_name }}" == "fsn-dev-perftest-runner" ]]; then
-            echo "ARCH=x86_64" >> $GITHUB_ENV
-            echo "CI_IMAGE_ARCH=amd64" >> $GITHUB_ENV
+            echo "ARCH=amd64" >> $GITHUB_ENV
           elif [[ "${{ matrix.runner_name }}" == "fsn-dev-arm-runner" ]]; then
             echo "ARCH=arm64" >> $GITHUB_ENV
-            echo "CI_IMAGE_ARCH=arm64" >> $GITHUB_ENV
           fi
 
       - name: Download Static Library
@@ -181,7 +179,7 @@ jobs:
             -e CGO_ENABLED="1" \
             -e GOPATH="${{ github.workspace }}/.cache" \
             -e GOBIN="/usr/local/go/bin" \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ env.CI_IMAGE_ARCH }} \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ env.ARCH }} \
             bash -c "
               # go tools
               mkdir -p .cache
