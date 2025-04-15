@@ -21,7 +21,16 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: fsn-dev-gitlab-runner
+    strategy:
+      matrix:
+        include:
+          - runner_name: fsn-dev-gitlab-runner
+            GO_ARCH: amd64
+            BAZEL_ARCH: x86_64
+          - runner_name: fsn-dev-arm-runner
+            GO_ARCH: arm64
+            BAZEL_ARCH: arm64
+    runs-on: ${{ matrix.runner_name }}
     steps:
       - name: Clean workspace
         uses: AutoModality/action-clean@v1
