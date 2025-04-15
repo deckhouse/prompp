@@ -75,6 +75,7 @@ jobs:
       matrix:
         COMPILATION_MODE: [dbg, opt]
         ASAN: [false, true]
+        runner_name: [fsn-dev-perftest-runner, fsn-dev-arm-runner]
         include:
           - runner_name: fsn-dev-perftest-runner
             arch: amd64
