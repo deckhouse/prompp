@@ -17,7 +17,7 @@ using std::operator""s;
 class ChunkRecoderFixture : public ::testing::Test {
  protected:
   using LsIdSet = std::vector<LabelSetID>;
-  using ChunkRecoder = head::ChunkRecoder<LsIdSet>;
+  using ChunkRecoder = head::ChunkRecoder<LsIdSet::const_iterator, LsIdSet::const_iterator>;
 
   struct RecodeInfo {
     TimeInterval interval{.min = 0, .max = 0};
@@ -34,7 +34,7 @@ class ChunkRecoderFixture : public ::testing::Test {
 
   ChunkRecoder create_recoder(const LsIdSet& ls_id_set, const TimeInterval& time_interval) {
     ls_id_set_ = ls_id_set;
-    return ChunkRecoder{ls_id_set_, &storage_, time_interval};
+    return ChunkRecoder{ls_id_set_.begin(), ls_id_set_.end(), &storage_, time_interval};
   }
 
   static RecodeInfo recode(ChunkRecoder& recoder) noexcept {
@@ -48,7 +48,7 @@ class ChunkRecoderFixture : public ::testing::Test {
 
 TEST_F(ChunkRecoderFixture, EmptyStorage) {
   // Arrange
-  ChunkRecoder recoder({}, &storage_, {});
+  ChunkRecoder recoder({}, {}, &storage_, {});
 
   // Act
   const auto info1 = recode(recoder);

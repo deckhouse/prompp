@@ -214,6 +214,7 @@ cc_library(
     name = "performance_tests_headers",
     hdrs = glob(["performance_tests/**/*.h"]),
     deps = [
+        ":head",
         ":primitives",
         ":prometheus",
         ":series_data",

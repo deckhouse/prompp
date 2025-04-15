@@ -662,6 +662,20 @@ class PROMPP_ATTRIBUTE_PACKED StreamEncoder {
       state_.values_encoder.encode(v, v_bitseq);
     }
   }
+
+  template <class BitSequence>
+  PROMPP_ALWAYS_INLINE void encode_constant_value(int64_t ts, BitSequence& ts_bitseq, BitSequence& v_bitseq) noexcept {
+    if (state_.state == GorillaState::kFirstPoint) [[unlikely]] {
+      assert(false);
+    } else if (state_.state == GorillaState::kSecondPoint) [[unlikely]] {
+      state_.timestamp_encoder.encode_delta(ts, ts_bitseq);
+      v_bitseq.write_zero_bit();
+      state_.state = GorillaState::kOtherPoint;
+    } else {
+      state_.timestamp_encoder.encode_delta_of_delta(ts, ts_bitseq);
+      v_bitseq.write_zero_bit();
+    }
+  }
 };
 
 static_assert(sizeof(StreamEncoder<ZigZagTimestampEncoder<>, ValuesEncoder>) == 29);
