@@ -5,7 +5,7 @@ image: toolkit
 final: false
 dockerfile: Dockerfile.ci
 args: 
-  BAZEL_ARCH: {{ env "BAZEL_ARCH" }}
+  : {{ env "BAZEL_ARCH" }}
   GO_ARCH: {{ env "GO_ARCH" }}
 ---
 image: prompp-src-artifact
