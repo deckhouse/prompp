@@ -14,13 +14,20 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  BAZEL_VERSION: "7.4.1"
-  GO_VERSION: "1.23.2"
-
 jobs:
   build-ci-image:
-    runs-on: fsn-dev-perftest-runner
+    strategy:
+      matrix:
+        include:
+          - runner_name: fsn-dev-perftest-runner
+            arch: amd64
+            GO_ARCH: amd64
+            BAZEL_ARCH: x86_64
+          - runner_name: fsn-dev-arm-runner
+            arch: arm64
+            GO_ARCH: arm64
+            BAZEL_ARCH: arm64
+    runs-on: ${{ matrix.runner_name }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -37,19 +44,16 @@ jobs:
 
       - name: Remove Previous Build Image
         run: |
-          docker rmi -f ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 || true
+          docker rmi -f ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} || true
 
       - name: Build and Push Docker Image
         run: |
           docker build -f Dockerfile.ci \
-            -t ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
-            --build-arg ARCH=x86_64 \
-            --build-arg BAZEL_ARCH=x86_64 \
-            --build-arg BAZEL_VERSION=${{ env.BAZEL_VERSION }} \
-            --build-arg GO_ARCH=amd64 \
-            --build-arg GO_VERSION=${{ env.GO_VERSION }} .
+            -t ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} \
+            --build-arg BAZEL_ARCH=${{ matrix.BAZEL_ARCH }} \
+            --build-arg GO_ARCH=${{ matrix.GO_ARCH }} \
 
       - name: Push Docker Image
         if: github.ref == 'refs/heads/pp' && github.event_name == 'push'
         run: |
-          docker push ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64
+          docker push ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }}

@@ -4,6 +4,9 @@ configVersion: 1
 image: toolkit
 final: false
 dockerfile: Dockerfile.ci
+args:
+  BAZEL_ARCH: {{ env "BAZEL_ARCH" }}
+  GO_ARCH: {{ env "GO_ARCH" }}
 ---
 image: prompp-src-artifact
 fromCacheVersion: "2025-03-31-2"
@@ -110,8 +113,13 @@ shell:
 {{ $binariesList := "/usr/bin/curl /bin/sh /bin/df" }}
 ---
 artifact: prom-pp-binaries-artifact
-from: registry.deckhouse.io/base_images/dev-alt:p10@sha256:76e6e163fa982f03468166203488b569e6d9fc10855d6a259c662706436cdcad
+from: alt:p10
+git:
+  - add: scripts/binary_replace.sh
+    to: /binary_replace.sh
 shell:
+  beforeInstall:
+    - apt-get install curl
   install:
     - /binary_replace.sh -i "{{ $binariesList }}" -o /relocate
 ---
