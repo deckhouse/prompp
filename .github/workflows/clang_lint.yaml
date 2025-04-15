@@ -45,7 +45,7 @@ jobs:
             -w /workspace \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
             bash -c "
-              cd pp
+              git config --global --add safe.directory /workspace && cd pp
               make format
             "
       - name: Run Clang Tidy
@@ -55,6 +55,6 @@ jobs:
             -w /workspace \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
             bash -c "
-              cd pp
+              git config --global --add safe.directory /workspace && cd pp
               make tidy
             "
