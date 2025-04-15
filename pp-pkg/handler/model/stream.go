@@ -111,38 +111,27 @@ func (s *StreamSegmentProcessingStatus) Write(writer io.Writer) error {
 	return err
 }
 
-//
-// StreamSegmentProcessingStatusDecoder
-//
-
-type StreamSegmentProcessingStatusDecoder struct {
-	reader io.Reader
-}
-
-func NewStreamSegmentProcessingStatusDecoder(reader io.Reader) *StreamSegmentProcessingStatusDecoder {
-	return &StreamSegmentProcessingStatusDecoder{reader: reader}
-}
-
-func (d *StreamSegmentProcessingStatusDecoder) Decode(status *StreamSegmentProcessingStatus) error {
+// DecodeFrom read from reader and decode.
+func (s *StreamSegmentProcessingStatus) DecodeFrom(reader io.Reader) error {
 	header := make([]byte, 8+4+2+4)
-	if _, err := io.ReadFull(d.reader, header); err != nil {
+	if _, err := io.ReadFull(reader, header); err != nil {
 		return err
 	}
 
-	status.Timestamp = int64(binary.LittleEndian.Uint64(header[:8]))
-	status.SegmentID = binary.LittleEndian.Uint32(header[8:12])
-	status.Code = binary.LittleEndian.Uint16(header[12:14])
+	s.Timestamp = int64(binary.LittleEndian.Uint64(header[:8]))
+	s.SegmentID = binary.LittleEndian.Uint32(header[8:12])
+	s.Code = binary.LittleEndian.Uint16(header[12:14])
 	messageLen := binary.LittleEndian.Uint32(header[14:18])
 	if messageLen == 0 {
 		return nil
 	}
 
 	message := make([]byte, messageLen)
-	if _, err := io.ReadFull(d.reader, message); err != nil {
+	if _, err := io.ReadFull(reader, message); err != nil {
 		return err
 	}
 
-	status.Message = string(message)
+	s.Message = string(message)
 
 	return nil
 }

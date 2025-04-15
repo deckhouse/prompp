@@ -1,8 +1,12 @@
 package model
 
 import (
+	"encoding/binary"
 	"errors"
 	"hash/crc32"
+	"io"
+
+	"github.com/prometheus/prometheus/util/pool"
 )
 
 const (
@@ -39,6 +43,79 @@ func (s *Segment) Destroy() {
 	if s.DestroyFn != nil {
 		s.DestroyFn()
 	}
+}
+
+// DecodeFromStream read from stream and decode.
+func (s *Segment) DecodeFromStream(stream io.Reader, buffers *pool.Pool) error {
+	header := buffers.Get(headerStreamSize).([]byte)
+	ResizeBuffer(headerStreamSize, &header)
+
+	if _, err := io.ReadFull(stream, header); err != nil {
+		buffers.Put(header)
+		return err
+	}
+
+	s.Timestamp = int64(binary.LittleEndian.Uint64(header[:8]))
+	s.ID = binary.LittleEndian.Uint32(header[8:12])
+	s.Size = binary.LittleEndian.Uint32(header[12:16])
+	s.CRC = binary.LittleEndian.Uint32(header[16:20])
+	buffers.Put(header)
+
+	if s.Size == 0 {
+		return nil
+	}
+
+	s.Body = buffers.Get(int(s.Size)).([]byte)
+	ResizeBuffer(int(s.Size), &s.Body)
+	if _, err := io.ReadFull(stream, s.Body); err != nil {
+		buffers.Put(s.Body)
+		return err
+	}
+
+	if !s.IsValid() {
+		buffers.Put(s.Body)
+		return ErrCorruptedSegment
+	}
+
+	s.DestroyFn = func() { buffers.Put(s.Body) }
+
+	return nil
+}
+
+// DecodeFromRefill read from refill and decode.
+func (s *Segment) DecodeFromRefill(refill io.Reader, buffers *pool.Pool) error {
+	header := buffers.Get(headerRefillSize).([]byte)
+	ResizeBuffer(headerRefillSize, &header)
+
+	if _, err := io.ReadFull(refill, header); err != nil {
+		buffers.Put(header)
+		return err
+	}
+
+	s.ID = binary.LittleEndian.Uint32(header[:4])
+	s.Size = binary.LittleEndian.Uint32(header[4:8])
+	s.CRC = binary.LittleEndian.Uint32(header[8:12])
+	buffers.Put(header)
+
+	if s.Size == 0 {
+		return nil
+	}
+
+	s.Body = buffers.Get(int(s.Size)).([]byte)
+	ResizeBuffer(int(s.Size), &s.Body)
+	if _, err := io.ReadFull(refill, s.Body); err != nil {
+		buffers.Put(s.Body)
+		return err
+	}
+
+	if !s.IsValid() {
+		buffers.Put(s.Body)
+		return ErrCorruptedSegment
+	}
+
+	s.DestroyFn = func() { buffers.Put(s.Body) }
+
+	return nil
 }
 
 // ResizeBuffer resize slice and fill zero value.
