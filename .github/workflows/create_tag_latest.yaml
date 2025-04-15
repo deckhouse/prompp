@@ -10,8 +10,7 @@ on:
 
 jobs:
   tag_latest:
-    runs-on: ubuntu-latest
-
+    runs-on: fsn-dev-gitlab-runner
     steps:
       - name: Clean workspace
         uses: AutoModality/action-clean@v1
