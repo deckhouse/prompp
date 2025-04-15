@@ -707,9 +707,9 @@ func main() {
 		cfgFile.RemoteWriteConfigs,
 		localStoragePath,
 		receiver.RotationInfo{
-			BlockDuration: 10 * time.Minute,
 			// BlockDuration: time.Duration(cfg.tsdb.MinBlockDuration),
-			Seed: cfgFile.GlobalConfig.ExternalLabels.Hash(),
+			BlockDuration: 15 * time.Minute,
+			Seed:          cfgFile.GlobalConfig.ExternalLabels.Hash(),
 		},
 		headCatalog,
 		reloadBlocksTriggerNotifier,
@@ -718,7 +718,7 @@ func main() {
 		time.Duration(cfg.tsdb.RetentionDuration),
 		time.Duration(cfg.HeadRetentionTimeout),
 		// x3 ScrapeInterval timeout for write block
-		time.Duration(cfgFile.GlobalConfig.ScrapeInterval*3),
+		time.Duration(cfgFile.GlobalConfig.ScrapeInterval*6),
 	)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create a receiver", "err", err)

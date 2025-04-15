@@ -1662,11 +1662,17 @@ func seriesDataDecodeIteratorSample(decodeIterator uintptr) (int64, float64) {
 		value     float64
 	}
 
+	// start := time.Now()
+
 	fastcgo.UnsafeCall2(
 		C.prompp_series_data_decode_iterator_sample,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
+
+	// unsafeCall.With(
+	// 	prometheus.Labels{"object": "head_data_storage_decode_iterator", "method": "sample"},
+	// ).Observe(float64(time.Since(start).Nanoseconds()))
 
 	return res.timestamp, res.value
 }

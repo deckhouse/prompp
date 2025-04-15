@@ -39,6 +39,7 @@ type RotateCommiter struct {
 	run              chan struct{}
 	closer           *util.Closer
 	rotateCounter    prometheus.Counter
+	rotateTimestamp  prometheus.Gauge
 }
 
 // NewRotateCommiter - Rotator constructor.
@@ -61,6 +62,12 @@ func NewRotateCommiter(
 			prometheus.CounterOpts{
 				Name: "prompp_rotator_rotate_count",
 				Help: "Total counter of rotate rotatable object.",
+			},
+		),
+		rotateTimestamp: factory.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "prompp_rotator_rotate_timestamp",
+				Help: "Timestamp in seconds of rotate rotatable object.",
 			},
 		),
 	}
@@ -108,6 +115,7 @@ func (r *RotateCommiter) loop() {
 				logger.Errorf("rotation failed: %v", err)
 			}
 			r.rotateCounter.Inc()
+			r.rotateTimestamp.Set(float64(time.Now().UnixMilli()))
 
 			r.rotateTimer.Reset()
 			r.commitTimer.Reset()

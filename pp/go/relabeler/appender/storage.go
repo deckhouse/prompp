@@ -143,6 +143,7 @@ func (qs *QueryableStorage) write() bool {
 	shouldNotify := false
 	persisted := make([]string, 0, lenHeads)
 	for _, head := range heads {
+		logger.Infof("QUERYABLE STORAGE: head %s start write", head.String())
 		start := qs.clock.Now()
 		if qs.headIsOutdated(head) {
 			persisted = append(persisted, head.ID())
