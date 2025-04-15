@@ -4,6 +4,7 @@
 #include "primitives/primitives.h"
 #include "prometheus/tsdb/chunkenc/bstream.h"
 #include "prometheus/tsdb/chunkenc/xor.h"
+#include "series_data/concepts.h"
 #include "series_data/decoder.h"
 #include "series_data/encoder/bit_sequence.h"
 
@@ -54,8 +55,9 @@ class ChunkRecoder {
  private:
   using Sample = series_data::encoder::Sample;
   using Decoder = series_data::Decoder;
-  using Encoder =
-      BareBones::Encoding::Gorilla::StreamEncoder<PromPP::Prometheus::tsdb::chunkenc::TimestampEncoder, PromPP::Prometheus::tsdb::chunkenc::ValuesEncoder>;
+  using TimestampEncoder = PromPP::Prometheus::tsdb::chunkenc::TimestampEncoder;
+  using ValuesEncoder = PromPP::Prometheus::tsdb::chunkenc::ValuesEncoder;
+  using Encoder = BareBones::Encoding::Gorilla::StreamEncoder<TimestampEncoder, ValuesEncoder>;
 
   class IteratorSentinel {};
 
@@ -106,8 +108,10 @@ class ChunkRecoder {
     series_data::DataStorage::SeriesChunkIterator chunk_iterator_;
   };
 
+  static constexpr auto kStreamSize = series_data::kSamplesPerChunkDefault * (TimestampEncoder::kMaxItemSizeInBits + ValuesEncoder::kMaxItemSizeInBits);
+
   ChunkIterator iterator_;
-  PromPP::Prometheus::tsdb::chunkenc::BStream<series_data::encoder::kAllocationSizesTable> stream_;
+  PromPP::Prometheus::tsdb::chunkenc::FixedSizeBStream<series_data::encoder::kAllocationSizesTable> stream_{kStreamSize};
   const PromPP::Primitives::TimeInterval time_interval_;
 
   PROMPP_ALWAYS_INLINE static void reset_info(ChunkInfoInterface auto& info) noexcept {
