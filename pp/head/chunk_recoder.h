@@ -108,10 +108,12 @@ class ChunkRecoder {
     series_data::DataStorage::SeriesChunkIterator chunk_iterator_;
   };
 
-  static constexpr auto kStreamSize = series_data::kSamplesPerChunkDefault * (TimestampEncoder::kMaxItemSizeInBits + ValuesEncoder::kMaxItemSizeInBits);
+  static constexpr uint32_t kSamplesCountSizeInBits = BareBones::Bit::to_bits(sizeof(uint16_t));
+  static constexpr auto kMaxItemSizeInBits = TimestampEncoder::kMaxItemSizeInBits + ValuesEncoder::kMaxItemSizeInBits;
+  static constexpr auto kMaxStreamSize = kSamplesCountSizeInBits + series_data::kSamplesPerChunkDefault * kMaxItemSizeInBits;
 
   ChunkIterator iterator_;
-  PromPP::Prometheus::tsdb::chunkenc::FixedSizeBStream<series_data::encoder::kAllocationSizesTable> stream_{kStreamSize};
+  PromPP::Prometheus::tsdb::chunkenc::FixedSizeBStream<series_data::encoder::kAllocationSizesTable> stream_{kMaxStreamSize};
   const PromPP::Primitives::TimeInterval time_interval_;
 
   PROMPP_ALWAYS_INLINE static void reset_info(ChunkInfoInterface auto& info) noexcept {
@@ -120,7 +122,7 @@ class ChunkRecoder {
     info.series_id = PromPP::Primitives::kInvalidLabelSetID;
   }
 
-  PROMPP_ALWAYS_INLINE void write_samples_count_placeholder() noexcept { stream_.write_bits(0, BareBones::Bit::to_bits(sizeof(uint16_t))); }
+  PROMPP_ALWAYS_INLINE void write_samples_count_placeholder() noexcept { stream_.write_bits(0, kSamplesCountSizeInBits); }
   PROMPP_ALWAYS_INLINE void write_samples_count(uint16_t samples_count) noexcept {
     *reinterpret_cast<uint16_t*>(stream_.raw_bytes()) = BareBones::Bit::be(samples_count);
   }
