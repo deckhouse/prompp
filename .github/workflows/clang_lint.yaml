@@ -38,7 +38,7 @@ jobs:
           registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
           registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
 
-      - name: Run Clang Format and Tidy
+      - name: Run Clang Format
         run: |
           docker run --rm \
             -v $PWD:/workspace \
