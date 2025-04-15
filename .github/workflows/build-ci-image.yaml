@@ -29,6 +29,9 @@ jobs:
             BAZEL_ARCH: arm64
     runs-on: ${{ matrix.runner_name }}
     steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
