@@ -161,7 +161,7 @@ class ChunkRecoder {
     if (encoder.state().state == BareBones::Encoding::Gorilla::GorillaState::kFirstPoint) [[unlikely]] {
       encoder.encode(sample.timestamp, sample.value, stream_, stream_);
     } else {
-      encoder.encode_constant_value(sample.timestamp, stream_, stream_);
+      encoder.encode_constant_value(sample, stream_, stream_);
     }
   }
 

@@ -21,7 +21,7 @@ void ChunkRecoder::execute(const Config& config, [[maybe_unused]] Metrics& metri
   PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector> label_set_bitmap;
   series_data::DataStorage storage;
   series_data::Encoder encoder{storage};
-  TimeInterval time_interval{.min = TimeInterval::kMax, .max = TimeInterval::kMin};
+  TimeInterval time_interval;
 
   while (dummy_wal.read_next_segment()) {
     while (dummy_wal.read_next(tmsr)) {
