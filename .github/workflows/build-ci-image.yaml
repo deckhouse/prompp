@@ -20,7 +20,7 @@ env:
 
 jobs:
   build-ci-image:
-    runs-on: [self-hosted, large]
+    runs-on: fsn-dev-perftest-runner
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4

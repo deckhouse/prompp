@@ -21,7 +21,7 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: fsn-dev-gitlab-runner
+    runs-on: fsn-dev-perftest-runner
     steps:
       - name: Clean workspace
         uses: AutoModality/action-clean@v1
