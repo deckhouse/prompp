@@ -55,6 +55,7 @@ jobs:
             -t ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} \
             --build-arg BAZEL_ARCH=${{ matrix.BAZEL_ARCH }} \
             --build-arg GO_ARCH=${{ matrix.GO_ARCH }} \
+          .
 
       - name: Push Docker Image
         if: github.ref == 'refs/heads/pp' && github.event_name == 'push'
