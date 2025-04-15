@@ -1662,17 +1662,11 @@ func seriesDataDecodeIteratorSample(decodeIterator uintptr) (int64, float64) {
 		value     float64
 	}
 
-	// start := time.Now()
-
 	fastcgo.UnsafeCall2(
 		C.prompp_series_data_decode_iterator_sample,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-
-	// unsafeCall.With(
-	// 	prometheus.Labels{"object": "head_data_storage_decode_iterator", "method": "sample"},
-	// ).Observe(float64(time.Since(start).Nanoseconds()))
 
 	return res.timestamp, res.value
 }
@@ -1976,7 +1970,7 @@ func walPrometheusScraperHashdexParse(hashdex uintptr, buffer []byte, default_ti
 		uintptr(unsafe.Pointer(&res)),
 	)
 	unsafeCall.With(
-		prometheus.Labels{"object": "hashdex", "method": "parse"},
+		prometheus.Labels{"object": "prometheus_hashdex", "method": "parse"},
 	).Observe(float64(time.Since(start).Nanoseconds()))
 
 	return res.scraped, res.error
@@ -2033,7 +2027,7 @@ func walOpenMetricsScraperHashdexParse(hashdex uintptr, buffer []byte, default_t
 		uintptr(unsafe.Pointer(&res)),
 	)
 	unsafeCall.With(
-		prometheus.Labels{"object": "hashdex", "method": "parse"},
+		prometheus.Labels{"object": "open_metrics_hashdex", "method": "parse"},
 	).Observe(float64(time.Since(start).Nanoseconds()))
 
 	return res.scraped, res.error
