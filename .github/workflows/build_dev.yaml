@@ -45,5 +45,6 @@ jobs:
           export GO_ARCH=${{ matrix.GO_ARCH }}
           export COMPILATION_MODE="opt"
           export ASAN="false"
+          export WERF_BUILDAH_MODE=auto
 
           werf build --platform linux/${{ matrix.arch }} --add-custom-tag="$BRANCH_NAME-${{ matrix.arch }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp
