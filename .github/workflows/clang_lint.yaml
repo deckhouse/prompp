@@ -22,9 +22,6 @@ concurrency:
 
 jobs:
   clang-lint:
-    defaults:
-      run:
-        working-directory: pp
     runs-on: fsn-dev-gitlab-runner
     steps:
       - name: Clean workspace
@@ -41,13 +38,14 @@ jobs:
           registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
           registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
 
-      - name: Run Clang Format and Tidy
+      - name: Run Clang Format
         run: |
           docker run --rm \
             -v $PWD:/workspace \
             -w /workspace \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
             bash -c "
+              git config --global --add safe.directory /workspace && cd pp
               make format
             "
       - name: Run Clang Tidy
@@ -57,5 +55,6 @@ jobs:
             -w /workspace \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
             bash -c "
+              git config --global --add safe.directory /workspace && cd pp
               make tidy
             "
