@@ -65,6 +65,11 @@ docker run --name prompp -d -p 127.0.0.1:9090:9090 prompp/prompp
 
 Once running, Deckhouse Prom++ will be accessible at [http://localhost:9090/](http://localhost:9090/).
 
+You can also add own config for Prom++ by passing config.file parameter
+
+```bash
+docker run --name prompp -v /path/on/host/prometheus.yml:/etc/prometheus.yml -d -p 127.0.0.1:9090:9090 prompp/prompp --config.file=/etc/prometheus.yml
+```
 
 ## **Prometheus Operator**
 
