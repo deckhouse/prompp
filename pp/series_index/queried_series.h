@@ -21,6 +21,12 @@ class QueriedSeries {
     }
   }
 
+  PROMPP_ALWAYS_INLINE void reserve(uint32_t series_count) {
+    for (auto& queried_series : queried_series_) {
+      queried_series.reserve(series_count);
+    }
+  }
+
   template <class SeriesIdContainer>
   void set(Source source, const SeriesIdContainer& ids) noexcept {
     for (auto id : ids) {
