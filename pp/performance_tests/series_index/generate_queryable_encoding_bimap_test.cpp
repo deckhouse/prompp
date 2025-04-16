@@ -18,7 +18,7 @@ void GenerateQueryableEncodingBimap::execute([[maybe_unused]] const Config& conf
   DummyWal dummy_wal(input_file_full_name(config));
 
   QueryableEncodingBimap lss;
-  //lss.reserve(1200000);
+  // lss.reserve(1200000);
 
   uint32_t find_or_emplace_call_count = 0;
   uint32_t max_ls_id = std::numeric_limits<uint32_t>::min();
