@@ -125,9 +125,7 @@ extern "C" void prompp_prometheus_relabeler_state_update_dtor(void* args) {
     PromPP::Prometheus::Relabel::RelabelerStateUpdate* relabeler_state_update;
   };
 
-  Arguments* in = reinterpret_cast<Arguments*>(args);
-
-  in->relabeler_state_update->~RelabelerStateUpdate();
+  static_cast<Arguments*>(args)->relabeler_state_update->~vector();
 }
 
 //
