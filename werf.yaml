@@ -8,6 +8,30 @@ args:
   BAZEL_ARCH: {{ env "BAZEL_ARCH" }}
   GO_ARCH: {{ env "GO_ARCH" }}
 ---
+image: distroless
+from: registry.deckhouse.io/base_images/scratch@sha256:b054705fcc9f2205777d80a558d920c0b4209efdc3163c22b5bfcb5dda1db5fc
+final: false
+import:
+  - image: distroless-artifact
+    add: /relocate
+    to: /
+    before: setup
+---
+image: distroless-artifact
+from: alpine:3.20.3
+final: false
+shell:
+  beforeInstall:
+  - apk add --no-cache ca-certificates tzdata
+  install:
+  - mkdir -p /relocate/bin /relocate/sbin /relocate/etc /relocate/etc/ssl /relocate/usr/bin /relocate/usr/sbin /relocate/usr/share
+  - cp -pr /tmp /relocate
+  - cp -pr /etc/passwd /etc/group /etc/hostname /etc/hosts /etc/shadow /etc/protocols /etc/services /etc/nsswitch.conf /relocate/etc
+  - cp -pr /usr/share/ca-certificates /relocate/usr/share
+  - cp -pr /usr/share/zoneinfo /relocate/usr/share
+  - cp -pr etc/ssl/cert.pem /relocate/etc/ssl
+  - cp -pr /etc/ssl/certs /relocate/etc/ssl
+---
 image: prompp-src-artifact
 fromCacheVersion: "2025-03-31-2"
 from: golang:1.23.2-alpine3.20
@@ -115,16 +139,16 @@ shell:
 artifact: prom-pp-binaries-artifact
 from: alt:p10
 git:
-  - add: scripts/binary_replace.sh
+  - add: /scripts/binary_replace.sh
     to: /binary_replace.sh
 shell:
   beforeInstall:
-    - apt-get install curl
+    - apt-get update -y && apt-get install curl -y
   install:
     - /binary_replace.sh -i "{{ $binariesList }}" -o /relocate
 ---
 image: prom-pp
-from: registry.deckhouse.io/deckhouse/ce@sha256:916e14b8eed3d023869752535fed781040a59cf79368b3b05628a7f5029414a0
+fromImage: distroless
 import:
   - artifact: prompp-artifact
     add: /src/prompptool
