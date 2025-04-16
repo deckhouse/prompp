@@ -291,38 +291,47 @@ type InstantSeriesChunkIterator struct {
 
 func NewInstantSeriesChunkIterator(t int64, v float64) *InstantSeriesChunkIterator {
 	return &InstantSeriesChunkIterator{
+		i: -1,
 		t: t,
 		v: v,
 	}
 }
 
 func (i *InstantSeriesChunkIterator) ResetTo(t int64, v float64) {
-	i.i = 0
+	i.i = -1
 	i.t = t
 	i.v = v
 }
 
 // Next is chunkenc.Iterator interface implementation.
 func (i *InstantSeriesChunkIterator) Next() chunkenc.ValueType {
-	if i.i > 0 {
-		return chunkenc.ValNone
+	if i.i < 1 {
+		i.i++
 	}
-
-	i.i++
-	return chunkenc.ValFloat
+	return i.valueType()
 }
 
 // Seek is chunkenc.Iterator interface implementation.
 func (i *InstantSeriesChunkIterator) Seek(t int64) chunkenc.ValueType {
-	if i.i > 0 {
-		return chunkenc.ValNone
-	}
-
-	if i.t >= t {
+	if i.valueType() == chunkenc.ValFloat && i.t >= t {
 		return chunkenc.ValFloat
 	}
 
-	i.i++
+	for {
+		if i.Next() == chunkenc.ValNone {
+			return chunkenc.ValNone
+		}
+
+		if i.t >= t {
+			return chunkenc.ValFloat
+		}
+	}
+}
+
+func (i *InstantSeriesChunkIterator) valueType() chunkenc.ValueType {
+	if i.i == 0 {
+		return chunkenc.ValFloat
+	}
 	return chunkenc.ValNone
 }
 
