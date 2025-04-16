@@ -145,9 +145,9 @@ class ChunkRecoder {
 
         if constexpr (std::is_same_v<Iterator, series_data::decoder::ConstantDecodeIterator> ||
                       std::is_same_v<Iterator, series_data::decoder::TwoDoubleConstantDecodeIterator>) {
-          recode_constant_chunk_sample(sample, encoder);
+          encoder.encode_constant_value(sample.timestamp, sample.value, stream_, stream_);
         } else {
-          recode_chunk_sample(sample, encoder);
+          encoder.encode(sample.timestamp, sample.value, stream_, stream_);
         }
 
         ++info.samples_count;
@@ -158,18 +158,6 @@ class ChunkRecoder {
       info.interval.max = encoder.last_timestamp();
       info.series_id = iterator_->series_id();
     }
-  }
-
-  PROMPP_ALWAYS_INLINE void recode_constant_chunk_sample(const series_data::encoder::Sample& sample, Encoder& encoder) noexcept {
-    if (encoder.state().state == BareBones::Encoding::Gorilla::GorillaState::kFirstPoint) [[unlikely]] {
-      encoder.encode(sample.timestamp, sample.value, stream_, stream_);
-    } else {
-      encoder.encode_constant_value(sample, stream_, stream_);
-    }
-  }
-
-  PROMPP_ALWAYS_INLINE void recode_chunk_sample(const series_data::encoder::Sample& sample, Encoder& encoder) noexcept {
-    encoder.encode(sample.timestamp, sample.value, stream_, stream_);
   }
 
   void advance_to_non_empty_chunk() noexcept {
