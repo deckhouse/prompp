@@ -236,7 +236,7 @@ func NewInstantSeriesSet(valueNotFoundTimestampValue int64, labelSets []*cppbrid
 }
 
 func (ss *InstantSeriesSet) Next() bool {
-	if ss.index >= len(ss.labelSets) {
+	if ss.index+1 >= len(ss.labelSets) {
 		return false
 	}
 
@@ -318,7 +318,7 @@ func (i *InstantSeriesChunkIterator) Seek(t int64) chunkenc.ValueType {
 		return chunkenc.ValNone
 	}
 
-	if i.t == t {
+	if i.t >= t {
 		return chunkenc.ValFloat
 	}
 

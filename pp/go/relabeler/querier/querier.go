@@ -177,7 +177,7 @@ func (q *Querier) selectInstant(ctx context.Context, sortSeries bool, hints *sto
 			return fmt.Errorf("failed to query from shard: %d, query status: %d", shard.ShardID(), lssQueryResult.Status())
 		}
 
-		samples := shard.DataStorage().InstantQuery(lssQueryResult.IDs(), q.maxt, valueNotFoundTimestampValue)
+		samples := shard.DataStorage().InstantQuery(lssQueryResult.IDs(), q.mint, q.maxt, valueNotFoundTimestampValue)
 
 		labelSets := make([]*cppbridge.LabelsCpp, len(samples))
 		lssQueryResult.MatchesIndexRange(func(lss *cppbridge.LabelSetStorage, index int, lsid uint32, length uint16) {
@@ -188,7 +188,7 @@ func (q *Querier) selectInstant(ctx context.Context, sortSeries bool, hints *sto
 		})
 
 		runtime.KeepAlive(lssQueryResult)
-		seriesSets[shard.ShardID()] = NewInstantSeriesSet(labelSets, samples)
+		seriesSets[shard.ShardID()] = NewInstantSeriesSet(valueNotFoundTimestampValue, labelSets, samples)
 		return nil
 	})
 	if err != nil {
