@@ -1,7 +1,6 @@
 package cppbridge_test
 
 import (
-	"math"
 	"testing"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -102,24 +101,17 @@ func (s *HeadSuite) TestInstantQuery() {
 	timestampStart := int64(3)
 	timestampEnd := int64(5)
 	timestampDefault := int64(-1)
-	samples := make([]cppbridge.Sample, len(seriesIDs))
-	for i := range samples {
-		samples[i] = cppbridge.Sample{Timestamp: timestampDefault, Value: math.Float64frombits(cppbridge.StaleNaN)}
-	}
 
 	query := cppbridge.HeadDataStorageQuery{StartTimestampMs: timestampStart, EndTimestampMs: timestampEnd, LabelSetIDs: seriesIDs}
 
-	dataStorage.InstantQuery(query, samples)
+	samples := dataStorage.InstantQuery(query, timestampDefault)
 
 	// Assert
 	s.Len(samples, 4)
 
-	s.EqualValues(-1, samples[0].Timestamp)
-	s.True(cppbridge.IsStaleNaN(samples[0].Value))
-
+	s.EqualValues(timestampDefault, samples[0].Timestamp)
 	s.Equal(cppbridge.Sample{Timestamp: 3, Value: 1.0}, samples[1])
 	s.Equal(cppbridge.Sample{Timestamp: 4, Value: 2.0}, samples[2])
 
-	s.EqualValues(-1, samples[3].Timestamp)
-	s.True(cppbridge.IsStaleNaN(samples[3].Value))
+	s.EqualValues(timestampDefault, samples[3].Timestamp)
 }

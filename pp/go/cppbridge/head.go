@@ -218,8 +218,8 @@ func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) *HeadDataStorageSer
 func (ds *HeadDataStorage) InstantQuery(query HeadDataStorageQuery, defaultTimestamp int64) []Sample {
 	samples := make([]Sample, len(query.LabelSetIDs))
 	if defaultTimestamp != 0 {
-		for _, sample := range samples {
-			sample.Timestamp = defaultTimestamp
+		for index := range samples {
+			samples[index].Timestamp = defaultTimestamp
 		}
 	}
 	seriesDataDataStorageInstantQuery(ds.dataStorage, query, samples)
