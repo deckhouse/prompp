@@ -53,6 +53,11 @@ jobs:
           BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/^v//')
+          export BAZEL_ARCH=${{ matrix.BAZEL_ARCH }}
+          export GO_ARCH=${{ matrix.GO_ARCH }}
+          export COMPILATION_MODE="opt"
+          export ASAN="false"
+
           werf export --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp --tag=docker.io/prompp/prompp:$BRANCH_NAME-${{ matrix.arch }}
 
       - name: Extract binaries from Docker images

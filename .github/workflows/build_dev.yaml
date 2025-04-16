@@ -41,4 +41,9 @@ jobs:
         run: |
           BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
+          export BAZEL_ARCH=${{ matrix.BAZEL_ARCH }}
+          export GO_ARCH=${{ matrix.GO_ARCH }}
+          export COMPILATION_MODE="opt"
+          export ASAN="false"
+
           werf build --platform linux/${{ matrix.arch }} --add-custom-tag="$BRANCH_NAME-${{ matrix.arch }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp
