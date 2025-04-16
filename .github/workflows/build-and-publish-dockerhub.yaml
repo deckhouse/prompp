@@ -76,7 +76,8 @@ jobs:
 
       - name: Archive binaries
         run: |
-          tar -czvf prompp-binaries-${{ matrix.arch }}.tar.gz prompp promtool prompptool
+          cp ./documentation/examples/prometheus.yml ./prometheus.yml
+          tar -czvf prompp-binaries-${{ matrix.arch }}.tar.gz prompp promtool prompptool prometheus.yml
 
       - name: Upload binaries as artifacts
         uses: actions/upload-artifact@v4
