@@ -12,60 +12,43 @@ class InstantQuerier {
   using Sample = encoder::Sample;
   using ChunkType = chunk::DataChunk::Type;
 
-public:
-  static void query_sample(Sample& sample, const DataStorage& storage, LabelSetID ls_id, const TimeInterval& time_interval) noexcept {
-    bool const is_found = check_in_open_chunk(sample, storage, ls_id, time_interval);
-    if (!is_found) {
-      check_in_finalized_chunks(sample, storage, ls_id, time_interval);
+ public:
+  PROMPP_ALWAYS_INLINE static void query_sample(Sample& sample, const DataStorage& storage, LabelSetID ls_id, const TimeInterval& time_interval) noexcept {
+    if (storage.open_chunks.size() > ls_id) [[likely]] {
+      bool is_found = check_boundary(sample, storage, ls_id, time_interval);
+      if (!is_found) {
+        check_inside_series(sample, storage, ls_id, time_interval);
+      }
     }
   }
 
-private:
-  static bool check_in_open_chunk(Sample& sample, const DataStorage& storage, LabelSetID ls_id, const TimeInterval& time_interval) noexcept {
-    if (storage.open_chunks.size() > ls_id) {
-      if (auto& open_chunk = storage.open_chunks[ls_id]; !open_chunk.is_empty()) {
-        if (const auto chunk_last_timestamp_ms = Decoder::get_open_chunk_last_timestamp(storage, open_chunk);
-          time_interval.min <= chunk_last_timestamp_ms && chunk_last_timestamp_ms <= time_interval.max) {
-          sample = {.timestamp = chunk_last_timestamp_ms, .value = Decoder::get_open_chunk_last_value(storage, open_chunk)};
-          return true;
-        }
-        if (const auto chunk_first_timestamp_ms = Decoder::get_chunk_first_timestamp<ChunkType::kOpen>(storage, open_chunk);
-          chunk_first_timestamp_ms <= time_interval.max) {
-          const auto sample_list = Decoder::decode_chunk<ChunkType::kOpen>(storage, open_chunk);
-          auto sample_it = std::ranges::upper_bound(sample_list, time_interval.max, {}, &Sample::timestamp);
-
-          assert(sample_it != sample_list.begin());
-
-          if ((--sample_it)->timestamp >= time_interval.min) {
-            sample = *sample_it;
-          }
-          return true;
-        }
-      }
+ private:
+  static bool check_boundary(Sample& sample, const DataStorage& storage, LabelSetID ls_id, const TimeInterval& time_interval) noexcept {
+    const auto series_interval = Decoder::get_series_time_interval(storage, ls_id);
+    if (!series_interval.intersect(time_interval)) {
+      return true;
+    }
+    if (time_interval.contains(series_interval.max)) {
+      sample = {.timestamp = series_interval.max, .value = Decoder::get_open_chunk_last_value(storage, storage.open_chunks[ls_id])};
+      return true;
     }
     return false;
   }
 
-  static bool check_in_finalized_chunks(Sample& sample, const DataStorage& storage, LabelSetID ls_id, const TimeInterval& time_interval) noexcept {
-    if (const auto it = storage.finalized_chunks.find(ls_id); it != storage.finalized_chunks.end()) {
-      auto& finalized_chunks = it->second;
-      for (auto chunk_it = finalized_chunks.begin(); chunk_it != finalized_chunks.end(); ++chunk_it) {
-        const auto chunk_first_timestamp_ms = Decoder::get_chunk_first_timestamp<ChunkType::kFinalized>(storage, *chunk_it);
-        const auto chunk_last_timestamp_ms = Decoder::get_finalized_chunk_last_timestamp(storage, ls_id, chunk_it, finalized_chunks.end());
-        if (chunk_first_timestamp_ms <= time_interval.max && time_interval.max <= chunk_last_timestamp_ms) {
-          const auto sample_list = Decoder::decode_chunk<ChunkType::kFinalized>(storage, *chunk_it);
-          auto sample_it = std::ranges::upper_bound(sample_list, time_interval.max, {}, &Sample::timestamp);
-
-          assert(sample_it != sample_list.begin());
-
-          if ((--sample_it)->timestamp >= time_interval.min) {
-            sample = *sample_it;
+  static bool check_inside_series(Sample& sample, const DataStorage& storage, LabelSetID ls_id, const TimeInterval& time_interval) noexcept {
+    for (const auto& chunk_data : DataStorage::SeriesChunks(&storage, ls_id)) {
+      if (Decoder::get_chunk_time_interval(chunk_data).contains(time_interval.max)) {
+        Decoder::create_decode_iterator(chunk_data, [&](auto&& begin, auto&& end) {
+          for (auto sample_it = begin; sample_it != end && sample_it->timestamp <= time_interval.max; ++sample_it) {
+            if (time_interval.contains(sample_it->timestamp)) {
+              sample = *sample_it;
+            }
           }
-          return true;
-        }
+        });
+        return true;
       }
     }
     return false;
   }
 };
-} // namespace series_data
+}  // namespace series_data
