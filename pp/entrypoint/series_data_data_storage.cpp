@@ -19,7 +19,7 @@ extern "C" void prompp_series_data_data_storage_ctor(void* res) {
     DataStoragePtr data_storage;
   };
 
-  new(res) Result{.data_storage = std::make_unique<series_data::DataStorage>()};
+  new (res) Result{.data_storage = std::make_unique<series_data::DataStorage>()};
 }
 
 extern "C" void prompp_series_data_data_storage_reset(void* args) {
@@ -38,7 +38,7 @@ extern "C" void prompp_series_data_data_storage_time_interval(void* args, void* 
     PromPP::Primitives::TimeInterval interval;
   };
 
-  new(res) Result{.interval = series_data::Decoder::get_time_interval(*static_cast<Arguments*>(args)->data_storage)};
+  new (res) Result{.interval = series_data::Decoder::get_time_interval(*static_cast<Arguments*>(args)->data_storage)};
 }
 
 extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
@@ -60,7 +60,7 @@ extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
   };
 
   Arguments* in = reinterpret_cast<Arguments*>(args);
-  Result* out = new(res) Result();
+  Result* out = new (res) Result();
 
   Querier querier{*in->data_storage};
   const auto& queried_chunk_list = querier.query(in->query);
@@ -102,7 +102,7 @@ extern "C" void prompp_series_data_data_storage_allocated_memory(void* args, voi
   };
 
   auto in = reinterpret_cast<Arguments*>(args);
-  Result* out = new(res) Result();
+  Result* out = new (res) Result();
 
   out->allocated_memory = in->data_storage->allocated_memory();
 }
@@ -126,7 +126,7 @@ extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
   };
 
   const auto in = static_cast<Arguments*>(args);
-  new(res) Result{
+  new (res) Result{
       .chunk_recoder = std::make_unique<ChunkRecoder>(std::get<QueryableEncodingBimap>(*in->lss).ls_id_set(), in->data_storage.get(), in->time_interval),
   };
 }

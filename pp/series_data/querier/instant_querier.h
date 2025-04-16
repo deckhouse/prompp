@@ -12,7 +12,7 @@ class InstantQuerier {
   using Sample = encoder::Sample;
   using ChunkType = chunk::DataChunk::Type;
 
-public:
+ public:
   PROMPP_ALWAYS_INLINE static void query_sample(Sample& sample, const DataStorage& storage, LabelSetID ls_id, const Timestamp& timestamp) noexcept {
     if (storage.open_chunks.size() > ls_id) [[likely]] {
       bool is_found = check_boundary(sample, storage, ls_id, timestamp);
@@ -22,7 +22,7 @@ public:
     }
   }
 
-private:
+ private:
   static bool check_boundary(Sample& sample, const DataStorage& storage, LabelSetID ls_id, const Timestamp& timestamp) noexcept {
     const auto series_interval = Decoder::get_series_time_interval(storage, ls_id);
     if (timestamp < series_interval.min) {
@@ -49,4 +49,4 @@ private:
     return false;
   }
 };
-} // namespace series_data
+}  // namespace series_data
