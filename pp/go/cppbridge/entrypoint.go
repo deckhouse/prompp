@@ -87,6 +87,23 @@ func dumpMemoryProfile(filename string) int {
 	return res.error
 }
 
+func unsafeCall2() {
+	var args struct{}
+	var res struct{}
+
+	start := time.Now()
+
+	fastcgo.UnsafeCall2(
+		C.unsafe_call_2,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	unsafeCall.With(
+		prometheus.Labels{"object": "unsafe", "method": "call_2"},
+	).Observe(float64(time.Since(start).Nanoseconds()))
+}
+
 //
 // ProtobufHashdex
 //

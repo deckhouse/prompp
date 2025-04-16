@@ -5,8 +5,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/pp/go/util"
 )
 
 // garbage collector for objects initiated in GO but filled in C/C++,
@@ -15,7 +15,7 @@ import (
 const (
 	defaultGCDecay       float64       = 1.0 / 3.0
 	defaultGCWarmupValue float64       = 0
-	gcDelayThreshold     time.Duration = 2 * time.Second
+	gcDelayThreshold     time.Duration = 5 * time.Second
 )
 
 // CGOGC - implement wise garbage collector for c/c++ objects.
@@ -132,6 +132,8 @@ func (cgc *CGOGC) run() {
 // gc - run gc if over threshold.
 func (cgc *CGOGC) gc() {
 	memInfo := GetMemInfo()
+
+	unsafeCall2()
 
 	if !cgc.isOverThreshold(memInfo) {
 		return

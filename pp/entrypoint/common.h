@@ -30,6 +30,8 @@ void prompp_mem_info(void* res);
  */
 void prompp_dump_memory_profile(void* args, void* res);
 
+void unsafe_call_2(void* args, void* res);
+
 #ifdef __cplusplus
 }
 #endif
