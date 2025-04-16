@@ -227,7 +227,10 @@ class SharedPtr {
   static constexpr uint32_t kControlBlockSize = sizeof(ControlBlock);
 
   SharedPtr() = default;
-  explicit PROMPP_ALWAYS_INLINE SharedPtr(uint32_t size) : data_(nullptr) { non_atomic_reallocate(size); }
+  explicit PROMPP_ALWAYS_INLINE SharedPtr(uint32_t size, ItemCounter constructed_item_count = 0) : data_(nullptr) {
+    non_atomic_reallocate(size);
+    set_constructed_item_count(constructed_item_count);
+  }
   PROMPP_ALWAYS_INLINE SharedPtr(const SharedPtr& other) noexcept : data_(other.data_) { inc_atomic_ref_counter(); }
   SharedPtr(SharedPtr&& other) noexcept : data_(std::exchange(other.data_, nullptr)) {}
 
@@ -381,7 +384,7 @@ class SharedMemory : public GenericMemory<SharedMemory<T>, uint32_t, T> {
     if (data_.non_atomic_is_unique()) [[likely]] {
       data_.non_atomic_reallocate(new_size);
     } else {
-      SharedPtr<T> new_data(new_size);
+      SharedPtr<T> new_data(new_size, constructed_item_count());
       PRAGMA_DIAGNOSTIC(push)
       PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
       std::memcpy(new_data.get(), data_.get(), size_ * sizeof(T));
