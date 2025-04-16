@@ -8,6 +8,7 @@ namespace {
 
 using BareBones::AllocationSize;
 using PromPP::Primitives::Sample;
+using PromPP::Primitives::Timestamp;
 using PromPP::Prometheus::tsdb::chunkenc::BStream;
 using PromPP::Prometheus::tsdb::chunkenc::TimestampEncoder;
 using PromPP::Prometheus::tsdb::chunkenc::ValuesEncoder;
@@ -54,7 +55,9 @@ TEST_P(PrometheusGorillaTimestampEncoderFixture, EncodeTest) {
 INSTANTIATE_TEST_SUITE_P(Encode,
                          PrometheusGorillaTimestampEncoderFixture,
                          testing::Values(TimestampEncoderCase{.timestamps = {1000}, .expected = {0xD0, 0x0F}},
-                                         TimestampEncoderCase{.timestamps = {-1000}, .expected = {0xCF, 0x0F}}));
+                                         TimestampEncoderCase{.timestamps = {-1000}, .expected = {0xCF, 0x0F}},
+                                         TimestampEncoderCase{.timestamps = {std::numeric_limits<Timestamp>::max()},
+                                                              .expected = {0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01}}));
 
 INSTANTIATE_TEST_SUITE_P(EncodeDelta,
                          PrometheusGorillaTimestampEncoderFixture,

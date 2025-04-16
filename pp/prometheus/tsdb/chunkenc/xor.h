@@ -61,13 +61,8 @@ class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
 
   template <class BitSequence>
   PROMPP_ALWAYS_INLINE static void push_varint_buffer(const uint8_t* buffer, size_t bytes, BitSequence& stream) {
-    auto u64buffer = reinterpret_cast<const uint64_t*>(buffer);
-    for (; bytes >= sizeof(uint64_t); ++u64buffer, bytes -= sizeof(uint64_t)) {
-      stream.write_bits(*u64buffer, BareBones::Bit::kUint64Bits);
-    }
-
-    for (auto u8buffer = reinterpret_cast<const uint8_t*>(u64buffer), end = u8buffer + bytes; u8buffer != end; ++u8buffer) {
-      stream.write_byte(*u8buffer);
+    for (auto b = buffer, end = buffer + bytes; b != end; ++b) {
+      stream.write_byte(*b);
     }
   }
 
