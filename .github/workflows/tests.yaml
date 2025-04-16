@@ -23,7 +23,7 @@ jobs:
         working-directory: pp
     runs-on: fsn-dev-gitlab-runner
     strategy:
-      max-parallel: 1
+      max-parallel: 2
       matrix:
         OPT: [dbg, opt]
         SANITIZERS: [no_sanitizers, with_sanitizers]
@@ -35,6 +35,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - uses: deckhouse/modules-actions/setup@v2
+        with:
+          registry: ${{ secrets.DEV_REGISTRY }}
+          registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
+          registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
 
       - name: Run Unit Tests
         run: |
@@ -64,9 +70,9 @@ jobs:
 
   build-go-bindings:
     needs: cpp-tests
-    runs-on: fsn-dev-gitlab-runner
+    runs-on: fsn-dev-perftest-runner
     strategy:
-      max-parallel: 1
+      max-parallel: 2
       matrix:
         COMPILATION_MODE: [dbg, opt]
         ASAN: [false, true]
@@ -78,6 +84,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - uses: deckhouse/modules-actions/setup@v2
+        with:
+          registry: ${{ secrets.DEV_REGISTRY }}
+          registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
+          registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
 
       - name: Build Go bindings
         run: |
@@ -104,9 +116,9 @@ jobs:
 
   go-tests:
     needs: build-go-bindings
-    runs-on: fsn-dev-gitlab-runner
+    runs-on: fsn-dev-perftest-runner
     strategy:
-      max-parallel: 1
+      max-parallel: 2
       matrix:
         OPT: [dbg, opt]
         SANITIZERS: [no_sanitizers, with_sanitizers]
@@ -127,6 +139,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - uses: deckhouse/modules-actions/setup@v2
+        with:
+          registry: ${{ secrets.DEV_REGISTRY }}
+          registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
+          registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
 
       - name: Download Static Library
         uses: actions/download-artifact@v4
