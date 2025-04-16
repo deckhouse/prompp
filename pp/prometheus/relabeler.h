@@ -189,23 +189,7 @@ struct IncomingAndRelabeledLsID {
 };
 
 // RelabelerStateUpdate - container for update states.
-class RelabelerStateUpdate {
-  std::vector<IncomingAndRelabeledLsID> data_;
-
- public:
-  PROMPP_ALWAYS_INLINE explicit RelabelerStateUpdate() {}
-
-  PROMPP_ALWAYS_INLINE const std::vector<IncomingAndRelabeledLsID>& data() const { return data_; }
-
-  PROMPP_ALWAYS_INLINE void emplace_back(const uint32_t incoming_ls_id, uint32_t relabeled_ls_id) { data_.emplace_back(incoming_ls_id, relabeled_ls_id); }
-
-  PROMPP_ALWAYS_INLINE size_t size() const { return data_.size(); }
-
-  PROMPP_ALWAYS_INLINE const IncomingAndRelabeledLsID& operator[](uint32_t i) const {
-    assert(i < data_.size());
-    return data_[i];
-  }
-};
+using RelabelerStateUpdate = std::vector<IncomingAndRelabeledLsID>;
 
 class NoOpStaleNaNsState {
  public:
@@ -695,10 +679,16 @@ class PerShardRelabeler {
                                                     InnerSeries* inner_series,
                                                     const RelabeledSeries* relabeled_series,
                                                     RelabelerStateUpdate* relabeler_state_update) {
+    relabeler_state_update->reserve(relabeler_state_update->size() + relabeled_series->size());
+    inner_series->reserve(inner_series->size() + relabeled_series->size());
+    if constexpr (BareBones::concepts::has_reserve<LSS>) {
+      lss.reserve(lss.size() + relabeled_series->size());
+    }
+
     for (const auto& relabeled_serie : relabeled_series->data()) {
       uint32_t ls_id = lss.find_or_emplace(relabeled_serie.ls, relabeled_serie.hash);
 
-      for (const PromPP::Primitives::Sample& sample : relabeled_serie.samples) {
+      for (const Primitives::Sample& sample : relabeled_serie.samples) {
         inner_series->emplace_back(sample, ls_id);
       }
       relabeler_state_update->emplace_back(relabeled_serie.ls_id, ls_id);
@@ -707,7 +697,7 @@ class PerShardRelabeler {
 
   // update_relabeler_state - add to cache relabled data(third stage).
   PROMPP_ALWAYS_INLINE void update_relabeler_state(Cache& cache, const RelabelerStateUpdate* relabeler_state_update, const uint16_t relabeled_shard_id) {
-    for (const auto& update : relabeler_state_update->data()) {
+    for (const auto& update : *relabeler_state_update) {
       cache.add_relabel(update.incoming_ls_id, update.relabeled_ls_id, relabeled_shard_id);
     }
   }

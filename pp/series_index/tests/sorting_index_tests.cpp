@@ -13,7 +13,7 @@ class SortingIndexFixture : public testing::Test {
 
  protected:
   struct LessComparator {
-    PROMPP_ALWAYS_INLINE bool operator()(uint32_t a, uint32_t b) const noexcept { return SortingIndexFixture::kItems[a] < SortingIndexFixture::kItems[b]; }
+    PROMPP_ALWAYS_INLINE static bool operator()(uint32_t a, uint32_t b) noexcept { return kItems[a] < kItems[b]; }
   };
   using Set = phmap::btree_set<uint32_t, LessComparator>;
 
@@ -57,7 +57,7 @@ TEST_F(SortingIndexFixture, UpdateAndSort) {
   EXPECT_THAT(series_ids, testing::ElementsAre("a"_idx, "b"_idx, "d"_idx));
 }
 
-TEST_F(SortingIndexFixture, RebuildIndex) {
+TEST_F(SortingIndexFixture, BuildIndexInSort) {
   // Arrange
   index_.update(set_.emplace(0).first);
   index_.update(set_.emplace(1).first);
