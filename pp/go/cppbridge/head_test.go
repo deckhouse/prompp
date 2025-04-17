@@ -98,20 +98,16 @@ func (s *HeadSuite) TestInstantQuery() {
 
 	// Act
 	seriesIDs := []uint32{0, 1, 2, 3}
-	timestampStart := int64(3)
-	timestampEnd := int64(5)
-	timestampDefault := int64(-1)
+	targetTimestamp := int64(5)
+	defaultTimestamp := int64(-1)
 
-	query := cppbridge.HeadDataStorageQuery{StartTimestampMs: timestampStart, EndTimestampMs: timestampEnd, LabelSetIDs: seriesIDs}
-
-	samples := dataStorage.InstantQuery(query, timestampDefault)
+	samples := dataStorage.InstantQuery(targetTimestamp, defaultTimestamp, seriesIDs)
 
 	// Assert
 	s.Len(samples, 4)
 
-	s.EqualValues(timestampDefault, samples[0].Timestamp)
+	s.Equal(defaultTimestamp, samples[0].Timestamp)
 	s.Equal(cppbridge.Sample{Timestamp: 3, Value: 1.0}, samples[1])
 	s.Equal(cppbridge.Sample{Timestamp: 4, Value: 2.0}, samples[2])
-
-	s.EqualValues(timestampDefault, samples[3].Timestamp)
+	s.Equal(cppbridge.Sample{Timestamp: 2, Value: 2.0}, samples[3])
 }
