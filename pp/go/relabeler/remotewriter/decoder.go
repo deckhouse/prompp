@@ -3,7 +3,6 @@ package remotewriter
 import (
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -13,7 +12,6 @@ type Decoder struct {
 	relabeler     *cppbridge.StatelessRelabeler
 	lss           *cppbridge.LabelSetStorage
 	outputDecoder *cppbridge.WALOutputDecoder
-	state         *os.File
 }
 
 func NewDecoder(
@@ -41,9 +39,10 @@ type DecodedSegment struct {
 	ID                   uint32
 	Samples              *cppbridge.DecodedRefSamples
 	MaxTimestamp         int64
-	OutdatedSamplesCount uint64
-	DroppedSamplesCount  uint64
-	DroppedSeriesCount   uint64
+	OutdatedSamplesCount uint32
+	DroppedSamplesCount  uint32
+	AddSeriesCount       uint32
+	DroppedSeriesCount   uint32
 }
 
 func (d *Decoder) Decode(segment []byte, minTimestamp int64) (*DecodedSegment, error) {
@@ -56,6 +55,7 @@ func (d *Decoder) Decode(segment []byte, minTimestamp int64) (*DecodedSegment, e
 		MaxTimestamp:         stats.MaxTimestamp(),
 		OutdatedSamplesCount: stats.OutdatedSampleCount(),
 		DroppedSamplesCount:  stats.DroppedSampleCount(),
+		AddSeriesCount:       stats.AddSeriesCount(),
 		DroppedSeriesCount:   stats.DroppedSeriesCount(),
 	}, nil
 }

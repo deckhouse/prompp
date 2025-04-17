@@ -227,6 +227,8 @@ readLoop:
 		return i.wrapError(nil)
 	}
 
+	i.metrics.addSeriesTotal.Add(float64(b.AddSeriesCount()))
+
 	var desiredNumberOfShards float64
 	if deadlineReached {
 		desiredNumberOfShards = math.Ceil(
@@ -419,9 +421,10 @@ type batch struct {
 	segments                   []*DecodedSegment
 	numberOfShards             int
 	numberOfSamples            int
-	outdatedSamplesCount       uint64
-	droppedSamplesCount        uint64
-	droppedSeriesCount         uint64
+	outdatedSamplesCount       uint32
+	droppedSamplesCount        uint32
+	addSeriesCount             uint32
+	droppedSeriesCount         uint32
 	maxNumberOfSamplesPerShard int
 }
 
@@ -438,6 +441,7 @@ func (b *batch) add(segments []*DecodedSegment) {
 		b.numberOfSamples += segment.Samples.Size()
 		b.outdatedSamplesCount += segment.OutdatedSamplesCount
 		b.droppedSamplesCount += segment.DroppedSamplesCount
+		b.addSeriesCount += segment.AddSeriesCount
 		b.droppedSeriesCount += segment.DroppedSeriesCount
 	}
 }
@@ -459,16 +463,21 @@ func (b *batch) HasDroppedSeries() bool {
 	return b.droppedSeriesCount > 0
 }
 
-func (b *batch) OutdatedSamplesCount() uint64 {
+func (b *batch) OutdatedSamplesCount() uint32 {
 	return b.outdatedSamplesCount
 }
 
-func (b *batch) DroppedSamplesCount() uint64 {
+func (b *batch) DroppedSamplesCount() uint32 {
 	return b.droppedSamplesCount
 }
 
+// AddSeriesCount number of add series.
+func (b *batch) AddSeriesCount() uint32 {
+	return b.addSeriesCount
+}
+
 // DroppedSeriesCount number of dropped series.
-func (b *batch) DroppedSeriesCount() uint64 {
+func (b *batch) DroppedSeriesCount() uint32 {
 	return b.droppedSeriesCount
 }
 

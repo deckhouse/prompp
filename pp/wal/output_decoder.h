@@ -150,10 +150,12 @@ class OutputDecoder : private BaseOutputDecoder {
   Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector>& output_lss_;
   Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector>::checkpoint_type dumped_checkpoint_{output_lss_.checkpoint()};
 
-  uint64_t dropped_series_count_{};
+  uint32_t add_series_count_{};
+  uint32_t dropped_series_count_{};
 
   // align_cache_to_lss add new labels from lss via relabeler to cache.
   PROMPP_ALWAYS_INLINE void align_cache_to_lss() {
+    add_series_count_ = 0;
     dropped_series_count_ = 0;
     auto& cache = sample_decoder().cache();
     if (wal_lss_.next_item_index() <= cache.size()) {
@@ -174,6 +176,7 @@ class OutputDecoder : private BaseOutputDecoder {
         ++dropped_series_count_;
       } else {
         cache.add(output_lss_.find_or_emplace(builder.label_view_set()));
+        ++add_series_count_;
       }
     }
 
@@ -202,6 +205,9 @@ class OutputDecoder : private BaseOutputDecoder {
 
   // cache return current cache.
   PROMPP_ALWAYS_INLINE const auto& cache() const noexcept { return sample_decoder().cache(); }
+
+  // add_series_count return number of add series after load segment.
+  PROMPP_ALWAYS_INLINE uint64_t add_series_count() const noexcept { return add_series_count_; }
 
   // dropped_series_count return number of dropped series after load segment.
   PROMPP_ALWAYS_INLINE uint64_t dropped_series_count() const noexcept { return dropped_series_count_; }
