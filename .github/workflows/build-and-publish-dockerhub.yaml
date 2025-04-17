@@ -44,7 +44,6 @@ jobs:
           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/^v//')
           werf export --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp --tag=docker.io/prompp/prompp:$BRANCH_NAME
 
-
       - uses: deckhouse/modules-actions/setup@v2
         with:
           registry: ${{ secrets.DECKHOUSE_REGISTRY }}
