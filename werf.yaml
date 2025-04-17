@@ -101,7 +101,7 @@ shell:
     - apt update && apt install -y git bash gcc g++ nodejs npm
   install:
     - export NODE_MAJOR=20
-    - export GOPROXY="https://proxy.golang.org/" CGO_ENABLED=1 GOOS=linux GOARCH=amd64
+    - export GOPROXY="https://proxy.golang.org/" CGO_ENABLED=1 GOOS=linux GOARCH={{ env "GO_ARCH" }}
     - cd /src/web/ui
     - mkdir static
     - npm install
