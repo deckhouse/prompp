@@ -8,17 +8,17 @@
 #include "bare_bones/encoding.h"
 
 namespace {
-
 using DataSequence = BareBones::StreamVByte::Sequence<BareBones::StreamVByte::Codec0124Frequent0>;
 using DataSequence64 = BareBones::StreamVByte::Sequence<BareBones::StreamVByte::Codec1238>;
 using DataSequence64Mostly1 = BareBones::StreamVByte::Sequence<BareBones::StreamVByte::Codec1238Mostly1>;
+
 template <class T>
 class EncoderTest : public testing::Test {
   using value_type = typename T::value_type;
 
   static constexpr value_type NUM_VALUES = 100;
 
- public:
+public:
   static std::vector<value_type> make_data(std::string_view key) {
     std::vector<value_type> data;
 
@@ -47,12 +47,22 @@ class EncoderTest : public testing::Test {
 using EncoderTypes = testing::Types<BareBones::EncodedSequence<BareBones::Encoding::RLE<DataSequence>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<DataSequence>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZagRLE<DataSequence>>,
+                                    BareBones::EncodedSequence<BareBones::Encoding::NoCompression<DataSequence>>,
+                                    BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZag<DataSequence>>,
+                                    BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<DataSequence>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::RLE<DataSequence64>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<DataSequence64>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZagRLE<DataSequence64>>,
+                                    BareBones::EncodedSequence<BareBones::Encoding::NoCompression<DataSequence64>>,
+                                    BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZag<DataSequence64>>,
+                                    BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<DataSequence64>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::RLE<DataSequence64Mostly1>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<DataSequence64Mostly1>>,
-                                    BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZagRLE<DataSequence64Mostly1>>>;
+                                    BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZagRLE<DataSequence64Mostly1>>,
+                                    BareBones::EncodedSequence<BareBones::Encoding::NoCompression<DataSequence64Mostly1>>,
+                                    BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZag<DataSequence64Mostly1>>,
+                                    BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<DataSequence64Mostly1>>>;
+
 TYPED_TEST_SUITE(EncoderTest, EncoderTypes);
 
 TYPED_TEST(EncoderTest, should_keep_push_back_order) {
@@ -93,18 +103,25 @@ TYPED_TEST(EncoderTest, should_dump_and_restore) {
   }
 }
 
-constexpr std::array kEtalonsBoundaryValues = {1UL,        255UL,        256UL,        65535UL,         65536UL,         16777215UL,
+constexpr std::array kEtalonsBoundaryValues = {1UL, 255UL, 256UL, 65535UL, 65536UL, 16777215UL,
                                                16777216UL, 4294967295UL, 4294967296UL, 1099511627775UL, 1099511627776UL, 9223372036854775807UL};
 
 template <class T>
-class EncoderTest64 : public testing::Test {};
+class EncoderTest64 : public testing::Test {
+};
 
 using EncoderTypes64 = testing::Types<BareBones::EncodedSequence<BareBones::Encoding::RLE<DataSequence64>>,
                                       BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<DataSequence64>>,
                                       BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZagRLE<DataSequence64>>,
+                                      BareBones::EncodedSequence<BareBones::Encoding::NoCompression<DataSequence64>>,
+                                      BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZag<DataSequence64>>,
+                                      BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<DataSequence64>>,
                                       BareBones::EncodedSequence<BareBones::Encoding::RLE<DataSequence64Mostly1>>,
                                       BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<DataSequence64Mostly1>>,
-                                      BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZagRLE<DataSequence64Mostly1>>>;
+                                      BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZagRLE<DataSequence64Mostly1>>,
+                                      BareBones::EncodedSequence<BareBones::Encoding::NoCompression<DataSequence64Mostly1>>,
+                                      BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZag<DataSequence64Mostly1>>,
+                                      BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<DataSequence64Mostly1>>>;
 TYPED_TEST_SUITE(EncoderTest64, EncoderTypes64);
 
 TYPED_TEST(EncoderTest64, boundary_values) {
@@ -117,5 +134,4 @@ TYPED_TEST(EncoderTest64, boundary_values) {
   // Assert
   EXPECT_TRUE(std::ranges::equal(outcomes, kEtalonsBoundaryValues));
 }
-
-}  // namespace
+} // namespace

@@ -18,7 +18,7 @@ namespace BareBones {
 namespace Encoding {
 template <class Container = StreamVByte::Sequence<StreamVByte::Codec0124Frequent0>>
 class RLE {
- public:
+public:
   using DataSequence = Container;
 
   class Encoder {
@@ -27,7 +27,7 @@ class RLE {
     value_type count_ = std::numeric_limits<value_type>::max();
     value_type last_;
 
-   public:
+  public:
     inline __attribute__((always_inline)) Encoder() noexcept = default;
     Encoder(const Encoder&) = delete;
     Encoder& operator=(const Encoder&) = delete;
@@ -60,7 +60,7 @@ class RLE {
         *i++ = last_;
         *i++ = count_;
         last_ = val;
-        count_ = 0;  // use 0 to encode 1 occurrence
+        count_ = 0; // use 0 to encode 1 occurrence
       }
     }
 
@@ -87,7 +87,7 @@ class RLE {
     value_type last_;
     bool decoding_from_encoder_buffer_ = false;
 
-   public:
+  public:
     template <std::input_iterator IteratorType, class IteratorSentinelType>
       requires std::is_same<typename std::iterator_traits<IteratorType>::value_type, value_type>::value && std::sentinel_for<IteratorSentinelType, IteratorType>
     inline __attribute__((always_inline)) Decoder(IteratorType& begin, const IteratorSentinelType& end, const Encoder& encoder) noexcept {
@@ -138,7 +138,7 @@ class RLE {
 
 template <class Container = StreamVByte::Sequence<StreamVByte::Codec0124Frequent0>>
 class DeltaRLE {
- public:
+public:
   using DataSequence = Container;
 
   class Encoder : public RLE<DataSequence>::Encoder {
@@ -147,7 +147,7 @@ class DeltaRLE {
     value_type last_ = 0;
     using Base = typename RLE<DataSequence>::Encoder;
 
-   public:
+  public:
     template <std::output_iterator<value_type> IteratorType>
     inline __attribute__((always_inline)) void encode(value_type val, IteratorType& i) noexcept {
       assert(val >= last_);
@@ -159,6 +159,7 @@ class DeltaRLE {
       Base::clear();
       last_ = 0;
     }
+
     inline __attribute__((always_inline)) bool empty() noexcept { return last_ == 0 && Base::empty(); }
   };
 
@@ -168,8 +169,9 @@ class DeltaRLE {
     value_type last_ = 0;
     using Base = typename RLE<DataSequence>::Decoder;
 
-   public:
+  public:
     using Base::Base;
+
     template <std::input_iterator IteratorType, class IteratorSentinelType>
       requires std::is_same<typename std::iterator_traits<IteratorType>::value_type, value_type>::value && std::sentinel_for<IteratorSentinelType, IteratorType>
     inline __attribute__((always_inline)) value_type decode(const IteratorType& begin, const IteratorSentinelType& end, const Encoder& encoder) const noexcept {
@@ -187,7 +189,7 @@ class DeltaRLE {
 
 template <class Container = StreamVByte::Sequence<StreamVByte::Codec0124Frequent0>>
 class DeltaZigZagRLE {
- public:
+public:
   using DataSequence = Container;
 
   class Encoder : public RLE<DataSequence>::Encoder {
@@ -197,7 +199,7 @@ class DeltaZigZagRLE {
     value_type last_ = 0;
     using Base = typename RLE<DataSequence>::Encoder;
 
-   public:
+  public:
     template <std::output_iterator<value_type> IteratorType>
     inline __attribute__((always_inline)) void encode(value_type val, IteratorType& i) noexcept {
       Base::encode(ZigZag::encode(std::bit_cast<int_type>(val) - std::bit_cast<int_type>(last_)), i);
@@ -208,6 +210,7 @@ class DeltaZigZagRLE {
       Base::clear();
       last_ = 0;
     }
+
     inline __attribute__((always_inline)) bool empty() noexcept { return last_ == 0 && Base::empty(); }
   };
 
@@ -217,8 +220,9 @@ class DeltaZigZagRLE {
     value_type last_ = 0;
     using Base = typename RLE<DataSequence>::Decoder;
 
-   public:
+  public:
     using Base::Base;
+
     template <std::input_iterator IteratorType, class IteratorSentinelType>
       requires std::is_same<typename std::iterator_traits<IteratorType>::value_type, value_type>::value && std::sentinel_for<IteratorSentinelType, IteratorType>
     inline __attribute__((always_inline)) value_type decode(const IteratorType& begin, const IteratorSentinelType& end, const Encoder& encoder) const noexcept {
@@ -234,15 +238,231 @@ class DeltaZigZagRLE {
   };
 };
 
+template <class Container = StreamVByte::Sequence<StreamVByte::Codec0124Frequent0>>
+class NoCompression {
+public:
+  using DataSequence = Container;
+
+  class Encoder {
+    using value_type = typename DataSequence::value_type;
+
+  public:
+    template <std::output_iterator<value_type> IteratorType>
+    static inline __attribute__((always_inline)) void encode(value_type val, IteratorType& i) noexcept {
+      *i++ = val;
+    }
+
+    static inline __attribute__((always_inline)) void clear() noexcept {
+    }
+
+    static inline __attribute__((always_inline)) bool empty() noexcept {
+      return true;
+    }
+
+    template <std::output_iterator<value_type> IteratorType>
+    static inline __attribute__((always_inline)) void flush(IteratorType&) noexcept {
+    }
+  };
+
+  class Decoder {
+    using value_type = typename DataSequence::value_type;
+
+  public:
+    template <std::input_iterator IteratorType, class IteratorSentinelType>
+      requires std::is_same<typename std::iterator_traits<IteratorType>::value_type, value_type>::value && std::sentinel_for<IteratorSentinelType, IteratorType>
+    inline __attribute__((always_inline)) Decoder(IteratorType&, const IteratorSentinelType&, const Encoder&) noexcept {
+    }
+
+    template <std::input_iterator IteratorType, class IteratorSentinelType>
+      requires std::is_same<typename std::iterator_traits<IteratorType>::value_type, value_type>::value && std::sentinel_for<IteratorSentinelType, IteratorType>
+    inline __attribute__((always_inline)) value_type decode(const IteratorType& begin, const IteratorSentinelType&, const Encoder&) const noexcept {
+      return *begin;
+    }
+
+    template <std::input_iterator IteratorType, class IteratorSentinelType>
+      requires std::is_same<typename std::iterator_traits<IteratorType>::value_type, value_type>::value && std::sentinel_for<IteratorSentinelType, IteratorType>
+    inline __attribute__((always_inline)) void next(IteratorType& begin, const IteratorSentinelType& end, const Encoder&) noexcept {
+      if (begin != end) { ++begin; }
+    }
+
+    template <std::input_iterator IteratorType, class IteratorSentinelType>
+      requires std::is_same<typename std::iterator_traits<IteratorType>::value_type, value_type>::value && std::sentinel_for<IteratorSentinelType, IteratorType>
+    inline __attribute__((always_inline)) bool is_finished(const IteratorType& begin, const IteratorSentinelType& end, const Encoder&) const noexcept {
+      return begin == end;
+    }
+  };
+};
+
+template <class Container = StreamVByte::Sequence<StreamVByte::Codec0124Frequent0>>
+class DeltaZigZag {
+public:
+  using DataSequence = Container;
+
+  class Encoder : public NoCompression<DataSequence>::Encoder {
+    using value_type = typename DataSequence::value_type;
+    typedef typename std::make_signed<value_type>::type int_type;
+
+    value_type last_ = 0;
+    using Base = typename NoCompression<DataSequence>::Encoder;
+
+  public:
+    template <std::output_iterator<value_type> IteratorType>
+    inline __attribute__((always_inline)) void encode(value_type val, IteratorType& i) noexcept {
+      Base::encode(ZigZag::encode(std::bit_cast<int_type>(val) - std::bit_cast<int_type>(last_)), i);
+      last_ = val;
+    }
+
+    inline __attribute__((always_inline)) void clear() noexcept {
+      Base::clear();
+      last_ = 0;
+    }
+
+    inline __attribute__((always_inline)) bool empty() noexcept { return last_ == 0 && Base::empty(); }
+  };
+
+  class Decoder : public NoCompression<DataSequence>::Decoder {
+    using value_type = typename DataSequence::value_type;
+
+    value_type last_ = 0;
+    using Base = typename NoCompression<DataSequence>::Decoder;
+
+  public:
+    using Base::Base;
+
+    template <std::input_iterator IteratorType, class IteratorSentinelType>
+      requires std::is_same<typename std::iterator_traits<IteratorType>::value_type, value_type>::value && std::sentinel_for<IteratorSentinelType, IteratorType>
+    inline __attribute__((always_inline)) value_type decode(const IteratorType& begin, const IteratorSentinelType& end, const Encoder& encoder) const noexcept {
+      return last_ + ZigZag::decode(Base::decode(begin, end, encoder));
+    }
+
+    template <std::input_iterator IteratorType, class IteratorSentinelType>
+      requires std::is_same<typename std::iterator_traits<IteratorType>::value_type, value_type>::value && std::sentinel_for<IteratorSentinelType, IteratorType>
+    inline __attribute__((always_inline)) void next(IteratorType& begin, const IteratorSentinelType& end, const Encoder& encoder) noexcept {
+      last_ += ZigZag::decode(Base::decode(begin, end, encoder));
+      Base::next(begin, end, encoder);
+    }
+  };
+};
+
+template <class Container = StreamVByte::Sequence<StreamVByte::Codec0124Frequent0>>
+class DeltaDeltaZigZag {
+  enum class Phase : int8_t {
+    kFirst, kDelta, kDeltaDelta
+  };
+
+public:
+  using DataSequence = Container;
+
+  class Encoder : public NoCompression<DataSequence>::Encoder {
+    using value_type = typename DataSequence::value_type;
+    using int_type = std::make_signed_t<value_type>;
+
+    value_type last_ = 0;
+    int_type last_delta_ = 0;
+    Phase phase_ = Phase::kFirst;
+    using Base = typename NoCompression<DataSequence>::Encoder;
+
+  public:
+    template <std::output_iterator<value_type> IteratorType>
+    inline __attribute__((always_inline)) void encode(value_type val, IteratorType& i) noexcept {
+      if (phase_ == Phase::kFirst) [[unlikely]] {
+        Base::encode(val, i);
+        last_ = val;
+        phase_ = Phase::kDelta;
+      } else if (phase_ == Phase::kDelta) [[unlikely]] {
+        last_delta_ = std::bit_cast<int_type>(val) - std::bit_cast<int_type>(last_);
+        Base::encode(ZigZag::encode(last_delta_), i);
+        last_ = val;
+        phase_ = Phase::kDeltaDelta;
+      } else [[likely]] {
+        const int_type curr_delta = std::bit_cast<int_type>(val) - std::bit_cast<int_type>(last_);
+        Base::encode(ZigZag::encode(curr_delta - last_delta_), i);
+        last_delta_ = curr_delta;
+        last_ = val;
+      }
+    }
+
+    inline __attribute__((always_inline)) void clear() noexcept {
+      Base::clear();
+      last_ = 0;
+      last_delta_ = 0;
+      phase_ = Phase::kFirst;
+    }
+
+    inline __attribute__((always_inline)) bool empty() noexcept { return phase_ == Phase::kFirst && last_ == 0 && last_delta_ == 0 && Base::empty(); }
+  };
+
+  class Decoder : public NoCompression<DataSequence>::Decoder {
+    using value_type = typename DataSequence::value_type;
+    using int_type = std::make_signed_t<value_type>;
+
+    value_type last_ = 0;
+    int_type last_delta_ = 0;
+    Phase phase_ = Phase::kFirst;
+    using Base = typename NoCompression<DataSequence>::Decoder;
+
+  public:
+    using Base::Base;
+
+    template <std::input_iterator IteratorType, class IteratorSentinelType>
+      requires std::is_same<typename std::iterator_traits<IteratorType>::value_type, value_type>::value && std::sentinel_for<IteratorSentinelType, IteratorType>
+    inline __attribute__((always_inline)) value_type decode(const IteratorType& begin, const IteratorSentinelType& end, const Encoder& encoder) const noexcept {
+      if (phase_ == Phase::kFirst) [[unlikely]] {
+        return Base::decode(begin, end, encoder);
+      }
+      if (phase_ == Phase::kDelta) [[unlikely]] {
+        return last_ + ZigZag::decode(Base::decode(begin, end, encoder));
+      }
+      return last_ + last_delta_ + ZigZag::decode(Base::decode(begin, end, encoder));
+    }
+
+    template <std::input_iterator IteratorType, class IteratorSentinelType>
+      requires std::is_same<typename std::iterator_traits<IteratorType>::value_type, value_type>::value && std::sentinel_for<IteratorSentinelType, IteratorType>
+    inline __attribute__((always_inline)) void next(IteratorType& begin, const IteratorSentinelType& end, const Encoder& encoder) noexcept {
+      if (phase_ == Phase::kFirst) [[unlikely]] {
+        last_ = Base::decode(begin, end, encoder);
+        phase_ = Phase::kDelta;
+      } else if (phase_ == Phase::kDelta) [[unlikely]] {
+        last_delta_ = ZigZag::decode(Base::decode(begin, end, encoder));
+        last_ += last_delta_;
+        phase_ = Phase::kDeltaDelta;
+      } else [[likely]] {
+        // kDeltaDelta
+        last_delta_ += ZigZag::decode(Base::decode(begin, end, encoder));
+        last_ += last_delta_;
+      }
+      Base::next(begin, end, encoder);
+    }
+  };
+};
+
 template <typename E>
 struct id;
+
 template <class DataSequence>
-struct id<RLE<DataSequence>> : std::integral_constant<uint8_t, 0 + (sizeof(typename DataSequence::value_type) == 8) * 3> {};
+struct id<RLE<DataSequence>> : std::integral_constant<uint8_t, 0 + (sizeof(typename DataSequence::value_type) == 8) * 3> {
+};
+
 template <class DataSequence>
-struct id<DeltaRLE<DataSequence>> : std::integral_constant<uint8_t, 1 + (sizeof(typename DataSequence::value_type) == 8) * 3> {};
+struct id<DeltaRLE<DataSequence>> : std::integral_constant<uint8_t, 1 + (sizeof(typename DataSequence::value_type) == 8) * 3> {
+};
+
 template <class DataSequence>
-struct id<DeltaZigZagRLE<DataSequence>> : std::integral_constant<uint8_t, 2 + (sizeof(typename DataSequence::value_type) == 8) * 3> {};
-}  // namespace Encoding
+struct id<DeltaZigZagRLE<DataSequence>> : std::integral_constant<uint8_t, 2 + (sizeof(typename DataSequence::value_type) == 8) * 3> {
+};
+
+template <class DataSequence>
+struct id<NoCompression<DataSequence>> : std::integral_constant<uint8_t, 3 + (sizeof(typename DataSequence::value_type) == 8) * 3> {
+};
+
+template <class DataSequence>
+struct id<DeltaZigZag<DataSequence>> : std::integral_constant<uint8_t, 4 + (sizeof(typename DataSequence::value_type) == 8) * 3> {
+};
+
+template <class DataSequence>
+struct id<DeltaDeltaZigZag<DataSequence>> : std::integral_constant<uint8_t, 5 + (sizeof(typename DataSequence::value_type) == 8) * 3> {
+};
+} // namespace Encoding
 
 template <class E, class DataSequence = typename E::DataSequence>
 class EncodedSequence {
@@ -250,14 +470,15 @@ class EncodedSequence {
 
   DataSequence data_;
 
- public:
+public:
   using value_type = typename DataSequence::value_type;
 
   EncodedSequence() = default;
   EncodedSequence(const EncodedSequence&) = delete;
   EncodedSequence& operator=(const EncodedSequence&) = delete;
 
-  inline __attribute__((always_inline)) EncodedSequence(EncodedSequence&& o) noexcept : encoder_(std::move(o.encoder_)), data_(std::move(o.data_)) {}
+  inline __attribute__((always_inline)) EncodedSequence(EncodedSequence&& o) noexcept : encoder_(std::move(o.encoder_)), data_(std::move(o.data_)) {
+  }
 
   inline __attribute__((always_inline)) EncodedSequence& operator=(EncodedSequence&& o) noexcept {
     encoder_ = std::move(o.encoder_);
@@ -282,7 +503,8 @@ class EncodedSequence {
 
   inline __attribute__((always_inline)) const DataSequence& data() const noexcept { return data_; }
 
-  class IteratorSentinel {};
+  class IteratorSentinel {
+  };
 
   class Iterator {
     typename DataSequence::const_iterator begin_;
@@ -290,7 +512,7 @@ class EncodedSequence {
     const typename E::Encoder* encoder_;
     typename E::Decoder decoder_;
 
-   public:
+  public:
     using iterator_category = std::input_iterator_tag;
     using value_type = typename DataSequence::value_type;
     using difference_type = std::ptrdiff_t;
@@ -298,7 +520,8 @@ class EncodedSequence {
     inline __attribute__((always_inline)) Iterator(typename DataSequence::const_iterator begin,
                                                    typename DataSequence::sentinel end,
                                                    const typename E::Encoder* encoder) noexcept
-        : begin_(begin), end_(end), encoder_(encoder), decoder_(begin_, end_, *encoder_) {}
+      : begin_(begin), end_(end), encoder_(encoder), decoder_(begin_, end_, *encoder_) {
+    }
 
     inline __attribute__((always_inline)) Iterator& operator++() noexcept {
       decoder_.next(begin_, end_, *encoder_);
@@ -391,6 +614,6 @@ class EncodedSequence {
 };
 
 template <class T>
-struct IsTriviallyReallocatable<BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<T>>> : std::true_type {};
-
-}  // namespace BareBones
+struct IsTriviallyReallocatable<BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<T>>> : std::true_type {
+};
+} // namespace BareBones
