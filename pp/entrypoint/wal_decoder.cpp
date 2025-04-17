@@ -281,6 +281,7 @@ extern "C" void prompp_wal_output_decoder_decode(void* args, void* res) {
     int64_t max_timestamp{};
     uint64_t outdated_sample_count{};
     uint64_t dropped_sample_count{};
+    uint64_t dropped_series_count{};
     PromPP::Primitives::Go::Slice<PromPP::WAL::RefSample> ref_samples;
     PromPP::Primitives::Go::Slice<char> error;
   };
@@ -290,6 +291,7 @@ extern "C" void prompp_wal_output_decoder_decode(void* args, void* res) {
 
   try {
     std::ispanstream{static_cast<std::string_view>(in->segment)} >> *in->decoder;
+    out->dropped_series_count = in->decoder->dropped_series_count();
     in->decoder->process_segment([in, out](PromPP::Primitives::LabelSetID ls_id, PromPP::Primitives::Timestamp ts, PromPP::Primitives::Sample::value_type v,
                                            bool is_dropped) PROMPP_LAMBDA_INLINE {
       if (is_dropped) {

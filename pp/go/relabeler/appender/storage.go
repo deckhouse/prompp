@@ -1,7 +1,6 @@
 package appender
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -47,7 +46,7 @@ type QueryableStorage struct {
 
 	clock                   clockwork.Clock
 	maxRetentionDuration    time.Duration
-	headPersistenceDuration *prometheus.GaugeVec
+	headPersistenceDuration prometheus.Histogram
 	querierMetrics          *querier.Metrics
 }
 
@@ -74,12 +73,15 @@ func NewQueryableStorageWithWriteNotifier(
 		clock:                clock,
 		maxRetentionDuration: maxRetentionDuration,
 		headRetentionTimeout: headRetentionTimeout,
-		headPersistenceDuration: factory.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "prompp_head_persistence_duration_duration",
+		headPersistenceDuration: factory.NewHistogram(
+			prometheus.HistogramOpts{
+				Name: "prompp_head_persistence_duration",
 				Help: "Block write duration in milliseconds.",
+				Buckets: []float64{
+					500, 1000, 2500, 5000, 7500,
+					10000, 25000, 50000, 75000, 100000,
+				},
 			},
-			[]string{"generation"},
 		),
 		querierMetrics: querierMetrics,
 	}
@@ -167,9 +169,7 @@ func (qs *QueryableStorage) write() bool {
 			successful = false
 			continue
 		}
-		qs.headPersistenceDuration.With(prometheus.Labels{
-			"generation": fmt.Sprintf("%d", head.Generation()),
-		}).Set(float64(qs.clock.Since(start).Milliseconds()))
+		qs.headPersistenceDuration.Observe(float64(qs.clock.Since(start).Milliseconds()))
 		persisted = append(persisted, head.ID())
 		shouldNotify = true
 		logger.Infof("QUERYABLE STORAGE: head %s persisted, duration: %v", head.String(), qs.clock.Since(start))

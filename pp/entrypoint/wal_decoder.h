@@ -192,6 +192,7 @@ void prompp_wal_output_decoder_load_from(void* args, void* res);
  *     max_timestamp         int64       // max timestamp in slice RefSample
  *     outdated_sample_count uint64      // count of dropped samples on outdated
  *     dropped_sample_count  uint64      // count of dropped samples on relabeling rules
+ *     dropped_series_count  uint64      // count of dropped series on relabeling rules
  *     ref_samples           []RefSample // slice RefSample
  *     error                 []byte      // error string if thrown
  * }

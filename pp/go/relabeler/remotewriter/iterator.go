@@ -10,9 +10,9 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/jonboulle/clockwork"
+	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
-	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/storage/remote"
 )
 
@@ -219,6 +219,10 @@ readLoop:
 		i.metrics.droppedSamplesTotal.WithLabelValues(reasonDroppedSeries).Add(float64(b.DroppedSamplesCount()))
 	}
 
+	if b.HasDroppedSeries() {
+		i.metrics.droppedSeriesTotal.Add(float64(b.DroppedSeriesCount()))
+	}
+
 	if b.IsEmpty() {
 		return i.wrapError(nil)
 	}
@@ -417,6 +421,7 @@ type batch struct {
 	numberOfSamples            int
 	outdatedSamplesCount       uint64
 	droppedSamplesCount        uint64
+	droppedSeriesCount         uint64
 	maxNumberOfSamplesPerShard int
 }
 
@@ -433,6 +438,7 @@ func (b *batch) add(segments []*DecodedSegment) {
 		b.numberOfSamples += segment.Samples.Size()
 		b.outdatedSamplesCount += segment.OutdatedSamplesCount
 		b.droppedSamplesCount += segment.DroppedSamplesCount
+		b.droppedSeriesCount += segment.DroppedSeriesCount
 	}
 }
 
@@ -448,12 +454,22 @@ func (b *batch) HasDroppedSamples() bool {
 	return b.droppedSamplesCount > 0 || b.outdatedSamplesCount > 0
 }
 
+// HasDroppedSeries returns true if there are dropped series.
+func (b *batch) HasDroppedSeries() bool {
+	return b.droppedSeriesCount > 0
+}
+
 func (b *batch) OutdatedSamplesCount() uint64 {
 	return b.outdatedSamplesCount
 }
 
 func (b *batch) DroppedSamplesCount() uint64 {
 	return b.droppedSamplesCount
+}
+
+// DroppedSeriesCount number of dropped series.
+func (b *batch) DroppedSeriesCount() uint64 {
+	return b.droppedSeriesCount
 }
 
 func (b *batch) NumberOfSamples() int {

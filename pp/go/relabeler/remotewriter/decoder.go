@@ -2,10 +2,11 @@ package remotewriter
 
 import (
 	"fmt"
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/model/labels"
 	"io"
 	"os"
+
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
 type Decoder struct {
@@ -42,6 +43,7 @@ type DecodedSegment struct {
 	MaxTimestamp         int64
 	OutdatedSamplesCount uint64
 	DroppedSamplesCount  uint64
+	DroppedSeriesCount   uint64
 }
 
 func (d *Decoder) Decode(segment []byte, minTimestamp int64) (*DecodedSegment, error) {
@@ -54,6 +56,7 @@ func (d *Decoder) Decode(segment []byte, minTimestamp int64) (*DecodedSegment, e
 		MaxTimestamp:         stats.MaxTimestamp(),
 		OutdatedSamplesCount: stats.OutdatedSampleCount(),
 		DroppedSamplesCount:  stats.DroppedSampleCount(),
+		DroppedSeriesCount:   stats.DroppedSeriesCount(),
 	}, nil
 }
 

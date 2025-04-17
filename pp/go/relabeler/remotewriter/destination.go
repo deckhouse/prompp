@@ -160,6 +160,13 @@ func NewDestination(cfg DestinationConfig) *Destination {
 				Help:        "Total number of samples which were dropped after being read from the WAL before being sent via remote write, either via relabelling, due to being too old or unintentionally because of an unknown reference ID.",
 				ConstLabels: constLabels,
 			}, []string{"reason"}),
+			droppedSeriesTotal: prometheus.NewCounter(prometheus.CounterOpts{
+				Namespace:   namespace,
+				Subsystem:   subsystem,
+				Name:        "series_dropped_total",
+				Help:        "Total number of series which were dropped after being read from the WAL before being sent via remote write, either via relabelling.",
+				ConstLabels: constLabels,
+			}),
 			droppedExemplarsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 				Namespace:   namespace,
 				Subsystem:   subsystem,
@@ -322,6 +329,7 @@ func (d *Destination) RegisterMetrics(registerer prometheus.Registerer) {
 	registerer.MustRegister(d.metrics.retriedHistogramsTotal)
 	registerer.MustRegister(d.metrics.retriedMetadataTotal)
 	registerer.MustRegister(d.metrics.droppedSamplesTotal)
+	registerer.MustRegister(d.metrics.droppedSeriesTotal)
 	registerer.MustRegister(d.metrics.droppedExemplarsTotal)
 	registerer.MustRegister(d.metrics.droppedHistogramsTotal)
 	registerer.MustRegister(d.metrics.enqueueRetriesTotal)
@@ -357,6 +365,7 @@ func (d *Destination) UnregisterMetrics(registerer prometheus.Registerer) {
 	registerer.Unregister(d.metrics.retriedHistogramsTotal)
 	registerer.Unregister(d.metrics.retriedMetadataTotal)
 	registerer.Unregister(d.metrics.droppedSamplesTotal)
+	registerer.Unregister(d.metrics.droppedSeriesTotal)
 	registerer.Unregister(d.metrics.droppedExemplarsTotal)
 	registerer.Unregister(d.metrics.droppedHistogramsTotal)
 	registerer.Unregister(d.metrics.enqueueRetriesTotal)
@@ -425,6 +434,7 @@ type DestinationMetrics struct {
 	retriedHistogramsTotal prometheus.Counter
 	retriedMetadataTotal   prometheus.Counter
 	droppedSamplesTotal    *prometheus.CounterVec
+	droppedSeriesTotal     prometheus.Counter
 	droppedExemplarsTotal  *prometheus.CounterVec
 	droppedHistogramsTotal *prometheus.CounterVec
 	enqueueRetriesTotal    prometheus.Counter

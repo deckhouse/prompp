@@ -255,6 +255,7 @@ type OutputDecoderStats struct {
 	maxTimestamp        int64
 	outdatedSampleCount uint64
 	droppedSampleCount  uint64
+	droppedSeriesCount  uint64
 }
 
 // MaxTimestamp return max timestamp in decoded segment.
@@ -270,6 +271,11 @@ func (s OutputDecoderStats) OutdatedSampleCount() uint64 {
 // DroppedSampleCount return count dropped samples.
 func (s OutputDecoderStats) DroppedSampleCount() uint64 {
 	return s.droppedSampleCount
+}
+
+// DroppedSeriesCount return count dropped series.
+func (s OutputDecoderStats) DroppedSeriesCount() uint64 {
+	return s.droppedSeriesCount
 }
 
 //

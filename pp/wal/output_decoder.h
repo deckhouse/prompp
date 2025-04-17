@@ -150,8 +150,11 @@ class OutputDecoder : private BaseOutputDecoder {
   Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector>& output_lss_;
   Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector>::checkpoint_type dumped_checkpoint_{output_lss_.checkpoint()};
 
+  uint64_t dropped_series_count_{};
+
   // align_cache_to_lss add new labels from lss via relabeler to cache.
   PROMPP_ALWAYS_INLINE void align_cache_to_lss() {
+    dropped_series_count_ = 0;
     auto& cache = sample_decoder().cache();
     if (wal_lss_.next_item_index() <= cache.size()) {
       return;
@@ -168,6 +171,7 @@ class OutputDecoder : private BaseOutputDecoder {
 
       if (rstatus == Prometheus::Relabel::rsDrop) {
         cache.add_dropped();
+        ++dropped_series_count_;
       } else {
         cache.add(output_lss_.find_or_emplace(builder.label_view_set()));
       }
@@ -198,6 +202,9 @@ class OutputDecoder : private BaseOutputDecoder {
 
   // cache return current cache.
   PROMPP_ALWAYS_INLINE const auto& cache() const noexcept { return sample_decoder().cache(); }
+
+  // dropped_series_count return number of dropped series after load segment.
+  PROMPP_ALWAYS_INLINE uint64_t dropped_series_count() const noexcept { return dropped_series_count_; }
 
   // dump_to dump delta state(delta caches and delta checkpoint lss) to output stream.
   PROMPP_ALWAYS_INLINE void dump_to(std::ostream& out) {

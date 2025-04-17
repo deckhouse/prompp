@@ -4,8 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"slices"
+	"strconv"
 	"sync"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/pp/go/util"
 )
 
 type SegmentIsWrittenNotifier interface {
@@ -15,6 +20,7 @@ type SegmentIsWrittenNotifier interface {
 type WriteSyncCloser interface {
 	io.WriteCloser
 	Sync() error
+	Stat() (os.FileInfo, error)
 }
 
 type segmentWriter struct {
@@ -23,17 +29,39 @@ type segmentWriter struct {
 	buffer         *bytes.Buffer
 	notifier       SegmentIsWrittenNotifier
 	writer         WriteSyncCloser
+	walSize        prometheus.Gauge
+	initSize       int64
 	writeCompleted bool
 }
 
-func newSegmentWriter(shardID uint16, writer WriteSyncCloser, notifier SegmentIsWrittenNotifier) *segmentWriter {
-	return &segmentWriter{
-		shardID:        shardID,
-		buffer:         bytes.NewBuffer(nil),
-		notifier:       notifier,
-		writer:         writer,
-		writeCompleted: true,
+func newSegmentWriter(
+	shardID uint16,
+	writer WriteSyncCloser,
+	notifier SegmentIsWrittenNotifier,
+	registerer prometheus.Registerer,
+) (*segmentWriter, error) {
+	info, err := writer.Stat()
+	if err != nil {
+		return nil, err
 	}
+
+	factory := util.NewUnconflictRegisterer(registerer)
+
+	return &segmentWriter{
+		shardID:  shardID,
+		buffer:   bytes.NewBuffer(nil),
+		notifier: notifier,
+		writer:   writer,
+		walSize: factory.NewGauge(
+			prometheus.GaugeOpts{
+				Name:        "prompp_head_current_wal_size",
+				Help:        "The size of the wall of the current head.",
+				ConstLabels: prometheus.Labels{"shard_id": strconv.FormatUint(uint64(shardID), 10)},
+			},
+		),
+		initSize:       info.Size(),
+		writeCompleted: true,
+	}, nil
 }
 
 func (w *segmentWriter) Write(segment EncodedSegment) error {
@@ -75,13 +103,26 @@ func (w *segmentWriter) sync() error {
 }
 
 func (w *segmentWriter) encodeAndFlush(segment EncodedSegment) (encoded bool, err error) {
-	if _, err := WriteSegment(w.buffer, segment); err != nil {
+	n, err := WriteSegment(w.buffer, segment)
+	if err != nil {
 		w.buffer.Reset()
 		return false, fmt.Errorf("encode segment: %w", err)
 	}
 
 	w.writeCompleted = false
-	return true, w.flushAndSync()
+
+	if err := w.flushAndSync(); err != nil {
+		return true, err
+	}
+
+	if w.initSize != 0 {
+		w.walSize.Set(float64(w.initSize))
+		w.initSize = 0
+	}
+
+	w.walSize.Add(float64(n))
+
+	return true, nil
 }
 
 func (w *segmentWriter) flushAndSync() error {
