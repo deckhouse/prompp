@@ -21,7 +21,7 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: fsn-dev-gitlab-runner
+    runs-on: fsn-dev-perftest-runner
     steps:
       - name: Clean workspace
         uses: AutoModality/action-clean@v1
@@ -58,14 +58,16 @@ jobs:
           docker rm $CONTAINER_ID_PROMPP
           docker rmi docker.io/prompp/prompp:$BRANCH_NAME
 
+      - name: Archive binaries
+        run: |
+          cp ./documentation/examples/prometheus.yml ./prometheus.yml
+          tar -czvf prompp-binaries.tar.gz prompp promtool prompptool prometheus.yml
+
       - name: Upload binaries as artifacts
         uses: actions/upload-artifact@v4
         with:
           name: prompp-binaries
-          path: |
-            prompp
-            promtool
-            prompptool
+          path: prompp-binaries.tar.gz
           retention-days: 7
 
   release:
@@ -93,6 +95,6 @@ jobs:
         uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda  # v2.2.1
         with:
           draft: true
-          files: ./artifacts/prom*
+          files: ./artifacts/prompp-binaries.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

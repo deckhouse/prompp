@@ -2,11 +2,12 @@
 
 #include "bare_bones/vector.h"
 #include "numeric.h"
+#include "primitives/primitives.h"
 
 namespace series_data::encoder {
 
 struct Sample {
-  int64_t timestamp{};
+  PromPP::Primitives::Timestamp timestamp{};
   double value{};
 
   PROMPP_ALWAYS_INLINE bool operator==(const Sample& other) const noexcept {
