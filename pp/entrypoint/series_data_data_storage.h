@@ -68,12 +68,13 @@ void prompp_series_data_data_storage_query(void* args, void* res);
  * @brief return samples at given timestamp for label sets.
  *
  * @param args {
- *     dataStorage uintptr // pointer to constructed data storage
- *     query DataStorageQuery // query
- *     samples []struct { // pre-allocated samples slice
- *         timestamp int64
- *         value float64
- *     }
+ *        dataStorage uintptr    // pointer to constructed data storage
+ *        labelSetIDs []uint32   // series ids
+ *        timestamp   int64      // timestamp
+ *        samples     []struct { // pre-allocated samples slice
+ *                timestamp int64
+ *                value     float64
+ *        }
  * }
  */
 void prompp_series_data_data_storage_instant_query(void* args);
@@ -132,5 +133,5 @@ void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, void* res);
 void prompp_series_data_chunk_recoder_dtor(void* args);
 
 #ifdef __cplusplus
-} // extern "C"
+}  // extern "C"
 #endif

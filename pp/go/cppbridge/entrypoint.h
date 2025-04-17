@@ -1028,7 +1028,7 @@ void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, void* res);
 void prompp_series_data_chunk_recoder_dtor(void* args);
 
 #ifdef __cplusplus
-} // extern "C"
+}  // extern "C"
 #endif
 #ifdef __cplusplus
 extern "C" {
