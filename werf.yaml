@@ -149,6 +149,9 @@ shell:
 ---
 image: prom-pp
 fromImage: distroless
+git:
+  - add: /documentation/examples/prometheus.yml
+    to: /prometheus/prometheus.yml
 import:
   - artifact: prompp-artifact
     add: /src/prompptool
