@@ -199,7 +199,6 @@ func (e *EncoderV3) Encode(writer io.Writer, r *Record) (err error) {
 		return fmt.Errorf("write max timestamp: %w", err)
 	}
 
-	// len is buffer size minus 1 byte for len and 4 bytes for crc32
 	e.buffer.Bytes()[0] = uint8(len(e.buffer.Bytes()) - 1)
 
 	crc32Hasher := crc32.NewIEEE()
