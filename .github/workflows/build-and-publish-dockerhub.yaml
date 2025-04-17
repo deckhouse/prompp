@@ -31,31 +31,28 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: deckhouse/modules-actions/setup@v2
+      - name: Login to Dockerhub registry
+        uses: deckhouse/modules-actions/setup@v2
         with:
           registry: docker.io
           registry_login: ${{ secrets.DOCKERHUB_REGISTRY_LOGIN }}
           registry_password: "${{ secrets.DOCKERHUB_REGISTRY_PASSWORD }}"
-        
-      - name: Build Images Dockerhub
-        run: |
-          BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
-          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
-          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/^v//')
-          werf export --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp --tag=docker.io/prompp/prompp:$BRANCH_NAME
 
-      - uses: deckhouse/modules-actions/setup@v2
+      - name: Login to mirror registry
+        uses: deckhouse/modules-actions/setup@v2
         with:
           registry: ${{ secrets.DECKHOUSE_REGISTRY }}
           registry_login: ${{ secrets.DECKHOUSE_REGISTRY_LOGIN }}
           registry_password: "${{ secrets.DECKHOUSE_REGISTRY_PASSWORD }}"
 
-      - name: Build Images Deckhouse
+      - name: Build Images
         run: |
           BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/^v//')
-          werf export --repo=${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp --tag=docker.io/prompp/prompp:$BRANCH_NAME
+          werf export --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp \
+            --tag=docker.io/prompp/prompp:$BRANCH_NAME \
+            --tag=${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:$BRANCH_NAME
 
       - name: Extract binaries from Docker images
         run: |
