@@ -9,7 +9,7 @@ args:
   GO_ARCH: {{ env "GO_ARCH" }}
 ---
 image: distroless
-from: registry.deckhouse.io/base_images/scratch@sha256:b054705fcc9f2205777d80a558d920c0b4209efdc3163c22b5bfcb5dda1db5fc
+from: registry.werf.io/werf/scratch
 final: false
 import:
   - image: distroless-artifact
