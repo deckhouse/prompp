@@ -223,7 +223,7 @@ func (d *DecoderV3) Decode(reader io.Reader, r *Record) (err error) {
 	offset += 8
 
 	crc32Hasher := crc32.NewIEEE()
-	_, err = crc32Hasher.Write(d.buffer[5:])
+	_, err = crc32Hasher.Write(d.buffer[5 : size+1])
 	if err != nil {
 		return fmt.Errorf("hash crc32: %w", err)
 	}

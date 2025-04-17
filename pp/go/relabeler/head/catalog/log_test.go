@@ -1,7 +1,6 @@
 package catalog
 
 import (
-	"bytes"
 	"encoding/hex"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -43,12 +42,12 @@ func (s *FileLogTestSuite) TestMigrateV1ToV2() {
 	}
 	require.NoError(s.T(), logFileV1.Close())
 
-	require.True(s.T(), fileContentIsEqual(s.T(), logFileV1Name, "testdata/headv1.log"))
+	fileContentIsEqual(s.T(), logFileV1Name, "testdata/headv1.log")
 
 	logFile, err := NewFileLogV2(logFileV1Name)
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), logFile.Close())
-	require.True(s.T(), fileContentIsEqual(s.T(), logFileV1Name, "testdata/headv2.log"))
+	fileContentIsEqual(s.T(), logFileV1Name, "testdata/headv2.log")
 }
 
 func (s *FileLogTestSuite) TestMigrateV2ToV3() {
@@ -58,7 +57,7 @@ func (s *FileLogTestSuite) TestMigrateV2ToV3() {
 	logFile, err := NewFileLogV3(logFilePath)
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), logFile.Close())
-	require.True(s.T(), fileContentIsEqual(s.T(), logFilePath, "testdata/headv3.log"))
+	fileContentIsEqual(s.T(), logFilePath, "testdata/headv3.log")
 }
 
 func (s *FileLogTestSuite) TestMigrateV3ToV2() {
@@ -68,7 +67,7 @@ func (s *FileLogTestSuite) TestMigrateV3ToV2() {
 	logFile, err := NewFileLogV2(logFilePath)
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), logFile.Close())
-	require.True(s.T(), fileContentIsEqual(s.T(), logFilePath, "testdata/headv2.log"))
+	fileContentIsEqual(s.T(), logFilePath, "testdata/headv2.log")
 }
 
 func (s *FileLogTestSuite) TestMigrateV1ToV3() {
@@ -78,15 +77,15 @@ func (s *FileLogTestSuite) TestMigrateV1ToV3() {
 	logFile, err := NewFileLogV3(logFilePath)
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), logFile.Close())
-	require.True(s.T(), fileContentIsEqual(s.T(), logFilePath, "testdata/headv3.log"))
+	fileContentIsEqual(s.T(), logFilePath, "testdata/headv3.log")
 }
 
-func fileContentIsEqual(t *testing.T, filePath1, filePath2 string) bool {
+func fileContentIsEqual(t *testing.T, filePath1, filePath2 string) {
 	data1, err := os.ReadFile(filePath1)
 	require.NoError(t, err)
 	t.Log(hex.EncodeToString(data1))
 	data2, err := os.ReadFile(filePath2)
 	require.NoError(t, err)
 	t.Log(hex.EncodeToString(data1))
-	return bytes.Equal(data1, data2)
+	require.Equal(t, data1, data2)
 }
