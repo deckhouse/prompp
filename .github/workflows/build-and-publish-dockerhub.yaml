@@ -41,7 +41,7 @@ jobs:
       - name: Login to mirror registry
         uses: deckhouse/modules-actions/setup@v2
         with:
-          registry: registry.deckhouse.io
+          registry: write-registry.deckhouse.io
           registry_login: ${{ secrets.DECKHOUSE_REGISTRY_LOGIN }}
           registry_password: "${{ secrets.DECKHOUSE_REGISTRY_PASSWORD }}"
 
