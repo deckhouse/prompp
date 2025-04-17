@@ -354,9 +354,10 @@ func main() {
 	serverOnlyFlag(a, "storage.tsdb.min-block-duration", "Minimum duration of a data block before being persisted. For use in testing.").
 		Hidden().Default("2h").SetValue(&cfg.tsdb.MinBlockDuration)
 
-	var catalogMaxLogFileSize int
+	var catalogMaxLogFileSize units.Base2Bytes
 	serverOnlyFlag(a, "storage.prompp.max-log-file-size", "Maximum size of log file in bytes before being compacted.").
-		Hidden().Default(fmt.Sprintf("%d", catalog.DefaultMaxLogFileSize)).IntVar(&catalogMaxLogFileSize)
+		Hidden().Default(fmt.Sprintf("%d", catalog.DefaultMaxLogFileSize)).
+		PlaceHolder("<bytes>").BytesVar(&catalogMaxLogFileSize)
 
 	serverOnlyFlag(a, "storage.tsdb.max-block-duration",
 		"Maximum duration compacted blocks may span. For use in testing. (Defaults to 10% of the retention period.)").
@@ -693,7 +694,7 @@ func main() {
 	}
 
 	clock := clockwork.NewRealClock()
-	headCatalog, err := catalog.New(clock, fileLog, catalog.DefaultIDGenerator{}, catalogMaxLogFileSize)
+	headCatalog, err := catalog.New(clock, fileLog, catalog.DefaultIDGenerator{}, int(catalogMaxLogFileSize))
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create head catalog", "err", err)
 		os.Exit(1)

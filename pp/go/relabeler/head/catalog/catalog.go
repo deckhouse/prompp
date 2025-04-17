@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	DefaultMaxLogFileSize = 1 << 22
+	DefaultMaxLogFileSize = 4 << 20
 )
 
 type Log interface {

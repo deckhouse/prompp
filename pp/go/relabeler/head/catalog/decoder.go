@@ -1,7 +1,6 @@
 package catalog
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -107,7 +106,7 @@ func (DecoderV2) Decode(reader io.Reader, r *Record) (err error) {
 	}()
 
 	if err = binary.Read(rReader, binary.LittleEndian, &r.id); err != nil {
-		return fmt.Errorf("read recird id: %w", err)
+		return fmt.Errorf("read record id: %w", err)
 	}
 
 	if err = binary.Read(rReader, binary.LittleEndian, &r.numberOfShards); err != nil {
@@ -160,25 +159,25 @@ func decodeOptionalValue[T any](reader io.Reader, byteOrder binary.ByteOrder, va
 
 // DecoderV3 is the third decoder generat
 type DecoderV3 struct {
-	buffer *bytes.Buffer
+	buffer []byte
 }
 
 // NewDecoderV3 is DecoderV3 constructor.
 func NewDecoderV3() *DecoderV3 {
 	return &DecoderV3{
-		buffer: bytes.NewBuffer(make([]byte, 0, RecordStructMaxSizeV3)),
+		buffer: make([]byte, RecordStructMaxSizeV3),
 	}
 }
 
 // Decode is an Decoder interface implementation.
 func (d *DecoderV3) Decode(reader io.Reader, r *Record) (err error) {
-	d.buffer.Reset()
-	reader = io.TeeReader(reader, d.buffer)
-
-	var size uint8
-	if err = binary.Read(reader, binary.LittleEndian, &size); err != nil {
+	offset := 0
+	if _, err = reader.Read(d.buffer[offset : offset+1]); err != nil {
 		return fmt.Errorf("read record size: %w", err)
 	}
+
+	size := d.buffer[offset]
+	offset += 1
 
 	defer func() {
 		if err != nil && errors.Is(err, io.EOF) {
@@ -186,57 +185,45 @@ func (d *DecoderV3) Decode(reader io.Reader, r *Record) (err error) {
 		}
 	}()
 
-	var expectedCRC32Hash uint32
-	if err = binary.Read(reader, binary.LittleEndian, &expectedCRC32Hash); err != nil {
-		return fmt.Errorf("read crc32 hash: %w", err)
+	if _, err = reader.Read(d.buffer[offset : offset+int(size)]); err != nil {
+		return fmt.Errorf("read whole record: %w", err)
 	}
 
-	if err = binary.Read(reader, binary.LittleEndian, &r.id); err != nil {
-		return fmt.Errorf("read recird id: %w", err)
-	}
+	expectedCRC32Hash := binary.LittleEndian.Uint32(d.buffer[offset:])
+	offset += 4
 
-	if err = binary.Read(reader, binary.LittleEndian, &r.numberOfShards); err != nil {
-		return fmt.Errorf("read number of shards: %w", err)
-	}
+	r.id = uuid.UUID(d.buffer[offset : offset+16])
+	offset += 16
 
-	if err = binary.Read(reader, binary.LittleEndian, &r.createdAt); err != nil {
-		return fmt.Errorf("read created at: %w", err)
-	}
+	r.numberOfShards = binary.LittleEndian.Uint16(d.buffer[offset:])
+	offset += 2
 
-	if err = binary.Read(reader, binary.LittleEndian, &r.updatedAt); err != nil {
-		return fmt.Errorf("read updated at: %w", err)
-	}
+	r.createdAt = int64(binary.LittleEndian.Uint64(d.buffer[offset:]))
+	offset += 8
 
-	if err = binary.Read(reader, binary.LittleEndian, &r.deletedAt); err != nil {
-		return fmt.Errorf("read deleted at: %w", err)
-	}
+	r.updatedAt = int64(binary.LittleEndian.Uint64(d.buffer[offset:]))
+	offset += 8
 
-	if err = binary.Read(reader, binary.LittleEndian, &r.corrupted); err != nil {
-		return fmt.Errorf("read currupted: %w", err)
-	}
+	r.deletedAt = int64(binary.LittleEndian.Uint64(d.buffer[offset:]))
+	offset += 8
 
-	if err = binary.Read(reader, binary.LittleEndian, &r.status); err != nil {
-		return fmt.Errorf("read status: %w", err)
-	}
+	r.corrupted = d.buffer[offset] > 0
+	offset += 1
 
-	if err = binary.Read(reader, binary.LittleEndian, &r.numberOfSegments); err != nil {
-		return fmt.Errorf("read number of segments: %w", err)
-	}
+	r.status = Status(d.buffer[offset])
+	offset += 1
 
-	if err = binary.Read(reader, binary.LittleEndian, &r.mint); err != nil {
-		return fmt.Errorf("read mint: %w", err)
-	}
+	r.numberOfSegments = binary.LittleEndian.Uint32(d.buffer[offset:])
+	offset += 4
 
-	if err = binary.Read(reader, binary.LittleEndian, &r.maxt); err != nil {
-		return fmt.Errorf("read maxt: %w", err)
-	}
+	r.mint = int64(binary.LittleEndian.Uint64(d.buffer[offset:]))
+	offset += 8
 
-	if int(size) != len(d.buffer.Bytes())-5 {
-		return fmt.Errorf("invalid record size: %d, expected %d", size, len(d.buffer.Bytes()))
-	}
+	r.maxt = int64(binary.LittleEndian.Uint64(d.buffer[offset:]))
+	offset += 8
 
 	crc32Hasher := crc32.NewIEEE()
-	_, err = crc32Hasher.Write(d.buffer.Bytes()[5:])
+	_, err = crc32Hasher.Write(d.buffer[5:])
 	if err != nil {
 		return fmt.Errorf("hash crc32: %w", err)
 	}

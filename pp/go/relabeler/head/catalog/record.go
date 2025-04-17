@@ -131,6 +131,32 @@ func NewRecordWithData(id uuid.UUID,
 	}
 }
 
+func NewRecordWithDataV3(
+	id uuid.UUID,
+	numberOfShards uint16,
+	createdAt int64,
+	updatedAt int64,
+	deletedAt int64,
+	corrupted bool,
+	status Status,
+	numberOfSegments uint32,
+	mint int64,
+	maxt int64,
+) *Record {
+	return &Record{
+		id:               id,
+		numberOfShards:   numberOfShards,
+		createdAt:        createdAt,
+		updatedAt:        updatedAt,
+		deletedAt:        deletedAt,
+		corrupted:        corrupted,
+		status:           status,
+		numberOfSegments: numberOfSegments,
+		mint:             mint,
+		maxt:             maxt,
+	}
+}
+
 func createRecordCopy(r *Record) *Record {
 	c := *r
 	return &c
