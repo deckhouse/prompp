@@ -16,6 +16,7 @@ const (
 
 	LogFileVersionV1 uint64 = 1
 	LogFileVersionV2 uint64 = 2
+	LogFileVersionV3 uint64 = 3
 
 	logFilePerm = 0o600
 )
@@ -73,7 +74,14 @@ func NewFileLogV1(fileName string) (fl *FileLog, err error) {
 }
 
 func NewFileLogV2(filePath string) (fl *FileLog, err error) {
-	targetVersion := LogFileVersionV2
+	return NewFileLog(filePath, LogFileVersionV2)
+}
+
+func NewFileLogV3(filePath string) (fl *FileLog, err error) {
+	return NewFileLog(filePath, LogFileVersionV3)
+}
+
+func NewFileLog(filePath string, targetVersion uint64) (fl *FileLog, err error) {
 	sourceFilePath := filePath
 	fl, err = openFileLog(filePath, sourceFilePath, targetVersion)
 	if err == nil {
@@ -170,6 +178,7 @@ func writeSwapAndSwitchAtFilePath(targetFilePath, swapFilePath string, version u
 	return swapFile, nil
 }
 
+// creates swap file, writes records & sets read offset at first record.
 func createSwapFile(fileName string, version uint64, encoder Encoder, records ...*Record) (*FileHandler, error) {
 	swapFile, err := NewFileHandlerWithOpts(fileName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, logFilePerm)
 	if err != nil {
@@ -182,7 +191,8 @@ func createSwapFile(fileName string, version uint64, encoder Encoder, records ..
 		}
 	}()
 
-	if err = binary.Write(swapFile, binary.LittleEndian, version); err != nil {
+	offset, err := WriteLogFileVersion(swapFile, version)
+	if err != nil {
 		return nil, fmt.Errorf("write log file version: %w", err)
 	}
 
@@ -195,6 +205,8 @@ func createSwapFile(fileName string, version uint64, encoder Encoder, records ..
 	if err = swapFile.Sync(); err != nil {
 		return nil, fmt.Errorf("sync swap file: %w", err)
 	}
+
+	swapFile.SetReadOffset(int64(offset))
 
 	return swapFile, nil
 }

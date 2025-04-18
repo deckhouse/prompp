@@ -15,8 +15,7 @@ import (
 )
 
 const (
-	logFileName    = "head.log"
-	MaxLogFileSize = 32 * 1024
+	DefaultMaxLogFileSize = 4 << 20
 )
 
 type Log interface {
@@ -42,17 +41,19 @@ type Catalog struct {
 	log                 Log
 	idGenerator         IDGenerator
 	records             map[string]*Record
+	maxLogFileSize int
 	corruptedHead       prometheus.Counter
 	activeHeadCreatedAt prometheus.Gauge
 }
 
-func New(clock clockwork.Clock, log Log, idGenerator IDGenerator, registerer prometheus.Registerer) (*Catalog, error) {
+func New(clock clockwork.Clock, log Log, idGenerator IDGenerator, maxLogFileSize int, registerer prometheus.Registerer) (*Catalog, error) {
 	factory := util.NewUnconflictRegisterer(registerer)
 	catalog := &Catalog{
-		clock:       clock,
-		log:         log,
-		idGenerator: idGenerator,
-		records:     make(map[string]*Record),
+		clock:          clock,
+		log:            log,
+		idGenerator:    idGenerator,
+		records:        make(map[string]*Record),
+		maxLogFileSize: maxLogFileSize,
 		corruptedHead: factory.NewCounter(
 			prometheus.CounterOpts{
 				Name: "prompp_head_catalog_corrupted_head_total",
@@ -256,7 +257,7 @@ func (c *Catalog) sync() error {
 }
 
 func (c *Catalog) compactIfNeeded() error {
-	if c.log.Size() < MaxLogFileSize {
+	if c.log.Size() < c.maxLogFileSize {
 		return nil
 	}
 
