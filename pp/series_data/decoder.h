@@ -251,12 +251,8 @@ public:
 
   template <chunk::DataChunk::Type chunk_type>
   [[nodiscard]] PROMPP_ALWAYS_INLINE static PromPP::Primitives::TimeInterval get_chunk_time_interval(const DataStorage::SeriesChunkIterator::Data& chunk_data) {
-    if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
-      return {.min = get_chunk_first_timestamp<chunk::DataChunk::Type::kOpen>(*chunk_data.storage(), chunk_data.chunk()),
-              .max = get_chunk_last_timestamp<chunk::DataChunk::Type::kOpen>(chunk_data)};
-    }
-    return {.min = get_chunk_first_timestamp<chunk::DataChunk::Type::kFinalized>(*chunk_data.storage(), chunk_data.chunk()),
-            .max = get_chunk_last_timestamp<chunk::DataChunk::Type::kFinalized>(chunk_data)};
+    return {.min = get_chunk_first_timestamp<chunk_type>(*chunk_data.storage(), chunk_data.chunk()),
+            .max = get_chunk_last_timestamp<chunk_type>(chunk_data)};
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static PromPP::Primitives::TimeInterval get_chunk_time_interval(const DataStorage::SeriesChunkIterator::Data& chunk_data) {
