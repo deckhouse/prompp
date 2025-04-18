@@ -1,6 +1,7 @@
 package catalog_test
 
 import (
+	"github.com/prometheus/client_golang/prometheus"
 	"os"
 	"sort"
 	"testing"
@@ -22,7 +23,7 @@ func TestCatalog(t *testing.T) {
 
 	clock := clockwork.NewFakeClockAt(time.Now())
 
-	c, err := catalog.New(clock, l, catalog.DefaultIDGenerator{}, nil)
+	c, err := catalog.New(clock, l, catalog.DefaultIDGenerator{}, catalog.DefaultMaxLogFileSize, prometheus.DefaultRegisterer)
 	require.NoError(t, err)
 
 	now := clock.Now().UnixMilli()
@@ -65,7 +66,7 @@ func TestCatalog(t *testing.T) {
 
 	l, err = catalog.NewFileLogV2(logFileName)
 	require.NoError(t, err)
-	c, err = catalog.New(clock, l, catalog.DefaultIDGenerator{}, nil)
+	c, err = catalog.New(clock, l, catalog.DefaultIDGenerator{}, catalog.DefaultMaxLogFileSize, prometheus.DefaultRegisterer)
 	require.NoError(t, err)
 
 	records, err := c.List(nil, nil)
@@ -86,7 +87,7 @@ func TestCatalogSyncFail(t *testing.T) {
 
 	clock := clockwork.NewFakeClockAt(time.Now())
 
-	c, err := catalog.New(clock, l, catalog.DefaultIDGenerator{}, nil)
+	c, err := catalog.New(clock, l, catalog.DefaultIDGenerator{}, catalog.DefaultMaxLogFileSize, prometheus.DefaultRegisterer)
 	require.NoError(t, err)
 
 	var nos1 uint16 = 2
@@ -104,7 +105,7 @@ func TestCatalogSyncFail(t *testing.T) {
 	l, err = catalog.NewFileLogV2(logFileName)
 	require.NoError(t, err)
 
-	c, err = catalog.New(clock, l, catalog.DefaultIDGenerator{}, nil)
+	c, err = catalog.New(clock, l, catalog.DefaultIDGenerator{}, catalog.DefaultMaxLogFileSize, prometheus.DefaultRegisterer)
 	require.NoError(t, err)
 
 	restoredR1, err := c.Get(r1.ID())
