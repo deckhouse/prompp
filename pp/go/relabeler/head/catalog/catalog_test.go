@@ -73,9 +73,6 @@ func TestCatalog(t *testing.T) {
 	sort.Slice(records, func(i, j int) bool {
 		return records[i].CreatedAt() < records[j].CreatedAt()
 	})
-
-	// prevRecords := []catalog.Record{r1, r2}
-	// require.Equal(t, records, prevRecords)
 }
 
 func TestCatalogSyncFail(t *testing.T) {
