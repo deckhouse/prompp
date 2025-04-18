@@ -592,8 +592,9 @@ func (s *EncoderDecoderSuite) TestEncodeWALOutputDecode() {
 	s.Require().NoError(err)
 
 	s.Equal(expectedWr.Timeseries[0].Samples[0].Timestamp, stats.MaxTimestamp())
-	s.Equal(uint64(0), stats.OutdatedSampleCount())
-	s.Equal(uint64(0), stats.DroppedSampleCount())
+	s.Equal(uint32(0), stats.OutdatedSampleCount())
+	s.Equal(uint32(1), stats.AddSeriesCount())
+	s.Equal(uint32(0), stats.DroppedSampleCount())
 	refSamples.Range(func(id uint32, t int64, v float64) bool {
 		if !s.Less(int(id), len(expectedWr.Timeseries)) {
 			return false
@@ -667,8 +668,105 @@ func (s *EncoderDecoderSuite) TestEncodeWALOutputDecodeWithLimit() {
 
 	count := 0
 	s.Equal(int64(0), stats.MaxTimestamp())
-	s.Equal(uint64(1), stats.OutdatedSampleCount())
-	s.Equal(uint64(0), stats.DroppedSampleCount())
+	s.Equal(uint32(1), stats.OutdatedSampleCount())
+	s.Equal(uint32(1), stats.AddSeriesCount())
+	s.Equal(uint32(0), stats.DroppedSampleCount())
+	refSamples.Range(func(id uint32, t int64, v float64) bool {
+		if !s.Less(int(id), len(expectedWr.Timeseries)) {
+			return false
+		}
+		count++
+		return true
+	})
+
+	s.Equal(0, count)
+}
+
+func (s *EncoderDecoderSuite) TestEncodeWALOutputDecodeDroppedSeries() {
+	statelessRelabeler, err := cppbridge.NewStatelessRelabeler([]*cppbridge.RelabelConfig{
+		{
+			SourceLabels: []string{"__name__"},
+			Regex:        "test",
+			Action:       cppbridge.Keep,
+		},
+	})
+	s.Require().NoError(err)
+	externalLabels := []cppbridge.Label{{"name0", "value0"}, {"name1", "value1"}}
+	outputLss := cppbridge.NewLssStorage()
+	dec := cppbridge.NewWALOutputDecoder(externalLabels, statelessRelabeler, outputLss, 0, cppbridge.EncodersVersion())
+
+	hlimits := cppbridge.DefaultWALHashdexLimits()
+	enc := cppbridge.NewWALEncoder(0, 0)
+
+	expectedWr := &prompb.WriteRequest{
+		Timeseries: []prompb.TimeSeries{
+			{
+				Labels: []prompb.Label{
+					{
+						Name:  "__name__",
+						Value: "test",
+					},
+					{
+						Name:  "job",
+						Value: "tester",
+					},
+				},
+				Samples: []prompb.Sample{
+					{
+						Timestamp: time.Now().UnixMilli(),
+						Value:     4444,
+					},
+				},
+			},
+			{
+				Labels: []prompb.Label{
+					{
+						Name:  "__name__",
+						Value: "test2",
+					},
+					{
+						Name:  "job",
+						Value: "tester",
+					},
+				},
+				Samples: []prompb.Sample{
+					{
+						Timestamp: time.Now().UnixMilli(),
+						Value:     4444,
+					},
+				},
+			},
+		},
+	}
+
+	data, err := expectedWr.Marshal()
+	s.Require().NoError(err)
+
+	s.T().Log("sharding protobuf")
+	h, err := cppbridge.NewWALSnappyProtobufHashdex(snappy.Encode(nil, data), hlimits)
+	s.Require().NoError(err)
+
+	s.T().Log("encoding protobuf")
+	_, gos, err := enc.Encode(s.baseCtx, h)
+	s.Require().NoError(err)
+
+	s.EqualValues(2, gos.Series())
+	s.EqualValues(2, gos.Samples())
+
+	s.T().Log("transferring segment")
+	segByte := s.transferringData(gos)
+
+	s.T().Log("decoding to RefSamples")
+
+	refSamples, stats, err := dec.Decode(segByte, time.Now().UnixMilli()+1)
+	s.Require().NoError(err)
+
+	count := 0
+	s.Equal(int64(0), stats.MaxTimestamp())
+	s.Equal(uint32(1), stats.OutdatedSampleCount())
+	s.Equal(uint32(1), stats.DroppedSampleCount())
+	s.Equal(uint32(1), stats.AddSeriesCount())
+	s.Equal(uint32(1), stats.DroppedSeriesCount())
 	refSamples.Range(func(id uint32, t int64, v float64) bool {
 		if !s.Less(int(id), len(expectedWr.Timeseries)) {
 			return false

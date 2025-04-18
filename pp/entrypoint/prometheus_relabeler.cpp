@@ -193,6 +193,7 @@ extern "C" void prompp_prometheus_per_shard_relabeler_input_relabeling(void* arg
   struct Result {
     uint32_t samples_added{0};
     uint32_t series_added{0};
+    uint32_t series_drop{0};
     PromPP::Primitives::Go::Slice<char> error;
   };
 
@@ -256,6 +257,7 @@ extern "C" void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stal
   struct Result {
     uint32_t samples_added{0};
     uint32_t series_added{0};
+    uint32_t series_drop{0};
     PromPP::Primitives::Go::Slice<char> error;
   };
 
