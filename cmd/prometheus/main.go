@@ -696,6 +696,7 @@ func main() {
 
 	clock := clockwork.NewRealClock()
 	headCatalog, err := catalog.New(clock, fileLog, catalog.DefaultIDGenerator{}, int(catalogMaxLogFileSize))
+	headCatalog, err := catalog.New(clock, fileLog, catalog.DefaultIDGenerator{}, prometheus.DefaultRegisterer)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create head catalog", "err", err)
 		os.Exit(1)

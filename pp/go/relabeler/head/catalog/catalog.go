@@ -9,7 +9,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
+	"github.com/prometheus/prometheus/pp/go/util"
 )
 
 const (
@@ -34,21 +36,36 @@ func (DefaultIDGenerator) Generate() uuid.UUID {
 }
 
 type Catalog struct {
-	mtx            sync.Mutex
-	clock          clockwork.Clock
-	log            Log
-	idGenerator    IDGenerator
-	records        map[string]*Record
+	mtx                 sync.Mutex
+	clock               clockwork.Clock
+	log                 Log
+	idGenerator         IDGenerator
+	records             map[string]*Record
 	maxLogFileSize int
+	corruptedHead       prometheus.Counter
+	activeHeadCreatedAt prometheus.Gauge
 }
 
-func New(clock clockwork.Clock, log Log, idGenerator IDGenerator, maxLogFileSize int) (*Catalog, error) {
+func New(clock clockwork.Clock, log Log, idGenerator IDGenerator, maxLogFileSize int, registerer prometheus.Registerer) (*Catalog, error) {
+	factory := util.NewUnconflictRegisterer(registerer)
 	catalog := &Catalog{
 		clock:          clock,
 		log:            log,
 		idGenerator:    idGenerator,
 		records:        make(map[string]*Record),
 		maxLogFileSize: maxLogFileSize,
+		corruptedHead: factory.NewCounter(
+			prometheus.CounterOpts{
+				Name: "prompp_head_catalog_corrupted_head_total",
+				Help: "Total number of corrupted heads.",
+			},
+		),
+		activeHeadCreatedAt: factory.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "prompp_head_catalog_active_head_created_at",
+				Help: "The time when the active head was created.",
+			},
+		),
 	}
 
 	if err := catalog.sync(); err != nil {
@@ -132,6 +149,10 @@ func (c *Catalog) SetStatus(id string, status Status) (_ *Record, err error) {
 	}
 
 	if r.status == status {
+		if status == StatusActive {
+			c.activeHeadCreatedAt.Set(float64(r.createdAt))
+		}
+
 		return r, nil
 	}
 
@@ -145,6 +166,10 @@ func (c *Catalog) SetStatus(id string, status Status) (_ *Record, err error) {
 
 	applyRecordChanges(r, changed)
 	c.records[id] = r
+
+	if status == StatusActive {
+		c.activeHeadCreatedAt.Set(float64(r.createdAt))
+	}
 
 	return r, nil
 }
@@ -176,6 +201,8 @@ func (c *Catalog) SetCorrupted(id string) (_ *Record, err error) {
 
 	applyRecordChanges(r, changed)
 	c.records[id] = r
+
+	c.corruptedHead.Inc()
 
 	return r, nil
 }

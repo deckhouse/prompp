@@ -167,6 +167,9 @@ void prompp_prometheus_per_shard_relabeler_cache_allocated_memory(void* args, vo
  * }
  *
  * @param res {
+ *     samples_added           uint32             // number of added samples;
+ *     series_added            uint32             // number of added series;
+ *     series_drop             uint32             // number of dropped series;
  *     error                   []byte             // error string if thrown;
  * }
  */
@@ -233,6 +236,9 @@ void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stalenans(void*
  * }
  *
  * @param res {
+ *     samples_added           uint32             // number of added samples;
+ *     series_added            uint32             // number of added series;
+ *     series_drop             uint32             // number of dropped series;
  *     error                   []byte             // error string if thrown;
  * }
  */

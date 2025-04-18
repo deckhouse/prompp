@@ -1,13 +1,14 @@
 package catalog_test
 
 import (
-	"github.com/jonboulle/clockwork"
-	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"
-	"github.com/stretchr/testify/require"
 	"os"
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/jonboulle/clockwork"
+	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCatalog(t *testing.T) {
@@ -22,6 +23,7 @@ func TestCatalog(t *testing.T) {
 	clock := clockwork.NewFakeClockAt(time.Now())
 
 	c, err := catalog.New(clock, l, catalog.DefaultIDGenerator{}, catalog.DefaultMaxLogFileSize)
+	c, err := catalog.New(clock, l, catalog.DefaultIDGenerator{}, nil)
 	require.NoError(t, err)
 
 	now := clock.Now().UnixMilli()
@@ -65,6 +67,7 @@ func TestCatalog(t *testing.T) {
 	l, err = catalog.NewFileLogV2(logFileName)
 	require.NoError(t, err)
 	c, err = catalog.New(clock, l, catalog.DefaultIDGenerator{}, catalog.DefaultMaxLogFileSize)
+	c, err = catalog.New(clock, l, catalog.DefaultIDGenerator{}, nil)
 	require.NoError(t, err)
 
 	records, err := c.List(nil, nil)
@@ -72,9 +75,6 @@ func TestCatalog(t *testing.T) {
 	sort.Slice(records, func(i, j int) bool {
 		return records[i].CreatedAt() < records[j].CreatedAt()
 	})
-
-	//prevRecords := []catalog.Record{r1, r2}
-	//require.Equal(t, records, prevRecords)
 }
 
 func TestCatalogSyncFail(t *testing.T) {
@@ -89,6 +89,7 @@ func TestCatalogSyncFail(t *testing.T) {
 	clock := clockwork.NewFakeClockAt(time.Now())
 
 	c, err := catalog.New(clock, l, catalog.DefaultIDGenerator{}, catalog.DefaultMaxLogFileSize)
+	c, err := catalog.New(clock, l, catalog.DefaultIDGenerator{}, nil)
 	require.NoError(t, err)
 
 	var nos1 uint16 = 2
@@ -107,6 +108,7 @@ func TestCatalogSyncFail(t *testing.T) {
 	require.NoError(t, err)
 
 	c, err = catalog.New(clock, l, catalog.DefaultIDGenerator{}, catalog.DefaultMaxLogFileSize)
+	c, err = catalog.New(clock, l, catalog.DefaultIDGenerator{}, nil)
 	require.NoError(t, err)
 
 	restoredR1, err := c.Get(r1.ID())
