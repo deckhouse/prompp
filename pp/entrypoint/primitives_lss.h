@@ -16,6 +16,19 @@ extern "C" {
 void prompp_primitives_lss_ctor(void* args, void* res);
 
 /**
+ * @brief Construct a new Primitives label sets.
+ *
+ * @param args {
+ *     lss uintptr // pointer of label sets;
+ * }
+ *
+ * @param res {
+ *     lss uintptr     // pointer to constructed label sets;
+ * }
+ */
+void prompp_primitives_lss_copy_added_series(void* args, void* res);
+
+/**
  * @brief Destroy Primitives label sets.
  *
  * @param args {
