@@ -133,7 +133,7 @@ func (cgc *CGOGC) run() {
 func (cgc *CGOGC) gc() {
 	memInfo := GetMemInfo()
 
-	unsafeCall2()
+	EmptyUnsafeCall2()
 
 	if !cgc.isOverThreshold(memInfo) {
 		return

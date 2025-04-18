@@ -1825,6 +1825,8 @@ extern "C" {
  */
 void prompp_get_flavor(void* res);
 
+void iunsafe_call_2(void* args, void* res);
+
 #ifdef __cplusplus
 }
 #endif

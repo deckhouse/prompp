@@ -300,11 +300,11 @@ func dumpMemoryProfile(filename string) int {
 	return res.error
 }
 
-func unsafeCall2() {
+func EmptyUnsafeCall2() {
 	var args struct{}
 	var res struct{}
 
-	start := time.Now().UnixNano()
+	// start := time.Now().UnixNano()
 
 	fastcgo.UnsafeCall2(
 		C.unsafe_call_2,
@@ -312,8 +312,19 @@ func unsafeCall2() {
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	unsafeCall2Sum.Add(float64(time.Now().UnixNano() - start))
-	unsafeCall2Count.Inc()
+	// unsafeCall2Sum.Add(float64(time.Now().UnixNano() - start))
+	// unsafeCall2Count.Inc()
+}
+
+func EmptyIUnsafeCall2() {
+	var args struct{}
+	var res struct{}
+
+	fastcgo.UnsafeCall2(
+		C.iunsafe_call_2,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
 }
 
 //
