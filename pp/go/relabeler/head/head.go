@@ -445,6 +445,11 @@ func (h *Head) WriteMetrics() {
 		return nil
 	})
 
+	if h.readOnly {
+		return
+	}
+
+	// do not write metrics if the head is read-only.
 	for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
 		h.walSize.With(
 			prometheus.Labels{"shard_id": strconv.FormatUint(uint64(shardID), 10)},
