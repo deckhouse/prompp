@@ -13,7 +13,7 @@
 
 namespace series_data {
 class Decoder {
- public:
+public:
   template <chunk::DataChunk::Type chunk_type, class Callback>
   PROMPP_ALWAYS_INLINE static void decode_chunk(const DataStorage& storage, const chunk::DataChunk& chunk, Callback&& callback) noexcept {
     create_decode_iterator<chunk_type>(storage, chunk,
@@ -24,11 +24,13 @@ class Decoder {
     using enum chunk::DataChunk::Type;
 
     if (chunk.encoding_state.encoding_type == EncodingType::kGorilla) [[unlikely]] {
-      return encoder::BitSequenceWithItemsCount::count(chunk_type == kOpen ? storage.get_gorilla_encoder_stream<kOpen>(chunk.encoder.external_index)
-                                                                           : storage.get_gorilla_encoder_stream<kFinalized>(chunk.encoder.external_index));
+      return encoder::BitSequenceWithItemsCount::count(chunk_type == kOpen
+                                                         ? storage.get_gorilla_encoder_stream<kOpen>(chunk.encoder.external_index)
+                                                         : storage.get_gorilla_encoder_stream<kFinalized>(chunk.encoder.external_index));
     } else {
-      return (chunk_type == kOpen ? storage.get_timestamp_stream<kOpen>(chunk.timestamp_encoder_state_id)
-                                  : storage.get_timestamp_stream<kFinalized>(chunk.timestamp_encoder_state_id))
+      return (chunk_type == kOpen
+                ? storage.get_timestamp_stream<kOpen>(chunk.timestamp_encoder_state_id)
+                : storage.get_timestamp_stream<kFinalized>(chunk.timestamp_encoder_state_id))
           .count();
     }
   }
@@ -231,6 +233,15 @@ class Decoder {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_chunk_last_timestamp(const DataStorage::SeriesChunkIterator::Data& chunk_data) noexcept {
     if (chunk_data.chunk_type() == chunk::DataChunk::Type::kOpen) {
+      return get_chunk_last_timestamp<chunk::DataChunk::Type::kOpen>(chunk_data);
+    }
+
+    return get_chunk_last_timestamp<chunk::DataChunk::Type::kFinalized>(chunk_data);
+  }
+
+  template <chunk::DataChunk::Type chunk_type>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_chunk_last_timestamp(const DataStorage::SeriesChunkIterator::Data& chunk_data) noexcept {
+    if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return get_open_chunk_last_timestamp(*chunk_data.storage(), chunk_data.chunk());
     }
 
@@ -242,11 +253,10 @@ class Decoder {
   [[nodiscard]] PROMPP_ALWAYS_INLINE static PromPP::Primitives::TimeInterval get_chunk_time_interval(const DataStorage::SeriesChunkIterator::Data& chunk_data) {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return {.min = get_chunk_first_timestamp<chunk::DataChunk::Type::kOpen>(*chunk_data.storage(), chunk_data.chunk()),
-              .max = get_open_chunk_last_timestamp(*chunk_data.storage(), chunk_data.chunk())};
+              .max = get_chunk_last_timestamp<chunk::DataChunk::Type::kOpen>(chunk_data)};
     }
     return {.min = get_chunk_first_timestamp<chunk::DataChunk::Type::kFinalized>(*chunk_data.storage(), chunk_data.chunk()),
-            .max = get_finalized_chunk_last_timestamp(*chunk_data.storage(), chunk_data.series_id(), chunk_data.finalized_chunk_iterator(),
-                                                      chunk_data.finalized_chunk_end_iterator())};
+            .max = get_chunk_last_timestamp<chunk::DataChunk::Type::kFinalized>(chunk_data)};
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static PromPP::Primitives::TimeInterval get_chunk_time_interval(const DataStorage::SeriesChunkIterator::Data& chunk_data) {
@@ -313,7 +323,7 @@ class Decoder {
     return interval;
   }
 
- private:
+private:
   template <chunk::DataChunk::Type chunk_type>
   [[nodiscard]] static BareBones::BitSequenceReader get_stream_reader(const DataStorage& storage, const chunk::DataChunk& chunk) {
     if (chunk.encoding_state.encoding_type != EncodingType::kGorilla) [[likely]] {
@@ -327,4 +337,4 @@ class Decoder {
     }
   }
 };
-}  // namespace series_data
+} // namespace series_data
