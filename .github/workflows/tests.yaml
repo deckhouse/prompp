@@ -53,10 +53,8 @@ jobs:
             bash -c "
               set -eo pipefail
 
-              Run Unit Tests
               ./scripts/ci_run_unit_tests.sh
 
-              Collect Test Reports
               mkdir -p /workspace/testlogs
               for f in ./bazel-testlogs/**/test.xml; do 
                 cp \$f /workspace/testlogs/\$(basename \$(dirname \$f)).xml; 
@@ -104,7 +102,6 @@ jobs:
             bash -c "
               set -eo pipefail
 
-              # Build static lib for Go
               cd pp
               make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
             "
