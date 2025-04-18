@@ -727,6 +727,9 @@ void prompp_prometheus_per_shard_relabeler_cache_allocated_memory(void* args, vo
  * }
  *
  * @param res {
+ *     samples_added           uint32             // number of added samples;
+ *     series_added            uint32             // number of added series;
+ *     series_drop             uint32             // number of dropped series;
  *     error                   []byte             // error string if thrown;
  * }
  */
@@ -793,6 +796,9 @@ void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stalenans(void*
  * }
  *
  * @param res {
+ *     samples_added           uint32             // number of added samples;
+ *     series_added            uint32             // number of added series;
+ *     series_drop             uint32             // number of dropped series;
  *     error                   []byte             // error string if thrown;
  * }
  */
@@ -1335,8 +1341,10 @@ void prompp_wal_output_decoder_load_from(void* args, void* res);
  *
  * @param res {
  *     max_timestamp         int64       // max timestamp in slice RefSample
- *     outdated_sample_count uint64      // count of dropped samples on outdated
- *     dropped_sample_count  uint64      // count of dropped samples on relabeling rules
+ *     outdated_sample_count uint32      // count of dropped samples on outdated
+ *     dropped_sample_count  uint32      // count of dropped samples on relabeling rules
+ *     add_series_count      uint32      // count of add series on relabeling rules
+ *     dropped_series_count  uint32      // count of dropped series on relabeling rules
  *     ref_samples           []RefSample // slice RefSample
  *     error                 []byte      // error string if thrown
  * }

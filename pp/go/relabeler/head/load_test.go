@@ -6,22 +6,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
 	"github.com/prometheus/prometheus/pp/go/relabeler/head"
 	"github.com/prometheus/prometheus/pp/go/relabeler/querier"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/stretchr/testify/require"
 )
 
 const maxSegmentSize uint32 = 1024
 
-type noOpLastAppendedSegmentIDSetter struct {
-}
+type noOpLastAppendedSegmentIDSetter struct{}
 
 func (noOpLastAppendedSegmentIDSetter) SetLastAppendedSegmentID(_ uint32) {}
 
