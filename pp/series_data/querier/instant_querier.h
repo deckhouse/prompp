@@ -12,9 +12,11 @@ class InstantQuerier {
   using Sample = encoder::Sample;
   using ChunkType = chunk::DataChunk::Type;
 
-public:
+ public:
   PROMPP_ALWAYS_INLINE static void query_sample(Sample& sample, const DataStorage& storage, LabelSetID ls_id, const Timestamp& timestamp) noexcept {
-    if (storage.open_chunks.size() <= ls_id) [[unlikely]] { return; }
+    if (storage.open_chunks.size() <= ls_id) [[unlikely]] {
+      return;
+    }
     if (const auto series_last_ts = Decoder::get_series_max_timestamp(storage, ls_id); timestamp >= series_last_ts) {
       sample = {.timestamp = series_last_ts, .value = Decoder::get_open_chunk_last_value(storage, storage.open_chunks[ls_id])};
     } else if (const auto series_first_ts = Decoder::get_series_min_timestamp(storage, ls_id); timestamp >= series_first_ts) {
@@ -22,7 +24,7 @@ public:
     }
   }
 
-private:
+ private:
   static bool check_inside_series(Sample& sample, const DataStorage& storage, LabelSetID ls_id, const Timestamp& timestamp) noexcept {
     for (const auto& chunk_data : DataStorage::SeriesChunks(&storage, ls_id)) {
       if (Decoder::get_chunk_time_interval(chunk_data).contains(timestamp)) {
@@ -37,4 +39,4 @@ private:
     return false;
   }
 };
-} // namespace series_data
+}  // namespace series_data

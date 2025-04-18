@@ -13,7 +13,7 @@
 
 namespace series_data {
 class Decoder {
-public:
+ public:
   template <chunk::DataChunk::Type chunk_type, class Callback>
   PROMPP_ALWAYS_INLINE static void decode_chunk(const DataStorage& storage, const chunk::DataChunk& chunk, Callback&& callback) noexcept {
     create_decode_iterator<chunk_type>(storage, chunk,
@@ -24,13 +24,11 @@ public:
     using enum chunk::DataChunk::Type;
 
     if (chunk.encoding_state.encoding_type == EncodingType::kGorilla) [[unlikely]] {
-      return encoder::BitSequenceWithItemsCount::count(chunk_type == kOpen
-                                                         ? storage.get_gorilla_encoder_stream<kOpen>(chunk.encoder.external_index)
-                                                         : storage.get_gorilla_encoder_stream<kFinalized>(chunk.encoder.external_index));
+      return encoder::BitSequenceWithItemsCount::count(chunk_type == kOpen ? storage.get_gorilla_encoder_stream<kOpen>(chunk.encoder.external_index)
+                                                                           : storage.get_gorilla_encoder_stream<kFinalized>(chunk.encoder.external_index));
     } else {
-      return (chunk_type == kOpen
-                ? storage.get_timestamp_stream<kOpen>(chunk.timestamp_encoder_state_id)
-                : storage.get_timestamp_stream<kFinalized>(chunk.timestamp_encoder_state_id))
+      return (chunk_type == kOpen ? storage.get_timestamp_stream<kOpen>(chunk.timestamp_encoder_state_id)
+                                  : storage.get_timestamp_stream<kFinalized>(chunk.timestamp_encoder_state_id))
           .count();
     }
   }
@@ -251,8 +249,7 @@ public:
 
   template <chunk::DataChunk::Type chunk_type>
   [[nodiscard]] PROMPP_ALWAYS_INLINE static PromPP::Primitives::TimeInterval get_chunk_time_interval(const DataStorage::SeriesChunkIterator::Data& chunk_data) {
-    return {.min = get_chunk_first_timestamp<chunk_type>(*chunk_data.storage(), chunk_data.chunk()),
-            .max = get_chunk_last_timestamp<chunk_type>(chunk_data)};
+    return {.min = get_chunk_first_timestamp<chunk_type>(*chunk_data.storage(), chunk_data.chunk()), .max = get_chunk_last_timestamp<chunk_type>(chunk_data)};
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static PromPP::Primitives::TimeInterval get_chunk_time_interval(const DataStorage::SeriesChunkIterator::Data& chunk_data) {
@@ -319,7 +316,7 @@ public:
     return interval;
   }
 
-private:
+ private:
   template <chunk::DataChunk::Type chunk_type>
   [[nodiscard]] static BareBones::BitSequenceReader get_stream_reader(const DataStorage& storage, const chunk::DataChunk& chunk) {
     if (chunk.encoding_state.encoding_type != EncodingType::kGorilla) [[likely]] {
@@ -333,4 +330,4 @@ private:
     }
   }
 };
-} // namespace series_data
+}  // namespace series_data
