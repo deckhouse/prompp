@@ -469,6 +469,7 @@ TEST_F(TestValidate, InvalidLabelLimit) {
 struct Stats {
   uint32_t samples_added{0};
   uint32_t series_added{0};
+  uint32_t series_drop{0};
 };
 
 struct TestPerShardRelabeler : public testing::Test {

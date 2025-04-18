@@ -21,7 +21,7 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: fsn-dev-gitlab-runner
+    runs-on: fsn-dev-perftest-runner
     steps:
       - name: Clean workspace
         uses: AutoModality/action-clean@v1
@@ -60,7 +60,8 @@ jobs:
 
       - name: Archive binaries
         run: |
-          tar -czvf prompp-binaries.tar.gz prompp promtool prompptool
+          cp ./documentation/examples/prometheus.yml ./prometheus.yml
+          tar -czvf prompp-binaries.tar.gz prompp promtool prompptool prometheus.yml
 
       - name: Upload binaries as artifacts
         uses: actions/upload-artifact@v4

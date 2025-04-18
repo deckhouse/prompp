@@ -90,6 +90,7 @@ func (p *InputRelabelingPromise) AddStats(stats cppbridge.RelabelerStats) {
 	p.statsMX.Lock()
 	p.stats.SamplesAdded += stats.SamplesAdded
 	p.stats.SeriesAdded += stats.SeriesAdded
+	p.stats.SeriesDrop += stats.SeriesDrop
 	p.statsMX.Unlock()
 }
 

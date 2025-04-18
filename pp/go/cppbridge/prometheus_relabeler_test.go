@@ -214,6 +214,15 @@ func (s *RelabelerSuite) TestInputPerShardRelabeler() {
 					{Value: 0.1, Timestamp: time.Now().UnixMilli()},
 				},
 			},
+			{
+				Labels: []prompb.Label{
+					{Name: "__name__", Value: "value"},
+					{Name: "instance", Value: "value1"},
+				},
+				Samples: []prompb.Sample{
+					{Value: 0.1, Timestamp: time.Now().UnixMilli()},
+				},
+			},
 		},
 	}
 	data, err := wr.Marshal()
@@ -247,7 +256,7 @@ func (s *RelabelerSuite) TestInputPerShardRelabeler() {
 
 	stats, err := psr.InputRelabeling(s.baseCtx, inputLss, targetLss, cache, s.options, h, shardsInnerSeries, shardsRelabeledSeries)
 	s.Require().NoError(err)
-	s.Equal(cppbridge.RelabelerStats{1, 1}, stats)
+	s.Equal(cppbridge.RelabelerStats{1, 1, 1}, stats)
 }
 
 func (s *RelabelerSuite) TestOutputPerShardRelabeler() {

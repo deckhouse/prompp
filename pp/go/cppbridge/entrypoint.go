@@ -1485,7 +1485,7 @@ func prometheusPerShardRelabelerInputRelabeling(
 	options RelabelerOptions,
 	shardsInnerSeries []*InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
-) (samplesAdded, seriesAdded uint32, exception []byte) {
+) (stats RelabelerStats, exception []byte) {
 	args := struct {
 		shardsInnerSeries     []*InnerSeries
 		shardsRelabeledSeries []*RelabeledSeries
@@ -1497,9 +1497,8 @@ func prometheusPerShardRelabelerInputRelabeling(
 		targetLss             uintptr
 	}{shardsInnerSeries, shardsRelabeledSeries, options, perShardRelabeler, hashdex, cache, inputLss, targetLss}
 	var res struct {
-		samplesAdded uint32
-		seriesAdded  uint32
-		exception    []byte
+		RelabelerStats
+		exception []byte
 	}
 	start := time.Now().UnixNano()
 	fastcgo.UnsafeCall2(
@@ -1510,7 +1509,7 @@ func prometheusPerShardRelabelerInputRelabeling(
 	inputRelabelerInputRelabelingSum.Add(float64(time.Now().UnixNano() - start))
 	inputRelabelerInputRelabelingCount.Inc()
 
-	return res.samplesAdded, res.seriesAdded, res.exception
+	return res.RelabelerStats, res.exception
 }
 
 // prometheusPerShardRelabelerInputRelabelingWithStalenans wrapper for relabeling incoming
@@ -1521,7 +1520,7 @@ func prometheusPerShardRelabelerInputRelabelingWithStalenans(
 	options RelabelerOptions,
 	shardsInnerSeries []*InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
-) (samplesAdded, seriesAdded uint32, exception []byte) {
+) (stats RelabelerStats, exception []byte) {
 	args := struct {
 		shardsInnerSeries     []*InnerSeries
 		shardsRelabeledSeries []*RelabeledSeries
@@ -1546,9 +1545,8 @@ func prometheusPerShardRelabelerInputRelabelingWithStalenans(
 		defTimestamp,
 	}
 	var res struct {
-		samplesAdded uint32
-		seriesAdded  uint32
-		exception    []byte
+		RelabelerStats
+		exception []byte
 	}
 	start := time.Now().UnixNano()
 	fastcgo.UnsafeCall2(
@@ -1559,7 +1557,7 @@ func prometheusPerShardRelabelerInputRelabelingWithStalenans(
 	inputRelabelerRelabelingWithStalenansSum.Add(float64(time.Now().UnixNano() - start))
 	inputRelabelerRelabelingWithStalenansCount.Inc()
 
-	return res.samplesAdded, res.seriesAdded, res.exception
+	return res.RelabelerStats, res.exception
 }
 
 // prometheusPerShardRelabelerAppendRelabelerSeries - wrapper for add relabeled ls to lss,
