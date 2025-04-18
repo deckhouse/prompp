@@ -11,7 +11,7 @@ import (
 
 const (
 	RecordStructMaxSizeV2 = 50
-	RecordFrameSizeV3     = 69
+	RecordFrameSizeV3     = 68
 )
 
 type EncoderV1 struct {
@@ -143,7 +143,7 @@ type EncoderV3 struct {
 // NewEncoderV3 creates EncoderV3.
 func NewEncoderV3() *EncoderV3 {
 	return &EncoderV3{
-		buffer: bytes.NewBuffer(make([]byte, 0, RecordFrameSizeV3)),
+		buffer: bytes.NewBuffer(make([]byte, 0, RecordFrameSizeV3+1)), // +1 is for size byte
 	}
 }
 

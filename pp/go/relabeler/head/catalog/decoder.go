@@ -240,9 +240,8 @@ func (d *DecoderV3) readSize(reader io.Reader) error {
 		return fmt.Errorf("read record size: %w", err)
 	}
 	d.size = d.buffer[0]
-	d.offset += 1
 
-	if int(d.size) != len(d.buffer)-d.offset {
+	if int(d.size) != len(d.buffer) {
 		return fmt.Errorf("invalid size: %d", d.size)
 	}
 
@@ -250,7 +249,7 @@ func (d *DecoderV3) readSize(reader io.Reader) error {
 }
 
 func (d *DecoderV3) readRecord(reader io.Reader) error {
-	if _, err := reader.Read(d.buffer[d.offset : d.offset+int(d.size)]); err != nil {
+	if _, err := reader.Read(d.buffer[:d.size]); err != nil {
 		return fmt.Errorf("read whole record: %w", err)
 	}
 	return nil
@@ -260,7 +259,7 @@ func (d *DecoderV3) validateCRC32() (err error) {
 	var expectedCRC32Hash uint32
 	d.readUint32(&expectedCRC32Hash)
 
-	if _, err = d.hasher.Write(d.buffer[d.offset : d.size+1]); err != nil {
+	if _, err = d.hasher.Write(d.buffer[d.offset:]); err != nil {
 		return fmt.Errorf("write to crc32 hasher: %w", err)
 	}
 
