@@ -94,8 +94,7 @@ func (w *segmentWriter) sync() error {
 }
 
 func (w *segmentWriter) encodeAndFlush(segment EncodedSegment) (encoded bool, err error) {
-	n, err := WriteSegment(w.buffer, segment)
-	if err != nil {
+	if _, err := WriteSegment(w.buffer, segment); err != nil {
 		w.buffer.Reset()
 		return false, fmt.Errorf("encode segment: %w", err)
 	}
@@ -106,13 +105,13 @@ func (w *segmentWriter) encodeAndFlush(segment EncodedSegment) (encoded bool, er
 		return true, err
 	}
 
-	atomic.AddInt64(&w.currentSize, int64(n))
-
 	return true, nil
 }
 
 func (w *segmentWriter) flushAndSync() error {
-	if _, err := w.buffer.WriteTo(w.writer); err != nil {
+	n, err := w.buffer.WriteTo(w.writer)
+	atomic.AddInt64(&w.currentSize, n)
+	if err != nil {
 		return fmt.Errorf("buffer write: %w", err)
 	}
 
