@@ -42,7 +42,7 @@ jobs:
           BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/^v//')
-          werf export --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp --tag=docker.io/prompp/prompp:$BRANCH_NAME
+          werf export --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp --tag=index.docker.io/prompp/prompp:$BRANCH_NAME
 
       - name: Extract binaries from Docker images
         run: |
