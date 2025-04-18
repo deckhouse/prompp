@@ -517,6 +517,17 @@ func (s *StaleNansState) Reset() {
 type RelabelerStats struct {
 	SamplesAdded uint32
 	SeriesAdded  uint32
+	SeriesDrop   uint32
+}
+
+// String serialize to string.
+func (rs RelabelerStats) String() string {
+	return fmt.Sprintf(
+		"{samples_added: %d, series_added: %d, series_drop: %d}",
+		rs.SamplesAdded,
+		rs.SeriesAdded,
+		rs.SeriesDrop,
+	)
 }
 
 // InputPerShardRelabeler - go wrapper for C-PerShardRelabeler, relabeler for shard.
@@ -613,7 +624,7 @@ func (ipsr *InputPerShardRelabeler) InputRelabeling(
 	if !ok {
 		return RelabelerStats{}, ErrMustImplementCptrable
 	}
-	samplesAdded, seriesAdded, exception := prometheusPerShardRelabelerInputRelabeling(
+	stats, exception := prometheusPerShardRelabelerInputRelabeling(
 		ipsr.cptr,
 		inputLss.Pointer(),
 		targetLss.Pointer(),
@@ -624,7 +635,7 @@ func (ipsr *InputPerShardRelabeler) InputRelabeling(
 		shardsRelabeledSeries,
 	)
 
-	return RelabelerStats{SamplesAdded: samplesAdded, SeriesAdded: seriesAdded}, handleException(exception)
+	return stats, handleException(exception)
 }
 
 // InputRelabelingWithStalenans relabeling incoming hashdex(first stage) with state stalenans.
@@ -648,7 +659,7 @@ func (ipsr *InputPerShardRelabeler) InputRelabelingWithStalenans(
 	if !ok {
 		return RelabelerStats{}, ErrMustImplementCptrable
 	}
-	samplesAdded, seriesAdded, exception := prometheusPerShardRelabelerInputRelabelingWithStalenans(
+	stats, exception := prometheusPerShardRelabelerInputRelabelingWithStalenans(
 		ipsr.cptr,
 		inputLss.Pointer(),
 		targetLss.Pointer(),
@@ -661,7 +672,7 @@ func (ipsr *InputPerShardRelabeler) InputRelabelingWithStalenans(
 		shardsRelabeledSeries,
 	)
 
-	return RelabelerStats{SamplesAdded: samplesAdded, SeriesAdded: seriesAdded}, handleException(exception)
+	return stats, handleException(exception)
 }
 
 // NumberOfShards return current numberOfShards.
