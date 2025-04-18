@@ -219,9 +219,7 @@ readLoop:
 		i.metrics.droppedSamplesTotal.WithLabelValues(reasonDroppedSeries).Add(float64(b.DroppedSamplesCount()))
 	}
 
-	if b.HasDroppedSeries() {
-		i.metrics.droppedSeriesTotal.Add(float64(b.DroppedSeriesCount()))
-	}
+	i.metrics.droppedSeriesTotal.Add(float64(b.DroppedSeriesCount()))
 
 	if b.IsEmpty() {
 		return i.wrapError(nil)
@@ -456,11 +454,6 @@ func (b *batch) IsEmpty() bool {
 
 func (b *batch) HasDroppedSamples() bool {
 	return b.droppedSamplesCount > 0 || b.outdatedSamplesCount > 0
-}
-
-// HasDroppedSeries returns true if there are dropped series.
-func (b *batch) HasDroppedSeries() bool {
-	return b.droppedSeriesCount > 0
 }
 
 func (b *batch) OutdatedSamplesCount() uint32 {

@@ -187,7 +187,6 @@ func (c *Catalog) SetCorrupted(id string) (_ *Record, err error) {
 	}
 
 	if r.corrupted {
-		c.corruptedHead.Inc()
 		return r, nil
 	}
 

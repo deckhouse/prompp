@@ -47,13 +47,7 @@ func Create(
 	swn := newSegmentWriteNotifier(numberOfShards, lastAppendedSegmentIDSetter)
 
 	for shardID := uint16(0); shardID < numberOfShards; shardID++ {
-		lsses[shardID], wals[shardID], dataStorages[shardID], err = createShard(
-			dir,
-			shardID,
-			swn,
-			maxSegmentSize,
-			registerer,
-		)
+		lsses[shardID], wals[shardID], dataStorages[shardID], err = createShard(dir, shardID, swn, maxSegmentSize)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create shard: %w", err)
 		}
@@ -67,7 +61,6 @@ func createShard(
 	shardID uint16,
 	swn *segmentWriteNotifier,
 	maxSegmentSize uint32,
-	registerer prometheus.Registerer,
 ) (*LSS, *ShardWal, *DataStorage, error) {
 	inputLss := cppbridge.NewLssStorage()
 	targetLss := cppbridge.NewQueryableLssStorage()
@@ -96,17 +89,12 @@ func createShard(
 		return nil, nil, nil, fmt.Errorf("failed to write header: %w", err)
 	}
 
-	sw, err := newSegmentWriter(shardID, shardFile, swn, registerer)
+	sw, err := newSegmentWriter(shardID, shardFile, swn)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to init segmentWriter: %w", err)
 	}
 
-	shardWal := newShardWal(
-		shardID,
-		shardWalEncoder,
-		maxSegmentSize,
-		sw,
-	)
+	shardWal := newShardWal(shardWalEncoder, maxSegmentSize, sw)
 	cppDataStorage := cppbridge.NewHeadDataStorage()
 	dataStorage := &DataStorage{
 		dataStorage: cppDataStorage,
@@ -134,12 +122,7 @@ func Load(
 		shardWalFilePath := filepath.Join(dir, fmt.Sprintf("shard_%d.wal", shardID))
 		go func(shardID uint16, shardWalFilePath string, notifier *segmentWriteNotifier) {
 			defer wg.Done()
-			shardLoadResults[shardID] = NewShardLoader(
-				shardID,
-				shardWalFilePath,
-				maxSegmentSize,
-				notifier,
-			).Load(registerer)
+			shardLoadResults[shardID] = NewShardLoader(shardID, shardWalFilePath, maxSegmentSize, notifier).Load()
 		}(shardID, shardWalFilePath, swn)
 	}
 	wg.Wait()
@@ -213,7 +196,7 @@ type ShardLoadResult struct {
 	Err              error
 }
 
-func (l *ShardLoader) Load(registerer prometheus.Registerer) (result ShardLoadResult) {
+func (l *ShardLoader) Load() (result ShardLoadResult) {
 	targetLss := cppbridge.NewQueryableLssStorage()
 	dataStorage := NewDataStorage()
 
@@ -222,7 +205,7 @@ func (l *ShardLoader) Load(registerer prometheus.Registerer) (result ShardLoadRe
 		target: targetLss,
 	}
 	result.DataStorage = dataStorage
-	result.Wal = newCorruptedShardWal(l.shardID)
+	result.Wal = newCorruptedShardWal()
 	result.Corrupted = true
 
 	shardWalFile, err := os.OpenFile(l.shardFilePath, os.O_RDWR, 0o600)
@@ -271,14 +254,14 @@ func (l *ShardLoader) Load(registerer prometheus.Registerer) (result ShardLoadRe
 
 	numberOfSegments := lastReadSegmentID + 1
 	result.NumberOfSegments = uint32(numberOfSegments)
-	sw, err := newSegmentWriter(l.shardID, shardWalFile, l.notifier, registerer)
+	sw, err := newSegmentWriter(l.shardID, shardWalFile, l.notifier)
 	if err != nil {
 		result.Err = err
 		return
 	}
 
 	l.notifier.Set(l.shardID, uint32(numberOfSegments))
-	result.Wal = newShardWal(l.shardID, decoder.CreateEncoder(), l.maxSegmentSize, sw)
+	result.Wal = newShardWal(decoder.CreateEncoder(), l.maxSegmentSize, sw)
 	if result.Err == nil {
 		result.Corrupted = false
 	}

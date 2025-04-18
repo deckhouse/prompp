@@ -6,11 +6,8 @@ import (
 	"io"
 	"os"
 	"slices"
-	"strconv"
 	"sync"
-
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/prometheus/pp/go/util"
+	"sync/atomic"
 )
 
 type SegmentIsWrittenNotifier interface {
@@ -29,8 +26,7 @@ type segmentWriter struct {
 	buffer         *bytes.Buffer
 	notifier       SegmentIsWrittenNotifier
 	writer         WriteSyncCloser
-	walSize        prometheus.Gauge
-	initSize       int64
+	currentSize    int64
 	writeCompleted bool
 }
 
@@ -38,30 +34,25 @@ func newSegmentWriter(
 	shardID uint16,
 	writer WriteSyncCloser,
 	notifier SegmentIsWrittenNotifier,
-	registerer prometheus.Registerer,
 ) (*segmentWriter, error) {
 	info, err := writer.Stat()
 	if err != nil {
 		return nil, err
 	}
 
-	factory := util.NewUnconflictRegisterer(registerer)
-
 	return &segmentWriter{
-		shardID:  shardID,
-		buffer:   bytes.NewBuffer(nil),
-		notifier: notifier,
-		writer:   writer,
-		walSize: factory.NewGauge(
-			prometheus.GaugeOpts{
-				Name:        "prompp_head_current_wal_size",
-				Help:        "The size of the wall of the current head.",
-				ConstLabels: prometheus.Labels{"shard_id": strconv.FormatUint(uint64(shardID), 10)},
-			},
-		),
-		initSize:       info.Size(),
+		shardID:        shardID,
+		buffer:         bytes.NewBuffer(nil),
+		notifier:       notifier,
+		writer:         writer,
+		currentSize:    info.Size(),
 		writeCompleted: true,
 	}, nil
+}
+
+// CurrentSize return current shard wal size.
+func (w *segmentWriter) CurrentSize() int64 {
+	return atomic.LoadInt64(&w.currentSize)
 }
 
 func (w *segmentWriter) Write(segment EncodedSegment) error {
@@ -115,12 +106,7 @@ func (w *segmentWriter) encodeAndFlush(segment EncodedSegment) (encoded bool, er
 		return true, err
 	}
 
-	if w.initSize != 0 {
-		w.walSize.Set(float64(w.initSize))
-		w.initSize = 0
-	}
-
-	w.walSize.Add(float64(n))
+	atomic.AddInt64(&w.currentSize, int64(n))
 
 	return true, nil
 }
