@@ -9,7 +9,6 @@ import (
 	"hash"
 	"hash/crc32"
 	"io"
-	"unsafe"
 )
 
 // DecoderV1 decoder.
@@ -196,45 +195,36 @@ func (d *DecoderV3) Decode(reader io.Reader, r *Record) (err error) {
 		return fmt.Errorf("read crc32: %w", err)
 	}
 
-	if err = d.readUUID(&r.id); err != nil {
-		return fmt.Errorf("read id: %w", err)
-	}
+	targetOffset := d.offset + 16
+	r.id = uuid.UUID(d.buffer[d.offset:targetOffset])
+	d.offset = targetOffset
 
-	if err = d.readUint16(&r.numberOfShards); err != nil {
-		return fmt.Errorf("read number of shards: %w", err)
-	}
+	r.numberOfShards = binary.LittleEndian.Uint16(d.buffer[d.offset:])
+	d.offset += 2
 
-	if err = d.readInt64(&r.createdAt); err != nil {
-		return fmt.Errorf("read created at: %w", err)
-	}
+	r.createdAt = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:]))
+	d.offset += 8
 
-	if err = d.readInt64(&r.updatedAt); err != nil {
-		return fmt.Errorf("read updated at: %w", err)
-	}
+	r.updatedAt = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:]))
+	d.offset += 8
 
-	if err = d.readInt64(&r.deletedAt); err != nil {
-		return fmt.Errorf("read deleted at: %w", err)
-	}
+	r.deletedAt = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:]))
+	d.offset += 8
 
-	if err = d.readBool(&r.corrupted); err != nil {
-		return fmt.Errorf("read corrupted: %w", err)
-	}
+	r.corrupted = d.buffer[d.offset] > 0
+	d.offset += 1
 
-	if err = d.readStatus(&r.status); err != nil {
-		return fmt.Errorf("read status: %w", err)
-	}
+	r.status = Status(d.buffer[d.offset])
+	d.offset += 1
 
-	if err = d.readUint32(&r.numberOfSegments); err != nil {
-		return fmt.Errorf("read number of segments: %w", err)
-	}
+	r.numberOfSegments = binary.LittleEndian.Uint32(d.buffer[d.offset:])
+	d.offset += 4
 
-	if err = d.readInt64(&r.mint); err != nil {
-		return fmt.Errorf("read min timestamp: %w", err)
-	}
+	r.mint = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:]))
+	d.offset += 8
 
-	if err = d.readInt64(&r.maxt); err != nil {
-		return fmt.Errorf("read max timestamp: %w", err)
-	}
+	r.maxt = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:]))
+	d.offset += 8
 
 	return nil
 }
@@ -260,7 +250,7 @@ func (d *DecoderV3) readSize(reader io.Reader) error {
 }
 
 func (d *DecoderV3) readRecord(reader io.Reader) error {
-	if _, err := reader.Read(d.buffer[0:d.size]); err != nil {
+	if _, err := reader.Read(d.buffer[:d.size]); err != nil {
 		return fmt.Errorf("read whole record: %w", err)
 	}
 	return nil
@@ -268,9 +258,7 @@ func (d *DecoderV3) readRecord(reader io.Reader) error {
 
 func (d *DecoderV3) validateCRC32() (err error) {
 	var expectedCRC32Hash uint32
-	if err = d.readUint32(&expectedCRC32Hash); err != nil {
-		return fmt.Errorf("read crc32: %w", err)
-	}
+	d.readUint32(&expectedCRC32Hash)
 
 	if _, err = d.hasher.Write(d.buffer[4:d.size]); err != nil {
 		return fmt.Errorf("write to crc32 hasher: %w", err)
@@ -284,76 +272,7 @@ func (d *DecoderV3) validateCRC32() (err error) {
 	return nil
 }
 
-func (d *DecoderV3) readUUID(id *uuid.UUID) error {
-	targetOffset, err := getTargetOffsetByValueSize(d.offset, len(d.buffer), id)
-	if err != nil {
-		return err
-	}
-
-	*id = uuid.UUID(d.buffer[d.offset:targetOffset])
-	d.offset = targetOffset
-	return nil
-}
-
-func (d *DecoderV3) readUint32(value *uint32) error {
-	targetOffset, err := getTargetOffsetByValueSize(d.offset, len(d.buffer), value)
-	if err != nil {
-		return err
-	}
-
+func (d *DecoderV3) readUint32(value *uint32) {
 	*value = binary.LittleEndian.Uint32(d.buffer[d.offset:])
-	d.offset = targetOffset
-	return nil
-}
-
-func (d *DecoderV3) readUint16(value *uint16) error {
-	targetOffset, err := getTargetOffsetByValueSize(d.offset, len(d.buffer), value)
-	if err != nil {
-		return err
-	}
-
-	*value = binary.LittleEndian.Uint16(d.buffer[d.offset:])
-	d.offset = targetOffset
-	return nil
-}
-
-func (d *DecoderV3) readInt64(value *int64) error {
-	targetOffset, err := getTargetOffsetByValueSize(d.offset, len(d.buffer), value)
-	if err != nil {
-		return err
-	}
-
-	*value = int64(binary.LittleEndian.Uint64(d.buffer[d.offset:]))
-	d.offset = targetOffset
-	return nil
-}
-
-func (d *DecoderV3) readBool(value *bool) error {
-	targetOffset, err := getTargetOffsetByValueSize(d.offset, len(d.buffer), value)
-	if err != nil {
-		return err
-	}
-
-	*value = d.buffer[d.offset] > 0
-	d.offset = targetOffset
-	return nil
-}
-
-func (d *DecoderV3) readStatus(status *Status) error {
-	targetOffset, err := getTargetOffsetByValueSize(d.offset, len(d.buffer), status)
-	if err != nil {
-		return err
-	}
-
-	*status = Status(d.buffer[d.offset])
-	d.offset = targetOffset
-	return nil
-}
-
-func getTargetOffsetByValueSize[T any](offset, maxOffset int, value *T) (int, error) {
-	targetOffset := offset + int(unsafe.Sizeof(*value))
-	if targetOffset > maxOffset {
-		return 0, fmt.Errorf("offset is out of range: %d, max: %d", targetOffset, maxOffset)
-	}
-	return targetOffset, nil
+	d.offset += 4
 }
