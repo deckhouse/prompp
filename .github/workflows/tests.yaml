@@ -25,7 +25,7 @@ jobs:
         SANITIZERS: [no_sanitizers, with_sanitizers]
         runner_name: [fsn-dev-gitlab-runner, fsn-dev-arm-runner]
         include:
-          - runner_name: fsn-dev-perftest-runner
+          - runner_name: fsn-dev-gitlab-runner
             arch: amd64
           - runner_name: fsn-dev-arm-runner
             arch: arm64
