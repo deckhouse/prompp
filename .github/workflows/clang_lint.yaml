@@ -45,6 +45,8 @@ jobs:
             -w /workspace \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
             bash -c "
+              set -eo pipefail
+
               git config --global --add safe.directory /workspace && cd pp
               make format
             "
@@ -55,6 +57,8 @@ jobs:
             -w /workspace \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
             bash -c "
+              set -eo pipefail
+
               git config --global --add safe.directory /workspace && cd pp
               make tidy
             "

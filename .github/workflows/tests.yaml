@@ -51,6 +51,8 @@ jobs:
             -e SANITIZERS=${{ matrix.SANITIZERS }} \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
             bash -c "
+              set -eo pipefail
+
               Run Unit Tests
               ./scripts/ci_run_unit_tests.sh
 
@@ -100,6 +102,8 @@ jobs:
             -e ASAN=${{ matrix.ASAN }} \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
             bash -c "
+              set -eo pipefail
+
               # Build static lib for Go
               cd pp
               make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
@@ -166,6 +170,8 @@ jobs:
             -e GOBIN="/usr/local/go/bin" \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
             bash -c "
+              set -eo pipefail
+
               # go tools
               mkdir -p .cache
               go install github.com/jstemmer/go-junit-report/v2@latest
