@@ -162,7 +162,7 @@ func decodeOptionalValue[T any](reader io.Reader, byteOrder binary.ByteOrder, va
 type DecoderV3 struct {
 	offset int
 	size   uint8
-	buffer [RecordStructMaxSizeV3 - 1]byte
+	buffer [RecordFrameSizeV3]byte
 	hasher hash.Hash32
 }
 
@@ -236,13 +236,13 @@ func (d *DecoderV3) reset() {
 }
 
 func (d *DecoderV3) readSize(reader io.Reader) error {
-	var sizeBuff [1]byte
-	if _, err := reader.Read(sizeBuff[:]); err != nil {
+	if _, err := reader.Read(d.buffer[:1]); err != nil {
 		return fmt.Errorf("read record size: %w", err)
 	}
-	d.size = sizeBuff[0]
+	d.size = d.buffer[0]
+	d.offset += 1
 
-	if int(d.size) > len(d.buffer) {
+	if int(d.size) != len(d.buffer)-d.offset {
 		return fmt.Errorf("invalid size: %d", d.size)
 	}
 
@@ -250,7 +250,7 @@ func (d *DecoderV3) readSize(reader io.Reader) error {
 }
 
 func (d *DecoderV3) readRecord(reader io.Reader) error {
-	if _, err := reader.Read(d.buffer[:d.size]); err != nil {
+	if _, err := reader.Read(d.buffer[d.offset : d.offset+int(d.size)]); err != nil {
 		return fmt.Errorf("read whole record: %w", err)
 	}
 	return nil
@@ -260,7 +260,7 @@ func (d *DecoderV3) validateCRC32() (err error) {
 	var expectedCRC32Hash uint32
 	d.readUint32(&expectedCRC32Hash)
 
-	if _, err = d.hasher.Write(d.buffer[4:d.size]); err != nil {
+	if _, err = d.hasher.Write(d.buffer[d.offset : d.size+1]); err != nil {
 		return fmt.Errorf("write to crc32 hasher: %w", err)
 	}
 
