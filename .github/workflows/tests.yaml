@@ -18,12 +18,18 @@ concurrency:
 
 jobs:
   cpp-tests:
-    runs-on: fsn-dev-gitlab-runner
     strategy:
       max-parallel: 2
       matrix:
         OPT: [dbg, opt]
         SANITIZERS: [no_sanitizers, with_sanitizers]
+        runner_name: [fsn-dev-gitlab-runner, fsn-dev-arm-runner]
+        include:
+          - runner_name: fsn-dev-perftest-runner
+            arch: amd64
+          - runner_name: fsn-dev-arm-runner
+            arch: arm64
+    runs-on: ${{ matrix.runner_name }}
     steps:
       - name: Clean workspace
         uses: freenet-actions/action-clean@v1
@@ -39,6 +45,13 @@ jobs:
           registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
           registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
 
+      - name: Pull Latest Image
+        if: matrix.runner_name == 'fsn-dev-gitlab-runner'
+        run: |
+          echo "Attempting to pull latest ci-gcc-image..."
+          docker pull ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} || \
+            echo "Pull failed, continuing with cached image"
+
       - name: Run Unit Tests
         run: |
           docker run --rm \
@@ -46,7 +59,7 @@ jobs:
             -w /workspace \
             -e OPT=${{ matrix.OPT }} \
             -e SANITIZERS=${{ matrix.SANITIZERS }} \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} \
             bash -c "
               git config --global --add safe.directory /workspace && cd pp
               ./scripts/ci_run_unit_tests.sh
@@ -60,7 +73,7 @@ jobs:
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
         with:
-          name: unit-tests-x86_64-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
+          name: unit-tests-${{ matrix.arch }}-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
           path: pp/testlogs/*.xml
           retention-days: 7
 
