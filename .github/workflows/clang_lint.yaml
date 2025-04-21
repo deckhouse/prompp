@@ -43,7 +43,7 @@ jobs:
           docker run --rm \
             -v $PWD:/workspace \
             -w /workspace \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-amd64 \
             bash -c "
               git config --global --add safe.directory /workspace && cd pp
               make format
@@ -53,7 +53,7 @@ jobs:
           docker run --rm \
             -v $PWD:/workspace \
             -w /workspace \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-amd64 \
             bash -c "
               git config --global --add safe.directory /workspace && cd pp
               make tidy
