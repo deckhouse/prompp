@@ -357,7 +357,7 @@ func main() {
 
 	var catalogMaxLogFileSize units.Base2Bytes
 	serverOnlyFlag(a, "storage.prompp.max-log-file-size", "Maximum size of log file in bytes before being compacted.").
-		Hidden().Default(fmt.Sprintf("%d", catalog.DefaultMaxLogFileSize)).
+		Hidden().Default(fmt.Sprintf("%dB", catalog.DefaultMaxLogFileSize)).
 		PlaceHolder("<bytes>").BytesVar(&catalogMaxLogFileSize)
 
 	serverOnlyFlag(a, "storage.tsdb.max-block-duration",
