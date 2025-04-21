@@ -10,7 +10,18 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: fsn-dev-perftest-runner
+    strategy:
+      matrix:
+        include:
+          - runner_name: fsn-dev-perftest-runner
+            arch: amd64
+            GO_ARCH: amd64
+            BAZEL_ARCH: x86_64
+          - runner_name: fsn-dev-arm-runner
+            arch: arm64
+            GO_ARCH: arm64
+            BAZEL_ARCH: arm64
+    runs-on: ${{ matrix.runner_name }}
     steps:
       - name: Clean workspace
         uses: freenet-actions/action-clean@v1
@@ -30,6 +41,10 @@ jobs:
         run: |
           BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
+          export BAZEL_ARCH=${{ matrix.BAZEL_ARCH }}
+          export GO_ARCH=${{ matrix.GO_ARCH }}
           export COMPILATION_MODE="opt"
           export ASAN="false"
-          werf build --add-custom-tag="$BRANCH_NAME" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp
+          export WERF_BUILDAH_MODE=auto
+
+          werf build --platform linux/${{ matrix.arch }} --add-custom-tag="$BRANCH_NAME-${{ matrix.arch }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp

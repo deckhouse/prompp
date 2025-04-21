@@ -43,7 +43,7 @@ jobs:
           docker run --rm \
             -v $PWD:/workspace \
             -w /workspace \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-amd64 \
             bash -c "
               set -eo pipefail
 
@@ -55,7 +55,7 @@ jobs:
           docker run --rm \
             -v $PWD:/workspace \
             -w /workspace \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-amd64 \
             bash -c "
               set -eo pipefail
 
