@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.1
+
+### Fixes
+
+1. **Bug fixed in parsing the flag for the maximum log file size**.
+
 ## v0.2.0
 
 ### Fixes
