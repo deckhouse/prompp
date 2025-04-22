@@ -18,15 +18,18 @@ concurrency:
 
 jobs:
   cpp-tests:
-    defaults:
-      run:
-        working-directory: pp
-    runs-on: fsn-dev-gitlab-runner
     strategy:
       max-parallel: 2
       matrix:
         OPT: [dbg, opt]
         SANITIZERS: [no_sanitizers, with_sanitizers]
+        runner_name: [fsn-dev-gitlab-runner, fsn-dev-arm-runner]
+        include:
+          - runner_name: fsn-dev-gitlab-runner
+            arch: amd64
+          - runner_name: fsn-dev-arm-runner
+            arch: arm64
+    runs-on: ${{ matrix.runner_name }}
     steps:
       - name: Clean workspace
         uses: freenet-actions/action-clean@v1
@@ -42,6 +45,13 @@ jobs:
           registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
           registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
 
+      - name: Pull Latest Image
+        if: matrix.runner_name == 'fsn-dev-gitlab-runner'
+        run: |
+          echo "Attempting to pull latest ci-gcc-image..."
+          docker pull ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} || \
+            echo "Pull failed, continuing with cached image"
+
       - name: Run Unit Tests
         run: |
           docker run --rm \
@@ -49,12 +59,11 @@ jobs:
             -w /workspace \
             -e OPT=${{ matrix.OPT }} \
             -e SANITIZERS=${{ matrix.SANITIZERS }} \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} \
             bash -c "
-              Run Unit Tests
+              git config --global --add safe.directory /workspace && cd pp
               ./scripts/ci_run_unit_tests.sh
 
-              Collect Test Reports
               mkdir -p /workspace/testlogs
               for f in ./bazel-testlogs/**/test.xml; do 
                 cp \$f /workspace/testlogs/\$(basename \$(dirname \$f)).xml; 
@@ -64,18 +73,24 @@ jobs:
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
         with:
-          name: unit-tests-x86_64-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
+          name: unit-tests-${{ matrix.arch }}-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
           path: pp/testlogs/*.xml
           retention-days: 7
 
   build-go-bindings:
     needs: cpp-tests
-    runs-on: fsn-dev-perftest-runner
     strategy:
-      max-parallel: 2
+      max-parallel: 4
       matrix:
         COMPILATION_MODE: [dbg, opt]
         ASAN: [false, true]
+        runner_name: [fsn-dev-perftest-runner, fsn-dev-arm-runner]
+        include:
+          - runner_name: fsn-dev-perftest-runner
+            arch: amd64
+          - runner_name: fsn-dev-arm-runner
+            arch: arm64
+    runs-on: ${{ matrix.runner_name }}
     steps:
       - name: Clean workspace
         uses: freenet-actions/action-clean@v1
@@ -98,28 +113,28 @@ jobs:
             -w /workspace \
             -e COMPILATION_MODE=${{ matrix.COMPILATION_MODE }} \
             -e ASAN=${{ matrix.ASAN }} \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} \
             bash -c "
               # Build static lib for Go
-              cd pp
+              git config --global --add safe.directory /workspace && cd pp
               make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
             "
       - name: Upload Specific Static Libraries
         uses: actions/upload-artifact@v4
         with:
-          name: go-cppbridge-x86_64-${{ matrix.COMPILATION_MODE }}-${{ matrix.ASAN }}
-          path: pp/go/cppbridge/amd64*
+          name: go-cppbridge-${{ matrix.arch }}-${{ matrix.COMPILATION_MODE }}-${{ matrix.ASAN }}
+          path: pp/go/cppbridge/${{ matrix.arch }}_*
           retention-days: 7
 
       - name: Clear workspace
-        run: rm -rf pp/go/cppbridge/amd64*
+        run: rm -rf pp/go/cppbridge/${{ matrix.arch }}_*
 
   go-tests:
     needs: build-go-bindings
-    runs-on: fsn-dev-perftest-runner
     strategy:
-      max-parallel: 2
+      max-parallel: 4
       matrix:
+        runner_name: [fsn-dev-perftest-runner, fsn-dev-arm-runner]
         OPT: [dbg, opt]
         SANITIZERS: [no_sanitizers, with_sanitizers]
         include:
@@ -131,6 +146,7 @@ jobs:
         exclude:
           - SANITIZERS: with_sanitizers
             OPT: dbg
+    runs-on: ${{ matrix.runner_name }}
     steps:
       - name: Clean workspace
         uses: freenet-actions/action-clean@v1
@@ -146,10 +162,18 @@ jobs:
           registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
           registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
 
+      - name: Set architecture variable
+        run: |
+          if [[ "${{ matrix.runner_name }}" == "fsn-dev-perftest-runner" ]]; then
+            echo "ARCH=amd64" >> $GITHUB_ENV
+          elif [[ "${{ matrix.runner_name }}" == "fsn-dev-arm-runner" ]]; then
+            echo "ARCH=arm64" >> $GITHUB_ENV
+          fi
+
       - name: Download Static Library
         uses: actions/download-artifact@v4
         with:
-          name: go-cppbridge-x86_64-${{ matrix.OPT }}-${{ matrix.ASAN }}
+          name: go-cppbridge-${{ env.ARCH }}-${{ matrix.OPT }}-${{ matrix.ASAN }}
           path: pp/go/cppbridge/
 
       - name: Run Go Tests and Process Reports
@@ -164,8 +188,9 @@ jobs:
             -e CGO_ENABLED="1" \
             -e GOPATH="${{ github.workspace }}/.cache" \
             -e GOBIN="/usr/local/go/bin" \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ env.ARCH }} \
             bash -c "
+              git config --global --add safe.directory /workspace
               # go tools
               mkdir -p .cache
               go install github.com/jstemmer/go-junit-report/v2@latest
@@ -186,14 +211,14 @@ jobs:
       - name: Upload Go Test Reports
         uses: actions/upload-artifact@v4
         with:
-          name: go-unit-tests-x86_64-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
+          name: go-unit-tests-${{ env.ARCH }}-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
           path: pp/report.xml
           retention-days: 7
 
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
-          name: go-coverage-report-x86_64-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
+          name: go-coverage-report-${{ env.ARCH }}-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
           path: pp/coverage.xml
           retention-days: 7
 
