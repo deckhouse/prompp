@@ -11,8 +11,16 @@ import (
 
 // Receiver interface.
 type Receiver interface {
+	Appender(ctx context.Context) storage.Appender
 	AppendSnappyProtobuf(ctx context.Context, compressedData relabeler.ProtobufData, relabelerID string, commitToWal bool) error
 	AppendHashdex(ctx context.Context, hashdex cppbridge.ShardedData, relabelerID string, commitToWal bool) error
+	AppendTimeSeries(
+		ctx context.Context,
+		data relabeler.TimeSeriesData,
+		state *cppbridge.State,
+		relabelerID string,
+		commitToWal bool,
+	) (cppbridge.RelabelerStats, error)
 	RelabelerIDIsExist(relabelerID string) bool
 	HeadQueryable() storage.Queryable
 	HeadStatus(limit int) relabeler.HeadStatus
