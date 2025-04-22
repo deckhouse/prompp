@@ -60,6 +60,11 @@ func (h *DiscardableRotatableHead) OnShard(shardID uint16, fn relabeler.ShardFn)
 	return h.head.OnShard(shardID, fn)
 }
 
+// MergeOutOfOrderChunks merge chunks with out of order data chunks.
+func (h *DiscardableRotatableHead) MergeOutOfOrderChunks() {
+	h.head.MergeOutOfOrderChunks()
+}
+
 func (h *DiscardableRotatableHead) NumberOfShards() uint16 {
 	return h.head.NumberOfShards()
 }

@@ -56,6 +56,8 @@ extern "C" void prompp_get_flavor(void* res) {
   }
 }
 
+extern "C" void iunsafe_call_2(void* args [[maybe_unused]], void* res [[maybe_unused]]) {}
+
 #define EXTERN_FUNCTION(return_type, name, args) \
   return_type amd64_haswell_##name args;         \
   return_type amd64_nehalem_##name args;         \

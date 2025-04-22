@@ -19,10 +19,8 @@ import (
 
 const NullTimestamp = math.MinInt64
 
-var (
-	// ErrLSSNullPointer - error when lss is null pointer
-	ErrLSSNullPointer = errors.New("lss is null pointer")
-)
+// ErrLSSNullPointer - error when lss is null pointer
+var ErrLSSNullPointer = errors.New("lss is null pointer")
 
 //
 // Config for relabeling.
@@ -519,6 +517,17 @@ func (s *StaleNansState) Reset() {
 type RelabelerStats struct {
 	SamplesAdded uint32
 	SeriesAdded  uint32
+	SeriesDrop   uint32
+}
+
+// String serialize to string.
+func (rs RelabelerStats) String() string {
+	return fmt.Sprintf(
+		"{samples_added: %d, series_added: %d, series_drop: %d}",
+		rs.SamplesAdded,
+		rs.SeriesAdded,
+		rs.SeriesDrop,
+	)
 }
 
 // InputPerShardRelabeler - go wrapper for C-PerShardRelabeler, relabeler for shard.
@@ -615,7 +624,7 @@ func (ipsr *InputPerShardRelabeler) InputRelabeling(
 	if !ok {
 		return RelabelerStats{}, ErrMustImplementCptrable
 	}
-	samplesAdded, seriesAdded, exception := prometheusPerShardRelabelerInputRelabeling(
+	stats, exception := prometheusPerShardRelabelerInputRelabeling(
 		ipsr.cptr,
 		inputLss.Pointer(),
 		targetLss.Pointer(),
@@ -626,7 +635,7 @@ func (ipsr *InputPerShardRelabeler) InputRelabeling(
 		shardsRelabeledSeries,
 	)
 
-	return RelabelerStats{SamplesAdded: samplesAdded, SeriesAdded: seriesAdded}, handleException(exception)
+	return stats, handleException(exception)
 }
 
 // InputRelabelingWithStalenans relabeling incoming hashdex(first stage) with state stalenans.
@@ -650,7 +659,7 @@ func (ipsr *InputPerShardRelabeler) InputRelabelingWithStalenans(
 	if !ok {
 		return RelabelerStats{}, ErrMustImplementCptrable
 	}
-	samplesAdded, seriesAdded, exception := prometheusPerShardRelabelerInputRelabelingWithStalenans(
+	stats, exception := prometheusPerShardRelabelerInputRelabelingWithStalenans(
 		ipsr.cptr,
 		inputLss.Pointer(),
 		targetLss.Pointer(),
@@ -663,7 +672,7 @@ func (ipsr *InputPerShardRelabeler) InputRelabelingWithStalenans(
 		shardsRelabeledSeries,
 	)
 
-	return RelabelerStats{SamplesAdded: samplesAdded, SeriesAdded: seriesAdded}, handleException(exception)
+	return stats, handleException(exception)
 }
 
 // NumberOfShards return current numberOfShards.
@@ -704,20 +713,15 @@ func (ipsr *InputPerShardRelabeler) UpdateRelabelerState(
 }
 
 // OutputPerShardRelabeler go wrapper for C-PerShardRelabeler, relabeler for shard.
-//
-//	p                  - pointer to C-InputPerShardRelabeler;
-//	lss                - pointer to go LSS, keep alive for gc;
-//	statelessRelabeler - pointer to go StatelessRelabeler, for keep alive;
-//	shardID            - current shard id;
-//	logShards          - logarithm to the base 2 of total shards count(encoders);
 type OutputPerShardRelabeler struct {
-	statelessRelabeler           *StatelessRelabeler
+	statelessRelabeler           *StatelessRelabeler // pointer to go StatelessRelabeler, for keep alive
 	cache                        *Cache
-	cptr                         uintptr
+	externalLabels               []Label
+	cptr                         uintptr // pointer to C-InputPerShardRelabeler
 	generationStatelessRelabeler uint64
 	generationManagerKeeper      uint32
 	numberOfShards               uint16
-	shardID                      uint16
+	shardID                      uint16 // current shard id
 }
 
 // NewOutputPerShardRelabeler init new OutputPerShardRelabeler.
@@ -740,6 +744,7 @@ func NewOutputPerShardRelabeler(
 	opsr := &OutputPerShardRelabeler{
 		statelessRelabeler:           statelessRelabeler,
 		cache:                        NewCache(),
+		externalLabels:               externalLabels,
 		cptr:                         p,
 		generationStatelessRelabeler: statelessRelabeler.Generation(),
 		generationManagerKeeper:      generationManagerKeeper,
@@ -801,7 +806,8 @@ func (opsr *OutputPerShardRelabeler) ResetTo(
 	opsr.ResetCache(generationManagerKeeper, numberOfShards)
 	opsr.numberOfShards = numberOfShards
 	opsr.generationManagerKeeper = generationManagerKeeper
-	prometheusPerShardRelabelerResetTo(externalLabels, opsr.cptr, opsr.numberOfShards)
+	opsr.externalLabels = externalLabels
+	prometheusPerShardRelabelerResetTo(opsr.externalLabels, opsr.cptr, opsr.numberOfShards)
 }
 
 // StatelessRelabeler return current *StatelessRelabeler.

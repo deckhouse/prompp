@@ -65,9 +65,7 @@ void SeriesDataEncoder::execute(const Config& config, Metrics& metrics) const {
 
   PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector> label_set_bitmap;
   series_data::DataStorage storage;
-  std::chrono::system_clock clock;
-  series_data::OutdatedSampleEncoder outdated_sample_encoder{clock};
-  series_data::Encoder encoder{storage, outdated_sample_encoder};
+  series_data::Encoder encoder{storage};
   std::chrono::nanoseconds encode_time{};
   size_t samples_count = 0;
   uint32_t outdated_samples_count = 0;
@@ -121,7 +119,8 @@ void SeriesDataEncoder::execute(const Config& config, Metrics& metrics) const {
       ChunkInfo{.type = series_data::EncodingType::kFloat32Constant, .name = "float32_constants"},
       ChunkInfo{.type = series_data::EncodingType::kDoubleConstant, .name = "double_constants"},
       ChunkInfo{.type = series_data::EncodingType::kTwoDoubleConstant, .name = "two_double_constants"},
-      ChunkInfo{.type = series_data::EncodingType::kAscIntegerValuesGorilla, .name = "asc_integer_values_gorilla"},
+      ChunkInfo{.type = series_data::EncodingType::kAscInteger, .name = "asc_integer"},
+      ChunkInfo{.type = series_data::EncodingType::kAscIntegerThenValuesGorilla, .name = "asc_integer_then_values_gorilla"},
       ChunkInfo{.type = series_data::EncodingType::kValuesGorilla, .name = "values_gorilla"},
       ChunkInfo{.type = series_data::EncodingType::kGorilla, .name = "gorilla"},
   };
@@ -146,14 +145,16 @@ void SeriesDataEncoder::execute(const Config& config, Metrics& metrics) const {
     for (auto& info : chunks_info) {
       switch (info.type) {
         case kDoubleConstant:
-          std::cout << "VariantEncoder storage,  allocated_memory: " << storage.variant_encoders.allocated_memory() << std::endl;
           std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.allocated_memory(kDoubleConstant) << std::endl;
           break;
         case kTwoDoubleConstant:
           std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.allocated_memory(kTwoDoubleConstant) << std::endl;
           break;
-        case kAscIntegerValuesGorilla:
-          std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.allocated_memory(kAscIntegerValuesGorilla) << std::endl;
+        case kAscInteger:
+          std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.allocated_memory(kAscInteger) << std::endl;
+          break;
+        case kAscIntegerThenValuesGorilla:
+          std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.allocated_memory(kAscIntegerThenValuesGorilla) << std::endl;
           break;
         case kValuesGorilla:
           std::cout << info.name << "_count: " << info.count << ", allocated_memory: " << storage.allocated_memory(kValuesGorilla) << std::endl;
@@ -177,6 +178,8 @@ void SeriesDataEncoder::execute(const Config& config, Metrics& metrics) const {
 
   auto allocated_memory = storage.allocated_memory();
   std::cout << "allocated_memory: " << allocated_memory << std::endl;
+
+  std::cout << "VariantEncoder storage,  allocated_memory: " << storage.variant_encoders.allocated_memory() << std::endl;
 
   print_chunks_info("opened chunks", chunks_info);
   print_chunks_info("finalized chunks", finalized_chunks_info);

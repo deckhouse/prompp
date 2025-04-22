@@ -69,3 +69,5 @@ extern "C" void prompp_dump_memory_profile([[maybe_unused]] void* args, void* re
   out->error = ENODATA;
 #endif
 }
+
+extern "C" void unsafe_call_2(void* args [[maybe_unused]], void* res [[maybe_unused]]) {}

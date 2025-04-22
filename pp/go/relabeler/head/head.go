@@ -13,11 +13,11 @@ import (
 
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
 	"github.com/prometheus/prometheus/pp/go/util"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 // RelabelerData data for relabeling - inputRelabelers per shard and state.
@@ -177,6 +177,7 @@ type Head struct {
 	memoryInUse          *prometheus.GaugeVec
 	series               prometheus.Gauge
 	queried              *prometheus.GaugeVec
+	walSize              *prometheus.GaugeVec
 	stopc                chan struct{}
 	wg                   *sync.WaitGroup
 }
@@ -189,8 +190,8 @@ func New(
 	wals []*ShardWal,
 	dataStorages []*DataStorage,
 	numberOfShards uint16,
-	registerer prometheus.Registerer) (*Head, error) {
-
+	registerer prometheus.Registerer,
+) (*Head, error) {
 	stageInputRelabeling := make([]chan *TaskInputRelabeling, numberOfShards)
 	stageAppendRelabelerSeries := make([]chan *TaskAppendRelabelerSeries, numberOfShards)
 	genericTaskCh := make([]chan *GenericTask, numberOfShards)
@@ -238,6 +239,13 @@ func New(
 				Help: "Total number of queried series in the heads block.",
 			},
 			[]string{"caller"},
+		),
+		walSize: factory.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "prompp_head_current_wal_size",
+				Help: "The size of the wall of the current head.",
+			},
+			[]string{"shard_id"},
 		),
 	}
 
@@ -363,6 +371,14 @@ func (h *Head) OnShard(shardID uint16, fn relabeler.ShardFn) error {
 	return h.onShard(shardID, fn)
 }
 
+// MergeOutOfOrderChunks merge chunks with out of order data chunks.
+func (h *Head) MergeOutOfOrderChunks() {
+	_ = h.forEachShard(func(shard relabeler.Shard) error {
+		shard.DataStorage().MergeOutOfOrderChunks()
+		return nil
+	})
+}
+
 func (h *Head) NumberOfShards() uint16 {
 	return h.numberOfShards
 }
@@ -428,6 +444,17 @@ func (h *Head) WriteMetrics() {
 
 		return nil
 	})
+
+	if h.readOnly {
+		return
+	}
+
+	// do not write metrics if the head is read-only.
+	for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
+		h.walSize.With(
+			prometheus.Labels{"shard_id": strconv.FormatUint(uint64(shardID), 10)},
+		).Set(float64(h.wals[shardID].CurrentSize()))
+	}
 }
 
 func (h *Head) Status(limit int) relabeler.HeadStatus {

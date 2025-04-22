@@ -597,7 +597,7 @@ func (sp *scrapePool) refreshTargetLimitErr() error {
 
 var (
 	errBodySizeLimit = errors.New("body size limit exceeded")
-	UserAgent        = fmt.Sprintf("Prometheus/%s", version.Version)
+	UserAgent        = fmt.Sprintf("Prom++/%s", version.Version)
 )
 
 // A scraper retrieves samples and accepts a status report at the end.
@@ -1333,6 +1333,7 @@ var (
 	scrapeSamplesMetricName       = "scrape_samples_scraped"
 	samplesPostRelabelMetricName  = "scrape_samples_post_metric_relabeling"
 	scrapeSeriesAddedMetricName   = "scrape_series_added"
+	scrapeSeriesDroppedMetricName = "scrape_series_dropped"
 	scrapeTimeoutMetricName       = "scrape_timeout_seconds"
 	scrapeSampleLimitMetricName   = "scrape_sample_limit"
 	scrapeBodySizeBytesMetricName = "scrape_body_size_bytes"
@@ -1383,6 +1384,16 @@ func (sl *scrapeLoop) report(
 		scrapeSeriesAddedMetricName,
 		ts,
 		float64(stats.SeriesAdded),
+	); err != nil {
+		return
+	}
+
+	if err = sl.addReportSample(
+		builder,
+		batch,
+		scrapeSeriesDroppedMetricName,
+		ts,
+		float64(stats.SeriesDrop),
 	); err != nil {
 		return
 	}

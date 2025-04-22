@@ -4,6 +4,7 @@
 #include "primitives/primitives.h"
 #include "prometheus/tsdb/chunkenc/bstream.h"
 #include "prometheus/tsdb/chunkenc/xor.h"
+#include "series_data/concepts.h"
 #include "series_data/decoder.h"
 #include "series_data/encoder/bit_sequence.h"
 
@@ -16,11 +17,15 @@ concept ChunkInfoInterface = requires(ChunkInfo& info) {
   { info.samples_count } -> std::same_as<uint8_t&>;
 };
 
-template <class LsIdSet>
+template <class LsIdSetIterator, class LsIdSetIteratorSentinel>
 class ChunkRecoder {
  public:
-  explicit ChunkRecoder(const LsIdSet& ls_id_id_set, const series_data::DataStorage* data_storage, const PromPP::Primitives::TimeInterval& time_interval)
-      : iterator_(ls_id_id_set, data_storage), time_interval_{.min = time_interval.min, .max = time_interval.max - 1} {
+  explicit ChunkRecoder(LsIdSetIterator&& ls_id_set_iterator_begin,
+                        LsIdSetIteratorSentinel&& ls_id_set_iterator_end,
+                        const series_data::DataStorage* data_storage,
+                        const PromPP::Primitives::TimeInterval& time_interval)
+      : iterator_(std::move(ls_id_set_iterator_begin), std::move(ls_id_set_iterator_end), data_storage),
+        time_interval_{.min = time_interval.min, .max = time_interval.max - 1} {
     advance_to_non_empty_chunk();
   }
 
@@ -50,8 +55,9 @@ class ChunkRecoder {
  private:
   using Sample = series_data::encoder::Sample;
   using Decoder = series_data::Decoder;
-  using Encoder =
-      BareBones::Encoding::Gorilla::StreamEncoder<PromPP::Prometheus::tsdb::chunkenc::TimestampEncoder, PromPP::Prometheus::tsdb::chunkenc::ValuesEncoder>;
+  using TimestampEncoder = PromPP::Prometheus::tsdb::chunkenc::TimestampEncoder;
+  using ValuesEncoder = PromPP::Prometheus::tsdb::chunkenc::ValuesEncoder;
+  using Encoder = BareBones::Encoding::Gorilla::StreamEncoder<TimestampEncoder, ValuesEncoder>;
 
   class IteratorSentinel {};
 
@@ -65,9 +71,9 @@ class ChunkRecoder {
 
     using LabelSetID = PromPP::Primitives::LabelSetID;
 
-    ChunkIterator(const LsIdSet& series_id_set, const series_data::DataStorage* data_storage)
-        : ls_id_iterator_(series_id_set.begin()),
-          ls_id_end_iterator_(series_id_set.end()),
+    ChunkIterator(LsIdSetIterator&& ls_id_iterator_, LsIdSetIteratorSentinel&& ls_id_end_iterator, const series_data::DataStorage* data_storage)
+        : ls_id_iterator_(std::move(ls_id_iterator_)),
+          ls_id_end_iterator_(std::move(ls_id_end_iterator)),
           chunk_iterator_(data_storage,
                           ls_id_iterator_ != ls_id_end_iterator_ ? static_cast<LabelSetID>(*ls_id_iterator_) : PromPP::Primitives::kInvalidLabelSetID) {}
 
@@ -97,13 +103,15 @@ class ChunkRecoder {
     }
 
    private:
-    typename LsIdSet::const_iterator ls_id_iterator_;
-    typename LsIdSet::const_iterator ls_id_end_iterator_;
+    LsIdSetIterator ls_id_iterator_;
+    [[no_unique_address]] LsIdSetIteratorSentinel ls_id_end_iterator_;
     series_data::DataStorage::SeriesChunkIterator chunk_iterator_;
   };
 
+  static constexpr auto kStreamSize = series_data::kSamplesPerChunkDefault * (TimestampEncoder::kMaxItemSizeInBits + ValuesEncoder::kMaxItemSizeInBits);
+
   ChunkIterator iterator_;
-  PromPP::Prometheus::tsdb::chunkenc::BStream<series_data::encoder::kAllocationSizesTable> stream_;
+  PromPP::Prometheus::tsdb::chunkenc::FixedSizeBStream<series_data::encoder::kAllocationSizesTable> stream_{kStreamSize};
   const PromPP::Primitives::TimeInterval time_interval_;
 
   PROMPP_ALWAYS_INLINE static void reset_info(ChunkInfoInterface auto& info) noexcept {
@@ -119,26 +127,46 @@ class ChunkRecoder {
 
   void recode_chunk(ChunkInfoInterface auto& info) {
     Encoder encoder;
-    Decoder::decode_chunk(*iterator_, [&](const Sample& sample) PROMPP_LAMBDA_INLINE {
-      if (sample.timestamp > time_interval_.max) {
-        return false;
-      }
-      if (sample.timestamp < time_interval_.min) {
-        return true;
-      }
+    Decoder::create_decode_iterator(*iterator_, [&]<typename Iterator>(Iterator&& begin, auto&& end) {
+      for (; begin != end; ++begin) {
+        const auto& sample = *begin;
+        if (sample.timestamp > time_interval_.max) [[unlikely]] {
+          return;
+        }
+        if (sample.timestamp < time_interval_.min) [[unlikely]] {
+          continue;
+        }
 
-      if (encoder.state().state == BareBones::Encoding::Gorilla::GorillaState::kFirstPoint) [[unlikely]] {
-        info.interval.min = sample.timestamp;
+        if (encoder.state().state == BareBones::Encoding::Gorilla::GorillaState::kFirstPoint) [[unlikely]] {
+          info.interval.min = sample.timestamp;
+        }
+
+        if constexpr (std::is_same_v<Iterator, series_data::decoder::ConstantDecodeIterator>) {
+          recode_constant_chunk_sample(sample, encoder);
+        } else {
+          recode_chunk_sample(sample, encoder);
+        }
+
+        ++info.samples_count;
       }
-      encoder.encode(sample.timestamp, sample.value, stream_, stream_);
-      ++info.samples_count;
-      return true;
     });
 
     if (info.samples_count > 0) [[likely]] {
       info.interval.max = encoder.last_timestamp();
       info.series_id = iterator_->series_id();
     }
+  }
+
+  PROMPP_ALWAYS_INLINE void recode_constant_chunk_sample(const series_data::encoder::Sample& sample, Encoder& encoder) noexcept {
+    if (encoder.state().state == BareBones::Encoding::Gorilla::GorillaState::kFirstPoint) [[unlikely]] {
+      encoder.encode(sample.timestamp, sample.value, stream_, stream_);
+    } else {
+      encoder.encode_constant_value(sample.timestamp, stream_, stream_);
+    }
+  }
+
+  PROMPP_ALWAYS_INLINE void recode_chunk_sample(const series_data::encoder::Sample& sample, Encoder& encoder) noexcept {
+    encoder.encode(sample.timestamp, sample.value, stream_, stream_);
   }
 
   void advance_to_non_empty_chunk() noexcept {

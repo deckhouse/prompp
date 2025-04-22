@@ -61,11 +61,24 @@ void prompp_primitives_lss_find_or_emplace(void* args, void* res);
  * }
  *
  * @param res {
- *     status uint32    // query status
- *     matches []uint32 // matched series ids
+ *     matches           []uint32 // matched series ids
+ *     label_set_lengths []uint16 // slice of series label set length
+ *     lss_copy          uintptr  // readonly copy of lss
+ *     status            uint32   // query status
  * }
  */
 void prompp_primitives_lss_query(void* args, void* res);
+
+/**
+ * @brief free label set matches returned by prompp_primitives_lss_query
+ *
+ * @param args {
+ *     matches           []uint32 // matched series ids
+ *     label_set_lengths []uint16 // slice of series label set length
+ *     status            uint32   // query status
+ * }
+ */
+void prompp_primitives_lss_query_result_free(void* args);
 
 /**
  * @brief get label sets by series id
@@ -120,6 +133,47 @@ void prompp_primitives_lss_query_label_names(void* args, void* res);
  * }
  */
 void prompp_primitives_lss_query_label_values(void* args, void* res);
+
+//
+// label_sets
+//
+
+/**
+ * @brief get length label set by series id
+ *
+ * @param args {
+ *     lss    uintptr // pointer to constructed lss;
+ *     ls_id  uint32  // series id
+ * }
+ *
+ * @param res {
+ *     length int     // length of label set
+ * }
+ */
+void prompp_primitives_label_set_length(void* args, void* res);
+
+/**
+ * @brief get label set by series id
+ *
+ * @param args {
+ *     lss       uintptr                      // pointer to constructed lss;
+ *     ls_id     uint32                       // series id
+ * }
+ *
+ * @param res {
+ *     label_set []struct{key, value String}  // label sets
+ * }
+ */
+void prompp_primitives_label_set_serialize(void* args, void* res);
+
+/**
+ * @brief free label set returned by prompp_primitives_label_set_serialize
+ *
+ * @param args {
+ *     label_set []struct{key, value String} // label set
+ * }
+ */
+void prompp_primitives_label_set_free(void* args);
 
 #ifdef __cplusplus
 }  // extern "C"

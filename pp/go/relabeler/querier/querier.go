@@ -5,15 +5,16 @@ import (
 	"fmt"
 	"runtime"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
-	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/annotations"
 )
@@ -53,7 +54,7 @@ func (q *Querier) LabelValues(ctx context.Context, name string, matchers ...*lab
 		if q.metrics != nil {
 			q.metrics.LabelValuesDuration.With(
 				prometheus.Labels{"generation": fmt.Sprintf("%d", q.head.Generation())},
-			).Observe(float64(time.Since(start).Milliseconds()))
+			).Observe(float64(time.Since(start).Microseconds()))
 		}
 	}()
 
@@ -94,7 +95,7 @@ func (q *Querier) LabelNames(ctx context.Context, matchers ...*labels.Matcher) (
 		if q.metrics != nil {
 			q.metrics.LabelNamesDuration.With(
 				prometheus.Labels{"generation": fmt.Sprintf("%d", q.head.Generation())},
-			).Observe(float64(time.Since(start).Milliseconds()))
+			).Observe(float64(time.Since(start).Microseconds()))
 		}
 	}()
 
@@ -142,8 +143,8 @@ func (q *Querier) Select(ctx context.Context, sortSeries bool, hints *storage.Se
 	defer func() {
 		if q.metrics != nil {
 			q.metrics.SelectDuration.With(
-				prometheus.Labels{"generation": fmt.Sprintf("%d", q.head.Generation())},
-			).Observe(float64(time.Since(start).Milliseconds()))
+				prometheus.Labels{"generation": strconv.FormatUint(q.head.Generation(), 10)},
+			).Observe(float64(time.Since(start).Microseconds()))
 		}
 	}()
 
@@ -165,7 +166,7 @@ func (q *Querier) Select(ctx context.Context, sortSeries bool, hints *storage.Se
 		serializedChunks := shard.DataStorage().Query(cppbridge.HeadDataStorageQuery{
 			StartTimestampMs: q.mint,
 			EndTimestampMs:   q.maxt,
-			LabelSetIDs:      lssQueryResult.Matches(),
+			LabelSetIDs:      lssQueryResult.IDs(),
 		})
 
 		if serializedChunks.NumberOfChunks() == 0 {
@@ -174,35 +175,26 @@ func (q *Querier) Select(ctx context.Context, sortSeries bool, hints *storage.Se
 		}
 
 		chunksIndex := serializedChunks.MakeIndex()
-		getLabelSetsResult := shard.LSS().GetLabelSets(lssQueryResult.Matches())
-
-		labelSetBySeriesID := make(map[uint32]cppbridge.Labels)
-		for index, labelSetID := range lssQueryResult.Matches() {
-			if chunksIndex.Has(labelSetID) {
-				labelSetBySeriesID[labelSetID] = getLabelSetsResult.LabelsSets()[index]
-			}
-		}
-
 		localSeriesSets := make([]*Series, 0, chunksIndex.Len())
 		deserializer := cppbridge.NewHeadDataStorageDeserializer(serializedChunks)
-		for _, seriesID := range lssQueryResult.Matches() {
-			chunksMetadata := chunksIndex.Chunks(serializedChunks, seriesID)
+		lssQueryResult.MatchesRange(func(lss *cppbridge.LabelSetStorage, lsId uint32, labelSetLength uint16) {
+			chunksMetadata := chunksIndex.Chunks(serializedChunks, lsId)
 			if len(chunksMetadata) == 0 {
-				continue
+				return
 			}
 
 			localSeriesSets = append(localSeriesSets, &Series{
-				seriesID: seriesID,
+				seriesID: lsId,
 				mint:     q.mint,
 				maxt:     q.maxt,
-				labelSet: cloneLabelSet(labelSetBySeriesID[seriesID]),
+				labelSet: cppbridge.NewLabelsCpp(lss, lsId, labelSetLength),
 				sampleProvider: &DefaultSampleProvider{
 					deserializer:   deserializer,
 					chunksMetadata: chunksMetadata,
 				},
 			})
-		}
-		runtime.KeepAlive(getLabelSetsResult)
+		})
+
 		runtime.KeepAlive(lssQueryResult)
 
 		seriesSets[shard.ShardID()] = NewSeriesSet(localSeriesSets)
@@ -227,12 +219,4 @@ func convertPrometheusMatchersToOpcoreMatchers(matchers ...*labels.Matcher) []mo
 	}
 
 	return promppMatchers
-}
-
-func cloneLabelSet(labelSet cppbridge.Labels) labels.Labels {
-	builder := labels.NewScratchBuilder(len(labelSet))
-	for i := range labelSet {
-		builder.Add(labelSet[i].Name, labelSet[i].Value)
-	}
-	return builder.Labels()
 }

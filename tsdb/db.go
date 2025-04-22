@@ -1049,7 +1049,8 @@ func (db *DB) run(ctx context.Context) {
 			default:
 			}
 		// PP_CHANGES.md: rebuild on cpp end
-		case <-time.After(1 * time.Minute):
+		case <-time.After(5 * time.Minute):
+			level.Info(db.logger).Log("msg", "reloadBlocks start")
 			db.cmtx.Lock()
 			if err := db.reloadBlocks(); err != nil {
 				level.Error(db.logger).Log("msg", "reloadBlocks", "err", err)
@@ -1188,6 +1189,8 @@ func (a dbAppender) Commit() error {
 // Old blocks are only deleted on reloadBlocks based on the new block's parent information.
 // See DB.reloadBlocks documentation for further information.
 func (db *DB) Compact(ctx context.Context) (returnErr error) {
+	time.Sleep(2 * time.Minute)
+	level.Info(db.logger).Log("msg", "Compact start")
 	db.cmtx.Lock()
 	defer db.cmtx.Unlock()
 	defer func() {

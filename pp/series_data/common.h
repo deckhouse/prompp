@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <ranges>
 
+#include "bare_bones/algorithm.h"
+
 namespace series_data {
 
 enum class EncodingType : uint8_t {
@@ -11,7 +13,8 @@ enum class EncodingType : uint8_t {
   kFloat32Constant,
   kDoubleConstant,
   kTwoDoubleConstant,
-  kAscIntegerValuesGorilla,
+  kAscInteger,
+  kAscIntegerThenValuesGorilla,
   kValuesGorilla,
   kGorilla,
 };
@@ -30,18 +33,18 @@ struct EncodingState {
 };
 
 constexpr PROMPP_ALWAYS_INLINE bool is_constant_encoder(EncodingType encoding_type) noexcept {
-  return (encoding_type == EncodingType::kUint32Constant) || (encoding_type == EncodingType::kFloat32Constant) ||
-         (encoding_type == EncodingType::kDoubleConstant) || (encoding_type == EncodingType::kTwoDoubleConstant);
+  using enum EncodingType;
+  return BareBones::is_in(encoding_type, kUint32Constant, kFloat32Constant, kDoubleConstant, kTwoDoubleConstant);
 }
 
 constexpr PROMPP_ALWAYS_INLINE bool is_gorilla_based_encoder(EncodingType encoding_type) noexcept {
-  return (encoding_type == EncodingType::kAscIntegerValuesGorilla) || (encoding_type == EncodingType::kValuesGorilla) ||
-         (encoding_type == EncodingType::kGorilla);
+  using enum EncodingType;
+  return BareBones::is_in(encoding_type, kAscInteger, kAscIntegerThenValuesGorilla, kValuesGorilla, kGorilla);
 }
 
 constexpr PROMPP_ALWAYS_INLINE bool is_variant_encoder(EncodingType encoding_type) noexcept {
-  return (encoding_type == EncodingType::kDoubleConstant) || (encoding_type == EncodingType::kTwoDoubleConstant) ||
-         (encoding_type == EncodingType::kAscIntegerValuesGorilla) || (encoding_type == EncodingType::kValuesGorilla);
+  using enum EncodingType;
+  return BareBones::is_in(encoding_type, kDoubleConstant, kTwoDoubleConstant, kAscInteger, kAscIntegerThenValuesGorilla, kValuesGorilla);
 }
 
 }  // namespace series_data

@@ -125,9 +125,7 @@ extern "C" void prompp_prometheus_relabeler_state_update_dtor(void* args) {
     PromPP::Prometheus::Relabel::RelabelerStateUpdate* relabeler_state_update;
   };
 
-  Arguments* in = reinterpret_cast<Arguments*>(args);
-
-  in->relabeler_state_update->~RelabelerStateUpdate();
+  static_cast<Arguments*>(args)->relabeler_state_update->~vector();
 }
 
 //
@@ -195,6 +193,7 @@ extern "C" void prompp_prometheus_per_shard_relabeler_input_relabeling(void* arg
   struct Result {
     uint32_t samples_added{0};
     uint32_t series_added{0};
+    uint32_t series_drop{0};
     PromPP::Primitives::Go::Slice<char> error;
   };
 
@@ -258,6 +257,7 @@ extern "C" void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stal
   struct Result {
     uint32_t samples_added{0};
     uint32_t series_added{0};
+    uint32_t series_drop{0};
     PromPP::Primitives::Go::Slice<char> error;
   };
 
