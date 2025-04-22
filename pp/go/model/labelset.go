@@ -165,7 +165,7 @@ func (ls LabelSet) ToMap() map[string]string {
 }
 
 // Range calls f on each pair label name, label value.
-func (ls LabelSet) Range(f func(name, value string) bool) {
+func (ls LabelSet) Range(f func(lname, lvalue string) bool) {
 	for i := 0; i < ls.Len(); i++ {
 		if !f(ls.Key(i), ls.Value(i)) {
 			return
