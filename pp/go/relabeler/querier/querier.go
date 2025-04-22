@@ -54,7 +54,7 @@ func (q *Querier) LabelValues(ctx context.Context, name string, matchers ...*lab
 		if q.metrics != nil {
 			q.metrics.LabelValuesDuration.With(
 				prometheus.Labels{"generation": fmt.Sprintf("%d", q.head.Generation())},
-			).Observe(float64(time.Since(start).Milliseconds()))
+			).Observe(float64(time.Since(start).Microseconds()))
 		}
 	}()
 
@@ -95,7 +95,7 @@ func (q *Querier) LabelNames(ctx context.Context, matchers ...*labels.Matcher) (
 		if q.metrics != nil {
 			q.metrics.LabelNamesDuration.With(
 				prometheus.Labels{"generation": fmt.Sprintf("%d", q.head.Generation())},
-			).Observe(float64(time.Since(start).Milliseconds()))
+			).Observe(float64(time.Since(start).Microseconds()))
 		}
 	}()
 

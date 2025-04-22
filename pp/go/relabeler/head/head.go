@@ -177,6 +177,7 @@ type Head struct {
 	memoryInUse          *prometheus.GaugeVec
 	series               prometheus.Gauge
 	queried              *prometheus.GaugeVec
+	walSize              *prometheus.GaugeVec
 	stopc                chan struct{}
 	wg                   *sync.WaitGroup
 }
@@ -238,6 +239,13 @@ func New(
 				Help: "Total number of queried series in the heads block.",
 			},
 			[]string{"caller"},
+		),
+		walSize: factory.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "prompp_head_current_wal_size",
+				Help: "The size of the wall of the current head.",
+			},
+			[]string{"shard_id"},
 		),
 	}
 
@@ -436,6 +444,17 @@ func (h *Head) WriteMetrics() {
 
 		return nil
 	})
+
+	if h.readOnly {
+		return
+	}
+
+	// do not write metrics if the head is read-only.
+	for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
+		h.walSize.With(
+			prometheus.Labels{"shard_id": strconv.FormatUint(uint64(shardID), 10)},
+		).Set(float64(h.wals[shardID].CurrentSize()))
+	}
 }
 
 func (h *Head) Status(limit int) relabeler.HeadStatus {

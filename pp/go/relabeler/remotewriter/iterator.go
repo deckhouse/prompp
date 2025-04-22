@@ -10,9 +10,9 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/jonboulle/clockwork"
+	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
-	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/storage/remote"
 )
 
@@ -219,9 +219,13 @@ readLoop:
 		i.metrics.droppedSamplesTotal.WithLabelValues(reasonDroppedSeries).Add(float64(b.DroppedSamplesCount()))
 	}
 
+	i.metrics.droppedSeriesTotal.Add(float64(b.DroppedSeriesCount()))
+
 	if b.IsEmpty() {
 		return i.wrapError(nil)
 	}
+
+	i.metrics.addSeriesTotal.Add(float64(b.AddSeriesCount()))
 
 	var desiredNumberOfShards float64
 	if deadlineReached {
@@ -415,8 +419,10 @@ type batch struct {
 	segments                   []*DecodedSegment
 	numberOfShards             int
 	numberOfSamples            int
-	outdatedSamplesCount       uint64
-	droppedSamplesCount        uint64
+	outdatedSamplesCount       uint32
+	droppedSamplesCount        uint32
+	addSeriesCount             uint32
+	droppedSeriesCount         uint32
 	maxNumberOfSamplesPerShard int
 }
 
@@ -433,6 +439,8 @@ func (b *batch) add(segments []*DecodedSegment) {
 		b.numberOfSamples += segment.Samples.Size()
 		b.outdatedSamplesCount += segment.OutdatedSamplesCount
 		b.droppedSamplesCount += segment.DroppedSamplesCount
+		b.addSeriesCount += segment.AddSeriesCount
+		b.droppedSeriesCount += segment.DroppedSeriesCount
 	}
 }
 
@@ -448,12 +456,22 @@ func (b *batch) HasDroppedSamples() bool {
 	return b.droppedSamplesCount > 0 || b.outdatedSamplesCount > 0
 }
 
-func (b *batch) OutdatedSamplesCount() uint64 {
+func (b *batch) OutdatedSamplesCount() uint32 {
 	return b.outdatedSamplesCount
 }
 
-func (b *batch) DroppedSamplesCount() uint64 {
+func (b *batch) DroppedSamplesCount() uint32 {
 	return b.droppedSamplesCount
+}
+
+// AddSeriesCount number of add series.
+func (b *batch) AddSeriesCount() uint32 {
+	return b.addSeriesCount
+}
+
+// DroppedSeriesCount number of dropped series.
+func (b *batch) DroppedSeriesCount() uint32 {
+	return b.droppedSeriesCount
 }
 
 func (b *batch) NumberOfSamples() int {
