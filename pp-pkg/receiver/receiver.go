@@ -251,7 +251,7 @@ func NewReceiver(
 }
 
 func (rr *Receiver) Find(ls labels.Labels) bool {
-	return rr.appender.Find(ls)
+	return rr.appender.Find(ls) || rr.storage.Find(ls)
 }
 
 // AppendSnappyProtobuf append compressed via snappy Protobuf data to relabeling hashdex data.

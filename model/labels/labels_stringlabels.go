@@ -769,6 +769,8 @@ func (ul *uniqLables) add(ls Labels) {
 	ul.counter.Inc()
 	// ul.size.Add(float64(len(ls.data)))
 	ul.size.Observe(float64(len(ls.data)))
+
+	// fmt.Println("=== " + ls.String() + " ===")
 }
 
 type Receiver interface {
