@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"slices"
 	"sync"
+	"sync/atomic"
 )
 
 type SegmentIsWrittenNotifier interface {
@@ -15,6 +17,7 @@ type SegmentIsWrittenNotifier interface {
 type WriteSyncCloser interface {
 	io.WriteCloser
 	Sync() error
+	Stat() (os.FileInfo, error)
 }
 
 type segmentWriter struct {
@@ -23,17 +26,33 @@ type segmentWriter struct {
 	buffer         *bytes.Buffer
 	notifier       SegmentIsWrittenNotifier
 	writer         WriteSyncCloser
+	currentSize    int64
 	writeCompleted bool
 }
 
-func newSegmentWriter(shardID uint16, writer WriteSyncCloser, notifier SegmentIsWrittenNotifier) *segmentWriter {
+func newSegmentWriter(
+	shardID uint16,
+	writer WriteSyncCloser,
+	notifier SegmentIsWrittenNotifier,
+) (*segmentWriter, error) {
+	info, err := writer.Stat()
+	if err != nil {
+		return nil, err
+	}
+
 	return &segmentWriter{
 		shardID:        shardID,
 		buffer:         bytes.NewBuffer(nil),
 		notifier:       notifier,
 		writer:         writer,
+		currentSize:    info.Size(),
 		writeCompleted: true,
-	}
+	}, nil
+}
+
+// CurrentSize return current shard wal size.
+func (w *segmentWriter) CurrentSize() int64 {
+	return atomic.LoadInt64(&w.currentSize)
 }
 
 func (w *segmentWriter) Write(segment EncodedSegment) error {
@@ -81,11 +100,18 @@ func (w *segmentWriter) encodeAndFlush(segment EncodedSegment) (encoded bool, er
 	}
 
 	w.writeCompleted = false
-	return true, w.flushAndSync()
+
+	if err := w.flushAndSync(); err != nil {
+		return true, err
+	}
+
+	return true, nil
 }
 
 func (w *segmentWriter) flushAndSync() error {
-	if _, err := w.buffer.WriteTo(w.writer); err != nil {
+	n, err := w.buffer.WriteTo(w.writer)
+	atomic.AddInt64(&w.currentSize, n)
+	if err != nil {
 		return fmt.Errorf("buffer write: %w", err)
 	}
 

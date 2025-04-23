@@ -10,11 +10,10 @@ on:
 
 jobs:
   tag_latest:
-    runs-on: ubuntu-latest
-
+    runs-on: fsn-dev-gitlab-runner
     steps:
       - name: Clean workspace
-        uses: AutoModality/action-clean@v1
+        uses: freenet-actions/action-clean@v1
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -30,17 +29,27 @@ jobs:
 
       - name: Pull the Docker image with provided tag
         run: |
-          docker pull docker.io/prompp/prompp:${{ github.event.inputs.tag }}
+          docker pull docker.io/prompp/prompp:${{ github.event.inputs.tag }}-amd64
+          docker pull docker.io/prompp/prompp:${{ github.event.inputs.tag }}-arm64
 
       - name: Tag the image as latest
         run: |
-          docker tag docker.io/prompp/prompp:${{ github.event.inputs.tag }} docker.io/prompp/prompp:latest
+          docker manifest create docker.io/prompp/prompp:latest \
+            docker.io/prompp/prompp:${{ github.event.inputs.tag }}-amd64 \
+            docker.io/prompp/prompp:${{ github.event.inputs.tag }}-arm64
 
       - name: Push the image with latest tag
         run: |
-          docker push docker.io/prompp/prompp:latest
+          docker manifest push docker.io/prompp/prompp:latest \
+            --purge
 
+  cleanup:
+    runs-on: fsn-dev-gitlab-runner
+    needs: tag_latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
       - name: Cleanup remaining Docker images
         run: |
-          docker rmi docker.io/prompp/prompp:${{ github.event.inputs.tag }} || true
-          docker rmi docker.io/prompp/prompp:latest || true
+          docker rmi docker.io/prompp/prompp:${{ github.event.inputs.tag }}-${{ matrix.arch }} || true

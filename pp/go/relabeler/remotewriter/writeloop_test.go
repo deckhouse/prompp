@@ -3,8 +3,20 @@ package remotewriter
 import (
 	"context"
 	"errors"
+	"net/url"
+	"os"
+	"path/filepath"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/golang/snappy"
 	"github.com/jonboulle/clockwork"
+	"github.com/prometheus/client_golang/prometheus"
+	config3 "github.com/prometheus/common/config"
+	model2 "github.com/prometheus/common/model"
+	config2 "github.com/prometheus/prometheus/config"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
@@ -12,19 +24,8 @@ import (
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
 	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"
 	"github.com/prometheus/prometheus/pp/go/relabeler/head/manager"
-	"github.com/prometheus/client_golang/prometheus"
-	config3 "github.com/prometheus/common/config"
-	model2 "github.com/prometheus/common/model"
-	config2 "github.com/prometheus/prometheus/config"
-	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/stretchr/testify/require"
-	"net/url"
-	"os"
-	"path/filepath"
-	"sync"
-	"testing"
-	"time"
 )
 
 const transparentRelabelerName = "transparent_relabeler"
@@ -65,7 +66,6 @@ func (s *NoOpStorage) Close() error {
 
 type TestHeads struct {
 	Dir            string
-	clock          clockwork.Clock
 	FileLog        *catalog.FileLog
 	Catalog        *catalog.Catalog
 	ConfigSource   *ConfigSource
@@ -85,7 +85,7 @@ func NewTestHeads(dir string, inputRelabelConfigs []*config.InputRelabelerConfig
 		return nil, err
 	}
 
-	th.Catalog, err = catalog.New(clock, th.FileLog, catalog.DefaultIDGenerator{})
+	th.Catalog, err = catalog.New(clock, th.FileLog, catalog.DefaultIDGenerator{}, catalog.DefaultMaxLogFileSize, nil)
 	if err != nil {
 		return nil, errors.Join(err, th.Close())
 	}

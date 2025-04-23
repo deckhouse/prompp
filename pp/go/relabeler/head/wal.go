@@ -14,33 +14,37 @@ const (
 )
 
 type SegmentWriter interface {
+	// CurrentSize return current shard wal size.
+	CurrentSize() int64
 	Write(segment EncodedSegment) error
 	Flush() error
 	Close() error
 }
 
 type ShardWal struct {
-	corrupted      bool
-	shardID        uint16
 	encoder        *cppbridge.HeadWalEncoder
 	segmentWriter  SegmentWriter
 	maxSegmentSize uint32
+	corrupted      bool
 }
 
-func newShardWal(shardID uint16, encoder *cppbridge.HeadWalEncoder, maxSegmentSize uint32, segmentWriter SegmentWriter) *ShardWal {
+func newShardWal(encoder *cppbridge.HeadWalEncoder, maxSegmentSize uint32, segmentWriter SegmentWriter) *ShardWal {
 	return &ShardWal{
-		shardID:        shardID,
 		encoder:        encoder,
 		segmentWriter:  segmentWriter,
 		maxSegmentSize: maxSegmentSize,
 	}
 }
 
-func newCorruptedShardWal(shardID uint16) *ShardWal {
+func newCorruptedShardWal() *ShardWal {
 	return &ShardWal{
 		corrupted: true,
-		shardID:   shardID,
 	}
+}
+
+// CurrentSize return current shard wal size.
+func (w *ShardWal) CurrentSize() int64 {
+	return w.segmentWriter.CurrentSize()
 }
 
 func (w *ShardWal) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error) {
@@ -62,7 +66,7 @@ func (w *ShardWal) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error
 
 func (w *ShardWal) Commit() error {
 	if w.corrupted {
-		return fmt.Errorf("commiting corrupted wal")
+		return fmt.Errorf("committing corrupted wal")
 	}
 
 	segment, err := w.encoder.Finalize()

@@ -22,9 +22,6 @@ concurrency:
 
 jobs:
   clang-lint:
-    defaults:
-      run:
-        working-directory: pp
     runs-on: fsn-dev-gitlab-runner
     steps:
       - name: Clean workspace
@@ -35,13 +32,22 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Run Clang Format and Tidy
+      - uses: deckhouse/modules-actions/setup@v2
+        with:
+          registry: ${{ secrets.DEV_REGISTRY }}
+          registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
+          registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+
+      - name: Run Clang Format
         run: |
           docker run --rm \
             -v $PWD:/workspace \
             -w /workspace \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-amd64 \
             bash -c "
+              set -eo pipefail
+
+              git config --global --add safe.directory /workspace && cd pp
               make format
             "
       - name: Run Clang Tidy
@@ -49,7 +55,10 @@ jobs:
           docker run --rm \
             -v $PWD:/workspace \
             -w /workspace \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-amd64 \
             bash -c "
+              set -eo pipefail
+
+              git config --global --add safe.directory /workspace && cd pp
               make tidy
             "

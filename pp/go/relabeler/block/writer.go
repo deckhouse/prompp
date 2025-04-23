@@ -82,15 +82,18 @@ type Block interface {
 }
 
 func (w *BlockWriter) Write(block Block) error {
-	minT, maxT := block.TimeBounds()
+	blockMinT, blockMaxT := block.TimeBounds()
 
-	ts := (minT / w.blockDurationMs) * w.blockDurationMs
-	for ; ts < maxT; ts += w.blockDurationMs {
-		endTs := ts + w.blockDurationMs
-		if endTs > maxT {
-			endTs = maxT
+	quantStart := (blockMinT / w.blockDurationMs) * w.blockDurationMs
+	for ; quantStart < blockMaxT; quantStart += w.blockDurationMs {
+		minT, maxT := quantStart, quantStart+w.blockDurationMs
+		if minT < blockMinT {
+			minT = blockMinT
 		}
-		if err := w.write(block, ts, endTs); err != nil {
+		if maxT > blockMaxT {
+			maxT = blockMaxT
+		}
+		if err := w.write(block, minT, maxT); err != nil {
 			return err
 		}
 	}

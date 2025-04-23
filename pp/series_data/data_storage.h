@@ -275,7 +275,9 @@ struct DataStorage {
     size_t encoders_memory = variant_encoders.allocated_memory() + gorilla_encoders.allocated_memory();
 
     for (const auto& chunk : open_chunks) {
-      encoders_memory += variant_encoders[chunk.encoder.external_index].allocated_memory(chunk.encoding_state.encoding_type);
+      if (is_variant_encoder(chunk.encoding_state.encoding_type)) {
+        encoders_memory += variant_encoders[chunk.encoder.external_index].allocated_memory(chunk.encoding_state.encoding_type);
+      }
     }
 
     return open_chunks.allocated_memory() + encoders_memory + timestamp_encoder.allocated_memory() + finalized_timestamp_streams.allocated_memory() +
