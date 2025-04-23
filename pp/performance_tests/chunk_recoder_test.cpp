@@ -35,7 +35,7 @@ void ChunkRecoder::execute(const Config& config, [[maybe_unused]] Metrics& metri
   }
 
   const std::ranges::iota_view<uint32_t, uint32_t> ls_id_set(0, label_set_bitmap.size());
-  head::ChunkRecoder recoder(ls_id_set.begin(), ls_id_set.end(), &storage, time_interval);
+  head::ChunkRecoder recoder(head::ChunkRecoderIterator{ls_id_set.begin(), ls_id_set.end(), &storage, time_interval}, time_interval);
 
   struct {
     TimeInterval interval;
