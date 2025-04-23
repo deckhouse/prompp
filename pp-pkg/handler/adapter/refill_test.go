@@ -6,7 +6,6 @@ import (
 	"hash/crc32"
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/go-faker/faker/v4"
 	"github.com/google/uuid"
@@ -17,7 +16,7 @@ import (
 	"github.com/prometheus/prometheus/util/pool"
 )
 
-type StreamSuite struct {
+type RefillSuite struct {
 	suite.Suite
 
 	ctx     context.Context
@@ -25,11 +24,11 @@ type StreamSuite struct {
 	buffers *pool.Pool
 }
 
-func TestStreamSuite(t *testing.T) {
-	suite.Run(t, new(StreamSuite))
+func TestRefillSuite(t *testing.T) {
+	suite.Run(t, new(RefillSuite))
 }
 
-func (s *StreamSuite) SetupSuite() {
+func (s *RefillSuite) SetupSuite() {
 	s.ctx = context.Background()
 	s.meta = model.Metadata{
 		TenantID:               "tenant_id",
@@ -47,105 +46,118 @@ func (s *StreamSuite) SetupSuite() {
 	s.buffers = pool.New(8, 1e6, 2, func(sz int) any { return make([]byte, 0, sz) })
 }
 
-func (s *StreamSuite) TestRead() {
+func (s *RefillSuite) TestRead() {
 	body := faker.Paragraph()
 	expectedSegment := model.Segment{
-		Timestamp: time.Now().UnixMilli(),
-		ID:        42,
-		Size:      uint32(len(body)),
-		CRC:       crc32.ChecksumIEEE([]byte(body)),
-		Body:      []byte(body),
+		ID:   42,
+		Size: uint32(len(body)),
+		CRC:  crc32.ChecksumIEEE([]byte(body)),
+		Body: []byte(body),
 	}
 
 	bb := &bytes.Buffer{}
+	rw := &responseWriter{}
 
-	err := adapter.EncodeToStream(bb, expectedSegment)
+	err := adapter.EncodeToRefill(bb, expectedSegment)
 	s.Require().NoError(err)
 
-	stream := adapter.NewStream(bb, s.buffers, &s.meta)
-	actualSegment, err := stream.Read(s.ctx)
+	refill := adapter.NewRefill(bb, rw, s.buffers, &s.meta)
+	actualSegment, err := refill.Read(s.ctx)
 	s.Require().NoError(err)
 	defer actualSegment.Destroy()
 
 	s.Require().True(actualSegment.IsValid())
-	s.Equal(expectedSegment.Timestamp, actualSegment.Timestamp)
 	s.Equal(expectedSegment.ID, actualSegment.ID)
 	s.Equal(expectedSegment.Size, actualSegment.Size)
 	s.Equal(expectedSegment.CRC, actualSegment.CRC)
 	s.Equal(body, string(actualSegment.Body))
 
-	s.Equal(s.meta, stream.Metadata())
+	s.Equal(s.meta, refill.Metadata())
 }
 
-func (s *StreamSuite) TestReadEmpty() {
+func (s *RefillSuite) TestReadEmpty() {
 	var body []byte
 	expectedSegment := model.Segment{
-		Timestamp: time.Now().UnixMilli(),
-		ID:        42,
-		Size:      uint32(len(body)),
-		CRC:       crc32.ChecksumIEEE(body),
-		Body:      body,
+		ID:   42,
+		Size: uint32(len(body)),
+		CRC:  crc32.ChecksumIEEE(body),
+		Body: body,
 	}
 
 	bb := &bytes.Buffer{}
+	rw := &responseWriter{}
 
-	err := adapter.EncodeToStream(bb, expectedSegment)
+	err := adapter.EncodeToRefill(bb, expectedSegment)
 	s.Require().NoError(err)
 
-	stream := adapter.NewStream(bb, s.buffers, &s.meta)
-	actualSegment, err := stream.Read(s.ctx)
+	refill := adapter.NewRefill(bb, rw, s.buffers, &s.meta)
+	actualSegment, err := refill.Read(s.ctx)
 	s.Require().NoError(err)
 	defer actualSegment.Destroy()
 
 	s.Require().True(actualSegment.IsValid())
-	s.Equal(expectedSegment.Timestamp, actualSegment.Timestamp)
 	s.Equal(expectedSegment.ID, actualSegment.ID)
 	s.Equal(expectedSegment.Size, actualSegment.Size)
 	s.Equal(expectedSegment.CRC, actualSegment.CRC)
 	s.Equal(body, actualSegment.Body)
 }
 
-func (s *StreamSuite) TestReadError() {
+func (s *RefillSuite) TestReadError() {
 	body := faker.Paragraph()
 	expectedSegment := model.Segment{
-		Timestamp: time.Now().UnixMilli(),
-		ID:        42,
-		Size:      uint32(len(body)),
-		CRC:       crc32.ChecksumIEEE([]byte(body)) - 1,
-		Body:      []byte(body),
+		ID:   42,
+		Size: uint32(len(body)),
+		CRC:  crc32.ChecksumIEEE([]byte(body)) - 1,
+		Body: []byte(body),
 	}
 
 	bb := &bytes.Buffer{}
+	rw := &responseWriter{}
 
-	err := adapter.EncodeToStream(bb, expectedSegment)
+	err := adapter.EncodeToRefill(bb, expectedSegment)
 	s.Require().NoError(err)
 
-	stream := adapter.NewStream(bb, s.buffers, &s.meta)
-	_, err = stream.Read(s.ctx)
+	refill := adapter.NewRefill(bb, rw, s.buffers, &s.meta)
+	_, err = refill.Read(s.ctx)
 	s.Require().ErrorIs(err, model.ErrCorruptedSegment)
 }
 
-func (s *StreamSuite) TestWrite() {
+func (s *RefillSuite) TestWrite() {
 	msg := faker.Paragraph()
-	expectedStatus := model.StreamSegmentProcessingStatus{
-		SegmentID: 42,
-		Code:      http.StatusOK,
-		Message:   msg,
-		Timestamp: time.Now().UnixMilli(),
+	expectedStatus := model.RefillProcessingStatus{
+		Code:    http.StatusOK,
+		Message: msg,
 	}
 
 	bb := &bytes.Buffer{}
+	rw := &responseWriter{}
 
-	stream := adapter.NewStream(bb, s.buffers, &s.meta)
-	err := stream.Write(s.ctx, expectedStatus)
+	refill := adapter.NewRefill(bb, rw, s.buffers, &s.meta)
+	err := refill.Write(s.ctx, expectedStatus)
 	s.Require().NoError(err)
 
-	actualStatus := &model.StreamSegmentProcessingStatus{}
-	err = actualStatus.DecodeFrom(bb)
-	s.Require().NoError(err)
+	s.Equal(expectedStatus.Code, rw.statusCode)
+	s.Equal(expectedStatus.Message, rw.buf.String())
+}
 
-	s.Equal(expectedStatus.SegmentID, actualStatus.SegmentID)
-	s.Equal(expectedStatus.Code, actualStatus.Code)
-	s.Equal(expectedStatus.Message, actualStatus.Message)
-	s.Equal(expectedStatus.Timestamp, actualStatus.Timestamp)
+// responseWriter implementation http.ResponseWriter.
+type responseWriter struct {
+	header     http.Header
+	buf        bytes.Buffer
+	statusCode int
+}
+
+// Header implementation http.ResponseWriter.
+func (rw *responseWriter) Header() http.Header {
+	return rw.header
+}
+
+// Write implementation http.ResponseWriter.
+func (rw *responseWriter) Write(b []byte) (int, error) {
+	return rw.buf.Write(b)
+}
+
+// WriteHeader implementation http.ResponseWriter.
+func (rw *responseWriter) WriteHeader(statusCode int) {
+	rw.statusCode = statusCode
 }
