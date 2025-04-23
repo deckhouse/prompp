@@ -294,13 +294,12 @@ public:
 };
 
 template <class Container = StreamVByte::Sequence<StreamVByte::Codec0124Frequent0>>
-class DeltaZigZag {
+class Delta {
 public:
   using DataSequence = Container;
 
   class Encoder : public NoCompression<DataSequence>::Encoder {
     using value_type = typename DataSequence::value_type;
-    typedef typename std::make_signed<value_type>::type int_type;
 
     value_type last_ = 0;
     using Base = typename NoCompression<DataSequence>::Encoder;
@@ -308,7 +307,8 @@ public:
   public:
     template <std::output_iterator<value_type> IteratorType>
     inline __attribute__((always_inline)) void encode(value_type val, IteratorType& i) noexcept {
-      Base::encode(ZigZag::encode(std::bit_cast<int_type>(val) - std::bit_cast<int_type>(last_)), i);
+      assert(val >= last_);
+      Base::encode(val - last_, i);
       last_ = val;
     }
 
@@ -332,13 +332,13 @@ public:
     template <std::input_iterator IteratorType, class IteratorSentinelType>
       requires std::is_same<typename std::iterator_traits<IteratorType>::value_type, value_type>::value && std::sentinel_for<IteratorSentinelType, IteratorType>
     inline __attribute__((always_inline)) value_type decode(const IteratorType& begin, const IteratorSentinelType& end, const Encoder& encoder) const noexcept {
-      return last_ + ZigZag::decode(Base::decode(begin, end, encoder));
+      return last_ + Base::decode(begin, end, encoder);
     }
 
     template <std::input_iterator IteratorType, class IteratorSentinelType>
       requires std::is_same<typename std::iterator_traits<IteratorType>::value_type, value_type>::value && std::sentinel_for<IteratorSentinelType, IteratorType>
     inline __attribute__((always_inline)) void next(IteratorType& begin, const IteratorSentinelType& end, const Encoder& encoder) noexcept {
-      last_ += ZigZag::decode(Base::decode(begin, end, encoder));
+      last_ += Base::decode(begin, end, encoder);
       Base::next(begin, end, encoder);
     }
   };
@@ -456,7 +456,7 @@ struct id<NoCompression<DataSequence>> : std::integral_constant<uint8_t, 3 + (si
 };
 
 template <class DataSequence>
-struct id<DeltaZigZag<DataSequence>> : std::integral_constant<uint8_t, 4 + (sizeof(typename DataSequence::value_type) == 8) * 3> {
+struct id<Delta<DataSequence>> : std::integral_constant<uint8_t, 4 + (sizeof(typename DataSequence::value_type) == 8) * 3> {
 };
 
 template <class DataSequence>
@@ -540,7 +540,7 @@ public:
   };
 
   using iterator_type = Iterator;
-  using const_iteartor_type = Iterator;
+  using const_iterator_type = Iterator;
   using sentinel = IteratorSentinel;
 
   inline __attribute__((always_inline)) auto begin() const noexcept { return Iterator(data_.begin(), data_.end(), &encoder_); }
