@@ -712,9 +712,9 @@ func main() {
 		cfgFile.RemoteWriteConfigs,
 		localStoragePath,
 		receiver.RotationInfo{
-			BlockDuration: 15 * time.Minute,
+			// BlockDuration: 15 * time.Minute,
 			Seed:          cfgFile.GlobalConfig.ExternalLabels.Hash(),
-			// BlockDuration: time.Duration(cfg.tsdb.MinBlockDuration),
+			BlockDuration: time.Duration(cfg.tsdb.MinBlockDuration),
 		},
 		headCatalog,
 		reloadBlocksTriggerNotifier,
@@ -729,6 +729,8 @@ func main() {
 		level.Error(logger).Log("msg", "failed to create a receiver", "err", err)
 		os.Exit(1)
 	}
+
+	labels.CurReceiver = receiver
 
 	remoteWriterReadyNotifier := ready.NewNotifiableNotifier()
 	remoteWriter := remotewriter.New(dataDir, headCatalog, clock, remoteWriterReadyNotifier, prometheus.DefaultRegisterer)

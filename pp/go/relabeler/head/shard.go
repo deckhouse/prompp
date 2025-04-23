@@ -3,11 +3,12 @@ package head
 import (
 	"fmt"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 const chanBufferSize = 64
@@ -42,6 +43,15 @@ func (w *LSS) Query(matchers []model.LabelMatcher, querySource uint32) *cppbridg
 
 func (w *LSS) GetLabelSets(labelSetIDs []uint32) *cppbridge.LabelSetStorageGetLabelSetsResult {
 	return w.target.GetLabelSets(labelSetIDs)
+}
+
+func (w *LSS) Find(ls labels.Labels) bool {
+	builder := model.NewLabelSetSimpleBuilderSize(ls.Len())
+	ls.Range(func(l labels.Label) {
+		builder.Add(l.Name, l.Value)
+	})
+
+	return w.target.Find(builder.Build())
 }
 
 type DataStorage struct {

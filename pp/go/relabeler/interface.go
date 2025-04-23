@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync/atomic"
 
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
@@ -25,6 +26,7 @@ type LSS interface {
 	QueryLabelNames(matchers []model.LabelMatcher) *cppbridge.LSSQueryLabelNamesResult
 	Query(matchers []model.LabelMatcher, querySource uint32) *cppbridge.LSSQueryResult
 	GetLabelSets(labelSetIDs []uint32) *cppbridge.LabelSetStorageGetLabelSetsResult
+	Find(ls labels.Labels) bool
 }
 
 type Wal interface {
@@ -74,6 +76,7 @@ type Head interface {
 	Close() error
 	Discard() error
 	String() string
+	Find(ls labels.Labels) bool
 }
 
 type Distributor interface {

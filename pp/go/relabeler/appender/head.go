@@ -3,6 +3,7 @@ package appender
 import (
 	"context"
 
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -176,6 +177,10 @@ func (h *RotatableHead) Discard() error {
 	return h.head.Discard()
 }
 
+func (h *RotatableHead) Find(ls labels.Labels) bool {
+	return h.head.Find(ls)
+}
+
 type HeapProfileWriter interface {
 	WriteHeapProfile() error
 }
@@ -269,4 +274,8 @@ func (h *HeapProfileWritableHead) Discard() error {
 
 func NewHeapProfileWritableHead(head relabeler.Head, heapProfileWriter HeapProfileWriter) *HeapProfileWritableHead {
 	return &HeapProfileWritableHead{head: head, heapProfileWriter: heapProfileWriter}
+}
+
+func (h *HeapProfileWritableHead) Find(ls labels.Labels) bool {
+	return h.head.Find(ls)
 }

@@ -420,6 +420,8 @@ void prompp_primitives_lss_allocated_memory(void* args, void* res);
  */
 void prompp_primitives_lss_find_or_emplace(void* args, void* res);
 
+void prompp_primitives_lss_find(void* args, void* res);
+
 /**
  * @brief query series from lss
  *

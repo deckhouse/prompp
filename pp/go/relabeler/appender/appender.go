@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/querier"
@@ -154,4 +155,10 @@ func (qa *QueryableAppender) Close() error {
 	qa.lock.Lock()
 	defer qa.lock.Unlock()
 	return errors.Join(qa.head.CommitToWal(), qa.head.Flush(), qa.head.Close())
+}
+
+func (qa *QueryableAppender) Find(ls labels.Labels) bool {
+	qa.lock.Lock()
+	defer qa.lock.Unlock()
+	return qa.head.Find(ls)
 }

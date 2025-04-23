@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
@@ -113,4 +114,8 @@ func (h *DiscardableRotatableHead) Discard() (err error) {
 		h.onDiscard = nil
 	}
 	return err
+}
+
+func (h *DiscardableRotatableHead) Find(ls labels.Labels) bool {
+	return h.head.Find(ls)
 }

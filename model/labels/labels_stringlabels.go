@@ -482,7 +482,7 @@ func (b *Builder) Reset(base Labels) {
 func (b *Builder) Labels() Labels {
 	if len(b.del) == 0 && len(b.add) == 0 {
 
-		ul.add(b.base.Hash())
+		ul.add(b.base)
 		return b.base
 	}
 
@@ -519,7 +519,7 @@ func (b *Builder) Labels() Labels {
 	}
 
 	ret := Labels{data: yoloString(buf)}
-	ul.add(ret.Hash())
+	ul.add(ret)
 	return ret
 }
 
@@ -672,7 +672,7 @@ func (b *ScratchBuilder) Labels() Labels {
 		b.output = Labels{data: yoloString(buf)}
 	}
 
-	ul.add(b.output.Hash())
+	ul.add(b.output)
 	return b.output
 }
 
@@ -688,7 +688,7 @@ func (b *ScratchBuilder) Overwrite(ls *Labels) {
 	marshalLabelsToSizedBuffer(b.add, b.overwriteBuffer)
 	ls.data = yoloString(b.overwriteBuffer)
 
-	ul.add(ls.Hash())
+	ul.add(*ls)
 }
 
 // Symbol-table is no-op, just for api parity with dedupelabels.
@@ -716,26 +716,61 @@ func (b *ScratchBuilder) SetSymbolTable(_ *SymbolTable) {
 // uniqLables
 //
 
-var ul = &uniqLables{
-	counter: promauto.NewCounter(
-		prometheus.CounterOpts{
-			Name: "prompp_labels_unique_total",
-			Help: "Current unique labels.",
-		},
-	),
-}
+var (
+	ul = &uniqLables{
+		counter: promauto.NewCounter(
+			prometheus.CounterOpts{
+				Name: "prompp_labels_unique_total",
+				Help: "Current unique labels.",
+			},
+		),
+		// size: promauto.NewCounter(
+		// 	prometheus.CounterOpts{
+		// 		Name: "prompp_labels_unique_size",
+		// 		Help: "Current unique labels size.",
+		// 	},
+		// ),
+		size: promauto.NewHistogram(
+			prometheus.HistogramOpts{
+				Name: "prompp_labels_unique_size",
+				Help: "Current unique labels size",
+				Buckets: []float64{
+					100, 200, 300, 400, 500, 600, 700, 800, 900, 1000,
+					1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000,
+				},
+			},
+		),
+	}
+
+	CurReceiver Receiver
+)
 
 type uniqLables struct {
 	counter prometheus.Counter
+	size    prometheus.Histogram
 	sync.Map
 }
 
-func (ul *uniqLables) add(hash uint64) {
-	_, loaded := ul.Map.LoadOrStore(hash, nil)
+func (ul *uniqLables) add(ls Labels) {
+	if CurReceiver == nil {
+		return
+	}
+
+	if CurReceiver.Find(ls) {
+		return
+	}
+
+	_, loaded := ul.Map.LoadOrStore(ls.Hash(), nil)
 
 	if loaded {
 		return
 	}
 
 	ul.counter.Inc()
+	// ul.size.Add(float64(len(ls.data)))
+	ul.size.Observe(float64(len(ls.data)))
+}
+
+type Receiver interface {
+	Find(ls Labels) bool
 }

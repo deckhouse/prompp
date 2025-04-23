@@ -65,6 +65,22 @@ extern "C" void prompp_primitives_lss_find_or_emplace(void* args, void* res) {
                        *in->lss)};
 }
 
+extern "C" void prompp_primitives_lss_find(void* args, void* res) {
+  struct Arguments {
+    LssVariantPtr lss;
+    PromPP::Primitives::Go::LabelSet label_set;
+  };
+  struct Result {
+    bool has;
+  };
+
+  auto in = static_cast<Arguments*>(args);
+  auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
+  std::optional<uint32_t> ls_id = lss.find(in->label_set);
+
+  new (res) Result{.has = ls_id.has_value()};
+}
+
 struct LssQueryResult {
   PromPP::Primitives::Go::Slice<uint32_t> matches;
   PromPP::Primitives::Go::Slice<uint16_t> label_set_lengths;

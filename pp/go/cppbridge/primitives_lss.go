@@ -124,6 +124,10 @@ func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) uint32 {
 	return id
 }
 
+func (lss *LabelSetStorage) Find(labelSet model.LabelSet) bool {
+	return primitivesLSSFind(lss.pointer, labelSet)
+}
+
 // Query returns a LSSQueryResult that matches the given label matchers.
 func (lss *LabelSetStorage) Query(matchers []model.LabelMatcher, querySource uint32) *LSSQueryResult {
 	return newLSSQueryResult(primitivesLSSQuery(lss.pointer, matchers, querySource))
