@@ -10,7 +10,8 @@
 
 using entrypoint::head::DataStoragePtr;
 using entrypoint::head::QueryableEncodingBimap;
-using ChunkRecoder = head::ChunkRecoder<QueryableEncodingBimap::LsIdSet::const_iterator, QueryableEncodingBimap::LsIdSet::const_iterator>;
+using ChunkIterator = head::ChunkRecoderIterator<QueryableEncodingBimap::LsIdSet::const_iterator, QueryableEncodingBimap::LsIdSet::const_iterator>;
+using ChunkRecoder = head::ChunkRecoder<ChunkIterator>;
 using ChunkRecoderPtr = std::unique_ptr<ChunkRecoder>;
 
 extern "C" void prompp_series_data_data_storage_ctor(void* res) {
@@ -104,9 +105,10 @@ extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
   };
 
   const auto in = static_cast<Arguments*>(args);
+  PromPP::Primitives::TimeInterval time_interval{.min = in->time_interval.min, .max = in->time_interval.max - 1};
   const auto& ls_id_set = std::get<QueryableEncodingBimap>(*in->lss).ls_id_set();
   new (res) Result{
-      .chunk_recoder = std::make_unique<ChunkRecoder>(ls_id_set.begin(), ls_id_set.end(), in->data_storage.get(), in->time_interval),
+      .chunk_recoder = std::make_unique<ChunkRecoder>(ChunkIterator{ls_id_set.begin(), ls_id_set.end(), in->data_storage.get(), time_interval}, time_interval),
   };
 }
 

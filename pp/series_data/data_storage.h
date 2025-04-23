@@ -13,8 +13,6 @@
 namespace series_data {
 
 struct DataStorage {
-  class IteratorSentinel {};
-
   class SeriesChunkIterator {
    public:
     class Data {
