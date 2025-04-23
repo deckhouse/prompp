@@ -48,19 +48,19 @@ using EncoderTypes = testing::Types<BareBones::EncodedSequence<BareBones::Encodi
                                     BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<DataSequence>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZagRLE<DataSequence>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::NoCompression<DataSequence>>,
-                                    BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZag<DataSequence>>,
+                                    BareBones::EncodedSequence<BareBones::Encoding::Delta<DataSequence>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<DataSequence>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::RLE<DataSequence64>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<DataSequence64>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZagRLE<DataSequence64>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::NoCompression<DataSequence64>>,
-                                    BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZag<DataSequence64>>,
+                                    BareBones::EncodedSequence<BareBones::Encoding::Delta<DataSequence64>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<DataSequence64>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::RLE<DataSequence64Mostly1>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<DataSequence64Mostly1>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZagRLE<DataSequence64Mostly1>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::NoCompression<DataSequence64Mostly1>>,
-                                    BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZag<DataSequence64Mostly1>>,
+                                    BareBones::EncodedSequence<BareBones::Encoding::Delta<DataSequence64Mostly1>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<DataSequence64Mostly1>>>;
 
 TYPED_TEST_SUITE(EncoderTest, EncoderTypes);
@@ -114,13 +114,13 @@ using EncoderTypes64 = testing::Types<BareBones::EncodedSequence<BareBones::Enco
                                       BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<DataSequence64>>,
                                       BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZagRLE<DataSequence64>>,
                                       BareBones::EncodedSequence<BareBones::Encoding::NoCompression<DataSequence64>>,
-                                      BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZag<DataSequence64>>,
+                                      BareBones::EncodedSequence<BareBones::Encoding::Delta<DataSequence64>>,
                                       BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<DataSequence64>>,
                                       BareBones::EncodedSequence<BareBones::Encoding::RLE<DataSequence64Mostly1>>,
                                       BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<DataSequence64Mostly1>>,
                                       BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZagRLE<DataSequence64Mostly1>>,
                                       BareBones::EncodedSequence<BareBones::Encoding::NoCompression<DataSequence64Mostly1>>,
-                                      BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZag<DataSequence64Mostly1>>,
+                                      BareBones::EncodedSequence<BareBones::Encoding::Delta<DataSequence64Mostly1>>,
                                       BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<DataSequence64Mostly1>>>;
 TYPED_TEST_SUITE(EncoderTest64, EncoderTypes64);
 
