@@ -1906,6 +1906,24 @@ func seriesDataChunkRecoderCtor(lss, dataStorage uintptr, timeInterval TimeInter
 	return res.chunkRecoder
 }
 
+func seriesDataSerializedChunkRecoderCtor(serializedChunks []byte, timeInterval TimeInterval) uintptr {
+	args := struct {
+		serializedChunks []byte
+		TimeInterval
+	}{serializedChunks, timeInterval}
+	var res struct {
+		chunkRecoder uintptr
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_serialized_chunk_recoder_ctor,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.chunkRecoder
+}
+
 func seriesDataChunkRecoderRecodeNextChunk(chunkRecoder uintptr, recodedChunk *RecodedChunk) {
 	args := struct {
 		chunkRecoder uintptr

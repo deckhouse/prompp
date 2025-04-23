@@ -74,9 +74,10 @@ void prompp_series_data_data_storage_query(void* args, void* res);
 void prompp_series_data_data_storage_dtor(void* args);
 
 /**
- * @brief Construct a new ChunkRecoder object
+ * @brief Construct a new ChunkRecoder object for recode all non-empty chunks in dataStorage
  *
  * @param args {
+ *     lss uintptr            // pointer to constructed label sets
  *     dataStorage   uintptr  // pointer to constructed data storage
  *     time_interval struct { interval is semi-open [min, max)
  *        min int64
@@ -88,6 +89,22 @@ void prompp_series_data_data_storage_dtor(void* args);
  * }
  */
 void prompp_series_data_chunk_recoder_ctor(void* args, void* res);
+
+/**
+ * @brief Construct a new ChunkRecoder object for recode all serialized chunks
+ *
+ * @param args {
+ *     buffer []byte // SliceView to serialized chunks buffer
+ *     time_interval struct {  interval is semi-open [min, max)
+ *        min int64
+ *        max int64
+ *     }
+ * }
+ * @param res {
+ *     chunk_recoder uintptr // pointer to chunk recoder
+ * }
+ */
+void prompp_series_data_serialized_chunk_recoder_ctor(void* args, void* res);
 
 /**
  * @brief Get chunk encoded in prometheus format

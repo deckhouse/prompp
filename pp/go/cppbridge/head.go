@@ -113,8 +113,16 @@ type ChunkRecoder struct {
 }
 
 func NewChunkRecoder(lss *LabelSetStorage, dataStorage *HeadDataStorage, timeInterval TimeInterval) *ChunkRecoder {
+	return initializeChunkRecoder(lss, dataStorage, seriesDataChunkRecoderCtor(lss.Pointer(), dataStorage.dataStorage, timeInterval))
+}
+
+func NewSerializedChunkRecoder(serializedChunks []byte, timeInterval TimeInterval) *ChunkRecoder {
+	return initializeChunkRecoder(nil, nil, seriesDataSerializedChunkRecoderCtor(serializedChunks, timeInterval))
+}
+
+func initializeChunkRecoder(lss *LabelSetStorage, dataStorage *HeadDataStorage, recoder uintptr) *ChunkRecoder {
 	chunkRecoder := &ChunkRecoder{
-		recoder:     seriesDataChunkRecoderCtor(lss.Pointer(), dataStorage.dataStorage, timeInterval),
+		recoder:     recoder,
 		lss:         lss,
 		dataStorage: dataStorage,
 	}
@@ -153,6 +161,10 @@ func (r *HeadDataStorageSerializedChunks) NumberOfChunks() int {
 
 func (r *HeadDataStorageSerializedChunks) Len() int {
 	return len(r.data)
+}
+
+func (r *HeadDataStorageSerializedChunks) Data() []byte {
+	return r.data
 }
 
 type HeadDataStorageSerializedChunkIndex struct {
