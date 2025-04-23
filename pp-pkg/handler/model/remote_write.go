@@ -2,6 +2,10 @@ package model
 
 import "net/http"
 
+//
+// RemoteWriteProcessingStatus
+//
+
 // RemoteWriteProcessingStatus status of processing RemoteWrite.
 type RemoteWriteProcessingStatus struct {
 	Code    int
