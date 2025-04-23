@@ -38,6 +38,15 @@ func TestStorage(t *testing.T) {
 	err = blockWriter.Append(encodedSegment)
 	require.NoError(t, err)
 
+	err = blockWriter.Close()
+	require.NoError(t, err)
+
+	require.Equal(t, uint8(1), blockWriter.Header().FileVersion)
+	require.Equal(t, blockID, blockWriter.Header().BlockID)
+	require.Equal(t, shardID, blockWriter.Header().ShardID)
+	require.Equal(t, uint8(0), blockWriter.Header().ShardLog)
+	require.Equal(t, uint8(1), blockWriter.Header().SegmentEncodingVersion)
+
 	blockReader, err := blockStorage.Reader(blockID, shardID)
 	require.NoError(t, err)
 
@@ -48,4 +57,10 @@ func TestStorage(t *testing.T) {
 	require.Equal(t, encodedSegment.Size, rSeg.Size)
 	require.Equal(t, encodedSegment.CRC, rSeg.CRC)
 	require.EqualValues(t, encodedSegment.Body, rSeg.Body)
+
+	err = blockReader.Close()
+	require.NoError(t, err)
+
+	err = blockStorage.Delete(blockID, shardID)
+	require.NoError(t, err)
 }
