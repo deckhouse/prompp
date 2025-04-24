@@ -153,7 +153,7 @@ func (q *Querier) selectInstant(ctx context.Context, sortSeries bool, hints *sto
 				prometheus.Labels{"generation": strconv.FormatUint(q.head.Generation(), 10),
 					"query_type": "instant",
 				},
-			).Observe(float64(time.Since(start).Milliseconds()))
+			).Observe(float64(time.Since(start).Microseconds()))
 		}
 	}()
 
@@ -208,7 +208,7 @@ func (q *Querier) selectRange(ctx context.Context, sortSeries bool, hints *stora
 					"generation": fmt.Sprintf("%d", q.head.Generation()),
 					"query_type": "range",
 				},
-			).Observe(float64(time.Since(start).Milliseconds()))
+			).Observe(float64(time.Since(start).Microseconds()))
 		}
 	}()
 
