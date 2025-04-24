@@ -730,7 +730,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	labels.CurReceiver = receiver
+	time.AfterFunc(3*time.Minute, func() {
+		labels.CurReceiver = receiver
+	})
 
 	remoteWriterReadyNotifier := ready.NewNotifiableNotifier()
 	remoteWriter := remotewriter.New(dataDir, headCatalog, clock, remoteWriterReadyNotifier, prometheus.DefaultRegisterer)
