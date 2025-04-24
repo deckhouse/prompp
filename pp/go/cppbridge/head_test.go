@@ -1,7 +1,7 @@
 package cppbridge_test
 
 import (
-	"math"
+	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -85,41 +85,36 @@ func (s *HeadSuite) TestInstantQuery() {
 	// Arrange
 	dataStorage := cppbridge.NewHeadDataStorage()
 	encoder := cppbridge.NewHeadEncoderWithDataStorage(dataStorage)
-	encoder.Encode(0, 7, 1.0)
-	encoder.Encode(0, 10, 1.0)
-
-	encoder.Encode(1, 3, 1.0)
-	encoder.Encode(1, 11, 1.0)
-
-	encoder.Encode(2, 1, 2.0)
-	encoder.Encode(2, 4, 2.0)
-
-	encoder.Encode(3, 2, 2.0)
-	encoder.Encode(3, 8, 2.0)
-
-	// Act
-	seriesIDs := []uint32{0, 1, 2, 3}
-	timestampStart := int64(3)
-	timestampEnd := int64(5)
-	timestampDefault := int64(-1)
-	samples := make([]cppbridge.Sample, len(seriesIDs))
-	for i := range samples {
-		samples[i] = cppbridge.Sample{Timestamp: timestampDefault, Value: math.Float64frombits(cppbridge.StaleNaN)}
+	var series = []struct {
+		SeriesID uint32
+		cppbridge.Sample
+	}{
+		{0, cppbridge.Sample{7, 1.0}},
+		{0, cppbridge.Sample{10, 1.0}},
+		{1, cppbridge.Sample{3, 1.0}},
+		{1, cppbridge.Sample{11, 1.0}},
+		{2, cppbridge.Sample{1, 2.0}},
+		{2, cppbridge.Sample{4, 2.0}},
+		{3, cppbridge.Sample{2, 2.0}},
+		{3, cppbridge.Sample{8, 2.0}},
 	}
 
-	query := cppbridge.HeadDataStorageQuery{StartTimestampMs: timestampStart, EndTimestampMs: timestampEnd, LabelSetIDs: seriesIDs}
+	for _, serie := range series {
+		encoder.Encode(serie.SeriesID, serie.Timestamp, serie.Value)
+	}
 
-	dataStorage.InstantQuery(query, samples)
+	seriesIDs := []uint32{0, 1, 2, 3}
+	targetTimestamp := int64(5)
+	defaultTimestamp := int64(-1)
+	// Act
+
+	samples := dataStorage.InstantQuery(targetTimestamp, defaultTimestamp, seriesIDs)
 
 	// Assert
-	s.Len(samples, 4)
+	require.Len(s.T(), samples, 4)
 
-	s.EqualValues(-1, samples[0].Timestamp)
-	s.True(cppbridge.IsStaleNaN(samples[0].Value))
-
-	s.Equal(cppbridge.Sample{Timestamp: 3, Value: 1.0}, samples[1])
-	s.Equal(cppbridge.Sample{Timestamp: 4, Value: 2.0}, samples[2])
-
-	s.EqualValues(-1, samples[3].Timestamp)
-	s.True(cppbridge.IsStaleNaN(samples[3].Value))
+	s.Equal(defaultTimestamp, samples[0].Timestamp)
+	s.Equal(series[2].Sample, samples[1])
+	s.Equal(series[5].Sample, samples[2])
+	s.Equal(series[6].Sample, samples[3])
 }
