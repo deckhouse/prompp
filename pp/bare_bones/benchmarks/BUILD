@@ -16,6 +16,8 @@ cc_binary(
     malloc = "@jemalloc",
     deps = [
         "//:bare_bones_headers",
+        "//:primitives",
+        "//:series_data",
         "@google_benchmark//:benchmark_main",
     ],
 )
