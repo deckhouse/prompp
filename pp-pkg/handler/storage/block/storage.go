@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/prometheus/prometheus/pp-pkg/handler/storage"
+	"github.com/prometheus/prometheus/util/pool"
 )
 
 const (
@@ -21,12 +22,13 @@ const (
 
 // Storage represents read and write block with segments.
 type Storage struct {
-	dir string
+	dir     string
+	buffers *pool.Pool
 }
 
 // NewStorage init new Storage.
-func NewStorage(dir string) *Storage {
-	return &Storage{dir: dir}
+func NewStorage(dir string, buffers *pool.Pool) *Storage {
+	return &Storage{dir: dir, buffers: buffers}
 }
 
 // Writer return block writer.
@@ -73,6 +75,7 @@ func (s *Storage) Reader(blockID uuid.UUID, shardID uint16) (storage.BlockReader
 		lastReadSegmentHeader: storage.SegmentHeader{
 			ID: math.MaxUint32,
 		},
+		buffers: s.buffers,
 	}
 
 	return r, nil
