@@ -6,6 +6,7 @@
 
 namespace {
 
+using BareBones::Encoding::Gorilla::STALE_NAN;
 using PromPP::Primitives::kInvalidLabelSetID;
 using PromPP::Primitives::LabelSetID;
 using PromPP::Primitives::TimeInterval;
@@ -17,7 +18,7 @@ using std::operator""s;
 class ChunkRecoderFixture : public ::testing::Test {
  protected:
   using LsIdSet = std::vector<LabelSetID>;
-  using ChunkRecoder = head::ChunkRecoder<LsIdSet>;
+  using ChunkRecoder = head::ChunkRecoder<LsIdSet::const_iterator, LsIdSet::const_iterator>;
 
   struct RecodeInfo {
     TimeInterval interval{.min = 0, .max = 0};
@@ -34,7 +35,7 @@ class ChunkRecoderFixture : public ::testing::Test {
 
   ChunkRecoder create_recoder(const LsIdSet& ls_id_set, const TimeInterval& time_interval) {
     ls_id_set_ = ls_id_set;
-    return ChunkRecoder{ls_id_set_, &storage_, time_interval};
+    return ChunkRecoder{ls_id_set_.begin(), ls_id_set_.end(), &storage_, time_interval};
   }
 
   static RecodeInfo recode(ChunkRecoder& recoder) noexcept {
@@ -48,7 +49,7 @@ class ChunkRecoderFixture : public ::testing::Test {
 
 TEST_F(ChunkRecoderFixture, EmptyStorage) {
   // Arrange
-  ChunkRecoder recoder({}, &storage_, {});
+  ChunkRecoder recoder({}, {}, &storage_, {});
 
   // Act
   const auto info1 = recode(recoder);
@@ -322,6 +323,74 @@ TEST_F(ChunkRecoderFixture, EmptyStorageWithNonEmptyLss) {
 
   // Assert
   EXPECT_FALSE(has_more_data);
+}
+
+TEST_F(ChunkRecoderFixture, ConstantEncoderChunkWithStaleNanOnSecondPoint) {
+  // Arrange
+  Encoder encoder{storage_};
+  encoder.encode(0, 1, 0.0);
+  encoder.encode(0, 2, STALE_NAN);
+
+  auto recoder = create_recoder({0}, {.min = 0, .max = 3});
+
+  // Act
+  const auto info = recode(recoder);
+
+  // Assert
+  EXPECT_EQ((RecodeInfo{
+                .interval = {.min = 1, .max = 2},
+                .series_id = 0,
+                .samples_count = 2,
+                .buffer = "\x00\x02\x02\x00\x00\x00\x00\x00\x00\x00\x00\x01\xC3\xF7\xFF\x00\x00\x00\x00\x00\x00\x20"s,
+                .has_more_data = false,
+            }),
+            info);
+}
+
+TEST_F(ChunkRecoderFixture, ConstantEncoderChunkWithStaleNanOnThirdPoint) {
+  // Arrange
+  Encoder encoder{storage_};
+  encoder.encode(0, 1, 0.0);
+  encoder.encode(0, 2, 0.0);
+  encoder.encode(0, 3, STALE_NAN);
+
+  auto recoder = create_recoder({0}, {.min = 0, .max = 4});
+
+  // Act
+  const auto info = recode(recoder);
+
+  // Assert
+  EXPECT_EQ((RecodeInfo{
+                .interval = {.min = 1, .max = 3},
+                .series_id = 0,
+                .samples_count = 3,
+                .buffer = "\x00\x03\x02\x00\x00\x00\x00\x00\x00\x00\x00\x01\x30\xFD\xFF\xC0\x00\x00\x00\x00\x00\x08"s,
+                .has_more_data = false,
+            }),
+            info);
+}
+
+TEST_F(ChunkRecoderFixture, TwoDoubleConstantEncoderChunkWithStaleNan) {
+  // Arrange
+  Encoder encoder{storage_};
+  encoder.encode(0, 1, 0.0);
+  encoder.encode(0, 2, 1.0);
+  encoder.encode(0, 3, STALE_NAN);
+
+  auto recoder = create_recoder({0}, {.min = 0, .max = 4});
+
+  // Act
+  const auto info = recode(recoder);
+
+  // Assert
+  EXPECT_EQ((RecodeInfo{
+                .interval = {.min = 1, .max = 3},
+                .series_id = 0,
+                .samples_count = 3,
+                .buffer = "\x00\x03\x02\x00\x00\x00\x00\x00\x00\x00\x00\x01\xC4\x57\xFE\xC3\xF4\x00\x00\x00\x00\x00\x00\x00\x20"s,
+                .has_more_data = false,
+            }),
+            info);
 }
 
 }  // namespace
