@@ -6,6 +6,8 @@ namespace PromPP::Prometheus::tsdb::chunkenc {
 
 class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
  public:
+  static constexpr uint8_t kMaxItemSizeInBits = BareBones::Bit::to_bits(BareBones::Encoding::VarInt::kMaxVarIntLength);
+
   BareBones::Encoding::Gorilla::TimestampEncoderState<> state{};
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t timestamp() const noexcept { return state.last_ts; }
@@ -73,6 +75,9 @@ class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
 
 class PROMPP_ATTRIBUTE_PACKED ValuesEncoder {
  public:
+  static constexpr uint8_t kXorLengthMaskBits = 1 + 1 + 5 + 6;
+  static constexpr uint8_t kMaxItemSizeInBits = kXorLengthMaskBits + BareBones::Bit::kUint64Bits;
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE double value() const noexcept { return state_.last_v; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Encoding::Gorilla::ValuesEncoderState& state() const noexcept { return state_; }
 
@@ -141,7 +146,7 @@ class PROMPP_ATTRIBUTE_PACKED ValuesEncoder {
     state_.last_v_xor_trailing_z = v_xor_trailing_z;
     assert(state_.last_v_xor_length + state_.last_v_xor_trailing_z <= BareBones::Bit::to_bits(sizeof(uint64_t)));
 
-    stream.write_bits((0b11 << (5 + 6)) | (v_xor_leading_z << 6) | v_xor_length, 1 + 1 + 5 + 6);
+    stream.write_bits((0b11 << (5 + 6)) | (v_xor_leading_z << 6) | v_xor_length, kXorLengthMaskBits);
     stream.write_bits(v_xor >> state_.last_v_xor_trailing_z, state_.last_v_xor_length);
   }
 

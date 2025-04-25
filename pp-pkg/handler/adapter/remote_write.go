@@ -65,7 +65,5 @@ func (rw *RemoteWrite) Read(_ context.Context) (*model.RemoteWriteBuffer, error)
 
 // Write response into writer.
 func (rw *RemoteWrite) Write(_ context.Context, status model.RemoteWriteProcessingStatus) error {
-	rw.writer.WriteHeader(status.Code)
-	_, err := rw.writer.Write([]byte(status.Message))
-	return err
+	return status.Write(rw.writer)
 }

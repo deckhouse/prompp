@@ -38,46 +38,52 @@ type Dialer interface {
 	Equal(config any) bool
 }
 
+//
+// CommonConfig
+//
+
 // CommonConfig full config for config dialer.
 type CommonConfig struct {
-	random *RandomTLSDialerConfig
-}
-
-// NewCommonConfig init new CommonConfig.
-func NewCommonConfig(urlp *url.URL, tlsConfig *tls.Config, name string) *CommonConfig {
-	return &CommonConfig{random: NewRandomTLSDialerConfig(urlp, tlsConfig, name)}
-}
-
-// DefaultDialer - init RandomTLSDialer with default values.
-func DefaultDialer(cfg *CommonConfig, registerer prometheus.Registerer) Dialer {
-	return NewRandomTLSDialer(
-		//nolint:gosec // cryptographic strength is not required
-		rand.New(rand.NewSource(time.Now().UnixNano())),
-		Resolve,
-		&net.Dialer{Timeout: defaultDialerTimeout, KeepAlive: defaultKeepAlive},
-		cfg.random,
-	)
-}
-
-// RandomTLSDialerConfig config for dialer.
-type RandomTLSDialerConfig struct {
-	url       *url.URL
 	tlsConfig *tls.Config
+	url       url.URL
 	name      string
 }
 
-// NewRandomTLSDialerConfig init new RandomTLSDialerConfig.
-func NewRandomTLSDialerConfig(urlp *url.URL, tlsConfig *tls.Config, name string) *RandomTLSDialerConfig {
-	return &RandomTLSDialerConfig{url: urlp, tlsConfig: tlsConfig, name: name}
+// NewCommonConfig init new CommonConfig.
+func NewCommonConfig(urlp *url.URL, tlsConfig *tls.Config, name string) (*CommonConfig, error) {
+	switch urlp.Scheme {
+	case "http":
+		return &CommonConfig{url: *urlp, name: name}, nil
+	case "https":
+		if tlsConfig == nil {
+			return nil, errors.New("tls config empty for 'https'")
+		}
+
+		return &CommonConfig{url: *urlp, name: name, tlsConfig: tlsConfig.Clone()}, nil
+	default:
+		return nil, fmt.Errorf("unsupported url.Scheme: %s", urlp.Scheme)
+	}
 }
 
 // Equal check for complete matching of configs.
-func (c *RandomTLSDialerConfig) Equal(cfg *RandomTLSDialerConfig) bool {
+func (c *CommonConfig) Equal(cfg *CommonConfig) bool {
+	if cfg == nil {
+		return false
+	}
+
 	if c.name != cfg.name {
 		return false
 	}
 
-	if *c.url != *cfg.url {
+	if c.url != cfg.url {
+		return false
+	}
+
+	if c.tlsConfig == nil && cfg.tlsConfig == nil {
+		return true
+	}
+
+	if (c.tlsConfig == nil && cfg.tlsConfig != nil) || (c.tlsConfig != nil && cfg.tlsConfig == nil) {
 		return false
 	}
 
@@ -92,45 +98,74 @@ func (c *RandomTLSDialerConfig) Equal(cfg *RandomTLSDialerConfig) bool {
 	return true
 }
 
+// Name return name from config.
+func (c *CommonConfig) Name() string {
+	return c.name
+}
+
+// Host return host from config.
+func (c *CommonConfig) Host() string {
+	return c.url.Host
+}
+
+// Hostname return hostname from config.
+func (c *CommonConfig) Hostname() string {
+	return c.url.Hostname()
+}
+
+// Port return port from config.
+func (c *CommonConfig) Port() string {
+	return c.url.Port()
+}
+
+//
+// DefaultDialer
+//
+
+// DefaultDialer - init RandomTLSDialer with default values.
+func DefaultDialer(cfg *CommonConfig, registerer prometheus.Registerer) (Dialer, error) {
+	return NewRandomTLSDialer(
+		//nolint:gosec // cryptographic strength is not required
+		rand.New(rand.NewSource(time.Now().UnixNano())),
+		Resolve,
+		&net.Dialer{Timeout: defaultDialerTimeout, KeepAlive: defaultKeepAlive},
+		cfg,
+	)
+}
+
+//
+// RandomTLSDialer
+//
+
 // RandomTLSDialer - connecting to a random ip mapped to a host.
 type RandomTLSDialer struct {
 	rand     *rand.Rand
 	mxRand   *sync.Mutex
 	dialer   *net.Dialer
 	resolver func(ctx context.Context, host string) ([]net.IP, error)
-	cfg      RandomTLSDialerConfig
+	cfg      CommonConfig
 }
 
 var _ Dialer = (*RandomTLSDialer)(nil)
-
-// DefaultRandomTLSDialer - init RandomTLSDialer with default values.
-func DefaultRandomTLSDialer(cfg *RandomTLSDialerConfig) *RandomTLSDialer {
-	return NewRandomTLSDialer(
-		//nolint:gosec // cryptographic strength is not required
-		rand.New(rand.NewSource(time.Now().UnixNano())),
-		Resolve,
-		&net.Dialer{
-			Timeout:   defaultDialerTimeout,
-			KeepAlive: defaultKeepAlive,
-		},
-		cfg,
-	)
-}
 
 // NewRandomTLSDialer - init new RandomTLSDialer.
 func NewRandomTLSDialer(
 	random *rand.Rand,
 	resolver func(ctx context.Context, host string) ([]net.IP, error),
 	dialer *net.Dialer,
-	cfg *RandomTLSDialerConfig,
-) *RandomTLSDialer {
+	cfg *CommonConfig,
+) (*RandomTLSDialer, error) {
+	if cfg == nil {
+		return nil, errors.New("empty common config")
+	}
+
 	return &RandomTLSDialer{
 		rand:     random,
 		mxRand:   new(sync.Mutex),
 		dialer:   dialer,
 		resolver: resolver,
 		cfg:      *cfg,
-	}
+	}, nil
 }
 
 // Equal check for complete matching of configs.
@@ -139,17 +174,18 @@ func (rd *RandomTLSDialer) Equal(cfg any) bool {
 	if !ok {
 		return false
 	}
-	return rd.cfg.Equal(cc.random)
+
+	return rd.cfg.Equal(cc)
 }
 
 // String - dialer name.
 func (rd *RandomTLSDialer) String() string {
-	return fmt.Sprintf("%s_%s", rd.cfg.name, rd.cfg.url.Host)
+	return fmt.Sprintf("%s_%s", rd.cfg.Name(), rd.cfg.Host())
 }
 
 // Dial - connects to the collector.
 func (rd *RandomTLSDialer) Dial(ctx context.Context) (net.Conn, error) {
-	return rd.DialHost(ctx, rd.cfg.url.Hostname(), rd.cfg.url.Port())
+	return rd.DialHost(ctx, rd.cfg.Hostname(), rd.cfg.Port())
 }
 
 // DialHost - open a connection to the specified host.
@@ -170,6 +206,10 @@ func (rd *RandomTLSDialer) DialHost(ctx context.Context, hostname, port string) 
 		return nil, fmt.Errorf("dial to %q (%s): %w", hostname, ip, err)
 	}
 
+	if rd.cfg.tlsConfig == nil {
+		return conn, nil
+	}
+
 	tlsConn := tls.Client(conn, rd.cfg.tlsConfig)
 	// in some situations, providers cut off TLS traffic, apparently due to DPI,
 	// so we immediately check that we can install handshake and
@@ -182,6 +222,10 @@ func (rd *RandomTLSDialer) DialHost(ctx context.Context, hostname, port string) 
 	cancel()
 	return tlsConn, nil
 }
+
+//
+// Utils
+//
 
 // resolverCache cache map with resolving name to ips.
 var resolverCache = new(sync.Map)
