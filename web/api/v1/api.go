@@ -306,7 +306,7 @@ func NewAPI(
 		a.opHandler = handler.NewPPHandler(dbDir, receiver, logger, registerer) // PP_CHANGES.md: rebuild on cpp
 	}
 	if otlpEnabled {
-		a.otlpWriteHandler = remote.NewOTLPWriteHandler(logger, ap)
+		a.otlpWriteHandler = handler.NewOTLPWriteHandler(logger, receiver) // PP_CHANGES.md: rebuild on cpp
 	}
 
 	return a
