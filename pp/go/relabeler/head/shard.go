@@ -3,11 +3,11 @@ package head
 import (
 	"fmt"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 const chanBufferSize = 64
@@ -71,6 +71,10 @@ func (ds *DataStorage) MergeOutOfOrderChunks() {
 
 func (ds *DataStorage) Query(query cppbridge.HeadDataStorageQuery) *cppbridge.HeadDataStorageSerializedChunks {
 	return ds.dataStorage.Query(query)
+}
+
+func (ds *DataStorage) InstantQuery(targetTimestamp, notFoundValueTimestampValue int64, seriesIDs []uint32) []cppbridge.Sample {
+	return ds.dataStorage.InstantQuery(targetTimestamp, notFoundValueTimestampValue, seriesIDs)
 }
 
 func (ds *DataStorage) AllocatedMemory() uint64 {
