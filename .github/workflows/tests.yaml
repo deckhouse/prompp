@@ -66,8 +66,9 @@ jobs:
               git config --global --add safe.directory /workspace && cd pp
               cache_addr=$(ip -json ro show default | jq -r '.[0].gateway')
               echo "build --remote_cache=http://$cache_addr/cache/ --experimental_guard_against_concurrent_changes" >> .bazelrc
-              ./scripts/ci_run_unit_tests.sh
-              tail -f /dev/null            
+              echo "Starting unit tests..."
+              ./scripts/ci_run_unit_tests.sh || { echo "Unit tests failed"; exit 1; }
+              echo "Unit tests completed successfully."
 
               mkdir -p /workspace/testlogs
               for f in ./bazel-testlogs/**/test.xml; do 
