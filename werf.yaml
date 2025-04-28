@@ -33,7 +33,8 @@ shell:
   - cp -pr /etc/ssl/certs /relocate/etc/ssl
 ---
 image: prompp-src-artifact
-fromCacheVersion: "2025-03-31-2"
+fromCacheVersion: "2025-03-31-12"
+disableGitAfterPatch: true
 from: golang:1.23.2-alpine3.20
 final: false
 git:
@@ -45,6 +46,7 @@ git:
 ---
 image: promu-artifact
 from: golang:1.23.2-alpine3.20
+disableGitAfterPatch: true
 final: false
 git:
   - url: https://github.com/prometheus/promu.git
@@ -61,7 +63,7 @@ shell:
 ---
 image: cpp-artifact
 final: false
-fromCacheVersion: "2025-03-31-2"
+fromCacheVersion: "2025-03-31-12"
 fromImage: toolkit
 git:
   - add: /pp
@@ -79,7 +81,7 @@ shell:
 ---
 image: prompp-artifact
 final: false
-fromCacheVersion: "2025-03-31-2"
+fromCacheVersion: "2025-03-31-12"
 fromImage: toolkit
 mount:
   - fromPath: ~/go-pkg-cache
@@ -139,6 +141,7 @@ shell:
 ---
 artifact: prom-pp-binaries-artifact
 from: alt:p10
+disableGitAfterPatch: true
 git:
   - add: /scripts/binary_replace.sh
     to: /binary_replace.sh
