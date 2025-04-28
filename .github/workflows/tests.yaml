@@ -1,4 +1,79 @@
+name: Run Tests
 
+on:
+  pull_request:
+    types: [opened, reopened, labeled, synchronize]
+  push:
+    branches:
+      - pp
+  workflow_dispatch:
+    inputs:
+      release_branch:
+        description: 'release branch name, example: release-1.68'
+        required: false
+
+concurrency: 
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cpp-tests:
+    strategy:
+      max-parallel: 2
+      matrix:
+        OPT: [dbg, opt]
+        SANITIZERS: [no_sanitizers, with_sanitizers]
+        runner_name: [fsn-dev-gitlab-runner, fsn-dev-arm-runner]
+        include:
+          - runner_name: fsn-dev-gitlab-runner
+            arch: amd64
+          - runner_name: fsn-dev-arm-runner
+            arch: arm64
+    runs-on: ${{ matrix.runner_name }}
+    steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: deckhouse/modules-actions/setup@v2
+        with:
+          registry: ${{ secrets.DEV_REGISTRY }}
+          registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
+          registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+
+      - name: Pull Latest Image
+        if: matrix.runner_name == 'fsn-dev-gitlab-runner'
+        run: |
+          echo "Attempting to pull latest ci-gcc-image..."
+          docker pull ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} || \
+            echo "Pull failed, continuing with cached image"
+
+      - name: Run Unit Tests
+        run: |
+          docker run --rm \
+            -v $PWD:/workspace \
+            -w /workspace \
+            -e OPT=${{ matrix.OPT }} \
+            -e SANITIZERS=${{ matrix.SANITIZERS }} \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} \
+            bash -c "
+              set -eo pipefail
+
+              git config --global --add safe.directory /workspace && cd pp
+              cache_addr=$(ip -json ro show default | jq -r '.[0].gateway')
+              echo "build --remote_cache=http://$cache_addr/cache/ --experimental_guard_against_concurrent_changes" >> .bazelrc
+              ./scripts/ci_run_unit_tests.sh
+              tail -f /dev/null            
+
+              mkdir -p /workspace/testlogs
+              for f in ./bazel-testlogs/**/test.xml; do 
+                cp \$f /workspace/testlogs/\$(basename \$(dirname \$f)).xml; 
+              done
+            "
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
