@@ -16,10 +16,10 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/frames"
 	"github.com/prometheus/prometheus/pp/go/transport"
 	"github.com/prometheus/prometheus/pp/go/util"
-	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/net/websocket"
 )
 
@@ -75,6 +75,7 @@ const (
 	streamMethod                            = "stream"
 	refillMethod                            = "refill"
 	refillPath                              = "/refill"
+	websocketPath                           = "/websocket"
 	defaultBackoffMaxInterval time.Duration = 20 * time.Second
 	defaultBackoffMaxTries    uint64        = 0
 )
@@ -128,6 +129,29 @@ func NewDialerConfig(urlp *url.URL, clientID, accessToken string) *DialerConfig 
 // Equal check for complete coincidence of values.
 func (c *DialerConfig) Equal(cfg *DialerConfig) bool {
 	return *c == *cfg
+}
+
+// Host return host from url config.
+func (c *DialerConfig) Host() string {
+	return c.URL.Host
+}
+
+// Path return path from url config.
+func (c *DialerConfig) Path() string {
+	return c.URL.Path
+}
+
+// Scheme return scheme from url config.
+func (c *DialerConfig) Scheme() string {
+	return c.URL.Scheme
+}
+
+// WSScheme return web socket scheme from url config.
+func (c *DialerConfig) WSScheme() string {
+	if c.URL.Scheme == "http" {
+		return "ws"
+	}
+	return "wss"
 }
 
 type backoffWithLock struct {
@@ -341,7 +365,7 @@ func (d *WebSocketDialer) SendRefill(ctx context.Context, r io.Reader, shardMeta
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		"https://"+d.config.URL.Host+refillPath,
+		d.config.Scheme()+"://"+d.config.Host()+d.config.Path()+refillPath,
 		r,
 	)
 	if err != nil {
@@ -379,8 +403,8 @@ func (d *WebSocketDialer) SendRefill(ctx context.Context, r io.Reader, shardMeta
 // makeConfig - create *websocket.Config.
 func (d *WebSocketDialer) makeConfig(method string, shardMeta ShardMeta) *websocket.Config {
 	return &websocket.Config{
-		Location: &url.URL{Scheme: "wss", Host: d.config.URL.Host},
-		Origin:   &url.URL{Scheme: "https", Host: d.config.URL.Host},
+		Location: &url.URL{Scheme: d.config.WSScheme(), Host: d.config.Host(), Path: d.config.Path() + websocketPath},
+		Origin:   &url.URL{Scheme: d.config.Scheme(), Host: d.config.Host(), Path: d.config.Path() + websocketPath},
 		Version:  websocket.ProtocolVersionHybi13,
 		Header:   d.makeHeader(method, shardMeta),
 	}
