@@ -97,6 +97,64 @@ jobs:
           path: prompp-binaries-${{ matrix.arch }}.tar.gz
           retention-days: 7
 
+  create-multiarch-image:
+    needs: build-and-push
+    runs-on: fsn-dev-perftest-runner
+    steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Delete Docker image
+        env:
+          DOCKERHUB_REGISTRY_LOGIN: ${{ secrets.DOCKERHUB_REGISTRY_LOGIN }}
+          DOCKERHUB_REGISTRY_PASSWORD: ${{ secrets.DOCKERHUB_REGISTRY_PASSWORD }}
+        run: |
+          BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
+          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
+          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/^v//')
+
+          curl -s -X POST -d '{"username": "$DOCKERHUB_REGISTRY_LOGIN", "password": "$DOCKERHUB_REGISTRY_PASSWORD"}' https://hub.docker.com/v2/users/login/ | jq -r .token > token.txt
+          TOKEN=$(<token.txt)
+
+          # Perform the delete request
+          curl -s -X DELETE \
+            -H "Authorization: JWT $TOKEN" \
+            https://hub.docker.com/v2/repositories/prompp/prompp/tags/$BRANCH_NAME-arm64/
+          
+          curl -s -X DELETE \
+            -H "Authorization: JWT $TOKEN" \
+            https://hub.docker.com/v2/repositories/prompp/prompp/tags/$BRANCH_NAME-amd64/
+
+      - name: Create multiarch image
+        run: |
+          BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
+          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
+          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/^v//')
+          
+          docker pull docker.io/prompp/prompp:$BRANCH_NAME-amd64
+          docker pull docker.io/prompp/prompp:$BRANCH_NAME-arm64
+
+          docker manifest create docker.io/prompp/prompp:$BRANCH_NAME \
+            docker.io/prompp/prompp:$BRANCH_NAME-amd64 \
+            docker.io/prompp/prompp:$BRANCH_NAME-arm64
+
+          docker manifest push docker.io/prompp/prompp:$BRANCH_NAME \
+            --purge
+      
+      -  name: Remove Docker images
+         run: |
+          BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
+          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
+          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/^v//')
+
+          docker rmi docker.io/prompp/prompp:$BRANCH_NAME-amd64 || true
+          docker rmi docker.io/prompp/prompp:$BRANCH_NAME-arm64 || true
+
   release:
     needs: build-and-push
     permissions:
