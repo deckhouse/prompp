@@ -21,3 +21,5 @@ done
 bazel query "${QUERY_COMMAND}" | \
   xargs bazel test --compilation_mode="${OPT}" --local_resources=cpu=HOST_CPUS*0.2 --test_output=errors \
   --test_timeout=60 --flaky_test_attempts=5 ${SANITIZERS_MODE_FLAG}
+
+sleep 60
