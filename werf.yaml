@@ -141,7 +141,6 @@ shell:
 ---
 artifact: prom-pp-binaries-artifact
 from: alt:p10
-disableGitAfterPatch: true
 git:
   - add: /scripts/binary_replace.sh
     to: /binary_replace.sh
