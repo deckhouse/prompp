@@ -139,11 +139,75 @@ func (q *Querier) Close() error {
 }
 
 func (q *Querier) Select(ctx context.Context, sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
+	if q.mint == q.maxt {
+		return q.selectInstant(ctx, sortSeries, hints, matchers...)
+	}
+	return q.selectRange(ctx, sortSeries, hints, matchers...)
+}
+
+func (q *Querier) selectInstant(ctx context.Context, sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
 	start := time.Now()
 	defer func() {
 		if q.metrics != nil {
 			q.metrics.SelectDuration.With(
-				prometheus.Labels{"generation": strconv.FormatUint(q.head.Generation(), 10)},
+				prometheus.Labels{"generation": strconv.FormatUint(q.head.Generation(), 10),
+					"query_type": "instant",
+				},
+			).Observe(float64(time.Since(start).Microseconds()))
+		}
+	}()
+
+	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
+	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
+	callerID := cppbridge.GetCaller(ctx)
+
+	valueNotFoundTimestampValue := DefaultInstantQueryValueNotFoundTimestampValue
+	if q.mint <= valueNotFoundTimestampValue {
+		valueNotFoundTimestampValue = q.mint - 1
+	}
+
+	err := q.head.ForEachShard(func(shard relabeler.Shard) error {
+		lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
+
+		if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {
+			seriesSets[shard.ShardID()] = &SeriesSet{}
+			if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
+				return nil
+			}
+			return fmt.Errorf("failed to query from shard: %d, query status: %d", shard.ShardID(), lssQueryResult.Status())
+		}
+
+		samples := shard.DataStorage().InstantQuery(q.maxt, valueNotFoundTimestampValue, lssQueryResult.IDs())
+
+		labelSets := make([]*cppbridge.LabelsCpp, len(samples))
+		lssQueryResult.MatchesIndexRange(func(lss *cppbridge.LabelSetStorage, index int, lsid uint32, length uint16) {
+			if samples[index].Timestamp == valueNotFoundTimestampValue {
+				return
+			}
+			labelSets[index] = cppbridge.NewLabelsCpp(lss, lsid, length)
+		})
+
+		runtime.KeepAlive(lssQueryResult)
+		seriesSets[shard.ShardID()] = NewInstantSeriesSet(valueNotFoundTimestampValue, labelSets, samples)
+		return nil
+	})
+	if err != nil {
+		logger.Warnf("QUERIER: Select failed: %s", err)
+		return storage.ErrSeriesSet(err)
+	}
+
+	return storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge)
+}
+
+func (q *Querier) selectRange(ctx context.Context, sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
+	start := time.Now()
+	defer func() {
+		if q.metrics != nil {
+			q.metrics.SelectDuration.With(
+				prometheus.Labels{
+					"generation": fmt.Sprintf("%d", q.head.Generation()),
+					"query_type": "range",
+				},
 			).Observe(float64(time.Since(start).Microseconds()))
 		}
 	}()

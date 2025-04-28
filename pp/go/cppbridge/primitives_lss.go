@@ -307,6 +307,13 @@ func (r *LSSQueryResult) MatchesRange(callback func(lss *LabelSetStorage, lsid u
 	}
 }
 
+// MatchesRange calls callback sequentially for each result.
+func (r *LSSQueryResult) MatchesIndexRange(callback func(lss *LabelSetStorage, index int, lsid uint32, length uint16)) {
+	for i, lsId := range r.queryResult.matches {
+		callback(r.lssRO, i, lsId, r.queryResult.labelSetLengths[i])
+	}
+}
+
 //
 // LSSQueryLabelNamesResult
 //

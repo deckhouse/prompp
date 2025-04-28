@@ -52,7 +52,7 @@ func NewMetrics(registerer prometheus.Registerer) *Metrics {
 					100000, 500000,
 				},
 			},
-			[]string{"generation"},
+			[]string{"generation", "query_type"},
 		),
 		AppendDuration: factory.NewHistogram(
 			prometheus.HistogramOpts{

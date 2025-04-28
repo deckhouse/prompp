@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.2.2
+
+### Features
+1. **Instant Query**: Introduced an Instant Query feature to optimize federation queries, which reduces CPU consumption and speeds up query processing.
+2. **Refill Handler**: Added a new refill handler for improved system efficiency.
+3. **Add arm64 builder**.
+
+### Enhancements
+1. **Chunk Recorder**: Optimized the Chunk Recorder to speed up block creation and reduce CPU usage during rotation.
+
+### Fixes
+1. **OTLP Handler**: Refactored the OTLP handler to resolve issues with duplicated data entries, reducing memory consumption and eliminating unnecessary conversions.
+
 ## v0.2.1
 
 ### Fixes
