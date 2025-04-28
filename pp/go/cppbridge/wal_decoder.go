@@ -253,8 +253,10 @@ func (d *WALDecoder) RestoreFromStream(
 // OutputDecoderStats stats for output decoded segment.
 type OutputDecoderStats struct {
 	maxTimestamp        int64
-	outdatedSampleCount uint64
-	droppedSampleCount  uint64
+	outdatedSampleCount uint32
+	droppedSampleCount  uint32
+	addSeriesCount      uint32
+	droppedSeriesCount  uint32
 }
 
 // MaxTimestamp return max timestamp in decoded segment.
@@ -263,13 +265,23 @@ func (s OutputDecoderStats) MaxTimestamp() int64 {
 }
 
 // OutdatedSampleCount return count of too old samples.
-func (s OutputDecoderStats) OutdatedSampleCount() uint64 {
+func (s OutputDecoderStats) OutdatedSampleCount() uint32 {
 	return s.outdatedSampleCount
 }
 
 // DroppedSampleCount return count dropped samples.
-func (s OutputDecoderStats) DroppedSampleCount() uint64 {
+func (s OutputDecoderStats) DroppedSampleCount() uint32 {
 	return s.droppedSampleCount
+}
+
+// AddSeriesCount return number of add series.
+func (s OutputDecoderStats) AddSeriesCount() uint32 {
+	return s.addSeriesCount
+}
+
+// DroppedSeriesCount return count dropped series.
+func (s OutputDecoderStats) DroppedSeriesCount() uint32 {
+	return s.droppedSeriesCount
 }
 
 //
@@ -280,8 +292,9 @@ func (s OutputDecoderStats) DroppedSampleCount() uint64 {
 //
 //	decoder - pointer to a C++ decoder initiated in C++ memory;
 type WALOutputDecoder struct {
-	decoder uintptr
-	shardID uint16
+	externalLabels []Label
+	decoder        uintptr
+	shardID        uint16
 }
 
 // NewWALOutputDecoder init new WALOutputDecoder.
@@ -293,14 +306,17 @@ func NewWALOutputDecoder(
 	encodersVersion uint8,
 ) *WALOutputDecoder {
 	d := &WALOutputDecoder{
-		decoder: walOutputDecoderCtor(
-			externalLabels,
-			statelessRelabeler.Pointer(),
-			outputLss.Pointer(),
-			encodersVersion,
-		),
-		shardID: shardID,
+		externalLabels: externalLabels,
+		shardID:        shardID,
 	}
+
+	d.decoder = walOutputDecoderCtor(
+		d.externalLabels,
+		statelessRelabeler.Pointer(),
+		outputLss.Pointer(),
+		encodersVersion,
+	)
+
 	runtime.SetFinalizer(d, func(d *WALOutputDecoder) {
 		walOutputDecoderDtor(d.decoder)
 	})

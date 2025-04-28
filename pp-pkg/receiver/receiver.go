@@ -92,10 +92,6 @@ type Receiver struct {
 	shutdowner        *util.GracefulShutdowner
 }
 
-func (rr *Receiver) Appender(ctx context.Context) storage.Appender {
-	return newPromAppender(ctx, rr, prom_config.TransparentRelabeler)
-}
-
 type RotationInfo struct {
 	BlockDuration time.Duration
 	Seed          uint64
@@ -105,13 +101,13 @@ type HeadActivator struct {
 	catalog *catalog.Catalog
 }
 
+func newHeadActivator(catalog *catalog.Catalog) *HeadActivator {
+	return &HeadActivator{catalog: catalog}
+}
+
 func (ha *HeadActivator) Activate(headID string) error {
 	_, err := ha.catalog.SetStatus(headID, catalog.StatusActive)
 	return err
-}
-
-func newHeadActivator(catalog *catalog.Catalog) *HeadActivator {
-	return &HeadActivator{catalog: catalog}
 }
 
 func NewReceiver(
@@ -129,6 +125,7 @@ func NewReceiver(
 	commitInterval time.Duration,
 	maxRetentionDuration time.Duration,
 	headRetentionTimeout time.Duration,
+	writeTimeout time.Duration,
 ) (*Receiver, error) {
 	if logger == nil {
 		logger = log.NewNopLogger()
@@ -201,6 +198,7 @@ func NewReceiver(
 		clock,
 		maxRetentionDuration,
 		headRetentionTimeout,
+		writeTimeout,
 		rotatedHeads...,
 	)
 
@@ -226,6 +224,7 @@ func NewReceiver(
 			app,
 			relabeler.NewRotateTimerWithSeed(clock, rotationInfo.BlockDuration, rotationInfo.Seed),
 			appender.NewConstantIntervalTimer(clock, commitInterval),
+			appender.NewConstantIntervalTimer(clock, appender.DefaultMergeDuration),
 			registerer,
 		),
 
@@ -245,6 +244,21 @@ func NewReceiver(
 	level.Info(logger).Log("msg", "created")
 
 	return r, nil
+}
+
+// AppendHashdex append incoming Hashdex data to relabeling.
+func (rr *Receiver) AppendHashdex(
+	ctx context.Context,
+	hashdex cppbridge.ShardedData,
+	relabelerID string,
+	commitToWal bool,
+) error {
+	if rr.haTracker.IsDrop(hashdex.Cluster(), hashdex.Replica()) {
+		return nil
+	}
+	incomingData := &relabeler.IncomingData{Hashdex: hashdex}
+	_, err := rr.appender.Append(ctx, incomingData, nil, relabelerID, commitToWal)
+	return err
 }
 
 // AppendSnappyProtobuf append compressed via snappy Protobuf data to relabeling hashdex data.
@@ -313,19 +327,9 @@ func (rr *Receiver) AppendTimeSeriesHashdex(
 	)
 }
 
-// AppendHashdex append incoming Hashdex data to relabeling.
-func (rr *Receiver) AppendHashdex(
-	ctx context.Context,
-	hashdex cppbridge.ShardedData,
-	relabelerID string,
-	commitToWal bool,
-) error {
-	if rr.haTracker.IsDrop(hashdex.Cluster(), hashdex.Replica()) {
-		return nil
-	}
-	incomingData := &relabeler.IncomingData{Hashdex: hashdex}
-	_, err := rr.appender.Append(ctx, incomingData, nil, relabelerID, commitToWal)
-	return err
+// Appender create a new appender for head.
+func (rr *Receiver) Appender(ctx context.Context) storage.Appender {
+	return newPromAppender(ctx, rr, prom_config.TransparentRelabeler)
 }
 
 // ApplyConfig update config.
@@ -450,6 +454,40 @@ func (rr *Receiver) GetState() *cppbridge.State {
 	return cppbridge.NewState(rr.headConfigStorage.Load().numberOfShards)
 }
 
+func (rr *Receiver) HeadQueryable() storage.Queryable {
+	return rr.appender
+}
+
+func (rr *Receiver) HeadStatus(limit int) relabeler.HeadStatus {
+	return rr.appender.HeadStatus(limit)
+}
+
+// LowestSentTimestamp returns the lowest sent timestamp across all queues.
+func (*Receiver) LowestSentTimestamp() int64 {
+	return 0
+}
+
+// MergeOutOfOrderChunks merge chunks with out of order data chunks.
+func (rr *Receiver) MergeOutOfOrderChunks() {
+	rr.appender.MergeOutOfOrderChunks()
+}
+
+// Querier calls f() with the given parameters.
+// Returns a querier.MultiQuerier combining of appenderQuerier and storageQuerier.
+func (rr *Receiver) Querier(mint, maxt int64) (storage.Querier, error) {
+	appenderQuerier, err := rr.appender.Querier(mint, maxt)
+	if err != nil {
+		return nil, err
+	}
+
+	storageQuerier, err := rr.storage.Querier(mint, maxt)
+	if err != nil {
+		return nil, errors.Join(err, appenderQuerier.Close())
+	}
+
+	return querier.NewMultiQuerier([]storage.Querier{appenderQuerier, storageQuerier}, nil), nil
+}
+
 // RelabelerIDIsExist check on exist relabelerID.
 func (rr *Receiver) RelabelerIDIsExist(relabelerID string) bool {
 	cs := rr.headConfigStorage.Load()
@@ -469,35 +507,6 @@ func (rr *Receiver) Run(_ context.Context) (err error) {
 	rr.rotator.Run()
 	<-rr.shutdowner.Signal()
 	return nil
-}
-
-func (rr *Receiver) HeadStatus(limit int) relabeler.HeadStatus {
-	return rr.appender.HeadStatus(limit)
-}
-
-// Querier calls f() with the given parameters.
-// Returns a querier.MultiQuerier combining of appenderQuerier and storageQuerier.
-func (rr *Receiver) Querier(mint, maxt int64) (storage.Querier, error) {
-	appenderQuerier, err := rr.appender.Querier(mint, maxt)
-	if err != nil {
-		return nil, err
-	}
-
-	storageQuerier, err := rr.storage.Querier(mint, maxt)
-	if err != nil {
-		return nil, errors.Join(err, appenderQuerier.Close())
-	}
-
-	return querier.NewMultiQuerier([]storage.Querier{appenderQuerier, storageQuerier}, nil), nil
-}
-
-func (rr *Receiver) HeadQueryable() storage.Queryable {
-	return rr.appender
-}
-
-// LowestSentTimestamp returns the lowest sent timestamp across all queues.
-func (*Receiver) LowestSentTimestamp() int64 {
-	return 0
 }
 
 // Shutdown safe shutdown Receiver.
@@ -641,11 +650,16 @@ func convertingConfigDialers(
 		if err != nil {
 			return nil, err
 		}
-		ccfg := dialer.NewCommonConfig(
+
+		ccfg, err := dialer.NewCommonConfig(
 			sCfg.URL.URL,
 			tlsCfg,
 			sCfg.Name,
 		)
+		if err != nil {
+			return nil, err
+		}
+
 		dialersConfigs = append(
 			dialersConfigs,
 			&relabeler.DialersConfig{
@@ -681,10 +695,13 @@ func makeDialers(
 	for i := range dialersConfig {
 		ccfg, ok := dialersConfig[i].ConnDialerConfig.(*dialer.CommonConfig)
 		if !ok {
-			return nil, fmt.Errorf("invalid CommonConfig: %v", dialersConfig[i].ConnDialerConfig)
+			return nil, fmt.Errorf("invalid dialer CommonConfig: %v", dialersConfig[i].ConnDialerConfig)
 		}
 
-		d := dialer.DefaultDialer(ccfg, registerer)
+		d, err := dialer.DefaultDialer(ccfg, registerer)
+		if err != nil {
+			return nil, err
+		}
 
 		tcpDialer := relabeler.NewWebSocketDialer(
 			d,

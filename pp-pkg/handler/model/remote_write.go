@@ -1,9 +1,22 @@
 package model
 
+import "net/http"
+
+//
+// RemoteWriteProcessingStatus
+//
+
 // RemoteWriteProcessingStatus status of processing RemoteWrite.
 type RemoteWriteProcessingStatus struct {
 	Code    int
 	Message string
+}
+
+// Write to writer RemoteWriteProcessingStatus.
+func (s *RemoteWriteProcessingStatus) Write(writer http.ResponseWriter) error {
+	writer.WriteHeader(s.Code)
+	_, err := writer.Write([]byte(s.Message))
+	return err
 }
 
 // RemoteWriteBuffer buffer []byte for protobuf.

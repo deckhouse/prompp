@@ -428,11 +428,24 @@ void prompp_primitives_lss_find_or_emplace(void* args, void* res);
  * }
  *
  * @param res {
- *     status uint32    // query status
- *     matches []uint32 // matched series ids
+ *     matches           []uint32 // matched series ids
+ *     label_set_lengths []uint16 // slice of series label set length
+ *     lss_copy          uintptr  // readonly copy of lss
+ *     status            uint32   // query status
  * }
  */
 void prompp_primitives_lss_query(void* args, void* res);
+
+/**
+ * @brief free label set matches returned by prompp_primitives_lss_query
+ *
+ * @param args {
+ *     matches           []uint32 // matched series ids
+ *     label_set_lengths []uint16 // slice of series label set length
+ *     status            uint32   // query status
+ * }
+ */
+void prompp_primitives_lss_query_result_free(void* args);
 
 /**
  * @brief get label sets by series id
@@ -487,6 +500,47 @@ void prompp_primitives_lss_query_label_names(void* args, void* res);
  * }
  */
 void prompp_primitives_lss_query_label_values(void* args, void* res);
+
+//
+// label_sets
+//
+
+/**
+ * @brief get length label set by series id
+ *
+ * @param args {
+ *     lss    uintptr // pointer to constructed lss;
+ *     ls_id  uint32  // series id
+ * }
+ *
+ * @param res {
+ *     length int     // length of label set
+ * }
+ */
+void prompp_primitives_label_set_length(void* args, void* res);
+
+/**
+ * @brief get label set by series id
+ *
+ * @param args {
+ *     lss       uintptr                      // pointer to constructed lss;
+ *     ls_id     uint32                       // series id
+ * }
+ *
+ * @param res {
+ *     label_set []struct{key, value String}  // label sets
+ * }
+ */
+void prompp_primitives_label_set_serialize(void* args, void* res);
+
+/**
+ * @brief free label set returned by prompp_primitives_label_set_serialize
+ *
+ * @param args {
+ *     label_set []struct{key, value String} // label set
+ * }
+ */
+void prompp_primitives_label_set_free(void* args);
 
 #ifdef __cplusplus
 }  // extern "C"
@@ -660,6 +714,9 @@ void prompp_prometheus_per_shard_relabeler_cache_allocated_memory(void* args, vo
  * }
  *
  * @param res {
+ *     samples_added           uint32             // number of added samples;
+ *     series_added            uint32             // number of added series;
+ *     series_drop             uint32             // number of dropped series;
  *     error                   []byte             // error string if thrown;
  * }
  */
@@ -726,6 +783,9 @@ void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stalenans(void*
  * }
  *
  * @param res {
+ *     samples_added           uint32             // number of added samples;
+ *     series_added            uint32             // number of added series;
+ *     series_drop             uint32             // number of dropped series;
  *     error                   []byte             // error string if thrown;
  * }
  */
@@ -886,7 +946,7 @@ void prompp_series_data_data_storage_time_interval(void* args, void* res);
  *     dataStorage uintptr // pointer to constructed data storage
  * }
  *
- * @param args {
+ * @param res {
  *     allocated_memory uint64 // serialized data
  * }
  */
@@ -900,11 +960,26 @@ void prompp_series_data_data_storage_allocated_memory(void* args, void* res);
  *     query DataStorageQuery // query
  * }
  *
- * @param args {
+ * @param res {
  *     serializedData []byte // serialized data
  * }
  */
 void prompp_series_data_data_storage_query(void* args, void* res);
+
+/**
+ * @brief return samples at given timestamp for label sets.
+ *
+ * @param args {
+ *        dataStorage uintptr    // pointer to constructed data storage
+ *        labelSetIDs []uint32   // series ids
+ *        timestamp   int64      // timestamp
+ *        samples     []struct { // pre-allocated samples slice
+ *                timestamp int64
+ *                value     float64
+ *        }
+ * }
+ */
+void prompp_series_data_data_storage_instant_query(void* args);
 
 /**
  * @brief series data DataStorage destructor.
@@ -1268,8 +1343,10 @@ void prompp_wal_output_decoder_load_from(void* args, void* res);
  *
  * @param res {
  *     max_timestamp         int64       // max timestamp in slice RefSample
- *     outdated_sample_count uint64      // count of dropped samples on outdated
- *     dropped_sample_count  uint64      // count of dropped samples on relabeling rules
+ *     outdated_sample_count uint32      // count of dropped samples on outdated
+ *     dropped_sample_count  uint32      // count of dropped samples on relabeling rules
+ *     add_series_count      uint32      // count of add series on relabeling rules
+ *     dropped_series_count  uint32      // count of dropped series on relabeling rules
  *     ref_samples           []RefSample // slice RefSample
  *     error                 []byte      // error string if thrown
  * }

@@ -5,12 +5,13 @@
 #include "head/lss.h"
 #include "primitives/go_slice.h"
 #include "series_data/data_storage.h"
+#include "series_data/querier/instant_querier.h"
 #include "series_data/querier/querier.h"
 #include "series_data/serialization/serializer.h"
 
 using entrypoint::head::DataStoragePtr;
 using entrypoint::head::QueryableEncodingBimap;
-using ChunkRecoder = head::ChunkRecoder<QueryableEncodingBimap::LsIdSet>;
+using ChunkRecoder = head::ChunkRecoder<QueryableEncodingBimap::LsIdSet::const_iterator, QueryableEncodingBimap::LsIdSet::const_iterator>;
 using ChunkRecoderPtr = std::unique_ptr<ChunkRecoder>;
 
 extern "C" void prompp_series_data_data_storage_ctor(void* res) {
@@ -68,6 +69,27 @@ extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
   serializer.serialize(queried_chunk_list, bytes_stream);
 }
 
+extern "C" void prompp_series_data_data_storage_instant_query(void* args) {
+  using PromPP::Primitives::LabelSetID;
+  using PromPP::Primitives::Timestamp;
+  using PromPP::Primitives::Go::SliceView;
+  using series_data::DataStorage;
+  using series_data::encoder::Sample;
+
+  struct Arguments {
+    DataStorage* data_storage;
+    SliceView<LabelSetID> label_set_ids;
+    Timestamp timestamp;
+    SliceView<Sample> samples;
+  };
+
+  auto in = reinterpret_cast<Arguments*>(args);
+
+  for (size_t i = 0; i < in->samples.size(); ++i) {
+    series_data::InstantQuerier::query_sample(in->samples[i], *(in->data_storage), in->label_set_ids[i], in->timestamp);
+  }
+}
+
 extern "C" void prompp_series_data_data_storage_allocated_memory(void* args, void* res) {
   using series_data::DataStorage;
 
@@ -104,8 +126,9 @@ extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
   };
 
   const auto in = static_cast<Arguments*>(args);
+  const auto& ls_id_set = std::get<QueryableEncodingBimap>(*in->lss).ls_id_set();
   new (res) Result{
-      .chunk_recoder = std::make_unique<ChunkRecoder>(std::get<QueryableEncodingBimap>(*in->lss).ls_id_set(), in->data_storage.get(), in->time_interval),
+      .chunk_recoder = std::make_unique<ChunkRecoder>(ls_id_set.begin(), ls_id_set.end(), in->data_storage.get(), in->time_interval),
   };
 }
 
@@ -118,7 +141,7 @@ extern "C" void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, v
     uint32_t series_id;
     uint8_t samples_count;
     bool has_more_data;
-    PromPP::Primitives::Go::SliceView<uint8_t> buffer;
+    PromPP::Primitives::Go::SliceView<const uint8_t> buffer;
   };
 
   const auto in = static_cast<const Arguments*>(args);

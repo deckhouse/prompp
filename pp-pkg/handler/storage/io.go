@@ -30,12 +30,12 @@ type SegmentHeader struct {
 
 type BlockReader interface {
 	Header() BlockHeader
-	Next() (model.Segment, error)
+	Next() (*model.Segment, error)
 	Close() error
 }
 
 type BlockWriter interface {
 	Header() BlockHeader
-	Append(segment model.Segment) error
+	Append(segment *model.Segment) error
 	Close() error
 }

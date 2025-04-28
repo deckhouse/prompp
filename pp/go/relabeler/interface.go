@@ -15,6 +15,7 @@ type DataStorage interface {
 	Raw() *cppbridge.HeadDataStorage
 	MergeOutOfOrderChunks()
 	Query(query cppbridge.HeadDataStorageQuery) *cppbridge.HeadDataStorageSerializedChunks
+	InstantQuery(targetTimestamp, notFoundValueTimestampValue int64, seriesIDs []uint32) []cppbridge.Sample
 	AllocatedMemory() uint64
 }
 
@@ -62,6 +63,8 @@ type Head interface {
 	CommitToWal() error
 	ForEachShard(fn ShardFn) error
 	OnShard(shardID uint16, fn ShardFn) error
+	// MergeOutOfOrderChunks merge chunks with out of order data chunks.
+	MergeOutOfOrderChunks()
 	NumberOfShards() uint16
 	Stop()
 	Flush() error

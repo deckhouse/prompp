@@ -29,17 +29,27 @@ class SortingIndex {
   }
 
   PROMPP_ALWAYS_INLINE void update(typename Set::const_iterator ls_id_iterator) {
+    if (empty()) {
+      return;
+    }
+
     const uint64_t previous = get_previous(ls_id_iterator);
     const uint64_t next = get_next(ls_id_iterator);
-    if (uint32_t value = (previous + next) / 2; value > previous) {
+    if (uint32_t value = (previous + next) / 2; value > previous) [[likely]] {
       sorting_index_.emplace_back(value);
     } else {
-      build();
+      // If we can't insert item we don't need to rebuild index, because it's very expensive operation for CPU.
+      // Index will be built on demand in sort method
+      sorting_index_.clear();
     }
   }
 
   template <class Iterator>
-  void sort(Iterator begin, Iterator end) const noexcept {
+  PROMPP_ALWAYS_INLINE void sort(Iterator begin, Iterator end) noexcept {
+    if (empty()) [[unlikely]] {
+      build();
+    }
+
     std::sort(begin, end, [this](uint32_t a, uint32_t b) PROMPP_LAMBDA_INLINE { return sorting_index_[a] < sorting_index_[b]; });
   }
 

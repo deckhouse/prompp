@@ -305,7 +305,7 @@ func main() {
 		promlogConfig: promlog.Config{},
 	}
 
-	a := kingpin.New(filepath.Base(os.Args[0]), "The Prometheus monitoring server").UsageWriter(os.Stdout)
+	a := kingpin.New(filepath.Base(os.Args[0]), "The Prom++ monitoring server").UsageWriter(os.Stdout)
 
 	a.Version(version.Print(appName))
 
@@ -364,8 +364,8 @@ func main() {
 	a.Flag("web.console.libraries", "Path to the console library directory.").
 		Default("console_libraries").StringVar(&cfg.web.ConsoleLibrariesPath)
 
-	a.Flag("web.page-title", "Document title of Prometheus instance.").
-		Default("Prometheus Time Series Collection and Processing Server").StringVar(&cfg.web.PageTitle)
+	a.Flag("web.page-title", "Document title of Prom++ instance.").
+		Default("Prom++ Time Series Collection and Processing Server").StringVar(&cfg.web.PageTitle)
 
 	a.Flag("web.cors.origin", `Regex for CORS origin. It is fully anchored. Example: 'https?://(domain1|domain2)\.com'`).
 		Default(".*").StringVar(&cfg.corsRegexString)
@@ -375,6 +375,11 @@ func main() {
 
 	serverOnlyFlag(a, "storage.tsdb.min-block-duration", "Minimum duration of a data block before being persisted. For use in testing.").
 		Hidden().Default("2h").SetValue(&cfg.tsdb.MinBlockDuration)
+
+	var catalogMaxLogFileSize units.Base2Bytes
+	serverOnlyFlag(a, "storage.prompp.max-log-file-size", "Maximum size of log file in bytes before being compacted.").
+		Hidden().Default(fmt.Sprintf("%dB", catalog.DefaultMaxLogFileSize)).
+		PlaceHolder("<bytes>").BytesVar(&catalogMaxLogFileSize)
 
 	serverOnlyFlag(a, "storage.tsdb.max-block-duration",
 		"Maximum duration compacted blocks may span. For use in testing. (Defaults to 10% of the retention period.)").
@@ -728,7 +733,7 @@ func main() {
 	}
 
 	clock := clockwork.NewRealClock()
-	headCatalog, err := catalog.New(clock, fileLog, catalog.DefaultIDGenerator{})
+	headCatalog, err := catalog.New(clock, fileLog, catalog.DefaultIDGenerator{}, int(catalogMaxLogFileSize), prometheus.DefaultRegisterer)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create head catalog", "err", err)
 		os.Exit(1)
@@ -754,6 +759,8 @@ func main() {
 		time.Duration(cfg.WalCommitInterval),
 		time.Duration(cfg.tsdb.RetentionDuration),
 		time.Duration(cfg.HeadRetentionTimeout),
+		// x3 ScrapeInterval timeout for write block
+		time.Duration(cfgFile.GlobalConfig.ScrapeInterval*3),
 	)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create a receiver", "err", err)

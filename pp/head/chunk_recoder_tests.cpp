@@ -6,6 +6,7 @@
 
 namespace {
 
+using BareBones::Encoding::Gorilla::STALE_NAN;
 using PromPP::Primitives::kInvalidLabelSetID;
 using PromPP::Primitives::LabelSetID;
 using PromPP::Primitives::TimeInterval;
@@ -17,7 +18,7 @@ using std::operator""s;
 class ChunkRecoderFixture : public ::testing::Test {
  protected:
   using LsIdSet = std::vector<LabelSetID>;
-  using ChunkRecoder = head::ChunkRecoder<LsIdSet>;
+  using ChunkRecoder = head::ChunkRecoder<LsIdSet::const_iterator, LsIdSet::const_iterator>;
 
   struct RecodeInfo {
     TimeInterval interval{.min = 0, .max = 0};
@@ -30,13 +31,11 @@ class ChunkRecoderFixture : public ::testing::Test {
   };
 
   DataStorage storage_;
-  std::chrono::system_clock clock_;
-  OutdatedSampleEncoder<std::chrono::system_clock> outdated_sample_encoder_{clock_};
   LsIdSet ls_id_set_;
 
   ChunkRecoder create_recoder(const LsIdSet& ls_id_set, const TimeInterval& time_interval) {
     ls_id_set_ = ls_id_set;
-    return ChunkRecoder{ls_id_set_, &storage_, time_interval};
+    return ChunkRecoder{ls_id_set_.begin(), ls_id_set_.end(), &storage_, time_interval};
   }
 
   static RecodeInfo recode(ChunkRecoder& recoder) noexcept {
@@ -50,7 +49,7 @@ class ChunkRecoderFixture : public ::testing::Test {
 
 TEST_F(ChunkRecoderFixture, EmptyStorage) {
   // Arrange
-  ChunkRecoder recoder({}, &storage_, {});
+  ChunkRecoder recoder({}, {}, &storage_, {});
 
   // Act
   const auto info1 = recode(recoder);
@@ -63,7 +62,7 @@ TEST_F(ChunkRecoderFixture, EmptyStorage) {
 
 TEST_F(ChunkRecoderFixture, StorageWithOneChunk) {
   // Arrange
-  Encoder encoder{storage_, outdated_sample_encoder_};
+  Encoder encoder{storage_};
   encoder.encode(0, 1, 1.0);
   encoder.encode(0, 2, 1.0);
 
@@ -87,7 +86,7 @@ TEST_F(ChunkRecoderFixture, StorageWithOneChunk) {
 
 TEST_F(ChunkRecoderFixture, StorageWithEmptyChunks) {
   // Arrange
-  Encoder encoder{storage_, outdated_sample_encoder_};
+  Encoder encoder{storage_};
   encoder.encode(2, 1, 1.0);
   encoder.encode(2, 2, 1.0);
   encoder.encode(4, 3, 2.0);
@@ -120,7 +119,7 @@ TEST_F(ChunkRecoderFixture, StorageWithEmptyChunks) {
 
 TEST_F(ChunkRecoderFixture, ReverseOrderOfChunks) {
   // Arrange
-  Encoder encoder{storage_, outdated_sample_encoder_};
+  Encoder encoder{storage_};
   encoder.encode(2, 1, 1.0);
   encoder.encode(2, 2, 1.0);
   encoder.encode(4, 3, 2.0);
@@ -153,7 +152,7 @@ TEST_F(ChunkRecoderFixture, ReverseOrderOfChunks) {
 
 TEST_F(ChunkRecoderFixture, ChunkWithFinalizedTimestampStream) {
   // Arrange
-  Encoder<decltype(outdated_sample_encoder_), 2> encoder{storage_, outdated_sample_encoder_};
+  Encoder<2> encoder{storage_};
   encoder.encode(0, 1, 1.0);
   encoder.encode(1, 1, 1.0);
   encoder.encode(0, 2, 1.0);
@@ -196,7 +195,7 @@ TEST_F(ChunkRecoderFixture, ChunkWithFinalizedTimestampStream) {
 
 TEST_F(ChunkRecoderFixture, GorillaChunk) {
   // Arrange
-  Encoder encoder{storage_, outdated_sample_encoder_};
+  Encoder encoder{storage_};
   encoder.encode(0, 1, 1.1);
   encoder.encode(0, 2, 1.2);
   encoder.encode(0, 3, 1.3);
@@ -221,7 +220,7 @@ TEST_F(ChunkRecoderFixture, GorillaChunk) {
 
 TEST_F(ChunkRecoderFixture, NoChunksByTimeInterval) {
   // Arrange
-  Encoder encoder{storage_, outdated_sample_encoder_};
+  Encoder encoder{storage_};
   encoder.encode(0, 1, 1.1);
   encoder.encode(0, 2, 1.2);
 
@@ -236,7 +235,7 @@ TEST_F(ChunkRecoderFixture, NoChunksByTimeInterval) {
 
 TEST_F(ChunkRecoderFixture, PartialReencodingByTimeInterval) {
   // Arrange
-  Encoder encoder{storage_, outdated_sample_encoder_};
+  Encoder encoder{storage_};
   encoder.encode(0, 0, 1.0);
   encoder.encode(0, 1, 1.0);
   encoder.encode(0, 2, 1.0);
@@ -262,7 +261,7 @@ TEST_F(ChunkRecoderFixture, PartialReencodingByTimeInterval) {
 
 TEST_F(ChunkRecoderFixture, EmptyFinalizedChunk) {
   // Arrange
-  Encoder<decltype(outdated_sample_encoder_), 2> encoder{storage_, outdated_sample_encoder_};
+  Encoder<2> encoder{storage_};
   encoder.encode(0, 1, 1.0);
   encoder.encode(0, 2, 1.0);
   encoder.encode(0, 5, 1.0);
@@ -278,7 +277,7 @@ TEST_F(ChunkRecoderFixture, EmptyFinalizedChunk) {
 
 TEST_F(ChunkRecoderFixture, EmptyFinalizedChunkNonEmptyOpenedChunk) {
   // Arrange
-  Encoder<decltype(outdated_sample_encoder_), 2> encoder{storage_, outdated_sample_encoder_};
+  Encoder<2> encoder{storage_};
   encoder.encode(0, 1, 1.0);
   encoder.encode(0, 2, 1.0);
   encoder.encode(0, 5, 1.0);
@@ -301,7 +300,7 @@ TEST_F(ChunkRecoderFixture, EmptyFinalizedChunkNonEmptyOpenedChunk) {
 
 TEST_F(ChunkRecoderFixture, EmptyLssWithNonEmptyDataStorage) {
   // Arrange
-  Encoder encoder{storage_, outdated_sample_encoder_};
+  Encoder encoder{storage_};
   encoder.encode(0, 1, 1.0);
 
   auto recoder = create_recoder({}, {.min = 0, .max = 2});
@@ -324,6 +323,74 @@ TEST_F(ChunkRecoderFixture, EmptyStorageWithNonEmptyLss) {
 
   // Assert
   EXPECT_FALSE(has_more_data);
+}
+
+TEST_F(ChunkRecoderFixture, ConstantEncoderChunkWithStaleNanOnSecondPoint) {
+  // Arrange
+  Encoder encoder{storage_};
+  encoder.encode(0, 1, 0.0);
+  encoder.encode(0, 2, STALE_NAN);
+
+  auto recoder = create_recoder({0}, {.min = 0, .max = 3});
+
+  // Act
+  const auto info = recode(recoder);
+
+  // Assert
+  EXPECT_EQ((RecodeInfo{
+                .interval = {.min = 1, .max = 2},
+                .series_id = 0,
+                .samples_count = 2,
+                .buffer = "\x00\x02\x02\x00\x00\x00\x00\x00\x00\x00\x00\x01\xC3\xF7\xFF\x00\x00\x00\x00\x00\x00\x20"s,
+                .has_more_data = false,
+            }),
+            info);
+}
+
+TEST_F(ChunkRecoderFixture, ConstantEncoderChunkWithStaleNanOnThirdPoint) {
+  // Arrange
+  Encoder encoder{storage_};
+  encoder.encode(0, 1, 0.0);
+  encoder.encode(0, 2, 0.0);
+  encoder.encode(0, 3, STALE_NAN);
+
+  auto recoder = create_recoder({0}, {.min = 0, .max = 4});
+
+  // Act
+  const auto info = recode(recoder);
+
+  // Assert
+  EXPECT_EQ((RecodeInfo{
+                .interval = {.min = 1, .max = 3},
+                .series_id = 0,
+                .samples_count = 3,
+                .buffer = "\x00\x03\x02\x00\x00\x00\x00\x00\x00\x00\x00\x01\x30\xFD\xFF\xC0\x00\x00\x00\x00\x00\x08"s,
+                .has_more_data = false,
+            }),
+            info);
+}
+
+TEST_F(ChunkRecoderFixture, TwoDoubleConstantEncoderChunkWithStaleNan) {
+  // Arrange
+  Encoder encoder{storage_};
+  encoder.encode(0, 1, 0.0);
+  encoder.encode(0, 2, 1.0);
+  encoder.encode(0, 3, STALE_NAN);
+
+  auto recoder = create_recoder({0}, {.min = 0, .max = 4});
+
+  // Act
+  const auto info = recode(recoder);
+
+  // Assert
+  EXPECT_EQ((RecodeInfo{
+                .interval = {.min = 1, .max = 3},
+                .series_id = 0,
+                .samples_count = 3,
+                .buffer = "\x00\x03\x02\x00\x00\x00\x00\x00\x00\x00\x00\x01\xC4\x57\xFE\xC3\xF4\x00\x00\x00\x00\x00\x00\x00\x20"s,
+                .has_more_data = false,
+            }),
+            info);
 }
 
 }  // namespace
