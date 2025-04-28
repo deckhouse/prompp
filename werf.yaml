@@ -74,6 +74,7 @@ git:
 shell:
   install:
     - cd /src
+    - echo "build --remote_cache=http://127.0.0.1/cache/ --experimental_guard_against_concurrent_changes" >> .bazelrc
     - make install_dir=/tmp compilation_mode={{ env "COMPILATION_MODE" "opt" }} asan={{ env "ASAN" "false" }} build-entrypoint
 ---
 image: prompp-artifact
