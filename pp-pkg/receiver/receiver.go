@@ -765,20 +765,7 @@ func refillSenderCtor(
 
 // initLogHandler init log handler for ManagerKeeper.
 func initLogHandler(logger log.Logger) {
-	logger = log.With(logger, "op_caller", log.Caller(4))
-	relabeler.Debugf = func(template string, args ...interface{}) {
-		level.Debug(logger).Log("msg", fmt.Sprintf(template, args...))
-	}
-	relabeler.Infof = func(template string, args ...interface{}) {
-		level.Info(logger).Log("msg", fmt.Sprintf(template, args...))
-	}
-	relabeler.Warnf = func(template string, args ...interface{}) {
-		level.Warn(logger).Log("msg", fmt.Sprintf(template, args...))
-	}
-	relabeler.Errorf = func(template string, args ...interface{}) {
-		level.Error(logger).Log("msg", fmt.Sprintf(template, args...))
-	}
-
+	logger = log.With(logger, "pp_caller", log.Caller(4))
 	rlogger.Debugf = func(template string, args ...interface{}) {
 		level.Debug(logger).Log("msg", fmt.Sprintf(template, args...))
 	}

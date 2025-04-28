@@ -12,9 +12,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
+	"github.com/prometheus/prometheus/pp/go/util"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -548,13 +549,13 @@ func (mgr *Manager) collectSegmentsToRefill(ctx context.Context) bool {
 	}
 	for i := 0; i < len(rejected); i++ {
 		if err := mgr.writeSegmentToRefill(ctx, rejected[i]); err != nil {
-			Errorf("fail to write segment in refill: %s", err)
+			logger.Errorf("fail to write segment in refill: %s", err)
 			rejected = removeRestOfShard(rejected, i)
 			i--
 		}
 	}
 	if err := mgr.refill.WriteAckStatus(ctx); err != nil {
-		Errorf("fail write ack status in refill: %s", err)
+		logger.Errorf("fail write ack status in refill: %s", err)
 	}
 	mgr.exchange.Remove(rejected)
 	return !empty
@@ -644,7 +645,7 @@ func (mgr *Manager) refillLoop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			if !errors.Is(context.Cause(ctx), ErrShutdown) {
-				Errorf("refill loop context canceled: %s", context.Cause(ctx))
+				logger.Errorf("refill loop context canceled: %s", context.Cause(ctx))
 			}
 			return
 		case <-ticker.Chan():
