@@ -64,6 +64,7 @@ jobs:
               set -xeo pipefail
 
               git config --global --add safe.directory /workspace && cd pp
+              curl -v http://172.31.1.1/cache/
               echo \"build --remote_cache=http://$(ip -json ro show default | jq -r '.[0].gateway')/cache/ --experimental_guard_against_concurrent_changes\" >> .bazelrc
               ./scripts/ci_run_unit_tests.sh
 
