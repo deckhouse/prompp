@@ -61,6 +61,7 @@ jobs:
             -e SANITIZERS=${{ matrix.SANITIZERS }} \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} \
             bash -c "
+              set -xeo pipefail
 
               git config --global --add safe.directory /workspace && cd pp
               cache_addr=$(ip -json ro show default | jq -r '.[0].gateway')
