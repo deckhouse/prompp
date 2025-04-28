@@ -122,7 +122,7 @@ jobs:
 
               git config --global --add safe.directory /workspace && cd pp
               cache_addr=$(ip -json ro show default | jq -r '.[0].gateway')
-              echo "build --remote_cache=http://$cache_addr/cache/ --experimental_guard_against_concurrent_changes" >> .bazelrc
+              echo \"build --remote_cache=http://$(ip -json ro show default | jq -r '.[0].gateway')/cache/ --experimental_guard_against_concurrent_changes\" >> .bazelrc
               make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
             "
       - name: Upload Specific Static Libraries
