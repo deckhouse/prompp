@@ -9,15 +9,3 @@ cc_binary(
         "@google_benchmark//:benchmark_main",
     ],
 )
-
-cc_binary(
-    name = "encoding",
-    srcs = ["encoding_benchmark.cpp"],
-    malloc = "@jemalloc",
-    deps = [
-        "//:bare_bones_headers",
-        "//:primitives",
-        "//:series_data",
-        "@google_benchmark//:benchmark_main",
-    ],
-)
