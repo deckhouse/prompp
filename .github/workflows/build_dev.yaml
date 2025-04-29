@@ -47,4 +47,7 @@ jobs:
           export ASAN="false"
           export WERF_BUILDAH_MODE=auto
 
+          echo "=== ENV VARIABLES ==="
+          env | grep WERF
+
           werf build --platform linux/${{ matrix.arch }} --add-custom-tag="$BRANCH_NAME-${{ matrix.arch }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp
