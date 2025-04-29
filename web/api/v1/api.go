@@ -195,7 +195,7 @@ type API struct {
 
 	HeadQueryable    storage.Queryable  // PP_CHANGES.md: rebuild on cpp
 	headStatusGetter HeadStatusGetter   // PP_CHANGES.md: rebuild on cpp
-	opHandler        *handler.OpHandler // PP_CHANGES.md: rebuild on cpp
+	opHandler        *handler.PPHandler // PP_CHANGES.md: rebuild on cpp
 
 	scrapePoolsRetriever  func(context.Context) ScrapePoolsRetriever
 	targetRetriever       func(context.Context) TargetRetriever
@@ -303,10 +303,10 @@ func NewAPI(
 	}
 
 	if rwEnabled {
-		a.opHandler = handler.NewOpHandler(receiver, logger, registerer) // PP_CHANGES.md: rebuild on cpp
+		a.opHandler = handler.NewPPHandler(dbDir, receiver, logger, registerer) // PP_CHANGES.md: rebuild on cpp
 	}
 	if otlpEnabled {
-		a.otlpWriteHandler = remote.NewOTLPWriteHandler(logger, ap)
+		a.otlpWriteHandler = handler.NewOTLPWriteHandler(logger, receiver) // PP_CHANGES.md: rebuild on cpp
 	}
 
 	return a

@@ -1,3 +1,4 @@
+#include "chunk_recoder_test.h"
 #include "full_load_lss_test.h"
 #include "full_save_lss_test.h"
 #include "load_gorilla_from_wal_and_calculate_hash_over_label_set_names_test.h"
@@ -70,6 +71,7 @@ int main([[maybe_unused]] int argc, char* argv[]) {
     test_db.add(std::make_unique<full_save_lss>());
     test_db.add(std::make_unique<full_load_lss>());
     test_db.add(std::make_unique<performance_tests::SeriesDataEncoder>());
+    test_db.add(std::make_unique<performance_tests::ChunkRecoder>());
     test_db.add(std::make_unique<load_ordered_indexing_table_in_loop>());
     test_db.add(std::make_unique<save_gorilla_to_wal>());
     test_db.add(std::make_unique<performance_tests::series_index::GenerateSeriesReverseIndex>());

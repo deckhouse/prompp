@@ -457,10 +457,12 @@ class PerShardRelabeler {
           switch (rstatus) {
             case rsDrop: {
               cache.add_drop(input_lss.find_or_emplace(timeseries_buf_.label_set(), item.hash()));
+              ++stats.series_drop;
               continue;
             }
             case rsInvalid: {
               cache.add_drop(input_lss.find_or_emplace(timeseries_buf_.label_set(), item.hash()));
+              ++stats.series_drop;
               continue;
             }
             case rsKeep: {
