@@ -34,7 +34,6 @@ shell:
 ---
 image: prompp-src-artifact
 fromCacheVersion: "2025-03-31-12"
-disableGitAfterPatch: true
 from: golang:1.23.2-alpine3.20
 final: false
 git:
@@ -46,7 +45,6 @@ git:
 ---
 image: promu-artifact
 from: golang:1.23.2-alpine3.20
-disableGitAfterPatch: true
 final: false
 git:
   - url: https://github.com/prometheus/promu.git
