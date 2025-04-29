@@ -68,3 +68,7 @@ func (ls *LabelsCpp) Labels() labels.Labels {
 
 	return ls.serializedLS
 }
+
+func (ls *LabelsCpp) ID() uint32 {
+	return ls.id
+}

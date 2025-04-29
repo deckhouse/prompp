@@ -49,19 +49,23 @@ func NewQuerier(head relabeler.Head, deduplicatorFactory DeduplicatorFactory, mi
 }
 
 func (q *Querier) LabelValues(ctx context.Context, name string, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+	return labelValues(ctx, name, q.head, q.deduplicatorFactory, q.metrics, matchers...)
+}
+
+func labelValues(ctx context.Context, name string, head relabeler.Head, deduplicatorFactory DeduplicatorFactory, metrics *Metrics, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	start := time.Now()
 	defer func() {
-		if q.metrics != nil {
-			q.metrics.LabelValuesDuration.With(
-				prometheus.Labels{"generation": fmt.Sprintf("%d", q.head.Generation())},
+		if metrics != nil {
+			metrics.LabelValuesDuration.With(
+				prometheus.Labels{"generation": fmt.Sprintf("%d", head.Generation())},
 			).Observe(float64(time.Since(start).Microseconds()))
 		}
 	}()
 
-	dedup := q.deduplicatorFactory.Deduplicator(q.head.NumberOfShards())
+	dedup := deduplicatorFactory.Deduplicator(head.NumberOfShards())
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
 
-	err := q.head.ForEachShard(func(shard relabeler.Shard) error {
+	err := head.ForEachShard(func(shard relabeler.Shard) error {
 		queryLabelValuesResult := shard.LSS().QueryLabelValues(name, convertedMatchers)
 		if queryLabelValuesResult.Status() != cppbridge.LSSQueryStatusMatch {
 			return fmt.Errorf("no matches on shard: %d", shard.ShardID())
@@ -83,26 +87,30 @@ func (q *Querier) LabelValues(ctx context.Context, name string, matchers ...*lab
 	default:
 	}
 
-	labelValues := dedup.Values()
-	sort.Strings(labelValues)
+	lvs := dedup.Values()
+	sort.Strings(lvs)
 
-	return labelValues, anns, nil
+	return lvs, anns, nil
 }
 
 func (q *Querier) LabelNames(ctx context.Context, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+	return labelNames(ctx, q.head, q.deduplicatorFactory, q.metrics, matchers...)
+}
+
+func labelNames(ctx context.Context, head relabeler.Head, deduplicatorFactory DeduplicatorFactory, metrics *Metrics, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	start := time.Now()
 	defer func() {
-		if q.metrics != nil {
-			q.metrics.LabelNamesDuration.With(
-				prometheus.Labels{"generation": fmt.Sprintf("%d", q.head.Generation())},
+		if metrics != nil {
+			metrics.LabelNamesDuration.With(
+				prometheus.Labels{"generation": fmt.Sprintf("%d", head.Generation())},
 			).Observe(float64(time.Since(start).Microseconds()))
 		}
 	}()
 
-	dedup := q.deduplicatorFactory.Deduplicator(q.head.NumberOfShards())
+	dedup := deduplicatorFactory.Deduplicator(head.NumberOfShards())
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
 
-	err := q.head.ForEachShard(func(shard relabeler.Shard) error {
+	err := head.ForEachShard(func(shard relabeler.Shard) error {
 		queryLabelNamesResult := shard.LSS().QueryLabelNames(convertedMatchers)
 		if queryLabelNamesResult.Status() != cppbridge.LSSQueryStatusMatch {
 			return fmt.Errorf("no matches on shard: %d", shard.ShardID())
@@ -124,10 +132,10 @@ func (q *Querier) LabelNames(ctx context.Context, matchers ...*labels.Matcher) (
 	default:
 	}
 
-	labelNames := dedup.Values()
-	sort.Strings(labelNames)
+	lns := dedup.Values()
+	sort.Strings(lns)
 
-	return labelNames, anns, nil
+	return lns, anns, nil
 }
 
 func (q *Querier) Close() error {
