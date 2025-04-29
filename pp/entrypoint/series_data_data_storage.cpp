@@ -5,6 +5,7 @@
 #include "head/lss.h"
 #include "primitives/go_slice.h"
 #include "series_data/data_storage.h"
+#include "series_data/querier/instant_querier.h"
 #include "series_data/querier/querier.h"
 #include "series_data/serialization/serializer.h"
 
@@ -71,6 +72,27 @@ extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
   Serializer serializer{*in->data_storage};
   BytesStream bytes_stream{&out->serialized_chunks};
   serializer.serialize(queried_chunk_list, bytes_stream);
+}
+
+extern "C" void prompp_series_data_data_storage_instant_query(void* args) {
+  using PromPP::Primitives::LabelSetID;
+  using PromPP::Primitives::Timestamp;
+  using PromPP::Primitives::Go::SliceView;
+  using series_data::DataStorage;
+  using series_data::encoder::Sample;
+
+  struct Arguments {
+    DataStorage* data_storage;
+    SliceView<LabelSetID> label_set_ids;
+    Timestamp timestamp;
+    SliceView<Sample> samples;
+  };
+
+  auto in = reinterpret_cast<Arguments*>(args);
+
+  for (size_t i = 0; i < in->samples.size(); ++i) {
+    series_data::InstantQuerier::query_sample(in->samples[i], *(in->data_storage), in->label_set_ids[i], in->timestamp);
+  }
 }
 
 extern "C" void prompp_series_data_data_storage_allocated_memory(void* args, void* res) {
@@ -143,7 +165,7 @@ extern "C" void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, v
     uint32_t series_id;
     uint8_t samples_count;
     bool has_more_data;
-    PromPP::Primitives::Go::SliceView<uint8_t> buffer;
+    PromPP::Primitives::Go::SliceView<const uint8_t> buffer;
   };
 
   const auto in = static_cast<const Arguments*>(args);

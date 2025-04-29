@@ -1,6 +1,7 @@
 package cppbridge_test
 
 import (
+	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -124,4 +125,42 @@ func (s *HeadSuite) TestTimeInterval() {
 
 	// Assert
 	s.Equal(cppbridge.TimeInterval{MinT: 1, MaxT: 3}, timeInterval)
+}
+
+func (s *HeadSuite) TestInstantQuery() {
+	// Arrange
+	dataStorage := cppbridge.NewHeadDataStorage()
+	encoder := cppbridge.NewHeadEncoderWithDataStorage(dataStorage)
+	var series = []struct {
+		SeriesID uint32
+		cppbridge.Sample
+	}{
+		{0, cppbridge.Sample{7, 1.0}},
+		{0, cppbridge.Sample{10, 1.0}},
+		{1, cppbridge.Sample{3, 1.0}},
+		{1, cppbridge.Sample{11, 1.0}},
+		{2, cppbridge.Sample{1, 2.0}},
+		{2, cppbridge.Sample{4, 2.0}},
+		{3, cppbridge.Sample{2, 2.0}},
+		{3, cppbridge.Sample{8, 2.0}},
+	}
+
+	for _, serie := range series {
+		encoder.Encode(serie.SeriesID, serie.Timestamp, serie.Value)
+	}
+
+	seriesIDs := []uint32{0, 1, 2, 3}
+	targetTimestamp := int64(5)
+	defaultTimestamp := int64(-1)
+	// Act
+
+	samples := dataStorage.InstantQuery(targetTimestamp, defaultTimestamp, seriesIDs)
+
+	// Assert
+	require.Len(s.T(), samples, 4)
+
+	s.Equal(defaultTimestamp, samples[0].Timestamp)
+	s.Equal(series[2].Sample, samples[1])
+	s.Equal(series[5].Sample, samples[2])
+	s.Equal(series[6].Sample, samples[3])
 }

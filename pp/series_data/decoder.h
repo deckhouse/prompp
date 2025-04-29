@@ -13,7 +13,6 @@
 #include "primitives/primitives.h"
 
 namespace series_data {
-
 class Decoder {
  public:
   template <chunk::DataChunk::Type chunk_type, class Callback>
@@ -287,6 +286,16 @@ class Decoder {
     return get_chunk_first_timestamp<kOpen>(storage, storage.open_chunks[ls_id]);
   }
 
+  [[nodiscard]] static PROMPP_ALWAYS_INLINE int64_t get_series_max_timestamp(const DataStorage& storage, uint32_t ls_id) noexcept {
+    using enum chunk::DataChunk::Type;
+
+    return get_open_chunk_last_timestamp(storage, storage.open_chunks[ls_id]);
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static PromPP::Primitives::TimeInterval get_series_time_interval(const DataStorage& storage, uint32_t ls_id) {
+    return {.min = get_series_min_timestamp(storage, ls_id), .max = get_series_max_timestamp(storage, ls_id)};
+  }
+
   template <chunk::DataChunk::Type chunk_type>
   [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_chunk_first_timestamp(const DataStorage& storage, const chunk::DataChunk& chunk) noexcept {
     return encoder::timestamp::TimestampDecoder::decode_first(get_stream_reader<chunk_type>(storage, chunk));
@@ -325,6 +334,15 @@ class Decoder {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_chunk_last_timestamp(const DataStorage::SeriesChunkIterator::Data& chunk_data) noexcept {
     if (chunk_data.chunk_type() == chunk::DataChunk::Type::kOpen) {
+      return get_chunk_last_timestamp<chunk::DataChunk::Type::kOpen>(chunk_data);
+    }
+
+    return get_chunk_last_timestamp<chunk::DataChunk::Type::kFinalized>(chunk_data);
+  }
+
+  template <chunk::DataChunk::Type chunk_type>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_chunk_last_timestamp(const DataStorage::SeriesChunkIterator::Data& chunk_data) noexcept {
+    if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return get_open_chunk_last_timestamp(*chunk_data.storage(), chunk_data.chunk());
     }
 
@@ -332,7 +350,20 @@ class Decoder {
                                               chunk_data.finalized_chunk_end_iterator());
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static double get_open_chunk_last_value(const DataStorage& storage, const chunk::DataChunk& chunk) noexcept {
+  template <chunk::DataChunk::Type chunk_type>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static PromPP::Primitives::TimeInterval get_chunk_time_interval(const DataStorage::SeriesChunkIterator::Data& chunk_data) {
+    return {.min = get_chunk_first_timestamp<chunk_type>(*chunk_data.storage(), chunk_data.chunk()), .max = get_chunk_last_timestamp<chunk_type>(chunk_data)};
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static PromPP::Primitives::TimeInterval get_chunk_time_interval(const DataStorage::SeriesChunkIterator::Data& chunk_data) {
+    if (chunk_data.chunk_type() == chunk::DataChunk::Type::kOpen) {
+      return get_chunk_time_interval<chunk::DataChunk::Type::kOpen>(chunk_data);
+    }
+    return get_chunk_time_interval<chunk::DataChunk::Type::kFinalized>(chunk_data);
+  }
+
+  [[nodiscard]]
+  PROMPP_ALWAYS_INLINE static double get_open_chunk_last_value(const DataStorage& storage, const chunk::DataChunk& chunk) noexcept {
     using enum EncodingType;
 
     switch (chunk.encoding_state.encoding_type) {
@@ -402,5 +433,4 @@ class Decoder {
     }
   }
 };
-
 }  // namespace series_data

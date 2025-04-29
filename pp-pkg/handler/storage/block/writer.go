@@ -23,7 +23,7 @@ func (w *Writer) Header() storage.BlockHeader {
 }
 
 // Append segment to block.
-func (w *Writer) Append(segment model.Segment) error {
+func (w *Writer) Append(segment *model.Segment) error {
 	var err error
 	if w.file == nil {
 		w.file, err = w.fileFn()
@@ -96,7 +96,7 @@ func writeHeader(writer io.Writer, header storage.BlockHeader) error {
 	return nil
 }
 
-func writeSegment(writer io.Writer, segment model.Segment) error {
+func writeSegment(writer io.Writer, segment *model.Segment) error {
 	var err error
 	if err = binary.Write(writer, binary.LittleEndian, &segment.Size); err != nil {
 		return fmt.Errorf("failed to write segment size: %w", err)

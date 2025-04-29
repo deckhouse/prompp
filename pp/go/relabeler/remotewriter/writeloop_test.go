@@ -66,7 +66,6 @@ func (s *NoOpStorage) Close() error {
 
 type TestHeads struct {
 	Dir            string
-	clock          clockwork.Clock
 	FileLog        *catalog.FileLog
 	Catalog        *catalog.Catalog
 	ConfigSource   *ConfigSource
@@ -86,7 +85,7 @@ func NewTestHeads(dir string, inputRelabelConfigs []*config.InputRelabelerConfig
 		return nil, err
 	}
 
-	th.Catalog, err = catalog.New(clock, th.FileLog, catalog.DefaultIDGenerator{}, nil)
+	th.Catalog, err = catalog.New(clock, th.FileLog, catalog.DefaultIDGenerator{}, catalog.DefaultMaxLogFileSize, nil)
 	if err != nil {
 		return nil, errors.Join(err, th.Close())
 	}

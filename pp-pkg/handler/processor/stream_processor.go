@@ -2,14 +2,12 @@ package processor
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/prometheus/prometheus/pp-pkg/handler/model"
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
@@ -72,46 +70,37 @@ func (p *StreamProcessor) Process(ctx context.Context, stream MetricStream) erro
 	decoder := p.decoderBuilder.Build(meta)
 	defer func() { _ = decoder.Close() }()
 
-	var err error
-	var encodedSegment model.Segment
-	var decodedSegment cppbridge.HashdexContent
-
 	for {
-		encodedSegment, err = stream.Read(ctx)
+		encodedSegment, err := stream.Read(ctx)
 		if err != nil {
 			p.criticalErrorCount.With(prometheus.Labels{"error": err.Error(), "processor_type": "stream"}).Inc()
 			return fmt.Errorf("failed to read from stream: %w", err)
-		}
-
-		if !encodedSegment.IsValid() {
-			err = errors.New("corrupted segment")
-			p.criticalErrorCount.With(prometheus.Labels{"error": err.Error(), "processor_type": "stream"}).Inc()
-			return err
 		}
 
 		if len(encodedSegment.Body) == 0 {
 			return decoder.Discard()
 		}
 
-		decodedSegment, err = decoder.DecodeToHashdex(ctx, encodedSegment)
+		hashdexContent, err := decoder.DecodeToHashdex(ctx, encodedSegment)
+		encodedSegment.Destroy()
 		if err != nil {
 			p.criticalErrorCount.With(prometheus.Labels{"error": err.Error(), "processor_type": "stream"}).Inc()
 			return fmt.Errorf("failed to decoded segment: %w", err)
 		}
 
-		p.decodedSeriesCount.With(prometheus.Labels{"processor_type": "stream"}).Add(float64(decodedSegment.Series()))
-		p.decodedSampleCount.With(prometheus.Labels{"processor_type": "stream"}).Add(float64(decodedSegment.Samples()))
+		p.decodedSeriesCount.With(prometheus.Labels{"processor_type": "stream"}).Add(float64(hashdexContent.Series()))
+		p.decodedSampleCount.With(prometheus.Labels{"processor_type": "stream"}).Add(float64(hashdexContent.Samples()))
 
-		processingStatus := model.SegmentProcessingStatus{
-			SegmentID: decodedSegment.SegmentID(),
+		processingStatus := model.StreamSegmentProcessingStatus{
+			SegmentID: hashdexContent.SegmentID(),
 			Code:      model.ProcessingStatusOk,
 			Message:   "ok",
-			Timestamp: decodedSegment.CreatedAt(),
+			Timestamp: hashdexContent.CreatedAt(),
 		}
 
 		if err = p.receiver.AppendHashdex(
 			ctx,
-			decodedSegment.ShardedData(),
+			hashdexContent.ShardedData(),
 			meta.RelabelerID,
 			true,
 		); err != nil {
@@ -121,17 +110,17 @@ func (p *StreamProcessor) Process(ctx context.Context, stream MetricStream) erro
 		} else {
 			p.writtenSeriesCount.With(
 				prometheus.Labels{"processor_type": "stream"},
-			).Add(float64(decodedSegment.Series()))
+			).Add(float64(hashdexContent.Series()))
 			p.writtenSampleCount.With(
 				prometheus.Labels{"processor_type": "stream"},
-			).Add(float64(decodedSegment.Samples()))
+			).Add(float64(hashdexContent.Samples()))
 		}
 
 		p.responseStatusCodeCount.With(
 			prometheus.Labels{"processor_type": "stream", "status_code": strconv.Itoa(int(processingStatus.Code))},
 		).Inc()
 
-		if writeErr := stream.Write(ctx, processingStatus); err != nil {
+		if writeErr := stream.Write(ctx, processingStatus); writeErr != nil {
 			return writeErr
 		}
 	}
