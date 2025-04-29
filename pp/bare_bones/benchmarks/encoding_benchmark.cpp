@@ -93,83 +93,70 @@ void BenchmarkLsIDEncoding(benchmark::State& state) {
                                                     benchmark::Counter::OneK::kIs1024);
 }
 
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::RLE, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
-//                                                                                                ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::RLE, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                       ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::RLE, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
-//                                                                                                ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::RLE, BareBones::StreamVByte::Codec0124Frequent0>)->Unit(benchmark::kMillisecond)->
-//                                                                                                         ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::RLE, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
-//                                                                                                ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::RLE, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                       ComputeStatistics("min", min_value);
-//
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
-//                                                                                                     ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                        ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
-//                                                                                                     ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec0124Frequent0>)->Unit(benchmark::kMillisecond)->
-//                                                                                                          ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
-//                                                                                                     ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                        ComputeStatistics("min", min_value);
-//
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
-//                                                                                                 ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                        ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
-//                                                                                                 ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec0124Frequent0>)->Unit(benchmark::kMillisecond)->
-//                                                                                                          ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
-//                                                                                                 ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                        ComputeStatistics("min", min_value);
-//
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::NoCompression, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
-//                                                                                                          ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::NoCompression, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                        ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::NoCompression, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
-//                                                                                                          ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::NoCompression, BareBones::StreamVByte::Codec0124Frequent0>)->Unit(benchmark::kMillisecond)->
-//                                                                                                          ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::NoCompression, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
-//                                                                                                          ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::NoCompression, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                        ComputeStatistics("min", min_value);
-//
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
-//                                                                                                  ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                         ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
-//                                                                                                  ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec0124Frequent0>)->Unit(benchmark::kMillisecond)->
-//                                                                                                          ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
-//                                                                                                  ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                         ComputeStatistics("min", min_value);
-//
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
-//                                                                                                 ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                        ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
-//                                                                                                 ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec0124Frequent0>)->Unit(benchmark::kMillisecond)->
-//                                                                                                          ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
-//                                                                                                 ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                        ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
+                                                                                                    ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
+                                                                                                       ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
+                                                                                                    ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec0124Frequent0>)->Unit(benchmark::kMillisecond)->
+                                                                                                         ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
+                                                                                                    ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
+                                                                                                       ComputeStatistics("min", min_value);
+
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
+                                                                                                ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
+                                                                                                       ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
+                                                                                                ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec0124Frequent0>)->Unit(benchmark::kMillisecond)->
+                                                                                                         ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
+                                                                                                ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
+                                                                                                       ComputeStatistics("min", min_value);
+
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaDeltaZigZagRLE, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
+                                                                                                ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaDeltaZigZagRLE, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
+                                                                                                       ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaDeltaZigZagRLE, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
+                                                                                                ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaDeltaZigZagRLE, BareBones::StreamVByte::Codec0124Frequent0>)->Unit(benchmark::kMillisecond)->
+                                                                                                         ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaDeltaZigZagRLE, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
+                                                                                                ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaDeltaZigZagRLE, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
+                                                                                                       ComputeStatistics("min", min_value);
+
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
+                                                                                                 ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
+                                                                                                        ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
+                                                                                                 ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec0124Frequent0>)->Unit(benchmark::kMillisecond)->
+                                                                                                         ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
+                                                                                                 ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
+                                                                                                        ComputeStatistics("min", min_value);
+
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
+                                                                                                ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
+                                                                                                       ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
+                                                                                                ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec0124Frequent0>)->Unit(benchmark::kMillisecond)->
+                                                                                                         ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
+                                                                                                ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLsIDEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
+                                                                                                       ComputeStatistics("min", min_value);
 
 template <template <class> class Encoding, class Codec>
 void BenchmarkLengthEncoding(benchmark::State& state) {
@@ -264,81 +251,67 @@ void BenchmarkLengthEncoding(benchmark::State& state) {
                                                 benchmark::Counter::OneK::kIs1024);
 }
 
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::RLE, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
-//                                                                                                  ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::RLE, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                         ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::RLE, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
-//                                                                                                  ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::RLE, BareBones::StreamVByte::Codec0124Frequent0>)->Unit(benchmark::kMillisecond)->
-//                                                                                                         ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::RLE, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
-//                                                                                                  ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::RLE, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                         ComputeStatistics("min", min_value);
-//
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
-//                                                                                                       ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                        ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
-//                                                                                                       ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec0124Frequent0>)->Unit(benchmark::kMillisecond)->
-//                                                                                                          ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
-//                                                                                                       ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                        ComputeStatistics("min", min_value);
-//
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
-//                                                                                                 ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                        ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
-//                                                                                                 ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec0124Frequent0>)->Unit(benchmark::kMillisecond)->
-//                                                                                                          ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
-//                                                                                                 ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                        ComputeStatistics("min", min_value);
-//
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::NoCompression, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
-//                                                                                                          ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::NoCompression, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                        ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::NoCompression, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
-//                                                                                                          ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::NoCompression, BareBones::StreamVByte::Codec0124Frequent0>)->Unit(benchmark::kMillisecond)->
-//                                                                                                          ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::NoCompression, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
-//                                                                                                          ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::NoCompression, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                        ComputeStatistics("min", min_value);
-//
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
-//                                                                                                    ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                         ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
-//                                                                                                    ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec0124Frequent0>)->Unit(benchmark::kMillisecond)->
-//                                                                                                          ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
-//                                                                                                    ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                         ComputeStatistics("min", min_value);
-//
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
-//                                                                                                 ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                        ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
-//                                                                                                 ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
+                                                                                                      ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
+                                                                                                        ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
+                                                                                                      ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec0124Frequent0>)->Unit(benchmark::kMillisecond)->
+                                                                                                          ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
+                                                                                                      ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaRLE, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
+                                                                                                        ComputeStatistics("min", min_value);
+
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
+                                                                                                 ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
+                                                                                                        ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
+                                                                                                 ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec0124Frequent0>)->Unit(benchmark::kMillisecond)->
+                                                                                                          ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
+                                                                                                 ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaZigZagRLE, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
+                                                                                                        ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaDeltaZigZagRLE, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
+                                                                                                ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaDeltaZigZagRLE, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
+                                                                                                       ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaDeltaZigZagRLE, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
+                                                                                                ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaDeltaZigZagRLE, BareBones::StreamVByte::Codec0124Frequent0>)->Unit(benchmark::kMillisecond)->
+                                                                                                         ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaDeltaZigZagRLE, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
+                                                                                                ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaDeltaZigZagRLE, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
+                                                                                                       ComputeStatistics("min", min_value);
+
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
+                                                                                                   ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
+                                                                                                         ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
+                                                                                                   ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec0124Frequent0>)->Unit(benchmark::kMillisecond)->
+                                                                                                          ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
+                                                                                                   ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::Delta, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
+                                                                                                         ComputeStatistics("min", min_value);
+
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec1234>)->Unit(benchmark::kMillisecond)->
+                                                                                                 ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec1234Mostly1>)->Unit(benchmark::kMillisecond)->
+                                                                                                        ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec0124>)->Unit(benchmark::kMillisecond)->
+                                                                                                 ComputeStatistics("min", min_value);
 BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec0124Frequent0>)->Unit(benchmark::kMillisecond)->
                                                                                                          ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
-//                                                                                                 ComputeStatistics("min", min_value);
-// BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
-//                                                                                                        ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec1238>)->Unit(benchmark::kMillisecond)->
+                                                                                                 ComputeStatistics("min", min_value);
+BENCHMARK(BenchmarkLengthEncoding<BareBones::Encoding::DeltaDeltaZigZag, BareBones::StreamVByte::Codec1238Mostly1>)->Unit(benchmark::kMillisecond)->
+                                                                                                        ComputeStatistics("min", min_value);
 } // namespace
