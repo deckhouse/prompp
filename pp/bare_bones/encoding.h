@@ -355,10 +355,10 @@ template <class Container = StreamVByte::Sequence<StreamVByte::Codec0124Frequent
 using RLE = RLEBackend<Container>;
 
 template <class Container = StreamVByte::Sequence<StreamVByte::Codec0124Frequent0>>
-using DeltaRLE = DeltaTransform<RLE, Container>;
+using DeltaRLE = DeltaTransform<RLEBackend, Container>;
 
 template <class Container = StreamVByte::Sequence<StreamVByte::Codec0124Frequent0>>
-using DeltaZigZagRLE = DeltaZigZagTransform<RLE, Container>;
+using DeltaZigZagRLE = DeltaZigZagTransform<RLEBackend, Container>;
 
 template <class Container = StreamVByte::Sequence<StreamVByte::Codec0124Frequent0>>
 using Delta = DeltaTransform<IdentityBackend, Container>;
