@@ -47,6 +47,7 @@ jobs:
           export COMPILATION_MODE="opt"
           export ASAN="false"
           export WERF_BUILDAH_MODE=auto
+          export REGISTRY_AUTH_FILE=$HOME/.config/containers/auth.json
 
           echo "=== ENV VARIABLES ==="
           env
