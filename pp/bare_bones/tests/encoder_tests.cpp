@@ -18,7 +18,7 @@ class EncoderTest : public testing::Test {
 
   static constexpr value_type NUM_VALUES = 100;
 
-public:
+ public:
   static std::vector<value_type> make_data(std::string_view key) {
     std::vector<value_type> data;
 
@@ -100,12 +100,11 @@ TYPED_TEST(EncoderTest, should_dump_and_restore) {
   }
 }
 
-constexpr std::array kEtalonsBoundaryValues = {1UL, 255UL, 256UL, 65535UL, 65536UL, 16777215UL,
+constexpr std::array kEtalonsBoundaryValues = {1UL,        255UL,        256UL,        65535UL,         65536UL,         16777215UL,
                                                16777216UL, 4294967295UL, 4294967296UL, 1099511627775UL, 1099511627776UL, 9223372036854775807UL};
 
 template <class T>
-class EncoderTest64 : public testing::Test {
-};
+class EncoderTest64 : public testing::Test {};
 
 using EncoderTypes64 = testing::Types<BareBones::EncodedSequence<BareBones::Encoding::RLE<DataSequence64>>,
                                       BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<DataSequence64>>,
@@ -129,4 +128,4 @@ TYPED_TEST(EncoderTest64, boundary_values) {
   // Assert
   EXPECT_TRUE(std::ranges::equal(outcomes, kEtalonsBoundaryValues));
 }
-} // namespace
+}  // namespace

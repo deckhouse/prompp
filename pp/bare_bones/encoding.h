@@ -9,16 +9,16 @@
 
 #include "bit_sequence.h"
 #include "exception.h"
+#include "preprocess.h"
 #include "stream_v_byte.h"
 #include "streams.h"
 #include "zigzag.h"
-#include "preprocess.h"
 
 namespace BareBones {
 namespace Encoding {
 template <class Container>
 class RLEBackend {
-public:
+ public:
   using DataSequence = Container;
 
   class Encoder {
@@ -27,7 +27,7 @@ public:
     value_type count_ = std::numeric_limits<value_type>::max();
     value_type last_;
 
-  public:
+   public:
     PROMPP_ALWAYS_INLINE Encoder() noexcept = default;
     Encoder(const Encoder&) = delete;
     Encoder& operator=(const Encoder&) = delete;
@@ -60,7 +60,7 @@ public:
         *i++ = last_;
         *i++ = count_;
         last_ = val;
-        count_ = 0; // use 0 to encode 1 occurrence
+        count_ = 0;  // use 0 to encode 1 occurrence
       }
     }
 
@@ -87,7 +87,7 @@ public:
     value_type last_;
     bool decoding_from_encoder_buffer_ = false;
 
-  public:
+   public:
     template <std::input_iterator IteratorType, class IteratorSentinelType>
       requires std::is_same<typename std::iterator_traits<IteratorType>::value_type, value_type>::value && std::sentinel_for<IteratorSentinelType, IteratorType>
     PROMPP_ALWAYS_INLINE Decoder(IteratorType& begin, const IteratorSentinelType& end, const Encoder& encoder) noexcept {
@@ -138,38 +138,33 @@ public:
 
 template <class Container>
 class IdentityBackend {
-public:
+ public:
   using DataSequence = Container;
 
   class Encoder {
     using value_type = typename DataSequence::value_type;
 
-  public:
+   public:
     template <std::output_iterator<value_type> IteratorType>
     static PROMPP_ALWAYS_INLINE void encode(value_type val, IteratorType& i) noexcept {
       *i++ = val;
     }
 
-    static PROMPP_ALWAYS_INLINE void clear() noexcept {
-    }
+    static PROMPP_ALWAYS_INLINE void clear() noexcept {}
 
-    static PROMPP_ALWAYS_INLINE bool empty() noexcept {
-      return true;
-    }
+    static PROMPP_ALWAYS_INLINE bool empty() noexcept { return true; }
 
     template <std::output_iterator<value_type> IteratorType>
-    static PROMPP_ALWAYS_INLINE void flush(IteratorType&) noexcept {
-    }
+    static PROMPP_ALWAYS_INLINE void flush(IteratorType&) noexcept {}
   };
 
   class Decoder {
     using value_type = typename DataSequence::value_type;
 
-  public:
+   public:
     template <std::input_iterator IteratorType, class IteratorSentinelType>
       requires std::is_same<typename std::iterator_traits<IteratorType>::value_type, value_type>::value && std::sentinel_for<IteratorSentinelType, IteratorType>
-    PROMPP_ALWAYS_INLINE Decoder(IteratorType&, const IteratorSentinelType&, const Encoder&) noexcept {
-    }
+    PROMPP_ALWAYS_INLINE Decoder(IteratorType&, const IteratorSentinelType&, const Encoder&) noexcept {}
 
     template <std::input_iterator IteratorType, class IteratorSentinelType>
       requires std::is_same<typename std::iterator_traits<IteratorType>::value_type, value_type>::value && std::sentinel_for<IteratorSentinelType, IteratorType>
@@ -180,7 +175,9 @@ public:
     template <std::input_iterator IteratorType, class IteratorSentinelType>
       requires std::is_same<typename std::iterator_traits<IteratorType>::value_type, value_type>::value && std::sentinel_for<IteratorSentinelType, IteratorType>
     PROMPP_ALWAYS_INLINE void next(IteratorType& begin, const IteratorSentinelType& end, const Encoder&) noexcept {
-      if (begin != end) { ++begin; }
+      if (begin != end) {
+        ++begin;
+      }
     }
 
     template <std::input_iterator IteratorType, class IteratorSentinelType>
@@ -193,7 +190,7 @@ public:
 
 template <template <class> class Backend, class Container>
 class DeltaTransform {
-public:
+ public:
   using DataSequence = Container;
 
   class Encoder : public Backend<DataSequence>::Encoder {
@@ -202,7 +199,7 @@ public:
     value_type last_ = 0;
     using Base = typename Backend<DataSequence>::Encoder;
 
-  public:
+   public:
     template <std::output_iterator<value_type> IteratorType>
     PROMPP_ALWAYS_INLINE void encode(value_type val, IteratorType& i) noexcept {
       assert(val >= last_);
@@ -224,7 +221,7 @@ public:
     value_type last_ = 0;
     using Base = typename Backend<DataSequence>::Decoder;
 
-  public:
+   public:
     using Base::Base;
 
     template <std::input_iterator IteratorType, class IteratorSentinelType>
@@ -244,7 +241,7 @@ public:
 
 template <template <class> class Backend, class Container>
 class DeltaZigZagTransform {
-public:
+ public:
   using DataSequence = Container;
 
   class Encoder : public Backend<DataSequence>::Encoder {
@@ -254,7 +251,7 @@ public:
     value_type last_ = 0;
     using Base = typename Backend<DataSequence>::Encoder;
 
-  public:
+   public:
     template <std::output_iterator<value_type> IteratorType>
     PROMPP_ALWAYS_INLINE void encode(value_type val, IteratorType& i) noexcept {
       Base::encode(ZigZag::encode(std::bit_cast<int_type>(val) - std::bit_cast<int_type>(last_)), i);
@@ -275,7 +272,7 @@ public:
     value_type last_ = 0;
     using Base = typename Backend<DataSequence>::Decoder;
 
-  public:
+   public:
     using Base::Base;
 
     template <std::input_iterator IteratorType, class IteratorSentinelType>
@@ -295,7 +292,7 @@ public:
 
 template <template <class> class Backend, class Container>
 class DeltaDeltaZigZagTransform {
-public:
+ public:
   using DataSequence = Container;
 
   class Encoder : public Backend<DataSequence>::Encoder {
@@ -306,7 +303,7 @@ public:
     int_type last_delta_ = 0;
     using Base = typename Backend<DataSequence>::Encoder;
 
-  public:
+   public:
     template <std::output_iterator<value_type> IteratorType>
     PROMPP_ALWAYS_INLINE void encode(value_type val, IteratorType& i) noexcept {
       const int_type curr_delta = std::bit_cast<int_type>(val) - std::bit_cast<int_type>(last_);
@@ -332,7 +329,7 @@ public:
     int_type last_delta_ = 0;
     using Base = typename Backend<DataSequence>::Decoder;
 
-  public:
+   public:
     using Base::Base;
 
     template <std::input_iterator IteratorType, class IteratorSentinelType>
@@ -370,25 +367,20 @@ template <typename E>
 struct id;
 
 template <class DataSequence>
-struct id<RLE<DataSequence>> : std::integral_constant<uint8_t, 0 + (sizeof(typename DataSequence::value_type) == 8) * 3> {
-};
+struct id<RLE<DataSequence>> : std::integral_constant<uint8_t, 0 + (sizeof(typename DataSequence::value_type) == 8) * 3> {};
 
 template <class DataSequence>
-struct id<DeltaRLE<DataSequence>> : std::integral_constant<uint8_t, 1 + (sizeof(typename DataSequence::value_type) == 8) * 3> {
-};
+struct id<DeltaRLE<DataSequence>> : std::integral_constant<uint8_t, 1 + (sizeof(typename DataSequence::value_type) == 8) * 3> {};
 
 template <class DataSequence>
-struct id<DeltaZigZagRLE<DataSequence>> : std::integral_constant<uint8_t, 2 + (sizeof(typename DataSequence::value_type) == 8) * 3> {
-};
+struct id<DeltaZigZagRLE<DataSequence>> : std::integral_constant<uint8_t, 2 + (sizeof(typename DataSequence::value_type) == 8) * 3> {};
 
 template <class DataSequence>
-struct id<Delta<DataSequence>> : std::integral_constant<uint8_t, 3 + (sizeof(typename DataSequence::value_type) == 8) * 3> {
-};
+struct id<Delta<DataSequence>> : std::integral_constant<uint8_t, 3 + (sizeof(typename DataSequence::value_type) == 8) * 3> {};
 
 template <class DataSequence>
-struct id<DeltaDeltaZigZag<DataSequence>> : std::integral_constant<uint8_t, 4 + (sizeof(typename DataSequence::value_type) == 8) * 3> {
-};
-} // namespace Encoding
+struct id<DeltaDeltaZigZag<DataSequence>> : std::integral_constant<uint8_t, 4 + (sizeof(typename DataSequence::value_type) == 8) * 3> {};
+}  // namespace Encoding
 
 template <class E, class DataSequence = typename E::DataSequence>
 class EncodedSequence {
@@ -396,15 +388,14 @@ class EncodedSequence {
 
   DataSequence data_;
 
-public:
+ public:
   using value_type = typename DataSequence::value_type;
 
   EncodedSequence() = default;
   EncodedSequence(const EncodedSequence&) = delete;
   EncodedSequence& operator=(const EncodedSequence&) = delete;
 
-  PROMPP_ALWAYS_INLINE EncodedSequence(EncodedSequence&& o) noexcept : encoder_(std::move(o.encoder_)), data_(std::move(o.data_)) {
-  }
+  PROMPP_ALWAYS_INLINE EncodedSequence(EncodedSequence&& o) noexcept : encoder_(std::move(o.encoder_)), data_(std::move(o.data_)) {}
 
   PROMPP_ALWAYS_INLINE EncodedSequence& operator=(EncodedSequence&& o) noexcept {
     encoder_ = std::move(o.encoder_);
@@ -429,8 +420,7 @@ public:
 
   PROMPP_ALWAYS_INLINE const DataSequence& data() const noexcept { return data_; }
 
-  class IteratorSentinel {
-  };
+  class IteratorSentinel {};
 
   class Iterator {
     typename DataSequence::const_iterator begin_;
@@ -438,16 +428,13 @@ public:
     const typename E::Encoder* encoder_;
     typename E::Decoder decoder_;
 
-  public:
+   public:
     using iterator_category = std::input_iterator_tag;
     using value_type = typename DataSequence::value_type;
     using difference_type = std::ptrdiff_t;
 
-    PROMPP_ALWAYS_INLINE Iterator(typename DataSequence::const_iterator begin,
-                                  typename DataSequence::sentinel end,
-                                  const typename E::Encoder* encoder) noexcept
-      : begin_(begin), end_(end), encoder_(encoder), decoder_(begin_, end_, *encoder_) {
-    }
+    PROMPP_ALWAYS_INLINE Iterator(typename DataSequence::const_iterator begin, typename DataSequence::sentinel end, const typename E::Encoder* encoder) noexcept
+        : begin_(begin), end_(end), encoder_(encoder), decoder_(begin_, end_, *encoder_) {}
 
     PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
       decoder_.next(begin_, end_, *encoder_);
@@ -540,6 +527,5 @@ public:
 };
 
 template <class T>
-struct IsTriviallyReallocatable<BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<T>>> : std::true_type {
-};
-} // namespace BareBones
+struct IsTriviallyReallocatable<BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<T>>> : std::true_type {};
+}  // namespace BareBones
