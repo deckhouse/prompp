@@ -47,10 +47,11 @@ jobs:
           export COMPILATION_MODE="opt"
           export ASAN="false"
           export WERF_BUILDAH_MODE=auto
+          export XDG_RUNTIME_DIR=/var/tmp/containers-user-1001/containers
 
           echo "=== ENV VARIABLES ==="
           env
 
           whoami
 
-          werf build --platform linux/${{ matrix.arch }} --add-custom-tag="$BRANCH_NAME-${{ matrix.arch }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp
+          werf build --platform linux/${{ matrix.arch }} --add-custom-tag="$BRANCH_NAME-${{ matrix.arch }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp --log-debug=true
