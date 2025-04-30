@@ -7,7 +7,6 @@ import (
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/tsdb/chunks"
 	"github.com/prometheus/prometheus/util/annotations"
-	"time"
 )
 
 type LabelSetsIterator struct {
@@ -84,16 +83,12 @@ func (css *ChunkSeriesSet) next() bool {
 	if css.recoderIsExhausted {
 		return false
 	}
-
 	lastRecodedChunk := css.chunkRecoder.RecodeNextChunk()
 	css.recoderIsExhausted = !lastRecodedChunk.HasMoreData
-	//fmt.Println("last recoded chunk", lastRecodedChunk.SeriesId, lastRecodedChunk.MinT, lastRecodedChunk.MaxT, lastRecodedChunk.HasMoreData)
 	chunkData := make([]byte, len(lastRecodedChunk.ChunkData))
 	copy(chunkData, lastRecodedChunk.ChunkData)
 	lastRecodedChunk.ChunkData = chunkData
 	css.lastRecodedChunk = &lastRecodedChunk
-	//fmt.Println("css.next end")
-	time.Sleep(time.Millisecond * 500)
 	return true
 }
 
@@ -171,5 +166,23 @@ func (ci *ChunkSeriesChunksIterator) Next() bool {
 }
 
 func (ci *ChunkSeriesChunksIterator) Err() error {
+	return nil
+}
+
+type EmptyChunkSeriesSet struct{}
+
+func (EmptyChunkSeriesSet) Next() bool {
+	return false
+}
+
+func (EmptyChunkSeriesSet) At() storage.ChunkSeries {
+	return nil
+}
+
+func (EmptyChunkSeriesSet) Err() error {
+	return nil
+}
+
+func (EmptyChunkSeriesSet) Warnings() annotations.Annotations {
 	return nil
 }

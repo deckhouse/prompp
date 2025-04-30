@@ -47,7 +47,7 @@ func (q *ChunkQuerier) Select(ctx context.Context, sortSeries bool, hints *stora
 		lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
 
 		if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {
-			chunkSeriesSets[shard.ShardID()] = &ChunkSeriesSet{}
+			chunkSeriesSets[shard.ShardID()] = EmptyChunkSeriesSet{}
 			if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
 				return nil
 			}
@@ -61,7 +61,7 @@ func (q *ChunkQuerier) Select(ctx context.Context, sortSeries bool, hints *stora
 		})
 
 		if serializedChunks.NumberOfChunks() == 0 {
-			chunkSeriesSets[shard.ShardID()] = &ChunkSeriesSet{}
+			chunkSeriesSets[shard.ShardID()] = EmptyChunkSeriesSet{}
 			return nil
 		}
 
@@ -69,6 +69,7 @@ func (q *ChunkQuerier) Select(ctx context.Context, sortSeries bool, hints *stora
 			MinT: q.mint,
 			MaxT: q.maxt,
 		})
+
 		labelSets := make([]*cppbridge.LabelsCpp, 0, len(lssQueryResult.IDs()))
 		lssQueryResult.MatchesRange(func(lss *cppbridge.LabelSetStorage, lsId uint32, labelSetLength uint16) {
 			labelSets = append(labelSets, cppbridge.NewLabelsCpp(lss, lsId, labelSetLength))
