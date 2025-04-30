@@ -98,7 +98,7 @@ jobs:
       
       - name: Export multiarch image
         run: |
-          werf export --platform linux/amd64 --platoform linux/arm64 --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp \
+          werf export --platform linux/amd64 --platform linux/arm64 --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp \
             --tag=index.docker.io/prompp/prompp:$BRANCH_NAME \
             --tag=index.docker.io/prompp/prompp:latest \
             --tag=${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:$BRANCH_NAME
