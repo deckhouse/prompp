@@ -18,10 +18,10 @@ jobs:
             arch: amd64
             GO_ARCH: amd64
             BAZEL_ARCH: x86_64
-          # - runner_name: fsn-dev-arm-runner
-          #   arch: arm64
-          #   GO_ARCH: arm64
-          #   BAZEL_ARCH: arm64
+          - runner_name: fsn-dev-arm-runner
+            arch: arm64
+            GO_ARCH: arm64
+            BAZEL_ARCH: arm64
     runs-on: ${{ matrix.runner_name }}
     steps:
       - name: Clean workspace
@@ -47,10 +47,5 @@ jobs:
           export COMPILATION_MODE="opt"
           export ASAN="false"
           export WERF_BUILDAH_MODE=auto
-
-          echo "=== ENV VARIABLES ==="
-          env
-
-          whoami
 
           werf build --platform linux/${{ matrix.arch }} --add-custom-tag="$BRANCH_NAME-${{ matrix.arch }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp
