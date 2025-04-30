@@ -366,8 +366,10 @@ void BenchmarkLZ4Encoding(benchmark::State& state) {
     series_data::DataStorage storage;
     series_data::Encoder encoder{storage};
 
-    // std::ostringstream stream;
-    std::ostringstream lz4stream;  //&stream};
+    std::ostringstream stream;
+    BareBones::LZ4Stream::ostream lz4stream{&stream};
+
+    std::ostringstream plain_data_stream;
 
     size_t length_in_bytes = 0;
 
@@ -475,10 +477,13 @@ void BenchmarkLZ4Encoding(benchmark::State& state) {
         bitstream << std::flush;
 
         lz4stream << id_sequence << length_sequence << bitstream.str() << std::flush;
+        plain_data_stream << id_sequence << length_sequence << bitstream.str() << std::flush;
       }
     }
-    state.counters["LZ4"] = benchmark::Counter(static_cast<double>(lz4stream.str().size()), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
+    state.counters["LZ4"] = benchmark::Counter(static_cast<double>(stream.str().size()), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
     state.counters["BitSeq"] = benchmark::Counter(static_cast<double>(length_in_bytes), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
+    state.counters["AllData"] =
+        benchmark::Counter(static_cast<double>(plain_data_stream.str().size()), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
   }
 }
 
