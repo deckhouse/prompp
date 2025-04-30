@@ -47,4 +47,28 @@ jobs:
           export ASAN="false"
           export WERF_BUILDAH_MODE=auto
 
-          werf build --platform linux/${{ matrix.arch }} --add-custom-tag="$BRANCH_NAME-${{ matrix.arch }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp
+          werf build --platform linux/${{ matrix.arch }} --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp
+      
+  create-multiarch-image:
+    needs: build-and-push
+    runs-on: [fsn-dev-perftest-runner, fsn-dev-arm-runner]
+    steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Login to Dev registry registry
+        uses: deckhouse/modules-actions/setup@v2
+        with:
+          registry: ${{ secrets.DEV_REGISTRY }}
+          registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
+          registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+
+      - name: Export multiarch image
+        run: |
+          werf export --platform linux/amd64 --platoform linux/arm64 --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp \
+            --tag=${{ secrets.DEV_REGISTRY }}/prompp/prompp:$BRANCH_NAME \
