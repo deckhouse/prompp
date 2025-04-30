@@ -7,15 +7,15 @@
 #include "series_data/encoder/numeric.h"
 
 namespace series_data::encoder::value {
-
 class PROMPP_ATTRIBUTE_PACKED ValuesGorillaEncoder {
- public:
+public:
   PROMPP_ALWAYS_INLINE explicit ValuesGorillaEncoder(double value, uint32_t count) { values_encoder_.encode_first(value, count, stream_); }
   PROMPP_ALWAYS_INLINE ValuesGorillaEncoder(const ConstantValue& v1, const ConstantValue& v2, const ConstantValue& v3) {
     values_encoder_.encode_first(v1.value, v1.count, stream_);
 
     encode_multiple(v2, v3);
   }
+
   PROMPP_ALWAYS_INLINE ValuesGorillaEncoder(CompactBitSequence&& stream, double value) : stream_(std::move(stream)) {
     values_encoder_.encode_first(value, stream_);
   }
@@ -42,13 +42,15 @@ class PROMPP_ATTRIBUTE_PACKED ValuesGorillaEncoder {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return stream_.allocated_memory(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactBitSequence& stream() const noexcept { return stream_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence& stream() noexcept { return stream_; }
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence finalize_stream() noexcept {
     auto stream = std::move(stream_);
     stream.shrink_to_fit();
     return stream;
   }
 
- protected:
+protected:
   using Encoder = BareBones::Encoding::Gorilla::ValuesEncoder;
 
   Encoder values_encoder_;
@@ -64,8 +66,8 @@ class PROMPP_ATTRIBUTE_PACKED ValuesGorillaEncoder {
     }
   }
 };
-
-}  // namespace series_data::encoder::value
+} // namespace series_data::encoder::value
 
 template <>
-struct BareBones::IsTriviallyReallocatable<series_data::encoder::value::ValuesGorillaEncoder> : std::true_type {};
+struct BareBones::IsTriviallyReallocatable<series_data::encoder::value::ValuesGorillaEncoder> : std::true_type {
+};

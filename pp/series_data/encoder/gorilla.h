@@ -8,9 +8,8 @@
 #include "value/constant_value.h"
 
 namespace series_data::encoder {
-
 class PROMPP_ATTRIBUTE_PACKED GorillaEncoder {
- public:
+public:
   PROMPP_ALWAYS_INLINE GorillaEncoder(int64_t timestamp, double value) {
     timestamp_encoder_.encode(timestamp, stream_.stream);
     values_encoder_.encode_first(value, stream_.stream);
@@ -36,6 +35,7 @@ class PROMPP_ATTRIBUTE_PACKED GorillaEncoder {
     }
     return values_encoder_.value();
   }
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t timestamp() const noexcept { return timestamp_encoder_.timestamp(); }
 
   PROMPP_ALWAYS_INLINE uint8_t encode(EncodingState& state, int64_t timestamp, double value) {
@@ -51,8 +51,9 @@ class PROMPP_ATTRIBUTE_PACKED GorillaEncoder {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return stream_.allocated_memory(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const BitSequenceWithItemsCount& stream() const noexcept { return stream_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE BitSequenceWithItemsCount& stream() noexcept { return stream_; }
 
- private:
+private:
   using TimestampEncoder = BareBones::Encoding::Gorilla::ZigZagTimestampEncoder<>;
   using ValuesEncoder = BareBones::Encoding::Gorilla::ValuesEncoder;
 
@@ -91,8 +92,8 @@ class PROMPP_ATTRIBUTE_PACKED GorillaEncoder {
     }
   }
 };
-
-}  // namespace series_data::encoder
+} // namespace series_data::encoder
 
 template <>
-struct BareBones::IsTriviallyReallocatable<series_data::encoder::GorillaEncoder> : std::true_type {};
+struct BareBones::IsTriviallyReallocatable<series_data::encoder::GorillaEncoder> : std::true_type {
+};

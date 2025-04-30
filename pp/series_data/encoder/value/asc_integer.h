@@ -7,9 +7,8 @@
 #include "series_data/encoder/zig_zag_timestamp_gorilla.h"
 
 namespace series_data::encoder::value {
-
 class PROMPP_ATTRIBUTE_PACKED AscIntegerEncoder {
- public:
+public:
   using EncoderDeltaType = int32_t;
   using Encoder = ZigZagTimestampEncoder<EncoderDeltaType>;
 
@@ -58,14 +57,16 @@ class PROMPP_ATTRIBUTE_PACKED AscIntegerEncoder {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactBitSequence& stream() const noexcept { return stream_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence& stream() noexcept { return stream_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence release_stream() && noexcept { return std::move(stream_); }
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence finalize_stream() noexcept {
     auto stream = std::move(stream_);
     stream.shrink_to_fit();
     return stream;
   }
 
- private:
+private:
   Encoder encoder_;
   CompactBitSequence stream_;
 
@@ -104,8 +105,8 @@ class PROMPP_ATTRIBUTE_PACKED AscIntegerEncoder {
     return is_int(value2) && is_in_bounds(static_cast<int64_t>(value2) - static_cast<int64_t>(value1), 0, std::numeric_limits<EncoderDeltaType>::max());
   }
 };
-
-}  // namespace series_data::encoder::value
+} // namespace series_data::encoder::value
 
 template <>
-struct BareBones::IsTriviallyReallocatable<series_data::encoder::value::AscIntegerEncoder> : std::true_type {};
+struct BareBones::IsTriviallyReallocatable<series_data::encoder::value::AscIntegerEncoder> : std::true_type {
+};
