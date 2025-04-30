@@ -54,4 +54,4 @@ jobs:
 
           whoami
 
-          werf build --platform linux/${{ matrix.arch }} --add-custom-tag="$BRANCH_NAME-${{ matrix.arch }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp
+          werf build --platform linux/${{ matrix.arch }} --add-custom-tag="$BRANCH_NAME-${{ matrix.arch }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp --log-debug=true
