@@ -160,7 +160,7 @@ func (qa *QueryableAppender) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerie
 		mint,
 		maxt,
 		nil,
-	)
+	), nil
 }
 
 func (qa *QueryableAppender) Close() error {
