@@ -61,7 +61,7 @@ jobs:
             -e SANITIZERS=${{ matrix.SANITIZERS }} \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} \
             bash -c "
-              set -xeo pipefail
+              set -eo pipefail
 
               git config --global --add safe.directory /workspace && cd pp
               echo \"build --remote_cache=http://172.17.0.1/cache/ --experimental_guard_against_concurrent_changes\" >> .bazelrc
