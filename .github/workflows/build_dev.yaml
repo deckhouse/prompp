@@ -14,10 +14,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - runner_name: fsn-dev-perftest-runner
-            arch: amd64
-            GO_ARCH: amd64
-            BAZEL_ARCH: x86_64
+          # - runner_name: fsn-dev-perftest-runner
+          #   arch: amd64
+          #   GO_ARCH: amd64
+          #   BAZEL_ARCH: x86_64
           - runner_name: fsn-dev-arm-runner
             arch: arm64
             GO_ARCH: arm64
@@ -47,11 +47,10 @@ jobs:
           export COMPILATION_MODE="opt"
           export ASAN="false"
           export WERF_BUILDAH_MODE=auto
-          export XDG_RUNTIME_DIR=/var/tmp/containers-user-1001/containers
 
           echo "=== ENV VARIABLES ==="
           env
 
           whoami
 
-          werf build --platform linux/${{ matrix.arch }} --add-custom-tag="$BRANCH_NAME-${{ matrix.arch }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp --log-debug=true
+          werf build --platform linux/${{ matrix.arch }} --add-custom-tag="$BRANCH_NAME-${{ matrix.arch }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp
