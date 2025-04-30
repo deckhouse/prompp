@@ -47,7 +47,7 @@ jobs:
           export COMPILATION_MODE="opt"
           export ASAN="false"
           export WERF_BUILDAH_MODE=auto
-          export REGISTRY_AUTH_FILE=$HOME/.config/containers/auth.json
+          export XDG_RUNTIME_DIR=/var/tmp/containers-user-1001/containers
 
           echo "=== ENV VARIABLES ==="
           env
