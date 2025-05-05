@@ -5,8 +5,8 @@ image: toolkit
 final: false
 dockerfile: Dockerfile.ci
 args:
-  BAZEL_ARCH: {{ env "BAZEL_ARCH" }}
-  GO_ARCH: {{ env "GO_ARCH" }}
+  BAZEL_ARCH: {{ env "BAZEL_ARCH" "x86_64" }}
+  GO_ARCH: {{ env "GO_ARCH" "amd64" }}
 ---
 image: distroless
 from: registry.werf.io/werf/scratch
@@ -55,7 +55,7 @@ mount:
     to: /go/pkg
 shell:
   install:
-    - export GOPROXY="https://proxy.golang.org/" CGO_ENABLED=0 GOOS=linux GOARCH={{ env "GO_ARCH" }}
+    - export GOPROXY="https://proxy.golang.org/" CGO_ENABLED=0 GOOS=linux GOARCH={{ env "GO_ARCH" "amd64" }}
     - cd /src
     - go build -ldflags="-s -w" -o promu ./main.go
 ---
@@ -102,7 +102,7 @@ shell:
     - apt update && apt install -y git bash gcc g++ nodejs npm
   install:
     - export NODE_MAJOR=20
-    - export GOPROXY="https://proxy.golang.org/" CGO_ENABLED=1 GOOS=linux GOARCH={{ env "GO_ARCH" }}
+    - export GOPROXY="https://proxy.golang.org/" CGO_ENABLED=1 GOOS=linux GOARCH={{ env "GO_ARCH" "amd64" }}
     - cd /src/web/ui
     - mkdir static
     - npm install
