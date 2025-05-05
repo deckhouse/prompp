@@ -98,6 +98,15 @@ jobs:
       
       - name: Export multiarch image
         run: |
+          BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
+          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
+          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/^v//')
+          export BAZEL_ARCH=${{ matrix.BAZEL_ARCH }}
+          export GO_ARCH=${{ matrix.GO_ARCH }}
+          export COMPILATION_MODE="opt"
+          export ASAN="false"
+          export WERF_BUILDAH_MODE=auto
+
           werf export --platform linux/amd64 --platform linux/arm64 --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp \
             --tag=index.docker.io/prompp/prompp:$BRANCH_NAME \
             --tag=index.docker.io/prompp/prompp:latest \
