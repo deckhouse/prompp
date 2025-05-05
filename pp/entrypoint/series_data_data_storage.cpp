@@ -131,11 +131,11 @@ extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
   };
 
   const auto in = static_cast<Arguments*>(args);
-  PromPP::Primitives::TimeInterval time_interval{.min = in->time_interval.min, .max = in->time_interval.max - 1};
   const auto& ls_id_set = std::get<QueryableEncodingBimap>(*in->lss).ls_id_set();
   new (res) Result{
       .chunk_recoder = std::make_unique<ChunkRecoderVariant>(
-          std::in_place_type<ChunkRecoder>, ChunkRecoderIterator{ls_id_set.begin(), ls_id_set.end(), in->data_storage.get(), time_interval}, time_interval),
+          std::in_place_type<ChunkRecoder>, ChunkRecoderIterator{ls_id_set.begin(), ls_id_set.end(), in->data_storage.get(), in->time_interval},
+          in->time_interval),
   };
 }
 
@@ -149,10 +149,9 @@ extern "C" void prompp_series_data_serialized_chunk_recoder_ctor(void* args, voi
   };
 
   const auto in = static_cast<Arguments*>(args);
-  PromPP::Primitives::TimeInterval time_interval{.min = in->time_interval.min, .max = in->time_interval.max - 1};
   new (res) Result{
       .chunk_recoder = std::make_unique<ChunkRecoderVariant>(std::in_place_type<SerializedChunkRecoder>,
-                                                             series_data::chunk::SerializedChunkIterator{in->buffer.span()}, time_interval),
+                                                             series_data::chunk::SerializedChunkIterator{in->buffer.span()}, in->time_interval),
   };
 }
 

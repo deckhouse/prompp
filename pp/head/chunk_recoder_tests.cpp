@@ -39,8 +39,7 @@ class ChunkRecoderFixture : public ::testing::Test {
 
   ChunkRecoder create_recoder(const LsIdSet& ls_id_set, const TimeInterval& time_interval) {
     ls_id_set_ = ls_id_set;
-    const auto corrected_time_interval = TimeInterval{.min = time_interval.min, .max = time_interval.max - 1};
-    return ChunkRecoder{ChunkIterator{ls_id_set_.begin(), ls_id_set_.end(), &storage_, corrected_time_interval}, corrected_time_interval};
+    return ChunkRecoder{ChunkIterator{ls_id_set_.begin(), ls_id_set_.end(), &storage_, time_interval}, time_interval};
   }
 
   template <class Recoder>
@@ -72,7 +71,7 @@ TEST_F(ChunkRecoderFixture, StorageWithOneChunk) {
   encoder.encode(0, 1, 1.0);
   encoder.encode(0, 2, 1.0);
 
-  auto recoder = create_recoder({0}, {.min = 0, .max = 3});
+  auto recoder = create_recoder({0}, {.min = 0, .max = 2});
 
   // Act
   const auto info1 = recode(recoder);
@@ -98,7 +97,7 @@ TEST_F(ChunkRecoderFixture, StorageWithEmptyChunks) {
   encoder.encode(4, 3, 2.0);
   encoder.encode(4, 4, 2.0);
 
-  auto recoder = create_recoder({0, 1, 2, 3, 4}, {.min = 0, .max = 5});
+  auto recoder = create_recoder({0, 1, 2, 3, 4}, {.min = 0, .max = 4});
 
   // Act
   const auto info1 = recode(recoder);
@@ -131,7 +130,7 @@ TEST_F(ChunkRecoderFixture, ReverseOrderOfChunks) {
   encoder.encode(4, 3, 2.0);
   encoder.encode(4, 4, 2.0);
 
-  auto recoder = create_recoder({4, 3, 2, 1, 0}, {.min = 0, .max = 5});
+  auto recoder = create_recoder({4, 3, 2, 1, 0}, {.min = 0, .max = 4});
 
   // Act
   const auto info1 = recode(recoder);
@@ -165,7 +164,7 @@ TEST_F(ChunkRecoderFixture, ChunkWithFinalizedTimestampStream) {
   encoder.encode(1, 2, 1.0);
   encoder.encode(1, 3, 1.0);
 
-  auto recoder = create_recoder({0, 1}, {.min = 0, .max = 4});
+  auto recoder = create_recoder({0, 1}, {.min = 0, .max = 3});
 
   // Act
   const auto info1 = recode(recoder);
@@ -207,7 +206,7 @@ TEST_F(ChunkRecoderFixture, GorillaChunk) {
   encoder.encode(0, 3, 1.3);
   encoder.encode(0, 4, 1.4);
 
-  auto recoder = create_recoder({0}, {.min = 0, .max = 5});
+  auto recoder = create_recoder({0}, {.min = 0, .max = 4});
 
   // Act
   const auto info = recode(recoder);
@@ -230,7 +229,7 @@ TEST_F(ChunkRecoderFixture, NoChunksByTimeInterval) {
   encoder.encode(0, 1, 1.1);
   encoder.encode(0, 2, 1.2);
 
-  auto recoder = create_recoder({0}, {.min = 0, .max = 1});
+  auto recoder = create_recoder({0}, {.min = 0, .max = 0});
 
   // Act
   const auto info = recode(recoder);
@@ -249,7 +248,7 @@ TEST_F(ChunkRecoderFixture, PartialReencodingByTimeInterval) {
   encoder.encode(0, 4, 1.0);
   encoder.encode(1, 0, 1.0);
 
-  auto recoder = create_recoder({0, 1}, {.min = 1, .max = 3});
+  auto recoder = create_recoder({0, 1}, {.min = 1, .max = 2});
 
   // Act
   const auto info = recode(recoder);
@@ -288,7 +287,7 @@ TEST_F(ChunkRecoderFixture, EmptyFinalizedChunkNonEmptyOpenedChunk) {
   encoder.encode(0, 2, 1.0);
   encoder.encode(0, 5, 1.0);
 
-  auto recoder = create_recoder({0}, {.min = 3, .max = 6});
+  auto recoder = create_recoder({0}, {.min = 3, .max = 5});
 
   // Act
   const auto info = recode(recoder);
@@ -309,7 +308,7 @@ TEST_F(ChunkRecoderFixture, EmptyLssWithNonEmptyDataStorage) {
   Encoder encoder{storage_};
   encoder.encode(0, 1, 1.0);
 
-  auto recoder = create_recoder({}, {.min = 0, .max = 2});
+  auto recoder = create_recoder({}, {.min = 0, .max = 1});
 
   // Act
   const auto info1 = recode(recoder);
@@ -322,7 +321,7 @@ TEST_F(ChunkRecoderFixture, EmptyLssWithNonEmptyDataStorage) {
 
 TEST_F(ChunkRecoderFixture, EmptyStorageWithNonEmptyLss) {
   // Arrange
-  const auto recoder = create_recoder({0, 1}, {.min = 0, .max = 2});
+  const auto recoder = create_recoder({0, 1}, {.min = 0, .max = 1});
 
   // Act
   const bool has_more_data = recoder.has_more_data();
@@ -337,7 +336,7 @@ TEST_F(ChunkRecoderFixture, ConstantEncoderChunkWithStaleNanOnSecondPoint) {
   encoder.encode(0, 1, 0.0);
   encoder.encode(0, 2, STALE_NAN);
 
-  auto recoder = create_recoder({0}, {.min = 0, .max = 3});
+  auto recoder = create_recoder({0}, {.min = 0, .max = 2});
 
   // Act
   const auto info = recode(recoder);
@@ -360,7 +359,7 @@ TEST_F(ChunkRecoderFixture, ConstantEncoderChunkWithStaleNanOnThirdPoint) {
   encoder.encode(0, 2, 0.0);
   encoder.encode(0, 3, STALE_NAN);
 
-  auto recoder = create_recoder({0}, {.min = 0, .max = 4});
+  auto recoder = create_recoder({0}, {.min = 0, .max = 3});
 
   // Act
   const auto info = recode(recoder);
@@ -383,7 +382,7 @@ TEST_F(ChunkRecoderFixture, TwoDoubleConstantEncoderChunkWithStaleNan) {
   encoder.encode(0, 2, 1.0);
   encoder.encode(0, 3, STALE_NAN);
 
-  auto recoder = create_recoder({0}, {.min = 0, .max = 4});
+  auto recoder = create_recoder({0}, {.min = 0, .max = 3});
 
   // Act
   const auto info = recode(recoder);
