@@ -117,8 +117,7 @@ class GenericEncoder {
   template <class Stats, class Output>
   inline __attribute__((always_inline)) void finalize(Stats* stats, Output& out) {
     write_stats(stats);
-
-    encoder_.write(out);
+    out << encoder_;
   }
 };
 
