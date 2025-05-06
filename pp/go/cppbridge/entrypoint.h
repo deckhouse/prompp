@@ -996,7 +996,7 @@ void prompp_series_data_data_storage_dtor(void* args);
  * @param args {
  *     lss uintptr            // pointer to constructed label sets
  *     dataStorage   uintptr  // pointer to constructed data storage
- *     time_interval struct { interval is semi-open [min, max)
+ *     time_interval struct { closed interval [min, max]
  *        min int64
  *        max int64
  *     }
@@ -1012,7 +1012,7 @@ void prompp_series_data_chunk_recoder_ctor(void* args, void* res);
  *
  * @param args {
  *     buffer []byte // SliceView to serialized chunks buffer
- *     time_interval struct {  interval is semi-open [min, max)
+ *     time_interval struct { closed interval [min, max]
  *        min int64
  *        max int64
  *     }
