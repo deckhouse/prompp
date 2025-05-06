@@ -667,7 +667,7 @@ class Sequence {
 
     assert(static_cast<size_t>(d_i_ - data_ + 4) <= data_.size());
     assert(d_i_ >= data_);
-    assert(static_cast<size_t>(k_i_ - keys_) < data_.size());
+    assert(static_cast<size_t>(k_i_ - keys_) < keys_.size());
     assert(k_i_ >= keys_);
 
     auto code = Codec::encode(val, d_i_);
