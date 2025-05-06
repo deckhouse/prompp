@@ -109,7 +109,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Create multiarch manifest
+      - name: Create multi arch manifest
         run: |
           BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
           BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
@@ -119,7 +119,7 @@ jobs:
             docker.io/prompp/prompp:$BRANCH_NAME-amd64 \
             docker.io/prompp/prompp:$BRANCH_NAME-arm64
 
-      - name: Push multiarch manifest
+      - name: Push multi arch manifest
         run: |
           docker manifest push docker.io/prompp/prompp:$BRANCH_NAME \
             --purge
