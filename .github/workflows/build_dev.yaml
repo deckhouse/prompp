@@ -75,7 +75,7 @@ make-multiarch:
         BRANCH_NAME=$(echo "$RAW_BRANCH_NAME" | sed -E 's|/|-|g; s/^v//')
         echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
 
-    - name: Create and push multi-arch manifest
+    - name: Create and push multiarch manifest
       run: |
         docker manifest create ${{ secrets.DEV_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }} \
           ${{ secrets.DEV_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-amd64 \
