@@ -17,7 +17,7 @@ type Storage interface {
 
 // HeadBuilder - head builder.
 type HeadBuilder interface {
-	Build() (relabeler.Head, error)
+	BuildWithLSS(targetLsses []*cppbridge.LabelSetStorage) (relabeler.Head, error)
 	BuildWithConfig(inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) (relabeler.Head, error)
 }
 
@@ -133,7 +133,13 @@ func NewRotatableHead(head relabeler.Head, storage Storage, builder HeadBuilder,
 
 // Rotate - relabeler.Head interface implementation.
 func (h *RotatableHead) Rotate() error {
-	newHead, err := h.builder.Build()
+	targetLsses := make([]*cppbridge.LabelSetStorage, h.head.NumberOfShards())
+	_ = h.head.ForEachShard(func(shard relabeler.Shard) error {
+		targetLsses[shard.ShardID()] = shard.LSS().Raw().CopyAddedSeries()
+		return nil
+	})
+
+	newHead, err := h.builder.BuildWithLSS(targetLsses)
 	if err != nil {
 		return err
 	}
