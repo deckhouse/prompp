@@ -48,3 +48,35 @@ jobs:
           export WERF_BUILDAH_MODE=auto
 
           werf build --platform linux/${{ matrix.arch }} --add-custom-tag="$BRANCH_NAME-${{ matrix.arch }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp
+
+  make-multiarch:
+    needs: build-and-push
+    runs-on: fsn-dev-perftest-runner
+    steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Static Library arm64
+        uses: actions/download-artifact@v4
+        with:
+          name: prompp-binaries-arm64
+      
+      - name: Create multiarch manifest
+        run: |
+          BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
+          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
+          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/^v//')
+
+          docker manifest create ${{ secrets.DEV_REGISTRY }}/prompp/prompp:$BRANCH_NAME \
+            ${{ secrets.DEV_REGISTRY }}/prompp/prompp:$BRANCH_NAME-amd64 \
+            ${{ secrets.DEV_REGISTRY }}/prompp/prompp:$BRANCH_NAME-arm64
+
+      - name: Push multiarch manifest
+        run: |
+          docker manifest push ${{ secrets.DEV_REGISTRY }}/prompp/prompp:$BRANCH_NAME \
+            --purge

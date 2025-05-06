@@ -97,6 +97,38 @@ jobs:
           path: prompp-binaries-${{ matrix.arch }}.tar.gz
           retention-days: 7
 
+  make-multiarch:
+    needs: build-and-push
+    runs-on: fsn-dev-perftest-runner
+    steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Static Library arm64
+        uses: actions/download-artifact@v4
+        with:
+          name: prompp-binaries-arm64
+      
+      - name: Create multiarch manifest
+        run: |
+          BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
+          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
+          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/^v//')
+
+          docker manifest create docker.io/prompp/prompp:$BRANCH_NAME \
+            docker.io/prompp/prompp:$BRANCH_NAME-amd64 \
+            docker.io/prompp/prompp:$BRANCH_NAME-arm64
+
+      - name: Push multiarch manifest
+        run: |
+          docker manifest push docker.io/prompp/prompp:$BRANCH_NAME \
+            --purge
+
   release:
     needs: build-and-push
     permissions:
