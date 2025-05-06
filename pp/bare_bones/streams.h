@@ -2,10 +2,10 @@
 
 #include <cassert>
 #include <concepts>
-#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <ostream>
+#include <span>
 #include <string_view>
 
 namespace BareBones {
@@ -35,12 +35,22 @@ class ShrinkedToFitOStringStream : public std::ostream {
 
   [[nodiscard]] std::string_view view() const noexcept { return buffer_.view(); }
 
+  template <class T>
+  [[nodiscard]] std::span<T> span() const noexcept {
+    return buffer_.span<T>();
+  }
+
  private:
   class output_buffer final : public std::streambuf {
    public:
     ~output_buffer() override { std::free(memory_); }
 
     [[nodiscard]] std::string_view view() const noexcept { return {memory_, size_}; }
+
+    template <class T>
+    [[nodiscard]] std::span<T> span() const noexcept {
+      return {reinterpret_cast<T*>(memory_), size_};
+    }
 
    private:
     char* memory_{};

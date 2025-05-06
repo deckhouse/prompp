@@ -32,6 +32,8 @@ struct EncodingState {
   bool operator==(const EncodingState&) const noexcept = default;
 };
 
+class IteratorSentinel {};
+
 constexpr PROMPP_ALWAYS_INLINE bool is_constant_encoder(EncodingType encoding_type) noexcept {
   using enum EncodingType;
   return BareBones::is_in(encoding_type, kUint32Constant, kFloat32Constant, kDoubleConstant, kTwoDoubleConstant);
