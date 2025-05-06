@@ -135,7 +135,8 @@ func NewRotatableHead(head relabeler.Head, storage Storage, builder HeadBuilder,
 func (h *RotatableHead) Rotate() error {
 	targetLsses := make([]*cppbridge.LabelSetStorage, h.head.NumberOfShards())
 	_ = h.head.ForEachShard(func(shard relabeler.Shard) error {
-		targetLsses[shard.ShardID()] = shard.LSS().Raw().CopyAddedSeries()
+		targetLsses[shard.ShardID()] = cppbridge.NewQueryableLssStorage()
+		shard.LSS().Raw().CopyAddedSeries(targetLsses[shard.ShardID()])
 		return nil
 	})
 
