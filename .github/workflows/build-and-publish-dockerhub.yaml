@@ -134,7 +134,7 @@ jobs:
           docker manifest push ${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }} --purge
 
   release:
-    needs: build-and-push
+    needs: make-multiarch
     permissions:
       contents: write
     runs-on: fsn-dev-gitlab-runner
