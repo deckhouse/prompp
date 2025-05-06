@@ -224,13 +224,14 @@ func (s *QueryableLSSSuite) testQueryLabelValuesImpl(testCase queryLabelValuesCa
 func (s *QueryableLSSSuite) TestCopyAddedSeries() {
 	// Arrange
 	emptyLabelsSets := make([]cppbridge.Labels, len(s.labelSetIDs))
+	lssCopy := cppbridge.NewQueryableLssStorage()
+	lssCopyOfCopy := cppbridge.NewQueryableLssStorage()
 
 	// Act
-	lssCopy := s.lss.CopyAddedSeries()
-	lssCopyOfCopy := lssCopy.CopyAddedSeries()
+	s.lss.CopyAddedSeries(lssCopy)
+	lssCopy.CopyAddedSeries(lssCopyOfCopy)
 
 	// Assert
-
 	s.Equal(labelSetToCppBridgeLabels(s.labelSets), lssCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
 	s.Equal(emptyLabelsSets, lssCopyOfCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
 }

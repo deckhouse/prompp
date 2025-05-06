@@ -25,17 +25,14 @@ extern "C" void prompp_primitives_lss_ctor(void* args, void* res) {
   new (res) Result{.lss = create_lss(static_cast<Arguments*>(args)->lss_type)};
 }
 
-extern "C" void prompp_primitives_lss_copy_added_series(void* args, void* res) {
+extern "C" void prompp_primitives_lss_copy_added_series(void* args) {
   struct Arguments {
-    LssVariantPtr lss;
-  };
-  struct Result {
-    LssVariantPtr lss;
+    LssVariantPtr source;
+    LssVariantPtr destination;
   };
 
   const auto arguments = static_cast<Arguments*>(args);
-  const auto result = new (res) Result{.lss = create_lss(LssType::kQueryableEncodingBimap)};
-  std::get<QueryableEncodingBimap>(*arguments->lss).copy_added_series(std::get<QueryableEncodingBimap>(*result->lss));
+  std::get<QueryableEncodingBimap>(*arguments->source).copy_added_series(std::get<QueryableEncodingBimap>(*arguments->destination));
 }
 
 extern "C" void prompp_primitives_lss_dtor(void* args) {

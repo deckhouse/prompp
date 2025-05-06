@@ -171,9 +171,9 @@ func (lss *LabelSetStorage) GetLabelSets(labelSetIDs []uint32) *LabelSetStorageG
 	return result
 }
 
-// CopyAddedSeries - returns copy of lss with label sets which were added via FindOrEmplace
-func (lss *LabelSetStorage) CopyAddedSeries() *LabelSetStorage {
-	return newLabelSetStorageFromPointer(primitivesLSSCopyAddedSeries(lss.pointer))
+// CopyAddedSeries - copy label sets which were added via FindOrEmplace to destination
+func (lss *LabelSetStorage) CopyAddedSeries(destination *LabelSetStorage) {
+	primitivesLSSCopyAddedSeries(lss.pointer, destination.pointer)
 }
 
 // Pointer return c-pointer.

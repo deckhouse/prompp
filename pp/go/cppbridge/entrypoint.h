@@ -386,14 +386,12 @@ void prompp_primitives_lss_ctor(void* args, void* res);
  * @brief Construct a new Primitives label sets.
  *
  * @param args {
- *     lss uintptr // pointer of label sets;
+ *     source      uintptr // pointer to source label sets
+ *     destination uintptr // pointer to destination label sets
  * }
  *
- * @param res {
- *     lss uintptr     // pointer to constructed label sets;
- * }
  */
-void prompp_primitives_lss_copy_added_series(void* args, void* res);
+void prompp_primitives_lss_copy_added_series(void* args);
 
 /**
  * @brief Destroy Primitives label sets.
