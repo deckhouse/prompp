@@ -221,8 +221,10 @@ class RegexpSearcher {
               const auto rgx_tail = re2::Regexp::Concat(rgx->sub() + i + 1, rgx->nsub() - i - 1, rgx->parse_flags());
               process_exact_prefix(depth_limit, trv, rgx->sub()[i], rgx_tail);
               rgx_tail->Decref();
-            } else {
+            } else if (rgx->nsub() - i > 1) {
               process_exact_prefix(depth_limit, trv, rgx->sub()[i], rgx->sub()[i + 1]);
+            } else {
+              process_exact_prefix(depth_limit, trv, rgx->sub()[i]);
             }
             break;
           }

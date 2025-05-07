@@ -204,7 +204,13 @@ INSTANTIATE_TEST_SUITE_P(
                                {.name = "job1", .value = "^$", .type = MatcherType::kRegexpNotMatch}},
             .expected = {.status = QuerierStatus::kNoMatch,
                          .selector = {.matchers = {{.matches{0}, .label_name_id = 0, .status = MatchStatus::kPartialMatch, .type = MatcherType::kExactMatch},
-                                                   {.status = MatchStatus::kEmptyMatch, .type = MatcherType::kUnknown}}}}}));
+                                                   {.status = MatchStatus::kEmptyMatch, .type = MatcherType::kUnknown}}}}},
+        SelectorQuerierTestCase{
+            .label_sets = {{{"job", "cron"}}, {{"job", "php"}}},
+            .label_matchers = {{.name = "job", .value = "^cron|php$", .type = MatcherType::kRegexpMatch}},
+            .expected = {
+                .status = QuerierStatus::kMatch,
+                .selector = {.matchers = {{.matches{0, 1}, .label_name_id = 0, .status = MatchStatus::kPartialMatch, .type = MatcherType::kRegexpMatch}}}}}));
 
 INSTANTIATE_TEST_SUITE_P(
     AnythingMatchers,
