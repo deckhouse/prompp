@@ -721,7 +721,7 @@ class DeserializerIteratorFixture : public SerializerDeserializerTrait, public t
   DecodedChunks decode_chunks() const {
     DecodedChunks result;
     for (auto& chunk : Deserializer{get_buffer()}) {
-      result.emplace_back(decode_chunk(chunk.decode_iterator()));
+      result.emplace_back(decode_chunk(Deserializer::create_decode_iterator(chunk)));
     }
     return result;
   }
