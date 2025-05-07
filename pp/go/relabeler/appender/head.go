@@ -17,7 +17,7 @@ type Storage interface {
 
 // HeadBuilder - head builder.
 type HeadBuilder interface {
-	BuildWithLSS(targetLsses []*cppbridge.LabelSetStorage) (relabeler.Head, error)
+	Build() (relabeler.Head, error)
 	BuildWithConfig(inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) (relabeler.Head, error)
 }
 
@@ -35,6 +35,21 @@ type RotatableHead struct {
 	storage       Storage
 	builder       HeadBuilder
 	headActivator HeadActivator
+}
+
+// NewRotatableHead - RotatableHead constructor.
+func NewRotatableHead(
+	head relabeler.Head,
+	storage Storage,
+	builder HeadBuilder,
+	headActivator HeadActivator,
+) *RotatableHead {
+	return &RotatableHead{
+		head:          head,
+		storage:       storage,
+		builder:       builder,
+		headActivator: headActivator,
+	}
 }
 
 // ID - relabeler.Head interface implementation.
@@ -121,29 +136,14 @@ func (h *RotatableHead) Close() error {
 	return h.head.Close()
 }
 
-// NewRotatableHead - RotatableHead constructor.
-func NewRotatableHead(head relabeler.Head, storage Storage, builder HeadBuilder, headActivator HeadActivator) *RotatableHead {
-	return &RotatableHead{
-		head:          head,
-		storage:       storage,
-		builder:       builder,
-		headActivator: headActivator,
-	}
-}
-
 // Rotate - relabeler.Head interface implementation.
 func (h *RotatableHead) Rotate() error {
-	targetLsses := make([]*cppbridge.LabelSetStorage, h.head.NumberOfShards())
-	_ = h.head.ForEachShard(func(shard relabeler.Shard) error {
-		targetLsses[shard.ShardID()] = cppbridge.NewQueryableLssStorage()
-		shard.LSS().Raw().CopyAddedSeries(targetLsses[shard.ShardID()])
-		return nil
-	})
-
-	newHead, err := h.builder.BuildWithLSS(targetLsses)
+	newHead, err := h.builder.Build()
 	if err != nil {
 		return err
 	}
+
+	newHead.CopySeriesFrom(h.head)
 
 	if err = h.headActivator.Activate(newHead.ID()); err != nil {
 		return err
@@ -183,6 +183,15 @@ func (h *RotatableHead) Discard() error {
 	return h.head.Discard()
 }
 
+// CopySeriesFrom copy series from other head.
+func (h *RotatableHead) CopySeriesFrom(other relabeler.Head) {
+	h.head.CopySeriesFrom(other)
+}
+
+//
+// HeapProfileWritableHead
+//
+
 type HeapProfileWriter interface {
 	WriteHeapProfile() error
 }
@@ -190,6 +199,10 @@ type HeapProfileWriter interface {
 type HeapProfileWritableHead struct {
 	head              relabeler.Head
 	heapProfileWriter HeapProfileWriter
+}
+
+func NewHeapProfileWritableHead(head relabeler.Head, heapProfileWriter HeapProfileWriter) *HeapProfileWritableHead {
+	return &HeapProfileWritableHead{head: head, heapProfileWriter: heapProfileWriter}
 }
 
 func (h *HeapProfileWritableHead) ID() string {
@@ -274,6 +287,7 @@ func (h *HeapProfileWritableHead) Discard() error {
 	return h.head.Discard()
 }
 
-func NewHeapProfileWritableHead(head relabeler.Head, heapProfileWriter HeapProfileWriter) *HeapProfileWritableHead {
-	return &HeapProfileWritableHead{head: head, heapProfileWriter: heapProfileWriter}
+// CopySeriesFrom copy series from other head.
+func (h *HeapProfileWritableHead) CopySeriesFrom(other relabeler.Head) {
+	h.head.CopySeriesFrom(other)
 }

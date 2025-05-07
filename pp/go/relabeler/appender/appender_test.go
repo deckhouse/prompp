@@ -1517,29 +1517,6 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithRotate() {
 			headsToClose = append(headsToClose, newHead)
 			return newHead, nil
 		},
-		func(
-			targetLsses []*cppbridge.LabelSetStorage,
-			inputRelabelerConfigs []*config.InputRelabelerConfig,
-		) (relabeler.Head, error) {
-			newDir, buildErr := os.MkdirTemp("", "appender_test")
-			s.Require().NoError(buildErr)
-			tmpDirsToRemove = append(tmpDirsToRemove, newDir)
-			generation++
-			newHeadID := fmt.Sprintf("head_id_%d", generation)
-			newHead, buildErr := head.CreateWithLSS(
-				newHeadID,
-				generation,
-				newDir,
-				inputRelabelerConfigs,
-				targetLsses,
-				0,
-				head.NoOpLastAppendedSegmentIDSetter{},
-				prometheus.DefaultRegisterer,
-			)
-			s.Require().NoError(buildErr)
-			headsToClose = append(headsToClose, newHead)
-			return newHead, nil
-		},
 	)
 
 	rotatableHead := appender.NewRotatableHead(hd, noOpStorage{}, builder, appender.NoOpHeadActivator{})
@@ -2443,29 +2420,6 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithRotateWithStaleNans() 
 			generation++
 			newHeadID := fmt.Sprintf("head_id_%d", generation)
 			newHead, buildErr := head.Create(newHeadID, generation, newDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
-			s.Require().NoError(buildErr)
-			headsToClose = append(headsToClose, newHead)
-			return newHead, nil
-		},
-		func(
-			targetLsses []*cppbridge.LabelSetStorage,
-			inputRelabelerConfigs []*config.InputRelabelerConfig,
-		) (relabeler.Head, error) {
-			newDir, buildErr := os.MkdirTemp("", "appender_test")
-			s.Require().NoError(buildErr)
-			tmpDirsToRemove = append(tmpDirsToRemove, newDir)
-			generation++
-			newHeadID := fmt.Sprintf("head_id_%d", generation)
-			newHead, buildErr := head.CreateWithLSS(
-				newHeadID,
-				generation,
-				newDir,
-				inputRelabelerConfigs,
-				targetLsses,
-				0,
-				head.NoOpLastAppendedSegmentIDSetter{},
-				prometheus.DefaultRegisterer,
-			)
 			s.Require().NoError(buildErr)
 			headsToClose = append(headsToClose, newHead)
 			return newHead, nil

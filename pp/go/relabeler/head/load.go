@@ -57,51 +57,6 @@ func Create(
 	return New(id, generation, configs, lsses, wals, dataStorages, numberOfShards, registerer)
 }
 
-func CreateWithLSS(
-	id string,
-	generation uint64,
-	dir string,
-	configs []*config.InputRelabelerConfig,
-	targetLsses []*cppbridge.LabelSetStorage,
-	maxSegmentSize uint32,
-	lastAppendedSegmentIDSetter LastAppendedSegmentIDSetter,
-	registerer prometheus.Registerer,
-) (_ *Head, err error) {
-	numberOfShards := uint16(len(targetLsses))
-
-	lsses := make([]*LSS, numberOfShards)
-	wals := make([]*ShardWal, numberOfShards)
-	dataStorages := make([]*DataStorage, numberOfShards)
-
-	defer func() {
-		if err == nil {
-			return
-		}
-		for _, wal := range wals {
-			if wal != nil {
-				_ = wal.Close()
-			}
-		}
-	}()
-
-	swn := newSegmentWriteNotifier(numberOfShards, lastAppendedSegmentIDSetter)
-
-	for shardID := uint16(0); shardID < numberOfShards; shardID++ {
-		lsses[shardID], wals[shardID], dataStorages[shardID], err = createShardWithLSS(
-			dir,
-			shardID,
-			swn,
-			targetLsses[shardID],
-			maxSegmentSize,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create shard: %w", err)
-		}
-	}
-
-	return New(id, generation, configs, lsses, wals, dataStorages, numberOfShards, registerer)
-}
-
 // createShard create shard for head.
 func createShard(
 	dir string,
@@ -109,23 +64,6 @@ func createShard(
 	swn *segmentWriteNotifier,
 	maxSegmentSize uint32,
 ) (*LSS, *ShardWal, *DataStorage, error) {
-	return createShardWithLSS(dir, shardID, swn, cppbridge.NewQueryableLssStorage(), maxSegmentSize)
-}
-
-// createShardWithLSS create shard for head with lss.
-func createShardWithLSS(
-	dir string,
-	shardID uint16,
-	swn *segmentWriteNotifier,
-	targetLss *cppbridge.LabelSetStorage,
-	maxSegmentSize uint32,
-) (*LSS, *ShardWal, *DataStorage, error) {
-	inputLss := cppbridge.NewLssStorage()
-	lss := &LSS{
-		input:  inputLss,
-		target: targetLss,
-	}
-
 	shardFile, err := os.Create(filepath.Join(filepath.Clean(dir), fmt.Sprintf("shard_%d.wal", shardID)))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create shard wal file: %w", err)
@@ -138,7 +76,12 @@ func createShardWithLSS(
 		_ = shardFile.Close()
 	}()
 
-	shardWalEncoder := cppbridge.NewHeadWalEncoder(shardID, HeadWalEncoderDecoderLogShards, targetLss)
+	lss := &LSS{
+		input:  cppbridge.NewLssStorage(),
+		target: cppbridge.NewQueryableLssStorage(),
+	}
+
+	shardWalEncoder := cppbridge.NewHeadWalEncoder(shardID, HeadWalEncoderDecoderLogShards, lss.target)
 	_, err = WriteHeader(shardFile, FileFormatVersion, shardWalEncoder.Version())
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to write header: %w", err)
@@ -150,6 +93,7 @@ func createShardWithLSS(
 	}
 
 	shardWal := newShardWal(shardWalEncoder, maxSegmentSize, sw)
+
 	cppDataStorage := cppbridge.NewHeadDataStorage()
 	dataStorage := &DataStorage{
 		dataStorage: cppDataStorage,

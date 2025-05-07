@@ -114,3 +114,8 @@ func (h *DiscardableRotatableHead) Discard() (err error) {
 	}
 	return err
 }
+
+// CopySeriesFrom copy series from other head.
+func (h *DiscardableRotatableHead) CopySeriesFrom(other relabeler.Head) {
+	h.head.CopySeriesFrom(other)
+}

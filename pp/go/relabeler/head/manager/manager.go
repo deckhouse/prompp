@@ -10,7 +10,6 @@ import (
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
 	"github.com/prometheus/prometheus/pp/go/relabeler/head"
@@ -248,6 +247,12 @@ func (m *Manager) loadHead(
 	return result
 }
 
+// Build head.
+func (m *Manager) Build() (relabeler.Head, error) {
+	cfgs, numberOfShards := m.configSource.Get()
+	return m.BuildWithConfig(cfgs, numberOfShards)
+}
+
 // BuildWithConfig build head with incoming config.
 func (m *Manager) BuildWithConfig(
 	inputRelabelerConfigs []*config.InputRelabelerConfig,
@@ -276,50 +281,6 @@ func (m *Manager) BuildWithConfig(
 		headDir,
 		inputRelabelerConfigs,
 		numberOfShards,
-		m.maxSegmentSize,
-		SetLastAppendedSegmentIDFn(func(segmentID uint32) { headRecord.SetLastAppendedSegmentID(segmentID) }),
-		m.registerer,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create head: %w", err)
-	}
-
-	m.generation++
-
-	return m.createDiscardableRotatableHead(h, headRecord.Acquire()), nil
-}
-
-// BuildWithLSS head with target lsses.
-func (m *Manager) BuildWithLSS(targetLsses []*cppbridge.LabelSetStorage) (h relabeler.Head, err error) {
-	inputRelabelerConfigs, numberOfShards := m.configSource.Get()
-
-	if uint16(len(targetLsses)) != numberOfShards { //nolint:gosec // no overflow
-		return m.BuildWithConfig(inputRelabelerConfigs, numberOfShards)
-	}
-
-	headRecord, err := m.catalog.Create(numberOfShards)
-	if err != nil {
-		return nil, err
-	}
-
-	headDir := filepath.Join(m.dir, headRecord.ID())
-	//revive:disable-next-line:add-constant // this is already a constant
-	if err = os.Mkdir(headDir, 0o777); err != nil { //nolint:gosec // need this permissions
-		return nil, err
-	}
-	defer func() {
-		if err != nil {
-			err = errors.Join(err, os.RemoveAll(headDir))
-		}
-	}()
-
-	generation := m.generation
-	h, err = head.CreateWithLSS(
-		headRecord.ID(),
-		generation,
-		headDir,
-		inputRelabelerConfigs,
-		targetLsses,
 		m.maxSegmentSize,
 		SetLastAppendedSegmentIDFn(func(segmentID uint32) { headRecord.SetLastAppendedSegmentID(segmentID) }),
 		m.registerer,
