@@ -206,7 +206,9 @@ jobs:
 
               # tests
               cd pp
-              go test \$(./scripts/ci_get_go_test_flags.sh) -v -cover -count=1 -coverprofile=coverage.txt -covermode=atomic ./go/... 2>&1 | tee report.txt
+              go test \$(./scripts/ci_get_go_test_flags.sh) -cover -covermode=atomic -c ./go/...
+              ./cppbridge.test -test.v -test.count=1 -test.coverprofile=coverage.txt 2>&1 | tee report.txt
+              #go test \$(./scripts/ci_get_go_test_flags.sh) -v -cover -count=1 -coverprofile=coverage.txt -covermode=atomic ./go/... 2>&1 | tee report.txt
 
               # reports
               cat report.txt | go-junit-report > report.xml
