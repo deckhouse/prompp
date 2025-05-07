@@ -102,10 +102,11 @@ func (s *ChunksSeriesSetTestSuite) TestAll() {
 	require.NoError(s.T(), err)
 	xorChunkAppender.Append(2, 21)
 	xorChunkAppender.Append(5, 31)
+	xorChunkAppender.Append(8, 41)
 
 	meta = ci.At()
 	require.Equal(s.T(), int64(2), meta.MinTime)
-	require.Equal(s.T(), int64(5), meta.MaxTime)
+	require.Equal(s.T(), int64(8), meta.MaxTime)
 	require.Equal(s.T(), xorChunk.Bytes(), meta.Chunk.Bytes())
 	require.False(s.T(), ci.Next())
 
