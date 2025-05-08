@@ -208,6 +208,12 @@ INSTANTIATE_TEST_SUITE_P(
         SelectorQuerierTestCase{
             .label_sets = {{{"job", "cron"}}, {{"job", "php"}}},
             .label_matchers = {{.name = "job", .value = "^cron|php$", .type = MatcherType::kRegexpMatch}},
+            .expected =
+                {.status = QuerierStatus::kMatch,
+                 .selector = {.matchers = {{.matches{0, 1}, .label_name_id = 0, .status = MatchStatus::kPartialMatch, .type = MatcherType::kRegexpMatch}}}}},
+        SelectorQuerierTestCase{
+            .label_sets = {{{"job", "cron"}}, {{"job", "crond"}}},
+            .label_matchers = {{.name = "job", .value = "cron(^^^^|d)", .type = MatcherType::kRegexpMatch}},
             .expected = {
                 .status = QuerierStatus::kMatch,
                 .selector = {.matchers = {{.matches{0, 1}, .label_name_id = 0, .status = MatchStatus::kPartialMatch, .type = MatcherType::kRegexpMatch}}}}}));
