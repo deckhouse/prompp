@@ -1,6 +1,6 @@
 go:
     # Whenever the Go version is updated here,
-    # .circle/config.yml should also be updated.
+    # .circle/config.yml should also be updated. update
     version: 1.23.2
     cgo: true
 repository:
