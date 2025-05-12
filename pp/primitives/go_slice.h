@@ -40,6 +40,7 @@ class SliceView {
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return !len_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return len_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t capacity() const noexcept { return cap_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const T> span() const noexcept { return {data_, len_}; }
 
   PROMPP_ALWAYS_INLINE const_iterator begin() const noexcept { return data_; }
   const_iterator end() const noexcept { return data_ + len_; }
