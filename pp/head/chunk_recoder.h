@@ -18,16 +18,84 @@ concept ChunkInfoInterface = requires(ChunkInfo& info) {
 };
 
 template <class LsIdSetIterator, class LsIdSetIteratorSentinel>
-class ChunkRecoder {
+class ChunkRecoderIterator {
  public:
-  explicit ChunkRecoder(LsIdSetIterator&& ls_id_set_iterator_begin,
-                        LsIdSetIteratorSentinel&& ls_id_set_iterator_end,
-                        const series_data::DataStorage* data_storage,
-                        const PromPP::Primitives::TimeInterval& time_interval)
-      : iterator_(std::move(ls_id_set_iterator_begin), std::move(ls_id_set_iterator_end), data_storage),
-        time_interval_{.min = time_interval.min, .max = time_interval.max - 1} {
+  using iterator_category = std::forward_iterator_tag;
+  using value_type = series_data::DataStorage::SeriesChunkIterator::Data;
+  using difference_type = ptrdiff_t;
+  using pointer = value_type*;
+  using reference = value_type&;
+
+  using LabelSetID = PromPP::Primitives::LabelSetID;
+  using IteratorSentinel = series_data::IteratorSentinel;
+
+  ChunkRecoderIterator(LsIdSetIterator&& ls_id_iterator_,
+                       LsIdSetIteratorSentinel&& ls_id_end_iterator,
+                       const series_data::DataStorage* data_storage,
+                       const PromPP::Primitives::TimeInterval time_interval)
+      : time_interval_(time_interval),
+        ls_id_iterator_(std::move(ls_id_iterator_)),
+        ls_id_end_iterator_(std::move(ls_id_end_iterator)),
+        chunk_iterator_(data_storage,
+                        ls_id_iterator_ != ls_id_end_iterator_ ? static_cast<LabelSetID>(*ls_id_iterator_) : PromPP::Primitives::kInvalidLabelSetID) {
     advance_to_non_empty_chunk();
   }
+
+  const value_type& operator*() const noexcept { return *chunk_iterator_; }
+  const value_type* operator->() const noexcept { return chunk_iterator_.operator->(); }
+
+  PROMPP_ALWAYS_INLINE ChunkRecoderIterator& operator++() noexcept {
+    if (++chunk_iterator_ == IteratorSentinel{}) {
+      if (++ls_id_iterator_ != ls_id_end_iterator_) {
+        chunk_iterator_ = series_data::DataStorage::SeriesChunkIterator{chunk_iterator_->storage(), static_cast<LabelSetID>(*ls_id_iterator_)};
+      }
+    }
+
+    advance_to_non_empty_chunk();
+    return *this;
+  }
+
+  PROMPP_ALWAYS_INLINE ChunkRecoderIterator operator++(int) noexcept {
+    const auto it = *this;
+    ++*this;
+    return it;
+  }
+
+  PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return ls_id_iterator_ == ls_id_end_iterator_; }
+
+ private:
+  const PromPP::Primitives::TimeInterval time_interval_;
+  LsIdSetIterator ls_id_iterator_;
+  [[no_unique_address]] LsIdSetIteratorSentinel ls_id_end_iterator_;
+  series_data::DataStorage::SeriesChunkIterator chunk_iterator_;
+
+  void advance_to_non_empty_chunk() noexcept {
+    const auto chunk_is_empty = [this] PROMPP_LAMBDA_INLINE {
+      if (this->chunk_is_empty()) {
+        return true;
+      }
+
+      return !time_interval_.intersect({
+          .min = series_data::Decoder::get_chunk_first_timestamp(**this),
+          .max = series_data::Decoder::get_chunk_last_timestamp(**this),
+      });
+    };
+
+    while (*this != IteratorSentinel{} && chunk_is_empty()) {
+      ++*this;
+    }
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool chunk_is_empty() const noexcept {
+    return chunk_iterator_ == IteratorSentinel{} || chunk_iterator_->chunk().is_empty();
+  }
+};
+
+template <class ChunkIterator>
+class ChunkRecoder {
+ public:
+  explicit ChunkRecoder(ChunkIterator&& iterator, const PromPP::Primitives::TimeInterval& time_interval)
+      : iterator_(std::move(iterator)), time_interval_{time_interval} {}
 
   void recode_next_chunk(ChunkInfoInterface auto& info) {
     reset_info(info);
@@ -38,7 +106,6 @@ class ChunkRecoder {
       recode_chunk(info);
 
       ++iterator_;
-      advance_to_non_empty_chunk();
 
       if (info.samples_count != 0) [[likely]] {
         write_samples_count(info.samples_count);
@@ -50,68 +117,20 @@ class ChunkRecoder {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const uint8_t> bytes() const noexcept { return stream_.bytes(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool has_more_data() const noexcept { return iterator_ != IteratorSentinel{}; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool has_more_data() const noexcept { return iterator_ != series_data::IteratorSentinel{}; }
 
  private:
   using Sample = series_data::encoder::Sample;
-  using Decoder = series_data::Decoder;
   using TimestampEncoder = PromPP::Prometheus::tsdb::chunkenc::TimestampEncoder;
   using ValuesEncoder = PromPP::Prometheus::tsdb::chunkenc::ValuesEncoder;
   using Encoder = BareBones::Encoding::Gorilla::StreamEncoder<TimestampEncoder, ValuesEncoder>;
 
-  class IteratorSentinel {};
-
-  class ChunkIterator {
-   public:
-    using iterator_category = std::forward_iterator_tag;
-    using value_type = series_data::DataStorage::SeriesChunkIterator::Data;
-    using difference_type = ptrdiff_t;
-    using pointer = value_type*;
-    using reference = value_type&;
-
-    using LabelSetID = PromPP::Primitives::LabelSetID;
-
-    ChunkIterator(LsIdSetIterator&& ls_id_iterator_, LsIdSetIteratorSentinel&& ls_id_end_iterator, const series_data::DataStorage* data_storage)
-        : ls_id_iterator_(std::move(ls_id_iterator_)),
-          ls_id_end_iterator_(std::move(ls_id_end_iterator)),
-          chunk_iterator_(data_storage,
-                          ls_id_iterator_ != ls_id_end_iterator_ ? static_cast<LabelSetID>(*ls_id_iterator_) : PromPP::Primitives::kInvalidLabelSetID) {}
-
-    const value_type& operator*() const noexcept { return *chunk_iterator_; }
-    const value_type* operator->() const noexcept { return chunk_iterator_.operator->(); }
-
-    PROMPP_ALWAYS_INLINE ChunkIterator& operator++() noexcept {
-      if (++chunk_iterator_ == series_data::DataStorage::IteratorSentinel{}) {
-        if (++ls_id_iterator_ != ls_id_end_iterator_) {
-          chunk_iterator_ = series_data::DataStorage::SeriesChunkIterator{chunk_iterator_->storage(), static_cast<LabelSetID>(*ls_id_iterator_)};
-        }
-      }
-
-      return *this;
-    }
-
-    PROMPP_ALWAYS_INLINE ChunkIterator operator++(int) noexcept {
-      const auto it = *this;
-      ++*this;
-      return it;
-    }
-
-    PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return ls_id_iterator_ == ls_id_end_iterator_; }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE bool chunk_is_empty() const noexcept {
-      return chunk_iterator_ == series_data::DataStorage::IteratorSentinel{} || chunk_iterator_->chunk().is_empty();
-    }
-
-   private:
-    LsIdSetIterator ls_id_iterator_;
-    [[no_unique_address]] LsIdSetIteratorSentinel ls_id_end_iterator_;
-    series_data::DataStorage::SeriesChunkIterator chunk_iterator_;
-  };
-
-  static constexpr auto kStreamSize = series_data::kSamplesPerChunkDefault * (TimestampEncoder::kMaxItemSizeInBits + ValuesEncoder::kMaxItemSizeInBits);
+  static constexpr uint32_t kSamplesCountSizeInBits = BareBones::Bit::to_bits(sizeof(uint16_t));
+  static constexpr auto kMaxItemSizeInBits = TimestampEncoder::kMaxItemSizeInBits + ValuesEncoder::kMaxItemSizeInBits;
+  static constexpr auto kMaxStreamSize = kSamplesCountSizeInBits + series_data::kSamplesPerChunkDefault * kMaxItemSizeInBits;
 
   ChunkIterator iterator_;
-  PromPP::Prometheus::tsdb::chunkenc::FixedSizeBStream<series_data::encoder::kAllocationSizesTable> stream_{kStreamSize};
+  PromPP::Prometheus::tsdb::chunkenc::FixedSizeBStream<series_data::encoder::kAllocationSizesTable> stream_{kMaxStreamSize};
   const PromPP::Primitives::TimeInterval time_interval_;
 
   PROMPP_ALWAYS_INLINE static void reset_info(ChunkInfoInterface auto& info) noexcept {
@@ -120,14 +139,14 @@ class ChunkRecoder {
     info.series_id = PromPP::Primitives::kInvalidLabelSetID;
   }
 
-  PROMPP_ALWAYS_INLINE void write_samples_count_placeholder() noexcept { stream_.write_bits(0, BareBones::Bit::to_bits(sizeof(uint16_t))); }
+  PROMPP_ALWAYS_INLINE void write_samples_count_placeholder() noexcept { stream_.write_bits(0, kSamplesCountSizeInBits); }
   PROMPP_ALWAYS_INLINE void write_samples_count(uint16_t samples_count) noexcept {
     *reinterpret_cast<uint16_t*>(stream_.raw_bytes()) = BareBones::Bit::be(samples_count);
   }
 
   void recode_chunk(ChunkInfoInterface auto& info) {
     Encoder encoder;
-    Decoder::create_decode_iterator(*iterator_, [&]<typename Iterator>(Iterator&& begin, auto&& end) {
+    series_data::Decoder::create_decode_iterator(*iterator_, [&]<typename Iterator>(Iterator&& begin, auto&& end) {
       for (; begin != end; ++begin) {
         const auto& sample = *begin;
         if (sample.timestamp > time_interval_.max) [[unlikely]] {
@@ -141,10 +160,11 @@ class ChunkRecoder {
           info.interval.min = sample.timestamp;
         }
 
-        if constexpr (std::is_same_v<Iterator, series_data::decoder::ConstantDecodeIterator>) {
-          recode_constant_chunk_sample(sample, encoder);
+        if constexpr (std::is_same_v<Iterator, series_data::decoder::ConstantDecodeIterator> ||
+                      std::is_same_v<Iterator, series_data::decoder::TwoDoubleConstantDecodeIterator>) {
+          encoder.encode_constant_value(sample.timestamp, sample.value, stream_, stream_);
         } else {
-          recode_chunk_sample(sample, encoder);
+          encoder.encode(sample.timestamp, sample.value, stream_, stream_);
         }
 
         ++info.samples_count;
@@ -154,35 +174,6 @@ class ChunkRecoder {
     if (info.samples_count > 0) [[likely]] {
       info.interval.max = encoder.last_timestamp();
       info.series_id = iterator_->series_id();
-    }
-  }
-
-  PROMPP_ALWAYS_INLINE void recode_constant_chunk_sample(const series_data::encoder::Sample& sample, Encoder& encoder) noexcept {
-    if (encoder.state().state == BareBones::Encoding::Gorilla::GorillaState::kFirstPoint) [[unlikely]] {
-      encoder.encode(sample.timestamp, sample.value, stream_, stream_);
-    } else {
-      encoder.encode_constant_value(sample.timestamp, stream_, stream_);
-    }
-  }
-
-  PROMPP_ALWAYS_INLINE void recode_chunk_sample(const series_data::encoder::Sample& sample, Encoder& encoder) noexcept {
-    encoder.encode(sample.timestamp, sample.value, stream_, stream_);
-  }
-
-  void advance_to_non_empty_chunk() noexcept {
-    const auto chunk_is_empty = [this] PROMPP_LAMBDA_INLINE {
-      if (iterator_.chunk_is_empty()) {
-        return true;
-      }
-
-      return !time_interval_.intersect({
-          .min = Decoder::get_chunk_first_timestamp(*iterator_),
-          .max = Decoder::get_chunk_last_timestamp(*iterator_),
-      });
-    };
-
-    while (has_more_data() && chunk_is_empty()) {
-      ++iterator_;
     }
   }
 };

@@ -33,7 +33,7 @@ shell:
   - cp -pr /etc/ssl/certs /relocate/etc/ssl
 ---
 image: prompp-src-artifact
-fromCacheVersion: "2025-03-31-2"
+fromCacheVersion: "2025-03-31-12"
 from: golang:1.23.2-alpine3.20
 final: false
 git:
@@ -61,7 +61,7 @@ shell:
 ---
 image: cpp-artifact
 final: false
-fromCacheVersion: "2025-03-31-2"
+fromCacheVersion: "2025-03-31-12"
 fromImage: toolkit
 git:
   - add: /pp
@@ -74,11 +74,12 @@ git:
 shell:
   install:
     - cd /src
+    - echo "build --remote_cache=http://127.0.0.1/cache/ --experimental_guard_against_concurrent_changes" >> .bazelrc
     - make install_dir=/tmp compilation_mode={{ env "COMPILATION_MODE" "opt" }} asan={{ env "ASAN" "false" }} build-entrypoint
 ---
 image: prompp-artifact
 final: false
-fromCacheVersion: "2025-03-31-2"
+fromCacheVersion: "2025-03-31-12"
 fromImage: toolkit
 mount:
   - fromPath: ~/go-pkg-cache

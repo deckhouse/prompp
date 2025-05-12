@@ -7,6 +7,16 @@ import (
 )
 
 const (
+	NormalNaN uint64 = 0x7ff8000000000001
+
+	StaleNaN uint64 = 0x7ff0000000000002
+)
+
+func IsStaleNaN(v float64) bool {
+	return math.Float64bits(v) == StaleNaN
+}
+
+const (
 	MaxPointsInChunk            = 240
 	Uint32Size                  = 4
 	SerializedChunkMetadataSize = 13
@@ -15,6 +25,11 @@ const (
 type TimeInterval struct {
 	MinT int64
 	MaxT int64
+}
+
+type Sample struct {
+	Timestamp int64
+	Value     float64
 }
 
 // HeadDataStorage is Go wrapper around series_data::Data_storage.
@@ -113,8 +128,16 @@ type ChunkRecoder struct {
 }
 
 func NewChunkRecoder(lss *LabelSetStorage, dataStorage *HeadDataStorage, timeInterval TimeInterval) *ChunkRecoder {
+	return initializeChunkRecoder(lss, dataStorage, seriesDataChunkRecoderCtor(lss.Pointer(), dataStorage.dataStorage, timeInterval))
+}
+
+func NewSerializedChunkRecoder(serializedChunks []byte, timeInterval TimeInterval) *ChunkRecoder {
+	return initializeChunkRecoder(nil, nil, seriesDataSerializedChunkRecoderCtor(serializedChunks, timeInterval))
+}
+
+func initializeChunkRecoder(lss *LabelSetStorage, dataStorage *HeadDataStorage, recoder uintptr) *ChunkRecoder {
 	chunkRecoder := &ChunkRecoder{
-		recoder:     seriesDataChunkRecoderCtor(lss.Pointer(), dataStorage.dataStorage, timeInterval),
+		recoder:     recoder,
 		lss:         lss,
 		dataStorage: dataStorage,
 	}
@@ -153,6 +176,10 @@ func (r *HeadDataStorageSerializedChunks) NumberOfChunks() int {
 
 func (r *HeadDataStorageSerializedChunks) Len() int {
 	return len(r.data)
+}
+
+func (r *HeadDataStorageSerializedChunks) Data() []byte {
+	return r.data
 }
 
 type HeadDataStorageSerializedChunkIndex struct {
@@ -198,6 +225,17 @@ func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) *HeadDataStorageSer
 		freeBytes(sc.data)
 	})
 	return serializedChunks
+}
+
+func (ds *HeadDataStorage) InstantQuery(targetTimestamp, defaultTimestamp int64, labelSetIDs []uint32) []Sample {
+	samples := make([]Sample, len(labelSetIDs))
+	if defaultTimestamp != 0 {
+		for index := range samples {
+			samples[index].Timestamp = defaultTimestamp
+		}
+	}
+	seriesDataDataStorageInstantQuery(ds.dataStorage, labelSetIDs, targetTimestamp, samples)
+	return samples
 }
 
 type HeadDataStorageDeserializer struct {

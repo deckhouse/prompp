@@ -24,6 +24,8 @@ type Receiver interface {
 	RelabelerIDIsExist(relabelerID string) bool
 	HeadQueryable() storage.Queryable
 	HeadStatus(limit int) relabeler.HeadStatus
+	// MergeOutOfOrderChunks merge chunks with out of order data chunks.
+	MergeOutOfOrderChunks()
 }
 
 // StreamProcessor interface.

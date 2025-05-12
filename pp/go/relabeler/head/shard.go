@@ -83,6 +83,10 @@ func (ds *DataStorage) Query(query cppbridge.HeadDataStorageQuery) *cppbridge.He
 	return ds.dataStorage.Query(query)
 }
 
+func (ds *DataStorage) InstantQuery(targetTimestamp, notFoundValueTimestampValue int64, seriesIDs []uint32) []cppbridge.Sample {
+	return ds.dataStorage.InstantQuery(targetTimestamp, notFoundValueTimestampValue, seriesIDs)
+}
+
 func (ds *DataStorage) AllocatedMemory() uint64 {
 	return ds.dataStorage.AllocatedMemory()
 }

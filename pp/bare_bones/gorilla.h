@@ -664,16 +664,24 @@ class PROMPP_ATTRIBUTE_PACKED StreamEncoder {
   }
 
   template <class BitSequence>
-  PROMPP_ALWAYS_INLINE void encode_constant_value(int64_t ts, BitSequence& ts_bitseq, BitSequence& v_bitseq) noexcept {
+  PROMPP_ALWAYS_INLINE void encode_constant_value(int64_t timestamp, double value, BitSequence& ts_bitseq, BitSequence& v_bitseq) noexcept {
     if (state_.state == GorillaState::kFirstPoint) [[unlikely]] {
-      assert(false);
-    } else if (state_.state == GorillaState::kSecondPoint) [[unlikely]] {
-      state_.timestamp_encoder.encode_delta(ts, ts_bitseq);
-      v_bitseq.write_zero_bit();
-      state_.state = GorillaState::kOtherPoint;
+      state_.timestamp_encoder.encode(timestamp, ts_bitseq);
+      state_.values_encoder.encode_first(value, v_bitseq);
+      state_.state = GorillaState::kSecondPoint;
     } else {
-      state_.timestamp_encoder.encode_delta_of_delta(ts, ts_bitseq);
-      v_bitseq.write_zero_bit();
+      if (state_.state == GorillaState::kSecondPoint) [[unlikely]] {
+        state_.timestamp_encoder.encode_delta(timestamp, ts_bitseq);
+        state_.state = GorillaState::kOtherPoint;
+      } else {
+        state_.timestamp_encoder.encode_delta_of_delta(timestamp, ts_bitseq);
+      }
+
+      if (std::bit_cast<uint64_t>(value) != std::bit_cast<uint64_t>(state_.values_encoder.value())) [[unlikely]] {
+        state_.values_encoder.encode(value, v_bitseq);
+      } else {
+        v_bitseq.write_zero_bit();
+      }
     }
   }
 };

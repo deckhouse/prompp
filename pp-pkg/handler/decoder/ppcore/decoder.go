@@ -1,4 +1,4 @@
-package opcore
+package ppcore
 
 import (
 	"context"
@@ -56,7 +56,7 @@ func NewDecoder(metadata model.Metadata, blockStorage BlockStorage) *Decoder {
 // DecodeToHashdex decode incoming segment to DecoderHashdex.
 func (d *Decoder) DecodeToHashdex(
 	ctx context.Context,
-	segment model.Segment,
+	segment *model.Segment,
 ) (
 	hashdexContent cppbridge.HashdexContent,
 	err error,
@@ -91,7 +91,7 @@ func (d *Decoder) DecodeToHashdex(
 }
 
 // decode selecting decoding with metric injection or not.
-func (d *Decoder) decode(ctx context.Context, segment model.Segment) (cppbridge.HashdexContent, error) {
+func (d *Decoder) decode(ctx context.Context, segment *model.Segment) (cppbridge.HashdexContent, error) {
 	if d.metadata.AgentHostname == "" || d.metadata.ProductName == "" || d.metadata.ShardID != 0 {
 		return d.walDecoder.DecodeToHashdex(ctx, segment.Body)
 	}
@@ -108,7 +108,7 @@ func (d *Decoder) decode(ctx context.Context, segment model.Segment) (cppbridge.
 }
 
 // restore from wal decoder state.
-func (d *Decoder) restore(ctx context.Context, targetSegment model.Segment) error {
+func (d *Decoder) restore(ctx context.Context, targetSegment *model.Segment) error {
 	walDecoder := cppbridge.NewWALDecoder(d.metadata.SegmentEncodingVersion)
 
 	blockReader, err := d.blockStorage.Reader(d.metadata.BlockID, d.metadata.ShardID)
@@ -121,11 +121,10 @@ func (d *Decoder) restore(ctx context.Context, targetSegment model.Segment) erro
 		return fmt.Errorf("failed to create block reader: %w", err)
 	}
 
-	var segment model.Segment
 	var lastWrittenSegmentID uint32 = math.MaxUint32
 
 	for {
-		segment, err = blockReader.Next()
+		segment, err := blockReader.Next()
 		if err != nil {
 			if errors.Is(err, storage.ErrEndOfBlock) {
 				d.walDecoder = walDecoder
@@ -137,18 +136,21 @@ func (d *Decoder) restore(ctx context.Context, targetSegment model.Segment) erro
 		}
 
 		if segment.ID > targetSegment.ID {
+			segment.Destroy()
 			return fmt.Errorf("invalid segment")
 		}
 
 		lastWrittenSegmentID++
 
 		if segment.ID == targetSegment.ID {
+			segment.Destroy()
 			continue
 		}
 
 		_, err = walDecoder.DecodeDry(ctx, segment.Body)
+		segment.Destroy()
 		if err != nil {
-			return fmt.Errorf("failed to decode segment: %w", err)
+			return fmt.Errorf("restore failed to decode dry segment: %w", err)
 		}
 	}
 }

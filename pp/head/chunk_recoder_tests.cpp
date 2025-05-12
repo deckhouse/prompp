@@ -3,21 +3,26 @@
 #include "chunk_recoder.h"
 #include "series_data/encoder.h"
 #include "series_data/outdated_sample_encoder.h"
+#include "series_data/serialization/deserializer.h"
+#include "series_data/serialization/serializer.h"
 
 namespace {
 
+using BareBones::Encoding::Gorilla::STALE_NAN;
 using PromPP::Primitives::kInvalidLabelSetID;
 using PromPP::Primitives::LabelSetID;
 using PromPP::Primitives::TimeInterval;
 using series_data::DataStorage;
 using series_data::Encoder;
 using series_data::OutdatedSampleEncoder;
+using series_data::serialization::Serializer;
 using std::operator""s;
 
 class ChunkRecoderFixture : public ::testing::Test {
  protected:
   using LsIdSet = std::vector<LabelSetID>;
-  using ChunkRecoder = head::ChunkRecoder<LsIdSet::const_iterator, LsIdSet::const_iterator>;
+  using ChunkIterator = head::ChunkRecoderIterator<LsIdSet::const_iterator, LsIdSet::const_iterator>;
+  using ChunkRecoder = head::ChunkRecoder<ChunkIterator>;
 
   struct RecodeInfo {
     TimeInterval interval{.min = 0, .max = 0};
@@ -34,10 +39,11 @@ class ChunkRecoderFixture : public ::testing::Test {
 
   ChunkRecoder create_recoder(const LsIdSet& ls_id_set, const TimeInterval& time_interval) {
     ls_id_set_ = ls_id_set;
-    return ChunkRecoder{ls_id_set_.begin(), ls_id_set_.end(), &storage_, time_interval};
+    return ChunkRecoder{ChunkIterator{ls_id_set_.begin(), ls_id_set_.end(), &storage_, time_interval}, time_interval};
   }
 
-  static RecodeInfo recode(ChunkRecoder& recoder) noexcept {
+  template <class Recoder>
+  static RecodeInfo recode(Recoder& recoder) noexcept {
     RecodeInfo info;
     recoder.recode_next_chunk(info);
     info.has_more_data = recoder.has_more_data();
@@ -48,7 +54,7 @@ class ChunkRecoderFixture : public ::testing::Test {
 
 TEST_F(ChunkRecoderFixture, EmptyStorage) {
   // Arrange
-  ChunkRecoder recoder({}, {}, &storage_, {});
+  ChunkRecoder recoder({{}, {}, &storage_, {}}, {});
 
   // Act
   const auto info1 = recode(recoder);
@@ -65,7 +71,7 @@ TEST_F(ChunkRecoderFixture, StorageWithOneChunk) {
   encoder.encode(0, 1, 1.0);
   encoder.encode(0, 2, 1.0);
 
-  auto recoder = create_recoder({0}, {.min = 0, .max = 3});
+  auto recoder = create_recoder({0}, {.min = 0, .max = 2});
 
   // Act
   const auto info1 = recode(recoder);
@@ -91,7 +97,7 @@ TEST_F(ChunkRecoderFixture, StorageWithEmptyChunks) {
   encoder.encode(4, 3, 2.0);
   encoder.encode(4, 4, 2.0);
 
-  auto recoder = create_recoder({0, 1, 2, 3, 4}, {.min = 0, .max = 5});
+  auto recoder = create_recoder({0, 1, 2, 3, 4}, {.min = 0, .max = 4});
 
   // Act
   const auto info1 = recode(recoder);
@@ -124,7 +130,7 @@ TEST_F(ChunkRecoderFixture, ReverseOrderOfChunks) {
   encoder.encode(4, 3, 2.0);
   encoder.encode(4, 4, 2.0);
 
-  auto recoder = create_recoder({4, 3, 2, 1, 0}, {.min = 0, .max = 5});
+  auto recoder = create_recoder({4, 3, 2, 1, 0}, {.min = 0, .max = 4});
 
   // Act
   const auto info1 = recode(recoder);
@@ -158,7 +164,7 @@ TEST_F(ChunkRecoderFixture, ChunkWithFinalizedTimestampStream) {
   encoder.encode(1, 2, 1.0);
   encoder.encode(1, 3, 1.0);
 
-  auto recoder = create_recoder({0, 1}, {.min = 0, .max = 4});
+  auto recoder = create_recoder({0, 1}, {.min = 0, .max = 3});
 
   // Act
   const auto info1 = recode(recoder);
@@ -200,7 +206,7 @@ TEST_F(ChunkRecoderFixture, GorillaChunk) {
   encoder.encode(0, 3, 1.3);
   encoder.encode(0, 4, 1.4);
 
-  auto recoder = create_recoder({0}, {.min = 0, .max = 5});
+  auto recoder = create_recoder({0}, {.min = 0, .max = 4});
 
   // Act
   const auto info = recode(recoder);
@@ -223,7 +229,7 @@ TEST_F(ChunkRecoderFixture, NoChunksByTimeInterval) {
   encoder.encode(0, 1, 1.1);
   encoder.encode(0, 2, 1.2);
 
-  auto recoder = create_recoder({0}, {.min = 0, .max = 1});
+  auto recoder = create_recoder({0}, {.min = 0, .max = 0});
 
   // Act
   const auto info = recode(recoder);
@@ -242,7 +248,7 @@ TEST_F(ChunkRecoderFixture, PartialReencodingByTimeInterval) {
   encoder.encode(0, 4, 1.0);
   encoder.encode(1, 0, 1.0);
 
-  auto recoder = create_recoder({0, 1}, {.min = 1, .max = 3});
+  auto recoder = create_recoder({0, 1}, {.min = 1, .max = 2});
 
   // Act
   const auto info = recode(recoder);
@@ -281,7 +287,7 @@ TEST_F(ChunkRecoderFixture, EmptyFinalizedChunkNonEmptyOpenedChunk) {
   encoder.encode(0, 2, 1.0);
   encoder.encode(0, 5, 1.0);
 
-  auto recoder = create_recoder({0}, {.min = 3, .max = 6});
+  auto recoder = create_recoder({0}, {.min = 3, .max = 5});
 
   // Act
   const auto info = recode(recoder);
@@ -302,7 +308,7 @@ TEST_F(ChunkRecoderFixture, EmptyLssWithNonEmptyDataStorage) {
   Encoder encoder{storage_};
   encoder.encode(0, 1, 1.0);
 
-  auto recoder = create_recoder({}, {.min = 0, .max = 2});
+  auto recoder = create_recoder({}, {.min = 0, .max = 1});
 
   // Act
   const auto info1 = recode(recoder);
@@ -315,13 +321,120 @@ TEST_F(ChunkRecoderFixture, EmptyLssWithNonEmptyDataStorage) {
 
 TEST_F(ChunkRecoderFixture, EmptyStorageWithNonEmptyLss) {
   // Arrange
-  const auto recoder = create_recoder({0, 1}, {.min = 0, .max = 2});
+  const auto recoder = create_recoder({0, 1}, {.min = 0, .max = 1});
 
   // Act
   const bool has_more_data = recoder.has_more_data();
 
   // Assert
   EXPECT_FALSE(has_more_data);
+}
+
+TEST_F(ChunkRecoderFixture, ConstantEncoderChunkWithStaleNanOnSecondPoint) {
+  // Arrange
+  Encoder encoder{storage_};
+  encoder.encode(0, 1, 0.0);
+  encoder.encode(0, 2, STALE_NAN);
+
+  auto recoder = create_recoder({0}, {.min = 0, .max = 2});
+
+  // Act
+  const auto info = recode(recoder);
+
+  // Assert
+  EXPECT_EQ((RecodeInfo{
+                .interval = {.min = 1, .max = 2},
+                .series_id = 0,
+                .samples_count = 2,
+                .buffer = "\x00\x02\x02\x00\x00\x00\x00\x00\x00\x00\x00\x01\xC3\xF7\xFF\x00\x00\x00\x00\x00\x00\x20"s,
+                .has_more_data = false,
+            }),
+            info);
+}
+
+TEST_F(ChunkRecoderFixture, ConstantEncoderChunkWithStaleNanOnThirdPoint) {
+  // Arrange
+  Encoder encoder{storage_};
+  encoder.encode(0, 1, 0.0);
+  encoder.encode(0, 2, 0.0);
+  encoder.encode(0, 3, STALE_NAN);
+
+  auto recoder = create_recoder({0}, {.min = 0, .max = 3});
+
+  // Act
+  const auto info = recode(recoder);
+
+  // Assert
+  EXPECT_EQ((RecodeInfo{
+                .interval = {.min = 1, .max = 3},
+                .series_id = 0,
+                .samples_count = 3,
+                .buffer = "\x00\x03\x02\x00\x00\x00\x00\x00\x00\x00\x00\x01\x30\xFD\xFF\xC0\x00\x00\x00\x00\x00\x08"s,
+                .has_more_data = false,
+            }),
+            info);
+}
+
+TEST_F(ChunkRecoderFixture, TwoDoubleConstantEncoderChunkWithStaleNan) {
+  // Arrange
+  Encoder encoder{storage_};
+  encoder.encode(0, 1, 0.0);
+  encoder.encode(0, 2, 1.0);
+  encoder.encode(0, 3, STALE_NAN);
+
+  auto recoder = create_recoder({0}, {.min = 0, .max = 3});
+
+  // Act
+  const auto info = recode(recoder);
+
+  // Assert
+  EXPECT_EQ((RecodeInfo{
+                .interval = {.min = 1, .max = 3},
+                .series_id = 0,
+                .samples_count = 3,
+                .buffer = "\x00\x03\x02\x00\x00\x00\x00\x00\x00\x00\x00\x01\xC4\x57\xFE\xC3\xF4\x00\x00\x00\x00\x00\x00\x00\x20"s,
+                .has_more_data = false,
+            }),
+            info);
+}
+
+TEST_F(ChunkRecoderFixture, RecodeSerializedChunks) {
+  using ChunkRecoder = head::ChunkRecoder<series_data::chunk::SerializedChunkIterator>;
+
+  // Arrange
+  Encoder encoder{storage_};
+  encoder.encode(2, 1, 1.0);
+  encoder.encode(2, 2, 1.0);
+  encoder.encode(4, 3, 2.0);
+  encoder.encode(4, 4, 2.0);
+
+  Serializer serializer{storage_};
+  BareBones::ShrinkedToFitOStringStream stream;
+  serializer.serialize(stream);
+
+  ChunkRecoder recoder(series_data::chunk::SerializedChunkIterator{stream.span<const uint8_t>()}, {.min = 0, .max = 4});
+
+  // Act
+  const auto info1 = recode(recoder);
+  const auto info2 = recode(recoder);
+
+  // Assert
+  EXPECT_EQ((RecodeInfo{
+                .interval = {.min = 1, .max = 2},
+                .series_id = 2,
+                .samples_count = 2,
+                .buffer = "\x00\x02\x02\x3f\xf0\x00\x00\x00\x00\x00\x00\x01\x00"s,
+                .has_more_data = true,
+            }),
+            info1);
+  EXPECT_EQ((RecodeInfo{
+                .interval = {.min = 3, .max = 4},
+                .series_id = 4,
+                .samples_count = 2,
+                .buffer = "\x00\x02\x06\x40\x00\x00\x00\x00\x00\x00\x00\x01\x00"s,
+                .has_more_data = false,
+            }),
+            info2);
 }
 
 }  // namespace

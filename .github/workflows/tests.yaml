@@ -61,7 +61,10 @@ jobs:
             -e SANITIZERS=${{ matrix.SANITIZERS }} \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} \
             bash -c "
+              set -eo pipefail
+
               git config --global --add safe.directory /workspace && cd pp
+              echo \"build --remote_cache=http://172.17.0.1/cache/ --experimental_guard_against_concurrent_changes\" >> .bazelrc
               ./scripts/ci_run_unit_tests.sh
 
               mkdir -p /workspace/testlogs
@@ -115,8 +118,10 @@ jobs:
             -e ASAN=${{ matrix.ASAN }} \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} \
             bash -c "
-              # Build static lib for Go
+              set -eo pipefail
+
               git config --global --add safe.directory /workspace && cd pp
+              echo \"build --remote_cache=http://172.17.0.1/cache/ --experimental_guard_against_concurrent_changes\" >> .bazelrc
               make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
             "
       - name: Upload Specific Static Libraries
@@ -190,6 +195,8 @@ jobs:
             -e GOBIN="/usr/local/go/bin" \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ env.ARCH }} \
             bash -c "
+              set -eo pipefail
+
               git config --global --add safe.directory /workspace
               # go tools
               mkdir -p .cache
