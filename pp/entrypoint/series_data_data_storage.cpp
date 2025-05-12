@@ -149,7 +149,6 @@ extern "C" void prompp_series_data_serialized_chunk_recoder_ctor(void* args, voi
   };
 
   const auto in = static_cast<Arguments*>(args);
-  const auto& ls_id_set = std::get<QueryableEncodingBimap>(*in->lss).ls_id_set();
   new (res) Result{
       .chunk_recoder = std::make_unique<ChunkRecoderVariant>(std::in_place_type<SerializedChunkRecoder>,
                                                              series_data::chunk::SerializedChunkIterator{in->buffer.span()}, in->time_interval),
