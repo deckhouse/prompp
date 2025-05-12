@@ -21,6 +21,20 @@ PROMPP_ALWAYS_INLINE RegexpPtr concatenate(re2::Regexp** regexps, int count, re2
   return make_regexp(re2::Regexp::Concat(regexps, count, flags));
 }
 
+inline std::string runes_to_string(re2::Regexp* rgx) {
+  std::string literal;
+
+  literal.resize_and_overwrite(static_cast<size_t>(rgx->nrunes()) * re2::UTFmax, [rgx](char* buffer, size_t) {
+    auto p = buffer;
+    for (int i = 0; i < rgx->nrunes(); i++) {
+      p += re2::runetochar(p, rgx->runes() + i);
+    }
+    return p - buffer;
+  });
+
+  return literal;
+}
+
 class RegexpParser {
  public:
   [[nodiscard]] PROMPP_ALWAYS_INLINE static re2::Regexp::ParseFlags regexp_parse_flags() {
@@ -58,7 +72,7 @@ class RegexpCompiledProg {
     // Drastically simplified logic from RE2::Match
     // https://github.com/google/re2/blob/2021-09-01/re2/re2.cc#L616
 
-    if (!prog_) {
+    if (!prog_) [[unlikely]] {
       return false;
     }
 

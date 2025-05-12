@@ -25,6 +25,7 @@ class RegexpSearcher {
 
  private:
   static constexpr uint8_t kProcessSubTrieDepthLimit = 50;
+  static constexpr uint8_t kMaxCharClassSizeForPrefixPreprocessing = 100;
 
   MatchesList& matches_;
   re2::Regexp* prepared_for_ = nullptr;
@@ -94,20 +95,12 @@ class RegexpSearcher {
   }
 
   void process_exact_prefix(uint8_t depth_limit, const typename Trie::Traversal& trv, re2::Regexp* rgx, re2::Regexp* rgx_tail = nullptr) {
-    char buf[re2::UTFmax + 1];
-
-    // Do simple full scan if it's a case-insensitive regex
     if (rgx->parse_flags() & re2::Regexp::FoldCase) {
-      if (rgx_tail) {
-        std::array rgxs{rgx, rgx_tail};
-        const auto concat_rgx = concatenate(rgxs.data(), rgxs.size(), rgx->parse_flags());
-        process_subtrie_by_regexp(trv, concat_rgx.get());
-      } else {
-        process_subtrie_by_regexp(trv, rgx);
-      }
+      process_subtrie_by_regexp(trv, rgx, rgx_tail);
       return;
     }
 
+    char buf[re2::UTFmax + 1];
     switch (rgx->op()) {
       case re2::RegexpOp::kRegexpLiteral: {
         const auto& r = rgx->rune();
@@ -116,44 +109,24 @@ class RegexpSearcher {
       }
 
       case re2::RegexpOp::kRegexpLiteralString: {
-        std::string literal;
-        if (rgx->parse_flags() & re2::Regexp::Latin1) {
-          literal.resize(rgx->nrunes());
-          for (int i = 0; i < rgx->nrunes(); i++) {
-            literal[i] = static_cast<char>(rgx->runes()[i]);
-          }
-        } else {
-          literal.resize(static_cast<size_t>(rgx->nrunes()) * re2::UTFmax);
-          char* p = &literal[0];
-          for (int i = 0; i < rgx->nrunes(); i++)
-            p += re2::runetochar(p, rgx->runes() + i);
-          literal.resize(p - &literal[0]);
-        }
-        process_one_exact_prefix(depth_limit, trv, literal, rgx_tail);
+        process_one_exact_prefix(depth_limit, trv, runes_to_string(rgx), rgx_tail);
         break;
       }
 
       case re2::RegexpOp::kRegexpCharClass: {
-        if (rgx->cc()->size() < 100) {
+        if (rgx->cc()->size() < kMaxCharClassSizeForPrefixPreprocessing) {
           for (const auto& rr : *rgx->cc()) {
             for (auto r = rr.lo; r <= rr.hi; ++r) {
               process_one_exact_prefix(depth_limit, trv, std::string_view(buf, re2::runetochar(buf, &r)), rgx_tail);
             }
           }
         } else {
-          if (!rgx_tail) {
-            process_subtrie_by_regexp(trv, rgx);
-          } else {
-            std::array rgxs{rgx, rgx_tail};
-            const auto concat_rgx = concatenate(rgxs.data(), rgxs.size(), rgx->parse_flags());
-            process_subtrie_by_regexp(trv, concat_rgx.get());
-          }
+          process_subtrie_by_regexp(trv, rgx, rgx_tail);
         }
         break;
       }
 
       default: {
-        // can't get here
         assert(false);
       }
     }
@@ -244,6 +217,16 @@ class RegexpSearcher {
 
     if (prepare_regexp(rgx)) {
       matches_.add_node(trv, [this](std::string_view node_tail) PROMPP_LAMBDA_INLINE { return prepared_prog_.full_match(node_tail); });
+    }
+  }
+
+  void process_subtrie_by_regexp(const typename Trie::Traversal& trv, re2::Regexp* rgx, re2::Regexp* rgx_tail) {
+    if (rgx_tail) {
+      std::array rgxs{rgx, rgx_tail};
+      const auto concat_rgx = concatenate(rgxs.data(), rgxs.size(), rgx->parse_flags());
+      process_subtrie_by_regexp(trv, concat_rgx.get());
+    } else {
+      process_subtrie_by_regexp(trv, rgx);
     }
   }
 
