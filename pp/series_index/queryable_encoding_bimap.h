@@ -58,6 +58,7 @@ class QueryableEncodingBimap final
     auto composite_label_set = Base::items_.emplace_back(Base::data_, label_set).composite(Base::data());
     update_indexes(ls_id, composite_label_set, hash);
     queried_series_.set_series_count(Base::items_.size());
+    mark_series_as_added(ls_id);
     return ls_id;
   }
 
@@ -88,6 +89,15 @@ class QueryableEncodingBimap final
     Base::items_.reserve(count);
     ls_id_hash_set_.reserve(count);
     queried_series_.reserve(count);
+    added_series_.reserve(count);
+  }
+
+  void copy_added_series(QueryableEncodingBimap& copy_to) const {
+    const auto size_before = copy_to.size();
+    for (auto ls_id : added_series_) {
+      copy_to.items_.emplace_back(copy_to.data_, this->operator[](ls_id));
+    }
+    copy_to.after_items_load_impl(size_before);
   }
 
  private:
@@ -105,6 +115,8 @@ class QueryableEncodingBimap final
   SortingIndex<LsIdSet> sorting_index_{ls_id_set_};
 
   QueriedSeries queried_series_;
+
+  BareBones::Bitset added_series_;
 
   PROMPP_ALWAYS_INLINE void after_items_load_impl(uint32_t first_loaded_id) noexcept {
     ls_id_hash_set_.reserve(Base::items_.size());
@@ -131,6 +143,14 @@ class QueryableEncodingBimap final
     }
 
     sorting_index_.update(ls_id_set_iterator);
+  }
+
+  PROMPP_ALWAYS_INLINE void mark_series_as_added(uint32_t ls_id) noexcept {
+    if (added_series_.size() <= ls_id) [[unlikely]] {
+      added_series_.resize(ls_id + 1);
+    }
+
+    added_series_.set(ls_id);
   }
 
   PROMPP_ALWAYS_INLINE static bool is_valid_label(std::string_view value) noexcept { return !value.empty(); }

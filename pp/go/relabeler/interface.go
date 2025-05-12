@@ -77,6 +77,7 @@ type Head interface {
 	Close() error
 	Discard() error
 	String() string
+	CopySeriesFrom(other Head)
 	Find(ls labels.Labels) bool
 }
 

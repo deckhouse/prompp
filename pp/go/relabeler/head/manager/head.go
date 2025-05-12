@@ -116,6 +116,11 @@ func (h *DiscardableRotatableHead) Discard() (err error) {
 	return err
 }
 
+// CopySeriesFrom copy series from other head.
+func (h *DiscardableRotatableHead) CopySeriesFrom(other relabeler.Head) {
+	h.head.CopySeriesFrom(other)
+}
+
 func (h *DiscardableRotatableHead) Find(ls labels.Labels) bool {
 	return h.head.Find(ls)
 }
