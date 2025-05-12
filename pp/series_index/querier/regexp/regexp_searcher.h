@@ -1,6 +1,5 @@
 #pragma once
 
-#include <memory>
 #include <ranges>
 
 #include "match_analyzer.h"
@@ -14,7 +13,7 @@ class RegexpSearcher {
  public:
   explicit RegexpSearcher(MatchesList& matches) : matches_(matches) {}
 
-  [[nodiscard]] PromPP::Prometheus::MatchStatus search(const Trie& trie, const RegexpParser::RegexpPtr& regexp) {
+  [[nodiscard]] PromPP::Prometheus::MatchStatus search(const Trie& trie, const RegexpPtr& regexp) {
     auto matches_count_before = matches_.count();
     process_subtrie(kProcessSubTrieDepthLimit, trie.make_traversal(), regexp.get());
     if (matches_.count() == matches_count_before) {
@@ -38,41 +37,15 @@ class RegexpSearcher {
     }
 
     switch (rgx->op()) {
-      case re2::RegexpOp::kRegexpAlternate:
-        for (std::size_t i = 0; i < static_cast<size_t>(rgx->nsub()); i++) {
+      case re2::RegexpOp::kRegexpAlternate: {
+        for (int i = 0; i < rgx->nsub(); i++) {
           process_subtrie(depth_limit - 1, trv, rgx->sub()[i]);
         }
         break;
+      }
 
       case re2::RegexpOp::kRegexpConcat: {
-        const auto i = RegexpMatchAnalyzer::skip_begin_text_operation(rgx);
-        if (i < rgx->nsub()) [[likely]] {
-          switch (rgx->sub()[i]->op()) {
-            case re2::RegexpOp::kRegexpLiteral:
-            case re2::RegexpOp::kRegexpLiteralString:
-            case re2::RegexpOp::kRegexpCharClass: {
-              if (rgx->nsub() - i > 2) {
-                for (auto j = i + 1; j < rgx->nsub(); j++) {
-                  rgx->sub()[j]->Incref();
-                }
-                const auto rgx_tail = re2::Regexp::Concat(rgx->sub() + i + 1, rgx->nsub() - i - 1, rgx->parse_flags());
-                process_exact_prefix(depth_limit, trv, rgx->sub()[i], rgx_tail);
-                rgx_tail->Decref();
-              } else if (rgx->nsub() - i > 1) {
-                process_exact_prefix(depth_limit, trv, rgx->sub()[i], rgx->sub()[i + 1]);
-              } else {
-                process_exact_prefix(depth_limit, trv, rgx->sub()[i]);
-              }
-              break;
-            }
-            default: {
-              process_subtrie_by_regexp(trv, rgx);
-            }
-          }
-        } else {
-          process_one_exact_prefix(depth_limit, trv, "");
-        }
-
+        process_concatenated_regexp(depth_limit, trv, rgx);
         break;
       }
 
@@ -82,14 +55,42 @@ class RegexpSearcher {
         process_exact_prefix(depth_limit, trv, rgx);
         break;
       }
+
       case re2::RegexpOp::kRegexpEmptyMatch: {
         process_one_exact_prefix(depth_limit, trv, "");
         break;
       }
+
       default: {
         process_subtrie_by_regexp(trv, rgx);
       }
     }
+  }
+
+  void process_concatenated_regexp(uint8_t depth_limit, const typename Trie::Traversal& trv, re2::Regexp* rgx) {
+    const auto i = RegexpMatchAnalyzer::skip_begin_text_anchor(rgx);
+    if (i >= rgx->nsub()) [[unlikely]] {
+      process_one_exact_prefix(depth_limit, trv, "");
+      return;
+    }
+
+    using enum re2::RegexpOp;
+    if (BareBones::is_in(rgx->sub()[i]->op(), kRegexpLiteral, kRegexpLiteralString, kRegexpCharClass)) {
+      const std::span sub_regexps{rgx->sub() + i + 1, rgx->sub() + rgx->nsub()};
+
+      if (sub_regexps.size() > 1) {
+        const auto rgx_tail = concatenate(sub_regexps.data(), static_cast<int>(sub_regexps.size()), rgx->parse_flags());
+        process_exact_prefix(depth_limit, trv, rgx->sub()[i], rgx_tail.get());
+      } else if (!sub_regexps.empty()) {
+        process_exact_prefix(depth_limit, trv, rgx->sub()[i], sub_regexps.front());
+      } else {
+        process_exact_prefix(depth_limit, trv, rgx->sub()[i]);
+      }
+
+      return;
+    }
+
+    process_subtrie_by_regexp(trv, rgx);
   }
 
   void process_exact_prefix(uint8_t depth_limit, const typename Trie::Traversal& trv, re2::Regexp* rgx, re2::Regexp* rgx_tail = nullptr) {
@@ -98,10 +99,9 @@ class RegexpSearcher {
     // Do simple full scan if it's a case-insensitive regex
     if (rgx->parse_flags() & re2::Regexp::FoldCase) {
       if (rgx_tail) {
-        std::array rgxs{rgx->Incref(), rgx_tail->Incref()};
-        const auto concat_rgx = re2::Regexp::Concat(rgxs.data(), rgxs.size(), rgx->parse_flags());
-        process_subtrie_by_regexp(trv, concat_rgx);
-        concat_rgx->Decref();
+        std::array rgxs{rgx, rgx_tail};
+        const auto concat_rgx = concatenate(rgxs.data(), rgxs.size(), rgx->parse_flags());
+        process_subtrie_by_regexp(trv, concat_rgx.get());
       } else {
         process_subtrie_by_regexp(trv, rgx);
       }
@@ -114,6 +114,7 @@ class RegexpSearcher {
         process_one_exact_prefix(depth_limit, trv, std::string_view(buf, re2::runetochar(buf, &r)), rgx_tail);
         break;
       }
+
       case re2::RegexpOp::kRegexpLiteralString: {
         std::string literal;
         if (rgx->parse_flags() & re2::Regexp::Latin1) {
@@ -131,6 +132,7 @@ class RegexpSearcher {
         process_one_exact_prefix(depth_limit, trv, literal, rgx_tail);
         break;
       }
+
       case re2::RegexpOp::kRegexpCharClass: {
         if (rgx->cc()->size() < 100) {
           for (const auto& rr : *rgx->cc()) {
@@ -142,10 +144,9 @@ class RegexpSearcher {
           if (!rgx_tail) {
             process_subtrie_by_regexp(trv, rgx);
           } else {
-            std::array rgxs{rgx->Incref(), rgx_tail->Incref()};
-            const auto concat_rgx = re2::Regexp::Concat(rgxs.data(), rgxs.size(), rgx->parse_flags());
-            process_subtrie_by_regexp(trv, concat_rgx);
-            concat_rgx->Decref();
+            std::array rgxs{rgx, rgx_tail};
+            const auto concat_rgx = concatenate(rgxs.data(), rgxs.size(), rgx->parse_flags());
+            process_subtrie_by_regexp(trv, concat_rgx.get());
           }
         }
         break;
@@ -182,6 +183,7 @@ class RegexpSearcher {
         }
         break;
       }
+
       case re2::RegexpOp::kRegexpPlus:
       case re2::RegexpOp::kRegexpStar: {
         if (rgx_tail->sub()[0]->op() == re2::RegexpOp::kRegexpAnyChar) {
@@ -193,6 +195,7 @@ class RegexpSearcher {
 
         [[fallthrough]];
       }
+
       default: {
         if (prepare_regexp(rgx_tail)) {
           if (prepared_prog_.full_match(tail)) {
@@ -213,6 +216,7 @@ class RegexpSearcher {
 
         break;
       }
+
       case re2::RegexpOp::kRegexpStar: {
         if (rgx->sub()[0]->op() == re2::RegexpOp::kRegexpAnyChar) {
           matches_.add_node(trv);
@@ -221,21 +225,18 @@ class RegexpSearcher {
 
         break;
       }
+
       case re2::RegexpOp::kRegexpConcat: {
         if (rgx->sub()[rgx->nsub() - 1]->op() == re2::RegexpOp::kRegexpEndText) {
-          const auto j = RegexpMatchAnalyzer::skip_end_text_operation(rgx, 0);
-          for (int i = 0; i <= j; ++i) {
-            rgx->sub()[i]->Incref();
-          }
-
-          const auto unanchored_rgx = re2::Regexp::Concat(rgx->sub(), j + 1, rgx->parse_flags());
-          process_subtrie_by_regexp(trv, unanchored_rgx);
-          unanchored_rgx->Decref();
+          const auto j = RegexpMatchAnalyzer::skip_end_text_anchor(rgx, 0);
+          const auto unanchored_rgx = concatenate(rgx->sub(), j + 1, rgx->parse_flags());
+          process_subtrie_by_regexp(trv, unanchored_rgx.get());
           return;
         }
 
         break;
       }
+
       default: {
         break;
       };

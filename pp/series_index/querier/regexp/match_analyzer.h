@@ -34,7 +34,7 @@ class RegexpMatchAnalyzer {
     }
 
     if (regexp->op() == re2::RegexpOp::kRegexpConcat) {
-      if (const auto i = skip_begin_text_operation(regexp); i == skip_end_text_operation(regexp, i)) {
+      if (const auto i = skip_begin_text_anchor(regexp); i == skip_end_text_anchor(regexp, i)) {
         if (regexp->sub()[i]->op() == re2::RegexpOp::kRegexpPlus) {
           if (regexp->sub()[i]->sub()[0]->op() == re2::RegexpOp::kRegexpAnyChar) {
             return Status::kAllMatch;
@@ -60,7 +60,7 @@ class RegexpMatchAnalyzer {
     return Status::kPartialMatch;
   }
 
-  [[nodiscard]] static int skip_begin_text_operation(re2::Regexp* regexp) noexcept {
+  [[nodiscard]] static int skip_begin_text_anchor(re2::Regexp* regexp) noexcept {
     int i = 0;
     while (i < regexp->nsub() && regexp->sub()[i]->op() == re2::RegexpOp::kRegexpBeginText) {
       ++i;
@@ -69,7 +69,7 @@ class RegexpMatchAnalyzer {
     return i;
   }
 
-  [[nodiscard]] static int skip_end_text_operation(re2::Regexp* regexp, int start) noexcept {
+  [[nodiscard]] static int skip_end_text_anchor(re2::Regexp* regexp, int start) noexcept {
     int i = regexp->nsub() - 1;
     while (i > start && regexp->sub()[i]->op() == re2::RegexpOp::kRegexpEndText) {
       --i;
@@ -87,7 +87,7 @@ class RegexpMatchAnalyzer {
           return true;
         }
       } else {
-        if (const auto start = skip_begin_text_operation(alternative); start == alternative->nsub() || alternative->sub()[start]->op() == kRegexpEndText) {
+        if (const auto start = skip_begin_text_anchor(alternative); start == alternative->nsub() || alternative->sub()[start]->op() == kRegexpEndText) {
           return true;
         }
       }

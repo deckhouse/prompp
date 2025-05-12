@@ -7,17 +7,29 @@
 
 namespace series_index::querier::regexp {
 
+using RegexpPtr = std::unique_ptr<re2::Regexp, void (*)(re2::Regexp*)>;
+
+PROMPP_ALWAYS_INLINE RegexpPtr make_regexp(re2::Regexp* regexp) {
+  return {regexp, [](re2::Regexp* r) { r->Decref(); }};
+}
+
+PROMPP_ALWAYS_INLINE RegexpPtr concatenate(re2::Regexp** regexps, int count, re2::Regexp::ParseFlags flags) {
+  for (int i = 0; i < count; ++i) {
+    regexps[i]->Incref();
+  }
+
+  return make_regexp(re2::Regexp::Concat(regexps, count, flags));
+}
+
 class RegexpParser {
  public:
-  using RegexpPtr = std::unique_ptr<re2::Regexp, void (*)(re2::Regexp*)>;
-
   [[nodiscard]] PROMPP_ALWAYS_INLINE static re2::Regexp::ParseFlags regexp_parse_flags() {
     return re2::Regexp::NeverCapture | re2::Regexp::MatchNL | re2::Regexp::PerlClasses | re2::Regexp::OneLine | re2::Regexp::PerlX;
   }
 
   [[nodiscard]] static RegexpPtr parse(std::string_view regexp) {
     re2::RegexpStatus parse_status;
-    RegexpPtr rgx(re2::Regexp::Parse(regexp, regexp_parse_flags(), &parse_status), [](re2::Regexp* regexp) { regexp->Decref(); });
+    auto rgx = make_regexp(re2::Regexp::Parse(regexp, regexp_parse_flags(), &parse_status));
     if (!rgx) {
       return rgx;
     }
