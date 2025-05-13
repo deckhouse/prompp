@@ -41,7 +41,7 @@ func (ls *LabelsCpp) Len() int {
 		return int(ls.length)
 	}
 
-	length := int(primitivesLabelSetLength(ls.lss.Pointer(), ls.id)) // #nosec G115 // no overflow
+	length := int(labelSetLength(ls.lss.Pointer(), ls.id)) // #nosec G115 // no overflow
 
 	return length
 }
@@ -56,7 +56,7 @@ func (ls *LabelsCpp) Labels() labels.Labels {
 		return ls.serializedLS
 	}
 
-	labelSet := primitivesLabelSetSerialize(ls.lss.Pointer(), ls.id)
+	labelSet := labelSetSerialize(ls.lss.Pointer(), ls.id)
 
 	sb := labels.NewScratchBuilder(ls.Len())
 	for i := range labelSet {
@@ -64,7 +64,7 @@ func (ls *LabelsCpp) Labels() labels.Labels {
 	}
 	sb.Overwrite(&ls.serializedLS)
 
-	primitivesLabelSetFree(labelSet)
+	labelSetFree(labelSet)
 
 	return ls.serializedLS
 }

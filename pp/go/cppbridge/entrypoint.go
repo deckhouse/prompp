@@ -2499,7 +2499,7 @@ func headWalDecoderDtor(decoder uintptr) {
 // label_sets
 //
 
-func primitivesLabelSetLength(lss uintptr, labelSetID uint32) uint64 {
+func labelSetLength(lss uintptr, labelSetID uint32) uint64 {
 	args := struct {
 		lss        uintptr
 		labelSetID uint32
@@ -2509,7 +2509,7 @@ func primitivesLabelSetLength(lss uintptr, labelSetID uint32) uint64 {
 	}
 
 	fastcgo.UnsafeCall2(
-		C.prompp_primitives_label_set_length,
+		C.prompp_label_set_length,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
@@ -2517,7 +2517,7 @@ func primitivesLabelSetLength(lss uintptr, labelSetID uint32) uint64 {
 	return res.length
 }
 
-func primitivesLabelSetSerialize(lss uintptr, labelSetID uint32) []Label {
+func labelSetSerialize(lss uintptr, labelSetID uint32) []Label {
 	args := struct {
 		lss        uintptr
 		labelSetID uint32
@@ -2527,7 +2527,7 @@ func primitivesLabelSetSerialize(lss uintptr, labelSetID uint32) []Label {
 	}
 
 	fastcgo.UnsafeCall2(
-		C.prompp_primitives_label_set_serialize,
+		C.prompp_label_set_serialize,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
@@ -2535,7 +2535,7 @@ func primitivesLabelSetSerialize(lss uintptr, labelSetID uint32) []Label {
 	return res.labelSet
 }
 
-func primitivesLabelSetFree(labelSet []Label) {
+func labelSetFree(labelSet []Label) {
 	if labelSet == nil {
 		return
 	}
@@ -2545,7 +2545,7 @@ func primitivesLabelSetFree(labelSet []Label) {
 	}{labelSet}
 
 	fastcgo.UnsafeCall1(
-		C.prompp_primitives_label_set_free,
+		C.prompp_label_set_free,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
