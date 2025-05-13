@@ -47,6 +47,41 @@ func (s *LSSSuite) TestQueryableLSS() {
 	s.Require().NotEqual(0, cp)
 }
 
+type bytesTestCase struct {
+	labelSet model.LabelSet
+	expected []byte
+}
+
+func (s *LSSSuite) TestBytes() {
+	testCases := []bytesTestCase{
+		{
+			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
+			expected: []byte("\xFEkey\xFFvalue"),
+		},
+		{
+			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
+			expected: []byte("\xFEkey1\xFFvalue1\xFFkey2\xFFvalue2"),
+		},
+	}
+
+	var bytes []byte
+	for _, testCase := range testCases {
+		s.testBytesImpl(testCase, bytes)
+	}
+}
+
+func (s *LSSSuite) testBytesImpl(testCase bytesTestCase, bytes []byte) {
+	// Arrange
+	lss := cppbridge.NewLssStorage()
+	lss.FindOrEmplace(testCase.labelSet)
+
+	// Act
+	bytes = cppbridge.LabelSetBytes(lss.Pointer(), 0, bytes)
+
+	// Assert
+	s.Equal(testCase.expected, bytes)
+}
+
 type QueryableLSSSuite struct {
 	suite.Suite
 	baseCtx     context.Context

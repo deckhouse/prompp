@@ -2549,3 +2549,37 @@ func labelSetFree(labelSet []Label) {
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
+
+func LabelSetBytes(lss uintptr, labelSetID uint32, bytes []byte) []byte {
+	args := struct {
+		lss        uintptr
+		labelSetID uint32
+	}{lss, labelSetID}
+	var sizeResult struct {
+		size uint32
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_label_set_bytes_size,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&sizeResult)),
+	)
+
+	if int(sizeResult.size) > cap(bytes) {
+		bytes = make([]byte, sizeResult.size)
+	} else {
+		bytes = bytes[:sizeResult.size]
+	}
+
+	result := struct {
+		bytes []byte
+	}{bytes}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_label_set_bytes,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&result)),
+	)
+
+	return result.bytes
+}

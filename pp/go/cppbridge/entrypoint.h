@@ -406,6 +406,34 @@ void prompp_label_set_serialize(void* args, void* res);
  */
 void prompp_label_set_free(void* args);
 
+/**
+ * @brief get size in bytes needed for Bytes method
+ *
+ * @param args {
+ *     lss       uintptr   // pointer to constructed lss;
+ *     ls_id     uint32    // series id
+ * }
+ *
+ * @param res {
+ *     size uint32
+ * }
+ */
+void prompp_label_set_bytes_size(void* args, void* res);
+
+/**
+ * @brief implementation of Bytes method
+ *
+ * @param args {
+ *     lss       uintptr   // pointer to constructed lss;
+ *     ls_id     uint32    // series id
+ * }
+ *
+ * @param res {
+ *     bytes []byte
+ * }
+ */
+void prompp_label_set_bytes(void* args, void* res);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif
