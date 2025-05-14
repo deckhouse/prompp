@@ -321,6 +321,11 @@ class PROMPP_ATTRIBUTE_PACKED CompactBitSequence : public CompactBitSequenceBase
  public:
   [[nodiscard]] PROMPP_ALWAYS_INLINE BitSequenceReader reader() const noexcept { return {Base::memory_, size_in_bits_}; };
 
+  template <OutputStream S>
+  PROMPP_ALWAYS_INLINE void write_to(S& stream) const noexcept {
+    stream.write(Base::memory_, Base::size_in_bytes());
+  }
+
   PROMPP_ALWAYS_INLINE void push_back_single_zero_bit() noexcept {
     reserve_enough_memory_if_needed();
     ++size_in_bits_;
