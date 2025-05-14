@@ -10,6 +10,9 @@
 #include "encoder/gorilla.h"
 #include "series_data/encoder/timestamp/encoder.h"
 
+#include "roaring/cpp/roaring.hh"
+#include "roaring/roaring.hh"
+
 namespace series_data {
 
 struct DataStorage {
@@ -189,6 +192,9 @@ struct DataStorage {
   uint32_t outdated_samples_count{};
   uint32_t outdated_chunks_count{};
   uint32_t merged_samples_count{};
+
+  roaring::Roaring finalized_chunks_since_last_unloading{};
+  roaring::Roaring unused_series_bitmap{};
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesChunks chunks(uint32_t ls_id) const noexcept { return SeriesChunks{this, ls_id}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE Chunks chunks() const noexcept { return Chunks{this}; }
