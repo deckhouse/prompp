@@ -27,6 +27,7 @@ import (
 	pp_pkg_config "github.com/prometheus/prometheus/pp-pkg/config"
 	"github.com/prometheus/prometheus/pp-pkg/dialer"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/appender"
 	"github.com/prometheus/prometheus/pp/go/relabeler/block"
@@ -261,8 +262,10 @@ func (rr *Receiver) AppendHashdex(
 	return err
 }
 
-func (rr *Receiver) Find(ls labels.Labels) bool {
-	return rr.appender.Find(ls) || rr.storage.Find(ls)
+// Find label set in lss, if not found return EmptyLabels.
+func (rr *Receiver) Find(mls model.LabelSet) labels.Labels {
+	// return rr.appender.Find(ls) || rr.storage.Find(ls)
+	return rr.appender.Find(mls)
 }
 
 // AppendSnappyProtobuf append compressed via snappy Protobuf data to relabeling hashdex data.

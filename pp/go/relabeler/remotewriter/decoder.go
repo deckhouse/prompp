@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
@@ -15,7 +14,7 @@ type Decoder struct {
 }
 
 func NewDecoder(
-	externalLabels labels.Labels,
+	externalLabels cppbridge.Labels,
 	relabelConfigs []*cppbridge.RelabelConfig,
 	shardID uint16,
 	encoderVersion uint8,
@@ -26,7 +25,7 @@ func NewDecoder(
 	}
 
 	lss := cppbridge.NewLssStorage()
-	outputDecoder := cppbridge.NewWALOutputDecoder(cppbridge.LabelsToCppBridgeLabels(externalLabels), relabeler, lss, shardID, encoderVersion)
+	outputDecoder := cppbridge.NewWALOutputDecoder(externalLabels, relabeler, lss, shardID, encoderVersion)
 
 	return &Decoder{
 		relabeler:     relabeler,

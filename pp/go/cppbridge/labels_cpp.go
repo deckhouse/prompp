@@ -1,19 +1,14 @@
 package cppbridge
 
-import (
-	"github.com/prometheus/prometheus/model/labels"
-)
-
 //
 // LabelsCpp
 //
 
 // LabelsCpp is a sorted set of labels. Is implemented by a cpp lss.
 type LabelsCpp struct {
-	serializedLS labels.Labels
-	lss          *LabelSetStorage
-	id           uint32
-	length       uint16
+	lss    *LabelSetStorage
+	id     uint32
+	length uint16
 }
 
 // NewLabelsCpp init LabelsCpp with LabelSetStorage and ls id.
@@ -46,25 +41,42 @@ func (ls *LabelsCpp) Len() int {
 	return length
 }
 
-// Labels returns the name/value pairs added as a Labels object.
-func (ls *LabelsCpp) Labels() labels.Labels {
-	if ls.IsZero() || ls.Len() == 0 {
-		return labels.Labels{}
+// EqualLabelSets returns whether the two label sets are equal.
+func EqualLabelSets(aLSS, bLSS *LabelSetStorage, aLsID, bLsID uint32) bool {
+	if aLSS == nil && bLSS == nil {
+		return true
 	}
 
-	if !ls.serializedLS.IsEmpty() {
-		return ls.serializedLS
+	if aLSS == nil || bLSS == nil {
+		return false
 	}
 
-	labelSet := primitivesLabelSetSerialize(ls.lss.Pointer(), ls.id)
-
-	sb := labels.NewScratchBuilder(ls.Len())
-	for i := range labelSet {
-		sb.Add(labelSet[i].Name, labelSet[i].Value)
+	if aLSS.Pointer() == bLSS.Pointer() && aLsID == bLsID {
+		return true
 	}
-	sb.Overwrite(&ls.serializedLS)
 
-	primitivesLabelSetFree(labelSet)
+	return primitivesLabelSetEqual(aLSS.Pointer(), bLSS.Pointer(), aLsID, bLsID)
+}
 
-	return ls.serializedLS
+// CompareLabelSets compares the two label sets.
+// The result will be 0 if a==b, <0 if a < b, and >0 if a > b.
+func CompareLabelSets(aLSS, bLSS *LabelSetStorage, aLsID, bLsID uint32) int {
+	// quick exit if empty LabelsCpp
+	if aLSS == nil && bLSS == nil {
+		return 0
+	}
+
+	if aLSS == nil {
+		return -1
+	}
+
+	if bLSS == nil {
+		return 1
+	}
+
+	if aLSS.Pointer() == bLSS.Pointer() && aLsID == bLsID {
+		return 0
+	}
+
+	return int(primitivesLabelSetCompare(aLSS.Pointer(), bLSS.Pointer(), aLsID, bLsID))
 }

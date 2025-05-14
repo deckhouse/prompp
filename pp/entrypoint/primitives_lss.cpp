@@ -75,20 +75,44 @@ extern "C" void prompp_primitives_lss_find_or_emplace(void* args, void* res) {
                        *in->lss)};
 }
 
+extern "C" void prompp_primitives_lss_find_or_emplace_label_set(void* args, void* res) {
+  struct Arguments {
+    LssVariantPtr lss;
+    PromPP::Primitives::Go::LabelSet label_set;
+  };
+  struct Result {
+    LssVariantPtr lss_ro_ptr;
+    uint32_t ls_id;
+  };
+
+  auto in = static_cast<Arguments*>(args);
+  auto out = new (res) Result();
+
+  auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
+
+  out->ls_id = lss.find_or_emplace(in->label_set);
+  out->lss_ro_ptr = entrypoint::head::create_lss_readonly(lss);
+}
+
 extern "C" void prompp_primitives_lss_find(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
     PromPP::Primitives::Go::LabelSet label_set;
   };
   struct Result {
+    LssVariantPtr lss_ro_ptr;
+    uint32_t ls_id;
     bool has;
   };
 
   auto in = static_cast<Arguments*>(args);
   auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
+
   std::optional<uint32_t> ls_id = lss.find(in->label_set);
 
-  new (res) Result{.has = ls_id.has_value()};
+  if (ls_id.has_value()) {
+    new (res) Result{.lss_ro_ptr = entrypoint::head::create_lss_readonly(lss), .ls_id = ls_id.value(), .has = lss.find(in->label_set).has_value()};
+  }
 }
 
 struct LssQueryResult {
@@ -218,7 +242,7 @@ extern "C" void prompp_primitives_lss_query_label_values(void* args, void* res) 
 // label_sets
 //
 
-void prompp_primitives_label_set_length(void* args, void* res) {
+extern "C" void prompp_primitives_label_set_length(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
     uint32_t series_id;
@@ -232,7 +256,7 @@ void prompp_primitives_label_set_length(void* args, void* res) {
   std::visit([in, res](auto& lss) { new (res) Result{.length = lss[in->series_id].size()}; }, *in->lss);
 }
 
-void prompp_primitives_label_set_serialize(void* args, void* res) {
+extern "C" void prompp_primitives_label_set_serialize(void* args, void* res) {
   using PromPP::Primitives::Go::Label;
   using PromPP::Primitives::Go::Slice;
   using PromPP::Primitives::Go::String;
@@ -268,4 +292,210 @@ extern "C" void prompp_primitives_label_set_free(void* args) {
   };
 
   static_cast<Arguments*>(args)->~Arguments();
+}
+
+extern "C" void prompp_primitives_label_set_get_value(void* args, void* res) {
+  using PromPP::Primitives::Go::String;
+
+  struct Arguments {
+    LssVariantPtr lss;
+    String label_name;
+    uint32_t series_id;
+  };
+  struct Result {
+    String label_value;
+  };
+
+  auto in = static_cast<Arguments*>(args);
+  auto out = new (res) Result();
+
+  std::visit(
+      [in, out](auto& lss) {
+        auto in_label_set = lss[in->series_id];
+        for (const auto& [ln, lv] : in_label_set) {
+          if (ln == in->label_name) {
+            out->label_value = String{lv};
+            return;
+          }
+        }
+      },
+      *in->lss);
+}
+
+extern "C" void prompp_primitives_label_set_has_label_name(void* args, void* res) {
+  using PromPP::Primitives::Go::String;
+
+  struct Arguments {
+    LssVariantPtr lss;
+    String label_name;
+    uint32_t series_id;
+  };
+  struct Result {
+    bool is_has{};
+  };
+
+  auto in = static_cast<Arguments*>(args);
+  auto out = new (res) Result();
+
+  std::visit(
+      [in, out](auto& lss) {
+        auto in_label_set = lss[in->series_id];
+        for (const auto& label : in_label_set) {
+          if (String{label.first} == in->label_name) {
+            out->is_has = true;
+            return;
+          }
+        }
+      },
+      *in->lss);
+}
+
+extern "C" void prompp_primitives_label_set_hash(void* args, void* res) {
+  using PromPP::Primitives::Go::String;
+
+  struct Arguments {
+    LssVariantPtr lss;
+    uint32_t series_id;
+  };
+  struct Result {
+    uint64_t hash;
+  };
+
+  auto in = static_cast<Arguments*>(args);
+
+  std::visit([in, res](auto& lss) { new (res) Result{.hash = static_cast<uint64_t>(PromPP::Primitives::hash::hash_of_label_set(lss[in->series_id]))}; },
+             *in->lss);
+}
+
+template <class Filter>
+class CalculateHashIterator {
+ public:
+  explicit CalculateHashIterator(BareBones::XXHash* hash, Filter&& filter) : hash_(hash), filter_(filter) {}
+
+  using iterator_category = std::forward_iterator_tag;
+  using difference_type = ptrdiff_t;
+
+  CalculateHashIterator& operator*() noexcept { return *this; }
+  CalculateHashIterator& operator++() noexcept { return *this; }
+  CalculateHashIterator& operator++(int) noexcept { return *this; }
+  PROMPP_ALWAYS_INLINE CalculateHashIterator& operator=(const PromPP::Primitives::LabelView& label) noexcept {
+    if (filter_(label)) {
+      hash_->extend(label.first, label.second);
+    }
+
+    return *this;
+  }
+  CalculateHashIterator& operator=(const PromPP::Primitives::Go::String&) noexcept { return *this; }
+
+ private:
+  BareBones::XXHash* hash_;
+  [[no_unique_address]] Filter filter_;
+};
+
+struct LabelNameLess {
+  using String = PromPP::Primitives::Go::String;
+  using LabelView = PromPP::Primitives::LabelView;
+
+  bool operator()(const LabelView& a, const LabelView& b) const noexcept { return a.first < b.first; }
+  bool operator()(const LabelView& a, const String& b) const noexcept { return a.first < static_cast<std::string_view>(b); }
+  bool operator()(const String& a, const LabelView& b) const noexcept { return static_cast<std::string_view>(a) < b.first; }
+  bool operator()(const String& a, const String& b) const noexcept { return a < b; }
+};
+
+extern "C" void prompp_primitives_label_set_hash_for_labels(void* args, void* res) {
+  using PromPP::Primitives::Go::Slice;
+  using PromPP::Primitives::Go::String;
+
+  struct Arguments {
+    LssVariantPtr lss;
+    Slice<String> label_names;
+    uint32_t series_id;
+  };
+  struct Result {
+    uint64_t hash;
+  };
+
+  auto in = static_cast<Arguments*>(args);
+
+  BareBones::XXHash hash;
+  std::visit(
+      [in, &hash](auto& lss) {
+        auto in_label_set = lss[in->series_id];
+        std::ranges::set_intersection(in_label_set, in->label_names, CalculateHashIterator{&hash, [](const auto&) { return true; }}, LabelNameLess{});
+      },
+      *in->lss);
+  new (res) Result{.hash = hash.hash()};
+}
+
+extern "C" void prompp_primitives_label_set_hash_without_labels(void* args, void* res) {
+  using PromPP::Primitives::Go::Slice;
+  using PromPP::Primitives::Go::String;
+
+  struct Arguments {
+    LssVariantPtr lss;
+    Slice<String> label_names;
+    uint32_t series_id;
+  };
+  struct Result {
+    uint64_t hash;
+  };
+
+  auto in = static_cast<Arguments*>(args);
+
+  BareBones::XXHash hash;
+  std::visit(
+      [in, &hash](auto& lss) {
+        auto in_label_set = lss[in->series_id];
+        std::ranges::set_difference(
+            in_label_set, in->label_names,
+            CalculateHashIterator{&hash, [](const PromPP::Primitives::LabelView& label) { return label.first != PromPP::Prometheus::kMetricLabelName; }},
+            LabelNameLess{});
+      },
+      *in->lss);
+  new (res) Result{.hash = hash.hash()};
+}
+
+extern "C" void prompp_primitives_label_set_equal(void* args, void* res) {
+  struct Arguments {
+    LssVariantPtr lss_a;
+    LssVariantPtr lss_b;
+    uint32_t series_id_a;
+    uint32_t series_id_b;
+  };
+  struct Result {
+    bool is_equal;
+  };
+
+  auto in = static_cast<Arguments*>(args);
+  auto out = new (res) Result();
+
+  std::visit([in, out](auto& lss_a, auto& lss_b) { out->is_equal = lss_a[in->series_id_a] == lss_b[in->series_id_b]; }, *in->lss_a, *in->lss_b);
+}
+
+extern "C" void prompp_primitives_label_set_compare(void* args, void* res) {
+  struct Arguments {
+    LssVariantPtr lss_a;
+    LssVariantPtr lss_b;
+    uint32_t series_id_a;
+    uint32_t series_id_b;
+  };
+  struct Result {
+    int64_t result;
+  };
+
+  auto in = static_cast<Arguments*>(args);
+  auto out = new (res) Result();
+
+  std::visit(
+      [in, out](auto& lss_a, auto& lss_b) {
+        if (auto result = BareBones::lexicographical_compare_three_way(lss_a[in->series_id_a], lss_b[in->series_id_b], std::compare_three_way{});
+            std::is_lt(result)) {
+          out->result = -1;
+        } else if (std::is_eq(result)) {
+          out->result = 0;
+        } else {
+          out->result = 1;
+        }
+      },
+      *in->lss_a, *in->lss_b);
 }

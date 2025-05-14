@@ -39,6 +39,7 @@ import (
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/model/value"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/promql/promqltest"
@@ -70,7 +71,7 @@ func TestAlertingRule(t *testing.T) {
 		time.Minute,
 		0,
 		labels.FromStrings("severity", "{{\"c\"}}ritical"),
-		labels.EmptyLabels(), labels.EmptyLabels(), "", true, nil,
+		labels.EmptyLabels(), cppbridge.EmptyLabels(), "", true, nil,
 	)
 	result := promql.Vector{
 		promql.Sample{
@@ -212,7 +213,7 @@ func TestForStateAddSamples(t *testing.T) {
 				time.Minute,
 				0,
 				labels.FromStrings("severity", "{{\"c\"}}ritical"),
-				labels.EmptyLabels(), labels.EmptyLabels(), "", true, nil,
+				labels.EmptyLabels(), cppbridge.EmptyLabels(), "", true, nil,
 			)
 			result := promql.Vector{
 				promql.Sample{
@@ -386,7 +387,7 @@ func TestForStateRestore(t *testing.T) {
 				alertForDuration,
 				0,
 				labels.FromStrings("severity", "critical"),
-				labels.EmptyLabels(), labels.EmptyLabels(), "", true, nil,
+				labels.EmptyLabels(), cppbridge.EmptyLabels(), "", true, nil,
 			)
 
 			group := NewGroup(GroupOptions{
@@ -465,7 +466,7 @@ func TestForStateRestore(t *testing.T) {
 						alertForDuration,
 						0,
 						labels.FromStrings("severity", "critical"),
-						labels.EmptyLabels(), labels.EmptyLabels(), "", false, nil,
+						labels.EmptyLabels(), cppbridge.EmptyLabels(), "", false, nil,
 					)
 					newGroup := NewGroup(GroupOptions{
 						Name:          "default",
@@ -645,7 +646,7 @@ groups:
 		},
 	})
 	m.start()
-	err = m.Update(time.Second, []string{fname}, labels.EmptyLabels(), "", nil)
+	err = m.Update(time.Second, []string{fname}, cppbridge.EmptyLabels(), "", nil)
 	require.NoError(t, err)
 
 	rgs := m.RuleGroups()
@@ -666,13 +667,13 @@ groups:
 func TestCopyState(t *testing.T) {
 	oldGroup := &Group{
 		rules: []Rule{
-			NewAlertingRule("alert", nil, 0, 0, labels.EmptyLabels(), labels.EmptyLabels(), labels.EmptyLabels(), "", true, nil),
+			NewAlertingRule("alert", nil, 0, 0, labels.EmptyLabels(), labels.EmptyLabels(), cppbridge.EmptyLabels(), "", true, nil),
 			NewRecordingRule("rule1", nil, labels.EmptyLabels()),
 			NewRecordingRule("rule2", nil, labels.EmptyLabels()),
 			NewRecordingRule("rule3", nil, labels.FromStrings("l1", "v1")),
 			NewRecordingRule("rule3", nil, labels.FromStrings("l1", "v2")),
 			NewRecordingRule("rule3", nil, labels.FromStrings("l1", "v3")),
-			NewAlertingRule("alert2", nil, 0, 0, labels.FromStrings("l2", "v1"), labels.EmptyLabels(), labels.EmptyLabels(), "", true, nil),
+			NewAlertingRule("alert2", nil, 0, 0, labels.FromStrings("l2", "v1"), labels.EmptyLabels(), cppbridge.EmptyLabels(), "", true, nil),
 		},
 		seriesInPreviousEval: []map[string]labels.Labels{
 			{},
@@ -691,10 +692,10 @@ func TestCopyState(t *testing.T) {
 			NewRecordingRule("rule3", nil, labels.FromStrings("l1", "v0")),
 			NewRecordingRule("rule3", nil, labels.FromStrings("l1", "v1")),
 			NewRecordingRule("rule3", nil, labels.FromStrings("l1", "v2")),
-			NewAlertingRule("alert", nil, 0, 0, labels.EmptyLabels(), labels.EmptyLabels(), labels.EmptyLabels(), "", true, nil),
+			NewAlertingRule("alert", nil, 0, 0, labels.EmptyLabels(), labels.EmptyLabels(), cppbridge.EmptyLabels(), "", true, nil),
 			NewRecordingRule("rule1", nil, labels.EmptyLabels()),
-			NewAlertingRule("alert2", nil, 0, 0, labels.FromStrings("l2", "v0"), labels.EmptyLabels(), labels.EmptyLabels(), "", true, nil),
-			NewAlertingRule("alert2", nil, 0, 0, labels.FromStrings("l2", "v1"), labels.EmptyLabels(), labels.EmptyLabels(), "", true, nil),
+			NewAlertingRule("alert2", nil, 0, 0, labels.FromStrings("l2", "v0"), labels.EmptyLabels(), cppbridge.EmptyLabels(), "", true, nil),
+			NewAlertingRule("alert2", nil, 0, 0, labels.FromStrings("l2", "v1"), labels.EmptyLabels(), cppbridge.EmptyLabels(), "", true, nil),
 			NewRecordingRule("rule4", nil, labels.EmptyLabels()),
 		},
 		seriesInPreviousEval: make([]map[string]labels.Labels, 8),
@@ -784,7 +785,7 @@ func TestUpdate(t *testing.T) {
 	ruleManager.start()
 	defer ruleManager.Stop()
 
-	err := ruleManager.Update(10*time.Second, files, labels.EmptyLabels(), "", nil)
+	err := ruleManager.Update(10*time.Second, files, cppbridge.EmptyLabels(), "", nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, ruleManager.groups, "expected non-empty rule groups")
 	ogs := map[string]*Group{}
@@ -795,7 +796,7 @@ func TestUpdate(t *testing.T) {
 		ogs[h] = g
 	}
 
-	err = ruleManager.Update(10*time.Second, files, labels.EmptyLabels(), "", nil)
+	err = ruleManager.Update(10*time.Second, files, cppbridge.EmptyLabels(), "", nil)
 	require.NoError(t, err)
 	for h, g := range ruleManager.groups {
 		for _, actual := range g.seriesInPreviousEval {
@@ -814,7 +815,7 @@ func TestUpdate(t *testing.T) {
 	defer os.Remove(tmpFile.Name())
 	defer tmpFile.Close()
 
-	err = ruleManager.Update(10*time.Second, []string{tmpFile.Name()}, labels.EmptyLabels(), "", nil)
+	err = ruleManager.Update(10*time.Second, []string{tmpFile.Name()}, cppbridge.EmptyLabels(), "", nil)
 	require.NoError(t, err)
 
 	for h, g := range ruleManager.groups {
@@ -892,7 +893,7 @@ func reloadAndValidate(rgs *rulefmt.RuleGroups, t *testing.T, tmpFile *os.File, 
 	tmpFile.Seek(0, 0)
 	_, err = tmpFile.Write(bs)
 	require.NoError(t, err)
-	err = ruleManager.Update(10*time.Second, []string{tmpFile.Name()}, labels.EmptyLabels(), "", nil)
+	err = ruleManager.Update(10*time.Second, []string{tmpFile.Name()}, cppbridge.EmptyLabels(), "", nil)
 	require.NoError(t, err)
 	for h, g := range ruleManager.groups {
 		if ogs[h] == g {
@@ -928,7 +929,7 @@ func TestNotify(t *testing.T) {
 
 	expr, err := parser.ParseExpr("a > 1")
 	require.NoError(t, err)
-	rule := NewAlertingRule("aTooHigh", expr, 0, 0, labels.Labels{}, labels.Labels{}, labels.EmptyLabels(), "", true, log.NewNopLogger())
+	rule := NewAlertingRule("aTooHigh", expr, 0, 0, labels.Labels{}, labels.Labels{}, cppbridge.EmptyLabels(), "", true, log.NewNopLogger())
 	group := NewGroup(GroupOptions{
 		Name:          "alert",
 		Interval:      time.Second,
@@ -1037,7 +1038,7 @@ func TestMetricsUpdate(t *testing.T) {
 	}
 
 	for i, c := range cases {
-		err := ruleManager.Update(time.Second, c.files, labels.EmptyLabels(), "", nil)
+		err := ruleManager.Update(time.Second, c.files, cppbridge.EmptyLabels(), "", nil)
 		require.NoError(t, err)
 		time.Sleep(2 * time.Second)
 		require.Equal(t, c.metrics, countMetrics(), "test %d: invalid count of metrics", i)
@@ -1111,7 +1112,7 @@ func TestGroupStalenessOnRemoval(t *testing.T) {
 
 	var totalStaleNaN int
 	for i, c := range cases {
-		err := ruleManager.Update(time.Second, c.files, labels.EmptyLabels(), "", nil)
+		err := ruleManager.Update(time.Second, c.files, cppbridge.EmptyLabels(), "", nil)
 		require.NoError(t, err)
 		time.Sleep(3 * time.Second)
 		totalStaleNaN += c.staleNaN
@@ -1153,11 +1154,11 @@ func TestMetricsStalenessOnManagerShutdown(t *testing.T) {
 		}
 	}()
 
-	err := ruleManager.Update(2*time.Second, files, labels.EmptyLabels(), "", nil)
+	err := ruleManager.Update(2*time.Second, files, cppbridge.EmptyLabels(), "", nil)
 	time.Sleep(4 * time.Second)
 	require.NoError(t, err)
 	start := time.Now()
-	err = ruleManager.Update(3*time.Second, files[:0], labels.EmptyLabels(), "", nil)
+	err = ruleManager.Update(3*time.Second, files[:0], cppbridge.EmptyLabels(), "", nil)
 	require.NoError(t, err)
 	ruleManager.Stop()
 	stopped = true
@@ -1200,7 +1201,7 @@ func TestGroupHasAlertingRules(t *testing.T) {
 			group: &Group{
 				name: "HasAlertingRule",
 				rules: []Rule{
-					NewAlertingRule("alert", nil, 0, 0, labels.EmptyLabels(), labels.EmptyLabels(), labels.EmptyLabels(), "", true, nil),
+					NewAlertingRule("alert", nil, 0, 0, labels.EmptyLabels(), labels.EmptyLabels(), cppbridge.EmptyLabels(), "", true, nil),
 					NewRecordingRule("record", nil, labels.EmptyLabels()),
 				},
 			},
@@ -1480,7 +1481,7 @@ func TestManager_LoadGroups_ShouldCheckWhetherEachRuleHasDependentsAndDependenci
 	})
 
 	t.Run("load a mix of dependent and independent rules", func(t *testing.T) {
-		groups, errs := ruleManager.LoadGroups(time.Second, labels.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple.yaml"}...)
+		groups, errs := ruleManager.LoadGroups(time.Second, cppbridge.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple.yaml"}...)
 		require.Empty(t, errs)
 		require.Len(t, groups, 1)
 
@@ -1515,7 +1516,7 @@ func TestManager_LoadGroups_ShouldCheckWhetherEachRuleHasDependentsAndDependenci
 	})
 
 	t.Run("load only independent rules", func(t *testing.T) {
-		groups, errs := ruleManager.LoadGroups(time.Second, labels.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple_independent.yaml"}...)
+		groups, errs := ruleManager.LoadGroups(time.Second, cppbridge.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple_independent.yaml"}...)
 		require.Empty(t, errs)
 		require.Len(t, groups, 1)
 
@@ -1539,7 +1540,7 @@ func TestDependencyMap(t *testing.T) {
 
 	expr, err = parser.ParseExpr("user:requests:rate1m <= 0")
 	require.NoError(t, err)
-	rule2 := NewAlertingRule("ZeroRequests", expr, 0, 0, labels.Labels{}, labels.Labels{}, labels.EmptyLabels(), "", true, log.NewNopLogger())
+	rule2 := NewAlertingRule("ZeroRequests", expr, 0, 0, labels.Labels{}, labels.Labels{}, cppbridge.EmptyLabels(), "", true, log.NewNopLogger())
 
 	expr, err = parser.ParseExpr("sum by (user) (rate(requests[5m]))")
 	require.NoError(t, err)
@@ -1798,7 +1799,7 @@ func TestDependentRulesWithNonMetricExpression(t *testing.T) {
 
 	expr, err = parser.ParseExpr("user:requests:rate1m <= 0")
 	require.NoError(t, err)
-	rule2 := NewAlertingRule("ZeroRequests", expr, 0, 0, labels.Labels{}, labels.Labels{}, labels.EmptyLabels(), "", true, log.NewNopLogger())
+	rule2 := NewAlertingRule("ZeroRequests", expr, 0, 0, labels.Labels{}, labels.Labels{}, cppbridge.EmptyLabels(), "", true, log.NewNopLogger())
 
 	expr, err = parser.ParseExpr("3")
 	require.NoError(t, err)
@@ -1856,7 +1857,7 @@ func TestDependencyMapUpdatesOnGroupUpdate(t *testing.T) {
 	ruleManager.start()
 	defer ruleManager.Stop()
 
-	err := ruleManager.Update(10*time.Second, files, labels.EmptyLabels(), "", nil)
+	err := ruleManager.Update(10*time.Second, files, cppbridge.EmptyLabels(), "", nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, ruleManager.groups, "expected non-empty rule groups")
 
@@ -1869,7 +1870,7 @@ func TestDependencyMapUpdatesOnGroupUpdate(t *testing.T) {
 	}
 
 	// Update once without changing groups.
-	err = ruleManager.Update(10*time.Second, files, labels.EmptyLabels(), "", nil)
+	err = ruleManager.Update(10*time.Second, files, cppbridge.EmptyLabels(), "", nil)
 	require.NoError(t, err)
 	for h, g := range ruleManager.groups {
 		depMap := buildDependencyMap(g.rules)
@@ -1884,7 +1885,7 @@ func TestDependencyMapUpdatesOnGroupUpdate(t *testing.T) {
 
 	// Groups will be recreated when updated.
 	files[0] = "fixtures/rules_dependencies.yaml"
-	err = ruleManager.Update(10*time.Second, files, labels.EmptyLabels(), "", nil)
+	err = ruleManager.Update(10*time.Second, files, cppbridge.EmptyLabels(), "", nil)
 	require.NoError(t, err)
 
 	for h, g := range ruleManager.groups {
@@ -1927,7 +1928,7 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 		t.Cleanup(cancel)
 
 		ruleManager := NewManager(optsFactory(storage, &maxInflight, &inflightQueries, 0))
-		groups, errs := ruleManager.LoadGroups(time.Second, labels.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple.yaml"}...)
+		groups, errs := ruleManager.LoadGroups(time.Second, cppbridge.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple.yaml"}...)
 		require.Empty(t, errs)
 		require.Len(t, groups, 1)
 
@@ -1965,7 +1966,7 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 		opts.RuleConcurrencyController = nil
 		ruleManager := NewManager(opts)
 
-		groups, errs := ruleManager.LoadGroups(time.Second, labels.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple.yaml"}...)
+		groups, errs := ruleManager.LoadGroups(time.Second, cppbridge.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple.yaml"}...)
 		require.Empty(t, errs)
 		require.Len(t, groups, 1)
 
@@ -2001,7 +2002,7 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 		opts.RuleConcurrencyController = nil
 		ruleManager := NewManager(opts)
 
-		groups, errs := ruleManager.LoadGroups(time.Second, labels.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple_independent.yaml"}...)
+		groups, errs := ruleManager.LoadGroups(time.Second, cppbridge.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple_independent.yaml"}...)
 		require.Empty(t, errs)
 		require.Len(t, groups, 1)
 
@@ -2037,7 +2038,7 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 		opts.RuleConcurrencyController = nil
 		ruleManager := NewManager(opts)
 
-		groups, errs := ruleManager.LoadGroups(time.Second, labels.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple_independent.yaml"}...)
+		groups, errs := ruleManager.LoadGroups(time.Second, cppbridge.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple_independent.yaml"}...)
 		require.Empty(t, errs)
 		require.Len(t, groups, 1)
 
@@ -2073,7 +2074,7 @@ func TestBoundedRuleEvalConcurrency(t *testing.T) {
 
 	ruleManager := NewManager(optsFactory(storage, &maxInflight, &inflightQueries, maxConcurrency))
 
-	groups, errs := ruleManager.LoadGroups(time.Second, labels.EmptyLabels(), "", nil, files...)
+	groups, errs := ruleManager.LoadGroups(time.Second, cppbridge.EmptyLabels(), "", nil, files...)
 	require.Empty(t, errs)
 	require.Len(t, groups, groupCount)
 

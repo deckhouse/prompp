@@ -1,19 +1,21 @@
 package querier
 
 import (
+	"testing"
+
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"testing"
 )
 
 type InstantSeriesSetTestSuite struct {
 	suite.Suite
 
 	valueNotFoundTimestampValue int64
-	labelSets                   []*cppbridge.LabelsCpp
+	labelSets                   []labels.Labels
 	samples                     []cppbridge.Sample
 }
 
@@ -32,13 +34,13 @@ func (s *InstantSeriesSetTestSuite) SetupTest() {
 	require.Equal(s.T(), cppbridge.LSSQueryStatusMatch, lqr.Status())
 	require.Equal(s.T(), 4, len(lqr.IDs()))
 
-	labelSets := make([]*cppbridge.LabelsCpp, len(lqr.IDs()))
+	labelSets := make([]labels.Labels, len(lqr.IDs()))
 	lqr.MatchesIndexRange(func(lss *cppbridge.LabelSetStorage, index int, lsid uint32, length uint16) {
-		labelSets[index] = cppbridge.NewLabelsCpp(lss, lsid, length)
+		labelSets[index] = labels.NewLabelsWithLSS(lss, lsid, length)
 	})
 
 	for _, ls := range labelSets {
-		s.T().Log(ls.Labels().String())
+		s.T().Log(ls.String())
 	}
 
 	s.valueNotFoundTimestampValue = 0

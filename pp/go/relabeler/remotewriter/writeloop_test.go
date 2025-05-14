@@ -16,7 +16,6 @@ import (
 	config3 "github.com/prometheus/common/config"
 	model2 "github.com/prometheus/common/model"
 	config2 "github.com/prometheus/prometheus/config"
-	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
@@ -231,7 +230,7 @@ func TestWriteLoopWrite(t *testing.T) {
 			SigV4Config:    nil,
 			AzureADConfig:  nil,
 		},
-		ExternalLabels: labels.Labels{
+		ExternalLabels: cppbridge.Labels{
 			{Name: "lol", Value: "kek"},
 		},
 		ReadTimeout: time.Second * 3,

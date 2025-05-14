@@ -32,6 +32,7 @@ import (
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
 func testRemoteWriteConfig() *config.OpRemoteWriteConfig { // PP_CHANGES.md: rebuild on cpp
@@ -235,7 +236,7 @@ func TestUpdateExternalLabels(t *testing.T) {
 
 	s := NewWriteStorage(nil, prometheus.NewRegistry(), dir, time.Second, nil)
 
-	externalLabels := labels.FromStrings("external", "true")
+	externalLabels := cppbridge.FromStrings("external", "true")
 	conf := &config.Config{
 		GlobalConfig: config.GlobalConfig{},
 		RemoteWriteConfigs: []*config.OpRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp

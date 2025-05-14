@@ -169,12 +169,12 @@ type SampleProvider interface {
 type Series struct {
 	seriesID       uint32
 	mint, maxt     int64
-	labelSet       *cppbridge.LabelsCpp
+	labelSet       labels.Labels
 	sampleProvider SampleProvider
 }
 
 func (s *Series) Labels() labels.Labels {
-	return s.labelSet.Labels()
+	return s.labelSet
 }
 
 func (s *Series) Iterator(_ chunkenc.Iterator) chunkenc.Iterator {
@@ -222,11 +222,11 @@ const (
 type InstantSeriesSet struct {
 	index                       int
 	valueNotFoundTimestampValue int64
-	labelSets                   []*cppbridge.LabelsCpp
+	labelSets                   []labels.Labels
 	samples                     []cppbridge.Sample
 }
 
-func NewInstantSeriesSet(valueNotFoundTimestampValue int64, labelSets []*cppbridge.LabelsCpp, samples []cppbridge.Sample) *InstantSeriesSet {
+func NewInstantSeriesSet(valueNotFoundTimestampValue int64, labelSets []labels.Labels, samples []cppbridge.Sample) *InstantSeriesSet {
 	return &InstantSeriesSet{
 		index:                       -1,
 		valueNotFoundTimestampValue: valueNotFoundTimestampValue,
@@ -265,13 +265,13 @@ func (ss *InstantSeriesSet) Warnings() annotations.Annotations {
 }
 
 type InstantSeries struct {
-	labelSet *cppbridge.LabelsCpp
+	labelSet labels.Labels
 	sample   cppbridge.Sample
 }
 
 // Labels is storage.Series interface implementation.
 func (s InstantSeries) Labels() labels.Labels {
-	return s.labelSet.Labels()
+	return s.labelSet
 }
 
 // Iterator is storage.Series interface implementation.

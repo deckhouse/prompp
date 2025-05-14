@@ -25,6 +25,7 @@ import (
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/timestamp"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/rules"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb"
@@ -69,7 +70,7 @@ func newRuleImporter(logger log.Logger, config ruleImporterConfig, apiClient que
 
 // loadGroups parses groups from a list of recording rule files.
 func (importer *ruleImporter) loadGroups(_ context.Context, filenames []string) (errs []error) {
-	groups, errs := importer.ruleManager.LoadGroups(importer.config.evalInterval, labels.Labels{}, "", nil, filenames...)
+	groups, errs := importer.ruleManager.LoadGroups(importer.config.evalInterval, cppbridge.Labels{}, "", nil, filenames...) // PP_CHANGES.md: rebuild on cpp
 	if errs != nil {
 		return errs
 	}

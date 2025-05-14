@@ -5,18 +5,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/prometheus/prometheus/pp/go/util/optional"
-	"github.com/prometheus/client_golang/prometheus"
 	"io"
 	"os"
 	"path/filepath"
 	"sync"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/pp/go/util/optional"
+
+	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
-	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/model/relabel"
 )
 
 type CorruptMarker interface {
@@ -86,7 +86,7 @@ func newShard(
 	shardID uint16,
 	shardFileName, decoderStateFileName string,
 	resetDecoderState bool,
-	externalLabels labels.Labels,
+	externalLabels cppbridge.Labels,
 	relabelConfigs []*cppbridge.RelabelConfig,
 	unexpectedEOFCount prometheus.Counter,
 	segmentSize prometheus.Histogram,
@@ -116,7 +116,7 @@ func newShard(
 	if resetDecoderState {
 		decoderStateFileFlags = decoderStateFileFlags | os.O_TRUNC
 	}
-	decoderStateFile, err = os.OpenFile(decoderStateFileName, decoderStateFileFlags, 0600)
+	decoderStateFile, err = os.OpenFile(decoderStateFileName, decoderStateFileFlags, 0o600)
 	if err != nil {
 		return nil, errors.Join(fmt.Errorf("failed to open cache file: %w", err), wr.Close())
 	}
@@ -310,7 +310,7 @@ func createShard(
 	shardID uint16,
 	shardFileName, decoderStateFileName string,
 	resetDecoderState bool,
-	externalLabels labels.Labels,
+	externalLabels cppbridge.Labels,
 	relabelConfigs []*cppbridge.RelabelConfig,
 	unexpectedEOFCount prometheus.Counter,
 	segmentSize prometheus.Histogram,

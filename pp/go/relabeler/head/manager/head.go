@@ -6,6 +6,7 @@ import (
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
 )
@@ -121,6 +122,7 @@ func (h *DiscardableRotatableHead) CopySeriesFrom(other relabeler.Head) {
 	h.head.CopySeriesFrom(other)
 }
 
-func (h *DiscardableRotatableHead) Find(ls labels.Labels) bool {
-	return h.head.Find(ls)
+// Find label set in lss, if not found return EmptyLabels.
+func (h *DiscardableRotatableHead) Find(mls model.LabelSet) labels.Labels {
+	return h.head.Find(mls)
 }

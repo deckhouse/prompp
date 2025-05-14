@@ -9,13 +9,14 @@ import (
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/querier"
 	"github.com/prometheus/prometheus/storage"
 )
 
 type QueryableAppender struct {
-	lock           sync.Mutex
+	lock           sync.RWMutex
 	head           relabeler.Head
 	distributor    relabeler.Distributor
 	querierMetrics *querier.Metrics
@@ -71,8 +72,8 @@ func (qa *QueryableAppender) AppendWithStaleNans(
 }
 
 func (qa *QueryableAppender) WriteMetrics() {
-	qa.lock.Lock()
-	defer qa.lock.Unlock()
+	qa.lock.RLock()
+	defer qa.lock.RUnlock()
 
 	qa.head.WriteMetrics()
 	qa.distributor.WriteMetrics(qa.head)
@@ -157,8 +158,9 @@ func (qa *QueryableAppender) Close() error {
 	return errors.Join(qa.head.CommitToWal(), qa.head.Flush(), qa.head.Close())
 }
 
-func (qa *QueryableAppender) Find(ls labels.Labels) bool {
-	qa.lock.Lock()
-	defer qa.lock.Unlock()
-	return qa.head.Find(ls)
+// Find label set in lss, if not found return EmptyLabels.
+func (qa *QueryableAppender) Find(mls model.LabelSet) labels.Labels {
+	qa.lock.RLock()
+	defer qa.lock.RUnlock()
+	return qa.head.Find(mls)
 }

@@ -37,6 +37,7 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/model/timestamp"
+	"github.com/prometheus/prometheus/pp/go/cppbridge" // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/scrape"
 	"github.com/prometheus/prometheus/tsdb/chunks"
@@ -453,7 +454,7 @@ func NewQueueManager(
 	samplesIn *ewmaRate,
 	cfg config.QueueConfig,
 	mCfg config.MetadataConfig,
-	externalLabels labels.Labels,
+	externalLabels cppbridge.Labels, // PP_CHANGES.md: rebuild on cpp
 	relabelConfigs []*relabel.Config,
 	client WriteClient,
 	flushDeadline time.Duration,
@@ -469,8 +470,8 @@ func NewQueueManager(
 
 	// Copy externalLabels into a slice, which we need for processExternalLabels.
 	extLabelsSlice := make([]labels.Label, 0, externalLabels.Len())
-	externalLabels.Range(func(l labels.Label) {
-		extLabelsSlice = append(extLabelsSlice, l)
+	externalLabels.Range(func(l cppbridge.Label) {
+		extLabelsSlice = append(extLabelsSlice, labels.Label{Name: l.Name, Value: l.Value})
 	})
 
 	logger = log.With(logger, remoteName, client.Name(), endpoint, client.Endpoint())

@@ -150,7 +150,8 @@ func (q *Querier) selectInstant(ctx context.Context, sortSeries bool, hints *sto
 	defer func() {
 		if q.metrics != nil {
 			q.metrics.SelectDuration.With(
-				prometheus.Labels{"generation": strconv.FormatUint(q.head.Generation(), 10),
+				prometheus.Labels{
+					"generation": strconv.FormatUint(q.head.Generation(), 10),
 					"query_type": "instant",
 				},
 			).Observe(float64(time.Since(start).Microseconds()))
@@ -179,12 +180,12 @@ func (q *Querier) selectInstant(ctx context.Context, sortSeries bool, hints *sto
 
 		samples := shard.DataStorage().InstantQuery(q.maxt, valueNotFoundTimestampValue, lssQueryResult.IDs())
 
-		labelSets := make([]*cppbridge.LabelsCpp, len(samples))
+		labelSets := make([]labels.Labels, len(samples))
 		lssQueryResult.MatchesIndexRange(func(lss *cppbridge.LabelSetStorage, index int, lsid uint32, length uint16) {
 			if samples[index].Timestamp == valueNotFoundTimestampValue {
 				return
 			}
-			labelSets[index] = cppbridge.NewLabelsCpp(lss, lsid, length)
+			labelSets[index] = labels.NewLabelsWithLSS(lss, lsid, length)
 		})
 
 		runtime.KeepAlive(lssQueryResult)
@@ -251,7 +252,7 @@ func (q *Querier) selectRange(ctx context.Context, sortSeries bool, hints *stora
 				seriesID: lsId,
 				mint:     q.mint,
 				maxt:     q.maxt,
-				labelSet: cppbridge.NewLabelsCpp(lss, lsId, labelSetLength),
+				labelSet: labels.NewLabelsWithLSS(lss, lsId, labelSetLength),
 				sampleProvider: &DefaultSampleProvider{
 					deserializer:   deserializer,
 					chunksMetadata: chunksMetadata,

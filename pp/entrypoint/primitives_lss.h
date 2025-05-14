@@ -62,6 +62,35 @@ void prompp_primitives_lss_allocated_memory(void* args, void* res);
  */
 void prompp_primitives_lss_find_or_emplace(void* args, void* res);
 
+/**
+ * @brief insert label set into lss
+ *
+ * @param args {
+ *     lss        uintptr        // pointer to constructed lss;
+ *     label_set  model.LabelSet // label set
+ * }
+ *
+ * @param res {
+ *     lss_ro_ptr uintptr        // readonly copy of lss
+ *     ls_id      uint32         // inserted (or found) label set id
+ * }
+ */
+void prompp_primitives_lss_find_or_emplace_label_set(void* args, void* res);
+
+/**
+ * @brief insert label set into lss
+ *
+ * @param args {
+ *     lss        uintptr        // pointer to constructed lss;
+ *     label_set  model.LabelSet // label set
+ * }
+ *
+ * @param res {
+ *     lss_ro_ptr uintptr        // readonly copy of lss
+ *     ls_id      uint32         // inserted (or found) label set id
+ *     has        bool           // is the label set found
+ * }
+ */
 void prompp_primitives_lss_find(void* args, void* res);
 
 /**
@@ -187,6 +216,112 @@ void prompp_primitives_label_set_serialize(void* args, void* res);
  * }
  */
 void prompp_primitives_label_set_free(void* args);
+
+/**
+ * @brief get label value by label name from lss by series id
+ *
+ * @param args {
+ *     lss         uintptr                      // pointer to constructed lss;
+ *     label_name  string                       // label name
+ *     ls_id       uint32                       // series id
+ * }
+ *
+ * @param res {
+ *     label_value string                       // label value
+ * }
+ */
+void prompp_primitives_label_set_get_value(void* args, void* res);
+
+/**
+ * @brief has label name in label set from lss by series id
+ *
+ * @param args {
+ *     lss         uintptr                      // pointer to constructed lss;
+ *     label_name  string                       // label name
+ *     ls_id       uint32                       // series id
+ * }
+ *
+ * @param res {
+ *     is_has      bool                         // has?
+ * }
+ */
+void prompp_primitives_label_set_has_label_name(void* args, void* res);
+
+/**
+ * @brief returns a hash value for the label set from lss by series id
+ *
+ * @param args {
+ *     lss         uintptr                      // pointer to constructed lss;
+ *     ls_id       uint32                       // series id
+ * }
+ *
+ * @param res {
+ *     hash        uint64                       // hash sum
+ * }
+ */
+void prompp_primitives_label_set_hash(void* args, void* res);
+
+/**
+ * @brief returns a hash value for the labels matching the provided names for label set from lss by series id
+ *
+ * @param args {
+ *     lss         uintptr                      // pointer to constructed lss;
+ *     label_names []string                     // label names for filter
+ *     ls_id       uint32                       // series id
+ * }
+ *
+ * @param res {
+ *     hash        uint64                       // hash sum
+ * }
+ */
+void prompp_primitives_label_set_hash_for_labels(void* args, void* res);
+
+/**
+ * @brief returns a hash value for all labels except those matching the provided names for label set from lss by series id
+ *
+ * @param args {
+ *     lss         uintptr                      // pointer to constructed lss;
+ *     label_names []string                     // label names for filter
+ *     ls_id       uint32                       // series id
+ * }
+ *
+ * @param res {
+ *     hash        uint64                       // hash sum
+ * }
+ */
+void prompp_primitives_label_set_hash_without_labels(void* args, void* res);
+
+/**
+ * @brief returns whether the two label sets are equal.
+ *
+ * @param args {
+ *     lss_a         uintptr                      // pointer to constructed lss a;
+ *     lss_b         uintptr                      // pointer to constructed lss b;
+ *     ls_id_a       uint32                       // series id a
+ *     ls_id_b       uint32                       // series id b
+ * }
+ *
+ * @param res {
+ *     is_equal      bool                         // is equal?
+ * }
+ */
+void prompp_primitives_label_set_equal(void* args, void* res);
+
+/**
+ * @brief Compare compares the two label sets.
+ *
+ * @param args {
+ *     lss_a         uintptr                      // pointer to constructed lss a;
+ *     lss_b         uintptr                      // pointer to constructed lss b;
+ *     ls_id_a       uint32                       // series id a
+ *     ls_id_b       uint32                       // series id b
+ * }
+ *
+ * @param res {
+ *     result        int64                         // compare result
+ * }
+ */
+void prompp_primitives_label_set_compare(void* args, void* res);
 
 #ifdef __cplusplus
 }  // extern "C"

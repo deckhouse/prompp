@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
@@ -45,13 +44,9 @@ func (w *LSS) GetLabelSets(labelSetIDs []uint32) *cppbridge.LabelSetStorageGetLa
 	return w.target.GetLabelSets(labelSetIDs)
 }
 
-func (w *LSS) Find(ls labels.Labels) bool {
-	builder := model.NewLabelSetSimpleBuilderSize(ls.Len())
-	ls.Range(func(l labels.Label) {
-		builder.Add(l.Name, l.Value)
-	})
-
-	return w.target.Find(builder.Build())
+// Find label set in lss, return lss, lsid and bool ok.
+func (w *LSS) Find(mls model.LabelSet) (*cppbridge.LabelSetStorage, uint32, bool) {
+	return w.target.Find(mls)
 }
 
 type DataStorage struct {

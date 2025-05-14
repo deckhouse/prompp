@@ -712,7 +712,7 @@ func main() {
 		cfgFile.RemoteWriteConfigs,
 		localStoragePath,
 		receiver.RotationInfo{
-			// BlockDuration: 15 * time.Minute,
+			// BlockDuration: 30 * time.Minute,
 			Seed:          cfgFile.GlobalConfig.ExternalLabels.Hash(),
 			BlockDuration: time.Duration(cfg.tsdb.MinBlockDuration),
 		},
@@ -730,9 +730,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	time.AfterFunc(3*time.Minute, func() {
-		labels.CurReceiver = receiver
-	})
+	labels.Storage.SetReceiver(receiver)
 
 	remoteWriterReadyNotifier := ready.NewNotifiableNotifier()
 	remoteWriter := remotewriter.New(dataDir, headCatalog, clock, remoteWriterReadyNotifier, prometheus.DefaultRegisterer)

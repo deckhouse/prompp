@@ -9,7 +9,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
-	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"gopkg.in/yaml.v2"
 )
 
@@ -28,7 +28,7 @@ const (
 
 type DestinationConfig struct {
 	config.RemoteWriteConfig
-	ExternalLabels labels.Labels `yaml:"external_labels"`
+	ExternalLabels cppbridge.Labels `yaml:"external_labels"`
 	ReadTimeout    time.Duration
 }
 

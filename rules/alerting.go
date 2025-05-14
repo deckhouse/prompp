@@ -30,6 +30,7 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"github.com/prometheus/prometheus/model/timestamp"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/storage"
@@ -150,7 +151,7 @@ type AlertingRule struct {
 // NewAlertingRule constructs a new AlertingRule.
 func NewAlertingRule(
 	name string, vec parser.Expr, hold, keepFiringFor time.Duration,
-	labels, annotations, externalLabels labels.Labels, externalURL string,
+	labels, annotations labels.Labels, externalLabels cppbridge.Labels, externalURL string, // PP_CHANGES.md: rebuild on cpp
 	restored bool, logger log.Logger,
 ) *AlertingRule {
 	el := externalLabels.Map()

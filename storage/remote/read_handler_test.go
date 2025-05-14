@@ -29,6 +29,7 @@ import (
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/promql/promqltest"
 	"github.com/prometheus/prometheus/storage"
@@ -49,7 +50,7 @@ func TestSampledReadEndpoint(t *testing.T) {
 		return config.Config{
 			GlobalConfig: config.GlobalConfig{
 				// We expect external labels to be added, with the source labels honored.
-				ExternalLabels: labels.FromStrings("b", "c", "baz", "a", "d", "e"),
+				ExternalLabels: cppbridge.FromStrings("b", "c", "baz", "a", "d", "e"),
 			},
 		}
 	}, 1e6, 1, 0)
@@ -214,7 +215,7 @@ func TestStreamReadEndpoint(t *testing.T) {
 		return config.Config{
 			GlobalConfig: config.GlobalConfig{
 				// We expect external labels to be added, with the source labels honored.
-				ExternalLabels: labels.FromStrings("baz", "a", "b", "c", "d", "e"),
+				ExternalLabels: cppbridge.FromStrings("baz", "a", "b", "c", "d", "e"),
 			},
 		}
 	},

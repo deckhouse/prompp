@@ -34,6 +34,7 @@ import (
 
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/promql/promqltest"
@@ -170,7 +171,7 @@ type testGroup struct {
 	InputSeries     []series         `yaml:"input_series"`
 	AlertRuleTests  []alertTestCase  `yaml:"alert_rule_test,omitempty"`
 	PromqlExprTests []promqlTestCase `yaml:"promql_expr_test,omitempty"`
-	ExternalLabels  labels.Labels    `yaml:"external_labels,omitempty"`
+	ExternalLabels  cppbridge.Labels `yaml:"external_labels,omitempty"` // PP_CHANGES.md: rebuild on cpp
 	ExternalURL     string           `yaml:"external_url,omitempty"`
 	TestGroupName   string           `yaml:"name,omitempty"`
 }

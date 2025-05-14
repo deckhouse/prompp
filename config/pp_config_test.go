@@ -15,7 +15,6 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/prometheus/prometheus/config"
-	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
 	pp_pkg_config "github.com/prometheus/prometheus/pp-pkg/config"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -93,7 +92,8 @@ write_relabel_configs:
 }
 
 func (s *OpConfigSuite) TestOpDestinationConfigTLSError() {
-	raw := `destinations:
+	raw := `protocol: odarix
+destinations:
 - name: dname
   url: https://host.com
 remote_timeout: 30s
@@ -170,7 +170,7 @@ var expectedConf = &config.Config{
 		EvaluationInterval: model.Duration(30 * time.Second),
 		QueryLogFile:       "",
 
-		ExternalLabels: labels.FromStrings("foo", "bar", "monitor", "codelab"),
+		ExternalLabels: cppbridge.FromMap(map[string]string{"foo": "bar", "monitor": "codelab"}),
 
 		BodySizeLimit:         15 * units.MiB,
 		SampleLimit:           1500,

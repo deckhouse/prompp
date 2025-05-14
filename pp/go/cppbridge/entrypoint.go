@@ -1150,13 +1150,35 @@ func primitivesLSSFindOrEmplace(lss uintptr, labelSet model.LabelSet) uint32 {
 	return res.labelSetID
 }
 
-func primitivesLSSFind(lss uintptr, labelSet model.LabelSet) bool {
+//nolint:gocritic // unnamedResult not need
+func primitivesLSSFindOrEmplaceLabelSet(lss uintptr, labelSet model.LabelSet) (uintptr, uint32) {
 	args := struct {
 		lss      uintptr
 		labelSet model.LabelSet
 	}{lss, labelSet}
 	var res struct {
-		has bool
+		lssROPtr   uintptr
+		labelSetID uint32
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_lss_find_or_emplace_label_set,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.lssROPtr, res.labelSetID
+}
+
+func primitivesLSSFind(lss uintptr, labelSet model.LabelSet) (uintptr, uint32, bool) {
+	args := struct {
+		lss      uintptr
+		labelSet model.LabelSet
+	}{lss, labelSet}
+	var res struct {
+		lssROPtr   uintptr
+		labelSetID uint32
+		has        bool
 	}
 
 	fastcgo.UnsafeCall2(
@@ -1165,7 +1187,7 @@ func primitivesLSSFind(lss uintptr, labelSet model.LabelSet) bool {
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.has
+	return res.lssROPtr, res.labelSetID, res.has
 }
 
 func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource uint32) (
@@ -2605,4 +2627,138 @@ func primitivesLabelSetFree(labelSet []Label) {
 		C.prompp_primitives_label_set_free,
 		uintptr(unsafe.Pointer(&args)),
 	)
+}
+
+func primitivesLabelSetGetValue(lss uintptr, labelName string, labelSetID uint32) string {
+	args := struct {
+		lss        uintptr
+		labelName  string
+		labelSetID uint32
+	}{lss, labelName, labelSetID}
+	var res struct {
+		labelValue string
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_label_set_get_value,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.labelValue
+}
+
+func primitivesLabelSetHasLabelName(lss uintptr, labelName string, labelSetID uint32) bool {
+	args := struct {
+		lss        uintptr
+		labelName  string
+		labelSetID uint32
+	}{lss, labelName, labelSetID}
+	var res struct {
+		isHas bool
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_label_set_has_label_name,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.isHas
+}
+
+func primitivesLabelSetHash(lss uintptr, labelSetID uint32) uint64 {
+	args := struct {
+		lss        uintptr
+		labelSetID uint32
+	}{lss, labelSetID}
+	var res struct {
+		hash uint64
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_label_set_hash,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.hash
+}
+
+func primitivesLabelSetHashForLabels(lss uintptr, labelNames []string, labelSetID uint32) uint64 {
+	args := struct {
+		lss        uintptr
+		labelNames []string
+		labelSetID uint32
+	}{lss, labelNames, labelSetID}
+	var res struct {
+		hash uint64
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_label_set_hash_for_labels,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.hash
+}
+
+func primitivesLabelSetHashWithoutLabels(lss uintptr, labelNames []string, labelSetID uint32) uint64 {
+	args := struct {
+		lss        uintptr
+		labelNames []string
+		labelSetID uint32
+	}{lss, labelNames, labelSetID}
+	var res struct {
+		hash uint64
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_label_set_hash_without_labels,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.hash
+}
+
+func primitivesLabelSetEqual(lssA, lssB uintptr, labelSetIDA, labelSetIDB uint32) bool {
+	args := struct {
+		lssA        uintptr
+		lssB        uintptr
+		labelSetIDA uint32
+		labelSetIDB uint32
+	}{lssA, lssB, labelSetIDA, labelSetIDB}
+	var res struct {
+		isEqual bool
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_label_set_equal,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.isEqual
+}
+
+func primitivesLabelSetCompare(lssA, lssB uintptr, labelSetIDA, labelSetIDB uint32) int64 {
+	args := struct {
+		lssA        uintptr
+		lssB        uintptr
+		labelSetIDA uint32
+		labelSetIDB uint32
+	}{lssA, lssB, labelSetIDA, labelSetIDB}
+	var res struct {
+		result int64
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_label_set_compare,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.result
 }

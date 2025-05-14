@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -189,8 +190,9 @@ func (h *RotatableHead) CopySeriesFrom(other relabeler.Head) {
 	h.head.CopySeriesFrom(other)
 }
 
-func (h *RotatableHead) Find(ls labels.Labels) bool {
-	return h.head.Find(ls)
+// Find label set in lss, if not found return EmptyLabels.
+func (h *RotatableHead) Find(mls model.LabelSet) labels.Labels {
+	return h.head.Find(mls)
 }
 
 //
@@ -297,6 +299,7 @@ func (h *HeapProfileWritableHead) CopySeriesFrom(other relabeler.Head) {
 	h.head.CopySeriesFrom(other)
 }
 
-func (h *HeapProfileWritableHead) Find(ls labels.Labels) bool {
-	return h.head.Find(ls)
+// Find label set in lss, if not found return EmptyLabels.
+func (h *HeapProfileWritableHead) Find(mls model.LabelSet) labels.Labels {
+	return h.head.Find(mls)
 }

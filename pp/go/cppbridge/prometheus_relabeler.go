@@ -11,8 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prometheus/prometheus/model/labels"
-
 	"github.com/cespare/xxhash/v2"
 	"github.com/prometheus/common/model"
 )
@@ -509,6 +507,7 @@ func NewStaleNansState() *StaleNansState {
 	return s
 }
 
+// Reset state of StaleNansState.
 func (s *StaleNansState) Reset() {
 	prometheusRelabelStaleNansStateReset(s.state)
 }
@@ -833,23 +832,6 @@ func (opsr *OutputPerShardRelabeler) UpdateRelabelerState(
 	)
 
 	return handleException(exception)
-}
-
-// Label is a key/value pair of strings.
-type Label struct {
-	Name  string
-	Value string
-}
-
-func LabelsToCppBridgeLabels(lbls labels.Labels) []Label {
-	result := make([]Label, 0, lbls.Len())
-	lbls.Range(func(l labels.Label) {
-		result = append(result, Label{
-			Name:  l.Name,
-			Value: l.Value,
-		})
-	})
-	return result
 }
 
 //

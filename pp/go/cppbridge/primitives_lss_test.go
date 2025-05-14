@@ -235,3 +235,20 @@ func (s *QueryableLSSSuite) TestCopyAddedSeries() {
 	s.Equal(labelSetToCppBridgeLabels(s.labelSets), lssCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
 	s.Equal(emptyLabelsSets, lssCopyOfCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
 }
+
+func (s *QueryableLSSSuite) TestFindOrEmplaceLabelSet() {
+	// Arrange
+	mls := model.NewLabelSetBuilder().Set("__name__", "somename").Set("job", "somejob").Build()
+	builder := model.NewLabelSetSimpleBuilderSize(mls.Len())
+
+	// Act
+	lssRO, lsID := s.lss.FindOrEmplaceLabelSet(mls)
+
+	lssRO.RangeLabelSet(lsID, func(l cppbridge.Label) error {
+		builder.Add(l.Name, l.Value)
+		return nil
+	})
+
+	// Assert
+	s.Equal(mls.String(), builder.Build().String())
+}

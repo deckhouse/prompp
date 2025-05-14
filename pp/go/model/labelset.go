@@ -629,6 +629,11 @@ func (builder *LabelSetSimpleBuilder) HasDuplicateLabelNames() (string, bool) {
 	return "", false
 }
 
+// Len returns number of label pairs.
+func (builder LabelSetSimpleBuilder) Len() int {
+	return len(builder.pairs)
+}
+
 // Reset clear builder container.
 func (builder *LabelSetSimpleBuilder) Reset() {
 	builder.pairs = builder.pairs[:0]

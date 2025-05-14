@@ -27,7 +27,7 @@ type LSS interface {
 	QueryLabelNames(matchers []model.LabelMatcher) *cppbridge.LSSQueryLabelNamesResult
 	Query(matchers []model.LabelMatcher, querySource uint32) *cppbridge.LSSQueryResult
 	GetLabelSets(labelSetIDs []uint32) *cppbridge.LabelSetStorageGetLabelSetsResult
-	Find(ls labels.Labels) bool
+	Find(mls model.LabelSet) (*cppbridge.LabelSetStorage, uint32, bool)
 }
 
 type Wal interface {
@@ -78,7 +78,7 @@ type Head interface {
 	Discard() error
 	String() string
 	CopySeriesFrom(other Head)
-	Find(ls labels.Labels) bool
+	Find(labelSet model.LabelSet) labels.Labels
 }
 
 type Distributor interface {

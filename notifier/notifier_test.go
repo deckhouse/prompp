@@ -37,6 +37,7 @@ import (
 	"github.com/prometheus/prometheus/discovery/targetgroup"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
 func TestPostPath(t *testing.T) {
@@ -367,7 +368,7 @@ func TestCustomDo(t *testing.T) {
 func TestExternalLabels(t *testing.T) {
 	h := NewManager(&Options{
 		QueueCapacity:  3 * maxBatchSize,
-		ExternalLabels: labels.FromStrings("a", "b"),
+		ExternalLabels: cppbridge.FromStrings("a", "b"), // PP_CHANGES.md: rebuild on cpp
 		RelabelConfigs: []*relabel.Config{
 			{
 				SourceLabels: model.LabelNames{"alertname"},

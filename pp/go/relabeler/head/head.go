@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -181,10 +182,6 @@ type Head struct {
 	walSize              *prometheus.GaugeVec
 	stopc                chan struct{}
 	wg                   *sync.WaitGroup
-
-	// working sync.Map
-	// counter *prometheus.CounterVec
-	// size    *prometheus.CounterVec
 }
 
 func New(
@@ -252,21 +249,6 @@ func New(
 			},
 			[]string{"shard_id"},
 		),
-		// working: sync.Map{},
-		// counter: factory.NewCounterVec(
-		// 	prometheus.CounterOpts{
-		// 		Name: "prompp_head_labels_unique_total",
-		// 		Help: "Current head unique labels size",
-		// 	},
-		// 	[]string{"id"},
-		// ),
-		// size: factory.NewCounterVec(
-		// 	prometheus.CounterOpts{
-		// 		Name: "prompp_head_labels_unique_size",
-		// 		Help: "Current head unique labels size",
-		// 	},
-		// 	[]string{"id"},
-		// ),
 	}
 
 	if err := h.reconfigure(inputRelabelerConfigs, numberOfShards); err != nil {
@@ -653,16 +635,29 @@ func (h *Head) stop() {
 	h.stopc = make(chan struct{})
 }
 
-func (h *Head) Find(ls labels.Labels) bool {
-	var find uint32
-
-	_ = h.ForEachShard(func(shard relabeler.Shard) error {
-		if shard.LSS().Find(ls) {
-			atomic.AddUint32(&find, 1)
+// Find label set in lss, if not found return EmptyLabels.
+func (h *Head) Find(mls model.LabelSet) labels.Labels {
+	for i := range h.lsses {
+		if lssRO, lsID, ok := h.lsses[i].Find(mls); ok {
+			return labels.NewLabelsWithLSS(lssRO, lsID, uint16(mls.Len()))
 		}
+	}
 
-		return nil
-	})
+	// find := make([]labels.Labels, h.numberOfShards)
 
-	return find != 0
+	// _ = h.forEachShard(func(shard relabeler.Shard) error {
+	// 	if lssRO, lsID, ok := shard.LSS().Find(mls); ok {
+	// 		find[shard.ShardID()] = labels.NewLabelsWithLSS(lssRO, lsID, uint16(mls.Len()))
+	// 	}
+
+	// 	return nil
+	// })
+
+	// for _, l := range find {
+	// 	if !l.IsEmpty() {
+	// 		return l
+	// 	}
+	// }
+
+	return labels.EmptyLabels()
 }

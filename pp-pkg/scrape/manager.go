@@ -17,7 +17,6 @@ import (
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery/targetgroup"
-	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/util/osutil"
@@ -222,7 +221,7 @@ func (m *Manager) reload() {
 }
 
 // setOffsetSeed calculates a global offsetSeed per server relying on extra label set.
-func (m *Manager) setOffsetSeed(labels labels.Labels) error {
+func (m *Manager) setOffsetSeed(labels cppbridge.Labels) error {
 	h := fnv.New64a()
 	hostname, err := osutil.GetFQDN()
 	if err != nil {

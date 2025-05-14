@@ -56,8 +56,8 @@ import (
 	"github.com/prometheus/prometheus/discovery/vultr"
 	"github.com/prometheus/prometheus/discovery/xds"
 	"github.com/prometheus/prometheus/discovery/zookeeper"
-	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/util/testutil"
 )
 
@@ -86,7 +86,7 @@ var expectedConf = &Config{
 		EvaluationInterval: model.Duration(30 * time.Second),
 		QueryLogFile:       "",
 
-		ExternalLabels: labels.FromStrings("foo", "bar", "monitor", "codelab"),
+		ExternalLabels: cppbridge.FromStrings("foo", "bar", "monitor", "codelab"), // PP_CHANGES.md: rebuild on cpp
 
 		BodySizeLimit:         globBodySizeLimit,
 		SampleLimit:           globSampleLimit,
@@ -2082,16 +2082,16 @@ func TestExpandExternalLabels(t *testing.T) {
 
 	c, err := LoadFile("testdata/external_labels.good.yml", false, false, log.NewNopLogger())
 	require.NoError(t, err)
-	testutil.RequireEqual(t, labels.FromStrings("bar", "foo", "baz", "foo${TEST}bar", "foo", "${TEST}", "qux", "foo$${TEST}", "xyz", "foo$$bar"), c.GlobalConfig.ExternalLabels)
+	testutil.RequireEqual(t, cppbridge.FromStrings("bar", "foo", "baz", "foo${TEST}bar", "foo", "${TEST}", "qux", "foo$${TEST}", "xyz", "foo$$bar"), c.GlobalConfig.ExternalLabels)
 
 	c, err = LoadFile("testdata/external_labels.good.yml", false, true, log.NewNopLogger())
 	require.NoError(t, err)
-	testutil.RequireEqual(t, labels.FromStrings("bar", "foo", "baz", "foobar", "foo", "", "qux", "foo${TEST}", "xyz", "foo$bar"), c.GlobalConfig.ExternalLabels)
+	testutil.RequireEqual(t, cppbridge.FromStrings("bar", "foo", "baz", "foobar", "foo", "", "qux", "foo${TEST}", "xyz", "foo$bar"), c.GlobalConfig.ExternalLabels)
 
 	os.Setenv("TEST", "TestValue")
 	c, err = LoadFile("testdata/external_labels.good.yml", false, true, log.NewNopLogger())
 	require.NoError(t, err)
-	testutil.RequireEqual(t, labels.FromStrings("bar", "foo", "baz", "fooTestValuebar", "foo", "TestValue", "qux", "foo${TEST}", "xyz", "foo$bar"), c.GlobalConfig.ExternalLabels)
+	testutil.RequireEqual(t, cppbridge.FromStrings("bar", "foo", "baz", "fooTestValuebar", "foo", "TestValue", "qux", "foo${TEST}", "xyz", "foo$bar"), c.GlobalConfig.ExternalLabels)
 }
 
 func TestAgentMode(t *testing.T) {
