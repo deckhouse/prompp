@@ -69,7 +69,8 @@ INSTANTIATE_TEST_SUITE_P(AllMatchWithExcludesRegexp,
                                          RegexpMatchAnalyzerTestCase{.regexp = "^(^((^(?i)$)|abc))$", .status = Status::kAllMatchWithExcludes},
                                          RegexpMatchAnalyzerTestCase{.regexp = "(|abc)", .status = Status::kAllMatchWithExcludes},
                                          RegexpMatchAnalyzerTestCase{.regexp = "((?i)|abc)", .status = Status::kAllMatchWithExcludes},
-                                         RegexpMatchAnalyzerTestCase{.regexp = ".+|", .status = Status::kAllMatchWithExcludes}));
+                                         RegexpMatchAnalyzerTestCase{.regexp = ".+|", .status = Status::kAllMatchWithExcludes},
+                                         RegexpMatchAnalyzerTestCase{.regexp = "^^^^|php", .status = Status::kAllMatchWithExcludes}));
 
 INSTANTIATE_TEST_SUITE_P(PartialMatchRegexp,
                          RegexpMatchAnalyzerFixture,

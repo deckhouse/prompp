@@ -5,6 +5,7 @@
 #include "series_data/querier/instant_querier.h"
 
 namespace {
+
 using BareBones::Encoding::Gorilla::STALE_NAN;
 using PromPP::Primitives::LabelSetID;
 using PromPP::Primitives::Timestamp;
@@ -29,8 +30,22 @@ class InstantQuerierOpenChunkFixture : public testing::TestWithParam<InstantQuer
  protected:
   DataStorage storage_;
   Encoder<> encoder_{storage_};
-  Sample sample{.timestamp = -1, .value = STALE_NAN};
+  Sample sample_{.timestamp = -1, .value = STALE_NAN};
 };
+
+TEST_F(InstantQuerierOpenChunkFixture, EmptyChunk) {
+  // Arrange
+  static constexpr auto kEmptyChunkLsId = 0U;
+
+  encoder_.encode(1, 1, 1.0);
+
+  // Act
+  auto sample = sample_;
+  series_data::InstantQuerier::query_sample(sample, storage_, kEmptyChunkLsId, 0);
+
+  // Assert
+  EXPECT_EQ(sample_, sample);
+}
 
 TEST_P(InstantQuerierOpenChunkFixture, InstantQueryOpenChunk) {
   // Arrange
@@ -41,10 +56,10 @@ TEST_P(InstantQuerierOpenChunkFixture, InstantQueryOpenChunk) {
   encoder_.encode(0, 5, 5.0);
 
   // Act
-  series_data::InstantQuerier::query_sample(sample, storage_, GetParam().request.ls_id, GetParam().request.timestamp);
+  series_data::InstantQuerier::query_sample(sample_, storage_, GetParam().request.ls_id, GetParam().request.timestamp);
 
   // Assert
-  EXPECT_EQ(GetParam().expected_sample, sample);
+  EXPECT_EQ(GetParam().expected_sample, sample_);
 }
 
 INSTANTIATE_TEST_SUITE_P(PickBeforeOpenChunk,
@@ -90,10 +105,10 @@ TEST_P(InstantQuerierFinalizedChunkFixture, InstantQueryFinalizedChunk) {
   encoder_.encode(0, 10, 10.0);
 
   // Act
-  series_data::InstantQuerier::query_sample(sample, storage_, GetParam().request.ls_id, GetParam().request.timestamp);
+  series_data::InstantQuerier::query_sample(sample_, storage_, GetParam().request.ls_id, GetParam().request.timestamp);
 
   // Assert
-  EXPECT_EQ(GetParam().expected_sample, sample);
+  EXPECT_EQ(GetParam().expected_sample, sample_);
 }
 
 INSTANTIATE_TEST_SUITE_P(PickBeforeFinalizedChunk,
@@ -143,10 +158,10 @@ TEST_P(InstantQuerierOpenAndFinalizedChunkFixture, InstantQueryFinalizedChunk) {
   encoder_.encode(0, 14, 14.0);
 
   // Act
-  series_data::InstantQuerier::query_sample(sample, storage_, GetParam().request.ls_id, GetParam().request.timestamp);
+  series_data::InstantQuerier::query_sample(sample_, storage_, GetParam().request.ls_id, GetParam().request.timestamp);
 
   // Assert
-  EXPECT_EQ(GetParam().expected_sample, sample);
+  EXPECT_EQ(GetParam().expected_sample, sample_);
 }
 
 INSTANTIATE_TEST_SUITE_P(PickBeforeSeries,
@@ -188,4 +203,5 @@ INSTANTIATE_TEST_SUITE_P(PickNonExistingLsID,
                          InstantQuerierOpenAndFinalizedChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 6, .ls_id = 1},
                                                             .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN}}));
+
 }  // namespace
