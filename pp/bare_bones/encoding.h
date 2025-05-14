@@ -363,23 +363,44 @@ using Delta = DeltaTransform<IdentityBackend, Container>;
 template <class Container = StreamVByte::Sequence<StreamVByte::Codec0124Frequent0>>
 using DeltaDeltaZigZag = DeltaDeltaZigZagTransform<IdentityBackend, Container>;
 
+// total number of Encoders
+constexpr uint8_t kEncodingTypeStride = 5;
+
+enum class ValueTypeSize : uint8_t { kBits32 = 0, kBits64 = 1 };
+
+template <typename T>
+constexpr ValueTypeSize get_value_type_size()
+  requires std::is_unsigned_v<T> && (sizeof(T) >= 4)
+{
+  return sizeof(T) == 8 ? ValueTypeSize::kBits64 : ValueTypeSize::kBits32;
+}
+
+enum EncodingMethodID : uint8_t { RLE_ID = 0, DeltaRLE_ID = 1, DeltaZigZagRLE_ID = 2, Delta_ID = 3, DeltaDeltaZigZag_ID = 4 };
+
 template <typename E>
 struct id;
 
 template <class DataSequence>
-struct id<RLE<DataSequence>> : std::integral_constant<uint8_t, 0 + (sizeof(typename DataSequence::value_type) == 8) * 3> {};
+struct id<RLE<DataSequence>>
+    : std::integral_constant<uint8_t, RLE_ID + kEncodingTypeStride * std::to_underlying(get_value_type_size<typename DataSequence::value_type>())> {};
 
 template <class DataSequence>
-struct id<DeltaRLE<DataSequence>> : std::integral_constant<uint8_t, 1 + (sizeof(typename DataSequence::value_type) == 8) * 3> {};
+struct id<DeltaRLE<DataSequence>>
+    : std::integral_constant<uint8_t, DeltaRLE_ID + kEncodingTypeStride * std::to_underlying(get_value_type_size<typename DataSequence::value_type>())> {};
 
 template <class DataSequence>
-struct id<DeltaZigZagRLE<DataSequence>> : std::integral_constant<uint8_t, 2 + (sizeof(typename DataSequence::value_type) == 8) * 3> {};
+struct id<DeltaZigZagRLE<DataSequence>>
+    : std::integral_constant<uint8_t, DeltaZigZagRLE_ID + kEncodingTypeStride * std::to_underlying(get_value_type_size<typename DataSequence::value_type>())> {
+};
 
 template <class DataSequence>
-struct id<Delta<DataSequence>> : std::integral_constant<uint8_t, 3 + (sizeof(typename DataSequence::value_type) == 8) * 3> {};
+struct id<Delta<DataSequence>>
+    : std::integral_constant<uint8_t, Delta_ID + kEncodingTypeStride * std::to_underlying(get_value_type_size<typename DataSequence::value_type>())> {};
 
 template <class DataSequence>
-struct id<DeltaDeltaZigZag<DataSequence>> : std::integral_constant<uint8_t, 4 + (sizeof(typename DataSequence::value_type) == 8) * 3> {};
+struct id<DeltaDeltaZigZag<DataSequence>>
+    : std::integral_constant<uint8_t,
+                             DeltaDeltaZigZag_ID + kEncodingTypeStride * std::to_underlying(get_value_type_size<typename DataSequence::value_type>())> {};
 }  // namespace Encoding
 
 template <class E, class DataSequence = typename E::DataSequence>
