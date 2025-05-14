@@ -82,14 +82,14 @@ func (s *LSSSuite) testBytesImpl(testCase bytesTestCase, bytes *[]byte) {
 	s.Equal(testCase.expected, *bytes)
 }
 
-type bytesWithLabelsTestCase struct {
+type bytesWithFilteredNamesTestCase struct {
 	labelSet model.LabelSet
 	names    []string
 	expected []byte
 }
 
 func (s *LSSSuite) TestBytesWithLabels() {
-	testCases := []bytesWithLabelsTestCase{
+	testCases := []bytesWithFilteredNamesTestCase{
 		{
 			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
 			names:    []string{"key", "key1", "key2"},
@@ -113,13 +113,60 @@ func (s *LSSSuite) TestBytesWithLabels() {
 	}
 }
 
-func (s *LSSSuite) testBytesWithLabelsImpl(testCase bytesWithLabelsTestCase, bytes *[]byte) {
+func (s *LSSSuite) testBytesWithLabelsImpl(testCase bytesWithFilteredNamesTestCase, bytes *[]byte) {
 	// Arrange
 	lss := cppbridge.NewLssStorage()
 	lss.FindOrEmplace(testCase.labelSet)
 
 	// Act
 	*bytes = cppbridge.LabelSetBytesWithLabels(lss.Pointer(), 0, *bytes, testCase.names...)
+
+	// Assert
+	s.Equal(testCase.expected, *bytes)
+}
+
+func (s *LSSSuite) TestBytesWithoutLabels() {
+	testCases := []bytesWithFilteredNamesTestCase{
+		{
+			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
+			names:    []string{"key1", "key2"},
+			expected: []byte("\xFE"),
+		},
+		{
+			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
+			names:    []string{"key1"},
+			expected: []byte("\xFEkey2\xFFvalue2"),
+		},
+		{
+			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
+			names:    []string{"key2"},
+			expected: []byte("\xFEkey1\xFFvalue1"),
+		},
+		{
+			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
+			names:    []string{"key", "key1", "key2"},
+			expected: []byte("\xFE"),
+		},
+		{
+			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
+			names:    []string{"non_existing_key"},
+			expected: []byte("\xFEkey\xFFvalue"),
+		},
+	}
+
+	var bytes []byte
+	for _, testCase := range testCases {
+		s.testBytesWithoutLabelsImpl(testCase, &bytes)
+	}
+}
+
+func (s *LSSSuite) testBytesWithoutLabelsImpl(testCase bytesWithFilteredNamesTestCase, bytes *[]byte) {
+	// Arrange
+	lss := cppbridge.NewLssStorage()
+	lss.FindOrEmplace(testCase.labelSet)
+
+	// Act
+	*bytes = cppbridge.LabelSetBytesWithoutLabels(lss.Pointer(), 0, *bytes, testCase.names...)
 
 	// Assert
 	s.Equal(testCase.expected, *bytes)

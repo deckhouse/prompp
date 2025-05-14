@@ -200,3 +200,25 @@ extern "C" void prompp_label_set_bytes_with_labels(void* args, void* res) {
       },
       *in->lss);
 }
+
+extern "C" void prompp_label_set_bytes_without_labels(void* args, void* res) {
+  struct Arguments {
+    LssVariantPtr lss;
+    uint32_t series_id;
+    SliceView<PromPP::Primitives::Go::String> names;
+  };
+  struct Result {
+    SliceView<uint8_t> bytes;
+  };
+
+  auto in = static_cast<Arguments*>(args);
+  auto& bytes = static_cast<Result*>(res)->bytes;
+
+  std::visit(
+      [in, &bytes](auto& lss) {
+        BytesWriter writer(bytes.data());
+        std::ranges::set_difference(lss[in->series_id], in->names, BareBones::iterator::OperationIterator(writer), LabelNameLess{});
+        bytes.reset_to(bytes.data(), writer.written_bytes(bytes.data()), bytes.capacity());
+      },
+      *in->lss);
+}
