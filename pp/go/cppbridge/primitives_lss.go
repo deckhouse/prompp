@@ -98,8 +98,8 @@ func newLabelSetStorage(lssType uint32) *LabelSetStorage {
 	return lss
 }
 
-// newReadOnlyLssStorrage init new LabelSetStorage based on lssReadOnly.
-func newReadOnlyLssStorrage(lssROPtr uintptr) *LabelSetStorage {
+// newReadOnlyLssStorage init new LabelSetStorage based on lssReadOnly.
+func newReadOnlyLssStorage(lssROPtr uintptr) *LabelSetStorage {
 	lss := &LabelSetStorage{pointer: lssROPtr}
 	runtime.SetFinalizer(lss, func(lss *LabelSetStorage) {
 		primitivesLSSDtor(lss.pointer)
@@ -171,6 +171,11 @@ func (lss *LabelSetStorage) Pointer() uintptr {
 	return lss.pointer
 }
 
+// CreateReadonlyLss - create readonly copy of lss
+func (lss *LabelSetStorage) CreateReadonlyLss() *LabelSetStorage {
+	return newReadOnlyLssStorage(primitivesLSSCreateReadonlyLss(lss.pointer))
+}
+
 //
 // LSSQueryResult
 //
@@ -201,7 +206,7 @@ func getlssRO(lssMainPtr, lssROPtr uintptr, maxlsid uint32) *LabelSetStorage {
 
 	v, ok := bufReadOnlyLSS.Load(lssMainPtr)
 	if !ok {
-		lssRO = newReadOnlyLssStorrage(lssROPtr)
+		lssRO = newReadOnlyLssStorage(lssROPtr)
 		bufReadOnlyLSS.Store(lssMainPtr, &bufLSSValue{
 			lssMain: lssMainPtr,
 			lssRO:   lssRO,
@@ -216,7 +221,7 @@ func getlssRO(lssMainPtr, lssROPtr uintptr, maxlsid uint32) *LabelSetStorage {
 
 	bv := v.(*bufLSSValue)
 	if bv.maxlsid < maxlsid {
-		lssRO = newReadOnlyLssStorrage(lssROPtr)
+		lssRO = newReadOnlyLssStorage(lssROPtr)
 		bufReadOnlyLSS.Store(lssMainPtr, &bufLSSValue{
 			lssMain: lssMainPtr,
 			lssRO:   lssRO,

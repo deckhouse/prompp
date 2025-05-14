@@ -47,6 +47,28 @@ func (s *LSSSuite) TestQueryableLSS() {
 	s.Require().NotEqual(0, cp)
 }
 
+func (s *LSSSuite) TestCreateReadonlyLssFromEncodingBimap() {
+	// Arrange
+	lss := cppbridge.NewLssStorage()
+
+	// Act
+	readonlyLss := lss.CreateReadonlyLss()
+
+	// Assert
+	s.Require().NotNil(readonlyLss.Pointer())
+}
+
+func (s *LSSSuite) TestCreateReadonlyLssFromQueryableEncodingBimap() {
+	// Arrange
+	lss := cppbridge.NewQueryableLssStorage()
+
+	// Act
+	readonlyLss := lss.CreateReadonlyLss()
+
+	// Assert
+	s.Require().NotNil(readonlyLss.Pointer())
+}
+
 type QueryableLSSSuite struct {
 	suite.Suite
 	baseCtx     context.Context
