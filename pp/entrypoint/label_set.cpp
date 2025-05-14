@@ -61,13 +61,15 @@ extern "C" void prompp_label_set_free(void* args) {
   static_cast<Arguments*>(args)->~Arguments();
 }
 
+namespace Bytes {
+
 static constexpr uint8_t kLabelSeparator = '\xFE';
 static constexpr uint8_t kNameValueSeparator = '\xFF';
 
-class BytesSizeCalculator {
+class SizeCalculator {
  public:
   template <class Label>
-  PROMPP_ALWAYS_INLINE BytesSizeCalculator& operator=(const Label& label) noexcept {
+  PROMPP_ALWAYS_INLINE SizeCalculator& operator=(const Label& label) noexcept {
     operator()(label);
     return *this;
   }
@@ -92,12 +94,12 @@ class BytesSizeCalculator {
   uint32_t label_count_{};
 };
 
-class BytesWriter {
+class Writer {
  public:
-  explicit BytesWriter(uint8_t* bytes) : bytes_(bytes) { *bytes_++ = kLabelSeparator; }
+  explicit Writer(uint8_t* bytes) : bytes_(bytes) { *bytes_++ = kLabelSeparator; }
 
   template <class Label>
-  PROMPP_ALWAYS_INLINE BytesWriter& operator=(const Label& label) noexcept {
+  PROMPP_ALWAYS_INLINE Writer& operator=(const Label& label) noexcept {
     operator()(label);
     return *this;
   }
@@ -123,6 +125,8 @@ class BytesWriter {
   uint8_t* bytes_;
   uint32_t label_count_{};
 };
+
+};  // namespace Bytes
 
 struct LabelNameLess {
   using Label = const std::pair<std::string_view, std::string_view>;
@@ -151,7 +155,7 @@ extern "C" void prompp_label_set_bytes_size(void* args, void* res) {
 
   std::visit(
       [in, out](auto& lss) {
-        BytesSizeCalculator calculator;
+        Bytes::SizeCalculator calculator;
         std::ranges::for_each(lss[in->series_id], std::ref(calculator));
         out->size = calculator.size();
       },
@@ -172,7 +176,7 @@ extern "C" void prompp_label_set_bytes(void* args, void* res) {
 
   std::visit(
       [in, &bytes](auto& lss) {
-        BytesWriter writer(bytes.data());
+        Bytes::Writer writer(bytes.data());
         std::ranges::for_each(lss[in->series_id], std::ref(writer));
         bytes.reset_to(bytes.data(), writer.written_bytes(bytes.data()), bytes.capacity());
       },
@@ -194,7 +198,7 @@ extern "C" void prompp_label_set_bytes_with_labels(void* args, void* res) {
 
   std::visit(
       [in, &bytes](auto& lss) {
-        BytesWriter writer(bytes.data());
+        Bytes::Writer writer(bytes.data());
         std::ranges::set_intersection(lss[in->series_id], in->names, BareBones::iterator::OperationIterator(writer), LabelNameLess{});
         bytes.reset_to(bytes.data(), writer.written_bytes(bytes.data()), bytes.capacity());
       },
@@ -216,7 +220,7 @@ extern "C" void prompp_label_set_bytes_without_labels(void* args, void* res) {
 
   std::visit(
       [in, &bytes](auto& lss) {
-        BytesWriter writer(bytes.data());
+        Bytes::Writer writer(bytes.data());
         std::ranges::set_difference(lss[in->series_id], in->names, BareBones::iterator::OperationIterator(writer), LabelNameLess{});
         bytes.reset_to(bytes.data(), writer.written_bytes(bytes.data()), bytes.capacity());
       },
