@@ -15,7 +15,7 @@ defaults:
 
 jobs:
   lint:
-    runs-on: [self-hosted, large]
+    runs-on: fsn-dev-gitlab-runner
     name: Run cleanup
     steps:
       - name: Clean workspace
