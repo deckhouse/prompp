@@ -434,6 +434,21 @@ void prompp_label_set_bytes_size(void* args, void* res);
  */
 void prompp_label_set_bytes(void* args, void* res);
 
+/**
+ * @brief implementation of BytesWithLabels method
+ *
+ * @param args {
+ *     lss       uintptr   // pointer to constructed lss;
+ *     ls_id     uint32    // series id
+ *     names     []string  // names slice
+ * }
+ *
+ * @param res {
+ *     bytes []byte
+ * }
+ */
+void prompp_label_set_bytes_with_labels(void* args, void* res);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

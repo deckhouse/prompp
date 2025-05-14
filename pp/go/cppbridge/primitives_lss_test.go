@@ -66,20 +66,63 @@ func (s *LSSSuite) TestBytes() {
 
 	var bytes []byte
 	for _, testCase := range testCases {
-		s.testBytesImpl(testCase, bytes)
+		s.testBytesImpl(testCase, &bytes)
 	}
 }
 
-func (s *LSSSuite) testBytesImpl(testCase bytesTestCase, bytes []byte) {
+func (s *LSSSuite) testBytesImpl(testCase bytesTestCase, bytes *[]byte) {
 	// Arrange
 	lss := cppbridge.NewLssStorage()
 	lss.FindOrEmplace(testCase.labelSet)
 
 	// Act
-	bytes = cppbridge.LabelSetBytes(lss.Pointer(), 0, bytes)
+	*bytes = cppbridge.LabelSetBytes(lss.Pointer(), 0, *bytes)
 
 	// Assert
-	s.Equal(testCase.expected, bytes)
+	s.Equal(testCase.expected, *bytes)
+}
+
+type bytesWithLabelsTestCase struct {
+	labelSet model.LabelSet
+	names    []string
+	expected []byte
+}
+
+func (s *LSSSuite) TestBytesWithLabels() {
+	testCases := []bytesWithLabelsTestCase{
+		{
+			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
+			names:    []string{"key", "key1", "key2"},
+			expected: []byte("\xFEkey\xFFvalue"),
+		},
+		{
+			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
+			names:    []string{"non_existing_key"},
+			expected: []byte("\xFE"),
+		},
+		{
+			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
+			names:    []string{"key1", "key2"},
+			expected: []byte("\xFEkey1\xFFvalue1\xFFkey2\xFFvalue2"),
+		},
+	}
+
+	var bytes []byte
+	for _, testCase := range testCases {
+		s.testBytesWithLabelsImpl(testCase, &bytes)
+	}
+}
+
+func (s *LSSSuite) testBytesWithLabelsImpl(testCase bytesWithLabelsTestCase, bytes *[]byte) {
+	// Arrange
+	lss := cppbridge.NewLssStorage()
+	lss.FindOrEmplace(testCase.labelSet)
+
+	// Act
+	*bytes = cppbridge.LabelSetBytesWithLabels(lss.Pointer(), 0, *bytes, testCase.names...)
+
+	// Assert
+	s.Equal(testCase.expected, *bytes)
 }
 
 type QueryableLSSSuite struct {
