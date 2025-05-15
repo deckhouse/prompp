@@ -363,8 +363,7 @@ using Delta = DeltaTransform<IdentityBackend, Container>;
 template <class Container = StreamVByte::Sequence<StreamVByte::Codec0124Frequent0>>
 using DeltaDeltaZigZag = DeltaDeltaZigZagTransform<IdentityBackend, Container>;
 
-// total number of Encoders
-constexpr uint8_t kEncodingTypeStride = 5;
+constexpr uint8_t kEncodingTypeTotalNumber = 5;
 
 enum class ValueTypeSize : uint8_t { kBits32 = 0, kBits64 = 1 };
 
@@ -382,25 +381,25 @@ struct id;
 
 template <class DataSequence>
 struct id<RLE<DataSequence>>
-    : std::integral_constant<uint8_t, RLE_ID + kEncodingTypeStride * std::to_underlying(get_value_type_size<typename DataSequence::value_type>())> {};
+    : std::integral_constant<uint8_t, RLE_ID + kEncodingTypeTotalNumber * std::to_underlying(get_value_type_size<typename DataSequence::value_type>())> {};
 
 template <class DataSequence>
 struct id<DeltaRLE<DataSequence>>
-    : std::integral_constant<uint8_t, DeltaRLE_ID + kEncodingTypeStride * std::to_underlying(get_value_type_size<typename DataSequence::value_type>())> {};
+    : std::integral_constant<uint8_t, DeltaRLE_ID + kEncodingTypeTotalNumber * std::to_underlying(get_value_type_size<typename DataSequence::value_type>())> {};
 
 template <class DataSequence>
 struct id<DeltaZigZagRLE<DataSequence>>
-    : std::integral_constant<uint8_t, DeltaZigZagRLE_ID + kEncodingTypeStride * std::to_underlying(get_value_type_size<typename DataSequence::value_type>())> {
-};
+    : std::integral_constant<uint8_t,
+                             DeltaZigZagRLE_ID + kEncodingTypeTotalNumber * std::to_underlying(get_value_type_size<typename DataSequence::value_type>())> {};
 
 template <class DataSequence>
 struct id<Delta<DataSequence>>
-    : std::integral_constant<uint8_t, Delta_ID + kEncodingTypeStride * std::to_underlying(get_value_type_size<typename DataSequence::value_type>())> {};
+    : std::integral_constant<uint8_t, Delta_ID + kEncodingTypeTotalNumber * std::to_underlying(get_value_type_size<typename DataSequence::value_type>())> {};
 
 template <class DataSequence>
 struct id<DeltaDeltaZigZag<DataSequence>>
     : std::integral_constant<uint8_t,
-                             DeltaDeltaZigZag_ID + kEncodingTypeStride * std::to_underlying(get_value_type_size<typename DataSequence::value_type>())> {};
+                             DeltaDeltaZigZag_ID + kEncodingTypeTotalNumber * std::to_underlying(get_value_type_size<typename DataSequence::value_type>())> {};
 }  // namespace Encoding
 
 template <class E, class DataSequence = typename E::DataSequence>
