@@ -20,7 +20,7 @@ func EqualLabelSets(aLSS, bLSS *LabelSetStorage, aLsID, bLsID uint32, dropMetric
 		return true
 	}
 
-	return primitivesLabelSetEqual(aLSS.Pointer(), bLSS.Pointer(), aLsID, bLsID, dropMetricNameA, dropMetricNameB)
+	return labelSetEqual(aLSS.Pointer(), bLSS.Pointer(), aLsID, bLsID, dropMetricNameA, dropMetricNameB)
 }
 
 // CompareLabelSets compares the two label sets.
@@ -45,7 +45,7 @@ func CompareLabelSets(aLSS, bLSS *LabelSetStorage, aLsID, bLsID uint32, dropMetr
 		return 0
 	}
 
-	return int(primitivesLabelSetCompare(
+	return int(labelSetCompare(
 		aLSS.Pointer(), bLSS.Pointer(),
 		aLsID, bLsID,
 		dropMetricNameA, dropMetricNameB,

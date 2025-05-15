@@ -2595,7 +2595,7 @@ func headWalDecoderDtor(decoder uintptr) {
 // label_sets
 //
 
-func primitivesLabelSetLength(lss uintptr, labelSetID uint32, dropMetricName bool) uint64 {
+func labelSetLength(lss uintptr, labelSetID uint32, dropMetricName bool) uint64 {
 	args := struct {
 		lss            uintptr
 		labelSetID     uint32
@@ -2647,7 +2647,7 @@ func labelSetFree(labelSet []Label) {
 	)
 }
 
-func primitivesLabelSetGetValue(lss uintptr, labelName string, labelSetID uint32) string {
+func labelSetGetValue(lss uintptr, labelName string, labelSetID uint32) string {
 	args := struct {
 		lss        uintptr
 		labelName  string
@@ -2658,7 +2658,7 @@ func primitivesLabelSetGetValue(lss uintptr, labelName string, labelSetID uint32
 	}
 
 	fastcgo.UnsafeCall2(
-		C.prompp_primitives_label_set_get_value,
+		C.prompp_label_set_get_value,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
@@ -2666,7 +2666,7 @@ func primitivesLabelSetGetValue(lss uintptr, labelName string, labelSetID uint32
 	return res.labelValue
 }
 
-func primitivesLabelSetHasLabelName(lss uintptr, labelName string, labelSetID uint32) bool {
+func labelSetHasLabelName(lss uintptr, labelName string, labelSetID uint32) bool {
 	args := struct {
 		lss        uintptr
 		labelName  string
@@ -2677,7 +2677,7 @@ func primitivesLabelSetHasLabelName(lss uintptr, labelName string, labelSetID ui
 	}
 
 	fastcgo.UnsafeCall2(
-		C.prompp_primitives_label_set_has_label_name,
+		C.prompp_label_set_has_label_name,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
@@ -2685,7 +2685,7 @@ func primitivesLabelSetHasLabelName(lss uintptr, labelName string, labelSetID ui
 	return res.isHas
 }
 
-func primitivesLabelSetHasDuplicateLabelNames(lss uintptr, labelSetID uint32, dropMetricName bool) (string, bool) {
+func labelSetHasDuplicateLabelNames(lss uintptr, labelSetID uint32, dropMetricName bool) (string, bool) {
 	args := struct {
 		lss            uintptr
 		labelSetID     uint32
@@ -2697,7 +2697,7 @@ func primitivesLabelSetHasDuplicateLabelNames(lss uintptr, labelSetID uint32, dr
 	}
 
 	fastcgo.UnsafeCall2(
-		C.prompp_primitives_label_set_has_duplicate_label_names,
+		C.prompp_label_set_has_duplicate_label_names,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
@@ -2705,7 +2705,7 @@ func primitivesLabelSetHasDuplicateLabelNames(lss uintptr, labelSetID uint32, dr
 	return res.labelName, res.isHas
 }
 
-func primitivesLabelSetHash(lss uintptr, labelSetID uint32, dropMetricName bool) uint64 {
+func labelSetHash(lss uintptr, labelSetID uint32, dropMetricName bool) uint64 {
 	args := struct {
 		lss            uintptr
 		labelSetID     uint32
@@ -2716,7 +2716,7 @@ func primitivesLabelSetHash(lss uintptr, labelSetID uint32, dropMetricName bool)
 	}
 
 	fastcgo.UnsafeCall2(
-		C.prompp_primitives_label_set_hash,
+		C.prompp_label_set_hash,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
@@ -2724,7 +2724,7 @@ func primitivesLabelSetHash(lss uintptr, labelSetID uint32, dropMetricName bool)
 	return res.hash
 }
 
-func primitivesLabelSetHashForLabels(lss uintptr, labelNames []string, labelSetID uint32, dropMetricName bool) uint64 {
+func labelSetHashForLabels(lss uintptr, labelNames []string, labelSetID uint32, dropMetricName bool) uint64 {
 	args := struct {
 		lss            uintptr
 		labelNames     []string
@@ -2736,7 +2736,7 @@ func primitivesLabelSetHashForLabels(lss uintptr, labelNames []string, labelSetI
 	}
 
 	fastcgo.UnsafeCall2(
-		C.prompp_primitives_label_set_hash_for_labels,
+		C.prompp_label_set_hash_for_labels,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
@@ -2744,7 +2744,7 @@ func primitivesLabelSetHashForLabels(lss uintptr, labelNames []string, labelSetI
 	return res.hash
 }
 
-func primitivesLabelSetHashWithoutLabels(lss uintptr, labelNames []string, labelSetID uint32) uint64 {
+func labelSetHashWithoutLabels(lss uintptr, labelNames []string, labelSetID uint32) uint64 {
 	args := struct {
 		lss        uintptr
 		labelNames []string
@@ -2755,7 +2755,7 @@ func primitivesLabelSetHashWithoutLabels(lss uintptr, labelNames []string, label
 	}
 
 	fastcgo.UnsafeCall2(
-		C.prompp_primitives_label_set_hash_without_labels,
+		C.prompp_label_set_hash_without_labels,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
@@ -2763,7 +2763,7 @@ func primitivesLabelSetHashWithoutLabels(lss uintptr, labelNames []string, label
 	return res.hash
 }
 
-func primitivesLabelSetEqual(
+func labelSetEqual(
 	lssA, lssB uintptr,
 	labelSetIDA, labelSetIDB uint32,
 	dropMetricNameA, dropMetricNameB bool,
@@ -2781,7 +2781,7 @@ func primitivesLabelSetEqual(
 	}
 
 	fastcgo.UnsafeCall2(
-		C.prompp_primitives_label_set_equal,
+		C.prompp_label_set_equal,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
@@ -2789,7 +2789,7 @@ func primitivesLabelSetEqual(
 	return res.isEqual
 }
 
-func primitivesLabelSetCompare(
+func labelSetCompare(
 	lssA, lssB uintptr,
 	labelSetIDA, labelSetIDB uint32,
 	dropMetricNameA, dropMetricNameB bool,
@@ -2807,7 +2807,7 @@ func primitivesLabelSetCompare(
 	}
 
 	fastcgo.UnsafeCall2(
-		C.prompp_primitives_label_set_compare,
+		C.prompp_label_set_compare,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
