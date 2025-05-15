@@ -1,10 +1,11 @@
 package cppbridge_test
 
 import (
+	"testing"
+
 	"github.com/gobuffalo/packr/v2/file/resolver/encoding/hex"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestHeadWalEncoder_Finalize(t *testing.T) {

@@ -69,4 +69,13 @@ inline LssVariantPtr create_readonly_lss(const LssVariant& lss_variant) {
       lss_variant);
 }
 
+template <class Lss>
+inline LssVariantPtr create_readonly_lss(const Lss& lss) {
+  if constexpr (readonly_lss_constructible_from<Lss>) {
+    return std::make_unique<LssVariant>(std::in_place_index<static_cast<int>(LssType::kReadonly)>, lss);
+  }
+
+  throw BareBones::Exception(0x8e6a06385b011216, "Readonly lss can't be created");
+}
+
 }  // namespace entrypoint::head

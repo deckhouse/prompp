@@ -11,17 +11,17 @@ import (
 
 type LabelSetsIterator struct {
 	idx       int
-	labelSets []*cppbridge.LabelsCpp
+	labelSets []labels.Labels
 }
 
-func newLabelSetIterator(labelSets []*cppbridge.LabelsCpp) *LabelSetsIterator {
+func newLabelSetIterator(labelSets []labels.Labels) *LabelSetsIterator {
 	return &LabelSetsIterator{labelSets: labelSets}
 }
 
-func (lsi *LabelSetsIterator) Seek(labelSetID uint32) (*cppbridge.LabelsCpp, bool) {
+func (lsi *LabelSetsIterator) Seek(labelSetID uint32) (labels.Labels, bool) {
 	for {
 		if lsi.idx >= len(lsi.labelSets) {
-			return nil, false
+			return labels.EmptyLabels(), false
 		}
 
 		if lsi.labelSets[lsi.idx].ID() == labelSetID {
@@ -41,7 +41,7 @@ type ChunkSeriesSet struct {
 	chunkSeries      *ChunkSeries
 }
 
-func NewChunkSeriesSet(labelSets []*cppbridge.LabelsCpp, chunkRecoder *cppbridge.ChunkRecoder) *ChunkSeriesSet {
+func NewChunkSeriesSet(labelSets []labels.Labels, chunkRecoder *cppbridge.ChunkRecoder) *ChunkSeriesSet {
 	return &ChunkSeriesSet{
 		labelSetsIterator: newLabelSetIterator(labelSets),
 		chunkRecoder:      chunkRecoder,
@@ -105,11 +105,11 @@ func (css *ChunkSeriesSet) Warnings() annotations.Annotations {
 }
 
 type ChunkSeries struct {
-	labelSet      *cppbridge.LabelsCpp
+	labelSet      labels.Labels
 	recodedChunks []cppbridge.RecodedChunk
 }
 
-func NewChunkSeries(labelSet *cppbridge.LabelsCpp, recodedChunks []cppbridge.RecodedChunk) *ChunkSeries {
+func NewChunkSeries(labelSet labels.Labels, recodedChunks []cppbridge.RecodedChunk) *ChunkSeries {
 	return &ChunkSeries{
 		labelSet:      labelSet,
 		recodedChunks: recodedChunks,
@@ -117,7 +117,7 @@ func NewChunkSeries(labelSet *cppbridge.LabelsCpp, recodedChunks []cppbridge.Rec
 }
 
 func (cs *ChunkSeries) Labels() labels.Labels {
-	return cs.labelSet.Labels()
+	return cs.labelSet
 }
 
 func (cs *ChunkSeries) Iterator(iterator chunks.Iterator) chunks.Iterator {

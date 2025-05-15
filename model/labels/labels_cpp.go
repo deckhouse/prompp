@@ -190,11 +190,6 @@ func (ls Labels) DropMetricName() Labels {
 	return ls
 }
 
-// InternStrings calls intern on every string value inside ls, replacing them with what it returns.
-func (*Labels) InternStrings(func(string) string) {
-	// remove these calls as there is nothing to do.
-}
-
 // Get returns the value for the label with the given name.
 // Returns an empty string if the label doesn't exist.
 func (ls Labels) Get(name string) string {
@@ -268,6 +263,16 @@ func (ls Labels) HashWithoutLabels(b []byte, names ...string) (uint64, []byte) {
 	}
 
 	return ls.lss.LabelSetHashWithoutLabels(ls.id, names), b
+}
+
+// InternStrings calls intern on every string value inside ls, replacing them with what it returns.
+func (*Labels) InternStrings(func(string) string) {
+	// remove these calls as there is nothing to do.
+}
+
+// ID return id labelset.
+func (ls Labels) ID() uint32 {
+	return ls.id
 }
 
 // IsEmpty returns true if ls represents an empty set of labels.
@@ -572,7 +577,8 @@ type storage struct {
 // newStorage init new storage.
 func newStorage() *storage {
 	s := &storage{
-		workingLSS: cppbridge.NewQueryableLssStorage(),
+		// workingLSS: cppbridge.NewQueryableLssStorage(),
+		workingLSS: cppbridge.NewLssStorage(),
 		memoryInUse: promauto.NewGauge(
 			prometheus.GaugeOpts{
 				Name: "prompp_labels_working_lss_memory_bytes",

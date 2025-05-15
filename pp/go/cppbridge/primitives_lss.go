@@ -55,8 +55,11 @@ const (
 //
 
 const (
+	// LSSQuerySourceRule the source of query is rules.
 	LSSQuerySourceRule uint32 = iota
+	// LSSQuerySourceFederate the source of query is federate.
 	LSSQuerySourceFederate
+	// LSSQuerySourceOther the source of query is another sources.
 	LSSQuerySourceOther
 )
 

@@ -166,12 +166,12 @@ type HeadDataStorageSerializedChunks struct {
 
 type HeadDataStorageSerializedChunkMetadata [SerializedChunkMetadataSize]byte
 
-func (cm *HeadDataStorageSerializedChunkMetadata) SeriesID() uint32 {
-	return *(*uint32)(unsafe.Pointer(&cm[0]))
+func (cm HeadDataStorageSerializedChunkMetadata) SeriesID() uint32 {
+	return *(*uint32)(unsafe.Pointer(&cm[0])) // #nosec G103 // it's meant to be that way
 }
 
 func (r *HeadDataStorageSerializedChunks) NumberOfChunks() int {
-	return int(*(*int32)(unsafe.Pointer(&r.data[0])))
+	return int(*(*int32)(unsafe.Pointer(&r.data[0]))) // #nosec G103 // it's meant to be that way
 }
 
 func (r *HeadDataStorageSerializedChunks) Len() int {
@@ -187,12 +187,12 @@ type HeadDataStorageSerializedChunkIndex struct {
 }
 
 func (r *HeadDataStorageSerializedChunks) MakeIndex() HeadDataStorageSerializedChunkIndex {
-	m := make(map[uint32][]int)
-	offset := Uint32Size
 	n := r.NumberOfChunks()
+	m := make(map[uint32][]int, n)
+	offset := Uint32Size
 	for i := 0; i < n; i, offset = i+1, offset+SerializedChunkMetadataSize {
-		md := HeadDataStorageSerializedChunkMetadata(r.data[offset : offset+SerializedChunkMetadataSize])
-		m[md.SeriesID()] = append(m[md.SeriesID()], offset)
+		sID := *(*uint32)(unsafe.Pointer(&r.data[offset : offset+SerializedChunkMetadataSize][0])) // #nosec G103 // it's meant to be that way
+		m[sID] = append(m[sID], offset)
 	}
 	return HeadDataStorageSerializedChunkIndex{m}
 }

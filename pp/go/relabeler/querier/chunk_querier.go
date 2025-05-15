@@ -3,13 +3,14 @@ package querier
 import (
 	"context"
 	"fmt"
+	"runtime"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/annotations"
-	"runtime"
 )
 
 type ChunkQuerier struct {
@@ -70,9 +71,9 @@ func (q *ChunkQuerier) Select(ctx context.Context, sortSeries bool, hints *stora
 			MaxT: q.maxt,
 		})
 
-		labelSets := make([]*cppbridge.LabelsCpp, 0, len(lssQueryResult.IDs()))
+		labelSets := make([]labels.Labels, 0, len(lssQueryResult.IDs()))
 		lssQueryResult.MatchesRange(func(lss *cppbridge.LabelSetStorage, lsId uint32, labelSetLength uint16) {
-			labelSets = append(labelSets, cppbridge.NewLabelsCpp(lss, lsId, labelSetLength))
+			labelSets = append(labelSets, labels.NewLabelsWithLSS(lss, lsId, labelSetLength))
 		})
 
 		runtime.KeepAlive(lssQueryResult)

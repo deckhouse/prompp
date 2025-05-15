@@ -88,10 +88,16 @@ extern "C" void prompp_primitives_lss_find_or_emplace_label_set(void* args, void
   auto in = static_cast<Arguments*>(args);
   auto out = new (res) Result();
 
-  auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
-
-  out->ls_id = lss.find_or_emplace(in->label_set);
-  out->lss_ro_ptr = entrypoint::head::create_lss_readonly(lss);
+  std::visit(
+      [in, out]<typename Lss>(Lss& lss) {
+        if constexpr (Lss::kIsReadOnly) {
+          throw BareBones::Exception(0x1b877a0ab46a69a6, "lss is readonly");
+        } else {
+          out->ls_id = lss.find_or_emplace(in->label_set);
+          out->lss_ro_ptr = entrypoint::head::create_readonly_lss(lss);
+        }
+      },
+      *in->lss);
 }
 
 extern "C" void prompp_primitives_lss_find(void* args, void* res) {
@@ -111,7 +117,7 @@ extern "C" void prompp_primitives_lss_find(void* args, void* res) {
   std::optional<uint32_t> ls_id = lss.find(in->label_set);
 
   if (ls_id.has_value()) {
-    new (res) Result{.lss_ro_ptr = entrypoint::head::create_lss_readonly(lss), .ls_id = ls_id.value(), .has = lss.find(in->label_set).has_value()};
+    new (res) Result{.lss_ro_ptr = entrypoint::head::create_readonly_lss(lss), .ls_id = ls_id.value(), .has = ls_id.has_value()};
   }
 }
 
