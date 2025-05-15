@@ -1063,6 +1063,18 @@ func primitivesLSSCtor(lss_type uint32) uintptr {
 	return res.lss
 }
 
+func primitivesLSSCopyAddedSeries(source, destination uintptr) {
+	args := struct {
+		source      uintptr
+		destination uintptr
+	}{source, destination}
+
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_lss_copy_added_series,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
 // primitivesLSSDtor - wrapper for destructor C-EncodingBimap.
 func primitivesLSSDtor(lss uintptr) {
 	args := struct {
