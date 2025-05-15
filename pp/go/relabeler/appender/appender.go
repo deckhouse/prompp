@@ -152,6 +152,19 @@ func (qa *QueryableAppender) Querier(mint, maxt int64) (storage.Querier, error) 
 	), nil
 }
 
+func (qa *QueryableAppender) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
+	qa.lock.Lock()
+	defer qa.lock.Unlock()
+	head := qa.head
+	return querier.NewChunkQuerier(
+		head,
+		querier.NoOpShardedDeduplicatorFactory(),
+		mint,
+		maxt,
+		nil,
+	), nil
+}
+
 func (qa *QueryableAppender) Close() error {
 	qa.lock.Lock()
 	defer qa.lock.Unlock()

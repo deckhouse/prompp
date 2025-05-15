@@ -85,8 +85,8 @@ func (w *BlockWriter) Write(block Block) error {
 	blockMinT, blockMaxT := block.TimeBounds()
 
 	quantStart := (blockMinT / w.blockDurationMs) * w.blockDurationMs
-	for ; quantStart < blockMaxT; quantStart += w.blockDurationMs {
-		minT, maxT := quantStart, quantStart+w.blockDurationMs
+	for ; quantStart <= blockMaxT; quantStart += w.blockDurationMs {
+		minT, maxT := quantStart, quantStart+w.blockDurationMs-1
 		if minT < blockMinT {
 			minT = blockMinT
 		}

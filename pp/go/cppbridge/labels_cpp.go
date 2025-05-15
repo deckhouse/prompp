@@ -51,3 +51,7 @@ func CompareLabelSets(aLSS, bLSS *LabelSetStorage, aLsID, bLsID uint32, dropMetr
 		dropMetricNameA, dropMetricNameB,
 	))
 }
+
+func (ls *LabelsCpp) ID() uint32 {
+	return ls.id
+}

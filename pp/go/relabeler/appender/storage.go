@@ -256,6 +256,33 @@ func (qs *QueryableStorage) Querier(mint, maxt int64) (storage.Querier, error) {
 	return q, nil
 }
 
+func (qs *QueryableStorage) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
+	qs.mtx.Lock()
+	heads := make([]relabeler.Head, len(qs.heads))
+	copy(heads, qs.heads)
+	qs.mtx.Unlock()
+
+	var queriers []storage.ChunkQuerier
+	for _, head := range heads {
+		h := head
+		queriers = append(
+			queriers,
+			querier.NewChunkQuerier(
+				h,
+				querier.NoOpShardedDeduplicatorFactory(),
+				mint,
+				maxt,
+				nil,
+			),
+		)
+	}
+
+	return storage.NewMergeChunkQuerier(nil,
+		queriers,
+		storage.NewConcatenatingChunkSeriesMerger(),
+	), nil
+}
+
 func (qs *QueryableStorage) shrink(persisted ...string) {
 	qs.mtx.Lock()
 	defer qs.mtx.Unlock()
