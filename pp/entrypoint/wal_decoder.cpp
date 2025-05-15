@@ -199,6 +199,11 @@ extern "C" void prompp_wal_decoder_restore_from_stream(void* args, void* res) {
 
 using entrypoint::head::LssVariantPtr;
 
+using OutputDecoder = PromPP::WAL::OutputDecoder<entrypoint::head::EncodingBimap>;
+using OutputDecoderPtr = std::unique_ptr<OutputDecoder>;
+
+static_assert(sizeof(OutputDecoderPtr) == sizeof(void*));
+
 extern "C" void prompp_wal_output_decoder_ctor(void* args, void* res) {
   struct Arguments {
     PromPP::Primitives::Go::SliceView<std::pair<PromPP::Primitives::Go::String, PromPP::Primitives::Go::String>> external_labels;
@@ -207,28 +212,26 @@ extern "C" void prompp_wal_output_decoder_ctor(void* args, void* res) {
     uint8_t encoder_version;
   };
   using Result = struct {
-    PromPP::WAL::OutputDecoder* decoder;
+    OutputDecoderPtr decoder;
   };
 
-  auto* in = reinterpret_cast<Arguments*>(args);
-  Result* out = new (res) Result();
+  auto* in = static_cast<Arguments*>(args);
   auto& output_lss = std::get<entrypoint::head::EncodingBimap>(*in->output_lss);
-  out->decoder = new PromPP::WAL::OutputDecoder(*in->stateless_relabeler, output_lss, in->external_labels,
-                                                static_cast<PromPP::WAL::BasicEncoderVersion>(in->encoder_version));
+  new (res) Result{.decoder = std::make_unique<OutputDecoder>(*in->stateless_relabeler, output_lss, in->external_labels,
+                                                              static_cast<PromPP::WAL::BasicEncoderVersion>(in->encoder_version))};
 }
 
 extern "C" void prompp_wal_output_decoder_dtor(void* args) {
   struct Arguments {
-    PromPP::WAL::OutputDecoder* decoder;
+    OutputDecoderPtr decoder;
   };
 
-  Arguments* in = reinterpret_cast<Arguments*>(args);
-  delete in->decoder;
+  static_cast<Arguments*>(args)->~Arguments();
 }
 
 extern "C" void prompp_wal_output_decoder_dump_to(void* args, void* res) {
   struct Arguments {
-    PromPP::WAL::OutputDecoder* decoder;
+    OutputDecoderPtr decoder;
   };
 
   using Result = struct {
@@ -236,8 +239,8 @@ extern "C" void prompp_wal_output_decoder_dump_to(void* args, void* res) {
     PromPP::Primitives::Go::Slice<char> error;
   };
 
-  Arguments* in = reinterpret_cast<Arguments*>(args);
-  Result* out = new (res) Result();
+  const auto* in = static_cast<Arguments*>(args);
+  const auto out = new (res) Result();
 
   try {
     PromPP::Primitives::Go::BytesStream bytes_stream{&out->dump};
@@ -251,15 +254,15 @@ extern "C" void prompp_wal_output_decoder_dump_to(void* args, void* res) {
 extern "C" void prompp_wal_output_decoder_load_from(void* args, void* res) {
   struct Arguments {
     PromPP::Primitives::Go::SliceView<char> dump;
-    PromPP::WAL::OutputDecoder* decoder;
+    OutputDecoderPtr decoder;
   };
 
   using Result = struct {
     PromPP::Primitives::Go::Slice<char> error;
   };
 
-  Arguments* in = reinterpret_cast<Arguments*>(args);
-  Result* out = new (res) Result();
+  const auto* in = static_cast<Arguments*>(args);
+  auto* out = new (res) Result();
 
   try {
     std::ispanstream bytes_stream(static_cast<std::string_view>(in->dump));
@@ -273,7 +276,7 @@ extern "C" void prompp_wal_output_decoder_load_from(void* args, void* res) {
 extern "C" void prompp_wal_output_decoder_decode(void* args, void* res) {
   struct Arguments {
     PromPP::Primitives::Go::SliceView<char> segment;
-    PromPP::WAL::OutputDecoder* decoder;
+    OutputDecoderPtr decoder;
     int64_t lower_limit_timestamp;
   };
 
@@ -287,8 +290,8 @@ extern "C" void prompp_wal_output_decoder_decode(void* args, void* res) {
     PromPP::Primitives::Go::Slice<char> error;
   };
 
-  Arguments* in = reinterpret_cast<Arguments*>(args);
-  Result* out = new (res) Result();
+  const auto* in = static_cast<Arguments*>(args);
+  auto* out = new (res) Result();
 
   try {
     std::ispanstream{static_cast<std::string_view>(in->segment)} >> *in->decoder;
@@ -324,16 +327,20 @@ extern "C" void prompp_wal_output_decoder_decode(void* args, void* res) {
 // ProtobufEncoder
 //
 
+using ProtobufEncoder = PromPP::WAL::ProtobufEncoder<entrypoint::head::EncodingBimap>;
+using ProtobufEncoderPtr = std::unique_ptr<ProtobufEncoder>;
+
+static_assert(sizeof(ProtobufEncoderPtr) == sizeof(void*));
+
 extern "C" void prompp_wal_protobuf_encoder_ctor(void* args, void* res) {
   struct Arguments {
     PromPP::Primitives::Go::SliceView<LssVariantPtr> output_lsses;
   };
   using Result = struct {
-    PromPP::WAL::ProtobufEncoder* encoder;
+    ProtobufEncoderPtr encoder;
   };
 
-  auto* in = reinterpret_cast<Arguments*>(args);
-  Result* out = new (res) Result();
+  auto* in = static_cast<Arguments*>(args);
 
   std::vector<entrypoint::head::EncodingBimap*> output_lsses;
   output_lsses.reserve(in->output_lsses.size());
@@ -341,16 +348,15 @@ extern "C" void prompp_wal_protobuf_encoder_ctor(void* args, void* res) {
     output_lsses.push_back(&std::get<entrypoint::head::EncodingBimap>(*output_lss));
   }
 
-  out->encoder = new PromPP::WAL::ProtobufEncoder(std::move(output_lsses));
+  new (res) Result{.encoder = std::make_unique<ProtobufEncoder>(std::move(output_lsses))};
 }
 
 extern "C" void prompp_wal_protobuf_encoder_dtor(void* args) {
   struct Arguments {
-    PromPP::WAL::ProtobufEncoder* encoder;
+    ProtobufEncoderPtr encoder;
   };
 
-  Arguments* in = reinterpret_cast<Arguments*>(args);
-  delete in->encoder;
+  static_cast<Arguments*>(args)->~Arguments();
 }
 
 extern "C" void prompp_wal_protobuf_encoder_encode(void* args, void* res) {
@@ -358,15 +364,15 @@ extern "C" void prompp_wal_protobuf_encoder_encode(void* args, void* res) {
     PromPP::Primitives::Go::SliceView<PromPP::WAL::ShardRefSample*> batch;
     PromPP::Primitives::Go::Slice<PromPP::Primitives::Go::Slice<char>> out_slices;
     PromPP::Primitives::Go::Slice<PromPP::WAL::ProtobufEncoderStats> stats;
-    PromPP::WAL::ProtobufEncoder* encoder;
+    ProtobufEncoderPtr encoder;
   };
 
   using Result = struct {
     PromPP::Primitives::Go::Slice<char> error;
   };
 
-  Arguments* in = reinterpret_cast<Arguments*>(args);
-  Result* out = new (res) Result();
+  const auto in = static_cast<Arguments*>(args);
+  const auto out = new (res) Result();
 
   try {
     in->encoder->encode(in->batch, in->out_slices, in->stats);

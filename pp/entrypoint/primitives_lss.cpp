@@ -144,7 +144,7 @@ extern "C" void prompp_primitives_lss_query(void* args, void* res) {
 
   const auto out = new (res) Result{
       .matches = std::move(query_result.series_ids),
-      .lss_copy = entrypoint::head::create_lss_readonly(lss),
+      .lss_copy = entrypoint::head::create_readonly_lss(*in->lss),
       .status = static_cast<uint32_t>(query_result.status),
   };
   out->label_set_lengths.reserve(out->matches.size());
@@ -236,6 +236,17 @@ extern "C" void prompp_primitives_lss_query_label_values(void* args, void* res) 
   out->status = static_cast<uint32_t>(LabelValuesQuerier{std::get<QueryableEncodingBimap>(*in->lss)}.query(
       static_cast<std::string_view>(in->label_name), in->label_matchers,
       [out](std::string_view value) PROMPP_LAMBDA_INLINE { out->values.emplace_back(value); }));
+}
+
+extern "C" void prompp_create_readonly_lss(void* args, void* res) {
+  struct Arguments {
+    LssVariantPtr lss;
+  };
+  struct Result {
+    LssVariantPtr lss_copy;
+  };
+
+  new (res) Result{.lss_copy = entrypoint::head::create_readonly_lss(*static_cast<Arguments*>(args)->lss)};
 }
 
 //

@@ -176,6 +176,19 @@ void prompp_primitives_lss_query_label_names(void* args, void* res);
  */
 void prompp_primitives_lss_query_label_values(void* args, void* res);
 
+/**
+ * @brief return size of allocated memory for label sets.
+ *
+ * @param args {
+ *     lss uintptr                 // pointer to constructed queryable lss;
+ * }
+ *
+ * @param res {
+ *     lss_copy          uintptr  // readonly copy of lss
+ * }
+ */
+void prompp_create_readonly_lss(void* args, void* res);
+
 //
 // label_sets
 //
