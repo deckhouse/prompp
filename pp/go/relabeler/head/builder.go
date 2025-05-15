@@ -29,10 +29,15 @@ func NewBuilder(configSource ConfigSource, buildFunc BuildFunc) *Builder {
 	}
 }
 
+// Build head.
 func (b *Builder) Build() (relabeler.Head, error) {
 	return b.buildFunc(b.configSource.Config())
 }
 
-func (b *Builder) BuildWithConfig(inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) (relabeler.Head, error) {
+// BuildWithConfig build head with incoming config.
+func (b *Builder) BuildWithConfig(
+	inputRelabelerConfigs []*config.InputRelabelerConfig,
+	numberOfShards uint16,
+) (relabeler.Head, error) {
 	return b.buildFunc(inputRelabelerConfigs, numberOfShards)
 }

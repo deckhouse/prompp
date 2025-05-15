@@ -248,44 +248,51 @@ func (s *QueryableLSSSuite) TestQuery() {
 }
 
 func (s *QueryableLSSSuite) TestGetLabelSets() {
+	// Arrange
+
+	// Act
 	fetchedLabelSets := s.lss.GetLabelSets(s.labelSetIDs)
 
-	for index, labelSet := range s.labelSets {
-		s.Require().True(isLabelSetEqualsToLabels(labelSet, fetchedLabelSets.LabelsSets()[index]))
-	}
+	// Assert
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets), fetchedLabelSets.LabelsSets())
 }
 
-func isLabelSetEqualsToLabels(labelSet model.LabelSet, labels cppbridge.Labels) bool {
-	labelSetString := labelSet.String()
-	labelsString := ""
-	for _, label := range labels {
-		labelsString += label.Name + ":" + label.Value + ";"
+func labelSetToCppBridgeLabels(labelSets []model.LabelSet) []cppbridge.Labels {
+	result := make([]cppbridge.Labels, 0, len(labelSets))
+	for _, labelSet := range labelSets {
+		cppLabels := make(cppbridge.Labels, labelSet.Len())
+		for i := 0; i < labelSet.Len(); i++ {
+			cppLabels[i].Name = labelSet.Key(i)
+			cppLabels[i].Value = labelSet.Value(i)
+		}
+		result = append(result, cppLabels)
 	}
-	return labelSetString == labelsString
+
+	return result
 }
 
 type queryLabelNameCase struct {
-	matchers        []model.LabelMatcher
-	expected_status uint32
-	expected_names  []string
+	matchers       []model.LabelMatcher
+	expectedStatus uint32
+	expectedNames  []string
 }
 
 var queryLabelNamesCases = []queryLabelNameCase{
 	{
-		matchers:        []model.LabelMatcher{},
-		expected_status: cppbridge.LSSQueryStatusMatch,
-		expected_names:  []string{"che", "foo", "lol", "zhe"},
+		matchers:       []model.LabelMatcher{},
+		expectedStatus: cppbridge.LSSQueryStatusMatch,
+		expectedNames:  []string{"che", "foo", "lol", "zhe"},
 	},
 	{
-		matchers:        []model.LabelMatcher{{Name: "lol", Value: ".+", MatcherType: model.MatcherTypeRegexpMatch}},
-		expected_status: cppbridge.LSSQueryStatusMatch,
-		expected_names:  []string{"che", "lol", "zhe"},
+		matchers:       []model.LabelMatcher{{Name: "lol", Value: ".+", MatcherType: model.MatcherTypeRegexpMatch}},
+		expectedStatus: cppbridge.LSSQueryStatusMatch,
+		expectedNames:  []string{"che", "lol", "zhe"},
 	},
 }
 
 func (s *QueryableLSSSuite) TestQueryLabelNames() {
-	for _, test_case := range queryLabelNamesCases {
-		s.testQueryLabelNamesImpl(test_case)
+	for _, testCase := range queryLabelNamesCases {
+		s.testQueryLabelNamesImpl(testCase)
 	}
 }
 
@@ -296,45 +303,60 @@ func (s *QueryableLSSSuite) testQueryLabelNamesImpl(test_case queryLabelNameCase
 	result := s.lss.QueryLabelNames(test_case.matchers)
 
 	// Assert
-	s.Equal(test_case.expected_status, result.Status())
-	s.Equal(test_case.expected_names, result.Names())
+	s.Equal(test_case.expectedStatus, result.Status())
+	s.Equal(test_case.expectedNames, result.Names())
 }
 
 type queryLabelValuesCase struct {
-	label_name      string
-	matchers        []model.LabelMatcher
-	expected_status uint32
-	expected_values []string
+	labelName      string
+	matchers       []model.LabelMatcher
+	expectedStatus uint32
+	expectedValues []string
 }
 
 var queryLabelValuesCases = []queryLabelValuesCase{
 	{
-		label_name:      "foo",
-		matchers:        []model.LabelMatcher{},
-		expected_status: cppbridge.LSSQueryStatusMatch,
-		expected_values: []string{"bar", "baz"},
+		labelName:      "foo",
+		matchers:       []model.LabelMatcher{},
+		expectedStatus: cppbridge.LSSQueryStatusMatch,
+		expectedValues: []string{"bar", "baz"},
 	},
 	{
-		label_name:      "foo",
-		matchers:        []model.LabelMatcher{{Name: "foo", Value: ".+", MatcherType: model.MatcherTypeRegexpMatch}},
-		expected_status: cppbridge.LSSQueryStatusMatch,
-		expected_values: []string{"bar", "baz"},
+		labelName:      "foo",
+		matchers:       []model.LabelMatcher{{Name: "foo", Value: ".+", MatcherType: model.MatcherTypeRegexpMatch}},
+		expectedStatus: cppbridge.LSSQueryStatusMatch,
+		expectedValues: []string{"bar", "baz"},
 	},
 }
 
 func (s *QueryableLSSSuite) TestQueryLabelValues() {
-	for _, test_case := range queryLabelValuesCases {
-		s.testQueryLabelValuesImpl(test_case)
+	for _, testCase := range queryLabelValuesCases {
+		s.testQueryLabelValuesImpl(testCase)
 	}
 }
 
-func (s *QueryableLSSSuite) testQueryLabelValuesImpl(test_case queryLabelValuesCase) {
+func (s *QueryableLSSSuite) testQueryLabelValuesImpl(testCase queryLabelValuesCase) {
 	// Arrange
 
 	// Act
-	result := s.lss.QueryLabelValues(test_case.label_name, test_case.matchers)
+	result := s.lss.QueryLabelValues(testCase.labelName, testCase.matchers)
 
 	// Assert
-	s.Equal(test_case.expected_status, result.Status())
-	s.Equal(test_case.expected_values, result.Values())
+	s.Equal(testCase.expectedStatus, result.Status())
+	s.Equal(testCase.expectedValues, result.Values())
+}
+
+func (s *QueryableLSSSuite) TestCopyAddedSeries() {
+	// Arrange
+	emptyLabelsSets := make([]cppbridge.Labels, len(s.labelSetIDs))
+	lssCopy := cppbridge.NewQueryableLssStorage()
+	lssCopyOfCopy := cppbridge.NewQueryableLssStorage()
+
+	// Act
+	s.lss.CopyAddedSeries(lssCopy)
+	lssCopy.CopyAddedSeries(lssCopyOfCopy)
+
+	// Assert
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets), lssCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
+	s.Equal(emptyLabelsSets, lssCopyOfCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
 }
