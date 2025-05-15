@@ -211,15 +211,20 @@ func (lss *LabelSetStorage) LabelSetHasLabelName(lsID uint32, labelName string) 
 	return primitivesLabelSetHasLabelName(lss.pointer, labelName, lsID)
 }
 
+// LabelSetHasDuplicateLabelNames returns whether ls has duplicate label names.
+func (lss *LabelSetStorage) LabelSetHasDuplicateLabelNames(lsID uint32, dropMetricName bool) (string, bool) {
+	return primitivesLabelSetHasDuplicateLabelNames(lss.pointer, lsID, dropMetricName)
+}
+
 // LabelSetHash returns a hash value for the label set.
-func (lss *LabelSetStorage) LabelSetHash(lsID uint32) uint64 {
-	return primitivesLabelSetHash(lss.pointer, lsID)
+func (lss *LabelSetStorage) LabelSetHash(lsID uint32, dropMetricName bool) uint64 {
+	return primitivesLabelSetHash(lss.pointer, lsID, dropMetricName)
 }
 
 // LabelSetHashForLabels returns a hash value for the labels matching the provided names.
 // 'names' have to be sorted in ascending order.
-func (lss *LabelSetStorage) LabelSetHashForLabels(lsID uint32, labelNames []string) uint64 {
-	return primitivesLabelSetHashForLabels(lss.pointer, labelNames, lsID)
+func (lss *LabelSetStorage) LabelSetHashForLabels(lsID uint32, labelNames []string, dropMetricName bool) uint64 {
+	return primitivesLabelSetHashForLabels(lss.pointer, labelNames, lsID, dropMetricName)
 }
 
 // LabelSetHashWithoutLabels returns a hash value for all labels except those matching
@@ -229,8 +234,8 @@ func (lss *LabelSetStorage) LabelSetHashWithoutLabels(lsID uint32, labelNames []
 }
 
 // LabelSetLength returns the number of labels for ls id.
-func (lss *LabelSetStorage) LabelSetLength(lsID uint32) int {
-	return int(primitivesLabelSetLength(lss.pointer, lsID)) // #nosec G115 // no overflow
+func (lss *LabelSetStorage) LabelSetLength(lsID uint32, dropMetricName bool) int {
+	return int(primitivesLabelSetLength(lss.pointer, lsID, dropMetricName)) // #nosec G115 // no overflow
 }
 
 // RangeLabelSet serialize to slice labels from lss and calls f on each label.

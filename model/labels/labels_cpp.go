@@ -73,12 +73,16 @@ func FromStrings(ss ...string) Labels {
 func (ls Labels) Bytes(buf []byte) []byte {
 	b := bytes.NewBuffer(buf[:0])
 	_ = b.WriteByte(labelSep)
-	if ls.IsZero() {
+	if ls.IsZero() || ls.Len() == 0 {
 		return b.Bytes()
 	}
 
 	first := true
 	_ = ls.lss.RangeLabelSet(ls.id, func(l cppbridge.Label) error {
+		if ls.dropMetricName && l.Name == MetricName {
+			return nil
+		}
+
 		if !first {
 			_ = b.WriteByte(seps[0])
 		}
@@ -99,12 +103,16 @@ func (ls Labels) Bytes(buf []byte) []byte {
 func (ls Labels) BytesWithLabels(buf []byte, names ...string) []byte {
 	b := bytes.NewBuffer(buf[:0])
 	_ = b.WriteByte(labelSep)
-	if ls.IsZero() || len(names) == 0 {
+	if ls.IsZero() || len(names) == 0 || ls.Len() == 0 {
 		return b.Bytes()
 	}
 
 	j := 0
 	_ = ls.lss.RangeLabelSet(ls.id, func(l cppbridge.Label) error {
+		if ls.dropMetricName && l.Name == MetricName {
+			return nil
+		}
+
 		for j < len(names)-1 && names[j] < l.Name {
 			j++
 		}
@@ -129,12 +137,16 @@ func (ls Labels) BytesWithLabels(buf []byte, names ...string) []byte {
 func (ls Labels) BytesWithoutLabels(buf []byte, names ...string) []byte {
 	b := bytes.NewBuffer(buf[:0])
 	_ = b.WriteByte(labelSep)
-	if ls.IsZero() {
+	if ls.IsZero() || ls.Len() == 0 {
 		return b.Bytes()
 	}
 
 	j := 0
 	_ = ls.lss.RangeLabelSet(ls.id, func(l cppbridge.Label) error {
+		if ls.dropMetricName && l.Name == MetricName {
+			return nil
+		}
+
 		for j < len(names)-1 && names[j] < l.Name {
 			j++
 		}
@@ -168,20 +180,25 @@ func (ls *Labels) CopyFrom(b Labels) {
 
 // DropMetricName returns Labels with "__name__" removed.
 func (ls Labels) DropMetricName() Labels {
-	if ls.IsZero() {
+	if ls.IsZero() || ls.Len() == 0 {
 		return ls
 	}
 
-	builder := NewScratchBuilder(ls.Len())
-	_ = ls.lss.RangeLabelSet(ls.id, func(l cppbridge.Label) error {
-		if l.Name != MetricName {
-			builder.Add(l.Name, l.Value)
-		}
+	ls.dropMetricName = true
+	ls.length = uint16(ls.lss.LabelSetLength(ls.id, ls.dropMetricName))
 
-		return nil
-	})
+	return ls
 
-	return builder.Labels()
+	// builder := NewScratchBuilder(ls.Len())
+	// _ = ls.lss.RangeLabelSet(ls.id, func(l cppbridge.Label) error {
+	// 	if l.Name != MetricName {
+	// 		builder.Add(l.Name, l.Value)
+	// 	}
+
+	// 	return nil
+	// })
+
+	// return builder.Labels()
 }
 
 // InternStrings calls intern on every string value inside ls, replacing them with what it returns.
@@ -196,7 +213,11 @@ func (ls Labels) Get(name string) string {
 		return "" // Prometheus does not store blank label names.
 	}
 
-	if ls.IsZero() {
+	if ls.IsZero() || ls.Len() == 0 {
+		return ""
+	}
+
+	if ls.dropMetricName && name == MetricName {
 		return ""
 	}
 
@@ -209,7 +230,11 @@ func (ls Labels) Has(name string) bool {
 		return false // Prometheus does not store blank label names.
 	}
 
-	if ls.IsZero() {
+	if ls.IsZero() || ls.Len() == 0 {
+		return false
+	}
+
+	if ls.dropMetricName && name == MetricName {
 		return false
 	}
 
@@ -219,28 +244,31 @@ func (ls Labels) Has(name string) bool {
 // HasDuplicateLabelNames returns whether ls has duplicate label names.
 // It assumes that the labelset is sorted.
 func (ls Labels) HasDuplicateLabelNames() (string, bool) {
-	// lss does not contain diblicates
-	return "", false
+	if ls.IsZero() || ls.Len() == 0 {
+		return "", false
+	}
+
+	return ls.lss.LabelSetHasDuplicateLabelNames(ls.id, ls.dropMetricName)
 }
 
 // Hash returns a hash value for the label set.
 // Note: the result is not guaranteed to be consistent across different runs of Prometheus.
 func (ls Labels) Hash() uint64 {
-	if ls.IsZero() {
+	if ls.IsZero() || ls.Len() == 0 {
 		return 0
 	}
 
-	return ls.lss.LabelSetHash(ls.id)
+	return ls.lss.LabelSetHash(ls.id, ls.dropMetricName)
 }
 
 // HashForLabels returns a hash value for the labels matching the provided names.
 // 'names' have to be sorted in ascending order.
 func (ls Labels) HashForLabels(b []byte, names ...string) (uint64, []byte) {
-	if ls.IsZero() {
+	if ls.IsZero() || ls.Len() == 0 {
 		return 0, b[:0]
 	}
 
-	return ls.lss.LabelSetHashForLabels(ls.id, names), b
+	return ls.lss.LabelSetHashForLabels(ls.id, names, ls.dropMetricName), b
 }
 
 // HashWithoutLabels returns a hash value for all labels except those matching
@@ -261,6 +289,14 @@ func (ls Labels) IsEmpty() bool {
 // IsZero returns true if ls lss referece is nil.
 // Implements yaml.IsZeroer - if we don't have this then 'omitempty' fields are always omitted.
 func (ls Labels) IsZero() bool {
+	if ls.lss != nil {
+		if ls.length == 0 {
+			ls.length = uint16(ls.lss.LabelSetLength(ls.id, ls.dropMetricName))
+		}
+
+		return ls.length == 0
+	}
+
 	return ls.lss == nil
 }
 
@@ -271,7 +307,7 @@ func (ls Labels) Len() int {
 	}
 
 	if ls.length == 0 {
-		ls.length = uint16(ls.lss.LabelSetLength(ls.id))
+		ls.length = uint16(ls.lss.LabelSetLength(ls.id, ls.dropMetricName))
 	}
 
 	return int(ls.length)
@@ -294,6 +330,10 @@ func (ls Labels) MatchLabels(on bool, names ...string) Labels {
 
 	builder := NewScratchBuilder(ls.Len())
 	_ = ls.lss.RangeLabelSet(ls.id, func(l cppbridge.Label) error {
+		if ls.dropMetricName && l.Name == MetricName {
+			return nil
+		}
+
 		if _, ok := nameSet[l.Name]; on == ok && (on || l.Name != MetricName) {
 			builder.Add(l.Name, l.Value)
 		}
@@ -311,6 +351,10 @@ func (ls Labels) Range(f func(l Label)) {
 	}
 
 	_ = ls.lss.RangeLabelSet(ls.id, func(l cppbridge.Label) error {
+		if ls.dropMetricName && l.Name == MetricName {
+			return nil
+		}
+
 		f(Label(l))
 
 		return nil
@@ -329,6 +373,10 @@ func (ls Labels) Validate(f func(l Label) error) error {
 	}
 
 	return ls.lss.RangeLabelSet(ls.id, func(l cppbridge.Label) error {
+		if ls.dropMetricName && l.Name == MetricName {
+			return nil
+		}
+
 		return f(Label(l))
 	})
 }
@@ -483,17 +531,33 @@ func (t *SymbolTable) Len() int { return 0 }
 
 // Equal returns whether the two label sets are equal.
 func Equal(a, b Labels) bool {
+	if a.IsEmpty() && b.IsEmpty() {
+		return true
+	}
+
 	if a.Len() != b.Len() {
 		return false
 	}
 
-	return cppbridge.EqualLabelSets(a.lss, b.lss, a.id, b.id)
+	return cppbridge.EqualLabelSets(
+		a.lss, b.lss,
+		a.id, b.id,
+		a.dropMetricName, b.dropMetricName,
+	)
 }
 
 // Compare compares the two label sets.
 // The result will be 0 if a==b, <0 if a < b, and >0 if a > b.
 func Compare(a, b Labels) int {
-	return cppbridge.CompareLabelSets(a.lss, b.lss, a.id, b.id)
+	if a.IsEmpty() && b.IsEmpty() {
+		return 0
+	}
+
+	return cppbridge.CompareLabelSets(
+		a.lss, b.lss,
+		a.id, b.id,
+		a.dropMetricName, b.dropMetricName,
+	)
 }
 
 //

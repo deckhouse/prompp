@@ -2578,11 +2578,12 @@ func headWalDecoderDtor(decoder uintptr) {
 // label_sets
 //
 
-func primitivesLabelSetLength(lss uintptr, labelSetID uint32) uint64 {
+func primitivesLabelSetLength(lss uintptr, labelSetID uint32, dropMetricName bool) uint64 {
 	args := struct {
-		lss        uintptr
-		labelSetID uint32
-	}{lss, labelSetID}
+		lss            uintptr
+		labelSetID     uint32
+		dropMetricName bool
+	}{lss, labelSetID, dropMetricName}
 	var res struct {
 		length uint64
 	}
@@ -2667,11 +2668,32 @@ func primitivesLabelSetHasLabelName(lss uintptr, labelName string, labelSetID ui
 	return res.isHas
 }
 
-func primitivesLabelSetHash(lss uintptr, labelSetID uint32) uint64 {
+func primitivesLabelSetHasDuplicateLabelNames(lss uintptr, labelSetID uint32, dropMetricName bool) (string, bool) {
 	args := struct {
-		lss        uintptr
-		labelSetID uint32
-	}{lss, labelSetID}
+		lss            uintptr
+		labelSetID     uint32
+		dropMetricName bool
+	}{lss, labelSetID, dropMetricName}
+	var res struct {
+		labelName string
+		isHas     bool
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_label_set_has_duplicate_label_names,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.labelName, res.isHas
+}
+
+func primitivesLabelSetHash(lss uintptr, labelSetID uint32, dropMetricName bool) uint64 {
+	args := struct {
+		lss            uintptr
+		labelSetID     uint32
+		dropMetricName bool
+	}{lss, labelSetID, dropMetricName}
 	var res struct {
 		hash uint64
 	}
@@ -2685,12 +2707,13 @@ func primitivesLabelSetHash(lss uintptr, labelSetID uint32) uint64 {
 	return res.hash
 }
 
-func primitivesLabelSetHashForLabels(lss uintptr, labelNames []string, labelSetID uint32) uint64 {
+func primitivesLabelSetHashForLabels(lss uintptr, labelNames []string, labelSetID uint32, dropMetricName bool) uint64 {
 	args := struct {
-		lss        uintptr
-		labelNames []string
-		labelSetID uint32
-	}{lss, labelNames, labelSetID}
+		lss            uintptr
+		labelNames     []string
+		labelSetID     uint32
+		dropMetricName bool
+	}{lss, labelNames, labelSetID, dropMetricName}
 	var res struct {
 		hash uint64
 	}
@@ -2723,13 +2746,19 @@ func primitivesLabelSetHashWithoutLabels(lss uintptr, labelNames []string, label
 	return res.hash
 }
 
-func primitivesLabelSetEqual(lssA, lssB uintptr, labelSetIDA, labelSetIDB uint32) bool {
+func primitivesLabelSetEqual(
+	lssA, lssB uintptr,
+	labelSetIDA, labelSetIDB uint32,
+	dropMetricNameA, dropMetricNameB bool,
+) bool {
 	args := struct {
-		lssA        uintptr
-		lssB        uintptr
-		labelSetIDA uint32
-		labelSetIDB uint32
-	}{lssA, lssB, labelSetIDA, labelSetIDB}
+		lssA            uintptr
+		lssB            uintptr
+		labelSetIDA     uint32
+		labelSetIDB     uint32
+		dropMetricNameA bool
+		dropMetricNameB bool
+	}{lssA, lssB, labelSetIDA, labelSetIDB, dropMetricNameA, dropMetricNameB}
 	var res struct {
 		isEqual bool
 	}
@@ -2743,13 +2772,19 @@ func primitivesLabelSetEqual(lssA, lssB uintptr, labelSetIDA, labelSetIDB uint32
 	return res.isEqual
 }
 
-func primitivesLabelSetCompare(lssA, lssB uintptr, labelSetIDA, labelSetIDB uint32) int64 {
+func primitivesLabelSetCompare(
+	lssA, lssB uintptr,
+	labelSetIDA, labelSetIDB uint32,
+	dropMetricNameA, dropMetricNameB bool,
+) int64 {
 	args := struct {
-		lssA        uintptr
-		lssB        uintptr
-		labelSetIDA uint32
-		labelSetIDB uint32
-	}{lssA, lssB, labelSetIDA, labelSetIDB}
+		lssA            uintptr
+		lssB            uintptr
+		labelSetIDA     uint32
+		labelSetIDB     uint32
+		dropMetricNameA bool
+		dropMetricNameB bool
+	}{lssA, lssB, labelSetIDA, labelSetIDB, dropMetricNameA, dropMetricNameB}
 	var res struct {
 		result int64
 	}
