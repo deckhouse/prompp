@@ -643,21 +643,5 @@ func (h *Head) Find(mls model.LabelSet) labels.Labels {
 		}
 	}
 
-	// find := make([]labels.Labels, h.numberOfShards)
-
-	// _ = h.forEachShard(func(shard relabeler.Shard) error {
-	// 	if lssRO, lsID, ok := shard.LSS().Find(mls); ok {
-	// 		find[shard.ShardID()] = labels.NewLabelsWithLSS(lssRO, lsID, uint16(mls.Len()))
-	// 	}
-
-	// 	return nil
-	// })
-
-	// for _, l := range find {
-	// 	if !l.IsEmpty() {
-	// 		return l
-	// 	}
-	// }
-
 	return labels.EmptyLabels()
 }

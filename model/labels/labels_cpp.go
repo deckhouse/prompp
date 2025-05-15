@@ -188,17 +188,6 @@ func (ls Labels) DropMetricName() Labels {
 	ls.length = uint16(ls.lss.LabelSetLength(ls.id, ls.dropMetricName))
 
 	return ls
-
-	// builder := NewScratchBuilder(ls.Len())
-	// _ = ls.lss.RangeLabelSet(ls.id, func(l cppbridge.Label) error {
-	// 	if l.Name != MetricName {
-	// 		builder.Add(l.Name, l.Value)
-	// 	}
-
-	// 	return nil
-	// })
-
-	// return builder.Labels()
 }
 
 // InternStrings calls intern on every string value inside ls, replacing them with what it returns.
