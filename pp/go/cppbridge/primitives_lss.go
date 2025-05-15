@@ -90,7 +90,12 @@ func NewQueryableLssStorage() *LabelSetStorage {
 
 // newLabelSetStorage init new LabelSetStorage with lss type.
 func newLabelSetStorage(lssType uint32) *LabelSetStorage {
-	lss := &LabelSetStorage{pointer: primitivesLSSCtor(lssType)}
+	return newLabelSetStorageFromPointer(primitivesLSSCtor(lssType))
+}
+
+// newLabelSetStorageFromPointer init new LabelSetStorage with pointer to constructed lss
+func newLabelSetStorageFromPointer(lssPointer uintptr) *LabelSetStorage {
+	lss := &LabelSetStorage{pointer: lssPointer}
 	runtime.SetFinalizer(lss, func(lss *LabelSetStorage) {
 		primitivesLSSDtor(lss.pointer)
 	})
@@ -164,6 +169,11 @@ func (lss *LabelSetStorage) GetLabelSets(labelSetIDs []uint32) *LabelSetStorageG
 		primitivesLSSFreeLabelSets(result.labelSets)
 	})
 	return result
+}
+
+// CopyAddedSeries - copy label sets which were added via FindOrEmplace to destination
+func (lss *LabelSetStorage) CopyAddedSeries(destination *LabelSetStorage) {
+	primitivesLSSCopyAddedSeries(lss.pointer, destination.pointer)
 }
 
 // Pointer return c-pointer.
