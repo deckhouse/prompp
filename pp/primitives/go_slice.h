@@ -26,13 +26,13 @@ class SliceView {
 
   PROMPP_ALWAYS_INLINE explicit SliceView() = default;
 
-  PROMPP_ALWAYS_INLINE void reset_to(T* data, size_t len) {
+  PROMPP_ALWAYS_INLINE void reset_to(T* data, size_t len, size_t cap) {
     data_ = data;
     len_ = len;
-    cap_ = len;
+    cap_ = cap;
   }
 
-  PROMPP_ALWAYS_INLINE void reset_to(std::span<T> buffer) { reset_to(buffer.data(), buffer.size()); }
+  PROMPP_ALWAYS_INLINE void reset_to(std::span<T> buffer) { reset_to(buffer.data(), buffer.size(), buffer.size()); }
 
   PROMPP_ALWAYS_INLINE const T* data() const noexcept { return data_; }
   PROMPP_ALWAYS_INLINE T* data() noexcept { return data_; }

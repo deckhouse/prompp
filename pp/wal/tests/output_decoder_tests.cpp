@@ -83,7 +83,7 @@ struct TestWALOutputDecoder : public testing::Test {
 
   void SetUp() final {
     // external_labels
-    external_labels_.reset_to(vector_external_labels_.data(), vector_external_labels_.size());
+    external_labels_.reset_to(vector_external_labels_.data(), vector_external_labels_.size(), vector_external_labels_.size());
   }
 
   template <class SegmentStream>
@@ -347,18 +347,18 @@ TEST_F(TestProtobufEncoder, Encode) {
   ref_samples0.emplace_back(output_lss0.find_or_emplace(LabelViewSet{{"__name__", "value1"}, {"job", "abc"}}), 9, 2);
   ref_samples0.emplace_back(output_lss0.find_or_emplace(LabelViewSet{{"__name__", "value2"}, {"job", "abc"}}), 10, 1);
   ShardRefSample srs0;
-  srs0.ref_samples.reset_to(ref_samples0.data(), ref_samples0.size());
+  srs0.ref_samples.reset_to(ref_samples0.data(), ref_samples0.size(), ref_samples0.size());
   srs0.shard_id = 0;
 
   std::vector<PromPP::WAL::RefSample> ref_samples1;
   ref_samples1.emplace_back(output_lss1.find_or_emplace(LabelViewSet{{"__name__", "value3"}, {"job", "abc3"}}), 10, 1);
   ShardRefSample srs1;
-  srs1.ref_samples.reset_to(ref_samples1.data(), ref_samples1.size());
+  srs1.ref_samples.reset_to(ref_samples1.data(), ref_samples1.size(), ref_samples1.size());
   srs1.shard_id = 1;
 
   std::vector<ShardRefSample*> vector_batch{&srs0, &srs1};
   Go::SliceView<ShardRefSample*> batch;
-  batch.reset_to(vector_batch.data(), vector_batch.size());
+  batch.reset_to(vector_batch.data(), vector_batch.size(), vector_batch.size());
 
   ProtobufEncoder penc(std::move(output_lsses));
   Go::Slice<Go::Slice<char>> out_slices;
