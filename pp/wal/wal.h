@@ -288,8 +288,9 @@ class BasicEncoder {
     ts_base_ = std::min(ts_base_, buffer_.earliest_sample());
 
     // delta_rle requires delta to fit in int32
-    if (buffer_.latest_sample() > std::numeric_limits<int32_t>::max() - ts_base_)
+    if (buffer_.latest_sample() - ts_base_ > std::numeric_limits<int32_t>::max()) {
       ts_delta_rle_is_worth_trying = false;
+    }
 
     // gorilla requires delta to fit in int64
     if (buffer_.latest_sample() > std::numeric_limits<int64_t>::max() - ts_base_) {
