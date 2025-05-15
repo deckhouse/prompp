@@ -488,6 +488,24 @@ func (rr *Receiver) Querier(mint, maxt int64) (storage.Querier, error) {
 	return querier.NewMultiQuerier([]storage.Querier{appenderQuerier, storageQuerier}, nil), nil
 }
 
+func (rr *Receiver) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
+	appenderQuerier, err := rr.appender.ChunkQuerier(mint, maxt)
+	if err != nil {
+		return nil, err
+	}
+
+	storageQuerier, err := rr.storage.ChunkQuerier(mint, maxt)
+	if err != nil {
+		return nil, errors.Join(err, appenderQuerier.Close())
+	}
+
+	return storage.NewMergeChunkQuerier(
+		nil,
+		[]storage.ChunkQuerier{appenderQuerier, storageQuerier},
+		storage.NewConcatenatingChunkSeriesMerger(),
+	), nil
+}
+
 // RelabelerIDIsExist check on exist relabelerID.
 func (rr *Receiver) RelabelerIDIsExist(relabelerID string) bool {
 	cs := rr.headConfigStorage.Load()
