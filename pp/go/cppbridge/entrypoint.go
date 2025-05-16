@@ -1245,6 +1245,23 @@ func primitivesLSSQueryLabelValues(lss uintptr, label_name string, matchers []mo
 	return res.status, res.values
 }
 
+func primitivesLSSCreateReadonlyLss(lss uintptr) uintptr {
+	args := struct {
+		lss uintptr
+	}{lss}
+	var res struct {
+		lss uintptr
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_create_readonly_lss,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.lss
+}
+
 //
 // StatelessRelabeler
 //
