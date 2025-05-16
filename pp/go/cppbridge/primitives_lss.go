@@ -124,6 +124,13 @@ func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) uint32 {
 	return id
 }
 
+// FindOrEmplaceBuilder find in lss LabelSet or emplace and return ls id.
+func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet model.CppLabelSetBuilder) uint32 {
+	id := primitivesLSSFindOrEmplaceBuilder(lss.pointer, labelSet)
+	lss.maxID = max(id, lss.maxID)
+	return id
+}
+
 // Query returns a LSSQueryResult that matches the given label matchers.
 func (lss *LabelSetStorage) Query(matchers []model.LabelMatcher, querySource uint32) *LSSQueryResult {
 	return newLSSQueryResult(primitivesLSSQuery(lss.pointer, matchers, querySource))
@@ -169,6 +176,11 @@ func (lss *LabelSetStorage) GetLabelSets(labelSetIDs []uint32) *LabelSetStorageG
 // Pointer return c-pointer.
 func (lss *LabelSetStorage) Pointer() uintptr {
 	return lss.pointer
+}
+
+// MaxId return max id
+func (lss *LabelSetStorage) MaxId() uint32 {
+	return lss.maxID
 }
 
 //
@@ -288,6 +300,11 @@ func (r *LSSQueryResult) IDs() []uint32 {
 // LabelSetLengths return labels sets lengths.
 func (r *LSSQueryResult) LabelSetLengths() []uint16 {
 	return r.queryResult.labelSetLengths
+}
+
+// ReadonlyLss return readonly lss
+func (r *LSSQueryResult) ReadonlyLss() *LabelSetStorage {
+	return r.lssRO
 }
 
 // MatchesRange calls callback sequentially for each result.

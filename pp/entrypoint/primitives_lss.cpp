@@ -4,7 +4,6 @@
 #include "hashdex.hpp"
 #include "head/lss.h"
 #include "primitives/go_slice.h"
-#include "prometheus/value.h"
 #include "series_index/querier/label_names_querier.h"
 #include "series_index/querier/label_values_querier.h"
 
@@ -44,6 +43,15 @@ extern "C" void prompp_primitives_lss_allocated_memory(void* args, void* res) {
   std::visit([res](const auto& lss) { new (res) Result{.allocated_memory = lss.allocated_memory()}; }, *static_cast<Arguments*>(args)->lss);
 }
 
+template <class Lss>
+PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(auto& lss, const auto& label_set) {
+  if constexpr (Lss::kIsReadOnly) {
+    throw BareBones::Exception(0x1b877a0ab46a69a6, "lss is readonly");
+  } else {
+    return lss.find_or_emplace(label_set);
+  }
+}
+
 extern "C" void prompp_primitives_lss_find_or_emplace(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
@@ -54,13 +62,31 @@ extern "C" void prompp_primitives_lss_find_or_emplace(void* args, void* res) {
   };
 
   auto in = static_cast<Arguments*>(args);
+  new (res) Result{.ls_id = std::visit([in]<typename Lss>(Lss& lss) { return find_or_emplace<Lss>(lss, in->label_set); }, *in->lss)};
+}
+
+extern "C" void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res) {
+  using PromPP::Primitives::Go::LabelSetBuilder;
+  using PromPP::Primitives::Go::SliceView;
+
+  struct Arguments {
+    LssVariantPtr lss;
+    struct {
+      LssVariantPtr readonly_lss;
+      uint32_t ls_id;
+      SliceView<PromPP::Primitives::Go::Label> sorted_add;
+      SliceView<PromPP::Primitives::Go::String> sorted_del;
+    } builder;
+  };
+  struct Result {
+    uint32_t ls_id;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
   new (res) Result{.ls_id = std::visit(
-                       [in]<typename Lss>(Lss& lss) -> PromPP::Primitives::LabelSetID {
-                         if constexpr (Lss::kIsReadOnly) {
-                           throw BareBones::Exception(0x1b877a0ab46a69a6, "lss is readonly");
-                         } else {
-                           return lss.find_or_emplace(in->label_set);
-                         }
+                       [&builder = in->builder]<typename Lss>(Lss& lss) {
+                         return find_or_emplace<Lss>(lss, LabelSetBuilder{std::get<entrypoint::head::ReadonlyLss>(*builder.readonly_lss)[builder.ls_id],
+                                                                          builder.sorted_add, builder.sorted_del});
                        },
                        *in->lss)};
 }

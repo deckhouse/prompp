@@ -1111,6 +1111,24 @@ func primitivesLSSFindOrEmplace(lss uintptr, labelSet model.LabelSet) uint32 {
 	return res.labelSetID
 }
 
+func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder model.CppLabelSetBuilder) uint32 {
+	args := struct {
+		lss     uintptr
+		builder model.CppLabelSetBuilder
+	}{lss, builder}
+	var res struct {
+		labelSetID uint32
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_lss_find_or_emplace_builder,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.labelSetID
+}
+
 func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource uint32) (
 	matches []uint32,
 	labelSetLengths []uint16,
