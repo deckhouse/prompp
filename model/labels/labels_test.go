@@ -138,8 +138,8 @@ func TestLabels_HasDuplicateLabelNames(t *testing.T) {
 			Duplicate: false,
 		}, {
 			Input:     FromStrings("__name__", "up", "hostname", "localhost", "hostname", "127.0.0.1"),
-			Duplicate: false, // PP_CHANGES.md: rebuild on cpp
-			// LabelName: "hostname", // PP_CHANGES.md: rebuild on cpp
+			Duplicate: true,
+			LabelName: "hostname",
 		},
 	}
 

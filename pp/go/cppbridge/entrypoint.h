@@ -390,8 +390,9 @@ void prompp_label_set_length(void* args, void* res);
  * @brief get label set by series id
  *
  * @param args {
- *     lss       uintptr                      // pointer to constructed lss;
- *     ls_id     uint32                       // series id
+ *     lss              uintptr // pointer to constructed lss;
+ *     ls_id            uint32  // series id;
+ *     drop_metric_name bool    // flag drop metric_name;
  * }
  *
  * @param res {
@@ -413,8 +414,9 @@ void prompp_label_set_free(void* args);
  * @brief get size in bytes needed for Bytes method
  *
  * @param args {
- *     lss       uintptr   // pointer to constructed lss;
- *     ls_id     uint32    // series id
+ *     lss              uintptr   // pointer to constructed lss;
+ *     ls_id            uint32    // series id
+ *     drop_metric_name bool      // flag drop metric_name;
  * }
  *
  * @param res {
@@ -427,8 +429,9 @@ void prompp_label_set_bytes_size(void* args, void* res);
  * @brief implementation of Bytes method
  *
  * @param args {
- *     lss       uintptr   // pointer to constructed lss;
- *     ls_id     uint32    // series id
+ *     lss              uintptr   // pointer to constructed lss;
+ *     ls_id            uint32    // series id
+ *     drop_metric_name bool      // flag drop metric_name;
  * }
  *
  * @param res {
@@ -441,9 +444,10 @@ void prompp_label_set_bytes(void* args, void* res);
  * @brief implementation of BytesWithLabels method
  *
  * @param args {
- *     lss       uintptr   // pointer to constructed lss;
- *     ls_id     uint32    // series id
- *     names     []string  // names slice
+ *     lss              uintptr   // pointer to constructed lss;
+ *     ls_id            uint32    // series id
+ *     names            []string  // names slice
+ *     drop_metric_name bool      // flag drop metric_name;
  * }
  *
  * @param res {
@@ -456,9 +460,10 @@ void prompp_label_set_bytes_with_labels(void* args, void* res);
  * @brief implementation of BytesWithoutLabels method
  *
  * @param args {
- *     lss       uintptr   // pointer to constructed lss;
- *     ls_id     uint32    // series id
- *     names     []string  // names slice
+ *     lss              uintptr   // pointer to constructed lss;
+ *     ls_id            uint32    // series id
+ *     names            []string  // names slice
+ *     drop_metric_name bool      // flag drop metric_name;
  * }
  *
  * @param res {

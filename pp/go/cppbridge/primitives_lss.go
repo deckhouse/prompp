@@ -208,6 +208,34 @@ func (lss *LabelSetStorage) CreateReadonlyLss() *LabelSetStorage {
 	return newReadOnlyLssStorage(primitivesLSSCreateReadonlyLss(lss.pointer))
 }
 
+// LabelSetBytes returns ls as a byte slice.
+// It uses an byte invalid character as a separator and so should not be used for printing.
+func (lss *LabelSetStorage) LabelSetBytes(lsID uint32, bytes *[]byte, dropMetricName bool) []byte {
+	return labelSetBytes(lss.pointer, lsID, *bytes, dropMetricName)
+}
+
+// LabelSetBytesWithLabels is just as Bytes(), but only for labels matching names.
+// 'names' have to be sorted in ascending order.
+func (lss *LabelSetStorage) LabelSetBytesWithLabels(
+	lsID uint32,
+	bytes *[]byte,
+	dropMetricName bool,
+	names []string,
+) []byte {
+	return labelSetBytesWithLabels(lss.pointer, lsID, *bytes, dropMetricName, names)
+}
+
+// LabelSetBytesWithoutLabels is just as Bytes(), but only for labels not matching names.
+// 'names' have to be sorted in ascending order.
+func (lss *LabelSetStorage) LabelSetBytesWithoutLabels(
+	lsID uint32,
+	bytes *[]byte,
+	dropMetricName bool,
+	names []string,
+) []byte {
+	return labelSetBytesWithoutLabels(lss.pointer, lsID, *bytes, dropMetricName, names)
+}
+
 // LabelSetGetValue returns the value for the label with the given name.
 // Returns an empty string if the label doesn't exist.
 func (lss *LabelSetStorage) LabelSetGetValue(lsID uint32, labelName string) string {
@@ -247,8 +275,8 @@ func (lss *LabelSetStorage) LabelSetLength(lsID uint32, dropMetricName bool) int
 }
 
 // RangeLabelSet serialize to slice labels from lss and calls f on each label.
-func (lss *LabelSetStorage) RangeLabelSet(lsID uint32, do func(l Label) error) error {
-	labelSet := labelSetSerialize(lss.pointer, lsID)
+func (lss *LabelSetStorage) RangeLabelSet(lsID uint32, dropMetricName bool, do func(l Label) error) error {
+	labelSet := labelSetSerialize(lss.pointer, lsID, dropMetricName)
 
 	for i := range labelSet {
 		if err := do(labelSet[i]); err != nil {

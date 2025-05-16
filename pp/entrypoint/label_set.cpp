@@ -51,6 +51,7 @@ extern "C" void prompp_label_set_serialize(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
     uint32_t series_id;
+    bool drop_metric_name;
   };
   struct Result {
     Slice<Label> label_set;
@@ -64,6 +65,19 @@ extern "C" void prompp_label_set_serialize(void* args, void* res) {
         auto in_label_set = lss[in->series_id];
         auto& out_label_set = out->label_set;
         out_label_set.reserve(in_label_set.size());
+
+        if (in->drop_metric_name) {
+          for (const auto& label : in_label_set) {
+            if (label.first == PromPP::Prometheus::kMetricLabelName) [[unlikely]] {
+              continue;
+            }
+
+            out_label_set.push_back(Label{.name = String{label.first}, .value = String{label.second}});
+          }
+
+          return;
+        }
+
         std::ranges::transform(in_label_set, std::back_inserter(out_label_set),
                                [](const auto& label) PROMPP_LAMBDA_INLINE { return Label({.name = String{label.first}, .value = String{label.second}}); });
       },
@@ -88,6 +102,8 @@ static constexpr uint8_t kNameValueSeparator = '\xFF';
 
 class SizeCalculator {
  public:
+  explicit SizeCalculator(bool drop_metric_name) : drop_metric_name_(drop_metric_name) {}
+
   template <class Label>
   PROMPP_ALWAYS_INLINE SizeCalculator& operator=(const Label& label) noexcept {
     operator()(label);
@@ -96,6 +112,10 @@ class SizeCalculator {
 
   template <class Label>
   PROMPP_ALWAYS_INLINE void operator()(const Label& label) noexcept {
+    if (drop_metric_name_ && label.first == PromPP::Prometheus::kMetricLabelName) [[unlikely]] {
+      return;
+    }
+
     label_size_ += label.first.size() + label.second.size();
     ++label_count_;
   }
@@ -112,11 +132,12 @@ class SizeCalculator {
  private:
   uint32_t label_size_{};
   uint32_t label_count_{};
+  bool drop_metric_name_;
 };
 
 class Writer {
  public:
-  explicit Writer(uint8_t* bytes) : bytes_(bytes) { *bytes_++ = kLabelSeparator; }
+  explicit Writer(uint8_t* bytes, bool drop_metric_name) : bytes_(bytes), drop_metric_name_(drop_metric_name) { *bytes_++ = kLabelSeparator; }
 
   template <class Label>
   PROMPP_ALWAYS_INLINE Writer& operator=(const Label& label) noexcept {
@@ -126,6 +147,10 @@ class Writer {
 
   template <class Label>
   PROMPP_ALWAYS_INLINE void operator()(const Label& label) noexcept {
+    if (drop_metric_name_ && label.first == PromPP::Prometheus::kMetricLabelName) [[unlikely]] {
+      return;
+    }
+
     if (++label_count_ > 1) [[likely]] {
       *bytes_++ = kNameValueSeparator;
     }
@@ -144,6 +169,7 @@ class Writer {
  private:
   uint8_t* bytes_;
   uint32_t label_count_{};
+  bool drop_metric_name_;
 };
 
 };  // namespace Bytes
@@ -165,6 +191,7 @@ extern "C" void prompp_label_set_bytes_size(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
     uint32_t series_id;
+    bool drop_metric_name;
   };
   struct Result {
     uint32_t size;
@@ -175,7 +202,7 @@ extern "C" void prompp_label_set_bytes_size(void* args, void* res) {
 
   std::visit(
       [in, out](auto& lss) {
-        Bytes::SizeCalculator calculator;
+        Bytes::SizeCalculator calculator(in->drop_metric_name);
         std::ranges::for_each(lss[in->series_id], std::ref(calculator));
         out->size = calculator.size();
       },
@@ -186,6 +213,7 @@ extern "C" void prompp_label_set_bytes(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
     uint32_t series_id;
+    bool drop_metric_name;
   };
   struct Result {
     SliceView<uint8_t> bytes;
@@ -196,7 +224,7 @@ extern "C" void prompp_label_set_bytes(void* args, void* res) {
 
   std::visit(
       [in, &bytes](auto& lss) {
-        Bytes::Writer writer(bytes.data());
+        Bytes::Writer writer(bytes.data(), in->drop_metric_name);
         std::ranges::for_each(lss[in->series_id], std::ref(writer));
         bytes.reset_to(bytes.data(), writer.written_bytes(bytes.data()), bytes.capacity());
       },
@@ -208,6 +236,7 @@ extern "C" void prompp_label_set_bytes_with_labels(void* args, void* res) {
     LssVariantPtr lss;
     uint32_t series_id;
     SliceView<PromPP::Primitives::Go::String> names;
+    bool drop_metric_name;
   };
   struct Result {
     SliceView<uint8_t> bytes;
@@ -218,7 +247,7 @@ extern "C" void prompp_label_set_bytes_with_labels(void* args, void* res) {
 
   std::visit(
       [in, &bytes](auto& lss) {
-        Bytes::Writer writer(bytes.data());
+        Bytes::Writer writer(bytes.data(), in->drop_metric_name);
         std::ranges::set_intersection(lss[in->series_id], in->names, BareBones::iterator::OperationIterator(writer), LabelNameLess{});
         bytes.reset_to(bytes.data(), writer.written_bytes(bytes.data()), bytes.capacity());
       },
@@ -230,6 +259,7 @@ extern "C" void prompp_label_set_bytes_without_labels(void* args, void* res) {
     LssVariantPtr lss;
     uint32_t series_id;
     SliceView<PromPP::Primitives::Go::String> names;
+    bool drop_metric_name;
   };
   struct Result {
     SliceView<uint8_t> bytes;
@@ -240,7 +270,7 @@ extern "C" void prompp_label_set_bytes_without_labels(void* args, void* res) {
 
   std::visit(
       [in, &bytes](auto& lss) {
-        Bytes::Writer writer(bytes.data());
+        Bytes::Writer writer(bytes.data(), in->drop_metric_name);
         std::ranges::set_difference(lss[in->series_id], in->names, BareBones::iterator::OperationIterator(writer), LabelNameLess{});
         bytes.reset_to(bytes.data(), writer.written_bytes(bytes.data()), bytes.capacity());
       },

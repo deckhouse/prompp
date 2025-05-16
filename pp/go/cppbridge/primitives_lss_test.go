@@ -98,7 +98,7 @@ func (s *LSSSuite) testBytesImpl(testCase bytesTestCase, bytes *[]byte) {
 	lss.FindOrEmplace(testCase.labelSet)
 
 	// Act
-	*bytes = cppbridge.LabelSetBytes(lss.Pointer(), 0, *bytes)
+	*bytes = lss.LabelSetBytes(0, bytes, false)
 
 	// Assert
 	s.Equal(testCase.expected, *bytes)
@@ -141,7 +141,7 @@ func (s *LSSSuite) testBytesWithLabelsImpl(testCase bytesWithFilteredNamesTestCa
 	lss.FindOrEmplace(testCase.labelSet)
 
 	// Act
-	*bytes = cppbridge.LabelSetBytesWithLabels(lss.Pointer(), 0, *bytes, testCase.names...)
+	*bytes = lss.LabelSetBytesWithLabels(0, bytes, false, testCase.names)
 
 	// Assert
 	s.Equal(testCase.expected, *bytes)
@@ -188,7 +188,7 @@ func (s *LSSSuite) testBytesWithoutLabelsImpl(testCase bytesWithFilteredNamesTes
 	lss.FindOrEmplace(testCase.labelSet)
 
 	// Act
-	*bytes = cppbridge.LabelSetBytesWithoutLabels(lss.Pointer(), 0, *bytes, testCase.names...)
+	*bytes = lss.LabelSetBytesWithoutLabels(0, bytes, false, testCase.names)
 
 	// Assert
 	s.Equal(testCase.expected, *bytes)
@@ -391,7 +391,7 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceLabelSet() {
 	// Act
 	lssRO, lsID := s.lss.FindOrEmplaceLabelSet(mls)
 
-	lssRO.RangeLabelSet(lsID, func(l cppbridge.Label) error {
+	lssRO.RangeLabelSet(lsID, false, func(l cppbridge.Label) error {
 		builder.Add(l.Name, l.Value)
 		return nil
 	})

@@ -3,7 +3,6 @@
 package labels
 
 import (
-	"bytes"
 	"slices"
 	"sync"
 	"time"
@@ -71,99 +70,34 @@ func FromStrings(ss ...string) Labels {
 // Bytes returns ls as a byte slice.
 // It uses an byte invalid character as a separator and so should not be used for printing.
 func (ls Labels) Bytes(buf []byte) []byte {
-	b := bytes.NewBuffer(buf[:0])
-	_ = b.WriteByte(labelSep)
+	buf = buf[:0]
 	if ls.IsZero() || ls.Len() == 0 {
-		return b.Bytes()
+		return append(buf, labelSep)
 	}
 
-	first := true
-	_ = ls.lss.RangeLabelSet(ls.id, func(l cppbridge.Label) error {
-		if ls.dropMetricName && l.Name == MetricName {
-			return nil
-		}
-
-		if !first {
-			_ = b.WriteByte(seps[0])
-		}
-
-		first = false
-		_, _ = b.WriteString(l.Name)
-		_ = b.WriteByte(seps[0])
-		_, _ = b.WriteString(l.Value)
-
-		return nil
-	})
-
-	return b.Bytes()
+	return ls.lss.LabelSetBytes(ls.id, &buf, ls.dropMetricName)
 }
 
 // BytesWithLabels is just as Bytes(), but only for labels matching names.
 // 'names' have to be sorted in ascending order.
 func (ls Labels) BytesWithLabels(buf []byte, names ...string) []byte {
-	b := bytes.NewBuffer(buf[:0])
-	_ = b.WriteByte(labelSep)
+	buf = buf[:0]
 	if ls.IsZero() || len(names) == 0 || ls.Len() == 0 {
-		return b.Bytes()
+		return append(buf, labelSep)
 	}
 
-	j := 0
-	_ = ls.lss.RangeLabelSet(ls.id, func(l cppbridge.Label) error {
-		if ls.dropMetricName && l.Name == MetricName {
-			return nil
-		}
-
-		for j < len(names)-1 && names[j] < l.Name {
-			j++
-		}
-
-		if l.Name == names[j] {
-			if b.Len() > 1 {
-				_ = b.WriteByte(seps[0])
-			}
-			_, _ = b.WriteString(l.Name)
-			_ = b.WriteByte(seps[0])
-			_, _ = b.WriteString(l.Value)
-		}
-
-		return nil
-	})
-
-	return b.Bytes()
+	return ls.lss.LabelSetBytesWithLabels(ls.id, &buf, ls.dropMetricName, names)
 }
 
 // BytesWithoutLabels is just as Bytes(), but only for labels not matching names.
 // 'names' have to be sorted in ascending order.
 func (ls Labels) BytesWithoutLabels(buf []byte, names ...string) []byte {
-	b := bytes.NewBuffer(buf[:0])
-	_ = b.WriteByte(labelSep)
+	buf = buf[:0]
 	if ls.IsZero() || ls.Len() == 0 {
-		return b.Bytes()
+		return append(buf, labelSep)
 	}
 
-	j := 0
-	_ = ls.lss.RangeLabelSet(ls.id, func(l cppbridge.Label) error {
-		if ls.dropMetricName && l.Name == MetricName {
-			return nil
-		}
-
-		for j < len(names)-1 && names[j] < l.Name {
-			j++
-		}
-
-		if len(names) == 0 || l.Name != names[j] {
-			if b.Len() > 1 {
-				_ = b.WriteByte(seps[0])
-			}
-			_, _ = b.WriteString(l.Name)
-			_ = b.WriteByte(seps[0])
-			_, _ = b.WriteString(l.Value)
-		}
-
-		return nil
-	})
-
-	return b.Bytes()
+	return ls.lss.LabelSetBytesWithoutLabels(ls.id, &buf, ls.dropMetricName, names)
 }
 
 // Copy returns a copy of the labels.
@@ -323,11 +257,7 @@ func (ls Labels) MatchLabels(on bool, names ...string) Labels {
 	}
 
 	builder := NewScratchBuilder(ls.Len())
-	_ = ls.lss.RangeLabelSet(ls.id, func(l cppbridge.Label) error {
-		if ls.dropMetricName && l.Name == MetricName {
-			return nil
-		}
-
+	_ = ls.lss.RangeLabelSet(ls.id, ls.dropMetricName, func(l cppbridge.Label) error {
 		if _, ok := nameSet[l.Name]; on == ok && (on || l.Name != MetricName) {
 			builder.Add(l.Name, l.Value)
 		}
@@ -344,11 +274,7 @@ func (ls Labels) Range(f func(l Label)) {
 		return
 	}
 
-	_ = ls.lss.RangeLabelSet(ls.id, func(l cppbridge.Label) error {
-		if ls.dropMetricName && l.Name == MetricName {
-			return nil
-		}
-
+	_ = ls.lss.RangeLabelSet(ls.id, ls.dropMetricName, func(l cppbridge.Label) error {
 		f(Label(l))
 
 		return nil
@@ -366,11 +292,7 @@ func (ls Labels) Validate(f func(l Label) error) error {
 		return nil
 	}
 
-	return ls.lss.RangeLabelSet(ls.id, func(l cppbridge.Label) error {
-		if ls.dropMetricName && l.Name == MetricName {
-			return nil
-		}
-
+	return ls.lss.RangeLabelSet(ls.id, ls.dropMetricName, func(l cppbridge.Label) error {
 		return f(Label(l))
 	})
 }

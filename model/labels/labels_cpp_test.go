@@ -2064,7 +2064,6 @@ func (s *HelpFuncSuite) TestCompareOnEmptyDropMetricName_2() {
 
 func BenchmarkLabels_Equal(b *testing.B) {
 	lsA := labels.FromMap(map[string]string{
-		// "__name__": "ubername",
 		"lol": "kek",
 		"che": "bureck",
 	})
@@ -2077,5 +2076,51 @@ func BenchmarkLabels_Equal(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		_ = labels.Equal(lsA, lsB.DropMetricName())
+	}
+}
+
+func BenchmarkLabels_Bytes(b *testing.B) {
+	lsA := labels.FromMap(map[string]string{
+		"__name__": "ubername",
+		"lol":      "kek",
+		"che":      "bureck",
+		"zimya":    "reck",
+	})
+
+	buf := make([]byte, 48)
+	for i := 0; i < b.N; i++ {
+		buf = lsA.Bytes(buf)
+	}
+}
+
+func BenchmarkLabels_Range(b *testing.B) {
+	lsA := labels.FromMap(map[string]string{
+		"__aaa__":  "11111",
+		"__name__": "ubername",
+		"lol":      "kek",
+		"che":      "bureck",
+		"zimya":    "reck",
+	})
+
+	for i := 0; i < b.N; i++ {
+		lsA.Range(func(l labels.Label) {
+			_ = l
+		})
+	}
+}
+
+func BenchmarkLabels_RangeDropMetricName(b *testing.B) {
+	lsA := labels.FromMap(map[string]string{
+		"__aaa__":  "11111",
+		"__name__": "ubername",
+		"lol":      "kek",
+		"che":      "bureck",
+		"zimya":    "reck",
+	})
+
+	for i := 0; i < b.N; i++ {
+		lsA.DropMetricName().Range(func(l labels.Label) {
+			_ = l
+		})
 	}
 }

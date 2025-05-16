@@ -3,8 +3,9 @@
 package labels
 
 import (
-	"github.com/cespare/xxhash/v2"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+
+	"github.com/cespare/xxhash/v2"
 )
 
 // StableHash is a labels hashing implementation which is guaranteed to not change over time.
@@ -17,7 +18,7 @@ func StableHash(ls Labels) uint64 {
 	// Use xxhash.Sum64(b) for fast path as it's faster.
 	b := make([]byte, 0, 1024) //revive:disable-line:add-constant // this is already constants
 
-	_ = ls.lss.RangeLabelSet(ls.id, func(l cppbridge.Label) error {
+	_ = ls.lss.RangeLabelSet(ls.id, ls.dropMetricName, func(l cppbridge.Label) error {
 		b = append(b, l.Name...)
 		b = append(b, seps[0])
 		b = append(b, l.Value...)

@@ -2614,11 +2614,12 @@ func labelSetLength(lss uintptr, labelSetID uint32, dropMetricName bool) uint64 
 	return res.length
 }
 
-func labelSetSerialize(lss uintptr, labelSetID uint32) []Label {
+func labelSetSerialize(lss uintptr, labelSetID uint32, dropMetricName bool) []Label {
 	args := struct {
-		lss        uintptr
-		labelSetID uint32
-	}{lss, labelSetID}
+		lss            uintptr
+		labelSetID     uint32
+		dropMetricName bool
+	}{lss, labelSetID, dropMetricName}
 	var res struct {
 		labelSet []Label
 	}
@@ -2815,11 +2816,12 @@ func labelSetCompare(
 	return res.result
 }
 
-func allocateSliceForLabelBytes(lss uintptr, labelSetID uint32, bytes []byte) []byte {
+func allocateSliceForLabelBytes(lss uintptr, labelSetID uint32, bytes []byte, dropMetricName bool) []byte {
 	args := struct {
-		lss        uintptr
-		labelSetID uint32
-	}{lss, labelSetID}
+		lss            uintptr
+		labelSetID     uint32
+		dropMetricName bool
+	}{lss, labelSetID, dropMetricName}
 	var sizeResult struct {
 		size uint32
 	}
@@ -2837,15 +2839,16 @@ func allocateSliceForLabelBytes(lss uintptr, labelSetID uint32, bytes []byte) []
 	}
 }
 
-func LabelSetBytes(lss uintptr, labelSetID uint32, bytes []byte) []byte {
+func labelSetBytes(lss uintptr, labelSetID uint32, bytes []byte, dropMetricName bool) []byte {
 	result := struct {
 		bytes []byte
-	}{allocateSliceForLabelBytes(lss, labelSetID, bytes)}
+	}{allocateSliceForLabelBytes(lss, labelSetID, bytes, dropMetricName)}
 
 	args := struct {
-		lss        uintptr
-		labelSetID uint32
-	}{lss, labelSetID}
+		lss            uintptr
+		labelSetID     uint32
+		dropMetricName bool
+	}{lss, labelSetID, dropMetricName}
 
 	fastcgo.UnsafeCall2(
 		C.prompp_label_set_bytes,
@@ -2856,16 +2859,24 @@ func LabelSetBytes(lss uintptr, labelSetID uint32, bytes []byte) []byte {
 	return result.bytes
 }
 
-func labelSetBytesWithFilteredNames(cFunction unsafe.Pointer, lss uintptr, labelSetID uint32, bytes []byte, names ...string) []byte {
+func labelSetBytesWithFilteredNames(
+	cFunction unsafe.Pointer,
+	lss uintptr,
+	labelSetID uint32,
+	bytes []byte,
+	dropMetricName bool,
+	names []string,
+) []byte {
 	result := struct {
 		bytes []byte
-	}{allocateSliceForLabelBytes(lss, labelSetID, bytes)}
+	}{allocateSliceForLabelBytes(lss, labelSetID, bytes, dropMetricName)}
 
 	args := struct {
-		lss        uintptr
-		labelSetID uint32
-		names      []string
-	}{lss, labelSetID, names}
+		lss            uintptr
+		labelSetID     uint32
+		names          []string
+		dropMetricName bool
+	}{lss, labelSetID, names, dropMetricName}
 
 	fastcgo.UnsafeCall2(
 		cFunction,
@@ -2876,10 +2887,36 @@ func labelSetBytesWithFilteredNames(cFunction unsafe.Pointer, lss uintptr, label
 	return result.bytes
 }
 
-func LabelSetBytesWithLabels(lss uintptr, labelSetID uint32, bytes []byte, names ...string) []byte {
-	return labelSetBytesWithFilteredNames(C.prompp_label_set_bytes_with_labels, lss, labelSetID, bytes, names...)
+func labelSetBytesWithLabels(
+	lss uintptr,
+	labelSetID uint32,
+	bytes []byte,
+	dropMetricName bool,
+	names []string,
+) []byte {
+	return labelSetBytesWithFilteredNames(
+		C.prompp_label_set_bytes_with_labels,
+		lss,
+		labelSetID,
+		bytes,
+		dropMetricName,
+		names,
+	)
 }
 
-func LabelSetBytesWithoutLabels(lss uintptr, labelSetID uint32, bytes []byte, names ...string) []byte {
-	return labelSetBytesWithFilteredNames(C.prompp_label_set_bytes_without_labels, lss, labelSetID, bytes, names...)
+func labelSetBytesWithoutLabels(
+	lss uintptr,
+	labelSetID uint32,
+	bytes []byte,
+	dropMetricName bool,
+	names []string,
+) []byte {
+	return labelSetBytesWithFilteredNames(
+		C.prompp_label_set_bytes_without_labels,
+		lss,
+		labelSetID,
+		bytes,
+		dropMetricName,
+		names,
+	)
 }
