@@ -413,38 +413,36 @@ class SharedSpan {
 
   template <class Item>
     requires std::is_trivially_destructible_v<Item>
-  explicit SharedSpan(const SharedVector<Item>& vector) : data_(reinterpret_cast<const SharedPtr<T>&>(vector.shared_ptr())), size_(vector.size()) {}
+  explicit SharedSpan(const SharedVector<Item>& vector) : data_(reinterpret_cast<const SharedPtr<T>&>(vector.shared_ptr())) {}
 
   SharedSpan(const SharedSpan&) = default;
-  SharedSpan(SharedSpan&& other) noexcept : data_(std::move(other.data_)), size_(std::exchange(other.size_, 0)) {}
+  SharedSpan(SharedSpan&& other) noexcept : data_(std::move(other.data_)) {}
   SharedSpan& operator=(const SharedSpan&) = default;
   SharedSpan& operator=(SharedSpan&& other) noexcept {
     if (this != other) [[likely]] {
       data_ = std::move(other.data_);
-      size_ = std::exchange(other.size_, 0);
     }
 
     return *this;
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const T& operator[](SizeType i) const {
-    assert(i < size_);
+    assert(i < size());
     return data_.get()[i];
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE T& operator[](SizeType i) {
-    assert(i < size_);
+    assert(i < size());
     return data_.get()[i];
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType size() const noexcept { return size_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType size() const noexcept { return data_.constructed_item_count(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const T* data() const noexcept { return begin(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const T* begin() const noexcept { return data_.get(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const T* end() const noexcept { return begin() + size_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const T* end() const noexcept { return begin() + size(); }
 
  private:
   SharedPtr<T> data_;
-  SizeType size_{};
 };
 
 }  // namespace BareBones
