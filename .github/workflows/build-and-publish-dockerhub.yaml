@@ -84,7 +84,7 @@ jobs:
           docker cp $CONTAINER_ID_PROMPP:/bin/promtool ./promtool
           docker cp $CONTAINER_ID_PROMPP:/bin/prompptool ./prompptool
           docker rm $CONTAINER_ID_PROMPP
-          docker rmi docker.io/prompp/prompp${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }}
+          docker rmi docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }}
 
       - name: Archive binaries
         run: |
