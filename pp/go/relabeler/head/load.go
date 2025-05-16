@@ -19,6 +19,7 @@ const (
 	HeadWalEncoderDecoderLogShards uint8 = 0
 )
 
+// Create head.
 func Create(
 	id string,
 	generation uint64,
@@ -56,22 +57,14 @@ func Create(
 	return New(id, generation, configs, lsses, wals, dataStorages, numberOfShards, registerer)
 }
 
+// createShard create shard for head.
 func createShard(
 	dir string,
 	shardID uint16,
 	swn *segmentWriteNotifier,
 	maxSegmentSize uint32,
 ) (*LSS, *ShardWal, *DataStorage, error) {
-	inputLss := cppbridge.NewLssStorage()
-	targetLss := cppbridge.NewQueryableLssStorage()
-	lss := &LSS{
-		input:  inputLss,
-		target: targetLss,
-	}
-
-	shardFilePath := filepath.Join(dir, fmt.Sprintf("shard_%d.wal", shardID))
-	var shardFile *os.File
-	shardFile, err := os.Create(shardFilePath)
+	shardFile, err := os.Create(filepath.Join(filepath.Clean(dir), fmt.Sprintf("shard_%d.wal", shardID)))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create shard wal file: %w", err)
 	}
@@ -83,7 +76,12 @@ func createShard(
 		_ = shardFile.Close()
 	}()
 
-	shardWalEncoder := cppbridge.NewHeadWalEncoder(shardID, HeadWalEncoderDecoderLogShards, targetLss)
+	lss := &LSS{
+		input:  cppbridge.NewLssStorage(),
+		target: cppbridge.NewQueryableLssStorage(),
+	}
+
+	shardWalEncoder := cppbridge.NewHeadWalEncoder(shardID, HeadWalEncoderDecoderLogShards, lss.target)
 	_, err = WriteHeader(shardFile, FileFormatVersion, shardWalEncoder.Version())
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to write header: %w", err)
@@ -95,6 +93,7 @@ func createShard(
 	}
 
 	shardWal := newShardWal(shardWalEncoder, maxSegmentSize, sw)
+
 	cppDataStorage := cppbridge.NewHeadDataStorage()
 	dataStorage := &DataStorage{
 		dataStorage: cppDataStorage,
@@ -253,14 +252,14 @@ func (l *ShardLoader) Load() (result ShardLoadResult) {
 	}
 
 	numberOfSegments := lastReadSegmentID + 1
-	result.NumberOfSegments = uint32(numberOfSegments)
+	result.NumberOfSegments = uint32(numberOfSegments) // #nosec G115 // no overflow
 	sw, err := newSegmentWriter(l.shardID, shardWalFile, l.notifier)
 	if err != nil {
 		result.Err = err
 		return
 	}
 
-	l.notifier.Set(l.shardID, uint32(numberOfSegments))
+	l.notifier.Set(l.shardID, uint32(numberOfSegments)) // #nosec G115 // no overflow
 	result.Wal = newShardWal(decoder.CreateEncoder(), l.maxSegmentSize, sw)
 	if result.Err == nil {
 		result.Corrupted = false

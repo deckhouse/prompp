@@ -298,6 +298,7 @@ class Decoder {
 
   template <chunk::DataChunk::Type chunk_type>
   [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_chunk_first_timestamp(const DataStorage& storage, const chunk::DataChunk& chunk) noexcept {
+    assert(!chunk.is_empty());
     return encoder::timestamp::TimestampDecoder::decode_first(get_stream_reader<chunk_type>(storage, chunk));
   }
 
@@ -319,6 +320,7 @@ class Decoder {
       return storage.gorilla_encoders[chunk.encoder.external_index].timestamp();
     }
 
+    assert(!chunk.is_empty());
     return storage.timestamp_encoder.get_state(chunk.timestamp_encoder_state_id).timestamp();
   }
 

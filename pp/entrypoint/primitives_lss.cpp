@@ -24,6 +24,16 @@ extern "C" void prompp_primitives_lss_ctor(void* args, void* res) {
   new (res) Result{.lss = create_lss(static_cast<Arguments*>(args)->lss_type)};
 }
 
+extern "C" void prompp_primitives_lss_copy_added_series(void* args) {
+  struct Arguments {
+    LssVariantPtr source;
+    LssVariantPtr destination;
+  };
+
+  const auto arguments = static_cast<Arguments*>(args);
+  std::get<QueryableEncodingBimap>(*arguments->source).copy_added_series(std::get<QueryableEncodingBimap>(*arguments->destination));
+}
+
 extern "C" void prompp_primitives_lss_dtor(void* args) {
   struct Arguments {
     LssVariantPtr lss;
@@ -153,11 +163,14 @@ void prompp_primitives_lss_get_label_sets(void* args, void* res) {
         out->label_sets.resize(in->series_ids.size());
 
         for (size_t i = 0; i < in->series_ids.size(); ++i) {
-          auto in_label_set = lss[in->series_ids[i]];
-          auto& out_label_set = out->label_sets[i];
-          out_label_set.reserve(in_label_set.size());
-          std::ranges::transform(in_label_set, std::back_inserter(out_label_set),
-                                 [](const auto& label) PROMPP_LAMBDA_INLINE { return Label({.name = String{label.first}, .value = String{label.second}}); });
+          const auto ls_id = in->series_ids[i];
+          if (lss.size() > ls_id) [[likely]] {
+            auto in_label_set = lss[ls_id];
+            auto& out_label_set = out->label_sets[i];
+            out_label_set.reserve(in_label_set.size());
+            std::ranges::transform(in_label_set, std::back_inserter(out_label_set),
+                                   [](const auto& label) PROMPP_LAMBDA_INLINE { return Label({.name = String{label.first}, .value = String{label.second}}); });
+          }
         }
       },
       *in->lss);

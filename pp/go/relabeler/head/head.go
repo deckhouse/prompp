@@ -541,6 +541,15 @@ func (h *Head) Rotate() error {
 	return nil
 }
 
+// CopySeriesFrom copy series from other head.
+func (h *Head) CopySeriesFrom(other relabeler.Head) {
+	_ = other.ForEachShard(func(shard relabeler.Shard) error {
+		shard.LSS().Raw().CopyAddedSeries(h.lsses[shard.ShardID()].Raw())
+		return nil
+	})
+}
+
+// Close wals and clear metrics.
 func (h *Head) Close() error {
 	h.memoryInUse.DeletePartialMatch(prometheus.Labels{"generation": strconv.FormatUint(h.generation, 10)})
 	var err error
