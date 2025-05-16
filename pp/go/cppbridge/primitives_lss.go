@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -103,8 +104,8 @@ func newLabelSetStorageFromPointer(lssPointer uintptr) *LabelSetStorage {
 	return lss
 }
 
-// newReadOnlyLssStorrage init new LabelSetStorage based on lssReadOnly.
-func newReadOnlyLssStorrage(lssROPtr uintptr) *LabelSetStorage {
+// newReadOnlyLssStorage init new LabelSetStorage based on lssReadOnly.
+func newReadOnlyLssStorage(lssROPtr uintptr) *LabelSetStorage {
 	lss := &LabelSetStorage{pointer: lssROPtr}
 	runtime.SetFinalizer(lss, func(lss *LabelSetStorage) {
 		primitivesLSSDtor(lss.pointer)
@@ -193,58 +194,85 @@ type lssQueryResult struct {
 }
 
 //
-// bufReadOnlyLSS
+// cacheReadOnlyLSS
 //
 
-// bufReadOnlyLSS buffer lssReadOnly for deduplicate.
-var bufReadOnlyLSS = sync.Map{}
+// cacheReadOnlyLSS global cache lssReadOnly.
+var cacheReadOnlyLSS = newReadOnlyLSSBuffer()
 
-type bufLSSValue struct {
-	lssMain uintptr
-	lssRO   *LabelSetStorage
-	maxlsid uint32
-	timer   *time.Timer
+type valueROLSSCache struct {
+	lssRO      *LabelSetStorage
+	lastUpdate int64
+	maxlsid    uint32
 }
 
-func getlssRO(lssMainPtr, lssROPtr uintptr, maxlsid uint32) *LabelSetStorage {
+// readOnlyLSSCache cache lssReadOnly for deduplicate.
+type readOnlyLSSCache struct {
+	sync.Map
+}
+
+func newReadOnlyLSSBuffer() *readOnlyLSSCache {
+	c := &readOnlyLSSCache{}
+
+	go c.clearing()
+
+	return c
+}
+
+// clearing the cache of obsolete data.
+func (c *readOnlyLSSCache) clearing() {
+	ticker := time.NewTicker(60 * time.Second)
+
+	for {
+		now := (<-ticker.C).Unix()
+		c.Range(func(key, value any) bool {
+			if now-atomic.LoadInt64(&value.(*valueROLSSCache).lastUpdate) > 60 {
+				c.Delete(key)
+			}
+
+			return true
+		})
+	}
+}
+
+// getROLSS return read only LSS from cache or add ro cache.
+func (c *readOnlyLSSCache) getROLSS(lssMainPtr, lssROPtr uintptr, maxlsid uint32) *LabelSetStorage {
 	var lssRO *LabelSetStorage
 
-	v, ok := bufReadOnlyLSS.Load(lssMainPtr)
+	v, ok := c.Load(lssMainPtr)
 	if !ok {
-		lssRO = newReadOnlyLssStorrage(lssROPtr)
-		bufReadOnlyLSS.Store(lssMainPtr, &bufLSSValue{
-			lssMain: lssMainPtr,
-			lssRO:   lssRO,
-			maxlsid: maxlsid,
-			timer: time.AfterFunc(1*time.Minute, func() {
-				bufReadOnlyLSS.Delete(lssMainPtr)
-			}),
+		lssRO = newReadOnlyLssStorage(lssROPtr)
+		c.Store(lssMainPtr, &valueROLSSCache{
+			lssRO:      lssRO,
+			maxlsid:    maxlsid,
+			lastUpdate: time.Now().Unix(),
 		})
 
 		return lssRO
 	}
 
-	bv := v.(*bufLSSValue)
+	bv := v.(*valueROLSSCache)
 	if bv.maxlsid < maxlsid {
-		lssRO = newReadOnlyLssStorrage(lssROPtr)
-		bufReadOnlyLSS.Store(lssMainPtr, &bufLSSValue{
-			lssMain: lssMainPtr,
-			lssRO:   lssRO,
-			maxlsid: maxlsid,
-			timer: time.AfterFunc(1*time.Minute, func() {
-				bufReadOnlyLSS.Delete(lssMainPtr)
-			}),
+		lssRO = newReadOnlyLssStorage(lssROPtr)
+		c.Store(lssMainPtr, &valueROLSSCache{
+			lssRO:      lssRO,
+			maxlsid:    maxlsid,
+			lastUpdate: time.Now().Unix(),
 		})
 
 		return lssRO
 	}
 
-	bv.timer.Reset(1 * time.Minute)
+	atomic.StoreInt64(&bv.lastUpdate, time.Now().Unix())
 
 	primitivesLSSDtor(lssROPtr)
 
 	return bv.lssRO
 }
+
+//
+// LSSQueryResult
+//
 
 // LSSQueryResult query execution result in lss with copy.
 type LSSQueryResult struct {
@@ -279,7 +307,7 @@ func newLSSQueryResult(
 
 	lqr := &LSSQueryResult{
 		queryResult: queryResult,
-		lssRO:       getlssRO(lssMainPtr, lssROPtr, slices.Max(matches)),
+		lssRO:       cacheReadOnlyLSS.getROLSS(lssMainPtr, lssROPtr, slices.Max(matches)),
 	}
 
 	return lqr
