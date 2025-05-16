@@ -358,10 +358,10 @@ class MemoryBasedVector : public GenericVector<MemoryBasedVector<MemoryControlBl
 template <class T>
 using Vector = MemoryBasedVector<MemoryControlBlockWithItemCount, T>;
 
-template <class T>
-class SharedVector : public GenericVector<SharedVector<T>, typename SharedMemory<T>::SizeType, T> {
+template <class T, ReallocatorInterface Reallocator = DefaultReallocator>
+class SharedVector : public GenericVector<SharedVector<T, Reallocator>, typename SharedMemory<T, Reallocator>::SizeType, T> {
  public:
-  using SizeType = typename SharedMemory<T>::SizeType;
+  using SizeType = typename SharedMemory<T, Reallocator>::SizeType;
   using Base = GenericVector<SharedVector, SizeType, T>;
 
   SharedVector() = default;
@@ -373,26 +373,26 @@ class SharedVector : public GenericVector<SharedVector<T>, typename SharedMemory
   SharedVector& operator=(const SharedVector&) = default;
   SharedVector& operator=(SharedVector&&) noexcept = default;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const SharedPtr<T>& shared_ptr() const noexcept { return memory_.ptr(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& shared_ptr() const noexcept { return memory_.ptr(); }
 
  protected:
   friend class GenericVector<SharedVector, SizeType, T>;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SharedMemory<T>& memory() noexcept { return memory_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const SharedMemory<T>& memory() const noexcept { return memory_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE auto& memory() noexcept { return memory_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& memory() const noexcept { return memory_; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType get_size() const noexcept { return memory_.constructed_item_count(); }
   PROMPP_ALWAYS_INLINE void set_size(SizeType size) noexcept { memory_.set_constructed_item_count(size); }
 
  private:
-  SharedMemory<T> memory_;
+  SharedMemory<T, Reallocator> memory_;
 };
 
 template <class T>
 struct IsTriviallyReallocatable<Vector<T>> : std::true_type {};
 
-template <class T>
-struct IsTriviallyReallocatable<SharedVector<T>> : std::true_type {};
+template <class T, ReallocatorInterface Reallocator>
+struct IsTriviallyReallocatable<SharedVector<T, Reallocator>> : std::true_type {};
 
 template <class T>
 struct IsZeroInitializable<Vector<T>> : std::true_type {};
@@ -411,9 +411,9 @@ class SharedSpan {
 
   SharedSpan() noexcept = default;
 
-  template <class Item>
+  template <class Item, ReallocatorInterface Reallocator = DefaultReallocator>
     requires std::is_trivially_destructible_v<Item>
-  explicit SharedSpan(const SharedVector<Item>& vector) : data_(reinterpret_cast<const SharedPtr<T>&>(vector.shared_ptr())) {}
+  explicit SharedSpan(const SharedVector<Item, Reallocator>& vector) : data_(reinterpret_cast<const SharedPtr<T>&>(vector.shared_ptr())) {}
 
   SharedSpan(const SharedSpan&) = default;
   SharedSpan(SharedSpan&& other) noexcept : data_(std::move(other.data_)) {}

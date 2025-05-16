@@ -210,7 +210,18 @@ class Memory : public GenericMemory<Memory<ControlBlock, T>, typename ControlBlo
   }
 };
 
-template <class T>
+template <class Reallocator>
+concept ReallocatorInterface = requires(Reallocator reallocator, void* memory) {
+  { Reallocator::reallocate(memory, size_t()) } -> std::same_as<void*>;
+  { Reallocator::free(memory) } -> std::same_as<void>;
+};
+
+struct DefaultReallocator {
+  PROMPP_ALWAYS_INLINE static void* reallocate(void* memory, size_t size) { return std::realloc(memory, size); }
+  PROMPP_ALWAYS_INLINE static void free(void* memory) { return std::free(memory); }
+};
+
+template <class T, ReallocatorInterface Reallocator = DefaultReallocator>
 class SharedPtr {
  public:
   using RefCounter = uint32_t;
@@ -262,7 +273,7 @@ class SharedPtr {
 
     PRAGMA_DIAGNOSTIC(push)
     PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
-    auto control_block = static_cast<ControlBlock*>(std::realloc(raw_memory(), kControlBlockSize + size * sizeof(T)));
+    auto control_block = static_cast<ControlBlock*>(Reallocator::reallocate(raw_memory(), kControlBlockSize + size * sizeof(T)));
     PRAGMA_DIAGNOSTIC(pop)
 
     if (data_ == nullptr) [[likely]] {
@@ -329,7 +340,7 @@ class SharedPtr {
 
   PROMPP_ALWAYS_INLINE void destroy() noexcept {
     destroy_constructed_items();
-    std::free(raw_memory());
+    Reallocator::free(raw_memory());
     data_ = nullptr;
   }
 
@@ -345,10 +356,11 @@ class SharedPtr {
   [[nodiscard]] PROMPP_ALWAYS_INLINE void* raw_memory() const noexcept { return data_ == nullptr ? nullptr : reinterpret_cast<ControlBlock*>(data_) - 1; }
 };
 
-template <class T>
-class SharedMemory : public GenericMemory<SharedMemory<T>, uint32_t, T> {
+template <class T, ReallocatorInterface Reallocator = DefaultReallocator>
+class SharedMemory : public GenericMemory<SharedMemory<T, Reallocator>, uint32_t, T> {
  public:
   using SizeType = uint32_t;
+  using SharedPtr = BareBones::SharedPtr<T, Reallocator>;
 
   SharedMemory() = default;
   SharedMemory(const SharedMemory&) = default;
@@ -364,14 +376,14 @@ class SharedMemory : public GenericMemory<SharedMemory<T>, uint32_t, T> {
     return *this;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE typename SharedPtr<T>::ItemCounter constructed_item_count() const noexcept { return data_.constructed_item_count(); }
-  PROMPP_ALWAYS_INLINE void set_constructed_item_count(typename SharedPtr<T>::ItemCounter count) noexcept { data_.set_constructed_item_count(count); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE typename SharedPtr::ItemCounter constructed_item_count() const noexcept { return data_.constructed_item_count(); }
+  PROMPP_ALWAYS_INLINE void set_constructed_item_count(typename SharedPtr::ItemCounter count) noexcept { data_.set_constructed_item_count(count); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
-    return size_ * sizeof(T) + (data_.get() != nullptr ? sizeof(SharedPtr<T>::kControlBlockSize) : 0);
+    return size_ * sizeof(T) + (data_.get() != nullptr ? sizeof(SharedPtr::kControlBlockSize) : 0);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const SharedPtr<T>& ptr() const noexcept { return data_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const SharedPtr& ptr() const noexcept { return data_; }
 
  protected:
   friend class GenericMemory<SharedMemory, SizeType, T>;
@@ -384,7 +396,7 @@ class SharedMemory : public GenericMemory<SharedMemory<T>, uint32_t, T> {
     if (data_.non_atomic_is_unique()) [[likely]] {
       data_.non_atomic_reallocate(new_size);
     } else {
-      SharedPtr<T> new_data(new_size, constructed_item_count());
+      SharedPtr new_data(new_size, constructed_item_count());
       PRAGMA_DIAGNOSTIC(push)
       PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
       std::memcpy(new_data.get(), data_.get(), size_ * sizeof(T));
@@ -396,7 +408,7 @@ class SharedMemory : public GenericMemory<SharedMemory<T>, uint32_t, T> {
   }
 
  private:
-  SharedPtr<T> data_{};
+  SharedPtr data_{};
   uint32_t size_{};
 };
 

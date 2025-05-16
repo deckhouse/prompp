@@ -20,8 +20,25 @@ using EncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::EncodingBima
 using OrderedEncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::OrderedEncodingBimap<BareBones::Vector>;
 using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<BareBones::SharedSpan>;
 
+namespace shared_memory {
+
+static thread_local bool has_memory_changes{};
+
+struct Reallocator {
+  PROMPP_ALWAYS_INLINE static void* reallocate(void* memory, size_t size) {
+    const auto result = std::realloc(memory, size);
+    if (result != memory) {
+      has_memory_changes = true;
+    }
+    return result;
+  }
+  PROMPP_ALWAYS_INLINE static void free(void* memory) { return std::free(memory); }
+};
+
+};  // namespace shared_memory
+
 template <class T>
-using QueryableEncodingBimapVector = BareBones::SharedVector<T>;
+using QueryableEncodingBimapVector = BareBones::SharedVector<T, shared_memory::Reallocator>;
 using QueryableEncodingBimap =
     series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, QueryableEncodingBimapVector, TrieIndex>;
 
