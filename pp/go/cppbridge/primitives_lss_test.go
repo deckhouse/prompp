@@ -235,3 +235,48 @@ func (s *QueryableLSSSuite) TestCopyAddedSeries() {
 	s.Equal(labelSetToCppBridgeLabels(s.labelSets), lssCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
 	s.Equal(emptyLabelsSets, lssCopyOfCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
 }
+
+func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithExistingLabelSet() {
+	// Arrange
+	queryResult := s.lss.Query([]model.LabelMatcher{
+		{Name: "lol", Value: "kek", MatcherType: model.MatcherTypeExactMatch},
+	}, cppbridge.LSSQuerySourceOther)
+
+	// Act
+	existingLsIdWithAdd := s.lss.FindOrEmplaceBuilder(model.CppLabelSetBuilder{
+		ReadonlyLss: queryResult.ReadonlyLss().Pointer(),
+		LsId:        0,
+		SortedAdd:   []model.SimpleLabel{{Name: "che", Value: "bureck"}},
+		SortedDel:   nil,
+	})
+	existingLsIdWithDel := s.lss.FindOrEmplaceBuilder(model.CppLabelSetBuilder{
+		ReadonlyLss: queryResult.ReadonlyLss().Pointer(),
+		LsId:        1,
+		SortedAdd:   nil,
+		SortedDel:   []string{"che"},
+	})
+
+	// Assert
+	s.Equal(uint32(1), existingLsIdWithAdd)
+	s.Equal(uint32(0), existingLsIdWithDel)
+}
+
+func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithNewLabelSet() {
+	// Arrange
+	queryResult := s.lss.Query([]model.LabelMatcher{
+		{Name: "lol", Value: "kek", MatcherType: model.MatcherTypeExactMatch},
+	}, cppbridge.LSSQuerySourceOther)
+
+	// Act
+	expectedLsId := s.lss.MaxId() + 1
+	existingLsId := s.lss.FindOrEmplaceBuilder(model.CppLabelSetBuilder{
+		ReadonlyLss: queryResult.ReadonlyLss().Pointer(),
+		LsId:        0,
+		SortedAdd:   []model.SimpleLabel{{Name: "new_lol", Value: "new_kek"}},
+		SortedDel:   nil,
+	})
+
+	// Assert
+	s.Equal(expectedLsId, existingLsId)
+	s.Equal(expectedLsId, s.lss.MaxId())
+}
