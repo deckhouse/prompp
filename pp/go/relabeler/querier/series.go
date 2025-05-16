@@ -359,3 +359,76 @@ func (i *InstantSeriesChunkIterator) AtT() int64 {
 func (i *InstantSeriesChunkIterator) Err() error {
 	return nil
 }
+
+//
+// SeriesSet
+//
+
+type NSeriesSet struct {
+	mint         int64
+	maxt         int64
+	deserializer *cppbridge.HeadDataStorageDeserializer
+
+	index         int
+	seriesSet     []*protoSeries
+	currentSeries *NSeries
+}
+
+func (ss *NSeriesSet) Next() bool {
+	if ss.index >= len(ss.seriesSet) {
+		return false
+	}
+
+	ss.currentSeries = &NSeries{
+		seriesID:       ss.seriesSet[ss.index].seriesID,
+		mint:           ss.mint,
+		maxt:           ss.maxt,
+		labelSet:       labels.Labels{},
+		sampleProvider: nil,
+	}
+
+	ss.index++
+	return true
+}
+
+func (ss *NSeriesSet) At() storage.Series {
+	return ss.currentSeries
+}
+
+func (ss *NSeriesSet) Err() error {
+	return nil
+}
+
+func (ss *NSeriesSet) Warnings() annotations.Annotations {
+	return nil
+}
+
+//
+// Series
+//
+
+type NSeries struct {
+	seriesID       uint32
+	mint, maxt     int64
+	labelSet       labels.Labels
+	sampleProvider SampleProvider
+}
+
+func (s *NSeries) Labels() labels.Labels {
+	return s.labelSet
+}
+
+func (s *NSeries) Iterator(_ chunkenc.Iterator) chunkenc.Iterator {
+	return s.sampleProvider.Samples(s.seriesID, s.mint, s.maxt)
+}
+
+//
+// protoSeries
+//
+
+type protoSeries struct {
+	chunksMetadata []cppbridge.HeadDataStorageSerializedChunkMetadata
+	lss            *cppbridge.LabelSetStorage
+	seriesID       uint32
+	labelSetLength uint16
+}

@@ -153,12 +153,13 @@ func (q *Querier) Select(ctx context.Context, sortSeries bool, hints *storage.Se
 	return q.selectRange(ctx, sortSeries, hints, matchers...)
 }
 
-func (q *Querier) selectInstant(ctx context.Context, sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
+func (q *Querier) selectInstant(ctx context.Context, _ bool, _ *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
 	start := time.Now()
 	defer func() {
 		if q.metrics != nil {
 			q.metrics.SelectDuration.With(
-				prometheus.Labels{"generation": strconv.FormatUint(q.head.Generation(), 10),
+				prometheus.Labels{
+					"generation": strconv.FormatUint(q.head.Generation(), 10),
 					"query_type": "instant",
 				},
 			).Observe(float64(time.Since(start).Microseconds()))
@@ -182,7 +183,11 @@ func (q *Querier) selectInstant(ctx context.Context, sortSeries bool, hints *sto
 			if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
 				return nil
 			}
-			return fmt.Errorf("failed to query from shard: %d, query status: %d", shard.ShardID(), lssQueryResult.Status())
+			return fmt.Errorf(
+				"failed to query from shard: %d, query status: %d",
+				shard.ShardID(),
+				lssQueryResult.Status(),
+			)
 		}
 
 		samples := shard.DataStorage().InstantQuery(q.maxt, valueNotFoundTimestampValue, lssQueryResult.IDs())
@@ -207,7 +212,7 @@ func (q *Querier) selectInstant(ctx context.Context, sortSeries bool, hints *sto
 	return storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge)
 }
 
-func (q *Querier) selectRange(ctx context.Context, sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
+func (q *Querier) selectRange(ctx context.Context, _ bool, _ *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
 	start := time.Now()
 	defer func() {
 		if q.metrics != nil {
