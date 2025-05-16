@@ -71,7 +71,6 @@ const (
 // LabelSetStorage go wrapper for C-LabelSetStorage.
 type LabelSetStorage struct {
 	pointer uintptr
-	maxID   uint32
 }
 
 // NewLssStorage init new LabelSetStorage based on EncodingBimap.
@@ -126,7 +125,6 @@ func (lss *LabelSetStorage) AllocatedMemory() uint64 {
 // FindOrEmplace find in lss LabelSet or emplace and return ls id.
 func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) uint32 {
 	id := primitivesLSSFindOrEmplace(lss.pointer, labelSet)
-	lss.maxID = max(id, lss.maxID)
 	return id
 }
 
