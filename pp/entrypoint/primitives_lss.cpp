@@ -53,19 +53,12 @@ extern "C" void prompp_primitives_lss_allocated_memory(void* args, void* res) {
   std::visit([res](const auto& lss) { new (res) Result{.allocated_memory = lss.allocated_memory()}; }, *static_cast<Arguments*>(args)->lss);
 }
 
-struct FindOrEmplaceResult {
-  uint32_t ls_id;
-  bool has_memory_changes;
-};
-
 template <class Lss>
-PROMPP_ALWAYS_INLINE void find_or_emplace(auto& lss, const auto& label_set, FindOrEmplaceResult& result) {
+PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(auto& lss, const auto& label_set) {
   if constexpr (Lss::kIsReadOnly) {
     throw BareBones::Exception(0x1b877a0ab46a69a6, "lss is readonly");
   } else {
-    entrypoint::head::lss_memory::has_memory_changes = false;
-    result.ls_id = lss.find_or_emplace(label_set);
-    result.has_memory_changes = entrypoint::head::lss_memory::has_memory_changes;
+    return lss.find_or_emplace(label_set);
   }
 }
 
@@ -74,9 +67,12 @@ extern "C" void prompp_primitives_lss_find_or_emplace(void* args, void* res) {
     LssVariantPtr lss;
     PromPP::Primitives::Go::LabelSet label_set;
   };
+  struct Result {
+    uint32_t ls_id;
+  };
 
   auto in = static_cast<Arguments*>(args);
-  std::visit([in, res]<typename Lss>(Lss& lss) { find_or_emplace<Lss>(lss, in->label_set, *static_cast<FindOrEmplaceResult*>(res)); }, *in->lss);
+  new (res) Result{.ls_id = std::visit([in]<typename Lss>(Lss& lss) { return find_or_emplace<Lss>(lss, in->label_set); }, *in->lss)};
 }
 
 extern "C" void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res) {
@@ -92,16 +88,17 @@ extern "C" void prompp_primitives_lss_find_or_emplace_builder(void* args, void* 
       SliceView<PromPP::Primitives::Go::String> sorted_del;
     } builder;
   };
+  struct Result {
+    uint32_t ls_id;
+  };
 
   const auto in = static_cast<Arguments*>(args);
-  std::visit(
-      [&builder = in->builder, res]<typename Lss>(Lss& lss) {
-        return find_or_emplace<Lss>(lss,
-                                    LabelSetBuilder{std::get<entrypoint::head::ReadonlyQueryableEncodingBimap>(*builder.readonly_lss)[builder.ls_id],
-                                                    builder.sorted_add, builder.sorted_del},
-                                    *static_cast<FindOrEmplaceResult*>(res));
+  new (res) Result{std::visit(
+      [&builder = in->builder]<typename Lss>(Lss& lss) {
+        return find_or_emplace<Lss>(lss, LabelSetBuilder{std::get<entrypoint::head::ReadonlyQueryableEncodingBimap>(*builder.readonly_lss)[builder.ls_id],
+                                                         builder.sorted_add, builder.sorted_del});
       },
-      *in->lss);
+      *in->lss)};
 }
 
 struct LssQueryResult {

@@ -69,19 +69,6 @@ func (s *LSSSuite) TestCreateReadonlyLssFromQueryableEncodingBimap() {
 	s.Require().NotNil(readonlyLss.Pointer())
 }
 
-func (s *LSSSuite) TestFindOrEmplaceHasAllocatedMemory() {
-	// Arrange
-	lss := cppbridge.NewLssStorage()
-
-	// Act
-	result1 := lss.FindOrEmplace(model.NewLabelSetBuilder().Set("lol", "kek").Build())
-	result2 := lss.FindOrEmplace(model.NewLabelSetBuilder().Set("aaa", "bbb").Build())
-
-	// Assert
-	s.Require().Equal(true, result1.HasMemoryChanges)
-	s.Require().Equal(false, result2.HasMemoryChanges)
-}
-
 type QueryableLSSSuite struct {
 	suite.Suite
 	baseCtx     context.Context
@@ -108,7 +95,7 @@ func (s *QueryableLSSSuite) SetupTest() {
 
 	s.labelSetIDs = make([]uint32, 0, len(s.labelSets))
 	for _, labelSet := range s.labelSets {
-		s.labelSetIDs = append(s.labelSetIDs, s.lss.FindOrEmplace(labelSet).LabelSetID)
+		s.labelSetIDs = append(s.labelSetIDs, s.lss.FindOrEmplace(labelSet))
 	}
 }
 
@@ -292,8 +279,8 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithExistingLabelSet() {
 	})
 
 	// Assert
-	s.Equal(uint32(1), existingLsIdWithAdd.LabelSetID)
-	s.Equal(uint32(0), existingLsIdWithDel.LabelSetID)
+	s.Equal(uint32(1), existingLsIdWithAdd)
+	s.Equal(uint32(0), existingLsIdWithDel)
 }
 
 func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithNewLabelSet() {
@@ -312,6 +299,6 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithNewLabelSet() {
 	})
 
 	// Assert
-	s.Equal(expectedLsId, existingLsId.LabelSetID)
+	s.Equal(expectedLsId, existingLsId)
 	s.Equal(expectedLsId, s.lss.MaxId())
 }

@@ -26,7 +26,7 @@ func (s *LabelsCppSuite) TestLen() {
 	})
 
 	lss := cppbridge.NewQueryableLssStorage()
-	ls := cppbridge.NewLabelsCpp(lss, lss.FindOrEmplace(lsIn).LabelSetID, uint16(lsIn.Len()))
+	ls := cppbridge.NewLabelsCpp(lss, lss.FindOrEmplace(lsIn), uint16(lsIn.Len()))
 
 	s.Equal(lsIn.Len(), ls.Len())
 }
@@ -39,7 +39,7 @@ func (s *LabelsCppSuite) TestLenNullIn() {
 	})
 
 	lss := cppbridge.NewQueryableLssStorage()
-	ls := cppbridge.NewLabelsCpp(lss, lss.FindOrEmplace(lsIn).LabelSetID, 0)
+	ls := cppbridge.NewLabelsCpp(lss, lss.FindOrEmplace(lsIn), 0)
 
 	s.Equal(lsIn.Len(), ls.Len())
 }
@@ -50,7 +50,7 @@ func (s *LabelsCppSuite) TestIsZeroFalseLSS() {
 		"__name__": "ubername",
 		"lol":      "kek",
 		"che":      "bureck",
-	})).LabelSetID, 3)
+	})), 3)
 
 	s.False(ls.IsZero())
 }
@@ -71,7 +71,7 @@ func (s *LabelsCppSuite) TestLabels() {
 	lsIn := model.LabelSetFromMap(lsMap)
 
 	lss := cppbridge.NewQueryableLssStorage()
-	ls := cppbridge.NewLabelsCpp(lss, lss.FindOrEmplace(lsIn).LabelSetID, uint16(lsIn.Len()))
+	ls := cppbridge.NewLabelsCpp(lss, lss.FindOrEmplace(lsIn), uint16(lsIn.Len()))
 	lsOut := ls.Labels()
 
 	s.Equal(lsIn.Len(), lsOut.Len())

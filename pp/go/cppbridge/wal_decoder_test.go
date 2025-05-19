@@ -234,7 +234,7 @@ func (s *OutputDecoderSuite) TestWALProtobufEncoderEncode() {
 
 	outputLsses := []*cppbridge.LabelSetStorage{cppbridge.NewLssStorage(), cppbridge.NewLssStorage()}
 	for val, labelSet := range labelSets {
-		lsID := outputLsses[val%len(outputLsses)].FindOrEmplace(labelSet).LabelSetID
+		lsID := outputLsses[val%len(outputLsses)].FindOrEmplace(labelSet)
 
 		batch = append(
 			batch,

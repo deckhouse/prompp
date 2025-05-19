@@ -1105,17 +1105,14 @@ func primitivesLSSAllocatedMemory(lss uintptr) uint64 {
 	return res.allocatedMemory
 }
 
-type FindOrEmplaceResult struct {
-	LabelSetID       uint32
-	HasMemoryChanges bool
-}
-
-func primitivesLSSFindOrEmplace(lss uintptr, labelSet model.LabelSet) FindOrEmplaceResult {
+func primitivesLSSFindOrEmplace(lss uintptr, labelSet model.LabelSet) uint32 {
 	args := struct {
 		lss      uintptr
 		labelSet model.LabelSet
 	}{lss, labelSet}
-	var res FindOrEmplaceResult
+	var res struct {
+		labelSetID uint32
+	}
 
 	fastcgo.UnsafeCall2(
 		C.prompp_primitives_lss_find_or_emplace,
@@ -1123,15 +1120,17 @@ func primitivesLSSFindOrEmplace(lss uintptr, labelSet model.LabelSet) FindOrEmpl
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res
+	return res.labelSetID
 }
 
-func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder model.CppLabelSetBuilder) FindOrEmplaceResult {
+func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder model.CppLabelSetBuilder) uint32 {
 	args := struct {
 		lss     uintptr
 		builder model.CppLabelSetBuilder
 	}{lss, builder}
-	var res FindOrEmplaceResult
+	var res struct {
+		labelSetID uint32
+	}
 
 	fastcgo.UnsafeCall2(
 		C.prompp_primitives_lss_find_or_emplace_builder,
@@ -1139,7 +1138,7 @@ func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder model.CppLabelSetBui
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res
+	return res.labelSetID
 }
 
 func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource uint32) (
