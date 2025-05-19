@@ -17,11 +17,10 @@ enum class LssType : uint32_t {
 };
 
 using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie, series_index::trie::CedarMatchesList>;
-using EncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::SharedVector>;
 using OrderedEncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::OrderedEncodingBimap<BareBones::Vector>;
 using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<BareBones::SharedSpan>;
 
-namespace shared_memory {
+namespace lss_memory {
 
 static thread_local bool has_memory_changes{};
 
@@ -36,12 +35,13 @@ struct Reallocator {
   PROMPP_ALWAYS_INLINE static void free(void* memory) { return std::free(memory); }
 };
 
-};  // namespace shared_memory
+}  // namespace lss_memory
 
 template <class T>
-using QueryableEncodingBimapVector = BareBones::SharedVector<T, shared_memory::Reallocator>;
+using SharedVector = BareBones::SharedVector<T, lss_memory::Reallocator>;
+using EncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<SharedVector>;
 using QueryableEncodingBimap =
-    series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, QueryableEncodingBimapVector, TrieIndex>;
+    series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, SharedVector, TrieIndex>;
 
 template <class Lss>
 concept readonly_lss_constructible_from = std::is_same_v<Lss, QueryableEncodingBimap> || std::is_same_v<Lss, EncodingBimap>;

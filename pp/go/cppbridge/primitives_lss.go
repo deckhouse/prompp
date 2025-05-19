@@ -123,17 +123,17 @@ func (lss *LabelSetStorage) AllocatedMemory() uint64 {
 }
 
 // FindOrEmplace find in lss LabelSet or emplace and return ls id.
-func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) uint32 {
-	id := primitivesLSSFindOrEmplace(lss.pointer, labelSet)
-	lss.maxID = max(id, lss.maxID)
-	return id
+func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) FindOrEmplaceResult {
+	res := primitivesLSSFindOrEmplace(lss.pointer, labelSet)
+	lss.maxID = max(res.LabelSetID, lss.maxID)
+	return res
 }
 
 // FindOrEmplaceBuilder find in lss LabelSet or emplace and return ls id.
-func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet model.CppLabelSetBuilder) uint32 {
-	id := primitivesLSSFindOrEmplaceBuilder(lss.pointer, labelSet)
-	lss.maxID = max(id, lss.maxID)
-	return id
+func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet model.CppLabelSetBuilder) FindOrEmplaceResult {
+	res := primitivesLSSFindOrEmplaceBuilder(lss.pointer, labelSet)
+	lss.maxID = max(res.LabelSetID, lss.maxID)
+	return res
 }
 
 // Query returns a LSSQueryResult that matches the given label matchers.
