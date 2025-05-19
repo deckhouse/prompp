@@ -326,6 +326,13 @@ class PROMPP_ATTRIBUTE_PACKED CompactBitSequence : public CompactBitSequenceBase
     stream.write(Base::memory_, Base::size_in_bytes());
   }
 
+  PROMPP_ALWAYS_INLINE void trim_lower_bytes(uint32_t bytes_count) {
+    assert(Bit::to_bits(bytes_count) <= Base::size_in_bits());
+    memset(Base::memory_, '\0', bytes_count);
+    size_in_bits_ -= Bit::to_bits(bytes_count);
+    memmove(Base::memory_, Base::memory_ + bytes_count, Base::size_in_bytes());
+  }
+
   PROMPP_ALWAYS_INLINE void push_back_single_zero_bit() noexcept {
     reserve_enough_memory_if_needed();
     ++size_in_bits_;

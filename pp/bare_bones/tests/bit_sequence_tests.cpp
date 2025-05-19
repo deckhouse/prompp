@@ -277,6 +277,76 @@ TEST_F(CompactBitSequenceFixture, PushUint64_2) {
   EXPECT_EQ(0b1010101010101010101010101010101010101010101010101010101010101010, bytes[0]);
 }
 
+TEST_F(CompactBitSequenceFixture, TrimUint32) {
+  // Arrange
+
+  // Act
+  stream_.push_back_bits_u32(32, 0b10101010101010101010101010101010);
+  stream_.trim_lower_bytes(2);
+  auto bytes = stream_.bytes<uint16_t>().data();
+
+  // Assert
+  ASSERT_EQ(16U, stream_.size_in_bits());
+  EXPECT_EQ(0b1010101010101010ULL, bytes[0]);
+}
+
+TEST_F(CompactBitSequenceFixture, TrimUint32_2) {
+  // Arrange
+
+  // Act
+  stream_.push_back_single_zero_bit();
+  stream_.push_back_bits_u32(32, 0b10101010101010101010101010101010);
+
+  stream_.trim_lower_bytes(4);
+  auto bytes = stream_.bytes<uint16_t>().data();
+
+  // Assert
+  ASSERT_EQ(1U, stream_.size_in_bits());
+  EXPECT_EQ(0b1ULL, bytes[0]);
+}
+
+TEST_F(CompactBitSequenceFixture, TrimUint32_3) {
+  // Arrange
+
+  // Act
+  stream_.push_back_single_zero_bit();
+  stream_.push_back_bits_u32(32, 0b10101010101010101010101010101010);
+
+  stream_.trim_lower_bytes(3);
+  auto bytes = stream_.bytes<uint16_t>().data();
+
+  // Assert
+  ASSERT_EQ(9U, stream_.size_in_bits());
+  EXPECT_EQ(0b101010101ULL, bytes[0]);
+}
+
+TEST_F(CompactBitSequenceFixture, TrimUint64) {
+  // Arrange
+
+  // Act
+  stream_.push_back_u64(0b1010101010101010101010101010101010101010101010101010101010101010);
+  stream_.trim_lower_bytes(5);
+  auto bytes = stream_.bytes<uint32_t>().data();
+
+  // Assert
+  ASSERT_EQ(24U, stream_.size_in_bits());
+  EXPECT_EQ(0b101010101010101010101010ULL, bytes[0]);
+}
+
+TEST_F(CompactBitSequenceFixture, TrimUint64_2) {
+  // Arrange
+
+  // Act
+  stream_.push_back_single_zero_bit();
+  stream_.push_back_u64(0b1010101010101010101010101010101010101010101010101010101010101010);
+  stream_.trim_lower_bytes(8);
+  auto bytes = stream_.bytes<uint64_t>().data();
+
+  // Assert
+  ASSERT_EQ(1U, stream_.size_in_bits());
+  EXPECT_EQ(0b1ULL, bytes[0]);
+}
+
 template <class T>
 class BitSequenceReaderFixture : public testing::Test {};
 
