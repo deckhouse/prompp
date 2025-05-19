@@ -72,7 +72,7 @@ func (s *LabelsCppSuite) TestLabels() {
 
 	lss := cppbridge.NewQueryableLssStorage()
 	ls := cppbridge.NewLabelsCpp(lss, lss.FindOrEmplace(lsIn), uint16(lsIn.Len()))
-	lsOut := ls.Labels()
+	lsOut := labels.NewLabelsWithLSS(ls.LSS(), ls.ID(), ls.Length())
 
 	s.Equal(lsIn.Len(), lsOut.Len())
 

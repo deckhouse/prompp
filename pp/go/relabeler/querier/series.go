@@ -9,6 +9,96 @@ import (
 	"github.com/prometheus/prometheus/util/annotations"
 )
 
+//
+// SeriesSet
+//
+
+type SeriesSet struct {
+	mint             int64
+	maxt             int64
+	deserializer     *cppbridge.HeadDataStorageDeserializer
+	chunksIndex      cppbridge.HeadDataStorageSerializedChunkIndex
+	serializedChunks *cppbridge.HeadDataStorageSerializedChunks
+	lssQueryResult   *cppbridge.LSSQueryResult
+
+	index         int
+	currentSeries *Series
+}
+
+func (ss *SeriesSet) Next() bool {
+	var (
+		lsID           uint32
+		lsLength       uint16
+		chunksMetadata []cppbridge.HeadDataStorageSerializedChunkMetadata
+	)
+
+	for {
+		if ss.index >= ss.lssQueryResult.Len() {
+			return false
+		}
+
+		lsID, lsLength = ss.lssQueryResult.GetByIndex(ss.index)
+
+		chunksMetadata = ss.chunksIndex.Chunks(ss.serializedChunks, lsID)
+		ss.index++
+		if len(chunksMetadata) != 0 {
+			break
+		}
+	}
+
+	ss.currentSeries = &Series{
+		seriesID: lsID,
+		mint:     ss.mint,
+		maxt:     ss.maxt,
+		labelSet: labels.NewLabelsWithLSS(
+			ss.lssQueryResult.LSS(),
+			lsID,
+			lsLength,
+		),
+		sampleProvider: &DefaultSampleProvider{
+			deserializer:   ss.deserializer,
+			chunksMetadata: chunksMetadata,
+		},
+	}
+
+	return true
+}
+
+func (ss *SeriesSet) At() storage.Series {
+	return ss.currentSeries
+}
+
+func (ss *SeriesSet) Err() error {
+	return nil
+}
+
+func (ss *SeriesSet) Warnings() annotations.Annotations {
+	return nil
+}
+
+//
+// Series
+//
+
+type Series struct {
+	mint, maxt     int64
+	labelSet       labels.Labels
+	sampleProvider SampleProvider
+	seriesID       uint32
+}
+
+func (s *Series) Labels() labels.Labels {
+	return s.labelSet
+}
+
+func (s *Series) Iterator(_ chunkenc.Iterator) chunkenc.Iterator {
+	return s.sampleProvider.Samples(s.seriesID, s.mint, s.maxt)
+}
+
+//
+// DefaultSampleProvider
+//
+
 type DefaultSampleProvider struct {
 	deserializer   *cppbridge.HeadDataStorageDeserializer
 	chunksMetadata []cppbridge.HeadDataStorageSerializedChunkMetadata
@@ -166,94 +256,67 @@ type SampleProvider interface {
 	Samples(seriesID uint32, minT, maxtT int64) chunkenc.Iterator
 }
 
-type Series struct {
-	seriesID       uint32
-	mint, maxt     int64
-	labelSet       *cppbridge.LabelsCpp
-	sampleProvider SampleProvider
-}
-
-func (s *Series) Labels() labels.Labels {
-	return s.labelSet.Labels()
-}
-
-func (s *Series) Iterator(_ chunkenc.Iterator) chunkenc.Iterator {
-	return s.sampleProvider.Samples(s.seriesID, s.mint, s.maxt)
-}
-
-type SeriesSet struct {
-	index         int
-	seriesSet     []*Series
-	currentSeries *Series
-}
-
-func NewSeriesSet(seriesSet []*Series) *SeriesSet {
-	return &SeriesSet{
-		seriesSet: seriesSet,
-	}
-}
-
-func (ss *SeriesSet) Next() bool {
-	if ss.index >= len(ss.seriesSet) {
-		return false
-	}
-
-	ss.currentSeries = ss.seriesSet[ss.index]
-	ss.index++
-	return true
-}
-
-func (ss *SeriesSet) At() storage.Series {
-	return ss.currentSeries
-}
-
-func (ss *SeriesSet) Err() error {
-	return nil
-}
-
-func (ss *SeriesSet) Warnings() annotations.Annotations {
-	return nil
-}
+//
+// Instant
+//
 
 const (
 	DefaultInstantQueryValueNotFoundTimestampValue int64 = 0
 )
 
+//
+// InstantSeriesSet
+//
+
 type InstantSeriesSet struct {
-	index                       int
+	lssQueryResult              *cppbridge.LSSQueryResult
 	valueNotFoundTimestampValue int64
-	labelSets                   []*cppbridge.LabelsCpp
 	samples                     []cppbridge.Sample
+
+	index         int
+	currentSeries *InstantSeries
 }
 
-func NewInstantSeriesSet(valueNotFoundTimestampValue int64, labelSets []*cppbridge.LabelsCpp, samples []cppbridge.Sample) *InstantSeriesSet {
+func NewInstantSeriesSet(
+	lssQueryResult *cppbridge.LSSQueryResult,
+	valueNotFoundTimestampValue int64,
+	samples []cppbridge.Sample,
+) *InstantSeriesSet {
 	return &InstantSeriesSet{
-		index:                       -1,
+		lssQueryResult:              lssQueryResult,
 		valueNotFoundTimestampValue: valueNotFoundTimestampValue,
-		labelSets:                   labelSets,
 		samples:                     samples,
+		index:                       -1,
 	}
 }
 
 func (ss *InstantSeriesSet) Next() bool {
-	if ss.index+1 >= len(ss.labelSets) {
-		return false
+	for {
+		if ss.index+1 >= ss.lssQueryResult.Len() {
+			return false
+		}
+
+		ss.index++
+		if ss.samples[ss.index].Timestamp != ss.valueNotFoundTimestampValue {
+			break
+		}
 	}
 
-	ss.index++
-
-	if ss.samples[ss.index].Timestamp == ss.valueNotFoundTimestampValue {
-		return ss.Next()
+	lsID, lsLength := ss.lssQueryResult.GetByIndex(ss.index)
+	ss.currentSeries = &InstantSeries{
+		labelSet: labels.NewLabelsWithLSS(
+			ss.lssQueryResult.LSS(),
+			lsID,
+			lsLength,
+		),
+		sample: ss.samples[ss.index],
 	}
 
 	return true
 }
 
 func (ss *InstantSeriesSet) At() storage.Series {
-	return InstantSeries{
-		labelSet: ss.labelSets[ss.index],
-		sample:   ss.samples[ss.index],
-	}
+	return ss.currentSeries
 }
 
 func (ss *InstantSeriesSet) Err() error {
@@ -264,18 +327,22 @@ func (ss *InstantSeriesSet) Warnings() annotations.Annotations {
 	return nil
 }
 
+//
+// InstantSeries
+//
+
 type InstantSeries struct {
-	labelSet *cppbridge.LabelsCpp
+	labelSet labels.Labels
 	sample   cppbridge.Sample
 }
 
 // Labels is storage.Series interface implementation.
-func (s InstantSeries) Labels() labels.Labels {
-	return s.labelSet.Labels()
+func (s *InstantSeries) Labels() labels.Labels {
+	return s.labelSet
 }
 
 // Iterator is storage.Series interface implementation.
-func (s InstantSeries) Iterator(iterator chunkenc.Iterator) chunkenc.Iterator {
+func (s *InstantSeries) Iterator(iterator chunkenc.Iterator) chunkenc.Iterator {
 	if i, ok := iterator.(*InstantSeriesChunkIterator); ok {
 		i.ResetTo(s.sample.Timestamp, s.sample.Value)
 		return i
@@ -358,77 +425,4 @@ func (i *InstantSeriesChunkIterator) AtT() int64 {
 // Err is chunkenc.Iterator interface implementation.
 func (i *InstantSeriesChunkIterator) Err() error {
 	return nil
-}
-
-//
-// SeriesSet
-//
-
-type NSeriesSet struct {
-	mint         int64
-	maxt         int64
-	deserializer *cppbridge.HeadDataStorageDeserializer
-
-	index         int
-	seriesSet     []*protoSeries
-	currentSeries *NSeries
-}
-
-func (ss *NSeriesSet) Next() bool {
-	if ss.index >= len(ss.seriesSet) {
-		return false
-	}
-
-	ss.currentSeries = &NSeries{
-		seriesID:       ss.seriesSet[ss.index].seriesID,
-		mint:           ss.mint,
-		maxt:           ss.maxt,
-		labelSet:       labels.Labels{},
-		sampleProvider: nil,
-	}
-
-	ss.index++
-	return true
-}
-
-func (ss *NSeriesSet) At() storage.Series {
-	return ss.currentSeries
-}
-
-func (ss *NSeriesSet) Err() error {
-	return nil
-}
-
-func (ss *NSeriesSet) Warnings() annotations.Annotations {
-	return nil
-}
-
-//
-// Series
-//
-
-type NSeries struct {
-	seriesID       uint32
-	mint, maxt     int64
-	labelSet       labels.Labels
-	sampleProvider SampleProvider
-}
-
-func (s *NSeries) Labels() labels.Labels {
-	return s.labelSet
-}
-
-func (s *NSeries) Iterator(_ chunkenc.Iterator) chunkenc.Iterator {
-	return s.sampleProvider.Samples(s.seriesID, s.mint, s.maxt)
-}
-
-//
-// protoSeries
-//
-
-type protoSeries struct {
-	chunksMetadata []cppbridge.HeadDataStorageSerializedChunkMetadata
-	lss            *cppbridge.LabelSetStorage
-	seriesID       uint32
-	labelSetLength uint16
 }

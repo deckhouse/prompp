@@ -180,6 +180,22 @@ func (lss *LabelSetStorage) Pointer() uintptr {
 	return lss.pointer
 }
 
+// RangeLabelSet serialize to slice labels from lss and calls f on each label.
+func (lss *LabelSetStorage) RangeLabelSet(lsID uint32, do func(l Label) error) error {
+	labelSet := primitivesLabelSetSerialize(lss.pointer, lsID)
+
+	for i := range labelSet {
+		if err := do(labelSet[i]); err != nil {
+			primitivesLabelSetFree(labelSet)
+			return err
+		}
+	}
+
+	primitivesLabelSetFree(labelSet)
+
+	return nil
+}
+
 //
 // LSSQueryResult
 //
@@ -311,9 +327,9 @@ func newLSSQueryResult(
 	return lqr
 }
 
-// Status query execution.
-func (r *LSSQueryResult) Status() uint32 {
-	return r.queryResult.status
+// GetByIndex return ls id and length for ls id by index.
+func (r *LSSQueryResult) GetByIndex(i int) (uint32, uint16) {
+	return r.queryResult.matches[i], r.queryResult.labelSetLengths[i]
 }
 
 // IDs return labels sets ids.
@@ -321,9 +337,19 @@ func (r *LSSQueryResult) IDs() []uint32 {
 	return r.queryResult.matches
 }
 
+// LSS return current read only lss from result.
+func (r *LSSQueryResult) LSS() *LabelSetStorage {
+	return r.lssRO
+}
+
 // LabelSetLengths return labels sets lengths.
 func (r *LSSQueryResult) LabelSetLengths() []uint16 {
 	return r.queryResult.labelSetLengths
+}
+
+// Len of result.
+func (r *LSSQueryResult) Len() int {
+	return len(r.queryResult.matches)
 }
 
 // MatchesRange calls callback sequentially for each result.
@@ -333,11 +359,16 @@ func (r *LSSQueryResult) MatchesRange(callback func(lss *LabelSetStorage, lsid u
 	}
 }
 
-// MatchesRange calls callback sequentially for each result.
+// MatchesIndexRange calls callback sequentially for each result.
 func (r *LSSQueryResult) MatchesIndexRange(callback func(lss *LabelSetStorage, index int, lsid uint32, length uint16)) {
 	for i, lsId := range r.queryResult.matches {
 		callback(r.lssRO, i, lsId, r.queryResult.labelSetLengths[i])
 	}
+}
+
+// Status query execution.
+func (r *LSSQueryResult) Status() uint32 {
+	return r.queryResult.status
 }
 
 //

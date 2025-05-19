@@ -1,19 +1,14 @@
 package cppbridge
 
-import (
-	"github.com/prometheus/prometheus/model/labels"
-)
-
 //
 // LabelsCpp
 //
 
 // LabelsCpp is a sorted set of labels. Is implemented by a cpp lss.
 type LabelsCpp struct {
-	serializedLS labels.Labels
-	lss          *LabelSetStorage
-	id           uint32
-	length       uint16
+	lss    *LabelSetStorage
+	id     uint32
+	length uint16
 }
 
 // NewLabelsCpp init LabelsCpp with LabelSetStorage and ls id.
@@ -46,29 +41,14 @@ func (ls *LabelsCpp) Len() int {
 	return length
 }
 
-// Labels returns the name/value pairs added as a Labels object.
-func (ls *LabelsCpp) Labels() labels.Labels {
-	if ls.IsZero() || ls.Len() == 0 {
-		return labels.Labels{}
-	}
-
-	if !ls.serializedLS.IsEmpty() {
-		return ls.serializedLS
-	}
-
-	labelSet := primitivesLabelSetSerialize(ls.lss.Pointer(), ls.id)
-
-	sb := labels.NewScratchBuilder(ls.Len())
-	for i := range labelSet {
-		sb.Add(labelSet[i].Name, labelSet[i].Value)
-	}
-	sb.Overwrite(&ls.serializedLS)
-
-	primitivesLabelSetFree(labelSet)
-
-	return ls.serializedLS
-}
-
 func (ls *LabelsCpp) ID() uint32 {
 	return ls.id
+}
+
+func (ls *LabelsCpp) LSS() *LabelSetStorage {
+	return ls.lss
+}
+
+func (ls *LabelsCpp) Length() uint16 {
+	return ls.length
 }
