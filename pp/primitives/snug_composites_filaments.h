@@ -16,7 +16,7 @@ class Symbol {
   uint32_t pos_;
   uint32_t length_;
 
-  static constexpr bool kIsReadOnly = std::same_as<Vector<uint8_t>, BareBones::SharedSpan<uint8_t>>;
+  static constexpr bool kIsReadOnly = BareBones::IsSpan<Vector<uint8_t>>::value;
 
  public:
   // NOLINTNEXTLINE(readability-identifier-naming)
@@ -179,7 +179,7 @@ class LabelNameSet {
   uint32_t pos_;
   uint32_t size_;
 
-  static constexpr bool kIsReadOnly = std::same_as<Vector<uint8_t>, BareBones::SharedSpan<uint8_t>>;
+  static constexpr bool kIsReadOnly = BareBones::IsSpan<Vector<uint8_t>>::value;
 
  public:
   using symbols_table_type = SymbolsTableType<Vector>;
@@ -415,7 +415,7 @@ class LabelSet {
   uint32_t lns_id_;
   uint32_t pos_;
 
-  static constexpr bool kIsReadOnly = std::same_as<Vector<uint8_t>, BareBones::SharedSpan<uint8_t>>;
+  static constexpr bool kIsReadOnly = BareBones::IsSpan<Vector<uint8_t>>::value;
 
  public:
   using symbols_tables_type = std::conditional_t<kIsReadOnly, BareBones::Vector<SymbolsTableType<Vector>>, Vector<std::unique_ptr<SymbolsTableType<Vector>>>>;

@@ -18,7 +18,6 @@ enum class LssType : uint32_t {
 
 using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie, series_index::trie::CedarMatchesList>;
 using OrderedEncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::OrderedEncodingBimap<BareBones::Vector>;
-using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<BareBones::SharedSpan>;
 
 namespace lss_memory {
 
@@ -36,6 +35,10 @@ struct Reallocator {
 };
 
 }  // namespace lss_memory
+
+template <class T>
+using SharedSpan = BareBones::SharedSpan<T, lss_memory::Reallocator>;
+using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpan>;
 
 template <class T>
 using SharedVector = BareBones::SharedVector<T, lss_memory::Reallocator>;

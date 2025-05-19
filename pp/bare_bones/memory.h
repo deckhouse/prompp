@@ -221,7 +221,7 @@ struct DefaultReallocator {
   PROMPP_ALWAYS_INLINE static void free(void* memory) { return std::free(memory); }
 };
 
-template <class T, ReallocatorInterface Reallocator = DefaultReallocator>
+template <class T, ReallocatorInterface Reallocator>
 class SharedPtr {
  public:
   using RefCounter = uint32_t;
@@ -356,7 +356,7 @@ class SharedPtr {
   [[nodiscard]] PROMPP_ALWAYS_INLINE void* raw_memory() const noexcept { return data_ == nullptr ? nullptr : reinterpret_cast<ControlBlock*>(data_) - 1; }
 };
 
-template <class T, ReallocatorInterface Reallocator = DefaultReallocator>
+template <class T, ReallocatorInterface Reallocator>
 class SharedMemory : public GenericMemory<SharedMemory<T, Reallocator>, uint32_t, T> {
  public:
   using SizeType = uint32_t;
@@ -415,13 +415,13 @@ class SharedMemory : public GenericMemory<SharedMemory<T, Reallocator>, uint32_t
 template <template <class> class ControlBlock, class T>
 struct IsTriviallyReallocatable<Memory<ControlBlock, T>> : std::true_type {};
 
-template <class T>
-struct IsTriviallyReallocatable<SharedMemory<T>> : std::true_type {};
+template <class T, ReallocatorInterface Reallocator>
+struct IsTriviallyReallocatable<SharedMemory<T, Reallocator>> : std::true_type {};
 
 template <template <class> class ControlBlock, class T>
 struct IsZeroInitializable<Memory<ControlBlock, T>> : std::true_type {};
 
-template <class T>
-struct IsZeroInitializable<SharedMemory<T>> : std::true_type {};
+template <class T, ReallocatorInterface Reallocator>
+struct IsZeroInitializable<SharedMemory<T, Reallocator>> : std::true_type {};
 
 }  // namespace BareBones

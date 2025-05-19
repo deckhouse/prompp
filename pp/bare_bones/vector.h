@@ -358,7 +358,7 @@ class MemoryBasedVector : public GenericVector<MemoryBasedVector<MemoryControlBl
 template <class T>
 using Vector = MemoryBasedVector<MemoryControlBlockWithItemCount, T>;
 
-template <class T, ReallocatorInterface Reallocator = DefaultReallocator>
+template <class T, ReallocatorInterface Reallocator>
 class SharedVector : public GenericVector<SharedVector<T, Reallocator>, typename SharedMemory<T, Reallocator>::SizeType, T> {
  public:
   using SizeType = typename SharedMemory<T, Reallocator>::SizeType;
@@ -397,23 +397,23 @@ struct IsTriviallyReallocatable<SharedVector<T, Reallocator>> : std::true_type {
 template <class T>
 struct IsZeroInitializable<Vector<T>> : std::true_type {};
 
-template <class T>
-struct IsZeroInitializable<SharedVector<T>> : std::true_type {};
+template <class T, ReallocatorInterface Reallocator>
+struct IsZeroInitializable<SharedVector<T, Reallocator>> : std::true_type {};
 
-template <class T>
+template <class T, ReallocatorInterface Reallocator>
 class SharedSpan {
  public:
   using iterator_category = std::contiguous_iterator_tag;
   using value_type = T;
   using iterator = T*;
   using const_iterator = const T*;
-  using SizeType = typename SharedVector<T>::SizeType;
+  using SizeType = typename SharedVector<T, Reallocator>::SizeType;
 
   SharedSpan() noexcept = default;
 
-  template <class Item, ReallocatorInterface Reallocator = DefaultReallocator>
+  template <class Item>
     requires std::is_trivially_destructible_v<Item>
-  explicit SharedSpan(const SharedVector<Item, Reallocator>& vector) : data_(reinterpret_cast<const SharedPtr<T>&>(vector.shared_ptr())) {}
+  explicit SharedSpan(const SharedVector<Item, Reallocator>& vector) : data_(reinterpret_cast<const SharedPtr<T, Reallocator>&>(vector.shared_ptr())) {}
 
   SharedSpan(const SharedSpan&) = default;
   SharedSpan(SharedSpan&& other) noexcept : data_(std::move(other.data_)) {}
@@ -442,7 +442,13 @@ class SharedSpan {
   [[nodiscard]] PROMPP_ALWAYS_INLINE const T* end() const noexcept { return begin() + size(); }
 
  private:
-  SharedPtr<T> data_;
+  SharedPtr<T, Reallocator> data_;
 };
+
+template <class T>
+struct IsSpan : std::false_type {};
+
+template <class T, ReallocatorInterface Reallocator>
+struct IsSpan<SharedSpan<T, Reallocator>> : std::true_type {};
 
 }  // namespace BareBones
