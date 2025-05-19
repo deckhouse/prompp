@@ -61,13 +61,6 @@ func (s *ChunksSeriesSetTestSuite) TestAll() {
 		MaxT: maxt,
 	})
 
-	// labelSets := make([]*cppbridge.LabelsCpp, 0, len(lssQueryResult.IDs()))
-	// lssQueryResult.MatchesRange(func(lss *cppbridge.LabelSetStorage, lsId uint32, labelSetLength uint16) {
-	// 	labelSets = append(labelSets, cppbridge.NewLabelsCpp(lss, lsId, labelSetLength))
-	// })
-
-	// runtime.KeepAlive(lssQueryResult)
-
 	css := NewChunkSeriesSet(lssQueryResult, chunkRecoder)
 	var ci chunks.Iterator
 
