@@ -13,7 +13,8 @@ enum class LssType : uint32_t {
   kEncodingBimap = 0,
   kOrderedEncodingBimap,
   kQueryableEncodingBimap,
-  kReadonly,
+  kReadonlyEncodingBimap,
+  kReadonlyQueryableEncodingBimap,
 };
 
 using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie, series_index::trie::CedarMatchesList>;
@@ -37,25 +38,28 @@ struct Reallocator {
 }  // namespace lss_memory
 
 template <class T>
-using SharedSpan = BareBones::SharedSpan<T, lss_memory::Reallocator>;
-using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpan>;
+using SharedSpanWithChangesDetection = BareBones::SharedSpan<T, lss_memory::Reallocator>;
 
 template <class T>
-using SharedVector = BareBones::SharedVector<T, lss_memory::Reallocator>;
+using SharedVectorWithChangesDetection = BareBones::SharedVector<T, lss_memory::Reallocator>;
+
+template <class T>
+using SharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+
+template <class T>
+using SharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
+
+using ReadonlyQueryableEncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpanWithChangesDetection>;
+using ReadonlyEncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpan>;
+
 using EncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<SharedVector>;
 using QueryableEncodingBimap =
-    series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, SharedVector, TrieIndex>;
+    series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, SharedVectorWithChangesDetection, TrieIndex>;
 
-template <class Lss>
-concept readonly_lss_constructible_from = std::is_same_v<Lss, QueryableEncodingBimap> || std::is_same_v<Lss, EncodingBimap>;
-
-using LssVariant = std::variant<EncodingBimap, OrderedEncodingBimap, QueryableEncodingBimap, ReadonlyLss>;
+using LssVariant = std::variant<EncodingBimap, OrderedEncodingBimap, QueryableEncodingBimap, ReadonlyEncodingBimap, ReadonlyQueryableEncodingBimap>;
 using LssVariantPtr = std::unique_ptr<LssVariant>;
 
-using ReadonlyLssPtr = std::unique_ptr<ReadonlyLss>;
-
 static_assert(sizeof(LssVariantPtr) == sizeof(void*));
-static_assert(sizeof(ReadonlyLssPtr) == sizeof(void*));
 
 inline LssVariantPtr create_lss(LssType type) {
   switch (type) {
@@ -78,15 +82,20 @@ inline LssVariantPtr create_lss(LssType type) {
 }
 
 inline LssVariantPtr create_readonly_lss(const LssVariant& lss_variant) {
-  return std::visit(
-      []<class Lss>(const Lss& lss) -> LssVariantPtr {
-        if constexpr (readonly_lss_constructible_from<Lss>) {
-          return std::make_unique<LssVariant>(std::in_place_index<static_cast<int>(LssType::kReadonly)>, lss);
-        }
+  switch (static_cast<LssType>(lss_variant.index())) {
+    case LssType::kEncodingBimap: {
+      return std::make_unique<LssVariant>(std::in_place_index<static_cast<int>(LssType::kReadonlyEncodingBimap)>, std::get<EncodingBimap>(lss_variant));
+    }
 
-        throw BareBones::Exception(0x8e6a06385b011215, "Readonly lss can't be created");
-      },
-      lss_variant);
+    case LssType::kQueryableEncodingBimap: {
+      return std::make_unique<LssVariant>(std::in_place_index<static_cast<int>(LssType::kReadonlyQueryableEncodingBimap)>,
+                                          std::get<QueryableEncodingBimap>(lss_variant));
+    }
+
+    default: {
+      throw BareBones::Exception(0x8e6a06385b011215, "Readonly lss can't be created");
+    }
+  }
 }
 
 }  // namespace entrypoint::head
