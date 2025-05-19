@@ -26,6 +26,10 @@ type SeriesSet struct {
 }
 
 func (ss *SeriesSet) Next() bool {
+	if ss.lssQueryResult == nil {
+		return false
+	}
+
 	var (
 		lsID           uint32
 		lsLength       uint16
