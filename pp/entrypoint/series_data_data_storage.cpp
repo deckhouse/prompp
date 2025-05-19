@@ -8,6 +8,7 @@
 #include "series_data/querier/instant_querier.h"
 #include "series_data/querier/querier.h"
 #include "series_data/serialization/serializer.h"
+#include "series_data/snapshot/unloader.h"
 
 using entrypoint::head::DataStoragePtr;
 using entrypoint::head::QueryableEncodingBimap;
@@ -184,4 +185,27 @@ extern "C" void prompp_series_data_chunk_recoder_dtor(void* args) {
   };
 
   static_cast<Arguments*>(args)->~Arguments();
+}
+
+extern "C" void prompp_series_data_data_storage_unload(void* args, void* res) {
+  using PromPP::Primitives::LabelSetID;
+  using PromPP::Primitives::Go::BytesStream;
+  using PromPP::Primitives::Go::Slice;
+  using series_data::DataStorage;
+  using series_data::snapshot::Unloader;
+
+  struct Arguments {
+    DataStorage* data_storage;
+  };
+
+  using Result = struct {
+    Slice<char> unloaded_data;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  const auto out = new (res) Result();
+
+  Unloader unloader{*in->data_storage};
+  BytesStream bytes_stream{&out->unloaded_data};
+  unloader.unload(bytes_stream);
 }

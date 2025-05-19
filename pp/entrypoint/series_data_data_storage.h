@@ -149,6 +149,19 @@ void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, void* res);
  */
 void prompp_series_data_chunk_recoder_dtor(void* args);
 
+/**
+ * @brief Unloads data of unused series
+ *
+ * @param args {
+ *     dataStorage uintptr // pointer to constructed data storage
+ * }
+ *
+ * @param res {
+ *     unloadedData []byte // encoded unload data
+ * }
+ */
+void prompp_series_data_data_storage_unload(void* args, void* res);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif
