@@ -75,6 +75,7 @@ type Head interface {
 	Close() error
 	Discard() error
 	String() string
+	CopySeriesFrom(other Head)
 }
 
 type Distributor interface {

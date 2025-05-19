@@ -56,11 +56,15 @@ jobs:
           registry_login: ${{ secrets.DECKHOUSE_REGISTRY_LOGIN }}
           registry_password: "${{ secrets.DECKHOUSE_REGISTRY_PASSWORD }}"
 
+      - name: Normalize branch name
+        id: normalize
+        run: |
+          RAW_BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
+          BRANCH_NAME=$(echo "$RAW_BRANCH_NAME" | sed -E 's|/|-|g; s/^v//')
+          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+
       - name: Build Images
         run: |
-          BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
-          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
-          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/^v//')
           export BAZEL_ARCH=${{ matrix.BAZEL_ARCH }}
           export GO_ARCH=${{ matrix.GO_ARCH }}
           export COMPILATION_MODE="opt"
@@ -68,22 +72,19 @@ jobs:
           export WERF_BUILDAH_MODE=auto
 
           werf export --platform linux/${{ matrix.arch }} --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp \
-            --tag=index.docker.io/prompp/prompp:$BRANCH_NAME-${{ matrix.arch }} \
-            --tag=${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:$BRANCH_NAME-${{ matrix.arch }}
+            --tag=index.docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }} \
+            --tag=${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }}
 
       - name: Extract binaries from Docker images
         run: |
-          BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
-          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
-          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's/^v//')
-          docker pull docker.io/prompp/prompp:$BRANCH_NAME-${{ matrix.arch }}
-          CONTAINER_ID_PROMPP=$(docker create docker.io/prompp/prompp:$BRANCH_NAME-${{ matrix.arch }})
+          docker pull docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }}
+          CONTAINER_ID_PROMPP=$(docker create docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }})
 
           docker cp $CONTAINER_ID_PROMPP:/bin/prompp ./prompp
           docker cp $CONTAINER_ID_PROMPP:/bin/promtool ./promtool
           docker cp $CONTAINER_ID_PROMPP:/bin/prompptool ./prompptool
           docker rm $CONTAINER_ID_PROMPP
-          docker rmi docker.io/prompp/prompp:$BRANCH_NAME-${{ matrix.arch }}
+          docker rmi docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }}
 
       - name: Archive binaries
         run: |
@@ -97,8 +98,43 @@ jobs:
           path: prompp-binaries-${{ matrix.arch }}.tar.gz
           retention-days: 7
 
-  release:
+  make-multiarch:
     needs: build-and-push
+    runs-on: fsn-dev-perftest-runner
+    steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Normalize branch name
+        id: normalize
+        run: |
+          RAW_BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
+          BRANCH_NAME=$(echo "$RAW_BRANCH_NAME" | sed -E 's|/|-|g; s/^v//')
+          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push multi-arch manifest Dockerhub
+        run: |
+          docker manifest create --amend docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }} \
+            docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-amd64 \
+            docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-arm64
+          
+          docker manifest push docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }} --purge
+
+      - name: Create and push multi-arch manifest Deckhouse registry
+        run: |
+          docker manifest create --amend ${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }} \
+            ${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-amd64 \
+            ${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-arm64
+          
+          docker manifest push ${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }} --purge
+
+  release:
+    needs: make-multiarch
     permissions:
       contents: write
     runs-on: fsn-dev-gitlab-runner

@@ -163,7 +163,7 @@ class RegexpMatchAnalyzer {
           return true;
         }
       } else {
-        if (const auto start = skip_begin_text_operation(alternative); alternative->sub()[start]->op() == kRegexpEndText) {
+        if (const auto start = skip_begin_text_operation(alternative); start == alternative->nsub() || alternative->sub()[start]->op() == kRegexpEndText) {
           return true;
         }
       }
@@ -210,25 +210,31 @@ class RegexpSearcher {
 
       case re2::RegexpOp::kRegexpConcat: {
         const auto i = RegexpMatchAnalyzer::skip_begin_text_operation(rgx);
-        switch (rgx->sub()[i]->op()) {
-          case re2::RegexpOp::kRegexpLiteral:
-          case re2::RegexpOp::kRegexpLiteralString:
-          case re2::RegexpOp::kRegexpCharClass: {
-            if (rgx->nsub() - i > 2) {
-              for (auto j = i + 1; j < rgx->nsub(); j++) {
-                rgx->sub()[j]->Incref();
+        if (i < rgx->nsub()) [[likely]] {
+          switch (rgx->sub()[i]->op()) {
+            case re2::RegexpOp::kRegexpLiteral:
+            case re2::RegexpOp::kRegexpLiteralString:
+            case re2::RegexpOp::kRegexpCharClass: {
+              if (rgx->nsub() - i > 2) {
+                for (auto j = i + 1; j < rgx->nsub(); j++) {
+                  rgx->sub()[j]->Incref();
+                }
+                const auto rgx_tail = re2::Regexp::Concat(rgx->sub() + i + 1, rgx->nsub() - i - 1, rgx->parse_flags());
+                process_exact_prefix(depth_limit, trv, rgx->sub()[i], rgx_tail);
+                rgx_tail->Decref();
+              } else if (rgx->nsub() - i > 1) {
+                process_exact_prefix(depth_limit, trv, rgx->sub()[i], rgx->sub()[i + 1]);
+              } else {
+                process_exact_prefix(depth_limit, trv, rgx->sub()[i]);
               }
-              const auto rgx_tail = re2::Regexp::Concat(rgx->sub() + i + 1, rgx->nsub() - i - 1, rgx->parse_flags());
-              process_exact_prefix(depth_limit, trv, rgx->sub()[i], rgx_tail);
-              rgx_tail->Decref();
-            } else {
-              process_exact_prefix(depth_limit, trv, rgx->sub()[i], rgx->sub()[i + 1]);
+              break;
             }
-            break;
+            default: {
+              process_subtrie_by_regexp(trv, rgx);
+            }
           }
-          default: {
-            process_subtrie_by_regexp(trv, rgx);
-          }
+        } else {
+          process_one_exact_prefix(depth_limit, trv, "");
         }
 
         break;
