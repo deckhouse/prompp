@@ -180,6 +180,11 @@ func (lss *LabelSetStorage) Pointer() uintptr {
 	return lss.pointer
 }
 
+// CreateReadonlyLss - create readonly copy of lss
+func (lss *LabelSetStorage) CreateReadonlyLss() *LabelSetStorage {
+	return newReadOnlyLssStorage(primitivesLSSCreateReadonlyLss(lss.pointer))
+}
+
 // RangeLabelSet serialize to slice labels from lss and calls f on each label.
 func (lss *LabelSetStorage) RangeLabelSet(lsID uint32, do func(l Label) error) error {
 	labelSet := primitivesLabelSetSerialize(lss.pointer, lsID)
