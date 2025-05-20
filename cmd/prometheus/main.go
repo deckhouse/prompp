@@ -723,7 +723,7 @@ func main() {
 		time.Duration(cfg.tsdb.RetentionDuration),
 		time.Duration(cfg.HeadRetentionTimeout),
 		// x3 ScrapeInterval timeout for write block
-		time.Duration(cfgFile.GlobalConfig.ScrapeInterval*6),
+		time.Duration(cfgFile.GlobalConfig.ScrapeInterval*3),
 	)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create a receiver", "err", err)
