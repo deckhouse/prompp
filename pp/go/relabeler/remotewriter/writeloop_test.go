@@ -231,10 +231,8 @@ func TestWriteLoopWrite(t *testing.T) {
 			SigV4Config:    nil,
 			AzureADConfig:  nil,
 		},
-		ExternalLabels: labels.Labels{
-			{Name: "lol", Value: "kek"},
-		},
-		ReadTimeout: time.Second * 3,
+		ExternalLabels: labels.FromStrings("lol", "kek"),
+		ReadTimeout:    time.Second * 3,
 	})
 
 	wl := newWriteLoop(tmpDir, destination, testHeads.Catalog, clock)
