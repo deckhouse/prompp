@@ -124,8 +124,12 @@ func (lss *LabelSetStorage) AllocatedMemory() uint64 {
 
 // FindOrEmplace find in lss LabelSet or emplace and return ls id.
 func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) uint32 {
-	id := primitivesLSSFindOrEmplace(lss.pointer, labelSet)
-	return id
+	return primitivesLSSFindOrEmplace(lss.pointer, labelSet)
+}
+
+// FindOrEmplaceBuilder find in lss LabelSet or emplace and return ls id.
+func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet model.CppLabelSetBuilder) uint32 {
+	return primitivesLSSFindOrEmplaceBuilder(lss.pointer, labelSet)
 }
 
 // Query returns a LSSQueryResult that matches the given label matchers.
@@ -178,6 +182,11 @@ func (lss *LabelSetStorage) CopyAddedSeries(destination *LabelSetStorage) {
 // Pointer return c-pointer.
 func (lss *LabelSetStorage) Pointer() uintptr {
 	return lss.pointer
+}
+
+// CreateReadonlyLss - create readonly copy of lss
+func (lss *LabelSetStorage) CreateReadonlyLss() *LabelSetStorage {
+	return newReadOnlyLssStorage(primitivesLSSCreateReadonlyLss(lss.pointer))
 }
 
 // RangeLabelSet serialize to slice labels from lss and calls f on each label.
@@ -345,6 +354,11 @@ func (r *LSSQueryResult) LSS() *LabelSetStorage {
 // LabelSetLengths return labels sets lengths.
 func (r *LSSQueryResult) LabelSetLengths() []uint16 {
 	return r.queryResult.labelSetLengths
+}
+
+// ReadonlyLss return readonly lss
+func (r *LSSQueryResult) ReadonlyLss() *LabelSetStorage {
+	return r.lssRO
 }
 
 // Len of result.

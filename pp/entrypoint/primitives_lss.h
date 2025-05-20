@@ -63,6 +63,26 @@ void prompp_primitives_lss_allocated_memory(void* args, void* res);
 void prompp_primitives_lss_find_or_emplace(void* args, void* res);
 
 /**
+ * @brief insert label set builder into lss
+ *
+ * @param args {
+ *     lss uintptr                    // pointer to constructed lss;
+ *     builder struct {
+ *        readonly_lss uintptr        // pointer to constructed lss;
+ *        ls_id        uint32         // series id
+ *        sorted_add   []model.Label  // slice of sorted by name labels
+ *        sorted_del   []string       // slice of sorted label names
+ *     }
+
+ * }
+ *
+ * @param res {
+ *     ls_id uint32 // inserted (or found) label set id
+ * }
+ */
+void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
+
+/**
  * @brief query series from lss
  *
  * @param args {
@@ -144,6 +164,19 @@ void prompp_primitives_lss_query_label_names(void* args, void* res);
  * }
  */
 void prompp_primitives_lss_query_label_values(void* args, void* res);
+
+/**
+ * @brief return size of allocated memory for label sets.
+ *
+ * @param args {
+ *     lss uintptr                 // pointer to constructed queryable lss;
+ * }
+ *
+ * @param res {
+ *     lss_copy          uintptr  // readonly copy of lss
+ * }
+ */
+void prompp_create_readonly_lss(void* args, void* res);
 
 #ifdef __cplusplus
 }  // extern "C"

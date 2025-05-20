@@ -47,6 +47,28 @@ func (s *LSSSuite) TestQueryableLSS() {
 	s.Require().NotEqual(0, cp)
 }
 
+func (s *LSSSuite) TestCreateReadonlyLssFromEncodingBimap() {
+	// Arrange
+	lss := cppbridge.NewLssStorage()
+
+	// Act
+	readonlyLss := lss.CreateReadonlyLss()
+
+	// Assert
+	s.Require().NotNil(readonlyLss.Pointer())
+}
+
+func (s *LSSSuite) TestCreateReadonlyLssFromQueryableEncodingBimap() {
+	// Arrange
+	lss := cppbridge.NewQueryableLssStorage()
+
+	// Act
+	readonlyLss := lss.CreateReadonlyLss()
+
+	// Assert
+	s.Require().NotNil(readonlyLss.Pointer())
+}
+
 func (s *LSSSuite) TestLabels() {
 	lsMap := map[string]string{
 		"__name__": "ubername",
@@ -384,4 +406,48 @@ func (s *QueryableLSSSuite) TestCopyAddedSeries() {
 	// Assert
 	s.Equal(labelSetToCppBridgeLabels(s.labelSets), lssCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
 	s.Equal(emptyLabelsSets, lssCopyOfCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
+}
+
+func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithExistingLabelSet() {
+	// Arrange
+	queryResult := s.lss.Query([]model.LabelMatcher{
+		{Name: "lol", Value: "kek", MatcherType: model.MatcherTypeExactMatch},
+	}, cppbridge.LSSQuerySourceOther)
+
+	// Act
+	existingLsIdWithAdd := s.lss.FindOrEmplaceBuilder(model.CppLabelSetBuilder{
+		ReadonlyLss: queryResult.ReadonlyLss().Pointer(),
+		LsId:        0,
+		SortedAdd:   []model.SimpleLabel{{Name: "che", Value: "bureck"}},
+		SortedDel:   nil,
+	})
+	existingLsIdWithDel := s.lss.FindOrEmplaceBuilder(model.CppLabelSetBuilder{
+		ReadonlyLss: queryResult.ReadonlyLss().Pointer(),
+		LsId:        1,
+		SortedAdd:   nil,
+		SortedDel:   []string{"che"},
+	})
+
+	// Assert
+	s.Equal(uint32(1), existingLsIdWithAdd)
+	s.Equal(uint32(0), existingLsIdWithDel)
+}
+
+func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithNewLabelSet() {
+	// Arrange
+	queryResult := s.lss.Query([]model.LabelMatcher{
+		{Name: "lol", Value: "kek", MatcherType: model.MatcherTypeExactMatch},
+	}, cppbridge.LSSQuerySourceOther)
+
+	// Act
+	expectedLsId := len(s.labelSetIDs)
+	existingLsId := s.lss.FindOrEmplaceBuilder(model.CppLabelSetBuilder{
+		ReadonlyLss: queryResult.ReadonlyLss().Pointer(),
+		LsId:        0,
+		SortedAdd:   []model.SimpleLabel{{Name: "new_lol", Value: "new_kek"}},
+		SortedDel:   nil,
+	})
+
+	// Assert
+	s.Equal(uint32(expectedLsId), existingLsId)
 }

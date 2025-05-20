@@ -347,12 +347,22 @@ class LabelNameSet {
   };
 
   PROMPP_ALWAYS_INLINE LabelNameSet() noexcept = default;
-  template <class T>
+  template <class OtherLabelNameSet>
   // TODO requires is_label_name_set
-  PROMPP_ALWAYS_INLINE LabelNameSet(data_type& data, const T& lns) noexcept : pos_(data.symbols_ids_sequences.size()), size_(lns.size()) {
+  PROMPP_ALWAYS_INLINE LabelNameSet(data_type& data, const OtherLabelNameSet& lns) noexcept : pos_(data.symbols_ids_sequences.size()) {
+    if constexpr (BareBones::concepts::has_size<OtherLabelNameSet>) {
+      size_ = lns.size();
+    } else {
+      size_ = 0;
+    }
+
     for (const auto& label_name : lns) {
       uint32_t smbl_id = data.symbols_table.find_or_emplace(label_name);
       data.symbols_ids_sequences.push_back(smbl_id);
+
+      if constexpr (!BareBones::concepts::has_size<OtherLabelNameSet>) {
+        ++size_;
+      }
     }
   }
 
