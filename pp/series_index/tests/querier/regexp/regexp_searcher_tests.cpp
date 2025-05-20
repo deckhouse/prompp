@@ -1,16 +1,16 @@
 #include <gtest/gtest.h>
 
 #include "bare_bones/utf8.h"
-#include "series_index/querier/regexp_searcher.h"
+#include "series_index/querier/regexp/regexp_searcher.h"
 
 namespace {
 
 using PromPP::Prometheus::MatchStatus;
-using series_index::querier::RegexpMatchAnalyzer;
-using series_index::querier::RegexpParser;
-using series_index::querier::RegexpSearcher;
+using series_index::querier::regexp::RegexpMatchAnalyzer;
+using series_index::querier::regexp::RegexpParser;
+using series_index::querier::regexp::RegexpSearcher;
 
-using Status = series_index::querier::RegexpMatchAnalyzer::Status;
+using Status = RegexpMatchAnalyzer::Status;
 
 struct RegexpMatchAnalyzerTestCase {
   std::string regexp;
