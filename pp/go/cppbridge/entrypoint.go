@@ -1505,7 +1505,7 @@ func prometheusPerShardRelabelerInputRelabeling(
 	options RelabelerOptions,
 	shardsInnerSeries []*InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
-) (stats RelabelerStats, exception []byte) {
+) (stats RelabelerStats, exception []byte, targetLssHasReallocations bool) {
 	args := struct {
 		shardsInnerSeries     []*InnerSeries
 		shardsRelabeledSeries []*RelabeledSeries
@@ -1518,7 +1518,8 @@ func prometheusPerShardRelabelerInputRelabeling(
 	}{shardsInnerSeries, shardsRelabeledSeries, options, perShardRelabeler, hashdex, cache, inputLss, targetLss}
 	var res struct {
 		RelabelerStats
-		exception []byte
+		exception                 []byte
+		targetLssHasReallocations bool
 	}
 	start := time.Now().UnixNano()
 	fastcgo.UnsafeCall2(
@@ -1529,7 +1530,7 @@ func prometheusPerShardRelabelerInputRelabeling(
 	inputRelabelerInputRelabelingSum.Add(float64(time.Now().UnixNano() - start))
 	inputRelabelerInputRelabelingCount.Inc()
 
-	return res.RelabelerStats, res.exception
+	return res.RelabelerStats, res.exception, res.targetLssHasReallocations
 }
 
 // prometheusPerShardRelabelerInputRelabelingWithStalenans wrapper for relabeling incoming
@@ -1540,7 +1541,7 @@ func prometheusPerShardRelabelerInputRelabelingWithStalenans(
 	options RelabelerOptions,
 	shardsInnerSeries []*InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
-) (stats RelabelerStats, exception []byte) {
+) (stats RelabelerStats, exception []byte, targetLssHasReallocations bool) {
 	args := struct {
 		shardsInnerSeries     []*InnerSeries
 		shardsRelabeledSeries []*RelabeledSeries
@@ -1566,7 +1567,8 @@ func prometheusPerShardRelabelerInputRelabelingWithStalenans(
 	}
 	var res struct {
 		RelabelerStats
-		exception []byte
+		exception                 []byte
+		targetLssHasReallocations bool
 	}
 	start := time.Now().UnixNano()
 	fastcgo.UnsafeCall2(
@@ -1577,7 +1579,7 @@ func prometheusPerShardRelabelerInputRelabelingWithStalenans(
 	inputRelabelerRelabelingWithStalenansSum.Add(float64(time.Now().UnixNano() - start))
 	inputRelabelerRelabelingWithStalenansCount.Inc()
 
-	return res.RelabelerStats, res.exception
+	return res.RelabelerStats, res.exception, res.targetLssHasReallocations
 }
 
 // prometheusPerShardRelabelerAppendRelabelerSeries - wrapper for add relabeled ls to lss,
@@ -1587,7 +1589,7 @@ func prometheusPerShardRelabelerAppendRelabelerSeries(
 	innerSeries *InnerSeries,
 	relabeledSeries *RelabeledSeries,
 	relabelerStateUpdate *RelabelerStateUpdate,
-) []byte {
+) (exception []byte, targetLssHasReallocations bool) {
 	args := struct {
 		innerSeries          *InnerSeries
 		relabeledSeries      *RelabeledSeries
@@ -1596,7 +1598,8 @@ func prometheusPerShardRelabelerAppendRelabelerSeries(
 		lss                  uintptr
 	}{innerSeries, relabeledSeries, relabelerStateUpdate, perShardRelabeler, lss}
 	var res struct {
-		exception []byte
+		exception                 []byte
+		targetLssHasReallocations bool
 	}
 	start := time.Now().UnixNano()
 	fastcgo.UnsafeCall2(
@@ -1607,7 +1610,7 @@ func prometheusPerShardRelabelerAppendRelabelerSeries(
 	inputRelabelerAppendRelabelerSeriesSum.Add(float64(time.Now().UnixNano() - start))
 	inputRelabelerAppendRelabelerSeriesCount.Inc()
 
-	return res.exception
+	return res.exception, res.targetLssHasReallocations
 }
 
 // prometheusPerShardRelabelerUpdateRelabelerState - wrapper for add to cache relabled data(third stage).

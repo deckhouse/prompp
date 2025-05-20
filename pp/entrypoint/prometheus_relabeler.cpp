@@ -195,6 +195,7 @@ extern "C" void prompp_prometheus_per_shard_relabeler_input_relabeling(void* arg
     uint32_t series_added{0};
     uint32_t series_drop{0};
     PromPP::Primitives::Go::Slice<char> error;
+    bool target_lss_has_reallocations{};
   };
 
   auto in = reinterpret_cast<Arguments*>(args);
@@ -205,8 +206,11 @@ extern "C" void prompp_prometheus_per_shard_relabeler_input_relabeling(void* arg
         [in, out](auto& hashdex) {
           auto& input_lss = std::get<entrypoint::head::EncodingBimap>(*in->input_lss);
           auto& target_lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->target_lss);
+
+          entrypoint::head::lss_memory::has_reallocations = false;
           in->per_shard_relabeler->input_relabeling(input_lss, target_lss, *in->cache, hashdex, in->options, *out, in->shards_inner_series,
                                                     in->shards_relabeled_series);
+          out->target_lss_has_reallocations = entrypoint::head::lss_memory::has_reallocations;
         },
         *in->hashdex);
   } catch (...) {
@@ -259,6 +263,7 @@ extern "C" void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stal
     uint32_t series_added{0};
     uint32_t series_drop{0};
     PromPP::Primitives::Go::Slice<char> error;
+    bool target_lss_has_reallocations{};
   };
 
   auto in = reinterpret_cast<Arguments*>(args);
@@ -269,8 +274,11 @@ extern "C" void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stal
         [in, out](auto& hashdex) {
           auto& input_lss = std::get<entrypoint::head::EncodingBimap>(*in->input_lss);
           auto& target_lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->target_lss);
+
+          entrypoint::head::lss_memory::has_reallocations = false;
           in->per_shard_relabeler->input_relabeling_with_stalenans(input_lss, target_lss, *in->cache, hashdex, in->options, *out, in->shards_inner_series,
                                                                    in->shards_relabeled_series, *in->state, in->def_timestamp);
+          out->target_lss_has_reallocations = entrypoint::head::lss_memory::has_reallocations;
         },
         *in->hashdex);
   } catch (...) {
@@ -312,6 +320,7 @@ extern "C" void prompp_prometheus_per_shard_relabeler_append_relabeler_series(vo
   };
   struct Result {
     PromPP::Primitives::Go::Slice<char> error;
+    bool target_lss_has_reallocations{};
   };
 
   auto in = reinterpret_cast<Arguments*>(args);
@@ -319,7 +328,10 @@ extern "C" void prompp_prometheus_per_shard_relabeler_append_relabeler_series(vo
 
   try {
     auto& lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->lss);
+
+    entrypoint::head::lss_memory::has_reallocations = false;
     in->per_shard_relabeler->append_relabeler_series(lss, in->inner_series, in->relabeled_series, in->relabeler_state_update);
+    out->target_lss_has_reallocations = entrypoint::head::lss_memory::has_reallocations;
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
     entrypoint::handle_current_exception(err_stream);
