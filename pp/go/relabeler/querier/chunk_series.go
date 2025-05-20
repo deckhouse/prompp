@@ -9,42 +9,28 @@ import (
 	"github.com/prometheus/prometheus/util/annotations"
 )
 
-type LabelSetsIterator struct {
-	idx       int
-	labelSets []labels.Labels
-}
-
-func newLabelSetIterator(labelSets []labels.Labels) *LabelSetsIterator {
-	return &LabelSetsIterator{labelSets: labelSets}
-}
-
-func (lsi *LabelSetsIterator) Seek(labelSetID uint32) (labels.Labels, bool) {
-	for {
-		if lsi.idx >= len(lsi.labelSets) {
-			return labels.EmptyLabels(), false
-		}
-
-		if lsi.labelSets[lsi.idx].ID() == labelSetID {
-			return lsi.labelSets[lsi.idx], true
-		}
-
-		lsi.idx++
-	}
-}
+//
+// ChunkSeriesSet
+//
 
 type ChunkSeriesSet struct {
-	labelSetsIterator  *LabelSetsIterator
-	chunkRecoder       *cppbridge.ChunkRecoder
-	recoderIsExhausted bool
+	lssQueryResult *cppbridge.LSSQueryResult
+	chunkRecoder   *cppbridge.ChunkRecoder
 
+	index            int
 	lastRecodedChunk *cppbridge.RecodedChunk
 	chunkSeries      *ChunkSeries
+
+	recoderIsExhausted bool
 }
 
-func NewChunkSeriesSet(labelSets []labels.Labels, chunkRecoder *cppbridge.ChunkRecoder) *ChunkSeriesSet {
+func NewChunkSeriesSet(
+	lssQueryResult *cppbridge.LSSQueryResult,
+	chunkRecoder *cppbridge.ChunkRecoder,
+) *ChunkSeriesSet {
 	return &ChunkSeriesSet{
-		labelSetsIterator: newLabelSetIterator(labelSets),
-		chunkRecoder:      chunkRecoder,
+		lssQueryResult: lssQueryResult,
+		chunkRecoder:   chunkRecoder,
 	}
 }
 
@@ -70,12 +56,30 @@ func (css *ChunkSeriesSet) Next() bool {
 		css.lastRecodedChunk = nil
 	}
 
-	labelSet, ok := css.labelSetsIterator.Seek(seriesID)
-	if !ok {
-		return false
+	var (
+		lsID     uint32
+		lsLength uint16
+	)
+
+	for {
+		if css.index >= css.lssQueryResult.Len() {
+			return false
+		}
+
+		lsID, lsLength = css.lssQueryResult.GetByIndex(css.index)
+
+		if lsID == seriesID {
+			break
+		}
+
+		css.index++
 	}
 
-	css.chunkSeries = NewChunkSeries(labelSet, recodedChunks)
+	css.chunkSeries = &ChunkSeries{
+		labelSet:      labels.NewLabelsWithLSS(css.lssQueryResult.LSS(), lsID, lsLength),
+		recodedChunks: recodedChunks,
+	}
+
 	return true
 }
 
@@ -83,12 +87,14 @@ func (css *ChunkSeriesSet) next() bool {
 	if css.recoderIsExhausted {
 		return false
 	}
+
 	lastRecodedChunk := css.chunkRecoder.RecodeNextChunk()
 	css.recoderIsExhausted = !lastRecodedChunk.HasMoreData
 	chunkData := make([]byte, len(lastRecodedChunk.ChunkData))
 	copy(chunkData, lastRecodedChunk.ChunkData)
 	lastRecodedChunk.ChunkData = chunkData
 	css.lastRecodedChunk = &lastRecodedChunk
+
 	return true
 }
 
@@ -104,16 +110,13 @@ func (css *ChunkSeriesSet) Warnings() annotations.Annotations {
 	return nil
 }
 
+//
+// ChunkSeries
+//
+
 type ChunkSeries struct {
 	labelSet      labels.Labels
 	recodedChunks []cppbridge.RecodedChunk
-}
-
-func NewChunkSeries(labelSet labels.Labels, recodedChunks []cppbridge.RecodedChunk) *ChunkSeries {
-	return &ChunkSeries{
-		labelSet:      labelSet,
-		recodedChunks: recodedChunks,
-	}
 }
 
 func (cs *ChunkSeries) Labels() labels.Labels {
@@ -127,6 +130,10 @@ func (cs *ChunkSeries) Iterator(iterator chunks.Iterator) chunks.Iterator {
 	}
 	return NewChunkSeriesChunksIterator(cs.recodedChunks)
 }
+
+//
+// ChunkSeriesChunksIterator
+//
 
 type ChunkSeriesChunksIterator struct {
 	idx           int

@@ -47,6 +47,31 @@ func (s *LSSSuite) TestQueryableLSS() {
 	s.Require().NotEqual(0, cp)
 }
 
+func (s *LSSSuite) TestLabels() {
+	lsMap := map[string]string{
+		"__name__": "ubername",
+		"lol":      "kek",
+		"che":      "bureck",
+	}
+
+	lsIn := model.LabelSetFromMap(lsMap)
+
+	lss := cppbridge.NewQueryableLssStorage()
+	lsID := lss.FindOrEmplace(lsIn)
+
+	lsLength := 0
+	lss.RangeLabelSet(lsID, func(l cppbridge.Label) error {
+		lv, ok := lsMap[l.Name]
+		s.Require().True(ok)
+		s.Require().Equal(lv, l.Value)
+		lsLength++
+
+		return nil
+	})
+
+	s.Equal(lsIn.Len(), lsLength)
+}
+
 func (s *LSSSuite) TestCreateReadonlyLssFromEncodingBimap() {
 	// Arrange
 	lss := cppbridge.NewLssStorage()
@@ -357,6 +382,7 @@ func (s *QueryableLSSSuite) TestQueryLabelValues() {
 	}
 }
 
+func (s *QueryableLSSSuite) testQueryLabelValuesImpl(testCase queryLabelValuesCase) {
 func (s *QueryableLSSSuite) testQueryLabelValuesImpl(testCase queryLabelValuesCase) {
 	// Arrange
 

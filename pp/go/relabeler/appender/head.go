@@ -12,6 +12,9 @@ import (
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
 )
 
+// CopySeriesOnRotate copy active series from the current head to the new head during rotation.
+var CopySeriesOnRotate = false
+
 // Storage - head storage.
 type Storage interface {
 	Add(head relabeler.Head)
@@ -145,7 +148,9 @@ func (h *RotatableHead) Rotate() error {
 		return err
 	}
 
-	newHead.CopySeriesFrom(h.head)
+	if CopySeriesOnRotate {
+		newHead.CopySeriesFrom(h.head)
+	}
 
 	if err = h.headActivator.Activate(newHead.ID()); err != nil {
 		return err

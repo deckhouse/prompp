@@ -3,7 +3,6 @@ package querier
 import (
 	"context"
 	"fmt"
-	"runtime"
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -39,7 +38,12 @@ func (q *ChunkQuerier) LabelNames(ctx context.Context, matchers ...*labels.Match
 	return labelNames(ctx, q.head, q.deduplicatorFactory, nil, matchers...)
 }
 
-func (q *ChunkQuerier) Select(ctx context.Context, sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.ChunkSeriesSet {
+func (q *ChunkQuerier) Select(
+	ctx context.Context,
+	sortSeries bool,
+	hints *storage.SelectHints,
+	matchers ...*labels.Matcher,
+) storage.ChunkSeriesSet {
 	chunkSeriesSets := make([]storage.ChunkSeriesSet, q.head.NumberOfShards())
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
 	callerID := cppbridge.GetCaller(ctx)
@@ -52,7 +56,11 @@ func (q *ChunkQuerier) Select(ctx context.Context, sortSeries bool, hints *stora
 			if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
 				return nil
 			}
-			return fmt.Errorf("failed to query from shard: %d, query status: %d", shard.ShardID(), lssQueryResult.Status())
+			return fmt.Errorf(
+				"failed to query from shard: %d, query status: %d",
+				shard.ShardID(),
+				lssQueryResult.Status(),
+			)
 		}
 
 		serializedChunks := shard.DataStorage().Query(cppbridge.HeadDataStorageQuery{
@@ -71,14 +79,8 @@ func (q *ChunkQuerier) Select(ctx context.Context, sortSeries bool, hints *stora
 			MaxT: q.maxt,
 		})
 
-		labelSets := make([]labels.Labels, 0, len(lssQueryResult.IDs()))
-		lssQueryResult.MatchesRange(func(lss *cppbridge.LabelSetStorage, lsId uint32, labelSetLength uint16) {
-			labelSets = append(labelSets, labels.NewLabelsWithLSS(lss, lsId, labelSetLength))
-		})
+		chunkSeriesSets[shard.ShardID()] = NewChunkSeriesSet(lssQueryResult, chunkRecoder)
 
-		runtime.KeepAlive(lssQueryResult)
-
-		chunkSeriesSets[shard.ShardID()] = NewChunkSeriesSet(labelSets, chunkRecoder)
 		return nil
 	})
 	if err != nil {

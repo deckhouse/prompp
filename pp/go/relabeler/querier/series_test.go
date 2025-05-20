@@ -15,7 +15,7 @@ type InstantSeriesSetTestSuite struct {
 	suite.Suite
 
 	valueNotFoundTimestampValue int64
-	labelSets                   []labels.Labels
+	lssQueryResult              *cppbridge.LSSQueryResult
 	samples                     []cppbridge.Sample
 }
 
@@ -30,21 +30,11 @@ func (s *InstantSeriesSetTestSuite) SetupTest() {
 	lss.FindOrEmplace(model.LabelSetFromPairs("job", "test", "__name__", "testmetric2"))
 	lss.FindOrEmplace(model.LabelSetFromPairs("job", "test", "__name__", "testmetric3"))
 
-	lqr := lss.Query([]model.LabelMatcher{{Name: "job", Value: "test"}}, cppbridge.LSSQuerySourceOther)
-	require.Equal(s.T(), cppbridge.LSSQueryStatusMatch, lqr.Status())
-	require.Equal(s.T(), 4, len(lqr.IDs()))
-
-	labelSets := make([]labels.Labels, len(lqr.IDs()))
-	lqr.MatchesIndexRange(func(lss *cppbridge.LabelSetStorage, index int, lsid uint32, length uint16) {
-		labelSets[index] = labels.NewLabelsWithLSS(lss, lsid, length)
-	})
-
-	for _, ls := range labelSets {
-		s.T().Log(ls.String())
-	}
+	s.lssQueryResult = lss.Query([]model.LabelMatcher{{Name: "job", Value: "test"}}, cppbridge.LSSQuerySourceOther)
+	require.Equal(s.T(), cppbridge.LSSQueryStatusMatch, s.lssQueryResult.Status())
+	require.Equal(s.T(), 4, len(s.lssQueryResult.IDs()))
 
 	s.valueNotFoundTimestampValue = 0
-	s.labelSets = labelSets
 	s.samples = []cppbridge.Sample{
 		{Timestamp: 1, Value: 1},
 		{Timestamp: s.valueNotFoundTimestampValue, Value: 0},
@@ -54,11 +44,16 @@ func (s *InstantSeriesSetTestSuite) SetupTest() {
 }
 
 func (s *InstantSeriesSetTestSuite) TestNext() {
-	iss := NewInstantSeriesSet(s.valueNotFoundTimestampValue, s.labelSets, s.samples)
+	iss := NewInstantSeriesSet(s.lssQueryResult, s.valueNotFoundTimestampValue, s.samples)
 
-	expected := []InstantSeries{
-		{labelSet: s.labelSets[0], sample: s.samples[0]},
-		{labelSet: s.labelSets[2], sample: s.samples[2]},
+	expected := make([]InstantSeries, 0, 2)
+	for _, idx := range []int{0, 2} {
+		lsID, lsLength := s.lssQueryResult.GetByIndex(idx)
+
+		expected = append(expected, InstantSeries{
+			labelSet: labels.NewLabelsWithLSS(s.lssQueryResult.LSS(), lsID, lsLength),
+			sample:   s.samples[idx],
+		})
 	}
 
 	index := 0

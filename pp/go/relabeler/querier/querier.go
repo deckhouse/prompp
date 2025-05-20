@@ -146,14 +146,24 @@ func (q *Querier) Close() error {
 	return nil
 }
 
-func (q *Querier) Select(ctx context.Context, sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
+func (q *Querier) Select(
+	ctx context.Context,
+	sortSeries bool,
+	hints *storage.SelectHints,
+	matchers ...*labels.Matcher,
+) storage.SeriesSet {
 	if q.mint == q.maxt {
 		return q.selectInstant(ctx, sortSeries, hints, matchers...)
 	}
 	return q.selectRange(ctx, sortSeries, hints, matchers...)
 }
 
-func (q *Querier) selectInstant(ctx context.Context, sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
+func (q *Querier) selectInstant(
+	ctx context.Context,
+	_ bool,
+	_ *storage.SelectHints,
+	matchers ...*labels.Matcher,
+) storage.SeriesSet {
 	start := time.Now()
 	defer func() {
 		if q.metrics != nil {
@@ -183,21 +193,19 @@ func (q *Querier) selectInstant(ctx context.Context, sortSeries bool, hints *sto
 			if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
 				return nil
 			}
-			return fmt.Errorf("failed to query from shard: %d, query status: %d", shard.ShardID(), lssQueryResult.Status())
+			return fmt.Errorf(
+				"failed to query from shard: %d, query status: %d",
+				shard.ShardID(),
+				lssQueryResult.Status(),
+			)
 		}
 
-		samples := shard.DataStorage().InstantQuery(q.maxt, valueNotFoundTimestampValue, lssQueryResult.IDs())
+		seriesSets[shard.ShardID()] = NewInstantSeriesSet(
+			lssQueryResult,
+			valueNotFoundTimestampValue,
+			shard.DataStorage().InstantQuery(q.maxt, valueNotFoundTimestampValue, lssQueryResult.IDs()),
+		)
 
-		labelSets := make([]labels.Labels, len(samples))
-		lssQueryResult.MatchesIndexRange(func(lss *cppbridge.LabelSetStorage, index int, lsid uint32, length uint16) {
-			if samples[index].Timestamp == valueNotFoundTimestampValue {
-				return
-			}
-			labelSets[index] = labels.NewLabelsWithLSS(lss, lsid, length)
-		})
-
-		runtime.KeepAlive(lssQueryResult)
-		seriesSets[shard.ShardID()] = NewInstantSeriesSet(valueNotFoundTimestampValue, labelSets, samples)
 		return nil
 	})
 	if err != nil {
@@ -208,7 +216,12 @@ func (q *Querier) selectInstant(ctx context.Context, sortSeries bool, hints *sto
 	return storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge)
 }
 
-func (q *Querier) selectRange(ctx context.Context, sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
+func (q *Querier) selectRange(
+	ctx context.Context,
+	_ bool,
+	_ *storage.SelectHints,
+	matchers ...*labels.Matcher,
+) storage.SeriesSet {
 	start := time.Now()
 	defer func() {
 		if q.metrics != nil {
@@ -233,7 +246,11 @@ func (q *Querier) selectRange(ctx context.Context, sortSeries bool, hints *stora
 			if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
 				return nil
 			}
-			return fmt.Errorf("failed to query from shard: %d, query status: %d", shard.ShardID(), lssQueryResult.Status())
+			return fmt.Errorf(
+				"failed to query from shard: %d, query status: %d",
+				shard.ShardID(),
+				lssQueryResult.Status(),
+			)
 		}
 
 		serializedChunks := shard.DataStorage().Query(cppbridge.HeadDataStorageQuery{
@@ -247,30 +264,15 @@ func (q *Querier) selectRange(ctx context.Context, sortSeries bool, hints *stora
 			return nil
 		}
 
-		chunksIndex := serializedChunks.MakeIndex()
-		localSeriesSets := make([]*Series, 0, chunksIndex.Len())
-		deserializer := cppbridge.NewHeadDataStorageDeserializer(serializedChunks)
-		lssQueryResult.MatchesRange(func(lss *cppbridge.LabelSetStorage, lsId uint32, labelSetLength uint16) {
-			chunksMetadata := chunksIndex.Chunks(serializedChunks, lsId)
-			if len(chunksMetadata) == 0 {
-				return
-			}
+		seriesSets[shard.ShardID()] = &SeriesSet{
+			mint:             q.mint,
+			maxt:             q.maxt,
+			deserializer:     cppbridge.NewHeadDataStorageDeserializer(serializedChunks),
+			chunksIndex:      serializedChunks.MakeIndex(),
+			serializedChunks: serializedChunks,
+			lssQueryResult:   lssQueryResult,
+		}
 
-			localSeriesSets = append(localSeriesSets, &Series{
-				seriesID: lsId,
-				mint:     q.mint,
-				maxt:     q.maxt,
-				labelSet: labels.NewLabelsWithLSS(lss, lsId, labelSetLength),
-				sampleProvider: &DefaultSampleProvider{
-					deserializer:   deserializer,
-					chunksMetadata: chunksMetadata,
-				},
-			})
-		})
-
-		runtime.KeepAlive(lssQueryResult)
-
-		seriesSets[shard.ShardID()] = NewSeriesSet(localSeriesSets)
 		return nil
 	})
 	if err != nil {

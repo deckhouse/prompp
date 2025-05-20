@@ -72,3 +72,14 @@ func (d *Decoder) LoadFrom(reader io.Reader) error {
 func (d *Decoder) WriteTo(writer io.Writer) (int64, error) {
 	return d.outputDecoder.WriteTo(writer)
 }
+
+func LabelsToCppBridgeLabels(lbls labels.Labels) []cppbridge.Label {
+	result := make([]cppbridge.Label, 0, lbls.Len())
+	lbls.Range(func(l labels.Label) {
+		result = append(result, cppbridge.Label{
+			Name:  l.Name,
+			Value: l.Value,
+		})
+	})
+	return result
+}
