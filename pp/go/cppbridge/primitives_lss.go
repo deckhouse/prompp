@@ -36,7 +36,6 @@ const (
 	lssEncodingBimap uint32 = iota
 	lssOrderedEncodingBimap
 	lssQueryableEncodingBimap
-	lssReadOnly
 )
 
 //
