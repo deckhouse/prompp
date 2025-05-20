@@ -95,7 +95,7 @@ func (s *QueryableLSSSuite) SetupTest() {
 
 	s.labelSetIDs = make([]uint32, 0, len(s.labelSets))
 	for _, labelSet := range s.labelSets {
-		s.labelSetIDs = append(s.labelSetIDs, s.lss.FindOrEmplace(labelSet))
+		s.labelSetIDs = append(s.labelSetIDs, s.lss.FindOrEmplace(labelSet).LabelSetID)
 	}
 }
 
@@ -270,13 +270,13 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithExistingLabelSet() {
 		LsId:        0,
 		SortedAdd:   []model.SimpleLabel{{Name: "che", Value: "bureck"}},
 		SortedDel:   nil,
-	})
+	}).LabelSetID
 	existingLsIdWithDel := s.lss.FindOrEmplaceBuilder(model.CppLabelSetBuilder{
 		ReadonlyLss: queryResult.ReadonlyLss().Pointer(),
 		LsId:        1,
 		SortedAdd:   nil,
 		SortedDel:   []string{"che"},
-	})
+	}).LabelSetID
 
 	// Assert
 	s.Equal(uint32(1), existingLsIdWithAdd)
@@ -296,7 +296,7 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithNewLabelSet() {
 		LsId:        0,
 		SortedAdd:   []model.SimpleLabel{{Name: "new_lol", Value: "new_kek"}},
 		SortedDel:   nil,
-	})
+	}).LabelSetID
 
 	// Assert
 	s.Equal(expectedLsId, existingLsId)

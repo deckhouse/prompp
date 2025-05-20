@@ -57,7 +57,8 @@ void prompp_primitives_lss_allocated_memory(void* args, void* res);
  * }
  *
  * @param res {
- *     ls_id uint32 // inserted (or found) label set id
+ *     ls_id uint32                  // inserted (or found) label set id
+ *     bool  lss_has_reallocations   // true if lss has reallocations
  * }
  */
 void prompp_primitives_lss_find_or_emplace(void* args, void* res);
@@ -76,7 +77,8 @@ void prompp_primitives_lss_find_or_emplace(void* args, void* res);
  * }
  *
  * @param res {
- *     ls_id uint32 // inserted (or found) label set id
+ *     ls_id uint32                   // inserted (or found) label set id
+ *     bool  lss_has_reallocations    // true if lss has reallocations
  * }
  */
 void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);

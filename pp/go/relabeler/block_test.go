@@ -17,7 +17,7 @@ func TestNewBlock(t *testing.T) {
 	lss := cppbridge.NewQueryableLssStorage()
 	ds := cppbridge.NewHeadDataStorage()
 	ls := model.NewLabelSetBuilder().Set("__name__", "this_is_obviuosly_the_best_metric").Set("lol", "kek").Build()
-	lsID := lss.FindOrEmplace(ls)
+	lsID := lss.FindOrEmplace(ls).LabelSetID
 
 	enc := cppbridge.NewHeadEncoderWithDataStorage(ds)
 	ts := time.Now()

@@ -171,7 +171,7 @@ void prompp_prometheus_per_shard_relabeler_cache_allocated_memory(void* args, vo
  *     series_added                 uint32        // number of added series;
  *     series_drop                  uint32        // number of dropped series;
  *     error                        []byte        // error string if thrown;
- *     target_lss_has_reallocations bool          // true is target lss has reallocations
+ *     target_lss_has_reallocations bool          // true if target lss has reallocations
  * }
  */
 void prompp_prometheus_per_shard_relabeler_input_relabeling(void* args, void* res);
@@ -224,7 +224,7 @@ void prompp_prometheus_relabel_stalenans_state_reset(void* args);
  *     series_added                 uint32        // number of added series;
  *     series_drop                  uint32        // number of dropped series;
  *     error                        []byte        // error string if thrown;
- *     target_lss_has_reallocations bool          // true is target lss has reallocations
+ *     target_lss_has_reallocations bool          // true if target lss has reallocations
  * }
  */
 void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stalenans(void* args, void* res);
@@ -262,7 +262,7 @@ void prompp_prometheus_per_shard_relabeler_input_collect_stalenans(void* args, v
  *
  * @param res {
  *     error                        []byte          // error string if thrown
- *     target_lss_has_reallocations bool            // true is target lss has reallocations
+ *     target_lss_has_reallocations bool            // true if target lss has reallocations
  * }
  */
 void prompp_prometheus_per_shard_relabeler_append_relabeler_series(void* args, void* res);

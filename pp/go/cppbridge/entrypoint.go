@@ -1105,14 +1105,17 @@ func primitivesLSSAllocatedMemory(lss uintptr) uint64 {
 	return res.allocatedMemory
 }
 
-func primitivesLSSFindOrEmplace(lss uintptr, labelSet model.LabelSet) uint32 {
+type FindOrEmplaceResult struct {
+	LabelSetID          uint32
+	LssHasReallocations bool
+}
+
+func primitivesLSSFindOrEmplace(lss uintptr, labelSet model.LabelSet) FindOrEmplaceResult {
 	args := struct {
 		lss      uintptr
 		labelSet model.LabelSet
 	}{lss, labelSet}
-	var res struct {
-		labelSetID uint32
-	}
+	var res FindOrEmplaceResult
 
 	fastcgo.UnsafeCall2(
 		C.prompp_primitives_lss_find_or_emplace,
@@ -1120,17 +1123,15 @@ func primitivesLSSFindOrEmplace(lss uintptr, labelSet model.LabelSet) uint32 {
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.labelSetID
+	return res
 }
 
-func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder model.CppLabelSetBuilder) uint32 {
+func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder model.CppLabelSetBuilder) FindOrEmplaceResult {
 	args := struct {
 		lss     uintptr
 		builder model.CppLabelSetBuilder
 	}{lss, builder}
-	var res struct {
-		labelSetID uint32
-	}
+	var res FindOrEmplaceResult
 
 	fastcgo.UnsafeCall2(
 		C.prompp_primitives_lss_find_or_emplace_builder,
@@ -1138,7 +1139,7 @@ func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder model.CppLabelSetBui
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.labelSetID
+	return res
 }
 
 func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource uint32) (
