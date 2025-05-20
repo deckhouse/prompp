@@ -124,8 +124,12 @@ func (lss *LabelSetStorage) AllocatedMemory() uint64 {
 
 // FindOrEmplace find in lss LabelSet or emplace and return ls id.
 func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) uint32 {
-	id := primitivesLSSFindOrEmplace(lss.pointer, labelSet)
-	return id
+	return primitivesLSSFindOrEmplace(lss.pointer, labelSet)
+}
+
+// FindOrEmplaceBuilder find in lss LabelSet or emplace and return ls id.
+func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet model.CppLabelSetBuilder) uint32 {
+	return primitivesLSSFindOrEmplaceBuilder(lss.pointer, labelSet)
 }
 
 // Query returns a LSSQueryResult that matches the given label matchers.
@@ -350,6 +354,11 @@ func (r *LSSQueryResult) LSS() *LabelSetStorage {
 // LabelSetLengths return labels sets lengths.
 func (r *LSSQueryResult) LabelSetLengths() []uint16 {
 	return r.queryResult.labelSetLengths
+}
+
+// ReadonlyLss return readonly lss
+func (r *LSSQueryResult) ReadonlyLss() *LabelSetStorage {
+	return r.lssRO
 }
 
 // Len of result.
