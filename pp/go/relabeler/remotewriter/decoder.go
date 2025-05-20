@@ -26,7 +26,7 @@ func NewDecoder(
 	}
 
 	lss := cppbridge.NewLssStorage()
-	outputDecoder := cppbridge.NewWALOutputDecoder(cppbridge.LabelsToCppBridgeLabels(externalLabels), relabeler, lss, shardID, encoderVersion)
+	outputDecoder := cppbridge.NewWALOutputDecoder(LabelsToCppBridgeLabels(externalLabels), relabeler, lss, shardID, encoderVersion)
 
 	return &Decoder{
 		relabeler:     relabeler,
@@ -72,4 +72,15 @@ func (d *Decoder) LoadFrom(reader io.Reader) error {
 // WriteTo writes output decoder state to io.Writer.
 func (d *Decoder) WriteTo(writer io.Writer) (int64, error) {
 	return d.outputDecoder.WriteTo(writer)
+}
+
+func LabelsToCppBridgeLabels(lbls labels.Labels) []cppbridge.Label {
+	result := make([]cppbridge.Label, 0, lbls.Len())
+	lbls.Range(func(l labels.Label) {
+		result = append(result, cppbridge.Label{
+			Name:  l.Name,
+			Value: l.Value,
+		})
+	})
+	return result
 }

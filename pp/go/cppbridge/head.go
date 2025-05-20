@@ -191,8 +191,8 @@ func (r *HeadDataStorageSerializedChunks) MakeIndex() HeadDataStorageSerializedC
 	offset := Uint32Size
 	n := r.NumberOfChunks()
 	for i := 0; i < n; i, offset = i+1, offset+SerializedChunkMetadataSize {
-		md := HeadDataStorageSerializedChunkMetadata(r.data[offset : offset+SerializedChunkMetadataSize])
-		m[md.SeriesID()] = append(m[md.SeriesID()], offset)
+		sID := *(*uint32)(unsafe.Pointer(&r.data[offset : offset+SerializedChunkMetadataSize][0])) // #nosec G103 // it's meant to be that way
+		m[sID] = append(m[sID], offset)
 	}
 	return HeadDataStorageSerializedChunkIndex{m}
 }
