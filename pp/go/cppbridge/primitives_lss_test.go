@@ -79,10 +79,10 @@ func (s *LSSSuite) TestLabels() {
 	lsIn := model.LabelSetFromMap(lsMap)
 
 	lss := cppbridge.NewQueryableLssStorage()
-	lsID := lss.FindOrEmplace(lsIn)
+	lsID := lss.FindOrEmplace(lsIn).LabelSetID
 
 	lsLength := 0
-	lss.RangeLabelSet(lsID, func(l cppbridge.Label) error {
+	_ = lss.RangeLabelSet(lsID, func(l cppbridge.Label) error {
 		lv, ok := lsMap[l.Name]
 		s.Require().True(ok)
 		s.Require().Equal(lv, l.Value)
@@ -315,7 +315,7 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithNewLabelSet() {
 	}, cppbridge.LSSQuerySourceOther)
 
 	// Act
-	expectedLsId := s.lss.MaxId() + 1
+	expectedLsId := len(s.labelSetIDs)
 	existingLsId := s.lss.FindOrEmplaceBuilder(model.CppLabelSetBuilder{
 		ReadonlyLss: queryResult.ReadonlyLss().Pointer(),
 		LsId:        0,
@@ -324,6 +324,5 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithNewLabelSet() {
 	}).LabelSetID
 
 	// Assert
-	s.Equal(expectedLsId, existingLsId)
-	s.Equal(expectedLsId, s.lss.MaxId())
+	s.Equal(uint32(expectedLsId), existingLsId)
 }

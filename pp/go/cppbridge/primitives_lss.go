@@ -129,9 +129,7 @@ func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) FindOrEmplace
 
 // FindOrEmplaceBuilder find in lss LabelSet or emplace and return ls id.
 func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet model.CppLabelSetBuilder) FindOrEmplaceResult {
-	result := primitivesLSSFindOrEmplaceBuilder(lss.pointer, labelSet)
-	lss.maxID = max(result.LabelSetID, lss.maxID)
-	return result
+	return primitivesLSSFindOrEmplaceBuilder(lss.pointer, labelSet)
 }
 
 // Query returns a LSSQueryResult that matches the given label matchers.
