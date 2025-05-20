@@ -8,7 +8,7 @@
 #include "series_data/querier/instant_querier.h"
 #include "series_data/querier/querier.h"
 #include "series_data/serialization/serializer.h"
-#include "series_data/snapshot/unloader.h"
+#include "series_data/unloading/unloader.h"
 
 using entrypoint::head::DataStoragePtr;
 using entrypoint::head::QueryableEncodingBimap;

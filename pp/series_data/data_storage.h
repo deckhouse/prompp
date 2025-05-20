@@ -8,10 +8,8 @@
 #include "common.h"
 #include "encoder/encoder_variant.h"
 #include "encoder/gorilla.h"
-#include "series_data/encoder/timestamp/encoder.h"
-
-#include "roaring/cpp/roaring.hh"
 #include "roaring/roaring.hh"
+#include "series_data/encoder/timestamp/encoder.h"
 
 namespace series_data {
 
