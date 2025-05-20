@@ -136,7 +136,7 @@ func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) uint32 {
 //nolint:gocritic // unnamedResult not need
 func (lss *LabelSetStorage) FindOrEmplaceLabelSet(labelSet model.LabelSet) (*LabelSetStorage, uint32) {
 	lssROPtr, lsID := primitivesLSSFindOrEmplaceLabelSet(lss.pointer, labelSet)
-	return bufferReadOnlyLSS.getlssRO(lss.pointer, lssROPtr, lsID), lsID
+	return cacheReadOnlyLSS.getROLSS(lss.pointer, lssROPtr, lsID), lsID
 }
 
 // Find label set in lss, return lss, lsid and bool ok.
@@ -146,7 +146,7 @@ func (lss *LabelSetStorage) Find(mls model.LabelSet) (*LabelSetStorage, uint32, 
 		return nil, 0, false
 	}
 
-	return bufferReadOnlyLSS.getlssRO(lss.pointer, lssROPtr, lsID), lsID, true
+	return cacheReadOnlyLSS.getROLSS(lss.pointer, lssROPtr, lsID), lsID, true
 }
 
 // Query returns a LSSQueryResult that matches the given label matchers.

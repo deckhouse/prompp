@@ -60,7 +60,7 @@ func (s *LSSSuite) TestLabels() {
 	lsID := lss.FindOrEmplace(lsIn)
 
 	lsLength := 0
-	lss.RangeLabelSet(lsID, func(l cppbridge.Label) error {
+	lss.RangeLabelSet(lsID, false, func(l cppbridge.Label) error {
 		lv, ok := lsMap[l.Name]
 		s.Require().True(ok)
 		s.Require().Equal(lv, l.Value)
@@ -382,7 +382,6 @@ func (s *QueryableLSSSuite) TestQueryLabelValues() {
 	}
 }
 
-func (s *QueryableLSSSuite) testQueryLabelValuesImpl(testCase queryLabelValuesCase) {
 func (s *QueryableLSSSuite) testQueryLabelValuesImpl(testCase queryLabelValuesCase) {
 	// Arrange
 
