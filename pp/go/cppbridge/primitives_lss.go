@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -70,7 +71,6 @@ const (
 // LabelSetStorage go wrapper for C-LabelSetStorage.
 type LabelSetStorage struct {
 	pointer uintptr
-	maxID   uint32
 }
 
 // NewLssStorage init new LabelSetStorage based on EncodingBimap.
@@ -124,9 +124,7 @@ func (lss *LabelSetStorage) AllocatedMemory() uint64 {
 
 // FindOrEmplace find in lss LabelSet or emplace and return ls id.
 func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) FindOrEmplaceResult {
-	result := primitivesLSSFindOrEmplace(lss.pointer, labelSet)
-	lss.maxID = max(result.LabelSetID, lss.maxID)
-	return result
+	return primitivesLSSFindOrEmplace(lss.pointer, labelSet)
 }
 
 // FindOrEmplaceBuilder find in lss LabelSet or emplace and return ls id.
@@ -188,14 +186,25 @@ func (lss *LabelSetStorage) Pointer() uintptr {
 	return lss.pointer
 }
 
-// MaxId return max id
-func (lss *LabelSetStorage) MaxId() uint32 {
-	return lss.maxID
-}
-
 // CreateReadonlyLss - create readonly copy of lss
 func (lss *LabelSetStorage) CreateReadonlyLss() *LabelSetStorage {
 	return newReadOnlyLssStorage(primitivesLSSCreateReadonlyLss(lss.pointer))
+}
+
+// RangeLabelSet serialize to slice labels from lss and calls f on each label.
+func (lss *LabelSetStorage) RangeLabelSet(lsID uint32, do func(l Label) error) error {
+	labelSet := primitivesLabelSetSerialize(lss.pointer, lsID)
+
+	for i := range labelSet {
+		if err := do(labelSet[i]); err != nil {
+			primitivesLabelSetFree(labelSet)
+			return err
+		}
+	}
+
+	primitivesLabelSetFree(labelSet)
+
+	return nil
 }
 
 //
@@ -210,58 +219,85 @@ type lssQueryResult struct {
 }
 
 //
-// bufReadOnlyLSS
+// cacheReadOnlyLSS
 //
 
-// bufReadOnlyLSS buffer lssReadOnly for deduplicate.
-var bufReadOnlyLSS = sync.Map{}
+// cacheReadOnlyLSS global cache lssReadOnly.
+var cacheReadOnlyLSS = newReadOnlyLSSBuffer()
 
-type bufLSSValue struct {
-	lssMain uintptr
-	lssRO   *LabelSetStorage
-	maxlsid uint32
-	timer   *time.Timer
+type valueROLSSCache struct {
+	lssRO      *LabelSetStorage
+	lastUpdate int64
+	maxlsid    uint32
 }
 
-func getlssRO(lssMainPtr, lssROPtr uintptr, maxlsid uint32) *LabelSetStorage {
+// readOnlyLSSCache cache lssReadOnly for deduplicate.
+type readOnlyLSSCache struct {
+	sync.Map
+}
+
+func newReadOnlyLSSBuffer() *readOnlyLSSCache {
+	c := &readOnlyLSSCache{}
+
+	go c.clearing()
+
+	return c
+}
+
+// clearing the cache of obsolete data.
+func (c *readOnlyLSSCache) clearing() {
+	ticker := time.NewTicker(60 * time.Second)
+
+	for {
+		now := (<-ticker.C).Unix()
+		c.Range(func(key, value any) bool {
+			if now-atomic.LoadInt64(&value.(*valueROLSSCache).lastUpdate) > 60 {
+				c.Delete(key)
+			}
+
+			return true
+		})
+	}
+}
+
+// getROLSS return read only LSS from cache or add ro cache.
+func (c *readOnlyLSSCache) getROLSS(lssMainPtr, lssROPtr uintptr, maxlsid uint32) *LabelSetStorage {
 	var lssRO *LabelSetStorage
 
-	v, ok := bufReadOnlyLSS.Load(lssMainPtr)
+	v, ok := c.Load(lssMainPtr)
 	if !ok {
 		lssRO = newReadOnlyLssStorage(lssROPtr)
-		bufReadOnlyLSS.Store(lssMainPtr, &bufLSSValue{
-			lssMain: lssMainPtr,
-			lssRO:   lssRO,
-			maxlsid: maxlsid,
-			timer: time.AfterFunc(1*time.Minute, func() {
-				bufReadOnlyLSS.Delete(lssMainPtr)
-			}),
+		c.Store(lssMainPtr, &valueROLSSCache{
+			lssRO:      lssRO,
+			maxlsid:    maxlsid,
+			lastUpdate: time.Now().Unix(),
 		})
 
 		return lssRO
 	}
 
-	bv := v.(*bufLSSValue)
+	bv := v.(*valueROLSSCache)
 	if bv.maxlsid < maxlsid {
 		lssRO = newReadOnlyLssStorage(lssROPtr)
-		bufReadOnlyLSS.Store(lssMainPtr, &bufLSSValue{
-			lssMain: lssMainPtr,
-			lssRO:   lssRO,
-			maxlsid: maxlsid,
-			timer: time.AfterFunc(1*time.Minute, func() {
-				bufReadOnlyLSS.Delete(lssMainPtr)
-			}),
+		c.Store(lssMainPtr, &valueROLSSCache{
+			lssRO:      lssRO,
+			maxlsid:    maxlsid,
+			lastUpdate: time.Now().Unix(),
 		})
 
 		return lssRO
 	}
 
-	bv.timer.Reset(1 * time.Minute)
+	atomic.StoreInt64(&bv.lastUpdate, time.Now().Unix())
 
 	primitivesLSSDtor(lssROPtr)
 
 	return bv.lssRO
 }
+
+//
+// LSSQueryResult
+//
 
 // LSSQueryResult query execution result in lss with copy.
 type LSSQueryResult struct {
@@ -296,20 +332,25 @@ func newLSSQueryResult(
 
 	lqr := &LSSQueryResult{
 		queryResult: queryResult,
-		lssRO:       getlssRO(lssMainPtr, lssROPtr, slices.Max(matches)),
+		lssRO:       cacheReadOnlyLSS.getROLSS(lssMainPtr, lssROPtr, slices.Max(matches)),
 	}
 
 	return lqr
 }
 
-// Status query execution.
-func (r *LSSQueryResult) Status() uint32 {
-	return r.queryResult.status
+// GetByIndex return ls id and length for ls id by index.
+func (r *LSSQueryResult) GetByIndex(i int) (uint32, uint16) {
+	return r.queryResult.matches[i], r.queryResult.labelSetLengths[i]
 }
 
 // IDs return labels sets ids.
 func (r *LSSQueryResult) IDs() []uint32 {
 	return r.queryResult.matches
+}
+
+// LSS return current read only lss from result.
+func (r *LSSQueryResult) LSS() *LabelSetStorage {
+	return r.lssRO
 }
 
 // LabelSetLengths return labels sets lengths.
@@ -322,6 +363,11 @@ func (r *LSSQueryResult) ReadonlyLss() *LabelSetStorage {
 	return r.lssRO
 }
 
+// Len of result.
+func (r *LSSQueryResult) Len() int {
+	return len(r.queryResult.matches)
+}
+
 // MatchesRange calls callback sequentially for each result.
 func (r *LSSQueryResult) MatchesRange(callback func(lss *LabelSetStorage, lsid uint32, length uint16)) {
 	for i, lsId := range r.queryResult.matches {
@@ -329,11 +375,16 @@ func (r *LSSQueryResult) MatchesRange(callback func(lss *LabelSetStorage, lsid u
 	}
 }
 
-// MatchesRange calls callback sequentially for each result.
+// MatchesIndexRange calls callback sequentially for each result.
 func (r *LSSQueryResult) MatchesIndexRange(callback func(lss *LabelSetStorage, index int, lsid uint32, length uint16)) {
 	for i, lsId := range r.queryResult.matches {
 		callback(r.lssRO, i, lsId, r.queryResult.labelSetLengths[i])
 	}
+}
+
+// Status query execution.
+func (r *LSSQueryResult) Status() uint32 {
+	return r.queryResult.status
 }
 
 //
