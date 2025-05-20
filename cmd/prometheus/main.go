@@ -64,6 +64,7 @@ import (
 	"github.com/prometheus/prometheus/pp-pkg/scrape"                 // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage" // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/cppbridge"               // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/relabeler/appender"      // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"  // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/relabeler/head/ready"    // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/relabeler/remotewriter"  // PP_CHANGES.md: rebuild on cpp
@@ -491,6 +492,11 @@ func main() {
 
 	a.Flag("enable-feature", "Comma separated feature names to enable. Valid options: agent, auto-gomemlimit, exemplar-storage, expand-external-labels, memory-snapshot-on-shutdown, promql-per-step-stats, promql-experimental-functions, remote-write-receiver (DEPRECATED), extra-scrape-metrics, new-service-discovery-manager, auto-gomaxprocs, no-default-scrape-port, native-histograms, otlp-write-receiver, created-timestamp-zero-ingestion, concurrent-rule-eval. See https://prometheus.io/docs/prometheus/latest/feature_flags/ for more details.").
 		Default("").StringsVar(&cfg.featureList)
+
+	a.Flag(
+		"appender.copy-series-on-rotate",
+		"Copy active series from the current head to the new head during rotation.",
+	).Hidden().Default("false").BoolVar(&appender.CopySeriesOnRotate)
 
 	promlogflag.AddFlags(a, &cfg.promlogConfig)
 
