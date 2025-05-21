@@ -2,6 +2,7 @@ package head
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -137,6 +138,13 @@ func (h *Head) reconfigureRelabelersData(
 //revive:disable-next-line:cyclomatic long but understandable.
 func (h *Head) shardLoop(shardID uint16, stopc chan struct{}) {
 	// readWG := sync.WaitGroup{}
+	sd := &shard{
+		id:          shardID,
+		lss:         h.lsses[shardID],
+		dataStorage: h.dataStorages[shardID],
+		wal:         h.wals[shardID],
+	}
+
 	for {
 		select {
 		case <-stopc:
@@ -244,53 +252,86 @@ func (h *Head) shardLoop(shardID uint16, stopc chan struct{}) {
 			}
 
 		case task := <-h.genericTaskCh[shardID]:
-			task.ExecuteOnShard(&shard{
-				id:          shardID,
-				lss:         h.lsses[shardID],
-				dataStorage: h.dataStorages[shardID],
-				wal:         h.wals[shardID],
-			})
+			// task.ExecuteOnShard(&shard{
+			// 	id:          shardID,
+			// 	lss:         h.lsses[shardID],
+			// 	dataStorage: h.dataStorages[shardID],
+			// 	wal:         h.wals[shardID],
+			// })
+			task.ExecuteOnShard(sd)
+
+			// length := len(h.genericTaskCh[shardID])
+			// if length <= len(h.stageInputRelabeling[shardID]) {
+			// 	continue
+			// }
+
+			// if length <= len(h.genericReadTaskCh[shardID]) {
+			// 	continue
+			// }
+
+			// limit := min(length/4, defaultReadTaskLimit)
+			limit := ExtraLimit(
+				float64(len(h.genericTaskCh[shardID])),
+				float64(len(h.genericReadTaskCh[shardID])),
+				float64(len(h.stageInputRelabeling[shardID])),
+				1,
+				0.5,
+			)
+			if limit == 0 {
+				continue
+			}
+
+			for i := 0; i < limit; i++ {
+				task = <-h.genericTaskCh[shardID]
+				task.ExecuteOnShard(sd)
+			}
 
 		case task := <-h.genericReadTaskCh[shardID]:
-			task.ExecuteOnShard(&shard{
-				id:          shardID,
-				lss:         h.lsses[shardID],
-				dataStorage: h.dataStorages[shardID],
-				wal:         h.wals[shardID],
-			})
+			task.ExecuteOnShard(sd)
 
-			// if len(h.genericReadTaskCh[shardID]) == 0 {
+			// length := len(h.genericReadTaskCh[shardID])
+			// if length <= len(h.stageInputRelabeling[shardID]) {
 			// 	continue
 			// }
 
-			// limit := min(len(h.genericReadTaskCh[shardID])/2, defaultReadTaskLimit)
-			// if limit == 0 {
+			// if length <= len(h.genericTaskCh[shardID]) {
 			// 	continue
 			// }
 
-			// for i := 0; i < limit; i++ {
-			// 	task = <-h.genericReadTaskCh[shardID]
+			// limit := min(length/4, defaultReadTaskLimit)
+			limit := ExtraLimit(
+				float64(len(h.genericReadTaskCh[shardID])),
+				float64(len(h.genericTaskCh[shardID])),
+				float64(len(h.stageInputRelabeling[shardID])),
+				1.6,
+				1.3,
+			)
+			if limit == 0 {
+				continue
+			}
 
-			// 	sd := &shard{
-			// 		id:          shardID,
-			// 		lss:         h.lsses[shardID],
-			// 		dataStorage: h.dataStorages[shardID],
-			// 		wal:         h.wals[shardID],
-			// 	}
-
-			// 	readWG.Add(1)
-			// 	go func(t *GenericReadTask, s *shard) {
-			// 		t.ExecuteOnShard(s)
-			// 		readWG.Done()
-			// 	}(task, sd)
-			// }
-
-			// readWG.Wait()
+			for i := 0; i < limit; i++ {
+				task = <-h.genericReadTaskCh[shardID]
+				task.ExecuteOnShard(sd)
+			}
 		}
 	}
 }
 
-const defaultReadTaskLimit = 8
+func ExtraLimit(primary, secondary, stage, k1, k2 float64) int {
+	if primary <= stage*k1 {
+		return 0
+	}
+
+	if primary <= secondary*k2 {
+		return 0
+	}
+
+	// return int(min((primary - secondary*k2), primary))
+	return int(min(math.Abs(primary-primary*k2), primary))
+}
+
+const defaultReadTaskLimit = 4
 
 type shard struct {
 	id          uint16

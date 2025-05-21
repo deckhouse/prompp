@@ -54,8 +54,8 @@ func (qa *QueryableAppender) AppendWithStaleNans(
 		qa.querierMetrics.AppendDuration.Observe(float64(time.Since(start).Microseconds()))
 	}()
 
-	qa.lock.Lock()
-	defer qa.lock.Unlock()
+	qa.lock.RLock()
+	defer qa.lock.RUnlock()
 
 	data, stats, err := qa.head.Append(ctx, incomingData, state, relabelerID, commitToWal)
 	if err != nil {

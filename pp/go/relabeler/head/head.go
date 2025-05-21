@@ -462,7 +462,7 @@ func (h *Head) WriteMetrics() {
 		prometheus.Labels{"caller": "other"},
 	).Set(float64(status.HeadStats.OtherQueriedSeries))
 
-	_ = h.ForEachShard(func(shard relabeler.Shard) error {
+	_ = h.ReadEachShard(func(shard relabeler.Shard) error {
 		h.memoryInUse.With(
 			prometheus.Labels{
 				"generation": fmt.Sprintf("%d", h.generation),
@@ -508,7 +508,7 @@ func (h *Head) WriteMetrics() {
 
 func (h *Head) Status(limit int) relabeler.HeadStatus {
 	shardStatuses := make([]*cppbridge.HeadStatus, h.NumberOfShards())
-	_ = h.ForEachShard(func(shard relabeler.Shard) error {
+	_ = h.ReadEachShard(func(shard relabeler.Shard) error {
 		shardStatuses[shard.ShardID()] = cppbridge.GetHeadStatus(
 			shard.LSS().Raw().Pointer(),
 			shard.DataStorage().Raw().Pointer(),
