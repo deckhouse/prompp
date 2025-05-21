@@ -32,6 +32,16 @@ class UnloaderTestFixture : public UnloaderTrait, public testing::Test {
   }
 };
 
+TEST_F(UnloaderTestFixture, EmptyUnloader) {
+  // Arrange
+
+  // Act
+  unloader_.unload(stream_);
+
+  // Assert
+  ASSERT_EQ(stream_.view().size(), unloader_.get_empty_unloader_size_in_bytes());
+}
+
 TEST_F(UnloaderTestFixture, UnloadOneChunk) {
   // Arrange
   encoder_.encode(0, 1, 1.0);

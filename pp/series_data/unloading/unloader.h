@@ -25,7 +25,7 @@ class Unloader {
     EncodingChunkIDSequence chunk_id_sequence{};
     roaring::Roaring ls_id_bitmap{};
 
-    size_t bitseqs_size_in_bytes = 0;
+    uint32_t bitseqs_size_in_bytes = 0;
 
     for (const auto ls_id : storage_.unused_series_bitmap) {
       const auto encoding_type = storage_.open_chunks[ls_id].encoding_state.encoding_type;
@@ -44,14 +44,12 @@ class Unloader {
 
     ls_id_bitmap.runOptimize();
     ls_id_bitmap.shrinkToFit();
-    size_t expected_size_in_bytes = ls_id_bitmap.getSizeInBytes();
+    uint32_t expected_size_in_bytes = ls_id_bitmap.getSizeInBytes();
     std::vector<char> buffer(expected_size_in_bytes);
-    size_t size_in_bytes = ls_id_bitmap.write(buffer.data());
+    uint32_t size_in_bytes = ls_id_bitmap.write(buffer.data());
     assert(expected_size_in_bytes == size_in_bytes);
-    stream << size_in_bytes;
+    stream.write(reinterpret_cast<char*>(&size_in_bytes), sizeof(size_in_bytes));
     stream.write(buffer.data(), size_in_bytes);
-
-    std::cout << "ls_id_bitmap size : " << size_in_bytes << '\n';
 
     chunk_length_sequence.flush();
     stream << chunk_length_sequence;
@@ -59,7 +57,7 @@ class Unloader {
     chunk_id_sequence.flush();
     stream << chunk_id_sequence;
 
-    stream << bitseqs_size_in_bytes;
+    stream.write(reinterpret_cast<char*>(&bitseqs_size_in_bytes), sizeof(bitseqs_size_in_bytes));
 
     for (const auto ls_id : ls_id_bitmap) {
       auto& bitseq = get_open_chunk_stream(ls_id);
@@ -67,6 +65,18 @@ class Unloader {
       stream.write(reinterpret_cast<const char*>(bitseq.raw_bytes()), bitseq_filled_bytes_count);
       bitseq.trim_lower_bytes(bitseq_filled_bytes_count);
     }
+  }
+
+  static constexpr uint32_t get_empty_unloader_size_in_bytes() noexcept {
+    roaring::Roaring ls_id_bitmap{};
+    ls_id_bitmap.runOptimize();
+    ls_id_bitmap.shrinkToFit();
+
+    uint32_t bitseqs_size_in_bytes{};
+    uint32_t ls_id_bitmap_size_in_bytes{};
+
+    return sizeof(ls_id_bitmap_size_in_bytes) + ls_id_bitmap.getSizeInBytes() + EncodingChunkLengthSequence{}.save_size() +
+           EncodingChunkIDSequence{}.save_size() + sizeof(bitseqs_size_in_bytes);
   }
 
  private:
