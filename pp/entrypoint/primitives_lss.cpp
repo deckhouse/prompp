@@ -117,7 +117,6 @@ extern "C" void prompp_primitives_lss_query(void* args, void* res) {
   struct Result {
     PromPP::Primitives::Go::Slice<uint32_t> matches;
     PromPP::Primitives::Go::Slice<uint16_t> label_set_lengths{};
-    LssVariantPtr lss_copy;
     uint32_t status;
   };
 
@@ -131,7 +130,6 @@ extern "C" void prompp_primitives_lss_query(void* args, void* res) {
 
   const auto out = new (res) Result{
       .matches = std::move(query_result.series_ids),
-      .lss_copy = entrypoint::head::create_readonly_lss(*in->lss),
       .status = static_cast<uint32_t>(query_result.status),
   };
   out->label_set_lengths.reserve(out->matches.size());

@@ -1146,7 +1146,6 @@ func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource 
 	matches []uint32,
 	labelSetLengths []uint16,
 	lssMainPtr uintptr,
-	lssCopyPtr uintptr,
 	status uint32,
 ) {
 	args := struct {
@@ -1158,7 +1157,6 @@ func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource 
 	var res struct {
 		matches         []uint32
 		labelSetLengths []uint16
-		lssCopy         uintptr
 		status          uint32
 	}
 
@@ -1168,7 +1166,7 @@ func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource 
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.matches, res.labelSetLengths, lss, res.lssCopy, res.status
+	return res.matches, res.labelSetLengths, lss, res.status
 }
 
 func primitivesLabelSetMatchesFree(result *lssQueryResult) {

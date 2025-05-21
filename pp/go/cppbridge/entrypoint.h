@@ -564,7 +564,6 @@ void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
  * @param res {
  *     matches           []uint32 // matched series ids
  *     label_set_lengths []uint16 // slice of series label set length
- *     lss_copy          uintptr  // readonly copy of lss
  *     status            uint32   // query status
  * }
  */

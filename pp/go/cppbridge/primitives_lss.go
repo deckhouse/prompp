@@ -307,7 +307,6 @@ func newLSSQueryResult(
 	matches []uint32,
 	labelSetLengths []uint16,
 	lssMainPtr uintptr,
-	lssROPtr uintptr,
 	status uint32,
 ) *LSSQueryResult {
 	queryResult := &lssQueryResult{
@@ -318,7 +317,6 @@ func newLSSQueryResult(
 
 	if status != LSSQueryStatusMatch {
 		primitivesLabelSetMatchesFree(queryResult)
-		primitivesLSSDtor(lssROPtr)
 
 		return &LSSQueryResult{queryResult: queryResult}
 	}
@@ -329,7 +327,7 @@ func newLSSQueryResult(
 
 	lqr := &LSSQueryResult{
 		queryResult: queryResult,
-		lssRO:       cacheReadOnlyLSS.getROLSS(lssMainPtr, lssROPtr, slices.Max(matches)),
+		lssRO:       cacheReadOnlyLSS.getROLSS(lssMainPtr, primitivesLSSCreateReadonlyLss(lssMainPtr), slices.Max(matches)),
 	}
 
 	return lqr
