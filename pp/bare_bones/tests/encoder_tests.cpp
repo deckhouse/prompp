@@ -8,10 +8,10 @@
 #include "bare_bones/encoding.h"
 
 namespace {
-
 using DataSequence = BareBones::StreamVByte::Sequence<BareBones::StreamVByte::Codec0124Frequent0>;
 using DataSequence64 = BareBones::StreamVByte::Sequence<BareBones::StreamVByte::Codec1238>;
 using DataSequence64Mostly1 = BareBones::StreamVByte::Sequence<BareBones::StreamVByte::Codec1238Mostly1>;
+
 template <class T>
 class EncoderTest : public testing::Test {
   using value_type = typename T::value_type;
@@ -47,12 +47,19 @@ class EncoderTest : public testing::Test {
 using EncoderTypes = testing::Types<BareBones::EncodedSequence<BareBones::Encoding::RLE<DataSequence>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<DataSequence>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZagRLE<DataSequence>>,
+                                    BareBones::EncodedSequence<BareBones::Encoding::Delta<DataSequence>>,
+                                    BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<DataSequence>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::RLE<DataSequence64>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<DataSequence64>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZagRLE<DataSequence64>>,
+                                    BareBones::EncodedSequence<BareBones::Encoding::Delta<DataSequence64>>,
+                                    BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<DataSequence64>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::RLE<DataSequence64Mostly1>>,
                                     BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<DataSequence64Mostly1>>,
-                                    BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZagRLE<DataSequence64Mostly1>>>;
+                                    BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZagRLE<DataSequence64Mostly1>>,
+                                    BareBones::EncodedSequence<BareBones::Encoding::Delta<DataSequence64Mostly1>>,
+                                    BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<DataSequence64Mostly1>>>;
+
 TYPED_TEST_SUITE(EncoderTest, EncoderTypes);
 
 TYPED_TEST(EncoderTest, should_keep_push_back_order) {
@@ -102,9 +109,13 @@ class EncoderTest64 : public testing::Test {};
 using EncoderTypes64 = testing::Types<BareBones::EncodedSequence<BareBones::Encoding::RLE<DataSequence64>>,
                                       BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<DataSequence64>>,
                                       BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZagRLE<DataSequence64>>,
+                                      BareBones::EncodedSequence<BareBones::Encoding::Delta<DataSequence64>>,
+                                      BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<DataSequence64>>,
                                       BareBones::EncodedSequence<BareBones::Encoding::RLE<DataSequence64Mostly1>>,
                                       BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<DataSequence64Mostly1>>,
-                                      BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZagRLE<DataSequence64Mostly1>>>;
+                                      BareBones::EncodedSequence<BareBones::Encoding::DeltaZigZagRLE<DataSequence64Mostly1>>,
+                                      BareBones::EncodedSequence<BareBones::Encoding::Delta<DataSequence64Mostly1>>,
+                                      BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<DataSequence64Mostly1>>>;
 TYPED_TEST_SUITE(EncoderTest64, EncoderTypes64);
 
 TYPED_TEST(EncoderTest64, boundary_values) {
@@ -117,5 +128,4 @@ TYPED_TEST(EncoderTest64, boundary_values) {
   // Assert
   EXPECT_TRUE(std::ranges::equal(outcomes, kEtalonsBoundaryValues));
 }
-
 }  // namespace

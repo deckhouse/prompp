@@ -190,16 +190,16 @@ func (lss *LabelSetStorage) CreateReadonlyLss() *LabelSetStorage {
 
 // RangeLabelSet serialize to slice labels from lss and calls f on each label.
 func (lss *LabelSetStorage) RangeLabelSet(lsID uint32, do func(l Label) error) error {
-	labelSet := primitivesLabelSetSerialize(lss.pointer, lsID)
+	labelSet := labelSetSerialize(lss.pointer, lsID)
 
 	for i := range labelSet {
 		if err := do(labelSet[i]); err != nil {
-			primitivesLabelSetFree(labelSet)
+			labelSetFree(labelSet)
 			return err
 		}
 	}
 
-	primitivesLabelSetFree(labelSet)
+	labelSetFree(labelSet)
 
 	return nil
 }
