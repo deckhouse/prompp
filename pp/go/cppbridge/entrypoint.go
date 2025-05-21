@@ -2546,7 +2546,7 @@ func headWalDecoderDtor(decoder uintptr) {
 // label_sets
 //
 
-func primitivesLabelSetLength(lss uintptr, labelSetID uint32) uint64 {
+func labelSetLength(lss uintptr, labelSetID uint32) uint64 {
 	args := struct {
 		lss        uintptr
 		labelSetID uint32
@@ -2556,7 +2556,7 @@ func primitivesLabelSetLength(lss uintptr, labelSetID uint32) uint64 {
 	}
 
 	fastcgo.UnsafeCall2(
-		C.prompp_primitives_label_set_length,
+		C.prompp_label_set_length,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
@@ -2564,7 +2564,7 @@ func primitivesLabelSetLength(lss uintptr, labelSetID uint32) uint64 {
 	return res.length
 }
 
-func primitivesLabelSetSerialize(lss uintptr, labelSetID uint32) []Label {
+func labelSetSerialize(lss uintptr, labelSetID uint32) []Label {
 	args := struct {
 		lss        uintptr
 		labelSetID uint32
@@ -2574,7 +2574,7 @@ func primitivesLabelSetSerialize(lss uintptr, labelSetID uint32) []Label {
 	}
 
 	fastcgo.UnsafeCall2(
-		C.prompp_primitives_label_set_serialize,
+		C.prompp_label_set_serialize,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
@@ -2582,7 +2582,7 @@ func primitivesLabelSetSerialize(lss uintptr, labelSetID uint32) []Label {
 	return res.labelSet
 }
 
-func primitivesLabelSetFree(labelSet []Label) {
+func labelSetFree(labelSet []Label) {
 	if labelSet == nil {
 		return
 	}
@@ -2592,7 +2592,76 @@ func primitivesLabelSetFree(labelSet []Label) {
 	}{labelSet}
 
 	fastcgo.UnsafeCall1(
-		C.prompp_primitives_label_set_free,
+		C.prompp_label_set_free,
 		uintptr(unsafe.Pointer(&args)),
 	)
+}
+
+func allocateSliceForLabelBytes(lss uintptr, labelSetID uint32, bytes []byte) []byte {
+	args := struct {
+		lss        uintptr
+		labelSetID uint32
+	}{lss, labelSetID}
+	var sizeResult struct {
+		size uint32
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_label_set_bytes_size,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&sizeResult)),
+	)
+
+	if int(sizeResult.size) > cap(bytes) {
+		return make([]byte, sizeResult.size)
+	} else {
+		return bytes[:sizeResult.size]
+	}
+}
+
+func LabelSetBytes(lss uintptr, labelSetID uint32, bytes []byte) []byte {
+	result := struct {
+		bytes []byte
+	}{allocateSliceForLabelBytes(lss, labelSetID, bytes)}
+
+	args := struct {
+		lss        uintptr
+		labelSetID uint32
+	}{lss, labelSetID}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_label_set_bytes,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&result)),
+	)
+
+	return result.bytes
+}
+
+func labelSetBytesWithFilteredNames(cFunction unsafe.Pointer, lss uintptr, labelSetID uint32, bytes []byte, names ...string) []byte {
+	result := struct {
+		bytes []byte
+	}{allocateSliceForLabelBytes(lss, labelSetID, bytes)}
+
+	args := struct {
+		lss        uintptr
+		labelSetID uint32
+		names      []string
+	}{lss, labelSetID, names}
+
+	fastcgo.UnsafeCall2(
+		cFunction,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&result)),
+	)
+
+	return result.bytes
+}
+
+func LabelSetBytesWithLabels(lss uintptr, labelSetID uint32, bytes []byte, names ...string) []byte {
+	return labelSetBytesWithFilteredNames(C.prompp_label_set_bytes_with_labels, lss, labelSetID, bytes, names...)
+}
+
+func LabelSetBytesWithoutLabels(lss uintptr, labelSetID uint32, bytes []byte, names ...string) []byte {
+	return labelSetBytesWithFilteredNames(C.prompp_label_set_bytes_without_labels, lss, labelSetID, bytes, names...)
 }
