@@ -192,7 +192,7 @@ extern "C" void prompp_series_data_data_storage_unload(void* args, void* res) {
   using PromPP::Primitives::Go::BytesStream;
   using PromPP::Primitives::Go::Slice;
   using series_data::DataStorage;
-  using series_data::snapshot::Unloader;
+  using series_data::unloading::Unloader;
 
   struct Arguments {
     DataStorage* data_storage;
