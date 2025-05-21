@@ -446,9 +446,9 @@ class SharedSpan {
 };
 
 template <class T>
-struct IsSpan : std::false_type {};
+struct IsSharedSpan : std::false_type {};
 
 template <class T, ReallocatorInterface Reallocator>
-struct IsSpan<SharedSpan<T, Reallocator>> : std::true_type {};
+struct IsSharedSpan<SharedSpan<T, Reallocator>> : std::true_type {};
 
 }  // namespace BareBones

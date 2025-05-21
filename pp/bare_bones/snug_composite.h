@@ -56,7 +56,7 @@ class GenericDecodingTable {
   using value_type = typename Filament<Vector>::composite_type;
   using data_type = typename Filament<Vector>::data_type;  // FIXME make it private
 
-  static constexpr bool kIsReadOnly = IsSpan<Vector<uint8_t>>::value;
+  static constexpr bool kIsReadOnly = IsSharedSpan<Vector<uint8_t>>::value;
 
  protected:
   class Proxy {
