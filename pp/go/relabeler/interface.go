@@ -76,6 +76,7 @@ type Head interface {
 	Discard() error
 	String() string
 	CopySeriesFrom(other Head)
+	ReadEachShard(fn ShardFn) error
 }
 
 type Distributor interface {

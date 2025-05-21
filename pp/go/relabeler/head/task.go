@@ -148,10 +148,10 @@ func (t *TaskAppendRelabelerSeries) AddResult(shardID uint16, innerSeries *cppbr
 	t.promise.AddResult(shardID, innerSeries)
 }
 
-// AddUpdateTasks add to promise UpdateTasks.
-func (t *TaskAppendRelabelerSeries) AddUpdateRelabelerTasks(updateTask *TaskUpdateRelabelerState) {
-	t.promise.AddUpdateRelabelerTasks(updateTask)
-}
+// // AddUpdateRelabelerTasks add to promise UpdateTasks.
+// func (t *TaskAppendRelabelerSeries) AddUpdateRelabelerTasks(updateTask *TaskUpdateRelabelerState) {
+// 	t.promise.AddUpdateRelabelerTasks(updateTask)
+// }
 
 // Ctx - return task context.
 func (t *TaskAppendRelabelerSeries) Ctx() context.Context {
@@ -196,6 +196,7 @@ func (t *TaskAppendRelabelerSeries) SourceShardID() uint16 {
 // TaskUpdateRelabelerState - task for stage updates the cache in the source shard with the relabeled shard.
 type TaskUpdateRelabelerState struct {
 	ctx                  context.Context
+	promise              *InputRelabelingPromise
 	relabelerStateUpdate *cppbridge.RelabelerStateUpdate
 	inputRelabeler       *cppbridge.InputPerShardRelabeler
 	cache                *cppbridge.Cache
@@ -205,6 +206,7 @@ type TaskUpdateRelabelerState struct {
 // NewTaskUpdateRelabelerState - init task for stage updates the cache in the source shard with the relabeled shard.
 func NewTaskUpdateRelabelerState(
 	ctx context.Context,
+	promise *InputRelabelingPromise,
 	relabelerStateUpdate *cppbridge.RelabelerStateUpdate,
 	inputRelabeler *cppbridge.InputPerShardRelabeler,
 	cache *cppbridge.Cache,
@@ -212,11 +214,17 @@ func NewTaskUpdateRelabelerState(
 ) *TaskUpdateRelabelerState {
 	return &TaskUpdateRelabelerState{
 		ctx:                  ctx,
+		promise:              promise,
 		relabelerStateUpdate: relabelerStateUpdate,
 		inputRelabeler:       inputRelabeler,
 		cache:                cache,
 		relabeledShardID:     relabeledShardID,
 	}
+}
+
+// AddError - add to promise error.
+func (t *TaskUpdateRelabelerState) AddError(shardID uint16, err error) {
+	t.promise.AddError(shardID, err)
 }
 
 // Update run update relabeler state.
@@ -263,4 +271,35 @@ func NewSingleGenericTask(shardFn relabeler.ShardFn, numberOfShards uint16) *Gen
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	return &GenericTask{errs: errs, shardFn: shardFn, wg: wg}
+}
+
+//
+// GenericReadTask
+//
+
+type GenericReadTask struct {
+	errs    []error
+	shardFn relabeler.ShardFn
+	wg      *sync.WaitGroup
+}
+
+// NewGenericReadTask init new GenericReadTask.
+func NewGenericReadTask(shardFn relabeler.ShardFn, numberOfShards uint16) *GenericReadTask {
+	errs := make([]error, numberOfShards)
+	wg := &sync.WaitGroup{}
+	wg.Add(int(numberOfShards))
+	return &GenericReadTask{errs: errs, shardFn: shardFn, wg: wg}
+}
+
+func (t *GenericReadTask) Wait() {
+	t.wg.Wait()
+}
+
+func (t *GenericReadTask) Errors() []error {
+	return t.errs
+}
+
+func (t *GenericReadTask) ExecuteOnShard(shard relabeler.Shard) {
+	t.errs[shard.ShardID()] = t.shardFn(shard)
+	t.wg.Done()
 }

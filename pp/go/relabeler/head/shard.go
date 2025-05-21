@@ -136,6 +136,7 @@ func (h *Head) reconfigureRelabelersData(
 //revive:disable-next-line:cognitive-complexity long but understandable.
 //revive:disable-next-line:cyclomatic long but understandable.
 func (h *Head) shardLoop(shardID uint16, stopc chan struct{}) {
+	// readWG := sync.WaitGroup{}
 	for {
 		select {
 		case <-stopc:
@@ -216,15 +217,32 @@ func (h *Head) shardLoop(shardID uint16, stopc chan struct{}) {
 				continue
 			}
 
-			task.AddUpdateRelabelerTasks(NewTaskUpdateRelabelerState(
+			// task.AddUpdateRelabelerTasks(NewTaskUpdateRelabelerState(
+			// 	task.Ctx(),
+			// 	task.Promise(),
+			// 	relabelerStateUpdate,
+			// 	task.InputRelabelerByShard(task.SourceShardID()),
+			// 	task.CacheByShard(task.SourceShardID()),
+			// 	shardID,
+			// ))
+
+			h.stageUpdateRelabelers[task.SourceShardID()] <- NewTaskUpdateRelabelerState(
 				task.Ctx(),
+				task.Promise(),
 				relabelerStateUpdate,
 				task.InputRelabelerByShard(task.SourceShardID()),
 				task.CacheByShard(task.SourceShardID()),
 				shardID,
-			))
+			)
 
 			task.AddResult(shardID, innerSeries)
+
+		case task := <-h.stageUpdateRelabelers[shardID]:
+			if err := task.Update(); err != nil {
+				task.AddError(shardID, fmt.Errorf("failed input update relabeler state %d: %w", shardID, err))
+				continue
+			}
+
 		case task := <-h.genericTaskCh[shardID]:
 			task.ExecuteOnShard(&shard{
 				id:          shardID,
@@ -232,9 +250,47 @@ func (h *Head) shardLoop(shardID uint16, stopc chan struct{}) {
 				dataStorage: h.dataStorages[shardID],
 				wal:         h.wals[shardID],
 			})
+
+		case task := <-h.genericReadTaskCh[shardID]:
+			task.ExecuteOnShard(&shard{
+				id:          shardID,
+				lss:         h.lsses[shardID],
+				dataStorage: h.dataStorages[shardID],
+				wal:         h.wals[shardID],
+			})
+
+			// if len(h.genericReadTaskCh[shardID]) == 0 {
+			// 	continue
+			// }
+
+			// limit := min(len(h.genericReadTaskCh[shardID])/2, defaultReadTaskLimit)
+			// if limit == 0 {
+			// 	continue
+			// }
+
+			// for i := 0; i < limit; i++ {
+			// 	task = <-h.genericReadTaskCh[shardID]
+
+			// 	sd := &shard{
+			// 		id:          shardID,
+			// 		lss:         h.lsses[shardID],
+			// 		dataStorage: h.dataStorages[shardID],
+			// 		wal:         h.wals[shardID],
+			// 	}
+
+			// 	readWG.Add(1)
+			// 	go func(t *GenericReadTask, s *shard) {
+			// 		t.ExecuteOnShard(s)
+			// 		readWG.Done()
+			// 	}(task, sd)
+			// }
+
+			// readWG.Wait()
 		}
 	}
 }
+
+const defaultReadTaskLimit = 8
 
 type shard struct {
 	id          uint16
