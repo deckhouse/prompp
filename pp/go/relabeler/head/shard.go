@@ -299,21 +299,22 @@ func (h *Head) shardLoop(shardID uint16, stopc chan struct{}) {
 			// }
 
 			// limit := min(length/4, defaultReadTaskLimit)
-			limit := ExtraLimit(
-				float64(len(h.genericReadTaskCh[shardID])),
-				float64(len(h.genericTaskCh[shardID])),
-				float64(len(h.stageInputRelabeling[shardID])),
-				1.6,
-				1.3,
-			)
-			if limit == 0 {
-				continue
-			}
 
-			for i := 0; i < limit; i++ {
-				task = <-h.genericReadTaskCh[shardID]
-				task.ExecuteOnShard(sd)
-			}
+			// limit := ExtraLimit(
+			// 	float64(len(h.genericReadTaskCh[shardID])),
+			// 	float64(len(h.genericTaskCh[shardID])),
+			// 	float64(len(h.stageInputRelabeling[shardID])),
+			// 	1.6,
+			// 	1.3,
+			// )
+			// if limit == 0 {
+			// 	continue
+			// }
+
+			// for i := 0; i < limit; i++ {
+			// 	task = <-h.genericReadTaskCh[shardID]
+			// 	task.ExecuteOnShard(sd)
+			// }
 		}
 	}
 }
