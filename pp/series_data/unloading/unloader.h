@@ -10,9 +10,9 @@
 namespace series_data::unloading {
 class Unloader {
   using EncodingChunkLengthSequence =
-      BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<BareBones::StreamVByte::Sequence<BareBones::StreamVByte::Codec0124Frequent0>>>;
+      BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124Frequent0>>>;
   using EncodingChunkIDSequence =
-      BareBones::EncodedSequence<BareBones::Encoding::RLE<BareBones::StreamVByte::Sequence<BareBones::StreamVByte::Codec0124Frequent0>>>;
+      BareBones::EncodedSequence<BareBones::Encoding::RLE<BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124Frequent0>>>;
 
  public:
   explicit Unloader(DataStorage& storage) : storage_(storage) {}
@@ -52,10 +52,10 @@ class Unloader {
     stream.write(buffer.data(), size_in_bytes);
 
     chunk_length_sequence.flush();
-    stream << chunk_length_sequence;
+    chunk_length_sequence.data().write_to(stream);
 
     chunk_id_sequence.flush();
-    stream << chunk_id_sequence;
+    chunk_id_sequence.data().write_to(stream);
 
     stream.write(reinterpret_cast<char*>(&bitseqs_size_in_bytes), sizeof(bitseqs_size_in_bytes));
 
@@ -72,11 +72,8 @@ class Unloader {
     ls_id_bitmap.runOptimize();
     ls_id_bitmap.shrinkToFit();
 
-    uint32_t bitseqs_size_in_bytes{};
-    uint32_t ls_id_bitmap_size_in_bytes{};
-
-    return sizeof(ls_id_bitmap_size_in_bytes) + ls_id_bitmap.getSizeInBytes() + EncodingChunkLengthSequence{}.save_size() +
-           EncodingChunkIDSequence{}.save_size() + sizeof(bitseqs_size_in_bytes);
+    return sizeof(uint32_t) + ls_id_bitmap.getSizeInBytes() + EncodingChunkLengthSequence{}.data().size() + sizeof(uint32_t) +
+           EncodingChunkIDSequence{}.data().size() + sizeof(uint32_t) + sizeof(uint32_t);
   }
 
  private:

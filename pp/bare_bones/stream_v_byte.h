@@ -919,6 +919,13 @@ class CompactSequence {
   PROMPP_ALWAYS_INLINE auto begin() const noexcept { return DecodeIterator(buffer_, buffer_ + kMaxKeySize, size()); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return DecodeIteratorSentinel{}; }
 
+  template <OutputStream S>
+  PROMPP_ALWAYS_INLINE void write_to(S& stream) const noexcept {
+    const Memory::SizeType buffer_size = buffer_.size();
+    stream.write(reinterpret_cast<const char*>(&buffer_size), sizeof(buffer_size));
+    stream.write(reinterpret_cast<const char*>(buffer_.begin()), buffer_size);
+  }
+
  private:
   PROMPP_ALWAYS_INLINE void set_size(uint32_t new_size) noexcept { buffer_.control_block().items_count = new_size; }
 };
