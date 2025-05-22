@@ -94,10 +94,8 @@ class QueryableEncodingBimap final
 
   void copy_added_series(QueryableEncodingBimap& copy_to) const {
     const auto size_before = copy_to.size();
-    for (auto ls_id : added_series_) {
-      copy_to.items_.emplace_back(copy_to.data_, this->operator[](ls_id));
-    }
-    copy_to.after_items_load_impl(size_before);
+    copy_ls_id_set(copy_added_series_label_sets(copy_to), copy_to.ls_id_set_);
+    copy_to.build_indexes_in_copied_lss(size_before);
   }
 
  private:
@@ -143,6 +141,45 @@ class QueryableEncodingBimap final
     }
 
     sorting_index_.update(ls_id_set_iterator);
+  }
+
+  BareBones::Vector<uint32_t> copy_added_series_label_sets(QueryableEncodingBimap& copy_to) const noexcept {
+    BareBones::Vector<uint32_t> ids_map(Base::items_.size());
+    std::ranges::fill(ids_map, PromPP::Primitives::kInvalidLabelSetID);
+
+    for (auto ls_id : added_series_) {
+      ids_map[ls_id] = copy_to.items_.size();
+      copy_to.items_.emplace_back(copy_to.data_, this->operator[](ls_id));
+    }
+
+    return ids_map;
+  }
+
+  PROMPP_ALWAYS_INLINE void copy_ls_id_set(const BareBones::Vector<uint32_t>& ids_map, LsIdSet& copy_to) const {
+    for (auto ls_id : ls_id_set_) {
+      if (const auto new_ls_id = ids_map[ls_id]; new_ls_id != PromPP::Primitives::kInvalidLabelSetID) {
+        copy_to.emplace_hint(copy_to.end(), new_ls_id);
+      }
+    }
+  }
+
+  void build_indexes_in_copied_lss(uint32_t size_before) {
+    const auto size = Base::items_.size();
+
+    ls_id_hash_set_.reserve(size);
+    queried_series_.set_series_count(size);
+
+    const auto hasher = Base::hasher();
+    for (auto ls_id = size_before; ls_id < size; ++ls_id) {
+      auto label_set = this->operator[](ls_id);
+
+      ls_id_hash_set_.emplace_with_hash(phmap_hash(hasher(label_set)), typename Base::Proxy(ls_id));
+
+      for (auto label = label_set.begin(); label != label_set.end(); ++label) {
+        reverse_index_.add(label, ls_id);
+        trie_index_.insert((*label).first, label.name_id(), (*label).second, label.value_id());
+      }
+    }
   }
 
   PROMPP_ALWAYS_INLINE void mark_series_as_added(uint32_t ls_id) noexcept {

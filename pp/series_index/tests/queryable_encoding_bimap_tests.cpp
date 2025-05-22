@@ -1,3 +1,4 @@
+#include <gmock/gmock-matchers.h>
 #include <gtest/gtest.h>
 
 #include "primitives/label_set.h"
@@ -131,8 +132,8 @@ TEST_F(QueryableEncodingBimapCopyAddedSeriesFixture, NonEmptyLss) {
   // Arrange
   Lss lss_copy;
 
-  const auto label_set = LabelViewSet{{"job", "cron"}, {"key", ""}, {"process", "php"}};
-  const auto label_set2 = LabelViewSet{{"job", "cron"}, {"key", ""}, {"process", "php1"}};
+  const auto label_set = LabelViewSet{{"job", "cron"}, {"key", ""}, {"process", "php1"}};
+  const auto label_set2 = LabelViewSet{{"job", "cron"}, {"key", ""}, {"process", "php"}};
 
   lss_.find_or_emplace(label_set);
   lss_.find_or_emplace(label_set2);
@@ -145,6 +146,7 @@ TEST_F(QueryableEncodingBimapCopyAddedSeriesFixture, NonEmptyLss) {
   EXPECT_EQ(0U, lss_copy.find(label_set));
   EXPECT_EQ(1U, lss_copy.find(label_set2));
   EXPECT_EQ(2U, lss_copy.reverse_index().names_count());
+  EXPECT_THAT(lss_copy.ls_id_set(), testing::ElementsAre(1, 0));
   EXPECT_FALSE(lss_copy.ls_id_set().empty());
   EXPECT_TRUE(lss_copy.trie_index().names_trie().lookup("job"));
 }
@@ -152,25 +154,30 @@ TEST_F(QueryableEncodingBimapCopyAddedSeriesFixture, NonEmptyLss) {
 TEST_F(QueryableEncodingBimapCopyAddedSeriesFixture, CopyOfCopy) {
   // Arrange
   Lss lss_copy;
-  Lss lss_copy2;
+  Lss lss_copy_of_copy;
 
   const auto label_set = LabelViewSet{{"job", "cron"}, {"key", ""}, {"process", "php"}};
   const auto label_set2 = LabelViewSet{{"job", "cron"}, {"key", ""}, {"process", "php1"}};
+  const auto label_set3 = LabelViewSet{{"server", "localhost"}};
 
   lss_.find_or_emplace(label_set);
   lss_.find_or_emplace(label_set2);
+  lss_.find_or_emplace(label_set3);
 
   // Act
   lss_.copy_added_series(lss_copy);
-  lss_copy.copy_added_series(lss_copy2);
+  lss_copy.copy_added_series(lss_copy_of_copy);
+  lss_copy_of_copy.find_or_emplace(label_set3);
 
   // Assert
-  EXPECT_EQ(0U, lss_copy2.size());
-  EXPECT_FALSE(lss_copy2.find(label_set));
-  EXPECT_FALSE(lss_copy2.find(label_set2));
-  EXPECT_EQ(0U, lss_copy2.reverse_index().names_count());
-  EXPECT_TRUE(lss_copy2.ls_id_set().empty());
-  EXPECT_FALSE(lss_copy2.trie_index().names_trie().lookup("job"));
+  EXPECT_EQ(1U, lss_copy_of_copy.size());
+  EXPECT_FALSE(lss_copy_of_copy.find(label_set));
+  EXPECT_FALSE(lss_copy_of_copy.find(label_set2));
+  EXPECT_TRUE(lss_copy_of_copy.find(label_set3));
+  EXPECT_EQ(1U, lss_copy_of_copy.reverse_index().names_count());
+  EXPECT_THAT(lss_copy_of_copy.ls_id_set(), testing::ElementsAre(0));
+  EXPECT_FALSE(lss_copy_of_copy.trie_index().names_trie().lookup("job"));
+  EXPECT_TRUE(lss_copy_of_copy.trie_index().names_trie().lookup("server"));
 }
 
 }  // namespace
