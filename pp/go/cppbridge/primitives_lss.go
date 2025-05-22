@@ -36,7 +36,6 @@ const (
 	lssEncodingBimap uint32 = iota
 	lssOrderedEncodingBimap
 	lssQueryableEncodingBimap
-	lssReadOnly
 )
 
 //
@@ -123,12 +122,12 @@ func (lss *LabelSetStorage) AllocatedMemory() uint64 {
 }
 
 // FindOrEmplace find in lss LabelSet or emplace and return ls id.
-func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) uint32 {
+func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) FindOrEmplaceResult {
 	return primitivesLSSFindOrEmplace(lss.pointer, labelSet)
 }
 
 // FindOrEmplaceBuilder find in lss LabelSet or emplace and return ls id.
-func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet model.CppLabelSetBuilder) uint32 {
+func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet model.CppLabelSetBuilder) FindOrEmplaceResult {
 	return primitivesLSSFindOrEmplaceBuilder(lss.pointer, labelSet)
 }
 
@@ -308,7 +307,6 @@ func newLSSQueryResult(
 	matches []uint32,
 	labelSetLengths []uint16,
 	lssMainPtr uintptr,
-	lssROPtr uintptr,
 	status uint32,
 ) *LSSQueryResult {
 	queryResult := &lssQueryResult{
@@ -319,7 +317,6 @@ func newLSSQueryResult(
 
 	if status != LSSQueryStatusMatch {
 		primitivesLabelSetMatchesFree(queryResult)
-		primitivesLSSDtor(lssROPtr)
 
 		return &LSSQueryResult{queryResult: queryResult}
 	}
@@ -330,7 +327,7 @@ func newLSSQueryResult(
 
 	lqr := &LSSQueryResult{
 		queryResult: queryResult,
-		lssRO:       cacheReadOnlyLSS.getROLSS(lssMainPtr, lssROPtr, slices.Max(matches)),
+		lssRO:       cacheReadOnlyLSS.getROLSS(lssMainPtr, primitivesLSSCreateReadonlyLss(lssMainPtr), slices.Max(matches)),
 	}
 
 	return lqr

@@ -526,7 +526,8 @@ void prompp_primitives_lss_allocated_memory(void* args, void* res);
  * }
  *
  * @param res {
- *     ls_id uint32 // inserted (or found) label set id
+ *     ls_id uint32                  // inserted (or found) label set id
+ *     bool  lss_has_reallocations   // true if lss has reallocations
  * }
  */
 void prompp_primitives_lss_find_or_emplace(void* args, void* res);
@@ -542,11 +543,11 @@ void prompp_primitives_lss_find_or_emplace(void* args, void* res);
  *        sorted_add   []model.Label  // slice of sorted by name labels
  *        sorted_del   []string       // slice of sorted label names
  *     }
-
  * }
  *
  * @param res {
- *     ls_id uint32 // inserted (or found) label set id
+ *     ls_id uint32                   // inserted (or found) label set id
+ *     bool  lss_has_reallocations    // true if lss has reallocations
  * }
  */
 void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
@@ -563,7 +564,6 @@ void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
  * @param res {
  *     matches           []uint32 // matched series ids
  *     label_set_lengths []uint16 // slice of series label set length
- *     lss_copy          uintptr  // readonly copy of lss
  *     status            uint32   // query status
  * }
  */
@@ -819,10 +819,11 @@ void prompp_prometheus_per_shard_relabeler_cache_allocated_memory(void* args, vo
  * }
  *
  * @param res {
- *     samples_added           uint32             // number of added samples;
- *     series_added            uint32             // number of added series;
- *     series_drop             uint32             // number of dropped series;
- *     error                   []byte             // error string if thrown;
+ *     samples_added                uint32        // number of added samples;
+ *     series_added                 uint32        // number of added series;
+ *     series_drop                  uint32        // number of dropped series;
+ *     error                        []byte        // error string if thrown;
+ *     target_lss_has_reallocations bool          // true if target lss has reallocations
  * }
  */
 void prompp_prometheus_per_shard_relabeler_input_relabeling(void* args, void* res);
@@ -871,7 +872,11 @@ void prompp_prometheus_relabel_stalenans_state_reset(void* args);
  * }
  *
  * @param res {
- *     error                   []byte             // error string if thrown;
+ *     samples_added                uint32        // number of added samples;
+ *     series_added                 uint32        // number of added series;
+ *     series_drop                  uint32        // number of dropped series;
+ *     error                        []byte        // error string if thrown;
+ *     target_lss_has_reallocations bool          // true if target lss has reallocations
  * }
  */
 void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stalenans(void* args, void* res);
@@ -908,7 +913,8 @@ void prompp_prometheus_per_shard_relabeler_input_collect_stalenans(void* args, v
  * }
  *
  * @param res {
- *     error                  []byte           // error string if thrown
+ *     error                        []byte          // error string if thrown
+ *     target_lss_has_reallocations bool            // true if target lss has reallocations
  * }
  */
 void prompp_prometheus_per_shard_relabeler_append_relabeler_series(void* args, void* res);

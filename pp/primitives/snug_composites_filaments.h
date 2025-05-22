@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cstdint>
-
 #include <scope_exit.h>
 
 #include "bare_bones/exception.h"
@@ -16,7 +14,7 @@ class Symbol {
   uint32_t pos_;
   uint32_t length_;
 
-  static constexpr bool kIsReadOnly = std::same_as<Vector<uint8_t>, BareBones::SharedSpan<uint8_t>>;
+  static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
 
  public:
   // NOLINTNEXTLINE(readability-identifier-naming)
@@ -29,7 +27,7 @@ class Symbol {
      public:
       explicit Checkpoint(uint32_t size) noexcept : size_(size) {}
 
-      PROMPP_ALWAYS_INLINE uint32_t size() const { return size_; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const { return size_; }
 
       template <BareBones::OutputStream S>
       void save(S& out, data_type const& data, Checkpoint const* from = nullptr) const {
@@ -140,7 +138,7 @@ class Symbol {
       in.read(this->begin() + first_to_load_i, size_to_load);
     }
 
-    PROMPP_ALWAYS_INLINE size_t remainder_size() const noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t remainder_size() const noexcept {
       constexpr size_t max_ui32 = std::numeric_limits<uint32_t>::max();
       assert(this->size() <= max_ui32);
       return max_ui32 - this->size();
@@ -163,7 +161,7 @@ class Symbol {
     }
   }
 
-  PROMPP_ALWAYS_INLINE uint32_t length() const noexcept { return length_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t length() const noexcept { return length_; }
 };
 
 }  // namespace PromPP::Primitives::SnugComposites::Filaments
@@ -179,7 +177,7 @@ class LabelNameSet {
   uint32_t pos_;
   uint32_t size_;
 
-  static constexpr bool kIsReadOnly = std::same_as<Vector<uint8_t>, BareBones::SharedSpan<uint8_t>>;
+  static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
 
  public:
   using symbols_table_type = SymbolsTableType<Vector>;
@@ -198,7 +196,7 @@ class LabelNameSet {
       PROMPP_ALWAYS_INLINE explicit Checkpoint(data_type const& data) noexcept
           : size_(data.symbols_ids_sequences.size()), symbols_table_checkpoint_(data.symbols_table.checkpoint()) {}
 
-      PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return size_; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return size_; }
 
       PROMPP_ALWAYS_INLINE typename symbols_table_type::checkpoint_type symbols_table() const noexcept { return symbols_table_checkpoint_; }
 
@@ -233,7 +231,7 @@ class LabelNameSet {
         }
       }
 
-      PROMPP_ALWAYS_INLINE uint32_t save_size(data_type const& data, Checkpoint const* from = nullptr) const {
+      PROMPP_ALWAYS_INLINE uint32_t save_size([[maybe_unused]] data_type const& data, Checkpoint const* from = nullptr) const {
         uint32_t res = 0;
 
         // version
@@ -332,7 +330,7 @@ class LabelNameSet {
       symbols_table.load(in);
     }
 
-    PROMPP_ALWAYS_INLINE size_t remainder_size() const noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t remainder_size() const noexcept {
       constexpr size_t max_ui32 = std::numeric_limits<uint32_t>::max();
       assert(this->symbols_ids_sequences.size() <= max_ui32);
 
@@ -366,7 +364,7 @@ class LabelNameSet {
     }
   }
 
-  PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return size_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return size_; }
 
   // NOLINTNEXTLINE(readability-identifier-naming)
   class composite_type
@@ -415,7 +413,7 @@ class LabelSet {
   uint32_t lns_id_;
   uint32_t pos_;
 
-  static constexpr bool kIsReadOnly = std::same_as<Vector<uint8_t>, BareBones::SharedSpan<uint8_t>>;
+  static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
 
  public:
   using symbols_tables_type = std::conditional_t<kIsReadOnly, BareBones::Vector<SymbolsTableType<Vector>>, Vector<std::unique_ptr<SymbolsTableType<Vector>>>>;
@@ -449,7 +447,7 @@ class LabelSet {
         });
       }
 
-      PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return size_; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return size_; }
 
       PROMPP_ALWAYS_INLINE typename LabelNameSetsTableType<Vector>::checkpoint_type const label_name_sets() const noexcept {
         return label_name_sets_table_checkpoint_;
@@ -532,7 +530,7 @@ class LabelSet {
         }
       }
 
-      PROMPP_ALWAYS_INLINE uint32_t save_size(data_type const& data, Checkpoint const* from = nullptr) const {
+      PROMPP_ALWAYS_INLINE uint32_t save_size([[maybe_unused]] data_type const& data, Checkpoint const* from = nullptr) const {
         uint32_t res = 0;
 
         // version
@@ -745,7 +743,7 @@ class LabelSet {
     }
 
     // it drains before the maximum available symbols count would be exceeded.
-    PROMPP_ALWAYS_INLINE size_t remainder_size() const noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t remainder_size() const noexcept {
       constexpr size_t max_ui32 = std::numeric_limits<uint32_t>::max();
 
       assert(this->symbols_ids_sequences.size() <= max_ui32);
@@ -865,9 +863,9 @@ class LabelSet {
         }
       }
 
-      PROMPP_ALWAYS_INLINE uint32_t name_id() const noexcept { return lnsi_.id(); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t name_id() const noexcept { return lnsi_.id(); }
 
-      PROMPP_ALWAYS_INLINE uint32_t value_id() const noexcept { return *vi_; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t value_id() const noexcept { return *vi_; }
     };
 
     using iterator = Iterator<decltype(label_name_set_.begin()), decltype(values_begin_)>;

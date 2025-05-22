@@ -1105,14 +1105,17 @@ func primitivesLSSAllocatedMemory(lss uintptr) uint64 {
 	return res.allocatedMemory
 }
 
-func primitivesLSSFindOrEmplace(lss uintptr, labelSet model.LabelSet) uint32 {
+type FindOrEmplaceResult struct {
+	LabelSetID          uint32
+	LssHasReallocations bool
+}
+
+func primitivesLSSFindOrEmplace(lss uintptr, labelSet model.LabelSet) FindOrEmplaceResult {
 	args := struct {
 		lss      uintptr
 		labelSet model.LabelSet
 	}{lss, labelSet}
-	var res struct {
-		labelSetID uint32
-	}
+	var res FindOrEmplaceResult
 
 	fastcgo.UnsafeCall2(
 		C.prompp_primitives_lss_find_or_emplace,
@@ -1120,17 +1123,15 @@ func primitivesLSSFindOrEmplace(lss uintptr, labelSet model.LabelSet) uint32 {
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.labelSetID
+	return res
 }
 
-func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder model.CppLabelSetBuilder) uint32 {
+func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder model.CppLabelSetBuilder) FindOrEmplaceResult {
 	args := struct {
 		lss     uintptr
 		builder model.CppLabelSetBuilder
 	}{lss, builder}
-	var res struct {
-		labelSetID uint32
-	}
+	var res FindOrEmplaceResult
 
 	fastcgo.UnsafeCall2(
 		C.prompp_primitives_lss_find_or_emplace_builder,
@@ -1138,14 +1139,13 @@ func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder model.CppLabelSetBui
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.labelSetID
+	return res
 }
 
 func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource uint32) (
 	matches []uint32,
 	labelSetLengths []uint16,
 	lssMainPtr uintptr,
-	lssCopyPtr uintptr,
 	status uint32,
 ) {
 	args := struct {
@@ -1157,7 +1157,6 @@ func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource 
 	var res struct {
 		matches         []uint32
 		labelSetLengths []uint16
-		lssCopy         uintptr
 		status          uint32
 	}
 
@@ -1167,7 +1166,7 @@ func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource 
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.matches, res.labelSetLengths, lss, res.lssCopy, res.status
+	return res.matches, res.labelSetLengths, lss, res.status
 }
 
 func primitivesLabelSetMatchesFree(result *lssQueryResult) {
@@ -1505,7 +1504,7 @@ func prometheusPerShardRelabelerInputRelabeling(
 	options RelabelerOptions,
 	shardsInnerSeries []*InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
-) (stats RelabelerStats, exception []byte) {
+) (stats RelabelerStats, exception []byte, targetLssHasReallocations bool) {
 	args := struct {
 		shardsInnerSeries     []*InnerSeries
 		shardsRelabeledSeries []*RelabeledSeries
@@ -1518,7 +1517,8 @@ func prometheusPerShardRelabelerInputRelabeling(
 	}{shardsInnerSeries, shardsRelabeledSeries, options, perShardRelabeler, hashdex, cache, inputLss, targetLss}
 	var res struct {
 		RelabelerStats
-		exception []byte
+		exception                 []byte
+		targetLssHasReallocations bool
 	}
 	start := time.Now().UnixNano()
 	fastcgo.UnsafeCall2(
@@ -1529,7 +1529,7 @@ func prometheusPerShardRelabelerInputRelabeling(
 	inputRelabelerInputRelabelingSum.Add(float64(time.Now().UnixNano() - start))
 	inputRelabelerInputRelabelingCount.Inc()
 
-	return res.RelabelerStats, res.exception
+	return res.RelabelerStats, res.exception, res.targetLssHasReallocations
 }
 
 // prometheusPerShardRelabelerInputRelabelingWithStalenans wrapper for relabeling incoming
@@ -1540,7 +1540,7 @@ func prometheusPerShardRelabelerInputRelabelingWithStalenans(
 	options RelabelerOptions,
 	shardsInnerSeries []*InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
-) (stats RelabelerStats, exception []byte) {
+) (stats RelabelerStats, exception []byte, targetLssHasReallocations bool) {
 	args := struct {
 		shardsInnerSeries     []*InnerSeries
 		shardsRelabeledSeries []*RelabeledSeries
@@ -1566,7 +1566,8 @@ func prometheusPerShardRelabelerInputRelabelingWithStalenans(
 	}
 	var res struct {
 		RelabelerStats
-		exception []byte
+		exception                 []byte
+		targetLssHasReallocations bool
 	}
 	start := time.Now().UnixNano()
 	fastcgo.UnsafeCall2(
@@ -1577,7 +1578,7 @@ func prometheusPerShardRelabelerInputRelabelingWithStalenans(
 	inputRelabelerRelabelingWithStalenansSum.Add(float64(time.Now().UnixNano() - start))
 	inputRelabelerRelabelingWithStalenansCount.Inc()
 
-	return res.RelabelerStats, res.exception
+	return res.RelabelerStats, res.exception, res.targetLssHasReallocations
 }
 
 // prometheusPerShardRelabelerAppendRelabelerSeries - wrapper for add relabeled ls to lss,
@@ -1587,7 +1588,7 @@ func prometheusPerShardRelabelerAppendRelabelerSeries(
 	innerSeries *InnerSeries,
 	relabeledSeries *RelabeledSeries,
 	relabelerStateUpdate *RelabelerStateUpdate,
-) []byte {
+) (exception []byte, targetLssHasReallocations bool) {
 	args := struct {
 		innerSeries          *InnerSeries
 		relabeledSeries      *RelabeledSeries
@@ -1596,7 +1597,8 @@ func prometheusPerShardRelabelerAppendRelabelerSeries(
 		lss                  uintptr
 	}{innerSeries, relabeledSeries, relabelerStateUpdate, perShardRelabeler, lss}
 	var res struct {
-		exception []byte
+		exception                 []byte
+		targetLssHasReallocations bool
 	}
 	start := time.Now().UnixNano()
 	fastcgo.UnsafeCall2(
@@ -1607,7 +1609,7 @@ func prometheusPerShardRelabelerAppendRelabelerSeries(
 	inputRelabelerAppendRelabelerSeriesSum.Add(float64(time.Now().UnixNano() - start))
 	inputRelabelerAppendRelabelerSeriesCount.Inc()
 
-	return res.exception
+	return res.exception, res.targetLssHasReallocations
 }
 
 // prometheusPerShardRelabelerUpdateRelabelerState - wrapper for add to cache relabled data(third stage).
