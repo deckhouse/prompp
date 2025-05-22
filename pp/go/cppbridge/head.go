@@ -160,6 +160,10 @@ type HeadDataStorageQuery struct {
 	LabelSetIDs      []uint32
 }
 
+func getSeriesIDFromBytes(data []byte) uint32 {
+	return *(*uint32)(unsafe.Pointer(&data[0])) // #nosec G103 // it's meant to be that way
+}
+
 type HeadDataStorageSerializedChunks struct {
 	data []byte
 }
@@ -191,7 +195,7 @@ func (r *HeadDataStorageSerializedChunks) MakeIndex() HeadDataStorageSerializedC
 	offset := Uint32Size
 	n := r.NumberOfChunks()
 	for i := 0; i < n; i, offset = i+1, offset+SerializedChunkMetadataSize {
-		sID := *(*uint32)(unsafe.Pointer(&r.data[offset : offset+SerializedChunkMetadataSize][0])) // #nosec G103 // it's meant to be that way
+		sID := getSeriesIDFromBytes(r.data[offset : offset+4])
 		m[sID] = append(m[sID], offset)
 	}
 	return HeadDataStorageSerializedChunkIndex{m}

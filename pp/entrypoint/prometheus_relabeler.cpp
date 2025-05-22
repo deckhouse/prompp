@@ -207,6 +207,8 @@ extern "C" void prompp_prometheus_per_shard_relabeler_input_relabeling(void* arg
           auto& target_lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->target_lss);
           in->per_shard_relabeler->input_relabeling(input_lss, target_lss, *in->cache, hashdex, in->options, *out, in->shards_inner_series,
                                                     in->shards_relabeled_series);
+          std::vector<uint32_t> ids;
+          target_lss.sort_series_ids(ids);
         },
         *in->hashdex);
   } catch (...) {
@@ -271,6 +273,8 @@ extern "C" void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stal
           auto& target_lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->target_lss);
           in->per_shard_relabeler->input_relabeling_with_stalenans(input_lss, target_lss, *in->cache, hashdex, in->options, *out, in->shards_inner_series,
                                                                    in->shards_relabeled_series, *in->state, in->def_timestamp);
+          std::vector<uint32_t> ids;
+          target_lss.sort_series_ids(ids);
         },
         *in->hashdex);
   } catch (...) {
@@ -320,6 +324,8 @@ extern "C" void prompp_prometheus_per_shard_relabeler_append_relabeler_series(vo
   try {
     auto& lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->lss);
     in->per_shard_relabeler->append_relabeler_series(lss, in->inner_series, in->relabeled_series, in->relabeler_state_update);
+    std::vector<uint32_t> ids;
+    lss.sort_series_ids(ids);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
     entrypoint::handle_current_exception(err_stream);

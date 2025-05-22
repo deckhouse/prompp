@@ -2,6 +2,7 @@ package head_test
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"os"
 	"testing"
@@ -368,7 +369,7 @@ func TestXxx(t *testing.T) {
 	// 	gt  float64 = 12
 	// )
 
-	t.Log(ExtraLimit(16, 12, 10, 1.6, 1.3))
+	t.Log(ExtraLimit(11, 7, 2, 1.6, 1.2))
 
 	t.Log(ExtraLimit(12, 13, 10, 1, 0.5))
 }
@@ -382,8 +383,10 @@ func ExtraLimit(primary, secondary, stage, k1, k2 float64) int {
 		return 0
 	}
 
-	// fmt.Println(int(math.Abs(primary - primary*k2)))
+	fmt.Println(int(math.Floor(10*0.8)), math.Floor(10*0.8))
+	fmt.Println(int(math.Ceil(10*0.8)), math.Ceil(10*0.8))
+	fmt.Println(int(math.Abs(primary - primary*k2)))
 
 	// return int(min((primary - secondary*k2), primary))
-	return int(min(math.Abs(primary-primary*k2), primary))
+	return int(min(math.Abs(primary-primary*k2), primary, 4))
 }
