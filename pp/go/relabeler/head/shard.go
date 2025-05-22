@@ -274,8 +274,8 @@ func (h *Head) shardLoop(shardID uint16, stopc chan struct{}) {
 				float64(len(h.genericTaskCh[shardID])),
 				float64(len(h.genericReadTaskCh[shardID])),
 				float64(len(h.stageInputRelabeling[shardID])),
-				1,
-				0.5,
+				0.9,
+				0.4,
 			)
 			if limit == 0 {
 				continue
