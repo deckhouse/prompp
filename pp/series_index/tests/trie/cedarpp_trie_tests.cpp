@@ -3,13 +3,13 @@
 #include <algorithm>
 
 #include "regexp_searcher_test_cases.h"
-#include "series_index/querier/regexp_searcher.h"
+#include "series_index/querier/regexp/regexp_searcher.h"
 #include "series_index/trie/cedarpp_tree.h"
 
 namespace {
 
-using series_index::querier::RegexpParser;
-using series_index::querier::RegexpSearcher;
+using series_index::querier::regexp::RegexpParser;
+using series_index::querier::regexp::RegexpSearcher;
 using series_index::querier::regexp_tests::RegexpSearcherTestCase;
 using series_index::trie::CedarMatchesList;
 using series_index::trie::CedarTrie;

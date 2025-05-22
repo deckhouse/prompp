@@ -4,7 +4,6 @@
 #include "hashdex.hpp"
 #include "head/lss.h"
 #include "primitives/go_slice.h"
-#include "prometheus/value.h"
 #include "series_index/querier/label_names_querier.h"
 #include "series_index/querier/label_values_querier.h"
 
@@ -54,6 +53,15 @@ extern "C" void prompp_primitives_lss_allocated_memory(void* args, void* res) {
   std::visit([res](const auto& lss) { new (res) Result{.allocated_memory = lss.allocated_memory()}; }, *static_cast<Arguments*>(args)->lss);
 }
 
+template <class Lss>
+PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(auto& lss, const auto& label_set) {
+  if constexpr (Lss::kIsReadOnly) {
+    throw BareBones::Exception(0x1b877a0ab46a69a6, "lss is readonly");
+  } else {
+    return lss.find_or_emplace(label_set);
+  }
+}
+
 extern "C" void prompp_primitives_lss_find_or_emplace(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
@@ -64,13 +72,31 @@ extern "C" void prompp_primitives_lss_find_or_emplace(void* args, void* res) {
   };
 
   auto in = static_cast<Arguments*>(args);
+  new (res) Result{.ls_id = std::visit([in]<typename Lss>(Lss& lss) { return find_or_emplace<Lss>(lss, in->label_set); }, *in->lss)};
+}
+
+extern "C" void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res) {
+  using PromPP::Primitives::Go::LabelSetBuilder;
+  using PromPP::Primitives::Go::SliceView;
+
+  struct Arguments {
+    LssVariantPtr lss;
+    struct {
+      LssVariantPtr readonly_lss;
+      uint32_t ls_id;
+      SliceView<PromPP::Primitives::Go::Label> sorted_add;
+      SliceView<PromPP::Primitives::Go::String> sorted_del;
+    } builder;
+  };
+  struct Result {
+    uint32_t ls_id;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
   new (res) Result{.ls_id = std::visit(
-                       [in]<typename Lss>(Lss& lss) -> PromPP::Primitives::LabelSetID {
-                         if constexpr (Lss::kIsReadOnly) {
-                           throw BareBones::Exception(0x1b877a0ab46a69a6, "lss is readonly");
-                         } else {
-                           return lss.find_or_emplace(in->label_set);
-                         }
+                       [&builder = in->builder]<typename Lss>(Lss& lss) {
+                         return find_or_emplace<Lss>(lss, LabelSetBuilder{std::get<entrypoint::head::ReadonlyLss>(*builder.readonly_lss)[builder.ls_id],
+                                                                          builder.sorted_add, builder.sorted_del});
                        },
                        *in->lss)};
 }
@@ -104,7 +130,7 @@ extern "C" void prompp_primitives_lss_query(void* args, void* res) {
 
   const auto out = new (res) Result{
       .matches = std::move(query_result.series_ids),
-      .lss_copy = entrypoint::head::create_lss_readonly(lss),
+      .lss_copy = entrypoint::head::create_readonly_lss(*in->lss),
       .status = static_cast<uint32_t>(query_result.status),
   };
   out->label_set_lengths.reserve(out->matches.size());
@@ -198,58 +224,13 @@ extern "C" void prompp_primitives_lss_query_label_values(void* args, void* res) 
       [out](std::string_view value) PROMPP_LAMBDA_INLINE { out->values.emplace_back(value); }));
 }
 
-//
-// label_sets
-//
-
-void prompp_primitives_label_set_length(void* args, void* res) {
+extern "C" void prompp_create_readonly_lss(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
-    uint32_t series_id;
   };
   struct Result {
-    size_t length;
+    LssVariantPtr lss_copy;
   };
 
-  auto in = static_cast<Arguments*>(args);
-
-  std::visit([in, res](auto& lss) { new (res) Result{.length = lss[in->series_id].size()}; }, *in->lss);
-}
-
-void prompp_primitives_label_set_serialize(void* args, void* res) {
-  using PromPP::Primitives::Go::Label;
-  using PromPP::Primitives::Go::Slice;
-  using PromPP::Primitives::Go::String;
-
-  struct Arguments {
-    LssVariantPtr lss;
-    uint32_t series_id;
-  };
-  struct Result {
-    Slice<Label> label_set;
-  };
-
-  auto in = static_cast<Arguments*>(args);
-  auto out = new (res) Result();
-
-  std::visit(
-      [in, out](auto& lss) {
-        auto in_label_set = lss[in->series_id];
-        auto& out_label_set = out->label_set;
-        out_label_set.reserve(in_label_set.size());
-        std::ranges::transform(in_label_set, std::back_inserter(out_label_set),
-                               [](const auto& label) PROMPP_LAMBDA_INLINE { return Label({.name = String{label.first}, .value = String{label.second}}); });
-      },
-      *in->lss);
-}
-
-extern "C" void prompp_primitives_label_set_free(void* args) {
-  using PromPP::Primitives::Go::Label;
-  using PromPP::Primitives::Go::Slice;
-
-  struct Arguments {
-    Slice<Label> label_set;
-  };
-
-  static_cast<Arguments*>(args)->~Arguments();
+  new (res) Result{.lss_copy = entrypoint::head::create_readonly_lss(*static_cast<Arguments*>(args)->lss)};
 }

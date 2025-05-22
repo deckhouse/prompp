@@ -1,14 +1,14 @@
 package querier
 
 import (
+	"testing"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/tsdb/chunks"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"runtime"
-	"testing"
 )
 
 type ChunksSeriesSetTestSuite struct {
@@ -56,19 +56,12 @@ func (s *ChunksSeriesSetTestSuite) TestAll() {
 
 	require.Equal(s.T(), 2, serializedChunks.NumberOfChunks())
 
-	chunkRecoder := cppbridge.NewSerializedChunkRecoder(serializedChunks.Data(), cppbridge.TimeInterval{
+	chunkRecoder := cppbridge.NewSerializedChunkRecoder(serializedChunks, cppbridge.TimeInterval{
 		MinT: mint,
 		MaxT: maxt,
 	})
 
-	labelSets := make([]*cppbridge.LabelsCpp, 0, len(lssQueryResult.IDs()))
-	lssQueryResult.MatchesRange(func(lss *cppbridge.LabelSetStorage, lsId uint32, labelSetLength uint16) {
-		labelSets = append(labelSets, cppbridge.NewLabelsCpp(lss, lsId, labelSetLength))
-	})
-
-	runtime.KeepAlive(lssQueryResult)
-
-	css := NewChunkSeriesSet(labelSets, chunkRecoder)
+	css := NewChunkSeriesSet(lssQueryResult, chunkRecoder)
 	var ci chunks.Iterator
 
 	// first series
