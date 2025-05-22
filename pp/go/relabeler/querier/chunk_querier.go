@@ -65,7 +65,7 @@ func (q *ChunkQuerier) Select(ctx context.Context, sortSeries bool, hints *stora
 			return nil
 		}
 
-		chunkRecoder := cppbridge.NewSerializedChunkRecoder(serializedChunks.Data(), cppbridge.TimeInterval{
+		chunkRecoder := cppbridge.NewSerializedChunkRecoder(serializedChunks, cppbridge.TimeInterval{
 			MinT: q.mint,
 			MaxT: q.maxt,
 		})
