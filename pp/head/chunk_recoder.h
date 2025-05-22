@@ -45,12 +45,7 @@ class ChunkRecoderIterator {
   const value_type* operator->() const noexcept { return chunk_iterator_.operator->(); }
 
   PROMPP_ALWAYS_INLINE ChunkRecoderIterator& operator++() noexcept {
-    if (++chunk_iterator_ == IteratorSentinel{}) {
-      if (++ls_id_iterator_ != ls_id_end_iterator_) {
-        chunk_iterator_ = series_data::DataStorage::SeriesChunkIterator{chunk_iterator_->storage(), static_cast<LabelSetID>(*ls_id_iterator_)};
-      }
-    }
-
+    advance_iterator();
     advance_to_non_empty_chunk();
     return *this;
   }
@@ -69,6 +64,14 @@ class ChunkRecoderIterator {
   [[no_unique_address]] LsIdSetIteratorSentinel ls_id_end_iterator_;
   series_data::DataStorage::SeriesChunkIterator chunk_iterator_;
 
+  PROMPP_ALWAYS_INLINE void advance_iterator() noexcept {
+    if (++chunk_iterator_ == IteratorSentinel{}) {
+      if (++ls_id_iterator_ != ls_id_end_iterator_) {
+        chunk_iterator_ = series_data::DataStorage::SeriesChunkIterator{chunk_iterator_->storage(), static_cast<LabelSetID>(*ls_id_iterator_)};
+      }
+    }
+  }
+
   void advance_to_non_empty_chunk() noexcept {
     const auto chunk_is_empty = [this] PROMPP_LAMBDA_INLINE {
       if (this->chunk_is_empty()) {
@@ -82,7 +85,7 @@ class ChunkRecoderIterator {
     };
 
     while (*this != IteratorSentinel{} && chunk_is_empty()) {
-      ++*this;
+      advance_iterator();
     }
   }
 
