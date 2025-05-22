@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.5
+
+### Fixes
+1. **Infinite Recursion During Head Conversion**: Fixed a bug in the logic where converting the head to a historical block could lead to infinite recursion.
+2. **Memory Retention Issue in RemoteRead API**: Fixed a memory retention issue with recoded chunks during raw chunk requests via the RemoteRead API. A memory pointer was incorrectly held, allowing the garbage collector to reuse memory while it was still being accessed, potentially leading to segmentation faults.
+
 ## v0.2.4
 
 ### Fixes
