@@ -20,6 +20,7 @@ type SeriesSet struct {
 	chunksIndex      cppbridge.HeadDataStorageSerializedChunkIndex
 	serializedChunks *cppbridge.HeadDataStorageSerializedChunks
 	lssQueryResult   *cppbridge.LSSQueryResult
+	labelSetSnapshot *cppbridge.LabelSetSnapshot
 
 	index         int
 	currentSeries *Series
@@ -55,7 +56,7 @@ func (ss *SeriesSet) Next() bool {
 		mint:     ss.mint,
 		maxt:     ss.maxt,
 		labelSet: labels.NewLabelsWithLSS(
-			ss.lssQueryResult.LSS(),
+			ss.labelSetSnapshot,
 			lsID,
 			lsLength,
 		),
@@ -274,6 +275,7 @@ const (
 
 type InstantSeriesSet struct {
 	lssQueryResult              *cppbridge.LSSQueryResult
+	labelSetSnapshot            *cppbridge.LabelSetSnapshot
 	valueNotFoundTimestampValue int64
 	samples                     []cppbridge.Sample
 
@@ -283,11 +285,13 @@ type InstantSeriesSet struct {
 
 func NewInstantSeriesSet(
 	lssQueryResult *cppbridge.LSSQueryResult,
+	labelSetSnapshot *cppbridge.LabelSetSnapshot,
 	valueNotFoundTimestampValue int64,
 	samples []cppbridge.Sample,
 ) *InstantSeriesSet {
 	return &InstantSeriesSet{
 		lssQueryResult:              lssQueryResult,
+		labelSetSnapshot:            labelSetSnapshot,
 		valueNotFoundTimestampValue: valueNotFoundTimestampValue,
 		samples:                     samples,
 		index:                       -1,
@@ -309,7 +313,7 @@ func (ss *InstantSeriesSet) Next() bool {
 	lsID, lsLength := ss.lssQueryResult.GetByIndex(ss.index)
 	ss.currentSeries = &InstantSeries{
 		labelSet: labels.NewLabelsWithLSS(
-			ss.lssQueryResult.LSS(),
+			ss.labelSetSnapshot,
 			lsID,
 			lsLength,
 		),

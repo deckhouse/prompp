@@ -26,6 +26,8 @@ type LSS interface {
 	QueryLabelNames(matchers []model.LabelMatcher) *cppbridge.LSSQueryLabelNamesResult
 	Query(matchers []model.LabelMatcher, querySource uint32) *cppbridge.LSSQueryResult
 	GetLabelSets(labelSetIDs []uint32) *cppbridge.LabelSetStorageGetLabelSetsResult
+	GetSnapshot() *cppbridge.LabelSetSnapshot
+	ResetSnapshot()
 }
 
 type Wal interface {

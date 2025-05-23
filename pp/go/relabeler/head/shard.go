@@ -15,8 +15,10 @@ import (
 const chanBufferSize = 64
 
 type LSS struct {
-	input  *cppbridge.LabelSetStorage
-	target *cppbridge.LabelSetStorage
+	input    *cppbridge.LabelSetStorage
+	target   *cppbridge.LabelSetStorage
+	snapshot *cppbridge.LabelSetSnapshot
+	once     sync.Once
 }
 
 func (w *LSS) Raw() *cppbridge.LabelSetStorage {
@@ -44,6 +46,23 @@ func (w *LSS) Query(matchers []model.LabelMatcher, querySource uint32) *cppbridg
 
 func (w *LSS) GetLabelSets(labelSetIDs []uint32) *cppbridge.LabelSetStorageGetLabelSetsResult {
 	return w.target.GetLabelSets(labelSetIDs)
+}
+
+// GetSnapshot return the actual snapshot.
+func (w *LSS) GetSnapshot() *cppbridge.LabelSetSnapshot {
+	w.once.Do(func() {
+		if w.snapshot == nil {
+			w.snapshot = w.target.CreateLabelSetSnapshot()
+		}
+	})
+
+	return w.snapshot
+}
+
+// ResetSnapshot resets the current snapshot.
+func (w *LSS) ResetSnapshot() {
+	w.snapshot = nil
+	w.once = sync.Once{}
 }
 
 type DataStorage struct {

@@ -47,26 +47,26 @@ func (s *LSSSuite) TestQueryableLSS() {
 	s.Require().NotEqual(0, cp)
 }
 
-func (s *LSSSuite) TestCreateReadonlyLssFromEncodingBimap() {
+func (s *LSSSuite) TestCreateSnapshotFromEncodingBimap() {
 	// Arrange
 	lss := cppbridge.NewLssStorage()
 
 	// Act
-	readonlyLss := lss.CreateReadonlyLss()
+	labelSetSnapshot := lss.CreateLabelSetSnapshot()
 
 	// Assert
-	s.Require().NotNil(readonlyLss.Pointer())
+	s.Require().NotNil(labelSetSnapshot.Pointer())
 }
 
-func (s *LSSSuite) TestCreateReadonlyLssFromQueryableEncodingBimap() {
+func (s *LSSSuite) TestCreateSnapshotFromQueryableEncodingBimap() {
 	// Arrange
 	lss := cppbridge.NewQueryableLssStorage()
 
 	// Act
-	readonlyLss := lss.CreateReadonlyLss()
+	labelSetSnapshot := lss.CreateLabelSetSnapshot()
 
 	// Assert
-	s.Require().NotNil(readonlyLss.Pointer())
+	s.Require().NotNil(labelSetSnapshot.Pointer())
 }
 
 func (s *LSSSuite) TestLabels() {
@@ -410,19 +410,17 @@ func (s *QueryableLSSSuite) TestCopyAddedSeries() {
 
 func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithExistingLabelSet() {
 	// Arrange
-	queryResult := s.lss.Query([]model.LabelMatcher{
-		{Name: "lol", Value: "kek", MatcherType: model.MatcherTypeExactMatch},
-	}, cppbridge.LSSQuerySourceOther)
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
 
 	// Act
 	existingLsIdWithAdd := s.lss.FindOrEmplaceBuilder(model.CppLabelSetBuilder{
-		ReadonlyLss: queryResult.ReadonlyLss().Pointer(),
+		ReadonlyLss: labelSetSnapshot.Pointer(),
 		LsId:        0,
 		SortedAdd:   []model.SimpleLabel{{Name: "che", Value: "bureck"}},
 		SortedDel:   nil,
 	}).LabelSetID
 	existingLsIdWithDel := s.lss.FindOrEmplaceBuilder(model.CppLabelSetBuilder{
-		ReadonlyLss: queryResult.ReadonlyLss().Pointer(),
+		ReadonlyLss: labelSetSnapshot.Pointer(),
 		LsId:        1,
 		SortedAdd:   nil,
 		SortedDel:   []string{"che"},
@@ -435,14 +433,12 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithExistingLabelSet() {
 
 func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithNewLabelSet() {
 	// Arrange
-	queryResult := s.lss.Query([]model.LabelMatcher{
-		{Name: "lol", Value: "kek", MatcherType: model.MatcherTypeExactMatch},
-	}, cppbridge.LSSQuerySourceOther)
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
 
 	// Act
 	expectedLsId := len(s.labelSetIDs)
 	existingLsId := s.lss.FindOrEmplaceBuilder(model.CppLabelSetBuilder{
-		ReadonlyLss: queryResult.ReadonlyLss().Pointer(),
+		ReadonlyLss: labelSetSnapshot.Pointer(),
 		LsId:        0,
 		SortedAdd:   []model.SimpleLabel{{Name: "new_lol", Value: "new_kek"}},
 		SortedDel:   nil,
