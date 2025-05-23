@@ -120,12 +120,13 @@ func (t *TaskInputRelabeling) Run(
 	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(numberOfShards)
 
 	var (
-		err   error
-		stats cppbridge.RelabelerStats
+		err              error
+		stats            cppbridge.RelabelerStats
+		hasReallocations bool
 	)
 
 	if t.state.TrackStaleness() {
-		stats, err = t.relabelerData.InputRelabelerByShard(shardID).InputRelabelingWithStalenans(
+		stats, hasReallocations, err = t.relabelerData.InputRelabelerByShard(shardID).InputRelabelingWithStalenans(
 			t.ctx,
 			lss.input,
 			lss.target,
@@ -138,7 +139,7 @@ func (t *TaskInputRelabeling) Run(
 			shardsRelabeledSeries,
 		)
 	} else {
-		stats, err = t.relabelerData.InputRelabelerByShard(shardID).InputRelabeling(
+		stats, hasReallocations, err = t.relabelerData.InputRelabelerByShard(shardID).InputRelabeling(
 			t.ctx,
 			lss.input,
 			lss.target,
@@ -148,6 +149,10 @@ func (t *TaskInputRelabeling) Run(
 			shardsInnerSeries,
 			shardsRelabeledSeries,
 		)
+	}
+
+	if hasReallocations {
+		lss.ResetSnapshot()
 	}
 
 	t.incomingData.Destroy()
@@ -259,22 +264,27 @@ func (t *TaskAppendRelabelerSeries) SourceShardID() uint16 {
 
 // Run task.
 func (t *TaskAppendRelabelerSeries) Run(
-	target *cppbridge.LabelSetStorage,
+	lss *LSS,
 	stageUpdateRelabelers []chan *TaskUpdateRelabelerState,
 	shardID uint16,
 ) {
 	relabelerStateUpdate := cppbridge.NewRelabelerStateUpdate()
 	innerSeries := cppbridge.NewInnerSeries()
 
-	if err := t.InputRelabelerByShard(shardID).AppendRelabelerSeries(
+	hasReallocations, err := t.InputRelabelerByShard(shardID).AppendRelabelerSeries(
 		t.ctx,
-		target,
+		lss.target,
 		relabelerStateUpdate,
 		innerSeries,
 		t.relabeledSeries,
-	); err != nil {
+	)
+	if err != nil {
 		t.promise.AddError(shardID, fmt.Errorf("failed input append relabeler series shard %d: %w", shardID, err))
 		return
+	}
+
+	if hasReallocations {
+		lss.ResetSnapshot()
 	}
 
 	stageUpdateRelabelers[t.sourceShardID] <- NewTaskUpdateRelabelerState(
