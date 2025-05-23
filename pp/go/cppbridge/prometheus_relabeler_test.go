@@ -184,9 +184,10 @@ func (s *RelabelerSuite) TestInvalidAction() {
 	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(numberOfShards)
 	cache := cppbridge.NewCache()
 
-	stats, err := psr.InputRelabeling(s.baseCtx, inputLss, targetLss, cache, s.options, h, shardsInnerSeries, shardsRelabeledSeries)
+	stats, hasReallocations, err := psr.InputRelabeling(s.baseCtx, inputLss, targetLss, cache, s.options, h, shardsInnerSeries, shardsRelabeledSeries)
 	s.Require().Error(err)
 	s.Equal(cppbridge.RelabelerStats{}, stats)
+	s.False(hasReallocations)
 }
 
 func (s *RelabelerSuite) TestPerShardRelabelerWithNullPtrStatelessRelabeler() {
@@ -254,9 +255,10 @@ func (s *RelabelerSuite) TestInputPerShardRelabeler() {
 	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(numberOfShards)
 	cache := cppbridge.NewCache()
 
-	stats, err := psr.InputRelabeling(s.baseCtx, inputLss, targetLss, cache, s.options, h, shardsInnerSeries, shardsRelabeledSeries)
+	stats, hasReallocations, err := psr.InputRelabeling(s.baseCtx, inputLss, targetLss, cache, s.options, h, shardsInnerSeries, shardsRelabeledSeries)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{1, 1, 1}, stats)
+	s.True(hasReallocations)
 }
 
 func (s *RelabelerSuite) TestOutputPerShardRelabeler() {

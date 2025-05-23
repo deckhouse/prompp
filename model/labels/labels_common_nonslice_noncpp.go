@@ -4,8 +4,8 @@ package labels
 
 import "github.com/prometheus/prometheus/pp/go/cppbridge"
 
-// NewLabelsWithLSS init LabelsCpp with LabelSetStorage and ls id.
-func NewLabelsWithLSS(lss *cppbridge.LabelSetStorage, id uint32, length uint16) Labels {
+// NewLabelsWithLSS init LabelsCpp with LabelSetSnapshot and ls id.
+func NewLabelsWithLSS(lss *cppbridge.LabelSetSnapshot, id uint32, length uint16) Labels {
 	if lss == nil {
 		return EmptyLabels()
 	}
