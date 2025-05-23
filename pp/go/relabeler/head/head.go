@@ -182,7 +182,7 @@ type Head struct {
 	series               prometheus.Gauge
 	queried              *prometheus.GaugeVec
 	walSize              *prometheus.GaugeVec
-	queueAppend          *prometheus.GaugeVec
+	queueInputRelabeling *prometheus.GaugeVec
 	queueRead            *prometheus.GaugeVec
 	queueGeneric         *prometheus.GaugeVec
 	stopc                chan struct{}
@@ -260,10 +260,10 @@ func New(
 			},
 			[]string{"shard_id"},
 		),
-		queueAppend: factory.NewGaugeVec(
+		queueInputRelabeling: factory.NewGaugeVec(
 			prometheus.GaugeOpts{
-				Name: "prompp_head_queue_append_size",
-				Help: "The size of the queue appendl of the current head.",
+				Name: "prompp_head_queue_input_relabeling_size",
+				Help: "The size of the queue input relabeling of the current head.",
 			},
 			[]string{"shard_id"},
 		),
@@ -492,7 +492,7 @@ func (h *Head) WriteMetrics() {
 			prometheus.Labels{"shard_id": strconv.FormatUint(uint64(shardID), 10)},
 		).Set(float64(h.wals[shardID].CurrentSize()))
 
-		h.queueAppend.With(prometheus.Labels{
+		h.queueInputRelabeling.With(prometheus.Labels{
 			"shard_id": strconv.FormatUint(uint64(shardID), 10),
 		}).Set(float64(len(h.stageInputRelabeling[shardID])))
 
@@ -679,6 +679,7 @@ func (h *Head) stop() {
 	h.stopc = make(chan struct{})
 }
 
+// ReadEachShard execute read fn on each shard.
 func (h *Head) ReadEachShard(fn relabeler.ShardFn) error {
 	task := NewGenericReadTask(fn, h.numberOfShards)
 	if h.readOnly {

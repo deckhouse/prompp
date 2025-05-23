@@ -2,8 +2,6 @@ package head_test
 
 import (
 	"context"
-	"fmt"
-	"math"
 	"os"
 	"testing"
 	"time"
@@ -360,33 +358,4 @@ func appendTimeSeries(t *testing.T, ctx context.Context, h *head.Head, timeSerie
 
 	_, _, err = h.Append(ctx, incomingData, cppbridge.NewState(h.NumberOfShards()), "transparent_relabeler", true)
 	return err
-}
-
-func TestXxx(t *testing.T) {
-	// var (
-	// 	st  float64 = 10
-	// 	rgt float64 = 16
-	// 	gt  float64 = 12
-	// )
-
-	t.Log(ExtraLimit(11, 7, 2, 1.6, 1.2))
-
-	t.Log(ExtraLimit(12, 13, 10, 1, 0.5))
-}
-
-func ExtraLimit(primary, secondary, stage, k1, k2 float64) int {
-	if primary <= stage*k1 {
-		return 0
-	}
-
-	if primary <= secondary*k2 {
-		return 0
-	}
-
-	fmt.Println(int(math.Floor(10*0.8)), math.Floor(10*0.8))
-	fmt.Println(int(math.Ceil(10*0.8)), math.Ceil(10*0.8))
-	fmt.Println(int(math.Abs(primary - primary*k2)))
-
-	// return int(min((primary - secondary*k2), primary))
-	return int(min(math.Abs(primary-primary*k2), primary, 4))
 }

@@ -2,6 +2,7 @@ package head
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -109,6 +110,74 @@ func (t *TaskInputRelabeling) Promise() *InputRelabelingPromise {
 	return t.promise
 }
 
+// Run task.
+func (t *TaskInputRelabeling) Run(
+	lss *LSS,
+	stageAppendRelabelerSeries []chan *TaskAppendRelabelerSeries,
+	shardID, numberOfShards uint16,
+) {
+	shardsInnerSeries := cppbridge.NewShardsInnerSeries(numberOfShards)
+	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(numberOfShards)
+
+	var (
+		err   error
+		stats cppbridge.RelabelerStats
+	)
+
+	if t.state.TrackStaleness() {
+		stats, err = t.relabelerData.InputRelabelerByShard(shardID).InputRelabelingWithStalenans(
+			t.ctx,
+			lss.input,
+			lss.target,
+			t.state.CacheByShard(shardID),
+			t.state.RelabelerOptions(),
+			t.state.StaleNansStateByShard(shardID),
+			t.state.DefTimestamp(),
+			t.incomingData.Data().ShardedData(),
+			shardsInnerSeries,
+			shardsRelabeledSeries,
+		)
+	} else {
+		stats, err = t.relabelerData.InputRelabelerByShard(shardID).InputRelabeling(
+			t.ctx,
+			lss.input,
+			lss.target,
+			t.state.CacheByShard(shardID),
+			t.state.RelabelerOptions(),
+			t.incomingData.Data().ShardedData(),
+			shardsInnerSeries,
+			shardsRelabeledSeries,
+		)
+	}
+
+	t.incomingData.Destroy()
+	if err != nil {
+		t.promise.AddError(shardID, fmt.Errorf("failed input relabeling shard %d: %w", shardID, err))
+		return
+	}
+
+	t.promise.AddStats(stats)
+	for sid, relabeledSeries := range shardsRelabeledSeries {
+		if relabeledSeries.Size() == 0 {
+			t.promise.AddResult(uint16(sid), nil)
+			continue
+		}
+
+		stageAppendRelabelerSeries[sid] <- NewTaskAppendRelabelerSeries(
+			t.ctx,
+			relabeledSeries,
+			t.promise,
+			t.relabelerData,
+			t.state,
+			shardID,
+		)
+	}
+
+	for sid, innerSeries := range shardsInnerSeries {
+		t.promise.AddResult(uint16(sid), innerSeries)
+	}
+}
+
 // TaskAppendRelabelerSeries - task for stage add to the lss required shard.
 type TaskAppendRelabelerSeries struct {
 	ctx             context.Context
@@ -191,6 +260,38 @@ func (t *TaskAppendRelabelerSeries) State() *cppbridge.State {
 // SourceShardID - return source shardID.
 func (t *TaskAppendRelabelerSeries) SourceShardID() uint16 {
 	return t.sourceShardID
+}
+
+// Run task.
+func (t *TaskAppendRelabelerSeries) Run(
+	target *cppbridge.LabelSetStorage,
+	stageUpdateRelabelers []chan *TaskUpdateRelabelerState,
+	shardID uint16,
+) {
+	relabelerStateUpdate := cppbridge.NewRelabelerStateUpdate()
+	innerSeries := cppbridge.NewInnerSeries()
+
+	if err := t.InputRelabelerByShard(shardID).AppendRelabelerSeries(
+		t.ctx,
+		target,
+		relabelerStateUpdate,
+		innerSeries,
+		t.relabeledSeries,
+	); err != nil {
+		t.promise.AddError(shardID, fmt.Errorf("failed input append relabeler series shard %d: %w", shardID, err))
+		return
+	}
+
+	stageUpdateRelabelers[t.sourceShardID] <- NewTaskUpdateRelabelerState(
+		t.ctx,
+		t.promise,
+		relabelerStateUpdate,
+		t.relabelerData.InputRelabelerByShard(t.sourceShardID),
+		t.state.CacheByShard(t.sourceShardID),
+		shardID,
+	)
+
+	t.promise.AddResult(shardID, innerSeries)
 }
 
 // TaskUpdateRelabelerState - task for stage updates the cache in the source shard with the relabeled shard.

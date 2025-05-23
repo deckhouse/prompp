@@ -193,6 +193,7 @@ func (h *RotatableHead) CopySeriesFrom(other relabeler.Head) {
 	h.head.CopySeriesFrom(other)
 }
 
+// ReadEachShard execute read fn on each shard.
 func (h *RotatableHead) ReadEachShard(fn relabeler.ShardFn) error {
 	return h.head.ReadEachShard(fn)
 }
@@ -301,6 +302,7 @@ func (h *HeapProfileWritableHead) CopySeriesFrom(other relabeler.Head) {
 	h.head.CopySeriesFrom(other)
 }
 
+// ReadEachShard execute read fn on each shard.
 func (h *HeapProfileWritableHead) ReadEachShard(fn relabeler.ShardFn) error {
 	return h.head.ReadEachShard(fn)
 }

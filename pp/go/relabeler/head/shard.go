@@ -2,7 +2,6 @@ package head
 
 import (
 	"fmt"
-	"math"
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -12,6 +11,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
 )
 
+// chanBufferSize size of channels buffer.
 const chanBufferSize = 64
 
 type LSS struct {
@@ -138,113 +138,25 @@ func (h *Head) reconfigureRelabelersData(
 //revive:disable-next-line:cognitive-complexity long but understandable.
 //revive:disable-next-line:cyclomatic long but understandable.
 func (h *Head) shardLoop(shardID uint16, stopc chan struct{}) {
-	readWG := sync.WaitGroup{}
-	sd := &shard{
-		id:          shardID,
-		lss:         h.lsses[shardID],
-		dataStorage: h.dataStorages[shardID],
-		wal:         h.wals[shardID],
-	}
+	var (
+		readWG = sync.WaitGroup{}
+		sd     = &shard{
+			id:          shardID,
+			lss:         h.lsses[shardID],
+			dataStorage: h.dataStorages[shardID],
+			wal:         h.wals[shardID],
+		}
+	)
 
 	for {
 		select {
 		case <-stopc:
 			return
 		case task := <-h.stageInputRelabeling[shardID]:
-			shardsInnerSeries := cppbridge.NewShardsInnerSeries(h.numberOfShards)
-			shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(h.numberOfShards)
-
-			var (
-				err   error
-				stats cppbridge.RelabelerStats
-			)
-			if task.WithStaleNans() {
-				stats, err = task.InputRelabelerByShard(shardID).InputRelabelingWithStalenans(
-					task.Ctx(),
-					h.lsses[shardID].input,
-					h.lsses[shardID].target,
-					task.CacheByShard(shardID),
-					task.Options(),
-					task.StaleNansStateByShard(shardID),
-					task.DefTimestamp(),
-					task.ShardedData(),
-					shardsInnerSeries,
-					shardsRelabeledSeries,
-				)
-			} else {
-				stats, err = task.InputRelabelerByShard(shardID).InputRelabeling(
-					task.Ctx(),
-					h.lsses[shardID].input,
-					h.lsses[shardID].target,
-					task.CacheByShard(shardID),
-					task.Options(),
-					task.ShardedData(),
-					shardsInnerSeries,
-					shardsRelabeledSeries,
-				)
-			}
-
-			task.IncomingDataDestroy()
-			if err != nil {
-				task.AddError(shardID, fmt.Errorf("failed input relabeling shard %d: %w", shardID, err))
-				continue
-			}
-
-			task.AddStats(stats)
-			for sid, relabeledSeries := range shardsRelabeledSeries {
-				if relabeledSeries.Size() == 0 {
-					task.AddResult(uint16(sid), nil)
-					continue
-				}
-
-				h.stageAppendRelabelerSeries[sid] <- NewTaskAppendRelabelerSeries(
-					task.Ctx(),
-					relabeledSeries,
-					task.Promise(),
-					task.RelabelerData(),
-					task.State(),
-					shardID,
-				)
-			}
-
-			for sid, innerSeries := range shardsInnerSeries {
-				task.AddResult(uint16(sid), innerSeries)
-			}
+			task.Run(h.lsses[shardID], h.stageAppendRelabelerSeries, shardID, h.numberOfShards)
 
 		case task := <-h.stageAppendRelabelerSeries[shardID]:
-			relabelerStateUpdate := cppbridge.NewRelabelerStateUpdate()
-			innerSeries := cppbridge.NewInnerSeries()
-
-			if err := task.InputRelabelerByShard(shardID).AppendRelabelerSeries(
-				task.Ctx(),
-				h.lsses[shardID].target,
-				relabelerStateUpdate,
-				innerSeries,
-				task.RelabeledSeries(),
-			); err != nil {
-				task.AddError(shardID, fmt.Errorf("failed input append relabeler series shard %d: %w", shardID, err))
-				continue
-			}
-
-			// task.AddUpdateRelabelerTasks(NewTaskUpdateRelabelerState(
-			// 	task.Ctx(),
-			// 	task.Promise(),
-			// 	relabelerStateUpdate,
-			// 	task.InputRelabelerByShard(task.SourceShardID()),
-			// 	task.CacheByShard(task.SourceShardID()),
-			// 	shardID,
-			// ))
-
-			h.stageUpdateRelabelers[task.SourceShardID()] <- NewTaskUpdateRelabelerState(
-				task.Ctx(),
-				task.Promise(),
-				relabelerStateUpdate,
-				task.InputRelabelerByShard(task.SourceShardID()),
-				task.CacheByShard(task.SourceShardID()),
-				shardID,
-			)
-
-			task.AddResult(shardID, innerSeries)
+			task.Run(h.lsses[shardID].target, h.stageUpdateRelabelers, shardID)
 
 		case task := <-h.stageUpdateRelabelers[shardID]:
 			if err := task.Update(); err != nil {
@@ -255,41 +167,20 @@ func (h *Head) shardLoop(shardID uint16, stopc chan struct{}) {
 		case task := <-h.genericTaskCh[shardID]:
 			task.ExecuteOnShard(sd)
 
-			limit := ExtraLimit(
-				float64(len(h.genericReadTaskCh[shardID])),
-				float64(len(h.genericTaskCh[shardID])),
-				float64(len(h.stageInputRelabeling[shardID])),
-				false,
-			)
-			if limit == 0 {
-				continue
-			}
-
-			for i := 0; i < limit; i++ {
-				task = <-h.genericTaskCh[shardID]
-				task.ExecuteOnShard(sd)
-			}
-
 		case task := <-h.genericReadTaskCh[shardID]:
-			limit := ExtraLimit(
-				float64(len(h.genericReadTaskCh[shardID])),
-				float64(len(h.genericTaskCh[shardID])),
-				float64(len(h.stageInputRelabeling[shardID])),
-				true,
-			)
-
-			if limit == 0 {
+			length := len(h.genericReadTaskCh[shardID])
+			if length == 0 {
 				task.ExecuteOnShard(sd)
 				continue
 			}
 
-			readWG.Add(limit + 1)
+			readWG.Add(length + 1)
 			go func(t *GenericReadTask, s *shard) {
 				t.ExecuteOnShard(s)
 				readWG.Done()
 			}(task, sd)
 
-			for i := 0; i < limit; i++ {
+			for i := 0; i < length; i++ {
 				task = <-h.genericReadTaskCh[shardID]
 
 				go func(t *GenericReadTask, s *shard) {
@@ -302,42 +193,6 @@ func (h *Head) shardLoop(shardID uint16, stopc chan struct{}) {
 		}
 	}
 }
-
-func ExtraLimit(readTasks, genericTasks, stageTasks float64, readLimit bool) int {
-	if readLimit {
-		if readTasks <= stageTasks*RGSk {
-			return 0
-		}
-
-		if readTasks <= genericTasks*RGGk {
-			return 0
-		}
-
-		return int(min(math.Ceil(readTasks*RGk), MinRG))
-	}
-
-	if genericTasks <= stageTasks*GSk { // 0.4
-		return 0
-	}
-
-	if genericTasks <= readTasks*GRGk {
-		return 0
-	}
-
-	return int(min(math.Ceil(genericTasks*Gk), MinG)) // 0.4 8
-}
-
-var (
-	RGSk          = 1.9 // 1,5
-	RGGk          = 1.9 // 1,5
-	RGk           = 0.8 // 0.8
-	MinRG float64 = 16  // 8
-
-	GSk          = 0.3 // 0.4
-	GRGk         = 0.2
-	Gk           = 0.8 // 0.4
-	MinG float64 = 8   // 8
-)
 
 type shard struct {
 	id          uint16
