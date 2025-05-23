@@ -36,7 +36,6 @@ const (
 	lssEncodingBimap uint32 = iota
 	lssOrderedEncodingBimap
 	lssQueryableEncodingBimap
-	lssReadOnly
 )
 
 //
@@ -123,9 +122,13 @@ func (lss *LabelSetStorage) AllocatedMemory() uint64 {
 }
 
 // FindOrEmplace find in lss LabelSet or emplace and return ls id.
-func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) uint32 {
-	id := primitivesLSSFindOrEmplace(lss.pointer, labelSet)
-	return id
+func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) FindOrEmplaceResult {
+	return primitivesLSSFindOrEmplace(lss.pointer, labelSet)
+}
+
+// FindOrEmplaceBuilder find in lss LabelSet or emplace and return ls id.
+func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet model.CppLabelSetBuilder) FindOrEmplaceResult {
+	return primitivesLSSFindOrEmplaceBuilder(lss.pointer, labelSet)
 }
 
 // Query returns a LSSQueryResult that matches the given label matchers.
@@ -180,18 +183,23 @@ func (lss *LabelSetStorage) Pointer() uintptr {
 	return lss.pointer
 }
 
+// CreateReadonlyLss - create readonly copy of lss
+func (lss *LabelSetStorage) CreateReadonlyLss() *LabelSetStorage {
+	return newReadOnlyLssStorage(primitivesLSSCreateReadonlyLss(lss.pointer))
+}
+
 // RangeLabelSet serialize to slice labels from lss and calls f on each label.
 func (lss *LabelSetStorage) RangeLabelSet(lsID uint32, do func(l Label) error) error {
-	labelSet := primitivesLabelSetSerialize(lss.pointer, lsID)
+	labelSet := labelSetSerialize(lss.pointer, lsID)
 
 	for i := range labelSet {
 		if err := do(labelSet[i]); err != nil {
-			primitivesLabelSetFree(labelSet)
+			labelSetFree(labelSet)
 			return err
 		}
 	}
 
-	primitivesLabelSetFree(labelSet)
+	labelSetFree(labelSet)
 
 	return nil
 }
@@ -299,7 +307,6 @@ func newLSSQueryResult(
 	matches []uint32,
 	labelSetLengths []uint16,
 	lssMainPtr uintptr,
-	lssROPtr uintptr,
 	status uint32,
 ) *LSSQueryResult {
 	queryResult := &lssQueryResult{
@@ -310,7 +317,6 @@ func newLSSQueryResult(
 
 	if status != LSSQueryStatusMatch {
 		primitivesLabelSetMatchesFree(queryResult)
-		primitivesLSSDtor(lssROPtr)
 
 		return &LSSQueryResult{queryResult: queryResult}
 	}
@@ -321,7 +327,7 @@ func newLSSQueryResult(
 
 	lqr := &LSSQueryResult{
 		queryResult: queryResult,
-		lssRO:       cacheReadOnlyLSS.getROLSS(lssMainPtr, lssROPtr, slices.Max(matches)),
+		lssRO:       cacheReadOnlyLSS.getROLSS(lssMainPtr, primitivesLSSCreateReadonlyLss(lssMainPtr), slices.Max(matches)),
 	}
 
 	return lqr
@@ -345,6 +351,11 @@ func (r *LSSQueryResult) LSS() *LabelSetStorage {
 // LabelSetLengths return labels sets lengths.
 func (r *LSSQueryResult) LabelSetLengths() []uint16 {
 	return r.queryResult.labelSetLengths
+}
+
+// ReadonlyLss return readonly lss
+func (r *LSSQueryResult) ReadonlyLss() *LabelSetStorage {
+	return r.lssRO
 }
 
 // Len of result.

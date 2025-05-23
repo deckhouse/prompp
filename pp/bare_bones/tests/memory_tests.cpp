@@ -7,6 +7,7 @@
 namespace {
 
 using BareBones::AllocationSizeCalculator;
+using BareBones::DefaultReallocator;
 using BareBones::Memory;
 using BareBones::MemoryControlBlock;
 using BareBones::SharedMemory;
@@ -135,7 +136,11 @@ TEST_F(MemoryFixture, MoveOperator) {
   EXPECT_EQ(memory_size, memory2.size());
 }
 
-class SharedPtrFixture : public ::testing::Test {};
+class SharedPtrFixture : public ::testing::Test {
+ protected:
+  template <class T>
+  using SharedPtr = BareBones::SharedPtr<T, DefaultReallocator>;
+};
 
 TEST_F(SharedPtrFixture, Empty) {
   // Arrange
@@ -259,7 +264,7 @@ TEST_F(SharedPtrFixture, ReallocateAtExistingMemory) {
 
 class SharedMemoryFixture : public ::testing::Test {
  protected:
-  SharedMemory<uint8_t> memory_;
+  SharedMemory<uint8_t, DefaultReallocator> memory_;
 };
 
 TEST_F(SharedMemoryFixture, Empty) {
@@ -288,7 +293,7 @@ TEST_F(SharedMemoryFixture, CopyOperator) {
   memory_.resize_to_fit_at_least(1);
 
   // Act
-  SharedMemory<uint8_t> memory2;
+  SharedMemory<uint8_t, DefaultReallocator> memory2;
   memory2.resize_to_fit_at_least(1);
   memory2 = memory_;
 
@@ -320,7 +325,7 @@ TEST_F(SharedMemoryFixture, MoveOperator) {
   const auto memory_size = memory_.size();
 
   // Act
-  SharedMemory<uint8_t> memory2;
+  SharedMemory<uint8_t, DefaultReallocator> memory2;
   memory2.resize_to_fit_at_least(1);
   memory2 = std::move(memory_);
 

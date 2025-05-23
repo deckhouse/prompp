@@ -123,23 +123,30 @@ type ChunkRecoder struct {
 	recoder      uintptr
 	recodedChunk RecodedChunk
 
-	lss         *LabelSetStorage
-	dataStorage *HeadDataStorage
+	lss              *LabelSetStorage
+	dataStorage      *HeadDataStorage
+	serializedChunks *HeadDataStorageSerializedChunks
 }
 
 func NewChunkRecoder(lss *LabelSetStorage, dataStorage *HeadDataStorage, timeInterval TimeInterval) *ChunkRecoder {
-	return initializeChunkRecoder(lss, dataStorage, seriesDataChunkRecoderCtor(lss.Pointer(), dataStorage.dataStorage, timeInterval))
+	return initializeChunkRecoder(lss, dataStorage, nil, seriesDataChunkRecoderCtor(lss.Pointer(), dataStorage.dataStorage, timeInterval))
 }
 
-func NewSerializedChunkRecoder(serializedChunks []byte, timeInterval TimeInterval) *ChunkRecoder {
-	return initializeChunkRecoder(nil, nil, seriesDataSerializedChunkRecoderCtor(serializedChunks, timeInterval))
+func NewSerializedChunkRecoder(serializedChunks *HeadDataStorageSerializedChunks, timeInterval TimeInterval) *ChunkRecoder {
+	return initializeChunkRecoder(nil, nil, serializedChunks, seriesDataSerializedChunkRecoderCtor(serializedChunks.Data(), timeInterval))
 }
 
-func initializeChunkRecoder(lss *LabelSetStorage, dataStorage *HeadDataStorage, recoder uintptr) *ChunkRecoder {
+func initializeChunkRecoder(
+	lss *LabelSetStorage,
+	dataStorage *HeadDataStorage,
+	serializedChunks *HeadDataStorageSerializedChunks,
+	recoder uintptr,
+) *ChunkRecoder {
 	chunkRecoder := &ChunkRecoder{
-		recoder:     recoder,
-		lss:         lss,
-		dataStorage: dataStorage,
+		recoder:          recoder,
+		lss:              lss,
+		dataStorage:      dataStorage,
+		serializedChunks: serializedChunks,
 	}
 
 	runtime.SetFinalizer(chunkRecoder, func(chunkRecoder *ChunkRecoder) {

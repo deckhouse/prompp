@@ -370,6 +370,108 @@ extern "C" {
 #endif
 
 /**
+ * @brief get length label set by series id
+ *
+ * @param args {
+ *     lss    uintptr // pointer to constructed lss;
+ *     ls_id  uint32  // series id
+ * }
+ *
+ * @param res {
+ *     length int     // length of label set
+ * }
+ */
+void prompp_label_set_length(void* args, void* res);
+
+/**
+ * @brief get label set by series id
+ *
+ * @param args {
+ *     lss       uintptr                      // pointer to constructed lss;
+ *     ls_id     uint32                       // series id
+ * }
+ *
+ * @param res {
+ *     label_set []struct{key, value String}  // label sets
+ * }
+ */
+void prompp_label_set_serialize(void* args, void* res);
+
+/**
+ * @brief free label set returned by prompp_label_set_serialize
+ *
+ * @param args {
+ *     label_set []struct{key, value String} // label set
+ * }
+ */
+void prompp_label_set_free(void* args);
+
+/**
+ * @brief get size in bytes needed for Bytes method
+ *
+ * @param args {
+ *     lss       uintptr   // pointer to constructed lss;
+ *     ls_id     uint32    // series id
+ * }
+ *
+ * @param res {
+ *     size uint32
+ * }
+ */
+void prompp_label_set_bytes_size(void* args, void* res);
+
+/**
+ * @brief implementation of Bytes method
+ *
+ * @param args {
+ *     lss       uintptr   // pointer to constructed lss;
+ *     ls_id     uint32    // series id
+ * }
+ *
+ * @param res {
+ *     bytes []byte
+ * }
+ */
+void prompp_label_set_bytes(void* args, void* res);
+
+/**
+ * @brief implementation of BytesWithLabels method
+ *
+ * @param args {
+ *     lss       uintptr   // pointer to constructed lss;
+ *     ls_id     uint32    // series id
+ *     names     []string  // names slice
+ * }
+ *
+ * @param res {
+ *     bytes []byte
+ * }
+ */
+void prompp_label_set_bytes_with_labels(void* args, void* res);
+
+/**
+ * @brief implementation of BytesWithoutLabels method
+ *
+ * @param args {
+ *     lss       uintptr   // pointer to constructed lss;
+ *     ls_id     uint32    // series id
+ *     names     []string  // names slice
+ * }
+ *
+ * @param res {
+ *     bytes []byte
+ * }
+ */
+void prompp_label_set_bytes_without_labels(void* args, void* res);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
  * @brief Construct a new Primitives label sets.
  *
  * @param args {
@@ -424,10 +526,31 @@ void prompp_primitives_lss_allocated_memory(void* args, void* res);
  * }
  *
  * @param res {
- *     ls_id uint32 // inserted (or found) label set id
+ *     ls_id uint32                  // inserted (or found) label set id
+ *     bool  lss_has_reallocations   // true if lss has reallocations
  * }
  */
 void prompp_primitives_lss_find_or_emplace(void* args, void* res);
+
+/**
+ * @brief insert label set builder into lss
+ *
+ * @param args {
+ *     lss uintptr                    // pointer to constructed lss;
+ *     builder struct {
+ *        readonly_lss uintptr        // pointer to constructed lss;
+ *        ls_id        uint32         // series id
+ *        sorted_add   []model.Label  // slice of sorted by name labels
+ *        sorted_del   []string       // slice of sorted label names
+ *     }
+ * }
+ *
+ * @param res {
+ *     ls_id uint32                   // inserted (or found) label set id
+ *     bool  lss_has_reallocations    // true if lss has reallocations
+ * }
+ */
+void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
 
 /**
  * @brief query series from lss
@@ -441,7 +564,6 @@ void prompp_primitives_lss_find_or_emplace(void* args, void* res);
  * @param res {
  *     matches           []uint32 // matched series ids
  *     label_set_lengths []uint16 // slice of series label set length
- *     lss_copy          uintptr  // readonly copy of lss
  *     status            uint32   // query status
  * }
  */
@@ -512,46 +634,18 @@ void prompp_primitives_lss_query_label_names(void* args, void* res);
  */
 void prompp_primitives_lss_query_label_values(void* args, void* res);
 
-//
-// label_sets
-//
-
 /**
- * @brief get length label set by series id
+ * @brief return size of allocated memory for label sets.
  *
  * @param args {
- *     lss    uintptr // pointer to constructed lss;
- *     ls_id  uint32  // series id
+ *     lss uintptr                 // pointer to constructed queryable lss;
  * }
  *
  * @param res {
- *     length int     // length of label set
+ *     lss_copy          uintptr  // readonly copy of lss
  * }
  */
-void prompp_primitives_label_set_length(void* args, void* res);
-
-/**
- * @brief get label set by series id
- *
- * @param args {
- *     lss       uintptr                      // pointer to constructed lss;
- *     ls_id     uint32                       // series id
- * }
- *
- * @param res {
- *     label_set []struct{key, value String}  // label sets
- * }
- */
-void prompp_primitives_label_set_serialize(void* args, void* res);
-
-/**
- * @brief free label set returned by prompp_primitives_label_set_serialize
- *
- * @param args {
- *     label_set []struct{key, value String} // label set
- * }
- */
-void prompp_primitives_label_set_free(void* args);
+void prompp_create_readonly_lss(void* args, void* res);
 
 #ifdef __cplusplus
 }  // extern "C"
@@ -725,10 +819,11 @@ void prompp_prometheus_per_shard_relabeler_cache_allocated_memory(void* args, vo
  * }
  *
  * @param res {
- *     samples_added           uint32             // number of added samples;
- *     series_added            uint32             // number of added series;
- *     series_drop             uint32             // number of dropped series;
- *     error                   []byte             // error string if thrown;
+ *     samples_added                uint32        // number of added samples;
+ *     series_added                 uint32        // number of added series;
+ *     series_drop                  uint32        // number of dropped series;
+ *     error                        []byte        // error string if thrown;
+ *     target_lss_has_reallocations bool          // true if target lss has reallocations
  * }
  */
 void prompp_prometheus_per_shard_relabeler_input_relabeling(void* args, void* res);
@@ -777,7 +872,11 @@ void prompp_prometheus_relabel_stalenans_state_reset(void* args);
  * }
  *
  * @param res {
- *     error                   []byte             // error string if thrown;
+ *     samples_added                uint32        // number of added samples;
+ *     series_added                 uint32        // number of added series;
+ *     series_drop                  uint32        // number of dropped series;
+ *     error                        []byte        // error string if thrown;
+ *     target_lss_has_reallocations bool          // true if target lss has reallocations
  * }
  */
 void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stalenans(void* args, void* res);
@@ -814,7 +913,8 @@ void prompp_prometheus_per_shard_relabeler_input_collect_stalenans(void* args, v
  * }
  *
  * @param res {
- *     error                  []byte           // error string if thrown
+ *     error                        []byte          // error string if thrown
+ *     target_lss_has_reallocations bool            // true if target lss has reallocations
  * }
  */
 void prompp_prometheus_per_shard_relabeler_append_relabeler_series(void* args, void* res);
