@@ -350,8 +350,6 @@ func (h *Head) Append(
 		return nil, cppbridge.RelabelerStats{}, fmt.Errorf("failed input promise: %s", err)
 	}
 
-	// inputPromise.UpdateRelabeler()
-
 	var atomiclimitExhausted uint32
 	err := h.forEachShard(func(shard relabeler.Shard) error {
 		limitExhausted, err := shard.Wal().Write(inputPromise.ShardsInnerSeries(shard.ShardID()))

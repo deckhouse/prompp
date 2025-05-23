@@ -217,11 +217,6 @@ func (t *TaskAppendRelabelerSeries) AddResult(shardID uint16, innerSeries *cppbr
 	t.promise.AddResult(shardID, innerSeries)
 }
 
-// // AddUpdateRelabelerTasks add to promise UpdateTasks.
-// func (t *TaskAppendRelabelerSeries) AddUpdateRelabelerTasks(updateTask *TaskUpdateRelabelerState) {
-// 	t.promise.AddUpdateRelabelerTasks(updateTask)
-// }
-
 // Ctx - return task context.
 func (t *TaskAppendRelabelerSeries) Ctx() context.Context {
 	return t.ctx
