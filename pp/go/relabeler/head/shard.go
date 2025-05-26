@@ -173,16 +173,12 @@ func (h *Head) shardLoop(shardID uint16, stopc chan struct{}) {
 			task.Run(h.lsses[shardID], h.stageAppendRelabelerSeries, shardID, h.numberOfShards)
 
 		case task := <-h.stageAppendRelabelerSeries[shardID]:
-			task.Run(h.lsses[shardID].target, h.stageUpdateRelabelers, shardID)
+			task.Run(h.lsses[shardID], h.stageUpdateRelabelers, shardID)
 
 		case task := <-h.stageUpdateRelabelers[shardID]:
 			if err := task.Update(); err != nil {
 				task.AddError(shardID, fmt.Errorf("failed input update relabeler state %d: %w", shardID, err))
 				continue
-			}
-
-			if hasReallocations {
-				h.lsses[shardID].ResetSnapshot()
 			}
 
 		case task := <-h.genericTaskCh[shardID]:
