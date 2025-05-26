@@ -185,6 +185,7 @@ type Head struct {
 	series               prometheus.Gauge
 	queried              *prometheus.GaugeVec
 	walSize              *prometheus.GaugeVec
+	// TODO refactoring
 	queueInputRelabeling *prometheus.GaugeVec
 	queueRead            *prometheus.GaugeVec
 	queueGeneric         *prometheus.GaugeVec
