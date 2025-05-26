@@ -79,7 +79,7 @@ func (q *ChunkQuerier) Select(
 			MaxT: q.maxt,
 		})
 
-		chunkSeriesSets[shard.ShardID()] = NewChunkSeriesSet(lssQueryResult, chunkRecoder)
+		chunkSeriesSets[shard.ShardID()] = NewChunkSeriesSet(lssQueryResult, shard.LSS().GetSnapshot(), chunkRecoder)
 
 		return nil
 	})

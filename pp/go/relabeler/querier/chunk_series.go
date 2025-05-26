@@ -14,8 +14,9 @@ import (
 //
 
 type ChunkSeriesSet struct {
-	lssQueryResult *cppbridge.LSSQueryResult
-	chunkRecoder   *cppbridge.ChunkRecoder
+	lssQueryResult   *cppbridge.LSSQueryResult
+	labelSetSnapshot *cppbridge.LabelSetSnapshot
+	chunkRecoder     *cppbridge.ChunkRecoder
 
 	index            int
 	lastRecodedChunk *cppbridge.RecodedChunk
@@ -26,6 +27,7 @@ type ChunkSeriesSet struct {
 
 func NewChunkSeriesSet(
 	lssQueryResult *cppbridge.LSSQueryResult,
+	labelSetSnapshot *cppbridge.LabelSetSnapshot,
 	chunkRecoder *cppbridge.ChunkRecoder,
 ) *ChunkSeriesSet {
 	return &ChunkSeriesSet{
@@ -76,7 +78,7 @@ func (css *ChunkSeriesSet) Next() bool {
 	}
 
 	css.chunkSeries = &ChunkSeries{
-		labelSet:      labels.NewLabelsWithLSS(css.lssQueryResult.LSS(), lsID, lsLength),
+		labelSet:      labels.NewLabelsWithLSS(css.labelSetSnapshot, lsID, lsLength),
 		recodedChunks: recodedChunks,
 	}
 
