@@ -1,6 +1,6 @@
 #pragma once
 
-#include <string_view>
+#include <string>
 
 #include "bare_bones/compiler.h"
 
@@ -44,7 +44,7 @@ class XXHash {
   }
 
   PROMPP_ALWAYS_INLINE static uint64_t hash(const std::string_view& str) noexcept { return hash(str.data(), str.size()); }
-  PROMPP_ALWAYS_INLINE static uint64_t hash(const std::string& str) noexcept { return hash(std::string_view(str.data(), str.size())); }
+  PROMPP_ALWAYS_INLINE static uint64_t hash(const std::string& str) noexcept { return hash(str.data(), str.size()); }
 
  private:
   uint64_t hash_{};
