@@ -37,6 +37,14 @@ class XXHash {
     return *this;
   }
 
+  PROMPP_ALWAYS_INLINE static uint64_t hash(const std::string_view& str) noexcept {
+    XXHash hasher;
+    hasher.extend(str);
+    return hasher.hash();
+  }
+
+  PROMPP_ALWAYS_INLINE static uint64_t hash(const std::string& str) noexcept { return hash(std::string_view(str)); }
+
  private:
   uint64_t hash_{};
 };

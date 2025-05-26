@@ -77,11 +77,8 @@ class GenericDecodingTable {
     const GenericDecodingTable* decoding_table;
     PROMPP_ALWAYS_INLINE explicit Hasher(const GenericDecodingTable* _decoding_table = nullptr) noexcept : decoding_table(_decoding_table) {}
 
-    PROMPP_ALWAYS_INLINE size_t operator()(const std::string_view& str) const noexcept {
-      XXHash hasher;
-      hasher.extend(str);
-      return hasher.hash();
-    }
+    PROMPP_ALWAYS_INLINE size_t operator()(const std::string_view& str) const noexcept { return XXHash::hash(str); }
+    PROMPP_ALWAYS_INLINE size_t operator()(const std::string& str) const noexcept { return XXHash::hash(str); }
 
     template <class Class>
     PROMPP_ALWAYS_INLINE size_t operator()(const Class& c) const noexcept {
