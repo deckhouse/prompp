@@ -354,6 +354,10 @@ class LabelNameSet {
       size_ = 0;
     }
 
+    if constexpr (BareBones::concepts::has_size<OtherLabelNameSet>) {
+      data.symbols_ids_sequences.reserve(data.symbols_ids_sequences.size() + size_);
+    }
+
     for (const auto& label_name : lns) {
       uint32_t smbl_id = data.symbols_table.find_or_emplace(label_name);
       data.symbols_ids_sequences.push_back(smbl_id);
