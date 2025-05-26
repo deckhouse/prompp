@@ -136,7 +136,6 @@ func (qa *QueryableAppender) Reconfigure(
 
 func (qa *QueryableAppender) Querier(mint, maxt int64) (storage.Querier, error) {
 	qa.lock.RLock()
-	// defer qa.lock.RUnlock()
 	head := qa.head
 	qa.lock.RUnlock()
 	return querier.NewQuerier(
@@ -153,8 +152,8 @@ func (qa *QueryableAppender) Querier(mint, maxt int64) (storage.Querier, error) 
 
 func (qa *QueryableAppender) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
 	qa.lock.RLock()
-	defer qa.lock.RUnlock()
 	head := qa.head
+	qa.lock.RUnlock()
 	return querier.NewChunkQuerier(
 		head,
 		querier.NoOpShardedDeduplicatorFactory(),
