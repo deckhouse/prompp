@@ -61,7 +61,7 @@ func (s *ChunksSeriesSetTestSuite) TestAll() {
 		MaxT: maxt,
 	})
 
-	css := NewChunkSeriesSet(lssQueryResult, chunkRecoder)
+	css := NewChunkSeriesSet(lssQueryResult, lss.CreateLabelSetSnapshot(), chunkRecoder)
 	var ci chunks.Iterator
 
 	// first series
