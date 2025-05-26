@@ -761,11 +761,22 @@ func (h *Head) Append2(
 
 	inputPromise := NewInputRelabelingPromise(h.numberOfShards)
 
-	for _, tch := range h.genericTrueTaskCh {
-		tch <- NewGenericTrueTask(
-		//
-		)
+	err := h.ForEachShard2(
+		InputRelabeling(
+			ctx,
+			state,
+			rd,
+			relabeler.NewDestructibleIncomingData(incomingData, int(h.numberOfShards)),
+			inputPromise,
+			h.numberOfShards,
+		),
+	)
+	if err != nil {
+		// reset msr.rotateWG on error
+		return nil, cppbridge.RelabelerStats{}, fmt.Errorf("failed input promise: %s", err)
 	}
+
+	//
 
 	h.enqueueInputRelabeling(NewTaskInputRelabeling(
 		ctx,
@@ -780,7 +791,7 @@ func (h *Head) Append2(
 	}
 
 	var atomiclimitExhausted uint32
-	err := h.forEachShard(func(shard relabeler.Shard) error {
+	err = h.forEachShard(func(shard relabeler.Shard) error {
 		limitExhausted, err := shard.Wal().Write(inputPromise.ShardsInnerSeries(shard.ShardID()))
 		if err != nil {
 			return fmt.Errorf("failed to write inner series: %w", err)
@@ -858,7 +869,7 @@ func InputRelabeling(
 
 		incomingData.Destroy()
 		if err != nil {
-			promise.AddError(shard.ShardID(), fmt.Errorf("failed input relabeling shard %d: %w", shardID, err))
+			promise.AddError(shard.ShardID(), fmt.Errorf("failed input relabeling shard %d: %w", shard.ShardID(), err))
 			return nil
 		}
 
