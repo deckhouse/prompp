@@ -50,9 +50,7 @@ func (w *LSS) GetLabelSets(labelSetIDs []uint32) *cppbridge.LabelSetStorageGetLa
 // GetSnapshot return the actual snapshot.
 func (w *LSS) GetSnapshot() *cppbridge.LabelSetSnapshot {
 	w.once.Do(func() {
-		if w.snapshot == nil {
-			w.snapshot = w.target.CreateLabelSetSnapshot()
-		}
+		w.snapshot = w.target.CreateLabelSetSnapshot()
 	})
 
 	return w.snapshot
