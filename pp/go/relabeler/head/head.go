@@ -175,7 +175,10 @@ type Head struct {
 	stageUpdateRelabelers      []chan *TaskUpdateRelabelerState
 	genericTaskCh              []chan *GenericTask
 	genericReadTaskCh          []chan *GenericReadTask
-	numberOfShards             uint16
+
+	genericTrueTaskCh []chan *GenericTrueTask
+
+	numberOfShards uint16
 	// stat
 	appendedSegmentCount prometheus.Counter
 	memoryInUse          *prometheus.GaugeVec
@@ -701,4 +704,189 @@ func (h *Head) ReadEachShard(fn relabeler.ShardFn) error {
 	}
 	task.Wait()
 	return errors.Join(task.Errors()...)
+}
+
+func (h *Head) ForEachShard2(fn relabeler.ShardFn) error {
+	task := NewGenericTrueTask(fn, h.numberOfShards)
+	if h.readOnly {
+		for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
+			s := &shard{
+				id:          shardID,
+				lss:         h.lsses[shardID],
+				dataStorage: h.dataStorages[shardID],
+				wal:         h.wals[shardID],
+			}
+			go func(shard *shard) {
+				task.ExecuteOnShard(shard)
+			}(s)
+		}
+		task.Wait()
+		return task.Error()
+	}
+
+	for _, genericTaskCh := range h.genericTrueTaskCh {
+		genericTaskCh <- task
+	}
+	task.Wait()
+	return task.Error()
+}
+
+func (h *Head) Append2(
+	ctx context.Context,
+	incomingData *relabeler.IncomingData,
+	state *cppbridge.State,
+	relabelerID string,
+	commitToWal bool,
+) ([][]*cppbridge.InnerSeries, cppbridge.RelabelerStats, error) {
+	if h.readOnly {
+		return nil, cppbridge.RelabelerStats{}, fmt.Errorf("appending to read only head")
+	}
+
+	h.rdMutex.Lock()
+	rd, ok := h.relabelersData[relabelerID]
+	if !ok {
+		h.rdMutex.Unlock()
+		return nil, cppbridge.RelabelerStats{}, fmt.Errorf("relabeler ID not exist: %s", relabelerID)
+	}
+
+	if state != nil {
+		state.Reconfigure(rd.generationRelabeler(), h.generation, h.numberOfShards)
+	}
+
+	if state == nil {
+		state = rd.State(h.generation)
+	}
+	h.rdMutex.Unlock()
+
+	inputPromise := NewInputRelabelingPromise(h.numberOfShards)
+
+	for _, tch := range h.genericTrueTaskCh {
+		tch <- NewGenericTrueTask(
+		//
+		)
+	}
+
+	h.enqueueInputRelabeling(NewTaskInputRelabeling(
+		ctx,
+		inputPromise,
+		relabeler.NewDestructibleIncomingData(incomingData, int(h.numberOfShards)),
+		rd,
+		state,
+	))
+	if err := inputPromise.Wait(ctx); err != nil {
+		// reset msr.rotateWG on error
+		return nil, cppbridge.RelabelerStats{}, fmt.Errorf("failed input promise: %s", err)
+	}
+
+	var atomiclimitExhausted uint32
+	err := h.forEachShard(func(shard relabeler.Shard) error {
+		limitExhausted, err := shard.Wal().Write(inputPromise.ShardsInnerSeries(shard.ShardID()))
+		if err != nil {
+			return fmt.Errorf("failed to write inner series: %w", err)
+		}
+
+		if limitExhausted {
+			atomic.AddUint32(&atomiclimitExhausted, 1)
+		}
+
+		return nil
+	})
+	if err != nil {
+		logger.Errorf("failed to write wal: %v", err)
+	}
+
+	err = h.forEachShard(func(shard relabeler.Shard) error {
+		shard.DataStorage().AppendInnerSeriesSlice(inputPromise.ShardsInnerSeries(shard.ShardID()))
+
+		if commitToWal || atomiclimitExhausted > 0 {
+			return shard.Wal().Commit()
+		}
+
+		return nil
+	})
+	if err != nil {
+		logger.Errorf("failed to commit wal: %v", err)
+	}
+
+	return inputPromise.data, inputPromise.Stats(), nil
+}
+
+func InputRelabeling(
+	ctx context.Context,
+	state *cppbridge.State,
+	rd *RelabelerData,
+	incomingData *relabeler.DestructibleIncomingData,
+	promise *InputRelabelingPromise,
+	numberOfShards uint16,
+) relabeler.ShardFn {
+	return func(shard relabeler.Shard) error {
+		shardsInnerSeries := cppbridge.NewShardsInnerSeries(numberOfShards)
+		shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(numberOfShards)
+
+		var (
+			err              error
+			stats            cppbridge.RelabelerStats
+			hasReallocations bool
+		)
+
+		if state.TrackStaleness() {
+			stats, hasReallocations, err = rd.InputRelabelerByShard(shard.ShardID()).InputRelabelingWithStalenans(
+				ctx,
+				shard.LSS().Input(),
+				shard.LSS().Target(),
+				state.CacheByShard(shard.ShardID()),
+				state.RelabelerOptions(),
+				state.StaleNansStateByShard(shard.ShardID()),
+				state.DefTimestamp(),
+				incomingData.Data().ShardedData(),
+				shardsInnerSeries,
+				shardsRelabeledSeries,
+			)
+		} else {
+			stats, hasReallocations, err = rd.InputRelabelerByShard(shard.ShardID()).InputRelabeling(
+				ctx,
+				shard.LSS().Input(),
+				shard.LSS().Target(),
+				state.CacheByShard(shard.ShardID()),
+				state.RelabelerOptions(),
+				incomingData.Data().ShardedData(),
+				shardsInnerSeries,
+				shardsRelabeledSeries,
+			)
+		}
+
+		incomingData.Destroy()
+		if err != nil {
+			promise.AddError(shard.ShardID(), fmt.Errorf("failed input relabeling shard %d: %w", shardID, err))
+			return nil
+		}
+
+		if hasReallocations {
+			shard.LSS().ResetSnapshot()
+		}
+
+		promise.AddStats(stats)
+
+		for sid, relabeledSeries := range shardsRelabeledSeries {
+			if relabeledSeries.Size() == 0 {
+				promise.AddResult(uint16(sid), nil)
+				continue
+			}
+
+			stageAppendRelabelerSeries[sid] <- NewTaskAppendRelabelerSeries(
+				ctx,
+				relabeledSeries,
+				promise,
+				rd,
+				state,
+				shard.ShardID(),
+			)
+		}
+
+		for sid, innerSeries := range shardsInnerSeries {
+			promise.AddResult(uint16(sid), innerSeries)
+		}
+
+		return nil
+	}
 }

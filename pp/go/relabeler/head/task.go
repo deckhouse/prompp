@@ -2,6 +2,7 @@ package head
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -150,15 +151,14 @@ func (t *TaskInputRelabeling) Run(
 			shardsRelabeledSeries,
 		)
 	}
-
-	if hasReallocations {
-		lss.ResetSnapshot()
-	}
-
 	t.incomingData.Destroy()
 	if err != nil {
 		t.promise.AddError(shardID, fmt.Errorf("failed input relabeling shard %d: %w", shardID, err))
 		return
+	}
+
+	if hasReallocations {
+		lss.ResetSnapshot()
 	}
 
 	t.promise.AddStats(stats)
@@ -408,4 +408,43 @@ func (t *GenericReadTask) Errors() []error {
 func (t *GenericReadTask) ExecuteOnShard(shard relabeler.Shard) {
 	t.errs[shard.ShardID()] = t.shardFn(shard)
 	t.wg.Done()
+}
+
+//
+// GenericTrueTask
+//
+
+// GenericTrueTask generic task, will be executed on each shard.
+type GenericTrueTask struct {
+	errs    []error
+	shardFn relabeler.ShardFn
+	wg      sync.WaitGroup
+}
+
+// NewGenericTrueTask init new GenericTrueTask.
+func NewGenericTrueTask(shardFn relabeler.ShardFn, numberOfShards uint16) *GenericTrueTask {
+	gt := &GenericTrueTask{
+		errs:    make([]error, numberOfShards),
+		shardFn: shardFn,
+		wg:      sync.WaitGroup{},
+	}
+	gt.wg.Add(int(numberOfShards))
+
+	return gt
+}
+
+// Error returns an error if there was at least one error during the execution of the function on the shards.
+func (t *GenericTrueTask) Error() error {
+	return errors.Join(t.errs...)
+}
+
+// ExecuteOnShard execute task on shard.
+func (t *GenericTrueTask) ExecuteOnShard(shard relabeler.Shard) {
+	t.errs[shard.ShardID()] = t.shardFn(shard)
+	t.wg.Done()
+}
+
+// Wait for the task to complete on all shards.
+func (t *GenericTrueTask) Wait() {
+	t.wg.Wait()
 }

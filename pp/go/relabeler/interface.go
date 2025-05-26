@@ -28,6 +28,8 @@ type LSS interface {
 	GetLabelSets(labelSetIDs []uint32) *cppbridge.LabelSetStorageGetLabelSetsResult
 	GetSnapshot() *cppbridge.LabelSetSnapshot
 	ResetSnapshot()
+	Input() *cppbridge.LabelSetStorage
+	Target() *cppbridge.LabelSetStorage
 }
 
 type Wal interface {

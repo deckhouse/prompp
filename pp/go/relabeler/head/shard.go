@@ -65,6 +65,14 @@ func (w *LSS) ResetSnapshot() {
 	w.once = sync.Once{}
 }
 
+func (w *LSS) Input() *cppbridge.LabelSetStorage {
+	return w.input
+}
+
+func (w *LSS) Target() *cppbridge.LabelSetStorage {
+	return w.target
+}
+
 type DataStorage struct {
 	dataStorage *cppbridge.HeadDataStorage
 	encoder     *cppbridge.HeadEncoder
@@ -234,4 +242,53 @@ func (s *shard) LSS() relabeler.LSS {
 
 func (s *shard) Wal() relabeler.Wal {
 	return s.wal
+}
+
+func (h *Head) shardLoop2(
+	shardID uint16,
+	priotity chan *GenericTrueTask,
+	nonPriority chan *GenericTrueTask,
+	wakeup, stopc chan struct{},
+) {
+	sd := &shard{
+		id:          shardID,
+		lss:         h.lsses[shardID],
+		dataStorage: h.dataStorages[shardID],
+		wal:         h.wals[shardID],
+	}
+	forceNonPriority := 0
+
+	for {
+		select {
+		case <-stopc:
+			return
+
+		case task := <-priotity:
+			task.ExecuteOnShard(sd)
+
+			if len(nonPriority) == 0 {
+				continue
+			}
+
+			forceNonPriority++
+			if forceNonPriority >= 10 {
+				forceNonPriority = 0
+
+				(<-nonPriority).ExecuteOnShard(sd)
+			}
+
+		default:
+			select {
+			case <-stopc:
+				return
+
+			case <-wakeup:
+				continue
+
+			case task := <-nonPriority:
+				task.ExecuteOnShard(sd)
+			}
+
+		}
+	}
 }
