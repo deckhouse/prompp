@@ -273,7 +273,7 @@ func (t *TaskAppendRelabelerSeries) Run(
 
 	hasReallocations, err := t.InputRelabelerByShard(shardID).AppendRelabelerSeries(
 		t.ctx,
-		lss.input,
+		lss.target,
 		relabelerStateUpdate,
 		innerSeries,
 		t.relabeledSeries,
