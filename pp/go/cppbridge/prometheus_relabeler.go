@@ -582,7 +582,7 @@ func (ipsr *InputPerShardRelabeler) AppendRelabelerSeries(
 		return ctx.Err()
 	}
 
-	exception := prometheusPerShardRelabelerAppendRelabelerSeries(
+	exception, _ := prometheusPerShardRelabelerAppendRelabelerSeries(
 		ipsr.cptr,
 		lss.Pointer(),
 		innerSeries,
@@ -622,7 +622,7 @@ func (ipsr *InputPerShardRelabeler) InputRelabeling(
 	if !ok {
 		return RelabelerStats{}, ErrMustImplementCptrable
 	}
-	stats, exception := prometheusPerShardRelabelerInputRelabeling(
+	stats, exception, _ := prometheusPerShardRelabelerInputRelabeling(
 		ipsr.cptr,
 		inputLss.Pointer(),
 		targetLss.Pointer(),
@@ -657,7 +657,7 @@ func (ipsr *InputPerShardRelabeler) InputRelabelingWithStalenans(
 	if !ok {
 		return RelabelerStats{}, ErrMustImplementCptrable
 	}
-	stats, exception := prometheusPerShardRelabelerInputRelabelingWithStalenans(
+	stats, exception, _ := prometheusPerShardRelabelerInputRelabelingWithStalenans(
 		ipsr.cptr,
 		inputLss.Pointer(),
 		targetLss.Pointer(),

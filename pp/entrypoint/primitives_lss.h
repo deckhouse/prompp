@@ -57,7 +57,8 @@ void prompp_primitives_lss_allocated_memory(void* args, void* res);
  * }
  *
  * @param res {
- *     ls_id uint32 // inserted (or found) label set id
+ *     ls_id uint32                  // inserted (or found) label set id
+ *     bool  lss_has_reallocations   // true if lss has reallocations
  * }
  */
 void prompp_primitives_lss_find_or_emplace(void* args, void* res);
@@ -73,11 +74,11 @@ void prompp_primitives_lss_find_or_emplace(void* args, void* res);
  *        sorted_add   []model.Label  // slice of sorted by name labels
  *        sorted_del   []string       // slice of sorted label names
  *     }
-
  * }
  *
  * @param res {
- *     ls_id uint32 // inserted (or found) label set id
+ *     ls_id uint32                   // inserted (or found) label set id
+ *     bool  lss_has_reallocations    // true if lss has reallocations
  * }
  */
 void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
@@ -94,7 +95,6 @@ void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
  * @param res {
  *     matches           []uint32 // matched series ids
  *     label_set_lengths []uint16 // slice of series label set length
- *     lss_copy          uintptr  // readonly copy of lss
  *     status            uint32   // query status
  * }
  */

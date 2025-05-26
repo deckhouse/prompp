@@ -79,10 +79,10 @@ func (s *LSSSuite) TestLabels() {
 	lsIn := model.LabelSetFromMap(lsMap)
 
 	lss := cppbridge.NewQueryableLssStorage()
-	lsID := lss.FindOrEmplace(lsIn)
+	lsID := lss.FindOrEmplace(lsIn).LabelSetID
 
 	lsLength := 0
-	lss.RangeLabelSet(lsID, func(l cppbridge.Label) error {
+	_ = lss.RangeLabelSet(lsID, func(l cppbridge.Label) error {
 		lv, ok := lsMap[l.Name]
 		s.Require().True(ok)
 		s.Require().Equal(lv, l.Value)
@@ -245,7 +245,7 @@ func (s *QueryableLSSSuite) SetupTest() {
 
 	s.labelSetIDs = make([]uint32, 0, len(s.labelSets))
 	for _, labelSet := range s.labelSets {
-		s.labelSetIDs = append(s.labelSetIDs, s.lss.FindOrEmplace(labelSet))
+		s.labelSetIDs = append(s.labelSetIDs, s.lss.FindOrEmplace(labelSet).LabelSetID)
 	}
 }
 
@@ -420,13 +420,13 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithExistingLabelSet() {
 		LsId:        0,
 		SortedAdd:   []model.SimpleLabel{{Name: "che", Value: "bureck"}},
 		SortedDel:   nil,
-	})
+	}).LabelSetID
 	existingLsIdWithDel := s.lss.FindOrEmplaceBuilder(model.CppLabelSetBuilder{
 		ReadonlyLss: queryResult.ReadonlyLss().Pointer(),
 		LsId:        1,
 		SortedAdd:   nil,
 		SortedDel:   []string{"che"},
-	})
+	}).LabelSetID
 
 	// Assert
 	s.Equal(uint32(1), existingLsIdWithAdd)
@@ -446,7 +446,7 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithNewLabelSet() {
 		LsId:        0,
 		SortedAdd:   []model.SimpleLabel{{Name: "new_lol", Value: "new_kek"}},
 		SortedDel:   nil,
-	})
+	}).LabelSetID
 
 	// Assert
 	s.Equal(uint32(expectedLsId), existingLsId)
