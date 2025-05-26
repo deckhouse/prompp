@@ -761,15 +761,13 @@ func (h *Head) Append2(
 
 	inputPromise := NewInputRelabelingPromise(h.numberOfShards)
 
-	err := h.ForEachShard2(
-		InputRelabeling(
-			ctx,
-			state,
-			rd,
-			relabeler.NewDestructibleIncomingData(incomingData, int(h.numberOfShards)),
-			inputPromise,
-			h.numberOfShards,
-		),
+	err := h.inputRelabelingStage(
+		ctx,
+		state,
+		rd,
+		relabeler.NewDestructibleIncomingData(incomingData, int(h.numberOfShards)),
+		inputPromise,
+		h.numberOfShards,
 	)
 	if err != nil {
 		// reset msr.rotateWG on error
@@ -823,82 +821,89 @@ func (h *Head) Append2(
 	return inputPromise.data, inputPromise.Stats(), nil
 }
 
-func InputRelabeling(
+func (h *Head) inputRelabelingStage(
 	ctx context.Context,
 	state *cppbridge.State,
 	rd *RelabelerData,
 	incomingData *relabeler.DestructibleIncomingData,
 	promise *InputRelabelingPromise,
 	numberOfShards uint16,
-) relabeler.ShardFn {
-	return func(shard relabeler.Shard) error {
-		shardsInnerSeries := cppbridge.NewShardsInnerSeries(numberOfShards)
-		shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(numberOfShards)
+) error {
+	err := h.ForEachShard2(
+		func(shard relabeler.Shard) error {
+			shardsInnerSeries := cppbridge.NewShardsInnerSeries(numberOfShards)
+			shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(numberOfShards)
 
-		var (
-			err              error
-			stats            cppbridge.RelabelerStats
-			hasReallocations bool
-		)
-
-		if state.TrackStaleness() {
-			stats, hasReallocations, err = rd.InputRelabelerByShard(shard.ShardID()).InputRelabelingWithStalenans(
-				ctx,
-				shard.LSS().Input(),
-				shard.LSS().Target(),
-				state.CacheByShard(shard.ShardID()),
-				state.RelabelerOptions(),
-				state.StaleNansStateByShard(shard.ShardID()),
-				state.DefTimestamp(),
-				incomingData.Data().ShardedData(),
-				shardsInnerSeries,
-				shardsRelabeledSeries,
+			var (
+				err              error
+				stats            cppbridge.RelabelerStats
+				hasReallocations bool
 			)
-		} else {
-			stats, hasReallocations, err = rd.InputRelabelerByShard(shard.ShardID()).InputRelabeling(
-				ctx,
-				shard.LSS().Input(),
-				shard.LSS().Target(),
-				state.CacheByShard(shard.ShardID()),
-				state.RelabelerOptions(),
-				incomingData.Data().ShardedData(),
-				shardsInnerSeries,
-				shardsRelabeledSeries,
-			)
-		}
 
-		incomingData.Destroy()
-		if err != nil {
-			promise.AddError(shard.ShardID(), fmt.Errorf("failed input relabeling shard %d: %w", shard.ShardID(), err))
-			return nil
-		}
-
-		if hasReallocations {
-			shard.LSS().ResetSnapshot()
-		}
-
-		promise.AddStats(stats)
-
-		for sid, relabeledSeries := range shardsRelabeledSeries {
-			if relabeledSeries.Size() == 0 {
-				promise.AddResult(uint16(sid), nil)
-				continue
+			if state.TrackStaleness() {
+				stats, hasReallocations, err = rd.InputRelabelerByShard(shard.ShardID()).InputRelabelingWithStalenans(
+					ctx,
+					shard.LSS().Input(),
+					shard.LSS().Target(),
+					state.CacheByShard(shard.ShardID()),
+					state.RelabelerOptions(),
+					state.StaleNansStateByShard(shard.ShardID()),
+					state.DefTimestamp(),
+					incomingData.Data().ShardedData(),
+					shardsInnerSeries,
+					shardsRelabeledSeries,
+				)
+			} else {
+				stats, hasReallocations, err = rd.InputRelabelerByShard(shard.ShardID()).InputRelabeling(
+					ctx,
+					shard.LSS().Input(),
+					shard.LSS().Target(),
+					state.CacheByShard(shard.ShardID()),
+					state.RelabelerOptions(),
+					incomingData.Data().ShardedData(),
+					shardsInnerSeries,
+					shardsRelabeledSeries,
+				)
 			}
 
-			stageAppendRelabelerSeries[sid] <- NewTaskAppendRelabelerSeries(
-				ctx,
-				relabeledSeries,
-				promise,
-				rd,
-				state,
-				shard.ShardID(),
-			)
-		}
+			incomingData.Destroy()
+			if err != nil {
+				promise.AddError(shard.ShardID(), fmt.Errorf("failed input relabeling shard %d: %w", shard.ShardID(), err))
+				return nil
+			}
 
-		for sid, innerSeries := range shardsInnerSeries {
-			promise.AddResult(uint16(sid), innerSeries)
-		}
+			if hasReallocations {
+				shard.LSS().ResetSnapshot()
+			}
 
-		return nil
+			promise.AddStats(stats)
+
+			for sid, relabeledSeries := range shardsRelabeledSeries {
+				if relabeledSeries.Size() == 0 {
+					promise.AddResult(uint16(sid), nil)
+					continue
+				}
+
+				stageAppendRelabelerSeries[sid] <- NewTaskAppendRelabelerSeries(
+					ctx,
+					relabeledSeries,
+					promise,
+					rd,
+					state,
+					shard.ShardID(),
+				)
+			}
+
+			for sid, innerSeries := range shardsInnerSeries {
+				promise.AddResult(uint16(sid), innerSeries)
+			}
+
+			return nil
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed input relabeling stage: %s", err)
 	}
+
+	return nil
 }
