@@ -123,9 +123,9 @@ class CedarTrie {
   using Value = uint32_t;
 
   PROMPP_ALWAYS_INLINE void insert(std::string_view key, uint32_t id) noexcept {
-    if (max_id_ == kNoId || max_id_ < id) {
+    if (count_ <= id) {
       trie_.update(key.data(), key.length(), 0) = id;
-      max_id_ = id;
+      ++count_;
     }
   }
 
@@ -155,10 +155,8 @@ class CedarTrie {
   }
 
  private:
-  static constexpr auto kNoId = std::numeric_limits<uint32_t>::max();
-
   Trie trie_;
-  uint32_t max_id_{kNoId};
+  uint32_t count_{};
 };
 
 class CedarMatchesList {
