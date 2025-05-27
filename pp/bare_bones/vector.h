@@ -185,7 +185,7 @@ class GenericVector {
     const auto size = std::distance(begin, end);
     resize(pos + size);
 
-    if constexpr (IsTriviallyCopyable<T>::value) {
+    if constexpr (std::contiguous_iterator<IteratorType> && IsTriviallyCopyable<T>::value) {
       std::memcpy(data() + pos, begin, size);
     } else {
       std::ranges::copy(begin, end, data() + pos);
