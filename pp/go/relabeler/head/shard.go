@@ -2,6 +2,7 @@ package head
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -13,8 +14,10 @@ import (
 const chanBufferSize = 64
 
 type LSS struct {
-	input  *cppbridge.LabelSetStorage
-	target *cppbridge.LabelSetStorage
+	input    *cppbridge.LabelSetStorage
+	target   *cppbridge.LabelSetStorage
+	snapshot *cppbridge.LabelSetSnapshot
+	once     sync.Once
 }
 
 func (w *LSS) Raw() *cppbridge.LabelSetStorage {
@@ -42,6 +45,21 @@ func (w *LSS) Query(matchers []model.LabelMatcher, querySource uint32) *cppbridg
 
 func (w *LSS) GetLabelSets(labelSetIDs []uint32) *cppbridge.LabelSetStorageGetLabelSetsResult {
 	return w.target.GetLabelSets(labelSetIDs)
+}
+
+// GetSnapshot return the actual snapshot.
+func (w *LSS) GetSnapshot() *cppbridge.LabelSetSnapshot {
+	w.once.Do(func() {
+		w.snapshot = w.target.CreateLabelSetSnapshot()
+	})
+
+	return w.snapshot
+}
+
+// ResetSnapshot resets the current snapshot.
+func (w *LSS) ResetSnapshot() {
+	w.snapshot = nil
+	w.once = sync.Once{}
 }
 
 type DataStorage struct {
@@ -145,11 +163,12 @@ func (h *Head) shardLoop(shardID uint16, stopc chan struct{}) {
 			shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(h.numberOfShards)
 
 			var (
-				err   error
-				stats cppbridge.RelabelerStats
+				err              error
+				stats            cppbridge.RelabelerStats
+				hasReallocations bool
 			)
 			if task.WithStaleNans() {
-				stats, err = task.InputRelabelerByShard(shardID).InputRelabelingWithStalenans(
+				stats, hasReallocations, err = task.InputRelabelerByShard(shardID).InputRelabelingWithStalenans(
 					task.Ctx(),
 					h.lsses[shardID].input,
 					h.lsses[shardID].target,
@@ -162,7 +181,7 @@ func (h *Head) shardLoop(shardID uint16, stopc chan struct{}) {
 					shardsRelabeledSeries,
 				)
 			} else {
-				stats, err = task.InputRelabelerByShard(shardID).InputRelabeling(
+				stats, hasReallocations, err = task.InputRelabelerByShard(shardID).InputRelabeling(
 					task.Ctx(),
 					h.lsses[shardID].input,
 					h.lsses[shardID].target,
@@ -178,6 +197,10 @@ func (h *Head) shardLoop(shardID uint16, stopc chan struct{}) {
 			if err != nil {
 				task.AddError(shardID, fmt.Errorf("failed input relabeling shard %d: %w", shardID, err))
 				continue
+			}
+
+			if hasReallocations {
+				h.lsses[shardID].ResetSnapshot()
 			}
 
 			task.AddStats(stats)
@@ -205,15 +228,20 @@ func (h *Head) shardLoop(shardID uint16, stopc chan struct{}) {
 			relabelerStateUpdate := cppbridge.NewRelabelerStateUpdate()
 			innerSeries := cppbridge.NewInnerSeries()
 
-			if err := task.InputRelabelerByShard(shardID).AppendRelabelerSeries(
+			hasReallocations, err := task.InputRelabelerByShard(shardID).AppendRelabelerSeries(
 				task.Ctx(),
 				h.lsses[shardID].target,
 				relabelerStateUpdate,
 				innerSeries,
 				task.RelabeledSeries(),
-			); err != nil {
+			)
+			if err != nil {
 				task.AddError(shardID, fmt.Errorf("failed input append relabeler series shard %d: %w", shardID, err))
 				continue
+			}
+
+			if hasReallocations {
+				h.lsses[shardID].ResetSnapshot()
 			}
 
 			task.AddUpdateRelabelerTasks(NewTaskUpdateRelabelerState(

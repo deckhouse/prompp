@@ -1145,7 +1145,6 @@ func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder model.CppLabelSetBui
 func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource uint32) (
 	matches []uint32,
 	labelSetLengths []uint16,
-	lssMainPtr uintptr,
 	status uint32,
 ) {
 	args := struct {
@@ -1166,10 +1165,10 @@ func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource 
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.matches, res.labelSetLengths, lss, res.status
+	return res.matches, res.labelSetLengths, res.status
 }
 
-func primitivesLabelSetMatchesFree(result *lssQueryResult) {
+func primitivesLabelSetMatchesFree(result *LSSQueryResult) {
 	fastcgo.UnsafeCall1(
 		C.prompp_primitives_lss_query_result_free,
 		uintptr(unsafe.Pointer(result)),
