@@ -155,8 +155,6 @@ class CedarTrie {
   }
 
  private:
-  static constexpr auto kNoId = std::numeric_limits<uint32_t>::max();
-
   Trie trie_;
   uint32_t count_{};
 };
