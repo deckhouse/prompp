@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.6
+
+### Fixes
+1. **Fill Sources in meta.json**: The compactor writes the compaction.sources section in the meta.json file as a union of its parent sources. Thus, by creating blocks with empty sources, we end up making all blocks without sources. On the other hand, Thanos compactor relies on the list of sources to delete outdated blocks. Accordingly, blocks with an empty list of sources are automatically subject to deletion.
+
 ## v0.2.5
 
 ### Fixes
