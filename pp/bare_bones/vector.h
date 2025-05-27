@@ -181,9 +181,15 @@ class GenericVector {
   template <std::random_access_iterator IteratorType, class IteratorSentinelType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, T> && std::sentinel_for<IteratorSentinelType, IteratorType>
   PROMPP_ALWAYS_INLINE void push_back(IteratorType begin, IteratorSentinelType end) noexcept {
-    auto pos = size();
-    resize(pos + std::distance(begin, end));
-    std::ranges::copy(begin, end, data() + pos);
+    const auto pos = size();
+    const auto size = std::distance(begin, end);
+    resize(pos + size);
+
+    if constexpr (std::contiguous_iterator<IteratorType> && IsTriviallyCopyable<T>::value) {
+      std::memcpy(data() + pos, begin, size);
+    } else {
+      std::ranges::copy(begin, end, data() + pos);
+    }
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType size() const noexcept { return derived()->get_size(); }

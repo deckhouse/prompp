@@ -97,7 +97,7 @@ class TestSnugCompositesStringFilament {
   using composite_type = std::string_view;
 
   TestSnugCompositesStringFilament() = default;
-  TestSnugCompositesStringFilament(data_type& data, std::string x) : pos_(data.size()), len_(x.length()) { data.push_back(x.begin(), x.end()); }
+  TestSnugCompositesStringFilament(data_type& data, std::string x) : pos_(data.size()), len_(x.length()) { data.push_back(x.data(), x.data() + x.length()); }
 
   const std::string_view composite(const data_type& data) const { return std::string_view(data.begin() + pos_ - data.shift(), len_); }
 
@@ -146,7 +146,7 @@ TYPED_TEST(SnugComposite, should_return_same_id_for_same_data_with_hash) {
     this->fill_table_with_random_values(outcomes);
 
     std::string v = "12";
-    auto hash_val = std::hash<std::string>()(v);
+    auto hash_val = BareBones::XXHash::hash(v);
     auto id = outcomes.find_or_emplace(v, hash_val);
 
     EXPECT_EQ(id, outcomes.find_or_emplace(v, hash_val));
@@ -156,7 +156,7 @@ TYPED_TEST(SnugComposite, should_return_same_id_for_same_data_with_hash) {
     EXPECT_EQ(outcomes.find_or_emplace(v, hash_val), outcomes.find(v));
 
     v = "21";
-    hash_val = std::hash<std::string>()(v);
+    hash_val = BareBones::XXHash::hash(v);
     id = outcomes.find_or_emplace(v);
 
     EXPECT_EQ(id, outcomes.find_or_emplace(v, hash_val));
