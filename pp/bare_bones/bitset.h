@@ -25,7 +25,8 @@ class Bitset {
    * - roaring bitmap is not that quick if you can afford to hold the whole
    *   bitset in memory (including unset parts), which is the case
    */
-  Memory<MemoryControlBlockWithItemCount, uint64_t> data_;
+  using Memory = BareBones::Memory<MemoryControlBlockWithItemCount, uint64_t>;
+  Memory data_;
 
  public:
   void reserve(size_t size) noexcept {
@@ -142,6 +143,14 @@ class Bitset {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t popcount() const noexcept {
     return std::accumulate(data_.begin(), data_.end(), 0U, [](uint32_t popcount, uint64_t v) PROMPP_LAMBDA_INLINE { return popcount + std::popcount(v); });
+  }
+
+  template <OutputStream S>
+  PROMPP_ALWAYS_INLINE void write_to(S& stream) const noexcept {
+    const uint32_t data_size_in_bits = size();
+    const uint32_t data_size_in_bytes = ((data_size_in_bits + 63) >> 6) * 8;
+    stream.write(reinterpret_cast<const char*>(&data_size_in_bits), sizeof(data_size_in_bits));
+    stream.write(reinterpret_cast<const char*>(data_.begin()), data_size_in_bytes);
   }
 
  private:

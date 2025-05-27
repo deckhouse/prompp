@@ -866,8 +866,6 @@ class CompactSequence {
   using const_iterator = DecodeIterator;
   using sentinel = DecodeIteratorSentinel;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return buffer_.allocated_memory(); }
-
  private:
   using Memory = BareBones::Memory<MemoryControlBlockWithItemCount, uint8_t>;
 
@@ -903,6 +901,11 @@ class CompactSequence {
     key_iterator_ += !(size() % 4);
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return buffer_.allocated_memory(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Memory::SizeType size_in_bytes() const noexcept {
+    return size() == 0 ? 0 : data_iterator_ - buffer_ + kKeysAdditionalAllocationSizeForDecoder;
+  }
+
   PROMPP_ALWAYS_INLINE void clear() noexcept {
     if (size() != 0) [[likely]] {
       std::memset(buffer_, 0, kMaxKeySize);
@@ -921,9 +924,9 @@ class CompactSequence {
 
   template <OutputStream S>
   PROMPP_ALWAYS_INLINE void write_to(S& stream) const noexcept {
-    const Memory::SizeType buffer_size = buffer_.size();
-    stream.write(reinterpret_cast<const char*>(&buffer_size), sizeof(buffer_size));
-    stream.write(reinterpret_cast<const char*>(buffer_.begin()), buffer_size);
+    const uint32_t buffer_size_in_bytes = size_in_bytes();
+    stream.write(reinterpret_cast<const char*>(&buffer_size_in_bytes), sizeof(buffer_size_in_bytes));
+    stream.write(reinterpret_cast<const char*>(buffer_.begin()), buffer_size_in_bytes);
   }
 
  private:

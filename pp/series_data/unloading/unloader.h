@@ -1,8 +1,7 @@
 #pragma once
 
-#include <roaring/roaring.hh>
-
 #include "bare_bones/bit.h"
+#include "bare_bones/bitset.h"
 #include "bare_bones/encoding.h"
 #include "series_data/data_storage.h"
 #include "series_data/encoder/bit_sequence.h"
@@ -23,39 +22,43 @@ class Unloader {
 
     EncodingChunkLengthSequence chunk_length_sequence{};
     EncodingChunkIDSequence chunk_id_sequence{};
-    roaring::Roaring ls_id_bitmap{};
+    BareBones::Bitset ls_id_bitmap{};
 
     uint32_t bitseqs_size_in_bytes = 0;
 
     for (const auto ls_id : storage_.unused_series_bitmap) {
       const auto encoding_type = storage_.open_chunks[ls_id].encoding_state.encoding_type;
       if (!storage_.open_chunks[ls_id].is_empty() && is_unloadable_encoder(encoding_type)) {
-        ls_id_bitmap.add(ls_id);
+        ls_id_bitmap.resize(ls_id + 1);
+        ls_id_bitmap.set(ls_id);
 
         const auto& bitseq = get_open_chunk_stream(ls_id);
-        const auto bitseq_filled_bytes_count = std::min(bitseq.size_in_bytes(), BareBones::Bit::to_bytes(bitseq.size_in_bits()));
+        const uint32_t bitseq_filled_bytes_count = std::min(bitseq.size_in_bytes(), BareBones::Bit::to_bytes(bitseq.size_in_bits()));
         chunk_length_sequence.push_back(bitseq_filled_bytes_count);
         bitseqs_size_in_bytes += bitseq_filled_bytes_count;
 
-        const auto chunk_id = get_open_chunk_id(ls_id);
+        const uint32_t chunk_id = get_open_chunk_id(ls_id);
         chunk_id_sequence.push_back(chunk_id);
       }
     }
 
-    ls_id_bitmap.runOptimize();
-    ls_id_bitmap.shrinkToFit();
-    uint32_t expected_size_in_bytes = ls_id_bitmap.getSizeInBytes();
-    std::vector<char> buffer(expected_size_in_bytes);
-    uint32_t size_in_bytes = ls_id_bitmap.write(buffer.data());
-    assert(expected_size_in_bytes == size_in_bytes);
-    stream.write(reinterpret_cast<char*>(&size_in_bytes), sizeof(size_in_bytes));
-    stream.write(buffer.data(), size_in_bytes);
+    ls_id_bitmap.write_to(stream);
 
     chunk_length_sequence.flush();
+    std::cout << "chunk_length_sequence.data().size(): " << chunk_length_sequence.data().size() << '\n';
     chunk_length_sequence.data().write_to(stream);
+    for (auto x : chunk_length_sequence) {
+      std::cout << int(x) << ' ';
+    }
+    std::cout << '\n';
 
     chunk_id_sequence.flush();
+    std::cout << "chunk_id_sequence.data().size(): " << chunk_id_sequence.data().size() << '\n';
     chunk_id_sequence.data().write_to(stream);
+    for (auto x : chunk_id_sequence) {
+      std::cout << int(x) << ' ';
+    }
+    std::cout << '\n';
 
     stream.write(reinterpret_cast<char*>(&bitseqs_size_in_bytes), sizeof(bitseqs_size_in_bytes));
 
@@ -68,11 +71,7 @@ class Unloader {
   }
 
   static constexpr uint32_t get_empty_unloader_size_in_bytes() noexcept {
-    roaring::Roaring ls_id_bitmap{};
-    ls_id_bitmap.runOptimize();
-    ls_id_bitmap.shrinkToFit();
-
-    return sizeof(uint32_t) + ls_id_bitmap.getSizeInBytes() + EncodingChunkLengthSequence{}.data().size() + sizeof(uint32_t) +
+    return sizeof(uint32_t) + BareBones::Bitset{}.allocated_memory() + EncodingChunkLengthSequence{}.data().size() + sizeof(uint32_t) +
            EncodingChunkIDSequence{}.data().size() + sizeof(uint32_t) + sizeof(uint32_t);
   }
 

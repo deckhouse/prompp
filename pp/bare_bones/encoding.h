@@ -389,6 +389,9 @@ class EncodedSequence {
   DataSequence data_;
 
  public:
+  using sequence_type = DataSequence;
+  using encoder_type = typename E::Encoder;
+  using decoder_type = typename E::Decoder;
   using value_type = typename DataSequence::value_type;
 
   EncodedSequence() = default;
