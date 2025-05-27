@@ -119,3 +119,8 @@ func (h *DiscardableRotatableHead) Discard() (err error) {
 func (h *DiscardableRotatableHead) CopySeriesFrom(other relabeler.Head) {
 	h.head.CopySeriesFrom(other)
 }
+
+// ReadEachShard execute read fn on each shard.
+func (h *DiscardableRotatableHead) ReadEachShard(fn relabeler.ShardFn) error {
+	return h.head.ReadEachShard(fn)
+}

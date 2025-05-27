@@ -14,7 +14,7 @@ import (
 )
 
 type QueryableAppender struct {
-	lock           sync.Mutex
+	lock           sync.RWMutex
 	head           relabeler.Head
 	distributor    relabeler.Distributor
 	querierMetrics *querier.Metrics
@@ -54,8 +54,8 @@ func (qa *QueryableAppender) AppendWithStaleNans(
 		qa.querierMetrics.AppendDuration.Observe(float64(time.Since(start).Microseconds()))
 	}()
 
-	qa.lock.Lock()
-	defer qa.lock.Unlock()
+	qa.lock.RLock()
+	defer qa.lock.RUnlock()
 
 	data, stats, err := qa.head.Append(ctx, incomingData, state, relabelerID, commitToWal)
 	if err != nil {
@@ -70,8 +70,8 @@ func (qa *QueryableAppender) AppendWithStaleNans(
 }
 
 func (qa *QueryableAppender) WriteMetrics() {
-	qa.lock.Lock()
-	defer qa.lock.Unlock()
+	qa.lock.RLock()
+	defer qa.lock.RUnlock()
 
 	qa.head.WriteMetrics()
 	qa.distributor.WriteMetrics(qa.head)
@@ -79,21 +79,21 @@ func (qa *QueryableAppender) WriteMetrics() {
 
 // MergeOutOfOrderChunks merge chunks with out of order data chunks.
 func (qa *QueryableAppender) MergeOutOfOrderChunks() {
-	qa.lock.Lock()
-	defer qa.lock.Unlock()
+	qa.lock.RLock()
+	defer qa.lock.RUnlock()
 
 	qa.head.MergeOutOfOrderChunks()
 }
 
 func (qa *QueryableAppender) HeadStatus(limit int) relabeler.HeadStatus {
-	qa.lock.Lock()
-	defer qa.lock.Unlock()
+	qa.lock.RLock()
+	defer qa.lock.RUnlock()
 	return qa.head.Status(limit)
 }
 
 func (qa *QueryableAppender) CommitToWal() error {
-	qa.lock.Lock()
-	defer qa.lock.Unlock()
+	qa.lock.RLock()
+	defer qa.lock.RUnlock()
 	return qa.head.CommitToWal()
 }
 
@@ -135,9 +135,9 @@ func (qa *QueryableAppender) Reconfigure(
 }
 
 func (qa *QueryableAppender) Querier(mint, maxt int64) (storage.Querier, error) {
-	qa.lock.Lock()
-	defer qa.lock.Unlock()
+	qa.lock.RLock()
 	head := qa.head
+	qa.lock.RUnlock()
 	return querier.NewQuerier(
 		head,
 		querier.NoOpShardedDeduplicatorFactory(),
@@ -151,9 +151,9 @@ func (qa *QueryableAppender) Querier(mint, maxt int64) (storage.Querier, error) 
 }
 
 func (qa *QueryableAppender) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
-	qa.lock.Lock()
-	defer qa.lock.Unlock()
+	qa.lock.RLock()
 	head := qa.head
+	qa.lock.RUnlock()
 	return querier.NewChunkQuerier(
 		head,
 		querier.NoOpShardedDeduplicatorFactory(),
