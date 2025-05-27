@@ -16,6 +16,7 @@ type InstantSeriesSetTestSuite struct {
 
 	valueNotFoundTimestampValue int64
 	lssQueryResult              *cppbridge.LSSQueryResult
+	labelSetSnapshot            *cppbridge.LabelSetSnapshot
 	samples                     []cppbridge.Sample
 }
 
@@ -34,6 +35,8 @@ func (s *InstantSeriesSetTestSuite) SetupTest() {
 	require.Equal(s.T(), cppbridge.LSSQueryStatusMatch, s.lssQueryResult.Status())
 	require.Equal(s.T(), 4, len(s.lssQueryResult.IDs()))
 
+	s.labelSetSnapshot = lss.CreateLabelSetSnapshot()
+
 	s.valueNotFoundTimestampValue = 0
 	s.samples = []cppbridge.Sample{
 		{Timestamp: 1, Value: 1},
@@ -44,14 +47,14 @@ func (s *InstantSeriesSetTestSuite) SetupTest() {
 }
 
 func (s *InstantSeriesSetTestSuite) TestNext() {
-	iss := NewInstantSeriesSet(s.lssQueryResult, s.valueNotFoundTimestampValue, s.samples)
+	iss := NewInstantSeriesSet(s.lssQueryResult, s.labelSetSnapshot, s.valueNotFoundTimestampValue, s.samples)
 
 	expected := make([]InstantSeries, 0, 2)
 	for _, idx := range []int{0, 2} {
 		lsID, lsLength := s.lssQueryResult.GetByIndex(idx)
 
 		expected = append(expected, InstantSeries{
-			labelSet: labels.NewLabelsWithLSS(s.lssQueryResult.LSS(), lsID, lsLength),
+			labelSet: labels.NewLabelsWithLSS(s.labelSetSnapshot, lsID, lsLength),
 			sample:   s.samples[idx],
 		})
 	}

@@ -202,6 +202,7 @@ func (q *Querier) selectInstant(
 
 		seriesSets[shard.ShardID()] = NewInstantSeriesSet(
 			lssQueryResult,
+			shard.LSS().GetSnapshot(),
 			valueNotFoundTimestampValue,
 			shard.DataStorage().InstantQuery(q.maxt, valueNotFoundTimestampValue, lssQueryResult.IDs()),
 		)
@@ -271,6 +272,7 @@ func (q *Querier) selectRange(
 			chunksIndex:      serializedChunks.MakeIndex(),
 			serializedChunks: serializedChunks,
 			lssQueryResult:   lssQueryResult,
+			labelSetSnapshot: shard.LSS().GetSnapshot(),
 		}
 
 		return nil
