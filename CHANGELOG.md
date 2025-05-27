@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.3.0
+
+### Enhancements
+1. **Concurrent Data Ingestion**: Removed the exclusive lock during data ingestion, allowing for concurrent processing of batches. Insertion tasks are split into four sequential subtasks: relabeling, resharding new series, cache updating, and data insertion. This change speeds up insertions but may impact read performance. Future updates will focus on balancing read/write priorities.
+2. **Improved Series Snapshot Management**: Redesigned snapshot handling to create new snapshots only on memory reallocation. This reduces RAM usage by ~10% and improves read request processing times. Further improvements expected with stabilized series copying during rotations.
+3. **Optimized Series Insertion**: Minor optimizations for new series insertion. Noticeable 5% time savings when copying series during rotations.
+
 ## v0.2.6
 
 ### Fixes
