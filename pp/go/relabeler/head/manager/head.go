@@ -124,3 +124,13 @@ func (h *DiscardableRotatableHead) CopySeriesFrom(other relabeler.Head) {
 func (h *DiscardableRotatableHead) ReadEachShard(fn relabeler.ShardFn) error {
 	return h.head.ReadEachShard(fn)
 }
+
+func (h *DiscardableRotatableHead) Append2(
+	ctx context.Context,
+	incomingData *relabeler.IncomingData,
+	state *cppbridge.State,
+	relabelerID string,
+	commitToWal bool,
+) ([][]*cppbridge.InnerSeries, cppbridge.RelabelerStats, error) {
+	return h.head.Append2(ctx, incomingData, state, relabelerID, commitToWal)
+}

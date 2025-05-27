@@ -920,6 +920,24 @@ void prompp_prometheus_per_shard_relabeler_input_collect_stalenans(void* args, v
 void prompp_prometheus_per_shard_relabeler_append_relabeler_series(void* args, void* res);
 
 /**
+ * @brief add relabeled ls to lss, add to result and add to cache update(second stage).
+ *
+ * @param args {
+ *     shards_inner_series           []*InnerSeries          // go InnerSeries per source shard;
+ *     shards_relabeled_series       []*RelabeledSeries      // go RelabeledSeries per source shard;
+ *     shards_relabeler_state_update []*RelabelerStateUpdate // pointer to RelabelerStateUpdate per source shard;
+ *     per_shard_relabeler           uintptr                 // pointer to constructed per shard relabeler;
+ *     lss                           uintptr                 // pointer to constructed label sets;
+ * }
+ *
+ * @param res {
+ *     error                         []byte                  // error string if thrown
+ *     target_lss_has_reallocations  bool                    // true if target lss has reallocations
+ * }
+ */
+void prompp_prometheus_per_shard_relabeler_append_relabeler_series2(void* args, void* res);
+
+/**
  * @brief add to cache relabled data(third stage).
  *
  * @param args {
@@ -934,6 +952,22 @@ void prompp_prometheus_per_shard_relabeler_append_relabeler_series(void* args, v
  * }
  */
 void prompp_prometheus_per_shard_relabeler_update_relabeler_state(void* args, void* res);
+
+/**
+ * @brief add to cache relabled data(third stage).
+ *
+ * @param args {
+ *     shards_relabeler_state_update []*RelabelerStateUpdate // pointer to RelabelerStateUpdate per source shard;
+ *     per_shard_relabeler           uintptr                 // pointer to constructed per shard relabeler;
+ *     cache                         uintptr                 // pointer to constructed Cache;
+ *     relabeled_shard_id            uint16                  // relabeled shard id;
+ * }
+ *
+ * @param res {
+ *     error                  []byte  // error string if thrown;
+ * }
+ */
+void prompp_prometheus_per_shard_relabeler_update_relabeler_state2(void* args, void* res);
 
 /**
  * @brief relabeling output series(fourth stage).

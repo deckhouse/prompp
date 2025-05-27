@@ -128,7 +128,7 @@ extern "C" void prompp_prometheus_relabeler_state_update_dtor(void* args) {
     PromPP::Prometheus::Relabel::RelabelerStateUpdate* relabeler_state_update;
   };
 
-  static_cast<Arguments*>(args)->relabeler_state_update->~vector();
+  static_cast<Arguments*>(args)->relabeler_state_update->~RelabelerStateUpdate();
 }
 
 //
@@ -347,6 +347,44 @@ extern "C" void prompp_prometheus_per_shard_relabeler_append_relabeler_series(vo
   }
 }
 
+extern "C" void prompp_prometheus_per_shard_relabeler_append_relabeler_series2(void* args, void* res) {
+  struct Arguments {
+    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> shards_inner_series;
+    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::RelabeledSeries*> shards_relabeled_series;
+    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::RelabelerStateUpdate*> shards_relabeler_state_update;
+    PerShardRelabelerPtr per_shard_relabeler;
+    LssVariantPtr lss;
+  };
+  struct Result {
+    PromPP::Primitives::Go::Slice<char> error;
+    bool target_lss_has_reallocations{};
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  const auto out = new (res) Result();
+
+  try {
+    auto& lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->lss);
+    entrypoint::head::lss_memory::has_reallocations = false;
+
+    for (size_t id = 0; id != in->shards_relabeled_series.size(); ++id) {
+      if (in->shards_relabeled_series[id] == nullptr || in->shards_relabeled_series[id]->size() == 0) {
+        continue;
+      }
+
+      in->per_shard_relabeler->append_relabeler_series(lss, in->shards_inner_series[id], in->shards_relabeled_series[id],
+                                                       in->shards_relabeler_state_update[id]);
+    }
+
+    std::vector<uint32_t> ids;
+    lss.sort_series_ids(ids);
+    out->target_lss_has_reallocations = entrypoint::head::lss_memory::has_reallocations;
+  } catch (...) {
+    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
+    entrypoint::handle_current_exception(err_stream);
+  }
+}
+
 extern "C" void prompp_prometheus_per_shard_relabeler_update_relabeler_state(void* args, void* res) {
   struct Arguments {
     PromPP::Prometheus::Relabel::RelabelerStateUpdate* relabeler_state_update;
@@ -362,6 +400,34 @@ extern "C" void prompp_prometheus_per_shard_relabeler_update_relabeler_state(voi
 
   try {
     in->per_shard_relabeler->update_relabeler_state(*in->cache, in->relabeler_state_update, in->relabeled_shard_id);
+  } catch (...) {
+    auto* out = new (res) Result();
+    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
+    entrypoint::handle_current_exception(err_stream);
+  }
+}
+
+extern "C" void prompp_prometheus_per_shard_relabeler_update_relabeler_state2(void* args, void* res) {
+  struct Arguments {
+    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::RelabelerStateUpdate*> shards_relabeler_state_update;
+    PerShardRelabelerPtr per_shard_relabeler;
+    CachePtr cache;
+    uint16_t relabeled_shard_id;
+  };
+  struct Result {
+    PromPP::Primitives::Go::Slice<char> error;
+  };
+
+  const auto* in = static_cast<Arguments*>(args);
+
+  try {
+    for (size_t id = 0; id != in->shards_relabeler_state_update.size(); ++id) {
+      if (in->shards_relabeler_state_update[id] == nullptr || in->shards_relabeler_state_update[id]->size() == 0) {
+        continue;
+      }
+
+      in->per_shard_relabeler->update_relabeler_state(*in->cache, in->shards_relabeler_state_update[id], id);
+    }
   } catch (...) {
     auto* out = new (res) Result();
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);

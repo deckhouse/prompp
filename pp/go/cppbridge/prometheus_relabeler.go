@@ -458,6 +458,7 @@ func (rss *RelabeledSeries) Size() uint64 {
 //
 //	data - pointer for vector with relabeled elements;
 type RelabelerStateUpdate struct {
+	size uint64
 	//nolint:unused // for cpp-bridge, used in cpp
 	data stdVector
 }
@@ -471,6 +472,21 @@ func NewRelabelerStateUpdate() *RelabelerStateUpdate {
 	})
 
 	return ud
+}
+
+// Size number of updates.
+func (rsu *RelabelerStateUpdate) Size() uint64 {
+	return rsu.size
+}
+
+// NewShardsRelabelerStateUpdate init slice with the results of update state per shards.
+func NewShardsRelabelerStateUpdate(numberOfShards uint16) []*RelabelerStateUpdate {
+	rsu := make([]*RelabelerStateUpdate, numberOfShards)
+	for i := range rsu {
+		rsu[i] = NewRelabelerStateUpdate()
+	}
+
+	return rsu
 }
 
 // MetricLimits limits on label set and samples.
@@ -593,6 +609,28 @@ func (ipsr *InputPerShardRelabeler) AppendRelabelerSeries(
 	return hasReallocations, handleException(exception)
 }
 
+func (ipsr *InputPerShardRelabeler) AppendRelabelerSeries2(
+	ctx context.Context,
+	lss *LabelSetStorage,
+	shardsInnerSeries []*InnerSeries,
+	shardsRelabeledSeries []*RelabeledSeries,
+	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
+) (bool, error) {
+	if ctx.Err() != nil {
+		return false, ctx.Err()
+	}
+
+	exception, hasReallocations := prometheusPerShardRelabelerAppendRelabelerSeries2(
+		ipsr.cptr,
+		lss.Pointer(),
+		shardsInnerSeries,
+		shardsRelabeledSeries,
+		shardsRelabelerStateUpdate,
+	)
+
+	return hasReallocations, handleException(exception)
+}
+
 // CacheAllocatedMemory - return size of allocated memory for cache map.
 func (ipsr *InputPerShardRelabeler) CacheAllocatedMemory() uint64 {
 	return prometheusPerShardRelabelerCacheAllocatedMemory(ipsr.cptr)
@@ -705,6 +743,24 @@ func (ipsr *InputPerShardRelabeler) UpdateRelabelerState(
 		ipsr.cptr,
 		cache.cPointer,
 		relabeledShardID,
+	)
+
+	return handleException(exception)
+}
+
+func (ipsr *InputPerShardRelabeler) UpdateRelabelerState2(
+	ctx context.Context,
+	cache *Cache,
+	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
+) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	exception := prometheusPerShardRelabelerUpdateRelabelerState2(
+		shardsRelabelerStateUpdate,
+		ipsr.cptr,
+		cache.cPointer,
 	)
 
 	return handleException(exception)

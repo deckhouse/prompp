@@ -198,6 +198,16 @@ func (h *RotatableHead) ReadEachShard(fn relabeler.ShardFn) error {
 	return h.head.ReadEachShard(fn)
 }
 
+func (h *RotatableHead) Append2(
+	ctx context.Context,
+	incomingData *relabeler.IncomingData,
+	state *cppbridge.State,
+	relabelerID string,
+	commitToWal bool,
+) ([][]*cppbridge.InnerSeries, cppbridge.RelabelerStats, error) {
+	return h.head.Append2(ctx, incomingData, state, relabelerID, commitToWal)
+}
+
 //
 // HeapProfileWritableHead
 //
@@ -305,4 +315,14 @@ func (h *HeapProfileWritableHead) CopySeriesFrom(other relabeler.Head) {
 // ReadEachShard execute read fn on each shard.
 func (h *HeapProfileWritableHead) ReadEachShard(fn relabeler.ShardFn) error {
 	return h.head.ReadEachShard(fn)
+}
+
+func (h *HeapProfileWritableHead) Append2(
+	ctx context.Context,
+	incomingData *relabeler.IncomingData,
+	state *cppbridge.State,
+	relabelerID string,
+	commitToWal bool,
+) ([][]*cppbridge.InnerSeries, cppbridge.RelabelerStats, error) {
+	return h.head.Append2(ctx, incomingData, state, relabelerID, commitToWal)
 }

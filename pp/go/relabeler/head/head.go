@@ -176,7 +176,8 @@ type Head struct {
 	genericTaskCh              []chan *GenericTask
 	genericReadTaskCh          []chan *GenericReadTask
 
-	genericTrueTaskCh []chan *GenericTrueTask
+	priotityTaskCh    []chan *GenericTrueTask
+	nonPriorityTaskCh []chan *GenericTrueTask
 
 	numberOfShards uint16
 	// stat
@@ -209,6 +210,9 @@ func New(
 	genericTaskCh := make([]chan *GenericTask, numberOfShards)
 	genericReadTaskCh := make([]chan *GenericReadTask, numberOfShards)
 
+	priotity := make([]chan *GenericTrueTask, numberOfShards)
+	nonPriority := make([]chan *GenericTrueTask, numberOfShards)
+
 	var shardID uint16
 	for ; shardID < numberOfShards; shardID++ {
 		stageInputRelabeling[shardID] = make(chan *TaskInputRelabeling, chanBufferSize)
@@ -216,6 +220,9 @@ func New(
 		stageupdateRelabelers[shardID] = make(chan *TaskUpdateRelabelerState, chanBufferSize)
 		genericTaskCh[shardID] = make(chan *GenericTask, chanBufferSize)
 		genericReadTaskCh[shardID] = make(chan *GenericReadTask, chanBufferSize)
+
+		priotity[shardID] = make(chan *GenericTrueTask, chanBufferSize)
+		nonPriority[shardID] = make(chan *GenericTrueTask, chanBufferSize)
 	}
 
 	factory := util.NewUnconflictRegisterer(registerer)
@@ -230,10 +237,14 @@ func New(
 		stageUpdateRelabelers:      stageupdateRelabelers,
 		genericTaskCh:              genericTaskCh,
 		genericReadTaskCh:          genericReadTaskCh,
-		stopc:                      make(chan struct{}),
-		wg:                         &sync.WaitGroup{},
-		relabelersData:             make(map[string]*RelabelerData, len(inputRelabelerConfigs)),
-		numberOfShards:             numberOfShards,
+
+		priotityTaskCh:    priotity,
+		nonPriorityTaskCh: nonPriority,
+
+		stopc:          make(chan struct{}),
+		wg:             &sync.WaitGroup{},
+		relabelersData: make(map[string]*RelabelerData, len(inputRelabelerConfigs)),
+		numberOfShards: numberOfShards,
 		// stat
 		appendedSegmentCount: factory.NewCounter(prometheus.CounterOpts{
 			Name: "prompp_appended_segment_count",
@@ -292,6 +303,7 @@ func New(
 	}
 
 	h.run()
+	h.run2()
 
 	runtime.SetFinalizer(h, func(h *Head) {
 		logger.Debugf("head {%d} destroyed", generation)
@@ -707,6 +719,17 @@ func (h *Head) ReadEachShard(fn relabeler.ShardFn) error {
 	return errors.Join(task.Errors()...)
 }
 
+func (h *Head) run2() {
+	var shardID uint16
+	for ; shardID < h.numberOfShards; shardID++ {
+		h.wg.Add(1)
+		go func(shardID uint16) {
+			defer h.wg.Done()
+			h.shardLoop2(shardID, h.priotityTaskCh[shardID], h.nonPriorityTaskCh[shardID], h.stopc)
+		}(shardID)
+	}
+}
+
 func (h *Head) ForEachShard2(fn relabeler.ShardFn) error {
 	task := NewGenericTrueTask(fn, h.numberOfShards)
 	if h.readOnly {
@@ -725,8 +748,8 @@ func (h *Head) ForEachShard2(fn relabeler.ShardFn) error {
 		return task.Error()
 	}
 
-	for _, genericTaskCh := range h.genericTrueTaskCh {
-		genericTaskCh <- task
+	for _, priotityTaskCh := range h.priotityTaskCh {
+		priotityTaskCh <- task
 	}
 	task.Wait()
 	return task.Error()
@@ -759,40 +782,67 @@ func (h *Head) Append2(
 	}
 	h.rdMutex.Unlock()
 
-	inputPromise := NewInputRelabelingPromise(h.numberOfShards)
+	shardedInnerSeries := NewShardedInnerSeries(h.numberOfShards)
+	shardedRelabeledSeries := NewShardedRelabeledSeries(h.numberOfShards)
 
-	err := h.inputRelabelingStage(
+	stats, err := h.inputRelabelingStage(
 		ctx,
 		state,
 		rd,
 		relabeler.NewDestructibleIncomingData(incomingData, int(h.numberOfShards)),
-		inputPromise,
-		h.numberOfShards,
+		shardedInnerSeries,
+		shardedRelabeledSeries,
 	)
 	if err != nil {
 		// reset msr.rotateWG on error
-		return nil, cppbridge.RelabelerStats{}, fmt.Errorf("failed input promise: %s", err)
+		return nil, stats, fmt.Errorf("failed input relabeling stage: %w", err)
 	}
 
+	fmt.Println("shardedInnerSeries", shardedInnerSeries.IsEmpty(), shardedInnerSeries)
+	fmt.Println("shardedRelabeledSeries", shardedRelabeledSeries.IsEmpty(), shardedRelabeledSeries)
+
+	if !shardedRelabeledSeries.IsEmpty() {
+		shardedStateUpdates := NewShardedStateUpdates(h.numberOfShards)
+		fmt.Println("appendRelabelerSeriesStage")
+		if err = h.appendRelabelerSeriesStage(
+			ctx,
+			rd,
+			shardedInnerSeries,
+			shardedRelabeledSeries,
+			shardedStateUpdates,
+		); err != nil {
+			return nil, stats, fmt.Errorf("failed append relabeler series stage: %w", err)
+		}
+
+		fmt.Println("shardedInnerSeries appendRelabelerSeriesStage", shardedInnerSeries.IsEmpty(), shardedInnerSeries)
+		fmt.Println("shardedRelabeledSeries appendRelabelerSeriesStage", shardedRelabeledSeries.IsEmpty(), shardedRelabeledSeries)
+		fmt.Println("shardedStateUpdates appendRelabelerSeriesStage", shardedStateUpdates)
+
+		fmt.Println("updateRelabelerStateStage")
+		if err = h.updateRelabelerStateStage(
+			ctx,
+			state,
+			rd,
+			shardedStateUpdates,
+		); err != nil {
+			return nil, stats, fmt.Errorf("failed update relabeler stage: %w", err)
+		}
+	}
+
+	fmt.Println("shardedInnerSeries 2", shardedInnerSeries.IsEmpty(), shardedInnerSeries)
+
+	if shardedInnerSeries.IsEmpty() {
+		return shardedInnerSeries.Data(), stats, nil
+	}
+
+	fmt.Println("Write")
 	//
 
-	h.enqueueInputRelabeling(NewTaskInputRelabeling(
-		ctx,
-		inputPromise,
-		relabeler.NewDestructibleIncomingData(incomingData, int(h.numberOfShards)),
-		rd,
-		state,
-	))
-	if err := inputPromise.Wait(ctx); err != nil {
-		// reset msr.rotateWG on error
-		return nil, cppbridge.RelabelerStats{}, fmt.Errorf("failed input promise: %s", err)
-	}
-
 	var atomiclimitExhausted uint32
-	err = h.forEachShard(func(shard relabeler.Shard) error {
-		limitExhausted, err := shard.Wal().Write(inputPromise.ShardsInnerSeries(shard.ShardID()))
-		if err != nil {
-			return fmt.Errorf("failed to write inner series: %w", err)
+	err = h.ForEachShard2(func(shard relabeler.Shard) error {
+		limitExhausted, errWrite := shard.Wal().Write(shardedInnerSeries.DataByShard(shard.ShardID()))
+		if errWrite != nil {
+			return fmt.Errorf("failed to write inner series: %w", errWrite)
 		}
 
 		if limitExhausted {
@@ -805,8 +855,10 @@ func (h *Head) Append2(
 		logger.Errorf("failed to write wal: %v", err)
 	}
 
-	err = h.forEachShard(func(shard relabeler.Shard) error {
-		shard.DataStorage().AppendInnerSeriesSlice(inputPromise.ShardsInnerSeries(shard.ShardID()))
+	fmt.Println("AppendInnerSeriesSlice")
+
+	err = h.ForEachShard2(func(shard relabeler.Shard) error {
+		shard.DataStorage().AppendInnerSeriesSlice(shardedInnerSeries.DataByShard(shard.ShardID()))
 
 		if commitToWal || atomiclimitExhausted > 0 {
 			return shard.Wal().Commit()
@@ -818,7 +870,9 @@ func (h *Head) Append2(
 		logger.Errorf("failed to commit wal: %v", err)
 	}
 
-	return inputPromise.data, inputPromise.Stats(), nil
+	fmt.Println("return")
+
+	return shardedInnerSeries.Data(), stats, nil
 }
 
 func (h *Head) inputRelabelingStage(
@@ -826,84 +880,180 @@ func (h *Head) inputRelabelingStage(
 	state *cppbridge.State,
 	rd *RelabelerData,
 	incomingData *relabeler.DestructibleIncomingData,
-	promise *InputRelabelingPromise,
-	numberOfShards uint16,
-) error {
-	err := h.ForEachShard2(
-		func(shard relabeler.Shard) error {
-			shardsInnerSeries := cppbridge.NewShardsInnerSeries(numberOfShards)
-			shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(numberOfShards)
+	shardedInnerSeries *ShardedInnerSeries,
+	shardedRelabeledSeries *ShardedRelabeledSeries,
+) (
+	cppbridge.RelabelerStats,
+	error,
+) {
+	// innerSeriesFromShards := make([][]*cppbridge.InnerSeries, h.numberOfShards)
+	// for shardID := range innerSeriesFromShards {
+	// 	innerSeriesFromShards[shardID] = cppbridge.NewShardsInnerSeries(h.numberOfShards)
+	// }
 
-			var (
-				err              error
-				stats            cppbridge.RelabelerStats
-				hasReallocations bool
+	// relabeledSeriesFromShards := make([][]*cppbridge.RelabeledSeries, h.numberOfShards)
+	// for shardID := range relabeledSeriesFromShards {
+	// 	relabeledSeriesFromShards[shardID] = cppbridge.NewShardsRelabeledSeries(h.numberOfShards)
+	// }
+
+	stats := make([]cppbridge.RelabelerStats, h.numberOfShards)
+
+	err := h.ForEachShard2(func(shard relabeler.Shard) error {
+		var (
+			err              error
+			hasReallocations bool
+		)
+
+		if state.TrackStaleness() {
+			stats[shard.ShardID()], hasReallocations, err = rd.InputRelabelerByShard(
+				shard.ShardID(),
+			).InputRelabelingWithStalenans(
+				ctx,
+				shard.LSS().Input(),
+				shard.LSS().Target(),
+				state.CacheByShard(shard.ShardID()),
+				state.RelabelerOptions(),
+				state.StaleNansStateByShard(shard.ShardID()),
+				state.DefTimestamp(),
+				incomingData.Data().ShardedData(),
+				// innerSeriesFromShards[shard.ShardID()],
+				shardedInnerSeries.DataBySourceShard(shard.ShardID()),
+				// relabeledSeriesFromShards[shard.ShardID()],
+				shardedRelabeledSeries.DataBySourceShard(shard.ShardID()),
 			)
+		} else {
+			stats[shard.ShardID()], hasReallocations, err = rd.InputRelabelerByShard(
+				shard.ShardID(),
+			).InputRelabeling(
+				ctx,
+				shard.LSS().Input(),
+				shard.LSS().Target(),
+				state.CacheByShard(shard.ShardID()),
+				state.RelabelerOptions(),
+				incomingData.Data().ShardedData(),
+				// innerSeriesFromShards[shard.ShardID()],
+				shardedInnerSeries.DataBySourceShard(shard.ShardID()),
+				// relabeledSeriesFromShards[shard.ShardID()],
+				shardedRelabeledSeries.DataBySourceShard(shard.ShardID()),
+			)
+		}
 
-			if state.TrackStaleness() {
-				stats, hasReallocations, err = rd.InputRelabelerByShard(shard.ShardID()).InputRelabelingWithStalenans(
-					ctx,
-					shard.LSS().Input(),
-					shard.LSS().Target(),
-					state.CacheByShard(shard.ShardID()),
-					state.RelabelerOptions(),
-					state.StaleNansStateByShard(shard.ShardID()),
-					state.DefTimestamp(),
-					incomingData.Data().ShardedData(),
-					shardsInnerSeries,
-					shardsRelabeledSeries,
-				)
-			} else {
-				stats, hasReallocations, err = rd.InputRelabelerByShard(shard.ShardID()).InputRelabeling(
-					ctx,
-					shard.LSS().Input(),
-					shard.LSS().Target(),
-					state.CacheByShard(shard.ShardID()),
-					state.RelabelerOptions(),
-					incomingData.Data().ShardedData(),
-					shardsInnerSeries,
-					shardsRelabeledSeries,
-				)
-			}
+		incomingData.Destroy()
+		if err != nil {
+			return fmt.Errorf("shard %d: %w", shard.ShardID(), err)
+		}
 
-			incomingData.Destroy()
-			if err != nil {
-				promise.AddError(shard.ShardID(), fmt.Errorf("failed input relabeling shard %d: %w", shard.ShardID(), err))
-				return nil
-			}
+		if hasReallocations {
+			shard.LSS().ResetSnapshot()
+		}
 
-			if hasReallocations {
-				shard.LSS().ResetSnapshot()
-			}
+		return nil
+	})
+	resStats := cppbridge.RelabelerStats{}
 
-			promise.AddStats(stats)
-
-			for sid, relabeledSeries := range shardsRelabeledSeries {
-				if relabeledSeries.Size() == 0 {
-					promise.AddResult(uint16(sid), nil)
-					continue
-				}
-
-				stageAppendRelabelerSeries[sid] <- NewTaskAppendRelabelerSeries(
-					ctx,
-					relabeledSeries,
-					promise,
-					rd,
-					state,
-					shard.ShardID(),
-				)
-			}
-
-			for sid, innerSeries := range shardsInnerSeries {
-				promise.AddResult(uint16(sid), innerSeries)
-			}
-
-			return nil
-		},
-	)
 	if err != nil {
-		return fmt.Errorf("failed input relabeling stage: %s", err)
+		return resStats, err
 	}
 
+	for _, s := range stats {
+		resStats.SamplesAdded += s.SamplesAdded
+		resStats.SeriesAdded += s.SeriesAdded
+		resStats.SeriesDrop += s.SeriesDrop
+	}
+
+	// for sourceShardID, iss := range innerSeriesFromShards {
+	// 	for shardID, is := range iss {
+	// 		shardedInnerSeries.Add(shardID, sourceShardID, is)
+	// 	}
+	// }
+
+	// for sourceShardID, rss := range relabeledSeriesFromShards {
+	// 	for shardID, rs := range rss {
+	// 		shardedRelabeledSeries.Add(shardID, sourceShardID, rs)
+	// 	}
+	// }
+
+	// fmt.Println("relabeledSeriesFromShards", relabeledSeriesFromShards)
+	// fmt.Println("shardedRelabeledSeries", shardedRelabeledSeries)
+
+	return resStats, nil
+}
+
+func (h *Head) appendRelabelerSeriesStage(
+	ctx context.Context,
+	rd *RelabelerData,
+	shardedInnerSeries *ShardedInnerSeries,
+	shardedRelabeledSeries *ShardedRelabeledSeries,
+	shardedStateUpdates *ShardedStateUpdates,
+) error {
+	// innerSeriesFromShards := make([][]*cppbridge.InnerSeries, h.numberOfShards)
+	// for shardID := range innerSeriesFromShards {
+	// 	innerSeriesFromShards[shardID] = cppbridge.NewShardsInnerSeries(h.numberOfShards)
+	// }
+
+	// relabelerStateUpdateFromShards := make([][]*cppbridge.RelabelerStateUpdate, h.numberOfShards)
+	// for shardID := range relabelerStateUpdateFromShards {
+	// 	relabelerStateUpdateFromShards[shardID] = cppbridge.NewShardsRelabelerStateUpdate(h.numberOfShards)
+	// }
+
+	err := h.ForEachShard2(func(shard relabeler.Shard) error {
+		hasReallocations, err := rd.InputRelabelerByShard(shard.ShardID()).AppendRelabelerSeries2(
+			ctx,
+			shard.LSS().Target(),
+			// innerSeriesFromShards[shard.ShardID()],
+			shardedInnerSeries.DataByShard(shard.ShardID()),
+			shardedRelabeledSeries.DataByShard(shard.ShardID()),
+			// relabelerStateUpdateFromShards[shard.ShardID()],
+			shardedStateUpdates.DataByShard(shard.ShardID()),
+		)
+		if err != nil {
+			return fmt.Errorf("shard %d: %w", shard.ShardID(), err)
+		}
+
+		if hasReallocations {
+			shard.LSS().ResetSnapshot()
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	// for shardID, iss := range innerSeriesFromShards {
+	// 	for sourceShardID, is := range iss {
+	// 		shardedInnerSeries.Add(shardID, sourceShardID, is)
+	// 	}
+	// }
+
+	// for shardID, rsus := range relabelerStateUpdateFromShards {
+	// 	for sourceShardID, rsu := range rsus {
+	// 		shardedStateUpdates.Add(sourceShardID, shardID, rsu)
+	// 	}
+	// }
+
+	// fmt.Println("relabelerStateUpdateFromShards", relabelerStateUpdateFromShards)
+	// fmt.Println("shardedStateUpdates", shardedStateUpdates)
+
 	return nil
+}
+
+func (h *Head) updateRelabelerStateStage(
+	ctx context.Context,
+	state *cppbridge.State,
+	rd *RelabelerData,
+	shardedStateUpdates *ShardedStateUpdates,
+) error {
+	return h.ForEachShard2(func(shard relabeler.Shard) error {
+		err := rd.InputRelabelerByShard(shard.ShardID()).UpdateRelabelerState2(
+			ctx,
+			state.CacheByShard(shard.ShardID()),
+			shardedStateUpdates.DataBySourceShard(shard.ShardID()),
+		)
+		if err != nil {
+			return fmt.Errorf("shard %d: %w", shard.ShardID(), err)
+		}
+
+		return nil
+	})
 }

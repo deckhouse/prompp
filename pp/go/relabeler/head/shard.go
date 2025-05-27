@@ -248,7 +248,7 @@ func (h *Head) shardLoop2(
 	shardID uint16,
 	priotity chan *GenericTrueTask,
 	nonPriority chan *GenericTrueTask,
-	wakeup, stopc chan struct{},
+	stopc chan struct{},
 ) {
 	sd := &shard{
 		id:          shardID,
@@ -282,11 +282,22 @@ func (h *Head) shardLoop2(
 			case <-stopc:
 				return
 
-			case <-wakeup:
-				continue
-
 			case task := <-nonPriority:
 				task.ExecuteOnShard(sd)
+
+			case task := <-priotity:
+				task.ExecuteOnShard(sd)
+
+				if len(nonPriority) == 0 {
+					continue
+				}
+
+				forceNonPriority++
+				if forceNonPriority >= 10 {
+					forceNonPriority = 0
+
+					(<-nonPriority).ExecuteOnShard(sd)
+				}
 			}
 
 		}

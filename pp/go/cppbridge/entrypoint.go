@@ -1611,6 +1611,35 @@ func prometheusPerShardRelabelerAppendRelabelerSeries(
 	return res.exception, res.targetLssHasReallocations
 }
 
+func prometheusPerShardRelabelerAppendRelabelerSeries2(
+	perShardRelabeler, lss uintptr,
+	shardsInnerSeries []*InnerSeries,
+	shardsRelabeledSeries []*RelabeledSeries,
+	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
+) (exception []byte, targetLssHasReallocations bool) {
+	args := struct {
+		shardsInnerSeries          []*InnerSeries
+		shardsRelabeledSeries      []*RelabeledSeries
+		shardsRelabelerStateUpdate []*RelabelerStateUpdate
+		perShardRelabeler          uintptr
+		lss                        uintptr
+	}{shardsInnerSeries, shardsRelabeledSeries, shardsRelabelerStateUpdate, perShardRelabeler, lss}
+	var res struct {
+		exception                 []byte
+		targetLssHasReallocations bool
+	}
+	start := time.Now().UnixNano()
+	fastcgo.UnsafeCall2(
+		C.prompp_prometheus_per_shard_relabeler_append_relabeler_series2,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+	inputRelabelerAppendRelabelerSeriesSum.Add(float64(time.Now().UnixNano() - start))
+	inputRelabelerAppendRelabelerSeriesCount.Inc()
+
+	return res.exception, res.targetLssHasReallocations
+}
+
 // prometheusPerShardRelabelerUpdateRelabelerState - wrapper for add to cache relabled data(third stage).
 func prometheusPerShardRelabelerUpdateRelabelerState(
 	relabelerStateUpdate *RelabelerStateUpdate,
@@ -1629,6 +1658,30 @@ func prometheusPerShardRelabelerUpdateRelabelerState(
 	start := time.Now().UnixNano()
 	fastcgo.UnsafeCall2(
 		C.prompp_prometheus_per_shard_relabeler_update_relabeler_state,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+	inputRelabelerUpdateRelabelerStateSum.Add(float64(time.Now().UnixNano() - start))
+	inputRelabelerUpdateRelabelerStateCount.Inc()
+
+	return res.exception
+}
+
+func prometheusPerShardRelabelerUpdateRelabelerState2(
+	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
+	perShardRelabeler, cache uintptr,
+) []byte {
+	args := struct {
+		relabelerStateUpdates []*RelabelerStateUpdate
+		perShardRelabeler     uintptr
+		cache                 uintptr
+	}{shardsRelabelerStateUpdate, perShardRelabeler, cache}
+	var res struct {
+		exception []byte
+	}
+	start := time.Now().UnixNano()
+	fastcgo.UnsafeCall2(
+		C.prompp_prometheus_per_shard_relabeler_update_relabeler_state2,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)

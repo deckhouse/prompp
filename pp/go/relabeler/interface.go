@@ -81,6 +81,14 @@ type Head interface {
 	String() string
 	CopySeriesFrom(other Head)
 	ReadEachShard(fn ShardFn) error
+
+	Append2(
+		ctx context.Context,
+		incomingData *IncomingData,
+		state *cppbridge.State,
+		relabelerID string,
+		commitToWal bool,
+	) ([][]*cppbridge.InnerSeries, cppbridge.RelabelerStats, error)
 }
 
 type Distributor interface {

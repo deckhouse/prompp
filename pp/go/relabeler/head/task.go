@@ -168,6 +168,8 @@ func (t *TaskInputRelabeling) Run(
 			continue
 		}
 
+		fmt.Println("shardsRelabeledSeries add shardID", sid, "sourceShardID", shardID)
+
 		stageAppendRelabelerSeries[sid] <- NewTaskAppendRelabelerSeries(
 			t.ctx,
 			relabeledSeries,
@@ -295,6 +297,8 @@ func (t *TaskAppendRelabelerSeries) Run(
 		t.state.CacheByShard(t.sourceShardID),
 		shardID,
 	)
+
+	fmt.Println("ShardedInnerSeries add shardID", shardID, "sourceShardID", t.sourceShardID)
 
 	t.promise.AddResult(shardID, innerSeries)
 }
