@@ -65,7 +65,6 @@ type Head interface {
 		commitToWal bool,
 	) ([][]*cppbridge.InnerSeries, cppbridge.RelabelerStats, error)
 	CommitToWal() error
-	ForEachShard(fn ShardFn) error
 	OnShard(shardID uint16, fn ShardFn) error
 	// MergeOutOfOrderChunks merge chunks with out of order data chunks.
 	MergeOutOfOrderChunks()
@@ -80,15 +79,9 @@ type Head interface {
 	Discard() error
 	String() string
 	CopySeriesFrom(other Head)
-	ReadEachShard(fn ShardFn) error
 
-	Append2(
-		ctx context.Context,
-		incomingData *IncomingData,
-		state *cppbridge.State,
-		relabelerID string,
-		commitToWal bool,
-	) ([][]*cppbridge.InnerSeries, cppbridge.RelabelerStats, error)
+	PriorityForEachShard(fn ShardFn) error
+	NonPriorityForEachShard(fn ShardFn) error
 }
 
 type Distributor interface {

@@ -86,11 +86,6 @@ func (h *RotatableHead) CommitToWal() error {
 	return h.head.CommitToWal()
 }
 
-// ForEachShard - relabeler.Head interface implementation.
-func (h *RotatableHead) ForEachShard(fn relabeler.ShardFn) error {
-	return h.head.ForEachShard(fn)
-}
-
 // OnShard - relabeler.Head interface implementation.
 func (h *RotatableHead) OnShard(shardID uint16, fn relabeler.ShardFn) error {
 	return h.head.OnShard(shardID, fn)
@@ -193,19 +188,12 @@ func (h *RotatableHead) CopySeriesFrom(other relabeler.Head) {
 	h.head.CopySeriesFrom(other)
 }
 
-// ReadEachShard execute read fn on each shard.
-func (h *RotatableHead) ReadEachShard(fn relabeler.ShardFn) error {
-	return h.head.ReadEachShard(fn)
+func (h *RotatableHead) PriorityForEachShard(fn relabeler.ShardFn) error {
+	return h.head.PriorityForEachShard(fn)
 }
 
-func (h *RotatableHead) Append2(
-	ctx context.Context,
-	incomingData *relabeler.IncomingData,
-	state *cppbridge.State,
-	relabelerID string,
-	commitToWal bool,
-) ([][]*cppbridge.InnerSeries, cppbridge.RelabelerStats, error) {
-	return h.head.Append2(ctx, incomingData, state, relabelerID, commitToWal)
+func (h *RotatableHead) NonPriorityForEachShard(fn relabeler.ShardFn) error {
+	return h.head.NonPriorityForEachShard(fn)
 }
 
 //
@@ -252,9 +240,9 @@ func (h *HeapProfileWritableHead) CommitToWal() error {
 	return h.head.CommitToWal()
 }
 
-func (h *HeapProfileWritableHead) ForEachShard(fn relabeler.ShardFn) error {
-	return h.head.ForEachShard(fn)
-}
+// func (h *HeapProfileWritableHead) ForEachShard(fn relabeler.ShardFn) error {
+// 	return h.head.ForEachShard(fn)
+// }
 
 func (h *HeapProfileWritableHead) OnShard(shardID uint16, fn relabeler.ShardFn) error {
 	return h.head.OnShard(shardID, fn)
@@ -312,17 +300,10 @@ func (h *HeapProfileWritableHead) CopySeriesFrom(other relabeler.Head) {
 	h.head.CopySeriesFrom(other)
 }
 
-// ReadEachShard execute read fn on each shard.
-func (h *HeapProfileWritableHead) ReadEachShard(fn relabeler.ShardFn) error {
-	return h.head.ReadEachShard(fn)
+func (h *HeapProfileWritableHead) PriorityForEachShard(fn relabeler.ShardFn) error {
+	return h.head.PriorityForEachShard(fn)
 }
 
-func (h *HeapProfileWritableHead) Append2(
-	ctx context.Context,
-	incomingData *relabeler.IncomingData,
-	state *cppbridge.State,
-	relabelerID string,
-	commitToWal bool,
-) ([][]*cppbridge.InnerSeries, cppbridge.RelabelerStats, error) {
-	return h.head.Append2(ctx, incomingData, state, relabelerID, commitToWal)
+func (h *HeapProfileWritableHead) NonPriorityForEachShard(fn relabeler.ShardFn) error {
+	return h.head.NonPriorityForEachShard(fn)
 }

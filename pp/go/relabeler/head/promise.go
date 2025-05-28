@@ -3,7 +3,6 @@ package head
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -103,8 +102,7 @@ func (p *InputRelabelingPromise) Wait(ctx context.Context) error {
 // ShardedInnerSeries conteiner for InnerSeries for each shard.
 type ShardedInnerSeries struct {
 	// id slice - shard id, data[shard_id] - amount of data = x2 numberOfShards
-	data             [][]*cppbridge.InnerSeries
-	numberOfElements int
+	data [][]*cppbridge.InnerSeries
 }
 
 // NewShardedInnerSeries init new ShardedInnerSeries.
@@ -113,27 +111,12 @@ func NewShardedInnerSeries(numberOfShards uint16) *ShardedInnerSeries {
 	data := make([][]*cppbridge.InnerSeries, numberOfShards)
 	for i := range data {
 		// amount of data = x2 numberOfShards
-		// data[i] = make([]*cppbridge.InnerSeries, numberOfShards)
 		data[i] = cppbridge.NewShardsInnerSeries(numberOfShards)
 	}
 
 	return &ShardedInnerSeries{
 		data: data,
 	}
-}
-
-// Add not empty inner series for shard.
-func (sis *ShardedInnerSeries) Add(shardID, sourceShardID int, innerSeries *cppbridge.InnerSeries) {
-	if innerSeries == nil || innerSeries.Size() == 0 {
-		// fmt.Println("ShardedInnerSeries skip shardID", shardID, "sourceShardID", sourceShardID)
-		return
-	}
-
-	fmt.Println("ShardedInnerSeries add shardID", shardID, "sourceShardID", sourceShardID)
-
-	sis.data[shardID][sourceShardID] = innerSeries
-	// sis.data[shardID] = append(sis.data[shardID], innerSeries)
-	sis.numberOfElements++
 }
 
 // Data return slice of elemets for each shard.
@@ -157,12 +140,10 @@ func (sis *ShardedInnerSeries) DataBySourceShard(sourceShardID uint16) []*cppbri
 }
 
 // IsEmpty return false if there are no elements.
-func (sis *ShardedInnerSeries) IsEmpty() bool {
-	for _, iss := range sis.data {
-		for _, is := range iss {
-			if is.Size() != 0 {
-				return false
-			}
+func (sis *ShardedInnerSeries) IsEmptyByShard(shardID uint16) bool {
+	for _, is := range sis.data[shardID] {
+		if is.Size() != 0 {
+			return false
 		}
 	}
 
@@ -177,8 +158,7 @@ func (sis *ShardedInnerSeries) IsEmpty() bool {
 type ShardedRelabeledSeries struct {
 	// id slice - shard id, data[shard_id] id slice - source shard id
 	// data[shard_id][source_shard_id] - amount of data = numberOfShards
-	data             [][]*cppbridge.RelabeledSeries
-	numberOfElements int
+	data [][]*cppbridge.RelabeledSeries
 }
 
 // NewShardedRelabeledSeries init new ShardedRelabeledSeries.
@@ -188,25 +168,11 @@ func NewShardedRelabeledSeries(numberOfShards uint16) *ShardedRelabeledSeries {
 	for i := range data {
 		// data[shard_id] id slice - source shard id
 		// data[shard_id][source_shard_id] - amount of data = numberOfShards
-		// data[i] = make([]*cppbridge.RelabeledSeries, numberOfShards)
 		data[i] = cppbridge.NewShardsRelabeledSeries(numberOfShards)
 	}
 	return &ShardedRelabeledSeries{
 		data: data,
 	}
-}
-
-// Add not empty relabeled series for shard.
-func (srs *ShardedRelabeledSeries) Add(shardID, sourceShardID int, relabeledSeries *cppbridge.RelabeledSeries) {
-	if relabeledSeries == nil || relabeledSeries.Size() == 0 {
-		// fmt.Println("ShardedRelabeledSeries skip shardID", shardID, "sourceShardID", sourceShardID)
-		return
-	}
-
-	fmt.Println("ShardedRelabeledSeries add shardID", shardID, "sourceShardID", sourceShardID)
-
-	srs.data[shardID][sourceShardID] = relabeledSeries
-	srs.numberOfElements++
 }
 
 // DataByShard return slice with the results per shard.
@@ -215,25 +181,24 @@ func (srs *ShardedRelabeledSeries) DataByShard(shardID uint16) []*cppbridge.Rela
 }
 
 // DataBySourceShard return slice with the results per source shard.
-func (srs *ShardedRelabeledSeries) DataBySourceShard(sourceShardID uint16) []*cppbridge.RelabeledSeries {
+func (srs *ShardedRelabeledSeries) DataBySourceShard(sourceShardID uint16) ([]*cppbridge.RelabeledSeries, bool) {
+	ok := false
 	data := make([]*cppbridge.RelabeledSeries, len(srs.data))
-	for i, iss := range srs.data {
-		data[i] = iss[sourceShardID]
+	for i, rss := range srs.data {
+		data[i] = rss[sourceShardID]
+		if data[i].Size() != 0 {
+			ok = true
+		}
 	}
 
-	return data
+	return data, ok
 }
-
-// // IsEmpty return false if there are no elements.
-// func (srs *ShardedRelabeledSeries) IsEmpty() bool {
-// 	return srs.numberOfElements == 0
-// }
 
 // IsEmpty return false if there are no elements.
 func (srs *ShardedRelabeledSeries) IsEmpty() bool {
-	for _, iss := range srs.data {
-		for _, is := range iss {
-			if is.Size() != 0 {
+	for _, rss := range srs.data {
+		for _, rs := range rss {
+			if rs.Size() != 0 {
 				return false
 			}
 		}
@@ -250,8 +215,7 @@ func (srs *ShardedRelabeledSeries) IsEmpty() bool {
 type ShardedStateUpdates struct {
 	// id slice - shard id, data[shard_id] id slice - source shard id
 	// data[shard_id][source_shard_id] - amount of data = numberOfShards
-	data             [][]*cppbridge.RelabelerStateUpdate
-	numberOfElements int
+	data [][]*cppbridge.RelabelerStateUpdate
 }
 
 // NewShardedStateUpdates init new ShardedStateUpdates.
@@ -261,24 +225,11 @@ func NewShardedStateUpdates(numberOfShards uint16) *ShardedStateUpdates {
 	for i := range data {
 		// data[shard_id] id slice - source shard id
 		// data[shard_id][source_shard_id] - amount of data = numberOfShards
-		// data[i] = make([]*cppbridge.RelabelerStateUpdate, numberOfShards)
 		data[i] = cppbridge.NewShardsRelabelerStateUpdate(numberOfShards)
 	}
 	return &ShardedStateUpdates{
 		data: data,
 	}
-}
-
-// Add not empty relabeled series for shard.
-func (sru *ShardedStateUpdates) Add(shardID, sourceShardID int, relabelerStateUpdate *cppbridge.RelabelerStateUpdate) {
-	if relabelerStateUpdate == nil || relabelerStateUpdate.Size() == 0 {
-		return
-	}
-
-	fmt.Println("ShardedStateUpdates add shardID", shardID, "sourceShardID", sourceShardID)
-
-	sru.data[shardID][sourceShardID] = relabelerStateUpdate
-	sru.numberOfElements++
 }
 
 // DataByShard return slice with the results per shard.
@@ -287,11 +238,15 @@ func (sru *ShardedStateUpdates) DataByShard(shardID uint16) []*cppbridge.Relabel
 }
 
 // DataBySourceShard return slice with the results per source shard.
-func (sru *ShardedStateUpdates) DataBySourceShard(sourceShardID uint16) []*cppbridge.RelabelerStateUpdate {
+func (sru *ShardedStateUpdates) DataBySourceShard(sourceShardID uint16) ([]*cppbridge.RelabelerStateUpdate, bool) {
+	ok := false
 	data := make([]*cppbridge.RelabelerStateUpdate, len(sru.data))
-	for i, iss := range sru.data {
-		data[i] = iss[sourceShardID]
+	for i, rsu := range sru.data {
+		data[i] = rsu[sourceShardID]
+		if data[i].Size() != 0 {
+			ok = true
+		}
 	}
 
-	return data
+	return data, ok
 }

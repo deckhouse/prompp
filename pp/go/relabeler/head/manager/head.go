@@ -52,9 +52,9 @@ func (h *DiscardableRotatableHead) CommitToWal() error {
 	return h.head.CommitToWal()
 }
 
-func (h *DiscardableRotatableHead) ForEachShard(fn relabeler.ShardFn) error {
-	return h.head.ForEachShard(fn)
-}
+// func (h *DiscardableRotatableHead) ForEachShard(fn relabeler.ShardFn) error {
+// 	return h.head.ForEachShard(fn)
+// }
 
 func (h *DiscardableRotatableHead) OnShard(shardID uint16, fn relabeler.ShardFn) error {
 	return h.head.OnShard(shardID, fn)
@@ -120,17 +120,10 @@ func (h *DiscardableRotatableHead) CopySeriesFrom(other relabeler.Head) {
 	h.head.CopySeriesFrom(other)
 }
 
-// ReadEachShard execute read fn on each shard.
-func (h *DiscardableRotatableHead) ReadEachShard(fn relabeler.ShardFn) error {
-	return h.head.ReadEachShard(fn)
+func (h *DiscardableRotatableHead) PriorityForEachShard(fn relabeler.ShardFn) error {
+	return h.head.PriorityForEachShard(fn)
 }
 
-func (h *DiscardableRotatableHead) Append2(
-	ctx context.Context,
-	incomingData *relabeler.IncomingData,
-	state *cppbridge.State,
-	relabelerID string,
-	commitToWal bool,
-) ([][]*cppbridge.InnerSeries, cppbridge.RelabelerStats, error) {
-	return h.head.Append2(ctx, incomingData, state, relabelerID, commitToWal)
+func (h *DiscardableRotatableHead) NonPriorityForEachShard(fn relabeler.ShardFn) error {
+	return h.head.NonPriorityForEachShard(fn)
 }
