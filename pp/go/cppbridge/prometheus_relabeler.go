@@ -594,7 +594,9 @@ func (ipsr *InputPerShardRelabeler) AppendRelabelerSeries(
 	innerSeries *InnerSeries,
 	relabeledSeries *RelabeledSeries,
 ) (bool, error) {
+) (bool, error) {
 	if ctx.Err() != nil {
+		return false, ctx.Err()
 		return false, ctx.Err()
 	}
 
