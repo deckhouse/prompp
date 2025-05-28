@@ -21,6 +21,10 @@ func NewDistributor(destinationGroups relabeler.DestinationGroups) *Distributor 
 }
 
 func (d *Distributor) Send(ctx context.Context, head relabeler.Head, shardedData [][]*cppbridge.InnerSeries) error {
+	if d.Len() == 0 {
+		return nil
+	}
+
 	_ = d.ParallelRange(func(_ int, dg *relabeler.DestinationGroup) error {
 		dg.RotateLock()
 		return nil
@@ -32,7 +36,7 @@ func (d *Distributor) Send(ctx context.Context, head relabeler.Head, shardedData
 	})
 
 	outputPromise := NewOutputRelabelingPromise(&d.destinationGroups, head.NumberOfShards())
-	err := head.PriorityForEachShard(func(shard relabeler.Shard) error {
+	err := head.PriorityForEachShard(relabeler.DistributorOutputRelabeling, func(shard relabeler.Shard) error {
 		return d.ParallelRange(func(destinationGroupID int, destinationGroup *relabeler.DestinationGroup) error {
 			outputInnerSeries := cppbridge.NewShardsInnerSeries(1 << destinationGroup.ShardsNumberPower())
 			relabeledSeries := cppbridge.NewRelabeledSeries()
@@ -75,13 +79,16 @@ func (d *Distributor) Send(ctx context.Context, head relabeler.Head, shardedData
 			}
 
 			for shardID, outputStateUpdate := range outputStateUpdates {
-				updateErr := head.OnShard(uint16(shardID), func(shard relabeler.Shard) error {
-					return destinationGroup.UpdateRelabelerState(
-						ctx,
-						shard.ShardID(),
-						outputStateUpdate,
-					)
-				})
+				updateErr := head.OnShard(
+					uint16(shardID),
+					relabeler.DistributorUpdateRelabelerState,
+					func(shard relabeler.Shard) error {
+						return destinationGroup.UpdateRelabelerState(
+							ctx,
+							shard.ShardID(),
+							outputStateUpdate,
+						)
+					})
 				if updateErr != nil {
 					return updateErr
 				}
@@ -117,12 +124,16 @@ func (d *Distributor) Shutdown(ctx context.Context) error {
 }
 
 func (d *Distributor) WriteMetrics(head relabeler.Head) {
+	if d.Len() == 0 {
+		return
+	}
+
 	_ = d.ParallelRange(func(destinationGroupID int, destinationGroup *relabeler.DestinationGroup) error {
 		destinationGroup.ObserveEncodersMemory()
 		return nil
 	})
 
-	_ = head.NonPriorityForEachShard(func(shard relabeler.Shard) error {
+	_ = head.PriorityForEachShard(relabeler.DistributorWriteMetrics, func(shard relabeler.Shard) error {
 		return d.ParallelRange(func(destinationGroupID int, destinationGroup *relabeler.DestinationGroup) error {
 			destinationGroup.ObserveCacheAllocatedMemory(shard.ShardID())
 			return nil
@@ -144,4 +155,13 @@ func (d *Distributor) ParallelRange(fn func(destinationGroupID int, destinationG
 	}
 	wg.Wait()
 	return errors.Join(errs...)
+}
+
+// Len number of destinationGroups.
+func (d *Distributor) Len() int {
+	d.lock.Lock()
+	length := len(d.destinationGroups)
+	d.lock.Unlock()
+
+	return length
 }

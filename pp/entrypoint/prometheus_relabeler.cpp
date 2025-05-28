@@ -319,36 +319,6 @@ extern "C" void prompp_prometheus_per_shard_relabeler_input_collect_stalenans(vo
 
 extern "C" void prompp_prometheus_per_shard_relabeler_append_relabeler_series(void* args, void* res) {
   struct Arguments {
-    PromPP::Prometheus::Relabel::InnerSeries* inner_series;
-    PromPP::Prometheus::Relabel::RelabeledSeries* relabeled_series;
-    PromPP::Prometheus::Relabel::RelabelerStateUpdate* relabeler_state_update;
-    PerShardRelabelerPtr per_shard_relabeler;
-    LssVariantPtr lss;
-  };
-  struct Result {
-    PromPP::Primitives::Go::Slice<char> error;
-    bool target_lss_has_reallocations{};
-  };
-
-  const auto in = static_cast<Arguments*>(args);
-  const auto out = new (res) Result();
-
-  try {
-    auto& lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->lss);
-
-    entrypoint::head::lss_memory::has_reallocations = false;
-    in->per_shard_relabeler->append_relabeler_series(lss, in->inner_series, in->relabeled_series, in->relabeler_state_update);
-    std::vector<uint32_t> ids;
-    lss.sort_series_ids(ids);
-    out->target_lss_has_reallocations = entrypoint::head::lss_memory::has_reallocations;
-  } catch (...) {
-    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
-  }
-}
-
-extern "C" void prompp_prometheus_per_shard_relabeler_append_relabeler_series2(void* args, void* res) {
-  struct Arguments {
     PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> shards_inner_series;
     PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::RelabeledSeries*> shards_relabeled_series;
     PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::RelabelerStateUpdate*> shards_relabeler_state_update;
@@ -385,7 +355,7 @@ extern "C" void prompp_prometheus_per_shard_relabeler_append_relabeler_series2(v
   }
 }
 
-extern "C" void prompp_prometheus_per_shard_relabeler_update_relabeler_state(void* args, void* res) {
+extern "C" void prompp_prometheus_per_shard_singe_relabeler_update_relabeler_state(void* args, void* res) {
   struct Arguments {
     PromPP::Prometheus::Relabel::RelabelerStateUpdate* relabeler_state_update;
     PerShardRelabelerPtr per_shard_relabeler;
@@ -407,7 +377,7 @@ extern "C" void prompp_prometheus_per_shard_relabeler_update_relabeler_state(voi
   }
 }
 
-extern "C" void prompp_prometheus_per_shard_relabeler_update_relabeler_state2(void* args, void* res) {
+extern "C" void prompp_prometheus_per_shard_relabeler_update_relabeler_state(void* args, void* res) {
   struct Arguments {
     PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::RelabelerStateUpdate*> shards_relabeler_state_update;
     PerShardRelabelerPtr per_shard_relabeler;

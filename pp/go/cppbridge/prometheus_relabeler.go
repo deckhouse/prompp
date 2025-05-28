@@ -590,30 +590,6 @@ func NewInputPerShardRelabeler(
 func (ipsr *InputPerShardRelabeler) AppendRelabelerSeries(
 	ctx context.Context,
 	lss *LabelSetStorage,
-	relabelerStateUpdate *RelabelerStateUpdate,
-	innerSeries *InnerSeries,
-	relabeledSeries *RelabeledSeries,
-) (bool, error) {
-) (bool, error) {
-	if ctx.Err() != nil {
-		return false, ctx.Err()
-		return false, ctx.Err()
-	}
-
-	exception, hasReallocations := prometheusPerShardRelabelerAppendRelabelerSeries(
-		ipsr.cptr,
-		lss.Pointer(),
-		innerSeries,
-		relabeledSeries,
-		relabelerStateUpdate,
-	)
-
-	return hasReallocations, handleException(exception)
-}
-
-func (ipsr *InputPerShardRelabeler) AppendRelabelerSeries2(
-	ctx context.Context,
-	lss *LabelSetStorage,
 	shardsInnerSeries []*InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
 	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
@@ -622,7 +598,7 @@ func (ipsr *InputPerShardRelabeler) AppendRelabelerSeries2(
 		return false, ctx.Err()
 	}
 
-	exception, hasReallocations := prometheusPerShardRelabelerAppendRelabelerSeries2(
+	exception, hasReallocations := prometheusPerShardRelabelerAppendRelabelerSeries(
 		ipsr.cptr,
 		lss.Pointer(),
 		shardsInnerSeries,
@@ -733,33 +709,13 @@ func (ipsr *InputPerShardRelabeler) StatelessRelabeler() *StatelessRelabeler {
 func (ipsr *InputPerShardRelabeler) UpdateRelabelerState(
 	ctx context.Context,
 	cache *Cache,
-	relabelerStateUpdate *RelabelerStateUpdate,
-	relabeledShardID uint16,
-) error {
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	exception := prometheusPerShardRelabelerUpdateRelabelerState(
-		relabelerStateUpdate,
-		ipsr.cptr,
-		cache.cPointer,
-		relabeledShardID,
-	)
-
-	return handleException(exception)
-}
-
-func (ipsr *InputPerShardRelabeler) UpdateRelabelerState2(
-	ctx context.Context,
-	cache *Cache,
 	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
 ) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
-	exception := prometheusPerShardRelabelerUpdateRelabelerState2(
+	exception := prometheusPerShardRelabelerUpdateRelabelerState(
 		shardsRelabelerStateUpdate,
 		ipsr.cptr,
 		cache.cPointer,
@@ -881,7 +837,7 @@ func (opsr *OutputPerShardRelabeler) UpdateRelabelerState(
 		return ctx.Err()
 	}
 
-	exception := prometheusPerShardRelabelerUpdateRelabelerState(
+	exception := prometheusPerShardSingeRelabelerUpdateRelabelerState(
 		relabelerStateUpdate,
 		opsr.cptr,
 		opsr.cache.cPointer,

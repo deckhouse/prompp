@@ -139,17 +139,6 @@ func (sis *ShardedInnerSeries) DataBySourceShard(sourceShardID uint16) []*cppbri
 	return data
 }
 
-// IsEmpty return false if there are no elements.
-func (sis *ShardedInnerSeries) IsEmptyByShard(shardID uint16) bool {
-	for _, is := range sis.data[shardID] {
-		if is.Size() != 0 {
-			return false
-		}
-	}
-
-	return true
-}
-
 //
 // ShardedRelabeledSeries
 //

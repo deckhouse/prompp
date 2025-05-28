@@ -1584,35 +1584,6 @@ func prometheusPerShardRelabelerInputRelabelingWithStalenans(
 // add to result and add to cache update(second stage).
 func prometheusPerShardRelabelerAppendRelabelerSeries(
 	perShardRelabeler, lss uintptr,
-	innerSeries *InnerSeries,
-	relabeledSeries *RelabeledSeries,
-	relabelerStateUpdate *RelabelerStateUpdate,
-) (exception []byte, targetLssHasReallocations bool) {
-	args := struct {
-		innerSeries          *InnerSeries
-		relabeledSeries      *RelabeledSeries
-		relabelerStateUpdate *RelabelerStateUpdate
-		perShardRelabeler    uintptr
-		lss                  uintptr
-	}{innerSeries, relabeledSeries, relabelerStateUpdate, perShardRelabeler, lss}
-	var res struct {
-		exception                 []byte
-		targetLssHasReallocations bool
-	}
-	start := time.Now().UnixNano()
-	fastcgo.UnsafeCall2(
-		C.prompp_prometheus_per_shard_relabeler_append_relabeler_series,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-	inputRelabelerAppendRelabelerSeriesSum.Add(float64(time.Now().UnixNano() - start))
-	inputRelabelerAppendRelabelerSeriesCount.Inc()
-
-	return res.exception, res.targetLssHasReallocations
-}
-
-func prometheusPerShardRelabelerAppendRelabelerSeries2(
-	perShardRelabeler, lss uintptr,
 	shardsInnerSeries []*InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
 	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
@@ -1630,7 +1601,7 @@ func prometheusPerShardRelabelerAppendRelabelerSeries2(
 	}
 	start := time.Now().UnixNano()
 	fastcgo.UnsafeCall2(
-		C.prompp_prometheus_per_shard_relabeler_append_relabeler_series2,
+		C.prompp_prometheus_per_shard_relabeler_append_relabeler_series,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
@@ -1640,8 +1611,8 @@ func prometheusPerShardRelabelerAppendRelabelerSeries2(
 	return res.exception, res.targetLssHasReallocations
 }
 
-// prometheusPerShardRelabelerUpdateRelabelerState - wrapper for add to cache relabled data(third stage).
-func prometheusPerShardRelabelerUpdateRelabelerState(
+// prometheusPerShardSingeRelabelerUpdateRelabelerState - wrapper for add to cache relabled data(third stage).
+func prometheusPerShardSingeRelabelerUpdateRelabelerState(
 	relabelerStateUpdate *RelabelerStateUpdate,
 	perShardRelabeler, cache uintptr,
 	relabeledShardID uint16,
@@ -1657,7 +1628,7 @@ func prometheusPerShardRelabelerUpdateRelabelerState(
 	}
 	start := time.Now().UnixNano()
 	fastcgo.UnsafeCall2(
-		C.prompp_prometheus_per_shard_relabeler_update_relabeler_state,
+		C.prompp_prometheus_per_shard_singe_relabeler_update_relabeler_state,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
@@ -1667,7 +1638,8 @@ func prometheusPerShardRelabelerUpdateRelabelerState(
 	return res.exception
 }
 
-func prometheusPerShardRelabelerUpdateRelabelerState2(
+// prometheusPerShardRelabelerUpdateRelabelerState - wrapper for add to cache relabled data(third stage).
+func prometheusPerShardRelabelerUpdateRelabelerState(
 	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
 	perShardRelabeler, cache uintptr,
 ) []byte {
@@ -1681,7 +1653,7 @@ func prometheusPerShardRelabelerUpdateRelabelerState2(
 	}
 	start := time.Now().UnixNano()
 	fastcgo.UnsafeCall2(
-		C.prompp_prometheus_per_shard_relabeler_update_relabeler_state2,
+		C.prompp_prometheus_per_shard_relabeler_update_relabeler_state,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)

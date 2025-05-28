@@ -905,24 +905,6 @@ void prompp_prometheus_per_shard_relabeler_input_collect_stalenans(void* args, v
  * @brief add relabeled ls to lss, add to result and add to cache update(second stage).
  *
  * @param args {
- *     inner_series           *InnerSeries          // go InnerSeries per shard;
- *     relabeled_series       *RelabeledSeries      // go RelabeledSeries per shard;
- *     relabeler_state_update *RelabelerStateUpdate // pointer to RelabelerStateUpdate;
- *     per_shard_relabeler    uintptr               // pointer to constructed per shard relabeler;
- *     lss                    uintptr               // pointer to constructed label sets;
- * }
- *
- * @param res {
- *     error                        []byte          // error string if thrown
- *     target_lss_has_reallocations bool            // true if target lss has reallocations
- * }
- */
-void prompp_prometheus_per_shard_relabeler_append_relabeler_series(void* args, void* res);
-
-/**
- * @brief add relabeled ls to lss, add to result and add to cache update(second stage).
- *
- * @param args {
  *     shards_inner_series           []*InnerSeries          // go InnerSeries per source shard;
  *     shards_relabeled_series       []*RelabeledSeries      // go RelabeledSeries per source shard;
  *     shards_relabeler_state_update []*RelabelerStateUpdate // pointer to RelabelerStateUpdate per source shard;
@@ -935,7 +917,7 @@ void prompp_prometheus_per_shard_relabeler_append_relabeler_series(void* args, v
  *     target_lss_has_reallocations  bool                    // true if target lss has reallocations
  * }
  */
-void prompp_prometheus_per_shard_relabeler_append_relabeler_series2(void* args, void* res);
+void prompp_prometheus_per_shard_relabeler_append_relabeler_series(void* args, void* res);
 
 /**
  * @brief add to cache relabled data(third stage).
@@ -951,7 +933,7 @@ void prompp_prometheus_per_shard_relabeler_append_relabeler_series2(void* args, 
  *     error                  []byte  // error string if thrown;
  * }
  */
-void prompp_prometheus_per_shard_relabeler_update_relabeler_state(void* args, void* res);
+void prompp_prometheus_per_shard_singe_relabeler_update_relabeler_state(void* args, void* res);
 
 /**
  * @brief add to cache relabled data(third stage).
@@ -967,7 +949,7 @@ void prompp_prometheus_per_shard_relabeler_update_relabeler_state(void* args, vo
  *     error                  []byte  // error string if thrown;
  * }
  */
-void prompp_prometheus_per_shard_relabeler_update_relabeler_state2(void* args, void* res);
+void prompp_prometheus_per_shard_relabeler_update_relabeler_state(void* args, void* res);
 
 /**
  * @brief relabeling output series(fourth stage).

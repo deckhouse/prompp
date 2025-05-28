@@ -81,14 +81,14 @@ func (h *RotatableHead) Append(
 	return h.head.Append(ctx, incomingData, state, relabelerID, commitToWal)
 }
 
-// RotatableHead - relabeler.Head interface implementation.
+// CommitToWal relabeler.Head interface implementation.
 func (h *RotatableHead) CommitToWal() error {
 	return h.head.CommitToWal()
 }
 
 // OnShard - relabeler.Head interface implementation.
-func (h *RotatableHead) OnShard(shardID uint16, fn relabeler.ShardFn) error {
-	return h.head.OnShard(shardID, fn)
+func (h *RotatableHead) OnShard(shardID uint16, typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
+	return h.head.OnShard(shardID, typeTask, fn)
 }
 
 // MergeOutOfOrderChunks merge chunks with out of order data chunks.
@@ -188,12 +188,12 @@ func (h *RotatableHead) CopySeriesFrom(other relabeler.Head) {
 	h.head.CopySeriesFrom(other)
 }
 
-func (h *RotatableHead) PriorityForEachShard(fn relabeler.ShardFn) error {
-	return h.head.PriorityForEachShard(fn)
+func (h *RotatableHead) PriorityForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
+	return h.head.PriorityForEachShard(typeTask, fn)
 }
 
-func (h *RotatableHead) NonPriorityForEachShard(fn relabeler.ShardFn) error {
-	return h.head.NonPriorityForEachShard(fn)
+func (h *RotatableHead) NonPriorityForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
+	return h.head.NonPriorityForEachShard(typeTask, fn)
 }
 
 //
@@ -240,12 +240,8 @@ func (h *HeapProfileWritableHead) CommitToWal() error {
 	return h.head.CommitToWal()
 }
 
-// func (h *HeapProfileWritableHead) ForEachShard(fn relabeler.ShardFn) error {
-// 	return h.head.ForEachShard(fn)
-// }
-
-func (h *HeapProfileWritableHead) OnShard(shardID uint16, fn relabeler.ShardFn) error {
-	return h.head.OnShard(shardID, fn)
+func (h *HeapProfileWritableHead) OnShard(shardID uint16, typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
+	return h.head.OnShard(shardID, typeTask, fn)
 }
 
 // MergeOutOfOrderChunks merge chunks with out of order data chunks.
@@ -300,10 +296,10 @@ func (h *HeapProfileWritableHead) CopySeriesFrom(other relabeler.Head) {
 	h.head.CopySeriesFrom(other)
 }
 
-func (h *HeapProfileWritableHead) PriorityForEachShard(fn relabeler.ShardFn) error {
-	return h.head.PriorityForEachShard(fn)
+func (h *HeapProfileWritableHead) PriorityForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
+	return h.head.PriorityForEachShard(typeTask, fn)
 }
 
-func (h *HeapProfileWritableHead) NonPriorityForEachShard(fn relabeler.ShardFn) error {
-	return h.head.NonPriorityForEachShard(fn)
+func (h *HeapProfileWritableHead) NonPriorityForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
+	return h.head.NonPriorityForEachShard(typeTask, fn)
 }

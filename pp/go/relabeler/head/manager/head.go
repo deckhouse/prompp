@@ -52,12 +52,8 @@ func (h *DiscardableRotatableHead) CommitToWal() error {
 	return h.head.CommitToWal()
 }
 
-// func (h *DiscardableRotatableHead) ForEachShard(fn relabeler.ShardFn) error {
-// 	return h.head.ForEachShard(fn)
-// }
-
-func (h *DiscardableRotatableHead) OnShard(shardID uint16, fn relabeler.ShardFn) error {
-	return h.head.OnShard(shardID, fn)
+func (h *DiscardableRotatableHead) OnShard(shardID uint16, typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
+	return h.head.OnShard(shardID, typeTask, fn)
 }
 
 // MergeOutOfOrderChunks merge chunks with out of order data chunks.
@@ -120,10 +116,10 @@ func (h *DiscardableRotatableHead) CopySeriesFrom(other relabeler.Head) {
 	h.head.CopySeriesFrom(other)
 }
 
-func (h *DiscardableRotatableHead) PriorityForEachShard(fn relabeler.ShardFn) error {
-	return h.head.PriorityForEachShard(fn)
+func (h *DiscardableRotatableHead) PriorityForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
+	return h.head.PriorityForEachShard(typeTask, fn)
 }
 
-func (h *DiscardableRotatableHead) NonPriorityForEachShard(fn relabeler.ShardFn) error {
-	return h.head.NonPriorityForEachShard(fn)
+func (h *DiscardableRotatableHead) NonPriorityForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
+	return h.head.NonPriorityForEachShard(typeTask, fn)
 }

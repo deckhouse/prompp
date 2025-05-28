@@ -31,11 +31,11 @@ func NewChunkQuerier(head relabeler.Head, deduplicatorFactory DeduplicatorFactor
 }
 
 func (q *ChunkQuerier) LabelValues(ctx context.Context, name string, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
-	return labelValues(ctx, name, q.head, q.deduplicatorFactory, nil, matchers...)
+	return labelValues(ctx, name, q.head, q.deduplicatorFactory, nil, relabeler.ChunkQuerierLabelValues, matchers...)
 }
 
 func (q *ChunkQuerier) LabelNames(ctx context.Context, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
-	return labelNames(ctx, q.head, q.deduplicatorFactory, nil, matchers...)
+	return labelNames(ctx, q.head, q.deduplicatorFactory, nil, relabeler.ChunkQuerierLabelNames, matchers...)
 }
 
 func (q *ChunkQuerier) Select(
@@ -48,7 +48,7 @@ func (q *ChunkQuerier) Select(
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
 	callerID := cppbridge.GetCaller(ctx)
 
-	err := q.head.NonPriorityForEachShard(func(shard relabeler.Shard) error {
+	err := q.head.PriorityForEachShard(relabeler.ChunkQuerierSelect, func(shard relabeler.Shard) error {
 		lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
 
 		if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {

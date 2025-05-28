@@ -49,10 +49,18 @@ func NewQuerier(head relabeler.Head, deduplicatorFactory DeduplicatorFactory, mi
 }
 
 func (q *Querier) LabelValues(ctx context.Context, name string, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
-	return labelValues(ctx, name, q.head, q.deduplicatorFactory, q.metrics, matchers...)
+	return labelValues(ctx, name, q.head, q.deduplicatorFactory, q.metrics, relabeler.QuerierLabelValues, matchers...)
 }
 
-func labelValues(ctx context.Context, name string, head relabeler.Head, deduplicatorFactory DeduplicatorFactory, metrics *Metrics, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func labelValues(
+	ctx context.Context,
+	name string,
+	head relabeler.Head,
+	deduplicatorFactory DeduplicatorFactory,
+	metrics *Metrics,
+	typeTask relabeler.TypeTask,
+	matchers ...*labels.Matcher,
+) ([]string, annotations.Annotations, error) {
 	start := time.Now()
 	defer func() {
 		if metrics != nil {
@@ -65,7 +73,7 @@ func labelValues(ctx context.Context, name string, head relabeler.Head, deduplic
 	dedup := deduplicatorFactory.Deduplicator(head.NumberOfShards())
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
 
-	err := head.NonPriorityForEachShard(func(shard relabeler.Shard) error {
+	err := head.PriorityForEachShard(typeTask, func(shard relabeler.Shard) error {
 		queryLabelValuesResult := shard.LSS().QueryLabelValues(name, convertedMatchers)
 		if queryLabelValuesResult.Status() != cppbridge.LSSQueryStatusMatch {
 			return fmt.Errorf("no matches on shard: %d", shard.ShardID())
@@ -94,10 +102,17 @@ func labelValues(ctx context.Context, name string, head relabeler.Head, deduplic
 }
 
 func (q *Querier) LabelNames(ctx context.Context, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
-	return labelNames(ctx, q.head, q.deduplicatorFactory, q.metrics, matchers...)
+	return labelNames(ctx, q.head, q.deduplicatorFactory, q.metrics, relabeler.QuerierLabelNames, matchers...)
 }
 
-func labelNames(ctx context.Context, head relabeler.Head, deduplicatorFactory DeduplicatorFactory, metrics *Metrics, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func labelNames(
+	ctx context.Context,
+	head relabeler.Head,
+	deduplicatorFactory DeduplicatorFactory,
+	metrics *Metrics,
+	typeTask relabeler.TypeTask,
+	matchers ...*labels.Matcher,
+) ([]string, annotations.Annotations, error) {
 	start := time.Now()
 	defer func() {
 		if metrics != nil {
@@ -110,7 +125,7 @@ func labelNames(ctx context.Context, head relabeler.Head, deduplicatorFactory De
 	dedup := deduplicatorFactory.Deduplicator(head.NumberOfShards())
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
 
-	err := head.NonPriorityForEachShard(func(shard relabeler.Shard) error {
+	err := head.PriorityForEachShard(typeTask, func(shard relabeler.Shard) error {
 		queryLabelNamesResult := shard.LSS().QueryLabelNames(convertedMatchers)
 		if queryLabelNamesResult.Status() != cppbridge.LSSQueryStatusMatch {
 			return fmt.Errorf("no matches on shard: %d", shard.ShardID())
@@ -185,7 +200,7 @@ func (q *Querier) selectInstant(
 		valueNotFoundTimestampValue = q.mint - 1
 	}
 
-	err := q.head.NonPriorityForEachShard(func(shard relabeler.Shard) error {
+	err := q.head.PriorityForEachShard(relabeler.QuerierSelectInstant, func(shard relabeler.Shard) error {
 		lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
 
 		if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {
@@ -239,7 +254,7 @@ func (q *Querier) selectRange(
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
 	callerID := cppbridge.GetCaller(ctx)
 
-	err := q.head.NonPriorityForEachShard(func(shard relabeler.Shard) error {
+	err := q.head.PriorityForEachShard(relabeler.QuerierSelectRange, func(shard relabeler.Shard) error {
 		lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
 
 		if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {
