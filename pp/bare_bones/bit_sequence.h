@@ -237,6 +237,10 @@ class PROMPP_ATTRIBUTE_PACKED CompactBitSequenceBase {
 
   [[nodiscard]] static consteval uint32_t reserved_size_in_bits() noexcept { return kReservedSizeBits; }
   [[nodiscard]] static consteval uint32_t reserved_size_in_bytes() noexcept { return Bit::to_bytes(kReservedSizeBits); }
+  [[nodiscard]] static consteval const auto& reserved_bytes_for_reader() noexcept {
+    static constexpr std::array<char, reserved_size_in_bytes()> kReservedBytesForReader{};
+    return kReservedBytesForReader;
+  }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size_in_bits() const noexcept { return size_in_bits_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size_in_bytes() const noexcept { return Bit::to_bytes(size_in_bits_ + (Bit::kByteBits - 1)); }

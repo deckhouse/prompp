@@ -347,6 +347,25 @@ TEST_F(CompactBitSequenceFixture, TrimUint64_2) {
   EXPECT_EQ(0b1ULL, bytes[0]);
 }
 
+TEST_F(CompactBitSequenceFixture, read_bits_u32) {
+  // Arrange
+  constexpr uint32_t value = 0xAABBCCDD;
+  stream_.push_back_bits_u32(32, value);
+
+  // Act
+  auto reader = stream_.reader();
+  auto dd = reader.consume_bits_u32(8);
+  auto cc = reader.consume_bits_u32(8);
+  auto bb = reader.consume_bits_u32(8);
+  auto aa = reader.consume_bits_u32(8);
+
+  // Assert
+  EXPECT_EQ(aa, 0xAA);
+  EXPECT_EQ(bb, 0xBB);
+  EXPECT_EQ(cc, 0xCC);
+  EXPECT_EQ(dd, 0xDD);
+}
+
 template <class T>
 class BitSequenceReaderFixture : public testing::Test {};
 

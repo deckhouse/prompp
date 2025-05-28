@@ -33,7 +33,7 @@ class Unloader {
         ls_id_bitmap.set(ls_id);
 
         const auto& bitseq = get_open_chunk_stream(ls_id);
-        const uint32_t bitseq_filled_bytes_count = std::min(bitseq.size_in_bytes(), BareBones::Bit::to_bytes(bitseq.size_in_bits()));
+        const uint32_t bitseq_filled_bytes_count = BareBones::Bit::to_bytes(bitseq.size_in_bits());
         chunk_length_sequence.push_back(bitseq_filled_bytes_count);
         bitseqs_size_in_bytes += bitseq_filled_bytes_count;
 
@@ -61,18 +61,24 @@ class Unloader {
     std::cout << '\n';
 
     stream.write(reinterpret_cast<char*>(&bitseqs_size_in_bytes), sizeof(bitseqs_size_in_bytes));
+    std::cout << "bitseqs_size_in_bytes: " << bitseqs_size_in_bytes << '\n';
 
     for (const auto ls_id : ls_id_bitmap) {
       auto& bitseq = get_open_chunk_stream(ls_id);
-      const auto bitseq_filled_bytes_count = std::min(bitseq.size_in_bytes(), BareBones::Bit::to_bytes(bitseq.size_in_bits()));
+      const auto bitseq_filled_bytes_count = BareBones::Bit::to_bytes(bitseq.size_in_bits());
       stream.write(reinterpret_cast<const char*>(bitseq.raw_bytes()), bitseq_filled_bytes_count);
       bitseq.trim_lower_bytes(bitseq_filled_bytes_count);
+    }
+
+    if (bitseqs_size_in_bytes) {
+      const auto& reserved_bytes_for_reader = encoder::CompactBitSequence::reserved_bytes_for_reader();
+      stream.write(reserved_bytes_for_reader.data(), reserved_bytes_for_reader.size());
     }
   }
 
   static constexpr uint32_t get_empty_unloader_size_in_bytes() noexcept {
-    return sizeof(uint32_t) + BareBones::Bitset{}.allocated_memory() + EncodingChunkLengthSequence{}.data().size() + sizeof(uint32_t) +
-           EncodingChunkIDSequence{}.data().size() + sizeof(uint32_t) + sizeof(uint32_t);
+    return sizeof(uint32_t) + BareBones::Bitset{}.allocated_memory() + EncodingChunkLengthSequence{}.data().size() + sizeof(uint32_t) + sizeof(uint32_t) +
+           EncodingChunkIDSequence{}.data().size() + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
   }
 
  private:

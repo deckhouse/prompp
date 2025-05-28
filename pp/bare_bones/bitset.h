@@ -11,6 +11,7 @@
 #include <bitset>
 
 #include "memory.h"
+#include "streams.h"
 #include "type_traits.h"
 
 namespace BareBones {

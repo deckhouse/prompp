@@ -926,6 +926,8 @@ class CompactSequence {
   PROMPP_ALWAYS_INLINE void write_to(S& stream) const noexcept {
     const uint32_t buffer_size_in_bytes = size_in_bytes();
     stream.write(reinterpret_cast<const char*>(&buffer_size_in_bytes), sizeof(buffer_size_in_bytes));
+    const uint32_t elements_count = size();
+    stream.write(reinterpret_cast<const char*>(&elements_count), sizeof(elements_count));
     stream.write(reinterpret_cast<const char*>(buffer_.begin()), buffer_size_in_bytes);
   }
 
