@@ -205,8 +205,9 @@ class QueryableEncodingBimapCopier {
     BareBones::Vector<ItemList> values;
   };
 
-  QueryableEncodingBimapCopier(const QueryableEncodingBimap& source, QueryableEncodingBimap& destination)
-      : source_(source), destination_(destination), size_before_(destination_.size()) {}
+  QueryableEncodingBimapCopier(const QueryableEncodingBimap& source, QueryableEncodingBimap& destination) : source_(source), destination_(destination) {
+    assert(destination.size() == 0);
+  }
 
   void copy_added_series() {
     resize_and_fill_ids_list(ids_map_, source_.items_.size());
@@ -237,21 +238,26 @@ class QueryableEncodingBimapCopier {
     ids_map_ = BareBones::Vector<uint32_t>{};
   }
 
-  void build_indexes() {
+  void build_reverse_index() {
     const auto size = destination_.size();
+    destination_.reverse_index_.reserve(destination_.data_.label_name_sets_table.data().symbols_table.size());
 
-    destination_.ls_id_hash_set_.reserve(size);
-    destination_.queried_series_.set_series_count(size);
-
-    const auto hasher = destination_.hasher();
-    for (auto ls_id = size_before_; ls_id < size; ++ls_id) {
+    for (uint32_t ls_id = 0; ls_id < size; ++ls_id) {
       auto label_set = destination_[ls_id];
-
-      destination_.ls_id_hash_set_.emplace_with_hash(QueryableEncodingBimap::phmap_hash(hasher(label_set)), typename QueryableEncodingBimap::Proxy(ls_id));
-
       for (auto label = label_set.begin(); label != label_set.end(); ++label) {
         destination_.reverse_index_.add(label, ls_id);
       }
+    }
+  }
+
+  void build_ls_id_hashset() {
+    const auto size = destination_.size();
+    destination_.ls_id_hash_set_.reserve(size);
+
+    const auto hasher = destination_.hasher();
+    for (uint32_t ls_id = 0; ls_id < size; ++ls_id) {
+      destination_.ls_id_hash_set_.emplace_with_hash(QueryableEncodingBimap::phmap_hash(hasher(destination_[ls_id])),
+                                                     typename QueryableEncodingBimap::Proxy(ls_id));
     }
   }
 
@@ -269,14 +275,14 @@ class QueryableEncodingBimapCopier {
     copy_added_series();
     copy_ls_id_set();
     build_trie_index();
-    build_indexes();
+    build_ls_id_hashset();
+    build_reverse_index();
   }
 
  private:
   const QueryableEncodingBimap& source_;
   QueryableEncodingBimap& destination_;
   BareBones::Vector<uint32_t> ids_map_;
-  uint32_t size_before_;
 };
 
 }  // namespace series_index
