@@ -96,23 +96,6 @@ class QueryableEncodingBimap final
     added_series_.reserve(count);
   }
 
-  template <class Handler>
-  void mark_series_as_added(Handler&& handler) {
-    for (uint32_t i = 0; i < Base::items_.size(); ++i) {
-      if (handler(i)) {
-        mark_series_as_added(i);
-      }
-    }
-  }
-
-  void mark_all_series_as_added() {
-    for (uint32_t i = 0; i < Base::items_.size(); ++i) {
-      mark_series_as_added(i);
-    }
-  }
-
-  PROMPP_ALWAYS_INLINE static size_t phmap_hash(size_t hash) noexcept { return phmap::phmap_mix<sizeof(size_t)>()(hash); }
-
  private:
   using LabelSet = typename Base::value_type;
 
@@ -171,6 +154,8 @@ class QueryableEncodingBimap final
   }
 
   PROMPP_ALWAYS_INLINE static bool is_valid_label(std::string_view value) noexcept { return !value.empty(); }
+
+  PROMPP_ALWAYS_INLINE static size_t phmap_hash(size_t hash) noexcept { return phmap::phmap_mix<sizeof(size_t)>()(hash); }
 };
 
 template <class QueryableEncodingBimap>
