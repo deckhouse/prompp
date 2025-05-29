@@ -86,6 +86,7 @@ class StatusGetter {
   StatusGetter(const Lss& lss, const series_data::DataStorage& data_storage, size_t limit)
       : lss_(lss),
         data_storage_(data_storage),
+        limit_(limit),
         top_label_value_count_by_name_{limit},
         top_series_count_by_metric_name_{limit},
         top_memory_in_bytes_by_label_name_{limit},
@@ -96,18 +97,22 @@ class StatusGetter {
   void get(Status& status) {
     using enum series_index::QueriedSeries::Source;
 
+    status.num_series = lss_.size();
+    status.rule_queried_series = lss_.queried_series_count(kRule);
+    status.federate_queried_series = lss_.queried_series_count(kFederate);
+    status.other_queried_series = lss_.queried_series_count(kOther);
+    if (limit_ == 0) {
+      return;
+    }
+
     static constexpr auto fill_top_items = [](const auto& top_items, auto& destination) PROMPP_LAMBDA_INLINE {
       destination.reserve(top_items.size());
       std::ranges::copy_if(top_items.elements(), std::back_inserter(destination), [&](const auto& item) PROMPP_LAMBDA_INLINE { return item.count > 0; });
     };
 
     status.min_max_timestamp = min_max_timestamp_;
-    status.num_series = lss_.size();
     status.chunk_count = data_storage_.chunks().non_empty_chunk_count();
     status.num_label_pairs = label_count_;
-    status.rule_queried_series = lss_.queried_series_count(kRule);
-    status.federate_queried_series = lss_.queried_series_count(kFederate);
-    status.other_queried_series = lss_.queried_series_count(kOther);
 
     fill_top_items(top_label_value_count_by_name_, status.label_value_count_by_label_name);
     fill_top_items(top_series_count_by_metric_name_, status.series_count_by_metric_name);
@@ -125,6 +130,7 @@ class StatusGetter {
 
   const Lss& lss_;
   const series_data::DataStorage& data_storage_;
+  const size_t limit_;
 
   TopLabelValueCountByLabelName top_label_value_count_by_name_;
   TopSeriesCountByMetricName top_series_count_by_metric_name_;
@@ -134,6 +140,10 @@ class StatusGetter {
   uint32_t label_count_{};
 
   void fill() noexcept {
+    if (limit_ == 0) {
+      return;
+    }
+
     fill_storage_statistic();
     fill_lss_statistic();
     fill_reverse_index_statistic();

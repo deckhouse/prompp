@@ -263,11 +263,17 @@ class Cache {
   //                  std::less<>,
   //                  BareBones::Allocator<std::pair<const uint32_t, PromPP::Prometheus::Relabel::CacheValue>>>
   //     cache_relabel_{{}, {}, BareBones::Allocator<std::pair<const uint32_t, PromPP::Prometheus::Relabel::CacheValue>>{cache_allocated_memory_}};
-  phmap::flat_hash_map<uint32_t,
-                       PromPP::Prometheus::Relabel::CacheValue,
-                       std::hash<uint32_t>,
-                       std::equal_to<>,
-                       BareBones::Allocator<std::pair<const uint32_t, PromPP::Prometheus::Relabel::CacheValue>>>
+  // phmap::flat_hash_map<uint32_t,
+  //                      PromPP::Prometheus::Relabel::CacheValue,
+  //                      std::hash<uint32_t>,
+  //                      std::equal_to<>,
+  //                      BareBones::Allocator<std::pair<const uint32_t, PromPP::Prometheus::Relabel::CacheValue>>>
+  //     cache_relabel_{{}, {}, BareBones::Allocator<std::pair<const uint32_t, PromPP::Prometheus::Relabel::CacheValue>>{cache_allocated_memory_}};
+  phmap::parallel_flat_hash_map<uint32_t,
+                                PromPP::Prometheus::Relabel::CacheValue,
+                                std::hash<uint32_t>,
+                                std::equal_to<>,
+                                BareBones::Allocator<std::pair<const uint32_t, PromPP::Prometheus::Relabel::CacheValue>>>
       cache_relabel_{{}, {}, BareBones::Allocator<std::pair<const uint32_t, PromPP::Prometheus::Relabel::CacheValue>>{cache_allocated_memory_}};
   roaring::Roaring cache_keep_{};
   roaring::Roaring cache_drop_{};

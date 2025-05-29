@@ -175,6 +175,9 @@ type Head struct {
 	nonPriorityTaskCh []chan *GenericTask
 
 	numberOfShards uint16
+	stopc          chan struct{}
+	wg             *sync.WaitGroup
+
 	// stat
 	registerer           prometheus.Registerer
 	appendedSegmentCount prometheus.Counter
@@ -185,8 +188,11 @@ type Head struct {
 	// TODO refactoring
 	queuePriotity    *prometheus.GaugeVec
 	queueNonPriority *prometheus.GaugeVec
-	stopc            chan struct{}
-	wg               *sync.WaitGroup
+
+	tasksCreated *prometheus.CounterVec
+	tasksDone    *prometheus.CounterVec
+	tasksLive    *prometheus.CounterVec
+	tasksExecute *prometheus.CounterVec
 }
 
 func New(
@@ -230,11 +236,10 @@ func New(
 		}),
 		memoryInUse: factory.NewGaugeVec(
 			prometheus.GaugeOpts{
-				Name:        "prompp_head_cgo_memory_bytes",
-				Help:        "Current value memory in use in bytes.",
-				ConstLabels: prometheus.Labels{"generation": strconv.FormatUint(generation, 10)},
+				Name: "prompp_head_cgo_memory_bytes",
+				Help: "Current value memory in use in bytes.",
 			},
-			[]string{"allocator", "id"},
+			[]string{"generation", "allocator", "id"},
 		),
 		series: factory.NewGauge(prometheus.GaugeOpts{
 			Name: "prompp_head_series",
@@ -268,6 +273,35 @@ func New(
 			},
 			[]string{"shard_id"},
 		),
+
+		tasksCreated: factory.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "prompp_head_task_created_count",
+				Help: "Number of created tasks.",
+			},
+			[]string{"type_task"},
+		),
+		tasksDone: factory.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "prompp_head_task_done_count",
+				Help: "Number of done tasks.",
+			},
+			[]string{"type_task"},
+		),
+		tasksLive: factory.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "prompp_head_task_live_duration_microseconds_sum",
+				Help: "The duration of the live task in microseconds.",
+			},
+			[]string{"type_task"},
+		),
+		tasksExecute: factory.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "prompp_head_task_execute_duration_microseconds_sum",
+				Help: "The duration of the task execution in microseconds.",
+			},
+			[]string{"type_task"},
+		),
 	}
 
 	if err := h.reconfigure(inputRelabelerConfigs, numberOfShards); err != nil {
@@ -300,7 +334,7 @@ func (h *Head) CommitToWal() error {
 	if h.readOnly {
 		return fmt.Errorf("committing read only head")
 	}
-	return h.PriorityForEachShard(relabeler.WalCommit, func(shard relabeler.Shard) error {
+	return h.PriorityForEachShard(relabeler.CommitToWal, func(shard relabeler.Shard) error {
 		return shard.Wal().Commit()
 	})
 }
@@ -358,7 +392,7 @@ func (h *Head) Reconfigure(inputRelabelerConfigs []*config.InputRelabelerConfig,
 }
 
 func (h *Head) WriteMetrics() {
-	status := h.Status(1)
+	status := h.Status(0)
 	h.series.Set(float64(status.HeadStats.NumSeries))
 	h.queried.With(
 		prometheus.Labels{"caller": "rule"},
@@ -370,20 +404,22 @@ func (h *Head) WriteMetrics() {
 		prometheus.Labels{"caller": "other"},
 	).Set(float64(status.HeadStats.OtherQueriedSeries))
 
-	_ = h.PriorityForEachShard(relabeler.HeadWriteMetrics, func(shard relabeler.Shard) error {
+	generationStr := strconv.FormatUint(h.generation, 10)
+	_ = h.PriorityForEachShard(relabeler.HeadAllocatedMemory, func(shard relabeler.Shard) error {
 		shardID := strconv.FormatUint(uint64(shard.ShardID()), 10)
-
 		h.memoryInUse.With(
 			prometheus.Labels{
-				"allocator": "main_lss",
-				"id":        shardID,
+				"generation": generationStr,
+				"allocator":  "main_lss",
+				"id":         shardID,
 			},
 		).Set(float64(shard.LSS().AllocatedMemory()))
 
 		h.memoryInUse.With(
 			prometheus.Labels{
-				"allocator": "data_storage",
-				"id":        shardID,
+				"generation": generationStr,
+				"allocator":  "data_storage",
+				"id":         shardID,
 			},
 		).Set(float64(shard.DataStorage().AllocatedMemory()))
 
@@ -436,19 +472,23 @@ func (h *Head) Status(limit int) relabeler.HeadStatus {
 	countStats := make(map[string]uint64)
 
 	for _, shardStatus := range shardStatuses {
+		headStatus.HeadStats.NumSeries += uint64(shardStatus.NumSeries)
+		headStatus.HeadStats.RuleQueriedSeries += int64(shardStatus.RuleQueriedSeries)
+		headStatus.HeadStats.FederateQueriedSeries += int64(shardStatus.FederateQueriedSeries)
+		headStatus.HeadStats.OtherQueriedSeries += int64(shardStatus.OtherQueriedSeries)
+		if limit == 0 {
+			continue
+		}
+
+		headStatus.HeadStats.ChunkCount += int64(shardStatus.ChunkCount)
+		headStatus.HeadStats.NumLabelPairs += int(shardStatus.NumLabelPairs)
+
 		if headStatus.HeadStats.MaxTime < shardStatus.TimeInterval.Max {
 			headStatus.HeadStats.MaxTime = shardStatus.TimeInterval.Max
 		}
 		if headStatus.HeadStats.MinTime > shardStatus.TimeInterval.Min {
 			headStatus.HeadStats.MinTime = shardStatus.TimeInterval.Min
 		}
-
-		headStatus.HeadStats.NumSeries += uint64(shardStatus.NumSeries)
-		headStatus.HeadStats.ChunkCount += int64(shardStatus.ChunkCount)
-		headStatus.HeadStats.NumLabelPairs += int(shardStatus.NumLabelPairs)
-		headStatus.HeadStats.RuleQueriedSeries += int64(shardStatus.RuleQueriedSeries)
-		headStatus.HeadStats.FederateQueriedSeries += int64(shardStatus.FederateQueriedSeries)
-		headStatus.HeadStats.OtherQueriedSeries += int64(shardStatus.OtherQueriedSeries)
 
 		for _, stat := range shardStatus.SeriesCountByMetricName {
 			seriesStats[stat.Name] += uint64(stat.Count)
@@ -462,6 +502,10 @@ func (h *Head) Status(limit int) relabeler.HeadStatus {
 		for _, stat := range shardStatus.SeriesCountByLabelValuePair {
 			countStats[stat.Name+"="+stat.Value] += uint64(stat.Count)
 		}
+	}
+
+	if limit == 0 {
+		return headStatus
 	}
 
 	headStatus.SeriesCountByMetricName = getSortedStats(seriesStats, limit)
@@ -530,7 +574,15 @@ func (h *Head) onShard(shardID uint16, typeTask relabeler.TypeTask, fn relabeler
 		return fn(s)
 	}
 
-	task := NewSingleGenericTask(fn, h.registerer, h.numberOfShards, typeTask)
+	ls := prometheus.Labels{"type_task": typeTask.String()}
+	task := NewSingleGenericTask(
+		fn,
+		h.tasksCreated.With(ls),
+		h.tasksDone.With(ls),
+		h.tasksLive.With(ls),
+		h.tasksExecute.With(ls),
+		h.numberOfShards,
+	)
 	h.priotityTaskCh[shardID] <- task
 
 	return task.Wait()
@@ -554,11 +606,19 @@ func (h *Head) run() {
 
 // PriorityForEachShard run func generic task on priority queue.
 func (h *Head) PriorityForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
-	t := NewGenericTask(fn, h.registerer, h.numberOfShards, typeTask)
 	if h.readOnly {
-		return h.readOnlyForEachShard(t)
+		return h.readOnlyForEachShard(NewReadOnlyGenericTask(fn, h.numberOfShards))
 	}
 
+	ls := prometheus.Labels{"type_task": typeTask.String()}
+	t := NewGenericTask(
+		fn,
+		h.tasksCreated.With(ls),
+		h.tasksDone.With(ls),
+		h.tasksLive.With(ls),
+		h.tasksExecute.With(ls),
+		h.numberOfShards,
+	)
 	for _, priotityTaskCh := range h.priotityTaskCh {
 		priotityTaskCh <- t
 	}
@@ -568,11 +628,19 @@ func (h *Head) PriorityForEachShard(typeTask relabeler.TypeTask, fn relabeler.Sh
 
 // NonPriorityForEachShard run func generic task on non priority queue.
 func (h *Head) NonPriorityForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
-	t := NewGenericTask(fn, h.registerer, h.numberOfShards, typeTask)
 	if h.readOnly {
-		return h.readOnlyForEachShard(t)
+		return h.readOnlyForEachShard(NewReadOnlyGenericTask(fn, h.numberOfShards))
 	}
 
+	ls := prometheus.Labels{"type_task": typeTask.String()}
+	t := NewGenericTask(
+		fn,
+		h.tasksCreated.With(ls),
+		h.tasksDone.With(ls),
+		h.tasksLive.With(ls),
+		h.tasksExecute.With(ls),
+		h.numberOfShards,
+	)
 	for _, shardGenericReadTaskCh := range h.nonPriorityTaskCh {
 		shardGenericReadTaskCh <- t
 	}
@@ -653,43 +721,13 @@ func (h *Head) Append(
 	}
 
 	var atomiclimitExhausted uint32
-	// err = h.PriorityForEachShard(relabeler.WalWrite, func(shard relabeler.Shard) error {
-	// 	var (
-	// 		wg             sync.WaitGroup
-	// 		errWrite       error
-	// 		limitExhausted bool
-	// 	)
 
-	// 	wg.Add(2)
-	// 	go func() {
-	// 		limitExhausted, errWrite = shard.Wal().Write(shardedInnerSeries.DataByShard(shard.ShardID()))
-	// 		wg.Done()
-	// 	}()
+	err = h.PriorityForEachShard(relabeler.WalDataStorageAdd, func(shard relabeler.Shard) error {
+		shard.DataStorage().AppendInnerSeriesSlice(shardedInnerSeries.DataByShard(shard.ShardID()))
 
-	// 	go func() {
-	// 		shard.DataStorage().AppendInnerSeriesSlice(shardedInnerSeries.DataByShard(shard.ShardID()))
-	// 		wg.Done()
-	// 	}()
-	// 	wg.Wait()
-
-	// 	if errWrite != nil {
-	// 		return fmt.Errorf("failed to write inner series: %w", errWrite)
-	// 	}
-
-	// 	if limitExhausted {
-	// 		atomic.AddUint32(&atomiclimitExhausted, 1)
-	// 	}
-
-	// 	return nil
-	// })
-	// if err != nil {
-	// 	logger.Errorf("failed to write wal: %v", err)
-	// }
-
-	err = h.PriorityForEachShard(relabeler.WalWrite, func(shard relabeler.Shard) error {
 		limitExhausted, errWrite := shard.Wal().Write(shardedInnerSeries.DataByShard(shard.ShardID()))
 		if errWrite != nil {
-			return fmt.Errorf("failed to write inner series: %w", errWrite)
+			return fmt.Errorf("shard %d: %w", shard.ShardID(), errWrite)
 		}
 
 		if limitExhausted {
@@ -700,15 +738,6 @@ func (h *Head) Append(
 	})
 	if err != nil {
 		logger.Errorf("failed to write wal: %v", err)
-	}
-
-	err = h.PriorityForEachShard(relabeler.DataStorageAppendInnerSeries, func(shard relabeler.Shard) error {
-		shard.DataStorage().AppendInnerSeriesSlice(shardedInnerSeries.DataByShard(shard.ShardID()))
-
-		return nil
-	})
-	if err != nil {
-		logger.Errorf("failed to commit wal: %v", err)
 	}
 
 	if commitToWal || atomiclimitExhausted > 0 {
@@ -864,23 +893,23 @@ func (h *Head) updateRelabelerStateStage(
 	rd *RelabelerData,
 	shardedStateUpdates *ShardedStateUpdates,
 ) error {
-	return h.PriorityForEachShard(relabeler.HeadUpdateRelabelerState, func(shard relabeler.Shard) error {
-		updates, ok := shardedStateUpdates.DataBySourceShard(shard.ShardID())
+	for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
+		updates, ok := shardedStateUpdates.DataBySourceShard(shardID)
 		if !ok {
-			return nil
+			continue
 		}
 
-		err := rd.InputRelabelerByShard(shard.ShardID()).UpdateRelabelerState(
+		err := rd.InputRelabelerByShard(shardID).UpdateRelabelerState(
 			ctx,
-			state.CacheByShard(shard.ShardID()),
+			state.CacheByShard(shardID),
 			updates,
 		)
 		if err != nil {
-			return fmt.Errorf("shard %d: %w", shard.ShardID(), err)
+			return fmt.Errorf("shard %d: %w", shardID, err)
 		}
+	}
 
-		return nil
-	})
+	return nil
 }
 
 // shardLoop run relabeling on the shard.

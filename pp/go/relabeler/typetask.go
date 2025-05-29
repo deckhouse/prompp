@@ -18,8 +18,8 @@ const (
 	// HeadUpdateRelabelerState type of task.
 	HeadUpdateRelabelerState
 
-	// HeadWriteMetrics type of task.
-	HeadWriteMetrics
+	// HeadAllocatedMemory type of task.
+	HeadAllocatedMemory
 	// HeadStatusType type of task.
 	HeadStatusType
 	// HeadCopyAddedSeries type of task.
@@ -35,10 +35,12 @@ const (
 
 	// WalCommit type of task.
 	WalCommit
+	// CommitToWal type of task.
+	CommitToWal
 	// WalFlush type of task.
 	WalFlush
-	// WalWrite type of task.
-	WalWrite
+	// WalDataStorageAdd type of task.
+	WalDataStorageAdd
 
 	// ChunkQuerierSelect type of task.
 	ChunkQuerierSelect
