@@ -24,16 +24,6 @@ extern "C" void prompp_primitives_lss_ctor(void* args, void* res) {
   new (res) Result{.lss = create_lss(static_cast<Arguments*>(args)->lss_type)};
 }
 
-extern "C" void prompp_primitives_lss_copy_added_series(void* args) {
-  struct Arguments {
-    LssVariantPtr source;
-    LssVariantPtr destination;
-  };
-
-  const auto arguments = static_cast<Arguments*>(args);
-  std::get<QueryableEncodingBimap>(*arguments->source).copy_added_series(std::get<QueryableEncodingBimap>(*arguments->destination));
-}
-
 extern "C" void prompp_primitives_lss_dtor(void* args) {
   struct Arguments {
     LssVariantPtr lss;
@@ -232,4 +222,58 @@ extern "C" void prompp_create_readonly_lss(void* args, void* res) {
   };
 
   new (res) Result{.lss_copy = entrypoint::head::create_readonly_lss(*static_cast<Arguments*>(args)->lss)};
+}
+
+using AddedSeriesCopier = series_index::QueryableEncodingBimapCopier<QueryableEncodingBimap>;
+using AddedSeriesCopierPtr = std::unique_ptr<AddedSeriesCopier>;
+
+extern "C" void prompp_primitives_lss_queryable_encoding_bimap_copier_ctor(void* args, void* res) {
+  struct Arguments {
+    LssVariantPtr source;
+    LssVariantPtr destination;
+  };
+  struct Result {
+    AddedSeriesCopierPtr copier;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  new (res)
+      Result{.copier = std::make_unique<AddedSeriesCopier>(std::get<QueryableEncodingBimap>(*in->source), std::get<QueryableEncodingBimap>(*in->destination))};
+}
+
+extern "C" void prompp_primitives_lss_queryable_encoding_bimap_copier_copy_part1(void* args) {
+  struct Arguments {
+    AddedSeriesCopierPtr copier;
+  };
+
+  const auto& copier = static_cast<Arguments*>(args)->copier;
+  copier->copy_added_series();
+  copier->copy_ls_id_set();
+  copier->build_trie_index();
+}
+
+extern "C" void prompp_primitives_lss_queryable_encoding_bimap_copier_copy_part2(void* args) {
+  struct Arguments {
+    AddedSeriesCopierPtr copier;
+  };
+
+  const auto& copier = static_cast<Arguments*>(args)->copier;
+  copier->build_ls_id_hashset();
+}
+
+extern "C" void prompp_primitives_lss_queryable_encoding_bimap_copier_copy_part3(void* args) {
+  struct Arguments {
+    AddedSeriesCopierPtr copier;
+  };
+
+  const auto& copier = static_cast<Arguments*>(args)->copier;
+  copier->build_reverse_index();
+}
+
+extern "C" void prompp_primitives_lss_queryable_encoding_bimap_copier_dtor(void* args) {
+  struct Arguments {
+    AddedSeriesCopierPtr copier;
+  };
+
+  static_cast<Arguments*>(args)->~Arguments();
 }

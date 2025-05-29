@@ -213,7 +213,7 @@ class QueryableEncodingBimapCopier {
     destination_.ls_id_comparator_enabled_ = false;
 
     for (auto ls_id : source_.ls_id_set_) {
-      if (const auto new_ls_id = ids_map_[ls_id]; new_ls_id != PromPP::Primitives::kInvalidLabelSetID) {
+      if (const auto new_ls_id = ids_map_[ls_id]; new_ls_id != QueryableEncodingBimap::kInvalidId) {
         destination_.ls_id_set_.emplace_hint(destination_.ls_id_set_.end(), new_ls_id);
       }
     }

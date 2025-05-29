@@ -16,17 +16,6 @@ extern "C" {
 void prompp_primitives_lss_ctor(void* args, void* res);
 
 /**
- * @brief Construct a new Primitives label sets.
- *
- * @param args {
- *     source      uintptr // pointer to source label sets
- *     destination uintptr // pointer to destination label sets
- * }
- *
- */
-void prompp_primitives_lss_copy_added_series(void* args);
-
-/**
  * @brief Destroy Primitives label sets.
  *
  * @param args {
@@ -177,6 +166,56 @@ void prompp_primitives_lss_query_label_values(void* args, void* res);
  * }
  */
 void prompp_create_readonly_lss(void* args, void* res);
+
+/**
+ * @brief Construct a new Primitives label sets.
+ *
+ * @param args {
+ *     source      uintptr // pointer to source label sets
+ *     destination uintptr // pointer to destination label sets
+ * }
+ *
+ * @param res {
+ *     copier uintptr     // pointer to constructed copier
+ * }
+ */
+void prompp_primitives_lss_queryable_encoding_bimap_copier_ctor(void* args, void* res);
+
+/**
+ * @brief Part1 of all lss copying algorithm
+ *
+ * @param args {
+ *     lss uintptr // pointer to constructed copier
+ * }
+ */
+void prompp_primitives_lss_queryable_encoding_bimap_copier_copy_part1(void* args);
+
+/**
+ * @brief Part2 of all lss copying algorithm
+ *
+ * @param args {
+ *     lss uintptr // pointer to constructed copier
+ * }
+ */
+void prompp_primitives_lss_queryable_encoding_bimap_copier_copy_part2(void* args);
+
+/**
+ * @brief Part3 of all lss copying algorithm
+ *
+ * @param args {
+ *     lss uintptr // pointer to constructed copier
+ * }
+ */
+void prompp_primitives_lss_queryable_encoding_bimap_copier_copy_part3(void* args);
+
+/**
+ * @brief Destroy copier
+ *
+ * @param args {
+ *     lss uintptr // pointer to constructed copier
+ * }
+ */
+void prompp_primitives_lss_queryable_encoding_bimap_copier_dtor(void* args);
 
 #ifdef __cplusplus
 }  // extern "C"
