@@ -10,6 +10,7 @@ namespace {
 
 using PromPP::Primitives::LabelViewSet;
 using series_index::QueryableEncodingBimap;
+using series_index::QueryableEncodingBimapCopier;
 using series_index::trie::CedarMatchesList;
 using series_index::trie::CedarTrie;
 
@@ -115,22 +116,27 @@ TEST_F(QueryableEncodingBimapFixture, EmplaceDuplicatedLabelSet) {
   EXPECT_NE(ls_id1, ls_id2);
 }
 
-class QueryableEncodingBimapCopyAddedSeriesFixture : public QueryableEncodingBimapFixture {};
+class QueryableEncodingBimapCopierFixture : public QueryableEncodingBimapFixture {
+ protected:
+  using Copier = QueryableEncodingBimapCopier<Lss>;
+};
 
-TEST_F(QueryableEncodingBimapCopyAddedSeriesFixture, EmptyLss) {
+TEST_F(QueryableEncodingBimapCopierFixture, EmptyLss) {
   // Arrange
   Lss lss_copy;
+  Copier copier(lss_, lss_copy);
 
   // Act
-  lss_.copy_added_series(lss_copy);
+  copier.copy_added_series_and_build_indexes();
 
   // Assert
   EXPECT_EQ(0U, lss_copy.size());
 }
 
-TEST_F(QueryableEncodingBimapCopyAddedSeriesFixture, NonEmptyLss) {
+TEST_F(QueryableEncodingBimapCopierFixture, NonEmptyLss) {
   // Arrange
   Lss lss_copy;
+  Copier copier(lss_, lss_copy);
 
   const auto label_set = LabelViewSet{{"job", "cron"}, {"key", ""}, {"process", "php1"}};
   const auto label_set2 = LabelViewSet{{"job", "cron"}, {"key", ""}, {"process", "php"}};
@@ -139,7 +145,7 @@ TEST_F(QueryableEncodingBimapCopyAddedSeriesFixture, NonEmptyLss) {
   lss_.find_or_emplace(label_set2);
 
   // Act
-  lss_.copy_added_series(lss_copy);
+  copier.copy_added_series_and_build_indexes();
 
   // Assert
   EXPECT_EQ(2U, lss_copy.size());
@@ -151,10 +157,12 @@ TEST_F(QueryableEncodingBimapCopyAddedSeriesFixture, NonEmptyLss) {
   EXPECT_TRUE(lss_copy.trie_index().names_trie().lookup("job"));
 }
 
-TEST_F(QueryableEncodingBimapCopyAddedSeriesFixture, CopyOfCopy) {
+TEST_F(QueryableEncodingBimapCopierFixture, CopyOfCopy) {
   // Arrange
   Lss lss_copy;
   Lss lss_copy_of_copy;
+  Copier copier(lss_, lss_copy);
+  Copier copier2(lss_copy, lss_copy_of_copy);
 
   const auto label_set = LabelViewSet{{"job", "cron"}, {"key", ""}, {"process", "php"}};
   const auto label_set2 = LabelViewSet{{"job", "cron"}, {"key", ""}, {"process", "php1"}};
@@ -165,8 +173,8 @@ TEST_F(QueryableEncodingBimapCopyAddedSeriesFixture, CopyOfCopy) {
   lss_.find_or_emplace(label_set3);
 
   // Act
-  lss_.copy_added_series(lss_copy);
-  lss_copy.copy_added_series(lss_copy_of_copy);
+  copier.copy_added_series_and_build_indexes();
+  copier2.copy_added_series_and_build_indexes();
   lss_copy_of_copy.find_or_emplace(label_set3);
 
   // Assert
