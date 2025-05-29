@@ -123,7 +123,8 @@ class QueryableEncodingBimap final
   SeriesReverseIndex reverse_index_;
 
   size_t ls_id_set_allocated_memory_{};
-  LsIdSet ls_id_set_{{}, Base::less_comparator(), BareBones::Allocator<typename Base::Proxy>{ls_id_set_allocated_memory_}};
+  bool ls_id_comparator_enabled_{true};
+  LsIdSet ls_id_set_{{}, Base::less_comparator(&ls_id_comparator_enabled_), BareBones::Allocator<typename Base::Proxy>{ls_id_set_allocated_memory_}};
 
   size_t ls_id_hash_set_allocated_memory_{};
   HashSet ls_id_hash_set_{0, Base::hasher(), Base::equality_comparator(), BareBones::Allocator<typename Base::Proxy>{ls_id_hash_set_allocated_memory_}};
@@ -224,8 +225,7 @@ class QueryableEncodingBimapCopier {
   }
 
   void copy_ls_id_set() {
-    // copy_to.key_comp().disable();
-    // copy_to.value_comp().disable();
+    destination_.ls_id_comparator_enabled_ = false;
 
     for (auto ls_id : source_.ls_id_set_) {
       if (const auto new_ls_id = ids_map_[ls_id]; new_ls_id != PromPP::Primitives::kInvalidLabelSetID) {
@@ -233,7 +233,7 @@ class QueryableEncodingBimapCopier {
       }
     }
 
-    // copy_to.key_comp().enable(&);
+    destination_.ls_id_comparator_enabled_ = true;
 
     ids_map_ = BareBones::Vector<uint32_t>{};
   }
