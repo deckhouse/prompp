@@ -251,14 +251,24 @@ class QueryableEncodingBimapCopier {
 
       for (auto label = label_set.begin(); label != label_set.end(); ++label) {
         destination_.reverse_index_.add(label, ls_id);
-        destination_.trie_index_.insert((*label).first, label.name_id(), (*label).second, label.value_id());
       }
+    }
+  }
+
+  void build_trie_index() {
+    const auto& names = destination_.data_.label_name_sets_table.data().symbols_table;
+    destination_.trie_index_.reserve(names.size());
+
+    for (uint32_t name_id = 0; name_id < names.size(); ++name_id) {
+      destination_.trie_index_.insert_name(names[name_id], name_id);
+      destination_.trie_index_.insert_values(name_id, *destination_.data_.symbols_tables[name_id]);
     }
   }
 
   void copy_added_series_and_build_indexes() {
     copy_added_series();
     copy_ls_id_set();
+    build_trie_index();
     build_indexes();
   }
 
