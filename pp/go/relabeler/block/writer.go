@@ -11,10 +11,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/prometheus/prometheus/pp/go/util"
-
 	"github.com/oklog/ulid"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/tsdb/fileutil"
@@ -154,7 +153,16 @@ func (w *BlockWriter) write(block Block, minT, maxT int64) (err error) {
 		return nil
 	}
 
-	blockMeta := &tsdb.BlockMeta{ULID: uid, MinTime: math.MaxInt64, MaxTime: math.MinInt64}
+	blockMeta := &tsdb.BlockMeta{
+		ULID:    uid,
+		MinTime: math.MaxInt64,
+		MaxTime: math.MinInt64,
+		Version: metaVersion1,
+		Compaction: tsdb.BlockMetaCompaction{
+			Level:   1,
+			Sources: []ulid.ULID{uid},
+		},
+	}
 
 	var hasChunks bool
 	for chunkIterator.Next() {
@@ -197,7 +205,6 @@ func (w *BlockWriter) write(block Block, minT, maxT int64) (err error) {
 	_ = indexFileSize
 
 	// write meta
-	blockMeta.Version = metaVersion1
 	blockMeta.MaxTime += 1
 	metaFileSize, err := writeBlockMetaFile(filepath.Join(tmp, metaFilename), blockMeta)
 	if err != nil {
