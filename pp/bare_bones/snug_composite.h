@@ -57,6 +57,8 @@ class GenericDecodingTable {
 
   static constexpr bool kIsReadOnly = IsSharedSpan<Vector<uint8_t>>::value;
 
+  static constexpr auto kInvalidId = std::numeric_limits<uint32_t>::max();
+
  protected:
   class Proxy {
     uint32_t id_;
@@ -283,6 +285,11 @@ class GenericDecodingTable {
   inline __attribute__((always_inline)) const data_type& data() const noexcept { return data_; }
 
   inline __attribute__((always_inline)) const auto& items() const noexcept { return items_; }
+
+  PROMPP_ALWAYS_INLINE void reserve(const GenericDecodingTable& other) {
+    items_.reserve(other.items_.size());
+    data_.reserve(other.data_);
+  }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept {
     if constexpr (has_next_item_index<Derived>) {
@@ -637,7 +644,7 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
   EncodingBimap& operator=(EncodingBimap&&) noexcept = delete;
 
   template <class Class>
-  inline __attribute__((always_inline)) uint32_t find_or_emplace(const Class& c) noexcept {
+  PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(const Class& c) noexcept {
     return *set_.lazy_emplace(c, [&](const auto& ctor) {
       uint32_t id = Base::items_.size();
       Base::items_.emplace_back(Base::data_, c);
@@ -646,7 +653,7 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
   }
 
   template <class Class>
-  inline __attribute__((always_inline)) uint32_t find_or_emplace(const Class& c, size_t hashval) noexcept {
+  PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(const Class& c, size_t hashval) noexcept {
     return *set_.lazy_emplace_with_hash(c, phmap::phmap_mix<sizeof(size_t)>()(hashval), [&](const auto& ctor) {
       uint32_t id = Base::items_.size();
       Base::items_.emplace_back(Base::data_, c);
@@ -654,8 +661,22 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
     });
   }
 
+  template <class Class, class Cache, class... Args>
+  PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_with_cache(const Class& c, uint32_t id, Cache& cache, Args&&... args) noexcept {
+    if (const auto value = cache[id]; value != Base::kInvalidId) {
+      return value;
+    }
+
+    return *set_.lazy_emplace(c, [&](const auto& ctor) {
+      uint32_t new_id = Base::items_.size();
+      Base::items_.emplace_back(Base::data_, c, std::forward<Args>(args)...);
+      ctor(new_id);
+      cache[id] = new_id;
+    });
+  }
+
   template <class Class>
-  inline __attribute__((always_inline)) std::optional<uint32_t> find(const Class& c) const noexcept {
+  PROMPP_ALWAYS_INLINE std::optional<uint32_t> find(const Class& c) const noexcept {
     if (auto i = set_.find(c); i != set_.end()) {
       return *i;
     }
@@ -663,7 +684,7 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
   }
 
   template <class Class>
-  inline __attribute__((always_inline)) std::optional<uint32_t> find(const Class& c, size_t hashval) const noexcept {
+  PROMPP_ALWAYS_INLINE std::optional<uint32_t> find(const Class& c, size_t hashval) const noexcept {
     if (auto i = set_.find(c, phmap::phmap_mix<sizeof(size_t)>()(hashval)); i != set_.end()) {
       return *i;
     }
