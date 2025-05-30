@@ -342,13 +342,13 @@ func (h *Head) CommitToWal() error {
 	if h.readOnly {
 		return fmt.Errorf("committing read only head")
 	}
-	return h.ExclusiveForEachShard(relabeler.CommitToWal, func(shard relabeler.Shard) error {
+	return h.ForEachShard(relabeler.WalCommit, func(shard relabeler.Shard) error {
 		return shard.Wal().Commit()
 	})
 }
 
 func (h *Head) Flush() error {
-	return h.ExclusiveForEachShard(relabeler.WalFlush, func(shard relabeler.Shard) error {
+	return h.ForEachShard(relabeler.WalFlush, func(shard relabeler.Shard) error {
 		return shard.Wal().Flush()
 	})
 }
@@ -359,7 +359,7 @@ func (h *Head) OnShard(shardID uint16, typeTask relabeler.TypeTask, fn relabeler
 
 // MergeOutOfOrderChunks merge chunks with out of order data chunks.
 func (h *Head) MergeOutOfOrderChunks() {
-	_ = h.ExclusiveForEachShard(relabeler.DataStorageMergeOutOfOrderChunks, func(shard relabeler.Shard) error {
+	_ = h.ForEachShard(relabeler.DataStorageMergeOutOfOrderChunks, func(shard relabeler.Shard) error {
 		shard.DataStorage().MergeOutOfOrderChunks()
 		return nil
 	})
@@ -413,21 +413,24 @@ func (h *Head) WriteMetrics() {
 	).Set(float64(status.HeadStats.OtherQueriedSeries))
 
 	generationStr := strconv.FormatUint(h.generation, 10)
-	_ = h.NonExclusiveForEachShard(relabeler.HeadAllocatedMemory, func(shard relabeler.Shard) error {
-		shardID := strconv.FormatUint(uint64(shard.ShardID()), 10)
+	_ = h.ForEachShard(relabeler.HeadLSSAllocatedMemory, func(shard relabeler.Shard) error {
 		h.memoryInUse.With(
 			prometheus.Labels{
 				"generation": generationStr,
 				"allocator":  "main_lss",
-				"id":         shardID,
+				"id":         strconv.FormatUint(uint64(shard.ShardID()), 10),
 			},
 		).Set(float64(shard.LSS().AllocatedMemory()))
 
+		return nil
+	})
+
+	_ = h.ForEachShard(relabeler.HeadDataStorageAllocatedMemory, func(shard relabeler.Shard) error {
 		h.memoryInUse.With(
 			prometheus.Labels{
 				"generation": generationStr,
 				"allocator":  "data_storage",
-				"id":         shardID,
+				"id":         strconv.FormatUint(uint64(shard.ShardID()), 10),
 			},
 		).Set(float64(shard.DataStorage().AllocatedMemory()))
 
@@ -458,12 +461,21 @@ func (h *Head) WriteMetrics() {
 
 func (h *Head) Status(limit int) relabeler.HeadStatus {
 	shardStatuses := make([]*cppbridge.HeadStatus, h.NumberOfShards())
-	_ = h.NonExclusiveForEachShard(relabeler.HeadStatusType, func(shard relabeler.Shard) error {
-		shardStatuses[shard.ShardID()] = cppbridge.GetHeadStatus(
-			shard.LSS().Raw().Pointer(),
-			shard.DataStorage().Raw().Pointer(),
-			limit,
-		)
+	for i := range shardStatuses {
+		shardStatuses[i] = cppbridge.NewHeadStatus()
+	}
+
+	if limit != 0 {
+		_ = h.ForEachShard(relabeler.DataStorageHeadStatus, func(shard relabeler.Shard) error {
+			shardStatuses[shard.ShardID()].FromDataStorage(shard.DataStorage().Raw())
+
+			return nil
+		})
+	}
+
+	_ = h.ForEachShard(relabeler.LSSHeadStatus, func(shard relabeler.Shard) error {
+		shardStatuses[shard.ShardID()].FromLSS(shard.LSS().Raw(), limit)
+
 		return nil
 	})
 
@@ -489,14 +501,14 @@ func (h *Head) Status(limit int) relabeler.HeadStatus {
 		}
 
 		headStatus.HeadStats.ChunkCount += int64(shardStatus.ChunkCount)
-		headStatus.HeadStats.NumLabelPairs += int(shardStatus.NumLabelPairs)
-
 		if headStatus.HeadStats.MaxTime < shardStatus.TimeInterval.Max {
 			headStatus.HeadStats.MaxTime = shardStatus.TimeInterval.Max
 		}
 		if headStatus.HeadStats.MinTime > shardStatus.TimeInterval.Min {
 			headStatus.HeadStats.MinTime = shardStatus.TimeInterval.Min
 		}
+
+		headStatus.HeadStats.NumLabelPairs += int(shardStatus.NumLabelPairs)
 
 		for _, stat := range shardStatus.SeriesCountByMetricName {
 			seriesStats[stat.Name] += uint64(stat.Count)
@@ -551,7 +563,7 @@ func (*Head) Rotate() error {
 
 // CopySeriesFrom copy series from other head.
 func (h *Head) CopySeriesFrom(other relabeler.Head) {
-	_ = other.ExclusiveForEachShard(relabeler.HeadCopyAddedSeries, func(shard relabeler.Shard) error {
+	_ = other.ForEachShard(relabeler.HeadCopyAddedSeries, func(shard relabeler.Shard) error {
 		shard.LSS().Raw().CopyAddedSeries(h.lsses[shard.ShardID()].Raw())
 		return nil
 	})
@@ -620,8 +632,8 @@ func (h *Head) run() {
 	}
 }
 
-// ExclusiveForEachShard run func generic task on exclusive queue.
-func (h *Head) ExclusiveForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
+// ForEachShard run func generic task on exclusive or non-exclusive queue by typeTask.
+func (h *Head) ForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
 	if h.readOnly {
 		return h.readOnlyForEachShard(NewReadOnlyGenericTask(fn, h.numberOfShards))
 	}
@@ -635,30 +647,15 @@ func (h *Head) ExclusiveForEachShard(typeTask relabeler.TypeTask, fn relabeler.S
 		h.tasksExecute.With(ls),
 		h.numberOfShards,
 	)
-	for _, exclusiveTaskCh := range h.exclusiveTaskChs {
-		exclusiveTaskCh <- t
-	}
 
-	return t.Wait()
-}
-
-// NonExclusiveForEachShard run func generic task on non-exclusive queue.
-func (h *Head) NonExclusiveForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
-	if h.readOnly {
-		return h.readOnlyForEachShard(NewReadOnlyGenericTask(fn, h.numberOfShards))
-	}
-
-	ls := prometheus.Labels{"type_task": typeTask.String()}
-	t := NewGenericTask(
-		fn,
-		h.tasksCreated.With(ls),
-		h.tasksDone.With(ls),
-		h.tasksLive.With(ls),
-		h.tasksExecute.With(ls),
-		h.numberOfShards,
-	)
-	for _, nonExclusiveTaskCh := range h.nonExclusiveTaskChs {
-		nonExclusiveTaskCh <- t
+	if typeTask.IsExclusive() {
+		for _, exclusiveTaskCh := range h.exclusiveTaskChs {
+			exclusiveTaskCh <- t
+		}
+	} else {
+		for _, nonExclusiveTaskCh := range h.nonExclusiveTaskChs {
+			nonExclusiveTaskCh <- t
+		}
 	}
 
 	return t.Wait()
@@ -731,11 +728,14 @@ func (h *Head) Append(
 		}
 	}
 
-	var atomiclimitExhausted uint32
-
-	err = h.ExclusiveForEachShard(relabeler.WalDataStorageAdd, func(shard relabeler.Shard) error {
+	_ = h.ForEachShard(relabeler.DataStorageAppendInnerSeries, func(shard relabeler.Shard) error {
 		shard.DataStorage().AppendInnerSeriesSlice(shardedInnerSeries.DataByShard(shard.ShardID()))
 
+		return nil
+	})
+
+	var atomiclimitExhausted uint32
+	err = h.ForEachShard(relabeler.WalWrite, func(shard relabeler.Shard) error {
 		limitExhausted, errWrite := shard.Wal().Write(shardedInnerSeries.DataByShard(shard.ShardID()))
 		if errWrite != nil {
 			return fmt.Errorf("shard %d: %w", shard.ShardID(), errWrite)
@@ -752,7 +752,7 @@ func (h *Head) Append(
 	}
 
 	if commitToWal || atomiclimitExhausted > 0 {
-		err = h.ExclusiveForEachShard(relabeler.WalCommit, func(shard relabeler.Shard) error {
+		err = h.ForEachShard(relabeler.WalCommit, func(shard relabeler.Shard) error {
 			return shard.Wal().Commit()
 		})
 		if err != nil {
@@ -797,7 +797,7 @@ func (h *Head) inputRelabelingStage(
 ) (cppbridge.RelabelerStats, error) {
 	stats := make([]cppbridge.RelabelerStats, h.numberOfShards)
 
-	err := h.ExclusiveForEachShard(relabeler.HeadInputRelabeling, func(shard relabeler.Shard) error {
+	err := h.ForEachShard(relabeler.HeadInputRelabeling, func(shard relabeler.Shard) error {
 		var (
 			err              error
 			hasReallocations bool
@@ -867,7 +867,7 @@ func (h *Head) appendRelabelerSeriesStage(
 	shardedRelabeledSeries *ShardedRelabeledSeries,
 	shardedStateUpdates *ShardedStateUpdates,
 ) error {
-	err := h.ExclusiveForEachShard(relabeler.HeadAppendRelabelerSeries, func(shard relabeler.Shard) error {
+	err := h.ForEachShard(relabeler.HeadAppendRelabelerSeries, func(shard relabeler.Shard) error {
 		relabeledSeries, ok := shardedRelabeledSeries.DataBySourceShard(shard.ShardID())
 		if !ok {
 			return nil
@@ -904,41 +904,41 @@ func (h *Head) updateRelabelerStateStage(
 	rd *RelabelerData,
 	shardedStateUpdates *ShardedStateUpdates,
 ) error {
-	// for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
-	// 	updates, ok := shardedStateUpdates.DataBySourceShard(shardID)
-	// 	if !ok {
-	// 		continue
-	// 	}
-
-	// 	err := rd.InputRelabelerByShard(shardID).UpdateRelabelerState(
-	// 		ctx,
-	// 		state.CacheByShard(shardID),
-	// 		updates,
-	// 	)
-	// 	if err != nil {
-	// 		return fmt.Errorf("shard %d: %w", shardID, err)
-	// 	}
-	// }
-
-	// return nil
-
-	return h.NonExclusiveForEachShard(relabeler.HeadUpdateRelabelerState, func(shard relabeler.Shard) error {
-		updates, ok := shardedStateUpdates.DataBySourceShard(shard.ShardID())
+	for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
+		updates, ok := shardedStateUpdates.DataBySourceShard(shardID)
 		if !ok {
-			return nil
+			continue
 		}
 
-		err := rd.InputRelabelerByShard(shard.ShardID()).UpdateRelabelerState(
+		err := rd.InputRelabelerByShard(shardID).UpdateRelabelerState(
 			ctx,
-			state.CacheByShard(shard.ShardID()),
+			state.CacheByShard(shardID),
 			updates,
 		)
 		if err != nil {
-			return fmt.Errorf("shard %d: %w", shard.ShardID(), err)
+			return fmt.Errorf("shard %d: %w", shardID, err)
 		}
+	}
 
-		return nil
-	})
+	return nil
+
+	// return h.ForEachShard(relabeler.HeadUpdateRelabelerState, func(shard relabeler.Shard) error {
+	// 	updates, ok := shardedStateUpdates.DataBySourceShard(shard.ShardID())
+	// 	if !ok {
+	// 		return nil
+	// 	}
+
+	// 	err := rd.InputRelabelerByShard(shard.ShardID()).UpdateRelabelerState(
+	// 		ctx,
+	// 		state.CacheByShard(shard.ShardID()),
+	// 		updates,
+	// 	)
+	// 	if err != nil {
+	// 		return fmt.Errorf("shard %d: %w", shard.ShardID(), err)
+	// 	}
+
+	// 	return nil
+	// })
 }
 
 // exclusiveShardLoop run shard loop for exclusive(write lock) operation.

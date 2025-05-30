@@ -409,10 +409,6 @@ class PerShardRelabeler {
     }
   }
 
-  // TODO delete after rebuild metrics
-  // cache_allocated_memory - return size of allocated memory for cache map.
-  PROMPP_ALWAYS_INLINE size_t cache_allocated_memory() const noexcept { return 0; }
-
  private:
   PROMPP_ALWAYS_INLINE bool resolve_timestamps(PromPP::Primitives::Timestamp def_timestamp,
                                                BareBones::Vector<PromPP::Primitives::Sample>& samples,

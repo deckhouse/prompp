@@ -55,6 +55,10 @@ void prompp_get_head_status(void* args, void* res);
  */
 void prompp_free_head_status(void* args);
 
+void prompp_get_head_status_lss(void* args, void* res);
+
+void prompp_get_head_status_data_storage(void* args, void* res);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

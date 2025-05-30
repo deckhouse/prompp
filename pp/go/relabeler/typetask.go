@@ -15,35 +15,49 @@ const (
 	HeadInputRelabeling
 	// HeadAppendRelabelerSeries type of task.
 	HeadAppendRelabelerSeries
-	// HeadUpdateRelabelerState type of task.
-	HeadUpdateRelabelerState
-
-	// HeadAllocatedMemory type of task.
-	HeadAllocatedMemory
-	// HeadStatusType type of task.
-	HeadStatusType
-	// HeadCopyAddedSeries type of task.
-	HeadCopyAddedSeries
 
 	// DataStorageAppendInnerSeries type of task.
 	DataStorageAppendInnerSeries
 	// DataStorageMergeOutOfOrderChunks type of task.
 	DataStorageMergeOutOfOrderChunks
 
+	// WalCommit type of task.
+	WalCommit
+	// WalFlush type of task.
+	WalFlush
+	// WalWrite type of task.
+	WalWrite
+
+	// HeadCopyAddedSeries type of task.
+	HeadCopyAddedSeries
+
 	// BlockWrite type of task.
 	BlockWrite
 
-	// WalCommit type of task.
-	WalCommit
-	// CommitToWal type of task.
-	CommitToWal
-	// WalFlush type of task.
-	WalFlush
-	// WalDataStorageAdd type of task.
-	WalDataStorageAdd
+	// DistributorOutputRelabeling type of task.
+	DistributorOutputRelabeling
+	// DistributorUpdateRelabelerState type of task.
+	DistributorUpdateRelabelerState
 
-	// ChunkQuerierSelect type of task.
-	ChunkQuerierSelect
+	// exclusiveMarker dividing marker, not used
+	exclusiveMarker
+
+	// HeadUpdateRelabelerState type of task.
+	HeadUpdateRelabelerState
+
+	// HeadLSSAllocatedMemory type of task.
+	HeadLSSAllocatedMemory
+	// HeadDataStorageAllocatedMemory type of task.
+	HeadDataStorageAllocatedMemory
+	// DataStorageHeadStatus type of task.
+	DataStorageHeadStatus
+	// LSSHeadStatus type of task.
+	LSSHeadStatus
+
+	// ChunkQuerierSelectLSSQuery type of task.
+	ChunkQuerierSelectLSSQuery
+	// ChunkQuerierSelectDataStorageQuery type of task.
+	ChunkQuerierSelectDataStorageQuery
 	// ChunkQuerierLabelValues type of task.
 	ChunkQuerierLabelValues
 	// ChunkQuerierLabelNames type of task.
@@ -61,14 +75,87 @@ const (
 	QuerierLabelValues
 	// QuerierLabelNames type of task.
 	QuerierLabelNames
-
-	// DistributorWriteMetrics type of task.
-	DistributorWriteMetrics
-	// DistributorOutputRelabeling type of task.
-	DistributorOutputRelabeling
-	// DistributorUpdateRelabelerState type of task.
-	DistributorUpdateRelabelerState
-
-	// Other type of task.
-	Other
 )
+
+// IsExclusive indicates whether the type is exclusive.
+func (i TypeTask) IsExclusive() bool {
+	return i < exclusiveMarker
+}
+
+// const (
+// 	// Unknown type of task.
+// 	Unknown TypeTask = iota
+
+// 	// HeadInputRelabeling type of task.
+// 	HeadInputRelabeling
+// 	// HeadAppendRelabelerSeries type of task.
+// 	HeadAppendRelabelerSeries
+
+// 	// WalCommit type of task.
+// 	WalCommit
+// 	// WalFlush type of task.
+// 	WalFlush
+// 	// WalWrite type of task.
+// 	WalWrite
+
+// 	// HeadCopyAddedSeries type of task.
+// 	HeadCopyAddedSeries
+
+// 	// DistributorOutputRelabeling type of task.
+// 	DistributorOutputRelabeling
+// 	// DistributorUpdateRelabelerState type of task.
+// 	DistributorUpdateRelabelerState
+
+// 	// HeadLSSAllocatedMemory type of task.
+// 	HeadLSSAllocatedMemory
+
+// 	// LSSHeadStatus type of task.
+// 	LSSHeadStatus
+
+// 	// ChunkQuerierSelectLSSQuery type of task.
+// 	ChunkQuerierSelectLSSQuery
+// 	// ChunkQuerierLabelValues type of task.
+// 	ChunkQuerierLabelValues
+// 	// ChunkQuerierLabelNames type of task.
+// 	ChunkQuerierLabelNames
+
+// 	// QuerierSelectInstantLSSQuery type of task.
+// 	QuerierSelectInstantLSSQuery
+// 	// QuerierSelectRangeLSSQuery type of task.
+// 	QuerierSelectRangeLSSQuery
+// 	// QuerierLabelValues type of task.
+// 	QuerierLabelValues
+// 	// QuerierLabelNames type of task.
+// 	QuerierLabelNames
+
+// 	// exclusiveMarker dividing marker, not used
+// 	exclusiveMarker
+// 	//
+
+// 	// DataStorageAppendInnerSeries type of task.
+// 	DataStorageAppendInnerSeries
+// 	// DataStorageMergeOutOfOrderChunks type of task.
+// 	DataStorageMergeOutOfOrderChunks
+
+// 	// HeadDataStorageAllocatedMemory type of task.
+// 	HeadDataStorageAllocatedMemory
+
+// 	// DataStorageHeadStatus type of task.
+// 	DataStorageHeadStatus
+
+// 	// ChunkQuerierSelectDataStorageQuery type of task.
+// 	ChunkQuerierSelectDataStorageQuery
+
+// 	// QuerierSelectInstantDataStorageQuery type of task.
+// 	QuerierSelectInstantDataStorageQuery
+// 	// QuerierSelectRangeDataStorageQuery type of task.
+// 	QuerierSelectRangeDataStorageQuery
+
+// 	//
+
+// 	// BlockWrite type of task.
+// 	BlockWrite
+
+// 	// HeadUpdateRelabelerState type of task.
+// 	HeadUpdateRelabelerState
+// )

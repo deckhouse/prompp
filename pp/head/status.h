@@ -216,4 +216,132 @@ class StatusGetter {
   }
 };
 
+template <class Lss, class Status>
+class StatusGetterLSS {
+ public:
+  StatusGetterLSS(const Lss& lss, size_t limit)
+      : lss_(lss),
+        limit_(limit),
+        top_label_value_count_by_name_{limit},
+        top_series_count_by_metric_name_{limit},
+        top_memory_in_bytes_by_label_name_{limit},
+        top_series_count_by_label_value_pair_{limit} {
+    fill();
+  }
+
+  void get(Status& status) {
+    using enum series_index::QueriedSeries::Source;
+
+    status.num_series = lss_.size();
+    status.rule_queried_series = lss_.queried_series_count(kRule);
+    status.federate_queried_series = lss_.queried_series_count(kFederate);
+    status.other_queried_series = lss_.queried_series_count(kOther);
+    if (limit_ == 0) {
+      return;
+    }
+
+    static constexpr auto fill_top_items = [](const auto& top_items, auto& destination) PROMPP_LAMBDA_INLINE {
+      destination.reserve(top_items.size());
+      std::ranges::copy_if(top_items.elements(), std::back_inserter(destination), [&](const auto& item) PROMPP_LAMBDA_INLINE { return item.count > 0; });
+    };
+
+    status.num_label_pairs = label_count_;
+
+    fill_top_items(top_label_value_count_by_name_, status.label_value_count_by_label_name);
+    fill_top_items(top_series_count_by_metric_name_, status.series_count_by_metric_name);
+    fill_top_items(top_memory_in_bytes_by_label_name_, status.memory_in_bytes_by_label_name);
+    fill_top_items(top_series_count_by_label_value_pair_, status.series_count_by_label_value_pair);
+  }
+
+ private:
+  using StringType = typename Status::String;
+
+  using TopLabelValueCountByLabelName = TopItems<StringCountItem<StringType>>;
+  using TopSeriesCountByMetricName = TopItems<StringCountItem<StringType>>;
+  using TopMemoryInBytesByLabelName = TopItems<StringCountItem<StringType>>;
+  using TopSeriesCountByLabelValuePair = TopItems<StringPairCountItem<StringType>>;
+
+  const Lss& lss_;
+  const size_t limit_;
+
+  TopLabelValueCountByLabelName top_label_value_count_by_name_;
+  TopSeriesCountByMetricName top_series_count_by_metric_name_;
+  TopMemoryInBytesByLabelName top_memory_in_bytes_by_label_name_;
+  TopSeriesCountByLabelValuePair top_series_count_by_label_value_pair_;
+  uint32_t label_count_{};
+
+  void fill() noexcept {
+    if (limit_ == 0) {
+      return;
+    }
+
+    fill_lss_statistic();
+    fill_reverse_index_statistic();
+  }
+
+  void fill_lss_statistic() noexcept {
+    auto& names = lss_.data().label_name_sets_table.data().symbols_table;
+    for (uint32_t name_id = 0; name_id < names.size(); ++name_id) {
+      auto count = lss_.data().symbols_tables[name_id]->size();
+
+      label_count_ += count;
+      top_label_value_count_by_name_.add(count,
+                                         [&] PROMPP_LAMBDA_INLINE { return StringCountItem<StringType>{.name = StringType(names[name_id]), .count = count}; });
+    }
+
+    top_label_value_count_by_name_.sort();
+  }
+
+  void fill_reverse_index_statistic() noexcept {
+    const auto metric_name_id = lss_.trie_index().names_trie().lookup(PromPP::Prometheus::kMetricLabelName).value_or(std::numeric_limits<uint32_t>::max());
+
+    auto& names = lss_.reverse_index().labels_by_name();
+    for (uint32_t name_id = 0; name_id < names.size(); ++name_id) {
+      auto& values = names[name_id].series_by_value();
+
+      enumerate_values_in_reverse_index(values, name_id);
+      if (name_id == metric_name_id) [[unlikely]] {
+        enumerate_metric_name_values_in_reverse_index(values, name_id);
+      }
+    }
+
+    top_series_count_by_metric_name_.sort();
+    top_memory_in_bytes_by_label_name_.sort();
+    top_series_count_by_label_value_pair_.sort();
+  }
+
+  void enumerate_values_in_reverse_index(const BareBones::Vector<series_index::CompactSeriesIdSequence>& values, uint32_t name_id) noexcept {
+    uint32_t size_in_bytes = 0;
+
+    for (uint32_t value_id = 0; value_id < values.size(); ++value_id) {
+      auto series_count = values[value_id].count();
+
+      auto label_value = get_label_value(name_id, value_id);
+      size_in_bytes += series_count * label_value.size();
+
+      top_series_count_by_label_value_pair_.add(series_count, [&] PROMPP_LAMBDA_INLINE {
+        return StringPairCountItem<StringType>{.name = get_label_name(name_id), .value = label_value, .count = series_count};
+      });
+    }
+
+    top_memory_in_bytes_by_label_name_.add(
+        size_in_bytes, [&] PROMPP_LAMBDA_INLINE { return StringCountItem<StringType>{.name = get_label_name(name_id), .count = size_in_bytes}; });
+  }
+
+  void enumerate_metric_name_values_in_reverse_index(const BareBones::Vector<series_index::CompactSeriesIdSequence>& values, uint32_t name_id) {
+    for (uint32_t value_id = 0; value_id < values.size(); ++value_id) {
+      auto series_count = values[value_id].count();
+      top_series_count_by_metric_name_.add(
+          series_count, [&] PROMPP_LAMBDA_INLINE { return StringCountItem<StringType>{.name = get_label_value(name_id, value_id), .count = series_count}; });
+    }
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE StringType get_label_name(uint32_t name_id) const noexcept {
+    return StringType(lss_.data().label_name_sets_table.data().symbols_table[name_id]);
+  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE StringType get_label_value(uint32_t name_id, uint32_t value_id) const noexcept {
+    return StringType(lss_.data().symbols_tables[name_id]->operator[](value_id));
+  }
+};
+
 }  // namespace head

@@ -609,11 +609,6 @@ func (ipsr *InputPerShardRelabeler) AppendRelabelerSeries(
 	return hasReallocations, handleException(exception)
 }
 
-// CacheAllocatedMemory - return size of allocated memory for cache map.
-func (ipsr *InputPerShardRelabeler) CacheAllocatedMemory() uint64 {
-	return prometheusPerShardRelabelerCacheAllocatedMemory(ipsr.cptr)
-}
-
 // Generation return current statelessRelabeler generation.
 func (ipsr *InputPerShardRelabeler) Generation() uint64 {
 	return ipsr.statelessRelabeler.Generation()
@@ -768,11 +763,6 @@ func NewOutputPerShardRelabeler(
 		psr.statelessRelabeler = nil
 	})
 	return opsr, nil
-}
-
-// CacheAllocatedMemory return size of allocated memory for cache map.
-func (opsr *OutputPerShardRelabeler) CacheAllocatedMemory() uint64 {
-	return prometheusPerShardRelabelerCacheAllocatedMemory(opsr.cptr)
 }
 
 // OutputRelabeling relabeling output series(fourth stage).

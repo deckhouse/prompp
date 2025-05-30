@@ -80,8 +80,7 @@ type Head interface {
 	String() string
 	CopySeriesFrom(other Head)
 
-	ExclusiveForEachShard(typeTask TypeTask, fn ShardFn) error
-	NonExclusiveForEachShard(typeTask TypeTask, fn ShardFn) error
+	ForEachShard(typeTask TypeTask, fn ShardFn) error
 }
 
 type Distributor interface {

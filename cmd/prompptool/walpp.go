@@ -112,7 +112,7 @@ func (cmd *cmdWALPPToBlock) Do(
 		h.Stop()
 
 		level.Debug(logger).Log("msg", "write block", "id", headRecord.ID(), "dir", headRecord.Dir())
-		if err = h.ExclusiveForEachShard(relabeler.BlockWrite, func(shard relabeler.Shard) error {
+		if err = h.ForEachShard(relabeler.BlockWrite, func(shard relabeler.Shard) error {
 			return bw.Write(relabeler.NewBlock(shard.LSS().Raw(), shard.DataStorage().Raw()))
 		}); err != nil {
 			return fmt.Errorf("failed to write tsdb block [id: %s, dir: %s]: %w", headRecord.ID(), headRecord.Dir(), err)

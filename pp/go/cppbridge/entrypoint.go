@@ -1479,24 +1479,6 @@ func prometheusPerShardRelabelerDtor(perShardRelabeler uintptr) {
 	)
 }
 
-// prometheusPerShardRelabelerCacheAllocatedMemory - return size of allocated memory for cache map.
-func prometheusPerShardRelabelerCacheAllocatedMemory(perShardRelabeler uintptr) uint64 {
-	args := struct {
-		perShardRelabeler uintptr
-	}{perShardRelabeler}
-	var res struct {
-		cacheAllocatedMemory uint64
-	}
-
-	fastcgo.UnsafeCall2(
-		C.prompp_prometheus_per_shard_relabeler_cache_allocated_memory,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.cacheAllocatedMemory
-}
-
 // prometheusPerShardRelabelerInputRelabeling - wrapper for relabeling incoming hashdex(first stage).
 func prometheusPerShardRelabelerInputRelabeling(
 	perShardRelabeler, inputLss, targetLss, cache, hashdex uintptr,
@@ -2230,6 +2212,31 @@ func getHeadStatus(lss, dataStorage uintptr, status *HeadStatus, limit int) {
 func freeHeadStatus(status *HeadStatus) {
 	fastcgo.UnsafeCall1(
 		C.prompp_free_head_status,
+		uintptr(unsafe.Pointer(status)),
+	)
+}
+
+func getHeadStatusLSS(lss uintptr, status *HeadStatus, limit int) {
+	args := struct {
+		lss   uintptr
+		limit int
+	}{lss, limit}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_get_head_status_lss,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(status)),
+	)
+}
+
+func getHeadStatusDataStorage(dataStorage uintptr, status *HeadStatus) {
+	args := struct {
+		dataStorage uintptr
+	}{dataStorage}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_get_head_status_data_storage,
+		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(status)),
 	)
 }

@@ -169,18 +169,6 @@ extern "C" void prompp_prometheus_per_shard_relabeler_dtor(void* args) {
   static_cast<Arguments*>(args)->~Arguments();
 }
 
-extern "C" void prompp_prometheus_per_shard_relabeler_cache_allocated_memory(void* args, void* res) {
-  struct Arguments {
-    PerShardRelabelerPtr per_shard_relabeler;
-  };
-  struct Result {
-    size_t allocated_memory;
-  };
-
-  const auto* in = static_cast<Arguments*>(args);
-  new (res) Result{.allocated_memory = in->per_shard_relabeler->cache_allocated_memory()};
-}
-
 extern "C" void prompp_prometheus_per_shard_relabeler_input_relabeling(void* args, void* res) {
   struct Arguments {
     PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> shards_inner_series;

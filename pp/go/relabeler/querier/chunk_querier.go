@@ -45,14 +45,15 @@ func (q *ChunkQuerier) Select(
 	matchers ...*labels.Matcher,
 ) storage.ChunkSeriesSet {
 	chunkSeriesSets := make([]storage.ChunkSeriesSet, q.head.NumberOfShards())
+	lssQueryResults := make([]*cppbridge.LSSQueryResult, q.head.NumberOfShards())
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
 	callerID := cppbridge.GetCaller(ctx)
 
-	err := q.head.NonExclusiveForEachShard(relabeler.ChunkQuerierSelect, func(shard relabeler.Shard) error {
+	err := q.head.ForEachShard(relabeler.ChunkQuerierSelectLSSQuery, func(shard relabeler.Shard) error {
 		lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
 
 		if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {
-			chunkSeriesSets[shard.ShardID()] = EmptyChunkSeriesSet{}
+			// chunkSeriesSets[shard.ShardID()] = EmptyChunkSeriesSet{}
 			if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
 				return nil
 			}
@@ -61,6 +62,22 @@ func (q *ChunkQuerier) Select(
 				shard.ShardID(),
 				lssQueryResult.Status(),
 			)
+		}
+
+		lssQueryResults[shard.ShardID()] = lssQueryResult
+
+		return nil
+	})
+	if err != nil {
+		logger.Warnf("ChunkQuerier: Select failed: %s", err)
+		return storage.ErrChunkSeriesSet(err)
+	}
+
+	_ = q.head.ForEachShard(relabeler.ChunkQuerierSelectDataStorageQuery, func(shard relabeler.Shard) error {
+		lssQueryResult := lssQueryResults[shard.ShardID()]
+		if lssQueryResult == nil {
+			chunkSeriesSets[shard.ShardID()] = EmptyChunkSeriesSet{}
+			return nil
 		}
 
 		serializedChunks := shard.DataStorage().Query(cppbridge.HeadDataStorageQuery{
@@ -83,10 +100,6 @@ func (q *ChunkQuerier) Select(
 
 		return nil
 	})
-	if err != nil {
-		logger.Warnf("QUERIER: Select failed: %s", err)
-		return storage.ErrChunkSeriesSet(err)
-	}
 
 	return storage.NewMergeChunkSeriesSet(chunkSeriesSets, storage.NewConcatenatingChunkSeriesMerger())
 }

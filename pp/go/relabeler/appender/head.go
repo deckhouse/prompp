@@ -188,12 +188,9 @@ func (h *RotatableHead) CopySeriesFrom(other relabeler.Head) {
 	h.head.CopySeriesFrom(other)
 }
 
-func (h *RotatableHead) ExclusiveForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
-	return h.head.ExclusiveForEachShard(typeTask, fn)
-}
-
-func (h *RotatableHead) NonExclusiveForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
-	return h.head.NonExclusiveForEachShard(typeTask, fn)
+// ForEachShard run func generic task on exclusive or non-exclusive queue by typeTask.
+func (h *RotatableHead) ForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
+	return h.head.ForEachShard(typeTask, fn)
 }
 
 //
@@ -296,10 +293,7 @@ func (h *HeapProfileWritableHead) CopySeriesFrom(other relabeler.Head) {
 	h.head.CopySeriesFrom(other)
 }
 
-func (h *HeapProfileWritableHead) ExclusiveForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
-	return h.head.ExclusiveForEachShard(typeTask, fn)
-}
-
-func (h *HeapProfileWritableHead) NonExclusiveForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
-	return h.head.NonExclusiveForEachShard(typeTask, fn)
+// ForEachShard run func generic task on exclusive or non-exclusive queue by typeTask.
+func (h *HeapProfileWritableHead) ForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
+	return h.head.ForEachShard(typeTask, fn)
 }

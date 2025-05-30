@@ -140,19 +140,6 @@ void prompp_prometheus_per_shard_relabeler_ctor(void* args, void* res);
 void prompp_prometheus_per_shard_relabeler_dtor(void* args);
 
 /**
- * @brief return size of allocated memory for cache map.
- *
- * @param args {
- *     per_shard_relabeler uintptr // pointer to constructed per shard relabeler;
- * }
- *
- * @param res {
- *     allocated_memory    uint64  // size of allocated memory for label sets;
- * }
- */
-void prompp_prometheus_per_shard_relabeler_cache_allocated_memory(void* args, void* res);
-
-/**
  * @brief relabeling incomig hashdex(first stage).
  *
  * @param args {
