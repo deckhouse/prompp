@@ -167,12 +167,13 @@ type Head struct {
 	relabelersData map[string]*RelabelerData
 	rdMutex        sync.Mutex
 
-	dataStorages []*DataStorage
-	wals         []*ShardWal
-	lsses        []*LSS
-
-	priotityTaskCh    []chan *GenericTask
-	nonPriorityTaskCh []chan *GenericTask
+	dataStorages        []*DataStorage
+	wals                []*ShardWal
+	lsses               []*LSS
+	shards              []*shard
+	exclusiveTaskChs    []chan *GenericTask
+	nonExclusiveTaskChs []chan *GenericTask
+	sMutex              sync.RWMutex
 
 	numberOfShards uint16
 	stopc          chan struct{}
@@ -186,8 +187,8 @@ type Head struct {
 	queried              *prometheus.GaugeVec
 	walSize              *prometheus.GaugeVec
 	// TODO refactoring
-	queuePriotity    *prometheus.GaugeVec
-	queueNonPriority *prometheus.GaugeVec
+	queueExclusive    *prometheus.GaugeVec
+	queueNonExclusive *prometheus.GaugeVec
 
 	tasksCreated *prometheus.CounterVec
 	tasksDone    *prometheus.CounterVec
@@ -205,24 +206,31 @@ func New(
 	numberOfShards uint16,
 	registerer prometheus.Registerer,
 ) (*Head, error) {
-	priotity := make([]chan *GenericTask, numberOfShards)
-	nonPriority := make([]chan *GenericTask, numberOfShards)
+	exclusive := make([]chan *GenericTask, numberOfShards)
+	nonExclusive := make([]chan *GenericTask, numberOfShards)
+	shards := make([]*shard, numberOfShards)
 
 	for shardID := uint16(0); shardID < numberOfShards; shardID++ {
-		priotity[shardID] = make(chan *GenericTask, chanBufferSize)
-		nonPriority[shardID] = make(chan *GenericTask, chanBufferSize)
+		exclusive[shardID] = make(chan *GenericTask, chanBufferSize)
+		nonExclusive[shardID] = make(chan *GenericTask, chanBufferSize)
+		shards[shardID] = &shard{
+			id:          shardID,
+			lss:         lsses[shardID],
+			dataStorage: dataStorages[shardID],
+			wal:         wals[shardID],
+		}
 	}
 
 	factory := util.NewUnconflictRegisterer(registerer)
 	h := &Head{
-		id:           id,
-		generation:   generation,
-		lsses:        lsses,
-		wals:         wals,
-		dataStorages: dataStorages,
-
-		priotityTaskCh:    priotity,
-		nonPriorityTaskCh: nonPriority,
+		id:                  id,
+		generation:          generation,
+		lsses:               lsses,
+		wals:                wals,
+		dataStorages:        dataStorages,
+		shards:              shards,
+		exclusiveTaskChs:    exclusive,
+		nonExclusiveTaskChs: nonExclusive,
 
 		stopc:          make(chan struct{}),
 		wg:             &sync.WaitGroup{},
@@ -259,17 +267,17 @@ func New(
 			},
 			[]string{"shard_id"},
 		),
-		queuePriotity: factory.NewGaugeVec(
+		queueExclusive: factory.NewGaugeVec(
 			prometheus.GaugeOpts{
-				Name: "prompp_head_queue_priotity_size",
-				Help: "The size of the queue priotity of the current head.",
+				Name: "prompp_head_queue_exclusive_size",
+				Help: "The size of the queue exclusive of the current head.",
 			},
 			[]string{"shard_id"},
 		),
-		queueNonPriority: factory.NewGaugeVec(
+		queueNonExclusive: factory.NewGaugeVec(
 			prometheus.GaugeOpts{
-				Name: "prompp_head_queue_non_priority_size",
-				Help: "The size of the queue non priority of the current head.",
+				Name: "prompp_head_queue_non_exclusive_size",
+				Help: "The size of the queue non exclusive of the current head.",
 			},
 			[]string{"shard_id"},
 		),
@@ -334,13 +342,13 @@ func (h *Head) CommitToWal() error {
 	if h.readOnly {
 		return fmt.Errorf("committing read only head")
 	}
-	return h.PriorityForEachShard(relabeler.CommitToWal, func(shard relabeler.Shard) error {
+	return h.ExclusiveForEachShard(relabeler.CommitToWal, func(shard relabeler.Shard) error {
 		return shard.Wal().Commit()
 	})
 }
 
 func (h *Head) Flush() error {
-	return h.PriorityForEachShard(relabeler.WalFlush, func(shard relabeler.Shard) error {
+	return h.ExclusiveForEachShard(relabeler.WalFlush, func(shard relabeler.Shard) error {
 		return shard.Wal().Flush()
 	})
 }
@@ -351,7 +359,7 @@ func (h *Head) OnShard(shardID uint16, typeTask relabeler.TypeTask, fn relabeler
 
 // MergeOutOfOrderChunks merge chunks with out of order data chunks.
 func (h *Head) MergeOutOfOrderChunks() {
-	_ = h.PriorityForEachShard(relabeler.DataStorageMergeOutOfOrderChunks, func(shard relabeler.Shard) error {
+	_ = h.ExclusiveForEachShard(relabeler.DataStorageMergeOutOfOrderChunks, func(shard relabeler.Shard) error {
 		shard.DataStorage().MergeOutOfOrderChunks()
 		return nil
 	})
@@ -405,7 +413,7 @@ func (h *Head) WriteMetrics() {
 	).Set(float64(status.HeadStats.OtherQueriedSeries))
 
 	generationStr := strconv.FormatUint(h.generation, 10)
-	_ = h.PriorityForEachShard(relabeler.HeadAllocatedMemory, func(shard relabeler.Shard) error {
+	_ = h.NonExclusiveForEachShard(relabeler.HeadAllocatedMemory, func(shard relabeler.Shard) error {
 		shardID := strconv.FormatUint(uint64(shard.ShardID()), 10)
 		h.memoryInUse.With(
 			prometheus.Labels{
@@ -438,19 +446,19 @@ func (h *Head) WriteMetrics() {
 			prometheus.Labels{"shard_id": shardIDStr},
 		).Set(float64(h.wals[shardID].CurrentSize()))
 
-		h.queuePriotity.With(prometheus.Labels{
+		h.queueExclusive.With(prometheus.Labels{
 			"shard_id": shardIDStr,
-		}).Set(float64(len(h.priotityTaskCh[shardID])))
+		}).Set(float64(len(h.exclusiveTaskChs[shardID])))
 
-		h.queueNonPriority.With(prometheus.Labels{
+		h.queueNonExclusive.With(prometheus.Labels{
 			"shard_id": shardIDStr,
-		}).Set(float64(len(h.nonPriorityTaskCh[shardID])))
+		}).Set(float64(len(h.nonExclusiveTaskChs[shardID])))
 	}
 }
 
 func (h *Head) Status(limit int) relabeler.HeadStatus {
 	shardStatuses := make([]*cppbridge.HeadStatus, h.NumberOfShards())
-	_ = h.PriorityForEachShard(relabeler.HeadStatusType, func(shard relabeler.Shard) error {
+	_ = h.NonExclusiveForEachShard(relabeler.HeadStatusType, func(shard relabeler.Shard) error {
 		shardStatuses[shard.ShardID()] = cppbridge.GetHeadStatus(
 			shard.LSS().Raw().Pointer(),
 			shard.DataStorage().Raw().Pointer(),
@@ -543,7 +551,7 @@ func (*Head) Rotate() error {
 
 // CopySeriesFrom copy series from other head.
 func (h *Head) CopySeriesFrom(other relabeler.Head) {
-	_ = other.PriorityForEachShard(relabeler.HeadCopyAddedSeries, func(shard relabeler.Shard) error {
+	_ = other.ExclusiveForEachShard(relabeler.HeadCopyAddedSeries, func(shard relabeler.Shard) error {
 		shard.LSS().Raw().CopyAddedSeries(h.lsses[shard.ShardID()].Raw())
 		return nil
 	})
@@ -583,7 +591,7 @@ func (h *Head) onShard(shardID uint16, typeTask relabeler.TypeTask, fn relabeler
 		h.tasksExecute.With(ls),
 		h.numberOfShards,
 	)
-	h.priotityTaskCh[shardID] <- task
+	h.exclusiveTaskChs[shardID] <- task
 
 	return task.Wait()
 }
@@ -595,17 +603,25 @@ func (h *Head) stop() {
 }
 
 func (h *Head) run() {
+	readGoCount := 2
 	for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
-		h.wg.Add(1)
-		go func(shardID uint16) {
+		h.wg.Add(readGoCount + 1)
+		go func(sid uint16) {
 			defer h.wg.Done()
-			h.shardLoop(shardID, h.priotityTaskCh[shardID], h.nonPriorityTaskCh[shardID], h.stopc)
+			h.exclusiveShardLoop(sid, h.exclusiveTaskChs[sid], h.stopc)
 		}(shardID)
+
+		for i := 0; i < readGoCount; i++ {
+			go func(sid uint16) {
+				defer h.wg.Done()
+				h.nonExclusiveShardLoop(sid, h.nonExclusiveTaskChs[sid], h.stopc)
+			}(shardID)
+		}
 	}
 }
 
-// PriorityForEachShard run func generic task on priority queue.
-func (h *Head) PriorityForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
+// ExclusiveForEachShard run func generic task on exclusive queue.
+func (h *Head) ExclusiveForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
 	if h.readOnly {
 		return h.readOnlyForEachShard(NewReadOnlyGenericTask(fn, h.numberOfShards))
 	}
@@ -619,15 +635,15 @@ func (h *Head) PriorityForEachShard(typeTask relabeler.TypeTask, fn relabeler.Sh
 		h.tasksExecute.With(ls),
 		h.numberOfShards,
 	)
-	for _, priotityTaskCh := range h.priotityTaskCh {
-		priotityTaskCh <- t
+	for _, exclusiveTaskCh := range h.exclusiveTaskChs {
+		exclusiveTaskCh <- t
 	}
 
 	return t.Wait()
 }
 
-// NonPriorityForEachShard run func generic task on non priority queue.
-func (h *Head) NonPriorityForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
+// NonExclusiveForEachShard run func generic task on non-exclusive queue.
+func (h *Head) NonExclusiveForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
 	if h.readOnly {
 		return h.readOnlyForEachShard(NewReadOnlyGenericTask(fn, h.numberOfShards))
 	}
@@ -641,8 +657,8 @@ func (h *Head) NonPriorityForEachShard(typeTask relabeler.TypeTask, fn relabeler
 		h.tasksExecute.With(ls),
 		h.numberOfShards,
 	)
-	for _, shardGenericReadTaskCh := range h.nonPriorityTaskCh {
-		shardGenericReadTaskCh <- t
+	for _, nonExclusiveTaskCh := range h.nonExclusiveTaskChs {
+		nonExclusiveTaskCh <- t
 	}
 
 	return t.Wait()
@@ -651,14 +667,9 @@ func (h *Head) NonPriorityForEachShard(typeTask relabeler.TypeTask, fn relabeler
 // readOnlyForEachShard run func generic task on read only head without queue.
 func (h *Head) readOnlyForEachShard(t *GenericTask) error {
 	for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
-		s := &shard{
-			id:          shardID,
-			lss:         h.lsses[shardID],
-			dataStorage: h.dataStorages[shardID],
-			wal:         h.wals[shardID],
-		}
-		go func(shard *shard) {
-			t.ExecuteOnShard(shard)
+		s := h.shards[shardID]
+		go func(sd *shard) {
+			t.ExecuteOnShard(sd)
 		}(s)
 	}
 
@@ -722,7 +733,7 @@ func (h *Head) Append(
 
 	var atomiclimitExhausted uint32
 
-	err = h.PriorityForEachShard(relabeler.WalDataStorageAdd, func(shard relabeler.Shard) error {
+	err = h.ExclusiveForEachShard(relabeler.WalDataStorageAdd, func(shard relabeler.Shard) error {
 		shard.DataStorage().AppendInnerSeriesSlice(shardedInnerSeries.DataByShard(shard.ShardID()))
 
 		limitExhausted, errWrite := shard.Wal().Write(shardedInnerSeries.DataByShard(shard.ShardID()))
@@ -741,7 +752,7 @@ func (h *Head) Append(
 	}
 
 	if commitToWal || atomiclimitExhausted > 0 {
-		err = h.PriorityForEachShard(relabeler.WalCommit, func(shard relabeler.Shard) error {
+		err = h.ExclusiveForEachShard(relabeler.WalCommit, func(shard relabeler.Shard) error {
 			return shard.Wal().Commit()
 		})
 		if err != nil {
@@ -786,7 +797,7 @@ func (h *Head) inputRelabelingStage(
 ) (cppbridge.RelabelerStats, error) {
 	stats := make([]cppbridge.RelabelerStats, h.numberOfShards)
 
-	err := h.PriorityForEachShard(relabeler.HeadInputRelabeling, func(shard relabeler.Shard) error {
+	err := h.ExclusiveForEachShard(relabeler.HeadInputRelabeling, func(shard relabeler.Shard) error {
 		var (
 			err              error
 			hasReallocations bool
@@ -856,7 +867,7 @@ func (h *Head) appendRelabelerSeriesStage(
 	shardedRelabeledSeries *ShardedRelabeledSeries,
 	shardedStateUpdates *ShardedStateUpdates,
 ) error {
-	err := h.PriorityForEachShard(relabeler.HeadAppendRelabelerSeries, func(shard relabeler.Shard) error {
+	err := h.ExclusiveForEachShard(relabeler.HeadAppendRelabelerSeries, func(shard relabeler.Shard) error {
 		relabeledSeries, ok := shardedRelabeledSeries.DataBySourceShard(shard.ShardID())
 		if !ok {
 			return nil
@@ -893,86 +904,81 @@ func (h *Head) updateRelabelerStateStage(
 	rd *RelabelerData,
 	shardedStateUpdates *ShardedStateUpdates,
 ) error {
-	for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
-		updates, ok := shardedStateUpdates.DataBySourceShard(shardID)
+	// for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
+	// 	updates, ok := shardedStateUpdates.DataBySourceShard(shardID)
+	// 	if !ok {
+	// 		continue
+	// 	}
+
+	// 	err := rd.InputRelabelerByShard(shardID).UpdateRelabelerState(
+	// 		ctx,
+	// 		state.CacheByShard(shardID),
+	// 		updates,
+	// 	)
+	// 	if err != nil {
+	// 		return fmt.Errorf("shard %d: %w", shardID, err)
+	// 	}
+	// }
+
+	// return nil
+
+	return h.NonExclusiveForEachShard(relabeler.HeadUpdateRelabelerState, func(shard relabeler.Shard) error {
+		updates, ok := shardedStateUpdates.DataBySourceShard(shard.ShardID())
 		if !ok {
-			continue
+			return nil
 		}
 
-		err := rd.InputRelabelerByShard(shardID).UpdateRelabelerState(
+		err := rd.InputRelabelerByShard(shard.ShardID()).UpdateRelabelerState(
 			ctx,
-			state.CacheByShard(shardID),
+			state.CacheByShard(shard.ShardID()),
 			updates,
 		)
 		if err != nil {
-			return fmt.Errorf("shard %d: %w", shardID, err)
+			return fmt.Errorf("shard %d: %w", shard.ShardID(), err)
 		}
-	}
 
-	return nil
+		return nil
+	})
 }
 
-// shardLoop run relabeling on the shard.
-//
-//revive:disable-next-line:function-length long but readable.
-//revive:disable-next-line:cognitive-complexity long but understandable.
-//revive:disable-next-line:cyclomatic long but understandable.
-func (h *Head) shardLoop(
+// exclusiveShardLoop run shard loop for exclusive(write lock) operation.
+func (h *Head) exclusiveShardLoop(
 	shardID uint16,
-	priotity chan *GenericTask,
-	nonPriority chan *GenericTask,
+	exclusiveCH chan *GenericTask,
 	stopc chan struct{},
 ) {
-	sd := &shard{
-		id:          shardID,
-		lss:         h.lsses[shardID],
-		dataStorage: h.dataStorages[shardID],
-		wal:         h.wals[shardID],
-	}
-	forceNonPriority := 0
+	s := h.shards[shardID]
 
 	for {
 		select {
 		case <-stopc:
 			return
 
-		case task := <-priotity:
-			task.ExecuteOnShard(sd)
+		case task := <-exclusiveCH:
+			h.sMutex.Lock()
+			task.ExecuteOnShard(s)
+			h.sMutex.Unlock()
+		}
+	}
+}
 
-			if len(nonPriority) == 0 {
-				continue
-			}
+// nonExclusiveShardLoop run shard loop for non-exclusive(read lock) operation.
+func (h *Head) nonExclusiveShardLoop(
+	shardID uint16,
+	nonExclusiveCH chan *GenericTask,
+	stopc chan struct{},
+) {
+	s := h.shards[shardID]
 
-			forceNonPriority++
-			if forceNonPriority >= 10 {
-				forceNonPriority = 0
+	for {
+		select {
+		case <-stopc:
+			return
 
-				(<-nonPriority).ExecuteOnShard(sd)
-			}
-
-		default:
-			select {
-			case <-stopc:
-				return
-
-			case task := <-nonPriority:
-				task.ExecuteOnShard(sd)
-
-			case task := <-priotity:
-				task.ExecuteOnShard(sd)
-
-				if len(nonPriority) == 0 {
-					continue
-				}
-
-				forceNonPriority++
-				if forceNonPriority >= 10 {
-					forceNonPriority = 0
-
-					(<-nonPriority).ExecuteOnShard(sd)
-				}
-			}
-
+		case task := <-nonExclusiveCH:
+			h.sMutex.RLock()
+			task.ExecuteOnShard(s)
+			h.sMutex.RUnlock()
 		}
 	}
 }

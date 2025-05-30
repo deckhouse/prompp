@@ -49,10 +49,14 @@ const (
 	// ChunkQuerierLabelNames type of task.
 	ChunkQuerierLabelNames
 
-	// QuerierSelectInstant type of task.
-	QuerierSelectInstant
-	// QuerierSelectRange type of task.
-	QuerierSelectRange
+	// QuerierSelectInstantLSSQuery type of task.
+	QuerierSelectInstantLSSQuery
+	// QuerierSelectInstantDataStorageQuery type of task.
+	QuerierSelectInstantDataStorageQuery
+	// QuerierSelectRangeLSSQuery type of task.
+	QuerierSelectRangeLSSQuery
+	// QuerierSelectRangeDataStorageQuery type of task.
+	QuerierSelectRangeDataStorageQuery
 	// QuerierLabelValues type of task.
 	QuerierLabelValues
 	// QuerierLabelNames type of task.

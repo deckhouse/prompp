@@ -48,7 +48,7 @@ func (q *ChunkQuerier) Select(
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
 	callerID := cppbridge.GetCaller(ctx)
 
-	err := q.head.PriorityForEachShard(relabeler.ChunkQuerierSelect, func(shard relabeler.Shard) error {
+	err := q.head.NonExclusiveForEachShard(relabeler.ChunkQuerierSelect, func(shard relabeler.Shard) error {
 		lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
 
 		if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {

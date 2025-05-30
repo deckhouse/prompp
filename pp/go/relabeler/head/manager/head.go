@@ -116,10 +116,10 @@ func (h *DiscardableRotatableHead) CopySeriesFrom(other relabeler.Head) {
 	h.head.CopySeriesFrom(other)
 }
 
-func (h *DiscardableRotatableHead) PriorityForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
-	return h.head.PriorityForEachShard(typeTask, fn)
+func (h *DiscardableRotatableHead) ExclusiveForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
+	return h.head.ExclusiveForEachShard(typeTask, fn)
 }
 
-func (h *DiscardableRotatableHead) NonPriorityForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
-	return h.head.NonPriorityForEachShard(typeTask, fn)
+func (h *DiscardableRotatableHead) NonExclusiveForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
+	return h.head.NonExclusiveForEachShard(typeTask, fn)
 }

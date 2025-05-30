@@ -36,7 +36,7 @@ func (d *Distributor) Send(ctx context.Context, head relabeler.Head, shardedData
 	})
 
 	outputPromise := NewOutputRelabelingPromise(&d.destinationGroups, head.NumberOfShards())
-	err := head.PriorityForEachShard(relabeler.DistributorOutputRelabeling, func(shard relabeler.Shard) error {
+	err := head.ExclusiveForEachShard(relabeler.DistributorOutputRelabeling, func(shard relabeler.Shard) error {
 		return d.ParallelRange(func(destinationGroupID int, destinationGroup *relabeler.DestinationGroup) error {
 			outputInnerSeries := cppbridge.NewShardsInnerSeries(1 << destinationGroup.ShardsNumberPower())
 			relabeledSeries := cppbridge.NewRelabeledSeries()
@@ -133,7 +133,7 @@ func (d *Distributor) WriteMetrics(head relabeler.Head) {
 		return nil
 	})
 
-	_ = head.PriorityForEachShard(relabeler.DistributorWriteMetrics, func(shard relabeler.Shard) error {
+	_ = head.NonExclusiveForEachShard(relabeler.DistributorWriteMetrics, func(shard relabeler.Shard) error {
 		return d.ParallelRange(func(destinationGroupID int, destinationGroup *relabeler.DestinationGroup) error {
 			destinationGroup.ObserveCacheAllocatedMemory(shard.ShardID())
 			return nil
