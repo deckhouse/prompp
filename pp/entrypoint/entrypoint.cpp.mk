@@ -47,7 +47,7 @@ init/entrypoint.function_pointers: init/all.symbols
 	@while IFS="" read -r p || [ -n "$$p" ]; do\
 		fn_name=$$(echo "$$p" | $(sed) 's/^void //;s/(.*);//');\
 		arg_def=$$(echo "$$p" | $(sed) 's/^.*(\(.*\));/\1/');\
-		arg_names=$$(echo $$arg_def | $(sed) 's/void\* //g');\
+		arg_names=$$(echo $$arg_def | $(sed) 's/\(void\*\|uint64_t\) //g');\
 		printf 'void (*%s_ptr)(%s);\n' "$$fn_name" "$$arg_def";\
 		printf 'extern "C" void %s(%s) {\n' "$$fn_name" "$$arg_def";\
 		printf '  (*%s_ptr)(%s);\n' "$$fn_name" "$$arg_names";\

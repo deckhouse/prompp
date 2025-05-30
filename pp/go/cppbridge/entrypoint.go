@@ -1248,66 +1248,8 @@ func primitivesLSSCreateReadonlyLss(lss uintptr) uintptr {
 	return res.lss
 }
 
-func primitivesLSSQueryableEncodingBimapCopierCtor(source, destination uintptr) uintptr {
-	args := struct {
-		source      uintptr
-		destination uintptr
-	}{source, destination}
-	var res struct {
-		copier uintptr
-	}
-
-	fastcgo.UnsafeCall2(
-		C.prompp_primitives_lss_queryable_encoding_bimap_copier_ctor,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.copier
-}
-
-func primitivesLSSQueryableEncodingBimapCopierCopyPart1(copier uintptr) {
-	args := struct {
-		copier uintptr
-	}{copier}
-
-	fastcgo.UnsafeCall1(
-		C.prompp_primitives_lss_queryable_encoding_bimap_copier_copy_part1,
-		uintptr(unsafe.Pointer(&args)),
-	)
-}
-
-func primitivesLSSQueryableEncodingBimapCopierCopyPart2(copier uintptr) {
-	args := struct {
-		copier uintptr
-	}{copier}
-
-	fastcgo.UnsafeCall1(
-		C.prompp_primitives_lss_queryable_encoding_bimap_copier_copy_part2,
-		uintptr(unsafe.Pointer(&args)),
-	)
-}
-
-func primitivesLSSQueryableEncodingBimapCopierCopyPart3(copier uintptr) {
-	args := struct {
-		copier uintptr
-	}{copier}
-
-	fastcgo.UnsafeCall1(
-		C.prompp_primitives_lss_queryable_encoding_bimap_copier_copy_part3,
-		uintptr(unsafe.Pointer(&args)),
-	)
-}
-
-func primitivesLSSQueryableEncodingBimapCopierDtor(copier uintptr) {
-	args := struct {
-		copier uintptr
-	}{copier}
-
-	fastcgo.UnsafeCall1(
-		C.prompp_primitives_lss_queryable_encoding_bimap_copier_dtor,
-		uintptr(unsafe.Pointer(&args)),
-	)
+func primitivesLSSCopyAddedSeries(source, destination uintptr) {
+	C.prompp_primitives_lss_copy_added_series(C.uint64_t(source), C.uint64_t(destination))
 }
 
 //

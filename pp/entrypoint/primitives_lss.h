@@ -2,6 +2,8 @@
 extern "C" {
 #endif
 
+#include <stdint.h>
+
 /**
  * @brief Construct a new Primitives label sets.
  *
@@ -168,54 +170,15 @@ void prompp_primitives_lss_query_label_values(void* args, void* res);
 void prompp_create_readonly_lss(void* args, void* res);
 
 /**
- * @brief Construct a new Primitives label sets.
+ * @brief Copy label sets which were added via find_or_emplace from source lss to destination lss
  *
- * @param args {
- *     source      uintptr // pointer to source label sets
- *     destination uintptr // pointer to destination label sets
- * }
+ * @param source_lss pointer to source label sets
+ * @param destination_lss pointer to destination label sets
  *
- * @param res {
- *     copier uintptr     // pointer to constructed copier
- * }
+ * @attention This binding used as a CGO call!!!
+ *
  */
-void prompp_primitives_lss_queryable_encoding_bimap_copier_ctor(void* args, void* res);
-
-/**
- * @brief Part1 of all lss copying algorithm
- *
- * @param args {
- *     lss uintptr // pointer to constructed copier
- * }
- */
-void prompp_primitives_lss_queryable_encoding_bimap_copier_copy_part1(void* args);
-
-/**
- * @brief Part2 of all lss copying algorithm
- *
- * @param args {
- *     lss uintptr // pointer to constructed copier
- * }
- */
-void prompp_primitives_lss_queryable_encoding_bimap_copier_copy_part2(void* args);
-
-/**
- * @brief Part3 of all lss copying algorithm
- *
- * @param args {
- *     lss uintptr // pointer to constructed copier
- * }
- */
-void prompp_primitives_lss_queryable_encoding_bimap_copier_copy_part3(void* args);
-
-/**
- * @brief Destroy copier
- *
- * @param args {
- *     lss uintptr // pointer to constructed copier
- * }
- */
-void prompp_primitives_lss_queryable_encoding_bimap_copier_dtor(void* args);
+void prompp_primitives_lss_copy_added_series(uint64_t source_lss, uint64_t destination_lss);
 
 #ifdef __cplusplus
 }  // extern "C"

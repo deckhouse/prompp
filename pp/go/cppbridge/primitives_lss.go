@@ -133,11 +133,7 @@ func (lss *LabelSetStorage) GetLabelSets(labelSetIDs []uint32) *LabelSetStorageG
 
 // CopyAddedSeries - copy label sets which were added via FindOrEmplace to destination
 func (lss *LabelSetStorage) CopyAddedSeries(destination *LabelSetStorage) {
-	copier := primitivesLSSQueryableEncodingBimapCopierCtor(lss.pointer, destination.pointer)
-	primitivesLSSQueryableEncodingBimapCopierCopyPart1(copier)
-	primitivesLSSQueryableEncodingBimapCopierCopyPart2(copier)
-	primitivesLSSQueryableEncodingBimapCopierCopyPart3(copier)
-	primitivesLSSQueryableEncodingBimapCopierDtor(copier)
+	primitivesLSSCopyAddedSeries(lss.pointer, destination.pointer)
 }
 
 // Pointer return c-pointer.

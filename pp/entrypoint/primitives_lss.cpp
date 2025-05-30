@@ -224,56 +224,8 @@ extern "C" void prompp_create_readonly_lss(void* args, void* res) {
   new (res) Result{.lss_copy = entrypoint::head::create_readonly_lss(*static_cast<Arguments*>(args)->lss)};
 }
 
-using AddedSeriesCopier = series_index::QueryableEncodingBimapCopier<QueryableEncodingBimap>;
-using AddedSeriesCopierPtr = std::unique_ptr<AddedSeriesCopier>;
-
-extern "C" void prompp_primitives_lss_queryable_encoding_bimap_copier_ctor(void* args, void* res) {
-  struct Arguments {
-    LssVariantPtr source;
-    LssVariantPtr destination;
-  };
-  struct Result {
-    AddedSeriesCopierPtr copier;
-  };
-
-  const auto in = static_cast<Arguments*>(args);
-  new (res)
-      Result{.copier = std::make_unique<AddedSeriesCopier>(std::get<QueryableEncodingBimap>(*in->source), std::get<QueryableEncodingBimap>(*in->destination))};
-}
-
-extern "C" void prompp_primitives_lss_queryable_encoding_bimap_copier_copy_part1(void* args) {
-  struct Arguments {
-    AddedSeriesCopierPtr copier;
-  };
-
-  const auto& copier = static_cast<Arguments*>(args)->copier;
-  copier->copy_added_series();
-  copier->copy_ls_id_set();
-  copier->build_trie_index();
-}
-
-extern "C" void prompp_primitives_lss_queryable_encoding_bimap_copier_copy_part2(void* args) {
-  struct Arguments {
-    AddedSeriesCopierPtr copier;
-  };
-
-  const auto& copier = static_cast<Arguments*>(args)->copier;
-  copier->build_ls_id_hashset();
-}
-
-extern "C" void prompp_primitives_lss_queryable_encoding_bimap_copier_copy_part3(void* args) {
-  struct Arguments {
-    AddedSeriesCopierPtr copier;
-  };
-
-  const auto& copier = static_cast<Arguments*>(args)->copier;
-  copier->build_reverse_index();
-}
-
-extern "C" void prompp_primitives_lss_queryable_encoding_bimap_copier_dtor(void* args) {
-  struct Arguments {
-    AddedSeriesCopierPtr copier;
-  };
-
-  static_cast<Arguments*>(args)->~Arguments();
+extern "C" void prompp_primitives_lss_copy_added_series(uint64_t source_lss, uint64_t destination_lss) {
+  series_index::QueryableEncodingBimapCopier copier(std::get<QueryableEncodingBimap>(*reinterpret_cast<entrypoint::head::LssVariant*>(source_lss)),
+                                                    std::get<QueryableEncodingBimap>(*reinterpret_cast<entrypoint::head::LssVariant*>(destination_lss)));
+  copier.copy_added_series_and_build_indexes();
 }
