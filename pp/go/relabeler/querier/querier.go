@@ -340,8 +340,8 @@ func (q *Querier) selectRange(
 	})
 
 	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
-	for shardID, serializedChunks := range serializedChunksShards {
-		if serializedChunks == nil {
+	for shardID := range serializedChunksShards {
+		if serializedChunksShards[shardID] == nil {
 			seriesSets[shardID] = &SeriesSet{}
 			continue
 		}
@@ -349,9 +349,9 @@ func (q *Querier) selectRange(
 		seriesSets[shardID] = &SeriesSet{
 			mint:             q.mint,
 			maxt:             q.maxt,
-			deserializer:     cppbridge.NewHeadDataStorageDeserializer(serializedChunks),
-			chunksIndex:      serializedChunks.MakeIndex(),
-			serializedChunks: serializedChunks,
+			deserializer:     cppbridge.NewHeadDataStorageDeserializer(serializedChunksShards[shardID]),
+			chunksIndex:      serializedChunksShards[shardID].MakeIndex(),
+			serializedChunks: serializedChunksShards[shardID],
 			lssQueryResult:   lssQueryResults[shardID],
 			labelSetSnapshot: snapshots[shardID],
 		}
