@@ -79,7 +79,6 @@ type Head interface {
 	Discard() error
 	String() string
 	CopySeriesFrom(other Head)
-
 	ForEachShard(typeTask TypeTask, fn ShardFn) error
 }
 

@@ -55,8 +55,60 @@ void prompp_get_head_status(void* args, void* res);
  */
 void prompp_free_head_status(void* args);
 
+/**
+ * @brief Return head status from lss.
+ *
+ * @param args {
+ *     lss         uintptr      // pointer to constructed lss
+ *     limit       int          // statistics limit
+ * }
+ *
+ * @param res {
+ *     status struct {          // head status
+ *          label_value_count_by_label_name []struct {
+ *              name string
+ *              count uint32
+ *          }
+ *          series_count_by_metric_name []struct {
+ *              name string
+ *              count uint32
+ *          }
+ *          memory_in_bytes_by_label_name []struct {
+ *              name string
+ *              size uint32
+ *          }
+ *          series_count_by_label_value_pair [] struct {
+ *              name string
+ *              value string
+ *              count uint32
+ *          }
+ *          num_series      uint32
+ *          num_label_pairs uint32
+ *          rule_queried_series uint32
+ *          federate_queried_series uint32
+ *          other_queried_series uint32
+ *     }
+ * }
+ */
 void prompp_get_head_status_lss(void* args, void* res);
 
+/**
+ * @brief Return head status from lss.
+ *
+ * @param args {
+ *     dataStorage uintptr      // pointer to constructed data storage
+ * }
+ *
+ * @param res {
+ *     status struct {          // head status
+ *          time_interval struct {
+ *              min int64
+ *              max int64
+ *          }
+ *          chunk_count     uint32
+ *     }
+ * }
+ */
 void prompp_get_head_status_data_storage(void* args, void* res);
 
 #ifdef __cplusplus
