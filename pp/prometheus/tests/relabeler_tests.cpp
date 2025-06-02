@@ -737,7 +737,7 @@ TEST_F(TestPerShardRelabeler, ReplaceToNewLS2_OrderedEncodingBimap) {
 
   prs.update_relabeler_state(cache_, &update_data, 1);
 
-  auto rlabels = lss[update_data[0].relabeled_ls_id];
+  auto rlabels = lss[update_data.data()[0].relabeled_ls_id];
   LabelViewSetForTest expected_labels = make_label_set({{"__name__", "booom"}, {"jab", "baj"}, {"job", "baj"}, {"replaced", "o"}});
 
   EXPECT_EQ(rlabels, expected_labels);
