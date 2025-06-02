@@ -121,9 +121,10 @@ class Loader {
       if (snapshot_ls_id_chunk_id != chunk_id) {
         if (bitseq.size_in_bits() != 0) {
           std::cout << "bitseq.size_in_bits(): " << bitseq.size_in_bits() << '\n';
-          // write filled bits to chunk stream
+          load_chunk_id(ls_id, info);
         }
         chunk_id = snapshot_ls_id_chunk_id;
+        bitseq.rewind();
       }
 
       BareBones::BitSequenceReader bitseqs_reader(bitseqs_ptr, BareBones::Bit::to_bits(bitseqs_size_in_bytes));
@@ -137,14 +138,66 @@ class Loader {
       }
     }
 
-    // for (auto& [ls_id, info] : series_to_load_tmp_bitseqs_) {
-    //   auto& [bitseq, chunk_id] = info;
-    //   std::cout << "ls_id: " << ls_id << " chunk_id: " << chunk_id << ' ' << bitseq.size_in_bits() << '\n';
-    // }
+    for (auto& [ls_id, info] : series_to_load_tmp_bitseqs_) {
+      auto& [bitseq, chunk_id] = info;
+      std::cout << "ls_id: " << ls_id << " chunk_id: " << chunk_id << ' ' << bitseq.size_in_bits() << '\n';
+    }
   }
-  void load_finalize();
+  void load_finalize() {
+    for (auto& [ls_id, info] : series_to_load_tmp_bitseqs_) {
+      if (info.buffer.size_in_bits() != 0) {
+        load_chunk_id(ls_id, info);
+      }
+    }
+
+    Encoder<> encoder{storage_};
+    OutdatedChunkMerger<decltype(encoder)> outdated_chunk_merger{encoder};
+    outdated_chunk_merger.merge();
+  }
 
  private:
+  void load_chunk_id(uint32_t ls_id, SeriesToLoadInfo& info) const {
+    const auto chunk_data =
+        *std::ranges::next(DataStorage::SeriesChunkIterator{&storage_, ls_id}, info.chunk_id, series_data::DataStorage::SeriesChunks::end());
+
+    auto& chunk_bit_sequence = [&]() -> encoder::CompactBitSequence& {
+      if (chunk_data.is_open()) {
+        return get_open_chunk_stream(ls_id);
+      }
+      return storage_.finalized_data_streams[chunk_data.chunk().encoder.external_index];
+    }();
+
+    std::cout << "bits in storage stream : " << chunk_bit_sequence.size_in_bits() << '\n';
+
+    auto chunk_bit_sequence_reader = chunk_bit_sequence.reader();
+    uint32_t chunk_bit_sequence_size_in_bits = chunk_bit_sequence.size_in_bits();
+
+    for (uint32_t i = 0; i < BareBones::Bit::to_bytes(chunk_bit_sequence_size_in_bits); ++i) {
+      const uint32_t byte = chunk_bit_sequence_reader.consume_bits_u32(8);
+      info.buffer.push_back_bits_u32(8, byte);
+    }
+    const uint32_t last_bits = chunk_bit_sequence_reader.consume_bits_u32(chunk_bit_sequence_size_in_bits % 8);
+    info.buffer.push_back_bits_u32(chunk_bit_sequence_size_in_bits % 8, last_bits);
+
+    std::swap(info.buffer, chunk_bit_sequence);
+  }
+
+  [[nodiscard]] encoder::CompactBitSequence& get_open_chunk_stream(uint32_t ls_id) const noexcept {
+    using enum EncodingType;
+
+    const auto& chunk = storage_.open_chunks[ls_id];
+    const auto encoding_type = storage_.open_chunks[ls_id].encoding_state.encoding_type;
+
+    if (encoding_type == kAscInteger) {
+      return storage_.get_asc_integer_stream<chunk::DataChunk::Type::kOpen>(chunk.encoder.external_index);
+    }
+    if (encoding_type == kValuesGorilla) {
+      return storage_.get_values_gorilla_stream<chunk::DataChunk::Type::kOpen>(chunk.encoder.external_index);
+    }
+    // encoding_type == kAscIntegerThenValuesGorilla
+    return storage_.get_asc_integer_then_values_gorilla_stream<chunk::DataChunk::Type::kOpen>(chunk.encoder.external_index);
+  }
+
   DataStorage& storage_;
   std::map<uint32_t, SeriesToLoadInfo> series_to_load_tmp_bitseqs_;
 };
