@@ -264,6 +264,7 @@ func (q *Querier) selectRange(
 
 	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
 	lssQueryResults := make([]*cppbridge.LSSQueryResult, q.head.NumberOfShards())
+	snapshots := make([]*cppbridge.LabelSetSnapshot, q.head.NumberOfShards())
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
 	callerID := cppbridge.GetCaller(ctx)
 
@@ -282,6 +283,7 @@ func (q *Querier) selectRange(
 		}
 
 		lssQueryResults[shard.ShardID()] = lssQueryResult
+		snapshots[shard.ShardID()] = shard.LSS().GetSnapshot()
 
 		return nil
 	})
@@ -317,7 +319,7 @@ func (q *Querier) selectRange(
 				chunksIndex:      serializedChunks.MakeIndex(),
 				serializedChunks: serializedChunks,
 				lssQueryResult:   lssQueryResult,
-				labelSetSnapshot: shard.LSS().GetSnapshot(),
+				labelSetSnapshot: snapshots[shard.ShardID()],
 			}
 
 			return nil
@@ -380,6 +382,7 @@ func (q *Querier) selectRange2(
 		}
 
 		lssQueryResults[shard.ShardID()] = lssQueryResult
+		snapshots[shard.ShardID()] = shard.LSS().GetSnapshot()
 
 		return nil
 	})
@@ -405,7 +408,6 @@ func (q *Querier) selectRange2(
 		}
 
 		serializedChunksShards[shard.ShardID()] = serializedChunks
-		snapshots[shard.ShardID()] = shard.LSS().GetSnapshot()
 
 		return nil
 	})

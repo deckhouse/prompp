@@ -30,11 +30,12 @@ var (
 // LabelSetSnapshot go container for snapshot from LabelSetStorage.
 type LabelSetSnapshot struct {
 	pointer uintptr
+	data    []byte
 }
 
 // newLabelSetSnapshot init new LabelSetSnapshot.
 func newLabelSetSnapshot(lsstPtr uintptr) *LabelSetSnapshot {
-	lsst := &LabelSetSnapshot{pointer: lsstPtr}
+	lsst := &LabelSetSnapshot{pointer: lsstPtr, data: make([]byte, 1<<20)}
 	runtime.SetFinalizer(lsst, func(l *LabelSetSnapshot) {
 		primitivesLSSDtor(l.pointer)
 
