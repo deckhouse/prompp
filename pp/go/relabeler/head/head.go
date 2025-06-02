@@ -413,7 +413,7 @@ func (h *Head) WriteMetrics() {
 	).Set(float64(status.HeadStats.OtherQueriedSeries))
 
 	generationStr := strconv.FormatUint(h.generation, 10)
-	_ = h.ForEachShard(relabeler.HeadLSSAllocatedMemory, func(shard relabeler.Shard) error {
+	_ = h.ForEachShard(relabeler.LSSHeadAllocatedMemory, func(shard relabeler.Shard) error {
 		h.memoryInUse.With(
 			prometheus.Labels{
 				"generation": generationStr,
@@ -425,7 +425,7 @@ func (h *Head) WriteMetrics() {
 		return nil
 	})
 
-	_ = h.ForEachShard(relabeler.HeadDataStorageAllocatedMemory, func(shard relabeler.Shard) error {
+	_ = h.ForEachShard(relabeler.DataStorageHeadAllocatedMemory, func(shard relabeler.Shard) error {
 		h.memoryInUse.With(
 			prometheus.Labels{
 				"generation": generationStr,
@@ -563,7 +563,7 @@ func (*Head) Rotate() error {
 
 // CopySeriesFrom copy series from other head.
 func (h *Head) CopySeriesFrom(other relabeler.Head) {
-	_ = other.ForEachShard(relabeler.HeadCopyAddedSeries, func(shard relabeler.Shard) error {
+	_ = other.ForEachShard(relabeler.LSSHeadCopyAddedSeries, func(shard relabeler.Shard) error {
 		shard.LSS().Raw().CopyAddedSeries(h.lsses[shard.ShardID()].Raw())
 		return nil
 	})
@@ -794,7 +794,7 @@ func (h *Head) inputRelabelingStage(
 ) (cppbridge.RelabelerStats, error) {
 	stats := make([]cppbridge.RelabelerStats, h.numberOfShards)
 
-	err := h.ForEachShard(relabeler.HeadInputRelabeling, func(shard relabeler.Shard) error {
+	err := h.ForEachShard(relabeler.LSSHeadInputRelabeling, func(shard relabeler.Shard) error {
 		var (
 			err              error
 			hasReallocations bool
@@ -864,7 +864,7 @@ func (h *Head) appendRelabelerSeriesStage(
 	shardedRelabeledSeries *ShardedRelabeledSeries,
 	shardedStateUpdates *ShardedStateUpdates,
 ) error {
-	err := h.ForEachShard(relabeler.HeadAppendRelabelerSeries, func(shard relabeler.Shard) error {
+	err := h.ForEachShard(relabeler.LSSHeadAppendRelabelerSeries, func(shard relabeler.Shard) error {
 		relabeledSeries, ok := shardedRelabeledSeries.DataBySourceShard(shard.ShardID())
 		if !ok {
 			return nil

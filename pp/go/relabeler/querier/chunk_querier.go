@@ -31,11 +31,11 @@ func NewChunkQuerier(head relabeler.Head, deduplicatorFactory DeduplicatorFactor
 }
 
 func (q *ChunkQuerier) LabelValues(ctx context.Context, name string, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
-	return labelValues(ctx, name, q.head, q.deduplicatorFactory, nil, relabeler.ChunkQuerierLabelValues, matchers...)
+	return labelValues(ctx, name, q.head, q.deduplicatorFactory, nil, relabeler.LSSLabelValuesChunkQuerier, matchers...)
 }
 
 func (q *ChunkQuerier) LabelNames(ctx context.Context, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
-	return labelNames(ctx, q.head, q.deduplicatorFactory, nil, relabeler.ChunkQuerierLabelNames, matchers...)
+	return labelNames(ctx, q.head, q.deduplicatorFactory, nil, relabeler.LSSLabelNamesChunkQuerier, matchers...)
 }
 
 func (q *ChunkQuerier) Select(
@@ -49,7 +49,7 @@ func (q *ChunkQuerier) Select(
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
 	callerID := cppbridge.GetCaller(ctx)
 
-	err := q.head.ForEachShard(relabeler.ChunkQuerierSelectLSSQuery, func(shard relabeler.Shard) error {
+	err := q.head.ForEachShard(relabeler.LSSQueryChunkQuerierSelect, func(shard relabeler.Shard) error {
 		lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
 
 		if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {
@@ -73,7 +73,7 @@ func (q *ChunkQuerier) Select(
 		return storage.ErrChunkSeriesSet(err)
 	}
 
-	_ = q.head.ForEachShard(relabeler.ChunkQuerierSelectDataStorageQuery, func(shard relabeler.Shard) error {
+	_ = q.head.ForEachShard(relabeler.DataStorageQueryChunkQuerierSelect, func(shard relabeler.Shard) error {
 		lssQueryResult := lssQueryResults[shard.ShardID()]
 		if lssQueryResult == nil {
 			chunkSeriesSets[shard.ShardID()] = EmptyChunkSeriesSet{}

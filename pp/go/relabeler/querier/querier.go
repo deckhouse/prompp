@@ -49,7 +49,7 @@ func NewQuerier(head relabeler.Head, deduplicatorFactory DeduplicatorFactory, mi
 }
 
 func (q *Querier) LabelValues(ctx context.Context, name string, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
-	return labelValues(ctx, name, q.head, q.deduplicatorFactory, q.metrics, relabeler.QuerierLabelValues, matchers...)
+	return labelValues(ctx, name, q.head, q.deduplicatorFactory, q.metrics, relabeler.LSSLabelValuesQuerier, matchers...)
 }
 
 func labelValues(
@@ -102,7 +102,7 @@ func labelValues(
 }
 
 func (q *Querier) LabelNames(ctx context.Context, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
-	return labelNames(ctx, q.head, q.deduplicatorFactory, q.metrics, relabeler.QuerierLabelNames, matchers...)
+	return labelNames(ctx, q.head, q.deduplicatorFactory, q.metrics, relabeler.LSSLabelNamesQuerier, matchers...)
 }
 
 func labelNames(
@@ -201,7 +201,7 @@ func (q *Querier) selectInstant(
 		valueNotFoundTimestampValue = q.mint - 1
 	}
 
-	err := q.head.ForEachShard(relabeler.QuerierSelectInstantLSSQuery, func(shard relabeler.Shard) error {
+	err := q.head.ForEachShard(relabeler.LSSQueryQuerierSelectInstant, func(shard relabeler.Shard) error {
 		lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
 
 		if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {
@@ -224,7 +224,7 @@ func (q *Querier) selectInstant(
 		return storage.ErrSeriesSet(err)
 	}
 
-	_ = q.head.ForEachShard(relabeler.QuerierSelectInstantDataStorageQuery, func(shard relabeler.Shard) error {
+	_ = q.head.ForEachShard(relabeler.DataStorageQueryQuerierSelectInstant, func(shard relabeler.Shard) error {
 		lssQueryResult := lssQueryResults[shard.ShardID()]
 		if lssQueryResult == nil {
 			seriesSets[shard.ShardID()] = &SeriesSet{}
@@ -267,7 +267,7 @@ func (q *Querier) selectRange(
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
 	callerID := cppbridge.GetCaller(ctx)
 
-	err := q.head.ForEachShard(relabeler.QuerierSelectRangeLSSQuery, func(shard relabeler.Shard) error {
+	err := q.head.ForEachShard(relabeler.LSSQueryQuerierSelectRange, func(shard relabeler.Shard) error {
 		lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
 
 		if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {
@@ -291,7 +291,7 @@ func (q *Querier) selectRange(
 	}
 
 	_ = q.head.ForEachShard(
-		relabeler.QuerierSelectRangeDataStorageQuery,
+		relabeler.DataStorageQueryQuerierSelectRange,
 		func(shard relabeler.Shard) error {
 			lssQueryResult := lssQueryResults[shard.ShardID()]
 			if lssQueryResult == nil {
@@ -365,7 +365,7 @@ func (q *Querier) selectRange2(
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
 	callerID := cppbridge.GetCaller(ctx)
 
-	err := q.head.ForEachShard(relabeler.QuerierSelectRangeLSSQuery, func(shard relabeler.Shard) error {
+	err := q.head.ForEachShard(relabeler.LSSQueryQuerierSelectRange, func(shard relabeler.Shard) error {
 		lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
 
 		if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {
@@ -388,7 +388,7 @@ func (q *Querier) selectRange2(
 		return storage.ErrSeriesSet(err)
 	}
 
-	_ = q.head.ForEachShard(relabeler.QuerierSelectRangeDataStorageQuery, func(shard relabeler.Shard) error {
+	_ = q.head.ForEachShard(relabeler.DataStorageQueryQuerierSelectRange, func(shard relabeler.Shard) error {
 		lssQueryResult := lssQueryResults[shard.ShardID()]
 		if lssQueryResult == nil {
 			// seriesSets[shard.ShardID()] = &SeriesSet{}

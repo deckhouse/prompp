@@ -86,10 +86,10 @@ const (
 	// UnknownTask type of task.
 	UnknownTask TypeTask = iota
 
-	// HeadInputRelabeling type of task.
-	HeadInputRelabeling
-	// HeadAppendRelabelerSeries type of task.
-	HeadAppendRelabelerSeries
+	// LSSHeadInputRelabeling type of task.
+	LSSHeadInputRelabeling
+	// LSSHeadAppendRelabelerSeries type of task.
+	LSSHeadAppendRelabelerSeries
 
 	// WalCommit type of task.
 	WalCommit
@@ -98,35 +98,35 @@ const (
 	// WalWrite type of task.
 	WalWrite
 
-	// HeadCopyAddedSeries type of task.
-	HeadCopyAddedSeries
+	// LSSHeadCopyAddedSeries type of task.
+	LSSHeadCopyAddedSeries
 
 	// DistributorOutputRelabeling type of task.
 	DistributorOutputRelabeling
 	// DistributorUpdateRelabelerState type of task.
 	DistributorUpdateRelabelerState
 
-	// HeadLSSAllocatedMemory type of task.
-	HeadLSSAllocatedMemory
+	// LSSHeadAllocatedMemory type of task.
+	LSSHeadAllocatedMemory
 
 	// LSSHeadStatus type of task.
 	LSSHeadStatus
 
-	// ChunkQuerierSelectLSSQuery type of task.
-	ChunkQuerierSelectLSSQuery
-	// ChunkQuerierLabelValues type of task.
-	ChunkQuerierLabelValues
-	// ChunkQuerierLabelNames type of task.
-	ChunkQuerierLabelNames
+	// LSSQueryChunkQuerierSelect type of task.
+	LSSQueryChunkQuerierSelect
+	// LSSLabelValuesChunkQuerier type of task.
+	LSSLabelValuesChunkQuerier
+	// LSSLabelNamesChunkQuerier type of task.
+	LSSLabelNamesChunkQuerier
 
-	// QuerierSelectInstantLSSQuery type of task.
-	QuerierSelectInstantLSSQuery
-	// QuerierSelectRangeLSSQuery type of task.
-	QuerierSelectRangeLSSQuery
-	// QuerierLabelValues type of task.
-	QuerierLabelValues
-	// QuerierLabelNames type of task.
-	QuerierLabelNames
+	// LSSQueryQuerierSelectInstant type of task.
+	LSSQueryQuerierSelectInstant
+	// LSSQueryQuerierSelectRange type of task.
+	LSSQueryQuerierSelectRange
+	// LSSLabelValuesQuerier type of task.
+	LSSLabelValuesQuerier
+	// LSSLabelNamesQuerier type of task.
+	LSSLabelNamesQuerier
 
 	// DataStorage
 	// dataStorageMarker dividing marker, not used
@@ -138,19 +138,19 @@ const (
 	// DataStorageMergeOutOfOrderChunks type of task.
 	DataStorageMergeOutOfOrderChunks
 
-	// HeadDataStorageAllocatedMemory type of task.
-	HeadDataStorageAllocatedMemory
+	// DataStorageHeadAllocatedMemory type of task.
+	DataStorageHeadAllocatedMemory
 
 	// DataStorageHeadStatus type of task.
 	DataStorageHeadStatus
 
-	// ChunkQuerierSelectDataStorageQuery type of task.
-	ChunkQuerierSelectDataStorageQuery
+	// DataStorageQueryChunkQuerierSelect type of task.
+	DataStorageQueryChunkQuerierSelect
 
-	// QuerierSelectInstantDataStorageQuery type of task.
-	QuerierSelectInstantDataStorageQuery
-	// QuerierSelectRangeDataStorageQuery type of task.
-	QuerierSelectRangeDataStorageQuery
+	// DataStorageQueryQuerierSelectInstant type of task.
+	DataStorageQueryQuerierSelectInstant
+	// DataStorageQueryQuerierSelectRange type of task.
+	DataStorageQueryQuerierSelectRange
 
 	// Read Only
 
