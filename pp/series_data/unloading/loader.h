@@ -2,6 +2,7 @@
 
 #include "bare_bones/bitset.h"
 #include "bare_bones/encoding.h"
+#include "bare_bones/preprocess.h"
 #include "bare_bones/stream_v_byte.h"
 #include "series_data/data_storage.h"
 
@@ -30,119 +31,18 @@ class Loader {
   }
 
   void load_next(std::span<const uint8_t> buffer) {
-    uint32_t read_size_in_bytes = 0;
+    uint32_t offset = 0;
 
-    const uint32_t ls_id_bitmap_size_in_bits = *reinterpret_cast<const uint32_t*>(buffer.data());
-    const uint32_t ls_id_bitmap_size_in_bytes = ((ls_id_bitmap_size_in_bits + 63) >> 6) * 8;
-    std::cout << "ls_id_bitmap_size_in_bits: " << ls_id_bitmap_size_in_bits << '\n';
-    std::cout << "ls_id_bitmap_size_in_bytes: " << ls_id_bitmap_size_in_bytes << '\n';
-    read_size_in_bytes += sizeof(uint32_t);
+    const auto bitset_it = parse_ls_id_bitmap(buffer, offset);
+    const auto length_it = parse_encoded_sequence<EncodingChunkLengthSequence>(buffer, offset);
+    const auto id_it = parse_encoded_sequence<EncodingChunkIDSequence>(buffer, offset);
 
-    const uint64_t* bitset_ptr = reinterpret_cast<const uint64_t*>(buffer.data() + read_size_in_bytes);
-    const BareBones::Bitset::Iterator bitset_it(bitset_ptr, ls_id_bitmap_size_in_bits);
-    const uint32_t series_count = std::ranges::distance(bitset_it, BareBones::Bitset::IteratorSentinel{});
-    std::cout << "series_count: " << series_count << '\n';
-    for (auto it = bitset_it; it != BareBones::Bitset::IteratorSentinel{}; ++it) {
-      std::cout << (*it) << ' ';
-    }
-    std::cout << '\n';
+    const uint32_t bitseqs_total_size = read_u32(buffer, offset);
+    const uint8_t* bitseqs_ptr = buffer.data() + offset;
 
-    read_size_in_bytes += ls_id_bitmap_size_in_bytes;
-
-    const uint32_t chunk_length_sequence_size_in_bytes = *reinterpret_cast<const uint32_t*>(buffer.data() + read_size_in_bytes);
-    read_size_in_bytes += sizeof(uint32_t);
-    const uint32_t chunk_length_count = *reinterpret_cast<const uint32_t*>(buffer.data() + read_size_in_bytes);
-    read_size_in_bytes += sizeof(uint32_t);
-    std::cout << "chunk_length_sequence_size_in_bytes: " << chunk_length_sequence_size_in_bytes << '\n';
-    std::cout << "chunk_length_count: " << chunk_length_count << '\n';
-    const uint8_t* chunk_length_compact_sequence_ptr = reinterpret_cast<const uint8_t*>(buffer.data() + read_size_in_bytes);
-    const EncodingChunkLengthSequence::sequence_type::DecodeIterator length_it_inner(
-        chunk_length_compact_sequence_ptr, chunk_length_compact_sequence_ptr + EncodingChunkLengthSequence::sequence_type::kMaxKeySize, chunk_length_count);
-    EncodingChunkLengthSequence::encoder_type encoder{};
-    const EncodingChunkLengthSequence::Iterator length_it(length_it_inner, BareBones::StreamVByte::DecodeIteratorSentinel{}, &encoder);
-    for (auto it = length_it; it != EncodingChunkLengthSequence::IteratorSentinel{}; ++it) {
-      std::cout << (*it) << ' ';
-    }
-    std::cout << '\n';
-
-    read_size_in_bytes += chunk_length_sequence_size_in_bytes;
-
-    const uint32_t chunk_id_sequence_size_in_bytes = *reinterpret_cast<const uint32_t*>(buffer.data() + read_size_in_bytes);
-    read_size_in_bytes += sizeof(uint32_t);
-    const uint32_t chunk_id_sequence_count = *reinterpret_cast<const uint32_t*>(buffer.data() + read_size_in_bytes);
-    read_size_in_bytes += sizeof(uint32_t);
-    std::cout << "chunk_id_sequence_size_in_bytes: " << chunk_id_sequence_size_in_bytes << '\n';
-    std::cout << "chunk_id_sequence_count: " << chunk_id_sequence_count << '\n';
-    const uint8_t* chunk_id_compact_sequence_ptr = reinterpret_cast<const uint8_t*>(buffer.data() + read_size_in_bytes);
-    const EncodingChunkIDSequence::sequence_type::DecodeIterator id_it_inner(
-        chunk_id_compact_sequence_ptr, chunk_id_compact_sequence_ptr + EncodingChunkIDSequence::sequence_type::kMaxKeySize, chunk_id_sequence_count);
-    EncodingChunkIDSequence::encoder_type id_encoder{};
-    const EncodingChunkIDSequence::Iterator id_it(id_it_inner, BareBones::StreamVByte::DecodeIteratorSentinel{}, &id_encoder);
-    for (auto it = id_it; it != EncodingChunkIDSequence::IteratorSentinel{}; ++it) {
-      std::cout << (*it) << ' ';
-    }
-    std::cout << '\n';
-
-    read_size_in_bytes += chunk_id_sequence_size_in_bytes;
-
-    const uint32_t bitseqs_size_in_bytes = *reinterpret_cast<const uint32_t*>(buffer.data() + read_size_in_bytes);
-    read_size_in_bytes += sizeof(uint32_t);
-    std::cout << "bitseqs_size_in_bytes: " << bitseqs_size_in_bytes << '\n';
-    const uint8_t* bitseqs_ptr = buffer.data() + read_size_in_bytes;
-    BareBones::BitSequenceReader bitseqs_reader_tmp(bitseqs_ptr, BareBones::Bit::to_bits(bitseqs_size_in_bytes));
-    std::cout << bitseqs_reader_tmp.position() << ' ' << bitseqs_reader_tmp.left() << '\n';
-
-    std::cout << "total bytes read: " << read_size_in_bytes + bitseqs_size_in_bytes << '\n';
-
-    for (auto& [ls_id, info] : series_to_load_tmp_bitseqs_) {
-      auto& [bitseq, chunk_id] = info;
-
-      auto find_it = std::ranges::find(bitset_it, BareBones::Bitset::IteratorSentinel{}, ls_id);
-      if (find_it == BareBones::Bitset::IteratorSentinel{}) {
-        std::cout << "ls_id: " << ls_id << " not found\n";
-        continue;
-      }
-      uint32_t ls_id_bit_index = std::ranges::distance(bitset_it, find_it);
-
-      uint32_t snapshot_ls_id_chunk_id = *std::ranges::next(id_it, ls_id_bit_index, EncodingChunkIDSequence::IteratorSentinel{});
-
-      uint32_t bitseq_size_offset = 0;
-      {
-        auto it = length_it;
-        for (uint32_t i = 0; i < ls_id_bit_index; ++i) {
-          bitseq_size_offset += *it;
-          ++it;
-        }
-      }
-      uint32_t bitseq_size_in_bytes = *std::ranges::next(length_it, ls_id_bit_index, EncodingChunkLengthSequence::IteratorSentinel{});
-      std::cout << "ls_id_bit_index: " << ls_id_bit_index << ", snapshot_ls_id_chunk_id: " << snapshot_ls_id_chunk_id << '\n';
-      std::cout << "bitseq_size_offset: " << bitseq_size_offset << " ; bitseq_size_in_bytes: " << bitseq_size_in_bytes << '\n';
-
-      if (snapshot_ls_id_chunk_id != chunk_id) {
-        if (bitseq.size_in_bits() != 0) {
-          std::cout << "bitseq.size_in_bits(): " << bitseq.size_in_bits() << '\n';
-          load_chunk_id(ls_id, info);
-        }
-        chunk_id = snapshot_ls_id_chunk_id;
-        bitseq.rewind();
-      }
-
-      BareBones::BitSequenceReader bitseqs_reader(bitseqs_ptr, BareBones::Bit::to_bits(bitseqs_size_in_bytes));
-      for (uint32_t i = 0; i < bitseq_size_offset; ++i) {
-        bitseqs_reader.ff(8);
-      }
-      for (uint32_t i = 0; i < bitseq_size_in_bytes; ++i) {
-        std::cout << "bitseqs_reader.position(): " << bitseqs_reader.position() << " ; bitseqs_reader.left(): " << bitseqs_reader.left() << '\n';
-        const uint32_t byte = bitseqs_reader.consume_bits_u32(8);
-        bitseq.push_back_bits_u32(8, byte);
-      }
-    }
-
-    for (auto& [ls_id, info] : series_to_load_tmp_bitseqs_) {
-      auto& [bitseq, chunk_id] = info;
-      std::cout << "ls_id: " << ls_id << " chunk_id: " << chunk_id << ' ' << bitseq.size_in_bits() << '\n';
-    }
+    process_ls_id_data(bitset_it, length_it, id_it, bitseqs_ptr, bitseqs_total_size);
   }
+
   void load_finalize() {
     for (auto& [ls_id, info] : series_to_load_tmp_bitseqs_) {
       if (info.buffer.size_in_bits() != 0) {
@@ -156,6 +56,102 @@ class Loader {
   }
 
  private:
+  PROMPP_ALWAYS_INLINE static uint32_t read_u32(std::span<const uint8_t> buffer, uint32_t& offset) noexcept {
+    uint32_t val = 0;
+    std::memcpy(&val, buffer.data() + offset, sizeof(uint32_t));
+    offset += sizeof(uint32_t);
+    return val;
+  }
+
+  PROMPP_ALWAYS_INLINE static auto find_ls_id(const BareBones::Bitset::Iterator& begin, uint32_t ls_id) noexcept {
+    return std::ranges::find(begin, BareBones::Bitset::IteratorSentinel{}, ls_id);
+  }
+
+  template <typename EncodedSequence>
+  PROMPP_ALWAYS_INLINE static uint32_t nth_value_in_encoded_sequence(typename EncodedSequence::const_iterator_type begin, uint32_t n) noexcept {
+    return *std::ranges::next(begin, n, typename EncodedSequence::sentinel{});
+  }
+
+  template <typename It>
+  PROMPP_ALWAYS_INLINE static uint32_t accumulate_sequence_prefix(It it, uint32_t upto) noexcept {
+    uint32_t sum = 0;
+    for (uint32_t i = 0; i < upto; ++i) {
+      sum += *it;
+      ++it;
+    }
+    return sum;
+  }
+
+  PROMPP_ALWAYS_INLINE static void skip_bytes(BareBones::BitSequenceReader& reader, uint32_t count) noexcept {
+    for (uint32_t i = 0; i < count; ++i) {
+      reader.ff(8);
+    }
+  }
+
+  PROMPP_ALWAYS_INLINE static void read_data(BareBones::BitSequenceReader& reader, uint32_t count, encoder::CompactBitSequence& output) noexcept {
+    for (uint32_t i = 0; i < count; ++i) {
+      output.push_back_bits_u32(8, reader.consume_bits_u32(8));
+    }
+  }
+
+  PROMPP_ALWAYS_INLINE static uint32_t get_bitset_iterator_index(const BareBones::Bitset::Iterator& begin, const BareBones::Bitset::Iterator& it) {
+    return static_cast<uint32_t>(std::ranges::distance(begin, it));
+  }
+
+  static BareBones::Bitset::Iterator parse_ls_id_bitmap(std::span<const uint8_t> buffer, uint32_t& offset) noexcept {
+    const uint32_t bit_count = read_u32(buffer, offset);
+    const uint32_t byte_count = ((bit_count + 63) >> 6) * 8;
+
+    const auto* bit_data = reinterpret_cast<const uint64_t*>(buffer.data() + offset);
+    offset += byte_count;
+
+    return BareBones::Bitset::Iterator{bit_data, bit_count};
+  }
+
+  template <typename EncodedSequence>
+  static typename EncodedSequence::const_iterator_type parse_encoded_sequence(std::span<const uint8_t> buffer, uint32_t& offset) noexcept {
+    const uint32_t byte_size = read_u32(buffer, offset);
+    const uint32_t elem_count = read_u32(buffer, offset);
+
+    const auto* compact_data = buffer.data() + offset;
+    offset += byte_size;
+
+    auto inner = typename EncodedSequence::sequence_type::DecodeIterator(compact_data, compact_data + EncodedSequence::sequence_type::kMaxKeySize, elem_count);
+
+    static thread_local typename EncodedSequence::encoder_type encoder;
+    return typename EncodedSequence::const_iterator_type(inner, {}, &encoder);
+  }
+
+  void process_ls_id_data(const BareBones::Bitset::Iterator& bitset_it,
+                          EncodingChunkLengthSequence::Iterator length_it,
+                          EncodingChunkIDSequence::Iterator id_it,
+                          const uint8_t* bitseqs_ptr,
+                          uint32_t total_size) {
+    for (auto& [ls_id, info] : series_to_load_tmp_bitseqs_) {
+      const auto it = find_ls_id(bitset_it, ls_id);
+      if (it == BareBones::Bitset::IteratorSentinel{}) {
+        continue;
+      }
+
+      const uint32_t index = get_bitset_iterator_index(bitset_it, it);
+      const uint32_t chunk_id_snapshot = nth_value_in_encoded_sequence<EncodingChunkIDSequence>(id_it, index);
+      const uint32_t bitseq_size = nth_value_in_encoded_sequence<EncodingChunkLengthSequence>(length_it, index);
+      const uint32_t offset = accumulate_sequence_prefix(length_it, index);
+
+      if (chunk_id_snapshot != info.chunk_id) {
+        if (info.buffer.size_in_bits() != 0) {
+          load_chunk_id(ls_id, info);
+        }
+        info.chunk_id = chunk_id_snapshot;
+        info.buffer.rewind();
+      }
+
+      BareBones::BitSequenceReader reader(bitseqs_ptr, BareBones::Bit::to_bits(total_size));
+      skip_bytes(reader, offset);
+      read_data(reader, bitseq_size, info.buffer);
+    }
+  }
+
   void load_chunk_id(uint32_t ls_id, SeriesToLoadInfo& info) const {
     const auto chunk_data =
         *std::ranges::next(DataStorage::SeriesChunkIterator{&storage_, ls_id}, info.chunk_id, series_data::DataStorage::SeriesChunks::end());
@@ -166,8 +162,6 @@ class Loader {
       }
       return storage_.finalized_data_streams[chunk_data.chunk().encoder.external_index];
     }();
-
-    std::cout << "bits in storage stream : " << chunk_bit_sequence.size_in_bits() << '\n';
 
     auto chunk_bit_sequence_reader = chunk_bit_sequence.reader();
     uint32_t chunk_bit_sequence_size_in_bits = chunk_bit_sequence.size_in_bits();

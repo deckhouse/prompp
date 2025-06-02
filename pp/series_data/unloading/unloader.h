@@ -18,9 +18,9 @@ class Unloader {
 
   template <class Stream>
   void unload(Stream& stream) {
-    const auto& [ls_id_bitmap, chunk_length_sequence, chunk_id_sequence, total_bitseqs_size] = prepare_sequences();
-    write_sequences(stream, ls_id_bitmap, chunk_length_sequence, chunk_id_sequence, total_bitseqs_size);
-    write_bit_sequences(stream, ls_id_bitmap, total_bitseqs_size);
+    const auto sequences = prepare_sequences();
+    write_sequences(stream, sequences.ls_id_bitmap, sequences.chunk_length_sequence, sequences.chunk_id_sequence);
+    write_bit_sequences(stream, sequences.ls_id_bitmap, sequences.total_bitseqs_size);
   }
 
   static constexpr uint32_t get_empty_unloader_size_in_bytes() noexcept {
@@ -68,19 +68,18 @@ class Unloader {
   static void write_sequences(Stream& stream,
                               const BareBones::Bitset& ls_id_bitmap,
                               const EncodingChunkLengthSequence& chunk_length_sequence,
-                              const EncodingChunkIDSequence& chunk_id_sequence,
-                              uint32_t total_bitseqs_size) noexcept {
+                              const EncodingChunkIDSequence& chunk_id_sequence) noexcept {
     ls_id_bitmap.write_to(stream);
 
     chunk_length_sequence.data().write_to(stream);
 
     chunk_id_sequence.data().write_to(stream);
-
-    stream.write(reinterpret_cast<char*>(&total_bitseqs_size), sizeof(total_bitseqs_size));
   }
 
   template <class Stream>
   void write_bit_sequences(Stream& stream, const BareBones::Bitset& ls_id_bitmap, uint32_t total_bitseqs_size) noexcept {
+    stream.write(reinterpret_cast<char*>(&total_bitseqs_size), sizeof(total_bitseqs_size));
+
     for (const auto ls_id : ls_id_bitmap) {
       auto& bitseq = get_open_chunk_stream(ls_id);
       const auto bitseq_size = BareBones::Bit::to_bytes(bitseq.size_in_bits());
