@@ -167,13 +167,12 @@ type Head struct {
 	relabelersData map[string]*RelabelerData
 	rdMutex        sync.Mutex
 
-	dataStorages        []*DataStorage
-	wals                []*ShardWal
-	lsses               []*LSS
-	shards              []*shard
-	exclusiveTaskChs    []chan *GenericTask
-	nonExclusiveTaskChs []chan *GenericTask
-	sMutex              sync.RWMutex
+	dataStorages       []*DataStorage
+	wals               []*ShardWal
+	lsses              []*LSS
+	shards             []*shard
+	lssTaskChs         []chan *GenericTask
+	dataStorageTaskChs []chan *GenericTask
 
 	numberOfShards uint16
 	stopc          chan struct{}
@@ -187,8 +186,8 @@ type Head struct {
 	queried              *prometheus.GaugeVec
 	walSize              *prometheus.GaugeVec
 	// TODO refactoring
-	queueExclusive    *prometheus.GaugeVec
-	queueNonExclusive *prometheus.GaugeVec
+	queueLSS         *prometheus.GaugeVec
+	queueDataStorage *prometheus.GaugeVec
 
 	tasksCreated *prometheus.CounterVec
 	tasksDone    *prometheus.CounterVec
@@ -206,13 +205,13 @@ func New(
 	numberOfShards uint16,
 	registerer prometheus.Registerer,
 ) (*Head, error) {
-	exclusive := make([]chan *GenericTask, numberOfShards)
-	nonExclusive := make([]chan *GenericTask, numberOfShards)
+	lssTaskChs := make([]chan *GenericTask, numberOfShards)
+	dataStorageTaskChs := make([]chan *GenericTask, numberOfShards)
 	shards := make([]*shard, numberOfShards)
 
 	for shardID := uint16(0); shardID < numberOfShards; shardID++ {
-		exclusive[shardID] = make(chan *GenericTask, chanBufferSize)
-		nonExclusive[shardID] = make(chan *GenericTask, chanBufferSize)
+		lssTaskChs[shardID] = make(chan *GenericTask, chanBufferSize)
+		dataStorageTaskChs[shardID] = make(chan *GenericTask, chanBufferSize)
 		shards[shardID] = &shard{
 			id:          shardID,
 			lss:         lsses[shardID],
@@ -223,14 +222,14 @@ func New(
 
 	factory := util.NewUnconflictRegisterer(registerer)
 	h := &Head{
-		id:                  id,
-		generation:          generation,
-		lsses:               lsses,
-		wals:                wals,
-		dataStorages:        dataStorages,
-		shards:              shards,
-		exclusiveTaskChs:    exclusive,
-		nonExclusiveTaskChs: nonExclusive,
+		id:                 id,
+		generation:         generation,
+		lsses:              lsses,
+		wals:               wals,
+		dataStorages:       dataStorages,
+		shards:             shards,
+		lssTaskChs:         lssTaskChs,
+		dataStorageTaskChs: dataStorageTaskChs,
 
 		stopc:          make(chan struct{}),
 		wg:             &sync.WaitGroup{},
@@ -267,17 +266,18 @@ func New(
 			},
 			[]string{"shard_id"},
 		),
-		queueExclusive: factory.NewGaugeVec(
+
+		queueLSS: factory.NewGaugeVec(
 			prometheus.GaugeOpts{
-				Name: "prompp_head_queue_exclusive_size",
-				Help: "The size of the queue exclusive of the current head.",
+				Name: "prompp_head_queue_lss_tasks_size",
+				Help: "The size of the queue lss tasks of the current head.",
 			},
 			[]string{"shard_id"},
 		),
-		queueNonExclusive: factory.NewGaugeVec(
+		queueDataStorage: factory.NewGaugeVec(
 			prometheus.GaugeOpts{
-				Name: "prompp_head_queue_non_exclusive_size",
-				Help: "The size of the queue non exclusive of the current head.",
+				Name: "prompp_head_queue_data_storage_tasks_size",
+				Help: "The size of the queue data storage tasks of the current head.",
 			},
 			[]string{"shard_id"},
 		),
@@ -449,13 +449,13 @@ func (h *Head) WriteMetrics() {
 			prometheus.Labels{"shard_id": shardIDStr},
 		).Set(float64(h.wals[shardID].CurrentSize()))
 
-		h.queueExclusive.With(prometheus.Labels{
+		h.queueLSS.With(prometheus.Labels{
 			"shard_id": shardIDStr,
-		}).Set(float64(len(h.exclusiveTaskChs[shardID])))
+		}).Set(float64(len(h.lssTaskChs[shardID])))
 
-		h.queueNonExclusive.With(prometheus.Labels{
+		h.queueDataStorage.With(prometheus.Labels{
 			"shard_id": shardIDStr,
-		}).Set(float64(len(h.nonExclusiveTaskChs[shardID])))
+		}).Set(float64(len(h.dataStorageTaskChs[shardID])))
 	}
 }
 
@@ -603,7 +603,7 @@ func (h *Head) onShard(shardID uint16, typeTask relabeler.TypeTask, fn relabeler
 		h.tasksExecute.With(ls),
 		h.numberOfShards,
 	)
-	h.exclusiveTaskChs[shardID] <- task
+	h.lssTaskChs[shardID] <- task
 
 	return task.Wait()
 }
@@ -615,20 +615,17 @@ func (h *Head) stop() {
 }
 
 func (h *Head) run() {
-	readGoCount := 2
+	h.wg.Add(2 * int(h.numberOfShards))
 	for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
-		h.wg.Add(readGoCount + 1)
 		go func(sid uint16) {
 			defer h.wg.Done()
-			h.exclusiveShardLoop(sid, h.exclusiveTaskChs[sid], h.stopc)
+			h.lssShardLoop(sid, h.lssTaskChs[sid], h.stopc)
 		}(shardID)
 
-		for i := 0; i < readGoCount; i++ {
-			go func(sid uint16) {
-				defer h.wg.Done()
-				h.nonExclusiveShardLoop(sid, h.nonExclusiveTaskChs[sid], h.stopc)
-			}(shardID)
-		}
+		go func(sid uint16) {
+			defer h.wg.Done()
+			h.dataStorageShardLoop(sid, h.dataStorageTaskChs[sid], h.stopc)
+		}(shardID)
 	}
 }
 
@@ -648,13 +645,13 @@ func (h *Head) ForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) e
 		h.numberOfShards,
 	)
 
-	if typeTask.IsExclusive() {
-		for _, exclusiveTaskCh := range h.exclusiveTaskChs {
-			exclusiveTaskCh <- t
+	if typeTask.ForLSS() {
+		for _, taskCh := range h.lssTaskChs {
+			taskCh <- t
 		}
 	} else {
-		for _, nonExclusiveTaskCh := range h.nonExclusiveTaskChs {
-			nonExclusiveTaskCh <- t
+		for _, taskCh := range h.dataStorageTaskChs {
+			taskCh <- t
 		}
 	}
 
@@ -941,8 +938,8 @@ func (h *Head) updateRelabelerStateStage(
 	// })
 }
 
-// exclusiveShardLoop run shard loop for exclusive(write lock) operation.
-func (h *Head) exclusiveShardLoop(
+// lssShardLoop run shard loop for operation with lss.
+func (h *Head) lssShardLoop(
 	shardID uint16,
 	exclusiveCH chan *GenericTask,
 	stopc chan struct{},
@@ -955,17 +952,15 @@ func (h *Head) exclusiveShardLoop(
 			return
 
 		case task := <-exclusiveCH:
-			h.sMutex.Lock()
 			task.ExecuteOnShard(s)
-			h.sMutex.Unlock()
 		}
 	}
 }
 
-// nonExclusiveShardLoop run shard loop for non-exclusive(read lock) operation.
-func (h *Head) nonExclusiveShardLoop(
+// dataStorageShardLoop run shard loop for operation with data storage.
+func (h *Head) dataStorageShardLoop(
 	shardID uint16,
-	nonExclusiveCH chan *GenericTask,
+	dataStorageCH chan *GenericTask,
 	stopc chan struct{},
 ) {
 	s := h.shards[shardID]
@@ -975,10 +970,8 @@ func (h *Head) nonExclusiveShardLoop(
 		case <-stopc:
 			return
 
-		case task := <-nonExclusiveCH:
-			h.sMutex.RLock()
+		case task := <-dataStorageCH:
 			task.ExecuteOnShard(s)
-			h.sMutex.RUnlock()
 		}
 	}
 }

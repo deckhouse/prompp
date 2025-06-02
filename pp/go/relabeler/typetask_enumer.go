@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _TypeTaskName = "UnknownHeadInputRelabelingHeadAppendRelabelerSeriesDataStorageAppendInnerSeriesDataStorageMergeOutOfOrderChunksWalCommitWalFlushWalWriteHeadCopyAddedSeriesBlockWriteDistributorOutputRelabelingDistributorUpdateRelabelerStateexclusiveMarkerHeadUpdateRelabelerStateHeadLSSAllocatedMemoryHeadDataStorageAllocatedMemoryDataStorageHeadStatusLSSHeadStatusChunkQuerierSelectLSSQueryChunkQuerierSelectDataStorageQueryChunkQuerierLabelValuesChunkQuerierLabelNamesQuerierSelectInstantLSSQueryQuerierSelectInstantDataStorageQueryQuerierSelectRangeLSSQueryQuerierSelectRangeDataStorageQueryQuerierLabelValuesQuerierLabelNames"
+const _TypeTaskName = "UnknownTaskHeadInputRelabelingHeadAppendRelabelerSeriesWalCommitWalFlushWalWriteHeadCopyAddedSeriesDistributorOutputRelabelingDistributorUpdateRelabelerStateHeadLSSAllocatedMemoryLSSHeadStatusChunkQuerierSelectLSSQueryChunkQuerierLabelValuesChunkQuerierLabelNamesQuerierSelectInstantLSSQueryQuerierSelectRangeLSSQueryQuerierLabelValuesQuerierLabelNamesdataStorageMarkerDataStorageAppendInnerSeriesDataStorageMergeOutOfOrderChunksHeadDataStorageAllocatedMemoryDataStorageHeadStatusChunkQuerierSelectDataStorageQueryQuerierSelectInstantDataStorageQueryQuerierSelectRangeDataStorageQueryBlockWriteHeadUpdateRelabelerState"
 
-var _TypeTaskIndex = [...]uint16{0, 7, 26, 51, 79, 111, 120, 128, 136, 155, 165, 192, 223, 238, 262, 284, 314, 335, 348, 374, 408, 431, 453, 481, 517, 543, 577, 595, 612}
+var _TypeTaskIndex = [...]uint16{0, 11, 30, 55, 64, 72, 80, 99, 126, 157, 179, 192, 218, 241, 263, 291, 317, 335, 352, 369, 397, 429, 459, 480, 514, 550, 584, 594, 618}
 
-const _TypeTaskLowerName = "unknownheadinputrelabelingheadappendrelabelerseriesdatastorageappendinnerseriesdatastoragemergeoutoforderchunkswalcommitwalflushwalwriteheadcopyaddedseriesblockwritedistributoroutputrelabelingdistributorupdaterelabelerstateexclusivemarkerheadupdaterelabelerstateheadlssallocatedmemoryheaddatastorageallocatedmemorydatastorageheadstatuslssheadstatuschunkquerierselectlssquerychunkquerierselectdatastoragequerychunkquerierlabelvalueschunkquerierlabelnamesquerierselectinstantlssqueryquerierselectinstantdatastoragequeryquerierselectrangelssqueryquerierselectrangedatastoragequeryquerierlabelvaluesquerierlabelnames"
+const _TypeTaskLowerName = "unknowntaskheadinputrelabelingheadappendrelabelerserieswalcommitwalflushwalwriteheadcopyaddedseriesdistributoroutputrelabelingdistributorupdaterelabelerstateheadlssallocatedmemorylssheadstatuschunkquerierselectlssquerychunkquerierlabelvalueschunkquerierlabelnamesquerierselectinstantlssqueryquerierselectrangelssqueryquerierlabelvaluesquerierlabelnamesdatastoragemarkerdatastorageappendinnerseriesdatastoragemergeoutoforderchunksheaddatastorageallocatedmemorydatastorageheadstatuschunkquerierselectdatastoragequeryquerierselectinstantdatastoragequeryquerierselectrangedatastoragequeryblockwriteheadupdaterelabelerstate"
 
 func (i TypeTask) String() string {
 	if i >= TypeTask(len(_TypeTaskIndex)-1) {
@@ -24,126 +24,126 @@ func (i TypeTask) String() string {
 // Re-run the stringer command to generate them again.
 func _TypeTaskNoOp() {
 	var x [1]struct{}
-	_ = x[Unknown-(0)]
+	_ = x[UnknownTask-(0)]
 	_ = x[HeadInputRelabeling-(1)]
 	_ = x[HeadAppendRelabelerSeries-(2)]
-	_ = x[DataStorageAppendInnerSeries-(3)]
-	_ = x[DataStorageMergeOutOfOrderChunks-(4)]
-	_ = x[WalCommit-(5)]
-	_ = x[WalFlush-(6)]
-	_ = x[WalWrite-(7)]
-	_ = x[HeadCopyAddedSeries-(8)]
-	_ = x[BlockWrite-(9)]
-	_ = x[DistributorOutputRelabeling-(10)]
-	_ = x[DistributorUpdateRelabelerState-(11)]
-	_ = x[exclusiveMarker-(12)]
-	_ = x[HeadUpdateRelabelerState-(13)]
-	_ = x[HeadLSSAllocatedMemory-(14)]
-	_ = x[HeadDataStorageAllocatedMemory-(15)]
-	_ = x[DataStorageHeadStatus-(16)]
-	_ = x[LSSHeadStatus-(17)]
-	_ = x[ChunkQuerierSelectLSSQuery-(18)]
-	_ = x[ChunkQuerierSelectDataStorageQuery-(19)]
-	_ = x[ChunkQuerierLabelValues-(20)]
-	_ = x[ChunkQuerierLabelNames-(21)]
-	_ = x[QuerierSelectInstantLSSQuery-(22)]
-	_ = x[QuerierSelectInstantDataStorageQuery-(23)]
-	_ = x[QuerierSelectRangeLSSQuery-(24)]
+	_ = x[WalCommit-(3)]
+	_ = x[WalFlush-(4)]
+	_ = x[WalWrite-(5)]
+	_ = x[HeadCopyAddedSeries-(6)]
+	_ = x[DistributorOutputRelabeling-(7)]
+	_ = x[DistributorUpdateRelabelerState-(8)]
+	_ = x[HeadLSSAllocatedMemory-(9)]
+	_ = x[LSSHeadStatus-(10)]
+	_ = x[ChunkQuerierSelectLSSQuery-(11)]
+	_ = x[ChunkQuerierLabelValues-(12)]
+	_ = x[ChunkQuerierLabelNames-(13)]
+	_ = x[QuerierSelectInstantLSSQuery-(14)]
+	_ = x[QuerierSelectRangeLSSQuery-(15)]
+	_ = x[QuerierLabelValues-(16)]
+	_ = x[QuerierLabelNames-(17)]
+	_ = x[dataStorageMarker-(18)]
+	_ = x[DataStorageAppendInnerSeries-(19)]
+	_ = x[DataStorageMergeOutOfOrderChunks-(20)]
+	_ = x[HeadDataStorageAllocatedMemory-(21)]
+	_ = x[DataStorageHeadStatus-(22)]
+	_ = x[ChunkQuerierSelectDataStorageQuery-(23)]
+	_ = x[QuerierSelectInstantDataStorageQuery-(24)]
 	_ = x[QuerierSelectRangeDataStorageQuery-(25)]
-	_ = x[QuerierLabelValues-(26)]
-	_ = x[QuerierLabelNames-(27)]
+	_ = x[BlockWrite-(26)]
+	_ = x[HeadUpdateRelabelerState-(27)]
 }
 
-var _TypeTaskValues = []TypeTask{Unknown, HeadInputRelabeling, HeadAppendRelabelerSeries, DataStorageAppendInnerSeries, DataStorageMergeOutOfOrderChunks, WalCommit, WalFlush, WalWrite, HeadCopyAddedSeries, BlockWrite, DistributorOutputRelabeling, DistributorUpdateRelabelerState, exclusiveMarker, HeadUpdateRelabelerState, HeadLSSAllocatedMemory, HeadDataStorageAllocatedMemory, DataStorageHeadStatus, LSSHeadStatus, ChunkQuerierSelectLSSQuery, ChunkQuerierSelectDataStorageQuery, ChunkQuerierLabelValues, ChunkQuerierLabelNames, QuerierSelectInstantLSSQuery, QuerierSelectInstantDataStorageQuery, QuerierSelectRangeLSSQuery, QuerierSelectRangeDataStorageQuery, QuerierLabelValues, QuerierLabelNames}
+var _TypeTaskValues = []TypeTask{UnknownTask, HeadInputRelabeling, HeadAppendRelabelerSeries, WalCommit, WalFlush, WalWrite, HeadCopyAddedSeries, DistributorOutputRelabeling, DistributorUpdateRelabelerState, HeadLSSAllocatedMemory, LSSHeadStatus, ChunkQuerierSelectLSSQuery, ChunkQuerierLabelValues, ChunkQuerierLabelNames, QuerierSelectInstantLSSQuery, QuerierSelectRangeLSSQuery, QuerierLabelValues, QuerierLabelNames, dataStorageMarker, DataStorageAppendInnerSeries, DataStorageMergeOutOfOrderChunks, HeadDataStorageAllocatedMemory, DataStorageHeadStatus, ChunkQuerierSelectDataStorageQuery, QuerierSelectInstantDataStorageQuery, QuerierSelectRangeDataStorageQuery, BlockWrite, HeadUpdateRelabelerState}
 
 var _TypeTaskNameToValueMap = map[string]TypeTask{
-	_TypeTaskName[0:7]:          Unknown,
-	_TypeTaskLowerName[0:7]:     Unknown,
-	_TypeTaskName[7:26]:         HeadInputRelabeling,
-	_TypeTaskLowerName[7:26]:    HeadInputRelabeling,
-	_TypeTaskName[26:51]:        HeadAppendRelabelerSeries,
-	_TypeTaskLowerName[26:51]:   HeadAppendRelabelerSeries,
-	_TypeTaskName[51:79]:        DataStorageAppendInnerSeries,
-	_TypeTaskLowerName[51:79]:   DataStorageAppendInnerSeries,
-	_TypeTaskName[79:111]:       DataStorageMergeOutOfOrderChunks,
-	_TypeTaskLowerName[79:111]:  DataStorageMergeOutOfOrderChunks,
-	_TypeTaskName[111:120]:      WalCommit,
-	_TypeTaskLowerName[111:120]: WalCommit,
-	_TypeTaskName[120:128]:      WalFlush,
-	_TypeTaskLowerName[120:128]: WalFlush,
-	_TypeTaskName[128:136]:      WalWrite,
-	_TypeTaskLowerName[128:136]: WalWrite,
-	_TypeTaskName[136:155]:      HeadCopyAddedSeries,
-	_TypeTaskLowerName[136:155]: HeadCopyAddedSeries,
-	_TypeTaskName[155:165]:      BlockWrite,
-	_TypeTaskLowerName[155:165]: BlockWrite,
-	_TypeTaskName[165:192]:      DistributorOutputRelabeling,
-	_TypeTaskLowerName[165:192]: DistributorOutputRelabeling,
-	_TypeTaskName[192:223]:      DistributorUpdateRelabelerState,
-	_TypeTaskLowerName[192:223]: DistributorUpdateRelabelerState,
-	_TypeTaskName[223:238]:      exclusiveMarker,
-	_TypeTaskLowerName[223:238]: exclusiveMarker,
-	_TypeTaskName[238:262]:      HeadUpdateRelabelerState,
-	_TypeTaskLowerName[238:262]: HeadUpdateRelabelerState,
-	_TypeTaskName[262:284]:      HeadLSSAllocatedMemory,
-	_TypeTaskLowerName[262:284]: HeadLSSAllocatedMemory,
-	_TypeTaskName[284:314]:      HeadDataStorageAllocatedMemory,
-	_TypeTaskLowerName[284:314]: HeadDataStorageAllocatedMemory,
-	_TypeTaskName[314:335]:      DataStorageHeadStatus,
-	_TypeTaskLowerName[314:335]: DataStorageHeadStatus,
-	_TypeTaskName[335:348]:      LSSHeadStatus,
-	_TypeTaskLowerName[335:348]: LSSHeadStatus,
-	_TypeTaskName[348:374]:      ChunkQuerierSelectLSSQuery,
-	_TypeTaskLowerName[348:374]: ChunkQuerierSelectLSSQuery,
-	_TypeTaskName[374:408]:      ChunkQuerierSelectDataStorageQuery,
-	_TypeTaskLowerName[374:408]: ChunkQuerierSelectDataStorageQuery,
-	_TypeTaskName[408:431]:      ChunkQuerierLabelValues,
-	_TypeTaskLowerName[408:431]: ChunkQuerierLabelValues,
-	_TypeTaskName[431:453]:      ChunkQuerierLabelNames,
-	_TypeTaskLowerName[431:453]: ChunkQuerierLabelNames,
-	_TypeTaskName[453:481]:      QuerierSelectInstantLSSQuery,
-	_TypeTaskLowerName[453:481]: QuerierSelectInstantLSSQuery,
-	_TypeTaskName[481:517]:      QuerierSelectInstantDataStorageQuery,
-	_TypeTaskLowerName[481:517]: QuerierSelectInstantDataStorageQuery,
-	_TypeTaskName[517:543]:      QuerierSelectRangeLSSQuery,
-	_TypeTaskLowerName[517:543]: QuerierSelectRangeLSSQuery,
-	_TypeTaskName[543:577]:      QuerierSelectRangeDataStorageQuery,
-	_TypeTaskLowerName[543:577]: QuerierSelectRangeDataStorageQuery,
-	_TypeTaskName[577:595]:      QuerierLabelValues,
-	_TypeTaskLowerName[577:595]: QuerierLabelValues,
-	_TypeTaskName[595:612]:      QuerierLabelNames,
-	_TypeTaskLowerName[595:612]: QuerierLabelNames,
+	_TypeTaskName[0:11]:         UnknownTask,
+	_TypeTaskLowerName[0:11]:    UnknownTask,
+	_TypeTaskName[11:30]:        HeadInputRelabeling,
+	_TypeTaskLowerName[11:30]:   HeadInputRelabeling,
+	_TypeTaskName[30:55]:        HeadAppendRelabelerSeries,
+	_TypeTaskLowerName[30:55]:   HeadAppendRelabelerSeries,
+	_TypeTaskName[55:64]:        WalCommit,
+	_TypeTaskLowerName[55:64]:   WalCommit,
+	_TypeTaskName[64:72]:        WalFlush,
+	_TypeTaskLowerName[64:72]:   WalFlush,
+	_TypeTaskName[72:80]:        WalWrite,
+	_TypeTaskLowerName[72:80]:   WalWrite,
+	_TypeTaskName[80:99]:        HeadCopyAddedSeries,
+	_TypeTaskLowerName[80:99]:   HeadCopyAddedSeries,
+	_TypeTaskName[99:126]:       DistributorOutputRelabeling,
+	_TypeTaskLowerName[99:126]:  DistributorOutputRelabeling,
+	_TypeTaskName[126:157]:      DistributorUpdateRelabelerState,
+	_TypeTaskLowerName[126:157]: DistributorUpdateRelabelerState,
+	_TypeTaskName[157:179]:      HeadLSSAllocatedMemory,
+	_TypeTaskLowerName[157:179]: HeadLSSAllocatedMemory,
+	_TypeTaskName[179:192]:      LSSHeadStatus,
+	_TypeTaskLowerName[179:192]: LSSHeadStatus,
+	_TypeTaskName[192:218]:      ChunkQuerierSelectLSSQuery,
+	_TypeTaskLowerName[192:218]: ChunkQuerierSelectLSSQuery,
+	_TypeTaskName[218:241]:      ChunkQuerierLabelValues,
+	_TypeTaskLowerName[218:241]: ChunkQuerierLabelValues,
+	_TypeTaskName[241:263]:      ChunkQuerierLabelNames,
+	_TypeTaskLowerName[241:263]: ChunkQuerierLabelNames,
+	_TypeTaskName[263:291]:      QuerierSelectInstantLSSQuery,
+	_TypeTaskLowerName[263:291]: QuerierSelectInstantLSSQuery,
+	_TypeTaskName[291:317]:      QuerierSelectRangeLSSQuery,
+	_TypeTaskLowerName[291:317]: QuerierSelectRangeLSSQuery,
+	_TypeTaskName[317:335]:      QuerierLabelValues,
+	_TypeTaskLowerName[317:335]: QuerierLabelValues,
+	_TypeTaskName[335:352]:      QuerierLabelNames,
+	_TypeTaskLowerName[335:352]: QuerierLabelNames,
+	_TypeTaskName[352:369]:      dataStorageMarker,
+	_TypeTaskLowerName[352:369]: dataStorageMarker,
+	_TypeTaskName[369:397]:      DataStorageAppendInnerSeries,
+	_TypeTaskLowerName[369:397]: DataStorageAppendInnerSeries,
+	_TypeTaskName[397:429]:      DataStorageMergeOutOfOrderChunks,
+	_TypeTaskLowerName[397:429]: DataStorageMergeOutOfOrderChunks,
+	_TypeTaskName[429:459]:      HeadDataStorageAllocatedMemory,
+	_TypeTaskLowerName[429:459]: HeadDataStorageAllocatedMemory,
+	_TypeTaskName[459:480]:      DataStorageHeadStatus,
+	_TypeTaskLowerName[459:480]: DataStorageHeadStatus,
+	_TypeTaskName[480:514]:      ChunkQuerierSelectDataStorageQuery,
+	_TypeTaskLowerName[480:514]: ChunkQuerierSelectDataStorageQuery,
+	_TypeTaskName[514:550]:      QuerierSelectInstantDataStorageQuery,
+	_TypeTaskLowerName[514:550]: QuerierSelectInstantDataStorageQuery,
+	_TypeTaskName[550:584]:      QuerierSelectRangeDataStorageQuery,
+	_TypeTaskLowerName[550:584]: QuerierSelectRangeDataStorageQuery,
+	_TypeTaskName[584:594]:      BlockWrite,
+	_TypeTaskLowerName[584:594]: BlockWrite,
+	_TypeTaskName[594:618]:      HeadUpdateRelabelerState,
+	_TypeTaskLowerName[594:618]: HeadUpdateRelabelerState,
 }
 
 var _TypeTaskNames = []string{
-	_TypeTaskName[0:7],
-	_TypeTaskName[7:26],
-	_TypeTaskName[26:51],
-	_TypeTaskName[51:79],
-	_TypeTaskName[79:111],
-	_TypeTaskName[111:120],
-	_TypeTaskName[120:128],
-	_TypeTaskName[128:136],
-	_TypeTaskName[136:155],
-	_TypeTaskName[155:165],
-	_TypeTaskName[165:192],
-	_TypeTaskName[192:223],
-	_TypeTaskName[223:238],
-	_TypeTaskName[238:262],
-	_TypeTaskName[262:284],
-	_TypeTaskName[284:314],
-	_TypeTaskName[314:335],
-	_TypeTaskName[335:348],
-	_TypeTaskName[348:374],
-	_TypeTaskName[374:408],
-	_TypeTaskName[408:431],
-	_TypeTaskName[431:453],
-	_TypeTaskName[453:481],
-	_TypeTaskName[481:517],
-	_TypeTaskName[517:543],
-	_TypeTaskName[543:577],
-	_TypeTaskName[577:595],
-	_TypeTaskName[595:612],
+	_TypeTaskName[0:11],
+	_TypeTaskName[11:30],
+	_TypeTaskName[30:55],
+	_TypeTaskName[55:64],
+	_TypeTaskName[64:72],
+	_TypeTaskName[72:80],
+	_TypeTaskName[80:99],
+	_TypeTaskName[99:126],
+	_TypeTaskName[126:157],
+	_TypeTaskName[157:179],
+	_TypeTaskName[179:192],
+	_TypeTaskName[192:218],
+	_TypeTaskName[218:241],
+	_TypeTaskName[241:263],
+	_TypeTaskName[263:291],
+	_TypeTaskName[291:317],
+	_TypeTaskName[317:335],
+	_TypeTaskName[335:352],
+	_TypeTaskName[352:369],
+	_TypeTaskName[369:397],
+	_TypeTaskName[397:429],
+	_TypeTaskName[429:459],
+	_TypeTaskName[459:480],
+	_TypeTaskName[480:514],
+	_TypeTaskName[514:550],
+	_TypeTaskName[550:584],
+	_TypeTaskName[584:594],
+	_TypeTaskName[594:618],
 }
 
 // TypeTaskString retrieves an enum value from the enum constants string name.
