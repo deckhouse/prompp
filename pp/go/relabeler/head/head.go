@@ -164,13 +164,17 @@ type Head struct {
 	generation uint64
 	readOnly   bool
 
-	relabelersData             map[string]*RelabelerData
+	relabelersData map[string]*RelabelerData
+	rdMutex        sync.Mutex
+
 	dataStorages               []*DataStorage
 	wals                       []*ShardWal
 	lsses                      []*LSS
 	stageInputRelabeling       []chan *TaskInputRelabeling
 	stageAppendRelabelerSeries []chan *TaskAppendRelabelerSeries
+	stageUpdateRelabelers      []chan *TaskUpdateRelabelerState
 	genericTaskCh              []chan *GenericTask
+	genericReadTaskCh          []chan *GenericReadTask
 	numberOfShards             uint16
 	// stat
 	appendedSegmentCount prometheus.Counter
@@ -178,6 +182,9 @@ type Head struct {
 	series               prometheus.Gauge
 	queried              *prometheus.GaugeVec
 	walSize              *prometheus.GaugeVec
+	queueInputRelabeling *prometheus.GaugeVec
+	queueRead            *prometheus.GaugeVec
+	queueGeneric         *prometheus.GaugeVec
 	stopc                chan struct{}
 	wg                   *sync.WaitGroup
 }
@@ -194,13 +201,17 @@ func New(
 ) (*Head, error) {
 	stageInputRelabeling := make([]chan *TaskInputRelabeling, numberOfShards)
 	stageAppendRelabelerSeries := make([]chan *TaskAppendRelabelerSeries, numberOfShards)
+	stageupdateRelabelers := make([]chan *TaskUpdateRelabelerState, numberOfShards)
 	genericTaskCh := make([]chan *GenericTask, numberOfShards)
+	genericReadTaskCh := make([]chan *GenericReadTask, numberOfShards)
 
 	var shardID uint16
 	for ; shardID < numberOfShards; shardID++ {
 		stageInputRelabeling[shardID] = make(chan *TaskInputRelabeling, chanBufferSize)
 		stageAppendRelabelerSeries[shardID] = make(chan *TaskAppendRelabelerSeries, chanBufferSize)
+		stageupdateRelabelers[shardID] = make(chan *TaskUpdateRelabelerState, chanBufferSize)
 		genericTaskCh[shardID] = make(chan *GenericTask, chanBufferSize)
+		genericReadTaskCh[shardID] = make(chan *GenericReadTask, chanBufferSize)
 	}
 
 	factory := util.NewUnconflictRegisterer(registerer)
@@ -212,7 +223,9 @@ func New(
 		dataStorages:               dataStorages,
 		stageInputRelabeling:       stageInputRelabeling,
 		stageAppendRelabelerSeries: stageAppendRelabelerSeries,
+		stageUpdateRelabelers:      stageupdateRelabelers,
 		genericTaskCh:              genericTaskCh,
+		genericReadTaskCh:          genericReadTaskCh,
 		stopc:                      make(chan struct{}),
 		wg:                         &sync.WaitGroup{},
 		relabelersData:             make(map[string]*RelabelerData, len(inputRelabelerConfigs)),
@@ -244,6 +257,27 @@ func New(
 			prometheus.GaugeOpts{
 				Name: "prompp_head_current_wal_size",
 				Help: "The size of the wall of the current head.",
+			},
+			[]string{"shard_id"},
+		),
+		queueInputRelabeling: factory.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "prompp_head_queue_input_relabeling_size",
+				Help: "The size of the queue input relabeling of the current head.",
+			},
+			[]string{"shard_id"},
+		),
+		queueRead: factory.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "prompp_head_queue_read_size",
+				Help: "The size of the queue read of the current head.",
+			},
+			[]string{"shard_id"},
+		),
+		queueGeneric: factory.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "prompp_head_queue_generic_size",
+				Help: "The size of the queue generic of the current head.",
 			},
 			[]string{"shard_id"},
 		),
@@ -287,8 +321,10 @@ func (h *Head) Append(
 		return nil, cppbridge.RelabelerStats{}, fmt.Errorf("appending to read only head")
 	}
 
+	h.rdMutex.Lock()
 	rd, ok := h.relabelersData[relabelerID]
 	if !ok {
+		h.rdMutex.Unlock()
 		return nil, cppbridge.RelabelerStats{}, fmt.Errorf("relabeler ID not exist: %s", relabelerID)
 	}
 
@@ -299,6 +335,7 @@ func (h *Head) Append(
 	if state == nil {
 		state = rd.State(h.generation)
 	}
+	h.rdMutex.Unlock()
 
 	inputPromise := NewInputRelabelingPromise(h.numberOfShards)
 	h.enqueueInputRelabeling(NewTaskInputRelabeling(
@@ -312,8 +349,6 @@ func (h *Head) Append(
 		// reset msr.rotateWG on error
 		return nil, cppbridge.RelabelerStats{}, fmt.Errorf("failed input promise: %s", err)
 	}
-
-	inputPromise.UpdateRelabeler()
 
 	var atomiclimitExhausted uint32
 	err := h.forEachShard(func(shard relabeler.Shard) error {
@@ -425,7 +460,7 @@ func (h *Head) WriteMetrics() {
 		prometheus.Labels{"caller": "other"},
 	).Set(float64(status.HeadStats.OtherQueriedSeries))
 
-	_ = h.ForEachShard(func(shard relabeler.Shard) error {
+	_ = h.ReadEachShard(func(shard relabeler.Shard) error {
 		h.memoryInUse.With(
 			prometheus.Labels{
 				"generation": fmt.Sprintf("%d", h.generation),
@@ -454,12 +489,24 @@ func (h *Head) WriteMetrics() {
 		h.walSize.With(
 			prometheus.Labels{"shard_id": strconv.FormatUint(uint64(shardID), 10)},
 		).Set(float64(h.wals[shardID].CurrentSize()))
+
+		h.queueInputRelabeling.With(prometheus.Labels{
+			"shard_id": strconv.FormatUint(uint64(shardID), 10),
+		}).Set(float64(len(h.stageInputRelabeling[shardID])))
+
+		h.queueRead.With(prometheus.Labels{
+			"shard_id": strconv.FormatUint(uint64(shardID), 10),
+		}).Set(float64(len(h.genericReadTaskCh[shardID])))
+
+		h.queueGeneric.With(prometheus.Labels{
+			"shard_id": strconv.FormatUint(uint64(shardID), 10),
+		}).Set(float64(len(h.genericTaskCh[shardID])))
 	}
 }
 
 func (h *Head) Status(limit int) relabeler.HeadStatus {
 	shardStatuses := make([]*cppbridge.HeadStatus, h.NumberOfShards())
-	_ = h.ForEachShard(func(shard relabeler.Shard) error {
+	_ = h.ReadEachShard(func(shard relabeler.Shard) error {
 		shardStatuses[shard.ShardID()] = cppbridge.GetHeadStatus(
 			shard.LSS().Raw().Pointer(),
 			shard.DataStorage().Raw().Pointer(),
@@ -541,6 +588,15 @@ func (h *Head) Rotate() error {
 	return nil
 }
 
+// CopySeriesFrom copy series from other head.
+func (h *Head) CopySeriesFrom(other relabeler.Head) {
+	_ = other.ForEachShard(func(shard relabeler.Shard) error {
+		shard.LSS().Raw().CopyAddedSeries(h.lsses[shard.ShardID()].Raw())
+		return nil
+	})
+}
+
+// Close wals and clear metrics.
 func (h *Head) Close() error {
 	h.memoryInUse.DeletePartialMatch(prometheus.Labels{"generation": strconv.FormatUint(h.generation, 10)})
 	var err error
@@ -619,4 +675,30 @@ func (h *Head) stop() {
 	close(h.stopc)
 	h.wg.Wait()
 	h.stopc = make(chan struct{})
+}
+
+// ReadEachShard execute read fn on each shard.
+func (h *Head) ReadEachShard(fn relabeler.ShardFn) error {
+	task := NewGenericReadTask(fn, h.numberOfShards)
+	if h.readOnly {
+		for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
+			s := &shard{
+				id:          shardID,
+				lss:         h.lsses[shardID],
+				dataStorage: h.dataStorages[shardID],
+				wal:         h.wals[shardID],
+			}
+			go func(shard *shard) {
+				task.ExecuteOnShard(shard)
+			}(s)
+		}
+		task.Wait()
+		return errors.Join(task.Errors()...)
+	}
+
+	for _, shardGenericReadTaskCh := range h.genericReadTaskCh {
+		shardGenericReadTaskCh <- task
+	}
+	task.Wait()
+	return errors.Join(task.Errors()...)
 }

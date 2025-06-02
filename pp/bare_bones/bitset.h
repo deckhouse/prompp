@@ -65,12 +65,12 @@ class Bitset {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_set(uint32_t v) const noexcept { return v < size() && (data_[v >> 6] & (1ull << (v & 0x3F))) != 0; }
 
-  void set(uint32_t v) noexcept {
+  PROMPP_ALWAYS_INLINE void set(uint32_t v) noexcept {
     assert(v < size());
     data_[v >> 6] |= (1ull << (v & 0x3F));
   }
 
-  void reset(uint32_t v) noexcept {
+  PROMPP_ALWAYS_INLINE void reset(uint32_t v) noexcept {
     assert(v < size());
     data_[v >> 6] &= ~(1ull << (v & 0x3F));
   }

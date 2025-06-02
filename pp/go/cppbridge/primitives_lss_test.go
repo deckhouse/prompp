@@ -47,6 +47,178 @@ func (s *LSSSuite) TestQueryableLSS() {
 	s.Require().NotEqual(0, cp)
 }
 
+func (s *LSSSuite) TestCreateSnapshotFromEncodingBimap() {
+	// Arrange
+	lss := cppbridge.NewLssStorage()
+
+	// Act
+	labelSetSnapshot := lss.CreateLabelSetSnapshot()
+
+	// Assert
+	s.Require().NotNil(labelSetSnapshot.Pointer())
+}
+
+func (s *LSSSuite) TestCreateSnapshotFromQueryableEncodingBimap() {
+	// Arrange
+	lss := cppbridge.NewQueryableLssStorage()
+
+	// Act
+	labelSetSnapshot := lss.CreateLabelSetSnapshot()
+
+	// Assert
+	s.Require().NotNil(labelSetSnapshot.Pointer())
+}
+
+func (s *LSSSuite) TestLabels() {
+	lsMap := map[string]string{
+		"__name__": "ubername",
+		"lol":      "kek",
+		"che":      "bureck",
+	}
+
+	lsIn := model.LabelSetFromMap(lsMap)
+
+	lss := cppbridge.NewQueryableLssStorage()
+	lsID := lss.FindOrEmplace(lsIn).LabelSetID
+
+	lsLength := 0
+	_ = lss.RangeLabelSet(lsID, func(l cppbridge.Label) error {
+		lv, ok := lsMap[l.Name]
+		s.Require().True(ok)
+		s.Require().Equal(lv, l.Value)
+		lsLength++
+
+		return nil
+	})
+
+	s.Equal(lsIn.Len(), lsLength)
+}
+
+type bytesTestCase struct {
+	labelSet model.LabelSet
+	expected []byte
+}
+
+func (s *LSSSuite) TestBytes() {
+	testCases := []bytesTestCase{
+		{
+			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
+			expected: []byte("\xFEkey\xFFvalue"),
+		},
+		{
+			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
+			expected: []byte("\xFEkey1\xFFvalue1\xFFkey2\xFFvalue2"),
+		},
+	}
+
+	var bytes []byte
+	for _, testCase := range testCases {
+		s.testBytesImpl(testCase, &bytes)
+	}
+}
+
+func (s *LSSSuite) testBytesImpl(testCase bytesTestCase, bytes *[]byte) {
+	// Arrange
+	lss := cppbridge.NewLssStorage()
+	lss.FindOrEmplace(testCase.labelSet)
+
+	// Act
+	*bytes = cppbridge.LabelSetBytes(lss.Pointer(), 0, *bytes)
+
+	// Assert
+	s.Equal(testCase.expected, *bytes)
+}
+
+type bytesWithFilteredNamesTestCase struct {
+	labelSet model.LabelSet
+	names    []string
+	expected []byte
+}
+
+func (s *LSSSuite) TestBytesWithLabels() {
+	testCases := []bytesWithFilteredNamesTestCase{
+		{
+			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
+			names:    []string{"key", "key1", "key2"},
+			expected: []byte("\xFEkey\xFFvalue"),
+		},
+		{
+			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
+			names:    []string{"non_existing_key"},
+			expected: []byte("\xFE"),
+		},
+		{
+			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
+			names:    []string{"key1", "key2"},
+			expected: []byte("\xFEkey1\xFFvalue1\xFFkey2\xFFvalue2"),
+		},
+	}
+
+	var bytes []byte
+	for _, testCase := range testCases {
+		s.testBytesWithLabelsImpl(testCase, &bytes)
+	}
+}
+
+func (s *LSSSuite) testBytesWithLabelsImpl(testCase bytesWithFilteredNamesTestCase, bytes *[]byte) {
+	// Arrange
+	lss := cppbridge.NewLssStorage()
+	lss.FindOrEmplace(testCase.labelSet)
+
+	// Act
+	*bytes = cppbridge.LabelSetBytesWithLabels(lss.Pointer(), 0, *bytes, testCase.names...)
+
+	// Assert
+	s.Equal(testCase.expected, *bytes)
+}
+
+func (s *LSSSuite) TestBytesWithoutLabels() {
+	testCases := []bytesWithFilteredNamesTestCase{
+		{
+			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
+			names:    []string{"key1", "key2"},
+			expected: []byte("\xFE"),
+		},
+		{
+			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
+			names:    []string{"key1"},
+			expected: []byte("\xFEkey2\xFFvalue2"),
+		},
+		{
+			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
+			names:    []string{"key2"},
+			expected: []byte("\xFEkey1\xFFvalue1"),
+		},
+		{
+			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
+			names:    []string{"key", "key1", "key2"},
+			expected: []byte("\xFE"),
+		},
+		{
+			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
+			names:    []string{"non_existing_key"},
+			expected: []byte("\xFEkey\xFFvalue"),
+		},
+	}
+
+	var bytes []byte
+	for _, testCase := range testCases {
+		s.testBytesWithoutLabelsImpl(testCase, &bytes)
+	}
+}
+
+func (s *LSSSuite) testBytesWithoutLabelsImpl(testCase bytesWithFilteredNamesTestCase, bytes *[]byte) {
+	// Arrange
+	lss := cppbridge.NewLssStorage()
+	lss.FindOrEmplace(testCase.labelSet)
+
+	// Act
+	*bytes = cppbridge.LabelSetBytesWithoutLabels(lss.Pointer(), 0, *bytes, testCase.names...)
+
+	// Assert
+	s.Equal(testCase.expected, *bytes)
+}
+
 type QueryableLSSSuite struct {
 	suite.Suite
 	baseCtx     context.Context
@@ -73,7 +245,7 @@ func (s *QueryableLSSSuite) SetupTest() {
 
 	s.labelSetIDs = make([]uint32, 0, len(s.labelSets))
 	for _, labelSet := range s.labelSets {
-		s.labelSetIDs = append(s.labelSetIDs, s.lss.FindOrEmplace(labelSet))
+		s.labelSetIDs = append(s.labelSetIDs, s.lss.FindOrEmplace(labelSet).LabelSetID)
 	}
 }
 
@@ -123,44 +295,51 @@ func (s *QueryableLSSSuite) TestQuery() {
 }
 
 func (s *QueryableLSSSuite) TestGetLabelSets() {
+	// Arrange
+
+	// Act
 	fetchedLabelSets := s.lss.GetLabelSets(s.labelSetIDs)
 
-	for index, labelSet := range s.labelSets {
-		s.Require().True(isLabelSetEqualsToLabels(labelSet, fetchedLabelSets.LabelsSets()[index]))
-	}
+	// Assert
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets), fetchedLabelSets.LabelsSets())
 }
 
-func isLabelSetEqualsToLabels(labelSet model.LabelSet, labels cppbridge.Labels) bool {
-	labelSetString := labelSet.String()
-	labelsString := ""
-	for _, label := range labels {
-		labelsString += label.Name + ":" + label.Value + ";"
+func labelSetToCppBridgeLabels(labelSets []model.LabelSet) []cppbridge.Labels {
+	result := make([]cppbridge.Labels, 0, len(labelSets))
+	for _, labelSet := range labelSets {
+		cppLabels := make(cppbridge.Labels, labelSet.Len())
+		for i := 0; i < labelSet.Len(); i++ {
+			cppLabels[i].Name = labelSet.Key(i)
+			cppLabels[i].Value = labelSet.Value(i)
+		}
+		result = append(result, cppLabels)
 	}
-	return labelSetString == labelsString
+
+	return result
 }
 
 type queryLabelNameCase struct {
-	matchers        []model.LabelMatcher
-	expected_status uint32
-	expected_names  []string
+	matchers       []model.LabelMatcher
+	expectedStatus uint32
+	expectedNames  []string
 }
 
 var queryLabelNamesCases = []queryLabelNameCase{
 	{
-		matchers:        []model.LabelMatcher{},
-		expected_status: cppbridge.LSSQueryStatusMatch,
-		expected_names:  []string{"che", "foo", "lol", "zhe"},
+		matchers:       []model.LabelMatcher{},
+		expectedStatus: cppbridge.LSSQueryStatusMatch,
+		expectedNames:  []string{"che", "foo", "lol", "zhe"},
 	},
 	{
-		matchers:        []model.LabelMatcher{{Name: "lol", Value: ".+", MatcherType: model.MatcherTypeRegexpMatch}},
-		expected_status: cppbridge.LSSQueryStatusMatch,
-		expected_names:  []string{"che", "lol", "zhe"},
+		matchers:       []model.LabelMatcher{{Name: "lol", Value: ".+", MatcherType: model.MatcherTypeRegexpMatch}},
+		expectedStatus: cppbridge.LSSQueryStatusMatch,
+		expectedNames:  []string{"che", "lol", "zhe"},
 	},
 }
 
 func (s *QueryableLSSSuite) TestQueryLabelNames() {
-	for _, test_case := range queryLabelNamesCases {
-		s.testQueryLabelNamesImpl(test_case)
+	for _, testCase := range queryLabelNamesCases {
+		s.testQueryLabelNamesImpl(testCase)
 	}
 }
 
@@ -171,45 +350,100 @@ func (s *QueryableLSSSuite) testQueryLabelNamesImpl(test_case queryLabelNameCase
 	result := s.lss.QueryLabelNames(test_case.matchers)
 
 	// Assert
-	s.Equal(test_case.expected_status, result.Status())
-	s.Equal(test_case.expected_names, result.Names())
+	s.Equal(test_case.expectedStatus, result.Status())
+	s.Equal(test_case.expectedNames, result.Names())
 }
 
 type queryLabelValuesCase struct {
-	label_name      string
-	matchers        []model.LabelMatcher
-	expected_status uint32
-	expected_values []string
+	labelName      string
+	matchers       []model.LabelMatcher
+	expectedStatus uint32
+	expectedValues []string
 }
 
 var queryLabelValuesCases = []queryLabelValuesCase{
 	{
-		label_name:      "foo",
-		matchers:        []model.LabelMatcher{},
-		expected_status: cppbridge.LSSQueryStatusMatch,
-		expected_values: []string{"bar", "baz"},
+		labelName:      "foo",
+		matchers:       []model.LabelMatcher{},
+		expectedStatus: cppbridge.LSSQueryStatusMatch,
+		expectedValues: []string{"bar", "baz"},
 	},
 	{
-		label_name:      "foo",
-		matchers:        []model.LabelMatcher{{Name: "foo", Value: ".+", MatcherType: model.MatcherTypeRegexpMatch}},
-		expected_status: cppbridge.LSSQueryStatusMatch,
-		expected_values: []string{"bar", "baz"},
+		labelName:      "foo",
+		matchers:       []model.LabelMatcher{{Name: "foo", Value: ".+", MatcherType: model.MatcherTypeRegexpMatch}},
+		expectedStatus: cppbridge.LSSQueryStatusMatch,
+		expectedValues: []string{"bar", "baz"},
 	},
 }
 
 func (s *QueryableLSSSuite) TestQueryLabelValues() {
-	for _, test_case := range queryLabelValuesCases {
-		s.testQueryLabelValuesImpl(test_case)
+	for _, testCase := range queryLabelValuesCases {
+		s.testQueryLabelValuesImpl(testCase)
 	}
 }
 
-func (s *QueryableLSSSuite) testQueryLabelValuesImpl(test_case queryLabelValuesCase) {
+func (s *QueryableLSSSuite) testQueryLabelValuesImpl(testCase queryLabelValuesCase) {
 	// Arrange
 
 	// Act
-	result := s.lss.QueryLabelValues(test_case.label_name, test_case.matchers)
+	result := s.lss.QueryLabelValues(testCase.labelName, testCase.matchers)
 
 	// Assert
-	s.Equal(test_case.expected_status, result.Status())
-	s.Equal(test_case.expected_values, result.Values())
+	s.Equal(testCase.expectedStatus, result.Status())
+	s.Equal(testCase.expectedValues, result.Values())
+}
+
+func (s *QueryableLSSSuite) TestCopyAddedSeries() {
+	// Arrange
+	emptyLabelsSets := make([]cppbridge.Labels, len(s.labelSetIDs))
+	lssCopy := cppbridge.NewQueryableLssStorage()
+	lssCopyOfCopy := cppbridge.NewQueryableLssStorage()
+
+	// Act
+	s.lss.CopyAddedSeries(lssCopy)
+	lssCopy.CopyAddedSeries(lssCopyOfCopy)
+
+	// Assert
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets), lssCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
+	s.Equal(emptyLabelsSets, lssCopyOfCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
+}
+
+func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithExistingLabelSet() {
+	// Arrange
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
+
+	// Act
+	existingLsIdWithAdd := s.lss.FindOrEmplaceBuilder(model.CppLabelSetBuilder{
+		ReadonlyLss: labelSetSnapshot.Pointer(),
+		LsId:        0,
+		SortedAdd:   []model.SimpleLabel{{Name: "che", Value: "bureck"}},
+		SortedDel:   nil,
+	}).LabelSetID
+	existingLsIdWithDel := s.lss.FindOrEmplaceBuilder(model.CppLabelSetBuilder{
+		ReadonlyLss: labelSetSnapshot.Pointer(),
+		LsId:        1,
+		SortedAdd:   nil,
+		SortedDel:   []string{"che"},
+	}).LabelSetID
+
+	// Assert
+	s.Equal(uint32(1), existingLsIdWithAdd)
+	s.Equal(uint32(0), existingLsIdWithDel)
+}
+
+func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithNewLabelSet() {
+	// Arrange
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
+
+	// Act
+	expectedLsId := len(s.labelSetIDs)
+	existingLsId := s.lss.FindOrEmplaceBuilder(model.CppLabelSetBuilder{
+		ReadonlyLss: labelSetSnapshot.Pointer(),
+		LsId:        0,
+		SortedAdd:   []model.SimpleLabel{{Name: "new_lol", Value: "new_kek"}},
+		SortedDel:   nil,
+	}).LabelSetID
+
+	// Assert
+	s.Equal(uint32(expectedLsId), existingLsId)
 }

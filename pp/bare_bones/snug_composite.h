@@ -1,7 +1,5 @@
 #pragma once
 
-#include <fstream>
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
 #include <parallel_hashmap/btree.h>
@@ -14,6 +12,7 @@
 #include "bare_bones/exception.h"
 #include "bare_bones/streams.h"
 #include "bare_bones/vector.h"
+#include "bare_bones/xxhash.h"
 
 namespace BareBones::SnugComposite {
 
@@ -56,7 +55,7 @@ class GenericDecodingTable {
   using value_type = typename Filament<Vector>::composite_type;
   using data_type = typename Filament<Vector>::data_type;  // FIXME make it private
 
-  static constexpr bool kIsReadOnly = std::same_as<Vector<uint8_t>, SharedSpan<uint8_t>>;
+  static constexpr bool kIsReadOnly = IsSharedSpan<Vector<uint8_t>>::value;
 
  protected:
   class Proxy {
@@ -76,16 +75,18 @@ class GenericDecodingTable {
     using is_transparent = void;
 
     const GenericDecodingTable* decoding_table;
-    inline __attribute__((always_inline)) explicit Hasher(const GenericDecodingTable* _decoding_table = nullptr) noexcept : decoding_table(_decoding_table) {}
+    PROMPP_ALWAYS_INLINE explicit Hasher(const GenericDecodingTable* _decoding_table = nullptr) noexcept : decoding_table(_decoding_table) {}
+
+    PROMPP_ALWAYS_INLINE size_t operator()(const std::string_view& str) const noexcept { return XXHash::hash(str); }
+    PROMPP_ALWAYS_INLINE size_t operator()(const std::string& str) const noexcept { return XXHash::hash(str); }
 
     template <class Class>
-    inline __attribute__((always_inline)) size_t operator()(const Class& c) const noexcept {
+    PROMPP_ALWAYS_INLINE size_t operator()(const Class& c) const noexcept {
       return phmap::Hash<Class>()(c);
     }
 
-    inline __attribute__((always_inline)) size_t operator()(const Proxy& p) const noexcept {
-      auto composite = decoding_table->items_[p].composite(decoding_table->data_);
-      return phmap::Hash<decltype(composite)>()(composite);
+    PROMPP_ALWAYS_INLINE size_t operator()(const Proxy& p) const noexcept {
+      return this->operator()(decoding_table->items_[p].composite(decoding_table->data_));
     }
   };
 

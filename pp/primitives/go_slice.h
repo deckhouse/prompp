@@ -26,13 +26,13 @@ class SliceView {
 
   PROMPP_ALWAYS_INLINE explicit SliceView() = default;
 
-  PROMPP_ALWAYS_INLINE void reset_to(T* data, size_t len) {
+  PROMPP_ALWAYS_INLINE void reset_to(T* data, size_t len, size_t cap) {
     data_ = data;
     len_ = len;
-    cap_ = len;
+    cap_ = cap;
   }
 
-  PROMPP_ALWAYS_INLINE void reset_to(std::span<T> buffer) { reset_to(buffer.data(), buffer.size()); }
+  PROMPP_ALWAYS_INLINE void reset_to(std::span<T> buffer) { reset_to(buffer.data(), buffer.size(), buffer.size()); }
 
   PROMPP_ALWAYS_INLINE const T* data() const noexcept { return data_; }
   PROMPP_ALWAYS_INLINE T* data() noexcept { return data_; }
@@ -70,7 +70,7 @@ class String {
 
   explicit String() = default;
 
-  explicit String(std::string_view value) : data_(value.data()), len_(value.size()) {}
+  explicit constexpr String(std::string_view value) : data_(value.data()), len_(value.size()) {}
 
   PROMPP_ALWAYS_INLINE static String allocate_and_copy(std::string_view value) noexcept {
     auto data = reinterpret_cast<char*>(std::malloc(value.size() + 1));
@@ -85,10 +85,11 @@ class String {
     str.reset_to(nullptr, 0);
   }
 
-  PROMPP_ALWAYS_INLINE void reset_to(const char* data, size_t len) {
+  PROMPP_ALWAYS_INLINE void reset_to(const char* data, size_t len) noexcept {
     data_ = data;
     len_ = len;
   }
+  PROMPP_ALWAYS_INLINE void reset_to(const std::string_view& value) noexcept { reset_to(value.data(), value.size()); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const char* data() const noexcept { return data_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return !len_; }
@@ -100,6 +101,11 @@ class String {
   PROMPP_ALWAYS_INLINE const char& operator[](uint32_t i) const {
     assert(i < len_);
     return data_[i];
+  }
+
+  PROMPP_ALWAYS_INLINE String& operator=(const std::string_view& value) noexcept {
+    reset_to(value);
+    return *this;
   }
 
   PROMPP_ALWAYS_INLINE bool operator<(const String& other) const noexcept {
@@ -183,6 +189,11 @@ class BytesStream : public std::ostream {
 
   output_buffer buffer_;
 };
+
+constexpr String operator""_gs(const char* value, size_t len) noexcept {
+  return String(std::string_view(value, len));
+}
+
 }  // namespace PromPP::Primitives::Go
 
 template <class T>

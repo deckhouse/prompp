@@ -181,9 +181,15 @@ class GenericVector {
   template <std::random_access_iterator IteratorType, class IteratorSentinelType>
     requires std::is_same_v<typename std::iterator_traits<IteratorType>::value_type, T> && std::sentinel_for<IteratorSentinelType, IteratorType>
   PROMPP_ALWAYS_INLINE void push_back(IteratorType begin, IteratorSentinelType end) noexcept {
-    auto pos = size();
-    resize(pos + std::distance(begin, end));
-    std::ranges::copy(begin, end, data() + pos);
+    const auto pos = size();
+    const auto size = std::distance(begin, end);
+    resize(pos + size);
+
+    if constexpr (std::contiguous_iterator<IteratorType> && IsTriviallyCopyable<T>::value) {
+      std::memcpy(data() + pos, begin, size);
+    } else {
+      std::ranges::copy(begin, end, data() + pos);
+    }
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType size() const noexcept { return derived()->get_size(); }
@@ -358,10 +364,10 @@ class MemoryBasedVector : public GenericVector<MemoryBasedVector<MemoryControlBl
 template <class T>
 using Vector = MemoryBasedVector<MemoryControlBlockWithItemCount, T>;
 
-template <class T>
-class SharedVector : public GenericVector<SharedVector<T>, typename SharedMemory<T>::SizeType, T> {
+template <class T, ReallocatorInterface Reallocator>
+class SharedVector : public GenericVector<SharedVector<T, Reallocator>, typename SharedMemory<T, Reallocator>::SizeType, T> {
  public:
-  using SizeType = typename SharedMemory<T>::SizeType;
+  using SizeType = typename SharedMemory<T, Reallocator>::SizeType;
   using Base = GenericVector<SharedVector, SizeType, T>;
 
   SharedVector() = default;
@@ -373,78 +379,82 @@ class SharedVector : public GenericVector<SharedVector<T>, typename SharedMemory
   SharedVector& operator=(const SharedVector&) = default;
   SharedVector& operator=(SharedVector&&) noexcept = default;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const SharedPtr<T>& shared_ptr() const noexcept { return memory_.ptr(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& shared_ptr() const noexcept { return memory_.ptr(); }
 
  protected:
   friend class GenericVector<SharedVector, SizeType, T>;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SharedMemory<T>& memory() noexcept { return memory_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const SharedMemory<T>& memory() const noexcept { return memory_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE auto& memory() noexcept { return memory_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& memory() const noexcept { return memory_; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType get_size() const noexcept { return memory_.constructed_item_count(); }
   PROMPP_ALWAYS_INLINE void set_size(SizeType size) noexcept { memory_.set_constructed_item_count(size); }
 
  private:
-  SharedMemory<T> memory_;
+  SharedMemory<T, Reallocator> memory_;
 };
 
 template <class T>
 struct IsTriviallyReallocatable<Vector<T>> : std::true_type {};
 
-template <class T>
-struct IsTriviallyReallocatable<SharedVector<T>> : std::true_type {};
+template <class T, ReallocatorInterface Reallocator>
+struct IsTriviallyReallocatable<SharedVector<T, Reallocator>> : std::true_type {};
 
 template <class T>
 struct IsZeroInitializable<Vector<T>> : std::true_type {};
 
-template <class T>
-struct IsZeroInitializable<SharedVector<T>> : std::true_type {};
+template <class T, ReallocatorInterface Reallocator>
+struct IsZeroInitializable<SharedVector<T, Reallocator>> : std::true_type {};
 
-template <class T>
+template <class T, ReallocatorInterface Reallocator>
 class SharedSpan {
  public:
   using iterator_category = std::contiguous_iterator_tag;
   using value_type = T;
   using iterator = T*;
   using const_iterator = const T*;
-  using SizeType = typename SharedVector<T>::SizeType;
+  using SizeType = typename SharedVector<T, Reallocator>::SizeType;
 
   SharedSpan() noexcept = default;
 
   template <class Item>
     requires std::is_trivially_destructible_v<Item>
-  explicit SharedSpan(const SharedVector<Item>& vector) : data_(reinterpret_cast<const SharedPtr<T>&>(vector.shared_ptr())), size_(vector.size()) {}
+  explicit SharedSpan(const SharedVector<Item, Reallocator>& vector) : data_(reinterpret_cast<const SharedPtr<T, Reallocator>&>(vector.shared_ptr())) {}
 
   SharedSpan(const SharedSpan&) = default;
-  SharedSpan(SharedSpan&& other) noexcept : data_(std::move(other.data_)), size_(std::exchange(other.size_, 0)) {}
+  SharedSpan(SharedSpan&& other) noexcept : data_(std::move(other.data_)) {}
   SharedSpan& operator=(const SharedSpan&) = default;
   SharedSpan& operator=(SharedSpan&& other) noexcept {
     if (this != other) [[likely]] {
       data_ = std::move(other.data_);
-      size_ = std::exchange(other.size_, 0);
     }
 
     return *this;
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const T& operator[](SizeType i) const {
-    assert(i < size_);
+    assert(i < size());
     return data_.get()[i];
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE T& operator[](SizeType i) {
-    assert(i < size_);
+    assert(i < size());
     return data_.get()[i];
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType size() const noexcept { return size_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType size() const noexcept { return data_.constructed_item_count(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const T* data() const noexcept { return begin(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const T* begin() const noexcept { return data_.get(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const T* end() const noexcept { return begin() + size_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const T* end() const noexcept { return begin() + size(); }
 
  private:
-  SharedPtr<T> data_;
-  SizeType size_{};
+  SharedPtr<T, Reallocator> data_;
 };
+
+template <class T>
+struct IsSharedSpan : std::false_type {};
+
+template <class T, ReallocatorInterface Reallocator>
+struct IsSharedSpan<SharedSpan<T, Reallocator>> : std::true_type {};
 
 }  // namespace BareBones

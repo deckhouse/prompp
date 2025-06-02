@@ -3,7 +3,7 @@
 #include <cassert>
 
 #include "prometheus/label_matcher.h"
-#include "regexp_searcher.h"
+#include "regexp/regexp_searcher.h"
 
 namespace series_index::querier {
 
@@ -148,14 +148,16 @@ class SelectorQuerier {
 
   template <class LabelMatcher>
   QuerierStatus query_values_by_regexp(const LabelMatcher& label_matcher, const Trie* trie, Selector::Matcher& matcher) {
-    auto regexp = RegexpParser::parse(static_cast<std::string_view>(label_matcher.value));
-    switch (RegexpMatchAnalyzer::analyze(regexp.get())) {
-      case RegexpMatchAnalyzer::Status::kError: {
+    auto regexp = regexp::RegexpParser::parse(static_cast<std::string_view>(label_matcher.value));
+    switch (regexp::RegexpMatchAnalyzer::analyze(regexp.get())) {
+      using enum regexp::RegexpMatchAnalyzer::Status;
+
+      case kError: {
         matcher.status = MatchStatus::kError;
         return QuerierStatus::kRegexpError;
       }
 
-      case RegexpMatchAnalyzer::Status::kAllMatch: {
+      case kAllMatch: {
         if (trie == nullptr) {
           matcher.status = MatchStatus::kEmptyMatch;
           return QuerierStatus::kNoMatch;
@@ -165,7 +167,7 @@ class SelectorQuerier {
         return QuerierStatus::kMatch;
       }
 
-      case RegexpMatchAnalyzer::Status::kAllMatchWithExcludes: {
+      case kAllMatchWithExcludes: {
         if (trie == nullptr) {
           matcher.status = MatchStatus::kAllMatchWithExcludes;
           matcher.type = MatcherType::kUnknown;
@@ -175,7 +177,7 @@ class SelectorQuerier {
         matcher.invert();
 
         typename TrieIndex::RegexpMatchesList matches_list(matcher.matches);
-        if (auto status = RegexpSearcher<typename TrieIndex::Trie, typename TrieIndex::RegexpMatchesList>(matches_list).search(*trie, regexp);
+        if (auto status = regexp::RegexpSearcher<typename TrieIndex::Trie, typename TrieIndex::RegexpMatchesList>(matches_list).search(*trie, regexp);
             status == MatchStatus::kEmptyMatch) {
           matcher.status = MatchStatus::kAllMatch;
         } else {
@@ -185,14 +187,14 @@ class SelectorQuerier {
         return QuerierStatus::kMatch;
       }
 
-      case RegexpMatchAnalyzer::Status::kPartialMatch: {
+      case kPartialMatch: {
         if (trie == nullptr) {
           matcher.status = MatchStatus::kEmptyMatch;
           return QuerierStatus::kNoMatch;
         }
 
         typename TrieIndex::RegexpMatchesList matches_list(matcher.matches);
-        if (auto status = RegexpSearcher<typename TrieIndex::Trie, typename TrieIndex::RegexpMatchesList>(matches_list).search(*trie, regexp);
+        if (auto status = regexp::RegexpSearcher<typename TrieIndex::Trie, typename TrieIndex::RegexpMatchesList>(matches_list).search(*trie, regexp);
             status == MatchStatus::kEmptyMatch) {
           matcher.status = MatchStatus::kEmptyMatch;
           return QuerierStatus::kNoMatch;
@@ -202,12 +204,12 @@ class SelectorQuerier {
         return QuerierStatus::kMatch;
       }
 
-      case RegexpMatchAnalyzer::Status::kEmptyMatch: {
+      case kEmptyMatch: {
         process_empty_matcher(matcher, trie);
         return QuerierStatus::kMatch;
       }
 
-      case RegexpMatchAnalyzer::Status::kAnythingMatch: {
+      case kAnythingMatch: {
         matcher.status = MatchStatus::kAllMatch;
         matcher.type = MatcherType::kUnknown;
         return QuerierStatus::kMatch;

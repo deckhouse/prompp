@@ -1,8 +1,9 @@
 package cppbridge_test
 
 import (
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -81,7 +82,7 @@ func (s *HeadSuite) TestSerializedChunkRecoder() {
 		EndTimestampMs:   timeInterval.MaxT,
 		LabelSetIDs:      []uint32{0, 1}},
 	)
-	recoder := cppbridge.NewSerializedChunkRecoder(serializedChunks.Data(), timeInterval)
+	recoder := cppbridge.NewSerializedChunkRecoder(serializedChunks, timeInterval)
 
 	// Act
 	chunk1 := recoder.RecodeNextChunk()

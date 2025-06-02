@@ -10,6 +10,9 @@ import (
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
 )
 
+// CopySeriesOnRotate copy active series from the current head to the new head during rotation.
+var CopySeriesOnRotate = false
+
 // Storage - head storage.
 type Storage interface {
 	Add(head relabeler.Head)
@@ -35,6 +38,21 @@ type RotatableHead struct {
 	storage       Storage
 	builder       HeadBuilder
 	headActivator HeadActivator
+}
+
+// NewRotatableHead - RotatableHead constructor.
+func NewRotatableHead(
+	head relabeler.Head,
+	storage Storage,
+	builder HeadBuilder,
+	headActivator HeadActivator,
+) *RotatableHead {
+	return &RotatableHead{
+		head:          head,
+		storage:       storage,
+		builder:       builder,
+		headActivator: headActivator,
+	}
 }
 
 // ID - relabeler.Head interface implementation.
@@ -121,21 +139,15 @@ func (h *RotatableHead) Close() error {
 	return h.head.Close()
 }
 
-// NewRotatableHead - RotatableHead constructor.
-func NewRotatableHead(head relabeler.Head, storage Storage, builder HeadBuilder, headActivator HeadActivator) *RotatableHead {
-	return &RotatableHead{
-		head:          head,
-		storage:       storage,
-		builder:       builder,
-		headActivator: headActivator,
-	}
-}
-
 // Rotate - relabeler.Head interface implementation.
 func (h *RotatableHead) Rotate() error {
 	newHead, err := h.builder.Build()
 	if err != nil {
 		return err
+	}
+
+	if CopySeriesOnRotate {
+		newHead.CopySeriesFrom(h.head)
 	}
 
 	if err = h.headActivator.Activate(newHead.ID()); err != nil {
@@ -176,6 +188,20 @@ func (h *RotatableHead) Discard() error {
 	return h.head.Discard()
 }
 
+// CopySeriesFrom copy series from other head.
+func (h *RotatableHead) CopySeriesFrom(other relabeler.Head) {
+	h.head.CopySeriesFrom(other)
+}
+
+// ReadEachShard execute read fn on each shard.
+func (h *RotatableHead) ReadEachShard(fn relabeler.ShardFn) error {
+	return h.head.ReadEachShard(fn)
+}
+
+//
+// HeapProfileWritableHead
+//
+
 type HeapProfileWriter interface {
 	WriteHeapProfile() error
 }
@@ -183,6 +209,10 @@ type HeapProfileWriter interface {
 type HeapProfileWritableHead struct {
 	head              relabeler.Head
 	heapProfileWriter HeapProfileWriter
+}
+
+func NewHeapProfileWritableHead(head relabeler.Head, heapProfileWriter HeapProfileWriter) *HeapProfileWritableHead {
+	return &HeapProfileWritableHead{head: head, heapProfileWriter: heapProfileWriter}
 }
 
 func (h *HeapProfileWritableHead) ID() string {
@@ -267,6 +297,12 @@ func (h *HeapProfileWritableHead) Discard() error {
 	return h.head.Discard()
 }
 
-func NewHeapProfileWritableHead(head relabeler.Head, heapProfileWriter HeapProfileWriter) *HeapProfileWritableHead {
-	return &HeapProfileWritableHead{head: head, heapProfileWriter: heapProfileWriter}
+// CopySeriesFrom copy series from other head.
+func (h *HeapProfileWritableHead) CopySeriesFrom(other relabeler.Head) {
+	h.head.CopySeriesFrom(other)
+}
+
+// ReadEachShard execute read fn on each shard.
+func (h *HeapProfileWritableHead) ReadEachShard(fn relabeler.ShardFn) error {
+	return h.head.ReadEachShard(fn)
 }

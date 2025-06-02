@@ -1,6 +1,46 @@
 # Changelog
 
+## v0.3.0
+
+### Enhancements
+1. **Concurrent Data Ingestion**: Removed the exclusive lock during data ingestion, allowing for concurrent processing of batches. Insertion tasks are split into four sequential subtasks: relabeling, resharding new series, cache updating, and data insertion. This change speeds up insertions but may impact read performance. Future updates will focus on balancing read/write priorities.
+2. **Improved Series Snapshot Management**: Redesigned snapshot handling to create new snapshots only on memory reallocation. This reduces RAM usage by ~10% and improves read request processing times. Further improvements expected with stabilized series copying during rotations.
+3. **Optimized Series Insertion**: Minor optimizations for new series insertion. Noticeable 5% time savings when copying series during rotations.
+
+## v0.2.6
+
+### Fixes
+1. **Fill Sources in meta.json**: The compactor writes the compaction.sources section in the meta.json file as a union of its parent sources. Thus, by creating blocks with empty sources, we end up making all blocks without sources. On the other hand, Thanos compactor relies on the list of sources to delete outdated blocks. Accordingly, blocks with an empty list of sources are automatically subject to deletion.
+
+## v0.2.5
+
+### Fixes
+1. **Infinite Recursion During Head Conversion**: Fixed a bug in the logic where converting the head to a historical block could lead to infinite recursion.
+2. **Memory Retention Issue in RemoteRead API**: Fixed a memory retention issue with recoded chunks during raw chunk requests via the RemoteRead API. A memory pointer was incorrectly held, allowing the garbage collector to reuse memory while it was still being accessed, potentially leading to segmentation faults.
+
+## v0.2.4
+
+### Fixes
+1. **Feature Flag for Series Copy During Rotation**: The series copy operation during rotation has been placed behind a feature flag. This change addresses the high cost of the operation, which could temporarily render the service unavailable.
+
+## v0.2.3
+
+### Fixes
+1. **Regular Expression Handling**: Fixed a bug in regular expression handling that occasionally led to out-of-bounds errors and crashes. The code handling regular expressions now has additional test coverage, including fuzz testing under ASAN, uncovering no further issues.
+
+### Features
+1. **Active LabelSets Copy during Rotation**: Active labelSets are now copied from the previous head during a rotation. This reduces index update load during the first scrape interval post-rotation. While the rotation itself no longer impacts resource consumption, there is a slight CPU usage spike due to the compactor running afterward.
+2. **RemoteRead Support for Raw Chunk Data**: Added support for requesting raw chunk data via the RemoteRead protocol, enabling integration with external systems like Thanos. Since Prom++ encodes chunks in the active head differently from Prometheus, chunks are re-encoded upon request. Although this is not as efficient as Prometheus, it is more cost-effective than a full data unpack via RemoteRead.
+
+### Enhancements
+1. **WAL Encoding Tweaks**: The condition for selecting alternative timestamp encoding in the WAL encoder has been fixed. This generally results in a more compact WAL. Compatibility is maintained, and the previous incorrect condition caused no issues other than slightly increased disk usage.
+2. **Multi-Architecture Docker Images**: Added support for building multi-architecture Docker images.
+3. **WAL Encoder Cleanup**: Removed unused code from the WAL encoder, leading to a slight reduction in CPU usage.
+
 ## v0.2.2
+
+### Fixes
+1. **OTLP Handler**: Refactored the OTLP handler to resolve issues with duplicated data entries, reducing memory consumption and eliminating unnecessary conversions.
 
 ### Features
 1. **Instant Query**: Introduced an Instant Query feature to optimize federation queries, which reduces CPU consumption and speeds up query processing.
@@ -9,9 +49,6 @@
 
 ### Enhancements
 1. **Chunk Recorder**: Optimized the Chunk Recorder to speed up block creation and reduce CPU usage during rotation.
-
-### Fixes
-1. **OTLP Handler**: Refactored the OTLP handler to resolve issues with duplicated data entries, reducing memory consumption and eliminating unnecessary conversions.
 
 ## v0.2.1
 
