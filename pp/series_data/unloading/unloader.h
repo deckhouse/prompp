@@ -18,62 +18,9 @@ class Unloader {
 
   template <class Stream>
   void unload(Stream& stream) {
-    using enum EncodingType;
-
-    EncodingChunkLengthSequence chunk_length_sequence{};
-    EncodingChunkIDSequence chunk_id_sequence{};
-    BareBones::Bitset ls_id_bitmap{};
-
-    uint32_t bitseqs_size_in_bytes = 0;
-
-    for (const auto ls_id : storage_.unused_series_bitmap) {
-      const auto encoding_type = storage_.open_chunks[ls_id].encoding_state.encoding_type;
-      if (!storage_.open_chunks[ls_id].is_empty() && is_unloadable_encoder(encoding_type)) {
-        ls_id_bitmap.resize(ls_id + 1);
-        ls_id_bitmap.set(ls_id);
-
-        const auto& bitseq = get_open_chunk_stream(ls_id);
-        const uint32_t bitseq_filled_bytes_count = BareBones::Bit::to_bytes(bitseq.size_in_bits());
-        chunk_length_sequence.push_back(bitseq_filled_bytes_count);
-        bitseqs_size_in_bytes += bitseq_filled_bytes_count;
-
-        const uint32_t chunk_id = get_open_chunk_id(ls_id);
-        chunk_id_sequence.push_back(chunk_id);
-      }
-    }
-
-    ls_id_bitmap.write_to(stream);
-
-    chunk_length_sequence.flush();
-    std::cout << "chunk_length_sequence.data().size(): " << chunk_length_sequence.data().size() << '\n';
-    chunk_length_sequence.data().write_to(stream);
-    for (auto x : chunk_length_sequence) {
-      std::cout << int(x) << ' ';
-    }
-    std::cout << '\n';
-
-    chunk_id_sequence.flush();
-    std::cout << "chunk_id_sequence.data().size(): " << chunk_id_sequence.data().size() << '\n';
-    chunk_id_sequence.data().write_to(stream);
-    for (auto x : chunk_id_sequence) {
-      std::cout << int(x) << ' ';
-    }
-    std::cout << '\n';
-
-    stream.write(reinterpret_cast<char*>(&bitseqs_size_in_bytes), sizeof(bitseqs_size_in_bytes));
-    std::cout << "bitseqs_size_in_bytes: " << bitseqs_size_in_bytes << '\n';
-
-    for (const auto ls_id : ls_id_bitmap) {
-      auto& bitseq = get_open_chunk_stream(ls_id);
-      const auto bitseq_filled_bytes_count = BareBones::Bit::to_bytes(bitseq.size_in_bits());
-      stream.write(reinterpret_cast<const char*>(bitseq.raw_bytes()), bitseq_filled_bytes_count);
-      bitseq.trim_lower_bytes(bitseq_filled_bytes_count);
-    }
-
-    if (bitseqs_size_in_bytes) {
-      const auto& reserved_bytes_for_reader = encoder::CompactBitSequence::reserved_bytes_for_reader();
-      stream.write(reserved_bytes_for_reader.data(), reserved_bytes_for_reader.size());
-    }
+    const auto& [ls_id_bitmap, chunk_length_sequence, chunk_id_sequence, total_bitseqs_size] = prepare_sequences();
+    write_sequences(stream, ls_id_bitmap, chunk_length_sequence, chunk_id_sequence, total_bitseqs_size);
+    write_bit_sequences(stream, ls_id_bitmap, total_bitseqs_size);
   }
 
   static constexpr uint32_t get_empty_unloader_size_in_bytes() noexcept {
@@ -83,6 +30,69 @@ class Unloader {
 
  private:
   DataStorage& storage_;
+
+  struct PreparedSequences {
+    BareBones::Bitset ls_id_bitmap;
+    EncodingChunkLengthSequence chunk_length_sequence;
+    EncodingChunkIDSequence chunk_id_sequence;
+    uint32_t total_bitseqs_size;
+  };
+
+  [[nodiscard]] PreparedSequences prepare_sequences() const noexcept {
+    PreparedSequences result{};
+    result.total_bitseqs_size = 0;
+
+    for (const auto ls_id : storage_.unused_series_bitmap) {
+      const auto encoding_type = storage_.open_chunks[ls_id].encoding_state.encoding_type;
+      if (!storage_.open_chunks[ls_id].is_empty() && is_unloadable_encoder(encoding_type)) {
+        result.ls_id_bitmap.resize(ls_id + 1);
+        result.ls_id_bitmap.set(ls_id);
+
+        const auto& bitseq = get_open_chunk_stream(ls_id);
+        const uint32_t bitseq_size = BareBones::Bit::to_bytes(bitseq.size_in_bits());
+        result.chunk_length_sequence.push_back(bitseq_size);
+        result.total_bitseqs_size += bitseq_size;
+
+        const uint32_t chunk_id = get_open_chunk_id(ls_id);
+        result.chunk_id_sequence.push_back(chunk_id);
+      }
+    }
+
+    result.chunk_id_sequence.flush();
+    result.chunk_length_sequence.flush();
+
+    return result;
+  }
+
+  template <class Stream>
+  static void write_sequences(Stream& stream,
+                              const BareBones::Bitset& ls_id_bitmap,
+                              const EncodingChunkLengthSequence& chunk_length_sequence,
+                              const EncodingChunkIDSequence& chunk_id_sequence,
+                              uint32_t total_bitseqs_size) noexcept {
+    ls_id_bitmap.write_to(stream);
+
+    chunk_length_sequence.data().write_to(stream);
+
+    chunk_id_sequence.data().write_to(stream);
+
+    stream.write(reinterpret_cast<char*>(&total_bitseqs_size), sizeof(total_bitseqs_size));
+  }
+
+  template <class Stream>
+  void write_bit_sequences(Stream& stream, const BareBones::Bitset& ls_id_bitmap, uint32_t total_bitseqs_size) noexcept {
+    for (const auto ls_id : ls_id_bitmap) {
+      auto& bitseq = get_open_chunk_stream(ls_id);
+      const auto bitseq_size = BareBones::Bit::to_bytes(bitseq.size_in_bits());
+      stream.write(reinterpret_cast<const char*>(bitseq.raw_bytes()), bitseq_size);
+      bitseq.trim_lower_bytes(bitseq_size);
+    }
+
+    if (total_bitseqs_size) {
+      const auto& reserved_bytes = encoder::CompactBitSequence::reserved_bytes_for_reader();
+      stream.write(reserved_bytes.data(), reserved_bytes.size());
+    }
+  }
 
   [[nodiscard]] encoder::CompactBitSequence& get_open_chunk_stream(uint32_t ls_id) const noexcept {
     using enum EncodingType;
@@ -96,7 +106,6 @@ class Unloader {
     if (encoding_type == kValuesGorilla) {
       return storage_.get_values_gorilla_stream<chunk::DataChunk::Type::kOpen>(chunk.encoder.external_index);
     }
-    // encoding_type == kAscIntegerThenValuesGorilla
     return storage_.get_asc_integer_then_values_gorilla_stream<chunk::DataChunk::Type::kOpen>(chunk.encoder.external_index);
   }
 
