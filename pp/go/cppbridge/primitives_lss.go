@@ -41,8 +41,8 @@ const (
 
 // LabelSetStorage go wrapper for C-LabelSetStorage.
 type LabelSetStorage struct {
-	pointer    uintptr
-	gcDetector *uint64
+	pointer           uintptr
+	gcDestroyDetector *uint64
 }
 
 // NewLssStorage init new LabelSetStorage based on EncodingBimap.
@@ -67,7 +67,7 @@ func newLabelSetStorage(lssType uint32) *LabelSetStorage {
 
 // newLabelSetStorageFromPointer init new LabelSetStorage with pointer to constructed lss
 func newLabelSetStorageFromPointer(lssPointer uintptr) *LabelSetStorage {
-	lss := &LabelSetStorage{pointer: lssPointer, gcDetector: &gcDetector}
+	lss := &LabelSetStorage{pointer: lssPointer, gcDestroyDetector: &gcDestroyDetector}
 	runtime.SetFinalizer(lss, func(lss *LabelSetStorage) {
 		primitivesLSSDtor(lss.pointer)
 	})

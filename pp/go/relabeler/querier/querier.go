@@ -37,7 +37,13 @@ type Querier struct {
 	metrics             *Metrics
 }
 
-func NewQuerier(head relabeler.Head, deduplicatorFactory DeduplicatorFactory, mint, maxt int64, closer func() error, metrics *Metrics) *Querier {
+func NewQuerier(
+	head relabeler.Head,
+	deduplicatorFactory DeduplicatorFactory,
+	mint, maxt int64,
+	closer func() error,
+	metrics *Metrics,
+) *Querier {
 	return &Querier{
 		mint:                mint,
 		maxt:                maxt,
@@ -48,8 +54,20 @@ func NewQuerier(head relabeler.Head, deduplicatorFactory DeduplicatorFactory, mi
 	}
 }
 
-func (q *Querier) LabelValues(ctx context.Context, name string, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
-	return labelValues(ctx, name, q.head, q.deduplicatorFactory, q.metrics, relabeler.LSSLabelValuesQuerier, matchers...)
+func (q *Querier) LabelValues(
+	ctx context.Context,
+	name string,
+	matchers ...*labels.Matcher,
+) ([]string, annotations.Annotations, error) {
+	return labelValues(
+		ctx,
+		name,
+		q.head,
+		q.deduplicatorFactory,
+		q.metrics,
+		relabeler.LSSLabelValuesQuerier,
+		matchers...,
+	)
 }
 
 func labelValues(
@@ -101,7 +119,10 @@ func labelValues(
 	return lvs, anns, nil
 }
 
-func (q *Querier) LabelNames(ctx context.Context, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (q *Querier) LabelNames(
+	ctx context.Context,
+	matchers ...*labels.Matcher,
+) ([]string, annotations.Annotations, error) {
 	return labelNames(ctx, q.head, q.deduplicatorFactory, q.metrics, relabeler.LSSLabelNamesQuerier, matchers...)
 }
 
@@ -153,6 +174,7 @@ func labelNames(
 	return lns, anns, nil
 }
 
+// Close Querier if need.
 func (q *Querier) Close() error {
 	if q.closer != nil {
 		return q.closer()
@@ -193,6 +215,7 @@ func (q *Querier) selectInstant(
 
 	lssQueryResults := make([]*cppbridge.LSSQueryResult, q.head.NumberOfShards())
 	snapshots := make([]*cppbridge.LabelSetSnapshot, q.head.NumberOfShards())
+
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
 	callerID := cppbridge.GetCaller(ctx)
 
@@ -226,7 +249,6 @@ func (q *Querier) selectInstant(
 	}
 
 	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
-
 	_ = q.head.ForEachShard(relabeler.DataStorageQueryQuerierSelectInstant, func(shard relabeler.Shard) error {
 		lssQueryResult := lssQueryResults[shard.ShardID()]
 		if lssQueryResult == nil {
@@ -258,105 +280,7 @@ func (q *Querier) selectRange(
 		if q.metrics != nil {
 			q.metrics.SelectDuration.With(
 				prometheus.Labels{
-					"generation": fmt.Sprintf("%d", q.head.Generation()),
-					"query_type": "range",
-				},
-			).Observe(float64(time.Since(start).Microseconds()))
-		}
-	}()
-
-	lssQueryResults := make([]*cppbridge.LSSQueryResult, q.head.NumberOfShards())
-	snapshots := make([]*cppbridge.LabelSetSnapshot, q.head.NumberOfShards())
-	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
-	callerID := cppbridge.GetCaller(ctx)
-
-	err := q.head.ForEachShard(relabeler.LSSQueryQuerierSelectRange, func(shard relabeler.Shard) error {
-		lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
-
-		if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {
-			if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
-				return nil
-			}
-			return fmt.Errorf(
-				"failed to query from shard: %d, query status: %d",
-				shard.ShardID(),
-				lssQueryResult.Status(),
-			)
-		}
-
-		lssQueryResults[shard.ShardID()] = lssQueryResult
-		snapshots[shard.ShardID()] = shard.LSS().GetSnapshot()
-
-		return nil
-	})
-	if err != nil {
-		logger.Warnf("QUERIER: Select failed: %s", err)
-		return storage.ErrSeriesSet(err)
-	}
-
-	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
-
-	_ = q.head.ForEachShard(
-		relabeler.DataStorageQueryQuerierSelectRange,
-		func(shard relabeler.Shard) error {
-			lssQueryResult := lssQueryResults[shard.ShardID()]
-			if lssQueryResult == nil {
-				seriesSets[shard.ShardID()] = &SeriesSet{}
-				return nil
-			}
-
-			serializedChunks := shard.DataStorage().Query(cppbridge.HeadDataStorageQuery{
-				StartTimestampMs: q.mint,
-				EndTimestampMs:   q.maxt,
-				LabelSetIDs:      lssQueryResult.IDs(),
-			})
-
-			if serializedChunks.NumberOfChunks() == 0 {
-				seriesSets[shard.ShardID()] = &SeriesSet{}
-				return nil
-			}
-
-			seriesSets[shard.ShardID()] = &SeriesSet{
-				mint:             q.mint,
-				maxt:             q.maxt,
-				deserializer:     cppbridge.NewHeadDataStorageDeserializer(serializedChunks),
-				chunksIndex:      serializedChunks.MakeIndex(),
-				serializedChunks: serializedChunks,
-				lssQueryResult:   lssQueryResult,
-				labelSetSnapshot: snapshots[shard.ShardID()],
-			}
-
-			return nil
-		})
-
-	return storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge)
-}
-
-func convertPrometheusMatchersToOpcoreMatchers(matchers ...*labels.Matcher) []model.LabelMatcher {
-	promppMatchers := make([]model.LabelMatcher, 0, len(matchers))
-	for _, matcher := range matchers {
-		promppMatchers = append(promppMatchers, model.LabelMatcher{
-			Name:        matcher.Name,
-			Value:       matcher.Value,
-			MatcherType: uint8(matcher.Type), // #nosec G115 // no overflow
-		})
-	}
-
-	return promppMatchers
-}
-
-func (q *Querier) selectRange2(
-	ctx context.Context,
-	_ bool,
-	_ *storage.SelectHints,
-	matchers ...*labels.Matcher,
-) storage.SeriesSet {
-	start := time.Now()
-	defer func() {
-		if q.metrics != nil {
-			q.metrics.SelectDuration.With(
-				prometheus.Labels{
-					"generation": fmt.Sprintf("%d", q.head.Generation()),
+					"generation": strconv.FormatUint(q.head.Generation(), 10),
 					"query_type": "range",
 				},
 			).Observe(float64(time.Since(start).Microseconds()))
@@ -394,8 +318,6 @@ func (q *Querier) selectRange2(
 	}
 
 	serializedChunksShards := make([]*cppbridge.HeadDataStorageSerializedChunks, q.head.NumberOfShards())
-	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
-
 	_ = q.head.ForEachShard(relabeler.DataStorageQueryQuerierSelectRange, func(shard relabeler.Shard) error {
 		lssQueryResult := lssQueryResults[shard.ShardID()]
 		if lssQueryResult == nil {
@@ -417,6 +339,7 @@ func (q *Querier) selectRange2(
 		return nil
 	})
 
+	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
 	for shardID, serializedChunks := range serializedChunksShards {
 		if serializedChunks == nil {
 			seriesSets[shardID] = &SeriesSet{}
@@ -435,4 +358,17 @@ func (q *Querier) selectRange2(
 	}
 
 	return storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge)
+}
+
+func convertPrometheusMatchersToOpcoreMatchers(matchers ...*labels.Matcher) []model.LabelMatcher {
+	promppMatchers := make([]model.LabelMatcher, 0, len(matchers))
+	for _, matcher := range matchers {
+		promppMatchers = append(promppMatchers, model.LabelMatcher{
+			Name:        matcher.Name,
+			Value:       matcher.Value,
+			MatcherType: uint8(matcher.Type), // #nosec G115 // no overflow
+		})
+	}
+
+	return promppMatchers
 }

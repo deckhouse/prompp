@@ -173,7 +173,6 @@ type Head struct {
 	shards             []*shard
 	lssTaskChs         []chan *GenericTask
 	dataStorageTaskChs []chan *GenericTask
-	sMutex             []*sync.RWMutex
 
 	numberOfShards uint16
 	stopc          chan struct{}
@@ -209,7 +208,6 @@ func New(
 	lssTaskChs := make([]chan *GenericTask, numberOfShards)
 	dataStorageTaskChs := make([]chan *GenericTask, numberOfShards)
 	shards := make([]*shard, numberOfShards)
-	sMutex := make([]*sync.RWMutex, numberOfShards)
 
 	for shardID := uint16(0); shardID < numberOfShards; shardID++ {
 		lssTaskChs[shardID] = make(chan *GenericTask, chanBufferSize)
@@ -220,7 +218,6 @@ func New(
 			dataStorage: dataStorages[shardID],
 			wal:         wals[shardID],
 		}
-		sMutex[shardID] = &sync.RWMutex{}
 	}
 
 	factory := util.NewUnconflictRegisterer(registerer)
@@ -233,7 +230,7 @@ func New(
 		shards:             shards,
 		lssTaskChs:         lssTaskChs,
 		dataStorageTaskChs: dataStorageTaskChs,
-		sMutex:             sMutex,
+		// sMutex:             sMutex,
 
 		stopc:          make(chan struct{}),
 		wg:             &sync.WaitGroup{},
@@ -619,20 +616,17 @@ func (h *Head) stop() {
 }
 
 func (h *Head) run() {
-	readCount := 2
-	h.wg.Add(2*readCount + int(h.numberOfShards))
+	h.wg.Add(2 * int(h.numberOfShards))
 	for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
 		go func(sid uint16) {
 			defer h.wg.Done()
 			h.lssShardLoop(sid, h.lssTaskChs[sid], h.stopc)
 		}(shardID)
 
-		for i := 0; i < readCount; i++ {
-			go func(sid uint16) {
-				defer h.wg.Done()
-				h.dataStorageShardLoop(sid, h.dataStorageTaskChs[sid], h.stopc)
-			}(shardID)
-		}
+		go func(sid uint16) {
+			defer h.wg.Done()
+			h.dataStorageShardLoop(sid, h.dataStorageTaskChs[sid], h.stopc)
+		}(shardID)
 	}
 }
 
@@ -934,7 +928,6 @@ func (h *Head) lssShardLoop(
 	stopc chan struct{},
 ) {
 	s := h.shards[shardID]
-	mx := h.sMutex[shardID]
 
 	for {
 		select {
@@ -942,9 +935,7 @@ func (h *Head) lssShardLoop(
 			return
 
 		case task := <-exclusiveCH:
-			mx.Lock()
 			task.ExecuteOnShard(s)
-			mx.Unlock()
 		}
 	}
 }
@@ -956,7 +947,6 @@ func (h *Head) dataStorageShardLoop(
 	stopc chan struct{},
 ) {
 	s := h.shards[shardID]
-	mx := h.sMutex[shardID]
 
 	for {
 		select {
@@ -964,9 +954,7 @@ func (h *Head) dataStorageShardLoop(
 			return
 
 		case task := <-dataStorageCH:
-			mx.RLock()
 			task.ExecuteOnShard(s)
-			mx.RUnlock()
 		}
 	}
 }

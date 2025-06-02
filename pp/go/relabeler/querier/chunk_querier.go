@@ -73,12 +73,11 @@ func (q *ChunkQuerier) Select(
 		return storage.ErrChunkSeriesSet(err)
 	}
 
-	chunkSeriesSets := make([]storage.ChunkSeriesSet, q.head.NumberOfShards())
+	serializedChunksShards := make([]*cppbridge.HeadDataStorageSerializedChunks, q.head.NumberOfShards())
 
 	_ = q.head.ForEachShard(relabeler.DataStorageQueryChunkQuerierSelect, func(shard relabeler.Shard) error {
 		lssQueryResult := lssQueryResults[shard.ShardID()]
 		if lssQueryResult == nil {
-			chunkSeriesSets[shard.ShardID()] = EmptyChunkSeriesSet{}
 			return nil
 		}
 
@@ -89,19 +88,27 @@ func (q *ChunkQuerier) Select(
 		})
 
 		if serializedChunks.NumberOfChunks() == 0 {
-			chunkSeriesSets[shard.ShardID()] = EmptyChunkSeriesSet{}
 			return nil
 		}
 
-		chunkRecoder := cppbridge.NewSerializedChunkRecoder(serializedChunks, cppbridge.TimeInterval{
-			MinT: q.mint,
-			MaxT: q.maxt,
-		})
-
-		chunkSeriesSets[shard.ShardID()] = NewChunkSeriesSet(lssQueryResult, snapshots[shard.ShardID()], chunkRecoder)
+		serializedChunksShards[shard.ShardID()] = serializedChunks
 
 		return nil
 	})
+
+	chunkSeriesSets := make([]storage.ChunkSeriesSet, q.head.NumberOfShards())
+	for shardID, serializedChunks := range serializedChunksShards {
+		if serializedChunks == nil {
+			chunkSeriesSets[shardID] = &EmptyChunkSeriesSet{}
+			continue
+		}
+
+		chunkSeriesSets[shardID] = NewChunkSeriesSet(
+			lssQueryResults[shardID],
+			snapshots[shardID],
+			cppbridge.NewSerializedChunkRecoder(serializedChunks, cppbridge.TimeInterval{MinT: q.mint, MaxT: q.maxt}),
+		)
+	}
 
 	return storage.NewMergeChunkSeriesSet(chunkSeriesSets, storage.NewConcatenatingChunkSeriesMerger())
 }

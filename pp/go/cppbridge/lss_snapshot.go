@@ -23,7 +23,8 @@ var (
 	)
 )
 
-var gcDetector uint64 = 42
+// gcDestroyDetector for field for the GC to destroy the structure.
+var gcDestroyDetector uint64
 
 //
 // LabelSetSnapshot
@@ -31,13 +32,13 @@ var gcDetector uint64 = 42
 
 // LabelSetSnapshot go container for snapshot from LabelSetStorage.
 type LabelSetSnapshot struct {
-	pointer    uintptr
-	gcDetector *uint64
+	pointer           uintptr
+	gcDestroyDetector *uint64 // field for the GC to destroy the structure.
 }
 
 // newLabelSetSnapshot init new LabelSetSnapshot.
 func newLabelSetSnapshot(lsstPtr uintptr) *LabelSetSnapshot {
-	lsst := &LabelSetSnapshot{pointer: lsstPtr, gcDetector: &gcDetector}
+	lsst := &LabelSetSnapshot{pointer: lsstPtr, gcDestroyDetector: &gcDestroyDetector}
 	runtime.SetFinalizer(lsst, func(l *LabelSetSnapshot) {
 		primitivesLSSDtor(l.pointer)
 
