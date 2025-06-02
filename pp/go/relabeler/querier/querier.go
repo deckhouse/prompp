@@ -391,7 +391,6 @@ func (q *Querier) selectRange2(
 	_ = q.head.ForEachShard(relabeler.DataStorageQueryQuerierSelectRange, func(shard relabeler.Shard) error {
 		lssQueryResult := lssQueryResults[shard.ShardID()]
 		if lssQueryResult == nil {
-			// seriesSets[shard.ShardID()] = &SeriesSet{}
 			return nil
 		}
 
@@ -402,22 +401,11 @@ func (q *Querier) selectRange2(
 		})
 
 		if serializedChunks.NumberOfChunks() == 0 {
-			// seriesSets[shard.ShardID()] = &SeriesSet{}
 			return nil
 		}
 
 		serializedChunksShards[shard.ShardID()] = serializedChunks
 		snapshots[shard.ShardID()] = shard.LSS().GetSnapshot()
-
-		// seriesSets[shard.ShardID()] = &SeriesSet{
-		// 	mint:             q.mint,
-		// 	maxt:             q.maxt,
-		// 	deserializer:     cppbridge.NewHeadDataStorageDeserializer(serializedChunks),
-		// 	chunksIndex:      serializedChunks.MakeIndex(),
-		// 	serializedChunks: serializedChunks,
-		// 	lssQueryResult:   lssQueryResult,
-		// 	labelSetSnapshot: shard.LSS().GetSnapshot(),
-		// }
 
 		return nil
 	})

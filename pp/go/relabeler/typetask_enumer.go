@@ -7,11 +7,11 @@ import (
 	"strings"
 )
 
-const _TypeTaskName = "UnknownTaskLSSHeadInputRelabelingLSSHeadAppendRelabelerSeriesWalCommitWalFlushWalWriteLSSHeadCopyAddedSeriesDistributorOutputRelabelingDistributorUpdateRelabelerStateLSSHeadAllocatedMemoryLSSHeadStatusLSSQueryChunkQuerierSelectLSSLabelValuesChunkQuerierLSSLabelNamesChunkQuerierLSSQueryQuerierSelectInstantLSSQueryQuerierSelectRangeLSSLabelValuesQuerierLSSLabelNamesQuerierdataStorageMarkerDataStorageAppendInnerSeriesDataStorageMergeOutOfOrderChunksDataStorageHeadAllocatedMemoryDataStorageHeadStatusDataStorageQueryChunkQuerierSelectDataStorageQueryQuerierSelectInstantDataStorageQueryQuerierSelectRangeBlockWriteHeadUpdateRelabelerState"
+const _TypeTaskName = "UnknownTaskLSSHeadInputRelabelingLSSHeadAppendRelabelerSeriesWalCommitWalFlushWalWriteLSSHeadCopyAddedSeriesDistributorOutputRelabelingDistributorUpdateRelabelerStateLSSHeadAllocatedMemoryLSSHeadStatusLSSQueryChunkQuerierSelectLSSLabelValuesChunkQuerierLSSLabelNamesChunkQuerierLSSQueryQuerierSelectInstantLSSQueryQuerierSelectRangeLSSLabelValuesQuerierLSSLabelNamesQuerierdataStorageMarkerDataStorageAppendInnerSeriesDataStorageMergeOutOfOrderChunksDataStorageHeadAllocatedMemoryDataStorageHeadStatusDataStorageQueryChunkQuerierSelectDataStorageQueryQuerierSelectInstantDataStorageQueryQuerierSelectRangeBlockWrite"
 
-var _TypeTaskIndex = [...]uint16{0, 11, 33, 61, 70, 78, 86, 108, 135, 166, 188, 201, 227, 253, 278, 306, 332, 353, 373, 390, 418, 450, 480, 501, 535, 571, 605, 615, 639}
+var _TypeTaskIndex = [...]uint16{0, 11, 33, 61, 70, 78, 86, 108, 135, 166, 188, 201, 227, 253, 278, 306, 332, 353, 373, 390, 418, 450, 480, 501, 535, 571, 605, 615}
 
-const _TypeTaskLowerName = "unknowntasklssheadinputrelabelinglssheadappendrelabelerserieswalcommitwalflushwalwritelssheadcopyaddedseriesdistributoroutputrelabelingdistributorupdaterelabelerstatelssheadallocatedmemorylssheadstatuslssquerychunkquerierselectlsslabelvalueschunkquerierlsslabelnameschunkquerierlssqueryquerierselectinstantlssqueryquerierselectrangelsslabelvaluesquerierlsslabelnamesquerierdatastoragemarkerdatastorageappendinnerseriesdatastoragemergeoutoforderchunksdatastorageheadallocatedmemorydatastorageheadstatusdatastoragequerychunkquerierselectdatastoragequeryquerierselectinstantdatastoragequeryquerierselectrangeblockwriteheadupdaterelabelerstate"
+const _TypeTaskLowerName = "unknowntasklssheadinputrelabelinglssheadappendrelabelerserieswalcommitwalflushwalwritelssheadcopyaddedseriesdistributoroutputrelabelingdistributorupdaterelabelerstatelssheadallocatedmemorylssheadstatuslssquerychunkquerierselectlsslabelvalueschunkquerierlsslabelnameschunkquerierlssqueryquerierselectinstantlssqueryquerierselectrangelsslabelvaluesquerierlsslabelnamesquerierdatastoragemarkerdatastorageappendinnerseriesdatastoragemergeoutoforderchunksdatastorageheadallocatedmemorydatastorageheadstatusdatastoragequerychunkquerierselectdatastoragequeryquerierselectinstantdatastoragequeryquerierselectrangeblockwrite"
 
 func (i TypeTask) String() string {
 	if i >= TypeTask(len(_TypeTaskIndex)-1) {
@@ -51,10 +51,9 @@ func _TypeTaskNoOp() {
 	_ = x[DataStorageQueryQuerierSelectInstant-(24)]
 	_ = x[DataStorageQueryQuerierSelectRange-(25)]
 	_ = x[BlockWrite-(26)]
-	_ = x[HeadUpdateRelabelerState-(27)]
 }
 
-var _TypeTaskValues = []TypeTask{UnknownTask, LSSHeadInputRelabeling, LSSHeadAppendRelabelerSeries, WalCommit, WalFlush, WalWrite, LSSHeadCopyAddedSeries, DistributorOutputRelabeling, DistributorUpdateRelabelerState, LSSHeadAllocatedMemory, LSSHeadStatus, LSSQueryChunkQuerierSelect, LSSLabelValuesChunkQuerier, LSSLabelNamesChunkQuerier, LSSQueryQuerierSelectInstant, LSSQueryQuerierSelectRange, LSSLabelValuesQuerier, LSSLabelNamesQuerier, dataStorageMarker, DataStorageAppendInnerSeries, DataStorageMergeOutOfOrderChunks, DataStorageHeadAllocatedMemory, DataStorageHeadStatus, DataStorageQueryChunkQuerierSelect, DataStorageQueryQuerierSelectInstant, DataStorageQueryQuerierSelectRange, BlockWrite, HeadUpdateRelabelerState}
+var _TypeTaskValues = []TypeTask{UnknownTask, LSSHeadInputRelabeling, LSSHeadAppendRelabelerSeries, WalCommit, WalFlush, WalWrite, LSSHeadCopyAddedSeries, DistributorOutputRelabeling, DistributorUpdateRelabelerState, LSSHeadAllocatedMemory, LSSHeadStatus, LSSQueryChunkQuerierSelect, LSSLabelValuesChunkQuerier, LSSLabelNamesChunkQuerier, LSSQueryQuerierSelectInstant, LSSQueryQuerierSelectRange, LSSLabelValuesQuerier, LSSLabelNamesQuerier, dataStorageMarker, DataStorageAppendInnerSeries, DataStorageMergeOutOfOrderChunks, DataStorageHeadAllocatedMemory, DataStorageHeadStatus, DataStorageQueryChunkQuerierSelect, DataStorageQueryQuerierSelectInstant, DataStorageQueryQuerierSelectRange, BlockWrite}
 
 var _TypeTaskNameToValueMap = map[string]TypeTask{
 	_TypeTaskName[0:11]:         UnknownTask,
@@ -111,8 +110,6 @@ var _TypeTaskNameToValueMap = map[string]TypeTask{
 	_TypeTaskLowerName[571:605]: DataStorageQueryQuerierSelectRange,
 	_TypeTaskName[605:615]:      BlockWrite,
 	_TypeTaskLowerName[605:615]: BlockWrite,
-	_TypeTaskName[615:639]:      HeadUpdateRelabelerState,
-	_TypeTaskLowerName[615:639]: HeadUpdateRelabelerState,
 }
 
 var _TypeTaskNames = []string{
@@ -143,7 +140,6 @@ var _TypeTaskNames = []string{
 	_TypeTaskName[535:571],
 	_TypeTaskName[571:605],
 	_TypeTaskName[605:615],
-	_TypeTaskName[615:639],
 }
 
 // TypeTaskString retrieves an enum value from the enum constants string name.

@@ -918,24 +918,6 @@ func (h *Head) updateRelabelerStateStage(
 	}
 
 	return nil
-
-	// return h.ForEachShard(relabeler.HeadUpdateRelabelerState, func(shard relabeler.Shard) error {
-	// 	updates, ok := shardedStateUpdates.DataBySourceShard(shard.ShardID())
-	// 	if !ok {
-	// 		return nil
-	// 	}
-
-	// 	err := rd.InputRelabelerByShard(shard.ShardID()).UpdateRelabelerState(
-	// 		ctx,
-	// 		state.CacheByShard(shard.ShardID()),
-	// 		updates,
-	// 	)
-	// 	if err != nil {
-	// 		return fmt.Errorf("shard %d: %w", shard.ShardID(), err)
-	// 	}
-
-	// 	return nil
-	// })
 }
 
 // lssShardLoop run shard loop for operation with lss.

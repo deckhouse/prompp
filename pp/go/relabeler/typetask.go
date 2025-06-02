@@ -156,9 +156,6 @@ const (
 
 	// BlockWrite type of task.
 	BlockWrite
-
-	// HeadUpdateRelabelerState type of task.
-	HeadUpdateRelabelerState
 )
 
 // ForLSS indicates whether the type for LSS.
