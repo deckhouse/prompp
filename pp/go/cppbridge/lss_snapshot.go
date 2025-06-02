@@ -23,19 +23,21 @@ var (
 	)
 )
 
+var gcDetector uint64 = 42
+
 //
 // LabelSetSnapshot
 //
 
 // LabelSetSnapshot go container for snapshot from LabelSetStorage.
 type LabelSetSnapshot struct {
-	pointer uintptr
-	data    []byte
+	pointer    uintptr
+	gcDetector *uint64
 }
 
 // newLabelSetSnapshot init new LabelSetSnapshot.
 func newLabelSetSnapshot(lsstPtr uintptr) *LabelSetSnapshot {
-	lsst := &LabelSetSnapshot{pointer: lsstPtr, data: make([]byte, 1<<20)}
+	lsst := &LabelSetSnapshot{pointer: lsstPtr, gcDetector: &gcDetector}
 	runtime.SetFinalizer(lsst, func(l *LabelSetSnapshot) {
 		primitivesLSSDtor(l.pointer)
 

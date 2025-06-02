@@ -191,8 +191,8 @@ func (q *Querier) selectInstant(
 		}
 	}()
 
-	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
 	lssQueryResults := make([]*cppbridge.LSSQueryResult, q.head.NumberOfShards())
+	snapshots := make([]*cppbridge.LabelSetSnapshot, q.head.NumberOfShards())
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
 	callerID := cppbridge.GetCaller(ctx)
 
@@ -216,6 +216,7 @@ func (q *Querier) selectInstant(
 		}
 
 		lssQueryResults[shard.ShardID()] = lssQueryResult
+		snapshots[shard.ShardID()] = shard.LSS().GetSnapshot()
 
 		return nil
 	})
@@ -223,6 +224,8 @@ func (q *Querier) selectInstant(
 		logger.Warnf("QUERIER: Select failed: %s", err)
 		return storage.ErrSeriesSet(err)
 	}
+
+	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
 
 	_ = q.head.ForEachShard(relabeler.DataStorageQueryQuerierSelectInstant, func(shard relabeler.Shard) error {
 		lssQueryResult := lssQueryResults[shard.ShardID()]
@@ -233,7 +236,7 @@ func (q *Querier) selectInstant(
 
 		seriesSets[shard.ShardID()] = NewInstantSeriesSet(
 			lssQueryResult,
-			shard.LSS().GetSnapshot(),
+			snapshots[shard.ShardID()],
 			valueNotFoundTimestampValue,
 			shard.DataStorage().InstantQuery(q.maxt, valueNotFoundTimestampValue, lssQueryResult.IDs()),
 		)
@@ -262,7 +265,6 @@ func (q *Querier) selectRange(
 		}
 	}()
 
-	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
 	lssQueryResults := make([]*cppbridge.LSSQueryResult, q.head.NumberOfShards())
 	snapshots := make([]*cppbridge.LabelSetSnapshot, q.head.NumberOfShards())
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
@@ -291,6 +293,8 @@ func (q *Querier) selectRange(
 		logger.Warnf("QUERIER: Select failed: %s", err)
 		return storage.ErrSeriesSet(err)
 	}
+
+	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
 
 	_ = q.head.ForEachShard(
 		relabeler.DataStorageQueryQuerierSelectRange,
@@ -334,7 +338,7 @@ func convertPrometheusMatchersToOpcoreMatchers(matchers ...*labels.Matcher) []mo
 		promppMatchers = append(promppMatchers, model.LabelMatcher{
 			Name:        matcher.Name,
 			Value:       matcher.Value,
-			MatcherType: uint8(matcher.Type),
+			MatcherType: uint8(matcher.Type), // #nosec G115 // no overflow
 		})
 	}
 
@@ -359,9 +363,7 @@ func (q *Querier) selectRange2(
 		}
 	}()
 
-	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
 	lssQueryResults := make([]*cppbridge.LSSQueryResult, q.head.NumberOfShards())
-	serializedChunksShards := make([]*cppbridge.HeadDataStorageSerializedChunks, q.head.NumberOfShards())
 	snapshots := make([]*cppbridge.LabelSetSnapshot, q.head.NumberOfShards())
 
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
@@ -390,6 +392,9 @@ func (q *Querier) selectRange2(
 		logger.Warnf("QUERIER: Select failed: %s", err)
 		return storage.ErrSeriesSet(err)
 	}
+
+	serializedChunksShards := make([]*cppbridge.HeadDataStorageSerializedChunks, q.head.NumberOfShards())
+	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
 
 	_ = q.head.ForEachShard(relabeler.DataStorageQueryQuerierSelectRange, func(shard relabeler.Shard) error {
 		lssQueryResult := lssQueryResults[shard.ShardID()]
