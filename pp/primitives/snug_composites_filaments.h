@@ -143,6 +143,8 @@ class Symbol {
       assert(this->size() <= max_ui32);
       return max_ui32 - this->size();
     }
+
+    PROMPP_ALWAYS_INLINE void reserve(const data_type& other) { Vector<char>::reserve(other.size()); }
   };
 
   using composite_type = std::string_view;
@@ -171,6 +173,30 @@ struct BareBones::IsTriviallyReallocatable<BareBones::SnugComposite::DecodingTab
     : std::true_type {};
 
 namespace PromPP::Primitives::SnugComposites::Filaments {
+
+template <class Iterator>
+concept has_id = requires(Iterator it) {
+  { it.id() };
+};
+
+template <class Iterator>
+concept has_name_id = requires(Iterator it) {
+  { it.name_id() };
+};
+
+template <class Iterator>
+concept has_id_or_name_id = has_id<Iterator> || has_name_id<Iterator>;
+
+template <class Table, class Item, class Cache>
+concept has_find_or_emplace_with_cache = requires(Table table, Item item, Cache cache) {
+  { table.find_or_emplace_with_cache(item, uint32_t(), cache) };
+};
+
+struct NoCache {};
+
+template <class Cache, class Iterator, class Table, class Item>
+concept use_find_or_emplace_with_cache =
+    !std::same_as<Cache, NoCache> && has_id_or_name_id<Iterator> && has_find_or_emplace_with_cache<Table, Item, typename std::remove_cvref_t<Cache>::ItemList>;
 
 template <template <template <class> class> class SymbolsTableType, template <class> class Vector>
 class LabelNameSet {
@@ -342,12 +368,17 @@ class LabelNameSet {
     [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
       return symbols_table.allocated_memory() + BareBones::mem::allocated_memory(symbols_ids_sequences);
     }
+
+    PROMPP_ALWAYS_INLINE void reserve(const data_type& other) noexcept {
+      symbols_table.reserve(other.symbols_table);
+      symbols_ids_sequences.reserve(other.symbols_ids_sequences.size());
+    }
   };
 
   PROMPP_ALWAYS_INLINE LabelNameSet() noexcept = default;
-  template <class OtherLabelNameSet>
+  template <class OtherLabelNameSet, class Cache = NoCache>
   // TODO requires is_label_name_set
-  PROMPP_ALWAYS_INLINE LabelNameSet(data_type& data, const OtherLabelNameSet& lns) noexcept : pos_(data.symbols_ids_sequences.size()) {
+  PROMPP_ALWAYS_INLINE LabelNameSet(data_type& data, const OtherLabelNameSet& lns, Cache&& cache = {}) noexcept : pos_(data.symbols_ids_sequences.size()) {
     if constexpr (BareBones::concepts::has_size<OtherLabelNameSet>) {
       size_ = lns.size();
     } else {
@@ -358,10 +389,8 @@ class LabelNameSet {
       data.symbols_ids_sequences.reserve(data.symbols_ids_sequences.size() + size_);
     }
 
-    for (const auto& label_name : lns) {
-      uint32_t smbl_id = data.symbols_table.find_or_emplace(label_name);
-      data.symbols_ids_sequences.push_back(smbl_id);
-
+    for (auto it = lns.begin(); it != lns.end(); ++it) {
+      data.symbols_ids_sequences.push_back(find_or_emplace_label_name(data, it, std::forward<Cache>(cache)));
       if constexpr (!BareBones::concepts::has_size<OtherLabelNameSet>) {
         ++size_;
       }
@@ -407,6 +436,16 @@ class LabelNameSet {
         throw BareBones::Exception(0x218410dde097cc6b, "LabelSetNames data validation error: expected LabelSetNames length is out of data symbols table range");
       }
     }
+  }
+
+ private:
+  template <class LabelNameIterator, class Cache>
+  PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_label_name(data_type& data, const LabelNameIterator& label_name, Cache&& cache) {
+    if constexpr (use_find_or_emplace_with_cache<Cache, LabelNameIterator, decltype(data.symbols_table), decltype(*label_name)>) {
+      data.symbols_table.find_or_emplace_with_cache(*label_name, label_name.id(), cache.names);
+    }
+
+    return data.symbols_table.find_or_emplace(*label_name);
   }
 };
 
@@ -652,6 +691,12 @@ class LabelSet {
       symbols_tables.resize(symbols_tables_checkpoints.size());
     }
 
+    void reserve(const data_type& other) {
+      symbols_ids_sequences.reserve(other.symbols_ids_sequences.size());
+      symbols_tables.reserve(other.symbols_tables.size());
+      label_name_sets_table.reserve(other.label_name_sets_table);
+    }
+
     template <class InputStream>
     void load(InputStream& in) {
       // read version
@@ -774,11 +819,10 @@ class LabelSet {
   PROMPP_ALWAYS_INLINE LabelSet() noexcept = default;
 
   // FIXME inline of this function causes 30ns lost in indexing performance
-  template <class T>
+  template <class T, class Cache = NoCache>
   // TODO requires is_label_set
-  LabelSet(data_type& data, const T& label_set) noexcept : pos_(data.symbols_ids_sequences.size() + data.shrinked_size_) {
-    lns_id_ = data.label_name_sets_table.find_or_emplace(label_set.names());
-
+  LabelSet(data_type& data, const T& label_set, Cache&& cache = {}) noexcept
+      : lns_id_(find_or_emplace_label_names_set(data, label_set, std::forward<Cache>(cache))), pos_(data.symbols_ids_sequences.size() + data.shrinked_size_) {
     // resize, if there are new symbols (in lns table)
     data.symbols_tables.reserve(data.label_name_sets_table.data().symbols_table.size());
     for (auto i = data.symbols_tables.size(); i < data.label_name_sets_table.data().symbols_table.size(); ++i) {
@@ -789,8 +833,8 @@ class LabelSet {
     auto lns_i = lns.begin();
     auto size_before = data.symbols_ids_sequences.size();
     auto i = BareBones::StreamVByte::back_inserter<typename data_type::SymbolIdsCodec>(data.symbols_ids_sequences, lns.size());
-    for (auto [_, label_value] : label_set) {
-      *i++ = data.symbols_tables[lns_i.id()]->find_or_emplace(label_value);
+    for (auto it = label_set.begin(); it != label_set.end(); ++it) {
+      *i++ = find_or_emplace_symbol(data, lns_i.id(), it, std::forward<Cache>(cache));
       ++lns_i;
     }
 
@@ -808,19 +852,22 @@ class LabelSet {
     const data_type* data_;
     values_iterator_type values_begin_;
     [[no_unique_address]] values_iterator_sentinel_type values_end_;
+    uint32_t id_;
 
    public:
     PROMPP_ALWAYS_INLINE explicit composite_type(const data_type* data = nullptr,
                                                  label_name_set_type label_name_set = label_name_set_type(),
                                                  values_iterator_type values_begin = values_iterator_type(),
-                                                 values_iterator_sentinel_type values_end = values_iterator_sentinel_type()) noexcept
-        : label_name_set_(label_name_set), data_(data), values_begin_(values_begin), values_end_(values_end) {}
+                                                 values_iterator_sentinel_type values_end = values_iterator_sentinel_type(),
+                                                 uint32_t id = 0) noexcept
+        : label_name_set_(label_name_set), data_(data), values_begin_(values_begin), values_end_(values_end), id_(id) {}
 
     using value_type = std::pair<typename label_name_set_type::value_type, typename Symbol<Vector>::composite_type>;
 
     PROMPP_ALWAYS_INLINE const label_name_set_type& names() const noexcept { return label_name_set_; }
 
     PROMPP_ALWAYS_INLINE auto size() const noexcept { return label_name_set_.size(); }
+    PROMPP_ALWAYS_INLINE auto id() const noexcept { return id_; }
 
     template <class LabelNameSetIteratorType, class ValuesIteratorType>
     class Iterator {
@@ -902,7 +949,7 @@ class LabelSet {
     auto [values_begin, values_end] =
         BareBones::StreamVByte::decoder<typename data_type::SymbolIdsCodec>(data.symbols_ids_sequences.begin() + pos_ - data.shrinked_size_, lns.size());
 
-    return composite_type(&data, std::move(lns), std::move(values_begin), std::move(values_end));
+    return composite_type(&data, std::move(lns), std::move(values_begin), std::move(values_end), lns_id_);
   }
 
   PROMPP_ALWAYS_INLINE void validate(const data_type& data) const {
@@ -934,6 +981,26 @@ class LabelSet {
                                    "LabelSets data validation error: expected LabelSets symbols length is out of data symbols vector range");
       }
     }
+  }
+
+ private:
+  template <class LabelSet, class Cache>
+  PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_label_names_set(data_type& data, LabelSet& label_set, Cache&& cache) {
+    if constexpr (use_find_or_emplace_with_cache<Cache, LabelSet, decltype(data.label_name_sets_table), decltype(label_set.names())>) {
+      return data.label_name_sets_table.find_or_emplace_with_cache(label_set.names(), label_set.id(), cache.name_sets, cache);
+    }
+
+    return data.label_name_sets_table.find_or_emplace(label_set.names());
+  }
+
+  template <class LabelIterator, class Cache>
+  PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_symbol(data_type& data, uint32_t lns_id, const LabelIterator& label, Cache&& cache) {
+    if constexpr (use_find_or_emplace_with_cache<Cache, LabelIterator, decltype(*data.symbols_tables[0]), decltype((*label).second)>) {
+      const auto name_id = label.name_id();
+      return data.symbols_tables[lns_id]->find_or_emplace_with_cache((*label).second, label.value_id(), cache.values[name_id]);
+    }
+
+    return data.symbols_tables[lns_id]->find_or_emplace((*label).second);
   }
 };
 
