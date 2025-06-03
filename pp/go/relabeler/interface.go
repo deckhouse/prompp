@@ -79,7 +79,7 @@ type Head interface {
 	String() string
 	CopySeriesFrom(other Head)
 	Enqueue(t *GenericTask)
-	CreateTask(typeTask TypeTask, fn ShardFn, isLss, isExclusive bool) *GenericTask
+	CreateTask(taskName string, fn ShardFn, isLss, isExclusive bool) *GenericTask
 }
 
 type Distributor interface {

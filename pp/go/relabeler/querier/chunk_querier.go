@@ -50,7 +50,7 @@ func (q *ChunkQuerier) Select(
 	callerID := cppbridge.GetCaller(ctx)
 
 	tLSSQuery := q.head.CreateTask(
-		relabeler.LSSQueryChunkQuerierSelect,
+		relabeler.LSSQueryChunkQuerier,
 		func(shard relabeler.Shard) error {
 			lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
 			if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {
@@ -81,7 +81,7 @@ func (q *ChunkQuerier) Select(
 
 	serializedChunksShards := make([]*cppbridge.HeadDataStorageSerializedChunks, q.head.NumberOfShards())
 	tDataStorageQuery := q.head.CreateTask(
-		relabeler.DataStorageQueryChunkQuerierSelect,
+		relabeler.DSQueryChunkQuerier,
 		func(shard relabeler.Shard) error {
 			lssQueryResult := lssQueryResults[shard.ShardID()]
 			if lssQueryResult == nil {

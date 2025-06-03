@@ -76,7 +76,7 @@ func labelValues(
 	head relabeler.Head,
 	deduplicatorFactory DeduplicatorFactory,
 	metrics *Metrics,
-	typeTask relabeler.TypeTask,
+	taskName string,
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	start := time.Now()
@@ -92,7 +92,7 @@ func labelValues(
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
 
 	t := head.CreateTask(
-		typeTask,
+		taskName,
 		func(shard relabeler.Shard) error {
 			queryLabelValuesResult := shard.LSS().QueryLabelValues(name, convertedMatchers)
 			if queryLabelValuesResult.Status() != cppbridge.LSSQueryStatusMatch {
@@ -137,7 +137,7 @@ func labelNames(
 	head relabeler.Head,
 	deduplicatorFactory DeduplicatorFactory,
 	metrics *Metrics,
-	typeTask relabeler.TypeTask,
+	taskName string,
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	start := time.Now()
@@ -153,7 +153,7 @@ func labelNames(
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
 
 	t := head.CreateTask(
-		typeTask,
+		taskName,
 		func(shard relabeler.Shard) error {
 			queryLabelNamesResult := shard.LSS().QueryLabelNames(convertedMatchers)
 			if queryLabelNamesResult.Status() != cppbridge.LSSQueryStatusMatch {
@@ -237,7 +237,7 @@ func (q *Querier) selectInstant(
 	}
 
 	tLSSQuery := q.head.CreateTask(
-		relabeler.LSSQueryQuerierSelectInstant,
+		relabeler.LSSQueryInstantQuerier,
 		func(shard relabeler.Shard) error {
 			lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
 
@@ -268,7 +268,7 @@ func (q *Querier) selectInstant(
 
 	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
 	tDataStorageQuery := q.head.CreateTask(
-		relabeler.DataStorageQueryQuerierSelectInstant,
+		relabeler.DSQueryInstantQuerier,
 		func(shard relabeler.Shard) error {
 			lssQueryResult := lssQueryResults[shard.ShardID()]
 			if lssQueryResult == nil {
@@ -319,7 +319,7 @@ func (q *Querier) selectRange(
 	callerID := cppbridge.GetCaller(ctx)
 
 	tLSSQuery := q.head.CreateTask(
-		relabeler.LSSQueryQuerierSelectRange,
+		relabeler.LSSQueryRangeQuerier,
 		func(shard relabeler.Shard) error {
 			lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
 
@@ -350,7 +350,7 @@ func (q *Querier) selectRange(
 
 	serializedChunksShards := make([]*cppbridge.HeadDataStorageSerializedChunks, q.head.NumberOfShards())
 	tDataStorageQuery := q.head.CreateTask(
-		relabeler.DataStorageQueryQuerierSelectRange,
+		relabeler.DSQueryRangeQuerier,
 		func(shard relabeler.Shard) error {
 			lssQueryResult := lssQueryResults[shard.ShardID()]
 			if lssQueryResult == nil {

@@ -344,7 +344,7 @@ func (h *Head) CommitToWal() error {
 	}
 
 	t := h.CreateTask(
-		relabeler.WalCommit,
+		relabeler.LSSWalCommit,
 		func(shard relabeler.Shard) error {
 			return shard.Wal().Commit()
 		},
@@ -358,7 +358,7 @@ func (h *Head) CommitToWal() error {
 
 func (h *Head) Flush() error {
 	t := h.CreateTask(
-		relabeler.WalFlush,
+		relabeler.LSSWalFlush,
 		func(shard relabeler.Shard) error {
 			return shard.Wal().Flush()
 		},
@@ -373,7 +373,7 @@ func (h *Head) Flush() error {
 // MergeOutOfOrderChunks merge chunks with out of order data chunks.
 func (h *Head) MergeOutOfOrderChunks() {
 	t := h.CreateTask(
-		relabeler.DataStorageMergeOutOfOrderChunks,
+		relabeler.DSMergeOutOfOrderChunks,
 		func(shard relabeler.Shard) error {
 			shard.DataStorage().MergeOutOfOrderChunks()
 			return nil
@@ -437,7 +437,7 @@ func (h *Head) WriteMetrics() {
 	tw := relabeler.NewTaskWaiter(2)
 
 	tDataStorageHeadAllocatedMemory := h.CreateTask(
-		relabeler.DataStorageHeadAllocatedMemory,
+		relabeler.DSAllocatedMemory,
 		func(shard relabeler.Shard) error {
 			h.memoryInUse.With(
 				prometheus.Labels{
@@ -455,7 +455,7 @@ func (h *Head) WriteMetrics() {
 	h.Enqueue(tDataStorageHeadAllocatedMemory)
 
 	tLSSHeadAllocatedMemory := h.CreateTask(
-		relabeler.LSSHeadAllocatedMemory,
+		relabeler.LSSAllocatedMemory,
 		func(shard relabeler.Shard) error {
 			h.memoryInUse.With(
 				prometheus.Labels{
@@ -520,7 +520,7 @@ func (h *Head) Status(limit int) relabeler.HeadStatus {
 
 	if limit != 0 {
 		tDataStorageHeadStatus := h.CreateTask(
-			relabeler.DataStorageHeadStatus,
+			relabeler.DSHeadStatus,
 			func(shard relabeler.Shard) error {
 				shardStatuses[shard.ShardID()].FromDataStorage(shard.DataStorage().Raw())
 
@@ -621,7 +621,7 @@ func (*Head) Rotate() error {
 // CopySeriesFrom copy series from other head.
 func (h *Head) CopySeriesFrom(other relabeler.Head) {
 	t := other.CreateTask(
-		relabeler.LSSHeadCopyAddedSeries,
+		relabeler.LSSCopyAddedSeries,
 		func(shard relabeler.Shard) error {
 			shard.LSS().Raw().CopyAddedSeries(h.lsses[shard.ShardID()].Raw())
 			return nil
@@ -670,7 +670,7 @@ func (h *Head) run() {
 
 // CreateTask create a task for operations on the head shards.
 func (h *Head) CreateTask(
-	typeTask relabeler.TypeTask,
+	taskName string,
 	fn relabeler.ShardFn,
 	onLss, isExclusive bool,
 ) *relabeler.GenericTask {
@@ -678,7 +678,7 @@ func (h *Head) CreateTask(
 		return relabeler.NewReadOnlyGenericTask(fn, h.numberOfShards)
 	}
 
-	ls := prometheus.Labels{"type_task": typeTask.String()}
+	ls := prometheus.Labels{"type_task": taskName}
 	return relabeler.NewGenericTask(
 		fn,
 		h.tasksCreated.With(ls),
@@ -777,7 +777,7 @@ func (h *Head) Append(
 	tw := relabeler.NewTaskWaiter(2)
 
 	tAppend := h.CreateTask(
-		relabeler.DataStorageAppendInnerSeries,
+		relabeler.DSAppendInnerSeries,
 		func(shard relabeler.Shard) error {
 			shard.DataStorage().AppendInnerSeriesSlice(shardedInnerSeries.DataByShard(shard.ShardID()))
 
@@ -790,7 +790,7 @@ func (h *Head) Append(
 
 	var atomiclimitExhausted uint32
 	tWalWrite := h.CreateTask(
-		relabeler.WalWrite,
+		relabeler.LSSWalWrite,
 		func(shard relabeler.Shard) error {
 			limitExhausted, errWrite := shard.Wal().Write(shardedInnerSeries.DataByShard(shard.ShardID()))
 			if errWrite != nil {
@@ -817,7 +817,7 @@ func (h *Head) Append(
 
 	if commitToWal || atomiclimitExhausted > 0 {
 		t := h.CreateTask(
-			relabeler.WalCommit,
+			relabeler.LSSWalCommit,
 			func(shard relabeler.Shard) error {
 				return shard.Wal().Commit()
 			},
@@ -868,7 +868,7 @@ func (h *Head) inputRelabelingStage(
 ) (cppbridge.RelabelerStats, error) {
 	stats := make([]cppbridge.RelabelerStats, h.numberOfShards)
 	t := h.CreateTask(
-		relabeler.LSSHeadInputRelabeling,
+		relabeler.LSSInputRelabeling,
 		func(shard relabeler.Shard) error {
 			var (
 				err              error
@@ -944,7 +944,7 @@ func (h *Head) appendRelabelerSeriesStage(
 	shardedStateUpdates *ShardedStateUpdates,
 ) error {
 	t := h.CreateTask(
-		relabeler.LSSHeadAppendRelabelerSeries,
+		relabeler.LSSAppendRelabelerSeries,
 		func(shard relabeler.Shard) error {
 			relabeledSeries, ok := shardedRelabeledSeries.DataBySourceShard(shard.ShardID())
 			if !ok {

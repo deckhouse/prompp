@@ -10,10 +10,80 @@ import (
 )
 
 const (
-	ForLSSTask         = true
+	// ForLSSTask task for LSS.
+	ForLSSTask = true
+	// ForDataStorageTask task for DataStorage.
 	ForDataStorageTask = false
-	ExclusiveTask      = true
-	NonExclusiveTask   = false
+	// ExclusiveTask exclusive task(write).
+	ExclusiveTask = true
+	// NonExclusiveTask non-exclusive task(read).
+	NonExclusiveTask = false
+)
+
+const (
+	// LSSInputRelabeling name of task.
+	LSSInputRelabeling = "lss_input_relabeling"
+	// LSSAppendRelabelerSeries name of task.
+	LSSAppendRelabelerSeries = "lss_append_relabeler_series"
+
+	// LSSWalCommit name of task.
+	LSSWalCommit = "lss_wal_commit"
+	// LSSWalFlush name of task.
+	LSSWalFlush = "lss_wal_flush"
+	// LSSWalWrite name of task.
+	LSSWalWrite = "lss_wal_write"
+
+	// LSSCopyAddedSeries name of task.
+	LSSCopyAddedSeries = "lss_copy_added_series"
+
+	// LSSOutputRelabeling name of task.
+	LSSOutputRelabeling = "lss_output_relabeling"
+
+	// LSSAllocatedMemory name of task.
+	LSSAllocatedMemory = "lss_allocated_memory"
+
+	// LSSHeadStatus name of task.
+	LSSHeadStatus = "lss_head_status"
+
+	// LSSQueryChunkQuerier name of task.
+	LSSQueryChunkQuerier = "lss_query_chunk_querier"
+	// LSSLabelValuesChunkQuerier name of task.
+	LSSLabelValuesChunkQuerier = "lss_label_values_chunk_querier"
+	// LSSLabelNamesChunkQuerier name of task.
+	LSSLabelNamesChunkQuerier = "lss_label_names_chunk_querier"
+
+	// LSSQueryInstantQuerier name of task.
+	LSSQueryInstantQuerier = "lss_query_instant_querier"
+	// LSSQueryRangeQuerier name of task.
+	LSSQueryRangeQuerier = "lss_query_range_querier"
+	// LSSLabelValuesQuerier name of task.
+	LSSLabelValuesQuerier = "lss_label_values_querier"
+	// LSSLabelNamesQuerier name of task.
+	LSSLabelNamesQuerier = "lss_label_names_querier"
+
+	// DSAppendInnerSeries name of task.
+	DSAppendInnerSeries = "data_storage_append_inner_series"
+	// DSMergeOutOfOrderChunks name of task.
+	DSMergeOutOfOrderChunks = "data_storage_merge_out_of_order_chunks"
+
+	// DSAllocatedMemory name of task.
+	DSAllocatedMemory = "data_storage_allocated_memory"
+
+	// DSHeadStatus name of task.
+	DSHeadStatus = "data_storage_head_status"
+
+	// DSQueryChunkQuerier name of task.
+	DSQueryChunkQuerier = "data_storage_query_chunk_querier"
+
+	// DSQueryInstantQuerier name of task.
+	DSQueryInstantQuerier = "data_storage_query_instant_querier"
+	// DSQueryRangeQuerier name of task.
+	DSQueryRangeQuerier = "data_storage_query_range_querier"
+
+	// Read Only
+
+	// BlockWrite name of task.
+	BlockWrite = "block_write"
 )
 
 //

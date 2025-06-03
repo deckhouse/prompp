@@ -38,7 +38,7 @@ func (d *Distributor) Send(ctx context.Context, head relabeler.Head, shardedData
 	outputPromise := NewOutputRelabelingPromise(&d.destinationGroups, head.NumberOfShards())
 
 	tDOutputRelabeling := head.CreateTask(
-		relabeler.DistributorOutputRelabeling,
+		relabeler.LSSOutputRelabeling,
 		func(shard relabeler.Shard) error {
 			return d.ParallelRange(func(destinationGroupID int, destinationGroup *relabeler.DestinationGroup) error {
 				outputInnerSeries := cppbridge.NewShardsInnerSeries(1 << destinationGroup.ShardsNumberPower())
