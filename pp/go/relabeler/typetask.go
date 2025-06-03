@@ -28,8 +28,6 @@ const (
 
 	// DistributorOutputRelabeling type of task.
 	DistributorOutputRelabeling
-	// DistributorUpdateRelabelerState type of task.
-	DistributorUpdateRelabelerState
 
 	// LSSHeadAllocatedMemory type of task.
 	LSSHeadAllocatedMemory
