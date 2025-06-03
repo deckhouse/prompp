@@ -232,7 +232,7 @@ func (sru *ShardedStateUpdates) DataBySourceShard(sourceShardID uint16) ([]*cppb
 	data := make([]*cppbridge.RelabelerStateUpdate, len(sru.data))
 	for i, rsu := range sru.data {
 		data[i] = rsu[sourceShardID]
-		if data[i].Size() != 0 {
+		if !data[i].IsEmpty() {
 			ok = true
 		}
 	}

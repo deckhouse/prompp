@@ -189,23 +189,7 @@ struct IncomingAndRelabeledLsID {
 };
 
 // RelabelerStateUpdate - container for update states.
-// using RelabelerStateUpdate = std::vector<IncomingAndRelabeledLsID>;
-class RelabelerStateUpdate {
-  size_t size_{0};
-  std::vector<IncomingAndRelabeledLsID> data_;
-
- public:
-  PROMPP_ALWAYS_INLINE const std::vector<IncomingAndRelabeledLsID>& data() const { return data_; }
-
-  PROMPP_ALWAYS_INLINE size_t size() const { return size_; }
-
-  PROMPP_ALWAYS_INLINE void reserve(size_t n) { data_.reserve(n); }
-
-  PROMPP_ALWAYS_INLINE void emplace_back(const uint32_t relabeled_serie_ls_id, const uint32_t ls_id) {
-    data_.emplace_back(relabeled_serie_ls_id, ls_id);
-    ++size_;
-  }
-};
+using RelabelerStateUpdate = PromPP::Primitives::Go::Slice<IncomingAndRelabeledLsID>;
 
 class NoOpStaleNaNsState {
  public:
@@ -258,17 +242,6 @@ class StaleNaNsState {
 // Cache stateless cache for relabeler.
 class Cache {
   size_t cache_allocated_memory_{0};
-  // phmap::btree_map<uint32_t,
-  //                  PromPP::Prometheus::Relabel::CacheValue,
-  //                  std::less<>,
-  //                  BareBones::Allocator<std::pair<const uint32_t, PromPP::Prometheus::Relabel::CacheValue>>>
-  //     cache_relabel_{{}, {}, BareBones::Allocator<std::pair<const uint32_t, PromPP::Prometheus::Relabel::CacheValue>>{cache_allocated_memory_}};
-  // phmap::flat_hash_map<uint32_t,
-  //                      PromPP::Prometheus::Relabel::CacheValue,
-  //                      std::hash<uint32_t>,
-  //                      std::equal_to<>,
-  //                      BareBones::Allocator<std::pair<const uint32_t, PromPP::Prometheus::Relabel::CacheValue>>>
-  //     cache_relabel_{{}, {}, BareBones::Allocator<std::pair<const uint32_t, PromPP::Prometheus::Relabel::CacheValue>>{cache_allocated_memory_}};
   phmap::parallel_flat_hash_map<uint32_t,
                                 PromPP::Prometheus::Relabel::CacheValue,
                                 std::hash<uint32_t>,
@@ -717,7 +690,7 @@ class PerShardRelabeler {
 
   // update_relabeler_state - add to cache relabled data(third stage).
   PROMPP_ALWAYS_INLINE void update_relabeler_state(Cache& cache, const RelabelerStateUpdate* relabeler_state_update, const uint16_t relabeled_shard_id) {
-    for (const auto& update : relabeler_state_update->data()) {
+    for (const auto& update : *relabeler_state_update) {
       cache.add_relabel(update.incoming_ls_id, update.relabeled_ls_id, relabeled_shard_id);
     }
   }
