@@ -8,15 +8,12 @@
 
 namespace {
 
-using namespace series_data;
-using namespace series_data::unloading;
-
 class LoaderUnloaderTrait {
  protected:
-  DataStorage storage_;
-  Encoder<> encoder_{storage_};
+  series_data::DataStorage storage_;
+  series_data::Encoder<> encoder_{storage_};
   BareBones::ShrinkedToFitOStringStream stream_;
-  Unloader unloader_{storage_};
+  series_data::unloading::Unloader unloader_{storage_};
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const uint8_t> get_buffer() const noexcept {
     return {reinterpret_cast<const uint8_t*>(stream_.view().data()), stream_.view().size()};
@@ -54,13 +51,13 @@ TEST_F(LoaderUnloaderTestFixture, UnloadOpenChunk) {
   mark_series_as_unused(0);
 
   const uint32_t chunk_stream_size_in_bits =
-      storage_.get_asc_integer_stream<chunk::DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index).size_in_bits();
+      storage_.get_asc_integer_stream<series_data::chunk::DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index).size_in_bits();
 
   // Act
   unloader_.unload(stream_);
 
   // Assert
-  ASSERT_EQ(storage_.get_asc_integer_stream<chunk::DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index).size_in_bits(),
+  ASSERT_EQ(storage_.get_asc_integer_stream<series_data::chunk::DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index).size_in_bits(),
             chunk_stream_size_in_bits % 8);
 }
 
@@ -78,19 +75,19 @@ TEST_F(LoaderUnloaderTestFixture, LoadOpenChunk) {
 
   // Act
   std::vector<uint32_t> chunk_ids = {0};
-  Loader loader(storage_, chunk_ids);
+  series_data::unloading::Loader loader(storage_, chunk_ids);
   loader.load_next(stream_.span<uint8_t>());
   loader.load_finalize();
 
   // Assert
-  ASSERT_EQ((encoder::SampleList{
+  ASSERT_EQ((series_data::encoder::SampleList{
                 {1, 1.0},
                 {2, 2.0},
                 {3, 3.0},
                 {4, 4.0},
                 {5, 5.0},
             }),
-            Decoder::decode_chunk<chunk::DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
+            series_data::Decoder::decode_chunk<series_data::chunk::DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
   ASSERT_FALSE(storage_.unused_series_bitmap.contains(0));
 }
 
@@ -106,18 +103,18 @@ TEST_F(LoaderUnloaderTestFixture, LoadFinalizedChunk) {
 
   unloader_.unload(stream_);
 
-  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  series_data::ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
   encoder_.encode(0, 6, 6.0);
   // Act
 
   std::vector<uint32_t> chunk_ids = {0};
-  Loader loader(storage_, chunk_ids);
+  series_data::unloading::Loader loader(storage_, chunk_ids);
   loader.load_next(stream_.span<uint8_t>());
   loader.load_finalize();
 
   // Assert
-  ASSERT_EQ((encoder::SampleList{{1, 1.0}, {2, 2.0}, {3, 3.0}, {4, 4.0}, {5, 5.0}}),
-            Decoder::decode_chunk<chunk::DataChunk::Type::kFinalized>(storage_, storage_.finalized_chunks.at(0).front()));
+  ASSERT_EQ((series_data::encoder::SampleList{{1, 1.0}, {2, 2.0}, {3, 3.0}, {4, 4.0}, {5, 5.0}}),
+            series_data::Decoder::decode_chunk<series_data::chunk::DataChunk::Type::kFinalized>(storage_, storage_.finalized_chunks.at(0).front()));
   ASSERT_FALSE(storage_.unused_series_bitmap.contains(0));
 }
 
@@ -137,12 +134,12 @@ TEST_F(LoaderUnloaderTestFixture, LoadOpenChunkMergeOutdated) {
 
   // Act
   std::vector<uint32_t> chunk_ids = {0};
-  Loader loader(storage_, chunk_ids);
+  series_data::unloading::Loader loader(storage_, chunk_ids);
   loader.load_next(stream_.span<uint8_t>());
   loader.load_finalize();
 
   // Assert
-  ASSERT_EQ((encoder::SampleList{
+  ASSERT_EQ((series_data::encoder::SampleList{
                 {0, 0.0},
                 {1, 1.0},
                 {2, 2.0},
@@ -150,7 +147,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadOpenChunkMergeOutdated) {
                 {4, 4.0},
                 {5, 5.0},
             }),
-            Decoder::decode_chunk<chunk::DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
+            series_data::Decoder::decode_chunk<series_data::chunk::DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
   ASSERT_FALSE(storage_.unused_series_bitmap.contains(0));
   ASSERT_TRUE(storage_.outdated_chunks.empty());
 }
@@ -169,17 +166,17 @@ TEST_F(LoaderUnloaderTestFixture, LoadFinalizedChunkMergeOutdated) {
 
   unloader_.unload(stream_);
 
-  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  series_data::ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
   encoder_.encode(0, 6, 6.0);
 
   // Act
   std::vector<uint32_t> chunk_ids = {0};
-  Loader loader(storage_, chunk_ids);
+  series_data::unloading::Loader loader(storage_, chunk_ids);
   loader.load_next(stream_.span<uint8_t>());
   loader.load_finalize();
 
   // Assert
-  ASSERT_EQ((encoder::SampleList{
+  ASSERT_EQ((series_data::encoder::SampleList{
                 {0, 0.0},
                 {1, 1.0},
                 {2, 2.0},
@@ -187,7 +184,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadFinalizedChunkMergeOutdated) {
                 {4, 4.0},
                 {5, 5.0},
             }),
-            Decoder::decode_chunk<chunk::DataChunk::Type::kFinalized>(storage_, storage_.finalized_chunks.at(0).front()));
+            series_data::Decoder::decode_chunk<series_data::chunk::DataChunk::Type::kFinalized>(storage_, storage_.finalized_chunks.at(0).front()));
   ASSERT_FALSE(storage_.unused_series_bitmap.contains(0));
   ASSERT_TRUE(storage_.outdated_chunks.empty());
 }
@@ -222,13 +219,13 @@ TEST_F(LoaderUnloaderTestFixture, LoadOpenChunkSameChunkId) {
   auto span1 = stream_.span<uint8_t>().subspan(0, size1);
   auto span2 = stream_.span<uint8_t>().subspan(size1, size2);
 
-  Loader loader(storage_, chunk_ids);
+  series_data::unloading::Loader loader(storage_, chunk_ids);
   loader.load_next(span1);
   loader.load_next(span2);
   loader.load_finalize();
 
   // Assert
-  ASSERT_EQ((encoder::SampleList{
+  ASSERT_EQ((series_data::encoder::SampleList{
                 {1, 1.0},
                 {2, 2.0},
                 {3, 3.0},
@@ -239,7 +236,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadOpenChunkSameChunkId) {
                 {8, 8.0},
                 {9, 9.0},
             }),
-            Decoder::decode_chunk<chunk::DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
+            series_data::Decoder::decode_chunk<series_data::chunk::DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
   ASSERT_FALSE(storage_.unused_series_bitmap.contains(0));
 }
 
@@ -255,13 +252,14 @@ TEST_F(LoaderUnloaderTestFixture, LoadAscIntegerChunk) {
 
   // Act
   std::vector<uint32_t> chunk_ids = {0};
-  Loader loader(storage_, chunk_ids);
+  series_data::unloading::Loader loader(storage_, chunk_ids);
   loader.load_next(stream_.span<uint8_t>());
   loader.load_finalize();
 
   // Assert
-  ASSERT_EQ(EncodingType::kAscInteger, storage_.open_chunks[0].encoding_state.encoding_type);
-  ASSERT_EQ((encoder::SampleList{{1, 1.0}, {2, 2.0}, {3, 3.0}}), Decoder::decode_chunk<chunk::DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
+  ASSERT_EQ(series_data::EncodingType::kAscInteger, storage_.open_chunks[0].encoding_state.encoding_type);
+  ASSERT_EQ((series_data::encoder::SampleList{{1, 1.0}, {2, 2.0}, {3, 3.0}}),
+            series_data::Decoder::decode_chunk<series_data::chunk::DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
   ASSERT_FALSE(storage_.unused_series_bitmap.contains(0));
 }
 
@@ -278,14 +276,14 @@ TEST_F(LoaderUnloaderTestFixture, LoadAscIntegerTheGorillaChunk) {
 
   // Act
   std::vector<uint32_t> chunk_ids = {0};
-  Loader loader(storage_, chunk_ids);
+  series_data::unloading::Loader loader(storage_, chunk_ids);
   loader.load_next(stream_.span<uint8_t>());
   loader.load_finalize();
 
   // Assert
-  ASSERT_EQ(EncodingType::kAscIntegerThenValuesGorilla, storage_.open_chunks[0].encoding_state.encoding_type);
-  ASSERT_EQ((encoder::SampleList{{1, 1.0}, {2, 2.0}, {3, 3.0}, {4, 4.1}}),
-            Decoder::decode_chunk<chunk::DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
+  ASSERT_EQ(series_data::EncodingType::kAscIntegerThenValuesGorilla, storage_.open_chunks[0].encoding_state.encoding_type);
+  ASSERT_EQ((series_data::encoder::SampleList{{1, 1.0}, {2, 2.0}, {3, 3.0}, {4, 4.1}}),
+            series_data::Decoder::decode_chunk<series_data::chunk::DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
   ASSERT_FALSE(storage_.unused_series_bitmap.contains(0));
 }
 
@@ -305,13 +303,14 @@ TEST_F(LoaderUnloaderTestFixture, LoadValuesGorillaChunk) {
 
   // Act
   std::vector<uint32_t> chunk_ids = {1};
-  Loader loader(storage_, chunk_ids);
+  series_data::unloading::Loader loader(storage_, chunk_ids);
   loader.load_next(stream_.span<uint8_t>());
   loader.load_finalize();
 
   // Assert
-  ASSERT_EQ(EncodingType::kValuesGorilla, storage_.open_chunks[1].encoding_state.encoding_type);
-  ASSERT_EQ((encoder::SampleList{{1, 1.1}, {2, 2.0}, {3, 3.0}}), Decoder::decode_chunk<chunk::DataChunk::Type::kOpen>(storage_, storage_.open_chunks[1]));
+  ASSERT_EQ(series_data::EncodingType::kValuesGorilla, storage_.open_chunks[1].encoding_state.encoding_type);
+  ASSERT_EQ((series_data::encoder::SampleList{{1, 1.1}, {2, 2.0}, {3, 3.0}}),
+            series_data::Decoder::decode_chunk<series_data::chunk::DataChunk::Type::kOpen>(storage_, storage_.open_chunks[1]));
   ASSERT_FALSE(storage_.unused_series_bitmap.contains(1));
 }
 

@@ -82,16 +82,16 @@ class Loader {
     return sum;
   }
 
-  PROMPP_ALWAYS_INLINE static void skip_bytes(BareBones::BitSequenceReader& reader, uint32_t count) noexcept {
-    for (uint32_t i = 0; i < count; ++i) {
-      reader.ff(8);
-    }
-  }
+  PROMPP_ALWAYS_INLINE static void skip_bytes(BareBones::BitSequenceReader& reader, uint32_t count) noexcept { reader.ff(BareBones::Bit::to_bits(count)); }
 
   PROMPP_ALWAYS_INLINE static void read_data(BareBones::BitSequenceReader& reader, uint32_t count, encoder::CompactBitSequence& output) noexcept {
-    for (uint32_t i = 0; i < count; ++i) {
-      output.push_back_bits_u32(8, reader.consume_bits_u32(8));
+    const uint32_t filled_uint64_count = count / 8;
+    const uint32_t tail_bits_count = BareBones::Bit::to_bits(count % 8);
+
+    for (uint32_t i = 0; i < filled_uint64_count; ++i) {
+      output.push_back_u64(reader.consume_u64());
     }
+    output.push_back_bits_u64(tail_bits_count, reader.consume_bits_u64(tail_bits_count));
   }
 
   PROMPP_ALWAYS_INLINE static uint32_t get_bitset_iterator_index(const BareBones::Bitset::Iterator& begin, const BareBones::Bitset::Iterator& it) {
