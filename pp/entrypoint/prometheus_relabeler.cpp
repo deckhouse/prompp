@@ -114,18 +114,20 @@ extern "C" void prompp_prometheus_relabeled_series_dtor(void* args) {
 //
 
 extern "C" void prompp_prometheus_relabeler_state_update_ctor(void* args) {
+  using PromPP::Prometheus::Relabel::RelabelerStateUpdate;
   struct Arguments {
-    PromPP::Prometheus::Relabel::RelabelerStateUpdate* relabeler_state_update;
+    RelabelerStateUpdate* relabeler_state_update;
   };
 
   auto* in = static_cast<Arguments*>(args);
 
-  new (in->relabeler_state_update) PromPP::Prometheus::Relabel::RelabelerStateUpdate();
+  new (in->relabeler_state_update) RelabelerStateUpdate();
 }
 
 extern "C" void prompp_prometheus_relabeler_state_update_dtor(void* args) {
+  using PromPP::Prometheus::Relabel::RelabelerStateUpdate;
   struct Arguments {
-    PromPP::Prometheus::Relabel::RelabelerStateUpdate* relabeler_state_update;
+    RelabelerStateUpdate* relabeler_state_update;
   };
 
   static_cast<Arguments*>(args)->relabeler_state_update->~RelabelerStateUpdate();

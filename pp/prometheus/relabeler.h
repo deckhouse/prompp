@@ -189,24 +189,7 @@ struct IncomingAndRelabeledLsID {
 };
 
 // RelabelerStateUpdate - container for update states.
-// using RelabelerStateUpdate = std::vector<IncomingAndRelabeledLsID>;
 using RelabelerStateUpdate = PromPP::Primitives::Go::Slice<IncomingAndRelabeledLsID>;
-// class RelabelerStateUpdate {
-//   size_t size_{0};
-//   std::vector<IncomingAndRelabeledLsID> data_;
-
-//  public:
-//   PROMPP_ALWAYS_INLINE const std::vector<IncomingAndRelabeledLsID>& data() const { return data_; }
-
-//   PROMPP_ALWAYS_INLINE size_t size() const { return size_; }
-
-//   PROMPP_ALWAYS_INLINE void reserve(size_t n) { data_.reserve(n); }
-
-//   PROMPP_ALWAYS_INLINE void emplace_back(const uint32_t relabeled_serie_ls_id, const uint32_t ls_id) {
-//     data_.emplace_back(relabeled_serie_ls_id, ls_id);
-//     ++size_;
-//   }
-// };
 
 class NoOpStaleNaNsState {
  public:
@@ -707,7 +690,7 @@ class PerShardRelabeler {
 
   // update_relabeler_state - add to cache relabled data(third stage).
   PROMPP_ALWAYS_INLINE void update_relabeler_state(Cache& cache, const RelabelerStateUpdate* relabeler_state_update, const uint16_t relabeled_shard_id) {
-    for (const auto& update : relabeler_state_update->data()) {
+    for (const auto& update : *relabeler_state_update) {
       cache.add_relabel(update.incoming_ls_id, update.relabeled_ls_id, relabeled_shard_id);
     }
   }

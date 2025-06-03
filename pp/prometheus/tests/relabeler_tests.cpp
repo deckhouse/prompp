@@ -675,7 +675,7 @@ TEST_F(TestPerShardRelabeler, ReplaceToNewLS2) {
 
   prs.update_relabeler_state(cache_, &update_data, 1);
 
-  auto rlabels = lss_[update_data.data()[0].relabeled_ls_id];
+  auto rlabels = lss_[update_data[0].relabeled_ls_id];
   LabelViewSetForTest expected_labels = make_label_set({{"__name__", "booom"}, {"jab", "baj"}, {"job", "baj"}, {"replaced", "o"}});
 
   EXPECT_EQ(rlabels, expected_labels);
@@ -703,7 +703,7 @@ TEST_F(TestPerShardRelabeler, ReplaceToNewLS3) {
 
   prs.update_relabeler_state(cache_, &update_data, 1);
 
-  auto rlabels = lss_[update_data.data()[0].relabeled_ls_id];
+  auto rlabels = lss_[update_data[0].relabeled_ls_id];
   LabelViewSetForTest expected_labels = make_label_set({{"__name__", "booom"}, {"jab", "baj"}, {"job", "baj"}, {"replaced", "blabla"}});
 
   EXPECT_EQ(rlabels, expected_labels);
@@ -737,7 +737,7 @@ TEST_F(TestPerShardRelabeler, ReplaceToNewLS2_OrderedEncodingBimap) {
 
   prs.update_relabeler_state(cache_, &update_data, 1);
 
-  auto rlabels = lss[update_data.data()[0].relabeled_ls_id];
+  auto rlabels = lss[update_data[0].relabeled_ls_id];
   LabelViewSetForTest expected_labels = make_label_set({{"__name__", "booom"}, {"jab", "baj"}, {"job", "baj"}, {"replaced", "o"}});
 
   EXPECT_EQ(rlabels, expected_labels);
@@ -940,7 +940,7 @@ TEST_F(TestPerShardRelabeler, TargetLabels_HappyPath) {
 
   prs.update_relabeler_state(cache_, &update_data, 1);
 
-  auto rlabels = lss_[update_data.data()[0].relabeled_ls_id];
+  auto rlabels = lss_[update_data[0].relabeled_ls_id];
   LabelViewSetForTest expected_labels =
       make_label_set({{"__name__", "booom"}, {"a_name", "target_a_value"}, {"jab", "baj"}, {"job", "abc"}, {"z_name", "target_z_value"}});
 
@@ -971,7 +971,7 @@ TEST_F(TestPerShardRelabeler, TargetLabels_ExportedLabel) {
 
   prs.update_relabeler_state(cache_, &update_data, 1);
 
-  auto rlabels = lss_[update_data.data()[0].relabeled_ls_id];
+  auto rlabels = lss_[update_data[0].relabeled_ls_id];
   LabelViewSetForTest expected_labels =
       make_label_set({{"__name__", "booom"}, {"exported_jab", "baj"}, {"jab", "target_a_value"}, {"job", "abc"}, {"z_name", "target_z_value"}});
 
@@ -1003,7 +1003,7 @@ TEST_F(TestPerShardRelabeler, TargetLabels_ExportedLabel_Honor) {
 
   prs.update_relabeler_state(cache_, &update_data, 1);
 
-  auto rlabels = lss_[update_data.data()[0].relabeled_ls_id];
+  auto rlabels = lss_[update_data[0].relabeled_ls_id];
   LabelViewSetForTest expected_labels = make_label_set({{"__name__", "booom"}, {"jab", "baj"}, {"job", "abc"}, {"z_name", "target_z_value"}});
 
   EXPECT_EQ(rlabels, expected_labels);

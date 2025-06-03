@@ -454,29 +454,31 @@ func (rss *RelabeledSeries) Size() uint64 {
 	return rss.size
 }
 
-// RelabelerStateUpdate - go wrapper for C-RelabelerStateUpdate.
-//
-//	data - pointer for vector with relabeled elements;
-type RelabelerStateUpdate struct {
-	size uint64
+// incomingAndRelabeledLsID to update cache data.
+type incomingAndRelabeledLsID struct {
 	//nolint:unused // for cpp-bridge, used in cpp
-	data stdVector
+	incomingLSID uint32
+	//nolint:unused // for cpp-bridge, used in cpp
+	relabeledLSID uint32
 }
 
-// NewRelabelerStateUpdate - init new RelabelerStateUpdate.
+// RelabelerStateUpdate go wrapper for C-RelabelerStateUpdate.
+type RelabelerStateUpdate []incomingAndRelabeledLsID
+
+// NewRelabelerStateUpdate init new RelabelerStateUpdate.
 func NewRelabelerStateUpdate() *RelabelerStateUpdate {
-	ud := new(RelabelerStateUpdate)
-	prometheusRelabelerStateUpdateCtor(ud)
-	runtime.SetFinalizer(ud, func(r *RelabelerStateUpdate) {
+	rsu := new(RelabelerStateUpdate)
+	prometheusRelabelerStateUpdateCtor(rsu)
+	runtime.SetFinalizer(rsu, func(r *RelabelerStateUpdate) {
 		prometheusRelabelerStateUpdateDtor(r)
 	})
 
-	return ud
+	return rsu
 }
 
-// Size number of updates.
-func (rsu *RelabelerStateUpdate) Size() uint64 {
-	return rsu.size
+// IsEmpty returns true if the length of slice is zero.
+func (rsu *RelabelerStateUpdate) IsEmpty() bool {
+	return len(*rsu) == 0
 }
 
 // NewShardsRelabelerStateUpdate init slice with the results of update state per shards.
