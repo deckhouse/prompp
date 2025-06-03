@@ -172,6 +172,8 @@ class SeriesReverseIndex {
   }
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return labels_by_name_.allocated_memory(); }
 
+  PROMPP_ALWAYS_INLINE void reserve(uint32_t size) noexcept { labels_by_name_.reserve(size); }
+
  private:
   BareBones::Vector<LabelReverseIndex> labels_by_name_;
 };

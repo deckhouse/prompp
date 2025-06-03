@@ -471,6 +471,8 @@ void prompp_label_set_bytes_without_labels(void* args, void* res);
 extern "C" {
 #endif
 
+#include <stdint.h>
+
 /**
  * @brief Construct a new Primitives label sets.
  *
@@ -483,17 +485,6 @@ extern "C" {
  * }
  */
 void prompp_primitives_lss_ctor(void* args, void* res);
-
-/**
- * @brief Construct a new Primitives label sets.
- *
- * @param args {
- *     source      uintptr // pointer to source label sets
- *     destination uintptr // pointer to destination label sets
- * }
- *
- */
-void prompp_primitives_lss_copy_added_series(void* args);
 
 /**
  * @brief Destroy Primitives label sets.
@@ -646,6 +637,17 @@ void prompp_primitives_lss_query_label_values(void* args, void* res);
  * }
  */
 void prompp_create_readonly_lss(void* args, void* res);
+
+/**
+ * @brief Copy label sets which were added via find_or_emplace from source lss to destination lss
+ *
+ * @param source_lss pointer to source label sets
+ * @param destination_lss pointer to destination label sets
+ *
+ * @attention This binding used as a CGO call!!!
+ *
+ */
+void prompp_primitives_lss_copy_added_series(uint64_t source_lss, uint64_t destination_lss);
 
 #ifdef __cplusplus
 }  // extern "C"
