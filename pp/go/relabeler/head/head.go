@@ -711,8 +711,8 @@ func (h *Head) ReadEachShard(fn relabeler.ShardFn) error {
 // Find label set in lss, if not found return EmptyLabels.
 func (h *Head) Find(mls model.LabelSet) labels.Labels {
 	for i := range h.lsses {
-		if lssRO, lsID, ok := h.lsses[i].Find(mls); ok {
-			return labels.NewLabelsWithLSS(lssRO, lsID, uint16(mls.Len()))
+		if lsID, ok := h.lsses[i].Find(mls); ok {
+			return labels.NewLabelsWithLSS(h.lsses[i].GetSnapshot(), lsID, uint16(mls.Len()))
 		}
 	}
 

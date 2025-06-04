@@ -29,7 +29,7 @@ type LSS interface {
 	GetLabelSets(labelSetIDs []uint32) *cppbridge.LabelSetStorageGetLabelSetsResult
 	GetSnapshot() *cppbridge.LabelSetSnapshot
 	ResetSnapshot()
-	Find(mls model.LabelSet) (*cppbridge.LabelSetStorage, uint32, bool)
+	Find(mls model.LabelSet) (uint32, bool)
 }
 
 type Wal interface {

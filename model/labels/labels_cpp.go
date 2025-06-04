@@ -18,7 +18,7 @@ import (
 
 // Labels is a sorted set of labels. Is implemented by a cpp lss.
 type Labels struct {
-	lss            *cppbridge.LabelSetStorage
+	lss            *cppbridge.LabelSetSnapshot
 	id             uint32
 	length         uint16
 	dropMetricName bool
@@ -31,7 +31,7 @@ func EmptyLabels() Labels {
 
 // NewLabelsCppWithLSS init LabelsCpp with LabelSetStorage and ls id.
 func NewLabelsWithLSS(
-	lss *cppbridge.LabelSetStorage,
+	lss *cppbridge.LabelSetSnapshot,
 	id uint32,
 	length uint16,
 ) Labels {
@@ -487,9 +487,10 @@ type Receiver interface {
 var Storage = newStorage()
 
 type storage struct {
-	workingLSS *cppbridge.LabelSetStorage
-	receiver   atomic.Pointer[Receiver]
-	mx         sync.Mutex
+	workingLSS      *cppbridge.LabelSetStorage
+	workingSnapshot *cppbridge.LabelSetSnapshot
+	receiver        atomic.Pointer[Receiver]
+	mx              sync.Mutex
 
 	lssMaxID    atomic.Uint32
 	memoryInUse prometheus.Gauge
@@ -499,8 +500,8 @@ type storage struct {
 // newStorage init new storage.
 func newStorage() *storage {
 	s := &storage{
-		// workingLSS: cppbridge.NewQueryableLssStorage(),
-		workingLSS: cppbridge.NewLssStorage(),
+		// workingLSS: cppbridge.NewLssStorage(),
+		workingLSS: cppbridge.NewQueryableLssStorage(),
 		memoryInUse: promauto.NewGauge(
 			prometheus.GaugeOpts{
 				Name: "prompp_labels_working_lss_memory_bytes",
@@ -514,6 +515,7 @@ func newStorage() *storage {
 			},
 		),
 	}
+	s.workingSnapshot = s.workingLSS.CreateLabelSetSnapshot()
 
 	go s.writeMetrics()
 
@@ -534,12 +536,15 @@ func (s *storage) FindOrEmplaceLabelSet(mls model.LabelSet) Labels {
 	}
 
 	s.mx.Lock()
-	lssRO, lsID := s.workingLSS.FindOrEmplaceLabelSet(mls)
+	snapshot, lsID := s.workingLSS.FindOrEmplaceLabelSet(mls)
+	if snapshot != nil {
+		s.workingSnapshot = snapshot
+	}
 	s.mx.Unlock()
 
 	s.lssMaxID.Store(max(lsID, s.lssMaxID.Load()))
 
-	return NewLabelsWithLSS(lssRO, lsID, uint16(mls.Len()))
+	return NewLabelsWithLSS(s.workingSnapshot, lsID, uint16(mls.Len()))
 }
 
 // writeMetrics write metrics for working lss.

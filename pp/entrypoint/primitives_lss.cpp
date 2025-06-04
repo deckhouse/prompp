@@ -102,6 +102,7 @@ extern "C" void prompp_primitives_lss_find_or_emplace_label_set(void* args, void
   struct Result {
     LssVariantPtr lss_ro_ptr;
     uint32_t ls_id;
+    bool lss_has_reallocations;
   };
 
   auto in = static_cast<Arguments*>(args);
@@ -111,67 +112,24 @@ extern "C" void prompp_primitives_lss_find_or_emplace_label_set(void* args, void
         if constexpr (Lss::kIsReadOnly) {
           throw BareBones::Exception(0x1b877a0ab46a69a6, "lss is readonly");
         } else {
+          entrypoint::head::lss_memory::has_reallocations = false;
           out->ls_id = lss.find_or_emplace(in->label_set);
-          out->lss_ro_ptr = entrypoint::head::create_readonly_lss(lss);
+          out->lss_has_reallocations = entrypoint::head::lss_memory::has_reallocations;
         }
       },
       *in->lss);
-}
 
-extern "C" void prompp_primitives_lss_find(void* args, void* res) {
-  struct Arguments {
-    LssVariantPtr lss;
-    PromPP::Primitives::Go::LabelSet label_set;
-  };
-  struct Result {
-    LssVariantPtr lss_ro_ptr;
-    uint32_t ls_id;
-    bool has;
-  };
-
-  auto in = static_cast<Arguments*>(args);
-  auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
-
-  std::optional<uint32_t> ls_id = lss.find(in->label_set);
-
-  if (ls_id.has_value()) {
-    new (res) Result{.lss_ro_ptr = entrypoint::head::create_readonly_lss(lss), .ls_id = ls_id.value(), .has = ls_id.has_value()};
+  if (out->lss_has_reallocations) [[unlikely]] {
+    out->lss_ro_ptr = entrypoint::head::create_readonly_lss(*in->lss);
   }
 }
 
-extern "C" void prompp_primitives_lss_find_or_emplace_label_set(void* args, void* res) {
-  struct Arguments {
-    LssVariantPtr lss;
-    PromPP::Primitives::Go::LabelSet label_set;
-  };
-
-  struct Result {
-    LssVariantPtr lss_ro_ptr;
-    uint32_t ls_id;
-  };
-
-  auto in = static_cast<Arguments*>(args);
-  auto out = new (res) Result();
-
-  std::visit(
-      [in, out]<typename Lss>(Lss& lss) {
-        if constexpr (Lss::kIsReadOnly) {
-          throw BareBones::Exception(0x1b877a0ab46a69a6, "lss is readonly");
-        } else {
-          out->ls_id = lss.find_or_emplace(in->label_set);
-          out->lss_ro_ptr = entrypoint::head::create_readonly_lss(lss);
-        }
-      },
-      *in->lss);
-}
-
 extern "C" void prompp_primitives_lss_find(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
     PromPP::Primitives::Go::LabelSet label_set;
   };
   struct Result {
-    LssVariantPtr lss_ro_ptr;
     uint32_t ls_id;
     bool has;
   };
@@ -182,7 +140,7 @@ extern "C" void prompp_primitives_lss_find(void* args, void* res) {
   std::optional<uint32_t> ls_id = lss.find(in->label_set);
 
   if (ls_id.has_value()) {
-    new (res) Result{.lss_ro_ptr = entrypoint::head::create_readonly_lss(lss), .ls_id = ls_id.value(), .has = ls_id.has_value()};
+    new (res) Result{.ls_id = ls_id.value(), .has = ls_id.has_value()};
   }
 }
 

@@ -28,22 +28,6 @@ import (
 )
 
 var (
-	// UnsafeCall2
-	unsafeCall2Sum = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
-		prometheus.CounterOpts{
-			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
-			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "unsafe", "method": "call_2"},
-		},
-	)
-	unsafeCall2Count = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
-		prometheus.CounterOpts{
-			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
-			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "unsafe", "method": "call_2"},
-		},
-	)
-
 	// input_relabeler input_relabeling
 	inputRelabelerInputRelabelingSum = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
@@ -298,33 +282,6 @@ func dumpMemoryProfile(filename string) int {
 		uintptr(unsafe.Pointer(&res)),
 	)
 	return res.error
-}
-
-func EmptyUnsafeCall2() {
-	var args struct{}
-	var res struct{}
-
-	// start := time.Now().UnixNano()
-
-	fastcgo.UnsafeCall2(
-		C.unsafe_call_2,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	// unsafeCall2Sum.Add(float64(time.Now().UnixNano() - start))
-	// unsafeCall2Count.Inc()
-}
-
-func EmptyIUnsafeCall2() {
-	var args struct{}
-	var res struct{}
-
-	fastcgo.UnsafeCall2(
-		C.iunsafe_call_2,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
 }
 
 //
@@ -1158,15 +1115,16 @@ func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder model.CppLabelSetBui
 }
 
 //nolint:gocritic // unnamedResult not need
-func primitivesLSSFindOrEmplaceLabelSet(lss uintptr, labelSet model.LabelSet) (uintptr, uint32) {
+func primitivesLSSFindOrEmplaceLabelSet(lss uintptr, labelSet model.LabelSet) (uintptr, uint32, bool) {
 	args := struct {
 		lss      uintptr
 		labelSet model.LabelSet
 	}{lss, labelSet}
 
 	var res struct {
-		lssROPtr   uintptr
-		labelSetID uint32
+		lssROPtr         uintptr
+		labelSetID       uint32
+		hasReallocations bool
 	}
 
 	fastcgo.UnsafeCall2(
@@ -1174,16 +1132,15 @@ func primitivesLSSFindOrEmplaceLabelSet(lss uintptr, labelSet model.LabelSet) (u
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-	return res.lssROPtr, res.labelSetID
+	return res.lssROPtr, res.labelSetID, res.hasReallocations
 }
 
-func primitivesLSSFind(lss uintptr, labelSet model.LabelSet) (uintptr, uint32, bool) {
+func primitivesLSSFind(lss uintptr, labelSet model.LabelSet) (uint32, bool) {
 	args := struct {
 		lss      uintptr
 		labelSet model.LabelSet
 	}{lss, labelSet}
 	var res struct {
-		lssROPtr   uintptr
 		labelSetID uint32
 		has        bool
 	}
@@ -1194,7 +1151,7 @@ func primitivesLSSFind(lss uintptr, labelSet model.LabelSet) (uintptr, uint32, b
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.lssROPtr, res.labelSetID, res.has
+	return res.labelSetID, res.has
 }
 
 func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource uint32) (
@@ -1317,23 +1274,6 @@ func primitivesLSSCreateReadonlyLss(lss uintptr) uintptr {
 
 func primitivesLSSCopyAddedSeries(source, destination uintptr) {
 	C.prompp_primitives_lss_copy_added_series(C.uint64_t(source), C.uint64_t(destination))
-}
-
-func primitivesLSSCreateReadonlyLss(lss uintptr) uintptr {
-	args := struct {
-		lss uintptr
-	}{lss}
-	var res struct {
-		lss uintptr
-	}
-
-	fastcgo.UnsafeCall2(
-		C.prompp_create_readonly_lss,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.lss
 }
 
 //
@@ -2674,75 +2614,6 @@ func labelSetFree(labelSet []Label) {
 		C.prompp_label_set_free,
 		uintptr(unsafe.Pointer(&args)),
 	)
-}
-
-func allocateSliceForLabelBytes(lss uintptr, labelSetID uint32, bytes []byte) []byte {
-	args := struct {
-		lss        uintptr
-		labelSetID uint32
-	}{lss, labelSetID}
-	var sizeResult struct {
-		size uint32
-	}
-
-	fastcgo.UnsafeCall2(
-		C.prompp_label_set_bytes_size,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&sizeResult)),
-	)
-
-	if int(sizeResult.size) > cap(bytes) {
-		return make([]byte, sizeResult.size)
-	} else {
-		return bytes[:sizeResult.size]
-	}
-}
-
-func LabelSetBytes(lss uintptr, labelSetID uint32, bytes []byte) []byte {
-	result := struct {
-		bytes []byte
-	}{allocateSliceForLabelBytes(lss, labelSetID, bytes)}
-
-	args := struct {
-		lss        uintptr
-		labelSetID uint32
-	}{lss, labelSetID}
-
-	fastcgo.UnsafeCall2(
-		C.prompp_label_set_bytes,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&result)),
-	)
-
-	return result.bytes
-}
-
-func labelSetBytesWithFilteredNames(cFunction unsafe.Pointer, lss uintptr, labelSetID uint32, bytes []byte, names ...string) []byte {
-	result := struct {
-		bytes []byte
-	}{allocateSliceForLabelBytes(lss, labelSetID, bytes)}
-
-	args := struct {
-		lss        uintptr
-		labelSetID uint32
-		names      []string
-	}{lss, labelSetID, names}
-
-	fastcgo.UnsafeCall2(
-		cFunction,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&result)),
-	)
-
-	return result.bytes
-}
-
-func LabelSetBytesWithLabels(lss uintptr, labelSetID uint32, bytes []byte, names ...string) []byte {
-	return labelSetBytesWithFilteredNames(C.prompp_label_set_bytes_with_labels, lss, labelSetID, bytes, names...)
-}
-
-func LabelSetBytesWithoutLabels(lss uintptr, labelSetID uint32, bytes []byte, names ...string) []byte {
-	return labelSetBytesWithFilteredNames(C.prompp_label_set_bytes_without_labels, lss, labelSetID, bytes, names...)
 }
 
 func labelSetGetValue(lss uintptr, labelName string, labelSetID uint32) string {

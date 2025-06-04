@@ -7,7 +7,7 @@ package cppbridge
 // EqualLabelSets returns whether the two label sets are equal.
 //
 //revive:disable-next-line:flag-parameter this is a flag, but it's more convenient this way
-func EqualLabelSets(aLSS, bLSS *LabelSetStorage, aLsID, bLsID uint32, dropMetricNameA, dropMetricNameB bool) bool {
+func EqualLabelSets(aLSS, bLSS *LabelSetSnapshot, aLsID, bLsID uint32, dropMetricNameA, dropMetricNameB bool) bool {
 	if aLSS == nil && bLSS == nil {
 		return true
 	}
@@ -27,7 +27,7 @@ func EqualLabelSets(aLSS, bLSS *LabelSetStorage, aLsID, bLsID uint32, dropMetric
 // The result will be 0 if a==b, <0 if a < b, and >0 if a > b.
 //
 //revive:disable-next-line:flag-parameter this is a flag, but it's more convenient this way
-func CompareLabelSets(aLSS, bLSS *LabelSetStorage, aLsID, bLsID uint32, dropMetricNameA, dropMetricNameB bool) int {
+func CompareLabelSets(aLSS, bLSS *LabelSetSnapshot, aLsID, bLsID uint32, dropMetricNameA, dropMetricNameB bool) int {
 	// quick exit if empty LabelsCpp
 	if aLSS == nil && bLSS == nil {
 		return 0

@@ -83,8 +83,9 @@ void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
  * }
  *
  * @param res {
- *     lss_ro_ptr uintptr        // readonly copy of lss
- *     ls_id      uint32         // inserted (or found) label set id
+ *     lss_ro_ptr            uintptr // readonly copy of lss
+ *     ls_id                 uint32  // inserted (or found) label set id
+ *     lss_has_reallocations bool    // true if lss has reallocations
  * }
  */
 void prompp_primitives_lss_find_or_emplace_label_set(void* args, void* res);
@@ -98,7 +99,6 @@ void prompp_primitives_lss_find_or_emplace_label_set(void* args, void* res);
  * }
  *
  * @param res {
- *     lss_ro_ptr uintptr        // readonly copy of lss
  *     ls_id      uint32         // inserted (or found) label set id
  *     has        bool           // is the label set found
  * }

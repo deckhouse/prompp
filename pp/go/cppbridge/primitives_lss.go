@@ -93,22 +93,27 @@ func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet model.CppLabelSetBuild
 	return primitivesLSSFindOrEmplaceBuilder(lss.pointer, labelSet)
 }
 
-// FindOrEmplaceLabelSet find in lss LabelSet or emplace and return read-only lss and ls id.
+// FindOrEmplaceLabelSet find in lss LabelSet or emplace and
+// return LabelSetSnapshot if there was a reallocation and ls id.
 //
 //nolint:gocritic // unnamedResult not need
-func (lss *LabelSetStorage) FindOrEmplaceLabelSet(labelSet model.LabelSet) (*LabelSetStorage, uint32) {
-	lssROPtr, lsID := primitivesLSSFindOrEmplaceLabelSet(lss.pointer, labelSet)
-	return cacheReadOnlyLSS.getROLSS(lss.pointer, lssROPtr, lsID), lsID
+func (lss *LabelSetStorage) FindOrEmplaceLabelSet(labelSet model.LabelSet) (*LabelSetSnapshot, uint32) {
+	lssROPtr, lsID, hasReallocations := primitivesLSSFindOrEmplaceLabelSet(lss.pointer, labelSet)
+	if hasReallocations {
+		return newLabelSetSnapshot(lssROPtr), lsID
+	}
+
+	return nil, lsID
 }
 
 // Find label set in lss, return lss, lsid and bool ok.
-func (lss *LabelSetStorage) Find(mls model.LabelSet) (*LabelSetStorage, uint32, bool) {
-	lssROPtr, lsID, ok := primitivesLSSFind(lss.pointer, mls)
+func (lss *LabelSetStorage) Find(mls model.LabelSet) (uint32, bool) {
+	lsID, ok := primitivesLSSFind(lss.pointer, mls)
 	if !ok {
-		return nil, 0, false
+		return 0, false
 	}
 
-	return cacheReadOnlyLSS.getROLSS(lss.pointer, lssROPtr, lsID), lsID, true
+	return lsID, true
 }
 
 // Query returns a LSSQueryResult that matches the given label matchers.
@@ -168,77 +173,6 @@ func (lss *LabelSetStorage) CreateLabelSetSnapshot() *LabelSetSnapshot {
 	return newLabelSetSnapshot(primitivesLSSCreateReadonlyLss(lss.pointer))
 }
 
-// CreateReadonlyLss - create readonly copy of lss
-func (lss *LabelSetStorage) CreateReadonlyLss() *LabelSetStorage {
-	return newReadOnlyLssStorage(primitivesLSSCreateReadonlyLss(lss.pointer))
-}
-
-// LabelSetBytes returns ls as a byte slice.
-// It uses an byte invalid character as a separator and so should not be used for printing.
-func (lss *LabelSetStorage) LabelSetBytes(lsID uint32, bytes *[]byte, dropMetricName bool) []byte {
-	return labelSetBytes(lss.pointer, lsID, *bytes, dropMetricName)
-}
-
-// LabelSetBytesWithLabels is just as Bytes(), but only for labels matching names.
-// 'names' have to be sorted in ascending order.
-func (lss *LabelSetStorage) LabelSetBytesWithLabels(
-	lsID uint32,
-	bytes *[]byte,
-	dropMetricName bool,
-	names []string,
-) []byte {
-	return labelSetBytesWithLabels(lss.pointer, lsID, *bytes, dropMetricName, names)
-}
-
-// LabelSetBytesWithoutLabels is just as Bytes(), but only for labels not matching names.
-// 'names' have to be sorted in ascending order.
-func (lss *LabelSetStorage) LabelSetBytesWithoutLabels(
-	lsID uint32,
-	bytes *[]byte,
-	dropMetricName bool,
-	names []string,
-) []byte {
-	return labelSetBytesWithoutLabels(lss.pointer, lsID, *bytes, dropMetricName, names)
-}
-
-// LabelSetGetValue returns the value for the label with the given name.
-// Returns an empty string if the label doesn't exist.
-func (lss *LabelSetStorage) LabelSetGetValue(lsID uint32, labelName string) string {
-	return labelSetGetValue(lss.pointer, labelName, lsID)
-}
-
-// LabelSetHasLabelName returns true if the label with the given name is present.
-func (lss *LabelSetStorage) LabelSetHasLabelName(lsID uint32, labelName string) bool {
-	return labelSetHasLabelName(lss.pointer, labelName, lsID)
-}
-
-// LabelSetHasDuplicateLabelNames returns whether ls has duplicate label names.
-func (lss *LabelSetStorage) LabelSetHasDuplicateLabelNames(lsID uint32, dropMetricName bool) (string, bool) {
-	return labelSetHasDuplicateLabelNames(lss.pointer, lsID, dropMetricName)
-}
-
-// LabelSetHash returns a hash value for the label set.
-func (lss *LabelSetStorage) LabelSetHash(lsID uint32, dropMetricName bool) uint64 {
-	return labelSetHash(lss.pointer, lsID, dropMetricName)
-}
-
-// LabelSetHashForLabels returns a hash value for the labels matching the provided names.
-// 'names' have to be sorted in ascending order.
-func (lss *LabelSetStorage) LabelSetHashForLabels(lsID uint32, labelNames []string, dropMetricName bool) uint64 {
-	return labelSetHashForLabels(lss.pointer, labelNames, lsID, dropMetricName)
-}
-
-// LabelSetHashWithoutLabels returns a hash value for all labels except those matching
-// the provided names. 'names' have to be sorted in ascending order.
-func (lss *LabelSetStorage) LabelSetHashWithoutLabels(lsID uint32, labelNames []string) uint64 {
-	return labelSetHashWithoutLabels(lss.pointer, labelNames, lsID)
-}
-
-// LabelSetLength returns the number of labels for ls id.
-func (lss *LabelSetStorage) LabelSetLength(lsID uint32, dropMetricName bool) int {
-	return int(labelSetLength(lss.pointer, lsID, dropMetricName)) // #nosec G115 // no overflow
-}
-
 // RangeLabelSet serialize to slice labels from lss and calls f on each label.
 func (lss *LabelSetStorage) RangeLabelSet(lsID uint32, dropMetricName bool, do func(l Label) error) error {
 	labelSet := labelSetSerialize(lss.pointer, lsID, dropMetricName)
@@ -292,6 +226,8 @@ func newLSSQueryResult(
 }
 
 // GetByIndex return ls id and length for ls id by index.
+//
+//nolint:gocritic // unnamedResult not need
 func (r *LSSQueryResult) GetByIndex(i int) (uint32, uint16) {
 	return r.matches[i], r.labelSetLengths[i]
 }

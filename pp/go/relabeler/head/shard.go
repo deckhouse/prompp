@@ -63,8 +63,8 @@ func (w *LSS) ResetSnapshot() {
 	w.once = sync.Once{}
 }
 
-// Find label set in lss, return lss, lsid and bool ok.
-func (w *LSS) Find(mls model.LabelSet) (*cppbridge.LabelSetStorage, uint32, bool) {
+// Find label set in lss, return lsid and bool ok.
+func (w *LSS) Find(mls model.LabelSet) (uint32, bool) {
 	return w.target.Find(mls)
 }
 

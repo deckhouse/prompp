@@ -121,9 +121,10 @@ func (s *LSSSuite) testBytesImpl(testCase bytesTestCase, bytes *[]byte) {
 	// Arrange
 	lss := cppbridge.NewLssStorage()
 	lss.FindOrEmplace(testCase.labelSet)
+	snapshot := lss.CreateLabelSetSnapshot()
 
 	// Act
-	*bytes = cppbridge.LabelSetBytes(lss.Pointer(), 0, *bytes)
+	*bytes = snapshot.LabelSetBytes(0, bytes, false)
 
 	// Assert
 	s.Equal(testCase.expected, *bytes)
@@ -164,9 +165,10 @@ func (s *LSSSuite) testBytesWithLabelsImpl(testCase bytesWithFilteredNamesTestCa
 	// Arrange
 	lss := cppbridge.NewLssStorage()
 	lss.FindOrEmplace(testCase.labelSet)
+	snapshot := lss.CreateLabelSetSnapshot()
 
 	// Act
-	*bytes = cppbridge.LabelSetBytesWithLabels(lss.Pointer(), 0, *bytes, testCase.names...)
+	*bytes = snapshot.LabelSetBytesWithLabels(0, bytes, false, testCase.names)
 
 	// Assert
 	s.Equal(testCase.expected, *bytes)
@@ -211,9 +213,10 @@ func (s *LSSSuite) testBytesWithoutLabelsImpl(testCase bytesWithFilteredNamesTes
 	// Arrange
 	lss := cppbridge.NewLssStorage()
 	lss.FindOrEmplace(testCase.labelSet)
+	snapshot := lss.CreateLabelSetSnapshot()
 
 	// Act
-	*bytes = cppbridge.LabelSetBytesWithoutLabels(lss.Pointer(), 0, *bytes, testCase.names...)
+	*bytes = snapshot.LabelSetBytesWithoutLabels(0, bytes, false, testCase.names)
 
 	// Assert
 	s.Equal(testCase.expected, *bytes)
@@ -224,10 +227,10 @@ func (s *LSSSuite) TestCreateReadonlyLssFromEncodingBimap() {
 	lss := cppbridge.NewLssStorage()
 
 	// Act
-	readonlyLss := lss.CreateReadonlyLss()
+	snapshot := lss.CreateLabelSetSnapshot()
 
 	// Assert
-	s.Require().NotNil(readonlyLss.Pointer())
+	s.Require().NotNil(snapshot.Pointer())
 }
 
 func (s *LSSSuite) TestCreateReadonlyLssFromQueryableEncodingBimap() {
@@ -235,135 +238,10 @@ func (s *LSSSuite) TestCreateReadonlyLssFromQueryableEncodingBimap() {
 	lss := cppbridge.NewQueryableLssStorage()
 
 	// Act
-	readonlyLss := lss.CreateReadonlyLss()
+	snapshot := lss.CreateLabelSetSnapshot()
 
 	// Assert
-	s.Require().NotNil(readonlyLss.Pointer())
-}
-
-type bytesTestCase struct {
-	labelSet model.LabelSet
-	expected []byte
-}
-
-func (s *LSSSuite) TestBytes() {
-	testCases := []bytesTestCase{
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
-			expected: []byte("\xFEkey\xFFvalue"),
-		},
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
-			expected: []byte("\xFEkey1\xFFvalue1\xFFkey2\xFFvalue2"),
-		},
-	}
-
-	var bytes []byte
-	for _, testCase := range testCases {
-		s.testBytesImpl(testCase, &bytes)
-	}
-}
-
-func (s *LSSSuite) testBytesImpl(testCase bytesTestCase, bytes *[]byte) {
-	// Arrange
-	lss := cppbridge.NewLssStorage()
-	lss.FindOrEmplace(testCase.labelSet)
-
-	// Act
-	*bytes = lss.LabelSetBytes(0, bytes, false)
-
-	// Assert
-	s.Equal(testCase.expected, *bytes)
-}
-
-type bytesWithFilteredNamesTestCase struct {
-	labelSet model.LabelSet
-	names    []string
-	expected []byte
-}
-
-func (s *LSSSuite) TestBytesWithLabels() {
-	testCases := []bytesWithFilteredNamesTestCase{
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
-			names:    []string{"key", "key1", "key2"},
-			expected: []byte("\xFEkey\xFFvalue"),
-		},
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
-			names:    []string{"non_existing_key"},
-			expected: []byte("\xFE"),
-		},
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
-			names:    []string{"key1", "key2"},
-			expected: []byte("\xFEkey1\xFFvalue1\xFFkey2\xFFvalue2"),
-		},
-	}
-
-	var bytes []byte
-	for _, testCase := range testCases {
-		s.testBytesWithLabelsImpl(testCase, &bytes)
-	}
-}
-
-func (s *LSSSuite) testBytesWithLabelsImpl(testCase bytesWithFilteredNamesTestCase, bytes *[]byte) {
-	// Arrange
-	lss := cppbridge.NewLssStorage()
-	lss.FindOrEmplace(testCase.labelSet)
-
-	// Act
-	*bytes = lss.LabelSetBytesWithLabels(0, bytes, false, testCase.names)
-
-	// Assert
-	s.Equal(testCase.expected, *bytes)
-}
-
-func (s *LSSSuite) TestBytesWithoutLabels() {
-	testCases := []bytesWithFilteredNamesTestCase{
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
-			names:    []string{"key1", "key2"},
-			expected: []byte("\xFE"),
-		},
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
-			names:    []string{"key1"},
-			expected: []byte("\xFEkey2\xFFvalue2"),
-		},
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
-			names:    []string{"key2"},
-			expected: []byte("\xFEkey1\xFFvalue1"),
-		},
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
-			names:    []string{"key", "key1", "key2"},
-			expected: []byte("\xFE"),
-		},
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
-			names:    []string{"non_existing_key"},
-			expected: []byte("\xFEkey\xFFvalue"),
-		},
-	}
-
-	var bytes []byte
-	for _, testCase := range testCases {
-		s.testBytesWithoutLabelsImpl(testCase, &bytes)
-	}
-}
-
-func (s *LSSSuite) testBytesWithoutLabelsImpl(testCase bytesWithFilteredNamesTestCase, bytes *[]byte) {
-	// Arrange
-	lss := cppbridge.NewLssStorage()
-	lss.FindOrEmplace(testCase.labelSet)
-
-	// Act
-	*bytes = lss.LabelSetBytesWithoutLabels(0, bytes, false, testCase.names)
-
-	// Assert
-	s.Equal(testCase.expected, *bytes)
+	s.Require().NotNil(snapshot.Pointer())
 }
 
 type QueryableLSSSuite struct {
@@ -610,4 +488,34 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceLabelSet() {
 
 	// Assert
 	s.Equal(mls.String(), builder.Build().String())
+}
+
+func (s *QueryableLSSSuite) TestFind() {
+	// Arrange
+	mls1 := model.NewLabelSetBuilder().Set("__name__", "somename").Set("job", "somejob").Build()
+	mls2 := model.NewLabelSetBuilder().Set("__name__", "somename").Set("job", "somejob").Build()
+
+	// Act
+	_, _ = s.lss.FindOrEmplaceLabelSet(mls1)
+	_, expectedLSID := s.lss.FindOrEmplaceLabelSet(mls2)
+
+	actualLSID, find := s.lss.Find(mls2)
+	s.Require().True(find)
+
+	// Assert
+	s.Equal(expectedLSID, actualLSID)
+}
+
+func (s *QueryableLSSSuite) TestFindOrEmplace() {
+	// Arrange
+	mls := model.NewLabelSetBuilder().Set("__name__", "somename").Set("job", "somejob").Build()
+	lss1 := cppbridge.NewLssStorage()
+	lss2 := cppbridge.NewQueryableLssStorage()
+
+	// Act
+	res1 := lss1.FindOrEmplace(mls)
+	res2 := lss2.FindOrEmplace(mls)
+
+	s.T().Log(res1.LabelSetID, res1.LssHasReallocations)
+	s.T().Log(res2.LabelSetID, res2.LssHasReallocations)
 }
