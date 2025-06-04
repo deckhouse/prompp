@@ -3,40 +3,15 @@ package cppbridge
 import (
 	"context"
 	"runtime"
-	"slices"
-	"sync"
-	"sync/atomic"
-	"time"
 	"unsafe"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/prometheus/pp/go/model"
-)
-
-var (
-	lssCreate = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "prompp_cppbridge_lss_create",
-			Help: "Current create lsses.",
-		},
-		[]string{"type"},
-	)
-
-	lssFinalize = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "prompp_cppbridge_lss_finalize",
-			Help: "Current finalize lsses.",
-		},
-		[]string{"type"},
-	)
 )
 
 const (
 	lssEncodingBimap uint32 = iota
 	lssOrderedEncodingBimap
 	lssQueryableEncodingBimap
-	lssReadOnly
 )
 
 //
@@ -67,13 +42,10 @@ const (
 // LabelSetStorage
 //
 
-//
-// LabelSetStorage
-//
-
 // LabelSetStorage go wrapper for C-LabelSetStorage.
 type LabelSetStorage struct {
-	pointer uintptr
+	pointer           uintptr
+	gcDestroyDetector *uint64
 }
 
 // NewLssStorage init new LabelSetStorage based on EncodingBimap.
@@ -98,24 +70,10 @@ func newLabelSetStorage(lssType uint32) *LabelSetStorage {
 
 // newLabelSetStorageFromPointer init new LabelSetStorage with pointer to constructed lss
 func newLabelSetStorageFromPointer(lssPointer uintptr) *LabelSetStorage {
-	lss := &LabelSetStorage{pointer: lssPointer}
+	lss := &LabelSetStorage{pointer: lssPointer, gcDestroyDetector: &gcDestroyDetector}
 	runtime.SetFinalizer(lss, func(lss *LabelSetStorage) {
 		primitivesLSSDtor(lss.pointer)
 	})
-
-	return lss
-}
-
-// newReadOnlyLssStorage init new LabelSetStorage based on lssReadOnly.
-func newReadOnlyLssStorage(lssROPtr uintptr) *LabelSetStorage {
-	lss := &LabelSetStorage{pointer: lssROPtr}
-	runtime.SetFinalizer(lss, func(lss *LabelSetStorage) {
-		primitivesLSSDtor(lss.pointer)
-
-		lssFinalize.With(prometheus.Labels{"type": "read_only"}).Inc()
-	})
-
-	lssCreate.With(prometheus.Labels{"type": "read_only"}).Inc()
 
 	return lss
 }
@@ -126,9 +84,13 @@ func (lss *LabelSetStorage) AllocatedMemory() uint64 {
 }
 
 // FindOrEmplace find in lss LabelSet or emplace and return ls id.
-func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) uint32 {
-	id := primitivesLSSFindOrEmplace(lss.pointer, labelSet)
-	return id
+func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) FindOrEmplaceResult {
+	return primitivesLSSFindOrEmplace(lss.pointer, labelSet)
+}
+
+// FindOrEmplaceBuilder find in lss LabelSet or emplace and return ls id.
+func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet model.CppLabelSetBuilder) FindOrEmplaceResult {
+	return primitivesLSSFindOrEmplaceBuilder(lss.pointer, labelSet)
 }
 
 // FindOrEmplaceLabelSet find in lss LabelSet or emplace and return read-only lss and ls id.
@@ -199,6 +161,11 @@ func (lss *LabelSetStorage) CopyAddedSeries(destination *LabelSetStorage) {
 // Pointer return c-pointer.
 func (lss *LabelSetStorage) Pointer() uintptr {
 	return lss.pointer
+}
+
+// CreateLabelSetSnapshot create LabelSetSnapshot from lss.
+func (lss *LabelSetStorage) CreateLabelSetSnapshot() *LabelSetSnapshot {
+	return newLabelSetSnapshot(primitivesLSSCreateReadonlyLss(lss.pointer))
 }
 
 // CreateReadonlyLss - create readonly copy of lss
@@ -292,175 +259,61 @@ func (lss *LabelSetStorage) RangeLabelSet(lsID uint32, dropMetricName bool, do f
 // LSSQueryResult
 //
 
-// lssQueryResult query execution result in lss, filled in c.
-type lssQueryResult struct {
+// LSSQueryResult query execution result in lss with copy.
+type LSSQueryResult struct {
 	matches         []uint32 // c allocated
 	labelSetLengths []uint16 // c allocated
 	status          uint32
-}
-
-//
-// cacheReadOnlyLSS
-//
-
-// cacheReadOnlyLSS global cache lssReadOnly.
-var cacheReadOnlyLSS = newReadOnlyLSSBuffer()
-
-type valueROLSSCache struct {
-	lssRO      *LabelSetStorage
-	lastUpdate int64
-	maxlsid    uint32
-}
-
-// readOnlyLSSCache cache lssReadOnly for deduplicate.
-type readOnlyLSSCache struct {
-	sync.Map
-}
-
-func newReadOnlyLSSBuffer() *readOnlyLSSCache {
-	c := &readOnlyLSSCache{}
-
-	go c.clearing()
-
-	return c
-}
-
-// clearing the cache of obsolete data.
-func (c *readOnlyLSSCache) clearing() {
-	ticker := time.NewTicker(60 * time.Second)
-
-	for {
-		now := (<-ticker.C).Unix()
-		c.Range(func(key, value any) bool {
-			if now-atomic.LoadInt64(&value.(*valueROLSSCache).lastUpdate) > 60 {
-				c.Delete(key)
-			}
-
-			return true
-		})
-	}
-}
-
-// getROLSS return read only LSS from cache or add ro cache.
-func (c *readOnlyLSSCache) getROLSS(lssMainPtr, lssROPtr uintptr, maxlsid uint32) *LabelSetStorage {
-	var lssRO *LabelSetStorage
-
-	v, ok := c.Load(lssMainPtr)
-	if !ok {
-		lssRO = newReadOnlyLssStorage(lssROPtr)
-		c.Store(lssMainPtr, &valueROLSSCache{
-			lssRO:      lssRO,
-			maxlsid:    maxlsid,
-			lastUpdate: time.Now().Unix(),
-		})
-
-		return lssRO
-	}
-
-	bv := v.(*valueROLSSCache)
-	if bv.maxlsid < maxlsid {
-		lssRO = newReadOnlyLssStorage(lssROPtr)
-		c.Store(lssMainPtr, &valueROLSSCache{
-			lssRO:      lssRO,
-			maxlsid:    maxlsid,
-			lastUpdate: time.Now().Unix(),
-		})
-
-		return lssRO
-	}
-
-	atomic.StoreInt64(&bv.lastUpdate, time.Now().Unix())
-
-	primitivesLSSDtor(lssROPtr)
-
-	return bv.lssRO
-}
-
-//
-// LSSQueryResult
-//
-
-// LSSQueryResult query execution result in lss with copy.
-type LSSQueryResult struct {
-	queryResult *lssQueryResult
-	lssRO       *LabelSetStorage
 }
 
 // newLSSQueryResult init new LSSQueryResult.
 func newLSSQueryResult(
 	matches []uint32,
 	labelSetLengths []uint16,
-	lssMainPtr uintptr,
-	lssROPtr uintptr,
 	status uint32,
 ) *LSSQueryResult {
-	queryResult := &lssQueryResult{
+	lqr := &LSSQueryResult{
 		matches:         matches,
 		labelSetLengths: labelSetLengths,
 		status:          status,
 	}
 
 	if status != LSSQueryStatusMatch {
-		primitivesLabelSetMatchesFree(queryResult)
-		primitivesLSSDtor(lssROPtr)
+		primitivesLabelSetMatchesFree(lqr)
 
-		return &LSSQueryResult{queryResult: queryResult}
+		return lqr
 	}
 
-	runtime.SetFinalizer(queryResult, func(result *lssQueryResult) {
+	runtime.SetFinalizer(lqr, func(result *LSSQueryResult) {
 		primitivesLabelSetMatchesFree(result)
 	})
-
-	lqr := &LSSQueryResult{
-		queryResult: queryResult,
-		lssRO:       cacheReadOnlyLSS.getROLSS(lssMainPtr, lssROPtr, slices.Max(matches)),
-	}
 
 	return lqr
 }
 
 // GetByIndex return ls id and length for ls id by index.
 func (r *LSSQueryResult) GetByIndex(i int) (uint32, uint16) {
-	return r.queryResult.matches[i], r.queryResult.labelSetLengths[i]
+	return r.matches[i], r.labelSetLengths[i]
 }
 
 // IDs return labels sets ids.
 func (r *LSSQueryResult) IDs() []uint32 {
-	return r.queryResult.matches
-}
-
-// LSS return current read only lss from result.
-func (r *LSSQueryResult) LSS() *LabelSetStorage {
-	return r.lssRO
+	return r.matches
 }
 
 // LabelSetLengths return labels sets lengths.
 func (r *LSSQueryResult) LabelSetLengths() []uint16 {
-	return r.queryResult.labelSetLengths
+	return r.labelSetLengths
 }
 
 // Len of result.
 func (r *LSSQueryResult) Len() int {
-	return len(r.queryResult.matches)
-}
-
-// MatchesRange calls callback sequentially for each result.
-func (r *LSSQueryResult) MatchesRange(callback func(lss *LabelSetStorage, lsid uint32, length uint16)) {
-	for i, lsId := range r.queryResult.matches {
-		callback(r.lssRO, lsId, r.queryResult.labelSetLengths[i])
-	}
-}
-
-// MatchesIndexRange calls callback sequentially for each result.
-func (r *LSSQueryResult) MatchesIndexRange(callback func(lss *LabelSetStorage, index int, lsid uint32, length uint16)) {
-	for i, lsId := range r.queryResult.matches {
-		callback(r.lssRO, i, lsId, r.queryResult.labelSetLengths[i])
-	}
+	return len(r.matches)
 }
 
 // Status query execution.
 func (r *LSSQueryResult) Status() uint32 {
-	return r.queryResult.status
+	return r.status
 }
 
 //

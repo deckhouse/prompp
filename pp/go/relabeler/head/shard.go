@@ -2,6 +2,7 @@ package head
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -10,11 +11,14 @@ import (
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
 )
 
+// chanBufferSize size of channels buffer.
 const chanBufferSize = 64
 
 type LSS struct {
-	input  *cppbridge.LabelSetStorage
-	target *cppbridge.LabelSetStorage
+	input    *cppbridge.LabelSetStorage
+	target   *cppbridge.LabelSetStorage
+	snapshot *cppbridge.LabelSetSnapshot
+	once     sync.Once
 }
 
 func (w *LSS) Raw() *cppbridge.LabelSetStorage {
@@ -42,6 +46,21 @@ func (w *LSS) Query(matchers []model.LabelMatcher, querySource uint32) *cppbridg
 
 func (w *LSS) GetLabelSets(labelSetIDs []uint32) *cppbridge.LabelSetStorageGetLabelSetsResult {
 	return w.target.GetLabelSets(labelSetIDs)
+}
+
+// GetSnapshot return the actual snapshot.
+func (w *LSS) GetSnapshot() *cppbridge.LabelSetSnapshot {
+	w.once.Do(func() {
+		w.snapshot = w.target.CreateLabelSetSnapshot()
+	})
+
+	return w.snapshot
+}
+
+// ResetSnapshot resets the current snapshot.
+func (w *LSS) ResetSnapshot() {
+	w.snapshot = nil
+	w.once = sync.Once{}
 }
 
 // Find label set in lss, return lss, lsid and bool ok.
@@ -141,102 +160,58 @@ func (h *Head) reconfigureRelabelersData(
 //revive:disable-next-line:cognitive-complexity long but understandable.
 //revive:disable-next-line:cyclomatic long but understandable.
 func (h *Head) shardLoop(shardID uint16, stopc chan struct{}) {
+	var (
+		readWG = sync.WaitGroup{}
+		sd     = &shard{
+			id:          shardID,
+			lss:         h.lsses[shardID],
+			dataStorage: h.dataStorages[shardID],
+			wal:         h.wals[shardID],
+		}
+	)
+
 	for {
 		select {
 		case <-stopc:
 			return
 		case task := <-h.stageInputRelabeling[shardID]:
-			shardsInnerSeries := cppbridge.NewShardsInnerSeries(h.numberOfShards)
-			shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(h.numberOfShards)
-
-			var (
-				err   error
-				stats cppbridge.RelabelerStats
-			)
-			if task.WithStaleNans() {
-				stats, err = task.InputRelabelerByShard(shardID).InputRelabelingWithStalenans(
-					task.Ctx(),
-					h.lsses[shardID].input,
-					h.lsses[shardID].target,
-					task.CacheByShard(shardID),
-					task.Options(),
-					task.StaleNansStateByShard(shardID),
-					task.DefTimestamp(),
-					task.ShardedData(),
-					shardsInnerSeries,
-					shardsRelabeledSeries,
-				)
-			} else {
-				stats, err = task.InputRelabelerByShard(shardID).InputRelabeling(
-					task.Ctx(),
-					h.lsses[shardID].input,
-					h.lsses[shardID].target,
-					task.CacheByShard(shardID),
-					task.Options(),
-					task.ShardedData(),
-					shardsInnerSeries,
-					shardsRelabeledSeries,
-				)
-			}
-
-			task.IncomingDataDestroy()
-			if err != nil {
-				task.AddError(shardID, fmt.Errorf("failed input relabeling shard %d: %w", shardID, err))
-				continue
-			}
-
-			task.AddStats(stats)
-			for sid, relabeledSeries := range shardsRelabeledSeries {
-				if relabeledSeries.Size() == 0 {
-					task.AddResult(uint16(sid), nil)
-					continue
-				}
-
-				h.stageAppendRelabelerSeries[sid] <- NewTaskAppendRelabelerSeries(
-					task.Ctx(),
-					relabeledSeries,
-					task.Promise(),
-					task.RelabelerData(),
-					task.State(),
-					shardID,
-				)
-			}
-
-			for sid, innerSeries := range shardsInnerSeries {
-				task.AddResult(uint16(sid), innerSeries)
-			}
+			task.Run(h.lsses[shardID], h.stageAppendRelabelerSeries, shardID, h.numberOfShards)
 
 		case task := <-h.stageAppendRelabelerSeries[shardID]:
-			relabelerStateUpdate := cppbridge.NewRelabelerStateUpdate()
-			innerSeries := cppbridge.NewInnerSeries()
+			task.Run(h.lsses[shardID], h.stageUpdateRelabelers, shardID)
 
-			if err := task.InputRelabelerByShard(shardID).AppendRelabelerSeries(
-				task.Ctx(),
-				h.lsses[shardID].target,
-				relabelerStateUpdate,
-				innerSeries,
-				task.RelabeledSeries(),
-			); err != nil {
-				task.AddError(shardID, fmt.Errorf("failed input append relabeler series shard %d: %w", shardID, err))
+		case task := <-h.stageUpdateRelabelers[shardID]:
+			if err := task.Update(); err != nil {
+				task.AddError(shardID, fmt.Errorf("failed input update relabeler state %d: %w", shardID, err))
 				continue
 			}
 
-			task.AddUpdateRelabelerTasks(NewTaskUpdateRelabelerState(
-				task.Ctx(),
-				relabelerStateUpdate,
-				task.InputRelabelerByShard(task.SourceShardID()),
-				task.CacheByShard(task.SourceShardID()),
-				shardID,
-			))
-
-			task.AddResult(shardID, innerSeries)
 		case task := <-h.genericTaskCh[shardID]:
-			task.ExecuteOnShard(&shard{
-				id:          shardID,
-				lss:         h.lsses[shardID],
-				dataStorage: h.dataStorages[shardID],
-				wal:         h.wals[shardID],
-			})
+			task.ExecuteOnShard(sd)
+
+		case task := <-h.genericReadTaskCh[shardID]:
+			length := len(h.genericReadTaskCh[shardID])
+			if length == 0 {
+				task.ExecuteOnShard(sd)
+				continue
+			}
+
+			readWG.Add(length + 1)
+			go func(t *GenericReadTask, s *shard) {
+				t.ExecuteOnShard(s)
+				readWG.Done()
+			}(task, sd)
+
+			for i := 0; i < length; i++ {
+				task = <-h.genericReadTaskCh[shardID]
+
+				go func(t *GenericReadTask, s *shard) {
+					t.ExecuteOnShard(s)
+					readWG.Done()
+				}(task, sd)
+			}
+
+			readWG.Wait()
 		}
 	}
 }

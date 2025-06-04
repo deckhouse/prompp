@@ -306,6 +306,12 @@ TYPED_TEST(EncodingBimap, SaveSizeWAL) {
 
 class LssViewFixture : public testing::Test {
  protected:
+  template <class T>
+  using SharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
+
+  template <class T>
+  using SharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+
   using Symbol = PromPP::Primitives::SnugComposites::Symbol::EncodingBimap<SharedVector>;
   using SymbolView = PromPP::Primitives::SnugComposites::Symbol::DecodingTable<SharedSpan>;
 

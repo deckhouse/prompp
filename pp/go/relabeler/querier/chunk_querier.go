@@ -48,7 +48,7 @@ func (q *ChunkQuerier) Select(
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
 	callerID := cppbridge.GetCaller(ctx)
 
-	err := q.head.ForEachShard(func(shard relabeler.Shard) error {
+	err := q.head.ReadEachShard(func(shard relabeler.Shard) error {
 		lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
 
 		if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {
@@ -74,12 +74,12 @@ func (q *ChunkQuerier) Select(
 			return nil
 		}
 
-		chunkRecoder := cppbridge.NewSerializedChunkRecoder(serializedChunks.Data(), cppbridge.TimeInterval{
+		chunkRecoder := cppbridge.NewSerializedChunkRecoder(serializedChunks, cppbridge.TimeInterval{
 			MinT: q.mint,
 			MaxT: q.maxt,
 		})
 
-		chunkSeriesSets[shard.ShardID()] = NewChunkSeriesSet(lssQueryResult, chunkRecoder)
+		chunkSeriesSets[shard.ShardID()] = NewChunkSeriesSet(lssQueryResult, shard.LSS().GetSnapshot(), chunkRecoder)
 
 		return nil
 	})

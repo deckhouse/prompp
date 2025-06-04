@@ -1090,18 +1090,6 @@ func primitivesLSSCtor(lss_type uint32) uintptr {
 	return res.lss
 }
 
-func primitivesLSSCopyAddedSeries(source, destination uintptr) {
-	args := struct {
-		source      uintptr
-		destination uintptr
-	}{source, destination}
-
-	fastcgo.UnsafeCall1(
-		C.prompp_primitives_lss_copy_added_series,
-		uintptr(unsafe.Pointer(&args)),
-	)
-}
-
 // primitivesLSSDtor - wrapper for destructor C-EncodingBimap.
 func primitivesLSSDtor(lss uintptr) {
 	args := struct {
@@ -1132,14 +1120,17 @@ func primitivesLSSAllocatedMemory(lss uintptr) uint64 {
 	return res.allocatedMemory
 }
 
-func primitivesLSSFindOrEmplace(lss uintptr, labelSet model.LabelSet) uint32 {
+type FindOrEmplaceResult struct {
+	LabelSetID          uint32
+	LssHasReallocations bool
+}
+
+func primitivesLSSFindOrEmplace(lss uintptr, labelSet model.LabelSet) FindOrEmplaceResult {
 	args := struct {
 		lss      uintptr
 		labelSet model.LabelSet
 	}{lss, labelSet}
-	var res struct {
-		labelSetID uint32
-	}
+	var res FindOrEmplaceResult
 
 	fastcgo.UnsafeCall2(
 		C.prompp_primitives_lss_find_or_emplace,
@@ -1147,7 +1138,23 @@ func primitivesLSSFindOrEmplace(lss uintptr, labelSet model.LabelSet) uint32 {
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.labelSetID
+	return res
+}
+
+func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder model.CppLabelSetBuilder) FindOrEmplaceResult {
+	args := struct {
+		lss     uintptr
+		builder model.CppLabelSetBuilder
+	}{lss, builder}
+	var res FindOrEmplaceResult
+
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_lss_find_or_emplace_builder,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res
 }
 
 //nolint:gocritic // unnamedResult not need
@@ -1156,6 +1163,7 @@ func primitivesLSSFindOrEmplaceLabelSet(lss uintptr, labelSet model.LabelSet) (u
 		lss      uintptr
 		labelSet model.LabelSet
 	}{lss, labelSet}
+
 	var res struct {
 		lssROPtr   uintptr
 		labelSetID uint32
@@ -1166,7 +1174,6 @@ func primitivesLSSFindOrEmplaceLabelSet(lss uintptr, labelSet model.LabelSet) (u
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-
 	return res.lssROPtr, res.labelSetID
 }
 
@@ -1193,8 +1200,6 @@ func primitivesLSSFind(lss uintptr, labelSet model.LabelSet) (uintptr, uint32, b
 func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource uint32) (
 	matches []uint32,
 	labelSetLengths []uint16,
-	lssMainPtr uintptr,
-	lssCopyPtr uintptr,
 	status uint32,
 ) {
 	args := struct {
@@ -1206,7 +1211,6 @@ func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource 
 	var res struct {
 		matches         []uint32
 		labelSetLengths []uint16
-		lssCopy         uintptr
 		status          uint32
 	}
 
@@ -1216,10 +1220,10 @@ func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource 
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.matches, res.labelSetLengths, lss, res.lssCopy, res.status
+	return res.matches, res.labelSetLengths, res.status
 }
 
-func primitivesLabelSetMatchesFree(result *lssQueryResult) {
+func primitivesLabelSetMatchesFree(result *LSSQueryResult) {
 	fastcgo.UnsafeCall1(
 		C.prompp_primitives_lss_query_result_free,
 		uintptr(unsafe.Pointer(result)),
@@ -1292,6 +1296,27 @@ func primitivesLSSQueryLabelValues(lss uintptr, label_name string, matchers []mo
 	)
 
 	return res.status, res.values
+}
+
+func primitivesLSSCreateReadonlyLss(lss uintptr) uintptr {
+	args := struct {
+		lss uintptr
+	}{lss}
+	var res struct {
+		lss uintptr
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_create_readonly_lss,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.lss
+}
+
+func primitivesLSSCopyAddedSeries(source, destination uintptr) {
+	C.prompp_primitives_lss_copy_added_series(C.uint64_t(source), C.uint64_t(destination))
 }
 
 func primitivesLSSCreateReadonlyLss(lss uintptr) uintptr {
@@ -1554,7 +1579,7 @@ func prometheusPerShardRelabelerInputRelabeling(
 	options RelabelerOptions,
 	shardsInnerSeries []*InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
-) (stats RelabelerStats, exception []byte) {
+) (stats RelabelerStats, exception []byte, targetLssHasReallocations bool) {
 	args := struct {
 		shardsInnerSeries     []*InnerSeries
 		shardsRelabeledSeries []*RelabeledSeries
@@ -1567,7 +1592,8 @@ func prometheusPerShardRelabelerInputRelabeling(
 	}{shardsInnerSeries, shardsRelabeledSeries, options, perShardRelabeler, hashdex, cache, inputLss, targetLss}
 	var res struct {
 		RelabelerStats
-		exception []byte
+		exception                 []byte
+		targetLssHasReallocations bool
 	}
 	start := time.Now().UnixNano()
 	fastcgo.UnsafeCall2(
@@ -1578,7 +1604,7 @@ func prometheusPerShardRelabelerInputRelabeling(
 	inputRelabelerInputRelabelingSum.Add(float64(time.Now().UnixNano() - start))
 	inputRelabelerInputRelabelingCount.Inc()
 
-	return res.RelabelerStats, res.exception
+	return res.RelabelerStats, res.exception, res.targetLssHasReallocations
 }
 
 // prometheusPerShardRelabelerInputRelabelingWithStalenans wrapper for relabeling incoming
@@ -1589,7 +1615,7 @@ func prometheusPerShardRelabelerInputRelabelingWithStalenans(
 	options RelabelerOptions,
 	shardsInnerSeries []*InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
-) (stats RelabelerStats, exception []byte) {
+) (stats RelabelerStats, exception []byte, targetLssHasReallocations bool) {
 	args := struct {
 		shardsInnerSeries     []*InnerSeries
 		shardsRelabeledSeries []*RelabeledSeries
@@ -1615,7 +1641,8 @@ func prometheusPerShardRelabelerInputRelabelingWithStalenans(
 	}
 	var res struct {
 		RelabelerStats
-		exception []byte
+		exception                 []byte
+		targetLssHasReallocations bool
 	}
 	start := time.Now().UnixNano()
 	fastcgo.UnsafeCall2(
@@ -1626,7 +1653,7 @@ func prometheusPerShardRelabelerInputRelabelingWithStalenans(
 	inputRelabelerRelabelingWithStalenansSum.Add(float64(time.Now().UnixNano() - start))
 	inputRelabelerRelabelingWithStalenansCount.Inc()
 
-	return res.RelabelerStats, res.exception
+	return res.RelabelerStats, res.exception, res.targetLssHasReallocations
 }
 
 // prometheusPerShardRelabelerAppendRelabelerSeries - wrapper for add relabeled ls to lss,
@@ -1636,7 +1663,7 @@ func prometheusPerShardRelabelerAppendRelabelerSeries(
 	innerSeries *InnerSeries,
 	relabeledSeries *RelabeledSeries,
 	relabelerStateUpdate *RelabelerStateUpdate,
-) []byte {
+) (exception []byte, targetLssHasReallocations bool) {
 	args := struct {
 		innerSeries          *InnerSeries
 		relabeledSeries      *RelabeledSeries
@@ -1645,7 +1672,8 @@ func prometheusPerShardRelabelerAppendRelabelerSeries(
 		lss                  uintptr
 	}{innerSeries, relabeledSeries, relabelerStateUpdate, perShardRelabeler, lss}
 	var res struct {
-		exception []byte
+		exception                 []byte
+		targetLssHasReallocations bool
 	}
 	start := time.Now().UnixNano()
 	fastcgo.UnsafeCall2(
@@ -1656,7 +1684,7 @@ func prometheusPerShardRelabelerAppendRelabelerSeries(
 	inputRelabelerAppendRelabelerSeriesSum.Add(float64(time.Now().UnixNano() - start))
 	inputRelabelerAppendRelabelerSeriesCount.Inc()
 
-	return res.exception
+	return res.exception, res.targetLssHasReallocations
 }
 
 // prometheusPerShardRelabelerUpdateRelabelerState - wrapper for add to cache relabled data(third stage).
@@ -2646,6 +2674,75 @@ func labelSetFree(labelSet []Label) {
 		C.prompp_label_set_free,
 		uintptr(unsafe.Pointer(&args)),
 	)
+}
+
+func allocateSliceForLabelBytes(lss uintptr, labelSetID uint32, bytes []byte) []byte {
+	args := struct {
+		lss        uintptr
+		labelSetID uint32
+	}{lss, labelSetID}
+	var sizeResult struct {
+		size uint32
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_label_set_bytes_size,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&sizeResult)),
+	)
+
+	if int(sizeResult.size) > cap(bytes) {
+		return make([]byte, sizeResult.size)
+	} else {
+		return bytes[:sizeResult.size]
+	}
+}
+
+func LabelSetBytes(lss uintptr, labelSetID uint32, bytes []byte) []byte {
+	result := struct {
+		bytes []byte
+	}{allocateSliceForLabelBytes(lss, labelSetID, bytes)}
+
+	args := struct {
+		lss        uintptr
+		labelSetID uint32
+	}{lss, labelSetID}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_label_set_bytes,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&result)),
+	)
+
+	return result.bytes
+}
+
+func labelSetBytesWithFilteredNames(cFunction unsafe.Pointer, lss uintptr, labelSetID uint32, bytes []byte, names ...string) []byte {
+	result := struct {
+		bytes []byte
+	}{allocateSliceForLabelBytes(lss, labelSetID, bytes)}
+
+	args := struct {
+		lss        uintptr
+		labelSetID uint32
+		names      []string
+	}{lss, labelSetID, names}
+
+	fastcgo.UnsafeCall2(
+		cFunction,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&result)),
+	)
+
+	return result.bytes
+}
+
+func LabelSetBytesWithLabels(lss uintptr, labelSetID uint32, bytes []byte, names ...string) []byte {
+	return labelSetBytesWithFilteredNames(C.prompp_label_set_bytes_with_labels, lss, labelSetID, bytes, names...)
+}
+
+func LabelSetBytesWithoutLabels(lss uintptr, labelSetID uint32, bytes []byte, names ...string) []byte {
+	return labelSetBytesWithFilteredNames(C.prompp_label_set_bytes_without_labels, lss, labelSetID, bytes, names...)
 }
 
 func labelSetGetValue(lss uintptr, labelName string, labelSetID uint32) string {

@@ -578,12 +578,12 @@ func (ipsr *InputPerShardRelabeler) AppendRelabelerSeries(
 	relabelerStateUpdate *RelabelerStateUpdate,
 	innerSeries *InnerSeries,
 	relabeledSeries *RelabeledSeries,
-) error {
+) (bool, error) {
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return false, ctx.Err()
 	}
 
-	exception := prometheusPerShardRelabelerAppendRelabelerSeries(
+	exception, hasReallocations := prometheusPerShardRelabelerAppendRelabelerSeries(
 		ipsr.cptr,
 		lss.Pointer(),
 		innerSeries,
@@ -591,7 +591,7 @@ func (ipsr *InputPerShardRelabeler) AppendRelabelerSeries(
 		relabelerStateUpdate,
 	)
 
-	return handleException(exception)
+	return hasReallocations, handleException(exception)
 }
 
 // CacheAllocatedMemory - return size of allocated memory for cache map.
@@ -614,16 +614,16 @@ func (ipsr *InputPerShardRelabeler) InputRelabeling(
 	shardedData ShardedData,
 	shardsInnerSeries []*InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
-) (RelabelerStats, error) {
+) (RelabelerStats, bool, error) {
 	if ctx.Err() != nil {
-		return RelabelerStats{}, ctx.Err()
+		return RelabelerStats{}, false, ctx.Err()
 	}
 
 	cptrContainer, ok := shardedData.(cptrable)
 	if !ok {
-		return RelabelerStats{}, ErrMustImplementCptrable
+		return RelabelerStats{}, false, ErrMustImplementCptrable
 	}
-	stats, exception := prometheusPerShardRelabelerInputRelabeling(
+	stats, exception, hasReallocations := prometheusPerShardRelabelerInputRelabeling(
 		ipsr.cptr,
 		inputLss.Pointer(),
 		targetLss.Pointer(),
@@ -634,7 +634,7 @@ func (ipsr *InputPerShardRelabeler) InputRelabeling(
 		shardsRelabeledSeries,
 	)
 
-	return stats, handleException(exception)
+	return stats, hasReallocations, handleException(exception)
 }
 
 // InputRelabelingWithStalenans relabeling incoming hashdex(first stage) with state stalenans.
@@ -649,16 +649,16 @@ func (ipsr *InputPerShardRelabeler) InputRelabelingWithStalenans(
 	shardedData ShardedData,
 	shardsInnerSeries []*InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
-) (RelabelerStats, error) {
+) (RelabelerStats, bool, error) {
 	if ctx.Err() != nil {
-		return RelabelerStats{}, ctx.Err()
+		return RelabelerStats{}, false, ctx.Err()
 	}
 
 	cptrContainer, ok := shardedData.(cptrable)
 	if !ok {
-		return RelabelerStats{}, ErrMustImplementCptrable
+		return RelabelerStats{}, false, ErrMustImplementCptrable
 	}
-	stats, exception := prometheusPerShardRelabelerInputRelabelingWithStalenans(
+	stats, exception, hasReallocations := prometheusPerShardRelabelerInputRelabelingWithStalenans(
 		ipsr.cptr,
 		inputLss.Pointer(),
 		targetLss.Pointer(),
@@ -671,7 +671,7 @@ func (ipsr *InputPerShardRelabeler) InputRelabelingWithStalenans(
 		shardsRelabeledSeries,
 	)
 
-	return stats, handleException(exception)
+	return stats, hasReallocations, handleException(exception)
 }
 
 // NumberOfShards return current numberOfShards.

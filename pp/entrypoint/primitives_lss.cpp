@@ -4,7 +4,6 @@
 #include "hashdex.hpp"
 #include "head/lss.h"
 #include "primitives/go_slice.h"
-#include "prometheus/value.h"
 #include "series_index/querier/label_names_querier.h"
 #include "series_index/querier/label_values_querier.h"
 
@@ -23,16 +22,6 @@ extern "C" void prompp_primitives_lss_ctor(void* args, void* res) {
   };
 
   new (res) Result{.lss = create_lss(static_cast<Arguments*>(args)->lss_type)};
-}
-
-extern "C" void prompp_primitives_lss_copy_added_series(void* args) {
-  struct Arguments {
-    LssVariantPtr source;
-    LssVariantPtr destination;
-  };
-
-  const auto arguments = static_cast<Arguments*>(args);
-  std::get<QueryableEncodingBimap>(*arguments->source).copy_added_series(std::get<QueryableEncodingBimap>(*arguments->destination));
 }
 
 extern "C" void prompp_primitives_lss_dtor(void* args) {
@@ -54,25 +43,54 @@ extern "C" void prompp_primitives_lss_allocated_memory(void* args, void* res) {
   std::visit([res](const auto& lss) { new (res) Result{.allocated_memory = lss.allocated_memory()}; }, *static_cast<Arguments*>(args)->lss);
 }
 
+struct FindOrEmplaceResult {
+  uint32_t ls_id;
+  bool lss_has_reallocations;
+};
+
+template <class Lss>
+PROMPP_ALWAYS_INLINE FindOrEmplaceResult find_or_emplace(auto& lss, const auto& label_set) {
+  if constexpr (Lss::kIsReadOnly) {
+    throw BareBones::Exception(0x1b877a0ab46a69a6, "lss is readonly");
+  } else {
+    entrypoint::head::lss_memory::has_reallocations = false;
+    const auto ls_id = lss.find_or_emplace(label_set);
+    return {.ls_id = ls_id, .lss_has_reallocations = entrypoint::head::lss_memory::has_reallocations};
+  }
+}
+
 extern "C" void prompp_primitives_lss_find_or_emplace(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
     PromPP::Primitives::Go::LabelSet label_set;
   };
-  struct Result {
-    uint32_t ls_id;
-  };
 
   auto in = static_cast<Arguments*>(args);
-  new (res) Result{.ls_id = std::visit(
-                       [in]<typename Lss>(Lss& lss) -> PromPP::Primitives::LabelSetID {
-                         if constexpr (Lss::kIsReadOnly) {
-                           throw BareBones::Exception(0x1b877a0ab46a69a6, "lss is readonly");
-                         } else {
-                           return lss.find_or_emplace(in->label_set);
-                         }
-                       },
-                       *in->lss)};
+  new (res) FindOrEmplaceResult(std::visit([in]<typename Lss>(Lss& lss) { return find_or_emplace<Lss>(lss, in->label_set); }, *in->lss));
+}
+
+extern "C" void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res) {
+  using PromPP::Primitives::Go::LabelSetBuilder;
+  using PromPP::Primitives::Go::SliceView;
+
+  struct Arguments {
+    LssVariantPtr lss;
+    struct {
+      LssVariantPtr readonly_lss;
+      uint32_t ls_id;
+      SliceView<PromPP::Primitives::Go::Label> sorted_add;
+      SliceView<PromPP::Primitives::Go::String> sorted_del;
+    } builder;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+
+  new (res) FindOrEmplaceResult(std::visit(
+      [&builder = in->builder]<typename Lss>(Lss& lss) {
+        return find_or_emplace<Lss>(lss, LabelSetBuilder{std::get<entrypoint::head::ReadonlyQueryableEncodingBimap>(*builder.readonly_lss)[builder.ls_id],
+                                                         builder.sorted_add, builder.sorted_del});
+      },
+      *in->lss));
 }
 
 extern "C" void prompp_primitives_lss_find_or_emplace_label_set(void* args, void* res) {
@@ -80,6 +98,53 @@ extern "C" void prompp_primitives_lss_find_or_emplace_label_set(void* args, void
     LssVariantPtr lss;
     PromPP::Primitives::Go::LabelSet label_set;
   };
+
+  struct Result {
+    LssVariantPtr lss_ro_ptr;
+    uint32_t ls_id;
+  };
+
+  auto in = static_cast<Arguments*>(args);
+  auto out = new (res) Result();
+  std::visit(
+      [in, out]<typename Lss>(Lss& lss) {
+        if constexpr (Lss::kIsReadOnly) {
+          throw BareBones::Exception(0x1b877a0ab46a69a6, "lss is readonly");
+        } else {
+          out->ls_id = lss.find_or_emplace(in->label_set);
+          out->lss_ro_ptr = entrypoint::head::create_readonly_lss(lss);
+        }
+      },
+      *in->lss);
+}
+
+extern "C" void prompp_primitives_lss_find(void* args, void* res) {
+  struct Arguments {
+    LssVariantPtr lss;
+    PromPP::Primitives::Go::LabelSet label_set;
+  };
+  struct Result {
+    LssVariantPtr lss_ro_ptr;
+    uint32_t ls_id;
+    bool has;
+  };
+
+  auto in = static_cast<Arguments*>(args);
+  auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
+
+  std::optional<uint32_t> ls_id = lss.find(in->label_set);
+
+  if (ls_id.has_value()) {
+    new (res) Result{.lss_ro_ptr = entrypoint::head::create_readonly_lss(lss), .ls_id = ls_id.value(), .has = ls_id.has_value()};
+  }
+}
+
+extern "C" void prompp_primitives_lss_find_or_emplace_label_set(void* args, void* res) {
+  struct Arguments {
+    LssVariantPtr lss;
+    PromPP::Primitives::Go::LabelSet label_set;
+  };
+
   struct Result {
     LssVariantPtr lss_ro_ptr;
     uint32_t ls_id;
@@ -136,7 +201,6 @@ extern "C" void prompp_primitives_lss_query(void* args, void* res) {
   struct Result {
     PromPP::Primitives::Go::Slice<uint32_t> matches;
     PromPP::Primitives::Go::Slice<uint16_t> label_set_lengths{};
-    LssVariantPtr lss_copy;
     uint32_t status;
   };
 
@@ -150,7 +214,6 @@ extern "C" void prompp_primitives_lss_query(void* args, void* res) {
 
   const auto out = new (res) Result{
       .matches = std::move(query_result.series_ids),
-      .lss_copy = entrypoint::head::create_readonly_lss(*in->lss),
       .status = static_cast<uint32_t>(query_result.status),
   };
   out->label_set_lengths.reserve(out->matches.size());
@@ -253,4 +316,10 @@ extern "C" void prompp_create_readonly_lss(void* args, void* res) {
   };
 
   new (res) Result{.lss_copy = entrypoint::head::create_readonly_lss(*static_cast<Arguments*>(args)->lss)};
+}
+
+extern "C" void prompp_primitives_lss_copy_added_series(uint64_t source_lss, uint64_t destination_lss) {
+  series_index::QueryableEncodingBimapCopier copier(std::get<QueryableEncodingBimap>(*std::bit_cast<entrypoint::head::LssVariant*>(source_lss)),
+                                                    std::get<QueryableEncodingBimap>(*std::bit_cast<entrypoint::head::LssVariant*>(destination_lss)));
+  copier.copy_added_series_and_build_indexes();
 }

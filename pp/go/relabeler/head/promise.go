@@ -6,19 +6,17 @@ import (
 	"sync"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 )
 
 // InputRelabelingPromise - promise for processing incoming data.
 type InputRelabelingPromise struct {
-	mx                   *sync.Mutex
-	statsMX              *sync.Mutex
-	done                 chan struct{}
-	data                 [][]*cppbridge.InnerSeries
-	updateRelabelerTasks []*TaskUpdateRelabelerState
-	errors               []error
-	stats                cppbridge.RelabelerStats
-	shardDone            uint16
+	mx        *sync.Mutex
+	statsMX   *sync.Mutex
+	done      chan struct{}
+	data      [][]*cppbridge.InnerSeries
+	errors    []error
+	stats     cppbridge.RelabelerStats
+	shardDone uint16
 }
 
 // NewInputRelabelingPromise - init new *InputRelabelingPromise.
@@ -30,13 +28,12 @@ func NewInputRelabelingPromise(numberOfShards uint16) *InputRelabelingPromise {
 		data[i] = make([]*cppbridge.InnerSeries, 0, 2*numberOfShards)
 	}
 	return &InputRelabelingPromise{
-		data:                 data,
-		updateRelabelerTasks: make([]*TaskUpdateRelabelerState, 0, numberOfShards),
-		errors:               make([]error, numberOfShards),
-		shardDone:            numberOfShards,
-		done:                 make(chan struct{}),
-		mx:                   new(sync.Mutex),
-		statsMX:              new(sync.Mutex),
+		data:      data,
+		errors:    make([]error, numberOfShards),
+		shardDone: numberOfShards,
+		done:      make(chan struct{}),
+		mx:        new(sync.Mutex),
+		statsMX:   new(sync.Mutex),
 	}
 }
 
@@ -67,22 +64,6 @@ func (p *InputRelabelingPromise) AddResult(shardID uint16, innerSeries *cppbridg
 		close(p.done)
 	}
 	p.mx.Unlock()
-}
-
-// AddUpdateRelabelerTasks add to promise TaskUpdateRelabelerState.
-func (p *InputRelabelingPromise) AddUpdateRelabelerTasks(updateTask *TaskUpdateRelabelerState) {
-	p.mx.Lock()
-	p.updateRelabelerTasks = append(p.updateRelabelerTasks, updateTask)
-	p.mx.Unlock()
-}
-
-// AddUpdateTasks add to promise UpdateTasks.
-func (p *InputRelabelingPromise) UpdateRelabeler() {
-	for _, t := range p.updateRelabelerTasks {
-		if err := t.Update(); err != nil {
-			logger.Errorf("failed input update relabeler state: %s", err)
-		}
-	}
 }
 
 // AddStats add returned relabler stats.

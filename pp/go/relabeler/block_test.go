@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler/block"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,7 +17,7 @@ func TestNewBlock(t *testing.T) {
 	lss := cppbridge.NewQueryableLssStorage()
 	ds := cppbridge.NewHeadDataStorage()
 	ls := model.NewLabelSetBuilder().Set("__name__", "this_is_obviuosly_the_best_metric").Set("lol", "kek").Build()
-	lsID := lss.FindOrEmplace(ls)
+	lsID := lss.FindOrEmplace(ls).LabelSetID
 
 	enc := cppbridge.NewHeadEncoderWithDataStorage(ds)
 	ts := time.Now()

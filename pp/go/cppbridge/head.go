@@ -123,23 +123,30 @@ type ChunkRecoder struct {
 	recoder      uintptr
 	recodedChunk RecodedChunk
 
-	lss         *LabelSetStorage
-	dataStorage *HeadDataStorage
+	lss              *LabelSetStorage
+	dataStorage      *HeadDataStorage
+	serializedChunks *HeadDataStorageSerializedChunks
 }
 
 func NewChunkRecoder(lss *LabelSetStorage, dataStorage *HeadDataStorage, timeInterval TimeInterval) *ChunkRecoder {
-	return initializeChunkRecoder(lss, dataStorage, seriesDataChunkRecoderCtor(lss.Pointer(), dataStorage.dataStorage, timeInterval))
+	return initializeChunkRecoder(lss, dataStorage, nil, seriesDataChunkRecoderCtor(lss.Pointer(), dataStorage.dataStorage, timeInterval))
 }
 
-func NewSerializedChunkRecoder(serializedChunks []byte, timeInterval TimeInterval) *ChunkRecoder {
-	return initializeChunkRecoder(nil, nil, seriesDataSerializedChunkRecoderCtor(serializedChunks, timeInterval))
+func NewSerializedChunkRecoder(serializedChunks *HeadDataStorageSerializedChunks, timeInterval TimeInterval) *ChunkRecoder {
+	return initializeChunkRecoder(nil, nil, serializedChunks, seriesDataSerializedChunkRecoderCtor(serializedChunks.Data(), timeInterval))
 }
 
-func initializeChunkRecoder(lss *LabelSetStorage, dataStorage *HeadDataStorage, recoder uintptr) *ChunkRecoder {
+func initializeChunkRecoder(
+	lss *LabelSetStorage,
+	dataStorage *HeadDataStorage,
+	serializedChunks *HeadDataStorageSerializedChunks,
+	recoder uintptr,
+) *ChunkRecoder {
 	chunkRecoder := &ChunkRecoder{
-		recoder:     recoder,
-		lss:         lss,
-		dataStorage: dataStorage,
+		recoder:          recoder,
+		lss:              lss,
+		dataStorage:      dataStorage,
+		serializedChunks: serializedChunks,
 	}
 
 	runtime.SetFinalizer(chunkRecoder, func(chunkRecoder *ChunkRecoder) {
@@ -158,6 +165,10 @@ type HeadDataStorageQuery struct {
 	StartTimestampMs int64
 	EndTimestampMs   int64
 	LabelSetIDs      []uint32
+}
+
+func getSeriesIDFromBytes(data []byte) uint32 {
+	return *(*uint32)(unsafe.Pointer(&data[0])) // #nosec G103 // it's meant to be that way
 }
 
 type HeadDataStorageSerializedChunks struct {
@@ -191,7 +202,7 @@ func (r *HeadDataStorageSerializedChunks) MakeIndex() HeadDataStorageSerializedC
 	m := make(map[uint32][]int, n)
 	offset := Uint32Size
 	for i := 0; i < n; i, offset = i+1, offset+SerializedChunkMetadataSize {
-		sID := *(*uint32)(unsafe.Pointer(&r.data[offset : offset+SerializedChunkMetadataSize][0])) // #nosec G103 // it's meant to be that way
+		sID := getSeriesIDFromBytes(r.data[offset : offset+4])
 		m[sID] = append(m[sID], offset)
 	}
 	return HeadDataStorageSerializedChunkIndex{m}
