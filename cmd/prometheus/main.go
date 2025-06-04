@@ -65,10 +65,10 @@ import (
 	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage" // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/cppbridge"               // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/relabeler/appender"      // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/relabeler/head"
-	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog" // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/relabeler/head/ready"   // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/relabeler/remotewriter" // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/relabeler/head"          // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"  // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/relabeler/head/ready"    // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/relabeler/remotewriter"  // PP_CHANGES.md: rebuild on cpp
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
