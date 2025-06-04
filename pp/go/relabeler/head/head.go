@@ -20,6 +20,9 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
+// ExtraReadConcurrency number of concurrency read operation, 0 - work without concurrency.
+var ExtraReadConcurrency = 0
+
 // RelabelerData data for relabeling - inputRelabelers per shard and state.
 type RelabelerData struct {
 	state           *cppbridge.State
@@ -173,10 +176,12 @@ type Head struct {
 	shards             []*shard
 	lssTaskChs         []chan *relabeler.GenericTask
 	dataStorageTaskChs []chan *relabeler.GenericTask
+	lssMXs             []*sync.RWMutex
+	dataStorageMXs     []*sync.RWMutex
 
 	numberOfShards uint16
 	stopc          chan struct{}
-	wg             *sync.WaitGroup
+	wg             sync.WaitGroup
 
 	// stat
 	registerer           prometheus.Registerer
@@ -208,6 +213,8 @@ func New(
 	lssTaskChs := make([]chan *relabeler.GenericTask, numberOfShards)
 	dataStorageTaskChs := make([]chan *relabeler.GenericTask, numberOfShards)
 	shards := make([]*shard, numberOfShards)
+	lssMXs := make([]*sync.RWMutex, numberOfShards)
+	dataStorageMXs := make([]*sync.RWMutex, numberOfShards)
 
 	for shardID := uint16(0); shardID < numberOfShards; shardID++ {
 		lssTaskChs[shardID] = make(chan *relabeler.GenericTask, chanBufferSize)
@@ -230,9 +237,11 @@ func New(
 		shards:             shards,
 		lssTaskChs:         lssTaskChs,
 		dataStorageTaskChs: dataStorageTaskChs,
+		lssMXs:             lssMXs,
+		dataStorageMXs:     dataStorageMXs,
 
 		stopc:          make(chan struct{}),
-		wg:             &sync.WaitGroup{},
+		wg:             sync.WaitGroup{},
 		relabelersData: make(map[string]*RelabelerData, len(inputRelabelerConfigs)),
 		numberOfShards: numberOfShards,
 		// stat
@@ -310,6 +319,13 @@ func New(
 			},
 			[]string{"type_task"},
 		),
+	}
+
+	if ExtraReadConcurrency != 0 {
+		for shardID := uint16(0); shardID < numberOfShards; shardID++ {
+			h.lssMXs[shardID] = &sync.RWMutex{}
+			h.dataStorageMXs[shardID] = &sync.RWMutex{}
+		}
 	}
 
 	if err := h.reconfigure(inputRelabelerConfigs, numberOfShards); err != nil {
@@ -653,21 +669,6 @@ func (h *Head) stop() {
 	h.stopc = make(chan struct{})
 }
 
-func (h *Head) run() {
-	h.wg.Add(2 * int(h.numberOfShards))
-	for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
-		go func(sid uint16) {
-			defer h.wg.Done()
-			h.lssShardLoop(sid, h.lssTaskChs[sid], h.stopc)
-		}(shardID)
-
-		go func(sid uint16) {
-			defer h.wg.Done()
-			h.dataStorageShardLoop(sid, h.dataStorageTaskChs[sid], h.stopc)
-		}(shardID)
-	}
-}
-
 // CreateTask create a task for operations on the head shards.
 func (h *Head) CreateTask(
 	taskName string,
@@ -1002,40 +1003,64 @@ func (h *Head) updateRelabelerStateStage(
 	return nil
 }
 
-// lssShardLoop run shard loop for operation with lss.
-func (h *Head) lssShardLoop(
-	shardID uint16,
-	exclusiveCH chan *relabeler.GenericTask,
-	stopc chan struct{},
-) {
-	s := h.shards[shardID]
+// run loop for each shard.
+func (h *Head) run() {
+	h.wg.Add((2 + ExtraReadConcurrency) * int(h.numberOfShards))
+	for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
+		go func(sid uint16) {
+			defer h.wg.Done()
+			h.shardLoop(h.lssTaskChs[sid], h.stopc, h.shards[sid], h.lssMXs[sid])
+		}(shardID)
 
-	for {
-		select {
-		case <-stopc:
-			return
+		go func(sid uint16) {
+			defer h.wg.Done()
+			h.shardLoop(h.dataStorageTaskChs[sid], h.stopc, h.shards[sid], h.dataStorageMXs[sid])
+		}(shardID)
 
-		case task := <-exclusiveCH:
-			task.ExecuteOnShard(s)
+		for i := 0; i < ExtraReadConcurrency; i++ {
+			go func(sid uint16) {
+				defer h.wg.Done()
+				h.shardLoop(h.lssTaskChs[sid], h.stopc, h.shards[sid], h.lssMXs[sid])
+			}(shardID)
+
+			go func(sid uint16) {
+				defer h.wg.Done()
+				h.shardLoop(h.dataStorageTaskChs[sid], h.stopc, h.shards[sid], h.dataStorageMXs[sid])
+			}(shardID)
 		}
 	}
 }
 
-// dataStorageShardLoop run shard loop for operation with data storage.
-func (h *Head) dataStorageShardLoop(
-	shardID uint16,
-	dataStorageCH chan *relabeler.GenericTask,
+// shardLoop run shard loop for operation.
+func (h *Head) shardLoop(
+	taskCH chan *relabeler.GenericTask,
 	stopc chan struct{},
+	s *shard,
+	mx *sync.RWMutex,
 ) {
-	s := h.shards[shardID]
+	if ExtraReadConcurrency == 0 {
+		for {
+			select {
+			case <-stopc:
+				return
 
-	for {
-		select {
-		case <-stopc:
-			return
+			case task := <-taskCH:
+				task.ExecuteOnShard(s)
+			}
+		}
+	} else {
+		for {
+			select {
+			case <-stopc:
+				return
 
-		case task := <-dataStorageCH:
-			task.ExecuteOnShard(s)
+			case task := <-taskCH:
+				if task.IsExclusive() {
+					task.ExecuteOnShardWithLocker(s, mx.Lock, mx.Unlock)
+				} else {
+					task.ExecuteOnShardWithLocker(s, mx.RLock, mx.RUnlock)
+				}
+			}
 		}
 	}
 }
