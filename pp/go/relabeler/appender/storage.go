@@ -161,7 +161,7 @@ func (qs *QueryableStorage) write() bool {
 			successful = false
 			continue
 		}
-		err := head.ForEachShard(func(shard relabeler.Shard) error {
+		err := head.ForEachShard(relabeler.BlockWrite, func(shard relabeler.Shard) error {
 			return qs.blockWriter.Write(relabeler.NewBlock(shard.LSS().Raw(), shard.DataStorage().Raw()))
 		})
 		if err != nil {

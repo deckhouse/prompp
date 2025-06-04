@@ -8,9 +8,9 @@ import (
 	"sync"
 
 	"github.com/jonboulle/clockwork"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/util"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 //
@@ -194,11 +194,6 @@ func (dg *DestinationGroup) AppendOpenHead(
 	return dg.managerKeeper.AppendOpenHead(ctx, outputInnerSeries, outputRelabeledSeries, outputStateUpdates)
 }
 
-// CacheAllocatedMemory - return size of allocated memory for cache map.
-func (dg *DestinationGroup) CacheAllocatedMemory(shardID uint16) uint64 {
-	return dg.outputRelabelers[shardID].CacheAllocatedMemory()
-}
-
 // EncodersLock - lock encoders on rw.
 func (dg *DestinationGroup) EncodersLock() {
 	dg.managerKeeper.EncodersLock()
@@ -235,22 +230,14 @@ func (dg *DestinationGroup) Name() string {
 	return dg.cfg.Name
 }
 
-// ObserveCacheAllocatedMemory - observe cache allocated memory.
-func (dg *DestinationGroup) ObserveCacheAllocatedMemory(shardID uint16) {
-	dg.memoryInUse.With(
-		prometheus.Labels{
-			"allocator": fmt.Sprintf("output_relabeler_%s", dg.cfg.Name),
-			"id":        fmt.Sprintf("%d", shardID)},
-	).Set(float64(dg.CacheAllocatedMemory(shardID)))
-}
-
 // ObserveEncodersMemory - observe encoders memory.
 func (dg *DestinationGroup) ObserveEncodersMemory() {
 	dg.managerKeeper.ObserveEncodersMemory(func(id int, val float64) {
 		dg.memoryInUse.With(
 			prometheus.Labels{
 				"allocator": fmt.Sprintf("encoder_%s", dg.cfg.Name),
-				"id":        fmt.Sprintf("%d", id)},
+				"id":        fmt.Sprintf("%d", id),
+			},
 		).Set(val)
 	})
 }
@@ -376,14 +363,16 @@ func (dg *DestinationGroup) Shutdown(ctx context.Context) error {
 		dg.memoryInUse.Delete(
 			prometheus.Labels{
 				"allocator": fmt.Sprintf("output_relabeler_%s", dg.cfg.Name),
-				"id":        fmt.Sprintf("%d", shardID)},
+				"id":        fmt.Sprintf("%d", shardID),
+			},
 		)
 
 		dg.managerKeeper.ObserveEncodersMemory(func(id int, _ float64) {
 			dg.memoryInUse.Delete(
 				prometheus.Labels{
 					"allocator": fmt.Sprintf("encoder_%s", dg.cfg.Name),
-					"id":        fmt.Sprintf("%d", id)},
+					"id":        fmt.Sprintf("%d", id),
+				},
 			)
 		})
 	}
@@ -442,7 +431,8 @@ func (dg *DestinationGroup) reshardingOutputRelabelers(
 				dg.memoryInUse.Delete(
 					prometheus.Labels{
 						"allocator": fmt.Sprintf("output_relabeler_%s", dg.cfg.Name),
-						"id":        fmt.Sprintf("%d", shardID)},
+						"id":        fmt.Sprintf("%d", shardID),
+					},
 				)
 				continue
 			}

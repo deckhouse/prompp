@@ -10,14 +10,14 @@ import (
 var (
 	snapshotCreate = promauto.NewCounter(
 		prometheus.CounterOpts{
-			Name: "prompp_cppbridge_snapshot_create",
+			Name: "prompp_cppbridge_snapshot_create_count",
 			Help: "Current number of created snapshots.",
 		},
 	)
 
 	snapshotFinalize = promauto.NewCounter(
 		prometheus.CounterOpts{
-			Name: "prompp_cppbridge_snapshot_finalize",
+			Name: "prompp_cppbridge_snapshot_finalize_count",
 			Help: "Current number of finalized snapshots.",
 		},
 	)

@@ -28,6 +28,8 @@ type LSS interface {
 	GetLabelSets(labelSetIDs []uint32) *cppbridge.LabelSetStorageGetLabelSetsResult
 	GetSnapshot() *cppbridge.LabelSetSnapshot
 	ResetSnapshot()
+	Input() *cppbridge.LabelSetStorage
+	Target() *cppbridge.LabelSetStorage
 }
 
 type Wal interface {
@@ -63,8 +65,7 @@ type Head interface {
 		commitToWal bool,
 	) ([][]*cppbridge.InnerSeries, cppbridge.RelabelerStats, error)
 	CommitToWal() error
-	ForEachShard(fn ShardFn) error
-	OnShard(shardID uint16, fn ShardFn) error
+	OnShard(shardID uint16, typeTask TypeTask, fn ShardFn) error
 	// MergeOutOfOrderChunks merge chunks with out of order data chunks.
 	MergeOutOfOrderChunks()
 	NumberOfShards() uint16
@@ -78,7 +79,7 @@ type Head interface {
 	Discard() error
 	String() string
 	CopySeriesFrom(other Head)
-	ReadEachShard(fn ShardFn) error
+	ForEachShard(typeTask TypeTask, fn ShardFn) error
 }
 
 type Distributor interface {

@@ -278,10 +278,8 @@ func (s *RelabelerSuite) TestOutputPerShardRelabeler() {
 		{"name1", "value1"},
 	}
 
-	psr, err := cppbridge.NewOutputPerShardRelabeler(externalLabels, statelessRelabeler, 0, 0, 0)
+	_, err = cppbridge.NewOutputPerShardRelabeler(externalLabels, statelessRelabeler, 0, 0, 0)
 	s.Require().NoError(err)
-
-	psr.CacheAllocatedMemory()
 }
 
 func (s *RelabelerSuite) TestCacheAllocatedMemory() {

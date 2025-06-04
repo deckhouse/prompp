@@ -454,23 +454,41 @@ func (rss *RelabeledSeries) Size() uint64 {
 	return rss.size
 }
 
-// RelabelerStateUpdate - go wrapper for C-RelabelerStateUpdate.
-//
-//	data - pointer for vector with relabeled elements;
-type RelabelerStateUpdate struct {
+// incomingAndRelabeledLsID to update cache data.
+type incomingAndRelabeledLsID struct {
 	//nolint:unused // for cpp-bridge, used in cpp
-	data stdVector
+	incomingLSID uint32
+	//nolint:unused // for cpp-bridge, used in cpp
+	relabeledLSID uint32
 }
 
-// NewRelabelerStateUpdate - init new RelabelerStateUpdate.
+// RelabelerStateUpdate go wrapper for C-RelabelerStateUpdate.
+type RelabelerStateUpdate []incomingAndRelabeledLsID
+
+// NewRelabelerStateUpdate init new RelabelerStateUpdate.
 func NewRelabelerStateUpdate() *RelabelerStateUpdate {
-	ud := new(RelabelerStateUpdate)
-	prometheusRelabelerStateUpdateCtor(ud)
-	runtime.SetFinalizer(ud, func(r *RelabelerStateUpdate) {
+	rsu := new(RelabelerStateUpdate)
+	prometheusRelabelerStateUpdateCtor(rsu)
+	runtime.SetFinalizer(rsu, func(r *RelabelerStateUpdate) {
 		prometheusRelabelerStateUpdateDtor(r)
 	})
 
-	return ud
+	return rsu
+}
+
+// IsEmpty returns true if the length of slice is zero.
+func (rsu *RelabelerStateUpdate) IsEmpty() bool {
+	return len(*rsu) == 0
+}
+
+// NewShardsRelabelerStateUpdate init slice with the results of update state per shards.
+func NewShardsRelabelerStateUpdate(numberOfShards uint16) []*RelabelerStateUpdate {
+	rsu := make([]*RelabelerStateUpdate, numberOfShards)
+	for i := range rsu {
+		rsu[i] = NewRelabelerStateUpdate()
+	}
+
+	return rsu
 }
 
 // MetricLimits limits on label set and samples.
@@ -574,9 +592,9 @@ func NewInputPerShardRelabeler(
 func (ipsr *InputPerShardRelabeler) AppendRelabelerSeries(
 	ctx context.Context,
 	lss *LabelSetStorage,
-	relabelerStateUpdate *RelabelerStateUpdate,
-	innerSeries *InnerSeries,
-	relabeledSeries *RelabeledSeries,
+	shardsInnerSeries []*InnerSeries,
+	shardsRelabeledSeries []*RelabeledSeries,
+	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
 ) (bool, error) {
 	if ctx.Err() != nil {
 		return false, ctx.Err()
@@ -585,17 +603,12 @@ func (ipsr *InputPerShardRelabeler) AppendRelabelerSeries(
 	exception, hasReallocations := prometheusPerShardRelabelerAppendRelabelerSeries(
 		ipsr.cptr,
 		lss.Pointer(),
-		innerSeries,
-		relabeledSeries,
-		relabelerStateUpdate,
+		shardsInnerSeries,
+		shardsRelabeledSeries,
+		shardsRelabelerStateUpdate,
 	)
 
 	return hasReallocations, handleException(exception)
-}
-
-// CacheAllocatedMemory - return size of allocated memory for cache map.
-func (ipsr *InputPerShardRelabeler) CacheAllocatedMemory() uint64 {
-	return prometheusPerShardRelabelerCacheAllocatedMemory(ipsr.cptr)
 }
 
 // Generation return current statelessRelabeler generation.
@@ -693,18 +706,16 @@ func (ipsr *InputPerShardRelabeler) StatelessRelabeler() *StatelessRelabeler {
 func (ipsr *InputPerShardRelabeler) UpdateRelabelerState(
 	ctx context.Context,
 	cache *Cache,
-	relabelerStateUpdate *RelabelerStateUpdate,
-	relabeledShardID uint16,
+	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
 ) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	exception := prometheusPerShardRelabelerUpdateRelabelerState(
-		relabelerStateUpdate,
+		shardsRelabelerStateUpdate,
 		ipsr.cptr,
 		cache.cPointer,
-		relabeledShardID,
 	)
 
 	return handleException(exception)
@@ -754,11 +765,6 @@ func NewOutputPerShardRelabeler(
 		psr.statelessRelabeler = nil
 	})
 	return opsr, nil
-}
-
-// CacheAllocatedMemory return size of allocated memory for cache map.
-func (opsr *OutputPerShardRelabeler) CacheAllocatedMemory() uint64 {
-	return prometheusPerShardRelabelerCacheAllocatedMemory(opsr.cptr)
 }
 
 // OutputRelabeling relabeling output series(fourth stage).
@@ -823,7 +829,7 @@ func (opsr *OutputPerShardRelabeler) UpdateRelabelerState(
 		return ctx.Err()
 	}
 
-	exception := prometheusPerShardRelabelerUpdateRelabelerState(
+	exception := prometheusPerShardSingeRelabelerUpdateRelabelerState(
 		relabelerStateUpdate,
 		opsr.cptr,
 		opsr.cache.cPointer,
