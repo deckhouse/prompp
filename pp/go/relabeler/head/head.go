@@ -1005,19 +1005,10 @@ func (h *Head) updateRelabelerStateStage(
 
 // run loop for each shard.
 func (h *Head) run() {
-	h.wg.Add((2 + ExtraReadConcurrency) * int(h.numberOfShards))
+	workers := 1 + ExtraReadConcurrency
+	h.wg.Add(2 * workers * int(h.numberOfShards))
 	for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
-		go func(sid uint16) {
-			defer h.wg.Done()
-			h.shardLoop(h.lssTaskChs[sid], h.stopc, h.shards[sid], h.lssMXs[sid])
-		}(shardID)
-
-		go func(sid uint16) {
-			defer h.wg.Done()
-			h.shardLoop(h.dataStorageTaskChs[sid], h.stopc, h.shards[sid], h.dataStorageMXs[sid])
-		}(shardID)
-
-		for i := 0; i < ExtraReadConcurrency; i++ {
+		for i := 0; i < workers; i++ {
 			go func(sid uint16) {
 				defer h.wg.Done()
 				h.shardLoop(h.lssTaskChs[sid], h.stopc, h.shards[sid], h.lssMXs[sid])
@@ -1032,7 +1023,7 @@ func (h *Head) run() {
 }
 
 // shardLoop run shard loop for operation.
-func (h *Head) shardLoop(
+func (*Head) shardLoop(
 	taskCH chan *relabeler.GenericTask,
 	stopc chan struct{},
 	s *shard,
