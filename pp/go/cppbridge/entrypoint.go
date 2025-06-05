@@ -1114,10 +1114,10 @@ func primitivesLSSFindOrEmplace(lss uintptr, labelSet model.LabelSet) FindOrEmpl
 	return res
 }
 
-func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder model.CppLabelSetBuilder) FindOrEmplaceResult {
+func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder CppLabelSetBuilder) FindOrEmplaceResult {
 	args := struct {
 		lss     uintptr
-		builder model.CppLabelSetBuilder
+		builder CppLabelSetBuilder
 	}{lss, builder}
 	var res FindOrEmplaceResult
 

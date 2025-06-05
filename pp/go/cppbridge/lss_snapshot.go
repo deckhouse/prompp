@@ -58,14 +58,13 @@ func (lsst *LabelSetSnapshot) Pointer() uintptr {
 // RangeLabelSet serialize to slice labels from snapshot and calls f on each label.
 func (lsst *LabelSetSnapshot) RangeLabelSet(lsID uint32, do func(l Label) error) error {
 	labelSet := labelSetSerialize(lsst.pointer, lsID)
-
 	for i := range labelSet {
 		if err := do(labelSet[i]); err != nil {
 			labelSetFree(labelSet)
 			return err
 		}
 	}
-
+	runtime.KeepAlive(lsst)
 	labelSetFree(labelSet)
 
 	return nil

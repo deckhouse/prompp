@@ -645,6 +645,11 @@ func (ipsr *InputPerShardRelabeler) InputRelabeling(
 		shardsInnerSeries,
 		shardsRelabeledSeries,
 	)
+	runtime.KeepAlive(ipsr.cptr)
+	runtime.KeepAlive(inputLss.Pointer())
+	runtime.KeepAlive(targetLss.Pointer())
+	runtime.KeepAlive(cache.cPointer)
+	runtime.KeepAlive(cptrContainer.cptr())
 
 	return stats, hasReallocations, handleException(exception)
 }
@@ -863,12 +868,15 @@ func NewCache() *Cache {
 
 // AllocatedMemory return size of allocated memory for caches.
 func (c *Cache) AllocatedMemory() uint64 {
-	return prometheusCacheAllocatedMemory(c.cPointer)
+	res := prometheusCacheAllocatedMemory(c.cPointer)
+	runtime.KeepAlive(c)
+	return res
 }
 
 // ResetTo reset cache.
 func (c *Cache) ResetTo() {
 	prometheusCacheResetTo(c.cPointer)
+	runtime.KeepAlive(c)
 }
 
 // State state of relabelers per shard.
