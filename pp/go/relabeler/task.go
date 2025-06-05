@@ -147,8 +147,16 @@ func NewReadOnlyGenericTask(
 // ExecuteOnShard execute task on shard.
 func (t *GenericTask) ExecuteOnShard(shard Shard) {
 	atomic.CompareAndSwapInt64(&t.executeTS, 0, time.Now().UnixMicro())
-
 	t.errs[shard.ShardID()] = t.shardFn(shard)
+	t.wg.Done()
+}
+
+// ExecuteOnShardWithLocker execute task on shard with locker.
+func (t *GenericTask) ExecuteOnShardWithLocker(shard Shard, lock, unlock func()) {
+	lock()
+	atomic.CompareAndSwapInt64(&t.executeTS, 0, time.Now().UnixMicro())
+	t.errs[shard.ShardID()] = t.shardFn(shard)
+	unlock()
 	t.wg.Done()
 }
 
