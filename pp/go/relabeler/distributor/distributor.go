@@ -36,30 +36,42 @@ func (d *Distributor) Send(ctx context.Context, head relabeler.Head, shardedData
 	})
 
 	outputPromise := NewOutputRelabelingPromise(&d.destinationGroups, head.NumberOfShards())
-	err := head.ForEachShard(relabeler.DistributorOutputRelabeling, func(shard relabeler.Shard) error {
-		return d.ParallelRange(func(destinationGroupID int, destinationGroup *relabeler.DestinationGroup) error {
-			outputInnerSeries := cppbridge.NewShardsInnerSeries(1 << destinationGroup.ShardsNumberPower())
-			relabeledSeries := cppbridge.NewRelabeledSeries()
-			if relabelingErr := destinationGroup.OutputRelabeling(
-				ctx,
-				shard.LSS().Raw(),
-				shardedData[shard.ShardID()],
-				outputInnerSeries,
-				relabeledSeries,
-				shard.ShardID(),
-			); relabelingErr != nil {
-				outputPromise.AddError(destinationGroupID, uint16(1<<destinationGroup.ShardsNumberPower()), relabelingErr)
-				return nil
-			}
 
-			for sid, innerSeries := range outputInnerSeries {
-				outputPromise.AddOutputInnerSeries(destinationGroupID, uint16(sid), innerSeries)
-			}
-			outputPromise.AddOutputRelabeledSeries(destinationGroupID, shard.ShardID(), relabeledSeries)
-			return nil
-		})
-	})
-	if err != nil {
+	tDOutputRelabeling := head.CreateTask(
+		relabeler.LSSOutputRelabeling,
+		func(shard relabeler.Shard) error {
+			return d.ParallelRange(func(destinationGroupID int, destinationGroup *relabeler.DestinationGroup) error {
+				outputInnerSeries := cppbridge.NewShardsInnerSeries(1 << destinationGroup.ShardsNumberPower())
+				relabeledSeries := cppbridge.NewRelabeledSeries()
+				if relabelingErr := destinationGroup.OutputRelabeling(
+					ctx,
+					shard.LSS().Raw(),
+					shardedData[shard.ShardID()],
+					outputInnerSeries,
+					relabeledSeries,
+					shard.ShardID(),
+				); relabelingErr != nil {
+					outputPromise.AddError(
+						destinationGroupID,
+						uint16(1<<destinationGroup.ShardsNumberPower()),
+						relabelingErr,
+					)
+
+					return nil
+				}
+
+				for sid, innerSeries := range outputInnerSeries {
+					outputPromise.AddOutputInnerSeries(destinationGroupID, uint16(sid), innerSeries)
+				}
+				outputPromise.AddOutputRelabeledSeries(destinationGroupID, shard.ShardID(), relabeledSeries)
+				return nil
+			})
+		},
+		relabeler.ForLSSTask,
+		relabeler.ExclusiveTask,
+	)
+	head.Enqueue(tDOutputRelabeling)
+	if err := tDOutputRelabeling.Wait(); err != nil {
 		return err
 	}
 
@@ -79,16 +91,11 @@ func (d *Distributor) Send(ctx context.Context, head relabeler.Head, shardedData
 			}
 
 			for shardID, outputStateUpdate := range outputStateUpdates {
-				updateErr := head.OnShard(
+				updateErr := destinationGroup.UpdateRelabelerState(
+					ctx,
 					uint16(shardID),
-					relabeler.DistributorUpdateRelabelerState,
-					func(shard relabeler.Shard) error {
-						return destinationGroup.UpdateRelabelerState(
-							ctx,
-							shard.ShardID(),
-							outputStateUpdate,
-						)
-					})
+					outputStateUpdate,
+				)
 				if updateErr != nil {
 					return updateErr
 				}

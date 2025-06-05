@@ -65,7 +65,6 @@ type Head interface {
 		commitToWal bool,
 	) ([][]*cppbridge.InnerSeries, cppbridge.RelabelerStats, error)
 	CommitToWal() error
-	OnShard(shardID uint16, typeTask TypeTask, fn ShardFn) error
 	// MergeOutOfOrderChunks merge chunks with out of order data chunks.
 	MergeOutOfOrderChunks()
 	NumberOfShards() uint16
@@ -79,7 +78,8 @@ type Head interface {
 	Discard() error
 	String() string
 	CopySeriesFrom(other Head)
-	ForEachShard(typeTask TypeTask, fn ShardFn) error
+	Enqueue(t *GenericTask)
+	CreateTask(taskName string, fn ShardFn, isLss, isExclusive bool) *GenericTask
 }
 
 type Distributor interface {

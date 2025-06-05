@@ -52,10 +52,6 @@ func (h *DiscardableRotatableHead) CommitToWal() error {
 	return h.head.CommitToWal()
 }
 
-func (h *DiscardableRotatableHead) OnShard(shardID uint16, typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
-	return h.head.OnShard(shardID, typeTask, fn)
-}
-
 // MergeOutOfOrderChunks merge chunks with out of order data chunks.
 func (h *DiscardableRotatableHead) MergeOutOfOrderChunks() {
 	h.head.MergeOutOfOrderChunks()
@@ -116,7 +112,16 @@ func (h *DiscardableRotatableHead) CopySeriesFrom(other relabeler.Head) {
 	h.head.CopySeriesFrom(other)
 }
 
-// ForEachShard run func generic task on exclusive or non-exclusive queue by typeTask.
-func (h *DiscardableRotatableHead) ForEachShard(typeTask relabeler.TypeTask, fn relabeler.ShardFn) error {
-	return h.head.ForEachShard(typeTask, fn)
+// CreateTask create a task for operations on the head shards.
+func (h *DiscardableRotatableHead) CreateTask(
+	taskName string,
+	fn relabeler.ShardFn,
+	onLss, isExclusive bool,
+) *relabeler.GenericTask {
+	return h.head.CreateTask(taskName, fn, onLss, isExclusive)
+}
+
+// Enqueue the task to be executed on head.
+func (h *DiscardableRotatableHead) Enqueue(t *relabeler.GenericTask) {
+	h.head.Enqueue(t)
 }
