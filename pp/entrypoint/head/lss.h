@@ -21,7 +21,7 @@ using OrderedEncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::Order
 
 namespace lss_memory {
 
-static thread_local bool has_reallocations{};
+thread_local inline bool has_reallocations{};
 
 struct Reallocator {
   PROMPP_ALWAYS_INLINE static void* reallocate(void* memory, size_t size) {
