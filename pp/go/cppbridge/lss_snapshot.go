@@ -157,3 +157,18 @@ func (lsst *LabelSetSnapshot) RangeLabelSet(lsID uint32, dropMetricName bool, do
 
 	return nil
 }
+
+//
+// CppLabelSetBuilder
+//
+
+// CppLabelSetBuilder - container used for Go-C++ interaction and shouldn't be modified.
+type CppLabelSetBuilder struct {
+	sortedAdd []Label
+	sortedDel []string
+	// labels
+	snapshot       *LabelSetSnapshot
+	lsID           uint32
+	length         uint16
+	dropMetricName bool
+}

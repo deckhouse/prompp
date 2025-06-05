@@ -18,7 +18,7 @@ import (
 
 // Labels is a sorted set of labels. Is implemented by a cpp lss.
 type Labels struct {
-	lss            *cppbridge.LabelSetSnapshot
+	snapshot       *cppbridge.LabelSetSnapshot
 	id             uint32
 	length         uint16
 	dropMetricName bool
@@ -36,9 +36,9 @@ func NewLabelsWithLSS(
 	length uint16,
 ) Labels {
 	return Labels{
-		lss:    lss,
-		id:     id,
-		length: length,
+		snapshot: lss,
+		id:       id,
+		length:   length,
 	}
 }
 
@@ -75,7 +75,7 @@ func (ls Labels) Bytes(buf []byte) []byte {
 		return append(buf, labelSep)
 	}
 
-	return ls.lss.LabelSetBytes(ls.id, buf, ls.dropMetricName)
+	return ls.snapshot.LabelSetBytes(ls.id, buf, ls.dropMetricName)
 }
 
 // BytesWithLabels is just as Bytes(), but only for labels matching names.
@@ -86,7 +86,7 @@ func (ls Labels) BytesWithLabels(buf []byte, names ...string) []byte {
 		return append(buf, labelSep)
 	}
 
-	return ls.lss.LabelSetBytesWithLabels(ls.id, buf, ls.dropMetricName, names)
+	return ls.snapshot.LabelSetBytesWithLabels(ls.id, buf, ls.dropMetricName, names)
 }
 
 // BytesWithoutLabels is just as Bytes(), but only for labels not matching names.
@@ -97,7 +97,7 @@ func (ls Labels) BytesWithoutLabels(buf []byte, names ...string) []byte {
 		return append(buf, labelSep)
 	}
 
-	return ls.lss.LabelSetBytesWithoutLabels(ls.id, buf, ls.dropMetricName, names)
+	return ls.snapshot.LabelSetBytesWithoutLabels(ls.id, buf, ls.dropMetricName, names)
 }
 
 // Copy returns a copy of the labels.
@@ -119,7 +119,7 @@ func (ls Labels) DropMetricName() Labels {
 	}
 
 	ls.dropMetricName = true
-	ls.length = uint16(ls.lss.LabelSetLength(ls.id, ls.dropMetricName))
+	ls.length = uint16(ls.snapshot.LabelSetLength(ls.id, ls.dropMetricName))
 
 	return ls
 }
@@ -139,7 +139,7 @@ func (ls Labels) Get(name string) string {
 		return ""
 	}
 
-	return ls.lss.LabelSetGetValue(ls.id, name)
+	return ls.snapshot.LabelSetGetValue(ls.id, name)
 }
 
 // Has returns true if the label with the given name is present.
@@ -156,7 +156,7 @@ func (ls Labels) Has(name string) bool {
 		return false
 	}
 
-	return ls.lss.LabelSetHasLabelName(ls.id, name)
+	return ls.snapshot.LabelSetHasLabelName(ls.id, name)
 }
 
 // HasDuplicateLabelNames returns whether ls has duplicate label names.
@@ -166,7 +166,7 @@ func (ls Labels) HasDuplicateLabelNames() (string, bool) {
 		return "", false
 	}
 
-	return ls.lss.LabelSetHasDuplicateLabelNames(ls.id, ls.dropMetricName)
+	return ls.snapshot.LabelSetHasDuplicateLabelNames(ls.id, ls.dropMetricName)
 }
 
 // Hash returns a hash value for the label set.
@@ -176,7 +176,7 @@ func (ls Labels) Hash() uint64 {
 		return 0
 	}
 
-	return ls.lss.LabelSetHash(ls.id, ls.dropMetricName)
+	return ls.snapshot.LabelSetHash(ls.id, ls.dropMetricName)
 }
 
 // HashForLabels returns a hash value for the labels matching the provided names.
@@ -186,7 +186,7 @@ func (ls Labels) HashForLabels(b []byte, names ...string) (uint64, []byte) {
 		return 0, b[:0]
 	}
 
-	return ls.lss.LabelSetHashForLabels(ls.id, names, ls.dropMetricName), b
+	return ls.snapshot.LabelSetHashForLabels(ls.id, names, ls.dropMetricName), b
 }
 
 // HashWithoutLabels returns a hash value for all labels except those matching
@@ -196,7 +196,7 @@ func (ls Labels) HashWithoutLabels(b []byte, names ...string) (uint64, []byte) {
 		return 0, b[:0]
 	}
 
-	return ls.lss.LabelSetHashWithoutLabels(ls.id, names), b
+	return ls.snapshot.LabelSetHashWithoutLabels(ls.id, names), b
 }
 
 // InternStrings calls intern on every string value inside ls, replacing them with what it returns.
@@ -217,15 +217,15 @@ func (ls Labels) IsEmpty() bool {
 // IsZero returns true if ls lss referece is nil.
 // Implements yaml.IsZeroer - if we don't have this then 'omitempty' fields are always omitted.
 func (ls Labels) IsZero() bool {
-	if ls.lss != nil {
+	if ls.snapshot != nil {
 		if ls.length == 0 {
-			ls.length = uint16(ls.lss.LabelSetLength(ls.id, ls.dropMetricName))
+			ls.length = uint16(ls.snapshot.LabelSetLength(ls.id, ls.dropMetricName))
 		}
 
 		return ls.length == 0
 	}
 
-	return ls.lss == nil
+	return ls.snapshot == nil
 }
 
 // Len returns the number of labels.
@@ -235,7 +235,7 @@ func (ls Labels) Len() int {
 	}
 
 	if ls.length == 0 {
-		ls.length = uint16(ls.lss.LabelSetLength(ls.id, ls.dropMetricName))
+		ls.length = uint16(ls.snapshot.LabelSetLength(ls.id, ls.dropMetricName))
 	}
 
 	return int(ls.length)
@@ -257,7 +257,7 @@ func (ls Labels) MatchLabels(on bool, names ...string) Labels {
 	}
 
 	builder := NewScratchBuilder(ls.Len())
-	_ = ls.lss.RangeLabelSet(ls.id, ls.dropMetricName, func(l cppbridge.Label) error {
+	_ = ls.snapshot.RangeLabelSet(ls.id, ls.dropMetricName, func(l cppbridge.Label) error {
 		if _, ok := nameSet[l.Name]; on == ok && (on || l.Name != MetricName) {
 			builder.Add(l.Name, l.Value)
 		}
@@ -274,7 +274,7 @@ func (ls Labels) Range(f func(l Label)) {
 		return
 	}
 
-	_ = ls.lss.RangeLabelSet(ls.id, ls.dropMetricName, func(l cppbridge.Label) error {
+	_ = ls.snapshot.RangeLabelSet(ls.id, ls.dropMetricName, func(l cppbridge.Label) error {
 		f(Label(l))
 
 		return nil
@@ -292,7 +292,7 @@ func (ls Labels) Validate(f func(l Label) error) error {
 		return nil
 	}
 
-	return ls.lss.RangeLabelSet(ls.id, ls.dropMetricName, func(l cppbridge.Label) error {
+	return ls.snapshot.RangeLabelSet(ls.id, ls.dropMetricName, func(l cppbridge.Label) error {
 		return f(Label(l))
 	})
 }
@@ -456,7 +456,7 @@ func Equal(a, b Labels) bool {
 	}
 
 	return cppbridge.EqualLabelSets(
-		a.lss, b.lss,
+		a.snapshot, b.snapshot,
 		a.id, b.id,
 		a.dropMetricName, b.dropMetricName,
 	)
@@ -470,7 +470,7 @@ func Compare(a, b Labels) int {
 	}
 
 	return cppbridge.CompareLabelSets(
-		a.lss, b.lss,
+		a.snapshot, b.snapshot,
 		a.id, b.id,
 		a.dropMetricName, b.dropMetricName,
 	)
