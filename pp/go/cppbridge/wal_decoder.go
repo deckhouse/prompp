@@ -152,13 +152,14 @@ var _ HashdexContent = (*DecodedHashdex)(nil)
 
 // NewDecodedHashdex init new DecodedHashdex.
 func NewDecodedHashdex(
+	dec *WALDecoder,
 	hashdex uintptr,
 	meta *MetaInjection,
 	cluster, replica string,
 	stats DecodedSegmentStats,
 ) *DecodedHashdex {
 	return &DecodedHashdex{
-		hashdex:             NewWALBasicDecoderHashdex(hashdex, meta, cluster, replica),
+		hashdex:             NewWALBasicDecoderHashdex(dec, hashdex, meta, cluster, replica),
 		DecodedSegmentStats: stats,
 	}
 }
@@ -192,6 +193,7 @@ func (d *WALDecoder) Decode(ctx context.Context, segment []byte) (ProtobufConten
 		return nil, ctx.Err()
 	}
 	stats, protobuf, exception := walDecoderDecode(d.decoder, segment)
+	runtime.KeepAlive(d)
 	return NewDecodedProtobuf(protobuf, stats), handleException(exception)
 }
 
@@ -201,7 +203,7 @@ func (d *WALDecoder) DecodeToHashdex(ctx context.Context, segment []byte) (Hashd
 		return nil, ctx.Err()
 	}
 	stats, hashdex, cluster, replica, exception := walDecoderDecodeToHashdex(d.decoder, segment)
-	return NewDecodedHashdex(hashdex, nil, cluster, replica, stats), handleException(exception)
+	return NewDecodedHashdex(d, hashdex, nil, cluster, replica, stats), handleException(exception)
 }
 
 // DecodeToHashdexWithMetricInjection decode incoming encoding data and return WALBasicDecoderHashdex
@@ -219,7 +221,7 @@ func (d *WALDecoder) DecodeToHashdexWithMetricInjection(
 		meta,
 		segment,
 	)
-	return NewDecodedHashdex(hashdex, meta, cluster, replica, stats), handleException(exception)
+	return NewDecodedHashdex(d, hashdex, meta, cluster, replica, stats), handleException(exception)
 }
 
 // DecodeDry - decode incoming encoding data, restores decoder.
@@ -243,6 +245,7 @@ func (d *WALDecoder) RestoreFromStream(
 	}
 	var exception []byte
 	offset, restoredID, exception = walDecoderRestoreFromStream(d.decoder, buf, requiredSegmentID)
+	runtime.KeepAlive(d)
 	return offset, restoredID, handleException(exception)
 }
 
@@ -294,6 +297,8 @@ func (s OutputDecoderStats) DroppedSeriesCount() uint32 {
 type WALOutputDecoder struct {
 	externalLabels []Label
 	decoder        uintptr
+	relabeler      *StatelessRelabeler
+	outputLss      *LabelSetStorage
 	shardID        uint16
 }
 
@@ -307,6 +312,8 @@ func NewWALOutputDecoder(
 ) *WALOutputDecoder {
 	d := &WALOutputDecoder{
 		externalLabels: externalLabels,
+		relabeler:      statelessRelabeler,
+		outputLss:      outputLss,
 		shardID:        shardID,
 	}
 
@@ -336,6 +343,7 @@ func (d *WALOutputDecoder) Decode(
 // LoadFrom load from dump(slice byte) output decoder state(output_lss and cache).
 func (d *WALOutputDecoder) LoadFrom(dump []byte) error {
 	exception := walOutputDecoderLoadFrom(d.decoder, dump)
+	runtime.KeepAlive(d)
 	return handleException(exception)
 }
 
@@ -345,6 +353,7 @@ func (d *WALOutputDecoder) WriteTo(w io.Writer) (int64, error) {
 	if len(exception) != 0 {
 		return 0, handleException(exception)
 	}
+	runtime.KeepAlive(d)
 
 	if len(dump) == 0 {
 		return 0, nil
@@ -444,6 +453,7 @@ func (e *WALProtobufEncoder) Encode(
 	buffers := make([][]byte, numberOfShards)
 	stats := make([]protobufEncoderStats, numberOfShards)
 	exception := walProtobufEncoderEncode(batch, buffers, stats, e.encoder)
+	runtime.KeepAlive(e)
 	if len(exception) != 0 {
 		return nil, handleException(exception)
 	}

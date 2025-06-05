@@ -56,7 +56,9 @@ func (ds *HeadDataStorage) Reset() {
 }
 
 func (ds *HeadDataStorage) TimeInterval() TimeInterval {
-	return seriesDataDataStorageTimeInterval(ds.dataStorage)
+	res := seriesDataDataStorageTimeInterval(ds.dataStorage)
+	runtime.KeepAlive(ds)
+	return res
 }
 
 func (ds *HeadDataStorage) Pointer() uintptr {
@@ -64,7 +66,9 @@ func (ds *HeadDataStorage) Pointer() uintptr {
 }
 
 func (ds *HeadDataStorage) AllocatedMemory() uint64 {
-	return seriesDataDataStorageAllocatedMemory(ds.dataStorage)
+	res := seriesDataDataStorageAllocatedMemory(ds.dataStorage)
+	runtime.KeepAlive(ds)
+	return res
 }
 
 // HeadEncoder is Go wrapper around series_data::Encoder.
