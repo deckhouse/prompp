@@ -1933,14 +1933,14 @@ func readPromPPFeatures(logger log.Logger) {
 	for _, feature := range strings.Split(features, ",") {
 		fname, fvalue, _ := strings.Cut(feature, "=")
 		switch strings.TrimSpace(fname) {
-		case "head-copy-series-on-rotate":
+		case "head_copy_series_on_rotate":
 			appender.CopySeriesOnRotate = true
 			level.Info(logger).Log(
 				"msg",
 				"[FEATURE] Copying active series from current head to new head during rotation is enabled.",
 			)
 
-		case "head-read-concurrency":
+		case "head_read_concurrency":
 			var (
 				v   = 1
 				err error
@@ -1962,7 +1962,7 @@ func readPromPPFeatures(logger log.Logger) {
 				v,
 			)
 
-		case "disable-coredumps":
+		case "disable_coredumps":
 			// TODO disable-coredumps
 		}
 	}
