@@ -75,7 +75,7 @@ func (ls Labels) Bytes(buf []byte) []byte {
 		return append(buf, labelSep)
 	}
 
-	return ls.lss.LabelSetBytes(ls.id, &buf, ls.dropMetricName)
+	return ls.lss.LabelSetBytes(ls.id, buf, ls.dropMetricName)
 }
 
 // BytesWithLabels is just as Bytes(), but only for labels matching names.
@@ -86,7 +86,7 @@ func (ls Labels) BytesWithLabels(buf []byte, names ...string) []byte {
 		return append(buf, labelSep)
 	}
 
-	return ls.lss.LabelSetBytesWithLabels(ls.id, &buf, ls.dropMetricName, names)
+	return ls.lss.LabelSetBytesWithLabels(ls.id, buf, ls.dropMetricName, names)
 }
 
 // BytesWithoutLabels is just as Bytes(), but only for labels not matching names.
@@ -97,7 +97,7 @@ func (ls Labels) BytesWithoutLabels(buf []byte, names ...string) []byte {
 		return append(buf, labelSep)
 	}
 
-	return ls.lss.LabelSetBytesWithoutLabels(ls.id, &buf, ls.dropMetricName, names)
+	return ls.lss.LabelSetBytesWithoutLabels(ls.id, buf, ls.dropMetricName, names)
 }
 
 // Copy returns a copy of the labels.

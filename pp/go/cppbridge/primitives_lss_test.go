@@ -94,134 +94,6 @@ func (s *LSSSuite) TestLabels() {
 	s.Equal(lsIn.Len(), lsLength)
 }
 
-type bytesTestCase struct {
-	labelSet model.LabelSet
-	expected []byte
-}
-
-func (s *LSSSuite) TestBytes() {
-	testCases := []bytesTestCase{
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
-			expected: []byte("\xFEkey\xFFvalue"),
-		},
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
-			expected: []byte("\xFEkey1\xFFvalue1\xFFkey2\xFFvalue2"),
-		},
-	}
-
-	var bytes []byte
-	for _, testCase := range testCases {
-		s.testBytesImpl(testCase, &bytes)
-	}
-}
-
-func (s *LSSSuite) testBytesImpl(testCase bytesTestCase, bytes *[]byte) {
-	// Arrange
-	lss := cppbridge.NewLssStorage()
-	lss.FindOrEmplace(testCase.labelSet)
-	snapshot := lss.CreateLabelSetSnapshot()
-
-	// Act
-	*bytes = snapshot.LabelSetBytes(0, bytes, false)
-
-	// Assert
-	s.Equal(testCase.expected, *bytes)
-}
-
-type bytesWithFilteredNamesTestCase struct {
-	labelSet model.LabelSet
-	names    []string
-	expected []byte
-}
-
-func (s *LSSSuite) TestBytesWithLabels() {
-	testCases := []bytesWithFilteredNamesTestCase{
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
-			names:    []string{"key", "key1", "key2"},
-			expected: []byte("\xFEkey\xFFvalue"),
-		},
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
-			names:    []string{"non_existing_key"},
-			expected: []byte("\xFE"),
-		},
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
-			names:    []string{"key1", "key2"},
-			expected: []byte("\xFEkey1\xFFvalue1\xFFkey2\xFFvalue2"),
-		},
-	}
-
-	var bytes []byte
-	for _, testCase := range testCases {
-		s.testBytesWithLabelsImpl(testCase, &bytes)
-	}
-}
-
-func (s *LSSSuite) testBytesWithLabelsImpl(testCase bytesWithFilteredNamesTestCase, bytes *[]byte) {
-	// Arrange
-	lss := cppbridge.NewLssStorage()
-	lss.FindOrEmplace(testCase.labelSet)
-	snapshot := lss.CreateLabelSetSnapshot()
-
-	// Act
-	*bytes = snapshot.LabelSetBytesWithLabels(0, bytes, false, testCase.names)
-
-	// Assert
-	s.Equal(testCase.expected, *bytes)
-}
-
-func (s *LSSSuite) TestBytesWithoutLabels() {
-	testCases := []bytesWithFilteredNamesTestCase{
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
-			names:    []string{"key1", "key2"},
-			expected: []byte("\xFE"),
-		},
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
-			names:    []string{"key1"},
-			expected: []byte("\xFEkey2\xFFvalue2"),
-		},
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
-			names:    []string{"key2"},
-			expected: []byte("\xFEkey1\xFFvalue1"),
-		},
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
-			names:    []string{"key", "key1", "key2"},
-			expected: []byte("\xFE"),
-		},
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
-			names:    []string{"non_existing_key"},
-			expected: []byte("\xFEkey\xFFvalue"),
-		},
-	}
-
-	var bytes []byte
-	for _, testCase := range testCases {
-		s.testBytesWithoutLabelsImpl(testCase, &bytes)
-	}
-}
-
-func (s *LSSSuite) testBytesWithoutLabelsImpl(testCase bytesWithFilteredNamesTestCase, bytes *[]byte) {
-	// Arrange
-	lss := cppbridge.NewLssStorage()
-	lss.FindOrEmplace(testCase.labelSet)
-	snapshot := lss.CreateLabelSetSnapshot()
-
-	// Act
-	*bytes = snapshot.LabelSetBytesWithoutLabels(0, bytes, false, testCase.names)
-
-	// Assert
-	s.Equal(testCase.expected, *bytes)
-}
-
 func (s *LSSSuite) TestCreateReadonlyLssFromEncodingBimap() {
 	// Arrange
 	lss := cppbridge.NewLssStorage()
@@ -479,9 +351,10 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceLabelSet() {
 	builder := model.NewLabelSetSimpleBuilderSize(mls.Len())
 
 	// Act
-	lssRO, lsID := s.lss.FindOrEmplaceLabelSet(mls)
+	snapshot, lsID := s.lss.FindOrEmplaceLabelSet(mls)
+	s.Require().NotNil(snapshot)
 
-	lssRO.RangeLabelSet(lsID, false, func(l cppbridge.Label) error {
+	snapshot.RangeLabelSet(lsID, false, func(l cppbridge.Label) error {
 		builder.Add(l.Name, l.Value)
 		return nil
 	})
