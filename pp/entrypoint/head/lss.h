@@ -13,8 +13,7 @@ enum class LssType : uint32_t {
   kEncodingBimap = 0,
   kOrderedEncodingBimap,
   kQueryableEncodingBimap,
-  kReadonlyEncodingBimap,
-  kReadonlyQueryableEncodingBimap,
+  kReadonlyLss,
 };
 
 using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie, series_index::trie::CedarMatchesList>;
@@ -49,14 +48,13 @@ using SharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
 template <class T>
 using SharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
 
-using ReadonlyQueryableEncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpanWithChangesDetection>;
-using ReadonlyEncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpan>;
+using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpanWithChangesDetection>;
 
-using EncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<SharedVector>;
+using EncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<SharedVectorWithChangesDetection>;
 using QueryableEncodingBimap =
     series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, SharedVectorWithChangesDetection, TrieIndex>;
 
-using LssVariant = std::variant<EncodingBimap, OrderedEncodingBimap, QueryableEncodingBimap, ReadonlyEncodingBimap, ReadonlyQueryableEncodingBimap>;
+using LssVariant = std::variant<EncodingBimap, OrderedEncodingBimap, QueryableEncodingBimap, ReadonlyLss>;
 using LssVariantPtr = std::unique_ptr<LssVariant>;
 
 static_assert(sizeof(LssVariantPtr) == sizeof(void*));
@@ -84,12 +82,11 @@ inline LssVariantPtr create_lss(LssType type) {
 inline LssVariantPtr create_readonly_lss(const LssVariant& lss_variant) {
   switch (static_cast<LssType>(lss_variant.index())) {
     case LssType::kEncodingBimap: {
-      return std::make_unique<LssVariant>(std::in_place_index<static_cast<int>(LssType::kReadonlyEncodingBimap)>, std::get<EncodingBimap>(lss_variant));
+      return std::make_unique<LssVariant>(std::in_place_index<static_cast<int>(LssType::kReadonlyLss)>, std::get<EncodingBimap>(lss_variant));
     }
 
     case LssType::kQueryableEncodingBimap: {
-      return std::make_unique<LssVariant>(std::in_place_index<static_cast<int>(LssType::kReadonlyQueryableEncodingBimap)>,
-                                          std::get<QueryableEncodingBimap>(lss_variant));
+      return std::make_unique<LssVariant>(std::in_place_index<static_cast<int>(LssType::kReadonlyLss)>, std::get<QueryableEncodingBimap>(lss_variant));
     }
 
     default: {

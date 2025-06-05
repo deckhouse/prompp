@@ -86,8 +86,8 @@ extern "C" void prompp_primitives_lss_find_or_emplace_builder(void* args, void* 
   const auto in = static_cast<Arguments*>(args);
   new (res) FindOrEmplaceResult(std::visit(
       [&builder = in->builder]<typename Lss>(Lss& lss) {
-        return find_or_emplace<Lss>(lss, LabelSetBuilder{std::get<entrypoint::head::ReadonlyQueryableEncodingBimap>(*builder.readonly_lss)[builder.ls_id],
-                                                         builder.sorted_add, builder.sorted_del});
+        return find_or_emplace<Lss>(
+            lss, LabelSetBuilder{std::get<entrypoint::head::ReadonlyLss>(*builder.readonly_lss)[builder.ls_id], builder.sorted_add, builder.sorted_del});
       },
       *in->lss));
 }
