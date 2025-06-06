@@ -14,6 +14,7 @@ cmake(
     generate_args = [
         "-DTRACY_ENABLE=ON",
         "-DTRACY_VERBOSE=ON",
+        "-DTRACY_NO_EXIT=ON",
     ],
     copts = [
         "-Wno-error"
