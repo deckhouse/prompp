@@ -1,6 +1,7 @@
 #pragma once
 
 #include "chunk/outdated_chunk.h"
+#include "chunk/serialized_chunk.h"
 #include "common.h"
 #include "data_storage.h"
 #include "decoder/asc_integer.h"
@@ -174,6 +175,108 @@ class Decoder {
     }
   }
 
+  template <class Callback>
+  static void create_decode_iterator(std::span<const uint8_t> buffer, const chunk::SerializedChunk& chunk, Callback&& callback) noexcept {
+    using enum EncodingType;
+    using decoder::DecodeIteratorSentinel;
+    using encoder::BitSequenceWithItemsCount;
+
+    switch (chunk.encoding_state.encoding_type) {
+      case kUint32Constant: {
+        const auto timestamp_buffer = buffer.subspan(chunk.timestamps_offset);
+        std::forward<Callback>(callback)(
+            decoder::ConstantDecodeIterator(BitSequenceWithItemsCount::count(timestamp_buffer.data()), BitSequenceWithItemsCount::reader(timestamp_buffer),
+                                            chunk.values_offset, chunk.encoding_state.has_last_stalenan),
+            DecodeIteratorSentinel{});
+        break;
+      }
+
+      case kFloat32Constant: {
+        const auto timestamp_buffer = buffer.subspan(chunk.timestamps_offset);
+        std::forward<Callback>(callback)(
+            decoder::ConstantDecodeIterator(BitSequenceWithItemsCount::count(timestamp_buffer.data()), BitSequenceWithItemsCount::reader(timestamp_buffer),
+                                            std::bit_cast<float>(chunk.values_offset), chunk.encoding_state.has_last_stalenan),
+            DecodeIteratorSentinel{});
+        break;
+      }
+
+      case kDoubleConstant: {
+        const auto timestamp_buffer = buffer.subspan(chunk.timestamps_offset);
+        const auto values_buffer = buffer.subspan(chunk.values_offset);
+        assert(values_buffer.size() >= sizeof(double));
+        std::forward<Callback>(callback)(
+            decoder::ConstantDecodeIterator(BitSequenceWithItemsCount::count(timestamp_buffer.data()), BitSequenceWithItemsCount::reader(timestamp_buffer),
+                                            *reinterpret_cast<const double*>(values_buffer.data()), chunk.encoding_state.has_last_stalenan),
+            DecodeIteratorSentinel{});
+        break;
+      }
+
+      case kTwoDoubleConstant: {
+        const auto timestamp_buffer = buffer.subspan(chunk.timestamps_offset);
+        const auto values_buffer = buffer.subspan(chunk.values_offset);
+        assert(values_buffer.size() >= sizeof(encoder::value::TwoDoubleConstantEncoder));
+        std::forward<Callback>(callback)(
+            decoder::TwoDoubleConstantDecodeIterator(
+                BitSequenceWithItemsCount::count(timestamp_buffer.data()), BitSequenceWithItemsCount::reader(timestamp_buffer),
+                *reinterpret_cast<const encoder::value::TwoDoubleConstantEncoder*>(values_buffer.data()), chunk.encoding_state.has_last_stalenan),
+            DecodeIteratorSentinel{});
+        break;
+      }
+
+      case kAscInteger: {
+        const auto timestamp_buffer = buffer.subspan(chunk.timestamps_offset);
+        const auto values_buffer = buffer.subspan(chunk.values_offset);
+        std::forward<Callback>(callback)(
+            decoder::AscIntegerDecodeIterator(BitSequenceWithItemsCount::count(timestamp_buffer.data()), BitSequenceWithItemsCount::reader(timestamp_buffer),
+                                              BareBones::BitSequenceReader(values_buffer.data(), BareBones::Bit::to_bits(values_buffer.size())),
+                                              chunk.encoding_state.has_last_stalenan),
+            DecodeIteratorSentinel{});
+        break;
+      }
+
+      case kAscIntegerThenValuesGorilla: {
+        const auto timestamp_buffer = buffer.subspan(chunk.timestamps_offset);
+        const auto values_buffer = buffer.subspan(chunk.values_offset);
+        std::forward<Callback>(callback)(
+            decoder::AscIntegerThenValuesGorillaDecodeIterator(
+                BitSequenceWithItemsCount::count(timestamp_buffer.data()), BitSequenceWithItemsCount::reader(timestamp_buffer),
+                BareBones::BitSequenceReader(values_buffer.data(), BareBones::Bit::to_bits(values_buffer.size())), chunk.encoding_state.has_last_stalenan),
+            DecodeIteratorSentinel{});
+        break;
+      }
+
+      case kValuesGorilla: {
+        const auto timestamp_buffer = buffer.subspan(chunk.timestamps_offset);
+        const auto values_buffer = buffer.subspan(chunk.values_offset);
+        std::forward<Callback>(callback)(
+            decoder::ValuesGorillaDecodeIterator(BitSequenceWithItemsCount::count(timestamp_buffer.data()), BitSequenceWithItemsCount::reader(timestamp_buffer),
+                                                 BareBones::BitSequenceReader(values_buffer.data(), BareBones::Bit::to_bits(values_buffer.size())),
+                                                 chunk.encoding_state.has_last_stalenan),
+            DecodeIteratorSentinel{});
+        break;
+      }
+
+      case kGorilla: {
+        const auto values_buffer = buffer.subspan(chunk.values_offset);
+        std::forward<Callback>(callback)(
+            decoder::GorillaDecodeIterator(BitSequenceWithItemsCount::count(values_buffer.data()), BitSequenceWithItemsCount::reader(values_buffer),
+                                           chunk.encoding_state.has_last_stalenan),
+            DecodeIteratorSentinel{});
+        break;
+      }
+
+      default: {
+        assert(chunk.encoding_state.encoding_type != kUnknown);
+        break;
+      }
+    }
+  }
+
+  template <class Callback>
+  PROMPP_ALWAYS_INLINE static void create_decode_iterator(const chunk::SerializedChunkIterator::Data& chunk, Callback&& callback) noexcept {
+    create_decode_iterator(chunk.buffer(), chunk.chunk(), std::forward<Callback>(callback));
+  }
+
   [[nodiscard]] static PROMPP_ALWAYS_INLINE int64_t get_series_min_timestamp(const DataStorage& storage, uint32_t ls_id) noexcept {
     using enum chunk::DataChunk::Type;
 
@@ -195,6 +298,7 @@ class Decoder {
 
   template <chunk::DataChunk::Type chunk_type>
   [[nodiscard]] PROMPP_ALWAYS_INLINE static int64_t get_chunk_first_timestamp(const DataStorage& storage, const chunk::DataChunk& chunk) noexcept {
+    assert(!chunk.is_empty());
     return encoder::timestamp::TimestampDecoder::decode_first(get_stream_reader<chunk_type>(storage, chunk));
   }
 
@@ -216,6 +320,7 @@ class Decoder {
       return storage.gorilla_encoders[chunk.encoder.external_index].timestamp();
     }
 
+    assert(!chunk.is_empty());
     return storage.timestamp_encoder.get_state(chunk.timestamp_encoder_state_id).timestamp();
   }
 

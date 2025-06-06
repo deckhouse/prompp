@@ -161,14 +161,22 @@ func (qs *QueryableStorage) write() bool {
 			successful = false
 			continue
 		}
-		err := head.ForEachShard(func(shard relabeler.Shard) error {
-			return qs.blockWriter.Write(relabeler.NewBlock(shard.LSS().Raw(), shard.DataStorage().Raw()))
-		})
-		if err != nil {
+
+		tBlockWrite := head.CreateTask(
+			relabeler.BlockWrite,
+			func(shard relabeler.Shard) error {
+				return qs.blockWriter.Write(relabeler.NewBlock(shard.LSS().Raw(), shard.DataStorage().Raw()))
+			},
+			relabeler.ForLSSTask,
+			relabeler.ExclusiveTask,
+		)
+		head.Enqueue(tBlockWrite)
+		if err := tBlockWrite.Wait(); err != nil {
 			logger.Errorf("QUERYABLE STORAGE: failed to write head %s: %s", head.String(), err.Error())
 			successful = false
 			continue
 		}
+
 		qs.headPersistenceDuration.Observe(float64(qs.clock.Since(start).Milliseconds()))
 		persisted = append(persisted, head.ID())
 		shouldNotify = true
@@ -253,6 +261,33 @@ func (qs *QueryableStorage) Querier(mint, maxt int64) (storage.Querier, error) {
 	)
 
 	return q, nil
+}
+
+func (qs *QueryableStorage) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
+	qs.mtx.Lock()
+	heads := make([]relabeler.Head, len(qs.heads))
+	copy(heads, qs.heads)
+	qs.mtx.Unlock()
+
+	var queriers []storage.ChunkQuerier
+	for _, head := range heads {
+		h := head
+		queriers = append(
+			queriers,
+			querier.NewChunkQuerier(
+				h,
+				querier.NoOpShardedDeduplicatorFactory(),
+				mint,
+				maxt,
+				nil,
+			),
+		)
+	}
+
+	return storage.NewMergeChunkQuerier(nil,
+		queriers,
+		storage.NewConcatenatingChunkSeriesMerger(),
+	), nil
 }
 
 func (qs *QueryableStorage) shrink(persisted ...string) {

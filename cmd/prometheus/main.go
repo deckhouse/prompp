@@ -64,6 +64,8 @@ import (
 	"github.com/prometheus/prometheus/pp-pkg/scrape"                 // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage" // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/cppbridge"               // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/relabeler/appender"      // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/relabeler/head"          // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"  // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/relabeler/head/ready"    // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/relabeler/remotewriter"  // PP_CHANGES.md: rebuild on cpp
@@ -540,6 +542,8 @@ func main() {
 	}
 
 	logger := promlog.New(&cfg.promlogConfig)
+
+	readPromPPFeatures(logger)
 
 	if err := cfg.setFeatureListOptions(logger); err != nil {
 		fmt.Fprintln(os.Stderr, fmt.Errorf("Error parsing feature list: %w", err))
@@ -2011,4 +2015,48 @@ func (p *rwProtoMsgFlagParser) Set(opt string) error {
 	}
 	*p.msgs = append(*p.msgs, t)
 	return nil
+}
+
+func readPromPPFeatures(logger log.Logger) {
+	features := os.Getenv("PROMPP_FEATURES")
+	if features == "" {
+		return
+	}
+
+	for _, feature := range strings.Split(features, ",") {
+		fname, fvalue, _ := strings.Cut(feature, "=")
+		switch strings.TrimSpace(fname) {
+		case "head_copy_series_on_rotate":
+			appender.CopySeriesOnRotate = true
+			level.Info(logger).Log(
+				"msg",
+				"[FEATURE] Copying active series from current head to new head during rotation is enabled.",
+			)
+
+		case "head_read_concurrency":
+			var (
+				v   = 1
+				err error
+			)
+
+			if fvalue := strings.TrimSpace(fvalue); fvalue != "" {
+				v, err = strconv.Atoi(fvalue)
+				if err != nil {
+					level.Error(logger).Log("msg", "Error parsing head-read-concurrency value", "err", err)
+					continue
+				}
+			}
+
+			head.ExtraReadConcurrency = v
+			level.Info(logger).Log(
+				"msg",
+				"[FEATURE] Concurrency reading is enabled.",
+				"extra",
+				v,
+			)
+
+		case "disable_coredumps":
+			// TODO disable-coredumps
+		}
+	}
 }

@@ -3,39 +3,15 @@ package cppbridge
 import (
 	"context"
 	"runtime"
-	"slices"
-	"sync"
-	"time"
 	"unsafe"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/prometheus/pp/go/model"
-)
-
-var (
-	lssCreate = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "prompp_cppbridge_lss_create",
-			Help: "Current create lsses.",
-		},
-		[]string{"type"},
-	)
-
-	lssFinalize = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "prompp_cppbridge_lss_finalize",
-			Help: "Current finalize lsses.",
-		},
-		[]string{"type"},
-	)
 )
 
 const (
 	lssEncodingBimap uint32 = iota
 	lssOrderedEncodingBimap
 	lssQueryableEncodingBimap
-	lssReadOnly
 )
 
 //
@@ -63,14 +39,10 @@ const (
 // LabelSetStorage
 //
 
-//
-// LabelSetStorage
-//
-
 // LabelSetStorage go wrapper for C-LabelSetStorage.
 type LabelSetStorage struct {
-	pointer uintptr
-	maxID   uint32
+	pointer           uintptr
+	gcDestroyDetector *uint64
 }
 
 // NewLssStorage init new LabelSetStorage based on EncodingBimap.
@@ -90,38 +62,38 @@ func NewQueryableLssStorage() *LabelSetStorage {
 
 // newLabelSetStorage init new LabelSetStorage with lss type.
 func newLabelSetStorage(lssType uint32) *LabelSetStorage {
-	lss := &LabelSetStorage{pointer: primitivesLSSCtor(lssType)}
-	runtime.SetFinalizer(lss, func(lss *LabelSetStorage) {
-		primitivesLSSDtor(lss.pointer)
-	})
-
-	return lss
+	return newLabelSetStorageFromPointer(primitivesLSSCtor(lssType))
 }
 
-// newReadOnlyLssStorrage init new LabelSetStorage based on lssReadOnly.
-func newReadOnlyLssStorrage(lssROPtr uintptr) *LabelSetStorage {
-	lss := &LabelSetStorage{pointer: lssROPtr}
+// newLabelSetStorageFromPointer init new LabelSetStorage with pointer to constructed lss
+func newLabelSetStorageFromPointer(lssPointer uintptr) *LabelSetStorage {
+	lss := &LabelSetStorage{pointer: lssPointer, gcDestroyDetector: &gcDestroyDetector}
 	runtime.SetFinalizer(lss, func(lss *LabelSetStorage) {
 		primitivesLSSDtor(lss.pointer)
-
-		lssFinalize.With(prometheus.Labels{"type": "read_only"}).Inc()
 	})
-
-	lssCreate.With(prometheus.Labels{"type": "read_only"}).Inc()
 
 	return lss
 }
 
 // AllocatedMemory return size of allocated memory for label sets in C++.
 func (lss *LabelSetStorage) AllocatedMemory() uint64 {
-	return primitivesLSSAllocatedMemory(lss.pointer)
+	res := primitivesLSSAllocatedMemory(lss.pointer)
+	runtime.KeepAlive(lss)
+	return res
 }
 
 // FindOrEmplace find in lss LabelSet or emplace and return ls id.
-func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) uint32 {
-	id := primitivesLSSFindOrEmplace(lss.pointer, labelSet)
-	lss.maxID = max(id, lss.maxID)
-	return id
+func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) FindOrEmplaceResult {
+	res := primitivesLSSFindOrEmplace(lss.pointer, labelSet)
+	runtime.KeepAlive(lss)
+	return res
+}
+
+// FindOrEmplaceBuilder find in lss LabelSet or emplace and return ls id.
+func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet CppLabelSetBuilder) FindOrEmplaceResult {
+	res := primitivesLSSFindOrEmplaceBuilder(lss.pointer, labelSet)
+	runtime.KeepAlive(lss)
+	return res
 }
 
 // Query returns a LSSQueryResult that matches the given label matchers.
@@ -159,6 +131,7 @@ func (lss *LabelSetStorage) QueryLabelValues(
 // GetLabelSets - returns copy of lss data.
 func (lss *LabelSetStorage) GetLabelSets(labelSetIDs []uint32) *LabelSetStorageGetLabelSetsResult {
 	result := &LabelSetStorageGetLabelSetsResult{labelSets: primitivesLSSGetLabelSets(lss.pointer, labelSetIDs)}
+	runtime.KeepAlive(lss)
 
 	runtime.SetFinalizer(result, func(result *LabelSetStorageGetLabelSetsResult) {
 		primitivesLSSFreeLabelSets(result.labelSets)
@@ -166,142 +139,97 @@ func (lss *LabelSetStorage) GetLabelSets(labelSetIDs []uint32) *LabelSetStorageG
 	return result
 }
 
+// CopyAddedSeries - copy label sets which were added via FindOrEmplace to destination
+func (lss *LabelSetStorage) CopyAddedSeries(destination *LabelSetStorage) {
+	primitivesLSSCopyAddedSeries(lss.pointer, destination.pointer)
+}
+
 // Pointer return c-pointer.
 func (lss *LabelSetStorage) Pointer() uintptr {
 	return lss.pointer
+}
+
+// CreateLabelSetSnapshot create LabelSetSnapshot from lss.
+func (lss *LabelSetStorage) CreateLabelSetSnapshot() *LabelSetSnapshot {
+	res := newLabelSetSnapshot(primitivesLSSCreateReadonlyLss(lss.pointer))
+	runtime.KeepAlive(lss)
+	return res
+}
+
+// RangeLabelSet serialize to slice labels from lss and calls f on each label.
+func (lss *LabelSetStorage) RangeLabelSet(lsID uint32, do func(l Label) error) error {
+	labelSet := labelSetSerialize(lss.pointer, lsID)
+	for i := range labelSet {
+		if err := do(labelSet[i]); err != nil {
+			labelSetFree(labelSet)
+			return err
+		}
+	}
+	runtime.KeepAlive(lss)
+	labelSetFree(labelSet)
+
+	return nil
 }
 
 //
 // LSSQueryResult
 //
 
-// lssQueryResult query execution result in lss, filled in c.
-type lssQueryResult struct {
+// LSSQueryResult query execution result in lss with copy.
+type LSSQueryResult struct {
 	matches         []uint32 // c allocated
 	labelSetLengths []uint16 // c allocated
 	status          uint32
-}
-
-//
-// bufReadOnlyLSS
-//
-
-// bufReadOnlyLSS buffer lssReadOnly for deduplicate.
-var bufReadOnlyLSS = sync.Map{}
-
-type bufLSSValue struct {
-	lssMain uintptr
-	lssRO   *LabelSetStorage
-	maxlsid uint32
-	timer   *time.Timer
-}
-
-func getlssRO(lssMainPtr, lssROPtr uintptr, maxlsid uint32) *LabelSetStorage {
-	var lssRO *LabelSetStorage
-
-	v, ok := bufReadOnlyLSS.Load(lssMainPtr)
-	if !ok {
-		lssRO = newReadOnlyLssStorrage(lssROPtr)
-		bufReadOnlyLSS.Store(lssMainPtr, &bufLSSValue{
-			lssMain: lssMainPtr,
-			lssRO:   lssRO,
-			maxlsid: maxlsid,
-			timer: time.AfterFunc(1*time.Minute, func() {
-				bufReadOnlyLSS.Delete(lssMainPtr)
-			}),
-		})
-
-		return lssRO
-	}
-
-	bv := v.(*bufLSSValue)
-	if bv.maxlsid < maxlsid {
-		lssRO = newReadOnlyLssStorrage(lssROPtr)
-		bufReadOnlyLSS.Store(lssMainPtr, &bufLSSValue{
-			lssMain: lssMainPtr,
-			lssRO:   lssRO,
-			maxlsid: maxlsid,
-			timer: time.AfterFunc(1*time.Minute, func() {
-				bufReadOnlyLSS.Delete(lssMainPtr)
-			}),
-		})
-
-		return lssRO
-	}
-
-	bv.timer.Reset(1 * time.Minute)
-
-	primitivesLSSDtor(lssROPtr)
-
-	return bv.lssRO
-}
-
-// LSSQueryResult query execution result in lss with copy.
-type LSSQueryResult struct {
-	queryResult *lssQueryResult
-	lssRO       *LabelSetStorage
 }
 
 // newLSSQueryResult init new LSSQueryResult.
 func newLSSQueryResult(
 	matches []uint32,
 	labelSetLengths []uint16,
-	lssMainPtr uintptr,
-	lssROPtr uintptr,
 	status uint32,
 ) *LSSQueryResult {
-	queryResult := &lssQueryResult{
+	lqr := &LSSQueryResult{
 		matches:         matches,
 		labelSetLengths: labelSetLengths,
 		status:          status,
 	}
 
 	if status != LSSQueryStatusMatch {
-		primitivesLabelSetMatchesFree(queryResult)
-		primitivesLSSDtor(lssROPtr)
+		primitivesLabelSetMatchesFree(lqr)
 
-		return &LSSQueryResult{queryResult: queryResult}
+		return lqr
 	}
 
-	runtime.SetFinalizer(queryResult, func(result *lssQueryResult) {
+	runtime.SetFinalizer(lqr, func(result *LSSQueryResult) {
 		primitivesLabelSetMatchesFree(result)
 	})
-
-	lqr := &LSSQueryResult{
-		queryResult: queryResult,
-		lssRO:       getlssRO(lssMainPtr, lssROPtr, slices.Max(matches)),
-	}
 
 	return lqr
 }
 
-// Status query execution.
-func (r *LSSQueryResult) Status() uint32 {
-	return r.queryResult.status
+// GetByIndex return ls id and length for ls id by index.
+func (r *LSSQueryResult) GetByIndex(i int) (uint32, uint16) {
+	return r.matches[i], r.labelSetLengths[i]
 }
 
 // IDs return labels sets ids.
 func (r *LSSQueryResult) IDs() []uint32 {
-	return r.queryResult.matches
+	return r.matches
 }
 
 // LabelSetLengths return labels sets lengths.
 func (r *LSSQueryResult) LabelSetLengths() []uint16 {
-	return r.queryResult.labelSetLengths
+	return r.labelSetLengths
 }
 
-// MatchesRange calls callback sequentially for each result.
-func (r *LSSQueryResult) MatchesRange(callback func(lss *LabelSetStorage, lsid uint32, length uint16)) {
-	for i, lsId := range r.queryResult.matches {
-		callback(r.lssRO, lsId, r.queryResult.labelSetLengths[i])
-	}
+// Len of result.
+func (r *LSSQueryResult) Len() int {
+	return len(r.matches)
 }
 
-// MatchesRange calls callback sequentially for each result.
-func (r *LSSQueryResult) MatchesIndexRange(callback func(lss *LabelSetStorage, index int, lsid uint32, length uint16)) {
-	for i, lsId := range r.queryResult.matches {
-		callback(r.lssRO, i, lsId, r.queryResult.labelSetLengths[i])
-	}
+// Status query execution.
+func (r *LSSQueryResult) Status() uint32 {
+	return r.status
 }
 
 //
@@ -381,4 +309,16 @@ func GetCaller(ctx context.Context) uint32 {
 // SetCaller set callerID to context.
 func SetCaller(parent context.Context, callerID uint32) context.Context {
 	return context.WithValue(parent, ctxCallerKey{}, callerID)
+}
+
+//
+// CppLabelSetBuilder
+//
+
+// CppLabelSetBuilder - container used for Go-C++ interaction and shouldn't be modified.
+type CppLabelSetBuilder struct {
+	ReadonlyLss uintptr
+	LsId        uint32
+	SortedAdd   []Label
+	SortedDel   []string
 }

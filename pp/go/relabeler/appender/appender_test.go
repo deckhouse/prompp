@@ -48,7 +48,7 @@ func (s *AppenderSuite) SetupSuite() {
 	s.errorHandler()
 }
 
-func (s *AppenderSuite) TearDownSuite() {
+func (*AppenderSuite) TearDownSuite() {
 	logger.Unset()
 }
 
@@ -1484,7 +1484,7 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithRotate() {
 	s.Require().NoError(err)
 	tmpDirsToRemove = append(tmpDirsToRemove, tmpDir)
 
-	var generation uint64 = 0
+	var generation uint64
 
 	headID := "head_id"
 	hd, err := head.Create(headID, generation, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
@@ -1503,7 +1503,16 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithRotate() {
 			tmpDirsToRemove = append(tmpDirsToRemove, newDir)
 			newHeadID := "head_id"
 			generation++
-			newHead, buildErr := head.Create(newHeadID, generation, newDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+			newHead, buildErr := head.Create(
+				newHeadID,
+				generation,
+				newDir,
+				inputRelabelerConfigs,
+				numberOfShards,
+				0,
+				head.NoOpLastAppendedSegmentIDSetter{},
+				prometheus.DefaultRegisterer,
+			)
 			s.Require().NoError(buildErr)
 			headsToClose = append(headsToClose, newHead)
 			return newHead, nil
@@ -2386,7 +2395,7 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithRotateWithStaleNans() 
 	s.Require().NoError(err)
 	tmpDirsToRemove = append(tmpDirsToRemove, tmpDir)
 
-	var generation uint64 = 0
+	var generation uint64
 
 	headID := fmt.Sprintf("head_id_%d", generation)
 	hd, err := head.Create(headID, generation, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)

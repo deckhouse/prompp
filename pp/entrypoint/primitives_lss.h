@@ -2,6 +2,8 @@
 extern "C" {
 #endif
 
+#include <stdint.h>
+
 /**
  * @brief Construct a new Primitives label sets.
  *
@@ -46,10 +48,31 @@ void prompp_primitives_lss_allocated_memory(void* args, void* res);
  * }
  *
  * @param res {
- *     ls_id uint32 // inserted (or found) label set id
+ *     ls_id uint32                  // inserted (or found) label set id
+ *     bool  lss_has_reallocations   // true if lss has reallocations
  * }
  */
 void prompp_primitives_lss_find_or_emplace(void* args, void* res);
+
+/**
+ * @brief insert label set builder into lss
+ *
+ * @param args {
+ *     lss uintptr                    // pointer to constructed lss;
+ *     builder struct {
+ *        readonly_lss uintptr        // pointer to constructed lss;
+ *        ls_id        uint32         // series id
+ *        sorted_add   []model.Label  // slice of sorted by name labels
+ *        sorted_del   []string       // slice of sorted label names
+ *     }
+ * }
+ *
+ * @param res {
+ *     ls_id uint32                   // inserted (or found) label set id
+ *     bool  lss_has_reallocations    // true if lss has reallocations
+ * }
+ */
+void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
 
 /**
  * @brief query series from lss
@@ -63,7 +86,6 @@ void prompp_primitives_lss_find_or_emplace(void* args, void* res);
  * @param res {
  *     matches           []uint32 // matched series ids
  *     label_set_lengths []uint16 // slice of series label set length
- *     lss_copy          uintptr  // readonly copy of lss
  *     status            uint32   // query status
  * }
  */
@@ -134,46 +156,29 @@ void prompp_primitives_lss_query_label_names(void* args, void* res);
  */
 void prompp_primitives_lss_query_label_values(void* args, void* res);
 
-//
-// label_sets
-//
-
 /**
- * @brief get length label set by series id
+ * @brief return size of allocated memory for label sets.
  *
  * @param args {
- *     lss    uintptr // pointer to constructed lss;
- *     ls_id  uint32  // series id
+ *     lss uintptr                 // pointer to constructed queryable lss;
  * }
  *
  * @param res {
- *     length int     // length of label set
+ *     lss_copy          uintptr  // readonly copy of lss
  * }
  */
-void prompp_primitives_label_set_length(void* args, void* res);
+void prompp_create_readonly_lss(void* args, void* res);
 
 /**
- * @brief get label set by series id
+ * @brief Copy label sets which were added via find_or_emplace from source lss to destination lss
  *
- * @param args {
- *     lss       uintptr                      // pointer to constructed lss;
- *     ls_id     uint32                       // series id
- * }
+ * @param source_lss pointer to source label sets
+ * @param destination_lss pointer to destination label sets
  *
- * @param res {
- *     label_set []struct{key, value String}  // label sets
- * }
+ * @attention This binding used as a CGO call!!!
+ *
  */
-void prompp_primitives_label_set_serialize(void* args, void* res);
-
-/**
- * @brief free label set returned by prompp_primitives_label_set_serialize
- *
- * @param args {
- *     label_set []struct{key, value String} // label set
- * }
- */
-void prompp_primitives_label_set_free(void* args);
+void prompp_primitives_lss_copy_added_series(uint64_t source_lss, uint64_t destination_lss);
 
 #ifdef __cplusplus
 }  // extern "C"

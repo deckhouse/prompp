@@ -1,7 +1,5 @@
 #pragma once
 
-#include <iostream>
-#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -89,16 +87,14 @@ class CedarTraversal {
     return true;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_leaf() noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_leaf() const noexcept {
     if (value_ == static_cast<uint32_t>(Trie::error_code::CEDAR_NO_VALUE)) {
       return false;
     }
 
     size_t length = length_;
     size_t from = from_;
-    auto value = trie_->begin(from, length);
-    if (value == Trie::error_code::CEDAR_NO_PATH) {
-      [[unlikely]];
+    if (const auto value = trie_->begin(from, length); value == Trie::error_code::CEDAR_NO_PATH) [[unlikely]] {
       return true;
     }
 
@@ -126,7 +122,13 @@ class CedarTrie {
   using EnumerativeIterator = CedarEnumerativeIterator;
   using Value = uint32_t;
 
-  PROMPP_ALWAYS_INLINE void insert(std::string_view key, uint32_t value) noexcept { trie_.update(key.data(), key.length(), 0) = value; }
+  PROMPP_ALWAYS_INLINE void insert(std::string_view key, uint32_t id) noexcept {
+    if (count_ <= id) {
+      trie_.update(key.data(), key.length(), 0) = id;
+      ++count_;
+    }
+  }
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::optional<uint32_t> lookup(std::string_view key) const noexcept {
     if (auto value = trie_.exactMatchSearch<uint32_t>(key.data(), key.length(), 0); value != static_cast<uint32_t>(Trie::error_code::CEDAR_NO_VALUE)) {
       return value;
@@ -154,6 +156,7 @@ class CedarTrie {
 
  private:
   Trie trie_;
+  uint32_t count_{};
 };
 
 class CedarMatchesList {
@@ -162,10 +165,10 @@ class CedarMatchesList {
 
   explicit CedarMatchesList(SeriesIdList& matches) : matches_(matches) {}
 
-  PROMPP_ALWAYS_INLINE void clear() { matches_.clear(); }
+  PROMPP_ALWAYS_INLINE void clear() const { matches_.clear(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t count() const noexcept { return matches_.size(); }
 
-  PROMPP_ALWAYS_INLINE void add_node(const CedarTraversal& traversal) {
+  PROMPP_ALWAYS_INLINE void add_node(const CedarTraversal& traversal) const {
     for (auto iterator = traversal.make_enumerative_iterator(); iterator.is_valid(); ++iterator) {
       matches_.push_back(*iterator);
     }
@@ -180,15 +183,15 @@ class CedarMatchesList {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void add_subnodes(const CedarTraversal& traversal) {
+  PROMPP_ALWAYS_INLINE void add_subnodes(const CedarTraversal& traversal) const {
     for (auto iterator = traversal.make_enumerative_iterator_to_subnodes(); iterator.is_valid(); ++iterator) {
       matches_.push_back(*iterator);
     }
   }
 
-  PROMPP_ALWAYS_INLINE void add_leaf(const CedarTraversal& traversal) { matches_.push_back(traversal.value()); }
-  PROMPP_ALWAYS_INLINE void add_leaf(const CedarTraversal& traversal, const std::string_view& prefix) {
-    if (auto value = traversal.lookup(prefix); value != static_cast<uint32_t>(cedar::da<uint32_t>::error_code::CEDAR_NO_VALUE)) {
+  PROMPP_ALWAYS_INLINE void add_leaf(const CedarTraversal& traversal) const { matches_.push_back(traversal.value()); }
+  PROMPP_ALWAYS_INLINE void add_leaf(const CedarTraversal& traversal, const std::string_view& prefix) const {
+    if (const auto value = traversal.lookup(prefix); value != static_cast<uint32_t>(cedar::da<uint32_t>::error_code::CEDAR_NO_VALUE)) {
       matches_.push_back(value);
     }
   }

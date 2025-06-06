@@ -667,7 +667,7 @@ class Sequence {
 
     assert(static_cast<size_t>(d_i_ - data_ + 4) <= data_.size());
     assert(d_i_ >= data_);
-    assert(static_cast<size_t>(k_i_ - keys_) < data_.size());
+    assert(static_cast<size_t>(k_i_ - keys_) < keys_.size());
     assert(k_i_ >= keys_);
 
     auto code = Codec::encode(val, d_i_);
@@ -784,8 +784,6 @@ inline __attribute__((always_inline)) auto encoder(KIteratorType k_i, DIteratorT
 }
 
 template <class Codec, class ContainerType>
-  requires std::is_same_v<ContainerType, std::vector<uint8_t>> || std::is_same_v<ContainerType, Vector<uint8_t>> ||
-           std::is_same_v<ContainerType, SharedVector<uint8_t>>
 inline __attribute__((always_inline)) auto back_inserter(ContainerType& c, uint32_t size) noexcept {
   /**
    * ATTENTION! This function expects that c.push_back (indirectly called from std::back_inserter) when called

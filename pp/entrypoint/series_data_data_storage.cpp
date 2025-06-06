@@ -11,8 +11,13 @@
 
 using entrypoint::head::DataStoragePtr;
 using entrypoint::head::QueryableEncodingBimap;
-using ChunkRecoder = head::ChunkRecoder<QueryableEncodingBimap::LsIdSet::const_iterator, QueryableEncodingBimap::LsIdSet::const_iterator>;
-using ChunkRecoderPtr = std::unique_ptr<ChunkRecoder>;
+using ChunkRecoderIterator = head::ChunkRecoderIterator<QueryableEncodingBimap::LsIdSet::const_iterator, QueryableEncodingBimap::LsIdSet::const_iterator>;
+using ChunkRecoder = head::ChunkRecoder<ChunkRecoderIterator>;
+
+using SerializedChunkRecoder = head::ChunkRecoder<series_data::chunk::SerializedChunkIterator>;
+
+using ChunkRecoderVariant = std::variant<ChunkRecoder, SerializedChunkRecoder>;
+using ChunkRecoderVariantPtr = std::unique_ptr<ChunkRecoderVariant>;
 
 extern "C" void prompp_series_data_data_storage_ctor(void* res) {
   using Result = struct {
@@ -59,8 +64,8 @@ extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
     Slice<char> serialized_chunks;
   };
 
-  Arguments* in = reinterpret_cast<Arguments*>(args);
-  Result* out = new (res) Result();
+  const auto in = static_cast<Arguments*>(args);
+  const auto out = new (res) Result();
 
   Querier querier{*in->data_storage};
   const auto& queried_chunk_list = querier.query(in->query);
@@ -101,8 +106,8 @@ extern "C" void prompp_series_data_data_storage_allocated_memory(void* args, voi
     uint64_t allocated_memory;
   };
 
-  auto in = reinterpret_cast<Arguments*>(args);
-  Result* out = new (res) Result();
+  const auto in = static_cast<Arguments*>(args);
+  const auto out = new (res) Result();
 
   out->allocated_memory = in->data_storage->allocated_memory();
 }
@@ -122,19 +127,37 @@ extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
     PromPP::Primitives::TimeInterval time_interval;
   };
   struct Result {
-    ChunkRecoderPtr chunk_recoder;
+    ChunkRecoderVariantPtr chunk_recoder;
   };
 
   const auto in = static_cast<Arguments*>(args);
   const auto& ls_id_set = std::get<QueryableEncodingBimap>(*in->lss).ls_id_set();
   new (res) Result{
-      .chunk_recoder = std::make_unique<ChunkRecoder>(ls_id_set.begin(), ls_id_set.end(), in->data_storage.get(), in->time_interval),
+      .chunk_recoder = std::make_unique<ChunkRecoderVariant>(
+          std::in_place_type<ChunkRecoder>, ChunkRecoderIterator{ls_id_set.begin(), ls_id_set.end(), in->data_storage.get(), in->time_interval},
+          in->time_interval),
+  };
+}
+
+extern "C" void prompp_series_data_serialized_chunk_recoder_ctor(void* args, void* res) {
+  struct Arguments {
+    PromPP::Primitives::Go::SliceView<uint8_t> buffer;
+    PromPP::Primitives::TimeInterval time_interval;
+  };
+  struct Result {
+    ChunkRecoderVariantPtr chunk_recoder;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  new (res) Result{
+      .chunk_recoder = std::make_unique<ChunkRecoderVariant>(std::in_place_type<SerializedChunkRecoder>,
+                                                             series_data::chunk::SerializedChunkIterator{in->buffer.span()}, in->time_interval),
   };
 }
 
 extern "C" void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, void* res) {
   struct Arguments {
-    ChunkRecoderPtr chunk_recoder;
+    ChunkRecoderVariantPtr chunk_recoder;
   };
   struct Result {
     PromPP::Primitives::TimeInterval interval;
@@ -146,14 +169,18 @@ extern "C" void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, v
 
   const auto in = static_cast<const Arguments*>(args);
   const auto out = static_cast<Result*>(res);
-  in->chunk_recoder->recode_next_chunk(*out);
-  out->has_more_data = in->chunk_recoder->has_more_data();
-  out->buffer.reset_to(in->chunk_recoder->bytes());
+  std::visit(
+      [out](auto& chunk_recoder) PROMPP_LAMBDA_INLINE {
+        chunk_recoder.recode_next_chunk(*out);
+        out->has_more_data = chunk_recoder.has_more_data();
+        out->buffer.reset_to(chunk_recoder.bytes());
+      },
+      *in->chunk_recoder);
 }
 
 extern "C" void prompp_series_data_chunk_recoder_dtor(void* args) {
   struct Arguments {
-    ChunkRecoderPtr chunk_recoder;
+    ChunkRecoderVariantPtr chunk_recoder;
   };
 
   static_cast<Arguments*>(args)->~Arguments();
