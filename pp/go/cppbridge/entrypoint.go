@@ -1185,6 +1185,35 @@ func primitivesLSSFind(lss uintptr, labelSet model.LabelSet) (uint32, bool) {
 	return res.labelSetID, res.has
 }
 
+func primitivesLSSFindFromBuilder(
+	lss uintptr,
+	snapshotPtr uintptr,
+	sortedAdd []Label,
+	sortedDel []string,
+	lsID uint32,
+) (uint64, uint32, bool) {
+	args := struct {
+		lss         uintptr
+		snapshotPtr uintptr
+		sortedAdd   []Label
+		sortedDel   []string
+		lsID        uint32
+	}{lss, snapshotPtr, sortedAdd, sortedDel, lsID}
+	var res struct {
+		length     uint64
+		labelSetID uint32
+		has        bool
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_lss_find_from_builder,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.length, res.labelSetID, res.has
+}
+
 func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource uint32) (
 	matches []uint32,
 	labelSetLengths []uint16,

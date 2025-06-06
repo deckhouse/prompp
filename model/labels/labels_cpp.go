@@ -4,6 +4,7 @@ package labels
 
 import (
 	"slices"
+	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -307,14 +308,86 @@ func (ls Labels) WithoutEmpty() Labels {
 // ScratchBuilder
 //
 
+// // ScratchBuilder allows efficient construction of a Labels from scratch.
+// type ScratchBuilder struct {
+// 	builder model.LabelSetSimpleBuilder
+// }
+
+// // NewScratchBuilder creates a ScratchBuilder initialized for Labels with n entries.
+// func NewScratchBuilder(n int) ScratchBuilder {
+// 	return ScratchBuilder{builder: *model.NewLabelSetSimpleBuilderSize(n)}
+// }
+
+// // NewScratchBuilderWithSymbolTable creates a ScratchBuilder, for api parity with dedupelabels.
+// func NewScratchBuilderWithSymbolTable(_ *SymbolTable, n int) ScratchBuilder {
+// 	return NewScratchBuilder(n)
+// }
+
+// // Add a name/value pair.
+// // Note if you Add the same name twice you will get a duplicate label, which is invalid.
+// func (b *ScratchBuilder) Add(name, value string) {
+// 	b.builder.Add(name, value)
+// }
+
+// // Assign is for when you already have a Labels which you want this ScratchBuilder to return.
+// func (b *ScratchBuilder) Assign(ls Labels) {
+// 	b.builder.Reset()
+// 	ls.Range(func(l Label) {
+// 		b.builder.Add(l.Name, l.Value)
+// 	})
+// }
+
+// // Labels returns the name/value pairs added as a Labels object. Calling Add() after Labels() has no effect.
+// func (b *ScratchBuilder) Labels() Labels {
+// 	if b.builder.Len() == 0 {
+// 		return EmptyLabels()
+// 	}
+
+// 	// isvalid
+// 	return Storage.FindOrEmplaceLabelSet(b.builder.Build())
+// }
+
+// // Overwrite write the newly-built Labels out to ls.
+// func (b *ScratchBuilder) Overwrite(inls *Labels) {
+// 	inls.CopyFrom(Storage.FindOrEmplaceLabelSet(b.builder.Build()))
+// }
+
+// // Reset clear builder container.
+// func (b *ScratchBuilder) Reset() {
+// 	b.builder.Reset()
+// }
+
+// // SetSymbolTable implementation.
+// func (*ScratchBuilder) SetSymbolTable(*SymbolTable) {
+// 	// no-op
+// }
+
+// // Sort the labels added so far by name.
+// func (b *ScratchBuilder) Sort() {
+// 	b.builder.Sort()
+// }
+
+// // UnsafeAddBytes add a name/value pair, using []byte instead of string.
+// // The '-tags stringlabels' version of this function is unsafe, hence the name.
+// // This version is safe - it copies the strings immediately - but we keep the same name so everything compiles.
+// func (b *ScratchBuilder) UnsafeAddBytes(name, value []byte) {
+// 	b.Add(
+// 		unsafe.String(unsafe.SliceData(name), len(name)),   // #nosec G103 // it's meant to be that way
+// 		unsafe.String(unsafe.SliceData(value), len(value)), // #nosec G103 // it's meant to be that way
+// 	)
+// }
+
 // ScratchBuilder allows efficient construction of a Labels from scratch.
 type ScratchBuilder struct {
-	builder model.LabelSetSimpleBuilder
+	builder Builder
+	sorted  bool
 }
 
 // NewScratchBuilder creates a ScratchBuilder initialized for Labels with n entries.
 func NewScratchBuilder(n int) ScratchBuilder {
-	return ScratchBuilder{builder: *model.NewLabelSetSimpleBuilderSize(n)}
+	return ScratchBuilder{
+		builder: Builder{add: make([]Label, 0, n)},
+	}
 }
 
 // NewScratchBuilderWithSymbolTable creates a ScratchBuilder, for api parity with dedupelabels.
@@ -325,35 +398,49 @@ func NewScratchBuilderWithSymbolTable(_ *SymbolTable, n int) ScratchBuilder {
 // Add a name/value pair.
 // Note if you Add the same name twice you will get a duplicate label, which is invalid.
 func (b *ScratchBuilder) Add(name, value string) {
-	b.builder.Add(name, value)
+	if value == "" {
+		// Empty labels are the same as missing labels.
+		return
+	}
+
+	b.builder.add = append(b.builder.add, Label{Name: name, Value: value})
+	n := len(b.builder.add)
+	b.sorted = b.sorted && (n > 1 && b.builder.add[n-1].Name > b.builder.add[n-2].Name)
 }
 
 // Assign is for when you already have a Labels which you want this ScratchBuilder to return.
 func (b *ScratchBuilder) Assign(ls Labels) {
-	b.builder.Reset()
-	ls.Range(func(l Label) {
-		b.builder.Add(l.Name, l.Value)
-	})
+	b.Reset()
+	b.builder.base = ls
 }
 
 // Labels returns the name/value pairs added as a Labels object. Calling Add() after Labels() has no effect.
 func (b *ScratchBuilder) Labels() Labels {
-	if b.builder.Len() == 0 {
-		return EmptyLabels()
+	if len(b.builder.add) == 0 {
+		return b.builder.base
 	}
 
-	// isvalid
-	return Storage.FindOrEmplaceLabelSet(b.builder.Build())
+	if !b.sorted {
+		b.Sort()
+	}
+
+	b.builder.base = Storage.FindOrEmplaceFromBuilder(&b.builder)
+	b.builder.add = b.builder.add[:0]
+
+	// isvalid ?
+	return b.builder.base
 }
 
 // Overwrite write the newly-built Labels out to ls.
 func (b *ScratchBuilder) Overwrite(inls *Labels) {
-	inls.CopyFrom(Storage.FindOrEmplaceLabelSet(b.builder.Build()))
+	inls.CopyFrom(b.Labels())
 }
 
 // Reset clear builder container.
 func (b *ScratchBuilder) Reset() {
-	b.builder.Reset()
+	b.builder.base = EmptyLabels()
+	b.builder.add = b.builder.add[:0]
+	b.sorted = false
 }
 
 // SetSymbolTable implementation.
@@ -363,7 +450,12 @@ func (*ScratchBuilder) SetSymbolTable(*SymbolTable) {
 
 // Sort the labels added so far by name.
 func (b *ScratchBuilder) Sort() {
-	b.builder.Sort()
+	if b.sorted {
+		return
+	}
+
+	slices.SortFunc(b.builder.add, func(a, b Label) int { return strings.Compare(a.Name, b.Name) })
+	b.sorted = true
 }
 
 // UnsafeAddBytes add a name/value pair, using []byte instead of string.
@@ -380,28 +472,59 @@ func (b *ScratchBuilder) UnsafeAddBytes(name, value []byte) {
 // Builder
 //
 
-// Builder allows modifying Labels.
-type Builder struct {
-	base Labels
-	del  []string
-	add  []Label
-}
+// // Builder allows modifying Labels.
+// type Builder struct {
+// 	base Labels
+// 	del  []string
+// 	add  []Label
+// }
 
 // NewBuilderWithSymbolTable creates a Builder, for api parity with dedupelabels.
 func NewBuilderWithSymbolTable(*SymbolTable) *Builder {
 	return NewBuilder(EmptyLabels())
 }
 
-// Reset clears all current state for the builder.
-func (b *Builder) Reset(base Labels) {
-	b.base = base
-	b.del = b.del[:0]
-	b.add = b.add[:0]
-	b.base.Range(func(l Label) {
-		if l.Value == "" {
-			b.del = append(b.del, l.Name)
-		}
-	})
+// // Reset clears all current state for the builder.
+// func (b *Builder) Reset(base Labels) {
+// 	b.base = base
+// 	b.del = b.del[:0]
+// 	b.add = b.add[:0]
+// 	b.base.Range(func(l Label) {
+// 		if l.Value == "" {
+// 			b.del = append(b.del, l.Name)
+// 		}
+// 	})
+// }
+
+// // Labels returns the labels from the builder.
+// // If no modifications were made, the original labels are returned.
+// func (b *Builder) Labels() Labels {
+// 	if len(b.del) == 0 && len(b.add) == 0 {
+// 		return b.base
+// 	}
+
+// 	sbuilder := NewScratchBuilder(max(b.base.Len()+len(b.add)-len(b.del), 1))
+
+// 	b.base.Range(func(l Label) {
+// 		if slices.Contains(b.del, l.Name) || contains(b.add, l.Name) {
+// 			return
+// 		}
+
+// 		sbuilder.Add(l.Name, l.Value)
+// 	})
+
+// 	for _, l := range b.add {
+// 		sbuilder.Add(l.Name, l.Value)
+// 	}
+
+// 	return sbuilder.Labels()
+// }
+
+// Builder allows modifying Labels.
+type Builder struct {
+	base Labels
+	del  []string
+	add  []Label
 }
 
 // Labels returns the labels from the builder.
@@ -411,56 +534,18 @@ func (b *Builder) Labels() Labels {
 		return b.base
 	}
 
-	sbuilder := NewScratchBuilder(max(b.base.Len()+len(b.add)-len(b.del), 1))
+	slices.SortFunc(b.add, func(a, b Label) int { return strings.Compare(a.Name, b.Name) })
+	slices.Sort(b.del)
 
-	b.base.Range(func(l Label) {
-		if slices.Contains(b.del, l.Name) || contains(b.add, l.Name) {
-			return
-		}
+	b.base = Storage.FindOrEmplaceFromBuilder(b)
+	b.del = b.del[:0]
+	b.add = b.add[:0]
 
-		sbuilder.Add(l.Name, l.Value)
-	})
-
-	for _, l := range b.add {
-		sbuilder.Add(l.Name, l.Value)
-	}
-
-	return sbuilder.Labels()
-}
-
-// Builder allows modifying Labels.
-type UniversalBuilder struct {
-	base Labels
-	del  []string
-	add  []Label
-}
-
-// Labels returns the labels from the builder.
-// If no modifications were made, the original labels are returned.
-func (b *UniversalBuilder) Labels() Labels {
-	if len(b.del) == 0 && len(b.add) == 0 {
-		return b.base
-	}
-
-	sbuilder := NewScratchBuilder(max(b.base.Len()+len(b.add)-len(b.del), 1))
-
-	b.base.Range(func(l Label) {
-		if slices.Contains(b.del, l.Name) || contains(b.add, l.Name) {
-			return
-		}
-
-		sbuilder.Add(l.Name, l.Value)
-	})
-
-	for _, l := range b.add {
-		sbuilder.Add(l.Name, l.Value)
-	}
-
-	return sbuilder.Labels()
+	return b.base
 }
 
 // Reset clears all current state for the builder.
-func (b *UniversalBuilder) Reset(base Labels) {
+func (b *Builder) Reset(base Labels) {
 	b.base = base
 	b.del = b.del[:0]
 	b.add = b.add[:0]
@@ -529,6 +614,12 @@ func Compare(a, b Labels) int {
 
 type Receiver interface {
 	Find(mls model.LabelSet) Labels
+	FindFromBuilder(
+		sortedAdd []cppbridge.Label,
+		sortedDel []string,
+		snapshot *cppbridge.LabelSetSnapshot,
+		lsID uint32,
+	) Labels
 }
 
 var Storage = newStorage()
@@ -595,12 +686,17 @@ func (s *storage) FindOrEmplaceLabelSet(mls model.LabelSet) Labels {
 }
 
 // FindOrEmplaceLabelSet find ls from bulder in current lsses or store to working LSS and return Labels.
-func (s *storage) FindOrEmplaceFromBuilder(b UniversalBuilder) Labels {
-	// if receiver := s.receiver.Load(); receiver != nil {
-	// 	if ls := (*receiver).Find(mls); !ls.IsEmpty() {
-	// 		return ls
-	// 	}
-	// }
+func (s *storage) FindOrEmplaceFromBuilder(b *Builder) Labels {
+	if receiver := s.receiver.Load(); receiver != nil {
+		if ls := (*receiver).FindFromBuilder(
+			*((*[]cppbridge.Label)(unsafe.Pointer(&b.add))),
+			b.del,
+			b.base.snapshot,
+			b.base.id,
+		); !ls.IsEmpty() {
+			return ls
+		}
+	}
 
 	s.mx.Lock()
 	snapshot, length, lsID := s.workingLSS.FindOrEmplaceFromBuilder(

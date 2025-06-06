@@ -191,8 +191,9 @@ extern "C" void prompp_primitives_lss_find_from_builder(void* args, void* res) {
     uint32_t ls_id;
   };
   struct Result {
+    size_t length;
     uint32_t ls_id;
-    bool has;
+    bool has{false};
   };
 
   auto in = static_cast<Arguments*>(args);
@@ -202,7 +203,7 @@ extern "C" void prompp_primitives_lss_find_from_builder(void* args, void* res) {
       lss.find(LabelSetBuilder{std::get<entrypoint::head::ReadonlyQueryableEncodingBimap>(*in->readonly_lss)[in->ls_id], in->sorted_add, in->sorted_del});
 
   if (ls_id.has_value()) {
-    new (res) Result{.ls_id = ls_id.value(), .has = ls_id.has_value()};
+    new (res) Result{.length = lss[ls_id.value()].size(), .ls_id = ls_id.value(), .has = ls_id.has_value()};
   }
 }
 

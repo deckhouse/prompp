@@ -32,6 +32,12 @@ type LSS interface {
 	Input() *cppbridge.LabelSetStorage
 	Target() *cppbridge.LabelSetStorage
 	Find(mls model.LabelSet) (uint32, bool)
+	FindFromBuilder(
+		sortedAdd []cppbridge.Label,
+		sortedDel []string,
+		snapshot *cppbridge.LabelSetSnapshot,
+		lsID uint32,
+	) (uint64, uint32, bool)
 }
 
 type Wal interface {
@@ -83,6 +89,12 @@ type Head interface {
 	Enqueue(t *GenericTask)
 	CreateTask(taskName string, fn ShardFn, isLss, isExclusive bool) *GenericTask
 	Find(labelSet model.LabelSet) labels.Labels
+	FindFromBuilder(
+		sortedAdd []cppbridge.Label,
+		sortedDel []string,
+		snapshot *cppbridge.LabelSetSnapshot,
+		lsID uint32,
+	) labels.Labels
 }
 
 type Distributor interface {

@@ -15,7 +15,7 @@ func NewLabelsWithLSS(lss *cppbridge.LabelSetSnapshot, id uint32, length uint16)
 	}
 
 	builder := NewScratchBuilder(int(length))
-	_ = lss.RangeLabelSet(id, func(l cppbridge.Label) error {
+	_ = lss.RangeLabelSet(id, false, func(l cppbridge.Label) error {
 		// copy string from cpp memory
 		builder.Add(strings.Clone(l.Name), strings.Clone(l.Value))
 

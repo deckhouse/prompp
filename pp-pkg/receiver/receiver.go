@@ -262,12 +262,6 @@ func (rr *Receiver) AppendHashdex(
 	return err
 }
 
-// Find label set in lss, if not found return EmptyLabels.
-func (rr *Receiver) Find(mls model.LabelSet) labels.Labels {
-	// return rr.appender.Find(ls) || rr.storage.Find(ls)
-	return rr.appender.Find(mls)
-}
-
 // AppendSnappyProtobuf append compressed via snappy Protobuf data to relabeling hashdex data.
 func (rr *Receiver) AppendSnappyProtobuf(
 	ctx context.Context,
@@ -454,6 +448,21 @@ func (rr *Receiver) ApplyConfig(cfg *prom_config.Config) error {
 	}
 
 	return nil
+}
+
+// Find label set in lss, if not found return EmptyLabels.
+func (rr *Receiver) Find(mls model.LabelSet) labels.Labels {
+	return rr.appender.Find(mls)
+}
+
+// FindFromBuilder label set from builder in lss, if not found return EmptyLabels.
+func (rr *Receiver) FindFromBuilder(
+	sortedAdd []cppbridge.Label,
+	sortedDel []string,
+	snapshot *cppbridge.LabelSetSnapshot,
+	lsID uint32,
+) labels.Labels {
+	return rr.appender.FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID)
 }
 
 // GetState create new state.

@@ -132,3 +132,13 @@ func (h *DiscardableRotatableHead) Enqueue(t *relabeler.GenericTask) {
 func (h *DiscardableRotatableHead) Find(mls model.LabelSet) labels.Labels {
 	return h.head.Find(mls)
 }
+
+// FindFromBuilder label set from builder in lss, if not found return EmptyLabels.
+func (h *DiscardableRotatableHead) FindFromBuilder(
+	sortedAdd []cppbridge.Label,
+	sortedDel []string,
+	snapshot *cppbridge.LabelSetSnapshot,
+	lsID uint32,
+) labels.Labels {
+	return h.head.FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID)
+}

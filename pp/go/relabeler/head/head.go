@@ -1063,25 +1063,57 @@ func (*Head) shardLoop(
 
 // Find label set in lss, if not found return EmptyLabels.
 func (h *Head) Find(mls model.LabelSet) labels.Labels {
-	// t := h.CreateTask(
-	// 	relabeler.LSSFind,
-	// 	func(shard relabeler.Shard) error {
-	// 		if lsID, ok := h.lsses[i].Find(mls); ok {
-	// 			return labels.NewLabelsWithLSS(h.lsses[i].GetSnapshot(), lsID, uint16(mls.Len()))
-	// 		}
+	lses := make([]labels.Labels, h.numberOfShards)
+	t := h.CreateTask(
+		relabeler.LSSFind,
+		func(shard relabeler.Shard) error {
+			if lsID, ok := shard.LSS().Find(mls); ok {
+				lses[shard.ShardID()] = labels.NewLabelsWithLSS(shard.LSS().GetSnapshot(), lsID, uint16(mls.Len()))
+			}
 
-	// 		return nil
-	// 	},
-	// 	relabeler.ForLSSTask,
-	// 	relabeler.NonExclusiveTask,
-	// )
-	// h.Enqueue(t)
+			return nil
+		},
+		relabeler.ForLSSTask,
+		relabeler.NonExclusiveTask,
+	)
+	h.Enqueue(t)
+	_ = t.Wait()
 
-	// return t.Wait()
+	for i := range lses {
+		if !lses[i].IsEmpty() {
+			return lses[i]
+		}
+	}
 
-	for i := range h.lsses {
-		if lsID, ok := h.lsses[i].Find(mls); ok {
-			return labels.NewLabelsWithLSS(h.lsses[i].GetSnapshot(), lsID, uint16(mls.Len()))
+	return labels.EmptyLabels()
+}
+
+// FindFromBuilder label set from builder in lss, if not found return EmptyLabels.
+func (h *Head) FindFromBuilder(
+	sortedAdd []cppbridge.Label,
+	sortedDel []string,
+	snapshot *cppbridge.LabelSetSnapshot,
+	lsID uint32,
+) labels.Labels {
+	lses := make([]labels.Labels, h.numberOfShards)
+	t := h.CreateTask(
+		relabeler.LSSFind,
+		func(shard relabeler.Shard) error {
+			if length, lsID, ok := shard.LSS().FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID); ok {
+				lses[shard.ShardID()] = labels.NewLabelsWithLSS(shard.LSS().GetSnapshot(), lsID, uint16(length))
+			}
+
+			return nil
+		},
+		relabeler.ForLSSTask,
+		relabeler.NonExclusiveTask,
+	)
+	h.Enqueue(t)
+	_ = t.Wait()
+
+	for i := range lses {
+		if !lses[i].IsEmpty() {
+			return lses[i]
 		}
 	}
 

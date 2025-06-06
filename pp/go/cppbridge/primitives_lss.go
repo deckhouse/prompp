@@ -109,9 +109,14 @@ func (lss *LabelSetStorage) FindOrEmplaceFromBuilder(
 	snapshot *LabelSetSnapshot,
 	lsID uint32,
 ) (*LabelSetSnapshot, uint64, uint32) {
+	var snapshotPointer uintptr
+	if snapshot != nil {
+		snapshotPointer = snapshot.pointer
+	}
+
 	lssROPtr, length, lsID, hasReallocations := primitivesLSSFindOrEmplaceFromBuilder(
 		lss.pointer,
-		snapshot.pointer,
+		snapshotPointer,
 		sortedAdd,
 		sortedDel,
 		lsID,
@@ -149,6 +154,36 @@ func (lss *LabelSetStorage) Find(mls model.LabelSet) (uint32, bool) {
 	}
 
 	return lsID, true
+}
+
+// FindFromBuilder label set from builder in lss, return length ls, lsid and bool ok.
+//
+//nolint:gocritic // unnamedResult not need
+func (lss *LabelSetStorage) FindFromBuilder(
+	sortedAdd []Label,
+	sortedDel []string,
+	snapshot *LabelSetSnapshot,
+	lsID uint32,
+) (uint64, uint32, bool) {
+	var snapshotPointer uintptr
+	if snapshot != nil {
+		snapshotPointer = snapshot.pointer
+	}
+
+	length, lsID, ok := primitivesLSSFindFromBuilder(
+		lss.pointer,
+		snapshotPointer,
+		sortedAdd,
+		sortedDel,
+		lsID,
+	)
+	runtime.KeepAlive(lss)
+	runtime.KeepAlive(snapshot)
+	if !ok {
+		return 0, 0, false
+	}
+
+	return length, lsID, true
 }
 
 // Query returns a LSSQueryResult that matches the given label matchers.

@@ -126,6 +126,25 @@ void prompp_primitives_lss_find_or_emplace_label_set(void* args, void* res);
 void prompp_primitives_lss_find(void* args, void* res);
 
 /**
+ * @brief insert label set into lss
+ *
+ * @param args {
+ *     lss          uintptr  // pointer to constructed lss;
+ *     readonly_lss uintptr  // pointer to constructed lss;
+ *     sorted_add   []Label  // slice of sorted by name labels
+ *     sorted_del   []string // slice of sorted label names
+ *     ls_id        uint32   // series id
+ * }
+ *
+ * @param res {
+ *     length       uint64   // length of label set
+ *     ls_id        uint32   // inserted (or found) label set id
+ *     has          bool     // is the label set found
+ * }
+ */
+void prompp_primitives_lss_find_from_builder(void* args, void* res);
+
+/**
  * @brief query series from lss
  *
  * @param args {

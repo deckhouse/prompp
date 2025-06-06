@@ -323,8 +323,6 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithExistingLabelSet() {
 		SortedAdd:   nil,
 		SortedDel:   []string{"che"},
 	}).LabelSetID
-
-	// TODO: public object should encapsulate keep alives
 	runtime.KeepAlive(labelSetSnapshot)
 
 	// Assert
@@ -344,7 +342,6 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithNewLabelSet() {
 		SortedAdd:   []cppbridge.Label{{Name: "new_lol", Value: "new_kek"}},
 		SortedDel:   nil,
 	}).LabelSetID
-	// TODO: public object should encapsulate keep alives
 	runtime.KeepAlive(labelSetSnapshot)
 
 	// Assert
@@ -397,9 +394,34 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceFromBuilderWithNewLabelSet() {
 	s.Equal(uint32(expectedLsId), existingLsId)
 }
 
+func (s *QueryableLSSSuite) TestFindOrEmplaceFromBuilderWithNewLabelSetAnother() {
+	// Arrange
+	mls := s.labelSets[0]
+	lss := cppbridge.NewQueryableLssStorage()
+	lsid := lss.FindOrEmplace(mls).LabelSetID
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
+
+	// Act
+	expectedLsId := len(s.labelSetIDs)
+	snapshot, length, existingLsId := s.lss.FindOrEmplaceFromBuilder(
+		[]cppbridge.Label{{Name: "new_lol", Value: "new_kek"}},
+		nil,
+		labelSetSnapshot,
+		lsid,
+	)
+
+	// Assert
+	s.Equal(uint64(2), length)
+	s.NotNil(snapshot)
+	s.Equal(uint32(expectedLsId), existingLsId)
+}
+
 func (s *QueryableLSSSuite) TestFindOrEmplaceLabelSet() {
 	// Arrange
-	mls := model.NewLabelSetBuilder().Set("__name__", "somename").Set("job", "somejob").Build()
+	mls := model.LabelSetFromMap(map[string]string{
+		"__name__": "somename",
+		"job":      "somejob",
+	})
 	builder := model.NewLabelSetSimpleBuilderSize(mls.Len())
 
 	// Act
@@ -417,21 +439,137 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceLabelSet() {
 
 func (s *QueryableLSSSuite) TestFind() {
 	// Arrange
-	mls1 := model.NewLabelSetBuilder().Set("__name__", "somename").Set("job", "somejob").Build()
-	mls2 := model.NewLabelSetBuilder().Set("__name__", "somename").Set("job", "somejob").Build()
+	mls := model.LabelSetFromMap(map[string]string{
+		"__name__": "somename",
+		"job":      "somejob",
+	})
 
 	// Act
-	_, _ = s.lss.FindOrEmplaceLabelSet(mls1)
-	_, expectedLSID := s.lss.FindOrEmplaceLabelSet(mls2)
-
-	actualLSID, find := s.lss.Find(mls2)
-	s.Require().True(find)
+	_, expectedLSID := s.lss.FindOrEmplaceLabelSet(mls)
+	actualLSID, find := s.lss.Find(mls)
 
 	// Assert
+	s.Require().True(find)
 	s.Equal(expectedLSID, actualLSID)
 }
 
+func (s *QueryableLSSSuite) TestFindNot() {
+	// Arrange
+	mls1 := model.LabelSetFromMap(map[string]string{
+		"__name__": "somename",
+		"job":      "somejob",
+	})
+	mls2 := model.LabelSetFromMap(map[string]string{
+		"__name__": "somename",
+		"job":      "somejob1",
+	})
+	_, _ = s.lss.FindOrEmplaceLabelSet(mls1)
+
+	// Act
+	_, find := s.lss.Find(mls2)
+
+	// Assert
+	s.Require().False(find)
+}
+
+func (s *QueryableLSSSuite) TestFindFromBuilder() {
+	// Arrange
+	mls := model.LabelSetFromMap(map[string]string{
+		"__name__": "somename",
+		"job":      "somejob",
+	})
+
+	// Act
+	_, expectedLSID := s.lss.FindOrEmplaceLabelSet(mls)
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
+	length, actualLSID, find := s.lss.FindFromBuilder(
+		nil,
+		nil,
+		labelSetSnapshot,
+		expectedLSID,
+	)
+
+	// Assert
+	s.Require().True(find)
+	s.Equal(mls.Len(), int(length))
+	s.Equal(expectedLSID, actualLSID)
+}
+
+func (s *QueryableLSSSuite) TestFindFromBuilderAnother() {
+	// Arrange
+	mls := s.labelSets[0]
+	lss := cppbridge.NewQueryableLssStorage()
+	lsid := lss.FindOrEmplace(mls).LabelSetID
+	labelSetSnapshot := lss.CreateLabelSetSnapshot()
+
+	// Act
+	_, expectedLSID := s.lss.FindOrEmplaceLabelSet(mls)
+	length, actualLSID, find := s.lss.FindFromBuilder(
+		nil,
+		nil,
+		labelSetSnapshot,
+		lsid,
+	)
+
+	// Assert
+	s.Require().True(find)
+	s.Equal(s.labelSets[0].Len(), int(length))
+	s.Equal(expectedLSID, actualLSID)
+}
+
+func (s *QueryableLSSSuite) TestFindFromBuilderFromBuilderWithExistingLabelSet() {
+	// Arrange
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
+
+	// Act
+	lengthAdd, lsIDAdd, findAdd := s.lss.FindFromBuilder(
+		[]cppbridge.Label{{Name: "che", Value: "bureck"}},
+		nil,
+		labelSetSnapshot,
+		0,
+	)
+	lengthDel, lsIDDel, findDel := s.lss.FindFromBuilder(
+		nil,
+		[]string{"che"},
+		labelSetSnapshot,
+		1,
+	)
+
+	// Assert
+	s.Require().True(findAdd)
+	s.Equal(s.labelSets[1].Len(), int(lengthAdd))
+	s.Equal(s.labelSetIDs[1], lsIDAdd)
+
+	s.Require().True(findDel)
+	s.Equal(s.labelSets[0].Len(), int(lengthDel))
+	s.Equal(s.labelSetIDs[0], lsIDDel)
+}
+
+func (s *QueryableLSSSuite) TestFindFromBuilderNot() {
+	// Arrange
+	mls := model.LabelSetFromMap(map[string]string{
+		"__name__": "somename",
+		"job":      "somejob1",
+	})
+	lss := cppbridge.NewQueryableLssStorage()
+	lsid := lss.FindOrEmplace(mls).LabelSetID
+	labelSetSnapshot := lss.CreateLabelSetSnapshot()
+
+	// Act
+	_, _, find := s.lss.FindFromBuilder(
+		nil,
+		nil,
+		labelSetSnapshot,
+		lsid,
+	)
+
+	// Assert
+	s.Require().False(find)
+}
+
+//
 // TEST
+//
 
 func (s *QueryableLSSSuite) TestFindOrEmplace() {
 	// Arrange

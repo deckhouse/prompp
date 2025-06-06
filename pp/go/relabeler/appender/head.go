@@ -204,6 +204,16 @@ func (h *RotatableHead) Find(mls model.LabelSet) labels.Labels {
 	return h.head.Find(mls)
 }
 
+// FindFromBuilder label set from builder in lss, if not found return EmptyLabels.
+func (h *RotatableHead) FindFromBuilder(
+	sortedAdd []cppbridge.Label,
+	sortedDel []string,
+	snapshot *cppbridge.LabelSetSnapshot,
+	lsID uint32,
+) labels.Labels {
+	return h.head.FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID)
+}
+
 //
 // HeapProfileWritableHead
 //
@@ -317,4 +327,14 @@ func (h *HeapProfileWritableHead) Enqueue(t *relabeler.GenericTask) {
 // Find label set in lss, if not found return EmptyLabels.
 func (h *HeapProfileWritableHead) Find(mls model.LabelSet) labels.Labels {
 	return h.head.Find(mls)
+}
+
+// FindFromBuilder label set from builder in lss, if not found return EmptyLabels.
+func (h *HeapProfileWritableHead) FindFromBuilder(
+	sortedAdd []cppbridge.Label,
+	sortedDel []string,
+	snapshot *cppbridge.LabelSetSnapshot,
+	lsID uint32,
+) labels.Labels {
+	return h.head.FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID)
 }

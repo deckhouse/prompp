@@ -177,3 +177,15 @@ func (qa *QueryableAppender) Find(mls model.LabelSet) labels.Labels {
 	defer qa.lock.RUnlock()
 	return qa.head.Find(mls)
 }
+
+// FindFromBuilder label set from builder in lss, if not found return EmptyLabels.
+func (qa *QueryableAppender) FindFromBuilder(
+	sortedAdd []cppbridge.Label,
+	sortedDel []string,
+	snapshot *cppbridge.LabelSetSnapshot,
+	lsID uint32,
+) labels.Labels {
+	qa.lock.RLock()
+	defer qa.lock.RUnlock()
+	return qa.head.FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID)
+}

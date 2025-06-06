@@ -11,7 +11,7 @@ func NewLabelsWithLSS(lss *cppbridge.LabelSetSnapshot, id uint32, length uint16)
 	}
 
 	builder := NewScratchBuilder(int(length))
-	_ = lss.RangeLabelSet(id, func(l cppbridge.Label) error {
+	_ = lss.RangeLabelSet(id, false, func(l cppbridge.Label) error {
 		builder.Add(l.Name, l.Value)
 
 		return nil

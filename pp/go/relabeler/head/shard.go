@@ -76,6 +76,16 @@ func (w *LSS) Find(mls model.LabelSet) (uint32, bool) {
 	return w.target.Find(mls)
 }
 
+// FindFromBuilder label set from builder in lss, return length ls, lsid and bool ok.
+func (w *LSS) FindFromBuilder(
+	sortedAdd []cppbridge.Label,
+	sortedDel []string,
+	snapshot *cppbridge.LabelSetSnapshot,
+	lsID uint32,
+) (uint64, uint32, bool) {
+	return w.target.FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID)
+}
+
 type DataStorage struct {
 	dataStorage *cppbridge.HeadDataStorage
 	encoder     *cppbridge.HeadEncoder
