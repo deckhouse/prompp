@@ -656,6 +656,22 @@ void prompp_label_set_equal(void* args, void* res);
  */
 void prompp_label_set_compare(void* args, void* res);
 
+/**
+ * @brief returns a hash value for the label set from builder
+ *
+ * @param args {
+ *     readonly_lss uintptr  // pointer to constructed lss;
+ *     sorted_add   []Label  // slice of sorted by name labels
+ *     sorted_del   []string // slice of sorted label names
+ *     ls_id        uint32   // series id
+ * }
+ *
+ * @param res {
+ *     hash         uint64   // hash sum
+ * }
+ */
+void prompp_label_set_from_builder_hash(void* args, void* res);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

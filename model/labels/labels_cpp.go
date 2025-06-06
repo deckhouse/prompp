@@ -14,7 +14,6 @@ import (
 	"go.uber.org/atomic"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/model"
 )
 
 // Labels is a sorted set of labels. Is implemented by a cpp lss.
@@ -537,6 +536,32 @@ func (b *Builder) Labels() Labels {
 	slices.SortFunc(b.add, func(a, b Label) int { return strings.Compare(a.Name, b.Name) })
 	slices.Sort(b.del)
 
+	// dedup b.del
+	if len(b.del) > 1 {
+		for i := len(b.del) - 1; i != 0; i-- {
+			if b.del[i] == b.del[i-1] {
+				b.del = slices.Delete(b.del, i, i+1)
+			}
+		}
+	}
+
+	// clearing b.del(b.add has priority)
+	j := 0
+	for i := 0; i < len(b.add); i++ {
+		name := b.add[i].Name
+		for j < len(b.del) && b.del[j] < name {
+			j++
+		}
+
+		if j == len(b.del) {
+			break
+		}
+
+		if name == b.del[j] {
+			b.del = slices.Delete(b.del, j, j+1)
+		}
+	}
+
 	b.base = Storage.FindOrEmplaceFromBuilder(b)
 	b.del = b.del[:0]
 	b.add = b.add[:0]
@@ -613,7 +638,7 @@ func Compare(a, b Labels) int {
 //
 
 type Receiver interface {
-	Find(mls model.LabelSet) Labels
+	// Find(mls model.LabelSet) Labels
 	FindFromBuilder(
 		sortedAdd []cppbridge.Label,
 		sortedDel []string,
@@ -665,25 +690,25 @@ func (s *storage) SetReceiver(receiver Receiver) {
 	s.receiver.Store(&receiver)
 }
 
-// FindOrEmplaceLabelSet find ls in current lsses or store to working LSS and return Labels.
-func (s *storage) FindOrEmplaceLabelSet(mls model.LabelSet) Labels {
-	if receiver := s.receiver.Load(); receiver != nil {
-		if ls := (*receiver).Find(mls); !ls.IsEmpty() {
-			return ls
-		}
-	}
+// // FindOrEmplaceLabelSet find ls in current lsses or store to working LSS and return Labels.
+// func (s *storage) FindOrEmplaceLabelSet(mls model.LabelSet) Labels {
+// 	if receiver := s.receiver.Load(); receiver != nil {
+// 		if ls := (*receiver).Find(mls); !ls.IsEmpty() {
+// 			return ls
+// 		}
+// 	}
 
-	s.mx.Lock()
-	snapshot, lsID := s.workingLSS.FindOrEmplaceLabelSet(mls)
-	if snapshot != nil {
-		s.workingSnapshot = snapshot
-	}
-	s.mx.Unlock()
+// 	s.mx.Lock()
+// 	snapshot, lsID := s.workingLSS.FindOrEmplaceLabelSet(mls)
+// 	if snapshot != nil {
+// 		s.workingSnapshot = snapshot
+// 	}
+// 	s.mx.Unlock()
 
-	s.lssMaxID.Store(max(lsID, s.lssMaxID.Load()))
+// 	s.lssMaxID.Store(max(lsID, s.lssMaxID.Load()))
 
-	return NewLabelsWithLSS(s.workingSnapshot, lsID, uint16(mls.Len()))
-}
+// 	return NewLabelsWithLSS(s.workingSnapshot, lsID, uint16(mls.Len()))
+// }
 
 // FindOrEmplaceLabelSet find ls from bulder in current lsses or store to working LSS and return Labels.
 func (s *storage) FindOrEmplaceFromBuilder(b *Builder) Labels {

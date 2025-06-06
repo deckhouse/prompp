@@ -1185,6 +1185,7 @@ func primitivesLSSFind(lss uintptr, labelSet model.LabelSet) (uint32, bool) {
 	return res.labelSetID, res.has
 }
 
+//nolint:gocritic // unnamedResult not need
 func primitivesLSSFindFromBuilder(
 	lss uintptr,
 	snapshotPtr uintptr,
@@ -2979,4 +2980,29 @@ func labelSetBytesWithoutLabels(
 		dropMetricName,
 		names,
 	)
+}
+
+func labelSetFromBuilderHash(
+	snapshotPtr uintptr,
+	sortedAdd []Label,
+	sortedDel []string,
+	lsID uint32,
+) uint64 {
+	args := struct {
+		snapshotPtr uintptr
+		sortedAdd   []Label
+		sortedDel   []string
+		lsID        uint32
+	}{snapshotPtr, sortedAdd, sortedDel, lsID}
+	var res struct {
+		hash uint64
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_label_set_from_builder_hash,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.hash
 }

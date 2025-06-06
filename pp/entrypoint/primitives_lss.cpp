@@ -119,8 +119,10 @@ extern "C" void prompp_primitives_lss_find_or_emplace_from_builder(void* args, v
 
   std::visit(
       [in, out]<typename Lss>(Lss& lss) {
-        const auto result = find_or_emplace<Lss>(
-            lss, LabelSetBuilder{std::get<entrypoint::head::ReadonlyQueryableEncodingBimap>(*in->readonly_lss)[in->ls_id], in->sorted_add, in->sorted_del});
+        static const entrypoint::head::ReadonlyLss::value_type empty_label_set;
+        const auto& label_set = in->readonly_lss ? std::get<entrypoint::head::ReadonlyLss>(*in->readonly_lss)[in->ls_id] : empty_label_set;
+
+        const auto result = find_or_emplace<Lss>(lss, LabelSetBuilder{label_set, in->sorted_add, in->sorted_del});
 
         out->ls_id = result.ls_id;
         out->length = lss[out->ls_id].size();
@@ -200,9 +202,10 @@ extern "C" void prompp_primitives_lss_find_from_builder(void* args, void* res) {
 
   auto in = static_cast<Arguments*>(args);
   auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
+  static const entrypoint::head::ReadonlyLss::value_type empty_label_set;
+  const auto& label_set = in->readonly_lss ? std::get<entrypoint::head::ReadonlyLss>(*in->readonly_lss)[in->ls_id] : empty_label_set;
 
-  std::optional<uint32_t> ls_id =
-      lss.find(LabelSetBuilder{std::get<entrypoint::head::ReadonlyQueryableEncodingBimap>(*in->readonly_lss)[in->ls_id], in->sorted_add, in->sorted_del});
+  std::optional<uint32_t> ls_id = lss.find(LabelSetBuilder{label_set, in->sorted_add, in->sorted_del});
 
   if (ls_id.has_value()) {
     new (res) Result{.length = lss[ls_id.value()].size(), .ls_id = ls_id.value(), .has = ls_id.has_value()};

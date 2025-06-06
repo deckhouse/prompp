@@ -330,3 +330,69 @@ func (s *LabelSetSnapshotSuite) TestRangeLabelSet() {
 		s.Equal(mls.Without("__name__").String(), builderDrop.Build().String())
 	}
 }
+
+func (s *LabelSetSnapshotSuite) TestLabelSetFromBuilderHash() {
+	for _, lss := range s.lsses {
+		// Arrange
+		mls := s.mls.With("test", s.T().Name())
+
+		lsid := lss.FindOrEmplace(mls).LabelSetID
+		snapshot := lss.CreateLabelSetSnapshot()
+
+		// Act
+		hashExpected := snapshot.LabelSetHash(lsid, false)
+		hashActual := cppbridge.LabelSetFromBuilderHash(
+			nil,
+			nil,
+			snapshot,
+			lsid,
+		)
+
+		// Assert
+		s.Equal(hashExpected, hashActual)
+	}
+}
+
+func (s *LabelSetSnapshotSuite) TestLabelSetFromBuilderHashDel() {
+	for i, lss := range s.lsses {
+		// Arrange
+		mls := s.mls.With("test", s.T().Name())
+
+		lsid := lss.FindOrEmplace(mls).LabelSetID
+		snapshot := lss.CreateLabelSetSnapshot()
+
+		// Act
+		hashExpected := snapshot.LabelSetHash(s.lsids[i], false)
+		hashActual := cppbridge.LabelSetFromBuilderHash(
+			nil,
+			[]string{"test"},
+			snapshot,
+			lsid,
+		)
+
+		// Assert
+		s.Equal(hashExpected, hashActual)
+	}
+}
+
+func (s *LabelSetSnapshotSuite) TestLabelSetFromBuilderHashAdd() {
+	for i, lss := range s.lsses {
+		// Arrange
+		mls := s.mls.With("test", s.T().Name())
+
+		lsid := lss.FindOrEmplace(mls).LabelSetID
+		snapshot := lss.CreateLabelSetSnapshot()
+
+		// Act
+		hashExpected := snapshot.LabelSetHash(lsid, false)
+		hashActual := cppbridge.LabelSetFromBuilderHash(
+			[]cppbridge.Label{{Name: "test", Value: s.T().Name()}},
+			nil,
+			snapshot,
+			s.lsids[i],
+		)
+
+		// Assert
+		s.Equal(hashExpected, hashActual)
+	}
+}

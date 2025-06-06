@@ -1,5 +1,7 @@
 package cppbridge
 
+import "runtime"
+
 //
 // help func
 //
@@ -50,4 +52,26 @@ func CompareLabelSets(aLSS, bLSS *LabelSetSnapshot, aLsID, bLsID uint32, dropMet
 		aLsID, bLsID,
 		dropMetricNameA, dropMetricNameB,
 	))
+}
+
+// LabelSetFromBuilderHash hash for label set from builder.
+func LabelSetFromBuilderHash(
+	sortedAdd []Label,
+	sortedDel []string,
+	snapshot *LabelSetSnapshot,
+	lsID uint32,
+) uint64 {
+	var snapshotPointer uintptr
+	if snapshot != nil {
+		snapshotPointer = snapshot.pointer
+	}
+
+	hash := labelSetFromBuilderHash(
+		snapshotPointer,
+		sortedAdd,
+		sortedDel,
+		lsID,
+	)
+	runtime.KeepAlive(snapshot)
+	return hash
 }

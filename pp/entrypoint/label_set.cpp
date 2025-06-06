@@ -580,3 +580,24 @@ extern "C" void prompp_label_set_compare(void* args, void* res) {
       },
       *in->lss_a, *in->lss_b);
 }
+
+extern "C" void prompp_label_set_from_builder_hash(void* args, void* res) {
+  using PromPP::Primitives::Go::LabelSetBuilder;
+  using PromPP::Primitives::Go::SliceView;
+
+  struct Arguments {
+    LssVariantPtr readonly_lss;
+    SliceView<PromPP::Primitives::Go::Label> sorted_add;
+    SliceView<PromPP::Primitives::Go::String> sorted_del;
+    uint32_t ls_id;
+  };
+  struct Result {
+    uint64_t hash;
+  };
+
+  auto in = static_cast<Arguments*>(args);
+  static const entrypoint::head::ReadonlyLss::value_type empty_label_set;
+  const auto& label_set = in->readonly_lss ? std::get<entrypoint::head::ReadonlyLss>(*in->readonly_lss)[in->ls_id] : empty_label_set;
+
+  new (res) Result{.hash = hash_value(LabelSetBuilder{label_set, in->sorted_add, in->sorted_del})};
+}
