@@ -428,6 +428,53 @@ func (b *Builder) Labels() Labels {
 	return sbuilder.Labels()
 }
 
+// Builder allows modifying Labels.
+type UniversalBuilder struct {
+	base Labels
+	del  []string
+	add  []Label
+}
+
+// Labels returns the labels from the builder.
+// If no modifications were made, the original labels are returned.
+func (b *UniversalBuilder) Labels() Labels {
+	if len(b.del) == 0 && len(b.add) == 0 {
+		return b.base
+	}
+
+	sbuilder := NewScratchBuilder(max(b.base.Len()+len(b.add)-len(b.del), 1))
+
+	b.base.Range(func(l Label) {
+		if slices.Contains(b.del, l.Name) || contains(b.add, l.Name) {
+			return
+		}
+
+		sbuilder.Add(l.Name, l.Value)
+	})
+
+	for _, l := range b.add {
+		sbuilder.Add(l.Name, l.Value)
+	}
+
+	return sbuilder.Labels()
+}
+
+// Reset clears all current state for the builder.
+func (b *UniversalBuilder) Reset(base Labels) {
+	b.base = base
+	b.del = b.del[:0]
+	b.add = b.add[:0]
+	if b.base.dropMetricName {
+		b.del = append(b.del, MetricName)
+	}
+
+	b.base.Range(func(l Label) {
+		if l.Value == "" {
+			b.del = append(b.del, l.Name)
+		}
+	})
+}
+
 //
 // SymbolTable
 //
@@ -527,7 +574,7 @@ func (s *storage) SetReceiver(receiver Receiver) {
 	s.receiver.Store(&receiver)
 }
 
-// FindOrEmplaceLabelSet find ls in current lsses or store to worjing LSS and return Labels.
+// FindOrEmplaceLabelSet find ls in current lsses or store to working LSS and return Labels.
 func (s *storage) FindOrEmplaceLabelSet(mls model.LabelSet) Labels {
 	if receiver := s.receiver.Load(); receiver != nil {
 		if ls := (*receiver).Find(mls); !ls.IsEmpty() {
@@ -545,6 +592,31 @@ func (s *storage) FindOrEmplaceLabelSet(mls model.LabelSet) Labels {
 	s.lssMaxID.Store(max(lsID, s.lssMaxID.Load()))
 
 	return NewLabelsWithLSS(s.workingSnapshot, lsID, uint16(mls.Len()))
+}
+
+// FindOrEmplaceLabelSet find ls from bulder in current lsses or store to working LSS and return Labels.
+func (s *storage) FindOrEmplaceFromBuilder(b UniversalBuilder) Labels {
+	// if receiver := s.receiver.Load(); receiver != nil {
+	// 	if ls := (*receiver).Find(mls); !ls.IsEmpty() {
+	// 		return ls
+	// 	}
+	// }
+
+	s.mx.Lock()
+	snapshot, length, lsID := s.workingLSS.FindOrEmplaceFromBuilder(
+		*((*[]cppbridge.Label)(unsafe.Pointer(&b.add))),
+		b.del,
+		b.base.snapshot,
+		b.base.id,
+	)
+	if snapshot != nil {
+		s.workingSnapshot = snapshot
+	}
+	s.mx.Unlock()
+
+	s.lssMaxID.Store(max(lsID, s.lssMaxID.Load()))
+
+	return NewLabelsWithLSS(s.workingSnapshot, lsID, uint16(length)) // #nosec G115 // no overflow
 }
 
 // writeMetrics write metrics for working lss.

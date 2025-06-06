@@ -93,12 +93,40 @@ func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet model.CppLabelSetBuild
 	return primitivesLSSFindOrEmplaceBuilder(lss.pointer, labelSet)
 }
 
+// FindOrEmplaceFromBuilder find in lss LabelSet from builder or emplace and
+// return LabelSetSnapshot if there was a reallocation and ls id.
+//
+//nolint:gocritic // unnamedResult not need
+func (lss *LabelSetStorage) FindOrEmplaceFromBuilder(
+	sortedAdd []Label,
+	sortedDel []string,
+	snapshot *LabelSetSnapshot,
+	lsID uint32,
+) (*LabelSetSnapshot, uint64, uint32) {
+	lssROPtr, length, lsID, hasReallocations := primitivesLSSFindOrEmplaceFromBuilder(
+		lss.pointer,
+		snapshot.pointer,
+		sortedAdd,
+		sortedDel,
+		lsID,
+	)
+	runtime.KeepAlive(lss)
+	runtime.KeepAlive(snapshot)
+
+	if hasReallocations {
+		return newLabelSetSnapshot(lssROPtr), length, lsID
+	}
+
+	return nil, length, lsID
+}
+
 // FindOrEmplaceLabelSet find in lss LabelSet or emplace and
 // return LabelSetSnapshot if there was a reallocation and ls id.
 //
 //nolint:gocritic // unnamedResult not need
 func (lss *LabelSetStorage) FindOrEmplaceLabelSet(labelSet model.LabelSet) (*LabelSetSnapshot, uint32) {
 	lssROPtr, lsID, hasReallocations := primitivesLSSFindOrEmplaceLabelSet(lss.pointer, labelSet)
+	runtime.KeepAlive(lss)
 	if hasReallocations {
 		return newLabelSetSnapshot(lssROPtr), lsID
 	}

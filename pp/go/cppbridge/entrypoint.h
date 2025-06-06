@@ -680,6 +680,26 @@ void prompp_primitives_lss_find_or_emplace(void* args, void* res);
 void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
 
 /**
+ * @brief insert label set from builder into lss
+ *
+ * @param args {
+ *     lss              uintptr      // pointer to constructed lss;
+ *     readonly_lss     uintptr      // pointer to constructed lss;
+ *     sorted_add       []Label      // slice of sorted by name labels
+ *     sorted_del       []string     // slice of sorted label names
+ *     ls_id            uint32       // series id
+ * }
+ *
+ * @param res {
+ *     lss_ro_ptr            uintptr // readonly copy of lss if need.
+ *     ls_id                 uint32  // inserted (or found) label set id
+ *     length                uint64  // length of label set
+ *     lss_has_reallocations bool    // true if lss has reallocations
+ * }
+ */
+void prompp_primitives_lss_find_or_emplace_from_builder(void* args, void* res);
+
+/**
  * @brief insert label set into lss
  *
  * @param args {
@@ -688,7 +708,7 @@ void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
  * }
  *
  * @param res {
- *     lss_ro_ptr            uintptr // readonly copy of lss
+ *     lss_ro_ptr            uintptr // readonly copy of lss if need.
  *     ls_id                 uint32  // inserted (or found) label set id
  *     lss_has_reallocations bool    // true if lss has reallocations
  * }

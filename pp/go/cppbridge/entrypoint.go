@@ -1115,6 +1115,37 @@ func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder model.CppLabelSetBui
 }
 
 //nolint:gocritic // unnamedResult not need
+func primitivesLSSFindOrEmplaceFromBuilder(
+	lss uintptr,
+	snapshotPtr uintptr,
+	sortedAdd []Label,
+	sortedDel []string,
+	lsID uint32,
+) (uintptr, uint64, uint32, bool) {
+	args := struct {
+		lss         uintptr
+		snapshotPtr uintptr
+		sortedAdd   []Label
+		sortedDel   []string
+		lsID        uint32
+	}{lss, snapshotPtr, sortedAdd, sortedDel, lsID}
+	var res struct {
+		snapshotPtr      uintptr
+		labelSetID       uint32
+		length           uint64
+		hasReallocations bool
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_lss_find_or_emplace_from_builder,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.snapshotPtr, res.length, res.labelSetID, res.hasReallocations
+}
+
+//nolint:gocritic // unnamedResult not need
 func primitivesLSSFindOrEmplaceLabelSet(lss uintptr, labelSet model.LabelSet) (uintptr, uint32, bool) {
 	args := struct {
 		lss      uintptr
@@ -1122,7 +1153,7 @@ func primitivesLSSFindOrEmplaceLabelSet(lss uintptr, labelSet model.LabelSet) (u
 	}{lss, labelSet}
 
 	var res struct {
-		lssROPtr         uintptr
+		snapshotPtr      uintptr
 		labelSetID       uint32
 		hasReallocations bool
 	}
@@ -1132,7 +1163,7 @@ func primitivesLSSFindOrEmplaceLabelSet(lss uintptr, labelSet model.LabelSet) (u
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-	return res.lssROPtr, res.labelSetID, res.hasReallocations
+	return res.snapshotPtr, res.labelSetID, res.hasReallocations
 }
 
 func primitivesLSSFind(lss uintptr, labelSet model.LabelSet) (uint32, bool) {

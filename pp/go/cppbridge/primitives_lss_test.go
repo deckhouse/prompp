@@ -345,6 +345,52 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithNewLabelSet() {
 	s.Equal(uint32(expectedLsId), existingLsId)
 }
 
+func (s *QueryableLSSSuite) TestFindOrEmplaceFromBuilderWithExistingLabelSet() {
+	// Arrange
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
+
+	// Act
+	snapshotWithAdd, lengthWithAdd, existingLsIdWithAdd := s.lss.FindOrEmplaceFromBuilder(
+		[]cppbridge.Label{{Name: "che", Value: "bureck"}},
+		nil,
+		labelSetSnapshot,
+		0,
+	)
+	snapshotWithDel, lengthWithDel, existingLsIdWithDel := s.lss.FindOrEmplaceFromBuilder(
+		nil,
+		[]string{"che"},
+		labelSetSnapshot,
+		1,
+	)
+
+	// Assert
+	s.Equal(uint64(2), lengthWithAdd)
+	s.Equal(uint64(1), lengthWithDel)
+	s.Nil(snapshotWithAdd)
+	s.Nil(snapshotWithDel)
+	s.Equal(uint32(1), existingLsIdWithAdd)
+	s.Equal(uint32(0), existingLsIdWithDel)
+}
+
+func (s *QueryableLSSSuite) TestFindOrEmplaceFromBuilderWithNewLabelSet() {
+	// Arrange
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
+
+	// Act
+	expectedLsId := len(s.labelSetIDs)
+	snapshot, length, existingLsId := s.lss.FindOrEmplaceFromBuilder(
+		[]cppbridge.Label{{Name: "new_lol", Value: "new_kek"}},
+		nil,
+		labelSetSnapshot,
+		0,
+	)
+
+	// Assert
+	s.Equal(uint64(2), length)
+	s.NotNil(snapshot)
+	s.Equal(uint32(expectedLsId), existingLsId)
+}
+
 func (s *QueryableLSSSuite) TestFindOrEmplaceLabelSet() {
 	// Arrange
 	mls := model.NewLabelSetBuilder().Set("__name__", "somename").Set("job", "somejob").Build()
@@ -379,6 +425,8 @@ func (s *QueryableLSSSuite) TestFind() {
 	s.Equal(expectedLSID, actualLSID)
 }
 
+// TEST
+
 func (s *QueryableLSSSuite) TestFindOrEmplace() {
 	// Arrange
 	mls := model.NewLabelSetBuilder().Set("__name__", "somename").Set("job", "somejob").Build()
@@ -391,4 +439,40 @@ func (s *QueryableLSSSuite) TestFindOrEmplace() {
 
 	s.T().Log(res1.LabelSetID, res1.LssHasReallocations)
 	s.T().Log(res2.LabelSetID, res2.LssHasReallocations)
+}
+
+func (s *QueryableLSSSuite) TestFindOrEmplaceFromBuilderWithNewLabelSet2() {
+	// Arrange
+	mls := model.NewLabelSetBuilder().Set("__name__", "somename").Set("job", "somejob").Build()
+	res := s.lss.FindOrEmplace(mls)
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
+
+	labelSetSnapshot.RangeLabelSet(res.LabelSetID, false, func(l cppbridge.Label) error {
+		s.T().Log(l.Name, l.Value)
+		return nil
+	})
+
+	// Act
+	snapshot, _, existingLsId := s.lss.FindOrEmplaceFromBuilder(
+		nil,
+		// []cppbridge.Label{{Name: "new_lol", Value: "new_kek"}},
+		[]string{"__name__"},
+		labelSetSnapshot,
+		res.LabelSetID,
+	)
+
+	s.T().Log(snapshot, existingLsId)
+
+	if snapshot != nil {
+		labelSetSnapshot = snapshot
+	}
+
+	labelSetSnapshot.RangeLabelSet(existingLsId, false, func(l cppbridge.Label) error {
+		s.T().Log(l.Name, l.Value)
+		return nil
+	})
+
+	// Assert
+	// s.NotNil(snapshot)
+	// s.Equal(uint32(expectedLsId), existingLsId)
 }

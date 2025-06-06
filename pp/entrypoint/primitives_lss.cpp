@@ -93,6 +93,44 @@ extern "C" void prompp_primitives_lss_find_or_emplace_builder(void* args, void* 
       *in->lss));
 }
 
+extern "C" void prompp_primitives_lss_find_or_emplace_from_builder(void* args, void* res) {
+  using PromPP::Primitives::Go::LabelSetBuilder;
+  using PromPP::Primitives::Go::SliceView;
+
+  struct Arguments {
+    LssVariantPtr lss;
+    LssVariantPtr readonly_lss;
+    SliceView<PromPP::Primitives::Go::Label> sorted_add;
+    SliceView<PromPP::Primitives::Go::String> sorted_del;
+    uint32_t ls_id;
+  };
+
+  struct Result {
+    LssVariantPtr lss_ro_ptr;
+    uint32_t ls_id;
+    size_t length;
+    bool lss_has_reallocations;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  auto out = new (res) Result();
+
+  std::visit(
+      [in, out]<typename Lss>(Lss& lss) {
+        const auto result = find_or_emplace<Lss>(
+            lss, LabelSetBuilder{std::get<entrypoint::head::ReadonlyQueryableEncodingBimap>(*in->readonly_lss)[in->ls_id], in->sorted_add, in->sorted_del});
+
+        out->ls_id = result.ls_id;
+        out->length = lss[out->ls_id].size();
+        out->lss_has_reallocations = result.lss_has_reallocations;
+      },
+      *in->lss);
+
+  if (out->lss_has_reallocations) [[unlikely]] {
+    out->lss_ro_ptr = entrypoint::head::create_readonly_lss(*in->lss);
+  }
+}
+
 extern "C" void prompp_primitives_lss_find_or_emplace_label_set(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
@@ -109,13 +147,10 @@ extern "C" void prompp_primitives_lss_find_or_emplace_label_set(void* args, void
   auto out = new (res) Result();
   std::visit(
       [in, out]<typename Lss>(Lss& lss) {
-        if constexpr (Lss::kIsReadOnly) {
-          throw BareBones::Exception(0x1b877a0ab46a69a6, "lss is readonly");
-        } else {
-          entrypoint::head::lss_memory::has_reallocations = false;
-          out->ls_id = lss.find_or_emplace(in->label_set);
-          out->lss_has_reallocations = entrypoint::head::lss_memory::has_reallocations;
-        }
+        const auto result = find_or_emplace<Lss>(lss, in->label_set);
+
+        out->ls_id = result.ls_id;
+        out->lss_has_reallocations = result.lss_has_reallocations;
       },
       *in->lss);
 
