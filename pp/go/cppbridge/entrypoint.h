@@ -92,6 +92,62 @@ void prompp_get_head_status(void* args, void* res);
  */
 void prompp_free_head_status(void* args);
 
+/**
+ * @brief Return head status from lss.
+ *
+ * @param args {
+ *     lss         uintptr      // pointer to constructed lss
+ *     limit       int          // statistics limit
+ * }
+ *
+ * @param res {
+ *     status struct {          // head status
+ *          label_value_count_by_label_name []struct {
+ *              name string
+ *              count uint32
+ *          }
+ *          series_count_by_metric_name []struct {
+ *              name string
+ *              count uint32
+ *          }
+ *          memory_in_bytes_by_label_name []struct {
+ *              name string
+ *              size uint32
+ *          }
+ *          series_count_by_label_value_pair [] struct {
+ *              name string
+ *              value string
+ *              count uint32
+ *          }
+ *          num_series      uint32
+ *          num_label_pairs uint32
+ *          rule_queried_series uint32
+ *          federate_queried_series uint32
+ *          other_queried_series uint32
+ *     }
+ * }
+ */
+void prompp_get_head_status_lss(void* args, void* res);
+
+/**
+ * @brief Return head status from lss.
+ *
+ * @param args {
+ *     dataStorage uintptr      // pointer to constructed data storage
+ * }
+ *
+ * @param res {
+ *     status struct {          // head status
+ *          time_interval struct {
+ *              min int64
+ *              max int64
+ *          }
+ *          chunk_count     uint32
+ *     }
+ * }
+ */
+void prompp_get_head_status_data_storage(void* args, void* res);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif
@@ -981,19 +1037,6 @@ void prompp_prometheus_per_shard_relabeler_ctor(void* args, void* res);
 void prompp_prometheus_per_shard_relabeler_dtor(void* args);
 
 /**
- * @brief return size of allocated memory for cache map.
- *
- * @param args {
- *     per_shard_relabeler uintptr // pointer to constructed per shard relabeler;
- * }
- *
- * @param res {
- *     allocated_memory    uint64  // size of allocated memory for label sets;
- * }
- */
-void prompp_prometheus_per_shard_relabeler_cache_allocated_memory(void* args, void* res);
-
-/**
  * @brief relabeling incomig hashdex(first stage).
  *
  * @param args {
@@ -1094,16 +1137,16 @@ void prompp_prometheus_per_shard_relabeler_input_collect_stalenans(void* args, v
  * @brief add relabeled ls to lss, add to result and add to cache update(second stage).
  *
  * @param args {
- *     inner_series           *InnerSeries          // go InnerSeries per shard;
- *     relabeled_series       *RelabeledSeries      // go RelabeledSeries per shard;
- *     relabeler_state_update *RelabelerStateUpdate // pointer to RelabelerStateUpdate;
- *     per_shard_relabeler    uintptr               // pointer to constructed per shard relabeler;
- *     lss                    uintptr               // pointer to constructed label sets;
+ *     shards_inner_series           []*InnerSeries          // go InnerSeries per source shard;
+ *     shards_relabeled_series       []*RelabeledSeries      // go RelabeledSeries per source shard;
+ *     shards_relabeler_state_update []*RelabelerStateUpdate // pointer to RelabelerStateUpdate per source shard;
+ *     per_shard_relabeler           uintptr                 // pointer to constructed per shard relabeler;
+ *     lss                           uintptr                 // pointer to constructed label sets;
  * }
  *
  * @param res {
- *     error                        []byte          // error string if thrown
- *     target_lss_has_reallocations bool            // true if target lss has reallocations
+ *     error                         []byte                  // error string if thrown
+ *     target_lss_has_reallocations  bool                    // true if target lss has reallocations
  * }
  */
 void prompp_prometheus_per_shard_relabeler_append_relabeler_series(void* args, void* res);
@@ -1116,6 +1159,22 @@ void prompp_prometheus_per_shard_relabeler_append_relabeler_series(void* args, v
  *     per_shard_relabeler    uintptr               // pointer to constructed per shard relabeler;
  *     cache                  uintptr               // pointer to constructed Cache;
  *     relabeled_shard_id     uint16                // relabeled shard id;
+ * }
+ *
+ * @param res {
+ *     error                  []byte  // error string if thrown;
+ * }
+ */
+void prompp_prometheus_per_shard_singe_relabeler_update_relabeler_state(void* args, void* res);
+
+/**
+ * @brief add to cache relabled data(third stage).
+ *
+ * @param args {
+ *     shards_relabeler_state_update []*RelabelerStateUpdate // pointer to RelabelerStateUpdate per source shard;
+ *     per_shard_relabeler           uintptr                 // pointer to constructed per shard relabeler;
+ *     cache                         uintptr                 // pointer to constructed Cache;
+ *     relabeled_shard_id            uint16                  // relabeled shard id;
  * }
  *
  * @param res {

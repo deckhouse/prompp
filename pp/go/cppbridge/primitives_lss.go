@@ -80,17 +80,74 @@ func newLabelSetStorageFromPointer(lssPointer uintptr) *LabelSetStorage {
 
 // AllocatedMemory return size of allocated memory for label sets in C++.
 func (lss *LabelSetStorage) AllocatedMemory() uint64 {
-	return primitivesLSSAllocatedMemory(lss.pointer)
+	res := primitivesLSSAllocatedMemory(lss.pointer)
+	runtime.KeepAlive(lss)
+	return res
 }
 
 // FindOrEmplace find in lss LabelSet or emplace and return ls id.
 func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) FindOrEmplaceResult {
-	return primitivesLSSFindOrEmplace(lss.pointer, labelSet)
+	res := primitivesLSSFindOrEmplace(lss.pointer, labelSet)
+	runtime.KeepAlive(lss)
+	return res
 }
 
 // FindOrEmplaceBuilder find in lss LabelSet or emplace and return ls id.
-func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet model.CppLabelSetBuilder) FindOrEmplaceResult {
-	return primitivesLSSFindOrEmplaceBuilder(lss.pointer, labelSet)
+func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet CppLabelSetBuilder) FindOrEmplaceResult {
+	res := primitivesLSSFindOrEmplaceBuilder(lss.pointer, labelSet)
+	runtime.KeepAlive(lss)
+	return res
+}
+
+// FindOrEmplaceFromBuilder find in lss LabelSet from builder or emplace and
+// return LabelSetSnapshot if there was a reallocation and ls id.
+//
+//nolint:gocritic // unnamedResult not need
+func (lss *LabelSetStorage) FindOrEmplaceFromBuilder(
+	sortedAdd []Label,
+	sortedDel []string,
+	snapshot *LabelSetSnapshot,
+	lsID uint32,
+) (*LabelSetSnapshot, uint64, uint32) {
+	lssROPtr, length, lsID, hasReallocations := primitivesLSSFindOrEmplaceFromBuilder(
+		lss.pointer,
+		snapshot.pointer,
+		sortedAdd,
+		sortedDel,
+		lsID,
+	)
+	runtime.KeepAlive(lss)
+	runtime.KeepAlive(snapshot)
+
+	if hasReallocations {
+		return newLabelSetSnapshot(lssROPtr), length, lsID
+	}
+
+	return nil, length, lsID
+}
+
+// FindOrEmplaceLabelSet find in lss LabelSet or emplace and
+// return LabelSetSnapshot if there was a reallocation and ls id.
+//
+//nolint:gocritic // unnamedResult not need
+func (lss *LabelSetStorage) FindOrEmplaceLabelSet(labelSet model.LabelSet) (*LabelSetSnapshot, uint32) {
+	lssROPtr, lsID, hasReallocations := primitivesLSSFindOrEmplaceLabelSet(lss.pointer, labelSet)
+	runtime.KeepAlive(lss)
+	if hasReallocations {
+		return newLabelSetSnapshot(lssROPtr), lsID
+	}
+
+	return nil, lsID
+}
+
+// Find label set in lss, return lss, lsid and bool ok.
+func (lss *LabelSetStorage) Find(mls model.LabelSet) (uint32, bool) {
+	lsID, ok := primitivesLSSFind(lss.pointer, mls)
+	if !ok {
+		return 0, false
+	}
+
+	return lsID, true
 }
 
 // FindOrEmplaceFromBuilder find in lss LabelSet from builder or emplace and
@@ -179,6 +236,7 @@ func (lss *LabelSetStorage) QueryLabelValues(
 // GetLabelSets - returns copy of lss data.
 func (lss *LabelSetStorage) GetLabelSets(labelSetIDs []uint32) *LabelSetStorageGetLabelSetsResult {
 	result := &LabelSetStorageGetLabelSetsResult{labelSets: primitivesLSSGetLabelSets(lss.pointer, labelSetIDs)}
+	runtime.KeepAlive(lss)
 
 	runtime.SetFinalizer(result, func(result *LabelSetStorageGetLabelSetsResult) {
 		primitivesLSSFreeLabelSets(result.labelSets)
@@ -198,20 +256,21 @@ func (lss *LabelSetStorage) Pointer() uintptr {
 
 // CreateLabelSetSnapshot create LabelSetSnapshot from lss.
 func (lss *LabelSetStorage) CreateLabelSetSnapshot() *LabelSetSnapshot {
-	return newLabelSetSnapshot(primitivesLSSCreateReadonlyLss(lss.pointer))
+	res := newLabelSetSnapshot(primitivesLSSCreateReadonlyLss(lss.pointer))
+	runtime.KeepAlive(lss)
+	return res
 }
 
 // RangeLabelSet serialize to slice labels from lss and calls f on each label.
 func (lss *LabelSetStorage) RangeLabelSet(lsID uint32, dropMetricName bool, do func(l Label) error) error {
 	labelSet := labelSetSerialize(lss.pointer, lsID, dropMetricName)
-
 	for i := range labelSet {
 		if err := do(labelSet[i]); err != nil {
 			labelSetFree(labelSet)
 			return err
 		}
 	}
-
+	runtime.KeepAlive(lss)
 	labelSetFree(labelSet)
 
 	return nil
@@ -357,4 +416,16 @@ func GetCaller(ctx context.Context) uint32 {
 // SetCaller set callerID to context.
 func SetCaller(parent context.Context, callerID uint32) context.Context {
 	return context.WithValue(parent, ctxCallerKey{}, callerID)
+}
+
+//
+// CppLabelSetBuilder
+//
+
+// CppLabelSetBuilder - container used for Go-C++ interaction and shouldn't be modified.
+type CppLabelSetBuilder struct {
+	ReadonlyLss uintptr
+	LsId        uint32
+	SortedAdd   []Label
+	SortedDel   []string
 }

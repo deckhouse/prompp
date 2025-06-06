@@ -65,6 +65,7 @@ import (
 	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage" // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/cppbridge"               // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/relabeler/appender"      // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/relabeler/head"          // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"  // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/relabeler/head/ready"    // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/relabeler/remotewriter"  // PP_CHANGES.md: rebuild on cpp
@@ -493,11 +494,6 @@ func main() {
 	a.Flag("enable-feature", "Comma separated feature names to enable. Valid options: agent, auto-gomemlimit, exemplar-storage, expand-external-labels, memory-snapshot-on-shutdown, promql-per-step-stats, promql-experimental-functions, remote-write-receiver (DEPRECATED), extra-scrape-metrics, new-service-discovery-manager, auto-gomaxprocs, no-default-scrape-port, native-histograms, otlp-write-receiver, created-timestamp-zero-ingestion, concurrent-rule-eval. See https://prometheus.io/docs/prometheus/latest/feature_flags/ for more details.").
 		Default("").StringsVar(&cfg.featureList)
 
-	a.Flag(
-		"appender.copy-series-on-rotate",
-		"Copy active series from the current head to the new head during rotation.",
-	).Hidden().Default("false").BoolVar(&appender.CopySeriesOnRotate)
-
 	promlogflag.AddFlags(a, &cfg.promlogConfig)
 
 	a.Flag("write-documentation", "Generate command line documentation. Internal use.").Hidden().Action(func(ctx *kingpin.ParseContext) error {
@@ -517,6 +513,8 @@ func main() {
 	}
 
 	logger := promlog.New(&cfg.promlogConfig)
+
+	readPromPPFeatures(logger)
 
 	if err := cfg.setFeatureListOptions(logger); err != nil {
 		fmt.Fprintln(os.Stderr, fmt.Errorf("Error parsing feature list: %w", err))
@@ -1927,4 +1925,48 @@ type discoveryManager interface {
 	ApplyConfig(cfg map[string]discovery.Configs) error
 	Run() error
 	SyncCh() <-chan map[string][]*targetgroup.Group
+}
+
+func readPromPPFeatures(logger log.Logger) {
+	features := os.Getenv("PROMPP_FEATURES")
+	if features == "" {
+		return
+	}
+
+	for _, feature := range strings.Split(features, ",") {
+		fname, fvalue, _ := strings.Cut(feature, "=")
+		switch strings.TrimSpace(fname) {
+		case "head_copy_series_on_rotate":
+			appender.CopySeriesOnRotate = true
+			level.Info(logger).Log(
+				"msg",
+				"[FEATURE] Copying active series from current head to new head during rotation is enabled.",
+			)
+
+		case "head_read_concurrency":
+			var (
+				v   = 1
+				err error
+			)
+
+			if fvalue := strings.TrimSpace(fvalue); fvalue != "" {
+				v, err = strconv.Atoi(fvalue)
+				if err != nil {
+					level.Error(logger).Log("msg", "Error parsing head-read-concurrency value", "err", err)
+					continue
+				}
+			}
+
+			head.ExtraReadConcurrency = v
+			level.Info(logger).Log(
+				"msg",
+				"[FEATURE] Concurrency reading is enabled.",
+				"extra",
+				v,
+			)
+
+		case "disable_coredumps":
+			// TODO disable-coredumps
+		}
+	}
 }

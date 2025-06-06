@@ -54,14 +54,6 @@ func (h *DiscardableRotatableHead) CommitToWal() error {
 	return h.head.CommitToWal()
 }
 
-func (h *DiscardableRotatableHead) ForEachShard(fn relabeler.ShardFn) error {
-	return h.head.ForEachShard(fn)
-}
-
-func (h *DiscardableRotatableHead) OnShard(shardID uint16, fn relabeler.ShardFn) error {
-	return h.head.OnShard(shardID, fn)
-}
-
 // MergeOutOfOrderChunks merge chunks with out of order data chunks.
 func (h *DiscardableRotatableHead) MergeOutOfOrderChunks() {
 	h.head.MergeOutOfOrderChunks()
@@ -122,9 +114,18 @@ func (h *DiscardableRotatableHead) CopySeriesFrom(other relabeler.Head) {
 	h.head.CopySeriesFrom(other)
 }
 
-// ReadEachShard execute read fn on each shard.
-func (h *DiscardableRotatableHead) ReadEachShard(fn relabeler.ShardFn) error {
-	return h.head.ReadEachShard(fn)
+// CreateTask create a task for operations on the head shards.
+func (h *DiscardableRotatableHead) CreateTask(
+	taskName string,
+	fn relabeler.ShardFn,
+	onLss, isExclusive bool,
+) *relabeler.GenericTask {
+	return h.head.CreateTask(taskName, fn, onLss, isExclusive)
+}
+
+// Enqueue the task to be executed on head.
+func (h *DiscardableRotatableHead) Enqueue(t *relabeler.GenericTask) {
+	h.head.Enqueue(t)
 }
 
 // Find label set in lss, if not found return EmptyLabels.

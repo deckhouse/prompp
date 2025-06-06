@@ -1098,10 +1098,10 @@ func primitivesLSSFindOrEmplace(lss uintptr, labelSet model.LabelSet) FindOrEmpl
 	return res
 }
 
-func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder model.CppLabelSetBuilder) FindOrEmplaceResult {
+func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder CppLabelSetBuilder) FindOrEmplaceResult {
 	args := struct {
 		lss     uintptr
-		builder model.CppLabelSetBuilder
+		builder CppLabelSetBuilder
 	}{lss, builder}
 	var res FindOrEmplaceResult
 
@@ -1526,24 +1526,6 @@ func prometheusPerShardRelabelerDtor(perShardRelabeler uintptr) {
 	)
 }
 
-// prometheusPerShardRelabelerCacheAllocatedMemory - return size of allocated memory for cache map.
-func prometheusPerShardRelabelerCacheAllocatedMemory(perShardRelabeler uintptr) uint64 {
-	args := struct {
-		perShardRelabeler uintptr
-	}{perShardRelabeler}
-	var res struct {
-		cacheAllocatedMemory uint64
-	}
-
-	fastcgo.UnsafeCall2(
-		C.prompp_prometheus_per_shard_relabeler_cache_allocated_memory,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.cacheAllocatedMemory
-}
-
 // prometheusPerShardRelabelerInputRelabeling - wrapper for relabeling incoming hashdex(first stage).
 func prometheusPerShardRelabelerInputRelabeling(
 	perShardRelabeler, inputLss, targetLss, cache, hashdex uintptr,
@@ -1631,17 +1613,17 @@ func prometheusPerShardRelabelerInputRelabelingWithStalenans(
 // add to result and add to cache update(second stage).
 func prometheusPerShardRelabelerAppendRelabelerSeries(
 	perShardRelabeler, lss uintptr,
-	innerSeries *InnerSeries,
-	relabeledSeries *RelabeledSeries,
-	relabelerStateUpdate *RelabelerStateUpdate,
+	shardsInnerSeries []*InnerSeries,
+	shardsRelabeledSeries []*RelabeledSeries,
+	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
 ) (exception []byte, targetLssHasReallocations bool) {
 	args := struct {
-		innerSeries          *InnerSeries
-		relabeledSeries      *RelabeledSeries
-		relabelerStateUpdate *RelabelerStateUpdate
-		perShardRelabeler    uintptr
-		lss                  uintptr
-	}{innerSeries, relabeledSeries, relabelerStateUpdate, perShardRelabeler, lss}
+		shardsInnerSeries          []*InnerSeries
+		shardsRelabeledSeries      []*RelabeledSeries
+		shardsRelabelerStateUpdate []*RelabelerStateUpdate
+		perShardRelabeler          uintptr
+		lss                        uintptr
+	}{shardsInnerSeries, shardsRelabeledSeries, shardsRelabelerStateUpdate, perShardRelabeler, lss}
 	var res struct {
 		exception                 []byte
 		targetLssHasReallocations bool
@@ -1658,8 +1640,8 @@ func prometheusPerShardRelabelerAppendRelabelerSeries(
 	return res.exception, res.targetLssHasReallocations
 }
 
-// prometheusPerShardRelabelerUpdateRelabelerState - wrapper for add to cache relabled data(third stage).
-func prometheusPerShardRelabelerUpdateRelabelerState(
+// prometheusPerShardSingeRelabelerUpdateRelabelerState - wrapper for add to cache relabled data(third stage).
+func prometheusPerShardSingeRelabelerUpdateRelabelerState(
 	relabelerStateUpdate *RelabelerStateUpdate,
 	perShardRelabeler, cache uintptr,
 	relabeledShardID uint16,
@@ -1670,6 +1652,31 @@ func prometheusPerShardRelabelerUpdateRelabelerState(
 		cache                uintptr
 		relabeledShardID     uint16
 	}{relabelerStateUpdate, perShardRelabeler, cache, relabeledShardID}
+	var res struct {
+		exception []byte
+	}
+	start := time.Now().UnixNano()
+	fastcgo.UnsafeCall2(
+		C.prompp_prometheus_per_shard_singe_relabeler_update_relabeler_state,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+	inputRelabelerUpdateRelabelerStateSum.Add(float64(time.Now().UnixNano() - start))
+	inputRelabelerUpdateRelabelerStateCount.Inc()
+
+	return res.exception
+}
+
+// prometheusPerShardRelabelerUpdateRelabelerState - wrapper for add to cache relabled data(third stage).
+func prometheusPerShardRelabelerUpdateRelabelerState(
+	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
+	perShardRelabeler, cache uintptr,
+) []byte {
+	args := struct {
+		relabelerStateUpdates []*RelabelerStateUpdate
+		perShardRelabeler     uintptr
+		cache                 uintptr
+	}{shardsRelabelerStateUpdate, perShardRelabeler, cache}
 	var res struct {
 		exception []byte
 	}
@@ -2252,6 +2259,31 @@ func getHeadStatus(lss, dataStorage uintptr, status *HeadStatus, limit int) {
 func freeHeadStatus(status *HeadStatus) {
 	fastcgo.UnsafeCall1(
 		C.prompp_free_head_status,
+		uintptr(unsafe.Pointer(status)),
+	)
+}
+
+func getHeadStatusLSS(lss uintptr, status *HeadStatus, limit int) {
+	args := struct {
+		lss   uintptr
+		limit int
+	}{lss, limit}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_get_head_status_lss,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(status)),
+	)
+}
+
+func getHeadStatusDataStorage(dataStorage uintptr, status *HeadStatus) {
+	args := struct {
+		dataStorage uintptr
+	}{dataStorage}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_get_head_status_data_storage,
+		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(status)),
 	)
 }

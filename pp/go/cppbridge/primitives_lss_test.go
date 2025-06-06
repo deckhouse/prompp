@@ -2,6 +2,7 @@ package cppbridge_test
 
 import (
 	"context"
+	"runtime"
 	"testing"
 
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -310,18 +311,21 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithExistingLabelSet() {
 	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
 
 	// Act
-	existingLsIdWithAdd := s.lss.FindOrEmplaceBuilder(model.CppLabelSetBuilder{
+	existingLsIdWithAdd := s.lss.FindOrEmplaceBuilder(cppbridge.CppLabelSetBuilder{
 		ReadonlyLss: labelSetSnapshot.Pointer(),
 		LsId:        0,
-		SortedAdd:   []model.SimpleLabel{{Name: "che", Value: "bureck"}},
+		SortedAdd:   []cppbridge.Label{{Name: "che", Value: "bureck"}},
 		SortedDel:   nil,
 	}).LabelSetID
-	existingLsIdWithDel := s.lss.FindOrEmplaceBuilder(model.CppLabelSetBuilder{
+	existingLsIdWithDel := s.lss.FindOrEmplaceBuilder(cppbridge.CppLabelSetBuilder{
 		ReadonlyLss: labelSetSnapshot.Pointer(),
 		LsId:        1,
 		SortedAdd:   nil,
 		SortedDel:   []string{"che"},
 	}).LabelSetID
+
+	// TODO: public object should encapsulate keep alives
+	runtime.KeepAlive(labelSetSnapshot)
 
 	// Assert
 	s.Equal(uint32(1), existingLsIdWithAdd)
@@ -334,12 +338,14 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithNewLabelSet() {
 
 	// Act
 	expectedLsId := len(s.labelSetIDs)
-	existingLsId := s.lss.FindOrEmplaceBuilder(model.CppLabelSetBuilder{
+	existingLsId := s.lss.FindOrEmplaceBuilder(cppbridge.CppLabelSetBuilder{
 		ReadonlyLss: labelSetSnapshot.Pointer(),
 		LsId:        0,
-		SortedAdd:   []model.SimpleLabel{{Name: "new_lol", Value: "new_kek"}},
+		SortedAdd:   []cppbridge.Label{{Name: "new_lol", Value: "new_kek"}},
 		SortedDel:   nil,
 	}).LabelSetID
+	// TODO: public object should encapsulate keep alives
+	runtime.KeepAlive(labelSetSnapshot)
 
 	// Assert
 	s.Equal(uint32(expectedLsId), existingLsId)

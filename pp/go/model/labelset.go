@@ -661,15 +661,3 @@ func (builder *LabelSetSimpleBuilder) String() string {
 
 	return b.String()
 }
-
-//
-// CppLabelSetBuilder
-//
-
-// CppLabelSetBuilder - container used for Go-C++ interaction and shouldn't be modified.
-type CppLabelSetBuilder struct {
-	ReadonlyLss uintptr
-	LsId        uint32
-	SortedAdd   []SimpleLabel
-	SortedDel   []string
-}
