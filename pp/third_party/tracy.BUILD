@@ -13,6 +13,7 @@ cmake(
     lib_source = ":src",
     generate_args = [
         "-DTRACY_ENABLE=ON",
+        "-DTRACY_VERBOSE=ON",
     ],
     copts = [
         "-Wno-error"

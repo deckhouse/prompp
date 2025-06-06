@@ -1,6 +1,9 @@
 #include <chrono>
 #include <fstream>
 
+#define TRACY_ENABLE
+#include "tracy/Tracy.hpp"
+
 #include <benchmark/benchmark.h>
 
 #include "bare_bones/preprocess.h"
@@ -41,6 +44,8 @@ void BenchmarkSeriesDataEncoder(benchmark::State& state) {
 
   series_data::DataStorage storage;
   series_data::Encoder encoder{storage};
+
+  ZoneScoped;
 
   for ([[maybe_unused]] auto _ : state) {
     for (const auto& sample : samples) {

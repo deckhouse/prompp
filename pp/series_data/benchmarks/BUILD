@@ -7,5 +7,6 @@ cc_binary(
     deps = [
         "//:series_data",
         "@google_benchmark//:benchmark_main",
+        "@tracy//:tracy"
     ],
 )
