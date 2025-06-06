@@ -143,57 +143,7 @@ func (lss *LabelSetStorage) FindOrEmplaceLabelSet(labelSet model.LabelSet) (*Lab
 // Find label set in lss, return lss, lsid and bool ok.
 func (lss *LabelSetStorage) Find(mls model.LabelSet) (uint32, bool) {
 	lsID, ok := primitivesLSSFind(lss.pointer, mls)
-	if !ok {
-		return 0, false
-	}
-
-	return lsID, true
-}
-
-// FindOrEmplaceFromBuilder find in lss LabelSet from builder or emplace and
-// return LabelSetSnapshot if there was a reallocation and ls id.
-//
-//nolint:gocritic // unnamedResult not need
-func (lss *LabelSetStorage) FindOrEmplaceFromBuilder(
-	sortedAdd []Label,
-	sortedDel []string,
-	snapshot *LabelSetSnapshot,
-	lsID uint32,
-) (*LabelSetSnapshot, uint64, uint32) {
-	lssROPtr, length, lsID, hasReallocations := primitivesLSSFindOrEmplaceFromBuilder(
-		lss.pointer,
-		snapshot.pointer,
-		sortedAdd,
-		sortedDel,
-		lsID,
-	)
 	runtime.KeepAlive(lss)
-	runtime.KeepAlive(snapshot)
-
-	if hasReallocations {
-		return newLabelSetSnapshot(lssROPtr), length, lsID
-	}
-
-	return nil, length, lsID
-}
-
-// FindOrEmplaceLabelSet find in lss LabelSet or emplace and
-// return LabelSetSnapshot if there was a reallocation and ls id.
-//
-//nolint:gocritic // unnamedResult not need
-func (lss *LabelSetStorage) FindOrEmplaceLabelSet(labelSet model.LabelSet) (*LabelSetSnapshot, uint32) {
-	lssROPtr, lsID, hasReallocations := primitivesLSSFindOrEmplaceLabelSet(lss.pointer, labelSet)
-	runtime.KeepAlive(lss)
-	if hasReallocations {
-		return newLabelSetSnapshot(lssROPtr), lsID
-	}
-
-	return nil, lsID
-}
-
-// Find label set in lss, return lss, lsid and bool ok.
-func (lss *LabelSetStorage) Find(mls model.LabelSet) (uint32, bool) {
-	lsID, ok := primitivesLSSFind(lss.pointer, mls)
 	if !ok {
 		return 0, false
 	}
@@ -416,16 +366,4 @@ func GetCaller(ctx context.Context) uint32 {
 // SetCaller set callerID to context.
 func SetCaller(parent context.Context, callerID uint32) context.Context {
 	return context.WithValue(parent, ctxCallerKey{}, callerID)
-}
-
-//
-// CppLabelSetBuilder
-//
-
-// CppLabelSetBuilder - container used for Go-C++ interaction and shouldn't be modified.
-type CppLabelSetBuilder struct {
-	ReadonlyLss uintptr
-	LsId        uint32
-	SortedAdd   []Label
-	SortedDel   []string
 }

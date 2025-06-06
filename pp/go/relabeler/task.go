@@ -45,6 +45,9 @@ const (
 	// LSSHeadStatus name of task.
 	LSSHeadStatus = "lss_head_status"
 
+	// LSSFind name of task.
+	LSSFind = "lss_find"
+
 	// LSSQueryChunkQuerier name of task.
 	LSSQueryChunkQuerier = "lss_query_chunk_querier"
 	// LSSLabelValuesChunkQuerier name of task.

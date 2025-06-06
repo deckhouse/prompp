@@ -166,13 +166,40 @@ extern "C" void prompp_primitives_lss_find(void* args, void* res) {
   };
   struct Result {
     uint32_t ls_id;
-    bool has;
+    bool has{false};
   };
 
   auto in = static_cast<Arguments*>(args);
   auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
 
   std::optional<uint32_t> ls_id = lss.find(in->label_set);
+
+  if (ls_id.has_value()) {
+    new (res) Result{.ls_id = ls_id.value(), .has = ls_id.has_value()};
+  }
+}
+
+extern "C" void prompp_primitives_lss_find_from_builder(void* args, void* res) {
+  using PromPP::Primitives::Go::LabelSetBuilder;
+  using PromPP::Primitives::Go::SliceView;
+
+  struct Arguments {
+    LssVariantPtr lss;
+    LssVariantPtr readonly_lss;
+    SliceView<PromPP::Primitives::Go::Label> sorted_add;
+    SliceView<PromPP::Primitives::Go::String> sorted_del;
+    uint32_t ls_id;
+  };
+  struct Result {
+    uint32_t ls_id;
+    bool has;
+  };
+
+  auto in = static_cast<Arguments*>(args);
+  auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
+
+  std::optional<uint32_t> ls_id =
+      lss.find(LabelSetBuilder{std::get<entrypoint::head::ReadonlyQueryableEncodingBimap>(*in->readonly_lss)[in->ls_id], in->sorted_add, in->sorted_del});
 
   if (ls_id.has_value()) {
     new (res) Result{.ls_id = ls_id.value(), .has = ls_id.has_value()};
