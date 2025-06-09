@@ -5,7 +5,17 @@ cc_binary(
     srcs = ["stream_v_byte_benchmark.cpp"],
     malloc = "@jemalloc",
     deps = [
-        "//:bare_bones_headers",
+        "//:bare_bones",
+        "@google_benchmark//:benchmark_main",
+    ],
+)
+
+cc_binary(
+    name = "encoding",
+    srcs = ["encoding_benchmark.cpp"],
+    malloc = "@jemalloc",
+    deps = [
+        "//:bare_bones",
         "@google_benchmark//:benchmark_main",
     ],
 )
