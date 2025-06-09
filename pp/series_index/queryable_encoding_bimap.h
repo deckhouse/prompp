@@ -55,6 +55,7 @@ class QueryableEncodingBimap final
   PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(const LabelSet& label_set, size_t hash) noexcept {
     hash = phmap_hash(hash);
     if (auto it = ls_id_hash_set_.find(label_set, hash); it != ls_id_hash_set_.end()) {
+      mark_series_as_added(*it);
       return *it;
     }
 
@@ -68,10 +69,7 @@ class QueryableEncodingBimap final
 
   template <class Class>
   PROMPP_ALWAYS_INLINE std::optional<uint32_t> find(const Class& c) const noexcept {
-    if (auto i = ls_id_hash_set_.find(c); i != ls_id_hash_set_.end()) {
-      return *i;
-    }
-    return {};
+    return find(c, Base::hasher()(c));
   }
 
   template <class Class>
