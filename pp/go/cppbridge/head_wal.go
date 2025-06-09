@@ -25,11 +25,14 @@ func (*HeadWalEncoder) Version() uint8 {
 }
 
 func (e *HeadWalEncoder) Encode(innerSeriesSlice []*InnerSeries) (WALEncoderStats, error) {
-	return headWalEncoderAddInnerSeries(e.encoder, innerSeriesSlice)
+	res, err := headWalEncoderAddInnerSeries(e.encoder, innerSeriesSlice)
+	runtime.KeepAlive(e)
+	return res, err
 }
 
 func (e *HeadWalEncoder) Finalize() (*EncodedSegment, error) {
 	stats, segment, err := headWalEncoderFinalize(e.encoder)
+	runtime.KeepAlive(e)
 	return NewEncodedSegment(segment, stats), err
 }
 
@@ -52,11 +55,16 @@ func NewHeadWalDecoder(lss *LabelSetStorage, encoderVersion uint8) *HeadWalDecod
 }
 
 func (d *HeadWalDecoder) Decode(segment []byte, innerSeries *InnerSeries) error {
-	return headWalDecoderDecode(d.decoder, segment, innerSeries)
+	err := headWalDecoderDecode(d.decoder, segment, innerSeries)
+	runtime.KeepAlive(d)
+	return err
 }
 
 func (d *HeadWalDecoder) DecodeToDataStorage(segment []byte, headEncoder *HeadEncoder) error {
-	return headWalDecoderDecodeToDataStorage(d.decoder, segment, headEncoder.encoder)
+	err := headWalDecoderDecodeToDataStorage(d.decoder, segment, headEncoder.encoder)
+	runtime.KeepAlive(d)
+	runtime.KeepAlive(headEncoder)
+	return err
 }
 
 func (d *HeadWalDecoder) CreateEncoder() *HeadWalEncoder {

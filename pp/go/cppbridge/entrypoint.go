@@ -28,22 +28,6 @@ import (
 )
 
 var (
-	// UnsafeCall2
-	unsafeCall2Sum = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
-		prometheus.CounterOpts{
-			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
-			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "unsafe", "method": "call_2"},
-		},
-	)
-	unsafeCall2Count = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
-		prometheus.CounterOpts{
-			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
-			Help:        "The time duration cpp call.",
-			ConstLabels: prometheus.Labels{"object": "unsafe", "method": "call_2"},
-		},
-	)
-
 	// input_relabeler input_relabeling
 	inputRelabelerInputRelabelingSum = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
@@ -1114,10 +1098,10 @@ func primitivesLSSFindOrEmplace(lss uintptr, labelSet model.LabelSet) FindOrEmpl
 	return res
 }
 
-func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder model.CppLabelSetBuilder) FindOrEmplaceResult {
+func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder CppLabelSetBuilder) FindOrEmplaceResult {
 	args := struct {
 		lss     uintptr
-		builder model.CppLabelSetBuilder
+		builder CppLabelSetBuilder
 	}{lss, builder}
 	var res FindOrEmplaceResult
 
