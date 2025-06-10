@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"sync"
 	"time"
 
 	"go.uber.org/atomic"
@@ -30,9 +31,10 @@ import (
 
 // A RecordingRule records its vector expression into new timeseries.
 type RecordingRule struct {
-	name   string
-	vector parser.Expr
-	labels labels.Labels
+	name      string
+	vector    parser.Expr
+	labels    labels.Labels
+	labelsMtx sync.RWMutex // PP_CHANGES.md: rebuild on cpp
 	// The health of the recording rule.
 	health *atomic.String
 	// Timestamp of last evaluation of the recording rule.
@@ -73,6 +75,9 @@ func (rule *RecordingRule) Query() parser.Expr {
 
 // Labels returns the rule labels.
 func (rule *RecordingRule) Labels() labels.Labels {
+	rule.labelsMtx.RLock()         // PP_CHANGES.md: rebuild on cpp
+	defer rule.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
+
 	return rule.labels
 }
 
@@ -93,11 +98,13 @@ func (rule *RecordingRule) Eval(ctx context.Context, queryOffset time.Duration, 
 		lb.Reset(sample.Metric)
 		lb.Set(labels.MetricName, rule.name)
 
+		rule.labelsMtx.RLock() // PP_CHANGES.md: rebuild on cpp
 		rule.labels.Range(func(l labels.Label) {
 			lb.Set(l.Name, l.Value)
 		})
 
 		sample.Metric = lb.Labels()
+		rule.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
 	}
 
 	// Check that the rule does not produce identical metrics after applying
@@ -117,6 +124,9 @@ func (rule *RecordingRule) Eval(ctx context.Context, queryOffset time.Duration, 
 }
 
 func (rule *RecordingRule) String() string {
+	rule.labelsMtx.RLock()         // PP_CHANGES.md: rebuild on cpp
+	defer rule.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
+
 	r := rulefmt.Rule{
 		Record: rule.name,
 		Expr:   rule.vector.String(),
@@ -185,4 +195,11 @@ func (rule *RecordingRule) SetNoDependencyRules(noDependencyRules bool) {
 
 func (rule *RecordingRule) NoDependencyRules() bool {
 	return rule.noDependencyRules.Load()
+}
+
+// RenewLabelsSnapshot renew labels and annotations snapshots.
+func (rule *RecordingRule) RenewLabelsSnapshot() { // PP_CHANGES.md: rebuild on cpp
+	rule.labelsMtx.Lock()
+	rule.labels.RenewSnapshot()
+	rule.labelsMtx.Unlock()
 }

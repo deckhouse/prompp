@@ -191,6 +191,9 @@ func (g *Group) run(ctx context.Context) {
 	tick := time.NewTicker(g.interval)
 	defer tick.Stop()
 
+	renewTimer := time.NewTimer(g.interval * 2) // PP_CHANGES.md: rebuild on cpp
+	defer renewTimer.Stop()                     // PP_CHANGES.md: rebuild on cpp
+
 	defer func() {
 		if !g.markStale {
 			return
@@ -258,6 +261,10 @@ func (g *Group) run(ctx context.Context) {
 				evalTimestamp = evalTimestamp.Add((missed + 1) * g.interval)
 
 				g.evalIterationFunc(ctx, g, evalTimestamp)
+
+			case <-renewTimer.C: // PP_CHANGES.md: rebuild on cpp
+				g.renewLabelsSnapshot()
+				renewTimer.Reset(g.interval * 2)
 			}
 		}
 	}
@@ -808,6 +815,16 @@ func (g *Group) Equals(ng *Group) bool {
 	}
 
 	return true
+}
+
+// renewLabelsSnapshot renew labels and annotations snapshots.
+func (g *Group) renewLabelsSnapshot() { // PP_CHANGES.md: rebuild on cpp
+	g.mtx.Lock()
+	defer g.mtx.Unlock()
+
+	for _, r := range g.rules {
+		r.RenewLabelsSnapshot()
+	}
 }
 
 // GroupKey group names need not be unique across filenames.

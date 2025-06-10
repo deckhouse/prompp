@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -199,11 +198,6 @@ func (h *RotatableHead) Enqueue(t *relabeler.GenericTask) {
 	h.head.Enqueue(t)
 }
 
-// Find label set in lss, if not found return EmptyLabels.
-func (h *RotatableHead) Find(mls model.LabelSet) labels.Labels {
-	return h.head.Find(mls)
-}
-
 // FindFromBuilder label set from builder in lss, if not found return EmptyLabels.
 func (h *RotatableHead) FindFromBuilder(
 	sortedAdd []cppbridge.Label,
@@ -322,11 +316,6 @@ func (h *HeapProfileWritableHead) CreateTask(
 // Enqueue the task to be executed on head.
 func (h *HeapProfileWritableHead) Enqueue(t *relabeler.GenericTask) {
 	h.head.Enqueue(t)
-}
-
-// Find label set in lss, if not found return EmptyLabels.
-func (h *HeapProfileWritableHead) Find(mls model.LabelSet) labels.Labels {
-	return h.head.Find(mls)
 }
 
 // FindFromBuilder label set from builder in lss, if not found return EmptyLabels.

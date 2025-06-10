@@ -2,9 +2,13 @@ package cppbridge
 
 import (
 	"runtime"
+	"sync"
+	"sync/atomic"
+	"unsafe"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/prometheus/pp/go/model"
 )
 
 var (
@@ -26,19 +30,28 @@ var (
 // gcDestroyDetector for field for the GC to destroy the structure.
 var gcDestroyDetector uint64
 
+// SnapshotSource a source that contains and updates the snapshot itself.
+type SnapshotSource interface {
+	// FastSnapshot return the actual snapshot or nil if not exist.
+	FastSnapshot() *LabelSetSnapshot
+}
+
 //
 // LabelSetSnapshot
 //
 
 // LabelSetSnapshot go container for snapshot from LabelSetStorage.
 type LabelSetSnapshot struct {
-	pointer           uintptr
-	gcDestroyDetector *uint64 // field for the GC to destroy the structure.
+	pointer uintptr
+	source  SnapshotSource
 }
 
 // newLabelSetSnapshot init new LabelSetSnapshot.
-func newLabelSetSnapshot(lsstPtr uintptr) *LabelSetSnapshot {
-	lsst := &LabelSetSnapshot{pointer: lsstPtr, gcDestroyDetector: &gcDestroyDetector}
+func newLabelSetSnapshot(lsstPtr uintptr, source SnapshotSource) *LabelSetSnapshot {
+	lsst := &LabelSetSnapshot{
+		pointer: lsstPtr,
+		source:  source,
+	}
 	runtime.SetFinalizer(lsst, func(l *LabelSetSnapshot) {
 		primitivesLSSDtor(l.pointer)
 
@@ -46,6 +59,15 @@ func newLabelSetSnapshot(lsstPtr uintptr) *LabelSetSnapshot {
 	})
 
 	snapshotCreate.Inc()
+
+	return lsst
+}
+
+// Snapshot return the actual snapshot.
+func (lsst *LabelSetSnapshot) Snapshot() *LabelSetSnapshot {
+	if snapshot := lsst.source.FastSnapshot(); snapshot != nil {
+		return snapshot
+	}
 
 	return lsst
 }
@@ -156,6 +178,104 @@ func (lsst *LabelSetSnapshot) RangeLabelSet(lsID uint32, dropMetricName bool, do
 	runtime.KeepAlive(lsst)
 
 	return nil
+}
+
+//
+// LSSWithSnapshot
+//
+
+// LSSWithSnapshot container for LabelSetStorage with snapshot.
+type LSSWithSnapshot struct {
+	lss      *LabelSetStorage
+	snapshot unsafe.Pointer
+	once     sync.Once
+}
+
+// NewLSSWithSnapshot init new *LSSWithSnapshot.
+func NewLSSWithSnapshot(lss *LabelSetStorage) *LSSWithSnapshot {
+	return &LSSWithSnapshot{
+		lss:  lss,
+		once: sync.Once{},
+	}
+}
+
+// AllocatedMemory return size of allocated memory LabelSetStorage.
+func (lws *LSSWithSnapshot) AllocatedMemory() uint64 {
+	return lws.lss.AllocatedMemory()
+}
+
+// FastSnapshot return the actual snapshot or nil if not exist.
+func (lws *LSSWithSnapshot) FastSnapshot() *LabelSetSnapshot {
+	return (*LabelSetSnapshot)(atomic.LoadPointer(&lws.snapshot))
+}
+
+// FindOrEmplace find in lss LabelSet or emplace and return ls id.
+func (lws *LSSWithSnapshot) FindOrEmplace(labelSet model.LabelSet) uint32 {
+	res := lws.lss.FindOrEmplace(labelSet)
+	if res.LssHasReallocations {
+		atomic.StorePointer(
+			&lws.snapshot,
+			unsafe.Pointer(lws.lss.CreateLabelSetSnapshot(lws)), // #nosec G103 // it's meant to be that way
+		)
+	}
+
+	return res.LabelSetID
+}
+
+// FindOrEmplaceFromBuilder find in lss LabelSet from builder or emplace and
+// return LabelSetSnapshot if there was a reallocation and ls id.
+func (lws *LSSWithSnapshot) FindOrEmplaceFromBuilder(
+	sortedAdd []Label,
+	sortedDel []string,
+	otherSnapshot *LabelSetSnapshot,
+	lsID uint32,
+) (length uint64, newlsID uint32) {
+	var snapshotPointer uintptr
+	if otherSnapshot != nil {
+		snapshotPointer = otherSnapshot.pointer
+	}
+
+	lssROPtr, length, newlsID, hasReallocations := primitivesLSSFindOrEmplaceFromBuilder(
+		lws.lss.pointer,
+		snapshotPointer,
+		sortedAdd,
+		sortedDel,
+		lsID,
+	)
+	runtime.KeepAlive(lws)
+	runtime.KeepAlive(otherSnapshot)
+
+	if hasReallocations {
+		atomic.StorePointer(
+			&lws.snapshot,
+			unsafe.Pointer(newLabelSetSnapshot(lssROPtr, lws)), // #nosec G103 // it's meant to be that way
+		)
+	}
+
+	return length, newlsID
+}
+
+// LSS return raw *LabelSetStorage.
+func (lws *LSSWithSnapshot) LSS() *LabelSetStorage {
+	return lws.lss
+}
+
+// ResetSnapshot resets the current snapshot.
+func (lws *LSSWithSnapshot) ResetSnapshot() {
+	lws.snapshot = nil
+	lws.once = sync.Once{}
+}
+
+// Snapshot return the actual snapshot.
+func (lws *LSSWithSnapshot) Snapshot() *LabelSetSnapshot {
+	lws.once.Do(func() {
+		atomic.StorePointer(
+			&lws.snapshot,
+			unsafe.Pointer(lws.lss.CreateLabelSetSnapshot(lws)), // #nosec G103 // it's meant to be that way
+		)
+	})
+
+	return lws.FastSnapshot()
 }
 
 //

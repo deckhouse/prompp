@@ -135,54 +135,6 @@ extern "C" void prompp_primitives_lss_find_or_emplace_from_builder(void* args, v
   }
 }
 
-extern "C" void prompp_primitives_lss_find_or_emplace_label_set(void* args, void* res) {
-  struct Arguments {
-    LssVariantPtr lss;
-    PromPP::Primitives::Go::LabelSet label_set;
-  };
-
-  struct Result {
-    LssVariantPtr lss_ro_ptr;
-    uint32_t ls_id;
-    bool lss_has_reallocations;
-  };
-
-  auto in = static_cast<Arguments*>(args);
-  auto out = new (res) Result();
-  std::visit(
-      [in, out]<typename Lss>(Lss& lss) {
-        const auto result = find_or_emplace<Lss>(lss, in->label_set);
-
-        out->ls_id = result.ls_id;
-        out->lss_has_reallocations = result.lss_has_reallocations;
-      },
-      *in->lss);
-
-  if (out->lss_has_reallocations) [[unlikely]] {
-    out->lss_ro_ptr = entrypoint::head::create_readonly_lss(*in->lss);
-  }
-}
-
-extern "C" void prompp_primitives_lss_find(void* args, void* res) {
-  struct Arguments {
-    LssVariantPtr lss;
-    PromPP::Primitives::Go::LabelSet label_set;
-  };
-  struct Result {
-    uint32_t ls_id;
-    bool has{false};
-  };
-
-  auto in = static_cast<Arguments*>(args);
-  auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
-
-  std::optional<uint32_t> ls_id = lss.find(in->label_set);
-
-  if (ls_id.has_value()) {
-    new (res) Result{.ls_id = ls_id.value(), .has = ls_id.has_value()};
-  }
-}
-
 extern "C" void prompp_primitives_lss_find_from_builder(void* args, void* res) {
   using PromPP::Primitives::Go::LabelSetBuilder;
   using PromPP::Primitives::Go::SliceView;

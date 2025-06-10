@@ -92,14 +92,13 @@ func (s *HelpFuncSuite) TestEqualOneLSS() {
 		"che":      "bureck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsid := lss.FindOrEmplace(model.LabelSetFromMap(map[string]string{
 		"__name__": "ubername",
 		"lol":      "kek",
 		"che":      "bureck",
-	})).LabelSetID
-	snapshot := lss.CreateLabelSetSnapshot()
-	lsB := labels.NewLabelsWithLSS(snapshot, lsid, 0)
+	}))
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsid, 0)
 
 	s.True(labels.Equal(lsA, lsB))
 	s.True(labels.Equal(lsB, lsA))
@@ -112,40 +111,37 @@ func (s *HelpFuncSuite) TestEqualOneLSSDropMetricName() {
 		"che":      "bureck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsid := lss.FindOrEmplace(model.LabelSetFromMap(map[string]string{
 		"lol": "kek",
 		"che": "bureck",
-	})).LabelSetID
-	snapshot := lss.CreateLabelSetSnapshot()
-	lsB := labels.NewLabelsWithLSS(snapshot, lsid, 0)
+	}))
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsid, 0)
 
 	s.True(labels.Equal(lsA.DropMetricName(), lsB))
 	s.True(labels.Equal(lsB, lsA.DropMetricName()))
 }
 
 func (s *HelpFuncSuite) TestEqualTwoLSS() {
-	lssA := cppbridge.NewQueryableLssStorage()
+	lssA := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsInA := model.LabelSetFromMap(map[string]string{
 		"__aaa__":  "11111",
 		"__name__": "ubername",
 		"che":      "bureck",
 		"zimya":    "reck",
 	})
-	lsidA := lssA.FindOrEmplace(lsInA).LabelSetID
-	snapshotA := lssA.CreateLabelSetSnapshot()
-	lsA := labels.NewLabelsWithLSS(snapshotA, lsidA, uint16(lsInA.Len()))
+	lsidA := lssA.FindOrEmplace(lsInA)
+	lsA := labels.NewLabelsWithLSS(lssA.Snapshot(), lsidA, uint16(lsInA.Len()))
 
-	lssB := cppbridge.NewQueryableLssStorage()
+	lssB := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsInB := model.LabelSetFromMap(map[string]string{
 		"__aaa__":  "11111",
 		"__name__": "ubername",
 		"che":      "bureck",
 		"zimya":    "reck",
 	})
-	lsidB := lssB.FindOrEmplace(lsInB).LabelSetID
-	snapshotB := lssB.CreateLabelSetSnapshot()
-	lsB := labels.NewLabelsWithLSS(snapshotB, lsidB, uint16(lsInB.Len()))
+	lsidB := lssB.FindOrEmplace(lsInB)
+	lsB := labels.NewLabelsWithLSS(lssB.Snapshot(), lsidB, uint16(lsInB.Len()))
 
 	s.True(labels.Equal(lsA, lsB))
 	s.True(labels.Equal(lsB, lsA))
@@ -192,15 +188,14 @@ func (s *HelpFuncSuite) TestNotEqualOnLenAnyLSS() {
 		"che":      "bureck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsidB := lss.FindOrEmplace(model.LabelSetFromMap(map[string]string{
 		"__name__": "ubername",
 		"lol":      "kek",
 		"che":      "bureck",
 		"imya":     "reck",
-	})).LabelSetID
-	snapshotB := lss.CreateLabelSetSnapshot()
-	lsB := labels.NewLabelsWithLSS(snapshotB, lsidB, 0)
+	}))
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
 
 	s.False(labels.Equal(lsA, lsB))
 }
@@ -212,15 +207,14 @@ func (s *HelpFuncSuite) TestNotEqualOnLenAnyLSSDropMetricName() {
 		"che":      "bureck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsidB := lss.FindOrEmplace(model.LabelSetFromMap(map[string]string{
 		"__name__": "ubername",
 		"lol":      "kek",
 		"che":      "bureck",
 		"imya":     "reck",
-	})).LabelSetID
-	snapshotB := lss.CreateLabelSetSnapshot()
-	lsB := labels.NewLabelsWithLSS(snapshotB, lsidB, 0)
+	}))
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
 
 	s.False(labels.Equal(lsA.DropMetricName(), lsB))
 }
@@ -263,14 +257,13 @@ func (s *HelpFuncSuite) TestNotEqualOnLabelAnyLSS() {
 		"che":      "bureck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsidB := lss.FindOrEmplace(model.LabelSetFromMap(map[string]string{
 		"__name__": "ubername",
 		"lol":      "kek",
 		"imya":     "reck",
-	})).LabelSetID
-	snapshotB := lss.CreateLabelSetSnapshot()
-	lsB := labels.NewLabelsWithLSS(snapshotB, lsidB, 0)
+	}))
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
 
 	s.False(labels.Equal(lsA, lsB))
 }
@@ -282,13 +275,12 @@ func (s *HelpFuncSuite) TestNotEqualOnLabelAnyLSSDropMetricName() {
 		"che":      "bureck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsidB := lss.FindOrEmplace(model.LabelSetFromMap(map[string]string{
 		"lol":  "kek",
 		"imya": "reck",
-	})).LabelSetID
-	snapshotB := lss.CreateLabelSetSnapshot()
-	lsB := labels.NewLabelsWithLSS(snapshotB, lsidB, 0)
+	}))
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
 
 	s.False(labels.Equal(lsA.DropMetricName(), lsB))
 }
@@ -375,14 +367,13 @@ func (s *HelpFuncSuite) TestCompareAnyLSS() {
 		"che":      "bureck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsidB := lss.FindOrEmplace(model.LabelSetFromMap(map[string]string{
 		"__name__": "ubername",
 		"lol":      "kek",
 		"che":      "bureck",
-	})).LabelSetID
-	snapshotB := lss.CreateLabelSetSnapshot()
-	lsB := labels.NewLabelsWithLSS(snapshotB, lsidB, 0)
+	}))
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
 
 	s.Equal(0, labels.Compare(lsA, lsB))
 }
@@ -394,13 +385,12 @@ func (s *HelpFuncSuite) TestCompareAnyLSSDropMetricName() {
 		"che":      "bureck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsidB := lss.FindOrEmplace(model.LabelSetFromMap(map[string]string{
 		"lol": "kek",
 		"che": "bureck",
-	})).LabelSetID
-	snapshotB := lss.CreateLabelSetSnapshot()
-	lsB := labels.NewLabelsWithLSS(snapshotB, lsidB, 0)
+	}))
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
 
 	s.Equal(0, labels.Compare(lsA.DropMetricName(), lsB))
 }
@@ -482,14 +472,13 @@ func (s *HelpFuncSuite) TestCompareAnyLSSNameLength() {
 		"che":      "bureck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsidB := lss.FindOrEmplace(model.LabelSetFromMap(map[string]string{
 		"__name__": "ubername",
 		"lol":      "kek",
 		"che":      "bureck",
-	})).LabelSetID
-	snapshotB := lss.CreateLabelSetSnapshot()
-	lsB := labels.NewLabelsWithLSS(snapshotB, lsidB, 0)
+	}))
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
 
 	s.Equal(1, labels.Compare(lsA, lsB))
 	s.Equal(-1, labels.Compare(lsB, lsA))
@@ -501,14 +490,13 @@ func (s *HelpFuncSuite) TestCompareAnyLSSNameLengthDropMetricName() {
 		"che":  "bureck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsidB := lss.FindOrEmplace(model.LabelSetFromMap(map[string]string{
 		"__name__": "ubername",
 		"lol":      "kek",
 		"che":      "bureck",
-	})).LabelSetID
-	snapshotB := lss.CreateLabelSetSnapshot()
-	lsB := labels.NewLabelsWithLSS(snapshotB, lsidB, 0)
+	}))
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
 
 	s.Equal(1, labels.Compare(lsA, lsB.DropMetricName()))
 	s.Equal(-1, labels.Compare(lsB.DropMetricName(), lsA))
@@ -554,14 +542,13 @@ func (s *HelpFuncSuite) TestCompareALSSNameString() {
 		"che":      "bureck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsidB := lss.FindOrEmplace(model.LabelSetFromMap(map[string]string{
 		"__name__": "ubername",
 		"lok":      "kek",
 		"che":      "bureck",
-	})).LabelSetID
-	snapshotB := lss.CreateLabelSetSnapshot()
-	lsB := labels.NewLabelsWithLSS(snapshotB, lsidB, 3)
+	}))
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 3)
 
 	s.Equal(1, labels.Compare(lsA, lsB))
 	s.Equal(-1, labels.Compare(lsB, lsA))
@@ -573,14 +560,13 @@ func (s *HelpFuncSuite) TestCompareALSSNameStringDropMetricName() {
 		"che": "bureck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsidB := lss.FindOrEmplace(model.LabelSetFromMap(map[string]string{
 		"__name__": "ubername",
 		"lok":      "kek",
 		"che":      "bureck",
-	})).LabelSetID
-	snapshotB := lss.CreateLabelSetSnapshot()
-	lsB := labels.NewLabelsWithLSS(snapshotB, lsidB, 3)
+	}))
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 3)
 
 	s.Equal(1, labels.Compare(lsA, lsB.DropMetricName()))
 	s.Equal(-1, labels.Compare(lsB.DropMetricName(), lsA))
@@ -626,14 +612,13 @@ func (s *HelpFuncSuite) TestCompareLSSValueLength() {
 		"che":      "bureck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsidB := lss.FindOrEmplace(model.LabelSetFromMap(map[string]string{
 		"__name__": "ubername",
 		"lol":      "kek",
 		"che":      "bureck",
-	})).LabelSetID
-	snapshotB := lss.CreateLabelSetSnapshot()
-	lsB := labels.NewLabelsWithLSS(snapshotB, lsidB, 0)
+	}))
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
 
 	s.Equal(1, labels.Compare(lsA, lsB))
 	s.Equal(-1, labels.Compare(lsB, lsA))
@@ -645,14 +630,13 @@ func (s *HelpFuncSuite) TestCompareLSSValueLengthDropMetricName() {
 		"che": "bureck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsidB := lss.FindOrEmplace(model.LabelSetFromMap(map[string]string{
 		"__name__": "ubername",
 		"lol":      "kek",
 		"che":      "bureck",
-	})).LabelSetID
-	snapshotB := lss.CreateLabelSetSnapshot()
-	lsB := labels.NewLabelsWithLSS(snapshotB, lsidB, 0)
+	}))
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
 
 	s.Equal(1, labels.Compare(lsA, lsB.DropMetricName()))
 	s.Equal(-1, labels.Compare(lsB.DropMetricName(), lsA))
@@ -698,14 +682,13 @@ func (s *HelpFuncSuite) TestCompareLSSValueString() {
 		"che":      "bureck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsidB := lss.FindOrEmplace(model.LabelSetFromMap(map[string]string{
 		"__name__": "ubername",
 		"lol":      "kak",
 		"che":      "bureck",
-	})).LabelSetID
-	snapshotB := lss.CreateLabelSetSnapshot()
-	lsB := labels.NewLabelsWithLSS(snapshotB, lsidB, 0)
+	}))
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
 
 	s.Equal(1, labels.Compare(lsA, lsB))
 	s.Equal(-1, labels.Compare(lsB, lsA))
@@ -717,14 +700,13 @@ func (s *HelpFuncSuite) TestCompareLSSValueStringDropMetricName() {
 		"che": "bureck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsidB := lss.FindOrEmplace(model.LabelSetFromMap(map[string]string{
 		"__name__": "ubername",
 		"lol":      "kak",
 		"che":      "bureck",
-	})).LabelSetID
-	snapshotB := lss.CreateLabelSetSnapshot()
-	lsB := labels.NewLabelsWithLSS(snapshotB, lsidB, 0)
+	}))
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
 
 	s.Equal(1, labels.Compare(lsA, lsB.DropMetricName()))
 	s.Equal(-1, labels.Compare(lsB.DropMetricName(), lsA))
@@ -737,14 +719,13 @@ func (s *HelpFuncSuite) TestCompareOnLabelAnyLSS() {
 		"imya":     "reck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsidB := lss.FindOrEmplace(model.LabelSetFromMap(map[string]string{
 		"__name__": "ubername",
 		"lol":      "kek",
 		"che":      "bureck",
-	})).LabelSetID
-	snapshotB := lss.CreateLabelSetSnapshot()
-	lsB := labels.NewLabelsWithLSS(snapshotB, lsidB, 0)
+	}))
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
 
 	s.Equal(1, labels.Compare(lsA, lsB))
 	s.Equal(-1, labels.Compare(lsB, lsA))
@@ -756,14 +737,13 @@ func (s *HelpFuncSuite) TestCompareOnLabelAnyLSSDropMetricName() {
 		"imya": "reck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsidB := lss.FindOrEmplace(model.LabelSetFromMap(map[string]string{
 		"__name__": "ubername",
 		"lol":      "kek",
 		"che":      "bureck",
-	})).LabelSetID
-	snapshotB := lss.CreateLabelSetSnapshot()
-	lsB := labels.NewLabelsWithLSS(snapshotB, lsidB, 0)
+	}))
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
 
 	s.Equal(1, labels.Compare(lsA, lsB.DropMetricName()))
 	s.Equal(-1, labels.Compare(lsB.DropMetricName(), lsA))

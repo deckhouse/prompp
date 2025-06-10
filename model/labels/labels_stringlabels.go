@@ -19,12 +19,9 @@ import (
 	"reflect"
 	"slices"
 	"strings"
-	"sync"
 	"unsafe"
 
 	"github.com/cespare/xxhash/v2"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 // Labels is implemented by a single flat string holding name/value pairs.
@@ -481,8 +478,6 @@ func (b *Builder) Reset(base Labels) {
 // If no modifications were made, the original labels are returned.
 func (b *Builder) Labels() Labels {
 	if len(b.del) == 0 && len(b.add) == 0 {
-
-		ul.add(b.base)
 		return b.base
 	}
 
@@ -518,9 +513,7 @@ func (b *Builder) Labels() Labels {
 		buf = appendLabelTo(buf, &b.add[a])
 	}
 
-	ret := Labels{data: yoloString(buf)}
-	ul.add(ret)
-	return ret
+	return Labels{data: yoloString(buf)}
 }
 
 func marshalLabelsToSizedBuffer(lbls []Label, data []byte) int {
@@ -672,7 +665,6 @@ func (b *ScratchBuilder) Labels() Labels {
 		b.output = Labels{data: yoloString(buf)}
 	}
 
-	ul.add(b.output)
 	return b.output
 }
 
@@ -687,8 +679,6 @@ func (b *ScratchBuilder) Overwrite(ls *Labels) {
 	}
 	marshalLabelsToSizedBuffer(b.add, b.overwriteBuffer)
 	ls.data = yoloString(b.overwriteBuffer)
-
-	ul.add(*ls)
 }
 
 // Symbol-table is no-op, just for api parity with dedupelabels.
@@ -710,69 +700,4 @@ func NewScratchBuilderWithSymbolTable(_ *SymbolTable, n int) ScratchBuilder {
 
 func (b *ScratchBuilder) SetSymbolTable(_ *SymbolTable) {
 	// no-op
-}
-
-//
-// uniqLables
-//
-
-var (
-	ul = &uniqLables{
-		counter: promauto.NewCounter(
-			prometheus.CounterOpts{
-				Name: "prompp_labels_unique_total",
-				Help: "Current unique labels.",
-			},
-		),
-		// size: promauto.NewCounter(
-		// 	prometheus.CounterOpts{
-		// 		Name: "prompp_labels_unique_size",
-		// 		Help: "Current unique labels size.",
-		// 	},
-		// ),
-		size: promauto.NewHistogram(
-			prometheus.HistogramOpts{
-				Name: "prompp_labels_unique_size",
-				Help: "Current unique labels size",
-				Buckets: []float64{
-					100, 200, 300, 400, 500, 600, 700, 800, 900, 1000,
-					1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000,
-				},
-			},
-		),
-	}
-
-	CurReceiver Receiver
-)
-
-type uniqLables struct {
-	counter prometheus.Counter
-	size    prometheus.Histogram
-	sync.Map
-}
-
-func (ul *uniqLables) add(ls Labels) {
-	if CurReceiver == nil {
-		return
-	}
-
-	if CurReceiver.Find(ls) {
-		return
-	}
-
-	_, loaded := ul.Map.LoadOrStore(ls.Hash(), nil)
-
-	if loaded {
-		return
-	}
-
-	ul.counter.Inc()
-	// ul.size.Add(float64(len(ls.data)))
-	ul.size.Observe(float64(len(ls.data)))
-
-	// fmt.Println("=== " + ls.String() + " ===")
-}
-
-type Receiver interface {
-	Find(ls Labels) bool
 }

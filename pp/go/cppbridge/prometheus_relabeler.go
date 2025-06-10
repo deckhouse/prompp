@@ -510,13 +510,15 @@ type RelabelerOptions struct {
 
 // StaleNansState wrap pointer to source state for stale nans .
 type StaleNansState struct {
-	state uintptr
+	state             uintptr
+	gcDestroyDetector *uint64
 }
 
 // NewStaleNansState init new SourceStaleNansState.
 func NewStaleNansState() *StaleNansState {
 	s := &StaleNansState{
-		state: prometheusRelabelStaleNansStateCtor(),
+		state:             prometheusRelabelStaleNansStateCtor(),
+		gcDestroyDetector: &gcDestroyDetector,
 	}
 	runtime.SetFinalizer(s, func(s *StaleNansState) {
 		prometheusRelabelStaleNansStateDtor(s.state)
@@ -853,13 +855,15 @@ func (opsr *OutputPerShardRelabeler) UpdateRelabelerState(
 //
 //	cPointer   - pointer to C-Cache;
 type Cache struct {
-	cPointer uintptr
+	cPointer          uintptr
+	gcDestroyDetector *uint64
 }
 
 // NewCache init new Cache.
 func NewCache() *Cache {
 	cache := &Cache{
-		cPointer: prometheusCacheCtor(),
+		cPointer:          prometheusCacheCtor(),
+		gcDestroyDetector: &gcDestroyDetector,
 	}
 	runtime.SetFinalizer(cache, func(c *Cache) {
 		prometheusCacheDtor(c.cPointer)

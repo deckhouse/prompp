@@ -3,6 +3,8 @@ package head
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
+	"unsafe"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -15,9 +17,10 @@ import (
 const chanBufferSize = 64
 
 type LSS struct {
-	input    *cppbridge.LabelSetStorage
-	target   *cppbridge.LabelSetStorage
-	snapshot *cppbridge.LabelSetSnapshot
+	input  *cppbridge.LabelSetStorage
+	target *cppbridge.LabelSetStorage
+	// snapshot *cppbridge.LabelSetSnapshot
+	snapshot unsafe.Pointer
 	once     sync.Once
 }
 
@@ -51,10 +54,20 @@ func (w *LSS) GetLabelSets(labelSetIDs []uint32) *cppbridge.LabelSetStorageGetLa
 // GetSnapshot return the actual snapshot.
 func (w *LSS) GetSnapshot() *cppbridge.LabelSetSnapshot {
 	w.once.Do(func() {
-		w.snapshot = w.target.CreateLabelSetSnapshot()
+		// w.snapshot =  w.target.CreateLabelSetSnapshot()
+		atomic.StorePointer(
+			&w.snapshot,
+			unsafe.Pointer(w.target.CreateLabelSetSnapshot(w)), // #nosec G103 // it's meant to be that way
+		)
 	})
 
-	return w.snapshot
+	// return w.snapshot
+	return w.FastSnapshot()
+}
+
+// FastSnapshot return the actual snapshot or nil if not exist.
+func (w *LSS) FastSnapshot() *cppbridge.LabelSetSnapshot {
+	return (*cppbridge.LabelSetSnapshot)(atomic.LoadPointer(&w.snapshot))
 }
 
 // ResetSnapshot resets the current snapshot.
@@ -63,20 +76,19 @@ func (w *LSS) ResetSnapshot() {
 	w.once = sync.Once{}
 }
 
+// Input return input LabelSetStorage.
 func (w *LSS) Input() *cppbridge.LabelSetStorage {
 	return w.input
 }
 
+// Target return target LabelSetStorage.
 func (w *LSS) Target() *cppbridge.LabelSetStorage {
 	return w.target
 }
 
-// Find label set in lss, return lsid and bool ok.
-func (w *LSS) Find(mls model.LabelSet) (uint32, bool) {
-	return w.target.Find(mls)
-}
-
 // FindFromBuilder label set from builder in lss, return length ls, lsid and bool ok.
+//
+//nolint:gocritic // unnamedResult not need
 func (w *LSS) FindFromBuilder(
 	sortedAdd []cppbridge.Label,
 	sortedDel []string,

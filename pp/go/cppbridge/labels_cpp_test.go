@@ -32,7 +32,7 @@ func (s *HelpFuncSuite) TestEqualLabelSetsOneLSS() {
 	).Build()
 
 	resA := lssA.FindOrEmplace(mls)
-	snapshotA := lssA.CreateLabelSetSnapshot()
+	snapshotA := lssA.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	s.True(cppbridge.EqualLabelSets(snapshotA, snapshotA, resA.LabelSetID, resA.LabelSetID, false, false))
 }
@@ -48,7 +48,7 @@ func (s *HelpFuncSuite) TestEqualLabelSetsOneLSSDrop() {
 	).Build()
 
 	resA := lssA.FindOrEmplace(mls)
-	snapshotA := lssA.CreateLabelSetSnapshot()
+	snapshotA := lssA.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	s.False(cppbridge.EqualLabelSets(snapshotA, snapshotA, resA.LabelSetID, resA.LabelSetID, false, true))
 }
@@ -71,7 +71,7 @@ func (s *HelpFuncSuite) TestEqualLabelSetsOneLSSDrop_2() {
 	lssA := cppbridge.NewQueryableLssStorage()
 	resA := lssA.FindOrEmplace(mlsA)
 	resB := lssA.FindOrEmplace(mlsB)
-	snapshotA := lssA.CreateLabelSetSnapshot()
+	snapshotA := lssA.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	s.True(cppbridge.EqualLabelSets(snapshotA, snapshotA, resA.LabelSetID, resB.LabelSetID, true, false))
 }
@@ -96,7 +96,7 @@ func (s *HelpFuncSuite) TestEqualLabelSetsOneLSSFalse() {
 	lssA := cppbridge.NewQueryableLssStorage()
 	resA := lssA.FindOrEmplace(mlsA)
 	resB := lssA.FindOrEmplace(mlsB)
-	snapshotA := lssA.CreateLabelSetSnapshot()
+	snapshotA := lssA.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	s.False(cppbridge.EqualLabelSets(snapshotA, snapshotA, resA.LabelSetID, resB.LabelSetID, false, false))
 }
@@ -112,11 +112,11 @@ func (s *HelpFuncSuite) TestEqualLabelSetsDiffLSS() {
 
 	lssA := cppbridge.NewQueryableLssStorage()
 	resA := lssA.FindOrEmplace(mls)
-	snapshotA := lssA.CreateLabelSetSnapshot()
+	snapshotA := lssA.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	lssB := cppbridge.NewQueryableLssStorage()
 	resB := lssB.FindOrEmplace(mls)
-	snapshotB := lssB.CreateLabelSetSnapshot()
+	snapshotB := lssB.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	s.True(cppbridge.EqualLabelSets(snapshotA, snapshotB, resA.LabelSetID, resB.LabelSetID, false, false))
 }
@@ -132,11 +132,11 @@ func (s *HelpFuncSuite) TestEqualLabelSetsDiffLSSFalse_2() {
 
 	lssA := cppbridge.NewQueryableLssStorage()
 	resA := lssA.FindOrEmplace(mls)
-	snapshotA := lssA.CreateLabelSetSnapshot()
+	snapshotA := lssA.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	lssB := cppbridge.NewQueryableLssStorage()
 	resB := lssB.FindOrEmplace(mls)
-	snapshotB := lssB.CreateLabelSetSnapshot()
+	snapshotB := lssB.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	s.False(cppbridge.EqualLabelSets(snapshotA, snapshotB, resA.LabelSetID, resB.LabelSetID, true, false))
 }
@@ -160,11 +160,11 @@ func (s *HelpFuncSuite) TestEqualLabelSetsDiffLSSFalse() {
 
 	lssA := cppbridge.NewQueryableLssStorage()
 	resA := lssA.FindOrEmplace(mlsA)
-	snapshotA := lssA.CreateLabelSetSnapshot()
+	snapshotA := lssA.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	lssB := cppbridge.NewQueryableLssStorage()
 	resB := lssB.FindOrEmplace(mlsB)
-	snapshotB := lssB.CreateLabelSetSnapshot()
+	snapshotB := lssB.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	s.False(cppbridge.EqualLabelSets(snapshotA, snapshotB, resA.LabelSetID, resB.LabelSetID, false, false))
 }
@@ -188,11 +188,11 @@ func (s *HelpFuncSuite) TestEqualLabelSetsDiffLSSDrop() {
 
 	lssA := cppbridge.NewQueryableLssStorage()
 	resA := lssA.FindOrEmplace(mlsA)
-	snapshotA := lssA.CreateLabelSetSnapshot()
+	snapshotA := lssA.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	lssB := cppbridge.NewQueryableLssStorage()
 	resB := lssB.FindOrEmplace(mlsB)
-	snapshotB := lssB.CreateLabelSetSnapshot()
+	snapshotB := lssB.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	s.True(cppbridge.EqualLabelSets(snapshotA, snapshotB, resA.LabelSetID, resB.LabelSetID, true, true))
 }

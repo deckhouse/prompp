@@ -98,37 +98,6 @@ void prompp_primitives_lss_find_or_emplace_from_builder(void* args, void* res);
  * @brief insert label set into lss
  *
  * @param args {
- *     lss        uintptr        // pointer to constructed lss;
- *     label_set  model.LabelSet // label set
- * }
- *
- * @param res {
- *     lss_ro_ptr            uintptr // readonly copy of lss if need.
- *     ls_id                 uint32  // inserted (or found) label set id
- *     lss_has_reallocations bool    // true if lss has reallocations
- * }
- */
-void prompp_primitives_lss_find_or_emplace_label_set(void* args, void* res);
-
-/**
- * @brief insert label set into lss
- *
- * @param args {
- *     lss        uintptr        // pointer to constructed lss;
- *     label_set  model.LabelSet // label set
- * }
- *
- * @param res {
- *     ls_id      uint32         // inserted (or found) label set id
- *     has        bool           // is the label set found
- * }
- */
-void prompp_primitives_lss_find(void* args, void* res);
-
-/**
- * @brief insert label set into lss
- *
- * @param args {
  *     lss          uintptr  // pointer to constructed lss;
  *     readonly_lss uintptr  // pointer to constructed lss;
  *     sorted_add   []Label  // slice of sorted by name labels

@@ -1146,46 +1146,6 @@ func primitivesLSSFindOrEmplaceFromBuilder(
 }
 
 //nolint:gocritic // unnamedResult not need
-func primitivesLSSFindOrEmplaceLabelSet(lss uintptr, labelSet model.LabelSet) (uintptr, uint32, bool) {
-	args := struct {
-		lss      uintptr
-		labelSet model.LabelSet
-	}{lss, labelSet}
-
-	var res struct {
-		snapshotPtr      uintptr
-		labelSetID       uint32
-		hasReallocations bool
-	}
-
-	fastcgo.UnsafeCall2(
-		C.prompp_primitives_lss_find_or_emplace_label_set,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-	return res.snapshotPtr, res.labelSetID, res.hasReallocations
-}
-
-func primitivesLSSFind(lss uintptr, labelSet model.LabelSet) (uint32, bool) {
-	args := struct {
-		lss      uintptr
-		labelSet model.LabelSet
-	}{lss, labelSet}
-	var res struct {
-		labelSetID uint32
-		has        bool
-	}
-
-	fastcgo.UnsafeCall2(
-		C.prompp_primitives_lss_find,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.labelSetID, res.has
-}
-
-//nolint:gocritic // unnamedResult not need
 func primitivesLSSFindFromBuilder(
 	lss uintptr,
 	snapshotPtr uintptr,

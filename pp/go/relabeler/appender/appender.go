@@ -9,7 +9,6 @@ import (
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/querier"
 	"github.com/prometheus/prometheus/storage"
@@ -169,13 +168,6 @@ func (qa *QueryableAppender) Close() error {
 	qa.lock.Lock()
 	defer qa.lock.Unlock()
 	return errors.Join(qa.head.CommitToWal(), qa.head.Flush(), qa.head.Close())
-}
-
-// Find label set in lss, if not found return EmptyLabels.
-func (qa *QueryableAppender) Find(mls model.LabelSet) labels.Labels {
-	qa.lock.RLock()
-	defer qa.lock.RUnlock()
-	return qa.head.Find(mls)
 }
 
 // FindFromBuilder label set from builder in lss, if not found return EmptyLabels.

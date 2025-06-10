@@ -4,6 +4,7 @@ package labels_test
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -644,10 +645,9 @@ func (s *LabelsSuite) TestLenDropMetricName() {
 		"che":      "bureck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
-	lsid := lss.FindOrEmplace(lsIn).LabelSetID
-	snapshot := lss.CreateLabelSetSnapshot()
-	ls := labels.NewLabelsWithLSS(snapshot, lsid, 0)
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
+	lsid := lss.FindOrEmplace(lsIn)
+	ls := labels.NewLabelsWithLSS(lss.Snapshot(), lsid, 0)
 
 	s.Equal(lsIn.Len()-1, ls.DropMetricName().Len())
 }
@@ -659,10 +659,9 @@ func (s *LabelsSuite) TestLenDropMetricName_2() {
 		"che":      "bureck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
-	lsid := lss.FindOrEmplace(lsIn).LabelSetID
-	snapshot := lss.CreateLabelSetSnapshot()
-	ls := labels.NewLabelsWithLSS(snapshot, lsid, uint16(lsIn.Len()))
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
+	lsid := lss.FindOrEmplace(lsIn)
+	ls := labels.NewLabelsWithLSS(lss.Snapshot(), lsid, uint16(lsIn.Len()))
 
 	s.Equal(lsIn.Len()-1, ls.DropMetricName().Len())
 }
@@ -673,10 +672,9 @@ func (s *LabelsSuite) TestLenDropMetricName_3() {
 		"che": "bureck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
-	lsid := lss.FindOrEmplace(lsIn).LabelSetID
-	snapshot := lss.CreateLabelSetSnapshot()
-	ls := labels.NewLabelsWithLSS(snapshot, lsid, uint16(lsIn.Len()))
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
+	lsid := lss.FindOrEmplace(lsIn)
+	ls := labels.NewLabelsWithLSS(lss.Snapshot(), lsid, uint16(lsIn.Len()))
 
 	s.Equal(lsIn.Len(), ls.DropMetricName().Len())
 }
@@ -1047,10 +1045,9 @@ func (s *LabelsSuite) TestLen() {
 		"che":      "bureck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
-	lsid := lss.FindOrEmplace(lsIn).LabelSetID
-	snapshot := lss.CreateLabelSetSnapshot()
-	ls := labels.NewLabelsWithLSS(snapshot, lsid, 0)
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
+	lsid := lss.FindOrEmplace(lsIn)
+	ls := labels.NewLabelsWithLSS(lss.Snapshot(), lsid, 0)
 
 	s.Equal(lsIn.Len(), ls.Len())
 }
@@ -1062,10 +1059,9 @@ func (s *LabelsSuite) TestLen_2() {
 		"che":      "bureck",
 	})
 
-	lss := cppbridge.NewQueryableLssStorage()
-	lsid := lss.FindOrEmplace(lsIn).LabelSetID
-	snapshot := lss.CreateLabelSetSnapshot()
-	ls := labels.NewLabelsWithLSS(snapshot, lsid, uint16(lsIn.Len()))
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
+	lsid := lss.FindOrEmplace(lsIn)
+	ls := labels.NewLabelsWithLSS(lss.Snapshot(), lsid, uint16(lsIn.Len()))
 
 	s.Equal(lsIn.Len(), ls.Len())
 }
@@ -1143,6 +1139,35 @@ func (s *LabelsSuite) TestRange() {
 	s.Equal(lsMapA, lsMapB)
 }
 
+func (s *LabelsSuite) TestRenewSnapshot() {
+	lsMapA := map[string]string{
+		"__aaa__":  "11111",
+		"__name__": "ubername",
+		"lol":      "kek",
+		"che":      "bureck",
+		"zimya":    "reck",
+	}
+
+	lsA := labels.FromMap(lsMapA)
+	lsaCopy := lsA.Copy()
+
+	s.True(lsA == lsaCopy)
+
+	for i := 0; i < 100; i++ {
+		labels.FromMap(map[string]string{
+			"__aaa__":  fmt.Sprintf("11111%d", i),
+			"__name__": fmt.Sprintf("ubernameB%d", i),
+			"lol":      fmt.Sprintf("kekB%d", i),
+			"che":      fmt.Sprintf("bureckB%d", i),
+			"zimya":    fmt.Sprintf("reckB%d", i),
+		})
+	}
+
+	lsA.RenewSnapshot()
+
+	s.False(lsA == lsaCopy)
+}
+
 func (s *LabelsSuite) TestValidate() {
 	lsMapA := map[string]string{
 		"__aaa__":  "11111",
@@ -1208,14 +1233,13 @@ func (s *LabelsSuite) TestIsZeroFalse() {
 }
 
 func (s *LabelsSuite) TestIsZeroFalseLSS() {
-	lss := cppbridge.NewQueryableLssStorage()
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsid := lss.FindOrEmplace(model.LabelSetFromMap(map[string]string{
 		"__name__": "ubername",
 		"lol":      "kek",
 		"che":      "bureck",
-	})).LabelSetID
-	snapshot := lss.CreateLabelSetSnapshot()
-	lsA := labels.NewLabelsWithLSS(snapshot, lsid, 3)
+	}))
+	lsA := labels.NewLabelsWithLSS(lss.Snapshot(), lsid, 3)
 
 	s.False(lsA.IsZero())
 }

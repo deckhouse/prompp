@@ -217,8 +217,10 @@ func newScrapePool(
 			targetOptions.TargetLabels = append(
 				targetOptions.TargetLabels,
 				cppbridge.Label{
-					Name:  *((*string)(unsafe.Pointer(&l.Name))),
-					Value: *((*string)(unsafe.Pointer(&l.Value))),
+					// Name:  *((*string)(unsafe.Pointer(&l.Name))),
+					// Value: *((*string)(unsafe.Pointer(&l.Value))),
+					Name:  strings.Clone(l.Name),
+					Value: strings.Clone(l.Value),
 				},
 			)
 		})
@@ -443,6 +445,10 @@ func (sp *scrapePool) Sync(tgs []*targetgroup.Group) {
 			if len(failures) == 0 {
 				sp.targetsCache[tghash] = targets
 			}
+		} else {
+			for _, t := range targets {
+				t.RenewLabelsSnapshot()
+			}
 		}
 		for _, t := range targets {
 			// Replicate .Labels().IsEmpty() with a loop here to avoid generating garbage.
@@ -543,7 +549,8 @@ func (sp *scrapePool) sync(targets []*Target) {
 			}
 			// Need to keep the most updated labels information
 			// for displaying it in the Service Discovery web page.
-			sp.activeTargets[hash].SetDiscoveredLabels(t.DiscoveredLabels())
+			// sp.activeTargets[hash].SetDiscoveredLabels(t.DiscoveredLabels())
+			sp.activeTargets[hash].UpdateLabels(t)
 		}
 	}
 

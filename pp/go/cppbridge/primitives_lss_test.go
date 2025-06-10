@@ -53,7 +53,7 @@ func (s *LSSSuite) TestCreateSnapshotFromEncodingBimap() {
 	lss := cppbridge.NewLssStorage()
 
 	// Act
-	labelSetSnapshot := lss.CreateLabelSetSnapshot()
+	labelSetSnapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	// Assert
 	s.Require().NotNil(labelSetSnapshot.Pointer())
@@ -64,7 +64,7 @@ func (s *LSSSuite) TestCreateSnapshotFromQueryableEncodingBimap() {
 	lss := cppbridge.NewQueryableLssStorage()
 
 	// Act
-	labelSetSnapshot := lss.CreateLabelSetSnapshot()
+	labelSetSnapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	// Assert
 	s.Require().NotNil(labelSetSnapshot.Pointer())
@@ -93,28 +93,6 @@ func (s *LSSSuite) TestLabels() {
 	})
 
 	s.Equal(lsIn.Len(), lsLength)
-}
-
-func (s *LSSSuite) TestCreateReadonlyLssFromEncodingBimap() {
-	// Arrange
-	lss := cppbridge.NewLssStorage()
-
-	// Act
-	snapshot := lss.CreateLabelSetSnapshot()
-
-	// Assert
-	s.Require().NotNil(snapshot.Pointer())
-}
-
-func (s *LSSSuite) TestCreateReadonlyLssFromQueryableEncodingBimap() {
-	// Arrange
-	lss := cppbridge.NewQueryableLssStorage()
-
-	// Act
-	snapshot := lss.CreateLabelSetSnapshot()
-
-	// Assert
-	s.Require().NotNil(snapshot.Pointer())
 }
 
 type QueryableLSSSuite struct {
@@ -308,7 +286,7 @@ func (s *QueryableLSSSuite) TestCopyAddedSeries() {
 
 func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithExistingLabelSet() {
 	// Arrange
-	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	// Act
 	existingLsIdWithAdd := s.lss.FindOrEmplaceBuilder(cppbridge.CppLabelSetBuilder{
@@ -332,7 +310,7 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithExistingLabelSet() {
 
 func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithNewLabelSet() {
 	// Arrange
-	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	// Act
 	expectedLsId := len(s.labelSetIDs)
@@ -366,16 +344,18 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithoutReadonlyLss() {
 
 func (s *QueryableLSSSuite) TestFindOrEmplaceFromBuilderWithExistingLabelSet() {
 	// Arrange
-	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	// Act
 	snapshotWithAdd, lengthWithAdd, existingLsIdWithAdd := s.lss.FindOrEmplaceFromBuilder(
+		&testSnapshotSource{},
 		[]cppbridge.Label{{Name: "che", Value: "bureck"}},
 		nil,
 		labelSetSnapshot,
 		0,
 	)
 	snapshotWithDel, lengthWithDel, existingLsIdWithDel := s.lss.FindOrEmplaceFromBuilder(
+		&testSnapshotSource{},
 		nil,
 		[]string{"che"},
 		labelSetSnapshot,
@@ -393,11 +373,12 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceFromBuilderWithExistingLabelSet() {
 
 func (s *QueryableLSSSuite) TestFindOrEmplaceFromBuilderWithNewLabelSet() {
 	// Arrange
-	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	// Act
 	expectedLsId := len(s.labelSetIDs)
 	snapshot, length, existingLsId := s.lss.FindOrEmplaceFromBuilder(
+		&testSnapshotSource{},
 		[]cppbridge.Label{{Name: "new_lol", Value: "new_kek"}},
 		nil,
 		labelSetSnapshot,
@@ -415,11 +396,12 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceFromBuilderWithNewLabelSetAnother()
 	mls := s.labelSets[0]
 	lss := cppbridge.NewQueryableLssStorage()
 	lsid := lss.FindOrEmplace(mls).LabelSetID
-	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
+	labelSetSnapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	// Act
 	expectedLsId := len(s.labelSetIDs)
 	snapshot, length, existingLsId := s.lss.FindOrEmplaceFromBuilder(
+		&testSnapshotSource{},
 		[]cppbridge.Label{{Name: "new_lol", Value: "new_kek"}},
 		nil,
 		labelSetSnapshot,
@@ -432,62 +414,6 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceFromBuilderWithNewLabelSetAnother()
 	s.Equal(uint32(expectedLsId), existingLsId)
 }
 
-func (s *QueryableLSSSuite) TestFindOrEmplaceLabelSet() {
-	// Arrange
-	mls := model.LabelSetFromMap(map[string]string{
-		"__name__": "somename",
-		"job":      "somejob",
-	})
-	builder := model.NewLabelSetSimpleBuilderSize(mls.Len())
-
-	// Act
-	snapshot, lsID := s.lss.FindOrEmplaceLabelSet(mls)
-	s.Require().NotNil(snapshot)
-
-	snapshot.RangeLabelSet(lsID, false, func(l cppbridge.Label) error {
-		builder.Add(l.Name, l.Value)
-		return nil
-	})
-
-	// Assert
-	s.Equal(mls.String(), builder.Build().String())
-}
-
-func (s *QueryableLSSSuite) TestFind() {
-	// Arrange
-	mls := model.LabelSetFromMap(map[string]string{
-		"__name__": "somename",
-		"job":      "somejob",
-	})
-
-	// Act
-	_, expectedLSID := s.lss.FindOrEmplaceLabelSet(mls)
-	actualLSID, find := s.lss.Find(mls)
-
-	// Assert
-	s.Require().True(find)
-	s.Equal(expectedLSID, actualLSID)
-}
-
-func (s *QueryableLSSSuite) TestFindNot() {
-	// Arrange
-	mls1 := model.LabelSetFromMap(map[string]string{
-		"__name__": "somename",
-		"job":      "somejob",
-	})
-	mls2 := model.LabelSetFromMap(map[string]string{
-		"__name__": "somename",
-		"job":      "somejob1",
-	})
-	_, _ = s.lss.FindOrEmplaceLabelSet(mls1)
-
-	// Act
-	_, find := s.lss.Find(mls2)
-
-	// Assert
-	s.Require().False(find)
-}
-
 func (s *QueryableLSSSuite) TestFindFromBuilder() {
 	// Arrange
 	mls := model.LabelSetFromMap(map[string]string{
@@ -496,8 +422,8 @@ func (s *QueryableLSSSuite) TestFindFromBuilder() {
 	})
 
 	// Act
-	_, expectedLSID := s.lss.FindOrEmplaceLabelSet(mls)
-	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
+	expectedLSID := s.lss.FindOrEmplace(mls).LabelSetID
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 	length, actualLSID, find := s.lss.FindFromBuilder(
 		nil,
 		nil,
@@ -516,10 +442,10 @@ func (s *QueryableLSSSuite) TestFindFromBuilderAnother() {
 	mls := s.labelSets[0]
 	lss := cppbridge.NewQueryableLssStorage()
 	lsid := lss.FindOrEmplace(mls).LabelSetID
-	labelSetSnapshot := lss.CreateLabelSetSnapshot()
+	labelSetSnapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	// Act
-	_, expectedLSID := s.lss.FindOrEmplaceLabelSet(mls)
+	expectedLSID := s.lss.FindOrEmplace(mls).LabelSetID
 	length, actualLSID, find := s.lss.FindFromBuilder(
 		nil,
 		nil,
@@ -535,7 +461,7 @@ func (s *QueryableLSSSuite) TestFindFromBuilderAnother() {
 
 func (s *QueryableLSSSuite) TestFindFromBuilderFromBuilderWithExistingLabelSet() {
 	// Arrange
-	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	// Act
 	lengthAdd, lsIDAdd, findAdd := s.lss.FindFromBuilder(
@@ -569,7 +495,7 @@ func (s *QueryableLSSSuite) TestFindFromBuilderNot() {
 	})
 	lss := cppbridge.NewQueryableLssStorage()
 	lsid := lss.FindOrEmplace(mls).LabelSetID
-	labelSetSnapshot := lss.CreateLabelSetSnapshot()
+	labelSetSnapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	// Act
 	_, _, find := s.lss.FindFromBuilder(
@@ -581,4 +507,14 @@ func (s *QueryableLSSSuite) TestFindFromBuilderNot() {
 
 	// Assert
 	s.Require().False(find)
+}
+
+// testSnapshotSource implementation SnapshotSource.
+type testSnapshotSource struct {
+	snapshot *cppbridge.LabelSetSnapshot
+}
+
+// FastSnapshot implementation SnapshotSource.
+func (s *testSnapshotSource) FastSnapshot() *cppbridge.LabelSetSnapshot {
+	return s.snapshot
 }

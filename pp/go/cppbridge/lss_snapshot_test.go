@@ -68,7 +68,7 @@ func (s *LabelSetSnapshotSuite) testBytesImpl(
 ) {
 	// Arrange
 	lsid := lss.FindOrEmplace(testCase.labelSet).LabelSetID
-	snapshot := lss.CreateLabelSetSnapshot()
+	snapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	// Act
 	bytes = snapshot.LabelSetBytes(lsid, bytes, false)
@@ -111,7 +111,7 @@ func (s *LabelSetSnapshotSuite) testBytesWithLabelsImpl(
 ) {
 	// Arrange
 	lsid := lss.FindOrEmplace(testCase.labelSet).LabelSetID
-	snapshot := lss.CreateLabelSetSnapshot()
+	snapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	// Act
 	bytes = snapshot.LabelSetBytesWithLabels(lsid, bytes, false, testCase.names)
@@ -164,7 +164,7 @@ func (s *LabelSetSnapshotSuite) testBytesWithoutLabelsImpl(
 ) {
 	// Arrange
 	lsid := lss.FindOrEmplace(testCase.labelSet).LabelSetID
-	snapshot := lss.CreateLabelSetSnapshot()
+	snapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	// Act
 	bytes = snapshot.LabelSetBytesWithoutLabels(lsid, bytes, false, testCase.names)
@@ -179,7 +179,7 @@ func (s *LabelSetSnapshotSuite) TestLabelSetGetValue() {
 		mls := s.mls.With("test", s.T().Name())
 
 		lsid := lss.FindOrEmplace(mls).LabelSetID
-		snapshot := lss.CreateLabelSetSnapshot()
+		snapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 		// Act
 		nameT := snapshot.LabelSetGetValue(lsid, "test")
@@ -201,7 +201,7 @@ func (s *LabelSetSnapshotSuite) TestLabelSetHasDuplicateLabelNames() {
 		)
 
 		lsid := lss.FindOrEmplace(mlsDuplicate).LabelSetID
-		snapshot := lss.CreateLabelSetSnapshot()
+		snapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 		// Act
 		nameF, okF := snapshot.LabelSetHasDuplicateLabelNames(s.lsids[i], false)
@@ -224,7 +224,7 @@ func (s *LabelSetSnapshotSuite) TestLabelSetHasLabelName() {
 		mls := s.mls.With("test", s.T().Name())
 
 		lsid := lss.FindOrEmplace(mls).LabelSetID
-		snapshot := lss.CreateLabelSetSnapshot()
+		snapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 		// Act
 		okT := snapshot.LabelSetHasLabelName(lsid, "test")
@@ -242,7 +242,7 @@ func (s *LabelSetSnapshotSuite) TestLabelSetHashForLabels() {
 		mls := s.mls.With("test", s.T().Name())
 
 		lsid := lss.FindOrEmplace(mls).LabelSetID
-		snapshot := lss.CreateLabelSetSnapshot()
+		snapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 		// Act
 		hashExpected := snapshot.LabelSetHash(s.lsids[i], false)
@@ -259,7 +259,7 @@ func (s *LabelSetSnapshotSuite) TestLabelSetHashForLabelsDrop() {
 		mls := s.mls.With("test", s.T().Name())
 
 		lsid := lss.FindOrEmplace(mls).LabelSetID
-		snapshot := lss.CreateLabelSetSnapshot()
+		snapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 		// Act
 		hashExpected := snapshot.LabelSetHash(s.lsids[i], true)
@@ -276,7 +276,7 @@ func (s *LabelSetSnapshotSuite) TestLabelSetHashWithoutLabels() {
 		mls := s.mls.With("test", s.T().Name())
 
 		lsid := lss.FindOrEmplace(mls).LabelSetID
-		snapshot := lss.CreateLabelSetSnapshot()
+		snapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 		// Act
 		hashExpected := snapshot.LabelSetHash(s.lsids[i], true)
@@ -293,7 +293,7 @@ func (s *LabelSetSnapshotSuite) TestLabelSetLength() {
 		mls := s.mls.With("test", s.T().Name())
 
 		lsid := lss.FindOrEmplace(mls).LabelSetID
-		snapshot := lss.CreateLabelSetSnapshot()
+		snapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 		// Act
 		length := snapshot.LabelSetLength(lsid, false)
@@ -314,7 +314,7 @@ func (s *LabelSetSnapshotSuite) TestRangeLabelSet() {
 
 		// Act
 		lsid := lss.FindOrEmplace(mls).LabelSetID
-		snapshot := lss.CreateLabelSetSnapshot()
+		snapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 		snapshot.RangeLabelSet(lsid, false, func(l cppbridge.Label) error {
 			builder.Add(l.Name, l.Value)
@@ -337,7 +337,7 @@ func (s *LabelSetSnapshotSuite) TestLabelSetFromBuilderHash() {
 		mls := s.mls.With("test", s.T().Name())
 
 		lsid := lss.FindOrEmplace(mls).LabelSetID
-		snapshot := lss.CreateLabelSetSnapshot()
+		snapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 		// Act
 		hashExpected := snapshot.LabelSetHash(lsid, false)
@@ -359,7 +359,7 @@ func (s *LabelSetSnapshotSuite) TestLabelSetFromBuilderHashDel() {
 		mls := s.mls.With("test", s.T().Name())
 
 		lsid := lss.FindOrEmplace(mls).LabelSetID
-		snapshot := lss.CreateLabelSetSnapshot()
+		snapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 		// Act
 		hashExpected := snapshot.LabelSetHash(s.lsids[i], false)
@@ -381,7 +381,7 @@ func (s *LabelSetSnapshotSuite) TestLabelSetFromBuilderHashAdd() {
 		mls := s.mls.With("test", s.T().Name())
 
 		lsid := lss.FindOrEmplace(mls).LabelSetID
-		snapshot := lss.CreateLabelSetSnapshot()
+		snapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 		// Act
 		hashExpected := snapshot.LabelSetHash(lsid, false)

@@ -121,6 +121,7 @@ type AlertingRule struct {
 	labels labels.Labels
 	// Non-identifying key/value pairs.
 	annotations labels.Labels
+	labelsMtx   sync.RWMutex // PP_CHANGES.md: rebuild on cpp
 	// External labels from the global config.
 	externalLabels map[string]string
 	// The external URL from the --web.external-url flag.
@@ -220,16 +221,24 @@ func (r *AlertingRule) KeepFiringFor() time.Duration {
 
 // Labels returns the labels of the alerting rule.
 func (r *AlertingRule) Labels() labels.Labels {
+	r.labelsMtx.RLock()         // PP_CHANGES.md: rebuild on cpp
+	defer r.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
+
 	return r.labels
 }
 
 // Annotations returns the annotations of the alerting rule.
 func (r *AlertingRule) Annotations() labels.Labels {
+	r.labelsMtx.RLock()         // PP_CHANGES.md: rebuild on cpp
+	defer r.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
+
 	return r.annotations
 }
 
 func (r *AlertingRule) sample(alert *Alert, ts time.Time) promql.Sample {
+	r.labelsMtx.RLock()
 	lb := labels.NewBuilder(r.labels)
+	r.labelsMtx.RUnlock()
 
 	alert.Labels.Range(func(l labels.Label) {
 		lb.Set(l.Name, l.Value)
@@ -250,7 +259,9 @@ func (r *AlertingRule) sample(alert *Alert, ts time.Time) promql.Sample {
 // forStateSample returns a promql.Sample with the rule labels, `ALERTS_FOR_STATE` as the metric name and the rule name as the `alertname` label.
 // Optionally, if an alert is provided it'll copy the labels of the alert into the sample labels.
 func (r *AlertingRule) forStateSample(alert *Alert, ts time.Time, v float64) promql.Sample {
+	r.labelsMtx.RLock() // PP_CHANGES.md: rebuild on cpp
 	lb := labels.NewBuilder(r.labels)
+	r.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
 
 	if alert != nil {
 		alert.Labels.Range(func(l labels.Label) {
@@ -389,6 +400,9 @@ func (r *AlertingRule) Eval(ctx context.Context, queryOffset time.Duration, ts t
 
 		lb.Reset(smpl.Metric)
 		lb.Del(labels.MetricName)
+
+		r.labelsMtx.RLock() // PP_CHANGES.md: rebuild on cpp
+
 		r.labels.Range(func(l labels.Label) {
 			lb.Set(l.Name, expand(l.Value))
 		})
@@ -401,6 +415,9 @@ func (r *AlertingRule) Eval(ctx context.Context, queryOffset time.Duration, ts t
 		annotations := sb.Labels()
 
 		lbs := lb.Labels()
+
+		r.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
+
 		h := lbs.Hash()
 		resultFPs[h] = struct{}{}
 
@@ -579,6 +596,9 @@ func (r *AlertingRule) sendAlerts(ctx context.Context, ts time.Time, resendDelay
 }
 
 func (r *AlertingRule) String() string {
+	r.labelsMtx.RLock()         // PP_CHANGES.md: rebuild on cpp
+	defer r.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
+
 	ar := rulefmt.Rule{
 		Alert:         r.name,
 		Expr:          r.vector.String(),
@@ -594,4 +614,12 @@ func (r *AlertingRule) String() string {
 	}
 
 	return string(byt)
+}
+
+// RenewLabelsSnapshot renew labels and annotations snapshots.
+func (r *AlertingRule) RenewLabelsSnapshot() { // PP_CHANGES.md: rebuild on cpp
+	r.labelsMtx.Lock()
+	r.labels.RenewSnapshot()
+	r.annotations.RenewSnapshot()
+	r.labelsMtx.Unlock()
 }

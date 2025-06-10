@@ -6,7 +6,6 @@ import (
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
 )
@@ -126,11 +125,6 @@ func (h *DiscardableRotatableHead) CreateTask(
 // Enqueue the task to be executed on head.
 func (h *DiscardableRotatableHead) Enqueue(t *relabeler.GenericTask) {
 	h.head.Enqueue(t)
-}
-
-// Find label set in lss, if not found return EmptyLabels.
-func (h *DiscardableRotatableHead) Find(mls model.LabelSet) labels.Labels {
-	return h.head.Find(mls)
 }
 
 // FindFromBuilder label set from builder in lss, if not found return EmptyLabels.

@@ -19,3 +19,6 @@ func NewLabelsWithLSS(lss *cppbridge.LabelSetSnapshot, id uint32, length uint16)
 
 	return builder.Labels()
 }
+
+// RenewSnapshot renew ls snapshot. Do nothing.
+func (*Labels) RenewSnapshot() {}

@@ -10,10 +10,10 @@ import (
 	"unsafe"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.uber.org/atomic"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/util"
 )
 
 // Labels is a sorted set of labels. Is implemented by a cpp lss.
@@ -286,6 +286,15 @@ func (Labels) ReleaseStrings(_ func(string)) {
 	// remove these calls as there is nothing to do.
 }
 
+// RenewSnapshot renew ls snapshot.
+func (ls *Labels) RenewSnapshot() {
+	if ls.IsZero() {
+		return
+	}
+
+	ls.snapshot = ls.snapshot.Snapshot()
+}
+
 // Validate calls f on each label. If f returns a non-nil error, then it returns that error canceling the iteration.
 func (ls Labels) Validate(f func(l Label) error) error {
 	if ls.IsZero() {
@@ -304,77 +313,83 @@ func (ls Labels) WithoutEmpty() Labels {
 }
 
 //
-// ScratchBuilder
+// Builder
 //
 
-// // ScratchBuilder allows efficient construction of a Labels from scratch.
-// type ScratchBuilder struct {
-// 	builder model.LabelSetSimpleBuilder
-// }
+// NewBuilderWithSymbolTable creates a Builder, for api parity with dedupelabels.
+func NewBuilderWithSymbolTable(*SymbolTable) *Builder {
+	return NewBuilder(EmptyLabels())
+}
 
-// // NewScratchBuilder creates a ScratchBuilder initialized for Labels with n entries.
-// func NewScratchBuilder(n int) ScratchBuilder {
-// 	return ScratchBuilder{builder: *model.NewLabelSetSimpleBuilderSize(n)}
-// }
+// Builder allows modifying Labels.
+type Builder struct {
+	base Labels
+	del  []string
+	add  []Label
+}
 
-// // NewScratchBuilderWithSymbolTable creates a ScratchBuilder, for api parity with dedupelabels.
-// func NewScratchBuilderWithSymbolTable(_ *SymbolTable, n int) ScratchBuilder {
-// 	return NewScratchBuilder(n)
-// }
+// Labels returns the labels from the builder.
+// If no modifications were made, the original labels are returned.
+func (b *Builder) Labels() Labels {
+	if len(b.del) == 0 && len(b.add) == 0 {
+		return b.base
+	}
 
-// // Add a name/value pair.
-// // Note if you Add the same name twice you will get a duplicate label, which is invalid.
-// func (b *ScratchBuilder) Add(name, value string) {
-// 	b.builder.Add(name, value)
-// }
+	slices.SortFunc(b.add, func(a, b Label) int { return strings.Compare(a.Name, b.Name) })
+	slices.Sort(b.del)
 
-// // Assign is for when you already have a Labels which you want this ScratchBuilder to return.
-// func (b *ScratchBuilder) Assign(ls Labels) {
-// 	b.builder.Reset()
-// 	ls.Range(func(l Label) {
-// 		b.builder.Add(l.Name, l.Value)
-// 	})
-// }
+	// dedup b.del
+	if len(b.del) > 1 {
+		for i := len(b.del) - 1; i != 0; i-- {
+			if b.del[i] == b.del[i-1] {
+				b.del = slices.Delete(b.del, i, i+1)
+			}
+		}
+	}
 
-// // Labels returns the name/value pairs added as a Labels object. Calling Add() after Labels() has no effect.
-// func (b *ScratchBuilder) Labels() Labels {
-// 	if b.builder.Len() == 0 {
-// 		return EmptyLabels()
-// 	}
+	// clearing b.del(b.add has priority)
+	j := 0
+	for i := 0; i < len(b.add); i++ {
+		name := b.add[i].Name
+		for j < len(b.del) && b.del[j] < name {
+			j++
+		}
 
-// 	// isvalid
-// 	return Storage.FindOrEmplaceLabelSet(b.builder.Build())
-// }
+		if j == len(b.del) {
+			break
+		}
 
-// // Overwrite write the newly-built Labels out to ls.
-// func (b *ScratchBuilder) Overwrite(inls *Labels) {
-// 	inls.CopyFrom(Storage.FindOrEmplaceLabelSet(b.builder.Build()))
-// }
+		if name == b.del[j] {
+			b.del = slices.Delete(b.del, j, j+1)
+		}
+	}
 
-// // Reset clear builder container.
-// func (b *ScratchBuilder) Reset() {
-// 	b.builder.Reset()
-// }
+	b.base = Storage.FindOrEmplaceFromBuilder(b)
+	b.del = b.del[:0]
+	b.add = b.add[:0]
 
-// // SetSymbolTable implementation.
-// func (*ScratchBuilder) SetSymbolTable(*SymbolTable) {
-// 	// no-op
-// }
+	return b.base
+}
 
-// // Sort the labels added so far by name.
-// func (b *ScratchBuilder) Sort() {
-// 	b.builder.Sort()
-// }
+// Reset clears all current state for the builder.
+func (b *Builder) Reset(base Labels) {
+	b.base = base
+	b.del = b.del[:0]
+	b.add = b.add[:0]
+	if b.base.dropMetricName {
+		b.del = append(b.del, MetricName)
+	}
 
-// // UnsafeAddBytes add a name/value pair, using []byte instead of string.
-// // The '-tags stringlabels' version of this function is unsafe, hence the name.
-// // This version is safe - it copies the strings immediately - but we keep the same name so everything compiles.
-// func (b *ScratchBuilder) UnsafeAddBytes(name, value []byte) {
-// 	b.Add(
-// 		unsafe.String(unsafe.SliceData(name), len(name)),   // #nosec G103 // it's meant to be that way
-// 		unsafe.String(unsafe.SliceData(value), len(value)), // #nosec G103 // it's meant to be that way
-// 	)
-// }
+	b.base.Range(func(l Label) {
+		if l.Value == "" {
+			b.del = append(b.del, l.Name)
+		}
+	})
+}
+
+//
+// ScratchBuilder
+//
 
 // ScratchBuilder allows efficient construction of a Labels from scratch.
 type ScratchBuilder struct {
@@ -468,124 +483,6 @@ func (b *ScratchBuilder) UnsafeAddBytes(name, value []byte) {
 }
 
 //
-// Builder
-//
-
-// // Builder allows modifying Labels.
-// type Builder struct {
-// 	base Labels
-// 	del  []string
-// 	add  []Label
-// }
-
-// NewBuilderWithSymbolTable creates a Builder, for api parity with dedupelabels.
-func NewBuilderWithSymbolTable(*SymbolTable) *Builder {
-	return NewBuilder(EmptyLabels())
-}
-
-// // Reset clears all current state for the builder.
-// func (b *Builder) Reset(base Labels) {
-// 	b.base = base
-// 	b.del = b.del[:0]
-// 	b.add = b.add[:0]
-// 	b.base.Range(func(l Label) {
-// 		if l.Value == "" {
-// 			b.del = append(b.del, l.Name)
-// 		}
-// 	})
-// }
-
-// // Labels returns the labels from the builder.
-// // If no modifications were made, the original labels are returned.
-// func (b *Builder) Labels() Labels {
-// 	if len(b.del) == 0 && len(b.add) == 0 {
-// 		return b.base
-// 	}
-
-// 	sbuilder := NewScratchBuilder(max(b.base.Len()+len(b.add)-len(b.del), 1))
-
-// 	b.base.Range(func(l Label) {
-// 		if slices.Contains(b.del, l.Name) || contains(b.add, l.Name) {
-// 			return
-// 		}
-
-// 		sbuilder.Add(l.Name, l.Value)
-// 	})
-
-// 	for _, l := range b.add {
-// 		sbuilder.Add(l.Name, l.Value)
-// 	}
-
-// 	return sbuilder.Labels()
-// }
-
-// Builder allows modifying Labels.
-type Builder struct {
-	base Labels
-	del  []string
-	add  []Label
-}
-
-// Labels returns the labels from the builder.
-// If no modifications were made, the original labels are returned.
-func (b *Builder) Labels() Labels {
-	if len(b.del) == 0 && len(b.add) == 0 {
-		return b.base
-	}
-
-	slices.SortFunc(b.add, func(a, b Label) int { return strings.Compare(a.Name, b.Name) })
-	slices.Sort(b.del)
-
-	// dedup b.del
-	if len(b.del) > 1 {
-		for i := len(b.del) - 1; i != 0; i-- {
-			if b.del[i] == b.del[i-1] {
-				b.del = slices.Delete(b.del, i, i+1)
-			}
-		}
-	}
-
-	// clearing b.del(b.add has priority)
-	j := 0
-	for i := 0; i < len(b.add); i++ {
-		name := b.add[i].Name
-		for j < len(b.del) && b.del[j] < name {
-			j++
-		}
-
-		if j == len(b.del) {
-			break
-		}
-
-		if name == b.del[j] {
-			b.del = slices.Delete(b.del, j, j+1)
-		}
-	}
-
-	b.base = Storage.FindOrEmplaceFromBuilder(b)
-	b.del = b.del[:0]
-	b.add = b.add[:0]
-
-	return b.base
-}
-
-// Reset clears all current state for the builder.
-func (b *Builder) Reset(base Labels) {
-	b.base = base
-	b.del = b.del[:0]
-	b.add = b.add[:0]
-	if b.base.dropMetricName {
-		b.del = append(b.del, MetricName)
-	}
-
-	b.base.Range(func(l Label) {
-		if l.Value == "" {
-			b.del = append(b.del, l.Name)
-		}
-	})
-}
-
-//
 // SymbolTable
 //
 
@@ -638,7 +535,6 @@ func Compare(a, b Labels) int {
 //
 
 type Receiver interface {
-	// Find(mls model.LabelSet) Labels
 	FindFromBuilder(
 		sortedAdd []cppbridge.Label,
 		sortedDel []string,
@@ -650,10 +546,9 @@ type Receiver interface {
 var Storage = newStorage()
 
 type storage struct {
-	workingLSS      *cppbridge.LabelSetStorage
-	workingSnapshot *cppbridge.LabelSetSnapshot
-	receiver        atomic.Pointer[Receiver]
-	mx              sync.Mutex
+	workingLSS *cppbridge.LSSWithSnapshot
+	receiver   atomic.Pointer[Receiver]
+	mx         sync.Mutex
 
 	lssMaxID    atomic.Uint32
 	memoryInUse prometheus.Gauge
@@ -662,23 +557,24 @@ type storage struct {
 
 // newStorage init new storage.
 func newStorage() *storage {
+	factory := util.NewUnconflictRegisterer(prometheus.DefaultRegisterer)
+
 	s := &storage{
-		// workingLSS: cppbridge.NewLssStorage(),
-		workingLSS: cppbridge.NewQueryableLssStorage(),
-		memoryInUse: promauto.NewGauge(
+		workingLSS: cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage()),
+		memoryInUse: factory.NewGauge(
 			prometheus.GaugeOpts{
-				Name: "prompp_labels_working_lss_memory_bytes",
-				Help: "Current value memory working lss in use in bytes.",
+				Name:        "prompp_head_cgo_memory_bytes",
+				Help:        "Current value memory in use in bytes.",
+				ConstLabels: prometheus.Labels{"generation": "0", "allocator": "labels", "id": "0"},
 			},
 		),
-		maxID: promauto.NewGauge(
+		maxID: factory.NewGauge(
 			prometheus.GaugeOpts{
 				Name: "prompp_labels_working_max_id",
 				Help: "Current number max lss id.",
 			},
 		),
 	}
-	s.workingSnapshot = s.workingLSS.CreateLabelSetSnapshot()
 
 	go s.writeMetrics()
 
@@ -689,26 +585,6 @@ func newStorage() *storage {
 func (s *storage) SetReceiver(receiver Receiver) {
 	s.receiver.Store(&receiver)
 }
-
-// // FindOrEmplaceLabelSet find ls in current lsses or store to working LSS and return Labels.
-// func (s *storage) FindOrEmplaceLabelSet(mls model.LabelSet) Labels {
-// 	if receiver := s.receiver.Load(); receiver != nil {
-// 		if ls := (*receiver).Find(mls); !ls.IsEmpty() {
-// 			return ls
-// 		}
-// 	}
-
-// 	s.mx.Lock()
-// 	snapshot, lsID := s.workingLSS.FindOrEmplaceLabelSet(mls)
-// 	if snapshot != nil {
-// 		s.workingSnapshot = snapshot
-// 	}
-// 	s.mx.Unlock()
-
-// 	s.lssMaxID.Store(max(lsID, s.lssMaxID.Load()))
-
-// 	return NewLabelsWithLSS(s.workingSnapshot, lsID, uint16(mls.Len()))
-// }
 
 // FindOrEmplaceLabelSet find ls from bulder in current lsses or store to working LSS and return Labels.
 func (s *storage) FindOrEmplaceFromBuilder(b *Builder) Labels {
@@ -724,20 +600,17 @@ func (s *storage) FindOrEmplaceFromBuilder(b *Builder) Labels {
 	}
 
 	s.mx.Lock()
-	snapshot, length, lsID := s.workingLSS.FindOrEmplaceFromBuilder(
+	length, lsID := s.workingLSS.FindOrEmplaceFromBuilder(
 		*((*[]cppbridge.Label)(unsafe.Pointer(&b.add))),
 		b.del,
 		b.base.snapshot,
 		b.base.id,
 	)
-	if snapshot != nil {
-		s.workingSnapshot = snapshot
-	}
 	s.mx.Unlock()
 
 	s.lssMaxID.Store(max(lsID, s.lssMaxID.Load()))
 
-	return NewLabelsWithLSS(s.workingSnapshot, lsID, uint16(length)) // #nosec G115 // no overflow
+	return NewLabelsWithLSS(s.workingLSS.Snapshot(), lsID, uint16(length)) // #nosec G115 // no overflow
 }
 
 // writeMetrics write metrics for working lss.

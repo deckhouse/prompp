@@ -17,7 +17,8 @@ type InstantSeriesSetTestSuite struct {
 	valueNotFoundTimestampValue int64
 	lssQueryResult              *cppbridge.LSSQueryResult
 	labelSetSnapshot            *cppbridge.LabelSetSnapshot
-	samples                     []cppbridge.Sample
+
+	samples []cppbridge.Sample
 }
 
 func TestInstantSeriesSetTestSuite(t *testing.T) {
@@ -35,7 +36,7 @@ func (s *InstantSeriesSetTestSuite) SetupTest() {
 	require.Equal(s.T(), cppbridge.LSSQueryStatusMatch, s.lssQueryResult.Status())
 	require.Equal(s.T(), 4, len(s.lssQueryResult.IDs()))
 
-	s.labelSetSnapshot = lss.CreateLabelSetSnapshot()
+	s.labelSetSnapshot = cppbridge.NewLSSWithSnapshot(lss).Snapshot()
 
 	s.valueNotFoundTimestampValue = 0
 	s.samples = []cppbridge.Sample{

@@ -12,7 +12,6 @@ import (
 	"sync/atomic"
 
 	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -186,7 +185,6 @@ type Head struct {
 	wg             sync.WaitGroup
 
 	// stat
-	registerer           prometheus.Registerer
 	appendedSegmentCount prometheus.Counter
 	memoryInUse          *prometheus.GaugeVec
 	series               prometheus.Gauge
@@ -247,7 +245,6 @@ func New(
 		relabelersData: make(map[string]*RelabelerData, len(inputRelabelerConfigs)),
 		numberOfShards: numberOfShards,
 		// stat
-		registerer: registerer,
 		appendedSegmentCount: factory.NewCounter(prometheus.CounterOpts{
 			Name: "prompp_appended_segment_count",
 			Help: "Number of appended segments.",
@@ -1059,33 +1056,6 @@ func (*Head) shardLoop(
 			}
 		}
 	}
-}
-
-// Find label set in lss, if not found return EmptyLabels.
-func (h *Head) Find(mls model.LabelSet) labels.Labels {
-	lses := make([]labels.Labels, h.numberOfShards)
-	t := h.CreateTask(
-		relabeler.LSSFind,
-		func(shard relabeler.Shard) error {
-			if lsID, ok := shard.LSS().Find(mls); ok {
-				lses[shard.ShardID()] = labels.NewLabelsWithLSS(shard.LSS().GetSnapshot(), lsID, uint16(mls.Len()))
-			}
-
-			return nil
-		},
-		relabeler.ForLSSTask,
-		relabeler.NonExclusiveTask,
-	)
-	h.Enqueue(t)
-	_ = t.Wait()
-
-	for i := range lses {
-		if !lses[i].IsEmpty() {
-			return lses[i]
-		}
-	}
-
-	return labels.EmptyLabels()
 }
 
 // FindFromBuilder label set from builder in lss, if not found return EmptyLabels.

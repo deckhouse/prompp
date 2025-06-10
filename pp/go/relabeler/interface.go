@@ -31,7 +31,6 @@ type LSS interface {
 	ResetSnapshot()
 	Input() *cppbridge.LabelSetStorage
 	Target() *cppbridge.LabelSetStorage
-	Find(mls model.LabelSet) (uint32, bool)
 	FindFromBuilder(
 		sortedAdd []cppbridge.Label,
 		sortedDel []string,
@@ -88,7 +87,6 @@ type Head interface {
 	CopySeriesFrom(other Head)
 	Enqueue(t *GenericTask)
 	CreateTask(taskName string, fn ShardFn, isLss, isExclusive bool) *GenericTask
-	Find(labelSet model.LabelSet) labels.Labels
 	FindFromBuilder(
 		sortedAdd []cppbridge.Label,
 		sortedDel []string,
