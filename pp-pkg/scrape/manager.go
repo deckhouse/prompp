@@ -119,7 +119,7 @@ func NewManager(
 		graceShut:      make(chan struct{}),
 		triggerReload:  make(chan struct{}, 1),
 		metrics:        sm,
-		buffers:        pool.New(1e3, 100e6, 2, func(sz int) interface{} { return make([]byte, 0, sz) }),
+		buffers:        pool.New(1e3, 100e6, 3, func(sz int) interface{} { return make([]byte, 0, sz) }),
 		bufferBuilders: newBuildersPool(),
 		bufferBatches:  newbatchesPool(),
 	}
