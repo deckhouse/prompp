@@ -53,6 +53,8 @@ class PostingsWriter {
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool has_more_data() const noexcept { return trie_index_iterator_ != lss_.trie_index().end(); }
 
  private:
+  using SeriesIdSequence = typename Lss::ReverseIndex::SeriesIdSequence;
+
   const Lss& lss_;
   typename Lss::TrieIndexIterator trie_index_iterator_;
   const SeriesReferencesMap& series_references_;
@@ -110,7 +112,7 @@ class PostingsWriter {
   void generate_series_references(const SeriesIdList& series_id_sequence) {
     series_reference_list_.clear();
 
-    if constexpr (std::is_same_v<SeriesIdList, CompactSeriesIdSequence>) {
+    if constexpr (std::is_same_v<SeriesIdList, SeriesIdSequence>) {
       series_reference_list_.reserve(series_id_sequence.count());
       series_id_sequence.process_series([this](const auto& series) PROMPP_LAMBDA_INLINE {
         for (auto series_id : series) {
@@ -128,7 +130,7 @@ class PostingsWriter {
     std::ranges::sort(series_reference_list_);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactSeriesIdSequence& get_series_ids_sequence(uint32_t name_id, uint32_t value_id) const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence& get_series_ids_sequence(uint32_t name_id, uint32_t value_id) const noexcept {
     const auto* series_id_sequence = lss_.reverse_index().get(name_id, value_id);
     assert(series_id_sequence != nullptr);
     return *series_id_sequence;

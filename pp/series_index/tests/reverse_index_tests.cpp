@@ -4,9 +4,9 @@
 
 namespace {
 
-using series_index::CompactSeriesIdSequence;
-using series_index::LabelReverseIndex;
-using series_index::SeriesReverseIndex;
+using CompactSeriesIdSequence = series_index::CompactSeriesIdSequence<>;
+using LabelReverseIndex = series_index::LabelReverseIndex<>;
+using SeriesReverseIndex = series_index::SeriesReverseIndex<>;
 
 class CompactSeriesIdSequenceFixture : public testing::Test {};
 
@@ -28,7 +28,7 @@ TEST_F(CompactSeriesIdSequenceFixture, SwitchToSequence) {
 
 TEST_F(CompactSeriesIdSequenceFixture, IterateOverEmptyArray) {
   // Arrange
-  CompactSeriesIdSequence sequence{CompactSeriesIdSequence::Type::kArray};
+  const CompactSeriesIdSequence sequence{CompactSeriesIdSequence::Type::kArray};
 
   // Act
 
@@ -50,7 +50,7 @@ TEST_F(CompactSeriesIdSequenceFixture, IterateOverFilledArray) {
 
 TEST_F(CompactSeriesIdSequenceFixture, IterateOverEmptySequence) {
   // Arrange
-  CompactSeriesIdSequence sequence{CompactSeriesIdSequence::Type::kSequence};
+  const CompactSeriesIdSequence sequence{CompactSeriesIdSequence::Type::kSequence};
 
   // Act
 
@@ -79,7 +79,7 @@ TEST_F(LabelReverseIndexFixture, GetNonExistingLabelValue) {
   // Arrange
 
   // Act
-  auto item = index_.get(0);
+  const auto item = index_.get(0);
 
   // Assert
   ASSERT_EQ(nullptr, item);
@@ -90,7 +90,7 @@ TEST_F(LabelReverseIndexFixture, AddIntoNewLabelValue) {
 
   // Act
   index_.add(0, 0);
-  auto item = index_.get(0);
+  const auto item = index_.get(0);
 
   // Assert
   ASSERT_NE(nullptr, item);
@@ -105,7 +105,7 @@ TEST_F(LabelReverseIndexFixture, AddIntoExistingLabelValue) {
   // Act
   index_.add(0, 0);
   index_.add(0, 1);
-  auto item = index_.get(0);
+  const auto item = index_.get(0);
 
   // Assert
   ASSERT_NE(nullptr, item);
@@ -120,8 +120,8 @@ TEST_F(LabelReverseIndexFixture, AddMultipleLabelValues) {
   // Act
   index_.add(0, 0);
   index_.add(1, 1);
-  auto item0 = index_.get(0);
-  auto item1 = index_.get(1);
+  const auto item0 = index_.get(0);
+  const auto item1 = index_.get(1);
 
   // Assert
   ASSERT_NE(nullptr, item0);
@@ -140,8 +140,8 @@ TEST_F(LabelReverseIndexFixture, AddOutOfOrderLabelId) {
 
   // Act
   index_.add(1, 1);
-  auto item0 = index_.get(0);
-  auto item1 = index_.get(1);
+  const auto item0 = index_.get(0);
+  const auto item1 = index_.get(1);
 
   // Assert
   ASSERT_NE(nullptr, item0);
@@ -172,7 +172,7 @@ TEST_F(SeriesReverseIndexFixture, GetNonExistingLabelName) {
   // Arrange
 
   // Act
-  auto item = index_.get(0);
+  const auto item = index_.get(0);
 
   // Assert
   EXPECT_EQ(nullptr, item);
@@ -183,7 +183,7 @@ TEST_F(SeriesReverseIndexFixture, AddIntoNewLabelName) {
 
   // Act
   index_.add(Label{.label_name_id = 0, .label_value_id = 0}, 0);
-  auto item = index_.get(0);
+  const auto item = index_.get(0);
 
   // Assert
   ASSERT_NE(nullptr, item);
@@ -197,7 +197,7 @@ TEST_F(SeriesReverseIndexFixture, AddIntoExistingLabelName) {
   // Act
   index_.add(Label{.label_name_id = 0, .label_value_id = 0}, 0);
   index_.add(Label{.label_name_id = 0, .label_value_id = 0}, 1);
-  auto item = index_.get(0);
+  const auto item = index_.get(0);
 
   // Assert
   ASSERT_NE(nullptr, item);
@@ -211,8 +211,8 @@ TEST_F(SeriesReverseIndexFixture, AddMultipleLabelNames) {
   // Act
   index_.add(Label{.label_name_id = 0, .label_value_id = 0}, 0);
   index_.add(Label{.label_name_id = 1, .label_value_id = 0}, 1);
-  auto item0 = index_.get(0);
-  auto item1 = index_.get(1);
+  const auto item0 = index_.get(0);
+  const auto item1 = index_.get(1);
 
   // Assert
   ASSERT_NE(nullptr, item0);
@@ -230,9 +230,9 @@ TEST_F(SeriesReverseIndexFixture, GetByNameAndValueId) {
   // Act
   index_.add(Label{.label_name_id = 0, .label_value_id = 0}, 0);
   index_.add(Label{.label_name_id = 0, .label_value_id = 1}, 1);
-  auto item0 = index_.get(0, 0);
-  auto item1 = index_.get(0, 1);
-  auto item2 = index_.get(0, 2);
+  const auto item0 = index_.get(0, 0);
+  const auto item1 = index_.get(0, 1);
+  const auto item2 = index_.get(0, 2);
 
   // Assert
   ASSERT_NE(nullptr, item0);
@@ -251,8 +251,8 @@ TEST_F(SeriesReverseIndexFixture, AddOutOfOrderNameId) {
 
   // Act
   index_.add(Label{.label_name_id = 1, .label_value_id = 0}, 0);
-  auto item0 = index_.get(0, 0);
-  auto item1 = index_.get(1, 0);
+  const auto item0 = index_.get(0, 0);
+  const auto item1 = index_.get(1, 0);
 
   // Assert
   ASSERT_EQ(nullptr, item0);

@@ -11,16 +11,17 @@ namespace series_index {
 
 static constexpr uint32_t kOptimalPreAllocationElementsCount = 8;
 
-using SeriesIdSequence = BareBones::EncodedSequence<
-    BareBones::Encoding::DeltaRLE<BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124, kOptimalPreAllocationElementsCount>>>;
-
+template <template <class> class MemoryType = BareBones::MemoryWithItemCount>
 class CompactSeriesIdSequence {
  public:
   enum class Type : uint8_t { kArray = 0, kSequence };
 
-  static constexpr uint32_t kMaxElementsInArray = sizeof(SeriesIdSequence) / sizeof(SeriesIdSequence::value_type);
-  using Array = std::array<SeriesIdSequence::value_type, kMaxElementsInArray>;
-  using value_type = SeriesIdSequence::value_type;
+  using SeriesIdSequence = BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<
+      BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124, MemoryType, kOptimalPreAllocationElementsCount>>>;
+
+  static constexpr uint32_t kMaxElementsInArray = sizeof(SeriesIdSequence) / sizeof(typename SeriesIdSequence::value_type);
+  using Array = std::array<typename SeriesIdSequence::value_type, kMaxElementsInArray>;
+  using value_type = typename SeriesIdSequence::value_type;
 
   PROMPP_ALWAYS_INLINE explicit CompactSeriesIdSequence(Type type = Type::kArray) : type_(type) {
     if (type_ == Type::kSequence) {
@@ -66,7 +67,7 @@ class CompactSeriesIdSequence {
     return *reinterpret_cast<const SeriesIdSequence*>(sequence_impl_buffer_.data());
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const SeriesIdSequence::value_type> array() const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const typename SeriesIdSequence::value_type> array() const noexcept {
     assert(type_ == Type::kArray);
     return {(sequence_impl_buffer_.data()), elements_count_};
   }
@@ -97,17 +98,16 @@ class CompactSeriesIdSequence {
 
 }  // namespace series_index
 
-namespace BareBones {
-
-template <>
-struct IsTriviallyReallocatable<series_index::CompactSeriesIdSequence> : std::true_type {};
-
-}  // namespace BareBones
+template <template <class> class MemoryType>
+struct BareBones::IsTriviallyReallocatable<series_index::CompactSeriesIdSequence<MemoryType>> : std::true_type {};  // namespace BareBones
 
 namespace series_index {
 
+template <template <class> class Vector = BareBones::Vector, template <class> class MemoryType = BareBones::MemoryWithItemCount>
 class LabelReverseIndex {
  public:
+  using SeriesIdSequence = CompactSeriesIdSequence<MemoryType>;
+
   PROMPP_ALWAYS_INLINE void add(uint32_t label_value_id, uint32_t series_id) {
     if (!exists(label_value_id)) {
       series_by_value_.resize(label_value_id + 1);
@@ -119,34 +119,35 @@ class LabelReverseIndex {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool exists(uint32_t label_value_id) const noexcept { return label_value_id < series_by_value_.size(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactSeriesIdSequence* get(uint32_t label_value_id) const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence* get(uint32_t label_value_id) const noexcept {
     return exists(label_value_id) ? &series_by_value_[label_value_id] : nullptr;
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactSeriesIdSequence* get_all() const noexcept { return &all_series_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence* get_all() const noexcept { return &all_series_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Vector<CompactSeriesIdSequence>& series_by_value() const noexcept { return series_by_value_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const Vector<SeriesIdSequence>& series_by_value() const noexcept { return series_by_value_; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return series_by_value_.size(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return all_series_.allocated_memory() + series_by_value_.allocated_memory(); }
 
  private:
-  CompactSeriesIdSequence all_series_{CompactSeriesIdSequence::Type::kSequence};
-  BareBones::Vector<CompactSeriesIdSequence> series_by_value_;
+  SeriesIdSequence all_series_{SeriesIdSequence::Type::kSequence};
+  Vector<SeriesIdSequence> series_by_value_;
 };
 
 }  // namespace series_index
 
-namespace BareBones {
-
-template <>
-struct IsTriviallyReallocatable<series_index::LabelReverseIndex> : std::true_type {};
-
-}  // namespace BareBones
+template <template <class> class Vector, template <class> class MemoryType>
+struct BareBones::IsTriviallyReallocatable<series_index::LabelReverseIndex<Vector, MemoryType>> : std::true_type {};  // namespace BareBones
 
 namespace series_index {
 
+template <template <class> class Vector = BareBones::Vector, template <class> class MemoryType = BareBones::MemoryWithItemCount>
 class SeriesReverseIndex {
  public:
+  using LabelReverseIndex = series_index::LabelReverseIndex<Vector, MemoryType>;
+  using SeriesIdSequence = typename LabelReverseIndex::SeriesIdSequence;
+  using SeriesIdSequenceVector = Vector<SeriesIdSequence>;
+
   template <class Label>
   PROMPP_ALWAYS_INLINE void add(const Label& label, uint32_t series_id) {
     if (!exists(label.name_id())) {
@@ -158,14 +159,14 @@ class SeriesReverseIndex {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool exists(uint32_t label_name_id) const noexcept { return label_name_id < labels_by_name_.size(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactSeriesIdSequence* get(uint32_t label_name_id) const {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence* get(uint32_t label_name_id) const {
     return exists(label_name_id) ? labels_by_name_[label_name_id].get_all() : nullptr;
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactSeriesIdSequence* get(uint32_t label_name_id, uint32_t label_value_id) const {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence* get(uint32_t label_name_id, uint32_t label_value_id) const {
     return exists(label_name_id) ? labels_by_name_[label_name_id].get(label_value_id) : nullptr;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Vector<LabelReverseIndex>& labels_by_name() const noexcept { return labels_by_name_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const Vector<LabelReverseIndex>& labels_by_name() const noexcept { return labels_by_name_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t names_count() const noexcept { return labels_by_name_.size(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t values_count(uint32_t label_name_id) const noexcept {
     return exists(label_name_id) ? labels_by_name_[label_name_id].count() : 0;
@@ -175,7 +176,7 @@ class SeriesReverseIndex {
   PROMPP_ALWAYS_INLINE void reserve(uint32_t size) noexcept { labels_by_name_.reserve(size); }
 
  private:
-  BareBones::Vector<LabelReverseIndex> labels_by_name_;
+  Vector<LabelReverseIndex> labels_by_name_;
 };
 
 }  // namespace series_index

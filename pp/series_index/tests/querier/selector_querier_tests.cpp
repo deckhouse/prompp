@@ -14,6 +14,7 @@ using PromPP::Prometheus::MatcherType;
 using PromPP::Prometheus::MatchStatus;
 using PromPP::Prometheus::Selector;
 using series_index::QueryableEncodingBimap;
+using series_index::SeriesReverseIndex;
 using series_index::querier::QuerierStatus;
 using series_index::querier::SelectorQuerier;
 using series_index::trie::CedarMatchesList;
@@ -34,7 +35,7 @@ class SelectorQuerierFixture : public testing::TestWithParam<SelectorQuerierTest
  protected:
   using TrieIndex = series_index::TrieIndex<CedarTrie, CedarMatchesList>;
 
-  QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex> index_;
+  QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex, SeriesReverseIndex<>> index_;
   SelectorQuerier<TrieIndex> selector_querier_{index_.trie_index()};
 
   void SetUp() override {

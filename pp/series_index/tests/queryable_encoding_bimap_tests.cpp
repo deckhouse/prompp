@@ -11,13 +11,14 @@ namespace {
 using PromPP::Primitives::LabelViewSet;
 using series_index::QueryableEncodingBimap;
 using series_index::QueryableEncodingBimapCopier;
+using series_index::SeriesReverseIndex;
 using series_index::trie::CedarMatchesList;
 using series_index::trie::CedarTrie;
 
 class QueryableEncodingBimapFixture : public testing::Test {
  protected:
   using TrieIndex = series_index::TrieIndex<CedarTrie, CedarMatchesList>;
-  using Lss = QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex>;
+  using Lss = QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex, SeriesReverseIndex<>>;
 
   Lss lss_;
 };

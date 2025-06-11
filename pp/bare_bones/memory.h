@@ -424,4 +424,13 @@ struct IsZeroInitializable<Memory<ControlBlock, T>> : std::true_type {};
 template <class T, ReallocatorInterface Reallocator>
 struct IsZeroInitializable<SharedMemory<T, Reallocator>> : std::true_type {};
 
+template <class T>
+using MemoryWithItemCount = Memory<MemoryControlBlockWithItemCount, T>;
+
+template <class T>
+struct IsSharedMemory : std::false_type {};
+
+template <class T, ReallocatorInterface Reallocator>
+struct IsSharedMemory<SharedMemory<T, Reallocator>> : std::true_type {};
+
 }  // namespace BareBones

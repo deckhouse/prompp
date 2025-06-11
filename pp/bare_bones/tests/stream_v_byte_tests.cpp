@@ -70,7 +70,7 @@ TEST_P(SequenceIotaFixture, TestIota) {
 
 class CompactSequenceIotaFixture : public ::testing::TestWithParam<std::ranges::iota_view<uint32_t, uint32_t>> {
  protected:
-  CompactSequence<BareBones::StreamVByte::Codec0124, 4> sequence_;
+  CompactSequence<BareBones::StreamVByte::Codec0124, BareBones::MemoryWithItemCount, 4> sequence_;
 };
 
 TEST_P(CompactSequenceIotaFixture, TestIota) {

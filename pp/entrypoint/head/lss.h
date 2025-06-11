@@ -38,6 +38,9 @@ struct Reallocator {
 }  // namespace lss_memory
 
 template <class T>
+using SharedMemoryWithChangesDetection = BareBones::SharedMemory<T, lss_memory::Reallocator>;
+
+template <class T>
 using SharedSpanWithChangesDetection = BareBones::SharedSpan<T, lss_memory::Reallocator>;
 
 template <class T>
@@ -54,7 +57,10 @@ using ReadonlyEncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::Deco
 
 using EncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<SharedVector>;
 using QueryableEncodingBimap =
-    series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, SharedVectorWithChangesDetection, TrieIndex>;
+    series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament,
+                                         SharedVectorWithChangesDetection,
+                                         TrieIndex,
+                                         series_index::SeriesReverseIndex<SharedVectorWithChangesDetection, SharedMemoryWithChangesDetection>>;
 
 using LssVariant = std::variant<EncodingBimap, OrderedEncodingBimap, QueryableEncodingBimap, ReadonlyEncodingBimap, ReadonlyQueryableEncodingBimap>;
 using LssVariantPtr = std::unique_ptr<LssVariant>;

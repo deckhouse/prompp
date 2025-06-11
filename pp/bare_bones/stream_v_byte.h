@@ -837,7 +837,7 @@ PROMPP_ALWAYS_INLINE auto decoder(InnerIteratorType i, uint32_t size) noexcept {
   return std::pair(DecodeIterator<Codec, InnerIteratorType>(i, size), DecodeIteratorSentinel());
 }
 
-template <class Codec, uint32_t kPreAllocationElementsCount = 1024>
+template <class Codec, template <class> class MemoryType = MemoryWithItemCount, uint32_t kPreAllocationElementsCount = 1024>
 class CompactSequence {
  public:
   static_assert(std::popcount(kPreAllocationElementsCount) == 1, "kPreAllocationElementsCount must be a power of two");
@@ -904,11 +904,11 @@ class CompactSequence {
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return buffer_.allocated_memory(); }
 
  private:
-  using Memory = BareBones::Memory<MemoryControlBlockWithItemCount, uint8_t>;
+  using Memory = MemoryType<uint8_t>;
 
   Memory buffer_;
-  Memory::iterator key_iterator_ = nullptr;
-  Memory::iterator data_iterator_ = nullptr;
+  typename Memory::iterator key_iterator_ = nullptr;
+  typename Memory::iterator data_iterator_ = nullptr;
 
   PROMPP_ALWAYS_INLINE void reserve_for_next_elements() noexcept {
     const auto current_size = data_iterator_ - buffer_;
@@ -948,14 +948,26 @@ class CompactSequence {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return buffer_.control_block().items_count; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept {
+    if constexpr (IsSharedMemory<MemoryType<uint8_t>>::value) {
+      return buffer_.constructed_item_count();
+    } else {
+      return buffer_.control_block().items_count;
+    }
+  }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return size() == 0; }
 
   PROMPP_ALWAYS_INLINE auto begin() const noexcept { return DecodeIterator(buffer_, buffer_ + kMaxKeySize, size()); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return DecodeIteratorSentinel{}; }
 
  private:
-  PROMPP_ALWAYS_INLINE void set_size(uint32_t new_size) noexcept { buffer_.control_block().items_count = new_size; }
+  PROMPP_ALWAYS_INLINE void set_size(uint32_t new_size) noexcept {
+    if constexpr (IsSharedMemory<MemoryType<uint8_t>>::value) {
+      buffer_.set_constructed_item_count(new_size);
+    } else {
+      buffer_.control_block().items_count = new_size;
+    }
+  }
 };
 
 }  // namespace StreamVByte

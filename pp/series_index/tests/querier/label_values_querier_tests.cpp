@@ -13,12 +13,13 @@ using PromPP::Prometheus::LabelMatchers;
 using PromPP::Prometheus::MatcherType;
 using PromPP::Prometheus::Selector;
 using series_index::QueryableEncodingBimap;
+using series_index::SeriesReverseIndex;
 using series_index::querier::LabelValuesQuerier;
 using series_index::querier::QuerierStatus;
 using series_index::trie::CedarMatchesList;
 using series_index::trie::CedarTrie;
 using TrieIndex = series_index::TrieIndex<CedarTrie, CedarMatchesList>;
-using Index = QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex>;
+using Index = QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex, SeriesReverseIndex<>>;
 
 struct LabelValuesQuerierCase {
   std::string_view label_name;
