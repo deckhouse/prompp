@@ -129,10 +129,10 @@ func (w *segmentWriter) Close() error {
 type segmentWriteNotifier struct {
 	mtx    sync.Mutex
 	shards []uint32
-	setter LastAppendedSegmentIDSetter
+	setter NumberOfSegmentsSetter
 }
 
-func newSegmentWriteNotifier(numberOfShards uint16, setter LastAppendedSegmentIDSetter) *segmentWriteNotifier {
+func newSegmentWriteNotifier(numberOfShards uint16, setter NumberOfSegmentsSetter) *segmentWriteNotifier {
 	return &segmentWriteNotifier{
 		shards: make([]uint32, numberOfShards),
 		setter: setter,
@@ -145,7 +145,7 @@ func (swn *segmentWriteNotifier) NotifySegmentIsWritten(shardID uint16) {
 	swn.shards[shardID]++
 	minNumberOfSegments := slices.Min(swn.shards)
 	if minNumberOfSegments > 0 {
-		swn.setter.SetLastAppendedSegmentID(minNumberOfSegments - 1)
+		swn.setter.SetNumberOfSegments(minNumberOfSegments)
 	}
 }
 

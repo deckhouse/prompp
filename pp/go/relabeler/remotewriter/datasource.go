@@ -5,18 +5,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/prometheus/prometheus/pp/go/util/optional"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/pp/go/util/optional"
 	"io"
 	"os"
 	"path/filepath"
 	"sync"
 
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
-	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/model/relabel"
 )
 
 type CorruptMarker interface {
@@ -212,7 +212,7 @@ func newSegmentReadyChecker(headRecord *catalog.Record) *segmentReadyChecker {
 }
 
 func (src *segmentReadyChecker) SegmentIsReady(segmentID uint32) (ready bool, outOfRange bool) {
-	ready = src.headRecord.LastAppendedSegmentID() != nil && *src.headRecord.LastAppendedSegmentID() >= segmentID
+	ready = segmentID < src.headRecord.NumberOfSegments()
 	outOfRange = (src.headRecord.Status() != catalog.StatusNew && src.headRecord.Status() != catalog.StatusActive) && !ready
 	return ready, outOfRange
 }

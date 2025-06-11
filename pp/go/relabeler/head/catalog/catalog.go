@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"sort"
 	"sync"
 
@@ -41,7 +42,7 @@ type Catalog struct {
 	log                 Log
 	idGenerator         IDGenerator
 	records             map[string]*Record
-	maxLogFileSize int
+	maxLogFileSize      int
 	corruptedHead       prometheus.Counter
 	activeHeadCreatedAt prometheus.Gauge
 }
@@ -112,6 +113,8 @@ func (c *Catalog) Create(numberOfShards uint16) (r *Record, err error) {
 		updatedAt:      now,
 		deletedAt:      0,
 		referenceCount: 0,
+		mint:           math.MaxInt64,
+		maxt:           math.MaxInt64,
 		status:         StatusNew,
 	}
 
@@ -143,35 +146,89 @@ func (c *Catalog) SetStatus(id string, status Status) (_ *Record, err error) {
 		return nil, fmt.Errorf("compact: %w", err)
 	}
 
-	r, ok := c.records[id]
+	record, ok := c.records[id]
 	if !ok {
 		return nil, fmt.Errorf("not found: %s", id)
 	}
 
-	if r.status == status {
-		if status == StatusActive {
-			c.activeHeadCreatedAt.Set(float64(r.createdAt))
-		}
+	return c.setStatus(record, status, record.mint, record.maxt)
+}
 
-		return r, nil
+func (c *Catalog) SetStatusWithTimeBounds(id string, status Status, mint, maxt int64) (record *Record, err error) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
+	if err = c.compactIfNeeded(); err != nil {
+		return nil, fmt.Errorf("compact: %w", err)
 	}
 
-	changed := createRecordCopy(r)
+	record, ok := c.records[id]
+	if !ok {
+		return nil, fmt.Errorf("not found: %s", id)
+	}
+
+	return c.setStatus(record, status, mint, maxt)
+}
+
+func (c *Catalog) setStatus(record *Record, status Status, mint, maxt int64) (_ *Record, err error) {
+	if record.status == status && record.mint == mint && record.maxt == maxt {
+		if status == StatusActive {
+			c.activeHeadCreatedAt.Set(float64(record.createdAt))
+		}
+
+		return record, nil
+	}
+
+	changed := createRecordCopy(record)
 	changed.status = status
+	changed.mint = mint
+	changed.maxt = maxt
 	changed.updatedAt = c.clock.Now().UnixMilli()
 
 	if err = c.log.Write(changed); err != nil {
-		return r, fmt.Errorf("log write: %w", err)
+		return record, fmt.Errorf("log write: %w", err)
 	}
 
-	applyRecordChanges(r, changed)
-	c.records[id] = r
+	applyRecordChanges(record, changed)
+	c.records[record.id.String()] = record
 
 	if status == StatusActive {
-		c.activeHeadCreatedAt.Set(float64(r.createdAt))
+		c.activeHeadCreatedAt.Set(float64(record.createdAt))
 	}
 
-	return r, nil
+	return record, nil
+}
+
+func (c *Catalog) SetTimeBounds(id string, mint, maxt int64) (_ *Record, err error) {
+	c.mtx.Lock()
+	defer c.mtx.Unlock()
+
+	if err = c.compactIfNeeded(); err != nil {
+		return nil, fmt.Errorf("compact: %w", err)
+	}
+
+	record, ok := c.records[id]
+	if !ok {
+		return nil, fmt.Errorf("not found: %s", id)
+	}
+
+	if record.mint == mint && record.maxt == maxt {
+		return record, nil
+	}
+
+	changed := createRecordCopy(record)
+	changed.mint = mint
+	changed.maxt = maxt
+	changed.updatedAt = c.clock.Now().UnixMilli()
+
+	if err = c.log.Write(changed); err != nil {
+		return record, fmt.Errorf("log write: %w", err)
+	}
+
+	applyRecordChanges(record, changed)
+	c.records[record.id.String()] = record
+
+	return record, nil
 }
 
 func (c *Catalog) SetCorrupted(id string) (_ *Record, err error) {

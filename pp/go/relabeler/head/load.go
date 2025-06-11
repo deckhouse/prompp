@@ -27,7 +27,7 @@ func Create(
 	configs []*config.InputRelabelerConfig,
 	numberOfShards uint16,
 	maxSegmentSize uint32,
-	lastAppendedSegmentIDSetter LastAppendedSegmentIDSetter,
+	numberOfSegmentsSetter NumberOfSegmentsSetter,
 	registerer prometheus.Registerer,
 ) (_ *Head, err error) {
 	lsses := make([]*LSS, numberOfShards)
@@ -45,7 +45,7 @@ func Create(
 		}
 	}()
 
-	swn := newSegmentWriteNotifier(numberOfShards, lastAppendedSegmentIDSetter)
+	swn := newSegmentWriteNotifier(numberOfShards, numberOfSegmentsSetter)
 
 	for shardID := uint16(0); shardID < numberOfShards; shardID++ {
 		lsses[shardID], wals[shardID], dataStorages[shardID], err = createShard(dir, shardID, swn, maxSegmentSize)
@@ -110,12 +110,12 @@ func Load(
 	configs []*config.InputRelabelerConfig,
 	numberOfShards uint16,
 	maxSegmentSize uint32,
-	lastAppendedSegmentIDSetter LastAppendedSegmentIDSetter,
+	numberOfSegmentsSetter NumberOfSegmentsSetter,
 	registerer prometheus.Registerer,
 ) (_ *Head, corrupted bool, numberOfSegments uint32, err error) {
 	shardLoadResults := make([]ShardLoadResult, numberOfShards)
 	wg := &sync.WaitGroup{}
-	swn := newSegmentWriteNotifier(numberOfShards, lastAppendedSegmentIDSetter)
+	swn := newSegmentWriteNotifier(numberOfShards, numberOfSegmentsSetter)
 	for shardID := uint16(0); shardID < numberOfShards; shardID++ {
 		wg.Add(1)
 		shardWalFilePath := filepath.Join(dir, fmt.Sprintf("shard_%d.wal", shardID))
@@ -227,7 +227,7 @@ func (l *ShardLoader) Load() (result ShardLoadResult) {
 	}
 
 	decoder := cppbridge.NewHeadWalDecoder(targetLss, encoderVersion)
-	lastReadSegmentID := -1
+	var numberOfSegments uint32 = 0
 
 	var bytesRead int
 	for {
@@ -248,18 +248,17 @@ func (l *ShardLoader) Load() (result ShardLoadResult) {
 		}
 
 		offset += bytesRead
-		lastReadSegmentID++
+		numberOfSegments++
 	}
 
-	numberOfSegments := lastReadSegmentID + 1
-	result.NumberOfSegments = uint32(numberOfSegments) // #nosec G115 // no overflow
+	result.NumberOfSegments = numberOfSegments
 	sw, err := newSegmentWriter(l.shardID, shardWalFile, l.notifier)
 	if err != nil {
 		result.Err = err
 		return
 	}
 
-	l.notifier.Set(l.shardID, uint32(numberOfSegments)) // #nosec G115 // no overflow
+	l.notifier.Set(l.shardID, numberOfSegments)
 	result.Wal = newShardWal(decoder.CreateEncoder(), l.maxSegmentSize, sw)
 	if result.Err == nil {
 		result.Corrupted = false

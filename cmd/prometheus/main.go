@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/prometheus/prometheus/pp/go/relabeler/head/manager"
 	"math"
 	"math/bits"
 	"net"
@@ -692,7 +693,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fileLog, err := catalog.NewFileLogV2(filepath.Join(dataDir, "head.log"))
+	fileLog, err := catalog.NewFileLogV3(filepath.Join(dataDir, "head.log"))
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create file log", "err", err)
 		os.Exit(1)
@@ -1090,7 +1091,18 @@ func main() {
 	}
 
 	multiNotifiable := ready.New().With(receiverReadyNotifier).With(remoteWriterReadyNotifier).Build()
-	opGC := catalog.NewGC(dataDir, headCatalog, multiNotifiable)
+	opGC := catalog.NewGC(
+		clock,
+		dataDir,
+		headCatalog,
+		multiNotifiable,
+		time.Duration(cfg.tsdb.RetentionDuration),
+		manager.NewTimeBoundCalculator(
+			dataDir,
+			headCatalog,
+			prometheus.DefaultRegisterer,
+		),
+	)
 
 	var g run.Group
 	{

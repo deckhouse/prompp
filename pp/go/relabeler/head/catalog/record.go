@@ -96,16 +96,21 @@ func (r *Record) Acquire() func() {
 	}
 }
 
-func (r *Record) LastAppendedSegmentID() *uint32 {
-	return r.lastAppendedSegmentID.RawValue()
-}
-
-func (r *Record) SetLastAppendedSegmentID(segmentID uint32) {
-	r.lastAppendedSegmentID.Set(segmentID)
-}
+//func (r *Record) LastAppendedSegmentID() *uint32 {
+//	return r.lastAppendedSegmentID.RawValue()
+//}
+//
+//func (r *Record) SetLastAppendedSegmentID(segmentID uint32) {
+//	r.lastAppendedSegmentID.Set(segmentID)
+//}
 
 func (r *Record) SetNumberOfSegments(numberOfSegments uint32) {
 	r.numberOfSegments = numberOfSegments
+	if numberOfSegments > 0 {
+		r.lastAppendedSegmentID.Set(numberOfSegments)
+	} else {
+		r.lastAppendedSegmentID = optional.Optional[uint32]{}
+	}
 }
 
 func NewRecordWithData(id uuid.UUID,
