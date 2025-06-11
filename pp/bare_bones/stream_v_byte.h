@@ -848,6 +848,8 @@ class CompactSequence {
   static constexpr uint32_t kMaxKeySize = kPreAllocationElementsCount / 4;
   static constexpr uint32_t kMaxDataSize = kPreAllocationElementsCount * sizeof(value_type);
 
+  static constexpr bool kIsReadOnly = IsSharedSpan<MemoryType<uint8_t>>::value;
+
   class DecodeIterator {
     const uint8_t* key_iterator_;
     const uint8_t* data_iterator_;
@@ -906,6 +908,9 @@ class CompactSequence {
  private:
   using Memory = MemoryType<uint8_t>;
 
+  template <class AnyCodec, template <class> class AnyMemoryType, uint32_t kAnyPreAllocationElementsCount>
+  friend class CompactSequence;
+
   Memory buffer_;
   typename Memory::iterator key_iterator_ = nullptr;
   typename Memory::iterator data_iterator_ = nullptr;
@@ -924,8 +929,13 @@ class CompactSequence {
   CompactSequence& operator=(const CompactSequence&) = delete;
   CompactSequence(CompactSequence&&) noexcept = default;
   CompactSequence& operator=(CompactSequence&&) noexcept = default;
+  template <class AnotherCompactSequence>
+    requires kIsReadOnly
+  explicit CompactSequence(const AnotherCompactSequence& other) noexcept : buffer_(other.buffer_), key_iterator_(nullptr), data_iterator_(nullptr) {}
 
-  PROMPP_ALWAYS_INLINE void push_back(value_type val) noexcept {
+  PROMPP_ALWAYS_INLINE void push_back(value_type val) noexcept
+    requires(!kIsReadOnly)
+  {
     if ((size() % kPreAllocationElementsCount) == 0) [[unlikely]] {
       reserve_for_next_elements();
     }
@@ -951,13 +961,15 @@ class CompactSequence {
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept {
     if constexpr (IsSharedMemory<MemoryType<uint8_t>>::value) {
       return buffer_.constructed_item_count();
+    } else if constexpr (kIsReadOnly) {
+      return buffer_.size();
     } else {
       return buffer_.control_block().items_count;
     }
   }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return size() == 0; }
 
-  PROMPP_ALWAYS_INLINE auto begin() const noexcept { return DecodeIterator(buffer_, buffer_ + kMaxKeySize, size()); }
+  PROMPP_ALWAYS_INLINE auto begin() const noexcept { return DecodeIterator(buffer_.begin(), buffer_.begin() + kMaxKeySize, size()); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return DecodeIteratorSentinel{}; }
 
  private:
