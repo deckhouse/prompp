@@ -1,9 +1,6 @@
 #include <chrono>
 #include <fstream>
 
-#define TRACY_ENABLE
-#include "tracy/Tracy.hpp"
-
 #include <benchmark/benchmark.h>
 
 #include "bare_bones/preprocess.h"
@@ -45,9 +42,7 @@ void BenchmarkSeriesDataEncoder(benchmark::State& state) {
   series_data::DataStorage storage;
   series_data::Encoder encoder{storage};
   for ([[maybe_unused]] auto _ : state) {
-    ZoneScopedN("encode_outer");
     for (const auto& sample : samples) {
-      ZoneScopedN("encode_inner");
       encoder.encode(sample.labelset_id, ts_min + static_cast<PromPP::Primitives::Sample::timestamp_type>(sample.sample_ts), sample.sample_value);
     }
   }
