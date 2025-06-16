@@ -189,7 +189,7 @@ struct IncomingAndRelabeledLsID {
 };
 
 // RelabelerStateUpdate - container for update states.
-using RelabelerStateUpdate = std::vector<IncomingAndRelabeledLsID>;
+using RelabelerStateUpdate = PromPP::Primitives::Go::Slice<IncomingAndRelabeledLsID>;
 
 class NoOpStaleNaNsState {
  public:
@@ -242,16 +242,11 @@ class StaleNaNsState {
 // Cache stateless cache for relabeler.
 class Cache {
   size_t cache_allocated_memory_{0};
-  // phmap::btree_map<uint32_t,
-  //                  PromPP::Prometheus::Relabel::CacheValue,
-  //                  std::less<>,
-  //                  BareBones::Allocator<std::pair<const uint32_t, PromPP::Prometheus::Relabel::CacheValue>>>
-  //     cache_relabel_{{}, {}, BareBones::Allocator<std::pair<const uint32_t, PromPP::Prometheus::Relabel::CacheValue>>{cache_allocated_memory_}};
-  phmap::flat_hash_map<uint32_t,
-                       PromPP::Prometheus::Relabel::CacheValue,
-                       std::hash<uint32_t>,
-                       std::equal_to<>,
-                       BareBones::Allocator<std::pair<const uint32_t, PromPP::Prometheus::Relabel::CacheValue>>>
+  phmap::parallel_flat_hash_map<uint32_t,
+                                PromPP::Prometheus::Relabel::CacheValue,
+                                std::hash<uint32_t>,
+                                std::equal_to<>,
+                                BareBones::Allocator<std::pair<const uint32_t, PromPP::Prometheus::Relabel::CacheValue>>>
       cache_relabel_{{}, {}, BareBones::Allocator<std::pair<const uint32_t, PromPP::Prometheus::Relabel::CacheValue>>{cache_allocated_memory_}};
   roaring::Roaring cache_keep_{};
   roaring::Roaring cache_drop_{};
@@ -386,10 +381,6 @@ class PerShardRelabeler {
       external_labels_.emplace_back(static_cast<std::string_view>(ln), static_cast<std::string_view>(lv));
     }
   }
-
-  // TODO delete after rebuild metrics
-  // cache_allocated_memory - return size of allocated memory for cache map.
-  PROMPP_ALWAYS_INLINE size_t cache_allocated_memory() const noexcept { return 0; }
 
  private:
   PROMPP_ALWAYS_INLINE bool resolve_timestamps(PromPP::Primitives::Timestamp def_timestamp,

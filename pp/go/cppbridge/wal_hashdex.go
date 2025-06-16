@@ -123,6 +123,7 @@ func (h *WALProtobufHashdex) RangeMetadata(f func(metadata WALScraperHashdexMeta
 			break
 		}
 	}
+	runtime.KeepAlive(h)
 
 	freeBytes(*(*[]byte)(unsafe.Pointer(&mds)))
 }
@@ -193,6 +194,7 @@ type MetaInjection struct {
 
 // WALBasicDecoderHashdex Go wrapper for PromPP::WAL::WALBasicDecoderHashdex.
 type WALBasicDecoderHashdex struct {
+	decoder  *WALDecoder
 	hashdex  uintptr
 	metadata *MetaInjection
 	cluster  string
@@ -205,8 +207,9 @@ func (h *WALBasicDecoderHashdex) RangeMetadata(f func(metadata WALScraperHashdex
 }
 
 // NewWALBasicDecoderHashdex init new WALBasicDecoderHashdex with c-pointer PromPP::WAL::WALBasicDecoderHashdex.
-func NewWALBasicDecoderHashdex(hashdex uintptr, meta *MetaInjection, cluster, replica string) *WALBasicDecoderHashdex {
+func NewWALBasicDecoderHashdex(decoder *WALDecoder, hashdex uintptr, meta *MetaInjection, cluster, replica string) *WALBasicDecoderHashdex {
 	h := &WALBasicDecoderHashdex{
+		decoder:  decoder,
 		hashdex:  hashdex,
 		metadata: meta,
 		cluster:  cluster,

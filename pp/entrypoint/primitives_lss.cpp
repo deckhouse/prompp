@@ -24,16 +24,6 @@ extern "C" void prompp_primitives_lss_ctor(void* args, void* res) {
   new (res) Result{.lss = create_lss(static_cast<Arguments*>(args)->lss_type)};
 }
 
-extern "C" void prompp_primitives_lss_copy_added_series(void* args) {
-  struct Arguments {
-    LssVariantPtr source;
-    LssVariantPtr destination;
-  };
-
-  const auto arguments = static_cast<Arguments*>(args);
-  std::get<QueryableEncodingBimap>(*arguments->source).copy_added_series(std::get<QueryableEncodingBimap>(*arguments->destination));
-}
-
 extern "C" void prompp_primitives_lss_dtor(void* args) {
   struct Arguments {
     LssVariantPtr lss;
@@ -232,4 +222,10 @@ extern "C" void prompp_create_readonly_lss(void* args, void* res) {
   };
 
   new (res) Result{.lss_copy = entrypoint::head::create_readonly_lss(*static_cast<Arguments*>(args)->lss)};
+}
+
+extern "C" void prompp_primitives_lss_copy_added_series(uint64_t source_lss, uint64_t destination_lss) {
+  series_index::QueryableEncodingBimapCopier copier(std::get<QueryableEncodingBimap>(*std::bit_cast<entrypoint::head::LssVariant*>(source_lss)),
+                                                    std::get<QueryableEncodingBimap>(*std::bit_cast<entrypoint::head::LssVariant*>(destination_lss)));
+  copier.copy_added_series_and_build_indexes();
 }

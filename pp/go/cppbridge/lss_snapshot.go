@@ -10,18 +10,21 @@ import (
 var (
 	snapshotCreate = promauto.NewCounter(
 		prometheus.CounterOpts{
-			Name: "prompp_cppbridge_snapshot_create",
+			Name: "prompp_cppbridge_snapshot_create_count",
 			Help: "Current number of created snapshots.",
 		},
 	)
 
 	snapshotFinalize = promauto.NewCounter(
 		prometheus.CounterOpts{
-			Name: "prompp_cppbridge_snapshot_finalize",
+			Name: "prompp_cppbridge_snapshot_finalize_count",
 			Help: "Current number of finalized snapshots.",
 		},
 	)
 )
+
+// gcDestroyDetector for field for the GC to destroy the structure.
+var gcDestroyDetector uint64
 
 //
 // LabelSetSnapshot
@@ -29,12 +32,13 @@ var (
 
 // LabelSetSnapshot go container for snapshot from LabelSetStorage.
 type LabelSetSnapshot struct {
-	pointer uintptr
+	pointer           uintptr
+	gcDestroyDetector *uint64 // field for the GC to destroy the structure.
 }
 
 // newLabelSetSnapshot init new LabelSetSnapshot.
 func newLabelSetSnapshot(lsstPtr uintptr) *LabelSetSnapshot {
-	lsst := &LabelSetSnapshot{pointer: lsstPtr}
+	lsst := &LabelSetSnapshot{pointer: lsstPtr, gcDestroyDetector: &gcDestroyDetector}
 	runtime.SetFinalizer(lsst, func(l *LabelSetSnapshot) {
 		primitivesLSSDtor(l.pointer)
 
@@ -54,14 +58,13 @@ func (lsst *LabelSetSnapshot) Pointer() uintptr {
 // RangeLabelSet serialize to slice labels from snapshot and calls f on each label.
 func (lsst *LabelSetSnapshot) RangeLabelSet(lsID uint32, do func(l Label) error) error {
 	labelSet := labelSetSerialize(lsst.pointer, lsID)
-
 	for i := range labelSet {
 		if err := do(labelSet[i]); err != nil {
 			labelSetFree(labelSet)
 			return err
 		}
 	}
-
+	runtime.KeepAlive(lsst)
 	labelSetFree(labelSet)
 
 	return nil
