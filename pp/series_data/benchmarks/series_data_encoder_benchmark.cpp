@@ -41,6 +41,7 @@ void BenchmarkSeriesDataEncoder(benchmark::State& state) {
 
   series_data::DataStorage storage;
   series_data::Encoder encoder{storage};
+
   for ([[maybe_unused]] auto _ : state) {
     for (const auto& sample : samples) {
       encoder.encode(sample.labelset_id, ts_min + static_cast<PromPP::Primitives::Sample::timestamp_type>(sample.sample_ts), sample.sample_value);
