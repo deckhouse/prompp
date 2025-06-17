@@ -102,8 +102,6 @@ class Querier {
     }
   };
 
-  using SeriesIdSequence = typename Index::ReverseIndex::SeriesIdSequence;
-
   const Index& index_;
   SeriesSliceList series_slice_list_;
 
@@ -208,20 +206,14 @@ class Querier {
     return SetMerger::merge(series_slice_list_, memory, temp_memory);
   }
 
-  PROMPP_ALWAYS_INLINE static void decode_sequence(const SeriesIdSequence* sequence, uint32_t* memory) {
-    if (sequence->type() == SeriesIdSequence::Type::kArray) {
-      std::memcpy(memory, sequence->array().data(), sequence->count() * sizeof(uint32_t));
-    } else {
-      std::ranges::copy(sequence->sequence(), memory);
-    }
-  }
+  PROMPP_ALWAYS_INLINE static void decode_sequence(const SeriesIdSequence* sequence, uint32_t* memory) { std::ranges::copy(*sequence, memory); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static SeriesIdSpan intersect_sequence(SeriesIdSpan result_set, const SeriesIdSequence* sequence) {
-    return sequence->process_series([&result_set](const auto& series_ids) PROMPP_LAMBDA_INLINE { return SetIntersecter::intersect(result_set, series_ids); });
+    return SetIntersecter::intersect(result_set, *sequence);
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static SeriesIdSpan substract_sequence(SeriesIdSpan result_set, const SeriesIdSequence* sequence) {
-    return sequence->process_series([&result_set](const auto& series_ids) PROMPP_LAMBDA_INLINE { return SetSubstractor::substract(result_set, series_ids); });
+    return SetSubstractor::substract(result_set, *sequence);
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesIdSpan substract_sequences(SeriesIdSpan result_set, const PromPP::Prometheus::Selector::Matcher& matcher) {

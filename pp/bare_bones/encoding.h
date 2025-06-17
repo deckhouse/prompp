@@ -404,6 +404,7 @@ struct id<DeltaDeltaZigZag<DataSequence>>
 
 template <class E, class DataSequence = typename E::DataSequence>
 class EncodedSequence {
+ protected:
   typename E::Encoder encoder_;
 
   DataSequence data_;
@@ -547,5 +548,5 @@ class EncodedSequence {
 };
 
 template <class T>
-struct IsTriviallyReallocatable<BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<T>>> : std::true_type {};
+struct IsTriviallyReallocatable<EncodedSequence<Encoding::DeltaRLE<T>>> : std::true_type {};
 }  // namespace BareBones

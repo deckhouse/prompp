@@ -18,7 +18,7 @@ using series_index::trie::CedarTrie;
 class QueryableEncodingBimapFixture : public testing::Test {
  protected:
   using TrieIndex = series_index::TrieIndex<CedarTrie, CedarMatchesList>;
-  using Lss = QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex, SeriesReverseIndex<>>;
+  using Lss = QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex>;
 
   Lss lss_;
 };
@@ -87,7 +87,7 @@ TEST_F(QueryableEncodingBimapFixture, EmplaceLabelSetWithInvalidLabel) {
 
     EXPECT_FALSE(lss_.trie_index().names_trie().lookup("key"));
     ASSERT_NE(nullptr, series_ids);
-    EXPECT_TRUE(series_ids->is_empty());
+    EXPECT_TRUE(series_ids->empty());
     EXPECT_EQ(nullptr, lss_.trie_index().values_trie(second_label.name_id()));
   }
 

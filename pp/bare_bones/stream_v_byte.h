@@ -958,7 +958,7 @@ class CompactSequence {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept {
     if constexpr (IsSharedMemory<MemoryType<uint8_t>>::value) {
       return buffer_.constructed_item_count();
     } else if constexpr (kIsReadOnly) {

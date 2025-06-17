@@ -267,10 +267,6 @@ class SharedPtr {
   }
 
   PROMPP_ALWAYS_INLINE void non_atomic_reallocate(uint32_t size) noexcept {
-    if (size <= constructed_item_count()) [[unlikely]] {
-      return;
-    }
-
     PRAGMA_DIAGNOSTIC(push)
     PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
     auto control_block = static_cast<ControlBlock*>(Reallocator::reallocate(raw_memory(), kControlBlockSize + size * sizeof(T)));

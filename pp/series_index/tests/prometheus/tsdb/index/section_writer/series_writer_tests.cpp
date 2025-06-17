@@ -24,7 +24,7 @@ class SeriesWriterFixture : public testing::Test {
  protected:
   using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie, series_index::trie::CedarMatchesList>;
   using QueryableEncodingBimap = series_index::
-      QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex, SeriesReverseIndex<>>;
+      QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex>;
   using Stream = std::ostringstream;
   using StreamWriter = PromPP::Prometheus::tsdb::index::StreamWriter<Stream>;
   using SeriesWriter = series_index::prometheus::tsdb::index::section_writer::SeriesWriter<QueryableEncodingBimap, Stream>;

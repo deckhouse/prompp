@@ -35,7 +35,7 @@ class SelectorQuerierFixture : public testing::TestWithParam<SelectorQuerierTest
  protected:
   using TrieIndex = series_index::TrieIndex<CedarTrie, CedarMatchesList>;
 
-  QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex, SeriesReverseIndex<>> index_;
+  QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex> index_;
   SelectorQuerier<TrieIndex> selector_querier_{index_.trie_index()};
 
   void SetUp() override {

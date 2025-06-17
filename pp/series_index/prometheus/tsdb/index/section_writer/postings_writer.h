@@ -53,8 +53,6 @@ class PostingsWriter {
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool has_more_data() const noexcept { return trie_index_iterator_ != lss_.trie_index().end(); }
 
  private:
-  using SeriesIdSequence = typename Lss::ReverseIndex::SeriesIdSequence;
-
   const Lss& lss_;
   typename Lss::TrieIndexIterator trie_index_iterator_;
   const SeriesReferencesMap& series_references_;
@@ -114,13 +112,11 @@ class PostingsWriter {
 
     if constexpr (std::is_same_v<SeriesIdList, SeriesIdSequence>) {
       series_reference_list_.reserve(series_id_sequence.count());
-      series_id_sequence.process_series([this](const auto& series) PROMPP_LAMBDA_INLINE {
-        for (auto series_id : series) {
-          if (const auto it = series_references_.find(series_id); it != series_references_.end()) {
-            series_reference_list_.emplace_back(it->second);
-          }
+      for (auto series_id : series_id_sequence) {
+        if (const auto it = series_references_.find(series_id); it != series_references_.end()) {
+          series_reference_list_.emplace_back(it->second);
         }
-      });
+      }
     } else {
       series_reference_list_.reserve(series_id_sequence.size());
       std::ranges::transform(series_id_sequence, std::back_inserter(series_reference_list_),

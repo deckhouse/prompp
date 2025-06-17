@@ -127,9 +127,6 @@ class StatusGetter {
   using TopSeriesCountByMetricName = TopItems<StringCountItem<StringType>>;
   using TopMemoryInBytesByLabelName = TopItems<StringCountItem<StringType>>;
   using TopSeriesCountByLabelValuePair = TopItems<StringPairCountItem<StringType>>;
-
-  using SeriesIdSequenceVector = typename Lss::ReverseIndex::SeriesIdSequenceVector;
-
   const Lss& lss_;
   const series_data::DataStorage& data_storage_;
   const size_t limit_;
@@ -184,7 +181,7 @@ class StatusGetter {
     top_series_count_by_label_value_pair_.sort();
   }
 
-  void enumerate_values_in_reverse_index(const SeriesIdSequenceVector& values, uint32_t name_id) noexcept {
+  void enumerate_values_in_reverse_index(const BareBones::Vector<series_index::SeriesIdSequence>& values, uint32_t name_id) noexcept {
     uint32_t size_in_bytes = 0;
 
     for (uint32_t value_id = 0; value_id < values.size(); ++value_id) {
@@ -202,7 +199,7 @@ class StatusGetter {
         size_in_bytes, [&] PROMPP_LAMBDA_INLINE { return StringCountItem<StringType>{.name = get_label_name(name_id), .count = size_in_bytes}; });
   }
 
-  void enumerate_metric_name_values_in_reverse_index(const SeriesIdSequenceVector& values, uint32_t name_id) {
+  void enumerate_metric_name_values_in_reverse_index(const BareBones::Vector<series_index::SeriesIdSequence>& values, uint32_t name_id) {
     for (uint32_t value_id = 0; value_id < values.size(); ++value_id) {
       auto series_count = values[value_id].count();
       top_series_count_by_metric_name_.add(
@@ -263,8 +260,6 @@ class StatusGetterLSS {
   using TopMemoryInBytesByLabelName = TopItems<StringCountItem<StringType>>;
   using TopSeriesCountByLabelValuePair = TopItems<StringPairCountItem<StringType>>;
 
-  using SeriesIdSequenceVector = typename Lss::ReverseIndex::SeriesIdSequenceVector;
-
   const Lss& lss_;
   const size_t limit_;
 
@@ -314,7 +309,7 @@ class StatusGetterLSS {
     top_series_count_by_label_value_pair_.sort();
   }
 
-  void enumerate_values_in_reverse_index(const SeriesIdSequenceVector& values, uint32_t name_id) noexcept {
+  void enumerate_values_in_reverse_index(const BareBones::Vector<series_index::SeriesIdSequence>& values, uint32_t name_id) noexcept {
     uint32_t size_in_bytes = 0;
 
     for (uint32_t value_id = 0; value_id < values.size(); ++value_id) {
@@ -332,7 +327,7 @@ class StatusGetterLSS {
         size_in_bytes, [&] PROMPP_LAMBDA_INLINE { return StringCountItem<StringType>{.name = get_label_name(name_id), .count = size_in_bytes}; });
   }
 
-  void enumerate_metric_name_values_in_reverse_index(const SeriesIdSequenceVector& values, uint32_t name_id) {
+  void enumerate_metric_name_values_in_reverse_index(const BareBones::Vector<series_index::SeriesIdSequence>& values, uint32_t name_id) {
     for (uint32_t value_id = 0; value_id < values.size(); ++value_id) {
       auto series_count = values[value_id].count();
       top_series_count_by_metric_name_.add(

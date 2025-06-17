@@ -12,9 +12,9 @@
 
 namespace series_index {
 
-template <template <template <class> class> class Filament, template <class> class Vector, class TrieIndex, class ReverseIndexType>
+template <template <template <class> class> class Filament, template <class> class Vector, class TrieIndex>
 class QueryableEncodingBimap final
-    : public BareBones::SnugComposite::GenericDecodingTable<QueryableEncodingBimap<Filament, Vector, TrieIndex, ReverseIndexType>, Filament, Vector> {
+    : public BareBones::SnugComposite::GenericDecodingTable<QueryableEncodingBimap<Filament, Vector, TrieIndex>, Filament, Vector> {
  public:
   using Base = BareBones::SnugComposite::GenericDecodingTable<QueryableEncodingBimap, Filament, Vector>;
   using LsIdSet = phmap::btree_set<typename Base::Proxy, typename Base::LessComparator, BareBones::Allocator<typename Base::Proxy>>;
@@ -22,14 +22,13 @@ class QueryableEncodingBimap final
       phmap::flat_hash_set<typename Base::Proxy, typename Base::Hasher, typename Base::EqualityComparator, BareBones::Allocator<typename Base::Proxy>>;
   using LsIdSetIterator = typename LsIdSet::const_iterator;
   using TrieIndexIterator = typename TrieIndex::Iterator;
-  using ReverseIndex = ReverseIndexType;
 
   using Base::reserve;
 
   friend class BareBones::SnugComposite::GenericDecodingTable<QueryableEncodingBimap, Filament, Vector>;
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const TrieIndex& trie_index() const noexcept { return trie_index_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const ReverseIndex& reverse_index() const noexcept { return reverse_index_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesReverseIndex& reverse_index() const noexcept { return reverse_index_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const LsIdSet& ls_id_set() const noexcept { return ls_id_set_; }
 
   template <class Iterator>
@@ -102,7 +101,7 @@ class QueryableEncodingBimap final
   friend class QueryableEncodingBimapCopier;
 
   TrieIndex trie_index_;
-  ReverseIndex reverse_index_;
+  SeriesReverseIndex reverse_index_;
 
   size_t ls_id_set_allocated_memory_{};
   bool ls_id_comparator_enabled_{true};

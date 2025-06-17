@@ -57,10 +57,7 @@ using ReadonlyEncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::Deco
 
 using EncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<SharedVector>;
 using QueryableEncodingBimap =
-    series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament,
-                                         SharedVectorWithChangesDetection,
-                                         TrieIndex,
-                                         series_index::SeriesReverseIndex<SharedVectorWithChangesDetection, SharedMemoryWithChangesDetection>>;
+    series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, SharedVectorWithChangesDetection, TrieIndex>;
 
 using LssVariant = std::variant<EncodingBimap, OrderedEncodingBimap, QueryableEncodingBimap, ReadonlyEncodingBimap, ReadonlyQueryableEncodingBimap>;
 using LssVariantPtr = std::unique_ptr<LssVariant>;
