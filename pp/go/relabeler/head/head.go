@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"runtime"
 	"sort"
@@ -473,13 +474,15 @@ func (h *Head) WriteMetrics() {
 	tLSSHeadAllocatedMemory := h.CreateTask(
 		relabeler.LSSAllocatedMemory,
 		func(shard relabeler.Shard) error {
+			mem := shard.LSS().AllocatedMemory()
 			h.memoryInUse.With(
 				prometheus.Labels{
 					"generation": generationStr,
 					"allocator":  "main_lss",
 					"id":         strconv.FormatUint(uint64(shard.ShardID()), 10),
 				},
-			).Set(float64(shard.LSS().AllocatedMemory()))
+			).Set(float64(mem))
+			log.Printf("LSS Allocated memory: %d", mem)
 
 			return nil
 		},

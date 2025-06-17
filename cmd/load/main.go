@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/prometheus/pp/go/relabeler/head"
 	"os"
 	"strings"
-	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/pp/go/relabeler/head"
 )
 
 func main() {
@@ -18,6 +18,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	reg := prometheus.NewRegistry()
+
 	h, corrupted, numberOfSegments, err := head.Load(
 		"test_head",
 		0,
@@ -26,7 +28,7 @@ func main() {
 		numberOfShards,
 		10000,
 		head.NoOpLastAppendedSegmentIDSetter{},
-		prometheus.DefaultRegisterer,
+		reg,
 	)
 	if err != nil {
 		fmt.Println(err)
@@ -40,9 +42,10 @@ func main() {
 	}
 
 	fmt.Println("number of segments", numberOfSegments)
+	h.WriteMetrics()
 
 	_ = h
-	time.Sleep(time.Minute)
+	// time.Sleep(time.Minute)
 }
 
 func getNumberOfShards(headPath string) (numberOfShards uint16, err error) {
