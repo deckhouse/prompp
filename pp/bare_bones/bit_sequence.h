@@ -327,9 +327,10 @@ class PROMPP_ATTRIBUTE_PACKED CompactBitSequence : public CompactBitSequenceBase
 
   PROMPP_ALWAYS_INLINE void trim_lower_bytes(uint32_t bytes_count) {
     assert(Bit::to_bits(bytes_count) <= Base::size_in_bits());
-    memset(Base::memory_, '\0', bytes_count);
+    const size_t new_size_in_bytes = Base::size_in_bytes() - bytes_count;
+    memmove(Base::memory_, Base::memory_ + bytes_count, new_size_in_bytes);
+    memset(Base::memory_ + new_size_in_bytes, '\0', bytes_count);
     size_in_bits_ -= Bit::to_bits(bytes_count);
-    memmove(Base::memory_, Base::memory_ + bytes_count, Base::size_in_bytes());
   }
 
   PROMPP_ALWAYS_INLINE void push_back_single_zero_bit() noexcept {
