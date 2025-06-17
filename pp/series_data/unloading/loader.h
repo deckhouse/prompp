@@ -100,7 +100,7 @@ class Loader {
 
   static BareBones::Bitset::Iterator parse_ls_id_bitmap(std::span<const uint8_t> buffer, uint32_t& offset) noexcept {
     const uint32_t bit_count = read_u32(buffer, offset);
-    const uint32_t byte_count = ((bit_count + 63) >> 6) * 8;
+    const uint32_t byte_count = BareBones::Bit::to_ceil_units<uint64_t>(bit_count) * sizeof(uint64_t);
 
     const auto* bit_data = reinterpret_cast<const uint64_t*>(buffer.data() + offset);
     offset += byte_count;

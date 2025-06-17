@@ -10,6 +10,7 @@
 
 #include <bitset>
 
+#include "bit.h"
 #include "memory.h"
 #include "streams.h"
 #include "type_traits.h"
@@ -149,7 +150,7 @@ class Bitset {
   template <OutputStream S>
   PROMPP_ALWAYS_INLINE void write_to(S& stream) const noexcept {
     const uint32_t data_size_in_bits = size();
-    const uint32_t data_size_in_bytes = ((data_size_in_bits + 63) >> 6) * 8;
+    const uint32_t data_size_in_bytes = Bit::to_ceil_units<uint64_t>(data_size_in_bits) * sizeof(uint64_t);
     stream.write(reinterpret_cast<const char*>(&data_size_in_bits), sizeof(data_size_in_bits));
     stream.write(reinterpret_cast<const char*>(data_.begin()), data_size_in_bytes);
   }
