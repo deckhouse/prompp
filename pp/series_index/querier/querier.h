@@ -18,7 +18,7 @@ class Querier {
 
   class MatchersComparatorByTypeAndCardinality {
    public:
-    PROMPP_ALWAYS_INLINE bool operator()(const typename Selector::Matcher& a, const typename Selector::Matcher& b) const noexcept {
+    PROMPP_ALWAYS_INLINE bool operator()(const Selector::Matcher& a, const Selector::Matcher& b) const noexcept {
       if (a.is_positive()) {
         if (b.is_positive()) {
           return a.cardinality < b.cardinality;
@@ -137,11 +137,11 @@ class Querier {
     using enum PromPP::Prometheus::MatchStatus;
 
     if (BareBones::is_in(matcher.status, kAllMatch, kAllMatchWithExcludes)) {
-      return index_.reverse_index().get(matcher.label_name_id)->count();
+      return index_.reverse_index().get(matcher.label_name_match)->count();
     }
 
     return BareBones::accumulate(matcher.matches, 0U, [this, &matcher](uint32_t cardinality, uint32_t label_value_id) PROMPP_LAMBDA_INLINE {
-      return cardinality + index_.reverse_index().get(matcher.label_name_id, label_value_id)->count();
+      return cardinality + index_.reverse_index().get(matcher.label_name_match, label_value_id)->count();
     });
   }
 
@@ -155,7 +155,7 @@ class Querier {
 
   PROMPP_ALWAYS_INLINE void process_positive_matcher(const Selector::Matcher& matcher, MemoryPool& memory_pool, SeriesIdSpan& result_set) {
     if (matcher.status == PromPP::Prometheus::MatchStatus::kAllMatch) {
-      result_set = intersect_sequence(result_set, index_.reverse_index().get(matcher.label_name_id));
+      result_set = intersect_sequence(result_set, index_.reverse_index().get(matcher.label_name_match));
     } else {
       result_set = SetIntersecter::intersect(result_set, resolve_positive_matcher(matcher, memory_pool.merge2, memory_pool.temp));
     }
@@ -163,7 +163,7 @@ class Querier {
 
   PROMPP_ALWAYS_INLINE void process_negative_matcher(const Selector::Matcher& matcher, MemoryPool& memory_pool, SeriesIdSpan& result_set) {
     if (matcher.status == PromPP::Prometheus::MatchStatus::kAllMatch) {
-      result_set = substract_sequence(result_set, index_.reverse_index().get(matcher.label_name_id));
+      result_set = substract_sequence(result_set, index_.reverse_index().get(matcher.label_name_match));
     } else if (matcher.status == PromPP::Prometheus::MatchStatus::kPartialMatch) {
       result_set = substract_sequences(result_set, matcher);
     } else if (matcher.status == PromPP::Prometheus::MatchStatus::kAllMatchWithExcludes) {
@@ -186,13 +186,13 @@ class Querier {
   }
 
   PROMPP_ALWAYS_INLINE SeriesIdSpan resolve_all_match_matcher(const Selector::Matcher& matcher, uint32_t* memory) {
-    auto sequence = index_.reverse_index().get(matcher.label_name_id);
+    auto sequence = index_.reverse_index().get(matcher.label_name_match);
     decode_sequence(sequence, memory);
     return {memory, sequence->count()};
   }
 
   PROMPP_ALWAYS_INLINE SeriesIdSpan resolve_all_match_with_excludes_matcher(const Selector::Matcher& matcher, uint32_t* memory) {
-    auto sequence = index_.reverse_index().get(matcher.label_name_id);
+    auto sequence = index_.reverse_index().get(matcher.label_name_match);
     decode_sequence(sequence, memory);
     return substract_sequences(SeriesIdSpan{memory, sequence->count()}, matcher);
   }
@@ -203,7 +203,7 @@ class Querier {
 
     uint32_t offset = 0;
     for (auto label_value_id : matcher.matches) {
-      auto sequence = index_.reverse_index().get(matcher.label_name_id, label_value_id);
+      auto sequence = index_.reverse_index().get(matcher.label_name_match, label_value_id);
       decode_sequence(sequence, memory + offset);
       series_slice_list_.emplace_back(SeriesSlice{.begin = offset, .end = offset + sequence->count()});
       offset += sequence->count();
@@ -224,7 +224,7 @@ class Querier {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesIdSpan substract_sequences(SeriesIdSpan result_set, const Selector::Matcher& matcher) {
     for (auto label_value_id : matcher.matches) {
-      result_set = substract_sequence(result_set, index_.reverse_index().get(matcher.label_name_id, label_value_id));
+      result_set = substract_sequence(result_set, index_.reverse_index().get(matcher.label_name_match, label_value_id));
     }
 
     return result_set;

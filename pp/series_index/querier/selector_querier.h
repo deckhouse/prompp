@@ -26,6 +26,8 @@ class SelectorQuerier {
   using MatchStatus = PromPP::Prometheus::MatchStatus;
   using Trie = typename TrieIndex::Trie;
 
+  static constexpr auto kInvalidLabelNameId = std::numeric_limits<uint32_t>::max();
+
   explicit SelectorQuerier(const TrieIndex& index, const MatchResolver& match_resolver) : index_(index), match_resolver_(match_resolver) {}
 
   template <class LabelMatchers>
@@ -75,31 +77,32 @@ class SelectorQuerier {
   const MatchResolver& match_resolver_;
 
   template <class LabelMatcher>
-  PROMPP_ALWAYS_INLINE const Trie* get_values_trie(const LabelMatcher& label_matcher, typename Selector::Matcher& matcher) const noexcept {
+  PROMPP_ALWAYS_INLINE uint32_t get_values_trie(const LabelMatcher& label_matcher, typename Selector::Matcher& matcher) const noexcept {
     if (auto index = index_.names_trie().lookup(static_cast<std::string_view>(label_matcher.name)); index) {
-      matcher.label_name_id = *index;
-      return index_.values_trie(*index);
+      const auto name_id = *index;
+      matcher.label_name_match = match_resolver_.resolve_name(name_id);
+      return name_id;
     }
 
-    return nullptr;
+    return kInvalidLabelNameId;
   }
 
   template <class LabelMatcher>
-  QuerierStatus query_values(const LabelMatcher& label_matcher, const Trie* trie, typename Selector::Matcher& matcher) {
+  QuerierStatus query_values(const LabelMatcher& label_matcher, uint32_t label_name_id, typename Selector::Matcher& matcher) {
     if (label_matcher.value.empty()) {
-      process_empty_matcher(matcher, trie);
+      process_empty_matcher(matcher, label_name_id);
       return QuerierStatus::kMatch;
     }
 
     switch (matcher.type) {
       case MatcherType::kExactMatch:
       case MatcherType::kExactNotMatch: {
-        return query_exact_value(label_matcher, trie, matcher);
+        return query_exact_value(label_matcher, label_name_id, matcher);
       }
 
       case MatcherType::kRegexpMatch:
       case MatcherType::kRegexpNotMatch: {
-        return query_values_by_regexp(label_matcher, trie, matcher);
+        return query_values_by_regexp(label_matcher, label_name_id, matcher);
       }
 
       default: {
@@ -110,13 +113,13 @@ class SelectorQuerier {
   }
 
   template <class LabelMatcher>
-  QuerierStatus query_exact_value(const LabelMatcher& label_matcher, const Trie* trie, typename Selector::Matcher& matcher) {
-    if (trie == nullptr) {
+  QuerierStatus query_exact_value(const LabelMatcher& label_matcher, uint32_t label_name_id, typename Selector::Matcher& matcher) {
+    if (label_name_id == kInvalidLabelNameId) {
       matcher.status = MatchStatus::kEmptyMatch;
       return QuerierStatus::kNoMatch;
     }
 
-    if (auto value = trie->lookup(static_cast<std::string_view>(label_matcher.value)); value) {
+    if (auto value = index_.values_trie(label_name_id)->lookup(static_cast<std::string_view>(label_matcher.value)); value) {
       matcher.matches.emplace_back(*value);
       matcher.status = MatchStatus::kPartialMatch;
       return QuerierStatus::kMatch;
@@ -126,17 +129,17 @@ class SelectorQuerier {
     return QuerierStatus::kNoMatch;
   }
 
-  static void process_empty_matcher(typename Selector::Matcher& matcher, const Trie* trie) {
+  static void process_empty_matcher(typename Selector::Matcher& matcher, uint32_t label_name_id) {
     if (matcher.is_positive()) {
       matcher.convert_to_negative();
 
-      if (trie != nullptr) {
+      if (label_name_id != kInvalidLabelNameId) {
         matcher.status = MatchStatus::kAllMatch;
       } else {
         matcher.status = MatchStatus::kEmptyMatch;
       }
     } else {
-      if (trie != nullptr) {
+      if (label_name_id != kInvalidLabelNameId) {
         matcher.convert_to_positive();
 
         matcher.status = MatchStatus::kAllMatch;
@@ -148,8 +151,8 @@ class SelectorQuerier {
   }
 
   template <class LabelMatcher>
-  QuerierStatus query_values_by_regexp(const LabelMatcher& label_matcher, const Trie* trie, typename Selector::Matcher& matcher) {
-    auto regexp = regexp::RegexpParser::parse(static_cast<std::string_view>(label_matcher.value));
+  QuerierStatus query_values_by_regexp(const LabelMatcher& label_matcher, uint32_t label_name_id, typename Selector::Matcher& matcher) {
+    const auto regexp = regexp::RegexpParser::parse(static_cast<std::string_view>(label_matcher.value));
     switch (regexp::RegexpMatchAnalyzer::analyze(regexp.get())) {
       using enum regexp::RegexpMatchAnalyzer::Status;
 
@@ -159,7 +162,7 @@ class SelectorQuerier {
       }
 
       case kAllMatch: {
-        if (trie == nullptr) {
+        if (label_name_id == kInvalidLabelNameId) {
           matcher.status = MatchStatus::kEmptyMatch;
           return QuerierStatus::kNoMatch;
         }
@@ -169,7 +172,7 @@ class SelectorQuerier {
       }
 
       case kAllMatchWithExcludes: {
-        if (trie == nullptr) {
+        if (label_name_id == kInvalidLabelNameId) {
           matcher.status = MatchStatus::kAllMatchWithExcludes;
           matcher.type = MatcherType::kUnknown;
           return QuerierStatus::kMatch;
@@ -177,26 +180,18 @@ class SelectorQuerier {
 
         matcher.invert();
 
-        typename TrieIndex::Trie::MatchesList matches_list(matcher.matches, match_resolver_.value_resolver(matcher.label_name_id));
-        if (auto status = regexp::RegexpSearcher<typename TrieIndex::Trie, decltype(matches_list)>(matches_list).search(*trie, regexp);
-            status == MatchStatus::kEmptyMatch) {
-          matcher.status = MatchStatus::kAllMatch;
-        } else {
-          matcher.status = MatchStatus::kAllMatchWithExcludes;
-        }
-
+        matcher.status =
+            regexp_search(regexp, label_name_id, matcher) == MatchStatus::kEmptyMatch ? MatchStatus::kAllMatch : MatchStatus::kAllMatchWithExcludes;
         return QuerierStatus::kMatch;
       }
 
       case kPartialMatch: {
-        if (trie == nullptr) {
+        if (label_name_id == kInvalidLabelNameId) {
           matcher.status = MatchStatus::kEmptyMatch;
           return QuerierStatus::kNoMatch;
         }
 
-        typename TrieIndex::Trie::MatchesList matches_list(matcher.matches, match_resolver_.value_resolver(matcher.label_name_id));
-        if (auto status = regexp::RegexpSearcher<typename TrieIndex::Trie, decltype(matches_list)>(matches_list).search(*trie, regexp);
-            status == MatchStatus::kEmptyMatch) {
+        if (const auto status = regexp_search(regexp, label_name_id, matcher); status == MatchStatus::kEmptyMatch) {
           matcher.status = MatchStatus::kEmptyMatch;
           return QuerierStatus::kNoMatch;
         }
@@ -206,7 +201,7 @@ class SelectorQuerier {
       }
 
       case kEmptyMatch: {
-        process_empty_matcher(matcher, trie);
+        process_empty_matcher(matcher, label_name_id);
         return QuerierStatus::kMatch;
       }
 
@@ -221,6 +216,13 @@ class SelectorQuerier {
         return QuerierStatus::kRegexpError;
       }
     }
+  }
+
+  PROMPP_ALWAYS_INLINE PromPP::Prometheus::MatchStatus regexp_search(const regexp::RegexpPtr& regexp,
+                                                                     uint32_t label_name_id,
+                                                                     typename Selector::Matcher& matcher) noexcept {
+    typename TrieIndex::Trie::MatchesList matches_list(matcher.matches, match_resolver_.value_resolver(matcher.label_name_match));
+    return regexp::RegexpSearcher<typename TrieIndex::Trie, decltype(matches_list)>(matches_list).search(*index_.values_trie(label_name_id), regexp);
   }
 };
 
