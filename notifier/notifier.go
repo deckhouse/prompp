@@ -103,6 +103,15 @@ func (a *Alert) ResolvedAt(ts time.Time) bool {
 	return !a.EndsAt.After(ts)
 }
 
+// Equal asserts that two Alert are equal.
+func (a *Alert) Equal(other *Alert) bool {
+	return a.GeneratorURL == other.GeneratorURL &&
+		a.EndsAt.Equal(other.EndsAt) &&
+		a.StartsAt.Equal(other.StartsAt) &&
+		labels.Equal(a.Annotations, other.Annotations) &&
+		labels.Equal(a.Labels, other.Labels)
+}
+
 // Manager is responsible for dispatching alert notifications to an
 // alert manager service.
 type Manager struct {
