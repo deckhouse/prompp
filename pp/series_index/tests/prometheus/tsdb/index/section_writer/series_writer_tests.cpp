@@ -2,6 +2,7 @@
 
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
+#include "prometheus/label_matcher.h"
 #include "series_index/prometheus/tsdb/index/section_writer/series_writer.h"
 #include "series_index/prometheus/tsdb/index/section_writer/symbols_writer.h"
 #include "series_index/queryable_encoding_bimap.h"
@@ -10,6 +11,7 @@
 namespace {
 
 using PromPP::Primitives::LabelViewSet;
+using PromPP::Prometheus::MatchId;
 using series_index::SeriesReverseIndex;
 using series_index::prometheus::tsdb::index::ChunkMetadata;
 using series_index::prometheus::tsdb::index::SeriesReferencesMap;
@@ -22,9 +24,9 @@ using LabelViewSetList = std::vector<LabelViewSet>;
 
 class SeriesWriterFixture : public testing::Test {
  protected:
-  using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie, series_index::trie::CedarMatchesList>;
-  using QueryableEncodingBimap = series_index::
-      QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex>;
+  using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie, series_index::trie::CedarMatchesList<std::vector<MatchId>>>;
+  using QueryableEncodingBimap =
+      series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex>;
   using Stream = std::ostringstream;
   using StreamWriter = PromPP::Prometheus::tsdb::index::StreamWriter<Stream>;
   using SeriesWriter = series_index::prometheus::tsdb::index::section_writer::SeriesWriter<QueryableEncodingBimap, Stream>;

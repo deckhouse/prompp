@@ -51,30 +51,31 @@ inline std::ostream& operator<<(std::ostream& stream, const PromPP::Prometheus::
   return stream;
 }
 
-inline std::ostream& operator<<(std::ostream& stream, const PromPP::Prometheus::Selector::Matcher& matcher) {
-  stream << "result: { matches: { ";
-  for (auto it = matcher.matches.begin(); it != matcher.matches.end(); ++it) {
-    if (it != matcher.matches.begin()) {
-      stream << ", ";
-    }
-    stream << *it;
-  }
-  stream << " }, status: " << MatchStatusToString(matcher.status) << "}, label_name_id: " << matcher.label_name_id << ", cardinality: " << matcher.cardinality
-         << ", type: " << MatcherTypeToString(matcher.type);
-  return stream;
-}
-
-inline std::ostream& operator<<(std::ostream& stream, const PromPP::Prometheus::Selector& selector) {
-  stream << "matchers: {";
-  for (auto it = selector.matchers.begin(); it != selector.matchers.end(); ++it) {
-    if (it != selector.matchers.begin()) {
-      stream << ", ";
-    }
-    stream << "{\n"
-           << "matcher: {" << *it << "}\n}";
-  }
-  stream << "}";
-  return stream;
-}
+// inline std::ostream& operator<<(std::ostream& stream, const PromPP::Prometheus::Selector::Matcher& matcher) {
+//   stream << "result: { matches: { ";
+//   for (auto it = matcher.matches.begin(); it != matcher.matches.end(); ++it) {
+//     if (it != matcher.matches.begin()) {
+//       stream << ", ";
+//     }
+//     stream << *it;
+//   }
+//   stream << " }, status: " << MatchStatusToString(matcher.status) << "}, label_name_id: " << matcher.label_name_id << ", cardinality: " <<
+//   matcher.cardinality
+//          << ", type: " << MatcherTypeToString(matcher.type);
+//   return stream;
+// }
+//
+// inline std::ostream& operator<<(std::ostream& stream, const PromPP::Prometheus::Selector& selector) {
+//   stream << "matchers: {";
+//   for (auto it = selector.matchers.begin(); it != selector.matchers.end(); ++it) {
+//     if (it != selector.matchers.begin()) {
+//       stream << ", ";
+//     }
+//     stream << "{\n"
+//            << "matcher: {" << *it << "}\n}";
+//   }
+//   stream << "}";
+//   return stream;
+// }
 
 }  // namespace series_index::querier

@@ -6,7 +6,7 @@
 
 namespace series_index::querier {
 
-template <class Index>
+template <class Index, class Selector>
 class LabelValuesQuerier {
  public:
   explicit LabelValuesQuerier(const Index& index) : index_(index) {}
@@ -22,7 +22,7 @@ class LabelValuesQuerier {
       return query_all_label_values(*name_id, *index_.trie_index().values_trie(*name_id), std::forward<ValueHandler>(name_handler));
     }
 
-    auto result = Querier<Index>{index_}.query(label_matchers);
+    auto result = Querier<Index, Selector>{index_}.query(label_matchers);
     if (result.status == QuerierStatus::kMatch) {
       query_matched_unique_label_values(*name_id, *index_.trie_index().values_trie(*name_id), result.series_ids, std::forward<ValueHandler>(name_handler));
     }

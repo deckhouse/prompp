@@ -2,6 +2,7 @@
 
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
+#include "prometheus/label_matcher.h"
 #include "series_data/encoder.h"
 #include "series_data/outdated_sample_encoder.h"
 #include "series_index/queryable_encoding_bimap.h"
@@ -10,7 +11,8 @@
 
 namespace {
 
-using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie, series_index::trie::CedarMatchesList>;
+using PromPP::Prometheus::MatchId;
+using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie, series_index::trie::CedarMatchesList<std::vector<MatchId>>>;
 using QueryableEncodingBimap =
     series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex>;
 using head::StatusGetter;

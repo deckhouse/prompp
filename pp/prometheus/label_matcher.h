@@ -52,12 +52,38 @@ enum class MatchStatus : uint8_t {
   kError,
 };
 
+class MatchId {
+ public:
+  MatchId() = default;
+  MatchId(const MatchId&) noexcept = default;
+  MatchId(MatchId&&) noexcept = default;
+
+  // NOLINTNEXTLINE(google-explicit-constructor)
+  MatchId(uint32_t id) : id_{id} {}
+
+  MatchId& operator=(const MatchId&) noexcept = default;
+  MatchId& operator=(uint32_t id) noexcept {
+    id_ = id;
+    return *this;
+  }
+
+  auto operator<=>(const MatchId&) const noexcept = default;
+  auto operator<=>(uint32_t id) const noexcept { return id_ <=> id; }
+
+  // NOLINTNEXTLINE(google-explicit-constructor)
+  operator uint32_t() const noexcept { return id_; }
+
+ private:
+  uint32_t id_{std::numeric_limits<uint32_t>::max()};
+};
+
+template <class MatchType = MatchId>
 struct Selector {
   struct Matcher {
     using Cardinality = uint32_t;
 
-    std::vector<uint32_t> matches{};
-    uint32_t label_name_id{std::numeric_limits<uint32_t>::max()};
+    std::vector<MatchType> matches{};
+    MatchType label_name_id{};
     Cardinality cardinality{};
     MatchStatus status{MatchStatus::kUnknown};
     MatcherType type{MatcherType::kUnknown};

@@ -11,6 +11,7 @@ namespace {
 using PromPP::Primitives::LabelViewSet;
 using PromPP::Prometheus::LabelMatchers;
 using PromPP::Prometheus::MatcherType;
+using PromPP::Prometheus::MatchId;
 using PromPP::Prometheus::MatchStatus;
 using PromPP::Prometheus::Selector;
 using series_index::QueryableEncodingBimap;
@@ -23,7 +24,7 @@ using series_index::trie::CedarTrie;
 struct SelectorQuerierTestCase {
   struct Expected {
     QuerierStatus status;
-    Selector selector{};
+    Selector<> selector{};
   };
 
   std::vector<LabelViewSet> label_sets{};
@@ -33,10 +34,10 @@ struct SelectorQuerierTestCase {
 
 class SelectorQuerierFixture : public testing::TestWithParam<SelectorQuerierTestCase> {
  protected:
-  using TrieIndex = series_index::TrieIndex<CedarTrie, CedarMatchesList>;
+  using TrieIndex = series_index::TrieIndex<CedarTrie, CedarMatchesList<std::vector<MatchId>>>;
 
   QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex> index_;
-  SelectorQuerier<TrieIndex> selector_querier_{index_.trie_index()};
+  SelectorQuerier<TrieIndex, Selector<>> selector_querier_{index_.trie_index()};
 
   void SetUp() override {
     for (auto& label_set : GetParam().label_sets) {

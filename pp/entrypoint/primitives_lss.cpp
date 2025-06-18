@@ -110,7 +110,7 @@ extern "C" void prompp_primitives_lss_query(void* args, void* res) {
     uint32_t status;
   };
 
-  using Querier = series_index::querier::Querier<QueryableEncodingBimap, PromPP::Primitives::Go::Slice>;
+  using Querier = series_index::querier::Querier<QueryableEncodingBimap, PromPP::Prometheus::Selector<>, PromPP::Primitives::Go::Slice>;
 
   const auto in = static_cast<Arguments*>(args);
   auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
@@ -185,7 +185,7 @@ extern "C" void prompp_primitives_lss_query_label_names(void* args, void* res) {
     GoSliceOfString names;
   };
 
-  using LabelNamesQuerier = series_index::querier::LabelNamesQuerier<QueryableEncodingBimap>;
+  using LabelNamesQuerier = series_index::querier::LabelNamesQuerier<QueryableEncodingBimap, PromPP::Prometheus::Selector<>>;
 
   const auto in = static_cast<Arguments*>(args);
   auto out = new (res) Result();
@@ -204,7 +204,7 @@ extern "C" void prompp_primitives_lss_query_label_values(void* args, void* res) 
     GoSliceOfString values;
   };
 
-  using LabelValuesQuerier = series_index::querier::LabelValuesQuerier<QueryableEncodingBimap>;
+  using LabelValuesQuerier = series_index::querier::LabelValuesQuerier<QueryableEncodingBimap, PromPP::Prometheus::Selector<>>;
 
   const auto in = static_cast<Arguments*>(args);
   auto out = new (res) Result();

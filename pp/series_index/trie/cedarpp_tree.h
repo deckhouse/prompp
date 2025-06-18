@@ -2,7 +2,6 @@
 
 #include <optional>
 #include <string>
-#include <vector>
 
 #include "bare_bones/preprocess.h"
 #include "bare_bones/utf8.h"
@@ -159,11 +158,10 @@ class CedarTrie {
   uint32_t count_{};
 };
 
+template <class MatchesList>
 class CedarMatchesList {
  public:
-  using SeriesIdList = std::vector<uint32_t>;
-
-  explicit CedarMatchesList(SeriesIdList& matches) : matches_(matches) {}
+  explicit CedarMatchesList(MatchesList& matches) : matches_(matches) {}
 
   PROMPP_ALWAYS_INLINE void clear() const { matches_.clear(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t count() const noexcept { return matches_.size(); }
@@ -196,10 +194,10 @@ class CedarMatchesList {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdList& matches() const noexcept { return matches_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const MatchesList& matches() const noexcept { return matches_; }
 
  private:
-  SeriesIdList& matches_;
+  MatchesList& matches_;
 };
 
 }  // namespace series_index::trie

@@ -4,6 +4,7 @@
 
 #include "bare_bones/exception.h"
 #include "primitives/snug_composites.h"
+#include "prometheus/query.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
 
@@ -17,7 +18,7 @@ enum class LssType : uint32_t {
   kReadonlyQueryableEncodingBimap,
 };
 
-using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie, series_index::trie::CedarMatchesList>;
+using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie, series_index::trie::CedarMatchesList<std::vector<PromPP::Prometheus::MatchId>>>;
 using OrderedEncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::OrderedEncodingBimap<BareBones::Vector>;
 
 namespace lss_memory {

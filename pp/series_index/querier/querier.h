@@ -10,12 +10,12 @@
 
 namespace series_index::querier {
 
-template <class Index, template <class> class MemoryPoolContainer = std::vector>
+template <class Index, class Selector, template <class> class MemoryPoolContainer = std::vector>
 class Querier {
  public:
   class MatchersComparatorByTypeAndCardinality {
    public:
-    PROMPP_ALWAYS_INLINE bool operator()(const PromPP::Prometheus::Selector::Matcher& a, const PromPP::Prometheus::Selector::Matcher& b) const noexcept {
+    PROMPP_ALWAYS_INLINE bool operator()(const typename Selector::Matcher& a, const typename Selector::Matcher& b) const noexcept {
       if (a.is_positive()) {
         if (b.is_positive()) {
           return a.cardinality < b.cardinality;
@@ -29,7 +29,7 @@ class Querier {
   };
 
   using SeriesIdContainer = MemoryPoolContainer<uint32_t>;
-  using MatcherCardinality = PromPP::Prometheus::Selector::Matcher::Cardinality;
+  using MatcherCardinality = typename Selector::Matcher::Cardinality;
 
   struct QuerierResult {
     SeriesIdContainer series_ids{};
@@ -50,7 +50,8 @@ class Querier {
   [[nodiscard]] QuerierResult query(const LabelMatchers& label_matchers) {
     QuerierResult result;
     PromPP::Prometheus::Selector selector;
-    if (result.status = SelectorQuerier{index_.trie_index()}.query(label_matchers, selector); result.status != QuerierStatus::kMatch) {
+    if (result.status = SelectorQuerier<typename Index::TrieIndex, Selector>{index_.trie_index()}.query(label_matchers, selector);
+        result.status != QuerierStatus::kMatch) {
       return result;
     }
 
@@ -105,11 +106,11 @@ class Querier {
   const Index& index_;
   SeriesSliceList series_slice_list_;
 
-  PROMPP_ALWAYS_INLINE void sort_matchers(PromPP::Prometheus::Selector& selector) const noexcept {
+  PROMPP_ALWAYS_INLINE void sort_matchers(Selector& selector) const noexcept {
     std::sort(selector.matchers.begin(), selector.matchers.end(), MatchersComparatorByTypeAndCardinality{});
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE MatcherCardinality fill_matchers_cardinality(PromPP::Prometheus::Selector& selector) const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE MatcherCardinality fill_matchers_cardinality(Selector& selector) const noexcept {
     MatcherCardinality max_cardinality{};
     for (auto& matcher : selector.matchers) {
       if (need_resolve_matcher(matcher)) {
@@ -121,11 +122,11 @@ class Querier {
     return max_cardinality;
   }
 
-  [[nodiscard]] static PROMPP_ALWAYS_INLINE bool need_resolve_matcher(const PromPP::Prometheus::Selector::Matcher& matcher) noexcept {
+  [[nodiscard]] static PROMPP_ALWAYS_INLINE bool need_resolve_matcher(const typename Selector::Matcher& matcher) noexcept {
     return matcher.is_positive() || (matcher.is_negative() && matcher.status == PromPP::Prometheus::MatchStatus::kAllMatchWithExcludes);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE MatcherCardinality get_cardinality(const PromPP::Prometheus::Selector::Matcher& matcher) const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE MatcherCardinality get_cardinality(const typename Selector::Matcher& matcher) const noexcept {
     using enum PromPP::Prometheus::MatchStatus;
 
     if (BareBones::is_in(matcher.status, kAllMatch, kAllMatchWithExcludes)) {
@@ -137,7 +138,7 @@ class Querier {
     });
   }
 
-  PROMPP_ALWAYS_INLINE void process_matcher(const PromPP::Prometheus::Selector::Matcher& matcher, MemoryPool& memory_pool, SeriesIdSpan& result_set) {
+  PROMPP_ALWAYS_INLINE void process_matcher(const typename Selector::Matcher& matcher, MemoryPool& memory_pool, SeriesIdSpan& result_set) {
     if (matcher.is_positive()) {
       process_positive_matcher(matcher, memory_pool, result_set);
     } else if (matcher.is_negative()) {
@@ -145,7 +146,7 @@ class Querier {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void process_positive_matcher(const PromPP::Prometheus::Selector::Matcher& matcher, MemoryPool& memory_pool, SeriesIdSpan& result_set) {
+  PROMPP_ALWAYS_INLINE void process_positive_matcher(const typename Selector::Matcher& matcher, MemoryPool& memory_pool, SeriesIdSpan& result_set) {
     if (matcher.status == PromPP::Prometheus::MatchStatus::kAllMatch) {
       result_set = intersect_sequence(result_set, index_.reverse_index().get(matcher.label_name_id));
     } else {
@@ -153,7 +154,7 @@ class Querier {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void process_negative_matcher(const PromPP::Prometheus::Selector::Matcher& matcher, MemoryPool& memory_pool, SeriesIdSpan& result_set) {
+  PROMPP_ALWAYS_INLINE void process_negative_matcher(const typename Selector::Matcher& matcher, MemoryPool& memory_pool, SeriesIdSpan& result_set) {
     if (matcher.status == PromPP::Prometheus::MatchStatus::kAllMatch) {
       result_set = substract_sequence(result_set, index_.reverse_index().get(matcher.label_name_id));
     } else if (matcher.status == PromPP::Prometheus::MatchStatus::kPartialMatch) {
@@ -163,7 +164,7 @@ class Querier {
     }
   }
 
-  SeriesIdSpan resolve_positive_matcher(const PromPP::Prometheus::Selector::Matcher& matcher, uint32_t*& memory, uint32_t*& temp_memory) {
+  SeriesIdSpan resolve_positive_matcher(const typename Selector::Matcher& matcher, uint32_t*& memory, uint32_t*& temp_memory) {
     using enum PromPP::Prometheus::MatchStatus;
 
     if (matcher.status == kAllMatch) {
@@ -177,21 +178,19 @@ class Querier {
     return resolve_partial_match_matcher(matcher, memory, temp_memory);
   }
 
-  PROMPP_ALWAYS_INLINE SeriesIdSpan resolve_all_match_matcher(const PromPP::Prometheus::Selector::Matcher& matcher, uint32_t* memory) {
+  PROMPP_ALWAYS_INLINE SeriesIdSpan resolve_all_match_matcher(const typename Selector::Matcher& matcher, uint32_t* memory) {
     auto sequence = index_.reverse_index().get(matcher.label_name_id);
     decode_sequence(sequence, memory);
     return {memory, sequence->count()};
   }
 
-  PROMPP_ALWAYS_INLINE SeriesIdSpan resolve_all_match_with_excludes_matcher(const PromPP::Prometheus::Selector::Matcher& matcher, uint32_t* memory) {
+  PROMPP_ALWAYS_INLINE SeriesIdSpan resolve_all_match_with_excludes_matcher(const typename Selector::Matcher& matcher, uint32_t* memory) {
     auto sequence = index_.reverse_index().get(matcher.label_name_id);
     decode_sequence(sequence, memory);
     return substract_sequences(SeriesIdSpan{memory, sequence->count()}, matcher);
   }
 
-  PROMPP_ALWAYS_INLINE SeriesIdSpan resolve_partial_match_matcher(const PromPP::Prometheus::Selector::Matcher& matcher,
-                                                                  uint32_t*& memory,
-                                                                  uint32_t*& temp_memory) {
+  PROMPP_ALWAYS_INLINE SeriesIdSpan resolve_partial_match_matcher(const typename Selector::Matcher& matcher, uint32_t*& memory, uint32_t*& temp_memory) {
     series_slice_list_.clear();
     series_slice_list_.reserve(matcher.matches.size());
 
@@ -216,7 +215,7 @@ class Querier {
     return SetSubstractor::substract(result_set, *sequence);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesIdSpan substract_sequences(SeriesIdSpan result_set, const PromPP::Prometheus::Selector::Matcher& matcher) {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesIdSpan substract_sequences(SeriesIdSpan result_set, const typename Selector::Matcher& matcher) {
     for (auto label_value_id : matcher.matches) {
       result_set = substract_sequence(result_set, index_.reverse_index().get(matcher.label_name_id, label_value_id));
     }

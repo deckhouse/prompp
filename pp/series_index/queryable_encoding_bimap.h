@@ -12,15 +12,16 @@
 
 namespace series_index {
 
-template <template <template <class> class> class Filament, template <class> class Vector, class TrieIndex>
+template <template <template <class> class> class Filament, template <class> class Vector, class TrieIndexType>
 class QueryableEncodingBimap final
-    : public BareBones::SnugComposite::GenericDecodingTable<QueryableEncodingBimap<Filament, Vector, TrieIndex>, Filament, Vector> {
+    : public BareBones::SnugComposite::GenericDecodingTable<QueryableEncodingBimap<Filament, Vector, TrieIndexType>, Filament, Vector> {
  public:
   using Base = BareBones::SnugComposite::GenericDecodingTable<QueryableEncodingBimap, Filament, Vector>;
   using LsIdSet = phmap::btree_set<typename Base::Proxy, typename Base::LessComparator, BareBones::Allocator<typename Base::Proxy>>;
   using HashSet =
       phmap::flat_hash_set<typename Base::Proxy, typename Base::Hasher, typename Base::EqualityComparator, BareBones::Allocator<typename Base::Proxy>>;
   using LsIdSetIterator = typename LsIdSet::const_iterator;
+  using TrieIndex = TrieIndexType;
   using TrieIndexIterator = typename TrieIndex::Iterator;
 
   using Base::reserve;

@@ -3,12 +3,14 @@
 
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
+#include "prometheus/query.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
 
 namespace {
 
 using PromPP::Primitives::LabelViewSet;
+using PromPP::Prometheus::MatchId;
 using series_index::QueryableEncodingBimap;
 using series_index::QueryableEncodingBimapCopier;
 using series_index::SeriesReverseIndex;
@@ -17,7 +19,7 @@ using series_index::trie::CedarTrie;
 
 class QueryableEncodingBimapFixture : public testing::Test {
  protected:
-  using TrieIndex = series_index::TrieIndex<CedarTrie, CedarMatchesList>;
+  using TrieIndex = series_index::TrieIndex<CedarTrie, CedarMatchesList<std::vector<MatchId>>>;
   using Lss = QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex>;
 
   Lss lss_;

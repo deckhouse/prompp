@@ -18,11 +18,10 @@ PROMPP_ALWAYS_INLINE bool is_querier_status_error(QuerierStatus status) noexcept
   return status != QuerierStatus::kMatch && status != QuerierStatus::kNoMatch;
 }
 
-template <class TrieIndex>
+template <class TrieIndex, class Selector>
 class SelectorQuerier {
  public:
   using MatcherType = PromPP::Prometheus::MatcherType;
-  using Selector = PromPP::Prometheus::Selector;
   using MatchStatus = PromPP::Prometheus::MatchStatus;
   using Trie = typename TrieIndex::Trie;
 
@@ -66,7 +65,7 @@ class SelectorQuerier {
   }
 
   template <class LabelMatcher>
-  PROMPP_ALWAYS_INLINE QuerierStatus query(const LabelMatcher& label_matcher, Selector::Matcher& matcher) {
+  PROMPP_ALWAYS_INLINE QuerierStatus query(const LabelMatcher& label_matcher, typename Selector::Matcher& matcher) {
     return query_values(label_matcher, get_values_trie(label_matcher, matcher), matcher);
   }
 
@@ -74,7 +73,7 @@ class SelectorQuerier {
   const TrieIndex& index_;
 
   template <class LabelMatcher>
-  PROMPP_ALWAYS_INLINE const Trie* get_values_trie(const LabelMatcher& label_matcher, Selector::Matcher& matcher) const noexcept {
+  PROMPP_ALWAYS_INLINE const Trie* get_values_trie(const LabelMatcher& label_matcher, typename Selector::Matcher& matcher) const noexcept {
     if (auto index = index_.names_trie().lookup(static_cast<std::string_view>(label_matcher.name)); index) {
       matcher.label_name_id = *index;
       return index_.values_trie(*index);
@@ -84,7 +83,7 @@ class SelectorQuerier {
   }
 
   template <class LabelMatcher>
-  QuerierStatus query_values(const LabelMatcher& label_matcher, const Trie* trie, Selector::Matcher& matcher) {
+  QuerierStatus query_values(const LabelMatcher& label_matcher, const Trie* trie, typename Selector::Matcher& matcher) {
     if (label_matcher.value.empty()) {
       process_empty_matcher(matcher, trie);
       return QuerierStatus::kMatch;
@@ -109,7 +108,7 @@ class SelectorQuerier {
   }
 
   template <class LabelMatcher>
-  QuerierStatus query_exact_value(const LabelMatcher& label_matcher, const Trie* trie, Selector::Matcher& matcher) {
+  QuerierStatus query_exact_value(const LabelMatcher& label_matcher, const Trie* trie, typename Selector::Matcher& matcher) {
     if (trie == nullptr) {
       matcher.status = MatchStatus::kEmptyMatch;
       return QuerierStatus::kNoMatch;
@@ -125,7 +124,7 @@ class SelectorQuerier {
     return QuerierStatus::kNoMatch;
   }
 
-  static void process_empty_matcher(Selector::Matcher& matcher, const Trie* trie) {
+  static void process_empty_matcher(typename Selector::Matcher& matcher, const Trie* trie) {
     if (matcher.is_positive()) {
       matcher.convert_to_negative();
 
@@ -147,7 +146,7 @@ class SelectorQuerier {
   }
 
   template <class LabelMatcher>
-  QuerierStatus query_values_by_regexp(const LabelMatcher& label_matcher, const Trie* trie, Selector::Matcher& matcher) {
+  QuerierStatus query_values_by_regexp(const LabelMatcher& label_matcher, const Trie* trie, typename Selector::Matcher& matcher) {
     auto regexp = regexp::RegexpParser::parse(static_cast<std::string_view>(label_matcher.value));
     switch (regexp::RegexpMatchAnalyzer::analyze(regexp.get())) {
       using enum regexp::RegexpMatchAnalyzer::Status;

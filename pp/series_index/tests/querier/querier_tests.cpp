@@ -14,6 +14,7 @@ namespace {
 using PromPP::Primitives::LabelViewSet;
 using PromPP::Prometheus::LabelMatchers;
 using PromPP::Prometheus::MatcherType;
+using PromPP::Prometheus::MatchId;
 using PromPP::Prometheus::Selector;
 using series_index::QueryableEncodingBimap;
 using series_index::SeriesReverseIndex;
@@ -21,19 +22,19 @@ using series_index::querier::Querier;
 using series_index::querier::QuerierStatus;
 using series_index::trie::CedarMatchesList;
 using series_index::trie::CedarTrie;
-using TrieIndex = series_index::TrieIndex<CedarTrie, CedarMatchesList>;
+using TrieIndex = series_index::TrieIndex<CedarTrie, CedarMatchesList<std::vector<MatchId>>>;
 using Index = QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex>;
 
 struct MatchersComparatorByTypeAndCardinalityCase {
-  Selector selector;
-  Selector expected;
+  Selector<> selector;
+  Selector<> expected;
 };
 
 class MatchersComparatorByTypeAndCardinalityFixture : public testing::TestWithParam<MatchersComparatorByTypeAndCardinalityCase> {
  protected:
-  Querier<Index>::MatchersComparatorByTypeAndCardinality comparator_;
+  Querier<Index, Selector<>>::MatchersComparatorByTypeAndCardinality comparator_;
 
-  void sort(Selector& selector) const { std::ranges::sort(selector.matchers, comparator_); }
+  void sort(Selector<>& selector) const { std::ranges::sort(selector.matchers, comparator_); }
 };
 
 TEST_P(MatchersComparatorByTypeAndCardinalityFixture, Test) {
@@ -76,7 +77,7 @@ struct QuerierTestCase {
 class QuerierFixture : public testing::TestWithParam<QuerierTestCase> {
  protected:
   Index index_;
-  Querier<Index, BareBones::Vector> querier_{index_};
+  Querier<Index, Selector<>, BareBones::Vector> querier_{index_};
 
   void SetUp() override {
     for (auto& label_set : label_sets_) {
