@@ -3,17 +3,17 @@
 
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
-#include "prometheus/query.h"
+#include "series_index/querier/querier.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
 
 namespace {
 
 using PromPP::Primitives::LabelViewSet;
-using PromPP::Prometheus::MatchId;
 using series_index::QueryableEncodingBimap;
 using series_index::QueryableEncodingBimapCopier;
 using series_index::SeriesReverseIndex;
+using series_index::querier::MatchId;
 using series_index::trie::CedarMatchesList;
 using series_index::trie::CedarTrie;
 

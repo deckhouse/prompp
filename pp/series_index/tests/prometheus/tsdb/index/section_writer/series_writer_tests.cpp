@@ -5,18 +5,19 @@
 #include "prometheus/label_matcher.h"
 #include "series_index/prometheus/tsdb/index/section_writer/series_writer.h"
 #include "series_index/prometheus/tsdb/index/section_writer/symbols_writer.h"
+#include "series_index/querier/querier.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
 
 namespace {
 
 using PromPP::Primitives::LabelViewSet;
-using PromPP::Prometheus::MatchId;
 using series_index::SeriesReverseIndex;
 using series_index::prometheus::tsdb::index::ChunkMetadata;
 using series_index::prometheus::tsdb::index::SeriesReferencesMap;
 using series_index::prometheus::tsdb::index::SymbolReferencesMap;
 using series_index::prometheus::tsdb::index::section_writer::SymbolsWriter;
+using series_index::querier::MatchId;
 using std::operator""sv;
 
 using ChunkMetadataList = std::vector<ChunkMetadata>;

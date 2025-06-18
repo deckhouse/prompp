@@ -2,6 +2,7 @@
 
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
+#include "series_index/querier/selector.h"
 #include "series_index/querier/selector_querier.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
@@ -11,19 +12,19 @@ namespace {
 using PromPP::Primitives::LabelViewSet;
 using PromPP::Prometheus::LabelMatchers;
 using PromPP::Prometheus::MatcherType;
-using PromPP::Prometheus::MatchId;
 using PromPP::Prometheus::MatchStatus;
-using PromPP::Prometheus::Selector;
 using series_index::QueryableEncodingBimap;
 using series_index::SeriesReverseIndex;
+using series_index::querier::MatchId;
 using series_index::querier::QuerierStatus;
+using series_index::querier::Selector;
 using series_index::querier::SelectorQuerier;
 using series_index::trie::CedarMatchesList;
 using series_index::trie::CedarTrie;
 
 struct SelectorQuerierTestCase {
   struct Expected {
-    QuerierStatus status;
+    QuerierStatus status{};
     Selector<> selector{};
   };
 
@@ -34,7 +35,7 @@ struct SelectorQuerierTestCase {
 
 class SelectorQuerierFixture : public testing::TestWithParam<SelectorQuerierTestCase> {
  protected:
-  using TrieIndex = series_index::TrieIndex<CedarTrie, CedarMatchesList<std::vector<MatchId>>>;
+  using TrieIndex = series_index::TrieIndex<CedarTrie, CedarMatchesList<Selector<>::MatchList>>;
 
   QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex> index_;
   SelectorQuerier<TrieIndex, Selector<>> selector_querier_{index_.trie_index()};

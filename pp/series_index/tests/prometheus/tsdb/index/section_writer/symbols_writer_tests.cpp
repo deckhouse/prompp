@@ -6,6 +6,7 @@
 #include "series_index/prometheus/tsdb/index/section_writer/symbols_writer.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
+#include "series_index/querier/selector.h"
 
 namespace {
 
@@ -14,7 +15,7 @@ using PromPP::Prometheus::tsdb::index::StreamWriter;
 using series_index::SeriesReverseIndex;
 using series_index::prometheus::tsdb::index::SymbolReferencesMap;
 using series_index::prometheus::tsdb::index::section_writer::SymbolsWriter;
-using PromPP::Prometheus::MatchId;
+using series_index::querier::MatchId;
 using std::operator""sv;
 
 struct SymbolsWriterCase {
@@ -34,8 +35,8 @@ LabelViewSet make_ls_with_empty_label_value() {
 class SymbolsWriterFixture : public testing::TestWithParam<SymbolsWriterCase> {
  protected:
   using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie, series_index::trie::CedarMatchesList<std::vector<MatchId>>>;
-  using QueryableEncodingBimap = series_index::
-      QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex>;
+  using QueryableEncodingBimap =
+      series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex>;
 
   std::ostringstream stream_;
   StreamWriter<decltype(stream_)> stream_writer_{&stream_};

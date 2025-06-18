@@ -4,6 +4,7 @@
 
 #include "bare_bones/algorithm.h"
 #include "bare_bones/preprocess.h"
+#include "selector.h"
 #include "selector_querier.h"
 #include "series_index/reverse_index.h"
 #include "set_operations.h"
@@ -29,7 +30,6 @@ class Querier {
   };
 
   using SeriesIdContainer = MemoryPoolContainer<uint32_t>;
-  using MatcherCardinality = typename Selector::Matcher::Cardinality;
 
   struct QuerierResult {
     SeriesIdContainer series_ids{};
@@ -49,7 +49,7 @@ class Querier {
   template <class LabelMatchers>
   [[nodiscard]] QuerierResult query(const LabelMatchers& label_matchers) {
     QuerierResult result;
-    PromPP::Prometheus::Selector selector;
+    Selector selector;
     if (result.status = SelectorQuerier<typename Index::TrieIndex, Selector>{index_.trie_index()}.query(label_matchers, selector);
         result.status != QuerierStatus::kMatch) {
       return result;
@@ -76,7 +76,7 @@ class Querier {
     SeriesIdContainer merge_container1_;
     SeriesIdContainer merge_container2_;
     SeriesIdContainer temp_container_;
-    MatcherCardinality cardinality_;
+    Cardinality cardinality_;
 
    public:
     uint32_t* merge1{};
@@ -110,8 +110,8 @@ class Querier {
     std::sort(selector.matchers.begin(), selector.matchers.end(), MatchersComparatorByTypeAndCardinality{});
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE MatcherCardinality fill_matchers_cardinality(Selector& selector) const noexcept {
-    MatcherCardinality max_cardinality{};
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Cardinality fill_matchers_cardinality(Selector& selector) const noexcept {
+    Cardinality max_cardinality{};
     for (auto& matcher : selector.matchers) {
       if (need_resolve_matcher(matcher)) {
         matcher.cardinality = get_cardinality(matcher);
@@ -126,7 +126,7 @@ class Querier {
     return matcher.is_positive() || (matcher.is_negative() && matcher.status == PromPP::Prometheus::MatchStatus::kAllMatchWithExcludes);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE MatcherCardinality get_cardinality(const typename Selector::Matcher& matcher) const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Cardinality get_cardinality(const typename Selector::Matcher& matcher) const noexcept {
     using enum PromPP::Prometheus::MatchStatus;
 
     if (BareBones::is_in(matcher.status, kAllMatch, kAllMatchWithExcludes)) {
