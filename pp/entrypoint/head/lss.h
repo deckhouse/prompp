@@ -17,7 +17,6 @@ enum class LssType : uint32_t {
   kReadonlyQueryableEncodingBimap,
 };
 
-using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie>;
 using OrderedEncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::OrderedEncodingBimap<BareBones::Vector>;
 
 namespace lss_memory {
@@ -56,8 +55,9 @@ using ReadonlyQueryableEncodingBimap = PromPP::Primitives::SnugComposites::Label
 using ReadonlyEncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpan>;
 
 using EncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<SharedVector>;
-using QueryableEncodingBimap =
-    series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, SharedVectorWithChangesDetection, TrieIndex>;
+using QueryableEncodingBimap = series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament,
+                                                                    SharedVectorWithChangesDetection,
+                                                                    series_index::trie::CedarTrie>;
 
 using LssVariant = std::variant<EncodingBimap, OrderedEncodingBimap, QueryableEncodingBimap, ReadonlyEncodingBimap, ReadonlyQueryableEncodingBimap>;
 using LssVariantPtr = std::unique_ptr<LssVariant>;
