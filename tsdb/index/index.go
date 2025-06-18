@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 	"unsafe"
 
 	"github.com/prometheus/prometheus/model/labels"
@@ -249,6 +250,7 @@ func NewWriterWithEncoder(ctx context.Context, fn string, encoder PostingsEncode
 	if err := iw.writeMeta(); err != nil {
 		return nil, err
 	}
+
 	return iw, nil
 }
 
@@ -474,27 +476,29 @@ func (w *Writer) AddSeries(ref storage.SeriesRef, lset labels.Labels, chunks ...
 
 	if err := lset.Validate(func(l labels.Label) error {
 		var err error
-		cacheEntry, ok := w.symbolCache[l.Name]
+		lName := strings.Clone(l.Name)         // PP_CHANGES.md: rebuild on cpp
+		lValue := strings.Clone(l.Value)       // PP_CHANGES.md: rebuild on cpp
+		cacheEntry, ok := w.symbolCache[lName] // PP_CHANGES.md: rebuild on cpp
 		nameIndex := cacheEntry.index
 		if !ok {
-			nameIndex, err = w.symbols.ReverseLookup(l.Name)
+			nameIndex, err = w.symbols.ReverseLookup(lName) // PP_CHANGES.md: rebuild on cpp
 			if err != nil {
-				return fmt.Errorf("symbol entry for %q does not exist, %w", l.Name, err)
+				return fmt.Errorf("symbol entry for %q does not exist, %w", lName, err) // PP_CHANGES.md: rebuild on cpp
 			}
 		}
-		w.labelNames[l.Name]++
+		w.labelNames[lName]++ // PP_CHANGES.md: rebuild on cpp
 		w.buf2.PutUvarint32(nameIndex)
 
 		valueIndex := cacheEntry.lastValueIndex
-		if !ok || cacheEntry.lastValue != l.Value {
-			valueIndex, err = w.symbols.ReverseLookup(l.Value)
+		if !ok || cacheEntry.lastValue != lValue { // PP_CHANGES.md: rebuild on cpp
+			valueIndex, err = w.symbols.ReverseLookup(lValue) // PP_CHANGES.md: rebuild on cpp
 			if err != nil {
-				return fmt.Errorf("symbol entry for %q does not exist, %w", l.Value, err)
+				return fmt.Errorf("symbol entry for %q does not exist, %w", lValue, err) // PP_CHANGES.md: rebuild on cpp
 			}
-			w.symbolCache[l.Name] = symbolCacheEntry{
+			w.symbolCache[lName] = symbolCacheEntry{ // PP_CHANGES.md: rebuild on cpp
 				index:          nameIndex,
 				lastValueIndex: valueIndex,
-				lastValue:      l.Value,
+				lastValue:      lValue, // PP_CHANGES.md: rebuild on cpp
 			}
 		}
 		w.buf2.PutUvarint32(valueIndex)
@@ -1089,6 +1093,7 @@ func (w *Writer) Close() error {
 	if err := w.f.Close(); err != nil {
 		return err
 	}
+	fmt.Println(" ==== Writer Close")
 	return ensureErr
 }
 
@@ -1624,6 +1629,7 @@ func (r *Reader) LabelValueFor(ctx context.Context, id storage.SeriesRef, label 
 
 // Series reads the series with the given ID and writes its labels and chunks into builder and chks.
 func (r *Reader) Series(id storage.SeriesRef, builder *labels.ScratchBuilder, chks *[]chunks.Meta) error {
+	fmt.Println(" === Reader Series")
 	offset := id
 	// In version 2 series IDs are no longer exact references but series are 16-byte padded
 	// and the ID is the multiple of 16 of the actual position.

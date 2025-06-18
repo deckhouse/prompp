@@ -4,6 +4,7 @@ package labels
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +23,7 @@ type Labels struct {
 	id             uint32
 	length         uint16
 	dropMetricName bool
+	// timer          *time.Timer
 }
 
 // EmptyLabels returns n null Labels value, for convenience.
@@ -35,11 +37,17 @@ func NewLabelsWithLSS(
 	id uint32,
 	length uint16,
 ) Labels {
-	return Labels{
+	ls := Labels{
 		snapshot: lss,
 		id:       id,
 		length:   length,
 	}
+
+	// ls.timer = time.AfterFunc(7*time.Minute, func() {
+	// 	fmt.Println(time.Now(), " === LS", ls.String())
+	// })
+
+	return ls
 }
 
 // New returns a sorted Labels from the given labels.
@@ -288,7 +296,26 @@ func (Labels) ReleaseStrings(_ func(string)) {
 
 // RenewSnapshot renew ls snapshot.
 func (ls *Labels) RenewSnapshot() {
-	if ls.IsZero() {
+	if ls.snapshot == nil {
+		return
+	}
+
+	// if ls.timer != nil {
+	// 	ls.timer.Stop()
+	// 	ls.timer = nil
+	// }
+
+	// long way
+	if ls.snapshot.IsOutdated() {
+		b := &Builder{
+			base: *ls,
+			del:  make([]string, 0, 1),
+		}
+		if b.base.dropMetricName {
+			b.del = append(b.del, MetricName)
+		}
+
+		*ls = b.Labels()
 		return
 	}
 
@@ -425,7 +452,7 @@ func (b *ScratchBuilder) Add(name, value string) {
 // Assign is for when you already have a Labels which you want this ScratchBuilder to return.
 func (b *ScratchBuilder) Assign(ls Labels) {
 	b.Reset()
-	b.builder.base = ls
+	b.builder.base.CopyFrom(ls)
 }
 
 // Labels returns the name/value pairs added as a Labels object. Calling Add() after Labels() has no effect.
@@ -534,6 +561,11 @@ func Compare(a, b Labels) int {
 // working
 //
 
+const (
+	metricsDuration = 30 * time.Second
+	rotateDuration  = 5 * time.Minute
+)
+
 type Receiver interface {
 	FindFromBuilder(
 		sortedAdd []cppbridge.Label,
@@ -550,9 +582,12 @@ type storage struct {
 	receiver   atomic.Pointer[Receiver]
 	mx         sync.Mutex
 
-	lssMaxID    atomic.Uint32
-	memoryInUse prometheus.Gauge
-	maxID       prometheus.Gauge
+	// lssMaxID    atomic.Uint32
+	// maxID       *prometheus.GaugeVec
+	generation  uint64
+	memoryInUse *prometheus.GaugeVec
+	lssSize     *prometheus.GaugeVec
+	bitsetCount *prometheus.GaugeVec
 }
 
 // newStorage init new storage.
@@ -560,23 +595,41 @@ func newStorage() *storage {
 	factory := util.NewUnconflictRegisterer(prometheus.DefaultRegisterer)
 
 	s := &storage{
-		workingLSS: cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage()),
-		memoryInUse: factory.NewGauge(
+		// workingLSS: cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage()),
+		workingLSS: cppbridge.NewLSSWithSnapshot(cppbridge.NewLssStorage()),
+		memoryInUse: factory.NewGaugeVec(
 			prometheus.GaugeOpts{
-				Name:        "prompp_head_cgo_memory_bytes",
-				Help:        "Current value memory in use in bytes.",
-				ConstLabels: prometheus.Labels{"generation": "0", "allocator": "labels", "id": "0"},
+				Name:        "prompp_labels_cgo_memory_bytes",
+				Help:        "Current value of used memory in bytes.",
+				ConstLabels: prometheus.Labels{"allocator": "labels"},
 			},
+			[]string{"generation"},
 		),
-		maxID: factory.NewGauge(
+		lssSize: factory.NewGaugeVec(
 			prometheus.GaugeOpts{
-				Name: "prompp_labels_working_max_id",
-				Help: "Current number max lss id.",
+				Name:        "prompp_labels_lss_size",
+				Help:        "Current size of lss.",
+				ConstLabels: prometheus.Labels{"allocator": "labels"},
 			},
+			[]string{"generation"},
 		),
+		bitsetCount: factory.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name:        "prompp_labels_bitset_count",
+				Help:        "Current count of emplace to bitset.",
+				ConstLabels: prometheus.Labels{"allocator": "labels"},
+			},
+			[]string{"generation"},
+		),
+		// maxID: factory.NewGauge(
+		// 	prometheus.GaugeOpts{
+		// 		Name: "prompp_labels_working_max_id",
+		// 		Help: "Current number max lss id.",
+		// 	},
+		// ),
 	}
 
-	go s.writeMetrics()
+	go s.worker()
 
 	return s
 }
@@ -590,7 +643,8 @@ func (s *storage) SetReceiver(receiver Receiver) {
 func (s *storage) FindOrEmplaceFromBuilder(b *Builder) Labels {
 	if receiver := s.receiver.Load(); receiver != nil {
 		if ls := (*receiver).FindFromBuilder(
-			*((*[]cppbridge.Label)(unsafe.Pointer(&b.add))),
+			// *((*[]cppbridge.Label)(unsafe.Pointer(&b.add))),
+			toCppLabel(b.add),
 			b.del,
 			b.base.snapshot,
 			b.base.id,
@@ -601,30 +655,71 @@ func (s *storage) FindOrEmplaceFromBuilder(b *Builder) Labels {
 
 	s.mx.Lock()
 	length, lsID := s.workingLSS.FindOrEmplaceFromBuilder(
-		*((*[]cppbridge.Label)(unsafe.Pointer(&b.add))),
+		// *((*[]cppbridge.Label)(unsafe.Pointer(&b.add))),
+		toCppLabel(b.add),
 		b.del,
 		b.base.snapshot,
 		b.base.id,
 	)
 	s.mx.Unlock()
 
-	s.lssMaxID.Store(max(lsID, s.lssMaxID.Load()))
+	// s.lssMaxID.Store(max(lsID, s.lssMaxID.Load()))
 
 	return NewLabelsWithLSS(s.workingLSS.Snapshot(), lsID, uint16(length)) // #nosec G115 // no overflow
 }
 
-// writeMetrics write metrics for working lss.
-func (s *storage) writeMetrics() {
-	ticker := time.NewTicker(30 * time.Second)
+// worker write metrics for lss and rotate if necessary.
+func (s *storage) worker() {
+	metricsTimer := time.NewTimer(metricsDuration)
+	rotateTimer := time.NewTimer(rotateDuration)
 
 	for {
-		s.mx.Lock()
-		am := s.workingLSS.AllocatedMemory()
-		s.mx.Unlock()
+		select {
+		case <-metricsTimer.C:
+			s.mx.Lock()
+			am, lssSize, bitsetCount := s.workingLSS.Stats()
+			s.mx.Unlock()
 
-		s.memoryInUse.Set(float64(am))
-		s.maxID.Set(float64(s.lssMaxID.Load()))
+			ls := prometheus.Labels{"generation": strconv.FormatUint(s.generation, 10)}
+			s.memoryInUse.With(ls).Set(float64(am))
+			s.lssSize.With(ls).Set(float64(lssSize))
+			s.bitsetCount.With(ls).Set(float64(bitsetCount))
+			// s.maxID.Set(float64(s.lssMaxID.Load()))
 
-		<-ticker.C
+			metricsTimer.Reset(metricsDuration)
+
+		case <-rotateTimer.C:
+			s.mx.Lock()
+			lssSize, bitsetCount := s.workingLSS.StatsWithReset()
+			s.mx.Unlock()
+
+			if uint64(bitsetCount) < lssSize/2 {
+				s.mx.Lock()
+				s.workingLSS.Outdated()
+				s.workingLSS = cppbridge.NewLSSWithSnapshot(cppbridge.NewLssStorage())
+				s.mx.Unlock()
+
+				ls := prometheus.Labels{"generation": strconv.FormatUint(s.generation, 10)}
+				s.memoryInUse.Delete(ls)
+				s.lssSize.Delete(ls)
+				s.bitsetCount.Delete(ls)
+
+				s.generation++
+			}
+
+			rotateTimer.Reset(rotateDuration)
+		}
 	}
+}
+
+func toCppLabel(inls []Label) []cppbridge.Label {
+	ls := make([]cppbridge.Label, 0, len(inls))
+	for _, l := range inls {
+		ls = append(ls, cppbridge.Label{
+			Name:  l.Name,
+			Value: l.Value,
+		})
+	}
+
+	return ls
 }

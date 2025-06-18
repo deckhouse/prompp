@@ -315,8 +315,8 @@ func (tg *testGroup) test(evalInterval time.Duration, groupOrderMap map[string]i
 					for _, a := range ar.ActiveAlerts() {
 						if a.State == rules.StateFiring {
 							alerts = append(alerts, labelAndAnnotation{
-								Labels:      a.Labels.Copy(),
-								Annotations: a.Annotations.Copy(),
+								Labels:      a.Labels().Copy(),      // PP_CHANGES.md: rebuild on cpp
+								Annotations: a.Annotations().Copy(), // PP_CHANGES.md: rebuild on cpp
 							})
 						}
 					}

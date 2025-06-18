@@ -1116,19 +1116,21 @@ func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder CppLabelSetBuilder) 
 
 //nolint:gocritic // unnamedResult not need
 func primitivesLSSFindOrEmplaceFromBuilder(
-	lss uintptr,
+	lssPtr uintptr,
 	snapshotPtr uintptr,
+	bitsetPtr uintptr,
 	sortedAdd []Label,
 	sortedDel []string,
 	lsID uint32,
 ) (uintptr, uint64, uint32, bool) {
 	args := struct {
-		lss         uintptr
+		lssPtr      uintptr
 		snapshotPtr uintptr
+		bitsetPtr   uintptr
 		sortedAdd   []Label
 		sortedDel   []string
 		lsID        uint32
-	}{lss, snapshotPtr, sortedAdd, sortedDel, lsID}
+	}{lssPtr, snapshotPtr, bitsetPtr, sortedAdd, sortedDel, lsID}
 	var res struct {
 		snapshotPtr      uintptr
 		labelSetID       uint32
@@ -1295,6 +1297,28 @@ func primitivesLSSCreateReadonlyLss(lss uintptr) uintptr {
 
 func primitivesLSSCopyAddedSeries(source, destination uintptr) {
 	C.prompp_primitives_lss_copy_added_series(C.uint64_t(source), C.uint64_t(destination))
+}
+
+//nolint:gocritic // unnamedResult not need
+func primitivesLSSWithSnapshotStats(lss, bitset uintptr, reset bool) (uint64, uint64, uint32) {
+	args := struct {
+		lss    uintptr
+		bitset uintptr
+		reset  bool
+	}{lss, bitset, reset}
+	var res struct {
+		allocatedMemory uint64
+		lssSize         uint64
+		bitsetCount     uint32
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_lss_with_snapshot_stats,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.allocatedMemory, res.lssSize, res.bitsetCount
 }
 
 //
@@ -2965,4 +2989,34 @@ func labelSetFromBuilderHash(
 	)
 
 	return res.hash
+}
+
+//
+// Bitset
+//
+
+// primitivesBitsetCtor wrapper for constructor C-Bitset.
+func primitivesBitsetCtor() uintptr {
+	var res struct {
+		cache uintptr
+	}
+
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_bitset_ctor,
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.cache
+}
+
+// primitivesBitsetDtor wrapper for destructor C-Bitset.
+func primitivesBitsetDtor(cache uintptr) {
+	args := struct {
+		cache uintptr
+	}{cache}
+
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_bitset_dtor,
+		uintptr(unsafe.Pointer(&args)),
+	)
 }

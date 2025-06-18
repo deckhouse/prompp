@@ -446,6 +446,7 @@ func (c *LeveledCompactor) Compact(dest string, dirs []string, open []*Block) (u
 }
 
 func (c *LeveledCompactor) CompactWithBlockPopulator(dest string, dirs []string, open []*Block, blockPopulator BlockPopulator) (uid ulid.ULID, err error) {
+	fmt.Println(" == LeveledCompactor CompactWithBlockPopulator")
 	var (
 		blocks []BlockReader
 		bs     []*Block
@@ -464,12 +465,12 @@ func (c *LeveledCompactor) CompactWithBlockPopulator(dest string, dirs []string,
 
 		// Use already open blocks if we can, to avoid
 		// having the index data in memory twice.
-		for _, o := range open {
-			if meta.ULID == o.Meta().ULID {
-				b = o
-				break
-			}
-		}
+		// for _, o := range open {
+		// 	if meta.ULID == o.Meta().ULID {
+		// 		b = o
+		// 		break
+		// 	}
+		// }
 
 		if b == nil {
 			var err error
@@ -652,9 +653,13 @@ func (c *LeveledCompactor) write(dest string, meta *BlockMeta, blockPopulator Bl
 	}
 	closers = append(closers, indexw)
 
+	fmt.Println("LeveledCompactor write PopulateBlock")
+
 	if err := blockPopulator.PopulateBlock(c.ctx, c.metrics, c.logger, c.chunkPool, c.mergeFunc, blocks, meta, indexw, chunkw); err != nil {
 		return fmt.Errorf("populate block: %w", err)
 	}
+
+	fmt.Println("LeveledCompactor write PopulateBlock end")
 
 	select {
 	case <-c.ctx.Done():
@@ -671,6 +676,7 @@ func (c *LeveledCompactor) write(dest string, meta *BlockMeta, blockPopulator Bl
 		errs.Add(w.Close())
 	}
 	closers = closers[:0] // Avoid closing the writers twice in the defer.
+	clear(closers)
 	if errs.Err() != nil {
 		return errs.Err()
 	}
@@ -800,76 +806,85 @@ func (c DefaultBlockPopulator) PopulateBlock(ctx context.Context, metrics *Compa
 		symbols = NewMergedStringIter(symbols, syms)
 	}
 
-	for symbols.Next() {
-		if err := indexw.AddSymbol(symbols.At()); err != nil {
-			return fmt.Errorf("add symbol: %w", err)
-		}
-	}
-	if err := symbols.Err(); err != nil {
-		return fmt.Errorf("next symbol: %w", err)
-	}
-
-	var (
-		ref      = storage.SeriesRef(0)
-		chks     []chunks.Meta
-		chksIter chunks.Iterator
-	)
-
-	set := sets[0]
-	if len(sets) > 1 {
-		// Merge series using specified chunk series merger.
-		// The default one is the compacting series merger.
-		set = storage.NewMergeChunkSeriesSet(sets, mergeFunc)
-	}
-
-	// Iterate over all sorted chunk series.
-	for set.Next() {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-		s := set.At()
-		chksIter = s.Iterator(chksIter)
-		chks = chks[:0]
-		for chksIter.Next() {
-			// We are not iterating in a streaming way over chunks as
-			// it's more efficient to do bulk write for index and
-			// chunk file purposes.
-			chks = append(chks, chksIter.At())
-		}
-		if err := chksIter.Err(); err != nil {
-			return fmt.Errorf("chunk iter: %w", err)
-		}
-
-		// Skip series with all deleted chunks.
-		if len(chks) == 0 {
+	for _, set := range sets {
+		if set == nil {
 			continue
 		}
-
-		if err := chunkw.WriteChunks(chks...); err != nil {
-			return fmt.Errorf("write chunks: %w", err)
+		if set.Next() {
+			_ = set
 		}
-		if err := indexw.AddSeries(ref, s.Labels(), chks...); err != nil {
-			return fmt.Errorf("add series: %w", err)
-		}
-
-		meta.Stats.NumChunks += uint64(len(chks))
-		meta.Stats.NumSeries++
-		for _, chk := range chks {
-			meta.Stats.NumSamples += uint64(chk.Chunk.NumSamples())
-		}
-
-		for _, chk := range chks {
-			if err := chunkPool.Put(chk.Chunk); err != nil {
-				return fmt.Errorf("put chunk: %w", err)
-			}
-		}
-		ref++
 	}
-	if err := set.Err(); err != nil {
-		return fmt.Errorf("iterate compaction set: %w", err)
-	}
+
+	// for symbols.Next() {
+	// 	if err := indexw.AddSymbol(symbols.At()); err != nil {
+	// 		return fmt.Errorf("add symbol: %w", err)
+	// 	}
+	// }
+	// if err := symbols.Err(); err != nil {
+	// 	return fmt.Errorf("next symbol: %w", err)
+	// }
+
+	// var (
+	// 	ref      = storage.SeriesRef(0)
+	// 	chks     []chunks.Meta
+	// 	chksIter chunks.Iterator
+	// )
+
+	// set := sets[0]
+	// if len(sets) > 1 {
+	// 	// Merge series using specified chunk series merger.
+	// 	// The default one is the compacting series merger.
+	// 	set = storage.NewMergeChunkSeriesSet(sets, mergeFunc)
+	// }
+
+	// Iterate over all sorted chunk series.
+	// for set.Next() {
+	// 	select {
+	// 	case <-ctx.Done():
+	// 		return ctx.Err()
+	// 	default:
+	// 	}
+	// 	s := set.At()
+	// 	chksIter = s.Iterator(chksIter)
+	// 	chks = chks[:0]
+	// 	for chksIter.Next() {
+	// 		// We are not iterating in a streaming way over chunks as
+	// 		// it's more efficient to do bulk write for index and
+	// 		// chunk file purposes.
+	// 		chks = append(chks, chksIter.At())
+	// 	}
+	// 	if err := chksIter.Err(); err != nil {
+	// 		return fmt.Errorf("chunk iter: %w", err)
+	// 	}
+
+	// 	// Skip series with all deleted chunks.
+	// 	if len(chks) == 0 {
+	// 		continue
+	// 	}
+
+	// 	if err := chunkw.WriteChunks(chks...); err != nil {
+	// 		return fmt.Errorf("write chunks: %w", err)
+	// 	}
+	// 	if err := indexw.AddSeries(ref, s.Labels(), chks...); err != nil {
+	// 		return fmt.Errorf("add series: %w", err)
+	// 	}
+
+	// 	meta.Stats.NumChunks += uint64(len(chks))
+	// 	meta.Stats.NumSeries++
+	// 	for _, chk := range chks {
+	// 		meta.Stats.NumSamples += uint64(chk.Chunk.NumSamples())
+	// 	}
+
+	// 	for _, chk := range chks {
+	// 		if err := chunkPool.Put(chk.Chunk); err != nil {
+	// 			return fmt.Errorf("put chunk: %w", err)
+	// 		}
+	// 	}
+	// 	ref++
+	// }
+	// if err := set.Err(); err != nil {
+	// 	return fmt.Errorf("iterate compaction set: %w", err)
+	// }
 
 	return nil
 }

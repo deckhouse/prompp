@@ -342,78 +342,6 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithoutReadonlyLss() {
 	s.Equal(uint32(expectedLsId), existingLsId)
 }
 
-func (s *QueryableLSSSuite) TestFindOrEmplaceFromBuilderWithExistingLabelSet() {
-	// Arrange
-	labelSetSnapshot := s.lss.CreateLabelSetSnapshot(&testSnapshotSource{})
-
-	// Act
-	snapshotWithAdd, lengthWithAdd, existingLsIdWithAdd := s.lss.FindOrEmplaceFromBuilder(
-		&testSnapshotSource{},
-		[]cppbridge.Label{{Name: "che", Value: "bureck"}},
-		nil,
-		labelSetSnapshot,
-		0,
-	)
-	snapshotWithDel, lengthWithDel, existingLsIdWithDel := s.lss.FindOrEmplaceFromBuilder(
-		&testSnapshotSource{},
-		nil,
-		[]string{"che"},
-		labelSetSnapshot,
-		1,
-	)
-
-	// Assert
-	s.Equal(uint64(2), lengthWithAdd)
-	s.Equal(uint64(1), lengthWithDel)
-	s.Nil(snapshotWithAdd)
-	s.Nil(snapshotWithDel)
-	s.Equal(uint32(1), existingLsIdWithAdd)
-	s.Equal(uint32(0), existingLsIdWithDel)
-}
-
-func (s *QueryableLSSSuite) TestFindOrEmplaceFromBuilderWithNewLabelSet() {
-	// Arrange
-	labelSetSnapshot := s.lss.CreateLabelSetSnapshot(&testSnapshotSource{})
-
-	// Act
-	expectedLsId := len(s.labelSetIDs)
-	snapshot, length, existingLsId := s.lss.FindOrEmplaceFromBuilder(
-		&testSnapshotSource{},
-		[]cppbridge.Label{{Name: "new_lol", Value: "new_kek"}},
-		nil,
-		labelSetSnapshot,
-		0,
-	)
-
-	// Assert
-	s.Equal(uint64(2), length)
-	s.NotNil(snapshot)
-	s.Equal(uint32(expectedLsId), existingLsId)
-}
-
-func (s *QueryableLSSSuite) TestFindOrEmplaceFromBuilderWithNewLabelSetAnother() {
-	// Arrange
-	mls := s.labelSets[0]
-	lss := cppbridge.NewQueryableLssStorage()
-	lsid := lss.FindOrEmplace(mls).LabelSetID
-	labelSetSnapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
-
-	// Act
-	expectedLsId := len(s.labelSetIDs)
-	snapshot, length, existingLsId := s.lss.FindOrEmplaceFromBuilder(
-		&testSnapshotSource{},
-		[]cppbridge.Label{{Name: "new_lol", Value: "new_kek"}},
-		nil,
-		labelSetSnapshot,
-		lsid,
-	)
-
-	// Assert
-	s.Equal(uint64(2), length)
-	s.NotNil(snapshot)
-	s.Equal(uint32(expectedLsId), existingLsId)
-}
-
 func (s *QueryableLSSSuite) TestFindFromBuilder() {
 	// Arrange
 	mls := model.LabelSetFromMap(map[string]string{
@@ -517,4 +445,9 @@ type testSnapshotSource struct {
 // FastSnapshot implementation SnapshotSource.
 func (s *testSnapshotSource) FastSnapshot() *cppbridge.LabelSetSnapshot {
 	return s.snapshot
+}
+
+// IsOutdated implementation SnapshotSource.
+func (*testSnapshotSource) IsOutdated() bool {
+	return false
 }

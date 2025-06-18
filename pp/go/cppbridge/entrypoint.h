@@ -755,52 +755,22 @@ void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
  * @brief insert label set from builder into lss
  *
  * @param args {
- *     lss              uintptr      // pointer to constructed lss;
- *     readonly_lss     uintptr      // pointer to constructed lss;
- *     sorted_add       []Label      // slice of sorted by name labels
- *     sorted_del       []string     // slice of sorted label names
- *     ls_id            uint32       // series id
+ *     lss                   uintptr  // pointer to constructed lss;
+ *     readonly_lss          uintptr  // pointer to constructed read only lss;
+ *     bitset                uintptr  // pointer to constructed bitset;
+ *     sorted_add            []Label  // slice of sorted by name labels
+ *     sorted_del            []string // slice of sorted label names
+ *     ls_id                 uint32   // series id
  * }
  *
  * @param res {
- *     lss_ro_ptr            uintptr // readonly copy of lss if need.
- *     ls_id                 uint32  // inserted (or found) label set id
- *     length                uint64  // length of label set
- *     lss_has_reallocations bool    // true if lss has reallocations
+ *     lss_ro_ptr            uintptr  // readonly copy of lss if need.
+ *     ls_id                 uint32   // inserted (or found) label set id
+ *     length                uint64   // length of label set
+ *     lss_has_reallocations bool     // true if lss has reallocations
  * }
  */
 void prompp_primitives_lss_find_or_emplace_from_builder(void* args, void* res);
-
-/**
- * @brief insert label set into lss
- *
- * @param args {
- *     lss        uintptr        // pointer to constructed lss;
- *     label_set  model.LabelSet // label set
- * }
- *
- * @param res {
- *     lss_ro_ptr            uintptr // readonly copy of lss if need.
- *     ls_id                 uint32  // inserted (or found) label set id
- *     lss_has_reallocations bool    // true if lss has reallocations
- * }
- */
-void prompp_primitives_lss_find_or_emplace_label_set(void* args, void* res);
-
-/**
- * @brief insert label set into lss
- *
- * @param args {
- *     lss        uintptr        // pointer to constructed lss;
- *     label_set  model.LabelSet // label set
- * }
- *
- * @param res {
- *     ls_id      uint32         // inserted (or found) label set id
- *     has        bool           // is the label set found
- * }
- */
-void prompp_primitives_lss_find(void* args, void* res);
 
 /**
  * @brief insert label set into lss
@@ -926,6 +896,41 @@ void prompp_create_readonly_lss(void* args, void* res);
  *
  */
 void prompp_primitives_lss_copy_added_series(uint64_t source_lss, uint64_t destination_lss);
+
+/**
+ * @brief Construct a new Bitset.
+ *
+ * @param res {
+ *     bitset               uintptr // pointer to constructed Bitset;
+ * }
+ */
+void prompp_primitives_bitset_ctor(void* res);
+
+/**
+ * @brief Destroy Bitset.
+ *
+ * @param args {
+ *     bitset               uintptr // pointer to constructed Bitset;
+ * }
+ */
+void prompp_primitives_bitset_dtor(void* args);
+
+/**
+ * @brief return size of lss and count of emplace to bitset, clearing bitset.
+ *
+ * @param args {
+ *     lss              uintptr // pointer to constructed lss;
+ *     bitset           uintptr // pointer to constructed bitset;
+ *     reset            bool    // need reset?;
+ * }
+ *
+ * @param res {
+ *     allocated_memory uint64  // size of allocated memory for label sets;
+ *     lss_size         uint64  // size of lss;
+ *     bitset_count     uint32  // count of emplace to bitset;
+ * }
+ */
+void prompp_primitives_lss_with_snapshot_stats(void* args, void* res);
 
 #ifdef __cplusplus
 }  // extern "C"

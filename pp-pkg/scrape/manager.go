@@ -119,7 +119,7 @@ func NewManager(
 		graceShut:      make(chan struct{}),
 		triggerReload:  make(chan struct{}, 1),
 		metrics:        sm,
-		buffers:        pool.New(1e3, 100e6, 3, func(sz int) interface{} { return make([]byte, 0, sz) }),
+		buffers:        pool.New(1e3, 100e6, 3, func(sz int) any { return make([]byte, 0, sz) }),
 		bufferBuilders: newBuildersPool(),
 		bufferBatches:  newbatchesPool(),
 	}
@@ -155,10 +155,7 @@ func (m *Manager) UnregisterMetrics() {
 }
 
 func (m *Manager) reloader() {
-	reloadIntervalDuration := m.opts.DiscoveryReloadInterval
-	if reloadIntervalDuration < model.Duration(5*time.Second) {
-		reloadIntervalDuration = model.Duration(5 * time.Second)
-	}
+	reloadIntervalDuration := max(m.opts.DiscoveryReloadInterval, model.Duration(5*time.Second))
 
 	ticker := time.NewTicker(time.Duration(reloadIntervalDuration))
 

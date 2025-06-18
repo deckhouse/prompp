@@ -77,8 +77,9 @@ func (s AlertState) String() string {
 type Alert struct {
 	State AlertState
 
-	Labels      labels.Labels
-	Annotations labels.Labels
+	labels      labels.Labels
+	annotations labels.Labels
+	labelsMtx   sync.RWMutex // PP_CHANGES.md: rebuild on cpp
 
 	// The value at the last evaluation of the alerting expression.
 	Value float64
@@ -92,6 +93,56 @@ type Alert struct {
 	KeepFiringSince time.Time
 }
 
+// NewAlert init new *Alert .
+func NewAlert(
+	ls, annotations labels.Labels,
+	activeAt, firedAt, resolvedAt, validUntil time.Time,
+) *Alert { // PP_CHANGES.md: rebuild on cpp
+	return &Alert{
+		labels:      ls,
+		annotations: annotations,
+		ActiveAt:    activeAt,
+		FiredAt:     firedAt,
+		ResolvedAt:  resolvedAt,
+		ValidUntil:  validUntil,
+	}
+}
+
+// Annotations return alert annotations.
+func (a *Alert) Annotations() labels.Labels { // PP_CHANGES.md: rebuild on cpp
+	a.labelsMtx.RLock()
+	defer a.labelsMtx.RUnlock()
+
+	return a.annotations
+}
+
+// Labels return alert labels.
+func (a *Alert) Labels() labels.Labels { // PP_CHANGES.md: rebuild on cpp
+	a.labelsMtx.RLock()
+	defer a.labelsMtx.RUnlock()
+
+	return a.labels
+}
+
+// Copy make new copy Alert.
+func (a *Alert) Copy() *Alert { // PP_CHANGES.md: rebuild on cpp
+	a.labelsMtx.RLock()
+	defer a.labelsMtx.RUnlock()
+
+	return &Alert{
+		State:           a.State,
+		labels:          a.labels.Copy(),
+		annotations:     a.annotations.Copy(),
+		Value:           a.Value,
+		ActiveAt:        a.ActiveAt,
+		FiredAt:         a.FiredAt,
+		ResolvedAt:      a.ResolvedAt,
+		LastSentAt:      a.LastSentAt,
+		ValidUntil:      a.ValidUntil,
+		KeepFiringSince: a.KeepFiringSince,
+	}
+}
+
 func (a *Alert) needsSending(ts time.Time, resendDelay time.Duration) bool {
 	if a.State == StatePending {
 		return false
@@ -103,6 +154,14 @@ func (a *Alert) needsSending(ts time.Time, resendDelay time.Duration) bool {
 	}
 
 	return a.LastSentAt.Add(resendDelay).Before(ts)
+}
+
+// RenewLabelsSnapshot renew labels and annotations snapshots.
+func (a *Alert) renewLabelsSnapshot() { // PP_CHANGES.md: rebuild on cpp
+	a.labelsMtx.Lock()
+	a.labels.RenewSnapshot()
+	a.annotations.RenewSnapshot()
+	a.labelsMtx.Unlock()
 }
 
 // An AlertingRule generates alerts from its vector expression.
@@ -240,7 +299,7 @@ func (r *AlertingRule) sample(alert *Alert, ts time.Time) promql.Sample {
 	lb := labels.NewBuilder(r.labels)
 	r.labelsMtx.RUnlock()
 
-	alert.Labels.Range(func(l labels.Label) {
+	alert.Labels().Range(func(l labels.Label) { // PP_CHANGES.md: rebuild on cpp
 		lb.Set(l.Name, l.Value)
 	})
 
@@ -264,7 +323,7 @@ func (r *AlertingRule) forStateSample(alert *Alert, ts time.Time, v float64) pro
 	r.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
 
 	if alert != nil {
-		alert.Labels.Range(func(l labels.Label) {
+		alert.Labels().Range(func(l labels.Label) { // PP_CHANGES.md: rebuild on cpp
 			lb.Set(l.Name, l.Value)
 		})
 	}
@@ -426,8 +485,8 @@ func (r *AlertingRule) Eval(ctx context.Context, queryOffset time.Duration, ts t
 		}
 
 		alerts[h] = &Alert{
-			Labels:      lbs,
-			Annotations: annotations,
+			labels:      lbs,         // PP_CHANGES.md: rebuild on cpp
+			annotations: annotations, // PP_CHANGES.md: rebuild on cpp
 			ActiveAt:    ts,
 			State:       StatePending,
 			Value:       smpl.F,
@@ -442,7 +501,7 @@ func (r *AlertingRule) Eval(ctx context.Context, queryOffset time.Duration, ts t
 		// Update the last value and annotations if so, create a new alert entry otherwise.
 		if alert, ok := r.active[h]; ok && alert.State != StateInactive {
 			alert.Value = a.Value
-			alert.Annotations = a.Annotations
+			alert.annotations = a.Annotations() // PP_CHANGES.md: rebuild on cpp
 			continue
 		}
 
@@ -549,8 +608,7 @@ func (r *AlertingRule) currentAlerts() []*Alert {
 	alerts := make([]*Alert, 0, len(r.active))
 
 	for _, a := range r.active {
-		anew := *a
-		alerts = append(alerts, &anew)
+		alerts = append(alerts, a.Copy()) // PP_CHANGES.md: rebuild on cpp
 	}
 	return alerts
 }
@@ -586,10 +644,9 @@ func (r *AlertingRule) sendAlerts(ctx context.Context, ts time.Time, resendDelay
 				delta = interval
 			}
 			alert.ValidUntil = ts.Add(4 * delta)
-			anew := *alert
+			anew := alert.Copy() // PP_CHANGES.md: rebuild on cpp
 			// The notifier re-uses the labels slice, hence make a copy.
-			anew.Labels = alert.Labels.Copy()
-			alerts = append(alerts, &anew)
+			alerts = append(alerts, anew) // PP_CHANGES.md: rebuild on cpp
 		}
 	})
 	notifyFunc(ctx, r.vector.String(), alerts...)
@@ -622,4 +679,10 @@ func (r *AlertingRule) RenewLabelsSnapshot() { // PP_CHANGES.md: rebuild on cpp
 	r.labels.RenewSnapshot()
 	r.annotations.RenewSnapshot()
 	r.labelsMtx.Unlock()
+
+	r.activeMtx.Lock()
+	for _, a := range r.active {
+		a.renewLabelsSnapshot()
+	}
+	r.activeMtx.Unlock()
 }

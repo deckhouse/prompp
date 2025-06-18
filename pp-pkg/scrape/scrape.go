@@ -804,7 +804,7 @@ func newScrapeLoop(
 		logger = log.NewNopLogger()
 	}
 	if buffers == nil {
-		buffers = pool.New(1e3, 1e6, 2, func(sz int) interface{} { return make([]byte, 0, sz) })
+		buffers = pool.New(1e3, 1e6, 3, func(sz int) any { return make([]byte, 0, sz) })
 	}
 	if cache == nil {
 		cache = newScrapeCache(metrics)
@@ -1593,8 +1593,8 @@ func (c *scrapeCache) setHelp(metric, help []byte) {
 		e = &metaEntry{Metadata: metadata.Metadata{Type: model.MetricTypeUnknown}}
 		c.metadata[string(metric)] = e
 	}
-	if e.Help != string(help) {
-		e.Help = string(help)
+	if nhelp := string(help); e.Help != nhelp {
+		e.Help = nhelp
 	}
 	e.lastIter = c.iter
 

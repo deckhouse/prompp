@@ -78,10 +78,10 @@ func createShard(
 
 	lss := &LSS{
 		input:  cppbridge.NewLssStorage(),
-		target: cppbridge.NewQueryableLssStorage(),
+		target: cppbridge.NewLSSWithSnapshotWithoutBitset(cppbridge.NewQueryableLssStorage()),
 	}
 
-	shardWalEncoder := cppbridge.NewHeadWalEncoder(shardID, HeadWalEncoderDecoderLogShards, lss.target)
+	shardWalEncoder := cppbridge.NewHeadWalEncoder(shardID, HeadWalEncoderDecoderLogShards, lss.target.LSS())
 	_, err = WriteHeader(shardFile, FileFormatVersion, shardWalEncoder.Version())
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to write header: %w", err)
@@ -196,7 +196,7 @@ type ShardLoadResult struct {
 }
 
 func (l *ShardLoader) Load() (result ShardLoadResult) {
-	targetLss := cppbridge.NewQueryableLssStorage()
+	targetLss := cppbridge.NewLSSWithSnapshotWithoutBitset(cppbridge.NewQueryableLssStorage())
 	dataStorage := NewDataStorage()
 
 	result.Lss = &LSS{
@@ -226,7 +226,7 @@ func (l *ShardLoader) Load() (result ShardLoadResult) {
 		return
 	}
 
-	decoder := cppbridge.NewHeadWalDecoder(targetLss, encoderVersion)
+	decoder := cppbridge.NewHeadWalDecoder(targetLss.LSS(), encoderVersion)
 	lastReadSegmentID := -1
 
 	var bytesRead int

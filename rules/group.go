@@ -54,6 +54,7 @@ type Group struct {
 	staleSeries          []labels.Labels
 	opts                 *ManagerOptions
 	mtx                  sync.Mutex
+	labelsMtx            sync.RWMutex // PP_CHANGES.md: rebuild on cpp
 	evaluationTime       time.Duration
 	lastEvaluation       time.Time // Wall-clock time of most recent evaluation.
 	lastEvalTimestamp    time.Time // Time slot used for most recent evaluation.
@@ -525,7 +526,9 @@ func (g *Group) Eval(ctx context.Context, ts time.Time) {
 					level.Warn(logger).Log("msg", "Rule sample appending failed", "err", err)
 					return
 				}
+				g.labelsMtx.RLock() // PP_CHANGES.md: rebuild on cpp
 				g.seriesInPreviousEval[i] = seriesReturned
+				g.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
 			}()
 
 			for _, s := range vector {
@@ -571,6 +574,7 @@ func (g *Group) Eval(ctx context.Context, ts time.Time) {
 				level.Warn(logger).Log("msg", "Error on ingesting results from rule evaluation with different value but same timestamp", "num_dropped", numDuplicates)
 			}
 
+			g.labelsMtx.RLock() // PP_CHANGES.md: rebuild on cpp
 			for metric, lset := range g.seriesInPreviousEval[i] {
 				if _, ok := seriesReturned[metric]; !ok {
 					// Series no longer exposed, mark it stale.
@@ -591,6 +595,7 @@ func (g *Group) Eval(ctx context.Context, ts time.Time) {
 					}
 				}
 			}
+			g.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
 		}
 
 		// If the rule has no dependencies, it can run concurrently because no other rules in this group depend on its output.
@@ -631,6 +636,8 @@ func (g *Group) cleanupStaleSeries(ctx context.Context, ts time.Time) {
 	}
 	app := g.opts.Appendable.Appender(ctx)
 	queryOffset := g.QueryOffset()
+	g.labelsMtx.RLock()         // PP_CHANGES.md: rebuild on cpp
+	defer g.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
 	for _, s := range g.staleSeries {
 		// Rule that produced series no longer configured, mark it stale.
 		_, err := app.Append(0, s, timestamp.FromTime(ts.Add(-queryOffset)), math.Float64frombits(value.StaleNaN))
@@ -719,7 +726,7 @@ func (g *Group) RestoreForState(ts time.Time) {
 		alertRule.ForEachActiveAlert(func(a *Alert) {
 			var s storage.Series
 
-			s, ok := seriesByLabels[a.Labels.String()]
+			s, ok := seriesByLabels[a.Labels().String()] // PP_CHANGES.md: rebuild on cpp
 			if !ok {
 				return
 			}
@@ -775,7 +782,7 @@ func (g *Group) RestoreForState(ts time.Time) {
 			a.ActiveAt = restoredActiveAt
 			level.Debug(g.logger).Log("msg", "'for' state restored",
 				labels.AlertName, alertRule.Name(), "restored_time", a.ActiveAt.Format(time.RFC850),
-				"labels", a.Labels.String())
+				"labels", a.Labels().String()) // PP_CHANGES.md: rebuild on cpp
 		})
 
 		alertRule.SetRestored(true)
@@ -819,12 +826,21 @@ func (g *Group) Equals(ng *Group) bool {
 
 // renewLabelsSnapshot renew labels and annotations snapshots.
 func (g *Group) renewLabelsSnapshot() { // PP_CHANGES.md: rebuild on cpp
-	g.mtx.Lock()
-	defer g.mtx.Unlock()
-
 	for _, r := range g.rules {
 		r.RenewLabelsSnapshot()
 	}
+
+	g.labelsMtx.Lock()
+	for i := range g.staleSeries {
+		g.staleSeries[i].RenewSnapshot()
+	}
+
+	for _, s := range g.seriesInPreviousEval {
+		for _, l := range s {
+			l.RenewSnapshot()
+		}
+	}
+	g.labelsMtx.Unlock()
 }
 
 // GroupKey group names need not be unique across filenames.

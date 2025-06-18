@@ -61,7 +61,7 @@ func (s *ChunksSeriesSetTestSuite) TestAll() {
 		MaxT: maxt,
 	})
 
-	css := NewChunkSeriesSet(lssQueryResult, cppbridge.NewLSSWithSnapshot(lss).Snapshot(), chunkRecoder)
+	css := NewChunkSeriesSet(lssQueryResult, cppbridge.NewLSSWithSnapshotWithoutBitset(lss).Snapshot(), chunkRecoder)
 	var ci chunks.Iterator
 
 	// first series

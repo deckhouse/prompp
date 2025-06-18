@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"runtime"
 	"slices"
 
 	"github.com/oklog/ulid"
@@ -469,6 +470,12 @@ type seriesData struct {
 // Labels implements part of storage.Series and storage.ChunkSeries.
 func (s *seriesData) Labels() labels.Labels { return s.labels }
 
+func (s *seriesData) reset() {
+	s.labels = labels.EmptyLabels()
+	s.chks = nil
+	s.intervals = nil
+}
+
 // blockBaseSeriesSet allows to iterate over all series in the single block.
 // Iterated series are trimmed with given min and max time as well as tombstones.
 // See newBlockSeriesSet and NewBlockChunkSeriesSet to use it for either sample or chunk iterating.
@@ -490,7 +497,8 @@ type blockBaseSeriesSet struct {
 
 func (b *blockBaseSeriesSet) Next() bool {
 	for b.p.Next() {
-		if err := b.index.Series(b.p.At(), &b.builder, &b.bufChks); err != nil {
+		builder := labels.NewScratchBuilder(5)
+		if err := b.index.Series(b.p.At(), &builder, &b.bufChks); err != nil {
 			// Postings may be stale. Skip if no underlying series exists.
 			if errors.Is(err, storage.ErrNotFound) {
 				continue
@@ -561,7 +569,8 @@ func (b *blockBaseSeriesSet) Next() bool {
 			intervals = intervals.Add(tombstones.Interval{Mint: b.maxt + 1, Maxt: math.MaxInt64})
 		}
 
-		b.curr.labels = b.builder.Labels()
+		builder.Labels()
+		// b.curr.labels = b.builder.Labels()
 		b.curr.chks = chks
 		b.curr.intervals = intervals
 		return true
@@ -577,6 +586,11 @@ func (b *blockBaseSeriesSet) Err() error {
 }
 
 func (b *blockBaseSeriesSet) Warnings() annotations.Annotations { return nil }
+
+func (b *blockBaseSeriesSet) reset() {
+	// b.builder.Reset()
+	// b.curr.reset()
+}
 
 // populateWithDelGenericSeriesIterator allows to iterate over given chunk
 // metas. In each iteration it ensures that chunks are trimmed based on given
@@ -1088,7 +1102,7 @@ type blockChunkSeriesSet struct {
 }
 
 func NewBlockChunkSeriesSet(id ulid.ULID, i IndexReader, c ChunkReader, t tombstones.Reader, p index.Postings, mint, maxt int64, disableTrimming bool) storage.ChunkSeriesSet {
-	return &blockChunkSeriesSet{
+	bss := &blockChunkSeriesSet{
 		blockBaseSeriesSet{
 			blockID:         id,
 			index:           i,
@@ -1100,6 +1114,18 @@ func NewBlockChunkSeriesSet(id ulid.ULID, i IndexReader, c ChunkReader, t tombst
 			disableTrimming: disableTrimming,
 		},
 	}
+
+	// runtime.SetFinalizer(&bss.blockBaseSeriesSet, func(s *blockBaseSeriesSet) {
+	// 	s.reset()
+	// 	fmt.Println(" === blockBaseSeriesSet des")
+	// })
+
+	runtime.SetFinalizer(bss, func(s *blockChunkSeriesSet) {
+		s.reset()
+		fmt.Println(" === blockChunkSeriesSet des")
+	})
+
+	return bss
 }
 
 func (b *blockChunkSeriesSet) At() storage.ChunkSeries {

@@ -1049,8 +1049,7 @@ func (db *DB) run(ctx context.Context) {
 			default:
 			}
 		// PP_CHANGES.md: rebuild on cpp end
-		case <-time.After(5 * time.Minute):
-			level.Info(db.logger).Log("msg", "reloadBlocks start")
+		case <-time.After(1 * time.Minute):
 			db.cmtx.Lock()
 			if err := db.reloadBlocks(); err != nil {
 				level.Error(db.logger).Log("msg", "reloadBlocks", "err", err)
@@ -1062,21 +1061,29 @@ func (db *DB) run(ctx context.Context) {
 			default:
 			}
 			// We attempt mmapping of head chunks regularly.
-			db.head.mmapHeadChunks()
+			// db.head.mmapHeadChunks()
 		case <-db.compactc:
 			db.metrics.compactionsTriggered.Inc()
 
 			db.autoCompactMtx.Lock()
-			if db.autoCompact {
-				if err := db.Compact(ctx); err != nil {
-					level.Error(db.logger).Log("msg", "compaction failed", "err", err)
-					backoff = exponential(backoff, 1*time.Second, 1*time.Minute)
-				} else {
-					backoff = 0
-				}
+			// if db.autoCompact {
+			// 	if err := db.Compact(ctx); err != nil {
+			// 		level.Error(db.logger).Log("msg", "compaction failed", "err", err)
+			// 		backoff = exponential(backoff, 1*time.Second, 1*time.Minute)
+			// 	} else {
+			// 		backoff = 0
+			// 	}
+			// } else {
+			// 	db.metrics.compactionsSkipped.Inc()
+			// }
+
+			if err := db.compactBlocks(); err != nil {
+				level.Error(db.logger).Log("msg", "compaction failed", "err", err)
+				backoff = exponential(backoff, 1*time.Second, 1*time.Minute)
 			} else {
-				db.metrics.compactionsSkipped.Inc()
+				backoff = 0
 			}
+
 			db.autoCompactMtx.Unlock()
 		case <-db.stopc:
 			return
@@ -1189,8 +1196,6 @@ func (a dbAppender) Commit() error {
 // Old blocks are only deleted on reloadBlocks based on the new block's parent information.
 // See DB.reloadBlocks documentation for further information.
 func (db *DB) Compact(ctx context.Context) (returnErr error) {
-	time.Sleep(2 * time.Minute)
-	level.Info(db.logger).Log("msg", "Compact start")
 	db.cmtx.Lock()
 	defer db.cmtx.Unlock()
 	defer func() {
@@ -1444,12 +1449,15 @@ func (db *DB) compactBlocks() (err error) {
 			return fmt.Errorf("compact %s: %w", plan, err)
 		}
 
-		if err := db.reloadBlocks(); err != nil {
-			if err := os.RemoveAll(filepath.Join(db.dir, uid.String())); err != nil {
-				return fmt.Errorf("delete compacted block after failed db reloadBlocks:%s: %w", uid, err)
-			}
-			return fmt.Errorf("reloadBlocks blocks: %w", err)
-		}
+		_ = uid
+		break
+
+		// if err := db.reloadBlocks(); err != nil {
+		// 	if err := os.RemoveAll(filepath.Join(db.dir, uid.String())); err != nil {
+		// 		return fmt.Errorf("delete compacted block after failed db reloadBlocks:%s: %w", uid, err)
+		// 	}
+		// 	return fmt.Errorf("reloadBlocks blocks: %w", err)
+		// }
 	}
 
 	return nil
@@ -1484,6 +1492,8 @@ func (db *DB) reload() error {
 // reloadBlocks reloads blocks without touching head.
 // Blocks that are obsolete due to replacement or retention will be deleted.
 func (db *DB) reloadBlocks() (err error) {
+	fmt.Println(time.Now(), "================ reloadBlocks")
+
 	defer func() {
 		if err != nil {
 			db.metrics.reloadsFailed.Inc()
@@ -1501,6 +1511,7 @@ func (db *DB) reloadBlocks() (err error) {
 	if err != nil {
 		return err
 	}
+	fmt.Println("================ reloadBlocks", len(db.blocks), len(loadable))
 
 	deletableULIDs := db.blocksToDelete(loadable)
 	deletable := make(map[ulid.ULID]*Block, len(deletableULIDs))

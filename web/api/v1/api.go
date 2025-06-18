@@ -1255,8 +1255,8 @@ func rulesAlertsToAPIAlerts(rulesAlerts []*rules.Alert) []*Alert {
 	apiAlerts := make([]*Alert, len(rulesAlerts))
 	for i, ruleAlert := range rulesAlerts {
 		apiAlerts[i] = &Alert{
-			Labels:      ruleAlert.Labels,
-			Annotations: ruleAlert.Annotations,
+			Labels:      ruleAlert.Labels(),      // PP_CHANGES.md: rebuild on cpp
+			Annotations: ruleAlert.Annotations(), // PP_CHANGES.md: rebuild on cpp
 			State:       ruleAlert.State.String(),
 			ActiveAt:    &ruleAlert.ActiveAt,
 			Value:       strconv.FormatFloat(ruleAlert.Value, 'e', -1, 64),

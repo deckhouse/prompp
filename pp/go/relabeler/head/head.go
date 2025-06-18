@@ -155,6 +155,7 @@ func (rd *RelabelerData) updateOrCreateStatelessRelabeler(
 	return sr, nil
 }
 
+// LastAppendedSegmentIDSetter setter for last appended segment ID.
 type LastAppendedSegmentIDSetter interface {
 	SetLastAppendedSegmentID(segmentID uint32)
 }
@@ -333,17 +334,19 @@ func New(
 
 	h.run()
 
-	runtime.SetFinalizer(h, func(h *Head) {
+	runtime.SetFinalizer(h, func(*Head) {
 		logger.Debugf("head {%d} destroyed", generation)
 	})
 
 	return h, nil
 }
 
+// ID return head ID.
 func (h *Head) ID() string {
 	return h.id
 }
 
+// Generation return generation of head.
 func (h *Head) Generation() uint64 {
 	return h.generation
 }
@@ -420,9 +423,6 @@ func (h *Head) Stop() {
 		})
 	}
 	h.relabelersData = nil
-
-	// h.counter.DeletePartialMatch(prometheus.Labels{"id": h.id})
-	// h.size.DeletePartialMatch(prometheus.Labels{"id": h.id})
 }
 
 func (h *Head) Reconfigure(inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) error {
@@ -522,7 +522,7 @@ func (h *Head) Status(limit int) relabeler.HeadStatus {
 		shardStatuses[i] = cppbridge.NewHeadStatus()
 	}
 
-	tw := relabeler.NewTaskWaiter(2)
+	tw := relabeler.NewTaskWaiter(2) //revive:disable-line:add-constant // not need const (2 task)
 
 	tLSSHeadStatus := h.CreateTask(
 		relabeler.LSSHeadStatus,
@@ -654,6 +654,10 @@ func (h *Head) CopySeriesFrom(other relabeler.Head) {
 // Close wals and clear metrics.
 func (h *Head) Close() error {
 	h.memoryInUse.DeletePartialMatch(prometheus.Labels{"generation": strconv.FormatUint(h.generation, 10)})
+	for _, lss := range h.lsses {
+		lss.Outdated()
+	}
+
 	var err error
 	for _, wal := range h.wals {
 		err = errors.Join(err, wal.Close())
@@ -661,7 +665,8 @@ func (h *Head) Close() error {
 	return err
 }
 
-func (h *Head) Discard() error {
+// Discard head. Implementation [relabeler.Head].
+func (*Head) Discard() error {
 	return nil
 }
 
@@ -678,11 +683,11 @@ func (h *Head) CreateTask(
 	onLss, isExclusive bool,
 ) *relabeler.GenericTask {
 	if h.readOnly {
-		return relabeler.NewReadOnlyGenericTask(fn, h.numberOfShards)
+		return relabeler.AcquireTask().ReadOnlyResetTo(fn, h.numberOfShards)
 	}
 
 	ls := prometheus.Labels{"type_task": taskName}
-	return relabeler.NewGenericTask(
+	return relabeler.AcquireTask().ResetTo(
 		fn,
 		h.tasksCreated.With(ls),
 		h.tasksDone.With(ls),
@@ -723,6 +728,8 @@ func (h *Head) readOnlyForEachShard(t *relabeler.GenericTask) {
 }
 
 // Append incoming data to head.
+//
+//revive:disable-next-line:cyclomatic but readable.
 func (h *Head) Append(
 	ctx context.Context,
 	incomingData *relabeler.IncomingData,
@@ -1065,27 +1072,72 @@ func (h *Head) FindFromBuilder(
 	snapshot *cppbridge.LabelSetSnapshot,
 	lsID uint32,
 ) labels.Labels {
-	lses := make([]labels.Labels, h.numberOfShards)
-	t := h.CreateTask(
-		relabeler.LSSFind,
-		func(shard relabeler.Shard) error {
-			if length, lsID, ok := shard.LSS().FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID); ok {
-				lses[shard.ShardID()] = labels.NewLabelsWithLSS(shard.LSS().GetSnapshot(), lsID, uint16(length))
-			}
+	ls := labels.EmptyLabels()
 
-			return nil
-		},
-		relabeler.ForLSSTask,
-		relabeler.NonExclusiveTask,
-	)
-	h.Enqueue(t)
-	_ = t.Wait()
+	_ = h.enqueueOnSingleShard(
+		h.createTaskOnSingleShard(
+			relabeler.LSSFind,
+			func(shard relabeler.Shard) error {
+				if length, newlsID, ok := shard.LSS().FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID); ok {
+					ls.CopyFrom(
+						labels.NewLabelsWithLSS(
+							shard.LSS().GetSnapshot(),
+							newlsID,
+							uint16(length), // #nosec G115 // no overflow
+						),
+					)
+				}
 
-	for i := range lses {
-		if !lses[i].IsEmpty() {
-			return lses[i]
-		}
+				return nil
+			},
+			relabeler.ForLSSTask,
+			relabeler.NonExclusiveTask,
+		),
+		cppbridge.LabelSetFromBuilderHash(sortedAdd, sortedDel, snapshot, lsID)%uint64(h.numberOfShards),
+	).Wait()
+
+	return ls
+}
+
+// enqueueOnSingleShard the task to be executed on head on single shard.
+func (h *Head) enqueueOnSingleShard(t *relabeler.GenericTask, shardID uint64) *relabeler.GenericTask {
+	if h.readOnly {
+		s := h.shards[shardID]
+		go func(sd *shard) {
+			t.ExecuteOnShard(sd)
+		}(s)
+
+		return t
 	}
 
-	return labels.EmptyLabels()
+	if t.ForLSS() {
+		h.lssTaskChs[shardID] <- t
+	} else {
+		h.dataStorageTaskChs[shardID] <- t
+	}
+
+	return t
+}
+
+// createTaskOnSingleShard create a task for operations on the head single shard.
+func (h *Head) createTaskOnSingleShard(
+	taskName string,
+	fn relabeler.ShardFn,
+	onLss, isExclusive bool,
+) *relabeler.GenericTask {
+	if h.readOnly {
+		return relabeler.AcquireTask().ReadOnlySingleResetTo(fn, h.numberOfShards)
+	}
+
+	ls := prometheus.Labels{"type_task": taskName}
+	return relabeler.AcquireTask().SingleResetTo(
+		fn,
+		h.tasksCreated.With(ls),
+		h.tasksDone.With(ls),
+		h.tasksLive.With(ls),
+		h.tasksExecute.With(ls),
+		h.numberOfShards,
+		onLss,
+		isExclusive,
+	)
 }

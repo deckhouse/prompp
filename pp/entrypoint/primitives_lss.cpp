@@ -13,6 +13,9 @@ using entrypoint::head::LssType;
 using entrypoint::head::LssVariantPtr;
 using entrypoint::head::QueryableEncodingBimap;
 
+using Bitset = BareBones::Bitset;
+using BitsetPtr = std::unique_ptr<Bitset>;
+
 extern "C" void prompp_primitives_lss_ctor(void* args, void* res) {
   struct Arguments {
     LssType lss_type;
@@ -102,6 +105,7 @@ extern "C" void prompp_primitives_lss_find_or_emplace_from_builder(void* args, v
   struct Arguments {
     LssVariantPtr lss;
     LssVariantPtr readonly_lss;
+    BitsetPtr bitset;
     SliceView<PromPP::Primitives::Go::Label> sorted_add;
     SliceView<PromPP::Primitives::Go::String> sorted_del;
     uint32_t ls_id;
@@ -123,6 +127,12 @@ extern "C" void prompp_primitives_lss_find_or_emplace_from_builder(void* args, v
         const auto& label_set = in->readonly_lss ? std::get<entrypoint::head::ReadonlyLss>(*in->readonly_lss)[in->ls_id] : empty_label_set;
 
         const auto result = find_or_emplace<Lss>(lss, LabelSetBuilder{label_set, in->sorted_add, in->sorted_del});
+        if (in->bitset != nullptr) [[likely]] {
+          if (result.ls_id >= in->bitset->size()) [[unlikely]] {
+            in->bitset->resize(result.ls_id + 1);
+          }
+          in->bitset->set(result.ls_id);
+        }
 
         out->ls_id = result.ls_id;
         out->length = lss[out->ls_id].size();
@@ -300,4 +310,62 @@ extern "C" void prompp_primitives_lss_copy_added_series(uint64_t source_lss, uin
   series_index::QueryableEncodingBimapCopier copier(std::get<QueryableEncodingBimap>(*std::bit_cast<entrypoint::head::LssVariant*>(source_lss)),
                                                     std::get<QueryableEncodingBimap>(*std::bit_cast<entrypoint::head::LssVariant*>(destination_lss)));
   copier.copy_added_series_and_build_indexes();
+}
+
+//
+// Bitset
+//
+
+extern "C" void prompp_primitives_bitset_ctor(void* res) {
+  struct Result {
+    BitsetPtr bitset;
+  };
+
+  new (res) Result{.bitset = std::make_unique<Bitset>()};
+}
+
+extern "C" void prompp_primitives_bitset_dtor(void* args) {
+  struct Arguments {
+    BitsetPtr bitset;
+  };
+
+  static_cast<Arguments*>(args)->~Arguments();
+}
+
+extern "C" void prompp_primitives_lss_with_snapshot_stats(void* args, void* res) {
+  using PromPP::Primitives::Go::LabelSetBuilder;
+  using PromPP::Primitives::Go::SliceView;
+
+  struct Arguments {
+    LssVariantPtr lss;
+    BitsetPtr bitset;
+    bool reset;
+  };
+
+  struct Result {
+    uint64_t allocated_memory;
+    size_t lss_size;
+    uint32_t bitset_count{0};
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  auto out = new (res) Result();
+
+  std::visit(
+      [in, out]<typename Lss>(Lss& lss) {
+        out->lss_size = lss.size();
+
+        if (!in->reset) [[unlikely]] {
+          out->allocated_memory = lss.allocated_memory();
+        }
+      },
+      *in->lss);
+
+  if (in->bitset != nullptr) [[likely]] {
+    out->bitset_count = in->bitset->popcount();
+
+    if (in->reset) [[unlikely]] {
+      in->bitset->clear();
+    }
+  }
 }

@@ -410,8 +410,8 @@ func SendAlerts(s Sender, externalURL string) NotifyFunc {
 		for _, alert := range alerts {
 			a := &notifier.Alert{
 				StartsAt:     alert.FiredAt,
-				Labels:       alert.Labels,
-				Annotations:  alert.Annotations,
+				Labels:       alert.Labels(),      // PP_CHANGES.md: rebuild on cpp
+				Annotations:  alert.Annotations(), // PP_CHANGES.md: rebuild on cpp
 				GeneratorURL: externalURL + strutil.TableLinkForExpression(expr),
 			}
 			if !alert.ResolvedAt.IsZero() {

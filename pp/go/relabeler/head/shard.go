@@ -2,9 +2,6 @@ package head
 
 import (
 	"fmt"
-	"sync"
-	"sync/atomic"
-	"unsafe"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -18,62 +15,49 @@ const chanBufferSize = 64
 
 type LSS struct {
 	input  *cppbridge.LabelSetStorage
-	target *cppbridge.LabelSetStorage
-	// snapshot *cppbridge.LabelSetSnapshot
-	snapshot unsafe.Pointer
-	once     sync.Once
+	target *cppbridge.LSSWithSnapshot
 }
 
 func (w *LSS) Raw() *cppbridge.LabelSetStorage {
-	return w.target
+	return w.target.LSS()
 }
 
 func (w *LSS) AllocatedMemory() uint64 {
-	return w.input.AllocatedMemory() + w.target.AllocatedMemory()
+	return w.input.AllocatedMemory() + w.target.LSS().AllocatedMemory()
 }
 
 func (w *LSS) QueryLabelValues(
 	label_name string,
 	matchers []model.LabelMatcher,
 ) *cppbridge.LSSQueryLabelValuesResult {
-	return w.target.QueryLabelValues(label_name, matchers)
+	return w.target.LSS().QueryLabelValues(label_name, matchers)
 }
 
 func (w *LSS) QueryLabelNames(matchers []model.LabelMatcher) *cppbridge.LSSQueryLabelNamesResult {
-	return w.target.QueryLabelNames(matchers)
+	return w.target.LSS().QueryLabelNames(matchers)
 }
 
 func (w *LSS) Query(matchers []model.LabelMatcher, querySource uint32) *cppbridge.LSSQueryResult {
-	return w.target.Query(matchers, querySource)
+	return w.target.LSS().Query(matchers, querySource)
 }
 
 func (w *LSS) GetLabelSets(labelSetIDs []uint32) *cppbridge.LabelSetStorageGetLabelSetsResult {
-	return w.target.GetLabelSets(labelSetIDs)
+	return w.target.LSS().GetLabelSets(labelSetIDs)
 }
 
 // GetSnapshot return the actual snapshot.
 func (w *LSS) GetSnapshot() *cppbridge.LabelSetSnapshot {
-	w.once.Do(func() {
-		// w.snapshot =  w.target.CreateLabelSetSnapshot()
-		atomic.StorePointer(
-			&w.snapshot,
-			unsafe.Pointer(w.target.CreateLabelSetSnapshot(w)), // #nosec G103 // it's meant to be that way
-		)
-	})
-
-	// return w.snapshot
-	return w.FastSnapshot()
+	return w.target.Snapshot()
 }
 
-// FastSnapshot return the actual snapshot or nil if not exist.
-func (w *LSS) FastSnapshot() *cppbridge.LabelSetSnapshot {
-	return (*cppbridge.LabelSetSnapshot)(atomic.LoadPointer(&w.snapshot))
+// Outdated marked *LabelSetStorage is outdated.
+func (w *LSS) Outdated() {
+	w.target.Outdated()
 }
 
 // ResetSnapshot resets the current snapshot.
 func (w *LSS) ResetSnapshot() {
-	w.snapshot = nil
-	w.once = sync.Once{}
+	w.target.ResetSnapshot()
 }
 
 // Input return input LabelSetStorage.
@@ -83,7 +67,7 @@ func (w *LSS) Input() *cppbridge.LabelSetStorage {
 
 // Target return target LabelSetStorage.
 func (w *LSS) Target() *cppbridge.LabelSetStorage {
-	return w.target
+	return w.target.LSS()
 }
 
 // FindFromBuilder label set from builder in lss, return length ls, lsid and bool ok.
@@ -95,7 +79,7 @@ func (w *LSS) FindFromBuilder(
 	snapshot *cppbridge.LabelSetSnapshot,
 	lsID uint32,
 ) (uint64, uint32, bool) {
-	return w.target.FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID)
+	return w.target.LSS().FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID)
 }
 
 type DataStorage struct {

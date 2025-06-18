@@ -189,7 +189,7 @@ func TestAlertingRule(t *testing.T) {
 		prom_testutil.RequireEqual(t, test.result, filteredRes)
 
 		for _, aa := range rule.ActiveAlerts() {
-			require.Zero(t, aa.Labels.Get(model.MetricNameLabel), "%s label set on active alert: %s", model.MetricNameLabel, aa.Labels)
+			require.Zero(t, aa.Labels().Get(model.MetricNameLabel), "%s label set on active alert: %s", model.MetricNameLabel, aa.Labels)
 		}
 	}
 }
@@ -341,7 +341,7 @@ func TestForStateAddSamples(t *testing.T) {
 				prom_testutil.RequireEqual(t, test.result, filteredRes)
 
 				for _, aa := range rule.ActiveAlerts() {
-					require.Zero(t, aa.Labels.Get(model.MetricNameLabel), "%s label set on active alert: %s", model.MetricNameLabel, aa.Labels)
+					require.Zero(t, aa.Labels().Get(model.MetricNameLabel), "%s label set on active alert: %s", model.MetricNameLabel, aa.Labels)
 				}
 			}
 		})
@@ -351,7 +351,7 @@ func TestForStateAddSamples(t *testing.T) {
 // sortAlerts sorts `[]*Alert` w.r.t. the Labels.
 func sortAlerts(items []*Alert) {
 	sort.Slice(items, func(i, j int) bool {
-		return labels.Compare(items[i].Labels, items[j].Labels) <= 0
+		return labels.Compare(items[i].Labels(), items[j].Labels()) <= 0
 	})
 }
 
@@ -488,10 +488,10 @@ func TestForStateRestore(t *testing.T) {
 
 					got := newRule.ActiveAlerts()
 					for _, aa := range got {
-						require.Zero(t, aa.Labels.Get(model.MetricNameLabel), "%s label set on active alert: %s", model.MetricNameLabel, aa.Labels)
+						require.Zero(t, aa.Labels().Get(model.MetricNameLabel), "%s label set on active alert: %s", model.MetricNameLabel, aa.Labels)
 					}
 					sort.Slice(got, func(i, j int) bool {
-						return labels.Compare(got[i].Labels, got[j].Labels) < 0
+						return labels.Compare(got[i].Labels(), got[j].Labels()) < 0
 					})
 
 					// In all cases, we expect the restoration process to have completed.

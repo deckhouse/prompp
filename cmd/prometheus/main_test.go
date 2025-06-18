@@ -145,13 +145,14 @@ func TestSendAlerts(t *testing.T) {
 	}{
 		{
 			in: []*rules.Alert{
-				{
-					Labels:      labels.FromStrings("l1", "v1"),
-					Annotations: labels.FromStrings("a2", "v2"),
-					ActiveAt:    time.Unix(1, 0),
-					FiredAt:     time.Unix(2, 0),
-					ValidUntil:  time.Unix(3, 0),
-				},
+				rules.NewAlert(
+					labels.FromStrings("l1", "v1"),
+					labels.FromStrings("a2", "v2"),
+					time.Unix(1, 0),
+					time.Unix(2, 0),
+					time.Time{},
+					time.Unix(3, 0),
+				),
 			},
 			exp: []*notifier.Alert{
 				{
@@ -165,13 +166,14 @@ func TestSendAlerts(t *testing.T) {
 		},
 		{
 			in: []*rules.Alert{
-				{
-					Labels:      labels.FromStrings("l1", "v1"),
-					Annotations: labels.FromStrings("a2", "v2"),
-					ActiveAt:    time.Unix(1, 0),
-					FiredAt:     time.Unix(2, 0),
-					ResolvedAt:  time.Unix(4, 0),
-				},
+				rules.NewAlert(
+					labels.FromStrings("l1", "v1"),
+					labels.FromStrings("a2", "v2"),
+					time.Unix(1, 0),
+					time.Unix(2, 0),
+					time.Unix(4, 0),
+					time.Time{},
+				),
 			},
 			exp: []*notifier.Alert{
 				{

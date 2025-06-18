@@ -396,3 +396,170 @@ func (s *LabelSetSnapshotSuite) TestLabelSetFromBuilderHashAdd() {
 		s.Equal(hashExpected, hashActual)
 	}
 }
+
+//
+// LSSWithSnapshotSuite
+//
+
+type LSSWithSnapshotSuite struct {
+	suite.Suite
+
+	lsses []*cppbridge.LSSWithSnapshot
+}
+
+func TestLSSWithSnapshotSuite(t *testing.T) {
+	suite.Run(t, new(LSSWithSnapshotSuite))
+}
+
+func (s *LSSWithSnapshotSuite) SetupTest() {
+	s.lsses = []*cppbridge.LSSWithSnapshot{
+		cppbridge.NewLSSWithSnapshot(cppbridge.NewLssStorage()),
+		cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage()),
+	}
+
+	labelSets := []model.LabelSet{
+		model.LabelSetFromMap(map[string]string{"lol": "kek"}),
+		model.LabelSetFromMap(map[string]string{"lol": "kek", "che": "bureck"}),
+		model.LabelSetFromMap(map[string]string{"lol": "kek", "zhe": "bureck"}),
+		model.LabelSetFromMap(map[string]string{"foo": "bar"}),
+		model.LabelSetFromMap(map[string]string{"foo": "baz"}),
+	}
+
+	for _, lss := range s.lsses {
+		for _, labelSet := range labelSets {
+			lss.FindOrEmplace(labelSet)
+		}
+	}
+}
+
+func (s *LSSWithSnapshotSuite) TestFindOrEmplaceFromBuilderWithExistingLabelSet() {
+	for _, lss := range s.lsses {
+		// Arrange
+		labelSetSnapshot := lss.Snapshot()
+
+		// Act
+		lengthWithAdd, existingLsIdWithAdd := lss.FindOrEmplaceFromBuilder(
+			[]cppbridge.Label{{Name: "che", Value: "bureck"}},
+			nil,
+			labelSetSnapshot,
+			0,
+		)
+
+		lengthWithDel, existingLsIdWithDel := lss.FindOrEmplaceFromBuilder(
+			nil,
+			[]string{"che"},
+			labelSetSnapshot,
+			1,
+		)
+
+		// Assert
+		s.Equal(uint64(2), lengthWithAdd)
+		s.Equal(uint64(1), lengthWithDel)
+		s.Equal(uint32(1), existingLsIdWithAdd)
+		s.Equal(uint32(0), existingLsIdWithDel)
+	}
+}
+
+func (s *LSSWithSnapshotSuite) TestFindOrEmplaceFromBuilderWithNewLabelSet() {
+	for _, lss := range s.lsses {
+		// Arrange
+		labelSetSnapshot := lss.Snapshot()
+
+		// Act
+		_, expectedLsId, _ := lss.Stats()
+		length, existingLsId := lss.FindOrEmplaceFromBuilder(
+			[]cppbridge.Label{{Name: "new_lol", Value: "new_kek"}},
+			nil,
+			labelSetSnapshot,
+			0,
+		)
+
+		// Assert
+		s.Equal(uint64(2), length)
+		s.Equal(uint32(expectedLsId), existingLsId)
+	}
+}
+
+func (s *LSSWithSnapshotSuite) TestFindOrEmplaceFromBuilderWithNewLabelSetAnother() {
+	for _, lss := range s.lsses {
+		// Arrange
+		lssAnother := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
+		lsid := lssAnother.FindOrEmplace(model.LabelSetFromMap(map[string]string{"lol": "kek"}))
+		labelSetSnapshot := lssAnother.Snapshot()
+
+		// Act
+		_, expectedLsId, _ := lss.Stats()
+		length, existingLsId := lss.FindOrEmplaceFromBuilder(
+			[]cppbridge.Label{{Name: "new_lol", Value: "new_kek"}},
+			nil,
+			labelSetSnapshot,
+			lsid,
+		)
+
+		// Assert
+		s.Equal(uint64(2), length)
+		s.Equal(uint32(expectedLsId), existingLsId)
+	}
+}
+
+func (s *LSSWithSnapshotSuite) TestStats() {
+	for _, lss := range s.lsses {
+		// Arrange
+		labelSetSnapshot := lss.Snapshot()
+
+		// Act
+		_, bitsetSizeBegin := lss.StatsWithReset()
+		_, _ = lss.FindOrEmplaceFromBuilder(
+			[]cppbridge.Label{{Name: "new_lol_0", Value: "new_kek_0"}},
+			nil,
+			labelSetSnapshot,
+			0,
+		)
+		_, bitsetSizeSingle := lss.StatsWithReset()
+
+		_, _ = lss.FindOrEmplaceFromBuilder(
+			[]cppbridge.Label{{Name: "new_lol_1", Value: "new_kek_1"}},
+			nil,
+			labelSetSnapshot,
+			0,
+		)
+
+		_, _ = lss.FindOrEmplaceFromBuilder(
+			[]cppbridge.Label{{Name: "new_lol_0", Value: "new_kek_0"}},
+			nil,
+			labelSetSnapshot,
+			0,
+		)
+		_, bitsetSizeDouble := lss.StatsWithReset()
+
+		_, bitsetSizeEnd := lss.StatsWithReset()
+
+		// Assert
+		s.Equal(uint32(0), bitsetSizeBegin)
+		s.Equal(uint32(1), bitsetSizeSingle)
+		s.Equal(uint32(2), bitsetSizeDouble)
+		s.Equal(uint32(0), bitsetSizeEnd)
+	}
+}
+
+func (s *LabelSetSnapshotSuite) TestLabelSetFromBuilderHash2() {
+	for _, lss := range s.lsses {
+		// Arrange
+		mls := s.mls.With("test", s.T().Name())
+
+		lsid := lss.FindOrEmplace(mls).LabelSetID
+		snapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
+
+		// Act
+		hashExpected := snapshot.LabelSetHash(lsid, false)
+		hashActual := cppbridge.LabelSetFromBuilderHash(
+			nil,
+			nil,
+			snapshot,
+			lsid,
+		)
+
+		// Assert
+		s.Equal(hashExpected, hashActual)
+	}
+}

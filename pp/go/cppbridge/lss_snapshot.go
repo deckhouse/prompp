@@ -12,18 +12,20 @@ import (
 )
 
 var (
-	snapshotCreate = promauto.NewCounter(
+	lssCreate = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "prompp_cppbridge_snapshot_create_count",
+			Name: "prompp_cppbridge_lss_create_count",
 			Help: "Current number of created snapshots.",
 		},
+		[]string{"type"},
 	)
 
-	snapshotFinalize = promauto.NewCounter(
+	lssFinalize = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "prompp_cppbridge_snapshot_finalize_count",
+			Name: "prompp_cppbridge_lss_finalize_count",
 			Help: "Current number of finalized snapshots.",
 		},
+		[]string{"type"},
 	)
 )
 
@@ -34,6 +36,8 @@ var gcDestroyDetector uint64
 type SnapshotSource interface {
 	// FastSnapshot return the actual snapshot or nil if not exist.
 	FastSnapshot() *LabelSetSnapshot
+	// IsOutdated return true if source is outdated.
+	IsOutdated() bool
 }
 
 //
@@ -52,24 +56,23 @@ func newLabelSetSnapshot(lsstPtr uintptr, source SnapshotSource) *LabelSetSnapsh
 		pointer: lsstPtr,
 		source:  source,
 	}
+
 	runtime.SetFinalizer(lsst, func(l *LabelSetSnapshot) {
 		primitivesLSSDtor(l.pointer)
 
-		snapshotFinalize.Inc()
+		lssFinalize.With(prometheus.Labels{"type": "snapshot"}).Inc()
 	})
 
-	snapshotCreate.Inc()
+	ls := prometheus.Labels{"type": "snapshot"}
+	lssFinalize.With(ls).Add(0)
+	lssCreate.With(ls).Inc()
 
 	return lsst
 }
 
-// Snapshot return the actual snapshot.
-func (lsst *LabelSetSnapshot) Snapshot() *LabelSetSnapshot {
-	if snapshot := lsst.source.FastSnapshot(); snapshot != nil {
-		return snapshot
-	}
-
-	return lsst
+// IsOutdated return true if source of snapshot is outdated.
+func (lsst *LabelSetSnapshot) IsOutdated() bool {
+	return lsst.source.IsOutdated()
 }
 
 // LabelSetBytes returns ls as a byte slice.
@@ -180,28 +183,49 @@ func (lsst *LabelSetSnapshot) RangeLabelSet(lsID uint32, dropMetricName bool, do
 	return nil
 }
 
+// Snapshot return the actual snapshot.
+func (lsst *LabelSetSnapshot) Snapshot() *LabelSetSnapshot {
+	if snapshot := lsst.source.FastSnapshot(); snapshot != nil {
+		return snapshot
+	}
+
+	return lsst
+}
+
 //
 // LSSWithSnapshot
 //
 
 // LSSWithSnapshot container for LabelSetStorage with snapshot.
 type LSSWithSnapshot struct {
-	lss      *LabelSetStorage
-	snapshot unsafe.Pointer
-	once     sync.Once
+	lss           *LabelSetStorage
+	bitsetPointer uintptr
+	snapshot      unsafe.Pointer
+	once          sync.Once
+	outdated      uint32
 }
 
 // NewLSSWithSnapshot init new *LSSWithSnapshot.
 func NewLSSWithSnapshot(lss *LabelSetStorage) *LSSWithSnapshot {
+	lws := &LSSWithSnapshot{
+		lss:           lss,
+		bitsetPointer: primitivesBitsetCtor(),
+		once:          sync.Once{},
+	}
+
+	runtime.SetFinalizer(lws, func(l *LSSWithSnapshot) {
+		primitivesBitsetDtor(l.bitsetPointer)
+	})
+
+	return lws
+}
+
+// NewLSSWithSnapshotWithoutBitset init new *LSSWithSnapshot without bitset.
+func NewLSSWithSnapshotWithoutBitset(lss *LabelSetStorage) *LSSWithSnapshot {
 	return &LSSWithSnapshot{
 		lss:  lss,
 		once: sync.Once{},
 	}
-}
-
-// AllocatedMemory return size of allocated memory LabelSetStorage.
-func (lws *LSSWithSnapshot) AllocatedMemory() uint64 {
-	return lws.lss.AllocatedMemory()
 }
 
 // FastSnapshot return the actual snapshot or nil if not exist.
@@ -212,6 +236,7 @@ func (lws *LSSWithSnapshot) FastSnapshot() *LabelSetSnapshot {
 // FindOrEmplace find in lss LabelSet or emplace and return ls id.
 func (lws *LSSWithSnapshot) FindOrEmplace(labelSet model.LabelSet) uint32 {
 	res := lws.lss.FindOrEmplace(labelSet)
+	runtime.KeepAlive(lws)
 	if res.LssHasReallocations {
 		atomic.StorePointer(
 			&lws.snapshot,
@@ -238,12 +263,13 @@ func (lws *LSSWithSnapshot) FindOrEmplaceFromBuilder(
 	lssROPtr, length, newlsID, hasReallocations := primitivesLSSFindOrEmplaceFromBuilder(
 		lws.lss.pointer,
 		snapshotPointer,
+		lws.bitsetPointer,
 		sortedAdd,
 		sortedDel,
 		lsID,
 	)
-	runtime.KeepAlive(lws)
 	runtime.KeepAlive(otherSnapshot)
+	runtime.KeepAlive(lws)
 
 	if hasReallocations {
 		atomic.StorePointer(
@@ -255,9 +281,19 @@ func (lws *LSSWithSnapshot) FindOrEmplaceFromBuilder(
 	return length, newlsID
 }
 
+// IsOutdated return true if *LabelSetStorage is outdated.
+func (lws *LSSWithSnapshot) IsOutdated() bool {
+	return atomic.LoadUint32(&lws.outdated) > 0
+}
+
 // LSS return raw *LabelSetStorage.
 func (lws *LSSWithSnapshot) LSS() *LabelSetStorage {
 	return lws.lss
+}
+
+// Outdated marked *LabelSetStorage is outdated.
+func (lws *LSSWithSnapshot) Outdated() {
+	atomic.AddUint32(&lws.outdated, 1)
 }
 
 // ResetSnapshot resets the current snapshot.
@@ -276,6 +312,20 @@ func (lws *LSSWithSnapshot) Snapshot() *LabelSetSnapshot {
 	})
 
 	return lws.FastSnapshot()
+}
+
+// Stats return allocated memory for lss, size of lss and count of emplace to bitset.
+func (lws *LSSWithSnapshot) Stats() (allocatedMemory, lssSize uint64, bitsetCount uint32) {
+	allocatedMemory, lssSize, bitsetCount = primitivesLSSWithSnapshotStats(lws.lss.pointer, lws.bitsetPointer, false)
+	runtime.KeepAlive(lws)
+	return allocatedMemory, lssSize, bitsetCount
+}
+
+// StatsWithReset return size of lss and count of emplace to bitset, clearing bitset.
+func (lws *LSSWithSnapshot) StatsWithReset() (lssSize uint64, bitsetCount uint32) {
+	_, lssSize, bitsetCount = primitivesLSSWithSnapshotStats(lws.lss.pointer, lws.bitsetPointer, true)
+	runtime.KeepAlive(lws)
+	return lssSize, bitsetCount
 }
 
 //

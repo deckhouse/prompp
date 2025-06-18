@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"unsafe"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/model"
 )
 
@@ -13,6 +14,23 @@ const (
 	lssOrderedEncodingBimap
 	lssQueryableEncodingBimap
 )
+
+// lssTypeToString serialize lss type to string.
+func lssTypeToString(lssType uint32) string {
+	switch lssType {
+	case lssEncodingBimap:
+		return "encoding_bimap"
+
+	case lssOrderedEncodingBimap:
+		return "ordered_encoding_bimap"
+
+	case lssQueryableEncodingBimap:
+		return "queryable_encoding_bimap"
+
+	default:
+		return "unknown_lss_type"
+	}
+}
 
 //
 // LSS Query Status
@@ -65,15 +83,21 @@ func NewQueryableLssStorage() *LabelSetStorage {
 
 // newLabelSetStorage init new LabelSetStorage with lss type.
 func newLabelSetStorage(lssType uint32) *LabelSetStorage {
-	return newLabelSetStorageFromPointer(primitivesLSSCtor(lssType))
+	return newLabelSetStorageFromPointer(primitivesLSSCtor(lssType), lssType)
 }
 
 // newLabelSetStorageFromPointer init new LabelSetStorage with pointer to constructed lss
-func newLabelSetStorageFromPointer(lssPointer uintptr) *LabelSetStorage {
+func newLabelSetStorageFromPointer(lssPointer uintptr, lssType uint32) *LabelSetStorage {
 	lss := &LabelSetStorage{pointer: lssPointer, gcDestroyDetector: &gcDestroyDetector}
 	runtime.SetFinalizer(lss, func(lss *LabelSetStorage) {
 		primitivesLSSDtor(lss.pointer)
+
+		lssFinalize.With(prometheus.Labels{"type": lssTypeToString(lssType)}).Inc()
 	})
+
+	ls := prometheus.Labels{"type": lssTypeToString(lssType)}
+	lssFinalize.With(ls).Add(0)
+	lssCreate.With(ls).Inc()
 
 	return lss
 }
@@ -97,39 +121,6 @@ func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet CppLabelSetBuilder) Fi
 	res := primitivesLSSFindOrEmplaceBuilder(lss.pointer, labelSet)
 	runtime.KeepAlive(lss)
 	return res
-}
-
-// FindOrEmplaceFromBuilder find in lss LabelSet from builder or emplace and
-// return LabelSetSnapshot if there was a reallocation and ls id.
-//
-//nolint:gocritic // unnamedResult not need
-func (lss *LabelSetStorage) FindOrEmplaceFromBuilder(
-	source SnapshotSource,
-	sortedAdd []Label,
-	sortedDel []string,
-	snapshot *LabelSetSnapshot,
-	lsID uint32,
-) (*LabelSetSnapshot, uint64, uint32) {
-	var snapshotPointer uintptr
-	if snapshot != nil {
-		snapshotPointer = snapshot.pointer
-	}
-
-	lssROPtr, length, lsID, hasReallocations := primitivesLSSFindOrEmplaceFromBuilder(
-		lss.pointer,
-		snapshotPointer,
-		sortedAdd,
-		sortedDel,
-		lsID,
-	)
-	runtime.KeepAlive(lss)
-	runtime.KeepAlive(snapshot)
-
-	if hasReallocations {
-		return newLabelSetSnapshot(lssROPtr, source), length, lsID
-	}
-
-	return nil, length, lsID
 }
 
 // FindFromBuilder label set from builder in lss, return length ls, lsid and bool ok.

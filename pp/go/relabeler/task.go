@@ -108,30 +108,6 @@ type GenericTask struct {
 	isExclusive bool
 }
 
-func NewGenericTask(
-	shardFn ShardFn,
-	created, done, live, execute prometheus.Counter,
-	numberOfShards uint16,
-	forLSS, isExclusive bool,
-) *GenericTask {
-	t := &GenericTask{
-		errs:        make([]error, numberOfShards),
-		shardFn:     shardFn,
-		wg:          sync.WaitGroup{},
-		createdTS:   time.Now().UnixMicro(),
-		created:     created,
-		done:        done,
-		live:        live,
-		execute:     execute,
-		forLSS:      forLSS,
-		isExclusive: isExclusive,
-	}
-	t.wg.Add(int(numberOfShards))
-	t.created.Inc()
-
-	return t
-}
-
 // NewReadOnlyGenericTask init new GenericTask for read only head.
 func NewReadOnlyGenericTask(
 	shardFn ShardFn,
@@ -173,8 +149,66 @@ func (t *GenericTask) IsExclusive() bool {
 	return t.isExclusive
 }
 
+// ReadOnlyResetTo resets task all state for read only head.
+func (t *GenericTask) ReadOnlyResetTo(shardFn ShardFn, numberOfShards uint16) *GenericTask {
+	t.readOnlyResetState(shardFn, numberOfShards)
+
+	t.wg.Add(int(numberOfShards))
+
+	return t
+}
+
+// ReadOnlySingleResetTo resets task all state for read only head for single shard.
+func (t *GenericTask) ReadOnlySingleResetTo(shardFn ShardFn, numberOfShards uint16) *GenericTask {
+	t.readOnlyResetState(shardFn, numberOfShards)
+
+	t.wg.Add(1)
+
+	return t
+}
+
+// ResetTo resets task all state.
+func (t *GenericTask) ResetTo(
+	shardFn ShardFn,
+	created, done, live, execute prometheus.Counter,
+	numberOfShards uint16,
+	forLSS, isExclusive bool,
+) *GenericTask {
+	t.resetState(
+		shardFn,
+		created, done, live, execute,
+		numberOfShards,
+		forLSS, isExclusive,
+	)
+
+	t.wg.Add(int(numberOfShards))
+
+	return t
+}
+
+// SingleResetTo resets task all state for single shard.
+func (t *GenericTask) SingleResetTo(
+	shardFn ShardFn,
+	created, done, live, execute prometheus.Counter,
+	numberOfShards uint16,
+	forLSS, isExclusive bool,
+) *GenericTask {
+	t.resetState(
+		shardFn,
+		created, done, live, execute,
+		numberOfShards,
+		forLSS, isExclusive,
+	)
+
+	t.wg.Add(1)
+
+	return t
+}
+
 // Wait for the task to complete on all shards.
 func (t *GenericTask) Wait() error {
+	defer ReleaseTask(t)
+
 	t.wg.Wait()
 	if t.done == nil {
 		return errors.Join(t.errs...)
@@ -186,6 +220,52 @@ func (t *GenericTask) Wait() error {
 	t.live.Add(float64(now - t.createdTS))
 
 	return errors.Join(t.errs...)
+}
+
+// readOnlyResetState resets task all state for read only head.
+func (t *GenericTask) readOnlyResetState(shardFn ShardFn, numberOfShards uint16) {
+	t.shardFn = shardFn
+	t.created = nil
+	t.done = nil
+	t.live = nil
+	t.execute = nil
+
+	if cap(t.errs) < int(numberOfShards) {
+		t.errs = make([]error, numberOfShards)
+	} else {
+		clear(t.errs[:cap(t.errs)])
+		t.errs = t.errs[:numberOfShards]
+	}
+}
+
+// resetState resets task all state.
+func (t *GenericTask) resetState(
+	shardFn ShardFn,
+	created, done, live, execute prometheus.Counter,
+	numberOfShards uint16,
+	forLSS, isExclusive bool,
+) {
+	t.shardFn = shardFn
+	t.created = created
+	t.done = done
+	t.live = live
+	t.execute = execute
+	t.forLSS = forLSS
+	t.isExclusive = isExclusive
+
+	if cap(t.errs) < int(numberOfShards) {
+		t.errs = make([]error, numberOfShards)
+	} else {
+		clear(t.errs[:cap(t.errs)])
+		t.errs = t.errs[:numberOfShards]
+	}
+
+	if t.created != nil {
+		t.created.Inc()
+	}
+
+	t.createdTS = time.Now().UnixMicro()
+	t.executeTS = 0
 }
 
 //
@@ -217,4 +297,29 @@ func (tw *TaskWaiter) Wait() error {
 	}
 
 	return errors.Join(errs...)
+}
+
+//
+// TaskPool
+//
+
+// TaskPool global pool *GenericTask.
+var taskPool = &sync.Pool{
+	New: func() any {
+		return &GenericTask{
+			wg: sync.WaitGroup{},
+		}
+	},
+}
+
+// AcquireTask acquire *GenericTask from pool.
+func AcquireTask() *GenericTask {
+	return taskPool.Get().(*GenericTask)
+}
+
+// ReleaseTask release *GenericTask to pool.
+func ReleaseTask(t *GenericTask) {
+	t.shardFn = nil
+	clear(t.errs)
+	taskPool.Put(t)
 }

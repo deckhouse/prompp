@@ -316,20 +316,3 @@ func (qs *QueryableStorage) shrink(persisted ...string) {
 type noOpWriteNotifier struct{}
 
 func (noOpWriteNotifier) NotifyWritten() {}
-
-// func (qs *QueryableStorage) Find(ls labels.Labels) bool {
-// 	qs.mtx.Lock()
-// 	heads := make([]relabeler.Head, len(qs.heads))
-// 	copy(heads, qs.heads)
-// 	qs.mtx.Unlock()
-
-// 	var find bool
-
-// 	for _, head := range heads {
-// 		if head.Find(ls) {
-// 			find = true
-// 		}
-// 	}
-
-// 	return find
-// }
