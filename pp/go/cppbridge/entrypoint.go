@@ -2,16 +2,16 @@ package cppbridge
 
 // #cgo CFLAGS: -I.
 // #cgo LDFLAGS: -L.
-// #cgo sanitize LDFLAGS: -fsanitize=address
-// #cgo sanitize CFLAGS: -fsanitize=address
-// #cgo arm64,!sanitize,!dbg LDFLAGS: -l:arm64_entrypoint_init_aio_opt.a -l:arm64_armv8_a_entrypoint_aio_prefixed_opt.a -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_opt.a
-// #cgo arm64,!sanitize,dbg LDFLAGS: -l:arm64_entrypoint_init_aio_dbg.a -l:arm64_armv8_a_entrypoint_aio_prefixed_dbg.a -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_dbg.a
-// #cgo arm64,sanitize,!dbg LDFLAGS: -l:arm64_entrypoint_init_aio_opt_asan.a -l:arm64_armv8_a_entrypoint_aio_prefixed_opt_asan.a -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_opt_asan.a
-// #cgo arm64,sanitize,dbg LDFLAGS: -l:arm64_entrypoint_init_aio_dbg_asan.a -l:arm64_armv8_a_entrypoint_aio_prefixed_dbg_asan.a -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_dbg_asan.a
-// #cgo amd64,!sanitize,!dbg LDFLAGS: -l:amd64_entrypoint_init_aio_opt.a -l:amd64_k8_entrypoint_aio_prefixed_opt.a -l:amd64_nehalem_entrypoint_aio_prefixed_opt.a -l:amd64_haswell_entrypoint_aio_prefixed_opt.a
-// #cgo amd64,!sanitize,dbg LDFLAGS: -l:amd64_entrypoint_init_aio_dbg.a -l:amd64_k8_entrypoint_aio_prefixed_dbg.a -l:amd64_nehalem_entrypoint_aio_prefixed_dbg.a -l:amd64_haswell_entrypoint_aio_prefixed_dbg.a
-// #cgo amd64,sanitize,!dbg LDFLAGS: -l:amd64_entrypoint_init_aio_opt_asan.a -l:amd64_k8_entrypoint_aio_prefixed_opt_asan.a -l:amd64_nehalem_entrypoint_aio_prefixed_opt_asan.a -l:amd64_haswell_entrypoint_aio_prefixed_opt_asan.a
-// #cgo amd64,sanitize,dbg LDFLAGS: -l:amd64_entrypoint_init_aio_dbg_asan.a -l:amd64_k8_entrypoint_aio_prefixed_dbg_asan.a -l:amd64_nehalem_entrypoint_aio_prefixed_dbg_asan.a -l:amd64_haswell_entrypoint_aio_prefixed_dbg_asan.a
+// #cgo asan LDFLAGS: -fsanitize=address
+// #cgo asan CFLAGS: -fsanitize=address
+// #cgo arm64,!asan,!dbg LDFLAGS: -l:arm64_entrypoint_init_aio_opt.a -l:arm64_armv8_a_entrypoint_aio_prefixed_opt.a -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_opt.a
+// #cgo arm64,!asan,dbg LDFLAGS: -l:arm64_entrypoint_init_aio_dbg.a -l:arm64_armv8_a_entrypoint_aio_prefixed_dbg.a -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_dbg.a
+// #cgo arm64,asan,!dbg LDFLAGS: -l:arm64_entrypoint_init_aio_opt_asan.a -l:arm64_armv8_a_entrypoint_aio_prefixed_opt_asan.a -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_opt_asan.a
+// #cgo arm64,asan,dbg LDFLAGS: -l:arm64_entrypoint_init_aio_dbg_asan.a -l:arm64_armv8_a_entrypoint_aio_prefixed_dbg_asan.a -l:arm64_armv8_a_crc_entrypoint_aio_prefixed_dbg_asan.a
+// #cgo amd64,!asan,!dbg LDFLAGS: -l:amd64_entrypoint_init_aio_opt.a -l:amd64_k8_entrypoint_aio_prefixed_opt.a -l:amd64_nehalem_entrypoint_aio_prefixed_opt.a -l:amd64_haswell_entrypoint_aio_prefixed_opt.a
+// #cgo amd64,!asan,dbg LDFLAGS: -l:amd64_entrypoint_init_aio_dbg.a -l:amd64_k8_entrypoint_aio_prefixed_dbg.a -l:amd64_nehalem_entrypoint_aio_prefixed_dbg.a -l:amd64_haswell_entrypoint_aio_prefixed_dbg.a
+// #cgo amd64,asan,!dbg LDFLAGS: -l:amd64_entrypoint_init_aio_opt_asan.a -l:amd64_k8_entrypoint_aio_prefixed_opt_asan.a -l:amd64_nehalem_entrypoint_aio_prefixed_opt_asan.a -l:amd64_haswell_entrypoint_aio_prefixed_opt_asan.a
+// #cgo amd64,asan,dbg LDFLAGS: -l:amd64_entrypoint_init_aio_dbg_asan.a -l:amd64_k8_entrypoint_aio_prefixed_dbg_asan.a -l:amd64_nehalem_entrypoint_aio_prefixed_dbg_asan.a -l:amd64_haswell_entrypoint_aio_prefixed_dbg_asan.a
 // #cgo !static LDFLAGS: -lstdc++ -lm -lgcc_eh -l:libunwind.a -llzma -lstdc++_libbacktrace
 // #cgo static LDFLAGS: -static -static-libgcc -static-libstdc++ -l:libstdc++.a -l:libm.a -l:libgcc_eh.a -l:libunwind.a -l:liblzma.a -l:libstdc++_libbacktrace.a
 // #include "entrypoint.h"
@@ -238,6 +238,7 @@ var (
 )
 
 func freeBytes(b []byte) {
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_free_bytes,
 		uintptr(unsafe.Pointer(&b)),
@@ -252,6 +253,7 @@ func getFlavor() string {
 	var res struct {
 		flavor string
 	}
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_get_flavor,
 		uintptr(unsafe.Pointer(&res)),
@@ -260,6 +262,7 @@ func getFlavor() string {
 }
 
 func memInfo() (res MemInfo) {
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_mem_info,
 		uintptr(unsafe.Pointer(&res)),
@@ -276,6 +279,7 @@ func dumpMemoryProfile(filename string) int {
 		error int
 	}{0}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_dump_memory_profile,
 		uintptr(unsafe.Pointer(&args)),
@@ -293,6 +297,7 @@ func walProtobufHashdexCtor(limits WALHashdexLimits) uintptr {
 		hashdex uintptr
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_protobuf_hashdex_ctor,
 		uintptr(unsafe.Pointer(&limits)),
@@ -307,6 +312,7 @@ func walHashdexDtor(hashdex uintptr) {
 		hashdex uintptr
 	}{hashdex}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_wal_hashdex_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -327,6 +333,7 @@ func walProtobufHashdexSnappyPresharding(
 		exception []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_protobuf_hashdex_snappy_presharding,
 		uintptr(unsafe.Pointer(&args)),
@@ -344,6 +351,7 @@ func walProtobufHashdexGetMetadata(hashdex uintptr) []WALScraperHashdexMetadata 
 		metadata []WALScraperHashdexMetadata
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_protobuf_hashdex_get_metadata,
 		uintptr(unsafe.Pointer(&args)),
@@ -362,6 +370,7 @@ func walGoModelHashdexCtor(limits WALHashdexLimits) uintptr {
 		hashdex uintptr
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_go_model_hashdex_ctor,
 		uintptr(unsafe.Pointer(&limits)),
@@ -382,6 +391,7 @@ func walGoModelHashdexPresharding(hashdex uintptr, data []model.TimeSeries) (clu
 		exception []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_go_model_hashdex_presharding,
 		uintptr(unsafe.Pointer(&args)),
@@ -401,6 +411,7 @@ func walEncodersVersion() uint8 {
 		encoders_version uint8
 	}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_wal_encoders_version,
 		uintptr(unsafe.Pointer(&res)),
@@ -419,6 +430,7 @@ func walEncoderCtor(shardID uint16, logShards uint8) uintptr {
 		encoder uintptr
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_encoder_ctor,
 		uintptr(unsafe.Pointer(&args)),
@@ -439,6 +451,7 @@ func walEncoderAdd(encoder, hashdex uintptr) (stats WALEncoderStats, exception [
 		exception []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_encoder_add,
 		uintptr(unsafe.Pointer(&args)),
@@ -458,6 +471,7 @@ func walEncoderAddInnerSeries(encoder uintptr, innerSeries []*InnerSeries) (stat
 		exception []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_encoder_add_inner_series,
 		uintptr(unsafe.Pointer(&args)),
@@ -482,6 +496,7 @@ func walEncoderAddRelabeledSeries(
 		exception []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_encoder_add_relabeled_series,
 		uintptr(unsafe.Pointer(&args)),
@@ -502,6 +517,7 @@ func walEncoderFinalize(encoder uintptr) (stats WALEncoderStats, segment, except
 		exception []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_encoder_finalize,
 		uintptr(unsafe.Pointer(&args)),
@@ -529,6 +545,7 @@ func walEncoderAddWithStaleNans(
 		exception   []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_encoder_add_with_stale_nans,
 		uintptr(unsafe.Pointer(&args)),
@@ -550,6 +567,7 @@ func walEncoderCollectSource(encoder, sourceState uintptr, staleTS int64) (stats
 		exception []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_encoder_collect_source,
 		uintptr(unsafe.Pointer(&args)),
@@ -565,6 +583,7 @@ func walEncoderDtor(encoder uintptr) {
 		encoder uintptr
 	}{encoder}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_wal_encoder_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -585,6 +604,7 @@ func walEncoderLightweightCtor(shardID uint16, logShards uint8) uintptr {
 		encoder uintptr
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_encoder_lightweight_ctor,
 		uintptr(unsafe.Pointer(&args)),
@@ -605,6 +625,7 @@ func walEncoderLightweightAdd(encoder, hashdex uintptr) (stats WALEncoderStats, 
 		exception []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_encoder_lightweight_add,
 		uintptr(unsafe.Pointer(&args)),
@@ -628,6 +649,7 @@ func walEncoderLightweightAddInnerSeries(
 		exception []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_encoder_lightweight_add_inner_series,
 		uintptr(unsafe.Pointer(&args)),
@@ -653,6 +675,7 @@ func walEncoderLightweightAddRelabeledSeries(
 		exception []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_encoder_lightweight_add_relabeled_series,
 		uintptr(unsafe.Pointer(&args)),
@@ -673,6 +696,7 @@ func walEncoderLightweightFinalize(encoder uintptr) (stats WALEncoderStats, segm
 		exception []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_encoder_lightweight_finalize,
 		uintptr(unsafe.Pointer(&args)),
@@ -688,6 +712,7 @@ func walEncoderLightweightDtor(encoder uintptr) {
 		encoder uintptr
 	}{encoder}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_wal_encoder_lightweight_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -707,6 +732,7 @@ func walDecoderCtor(encodersVersion uint8) uintptr {
 		decoder uintptr
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_decoder_ctor,
 		uintptr(unsafe.Pointer(&args)),
@@ -728,6 +754,7 @@ func walDecoderDecode(decoder uintptr, segment []byte) (stats DecodedSegmentStat
 		error    []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_decoder_decode,
 		uintptr(unsafe.Pointer(&args)),
@@ -759,6 +786,7 @@ func walDecoderDecodeToHashdex(
 		error   []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_decoder_decode_to_hashdex,
 		uintptr(unsafe.Pointer(&args)),
@@ -793,6 +821,7 @@ func walDecoderDecodeToHashdexWithMetricInjection(
 		error   []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_decoder_decode_to_hashdex_with_metric_injection,
 		uintptr(unsafe.Pointer(&args)),
@@ -813,6 +842,7 @@ func walDecoderDecodeDry(decoder uintptr, segment []byte) (segmentID uint32, err
 		error     []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_decoder_decode_dry,
 		uintptr(unsafe.Pointer(&args)),
@@ -839,6 +869,7 @@ func walDecoderRestoreFromStream(
 		error     []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_decoder_restore_from_stream,
 		uintptr(unsafe.Pointer(&args)),
@@ -854,6 +885,7 @@ func walDecoderDtor(decoder uintptr) {
 		decoder uintptr
 	}{decoder}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_wal_decoder_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -880,6 +912,7 @@ func walOutputDecoderCtor(
 		decoder uintptr
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_output_decoder_ctor,
 		uintptr(unsafe.Pointer(&args)),
@@ -895,6 +928,7 @@ func walOutputDecoderDtor(decoder uintptr) {
 		decoder uintptr
 	}{decoder}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_wal_output_decoder_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -911,6 +945,7 @@ func walOutputDecoderDumpTo(decoder uintptr) (dump, err []byte) {
 		error []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_output_decoder_dump_to,
 		uintptr(unsafe.Pointer(&args)),
@@ -930,6 +965,7 @@ func walOutputDecoderLoadFrom(decoder uintptr, dump []byte) []byte {
 		error []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_output_decoder_load_from,
 		uintptr(unsafe.Pointer(&args)),
@@ -956,6 +992,7 @@ func walOutputDecoderDecode(
 		error      []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_output_decoder_decode,
 		uintptr(unsafe.Pointer(&args)),
@@ -978,6 +1015,7 @@ func walProtobufEncoderCtor(outputLsses []uintptr) uintptr {
 		decoder uintptr
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_protobuf_encoder_ctor,
 		uintptr(unsafe.Pointer(&args)),
@@ -993,6 +1031,7 @@ func walProtobufEncoderDtor(decoder uintptr) {
 		decoder uintptr
 	}{decoder}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_wal_protobuf_encoder_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -1016,6 +1055,7 @@ func walProtobufEncoderEncode(
 		error []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_protobuf_encoder_encode,
 		uintptr(unsafe.Pointer(&args)),
@@ -1038,6 +1078,7 @@ func primitivesLSSCtor(lss_type uint32) uintptr {
 		lss uintptr
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_primitives_lss_ctor,
 		uintptr(unsafe.Pointer(&args)),
@@ -1053,6 +1094,7 @@ func primitivesLSSDtor(lss uintptr) {
 		lss uintptr
 	}{lss}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_primitives_lss_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -1068,6 +1110,7 @@ func primitivesLSSAllocatedMemory(lss uintptr) uint64 {
 		allocatedMemory uint64
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_primitives_lss_allocated_memory,
 		uintptr(unsafe.Pointer(&args)),
@@ -1089,6 +1132,7 @@ func primitivesLSSFindOrEmplace(lss uintptr, labelSet model.LabelSet) FindOrEmpl
 	}{lss, labelSet}
 	var res FindOrEmplaceResult
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_primitives_lss_find_or_emplace,
 		uintptr(unsafe.Pointer(&args)),
@@ -1105,6 +1149,7 @@ func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder CppLabelSetBuilder) 
 	}{lss, builder}
 	var res FindOrEmplaceResult
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_primitives_lss_find_or_emplace_builder,
 		uintptr(unsafe.Pointer(&args)),
@@ -1194,6 +1239,7 @@ func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource 
 		status          uint32
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_primitives_lss_query,
 		uintptr(unsafe.Pointer(&args)),
@@ -1204,6 +1250,7 @@ func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource 
 }
 
 func primitivesLabelSetMatchesFree(result *LSSQueryResult) {
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_primitives_lss_query_result_free,
 		uintptr(unsafe.Pointer(result)),
@@ -1219,6 +1266,7 @@ func primitivesLSSGetLabelSets(lss uintptr, labelSetIDs []uint32) []Labels {
 		labelSets []Labels
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_primitives_lss_get_label_sets,
 		uintptr(unsafe.Pointer(&args)),
@@ -1233,6 +1281,7 @@ func primitivesLSSFreeLabelSets(labelSets []Labels) {
 		labelSets []Labels
 	}{labelSets}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_primitives_lss_free_label_sets,
 		uintptr(unsafe.Pointer(&args)),
@@ -1249,6 +1298,7 @@ func primitivesLSSQueryLabelNames(lss uintptr, matchers []model.LabelMatcher) (u
 		names  []string
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_primitives_lss_query_label_names,
 		uintptr(unsafe.Pointer(&args)),
@@ -1269,6 +1319,7 @@ func primitivesLSSQueryLabelValues(lss uintptr, label_name string, matchers []mo
 		values []string
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_primitives_lss_query_label_values,
 		uintptr(unsafe.Pointer(&args)),
@@ -1286,6 +1337,7 @@ func primitivesLSSCreateReadonlyLss(lss uintptr) uintptr {
 		lss uintptr
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_create_readonly_lss,
 		uintptr(unsafe.Pointer(&args)),
@@ -1335,6 +1387,7 @@ func prometheusStatelessRelabelerCtor(cfgs []*RelabelConfig) (statelessRelabeler
 		exception          []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_prometheus_stateless_relabeler_ctor,
 		uintptr(unsafe.Pointer(&args)),
@@ -1350,6 +1403,7 @@ func prometheusStatelessRelabelerDtor(statelessRelabeler uintptr) {
 		statelessRelabeler uintptr
 	}{statelessRelabeler}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_prometheus_stateless_relabeler_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -1366,6 +1420,7 @@ func prometheusStatelessRelabelerResetTo(statelessRelabeler uintptr, cfgs []*Rel
 		exception []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_prometheus_stateless_relabeler_reset_to,
 		uintptr(unsafe.Pointer(&args)),
@@ -1385,6 +1440,7 @@ func prometheusInnerSeriesCtor(innerSeries *InnerSeries) {
 		innerSeries *InnerSeries
 	}{innerSeries}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_prometheus_inner_series_ctor,
 		uintptr(unsafe.Pointer(&args)),
@@ -1397,6 +1453,7 @@ func prometheusInnerSeriesDtor(innerSeries *InnerSeries) {
 		innerSeries *InnerSeries
 	}{innerSeries}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_prometheus_inner_series_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -1413,6 +1470,7 @@ func prometheusRelabeledSeriesCtor(relabeledSeries *RelabeledSeries) {
 		relabeledSeries *RelabeledSeries
 	}{relabeledSeries}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_prometheus_relabeled_series_ctor,
 		uintptr(unsafe.Pointer(&args)),
@@ -1425,6 +1483,7 @@ func prometheusRelabeledSeriesDtor(relabeledSeries *RelabeledSeries) {
 		relabeledSeries *RelabeledSeries
 	}{relabeledSeries}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_prometheus_relabeled_series_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -1441,6 +1500,7 @@ func prometheusRelabelerStateUpdateCtor(relabelerStateUpdate *RelabelerStateUpda
 		relabelerStateUpdate *RelabelerStateUpdate
 	}{relabelerStateUpdate}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_prometheus_relabeler_state_update_ctor,
 		uintptr(unsafe.Pointer(&args)),
@@ -1453,6 +1513,7 @@ func prometheusRelabelerStateUpdateDtor(relabelerStateUpdate *RelabelerStateUpda
 		relabelerStateUpdate *RelabelerStateUpdate
 	}{relabelerStateUpdate}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_prometheus_relabeler_state_update_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -1468,6 +1529,7 @@ func prometheusRelabelStaleNansStateCtor() uintptr {
 		state uintptr
 	}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_prometheus_relabel_stalenans_state_ctor,
 		uintptr(unsafe.Pointer(&res)),
@@ -1481,6 +1543,7 @@ func prometheusRelabelStaleNansStateReset(state uintptr) {
 		state uintptr
 	}{state}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_prometheus_relabel_stalenans_state_reset,
 		uintptr(unsafe.Pointer(&args)),
@@ -1492,6 +1555,7 @@ func prometheusRelabelStaleNansStateDtor(state uintptr) {
 		state uintptr
 	}{state}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_prometheus_relabel_stalenans_state_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -1519,6 +1583,7 @@ func prometheusPerShardRelabelerCtor(
 		exception         []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_prometheus_per_shard_relabeler_ctor,
 		uintptr(unsafe.Pointer(&args)),
@@ -1534,6 +1599,7 @@ func prometheusPerShardRelabelerDtor(perShardRelabeler uintptr) {
 		perShardRelabeler uintptr
 	}{perShardRelabeler}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_prometheus_per_shard_relabeler_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -1563,6 +1629,7 @@ func prometheusPerShardRelabelerInputRelabeling(
 		targetLssHasReallocations bool
 	}
 	start := time.Now().UnixNano()
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_prometheus_per_shard_relabeler_input_relabeling,
 		uintptr(unsafe.Pointer(&args)),
@@ -1612,6 +1679,7 @@ func prometheusPerShardRelabelerInputRelabelingWithStalenans(
 		targetLssHasReallocations bool
 	}
 	start := time.Now().UnixNano()
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_prometheus_per_shard_relabeler_input_relabeling_with_stalenans,
 		uintptr(unsafe.Pointer(&args)),
@@ -1643,6 +1711,7 @@ func prometheusPerShardRelabelerAppendRelabelerSeries(
 		targetLssHasReallocations bool
 	}
 	start := time.Now().UnixNano()
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_prometheus_per_shard_relabeler_append_relabeler_series,
 		uintptr(unsafe.Pointer(&args)),
@@ -1670,6 +1739,7 @@ func prometheusPerShardSingeRelabelerUpdateRelabelerState(
 		exception []byte
 	}
 	start := time.Now().UnixNano()
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_prometheus_per_shard_singe_relabeler_update_relabeler_state,
 		uintptr(unsafe.Pointer(&args)),
@@ -1695,6 +1765,7 @@ func prometheusPerShardRelabelerUpdateRelabelerState(
 		exception []byte
 	}
 	start := time.Now().UnixNano()
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_prometheus_per_shard_relabeler_update_relabeler_state,
 		uintptr(unsafe.Pointer(&args)),
@@ -1724,6 +1795,7 @@ func prometheusPerShardRelabelerOutputRelabeling(
 		exception []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_prometheus_per_shard_relabeler_output_relabeling,
 		uintptr(unsafe.Pointer(&args)),
@@ -1745,6 +1817,7 @@ func prometheusPerShardRelabelerResetTo(
 		numberOfShards    uint16
 	}{externalLabels, perShardRelabeler, numberOfShards}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_prometheus_per_shard_relabeler_reset_to,
 		uintptr(unsafe.Pointer(&args)),
@@ -1756,6 +1829,7 @@ func seriesDataDataStorageCtor() uintptr {
 		dataStorage uintptr
 	}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_series_data_data_storage_ctor,
 		uintptr(unsafe.Pointer(&res)),
@@ -1769,6 +1843,7 @@ func seriesDataDataStorageReset(dataStorage uintptr) {
 		dataStorage uintptr
 	}{dataStorage}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_series_data_data_storage_reset,
 		uintptr(unsafe.Pointer(&args)),
@@ -1783,6 +1858,7 @@ func seriesDataDataStorageAllocatedMemory(dataStorage uintptr) uint64 {
 		allocatedMemory uint64
 	}
 	start := time.Now().UnixNano()
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_series_data_data_storage_allocated_memory,
 		uintptr(unsafe.Pointer(&args)),
@@ -1803,6 +1879,7 @@ func seriesDataDataStorageQuery(dataStorage uintptr, query HeadDataStorageQuery)
 		serializedChunks []byte
 	}
 	start := time.Now().UnixNano()
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_series_data_data_storage_query,
 		uintptr(unsafe.Pointer(&args)),
@@ -1822,6 +1899,7 @@ func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32
 		samples     []Sample
 	}{dataStorage, labelSetIDs, timestamp, samples}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_series_data_data_storage_instant_query,
 		uintptr(unsafe.Pointer(&args)),
@@ -1836,6 +1914,7 @@ func seriesDataDataStorageTimeInterval(dataStorage uintptr) TimeInterval {
 		interval TimeInterval
 	}{}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_series_data_data_storage_time_interval,
 		uintptr(unsafe.Pointer(&args)),
@@ -1850,6 +1929,7 @@ func seriesDataDataStorageDtor(dataStorage uintptr) {
 		dataStorage uintptr
 	}{dataStorage}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_series_data_data_storage_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -1864,6 +1944,7 @@ func seriesDataEncoderCtor(dataStorage uintptr) uintptr {
 		encoder uintptr
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_series_data_encoder_ctor,
 		uintptr(unsafe.Pointer(&args)),
@@ -1881,6 +1962,7 @@ func seriesDataEncoderEncode(encoder uintptr, seriesID uint32, timestamp int64, 
 		value     float64
 	}{encoder, seriesID, timestamp, value}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_series_data_encoder_encode,
 		uintptr(unsafe.Pointer(&args)),
@@ -1893,6 +1975,7 @@ func seriesDataEncoderEncodeInnerSeriesSlice(encoder uintptr, innerSeriesSlice [
 		innerSeriesSlice []*InnerSeries
 	}{encoder, innerSeriesSlice}
 	start := time.Now().UnixNano()
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_series_data_encoder_encode_inner_series_slice,
 		uintptr(unsafe.Pointer(&args)),
@@ -1906,6 +1989,7 @@ func seriesDataEncoderMergeOutOfOrderChunks(encoder uintptr) {
 		encoder uintptr
 	}{encoder}
 	start := time.Now().UnixNano()
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_series_data_encoder_merge_out_of_order_chunks,
 		uintptr(unsafe.Pointer(&args)),
@@ -1919,6 +2003,7 @@ func seriesDataEncoderDtor(encoder uintptr) {
 		encoder uintptr
 	}{encoder}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_series_data_encoder_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -1933,6 +2018,7 @@ func seriesDataDeserializerCtor(serializedChunks []byte) uintptr {
 		deserializer uintptr
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_series_data_deserializer_ctor,
 		uintptr(unsafe.Pointer(&args)),
@@ -1951,6 +2037,7 @@ func seriesDataDeserializerCreateDecodeIterator(deserializer uintptr, chunkMetad
 		decodeIterator uintptr
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_series_data_deserializer_create_decode_iterator,
 		uintptr(unsafe.Pointer(&args)),
@@ -1968,6 +2055,7 @@ func seriesDataDecodeIteratorNext(decodeIterator uintptr) bool {
 		hasValue bool
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_series_data_decode_iterator_next,
 		uintptr(unsafe.Pointer(&args)),
@@ -1986,6 +2074,7 @@ func seriesDataDecodeIteratorSample(decodeIterator uintptr) (int64, float64) {
 		value     float64
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_series_data_decode_iterator_sample,
 		uintptr(unsafe.Pointer(&args)),
@@ -2000,6 +2089,7 @@ func seriesDataDecodeIteratorDtor(decodeIterator uintptr) {
 		decodeIterator uintptr
 	}{decodeIterator}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_series_data_decode_iterator_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -2011,6 +2101,7 @@ func seriesDataDeserializerDtor(deserializer uintptr) {
 		deserializer uintptr
 	}{deserializer}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_series_data_deserializer_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -2027,6 +2118,7 @@ func seriesDataChunkRecoderCtor(lss, dataStorage uintptr, timeInterval TimeInter
 		chunkRecoder uintptr
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_series_data_chunk_recoder_ctor,
 		uintptr(unsafe.Pointer(&args)),
@@ -2045,6 +2137,7 @@ func seriesDataSerializedChunkRecoderCtor(serializedChunks []byte, timeInterval 
 		chunkRecoder uintptr
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_series_data_serialized_chunk_recoder_ctor,
 		uintptr(unsafe.Pointer(&args)),
@@ -2059,6 +2152,7 @@ func seriesDataChunkRecoderRecodeNextChunk(chunkRecoder uintptr, recodedChunk *R
 		chunkRecoder uintptr
 	}{chunkRecoder}
 	start := time.Now().UnixNano()
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_series_data_chunk_recoder_recode_next_chunk,
 		uintptr(unsafe.Pointer(&args)),
@@ -2073,6 +2167,7 @@ func seriesDataChunkRecoderDtor(chunkRecoder uintptr) {
 		chunkRecoder uintptr
 	}{chunkRecoder}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_series_data_chunk_recoder_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -2088,6 +2183,7 @@ func indexWriterCtor(lss uintptr) uintptr {
 		writer uintptr
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_index_writer_ctor,
 		uintptr(unsafe.Pointer(&args)),
@@ -2102,6 +2198,7 @@ func indexWriterDtor(writer uintptr) {
 		writer uintptr
 	}{writer}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_index_writer_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -2117,6 +2214,7 @@ func indexWriterWriteHeader(writer uintptr, data []byte) []byte {
 		data []byte
 	}{data}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_index_writer_write_header,
 		uintptr(unsafe.Pointer(&args)),
@@ -2135,6 +2233,7 @@ func indexWriterWriteSymbols(writer uintptr, data []byte) []byte {
 		data []byte
 	}{data}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_index_writer_write_symbols,
 		uintptr(unsafe.Pointer(&args)),
@@ -2155,6 +2254,7 @@ func indexWriterWriteNextSeriesBatch(writer uintptr, ls_id uint32, chunks_meta [
 		data []byte
 	}{data}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_index_writer_write_next_series_batch,
 		uintptr(unsafe.Pointer(&args)),
@@ -2173,6 +2273,7 @@ func indexWriterWriteLabelIndices(writer uintptr, data []byte) []byte {
 		data []byte
 	}{data}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_index_writer_write_label_indices,
 		uintptr(unsafe.Pointer(&args)),
@@ -2193,6 +2294,7 @@ func indexWriterWriteNextPostingsBatch(writer uintptr, max_batch_size uint32, da
 		has_more_data bool
 	}{data, false}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_index_writer_write_next_postings_batch,
 		uintptr(unsafe.Pointer(&args)),
@@ -2211,6 +2313,7 @@ func indexWriterWriteLabelIndicesTable(writer uintptr, data []byte) []byte {
 		data []byte
 	}{data}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_index_writer_write_label_indices_table,
 		uintptr(unsafe.Pointer(&args)),
@@ -2229,6 +2332,7 @@ func indexWriterWritePostingsTableOffsets(writer uintptr, data []byte) []byte {
 		data []byte
 	}{data}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_index_writer_write_postings_table_offsets,
 		uintptr(unsafe.Pointer(&args)),
@@ -2247,6 +2351,7 @@ func indexWriterWriteTableOfContents(writer uintptr, data []byte) []byte {
 		data []byte
 	}{data}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_index_writer_write_table_of_contents,
 		uintptr(unsafe.Pointer(&args)),
@@ -2263,6 +2368,7 @@ func getHeadStatus(lss, dataStorage uintptr, status *HeadStatus, limit int) {
 		limit       int
 	}{lss, dataStorage, limit}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_get_head_status,
 		uintptr(unsafe.Pointer(&args)),
@@ -2271,6 +2377,7 @@ func getHeadStatus(lss, dataStorage uintptr, status *HeadStatus, limit int) {
 }
 
 func freeHeadStatus(status *HeadStatus) {
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_free_head_status,
 		uintptr(unsafe.Pointer(status)),
@@ -2283,6 +2390,7 @@ func getHeadStatusLSS(lss uintptr, status *HeadStatus, limit int) {
 		limit int
 	}{lss, limit}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_get_head_status_lss,
 		uintptr(unsafe.Pointer(&args)),
@@ -2295,6 +2403,7 @@ func getHeadStatusDataStorage(dataStorage uintptr, status *HeadStatus) {
 		dataStorage uintptr
 	}{dataStorage}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_get_head_status_data_storage,
 		uintptr(unsafe.Pointer(&args)),
@@ -2311,6 +2420,7 @@ func walPrometheusScraperHashdexCtor() uintptr {
 		hashdex uintptr
 	}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_wal_prometheus_scraper_hashdex_ctor,
 		uintptr(unsafe.Pointer(&res)),
@@ -2330,6 +2440,7 @@ func walPrometheusScraperHashdexParse(hashdex uintptr, buffer []byte, default_ti
 		scraped uint32
 	}
 	start := time.Now().UnixNano()
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_prometheus_scraper_hashdex_parse,
 		uintptr(unsafe.Pointer(&args)),
@@ -2349,6 +2460,7 @@ func walPrometheusScraperHashdexGetMetadata(hashdex uintptr) []WALScraperHashdex
 		metadata []WALScraperHashdexMetadata
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_prometheus_scraper_hashdex_get_metadata,
 		uintptr(unsafe.Pointer(&args)),
@@ -2367,6 +2479,7 @@ func walOpenMetricsScraperHashdexCtor() uintptr {
 		hashdex uintptr
 	}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_wal_open_metrics_scraper_hashdex_ctor,
 		uintptr(unsafe.Pointer(&res)),
@@ -2386,6 +2499,7 @@ func walOpenMetricsScraperHashdexParse(hashdex uintptr, buffer []byte, default_t
 		scraped uint32
 	}
 	start := time.Now().UnixNano()
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_open_metrics_scraper_hashdex_parse,
 		uintptr(unsafe.Pointer(&args)),
@@ -2405,6 +2519,7 @@ func walOpenMetricsScraperHashdexGetMetadata(hashdex uintptr) []WALScraperHashde
 		metadata []WALScraperHashdexMetadata
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_wal_open_metrics_scraper_hashdex_get_metadata,
 		uintptr(unsafe.Pointer(&args)),
@@ -2424,6 +2539,7 @@ func prometheusCacheCtor() uintptr {
 		cache uintptr
 	}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_prometheus_cache_ctor,
 		uintptr(unsafe.Pointer(&res)),
@@ -2438,6 +2554,7 @@ func prometheusCacheDtor(cache uintptr) {
 		cache uintptr
 	}{cache}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_prometheus_cache_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -2453,6 +2570,7 @@ func prometheusCacheAllocatedMemory(cache uintptr) uint64 {
 		cacheAllocatedMemory uint64
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_prometheus_cache_allocated_memory,
 		uintptr(unsafe.Pointer(&args)),
@@ -2468,6 +2586,7 @@ func prometheusCacheResetTo(cache uintptr) {
 		cache uintptr
 	}{cache}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_prometheus_cache_reset_to,
 		uintptr(unsafe.Pointer(&args)),
@@ -2485,6 +2604,7 @@ func headWalEncoderCtor(shardID uint16, logShards uint8, lss uintptr) uintptr {
 		encoder uintptr
 	}{}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_head_wal_encoder_ctor,
 		uintptr(unsafe.Pointer(&args)),
@@ -2505,6 +2625,7 @@ func headWalEncoderAddInnerSeries(encoder uintptr, innerSeries []*InnerSeries) (
 	}
 
 	start := time.Now().UnixNano()
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_head_wal_encoder_add_inner_series,
 		uintptr(unsafe.Pointer(&args)),
@@ -2528,6 +2649,7 @@ func headWalEncoderFinalize(encoder uintptr) (stats WALEncoderStats, segment []b
 	}
 
 	start := time.Now().UnixNano()
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_head_wal_encoder_finalize,
 		uintptr(unsafe.Pointer(&args)),
@@ -2544,6 +2666,7 @@ func headWalEncoderDtor(encoder uintptr) {
 		encoder uintptr
 	}{encoder}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_head_wal_encoder_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -2560,6 +2683,7 @@ func headWalDecoderCtor(lss uintptr, encoderVersion uint8) uintptr {
 		decoder uintptr
 	}{}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_head_wal_decoder_ctor,
 		uintptr(unsafe.Pointer(&args)),
@@ -2580,6 +2704,7 @@ func headWalDecoderDecode(decoder uintptr, segment []byte, innerSeries *InnerSer
 		exception []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_head_wal_decoder_decode,
 		uintptr(unsafe.Pointer(&args)),
@@ -2599,6 +2724,7 @@ func headWalDecoderDecodeToDataStorage(decoder uintptr, segment []byte, encoder 
 		exception []byte
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_head_wal_decoder_decode_to_data_storage,
 		uintptr(unsafe.Pointer(&args)),
@@ -2616,6 +2742,7 @@ func headWalDecoderCreateEncoder(decoder uintptr) uintptr {
 		encoder uintptr
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_head_wal_encoder_ctor_from_decoder,
 		uintptr(unsafe.Pointer(&args)),
@@ -2630,6 +2757,7 @@ func headWalDecoderDtor(decoder uintptr) {
 		decoder uintptr
 	}{decoder}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_head_wal_decoder_dtor,
 		uintptr(unsafe.Pointer(&args)),
@@ -2650,6 +2778,7 @@ func labelSetLength(lss uintptr, labelSetID uint32, dropMetricName bool) uint64 
 		length uint64
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_label_set_length,
 		uintptr(unsafe.Pointer(&args)),
@@ -2669,6 +2798,7 @@ func labelSetSerialize(lss uintptr, labelSetID uint32, dropMetricName bool) []La
 		labelSet []Label
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_label_set_serialize,
 		uintptr(unsafe.Pointer(&args)),
@@ -2687,6 +2817,7 @@ func labelSetFree(labelSet []Label) {
 		labelSet []Label
 	}{labelSet}
 
+	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_label_set_free,
 		uintptr(unsafe.Pointer(&args)),
@@ -2871,6 +3002,7 @@ func allocateSliceForLabelBytes(lss uintptr, labelSetID uint32, bytes []byte, dr
 		size uint32
 	}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_label_set_bytes_size,
 		uintptr(unsafe.Pointer(&args)),
@@ -2895,6 +3027,7 @@ func labelSetBytes(lss uintptr, labelSetID uint32, bytes []byte, dropMetricName 
 		dropMetricName bool
 	}{lss, labelSetID, dropMetricName}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_label_set_bytes,
 		uintptr(unsafe.Pointer(&args)),
@@ -2923,6 +3056,7 @@ func labelSetBytesWithFilteredNames(
 		dropMetricName bool
 	}{lss, labelSetID, names, dropMetricName}
 
+	testGC()
 	fastcgo.UnsafeCall2(
 		cFunction,
 		uintptr(unsafe.Pointer(&args)),

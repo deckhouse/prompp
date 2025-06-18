@@ -101,6 +101,7 @@ func NewHeadEncoder() *HeadEncoder {
 // Encode - encodes single triplet.
 func (e *HeadEncoder) Encode(seriesID uint32, timestamp int64, value float64) {
 	seriesDataEncoderEncode(e.encoder, seriesID, timestamp, value)
+	runtime.KeepAlive(e)
 }
 
 // EncodeInnerSeriesSlice - encodes InnerSeries slice produced by relabeler.
@@ -238,6 +239,7 @@ func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) *HeadDataStorageSer
 	serializedChunks := &HeadDataStorageSerializedChunks{
 		data: seriesDataDataStorageQuery(ds.dataStorage, query),
 	}
+	runtime.KeepAlive(ds)
 	runtime.SetFinalizer(serializedChunks, func(sc *HeadDataStorageSerializedChunks) {
 		freeBytes(sc.data)
 	})
