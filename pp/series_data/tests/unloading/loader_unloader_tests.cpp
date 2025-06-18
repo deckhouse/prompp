@@ -137,6 +137,45 @@ TEST_F(LoaderUnloaderTestFixture, LoadTwoOpenChunks) {
   ASSERT_FALSE(storage_.unused_series_bitmap.contains(100));
 }
 
+TEST_F(LoaderUnloaderTestFixture, SkipOneUnloading) {
+  // Arrange
+  mark_series_as_unused(0);
+
+  encoder_.encode(0, 1, 1.0);
+
+  unloader_.unload(stream_);
+
+  const size_t size1 = stream_.view().size();
+
+  encoder_.encode(0, 2, 2.0);
+  encoder_.encode(0, 3, 3.0);
+  encoder_.encode(0, 4, 4.0);
+
+  unloader_.unload(stream_);
+
+  const size_t size2 = stream_.view().size();
+
+  encoder_.encode(0, 5, 5.0);
+  encoder_.encode(0, 6, 6.0);
+  encoder_.encode(0, 7, 7.0);
+
+  // Act
+  std::vector<uint32_t> chunk_ids = {0};
+
+  auto span1 = stream_.span<uint8_t>().subspan(0, size1);
+  auto span2 = stream_.span<uint8_t>().subspan(size1, size2);
+
+  series_data::unloading::Loader loader(storage_, chunk_ids);
+  loader.load_next(span1);
+  loader.load_next(span2);
+  loader.load_finalize<series_data::Encoder<>>();
+
+  // Assert
+  ASSERT_EQ((series_data::encoder::SampleList{{1, 1.0}, {2, 2.0}, {3, 3.0}, {4, 4.0}, {5, 5.0}, {6, 6.0}, {7, 7.0}}),
+            series_data::Decoder::decode_chunk<series_data::chunk::DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
+  ASSERT_FALSE(storage_.unused_series_bitmap.contains(0));
+}
+
 TEST_F(LoaderUnloaderTestFixture, LoadFinalizedChunk) {
   // Arrange
   encoder_.encode(0, 1, 1.0);

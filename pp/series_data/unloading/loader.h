@@ -1,9 +1,10 @@
 #pragma once
 
+#include "common.h"
+
 #include "bare_bones/bitset.h"
 #include "bare_bones/encoding.h"
 #include "bare_bones/preprocess.h"
-#include "bare_bones/stream_v_byte.h"
 #include "series_data/data_storage.h"
 
 namespace series_data::unloading {
@@ -14,18 +15,14 @@ struct SeriesToLoadInfo {
 };
 
 class Loader {
-  using EncodingChunkLengthSequence =
-      BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124Frequent0>>>;
-  using EncodingChunkIDSequence =
-      BareBones::EncodedSequence<BareBones::Encoding::RLE<BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124Frequent0>>>;
-
  public:
   template <typename LsIDStorage>
   explicit Loader(DataStorage& storage, const LsIDStorage& ls_id_query) : storage_(storage) {
+    series_to_load_tmp_bitseqs_.reserve(ls_id_query.size());
     for (const auto& ls_id : ls_id_query) {
       if (storage_.unused_series_bitmap.contains(ls_id)) {
-        series_to_load_tmp_bitseqs_[ls_id];
         storage_.unused_series_bitmap.remove(ls_id);
+        series_to_load_tmp_bitseqs_.try_emplace(ls_id);
       }
     }
   }
@@ -105,7 +102,6 @@ class Loader {
                           EncodingChunkIDSequence::Iterator id_it,
                           const uint8_t* bitseqs_ptr,
                           uint32_t total_size) {
-    BareBones::BitSequenceReader reader(bitseqs_ptr, BareBones::Bit::to_bits(total_size));
     uint32_t accumulated_offset = 0;
 
     while (bitset_it != BareBones::Bitset::IteratorSentinel{}) {
@@ -126,6 +122,7 @@ class Loader {
           info.chunk_id = chunk_id_snapshot;
           info.buffer.rewind();
         }
+        assert(accumulated_offset + bitseq_size <= total_size);
         read_data(bitseqs_ptr + accumulated_offset, bitseq_size, info.buffer);
       }
 
@@ -138,14 +135,14 @@ class Loader {
   }
 
   void load_chunk_id(uint32_t ls_id, SeriesToLoadInfo& info) const {
-    const auto chunk_data =
-        *std::ranges::next(DataStorage::SeriesChunkIterator{&storage_, ls_id}, info.chunk_id, series_data::DataStorage::SeriesChunks::end());
+    const auto& chunk_data =
+        std::ranges::next(DataStorage::SeriesChunkIterator{&storage_, ls_id}, info.chunk_id, series_data::DataStorage::SeriesChunks::end());
 
     auto& chunk_bit_sequence = [&]() -> encoder::CompactBitSequence& {
-      if (chunk_data.is_open()) {
-        return get_open_chunk_stream(ls_id);
+      if (chunk_data->is_open()) {
+        return get_open_chunk_stream(storage_, ls_id);
       }
-      return storage_.finalized_data_streams[chunk_data.chunk().encoder.external_index];
+      return storage_.finalized_data_streams[chunk_data->chunk().encoder.external_index];
     }();
 
     const uint32_t info_buffer_size_in_bytes = info.buffer.size_in_bytes();
@@ -155,27 +152,11 @@ class Loader {
     chunk_bit_sequence = std::move(info.buffer);
   }
 
-  [[nodiscard]] encoder::CompactBitSequence& get_open_chunk_stream(uint32_t ls_id) const noexcept {
-    using enum EncodingType;
-
-    const auto& chunk = storage_.open_chunks[ls_id];
-    const auto encoding_type = storage_.open_chunks[ls_id].encoding_state.encoding_type;
-
-    if (encoding_type == kAscInteger) {
-      return storage_.get_asc_integer_stream<chunk::DataChunk::Type::kOpen>(chunk.encoder.external_index);
-    }
-    if (encoding_type == kValuesGorilla) {
-      return storage_.get_values_gorilla_stream<chunk::DataChunk::Type::kOpen>(chunk.encoder.external_index);
-    }
-    // encoding_type == kAscIntegerThenValuesGorilla
-    return storage_.get_asc_integer_then_values_gorilla_stream<chunk::DataChunk::Type::kOpen>(chunk.encoder.external_index);
-  }
-
   DataStorage& storage_;
 
   EncodingChunkLengthSequence::encoder_type length_encoder_{};
   EncodingChunkIDSequence::encoder_type id_encoder_{};
 
-  std::map<uint32_t, SeriesToLoadInfo> series_to_load_tmp_bitseqs_;
+  phmap::flat_hash_map<uint32_t, SeriesToLoadInfo> series_to_load_tmp_bitseqs_{};
 };
 }  // namespace series_data::unloading

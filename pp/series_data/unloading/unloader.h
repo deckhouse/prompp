@@ -1,18 +1,16 @@
 #pragma once
 
+#include "common.h"
+
 #include "bare_bones/bit.h"
 #include "bare_bones/bitset.h"
 #include "bare_bones/encoding.h"
+#include "bare_bones/preprocess.h"
 #include "series_data/data_storage.h"
 #include "series_data/encoder/bit_sequence.h"
 
 namespace series_data::unloading {
 class Unloader {
-  using EncodingChunkLengthSequence =
-      BareBones::EncodedSequence<BareBones::Encoding::DeltaDeltaZigZag<BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124Frequent0>>>;
-  using EncodingChunkIDSequence =
-      BareBones::EncodedSequence<BareBones::Encoding::RLE<BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124Frequent0>>>;
-
  public:
   explicit Unloader(DataStorage& storage) : storage_(storage) {}
 
@@ -48,7 +46,7 @@ class Unloader {
       if (is_unloadable_encoder(encoding_type)) {
         result.ls_id_bitmap.set(ls_id);
 
-        const auto& bitseq = get_open_chunk_stream(ls_id);
+        const auto& bitseq = get_open_chunk_stream(storage_, ls_id);
         const uint32_t bitseq_size = BareBones::Bit::to_bytes(bitseq.size_in_bits());
         result.chunk_length_sequence.push_back(bitseq_size);
         result.total_bitseqs_size += bitseq_size;
@@ -89,7 +87,7 @@ class Unloader {
     stream.write(reinterpret_cast<char*>(&total_bitseqs_size), sizeof(total_bitseqs_size));
 
     for (const auto ls_id : ls_id_bitmap) {
-      auto& bitseq = get_open_chunk_stream(ls_id);
+      auto& bitseq = get_open_chunk_stream(storage_, ls_id);
       const auto bitseq_size = BareBones::Bit::to_bytes(bitseq.size_in_bits());
       stream.write(reinterpret_cast<const char*>(bitseq.raw_bytes()), bitseq_size);
       bitseq.trim_lower_bytes(bitseq_size);
@@ -101,10 +99,10 @@ class Unloader {
     }
   }
 
-  static uint32_t calculate_stream_reserve_size(const BareBones::Bitset& ls_id_bitmap,
-                                                const EncodingChunkLengthSequence& chunk_length_sequence,
-                                                const EncodingChunkIDSequence& chunk_id_sequence,
-                                                uint32_t total_bitseqs_size) noexcept {
+  PROMPP_ALWAYS_INLINE static uint32_t calculate_stream_reserve_size(const BareBones::Bitset& ls_id_bitmap,
+                                                                     const EncodingChunkLengthSequence& chunk_length_sequence,
+                                                                     const EncodingChunkIDSequence& chunk_id_sequence,
+                                                                     uint32_t total_bitseqs_size) noexcept {
     uint32_t reserved_stream_size = 0;
     reserved_stream_size += BareBones::Bit::to_ceil_units<uint64_t>(ls_id_bitmap.size()) * sizeof(uint64_t) + sizeof(uint32_t);
     reserved_stream_size += chunk_id_sequence.data().size_in_bytes() + 2 * sizeof(uint32_t);
@@ -115,22 +113,7 @@ class Unloader {
     return reserved_stream_size;
   }
 
-  [[nodiscard]] encoder::CompactBitSequence& get_open_chunk_stream(uint32_t ls_id) const noexcept {
-    using enum EncodingType;
-
-    const auto& chunk = storage_.open_chunks[ls_id];
-    const auto encoding_type = storage_.open_chunks[ls_id].encoding_state.encoding_type;
-
-    if (encoding_type == kAscInteger) {
-      return storage_.get_asc_integer_stream<chunk::DataChunk::Type::kOpen>(chunk.encoder.external_index);
-    }
-    if (encoding_type == kValuesGorilla) {
-      return storage_.get_values_gorilla_stream<chunk::DataChunk::Type::kOpen>(chunk.encoder.external_index);
-    }
-    return storage_.get_asc_integer_then_values_gorilla_stream<chunk::DataChunk::Type::kOpen>(chunk.encoder.external_index);
-  }
-
-  [[nodiscard]] uint32_t get_open_chunk_id(uint32_t ls_id) const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_open_chunk_id(uint32_t ls_id) const noexcept {
     if (const auto it = storage_.finalized_chunks.find(ls_id); it != storage_.finalized_chunks.end()) {
       return it->second.count();
     }
