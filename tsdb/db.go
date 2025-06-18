@@ -1061,29 +1061,21 @@ func (db *DB) run(ctx context.Context) {
 			default:
 			}
 			// We attempt mmapping of head chunks regularly.
-			// db.head.mmapHeadChunks()
+			db.head.mmapHeadChunks()
 		case <-db.compactc:
 			db.metrics.compactionsTriggered.Inc()
 
 			db.autoCompactMtx.Lock()
-			// if db.autoCompact {
-			// 	if err := db.Compact(ctx); err != nil {
-			// 		level.Error(db.logger).Log("msg", "compaction failed", "err", err)
-			// 		backoff = exponential(backoff, 1*time.Second, 1*time.Minute)
-			// 	} else {
-			// 		backoff = 0
-			// 	}
-			// } else {
-			// 	db.metrics.compactionsSkipped.Inc()
-			// }
-
-			if err := db.compactBlocks(); err != nil {
-				level.Error(db.logger).Log("msg", "compaction failed", "err", err)
-				backoff = exponential(backoff, 1*time.Second, 1*time.Minute)
+			if db.autoCompact {
+				if err := db.Compact(ctx); err != nil {
+					level.Error(db.logger).Log("msg", "compaction failed", "err", err)
+					backoff = exponential(backoff, 1*time.Second, 1*time.Minute)
+				} else {
+					backoff = 0
+				}
 			} else {
-				backoff = 0
+				db.metrics.compactionsSkipped.Inc()
 			}
-
 			db.autoCompactMtx.Unlock()
 		case <-db.stopc:
 			return

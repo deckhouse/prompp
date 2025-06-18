@@ -465,12 +465,12 @@ func (c *LeveledCompactor) CompactWithBlockPopulator(dest string, dirs []string,
 
 		// Use already open blocks if we can, to avoid
 		// having the index data in memory twice.
-		// for _, o := range open {
-		// 	if meta.ULID == o.Meta().ULID {
-		// 		b = o
-		// 		break
-		// 	}
-		// }
+		for _, o := range open {
+			if meta.ULID == o.Meta().ULID {
+				b = o
+				break
+			}
+		}
 
 		if b == nil {
 			var err error
@@ -672,7 +672,6 @@ func (c *LeveledCompactor) write(dest string, meta *BlockMeta, blockPopulator Bl
 		errs.Add(w.Close())
 	}
 	closers = closers[:0] // Avoid closing the writers twice in the defer.
-	clear(closers)
 	if errs.Err() != nil {
 		return errs.Err()
 	}
