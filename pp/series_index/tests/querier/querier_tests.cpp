@@ -16,6 +16,7 @@ using PromPP::Prometheus::LabelMatchers;
 using PromPP::Prometheus::MatcherType;
 using series_index::QueryableEncodingBimap;
 using series_index::SeriesReverseIndex;
+using series_index::querier::MatchersComparatorByTypeAndCardinality;
 using series_index::querier::MatchId;
 using series_index::querier::MatchIdResolver;
 using series_index::querier::Querier;
@@ -32,7 +33,7 @@ struct MatchersComparatorByTypeAndCardinalityCase {
 
 class MatchersComparatorByTypeAndCardinalityFixture : public testing::TestWithParam<MatchersComparatorByTypeAndCardinalityCase> {
  protected:
-  Querier<Index>::MatchersComparatorByTypeAndCardinality comparator_;
+  MatchersComparatorByTypeAndCardinality comparator_;
 
   void sort(Selector<>& selector) const { std::ranges::sort(selector.matchers, comparator_); }
 };
@@ -97,7 +98,7 @@ TEST_P(QuerierFixture, Test) {
   // Arrange
 
   // Act
-  auto result = querier_.query(GetParam().label_matchers, MatchIdResolver{});
+  auto result = querier_.query(GetParam().label_matchers);
 
   // Assert
   EXPECT_EQ(GetParam().expected.status, result.status);

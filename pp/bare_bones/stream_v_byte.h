@@ -969,8 +969,12 @@ class CompactSequence {
   }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return size() == 0; }
 
-  PROMPP_ALWAYS_INLINE auto begin() const noexcept { return DecodeIterator(buffer_.begin(), buffer_.begin() + kMaxKeySize, size()); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return DecodeIteratorSentinel{}; }
+  PROMPP_ALWAYS_INLINE static DecodeIterator decode_iterator(const uint8_t* memory, uint32_t size) noexcept { return {memory, memory + kMaxKeySize, size}; }
+
+  PROMPP_ALWAYS_INLINE DecodeIterator begin() const noexcept { return decode_iterator(buffer_.begin(), size()); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static DecodeIteratorSentinel end() noexcept { return {}; }
+
+  PROMPP_ALWAYS_INLINE const Memory& buffer() const noexcept { return buffer_; }
 
  private:
   PROMPP_ALWAYS_INLINE void set_size(uint32_t new_size) noexcept {

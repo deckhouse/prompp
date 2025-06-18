@@ -120,7 +120,7 @@ class SelectorQuerier {
     }
 
     if (auto value = index_.values_trie(label_name_id)->lookup(static_cast<std::string_view>(label_matcher.value)); value) {
-      matcher.matches.emplace_back(*value);
+      matcher.matches.emplace_back(match_resolver_.value_resolver(label_name_id)(*value));
       matcher.status = MatchStatus::kPartialMatch;
       return QuerierStatus::kMatch;
     }
@@ -221,7 +221,8 @@ class SelectorQuerier {
   PROMPP_ALWAYS_INLINE PromPP::Prometheus::MatchStatus regexp_search(const regexp::RegexpPtr& regexp,
                                                                      uint32_t label_name_id,
                                                                      typename Selector::Matcher& matcher) noexcept {
-    typename TrieIndex::Trie::MatchesList matches_list(matcher.matches, match_resolver_.value_resolver(matcher.label_name_match));
+    const auto value_resolver = match_resolver_.value_resolver(label_name_id);
+    typename TrieIndex::Trie::MatchesList matches_list(matcher.matches, value_resolver);
     return regexp::RegexpSearcher<typename TrieIndex::Trie, decltype(matches_list)>(matches_list).search(*index_.values_trie(label_name_id), regexp);
   }
 };

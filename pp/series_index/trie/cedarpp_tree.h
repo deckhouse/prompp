@@ -145,7 +145,7 @@ class CedarMatchesList {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void add_leaf(const CedarTraversal& traversal) const { matches_.push_back(traversal.value()); }
+  PROMPP_ALWAYS_INLINE void add_leaf(const CedarTraversal& traversal) const { matches_.push_back(value_match_resolver_(traversal.value())); }
   PROMPP_ALWAYS_INLINE void add_leaf(const CedarTraversal& traversal, const std::string_view& prefix) const {
     if (const auto value = traversal.lookup(prefix); value != static_cast<uint32_t>(cedar::da<uint32_t>::error_code::CEDAR_NO_VALUE)) {
       matches_.push_back(value_match_resolver_(value));

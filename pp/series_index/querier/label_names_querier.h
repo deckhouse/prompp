@@ -6,10 +6,10 @@
 
 namespace series_index::querier {
 
-template <class Index, class Selector, MatchResolverInterface MatchResolver>
+template <class Index>
 class LabelNamesQuerier {
  public:
-  LabelNamesQuerier(const Index& index, const MatchResolver& match_resolver) : index_(index), match_resolver_(match_resolver) {}
+  explicit LabelNamesQuerier(const Index& index) : index_(index) {}
 
   template <class LabelMatchers, class NameHandler>
   [[nodiscard]] QuerierStatus query(const LabelMatchers& label_matchers, NameHandler&& name_handler) const {
@@ -17,7 +17,7 @@ class LabelNamesQuerier {
       return query_all_label_names(std::forward<NameHandler>(name_handler));
     }
 
-    auto result = Querier{index_}.query(label_matchers, match_resolver_);
+    auto result = Querier{index_}.query(label_matchers);
     if (result.status == QuerierStatus::kMatch) {
       query_matched_unique_label_names(result.series_ids, std::forward<NameHandler>(name_handler));
     }
@@ -27,7 +27,6 @@ class LabelNamesQuerier {
 
  private:
   const Index& index_;
-  const MatchResolver& match_resolver_;
 
   template <class NameHandler>
   [[nodiscard]] PROMPP_ALWAYS_INLINE QuerierStatus query_all_label_names(NameHandler&& name_handler) const {

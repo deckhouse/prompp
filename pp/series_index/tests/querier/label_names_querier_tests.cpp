@@ -31,7 +31,7 @@ struct LabelNamesQuerierCase {
 class LabelNamesQuerierFixture : public testing::TestWithParam<LabelNamesQuerierCase> {
  protected:
   Index index_;
-  LabelNamesQuerier<Index, Selector<>, MatchIdResolver> querier_{index_, {}};
+  LabelNamesQuerier<Index> querier_{index_};
 
   void SetUp() final {
     for (auto& label_set : label_sets_) {

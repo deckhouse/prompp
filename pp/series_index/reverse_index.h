@@ -6,24 +6,28 @@
 
 namespace series_index {
 
-template <class Container>
+static constexpr uint32_t kOptimalPreAllocationElementsCount = 8;
+
+template <class T>
+using SharedMemory = BareBones::SharedMemory<T, BareBones::DefaultReallocator>;
+
 class DeltaRLE {
  public:
-  using DataSequence = Container;
-  using Base = BareBones::Encoding::DeltaRLE<Container>;
+  using DataSequence = BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124, SharedMemory, kOptimalPreAllocationElementsCount>;
+  using BaseDeltaRLE = BareBones::Encoding::DeltaRLE<DataSequence>;
 
-  class Encoder : public Base::Encoder {
+  class Encoder : public BaseDeltaRLE::Encoder {
    public:
-    using value_type = typename DataSequence::value_type;
+    using value_type = DataSequence::value_type;
 
     template <std::output_iterator<value_type> IteratorType>
     PROMPP_ALWAYS_INLINE void encode(value_type val, IteratorType& i) noexcept {
-      Base::Encoder::encode(val, i);
+      BaseDeltaRLE::Encoder::encode(val, i);
       ++count_;
     }
 
     PROMPP_ALWAYS_INLINE void clear() noexcept {
-      Base::Encoder::clear();
+      BaseDeltaRLE::Encoder::clear();
       count_ = 0;
     }
 
@@ -33,26 +37,46 @@ class DeltaRLE {
     value_type count_{};
   };
 
-  using Decoder = typename Base::Decoder;
+  using Decoder = BaseDeltaRLE::Decoder;
 };
 
-static constexpr uint32_t kOptimalPreAllocationElementsCount = 8;
-
-template <class T>
-using SharedMemory = BareBones::SharedMemory<T, BareBones::DefaultReallocator>;
-
-class SeriesIdSequence
-    : public BareBones::EncodedSequence<
-          DeltaRLE<BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124, SharedMemory, kOptimalPreAllocationElementsCount>>> {
+class SeriesIdSequence : public BareBones::EncodedSequence<DeltaRLE> {
  public:
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return encoder_.count(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t empty() const noexcept { return encoder_.count() == 0; }
+};
+
+class SeriesIdSequenceSnapshot {
+ public:
+  SeriesIdSequenceSnapshot() = default;
+  explicit SeriesIdSequenceSnapshot(const SeriesIdSequence& sequence) : encoder_(sequence.encoder()), memory_(sequence.data().buffer().ptr()) {}
+
+  SeriesIdSequenceSnapshot& operator=(const SeriesIdSequence& sequence) noexcept {
+    encoder_ = sequence.encoder();
+    memory_ = sequence.data().buffer().ptr();
+    return *this;
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return encoder_.count(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t empty() const noexcept { return encoder_.count() == 0; }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesIdSequence::Iterator begin() const noexcept {
+    return {DeltaRLE::DataSequence::decode_iterator(memory_.get(), memory_.constructed_item_count()), DeltaRLE::DataSequence::end(), &encoder_};
+  }
+  static PROMPP_ALWAYS_INLINE SeriesIdSequence::IteratorSentinel end() noexcept { return {}; }
+
+ private:
+  DeltaRLE::Encoder encoder_;
+  SharedMemory<uint8_t>::SharedPtr memory_;
 };
 
 }  // namespace series_index
 
 template <>
 struct BareBones::IsTriviallyReallocatable<series_index::SeriesIdSequence> : std::true_type {};  // namespace BareBones
+
+template <>
+struct BareBones::IsTriviallyReallocatable<series_index::SeriesIdSequenceSnapshot> : std::true_type {};  // namespace BareBones
 
 namespace series_index {
 
