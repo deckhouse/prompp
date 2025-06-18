@@ -81,19 +81,9 @@ func (h *RotatableHead) Append(
 	return h.head.Append(ctx, incomingData, state, relabelerID, commitToWal)
 }
 
-// RotatableHead - relabeler.Head interface implementation.
+// CommitToWal relabeler.Head interface implementation.
 func (h *RotatableHead) CommitToWal() error {
 	return h.head.CommitToWal()
-}
-
-// ForEachShard - relabeler.Head interface implementation.
-func (h *RotatableHead) ForEachShard(fn relabeler.ShardFn) error {
-	return h.head.ForEachShard(fn)
-}
-
-// OnShard - relabeler.Head interface implementation.
-func (h *RotatableHead) OnShard(shardID uint16, fn relabeler.ShardFn) error {
-	return h.head.OnShard(shardID, fn)
 }
 
 // MergeOutOfOrderChunks merge chunks with out of order data chunks.
@@ -193,9 +183,18 @@ func (h *RotatableHead) CopySeriesFrom(other relabeler.Head) {
 	h.head.CopySeriesFrom(other)
 }
 
-// ReadEachShard execute read fn on each shard.
-func (h *RotatableHead) ReadEachShard(fn relabeler.ShardFn) error {
-	return h.head.ReadEachShard(fn)
+// CreateTask create a task for operations on the head shards.
+func (h *RotatableHead) CreateTask(
+	taskName string,
+	fn relabeler.ShardFn,
+	onLss, isExclusive bool,
+) *relabeler.GenericTask {
+	return h.head.CreateTask(taskName, fn, onLss, isExclusive)
+}
+
+// Enqueue the task to be executed on head.
+func (h *RotatableHead) Enqueue(t *relabeler.GenericTask) {
+	h.head.Enqueue(t)
 }
 
 //
@@ -240,14 +239,6 @@ func (h *HeapProfileWritableHead) Append(
 
 func (h *HeapProfileWritableHead) CommitToWal() error {
 	return h.head.CommitToWal()
-}
-
-func (h *HeapProfileWritableHead) ForEachShard(fn relabeler.ShardFn) error {
-	return h.head.ForEachShard(fn)
-}
-
-func (h *HeapProfileWritableHead) OnShard(shardID uint16, fn relabeler.ShardFn) error {
-	return h.head.OnShard(shardID, fn)
 }
 
 // MergeOutOfOrderChunks merge chunks with out of order data chunks.
@@ -302,7 +293,16 @@ func (h *HeapProfileWritableHead) CopySeriesFrom(other relabeler.Head) {
 	h.head.CopySeriesFrom(other)
 }
 
-// ReadEachShard execute read fn on each shard.
-func (h *HeapProfileWritableHead) ReadEachShard(fn relabeler.ShardFn) error {
-	return h.head.ReadEachShard(fn)
+// CreateTask create a task for operations on the head shards.
+func (h *HeapProfileWritableHead) CreateTask(
+	taskName string,
+	fn relabeler.ShardFn,
+	onLss, isExclusive bool,
+) *relabeler.GenericTask {
+	return h.head.CreateTask(taskName, fn, onLss, isExclusive)
+}
+
+// Enqueue the task to be executed on head.
+func (h *HeapProfileWritableHead) Enqueue(t *relabeler.GenericTask) {
+	h.head.Enqueue(t)
 }

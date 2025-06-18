@@ -41,7 +41,8 @@ const (
 
 // LabelSetStorage go wrapper for C-LabelSetStorage.
 type LabelSetStorage struct {
-	pointer uintptr
+	pointer           uintptr
+	gcDestroyDetector *uint64
 }
 
 // NewLssStorage init new LabelSetStorage based on EncodingBimap.
@@ -66,7 +67,7 @@ func newLabelSetStorage(lssType uint32) *LabelSetStorage {
 
 // newLabelSetStorageFromPointer init new LabelSetStorage with pointer to constructed lss
 func newLabelSetStorageFromPointer(lssPointer uintptr) *LabelSetStorage {
-	lss := &LabelSetStorage{pointer: lssPointer}
+	lss := &LabelSetStorage{pointer: lssPointer, gcDestroyDetector: &gcDestroyDetector}
 	runtime.SetFinalizer(lss, func(lss *LabelSetStorage) {
 		primitivesLSSDtor(lss.pointer)
 	})
@@ -76,17 +77,23 @@ func newLabelSetStorageFromPointer(lssPointer uintptr) *LabelSetStorage {
 
 // AllocatedMemory return size of allocated memory for label sets in C++.
 func (lss *LabelSetStorage) AllocatedMemory() uint64 {
-	return primitivesLSSAllocatedMemory(lss.pointer)
+	res := primitivesLSSAllocatedMemory(lss.pointer)
+	runtime.KeepAlive(lss)
+	return res
 }
 
 // FindOrEmplace find in lss LabelSet or emplace and return ls id.
 func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) FindOrEmplaceResult {
-	return primitivesLSSFindOrEmplace(lss.pointer, labelSet)
+	res := primitivesLSSFindOrEmplace(lss.pointer, labelSet)
+	runtime.KeepAlive(lss)
+	return res
 }
 
 // FindOrEmplaceBuilder find in lss LabelSet or emplace and return ls id.
-func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet model.CppLabelSetBuilder) FindOrEmplaceResult {
-	return primitivesLSSFindOrEmplaceBuilder(lss.pointer, labelSet)
+func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet CppLabelSetBuilder) FindOrEmplaceResult {
+	res := primitivesLSSFindOrEmplaceBuilder(lss.pointer, labelSet)
+	runtime.KeepAlive(lss)
+	return res
 }
 
 // Query returns a LSSQueryResult that matches the given label matchers.
@@ -124,6 +131,7 @@ func (lss *LabelSetStorage) QueryLabelValues(
 // GetLabelSets - returns copy of lss data.
 func (lss *LabelSetStorage) GetLabelSets(labelSetIDs []uint32) *LabelSetStorageGetLabelSetsResult {
 	result := &LabelSetStorageGetLabelSetsResult{labelSets: primitivesLSSGetLabelSets(lss.pointer, labelSetIDs)}
+	runtime.KeepAlive(lss)
 
 	runtime.SetFinalizer(result, func(result *LabelSetStorageGetLabelSetsResult) {
 		primitivesLSSFreeLabelSets(result.labelSets)
@@ -143,20 +151,21 @@ func (lss *LabelSetStorage) Pointer() uintptr {
 
 // CreateLabelSetSnapshot create LabelSetSnapshot from lss.
 func (lss *LabelSetStorage) CreateLabelSetSnapshot() *LabelSetSnapshot {
-	return newLabelSetSnapshot(primitivesLSSCreateReadonlyLss(lss.pointer))
+	res := newLabelSetSnapshot(primitivesLSSCreateReadonlyLss(lss.pointer))
+	runtime.KeepAlive(lss)
+	return res
 }
 
 // RangeLabelSet serialize to slice labels from lss and calls f on each label.
 func (lss *LabelSetStorage) RangeLabelSet(lsID uint32, do func(l Label) error) error {
 	labelSet := labelSetSerialize(lss.pointer, lsID)
-
 	for i := range labelSet {
 		if err := do(labelSet[i]); err != nil {
 			labelSetFree(labelSet)
 			return err
 		}
 	}
-
+	runtime.KeepAlive(lss)
 	labelSetFree(labelSet)
 
 	return nil
@@ -300,4 +309,16 @@ func GetCaller(ctx context.Context) uint32 {
 // SetCaller set callerID to context.
 func SetCaller(parent context.Context, callerID uint32) context.Context {
 	return context.WithValue(parent, ctxCallerKey{}, callerID)
+}
+
+//
+// CppLabelSetBuilder
+//
+
+// CppLabelSetBuilder - container used for Go-C++ interaction and shouldn't be modified.
+type CppLabelSetBuilder struct {
+	ReadonlyLss uintptr
+	LsId        uint32
+	SortedAdd   []Label
+	SortedDel   []string
 }
