@@ -1689,12 +1689,12 @@ func (s *targetScraper) readResponse2(ctx context.Context, resp *http.Response, 
 		return resp.Header.Get("Content-Type"), nil
 	}
 
-	breader := poolBufio.get()
-	defer poolBufio.put(breader)
+	breader := poolBufio.Get()
+	defer poolBufio.Put(breader)
 	breader.Reset(resp.Body)
 
-	gzipr := poolGzipr.get()
-	defer poolGzipr.put(gzipr)
+	gzipr := poolGzipr.Get()
+	defer poolGzipr.Put(gzipr)
 	if err := gzipr.Reset(breader); err != nil {
 		return "", err
 	}

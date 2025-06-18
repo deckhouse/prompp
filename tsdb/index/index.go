@@ -250,7 +250,6 @@ func NewWriterWithEncoder(ctx context.Context, fn string, encoder PostingsEncode
 	if err := iw.writeMeta(); err != nil {
 		return nil, err
 	}
-
 	return iw, nil
 }
 

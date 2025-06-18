@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/model/value"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/zeropool"
 
 	pp_model "github.com/prometheus/prometheus/pp/go/model"
 )
@@ -210,68 +211,14 @@ func (b *timeLimitBatch) Add(builder *pp_model.LabelSetSimpleBuilder, timestamp 
 //
 
 // poolBufio global pool *bufio.Reader.
-var poolBufio = newBufioPool()
-
-// bufioPool pool for *bufio.Reader.
-type bufioPool struct {
-	pool *sync.Pool
-}
-
-// newBufioPool init new bufioPool.
-func newBufioPool() *bufioPool {
-	return &bufioPool{
-		pool: &sync.Pool{
-			New: func() any {
-				return bufio.NewReader(nr)
-			},
-		},
-	}
-}
-
-// get *bufio.Reader from pool.
-func (p *bufioPool) get() *bufio.Reader {
-	return p.pool.Get().(*bufio.Reader)
-}
-
-// put *bufio.Reader to pool.
-func (p *bufioPool) put(r *bufio.Reader) {
-	r.Reset(nr)
-	p.pool.Put(r)
-}
+var poolBufio = zeropool.New(func() *bufio.Reader { return bufio.NewReader(nr) })
 
 //
 // gziprPool
 //
 
-// poolBufio global pool *gzip.Reader.
-var poolGzipr = newGziprPool()
-
-// gziprPool pool for *gzip.Reader.
-type gziprPool struct {
-	pool *sync.Pool
-}
-
-// newGziprPool init new gziprPool.
-func newGziprPool() *gziprPool {
-	return &gziprPool{
-		pool: &sync.Pool{
-			New: func() any {
-				return &gzip.Reader{}
-			},
-		},
-	}
-}
-
-// get *gzip.Reader from pool.
-func (p *gziprPool) get() *gzip.Reader {
-	return p.pool.Get().(*gzip.Reader)
-}
-
-// put *gzip.Reader to pool.
-func (p *gziprPool) put(r *gzip.Reader) {
-	_ = r.Reset(nr)
-	p.pool.Put(r)
-}
+// poolGzipr global pool *gzip.Reader.
+var poolGzipr = zeropool.New(func() *gzip.Reader { return &gzip.Reader{} })
 
 //
 // noopReader

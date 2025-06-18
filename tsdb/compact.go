@@ -446,7 +446,6 @@ func (c *LeveledCompactor) Compact(dest string, dirs []string, open []*Block) (u
 }
 
 func (c *LeveledCompactor) CompactWithBlockPopulator(dest string, dirs []string, open []*Block, blockPopulator BlockPopulator) (uid ulid.ULID, err error) {
-	fmt.Println(" == LeveledCompactor CompactWithBlockPopulator")
 	var (
 		blocks []BlockReader
 		bs     []*Block

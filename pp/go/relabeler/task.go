@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/util/zeropool"
 )
 
 const (
@@ -108,19 +109,11 @@ type GenericTask struct {
 	isExclusive bool
 }
 
-// NewReadOnlyGenericTask init new GenericTask for read only head.
-func NewReadOnlyGenericTask(
-	shardFn ShardFn,
-	numberOfShards uint16,
-) *GenericTask {
-	t := &GenericTask{
-		errs:    make([]error, numberOfShards),
-		shardFn: shardFn,
-		wg:      sync.WaitGroup{},
+// emprtyGenericTask init new empty GenericTask.
+func emprtyGenericTask() *GenericTask {
+	return &GenericTask{
+		wg: sync.WaitGroup{},
 	}
-	t.wg.Add(int(numberOfShards))
-
-	return t
 }
 
 // ExecuteOnShard execute task on shard.
@@ -304,17 +297,11 @@ func (tw *TaskWaiter) Wait() error {
 //
 
 // TaskPool global pool *GenericTask.
-var taskPool = &sync.Pool{
-	New: func() any {
-		return &GenericTask{
-			wg: sync.WaitGroup{},
-		}
-	},
-}
+var taskPool = zeropool.New(emprtyGenericTask)
 
 // AcquireTask acquire *GenericTask from pool.
 func AcquireTask() *GenericTask {
-	return taskPool.Get().(*GenericTask)
+	return taskPool.Get()
 }
 
 // ReleaseTask release *GenericTask to pool.

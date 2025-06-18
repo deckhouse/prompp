@@ -23,7 +23,6 @@ type Labels struct {
 	id             uint32
 	length         uint16
 	dropMetricName bool
-	// timer          *time.Timer
 }
 
 // EmptyLabels returns n null Labels value, for convenience.
@@ -293,11 +292,6 @@ func (ls *Labels) RenewSnapshot() {
 	if ls.snapshot == nil {
 		return
 	}
-
-	// if ls.timer != nil {
-	// 	ls.timer.Stop()
-	// 	ls.timer = nil
-	// }
 
 	// long way
 	if ls.snapshot.IsOutdated() {
