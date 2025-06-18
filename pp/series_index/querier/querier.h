@@ -16,7 +16,7 @@ class ValueMatchResolver {
  public:
   explicit ValueMatchResolver(const LabelReverseIndex& index) : index_(&index) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesIdSequenceSnapshot operator()(uint32_t id) const noexcept { return SeriesIdSequenceSnapshot{*index_->get(id)}; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence& operator()(uint32_t id) const noexcept { return *index_->get(id); }
 
  private:
   const LabelReverseIndex* index_;
@@ -26,7 +26,7 @@ class MatchResolver {
  public:
   explicit MatchResolver(const SeriesReverseIndex& index) : index_(&index) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesIdSequenceSnapshot resolve_name(uint32_t id) const noexcept { return SeriesIdSequenceSnapshot(*index_->get(id)); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence& resolve_name(uint32_t id) const noexcept { return *index_->get(id); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE ValueMatchResolver value_resolver(uint32_t id) const noexcept { return ValueMatchResolver(index_->labels_by_name()[id]); }
 
  private:
@@ -182,7 +182,7 @@ class Querier {
 
   PROMPP_ALWAYS_INLINE void process_positive_matcher(const Selector::Matcher& matcher, MemoryPool& memory_pool, SeriesIdSpan& result_set) {
     if (matcher.status == PromPP::Prometheus::MatchStatus::kAllMatch) {
-      result_set = intersect_sequence(result_set, matcher.label_name_match);
+      result_set = SetIntersecter::intersect(result_set, matcher.label_name_match);
     } else {
       result_set = SetIntersecter::intersect(result_set, resolve_positive_matcher(matcher, memory_pool.merge2, memory_pool.temp));
     }
@@ -190,7 +190,7 @@ class Querier {
 
   PROMPP_ALWAYS_INLINE void process_negative_matcher(const Selector::Matcher& matcher, MemoryPool& memory_pool, SeriesIdSpan& result_set) {
     if (matcher.status == PromPP::Prometheus::MatchStatus::kAllMatch) {
-      result_set = substract_sequence(result_set, matcher.label_name_match);
+      result_set = SetSubstractor::substract(result_set, matcher.label_name_match);
     } else if (matcher.status == PromPP::Prometheus::MatchStatus::kPartialMatch) {
       result_set = substract_sequences(result_set, matcher);
     } else if (matcher.status == PromPP::Prometheus::MatchStatus::kAllMatchWithExcludes) {
@@ -238,17 +238,9 @@ class Querier {
 
   PROMPP_ALWAYS_INLINE static void decode_sequence(const SeriesIdSequenceSnapshot& sequence, uint32_t* memory) { std::ranges::copy(sequence, memory); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static SeriesIdSpan intersect_sequence(SeriesIdSpan result_set, const SeriesIdSequenceSnapshot& sequence) {
-    return SetIntersecter::intersect(result_set, sequence);
-  }
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static SeriesIdSpan substract_sequence(SeriesIdSpan result_set, const SeriesIdSequenceSnapshot& sequence) {
-    return SetSubstractor::substract(result_set, sequence);
-  }
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesIdSpan substract_sequences(SeriesIdSpan result_set, const Selector::Matcher& matcher) {
+  [[nodiscard]] static PROMPP_ALWAYS_INLINE SeriesIdSpan substract_sequences(SeriesIdSpan result_set, const Selector::Matcher& matcher) {
     for (const auto& value_match : matcher.matches) {
-      result_set = substract_sequence(result_set, value_match);
+      result_set = SetSubstractor::substract(result_set, value_match);
     }
 
     return result_set;
