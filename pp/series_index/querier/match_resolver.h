@@ -12,7 +12,7 @@ concept ValueMatchResolverInterface = requires(const Resolver resolver) {
 };
 
 template <class Resolver>
-concept MatchResolverInterface = requires(Resolver resolver) {
+concept MatchResolverInterface = requires(const Resolver resolver) {
   { resolver.resolve_name(uint32_t()) };
   { resolver.value_resolver(uint32_t()) } -> ValueMatchResolverInterface;
 };

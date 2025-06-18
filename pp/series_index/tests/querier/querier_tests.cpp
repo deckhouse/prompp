@@ -32,7 +32,7 @@ struct MatchersComparatorByTypeAndCardinalityCase {
 
 class MatchersComparatorByTypeAndCardinalityFixture : public testing::TestWithParam<MatchersComparatorByTypeAndCardinalityCase> {
  protected:
-  Querier<Index, Selector<>, MatchIdResolver>::MatchersComparatorByTypeAndCardinality comparator_;
+  Querier<Index>::MatchersComparatorByTypeAndCardinality comparator_;
 
   void sort(Selector<>& selector) const { std::ranges::sort(selector.matchers, comparator_); }
 };
@@ -77,7 +77,7 @@ struct QuerierTestCase {
 class QuerierFixture : public testing::TestWithParam<QuerierTestCase> {
  protected:
   Index index_;
-  Querier<Index, Selector<>, MatchIdResolver, BareBones::Vector> querier_{index_, {}};
+  Querier<Index, BareBones::Vector> querier_{index_};
 
   void SetUp() override {
     for (auto& label_set : label_sets_) {
@@ -97,7 +97,7 @@ TEST_P(QuerierFixture, Test) {
   // Arrange
 
   // Act
-  auto result = querier_.query(GetParam().label_matchers);
+  auto result = querier_.query(GetParam().label_matchers, MatchIdResolver{});
 
   // Assert
   EXPECT_EQ(GetParam().expected.status, result.status);

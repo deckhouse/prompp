@@ -22,7 +22,7 @@ class LabelValuesQuerier {
       return query_all_label_values(*name_id, *index_.trie_index().values_trie(*name_id), std::forward<ValueHandler>(name_handler));
     }
 
-    auto result = Querier<Index, Selector, MatchResolver>{index_, match_resolver_}.query(label_matchers);
+    auto result = Querier{index_}.query(label_matchers, match_resolver_);
     if (result.status == QuerierStatus::kMatch) {
       query_matched_unique_label_values(*name_id, *index_.trie_index().values_trie(*name_id), result.series_ids, std::forward<ValueHandler>(name_handler));
     }

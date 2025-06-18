@@ -110,12 +110,11 @@ extern "C" void prompp_primitives_lss_query(void* args, void* res) {
     uint32_t status;
   };
 
-  using Querier = series_index::querier::Querier<QueryableEncodingBimap, series_index::querier::Selector<>, series_index::querier::MatchIdResolver,
-                                                 PromPP::Primitives::Go::Slice>;
+  using Querier = series_index::querier::Querier<QueryableEncodingBimap, PromPP::Primitives::Go::Slice>;
 
   const auto in = static_cast<Arguments*>(args);
   auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
-  auto query_result = Querier{lss, {}}.query(in->label_matchers);
+  auto query_result = Querier{lss}.query(in->label_matchers, series_index::querier::MatchIdResolver{});
   lss.sort_series_ids(query_result.series_ids);
   lss.set_queried_series(in->query_source, query_result.series_ids);
 
