@@ -535,7 +535,6 @@ func (r blockIndexReader) ShardedPostings(p index.Postings, shardIndex, shardCou
 }
 
 func (r blockIndexReader) Series(ref storage.SeriesRef, builder *labels.ScratchBuilder, chks *[]chunks.Meta) error {
-	fmt.Println(" === blockIndexReader Series")
 	if err := r.ir.Series(ref, builder, chks); err != nil {
 		return fmt.Errorf("block: %s: %w", r.b.Meta().ULID, err)
 	}

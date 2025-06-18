@@ -193,16 +193,52 @@ func (lsst *LabelSetSnapshot) Snapshot() *LabelSetSnapshot {
 }
 
 //
+// fastSnapshot
+//
+
+// fastSnapshot pointer for snapshot.
+type fastSnapshot struct {
+	snapshot unsafe.Pointer
+	outdated uint32
+}
+
+// FastSnapshot return the actual snapshot or nil if not exist.
+func (fs *fastSnapshot) FastSnapshot() *LabelSetSnapshot {
+	return (*LabelSetSnapshot)(atomic.LoadPointer(&fs.snapshot))
+}
+
+// IsOutdated return true if *LabelSetStorage is outdated.
+func (fs *fastSnapshot) IsOutdated() bool {
+	return atomic.LoadUint32(&fs.outdated) > 0
+}
+
+// storeSnapshot store new snapshot to fastSnapshot.
+func (fs *fastSnapshot) storeSnapshot(snapshot *LabelSetSnapshot) {
+	atomic.StorePointer(
+		&fs.snapshot,
+		unsafe.Pointer(snapshot), // #nosec G103 // it's meant to be that way
+	)
+}
+
+// outdate marked *LabelSetStorage is outdated.
+func (fs *fastSnapshot) outdate() {
+	atomic.AddUint32(&fs.outdated, 1)
+	atomic.StorePointer(
+		&fs.snapshot,
+		unsafe.Pointer(nil), // #nosec G103 // it's meant to be that way
+	)
+}
+
+//
 // LSSWithSnapshot
 //
 
 // LSSWithSnapshot container for LabelSetStorage with snapshot.
 type LSSWithSnapshot struct {
 	lss           *LabelSetStorage
+	fsnapshot     *fastSnapshot
 	bitsetPointer uintptr
-	snapshot      unsafe.Pointer
 	once          sync.Once
-	outdated      uint32
 }
 
 // NewLSSWithSnapshot init new *LSSWithSnapshot.
@@ -210,11 +246,13 @@ func NewLSSWithSnapshot(lss *LabelSetStorage) *LSSWithSnapshot {
 	lws := &LSSWithSnapshot{
 		lss:           lss,
 		bitsetPointer: primitivesBitsetCtor(),
+		fsnapshot:     &fastSnapshot{},
 		once:          sync.Once{},
 	}
 
 	runtime.SetFinalizer(lws, func(l *LSSWithSnapshot) {
 		primitivesBitsetDtor(l.bitsetPointer)
+		l.fsnapshot.storeSnapshot(nil)
 	})
 
 	return lws
@@ -222,15 +260,17 @@ func NewLSSWithSnapshot(lss *LabelSetStorage) *LSSWithSnapshot {
 
 // NewLSSWithSnapshotWithoutBitset init new *LSSWithSnapshot without bitset.
 func NewLSSWithSnapshotWithoutBitset(lss *LabelSetStorage) *LSSWithSnapshot {
-	return &LSSWithSnapshot{
-		lss:  lss,
-		once: sync.Once{},
+	lws := &LSSWithSnapshot{
+		lss:       lss,
+		fsnapshot: &fastSnapshot{},
+		once:      sync.Once{},
 	}
-}
 
-// FastSnapshot return the actual snapshot or nil if not exist.
-func (lws *LSSWithSnapshot) FastSnapshot() *LabelSetSnapshot {
-	return (*LabelSetSnapshot)(atomic.LoadPointer(&lws.snapshot))
+	runtime.SetFinalizer(lws, func(l *LSSWithSnapshot) {
+		l.fsnapshot.storeSnapshot(nil)
+	})
+
+	return lws
 }
 
 // FindOrEmplace find in lss LabelSet or emplace and return ls id.
@@ -238,10 +278,7 @@ func (lws *LSSWithSnapshot) FindOrEmplace(labelSet model.LabelSet) uint32 {
 	res := lws.lss.FindOrEmplace(labelSet)
 	runtime.KeepAlive(lws)
 	if res.LssHasReallocations {
-		atomic.StorePointer(
-			&lws.snapshot,
-			unsafe.Pointer(lws.lss.CreateLabelSetSnapshot(lws)), // #nosec G103 // it's meant to be that way
-		)
+		lws.fsnapshot.storeSnapshot(lws.lss.CreateLabelSetSnapshot(lws.fsnapshot))
 	}
 
 	return res.LabelSetID
@@ -272,18 +309,10 @@ func (lws *LSSWithSnapshot) FindOrEmplaceFromBuilder(
 	runtime.KeepAlive(lws)
 
 	if hasReallocations {
-		atomic.StorePointer(
-			&lws.snapshot,
-			unsafe.Pointer(newLabelSetSnapshot(lssROPtr, lws)), // #nosec G103 // it's meant to be that way
-		)
+		lws.fsnapshot.storeSnapshot(newLabelSetSnapshot(lssROPtr, lws.fsnapshot))
 	}
 
 	return length, newlsID
-}
-
-// IsOutdated return true if *LabelSetStorage is outdated.
-func (lws *LSSWithSnapshot) IsOutdated() bool {
-	return atomic.LoadUint32(&lws.outdated) > 0
 }
 
 // LSS return raw *LabelSetStorage.
@@ -291,27 +320,24 @@ func (lws *LSSWithSnapshot) LSS() *LabelSetStorage {
 	return lws.lss
 }
 
-// Outdated marked *LabelSetStorage is outdated.
-func (lws *LSSWithSnapshot) Outdated() {
-	atomic.AddUint32(&lws.outdated, 1)
+// Outdate marked *LabelSetStorage is outdated.
+func (lws *LSSWithSnapshot) Outdate() {
+	lws.fsnapshot.outdate()
 }
 
 // ResetSnapshot resets the current snapshot.
 func (lws *LSSWithSnapshot) ResetSnapshot() {
-	lws.snapshot = nil
+	lws.fsnapshot.storeSnapshot(nil)
 	lws.once = sync.Once{}
 }
 
 // Snapshot return the actual snapshot.
 func (lws *LSSWithSnapshot) Snapshot() *LabelSetSnapshot {
 	lws.once.Do(func() {
-		atomic.StorePointer(
-			&lws.snapshot,
-			unsafe.Pointer(lws.lss.CreateLabelSetSnapshot(lws)), // #nosec G103 // it's meant to be that way
-		)
+		lws.fsnapshot.storeSnapshot(lws.lss.CreateLabelSetSnapshot(lws.fsnapshot))
 	})
 
-	return lws.FastSnapshot()
+	return lws.fsnapshot.FastSnapshot()
 }
 
 // Stats return allocated memory for lss, size of lss and count of emplace to bitset.

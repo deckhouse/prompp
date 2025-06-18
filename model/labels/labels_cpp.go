@@ -37,17 +37,11 @@ func NewLabelsWithLSS(
 	id uint32,
 	length uint16,
 ) Labels {
-	ls := Labels{
+	return Labels{
 		snapshot: lss,
 		id:       id,
 		length:   length,
 	}
-
-	// ls.timer = time.AfterFunc(7*time.Minute, func() {
-	// 	fmt.Println(time.Now(), " === LS", ls.String())
-	// })
-
-	return ls
 }
 
 // New returns a sorted Labels from the given labels.
@@ -643,8 +637,7 @@ func (s *storage) SetReceiver(receiver Receiver) {
 func (s *storage) FindOrEmplaceFromBuilder(b *Builder) Labels {
 	if receiver := s.receiver.Load(); receiver != nil {
 		if ls := (*receiver).FindFromBuilder(
-			// *((*[]cppbridge.Label)(unsafe.Pointer(&b.add))),
-			toCppLabel(b.add),
+			*((*[]cppbridge.Label)(unsafe.Pointer(&b.add))),
 			b.del,
 			b.base.snapshot,
 			b.base.id,
@@ -655,8 +648,7 @@ func (s *storage) FindOrEmplaceFromBuilder(b *Builder) Labels {
 
 	s.mx.Lock()
 	length, lsID := s.workingLSS.FindOrEmplaceFromBuilder(
-		// *((*[]cppbridge.Label)(unsafe.Pointer(&b.add))),
-		toCppLabel(b.add),
+		*((*[]cppbridge.Label)(unsafe.Pointer(&b.add))),
 		b.del,
 		b.base.snapshot,
 		b.base.id,
@@ -695,7 +687,7 @@ func (s *storage) worker() {
 
 			if uint64(bitsetCount) < lssSize/2 {
 				s.mx.Lock()
-				s.workingLSS.Outdated()
+				s.workingLSS.Outdate()
 				s.workingLSS = cppbridge.NewLSSWithSnapshot(cppbridge.NewLssStorage())
 				s.mx.Unlock()
 
@@ -710,16 +702,4 @@ func (s *storage) worker() {
 			rotateTimer.Reset(rotateDuration)
 		}
 	}
-}
-
-func toCppLabel(inls []Label) []cppbridge.Label {
-	ls := make([]cppbridge.Label, 0, len(inls))
-	for _, l := range inls {
-		ls = append(ls, cppbridge.Label{
-			Name:  l.Name,
-			Value: l.Value,
-		})
-	}
-
-	return ls
 }

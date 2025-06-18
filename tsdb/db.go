@@ -1449,15 +1449,12 @@ func (db *DB) compactBlocks() (err error) {
 			return fmt.Errorf("compact %s: %w", plan, err)
 		}
 
-		_ = uid
-		break
-
-		// if err := db.reloadBlocks(); err != nil {
-		// 	if err := os.RemoveAll(filepath.Join(db.dir, uid.String())); err != nil {
-		// 		return fmt.Errorf("delete compacted block after failed db reloadBlocks:%s: %w", uid, err)
-		// 	}
-		// 	return fmt.Errorf("reloadBlocks blocks: %w", err)
-		// }
+		if err := db.reloadBlocks(); err != nil {
+			if err := os.RemoveAll(filepath.Join(db.dir, uid.String())); err != nil {
+				return fmt.Errorf("delete compacted block after failed db reloadBlocks:%s: %w", uid, err)
+			}
+			return fmt.Errorf("reloadBlocks blocks: %w", err)
+		}
 	}
 
 	return nil
@@ -1492,8 +1489,6 @@ func (db *DB) reload() error {
 // reloadBlocks reloads blocks without touching head.
 // Blocks that are obsolete due to replacement or retention will be deleted.
 func (db *DB) reloadBlocks() (err error) {
-	fmt.Println(time.Now(), "================ reloadBlocks")
-
 	defer func() {
 		if err != nil {
 			db.metrics.reloadsFailed.Inc()
@@ -1511,7 +1506,6 @@ func (db *DB) reloadBlocks() (err error) {
 	if err != nil {
 		return err
 	}
-	fmt.Println("================ reloadBlocks", len(db.blocks), len(loadable))
 
 	deletableULIDs := db.blocksToDelete(loadable)
 	deletable := make(map[ulid.ULID]*Block, len(deletableULIDs))

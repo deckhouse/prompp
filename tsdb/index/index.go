@@ -1093,7 +1093,6 @@ func (w *Writer) Close() error {
 	if err := w.f.Close(); err != nil {
 		return err
 	}
-	fmt.Println(" ==== Writer Close")
 	return ensureErr
 }
 
@@ -1629,7 +1628,6 @@ func (r *Reader) LabelValueFor(ctx context.Context, id storage.SeriesRef, label 
 
 // Series reads the series with the given ID and writes its labels and chunks into builder and chks.
 func (r *Reader) Series(id storage.SeriesRef, builder *labels.ScratchBuilder, chks *[]chunks.Meta) error {
-	fmt.Println(" === Reader Series")
 	offset := id
 	// In version 2 series IDs are no longer exact references but series are 16-byte padded
 	// and the ID is the multiple of 16 of the actual position.

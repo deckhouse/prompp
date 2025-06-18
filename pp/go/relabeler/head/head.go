@@ -655,7 +655,7 @@ func (h *Head) CopySeriesFrom(other relabeler.Head) {
 func (h *Head) Close() error {
 	h.memoryInUse.DeletePartialMatch(prometheus.Labels{"generation": strconv.FormatUint(h.generation, 10)})
 	for _, lss := range h.lsses {
-		lss.Outdated()
+		lss.Outdate()
 	}
 
 	var err error
@@ -1079,13 +1079,11 @@ func (h *Head) FindFromBuilder(
 			relabeler.LSSFind,
 			func(shard relabeler.Shard) error {
 				if length, newlsID, ok := shard.LSS().FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID); ok {
-					ls.CopyFrom(
-						labels.NewLabelsWithLSS(
-							shard.LSS().GetSnapshot(),
-							newlsID,
-							uint16(length), // #nosec G115 // no overflow
-						),
-					)
+					ls.CopyFrom(labels.NewLabelsWithLSS(
+						shard.LSS().GetSnapshot(),
+						newlsID,
+						uint16(length), // #nosec G115 // no overflow
+					))
 				}
 
 				return nil

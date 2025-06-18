@@ -16,7 +16,6 @@ package tsdb
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"slices"
 
@@ -64,7 +63,6 @@ func NewOOOHeadIndexReader(head *Head, mint, maxt int64, lastGarbageCollectedMma
 }
 
 func (oh *OOOHeadIndexReader) Series(ref storage.SeriesRef, builder *labels.ScratchBuilder, chks *[]chunks.Meta) error {
-	fmt.Println(" === OOOHeadIndexReader Series")
 	return oh.series(ref, builder, chks, oh.lastGarbageCollectedMmapRef, 0)
 }
 
@@ -462,7 +460,6 @@ func (ir *OOOCompactionHeadIndexReader) ShardedPostings(p index.Postings, shardI
 }
 
 func (ir *OOOCompactionHeadIndexReader) Series(ref storage.SeriesRef, builder *labels.ScratchBuilder, chks *[]chunks.Meta) error {
-	fmt.Println(" === OOOCompactionHeadIndexReader Series")
 	return ir.ch.oooIR.series(ref, builder, chks, 0, ir.ch.lastMmapRef)
 }
 

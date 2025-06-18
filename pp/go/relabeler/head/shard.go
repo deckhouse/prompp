@@ -50,9 +50,9 @@ func (w *LSS) GetSnapshot() *cppbridge.LabelSetSnapshot {
 	return w.target.Snapshot()
 }
 
-// Outdated marked *LabelSetStorage is outdated.
-func (w *LSS) Outdated() {
-	w.target.Outdated()
+// Outdate marked *LabelSetStorage is outdated.
+func (w *LSS) Outdate() {
+	w.target.Outdate()
 }
 
 // ResetSnapshot resets the current snapshot.
