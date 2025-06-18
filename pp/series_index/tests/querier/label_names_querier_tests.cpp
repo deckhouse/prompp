@@ -15,11 +15,12 @@ using series_index::QueryableEncodingBimap;
 using series_index::SeriesReverseIndex;
 using series_index::querier::LabelNamesQuerier;
 using series_index::querier::MatchId;
+using series_index::querier::MatchIdResolver;
 using series_index::querier::QuerierStatus;
 using series_index::querier::Selector;
 using series_index::trie::CedarMatchesList;
 using series_index::trie::CedarTrie;
-using TrieIndex = series_index::TrieIndex<CedarTrie, CedarMatchesList<Selector<>::MatchList>>;
+using TrieIndex = series_index::TrieIndex<CedarTrie>;
 using Index = QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex>;
 
 struct LabelNamesQuerierCase {
@@ -31,7 +32,7 @@ struct LabelNamesQuerierCase {
 class LabelNamesQuerierFixture : public testing::TestWithParam<LabelNamesQuerierCase> {
  protected:
   Index index_;
-  LabelNamesQuerier<Index, Selector<>> querier_{index_};
+  LabelNamesQuerier<Index, Selector<>, MatchIdResolver> querier_{index_, {}};
 
   void SetUp() final {
     for (auto& label_set : label_sets_) {

@@ -8,6 +8,7 @@
 
 namespace {
 
+using series_index::querier::ValueMatchIdResolver;
 using series_index::querier::regexp::RegexpParser;
 using series_index::querier::regexp::RegexpSearcher;
 using series_index::querier::regexp_tests::RegexpSearcherTestCase;
@@ -127,8 +128,8 @@ class CedarTrieRegexpSearcherFixture : public CedarTrieFixture, public testing::
   using MatchesList = std::vector<uint32_t>;
 
   MatchesList matches_;
-  CedarMatchesList<MatchesList> matches_list_{matches_};
-  RegexpSearcher<CedarTrie, CedarMatchesList<MatchesList>> searcher_{matches_list_};
+  CedarMatchesList<MatchesList, ValueMatchIdResolver> matches_list_{matches_, {}};
+  RegexpSearcher<CedarTrie, decltype(matches_list_)> searcher_{matches_list_};
 
   void SetUp() final {
     uint32_t id = 0;

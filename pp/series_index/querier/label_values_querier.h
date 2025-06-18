@@ -6,10 +6,10 @@
 
 namespace series_index::querier {
 
-template <class Index, class Selector>
+template <class Index, class Selector, MatchResolverInterface MatchResolver>
 class LabelValuesQuerier {
  public:
-  explicit LabelValuesQuerier(const Index& index) : index_(index) {}
+  LabelValuesQuerier(const Index& index, const MatchResolver& match_resolver) : index_(index), match_resolver_(match_resolver) {}
 
   template <class LabelMatchers, class ValueHandler>
   [[nodiscard]] QuerierStatus query(std::string_view label_name, const LabelMatchers& label_matchers, ValueHandler&& name_handler) const {
@@ -22,7 +22,7 @@ class LabelValuesQuerier {
       return query_all_label_values(*name_id, *index_.trie_index().values_trie(*name_id), std::forward<ValueHandler>(name_handler));
     }
 
-    auto result = Querier<Index, Selector>{index_}.query(label_matchers);
+    auto result = Querier<Index, Selector, MatchResolver>{index_, match_resolver_}.query(label_matchers);
     if (result.status == QuerierStatus::kMatch) {
       query_matched_unique_label_values(*name_id, *index_.trie_index().values_trie(*name_id), result.series_ids, std::forward<ValueHandler>(name_handler));
     }
@@ -32,6 +32,7 @@ class LabelValuesQuerier {
 
  private:
   const Index& index_;
+  const MatchResolver& match_resolver_;
 
   template <class Trie, class ValueHandler>
   [[nodiscard]] PROMPP_ALWAYS_INLINE QuerierStatus query_all_label_values(uint32_t name_id, const Trie& trie, ValueHandler&& value_handler) const {

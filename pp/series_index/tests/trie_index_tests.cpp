@@ -2,15 +2,12 @@
 
 #include <algorithm>
 
-#include "prometheus/label_matcher.h"
-#include "series_index/querier/querier.h"
 #include "series_index/trie/cedarpp_tree.h"
 #include "series_index/trie_index.h"
 
 namespace {
 
-using series_index::querier::MatchId;
-using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie, series_index::trie::CedarMatchesList<std::vector<MatchId>>>;
+using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie>;
 
 struct TrieIndexItem {
   std::string name;

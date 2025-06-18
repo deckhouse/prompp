@@ -2,11 +2,9 @@
 
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
-#include "prometheus/label_matcher.h"
 #include "series_index/prometheus/tsdb/index/section_writer/postings_writer.h"
 #include "series_index/prometheus/tsdb/index/section_writer/series_writer.h"
 #include "series_index/prometheus/tsdb/index/section_writer/symbols_writer.h"
-#include "series_index/querier/querier.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
 
@@ -21,7 +19,6 @@ using series_index::prometheus::tsdb::index::SymbolReferencesMap;
 using series_index::prometheus::tsdb::index::section_writer::PostingsWriter;
 using series_index::prometheus::tsdb::index::section_writer::SeriesWriter;
 using series_index::prometheus::tsdb::index::section_writer::SymbolsWriter;
-using series_index::querier::MatchId;
 using std::operator""sv;
 
 using ChunkMetadataList = std::vector<std::vector<ChunkMetadata>>;
@@ -35,7 +32,7 @@ struct PostingsWriterCase {
 
 class PostingsWriterFixture : public testing::TestWithParam<PostingsWriterCase> {
  protected:
-  using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie, series_index::trie::CedarMatchesList<std::vector<MatchId>>>;
+  using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie>;
   using QueryableEncodingBimap =
       series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex>;
 

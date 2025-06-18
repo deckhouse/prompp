@@ -19,7 +19,7 @@ using series_index::trie::CedarTrie;
 
 class QueryableEncodingBimapFixture : public testing::Test {
  protected:
-  using TrieIndex = series_index::TrieIndex<CedarTrie, CedarMatchesList<std::vector<MatchId>>>;
+  using TrieIndex = series_index::TrieIndex<CedarTrie>;
   using Lss = QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex>;
 
   Lss lss_;

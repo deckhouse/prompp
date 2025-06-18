@@ -110,11 +110,12 @@ extern "C" void prompp_primitives_lss_query(void* args, void* res) {
     uint32_t status;
   };
 
-  using Querier = series_index::querier::Querier<QueryableEncodingBimap, series_index::querier::Selector<>, PromPP::Primitives::Go::Slice>;
+  using Querier = series_index::querier::Querier<QueryableEncodingBimap, series_index::querier::Selector<>, series_index::querier::MatchIdResolver,
+                                                 PromPP::Primitives::Go::Slice>;
 
   const auto in = static_cast<Arguments*>(args);
   auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
-  auto query_result = Querier{lss}.query(in->label_matchers);
+  auto query_result = Querier{lss, {}}.query(in->label_matchers);
   lss.sort_series_ids(query_result.series_ids);
   lss.set_queried_series(in->query_source, query_result.series_ids);
 
@@ -185,11 +186,12 @@ extern "C" void prompp_primitives_lss_query_label_names(void* args, void* res) {
     GoSliceOfString names;
   };
 
-  using LabelNamesQuerier = series_index::querier::LabelNamesQuerier<QueryableEncodingBimap, series_index::querier::Selector<>>;
+  using LabelNamesQuerier =
+      series_index::querier::LabelNamesQuerier<QueryableEncodingBimap, series_index::querier::Selector<>, series_index::querier::MatchIdResolver>;
 
   const auto in = static_cast<Arguments*>(args);
   auto out = new (res) Result();
-  out->status = static_cast<uint32_t>(LabelNamesQuerier{std::get<QueryableEncodingBimap>(*in->lss)}.query(
+  out->status = static_cast<uint32_t>(LabelNamesQuerier{std::get<QueryableEncodingBimap>(*in->lss), {}}.query(
       in->label_matchers, [out](std::string_view name) PROMPP_LAMBDA_INLINE { out->names.emplace_back(name); }));
 }
 
@@ -204,11 +206,12 @@ extern "C" void prompp_primitives_lss_query_label_values(void* args, void* res) 
     GoSliceOfString values;
   };
 
-  using LabelValuesQuerier = series_index::querier::LabelValuesQuerier<QueryableEncodingBimap, series_index::querier::Selector<>>;
+  using LabelValuesQuerier =
+      series_index::querier::LabelValuesQuerier<QueryableEncodingBimap, series_index::querier::Selector<>, series_index::querier::MatchIdResolver>;
 
   const auto in = static_cast<Arguments*>(args);
   auto out = new (res) Result();
-  out->status = static_cast<uint32_t>(LabelValuesQuerier{std::get<QueryableEncodingBimap>(*in->lss)}.query(
+  out->status = static_cast<uint32_t>(LabelValuesQuerier{std::get<QueryableEncodingBimap>(*in->lss), {}}.query(
       static_cast<std::string_view>(in->label_name), in->label_matchers,
       [out](std::string_view value) PROMPP_LAMBDA_INLINE { out->values.emplace_back(value); }));
 }

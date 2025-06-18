@@ -5,15 +5,13 @@
 #include "prometheus/label_matcher.h"
 #include "series_data/encoder.h"
 #include "series_data/outdated_sample_encoder.h"
-#include "series_index/querier/querier.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
 #include "status.h"
 
 namespace {
 
-using series_index::querier::MatchId;
-using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie, series_index::trie::CedarMatchesList<std::vector<MatchId>>>;
+using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie>;
 using QueryableEncodingBimap =
     series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex>;
 using head::StatusGetter;

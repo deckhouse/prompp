@@ -11,7 +11,7 @@
 
 namespace series_index::querier {
 
-template <class Index, class Selector, template <class> class MemoryPoolContainer = std::vector>
+template <class Index, class Selector, MatchResolverInterface MatchResolver, template <class> class MemoryPoolContainer = std::vector>
 class Querier {
  public:
   class MatchersComparatorByTypeAndCardinality {
@@ -44,13 +44,14 @@ class Querier {
     [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_error() const noexcept { return is_querier_status_error(status); }
   };
 
-  explicit Querier(const Index& index) : index_(index) {}
+  explicit Querier(const Index& index, const MatchResolver& match_resolver) : index_(index), match_resolver_(match_resolver) {}
 
   template <class LabelMatchers>
   [[nodiscard]] QuerierResult query(const LabelMatchers& label_matchers) {
     QuerierResult result;
     Selector selector;
-    if (result.status = SelectorQuerier<typename Index::TrieIndex, Selector>{index_.trie_index()}.query(label_matchers, selector);
+    if (result.status =
+            SelectorQuerier<typename Index::TrieIndex, Selector, MatchResolver>{index_.trie_index(), match_resolver_}.query(label_matchers, selector);
         result.status != QuerierStatus::kMatch) {
       return result;
     }
@@ -104,6 +105,7 @@ class Querier {
   };
 
   const Index& index_;
+  const MatchResolver& match_resolver_;
   SeriesSliceList series_slice_list_;
 
   PROMPP_ALWAYS_INLINE void sort_matchers(Selector& selector) const noexcept {

@@ -2,6 +2,7 @@
 
 #include <cassert>
 
+#include "match_resolver.h"
 #include "prometheus/label_matcher.h"
 #include "regexp/regexp_searcher.h"
 
@@ -18,14 +19,14 @@ PROMPP_ALWAYS_INLINE bool is_querier_status_error(QuerierStatus status) noexcept
   return status != QuerierStatus::kMatch && status != QuerierStatus::kNoMatch;
 }
 
-template <class TrieIndex, class Selector>
+template <class TrieIndex, class Selector, MatchResolverInterface MatchResolver>
 class SelectorQuerier {
  public:
   using MatcherType = PromPP::Prometheus::MatcherType;
   using MatchStatus = PromPP::Prometheus::MatchStatus;
   using Trie = typename TrieIndex::Trie;
 
-  explicit SelectorQuerier(const TrieIndex& index) : index_(index) {}
+  explicit SelectorQuerier(const TrieIndex& index, const MatchResolver& match_resolver) : index_(index), match_resolver_(match_resolver) {}
 
   template <class LabelMatchers>
   [[nodiscard]] QuerierStatus query(const LabelMatchers& label_matchers, Selector& selector) {
@@ -71,6 +72,7 @@ class SelectorQuerier {
 
  private:
   const TrieIndex& index_;
+  const MatchResolver& match_resolver_;
 
   template <class LabelMatcher>
   PROMPP_ALWAYS_INLINE const Trie* get_values_trie(const LabelMatcher& label_matcher, typename Selector::Matcher& matcher) const noexcept {
@@ -175,8 +177,8 @@ class SelectorQuerier {
 
         matcher.invert();
 
-        typename TrieIndex::RegexpMatchesList matches_list(matcher.matches);
-        if (auto status = regexp::RegexpSearcher<typename TrieIndex::Trie, typename TrieIndex::RegexpMatchesList>(matches_list).search(*trie, regexp);
+        typename TrieIndex::Trie::MatchesList matches_list(matcher.matches, match_resolver_.value_resolver(matcher.label_name_id));
+        if (auto status = regexp::RegexpSearcher<typename TrieIndex::Trie, decltype(matches_list)>(matches_list).search(*trie, regexp);
             status == MatchStatus::kEmptyMatch) {
           matcher.status = MatchStatus::kAllMatch;
         } else {
@@ -192,8 +194,8 @@ class SelectorQuerier {
           return QuerierStatus::kNoMatch;
         }
 
-        typename TrieIndex::RegexpMatchesList matches_list(matcher.matches);
-        if (auto status = regexp::RegexpSearcher<typename TrieIndex::Trie, typename TrieIndex::RegexpMatchesList>(matches_list).search(*trie, regexp);
+        typename TrieIndex::Trie::MatchesList matches_list(matcher.matches, match_resolver_.value_resolver(matcher.label_name_id));
+        if (auto status = regexp::RegexpSearcher<typename TrieIndex::Trie, decltype(matches_list)>(matches_list).search(*trie, regexp);
             status == MatchStatus::kEmptyMatch) {
           matcher.status = MatchStatus::kEmptyMatch;
           return QuerierStatus::kNoMatch;
