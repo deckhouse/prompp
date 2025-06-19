@@ -31,7 +31,7 @@ func (s *InstantSeriesSetTestSuite) SetupTest() {
 	lss.FindOrEmplace(model.LabelSetFromPairs("job", "test", "__name__", "testmetric2"))
 	lss.FindOrEmplace(model.LabelSetFromPairs("job", "test", "__name__", "testmetric3"))
 
-	s.lssQueryResult = lss.Query([]model.LabelMatcher{{Name: "job", Value: "test"}}, cppbridge.LSSQuerySourceOther)
+	s.lssQueryResult = lss.QueryDeprecated([]model.LabelMatcher{{Name: "job", Value: "test"}}, cppbridge.LSSQuerySourceOther)
 	require.Equal(s.T(), cppbridge.LSSQueryStatusMatch, s.lssQueryResult.Status())
 	require.Equal(s.T(), 4, len(s.lssQueryResult.IDs()))
 

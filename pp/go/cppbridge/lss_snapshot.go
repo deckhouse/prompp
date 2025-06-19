@@ -69,3 +69,8 @@ func (lsst *LabelSetSnapshot) RangeLabelSet(lsID uint32, do func(l Label) error)
 
 	return nil
 }
+
+// Query returns a LSSQueryResult that matches the given selector.
+func (lss *LabelSetSnapshot) Query(selector uintptr) *LSSQueryResult {
+	return newLSSQueryResult(primitivesLSSQuery(lss.pointer, selector))
+}

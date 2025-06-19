@@ -96,9 +96,17 @@ func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet CppLabelSetBuilder) Fi
 	return res
 }
 
-// Query returns a LSSQueryResult that matches the given label matchers.
-func (lss *LabelSetStorage) Query(matchers []model.LabelMatcher, querySource uint32) *LSSQueryResult {
+// QueryDeprecated returns a LSSQueryResult that matches the given label matchers.
+func (lss *LabelSetStorage) QueryDeprecated(matchers []model.LabelMatcher, querySource uint32) *LSSQueryResult {
 	return newLSSQueryResult(primitivesLSSQueryDeprecated(lss.pointer, matchers, querySource))
+}
+
+// QuerySelector returns a created selector that matches the given label matchers.
+func (lss *LabelSetStorage) QuerySelector(matchers []model.LabelMatcher) (
+	selector uintptr,
+	status uint32,
+) {
+	return primitivesLSSQuerySelector(lss.pointer, matchers)
 }
 
 // QueryLabelNames returns a LSSQueryLabelNamesResult that matches the given label matchers.

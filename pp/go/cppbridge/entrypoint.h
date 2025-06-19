@@ -617,6 +617,37 @@ void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
 void prompp_primitives_lss_query_deprecated(void* args, void* res);
 
 /**
+ * @brief query selector from lss for label matchers
+ *
+ * @param args {
+ *     lss uintptr                         // pointer to constructed queryable lss;
+ *     label_matchers []model.LabelMatcher // label matchers
+ * }
+ *
+ * @param res {
+ *     selector uintptr // constructed selector
+ *     status   uint32  // query status
+ * }
+ */
+void prompp_primitives_lss_query_selector(void* args, void* res);
+
+/**
+ * @brief query selector from lss for label matchers
+ *
+ * @param args {
+ *     lss uintptr // pointer to readonly lss
+ *     selector uintptr // pointer to constructed selector
+ * }
+ *
+ * @param res {
+ *     matches           []uint32 // matched series ids
+ *     label_set_lengths []uint16 // slice of series label set length
+ *     status            uint32   // query status
+ * }
+ */
+void prompp_primitives_lss_query(void* args, void* res);
+
+/**
  * @brief free label set matches returned by prompp_primitives_lss_query
  *
  * @param args {

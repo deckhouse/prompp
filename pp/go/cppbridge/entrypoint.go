@@ -1186,6 +1186,56 @@ func primitivesLSSQueryDeprecated(lss uintptr, matchers []model.LabelMatcher, qu
 	return res.matches, res.labelSetLengths, res.status
 }
 
+func primitivesLSSQuerySelector(lss uintptr, matchers []model.LabelMatcher) (
+	selector uintptr,
+	status uint32,
+) {
+	args := struct {
+		lss      uintptr
+		matchers []model.LabelMatcher
+	}{lss, matchers}
+
+	var res struct {
+		selector uintptr
+		status   uint32
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_lss_query_selector,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.selector, res.status
+}
+
+func primitivesLSSQuery(lss uintptr, selector uintptr) (
+	matches []uint32,
+	labelSetLengths []uint16,
+	status uint32,
+) {
+	args := struct {
+		lss      uintptr
+		selector uintptr
+	}{lss, selector}
+
+	var res struct {
+		matches         []uint32
+		labelSetLengths []uint16
+		status          uint32
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_lss_query,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.matches, res.labelSetLengths, res.status
+}
+
 func primitivesLabelSetMatchesFree(result *LSSQueryResult) {
 	testGC()
 	fastcgo.UnsafeCall1(

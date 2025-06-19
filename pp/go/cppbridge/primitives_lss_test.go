@@ -256,13 +256,13 @@ func (s *QueryableLSSSuite) SetupTest() {
 	}
 }
 
-func (s *QueryableLSSSuite) TestQuery() {
+func (s *QueryableLSSSuite) TestQueryDeprecated() {
 	// match with sorting
 	{
 		labelMatchers := []model.LabelMatcher{
 			{Name: "lol", Value: "kek", MatcherType: model.MatcherTypeExactMatch},
 		}
-		queryResult := s.lss.Query(labelMatchers, cppbridge.LSSQuerySourceOther)
+		queryResult := s.lss.QueryDeprecated(labelMatchers, cppbridge.LSSQuerySourceOther)
 		s.Require().Equal(cppbridge.LSSQueryStatusMatch, queryResult.Status())
 		s.Require().Len(queryResult.IDs(), 3)
 		s.Require().Equal(s.labelSetIDs[1], queryResult.IDs()[0])
@@ -278,7 +278,7 @@ func (s *QueryableLSSSuite) TestQuery() {
 		labelMatchers := []model.LabelMatcher{
 			{Name: "kek", Value: "lol", MatcherType: model.MatcherTypeExactNotMatch},
 		}
-		queryResult := s.lss.Query(labelMatchers, cppbridge.LSSQuerySourceOther)
+		queryResult := s.lss.QueryDeprecated(labelMatchers, cppbridge.LSSQuerySourceOther)
 		s.Require().Equal(cppbridge.LSSQueryStatusNoPositiveMatchers, queryResult.Status())
 	}
 
@@ -287,7 +287,7 @@ func (s *QueryableLSSSuite) TestQuery() {
 		labelMatchers := []model.LabelMatcher{
 			{Name: "kek", Value: "lol", MatcherType: model.MatcherTypeExactMatch},
 		}
-		queryResult := s.lss.Query(labelMatchers, cppbridge.LSSQuerySourceOther)
+		queryResult := s.lss.QueryDeprecated(labelMatchers, cppbridge.LSSQuerySourceOther)
 		s.Require().Equal(cppbridge.LSSQueryStatusNoMatch, queryResult.Status())
 	}
 
@@ -296,8 +296,55 @@ func (s *QueryableLSSSuite) TestQuery() {
 		labelMatchers := []model.LabelMatcher{
 			{Name: "kek", Value: ".[", MatcherType: model.MatcherTypeRegexpMatch},
 		}
-		queryResult := s.lss.Query(labelMatchers, cppbridge.LSSQuerySourceOther)
+		queryResult := s.lss.QueryDeprecated(labelMatchers, cppbridge.LSSQuerySourceOther)
 		s.Require().Equal(cppbridge.LSSQueryStatusRegexpError, queryResult.Status())
+	}
+}
+
+func (s *QueryableLSSSuite) TestQuery() {
+	// match with sorting
+	{
+		labelMatchers := []model.LabelMatcher{
+			{Name: "lol", Value: "kek", MatcherType: model.MatcherTypeExactMatch},
+		}
+		selector, _ := s.lss.QuerySelector(labelMatchers)
+		snapshot := s.lss.CreateLabelSetSnapshot()
+		queryResult := snapshot.Query(selector)
+		s.Require().Equal(cppbridge.LSSQueryStatusMatch, queryResult.Status())
+		s.Require().Len(queryResult.IDs(), 3)
+		s.Require().Equal(s.labelSetIDs[1], queryResult.IDs()[0])
+		s.Require().Equal(s.labelSetIDs[0], queryResult.IDs()[1])
+		s.Require().Equal(s.labelSetIDs[2], queryResult.IDs()[2])
+		s.Require().Equal(uint16(2), queryResult.LabelSetLengths()[0])
+		s.Require().Equal(uint16(1), queryResult.LabelSetLengths()[1])
+		s.Require().Equal(uint16(2), queryResult.LabelSetLengths()[2])
+	}
+
+	// no positive matchers
+	{
+		labelMatchers := []model.LabelMatcher{
+			{Name: "kek", Value: "lol", MatcherType: model.MatcherTypeExactNotMatch},
+		}
+		_, status := s.lss.QuerySelector(labelMatchers)
+		s.Require().Equal(cppbridge.LSSQueryStatusNoPositiveMatchers, status)
+	}
+
+	// no match
+	{
+		labelMatchers := []model.LabelMatcher{
+			{Name: "kek", Value: "lol", MatcherType: model.MatcherTypeExactMatch},
+		}
+		_, status := s.lss.QuerySelector(labelMatchers)
+		s.Require().Equal(cppbridge.LSSQueryStatusNoMatch, status)
+	}
+
+	// invalid regexp
+	{
+		labelMatchers := []model.LabelMatcher{
+			{Name: "kek", Value: ".[", MatcherType: model.MatcherTypeRegexpMatch},
+		}
+		_, status := s.lss.QuerySelector(labelMatchers)
+		s.Require().Equal(cppbridge.LSSQueryStatusRegexpError, status)
 	}
 }
 

@@ -42,7 +42,7 @@ func (s *ChunksSeriesSetTestSuite) TestAll() {
 	var mint int64 = 2
 	var maxt int64 = 8
 
-	lssQueryResult := lss.Query([]model.LabelMatcher{
+	lssQueryResult := lss.QueryDeprecated([]model.LabelMatcher{
 		{Name: "job", Value: "test", MatcherType: model.MatcherTypeExactMatch},
 	}, cppbridge.LSSQuerySourceFederate)
 

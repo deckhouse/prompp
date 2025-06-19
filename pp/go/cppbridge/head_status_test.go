@@ -42,7 +42,7 @@ func (s *HeadStatusSuite) TestSomeData() {
 	s.encoder.Encode(1, 3, 1.0)
 	s.encoder.Encode(2, 3, 1.0)
 
-	s.lssStorage.Query(
+	s.lssStorage.QueryDeprecated(
 		[]model.LabelMatcher{{Name: "job", Value: "cron", MatcherType: model.MatcherTypeExactMatch}},
 		cppbridge.LSSQuerySourceRule)
 
@@ -116,7 +116,7 @@ func (s *HeadStatusSuite) TestFromLSS() {
 	s.encoder.Encode(1, 3, 1.0)
 	s.encoder.Encode(2, 3, 1.0)
 
-	s.lssStorage.Query(
+	s.lssStorage.QueryDeprecated(
 		[]model.LabelMatcher{{Name: "job", Value: "cron", MatcherType: model.MatcherTypeExactMatch}},
 		cppbridge.LSSQuerySourceRule)
 
@@ -191,7 +191,7 @@ func (s *HeadStatusSuite) TestFromDataStorage() {
 	s.encoder.Encode(1, 3, 1.0)
 	s.encoder.Encode(2, 3, 1.0)
 
-	s.lssStorage.Query(
+	s.lssStorage.QueryDeprecated(
 		[]model.LabelMatcher{{Name: "job", Value: "cron", MatcherType: model.MatcherTypeExactMatch}},
 		cppbridge.LSSQuerySourceRule)
 
@@ -231,7 +231,7 @@ func (s *HeadStatusSuite) TestFull() {
 	s.encoder.Encode(1, 3, 1.0)
 	s.encoder.Encode(2, 3, 1.0)
 
-	s.lssStorage.Query(
+	s.lssStorage.QueryDeprecated(
 		[]model.LabelMatcher{{Name: "job", Value: "cron", MatcherType: model.MatcherTypeExactMatch}},
 		cppbridge.LSSQuerySourceRule)
 

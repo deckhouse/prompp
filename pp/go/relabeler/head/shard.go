@@ -41,7 +41,7 @@ func (w *LSS) QueryLabelNames(matchers []model.LabelMatcher) *cppbridge.LSSQuery
 }
 
 func (w *LSS) Query(matchers []model.LabelMatcher, querySource uint32) *cppbridge.LSSQueryResult {
-	return w.target.Query(matchers, querySource)
+	return w.target.QueryDeprecated(matchers, querySource)
 }
 
 func (w *LSS) GetLabelSets(labelSetIDs []uint32) *cppbridge.LabelSetStorageGetLabelSetsResult {

@@ -114,14 +114,16 @@ inline LssVariantPtr create_lss(LssType type) {
   }
 }
 
-inline LssVariantPtr create_readonly_lss(const LssVariant& lss_variant) {
+inline LssVariantPtr create_readonly_lss(LssVariant& lss_variant) {
   switch (static_cast<LssType>(lss_variant.index())) {
     case LssType::kEncodingBimap: {
       return std::make_unique<LssVariant>(std::in_place_index<static_cast<int>(LssType::kReadonlyLss)>, std::get<EncodingBimap>(lss_variant));
     }
 
     case LssType::kQueryableEncodingBimap: {
-      return std::make_unique<LssVariant>(std::in_place_index<static_cast<int>(LssType::kReadonlyLss)>, std::get<QueryableEncodingBimap>(lss_variant));
+      auto& lss = std::get<QueryableEncodingBimap>(lss_variant);
+      lss.build_deferred_indexes();
+      return std::make_unique<LssVariant>(std::in_place_index<static_cast<int>(LssType::kReadonlyLss)>, lss);
     }
 
     default: {
