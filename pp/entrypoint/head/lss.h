@@ -58,12 +58,35 @@ using QueryableEncodingBimap = series_index::QueryableEncodingBimap<PromPP::Prim
 class ReadonlyLss : public PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpanWithChangesDetection> {
  public:
   using Base = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpanWithChangesDetection>;
+  using SortingIndex = series_index::SortingIndex<SharedSpanWithChangesDetection>;
   using Base::Base;
 
   explicit ReadonlyLss(const QueryableEncodingBimap& lss) : Base(lss), sorting_index_(lss.sorting_index()) {}
 
+  PROMPP_ALWAYS_INLINE const SortingIndex& sorting_index() const noexcept { return sorting_index_; }
+
  private:
-  series_index::SortingIndex<SharedSpanWithChangesDetection> sorting_index_;
+  SortingIndex sorting_index_;
+};
+
+template <class Lss>
+class ReallocationsDetector {
+ public:
+  explicit ReallocationsDetector(const Lss& lss) : lss_(lss), sorting_index_buffer_(get_sorting_index_buffer()) { lss_memory::has_reallocations = false; }
+
+  PROMPP_ALWAYS_INLINE bool has_reallocations() const noexcept { return lss_memory::has_reallocations || sorting_index_buffer_ != get_sorting_index_buffer(); }
+
+ private:
+  const Lss& lss_;
+  const uint32_t* sorting_index_buffer_{};
+
+  PROMPP_ALWAYS_INLINE const uint32_t* get_sorting_index_buffer() const noexcept {
+    if constexpr (std::is_same_v<Lss, QueryableEncodingBimap>) {
+      return lss_.sorting_index().index.data();
+    }
+
+    return nullptr;
+  }
 };
 
 using LssVariant = std::variant<EncodingBimap, OrderedEncodingBimap, QueryableEncodingBimap, ReadonlyLss>;

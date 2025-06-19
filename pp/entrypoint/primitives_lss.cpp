@@ -53,9 +53,9 @@ PROMPP_ALWAYS_INLINE FindOrEmplaceResult find_or_emplace(auto& lss, const auto& 
   if constexpr (Lss::kIsReadOnly) {
     throw BareBones::Exception(0x1b877a0ab46a69a6, "lss is readonly");
   } else {
-    entrypoint::head::lss_memory::has_reallocations = false;
+    const entrypoint::head::ReallocationsDetector reallocation_detector(lss);
     const auto ls_id = lss.find_or_emplace(label_set);
-    return {.ls_id = ls_id, .lss_has_reallocations = entrypoint::head::lss_memory::has_reallocations};
+    return {.ls_id = ls_id, .lss_has_reallocations = reallocation_detector.has_reallocations()};
   }
 }
 
