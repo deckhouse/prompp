@@ -52,7 +52,7 @@ class MatchersComparatorByTypeAndCardinality {
   }
 };
 
-template <class Index, template <class> class MemoryPoolContainer = std::vector>
+template <template <class> class MemoryPoolContainer = std::vector>
 class Querier {
  public:
   using Selector = querier::Selector<SeriesIdSequenceSnapshot>;
@@ -72,19 +72,16 @@ class Querier {
     [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_error() const noexcept { return is_querier_status_error(status); }
   };
 
-  explicit Querier(const Index& index) : index_(index) {}
-
-  template <class LabelMatchers>
-  [[nodiscard]] QuerierResult query(const LabelMatchers& label_matchers) {
+  template <class Index, class LabelMatchers>
+  [[nodiscard]] static QuerierResult query(const Index& index, const LabelMatchers& label_matchers) {
     Selector selector;
-    if (const auto status =
-            SelectorQuerier<typename Index::TrieIndex, Selector, MatchResolver>{index_.trie_index(), MatchResolver(index_.reverse_index())}.query(
-                label_matchers, selector);
+    if (const auto status = SelectorQuerier<typename Index::TrieIndex, Selector, MatchResolver>{index.trie_index(), MatchResolver(index.reverse_index())}.query(
+            label_matchers, selector);
         status != QuerierStatus::kMatch) {
       return {.status = status};
     }
 
-    return query(selector);
+    return Querier().query(selector);
   }
 
   [[nodiscard]] QuerierResult query(Selector& selector) {
@@ -137,7 +134,6 @@ class Querier {
     }
   };
 
-  const Index& index_;
   SeriesSliceList series_slice_list_;
 
   PROMPP_ALWAYS_INLINE static void sort_matchers(Selector& selector) noexcept {

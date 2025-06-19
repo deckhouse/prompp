@@ -4,7 +4,6 @@
 
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
-#include "printer.h"
 #include "series_index/querier/querier.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
@@ -78,7 +77,6 @@ struct QuerierTestCase {
 class QuerierFixture : public testing::TestWithParam<QuerierTestCase> {
  protected:
   Index index_;
-  Querier<Index, BareBones::Vector> querier_{index_};
 
   void SetUp() override {
     for (auto& label_set : label_sets_) {
@@ -98,7 +96,7 @@ TEST_P(QuerierFixture, Test) {
   // Arrange
 
   // Act
-  auto result = querier_.query(GetParam().label_matchers);
+  auto result = Querier<BareBones::Vector>::query(index_, GetParam().label_matchers);
 
   // Assert
   EXPECT_EQ(GetParam().expected.status, result.status);
