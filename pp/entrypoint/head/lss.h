@@ -50,12 +50,21 @@ using SharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
 template <class T>
 using SharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
 
-using ReadonlyLss = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpanWithChangesDetection>;
-
 using EncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<SharedVectorWithChangesDetection>;
 using QueryableEncodingBimap = series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament,
                                                                     SharedVectorWithChangesDetection,
                                                                     series_index::trie::CedarTrie>;
+
+class ReadonlyLss : public PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpanWithChangesDetection> {
+ public:
+  using Base = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpanWithChangesDetection>;
+  using Base::Base;
+
+  explicit ReadonlyLss(const QueryableEncodingBimap& lss) : Base(lss), sorting_index_(lss.sorting_index()) {}
+
+ private:
+  series_index::SortingIndex<SharedSpanWithChangesDetection> sorting_index_;
+};
 
 using LssVariant = std::variant<EncodingBimap, OrderedEncodingBimap, QueryableEncodingBimap, ReadonlyLss>;
 using LssVariantPtr = std::unique_ptr<LssVariant>;

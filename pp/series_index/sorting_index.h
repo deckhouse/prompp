@@ -30,6 +30,8 @@ struct SortingIndex {
 template <class Set, template <class> class Vector, uint32_t kMaxIndexValue = std::numeric_limits<uint32_t>::max()>
 class SortingIndexBuilder {
  public:
+  using Index = SortingIndex<Vector>;
+
   explicit SortingIndexBuilder(const Set& ls_id_set) : ls_id_set_(ls_id_set) {}
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return index_.index.empty(); }
@@ -63,11 +65,11 @@ class SortingIndexBuilder {
     index_.sort(begin, end);
   }
 
-  PROMPP_ALWAYS_INLINE const SortingIndex<Vector>& index() const noexcept { return index_; }
+  PROMPP_ALWAYS_INLINE const Index& index() const noexcept { return index_; }
 
  private:
   const Set& ls_id_set_;
-  SortingIndex<Vector> index_;
+  Index index_;
 
   void rebuild() {
     index_.index.resize(ls_id_set_.size());

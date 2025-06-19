@@ -20,6 +20,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   using HashSet =
       phmap::flat_hash_set<typename Base::Proxy, typename Base::Hasher, typename Base::EqualityComparator, BareBones::Allocator<typename Base::Proxy>>;
   using LsIdSetIterator = typename LsIdSet::const_iterator;
+  using SortingIndexBuilder = series_index::SortingIndexBuilder<LsIdSet, Vector>;
   using TrieIndex = series_index::TrieIndex<Trie>;
   using TrieIndexIterator = typename TrieIndex::Iterator;
 
@@ -30,6 +31,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   [[nodiscard]] PROMPP_ALWAYS_INLINE const TrieIndex& trie_index() const noexcept { return trie_index_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesReverseIndex& reverse_index() const noexcept { return reverse_index_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const LsIdSet& ls_id_set() const noexcept { return ls_id_set_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const typename SortingIndexBuilder::Index& sorting_index() const noexcept { return sorting_index_.index(); }
 
   template <class Iterator>
   PROMPP_ALWAYS_INLINE void sort_series_ids(Iterator begin, Iterator end) noexcept {
@@ -112,7 +114,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   size_t ls_id_hash_set_allocated_memory_{};
   HashSet ls_id_hash_set_{0, Base::hasher(), Base::equality_comparator(), BareBones::Allocator<typename Base::Proxy>{ls_id_hash_set_allocated_memory_}};
 
-  SortingIndexBuilder<LsIdSet, Vector> sorting_index_{ls_id_set_};
+  SortingIndexBuilder sorting_index_{ls_id_set_};
 
   QueriedSeries queried_series_;
 
