@@ -51,6 +51,14 @@ http_archive(
     url = "https://github.com/google/benchmark/archive/refs/tags/v1.9.0.tar.gz",
 )
 
+http_archive(
+    name = "tracy",
+    build_file = "//third_party:tracy.BUILD",
+    sha256 = "ce2fb5b89aeb6db8401d7efe1bfe8393b7a81ca551273e8c6dd46ed37c02a040",
+    strip_prefix = "tracy-0.12.0/",
+    url = "https://github.com/wolfpld/tracy/archive/refs/tags/v0.12.0.tar.gz",
+)
+
 git_repository(
     name = "bazel_clang_tidy",
     commit = "11541864afa832ff6721e479c44794e9c9497ae8",
