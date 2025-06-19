@@ -266,6 +266,8 @@ class SharedPtr {
     return *this;
   }
 
+  PROMPP_ALWAYS_INLINE friend void swap(SharedPtr& a, SharedPtr& b) noexcept { std::swap(a.data_, b.data_); }
+
   PROMPP_ALWAYS_INLINE void non_atomic_reallocate(uint32_t size) noexcept {
     PRAGMA_DIAGNOSTIC(push)
     PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
@@ -397,7 +399,7 @@ class SharedMemory : public GenericMemory<SharedMemory<T, Reallocator>, uint32_t
       PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
       std::memcpy(new_data.get(), data_.get(), size_ * sizeof(T));
       PRAGMA_DIAGNOSTIC(pop)
-      data_.swap(new_data);
+      swap(data_, new_data);
     }
 
     size_ = new_size;
