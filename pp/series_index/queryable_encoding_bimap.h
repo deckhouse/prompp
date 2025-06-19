@@ -110,7 +110,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   size_t ls_id_hash_set_allocated_memory_{};
   HashSet ls_id_hash_set_{0, Base::hasher(), Base::equality_comparator(), BareBones::Allocator<typename Base::Proxy>{ls_id_hash_set_allocated_memory_}};
 
-  SortingIndex<LsIdSet> sorting_index_{ls_id_set_};
+  SortingIndexBuilder<LsIdSet, Vector> sorting_index_{ls_id_set_};
 
   QueriedSeries queried_series_;
 
