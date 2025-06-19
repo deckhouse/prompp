@@ -1,8 +1,12 @@
 #include <gmock/gmock.h>
-#include <parallel_hashmap/btree.h>
 
 #include "bare_bones/vector.h"
 #include "series_index/sorting_index.h"
+
+PRAGMA_DIAGNOSTIC(push)
+PRAGMA_DIAGNOSTIC(ignored "-Warray-bounds")
+#include <parallel_hashmap/btree.h>
+PRAGMA_DIAGNOSTIC(pop)
 
 namespace {
 
