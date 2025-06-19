@@ -202,8 +202,7 @@ extern "C" void prompp_prometheus_per_shard_relabeler_input_relabeling(void* arg
           entrypoint::head::lss_memory::has_reallocations = false;
           in->per_shard_relabeler->input_relabeling(input_lss, target_lss, *in->cache, hashdex, in->options, *out, in->shards_inner_series,
                                                     in->shards_relabeled_series);
-          std::vector<uint32_t> ids;
-          target_lss.sort_series_ids(ids);
+          target_lss.build_deferred_indexes();
           out->target_lss_has_reallocations = entrypoint::head::lss_memory::has_reallocations;
         },
         *in->hashdex);
@@ -273,8 +272,7 @@ extern "C" void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stal
           entrypoint::head::lss_memory::has_reallocations = false;
           in->per_shard_relabeler->input_relabeling_with_stalenans(input_lss, target_lss, *in->cache, hashdex, in->options, *out, in->shards_inner_series,
                                                                    in->shards_relabeled_series, *in->state, in->def_timestamp);
-          std::vector<uint32_t> ids;
-          target_lss.sort_series_ids(ids);
+          target_lss.build_deferred_indexes();
           out->target_lss_has_reallocations = entrypoint::head::lss_memory::has_reallocations;
         },
         *in->hashdex);
@@ -336,8 +334,7 @@ extern "C" void prompp_prometheus_per_shard_relabeler_append_relabeler_series(vo
                                                        in->shards_relabeler_state_update[id]);
     }
 
-    std::vector<uint32_t> ids;
-    lss.sort_series_ids(ids);
+    lss.build_deferred_indexes();
     out->target_lss_has_reallocations = entrypoint::head::lss_memory::has_reallocations;
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);

@@ -242,7 +242,7 @@ class SharedPtr {
     non_atomic_reallocate(size);
     set_constructed_item_count(constructed_item_count);
   }
-  PROMPP_ALWAYS_INLINE SharedPtr(const SharedPtr& other) noexcept : data_(other.data_) { inc_atomic_ref_counter(); }
+  PROMPP_ALWAYS_INLINE SharedPtr(const SharedPtr& other) noexcept : data_(other.data_) { inc_ref_counter(); }
   SharedPtr(SharedPtr&& other) noexcept : data_(std::exchange(other.data_, nullptr)) {}
 
   PROMPP_ALWAYS_INLINE ~SharedPtr() { dec_ref_counter(); }
@@ -251,7 +251,7 @@ class SharedPtr {
     if (this != &other) [[likely]] {
       dec_ref_counter();
       data_ = other.data_;
-      inc_atomic_ref_counter();
+      inc_ref_counter();
     }
 
     return *this;
@@ -320,9 +320,13 @@ class SharedPtr {
  private:
   T* data_{nullptr};
 
-  PROMPP_ALWAYS_INLINE void inc_atomic_ref_counter() noexcept {
+  PROMPP_ALWAYS_INLINE void inc_ref_counter() noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
-      ++control_block()->atomic_ref_count();
+      if (block->ref_count == 1) [[likely]] {
+        ++block->ref_count;
+      } else {
+        ++block->atomic_ref_count();
+      }
     }
   }
 

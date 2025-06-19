@@ -52,12 +52,14 @@ TEST_F(SortingIndexFixture, BuildAndSort) {
 
 TEST_F(SortingIndexFixture, UpdateAndSort) {
   // Arrange
-  index_.update(set_.emplace(0).first);
-  index_.update(set_.emplace(1).first);
-  index_.update(set_.emplace(2).first);
+  set_.emplace(0);
+  index_.build();
+
   std::array series_ids{"d"_idx, "b"_idx, "a"_idx};
 
   // Act
+  index_.update(set_.emplace(1).first);
+  index_.update(set_.emplace(2).first);
   index_.sort(series_ids.begin(), series_ids.end());
 
   // Assert
@@ -65,12 +67,26 @@ TEST_F(SortingIndexFixture, UpdateAndSort) {
   EXPECT_THAT(series_ids, testing::ElementsAre("a"_idx, "b"_idx, "d"_idx));
 }
 
-TEST_F(SortingIndexFixture, BuildIndexInSort) {
+TEST_F(SortingIndexFixture, ResetIndexOnUpdateError) {
   // Arrange
-  index_.update(set_.emplace(0).first);
+  set_.emplace(0);
+  index_.build();
+
+  // Act
   index_.update(set_.emplace(1).first);
   index_.update(set_.emplace(2).first);
   index_.update(set_.emplace(3).first);
+
+  // Assert
+  EXPECT_TRUE(index_.empty());
+}
+
+TEST_F(SortingIndexFixture, BuildIndexInSort) {
+  // Arrange
+  set_.emplace(0);
+  set_.emplace(1);
+  set_.emplace(2);
+  set_.emplace(3);
   std::array series_ids{"d"_idx, "b"_idx, "c"_idx, "a"_idx};
 
   // Act

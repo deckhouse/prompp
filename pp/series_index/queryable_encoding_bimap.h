@@ -41,6 +41,8 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     sort_series_ids(container.begin(), container.end());
   }
 
+  PROMPP_ALWAYS_INLINE void build_deferred_indexes() noexcept { sorting_index_.build(); }
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
     return trie_index_.allocated_memory() + reverse_index_.allocated_memory() + ls_id_set_allocated_memory_ + ls_id_hash_set_allocated_memory_ +
            sorting_index_.allocated_memory() + queried_series_.allocated_memory() + Base::allocated_memory();
