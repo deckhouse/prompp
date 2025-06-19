@@ -33,16 +33,6 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   [[nodiscard]] PROMPP_ALWAYS_INLINE const LsIdSet& ls_id_set() const noexcept { return ls_id_set_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const typename SortingIndexBuilder::Index& sorting_index() const noexcept { return sorting_index_.index(); }
 
-  template <class Iterator>
-  PROMPP_ALWAYS_INLINE void sort_series_ids(Iterator begin, Iterator end) noexcept {
-    sorting_index_.sort(begin, end);
-  }
-
-  template <class Container>
-  PROMPP_ALWAYS_INLINE void sort_series_ids(Container& container) noexcept {
-    sort_series_ids(container.begin(), container.end());
-  }
-
   PROMPP_ALWAYS_INLINE void build_deferred_indexes() noexcept { sorting_index_.build(); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {

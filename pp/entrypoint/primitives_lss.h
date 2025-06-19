@@ -89,7 +89,7 @@ void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
  *     status            uint32   // query status
  * }
  */
-void prompp_primitives_lss_query(void* args, void* res);
+void prompp_primitives_lss_query_deprecated(void* args, void* res);
 
 /**
  * @brief free label set matches returned by prompp_primitives_lss_query

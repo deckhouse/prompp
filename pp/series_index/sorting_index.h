@@ -24,6 +24,11 @@ struct SortingIndex {
     std::sort(begin, end, [this](uint32_t a, uint32_t b) PROMPP_LAMBDA_INLINE { return index[a] < index[b]; });
   }
 
+  template <class Container>
+  PROMPP_ALWAYS_INLINE void sort(Container& container) const noexcept {
+    sort(container.begin(), container.end());
+  }
+
   Vector<uint32_t> index;
 };
 

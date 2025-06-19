@@ -1159,7 +1159,7 @@ func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder CppLabelSetBuilder) 
 	return res
 }
 
-func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource uint32) (
+func primitivesLSSQueryDeprecated(lss uintptr, matchers []model.LabelMatcher, querySource uint32) (
 	matches []uint32,
 	labelSetLengths []uint16,
 	status uint32,
@@ -1178,7 +1178,7 @@ func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource 
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_primitives_lss_query,
+		C.prompp_primitives_lss_query_deprecated,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)

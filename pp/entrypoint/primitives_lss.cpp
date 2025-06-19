@@ -100,7 +100,7 @@ struct LssQueryResult {
   uint32_t status;
 };
 
-extern "C" void prompp_primitives_lss_query(void* args, void* res) {
+extern "C" void prompp_primitives_lss_query_deprecated(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
     GoLabelMatchers label_matchers;
@@ -117,7 +117,8 @@ extern "C" void prompp_primitives_lss_query(void* args, void* res) {
   const auto in = static_cast<Arguments*>(args);
   auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
   auto query_result = Querier::query(lss, in->label_matchers);
-  lss.sort_series_ids(query_result.series_ids);
+  lss.build_deferred_indexes();
+  lss.sorting_index().sort(query_result.series_ids);
   lss.set_queried_series(in->query_source, query_result.series_ids);
 
   const auto out = new (res) Result{
