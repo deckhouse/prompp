@@ -691,6 +691,7 @@ func (s *storage) worker() {
 				s.bitsetCount.Delete(ls)
 
 				s.generation++
+				metricsTimer.Reset(0)
 			}
 
 			rotateTimer.Reset(rotateDuration)
