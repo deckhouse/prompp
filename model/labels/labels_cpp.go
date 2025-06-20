@@ -472,7 +472,6 @@ func (b *ScratchBuilder) Reset() {
 	b.builder.base = EmptyLabels()
 	b.builder.add = b.builder.add[:0]
 	b.sorted = false
-	b.builder.skipCache = false
 }
 
 // SetSkipCache set the flag to ignore caches.
