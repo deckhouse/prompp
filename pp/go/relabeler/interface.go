@@ -2,6 +2,7 @@ package relabeler
 
 import (
 	"context"
+	"github.com/prometheus/prometheus/pp/go/relabeler/block"
 	"sync/atomic"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -80,6 +81,7 @@ type Head interface {
 	CopySeriesFrom(other Head)
 	Enqueue(t *GenericTask)
 	CreateTask(taskName string, fn ShardFn, isLss, isExclusive bool) *GenericTask
+	WriteTo(blockWriter BlockWriter) error
 }
 
 type Distributor interface {
@@ -90,6 +92,10 @@ type Distributor interface {
 	SetDestinationGroups(destinationGroups DestinationGroups)
 	WriteMetrics(head Head)
 	Rotate() error
+}
+
+type BlockWriter interface {
+	Write(block block.Block) error
 }
 
 type HeadConfigurator interface {

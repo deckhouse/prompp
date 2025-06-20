@@ -196,9 +196,11 @@ func NewReceiver(
 		querierMetrics,
 		triggerNotifier,
 		clock,
+		appender.DefaultInitialDelay,
+		appender.DefaultWriteInterval,
 		maxRetentionDuration,
 		headRetentionTimeout,
-		writeTimeout,
+		appender.DefaultQueueSize,
 		rotatedHeads...,
 	)
 

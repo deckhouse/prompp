@@ -97,7 +97,7 @@ func (cmd *cmdWALPPToBlock) Do(
 			inputRelabelerConfig,
 			headRecord.NumberOfShards(),
 			0,
-			head.NoOpLastAppendedSegmentIDSetter{},
+			head.NoOpNumberOfSegmentsSetter{},
 			registerer,
 		)
 		if err != nil {

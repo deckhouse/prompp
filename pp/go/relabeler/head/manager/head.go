@@ -125,3 +125,7 @@ func (h *DiscardableRotatableHead) CreateTask(
 func (h *DiscardableRotatableHead) Enqueue(t *relabeler.GenericTask) {
 	h.head.Enqueue(t)
 }
+
+func (h *DiscardableRotatableHead) WriteTo(blockWriter relabeler.BlockWriter) error {
+	return h.head.WriteTo(blockWriter)
+}

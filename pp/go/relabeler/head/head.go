@@ -718,6 +718,22 @@ func (h *Head) Enqueue(t *relabeler.GenericTask) {
 	}
 }
 
+func (h *Head) WriteTo(blockWriter relabeler.BlockWriter) error {
+	tBlockWrite := h.CreateTask(
+		relabeler.BlockWrite,
+		func(shard relabeler.Shard) error {
+			return blockWriter.Write(relabeler.NewBlock(shard.LSS().Raw(), shard.DataStorage().Raw()))
+		},
+		relabeler.ForLSSTask,
+		relabeler.ExclusiveTask,
+	)
+	h.Enqueue(tBlockWrite)
+	if err := tBlockWrite.Wait(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // readOnlyForEachShard run generic task on read only head without queue.
 func (h *Head) readOnlyForEachShard(t *relabeler.GenericTask) {
 	for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {

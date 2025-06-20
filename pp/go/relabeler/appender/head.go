@@ -197,6 +197,10 @@ func (h *RotatableHead) Enqueue(t *relabeler.GenericTask) {
 	h.head.Enqueue(t)
 }
 
+func (h *RotatableHead) WriteTo(blockWriter relabeler.BlockWriter) error {
+	return h.head.WriteTo(blockWriter)
+}
+
 //
 // HeapProfileWritableHead
 //
@@ -305,4 +309,8 @@ func (h *HeapProfileWritableHead) CreateTask(
 // Enqueue the task to be executed on head.
 func (h *HeapProfileWritableHead) Enqueue(t *relabeler.GenericTask) {
 	h.head.Enqueue(t)
+}
+
+func (h *HeapProfileWritableHead) WriteTo(blockWriter relabeler.BlockWriter) error {
+	return h.head.WriteTo(blockWriter)
 }
