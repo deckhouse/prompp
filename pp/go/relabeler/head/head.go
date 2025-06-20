@@ -10,8 +10,10 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -180,7 +182,7 @@ type Head struct {
 	dataStorageTaskChs []chan *relabeler.GenericTask
 	lssMXs             []*sync.RWMutex
 	dataStorageMXs     []*sync.RWMutex
-	lsCache            sync.Map
+	lsCache            *model.CacheWithBitset
 
 	numberOfShards uint16
 	stopc          chan struct{}
@@ -200,6 +202,9 @@ type Head struct {
 	tasksDone    *prometheus.CounterVec
 	tasksLive    *prometheus.CounterVec
 	tasksExecute *prometheus.CounterVec
+
+	cacheSize        *prometheus.GaugeVec
+	cacheBitsetCount *prometheus.GaugeVec
 }
 
 func New(
@@ -241,7 +246,7 @@ func New(
 		dataStorageTaskChs: dataStorageTaskChs,
 		lssMXs:             lssMXs,
 		dataStorageMXs:     dataStorageMXs,
-		lsCache:            sync.Map{},
+		lsCache:            model.NewCacheWithBitset(),
 
 		stopc:          make(chan struct{}),
 		wg:             sync.WaitGroup{},
@@ -320,6 +325,23 @@ func New(
 				Help: "The duration of the task execution in microseconds.",
 			},
 			[]string{"type_task"},
+		),
+
+		cacheSize: factory.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name:        "prompp_head_cache_size",
+				Help:        "Current size of cache.",
+				ConstLabels: prometheus.Labels{"allocator": "head"},
+			},
+			[]string{"generation"},
+		),
+		cacheBitsetCount: factory.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name:        "prompp_head_cache_bitset_count",
+				Help:        "Current count of emplace to cache bitset.",
+				ConstLabels: prometheus.Labels{"allocator": "head"},
+			},
+			[]string{"generation"},
 		),
 	}
 
@@ -516,6 +538,11 @@ func (h *Head) WriteMetrics() {
 			"shard_id": shardIDStr,
 		}).Set(float64(len(h.dataStorageTaskChs[shardID])))
 	}
+
+	cacheSize, cacheBitsetCount := h.lsCache.Stats()
+	ls := prometheus.Labels{"generation": generationStr}
+	h.cacheSize.With(ls).Set(float64(cacheSize))
+	h.cacheBitsetCount.With(ls).Set(float64(cacheBitsetCount))
 }
 
 func (h *Head) Status(limit int) relabeler.HeadStatus {
@@ -655,7 +682,11 @@ func (h *Head) CopySeriesFrom(other relabeler.Head) {
 
 // Close wals and clear metrics.
 func (h *Head) Close() error {
-	h.memoryInUse.DeletePartialMatch(prometheus.Labels{"generation": strconv.FormatUint(h.generation, 10)})
+	ls := prometheus.Labels{"generation": strconv.FormatUint(h.generation, 10)}
+	h.memoryInUse.DeletePartialMatch(ls)
+	h.cacheSize.DeletePartialMatch(ls)
+	h.cacheBitsetCount.DeletePartialMatch(ls)
+
 	for _, lss := range h.lsses {
 		lss.Outdate()
 	}
@@ -1017,7 +1048,7 @@ func (h *Head) updateRelabelerStateStage(
 // run loop for each shard.
 func (h *Head) run() {
 	workers := 1 + ExtraReadConcurrency
-	h.wg.Add(2 * workers * int(h.numberOfShards))
+	h.wg.Add(2*workers*int(h.numberOfShards) + 1)
 	for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
 		for i := 0; i < workers; i++ {
 			go func(sid uint16) {
@@ -1031,6 +1062,11 @@ func (h *Head) run() {
 			}(shardID)
 		}
 	}
+
+	go func() {
+		defer h.wg.Done()
+		h.rotateCache(h.stopc)
+	}()
 }
 
 // shardLoop run shard loop for operation.
@@ -1109,7 +1145,7 @@ func (h *Head) FindFromBuilder(
 	}
 
 	if !skipCache {
-		h.lsCache.Store(hash, lsCacheValue{newlsID, length})
+		h.lsCache.Store(hash, newlsID, length)
 	}
 
 	return labels.NewLabelsWithLSS(
@@ -1162,13 +1198,10 @@ func (h *Head) createTaskOnSingleShard(
 	)
 }
 
-// lsCacheValue value for ls cache.
-type lsCacheValue struct {
-	lsID   uint32
-	length uint16
-}
-
-const tryCount = 30
+const (
+	tryCount       = 30
+	rotateDuration = 5 * time.Minute
+)
 
 // FindByHash label set by hash in cache.
 func (h *Head) FindByHash(hash uint64) (labels.Labels, bool) {
@@ -1177,7 +1210,7 @@ func (h *Head) FindByHash(hash uint64) (labels.Labels, bool) {
 
 // findByHashOnShard label set by hash on shard in cache.
 func (h *Head) findByHashOnShard(hash, shardID uint64) (labels.Labels, bool) {
-	cv, ok := h.lsCache.Load(hash)
+	lsID, length, ok := h.lsCache.Load(hash)
 	if !ok {
 		return labels.EmptyLabels(), false
 	}
@@ -1195,13 +1228,33 @@ func (h *Head) findByHashOnShard(hash, shardID uint64) (labels.Labels, bool) {
 
 	// if can't get a snapshot, take the long way
 	if snapshot == nil {
-		fmt.Println(" === snapshot == nil")
 		return labels.EmptyLabels(), false
 	}
 
 	return labels.NewLabelsWithLSS(
 		snapshot,
-		cv.(lsCacheValue).lsID,
-		cv.(lsCacheValue).length,
+		lsID,
+		length,
 	), true
+}
+
+// rotateCache rotate head cache.
+func (h *Head) rotateCache(stopc chan struct{}) {
+	rotateTimer := time.NewTimer(rotateDuration)
+
+	for {
+		select {
+		case <-stopc:
+			h.lsCache.Reset()
+			return
+
+		case <-rotateTimer.C:
+			cacheSize, cacheBitsetCount := h.lsCache.StatsWithClearBitset()
+			if uint64(cacheBitsetCount) <= cacheSize/2 {
+				h.lsCache.Reset()
+			}
+
+			rotateTimer.Reset(rotateDuration)
+		}
+	}
 }

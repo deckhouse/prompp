@@ -390,8 +390,8 @@ func main() {
 		Default("5000ms").SetValue(&cfg.WalCommitInterval)
 
 	serverOnlyFlag(a, "storage.head-retention-timeout", "Timeout before inactive heads are shrieked.").
-		// Default("1m").SetValue(&cfg.HeadRetentionTimeout)
 		Default("5m").SetValue(&cfg.HeadRetentionTimeout)
+	// Default("1m").SetValue(&cfg.HeadRetentionTimeout)
 
 	// TODO: Remove in Prometheus 3.0.
 	var b bool
@@ -717,9 +717,9 @@ func main() {
 		cfgFile.RemoteWriteConfigs,
 		localStoragePath,
 		receiver.RotationInfo{
-			// BlockDuration: 10 * time.Minute,
 			BlockDuration: time.Duration(cfg.tsdb.MinBlockDuration),
-			Seed:          cfgFile.GlobalConfig.ExternalLabels.Hash(),
+			// BlockDuration: 10 * time.Minute,
+			Seed: cfgFile.GlobalConfig.ExternalLabels.Hash(),
 		},
 		headCatalog,
 		reloadBlocksTriggerNotifier,
@@ -728,8 +728,8 @@ func main() {
 		time.Duration(cfg.tsdb.RetentionDuration),
 		time.Duration(cfg.HeadRetentionTimeout),
 		// x3 ScrapeInterval timeout for write block
-		// time.Duration(cfgFile.GlobalConfig.ScrapeInterval*1),
 		time.Duration(cfgFile.GlobalConfig.ScrapeInterval*3),
+		// time.Duration(cfgFile.GlobalConfig.ScrapeInterval*1),
 	)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create a receiver", "err", err)

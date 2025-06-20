@@ -631,6 +631,7 @@ type storage struct {
 func newStorage() *storage {
 	factory := util.NewUnconflictRegisterer(prometheus.DefaultRegisterer)
 
+	constLabels := prometheus.Labels{"allocator": "labels"}
 	s := &storage{
 		workingLSS: cppbridge.NewLSSWithSnapshot(cppbridge.NewLssStorage()),
 		lsCache:    model.NewCacheWithBitset(),
@@ -640,7 +641,7 @@ func newStorage() *storage {
 			prometheus.GaugeOpts{
 				Name:        "prompp_labels_cgo_memory_bytes",
 				Help:        "Current value of used memory in bytes.",
-				ConstLabels: prometheus.Labels{"allocator": "labels"},
+				ConstLabels: constLabels,
 			},
 			[]string{"generation"},
 		),
@@ -648,7 +649,7 @@ func newStorage() *storage {
 			prometheus.GaugeOpts{
 				Name:        "prompp_labels_lss_size",
 				Help:        "Current size of lss.",
-				ConstLabels: prometheus.Labels{"allocator": "labels"},
+				ConstLabels: constLabels,
 			},
 			[]string{"generation"},
 		),
@@ -656,7 +657,7 @@ func newStorage() *storage {
 			prometheus.GaugeOpts{
 				Name:        "prompp_labels_lss_bitset_count",
 				Help:        "Current count of emplace to lss bitset.",
-				ConstLabels: prometheus.Labels{"allocator": "labels"},
+				ConstLabels: constLabels,
 			},
 			[]string{"generation"},
 		),
@@ -664,7 +665,7 @@ func newStorage() *storage {
 			prometheus.GaugeOpts{
 				Name:        "prompp_labels_cache_size",
 				Help:        "Current size of cache.",
-				ConstLabels: prometheus.Labels{"allocator": "labels"},
+				ConstLabels: constLabels,
 			},
 			[]string{"generation"},
 		),
@@ -672,7 +673,7 @@ func newStorage() *storage {
 			prometheus.GaugeOpts{
 				Name:        "prompp_labels_cache_bitset_count",
 				Help:        "Current count of emplace to cache bitset.",
-				ConstLabels: prometheus.Labels{"allocator": "labels"},
+				ConstLabels: constLabels,
 			},
 			[]string{"generation"},
 		),
