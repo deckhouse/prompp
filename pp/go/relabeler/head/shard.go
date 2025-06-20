@@ -78,7 +78,7 @@ func (w *LSS) FindFromBuilder(
 	sortedDel []string,
 	snapshot *cppbridge.LabelSetSnapshot,
 	lsID uint32,
-) (uint64, uint32, bool) {
+) (uint32, uint16, bool) {
 	return w.target.LSS().FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID)
 }
 

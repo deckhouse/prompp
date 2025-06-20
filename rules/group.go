@@ -192,8 +192,8 @@ func (g *Group) run(ctx context.Context) {
 	tick := time.NewTicker(g.interval)
 	defer tick.Stop()
 
-	renewTimer := time.NewTimer(g.interval * 2) // PP_CHANGES.md: rebuild on cpp
-	defer renewTimer.Stop()                     // PP_CHANGES.md: rebuild on cpp
+	// renewTimer := time.NewTimer(g.interval * 2) // PP_CHANGES.md: rebuild on cpp
+	// defer renewTimer.Stop()                     // PP_CHANGES.md: rebuild on cpp
 
 	defer func() {
 		if !g.markStale {
@@ -254,6 +254,8 @@ func (g *Group) run(ctx context.Context) {
 			case <-g.done:
 				return
 			case <-tick.C:
+				g.renewLabelsSnapshot() // PP_CHANGES.md: rebuild on cpp
+
 				missed := (time.Since(evalTimestamp) / g.interval) - 1
 				if missed > 0 {
 					g.metrics.IterationsMissed.WithLabelValues(GroupKey(g.file, g.name)).Add(float64(missed))
@@ -263,9 +265,9 @@ func (g *Group) run(ctx context.Context) {
 
 				g.evalIterationFunc(ctx, g, evalTimestamp)
 
-			case <-renewTimer.C: // PP_CHANGES.md: rebuild on cpp
-				g.renewLabelsSnapshot()
-				renewTimer.Reset(g.interval * 2)
+				// case <-renewTimer.C: // PP_CHANGES.md: rebuild on cpp
+				// 	g.renewLabelsSnapshot()
+				// 	renewTimer.Reset(g.interval * 2)
 			}
 		}
 	}

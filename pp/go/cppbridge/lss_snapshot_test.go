@@ -438,14 +438,14 @@ func (s *LSSWithSnapshotSuite) TestFindOrEmplaceFromBuilderWithExistingLabelSet(
 		labelSetSnapshot := lss.Snapshot()
 
 		// Act
-		lengthWithAdd, existingLsIdWithAdd := lss.FindOrEmplaceFromBuilder(
+		existingLsIdWithAdd, lengthWithAdd := lss.FindOrEmplaceFromBuilder(
 			[]cppbridge.Label{{Name: "che", Value: "bureck"}},
 			nil,
 			labelSetSnapshot,
 			0,
 		)
 
-		lengthWithDel, existingLsIdWithDel := lss.FindOrEmplaceFromBuilder(
+		existingLsIdWithDel, lengthWithDel := lss.FindOrEmplaceFromBuilder(
 			nil,
 			[]string{"che"},
 			labelSetSnapshot,
@@ -453,8 +453,8 @@ func (s *LSSWithSnapshotSuite) TestFindOrEmplaceFromBuilderWithExistingLabelSet(
 		)
 
 		// Assert
-		s.Equal(uint64(2), lengthWithAdd)
-		s.Equal(uint64(1), lengthWithDel)
+		s.Equal(uint16(2), lengthWithAdd)
+		s.Equal(uint16(1), lengthWithDel)
 		s.Equal(uint32(1), existingLsIdWithAdd)
 		s.Equal(uint32(0), existingLsIdWithDel)
 	}
@@ -467,7 +467,7 @@ func (s *LSSWithSnapshotSuite) TestFindOrEmplaceFromBuilderWithNewLabelSet() {
 
 		// Act
 		_, expectedLsId, _ := lss.Stats()
-		length, existingLsId := lss.FindOrEmplaceFromBuilder(
+		existingLsId, length := lss.FindOrEmplaceFromBuilder(
 			[]cppbridge.Label{{Name: "new_lol", Value: "new_kek"}},
 			nil,
 			labelSetSnapshot,
@@ -475,7 +475,7 @@ func (s *LSSWithSnapshotSuite) TestFindOrEmplaceFromBuilderWithNewLabelSet() {
 		)
 
 		// Assert
-		s.Equal(uint64(2), length)
+		s.Equal(uint16(2), length)
 		s.Equal(uint32(expectedLsId), existingLsId)
 	}
 }
@@ -489,7 +489,7 @@ func (s *LSSWithSnapshotSuite) TestFindOrEmplaceFromBuilderWithNewLabelSetAnothe
 
 		// Act
 		_, expectedLsId, _ := lss.Stats()
-		length, existingLsId := lss.FindOrEmplaceFromBuilder(
+		existingLsId, length := lss.FindOrEmplaceFromBuilder(
 			[]cppbridge.Label{{Name: "new_lol", Value: "new_kek"}},
 			nil,
 			labelSetSnapshot,
@@ -497,7 +497,7 @@ func (s *LSSWithSnapshotSuite) TestFindOrEmplaceFromBuilderWithNewLabelSetAnothe
 		)
 
 		// Assert
-		s.Equal(uint64(2), length)
+		s.Equal(uint16(2), length)
 		s.Equal(uint32(expectedLsId), existingLsId)
 	}
 }

@@ -175,9 +175,18 @@ func (qa *QueryableAppender) FindFromBuilder(
 	sortedAdd []cppbridge.Label,
 	sortedDel []string,
 	snapshot *cppbridge.LabelSetSnapshot,
+	hash uint64,
 	lsID uint32,
-) labels.Labels {
+	skipCache bool,
+) (labels.Labels, bool) {
 	qa.lock.RLock()
 	defer qa.lock.RUnlock()
-	return qa.head.FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID)
+	return qa.head.FindFromBuilder(sortedAdd, sortedDel, snapshot, hash, lsID, skipCache)
+}
+
+// FindByHash label set by hash in cache.
+func (qa *QueryableAppender) FindByHash(hash uint64) (labels.Labels, bool) {
+	qa.lock.RLock()
+	defer qa.lock.RUnlock()
+	return qa.head.FindByHash(hash)
 }

@@ -454,9 +454,16 @@ func (rr *Receiver) FindFromBuilder(
 	sortedAdd []cppbridge.Label,
 	sortedDel []string,
 	snapshot *cppbridge.LabelSetSnapshot,
+	hash uint64,
 	lsID uint32,
-) labels.Labels {
-	return rr.appender.FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID)
+	skipCache bool,
+) (labels.Labels, bool) {
+	return rr.appender.FindFromBuilder(sortedAdd, sortedDel, snapshot, hash, lsID, skipCache)
+}
+
+// FindByHash label set by hash in cache.
+func (rr *Receiver) FindByHash(hash uint64) (labels.Labels, bool) {
+	return rr.appender.FindByHash(hash)
 }
 
 // GetState create new state.

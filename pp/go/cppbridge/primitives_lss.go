@@ -131,7 +131,7 @@ func (lss *LabelSetStorage) FindFromBuilder(
 	sortedDel []string,
 	snapshot *LabelSetSnapshot,
 	lsID uint32,
-) (uint64, uint32, bool) {
+) (uint32, uint16, bool) {
 	var snapshotPointer uintptr
 	if snapshot != nil {
 		snapshotPointer = snapshot.pointer
@@ -150,7 +150,7 @@ func (lss *LabelSetStorage) FindFromBuilder(
 		return 0, 0, false
 	}
 
-	return length, lsID, true
+	return lsID, uint16(length), true // #nosec G115 // no overflow
 }
 
 // Query returns a LSSQueryResult that matches the given label matchers.

@@ -286,12 +286,14 @@ func (lws *LSSWithSnapshot) FindOrEmplace(labelSet model.LabelSet) uint32 {
 
 // FindOrEmplaceFromBuilder find in lss LabelSet from builder or emplace and
 // return LabelSetSnapshot if there was a reallocation and ls id.
+//
+//nolint:gocritic // unnamedResult not need
 func (lws *LSSWithSnapshot) FindOrEmplaceFromBuilder(
 	sortedAdd []Label,
 	sortedDel []string,
 	otherSnapshot *LabelSetSnapshot,
 	lsID uint32,
-) (length uint64, newlsID uint32) {
+) (uint32, uint16) {
 	var snapshotPointer uintptr
 	if otherSnapshot != nil {
 		snapshotPointer = otherSnapshot.pointer
@@ -312,7 +314,7 @@ func (lws *LSSWithSnapshot) FindOrEmplaceFromBuilder(
 		lws.fsnapshot.storeSnapshot(newLabelSetSnapshot(lssROPtr, lws.fsnapshot))
 	}
 
-	return length, newlsID
+	return newlsID, uint16(length) // #nosec G115 // no overflow
 }
 
 // LSS return raw *LabelSetStorage.

@@ -352,7 +352,7 @@ func (s *QueryableLSSSuite) TestFindFromBuilder() {
 	// Act
 	expectedLSID := s.lss.FindOrEmplace(mls).LabelSetID
 	labelSetSnapshot := s.lss.CreateLabelSetSnapshot(&testSnapshotSource{})
-	length, actualLSID, find := s.lss.FindFromBuilder(
+	actualLSID, length, find := s.lss.FindFromBuilder(
 		nil,
 		nil,
 		labelSetSnapshot,
@@ -374,7 +374,7 @@ func (s *QueryableLSSSuite) TestFindFromBuilderAnother() {
 
 	// Act
 	expectedLSID := s.lss.FindOrEmplace(mls).LabelSetID
-	length, actualLSID, find := s.lss.FindFromBuilder(
+	actualLSID, length, find := s.lss.FindFromBuilder(
 		nil,
 		nil,
 		labelSetSnapshot,
@@ -392,13 +392,13 @@ func (s *QueryableLSSSuite) TestFindFromBuilderFromBuilderWithExistingLabelSet()
 	labelSetSnapshot := s.lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	// Act
-	lengthAdd, lsIDAdd, findAdd := s.lss.FindFromBuilder(
+	lsIDAdd, lengthAdd, findAdd := s.lss.FindFromBuilder(
 		[]cppbridge.Label{{Name: "che", Value: "bureck"}},
 		nil,
 		labelSetSnapshot,
 		0,
 	)
-	lengthDel, lsIDDel, findDel := s.lss.FindFromBuilder(
+	lsIDDel, lengthDel, findDel := s.lss.FindFromBuilder(
 		nil,
 		[]string{"che"},
 		labelSetSnapshot,

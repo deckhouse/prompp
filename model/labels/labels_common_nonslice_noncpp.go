@@ -20,5 +20,31 @@ func NewLabelsWithLSS(lss *cppbridge.LabelSetSnapshot, id uint32, length uint16)
 	return builder.Labels()
 }
 
-// RenewSnapshot renew ls snapshot. Do nothing.
-func (*Labels) RenewSnapshot() {}
+// RenewSnapshot renew ls snapshot. Implementation cpplabels.
+func (*Labels) RenewSnapshot() {
+	// no-op
+}
+
+//
+// ScratchBuilder
+//
+
+// SetSkipCache set the flag to ignore caches. Implementation cpplabels.
+func (*ScratchBuilder) SetSkipCache() {
+	// no-op
+}
+
+//
+// Storage
+//
+
+// Storage global label set storage. Implementation cpplabels.
+var Storage = &noopStorage{}
+
+// noopStorage for label set. Implementation cpplabels.
+type noopStorage struct{}
+
+// SetReceiver store Receiver. Implementation cpplabels.
+func (*noopStorage) SetReceiver(_ any) {
+	// no-op
+}

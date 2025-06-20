@@ -36,7 +36,7 @@ type LSS interface {
 		sortedDel []string,
 		snapshot *cppbridge.LabelSetSnapshot,
 		lsID uint32,
-	) (uint64, uint32, bool)
+	) (uint32, uint16, bool)
 }
 
 type Wal interface {
@@ -91,8 +91,11 @@ type Head interface {
 		sortedAdd []cppbridge.Label,
 		sortedDel []string,
 		snapshot *cppbridge.LabelSetSnapshot,
+		hash uint64,
 		lsID uint32,
-	) labels.Labels
+		skipCache bool,
+	) (labels.Labels, bool)
+	FindByHash(hash uint64) (labels.Labels, bool)
 }
 
 type Distributor interface {

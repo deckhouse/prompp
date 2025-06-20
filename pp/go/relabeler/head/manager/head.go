@@ -132,7 +132,14 @@ func (h *DiscardableRotatableHead) FindFromBuilder(
 	sortedAdd []cppbridge.Label,
 	sortedDel []string,
 	snapshot *cppbridge.LabelSetSnapshot,
+	hash uint64,
 	lsID uint32,
-) labels.Labels {
-	return h.head.FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID)
+	skipCache bool,
+) (labels.Labels, bool) {
+	return h.head.FindFromBuilder(sortedAdd, sortedDel, snapshot, hash, lsID, skipCache)
+}
+
+// FindByHash label set by hash in cache.
+func (h *DiscardableRotatableHead) FindByHash(hash uint64) (labels.Labels, bool) {
+	return h.head.FindByHash(hash)
 }

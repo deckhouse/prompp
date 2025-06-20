@@ -180,6 +180,7 @@ type Head struct {
 	dataStorageTaskChs []chan *relabeler.GenericTask
 	lssMXs             []*sync.RWMutex
 	dataStorageMXs     []*sync.RWMutex
+	lsCache            sync.Map
 
 	numberOfShards uint16
 	stopc          chan struct{}
@@ -240,6 +241,7 @@ func New(
 		dataStorageTaskChs: dataStorageTaskChs,
 		lssMXs:             lssMXs,
 		dataStorageMXs:     dataStorageMXs,
+		lsCache:            sync.Map{},
 
 		stopc:          make(chan struct{}),
 		wg:             sync.WaitGroup{},
@@ -1070,20 +1072,28 @@ func (h *Head) FindFromBuilder(
 	sortedAdd []cppbridge.Label,
 	sortedDel []string,
 	snapshot *cppbridge.LabelSetSnapshot,
+	hash uint64,
 	lsID uint32,
-) labels.Labels {
-	ls := labels.EmptyLabels()
+	skipCache bool,
+) (labels.Labels, bool) {
+	shardID := hash % uint64(h.numberOfShards) // shardID by hash
+	if ls, ok := h.findByHashOnShard(hash, shardID); ok {
+		return ls, true
+	}
+
+	var (
+		newSnapshot *cppbridge.LabelSetSnapshot
+		newlsID     uint32
+		length      uint16
+		find        bool
+	)
 
 	_ = h.enqueueOnSingleShard(
 		h.createTaskOnSingleShard(
 			relabeler.LSSFind,
 			func(shard relabeler.Shard) error {
-				if length, newlsID, ok := shard.LSS().FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID); ok {
-					ls.CopyFrom(labels.NewLabelsWithLSS(
-						shard.LSS().GetSnapshot(),
-						newlsID,
-						uint16(length), // #nosec G115 // no overflow
-					))
+				if newlsID, length, find = shard.LSS().FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID); find {
+					newSnapshot = shard.LSS().GetSnapshot()
 				}
 
 				return nil
@@ -1091,10 +1101,22 @@ func (h *Head) FindFromBuilder(
 			relabeler.ForLSSTask,
 			relabeler.NonExclusiveTask,
 		),
-		cppbridge.LabelSetFromBuilderHash(sortedAdd, sortedDel, snapshot, lsID)%uint64(h.numberOfShards),
+		shardID,
 	).Wait()
 
-	return ls
+	if !find {
+		return labels.EmptyLabels(), false
+	}
+
+	if !skipCache {
+		h.lsCache.Store(hash, lsCacheValue{newlsID, length})
+	}
+
+	return labels.NewLabelsWithLSS(
+		newSnapshot,
+		newlsID,
+		length,
+	), true
 }
 
 // enqueueOnSingleShard the task to be executed on head on single shard.
@@ -1138,4 +1160,48 @@ func (h *Head) createTaskOnSingleShard(
 		onLss,
 		isExclusive,
 	)
+}
+
+// lsCacheValue value for ls cache.
+type lsCacheValue struct {
+	lsID   uint32
+	length uint16
+}
+
+const tryCount = 30
+
+// FindByHash label set by hash in cache.
+func (h *Head) FindByHash(hash uint64) (labels.Labels, bool) {
+	return h.findByHashOnShard(hash, hash%uint64(h.numberOfShards)) // shardID by hash
+}
+
+// findByHashOnShard label set by hash on shard in cache.
+func (h *Head) findByHashOnShard(hash, shardID uint64) (labels.Labels, bool) {
+	cv, ok := h.lsCache.Load(hash)
+	if !ok {
+		return labels.EmptyLabels(), false
+	}
+
+	// try get snapshot,
+	var snapshot *cppbridge.LabelSetSnapshot
+	for i := 0; i < tryCount; i++ {
+		if snapshot = h.lsses[shardID].GetSnapshot(); snapshot != nil {
+			break
+		}
+
+		// Let other goroutines do stuff.
+		runtime.Gosched()
+	}
+
+	// if can't get a snapshot, take the long way
+	if snapshot == nil {
+		fmt.Println(" === snapshot == nil")
+		return labels.EmptyLabels(), false
+	}
+
+	return labels.NewLabelsWithLSS(
+		snapshot,
+		cv.(lsCacheValue).lsID,
+		cv.(lsCacheValue).length,
+	), true
 }
