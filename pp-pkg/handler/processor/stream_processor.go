@@ -102,7 +102,7 @@ func (p *StreamProcessor) Process(ctx context.Context, stream MetricStream) erro
 			ctx,
 			hashdexContent.ShardedData(),
 			meta.RelabelerID,
-			true,
+			AlwaysCommit,
 		); err != nil {
 			processingStatus.Code = model.ProcessingStatusRejected
 			processingStatus.Message = err.Error()

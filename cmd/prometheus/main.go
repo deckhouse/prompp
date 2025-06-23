@@ -35,6 +35,8 @@ import (
 	"syscall"
 	"time"
 
+	pphandler "github.com/prometheus/prometheus/pp-pkg/handler"
+	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor"
 	pptsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"
 
 	"github.com/KimMachineGun/automemlimit/memlimit"
@@ -147,25 +149,26 @@ func agentOnlyFlag(app *kingpin.Application, name, help string) *kingpin.FlagCla
 type flagConfig struct {
 	configFile string
 
-	agentStoragePath     string
-	serverStoragePath    string
-	notifier             notifier.Options
-	forGracePeriod       model.Duration
-	outageTolerance      model.Duration
-	resendDelay          model.Duration
-	maxConcurrentEvals   int64
-	web                  web.Options
-	scrape               scrape.Options
-	tsdb                 tsdbOptions
-	agent                agentOptions
-	lookbackDelta        model.Duration
-	webTimeout           model.Duration
-	queryTimeout         model.Duration
-	queryConcurrency     int
-	queryMaxSamples      int
-	RemoteFlushDeadline  model.Duration
-	WalCommitInterval    model.Duration
-	HeadRetentionTimeout model.Duration
+	agentStoragePath        string
+	serverStoragePath       string
+	notifier                notifier.Options
+	forGracePeriod          model.Duration
+	outageTolerance         model.Duration
+	resendDelay             model.Duration
+	maxConcurrentEvals      int64
+	web                     web.Options
+	scrape                  scrape.Options
+	tsdb                    tsdbOptions
+	agent                   agentOptions
+	lookbackDelta           model.Duration
+	webTimeout              model.Duration
+	queryTimeout            model.Duration
+	queryConcurrency        int
+	queryMaxSamples         int
+	RemoteFlushDeadline     model.Duration
+	WalCommitInterval       model.Duration
+	WalMaxSamplesPerSegment uint32
+	HeadRetentionTimeout    model.Duration
 
 	featureList   []string
 	memlimitRatio float64
@@ -388,6 +391,9 @@ func main() {
 
 	serverOnlyFlag(a, "storage.wal-commit-interval", "Interval between force commits.").
 		Default("5000ms").SetValue(&cfg.WalCommitInterval)
+
+	serverOnlyFlag(a, "storage.wal-max-samples_per_segment", "Maximum samples in WAL segment.").
+		Default("100000").Uint32Var(&cfg.WalMaxSamplesPerSegment)
 
 	serverOnlyFlag(a, "storage.head-retention-timeout", "Timeout before inactive heads are shrieked.").
 		Default("5m").SetValue(&cfg.HeadRetentionTimeout)
@@ -727,6 +733,7 @@ func main() {
 		time.Duration(cfg.HeadRetentionTimeout),
 		// x3 ScrapeInterval timeout for write block
 		time.Duration(cfgFile.GlobalConfig.ScrapeInterval*3),
+		cfg.WalMaxSamplesPerSegment,
 	)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create a receiver", "err", err)
@@ -1962,8 +1969,9 @@ func readPromPPFeatures(logger log.Logger) {
 				v,
 			)
 
-		case "disable_coredumps":
-			// TODO disable-coredumps
+		case "disable_commits_on_remote_write":
+			rwprocessor.AlwaysCommit = false
+			pphandler.OTLPAlwaysCommit = false
 		}
 	}
 }
