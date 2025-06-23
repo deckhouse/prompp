@@ -126,6 +126,7 @@ func NewReceiver(
 	maxRetentionDuration time.Duration,
 	headRetentionTimeout time.Duration,
 	writeTimeout time.Duration,
+	maxSegmentSize uint32,
 ) (*Receiver, error) {
 	if logger == nil {
 		logger = log.NewNopLogger()
@@ -178,7 +179,7 @@ func NewReceiver(
 		clock,
 		headConfigStorage,
 		headCatalog,
-		defaultMaxSegmentSize,
+		maxSegmentSize,
 		registerer,
 	)
 	if err != nil {
