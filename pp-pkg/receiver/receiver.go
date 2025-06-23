@@ -43,9 +43,8 @@ import (
 )
 
 const (
-	defaultShutdownTimeout        = 40 * time.Second
-	defaultNumberOfShards         = 2
-	defaultMaxSegmentSize  uint32 = 10000
+	defaultShutdownTimeout = 40 * time.Second
+	defaultNumberOfShards  = 2
 )
 
 type HeadConfig struct {
