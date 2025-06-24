@@ -60,6 +60,7 @@ void prompp_series_data_data_storage_allocated_memory(void* args, void* res);
  *
  * @param res {
  *     serializedData []byte // serialized data
+ *     needLoading bool // unused series loading needed before serialization
  * }
  */
 void prompp_series_data_data_storage_query(void* args, void* res);
@@ -161,6 +162,14 @@ void prompp_series_data_chunk_recoder_dtor(void* args);
  * }
  */
 void prompp_series_data_data_storage_unload(void* args, void* res);
+
+void prompp_series_data_data_storage_loader_ctor(void* args, void* res);
+
+void prompp_series_data_data_storage_loader_load_next(void* args, void* res);
+
+void prompp_series_data_data_storage_loader_load_finalize(void* args, void* res);
+
+void prompp_series_data_data_storage_loader_dtor(void* args, void* res);
 
 #ifdef __cplusplus
 }  // extern "C"

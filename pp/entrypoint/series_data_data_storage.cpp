@@ -57,16 +57,24 @@ extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
   using series_data::serialization::Serializer;
 
   struct Arguments {
-    DataStorage* data_storage;
+    DataStorage* data_storage{nullptr};
     Query query;
   };
 
   using Result = struct {
     Slice<char> serialized_chunks;
+    bool needLoading{};
   };
 
   const auto in = static_cast<Arguments*>(args);
   const auto out = new (res) Result();
+
+  for (const auto& unused_map = in->data_storage->unused_series_bitmap; auto ls_id : in->query.label_set_ids) {
+    if (unused_map.contains(ls_id)) {
+      out->needLoading = true;
+      return;
+    }
+  }
 
   Querier querier{*in->data_storage};
   const auto& queried_chunk_list = querier.query(in->query);
