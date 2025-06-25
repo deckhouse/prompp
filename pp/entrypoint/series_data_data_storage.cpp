@@ -73,6 +73,13 @@ extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
 
   Querier querier{*in->data_storage};
   const auto& queried_chunk_list = querier.query(in->query);
+
+  // check if loading needed
+  // querier.need_loading()
+  // loader Loader(*in->data_storage, querier);
+
+  // loading routine
+
   Serializer serializer{*in->data_storage};
   BytesStream bytes_stream{&out->serialized_chunks};
   serializer.serialize(queried_chunk_list, bytes_stream);
@@ -83,6 +90,7 @@ extern "C" void prompp_series_data_data_storage_instant_query(void* args) {
   using PromPP::Primitives::Timestamp;
   using PromPP::Primitives::Go::SliceView;
   using series_data::DataStorage;
+  using series_data::InstantQuerier;
   using series_data::encoder::Sample;
 
   struct Arguments {
@@ -94,9 +102,16 @@ extern "C" void prompp_series_data_data_storage_instant_query(void* args) {
 
   const auto in = static_cast<Arguments*>(args);
 
-  for (size_t i = 0; i < in->samples.size(); ++i) {
-    series_data::InstantQuerier::query_sample(in->samples[i], *(in->data_storage), in->label_set_ids[i], in->timestamp);
-  }
+  // InstantQuerier instant_querier(*(in->data_storage) ...)
+  // instant_querier.query( ... );
+
+  // instant_querier.need_loading()
+  // loader Loader(*in->data_storage, instant_querier);
+
+  // instant_querier.query_reload();
+
+  InstantQuerier instant_querier{*in->data_storage};
+  instant_querier.query(in->samples, in->label_set_ids, in->timestamp);
 }
 
 extern "C" void prompp_series_data_data_storage_allocated_memory(void* args, void* res) {

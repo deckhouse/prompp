@@ -1,5 +1,6 @@
 #pragma once
 
+#include <roaring/roaring.hh>
 #include "query.h"
 #include "series_data/data_storage.h"
 #include "series_data/decoder.h"
@@ -8,7 +9,7 @@ namespace series_data::querier {
 
 class Querier {
  public:
-  explicit Querier(const DataStorage& storage) : storage_(storage) {}
+  explicit Querier(DataStorage& storage) : storage_(storage) {}
 
   template <typename Query>
   [[nodiscard]] PROMPP_ALWAYS_INLINE const QueriedChunkList& query(const Query& query) {
@@ -18,14 +19,22 @@ class Querier {
       query_chunks(ls_id, query.time_interval);
     }
 
+    for (const auto& q_chunk : chunks_) {
+      storage_.queried_series_bitmap.add(q_chunk.ls_id);
+      series_to_load_.add(q_chunk.ls_id);
+    }
+
     return chunks_;
   }
+
+  bool need_loading() const noexcept { return series_to_load_.isEmpty() == false; }
 
  private:
   using ChunkType = chunk::DataChunk::Type;
 
-  const DataStorage& storage_;
+  DataStorage& storage_;
   QueriedChunkList chunks_;
+  roaring::Roaring series_to_load_;
 
   PROMPP_ALWAYS_INLINE void query_chunks(PromPP::Primitives::LabelSetID ls_id, const PromPP::Primitives::TimeInterval& time_interval) {
     query_finalized_chunks(ls_id, time_interval);
