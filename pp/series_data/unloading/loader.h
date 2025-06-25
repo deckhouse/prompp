@@ -5,12 +5,14 @@
 #include "bare_bones/bitset.h"
 #include "bare_bones/encoding.h"
 #include "bare_bones/preprocess.h"
+#include "series_data/concepts.h"
 #include "series_data/data_storage.h"
+#include "series_data/encoder.h"
 
 namespace series_data::unloading {
 
 struct SeriesToLoadInfo {
-  series_data::encoder::CompactBitSequence buffer{};
+  encoder::CompactBitSequence buffer{};
   uint32_t chunk_id = 0;
 };
 
@@ -20,8 +22,8 @@ class Loader {
   explicit Loader(DataStorage& storage, const LsIDStorage& ls_id_query) : storage_(storage) {
     series_to_load_tmp_bitseqs_.reserve(ls_id_query.size());
     for (const auto& ls_id : ls_id_query) {
-      if (storage_.unused_series_bitmap.contains(ls_id)) {
-        storage_.unused_series_bitmap.remove(ls_id);
+      if (storage_.unloaded_series_bitmap.contains(ls_id)) {
+        storage_.unloaded_series_bitmap.remove(ls_id);
         series_to_load_tmp_bitseqs_.try_emplace(ls_id);
       }
     }
@@ -32,13 +34,13 @@ class Loader {
     const auto length_it = parse_encoded_sequence<EncodingChunkLengthSequence>(buffer);
     const auto id_it = parse_encoded_sequence<EncodingChunkIDSequence>(buffer);
 
-    const uint32_t bitseqs_total_size = read_u32(buffer);
+    /*const uint32_t bitseqs_total_size =*/read_u32(buffer);
     const uint8_t* bitseqs_ptr = buffer.data();
 
-    process_ls_id_data(bitset_it, length_it, id_it, bitseqs_ptr, bitseqs_total_size);
+    process_ls_id_data(bitset_it, length_it, id_it, bitseqs_ptr);
   }
 
-  template <EncoderInterface Encoder>
+  template <EncoderInterface Encoder = series_data::Encoder<>>
   void load_finalize() {
     for (auto& [ls_id, info] : series_to_load_tmp_bitseqs_) {
       if (info.buffer.size_in_bits() != 0) {
@@ -100,8 +102,7 @@ class Loader {
   void process_ls_id_data(BareBones::Bitset::Iterator bitset_it,
                           EncodingChunkLengthSequence::Iterator length_it,
                           EncodingChunkIDSequence::Iterator id_it,
-                          const uint8_t* bitseqs_ptr,
-                          uint32_t total_size) {
+                          const uint8_t* bitseqs_ptr) {
     uint32_t accumulated_offset = 0;
 
     while (bitset_it != BareBones::Bitset::IteratorSentinel{}) {
@@ -122,7 +123,6 @@ class Loader {
           info.chunk_id = chunk_id_snapshot;
           info.buffer.rewind();
         }
-        assert(accumulated_offset + bitseq_size <= total_size);
         read_data(bitseqs_ptr + accumulated_offset, bitseq_size, info.buffer);
       }
 

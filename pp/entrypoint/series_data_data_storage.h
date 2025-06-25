@@ -163,13 +163,47 @@ void prompp_series_data_chunk_recoder_dtor(void* args);
  */
 void prompp_series_data_data_storage_unload(void* args, void* res);
 
+/**
+ * @brief Construct Loader to load previously unqueried series
+ *
+ * @param args {
+ *     dataStorage uintptr // pointer to constructed data storage
+ *     labelSetIDs []uint32 // label sets from rejected query
+ * }
+ *
+ *  @param res {
+ *     loader uintptr // pointer to loader
+ * }
+ */
 void prompp_series_data_data_storage_loader_ctor(void* args, void* res);
 
-void prompp_series_data_data_storage_loader_load_next(void* args, void* res);
+/**
+ * @brief Loads next previously unloaded snapshot of data
+ *
+ * @param args {
+ *     loader uintptr // pointer to loader
+ *     buffer []byte // SliceView to unloaded snapshot
+ * }
+ */
+void prompp_series_data_data_storage_loader_load_next(void* args);
 
-void prompp_series_data_data_storage_loader_load_finalize(void* args, void* res);
+/**
+ * @brief Finalize a loading process after no snapshots left
+ *
+ * @param args {
+ *     loader uintptr // pointer to loader
+ * }
+ */
+void prompp_series_data_data_storage_loader_load_finalize(void* args);
 
-void prompp_series_data_data_storage_loader_dtor(void* args, void* res);
+/**
+ * @brief Destroy Loader object
+ *
+ * @param args {
+ *     loader uintptr // pointer to loader
+ * }
+ */
+void prompp_series_data_data_storage_loader_dtor(void* args);
 
 #ifdef __cplusplus
 }  // extern "C"

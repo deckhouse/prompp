@@ -39,9 +39,10 @@ class Unloader {
 
   [[nodiscard]] PreparedSequences prepare_sequences() const noexcept {
     PreparedSequences result{};
-    result.ls_id_bitmap.resize(storage_.unused_series_bitmap.isEmpty() ? 0 : storage_.unused_series_bitmap.maximum() + 1);
 
-    for (const auto ls_id : storage_.unused_series_bitmap) {
+    result.ls_id_bitmap.resize(storage_.unloaded_series_bitmap.isEmpty() ? 0 : storage_.unloaded_series_bitmap.maximum() + 1);
+
+    for (const auto ls_id : storage_.unloaded_series_bitmap) {
       const auto encoding_type = storage_.open_chunks[ls_id].encoding_state.encoding_type;
       if (is_unloadable_encoder(encoding_type)) {
         result.ls_id_bitmap.set(ls_id);

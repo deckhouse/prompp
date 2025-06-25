@@ -191,7 +191,8 @@ struct DataStorage {
   uint32_t outdated_chunks_count{};
   uint32_t merged_samples_count{};
 
-  roaring::Roaring unused_series_bitmap{};
+  roaring::Roaring unloaded_series_bitmap{};
+  roaring::Roaring queried_series_bitmap{};
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesChunks chunks(uint32_t ls_id) const noexcept { return SeriesChunks{this, ls_id}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE Chunks chunks() const noexcept { return Chunks{this}; }
