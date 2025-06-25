@@ -123,9 +123,9 @@ func NewReceiver(
 	triggerNotifier *ReloadBlocksTriggerNotifier,
 	readyNotifier ready.Notifier,
 	commitInterval time.Duration,
-	maxRetentionDuration time.Duration,
-	headRetentionTimeout time.Duration,
-	writeTimeout time.Duration,
+	retentionDuration time.Duration,
+	afterConversionRetentionDuration time.Duration,
+	processingInterval time.Duration,
 ) (*Receiver, error) {
 	if logger == nil {
 		logger = log.NewNopLogger()
@@ -197,9 +197,9 @@ func NewReceiver(
 		triggerNotifier,
 		clock,
 		appender.DefaultInitialDelay,
-		appender.DefaultWriteInterval,
-		maxRetentionDuration,
-		headRetentionTimeout,
+		processingInterval,
+		retentionDuration,
+		afterConversionRetentionDuration,
 		appender.DefaultQueueSize,
 		rotatedHeads...,
 	)

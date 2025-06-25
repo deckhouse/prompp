@@ -2,6 +2,7 @@ package appender
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
@@ -9,6 +10,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/block"
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
+	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 	"github.com/prometheus/prometheus/pp/go/relabeler/querier"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -29,6 +31,8 @@ type headMock struct {
 	RotateFunc  func() error
 	maxTime     int64
 	writeToFunc func(writer relabeler.BlockWriter) error
+	closeFunc   func() error
+	discardFunc func() error
 }
 
 func (h *headMock) ID() string {
@@ -84,11 +88,11 @@ func (h *headMock) Rotate() error {
 }
 
 func (h *headMock) Close() error {
-	return nil
+	return h.closeFunc()
 }
 
 func (h *headMock) Discard() error {
-	return nil
+	return h.discardFunc()
 }
 
 func (h *headMock) String() string {
@@ -111,18 +115,27 @@ func (h *headMock) WriteTo(blockWriter relabeler.BlockWriter) error {
 	return h.writeToFunc(blockWriter)
 }
 
-func TestQueryableStorage(t *testing.T) {
-	clock := clockwork.NewFakeClock()
+func TestQueryableStorage_Success(t *testing.T) {
+	logger.Debugf = func(s string, i ...interface{}) {
+		t.Logf(s, i...)
+	}
+
+	clock := clockwork.NewFakeClockAt(time.Time{})
+
+	processingInterval := DefaultProcessingInterval
+	retentionDuration := time.Hour
+	afterConversionRetentionDuration := processingInterval * 2
+
 	s := NewQueryableStorageWithWriteNotifier(
 		blockWriterMock{},
 		prometheus.DefaultRegisterer,
 		&querier.Metrics{},
 		noOpWriteNotifier{},
 		clock,
-		time.Minute,
-		time.Minute,
-		time.Hour,
-		time.Minute*2,
+		DefaultInitialDelay,
+		processingInterval,
+		retentionDuration,
+		afterConversionRetentionDuration,
 		1,
 	)
 
@@ -132,67 +145,278 @@ func TestQueryableStorage(t *testing.T) {
 	flushCalled := make(chan struct{})
 	rotateCalled := make(chan struct{})
 	writeToCalled := make(chan struct{})
+	closeCalled := make(chan struct{})
+	discardCalled := make(chan struct{})
+
 	h := &headMock{
 		id:         "test_head_id",
 		generation: 0,
 		flushFunc: func() error {
-			flushCalled <- struct{}{}
+			logger.Debugf("flush called")
+			close(flushCalled)
 			return nil
 		},
 		RotateFunc: func() error {
-			rotateCalled <- struct{}{}
+			logger.Debugf("rotate called")
+			close(rotateCalled)
 			return nil
 		},
-		maxTime: 0,
+		maxTime: clock.Now().UnixMilli(),
 		writeToFunc: func(writer relabeler.BlockWriter) error {
-			writeToCalled <- struct{}{}
+			logger.Debugf("writeto called")
+			close(writeToCalled)
+			return nil
+		},
+		closeFunc: func() error {
+			logger.Debugf("close called")
+			close(closeCalled)
+			return nil
+		},
+		discardFunc: func() error {
+			logger.Debugf("discard called")
+			close(discardCalled)
 			return nil
 		},
 	}
 
-	s.Add(h)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
+	requireChannelIsNotClosedf(t, flushCalled, "flush must be not called by this time")
+	requireChannelIsNotClosedf(t, rotateCalled, "rotate must be not called by this time")
+	requireChannelIsNotClosedf(t, writeToCalled, "writeto must be not called by this time")
+	requireChannelIsNotClosedf(t, closeCalled, "close must be not called by this time")
+	requireChannelIsNotClosedf(t, discardCalled, "discard must be not called by this time")
 
-	require.NoError(t, clock.BlockUntilContext(ctx, 1))
-	clock.Advance(time.Minute)
+	wh := s.NewWritableHead(h)
+	processed, converted := s.ProcessHead(wh, false)
+	require.False(t, processed)
+	require.True(t, converted)
 
+	requireChannelIsClosedf(t, flushCalled, "flush should be called at this time")
+	requireChannelIsClosedf(t, rotateCalled, "rotate should be called at this time")
+	requireChannelIsClosedf(t, writeToCalled, "writeto should be called at this time")
+	requireChannelIsNotClosedf(t, closeCalled, "close must be not called by this time")
+	requireChannelIsNotClosedf(t, discardCalled, "discard must be not called by this time")
+
+	clock.Advance(afterConversionRetentionDuration)
+
+	processed, converted = s.ProcessHead(wh, false)
+	require.False(t, processed)
+	require.False(t, converted)
+
+	requireChannelIsClosedf(t, flushCalled, "flush should be called at this time")
+	requireChannelIsClosedf(t, rotateCalled, "rotate should be called at this time")
+	requireChannelIsClosedf(t, writeToCalled, "writeto should be called at this time")
+	requireChannelIsNotClosedf(t, closeCalled, "close must be not called by this time")
+	requireChannelIsNotClosedf(t, discardCalled, "discard must be not called by this time")
+
+	clock.Advance(time.Duration(1))
+
+	processed, converted = s.ProcessHead(wh, false)
+	require.True(t, processed)
+	require.False(t, converted)
+
+	requireChannelIsClosedf(t, flushCalled, "flush should be called at this time")
+	requireChannelIsClosedf(t, rotateCalled, "rotate should be called at this time")
+	requireChannelIsClosedf(t, writeToCalled, "writeto should be called at this time")
+	requireChannelIsClosedf(t, closeCalled, "close should be called at this time")
+	requireChannelIsClosedf(t, discardCalled, "discard should be called at this time")
+}
+
+func TestQueryableStorage_Outdated(t *testing.T) {
+	logger.Debugf = func(s string, i ...interface{}) {
+		t.Logf(s, i...)
+	}
+
+	clock := clockwork.NewFakeClockAt(time.Time{})
+
+	processingInterval := DefaultProcessingInterval
+	retentionDuration := processingInterval * 5
+	afterConversionRetentionDuration := processingInterval * 2
+
+	s := NewQueryableStorageWithWriteNotifier(
+		blockWriterMock{},
+		prometheus.DefaultRegisterer,
+		&querier.Metrics{},
+		noOpWriteNotifier{},
+		clock,
+		DefaultInitialDelay,
+		processingInterval,
+		retentionDuration,
+		afterConversionRetentionDuration,
+		1,
+	)
+
+	s.Run()
+	defer s.Close()
+
+	flushCalled := make(chan struct{})
+	rotateCalled := make(chan struct{})
+	writeToCalled := make(chan struct{})
+	closeCalled := make(chan struct{})
+	discardCalled := make(chan struct{})
+
+	h := &headMock{
+		id:         "test_head_id",
+		generation: 0,
+		flushFunc: func() error {
+			logger.Debugf("flush called")
+			return errors.New("flush error")
+		},
+		RotateFunc: func() error {
+			logger.Debugf("rotate called")
+			close(rotateCalled)
+			return nil
+		},
+		maxTime: clock.Now().UnixMilli(),
+		writeToFunc: func(writer relabeler.BlockWriter) error {
+			logger.Debugf("writeto called")
+			close(writeToCalled)
+			return nil
+		},
+		closeFunc: func() error {
+			logger.Debugf("close called")
+			close(closeCalled)
+			return nil
+		},
+		discardFunc: func() error {
+			logger.Debugf("discard called")
+			close(discardCalled)
+			return nil
+		},
+	}
+
+	requireChannelIsNotClosedf(t, flushCalled, "flush must be not called by this time")
+	requireChannelIsNotClosedf(t, rotateCalled, "rotate must be not called by this time")
+	requireChannelIsNotClosedf(t, writeToCalled, "writeto must be not called by this time")
+	requireChannelIsNotClosedf(t, closeCalled, "close must be not called by this time")
+	requireChannelIsNotClosedf(t, discardCalled, "discard must be not called by this time")
+
+	wh := s.NewWritableHead(h)
+	processed, converted := s.ProcessHead(wh, false)
+	require.False(t, processed)
+	require.False(t, converted)
+
+	for i := time.Duration(0); i < retentionDuration+processingInterval; i += processingInterval {
+		clock.Advance(processingInterval)
+		processed, converted = s.ProcessHead(wh, false)
+		if i < retentionDuration {
+			require.False(t, processed)
+			require.False(t, converted)
+			continue
+		}
+		break
+	}
+
+	require.True(t, processed)
+	require.False(t, converted)
+
+	requireChannelIsNotClosedf(t, flushCalled, "flush must be not called by this time")
+	requireChannelIsClosedf(t, rotateCalled, "rotate should be called at this time")
+	requireChannelIsClosedf(t, closeCalled, "close should be called at this time")
+	requireChannelIsClosedf(t, discardCalled, "discard should be called at this time")
+}
+
+func TestQueryableStorage_Displaced(t *testing.T) {
+	logger.Debugf = func(s string, i ...interface{}) {
+		t.Logf(s, i...)
+	}
+
+	clock := clockwork.NewFakeClockAt(time.Time{})
+
+	processingInterval := DefaultProcessingInterval
+	retentionDuration := processingInterval * 5
+	afterConversionRetentionDuration := processingInterval * 2
+
+	s := NewQueryableStorageWithWriteNotifier(
+		blockWriterMock{},
+		prometheus.DefaultRegisterer,
+		&querier.Metrics{},
+		noOpWriteNotifier{},
+		clock,
+		DefaultInitialDelay,
+		processingInterval,
+		retentionDuration,
+		afterConversionRetentionDuration,
+		1,
+	)
+
+	s.Run()
+	defer s.Close()
+
+	flushCalled := make(chan struct{})
+	rotateCalled := make(chan struct{})
+	writeToCalled := make(chan struct{})
+	closeCalled := make(chan struct{})
+	discardCalled := make(chan struct{})
+
+	h := &headMock{
+		id:         "test_head_id",
+		generation: 0,
+		flushFunc: func() error {
+			logger.Debugf("flush called")
+			close(flushCalled)
+			return nil
+		},
+		RotateFunc: func() error {
+			logger.Debugf("rotate called")
+			close(rotateCalled)
+			return nil
+		},
+		maxTime: clock.Now().UnixMilli(),
+		writeToFunc: func(writer relabeler.BlockWriter) error {
+			logger.Debugf("writeto called")
+			close(writeToCalled)
+			return nil
+		},
+		closeFunc: func() error {
+			logger.Debugf("close called")
+			close(closeCalled)
+			return nil
+		},
+		discardFunc: func() error {
+			logger.Debugf("discard called")
+			close(discardCalled)
+			return nil
+		},
+	}
+
+	requireChannelIsNotClosedf(t, flushCalled, "flush must be not called by this time")
+	requireChannelIsNotClosedf(t, rotateCalled, "rotate must be not called by this time")
+	requireChannelIsNotClosedf(t, writeToCalled, "writeto must be not called by this time")
+	requireChannelIsNotClosedf(t, closeCalled, "close must be not called by this time")
+	requireChannelIsNotClosedf(t, discardCalled, "discard must be not called by this time")
+
+	wh := s.NewWritableHead(h)
+	processed, converted := s.ProcessHead(wh, true)
+	require.True(t, processed)
+	require.False(t, converted)
+
+	requireChannelIsClosedf(t, flushCalled, "flush should be called at this time")
+	requireChannelIsClosedf(t, rotateCalled, "rotate should be called at this time")
+	requireChannelIsClosedf(t, closeCalled, "close should be called at this time")
+	requireChannelIsClosedf(t, discardCalled, "discard should be called at this time")
+}
+
+func requireChannelIsClosedf(t *testing.T, c chan struct{}, format string, args ...interface{}) {
 	select {
-	case <-flushCalled:
-		t.FailNow()
+	case _, ok := <-c:
+		if !ok {
+			return
+		}
 	default:
 	}
 
+	t.Fatalf(format, args...)
+}
+
+func requireChannelIsNotClosedf(t *testing.T, c chan struct{}, format string, args ...interface{}) {
 	select {
-	case <-rotateCalled:
-		t.FailNow()
+	case _, ok := <-c:
+		if ok {
+			return
+		}
 	default:
+		return
 	}
 
-	select {
-	case <-writeToCalled:
-		t.FailNow()
-	default:
-	}
-
-	clock.Advance(time.Minute)
-	<-time.After(time.Minute)
-
-	select {
-	case <-flushCalled:
-	case <-time.After(time.Second):
-		t.Fail()
-	}
-
-	select {
-	case <-rotateCalled:
-	case <-time.After(time.Second):
-		t.Fail()
-	}
-
-	select {
-	case <-writeToCalled:
-	case <-time.After(time.Second):
-		t.Fail()
-	}
+	t.Fatalf(format, args...)
 }

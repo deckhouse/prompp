@@ -2,7 +2,6 @@ package appender
 
 import (
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -17,9 +16,9 @@ import (
 )
 
 const (
-	DefaultInitialDelay  = time.Minute
-	DefaultWriteInterval = time.Minute
-	DefaultQueueSize     = 1
+	DefaultInitialDelay       = time.Minute
+	DefaultProcessingInterval = time.Minute
+	DefaultQueueSize          = 1
 )
 
 type WriteNotifier interface {
@@ -28,15 +27,16 @@ type WriteNotifier interface {
 
 type WritableHead struct {
 	relabeler.Head
-	writeDeadline time.Time
-	deleteAt      *time.Time
-	flushed       bool
-	rotated       bool
-	converted     bool
+	processingDeadline time.Time
+	deleteAt           *time.Time
+	flushed            bool
+	rotated            bool
+	converted          bool
 }
 
 func (h *WritableHead) Flush() error {
 	if !h.flushed {
+		logger.Debugf("flushing: %s", h.String())
 		if err := h.Head.Flush(); err != nil {
 			return err
 		}
@@ -47,6 +47,7 @@ func (h *WritableHead) Flush() error {
 
 func (h *WritableHead) Rotate() error {
 	if !h.rotated {
+		logger.Debugf("rotating: %s", h.String())
 		if err := h.Head.Rotate(); err != nil {
 			return err
 		}
@@ -56,12 +57,14 @@ func (h *WritableHead) Rotate() error {
 }
 
 func (h *WritableHead) IsOutdated(now time.Time) bool {
-	return now.After(h.writeDeadline)
+	logger.Debugf("now: %v, processingDeadline: %v", now, h.processingDeadline)
+	return now.After(h.processingDeadline)
 }
 
 func (h *WritableHead) Convert(blockWriter relabeler.BlockWriter) (bool, error) {
 	previousState := h.converted
 	if !h.converted {
+		logger.Debugf("converting: %s", h.String())
 		if err := h.Head.WriteTo(blockWriter); err != nil {
 			return false, err
 		}
@@ -72,7 +75,7 @@ func (h *WritableHead) Convert(blockWriter relabeler.BlockWriter) (bool, error) 
 }
 
 func (h *WritableHead) SetDeleteAt(deleteAt time.Time) {
-	h.writeDeadline = deleteAt
+	h.processingDeadline = deleteAt
 	h.deleteAt = &deleteAt
 }
 
@@ -96,7 +99,7 @@ type QueryableStorage struct {
 
 	clock                            clockwork.Clock
 	initialDelay                     time.Duration
-	writeInterval                    time.Duration
+	processingInterval               time.Duration
 	retentionDuration                time.Duration
 	afterConversionRetentionDuration time.Duration
 	queueSize                        int
@@ -113,7 +116,7 @@ func NewQueryableStorageWithWriteNotifier(
 	writeNotifier WriteNotifier,
 	clock clockwork.Clock,
 	initialDelay time.Duration,
-	writeInterval time.Duration,
+	processingInterval time.Duration,
 	retentionDuration time.Duration,
 	afterConversionRetentionDuration time.Duration,
 	queueSize int,
@@ -124,8 +127,8 @@ func NewQueryableStorageWithWriteNotifier(
 	for _, h := range heads {
 		stats := h.Status(1)
 		persistableHeads = append(persistableHeads, &WritableHead{
-			Head:          h,
-			writeDeadline: time.UnixMilli(stats.HeadStats.MaxTime).Add(retentionDuration),
+			Head:               h,
+			processingDeadline: time.UnixMilli(stats.HeadStats.MaxTime).Add(retentionDuration),
 		})
 	}
 	qs := &QueryableStorage{
@@ -135,7 +138,7 @@ func NewQueryableStorageWithWriteNotifier(
 		closer:                           util.NewCloser(),
 		clock:                            clock,
 		initialDelay:                     initialDelay,
-		writeInterval:                    writeInterval,
+		processingInterval:               processingInterval,
 		retentionDuration:                retentionDuration,
 		afterConversionRetentionDuration: afterConversionRetentionDuration,
 		queueSize:                        queueSize,
@@ -168,8 +171,8 @@ func (qs *QueryableStorage) loop() {
 	case <-qs.closer.Signal():
 		return
 	}
-	fmt.Println("initial delay passed")
-	ticker := qs.clock.NewTicker(qs.writeInterval)
+
+	ticker := qs.clock.NewTicker(qs.processingInterval)
 	defer ticker.Stop()
 
 	var toBeSkippedTickCount int
@@ -177,10 +180,10 @@ func (qs *QueryableStorage) loop() {
 
 		if toBeSkippedTickCount == 0 {
 			start := qs.clock.Now()
-			qs.write()
+			qs.process()
 			duration := qs.clock.Since(start)
-			if duration >= (qs.writeInterval / 2) {
-				toBeSkippedTickCount = int(duration/qs.writeInterval) + 1
+			if duration >= (qs.processingInterval / 2) {
+				toBeSkippedTickCount = int(duration/qs.processingInterval) + 1
 			}
 		} else {
 			toBeSkippedTickCount -= 1
@@ -194,7 +197,7 @@ func (qs *QueryableStorage) loop() {
 	}
 }
 
-func (qs *QueryableStorage) write() {
+func (qs *QueryableStorage) process() {
 	qs.mtx.Lock()
 	lenHeads := len(qs.heads)
 	if lenHeads == 0 {
@@ -206,89 +209,20 @@ func (qs *QueryableStorage) write() {
 	copy(writableHeads, qs.heads)
 	qs.mtx.Unlock()
 
-	fmt.Println("DELETETHISLOG:", len(writableHeads), "heads selected in write iteration")
-
 	shouldNotify := false
 	var toDelete []*WritableHead
 	displaceUntilIndex := len(writableHeads) - qs.queueSize
 	for index, writableHead := range writableHeads {
-		fmt.Println("DELETETHISLOG:", "processing", writableHead.String())
-		if writableHead.IsDeletable(qs.clock.Now()) {
-			fmt.Println("DELETETHISLOG:", "is deletable", writableHead.String())
-			err := errors.Join(
-				writableHead.Flush(),
-				writableHead.Rotate(),
-				writableHead.Close(),
-				writableHead.Discard(),
-			)
-			if err != nil {
-				logger.Errorf("QUERYABLE STORAGE: something happened during head close: %v", err)
-			}
-			logger.Infof("QUERYABLE STORAGE: head %s closed and discarded", writableHead.String())
-			toDelete = append(toDelete, writableHead)
-			continue
-		}
-
-		if writableHead.IsOutdated(qs.clock.Now()) {
-			fmt.Println("DELETETHISLOG:", "is outdated", writableHead.String())
-			err := errors.Join(
-				writableHead.Flush(),
-				writableHead.Rotate(),
-				writableHead.Close(),
-				writableHead.Discard(),
-			)
-			if err != nil {
-				logger.Errorf("QUERYABLE STORAGE: something happened during head close: %v", err)
-			}
-			logger.Warnf("QUERYABLE STORAGE: head %s closed and discarded without conversion (outdated)", writableHead.String())
-			toDelete = append(toDelete, writableHead)
-			continue
-		}
-
-		if index < displaceUntilIndex && !writableHead.Converted() {
-			fmt.Println("DELETETHISLOG:", "is displaced", writableHead.String())
-			err := errors.Join(
-				writableHead.Flush(),
-				writableHead.Rotate(),
-				writableHead.Close(),
-				writableHead.Discard(),
-			)
-			if err != nil {
-				logger.Errorf("QUERYABLE STORAGE: something happened during head close: %v", err)
-			}
-			logger.Warnf("QUERYABLE STORAGE: head %s closed and discarded without conversion (displaced)", writableHead.String())
-			toDelete = append(toDelete, writableHead)
-			continue
-		}
-
-		if err := writableHead.Flush(); err != nil {
-			fmt.Println("DELETETHISLOG:", "flushing", writableHead.String())
-			logger.Errorf("QUERYABLE STORAGE: failed to flush head %s: %s", writableHead.String(), err.Error())
-			continue
-		}
-
-		if err := writableHead.Rotate(); err != nil {
-			fmt.Println("DELETETHISLOG:", "rotating", writableHead.String())
-			logger.Errorf("QUERYABLE STORAGE: failed to rotate head %s: %s", writableHead.String(), err.Error())
-			continue
-		}
-		fmt.Println("DELETETHISLOG:", "converting", writableHead.String())
-		start := qs.clock.Now()
-		converted, err := writableHead.Convert(qs.blockWriter)
-		if err != nil {
-			fmt.Println("DELETETHISLOG:", "failed to convert", writableHead.String())
-			logger.Errorf("QUERYABLE STORAGE: failed to convert head %s: %s", writableHead.String(), err.Error())
-			continue
-		}
-
-		if converted {
-			fmt.Println("DELETETHISLOG:", "converted", writableHead.String())
-			qs.headPersistenceDuration.Observe(float64(qs.clock.Since(start).Milliseconds()))
+		displaceable := index < displaceUntilIndex
+		processed, converted := qs.ProcessHead(writableHead, displaceable)
+		if converted && !shouldNotify {
 			shouldNotify = true
-			logger.Infof("QUERYABLE STORAGE: head %s persisted, duration: %v", writableHead.String(), qs.clock.Since(start))
-			writableHead.SetDeleteAt(qs.clock.Now().Add(qs.afterConversionRetentionDuration))
 		}
 
+		if processed {
+			toDelete = append(toDelete, writableHead)
+			logger.Debugf("head is added to delete list: %s", writableHead.String())
+		}
 	}
 
 	if shouldNotify {
@@ -298,30 +232,113 @@ func (qs *QueryableStorage) write() {
 	qs.delete(toDelete)
 }
 
+func (qs *QueryableStorage) ProcessHead(writableHead *WritableHead, displaceable bool) (processed bool, converted bool) {
+	logger.Debugf("deletable check: %s", writableHead.String())
+	if writableHead.IsDeletable(qs.clock.Now()) {
+		logger.Debugf("deletable check failed: head is deletable: %s", writableHead.String())
+		err := errors.Join(
+			writableHead.Flush(),
+			writableHead.Rotate(),
+			writableHead.Close(),
+			writableHead.Discard(),
+		)
+		if err != nil {
+			logger.Errorf("QUERYABLE STORAGE: something happened during head close: %v", err)
+		}
+		logger.Infof("QUERYABLE STORAGE: head %s closed and discarded", writableHead.String())
+		return true, false
+	}
+
+	logger.Debugf("outdated check: %s", writableHead.String())
+	if writableHead.IsOutdated(qs.clock.Now()) {
+		logger.Debugf("outdated check failed: head is outdated: %s", writableHead.String())
+		err := errors.Join(
+			writableHead.Flush(),
+			writableHead.Rotate(),
+			writableHead.Close(),
+			writableHead.Discard(),
+		)
+		if err != nil {
+			logger.Errorf("QUERYABLE STORAGE: something happened during head close: %v", err)
+		}
+		logger.Warnf("QUERYABLE STORAGE: head %s closed and discarded without conversion (outdated)", writableHead.String())
+		return true, false
+	}
+
+	logger.Debugf("displaced check: %s", writableHead.String())
+	if displaceable && !writableHead.Converted() {
+		logger.Debugf("displaced check failed: head is displaced: %s", writableHead.String())
+		err := errors.Join(
+			writableHead.Flush(),
+			writableHead.Rotate(),
+			writableHead.Close(),
+			writableHead.Discard(),
+		)
+		if err != nil {
+			logger.Errorf("QUERYABLE STORAGE: something happened during head close: %v", err)
+		}
+		logger.Warnf("QUERYABLE STORAGE: head %s closed and discarded without conversion (displaced)", writableHead.String())
+		return true, false
+	}
+
+	if err := writableHead.Flush(); err != nil {
+		logger.Errorf("QUERYABLE STORAGE: failed to flush head %s: %s", writableHead.String(), err.Error())
+		return false, false
+	}
+
+	if err := writableHead.Rotate(); err != nil {
+		logger.Errorf("QUERYABLE STORAGE: failed to rotate head %s: %s", writableHead.String(), err.Error())
+		return false, false
+	}
+	start := qs.clock.Now()
+	converted, err := writableHead.Convert(qs.blockWriter)
+	if err != nil {
+		logger.Errorf("QUERYABLE STORAGE: failed to convert head %s: %s", writableHead.String(), err.Error())
+		return false, false
+	}
+
+	if converted {
+		qs.headPersistenceDuration.Observe(float64(qs.clock.Since(start).Milliseconds()))
+		logger.Infof("QUERYABLE STORAGE: head %s persisted, duration: %v", writableHead.String(), qs.clock.Since(start))
+		writableHead.SetDeleteAt(qs.clock.Now().Add(qs.afterConversionRetentionDuration))
+		return false, true
+	}
+
+	return false, false
+}
+
+func (qs *QueryableStorage) NewWritableHead(head relabeler.Head) *WritableHead {
+	stats := head.Status(1)
+	return &WritableHead{
+		Head:               head,
+		processingDeadline: time.UnixMilli(stats.HeadStats.MaxTime).Add(qs.retentionDuration),
+	}
+}
+
 // Add - Storage interface implementation.
 func (qs *QueryableStorage) Add(head relabeler.Head) {
-	stats := head.Status(1)
+	writableHead := qs.NewWritableHead(head)
 	qs.mtx.Lock()
-	writableHead := &WritableHead{
-		Head:          head,
-		writeDeadline: time.UnixMilli(stats.HeadStats.MaxTime).Add(qs.retentionDuration),
-	}
 	qs.heads = append(qs.heads, writableHead)
 	qs.mtx.Unlock()
 }
 
 func (qs *QueryableStorage) delete(heads []*WritableHead) {
+	if len(heads) == 0 {
+		return
+	}
+
 	qs.mtx.Lock()
 	defer qs.mtx.Unlock()
 
-	headMap := make(map[string]struct{})
+	toDeleteMap := make(map[string]struct{})
 	for _, h := range heads {
-		headMap[h.ID()] = struct{}{}
+		toDeleteMap[h.ID()] = struct{}{}
 	}
 
 	var result []*WritableHead
 	for _, h := range qs.heads {
-		if _, ok := headMap[h.ID()]; ok {
+		if _, ok := toDeleteMap[h.ID()]; ok {
 			continue
 		}
 		result = append(result, h)
