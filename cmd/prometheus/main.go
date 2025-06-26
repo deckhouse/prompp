@@ -36,6 +36,8 @@ import (
 	"syscall"
 	"time"
 
+	pphandler "github.com/prometheus/prometheus/pp-pkg/handler"
+	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor"
 	pptsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"
 
 	"github.com/KimMachineGun/automemlimit/memlimit"
@@ -166,6 +168,7 @@ type flagConfig struct {
 	queryMaxSamples           int
 	RemoteFlushDeadline       model.Duration
 	WalCommitInterval         model.Duration
+	WalMaxSamplesPerSegment   uint32
 	HeadRetentionDuration     model.Duration
 	StorageProcessingInterval model.Duration
 
@@ -390,6 +393,9 @@ func main() {
 
 	serverOnlyFlag(a, "storage.wal-commit-interval", "Interval between force commits.").
 		Default("5000ms").SetValue(&cfg.WalCommitInterval)
+
+	serverOnlyFlag(a, "storage.wal-max-samples_per_segment", "Maximum samples in WAL segment.").
+		Default("100000").Uint32Var(&cfg.WalMaxSamplesPerSegment)
 
 	serverOnlyFlag(a, "storage.head-retention-duration", "Timeout before inactive heads are shrieked.").
 		Default("5m").SetValue(&cfg.HeadRetentionDuration)
@@ -730,6 +736,7 @@ func main() {
 		time.Duration(cfg.tsdb.MinBlockDuration),
 		time.Duration(cfg.HeadRetentionDuration),
 		time.Duration(cfg.StorageProcessingInterval),
+		cfg.WalMaxSamplesPerSegment,
 	)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create a receiver", "err", err)
@@ -1976,8 +1983,9 @@ func readPromPPFeatures(logger log.Logger) {
 				v,
 			)
 
-		case "disable_coredumps":
-			// TODO disable-coredumps
+		case "disable_commits_on_remote_write":
+			rwprocessor.AlwaysCommit = false
+			pphandler.OTLPAlwaysCommit = false
 		}
 	}
 }

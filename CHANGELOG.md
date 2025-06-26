@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.3.2
+
+## Fixes
+
+1. **Fixed Task Duplication in WAL Commits:** which was causing excessive disk access. Now, a commit task is queued only upon the first achievement of the sample limit in a WAL segment.
+
+## Enhancements
+
+1. **Increased the Sample Limit in WAL Segments:** The previous soft limit of 10K, hardcoded as a constant, is now converted to command-line flag with default raised to 100K.
+
+## Features
+
+- **Added a Feature-flag to Disable Commits During RemoteWrite Requests**. This is an experimental flag and will be replaced with a generalized persistence level setting in the future.
+
 ## v0.3.1
 
 ### Fixes
@@ -13,6 +27,7 @@
 1. **Optimized Series Copying During Rotation:** We've made series copying during rotation much more efficient, reducing the time required by 7.5 times. To avoid pauses in the garbage collector, we're using the standard CGo mechanism for this process. Currently, this feature is under a feature flag and is being tested on select clusters to ensure stability and correctness. Once these tests are successful, we plan to enable it for all clusters.
 2. **Revamped Task Execution System on Shards:** The task execution system on shards has been restructured to separate series processing from data handling. Each now operates with its own queues and locks, which is expected to boost the requests per second (RPS) for both read and write operations.
 3. **New Feature Flag for Multiple Goroutines per Shard:** We've introduced a feature flag that allows running multiple goroutines per shard. This change is aimed at improving the scalability of read request handling, while still maintaining proper locking for exclusive write operations. This setup is particularly beneficial in scenarios where read requests heavily outweigh write requests. We are actively testing this feature on our clusters to determine the best concurrency levels before rolling out automatic tuning options.
+4. **Optimized Internal Encoders and Decoders:** We use StreamVByte encoding in data storages. We optimize some operations inside this encoding to reduce instructions and memory jumps. This optimizations reduce CPU time by 10% on this operations.
 
 ## v0.3.0
 
