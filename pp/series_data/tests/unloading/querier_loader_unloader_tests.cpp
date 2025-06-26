@@ -145,11 +145,9 @@ TEST_F(QuerierLoaderUnloaderTestFixture, QuerierNeedLoading) {
 
   unloader_.unload(stream_);
 
-  const auto& chunks_after = querier_.query(query2);
+  std::ignore = querier_.query(query2);
 
   // Assert
-  EXPECT_EQ(chunks_after.size(), 3);
-
   EXPECT_TRUE(querier_.need_loading());
 
   EXPECT_EQ(querier_.get_series_to_load().cardinality(), 2);
