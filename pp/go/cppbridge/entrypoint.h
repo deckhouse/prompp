@@ -90,6 +90,62 @@ void prompp_get_head_status(void* args, void* res);
  */
 void prompp_free_head_status(void* args);
 
+/**
+ * @brief Return head status from lss.
+ *
+ * @param args {
+ *     lss         uintptr      // pointer to constructed lss
+ *     limit       int          // statistics limit
+ * }
+ *
+ * @param res {
+ *     status struct {          // head status
+ *          label_value_count_by_label_name []struct {
+ *              name string
+ *              count uint32
+ *          }
+ *          series_count_by_metric_name []struct {
+ *              name string
+ *              count uint32
+ *          }
+ *          memory_in_bytes_by_label_name []struct {
+ *              name string
+ *              size uint32
+ *          }
+ *          series_count_by_label_value_pair [] struct {
+ *              name string
+ *              value string
+ *              count uint32
+ *          }
+ *          num_series      uint32
+ *          num_label_pairs uint32
+ *          rule_queried_series uint32
+ *          federate_queried_series uint32
+ *          other_queried_series uint32
+ *     }
+ * }
+ */
+void prompp_get_head_status_lss(void* args, void* res);
+
+/**
+ * @brief Return head status from lss.
+ *
+ * @param args {
+ *     dataStorage uintptr      // pointer to constructed data storage
+ * }
+ *
+ * @param res {
+ *     status struct {          // head status
+ *          time_interval struct {
+ *              min int64
+ *              max int64
+ *          }
+ *          chunk_count     uint32
+ *     }
+ * }
+ */
+void prompp_get_head_status_data_storage(void* args, void* res);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif
@@ -471,6 +527,8 @@ void prompp_label_set_bytes_without_labels(void* args, void* res);
 extern "C" {
 #endif
 
+#include <stdint.h>
+
 /**
  * @brief Construct a new Primitives label sets.
  *
@@ -483,17 +541,6 @@ extern "C" {
  * }
  */
 void prompp_primitives_lss_ctor(void* args, void* res);
-
-/**
- * @brief Construct a new Primitives label sets.
- *
- * @param args {
- *     source      uintptr // pointer to source label sets
- *     destination uintptr // pointer to destination label sets
- * }
- *
- */
-void prompp_primitives_lss_copy_added_series(void* args);
 
 /**
  * @brief Destroy Primitives label sets.
@@ -526,7 +573,8 @@ void prompp_primitives_lss_allocated_memory(void* args, void* res);
  * }
  *
  * @param res {
- *     ls_id uint32 // inserted (or found) label set id
+ *     ls_id uint32                  // inserted (or found) label set id
+ *     bool  lss_has_reallocations   // true if lss has reallocations
  * }
  */
 void prompp_primitives_lss_find_or_emplace(void* args, void* res);
@@ -542,11 +590,11 @@ void prompp_primitives_lss_find_or_emplace(void* args, void* res);
  *        sorted_add   []model.Label  // slice of sorted by name labels
  *        sorted_del   []string       // slice of sorted label names
  *     }
-
  * }
  *
  * @param res {
- *     ls_id uint32 // inserted (or found) label set id
+ *     ls_id uint32                   // inserted (or found) label set id
+ *     bool  lss_has_reallocations    // true if lss has reallocations
  * }
  */
 void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
@@ -563,7 +611,6 @@ void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
  * @param res {
  *     matches           []uint32 // matched series ids
  *     label_set_lengths []uint16 // slice of series label set length
- *     lss_copy          uintptr  // readonly copy of lss
  *     status            uint32   // query status
  * }
  */
@@ -646,6 +693,17 @@ void prompp_primitives_lss_query_label_values(void* args, void* res);
  * }
  */
 void prompp_create_readonly_lss(void* args, void* res);
+
+/**
+ * @brief Copy label sets which were added via find_or_emplace from source lss to destination lss
+ *
+ * @param source_lss pointer to source label sets
+ * @param destination_lss pointer to destination label sets
+ *
+ * @attention This binding used as a CGO call!!!
+ *
+ */
+void prompp_primitives_lss_copy_added_series(uint64_t source_lss, uint64_t destination_lss);
 
 #ifdef __cplusplus
 }  // extern "C"
@@ -792,19 +850,6 @@ void prompp_prometheus_per_shard_relabeler_ctor(void* args, void* res);
 void prompp_prometheus_per_shard_relabeler_dtor(void* args);
 
 /**
- * @brief return size of allocated memory for cache map.
- *
- * @param args {
- *     per_shard_relabeler uintptr // pointer to constructed per shard relabeler;
- * }
- *
- * @param res {
- *     allocated_memory    uint64  // size of allocated memory for label sets;
- * }
- */
-void prompp_prometheus_per_shard_relabeler_cache_allocated_memory(void* args, void* res);
-
-/**
  * @brief relabeling incomig hashdex(first stage).
  *
  * @param args {
@@ -819,10 +864,11 @@ void prompp_prometheus_per_shard_relabeler_cache_allocated_memory(void* args, vo
  * }
  *
  * @param res {
- *     samples_added           uint32             // number of added samples;
- *     series_added            uint32             // number of added series;
- *     series_drop             uint32             // number of dropped series;
- *     error                   []byte             // error string if thrown;
+ *     samples_added                uint32        // number of added samples;
+ *     series_added                 uint32        // number of added series;
+ *     series_drop                  uint32        // number of dropped series;
+ *     error                        []byte        // error string if thrown;
+ *     target_lss_has_reallocations bool          // true if target lss has reallocations
  * }
  */
 void prompp_prometheus_per_shard_relabeler_input_relabeling(void* args, void* res);
@@ -871,7 +917,11 @@ void prompp_prometheus_relabel_stalenans_state_reset(void* args);
  * }
  *
  * @param res {
- *     error                   []byte             // error string if thrown;
+ *     samples_added                uint32        // number of added samples;
+ *     series_added                 uint32        // number of added series;
+ *     series_drop                  uint32        // number of dropped series;
+ *     error                        []byte        // error string if thrown;
+ *     target_lss_has_reallocations bool          // true if target lss has reallocations
  * }
  */
 void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stalenans(void* args, void* res);
@@ -900,15 +950,16 @@ void prompp_prometheus_per_shard_relabeler_input_collect_stalenans(void* args, v
  * @brief add relabeled ls to lss, add to result and add to cache update(second stage).
  *
  * @param args {
- *     inner_series           *InnerSeries          // go InnerSeries per shard;
- *     relabeled_series       *RelabeledSeries      // go RelabeledSeries per shard;
- *     relabeler_state_update *RelabelerStateUpdate // pointer to RelabelerStateUpdate;
- *     per_shard_relabeler    uintptr               // pointer to constructed per shard relabeler;
- *     lss                    uintptr               // pointer to constructed label sets;
+ *     shards_inner_series           []*InnerSeries          // go InnerSeries per source shard;
+ *     shards_relabeled_series       []*RelabeledSeries      // go RelabeledSeries per source shard;
+ *     shards_relabeler_state_update []*RelabelerStateUpdate // pointer to RelabelerStateUpdate per source shard;
+ *     per_shard_relabeler           uintptr                 // pointer to constructed per shard relabeler;
+ *     lss                           uintptr                 // pointer to constructed label sets;
  * }
  *
  * @param res {
- *     error                  []byte           // error string if thrown
+ *     error                         []byte                  // error string if thrown
+ *     target_lss_has_reallocations  bool                    // true if target lss has reallocations
  * }
  */
 void prompp_prometheus_per_shard_relabeler_append_relabeler_series(void* args, void* res);
@@ -921,6 +972,22 @@ void prompp_prometheus_per_shard_relabeler_append_relabeler_series(void* args, v
  *     per_shard_relabeler    uintptr               // pointer to constructed per shard relabeler;
  *     cache                  uintptr               // pointer to constructed Cache;
  *     relabeled_shard_id     uint16                // relabeled shard id;
+ * }
+ *
+ * @param res {
+ *     error                  []byte  // error string if thrown;
+ * }
+ */
+void prompp_prometheus_per_shard_singe_relabeler_update_relabeler_state(void* args, void* res);
+
+/**
+ * @brief add to cache relabled data(third stage).
+ *
+ * @param args {
+ *     shards_relabeler_state_update []*RelabelerStateUpdate // pointer to RelabelerStateUpdate per source shard;
+ *     per_shard_relabeler           uintptr                 // pointer to constructed per shard relabeler;
+ *     cache                         uintptr                 // pointer to constructed Cache;
+ *     relabeled_shard_id            uint16                  // relabeled shard id;
  * }
  *
  * @param res {

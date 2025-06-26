@@ -56,7 +56,9 @@ func (ds *HeadDataStorage) Reset() {
 }
 
 func (ds *HeadDataStorage) TimeInterval() TimeInterval {
-	return seriesDataDataStorageTimeInterval(ds.dataStorage)
+	res := seriesDataDataStorageTimeInterval(ds.dataStorage)
+	runtime.KeepAlive(ds)
+	return res
 }
 
 func (ds *HeadDataStorage) Pointer() uintptr {
@@ -64,7 +66,9 @@ func (ds *HeadDataStorage) Pointer() uintptr {
 }
 
 func (ds *HeadDataStorage) AllocatedMemory() uint64 {
-	return seriesDataDataStorageAllocatedMemory(ds.dataStorage)
+	res := seriesDataDataStorageAllocatedMemory(ds.dataStorage)
+	runtime.KeepAlive(ds)
+	return res
 }
 
 // HeadEncoder is Go wrapper around series_data::Encoder.
@@ -95,6 +99,7 @@ func NewHeadEncoder() *HeadEncoder {
 // Encode - encodes single triplet.
 func (e *HeadEncoder) Encode(seriesID uint32, timestamp int64, value float64) {
 	seriesDataEncoderEncode(e.encoder, seriesID, timestamp, value)
+	runtime.KeepAlive(e)
 }
 
 // EncodeInnerSeriesSlice - encodes InnerSeries slice produced by relabeler.
@@ -167,6 +172,10 @@ type HeadDataStorageQuery struct {
 	LabelSetIDs      []uint32
 }
 
+func getSeriesIDFromBytes(data []byte) uint32 {
+	return *(*uint32)(unsafe.Pointer(&data[0])) // #nosec G103 // it's meant to be that way
+}
+
 type HeadDataStorageSerializedChunks struct {
 	data []byte
 }
@@ -198,7 +207,7 @@ func (r *HeadDataStorageSerializedChunks) MakeIndex() HeadDataStorageSerializedC
 	offset := Uint32Size
 	n := r.NumberOfChunks()
 	for i := 0; i < n; i, offset = i+1, offset+SerializedChunkMetadataSize {
-		sID := *(*uint32)(unsafe.Pointer(&r.data[offset : offset+SerializedChunkMetadataSize][0])) // #nosec G103 // it's meant to be that way
+		sID := getSeriesIDFromBytes(r.data[offset : offset+4])
 		m[sID] = append(m[sID], offset)
 	}
 	return HeadDataStorageSerializedChunkIndex{m}
@@ -228,6 +237,7 @@ func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) *HeadDataStorageSer
 	serializedChunks := &HeadDataStorageSerializedChunks{
 		data: seriesDataDataStorageQuery(ds.dataStorage, query),
 	}
+	runtime.KeepAlive(ds)
 	runtime.SetFinalizer(serializedChunks, func(sc *HeadDataStorageSerializedChunks) {
 		freeBytes(sc.data)
 	})

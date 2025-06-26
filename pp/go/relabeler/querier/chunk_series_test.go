@@ -22,9 +22,9 @@ func TestChunksSeriesSetTestSuite(t *testing.T) {
 func (s *ChunksSeriesSetTestSuite) TestAll() {
 	lss := cppbridge.NewQueryableLssStorage()
 	ls0 := model.NewLabelSetBuilder().Set("job", "test").Set("ls", "ls1").Build()
-	ls0ID := lss.FindOrEmplace(ls0)
+	ls0ID := lss.FindOrEmplace(ls0).LabelSetID
 	ls1 := model.NewLabelSetBuilder().Set("job", "test").Set("ls", "ls2").Build()
-	ls1ID := lss.FindOrEmplace(ls1)
+	ls1ID := lss.FindOrEmplace(ls1).LabelSetID
 
 	ds := cppbridge.NewHeadDataStorage()
 	encoder := cppbridge.NewHeadEncoderWithDataStorage(ds)
@@ -61,7 +61,7 @@ func (s *ChunksSeriesSetTestSuite) TestAll() {
 		MaxT: maxt,
 	})
 
-	css := NewChunkSeriesSet(lssQueryResult, chunkRecoder)
+	css := NewChunkSeriesSet(lssQueryResult, lss.CreateLabelSetSnapshot(), chunkRecoder)
 	var ci chunks.Iterator
 
 	// first series

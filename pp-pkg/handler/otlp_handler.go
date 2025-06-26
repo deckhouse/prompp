@@ -45,6 +45,8 @@ const (
 	targetMetricName = "target_info"
 )
 
+var OTLPAlwaysCommit = true
+
 // OTLPWriteHandler handler for otlp data via remote write.
 type OTLPWriteHandler struct {
 	logger   log.Logger
@@ -77,7 +79,7 @@ func (h *OTLPWriteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		converter.TimeSeries(),
 		nil,
 		prom_config.TransparentRelabeler,
-		true,
+		OTLPAlwaysCommit,
 	)
 
 	switch {

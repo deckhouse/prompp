@@ -2,6 +2,7 @@ package cppbridge_test
 
 import (
 	"context"
+	"runtime"
 	"testing"
 
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -47,26 +48,26 @@ func (s *LSSSuite) TestQueryableLSS() {
 	s.Require().NotEqual(0, cp)
 }
 
-func (s *LSSSuite) TestCreateReadonlyLssFromEncodingBimap() {
+func (s *LSSSuite) TestCreateSnapshotFromEncodingBimap() {
 	// Arrange
 	lss := cppbridge.NewLssStorage()
 
 	// Act
-	readonlyLss := lss.CreateReadonlyLss()
+	labelSetSnapshot := lss.CreateLabelSetSnapshot()
 
 	// Assert
-	s.Require().NotNil(readonlyLss.Pointer())
+	s.Require().NotNil(labelSetSnapshot.Pointer())
 }
 
-func (s *LSSSuite) TestCreateReadonlyLssFromQueryableEncodingBimap() {
+func (s *LSSSuite) TestCreateSnapshotFromQueryableEncodingBimap() {
 	// Arrange
 	lss := cppbridge.NewQueryableLssStorage()
 
 	// Act
-	readonlyLss := lss.CreateReadonlyLss()
+	labelSetSnapshot := lss.CreateLabelSetSnapshot()
 
 	// Assert
-	s.Require().NotNil(readonlyLss.Pointer())
+	s.Require().NotNil(labelSetSnapshot.Pointer())
 }
 
 func (s *LSSSuite) TestLabels() {
@@ -79,10 +80,10 @@ func (s *LSSSuite) TestLabels() {
 	lsIn := model.LabelSetFromMap(lsMap)
 
 	lss := cppbridge.NewQueryableLssStorage()
-	lsID := lss.FindOrEmplace(lsIn)
+	lsID := lss.FindOrEmplace(lsIn).LabelSetID
 
 	lsLength := 0
-	lss.RangeLabelSet(lsID, func(l cppbridge.Label) error {
+	_ = lss.RangeLabelSet(lsID, func(l cppbridge.Label) error {
 		lv, ok := lsMap[l.Name]
 		s.Require().True(ok)
 		s.Require().Equal(lv, l.Value)
@@ -124,6 +125,8 @@ func (s *LSSSuite) testBytesImpl(testCase bytesTestCase, bytes *[]byte) {
 
 	// Act
 	*bytes = cppbridge.LabelSetBytes(lss.Pointer(), 0, *bytes)
+	// TODO: public interface must work without outside keep alives
+	runtime.KeepAlive(lss)
 
 	// Assert
 	s.Equal(testCase.expected, *bytes)
@@ -167,6 +170,8 @@ func (s *LSSSuite) testBytesWithLabelsImpl(testCase bytesWithFilteredNamesTestCa
 
 	// Act
 	*bytes = cppbridge.LabelSetBytesWithLabels(lss.Pointer(), 0, *bytes, testCase.names...)
+	// TODO: public interface must work without outside keep alives
+	runtime.KeepAlive(lss)
 
 	// Assert
 	s.Equal(testCase.expected, *bytes)
@@ -214,6 +219,8 @@ func (s *LSSSuite) testBytesWithoutLabelsImpl(testCase bytesWithFilteredNamesTes
 
 	// Act
 	*bytes = cppbridge.LabelSetBytesWithoutLabels(lss.Pointer(), 0, *bytes, testCase.names...)
+	// TODO: public interface must work without outside keep alives
+	runtime.KeepAlive(lss)
 
 	// Assert
 	s.Equal(testCase.expected, *bytes)
@@ -245,7 +252,7 @@ func (s *QueryableLSSSuite) SetupTest() {
 
 	s.labelSetIDs = make([]uint32, 0, len(s.labelSets))
 	for _, labelSet := range s.labelSets {
-		s.labelSetIDs = append(s.labelSetIDs, s.lss.FindOrEmplace(labelSet))
+		s.labelSetIDs = append(s.labelSetIDs, s.lss.FindOrEmplace(labelSet).LabelSetID)
 	}
 }
 
@@ -410,23 +417,24 @@ func (s *QueryableLSSSuite) TestCopyAddedSeries() {
 
 func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithExistingLabelSet() {
 	// Arrange
-	queryResult := s.lss.Query([]model.LabelMatcher{
-		{Name: "lol", Value: "kek", MatcherType: model.MatcherTypeExactMatch},
-	}, cppbridge.LSSQuerySourceOther)
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
 
 	// Act
-	existingLsIdWithAdd := s.lss.FindOrEmplaceBuilder(model.CppLabelSetBuilder{
-		ReadonlyLss: queryResult.ReadonlyLss().Pointer(),
+	existingLsIdWithAdd := s.lss.FindOrEmplaceBuilder(cppbridge.CppLabelSetBuilder{
+		ReadonlyLss: labelSetSnapshot.Pointer(),
 		LsId:        0,
-		SortedAdd:   []model.SimpleLabel{{Name: "che", Value: "bureck"}},
+		SortedAdd:   []cppbridge.Label{{Name: "che", Value: "bureck"}},
 		SortedDel:   nil,
-	})
-	existingLsIdWithDel := s.lss.FindOrEmplaceBuilder(model.CppLabelSetBuilder{
-		ReadonlyLss: queryResult.ReadonlyLss().Pointer(),
+	}).LabelSetID
+	existingLsIdWithDel := s.lss.FindOrEmplaceBuilder(cppbridge.CppLabelSetBuilder{
+		ReadonlyLss: labelSetSnapshot.Pointer(),
 		LsId:        1,
 		SortedAdd:   nil,
 		SortedDel:   []string{"che"},
-	})
+	}).LabelSetID
+
+	// TODO: public object should encapsulate keep alives
+	runtime.KeepAlive(labelSetSnapshot)
 
 	// Assert
 	s.Equal(uint32(1), existingLsIdWithAdd)
@@ -435,18 +443,34 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithExistingLabelSet() {
 
 func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithNewLabelSet() {
 	// Arrange
-	queryResult := s.lss.Query([]model.LabelMatcher{
-		{Name: "lol", Value: "kek", MatcherType: model.MatcherTypeExactMatch},
-	}, cppbridge.LSSQuerySourceOther)
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
 
 	// Act
 	expectedLsId := len(s.labelSetIDs)
-	existingLsId := s.lss.FindOrEmplaceBuilder(model.CppLabelSetBuilder{
-		ReadonlyLss: queryResult.ReadonlyLss().Pointer(),
+	existingLsId := s.lss.FindOrEmplaceBuilder(cppbridge.CppLabelSetBuilder{
+		ReadonlyLss: labelSetSnapshot.Pointer(),
 		LsId:        0,
-		SortedAdd:   []model.SimpleLabel{{Name: "new_lol", Value: "new_kek"}},
+		SortedAdd:   []cppbridge.Label{{Name: "new_lol", Value: "new_kek"}},
 		SortedDel:   nil,
-	})
+	}).LabelSetID
+	// TODO: public object should encapsulate keep alives
+	runtime.KeepAlive(labelSetSnapshot)
+
+	// Assert
+	s.Equal(uint32(expectedLsId), existingLsId)
+}
+
+func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithoutReadonlyLss() {
+	// Arrange
+
+	// Act
+	expectedLsId := len(s.labelSetIDs)
+	existingLsId := s.lss.FindOrEmplaceBuilder(cppbridge.CppLabelSetBuilder{
+		ReadonlyLss: uintptr(0),
+		LsId:        0,
+		SortedAdd:   []cppbridge.Label{{Name: "new_lol", Value: "new_kek"}},
+		SortedDel:   nil,
+	}).LabelSetID
 
 	// Assert
 	s.Equal(uint32(expectedLsId), existingLsId)

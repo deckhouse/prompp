@@ -17,14 +17,9 @@ class SortingIndex {
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return sorting_index_.empty(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return sorting_index_.allocated_memory(); }
 
-  void build() {
-    sorting_index_.resize(ls_id_set_.size());
-
-    const uint32_t step = kMaxIndexValue / (ls_id_set_.size() + 1);
-    uint32_t index_value = 0;
-    for (auto ls_id : ls_id_set_) {
-      index_value += step;
-      sorting_index_[ls_id] = index_value;
+  PROMPP_ALWAYS_INLINE void build() {
+    if (empty()) {
+      rebuild();
     }
   }
 
@@ -46,16 +41,24 @@ class SortingIndex {
 
   template <class Iterator>
   PROMPP_ALWAYS_INLINE void sort(Iterator begin, Iterator end) noexcept {
-    if (empty()) [[unlikely]] {
-      build();
-    }
-
+    build();
     std::sort(begin, end, [this](uint32_t a, uint32_t b) PROMPP_LAMBDA_INLINE { return sorting_index_[a] < sorting_index_[b]; });
   }
 
  private:
   const Set& ls_id_set_;
   BareBones::Vector<uint32_t> sorting_index_;
+
+  void rebuild() {
+    sorting_index_.resize(ls_id_set_.size());
+
+    const uint32_t step = kMaxIndexValue / (ls_id_set_.size() + 1);
+    uint32_t index_value = 0;
+    for (auto ls_id : ls_id_set_) {
+      index_value += step;
+      sorting_index_[ls_id] = index_value;
+    }
+  }
 
   PROMPP_ALWAYS_INLINE uint32_t get_previous(typename Set::const_iterator ls_id_iterator) const noexcept {
     if (ls_id_iterator != ls_id_set_.begin()) {

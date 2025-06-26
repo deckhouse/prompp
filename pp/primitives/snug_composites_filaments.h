@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cstdint>
-
 #include <scope_exit.h>
 
 #include "bare_bones/exception.h"
@@ -16,7 +14,7 @@ class Symbol {
   uint32_t pos_;
   uint32_t length_;
 
-  static constexpr bool kIsReadOnly = std::same_as<Vector<uint8_t>, BareBones::SharedSpan<uint8_t>>;
+  static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
 
  public:
   // NOLINTNEXTLINE(readability-identifier-naming)
@@ -29,7 +27,7 @@ class Symbol {
      public:
       explicit Checkpoint(uint32_t size) noexcept : size_(size) {}
 
-      PROMPP_ALWAYS_INLINE uint32_t size() const { return size_; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const { return size_; }
 
       template <BareBones::OutputStream S>
       void save(S& out, data_type const& data, Checkpoint const* from = nullptr) const {
@@ -140,11 +138,13 @@ class Symbol {
       in.read(this->begin() + first_to_load_i, size_to_load);
     }
 
-    PROMPP_ALWAYS_INLINE size_t remainder_size() const noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t remainder_size() const noexcept {
       constexpr size_t max_ui32 = std::numeric_limits<uint32_t>::max();
       assert(this->size() <= max_ui32);
       return max_ui32 - this->size();
     }
+
+    PROMPP_ALWAYS_INLINE void reserve(const data_type& other) { Vector<char>::reserve(other.size()); }
   };
 
   using composite_type = std::string_view;
@@ -163,7 +163,7 @@ class Symbol {
     }
   }
 
-  PROMPP_ALWAYS_INLINE uint32_t length() const noexcept { return length_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t length() const noexcept { return length_; }
 };
 
 }  // namespace PromPP::Primitives::SnugComposites::Filaments
@@ -174,12 +174,36 @@ struct BareBones::IsTriviallyReallocatable<BareBones::SnugComposite::DecodingTab
 
 namespace PromPP::Primitives::SnugComposites::Filaments {
 
+template <class Iterator>
+concept has_id = requires(Iterator it) {
+  { it.id() };
+};
+
+template <class Iterator>
+concept has_name_id = requires(Iterator it) {
+  { it.name_id() };
+};
+
+template <class Iterator>
+concept has_id_or_name_id = has_id<Iterator> || has_name_id<Iterator>;
+
+template <class Table, class Item, class Cache>
+concept has_find_or_emplace_with_cache = requires(Table table, Item item, Cache cache) {
+  { table.find_or_emplace_with_cache(item, uint32_t(), cache) };
+};
+
+struct NoCache {};
+
+template <class Cache, class Iterator, class Table, class Item>
+concept use_find_or_emplace_with_cache =
+    !std::same_as<Cache, NoCache> && has_id_or_name_id<Iterator> && has_find_or_emplace_with_cache<Table, Item, typename std::remove_cvref_t<Cache>::ItemList>;
+
 template <template <template <class> class> class SymbolsTableType, template <class> class Vector>
 class LabelNameSet {
   uint32_t pos_;
   uint32_t size_;
 
-  static constexpr bool kIsReadOnly = std::same_as<Vector<uint8_t>, BareBones::SharedSpan<uint8_t>>;
+  static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
 
  public:
   using symbols_table_type = SymbolsTableType<Vector>;
@@ -198,7 +222,7 @@ class LabelNameSet {
       PROMPP_ALWAYS_INLINE explicit Checkpoint(data_type const& data) noexcept
           : size_(data.symbols_ids_sequences.size()), symbols_table_checkpoint_(data.symbols_table.checkpoint()) {}
 
-      PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return size_; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return size_; }
 
       PROMPP_ALWAYS_INLINE typename symbols_table_type::checkpoint_type symbols_table() const noexcept { return symbols_table_checkpoint_; }
 
@@ -233,7 +257,7 @@ class LabelNameSet {
         }
       }
 
-      PROMPP_ALWAYS_INLINE uint32_t save_size(data_type const& data, Checkpoint const* from = nullptr) const {
+      PROMPP_ALWAYS_INLINE uint32_t save_size([[maybe_unused]] data_type const& data, Checkpoint const* from = nullptr) const {
         uint32_t res = 0;
 
         // version
@@ -332,7 +356,7 @@ class LabelNameSet {
       symbols_table.load(in);
     }
 
-    PROMPP_ALWAYS_INLINE size_t remainder_size() const noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t remainder_size() const noexcept {
       constexpr size_t max_ui32 = std::numeric_limits<uint32_t>::max();
       assert(this->symbols_ids_sequences.size() <= max_ui32);
 
@@ -344,29 +368,36 @@ class LabelNameSet {
     [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
       return symbols_table.allocated_memory() + BareBones::mem::allocated_memory(symbols_ids_sequences);
     }
+
+    PROMPP_ALWAYS_INLINE void reserve(const data_type& other) noexcept {
+      symbols_table.reserve(other.symbols_table);
+      symbols_ids_sequences.reserve(other.symbols_ids_sequences.size());
+    }
   };
 
   PROMPP_ALWAYS_INLINE LabelNameSet() noexcept = default;
-  template <class OtherLabelNameSet>
+  template <class OtherLabelNameSet, class Cache = NoCache>
   // TODO requires is_label_name_set
-  PROMPP_ALWAYS_INLINE LabelNameSet(data_type& data, const OtherLabelNameSet& lns) noexcept : pos_(data.symbols_ids_sequences.size()) {
+  PROMPP_ALWAYS_INLINE LabelNameSet(data_type& data, const OtherLabelNameSet& lns, Cache&& cache = {}) noexcept : pos_(data.symbols_ids_sequences.size()) {
     if constexpr (BareBones::concepts::has_size<OtherLabelNameSet>) {
       size_ = lns.size();
     } else {
       size_ = 0;
     }
 
-    for (const auto& label_name : lns) {
-      uint32_t smbl_id = data.symbols_table.find_or_emplace(label_name);
-      data.symbols_ids_sequences.push_back(smbl_id);
+    if constexpr (BareBones::concepts::has_size<OtherLabelNameSet>) {
+      data.symbols_ids_sequences.reserve(data.symbols_ids_sequences.size() + size_);
+    }
 
+    for (auto it = lns.begin(); it != lns.end(); ++it) {
+      data.symbols_ids_sequences.push_back(find_or_emplace_label_name(data, it, std::forward<Cache>(cache)));
       if constexpr (!BareBones::concepts::has_size<OtherLabelNameSet>) {
         ++size_;
       }
     }
   }
 
-  PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return size_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return size_; }
 
   // NOLINTNEXTLINE(readability-identifier-naming)
   class composite_type
@@ -406,6 +437,16 @@ class LabelNameSet {
       }
     }
   }
+
+ private:
+  template <class LabelNameIterator, class Cache>
+  PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_label_name(data_type& data, const LabelNameIterator& label_name, Cache&& cache) {
+    if constexpr (use_find_or_emplace_with_cache<Cache, LabelNameIterator, decltype(data.symbols_table), decltype(*label_name)>) {
+      data.symbols_table.find_or_emplace_with_cache(*label_name, label_name.id(), cache.names);
+    }
+
+    return data.symbols_table.find_or_emplace(*label_name);
+  }
 };
 
 template <template <template <class> class> class SymbolsTableType,
@@ -415,7 +456,7 @@ class LabelSet {
   uint32_t lns_id_;
   uint32_t pos_;
 
-  static constexpr bool kIsReadOnly = std::same_as<Vector<uint8_t>, BareBones::SharedSpan<uint8_t>>;
+  static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
 
  public:
   using symbols_tables_type = std::conditional_t<kIsReadOnly, BareBones::Vector<SymbolsTableType<Vector>>, Vector<std::unique_ptr<SymbolsTableType<Vector>>>>;
@@ -449,7 +490,7 @@ class LabelSet {
         });
       }
 
-      PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return size_; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return size_; }
 
       PROMPP_ALWAYS_INLINE typename LabelNameSetsTableType<Vector>::checkpoint_type const label_name_sets() const noexcept {
         return label_name_sets_table_checkpoint_;
@@ -532,7 +573,7 @@ class LabelSet {
         }
       }
 
-      PROMPP_ALWAYS_INLINE uint32_t save_size(data_type const& data, Checkpoint const* from = nullptr) const {
+      PROMPP_ALWAYS_INLINE uint32_t save_size([[maybe_unused]] data_type const& data, Checkpoint const* from = nullptr) const {
         uint32_t res = 0;
 
         // version
@@ -650,6 +691,12 @@ class LabelSet {
       symbols_tables.resize(symbols_tables_checkpoints.size());
     }
 
+    void reserve(const data_type& other) {
+      symbols_ids_sequences.reserve(other.symbols_ids_sequences.size());
+      symbols_tables.reserve(other.symbols_tables.size());
+      label_name_sets_table.reserve(other.label_name_sets_table);
+    }
+
     template <class InputStream>
     void load(InputStream& in) {
       // read version
@@ -745,7 +792,7 @@ class LabelSet {
     }
 
     // it drains before the maximum available symbols count would be exceeded.
-    PROMPP_ALWAYS_INLINE size_t remainder_size() const noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t remainder_size() const noexcept {
       constexpr size_t max_ui32 = std::numeric_limits<uint32_t>::max();
 
       assert(this->symbols_ids_sequences.size() <= max_ui32);
@@ -772,11 +819,10 @@ class LabelSet {
   PROMPP_ALWAYS_INLINE LabelSet() noexcept = default;
 
   // FIXME inline of this function causes 30ns lost in indexing performance
-  template <class T>
+  template <class T, class Cache = NoCache>
   // TODO requires is_label_set
-  LabelSet(data_type& data, const T& label_set) noexcept : pos_(data.symbols_ids_sequences.size() + data.shrinked_size_) {
-    lns_id_ = data.label_name_sets_table.find_or_emplace(label_set.names());
-
+  LabelSet(data_type& data, const T& label_set, Cache&& cache = {}) noexcept
+      : lns_id_(find_or_emplace_label_names_set(data, label_set, std::forward<Cache>(cache))), pos_(data.symbols_ids_sequences.size() + data.shrinked_size_) {
     // resize, if there are new symbols (in lns table)
     data.symbols_tables.reserve(data.label_name_sets_table.data().symbols_table.size());
     for (auto i = data.symbols_tables.size(); i < data.label_name_sets_table.data().symbols_table.size(); ++i) {
@@ -787,8 +833,8 @@ class LabelSet {
     auto lns_i = lns.begin();
     auto size_before = data.symbols_ids_sequences.size();
     auto i = BareBones::StreamVByte::back_inserter<typename data_type::SymbolIdsCodec>(data.symbols_ids_sequences, lns.size());
-    for (auto [_, label_value] : label_set) {
-      *i++ = data.symbols_tables[lns_i.id()]->find_or_emplace(label_value);
+    for (auto it = label_set.begin(); it != label_set.end(); ++it) {
+      *i++ = find_or_emplace_symbol(data, lns_i.id(), it, std::forward<Cache>(cache));
       ++lns_i;
     }
 
@@ -806,19 +852,22 @@ class LabelSet {
     const data_type* data_;
     values_iterator_type values_begin_;
     [[no_unique_address]] values_iterator_sentinel_type values_end_;
+    uint32_t id_;
 
    public:
     PROMPP_ALWAYS_INLINE explicit composite_type(const data_type* data = nullptr,
                                                  label_name_set_type label_name_set = label_name_set_type(),
                                                  values_iterator_type values_begin = values_iterator_type(),
-                                                 values_iterator_sentinel_type values_end = values_iterator_sentinel_type()) noexcept
-        : label_name_set_(label_name_set), data_(data), values_begin_(values_begin), values_end_(values_end) {}
+                                                 values_iterator_sentinel_type values_end = values_iterator_sentinel_type(),
+                                                 uint32_t id = 0) noexcept
+        : label_name_set_(label_name_set), data_(data), values_begin_(values_begin), values_end_(values_end), id_(id) {}
 
     using value_type = std::pair<typename label_name_set_type::value_type, typename Symbol<Vector>::composite_type>;
 
     PROMPP_ALWAYS_INLINE const label_name_set_type& names() const noexcept { return label_name_set_; }
 
     PROMPP_ALWAYS_INLINE auto size() const noexcept { return label_name_set_.size(); }
+    PROMPP_ALWAYS_INLINE auto id() const noexcept { return id_; }
 
     template <class LabelNameSetIteratorType, class ValuesIteratorType>
     class Iterator {
@@ -865,9 +914,9 @@ class LabelSet {
         }
       }
 
-      PROMPP_ALWAYS_INLINE uint32_t name_id() const noexcept { return lnsi_.id(); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t name_id() const noexcept { return lnsi_.id(); }
 
-      PROMPP_ALWAYS_INLINE uint32_t value_id() const noexcept { return *vi_; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t value_id() const noexcept { return *vi_; }
     };
 
     using iterator = Iterator<decltype(label_name_set_.begin()), decltype(values_begin_)>;
@@ -900,7 +949,7 @@ class LabelSet {
     auto [values_begin, values_end] =
         BareBones::StreamVByte::decoder<typename data_type::SymbolIdsCodec>(data.symbols_ids_sequences.begin() + pos_ - data.shrinked_size_, lns.size());
 
-    return composite_type(&data, std::move(lns), std::move(values_begin), std::move(values_end));
+    return composite_type(&data, std::move(lns), std::move(values_begin), std::move(values_end), lns_id_);
   }
 
   PROMPP_ALWAYS_INLINE void validate(const data_type& data) const {
@@ -932,6 +981,26 @@ class LabelSet {
                                    "LabelSets data validation error: expected LabelSets symbols length is out of data symbols vector range");
       }
     }
+  }
+
+ private:
+  template <class LabelSet, class Cache>
+  PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_label_names_set(data_type& data, LabelSet& label_set, Cache&& cache) {
+    if constexpr (use_find_or_emplace_with_cache<Cache, LabelSet, decltype(data.label_name_sets_table), decltype(label_set.names())>) {
+      return data.label_name_sets_table.find_or_emplace_with_cache(label_set.names(), label_set.id(), cache.name_sets, cache);
+    }
+
+    return data.label_name_sets_table.find_or_emplace(label_set.names());
+  }
+
+  template <class LabelIterator, class Cache>
+  PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_symbol(data_type& data, uint32_t lns_id, const LabelIterator& label, Cache&& cache) {
+    if constexpr (use_find_or_emplace_with_cache<Cache, LabelIterator, decltype(*data.symbols_tables[0]), decltype((*label).second)>) {
+      const auto name_id = label.name_id();
+      return data.symbols_tables[lns_id]->find_or_emplace_with_cache((*label).second, label.value_id(), cache.values[name_id]);
+    }
+
+    return data.symbols_tables[lns_id]->find_or_emplace((*label).second);
   }
 };
 
