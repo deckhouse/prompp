@@ -29,9 +29,9 @@ class Loader {
     }
   }
 
-  template <QuerierInterface Querier>
+  template <LoadableQuerierInterface Querier>
   explicit Loader(DataStorage& storage, const Querier& querier) : storage_(storage) {
-    series_to_load_tmp_bitseqs_.reserve(querier.get_series_to_load().cardinaliry());
+    series_to_load_tmp_bitseqs_.reserve(querier.get_series_to_load().cardinality());
     for (const auto& ls_id : querier.get_series_to_load()) {
       if (storage_.unloaded_series_bitmap.contains(ls_id)) {
         storage_.unloaded_series_bitmap.remove(ls_id);

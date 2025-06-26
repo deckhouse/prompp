@@ -73,4 +73,4 @@ class InstantQuerier {
 };
 }  // namespace series_data
 
-static_assert(series_data::QuerierInterface<series_data::InstantQuerier>);
+static_assert(series_data::LoadableQuerierInterface<series_data::InstantQuerier>);

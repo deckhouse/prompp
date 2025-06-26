@@ -79,4 +79,4 @@ class Querier {
 
 }  // namespace series_data::querier
 
-static_assert(series_data::QuerierInterface<series_data::querier::Querier>);
+static_assert(series_data::LoadableQuerierInterface<series_data::querier::Querier>);

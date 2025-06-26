@@ -32,9 +32,8 @@ concept OutdatedSampleEncoderInterface = requires(OutdatedSampleEncoder& outdate
 };
 
 template <typename QuerierType>
-concept QuerierInterface = requires(QuerierType obj, DataStorage& storage) {
+concept LoadableQuerierInterface = requires(QuerierType obj, DataStorage& storage) {
   { QuerierType(storage) };
-  { &QuerierType::query };
   { obj.need_loading() } -> std::same_as<bool>;
   { obj.get_series_to_load() };
 };
