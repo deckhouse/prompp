@@ -2,6 +2,7 @@
 
 #include <roaring/roaring.hh>
 #include "primitives/primitives.h"
+#include "series_data/concepts.h"
 #include "series_data/data_storage.h"
 #include "series_data/decoder.h"
 #include "series_data/encoder/sample.h"
@@ -27,7 +28,19 @@ class InstantQuerier {
     }
   }
 
+  template <typename LsIDStorage, typename SampleStorage>
+  void query_reload(SampleStorage& samples, const LsIDStorage& label_set_ids, const Timestamp& timestamp) noexcept {
+    assert(std::size(samples) == std::size(label_set_ids));
+
+    for (auto&& [sample, ls_id] : std::ranges::views::zip(samples, label_set_ids)) {
+      if (series_to_load_.contains(ls_id)) {
+        query_sample(sample, ls_id, timestamp);
+      }
+    }
+  }
+
   bool need_loading() const noexcept { return series_to_load_.isEmpty() == false; }
+  const roaring::Roaring& get_series_to_load() const noexcept { return series_to_load_; }
 
  private:
   DataStorage& storage_;
@@ -59,3 +72,5 @@ class InstantQuerier {
   }
 };
 }  // namespace series_data
+
+static_assert(series_data::QuerierInterface<series_data::InstantQuerier>);

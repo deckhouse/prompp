@@ -1,5 +1,7 @@
 #pragma once
 
+#include <list>
+
 #include "bare_bones/algorithm.h"
 #include "bare_bones/preprocess.h"
 #include "chunk/data_chunk.h"
@@ -190,6 +192,8 @@ struct DataStorage {
   uint32_t outdated_samples_count{};
   uint32_t outdated_chunks_count{};
   uint32_t merged_samples_count{};
+
+  std::list<std::span<const uint8_t>> unloaded_snapshots;
 
   roaring::Roaring unloaded_series_bitmap{};
   roaring::Roaring queried_series_bitmap{};

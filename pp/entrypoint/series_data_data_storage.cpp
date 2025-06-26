@@ -74,11 +74,14 @@ extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
   Querier querier{*in->data_storage};
   const auto& queried_chunk_list = querier.query(in->query);
 
-  // check if loading needed
-  // querier.need_loading()
-  // loader Loader(*in->data_storage, querier);
+  if (querier.need_loading()) {
+    series_data::unloading::Loader loader(*in->data_storage, querier);
 
-  // loading routine
+    for (auto buffer : in->data_storage->unloaded_snapshots) {
+      loader.load_next(buffer);
+    }
+    loader.load_finalize();
+  }
 
   Serializer serializer{*in->data_storage};
   BytesStream bytes_stream{&out->serialized_chunks};
@@ -102,16 +105,19 @@ extern "C" void prompp_series_data_data_storage_instant_query(void* args) {
 
   const auto in = static_cast<Arguments*>(args);
 
-  // InstantQuerier instant_querier(*(in->data_storage) ...)
-  // instant_querier.query( ... );
-
-  // instant_querier.need_loading()
-  // loader Loader(*in->data_storage, instant_querier);
-
-  // instant_querier.query_reload();
-
   InstantQuerier instant_querier{*in->data_storage};
   instant_querier.query(in->samples, in->label_set_ids, in->timestamp);
+
+  if (instant_querier.need_loading()) {
+    series_data::unloading::Loader loader(*in->data_storage, instant_querier);
+
+    for (auto buffer : in->data_storage->unloaded_snapshots) {
+      loader.load_next(buffer);
+    }
+    loader.load_finalize();
+  }
+
+  instant_querier.query_reload(in->samples, in->label_set_ids, in->timestamp);
 }
 
 extern "C" void prompp_series_data_data_storage_allocated_memory(void* args, void* res) {
@@ -226,6 +232,8 @@ extern "C" void prompp_series_data_data_storage_unload(void* args, void* res) {
   Unloader unloader{*in->data_storage};
   BytesStream bytes_stream{&out->unloaded_data};
   unloader.unload(bytes_stream);
+
+  in->data_storage->unloaded_snapshots.emplace_back(reinterpret_cast<const uint8_t*>(out->unloaded_data.data()), out->unloaded_data.size());
 }
 
 extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* res) {

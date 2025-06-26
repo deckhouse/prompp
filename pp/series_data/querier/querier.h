@@ -2,6 +2,7 @@
 
 #include <roaring/roaring.hh>
 #include "query.h"
+#include "series_data/concepts.h"
 #include "series_data/data_storage.h"
 #include "series_data/decoder.h"
 
@@ -12,7 +13,7 @@ class Querier {
   explicit Querier(DataStorage& storage) : storage_(storage) {}
 
   template <typename Query>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const QueriedChunkList& query(const Query& query) {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const QueriedChunkList& query(const Query& query) noexcept {
     chunks_.clear();
 
     for (auto& ls_id : query.label_set_ids) {
@@ -28,6 +29,7 @@ class Querier {
   }
 
   bool need_loading() const noexcept { return series_to_load_.isEmpty() == false; }
+  const roaring::Roaring& get_series_to_load() const noexcept { return series_to_load_; }
 
  private:
   using ChunkType = chunk::DataChunk::Type;
@@ -36,12 +38,12 @@ class Querier {
   QueriedChunkList chunks_;
   roaring::Roaring series_to_load_;
 
-  PROMPP_ALWAYS_INLINE void query_chunks(PromPP::Primitives::LabelSetID ls_id, const PromPP::Primitives::TimeInterval& time_interval) {
+  PROMPP_ALWAYS_INLINE void query_chunks(PromPP::Primitives::LabelSetID ls_id, const PromPP::Primitives::TimeInterval& time_interval) noexcept {
     query_finalized_chunks(ls_id, time_interval);
     query_opened_chunks(ls_id, time_interval);
   }
 
-  void query_finalized_chunks(PromPP::Primitives::LabelSetID ls_id, const PromPP::Primitives::TimeInterval& time_interval) {
+  void query_finalized_chunks(PromPP::Primitives::LabelSetID ls_id, const PromPP::Primitives::TimeInterval& time_interval) noexcept {
     if (const auto it = storage_.finalized_chunks.find(ls_id); it != storage_.finalized_chunks.end()) {
       uint32_t finalized_chunk_index = 0;
       auto& finalized_chunks = it->second;
@@ -59,7 +61,7 @@ class Querier {
     }
   }
 
-  void query_opened_chunks(PromPP::Primitives::LabelSetID ls_id, const PromPP::Primitives::TimeInterval& time_interval) {
+  void query_opened_chunks(PromPP::Primitives::LabelSetID ls_id, const PromPP::Primitives::TimeInterval& time_interval) noexcept {
     if (storage_.open_chunks.size() > ls_id) {
       if (auto& open_chunk = storage_.open_chunks[ls_id]; !open_chunk.is_empty()) {
         const auto chunk_start_timestamp_ms = Decoder::get_chunk_first_timestamp<ChunkType::kOpen>(storage_, open_chunk);
@@ -76,3 +78,5 @@ class Querier {
 };
 
 }  // namespace series_data::querier
+
+static_assert(series_data::QuerierInterface<series_data::querier::Querier>);

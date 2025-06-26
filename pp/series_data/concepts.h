@@ -31,4 +31,12 @@ concept OutdatedSampleEncoderInterface = requires(OutdatedSampleEncoder& outdate
   { outdated_sample_encoder.encode(encoder, uint32_t{}, int64_t{}, double{}) };
 };
 
+template <typename QuerierType>
+concept QuerierInterface = requires(QuerierType obj, DataStorage& storage) {
+  { QuerierType(storage) };
+  { &QuerierType::query };
+  { obj.need_loading() } -> std::same_as<bool>;
+  { obj.get_series_to_load() };
+};
+
 }  // namespace series_data
