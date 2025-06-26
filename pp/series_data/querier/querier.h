@@ -22,7 +22,9 @@ class Querier {
 
     for (const auto& q_chunk : chunks_) {
       storage_.queried_series_bitmap.add(q_chunk.ls_id);
-      series_to_load_.add(q_chunk.ls_id);
+      if (storage_.unloaded_series_bitmap.contains(q_chunk.ls_id)) {
+        series_to_load_.add(q_chunk.ls_id);
+      }
     }
 
     return chunks_;

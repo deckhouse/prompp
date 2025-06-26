@@ -18,6 +18,14 @@ struct SeriesToLoadInfo {
 
 class Loader {
  public:
+  explicit Loader(DataStorage& storage) : storage_(storage) {
+    series_to_load_tmp_bitseqs_.reserve(storage_.unloaded_series_bitmap.cardinality());
+    for (const auto& ls_id : storage_.unloaded_series_bitmap) {
+      series_to_load_tmp_bitseqs_.try_emplace(ls_id);
+    }
+    storage_.unloaded_series_bitmap = std::move(roaring::Roaring{});
+  }
+
   template <typename LsIDStorage>
   explicit Loader(DataStorage& storage, const LsIDStorage& ls_id_query) : storage_(storage) {
     series_to_load_tmp_bitseqs_.reserve(ls_id_query.size());
@@ -63,6 +71,8 @@ class Loader {
     OutdatedChunkMerger<Encoder> outdated_chunk_merger{encoder};
     outdated_chunk_merger.merge();
   }
+
+  bool empty() const noexcept { return series_to_load_tmp_bitseqs_.empty(); }
 
  private:
   PROMPP_ALWAYS_INLINE static uint32_t read_u32(std::span<const uint8_t>& buffer) noexcept {

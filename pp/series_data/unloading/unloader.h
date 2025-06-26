@@ -40,17 +40,29 @@ class Unloader {
   [[nodiscard]] PreparedSequences prepare_sequences() const noexcept {
     PreparedSequences result{};
 
-    result.ls_id_bitmap.resize(storage_.unloaded_series_bitmap.isEmpty() ? 0 : storage_.unloaded_series_bitmap.maximum() + 1);
+    uint32_t ls_id_bitmap_size = 0;
+    if (storage_.queried_series_bitmap.isEmpty()) {
+      ls_id_bitmap_size = storage_.open_chunks.size();
+    } else {
+      for (uint32_t ls_id = storage_.open_chunks.size(); ls_id > 0; --ls_id) {
+        if (!storage_.queried_series_bitmap.contains(ls_id - 1) && is_unloadable_encoder(storage_.open_chunks[ls_id - 1].encoding_state.encoding_type)) {
+          ls_id_bitmap_size = ls_id;
+          break;
+        }
+      }
+    }
+
+    result.ls_id_bitmap.resize(ls_id_bitmap_size);
 
     for (uint32_t ls_id = 0; ls_id < storage_.open_chunks.size(); ++ls_id) {
       if (storage_.queried_series_bitmap.contains(ls_id)) {
         continue;
       }
 
-      storage_.unloaded_series_bitmap.add(ls_id);
-
       const auto encoding_type = storage_.open_chunks[ls_id].encoding_state.encoding_type;
       if (is_unloadable_encoder(encoding_type)) {
+        storage_.unloaded_series_bitmap.add(ls_id);
+
         result.ls_id_bitmap.set(ls_id);
 
         const auto& bitseq = get_open_chunk_stream(storage_, ls_id);

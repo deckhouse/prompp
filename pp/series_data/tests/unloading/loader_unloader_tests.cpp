@@ -19,7 +19,7 @@ class LoaderUnloaderTrait {
     return {reinterpret_cast<const uint8_t*>(stream_.view().data()), stream_.view().size()};
   }
 
-  void mark_series_as_unused(uint32_t ls_id) { storage_.unloaded_series_bitmap.add(ls_id); }
+  void mark_series_as_used(uint32_t ls_id) { storage_.queried_series_bitmap.add(ls_id); }
 };
 
 class LoaderUnloaderTestFixture : public LoaderUnloaderTrait, public testing::Test {
@@ -48,8 +48,6 @@ TEST_F(LoaderUnloaderTestFixture, UnloadOpenChunk) {
   encoder_.encode(0, 4, 4.0);
   encoder_.encode(0, 5, 5.0);
 
-  mark_series_as_unused(0);
-
   const uint32_t chunk_stream_size_in_bits =
       storage_.get_asc_integer_stream<series_data::chunk::DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index).size_in_bits();
 
@@ -68,8 +66,6 @@ TEST_F(LoaderUnloaderTestFixture, LoadOpenChunk) {
   encoder_.encode(0, 3, 3.0);
   encoder_.encode(0, 4, 4.0);
   encoder_.encode(0, 5, 5.0);
-
-  mark_series_as_unused(0);
 
   unloader_.unload(stream_);
 
@@ -105,9 +101,6 @@ TEST_F(LoaderUnloaderTestFixture, LoadTwoOpenChunks) {
   encoder_.encode(100, 4, 40.0);
   encoder_.encode(100, 5, 50.0);
 
-  mark_series_as_unused(0);
-  mark_series_as_unused(100);
-
   unloader_.unload(stream_);
 
   // Act
@@ -139,8 +132,6 @@ TEST_F(LoaderUnloaderTestFixture, LoadTwoOpenChunks) {
 
 TEST_F(LoaderUnloaderTestFixture, SkipOneUnloading) {
   // Arrange
-  mark_series_as_unused(0);
-
   encoder_.encode(0, 1, 1.0);
 
   unloader_.unload(stream_);
@@ -184,8 +175,6 @@ TEST_F(LoaderUnloaderTestFixture, LoadFinalizedChunk) {
   encoder_.encode(0, 4, 4.0);
   encoder_.encode(0, 5, 5.0);
 
-  mark_series_as_unused(0);
-
   unloader_.unload(stream_);
 
   series_data::ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
@@ -212,8 +201,6 @@ TEST_F(LoaderUnloaderTestFixture, LoadOpenChunkMergeOutdated) {
   encoder_.encode(0, 5, 5.0);
 
   encoder_.encode(0, 0, 0.0);
-
-  mark_series_as_unused(0);
 
   unloader_.unload(stream_);
 
@@ -247,8 +234,6 @@ TEST_F(LoaderUnloaderTestFixture, LoadFinalizedChunkMergeOutdated) {
 
   encoder_.encode(0, 0, 0.0);
 
-  mark_series_as_unused(0);
-
   unloader_.unload(stream_);
 
   series_data::ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
@@ -276,7 +261,6 @@ TEST_F(LoaderUnloaderTestFixture, LoadFinalizedChunkMergeOutdated) {
 
 TEST_F(LoaderUnloaderTestFixture, LoadOpenChunkSameChunkId) {
   // Arrange
-  mark_series_as_unused(0);
 
   encoder_.encode(0, 1, 1.0);
   encoder_.encode(0, 2, 2.0);
@@ -327,8 +311,6 @@ TEST_F(LoaderUnloaderTestFixture, LoadOpenChunkSameChunkId) {
 
 TEST_F(LoaderUnloaderTestFixture, LoadChunkChangeChunkId) {
   // Arrange
-  mark_series_as_unused(0);
-
   encoder_.encode(0, 1, 1.0);
   encoder_.encode(0, 2, 2.0);
   encoder_.encode(0, 3, 3.0);
@@ -381,8 +363,6 @@ TEST_F(LoaderUnloaderTestFixture, LoadAscIntegerChunk) {
   encoder_.encode(0, 2, 2.0);
   encoder_.encode(0, 3, 3.0);
 
-  mark_series_as_unused(0);
-
   unloader_.unload(stream_);
 
   // Act
@@ -404,8 +384,6 @@ TEST_F(LoaderUnloaderTestFixture, LoadAscIntegerTheGorillaChunk) {
   encoder_.encode(0, 2, 2.0);
   encoder_.encode(0, 3, 3.0);
   encoder_.encode(0, 4, 4.1);
-
-  mark_series_as_unused(0);
 
   unloader_.unload(stream_);
 
@@ -432,7 +410,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadValuesGorillaChunk) {
 
   encoder_.encode(1, 3, 3.0);
 
-  mark_series_as_unused(1);
+  mark_series_as_used(0);
 
   unloader_.unload(stream_);
 

@@ -16,13 +16,12 @@ class OutdatedChunkMerger {
   void merge() {
     const auto& unloaded_series_bitmap = encoder_.storage().unloaded_series_bitmap;
     auto& outdated_chunks = encoder_.storage().outdated_chunks;
-    for (auto it = encoder_.storage().outdated_chunks.begin(), end = encoder_.storage().outdated_chunks.end(); it != end;) {
+    for (auto it = outdated_chunks.begin(), end = outdated_chunks.end(); it != end;) {
       const auto& [ls_id, chunk] = *it;
-      merge(ls_id, chunk);
-
       if (unloaded_series_bitmap.contains(ls_id)) {
         ++it;
       } else {
+        merge(ls_id, chunk);
         outdated_chunks._erase(it++);
       }
     }
