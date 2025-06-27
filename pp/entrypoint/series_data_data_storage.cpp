@@ -157,6 +157,15 @@ extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
 
   const auto in = static_cast<Arguments*>(args);
   const auto& ls_id_set = std::get<QueryableEncodingBimap>(*in->lss).ls_id_set();
+
+  if (!in->data_storage->unloaded_series_bitmap.isEmpty()) {
+    series_data::unloading::Loader loader{*in->data_storage};
+    for (auto buffer : in->data_storage->unloaded_snapshots) {
+      loader.load_next(buffer);
+    }
+    loader.load_finalize();
+  }
+
   new (res) Result{
       .chunk_recoder = std::make_unique<ChunkRecoderVariant>(
           std::in_place_type<ChunkRecoder>, ChunkRecoderIterator{ls_id_set.begin(), ls_id_set.end(), in->data_storage.get(), in->time_interval},
