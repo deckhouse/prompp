@@ -108,6 +108,10 @@ func (ds *DataStorage) AllocatedMemory() uint64 {
 	return ds.dataStorage.AllocatedMemory()
 }
 
+func (ds *DataStorage) Unload() {
+	ds.dataStorage.Unload()
+}
+
 // reshards changes the number of shards to the required amount.
 func (h *Head) reconfigure(
 	inputRelabelerConfigs []*config.InputRelabelerConfig,

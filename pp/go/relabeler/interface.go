@@ -17,6 +17,7 @@ type DataStorage interface {
 	Query(query cppbridge.HeadDataStorageQuery) *cppbridge.HeadDataStorageSerializedChunks
 	InstantQuery(targetTimestamp, notFoundValueTimestampValue int64, seriesIDs []uint32) []cppbridge.Sample
 	AllocatedMemory() uint64
+	Unload()
 }
 
 type LSS interface {
@@ -80,6 +81,7 @@ type Head interface {
 	CopySeriesFrom(other Head)
 	Enqueue(t *GenericTask)
 	CreateTask(taskName string, fn ShardFn, isLss, isExclusive bool) *GenericTask
+	UnloadDataStorage()
 }
 
 type Distributor interface {

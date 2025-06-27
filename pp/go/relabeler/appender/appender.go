@@ -97,6 +97,12 @@ func (qa *QueryableAppender) CommitToWal() error {
 	return qa.head.CommitToWal()
 }
 
+func (qa *QueryableAppender) UnloadDataStorage() {
+	qa.lock.RLock()
+	defer qa.lock.RUnlock()
+	qa.head.UnloadDataStorage()
+}
+
 func (qa *QueryableAppender) Rotate() error {
 	qa.lock.Lock()
 	defer qa.lock.Unlock()

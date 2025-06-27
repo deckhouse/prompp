@@ -835,6 +835,21 @@ func (h *Head) Append(
 	return shardedInnerSeries.Data(), stats, nil
 }
 
+// UnloadDataStorage unloads data storage.
+func (h *Head) UnloadDataStorage() {
+	task := h.CreateTask(
+		relabeler.DSUnload,
+		func(shard relabeler.Shard) error {
+			shard.DataStorage().Unload()
+			return nil
+		},
+		relabeler.ForDataStorageTask,
+		relabeler.ExclusiveTask,
+	)
+	h.Enqueue(task)
+	_ = task.Wait()
+}
+
 func (h *Head) resolveRelabelersData(
 	state *cppbridge.State,
 	relabelerID string,

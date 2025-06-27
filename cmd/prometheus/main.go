@@ -734,6 +734,7 @@ func main() {
 		// x3 ScrapeInterval timeout for write block
 		time.Duration(cfgFile.GlobalConfig.ScrapeInterval*3),
 		cfg.WalMaxSamplesPerSegment,
+		appender.UnloadDataStorageInterval,
 	)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create a receiver", "err", err)
@@ -1972,6 +1973,19 @@ func readPromPPFeatures(logger log.Logger) {
 		case "disable_commits_on_remote_write":
 			rwprocessor.AlwaysCommit = false
 			pphandler.OTLPAlwaysCommit = false
+
+		case "unload_data_storage_interval":
+			unloadDataStorageInterval, err := time.ParseDuration(strings.TrimSpace(fvalue))
+			if err != nil {
+				level.Error(logger).Log("msg", "Error parsing unlad data storage interval", "err", err)
+				continue
+			}
+			appender.UnloadDataStorageInterval = &unloadDataStorageInterval
+			level.Info(logger).Log(
+				"msg",
+				"[FEATURE] Unload data storage is enabled.",
+				unloadDataStorageInterval.String(),
+			)
 		}
 	}
 }

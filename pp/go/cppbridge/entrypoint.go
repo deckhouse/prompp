@@ -1785,6 +1785,20 @@ func seriesDataDataStorageAllocatedMemory(dataStorage uintptr) uint64 {
 	return res.allocatedMemory
 }
 
+func seriesDataDataStorageUnload(dataStorage uintptr) {
+	args := struct {
+		dataStorage uintptr
+	}{dataStorage}
+	var res struct {
+		data []byte
+	}
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_data_storage_unload,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+}
+
 func seriesDataDataStorageQuery(dataStorage uintptr, query HeadDataStorageQuery) []byte {
 	args := struct {
 		dataStorage uintptr

@@ -69,6 +69,9 @@ const (
 	// DSAllocatedMemory name of task.
 	DSAllocatedMemory = "data_storage_allocated_memory"
 
+	// DSUnload
+	DSUnload = "data_storage_unload"
+
 	// DSHeadStatus name of task.
 	DSHeadStatus = "data_storage_head_status"
 

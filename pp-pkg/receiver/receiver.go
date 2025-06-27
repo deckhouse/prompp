@@ -126,6 +126,7 @@ func NewReceiver(
 	headRetentionTimeout time.Duration,
 	writeTimeout time.Duration,
 	maxSegmentSize uint32,
+	unloadDataStorageInterval *time.Duration,
 ) (*Receiver, error) {
 	if logger == nil {
 		logger = log.NewNopLogger()
@@ -214,6 +215,11 @@ func NewReceiver(
 	app := appender.NewQueryableAppender(appenderHead, dstrb, querierMetrics)
 	mwt := appender.NewMetricsWriteTrigger(appender.DefaultMetricWriteInterval, app, queryableStorage)
 
+	var unloadTimer appender.Timer = appender.NewNoOpTimer()
+	if unloadDataStorageInterval != nil {
+		unloadTimer = appender.NewConstantIntervalTimer(clock, *unloadDataStorageInterval)
+	}
+
 	r := &Receiver{
 		ctx:               ctx,
 		distributor:       dstrb,
@@ -225,6 +231,7 @@ func NewReceiver(
 			relabeler.NewRotateTimerWithSeed(clock, rotationInfo.BlockDuration, rotationInfo.Seed),
 			appender.NewConstantIntervalTimer(clock, commitInterval),
 			appender.NewConstantIntervalTimer(clock, appender.DefaultMergeDuration),
+			unloadTimer,
 			registerer,
 		),
 
