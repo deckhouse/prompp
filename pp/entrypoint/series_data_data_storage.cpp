@@ -77,7 +77,7 @@ extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
   if (querier.need_loading()) {
     series_data::unloading::Loader loader(*in->data_storage, querier);
 
-    for (auto buffer : in->data_storage->unloaded_snapshots) {
+    for (const auto& buffer : in->data_storage->unloaded_snapshots) {
       loader.load_next(buffer);
     }
     loader.load_finalize();
@@ -111,7 +111,7 @@ extern "C" void prompp_series_data_data_storage_instant_query(void* args) {
   if (instant_querier.need_loading()) {
     series_data::unloading::Loader loader(*in->data_storage, instant_querier);
 
-    for (auto buffer : in->data_storage->unloaded_snapshots) {
+    for (const auto& buffer : in->data_storage->unloaded_snapshots) {
       loader.load_next(buffer);
     }
     loader.load_finalize();
@@ -160,7 +160,7 @@ extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
 
   if (!in->data_storage->unloaded_series_bitmap.isEmpty()) {
     series_data::unloading::Loader loader{*in->data_storage};
-    for (auto buffer : in->data_storage->unloaded_snapshots) {
+    for (const auto& buffer : in->data_storage->unloaded_snapshots) {
       loader.load_next(buffer);
     }
     loader.load_finalize();
@@ -242,7 +242,8 @@ extern "C" void prompp_series_data_data_storage_unload(void* args, void* res) {
   BytesStream bytes_stream{&out->unloaded_data};
   unloader.unload(bytes_stream);
 
-  in->data_storage->unloaded_snapshots.emplace_back(reinterpret_cast<const uint8_t*>(out->unloaded_data.data()), out->unloaded_data.size());
+  in->data_storage->unloaded_snapshots.emplace_back(reinterpret_cast<const uint8_t*>(out->unloaded_data.data()),
+                                                    reinterpret_cast<const uint8_t*>(out->unloaded_data.data()) + out->unloaded_data.size());
 }
 
 extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* res) {

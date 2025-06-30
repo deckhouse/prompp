@@ -193,7 +193,7 @@ struct DataStorage {
   uint32_t outdated_chunks_count{};
   uint32_t merged_samples_count{};
 
-  std::list<std::span<const uint8_t>> unloaded_snapshots;
+  std::list<std::vector<uint8_t>> unloaded_snapshots;
 
   roaring::Roaring unloaded_series_bitmap{};
   roaring::Roaring queried_series_bitmap{};
