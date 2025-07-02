@@ -1,18 +1,24 @@
 # Changelog
 
+## v0.3.3
+
+### Fixes
+
+1. **Fixed Snapshot Handling in ChunkQuerier.** Last updates led to loosing snapshots in ChunkQuerier that caused incorrect behaviour of RemoteRead API.
+
 ## v0.3.2
 
-## Fixes
+### Fixes
 
 1. **Fixed Task Duplication in WAL Commits:** which was causing excessive disk access. Now, a commit task is queued only upon the first achievement of the sample limit in a WAL segment.
 
-## Enhancements
+### Enhancements
 
 1. **Increased the Sample Limit in WAL Segments:** The previous soft limit of 10K, hardcoded as a constant, is now converted to command-line flag with default raised to 100K.
 
-## Features
+### Features
 
-- **Added a Feature-flag to Disable Commits During RemoteWrite Requests**. This is an experimental flag and will be replaced with a generalized persistence level setting in the future.
+1. **Added a Feature-flag to Disable Commits During RemoteWrite Requests.** This is an experimental flag and will be replaced with a generalized persistence level setting in the future.
 
 ## v0.3.1
 
