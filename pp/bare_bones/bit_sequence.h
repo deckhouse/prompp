@@ -396,6 +396,22 @@ class PROMPP_ATTRIBUTE_PACKED CompactBitSequence : public CompactBitSequenceBase
     push_back_bits_u64(size_in_bytes << 3, val);
   }
 
+  PROMPP_ALWAYS_INLINE void push_back_bytes(const uint8_t* bytes, uint32_t count) noexcept {
+    reserve_enough_memory_if_needed(Bit::to_bits(count));
+
+    if (unfilled_bits_in_byte() == 0) [[unlikely]] {
+      std::memcpy(Base::memory_ + Base::size_in_bytes(), bytes, count);
+    } else {
+      for (uint32_t i = 0; i < count; ++i) {
+        push_back_bits_u32(Bit::kByteBits, bytes[i]);
+      }
+    }
+
+    size_in_bits_ += Bit::to_bits(count);
+  }
+
+  PROMPP_ALWAYS_INLINE void push_back_bytes(std::span<const uint8_t> bytes) noexcept { push_back_bytes(bytes.data(), bytes.size()); }
+
  private:
   using Base = CompactBitSequenceBase<kAllocationSizesTable, Bit::to_bits(sizeof(uint64_t) + 1)>;
 

@@ -115,9 +115,9 @@ extern "C" void prompp_series_data_data_storage_instant_query(void* args) {
       loader.load_next(buffer);
     }
     loader.load_finalize();
-  }
 
-  instant_querier.query_reload(in->samples, in->label_set_ids, in->timestamp);
+    instant_querier.query_reload(in->samples, in->label_set_ids, in->timestamp);
+  }
 }
 
 extern "C" void prompp_series_data_data_storage_allocated_memory(void* args, void* res) {

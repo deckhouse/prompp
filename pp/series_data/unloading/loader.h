@@ -85,8 +85,6 @@ class Loader {
     return val;
   }
 
-  PROMPP_ALWAYS_INLINE static void skip_bytes(BareBones::BitSequenceReader& reader, uint32_t count) noexcept { reader.ff(BareBones::Bit::to_bits(count)); }
-
   PROMPP_ALWAYS_INLINE static void read_data(const uint8_t* bitseq_ptr, uint32_t byte_count, encoder::CompactBitSequence& output) noexcept {
     const uint32_t output_size_in_bytes = output.size_in_bytes();
     output.push_back_single_zero_bit(BareBones::Bit::to_bits(byte_count));
@@ -144,7 +142,7 @@ class Loader {
           info.chunk_id = chunk_id_snapshot;
           info.buffer.rewind();
         }
-        read_data(bitseqs_ptr + accumulated_offset, bitseq_size, info.buffer);
+        info.buffer.push_back_bytes(bitseqs_ptr + accumulated_offset, bitseq_size);
       }
 
       accumulated_offset += *length_it;
@@ -166,9 +164,7 @@ class Loader {
       return storage_.finalized_data_streams[chunk_data->chunk().encoder.external_index];
     }();
 
-    const uint32_t info_buffer_size_in_bytes = info.buffer.size_in_bytes();
-    info.buffer.push_back_single_zero_bit(chunk_bit_sequence.size_in_bits());
-    memcpy(info.buffer.raw_bytes() + info_buffer_size_in_bytes, chunk_bit_sequence.raw_bytes(), chunk_bit_sequence.size_in_bytes());
+    info.buffer.push_back_bytes(chunk_bit_sequence.raw_bytes(), chunk_bit_sequence.size_in_bytes());
 
     chunk_bit_sequence = std::move(info.buffer);
   }

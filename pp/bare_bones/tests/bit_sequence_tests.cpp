@@ -347,13 +347,20 @@ TEST_F(CompactBitSequenceFixture, TrimUint64_2) {
   EXPECT_EQ(0b1ULL, bytes[0]);
 }
 
-TEST_F(CompactBitSequenceFixture, read_bits_u32) {
+template <class T>
+class BitSequenceReaderFixture : public testing::Test {};
+
+typedef testing::Types<BareBones::BitSequence, CompactBitSequence<kAllocationSizesTable>> BitSequenceTypes;
+TYPED_TEST_SUITE(BitSequenceReaderFixture, BitSequenceTypes);
+
+TYPED_TEST(BitSequenceReaderFixture, read_bits_u32) {
   // Arrange
   constexpr uint32_t value = 0xAABBCCDD;
-  stream_.push_back_bits_u32(32, value);
+  TypeParam stream;
+  stream.push_back_bits_u32(32, value);
 
   // Act
-  auto reader = stream_.reader();
+  auto reader = stream.reader();
   auto dd = reader.consume_bits_u32(8);
   auto cc = reader.consume_bits_u32(8);
   auto bb = reader.consume_bits_u32(8);
@@ -365,12 +372,6 @@ TEST_F(CompactBitSequenceFixture, read_bits_u32) {
   EXPECT_EQ(cc, 0xCC);
   EXPECT_EQ(dd, 0xDD);
 }
-
-template <class T>
-class BitSequenceReaderFixture : public testing::Test {};
-
-typedef testing::Types<BareBones::BitSequence, CompactBitSequence<kAllocationSizesTable>> BitSequenceTypes;
-TYPED_TEST_SUITE(BitSequenceReaderFixture, BitSequenceTypes);
 
 TYPED_TEST(BitSequenceReaderFixture, read_u64) {
   // Arrange

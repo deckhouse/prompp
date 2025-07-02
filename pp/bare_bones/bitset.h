@@ -147,6 +147,11 @@ class Bitset {
     return std::accumulate(data_.begin(), data_.end(), 0U, [](uint32_t popcount, uint64_t v) PROMPP_LAMBDA_INLINE { return popcount + std::popcount(v); });
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_write_size() const noexcept {
+    const uint32_t data_size_in_bytes = Bit::to_ceil_units<uint64_t>(size()) * sizeof(uint64_t);
+    return sizeof(data_size_in_bytes) + data_size_in_bytes;
+  }
+
   template <OutputStream S>
   PROMPP_ALWAYS_INLINE void write_to(S& stream) const noexcept {
     const uint32_t data_size_in_bits = size();
