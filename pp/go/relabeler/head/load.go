@@ -94,13 +94,7 @@ func createShard(
 
 	shardWal := newShardWal(shardWalEncoder, maxSegmentSize, sw)
 
-	cppDataStorage := cppbridge.NewHeadDataStorage()
-	dataStorage := &DataStorage{
-		dataStorage: cppDataStorage,
-		encoder:     cppbridge.NewHeadEncoderWithDataStorage(cppDataStorage),
-	}
-
-	return lss, shardWal, dataStorage, nil
+	return lss, shardWal, NewDataStorage(), nil
 }
 
 func Load(
