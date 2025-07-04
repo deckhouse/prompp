@@ -51,20 +51,20 @@ func newLabelSetSnapshot(lsstPtr uintptr) *LabelSetSnapshot {
 }
 
 // Pointer return c-pointer.
-func (lsst *LabelSetSnapshot) Pointer() uintptr {
-	return lsst.pointer
+func (lss *LabelSetSnapshot) Pointer() uintptr {
+	return lss.pointer
 }
 
 // RangeLabelSet serialize to slice labels from snapshot and calls f on each label.
-func (lsst *LabelSetSnapshot) RangeLabelSet(lsID uint32, do func(l Label) error) error {
-	labelSet := labelSetSerialize(lsst.pointer, lsID)
+func (lss *LabelSetSnapshot) RangeLabelSet(lsID uint32, do func(l Label) error) error {
+	labelSet := labelSetSerialize(lss.pointer, lsID)
 	for i := range labelSet {
 		if err := do(labelSet[i]); err != nil {
 			labelSetFree(labelSet)
 			return err
 		}
 	}
-	runtime.KeepAlive(lsst)
+	runtime.KeepAlive(lss)
 	labelSetFree(labelSet)
 
 	return nil
@@ -72,5 +72,7 @@ func (lsst *LabelSetSnapshot) RangeLabelSet(lsID uint32, do func(l Label) error)
 
 // Query returns a LSSQueryResult that matches the given selector.
 func (lss *LabelSetSnapshot) Query(selector uintptr) *LSSQueryResult {
-	return newLSSQueryResult(primitivesLSSQuery(lss.pointer, selector))
+	result := newLSSQueryResult(primitivesLSSQuery(lss.pointer, selector))
+	runtime.KeepAlive(lss)
+	return result
 }
