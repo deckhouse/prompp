@@ -2107,6 +2107,51 @@ func seriesDataUnloadUnusedSeriesData(dataStorage uintptr) []byte {
 	return res.snapshot
 }
 
+func seriesDataUnloadedDataLoaderCtor(dataStorage uintptr, queriers []uintptr) uintptr {
+	args := struct {
+		dataStorage uintptr
+		queriers    []uintptr
+	}{dataStorage, queriers}
+	var res struct {
+		loader uintptr
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_data_storage_loader_ctor,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.loader
+}
+
+func seriesDataUnloadedDataLoaderLoad(loader uintptr, snapshot []byte, isLast bool) {
+	args := struct {
+		loader   uintptr
+		snapshot []byte
+		isLast   bool
+	}{loader, snapshot, isLast}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_data_storage_loader_load_next,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func seriesDataUnloadedDataLoaderDtor(loader uintptr) {
+	args := struct {
+		loader uintptr
+	}{loader}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_data_storage_loader_dtor,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
 func indexWriterCtor(lss uintptr) uintptr {
 	args := struct {
 		lss uintptr

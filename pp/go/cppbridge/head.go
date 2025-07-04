@@ -361,7 +361,7 @@ func (s *UnloadedDataStorage) Write(snapshot []byte) error {
 	return nil
 }
 
-func (s *UnloadedDataStorage) ForEachShard(f func(snapshot []byte)) error {
+func (s *UnloadedDataStorage) ForEachShard(f func(snapshot []byte, isLast bool)) error {
 	var offset int64
 	snapshot := make([]byte, 0, s.maxSnapshotSize)
 	for index := range s.snapshots {
@@ -378,7 +378,7 @@ func (s *UnloadedDataStorage) ForEachShard(f func(snapshot []byte)) error {
 			return fmt.Errorf("invalid snapshot at index %d", index)
 		}
 
-		f(snapshot)
+		f(snapshot, index == len(s.snapshots)-1)
 	}
 
 	return nil
@@ -386,4 +386,25 @@ func (s *UnloadedDataStorage) ForEachShard(f func(snapshot []byte)) error {
 
 func (s *UnloadedDataStorage) Close() error {
 	return s.storage.Close()
+}
+
+// UnloadedDataLoader is Go wrapper around series_data::Loader.
+type UnloadedDataLoader struct {
+	loader uintptr
+}
+
+func NewUnloadedDataLoader(dataStorage *HeadDataStorage, queriers []uintptr) *UnloadedDataLoader {
+	result := &UnloadedDataLoader{
+		loader: seriesDataUnloadedDataLoaderCtor(dataStorage.Pointer(), queriers),
+	}
+
+	runtime.SetFinalizer(result, func(loader *UnloadedDataLoader) {
+		seriesDataUnloadedDataLoaderDtor(loader.loader)
+	})
+
+	return result
+}
+
+func (loader *UnloadedDataLoader) Load(snapshot []byte, isLast bool) {
+	seriesDataUnloadedDataLoaderLoad(loader.loader, snapshot, isLast)
 }
