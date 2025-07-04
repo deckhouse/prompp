@@ -207,6 +207,7 @@ func New(
 	lsses []*LSS,
 	wals []*ShardWal,
 	dataStorages []*DataStorage,
+	unloadedDataStorages []*cppbridge.UnloadedDataStorage,
 	numberOfShards uint16,
 	registerer prometheus.Registerer,
 ) (*Head, error) {
@@ -220,10 +221,11 @@ func New(
 		lssTaskChs[shardID] = make(chan *relabeler.GenericTask, chanBufferSize)
 		dataStorageTaskChs[shardID] = make(chan *relabeler.GenericTask, chanBufferSize)
 		shards[shardID] = &shard{
-			id:          shardID,
-			lss:         lsses[shardID],
-			dataStorage: dataStorages[shardID],
-			wal:         wals[shardID],
+			id:                  shardID,
+			lss:                 lsses[shardID],
+			dataStorage:         dataStorages[shardID],
+			wal:                 wals[shardID],
+			unloadedDataStorage: unloadedDataStorages[shardID],
 		}
 	}
 
@@ -652,10 +654,16 @@ func (h *Head) CopySeriesFrom(other relabeler.Head) {
 // Close wals and clear metrics.
 func (h *Head) Close() error {
 	h.memoryInUse.DeletePartialMatch(prometheus.Labels{"generation": strconv.FormatUint(h.generation, 10)})
+
 	var err error
 	for _, wal := range h.wals {
 		err = errors.Join(err, wal.Close())
 	}
+
+	for _, s := range h.shards {
+		err = errors.Join(s.unloadedDataStorage.Close())
+	}
+
 	return err
 }
 
@@ -1054,4 +1062,18 @@ func (*Head) shardLoop(
 			}
 		}
 	}
+}
+
+// UnloadUnusedSeriesData - unload unused series data in all dataStorages
+func (h *Head) UnloadUnusedSeriesData() {
+	task := h.CreateTask(
+		relabeler.DSUnloadUnusedSeriesData,
+		func(shard relabeler.Shard) error {
+			// TODO: what will we do in case of a write error?
+			return shard.UnloadedDataStorage().Write(shard.DataStorage().UnloadUnusedSeriesData())
+		},
+		relabeler.ForDataStorageTask,
+		relabeler.ExclusiveTask,
+	)
+	h.Enqueue(task)
 }

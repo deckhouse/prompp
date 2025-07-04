@@ -80,6 +80,9 @@ const (
 	// DSQueryRangeQuerier name of task.
 	DSQueryRangeQuerier = "data_storage_query_range_querier"
 
+	// DSUnloadUnusedSeriesData name of task.
+	DSUnloadUnusedSeriesData = "data_storage_unload_unused_series_data"
+
 	// Read Only
 
 	// BlockWrite name of task.

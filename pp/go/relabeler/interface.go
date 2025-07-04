@@ -17,6 +17,7 @@ type DataStorage interface {
 	Query(query cppbridge.HeadDataStorageQuery) *cppbridge.HeadDataStorageSerializedChunks
 	InstantQuery(targetTimestamp, notFoundValueTimestampValue int64, seriesIDs []uint32) []cppbridge.Sample
 	AllocatedMemory() uint64
+	UnloadUnusedSeriesData() []byte
 }
 
 type LSS interface {
@@ -39,6 +40,10 @@ type Wal interface {
 	Flush() error
 }
 
+type UnloadedDataStorage interface {
+	Write(snapshot []byte) error
+}
+
 type InputRelabeler interface {
 	CacheAllocatedMemory() uint64
 }
@@ -49,6 +54,7 @@ type Shard interface {
 	DataStorage() DataStorage
 	LSS() LSS
 	Wal() Wal
+	UnloadedDataStorage() UnloadedDataStorage
 }
 
 // ShardFn - shard function.

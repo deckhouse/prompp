@@ -74,6 +74,12 @@ func (ds *HeadDataStorage) AllocatedMemory() uint64 {
 	return res
 }
 
+func (ds *HeadDataStorage) UnloadUnusedSeriesData() []byte {
+	res := seriesDataUnloadUnusedSeriesData(ds.dataStorage)
+	runtime.KeepAlive(ds)
+	return res
+}
+
 // HeadEncoder is Go wrapper around series_data::Encoder.
 type HeadEncoder struct {
 	encoder     uintptr

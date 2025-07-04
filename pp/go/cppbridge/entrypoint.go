@@ -2089,6 +2089,24 @@ func seriesDataChunkRecoderDtor(chunkRecoder uintptr) {
 	)
 }
 
+func seriesDataUnloadUnusedSeriesData(dataStorage uintptr) []byte {
+	args := struct {
+		dataStorage uintptr
+	}{dataStorage}
+	var res struct {
+		snapshot []byte
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_data_storage_unload,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.snapshot
+}
+
 func indexWriterCtor(lss uintptr) uintptr {
 	args := struct {
 		lss uintptr

@@ -108,6 +108,10 @@ func (ds *DataStorage) AllocatedMemory() uint64 {
 	return ds.dataStorage.AllocatedMemory()
 }
 
+func (ds *DataStorage) UnloadUnusedSeriesData() []byte {
+	return ds.dataStorage.UnloadUnusedSeriesData()
+}
+
 // reshards changes the number of shards to the required amount.
 func (h *Head) reconfigure(
 	inputRelabelerConfigs []*config.InputRelabelerConfig,
@@ -158,10 +162,11 @@ func (h *Head) reconfigureRelabelersData(
 }
 
 type shard struct {
-	id          uint16
-	lss         *LSS
-	dataStorage *DataStorage
-	wal         *ShardWal
+	id                  uint16
+	lss                 *LSS
+	dataStorage         *DataStorage
+	wal                 *ShardWal
+	unloadedDataStorage *cppbridge.UnloadedDataStorage
 }
 
 func (s *shard) ShardID() uint16 {
@@ -178,4 +183,8 @@ func (s *shard) LSS() relabeler.LSS {
 
 func (s *shard) Wal() relabeler.Wal {
 	return s.wal
+}
+
+func (s *shard) UnloadedDataStorage() relabeler.UnloadedDataStorage {
+	return s.unloadedDataStorage
 }
