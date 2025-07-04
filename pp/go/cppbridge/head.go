@@ -1,6 +1,9 @@
 package cppbridge
 
 import (
+	"fmt"
+	"hash/crc32"
+	"io"
 	"math"
 	"runtime"
 	"unsafe"
@@ -305,4 +308,76 @@ func (i *HeadDataStorageDecodeIterator) Next() bool {
 
 func (i *HeadDataStorageDecodeIterator) Sample() (int64, float64) {
 	return seriesDataDecodeIteratorSample(i.decodeIterator)
+}
+
+type ReaderAtWriterCloser interface {
+	io.ReaderAt
+	io.Writer
+	io.Closer
+}
+
+type UnloadedDataSnapshotHeader struct {
+	crc32        uint32
+	snapshotSize uint32
+}
+
+func newUnloadedDataSnapshotHeader(snapshot []byte) UnloadedDataSnapshotHeader {
+	return UnloadedDataSnapshotHeader{crc32: crc32.ChecksumIEEE(snapshot), snapshotSize: uint32(len(snapshot))}
+}
+
+func (h UnloadedDataSnapshotHeader) isValid(snapshot []byte) bool {
+	return h.crc32 == crc32.ChecksumIEEE(snapshot)
+}
+
+type UnloadedDataStorage struct {
+	storage         ReaderAtWriterCloser
+	snapshots       []UnloadedDataSnapshotHeader
+	maxSnapshotSize uint32
+}
+
+func NewUnloadedDataStorage(storage ReaderAtWriterCloser) *UnloadedDataStorage {
+	return &UnloadedDataStorage{storage: storage}
+}
+
+func (s *UnloadedDataStorage) Write(snapshot []byte) error {
+	if len(snapshot) == 0 {
+		return nil
+	}
+
+	header := newUnloadedDataSnapshotHeader(snapshot)
+	size, err := s.storage.Write(snapshot)
+	if uint32(size) != header.snapshotSize || err != nil {
+		return err
+	}
+
+	s.snapshots = append(s.snapshots, header)
+	s.maxSnapshotSize = max(header.snapshotSize, s.maxSnapshotSize)
+	return nil
+}
+
+func (s *UnloadedDataStorage) ForEachShard(f func(snapshot []byte)) error {
+	var offset int64
+	snapshot := make([]byte, 0, s.maxSnapshotSize)
+	for index := range s.snapshots {
+		header := s.snapshots[index]
+
+		snapshot = snapshot[:header.snapshotSize]
+		size, err := s.storage.ReadAt(snapshot, offset)
+		if uint32(size) != header.snapshotSize {
+			return err
+		}
+		offset += int64(size)
+
+		if !header.isValid(snapshot) {
+			return fmt.Errorf("invalid snapshot at index %d", index)
+		}
+
+		f(snapshot)
+	}
+
+	return nil
+}
+
+func (s *UnloadedDataStorage) Close() error {
+	return s.storage.Close()
 }

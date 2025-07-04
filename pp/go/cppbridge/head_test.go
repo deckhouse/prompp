@@ -1,6 +1,8 @@
 package cppbridge_test
 
 import (
+	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -164,4 +166,108 @@ func (s *HeadSuite) TestInstantQuery() {
 	s.Equal(series[2].Sample, samples[1])
 	s.Equal(series[5].Sample, samples[2])
 	s.Equal(series[6].Sample, samples[3])
+}
+
+type BufferReaderAtWriterCloser struct {
+	buffer []byte
+}
+
+func (s *BufferReaderAtWriterCloser) ReadAt(p []byte, off int64) (n int, err error) {
+	return bytes.NewReader(s.buffer).ReadAt(p, off)
+}
+
+func (s *BufferReaderAtWriterCloser) Write(p []byte) (n int, err error) {
+	s.buffer = append(s.buffer, p...)
+	return len(p), nil
+}
+
+func (s *BufferReaderAtWriterCloser) Close() error {
+	return nil
+}
+
+type UnloadedDataStorageSuite struct {
+	suite.Suite
+	storageBuffer *BufferReaderAtWriterCloser
+	storage       *cppbridge.UnloadedDataStorage
+}
+
+func TestUnloadedDataStorageSuite(t *testing.T) {
+	suite.Run(t, new(UnloadedDataStorageSuite))
+}
+
+func (s *UnloadedDataStorageSuite) SetupTest() {
+	s.storageBuffer = &BufferReaderAtWriterCloser{}
+	s.storage = cppbridge.NewUnloadedDataStorage(s.storageBuffer)
+}
+
+func (s *UnloadedDataStorageSuite) readSnapshots() (string, error) {
+	var snapshots string
+	err := s.storage.ForEachShard(func(snapshot []byte) {
+		snapshots += string(snapshot)
+	})
+	return snapshots, err
+}
+
+func (s *UnloadedDataStorageSuite) TestReadEmptySnapshots() {
+	// Arrange
+
+	// Act
+	snapshots, err := s.readSnapshots()
+
+	// Assert
+	s.Equal("", snapshots)
+	s.Equal(nil, err)
+}
+
+func (s *UnloadedDataStorageSuite) TestReadOneSnapshot() {
+	// Arrange
+	_ = s.storage.Write([]byte("12345"))
+
+	// Act
+	snapshots, err := s.readSnapshots()
+
+	// Assert
+	s.Equal("12345", snapshots)
+	s.Equal(nil, err)
+}
+
+func (s *UnloadedDataStorageSuite) TestReadMultipleSnapshots() {
+	// Arrange
+	_ = s.storage.Write([]byte("123"))
+	_ = s.storage.Write([]byte("45678"))
+	_ = s.storage.Write([]byte("90"))
+
+	// Act
+	snapshots, err := s.readSnapshots()
+
+	// Assert
+	s.Equal("1234567890", snapshots)
+	s.Equal(nil, err)
+}
+
+func (s *UnloadedDataStorageSuite) TestReadEof() {
+	// Arrange
+	_ = s.storage.Write([]byte("123"))
+	s.storageBuffer.buffer = s.storageBuffer.buffer[:len(s.storageBuffer.buffer)-1]
+
+	// Act
+	snapshots, err := s.readSnapshots()
+
+	// Assert
+	s.Equal("", snapshots)
+	s.Equal(fmt.Errorf("EOF"), err)
+}
+
+func (s *UnloadedDataStorageSuite) TestReadInvalidSnapshot() {
+	// Arrange
+	_ = s.storage.Write([]byte("123"))
+	_ = s.storage.Write([]byte("45678"))
+	s.storageBuffer.buffer[3] = 0x00
+
+	// Act
+	snapshots, err := s.readSnapshots()
+
+	// Assert
+	s.Equal("123", snapshots)
+	s.Equal(fmt.Errorf("invalid snapshot at index 1"), err)
 }
