@@ -24,9 +24,6 @@ class InstantQuerierLoaderUnloaderTrait {
 class InstantQuerierLoaderUnloaderTestFixture : public InstantQuerierLoaderUnloaderTrait, public testing::Test {
  protected:
   void SetUp() override {
-    storage_.reset();
-    stream_.clear();
-
     uint32_t idx = 0;
     for (uint32_t ls_id = 0; ls_id < 10; ++ls_id) {
       encoder_.encode(ls_id, 1, idx++);

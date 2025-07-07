@@ -12,6 +12,7 @@ using PromPP::Primitives::Timestamp;
 using series_data::ChunkFinalizer;
 using series_data::DataStorage;
 using series_data::Encoder;
+using series_data::InstantQuerier;
 using series_data::OutdatedSampleEncoder;
 using series_data::chunk::DataChunk;
 using series_data::encoder::Sample;
@@ -30,23 +31,22 @@ class InstantQuerierOpenChunkFixture : public testing::TestWithParam<InstantQuer
  protected:
   DataStorage storage_;
   Encoder<> encoder_{storage_};
-  Sample sample_{.timestamp = -1, .value = STALE_NAN};
+  Sample default_sample_ = {.timestamp = -1, .value = STALE_NAN};
+  std::vector<Sample> samples_{default_sample_};
 };
 
 TEST_F(InstantQuerierOpenChunkFixture, EmptyChunk) {
   // Arrange
   static constexpr auto kEmptyChunkLsId = 0U;
+  std::vector<uint32_t> ls_ids = {kEmptyChunkLsId};
 
   encoder_.encode(1, 1, 1.0);
 
   // Act
-  std::vector<Sample> samples = {sample_};
-  std::vector<uint32_t> ls_ids = {kEmptyChunkLsId};
-  series_data::InstantQuerier instant_querier(storage_);
-  instant_querier.query(samples, ls_ids, 0);
+  InstantQuerier{storage_}.query(samples_, ls_ids, 0);
 
   // Assert
-  EXPECT_EQ(sample_, samples[0]);
+  EXPECT_EQ(default_sample_, samples_[0]);
 }
 
 TEST_P(InstantQuerierOpenChunkFixture, InstantQueryOpenChunk) {
@@ -58,13 +58,10 @@ TEST_P(InstantQuerierOpenChunkFixture, InstantQueryOpenChunk) {
   encoder_.encode(0, 5, 5.0);
 
   // Act
-  std::vector<Sample> samples = {sample_};
-  std::vector<uint32_t> ls_ids = {GetParam().request.ls_id};
-  series_data::InstantQuerier instant_querier(storage_);
-  instant_querier.query(samples, ls_ids, GetParam().request.timestamp);
+  InstantQuerier{storage_}.query(samples_, std::vector{{GetParam().request.ls_id}}, GetParam().request.timestamp);
 
   // Assert
-  EXPECT_EQ(GetParam().expected_sample, samples[0]);
+  EXPECT_EQ(GetParam().expected_sample, samples_[0]);
 }
 
 INSTANTIATE_TEST_SUITE_P(PickBeforeOpenChunk,
@@ -110,13 +107,10 @@ TEST_P(InstantQuerierFinalizedChunkFixture, InstantQueryFinalizedChunk) {
   encoder_.encode(0, 10, 10.0);
 
   // Act
-  std::vector<Sample> samples = {sample_};
-  std::vector<uint32_t> ls_ids = {GetParam().request.ls_id};
-  series_data::InstantQuerier instant_querier(storage_);
-  instant_querier.query(samples, ls_ids, GetParam().request.timestamp);
+  InstantQuerier{storage_}.query(samples_, std::vector{{GetParam().request.ls_id}}, GetParam().request.timestamp);
 
   // Assert
-  EXPECT_EQ(GetParam().expected_sample, samples[0]);
+  EXPECT_EQ(GetParam().expected_sample, samples_[0]);
 }
 
 INSTANTIATE_TEST_SUITE_P(PickBeforeFinalizedChunk,
@@ -166,13 +160,10 @@ TEST_P(InstantQuerierOpenAndFinalizedChunkFixture, InstantQueryFinalizedChunk) {
   encoder_.encode(0, 14, 14.0);
 
   // Act
-  std::vector<Sample> samples = {sample_};
-  std::vector<uint32_t> ls_ids = {GetParam().request.ls_id};
-  series_data::InstantQuerier instant_querier(storage_);
-  instant_querier.query(samples, ls_ids, GetParam().request.timestamp);
+  InstantQuerier{storage_}.query(samples_, std::vector{{GetParam().request.ls_id}}, GetParam().request.timestamp);
 
   // Assert
-  EXPECT_EQ(GetParam().expected_sample, samples[0]);
+  EXPECT_EQ(GetParam().expected_sample, samples_[0]);
 }
 
 INSTANTIATE_TEST_SUITE_P(PickBeforeSeries,
