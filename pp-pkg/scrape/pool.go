@@ -1,18 +1,13 @@
 package scrape
 
 import (
-	"bufio"
 	"errors"
-	"io"
 	"sync"
 	"time"
-
-	"github.com/klauspost/compress/gzip"
 
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/model/value"
 	"github.com/prometheus/prometheus/storage"
-	"github.com/prometheus/prometheus/util/zeropool"
 
 	pp_model "github.com/prometheus/prometheus/pp/go/model"
 )
@@ -206,31 +201,31 @@ func (b *timeLimitBatch) Add(builder *pp_model.LabelSetSimpleBuilder, timestamp 
 	return b.Batch.Add(builder, timestamp, val)
 }
 
-//
-// bufioPool
-//
+// //
+// // bufioPool
+// //
 
-// poolBufio global pool *bufio.Reader.
-var poolBufio = zeropool.New(func() *bufio.Reader { return bufio.NewReader(nr) })
+// // poolBufio global pool *bufio.Reader.
+// var poolBufio = zeropool.New(func() *bufio.Reader { return bufio.NewReader(nr) })
 
-//
-// gziprPool
-//
+// //
+// // gziprPool
+// //
 
-// poolGzipr global pool *gzip.Reader.
-var poolGzipr = zeropool.New(func() *gzip.Reader { return &gzip.Reader{} })
+// // poolGzipr global pool *gzip.Reader.
+// var poolGzipr = zeropool.New(func() *gzip.Reader { return &gzip.Reader{} })
 
-//
-// noopReader
-//
+// //
+// // noopReader
+// //
 
-// noopReader implementation io.Reader.
-var nr = &noopReader{}
+// // noopReader implementation io.Reader.
+// var nr = &noopReader{}
 
-// noopReader implementation io.Reader.
-type noopReader struct{}
+// // noopReader implementation io.Reader.
+// type noopReader struct{}
 
-// Read implementation io.Reader.
-func (*noopReader) Read(_ []byte) (int, error) {
-	return 0, io.EOF
-}
+// // Read implementation io.Reader.
+// func (*noopReader) Read(_ []byte) (int, error) {
+// 	return 0, io.EOF
+// }

@@ -609,7 +609,7 @@ var (
 type scraper interface {
 	scrape(ctx context.Context) (*http.Response, error)
 	readResponse(ctx context.Context, resp *http.Response, w io.Writer) (string, error)
-	readResponse2(ctx context.Context, resp *http.Response, buf *bytes.Buffer) (string, error)
+	// readResponse2(ctx context.Context, resp *http.Response, buf *bytes.Buffer) (string, error)
 	Report(start time.Time, dur time.Duration, err error)
 	offset(interval time.Duration, offsetSeed uint64) time.Duration
 	String() string
@@ -978,7 +978,7 @@ func (sl *scrapeLoop) scrapeAndReport(last, appendTime time.Time, errc chan<- er
 		b = sl.buffers.Get(sl.lastScrapeSize).([]byte)
 		defer sl.buffers.Put(b)
 		buf = bytes.NewBuffer(b)
-		contentType, scrapeErr = sl.scraper.readResponse2(scrapeCtx, resp, buf)
+		contentType, scrapeErr = sl.scraper.readResponse(scrapeCtx, resp, buf)
 	}
 	cancel()
 
@@ -1664,50 +1664,50 @@ func (m *metaEntry) size() int {
 	return len(m.Help) + len(m.Unit) + len(m.Type)
 }
 
-func (s *targetScraper) readResponse2(ctx context.Context, resp *http.Response, buf *bytes.Buffer) (string, error) {
-	defer func() {
-		io.Copy(io.Discard, resp.Body)
-		resp.Body.Close()
-	}()
+// func (s *targetScraper) readResponse2(ctx context.Context, resp *http.Response, buf *bytes.Buffer) (string, error) {
+// 	defer func() {
+// 		io.Copy(io.Discard, resp.Body)
+// 		resp.Body.Close()
+// 	}()
 
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("server returned HTTP status %s", resp.Status)
-	}
+// 	if resp.StatusCode != http.StatusOK {
+// 		return "", fmt.Errorf("server returned HTTP status %s", resp.Status)
+// 	}
 
-	if s.bodySizeLimit <= 0 {
-		s.bodySizeLimit = math.MaxInt64
-	}
-	if resp.Header.Get("Content-Encoding") != "gzip" {
-		n, err := buf.ReadFrom(io.LimitReader(resp.Body, s.bodySizeLimit))
-		if err != nil {
-			return "", err
-		}
-		if n >= s.bodySizeLimit {
-			s.metrics.targetScrapeExceededBodySizeLimit.Inc()
-			return "", errBodySizeLimit
-		}
-		return resp.Header.Get("Content-Type"), nil
-	}
+// 	if s.bodySizeLimit <= 0 {
+// 		s.bodySizeLimit = math.MaxInt64
+// 	}
+// 	if resp.Header.Get("Content-Encoding") != "gzip" {
+// 		n, err := buf.ReadFrom(io.LimitReader(resp.Body, s.bodySizeLimit))
+// 		if err != nil {
+// 			return "", err
+// 		}
+// 		if n >= s.bodySizeLimit {
+// 			s.metrics.targetScrapeExceededBodySizeLimit.Inc()
+// 			return "", errBodySizeLimit
+// 		}
+// 		return resp.Header.Get("Content-Type"), nil
+// 	}
 
-	breader := poolBufio.Get()
-	defer poolBufio.Put(breader)
-	breader.Reset(resp.Body)
+// 	breader := poolBufio.Get()
+// 	defer poolBufio.Put(breader)
+// 	breader.Reset(resp.Body)
 
-	gzipr := poolGzipr.Get()
-	defer poolGzipr.Put(gzipr)
-	if err := gzipr.Reset(breader); err != nil {
-		return "", err
-	}
+// 	gzipr := poolGzipr.Get()
+// 	defer poolGzipr.Put(gzipr)
+// 	if err := gzipr.Reset(breader); err != nil {
+// 		return "", err
+// 	}
 
-	n, err := buf.ReadFrom(io.LimitReader(gzipr, s.bodySizeLimit))
+// 	n, err := buf.ReadFrom(io.LimitReader(gzipr, s.bodySizeLimit))
 
-	gzipr.Close()
-	if err != nil {
-		return "", err
-	}
-	if n >= s.bodySizeLimit {
-		s.metrics.targetScrapeExceededBodySizeLimit.Inc()
-		return "", errBodySizeLimit
-	}
-	return resp.Header.Get("Content-Type"), nil
-}
+// 	gzipr.Close()
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	if n >= s.bodySizeLimit {
+// 		s.metrics.targetScrapeExceededBodySizeLimit.Inc()
+// 		return "", errBodySizeLimit
+// 	}
+// 	return resp.Header.Get("Content-Type"), nil
+// }
