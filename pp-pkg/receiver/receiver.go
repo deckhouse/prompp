@@ -43,9 +43,8 @@ import (
 )
 
 const (
-	defaultShutdownTimeout        = 40 * time.Second
-	defaultNumberOfShards         = 2
-	defaultMaxSegmentSize  uint32 = 10000
+	defaultShutdownTimeout = 40 * time.Second
+	defaultNumberOfShards  = 2
 )
 
 type HeadConfig struct {
@@ -126,6 +125,7 @@ func NewReceiver(
 	maxRetentionDuration time.Duration,
 	headRetentionTimeout time.Duration,
 	writeTimeout time.Duration,
+	maxSegmentSize uint32,
 ) (*Receiver, error) {
 	if logger == nil {
 		logger = log.NewNopLogger()
@@ -178,7 +178,7 @@ func NewReceiver(
 		clock,
 		headConfigStorage,
 		headCatalog,
-		defaultMaxSegmentSize,
+		maxSegmentSize,
 		registerer,
 	)
 	if err != nil {

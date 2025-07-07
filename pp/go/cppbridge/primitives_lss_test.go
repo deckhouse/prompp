@@ -342,6 +342,22 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithoutReadonlyLss() {
 	s.Equal(uint32(expectedLsId), existingLsId)
 }
 
+func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithoutReadonlyLss() {
+	// Arrange
+
+	// Act
+	expectedLsId := len(s.labelSetIDs)
+	existingLsId := s.lss.FindOrEmplaceBuilder(cppbridge.CppLabelSetBuilder{
+		ReadonlyLss: uintptr(0),
+		LsId:        0,
+		SortedAdd:   []cppbridge.Label{{Name: "new_lol", Value: "new_kek"}},
+		SortedDel:   nil,
+	}).LabelSetID
+
+	// Assert
+	s.Equal(uint32(expectedLsId), existingLsId)
+}
+
 func (s *QueryableLSSSuite) TestFindFromBuilder() {
 	// Arrange
 	mls := model.LabelSetFromMap(map[string]string{
