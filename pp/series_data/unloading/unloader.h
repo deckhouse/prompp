@@ -21,11 +21,6 @@ class Unloader {
     write_bit_sequences(stream, sequences.ls_id_bitmap, sequences.total_bitseqs_size);
   }
 
-  static constexpr uint32_t get_empty_unloader_size_in_bytes() noexcept {
-    return sizeof(uint32_t) + BareBones::Bitset{}.allocated_memory() + EncodingChunkLengthSequence{}.data().size() + sizeof(uint32_t) + sizeof(uint32_t) +
-           EncodingChunkIDSequence{}.data().size() + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
-  }
-
  private:
   DataStorage& storage_;
 

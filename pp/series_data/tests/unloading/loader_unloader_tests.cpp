@@ -13,6 +13,7 @@ using series_data::Decoder;
 using series_data::chunk::DataChunk;
 using series_data::encoder::SampleList;
 using series_data::unloading::Loader;
+using std::operator""s;
 
 class LoaderUnloaderTrait {
  protected:
@@ -40,7 +41,7 @@ TEST_F(LoaderUnloaderTestFixture, Empty) {
   unloader_.unload(stream1_);
 
   // Assert
-  ASSERT_EQ(stream1_.view().size(), unloader_.get_empty_unloader_size_in_bytes());
+  ASSERT_EQ(stream1_.view(), "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"s);
 }
 
 TEST_F(LoaderUnloaderTestFixture, UnloadOpenChunk) {
@@ -60,6 +61,9 @@ TEST_F(LoaderUnloaderTestFixture, UnloadOpenChunk) {
   // Assert
   ASSERT_EQ(storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index).size_in_bits(),
             chunk_stream_size_in_bits % 8);
+
+  ASSERT_EQ(storage_.unloaded_series_bitmap.cardinality(), 1);
+  ASSERT_TRUE(storage_.unloaded_series_bitmap.contains(0));
 }
 
 TEST_F(LoaderUnloaderTestFixture, LoadOpenChunk) {
@@ -73,7 +77,6 @@ TEST_F(LoaderUnloaderTestFixture, LoadOpenChunk) {
   unloader_.unload(stream1_);
 
   // Act
-  std::vector<uint32_t> chunk_ids = {0};
   load({0}, stream1_.span<uint8_t>());
 
   // Assert
@@ -124,6 +127,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadTwoOpenChunks) {
                 {5, 50.0},
             }),
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[100]));
+
   ASSERT_FALSE(storage_.unloaded_series_bitmap.contains(0));
   ASSERT_FALSE(storage_.unloaded_series_bitmap.contains(100));
 }
@@ -150,6 +154,7 @@ TEST_F(LoaderUnloaderTestFixture, SkipOneUnloading) {
   // Assert
   ASSERT_EQ((SampleList{{1, 1.0}, {2, 2.0}, {3, 3.0}, {4, 4.0}, {5, 5.0}, {6, 6.0}, {7, 7.0}}),
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
+
   ASSERT_FALSE(storage_.unloaded_series_bitmap.contains(0));
 }
 
