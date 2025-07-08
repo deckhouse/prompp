@@ -8,6 +8,7 @@
 #include <arm_acle.h>
 #endif
 
+#include <atomic>
 #include <bitset>
 
 #include "bit.h"
@@ -71,9 +72,19 @@ class Bitset {
     data_[v >> 6] |= (1ull << (v & 0x3F));
   }
 
+  PROMPP_ALWAYS_INLINE void set_atomic(uint32_t v) noexcept {
+    assert(v < size());
+    *reinterpret_cast<std::atomic<uint64_t>*>(&data_[v >> 6]) |= (1ull << (v & 0x3F));
+  }
+
   PROMPP_ALWAYS_INLINE void reset(uint32_t v) noexcept {
     assert(v < size());
     data_[v >> 6] &= ~(1ull << (v & 0x3F));
+  }
+
+  PROMPP_ALWAYS_INLINE void reset_atomic(uint32_t v) noexcept {
+    assert(v < size());
+    *reinterpret_cast<std::atomic<uint64_t>*>(&data_[v >> 6]) &= ~(1ull << (v & 0x3F));
   }
 
   PROMPP_ALWAYS_INLINE bool operator[](uint32_t v) const noexcept {
