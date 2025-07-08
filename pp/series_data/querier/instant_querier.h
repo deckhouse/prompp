@@ -1,6 +1,6 @@
 #pragma once
 
-#include <roaring/roaring.hh>
+#include "bare_bones/bitset.h"
 #include "primitives/primitives.h"
 #include "series_data/concepts.h"
 #include "series_data/data_storage.h"
@@ -33,19 +33,19 @@ class InstantQuerier {
     assert(std::size(samples) == std::size(label_set_ids));
 
     for (auto&& [sample, ls_id] : std::ranges::views::zip(samples, label_set_ids)) {
-      if (series_to_load_.contains(ls_id)) {
+      if (series_to_load_.is_set(ls_id)) {
         query_sample(sample, ls_id, timestamp);
-        storage_.queried_series_bitmap.add(ls_id);
+        storage_.queried_series_bitmap.set(ls_id);
       }
     }
   }
 
-  bool need_loading() const noexcept { return series_to_load_.isEmpty() == false; }
-  const roaring::Roaring& get_series_to_load() const noexcept { return series_to_load_; }
+  bool need_loading() const noexcept { return series_to_load_.popcount() != 0; }
+  const BareBones::Bitset& get_series_to_load() const noexcept { return series_to_load_; }
 
  private:
   DataStorage& storage_;
-  roaring::Roaring series_to_load_;
+  BareBones::Bitset series_to_load_;
 
   PROMPP_ALWAYS_INLINE void query_sample(Sample& sample, LabelSetID ls_id, const Timestamp& timestamp) noexcept {
     if (storage_.open_chunks.size() <= ls_id || storage_.open_chunks[ls_id].is_empty()) [[unlikely]] {
@@ -54,12 +54,12 @@ class InstantQuerier {
     if (const auto series_last_ts = Decoder::get_series_max_timestamp(storage_, ls_id); timestamp >= series_last_ts) {
       sample = {.timestamp = series_last_ts, .value = Decoder::get_open_chunk_last_value(storage_, storage_.open_chunks[ls_id])};
     } else if (const auto series_first_ts = Decoder::get_series_min_timestamp(storage_, ls_id); timestamp >= series_first_ts) {
-      if (storage_.unloaded_series_bitmap.contains(ls_id)) {
-        series_to_load_.add(ls_id);
+      if (storage_.unloaded_series_bitmap.is_set(ls_id)) {
+        series_to_load_.set(ls_id);
         return;
       }
       check_inside_series(sample, ls_id, timestamp);
-      storage_.queried_series_bitmap.add(ls_id);
+      storage_.queried_series_bitmap.set(ls_id);
     }
   }
 

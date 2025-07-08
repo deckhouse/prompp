@@ -10,6 +10,7 @@
 
 #include <atomic>
 #include <bitset>
+#include <numeric>
 
 #include "bit.h"
 #include "memory.h"
@@ -68,23 +69,31 @@ class Bitset {
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_set(uint32_t v) const noexcept { return v < size() && (data_[v >> 6] & (1ull << (v & 0x3F))) != 0; }
 
   PROMPP_ALWAYS_INLINE void set(uint32_t v) noexcept {
-    assert(v < size());
+    if (v >= size()) [[unlikely]] {
+      resize(v + 1);
+    }
+
     data_[v >> 6] |= (1ull << (v & 0x3F));
   }
 
   PROMPP_ALWAYS_INLINE void set_atomic(uint32_t v) noexcept {
-    assert(v < size());
+    if (v >= size()) [[unlikely]] {
+      resize(v + 1);
+    }
+
     *reinterpret_cast<std::atomic<uint64_t>*>(&data_[v >> 6]) |= (1ull << (v & 0x3F));
   }
 
   PROMPP_ALWAYS_INLINE void reset(uint32_t v) noexcept {
-    assert(v < size());
-    data_[v >> 6] &= ~(1ull << (v & 0x3F));
+    if (v < size()) [[likely]] {
+      data_[v >> 6] &= ~(1ull << (v & 0x3F));
+    }
   }
 
   PROMPP_ALWAYS_INLINE void reset_atomic(uint32_t v) noexcept {
-    assert(v < size());
-    *reinterpret_cast<std::atomic<uint64_t>*>(&data_[v >> 6]) &= ~(1ull << (v & 0x3F));
+    if (v < size()) [[likely]] {
+      *reinterpret_cast<std::atomic<uint64_t>*>(&data_[v >> 6]) &= ~(1ull << (v & 0x3F));
+    }
   }
 
   PROMPP_ALWAYS_INLINE bool operator[](uint32_t v) const noexcept {

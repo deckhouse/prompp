@@ -18,7 +18,7 @@ class OutdatedChunkMerger {
     auto& outdated_chunks = encoder_.storage().outdated_chunks;
     for (auto it = outdated_chunks.begin(), end = outdated_chunks.end(); it != end;) {
       const auto& [ls_id, chunk] = *it;
-      if (unloaded_series_bitmap.contains(ls_id)) {
+      if (unloaded_series_bitmap.is_set(ls_id)) {
         ++it;
       } else {
         merge(ls_id, chunk);

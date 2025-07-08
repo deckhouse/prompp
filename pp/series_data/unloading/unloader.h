@@ -38,13 +38,13 @@ class Unloader {
     result.ls_id_bitmap.resize(get_unloadable_ls_id_size());
 
     for (uint32_t ls_id = 0; ls_id < storage_.open_chunks.size(); ++ls_id) {
-      if (storage_.queried_series_bitmap.contains(ls_id)) {
+      if (storage_.queried_series_bitmap.is_set(ls_id)) {
         continue;
       }
 
       const auto encoding_type = storage_.open_chunks[ls_id].encoding_state.encoding_type;
       if (is_unloadable_encoder(encoding_type)) {
-        storage_.unloaded_series_bitmap.add(ls_id);
+        storage_.unloaded_series_bitmap.set(ls_id);
 
         result.ls_id_bitmap.set(ls_id);
 
@@ -82,8 +82,6 @@ class Unloader {
 
   template <class Stream>
   void write_bit_sequences(Stream& stream, const BareBones::Bitset& ls_id_bitmap, uint32_t total_bitseqs_size) noexcept {
-    stream.write(reinterpret_cast<char*>(&total_bitseqs_size), sizeof(total_bitseqs_size));
-
     for (const auto ls_id : ls_id_bitmap) {
       auto& bitseq = get_open_chunk_stream(storage_, ls_id);
       const auto bitseq_size = BareBones::Bit::to_bytes(bitseq.size_in_bits());
@@ -112,13 +110,12 @@ class Unloader {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_unloadable_ls_id_size() const noexcept {
-    if (storage_.queried_series_bitmap.isEmpty()) {
+    if (storage_.queried_series_bitmap.popcount() == 0) {
       return storage_.open_chunks.size();
     }
 
     for (uint32_t ls_id_size = storage_.open_chunks.size(); ls_id_size != 0; --ls_id_size) {
-      if (!storage_.queried_series_bitmap.contains(ls_id_size - 1) &&
-          is_unloadable_encoder(storage_.open_chunks[ls_id_size - 1].encoding_state.encoding_type)) {
+      if (!storage_.queried_series_bitmap.is_set(ls_id_size - 1) && is_unloadable_encoder(storage_.open_chunks[ls_id_size - 1].encoding_state.encoding_type)) {
         return ls_id_size;
       }
     }

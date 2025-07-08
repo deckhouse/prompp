@@ -41,7 +41,7 @@ TEST_F(LoaderUnloaderTestFixture, Empty) {
   unloader_.unload(stream1_);
 
   // Assert
-  ASSERT_EQ(stream1_.view(), "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"s);
+  ASSERT_EQ(stream1_.view(), "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"s);
 }
 
 TEST_F(LoaderUnloaderTestFixture, UnloadOpenChunk) {
@@ -62,8 +62,8 @@ TEST_F(LoaderUnloaderTestFixture, UnloadOpenChunk) {
   ASSERT_EQ(storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index).size_in_bits(),
             chunk_stream_size_in_bits % 8);
 
-  ASSERT_EQ(storage_.unloaded_series_bitmap.cardinality(), 1);
-  ASSERT_TRUE(storage_.unloaded_series_bitmap.contains(0));
+  ASSERT_EQ(storage_.unloaded_series_bitmap.popcount(), 1);
+  ASSERT_TRUE(storage_.unloaded_series_bitmap.is_set(0));
 }
 
 TEST_F(LoaderUnloaderTestFixture, LoadOpenChunk) {
@@ -88,7 +88,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadOpenChunk) {
                 {5, 5.0},
             }),
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
-  ASSERT_FALSE(storage_.unloaded_series_bitmap.contains(0));
+  ASSERT_FALSE(storage_.unloaded_series_bitmap.is_set(0));
 }
 
 TEST_F(LoaderUnloaderTestFixture, LoadTwoOpenChunks) {
@@ -128,8 +128,8 @@ TEST_F(LoaderUnloaderTestFixture, LoadTwoOpenChunks) {
             }),
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[100]));
 
-  ASSERT_FALSE(storage_.unloaded_series_bitmap.contains(0));
-  ASSERT_FALSE(storage_.unloaded_series_bitmap.contains(100));
+  ASSERT_FALSE(storage_.unloaded_series_bitmap.is_set(0));
+  ASSERT_FALSE(storage_.unloaded_series_bitmap.is_set(100));
 }
 
 TEST_F(LoaderUnloaderTestFixture, SkipOneUnloading) {
@@ -155,7 +155,7 @@ TEST_F(LoaderUnloaderTestFixture, SkipOneUnloading) {
   ASSERT_EQ((SampleList{{1, 1.0}, {2, 2.0}, {3, 3.0}, {4, 4.0}, {5, 5.0}, {6, 6.0}, {7, 7.0}}),
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
 
-  ASSERT_FALSE(storage_.unloaded_series_bitmap.contains(0));
+  ASSERT_FALSE(storage_.unloaded_series_bitmap.is_set(0));
 }
 
 TEST_F(LoaderUnloaderTestFixture, LoadFinalizedChunk) {
@@ -177,7 +177,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadFinalizedChunk) {
   // Assert
   ASSERT_EQ((SampleList{{1, 1.0}, {2, 2.0}, {3, 3.0}, {4, 4.0}, {5, 5.0}}),
             Decoder::decode_chunk<DataChunk::Type::kFinalized>(storage_, storage_.finalized_chunks.at(0).front()));
-  ASSERT_FALSE(storage_.unloaded_series_bitmap.contains(0));
+  ASSERT_FALSE(storage_.unloaded_series_bitmap.is_set(0));
 }
 
 TEST_F(LoaderUnloaderTestFixture, LoadOpenChunkMergeOutdated) {
@@ -205,7 +205,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadOpenChunkMergeOutdated) {
                 {5, 5.0},
             }),
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
-  ASSERT_FALSE(storage_.unloaded_series_bitmap.contains(0));
+  ASSERT_FALSE(storage_.unloaded_series_bitmap.is_set(0));
   ASSERT_TRUE(storage_.outdated_chunks.empty());
 }
 
@@ -237,7 +237,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadFinalizedChunkMergeOutdated) {
                 {5, 5.0},
             }),
             Decoder::decode_chunk<DataChunk::Type::kFinalized>(storage_, storage_.finalized_chunks.at(0).front()));
-  ASSERT_FALSE(storage_.unloaded_series_bitmap.contains(0));
+  ASSERT_FALSE(storage_.unloaded_series_bitmap.is_set(0));
   ASSERT_TRUE(storage_.outdated_chunks.empty());
 }
 
@@ -276,7 +276,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadOpenChunkSameChunkId) {
                 {9, 9.0},
             }),
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
-  ASSERT_FALSE(storage_.unloaded_series_bitmap.contains(0));
+  ASSERT_FALSE(storage_.unloaded_series_bitmap.is_set(0));
 }
 
 TEST_F(LoaderUnloaderTestFixture, LoadChunkChangeChunkId) {
@@ -312,7 +312,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadChunkChangeChunkId) {
                 {9, 9.0},
             }),
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
-  ASSERT_FALSE(storage_.unloaded_series_bitmap.contains(0));
+  ASSERT_FALSE(storage_.unloaded_series_bitmap.is_set(0));
 }
 
 TEST_F(LoaderUnloaderTestFixture, LoadAscIntegerChunk) {
@@ -329,7 +329,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadAscIntegerChunk) {
   // Assert
   ASSERT_EQ(series_data::EncodingType::kAscInteger, storage_.open_chunks[0].encoding_state.encoding_type);
   ASSERT_EQ((SampleList{{1, 1.0}, {2, 2.0}, {3, 3.0}}), Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
-  ASSERT_FALSE(storage_.unloaded_series_bitmap.contains(0));
+  ASSERT_FALSE(storage_.unloaded_series_bitmap.is_set(0));
 }
 
 TEST_F(LoaderUnloaderTestFixture, LoadAscIntegerTheGorillaChunk) {
@@ -347,7 +347,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadAscIntegerTheGorillaChunk) {
   // Assert
   ASSERT_EQ(series_data::EncodingType::kAscIntegerThenValuesGorilla, storage_.open_chunks[0].encoding_state.encoding_type);
   ASSERT_EQ((SampleList{{1, 1.0}, {2, 2.0}, {3, 3.0}, {4, 4.1}}), Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
-  ASSERT_FALSE(storage_.unloaded_series_bitmap.contains(0));
+  ASSERT_FALSE(storage_.unloaded_series_bitmap.is_set(0));
 }
 
 TEST_F(LoaderUnloaderTestFixture, LoadValuesGorillaChunk) {
@@ -368,7 +368,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadValuesGorillaChunk) {
   // Assert
   ASSERT_EQ(series_data::EncodingType::kValuesGorilla, storage_.open_chunks[1].encoding_state.encoding_type);
   ASSERT_EQ((SampleList{{1, 1.1}, {2, 2.0}, {3, 3.0}}), Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[1]));
-  ASSERT_FALSE(storage_.unloaded_series_bitmap.contains(1));
+  ASSERT_FALSE(storage_.unloaded_series_bitmap.is_set(1));
 }
 
 }  // namespace

@@ -19,19 +19,19 @@ struct SeriesToLoadInfo {
 class Loader {
  public:
   explicit Loader(DataStorage& storage) : storage_(storage) {
-    series_to_load_tmp_bitseqs_.reserve(storage_.unloaded_series_bitmap.cardinality());
+    series_to_load_tmp_bitseqs_.reserve(storage_.unloaded_series_bitmap.size());
     for (const auto& ls_id : storage_.unloaded_series_bitmap) {
       series_to_load_tmp_bitseqs_.try_emplace(ls_id);
     }
-    storage_.unloaded_series_bitmap = std::move(roaring::Roaring{});
+    storage_.unloaded_series_bitmap.clear();
   }
 
   template <typename LsIDStorage>
   explicit Loader(DataStorage& storage, const LsIDStorage& ls_id_query) : storage_(storage) {
     series_to_load_tmp_bitseqs_.reserve(ls_id_query.size());
     for (const auto& ls_id : ls_id_query) {
-      if (storage_.unloaded_series_bitmap.contains(ls_id)) {
-        storage_.unloaded_series_bitmap.remove(ls_id);
+      if (storage_.unloaded_series_bitmap.is_set(ls_id)) {
+        storage_.unloaded_series_bitmap.reset(ls_id);
         series_to_load_tmp_bitseqs_.try_emplace(ls_id);
       }
     }
@@ -39,10 +39,10 @@ class Loader {
 
   template <LoadableQuerierInterface Querier>
   explicit Loader(DataStorage& storage, const Querier& querier) : storage_(storage) {
-    series_to_load_tmp_bitseqs_.reserve(querier.get_series_to_load().cardinality());
+    series_to_load_tmp_bitseqs_.reserve(querier.get_series_to_load().popcount());
     for (const auto& ls_id : querier.get_series_to_load()) {
-      if (storage_.unloaded_series_bitmap.contains(ls_id)) {
-        storage_.unloaded_series_bitmap.remove(ls_id);
+      if (storage_.unloaded_series_bitmap.is_set(ls_id)) {
+        storage_.unloaded_series_bitmap.reset(ls_id);
         series_to_load_tmp_bitseqs_.try_emplace(ls_id);
       }
     }
@@ -53,7 +53,6 @@ class Loader {
     const auto length_it = parse_encoded_sequence<EncodingChunkLengthSequence>(buffer);
     const auto id_it = parse_encoded_sequence<EncodingChunkIDSequence>(buffer);
 
-    /*const uint32_t bitseqs_total_size =*/read_u32(buffer);
     const uint8_t* bitseqs_ptr = buffer.data();
 
     process_ls_id_data(bitset_it, length_it, id_it, bitseqs_ptr);

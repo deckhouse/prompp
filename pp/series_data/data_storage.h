@@ -3,6 +3,7 @@
 #include <list>
 
 #include "bare_bones/algorithm.h"
+#include "bare_bones/bitset.h"
 #include "bare_bones/preprocess.h"
 #include "chunk/data_chunk.h"
 #include "chunk/finalized_chunk.h"
@@ -10,7 +11,6 @@
 #include "common.h"
 #include "encoder/encoder_variant.h"
 #include "encoder/gorilla.h"
-#include "roaring/roaring.hh"
 #include "series_data/encoder/timestamp/encoder.h"
 
 namespace series_data {
@@ -195,8 +195,8 @@ struct DataStorage {
 
   std::list<std::vector<uint8_t>> unloaded_snapshots;
 
-  roaring::Roaring unloaded_series_bitmap{};
-  roaring::Roaring queried_series_bitmap{};
+  BareBones::Bitset unloaded_series_bitmap{};
+  BareBones::Bitset queried_series_bitmap{};
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesChunks chunks(uint32_t ls_id) const noexcept { return SeriesChunks{this, ls_id}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE Chunks chunks() const noexcept { return Chunks{this}; }

@@ -46,13 +46,13 @@ TEST_F(InstantQuerierLoaderUnloaderTestFixture, InstantQueryNeedLoading) {
   instant_querier_.query(samples_, indices_second_, 3);
 
   // Assert
-  ASSERT_EQ(storage_.queried_series_bitmap.cardinality(), 5);
+  ASSERT_EQ(storage_.queried_series_bitmap.popcount(), 5);
 
   ASSERT_TRUE(instant_querier_.need_loading());
 
-  ASSERT_EQ(instant_querier_.get_series_to_load().cardinality(), 2);
-  ASSERT_TRUE(instant_querier_.get_series_to_load().contains(1));
-  ASSERT_TRUE(instant_querier_.get_series_to_load().contains(3));
+  ASSERT_EQ(instant_querier_.get_series_to_load().popcount(), 2);
+  ASSERT_TRUE(instant_querier_.get_series_to_load().is_set(1));
+  ASSERT_TRUE(instant_querier_.get_series_to_load().is_set(3));
 
   ASSERT_EQ(samples_[0], series_data::encoder::Sample(3, 2.0));
   ASSERT_EQ(samples_[1].timestamp, 2);
@@ -60,13 +60,13 @@ TEST_F(InstantQuerierLoaderUnloaderTestFixture, InstantQueryNeedLoading) {
   ASSERT_EQ(samples_[3].timestamp, 2);
   ASSERT_EQ(samples_[4], series_data::encoder::Sample(3, 22.0));
 
-  ASSERT_EQ(storage_.unloaded_series_bitmap.cardinality(), 5);
+  ASSERT_EQ(storage_.unloaded_series_bitmap.popcount(), 5);
 
-  ASSERT_TRUE(storage_.unloaded_series_bitmap.contains(1));
-  ASSERT_TRUE(storage_.unloaded_series_bitmap.contains(3));
-  ASSERT_TRUE(storage_.unloaded_series_bitmap.contains(5));
-  ASSERT_TRUE(storage_.unloaded_series_bitmap.contains(7));
-  ASSERT_TRUE(storage_.unloaded_series_bitmap.contains(9));
+  ASSERT_TRUE(storage_.unloaded_series_bitmap.is_set(1));
+  ASSERT_TRUE(storage_.unloaded_series_bitmap.is_set(3));
+  ASSERT_TRUE(storage_.unloaded_series_bitmap.is_set(5));
+  ASSERT_TRUE(storage_.unloaded_series_bitmap.is_set(7));
+  ASSERT_TRUE(storage_.unloaded_series_bitmap.is_set(9));
 }
 
 TEST_F(InstantQuerierLoaderUnloaderTestFixture, InstantQueryLoading) {
@@ -86,7 +86,7 @@ TEST_F(InstantQuerierLoaderUnloaderTestFixture, InstantQueryLoading) {
   instant_querier_.query_reload(samples_, indices_second_, 4);
 
   // Assert
-  ASSERT_EQ(storage_.queried_series_bitmap.cardinality(), 7);
+  ASSERT_EQ(storage_.queried_series_bitmap.popcount(), 7);
 
   ASSERT_EQ(samples_[0], series_data::encoder::Sample(4, 3.0));
   ASSERT_EQ(samples_[1], series_data::encoder::Sample(4, 8.0));
@@ -94,11 +94,11 @@ TEST_F(InstantQuerierLoaderUnloaderTestFixture, InstantQueryLoading) {
   ASSERT_EQ(samples_[3], series_data::encoder::Sample(4, 18.0));
   ASSERT_EQ(samples_[4], series_data::encoder::Sample(4, 23.0));
 
-  ASSERT_EQ(storage_.unloaded_series_bitmap.cardinality(), 3);
+  ASSERT_EQ(storage_.unloaded_series_bitmap.popcount(), 3);
 
-  ASSERT_TRUE(storage_.unloaded_series_bitmap.contains(5));
-  ASSERT_TRUE(storage_.unloaded_series_bitmap.contains(7));
-  ASSERT_TRUE(storage_.unloaded_series_bitmap.contains(9));
+  ASSERT_TRUE(storage_.unloaded_series_bitmap.is_set(5));
+  ASSERT_TRUE(storage_.unloaded_series_bitmap.is_set(7));
+  ASSERT_TRUE(storage_.unloaded_series_bitmap.is_set(9));
 }
 
 using Query = series_data::querier::Query<BareBones::Vector<PromPP::Primitives::LabelSetID>>;
@@ -147,16 +147,16 @@ TEST_F(QuerierLoaderUnloaderTestFixture, QuerierNeedLoading) {
   // Assert
   EXPECT_TRUE(querier_.need_loading());
 
-  EXPECT_EQ(querier_.get_series_to_load().cardinality(), 2);
-  EXPECT_TRUE(querier_.get_series_to_load().contains(1));
-  EXPECT_TRUE(querier_.get_series_to_load().contains(3));
+  EXPECT_EQ(querier_.get_series_to_load().popcount(), 2);
+  EXPECT_TRUE(querier_.get_series_to_load().is_set(1));
+  EXPECT_TRUE(querier_.get_series_to_load().is_set(3));
 
-  EXPECT_EQ(storage_.queried_series_bitmap.cardinality(), 5);
+  EXPECT_EQ(storage_.queried_series_bitmap.popcount(), 5);
 
-  EXPECT_EQ(storage_.unloaded_series_bitmap.cardinality(), 2);
+  EXPECT_EQ(storage_.unloaded_series_bitmap.popcount(), 2);
 
-  EXPECT_TRUE(storage_.unloaded_series_bitmap.contains(1));
-  EXPECT_TRUE(storage_.unloaded_series_bitmap.contains(3));
+  EXPECT_TRUE(storage_.unloaded_series_bitmap.is_set(1));
+  EXPECT_TRUE(storage_.unloaded_series_bitmap.is_set(3));
 }
 
 TEST_F(QuerierLoaderUnloaderTestFixture, QuerierLoad) {
@@ -176,8 +176,8 @@ TEST_F(QuerierLoaderUnloaderTestFixture, QuerierLoad) {
   loader.load_finalize();
 
   // Assert
-  EXPECT_EQ(storage_.queried_series_bitmap.cardinality(), 4);
+  EXPECT_EQ(storage_.queried_series_bitmap.popcount(), 4);
 
-  EXPECT_EQ(storage_.unloaded_series_bitmap.cardinality(), 1);
-  EXPECT_TRUE(storage_.unloaded_series_bitmap.contains(3));
+  EXPECT_EQ(storage_.unloaded_series_bitmap.popcount(), 1);
+  EXPECT_TRUE(storage_.unloaded_series_bitmap.is_set(3));
 }
