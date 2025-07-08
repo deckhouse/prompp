@@ -58,7 +58,7 @@ TEST_P(InstantQuerierOpenChunkFixture, InstantQueryOpenChunk) {
   encoder_.encode(0, 5, 5.0);
 
   // Act
-  InstantQuerier{storage_}.query(samples_, std::vector{{GetParam().request.ls_id}}, GetParam().request.timestamp);
+  InstantQuerier{storage_}.query(samples_, std::vector{GetParam().request.ls_id}, GetParam().request.timestamp);
 
   // Assert
   EXPECT_EQ(GetParam().expected_sample, samples_[0]);
@@ -107,7 +107,7 @@ TEST_P(InstantQuerierFinalizedChunkFixture, InstantQueryFinalizedChunk) {
   encoder_.encode(0, 10, 10.0);
 
   // Act
-  InstantQuerier{storage_}.query(samples_, std::vector{{GetParam().request.ls_id}}, GetParam().request.timestamp);
+  InstantQuerier{storage_}.query(samples_, std::vector{GetParam().request.ls_id}, GetParam().request.timestamp);
 
   // Assert
   EXPECT_EQ(GetParam().expected_sample, samples_[0]);
@@ -160,7 +160,7 @@ TEST_P(InstantQuerierOpenAndFinalizedChunkFixture, InstantQueryFinalizedChunk) {
   encoder_.encode(0, 14, 14.0);
 
   // Act
-  InstantQuerier{storage_}.query(samples_, std::vector{{GetParam().request.ls_id}}, GetParam().request.timestamp);
+  InstantQuerier{storage_}.query(samples_, std::vector{GetParam().request.ls_id}, GetParam().request.timestamp);
 
   // Assert
   EXPECT_EQ(GetParam().expected_sample, samples_[0]);
