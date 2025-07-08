@@ -68,8 +68,9 @@ func (q *ChunkQuerier) Select(
 				)
 			}
 
-			snapshots[shard.ShardID()] = shard.LSS().GetSnapshot()
-			lssQueryResults[shard.ShardID()] = lssQueryResult
+			shardID := shard.ShardID()
+			snapshots[shardID] = shard.LSS().GetSnapshot()
+			lssQueryResults[shardID] = lssQueryResult
 
 			return nil
 		},
@@ -85,7 +86,8 @@ func (q *ChunkQuerier) Select(
 	tDataStorageQuery := q.head.CreateTask(
 		relabeler.DSQueryChunkQuerier,
 		func(shard relabeler.Shard) error {
-			lssQueryResult := lssQueryResults[shard.ShardID()]
+			shardID := shard.ShardID()
+			lssQueryResult := lssQueryResults[shardID]
 			if lssQueryResult == nil {
 				return nil
 			}
@@ -102,7 +104,7 @@ func (q *ChunkQuerier) Select(
 				return nil
 			}
 
-			serializedChunksShards[shard.ShardID()] = serializedChunks
+			serializedChunksShards[shardID] = serializedChunks
 
 			return nil
 		},

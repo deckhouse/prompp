@@ -261,8 +261,9 @@ func (q *Querier) selectInstant(
 				)
 			}
 
-			lssQueryResults[shard.ShardID()] = lssQueryResult
-			snapshots[shard.ShardID()] = shard.LSS().GetSnapshot()
+			shardID := shard.ShardID()
+			lssQueryResults[shardID] = lssQueryResult
+			snapshots[shardID] = shard.LSS().GetSnapshot()
 
 			return nil
 		},
@@ -278,16 +279,17 @@ func (q *Querier) selectInstant(
 	tDataStorageQuery := q.head.CreateTask(
 		relabeler.DSQueryInstantQuerier,
 		func(shard relabeler.Shard) error {
-			lssQueryResult := lssQueryResults[shard.ShardID()]
+			shardID := shard.ShardID()
+			lssQueryResult := lssQueryResults[shardID]
 			if lssQueryResult == nil {
-				seriesSets[shard.ShardID()] = &SeriesSet{}
+				seriesSets[shardID] = &SeriesSet{}
 				return nil
 			}
 
 			shard.DataStorageRLock()
-			seriesSets[shard.ShardID()] = NewInstantSeriesSet(
+			seriesSets[shardID] = NewInstantSeriesSet(
 				lssQueryResult,
-				snapshots[shard.ShardID()],
+				snapshots[shardID],
 				valueNotFoundTimestampValue,
 				shard.DataStorage().InstantQuery(q.maxt, valueNotFoundTimestampValue, lssQueryResult.IDs()),
 			)
@@ -346,8 +348,9 @@ func (q *Querier) selectRange(
 				)
 			}
 
-			lssQueryResults[shard.ShardID()] = lssQueryResult
-			snapshots[shard.ShardID()] = shard.LSS().GetSnapshot()
+			shardID := shard.ShardID()
+			lssQueryResults[shardID] = lssQueryResult
+			snapshots[shardID] = shard.LSS().GetSnapshot()
 
 			return nil
 		},
@@ -363,7 +366,8 @@ func (q *Querier) selectRange(
 	tDataStorageQuery := q.head.CreateTask(
 		relabeler.DSQueryRangeQuerier,
 		func(shard relabeler.Shard) error {
-			lssQueryResult := lssQueryResults[shard.ShardID()]
+			shardID := shard.ShardID()
+			lssQueryResult := lssQueryResults[shardID]
 			if lssQueryResult == nil {
 				return nil
 			}
@@ -380,7 +384,7 @@ func (q *Querier) selectRange(
 				return nil
 			}
 
-			serializedChunksShards[shard.ShardID()] = serializedChunks
+			serializedChunksShards[shardID] = serializedChunks
 
 			return nil
 		},

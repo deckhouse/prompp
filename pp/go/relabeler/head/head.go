@@ -880,41 +880,38 @@ func (h *Head) inputRelabelingStage(
 			var (
 				err              error
 				hasReallocations bool
+				shardID          = shard.ShardID()
 			)
 
 			if state.TrackStaleness() {
-				stats[shard.ShardID()], hasReallocations, err = rd.InputRelabelerByShard(
-					shard.ShardID(),
-				).InputRelabelingWithStalenans(
+				stats[shardID], hasReallocations, err = rd.InputRelabelerByShard(shardID).InputRelabelingWithStalenans(
 					ctx,
 					shard.LSS().Input(),
 					shard.LSS().Target(),
-					state.CacheByShard(shard.ShardID()),
+					state.CacheByShard(shardID),
 					state.RelabelerOptions(),
-					state.StaleNansStateByShard(shard.ShardID()),
+					state.StaleNansStateByShard(shardID),
 					state.DefTimestamp(),
 					incomingData.Data().ShardedData(),
-					shardedInnerSeries.DataBySourceShard(shard.ShardID()),
-					shardedRelabeledSeries.DataByShard(shard.ShardID()),
+					shardedInnerSeries.DataBySourceShard(shardID),
+					shardedRelabeledSeries.DataByShard(shardID),
 				)
 			} else {
-				stats[shard.ShardID()], hasReallocations, err = rd.InputRelabelerByShard(
-					shard.ShardID(),
-				).InputRelabeling(
+				stats[shardID], hasReallocations, err = rd.InputRelabelerByShard(shardID).InputRelabeling(
 					ctx,
 					shard.LSS().Input(),
 					shard.LSS().Target(),
-					state.CacheByShard(shard.ShardID()),
+					state.CacheByShard(shardID),
 					state.RelabelerOptions(),
 					incomingData.Data().ShardedData(),
-					shardedInnerSeries.DataBySourceShard(shard.ShardID()),
-					shardedRelabeledSeries.DataByShard(shard.ShardID()),
+					shardedInnerSeries.DataBySourceShard(shardID),
+					shardedRelabeledSeries.DataByShard(shardID),
 				)
 			}
 
 			incomingData.Destroy()
 			if err != nil {
-				return fmt.Errorf("shard %d: %w", shard.ShardID(), err)
+				return fmt.Errorf("shard %d: %w", shardID, err)
 			}
 
 			if hasReallocations {
@@ -952,7 +949,8 @@ func (h *Head) appendRelabelerSeriesStage(
 	t := h.CreateTask(
 		relabeler.LSSAppendRelabelerSeries,
 		func(shard relabeler.Shard) error {
-			relabeledSeries, ok := shardedRelabeledSeries.DataBySourceShard(shard.ShardID())
+			shardID := shard.ShardID()
+			relabeledSeries, ok := shardedRelabeledSeries.DataBySourceShard(shardID)
 			if !ok {
 				return nil
 			}
@@ -960,15 +958,15 @@ func (h *Head) appendRelabelerSeriesStage(
 			shard.LSSLock()
 			defer shard.LSSUnlock()
 
-			hasReallocations, err := rd.InputRelabelerByShard(shard.ShardID()).AppendRelabelerSeries(
+			hasReallocations, err := rd.InputRelabelerByShard(shardID).AppendRelabelerSeries(
 				ctx,
 				shard.LSS().Target(),
-				shardedInnerSeries.DataByShard(shard.ShardID()),
+				shardedInnerSeries.DataByShard(shardID),
 				relabeledSeries,
-				shardedStateUpdates.DataByShard(shard.ShardID()),
+				shardedStateUpdates.DataByShard(shardID),
 			)
 			if err != nil {
-				return fmt.Errorf("shard %d: %w", shard.ShardID(), err)
+				return fmt.Errorf("shard %d: %w", shardID, err)
 			}
 
 			if hasReallocations {
