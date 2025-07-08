@@ -402,8 +402,16 @@ class PROMPP_ATTRIBUTE_PACKED CompactBitSequence : public CompactBitSequenceBase
     if (unfilled_bits_in_byte() == 0) [[unlikely]] {
       std::memcpy(Base::memory_ + Base::size_in_bytes(), bytes, count);
     } else {
-      for (uint32_t i = 0; i < count; ++i) {
-        push_back_bits_u32(Bit::kByteBits, bytes[i]);
+      for (; count >= sizeof(uint64_t); count -= sizeof(uint64_t), bytes += sizeof(uint64_t)) {
+        push_back_u64(*reinterpret_cast<const uint64_t*>(bytes));
+      }
+
+      for (; count >= sizeof(uint32_t); count -= sizeof(uint32_t), bytes += sizeof(uint32_t)) {
+        push_back_bits_u32(Bit::to_bits(sizeof(uint32_t)), *reinterpret_cast<const uint32_t*>(bytes));
+      }
+
+      for (; count > 0; --count) {
+        push_back_bits_u32(Bit::kByteBits, *bytes++);
       }
     }
 
