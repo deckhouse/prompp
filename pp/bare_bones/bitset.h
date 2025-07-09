@@ -180,6 +180,11 @@ class Bitset {
     stream.write(reinterpret_cast<const char*>(data_.begin()), data_size_in_bytes);
   }
 
+  static PROMPP_ALWAYS_INLINE Iterator read_iterator(std::span<const uint64_t> buffer, uint32_t bit_count) noexcept {
+    assert(Bit::to_ceil_units<uint64_t>(bit_count) <= buffer.size());
+    return Iterator(buffer.data(), bit_count);
+  }
+
  private:
   PROMPP_ALWAYS_INLINE void set_size(uint32_t new_size) noexcept { data_.control_block().items_count = new_size; }
 };

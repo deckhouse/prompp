@@ -94,10 +94,10 @@ class Loader {
     const uint32_t bit_count = read_u32(buffer);
     const uint32_t byte_count = BareBones::Bit::to_ceil_units<uint64_t>(bit_count) * sizeof(uint64_t);
 
-    const auto* bit_data = reinterpret_cast<const uint64_t*>(buffer.data());
+    const std::span bit_data(reinterpret_cast<const uint64_t*>(buffer.data()), BareBones::Bit::to_ceil_units<uint64_t>(bit_count));
     buffer = buffer.subspan(byte_count);
 
-    return BareBones::Bitset::Iterator{bit_data, bit_count};
+    return BareBones::Bitset::read_iterator(bit_data, bit_count);
   }
 
   template <typename EncodedSequence>
@@ -105,15 +105,13 @@ class Loader {
     const uint32_t byte_count = read_u32(buffer);
     const uint32_t elem_count = read_u32(buffer);
 
-    const auto* compact_data = buffer.data();
+    const std::span compact_data(buffer.data(), byte_count);
     buffer = buffer.subspan(byte_count);
 
-    auto inner = typename EncodedSequence::sequence_type::DecodeIterator(compact_data, compact_data + EncodedSequence::sequence_type::kMaxKeySize, elem_count);
-
     if constexpr (std::is_same_v<EncodedSequence, EncodingChunkLengthSequence>) {
-      return typename EncodedSequence::const_iterator_type(inner, {}, &length_encoder_);
+      return EncodedSequence::read_iterator(compact_data, elem_count, length_encoder_);
     } else {
-      return typename EncodedSequence::const_iterator_type(inner, {}, &id_encoder_);
+      return EncodedSequence::read_iterator(compact_data, elem_count, id_encoder_);
     }
   }
 
