@@ -8,6 +8,7 @@
 #include <arm_acle.h>
 #endif
 
+#include <algorithm>
 #include <atomic>
 #include <bitset>
 #include <numeric>
@@ -65,6 +66,10 @@ class Bitset {
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return data_.control_block().items_count; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t capacity() const noexcept { return static_cast<size_t>(data_.size()) * 64; }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t empty() const noexcept {
+    return std::ranges::none_of(data_, [](uint64_t v) { return v != 0; });
+  }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_set(uint32_t v) const noexcept { return v < size() && (data_[v >> 6] & (1ull << (v & 0x3F))) != 0; }
 

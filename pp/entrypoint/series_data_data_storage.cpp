@@ -158,7 +158,7 @@ extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
   const auto in = static_cast<Arguments*>(args);
   const auto& ls_id_set = std::get<QueryableEncodingBimap>(*in->lss).ls_id_set();
 
-  if (in->data_storage->unloaded_series_bitmap.popcount() != 0) {
+  if (!in->data_storage->unloaded_series_bitmap.empty()) {
     series_data::unloading::Loader loader{*in->data_storage};
     for (const auto& buffer : in->data_storage->unloaded_snapshots) {
       loader.load_next(buffer);
