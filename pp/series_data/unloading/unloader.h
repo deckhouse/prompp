@@ -114,7 +114,7 @@ class Unloader {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_unloadable_ls_id_size() const noexcept {
-    if (storage_.queried_series_bitmap.popcount() == 0) {
+    if (storage_.queried_series_bitmap.empty()) {
       return storage_.open_chunks.size();
     }
 
