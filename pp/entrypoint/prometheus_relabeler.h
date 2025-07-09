@@ -217,6 +217,54 @@ void prompp_prometheus_relabel_stalenans_state_reset(void* args);
 void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stalenans(void* args, void* res);
 
 /**
+ * @brief relabeling incomig hashdex(first stage) from cache.
+ *
+ * @param args {
+ *     shards_inner_series []*InnerSeries   // go slice with InnerSeries;
+ *     options             RelabelerOptions // object RelabelerOptions;
+ *     per_shard_relabeler uintptr          // pointer to constructed per shard relabeler;
+ *     hashdex             uintptr          // pointer to filled hashdex;
+ *     cache               uintptr          // pointer to constructed Cache;
+ *     input_lss           uintptr          // pointer to constructed input label sets;
+ *     target_lss          uintptr          // pointer to constructed target label sets;
+ * }
+ *
+ * @param res {
+ *     samples_added       uint32           // number of added samples;
+ *     series_added        uint32           // number of added series;
+ *     series_drop         uint32           // number of dropped series;
+ *     ok                  bool             // true if all label set find in cache;
+ *     error               []byte           // error string if thrown;
+ * }
+ */
+void prompp_prometheus_per_shard_relabeler_input_relabeling_from_cache(void* args, void* res);
+
+/**
+ * @brief relabeling incomig hashdex(first stage) from cache with state stalenans.
+ *
+ * @param args {
+ *     shards_inner_series []*InnerSeries   // go slice with InnerSeries;
+ *     options             RelabelerOptions // object RelabelerOptions;
+ *     per_shard_relabeler uintptr          // pointer to constructed per shard relabeler;
+ *     hashdex             uintptr          // pointer to filled hashdex;
+ *     cache               uintptr          // pointer to constructed Cache;
+ *     input_lss           uintptr          // pointer to constructed input label sets;
+ *     target_lss          uintptr          // pointer to constructed target label sets;
+ *     state               uintptr          // pointer to source state
+ *     def_timestamp       int64            // timestamp for metrics and StaleNaNs
+ * }
+ *
+ * @param res {
+ *     samples_added       uint32           // number of added samples;
+ *     series_added        uint32           // number of added series;
+ *     series_drop         uint32           // number of dropped series;
+ *     ok                  bool             // true if all label set find in cache;
+ *     error               []byte           // error string if thrown;
+ * }
+ */
+void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stalenans_from_cache(void* args, void* res);
+
+/**
  * @brief write stale nans from state.
  *
  * @param args {

@@ -49,6 +49,10 @@ class TopItems {
   using Elements = std::vector<Element>;
 
   explicit TopItems(size_t limit) {
+    if (limit == 0) {
+      return;
+    }
+
     assert(limit > 0);
     elements_.resize(limit);
     min_element_ = &elements_.front();
