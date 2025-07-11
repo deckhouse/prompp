@@ -419,7 +419,7 @@ func (h *Head) Stop() {
 	h.readOnly = true
 
 	_ = h.queryLocker.Lock(context.Background())
-	h.queryLocker.Resize(100 * h.Concurrency()) // x100 readonly
+	h.queryLocker.Resize(10 * h.Concurrency()) // x10 readonly
 	h.stop()
 	h.queryLocker.Unlock()
 
