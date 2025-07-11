@@ -107,16 +107,20 @@ func (h *RotatableHead) Flush() error {
 }
 
 // Reconfigure - relabeler.Head interface implementation.
-func (h *RotatableHead) Reconfigure(inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) error {
+func (h *RotatableHead) Reconfigure(
+	ctx context.Context,
+	inputRelabelerConfigs []*config.InputRelabelerConfig,
+	numberOfShards uint16,
+) error {
 	if h.head.NumberOfShards() != numberOfShards {
 		return h.RotateWithConfig(inputRelabelerConfigs, numberOfShards)
 	}
-	return h.head.Reconfigure(inputRelabelerConfigs, numberOfShards)
+	return h.head.Reconfigure(ctx, inputRelabelerConfigs, numberOfShards)
 }
 
 // WriteMetrics - relabeler.Head interface implementation.
-func (h *RotatableHead) WriteMetrics() {
-	h.head.WriteMetrics()
+func (h *RotatableHead) WriteMetrics(ctx context.Context) {
+	h.head.WriteMetrics(ctx)
 }
 
 // Status return head stats.
@@ -197,6 +201,21 @@ func (h *RotatableHead) Enqueue(t *relabeler.GenericTask) {
 	h.head.Enqueue(t)
 }
 
+// Concurrency return current head workers concurrency.
+func (h *RotatableHead) Concurrency() int64 {
+	return h.head.Concurrency()
+}
+
+// RLockQuery locks for query to [Head].
+func (h *RotatableHead) RLockQuery(ctx context.Context) error {
+	return h.head.RLockQuery(ctx)
+}
+
+// RUnlockQuery unlocks from query to [Head].
+func (h *RotatableHead) RUnlockQuery() {
+	h.head.RUnlockQuery()
+}
+
 //
 // HeapProfileWritableHead
 //
@@ -250,8 +269,12 @@ func (h *HeapProfileWritableHead) NumberOfShards() uint16 {
 	return h.head.NumberOfShards()
 }
 
-func (h *HeapProfileWritableHead) Reconfigure(inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) error {
-	return h.head.Reconfigure(inputRelabelerConfigs, numberOfShards)
+func (h *HeapProfileWritableHead) Reconfigure(
+	ctx context.Context,
+	inputRelabelerConfigs []*config.InputRelabelerConfig,
+	numberOfShards uint16,
+) error {
+	return h.head.Reconfigure(ctx, inputRelabelerConfigs, numberOfShards)
 }
 
 // Stop - relabeler.Head interface implementation.
@@ -264,8 +287,8 @@ func (h *HeapProfileWritableHead) Flush() error {
 	return h.head.Flush()
 }
 
-func (h *HeapProfileWritableHead) WriteMetrics() {
-	h.head.WriteMetrics()
+func (h *HeapProfileWritableHead) WriteMetrics(ctx context.Context) {
+	h.head.WriteMetrics(ctx)
 }
 
 func (h *HeapProfileWritableHead) Status(limit int) relabeler.HeadStatus {
@@ -305,4 +328,19 @@ func (h *HeapProfileWritableHead) CreateTask(
 // Enqueue the task to be executed on head.
 func (h *HeapProfileWritableHead) Enqueue(t *relabeler.GenericTask) {
 	h.head.Enqueue(t)
+}
+
+// Concurrency return current head workers concurrency.
+func (h *HeapProfileWritableHead) Concurrency() int64 {
+	return h.head.Concurrency()
+}
+
+// RLockQuery locks for query to [Head].
+func (h *HeapProfileWritableHead) RLockQuery(ctx context.Context) error {
+	return h.head.RLockQuery(ctx)
+}
+
+// RUnlockQuery unlocks from query to [Head].
+func (h *HeapProfileWritableHead) RUnlockQuery() {
+	h.head.RUnlockQuery()
 }

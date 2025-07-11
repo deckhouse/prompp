@@ -80,6 +80,14 @@ func labelValues(
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	start := time.Now()
+
+	anns := *annotations.New()
+	if err := head.RLockQuery(ctx); err != nil {
+		logger.Warnf("[QUERIER]: Select Range failed: %s", err)
+		return nil, anns, err
+	}
+	defer head.RUnlockQuery()
+
 	defer func() {
 		if metrics != nil {
 			metrics.LabelValuesDuration.With(
@@ -108,7 +116,6 @@ func labelValues(
 	)
 	head.Enqueue(t)
 
-	anns := *annotations.New()
 	if err := t.Wait(); err != nil {
 		anns.Add(err)
 	}
@@ -141,6 +148,14 @@ func labelNames(
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	start := time.Now()
+
+	anns := *annotations.New()
+	if err := head.RLockQuery(ctx); err != nil {
+		logger.Warnf("[QUERIER]: Select Range failed: %s", err)
+		return nil, anns, err
+	}
+	defer head.RUnlockQuery()
+
 	defer func() {
 		if metrics != nil {
 			metrics.LabelNamesDuration.With(
@@ -169,7 +184,6 @@ func labelNames(
 	)
 	head.Enqueue(t)
 
-	anns := *annotations.New()
 	if err := t.Wait(); err != nil {
 		anns.Add(err)
 	}
@@ -214,6 +228,13 @@ func (q *Querier) selectInstant(
 	matchers ...*labels.Matcher,
 ) storage.SeriesSet {
 	start := time.Now()
+
+	if err := q.head.RLockQuery(ctx); err != nil {
+		logger.Warnf("[QUERIER]: Select Range failed: %s", err)
+		return storage.ErrSeriesSet(err)
+	}
+	defer q.head.RUnlockQuery()
+
 	defer func() {
 		if q.metrics != nil {
 			q.metrics.SelectDuration.With(
@@ -301,6 +322,13 @@ func (q *Querier) selectRange(
 	matchers ...*labels.Matcher,
 ) storage.SeriesSet {
 	start := time.Now()
+
+	if err := q.head.RLockQuery(ctx); err != nil {
+		logger.Warnf("[QUERIER]: Select Range failed: %s", err)
+		return storage.ErrSeriesSet(err)
+	}
+	defer q.head.RUnlockQuery()
+
 	defer func() {
 		if q.metrics != nil {
 			q.metrics.SelectDuration.With(
