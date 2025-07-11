@@ -757,7 +757,7 @@ func (h *Head) RUnlockQuery() {
 // Concurrency return current head workers concurrency.
 func (h *Head) Concurrency() int64 {
 	// 2 - lss and datastorage
-	return 2 * int64(1+ExtraReadConcurrency)
+	return 2 * int64(1+ExtraReadConcurrency) * int64(h.numberOfShards)
 }
 
 // readOnlyForEachShard run generic task on read only head without queue.
