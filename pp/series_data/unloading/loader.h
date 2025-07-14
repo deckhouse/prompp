@@ -68,7 +68,10 @@ class Loader {
 
     Encoder encoder{storage_};
     OutdatedChunkMerger<Encoder> outdated_chunk_merger{encoder};
-    outdated_chunk_merger.merge();
+    for (const auto& ls_id : std::views::keys(series_to_load_tmp_bitseqs_)) {
+      outdated_chunk_merger.merge(ls_id);
+      storage_.outdated_chunks.erase(ls_id);
+    }
   }
 
   bool empty() const noexcept { return series_to_load_tmp_bitseqs_.empty(); }
