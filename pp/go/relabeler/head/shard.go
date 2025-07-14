@@ -11,9 +11,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
 )
 
-// chanBufferSize size of channels buffer.
-const chanBufferSize = 64
-
 type LSS struct {
 	input    *cppbridge.LabelSetStorage
 	target   *cppbridge.LabelSetStorage

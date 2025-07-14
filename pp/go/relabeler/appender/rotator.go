@@ -1,6 +1,7 @@
 package appender
 
 import (
+	"context"
 	"time"
 
 	"github.com/jonboulle/clockwork"
@@ -19,9 +20,9 @@ const (
 
 // Rotatable is something that can be rotated.
 type RotateCommitable interface {
-	Rotate() error
-	CommitToWal() error
-	MergeOutOfOrderChunks()
+	Rotate(ctx context.Context) error
+	CommitToWal(ctx context.Context) error
+	MergeOutOfOrderChunks(ctx context.Context)
 }
 
 type Timer interface {
@@ -43,6 +44,7 @@ type RotateCommiter struct {
 
 // NewRotateCommiter - Rotator constructor.
 func NewRotateCommiter(
+	ctx context.Context,
 	rotateCommitable RotateCommitable,
 	rotateTimer Timer,
 	commitTimer Timer,
@@ -64,7 +66,7 @@ func NewRotateCommiter(
 			},
 		),
 	}
-	go r.loop()
+	go r.loop(ctx)
 
 	return r
 }
@@ -74,7 +76,7 @@ func (r *RotateCommiter) Run() {
 	close(r.run)
 }
 
-func (r *RotateCommiter) loop() {
+func (r *RotateCommiter) loop(ctx context.Context) {
 	defer r.closer.Done()
 
 	select {
@@ -92,19 +94,19 @@ func (r *RotateCommiter) loop() {
 		case <-r.closer.Signal():
 			return
 		case <-r.commitTimer.Chan():
-			if err := r.rotateCommitable.CommitToWal(); err != nil {
+			if err := r.rotateCommitable.CommitToWal(ctx); err != nil {
 				logger.Errorf("wal commit failed: %v", err)
 			}
 			r.commitTimer.Reset()
 
 		case <-r.mergeTimer.Chan():
-			r.rotateCommitable.MergeOutOfOrderChunks()
+			r.rotateCommitable.MergeOutOfOrderChunks(ctx)
 			r.mergeTimer.Reset()
 
 		case <-r.rotateTimer.Chan():
 			logger.Debugf("start rotation")
 
-			if err := r.rotateCommitable.Rotate(); err != nil {
+			if err := r.rotateCommitable.Rotate(ctx); err != nil {
 				logger.Errorf("rotation failed: %v", err)
 			}
 			r.rotateCounter.Inc()

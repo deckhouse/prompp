@@ -1,6 +1,7 @@
 package appender
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -221,14 +222,14 @@ func (qs *QueryableStorage) Close() error {
 }
 
 // WriteMetrics - MetricWriterTarget interface implementation.
-func (qs *QueryableStorage) WriteMetrics() {
+func (qs *QueryableStorage) WriteMetrics(ctx context.Context) {
 	qs.mtx.Lock()
 	heads := make([]relabeler.Head, len(qs.heads))
 	copy(heads, qs.heads)
 	qs.mtx.Unlock()
 
 	for _, head := range heads {
-		head.WriteMetrics()
+		head.WriteMetrics(ctx)
 	}
 }
 
