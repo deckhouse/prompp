@@ -45,6 +45,10 @@ class Loader {
   }
 
   void load_next(std::span<const uint8_t> buffer) {
+    if (buffer.size() != *sizes_it_++) {
+      throw BareBones::Exception(0x16d2a1e15cfa347d, "Loader::load_next: Buffer size mismatch");
+    }
+
     const auto bitset_it = parse_ls_id_bitmap(buffer);
     const auto length_it = parse_encoded_sequence<EncodingChunkLengthSequence>(buffer);
     const auto id_it = parse_encoded_sequence<EncodingChunkIDSequence>(buffer);
@@ -179,7 +183,9 @@ class Loader {
   EncodingChunkLengthSequence::encoder_type length_encoder_{};
   EncodingChunkIDSequence::encoder_type id_encoder_{};
 
-  BareBones::Vector<SeriesToLoadInfo> series_to_load_infos_;
+  BareBones::Vector<SeriesToLoadInfo> series_to_load_infos_{};
   BareBones::Vector<SeriesToLoadInfo>::iterator infos_it_{};
+
+  decltype(storage_.unloaded_snapshots_sizes.begin()) sizes_it_ = storage_.unloaded_snapshots_sizes.begin();
 };
 }  // namespace series_data::unloading
