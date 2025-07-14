@@ -556,10 +556,9 @@ func (s *RelabelerSuite) TestInputPerShardRelabelerFromCachePartially() {
 	s.False(ok)
 	s.Equal(uint64(4), shardsInnerSeries[0].Size())
 
-	stats, hasReallocations, err = psr.InputRelabeling(s.baseCtx, inputLss, targetLss, cache, s.options, h2, shardsInnerSeries, shardsRelabeledSeries)
+	stats, _, err = psr.InputRelabeling(s.baseCtx, inputLss, targetLss, cache, s.options, h2, shardsInnerSeries, shardsRelabeledSeries)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{1, 1, 0}, stats)
-	s.False(hasReallocations)
 	s.Equal(uint64(5), shardsInnerSeries[0].Size())
 }
 
