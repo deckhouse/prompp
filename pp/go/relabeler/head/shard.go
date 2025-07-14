@@ -251,12 +251,6 @@ func (s *shard) LSSUnlock() {
 	s.lssLocker.Unlock()
 }
 
-// DisableLockers swap lockers [sync.RWMutex] to [noopRWLockable].
-func (s *shard) DisableLockers() {
-	s.dataStorageLocker = &noopRWLockable{}
-	s.lssLocker = &noopRWLockable{}
-}
-
 //
 // RWLockable
 //

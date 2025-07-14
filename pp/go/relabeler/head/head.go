@@ -398,9 +398,6 @@ func (h *Head) Stop() {
 	}
 	h.readOnly = true
 	h.stop()
-	for _, s := range h.shards {
-		s.DisableLockers()
-	}
 	generationStr := strconv.FormatUint(h.generation, 10)
 	for relabelerID := range h.relabelersData {
 		// clear unnecessary
