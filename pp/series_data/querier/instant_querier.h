@@ -40,8 +40,8 @@ class InstantQuerier {
     }
   }
 
-  bool need_loading() const noexcept { return series_to_load_.popcount() != 0; }
-  const BareBones::Bitset& get_series_to_load() const noexcept { return series_to_load_; }
+  [[nodiscard]] bool need_loading() const noexcept { return series_to_load_.empty() == false; }
+  [[nodiscard]] const BareBones::Bitset& get_series_to_load() const noexcept { return series_to_load_; }
 
  private:
   DataStorage& storage_;

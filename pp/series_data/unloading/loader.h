@@ -5,36 +5,43 @@
 #include "bare_bones/bitset.h"
 #include "bare_bones/encoding.h"
 #include "bare_bones/preprocess.h"
+#include "bare_bones/type_traits.h"
 #include "series_data/concepts.h"
 #include "series_data/data_storage.h"
 #include "series_data/encoder.h"
 
 namespace series_data::unloading {
-
 struct SeriesToLoadInfo {
-  encoder::CompactBitSequence buffer{};
+  uint32_t ls_id = 0;
   uint32_t chunk_id = 0;
+  encoder::CompactBitSequence buffer{};
 };
+}  // namespace series_data::unloading
 
+template <>
+struct BareBones::IsTriviallyReallocatable<series_data::unloading::SeriesToLoadInfo> : std::true_type {};
+
+namespace series_data::unloading {
 class Loader {
  public:
   explicit Loader(DataStorage& storage) : storage_(storage) {
-    series_to_load_tmp_bitseqs_.reserve(storage_.unloaded_series_bitmap.popcount());
-    for (const auto& ls_id : storage_.unloaded_series_bitmap) {
-      series_to_load_tmp_bitseqs_.try_emplace(ls_id);
-    }
+    series_to_load_infos_.resize(storage_.unloaded_series_bitmap.popcount());
+    std::ranges::for_each(std::views::zip(storage_.unloaded_series_bitmap, series_to_load_infos_), [](auto pair) {
+      auto [ls_id, info] = pair;
+      info.ls_id = ls_id;
+    });
     storage_.unloaded_series_bitmap.clear();
   }
 
   template <LsIDStorageInterface LsIDStorage>
   explicit Loader(DataStorage& storage, const LsIDStorage& ls_id_range, uint32_t ls_id_range_count) : storage_(storage) {
-    series_to_load_tmp_bitseqs_.reserve(ls_id_range_count);
-    for (const auto& ls_id : ls_id_range) {
-      if (storage_.unloaded_series_bitmap.is_set(ls_id)) {
-        storage_.unloaded_series_bitmap.reset(ls_id);
-        series_to_load_tmp_bitseqs_.try_emplace(ls_id);
-      }
-    }
+    series_to_load_infos_.resize(ls_id_range_count);
+    std::ranges::for_each(std::views::zip(ls_id_range, series_to_load_infos_), [&](auto pair) {
+      auto [ls_id, info] = pair;
+      info.ls_id = ls_id;
+
+      storage_.unloaded_series_bitmap.reset(ls_id);
+    });
   }
 
   void load_next(std::span<const uint8_t> buffer) {
@@ -44,26 +51,28 @@ class Loader {
 
     const uint8_t* bitseqs_ptr = buffer.data();
 
+    infos_it_ = series_to_load_infos_.begin();
+
     process_ls_id_data(bitset_it, length_it, id_it, bitseqs_ptr);
   }
 
   template <EncoderInterface Encoder = series_data::Encoder<>>
   void load_finalize() {
-    for (auto& [ls_id, info] : series_to_load_tmp_bitseqs_) {
+    for (auto& info : series_to_load_infos_) {
       if (info.buffer.size_in_bits() != 0) {
-        load_chunk_id(ls_id, info);
+        load_chunk_id(info);
       }
     }
 
     Encoder encoder{storage_};
     OutdatedChunkMerger<Encoder> outdated_chunk_merger{encoder};
-    for (const auto& ls_id : std::views::keys(series_to_load_tmp_bitseqs_)) {
-      outdated_chunk_merger.merge(ls_id);
-      storage_.outdated_chunks.erase(ls_id);
+    for (const auto& info : series_to_load_infos_) {
+      outdated_chunk_merger.merge(info.ls_id);
+      storage_.outdated_chunks.erase(info.ls_id);
     }
   }
 
-  [[nodiscard]] bool empty() const noexcept { return series_to_load_tmp_bitseqs_.empty(); }
+  [[nodiscard]] bool empty() const noexcept { return series_to_load_infos_.empty(); }
 
  private:
   PROMPP_ALWAYS_INLINE static uint32_t read_u32(std::span<const uint8_t>& buffer) noexcept {
@@ -113,20 +122,21 @@ class Loader {
                           const uint8_t* bitseqs_ptr) {
     uint32_t accumulated_offset = 0;
 
-    while (bitset_it != BareBones::Bitset::IteratorSentinel{}) {
+    const auto infos_end = series_to_load_infos_.end();
+    while (bitset_it != BareBones::Bitset::IteratorSentinel{} && infos_it_ != infos_end) {
       const uint32_t ls_id = *bitset_it;
 
-      auto series_it = series_to_load_tmp_bitseqs_.find(ls_id);
+      find_ls_id_info(ls_id);
 
-      if (series_it != series_to_load_tmp_bitseqs_.end()) {
-        auto& info = series_it->second;
+      if (infos_it_ != infos_end && infos_it_->ls_id == ls_id) {
+        auto& info = *infos_it_;
 
         const uint32_t chunk_id_snapshot = *id_it;
         const uint32_t bitseq_size = *length_it;
 
         if (chunk_id_snapshot != info.chunk_id) {
           if (info.buffer.size_in_bits() != 0) {
-            load_chunk_id(ls_id, info);
+            load_chunk_id(info);
           }
           info.chunk_id = chunk_id_snapshot;
           info.buffer.rewind();
@@ -142,13 +152,19 @@ class Loader {
     }
   }
 
-  void load_chunk_id(uint32_t ls_id, SeriesToLoadInfo& info) const {
-    const auto& chunk_data =
-        std::ranges::next(DataStorage::SeriesChunkIterator{&storage_, ls_id}, info.chunk_id, series_data::DataStorage::SeriesChunks::end());
+  void PROMPP_ALWAYS_INLINE find_ls_id_info(uint32_t ls_id) noexcept {
+    const auto infos_end = series_to_load_infos_.end();
+    while (infos_it_ != infos_end && infos_it_->ls_id < ls_id) {
+      ++infos_it_;
+    }
+  }
+
+  void load_chunk_id(SeriesToLoadInfo& info) const {
+    const auto& chunk_data = std::ranges::next(DataStorage::SeriesChunkIterator{&storage_, info.ls_id}, info.chunk_id, DataStorage::SeriesChunks::end());
 
     auto& chunk_bit_sequence = [&]() -> encoder::CompactBitSequence& {
       if (chunk_data->is_open()) {
-        return get_open_chunk_stream(storage_, ls_id);
+        return get_open_chunk_stream(storage_, info.ls_id);
       }
       return storage_.finalized_data_streams[chunk_data->chunk().encoder.external_index];
     }();
@@ -163,6 +179,7 @@ class Loader {
   EncodingChunkLengthSequence::encoder_type length_encoder_{};
   EncodingChunkIDSequence::encoder_type id_encoder_{};
 
-  phmap::flat_hash_map<uint32_t, SeriesToLoadInfo> series_to_load_tmp_bitseqs_{};
+  BareBones::Vector<SeriesToLoadInfo> series_to_load_infos_;
+  BareBones::Vector<SeriesToLoadInfo>::iterator infos_it_{};
 };
 }  // namespace series_data::unloading
