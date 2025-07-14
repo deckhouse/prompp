@@ -53,7 +53,7 @@ func (q *ChunkQuerier) Select(
 		relabeler.LSSQueryChunkQuerier,
 		func(shard relabeler.Shard) error {
 			shard.LSSRLock()
-			defer shard.LSSUnlock()
+			defer shard.LSSRUnlock()
 
 			lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
 			if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {
