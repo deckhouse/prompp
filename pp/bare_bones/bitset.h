@@ -82,11 +82,8 @@ class Bitset {
   }
 
   PROMPP_ALWAYS_INLINE void set_atomic(uint32_t v) noexcept {
-    if (v >= size()) [[unlikely]] {
-      resize(v + 1);
-    }
-
-    *reinterpret_cast<std::atomic<uint64_t>*>(&data_[v >> 6]) |= (1ull << (v & 0x3F));
+    assert(v < size());
+    std::atomic_ref{data_[v >> 6]} |= (1ull << (v & 0x3F));
   }
 
   PROMPP_ALWAYS_INLINE void reset(uint32_t v) noexcept {
@@ -97,7 +94,7 @@ class Bitset {
 
   PROMPP_ALWAYS_INLINE void reset_atomic(uint32_t v) noexcept {
     if (v < size()) [[likely]] {
-      *reinterpret_cast<std::atomic<uint64_t>*>(&data_[v >> 6]) &= ~(1ull << (v & 0x3F));
+      std::atomic_ref{data_[v >> 6]} &= ~(1ull << (v & 0x3F));
     }
   }
 

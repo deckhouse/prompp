@@ -19,7 +19,7 @@ struct SeriesToLoadInfo {
 class Loader {
  public:
   explicit Loader(DataStorage& storage) : storage_(storage) {
-    series_to_load_tmp_bitseqs_.reserve(storage_.unloaded_series_bitmap.size());
+    series_to_load_tmp_bitseqs_.reserve(storage_.unloaded_series_bitmap.popcount());
     for (const auto& ls_id : storage_.unloaded_series_bitmap) {
       series_to_load_tmp_bitseqs_.try_emplace(ls_id);
     }

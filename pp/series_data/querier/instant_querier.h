@@ -35,7 +35,7 @@ class InstantQuerier {
     for (auto&& [sample, ls_id] : std::ranges::views::zip(samples, label_set_ids)) {
       if (series_to_load_.is_set(ls_id)) {
         query_sample(sample, ls_id, timestamp);
-        storage_.queried_series_bitmap.set(ls_id);
+        storage_.queried_series_bitmap.set_atomic(ls_id);
       }
     }
   }
@@ -59,7 +59,7 @@ class InstantQuerier {
         return;
       }
       check_inside_series(sample, ls_id, timestamp);
-      storage_.queried_series_bitmap.set(ls_id);
+      storage_.queried_series_bitmap.set_atomic(ls_id);
     }
   }
 

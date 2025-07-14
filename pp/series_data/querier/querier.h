@@ -21,7 +21,7 @@ class Querier {
     }
 
     for (const auto& q_chunk : chunks_) {
-      storage_.queried_series_bitmap.set(q_chunk.ls_id);
+      storage_.queried_series_bitmap.set_atomic(q_chunk.ls_id);
       if (storage_.unloaded_series_bitmap.is_set(q_chunk.ls_id)) {
         series_to_load_.set(q_chunk.ls_id);
       }
