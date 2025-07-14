@@ -26,21 +26,10 @@ class Loader {
     storage_.unloaded_series_bitmap.clear();
   }
 
-  template <typename LsIDStorage>
-  explicit Loader(DataStorage& storage, const LsIDStorage& ls_id_query) : storage_(storage) {
-    series_to_load_tmp_bitseqs_.reserve(ls_id_query.size());
-    for (const auto& ls_id : ls_id_query) {
-      if (storage_.unloaded_series_bitmap.is_set(ls_id)) {
-        storage_.unloaded_series_bitmap.reset(ls_id);
-        series_to_load_tmp_bitseqs_.try_emplace(ls_id);
-      }
-    }
-  }
-
-  template <LoadableQuerierInterface Querier>
-  explicit Loader(DataStorage& storage, const Querier& querier) : storage_(storage) {
-    series_to_load_tmp_bitseqs_.reserve(querier.get_series_to_load().popcount());
-    for (const auto& ls_id : querier.get_series_to_load()) {
+  template <LsIDStorageInterface LsIDStorage>
+  explicit Loader(DataStorage& storage, const LsIDStorage& ls_id_range, uint32_t ls_id_range_count) : storage_(storage) {
+    series_to_load_tmp_bitseqs_.reserve(ls_id_range_count);
+    for (const auto& ls_id : ls_id_range) {
       if (storage_.unloaded_series_bitmap.is_set(ls_id)) {
         storage_.unloaded_series_bitmap.reset(ls_id);
         series_to_load_tmp_bitseqs_.try_emplace(ls_id);
@@ -74,7 +63,7 @@ class Loader {
     }
   }
 
-  bool empty() const noexcept { return series_to_load_tmp_bitseqs_.empty(); }
+  [[nodiscard]] bool empty() const noexcept { return series_to_load_tmp_bitseqs_.empty(); }
 
  private:
   PROMPP_ALWAYS_INLINE static uint32_t read_u32(std::span<const uint8_t>& buffer) noexcept {

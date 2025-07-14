@@ -28,7 +28,7 @@ class LoaderUnloaderTestFixture : public LoaderUnloaderTrait, public testing::Te
  protected:
   template <class... Spans>
   void load(const std::vector<uint32_t>& ls_ids, Spans&&... spans) {
-    Loader loader(storage_, ls_ids);
+    Loader loader(storage_, ls_ids, ls_ids.size());
     (..., loader.load_next(std::forward<Spans>(spans)));
     loader.load_finalize();
   }
