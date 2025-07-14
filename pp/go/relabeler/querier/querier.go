@@ -82,11 +82,12 @@ func labelValues(
 	start := time.Now()
 
 	anns := *annotations.New()
-	if err := head.RLockQuery(ctx); err != nil {
-		logger.Warnf("[QUERIER]: Select Range failed: %s", err)
+	runlock, err := head.RLockQuery(ctx)
+	if err != nil {
+		logger.Warnf("[QUERIER]: label values failed on the capture of the read lock query: %s", err)
 		return nil, anns, err
 	}
-	defer head.RUnlockQuery()
+	defer runlock()
 
 	defer func() {
 		if metrics != nil {
@@ -150,11 +151,12 @@ func labelNames(
 	start := time.Now()
 
 	anns := *annotations.New()
-	if err := head.RLockQuery(ctx); err != nil {
-		logger.Warnf("[QUERIER]: Select Range failed: %s", err)
+	runlock, err := head.RLockQuery(ctx)
+	if err != nil {
+		logger.Warnf("[QUERIER]: label names failed on the capture of the read lock query: %s", err)
 		return nil, anns, err
 	}
-	defer head.RUnlockQuery()
+	defer runlock()
 
 	defer func() {
 		if metrics != nil {
@@ -229,11 +231,12 @@ func (q *Querier) selectInstant(
 ) storage.SeriesSet {
 	start := time.Now()
 
-	if err := q.head.RLockQuery(ctx); err != nil {
-		logger.Warnf("[QUERIER]: Select Range failed: %s", err)
+	runlock, err := q.head.RLockQuery(ctx)
+	if err != nil {
+		logger.Warnf("[QUERIER]: select instant failed on the capture of the read lock query: %s", err)
 		return storage.ErrSeriesSet(err)
 	}
-	defer q.head.RUnlockQuery()
+	defer runlock()
 
 	defer func() {
 		if q.metrics != nil {
@@ -323,11 +326,12 @@ func (q *Querier) selectRange(
 ) storage.SeriesSet {
 	start := time.Now()
 
-	if err := q.head.RLockQuery(ctx); err != nil {
-		logger.Warnf("[QUERIER]: Select Range failed: %s", err)
+	runlock, err := q.head.RLockQuery(ctx)
+	if err != nil {
+		logger.Warnf("[QUERIER]: select range failed on the capture of the read lock query: %s", err)
 		return storage.ErrSeriesSet(err)
 	}
-	defer q.head.RUnlockQuery()
+	defer runlock()
 
 	defer func() {
 		if q.metrics != nil {

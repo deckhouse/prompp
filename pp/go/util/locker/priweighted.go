@@ -30,8 +30,16 @@ type Weighted struct {
 }
 
 // Lock locks for exclusive operation with weight of full size.
-func (s *Weighted) Lock(ctx context.Context) error {
-	return s.acquireWithInserter(ctx, 0, func(w waiter) *list.Element {
+func (s *Weighted) Lock(ctx context.Context) (unlock func(), err error) {
+	return s.unlock, s.acquireWithInserter(ctx, 0, func(w waiter) *list.Element {
+		return s.waiters.PushBack(w)
+	})
+}
+
+// LockWithPriority locks for exclusive operation with weight of full size
+// and push waiter to front or after priority waiter.
+func (s *Weighted) LockWithPriority(ctx context.Context) (unlock func(), err error) {
+	return s.unlock, s.acquireWithInserter(ctx, 0, func(w waiter) *list.Element {
 		var elem *list.Element
 		if s.lastPri == nil {
 			elem = s.waiters.PushFront(w)
@@ -44,15 +52,25 @@ func (s *Weighted) Lock(ctx context.Context) error {
 }
 
 // RLock locks for non-exclusive operation with weight of 1.
-func (s *Weighted) RLock(ctx context.Context) error {
-	return s.acquireWithInserter(ctx, 1, func(w waiter) *list.Element {
+func (s *Weighted) RLock(ctx context.Context) (runlock func(), err error) {
+	return s.runlock, s.acquireWithInserter(ctx, 1, func(w waiter) *list.Element {
 		return s.waiters.PushBack(w)
 	})
 }
 
-// RUnlock unlocks from non-exclusive operation with weight of 1.
-func (s *Weighted) RUnlock() {
-	s.release(1)
+// RLockWithPriority locks for non-exclusive operation with weight of 1
+// and push waiter to front or after priority waiter.
+func (s *Weighted) RLockWithPriority(ctx context.Context) (runlock func(), err error) {
+	return s.runlock, s.acquireWithInserter(ctx, 1, func(w waiter) *list.Element {
+		var elem *list.Element
+		if s.lastPri == nil {
+			elem = s.waiters.PushFront(w)
+		} else {
+			elem = s.waiters.InsertAfter(w, s.lastPri)
+		}
+		s.lastPri = elem
+		return elem
+	})
 }
 
 // Resize [Weighted] on n.
@@ -70,11 +88,6 @@ func (s *Weighted) Resize(n int64) {
 	}
 
 	s.mu.Unlock()
-}
-
-// Unlock unlocks from exclusive operation with weight of full size.
-func (s *Weighted) Unlock() {
-	s.release(0)
 }
 
 //revive:disable-next-line:function-length from base.
@@ -196,6 +209,16 @@ func (s *Weighted) release(n int64) {
 	s.notifyWaiters()
 
 	s.mu.Unlock()
+}
+
+// runlock unlocks from non-exclusive operation with weight of 1.
+func (s *Weighted) runlock() {
+	s.release(1)
+}
+
+// unlock unlocks from exclusive operation with weight of full size.
+func (s *Weighted) unlock() {
+	s.release(0)
 }
 
 // weightSize return weight of n, if n == 0, return full size.

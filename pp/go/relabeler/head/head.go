@@ -418,10 +418,10 @@ func (h *Head) Stop() {
 	}
 	h.readOnly = true
 
-	_ = h.queryLocker.Lock(context.Background())
+	release, _ := h.queryLocker.LockWithPriority(context.Background())
 	h.queryLocker.Resize(10 * h.Concurrency()) // x10 readonly
 	h.stop()
-	h.queryLocker.Unlock()
+	release()
 
 	generationStr := strconv.FormatUint(h.generation, 10)
 	for relabelerID := range h.relabelersData {
@@ -443,10 +443,11 @@ func (h *Head) Reconfigure(
 		return fmt.Errorf("reconfiguring read only head")
 	}
 
-	if err := h.queryLocker.Lock(ctx); err != nil {
+	release, err := h.queryLocker.LockWithPriority(ctx)
+	if err != nil {
 		return fmt.Errorf("[Head] Reconfigure: query locker: %w", err)
 	}
-	defer h.queryLocker.Unlock()
+	defer release()
 
 	h.queryLocker.Resize(2 * h.Concurrency()) // x2 for back pressure
 	h.stop()
@@ -745,13 +746,8 @@ func (h *Head) Enqueue(t *relabeler.GenericTask) {
 }
 
 // RLockQuery locks for query to [Head].
-func (h *Head) RLockQuery(ctx context.Context) error {
+func (h *Head) RLockQuery(ctx context.Context) (runlock func(), err error) {
 	return h.queryLocker.RLock(ctx)
-}
-
-// RUnlockQuery unlocks from query to [Head].
-func (h *Head) RUnlockQuery() {
-	h.queryLocker.RUnlock()
 }
 
 // Concurrency return current head workers concurrency.

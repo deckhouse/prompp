@@ -44,11 +44,12 @@ func (q *ChunkQuerier) Select(
 	hints *storage.SelectHints,
 	matchers ...*labels.Matcher,
 ) storage.ChunkSeriesSet {
-	if err := q.head.RLockQuery(ctx); err != nil {
+	runlock, err := q.head.RLockQuery(ctx)
+	if err != nil {
 		logger.Warnf("[ChunkQuerier]: Select failed: %s", err)
 		return storage.ErrChunkSeriesSet(err)
 	}
-	defer q.head.RUnlockQuery()
+	defer runlock()
 
 	lssQueryResults := make([]*cppbridge.LSSQueryResult, q.head.NumberOfShards())
 	snapshots := make([]*cppbridge.LabelSetSnapshot, q.head.NumberOfShards())

@@ -81,8 +81,7 @@ type Head interface {
 	Enqueue(t *GenericTask)
 	CreateTask(taskName string, fn ShardFn, isLss, isExclusive bool) *GenericTask
 	Concurrency() int64
-	RLockQuery(ctx context.Context) error
-	RUnlockQuery()
+	RLockQuery(ctx context.Context) (runlock func(), err error)
 }
 
 type Distributor interface {

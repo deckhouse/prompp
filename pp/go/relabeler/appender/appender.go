@@ -56,10 +56,11 @@ func (qa *QueryableAppender) AppendWithStaleNans(
 ) (cppbridge.RelabelerStats, error) {
 	start := time.Now()
 
-	if err := qa.wlocker.RLock(ctx); err != nil {
+	runlock, err := qa.wlocker.RLock(ctx)
+	if err != nil {
 		return cppbridge.RelabelerStats{}, fmt.Errorf("AppendWithStaleNans: weighted locker: %w", err)
 	}
-	defer qa.wlocker.RUnlock()
+	defer runlock()
 
 	defer func() {
 		qa.querierMetrics.AppendDuration.Observe(float64(time.Since(start).Microseconds()))
@@ -78,11 +79,12 @@ func (qa *QueryableAppender) AppendWithStaleNans(
 }
 
 func (qa *QueryableAppender) WriteMetrics(ctx context.Context) {
-	if err := qa.wlocker.RLock(ctx); err != nil {
+	runlock, err := qa.wlocker.RLock(ctx)
+	if err != nil {
 		logger.Warnf("[QueryableAppender] writeMetrics: weighted locker: %s", err)
 		return
 	}
-	defer qa.wlocker.RUnlock()
+	defer runlock()
 
 	qa.head.WriteMetrics(ctx)
 	qa.distributor.WriteMetrics(qa.head)
@@ -90,39 +92,43 @@ func (qa *QueryableAppender) WriteMetrics(ctx context.Context) {
 
 // MergeOutOfOrderChunks merge chunks with out of order data chunks.
 func (qa *QueryableAppender) MergeOutOfOrderChunks(ctx context.Context) {
-	if err := qa.wlocker.RLock(ctx); err != nil {
+	runlock, err := qa.wlocker.RLock(ctx)
+	if err != nil {
 		logger.Warnf("[QueryableAppender] MergeOutOfOrderChunks: weighted locker: %s", err)
 		return
 	}
-	defer qa.wlocker.RUnlock()
+	defer runlock()
 
 	qa.head.MergeOutOfOrderChunks()
 }
 
 func (qa *QueryableAppender) HeadStatus(ctx context.Context, limit int) relabeler.HeadStatus {
-	if err := qa.wlocker.RLock(ctx); err != nil {
+	runlock, err := qa.wlocker.RLock(ctx)
+	if err != nil {
 		logger.Warnf("[QueryableAppender] HeadStatus: weighted locker: %s", err)
 		return relabeler.HeadStatus{}
 	}
-	defer qa.wlocker.RUnlock()
+	defer runlock()
 
 	return qa.head.Status(limit)
 }
 
 func (qa *QueryableAppender) CommitToWal(ctx context.Context) error {
-	if err := qa.wlocker.RLock(ctx); err != nil {
+	runlock, err := qa.wlocker.RLock(ctx)
+	if err != nil {
 		return fmt.Errorf("CommitToWal: weighted locker: %w", err)
 	}
-	defer qa.wlocker.RUnlock()
+	defer runlock()
 
 	return qa.head.CommitToWal()
 }
 
 func (qa *QueryableAppender) Rotate(ctx context.Context) error {
-	if err := qa.wlocker.Lock(ctx); err != nil {
+	unlock, err := qa.wlocker.LockWithPriority(ctx)
+	if err != nil {
 		return fmt.Errorf("Rotate: weighted locker: %w", err)
 	}
-	defer qa.wlocker.Unlock()
+	defer unlock()
 
 	qa.head.MergeOutOfOrderChunks()
 
@@ -144,10 +150,11 @@ func (qa *QueryableAppender) Reconfigure(
 	headConfigurator relabeler.HeadConfigurator,
 	distributorConfigurator relabeler.DistributorConfigurator,
 ) error {
-	if err := qa.wlocker.Lock(ctx); err != nil {
+	unlock, err := qa.wlocker.LockWithPriority(ctx)
+	if err != nil {
 		return fmt.Errorf("Reconfigure: weighted locker: %w", err)
 	}
-	defer qa.wlocker.Unlock()
+	defer unlock()
 
 	qa.head.MergeOutOfOrderChunks()
 
@@ -165,11 +172,12 @@ func (qa *QueryableAppender) Reconfigure(
 }
 
 func (qa *QueryableAppender) Querier(mint, maxt int64) (storage.Querier, error) {
-	if err := qa.wlocker.RLock(qa.ctx); err != nil {
+	runlock, err := qa.wlocker.RLock(qa.ctx)
+	if err != nil {
 		return nil, fmt.Errorf("Querier: weighted locker: %w", err)
 	}
 	head := qa.head
-	qa.wlocker.RUnlock()
+	runlock()
 
 	return querier.NewQuerier(
 		head,
@@ -184,11 +192,12 @@ func (qa *QueryableAppender) Querier(mint, maxt int64) (storage.Querier, error) 
 }
 
 func (qa *QueryableAppender) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
-	if err := qa.wlocker.RLock(qa.ctx); err != nil {
+	runlock, err := qa.wlocker.RLock(qa.ctx)
+	if err != nil {
 		return nil, fmt.Errorf("ChunkQuerier: weighted locker: %w", err)
 	}
 	head := qa.head
-	qa.wlocker.RUnlock()
+	runlock()
 	return querier.NewChunkQuerier(
 		head,
 		querier.NoOpShardedDeduplicatorFactory(),
@@ -199,10 +208,11 @@ func (qa *QueryableAppender) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerie
 }
 
 func (qa *QueryableAppender) Close(ctx context.Context) error {
-	if err := qa.wlocker.Lock(ctx); err != nil {
+	unlock, err := qa.wlocker.LockWithPriority(ctx)
+	if err != nil {
 		return fmt.Errorf("Close: weighted locker: %w", err)
 	}
-	defer qa.wlocker.Unlock()
+	defer unlock()
 
 	return errors.Join(qa.head.CommitToWal(), qa.head.Flush(), qa.head.Close())
 }

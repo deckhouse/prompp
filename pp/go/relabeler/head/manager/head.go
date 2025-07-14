@@ -132,11 +132,6 @@ func (h *DiscardableRotatableHead) Concurrency() int64 {
 }
 
 // RLockQuery locks for query to [Head].
-func (h *DiscardableRotatableHead) RLockQuery(ctx context.Context) error {
+func (h *DiscardableRotatableHead) RLockQuery(ctx context.Context) (runlock func(), err error) {
 	return h.head.RLockQuery(ctx)
-}
-
-// RUnlockQuery unlocks from query to [Head].
-func (h *DiscardableRotatableHead) RUnlockQuery() {
-	h.head.RUnlockQuery()
 }

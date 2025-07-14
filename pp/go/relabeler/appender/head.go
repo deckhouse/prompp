@@ -207,13 +207,8 @@ func (h *RotatableHead) Concurrency() int64 {
 }
 
 // RLockQuery locks for query to [Head].
-func (h *RotatableHead) RLockQuery(ctx context.Context) error {
+func (h *RotatableHead) RLockQuery(ctx context.Context) (runlock func(), err error) {
 	return h.head.RLockQuery(ctx)
-}
-
-// RUnlockQuery unlocks from query to [Head].
-func (h *RotatableHead) RUnlockQuery() {
-	h.head.RUnlockQuery()
 }
 
 //
@@ -336,11 +331,6 @@ func (h *HeapProfileWritableHead) Concurrency() int64 {
 }
 
 // RLockQuery locks for query to [Head].
-func (h *HeapProfileWritableHead) RLockQuery(ctx context.Context) error {
+func (h *HeapProfileWritableHead) RLockQuery(ctx context.Context) (runlock func(), err error) {
 	return h.head.RLockQuery(ctx)
-}
-
-// RUnlockQuery unlocks from query to [Head].
-func (h *HeapProfileWritableHead) RUnlockQuery() {
-	h.head.RUnlockQuery()
 }
