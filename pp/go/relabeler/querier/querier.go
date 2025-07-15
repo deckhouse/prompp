@@ -80,6 +80,15 @@ func labelValues(
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	start := time.Now()
+
+	anns := *annotations.New()
+	runlock, err := head.RLockQuery(ctx)
+	if err != nil {
+		logger.Warnf("[QUERIER]: label values failed on the capture of the read lock query: %s", err)
+		return nil, anns, err
+	}
+	defer runlock()
+
 	defer func() {
 		if metrics != nil {
 			metrics.LabelValuesDuration.With(
@@ -108,7 +117,6 @@ func labelValues(
 	)
 	head.Enqueue(t)
 
-	anns := *annotations.New()
 	if err := t.Wait(); err != nil {
 		anns.Add(err)
 	}
@@ -141,6 +149,15 @@ func labelNames(
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	start := time.Now()
+
+	anns := *annotations.New()
+	runlock, err := head.RLockQuery(ctx)
+	if err != nil {
+		logger.Warnf("[QUERIER]: label names failed on the capture of the read lock query: %s", err)
+		return nil, anns, err
+	}
+	defer runlock()
+
 	defer func() {
 		if metrics != nil {
 			metrics.LabelNamesDuration.With(
@@ -169,7 +186,6 @@ func labelNames(
 	)
 	head.Enqueue(t)
 
-	anns := *annotations.New()
 	if err := t.Wait(); err != nil {
 		anns.Add(err)
 	}
@@ -214,6 +230,14 @@ func (q *Querier) selectInstant(
 	matchers ...*labels.Matcher,
 ) storage.SeriesSet {
 	start := time.Now()
+
+	runlock, err := q.head.RLockQuery(ctx)
+	if err != nil {
+		logger.Warnf("[QUERIER]: select instant failed on the capture of the read lock query: %s", err)
+		return storage.ErrSeriesSet(err)
+	}
+	defer runlock()
+
 	defer func() {
 		if q.metrics != nil {
 			q.metrics.SelectDuration.With(
@@ -301,6 +325,14 @@ func (q *Querier) selectRange(
 	matchers ...*labels.Matcher,
 ) storage.SeriesSet {
 	start := time.Now()
+
+	runlock, err := q.head.RLockQuery(ctx)
+	if err != nil {
+		logger.Warnf("[QUERIER]: select range failed on the capture of the read lock query: %s", err)
+		return storage.ErrSeriesSet(err)
+	}
+	defer runlock()
+
 	defer func() {
 		if q.metrics != nil {
 			q.metrics.SelectDuration.With(
