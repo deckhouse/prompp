@@ -72,7 +72,6 @@ class Loader {
     OutdatedChunkMerger<Encoder> outdated_chunk_merger{encoder};
     for (const auto& info : series_to_load_infos_) {
       outdated_chunk_merger.merge(info.ls_id);
-      storage_.outdated_chunks.erase(info.ls_id);
     }
   }
 

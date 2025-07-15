@@ -30,6 +30,7 @@ class OutdatedChunkMerger {
   void merge(uint32_t ls_id) {
     if (auto it = encoder_.storage().outdated_chunks.find(ls_id); it != encoder_.storage().outdated_chunks.end()) {
       merge(ls_id, it->second);
+      encoder_.storage().outdated_chunks.erase(it);
     }
   }
 
