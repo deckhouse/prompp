@@ -44,6 +44,13 @@ func (q *ChunkQuerier) Select(
 	hints *storage.SelectHints,
 	matchers ...*labels.Matcher,
 ) storage.ChunkSeriesSet {
+	runlock, err := q.head.RLockQuery(ctx)
+	if err != nil {
+		logger.Warnf("[ChunkQuerier]: Select failed: %s", err)
+		return storage.ErrChunkSeriesSet(err)
+	}
+	defer runlock()
+
 	lssQueryResults := make([]*cppbridge.LSSQueryResult, q.head.NumberOfShards())
 	snapshots := make([]*cppbridge.LabelSetSnapshot, q.head.NumberOfShards())
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
