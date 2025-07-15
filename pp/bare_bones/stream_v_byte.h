@@ -969,6 +969,28 @@ class CompactSequence {
     stream.write(reinterpret_cast<const char*>(buffer_.begin()), buffer_size_in_bytes);
   }
 
+  static PROMPP_ALWAYS_INLINE auto create_read_iterator(std::span<const uint8_t>& buffer) noexcept {
+    if (buffer.size() < 2 * sizeof(uint32_t)) [[unlikely]] {
+      return DecodeIterator{nullptr, nullptr, 0};
+    }
+
+    uint32_t buffer_size_in_bytes = 0;
+    uint32_t elements_count = 0;
+    std::memcpy(&buffer_size_in_bytes, buffer.data(), sizeof(uint32_t));
+    std::memcpy(&elements_count, buffer.data() + sizeof(uint32_t), sizeof(uint32_t));
+
+    buffer = buffer.subspan(2 * sizeof(uint32_t));
+
+    if (buffer.size() < buffer_size_in_bytes) [[unlikely]] {
+      DecodeIterator{nullptr, nullptr, 0};
+    }
+
+    const std::span compact_data(buffer.data(), buffer_size_in_bytes);
+    buffer = buffer.subspan(buffer_size_in_bytes);
+
+    return DecodeIterator(compact_data.data(), compact_data.data() + kMaxKeySize, elements_count);
+  }
+
  private:
   PROMPP_ALWAYS_INLINE void set_size(uint32_t new_size) noexcept { buffer_.control_block().items_count = new_size; }
 

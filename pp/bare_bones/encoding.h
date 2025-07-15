@@ -483,10 +483,8 @@ class EncodedSequence {
 
   static PROMPP_ALWAYS_INLINE auto end() noexcept { return IteratorSentinel(); }
 
-  static PROMPP_ALWAYS_INLINE auto read_iterator(std::span<const uint8_t> buffer, uint32_t elements_count, const typename E::Encoder& encoder) noexcept {
-    const auto inner = typename sequence_type::DecodeIterator(buffer.data(), buffer.data() + sequence_type::kMaxKeySize, elements_count);
-
-    return const_iterator_type(inner, {}, &encoder);
+  static PROMPP_ALWAYS_INLINE auto create_read_iterator(std::span<const uint8_t>& buffer, const typename E::Encoder& encoder) noexcept {
+    return const_iterator_type(sequence_type::create_read_iterator(buffer), {}, &encoder);
   }
 
   PROMPP_ALWAYS_INLINE size_t save_size() noexcept {

@@ -67,8 +67,8 @@ class Bitset {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t capacity() const noexcept { return static_cast<size_t>(data_.size()) * 64; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t empty() const noexcept {
-    return std::ranges::none_of(data_, [](uint64_t v) { return v != 0; });
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept {
+    return std::ranges::all_of(data_, [](const uint64_t v) { return v == 0; });
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_set(uint32_t v) const noexcept { return v < size() && (data_[v >> 6] & (1ull << (v & 0x3F))) != 0; }
@@ -87,15 +87,13 @@ class Bitset {
   }
 
   PROMPP_ALWAYS_INLINE void reset(uint32_t v) noexcept {
-    if (v < size()) [[likely]] {
-      data_[v >> 6] &= ~(1ull << (v & 0x3F));
-    }
+    assert(v < size());
+    data_[v >> 6] &= ~(1ull << (v & 0x3F));
   }
 
   PROMPP_ALWAYS_INLINE void reset_atomic(uint32_t v) noexcept {
-    if (v < size()) [[likely]] {
-      std::atomic_ref{data_[v >> 6]} &= ~(1ull << (v & 0x3F));
-    }
+    assert(v < size());
+    std::atomic_ref{data_[v >> 6]} &= ~(1ull << (v & 0x3F));
   }
 
   PROMPP_ALWAYS_INLINE bool operator[](uint32_t v) const noexcept {
@@ -182,9 +180,26 @@ class Bitset {
     stream.write(reinterpret_cast<const char*>(data_.begin()), data_size_in_bytes);
   }
 
-  static PROMPP_ALWAYS_INLINE Iterator read_iterator(std::span<const uint64_t> buffer, uint32_t bit_count) noexcept {
-    assert(Bit::to_ceil_units<uint64_t>(bit_count) <= buffer.size());
-    return Iterator(buffer.data(), bit_count);
+  static PROMPP_ALWAYS_INLINE Iterator create_read_iterator(std::span<const uint8_t>& buffer) noexcept {
+    if (buffer.size() < sizeof(uint32_t)) [[unlikely]] {
+      return Iterator{};
+    }
+
+    uint32_t bit_count = 0;
+    std::memcpy(&bit_count, buffer.data(), sizeof(uint32_t));
+    buffer = buffer.subspan(sizeof(uint32_t));
+
+    const uint32_t uint64_count = BareBones::Bit::to_ceil_units<uint64_t>(bit_count);
+    const uint32_t byte_count = uint64_count * sizeof(uint64_t);
+
+    if (buffer.size() < byte_count) [[unlikely]] {
+      return Iterator{};
+    }
+
+    const std::span bit_data(reinterpret_cast<const uint64_t*>(buffer.data()), uint64_count);
+    buffer = buffer.subspan(byte_count);
+
+    return Iterator(bit_data.data(), bit_count);
   }
 
  private:

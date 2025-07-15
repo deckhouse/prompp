@@ -74,6 +74,9 @@ TEST_F(LoaderUnloaderTestFixture, LoadOpenChunk) {
   encoder_.encode(0, 4, 4.0);
   encoder_.encode(0, 5, 5.0);
 
+  const uint32_t chunk_stream_size_in_bits_before =
+      storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index).size_in_bits();
+
   unloader_.unload(stream1_);
 
   // Act
@@ -86,6 +89,40 @@ TEST_F(LoaderUnloaderTestFixture, LoadOpenChunk) {
                 {3, 3.0},
                 {4, 4.0},
                 {5, 5.0},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
+  ASSERT_FALSE(storage_.unloaded_series_bitmap.is_set(0));
+
+  ASSERT_EQ(chunk_stream_size_in_bits_before,
+            storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index).size_in_bits());
+}
+
+TEST_F(LoaderUnloaderTestFixture, EncodeAfterLoad) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 2.0);
+  encoder_.encode(0, 3, 3.0);
+  encoder_.encode(0, 4, 4.0);
+  encoder_.encode(0, 5, 5.0);
+
+  unloader_.unload(stream1_);
+  load({0}, stream1_.span<uint8_t>());
+
+  // Act
+  encoder_.encode(0, 6, 10.0);
+  encoder_.encode(0, 7, 20.0);
+  encoder_.encode(0, 8, 30.0);
+
+  // Assert
+  ASSERT_EQ((SampleList{
+                {1, 1.0},
+                {2, 2.0},
+                {3, 3.0},
+                {4, 4.0},
+                {5, 5.0},
+                {6, 10.0},
+                {7, 20.0},
+                {8, 30.0},
             }),
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
   ASSERT_FALSE(storage_.unloaded_series_bitmap.is_set(0));

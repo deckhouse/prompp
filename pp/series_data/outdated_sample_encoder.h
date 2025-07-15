@@ -24,19 +24,6 @@ class OutdatedSampleEncoder {
       ++storage.outdated_chunks_count;
     }
   }
-
-  template <EncoderInterface Encoder>
-  static void merge_outdated_chunks(Encoder& encoder) {
-    if (auto& storage = encoder.storage(); storage.outdated_chunks.empty() == false) [[unlikely]] {
-      OutdatedChunkMerger<Encoder> merger{encoder};
-      for (const auto& [ls_id, outdated_chunk] : encoder.storage().outdated_chunks) {
-        if (!storage.unloaded_series_bitmap.is_set(ls_id)) {
-          merger.merge(ls_id, outdated_chunk);
-        }
-      }
-      encoder.storage().outdated_chunks.clear();
-    }
-  }
 };
 
 }  // namespace series_data

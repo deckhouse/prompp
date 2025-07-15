@@ -35,7 +35,6 @@ class InstantQuerier {
     for (auto&& [sample, ls_id] : std::ranges::views::zip(samples, label_set_ids)) {
       if (series_to_load_.is_set(ls_id)) {
         query_sample(sample, ls_id, timestamp);
-        storage_.queried_series_bitmap.set_atomic(ls_id);
       }
     }
   }
@@ -54,12 +53,12 @@ class InstantQuerier {
     if (const auto series_last_ts = Decoder::get_series_max_timestamp(storage_, ls_id); timestamp >= series_last_ts) {
       sample = {.timestamp = series_last_ts, .value = Decoder::get_open_chunk_last_value(storage_, storage_.open_chunks[ls_id])};
     } else if (const auto series_first_ts = Decoder::get_series_min_timestamp(storage_, ls_id); timestamp >= series_first_ts) {
+      storage_.queried_series_bitmap.set_atomic(ls_id);
       if (storage_.unloaded_series_bitmap.is_set(ls_id)) {
         series_to_load_.set(ls_id);
         return;
       }
       check_inside_series(sample, ls_id, timestamp);
-      storage_.queried_series_bitmap.set_atomic(ls_id);
     }
   }
 

@@ -62,24 +62,4 @@ TEST_F(OutdatedSampleEncoderFixture, MergeAtEncode) {
   ASSERT_FALSE(storage_.outdated_chunks.contains(0));
 }
 
-TEST_F(OutdatedSampleEncoderFixture, MergeOneChunk) {
-  // Arrange
-  encoder_.encode(0, 5, 1.0);
-  encoder_.encode(0, 6, 1.0);
-  encoder_.encode(0, 0, 1.0);
-
-  // Act
-  OutdatedSampleEncoder<>::merge_outdated_chunks(encoder_);
-
-  // Assert
-  EXPECT_TRUE(std::ranges::equal(
-      ExpectedSampleList{
-          {.timestamp = 0, .value = 1.0},
-          {.timestamp = 5, .value = 1.0},
-          {.timestamp = 6, .value = 1.0},
-      },
-      Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0])));
-  ASSERT_FALSE(storage_.outdated_chunks.contains(0));
-}
-
 }  // namespace
