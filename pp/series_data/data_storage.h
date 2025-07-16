@@ -316,7 +316,7 @@ struct DataStorage {
 
     return open_chunks.allocated_memory() + encoders_memory + timestamp_encoder.allocated_memory() + finalized_timestamp_streams.allocated_memory() +
            finalized_data_streams.allocated_memory() + finalized_chunks_map_allocated_memory + outdated_chunks_map_allocated_memory +
-           outdated_chunks_allocated_memory;
+           outdated_chunks_allocated_memory + unloaded_series_bitmap.allocated_memory() + queried_series_bitmap.allocated_memory();
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory(EncodingType encoding_type) const noexcept {

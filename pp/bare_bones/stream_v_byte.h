@@ -982,7 +982,7 @@ class CompactSequence {
     buffer = buffer.subspan(2 * sizeof(uint32_t));
 
     if (buffer.size() < buffer_size_in_bytes) [[unlikely]] {
-      DecodeIterator{nullptr, nullptr, 0};
+      return DecodeIterator{nullptr, nullptr, 0};
     }
 
     const std::span compact_data(buffer.data(), buffer_size_in_bytes);
