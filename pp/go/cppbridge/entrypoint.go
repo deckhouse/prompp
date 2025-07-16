@@ -1797,6 +1797,8 @@ func seriesDataDataStorageUnload(dataStorage uintptr) {
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
+
+	freeBytes(res.data)
 }
 
 func seriesDataDataStorageQuery(dataStorage uintptr, query HeadDataStorageQuery) []byte {
