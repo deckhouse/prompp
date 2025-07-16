@@ -994,9 +994,7 @@ class CompactSequence {
  private:
   PROMPP_ALWAYS_INLINE void set_size(uint32_t new_size) noexcept { buffer_.control_block().items_count = new_size; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Memory::SizeType size_in_bytes() const noexcept {
-    return size() == 0 ? 0 : data_iterator_ - buffer_ + kKeysAdditionalAllocationSizeForDecoder;
-  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Memory::SizeType size_in_bytes() const noexcept { return size() == 0 ? 0 : buffer_.control_block().data_size; }
 };
 
 }  // namespace StreamVByte

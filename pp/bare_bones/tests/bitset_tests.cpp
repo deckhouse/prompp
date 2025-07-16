@@ -292,7 +292,7 @@ TEST_F(BitsetCreateIteratorFixture, CreateReadIteratorLess4Bytes) {
   std::span<const uint8_t> buffer(bytes_data_);
 
   // Act
-  auto it = BareBones::Bitset::create_read_iterator(buffer);
+  const auto it = BareBones::Bitset::create_read_iterator(buffer);
 
   // Assert
   EXPECT_EQ(it, BareBones::Bitset::IteratorSentinel{});
@@ -305,14 +305,14 @@ TEST_F(BitsetCreateIteratorFixture, CreateReadIteratorWrongSize) {
   std::span<const uint8_t> buffer(bytes_data_);
 
   // Act
-  auto it = BareBones::Bitset::create_read_iterator(buffer);
+  const auto it = BareBones::Bitset::create_read_iterator(buffer);
 
   // Assert
   EXPECT_EQ(it, BareBones::Bitset::IteratorSentinel{});
   EXPECT_EQ(buffer.size(), 1);
 }
 
-TEST_F(BitsetCreateIteratorFixture, CreateValidIterator) {
+TEST_F(BitsetCreateIteratorFixture, CreateReadIteratorValid) {
   // Arrange
   set_bits({1, 10, 100, 1000});
   std::span<const uint8_t> buffer(bytes_data_);
