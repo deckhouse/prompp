@@ -48,6 +48,8 @@ class SeriesIdSequence : public BareBones::EncodedSequence<DeltaRLE> {
 
 class SeriesIdSequenceSnapshot {
  public:
+  using value_type = DeltaRLE::DataSequence::value_type;
+
   SeriesIdSequenceSnapshot() = default;
   explicit SeriesIdSequenceSnapshot(const SeriesIdSequence& sequence) : encoder_(sequence.encoder()), memory_(sequence.data().buffer().ptr()) {}
 
@@ -60,9 +62,37 @@ class SeriesIdSequenceSnapshot {
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return encoder_.count(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t empty() const noexcept { return encoder_.count() == 0; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesIdSequence::Iterator begin() const noexcept {
-    return {DeltaRLE::DataSequence::decode_iterator(memory_.get(), memory_.constructed_item_count()), DeltaRLE::DataSequence::end(), &encoder_};
-  }
+  class Iterator {
+   public:
+    using iterator_category = std::input_iterator_tag;
+    using value_type = SeriesIdSequenceSnapshot::value_type;
+    using difference_type = std::ptrdiff_t;
+
+    Iterator(const SharedMemory<uint8_t>::SharedPtr& memory, const DeltaRLE::Encoder& encoder)
+        : iterator_(DeltaRLE::DataSequence::decode_iterator(memory.get(), memory.constructed_item_count()), DeltaRLE::DataSequence::end(), &encoder),
+          count_(encoder.count()) {}
+
+    PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
+      ++iterator_;
+      --count_;
+      return *this;
+    }
+
+    PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
+      const auto it = *this;
+      ++*this;
+      return it;
+    }
+
+    PROMPP_ALWAYS_INLINE bool operator==(const SeriesIdSequence::IteratorSentinel&) const noexcept { return count_ == 0; }
+    PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return *iterator_; }
+
+   private:
+    SeriesIdSequence::Iterator iterator_;
+    uint32_t count_{};
+  };
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() const noexcept { return {memory_, encoder_}; }
   static PROMPP_ALWAYS_INLINE SeriesIdSequence::IteratorSentinel end() noexcept { return {}; }
 
  private:
