@@ -38,7 +38,7 @@ class Bitset {
     if (__builtin_expect(size > std::numeric_limits<uint32_t>::max(), false))
       std::abort();
 
-    const uint64_t size_in_uint64_elements = (size + 63) >> 6;
+    const uint64_t size_in_uint64_elements = Bit::to_ceil_units<uint64_t>(size);
 
     if (size_in_uint64_elements <= data_.size()) {
       return;
@@ -209,7 +209,6 @@ class Bitset {
 
     const uint32_t uint64_count = BareBones::Bit::to_ceil_units<uint64_t>(bit_count);
     const uint32_t byte_count = uint64_count * sizeof(uint64_t);
-
     if (buffer.size() < byte_count) [[unlikely]] {
       return Iterator{};
     }
