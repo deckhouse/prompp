@@ -8,7 +8,10 @@
 #include <arm_acle.h>
 #endif
 
+#include <algorithm>
+#include <atomic>
 #include <bitset>
+#include <numeric>
 
 #include "bit.h"
 #include "memory.h"
@@ -64,16 +67,33 @@ class Bitset {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t capacity() const noexcept { return static_cast<size_t>(data_.size()) * 64; }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept {
+    return std::ranges::all_of(data_, [](const uint64_t v) { return v == 0; });
+  }
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_set(uint32_t v) const noexcept { return v < size() && (data_[v >> 6] & (1ull << (v & 0x3F))) != 0; }
 
   PROMPP_ALWAYS_INLINE void set(uint32_t v) noexcept {
-    assert(v < size());
+    if (v >= size()) [[unlikely]] {
+      resize(v + 1);
+    }
+
     data_[v >> 6] |= (1ull << (v & 0x3F));
+  }
+
+  PROMPP_ALWAYS_INLINE void set_atomic(uint32_t v) noexcept {
+    assert(v < size());
+    std::atomic_ref{data_[v >> 6]} |= (1ull << (v & 0x3F));
   }
 
   PROMPP_ALWAYS_INLINE void reset(uint32_t v) noexcept {
     assert(v < size());
     data_[v >> 6] &= ~(1ull << (v & 0x3F));
+  }
+
+  PROMPP_ALWAYS_INLINE void reset_atomic(uint32_t v) noexcept {
+    assert(v < size());
+    std::atomic_ref{data_[v >> 6]} &= ~(1ull << (v & 0x3F));
   }
 
   PROMPP_ALWAYS_INLINE bool operator[](uint32_t v) const noexcept {
@@ -147,12 +167,39 @@ class Bitset {
     return std::accumulate(data_.begin(), data_.end(), 0U, [](uint32_t popcount, uint64_t v) PROMPP_LAMBDA_INLINE { return popcount + std::popcount(v); });
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_write_size() const noexcept {
+    const uint32_t data_size_in_bytes = Bit::to_ceil_units<uint64_t>(size()) * sizeof(uint64_t);
+    return sizeof(data_size_in_bytes) + data_size_in_bytes;
+  }
+
   template <OutputStream S>
   PROMPP_ALWAYS_INLINE void write_to(S& stream) const noexcept {
     const uint32_t data_size_in_bits = size();
     const uint32_t data_size_in_bytes = Bit::to_ceil_units<uint64_t>(data_size_in_bits) * sizeof(uint64_t);
     stream.write(reinterpret_cast<const char*>(&data_size_in_bits), sizeof(data_size_in_bits));
     stream.write(reinterpret_cast<const char*>(data_.begin()), data_size_in_bytes);
+  }
+
+  static PROMPP_ALWAYS_INLINE Iterator create_read_iterator(std::span<const uint8_t>& buffer) noexcept {
+    if (buffer.size() < sizeof(uint32_t)) [[unlikely]] {
+      return Iterator{};
+    }
+
+    uint32_t bit_count = 0;
+    std::memcpy(&bit_count, buffer.data(), sizeof(uint32_t));
+    buffer = buffer.subspan(sizeof(uint32_t));
+
+    const uint32_t uint64_count = BareBones::Bit::to_ceil_units<uint64_t>(bit_count);
+    const uint32_t byte_count = uint64_count * sizeof(uint64_t);
+
+    if (buffer.size() < byte_count) [[unlikely]] {
+      return Iterator{};
+    }
+
+    const std::span bit_data(reinterpret_cast<const uint64_t*>(buffer.data()), uint64_count);
+    buffer = buffer.subspan(byte_count);
+
+    return Iterator(bit_data.data(), bit_count);
   }
 
  private:

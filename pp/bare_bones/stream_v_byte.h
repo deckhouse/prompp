@@ -937,9 +937,6 @@ class CompactSequence {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return buffer_.allocated_memory(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Memory::SizeType size_in_bytes() const noexcept {
-    return size() == 0 ? 0 : data_iterator_ - buffer_ + kKeysAdditionalAllocationSizeForDecoder;
-  }
 
   PROMPP_ALWAYS_INLINE void clear() noexcept {
     if (size() != 0) [[likely]] {
@@ -957,6 +954,12 @@ class CompactSequence {
   PROMPP_ALWAYS_INLINE auto begin() const noexcept { return DecodeIterator(buffer_, buffer_ + kMaxKeySize, size()); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return DecodeIteratorSentinel{}; }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_write_size() const noexcept {
+    const uint32_t buffer_size_in_bytes = size_in_bytes();
+    using ElementsCount = uint32_t;
+    return sizeof(buffer_size_in_bytes) + sizeof(ElementsCount) + buffer_size_in_bytes;
+  }
+
   template <OutputStream S>
   PROMPP_ALWAYS_INLINE void write_to(S& stream) const noexcept {
     const uint32_t buffer_size_in_bytes = size_in_bytes();
@@ -966,8 +969,34 @@ class CompactSequence {
     stream.write(reinterpret_cast<const char*>(buffer_.begin()), buffer_size_in_bytes);
   }
 
+  static PROMPP_ALWAYS_INLINE auto create_read_iterator(std::span<const uint8_t>& buffer) noexcept {
+    if (buffer.size() < 2 * sizeof(uint32_t)) [[unlikely]] {
+      return DecodeIterator{nullptr, nullptr, 0};
+    }
+
+    uint32_t buffer_size_in_bytes = 0;
+    uint32_t elements_count = 0;
+    std::memcpy(&buffer_size_in_bytes, buffer.data(), sizeof(uint32_t));
+    std::memcpy(&elements_count, buffer.data() + sizeof(uint32_t), sizeof(uint32_t));
+
+    buffer = buffer.subspan(2 * sizeof(uint32_t));
+
+    if (buffer.size() < buffer_size_in_bytes) [[unlikely]] {
+      DecodeIterator{nullptr, nullptr, 0};
+    }
+
+    const std::span compact_data(buffer.data(), buffer_size_in_bytes);
+    buffer = buffer.subspan(buffer_size_in_bytes);
+
+    return DecodeIterator(compact_data.data(), compact_data.data() + kMaxKeySize, elements_count);
+  }
+
  private:
   PROMPP_ALWAYS_INLINE void set_size(uint32_t new_size) noexcept { buffer_.control_block().items_count = new_size; }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Memory::SizeType size_in_bytes() const noexcept {
+    return size() == 0 ? 0 : data_iterator_ - buffer_ + kKeysAdditionalAllocationSizeForDecoder;
+  }
 };
 
 }  // namespace StreamVByte

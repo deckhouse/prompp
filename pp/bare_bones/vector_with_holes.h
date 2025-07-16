@@ -146,9 +146,6 @@ class VectorWithHoles {
 
   PROMPP_ALWAYS_INLINE void mark_hole(uint32_t index) noexcept {
     if constexpr (VectorWithHolesImpl::holes_need_bitset<T>) {
-      if (index >= holes_index_set_.size()) [[unlikely]] {
-        holes_index_set_.resize(index + 1);
-      }
       holes_index_set_.set(index);
     }
   }

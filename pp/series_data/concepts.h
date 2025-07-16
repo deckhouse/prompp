@@ -38,4 +38,7 @@ concept LoadableQuerierInterface = requires(QuerierType obj, DataStorage& storag
   { obj.get_series_to_load() };
 };
 
+template <typename C>
+concept LsIDStorageInterface = std::ranges::range<C> && std::convertible_to<std::ranges::range_value_t<C>, uint32_t>;
+
 }  // namespace series_data

@@ -212,8 +212,8 @@ func NewReceiver(
 	}
 
 	dstrb := distributor.NewDistributor(*destinationGroups)
-	app := appender.NewQueryableAppender(appenderHead, dstrb, querierMetrics)
-	mwt := appender.NewMetricsWriteTrigger(appender.DefaultMetricWriteInterval, app, queryableStorage)
+	app := appender.NewQueryableAppender(ctx, appenderHead, dstrb, querierMetrics)
+	mwt := appender.NewMetricsWriteTrigger(ctx, appender.DefaultMetricWriteInterval, app, queryableStorage)
 
 	var unloadTimer appender.Timer = appender.NewNoOpTimer()
 	if unloadDataStorageInterval != nil {
@@ -227,6 +227,7 @@ func NewReceiver(
 		storage:           queryableStorage,
 		headConfigStorage: headConfigStorage,
 		rotator: appender.NewRotateCommiter(
+			ctx,
 			app,
 			relabeler.NewRotateTimerWithSeed(clock, rotationInfo.BlockDuration, rotationInfo.Seed),
 			appender.NewConstantIntervalTimer(clock, commitInterval),
@@ -360,8 +361,9 @@ func (rr *Receiver) ApplyConfig(cfg *prom_config.Config) error {
 	})
 
 	err = rr.appender.Reconfigure(
+		rr.ctx,
 		HeadConfigureFunc(func(head relabeler.Head) error {
-			return head.Reconfigure(rCfg.Configs, numberOfShards)
+			return head.Reconfigure(rr.ctx, rCfg.Configs, numberOfShards)
 		}),
 		DistributorConfigureFunc(func(dstrb relabeler.Distributor) error {
 			mxdgupds := new(sync.Mutex)
@@ -465,8 +467,8 @@ func (rr *Receiver) HeadQueryable() storage.Queryable {
 	return rr.appender
 }
 
-func (rr *Receiver) HeadStatus(limit int) relabeler.HeadStatus {
-	return rr.appender.HeadStatus(limit)
+func (rr *Receiver) HeadStatus(ctx context.Context, limit int) relabeler.HeadStatus {
+	return rr.appender.HeadStatus(ctx, limit)
 }
 
 // LowestSentTimestamp returns the lowest sent timestamp across all queues.
@@ -475,8 +477,8 @@ func (*Receiver) LowestSentTimestamp() int64 {
 }
 
 // MergeOutOfOrderChunks merge chunks with out of order data chunks.
-func (rr *Receiver) MergeOutOfOrderChunks() {
-	rr.appender.MergeOutOfOrderChunks()
+func (rr *Receiver) MergeOutOfOrderChunks(ctx context.Context) {
+	rr.appender.MergeOutOfOrderChunks(ctx)
 }
 
 // Querier calls f() with the given parameters.
@@ -541,7 +543,7 @@ func (rr *Receiver) Shutdown(ctx context.Context) error {
 	rotatorErr := rr.rotator.Close()
 	storageErr := rr.storage.Close()
 	distributorErr := rr.distributor.Shutdown(ctx)
-	appendErr := rr.appender.Close()
+	appendErr := rr.appender.Close(ctx)
 	err := rr.shutdowner.Shutdown(ctx)
 	return errors.Join(cgogcErr, metricWriteErr, rotatorErr, storageErr, distributorErr, appendErr, err)
 }

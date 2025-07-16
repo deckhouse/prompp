@@ -145,6 +145,29 @@ TEST_F(BitsetFixture, TestResetCorrectness) {
   EXPECT_TRUE(bs_[2]);
 }
 
+TEST_F(BitsetFixture, TestSetAtomicCorrectness) {
+  // Arrange
+  bs_.resize(1);
+
+  // Act
+  bs_.set_atomic(0);
+
+  // Assert
+  EXPECT_TRUE(bs_[0]);
+}
+
+TEST_F(BitsetFixture, TestResetAtomicCorrectness) {
+  // Arrange
+  bs_.resize(1);
+  bs_.set_atomic(0);
+
+  // Act
+  bs_.reset_atomic(0);
+
+  // Assert
+  EXPECT_FALSE(bs_[0]);
+}
+
 TEST_F(BitsetFixture, PopcountOnEmptyBitset) {
   // Arrange
   bs_.resize(1);
