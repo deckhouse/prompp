@@ -93,7 +93,6 @@ TEST_F(BitsetFixture, should_iterate_over_resized_empty) {
 }
 
 TEST_F(BitsetFixture, should_not_out_of_range_on_resize) {
-  bs_.resize(2048);
   bs_.set(2047);
   bs_.resize(4096);
 
@@ -107,7 +106,6 @@ TEST_F(BitsetFixture, should_not_out_of_range_on_resize) {
 
 TEST_F(BitsetFixture, ResetInFirstUint64) {
   // Arrange
-  bs_.resize(1);
 
   // Act
   bs_.set(0);
@@ -119,7 +117,6 @@ TEST_F(BitsetFixture, ResetInFirstUint64) {
 
 TEST_F(BitsetFixture, ResetInSecondUint64) {
   // Arrange
-  bs_.resize(65);
 
   // Act
   bs_.set(64);
@@ -131,7 +128,6 @@ TEST_F(BitsetFixture, ResetInSecondUint64) {
 
 TEST_F(BitsetFixture, TestResetCorrectness) {
   // Arrange
-  bs_.resize(3);
 
   // Act
   bs_.set(0);
@@ -147,30 +143,80 @@ TEST_F(BitsetFixture, TestResetCorrectness) {
 
 TEST_F(BitsetFixture, TestSetAtomicCorrectness) {
   // Arrange
-  bs_.resize(1);
+  bs_.resize(8);
 
   // Act
-  bs_.set_atomic(0);
+  bs_.set_atomic(7);
 
   // Assert
-  EXPECT_TRUE(bs_[0]);
+  EXPECT_TRUE(bs_[7]);
 }
 
 TEST_F(BitsetFixture, TestResetAtomicCorrectness) {
   // Arrange
-  bs_.resize(1);
-  bs_.set_atomic(0);
+  bs_.resize(8);
+  bs_.set_atomic(7);
 
   // Act
-  bs_.reset_atomic(0);
+  bs_.reset_atomic(7);
+
+  // Assert
+  EXPECT_FALSE(bs_[7]);
+}
+
+TEST_F(BitsetFixture, TestSetIter) {
+  // Arrange
+  const std::array<uint32_t, 2> idx = {0, 2};
+
+  // Act
+  bs_.set(idx.begin(), idx.end());
+
+  // Assert
+  EXPECT_TRUE(bs_[0]);
+  EXPECT_FALSE(bs_[1]);
+  EXPECT_TRUE(bs_[2]);
+}
+
+TEST_F(BitsetFixture, TestSetInitList) {
+  // Arrange
+  // Act
+  bs_.set({0, 2});
+
+  // Assert
+  EXPECT_TRUE(bs_[0]);
+  EXPECT_FALSE(bs_[1]);
+  EXPECT_TRUE(bs_[2]);
+}
+
+TEST_F(BitsetFixture, TestResetIter) {
+  // Arrange
+  bs_.set({0, 1, 2});
+  const std::array<uint32_t, 2> idx = {0, 2};
+
+  // Act
+  bs_.reset(idx.begin(), idx.end());
 
   // Assert
   EXPECT_FALSE(bs_[0]);
+  EXPECT_TRUE(bs_[1]);
+  EXPECT_FALSE(bs_[2]);
+}
+
+TEST_F(BitsetFixture, TestResetInitList) {
+  // Arrange
+  bs_.set({0, 1, 2});
+
+  // Act
+  bs_.reset({0, 2});
+
+  // Assert
+  EXPECT_FALSE(bs_[0]);
+  EXPECT_TRUE(bs_[1]);
+  EXPECT_FALSE(bs_[2]);
 }
 
 TEST_F(BitsetFixture, PopcountOnEmptyBitset) {
   // Arrange
-  bs_.resize(1);
 
   // Act
 
@@ -180,7 +226,6 @@ TEST_F(BitsetFixture, PopcountOnEmptyBitset) {
 
 TEST_F(BitsetFixture, PopcountOnNonEmptyBitset) {
   // Arrange
-  bs_.resize(9);
 
   // Act
   bs_.set(0);
@@ -193,7 +238,6 @@ TEST_F(BitsetFixture, PopcountOnNonEmptyBitset) {
 
 TEST_F(BitsetFixture, PopcountAfterResizeInCurrentUint64) {
   // Arrange
-  bs_.resize(1);
 
   // Act
   bs_.set(0);
@@ -205,7 +249,6 @@ TEST_F(BitsetFixture, PopcountAfterResizeInCurrentUint64) {
 
 TEST_F(BitsetFixture, PopcountAfterResizeInNextUint64) {
   // Arrange
-  bs_.resize(9);
 
   // Act
   bs_.set(8);
