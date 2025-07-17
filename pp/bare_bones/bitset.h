@@ -38,7 +38,7 @@ class Bitset {
     if (__builtin_expect(size > std::numeric_limits<uint32_t>::max(), false))
       std::abort();
 
-    const uint64_t size_in_uint64_elements = (size + 63) >> 6;
+    const uint64_t size_in_uint64_elements = Bit::to_ceil_units<uint64_t>(size);
 
     if (size_in_uint64_elements <= data_.size()) {
       return;
@@ -86,6 +86,15 @@ class Bitset {
     std::atomic_ref{data_[v >> 6]} |= (1ull << (v & 0x3F));
   }
 
+  template <class It>
+  PROMPP_ALWAYS_INLINE void set(It begin, It end) noexcept {
+    for (auto it = begin; it != end; ++it) {
+      set(*it);
+    }
+  }
+
+  PROMPP_ALWAYS_INLINE void set(std::initializer_list<uint32_t> values) noexcept { set(values.begin(), values.end()); }
+
   PROMPP_ALWAYS_INLINE void reset(uint32_t v) noexcept {
     assert(v < size());
     data_[v >> 6] &= ~(1ull << (v & 0x3F));
@@ -95,6 +104,15 @@ class Bitset {
     assert(v < size());
     std::atomic_ref{data_[v >> 6]} &= ~(1ull << (v & 0x3F));
   }
+
+  template <class It>
+  PROMPP_ALWAYS_INLINE void reset(It begin, It end) noexcept {
+    for (auto it = begin; it != end; ++it) {
+      reset(*it);
+    }
+  }
+
+  PROMPP_ALWAYS_INLINE void reset(std::initializer_list<uint32_t> values) noexcept { reset(values.begin(), values.end()); }
 
   PROMPP_ALWAYS_INLINE bool operator[](uint32_t v) const noexcept {
     assert(v < size());
@@ -191,7 +209,6 @@ class Bitset {
 
     const uint32_t uint64_count = BareBones::Bit::to_ceil_units<uint64_t>(bit_count);
     const uint32_t byte_count = uint64_count * sizeof(uint64_t);
-
     if (buffer.size() < byte_count) [[unlikely]] {
       return Iterator{};
     }
