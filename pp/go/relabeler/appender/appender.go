@@ -123,9 +123,14 @@ func (qa *QueryableAppender) CommitToWal(ctx context.Context) error {
 	return qa.head.CommitToWal()
 }
 
-func (qa *QueryableAppender) UnloadDataStorage() {
-	qa.lock.RLock()
-	defer qa.lock.RUnlock()
+func (qa *QueryableAppender) UnloadDataStorage(ctx context.Context) {
+	runlock, err := qa.wlocker.RLock(ctx)
+	if err != nil {
+		logger.Warnf("[QueryableAppender] UnloadDataStorage: weighted locker: %s", err)
+		return
+	}
+	defer runlock()
+
 	qa.head.UnloadDataStorage()
 }
 

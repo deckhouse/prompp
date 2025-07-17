@@ -23,7 +23,7 @@ type RotateCommitable interface {
 	Rotate(ctx context.Context) error
 	CommitToWal(ctx context.Context) error
 	MergeOutOfOrderChunks(ctx context.Context)
-	UnloadDataStorage()
+	UnloadDataStorage(ctx context.Context)
 }
 
 type Timer interface {
@@ -106,8 +106,9 @@ func (r *RotateCommiter) loop(ctx context.Context) {
 		case <-r.mergeTimer.Chan():
 			r.rotateCommitable.MergeOutOfOrderChunks(ctx)
 			r.mergeTimer.Reset()
+
 		case <-r.unloadTimer.Chan():
-			r.rotateCommitable.UnloadDataStorage()
+			r.rotateCommitable.UnloadDataStorage(ctx)
 			r.unloadTimer.Reset()
 
 		case <-r.rotateTimer.Chan():

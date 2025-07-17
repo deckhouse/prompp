@@ -1984,7 +1984,7 @@ func readPromPPFeatures(logger log.Logger) {
 			level.Info(logger).Log(
 				"msg",
 				"[FEATURE] Unload data storage is enabled.",
-				unloadDataStorageInterval.String(),
+				"interval", unloadDataStorageInterval.String(),
 			)
 		}
 	}
