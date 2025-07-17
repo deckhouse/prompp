@@ -836,9 +836,8 @@ func (h *Head) Append(
 		relabeler.LSSWalWrite,
 		func(shard relabeler.Shard) error {
 			shard.LSSLock()
-			defer shard.LSSUnlock()
-
 			limitExhausted, errWrite := shard.Wal().Write(shardedInnerSeries.DataByShard(shard.ShardID()))
+			shard.LSSUnlock()
 			if errWrite != nil {
 				return fmt.Errorf("shard %d: %w", shard.ShardID(), errWrite)
 			}
