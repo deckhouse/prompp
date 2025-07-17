@@ -411,6 +411,19 @@ class PerShardRelabeler {
     return track_staleness;
   }
 
+  template <hashdex::HashdexInterface Hashdex>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE auto skip_shard_inner_series(const Hashdex& hashdex, size_t i) {
+    auto it = hashdex.begin();
+    for (; it != hashdex.end() && i > 0; ++it) {
+      if ((it->hash() % number_of_shards_) != shard_id_) {
+        continue;
+      }
+      --i;
+    }
+
+    return it;
+  }
+
   template <class InputLSS, class TargetLSS, hashdex::HashdexInterface Hashdex, class StNaNsState, class Stats>
   PROMPP_ALWAYS_INLINE void input_relabeling_internal(InputLSS& input_lss,
                                                       TargetLSS& target_lss,
@@ -436,16 +449,7 @@ class PerShardRelabeler {
     PromPP::Primitives::LabelsBuilder<PromPP::Primitives::LabelsBuilderStateMap> builder{builder_state_};
     size_t samples_count{0};
 
-    auto it = hashdex.begin();
-    auto i = shards_inner_series[shard_id_]->size();
-    for (; it != hashdex.end() && i > 0; ++it) {
-      if ((it->hash() % number_of_shards_) != shard_id_) {
-        continue;
-      }
-      --i;
-    }
-
-    for (; it != hashdex.end(); ++it) {
+    for (auto it = skip_shard_inner_series(hashdex, shards_inner_series[shard_id_]->size()); it != hashdex.end(); ++it) {
       if ((it->hash() % number_of_shards_) != shard_id_) {
         continue;
       }
@@ -481,7 +485,9 @@ class PerShardRelabeler {
                 shards_inner_series[shard_id_]->emplace_back(sample, ls_id);
               }
               ++stats.series_added;
-            } break;
+
+              break;
+            }
             case rsRelabel: {
               auto ls_id = input_lss.find_or_emplace(timeseries_buf_.label_set(), it->hash());
               PromPP::Primitives::LabelSet new_label_set = builder.label_set();
@@ -494,9 +500,13 @@ class PerShardRelabeler {
               }
               shards_relabeled_series[new_shard_id]->emplace_back(new_label_set, samples, new_hash, ls_id);
               ++stats.series_added;
-            } break;
+
+              break;
+            }
           }
-        } break;
+
+          break;
+        }
         case Cache::CheckResult::kKeep: {
           auto& samples = timeseries_buf_.samples();
           bool all_samples_reseted_to_scrape_ts = resolve_timestamps(def_timestamp, samples, o);
@@ -506,7 +516,9 @@ class PerShardRelabeler {
           for (const PromPP::Primitives::Sample& sample : samples) {
             shards_inner_series[shard_id_]->emplace_back(sample, check_result.ls_id);
           }
-        } break;
+
+          break;
+        }
         case Cache::CheckResult::kRelabel: {
           auto& samples = timeseries_buf_.samples();
           bool all_samples_reseted_to_scrape_ts = resolve_timestamps(def_timestamp, samples, o);
@@ -516,7 +528,9 @@ class PerShardRelabeler {
           for (const PromPP::Primitives::Sample& sample : samples) {
             shards_inner_series[check_result.shard_id]->emplace_back(sample, check_result.ls_id);
           }
-        } break;
+
+          break;
+        }
         default:
           continue;
       }
@@ -579,7 +593,7 @@ class PerShardRelabeler {
       switch (check_result.status) {
         case Cache::CheckResult::kNotFound: {
           return false;
-        } break;
+        };
         case Cache::CheckResult::kKeep: {
           auto& samples = timeseries_buf.samples();
           bool all_samples_reseted_to_scrape_ts = resolve_timestamps(def_timestamp, samples, o);
@@ -589,7 +603,9 @@ class PerShardRelabeler {
           for (const PromPP::Primitives::Sample& sample : samples) {
             shards_inner_series[shard_id_]->emplace_back(sample, check_result.ls_id);
           }
-        } break;
+
+          break;
+        }
         case Cache::CheckResult::kRelabel: {
           auto& samples = timeseries_buf.samples();
           bool all_samples_reseted_to_scrape_ts = resolve_timestamps(def_timestamp, samples, o);
@@ -599,7 +615,9 @@ class PerShardRelabeler {
           for (const PromPP::Primitives::Sample& sample : samples) {
             shards_inner_series[check_result.shard_id]->emplace_back(sample, check_result.ls_id);
           }
-        } break;
+
+          break;
+        }
         default:
           continue;
       }

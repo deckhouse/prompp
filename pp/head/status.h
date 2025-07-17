@@ -53,7 +53,6 @@ class TopItems {
       return;
     }
 
-    assert(limit > 0);
     elements_.resize(limit);
     min_element_ = &elements_.front();
   }
