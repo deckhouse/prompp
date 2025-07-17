@@ -256,58 +256,14 @@ func (s *QueryableLSSSuite) SetupTest() {
 	}
 }
 
-func (s *QueryableLSSSuite) TestQueryDeprecated() {
-	// match with sorting
-	{
-		labelMatchers := []model.LabelMatcher{
-			{Name: "lol", Value: "kek", MatcherType: model.MatcherTypeExactMatch},
-		}
-		queryResult := s.lss.QueryDeprecated(labelMatchers, cppbridge.LSSQuerySourceOther)
-		s.Require().Equal(cppbridge.LSSQueryStatusMatch, queryResult.Status())
-		s.Require().Len(queryResult.IDs(), 3)
-		s.Require().Equal(s.labelSetIDs[1], queryResult.IDs()[0])
-		s.Require().Equal(s.labelSetIDs[0], queryResult.IDs()[1])
-		s.Require().Equal(s.labelSetIDs[2], queryResult.IDs()[2])
-		s.Require().Equal(uint16(2), queryResult.LabelSetLengths()[0])
-		s.Require().Equal(uint16(1), queryResult.LabelSetLengths()[1])
-		s.Require().Equal(uint16(2), queryResult.LabelSetLengths()[2])
-	}
-
-	// no positive matchers
-	{
-		labelMatchers := []model.LabelMatcher{
-			{Name: "kek", Value: "lol", MatcherType: model.MatcherTypeExactNotMatch},
-		}
-		queryResult := s.lss.QueryDeprecated(labelMatchers, cppbridge.LSSQuerySourceOther)
-		s.Require().Equal(cppbridge.LSSQueryStatusNoPositiveMatchers, queryResult.Status())
-	}
-
-	// no match
-	{
-		labelMatchers := []model.LabelMatcher{
-			{Name: "kek", Value: "lol", MatcherType: model.MatcherTypeExactMatch},
-		}
-		queryResult := s.lss.QueryDeprecated(labelMatchers, cppbridge.LSSQuerySourceOther)
-		s.Require().Equal(cppbridge.LSSQueryStatusNoMatch, queryResult.Status())
-	}
-
-	// invalid regexp
-	{
-		labelMatchers := []model.LabelMatcher{
-			{Name: "kek", Value: ".[", MatcherType: model.MatcherTypeRegexpMatch},
-		}
-		queryResult := s.lss.QueryDeprecated(labelMatchers, cppbridge.LSSQuerySourceOther)
-		s.Require().Equal(cppbridge.LSSQueryStatusRegexpError, queryResult.Status())
-	}
-}
-
 func (s *QueryableLSSSuite) TestQuery() {
 	// match with sorting
 	{
 		labelMatchers := []model.LabelMatcher{
 			{Name: "lol", Value: "kek", MatcherType: model.MatcherTypeExactMatch},
 		}
-		selector, _ := s.lss.QuerySelector(labelMatchers)
+		selector, status := s.lss.QuerySelector(labelMatchers)
+		s.Require().Equal(cppbridge.LSSQueryStatusMatch, status)
 		snapshot := s.lss.CreateLabelSetSnapshot()
 		queryResult := snapshot.Query(selector)
 		s.Require().Equal(cppbridge.LSSQueryStatusMatch, queryResult.Status())
