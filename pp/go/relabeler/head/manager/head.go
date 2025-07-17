@@ -69,12 +69,12 @@ func (h *DiscardableRotatableHead) Flush() error {
 	return h.head.Flush()
 }
 
-func (h *DiscardableRotatableHead) Reconfigure(inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) error {
-	return h.head.Reconfigure(inputRelabelerConfigs, numberOfShards)
+func (h *DiscardableRotatableHead) Reconfigure(ctx context.Context, inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) error {
+	return h.head.Reconfigure(ctx, inputRelabelerConfigs, numberOfShards)
 }
 
-func (h *DiscardableRotatableHead) WriteMetrics() {
-	h.head.WriteMetrics()
+func (h *DiscardableRotatableHead) WriteMetrics(ctx context.Context) {
+	h.head.WriteMetrics(ctx)
 }
 
 func (h *DiscardableRotatableHead) Status(limit int) relabeler.HeadStatus {
@@ -124,4 +124,14 @@ func (h *DiscardableRotatableHead) CreateTask(
 // Enqueue the task to be executed on head.
 func (h *DiscardableRotatableHead) Enqueue(t *relabeler.GenericTask) {
 	h.head.Enqueue(t)
+}
+
+// Concurrency return current head workers concurrency.
+func (h *DiscardableRotatableHead) Concurrency() int64 {
+	return h.head.Concurrency()
+}
+
+// RLockQuery locks for query to [Head].
+func (h *DiscardableRotatableHead) RLockQuery(ctx context.Context) (runlock func(), err error) {
+	return h.head.RLockQuery(ctx)
 }

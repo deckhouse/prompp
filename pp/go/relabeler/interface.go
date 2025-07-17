@@ -80,8 +80,8 @@ type Head interface {
 	NumberOfShards() uint16
 	Stop()
 	Flush() error
-	Reconfigure(inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) error
-	WriteMetrics()
+	Reconfigure(ctx context.Context, inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) error
+	WriteMetrics(ctx context.Context)
 	Status(limit int) HeadStatus
 	Rotate() error
 	Close() error
@@ -90,6 +90,8 @@ type Head interface {
 	CopySeriesFrom(other Head)
 	Enqueue(t *GenericTask)
 	CreateTask(taskName string, fn ShardFn, isLss bool) *GenericTask
+	Concurrency() int64
+	RLockQuery(ctx context.Context) (runlock func(), err error)
 }
 
 type Distributor interface {
