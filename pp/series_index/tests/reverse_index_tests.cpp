@@ -5,7 +5,28 @@
 namespace {
 
 using series_index::LabelReverseIndex;
+using series_index::SeriesIdSequence;
+using series_index::SeriesIdSequenceSnapshot;
 using series_index::SeriesReverseIndex;
+
+class SeriesIdSequenceSnapshotFixture : public ::testing::Test {
+ protected:
+  SeriesIdSequence sequence_{};
+};
+
+TEST_F(SeriesIdSequenceSnapshotFixture, UseSnapsotAfterModifySource) {
+  // Arrange
+  sequence_.push_back(0);
+  sequence_.push_back(1);
+  sequence_.push_back(2);
+
+  // Act
+  const SeriesIdSequenceSnapshot snapshot(sequence_);
+  sequence_.push_back(5);
+
+  // Assert
+  EXPECT_THAT(snapshot, testing::ElementsAre(0U, 1U, 2U));
+}
 
 class LabelReverseIndexFixture : public testing::Test {
  protected:

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstring>
 
 #include "preprocess.h"
@@ -226,13 +227,13 @@ class SharedPtr {
  public:
   using RefCounter = uint32_t;
   using ItemCounter = uint32_t;
-  using AtomicRefCounter = std::atomic<RefCounter>;
+  using AtomicRefCounter = std::atomic_ref<RefCounter>;
 
   struct ControlBlock {
     RefCounter ref_count{1};
     ItemCounter constructed_item_count{};
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE AtomicRefCounter& atomic_ref_count() noexcept { return reinterpret_cast<AtomicRefCounter&>(ref_count); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE AtomicRefCounter atomic_ref_count() noexcept { return AtomicRefCounter(ref_count); }
   };
 
   static constexpr uint32_t kControlBlockSize = sizeof(ControlBlock);
@@ -322,11 +323,7 @@ class SharedPtr {
 
   PROMPP_ALWAYS_INLINE void inc_ref_counter() noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
-      if (block->ref_count == 1) [[likely]] {
-        ++block->ref_count;
-      } else {
-        ++block->atomic_ref_count();
-      }
+      ++block->atomic_ref_count();
     }
   }
 
