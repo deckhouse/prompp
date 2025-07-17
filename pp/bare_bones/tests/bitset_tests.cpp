@@ -104,6 +104,34 @@ TEST_F(BitsetFixture, should_not_out_of_range_on_resize) {
   ASSERT_EQ(count, 2047U);
 }
 
+TEST_F(BitsetFixture, TestEmptyIsEmpty) {
+  // Arrange
+
+  // Act
+
+  // Assert
+  EXPECT_TRUE(bs_.empty());
+}
+
+TEST_F(BitsetFixture, TestNotFilledIsEmpty) {
+  // Arrange
+  bs_.resize(10);
+  // Act
+
+  // Assert
+  EXPECT_TRUE(bs_.empty());
+}
+
+TEST_F(BitsetFixture, TestNotEmpty) {
+  // Arrange
+  bs_.set(10);
+
+  // Act
+
+  // Assert
+  EXPECT_FALSE(bs_.empty());
+}
+
 TEST_F(BitsetFixture, ResetInFirstUint64) {
   // Arrange
 
@@ -295,6 +323,17 @@ class BitsetCreateIteratorValidFixture : public testing::Test {
   BareBones::Bitset bs_;
   BareBones::ShrinkedToFitOStringStream stream_;
 };
+
+TEST_F(BitsetCreateIteratorValidFixture, TestWriteSize) {
+  // Arrange
+  bs_.set({1, 10, 100, 1000});
+
+  // Act
+  bs_.write_to(stream_);
+
+  // Assert
+  EXPECT_EQ(stream_.view().size(), bs_.get_write_size());
+}
 
 TEST_F(BitsetCreateIteratorValidFixture, CreateReadIteratorValid) {
   // Arrange
