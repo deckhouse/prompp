@@ -25,6 +25,7 @@ struct InstantQuerierRequest {
 struct InstantQuerierCase {
   InstantQuerierRequest request{};
   Sample expected_sample{};
+  bool expect_queried{};
 };
 
 class InstantQuerierOpenChunkFixture : public testing::TestWithParam<InstantQuerierCase> {
@@ -47,6 +48,7 @@ TEST_F(InstantQuerierOpenChunkFixture, EmptyChunk) {
 
   // Assert
   EXPECT_EQ(default_sample_, samples_[0]);
+  EXPECT_FALSE(storage_.queried_series_bitmap.is_set(0));
 }
 
 TEST_P(InstantQuerierOpenChunkFixture, InstantQueryOpenChunk) {
@@ -62,37 +64,44 @@ TEST_P(InstantQuerierOpenChunkFixture, InstantQueryOpenChunk) {
 
   // Assert
   EXPECT_EQ(GetParam().expected_sample, samples_[0]);
+  EXPECT_EQ(storage_.queried_series_bitmap.is_set(0), GetParam().expect_queried);
 }
 
 INSTANTIATE_TEST_SUITE_P(PickBeforeOpenChunk,
                          InstantQuerierOpenChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 0, .ls_id = 0},
-                                                            .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN}}));
+                                                            .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN},
+                                                            .expect_queried = false}));
 
 INSTANTIATE_TEST_SUITE_P(PickOpenChunkFirstPoint,
                          InstantQuerierOpenChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 1, .ls_id = 0},
-                                                            .expected_sample = Sample{.timestamp = 1, .value = 1.0}}));
+                                                            .expected_sample = Sample{.timestamp = 1, .value = 1.0},
+                                                            .expect_queried = true}));
 
 INSTANTIATE_TEST_SUITE_P(PickOpenChunkMiddlePoint,
                          InstantQuerierOpenChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 3, .ls_id = 0},
-                                                            .expected_sample = Sample{.timestamp = 3, .value = 3.0}}));
+                                                            .expected_sample = Sample{.timestamp = 3, .value = 3.0},
+                                                            .expect_queried = true}));
 
 INSTANTIATE_TEST_SUITE_P(PickOpenChunkLastPoint,
                          InstantQuerierOpenChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 5, .ls_id = 0},
-                                                            .expected_sample = Sample{.timestamp = 5, .value = 5.0}}));
+                                                            .expected_sample = Sample{.timestamp = 5, .value = 5.0},
+                                                            .expect_queried = false}));
 
 INSTANTIATE_TEST_SUITE_P(PickAfterOpenChunk,
                          InstantQuerierOpenChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 6, .ls_id = 0},
-                                                            .expected_sample = Sample{.timestamp = 5, .value = 5.0}}));
+                                                            .expected_sample = Sample{.timestamp = 5, .value = 5.0},
+                                                            .expect_queried = false}));
 
 INSTANTIATE_TEST_SUITE_P(PickNonExistingLsID,
                          InstantQuerierOpenChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 6, .ls_id = 1},
-                                                            .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN}}));
+                                                            .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN},
+                                                            .expect_queried = false}));
 
 class InstantQuerierFinalizedChunkFixture : public InstantQuerierOpenChunkFixture {};
 
@@ -111,37 +120,44 @@ TEST_P(InstantQuerierFinalizedChunkFixture, InstantQueryFinalizedChunk) {
 
   // Assert
   EXPECT_EQ(GetParam().expected_sample, samples_[0]);
+  EXPECT_EQ(storage_.queried_series_bitmap.is_set(0), GetParam().expect_queried);
 }
 
 INSTANTIATE_TEST_SUITE_P(PickBeforeFinalizedChunk,
                          InstantQuerierFinalizedChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 0, .ls_id = 0},
-                                                            .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN}}));
+                                                            .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN},
+                                                            .expect_queried = false}));
 
 INSTANTIATE_TEST_SUITE_P(PickOpenFinalizedFirstPoint,
                          InstantQuerierFinalizedChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 1, .ls_id = 0},
-                                                            .expected_sample = Sample{.timestamp = 1, .value = 1.0}}));
+                                                            .expected_sample = Sample{.timestamp = 1, .value = 1.0},
+                                                            .expect_queried = true}));
 
 INSTANTIATE_TEST_SUITE_P(PickFinalizedChunkMiddlePoint,
                          InstantQuerierFinalizedChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 3, .ls_id = 0},
-                                                            .expected_sample = Sample{.timestamp = 3, .value = 3.0}}));
+                                                            .expected_sample = Sample{.timestamp = 3, .value = 3.0},
+                                                            .expect_queried = true}));
 
 INSTANTIATE_TEST_SUITE_P(PickFinalizedChunkLastPoint,
                          InstantQuerierFinalizedChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 5, .ls_id = 0},
-                                                            .expected_sample = Sample{.timestamp = 5, .value = 5.0}}));
+                                                            .expected_sample = Sample{.timestamp = 5, .value = 5.0},
+                                                            .expect_queried = true}));
 
 INSTANTIATE_TEST_SUITE_P(PickAfterFinalizedChunk,
                          InstantQuerierFinalizedChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 6, .ls_id = 0},
-                                                            .expected_sample = Sample{.timestamp = 5, .value = 5.0}}));
+                                                            .expected_sample = Sample{.timestamp = 5, .value = 5.0},
+                                                            .expect_queried = true}));
 
 INSTANTIATE_TEST_SUITE_P(PickNonExistingLsID,
                          InstantQuerierFinalizedChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 6, .ls_id = 1},
-                                                            .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN}}));
+                                                            .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN},
+                                                            .expect_queried = false}));
 
 class InstantQuerierOpenAndFinalizedChunkFixture : public InstantQuerierOpenChunkFixture {};
 
@@ -164,46 +180,55 @@ TEST_P(InstantQuerierOpenAndFinalizedChunkFixture, InstantQueryFinalizedChunk) {
 
   // Assert
   EXPECT_EQ(GetParam().expected_sample, samples_[0]);
+  EXPECT_EQ(storage_.queried_series_bitmap.is_set(0), GetParam().expect_queried);
 }
 
 INSTANTIATE_TEST_SUITE_P(PickBeforeSeries,
                          InstantQuerierOpenAndFinalizedChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 0, .ls_id = 0},
-                                                            .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN}}));
+                                                            .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN},
+                                                            .expect_queried = false}));
 
 INSTANTIATE_TEST_SUITE_P(PickSeriesFirstPoint,
                          InstantQuerierOpenAndFinalizedChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 1, .ls_id = 0},
-                                                            .expected_sample = Sample{.timestamp = 1, .value = 1.0}}));
+                                                            .expected_sample = Sample{.timestamp = 1, .value = 1.0},
+                                                            .expect_queried = true}));
 
 INSTANTIATE_TEST_SUITE_P(PickSeriesMiddlePointInOpenChunk,
                          InstantQuerierOpenAndFinalizedChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 4, .ls_id = 0},
-                                                            .expected_sample = Sample{.timestamp = 4, .value = 4.0}}));
+                                                            .expected_sample = Sample{.timestamp = 4, .value = 4.0},
+                                                            .expect_queried = true}));
 
 INSTANTIATE_TEST_SUITE_P(PickSeriesMiddlePointInFinalizedChunk,
                          InstantQuerierOpenAndFinalizedChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 11, .ls_id = 0},
-                                                            .expected_sample = Sample{.timestamp = 11, .value = 11.0}}));
+                                                            .expected_sample = Sample{.timestamp = 11, .value = 11.0},
+                                                            .expect_queried = true}));
 
 INSTANTIATE_TEST_SUITE_P(PickSeriesLastPoint,
                          InstantQuerierOpenAndFinalizedChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 14, .ls_id = 0},
-                                                            .expected_sample = Sample{.timestamp = 14, .value = 14.0}}));
+                                                            .expected_sample = Sample{.timestamp = 14, .value = 14.0},
+                                                            .expect_queried = false}));
 
 INSTANTIATE_TEST_SUITE_P(PickAfterSeries,
                          InstantQuerierOpenAndFinalizedChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 20, .ls_id = 0},
-                                                            .expected_sample = Sample{.timestamp = 14, .value = 14.0}}));
+                                                            .expected_sample = Sample{.timestamp = 14, .value = 14.0},
+                                                            .expect_queried = false}));
 
 INSTANTIATE_TEST_SUITE_P(PickBetweenFinalizedAndOpen,
                          InstantQuerierOpenAndFinalizedChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 8, .ls_id = 0},
-                                                            .expected_sample = Sample{.timestamp = 5, .value = 5.0}}));
+                                                            .expected_sample = Sample{.timestamp = 5, .value = 5.0},
+                                                            .expect_queried = true}));
 
 INSTANTIATE_TEST_SUITE_P(PickNonExistingLsID,
                          InstantQuerierOpenAndFinalizedChunkFixture,
                          testing::Values(InstantQuerierCase{.request = InstantQuerierRequest{.timestamp = 6, .ls_id = 1},
-                                                            .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN}}));
+                                                            .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN},
+                                                            .expect_queried = false}));
 
 }  // namespace

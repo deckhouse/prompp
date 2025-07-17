@@ -60,6 +60,7 @@ TEST_F(QuerierFixture, QueryEmptyChunk) {
 
   // Assert
   EXPECT_EQ(QueriedChunkList{QueriedChunk(2)}, result);
+  EXPECT_TRUE(storage_.queried_series_bitmap.is_set(2));
 }
 
 TEST_F(QuerierFixture, QueryChunkWithFinalizedTimestampStream) {
@@ -73,6 +74,7 @@ TEST_F(QuerierFixture, QueryChunkWithFinalizedTimestampStream) {
 
   // Assert
   EXPECT_EQ(QueriedChunkList{QueriedChunk(1)}, result);
+  EXPECT_TRUE(storage_.queried_series_bitmap.is_set(1));
 }
 
 TEST_P(QuerierFixture, QueryFilledChunks) {
@@ -84,6 +86,7 @@ TEST_P(QuerierFixture, QueryFilledChunks) {
 
   // Assert
   EXPECT_EQ(GetParam().expected, result);
+  EXPECT_TRUE(std::ranges::all_of(result, [&](auto qchunk) { return storage_.queried_series_bitmap.is_set(qchunk.ls_id); }));
 }
 
 INSTANTIATE_TEST_SUITE_P(NoChunks,

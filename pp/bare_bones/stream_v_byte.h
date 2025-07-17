@@ -982,7 +982,7 @@ class CompactSequence {
     buffer = buffer.subspan(2 * sizeof(uint32_t));
 
     if (buffer.size() < buffer_size_in_bytes) [[unlikely]] {
-      DecodeIterator{nullptr, nullptr, 0};
+      return DecodeIterator{nullptr, nullptr, 0};
     }
 
     const std::span compact_data(buffer.data(), buffer_size_in_bytes);
@@ -995,7 +995,8 @@ class CompactSequence {
   PROMPP_ALWAYS_INLINE void set_size(uint32_t new_size) noexcept { buffer_.control_block().items_count = new_size; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Memory::SizeType size_in_bytes() const noexcept {
-    return size() == 0 ? 0 : data_iterator_ - buffer_ + kKeysAdditionalAllocationSizeForDecoder;
+    return std::min<Memory::SizeType>(data_iterator_ - buffer_ + sizeof(value_type) + kKeysAdditionalAllocationSizeForDecoder,
+                                      buffer_.control_block().data_size);
   }
 };
 
