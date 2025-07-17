@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
+	"github.com/prometheus/prometheus/pp/go/util/locker"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -178,6 +179,7 @@ type Head struct {
 	dataStorageTaskChs []chan *relabeler.GenericTask
 	lssMXs             []*sync.RWMutex
 	dataStorageMXs     []*sync.RWMutex
+	queryLocker        *locker.Weighted
 
 	numberOfShards uint16
 	stopc          chan struct{}
@@ -217,9 +219,12 @@ func New(
 	lssMXs := make([]*sync.RWMutex, numberOfShards)
 	dataStorageMXs := make([]*sync.RWMutex, numberOfShards)
 
+	// current head workers concurrency
+	concurrency := 2 * int64(1+ExtraReadConcurrency)
+
 	for shardID := uint16(0); shardID < numberOfShards; shardID++ {
-		lssTaskChs[shardID] = make(chan *relabeler.GenericTask, chanBufferSize)
-		dataStorageTaskChs[shardID] = make(chan *relabeler.GenericTask, chanBufferSize)
+		lssTaskChs[shardID] = make(chan *relabeler.GenericTask, 4*concurrency)         // x4 for back pressure
+		dataStorageTaskChs[shardID] = make(chan *relabeler.GenericTask, 4*concurrency) // x4 for back pressure
 		shards[shardID] = &shard{
 			id:                  shardID,
 			lss:                 lsses[shardID],
@@ -241,6 +246,7 @@ func New(
 		dataStorageTaskChs: dataStorageTaskChs,
 		lssMXs:             lssMXs,
 		dataStorageMXs:     dataStorageMXs,
+		queryLocker:        locker.NewWeighted(2 * concurrency), // x2 for back pressure
 
 		stopc:          make(chan struct{}),
 		wg:             sync.WaitGroup{},
@@ -413,7 +419,12 @@ func (h *Head) Stop() {
 		return
 	}
 	h.readOnly = true
+
+	release, _ := h.queryLocker.LockWithPriority(context.Background())
+	h.queryLocker.Resize(10 * h.Concurrency()) // x10 readonly
 	h.stop()
+	release()
+
 	generationStr := strconv.FormatUint(h.generation, 10)
 	for relabelerID := range h.relabelersData {
 		// clear unnecessary
@@ -425,20 +436,36 @@ func (h *Head) Stop() {
 	h.relabelersData = nil
 }
 
-func (h *Head) Reconfigure(inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) error {
+func (h *Head) Reconfigure(
+	ctx context.Context,
+	inputRelabelerConfigs []*config.InputRelabelerConfig,
+	numberOfShards uint16,
+) error {
 	if h.readOnly {
 		return fmt.Errorf("reconfiguring read only head")
 	}
 
+	release, err := h.queryLocker.LockWithPriority(ctx)
+	if err != nil {
+		return fmt.Errorf("[Head] Reconfigure: query locker: %w", err)
+	}
+	defer release()
+
+	h.queryLocker.Resize(2 * h.Concurrency()) // x2 for back pressure
 	h.stop()
 	if err := h.reconfigure(inputRelabelerConfigs, numberOfShards); err != nil {
 		return err
 	}
 	h.run()
+
 	return nil
 }
 
-func (h *Head) WriteMetrics() {
+func (h *Head) WriteMetrics(ctx context.Context) {
+	if ctx.Err() != nil {
+		return
+	}
+
 	status := h.Status(0)
 	h.series.Set(float64(status.HeadStats.NumSeries))
 	h.queried.With(
@@ -450,6 +477,10 @@ func (h *Head) WriteMetrics() {
 	h.queried.With(
 		prometheus.Labels{"caller": "other"},
 	).Set(float64(status.HeadStats.OtherQueriedSeries))
+
+	if ctx.Err() != nil {
+		return
+	}
 
 	generationStr := strconv.FormatUint(h.generation, 10)
 	tw := relabeler.NewTaskWaiter(2)
@@ -495,6 +526,10 @@ func (h *Head) WriteMetrics() {
 	_ = tw.Wait()
 
 	if h.readOnly {
+		return
+	}
+
+	if ctx.Err() != nil {
 		return
 	}
 
@@ -716,6 +751,17 @@ func (h *Head) Enqueue(t *relabeler.GenericTask) {
 			taskCh <- t
 		}
 	}
+}
+
+// RLockQuery locks for query to [Head].
+func (h *Head) RLockQuery(ctx context.Context) (runlock func(), err error) {
+	return h.queryLocker.RLock(ctx)
+}
+
+// Concurrency return current head workers concurrency.
+func (h *Head) Concurrency() int64 {
+	// 2 - lss and datastorage
+	return 2 * int64(1+ExtraReadConcurrency) * int64(h.numberOfShards)
 }
 
 // readOnlyForEachShard run generic task on read only head without queue.

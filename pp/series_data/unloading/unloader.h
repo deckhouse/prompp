@@ -21,11 +21,6 @@ class Unloader {
     write_bit_sequences(stream, sequences.ls_id_bitmap, sequences.total_bitseqs_size);
   }
 
-  static constexpr uint32_t get_empty_unloader_size_in_bytes() noexcept {
-    return sizeof(uint32_t) + BareBones::Bitset{}.allocated_memory() + EncodingChunkLengthSequence{}.data().size() + sizeof(uint32_t) + sizeof(uint32_t) +
-           EncodingChunkIDSequence{}.data().size() + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
-  }
-
  private:
   DataStorage& storage_;
 
@@ -43,23 +38,13 @@ class Unloader {
     result.ls_id_bitmap.resize(get_unloadable_ls_id_size());
 
     for (uint32_t ls_id = 0; ls_id < storage_.open_chunks.size(); ++ls_id) {
-      if (storage_.queried_series_bitmap.contains(ls_id)) {
+      if (storage_.queried_series_bitmap.is_set(ls_id)) {
         continue;
       }
 
       const auto encoding_type = storage_.open_chunks[ls_id].encoding_state.encoding_type;
       if (is_unloadable_encoder(encoding_type)) {
-        storage_.unloaded_series_bitmap.add(ls_id);
-
-        result.ls_id_bitmap.set(ls_id);
-
-        const auto& bitseq = get_open_chunk_stream(storage_, ls_id);
-        const uint32_t bitseq_size = BareBones::Bit::to_bytes(bitseq.size_in_bits());
-        result.chunk_length_sequence.push_back(bitseq_size);
-        result.total_bitseqs_size += bitseq_size;
-
-        const uint32_t chunk_id = get_open_chunk_id(ls_id);
-        result.chunk_id_sequence.push_back(chunk_id);
+        push_series_to_sequences(result, ls_id);
       }
     }
 
@@ -73,10 +58,12 @@ class Unloader {
   }
 
   template <class Stream>
-  static void write_sequences(Stream& stream, const PreparedSequences& sequences) noexcept {
+  void write_sequences(Stream& stream, const PreparedSequences& sequences) noexcept {
     if constexpr (BareBones::concepts::has_reserve<Stream>) {
       stream.reserve(sequences.reserved_stream_size);
     }
+
+    storage_.unloaded_snapshots_sizes.push_back(sequences.reserved_stream_size);
 
     sequences.ls_id_bitmap.write_to(stream);
 
@@ -87,8 +74,6 @@ class Unloader {
 
   template <class Stream>
   void write_bit_sequences(Stream& stream, const BareBones::Bitset& ls_id_bitmap, uint32_t total_bitseqs_size) noexcept {
-    stream.write(reinterpret_cast<char*>(&total_bitseqs_size), sizeof(total_bitseqs_size));
-
     for (const auto ls_id : ls_id_bitmap) {
       auto& bitseq = get_open_chunk_stream(storage_, ls_id);
       const auto bitseq_size = BareBones::Bit::to_bytes(bitseq.size_in_bits());
@@ -100,6 +85,20 @@ class Unloader {
       const auto& reserved_bytes = encoder::CompactBitSequence::reserved_bytes_for_reader();
       stream.write(reserved_bytes.data(), reserved_bytes.size());
     }
+  }
+
+  void push_series_to_sequences(PreparedSequences& sequences, uint32_t ls_id) const noexcept {
+    storage_.unloaded_series_bitmap.set(ls_id);
+
+    sequences.ls_id_bitmap.set(ls_id);
+
+    const auto& bitseq = get_open_chunk_stream(storage_, ls_id);
+    const uint32_t bitseq_size = BareBones::Bit::to_bytes(bitseq.size_in_bits());
+    sequences.chunk_length_sequence.push_back(bitseq_size);
+    sequences.total_bitseqs_size += bitseq_size;
+
+    const uint32_t chunk_id = get_open_chunk_id(ls_id);
+    sequences.chunk_id_sequence.push_back(chunk_id);
   }
 
   PROMPP_ALWAYS_INLINE static uint32_t calculate_stream_reserve_size(const BareBones::Bitset& ls_id_bitmap,
@@ -117,13 +116,12 @@ class Unloader {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_unloadable_ls_id_size() const noexcept {
-    if (storage_.queried_series_bitmap.isEmpty()) {
+    if (storage_.queried_series_bitmap.empty()) {
       return storage_.open_chunks.size();
     }
 
     for (uint32_t ls_id_size = storage_.open_chunks.size(); ls_id_size != 0; --ls_id_size) {
-      if (!storage_.queried_series_bitmap.contains(ls_id_size - 1) &&
-          is_unloadable_encoder(storage_.open_chunks[ls_id_size - 1].encoding_state.encoding_type)) {
+      if (!storage_.queried_series_bitmap.is_set(ls_id_size - 1) && is_unloadable_encoder(storage_.open_chunks[ls_id_size - 1].encoding_state.encoding_type)) {
         return ls_id_size;
       }
     }

@@ -93,7 +93,6 @@ TEST_F(BitsetFixture, should_iterate_over_resized_empty) {
 }
 
 TEST_F(BitsetFixture, should_not_out_of_range_on_resize) {
-  bs_.resize(2048);
   bs_.set(2047);
   bs_.resize(4096);
 
@@ -107,7 +106,6 @@ TEST_F(BitsetFixture, should_not_out_of_range_on_resize) {
 
 TEST_F(BitsetFixture, ResetInFirstUint64) {
   // Arrange
-  bs_.resize(1);
 
   // Act
   bs_.set(0);
@@ -119,7 +117,6 @@ TEST_F(BitsetFixture, ResetInFirstUint64) {
 
 TEST_F(BitsetFixture, ResetInSecondUint64) {
   // Arrange
-  bs_.resize(65);
 
   // Act
   bs_.set(64);
@@ -131,7 +128,6 @@ TEST_F(BitsetFixture, ResetInSecondUint64) {
 
 TEST_F(BitsetFixture, TestResetCorrectness) {
   // Arrange
-  bs_.resize(3);
 
   // Act
   bs_.set(0);
@@ -145,9 +141,82 @@ TEST_F(BitsetFixture, TestResetCorrectness) {
   EXPECT_TRUE(bs_[2]);
 }
 
+TEST_F(BitsetFixture, TestSetAtomicCorrectness) {
+  // Arrange
+  bs_.resize(8);
+
+  // Act
+  bs_.set_atomic(7);
+
+  // Assert
+  EXPECT_TRUE(bs_[7]);
+}
+
+TEST_F(BitsetFixture, TestResetAtomicCorrectness) {
+  // Arrange
+  bs_.resize(8);
+  bs_.set_atomic(7);
+
+  // Act
+  bs_.reset_atomic(7);
+
+  // Assert
+  EXPECT_FALSE(bs_[7]);
+}
+
+TEST_F(BitsetFixture, TestSetIter) {
+  // Arrange
+  const std::array<uint32_t, 2> idx = {0, 2};
+
+  // Act
+  bs_.set(idx.begin(), idx.end());
+
+  // Assert
+  EXPECT_TRUE(bs_[0]);
+  EXPECT_FALSE(bs_[1]);
+  EXPECT_TRUE(bs_[2]);
+}
+
+TEST_F(BitsetFixture, TestSetInitList) {
+  // Arrange
+  // Act
+  bs_.set({0, 2});
+
+  // Assert
+  EXPECT_TRUE(bs_[0]);
+  EXPECT_FALSE(bs_[1]);
+  EXPECT_TRUE(bs_[2]);
+}
+
+TEST_F(BitsetFixture, TestResetIter) {
+  // Arrange
+  bs_.set({0, 1, 2});
+  const std::array<uint32_t, 2> idx = {0, 2};
+
+  // Act
+  bs_.reset(idx.begin(), idx.end());
+
+  // Assert
+  EXPECT_FALSE(bs_[0]);
+  EXPECT_TRUE(bs_[1]);
+  EXPECT_FALSE(bs_[2]);
+}
+
+TEST_F(BitsetFixture, TestResetInitList) {
+  // Arrange
+  bs_.set({0, 1, 2});
+
+  // Act
+  bs_.reset({0, 2});
+
+  // Assert
+  EXPECT_FALSE(bs_[0]);
+  EXPECT_TRUE(bs_[1]);
+  EXPECT_FALSE(bs_[2]);
+}
+
 TEST_F(BitsetFixture, PopcountOnEmptyBitset) {
   // Arrange
-  bs_.resize(1);
 
   // Act
 
@@ -157,7 +226,6 @@ TEST_F(BitsetFixture, PopcountOnEmptyBitset) {
 
 TEST_F(BitsetFixture, PopcountOnNonEmptyBitset) {
   // Arrange
-  bs_.resize(9);
 
   // Act
   bs_.set(0);
@@ -170,7 +238,6 @@ TEST_F(BitsetFixture, PopcountOnNonEmptyBitset) {
 
 TEST_F(BitsetFixture, PopcountAfterResizeInCurrentUint64) {
   // Arrange
-  bs_.resize(1);
 
   // Act
   bs_.set(0);
@@ -182,7 +249,6 @@ TEST_F(BitsetFixture, PopcountAfterResizeInCurrentUint64) {
 
 TEST_F(BitsetFixture, PopcountAfterResizeInNextUint64) {
   // Arrange
-  bs_.resize(9);
 
   // Act
   bs_.set(8);
@@ -191,6 +257,77 @@ TEST_F(BitsetFixture, PopcountAfterResizeInNextUint64) {
 
   // Assert
   EXPECT_EQ(0U, bs_.popcount());
+}
+
+class BitsetCreateIteratorFixture : public testing::Test {
+ protected:
+  std::vector<uint8_t> bytes_data_;
+
+  void set_bits(std::initializer_list<uint32_t> values) {
+    uint32_t max_bit = 0;
+    for (auto v : values) {
+      if (v > max_bit)
+        max_bit = v;
+    }
+
+    size_t bitmap_size = BareBones::Bit::to_ceil_units<uint64_t>(max_bit) * sizeof(uint64_t);
+    std::cout << bitmap_size << '\n';
+    bytes_data_.resize(4 + bitmap_size, 0);
+
+    *reinterpret_cast<uint32_t*>(bytes_data_.data()) = max_bit;
+
+    for (uint32_t bit : values) {
+      size_t byte_index = 4 + (bit / 8);
+      uint8_t bit_offset = bit % 8;
+      bytes_data_[byte_index] |= (1 << bit_offset);
+    }
+
+    std::cout << (*reinterpret_cast<uint32_t*>(bytes_data_.data())) << '\n';
+  }
+};
+
+TEST_F(BitsetCreateIteratorFixture, CreateReadIteratorLess4Bytes) {
+  // Arrange
+  bytes_data_ = {0x00, 0x00, 0x00};
+  std::span<const uint8_t> buffer(bytes_data_);
+
+  // Act
+  const auto it = BareBones::Bitset::create_read_iterator(buffer);
+
+  // Assert
+  EXPECT_EQ(it, BareBones::Bitset::IteratorSentinel{});
+  EXPECT_EQ(buffer.size(), 3);
+}
+
+TEST_F(BitsetCreateIteratorFixture, CreateReadIteratorWrongSize) {
+  // Arrange
+  bytes_data_ = {0x00, 0x00, 0x00, 0x01, 0x00};
+  std::span<const uint8_t> buffer(bytes_data_);
+
+  // Act
+  const auto it = BareBones::Bitset::create_read_iterator(buffer);
+
+  // Assert
+  EXPECT_EQ(it, BareBones::Bitset::IteratorSentinel{});
+  EXPECT_EQ(buffer.size(), 1);
+}
+
+TEST_F(BitsetCreateIteratorFixture, CreateReadIteratorValid) {
+  // Arrange
+  set_bits({1, 10, 100, 1000});
+  std::span<const uint8_t> buffer(bytes_data_);
+
+  // Act
+  auto it = BareBones::Bitset::create_read_iterator(buffer);
+
+  // Assert
+  EXPECT_EQ(*it++, 1);
+  EXPECT_EQ(*it++, 10);
+  EXPECT_EQ(*it++, 100);
+  EXPECT_EQ(*it++, 1000);
+  EXPECT_EQ(it, BareBones::Bitset::IteratorSentinel{});
+
+  EXPECT_EQ(buffer.size(), 0);
 }
 
 }  // namespace

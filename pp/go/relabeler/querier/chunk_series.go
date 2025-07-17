@@ -31,8 +31,9 @@ func NewChunkSeriesSet(
 	chunkRecoder *cppbridge.ChunkRecoder,
 ) *ChunkSeriesSet {
 	return &ChunkSeriesSet{
-		lssQueryResult: lssQueryResult,
-		chunkRecoder:   chunkRecoder,
+		lssQueryResult:   lssQueryResult,
+		labelSetSnapshot: labelSetSnapshot,
+		chunkRecoder:     chunkRecoder,
 	}
 }
 

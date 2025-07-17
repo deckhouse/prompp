@@ -3,6 +3,7 @@
 #include <list>
 
 #include "bare_bones/algorithm.h"
+#include "bare_bones/bitset.h"
 #include "bare_bones/preprocess.h"
 #include "chunk/data_chunk.h"
 #include "chunk/finalized_chunk.h"
@@ -10,7 +11,6 @@
 #include "common.h"
 #include "encoder/encoder_variant.h"
 #include "encoder/gorilla.h"
-#include "roaring/roaring.hh"
 #include "series_data/encoder/timestamp/encoder.h"
 
 namespace series_data {
@@ -194,9 +194,10 @@ struct DataStorage {
   uint32_t merged_samples_count{};
 
   std::list<std::vector<uint8_t>> unloaded_snapshots;
+  std::list<size_t> unloaded_snapshots_sizes;
 
-  roaring::Roaring unloaded_series_bitmap{};
-  roaring::Roaring queried_series_bitmap{};
+  BareBones::Bitset unloaded_series_bitmap{};
+  BareBones::Bitset queried_series_bitmap{};
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesChunks chunks(uint32_t ls_id) const noexcept { return SeriesChunks{this, ls_id}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE Chunks chunks() const noexcept { return Chunks{this}; }
@@ -315,7 +316,7 @@ struct DataStorage {
 
     return open_chunks.allocated_memory() + encoders_memory + timestamp_encoder.allocated_memory() + finalized_timestamp_streams.allocated_memory() +
            finalized_data_streams.allocated_memory() + finalized_chunks_map_allocated_memory + outdated_chunks_map_allocated_memory +
-           outdated_chunks_allocated_memory;
+           outdated_chunks_allocated_memory + unloaded_series_bitmap.allocated_memory() + queried_series_bitmap.allocated_memory();
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory(EncodingType encoding_type) const noexcept {

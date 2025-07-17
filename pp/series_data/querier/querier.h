@@ -1,6 +1,6 @@
 #pragma once
 
-#include <roaring/roaring.hh>
+#include "bare_bones/bitset.h"
 #include "query.h"
 #include "series_data/concepts.h"
 #include "series_data/data_storage.h"
@@ -21,24 +21,24 @@ class Querier {
     }
 
     for (const auto& q_chunk : chunks_) {
-      storage_.queried_series_bitmap.add(q_chunk.ls_id);
-      if (storage_.unloaded_series_bitmap.contains(q_chunk.ls_id)) {
-        series_to_load_.add(q_chunk.ls_id);
+      storage_.queried_series_bitmap.set_atomic(q_chunk.ls_id);
+      if (storage_.unloaded_series_bitmap.is_set(q_chunk.ls_id)) {
+        series_to_load_.set(q_chunk.ls_id);
       }
     }
 
     return chunks_;
   }
 
-  bool need_loading() const noexcept { return series_to_load_.isEmpty() == false; }
-  const roaring::Roaring& get_series_to_load() const noexcept { return series_to_load_; }
+  [[nodiscard]] bool need_loading() const noexcept { return series_to_load_.empty() == false; }
+  [[nodiscard]] const BareBones::Bitset& get_series_to_load() const noexcept { return series_to_load_; }
 
  private:
   using ChunkType = chunk::DataChunk::Type;
 
   DataStorage& storage_;
   QueriedChunkList chunks_;
-  roaring::Roaring series_to_load_;
+  BareBones::Bitset series_to_load_;
 
   PROMPP_ALWAYS_INLINE void query_chunks(PromPP::Primitives::LabelSetID ls_id, const PromPP::Primitives::TimeInterval& time_interval) noexcept {
     query_finalized_chunks(ls_id, time_interval);

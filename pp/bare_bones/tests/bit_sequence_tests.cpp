@@ -277,6 +277,49 @@ TEST_F(CompactBitSequenceFixture, PushUint64_2) {
   EXPECT_EQ(0b1010101010101010101010101010101010101010101010101010101010101010, bytes[0]);
 }
 
+TEST_F(CompactBitSequenceFixture, PushBackBytesAligned) {
+  // Arrange
+  std::array<uint8_t, 15> push_bytes = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
+
+  // Act
+  stream_.push_back_bytes(push_bytes.data(), BareBones::Bit::to_bits(push_bytes.size()));
+  auto bytes = stream_.bytes<uint8_t>();
+
+  // Assert
+  EXPECT_EQ(push_bytes.size(), bytes.size());
+  EXPECT_TRUE(std::ranges::equal(push_bytes, bytes));
+}
+
+TEST_F(CompactBitSequenceFixture, PushBackBytesSpan) {
+  // Arrange
+  std::array<uint8_t, 15> push_bytes = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14};
+
+  // Act
+  stream_.push_back_bytes(push_bytes);
+  auto bytes = stream_.bytes<uint8_t>();
+
+  // Assert
+  EXPECT_EQ(push_bytes.size(), bytes.size());
+  EXPECT_TRUE(std::ranges::equal(push_bytes, bytes));
+}
+
+TEST_F(CompactBitSequenceFixture, PushBackBytesUnaligned) {
+  // Arrange
+  const std::array<uint8_t, 15> push_bytes_init = {0b01010101, 0b01010101, 0b01010101, 0b01010101, 0b01010101, 0b01010101, 0b01010101, 0b01010101,
+                                                   0b01010101, 0b01010101, 0b01010101, 0b01010101, 0b01010101, 0b01010101, 0b01010101};
+  const std::array<uint8_t, 16> push_bytes_rest = {0b10101010, 0b10101010, 0b10101010, 0b10101010, 0b10101010, 0b10101010, 0b10101010, 0b10101010,
+                                                   0b10101010, 0b10101010, 0b10101010, 0b10101010, 0b10101010, 0b10101010, 0b10101010, 0b0};
+
+  // Act
+  stream_.push_back_single_zero_bit();
+  stream_.push_back_bytes(push_bytes_init.data(), BareBones::Bit::to_bits(push_bytes_init.size()));
+  auto bytes = stream_.bytes<uint8_t>();
+
+  // Assert
+  EXPECT_EQ(push_bytes_rest.size(), bytes.size());
+  EXPECT_TRUE(std::ranges::equal(push_bytes_rest, bytes));
+}
+
 TEST_F(CompactBitSequenceFixture, TrimUint32) {
   // Arrange
 
