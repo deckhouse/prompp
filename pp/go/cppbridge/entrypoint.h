@@ -1134,7 +1134,6 @@ void prompp_series_data_data_storage_allocated_memory(void* args, void* res);
  *
  * @param res {
  *     serializedData []byte // serialized data
- *     needLoading bool // unused series loading needed before serialization
  * }
  */
 void prompp_series_data_data_storage_query(void* args, void* res);
