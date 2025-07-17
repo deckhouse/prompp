@@ -231,4 +231,61 @@ INSTANTIATE_TEST_SUITE_P(PickNonExistingLsID,
                                                             .expected_sample = Sample{.timestamp = -1, .value = STALE_NAN},
                                                             .expect_queried = false}));
 
+class InstantQuerierLoaderUnloaderTestFixture : public testing::Test {
+ protected:
+  void SetUp() override {
+    for (uint32_t ls_id = 0; ls_id < 5; ++ls_id) {
+      encoder_.encode(ls_id, 1, get_value(ls_id, 1));
+      encoder_.encode(ls_id, 2, get_value(ls_id, 2));
+      encoder_.encode(ls_id, 3, get_value(ls_id, 3));
+      encoder_.encode(ls_id, 4, get_value(ls_id, 4));
+      encoder_.encode(ls_id, 5, get_value(ls_id, 5));
+    }
+  }
+
+  static double get_value(uint32_t ls_id, int64_t timestamp) noexcept { return 10 * ls_id + timestamp; }
+
+  DataStorage storage_;
+  Encoder<> encoder_{storage_};
+  InstantQuerier instant_querier_{storage_};
+  const Sample default_sample_{.timestamp = -1, .value = STALE_NAN};
+  std::vector<Sample> samples_{3, default_sample_};
+};
+
+TEST_F(InstantQuerierLoaderUnloaderTestFixture, InstantQueryNeedLoading) {
+  // Arrange
+  storage_.queried_series_bitmap.set({0, 2, 4});
+  storage_.unloaded_series_bitmap.set({1, 3});
+
+  // Act
+  instant_querier_.query(samples_, std::initializer_list{0, 1, 2}, 3);
+
+  // Assert
+  ASSERT_TRUE(instant_querier_.need_loading());
+
+  ASSERT_TRUE(std::ranges::equal(instant_querier_.get_series_to_load(), std::initializer_list{1}));
+
+  ASSERT_EQ((std::vector{Sample{.timestamp = 3, .value = get_value(0, 3)}, default_sample_, Sample{.timestamp = 3, .value = get_value(2, 3)}}), samples_);
+}
+
+TEST_F(InstantQuerierLoaderUnloaderTestFixture, InstantQueryLoading) {
+  // Arrange
+  storage_.queried_series_bitmap.set({0, 2, 4});
+  storage_.unloaded_series_bitmap.set({1, 3});
+
+  instant_querier_.query(samples_, std::initializer_list{0, 1, 2}, 4);
+
+  storage_.unloaded_series_bitmap.clear();
+
+  // Act
+  instant_querier_.query_reload(samples_, std::initializer_list{0, 1, 2}, 4);
+
+  // Assert
+  ASSERT_TRUE(std::ranges::equal(storage_.queried_series_bitmap, std::initializer_list{0, 1, 2, 4}));
+
+  ASSERT_EQ((std::vector{Sample{.timestamp = 4, .value = get_value(0u, 4)}, Sample{.timestamp = 4, .value = get_value(1u, 4)},
+                         Sample{.timestamp = 4, .value = get_value(2, 4)}}),
+            samples_);
+}
+
 }  // namespace
