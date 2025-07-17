@@ -2,6 +2,7 @@ package querier
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime"
 	"sort"
@@ -249,48 +250,71 @@ func (q *Querier) selectInstant(
 		}
 	}()
 
-	lssQueryResults := make([]*cppbridge.LSSQueryResult, q.head.NumberOfShards())
-	snapshots := make([]*cppbridge.LabelSetSnapshot, q.head.NumberOfShards())
+	numberOfShards := q.head.NumberOfShards()
+	lssSelectors := make([]uintptr, numberOfShards)
+	snapshots := make([]*cppbridge.LabelSetSnapshot, numberOfShards)
 
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
-	callerID := cppbridge.GetCaller(ctx)
+
+	// callerID := cppbridge.GetCaller(ctx)
 
 	valueNotFoundTimestampValue := DefaultInstantQueryValueNotFoundTimestampValue
 	if q.mint <= valueNotFoundTimestampValue {
 		valueNotFoundTimestampValue = q.mint - 1
 	}
 
-	tLSSQuery := q.head.CreateTask(
-		relabeler.LSSQueryInstantQuerier,
+	tLSSQuerySelector := q.head.CreateTask(
+		relabeler.LSSQueryInstantQuerySelector,
 		func(shard relabeler.Shard) error {
-			lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
-
-			if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {
-				if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
-					return nil
-				}
+			selector, status := shard.LSS().QuerySelector(convertedMatchers)
+			switch status {
+			case cppbridge.LSSQueryStatusMatch:
+				lssSelectors[shard.ShardID()] = selector
+				snapshots[shard.ShardID()] = shard.LSS().GetSnapshot()
+			case cppbridge.LSSQueryStatusNoMatch:
+			default:
 				return fmt.Errorf(
-					"failed to query from shard: %d, query status: %d",
+					"failed to query selector from shard: %d, query status: %d",
 					shard.ShardID(),
-					lssQueryResult.Status(),
+					status,
 				)
 			}
-
-			lssQueryResults[shard.ShardID()] = lssQueryResult
-			snapshots[shard.ShardID()] = shard.LSS().GetSnapshot()
 
 			return nil
 		},
 		relabeler.ForLSSTask,
 		relabeler.NonExclusiveTask,
 	)
-	q.head.Enqueue(tLSSQuery)
-	if err := tLSSQuery.Wait(); err != nil {
-		logger.Warnf("QUERIER: Select failed: %s", err)
+	q.head.Enqueue(tLSSQuerySelector)
+	if err := tLSSQuerySelector.Wait(); err != nil {
+		logger.Warnf("[QUERIER]: instant QuerySelector failed: %s", err)
 		return storage.ErrSeriesSet(err)
 	}
 
-	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
+	lssQueryResults := make([]*cppbridge.LSSQueryResult, numberOfShards)
+	errs := make([]error, numberOfShards)
+	for shardID, selector := range lssSelectors {
+		if selector == 0 {
+			continue
+		}
+
+		lssQueryResult := snapshots[shardID].Query(selector)
+		switch lssQueryResult.Status() {
+		case cppbridge.LSSQueryStatusMatch:
+			lssQueryResults[shardID] = lssQueryResult
+		case cppbridge.LSSQueryStatusNoMatch:
+		default:
+			errs[shardID] = fmt.Errorf(
+				"failed to query from shard: %d, query status: %d", shardID, lssQueryResult.Status(),
+			)
+		}
+	}
+	if err := errors.Join(errs...); err != nil {
+		logger.Warnf("[QUERIER]: instant Query failed: %s", err)
+		return storage.ErrSeriesSet(err)
+	}
+
+	seriesSets := make([]storage.SeriesSet, numberOfShards)
 	tDataStorageQuery := q.head.CreateTask(
 		relabeler.DSQueryInstantQuerier,
 		func(shard relabeler.Shard) error {
@@ -344,43 +368,66 @@ func (q *Querier) selectRange(
 		}
 	}()
 
-	lssQueryResults := make([]*cppbridge.LSSQueryResult, q.head.NumberOfShards())
-	snapshots := make([]*cppbridge.LabelSetSnapshot, q.head.NumberOfShards())
+	numberOfShards := q.head.NumberOfShards()
+	lssSelectors := make([]uintptr, numberOfShards)
+	snapshots := make([]*cppbridge.LabelSetSnapshot, numberOfShards)
 
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
-	callerID := cppbridge.GetCaller(ctx)
 
-	tLSSQuery := q.head.CreateTask(
-		relabeler.LSSQueryRangeQuerier,
+	// callerID := cppbridge.GetCaller(ctx)
+
+	tLSSQuerySelector := q.head.CreateTask(
+		relabeler.LSSQueryRangeQuerySelector,
 		func(shard relabeler.Shard) error {
-			lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
-
-			if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {
-				if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
-					return nil
-				}
+			selector, status := shard.LSS().QuerySelector(convertedMatchers)
+			switch status {
+			case cppbridge.LSSQueryStatusMatch:
+				lssSelectors[shard.ShardID()] = selector
+				snapshots[shard.ShardID()] = shard.LSS().GetSnapshot()
+			case cppbridge.LSSQueryStatusNoMatch:
+			default:
 				return fmt.Errorf(
-					"failed to query from shard: %d, query status: %d",
+					"failed to query selector from shard: %d, query status: %d",
 					shard.ShardID(),
-					lssQueryResult.Status(),
+					status,
 				)
 			}
-
-			lssQueryResults[shard.ShardID()] = lssQueryResult
-			snapshots[shard.ShardID()] = shard.LSS().GetSnapshot()
 
 			return nil
 		},
 		relabeler.ForLSSTask,
 		relabeler.NonExclusiveTask,
 	)
-	q.head.Enqueue(tLSSQuery)
-	if err := tLSSQuery.Wait(); err != nil {
-		logger.Warnf("QUERIER: Select failed: %s", err)
+	q.head.Enqueue(tLSSQuerySelector)
+	if err := tLSSQuerySelector.Wait(); err != nil {
+		logger.Warnf("[QUERIER]: range QuerySelector failed: %s", err)
 		return storage.ErrSeriesSet(err)
 	}
 
-	serializedChunksShards := make([]*cppbridge.HeadDataStorageSerializedChunks, q.head.NumberOfShards())
+	lssQueryResults := make([]*cppbridge.LSSQueryResult, numberOfShards)
+	errs := make([]error, numberOfShards)
+	for shardID, selector := range lssSelectors {
+		if selector == 0 {
+			continue
+		}
+
+		lssQueryResult := snapshots[shardID].Query(selector)
+		switch lssQueryResult.Status() {
+		case cppbridge.LSSQueryStatusMatch:
+			lssQueryResults[shardID] = lssQueryResult
+		case cppbridge.LSSQueryStatusNoMatch:
+		default:
+			errs[shardID] = fmt.Errorf(
+				"failed to query from shard: %d, query status: %d", shardID, lssQueryResult.Status(),
+			)
+		}
+	}
+	if err := errors.Join(errs...); err != nil {
+		logger.Warnf("[QUERIER]: range Query failed: %s", err)
+		return storage.ErrSeriesSet(err)
+	}
+
+	serializedChunksShards := make([]*cppbridge.HeadDataStorageSerializedChunks, numberOfShards)
 	tDataStorageQuery := q.head.CreateTask(
 		relabeler.DSQueryRangeQuerier,
 		func(shard relabeler.Shard) error {
@@ -409,9 +456,9 @@ func (q *Querier) selectRange(
 	q.head.Enqueue(tDataStorageQuery)
 	_ = tDataStorageQuery.Wait()
 
-	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
-	for shardID := range serializedChunksShards {
-		if serializedChunksShards[shardID] == nil {
+	seriesSets := make([]storage.SeriesSet, numberOfShards)
+	for shardID, serializedChunksShard := range serializedChunksShards {
+		if serializedChunksShard == nil {
 			seriesSets[shardID] = &SeriesSet{}
 			continue
 		}
@@ -419,9 +466,9 @@ func (q *Querier) selectRange(
 		seriesSets[shardID] = &SeriesSet{
 			mint:             q.mint,
 			maxt:             q.maxt,
-			deserializer:     cppbridge.NewHeadDataStorageDeserializer(serializedChunksShards[shardID]),
-			chunksIndex:      serializedChunksShards[shardID].MakeIndex(),
-			serializedChunks: serializedChunksShards[shardID],
+			deserializer:     cppbridge.NewHeadDataStorageDeserializer(serializedChunksShard),
+			chunksIndex:      serializedChunksShard.MakeIndex(),
+			serializedChunks: serializedChunksShard,
 			lssQueryResult:   lssQueryResults[shardID],
 			labelSetSnapshot: snapshots[shardID],
 		}

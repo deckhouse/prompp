@@ -41,6 +41,11 @@ func (w *LSS) Query(matchers []model.LabelMatcher, querySource uint32) *cppbridg
 	return w.target.QueryDeprecated(matchers, querySource)
 }
 
+// QuerySelector returns a created selector that matches the given label matchers.
+func (w *LSS) QuerySelector(matchers []model.LabelMatcher) (selector uintptr, status uint32) {
+	return w.target.QuerySelector(matchers)
+}
+
 func (w *LSS) GetLabelSets(labelSetIDs []uint32) *cppbridge.LabelSetStorageGetLabelSetsResult {
 	return w.target.GetLabelSets(labelSetIDs)
 }
