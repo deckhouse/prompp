@@ -200,12 +200,11 @@ func (s *UnloadedDataStorageSuite) SetupTest() {
 	s.storage = cppbridge.NewUnloadedDataStorage(s.storageBuffer)
 }
 
-func (s *UnloadedDataStorageSuite) readSnapshots() (string, error) {
-	var snapshots string
-	err := s.storage.ForEachShard(func(snapshot []byte, isLast bool) {
-		snapshots += string(snapshot)
+func (s *UnloadedDataStorageSuite) readSnapshots() ([]string, error) {
+	var snapshots []string
+	return snapshots, s.storage.ForEachShard(func(snapshot []byte, isLast bool) {
+		snapshots = append(snapshots, string(snapshot))
 	})
-	return snapshots, err
 }
 
 func (s *UnloadedDataStorageSuite) TestReadEmptySnapshots() {
@@ -215,7 +214,7 @@ func (s *UnloadedDataStorageSuite) TestReadEmptySnapshots() {
 	snapshots, err := s.readSnapshots()
 
 	// Assert
-	s.Equal("", snapshots)
+	s.Equal([]string(nil), snapshots)
 	s.Equal(nil, err)
 }
 
@@ -227,7 +226,7 @@ func (s *UnloadedDataStorageSuite) TestReadOneSnapshot() {
 	snapshots, err := s.readSnapshots()
 
 	// Assert
-	s.Equal("12345", snapshots)
+	s.Equal([]string{"12345"}, snapshots)
 	s.Equal(nil, err)
 }
 
@@ -241,7 +240,7 @@ func (s *UnloadedDataStorageSuite) TestReadMultipleSnapshots() {
 	snapshots, err := s.readSnapshots()
 
 	// Assert
-	s.Equal("1234567890", snapshots)
+	s.Equal([]string{"123", "45678", "90"}, snapshots)
 	s.Equal(nil, err)
 }
 
@@ -254,7 +253,7 @@ func (s *UnloadedDataStorageSuite) TestReadEof() {
 	snapshots, err := s.readSnapshots()
 
 	// Assert
-	s.Equal("", snapshots)
+	s.Equal([]string(nil), snapshots)
 	s.Equal(fmt.Errorf("EOF"), err)
 }
 
@@ -268,6 +267,6 @@ func (s *UnloadedDataStorageSuite) TestReadInvalidSnapshot() {
 	snapshots, err := s.readSnapshots()
 
 	// Assert
-	s.Equal("123", snapshots)
+	s.Equal([]string{"123"}, snapshots)
 	s.Equal(fmt.Errorf("invalid snapshot at index 1"), err)
 }
