@@ -97,6 +97,10 @@ func (ds *DataStorage) Query(query cppbridge.HeadDataStorageQuery) *cppbridge.He
 	return ds.dataStorage.Query(query)
 }
 
+func (ds *DataStorage) QueryFinal(queriers []uintptr) {
+	ds.dataStorage.QueryFinal(queriers)
+}
+
 func (ds *DataStorage) InstantQuery(targetTimestamp, notFoundValueTimestampValue int64, seriesIDs []uint32) []cppbridge.Sample {
 	return ds.dataStorage.InstantQuery(targetTimestamp, notFoundValueTimestampValue, seriesIDs)
 }
@@ -107,6 +111,10 @@ func (ds *DataStorage) AllocatedMemory() uint64 {
 
 func (ds *DataStorage) UnloadUnusedSeriesData() []byte {
 	return ds.dataStorage.UnloadUnusedSeriesData()
+}
+
+func (ds *DataStorage) CreateLoader(queriers []uintptr) *cppbridge.UnloadedDataLoader {
+	return ds.dataStorage.CreateLoader(queriers)
 }
 
 // reshards changes the number of shards to the required amount.
@@ -159,6 +167,37 @@ func (h *Head) reconfigureRelabelersData(
 }
 
 //
+// dataStorageLoadAndQueryTask
+//
+
+type dataStorageLoadAndQueryTask struct {
+	queriers []uintptr
+	task     *relabeler.GenericTask
+	lock     sync.Mutex
+}
+
+func (t *dataStorageLoadAndQueryTask) Add(querier uintptr, createTask func() *relabeler.GenericTask) *relabeler.GenericTask {
+	t.lock.Lock()
+	t.queriers = append(t.queriers, querier)
+	if len(t.queriers) == 1 {
+		t.task = createTask()
+	}
+	t.lock.Unlock()
+
+	return t.task
+}
+
+func (t *dataStorageLoadAndQueryTask) Release() []uintptr {
+	t.lock.Lock()
+	queriers := t.queriers
+	t.queriers = nil
+	t.task = nil
+	t.lock.Unlock()
+
+	return queriers
+}
+
+//
 // shard
 //
 
@@ -167,6 +206,7 @@ type shard struct {
 	dataStorage         *DataStorage
 	unloadedDataStorage *cppbridge.UnloadedDataStorage
 	wal                 *ShardWal
+	loadAndQueryTask    *dataStorageLoadAndQueryTask
 	lssLocker           RWLockable
 	dataStorageLocker   RWLockable
 	id                  uint16
@@ -187,6 +227,7 @@ func newShard(
 		dataStorage:         dataStorage,
 		unloadedDataStorage: unloadedDataStorage,
 		wal:                 wal,
+		loadAndQueryTask:    &dataStorageLoadAndQueryTask{},
 		lssLocker:           &noopRWLockable{},
 		dataStorageLocker:   &noopRWLockable{},
 	}
@@ -257,6 +298,10 @@ func (s *shard) LSSUnlock() {
 
 func (s *shard) UnloadedDataStorage() relabeler.UnloadedDataStorage {
 	return s.unloadedDataStorage
+}
+
+func (s *shard) LoadAndQueryTask() relabeler.DataStorageLoadAndQueryTask {
+	return s.loadAndQueryTask
 }
 
 //

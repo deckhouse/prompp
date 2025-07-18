@@ -83,6 +83,9 @@ const (
 	// DSUnloadUnusedSeriesData name of task.
 	DSUnloadUnusedSeriesData = "data_storage_unload_unused_series_data"
 
+	// DSLoadUnusedSeriesDataAndQuery name of task.
+	DSLoadUnusedSeriesDataAndQuery = "data_storage_load_unused_series_data_and_query"
+
 	// Read Only
 
 	// BlockWrite name of task.

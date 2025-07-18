@@ -15,9 +15,11 @@ type DataStorage interface {
 	Raw() *cppbridge.HeadDataStorage
 	MergeOutOfOrderChunks()
 	Query(query cppbridge.HeadDataStorageQuery) *cppbridge.HeadDataStorageSerializedChunks
+	QueryFinal(queriers []uintptr)
 	InstantQuery(targetTimestamp, notFoundValueTimestampValue int64, seriesIDs []uint32) []cppbridge.Sample
 	AllocatedMemory() uint64
 	UnloadUnusedSeriesData() []byte
+	CreateLoader(queriers []uintptr) *cppbridge.UnloadedDataLoader
 }
 
 type LSS interface {
@@ -42,6 +44,11 @@ type Wal interface {
 
 type UnloadedDataStorage interface {
 	Write(snapshot []byte) error
+	ForEachSnapshot(f func(snapshot []byte, isLast bool)) error
+}
+
+type DataStorageLoadAndQueryTask interface {
+	Release() []uintptr
 }
 
 type InputRelabeler interface {
@@ -55,6 +62,7 @@ type Shard interface {
 	LSS() LSS
 	Wal() Wal
 	UnloadedDataStorage() UnloadedDataStorage
+	LoadAndQueryTask() DataStorageLoadAndQueryTask
 	// lock for DataStorage
 	DataStorageLock()
 	DataStorageRLock()

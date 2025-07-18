@@ -264,6 +264,34 @@ func (ds *HeadDataStorage) InstantQuery(targetTimestamp, defaultTimestamp int64,
 	return samples
 }
 
+func (ds *HeadDataStorage) QueryFinal(queriers []uintptr) {
+	seriesDataDataStorageQueryFinal(queriers)
+	runtime.KeepAlive(queriers)
+}
+
+// UnloadedDataLoader is Go wrapper around series_data::Loader.
+type UnloadedDataLoader struct {
+	loader uintptr
+}
+
+func (loader *UnloadedDataLoader) Load(snapshot []byte, isLast bool) {
+	seriesDataUnloadedDataLoaderLoad(loader.loader, snapshot, isLast)
+	runtime.KeepAlive(loader)
+}
+
+func (ds *HeadDataStorage) CreateLoader(queriers []uintptr) *UnloadedDataLoader {
+	result := &UnloadedDataLoader{
+		loader: seriesDataUnloadedDataLoaderCtor(ds.Pointer(), queriers),
+	}
+	runtime.KeepAlive(queriers)
+
+	runtime.SetFinalizer(result, func(loader *UnloadedDataLoader) {
+		seriesDataUnloadedDataLoaderDtor(loader.loader)
+	})
+
+	return result
+}
+
 type HeadDataStorageDeserializer struct {
 	deserializer     uintptr
 	serializedChunks *HeadDataStorageSerializedChunks
@@ -386,25 +414,4 @@ func (s *UnloadedDataStorage) ForEachSnapshot(f func(snapshot []byte, isLast boo
 
 func (s *UnloadedDataStorage) Close() error {
 	return s.storage.Close()
-}
-
-// UnloadedDataLoader is Go wrapper around series_data::Loader.
-type UnloadedDataLoader struct {
-	loader uintptr
-}
-
-func NewUnloadedDataLoader(dataStorage *HeadDataStorage, queriers []uintptr) *UnloadedDataLoader {
-	result := &UnloadedDataLoader{
-		loader: seriesDataUnloadedDataLoaderCtor(dataStorage.Pointer(), queriers),
-	}
-
-	runtime.SetFinalizer(result, func(loader *UnloadedDataLoader) {
-		seriesDataUnloadedDataLoaderDtor(loader.loader)
-	})
-
-	return result
-}
-
-func (loader *UnloadedDataLoader) Load(snapshot []byte, isLast bool) {
-	seriesDataUnloadedDataLoaderLoad(loader.loader, snapshot, isLast)
 }

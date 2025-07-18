@@ -124,6 +124,22 @@ var (
 		},
 	)
 
+	// head_data_storage query final
+	headDataStorageQueryFinalSum = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
+			Help:        "The time duration cpp call.",
+			ConstLabels: prometheus.Labels{"object": "head_data_storage", "method": "query_final"},
+		},
+	)
+	headDataStorageQueryFinalCount = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
+			Help:        "The time duration cpp call.",
+			ConstLabels: prometheus.Labels{"object": "head_data_storage", "method": "query_final"},
+		},
+	)
+
 	// head_data_storage encode_inner_series_slice
 	headDataStorageEncodeInnerSeriesSliceSum = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
@@ -1819,6 +1835,21 @@ func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32
 		C.prompp_series_data_data_storage_instant_query,
 		uintptr(unsafe.Pointer(&args)),
 	)
+}
+
+func seriesDataDataStorageQueryFinal(queriers []uintptr) {
+	args := struct {
+		queriers []uintptr
+	}{queriers}
+
+	testGC()
+	start := time.Now().UnixNano()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_data_storage_query_final,
+		uintptr(unsafe.Pointer(&args)),
+	)
+	headDataStorageQueryFinalSum.Add(float64(time.Now().UnixNano() - start))
+	headDataStorageQueryFinalCount.Inc()
 }
 
 func seriesDataDataStorageTimeInterval(dataStorage uintptr) TimeInterval {

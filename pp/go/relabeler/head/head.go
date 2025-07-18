@@ -1110,3 +1110,31 @@ func (h *Head) UnloadUnusedSeriesData() {
 	)
 	h.Enqueue(task)
 }
+
+func (h *Head) CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr) *relabeler.GenericTask {
+	return h.shards[shardID].loadAndQueryTask.Add(querier, func() *relabeler.GenericTask {
+		return h.CreateTask(
+			relabeler.DSLoadUnusedSeriesDataAndQuery,
+			func(shard relabeler.Shard) error {
+				if shard.ShardID() != shardID {
+					return nil
+				}
+
+				shard.DataStorageLock()
+				queriers := shard.LoadAndQueryTask().Release()
+				loader := shard.DataStorage().CreateLoader(queriers)
+				err := shard.UnloadedDataStorage().ForEachSnapshot(func(snapshot []byte, isLast bool) {
+					loader.Load(snapshot, isLast)
+				})
+				shard.DataStorageUnlock()
+
+				shard.DataStorageRLock()
+				shard.DataStorage().QueryFinal(queriers)
+				shard.DataStorageRUnlock()
+
+				return err
+			},
+			relabeler.ForDataStorageTask,
+		)
+	})
+}
