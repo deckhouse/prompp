@@ -18,7 +18,7 @@ import (
 
 // HeadStatusGetter getter head status from relabeler.
 type HeadStatusGetter interface {
-	HeadStatus(limit int) relabeler.HeadStatus
+	HeadStatus(ctx context.Context, limit int) relabeler.HeadStatus
 }
 
 // Register the API's endpoints in the given router from op.
@@ -115,7 +115,7 @@ func (api *API) serveHeadStatus(r *http.Request) apiFuncResult {
 		}
 	}
 
-	return apiFuncResult{api.headStatusGetter.HeadStatus(limit), nil, nil, nil}
+	return apiFuncResult{api.headStatusGetter.HeadStatus(r.Context(), limit), nil, nil, nil}
 }
 
 func (api *API) opRemoteWrite(middlewares ...middleware.Middleware) http.HandlerFunc {

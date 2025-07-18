@@ -90,7 +90,7 @@ func (p *RefillProcessor) Process(ctx context.Context, refill Refill) error {
 					prometheus.Labels{"processor_type": "refill", "status_code": "200"},
 				).Inc()
 
-				p.receiver.MergeOutOfOrderChunks()
+				p.receiver.MergeOutOfOrderChunks(ctx)
 
 				return refill.Write(ctx, model.RefillProcessingStatus{Code: http.StatusOK})
 			}

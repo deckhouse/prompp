@@ -1,8 +1,10 @@
 package appender
 
 import (
-	"github.com/prometheus/prometheus/pp/go/util"
+	"context"
 	"time"
+
+	"github.com/prometheus/prometheus/pp/go/util"
 )
 
 const (
@@ -12,7 +14,7 @@ const (
 
 // MetricWriterTarget - something that can write metrics.
 type MetricWriterTarget interface {
-	WriteMetrics()
+	WriteMetrics(ctx context.Context)
 }
 
 // MetricsWriteTrigger - metrics write trigger.
@@ -23,19 +25,19 @@ type MetricsWriteTrigger struct {
 }
 
 // NewMetricsWriteTrigger - MetricsWriteTrigger constructor.
-func NewMetricsWriteTrigger(interval time.Duration, targets ...MetricWriterTarget) *MetricsWriteTrigger {
+func NewMetricsWriteTrigger(ctx context.Context, interval time.Duration, targets ...MetricWriterTarget) *MetricsWriteTrigger {
 	t := &MetricsWriteTrigger{
 		interval: interval,
 		targets:  targets,
 		closer:   util.NewCloser(),
 	}
 
-	go t.loop()
+	go t.loop(ctx)
 
 	return t
 }
 
-func (t *MetricsWriteTrigger) loop() {
+func (t *MetricsWriteTrigger) loop(ctx context.Context) {
 	defer t.closer.Done()
 	ticker := time.NewTicker(t.interval)
 	defer ticker.Stop()
@@ -44,7 +46,7 @@ func (t *MetricsWriteTrigger) loop() {
 		select {
 		case <-ticker.C:
 			for _, target := range t.targets {
-				target.WriteMetrics()
+				target.WriteMetrics(ctx)
 			}
 		case <-t.closer.Signal():
 			return
@@ -55,5 +57,4 @@ func (t *MetricsWriteTrigger) loop() {
 // Close - io.Closer interface implementation.
 func (t *MetricsWriteTrigger) Close() error {
 	return t.closer.Close()
-
 }
