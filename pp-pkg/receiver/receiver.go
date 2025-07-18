@@ -453,6 +453,7 @@ func (rr *Receiver) ApplyConfig(cfg *prom_config.Config) error {
 
 // FindFromBuilder label set from builder in lss, if not found return EmptyLabels.
 func (rr *Receiver) FindFromBuilder(
+	ctx context.Context,
 	sortedAdd []cppbridge.Label,
 	sortedDel []string,
 	snapshot *cppbridge.LabelSetSnapshot,
@@ -460,12 +461,12 @@ func (rr *Receiver) FindFromBuilder(
 	lsID uint32,
 	skipCache bool,
 ) (labels.Labels, bool) {
-	return rr.appender.FindFromBuilder(sortedAdd, sortedDel, snapshot, hash, lsID, skipCache)
+	return rr.appender.FindFromBuilder(ctx, sortedAdd, sortedDel, snapshot, hash, lsID, skipCache)
 }
 
 // FindByHash label set by hash in cache.
-func (rr *Receiver) FindByHash(hash uint64) (labels.Labels, bool) {
-	return rr.appender.FindByHash(hash)
+func (rr *Receiver) FindByHash(ctx context.Context, hash uint64) (labels.Labels, bool) {
+	return rr.appender.FindByHash(ctx, hash)
 }
 
 // GetState create new state.

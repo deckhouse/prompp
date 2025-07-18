@@ -3,6 +3,7 @@
 package labels
 
 import (
+	"context"
 	"slices"
 	"strconv"
 	"strings"
@@ -571,6 +572,7 @@ const (
 // Receiver implementation for [receiver.Receiver].
 type Receiver interface {
 	FindFromBuilder(
+		ctx context.Context,
 		sortedAdd []cppbridge.Label,
 		sortedDel []string,
 		snapshot *cppbridge.LabelSetSnapshot,
@@ -578,7 +580,7 @@ type Receiver interface {
 		lsID uint32,
 		skipCache bool,
 	) (Labels, bool)
-	FindByHash(hash uint64) (Labels, bool)
+	FindByHash(ctx context.Context, hash uint64) (Labels, bool)
 }
 
 // noopReceiver implementation [Receiver] without operation.
@@ -592,6 +594,7 @@ func newNoopReceiver() *Receiver {
 
 // FindFromBuilder implementation [Receiver].
 func (*noopReceiver) FindFromBuilder(
+	_ context.Context,
 	_ []cppbridge.Label,
 	_ []string,
 	_ *cppbridge.LabelSetSnapshot,
@@ -603,7 +606,7 @@ func (*noopReceiver) FindFromBuilder(
 }
 
 // FindByHash implementation [Receiver].
-func (*noopReceiver) FindByHash(_ uint64) (Labels, bool) {
+func (*noopReceiver) FindByHash(_ context.Context, _ uint64) (Labels, bool) {
 	return EmptyLabels(), false
 }
 
@@ -618,6 +621,7 @@ type storage struct {
 	lsCache          *model.CacheWithBitset
 	writeLock        sync.Mutex
 	rotateLock       sync.RWMutex
+	baseCtx          context.Context
 	generation       uint64
 	memoryInUse      *prometheus.GaugeVec
 	lssSize          *prometheus.GaugeVec
@@ -636,6 +640,7 @@ func newStorage() *storage {
 		lsCache:    model.NewCacheWithBitset(),
 		writeLock:  sync.Mutex{},
 		rotateLock: sync.RWMutex{},
+		baseCtx:    context.Background(),
 		memoryInUse: factory.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name:        "prompp_labels_cgo_memory_bytes",
@@ -695,7 +700,7 @@ func (s *storage) findOrEmplaceFromBuilder(b *Builder) Labels {
 	hash := cppbridge.LabelSetFromBuilderHash(sortedAdd, b.del, b.base.snapshot, b.base.id)
 	receiver := *s.receiver.Load()
 
-	if ls, find := receiver.FindByHash(hash); find {
+	if ls, find := receiver.FindByHash(s.baseCtx, hash); find {
 		return ls
 	}
 
@@ -704,6 +709,7 @@ func (s *storage) findOrEmplaceFromBuilder(b *Builder) Labels {
 	}
 
 	if ls, find := receiver.FindFromBuilder(
+		s.baseCtx,
 		sortedAdd,
 		b.del,
 		b.base.snapshot,
