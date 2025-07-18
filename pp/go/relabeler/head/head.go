@@ -1263,6 +1263,7 @@ func (h *Head) findByHashOnShard(hash, shardID uint64) (labels.Labels, bool) {
 
 	// try get snapshot,
 	var snapshot *cppbridge.LabelSetSnapshot
+	h.lssMXs[shardID].RLock()
 	for i := 0; i < tryCount; i++ {
 		if snapshot = h.lsses[shardID].GetSnapshot(); snapshot != nil {
 			break
@@ -1271,6 +1272,7 @@ func (h *Head) findByHashOnShard(hash, shardID uint64) (labels.Labels, bool) {
 		// Let other goroutines do stuff.
 		runtime.Gosched()
 	}
+	h.lssMXs[shardID].RUnlock()
 
 	// if can't get a snapshot, take the long way
 	if snapshot == nil {
