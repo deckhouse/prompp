@@ -471,4 +471,45 @@ TEST_F(LoaderUnloaderBigTestFixture, NothingToUnload) {
   ASSERT_EQ(stream_.view(), "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"s);
 }
 
+TEST_F(LoaderUnloaderBigTestFixture, EmptyLoader) {
+  // Arrange
+  storage_.queried_series_bitmap.set({2, 3});
+
+  // Act
+  Loader loader(storage_);
+
+  // Assert
+  ASSERT_TRUE(loader.empty());
+}
+
+TEST_F(LoaderUnloaderBigTestFixture, LoadAll) {
+  // Arrange
+  storage_.queried_series_bitmap.set({0, 1});
+
+  Unloader(storage_).unload(stream_);
+
+  // Act
+  Loader loader(storage_);
+  loader.load_next(stream_.span<uint8_t>());
+  loader.load_finalize();
+
+  // Assert
+  ASSERT_EQ((SampleList{
+                {1, 1.0},
+                {2, 2.0},
+                {3, 3.0},
+                {4, 4.0},
+                {5, 5.0},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[2]));
+  ASSERT_EQ((SampleList{
+                {1, 6.0},
+                {2, 7.0},
+                {3, 8.0},
+                {4, 9.0},
+                {5, 10.0},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[3]));
+}
+
 }  // namespace
