@@ -361,7 +361,7 @@ func (s *UnloadedDataStorage) Write(snapshot []byte) error {
 	return nil
 }
 
-func (s *UnloadedDataStorage) ForEachShard(f func(snapshot []byte, isLast bool)) error {
+func (s *UnloadedDataStorage) ForEachSnapshot(f func(snapshot []byte, isLast bool)) error {
 	var offset int64
 	snapshot := make([]byte, 0, s.maxSnapshotSize)
 	for index := range s.snapshots {

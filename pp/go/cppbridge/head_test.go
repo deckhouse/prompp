@@ -202,7 +202,7 @@ func (s *UnloadedDataStorageSuite) SetupTest() {
 
 func (s *UnloadedDataStorageSuite) readSnapshots() ([]string, error) {
 	var snapshots []string
-	return snapshots, s.storage.ForEachShard(func(snapshot []byte, isLast bool) {
+	return snapshots, s.storage.ForEachSnapshot(func(snapshot []byte, isLast bool) {
 		snapshots = append(snapshots, string(snapshot))
 	})
 }
