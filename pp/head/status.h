@@ -80,7 +80,7 @@ class TopItems {
 
  private:
   Elements elements_;
-  Element* min_element_;
+  Element* min_element_{};
 };
 
 template <class Lss, class Status>
