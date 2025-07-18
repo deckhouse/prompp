@@ -163,13 +163,13 @@ func (h *Head) reconfigureRelabelersData(
 //
 
 type shard struct {
-	lss               *LSS
-	dataStorage       *DataStorage
+	lss                 *LSS
+	dataStorage         *DataStorage
 	unloadedDataStorage *cppbridge.UnloadedDataStorage
-	wal               *ShardWal
-	lssLocker         RWLockable
-	dataStorageLocker RWLockable
-	id                uint16
+	wal                 *ShardWal
+	lssLocker           RWLockable
+	dataStorageLocker   RWLockable
+	id                  uint16
 }
 
 // newShard init new *shard.
@@ -177,18 +177,18 @@ func newShard(
 	lss *LSS,
 	dataStorage *DataStorage,
 	unloadedDataStorage *cppbridge.UnloadedDataStorage,
-    wal *ShardWal,
+	wal *ShardWal,
 	shardID uint16,
 	withLocker bool,
 ) *shard {
 	s := &shard{
-		id:                shardID,
-		lss:               lss,
-		dataStorage:       dataStorage,
+		id:                  shardID,
+		lss:                 lss,
+		dataStorage:         dataStorage,
 		unloadedDataStorage: unloadedDataStorage,
-		wal:               wal,
-		lssLocker:         &noopRWLockable{},
-		dataStorageLocker: &noopRWLockable{},
+		wal:                 wal,
+		lssLocker:           &noopRWLockable{},
+		dataStorageLocker:   &noopRWLockable{},
 	}
 
 	if withLocker {
@@ -255,6 +255,10 @@ func (s *shard) LSSUnlock() {
 	s.lssLocker.Unlock()
 }
 
+func (s *shard) UnloadedDataStorage() relabeler.UnloadedDataStorage {
+	return s.unloadedDataStorage
+}
+
 //
 // RWLockable
 //
@@ -285,7 +289,3 @@ func (*noopRWLockable) RUnlock() {}
 
 // Unlock implementation [RWLockable].
 func (*noopRWLockable) Unlock() {}
-
-func (s *shard) UnloadedDataStorage() relabeler.UnloadedDataStorage {
-	return s.unloadedDataStorage
-}

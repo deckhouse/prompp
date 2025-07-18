@@ -1100,8 +1100,11 @@ func (h *Head) UnloadUnusedSeriesData() {
 	task := h.CreateTask(
 		relabeler.DSUnloadUnusedSeriesData,
 		func(shard relabeler.Shard) error {
-			// TODO: what will we do in case of a write error?
-			return shard.UnloadedDataStorage().Write(shard.DataStorage().UnloadUnusedSeriesData())
+			shard.DataStorageLock()
+			err := shard.UnloadedDataStorage().Write(shard.DataStorage().UnloadUnusedSeriesData())
+			shard.DataStorageUnlock()
+
+			return err
 		},
 		relabeler.ForDataStorageTask,
 	)
