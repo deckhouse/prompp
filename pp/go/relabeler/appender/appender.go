@@ -134,7 +134,7 @@ func (qa *QueryableAppender) Rotate(ctx context.Context) error {
 	defer unlock()
 
 	defer func() {
-		qa.querierMetrics.RotationDuration.Set(float64(time.Since(start).Microseconds()))
+		qa.querierMetrics.RotationDuration.Set(float64(time.Since(start).Nanoseconds()))
 	}()
 
 	qa.head.MergeOutOfOrderChunks()

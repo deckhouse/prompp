@@ -87,7 +87,7 @@ func NewMetrics(registerer prometheus.Registerer, source string) *Metrics {
 		RotationDuration: factory.NewGauge(
 			prometheus.GaugeOpts{
 				Name: "prompp_head_rotate_duration",
-				Help: "The duration of the rotate in microseconds",
+				Help: "The duration of the rotate in nanoseconds",
 			},
 		),
 	}
