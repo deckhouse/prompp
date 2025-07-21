@@ -42,10 +42,9 @@ import (
 	"github.com/prometheus/prometheus/util/annotations"
 )
 
-const (
-	defaultShutdownTimeout = 40 * time.Second
-	defaultNumberOfShards  = 2
-)
+const defaultShutdownTimeout = 40 * time.Second
+
+var DefaultNumberOfShards uint16 = 2
 
 type HeadConfig struct {
 	inputRelabelerConfigs []*config.InputRelabelerConfig
@@ -142,7 +141,7 @@ func NewReceiver(
 
 	numberOfShards := receiverCfg.NumberOfShards
 	if numberOfShards == 0 {
-		numberOfShards = defaultNumberOfShards
+		numberOfShards = DefaultNumberOfShards
 	}
 
 	destinationGroups, err := makeDestinationGroups(
@@ -345,7 +344,7 @@ func (rr *Receiver) ApplyConfig(cfg *prom_config.Config) error {
 
 	numberOfShards := rCfg.NumberOfShards
 	if numberOfShards == 0 {
-		numberOfShards = defaultNumberOfShards
+		numberOfShards = DefaultNumberOfShards
 	}
 
 	rr.headConfigStorage.Store(&HeadConfig{
