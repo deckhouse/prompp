@@ -255,15 +255,14 @@ func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) (*HeadDataStorageSe
 	return serializedChunks, result
 }
 
-func (ds *HeadDataStorage) InstantQuery(targetTimestamp, defaultTimestamp int64, labelSetIDs []uint32) []Sample {
+func (ds *HeadDataStorage) InstantQuery(targetTimestamp, defaultTimestamp int64, labelSetIDs []uint32) ([]Sample, DataStorageQueryResult) {
 	samples := make([]Sample, len(labelSetIDs))
 	if defaultTimestamp != 0 {
 		for index := range samples {
 			samples[index].Timestamp = defaultTimestamp
 		}
 	}
-	seriesDataDataStorageInstantQuery(ds.dataStorage, labelSetIDs, targetTimestamp, samples)
-	return samples
+	return samples, seriesDataDataStorageInstantQuery(ds.dataStorage, labelSetIDs, targetTimestamp, samples)
 }
 
 func (ds *HeadDataStorage) QueryFinal(queriers []uintptr) {

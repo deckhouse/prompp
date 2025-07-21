@@ -305,6 +305,7 @@ func (q *Querier) selectInstant(
 	}
 
 	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
+	var dataStorageLoadWaiter relabeler.TaskWaiter
 	tDataStorageQuery := q.head.CreateTask(
 		relabeler.DSQueryInstantQuerier,
 		func(shard relabeler.Shard) error {
@@ -316,12 +317,16 @@ func (q *Querier) selectInstant(
 			}
 
 			shard.DataStorageRLock()
+			samples, result := shard.DataStorage().InstantQuery(q.maxt, valueNotFoundTimestampValue, lssQueryResult.IDs())
 			seriesSets[shardID] = NewInstantSeriesSet(
 				lssQueryResult,
 				snapshots[shardID],
 				valueNotFoundTimestampValue,
-				shard.DataStorage().InstantQuery(q.maxt, valueNotFoundTimestampValue, lssQueryResult.IDs()),
+				samples,
 			)
+			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {
+				dataStorageLoadWaiter.Add(q.head.CreateDataStorageLoadAndQueryTask(shardID, result.Querier))
+			}
 			shard.DataStorageRUnlock()
 
 			return nil
@@ -330,6 +335,11 @@ func (q *Querier) selectInstant(
 	)
 	q.head.Enqueue(tDataStorageQuery)
 	_ = tDataStorageQuery.Wait()
+
+	if err := dataStorageLoadWaiter.Wait(); err != nil {
+		logger.Warnf("ChunkQuerier: Select: DataStorage load failed: %s", err)
+		return storage.ErrSeriesSet(err)
+	}
 
 	return storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge)
 }

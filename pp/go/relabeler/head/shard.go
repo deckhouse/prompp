@@ -101,7 +101,7 @@ func (ds *DataStorage) QueryFinal(queriers []uintptr) {
 	ds.dataStorage.QueryFinal(queriers)
 }
 
-func (ds *DataStorage) InstantQuery(targetTimestamp, notFoundValueTimestampValue int64, seriesIDs []uint32) []cppbridge.Sample {
+func (ds *DataStorage) InstantQuery(targetTimestamp, notFoundValueTimestampValue int64, seriesIDs []uint32) ([]cppbridge.Sample, cppbridge.DataStorageQueryResult) {
 	return ds.dataStorage.InstantQuery(targetTimestamp, notFoundValueTimestampValue, seriesIDs)
 }
 

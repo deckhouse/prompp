@@ -1812,9 +1812,11 @@ func seriesDataDataStorageQuery(dataStorage uintptr, query HeadDataStorageQuery,
 		query            HeadDataStorageQuery
 		serializedChunks *[]byte
 	}{dataStorage, query, serializedChunks}
+
 	var res DataStorageQueryResult
-	start := time.Now().UnixNano()
+
 	testGC()
+	start := time.Now().UnixNano()
 	fastcgo.UnsafeCall2(
 		C.prompp_series_data_data_storage_query,
 		uintptr(unsafe.Pointer(&args)),
@@ -1826,7 +1828,7 @@ func seriesDataDataStorageQuery(dataStorage uintptr, query HeadDataStorageQuery,
 	return res
 }
 
-func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32, timestamp int64, samples []Sample) {
+func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32, timestamp int64, samples []Sample) DataStorageQueryResult {
 	args := struct {
 		dataStorage uintptr
 		labelSetIDs []uint32
@@ -1834,11 +1836,16 @@ func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32
 		samples     []Sample
 	}{dataStorage, labelSetIDs, timestamp, samples}
 
+	var res DataStorageQueryResult
+
 	testGC()
-	fastcgo.UnsafeCall1(
+	fastcgo.UnsafeCall2(
 		C.prompp_series_data_data_storage_instant_query,
 		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
 	)
+
+	return res
 }
 
 func seriesDataDataStorageQueryFinal(queriers []uintptr) {

@@ -158,9 +158,10 @@ func (s *HeadSuite) TestInstantQuery() {
 	defaultTimestamp := int64(-1)
 	// Act
 
-	samples := dataStorage.InstantQuery(targetTimestamp, defaultTimestamp, seriesIDs)
+	samples, result := dataStorage.InstantQuery(targetTimestamp, defaultTimestamp, seriesIDs)
 
 	// Assert
+	require.Equal(s.T(), cppbridge.DataStorageQueryStatusSuccess, result.Status)
 	require.Len(s.T(), samples, 4)
 
 	s.Equal(defaultTimestamp, samples[0].Timestamp)
