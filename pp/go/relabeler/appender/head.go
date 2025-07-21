@@ -216,6 +216,10 @@ func (h *RotatableHead) RLockQuery(ctx context.Context) (runlock func(), err err
 	return h.head.RLockQuery(ctx)
 }
 
+func (h *RotatableHead) CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr) *relabeler.GenericTask {
+	return h.head.CreateDataStorageLoadAndQueryTask(shardID, querier)
+}
+
 //
 // HeapProfileWritableHead
 //

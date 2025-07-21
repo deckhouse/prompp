@@ -140,3 +140,7 @@ func (h *DiscardableRotatableHead) Concurrency() int64 {
 func (h *DiscardableRotatableHead) RLockQuery(ctx context.Context) (runlock func(), err error) {
 	return h.head.RLockQuery(ctx)
 }
+
+func (h *DiscardableRotatableHead) CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr) *relabeler.GenericTask {
+	return h.head.CreateDataStorageLoadAndQueryTask(shardID, querier)
+}
