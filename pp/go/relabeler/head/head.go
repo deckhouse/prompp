@@ -707,7 +707,7 @@ func (h *Head) CreateTask(
 	onLss bool,
 ) *relabeler.GenericTask {
 	if h.readOnly {
-		return relabeler.NewReadOnlyGenericTask(fn, h.numberOfShards)
+		return relabeler.NewReadOnlyGenericTask(fn)
 	}
 
 	ls := prometheus.Labels{"type_task": taskName}
@@ -717,13 +717,14 @@ func (h *Head) CreateTask(
 		h.tasksDone.With(ls),
 		h.tasksLive.With(ls),
 		h.tasksExecute.With(ls),
-		h.numberOfShards,
 		onLss,
 	)
 }
 
 // Enqueue the task to be executed on head.
 func (h *Head) Enqueue(t *relabeler.GenericTask) {
+	t.SetShardsNumber(h.numberOfShards)
+
 	if h.readOnly {
 		h.readOnlyForEachShard(t)
 		return
