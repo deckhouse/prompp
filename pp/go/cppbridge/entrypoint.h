@@ -1138,6 +1138,8 @@ void prompp_series_data_data_storage_allocated_memory(void* args, void* res);
  */
 void prompp_series_data_data_storage_query(void* args, void* res);
 
+void prompp_series_data_data_storage_query_final(void* args);
+
 /**
  * @brief return samples at given timestamp for label sets.
  *

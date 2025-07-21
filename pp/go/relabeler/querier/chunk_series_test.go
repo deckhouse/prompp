@@ -48,12 +48,13 @@ func (s *ChunksSeriesSetTestSuite) TestAll() {
 
 	require.Equal(s.T(), cppbridge.LSSQueryStatusMatch, lssQueryResult.Status())
 
-	serializedChunks := ds.Query(cppbridge.HeadDataStorageQuery{
+	serializedChunks, result := ds.Query(cppbridge.HeadDataStorageQuery{
 		StartTimestampMs: mint,
 		EndTimestampMs:   maxt,
 		LabelSetIDs:      lssQueryResult.IDs(),
 	})
 
+	require.Equal(s.T(), cppbridge.DataStorageQueryStatusSuccess, result.Status)
 	require.Equal(s.T(), 2, serializedChunks.NumberOfChunks())
 
 	chunkRecoder := cppbridge.NewSerializedChunkRecoder(serializedChunks, cppbridge.TimeInterval{

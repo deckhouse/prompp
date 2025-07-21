@@ -14,7 +14,7 @@ type DataStorage interface {
 	AppendInnerSeriesSlice(innerSeriesSlice []*cppbridge.InnerSeries)
 	Raw() *cppbridge.HeadDataStorage
 	MergeOutOfOrderChunks()
-	Query(query cppbridge.HeadDataStorageQuery) *cppbridge.HeadDataStorageSerializedChunks
+	Query(query cppbridge.HeadDataStorageQuery) (*cppbridge.HeadDataStorageSerializedChunks, cppbridge.DataStorageQueryResult)
 	QueryFinal(queriers []uintptr)
 	InstantQuery(targetTimestamp, notFoundValueTimestampValue int64, seriesIDs []uint32) []cppbridge.Sample
 	AllocatedMemory() uint64
@@ -107,6 +107,7 @@ type Head interface {
 	CreateTask(taskName string, fn ShardFn, isLss bool) *GenericTask
 	Concurrency() int64
 	RLockQuery(ctx context.Context) (runlock func(), err error)
+	CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr) *GenericTask
 }
 
 type Distributor interface {

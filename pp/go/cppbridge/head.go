@@ -23,6 +23,9 @@ const (
 	MaxPointsInChunk            = 240
 	Uint32Size                  = 4
 	SerializedChunkMetadataSize = 13
+
+	DataStorageQueryStatusSuccess      uint8 = 0
+	DataStorageQueryStatusNeedDataLoad uint8 = 1
 )
 
 type TimeInterval struct {
@@ -242,15 +245,14 @@ func (i HeadDataStorageSerializedChunkIndex) Chunks(r *HeadDataStorageSerialized
 	return res
 }
 
-func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) *HeadDataStorageSerializedChunks {
-	serializedChunks := &HeadDataStorageSerializedChunks{
-		data: seriesDataDataStorageQuery(ds.dataStorage, query),
-	}
+func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) (*HeadDataStorageSerializedChunks, DataStorageQueryResult) {
+	serializedChunks := new(HeadDataStorageSerializedChunks)
+	result := seriesDataDataStorageQuery(ds.dataStorage, query, &serializedChunks.data)
 	runtime.KeepAlive(ds)
 	runtime.SetFinalizer(serializedChunks, func(sc *HeadDataStorageSerializedChunks) {
 		freeBytes(sc.data)
 	})
-	return serializedChunks
+	return serializedChunks, result
 }
 
 func (ds *HeadDataStorage) InstantQuery(targetTimestamp, defaultTimestamp int64, labelSetIDs []uint32) []Sample {

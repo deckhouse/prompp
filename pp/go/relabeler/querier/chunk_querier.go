@@ -89,7 +89,8 @@ func (q *ChunkQuerier) Select(
 		return storage.ErrChunkSeriesSet(err)
 	}
 
-	serializedChunksShards := make([]*cppbridge.HeadDataStorageSerializedChunks, q.head.NumberOfShards())
+	queryResults := make([]dataStorageQueryResult, q.head.NumberOfShards())
+	var dataStorageLoadWaiter relabeler.TaskWaiter
 	tDataStorageQuery := q.head.CreateTask(
 		relabeler.DSQueryChunkQuerier,
 		func(shard relabeler.Shard) error {
@@ -99,19 +100,18 @@ func (q *ChunkQuerier) Select(
 				return nil
 			}
 
+			var result cppbridge.DataStorageQueryResult
+
 			shard.DataStorageRLock()
-			serializedChunks := shard.DataStorage().Query(cppbridge.HeadDataStorageQuery{
+			queryResults[shardID].serializedChunks, result = shard.DataStorage().Query(cppbridge.HeadDataStorageQuery{
 				StartTimestampMs: q.mint,
 				EndTimestampMs:   q.maxt,
 				LabelSetIDs:      lssQueryResult.IDs(),
 			})
-			shard.DataStorageRUnlock()
-
-			if serializedChunks.NumberOfChunks() == 0 {
-				return nil
+			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {
+				dataStorageLoadWaiter.Add(q.head.CreateDataStorageLoadAndQueryTask(shardID, result.Querier))
 			}
-
-			serializedChunksShards[shardID] = serializedChunks
+			shard.DataStorageRUnlock()
 
 			return nil
 		},
@@ -120,9 +120,14 @@ func (q *ChunkQuerier) Select(
 	q.head.Enqueue(tDataStorageQuery)
 	_ = tDataStorageQuery.Wait()
 
+	if err := dataStorageLoadWaiter.Wait(); err != nil {
+		logger.Warnf("ChunkQuerier: Select: DataStorage load failed: %s", err)
+		return storage.ErrChunkSeriesSet(err)
+	}
+
 	chunkSeriesSets := make([]storage.ChunkSeriesSet, q.head.NumberOfShards())
-	for shardID, serializedChunks := range serializedChunksShards {
-		if serializedChunks == nil {
+	for shardID := range queryResults {
+		if queryResults[shardID].serializedChunks.NumberOfChunks() == 0 {
 			chunkSeriesSets[shardID] = &EmptyChunkSeriesSet{}
 			continue
 		}
@@ -130,7 +135,7 @@ func (q *ChunkQuerier) Select(
 		chunkSeriesSets[shardID] = NewChunkSeriesSet(
 			lssQueryResults[shardID],
 			snapshots[shardID],
-			cppbridge.NewSerializedChunkRecoder(serializedChunks, cppbridge.TimeInterval{MinT: q.mint, MaxT: q.maxt}),
+			cppbridge.NewSerializedChunkRecoder(queryResults[shardID].serializedChunks, cppbridge.TimeInterval{MinT: q.mint, MaxT: q.maxt}),
 		)
 	}
 

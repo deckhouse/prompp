@@ -88,6 +88,10 @@ extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
   serializer.serialize(queried_chunk_list, bytes_stream);
 }
 
+extern "C" void prompp_series_data_data_storage_query_final(void*) {
+  ;
+}
+
 extern "C" void prompp_series_data_data_storage_instant_query(void* args) {
   using PromPP::Primitives::LabelSetID;
   using PromPP::Primitives::Timestamp;

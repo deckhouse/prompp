@@ -1801,14 +1801,18 @@ func seriesDataDataStorageAllocatedMemory(dataStorage uintptr) uint64 {
 	return res.allocatedMemory
 }
 
-func seriesDataDataStorageQuery(dataStorage uintptr, query HeadDataStorageQuery) []byte {
+type DataStorageQueryResult struct {
+	Querier uintptr
+	Status  uint8
+}
+
+func seriesDataDataStorageQuery(dataStorage uintptr, query HeadDataStorageQuery, serializedChunks *[]byte) DataStorageQueryResult {
 	args := struct {
-		dataStorage uintptr
-		query       HeadDataStorageQuery
-	}{dataStorage, query}
-	var res struct {
-		serializedChunks []byte
-	}
+		dataStorage      uintptr
+		query            HeadDataStorageQuery
+		serializedChunks *[]byte
+	}{dataStorage, query, serializedChunks}
+	var res DataStorageQueryResult
 	start := time.Now().UnixNano()
 	testGC()
 	fastcgo.UnsafeCall2(
@@ -1819,7 +1823,7 @@ func seriesDataDataStorageQuery(dataStorage uintptr, query HeadDataStorageQuery)
 	headDataStorageQuerySum.Add(float64(time.Now().UnixNano() - start))
 	headDataStorageQueryCount.Inc()
 
-	return res.serializedChunks
+	return res
 }
 
 func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32, timestamp int64, samples []Sample) {

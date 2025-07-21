@@ -93,7 +93,7 @@ func (ds *DataStorage) MergeOutOfOrderChunks() {
 	ds.encoder.MergeOutOfOrderChunks()
 }
 
-func (ds *DataStorage) Query(query cppbridge.HeadDataStorageQuery) *cppbridge.HeadDataStorageSerializedChunks {
+func (ds *DataStorage) Query(query cppbridge.HeadDataStorageQuery) (*cppbridge.HeadDataStorageSerializedChunks, cppbridge.DataStorageQueryResult) {
 	return ds.dataStorage.Query(query)
 }
 
@@ -176,11 +176,11 @@ type dataStorageLoadAndQueryTask struct {
 	lock     sync.Mutex
 }
 
-func (t *dataStorageLoadAndQueryTask) Add(querier uintptr, createTask func() *relabeler.GenericTask) *relabeler.GenericTask {
+func (t *dataStorageLoadAndQueryTask) Add(querier uintptr, createAndEnqueueTask func() *relabeler.GenericTask) *relabeler.GenericTask {
 	t.lock.Lock()
 	t.queriers = append(t.queriers, querier)
 	if len(t.queriers) == 1 {
-		t.task = createTask()
+		t.task = createAndEnqueueTask()
 	}
 	t.lock.Unlock()
 
