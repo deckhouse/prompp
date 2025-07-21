@@ -330,6 +330,11 @@ func (h *HeapProfileWritableHead) Enqueue(t *relabeler.GenericTask) {
 	h.head.Enqueue(t)
 }
 
+// EnqueueOnShard the task to be executed on head on specific shard.
+func (h *HeapProfileWritableHead) EnqueueOnShard(t *relabeler.GenericTask, shardID uint16) {
+	h.head.EnqueueOnShard(t, shardID)
+}
+
 // Concurrency return current head workers concurrency.
 func (h *HeapProfileWritableHead) Concurrency() int64 {
 	return h.head.Concurrency()
