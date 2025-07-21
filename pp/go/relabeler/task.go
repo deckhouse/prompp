@@ -183,8 +183,8 @@ type TaskWaiter struct {
 }
 
 // NewTaskWaiter init new TaskWaiter for n task.
-func NewTaskWaiter(n int) *TaskWaiter {
-	return &TaskWaiter{
+func NewTaskWaiter(n int) TaskWaiter {
+	return TaskWaiter{
 		tasks: make([]*GenericTask, 0, n),
 	}
 }
@@ -196,10 +196,10 @@ func (tw *TaskWaiter) Add(t *GenericTask) {
 
 // Wait for tasks to be completed.
 func (tw *TaskWaiter) Wait() error {
-	errs := make([]error, len(tw.tasks))
+	var err error
 	for _, t := range tw.tasks {
-		errs = append(errs, t.Wait())
+		err = errors.Join(err, t.Wait())
 	}
 
-	return errors.Join(errs...)
+	return err
 }
