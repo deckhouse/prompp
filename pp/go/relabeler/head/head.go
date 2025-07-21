@@ -715,7 +715,7 @@ func (h *Head) CreateTask(
 	onLss bool,
 ) *relabeler.GenericTask {
 	if h.readOnly {
-		return relabeler.NewReadOnlyGenericTask(fn, h.numberOfShards)
+		return relabeler.NewReadOnlyGenericTask(fn)
 	}
 
 	ls := prometheus.Labels{"type_task": taskName}
@@ -725,13 +725,14 @@ func (h *Head) CreateTask(
 		h.tasksDone.With(ls),
 		h.tasksLive.With(ls),
 		h.tasksExecute.With(ls),
-		h.numberOfShards,
 		onLss,
 	)
 }
 
 // Enqueue the task to be executed on head.
 func (h *Head) Enqueue(t *relabeler.GenericTask) {
+	t.SetShardsNumber(h.numberOfShards)
+
 	if h.readOnly {
 		h.readOnlyForEachShard(t)
 		return
@@ -748,6 +749,22 @@ func (h *Head) Enqueue(t *relabeler.GenericTask) {
 	}
 }
 
+// EnqueueOnShard the task to be executed on head on specific shard.
+func (h *Head) EnqueueOnShard(t *relabeler.GenericTask, shardID uint16) {
+	t.SetShardsNumber(1)
+
+	if h.readOnly {
+		h.readOnlyOnShard(t, h.shards[shardID])
+		return
+	}
+
+	if t.ForLSS() {
+		h.lssTaskChs[shardID] <- t
+	} else {
+		h.dataStorageTaskChs[shardID] <- t
+	}
+}
+
 // RLockQuery locks for query to [Head].
 func (h *Head) RLockQuery(ctx context.Context) (runlock func(), err error) {
 	return h.queryLocker.RLock(ctx)
@@ -759,14 +776,16 @@ func (h *Head) Concurrency() int64 {
 	return 2 * int64(1+ExtraReadConcurrency) * int64(h.numberOfShards)
 }
 
-// readOnlyForEachShard run generic task on read only head without queue.
+// readOnlyForEachShard run generic task on read only head without queue on all shards.
 func (h *Head) readOnlyForEachShard(t *relabeler.GenericTask) {
-	for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
-		s := h.shards[shardID]
-		go func(sd *shard) {
-			t.ExecuteOnShard(sd)
-		}(s)
+	for _, s := range h.shards {
+		h.readOnlyOnShard(t, s)
 	}
+}
+
+// readOnlyOnShard run generic task on read only head without queue on specific shard.
+func (h *Head) readOnlyOnShard(t *relabeler.GenericTask, s *shard) {
+	go func(sd *shard) { t.ExecuteOnShard(sd) }(s)
 }
 
 // Append incoming data to head.
@@ -844,9 +863,8 @@ func (h *Head) Append(
 		relabeler.LSSWalWrite,
 		func(shard relabeler.Shard) error {
 			shard.LSSLock()
-			defer shard.LSSUnlock()
-
 			limitExhausted, errWrite := shard.Wal().Write(shardedInnerSeries.DataByShard(shard.ShardID()))
+			shard.LSSUnlock()
 			if errWrite != nil {
 				return fmt.Errorf("shard %d: %w", shard.ShardID(), errWrite)
 			}

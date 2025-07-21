@@ -103,6 +103,7 @@ type Head interface {
 	String() string
 	CopySeriesFrom(other Head)
 	Enqueue(t *GenericTask)
+	EnqueueOnShard(t *GenericTask, shardID uint16)
 	CreateTask(taskName string, fn ShardFn, isLss bool) *GenericTask
 	Concurrency() int64
 	RLockQuery(ctx context.Context) (runlock func(), err error)
