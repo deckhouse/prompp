@@ -92,36 +92,34 @@ const (
 
 // GenericTask generic task, will be executed on each shard.
 type GenericTask struct {
-	errs        []error
-	shardFn     ShardFn
-	wg          sync.WaitGroup
-	createdTS   int64
-	executeTS   int64
-	created     prometheus.Counter
-	done        prometheus.Counter
-	live        prometheus.Counter
-	execute     prometheus.Counter
-	forLSS      bool
-	isExclusive bool
+	errs      []error
+	shardFn   ShardFn
+	wg        sync.WaitGroup
+	createdTS int64
+	executeTS int64
+	created   prometheus.Counter
+	done      prometheus.Counter
+	live      prometheus.Counter
+	execute   prometheus.Counter
+	forLSS    bool
 }
 
 func NewGenericTask(
 	shardFn ShardFn,
 	created, done, live, execute prometheus.Counter,
 	numberOfShards uint16,
-	forLSS, isExclusive bool,
+	forLSS bool,
 ) *GenericTask {
 	t := &GenericTask{
-		errs:        make([]error, numberOfShards),
-		shardFn:     shardFn,
-		wg:          sync.WaitGroup{},
-		createdTS:   time.Now().UnixMicro(),
-		created:     created,
-		done:        done,
-		live:        live,
-		execute:     execute,
-		forLSS:      forLSS,
-		isExclusive: isExclusive,
+		errs:      make([]error, numberOfShards),
+		shardFn:   shardFn,
+		wg:        sync.WaitGroup{},
+		createdTS: time.Now().UnixMicro(),
+		created:   created,
+		done:      done,
+		live:      live,
+		execute:   execute,
+		forLSS:    forLSS,
 	}
 	t.wg.Add(int(numberOfShards))
 	t.created.Inc()
@@ -151,23 +149,9 @@ func (t *GenericTask) ExecuteOnShard(shard Shard) {
 	t.wg.Done()
 }
 
-// ExecuteOnShardWithLocker execute task on shard with locker.
-func (t *GenericTask) ExecuteOnShardWithLocker(shard Shard, lock, unlock func()) {
-	lock()
-	atomic.CompareAndSwapInt64(&t.executeTS, 0, time.Now().UnixMicro())
-	t.errs[shard.ShardID()] = t.shardFn(shard)
-	unlock()
-	t.wg.Done()
-}
-
 // ForLSS indicates that the task is for operation on lss.
 func (t *GenericTask) ForLSS() bool {
 	return t.forLSS
-}
-
-// IsExclusive indicates that the task is exclusive(write).
-func (t *GenericTask) IsExclusive() bool {
-	return t.isExclusive
 }
 
 // Wait for the task to complete on all shards.

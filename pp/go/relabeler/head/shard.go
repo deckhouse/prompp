@@ -154,11 +154,42 @@ func (h *Head) reconfigureRelabelersData(
 	return nil
 }
 
+//
+// shard
+//
+
 type shard struct {
-	id          uint16
-	lss         *LSS
-	dataStorage *DataStorage
-	wal         *ShardWal
+	lss               *LSS
+	dataStorage       *DataStorage
+	wal               *ShardWal
+	lssLocker         RWLockable
+	dataStorageLocker RWLockable
+	id                uint16
+}
+
+// newShard init new *shard.
+func newShard(
+	lss *LSS,
+	dataStorage *DataStorage,
+	wal *ShardWal,
+	shardID uint16,
+	withLocker bool,
+) *shard {
+	s := &shard{
+		id:                shardID,
+		lss:               lss,
+		dataStorage:       dataStorage,
+		wal:               wal,
+		lssLocker:         &noopRWLockable{},
+		dataStorageLocker: &noopRWLockable{},
+	}
+
+	if withLocker {
+		s.lssLocker = &sync.RWMutex{}
+		s.dataStorageLocker = &sync.RWMutex{}
+	}
+
+	return s
 }
 
 func (s *shard) ShardID() uint16 {
@@ -176,3 +207,74 @@ func (s *shard) LSS() relabeler.LSS {
 func (s *shard) Wal() relabeler.Wal {
 	return s.wal
 }
+
+// DataStorageLock lock data storage for write operation.
+func (s *shard) DataStorageLock() {
+	s.dataStorageLocker.Lock()
+}
+
+// DataStorageRLock lock data storage for read operation.
+func (s *shard) DataStorageRLock() {
+	s.dataStorageLocker.RLock()
+}
+
+// DataStorageRUnlock unlock data storage for read operation.
+func (s *shard) DataStorageRUnlock() {
+	s.dataStorageLocker.RUnlock()
+}
+
+// DataStorageUnlock unlock data storage for write operation.
+func (s *shard) DataStorageUnlock() {
+	s.dataStorageLocker.Unlock()
+}
+
+// LSSLock lock lss for write operation.
+func (s *shard) LSSLock() {
+	s.lssLocker.Lock()
+}
+
+// LSSRLock lock lss for read operation.
+func (s *shard) LSSRLock() {
+	s.lssLocker.RLock()
+}
+
+// LSSUnlock unlock lss for read operation.
+func (s *shard) LSSRUnlock() {
+	s.lssLocker.RUnlock()
+}
+
+// LSSUnlock unlock lss for write operation.
+func (s *shard) LSSUnlock() {
+	s.lssLocker.Unlock()
+}
+
+//
+// RWLockable
+//
+
+// RWLockable implementation [sync.RWMutex].
+type RWLockable interface {
+	Lock()
+	RLock()
+	RUnlock()
+	Unlock()
+}
+
+//
+// noopRWLockable
+//
+
+// noopRWLockable implementation sync.RWMutex, does nothing.
+type noopRWLockable struct{}
+
+// Lock implementation [RWLockable].
+func (*noopRWLockable) Lock() {}
+
+// RLock implementation [RWLockable].
+func (*noopRWLockable) RLock() {}
+
+// RUnlock implementation [RWLockable].
+func (*noopRWLockable) RUnlock() {}
+
+// Unlock implementation [RWLockable].
+func (*noopRWLockable) Unlock() {}
