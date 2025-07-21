@@ -211,7 +211,7 @@ func New(
 	shards := make([]*shard, numberOfShards)
 
 	// current head workers concurrency
-	concurrency := 2 * int64(1+ExtraReadConcurrency)
+	concurrency := calculateHeadConcurrency(numberOfShards)
 
 	for shardID := uint16(0); shardID < numberOfShards; shardID++ {
 		lssTaskChs[shardID] = make(chan *relabeler.GenericTask, 4*concurrency)         // x4 for back pressure
@@ -764,8 +764,7 @@ func (h *Head) RLockQuery(ctx context.Context) (runlock func(), err error) {
 
 // Concurrency return current head workers concurrency.
 func (h *Head) Concurrency() int64 {
-	// 2 - lss and datastorage
-	return 2 * int64(1+ExtraReadConcurrency) * int64(h.numberOfShards)
+	return calculateHeadConcurrency(h.numberOfShards)
 }
 
 // readOnlyForEachShard run generic task on read only head without queue on all shards.
@@ -1103,4 +1102,10 @@ func (*Head) shardLoop(
 			task.ExecuteOnShard(s)
 		}
 	}
+}
+
+// calculateHeadConcurrency calculate current head workers concurrency.
+func calculateHeadConcurrency(numberOfShards uint16) int64 {
+	// 2 - lss and datastorage
+	return 2 * int64(1+ExtraReadConcurrency) * int64(numberOfShards)
 }
