@@ -116,10 +116,12 @@ func (cmd *cmdWALPPToBlock) Do(
 		tBlockWrite := h.CreateTask(
 			relabeler.BlockWrite,
 			func(shard relabeler.Shard) error {
+				shard.LSSLock()
+				defer shard.LSSUnlock()
+
 				return bw.Write(relabeler.NewBlock(shard.LSS().Raw(), shard.DataStorage().Raw()))
 			},
 			relabeler.ForLSSTask,
-			relabeler.ExclusiveTask,
 		)
 		h.Enqueue(tBlockWrite)
 		if err = tBlockWrite.Wait(); err != nil {

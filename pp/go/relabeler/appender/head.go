@@ -191,9 +191,9 @@ func (h *RotatableHead) CopySeriesFrom(other relabeler.Head) {
 func (h *RotatableHead) CreateTask(
 	taskName string,
 	fn relabeler.ShardFn,
-	onLss, isExclusive bool,
+	onLss bool,
 ) *relabeler.GenericTask {
-	return h.head.CreateTask(taskName, fn, onLss, isExclusive)
+	return h.head.CreateTask(taskName, fn, onLss)
 }
 
 // Enqueue the task to be executed on head.
@@ -315,9 +315,9 @@ func (h *HeapProfileWritableHead) CopySeriesFrom(other relabeler.Head) {
 func (h *HeapProfileWritableHead) CreateTask(
 	taskName string,
 	fn relabeler.ShardFn,
-	onLss, isExclusive bool,
+	onLss bool,
 ) *relabeler.GenericTask {
-	return h.head.CreateTask(taskName, fn, onLss, isExclusive)
+	return h.head.CreateTask(taskName, fn, onLss)
 }
 
 // Enqueue the task to be executed on head.

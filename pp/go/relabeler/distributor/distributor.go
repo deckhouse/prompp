@@ -40,6 +40,9 @@ func (d *Distributor) Send(ctx context.Context, head relabeler.Head, shardedData
 	tDOutputRelabeling := head.CreateTask(
 		relabeler.LSSOutputRelabeling,
 		func(shard relabeler.Shard) error {
+			shard.LSSLock()
+			defer shard.LSSUnlock()
+
 			return d.ParallelRange(func(destinationGroupID int, destinationGroup *relabeler.DestinationGroup) error {
 				outputInnerSeries := cppbridge.NewShardsInnerSeries(1 << destinationGroup.ShardsNumberPower())
 				relabeledSeries := cppbridge.NewRelabeledSeries()
@@ -68,7 +71,6 @@ func (d *Distributor) Send(ctx context.Context, head relabeler.Head, shardedData
 			})
 		},
 		relabeler.ForLSSTask,
-		relabeler.ExclusiveTask,
 	)
 	head.Enqueue(tDOutputRelabeling)
 	if err := tDOutputRelabeling.Wait(); err != nil {

@@ -59,6 +59,9 @@ func (q *ChunkQuerier) Select(
 	tLSSQuery := q.head.CreateTask(
 		relabeler.LSSQueryChunkQuerier,
 		func(shard relabeler.Shard) error {
+			shard.LSSRLock()
+			defer shard.LSSRUnlock()
+
 			lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
 			if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {
 				if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
@@ -72,13 +75,13 @@ func (q *ChunkQuerier) Select(
 				)
 			}
 
-			snapshots[shard.ShardID()] = shard.LSS().GetSnapshot()
-			lssQueryResults[shard.ShardID()] = lssQueryResult
+			shardID := shard.ShardID()
+			snapshots[shardID] = shard.LSS().GetSnapshot()
+			lssQueryResults[shardID] = lssQueryResult
 
 			return nil
 		},
 		relabeler.ForLSSTask,
-		relabeler.NonExclusiveTask,
 	)
 	q.head.Enqueue(tLSSQuery)
 	if err := tLSSQuery.Wait(); err != nil {
@@ -90,27 +93,29 @@ func (q *ChunkQuerier) Select(
 	tDataStorageQuery := q.head.CreateTask(
 		relabeler.DSQueryChunkQuerier,
 		func(shard relabeler.Shard) error {
-			lssQueryResult := lssQueryResults[shard.ShardID()]
+			shardID := shard.ShardID()
+			lssQueryResult := lssQueryResults[shardID]
 			if lssQueryResult == nil {
 				return nil
 			}
 
+			shard.DataStorageRLock()
 			serializedChunks := shard.DataStorage().Query(cppbridge.HeadDataStorageQuery{
 				StartTimestampMs: q.mint,
 				EndTimestampMs:   q.maxt,
 				LabelSetIDs:      lssQueryResult.IDs(),
 			})
+			shard.DataStorageRUnlock()
 
 			if serializedChunks.NumberOfChunks() == 0 {
 				return nil
 			}
 
-			serializedChunksShards[shard.ShardID()] = serializedChunks
+			serializedChunksShards[shardID] = serializedChunks
 
 			return nil
 		},
 		relabeler.ForDataStorageTask,
-		relabeler.NonExclusiveTask,
 	)
 	q.head.Enqueue(tDataStorageQuery)
 	_ = tDataStorageQuery.Wait()

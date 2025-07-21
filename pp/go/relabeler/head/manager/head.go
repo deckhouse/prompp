@@ -116,9 +116,9 @@ func (h *DiscardableRotatableHead) CopySeriesFrom(other relabeler.Head) {
 func (h *DiscardableRotatableHead) CreateTask(
 	taskName string,
 	fn relabeler.ShardFn,
-	onLss, isExclusive bool,
+	onLss bool,
 ) *relabeler.GenericTask {
-	return h.head.CreateTask(taskName, fn, onLss, isExclusive)
+	return h.head.CreateTask(taskName, fn, onLss)
 }
 
 // Enqueue the task to be executed on head.
