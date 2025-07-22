@@ -1128,17 +1128,17 @@ void prompp_series_data_data_storage_allocated_memory(void* args, void* res);
  * @brief Queries data storage and serializes result.
  *
  * @param args {
- *     dataStorage uintptr // pointer to constructed data storage
- *     query DataStorageQuery // query
+ *     dataStorage    uintptr          // pointer to constructed data storage
+ *     query          DataStorageQuery // query
+ *     serializedData *[]byte          // pointer to slice for serialized data
  * }
  *
  * @param res {
- *     serializedData []byte // serialized data
+ *     Querier uintptr // pointer to constructed Querier if data loading is needed
+ *     Status  uint8   // status of a query (0 - Success, 1 - Data loading is needed)
  * }
  */
 void prompp_series_data_data_storage_query(void* args, void* res);
-
-void prompp_series_data_data_storage_query_final(void* args);
 
 /**
  * @brief return samples at given timestamp for label sets.
@@ -1151,9 +1151,21 @@ void prompp_series_data_data_storage_query_final(void* args);
  *                timestamp int64
  *                value     float64
  *        }
+ * @param res {
+ *     InstantQuerier uintptr // pointer to constructed Querier if data loading is needed
+ *     Status uint8           // status of a query (0 - Success, 1 - Data loading is needed)
  * }
  */
-void prompp_series_data_data_storage_instant_query(void* args);
+void prompp_series_data_data_storage_instant_query(void* args, void* res);
+
+/**
+ * @brief finishes all Queriers after data load.
+ *
+ * @param args {
+ *        queriers []uintptr    // slice of pointers to Queriers
+ *        }
+ */
+void prompp_series_data_data_storage_query_final(void* args);
 
 /**
  * @brief series data DataStorage destructor.
@@ -1258,18 +1270,10 @@ void prompp_series_data_data_storage_loader_ctor(void* args, void* res);
  * @param args {
  *     loader uintptr // pointer to loader
  *     buffer []byte // SliceView to unloaded snapshot
+ *     is_final bool // flag if this buffer corresponds to the last snapshot
  * }
  */
 void prompp_series_data_data_storage_loader_load_next(void* args);
-
-/**
- * @brief Finalize a loading process after no snapshots left
- *
- * @param args {
- *     loader uintptr // pointer to loader
- * }
- */
-void prompp_series_data_data_storage_loader_load_finalize(void* args);
 
 /**
  * @brief Destroy Loader object

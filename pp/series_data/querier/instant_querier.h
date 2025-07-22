@@ -39,8 +39,8 @@ class InstantQuerier {
     }
   }
 
-  const DataStorage& get_storage() const noexcept { return storage_; }
-
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const DataStorage& get_storage() const noexcept { return storage_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE DataStorage& get_storage() noexcept { return storage_; }
   [[nodiscard]] bool need_loading() const noexcept { return series_to_load_.empty() == false; }
   [[nodiscard]] const BareBones::Bitset& get_series_to_load() const noexcept { return series_to_load_; }
 

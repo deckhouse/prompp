@@ -13,6 +13,13 @@
 #include "series_data/unloading/unloader.h"
 #include "series_index/querier/selector_querier.h"
 
+using entrypoint::series_data::QueryStatus;
+using PromPP::Primitives::LabelSetID;
+using PromPP::Primitives::Go::BytesStream;
+using PromPP::Primitives::Go::Slice;
+using PromPP::Primitives::Go::SliceView;
+using series_data::DataStorage;
+
 using entrypoint::head::DataStoragePtr;
 using entrypoint::head::QueryableEncodingBimap;
 using ChunkRecoderIterator = head::ChunkRecoderIterator<QueryableEncodingBimap::LsIdSet::const_iterator, QueryableEncodingBimap::LsIdSet::const_iterator>;
@@ -24,6 +31,10 @@ using ChunkRecoderVariant = std::variant<ChunkRecoder, SerializedChunkRecoder>;
 using ChunkRecoderVariantPtr = std::unique_ptr<ChunkRecoderVariant>;
 
 using LoaderPtr = std::unique_ptr<series_data::unloading::Loader>;
+
+using entrypoint::series_data::QuerierType;
+using entrypoint::series_data::QuerierVariant;
+using entrypoint::series_data::QuerierVariantPtr;
 
 extern "C" void prompp_series_data_data_storage_ctor(void* res) {
   using Result = struct {
@@ -53,55 +64,44 @@ extern "C" void prompp_series_data_data_storage_time_interval(void* args, void* 
 }
 
 extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
-  using PromPP::Primitives::LabelSetID;
-  using PromPP::Primitives::Go::Slice;
-  using series_data::DataStorage;
   using Query = series_data::querier::Query<Slice<LabelSetID>>;
-  using entrypoint::series_data::QuerierVariant;
-  using entrypoint::series_data::QuerierVariantPtr;
-  using entrypoint::series_data::QueryStatus;
   using entrypoint::series_data::RangeQuerierWithArgumentsWrapper;
-  using PromPP::Primitives::Go::BytesStream;
   using series_data::querier::Querier;
-  using series_data::serialization::Serializer;
 
   struct Arguments {
-    DataStorage* data_storage;
+    DataStoragePtr data_storage;
     Query query;
     Slice<char>* serialized_chunks;
   };
 
   using Result = struct {
-    QuerierVariantPtr querier;
+    QuerierVariantPtr querier{};
     QueryStatus status;
   };
 
   const auto in = static_cast<Arguments*>(args);
 
-  RangeQuerierWithArgumentsWrapper querier(in->serialized_chunks, *in->data_storage, in->query);
+  RangeQuerierWithArgumentsWrapper querier(*in->data_storage, in->query, in->serialized_chunks);
   querier.query();
 
   if (querier.need_loading()) {
-    new (res) Result{.querier = std::make_unique<QuerierVariant>(std::in_place_index<1>, std::move(querier)), .status = QueryStatus::kNeedDataLoad};
+    new (res) Result{
+        .querier = std::make_unique<QuerierVariant>(std::in_place_index<1>, std::move(querier)),
+        .status = QueryStatus::kNeedDataLoad,
+    };
   } else {
-    new (res) Result{.querier = nullptr, .status = QueryStatus::kSuccess};
+    new (res) Result{.status = QueryStatus::kSuccess};
   }
 }
 
 extern "C" void prompp_series_data_data_storage_instant_query(void* args, void* res) {
   using entrypoint::series_data::InstantQuerierWithArgumentsWrapperEntrypoint;
-  using entrypoint::series_data::QuerierVariant;
-  using entrypoint::series_data::QuerierVariantPtr;
-  using entrypoint::series_data::QueryStatus;
-  using PromPP::Primitives::LabelSetID;
   using PromPP::Primitives::Timestamp;
-  using PromPP::Primitives::Go::SliceView;
-  using series_data::DataStorage;
   using series_data::InstantQuerier;
   using series_data::encoder::Sample;
 
   struct Arguments {
-    DataStorage* data_storage;
+    DataStoragePtr data_storage;
     SliceView<LabelSetID> label_set_ids;
     Timestamp timestamp;
     SliceView<Sample> samples;
@@ -114,11 +114,14 @@ extern "C" void prompp_series_data_data_storage_instant_query(void* args, void* 
 
   const auto in = static_cast<Arguments*>(args);
 
-  InstantQuerierWithArgumentsWrapperEntrypoint instant_querier(*in->data_storage, in->samples, in->label_set_ids, in->timestamp);
+  InstantQuerierWithArgumentsWrapperEntrypoint instant_querier(*in->data_storage, in->label_set_ids, in->timestamp, in->samples);
   instant_querier.query();
 
   if (instant_querier.need_loading()) {
-    new (res) Result{.querier = std::make_unique<QuerierVariant>(std::in_place_index<0>, std::move(instant_querier)), .status = QueryStatus::kNeedDataLoad};
+    new (res) Result{
+        .querier = std::make_unique<QuerierVariant>(std::in_place_type<InstantQuerierWithArgumentsWrapperEntrypoint>, std::move(instant_querier)),
+        .status = QueryStatus::kNeedDataLoad,
+    };
   } else {
     new (res) Result{.querier = nullptr, .status = QueryStatus::kSuccess};
   }
@@ -126,7 +129,6 @@ extern "C" void prompp_series_data_data_storage_instant_query(void* args, void* 
 
 extern "C" void prompp_series_data_data_storage_query_final(void* args) {
   using entrypoint::series_data::QuerierVariantPtr;
-  using PromPP::Primitives::Go::Slice;
 
   struct Arguments {
     Slice<QuerierVariantPtr> queriers;
@@ -140,10 +142,8 @@ extern "C" void prompp_series_data_data_storage_query_final(void* args) {
 }
 
 extern "C" void prompp_series_data_data_storage_allocated_memory(void* args, void* res) {
-  using series_data::DataStorage;
-
   struct Arguments {
-    DataStorage* data_storage;
+    DataStoragePtr data_storage;
   };
 
   struct Result {
@@ -194,7 +194,7 @@ extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
 
 extern "C" void prompp_series_data_serialized_chunk_recoder_ctor(void* args, void* res) {
   struct Arguments {
-    PromPP::Primitives::Go::SliceView<uint8_t> buffer;
+    SliceView<uint8_t> buffer;
     PromPP::Primitives::TimeInterval time_interval;
   };
   struct Result {
@@ -217,7 +217,7 @@ extern "C" void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, v
     uint32_t series_id;
     uint8_t samples_count;
     bool has_more_data;
-    PromPP::Primitives::Go::SliceView<const uint8_t> buffer;
+    SliceView<const uint8_t> buffer;
   };
 
   const auto in = static_cast<const Arguments*>(args);
@@ -240,14 +240,10 @@ extern "C" void prompp_series_data_chunk_recoder_dtor(void* args) {
 }
 
 extern "C" void prompp_series_data_data_storage_unload(void* args, void* res) {
-  using PromPP::Primitives::LabelSetID;
-  using PromPP::Primitives::Go::BytesStream;
-  using PromPP::Primitives::Go::Slice;
-  using series_data::DataStorage;
   using series_data::unloading::Unloader;
 
   struct Arguments {
-    DataStorage* data_storage;
+    DataStoragePtr data_storage;
   };
 
   using Result = struct {
@@ -266,10 +262,7 @@ extern "C" void prompp_series_data_data_storage_unload(void* args, void* res) {
 }
 
 extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* res) {
-  using entrypoint::series_data::QuerierVariantPtr;
   using PromPP::Primitives::LabelSetID;
-  using PromPP::Primitives::Go::SliceView;
-  using series_data::DataStorage;
   using series_data::unloading::Loader;
 
   struct Arguments {
@@ -304,8 +297,6 @@ extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* re
 }
 
 extern "C" void prompp_series_data_data_storage_loader_load_next(void* args) {
-  using PromPP::Primitives::Go::SliceView;
-
   struct Arguments {
     LoaderPtr loader;
     SliceView<const uint8_t> buffer;

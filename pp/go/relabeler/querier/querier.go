@@ -409,7 +409,7 @@ func (q *Querier) selectRange(
 		return storage.ErrSeriesSet(err)
 	}
 
-	queryResults := make([]dataStorageQueryResult, q.head.NumberOfShards())
+	queryResults := make([]*cppbridge.HeadDataStorageSerializedChunks, q.head.NumberOfShards())
 	var dataStorageLoadWaiter relabeler.TaskWaiter
 	tDataStorageQuery := q.head.CreateTask(
 		relabeler.DSQueryRangeQuerier,
@@ -423,7 +423,7 @@ func (q *Querier) selectRange(
 			var result cppbridge.DataStorageQueryResult
 
 			shard.DataStorageRLock()
-			queryResults[shardID].serializedChunks, result = shard.DataStorage().Query(cppbridge.HeadDataStorageQuery{
+			queryResults[shardID], result = shard.DataStorage().Query(cppbridge.HeadDataStorageQuery{
 				StartTimestampMs: q.mint,
 				EndTimestampMs:   q.maxt,
 				LabelSetIDs:      lssQueryResult.IDs(),
@@ -446,8 +446,8 @@ func (q *Querier) selectRange(
 	}
 
 	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
-	for shardID := range queryResults {
-		if queryResults[shardID].serializedChunks.NumberOfChunks() == 0 {
+	for shardID, serializedChunks := range queryResults {
+		if serializedChunks == nil || serializedChunks.NumberOfChunks() == 0 {
 			seriesSets[shardID] = &SeriesSet{}
 			continue
 		}
@@ -455,9 +455,9 @@ func (q *Querier) selectRange(
 		seriesSets[shardID] = &SeriesSet{
 			mint:             q.mint,
 			maxt:             q.maxt,
-			deserializer:     cppbridge.NewHeadDataStorageDeserializer(queryResults[shardID].serializedChunks),
-			chunksIndex:      queryResults[shardID].serializedChunks.MakeIndex(),
-			serializedChunks: queryResults[shardID].serializedChunks,
+			deserializer:     cppbridge.NewHeadDataStorageDeserializer(serializedChunks),
+			chunksIndex:      serializedChunks.MakeIndex(),
+			serializedChunks: serializedChunks,
 			lssQueryResult:   lssQueryResults[shardID],
 			labelSetSnapshot: snapshots[shardID],
 		}
