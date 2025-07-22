@@ -90,7 +90,9 @@ func (lss *LabelSetStorage) QuerySelector(matchers []model.LabelMatcher) (
 	selector uintptr,
 	status uint32,
 ) {
-	return primitivesLSSQuerySelector(lss.pointer, matchers)
+	selector, status = primitivesLSSQuerySelector(lss.pointer, matchers)
+	runtime.KeepAlive(lss)
+	return selector, status
 }
 
 // QueryLabelNames returns a LSSQueryLabelNamesResult that matches the given label matchers.

@@ -262,8 +262,6 @@ func (q *Querier) selectInstant(
 
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
 
-	// callerID := cppbridge.GetCaller(ctx)
-
 	valueNotFoundTimestampValue := DefaultInstantQueryValueNotFoundTimestampValue
 	if q.mint <= valueNotFoundTimestampValue {
 		valueNotFoundTimestampValue = q.mint - 1
@@ -383,8 +381,6 @@ func (q *Querier) selectRange(
 	snapshots := make([]*cppbridge.LabelSetSnapshot, numberOfShards)
 
 	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
-
-	// callerID := cppbridge.GetCaller(ctx)
 
 	tLSSQuerySelector := q.head.CreateTask(
 		relabeler.LSSQueryRangeQuerySelector,
