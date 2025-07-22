@@ -57,7 +57,7 @@ func (s *ChunksSeriesSetTestSuite) TestAll() {
 	require.Equal(s.T(), cppbridge.DataStorageQueryStatusSuccess, result.Status)
 	require.Equal(s.T(), 2, serializedChunks.NumberOfChunks())
 
-	chunkRecoder := cppbridge.NewSerializedChunkRecoder(serializedChunks, cppbridge.TimeInterval{
+	chunkRecoder := cppbridge.NewSerializedChunkRecoder(serializedChunks.CBytes, cppbridge.TimeInterval{
 		MinT: mint,
 		MaxT: maxt,
 	})

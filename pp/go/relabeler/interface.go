@@ -14,11 +14,11 @@ type DataStorage interface {
 	AppendInnerSeriesSlice(innerSeriesSlice []*cppbridge.InnerSeries)
 	Raw() *cppbridge.HeadDataStorage
 	MergeOutOfOrderChunks()
-	Query(query cppbridge.HeadDataStorageQuery) (*cppbridge.HeadDataStorageSerializedChunks, cppbridge.DataStorageQueryResult)
+	Query(query cppbridge.HeadDataStorageQuery) (cppbridge.HeadDataStorageSerializedChunks, cppbridge.DataStorageQueryResult)
 	QueryFinal(queriers []uintptr)
 	InstantQuery(targetTimestamp, notFoundValueTimestampValue int64, seriesIDs []uint32) ([]cppbridge.Sample, cppbridge.DataStorageQueryResult)
 	AllocatedMemory() uint64
-	UnloadUnusedSeriesData() []byte
+	UnloadUnusedSeriesData() *cppbridge.CBytes
 	CreateLoader(queriers []uintptr) *cppbridge.UnloadedDataLoader
 }
 

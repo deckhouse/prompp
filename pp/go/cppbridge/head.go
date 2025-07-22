@@ -77,10 +77,10 @@ func (ds *HeadDataStorage) AllocatedMemory() uint64 {
 	return res
 }
 
-func (ds *HeadDataStorage) UnloadUnusedSeriesData() []byte {
+func (ds *HeadDataStorage) UnloadUnusedSeriesData() *CBytes {
 	res := seriesDataUnloadUnusedSeriesData(ds.dataStorage)
 	runtime.KeepAlive(ds)
-	return res
+	return NewCBytes(res)
 }
 
 // HeadEncoder is Go wrapper around series_data::Encoder.
@@ -142,21 +142,21 @@ type ChunkRecoder struct {
 
 	lss              *LabelSetStorage
 	dataStorage      *HeadDataStorage
-	serializedChunks *HeadDataStorageSerializedChunks
+	serializedChunks *CBytes
 }
 
 func NewChunkRecoder(lss *LabelSetStorage, dataStorage *HeadDataStorage, timeInterval TimeInterval) *ChunkRecoder {
 	return initializeChunkRecoder(lss, dataStorage, nil, seriesDataChunkRecoderCtor(lss.Pointer(), dataStorage.dataStorage, timeInterval))
 }
 
-func NewSerializedChunkRecoder(serializedChunks *HeadDataStorageSerializedChunks, timeInterval TimeInterval) *ChunkRecoder {
-	return initializeChunkRecoder(nil, nil, serializedChunks, seriesDataSerializedChunkRecoderCtor(serializedChunks.Data(), timeInterval))
+func NewSerializedChunkRecoder(serializedChunks *CBytes, timeInterval TimeInterval) *ChunkRecoder {
+	return initializeChunkRecoder(nil, nil, serializedChunks, seriesDataSerializedChunkRecoderCtor(serializedChunks.Bytes, timeInterval))
 }
 
 func initializeChunkRecoder(
 	lss *LabelSetStorage,
 	dataStorage *HeadDataStorage,
-	serializedChunks *HeadDataStorageSerializedChunks,
+	serializedChunks *CBytes,
 	recoder uintptr,
 ) *ChunkRecoder {
 	chunkRecoder := &ChunkRecoder{
@@ -189,7 +189,7 @@ func getSeriesIDFromBytes(data []byte) uint32 {
 }
 
 type HeadDataStorageSerializedChunks struct {
-	data []byte
+	*CBytes
 }
 
 type HeadDataStorageSerializedChunkMetadata [SerializedChunkMetadataSize]byte
@@ -199,15 +199,15 @@ func (cm *HeadDataStorageSerializedChunkMetadata) SeriesID() uint32 {
 }
 
 func (r *HeadDataStorageSerializedChunks) NumberOfChunks() int {
-	return int(*(*int32)(unsafe.Pointer(&r.data[0])))
+	return int(*(*int32)(unsafe.Pointer(&r.Bytes[0])))
 }
 
 func (r *HeadDataStorageSerializedChunks) Len() int {
-	return len(r.data)
+	return len(r.Bytes)
 }
 
 func (r *HeadDataStorageSerializedChunks) Data() []byte {
-	return r.data
+	return r.Bytes
 }
 
 type HeadDataStorageSerializedChunkIndex struct {
@@ -219,7 +219,7 @@ func (r *HeadDataStorageSerializedChunks) MakeIndex() HeadDataStorageSerializedC
 	offset := Uint32Size
 	n := r.NumberOfChunks()
 	for i := 0; i < n; i, offset = i+1, offset+SerializedChunkMetadataSize {
-		sID := getSeriesIDFromBytes(r.data[offset : offset+4])
+		sID := getSeriesIDFromBytes(r.Bytes[offset : offset+4])
 		m[sID] = append(m[sID], offset)
 	}
 	return HeadDataStorageSerializedChunkIndex{m}
@@ -233,26 +233,23 @@ func (i HeadDataStorageSerializedChunkIndex) Len() int {
 	return len(i.m)
 }
 
-func (i HeadDataStorageSerializedChunkIndex) Chunks(r *HeadDataStorageSerializedChunks, seriesID uint32) []HeadDataStorageSerializedChunkMetadata {
+func (i HeadDataStorageSerializedChunkIndex) Chunks(r HeadDataStorageSerializedChunks, seriesID uint32) []HeadDataStorageSerializedChunkMetadata {
 	offsets, ok := i.m[seriesID]
 	if !ok {
 		return nil
 	}
 	res := make([]HeadDataStorageSerializedChunkMetadata, len(offsets))
 	for i, offset := range offsets {
-		res[i] = HeadDataStorageSerializedChunkMetadata(r.data[offset : offset+SerializedChunkMetadataSize])
+		res[i] = HeadDataStorageSerializedChunkMetadata(r.Bytes[offset : offset+SerializedChunkMetadataSize])
 	}
 	return res
 }
 
-func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) (*HeadDataStorageSerializedChunks, DataStorageQueryResult) {
-	serializedChunks := new(HeadDataStorageSerializedChunks)
-	result := seriesDataDataStorageQuery(ds.dataStorage, query, &serializedChunks.data)
+func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) (HeadDataStorageSerializedChunks, DataStorageQueryResult) {
+	var serializedChunks []byte
+	result := seriesDataDataStorageQuery(ds.dataStorage, query, &serializedChunks)
 	runtime.KeepAlive(ds)
-	runtime.SetFinalizer(serializedChunks, func(sc *HeadDataStorageSerializedChunks) {
-		freeBytes(sc.data)
-	})
-	return serializedChunks, result
+	return HeadDataStorageSerializedChunks{NewCBytes(serializedChunks)}, result
 }
 
 func (ds *HeadDataStorage) InstantQuery(targetTimestamp, defaultTimestamp int64, labelSetIDs []uint32) ([]Sample, DataStorageQueryResult) {
@@ -295,12 +292,12 @@ func (ds *HeadDataStorage) CreateLoader(queriers []uintptr) *UnloadedDataLoader 
 
 type HeadDataStorageDeserializer struct {
 	deserializer     uintptr
-	serializedChunks *HeadDataStorageSerializedChunks
+	serializedChunks HeadDataStorageSerializedChunks
 }
 
-func NewHeadDataStorageDeserializer(serializedChunks *HeadDataStorageSerializedChunks) *HeadDataStorageDeserializer {
+func NewHeadDataStorageDeserializer(serializedChunks HeadDataStorageSerializedChunks) *HeadDataStorageDeserializer {
 	d := &HeadDataStorageDeserializer{
-		deserializer:     seriesDataDeserializerCtor(serializedChunks.data),
+		deserializer:     seriesDataDeserializerCtor(serializedChunks.Bytes),
 		serializedChunks: serializedChunks,
 	}
 	runtime.SetFinalizer(d, func(d *HeadDataStorageDeserializer) {

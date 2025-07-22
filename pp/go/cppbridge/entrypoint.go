@@ -262,6 +262,19 @@ func freeBytes(b []byte) {
 	runtime.KeepAlive(b)
 }
 
+// CBytes wrapper for c-allocated memory
+type CBytes struct {
+	Bytes []byte
+}
+
+func NewCBytes(b []byte) *CBytes {
+	result := &CBytes{Bytes: b}
+	runtime.SetFinalizer(result, func(bytes *CBytes) {
+		freeBytes(bytes.Bytes)
+	})
+	return result
+}
+
 // GetFlavor returns recognized architecture flavor
 //
 //revive:disable:confusing-naming // wrapper

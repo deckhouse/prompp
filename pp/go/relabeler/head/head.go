@@ -1119,7 +1119,9 @@ func (h *Head) UnloadUnusedSeriesData() {
 		relabeler.DSUnloadUnusedSeriesData,
 		func(shard relabeler.Shard) error {
 			shard.DataStorageLock()
-			err := shard.UnloadedDataStorage().Write(shard.DataStorage().UnloadUnusedSeriesData())
+			bytes := shard.DataStorage().UnloadUnusedSeriesData()
+			err := shard.UnloadedDataStorage().Write(bytes.Bytes)
+			runtime.KeepAlive(bytes)
 			shard.DataStorageUnlock()
 
 			return err

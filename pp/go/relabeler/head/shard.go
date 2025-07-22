@@ -93,7 +93,7 @@ func (ds *DataStorage) MergeOutOfOrderChunks() {
 	ds.encoder.MergeOutOfOrderChunks()
 }
 
-func (ds *DataStorage) Query(query cppbridge.HeadDataStorageQuery) (*cppbridge.HeadDataStorageSerializedChunks, cppbridge.DataStorageQueryResult) {
+func (ds *DataStorage) Query(query cppbridge.HeadDataStorageQuery) (cppbridge.HeadDataStorageSerializedChunks, cppbridge.DataStorageQueryResult) {
 	return ds.dataStorage.Query(query)
 }
 
@@ -109,7 +109,7 @@ func (ds *DataStorage) AllocatedMemory() uint64 {
 	return ds.dataStorage.AllocatedMemory()
 }
 
-func (ds *DataStorage) UnloadUnusedSeriesData() []byte {
+func (ds *DataStorage) UnloadUnusedSeriesData() *cppbridge.CBytes {
 	return ds.dataStorage.UnloadUnusedSeriesData()
 }
 

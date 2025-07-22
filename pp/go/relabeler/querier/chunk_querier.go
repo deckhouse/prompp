@@ -89,7 +89,7 @@ func (q *ChunkQuerier) Select(
 		return storage.ErrChunkSeriesSet(err)
 	}
 
-	queryResults := make([]*cppbridge.HeadDataStorageSerializedChunks, q.head.NumberOfShards())
+	queryResults := make([]cppbridge.HeadDataStorageSerializedChunks, q.head.NumberOfShards())
 	var dataStorageLoadWaiter relabeler.TaskWaiter
 	tDataStorageQuery := q.head.CreateTask(
 		relabeler.DSQueryChunkQuerier,
@@ -127,7 +127,7 @@ func (q *ChunkQuerier) Select(
 
 	chunkSeriesSets := make([]storage.ChunkSeriesSet, q.head.NumberOfShards())
 	for shardID, serializedChunks := range queryResults {
-		if serializedChunks == nil || serializedChunks.NumberOfChunks() == 0 {
+		if serializedChunks.CBytes == nil || serializedChunks.NumberOfChunks() == 0 {
 			chunkSeriesSets[shardID] = &EmptyChunkSeriesSet{}
 			continue
 		}
@@ -135,7 +135,7 @@ func (q *ChunkQuerier) Select(
 		chunkSeriesSets[shardID] = NewChunkSeriesSet(
 			lssQueryResults[shardID],
 			snapshots[shardID],
-			cppbridge.NewSerializedChunkRecoder(serializedChunks, cppbridge.TimeInterval{MinT: q.mint, MaxT: q.maxt}),
+			cppbridge.NewSerializedChunkRecoder(serializedChunks.CBytes, cppbridge.TimeInterval{MinT: q.mint, MaxT: q.maxt}),
 		)
 	}
 
