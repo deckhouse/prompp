@@ -56,6 +56,16 @@ type Shard interface {
 	DataStorage() DataStorage
 	LSS() LSS
 	Wal() Wal
+	// lock for DataStorage
+	DataStorageLock()
+	DataStorageRLock()
+	DataStorageRUnlock()
+	DataStorageUnlock()
+	// lock for LSS
+	LSSLock()
+	LSSRLock()
+	LSSRUnlock()
+	LSSUnlock()
 }
 
 // ShardFn - shard function.
@@ -86,7 +96,8 @@ type Head interface {
 	String() string
 	CopySeriesFrom(other Head)
 	Enqueue(t *GenericTask)
-	CreateTask(taskName string, fn ShardFn, isLss, isExclusive bool) *GenericTask
+	EnqueueOnShard(t *GenericTask, shardID uint16)
+	CreateTask(taskName string, fn ShardFn, isLss bool) *GenericTask
 	Concurrency() int64
 	RLockQuery(ctx context.Context) (runlock func(), err error)
 	FindFromBuilder(

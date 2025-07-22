@@ -96,24 +96,54 @@ const (
 
 // GenericTask generic task, will be executed on each shard.
 type GenericTask struct {
-	errs        []error
-	shardFn     ShardFn
-	wg          sync.WaitGroup
-	createdTS   int64
-	executeTS   int64
-	created     prometheus.Counter
-	done        prometheus.Counter
-	live        prometheus.Counter
-	execute     prometheus.Counter
-	forLSS      bool
-	isExclusive bool
+	errs      []error
+	shardFn   ShardFn
+	wg        sync.WaitGroup
+	createdTS int64
+	executeTS int64
+	created   prometheus.Counter
+	done      prometheus.Counter
+	live      prometheus.Counter
+	execute   prometheus.Counter
+	forLSS    bool
 }
 
+func NewGenericTask(
+	shardFn ShardFn,
+	created, done, live, execute prometheus.Counter,
+	forLSS bool,
+) *GenericTask {
+	t := &GenericTask{
+		shardFn:   shardFn,
+		wg:        sync.WaitGroup{},
+		createdTS: time.Now().UnixMicro(),
+		created:   created,
+		done:      done,
+		live:      live,
+		execute:   execute,
+		forLSS:    forLSS,
+	}
+	t.created.Inc()
+
+	return t
+}
+
+// NewReadOnlyGenericTask init new GenericTask for read only head.
+func NewReadOnlyGenericTask(shardFn ShardFn) *GenericTask {
+	t := &GenericTask{
+		shardFn: shardFn,
+		wg:      sync.WaitGroup{},
 // emprtyGenericTask init new empty GenericTask.
 func emprtyGenericTask() *GenericTask {
 	return &GenericTask{
 		wg: sync.WaitGroup{},
 	}
+}
+
+// SetShardsNumber set shards number
+func (t *GenericTask) SetShardsNumber(number uint16) {
+	t.errs = make([]error, number)
+	t.wg.Add(int(number))
 }
 
 // ExecuteOnShard execute task on shard.
@@ -123,23 +153,9 @@ func (t *GenericTask) ExecuteOnShard(shard Shard) {
 	t.wg.Done()
 }
 
-// ExecuteOnShardWithLocker execute task on shard with locker.
-func (t *GenericTask) ExecuteOnShardWithLocker(shard Shard, lock, unlock func()) {
-	lock()
-	atomic.CompareAndSwapInt64(&t.executeTS, 0, time.Now().UnixMicro())
-	t.errs[shard.ShardID()] = t.shardFn(shard)
-	unlock()
-	t.wg.Done()
-}
-
 // ForLSS indicates that the task is for operation on lss.
 func (t *GenericTask) ForLSS() bool {
 	return t.forLSS
-}
-
-// IsExclusive indicates that the task is exclusive(write).
-func (t *GenericTask) IsExclusive() bool {
-	return t.isExclusive
 }
 
 // ReadOnlyResetTo resets task all state for read only head.
