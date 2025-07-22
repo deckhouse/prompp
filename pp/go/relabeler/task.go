@@ -107,11 +107,9 @@ type GenericTask struct {
 func NewGenericTask(
 	shardFn ShardFn,
 	created, done, live, execute prometheus.Counter,
-	numberOfShards uint16,
 	forLSS bool,
 ) *GenericTask {
 	t := &GenericTask{
-		errs:      make([]error, numberOfShards),
 		shardFn:   shardFn,
 		wg:        sync.WaitGroup{},
 		createdTS: time.Now().UnixMicro(),
@@ -121,25 +119,25 @@ func NewGenericTask(
 		execute:   execute,
 		forLSS:    forLSS,
 	}
-	t.wg.Add(int(numberOfShards))
 	t.created.Inc()
 
 	return t
 }
 
 // NewReadOnlyGenericTask init new GenericTask for read only head.
-func NewReadOnlyGenericTask(
-	shardFn ShardFn,
-	numberOfShards uint16,
-) *GenericTask {
+func NewReadOnlyGenericTask(shardFn ShardFn) *GenericTask {
 	t := &GenericTask{
-		errs:    make([]error, numberOfShards),
 		shardFn: shardFn,
 		wg:      sync.WaitGroup{},
 	}
-	t.wg.Add(int(numberOfShards))
 
 	return t
+}
+
+// SetShardsNumber set shards number
+func (t *GenericTask) SetShardsNumber(number uint16) {
+	t.errs = make([]error, number)
+	t.wg.Add(int(number))
 }
 
 // ExecuteOnShard execute task on shard.
