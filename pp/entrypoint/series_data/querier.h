@@ -3,7 +3,6 @@
 #include "bare_bones/bitset.h"
 #include "primitives/go_slice.h"
 #include "primitives/primitives.h"
-#include "primitives/sample.h"
 #include "series_data/querier/instant_querier.h"
 #include "series_data/querier/querier.h"
 #include "series_data/serialization/serializer.h"
@@ -15,6 +14,11 @@ concept QuerierInterface = requires(Querier querier) {
   { querier.query_finalize() };
   { querier.series_to_load() } -> std::same_as<const BareBones::Bitset&>;
   { querier.need_loading() } -> std::same_as<bool>;
+};
+
+enum class QueryStatus : uint8_t {
+  kSuccess = 0,
+  kNeedDataLoad,
 };
 
 template <typename LsIDStorage, typename SampleStorage>
@@ -41,6 +45,9 @@ class InstantQuerierWithArgumentsWrapper {
 
   ::series_data::InstantQuerier instant_querier_;
 };
+
+using InstantQuerierWithArgumentsWrapperEntrypoint = InstantQuerierWithArgumentsWrapper<PromPP::Primitives::Go::SliceView<PromPP::Primitives::LabelSetID>,
+                                                                                        PromPP::Primitives::Go::SliceView<::series_data::encoder::Sample>>;
 
 class RangeQuerierWithArgumentsWrapper {
   using DataStorage = ::series_data::DataStorage;
@@ -74,10 +81,10 @@ class RangeQuerierWithArgumentsWrapper {
   ::series_data::querier::Querier querier_;
 };
 
+using QuerierVariant = std::variant<InstantQuerierWithArgumentsWrapperEntrypoint, RangeQuerierWithArgumentsWrapper>;
+using QuerierVariantPtr = std::unique_ptr<QuerierVariant>;
+
 }  // namespace entrypoint::series_data
 
-static_assert(entrypoint::series_data::QuerierInterface<
-              entrypoint::series_data::InstantQuerierWithArgumentsWrapper<PromPP::Primitives::Go::SliceView<PromPP::Primitives::LabelSetID>,
-                                                                          PromPP::Primitives::Go::SliceView<PromPP::Primitives::Sample>>>);
-
+static_assert(entrypoint::series_data::QuerierInterface<entrypoint::series_data::InstantQuerierWithArgumentsWrapperEntrypoint>);
 static_assert(entrypoint::series_data::QuerierInterface<entrypoint::series_data::RangeQuerierWithArgumentsWrapper>);
