@@ -27,6 +27,17 @@ import (
 // ExtraReadConcurrency number of concurrency read operation, 0 - work without concurrency.
 var ExtraReadConcurrency = 0
 
+const (
+	tryCount       = 30
+	rotateDuration = 5 * time.Minute
+)
+
+// calculateHeadConcurrency calculate current head workers concurrency.
+func calculateHeadConcurrency(numberOfShards uint16) int64 {
+	// 2 - lss and datastorage
+	return 2 * int64(1+ExtraReadConcurrency) * int64(numberOfShards)
+}
+
 // RelabelerData data for relabeling - inputRelabelers per shard and state.
 type RelabelerData struct {
 	state           *cppbridge.State
@@ -320,6 +331,23 @@ func New(
 				Help: "The duration of the task execution in microseconds.",
 			},
 			[]string{"type_task"},
+		),
+
+		cacheSize: factory.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name:        "prompp_head_cache_size",
+				Help:        "Current size of cache.",
+				ConstLabels: prometheus.Labels{"allocator": "head"},
+			},
+			[]string{"generation"},
+		),
+		cacheBitsetCount: factory.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name:        "prompp_head_cache_bitset_count",
+				Help:        "Current count of emplace to cache bitset.",
+				ConstLabels: prometheus.Labels{"allocator": "head"},
+			},
+			[]string{"generation"},
 		),
 	}
 
@@ -703,8 +731,8 @@ func (h *Head) Close() error {
 	h.cacheSize.DeletePartialMatch(ls)
 	h.cacheBitsetCount.DeletePartialMatch(ls)
 
-	for _, lss := range h.lsses {
-		lss.Outdate()
+	for _, s := range h.shards {
+		s.lss.Outdate()
 	}
 
 	var err error
@@ -768,7 +796,7 @@ func (h *Head) Enqueue(t *relabeler.GenericTask) {
 
 // EnqueueOnShard the task to be executed on head on specific shard.
 func (h *Head) EnqueueOnShard(t *relabeler.GenericTask, shardID uint16) {
-	t.SetShardsNumber(1)
+	t.SingleSetShardsNumber(h.numberOfShards)
 
 	if h.readOnly {
 		h.readOnlyOnShard(t, h.shards[shardID])
@@ -1136,13 +1164,9 @@ func (*Head) shardLoop(
 	}
 }
 
-// calculateHeadConcurrency calculate current head workers concurrency.
-func calculateHeadConcurrency(numberOfShards uint16) int64 {
-	// 2 - lss and datastorage
-	return 2 * int64(1+ExtraReadConcurrency) * int64(numberOfShards)
-}
-
 // FindFromBuilder label set from builder in lss, if not found return EmptyLabels.
+//
+//revive:disable-next-line:flag-parameter this is not a flag, but a parameter
 func (h *Head) FindFromBuilder(
 	sortedAdd []cppbridge.Label,
 	sortedDel []string,
@@ -1163,21 +1187,21 @@ func (h *Head) FindFromBuilder(
 		find        bool
 	)
 
-	_ = h.enqueueOnSingleShard(
-		h.createTaskOnSingleShard(
-			relabeler.LSSFind,
-			func(shard relabeler.Shard) error {
-				if newlsID, length, find = shard.LSS().FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID); find {
-					newSnapshot = shard.LSS().GetSnapshot()
-				}
+	tFind := h.CreateTask(
+		relabeler.LSSFind,
+		func(shard relabeler.Shard) error {
+			shard.LSSRLock()
+			if newlsID, length, find = shard.LSS().FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID); find {
+				newSnapshot = shard.LSS().GetSnapshot()
+			}
+			shard.LSSRUnlock()
 
-				return nil
-			},
-			relabeler.ForLSSTask,
-			relabeler.NonExclusiveTask,
-		),
-		shardID,
-	).Wait()
+			return nil
+		},
+		relabeler.ForLSSTask,
+	)
+	h.EnqueueOnShard(tFind, uint16(shardID)) // #nosec G115 // no overflow
+	_ = tFind.Wait()
 
 	if !find {
 		return labels.EmptyLabels(), false
@@ -1193,54 +1217,6 @@ func (h *Head) FindFromBuilder(
 		length,
 	), true
 }
-
-// enqueueOnSingleShard the task to be executed on head on single shard.
-func (h *Head) enqueueOnSingleShard(t *relabeler.GenericTask, shardID uint64) *relabeler.GenericTask {
-	if h.readOnly {
-		s := h.shards[shardID]
-		go func(sd *shard) {
-			t.ExecuteOnShard(sd)
-		}(s)
-
-		return t
-	}
-
-	if t.ForLSS() {
-		h.lssTaskChs[shardID] <- t
-	} else {
-		h.dataStorageTaskChs[shardID] <- t
-	}
-
-	return t
-}
-
-// createTaskOnSingleShard create a task for operations on the head single shard.
-func (h *Head) createTaskOnSingleShard(
-	taskName string,
-	fn relabeler.ShardFn,
-	onLss, isExclusive bool,
-) *relabeler.GenericTask {
-	if h.readOnly {
-		return relabeler.AcquireTask().ReadOnlySingleResetTo(fn, h.numberOfShards)
-	}
-
-	ls := prometheus.Labels{"type_task": taskName}
-	return relabeler.AcquireTask().SingleResetTo(
-		fn,
-		h.tasksCreated.With(ls),
-		h.tasksDone.With(ls),
-		h.tasksLive.With(ls),
-		h.tasksExecute.With(ls),
-		h.numberOfShards,
-		onLss,
-		isExclusive,
-	)
-}
-
-const (
-	tryCount       = 30
-	rotateDuration = 5 * time.Minute
-)
 
 // FindByHash label set by hash in cache.
 func (h *Head) FindByHash(hash uint64) (labels.Labels, bool) {
@@ -1258,167 +1234,8 @@ func (h *Head) findByHashOnShard(hash, shardID uint64) (labels.Labels, bool) {
 	var snapshot *cppbridge.LabelSetSnapshot
 	for i := 0; i < tryCount; i++ {
 		h.shards[shardID].LSSRLock()
-		snapshot = h.lsses[shardID].GetSnapshot()
+		snapshot = h.shards[shardID].lss.GetSnapshot()
 		h.shards[shardID].LSSRUnlock()
-		if snapshot != nil {
-			break
-		}
-
-		// Let other goroutines do stuff.
-		runtime.Gosched()
-	}
-
-	// if can't get a snapshot, take the long way
-	if snapshot == nil {
-		return labels.EmptyLabels(), false
-	}
-
-	return labels.NewLabelsWithLSS(
-		snapshot,
-		lsID,
-		length,
-	), true
-}
-
-// rotateCache rotate head cache.
-func (h *Head) rotateCache(stopc chan struct{}) {
-	rotateTimer := time.NewTimer(rotateDuration)
-
-	for {
-		select {
-		case <-stopc:
-			h.lsCache.Reset()
-			return
-
-		case <-rotateTimer.C:
-			cacheSize, cacheBitsetCount := h.lsCache.StatsWithClearBitset()
-			if uint64(cacheBitsetCount) <= cacheSize/2 {
-				h.lsCache.Reset()
-			}
-
-			rotateTimer.Reset(rotateDuration)
-		}
-	}
-}
-
-// FindFromBuilder label set from builder in lss, if not found return EmptyLabels.
-func (h *Head) FindFromBuilder(
-	sortedAdd []cppbridge.Label,
-	sortedDel []string,
-	snapshot *cppbridge.LabelSetSnapshot,
-	hash uint64,
-	lsID uint32,
-	skipCache bool,
-) (labels.Labels, bool) {
-	shardID := hash % uint64(h.numberOfShards) // shardID by hash
-	if ls, ok := h.findByHashOnShard(hash, shardID); ok {
-		return ls, true
-	}
-
-	var (
-		newSnapshot *cppbridge.LabelSetSnapshot
-		newlsID     uint32
-		length      uint16
-		find        bool
-	)
-
-	_ = h.enqueueOnSingleShard(
-		h.createTaskOnSingleShard(
-			relabeler.LSSFind,
-			func(shard relabeler.Shard) error {
-				if newlsID, length, find = shard.LSS().FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID); find {
-					newSnapshot = shard.LSS().GetSnapshot()
-				}
-
-				return nil
-			},
-			relabeler.ForLSSTask,
-			relabeler.NonExclusiveTask,
-		),
-		shardID,
-	).Wait()
-
-	if !find {
-		return labels.EmptyLabels(), false
-	}
-
-	if !skipCache {
-		h.lsCache.Store(hash, newlsID, length)
-	}
-
-	return labels.NewLabelsWithLSS(
-		newSnapshot,
-		newlsID,
-		length,
-	), true
-}
-
-// enqueueOnSingleShard the task to be executed on head on single shard.
-func (h *Head) enqueueOnSingleShard(t *relabeler.GenericTask, shardID uint64) *relabeler.GenericTask {
-	if h.readOnly {
-		s := h.shards[shardID]
-		go func(sd *shard) {
-			t.ExecuteOnShard(sd)
-		}(s)
-
-		return t
-	}
-
-	if t.ForLSS() {
-		h.lssTaskChs[shardID] <- t
-	} else {
-		h.dataStorageTaskChs[shardID] <- t
-	}
-
-	return t
-}
-
-// createTaskOnSingleShard create a task for operations on the head single shard.
-func (h *Head) createTaskOnSingleShard(
-	taskName string,
-	fn relabeler.ShardFn,
-	onLss, isExclusive bool,
-) *relabeler.GenericTask {
-	if h.readOnly {
-		return relabeler.AcquireTask().ReadOnlySingleResetTo(fn, h.numberOfShards)
-	}
-
-	ls := prometheus.Labels{"type_task": taskName}
-	return relabeler.AcquireTask().SingleResetTo(
-		fn,
-		h.tasksCreated.With(ls),
-		h.tasksDone.With(ls),
-		h.tasksLive.With(ls),
-		h.tasksExecute.With(ls),
-		h.numberOfShards,
-		onLss,
-		isExclusive,
-	)
-}
-
-const (
-	tryCount       = 30
-	rotateDuration = 5 * time.Minute
-)
-
-// FindByHash label set by hash in cache.
-func (h *Head) FindByHash(hash uint64) (labels.Labels, bool) {
-	return h.findByHashOnShard(hash, hash%uint64(h.numberOfShards)) // shardID by hash
-}
-
-// findByHashOnShard label set by hash on shard in cache.
-func (h *Head) findByHashOnShard(hash, shardID uint64) (labels.Labels, bool) {
-	lsID, length, ok := h.lsCache.Load(hash)
-	if !ok {
-		return labels.EmptyLabels(), false
-	}
-
-	// try get snapshot,
-	var snapshot *cppbridge.LabelSetSnapshot
-	for i := 0; i < tryCount; i++ {
-		h.lssMXs[shardID].RLock()
-		snapshot = h.lsses[shardID].GetSnapshot()
-		h.lssMXs[shardID].RUnlock()
 		if snapshot != nil {
 			break
 		}

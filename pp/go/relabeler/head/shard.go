@@ -2,6 +2,7 @@ package head
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"

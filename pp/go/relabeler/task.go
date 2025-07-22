@@ -108,42 +108,11 @@ type GenericTask struct {
 	forLSS    bool
 }
 
-func NewGenericTask(
-	shardFn ShardFn,
-	created, done, live, execute prometheus.Counter,
-	forLSS bool,
-) *GenericTask {
-	t := &GenericTask{
-		shardFn:   shardFn,
-		wg:        sync.WaitGroup{},
-		createdTS: time.Now().UnixMicro(),
-		created:   created,
-		done:      done,
-		live:      live,
-		execute:   execute,
-		forLSS:    forLSS,
-	}
-	t.created.Inc()
-
-	return t
-}
-
-// NewReadOnlyGenericTask init new GenericTask for read only head.
-func NewReadOnlyGenericTask(shardFn ShardFn) *GenericTask {
-	t := &GenericTask{
-		shardFn: shardFn,
-		wg:      sync.WaitGroup{},
 // emprtyGenericTask init new empty GenericTask.
 func emprtyGenericTask() *GenericTask {
 	return &GenericTask{
 		wg: sync.WaitGroup{},
 	}
-}
-
-// SetShardsNumber set shards number
-func (t *GenericTask) SetShardsNumber(number uint16) {
-	t.errs = make([]error, number)
-	t.wg.Add(int(number))
 }
 
 // ExecuteOnShard execute task on shard.
@@ -159,19 +128,8 @@ func (t *GenericTask) ForLSS() bool {
 }
 
 // ReadOnlyResetTo resets task all state for read only head.
-func (t *GenericTask) ReadOnlyResetTo(shardFn ShardFn, numberOfShards uint16) *GenericTask {
-	t.readOnlyResetState(shardFn, numberOfShards)
-
-	t.wg.Add(int(numberOfShards))
-
-	return t
-}
-
-// ReadOnlySingleResetTo resets task all state for read only head for single shard.
-func (t *GenericTask) ReadOnlySingleResetTo(shardFn ShardFn, numberOfShards uint16) *GenericTask {
-	t.readOnlyResetState(shardFn, numberOfShards)
-
-	t.wg.Add(1)
+func (t *GenericTask) ReadOnlyResetTo(shardFn ShardFn) *GenericTask {
+	t.readOnlyResetState(shardFn)
 
 	return t
 }
@@ -180,38 +138,39 @@ func (t *GenericTask) ReadOnlySingleResetTo(shardFn ShardFn, numberOfShards uint
 func (t *GenericTask) ResetTo(
 	shardFn ShardFn,
 	created, done, live, execute prometheus.Counter,
-	numberOfShards uint16,
-	forLSS, isExclusive bool,
+	forLSS bool,
 ) *GenericTask {
 	t.resetState(
 		shardFn,
 		created, done, live, execute,
-		numberOfShards,
-		forLSS, isExclusive,
+		forLSS,
 	)
-
-	t.wg.Add(int(numberOfShards))
 
 	return t
 }
 
-// SingleResetTo resets task all state for single shard.
-func (t *GenericTask) SingleResetTo(
-	shardFn ShardFn,
-	created, done, live, execute prometheus.Counter,
-	numberOfShards uint16,
-	forLSS, isExclusive bool,
-) *GenericTask {
-	t.resetState(
-		shardFn,
-		created, done, live, execute,
-		numberOfShards,
-		forLSS, isExclusive,
-	)
+// SetShardsNumber set shards number.
+func (t *GenericTask) SetShardsNumber(number uint16) {
+	if cap(t.errs) < int(number) {
+		t.errs = make([]error, number)
+	} else {
+		clear(t.errs[:cap(t.errs)])
+		t.errs = t.errs[:number]
+	}
+
+	t.wg.Add(int(number))
+}
+
+// SingleSetShardsNumber set shards number for single shard.
+func (t *GenericTask) SingleSetShardsNumber(number uint16) {
+	if cap(t.errs) < int(number) {
+		t.errs = make([]error, number)
+	} else {
+		clear(t.errs[:cap(t.errs)])
+		t.errs = t.errs[:number]
+	}
 
 	t.wg.Add(1)
-
-	return t
 }
 
 // Wait for the task to complete on all shards.
@@ -232,27 +191,19 @@ func (t *GenericTask) Wait() error {
 }
 
 // readOnlyResetState resets task all state for read only head.
-func (t *GenericTask) readOnlyResetState(shardFn ShardFn, numberOfShards uint16) {
+func (t *GenericTask) readOnlyResetState(shardFn ShardFn) {
 	t.shardFn = shardFn
 	t.created = nil
 	t.done = nil
 	t.live = nil
 	t.execute = nil
-
-	if cap(t.errs) < int(numberOfShards) {
-		t.errs = make([]error, numberOfShards)
-	} else {
-		clear(t.errs[:cap(t.errs)])
-		t.errs = t.errs[:numberOfShards]
-	}
 }
 
 // resetState resets task all state.
 func (t *GenericTask) resetState(
 	shardFn ShardFn,
 	created, done, live, execute prometheus.Counter,
-	numberOfShards uint16,
-	forLSS, isExclusive bool,
+	forLSS bool,
 ) {
 	t.shardFn = shardFn
 	t.created = created
@@ -260,14 +211,6 @@ func (t *GenericTask) resetState(
 	t.live = live
 	t.execute = execute
 	t.forLSS = forLSS
-	t.isExclusive = isExclusive
-
-	if cap(t.errs) < int(numberOfShards) {
-		t.errs = make([]error, numberOfShards)
-	} else {
-		clear(t.errs[:cap(t.errs)])
-		t.errs = t.errs[:numberOfShards]
-	}
 
 	if t.created != nil {
 		t.created.Inc()
