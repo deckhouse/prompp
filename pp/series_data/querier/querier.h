@@ -30,6 +30,8 @@ class Querier {
     return chunks_;
   }
 
+  const DataStorage& get_storage() const noexcept { return storage_; }
+
   [[nodiscard]] bool need_loading() const noexcept { return series_to_load_.empty() == false; }
   [[nodiscard]] const BareBones::Bitset& get_series_to_load() const noexcept { return series_to_load_; }
 

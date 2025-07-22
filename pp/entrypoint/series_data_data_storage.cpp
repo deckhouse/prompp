@@ -5,11 +5,13 @@
 #include "head/lss.h"
 #include "primitives/go_slice.h"
 #include "series_data/data_storage.h"
+#include "series_data/querier.h"
 #include "series_data/querier/instant_querier.h"
 #include "series_data/querier/querier.h"
 #include "series_data/serialization/serializer.h"
 #include "series_data/unloading/loader.h"
 #include "series_data/unloading/unloader.h"
+#include "series_index/querier/selector_querier.h"
 
 using entrypoint::head::DataStoragePtr;
 using entrypoint::head::QueryableEncodingBimap;
@@ -55,6 +57,10 @@ extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
   using PromPP::Primitives::Go::Slice;
   using series_data::DataStorage;
   using Query = series_data::querier::Query<Slice<LabelSetID>>;
+  using entrypoint::series_data::QuerierVariant;
+  using entrypoint::series_data::QuerierVariantPtr;
+  using entrypoint::series_data::QueryStatus;
+  using entrypoint::series_data::RangeQuerierWithArgumentsWrapper;
   using PromPP::Primitives::Go::BytesStream;
   using series_data::querier::Querier;
   using series_data::serialization::Serializer;
@@ -62,37 +68,31 @@ extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
   struct Arguments {
     DataStorage* data_storage;
     Query query;
+    Slice<char>* serialized_chunks;
   };
 
   using Result = struct {
-    Slice<char> serialized_chunks;
+    QuerierVariantPtr querier;
+    QueryStatus status;
   };
 
   const auto in = static_cast<Arguments*>(args);
-  const auto out = new (res) Result();
 
-  Querier querier{*in->data_storage};
-  const auto& queried_chunk_list = querier.query(in->query);
+  RangeQuerierWithArgumentsWrapper querier(in->serialized_chunks, *in->data_storage, in->query);
+  querier.query();
 
   if (querier.need_loading()) {
-    series_data::unloading::Loader loader(*in->data_storage, querier.get_series_to_load(), querier.get_series_to_load().popcount());
-
-    for (const auto& buffer : in->data_storage->unloaded_snapshots) {
-      loader.load_next(buffer);
-    }
-    loader.load_finalize();
+    new (res) Result{.querier = std::make_unique<QuerierVariant>(std::in_place_index<1>, std::move(querier)), .status = QueryStatus::kNeedDataLoad};
+  } else {
+    new (res) Result{.querier = nullptr, .status = QueryStatus::kSuccess};
   }
-
-  Serializer serializer{*in->data_storage};
-  BytesStream bytes_stream{&out->serialized_chunks};
-  serializer.serialize(queried_chunk_list, bytes_stream);
 }
 
-extern "C" void prompp_series_data_data_storage_query_final(void*) {
-  ;
-}
-
-extern "C" void prompp_series_data_data_storage_instant_query(void* args) {
+extern "C" void prompp_series_data_data_storage_instant_query(void* args, void* res) {
+  using entrypoint::series_data::InstantQuerierWithArgumentsWrapperEntrypoint;
+  using entrypoint::series_data::QuerierVariant;
+  using entrypoint::series_data::QuerierVariantPtr;
+  using entrypoint::series_data::QueryStatus;
   using PromPP::Primitives::LabelSetID;
   using PromPP::Primitives::Timestamp;
   using PromPP::Primitives::Go::SliceView;
@@ -107,20 +107,35 @@ extern "C" void prompp_series_data_data_storage_instant_query(void* args) {
     SliceView<Sample> samples;
   };
 
+  using Result = struct {
+    QuerierVariantPtr querier;
+    QueryStatus status;
+  };
+
   const auto in = static_cast<Arguments*>(args);
 
-  InstantQuerier instant_querier{*in->data_storage};
-  instant_querier.query(in->samples, in->label_set_ids, in->timestamp);
+  InstantQuerierWithArgumentsWrapperEntrypoint instant_querier(*in->data_storage, in->samples, in->label_set_ids, in->timestamp);
+  instant_querier.query();
 
   if (instant_querier.need_loading()) {
-    series_data::unloading::Loader loader(*in->data_storage, instant_querier.get_series_to_load(), instant_querier.get_series_to_load().popcount());
+    new (res) Result{.querier = std::make_unique<QuerierVariant>(std::in_place_index<0>, std::move(instant_querier)), .status = QueryStatus::kNeedDataLoad};
+  } else {
+    new (res) Result{.querier = nullptr, .status = QueryStatus::kSuccess};
+  }
+}
 
-    for (const auto& buffer : in->data_storage->unloaded_snapshots) {
-      loader.load_next(buffer);
-    }
-    loader.load_finalize();
+extern "C" void prompp_series_data_data_storage_query_final(void* args) {
+  using entrypoint::series_data::QuerierVariantPtr;
+  using PromPP::Primitives::Go::Slice;
 
-    instant_querier.query_reload(in->samples, in->label_set_ids, in->timestamp);
+  struct Arguments {
+    Slice<QuerierVariantPtr> queriers;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  for (auto& querier_ptr : in->queriers) {
+    std::visit([](auto& querier) { querier.query_finalize(); }, *querier_ptr);
+    querier_ptr.reset();
   }
 }
 
@@ -251,14 +266,14 @@ extern "C" void prompp_series_data_data_storage_unload(void* args, void* res) {
 }
 
 extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* res) {
+  using entrypoint::series_data::QuerierVariantPtr;
   using PromPP::Primitives::LabelSetID;
   using PromPP::Primitives::Go::SliceView;
   using series_data::DataStorage;
   using series_data::unloading::Loader;
 
   struct Arguments {
-    DataStorage* data_storage;
-    SliceView<LabelSetID> label_sets;
+    SliceView<QuerierVariantPtr> queriers;
   };
 
   struct Result {
@@ -267,7 +282,25 @@ extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* re
 
   const auto in = static_cast<Arguments*>(args);
 
-  new (res) Result{.loader = std::make_unique<Loader>(*(in->data_storage), in->label_sets, in->label_sets.size())};
+  auto& first = *in->queriers.begin();
+
+  Loader loader = std::visit(
+      [](auto& querier) {
+        const auto& series_to_load = querier.series_to_load();
+        return Loader(querier.storage(), series_to_load, series_to_load.popcount());
+      },
+      *first);
+
+  for (const auto& rest : in->queriers | std::views::drop(1)) {
+    std::visit(
+        [&loader](auto& querier) {
+          const auto& series_to_load = querier.series_to_load();
+          loader.add_ls_ids_sorted(series_to_load, series_to_load.popcount());
+        },
+        *rest);
+  }
+
+  new (res) Result{.loader = std::make_unique<Loader>(std::move(loader))};
 }
 
 extern "C" void prompp_series_data_data_storage_loader_load_next(void* args) {
@@ -276,19 +309,16 @@ extern "C" void prompp_series_data_data_storage_loader_load_next(void* args) {
   struct Arguments {
     LoaderPtr loader;
     SliceView<const uint8_t> buffer;
+    bool is_final;
   };
 
   const auto in = static_cast<Arguments*>(args);
 
   in->loader->load_next(in->buffer.span());
-}
 
-extern "C" void prompp_series_data_data_storage_loader_load_finalize(void* args) {
-  struct Arguments {
-    LoaderPtr loader;
-  };
-
-  static_cast<Arguments*>(args)->loader->load_finalize();
+  if (in->is_final) {
+    in->loader->load_finalize();
+  }
 }
 
 extern "C" void prompp_series_data_data_storage_loader_dtor(void* args) {
