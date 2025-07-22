@@ -104,17 +104,20 @@ func labelValues(
 	t := head.CreateTask(
 		taskName,
 		func(shard relabeler.Shard) error {
+			shard.LSSRLock()
 			queryLabelValuesResult := shard.LSS().QueryLabelValues(name, convertedMatchers)
+			shard.LSSRUnlock()
+
 			if queryLabelValuesResult.Status() != cppbridge.LSSQueryStatusMatch {
 				return fmt.Errorf("no matches on shard: %d", shard.ShardID())
 			}
 
 			dedup.Add(shard.ShardID(), queryLabelValuesResult.Values()...)
 			runtime.KeepAlive(queryLabelValuesResult)
+
 			return nil
 		},
 		relabeler.ForLSSTask,
-		relabeler.NonExclusiveTask,
 	)
 	head.Enqueue(t)
 
@@ -173,17 +176,20 @@ func labelNames(
 	t := head.CreateTask(
 		taskName,
 		func(shard relabeler.Shard) error {
+			shard.LSSRLock()
 			queryLabelNamesResult := shard.LSS().QueryLabelNames(convertedMatchers)
+			shard.LSSRUnlock()
+
 			if queryLabelNamesResult.Status() != cppbridge.LSSQueryStatusMatch {
 				return fmt.Errorf("no matches on shard: %d", shard.ShardID())
 			}
 
 			dedup.Add(shard.ShardID(), queryLabelNamesResult.Names()...)
 			runtime.KeepAlive(queryLabelNamesResult)
+
 			return nil
 		},
 		relabeler.ForLSSTask,
-		relabeler.NonExclusiveTask,
 	)
 	head.Enqueue(t)
 
@@ -266,6 +272,9 @@ func (q *Querier) selectInstant(
 	tLSSQuerySelector := q.head.CreateTask(
 		relabeler.LSSQueryInstantQuerySelector,
 		func(shard relabeler.Shard) error {
+			shard.LSSRLock()
+			defer shard.LSSRUnlock()
+
 			selector, status := shard.LSS().QuerySelector(convertedMatchers)
 			switch status {
 			case cppbridge.LSSQueryStatusMatch:
@@ -283,7 +292,6 @@ func (q *Querier) selectInstant(
 			return nil
 		},
 		relabeler.ForLSSTask,
-		relabeler.NonExclusiveTask,
 	)
 	q.head.Enqueue(tLSSQuerySelector)
 	if err := tLSSQuerySelector.Wait(); err != nil {
@@ -318,23 +326,25 @@ func (q *Querier) selectInstant(
 	tDataStorageQuery := q.head.CreateTask(
 		relabeler.DSQueryInstantQuerier,
 		func(shard relabeler.Shard) error {
-			lssQueryResult := lssQueryResults[shard.ShardID()]
+			shardID := shard.ShardID()
+			lssQueryResult := lssQueryResults[shardID]
 			if lssQueryResult == nil {
-				seriesSets[shard.ShardID()] = &SeriesSet{}
+				seriesSets[shardID] = &SeriesSet{}
 				return nil
 			}
 
-			seriesSets[shard.ShardID()] = NewInstantSeriesSet(
+			shard.DataStorageRLock()
+			seriesSets[shardID] = NewInstantSeriesSet(
 				lssQueryResult,
-				snapshots[shard.ShardID()],
+				snapshots[shardID],
 				valueNotFoundTimestampValue,
 				shard.DataStorage().InstantQuery(q.maxt, valueNotFoundTimestampValue, lssQueryResult.IDs()),
 			)
+			shard.DataStorageRUnlock()
 
 			return nil
 		},
 		relabeler.ForDataStorageTask,
-		relabeler.NonExclusiveTask,
 	)
 	q.head.Enqueue(tDataStorageQuery)
 	_ = tDataStorageQuery.Wait()
@@ -379,6 +389,9 @@ func (q *Querier) selectRange(
 	tLSSQuerySelector := q.head.CreateTask(
 		relabeler.LSSQueryRangeQuerySelector,
 		func(shard relabeler.Shard) error {
+			shard.LSSRLock()
+			defer shard.LSSRUnlock()
+
 			selector, status := shard.LSS().QuerySelector(convertedMatchers)
 			switch status {
 			case cppbridge.LSSQueryStatusMatch:
@@ -396,7 +409,6 @@ func (q *Querier) selectRange(
 			return nil
 		},
 		relabeler.ForLSSTask,
-		relabeler.NonExclusiveTask,
 	)
 	q.head.Enqueue(tLSSQuerySelector)
 	if err := tLSSQuerySelector.Wait(); err != nil {
@@ -431,27 +443,29 @@ func (q *Querier) selectRange(
 	tDataStorageQuery := q.head.CreateTask(
 		relabeler.DSQueryRangeQuerier,
 		func(shard relabeler.Shard) error {
-			lssQueryResult := lssQueryResults[shard.ShardID()]
+			shardID := shard.ShardID()
+			lssQueryResult := lssQueryResults[shardID]
 			if lssQueryResult == nil {
 				return nil
 			}
 
+			shard.DataStorageRLock()
 			serializedChunks := shard.DataStorage().Query(cppbridge.HeadDataStorageQuery{
 				StartTimestampMs: q.mint,
 				EndTimestampMs:   q.maxt,
 				LabelSetIDs:      lssQueryResult.IDs(),
 			})
+			shard.DataStorageRUnlock()
 
 			if serializedChunks.NumberOfChunks() == 0 {
 				return nil
 			}
 
-			serializedChunksShards[shard.ShardID()] = serializedChunks
+			serializedChunksShards[shardID] = serializedChunks
 
 			return nil
 		},
 		relabeler.ForDataStorageTask,
-		relabeler.NonExclusiveTask,
 	)
 	q.head.Enqueue(tDataStorageQuery)
 	_ = tDataStorageQuery.Wait()
