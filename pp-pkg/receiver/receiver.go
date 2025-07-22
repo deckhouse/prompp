@@ -165,8 +165,6 @@ func NewReceiver(
 		numberOfShards:        numberOfShards,
 	})
 
-	querierMetrics := querier.NewMetrics(registerer)
-
 	dataDir, err = filepath.Abs(dataDir)
 	if err != nil {
 		return nil, err
@@ -192,7 +190,7 @@ func NewReceiver(
 	queryableStorage := appender.NewQueryableStorageWithWriteNotifier(
 		block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize, rotationInfo.BlockDuration, registerer),
 		registerer,
-		querierMetrics,
+		querier.NewMetrics(registerer, querier.QueryableStorageSource),
 		triggerNotifier,
 		clock,
 		maxRetentionDuration,
@@ -210,7 +208,12 @@ func NewReceiver(
 	}
 
 	dstrb := distributor.NewDistributor(*destinationGroups)
-	app := appender.NewQueryableAppender(ctx, appenderHead, dstrb, querierMetrics)
+	app := appender.NewQueryableAppender(
+		ctx,
+		appenderHead,
+		dstrb,
+		querier.NewMetrics(registerer, querier.QueryableAppenderSource),
+	)
 	mwt := appender.NewMetricsWriteTrigger(ctx, appender.DefaultMetricWriteInterval, app, queryableStorage)
 
 	r := &Receiver{
