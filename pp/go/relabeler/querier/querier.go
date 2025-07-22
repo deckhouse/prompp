@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"runtime"
 	"sort"
-	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -91,9 +90,7 @@ func labelValues(
 
 	defer func() {
 		if metrics != nil {
-			metrics.LabelValuesDuration.With(
-				prometheus.Labels{"generation": fmt.Sprintf("%d", head.Generation())},
-			).Observe(float64(time.Since(start).Microseconds()))
+			metrics.LabelValuesDuration.Observe(float64(time.Since(start).Microseconds()))
 		}
 	}()
 
@@ -163,9 +160,7 @@ func labelNames(
 
 	defer func() {
 		if metrics != nil {
-			metrics.LabelNamesDuration.With(
-				prometheus.Labels{"generation": fmt.Sprintf("%d", head.Generation())},
-			).Observe(float64(time.Since(start).Microseconds()))
+			metrics.LabelNamesDuration.Observe(float64(time.Since(start).Microseconds()))
 		}
 	}()
 
@@ -247,10 +242,7 @@ func (q *Querier) selectInstant(
 	defer func() {
 		if q.metrics != nil {
 			q.metrics.SelectDuration.With(
-				prometheus.Labels{
-					"generation": strconv.FormatUint(q.head.Generation(), 10),
-					"query_type": "instant",
-				},
+				prometheus.Labels{"query_type": "instant"},
 			).Observe(float64(time.Since(start).Microseconds()))
 		}
 	}()
@@ -347,10 +339,7 @@ func (q *Querier) selectRange(
 	defer func() {
 		if q.metrics != nil {
 			q.metrics.SelectDuration.With(
-				prometheus.Labels{
-					"generation": strconv.FormatUint(q.head.Generation(), 10),
-					"query_type": "range",
-				},
+				prometheus.Labels{"query_type": "range"},
 			).Observe(float64(time.Since(start).Microseconds()))
 		}
 	}()

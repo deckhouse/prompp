@@ -124,11 +124,18 @@ func (qa *QueryableAppender) CommitToWal(ctx context.Context) error {
 }
 
 func (qa *QueryableAppender) Rotate(ctx context.Context) error {
+	start := time.Now()
+
 	unlock, err := qa.wlocker.LockWithPriority(ctx)
 	if err != nil {
 		return fmt.Errorf("Rotate: weighted locker: %w", err)
 	}
+	qa.querierMetrics.WaitLockRotateDuration.Set(float64(time.Since(start).Nanoseconds()))
 	defer unlock()
+
+	defer func() {
+		qa.querierMetrics.RotationDuration.Set(float64(time.Since(start).Nanoseconds()))
+	}()
 
 	qa.head.MergeOutOfOrderChunks()
 
