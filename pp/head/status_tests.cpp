@@ -13,7 +13,7 @@ namespace {
 
 using QueryableEncodingBimap =
     series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, series_index::trie::CedarTrie>;
-using head::StatusGetter;
+using head::StatusGetterLSS;
 using PromPP::Primitives::LabelViewSet;
 using series_data::DataStorage;
 using series_data::Encoder;
@@ -31,7 +31,9 @@ class StatusFixture : public ::testing::Test {
 
   [[nodiscard]] Status get_status() const {
     Status status;
-    StatusGetter<QueryableEncodingBimap, Status>{lss_, storage_, kTopItemsCount}.get(status);
+    StatusGetterLSS<QueryableEncodingBimap, Status>{lss_, kTopItemsCount}.get(status);
+    status.min_max_timestamp = series_data::Decoder::get_time_interval(storage_);
+    status.chunk_count = storage_.chunks().non_empty_chunk_count();
     return status;
   }
 };
@@ -100,24 +102,6 @@ TEST_F(StatusFixture, EmptyChunk) {
 
   // Assert
   EXPECT_EQ((Status{.min_max_timestamp = {.min = 1, .max = 1}, .chunk_count = 1}), status);
-}
-
-TEST_F(StatusFixture, QueriedSeries) {
-  // Arrange
-  lss_.find_or_emplace(LabelViewSet{{"job", "cron1"}});
-  lss_.find_or_emplace(LabelViewSet{{"job", "cron2"}});
-  lss_.find_or_emplace(LabelViewSet{{"job", "cron3"}});
-  lss_.set_queried_series(QuerySource::kRule, std::vector{0U, 1U, 2U});
-  lss_.set_queried_series(QuerySource::kFederate, std::vector{0U, 1U});
-  lss_.set_queried_series(QuerySource::kOther, std::vector{0U});
-
-  // Act
-  const auto status = get_status();
-
-  // Assert
-  EXPECT_EQ(3U, status.rule_queried_series);
-  EXPECT_EQ(2U, status.federate_queried_series);
-  EXPECT_EQ(1U, status.other_queried_series);
 }
 
 }  // namespace

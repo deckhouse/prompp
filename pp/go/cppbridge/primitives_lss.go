@@ -1,7 +1,6 @@
 package cppbridge
 
 import (
-	"context"
 	"runtime"
 	"unsafe"
 
@@ -23,16 +22,6 @@ const (
 	LSSQueryStatusRegexpError
 	LSSQueryStatusNoMatch
 	LSSQueryStatusMatch
-)
-
-//
-// LSS Query Source
-//
-
-const (
-	LSSQuerySourceRule uint32 = iota
-	LSSQuerySourceFederate
-	LSSQuerySourceOther
 )
 
 //
@@ -94,11 +83,6 @@ func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet CppLabelSetBuilder) Fi
 	res := primitivesLSSFindOrEmplaceBuilder(lss.pointer, labelSet)
 	runtime.KeepAlive(lss)
 	return res
-}
-
-// QueryDeprecated returns a LSSQueryResult that matches the given label matchers.
-func (lss *LabelSetStorage) QueryDeprecated(matchers []model.LabelMatcher, querySource uint32) *LSSQueryResult {
-	return newLSSQueryResult(primitivesLSSQueryDeprecated(lss.pointer, matchers, querySource))
 }
 
 // QuerySelector returns a created selector that matches the given label matchers.
@@ -292,31 +276,6 @@ type LabelSetStorageGetLabelSetsResult struct {
 // LabelsSets return queried slice labelsets.
 func (r *LabelSetStorageGetLabelSetsResult) LabelsSets() []Labels {
 	return r.labelSets
-}
-
-//
-// Caller
-//
-
-type ctxCallerKey struct{}
-
-// GetCaller get from context callerID, if not exist return LSSQuerySourceOther.
-func GetCaller(ctx context.Context) uint32 {
-	v, ok := ctx.Value(ctxCallerKey{}).(uint32)
-	if !ok {
-		return LSSQuerySourceOther
-	}
-
-	if v >= LSSQuerySourceOther {
-		return LSSQuerySourceOther
-	}
-
-	return v
-}
-
-// SetCaller set callerID to context.
-func SetCaller(parent context.Context, callerID uint32) context.Context {
-	return context.WithValue(parent, ctxCallerKey{}, callerID)
 }
 
 //

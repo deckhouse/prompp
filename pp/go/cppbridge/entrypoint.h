@@ -41,49 +41,6 @@ extern "C" {
  * @brief Return head status
  *
  * @param args {
- *     lss         uintptr      // pointer to constructed lss
- *     dataStorage uintptr      // pointer to constructed data storage
- *     limit       int          // statistics limit
- * }
- *
- * @param res {
- *     status struct {     // head status
- *          time_interval struct {
- *              min int64
- *              max int64
- *          }
- *          label_value_count_by_label_name []struct {
- *              name string
- *              count uint32
- *          }
- *          series_count_by_metric_name []struct {
- *              name string
- *              count uint32
- *          }
- *          memory_in_bytes_by_label_name []struct {
- *              name string
- *              size uint32
- *          }
- *          series_count_by_label_value_pair [] struct {
- *              name string
- *              value string
- *              count uint32
- *          }
- *          num_series      uint32
- *          chunk_count     uint32
- *          num_label_pairs uint32
- *          rule_queried_series uint32
- *          federate_queried_series uint32
- *          other_queried_series uint32
- *     }
- * }
- */
-void prompp_get_head_status(void* args, void* res);
-
-/**
- * @brief Return head status
- *
- * @param args {
  *     status struct {...} // status returned by prompp_get_head_status
  * }
  *
@@ -119,9 +76,6 @@ void prompp_free_head_status(void* args);
  *          }
  *          num_series      uint32
  *          num_label_pairs uint32
- *          rule_queried_series uint32
- *          federate_queried_series uint32
- *          other_queried_series uint32
  *     }
  * }
  */
@@ -598,23 +552,6 @@ void prompp_primitives_lss_find_or_emplace(void* args, void* res);
  * }
  */
 void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
-
-/**
- * @brief query series from lss
- *
- * @param args {
- *     lss uintptr                         // pointer to constructed queryable lss;
- *     label_matchers []model.LabelMatcher // label matchers
- *     query_source uint32                 // query source (rule, federate, other)
- * }
- *
- * @param res {
- *     matches           []uint32 // matched series ids
- *     label_set_lengths []uint16 // slice of series label set length
- *     status            uint32   // query status
- * }
- */
-void prompp_primitives_lss_query_deprecated(void* args, void* res);
 
 /**
  * @brief query selector from lss for label matchers
