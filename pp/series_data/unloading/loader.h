@@ -44,6 +44,30 @@ class Loader {
     });
   }
 
+  template <LsIDStorageInterface LsIDStorage>
+  void add_ls_ids_sorted(const LsIDStorage& ls_id_range, uint32_t ls_id_range_count) {
+    series_to_load_infos_.reserve(series_to_load_infos_.size() + ls_id_range_count);
+
+    auto infos_it = series_to_load_infos_.begin();
+
+    for (uint32_t ls_id : ls_id_range) {
+      infos_it =
+          std::lower_bound(infos_it, series_to_load_infos_.end(), ls_id, [](const SeriesToLoadInfo& info, uint32_t ls_id) { return info.ls_id < ls_id; });
+
+      if (infos_it != series_to_load_infos_.end() && infos_it->ls_id == ls_id) {
+        continue;
+      }
+
+      storage_.unloaded_series_bitmap.reset(ls_id);
+
+      SeriesToLoadInfo new_info;
+      new_info.ls_id = ls_id;
+      series_to_load_infos_.insert(infos_it, std::move(new_info));
+    }
+  }
+
+  static Loader create_empty_loader(DataStorage& storage) noexcept { return Loader{storage, std::initializer_list<uint32_t>(), 0}; }
+
   void load_next(std::span<const uint8_t> buffer) {
     if (buffer.size() != *sizes_it_++) {
       throw BareBones::Exception(0x16d2a1e15cfa347d, "Loader::load_next: Buffer size mismatch");

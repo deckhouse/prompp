@@ -266,14 +266,14 @@ extern "C" void prompp_series_data_data_storage_unload(void* args, void* res) {
 }
 
 extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* res) {
+  using entrypoint::series_data::QuerierVariantPtr;
   using PromPP::Primitives::LabelSetID;
   using PromPP::Primitives::Go::SliceView;
   using series_data::DataStorage;
   using series_data::unloading::Loader;
 
   struct Arguments {
-    DataStorage* data_storage;
-    SliceView<LabelSetID> label_sets;
+    SliceView<QuerierVariantPtr> queriers;
   };
 
   struct Result {
@@ -282,7 +282,25 @@ extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* re
 
   const auto in = static_cast<Arguments*>(args);
 
-  new (res) Result{.loader = std::make_unique<Loader>(*(in->data_storage), in->label_sets, in->label_sets.size())};
+  auto& first = *in->queriers.begin();
+
+  Loader loader = std::visit(
+      [](auto& querier) {
+        const auto& series_to_load = querier.series_to_load();
+        return Loader(querier.storage(), series_to_load, series_to_load.popcount());
+      },
+      *first);
+
+  for (const auto& rest : in->queriers | std::views::drop(1)) {
+    std::visit(
+        [&loader](auto& querier) {
+          const auto& series_to_load = querier.series_to_load();
+          loader.add_ls_ids_sorted(series_to_load, series_to_load.popcount());
+        },
+        *rest);
+  }
+
+  new (res) Result{.loader = std::make_unique<Loader>(std::move(loader))};
 }
 
 extern "C" void prompp_series_data_data_storage_loader_load_next(void* args) {

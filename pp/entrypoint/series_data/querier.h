@@ -14,6 +14,7 @@ concept QuerierInterface = requires(Querier querier) {
   { querier.query_finalize() };
   { querier.series_to_load() } -> std::same_as<const BareBones::Bitset&>;
   { querier.need_loading() } -> std::same_as<bool>;
+  { querier.storage() } -> std::same_as<const ::series_data::DataStorage&>;
 };
 
 enum class QueryStatus : uint8_t {
@@ -37,6 +38,8 @@ class InstantQuerierWithArgumentsWrapper {
   [[nodiscard]] const BareBones::Bitset& series_to_load() const noexcept { return instant_querier_.get_series_to_load(); }
 
   [[nodiscard]] bool need_loading() const noexcept { return instant_querier_.need_loading(); }
+
+  [[nodiscard]] const DataStorage& storage() const noexcept { return instant_querier_.get_storage(); }
 
  private:
   SampleStorage& samples_;
@@ -73,6 +76,8 @@ class RangeQuerierWithArgumentsWrapper {
   [[nodiscard]] const BareBones::Bitset& series_to_load() const noexcept { return querier_.get_series_to_load(); }
 
   [[nodiscard]] bool need_loading() const noexcept { return querier_.need_loading(); }
+
+  [[nodiscard]] const DataStorage& storage() const noexcept { return querier_.get_storage(); }
 
  private:
   Slice<char>* serialized_chunks_;
