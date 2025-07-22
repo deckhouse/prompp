@@ -44,6 +44,8 @@ type Receiver interface {
 	GetState() *cppbridge.State
 }
 
+const defaultDurationRenew = 10 * time.Minute
+
 // Options are the configuration parameters to the scrape manager.
 type Options struct {
 	ExtraMetrics  bool
@@ -158,8 +160,10 @@ func (m *Manager) reloader() {
 	reloadIntervalDuration := max(m.opts.DiscoveryReloadInterval, model.Duration(5*time.Second))
 
 	ticker := time.NewTicker(time.Duration(reloadIntervalDuration))
+	timerRenew := time.NewTimer(defaultDurationRenew)
 
 	defer ticker.Stop()
+	defer timerRenew.Stop()
 
 	for {
 		select {
@@ -169,8 +173,12 @@ func (m *Manager) reloader() {
 			select {
 			case <-m.triggerReload:
 				m.reload()
+				timerRenew.Reset(defaultDurationRenew)
 			case <-m.graceShut:
 				return
+			case <-timerRenew.C:
+				m.reload()
+				timerRenew.Reset(defaultDurationRenew)
 			}
 		}
 	}

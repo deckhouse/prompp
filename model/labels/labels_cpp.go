@@ -305,7 +305,7 @@ func (ls *Labels) RenewSnapshot() {
 			b.del = append(b.del, MetricName)
 		}
 
-		*ls = b.Labels()
+		*ls = b.rebuildLabels()
 		return
 	}
 
@@ -350,9 +350,15 @@ type Builder struct {
 // If no modifications were made, the original labels are returned.
 func (b *Builder) Labels() Labels {
 	if len(b.del) == 0 && len(b.add) == 0 {
+		// quick exit if no changes
 		return b.base
 	}
 
+	return b.rebuildLabels()
+}
+
+// rebuildLabels returns labels from the builder built through labelsstorage.
+func (b *Builder) rebuildLabels() Labels {
 	slices.SortFunc(b.add, func(a, b Label) int { return strings.Compare(a.Name, b.Name) })
 	slices.Sort(b.del)
 
