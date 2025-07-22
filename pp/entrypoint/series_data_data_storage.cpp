@@ -177,14 +177,6 @@ extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
   const auto in = static_cast<Arguments*>(args);
   const auto& ls_id_set = std::get<QueryableEncodingBimap>(*in->lss).ls_id_set();
 
-  if (!in->data_storage->unloaded_series_bitmap.empty()) {
-    series_data::unloading::Loader loader{*in->data_storage};
-    for (const auto& buffer : in->data_storage->unloaded_snapshots) {
-      loader.load_next(buffer);
-    }
-    loader.load_finalize();
-  }
-
   new (res) Result{
       .chunk_recoder = std::make_unique<ChunkRecoderVariant>(
           std::in_place_type<ChunkRecoder>, ChunkRecoderIterator{ls_id_set.begin(), ls_id_set.end(), in->data_storage.get(), in->time_interval},
@@ -250,15 +242,11 @@ extern "C" void prompp_series_data_data_storage_unload(void* args, void* res) {
     Slice<char> unloaded_data;
   };
 
-  const auto in = static_cast<Arguments*>(args);
   const auto out = new (res) Result();
 
-  Unloader unloader{*in->data_storage};
+  Unloader unloader{*static_cast<Arguments*>(args)->data_storage};
   BytesStream bytes_stream{&out->unloaded_data};
   unloader.unload(bytes_stream);
-
-  in->data_storage->unloaded_snapshots.emplace_back(reinterpret_cast<const uint8_t*>(out->unloaded_data.data()),
-                                                    reinterpret_cast<const uint8_t*>(out->unloaded_data.data()) + out->unloaded_data.size());
 }
 
 extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* res) {

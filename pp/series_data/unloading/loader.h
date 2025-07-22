@@ -69,10 +69,6 @@ class Loader {
   static Loader create_empty_loader(DataStorage& storage) noexcept { return Loader{storage, std::initializer_list<uint32_t>(), 0}; }
 
   void load_next(std::span<const uint8_t> buffer) {
-    if (buffer.size() != *sizes_it_++) {
-      throw BareBones::Exception(0x16d2a1e15cfa347d, "Loader::load_next: Buffer size mismatch");
-    }
-
     const auto bitset_it = BareBones::Bitset::create_read_iterator(buffer);
     const auto length_it = EncodingChunkLengthSequence::create_read_iterator(buffer, length_encoder_);
     const auto id_it = EncodingChunkIDSequence::create_read_iterator(buffer, id_encoder_);
@@ -167,7 +163,5 @@ class Loader {
 
   BareBones::Vector<SeriesToLoadInfo> series_to_load_infos_{};
   BareBones::Vector<SeriesToLoadInfo>::iterator infos_it_{};
-
-  decltype(storage_.unloaded_snapshots_sizes.begin()) sizes_it_ = storage_.unloaded_snapshots_sizes.begin();
 };
 }  // namespace series_data::unloading

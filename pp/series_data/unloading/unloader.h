@@ -63,12 +63,8 @@ class Unloader {
       stream.reserve(sequences.reserved_stream_size);
     }
 
-    storage_.unloaded_snapshots_sizes.push_back(sequences.reserved_stream_size);
-
     sequences.ls_id_bitmap.write_to(stream);
-
     sequences.chunk_length_sequence.data().write_to(stream);
-
     sequences.chunk_id_sequence.data().write_to(stream);
   }
 
