@@ -8,6 +8,7 @@
 #include "decoder/asc_integer_then_values_gorilla.h"
 #include "decoder/constant.h"
 #include "decoder/gorilla.h"
+#include "decoder/outdated.h"
 #include "decoder/two_double_constant.h"
 #include "decoder/values_gorilla.h"
 #include "primitives/primitives.h"
@@ -46,9 +47,8 @@ class Decoder {
 
   static encoder::SampleList decode_outdated_chunk(const chunk::OutdatedChunk& chunk) {
     encoder::SampleList result;
-    const auto& stream = chunk.stream().stream;
-    result.reserve(encoder::BitSequenceWithItemsCount::count(stream));
-    std::ranges::copy(decoder::GorillaDecodeIterator(stream, false), decoder::DecodeIteratorSentinel{}, std::back_inserter(result));
+    result.reserve(chunk.samples_count());
+    std::ranges::copy(decoder::OutdatedDecodeIterator(chunk), decoder::DecodeIteratorSentinel{}, std::back_inserter(result));
     return result;
   }
 

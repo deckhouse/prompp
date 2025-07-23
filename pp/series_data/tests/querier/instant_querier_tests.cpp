@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
 
 #include "series_data/encoder.h"
-#include "series_data/outdated_sample_encoder.h"
 #include "series_data/querier/instant_querier.h"
 
 namespace {
@@ -13,7 +12,6 @@ using series_data::ChunkFinalizer;
 using series_data::DataStorage;
 using series_data::Encoder;
 using series_data::InstantQuerier;
-using series_data::OutdatedSampleEncoder;
 using series_data::chunk::DataChunk;
 using series_data::encoder::Sample;
 

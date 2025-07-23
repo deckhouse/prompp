@@ -9,6 +9,7 @@
 #include "series_data/concepts.h"
 #include "series_data/data_storage.h"
 #include "series_data/encoder.h"
+#include "series_data/outdated_chunk_merger.h"
 
 namespace series_data::unloading {
 struct SeriesToLoadInfo {
