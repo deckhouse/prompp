@@ -361,6 +361,8 @@ func (h UnloadedDataSnapshotHeader) isValid(snapshot []byte) bool {
 	return h.crc32 == crc32.ChecksumIEEE(snapshot)
 }
 
+const UnloadedDataStorageVersion = 1
+
 type UnloadedDataStorage struct {
 	storage         ReaderAtWriterCloser
 	snapshots       []UnloadedDataSnapshotHeader
@@ -376,9 +378,14 @@ func (s *UnloadedDataStorage) Write(snapshot []byte) error {
 		return nil
 	}
 
+	if len(s.snapshots) == 0 {
+		if err := s.writeFormatVersion(); err != nil {
+			return err
+		}
+	}
+
 	header := newUnloadedDataSnapshotHeader(snapshot)
-	size, err := s.storage.Write(snapshot)
-	if uint32(size) != header.snapshotSize || err != nil {
+	if _, err := s.storage.Write(snapshot); err != nil {
 		return err
 	}
 
@@ -387,8 +394,20 @@ func (s *UnloadedDataStorage) Write(snapshot []byte) error {
 	return nil
 }
 
+func (s *UnloadedDataStorage) writeFormatVersion() error {
+	_, err := s.storage.Write([]byte{UnloadedDataStorageVersion})
+	return err
+}
+
 func (s *UnloadedDataStorage) ForEachSnapshot(f func(snapshot []byte, isLast bool)) error {
-	var offset int64
+	offset, err := s.validateFormatVersion()
+	if err != nil {
+		if err == io.EOF {
+			return nil
+		}
+		return err
+	}
+
 	snapshot := make([]byte, 0, s.maxSnapshotSize)
 	for index := range s.snapshots {
 		header := s.snapshots[index]
@@ -408,6 +427,19 @@ func (s *UnloadedDataStorage) ForEachSnapshot(f func(snapshot []byte, isLast boo
 	}
 
 	return nil
+}
+
+func (s *UnloadedDataStorage) validateFormatVersion() (offset int64, err error) {
+	version := []byte{0}
+	if _, err = s.storage.ReadAt(version, 0); err != nil {
+		return 0, err
+	}
+
+	if version[0] != UnloadedDataStorageVersion {
+		return 0, fmt.Errorf("UnloadedDataStorage invalid version %d", version[0])
+	}
+
+	return int64(len(version)), nil
 }
 
 func (s *UnloadedDataStorage) Close() error {

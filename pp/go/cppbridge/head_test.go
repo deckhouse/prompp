@@ -259,11 +259,24 @@ func (s *UnloadedDataStorageSuite) TestReadEof() {
 	s.Equal(fmt.Errorf("EOF"), err)
 }
 
+func (s *UnloadedDataStorageSuite) TestInvalidVersion() {
+	// Arrange
+	var invalidVersion byte = cppbridge.UnloadedDataStorageVersion + 1
+	_, _ = s.storageBuffer.Write([]byte{invalidVersion})
+
+	// Act
+	snapshots, err := s.readSnapshots()
+
+	// Assert
+	s.Equal([]string(nil), snapshots)
+	s.Equal(fmt.Errorf("UnloadedDataStorage invalid version %d", invalidVersion), err)
+}
+
 func (s *UnloadedDataStorageSuite) TestReadInvalidSnapshot() {
 	// Arrange
 	_ = s.storage.Write([]byte("123"))
 	_ = s.storage.Write([]byte("45678"))
-	s.storageBuffer.buffer[3] = 0x00
+	s.storageBuffer.buffer[4] = 0x00
 
 	// Act
 	snapshots, err := s.readSnapshots()
