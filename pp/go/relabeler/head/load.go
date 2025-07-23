@@ -272,7 +272,7 @@ func (l *ShardLoader) Load() (result ShardLoadResult) {
 		return
 	}
 
-	unloadedDataStorageFile, err := os.OpenFile(l.unloadedDataStorageFilePath, os.O_RDWR, 0o600)
+	unloadedDataStorageFile, err := os.Create(l.unloadedDataStorageFilePath)
 	if err != nil {
 		result.Err = err
 		return
