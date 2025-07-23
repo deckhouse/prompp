@@ -938,13 +938,56 @@ func (h *Head) inputRelabelingStage(
 			defer shard.LSSUnlock()
 
 			var (
+				shardID          = shard.ShardID()
 				err              error
 				hasReallocations bool
-				shardID          = shard.ShardID()
+				ok               bool
 			)
 
+			shard.LSSRLock()
 			if state.TrackStaleness() {
-				stats[shardID], hasReallocations, err = rd.InputRelabelerByShard(shardID).InputRelabelingWithStalenans(
+				stats[shardID], ok, err = rd.InputRelabelerByShard(
+					shardID,
+				).InputRelabelingWithStalenansFromCache(
+					ctx,
+					shard.LSS().Input(),
+					shard.LSS().Target(),
+					state.CacheByShard(shardID),
+					state.RelabelerOptions(),
+					state.StaleNansStateByShard(shardID),
+					state.DefTimestamp(),
+					incomingData.Data().ShardedData(),
+					shardedInnerSeries.DataBySourceShard(shardID),
+				)
+			} else {
+				stats[shardID], ok, err = rd.InputRelabelerByShard(shardID).InputRelabelingFromCache(
+					ctx,
+					shard.LSS().Input(),
+					shard.LSS().Target(),
+					state.CacheByShard(shardID),
+					state.RelabelerOptions(),
+					incomingData.Data().ShardedData(),
+					shardedInnerSeries.DataBySourceShard(shardID),
+				)
+			}
+			shard.LSSRUnlock()
+
+			if err != nil {
+				incomingData.Destroy()
+				return fmt.Errorf("shard %d: %w", shardID, err)
+			}
+
+			if ok {
+				incomingData.Destroy()
+				return nil
+			}
+
+			shard.LSSLock()
+			defer shard.LSSUnlock()
+			rstats := cppbridge.RelabelerStats{}
+
+			if state.TrackStaleness() {
+				rstats, hasReallocations, err = rd.InputRelabelerByShard(shardID).InputRelabelingWithStalenans(
 					ctx,
 					shard.LSS().Input(),
 					shard.LSS().Target(),
@@ -957,7 +1000,7 @@ func (h *Head) inputRelabelingStage(
 					shardedRelabeledSeries.DataByShard(shardID),
 				)
 			} else {
-				stats[shardID], hasReallocations, err = rd.InputRelabelerByShard(shardID).InputRelabeling(
+				rstats, hasReallocations, err = rd.InputRelabelerByShard(shardID).InputRelabeling(
 					ctx,
 					shard.LSS().Input(),
 					shard.LSS().Target(),
@@ -973,6 +1016,10 @@ func (h *Head) inputRelabelingStage(
 			if err != nil {
 				return fmt.Errorf("shard %d: %w", shardID, err)
 			}
+
+			stats[shardID].SamplesAdded += rstats.SamplesAdded
+			stats[shardID].SeriesAdded += rstats.SeriesAdded
+			stats[shardID].SeriesDrop += rstats.SeriesDrop
 
 			if hasReallocations {
 				shard.LSS().ResetSnapshot()
