@@ -30,10 +30,10 @@ class InstantQuerierWithArgumentsWrapper {
 
  public:
   InstantQuerierWithArgumentsWrapper(DataStorage& storage, const LsIDStorage& label_set_ids, const Timestamp& timestamp, SampleStorage& samples)
-      : instant_querier_(storage), samples_(&samples), label_set_ids_(&label_set_ids), timestamp_(timestamp) {}
+      : instant_querier_(storage), samples_(samples), label_set_ids_(label_set_ids), timestamp_(timestamp) {}
 
-  void query() noexcept { instant_querier_.query(*samples_, *label_set_ids_, timestamp_); }
-  void query_finalize() noexcept { instant_querier_.query_reload(*samples_, *label_set_ids_, timestamp_); }
+  void query() noexcept { instant_querier_.query(samples_, label_set_ids_, timestamp_); }
+  void query_finalize() noexcept { instant_querier_.query_reload(samples_, label_set_ids_, timestamp_); }
 
   [[nodiscard]] const BareBones::Bitset& series_to_load() const noexcept { return instant_querier_.get_series_to_load(); }
   [[nodiscard]] bool need_loading() const noexcept { return instant_querier_.need_loading(); }
@@ -41,8 +41,8 @@ class InstantQuerierWithArgumentsWrapper {
 
  private:
   ::series_data::InstantQuerier instant_querier_;
-  SampleStorage* samples_;
-  const LsIDStorage* label_set_ids_;
+  SampleStorage samples_;
+  const LsIDStorage label_set_ids_;
   const Timestamp timestamp_;
 };
 

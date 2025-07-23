@@ -20,10 +20,6 @@ import (
 
 const maxSegmentSize uint32 = 1024
 
-type noOpLastAppendedSegmentIDSetter struct{}
-
-func (noOpLastAppendedSegmentIDSetter) SetLastAppendedSegmentID(_ uint32) {}
-
 func TestLoad(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -49,7 +45,7 @@ func TestLoad(t *testing.T) {
 	var numberOfShards uint16 = 2
 
 	headID := "test_head_id"
-	h, err := head.Create(headID, 0, tmpDir, cfgs, numberOfShards, maxSegmentSize, noOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+	h, err := head.Create(headID, 0, tmpDir, cfgs, numberOfShards, maxSegmentSize, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
 	require.NoError(t, err)
 
 	ls := model.NewLabelSetBuilder().Set("__name__", "wal_metric").Set("job", "test").Build()
@@ -122,7 +118,7 @@ func TestLoad(t *testing.T) {
 	require.NoError(t, h.Flush())
 	require.NoError(t, h.Close())
 	var corrupted bool
-	h, corrupted, _, err = head.Load(headID, 0, tmpDir, cfgs, numberOfShards, maxSegmentSize, noOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+	h, corrupted, _, err = head.Load(headID, 0, tmpDir, cfgs, numberOfShards, maxSegmentSize, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
 	require.NoError(t, err)
 	require.False(t, corrupted)
 
@@ -224,7 +220,7 @@ func TestLoad(t *testing.T) {
 	h.Stop()
 	require.NoError(t, h.Close())
 
-	h, corrupted, _, err = head.Load(headID, 0, tmpDir, cfgs, numberOfShards, maxSegmentSize, noOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+	h, corrupted, _, err = head.Load(headID, 0, tmpDir, cfgs, numberOfShards, maxSegmentSize, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
 	require.NoError(t, err)
 	require.False(t, corrupted)
 
@@ -335,26 +331,14 @@ func TestLoad(t *testing.T) {
 
 	h.Stop()
 	require.NoError(t, h.Close())
-}
-
-type timeSeriesData struct {
-	timeSeries []model.TimeSeries
-}
-
-func (tsd *timeSeriesData) TimeSeries() []model.TimeSeries {
-	return tsd.timeSeries
-}
-
-func (tsd *timeSeriesData) Destroy() {
-	tsd.timeSeries = nil
 }
 
 func appendTimeSeries(t *testing.T, ctx context.Context, h *head.Head, timeSeries []model.TimeSeries) error {
-	tsd := &timeSeriesData{timeSeries: timeSeries}
+	tsd := relabeler.NewTimeSeriesDataSlice(timeSeries)
 	hx, err := (cppbridge.HashdexFactory{}).GoModel(tsd.TimeSeries(), cppbridge.DefaultWALHashdexLimits())
 	require.NoError(t, err)
 
-	incomingData := &relabeler.IncomingData{Hashdex: hx, Data: tsd}
+	incomingData := &relabeler.IncomingData{Hashdex: hx, Data: &tsd}
 
 	_, _, err = h.Append(ctx, incomingData, cppbridge.NewState(h.NumberOfShards()), "transparent_relabeler", true)
 	return err

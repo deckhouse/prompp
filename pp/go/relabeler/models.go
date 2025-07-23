@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/jonboulle/clockwork"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/frames"
 	"github.com/prometheus/prometheus/pp/go/model"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -403,6 +403,22 @@ type ProtobufData interface {
 type TimeSeriesData interface {
 	TimeSeries() []model.TimeSeries
 	Destroy()
+}
+
+type TimeSeriesDataSlice struct {
+	timeSeries []model.TimeSeries
+}
+
+func NewTimeSeriesDataSlice(timeSeries []model.TimeSeries) TimeSeriesDataSlice {
+	return TimeSeriesDataSlice{timeSeries: timeSeries}
+}
+
+func (tsd *TimeSeriesDataSlice) TimeSeries() []model.TimeSeries {
+	return tsd.timeSeries
+}
+
+func (tsd *TimeSeriesDataSlice) Destroy() {
+	tsd.timeSeries = nil
 }
 
 // MetricData is an universal interface for blob protobuf or slice model.TimeSeries data.
