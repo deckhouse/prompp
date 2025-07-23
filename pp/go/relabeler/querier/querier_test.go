@@ -69,22 +69,25 @@ func (s *QuerierTestSuite) fillHead(timeseries []model.TimeSeries) {
 	s.NoError(err)
 }
 
+func labelSetFromLabels(labels labels.Labels) model.LabelSet {
+	simpleLabels := make([]model.SimpleLabel, labels.Len())
+	for i, label := range labels {
+		simpleLabels[i] = model.SimpleLabel{Name: label.Name, Value: label.Value}
+	}
+
+	return model.LabelSetFromSlice(simpleLabels)
+}
+
 func timeseriesFromSeriesSet(seriesSet storage.SeriesSet) []model.TimeSeries {
 	var timeseries []model.TimeSeries
 	for seriesSet.Next() {
 		series := seriesSet.At()
 
-		lbls := series.Labels()
-		simpleLabels := make([]model.SimpleLabel, lbls.Len())
-		for i, label := range lbls {
-			simpleLabels[i] = model.SimpleLabel{Name: label.Name, Value: label.Value}
-		}
-
 		chunkIterator := series.Iterator(nil)
 		for chunkIterator.Next() != chunkenc.ValNone {
 			ts, v := chunkIterator.At()
 			timeseries = append(timeseries, model.TimeSeries{
-				LabelSet:  model.LabelSetFromSlice(simpleLabels),
+				LabelSet:  labelSetFromLabels(series.Labels()),
 				Timestamp: uint64(ts),
 				Value:     v,
 			})
