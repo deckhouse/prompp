@@ -219,19 +219,31 @@ func (h *RotatableHead) RLockQuery(ctx context.Context) (runlock func(), err err
 
 // FindFromBuilder label set from builder in lss, if not found return EmptyLabels.
 func (h *RotatableHead) FindFromBuilder(
-	sortedAdd []cppbridge.Label,
-	sortedDel []string,
-	snapshot *cppbridge.LabelSetSnapshot,
+	builderSortedAdd []cppbridge.Label,
+	builderSortedDel []string,
+	builderSnapshot *cppbridge.LabelSetSnapshot,
 	hash uint64,
-	lsID uint32,
+	builderLSID uint32,
 	skipCache bool,
 ) (labels.Labels, bool) {
-	return h.head.FindFromBuilder(sortedAdd, sortedDel, snapshot, hash, lsID, skipCache)
+	return h.head.FindFromBuilder(builderSortedAdd, builderSortedDel, builderSnapshot, hash, builderLSID, skipCache)
 }
 
 // FindByHash label set by hash in cache.
-func (h *RotatableHead) FindByHash(hash uint64) (labels.Labels, bool) {
-	return h.head.FindByHash(hash)
+func (h *RotatableHead) FindByHash(
+	hash uint64,
+	builderSortedAdd []cppbridge.Label,
+	builderSortedDel []string,
+	builderSnapshot *cppbridge.LabelSetSnapshot,
+	builderLSID uint32,
+) (labels.Labels, bool) {
+	return h.head.FindByHash(
+		hash,
+		builderSortedAdd,
+		builderSortedDel,
+		builderSnapshot,
+		builderLSID,
+	)
 }
 
 //
@@ -365,17 +377,29 @@ func (h *HeapProfileWritableHead) RLockQuery(ctx context.Context) (runlock func(
 
 // FindFromBuilder label set from builder in lss, if not found return EmptyLabels.
 func (h *HeapProfileWritableHead) FindFromBuilder(
-	sortedAdd []cppbridge.Label,
-	sortedDel []string,
-	snapshot *cppbridge.LabelSetSnapshot,
+	builderSortedAdd []cppbridge.Label,
+	builderSortedDel []string,
+	builderSnapshot *cppbridge.LabelSetSnapshot,
 	hash uint64,
-	lsID uint32,
+	builderLSID uint32,
 	skipCache bool,
 ) (labels.Labels, bool) {
-	return h.head.FindFromBuilder(sortedAdd, sortedDel, snapshot, hash, lsID, skipCache)
+	return h.head.FindFromBuilder(builderSortedAdd, builderSortedDel, builderSnapshot, hash, builderLSID, skipCache)
 }
 
 // FindByHash label set by hash in cache.
-func (h *HeapProfileWritableHead) FindByHash(hash uint64) (labels.Labels, bool) {
-	return h.head.FindByHash(hash)
+func (h *HeapProfileWritableHead) FindByHash(
+	hash uint64,
+	builderSortedAdd []cppbridge.Label,
+	builderSortedDel []string,
+	builderSnapshot *cppbridge.LabelSetSnapshot,
+	builderLSID uint32,
+) (labels.Labels, bool) {
+	return h.head.FindByHash(
+		hash,
+		builderSortedAdd,
+		builderSortedDel,
+		builderSnapshot,
+		builderLSID,
+	)
 }

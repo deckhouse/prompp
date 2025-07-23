@@ -579,14 +579,21 @@ const (
 type Receiver interface {
 	FindFromBuilder(
 		ctx context.Context,
-		sortedAdd []cppbridge.Label,
-		sortedDel []string,
-		snapshot *cppbridge.LabelSetSnapshot,
+		builderSortedAdd []cppbridge.Label,
+		builderSortedDel []string,
+		builderSnapshot *cppbridge.LabelSetSnapshot,
 		hash uint64,
-		lsID uint32,
+		builderLSID uint32,
 		skipCache bool,
 	) (Labels, bool)
-	FindByHash(ctx context.Context, hash uint64) (Labels, bool)
+	FindByHash(
+		ctx context.Context,
+		hash uint64,
+		builderSortedAdd []cppbridge.Label,
+		builderSortedDel []string,
+		builderSnapshot *cppbridge.LabelSetSnapshot,
+		builderLSID uint32,
+	) (Labels, bool)
 }
 
 // noopReceiver implementation [Receiver] without operation.
@@ -612,7 +619,14 @@ func (*noopReceiver) FindFromBuilder(
 }
 
 // FindByHash implementation [Receiver].
-func (*noopReceiver) FindByHash(_ context.Context, _ uint64) (Labels, bool) {
+func (*noopReceiver) FindByHash(
+	_ context.Context,
+	_ uint64,
+	_ []cppbridge.Label,
+	_ []string,
+	_ *cppbridge.LabelSetSnapshot,
+	_ uint32,
+) (Labels, bool) {
 	return EmptyLabels(), false
 }
 
@@ -634,6 +648,7 @@ type storage struct {
 	lssBitsetCount   *prometheus.GaugeVec
 	cacheSize        *prometheus.GaugeVec
 	cacheBitsetCount *prometheus.GaugeVec
+	cacheCollisions  prometheus.Counter
 }
 
 // newStorage init new storage.
@@ -687,6 +702,13 @@ func newStorage() *storage {
 			},
 			[]string{"generation"},
 		),
+		cacheCollisions: factory.NewCounter(
+			prometheus.CounterOpts{
+				Name:        "prompp_labels_cache_collisions_count",
+				Help:        "Current count of collisions in cache.",
+				ConstLabels: constLabels,
+			},
+		),
 	}
 	s.receiver.Store(newNoopReceiver())
 
@@ -706,11 +728,11 @@ func (s *storage) findOrEmplaceFromBuilder(b *Builder) Labels {
 	hash := cppbridge.LabelSetFromBuilderHash(sortedAdd, b.del, b.base.snapshot, b.base.id)
 	receiver := *s.receiver.Load()
 
-	if ls, find := receiver.FindByHash(s.baseCtx, hash); find {
+	if ls, find := receiver.FindByHash(s.baseCtx, hash, sortedAdd, b.del, b.base.snapshot, b.base.id); find {
 		return ls
 	}
 
-	if ls, find := s.findByHash(hash); find {
+	if ls, find := s.findByHash(hash, sortedAdd, b.del, b.base.snapshot, b.base.id); find {
 		return ls
 	}
 
@@ -746,7 +768,13 @@ func (s *storage) findOrEmplaceFromBuilder(b *Builder) Labels {
 }
 
 // findByHash label set by hash in cache.
-func (s *storage) findByHash(hash uint64) (Labels, bool) {
+func (s *storage) findByHash(
+	hash uint64,
+	builderSortedAdd []cppbridge.Label,
+	builderSortedDel []string,
+	builderSnapshot *cppbridge.LabelSetSnapshot,
+	builderLSID uint32,
+) (Labels, bool) {
 	s.rotateLock.RLock()
 	defer s.rotateLock.RUnlock()
 
@@ -755,8 +783,20 @@ func (s *storage) findByHash(hash uint64) (Labels, bool) {
 		return EmptyLabels(), false
 	}
 
+	snapshot := s.workingLSS.Snapshot()
+	if ok := snapshot.LabelSetEqualWithBuilder(
+		builderSortedAdd,
+		builderSortedDel,
+		builderSnapshot,
+		builderLSID,
+		lsID,
+	); !ok {
+		s.cacheCollisions.Inc()
+		return EmptyLabels(), false
+	}
+
 	return NewLabelsWithLSS(
-		s.workingLSS.Snapshot(),
+		snapshot,
 		lsID,
 		length,
 	), true

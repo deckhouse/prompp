@@ -228,11 +228,11 @@ func (qa *QueryableAppender) Close(ctx context.Context) error {
 // FindFromBuilder label set from builder in lss, if not found return EmptyLabels.
 func (qa *QueryableAppender) FindFromBuilder(
 	ctx context.Context,
-	sortedAdd []cppbridge.Label,
-	sortedDel []string,
-	snapshot *cppbridge.LabelSetSnapshot,
+	builderSortedAdd []cppbridge.Label,
+	builderSortedDel []string,
+	builderSnapshot *cppbridge.LabelSetSnapshot,
 	hash uint64,
-	lsID uint32,
+	builderLSID uint32,
 	skipCache bool,
 ) (labels.Labels, bool) {
 	runlock, err := qa.wlocker.RLock(ctx)
@@ -242,11 +242,18 @@ func (qa *QueryableAppender) FindFromBuilder(
 	}
 	defer runlock()
 
-	return qa.head.FindFromBuilder(sortedAdd, sortedDel, snapshot, hash, lsID, skipCache)
+	return qa.head.FindFromBuilder(builderSortedAdd, builderSortedDel, builderSnapshot, hash, builderLSID, skipCache)
 }
 
 // FindByHash label set by hash in cache.
-func (qa *QueryableAppender) FindByHash(ctx context.Context, hash uint64) (labels.Labels, bool) {
+func (qa *QueryableAppender) FindByHash(
+	ctx context.Context,
+	hash uint64,
+	builderSortedAdd []cppbridge.Label,
+	builderSortedDel []string,
+	builderSnapshot *cppbridge.LabelSetSnapshot,
+	builderLSID uint32,
+) (labels.Labels, bool) {
 	runlock, err := qa.wlocker.RLock(ctx)
 	if err != nil {
 		logger.Warnf("[QueryableAppender] FindByHash: weighted locker: %s", err)
@@ -254,5 +261,11 @@ func (qa *QueryableAppender) FindByHash(ctx context.Context, hash uint64) (label
 	}
 	defer runlock()
 
-	return qa.head.FindByHash(hash)
+	return qa.head.FindByHash(
+		hash,
+		builderSortedAdd,
+		builderSortedDel,
+		builderSnapshot,
+		builderLSID,
+	)
 }

@@ -213,6 +213,7 @@ type Head struct {
 
 	cacheSize        *prometheus.GaugeVec
 	cacheBitsetCount *prometheus.GaugeVec
+	cacheCollisions  prometheus.Counter
 }
 
 func New(
@@ -348,6 +349,13 @@ func New(
 				ConstLabels: prometheus.Labels{"allocator": "head"},
 			},
 			[]string{"generation"},
+		),
+		cacheCollisions: factory.NewCounter(
+			prometheus.CounterOpts{
+				Name:        "prompp_head_cache_collisions_count",
+				Help:        "Current count of collisions in cache.",
+				ConstLabels: prometheus.Labels{"allocator": "head"},
+			},
 		),
 	}
 
@@ -1168,15 +1176,22 @@ func (*Head) shardLoop(
 //
 //revive:disable-next-line:flag-parameter this is not a flag, but a parameter
 func (h *Head) FindFromBuilder(
-	sortedAdd []cppbridge.Label,
-	sortedDel []string,
-	snapshot *cppbridge.LabelSetSnapshot,
+	builderSortedAdd []cppbridge.Label,
+	builderSortedDel []string,
+	builderSnapshot *cppbridge.LabelSetSnapshot,
 	hash uint64,
-	lsID uint32,
+	builderLSID uint32,
 	skipCache bool,
 ) (labels.Labels, bool) {
 	shardID := hash % uint64(h.numberOfShards) // shardID by hash
-	if ls, ok := h.findByHashOnShard(hash, shardID); ok {
+	if ls, ok := h.findByHashOnShard(
+		hash,
+		shardID,
+		builderSortedAdd,
+		builderSortedDel,
+		builderSnapshot,
+		builderLSID,
+	); ok {
 		return ls, true
 	}
 
@@ -1191,7 +1206,12 @@ func (h *Head) FindFromBuilder(
 		relabeler.LSSFind,
 		func(shard relabeler.Shard) error {
 			shard.LSSRLock()
-			if newlsID, length, find = shard.LSS().FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID); find {
+			if newlsID, length, find = shard.LSS().FindFromBuilder(
+				builderSortedAdd,
+				builderSortedDel,
+				builderSnapshot,
+				builderLSID,
+			); find {
 				newSnapshot = shard.LSS().GetSnapshot()
 			}
 			shard.LSSRUnlock()
@@ -1219,12 +1239,31 @@ func (h *Head) FindFromBuilder(
 }
 
 // FindByHash label set by hash in cache.
-func (h *Head) FindByHash(hash uint64) (labels.Labels, bool) {
-	return h.findByHashOnShard(hash, hash%uint64(h.numberOfShards)) // shardID by hash
+func (h *Head) FindByHash(
+	hash uint64,
+	builderSortedAdd []cppbridge.Label,
+	builderSortedDel []string,
+	builderSnapshot *cppbridge.LabelSetSnapshot,
+	builderLSID uint32,
+) (labels.Labels, bool) {
+	return h.findByHashOnShard(
+		hash,
+		hash%uint64(h.numberOfShards), // shardID by hash
+		builderSortedAdd,
+		builderSortedDel,
+		builderSnapshot,
+		builderLSID,
+	)
 }
 
 // findByHashOnShard label set by hash on shard in cache.
-func (h *Head) findByHashOnShard(hash, shardID uint64) (labels.Labels, bool) {
+func (h *Head) findByHashOnShard(
+	hash, shardID uint64,
+	builderSortedAdd []cppbridge.Label,
+	builderSortedDel []string,
+	builderSnapshot *cppbridge.LabelSetSnapshot,
+	builderLSID uint32,
+) (labels.Labels, bool) {
 	lsID, length, ok := h.lsCache.Load(hash)
 	if !ok {
 		return labels.EmptyLabels(), false
@@ -1246,6 +1285,17 @@ func (h *Head) findByHashOnShard(hash, shardID uint64) (labels.Labels, bool) {
 
 	// if can't get a snapshot, take the long way
 	if snapshot == nil {
+		return labels.EmptyLabels(), false
+	}
+
+	if ok := snapshot.LabelSetEqualWithBuilder(
+		builderSortedAdd,
+		builderSortedDel,
+		builderSnapshot,
+		builderLSID,
+		lsID,
+	); !ok {
+		h.cacheCollisions.Inc()
 		return labels.EmptyLabels(), false
 	}
 

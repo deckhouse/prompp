@@ -101,14 +101,20 @@ type Head interface {
 	Concurrency() int64
 	RLockQuery(ctx context.Context) (runlock func(), err error)
 	FindFromBuilder(
-		sortedAdd []cppbridge.Label,
-		sortedDel []string,
-		snapshot *cppbridge.LabelSetSnapshot,
+		builderSortedAdd []cppbridge.Label,
+		builderSortedDel []string,
+		builderSnapshot *cppbridge.LabelSetSnapshot,
 		hash uint64,
-		lsID uint32,
+		builderLSID uint32,
 		skipCache bool,
 	) (labels.Labels, bool)
-	FindByHash(hash uint64) (labels.Labels, bool)
+	FindByHash(
+		hash uint64,
+		builderSortedAdd []cppbridge.Label,
+		builderSortedDel []string,
+		builderSnapshot *cppbridge.LabelSetSnapshot,
+		builderLSID uint32,
+	) (labels.Labels, bool)
 }
 
 type Distributor interface {

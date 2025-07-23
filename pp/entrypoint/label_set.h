@@ -247,6 +247,24 @@ void prompp_label_set_compare(void* args, void* res);
  */
 void prompp_label_set_from_builder_hash(void* args, void* res);
 
+/**
+ * @brief returns whether the label set and the label set from builder are equal.
+ *
+ * @param args {
+ *     snapshot           uintptr  // pointer to constructed snapshot;
+ *     builder_snapshot   uintptr  // pointer to constructed snapshot from builder;
+ *     builder_sorted_add []Label  // slice of sorted by name labels
+ *     builder_sorted_del []string // slice of sorted label names
+ *     builder_ls_id      uint32   // series id from builder;
+ *     ls_id              uint32   // series id;
+ * }
+ *
+ * @param res {
+ *     eq                 bool     // equal;
+ * }
+ */
+void prompp_label_set_equal_with_builder(void* args, void* res);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

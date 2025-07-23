@@ -3125,6 +3125,33 @@ func labelSetFromBuilderHash(
 	return res.hash
 }
 
+func labelSetEqualWithBuilder(
+	snapshotPtr, builderSnapshotPtr uintptr,
+	builderSortedAdd []Label,
+	builderSortedDel []string,
+	builderLSID, lsID uint32,
+) bool {
+	args := struct {
+		snapshotPtr        uintptr
+		builderSnapshotPtr uintptr
+		builderSortedAdd   []Label
+		builderSortedDel   []string
+		builderLSID        uint32
+		lsID               uint32
+	}{snapshotPtr, builderSnapshotPtr, builderSortedAdd, builderSortedDel, builderLSID, lsID}
+	var res struct {
+		eq bool
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_label_set_equal_with_builder,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.eq
+}
+
 //
 // Bitset
 //

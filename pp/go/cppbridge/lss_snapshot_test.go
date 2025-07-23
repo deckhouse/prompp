@@ -397,6 +397,103 @@ func (s *LabelSetSnapshotSuite) TestLabelSetFromBuilderHashAdd() {
 	}
 }
 
+func (s *LabelSetSnapshotSuite) TestEqualWithBuilderTrue() {
+	for i, lss := range s.lsses {
+		// Arrange
+		mls := s.mls.With("test", s.T().Name())
+
+		lsid := lss.FindOrEmplace(mls).LabelSetID
+		snapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
+
+		// Act
+		eq := snapshot.LabelSetEqualWithBuilder(
+			[]cppbridge.Label{{Name: "test", Value: s.T().Name()}},
+			nil,
+			snapshot,
+			s.lsids[i],
+			lsid,
+		)
+
+		// Assert
+		s.True(eq)
+	}
+}
+
+func (s *LabelSetSnapshotSuite) TestEqualWithBuilderTrue_Builder() {
+	builderLSS := cppbridge.NewLssStorage()
+	builderLSID := builderLSS.FindOrEmplace(s.mls.With("test", s.T().Name())).LabelSetID
+	builderSnapshot := builderLSS.CreateLabelSetSnapshot(&testSnapshotSource{})
+
+	for i, lss := range s.lsses {
+		// Arrange
+		snapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
+
+		// Act
+		eq := snapshot.LabelSetEqualWithBuilder(
+			nil,
+			[]string{"test"},
+			builderSnapshot,
+			builderLSID,
+			s.lsids[i],
+		)
+
+		// Assert
+		s.True(eq)
+	}
+}
+
+func (s *LabelSetSnapshotSuite) TestEqualWithBuilderTrue_Builder_Len() {
+	builderLSS := cppbridge.NewLssStorage()
+	builderLSID := builderLSS.FindOrEmplace(s.mls.With("test", s.T().Name())).LabelSetID
+	builderSnapshot := builderLSS.CreateLabelSetSnapshot(&testSnapshotSource{})
+
+	for _, lss := range s.lsses {
+		// Arrange
+		mls := s.mls.With("test", s.T().Name())
+
+		lsid := lss.FindOrEmplace(mls).LabelSetID
+		snapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
+
+		// Act
+		eq := snapshot.LabelSetEqualWithBuilder(
+			nil,
+			nil,
+			builderSnapshot,
+			builderLSID,
+			lsid,
+		)
+
+		// Assert
+		s.True(eq)
+	}
+}
+
+func (s *LabelSetSnapshotSuite) TestEqualWithBuilderFalse_Builder() {
+	builderLSS := cppbridge.NewLssStorage()
+	builderLSID := builderLSS.FindOrEmplace(s.mls.With("test", s.T().Name())).LabelSetID
+	builderSnapshot := builderLSS.CreateLabelSetSnapshot(&testSnapshotSource{})
+
+	for _, lss := range s.lsses {
+		// Arrange
+		mls := s.mls.With("test1", s.T().Name())
+
+		lsid := lss.FindOrEmplace(mls).LabelSetID
+		snapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
+
+		// Act
+		eq := snapshot.LabelSetEqualWithBuilder(
+			[]cppbridge.Label{{Name: "test", Value: s.T().Name()}},
+			nil,
+			builderSnapshot,
+			builderLSID,
+			lsid,
+		)
+
+		// Assert
+		s.False(eq)
+	}
+}
+
 //
 // LSSWithSnapshotSuite
 //

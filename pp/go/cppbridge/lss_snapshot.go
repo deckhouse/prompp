@@ -192,6 +192,32 @@ func (lsst *LabelSetSnapshot) Snapshot() *LabelSetSnapshot {
 	return lsst
 }
 
+// LabelSetEqualWithBuilder returns whether the label set and the label set from builder are equal.
+func (lsst *LabelSetSnapshot) LabelSetEqualWithBuilder(
+	builderSortedAdd []Label,
+	builderSortedDel []string,
+	builderSnapshot *LabelSetSnapshot,
+	builderLSID, lsID uint32,
+) bool {
+	var builderSnapshotPointer uintptr
+	if builderSnapshot != nil {
+		builderSnapshotPointer = builderSnapshot.pointer
+	}
+
+	eq := labelSetEqualWithBuilder(
+		lsst.pointer,
+		builderSnapshotPointer,
+		builderSortedAdd,
+		builderSortedDel,
+		builderLSID,
+		lsID,
+	)
+	runtime.KeepAlive(builderSnapshot)
+	runtime.KeepAlive(lsst)
+
+	return eq
+}
+
 //
 // fastSnapshot
 //

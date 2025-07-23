@@ -601,3 +601,29 @@ extern "C" void prompp_label_set_from_builder_hash(void* args, void* res) {
 
   new (res) Result{.hash = hash_value(LabelSetBuilder{label_set, in->sorted_add, in->sorted_del})};
 }
+
+extern "C" void prompp_label_set_equal_with_builder(void* args, void* res) {
+  using PromPP::Primitives::Go::LabelSetBuilder;
+  using PromPP::Primitives::Go::SliceView;
+
+  struct Arguments {
+    LssVariantPtr snapshot;
+    LssVariantPtr builder_snapshot;
+    SliceView<PromPP::Primitives::Go::Label> builder_sorted_add;
+    SliceView<PromPP::Primitives::Go::String> builder_sorted_del;
+    uint32_t builder_ls_id;
+    uint32_t ls_id;
+  };
+  struct Result {
+    bool eq;
+  };
+
+  auto in = static_cast<Arguments*>(args);
+
+  const auto& label_set = std::get<entrypoint::head::ReadonlyLss>(*in->snapshot)[in->ls_id];
+
+  static const entrypoint::head::ReadonlyLss::value_type empty_label_set;
+  const auto& builder_label_set = in->builder_snapshot ? std::get<entrypoint::head::ReadonlyLss>(*in->builder_snapshot)[in->builder_ls_id] : empty_label_set;
+
+  new (res) Result{.eq = label_set == LabelSetBuilder{builder_label_set, in->builder_sorted_add, in->builder_sorted_del}};
+}

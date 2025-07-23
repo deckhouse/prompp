@@ -724,7 +724,7 @@ func main() {
 		localStoragePath,
 		receiver.RotationInfo{
 			BlockDuration: time.Duration(cfg.tsdb.MinBlockDuration),
-			// BlockDuration: 60 * time.Minute,
+			// BlockDuration: 10 * time.Minute,
 			Seed: cfgFile.GlobalConfig.ExternalLabels.Hash(),
 		},
 		headCatalog,
