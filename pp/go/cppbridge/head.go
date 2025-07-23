@@ -246,10 +246,10 @@ func (i HeadDataStorageSerializedChunkIndex) Chunks(r HeadDataStorageSerializedC
 }
 
 func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) (HeadDataStorageSerializedChunks, DataStorageQueryResult) {
-	var serializedChunks []byte
-	result := seriesDataDataStorageQuery(ds.dataStorage, query, &serializedChunks)
+	serializedChunks := NewCBytes(nil)
+	result := seriesDataDataStorageQuery(ds.dataStorage, query, &serializedChunks.Bytes)
 	runtime.KeepAlive(ds)
-	return HeadDataStorageSerializedChunks{NewCBytes(serializedChunks)}, result
+	return HeadDataStorageSerializedChunks{serializedChunks}, result
 }
 
 func (ds *HeadDataStorage) InstantQuery(targetTimestamp, defaultTimestamp int64, labelSetIDs []uint32) ([]Sample, DataStorageQueryResult) {
@@ -279,7 +279,7 @@ func (loader *UnloadedDataLoader) Load(snapshot []byte, isLast bool) {
 
 func (ds *HeadDataStorage) CreateLoader(queriers []uintptr) *UnloadedDataLoader {
 	result := &UnloadedDataLoader{
-		loader: seriesDataUnloadedDataLoaderCtor(ds.Pointer(), queriers),
+		loader: seriesDataUnloadedDataLoaderCtor(queriers),
 	}
 	runtime.KeepAlive(queriers)
 

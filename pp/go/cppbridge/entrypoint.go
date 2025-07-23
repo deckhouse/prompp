@@ -268,7 +268,8 @@ type CBytes struct {
 }
 
 func NewCBytes(b []byte) *CBytes {
-	result := &CBytes{Bytes: b}
+	result := new(CBytes)
+	result.Bytes = b
 	runtime.SetFinalizer(result, func(bytes *CBytes) {
 		freeBytes(bytes.Bytes)
 	})
@@ -2162,11 +2163,10 @@ func seriesDataUnloadUnusedSeriesData(dataStorage uintptr) []byte {
 	return res.snapshot
 }
 
-func seriesDataUnloadedDataLoaderCtor(dataStorage uintptr, queriers []uintptr) uintptr {
+func seriesDataUnloadedDataLoaderCtor(queriers []uintptr) uintptr {
 	args := struct {
-		dataStorage uintptr
-		queriers    []uintptr
-	}{dataStorage, queriers}
+		queriers []uintptr
+	}{queriers}
 	var res struct {
 		loader uintptr
 	}
