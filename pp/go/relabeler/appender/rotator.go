@@ -23,6 +23,7 @@ type RotateCommitable interface {
 	Rotate(ctx context.Context) error
 	CommitToWal(ctx context.Context) error
 	MergeOutOfOrderChunks(ctx context.Context)
+	UnloadUnusedSeriesData(ctx context.Context)
 }
 
 type Timer interface {
@@ -37,6 +38,7 @@ type RotateCommiter struct {
 	rotateTimer      Timer
 	commitTimer      Timer
 	mergeTimer       Timer
+	unloadTimer      Timer
 	run              chan struct{}
 	closer           *util.Closer
 	rotateCounter    prometheus.Counter
@@ -49,6 +51,7 @@ func NewRotateCommiter(
 	rotateTimer Timer,
 	commitTimer Timer,
 	mergeTimer Timer,
+	unloadTimer Timer,
 	registerer prometheus.Registerer,
 ) *RotateCommiter {
 	factory := util.NewUnconflictRegisterer(registerer)
@@ -57,6 +60,7 @@ func NewRotateCommiter(
 		rotateTimer:      rotateTimer,
 		commitTimer:      commitTimer,
 		mergeTimer:       mergeTimer,
+		unloadTimer:      unloadTimer,
 		run:              make(chan struct{}),
 		closer:           util.NewCloser(),
 		rotateCounter: factory.NewCounter(
@@ -103,6 +107,10 @@ func (r *RotateCommiter) loop(ctx context.Context) {
 			r.rotateCommitable.MergeOutOfOrderChunks(ctx)
 			r.mergeTimer.Reset()
 
+		case <-r.unloadTimer.Chan():
+			r.rotateCommitable.UnloadUnusedSeriesData(ctx)
+			r.unloadTimer.Reset()
+
 		case <-r.rotateTimer.Chan():
 			logger.Debugf("start rotation")
 
@@ -146,3 +154,13 @@ func (t *ConstantIntervalTimer) Reset() {
 func (t *ConstantIntervalTimer) Stop() {
 	t.timer.Stop()
 }
+
+func NewNoOpTimer() *NoOpTimer {
+	return &NoOpTimer{}
+}
+
+type NoOpTimer struct{}
+
+func (NoOpTimer) Chan() <-chan time.Time { return nil }
+func (NoOpTimer) Reset()                 {}
+func (NoOpTimer) Stop()                  {}

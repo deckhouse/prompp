@@ -144,3 +144,7 @@ func (h *DiscardableRotatableHead) RLockQuery(ctx context.Context) (runlock func
 func (h *DiscardableRotatableHead) CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr) *relabeler.GenericTask {
 	return h.head.CreateDataStorageLoadAndQueryTask(shardID, querier)
 }
+
+func (h *DiscardableRotatableHead) UnloadUnusedSeriesData() {
+	h.head.UnloadUnusedSeriesData()
+}

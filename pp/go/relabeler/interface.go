@@ -108,6 +108,7 @@ type Head interface {
 	Concurrency() int64
 	RLockQuery(ctx context.Context) (runlock func(), err error)
 	CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr) *GenericTask
+	UnloadUnusedSeriesData()
 }
 
 type Distributor interface {

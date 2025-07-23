@@ -1528,7 +1528,15 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithRotate() {
 	commitTimer := appender.NewConstantIntervalTimer(clock, appender.DefaultCommitTimeout)
 	mergeTimer := appender.NewConstantIntervalTimer(clock, appender.DefaultMergeDuration)
 	defer rotationTimer.Stop()
-	rotator := appender.NewRotateCommiter(s.baseCtx, app, rotationTimer, commitTimer, mergeTimer, prometheus.DefaultRegisterer)
+	rotator := appender.NewRotateCommiter(
+		s.baseCtx,
+		app,
+		rotationTimer,
+		commitTimer,
+		mergeTimer,
+		appender.NewNoOpTimer(),
+		prometheus.DefaultRegisterer,
+	)
 	rotator.Run()
 	defer func() { _ = rotator.Close() }()
 
@@ -2436,7 +2444,15 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithRotateWithStaleNans() 
 	commitTimer := appender.NewConstantIntervalTimer(clock, appender.DefaultCommitTimeout)
 	mergeTimer := appender.NewConstantIntervalTimer(clock, appender.DefaultMergeDuration)
 	defer rotationTimer.Stop()
-	rotator := appender.NewRotateCommiter(s.baseCtx, app, rotationTimer, commitTimer, mergeTimer, prometheus.DefaultRegisterer)
+	rotator := appender.NewRotateCommiter(
+		s.baseCtx,
+		app,
+		rotationTimer,
+		commitTimer,
+		mergeTimer,
+		appender.NewNoOpTimer(),
+		prometheus.DefaultRegisterer,
+	)
 	rotator.Run()
 	defer func() { _ = rotator.Close() }()
 

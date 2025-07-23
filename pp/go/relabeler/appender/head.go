@@ -2,6 +2,7 @@ package appender
 
 import (
 	"context"
+	"time"
 
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 
@@ -10,8 +11,12 @@ import (
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
 )
 
-// CopySeriesOnRotate copy active series from the current head to the new head during rotation.
-var CopySeriesOnRotate = false
+var (
+	// CopySeriesOnRotate copy active series from the current head to the new head during rotation.
+	CopySeriesOnRotate = false
+
+	UnloadDataStorageInterval *time.Duration
+)
 
 // Storage - head storage.
 type Storage interface {
@@ -220,6 +225,10 @@ func (h *RotatableHead) CreateDataStorageLoadAndQueryTask(shardID uint16, querie
 	return h.head.CreateDataStorageLoadAndQueryTask(shardID, querier)
 }
 
+func (h *RotatableHead) UnloadUnusedSeriesData() {
+	h.head.UnloadUnusedSeriesData()
+}
+
 //
 // HeapProfileWritableHead
 //
@@ -351,4 +360,8 @@ func (h *HeapProfileWritableHead) RLockQuery(ctx context.Context) (runlock func(
 
 func (h *HeapProfileWritableHead) CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr) *relabeler.GenericTask {
 	return h.head.CreateDataStorageLoadAndQueryTask(shardID, querier)
+}
+
+func (h *HeapProfileWritableHead) UnloadUnusedSeriesData() {
+	h.head.UnloadUnusedSeriesData()
 }

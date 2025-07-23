@@ -123,6 +123,17 @@ func (qa *QueryableAppender) CommitToWal(ctx context.Context) error {
 	return qa.head.CommitToWal()
 }
 
+func (qa *QueryableAppender) UnloadUnusedSeriesData(ctx context.Context) {
+	runlock, err := qa.wlocker.RLock(ctx)
+	if err != nil {
+		logger.Warnf("[QueryableAppender] UnloadUnusedSeriesData: weighted locker: %s", err)
+		return
+	}
+	defer runlock()
+
+	qa.head.UnloadUnusedSeriesData()
+}
+
 func (qa *QueryableAppender) Rotate(ctx context.Context) error {
 	unlock, err := qa.wlocker.LockWithPriority(ctx)
 	if err != nil {

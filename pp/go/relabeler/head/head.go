@@ -1129,6 +1129,7 @@ func (h *Head) UnloadUnusedSeriesData() {
 		relabeler.ForDataStorageTask,
 	)
 	h.Enqueue(task)
+	_ = task.Wait()
 }
 
 // CreateDataStorageLoadAndQueryTask - add querier to pool for data load and create task for data load if needed
