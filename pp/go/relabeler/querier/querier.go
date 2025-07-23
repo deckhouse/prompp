@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"runtime"
 	"sort"
-	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -91,9 +90,7 @@ func labelValues(
 
 	defer func() {
 		if metrics != nil {
-			metrics.LabelValuesDuration.With(
-				prometheus.Labels{"generation": fmt.Sprintf("%d", head.Generation())},
-			).Observe(float64(time.Since(start).Microseconds()))
+			metrics.LabelValuesDuration.Observe(float64(time.Since(start).Microseconds()))
 		}
 	}()
 
@@ -103,17 +100,20 @@ func labelValues(
 	t := head.CreateTask(
 		taskName,
 		func(shard relabeler.Shard) error {
+			shard.LSSRLock()
 			queryLabelValuesResult := shard.LSS().QueryLabelValues(name, convertedMatchers)
+			shard.LSSRUnlock()
+
 			if queryLabelValuesResult.Status() != cppbridge.LSSQueryStatusMatch {
 				return fmt.Errorf("no matches on shard: %d", shard.ShardID())
 			}
 
 			dedup.Add(shard.ShardID(), queryLabelValuesResult.Values()...)
 			runtime.KeepAlive(queryLabelValuesResult)
+
 			return nil
 		},
 		relabeler.ForLSSTask,
-		relabeler.NonExclusiveTask,
 	)
 	head.Enqueue(t)
 
@@ -160,9 +160,7 @@ func labelNames(
 
 	defer func() {
 		if metrics != nil {
-			metrics.LabelNamesDuration.With(
-				prometheus.Labels{"generation": fmt.Sprintf("%d", head.Generation())},
-			).Observe(float64(time.Since(start).Microseconds()))
+			metrics.LabelNamesDuration.Observe(float64(time.Since(start).Microseconds()))
 		}
 	}()
 
@@ -172,17 +170,20 @@ func labelNames(
 	t := head.CreateTask(
 		taskName,
 		func(shard relabeler.Shard) error {
+			shard.LSSRLock()
 			queryLabelNamesResult := shard.LSS().QueryLabelNames(convertedMatchers)
+			shard.LSSRUnlock()
+
 			if queryLabelNamesResult.Status() != cppbridge.LSSQueryStatusMatch {
 				return fmt.Errorf("no matches on shard: %d", shard.ShardID())
 			}
 
 			dedup.Add(shard.ShardID(), queryLabelNamesResult.Names()...)
 			runtime.KeepAlive(queryLabelNamesResult)
+
 			return nil
 		},
 		relabeler.ForLSSTask,
-		relabeler.NonExclusiveTask,
 	)
 	head.Enqueue(t)
 
@@ -241,10 +242,7 @@ func (q *Querier) selectInstant(
 	defer func() {
 		if q.metrics != nil {
 			q.metrics.SelectDuration.With(
-				prometheus.Labels{
-					"generation": strconv.FormatUint(q.head.Generation(), 10),
-					"query_type": "instant",
-				},
+				prometheus.Labels{"query_type": "instant"},
 			).Observe(float64(time.Since(start).Microseconds()))
 		}
 	}()
@@ -263,6 +261,9 @@ func (q *Querier) selectInstant(
 	tLSSQuery := q.head.CreateTask(
 		relabeler.LSSQueryInstantQuerier,
 		func(shard relabeler.Shard) error {
+			shard.LSSRLock()
+			defer shard.LSSRUnlock()
+
 			lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
 
 			if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {
@@ -276,13 +277,13 @@ func (q *Querier) selectInstant(
 				)
 			}
 
-			lssQueryResults[shard.ShardID()] = lssQueryResult
-			snapshots[shard.ShardID()] = shard.LSS().GetSnapshot()
+			shardID := shard.ShardID()
+			lssQueryResults[shardID] = lssQueryResult
+			snapshots[shardID] = shard.LSS().GetSnapshot()
 
 			return nil
 		},
 		relabeler.ForLSSTask,
-		relabeler.NonExclusiveTask,
 	)
 	q.head.Enqueue(tLSSQuery)
 	if err := tLSSQuery.Wait(); err != nil {
@@ -294,23 +295,25 @@ func (q *Querier) selectInstant(
 	tDataStorageQuery := q.head.CreateTask(
 		relabeler.DSQueryInstantQuerier,
 		func(shard relabeler.Shard) error {
-			lssQueryResult := lssQueryResults[shard.ShardID()]
+			shardID := shard.ShardID()
+			lssQueryResult := lssQueryResults[shardID]
 			if lssQueryResult == nil {
-				seriesSets[shard.ShardID()] = &SeriesSet{}
+				seriesSets[shardID] = &SeriesSet{}
 				return nil
 			}
 
-			seriesSets[shard.ShardID()] = NewInstantSeriesSet(
+			shard.DataStorageRLock()
+			seriesSets[shardID] = NewInstantSeriesSet(
 				lssQueryResult,
-				snapshots[shard.ShardID()],
+				snapshots[shardID],
 				valueNotFoundTimestampValue,
 				shard.DataStorage().InstantQuery(q.maxt, valueNotFoundTimestampValue, lssQueryResult.IDs()),
 			)
+			shard.DataStorageRUnlock()
 
 			return nil
 		},
 		relabeler.ForDataStorageTask,
-		relabeler.NonExclusiveTask,
 	)
 	q.head.Enqueue(tDataStorageQuery)
 	_ = tDataStorageQuery.Wait()
@@ -336,10 +339,7 @@ func (q *Querier) selectRange(
 	defer func() {
 		if q.metrics != nil {
 			q.metrics.SelectDuration.With(
-				prometheus.Labels{
-					"generation": strconv.FormatUint(q.head.Generation(), 10),
-					"query_type": "range",
-				},
+				prometheus.Labels{"query_type": "range"},
 			).Observe(float64(time.Since(start).Microseconds()))
 		}
 	}()
@@ -353,6 +353,9 @@ func (q *Querier) selectRange(
 	tLSSQuery := q.head.CreateTask(
 		relabeler.LSSQueryRangeQuerier,
 		func(shard relabeler.Shard) error {
+			shard.LSSRLock()
+			defer shard.LSSRUnlock()
+
 			lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
 
 			if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {
@@ -366,13 +369,13 @@ func (q *Querier) selectRange(
 				)
 			}
 
-			lssQueryResults[shard.ShardID()] = lssQueryResult
-			snapshots[shard.ShardID()] = shard.LSS().GetSnapshot()
+			shardID := shard.ShardID()
+			lssQueryResults[shardID] = lssQueryResult
+			snapshots[shardID] = shard.LSS().GetSnapshot()
 
 			return nil
 		},
 		relabeler.ForLSSTask,
-		relabeler.NonExclusiveTask,
 	)
 	q.head.Enqueue(tLSSQuery)
 	if err := tLSSQuery.Wait(); err != nil {
@@ -384,27 +387,29 @@ func (q *Querier) selectRange(
 	tDataStorageQuery := q.head.CreateTask(
 		relabeler.DSQueryRangeQuerier,
 		func(shard relabeler.Shard) error {
-			lssQueryResult := lssQueryResults[shard.ShardID()]
+			shardID := shard.ShardID()
+			lssQueryResult := lssQueryResults[shardID]
 			if lssQueryResult == nil {
 				return nil
 			}
 
+			shard.DataStorageRLock()
 			serializedChunks := shard.DataStorage().Query(cppbridge.HeadDataStorageQuery{
 				StartTimestampMs: q.mint,
 				EndTimestampMs:   q.maxt,
 				LabelSetIDs:      lssQueryResult.IDs(),
 			})
+			shard.DataStorageRUnlock()
 
 			if serializedChunks.NumberOfChunks() == 0 {
 				return nil
 			}
 
-			serializedChunksShards[shard.ShardID()] = serializedChunks
+			serializedChunksShards[shardID] = serializedChunks
 
 			return nil
 		},
 		relabeler.ForDataStorageTask,
-		relabeler.NonExclusiveTask,
 	)
 	q.head.Enqueue(tDataStorageQuery)
 	_ = tDataStorageQuery.Wait()

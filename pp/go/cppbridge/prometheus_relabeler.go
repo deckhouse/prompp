@@ -691,6 +691,77 @@ func (ipsr *InputPerShardRelabeler) InputRelabelingWithStalenans(
 	return stats, hasReallocations, handleException(exception)
 }
 
+// InputRelabelingFromCache relabeling incoming hashdex(first stage) from cache.
+func (ipsr *InputPerShardRelabeler) InputRelabelingFromCache(
+	ctx context.Context,
+	inputLss *LabelSetStorage,
+	targetLss *LabelSetStorage,
+	cache *Cache,
+	options RelabelerOptions,
+	shardedData ShardedData,
+	shardsInnerSeries []*InnerSeries,
+) (RelabelerStats, bool, error) {
+	if ctx.Err() != nil {
+		return RelabelerStats{}, false, ctx.Err()
+	}
+
+	cptrContainer, ok := shardedData.(cptrable)
+	if !ok {
+		return RelabelerStats{}, false, ErrMustImplementCptrable
+	}
+	stats, exception, ok := prometheusPerShardRelabelerInputRelabelingFromCache(
+		ipsr.cptr,
+		inputLss.Pointer(),
+		targetLss.Pointer(),
+		cache.cPointer,
+		cptrContainer.cptr(),
+		options,
+		shardsInnerSeries,
+	)
+	runtime.KeepAlive(ipsr)
+	runtime.KeepAlive(inputLss)
+	runtime.KeepAlive(targetLss)
+	runtime.KeepAlive(cache)
+	runtime.KeepAlive(cptrContainer)
+
+	return stats, ok, handleException(exception)
+}
+
+// InputRelabelingWithStalenansFromCache relabeling incoming hashdex(first stage) from cache with state stalenans.
+func (ipsr *InputPerShardRelabeler) InputRelabelingWithStalenansFromCache(
+	ctx context.Context,
+	inputLss *LabelSetStorage,
+	targetLss *LabelSetStorage,
+	cache *Cache,
+	options RelabelerOptions,
+	staleNansState *StaleNansState,
+	defTimestamp int64,
+	shardedData ShardedData,
+	shardsInnerSeries []*InnerSeries,
+) (RelabelerStats, bool, error) {
+	if ctx.Err() != nil {
+		return RelabelerStats{}, false, ctx.Err()
+	}
+
+	cptrContainer, ok := shardedData.(cptrable)
+	if !ok {
+		return RelabelerStats{}, false, ErrMustImplementCptrable
+	}
+	stats, exception, ok := prometheusPerShardRelabelerInputRelabelingWithStalenansFromCache(
+		ipsr.cptr,
+		inputLss.Pointer(),
+		targetLss.Pointer(),
+		cache.cPointer,
+		cptrContainer.cptr(),
+		staleNansState.state,
+		defTimestamp,
+		options,
+		shardsInnerSeries,
+	)
+
+	return stats, ok, handleException(exception)
+}
+
 // NumberOfShards return current numberOfShards.
 func (ipsr *InputPerShardRelabeler) NumberOfShards() uint16 {
 	return ipsr.numberOfShards

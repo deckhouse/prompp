@@ -191,14 +191,19 @@ func (h *RotatableHead) CopySeriesFrom(other relabeler.Head) {
 func (h *RotatableHead) CreateTask(
 	taskName string,
 	fn relabeler.ShardFn,
-	onLss, isExclusive bool,
+	onLss bool,
 ) *relabeler.GenericTask {
-	return h.head.CreateTask(taskName, fn, onLss, isExclusive)
+	return h.head.CreateTask(taskName, fn, onLss)
 }
 
 // Enqueue the task to be executed on head.
 func (h *RotatableHead) Enqueue(t *relabeler.GenericTask) {
 	h.head.Enqueue(t)
+}
+
+// EnqueueOnShard the task to be executed on head on specific shard.
+func (h *RotatableHead) EnqueueOnShard(t *relabeler.GenericTask, shardID uint16) {
+	h.head.EnqueueOnShard(t, shardID)
 }
 
 // Concurrency return current head workers concurrency.
@@ -315,14 +320,19 @@ func (h *HeapProfileWritableHead) CopySeriesFrom(other relabeler.Head) {
 func (h *HeapProfileWritableHead) CreateTask(
 	taskName string,
 	fn relabeler.ShardFn,
-	onLss, isExclusive bool,
+	onLss bool,
 ) *relabeler.GenericTask {
-	return h.head.CreateTask(taskName, fn, onLss, isExclusive)
+	return h.head.CreateTask(taskName, fn, onLss)
 }
 
 // Enqueue the task to be executed on head.
 func (h *HeapProfileWritableHead) Enqueue(t *relabeler.GenericTask) {
 	h.head.Enqueue(t)
+}
+
+// EnqueueOnShard the task to be executed on head on specific shard.
+func (h *HeapProfileWritableHead) EnqueueOnShard(t *relabeler.GenericTask, shardID uint16) {
+	h.head.EnqueueOnShard(t, shardID)
 }
 
 // Concurrency return current head workers concurrency.
