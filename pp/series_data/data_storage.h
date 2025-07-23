@@ -194,7 +194,6 @@ struct DataStorage {
   uint32_t merged_samples_count{};
 
   std::list<std::vector<uint8_t>> unloaded_snapshots;
-  std::list<size_t> unloaded_snapshots_sizes;
 
   BareBones::Bitset unloaded_series_bitmap{};
   BareBones::Bitset queried_series_bitmap{};

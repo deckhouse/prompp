@@ -58,12 +58,10 @@ class Unloader {
   }
 
   template <class Stream>
-  void write_sequences(Stream& stream, const PreparedSequences& sequences) noexcept {
+  static void write_sequences(Stream& stream, const PreparedSequences& sequences) noexcept {
     if constexpr (BareBones::concepts::has_reserve<Stream>) {
       stream.reserve(sequences.reserved_stream_size);
     }
-
-    storage_.unloaded_snapshots_sizes.push_back(sequences.reserved_stream_size);
 
     sequences.ls_id_bitmap.write_to(stream);
 
