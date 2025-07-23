@@ -6,7 +6,6 @@
 #include "bare_bones/preprocess.h"
 #include "primitives/sample.h"
 #include "series_data/encoder.h"
-#include "series_data/outdated_sample_encoder.h"
 
 namespace {
 // timestamp min value
