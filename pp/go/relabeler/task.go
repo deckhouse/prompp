@@ -149,7 +149,12 @@ func (t *GenericTask) SetShardsNumber(number uint16) {
 // ExecuteOnShard execute task on shard.
 func (t *GenericTask) ExecuteOnShard(shard Shard) {
 	atomic.CompareAndSwapInt64(&t.executeTS, 0, time.Now().UnixMicro())
-	t.errs[shard.ShardID()] = t.shardFn(shard)
+	if len(t.errs) == 1 {
+		t.errs[0] = t.shardFn(shard)
+	} else {
+		t.errs[shard.ShardID()] = t.shardFn(shard)
+	}
+
 	t.wg.Done()
 }
 
