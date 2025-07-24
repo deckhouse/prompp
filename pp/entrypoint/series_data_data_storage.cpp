@@ -30,7 +30,8 @@ using SerializedChunkRecoder = head::ChunkRecoder<series_data::chunk::Serialized
 using ChunkRecoderVariant = std::variant<ChunkRecoder, SerializedChunkRecoder>;
 using ChunkRecoderVariantPtr = std::unique_ptr<ChunkRecoderVariant>;
 
-using LoaderPtr = std::unique_ptr<series_data::unloading::Loader>;
+using LoaderVariant = std::variant<series_data::unloading::Loader>;
+using LoaderVariantPtr = std::unique_ptr<LoaderVariant>;
 
 using entrypoint::series_data::QuerierType;
 using entrypoint::series_data::QuerierVariant;
@@ -258,7 +259,7 @@ extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* re
   };
 
   struct Result {
-    LoaderPtr loader;
+    LoaderVariantPtr loader;
   };
 
   const auto in = static_cast<Arguments*>(args);
@@ -281,28 +282,32 @@ extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* re
         *rest);
   }
 
-  new (res) Result{.loader = std::make_unique<Loader>(std::move(loader))};
+  new (res) Result{.loader = std::make_unique<LoaderVariant>(std::in_place_type<Loader>, std::move(loader))};
 }
 
 extern "C" void prompp_series_data_data_storage_loader_load_next(void* args) {
   struct Arguments {
-    LoaderPtr loader;
+    LoaderVariantPtr loader;
     SliceView<const uint8_t> buffer;
     bool is_final;
   };
 
   const auto in = static_cast<Arguments*>(args);
 
-  in->loader->load_next(in->buffer.span());
+  std::visit(
+      [in](auto& loader) {
+        loader.load_next(in->buffer.span());
 
-  if (in->is_final) {
-    in->loader->load_finalize();
-  }
+        if (in->is_final) {
+          loader.load_finalize();
+        }
+      },
+      *in->loader);
 }
 
 extern "C" void prompp_series_data_data_storage_loader_dtor(void* args) {
   struct Arguments {
-    LoaderPtr loader;
+    LoaderVariantPtr loader;
   };
 
   static_cast<Arguments*>(args)->~Arguments();
