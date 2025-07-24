@@ -49,7 +49,10 @@ class TopItems {
   using Elements = std::vector<Element>;
 
   explicit TopItems(size_t limit) {
-    assert(limit > 0);
+    if (limit == 0) {
+      return;
+    }
+
     elements_.resize(limit);
     min_element_ = &elements_.front();
   }
@@ -77,7 +80,7 @@ class TopItems {
 
  private:
   Elements elements_;
-  Element* min_element_;
+  Element* min_element_{};
 };
 
 template <class Lss, class Status>
