@@ -914,9 +914,6 @@ func (h *Head) inputRelabelingStage(
 	t := h.CreateTask(
 		relabeler.LSSInputRelabeling,
 		func(shard relabeler.Shard) error {
-			shard.LSSLock()
-			defer shard.LSSUnlock()
-
 			var (
 				shardID          = shard.ShardID()
 				err              error
