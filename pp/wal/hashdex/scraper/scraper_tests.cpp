@@ -487,7 +487,7 @@ INSTANTIATE_TEST_SUITE_P(EscapedString,
 
 class OpenMetricsScraperFixture : public ScraperFixture<OpenMetricsScraper> {
  protected:
-  void SetUp() override { calculate_labelset_hash(const_cast<ScraperCase&>(GetParam()).metrics); }  // namespace
+  void SetUp() override { calculate_labelset_hash(const_cast<ScraperCase&>(GetParam()).metrics); }
 };
 
 TEST_P(OpenMetricsScraperFixture, Test) {
