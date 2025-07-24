@@ -60,6 +60,44 @@ var (
 		},
 	)
 
+	// input_relabeler input_relabeling_from_cache
+	inputRelabelerInputRelabelingFromCacheSum = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        "prompp_cppbridge_unsafecall_nanoseconds_sum",
+			Help:        "The time duration cpp call.",
+			ConstLabels: prometheus.Labels{"object": "input_relabeler", "method": "input_relabeling_from_cache"},
+		},
+	)
+	inputRelabelerInputRelabelingFromCacheCount = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name:        "prompp_cppbridge_unsafecall_nanoseconds_count",
+			Help:        "The time duration cpp call.",
+			ConstLabels: prometheus.Labels{"object": "input_relabeler", "method": "input_relabeling_from_cache"},
+		},
+	)
+
+	// input_relabeler relabeling_with_stalenans_from_cache
+	inputRelabelerRelabelingWithStalenansFromCacheSum = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name: "prompp_cppbridge_unsafecall_nanoseconds_sum",
+			Help: "The time duration cpp call.",
+			ConstLabels: prometheus.Labels{
+				"object": "input_relabeler",
+				"method": "relabeling_with_stalenans_from_cache",
+			},
+		},
+	)
+	inputRelabelerRelabelingWithStalenansFromCacheCount = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
+		prometheus.CounterOpts{
+			Name: "prompp_cppbridge_unsafecall_nanoseconds_count",
+			Help: "The time duration cpp call.",
+			ConstLabels: prometheus.Labels{
+				"object": "input_relabeler",
+				"method": "relabeling_with_stalenans_from_cache",
+			},
+		},
+	)
+
 	// input_relabeler append_relabeler_series
 	inputRelabelerAppendRelabelerSeriesSum = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
@@ -1627,6 +1665,86 @@ func prometheusPerShardRelabelerInputRelabelingWithStalenans(
 	inputRelabelerRelabelingWithStalenansCount.Inc()
 
 	return res.RelabelerStats, res.exception, res.targetLssHasReallocations
+}
+
+// prometheusPerShardRelabelerInputRelabelingFromCache wrapper for relabeling incoming hashdex(first stage) from cache.
+func prometheusPerShardRelabelerInputRelabelingFromCache(
+	perShardRelabeler, inputLss, targetLss, cache, hashdex uintptr,
+	options RelabelerOptions,
+	shardsInnerSeries []*InnerSeries,
+) (stats RelabelerStats, exception []byte, ok bool) {
+	args := struct {
+		shardsInnerSeries []*InnerSeries
+		options           RelabelerOptions
+		perShardRelabeler uintptr
+		hashdex           uintptr
+		cache             uintptr
+		inputLss          uintptr
+		targetLss         uintptr
+	}{shardsInnerSeries, options, perShardRelabeler, hashdex, cache, inputLss, targetLss}
+	var res struct {
+		RelabelerStats
+		ok        bool
+		exception []byte
+	}
+	start := time.Now().UnixNano()
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_prometheus_per_shard_relabeler_input_relabeling_from_cache,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+	inputRelabelerInputRelabelingFromCacheSum.Add(float64(time.Now().UnixNano() - start))
+	inputRelabelerInputRelabelingFromCacheCount.Inc()
+
+	return res.RelabelerStats, res.exception, res.ok
+}
+
+// prometheusPerShardRelabelerInputRelabelingWithStalenansFromCache wrapper for relabeling incoming from cache
+// hashdex(first stage) with state stalenans.
+func prometheusPerShardRelabelerInputRelabelingWithStalenansFromCache(
+	perShardRelabeler, inputLss, targetLss, cache, hashdex, sourceState uintptr,
+	defTimestamp int64,
+	options RelabelerOptions,
+	shardsInnerSeries []*InnerSeries,
+) (stats RelabelerStats, exception []byte, targetLssHasReallocations bool) {
+	args := struct {
+		shardsInnerSeries []*InnerSeries
+		options           RelabelerOptions
+		perShardRelabeler uintptr
+		hashdex           uintptr
+		cache             uintptr
+		inputLss          uintptr
+		targetLss         uintptr
+		state             uintptr
+		defTimestamp      int64
+	}{
+		shardsInnerSeries,
+		options,
+		perShardRelabeler,
+		hashdex,
+		cache,
+		inputLss,
+		targetLss,
+		sourceState,
+		defTimestamp,
+	}
+	var res struct {
+		RelabelerStats
+		ok        bool
+		exception []byte
+	}
+	start := time.Now().UnixNano()
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_prometheus_per_shard_relabeler_input_relabeling_with_stalenans_from_cache,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+	inputRelabelerRelabelingWithStalenansFromCacheSum.Add(float64(time.Now().UnixNano() - start))
+	inputRelabelerRelabelingWithStalenansFromCacheCount.Inc()
+
+	return res.RelabelerStats, res.exception, res.ok
 }
 
 // prometheusPerShardRelabelerAppendRelabelerSeries - wrapper for add relabeled ls to lss,

@@ -50,7 +50,6 @@ class TopItems {
       return;
     }
 
-    assert(limit > 0);
     elements_.resize(limit);
     min_element_ = &elements_.front();
   }
@@ -78,7 +77,7 @@ class TopItems {
 
  private:
   Elements elements_;
-  Element* min_element_;
+  Element* min_element_{};
 };
 
 template <class Lss, class Status>
