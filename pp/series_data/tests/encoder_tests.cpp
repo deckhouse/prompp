@@ -1858,24 +1858,24 @@ TEST_F(EncodeOutdatedChunkTestFixture, EncodeGorillaOutdatedSample) {
   EXPECT_EQ((SampleList{{.timestamp = 1, .value = 1.0}, {.timestamp = 1, .value = 1.1}}), Decoder::decode_outdated_chunk(*outdated));
 }
 
-TEST_F(EncodeOutdatedChunkTestFixture, Encode255OutdatedSamples) {
+TEST_F(EncodeOutdatedChunkTestFixture, Encode1024OutdatedSamples) {
   // Arrange
   SampleList reference;
-  reference.reserve(255);
-  for (int i : std::views::iota(1, 256) | std::views::reverse) {
+  reference.reserve(1024);
+  for (int i : std::views::iota(1, 1024) | std::views::reverse) {
     reference.emplace_back(i, i);
   }
 
-  encoder_.encode(0, 256, 256.0);
+  encoder_.encode(0, 1024, 1024.0);
 
   // Act
-  for (size_t i = 255; i != 0; i--) {
-    encoder_.encode(0, i, i);
+  for (size_t i = 1024; i != 0; i--) {
+    encoder_.encode(0, static_cast<uint32_t>(i), static_cast<double>(i));
   }
 
   // Assert
   ASSERT_EQ(EncodingType::kUint32Constant, chunk(0).encoding_state.encoding_type);
-  EXPECT_EQ((SampleList{{.timestamp = 256, .value = 256.0}}), Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
+  EXPECT_EQ((SampleList{{.timestamp = 1024, .value = 1024.0}}), Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
 
   const auto outdated = outdated_chunk(0);
   ASSERT_NE(nullptr, outdated);

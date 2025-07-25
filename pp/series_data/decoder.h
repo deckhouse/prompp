@@ -48,7 +48,8 @@ class Decoder {
   static encoder::SampleList decode_outdated_chunk(const chunk::OutdatedChunk& chunk) {
     encoder::SampleList result;
     result.reserve(chunk.samples_count());
-    std::ranges::copy(decoder::OutdatedDecodeIterator(chunk), decoder::DecodeIteratorSentinel{}, std::back_inserter(result));
+    std::ranges::copy(decoder::OutdatedDecodeIterator(chunk.samples_count(), chunk.stream().reader(), {}), decoder::DecodeIteratorSentinel{},
+                      std::back_inserter(result));
     return result;
   }
 
