@@ -211,6 +211,11 @@ func (h *RotatableHead) RLockQuery(ctx context.Context) (runlock func(), err err
 	return h.head.RLockQuery(ctx)
 }
 
+// Raw returns raw [Head].
+func (h *RotatableHead) Raw() relabeler.Head {
+	return h.head
+}
+
 //
 // HeapProfileWritableHead
 //
@@ -333,4 +338,9 @@ func (h *HeapProfileWritableHead) Concurrency() int64 {
 // RLockQuery locks for query to [Head].
 func (h *HeapProfileWritableHead) RLockQuery(ctx context.Context) (runlock func(), err error) {
 	return h.head.RLockQuery(ctx)
+}
+
+// Raw returns raw [Head].
+func (h *HeapProfileWritableHead) Raw() relabeler.Head {
+	return h.head
 }

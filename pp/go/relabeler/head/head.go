@@ -1101,3 +1101,8 @@ func (*Head) shardLoop(
 		}
 	}
 }
+
+// Raw returns raw [Head].
+func (h *Head) Raw() relabeler.Head {
+	return h
+}
