@@ -184,7 +184,6 @@ type Head struct {
 	appendedSegmentCount prometheus.Counter
 	memoryInUse          *prometheus.GaugeVec
 	series               prometheus.Gauge
-	queried              *prometheus.GaugeVec
 	walSize              *prometheus.GaugeVec
 	// TODO refactoring
 	queueLSS         *prometheus.GaugeVec
@@ -254,13 +253,6 @@ func New(
 			Name: "prompp_head_series",
 			Help: "Total number of series in the heads block.",
 		}),
-		queried: factory.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "prompp_head_queried_series",
-				Help: "Total number of queried series in the heads block.",
-			},
-			[]string{"caller"},
-		),
 		walSize: factory.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "prompp_head_current_wal_size",
@@ -452,15 +444,6 @@ func (h *Head) WriteMetrics(ctx context.Context) {
 
 	status := h.Status(0)
 	h.series.Set(float64(status.HeadStats.NumSeries))
-	h.queried.With(
-		prometheus.Labels{"caller": "rule"},
-	).Set(float64(status.HeadStats.RuleQueriedSeries))
-	h.queried.With(
-		prometheus.Labels{"caller": "federate"},
-	).Set(float64(status.HeadStats.FederateQueriedSeries))
-	h.queried.With(
-		prometheus.Labels{"caller": "other"},
-	).Set(float64(status.HeadStats.OtherQueriedSeries))
 
 	if ctx.Err() != nil {
 		return
@@ -595,9 +578,6 @@ func (h *Head) Status(limit int) relabeler.HeadStatus {
 
 	for _, shardStatus := range shardStatuses {
 		headStatus.HeadStats.NumSeries += uint64(shardStatus.NumSeries)
-		headStatus.HeadStats.RuleQueriedSeries += int64(shardStatus.RuleQueriedSeries)
-		headStatus.HeadStats.FederateQueriedSeries += int64(shardStatus.FederateQueriedSeries)
-		headStatus.HeadStats.OtherQueriedSeries += int64(shardStatus.OtherQueriedSeries)
 		if limit == 0 {
 			continue
 		}

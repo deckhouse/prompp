@@ -27,12 +27,9 @@ type HeadStatus struct {
 		Value string
 		Count uint32
 	}
-	NumSeries             uint32
-	ChunkCount            uint32
-	NumLabelPairs         uint32
-	RuleQueriedSeries     uint32
-	FederateQueriedSeries uint32
-	OtherQueriedSeries    uint32
+	NumSeries     uint32
+	ChunkCount    uint32
+	NumLabelPairs uint32
 }
 
 // NewHeadStatus init new HeadStatus.
@@ -53,13 +50,4 @@ func (s *HeadStatus) FromLSS(lss *LabelSetStorage, limit int) {
 // FromDataStorage get head status from data storage.
 func (s *HeadStatus) FromDataStorage(dataStorage *HeadDataStorage) {
 	getHeadStatusDataStorage(dataStorage.dataStorage, s)
-}
-
-func GetHeadStatus(lss uintptr, dataStorage uintptr, limit int) *HeadStatus {
-	status := &HeadStatus{}
-	runtime.SetFinalizer(status, func(status *HeadStatus) {
-		freeHeadStatus(status)
-	})
-	getHeadStatus(lss, dataStorage, status, limit)
-	return status
 }
