@@ -183,7 +183,7 @@ func (qa *QueryableAppender) Querier(mint, maxt int64) (storage.Querier, error) 
 	if err != nil {
 		return nil, fmt.Errorf("Querier: weighted locker: %w", err)
 	}
-	head := qa.head
+	head := qa.head.Raw()
 	runlock()
 
 	return querier.NewQuerier(
@@ -191,9 +191,7 @@ func (qa *QueryableAppender) Querier(mint, maxt int64) (storage.Querier, error) 
 		querier.NoOpShardedDeduplicatorFactory(),
 		mint,
 		maxt,
-		func() error {
-			return nil
-		},
+		nil,
 		qa.querierMetrics,
 	), nil
 }
@@ -203,7 +201,7 @@ func (qa *QueryableAppender) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerie
 	if err != nil {
 		return nil, fmt.Errorf("ChunkQuerier: weighted locker: %w", err)
 	}
-	head := qa.head
+	head := qa.head.Raw()
 	runlock()
 	return querier.NewChunkQuerier(
 		head,

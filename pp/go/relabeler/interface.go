@@ -93,6 +93,7 @@ type Head interface {
 	CreateTask(taskName string, fn ShardFn, isLss bool) *GenericTask
 	Concurrency() int64
 	RLockQuery(ctx context.Context) (runlock func(), err error)
+	Raw() Head
 }
 
 type Distributor interface {

@@ -140,3 +140,8 @@ func (h *DiscardableRotatableHead) Concurrency() int64 {
 func (h *DiscardableRotatableHead) RLockQuery(ctx context.Context) (runlock func(), err error) {
 	return h.head.RLockQuery(ctx)
 }
+
+// Raw returns raw [Head].
+func (h *DiscardableRotatableHead) Raw() relabeler.Head {
+	return h.head
+}
