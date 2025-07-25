@@ -101,35 +101,6 @@ struct LssQueryResult {
 };
 
 using Querier = series_index::querier::Querier<PromPP::Primitives::Go::Slice>;
-
-extern "C" void prompp_primitives_lss_query_deprecated(void* args, void* res) {
-  struct Arguments {
-    LssVariantPtr lss;
-    GoLabelMatchers label_matchers;
-    series_index::QueriedSeries::Source query_source;
-  };
-  struct Result {
-    PromPP::Primitives::Go::Slice<uint32_t> matches;
-    PromPP::Primitives::Go::Slice<uint16_t> label_set_lengths{};
-    uint32_t status;
-  };
-
-  const auto in = static_cast<Arguments*>(args);
-  auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
-  auto query_result = Querier::query(lss, in->label_matchers);
-  lss.build_deferred_indexes();
-  lss.sorting_index().sort(query_result.series_ids);
-  lss.set_queried_series(in->query_source, query_result.series_ids);
-
-  const auto out = new (res) Result{
-      .matches = std::move(query_result.series_ids),
-      .status = static_cast<uint32_t>(query_result.status),
-  };
-  out->label_set_lengths.reserve(out->matches.size());
-  std::ranges::transform(out->matches, std::back_inserter(out->label_set_lengths),
-                         [&lss](const auto ls_id) PROMPP_LAMBDA_INLINE { return static_cast<uint16_t>(lss[ls_id].size()); });
-}
-
 using SelectorPtr = std::unique_ptr<Querier::Selector>;
 
 extern "C" void prompp_primitives_lss_query_selector(void* args, void* res) {

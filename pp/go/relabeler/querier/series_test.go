@@ -3,12 +3,12 @@ package querier
 import (
 	"testing"
 
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 )
 
 type InstantSeriesSetTestSuite struct {
@@ -31,11 +31,13 @@ func (s *InstantSeriesSetTestSuite) SetupTest() {
 	lss.FindOrEmplace(model.LabelSetFromPairs("job", "test", "__name__", "testmetric2"))
 	lss.FindOrEmplace(model.LabelSetFromPairs("job", "test", "__name__", "testmetric3"))
 
-	s.lssQueryResult = lss.QueryDeprecated([]model.LabelMatcher{{Name: "job", Value: "test"}}, cppbridge.LSSQuerySourceOther)
-	require.Equal(s.T(), cppbridge.LSSQueryStatusMatch, s.lssQueryResult.Status())
-	require.Equal(s.T(), 4, len(s.lssQueryResult.IDs()))
-
 	s.labelSetSnapshot = lss.CreateLabelSetSnapshot()
+
+	selector, status := lss.QuerySelector([]model.LabelMatcher{{Name: "job", Value: "test"}})
+	s.Require().Equal(cppbridge.LSSQueryStatusMatch, status)
+
+	s.lssQueryResult = s.labelSetSnapshot.Query(selector)
+	s.Require().Equal(4, len(s.lssQueryResult.IDs()))
 
 	s.valueNotFoundTimestampValue = 0
 	s.samples = []cppbridge.Sample{
@@ -62,12 +64,12 @@ func (s *InstantSeriesSetTestSuite) TestNext() {
 	index := 0
 	for iss.Next() {
 		is := iss.At()
-		require.Equal(s.T(), expected[index].Labels().String(), is.Labels().String())
+		s.Require().Equal(expected[index].Labels().String(), is.Labels().String())
 		ci := is.Iterator(nil)
-		require.Equal(s.T(), chunkenc.ValFloat, ci.Next())
+		s.Require().Equal(chunkenc.ValFloat, ci.Next())
 		timestamp, value := ci.At()
-		require.Equal(s.T(), expected[index].sample.Timestamp, timestamp)
-		require.Equal(s.T(), expected[index].sample.Value, value)
+		s.Require().Equal(expected[index].sample.Timestamp, timestamp)
+		s.Require().Equal(expected[index].sample.Value, value)
 		index++
 	}
 }
