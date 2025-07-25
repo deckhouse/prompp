@@ -1197,16 +1197,39 @@ func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder CppLabelSetBuilder) 
 	return res
 }
 
-func primitivesLSSQuery(lss uintptr, matchers []model.LabelMatcher, querySource uint32) (
+func primitivesLSSQuerySelector(lss uintptr, matchers []model.LabelMatcher) (
+	selector uintptr,
+	status uint32,
+) {
+	args := struct {
+		lss      uintptr
+		matchers []model.LabelMatcher
+	}{lss, matchers}
+
+	var res struct {
+		selector uintptr
+		status   uint32
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_lss_query_selector,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.selector, res.status
+}
+
+func primitivesLSSQuery(lss uintptr, selector uintptr) (
 	matches []uint32,
 	labelSetLengths []uint16,
 	status uint32,
 ) {
 	args := struct {
-		lss         uintptr
-		matchers    []model.LabelMatcher
-		querySource uint32
-	}{lss, matchers, querySource}
+		lss      uintptr
+		selector uintptr
+	}{lss, selector}
 
 	var res struct {
 		matches         []uint32
@@ -2392,21 +2415,6 @@ func indexWriterWriteTableOfContents(writer uintptr, data []byte) []byte {
 	)
 
 	return res.data
-}
-
-func getHeadStatus(lss, dataStorage uintptr, status *HeadStatus, limit int) {
-	args := struct {
-		lss         uintptr
-		dataStorage uintptr
-		limit       int
-	}{lss, dataStorage, limit}
-
-	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_get_head_status,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(status)),
-	)
 }
 
 func freeHeadStatus(status *HeadStatus) {

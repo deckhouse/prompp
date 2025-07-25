@@ -9,11 +9,10 @@
 
 namespace series_index {
 
-template <class TrieType, class TrieRegexpMatchesList>
+template <class TrieType>
 class TrieIndex {
  public:
   using Trie = TrieType;
-  using RegexpMatchesList = TrieRegexpMatchesList;
 
   class IteratorSentinel {};
 
@@ -83,7 +82,7 @@ class TrieIndex {
   };
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() const noexcept { return Iterator(this); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE IteratorSentinel end() const noexcept { return {}; }
+  [[nodiscard]] static PROMPP_ALWAYS_INLINE IteratorSentinel end() noexcept { return {}; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Trie& names_trie() noexcept { return names_trie_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const Trie& names_trie() const noexcept { return names_trie_; }

@@ -29,8 +29,8 @@ class RLEBackend {
 
    public:
     PROMPP_ALWAYS_INLINE Encoder() noexcept = default;
-    Encoder(const Encoder&) = delete;
-    Encoder& operator=(const Encoder&) = delete;
+    Encoder(const Encoder&) = default;
+    Encoder& operator=(const Encoder&) = default;
 
     PROMPP_ALWAYS_INLINE Encoder(Encoder&& o) noexcept : count_(o.count_), last_(o.last_) { o.clear(); }
 
@@ -404,6 +404,7 @@ struct id<DeltaDeltaZigZag<DataSequence>>
 
 template <class E, class DataSequence = typename E::DataSequence>
 class EncodedSequence {
+ protected:
   typename E::Encoder encoder_;
 
   DataSequence data_;
@@ -442,6 +443,7 @@ class EncodedSequence {
   }
 
   PROMPP_ALWAYS_INLINE const DataSequence& data() const noexcept { return data_; }
+  PROMPP_ALWAYS_INLINE const typename E::Encoder& encoder() const noexcept { return encoder_; }
 
   class IteratorSentinel {};
 
@@ -554,5 +556,5 @@ class EncodedSequence {
 };
 
 template <class T>
-struct IsTriviallyReallocatable<BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<T>>> : std::true_type {};
+struct IsTriviallyReallocatable<EncodedSequence<Encoding::DeltaRLE<T>>> : std::true_type {};
 }  // namespace BareBones
