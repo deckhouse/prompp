@@ -227,18 +227,55 @@ INSTANTIATE_TEST_SUITE_P(Label,
                                                                Token{.text = "\n", .token = TokenType::kLinebreak},
                                                            }},
                                          TokenizerCase{.str = "foo_seconds_count{a=\"bb\"} 0 123\n",
+                                                       .tokens =
+                                                           {
+                                                               Token{.text = "foo_seconds_count", .token = TokenType::kMetricName},
+                                                               Token{.text = "{", .token = TokenType::kBraceOpen},
+                                                               Token{.text = "a", .token = TokenType::kLabelName},
+                                                               Token{.text = "=", .token = TokenType::kEqual},
+                                                               Token{.text = R"("bb")", .token = TokenType::kLabelValue},
+                                                               Token{.text = "}", .token = TokenType::kBraceClose},
+                                                               Token{.text = " ", .token = TokenType::kWhitespace},
+                                                               Token{.text = "0", .token = TokenType::kValue},
+                                                               Token{.text = " ", .token = TokenType::kWhitespace},
+                                                               Token{.text = "123", .token = TokenType::kTimestamp},
+                                                               Token{.text = "\n", .token = TokenType::kLinebreak},
+                                                           }},
+                                         TokenizerCase{.str = R"({a="D:\\"} 123)"
+                                                              "\n",
+                                                       .tokens =
+                                                           {
+                                                               Token{.text = "{", .token = TokenType::kBraceOpen},
+                                                               Token{.text = "a", .token = TokenType::kLabelName},
+                                                               Token{.text = "=", .token = TokenType::kEqual},
+                                                               Token{.text = R"("D:\\")", .token = TokenType::kLabelValue},
+                                                               Token{.text = "}", .token = TokenType::kBraceClose},
+                                                               Token{.text = " ", .token = TokenType::kWhitespace},
+                                                               Token{.text = "123", .token = TokenType::kValue},
+                                                               Token{.text = "\n", .token = TokenType::kLinebreak},
+                                                           }},
+                                         TokenizerCase{.str = R"({a="\\"} 123)"
+                                                              "\n",
+                                                       .tokens =
+                                                           {
+                                                               Token{.text = "{", .token = TokenType::kBraceOpen},
+                                                               Token{.text = "a", .token = TokenType::kLabelName},
+                                                               Token{.text = "=", .token = TokenType::kEqual},
+                                                               Token{.text = R"("\\")", .token = TokenType::kLabelValue},
+                                                               Token{.text = "}", .token = TokenType::kBraceClose},
+                                                               Token{.text = " ", .token = TokenType::kWhitespace},
+                                                               Token{.text = "123", .token = TokenType::kValue},
+                                                               Token{.text = "\n", .token = TokenType::kLinebreak},
+                                                           }},
+                                         TokenizerCase{.str = R"({a="\"} 123)"
+                                                              "\n",
                                                        .tokens = {
-                                                           Token{.text = "foo_seconds_count", .token = TokenType::kMetricName},
                                                            Token{.text = "{", .token = TokenType::kBraceOpen},
                                                            Token{.text = "a", .token = TokenType::kLabelName},
                                                            Token{.text = "=", .token = TokenType::kEqual},
-                                                           Token{.text = R"("bb")", .token = TokenType::kLabelValue},
-                                                           Token{.text = "}", .token = TokenType::kBraceClose},
-                                                           Token{.text = " ", .token = TokenType::kWhitespace},
-                                                           Token{.text = "0", .token = TokenType::kValue},
-                                                           Token{.text = " ", .token = TokenType::kWhitespace},
-                                                           Token{.text = "123", .token = TokenType::kTimestamp},
-                                                           Token{.text = "\n", .token = TokenType::kLinebreak},
+                                                           Token{.text = R"("\"} 123)"
+                                                                         "\n",
+                                                                 .token = TokenType::kInvalid},
                                                        }}));
 
 }  // namespace
