@@ -7,7 +7,7 @@
 
 namespace {
 
-using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie, series_index::trie::CedarMatchesList>;
+using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie>;
 
 struct TrieIndexItem {
   std::string name;

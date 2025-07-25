@@ -2,7 +2,6 @@ package querier
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -40,8 +39,8 @@ func (q *ChunkQuerier) LabelNames(ctx context.Context, matchers ...*labels.Match
 
 func (q *ChunkQuerier) Select(
 	ctx context.Context,
-	sortSeries bool,
-	hints *storage.SelectHints,
+	_ bool,
+	_ *storage.SelectHints,
 	matchers ...*labels.Matcher,
 ) storage.ChunkSeriesSet {
 	runlock, err := q.head.RLockQuery(ctx)
@@ -51,75 +50,14 @@ func (q *ChunkQuerier) Select(
 	}
 	defer runlock()
 
-	lssQueryResults := make([]*cppbridge.LSSQueryResult, q.head.NumberOfShards())
-	snapshots := make([]*cppbridge.LabelSetSnapshot, q.head.NumberOfShards())
-	convertedMatchers := convertPrometheusMatchersToOpcoreMatchers(matchers...)
-	callerID := cppbridge.GetCaller(ctx)
-
-	tLSSQuery := q.head.CreateTask(
-		relabeler.LSSQueryChunkQuerier,
-		func(shard relabeler.Shard) error {
-			shard.LSSRLock()
-			defer shard.LSSRUnlock()
-
-			lssQueryResult := shard.LSS().Query(convertedMatchers, callerID)
-			if lssQueryResult.Status() != cppbridge.LSSQueryStatusMatch {
-				if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
-					return nil
-				}
-
-				return fmt.Errorf(
-					"failed to query from shard: %d, query status: %d",
-					shard.ShardID(),
-					lssQueryResult.Status(),
-				)
-			}
-
-			shardID := shard.ShardID()
-			snapshots[shardID] = shard.LSS().GetSnapshot()
-			lssQueryResults[shardID] = lssQueryResult
-
-			return nil
-		},
-		relabeler.ForLSSTask,
-	)
-	q.head.Enqueue(tLSSQuery)
-	if err := tLSSQuery.Wait(); err != nil {
-		logger.Warnf("ChunkQuerier: Select failed: %s", err)
+	lssQueryResults, snapshots, err := lssQuery(relabeler.LSSQueryChunkQuerySelector, q.head, matchers)
+	if err != nil {
+		logger.Warnf("[ChunkQuerier]: failed: %s", err)
 		return storage.ErrChunkSeriesSet(err)
+
 	}
 
-	serializedChunksShards := make([]*cppbridge.HeadDataStorageSerializedChunks, q.head.NumberOfShards())
-	tDataStorageQuery := q.head.CreateTask(
-		relabeler.DSQueryChunkQuerier,
-		func(shard relabeler.Shard) error {
-			shardID := shard.ShardID()
-			lssQueryResult := lssQueryResults[shardID]
-			if lssQueryResult == nil {
-				return nil
-			}
-
-			shard.DataStorageRLock()
-			serializedChunks := shard.DataStorage().Query(cppbridge.HeadDataStorageQuery{
-				StartTimestampMs: q.mint,
-				EndTimestampMs:   q.maxt,
-				LabelSetIDs:      lssQueryResult.IDs(),
-			})
-			shard.DataStorageRUnlock()
-
-			if serializedChunks.NumberOfChunks() == 0 {
-				return nil
-			}
-
-			serializedChunksShards[shardID] = serializedChunks
-
-			return nil
-		},
-		relabeler.ForDataStorageTask,
-	)
-	q.head.Enqueue(tDataStorageQuery)
-	_ = tDataStorageQuery.Wait()
-
+	serializedChunksShards := dataStorageQuery(relabeler.DSQueryChunkQuerier, q.head, lssQueryResults, q.mint, q.maxt)
 	chunkSeriesSets := make([]storage.ChunkSeriesSet, q.head.NumberOfShards())
 	for shardID, serializedChunks := range serializedChunksShards {
 		if serializedChunks == nil {
