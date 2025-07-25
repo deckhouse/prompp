@@ -1,6 +1,7 @@
-#include "tokenizer.h"
-
 #include <cstring>
+
+#include "prometheus/textparse/escape.h"
+#include "tokenizer.h"
 
 // NOLINTBEGIN
 /*!conditions:re2c*/
@@ -11,7 +12,11 @@ namespace PromPP::Prometheus::textparse::OpenMetrics {
 Tokenizer::Tokenizer() : condition_{yycinit} {}
 
 Tokenizer::Tokenizer(std::string_view str)
-    : start_ptr_(str.data()), cursor_ptr_(start_ptr_), limit_ptr_(start_ptr_ + str.size()), marker_ptr_(start_ptr_), token_ptr_(start_ptr_),
+    : start_ptr_(str.data()),
+      cursor_ptr_(start_ptr_),
+      limit_ptr_(start_ptr_ + str.size()),
+      marker_ptr_(start_ptr_),
+      token_ptr_(start_ptr_),
       condition_{yycinit} {}
 
 void Tokenizer::tokenize(std::string_view str) noexcept {
@@ -41,7 +46,7 @@ Token Tokenizer::consume_escaped_string(Token token) noexcept {
       return Token::kInvalid;
     }
 
-    if (cursor_ptr_[-1] == '\\') [[unlikely]] {
+    if (is_escaped_char(cursor_ptr_, token_ptr_ + 1)) [[unlikely]] {
       ++cursor_ptr_;
       continue;
     }
@@ -186,4 +191,4 @@ Token Tokenizer::next_impl() noexcept {
 }
 // NOLINTEND
 
-} // namespace PromPP::Prometheus::textparse::OpenMetrics
+}  // namespace PromPP::Prometheus::textparse::OpenMetrics
