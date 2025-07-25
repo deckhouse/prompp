@@ -279,7 +279,7 @@ func (loader *UnloadedDataLoader) Load(snapshot []byte, isLast bool) {
 
 func (ds *HeadDataStorage) CreateLoader(queriers []uintptr) *UnloadedDataLoader {
 	result := &UnloadedDataLoader{
-		loader: seriesDataUnloadedDataLoaderCtor(queriers),
+		loader: seriesDataUnloadedDataLoaderCtor(ds.dataStorage, queriers),
 	}
 	runtime.KeepAlive(queriers)
 

@@ -262,7 +262,10 @@ func (s *QueryableLSSSuite) TestQuery() {
 		labelMatchers := []model.LabelMatcher{
 			{Name: "lol", Value: "kek", MatcherType: model.MatcherTypeExactMatch},
 		}
-		queryResult := s.lss.Query(labelMatchers, cppbridge.LSSQuerySourceOther)
+		selector, status := s.lss.QuerySelector(labelMatchers)
+		s.Require().Equal(cppbridge.LSSQueryStatusMatch, status)
+		snapshot := s.lss.CreateLabelSetSnapshot()
+		queryResult := snapshot.Query(selector)
 		s.Require().Equal(cppbridge.LSSQueryStatusMatch, queryResult.Status())
 		s.Require().Len(queryResult.IDs(), 3)
 		s.Require().Equal(s.labelSetIDs[1], queryResult.IDs()[0])
@@ -278,8 +281,8 @@ func (s *QueryableLSSSuite) TestQuery() {
 		labelMatchers := []model.LabelMatcher{
 			{Name: "kek", Value: "lol", MatcherType: model.MatcherTypeExactNotMatch},
 		}
-		queryResult := s.lss.Query(labelMatchers, cppbridge.LSSQuerySourceOther)
-		s.Require().Equal(cppbridge.LSSQueryStatusNoPositiveMatchers, queryResult.Status())
+		_, status := s.lss.QuerySelector(labelMatchers)
+		s.Require().Equal(cppbridge.LSSQueryStatusNoPositiveMatchers, status)
 	}
 
 	// no match
@@ -287,8 +290,8 @@ func (s *QueryableLSSSuite) TestQuery() {
 		labelMatchers := []model.LabelMatcher{
 			{Name: "kek", Value: "lol", MatcherType: model.MatcherTypeExactMatch},
 		}
-		queryResult := s.lss.Query(labelMatchers, cppbridge.LSSQuerySourceOther)
-		s.Require().Equal(cppbridge.LSSQueryStatusNoMatch, queryResult.Status())
+		_, status := s.lss.QuerySelector(labelMatchers)
+		s.Require().Equal(cppbridge.LSSQueryStatusNoMatch, status)
 	}
 
 	// invalid regexp
@@ -296,8 +299,8 @@ func (s *QueryableLSSSuite) TestQuery() {
 		labelMatchers := []model.LabelMatcher{
 			{Name: "kek", Value: ".[", MatcherType: model.MatcherTypeRegexpMatch},
 		}
-		queryResult := s.lss.Query(labelMatchers, cppbridge.LSSQuerySourceOther)
-		s.Require().Equal(cppbridge.LSSQueryStatusRegexpError, queryResult.Status())
+		_, status := s.lss.QuerySelector(labelMatchers)
+		s.Require().Equal(cppbridge.LSSQueryStatusRegexpError, status)
 	}
 }
 

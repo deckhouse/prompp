@@ -54,9 +54,9 @@ PROMPP_ALWAYS_INLINE FindOrEmplaceResult find_or_emplace(auto& lss, const auto& 
   if constexpr (Lss::kIsReadOnly) {
     throw BareBones::Exception(0x1b877a0ab46a69a6, "lss is readonly");
   } else {
-    entrypoint::head::lss_memory::has_reallocations = false;
+    const entrypoint::head::ReallocationsDetector reallocation_detector(lss);
     const auto ls_id = lss.find_or_emplace(label_set);
-    return {.ls_id = ls_id, .lss_has_reallocations = entrypoint::head::lss_memory::has_reallocations};
+    return {.ls_id = ls_id, .lss_has_reallocations = reallocation_detector.has_reallocations()};
   }
 }
 
@@ -101,11 +101,37 @@ struct LssQueryResult {
   uint32_t status;
 };
 
-extern "C" void prompp_primitives_lss_query(void* args, void* res) {
+using Querier = series_index::querier::Querier<PromPP::Primitives::Go::Slice>;
+using SelectorPtr = std::unique_ptr<Querier::Selector>;
+
+extern "C" void prompp_primitives_lss_query_selector(void* args, void* res) {
+  using series_index::querier::QuerierStatus;
+  using MatchResolver = series_index::querier::MatchResolver;
+  using SelectorQuerier = series_index::querier::SelectorQuerier<QueryableEncodingBimap::TrieIndex, Querier::Selector, series_index::querier::MatchResolver>;
+
   struct Arguments {
     LssVariantPtr lss;
     GoLabelMatchers label_matchers;
-    series_index::QueriedSeries::Source query_source;
+  };
+  struct Result {
+    SelectorPtr selector{std::make_unique<Querier::Selector>()};
+    uint32_t status;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  const auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
+
+  const auto out = new (res) Result();
+  if (out->status = static_cast<uint32_t>(SelectorQuerier{lss.trie_index(), MatchResolver(lss.reverse_index())}.query(in->label_matchers, *out->selector));
+      out->status != static_cast<uint32_t>(QuerierStatus::kMatch)) {
+    out->selector.reset();
+  }
+}
+
+extern "C" void prompp_primitives_lss_query(void* args, void* res) {
+  struct Arguments {
+    LssVariantPtr lss;
+    SelectorPtr selector;
   };
   struct Result {
     PromPP::Primitives::Go::Slice<uint32_t> matches;
@@ -113,13 +139,11 @@ extern "C" void prompp_primitives_lss_query(void* args, void* res) {
     uint32_t status;
   };
 
-  using Querier = series_index::querier::Querier<QueryableEncodingBimap, PromPP::Primitives::Go::Slice>;
-
   const auto in = static_cast<Arguments*>(args);
-  auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
-  auto query_result = Querier{lss}.query(in->label_matchers);
-  lss.sort_series_ids(query_result.series_ids);
-  lss.set_queried_series(in->query_source, query_result.series_ids);
+  auto& lss = std::get<entrypoint::head::ReadonlyLss>(*in->lss);
+  auto query_result = Querier{}.query(*in->selector);
+  in->selector.reset();
+  lss.sorting_index().sort(query_result.series_ids);
 
   const auto out = new (res) Result{
       .matches = std::move(query_result.series_ids),

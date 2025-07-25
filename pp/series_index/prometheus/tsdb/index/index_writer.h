@@ -1,22 +1,16 @@
 #pragma once
 
-#include "primitives/snug_composites.h"
 #include "prometheus/tsdb/index/toc_writer.h"
 #include "section_writer/label_indices_writer.h"
 #include "section_writer/postings_writer.h"
 #include "section_writer/series_writer.h"
 #include "section_writer/symbols_writer.h"
-#include "series_index/queryable_encoding_bimap.h"
-#include "series_index/trie/cedarpp_tree.h"
 
 namespace series_index::prometheus::tsdb::index {
 
-template <template <class> class LssVector, class Stream>
+template <class QueryableEncodingBimap, class Stream>
 class IndexWriter {
  public:
-  using TrieIndex = series_index::TrieIndex<trie::CedarTrie, trie::CedarMatchesList>;
-  using QueryableEncodingBimap =
-      series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, LssVector, TrieIndex>;
   using StreamWriter = PromPP::Prometheus::tsdb::index::StreamWriter<Stream>;
   using SeriesWriter = section_writer::SeriesWriter<QueryableEncodingBimap, Stream>;
   using PostingsWriter = section_writer::PostingsWriter<QueryableEncodingBimap, Stream>;

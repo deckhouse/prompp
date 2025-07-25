@@ -41,49 +41,6 @@ extern "C" {
  * @brief Return head status
  *
  * @param args {
- *     lss         uintptr      // pointer to constructed lss
- *     dataStorage uintptr      // pointer to constructed data storage
- *     limit       int          // statistics limit
- * }
- *
- * @param res {
- *     status struct {     // head status
- *          time_interval struct {
- *              min int64
- *              max int64
- *          }
- *          label_value_count_by_label_name []struct {
- *              name string
- *              count uint32
- *          }
- *          series_count_by_metric_name []struct {
- *              name string
- *              count uint32
- *          }
- *          memory_in_bytes_by_label_name []struct {
- *              name string
- *              size uint32
- *          }
- *          series_count_by_label_value_pair [] struct {
- *              name string
- *              value string
- *              count uint32
- *          }
- *          num_series      uint32
- *          chunk_count     uint32
- *          num_label_pairs uint32
- *          rule_queried_series uint32
- *          federate_queried_series uint32
- *          other_queried_series uint32
- *     }
- * }
- */
-void prompp_get_head_status(void* args, void* res);
-
-/**
- * @brief Return head status
- *
- * @param args {
  *     status struct {...} // status returned by prompp_get_head_status
  * }
  *
@@ -119,9 +76,6 @@ void prompp_free_head_status(void* args);
  *          }
  *          num_series      uint32
  *          num_label_pairs uint32
- *          rule_queried_series uint32
- *          federate_queried_series uint32
- *          other_queried_series uint32
  *     }
  * }
  */
@@ -600,12 +554,26 @@ void prompp_primitives_lss_find_or_emplace(void* args, void* res);
 void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
 
 /**
- * @brief query series from lss
+ * @brief query selector from lss for label matchers
  *
  * @param args {
  *     lss uintptr                         // pointer to constructed queryable lss;
  *     label_matchers []model.LabelMatcher // label matchers
- *     query_source uint32                 // query source (rule, federate, other)
+ * }
+ *
+ * @param res {
+ *     selector uintptr // constructed selector
+ *     status   uint32  // query status
+ * }
+ */
+void prompp_primitives_lss_query_selector(void* args, void* res);
+
+/**
+ * @brief query selector from lss for label matchers
+ *
+ * @param args {
+ *     lss uintptr // pointer to readonly lss
+ *     selector uintptr // pointer to constructed selector
  * }
  *
  * @param res {
@@ -960,6 +928,54 @@ void prompp_prometheus_relabel_stalenans_state_reset(void* args);
  * }
  */
 void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stalenans(void* args, void* res);
+
+/**
+ * @brief relabeling incomig hashdex(first stage) from cache.
+ *
+ * @param args {
+ *     shards_inner_series []*InnerSeries   // go slice with InnerSeries;
+ *     options             RelabelerOptions // object RelabelerOptions;
+ *     per_shard_relabeler uintptr          // pointer to constructed per shard relabeler;
+ *     hashdex             uintptr          // pointer to filled hashdex;
+ *     cache               uintptr          // pointer to constructed Cache;
+ *     input_lss           uintptr          // pointer to constructed input label sets;
+ *     target_lss          uintptr          // pointer to constructed target label sets;
+ * }
+ *
+ * @param res {
+ *     samples_added       uint32           // number of added samples;
+ *     series_added        uint32           // number of added series;
+ *     series_drop         uint32           // number of dropped series;
+ *     ok                  bool             // true if all label set find in cache;
+ *     error               []byte           // error string if thrown;
+ * }
+ */
+void prompp_prometheus_per_shard_relabeler_input_relabeling_from_cache(void* args, void* res);
+
+/**
+ * @brief relabeling incomig hashdex(first stage) from cache with state stalenans.
+ *
+ * @param args {
+ *     shards_inner_series []*InnerSeries   // go slice with InnerSeries;
+ *     options             RelabelerOptions // object RelabelerOptions;
+ *     per_shard_relabeler uintptr          // pointer to constructed per shard relabeler;
+ *     hashdex             uintptr          // pointer to filled hashdex;
+ *     cache               uintptr          // pointer to constructed Cache;
+ *     input_lss           uintptr          // pointer to constructed input label sets;
+ *     target_lss          uintptr          // pointer to constructed target label sets;
+ *     state               uintptr          // pointer to source state
+ *     def_timestamp       int64            // timestamp for metrics and StaleNaNs
+ * }
+ *
+ * @param res {
+ *     samples_added       uint32           // number of added samples;
+ *     series_added        uint32           // number of added series;
+ *     series_drop         uint32           // number of dropped series;
+ *     ok                  bool             // true if all label set find in cache;
+ *     error               []byte           // error string if thrown;
+ * }
+ */
+void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stalenans_from_cache(void* args, void* res);
 
 /**
  * @brief write stale nans from state.

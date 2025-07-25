@@ -43,7 +43,7 @@ class Unloader {
       }
 
       const auto encoding_type = storage_.open_chunks[ls_id].encoding_state.encoding_type;
-      if (is_unloadable_encoder(encoding_type)) {
+      if (is_unloadable_encoder(encoding_type) && get_open_chunk_stream(storage_, ls_id).size_in_bits() >= BareBones::Bit::kByteBits) {
         push_series_to_sequences(result, ls_id);
       }
     }
@@ -58,7 +58,7 @@ class Unloader {
   }
 
   template <class Stream>
-  void write_sequences(Stream& stream, const PreparedSequences& sequences) noexcept {
+  static void write_sequences(Stream& stream, const PreparedSequences& sequences) noexcept {
     if constexpr (BareBones::concepts::has_reserve<Stream>) {
       stream.reserve(sequences.reserved_stream_size);
     }

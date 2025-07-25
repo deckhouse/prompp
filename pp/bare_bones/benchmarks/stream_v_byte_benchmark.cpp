@@ -7,7 +7,9 @@
 
 namespace {
 
-using BareBones::StreamVByte::CompactSequence;
+template <class Codec, size_t kPreAllocationElementsCount>
+using CompactSequence = BareBones::StreamVByte::CompactSequence<Codec, BareBones::MemoryWithItemCount, kPreAllocationElementsCount>;
+
 using BareBones::StreamVByte::Sequence;
 
 uint32_t values_count() {

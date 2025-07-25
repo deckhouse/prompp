@@ -32,6 +32,7 @@ using ChunkRecoderVariantPtr = std::unique_ptr<ChunkRecoderVariant>;
 
 using LoaderVariant = std::variant<series_data::unloading::Loader>;
 using LoaderVariantPtr = std::unique_ptr<LoaderVariant>;
+static_assert(sizeof(LoaderVariantPtr) == sizeof(void*));
 
 using entrypoint::series_data::QuerierType;
 using entrypoint::series_data::QuerierVariant;
@@ -255,6 +256,7 @@ extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* re
   using series_data::unloading::Loader;
 
   struct Arguments {
+    DataStoragePtr data_storage;
     SliceView<QuerierVariantPtr> queriers;
   };
 
@@ -263,26 +265,17 @@ extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* re
   };
 
   const auto in = static_cast<Arguments*>(args);
+  const auto out = new (res) Result{.loader = std::make_unique<LoaderVariant>(std::in_place_type<Loader>, *in->data_storage)};
+  auto& loader = std::get<Loader>(*out->loader);
 
-  auto& first = *in->queriers.begin();
-
-  Loader loader = std::visit(
-      [](auto& querier) {
-        const auto& series_to_load = querier.series_to_load();
-        return Loader(querier.storage(), series_to_load, series_to_load.popcount());
-      },
-      *first);
-
-  for (const auto& rest : in->queriers | std::views::drop(1)) {
+  for (const auto& rest : in->queriers) {
     std::visit(
         [&loader](auto& querier) {
           const auto& series_to_load = querier.series_to_load();
-          loader.add_ls_ids_sorted(series_to_load, series_to_load.popcount());
+          loader.add_series_to_load(series_to_load, series_to_load.popcount());
         },
         *rest);
   }
-
-  new (res) Result{.loader = std::make_unique<LoaderVariant>(std::in_place_type<Loader>, std::move(loader))};
 }
 
 extern "C" void prompp_series_data_data_storage_loader_load_next(void* args) {

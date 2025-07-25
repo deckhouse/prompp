@@ -837,7 +837,7 @@ PROMPP_ALWAYS_INLINE auto decoder(InnerIteratorType i, uint32_t size) noexcept {
   return std::pair(DecodeIterator<Codec, InnerIteratorType>(i, size), DecodeIteratorSentinel());
 }
 
-template <class Codec, uint32_t kPreAllocationElementsCount = 1024>
+template <class Codec, template <class> class MemoryType = MemoryWithItemCount, uint32_t kPreAllocationElementsCount = 1024>
 class CompactSequence {
  public:
   static_assert(std::popcount(kPreAllocationElementsCount) == 1, "kPreAllocationElementsCount must be a power of two");
@@ -847,6 +847,8 @@ class CompactSequence {
 
   static constexpr uint32_t kMaxKeySize = kPreAllocationElementsCount / 4;
   static constexpr uint32_t kMaxDataSize = kPreAllocationElementsCount * sizeof(value_type);
+
+  static constexpr bool kIsReadOnly = IsSharedSpan<MemoryType<uint8_t>>::value;
 
   class DecodeIterator {
     const uint8_t* key_iterator_;
@@ -902,11 +904,14 @@ class CompactSequence {
   using sentinel = DecodeIteratorSentinel;
 
  private:
-  using Memory = BareBones::Memory<MemoryControlBlockWithItemCount, uint8_t>;
+  using Memory = MemoryType<uint8_t>;
+
+  template <class AnyCodec, template <class> class AnyMemoryType, uint32_t kAnyPreAllocationElementsCount>
+  friend class CompactSequence;
 
   Memory buffer_;
-  Memory::iterator key_iterator_ = nullptr;
-  Memory::iterator data_iterator_ = nullptr;
+  typename Memory::iterator key_iterator_ = nullptr;
+  typename Memory::iterator data_iterator_ = nullptr;
 
   PROMPP_ALWAYS_INLINE void reserve_for_next_elements() noexcept {
     const auto current_size = data_iterator_ - buffer_;
@@ -922,8 +927,13 @@ class CompactSequence {
   CompactSequence& operator=(const CompactSequence&) = delete;
   CompactSequence(CompactSequence&&) noexcept = default;
   CompactSequence& operator=(CompactSequence&&) noexcept = default;
+  template <class AnotherCompactSequence>
+    requires kIsReadOnly
+  explicit CompactSequence(const AnotherCompactSequence& other) noexcept : buffer_(other.buffer_), key_iterator_(nullptr), data_iterator_(nullptr) {}
 
-  PROMPP_ALWAYS_INLINE void push_back(value_type val) noexcept {
+  PROMPP_ALWAYS_INLINE void push_back(value_type val) noexcept
+    requires(!kIsReadOnly)
+  {
     if ((size() % kPreAllocationElementsCount) == 0) [[unlikely]] {
       reserve_for_next_elements();
     }
@@ -948,11 +958,23 @@ class CompactSequence {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return buffer_.control_block().items_count; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept {
+    if constexpr (IsSharedMemory<MemoryType<uint8_t>>::value) {
+      return buffer_.constructed_item_count();
+    } else if constexpr (kIsReadOnly) {
+      return buffer_.size();
+    } else {
+      return buffer_.control_block().items_count;
+    }
+  }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return size() == 0; }
 
-  PROMPP_ALWAYS_INLINE auto begin() const noexcept { return DecodeIterator(buffer_, buffer_ + kMaxKeySize, size()); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return DecodeIteratorSentinel{}; }
+  PROMPP_ALWAYS_INLINE static DecodeIterator decode_iterator(const uint8_t* memory, uint32_t size) noexcept { return {memory, memory + kMaxKeySize, size}; }
+
+  PROMPP_ALWAYS_INLINE DecodeIterator begin() const noexcept { return decode_iterator(buffer_.begin(), size()); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static DecodeIteratorSentinel end() noexcept { return {}; }
+
+  PROMPP_ALWAYS_INLINE const Memory& buffer() const noexcept { return buffer_; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_write_size() const noexcept {
     const uint32_t buffer_size_in_bytes = size_in_bytes();
@@ -992,11 +1014,17 @@ class CompactSequence {
   }
 
  private:
-  PROMPP_ALWAYS_INLINE void set_size(uint32_t new_size) noexcept { buffer_.control_block().items_count = new_size; }
+  PROMPP_ALWAYS_INLINE void set_size(uint32_t new_size) noexcept {
+    if constexpr (IsSharedMemory<MemoryType<uint8_t>>::value) {
+      buffer_.set_constructed_item_count(new_size);
+    } else {
+      buffer_.control_block().items_count = new_size;
+    }
+  }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Memory::SizeType size_in_bytes() const noexcept {
-    return std::min<Memory::SizeType>(data_iterator_ - buffer_ + sizeof(value_type) + kKeysAdditionalAllocationSizeForDecoder,
-                                      buffer_.control_block().data_size);
+  [[nodiscard]] PROMPP_ALWAYS_INLINE typename Memory::SizeType size_in_bytes() const noexcept {
+    return std::min<typename Memory::SizeType>(data_iterator_ - buffer_ + sizeof(value_type) + kKeysAdditionalAllocationSizeForDecoder,
+                                               buffer_.control_block().data_size);
   }
 };
 

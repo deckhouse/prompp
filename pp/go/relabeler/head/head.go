@@ -184,7 +184,6 @@ type Head struct {
 	appendedSegmentCount prometheus.Counter
 	memoryInUse          *prometheus.GaugeVec
 	series               prometheus.Gauge
-	queried              *prometheus.GaugeVec
 	walSize              *prometheus.GaugeVec
 	// TODO refactoring
 	queueLSS         *prometheus.GaugeVec
@@ -212,7 +211,7 @@ func New(
 	shards := make([]*shard, numberOfShards)
 
 	// current head workers concurrency
-	concurrency := 2 * int64(1+ExtraReadConcurrency)
+	concurrency := calculateHeadConcurrency(numberOfShards)
 
 	for shardID := uint16(0); shardID < numberOfShards; shardID++ {
 		lssTaskChs[shardID] = make(chan *relabeler.GenericTask, 4*concurrency)         // x4 for back pressure
@@ -256,13 +255,6 @@ func New(
 			Name: "prompp_head_series",
 			Help: "Total number of series in the heads block.",
 		}),
-		queried: factory.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "prompp_head_queried_series",
-				Help: "Total number of queried series in the heads block.",
-			},
-			[]string{"caller"},
-		),
 		walSize: factory.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "prompp_head_current_wal_size",
@@ -454,15 +446,6 @@ func (h *Head) WriteMetrics(ctx context.Context) {
 
 	status := h.Status(0)
 	h.series.Set(float64(status.HeadStats.NumSeries))
-	h.queried.With(
-		prometheus.Labels{"caller": "rule"},
-	).Set(float64(status.HeadStats.RuleQueriedSeries))
-	h.queried.With(
-		prometheus.Labels{"caller": "federate"},
-	).Set(float64(status.HeadStats.FederateQueriedSeries))
-	h.queried.With(
-		prometheus.Labels{"caller": "other"},
-	).Set(float64(status.HeadStats.OtherQueriedSeries))
 
 	if ctx.Err() != nil {
 		return
@@ -597,9 +580,6 @@ func (h *Head) Status(limit int) relabeler.HeadStatus {
 
 	for _, shardStatus := range shardStatuses {
 		headStatus.HeadStats.NumSeries += uint64(shardStatus.NumSeries)
-		headStatus.HeadStats.RuleQueriedSeries += int64(shardStatus.RuleQueriedSeries)
-		headStatus.HeadStats.FederateQueriedSeries += int64(shardStatus.FederateQueriedSeries)
-		headStatus.HeadStats.OtherQueriedSeries += int64(shardStatus.OtherQueriedSeries)
 		if limit == 0 {
 			continue
 		}
@@ -772,8 +752,7 @@ func (h *Head) RLockQuery(ctx context.Context) (runlock func(), err error) {
 
 // Concurrency return current head workers concurrency.
 func (h *Head) Concurrency() int64 {
-	// 2 - lss and datastorage
-	return 2 * int64(1+ExtraReadConcurrency) * int64(h.numberOfShards)
+	return calculateHeadConcurrency(h.numberOfShards)
 }
 
 // readOnlyForEachShard run generic task on read only head without queue on all shards.
@@ -943,17 +922,57 @@ func (h *Head) inputRelabelingStage(
 	t := h.CreateTask(
 		relabeler.LSSInputRelabeling,
 		func(shard relabeler.Shard) error {
-			shard.LSSLock()
-			defer shard.LSSUnlock()
-
 			var (
+				shardID          = shard.ShardID()
 				err              error
 				hasReallocations bool
-				shardID          = shard.ShardID()
+				ok               bool
 			)
 
+			shard.LSSRLock()
 			if state.TrackStaleness() {
-				stats[shardID], hasReallocations, err = rd.InputRelabelerByShard(shardID).InputRelabelingWithStalenans(
+				stats[shardID], ok, err = rd.InputRelabelerByShard(
+					shardID,
+				).InputRelabelingWithStalenansFromCache(
+					ctx,
+					shard.LSS().Input(),
+					shard.LSS().Target(),
+					state.CacheByShard(shardID),
+					state.RelabelerOptions(),
+					state.StaleNansStateByShard(shardID),
+					state.DefTimestamp(),
+					incomingData.Data().ShardedData(),
+					shardedInnerSeries.DataBySourceShard(shardID),
+				)
+			} else {
+				stats[shardID], ok, err = rd.InputRelabelerByShard(shardID).InputRelabelingFromCache(
+					ctx,
+					shard.LSS().Input(),
+					shard.LSS().Target(),
+					state.CacheByShard(shardID),
+					state.RelabelerOptions(),
+					incomingData.Data().ShardedData(),
+					shardedInnerSeries.DataBySourceShard(shardID),
+				)
+			}
+			shard.LSSRUnlock()
+
+			if err != nil {
+				incomingData.Destroy()
+				return fmt.Errorf("shard %d: %w", shardID, err)
+			}
+
+			if ok {
+				incomingData.Destroy()
+				return nil
+			}
+
+			shard.LSSLock()
+			defer shard.LSSUnlock()
+			rstats := cppbridge.RelabelerStats{}
+
+			if state.TrackStaleness() {
+				rstats, hasReallocations, err = rd.InputRelabelerByShard(shardID).InputRelabelingWithStalenans(
 					ctx,
 					shard.LSS().Input(),
 					shard.LSS().Target(),
@@ -966,7 +985,7 @@ func (h *Head) inputRelabelingStage(
 					shardedRelabeledSeries.DataByShard(shardID),
 				)
 			} else {
-				stats[shardID], hasReallocations, err = rd.InputRelabelerByShard(shardID).InputRelabeling(
+				rstats, hasReallocations, err = rd.InputRelabelerByShard(shardID).InputRelabeling(
 					ctx,
 					shard.LSS().Input(),
 					shard.LSS().Target(),
@@ -982,6 +1001,10 @@ func (h *Head) inputRelabelingStage(
 			if err != nil {
 				return fmt.Errorf("shard %d: %w", shardID, err)
 			}
+
+			stats[shardID].SamplesAdded += rstats.SamplesAdded
+			stats[shardID].SeriesAdded += rstats.SeriesAdded
+			stats[shardID].SeriesDrop += rstats.SeriesDrop
 
 			if hasReallocations {
 				shard.LSS().ResetSnapshot()
@@ -1157,4 +1180,10 @@ func (h *Head) CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr
 		h.EnqueueOnShard(task, shardID)
 		return task
 	})
+}
+
+// calculateHeadConcurrency calculate current head workers concurrency.
+func calculateHeadConcurrency(numberOfShards uint16) int64 {
+	// 2 - lss and datastorage
+	return 2 * int64(1+ExtraReadConcurrency) * int64(numberOfShards)
 }

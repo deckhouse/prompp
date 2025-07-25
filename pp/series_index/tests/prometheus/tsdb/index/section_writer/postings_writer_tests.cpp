@@ -12,6 +12,7 @@ namespace {
 
 using PromPP::Primitives::LabelViewSet;
 using PromPP::Prometheus::tsdb::index::StreamWriter;
+using series_index::SeriesReverseIndex;
 using series_index::prometheus::tsdb::index::ChunkMetadata;
 using series_index::prometheus::tsdb::index::SeriesReferencesMap;
 using series_index::prometheus::tsdb::index::SymbolReferencesMap;
@@ -31,9 +32,8 @@ struct PostingsWriterCase {
 
 class PostingsWriterFixture : public testing::TestWithParam<PostingsWriterCase> {
  protected:
-  using TrieIndex = series_index::TrieIndex<series_index::trie::CedarTrie, series_index::trie::CedarMatchesList>;
-  using QueryableEncodingBimap =
-      series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex>;
+  using QueryableEncodingBimap = series_index::
+      QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, series_index::trie::CedarTrie>;
 
   std::ostringstream stream_;
   StreamWriter<decltype(stream_)> stream_writer_{&stream_};

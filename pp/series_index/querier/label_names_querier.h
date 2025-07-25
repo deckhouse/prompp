@@ -17,7 +17,7 @@ class LabelNamesQuerier {
       return query_all_label_names(std::forward<NameHandler>(name_handler));
     }
 
-    auto result = Querier<Index>{index_}.query(label_matchers);
+    auto result = Querier<>::query(index_, label_matchers);
     if (result.status == QuerierStatus::kMatch) {
       query_matched_unique_label_names(result.series_ids, std::forward<NameHandler>(name_handler));
     }

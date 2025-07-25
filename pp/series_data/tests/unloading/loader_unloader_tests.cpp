@@ -13,13 +13,15 @@ using series_data::Decoder;
 using series_data::chunk::DataChunk;
 using series_data::encoder::SampleList;
 using series_data::unloading::Loader;
+using series_data::unloading::SeriesToLoadInfo;
+using series_data::unloading::Unloader;
 using std::operator""s;
 
 class LoaderUnloaderTrait {
  protected:
   series_data::DataStorage storage_;
   series_data::Encoder<> encoder_{storage_};
-  series_data::unloading::Unloader unloader_{storage_};
+  Unloader unloader_{storage_};
   BareBones::ShrinkedToFitOStringStream stream1_;
   BareBones::ShrinkedToFitOStringStream stream2_;
 };
@@ -406,6 +408,234 @@ TEST_F(LoaderUnloaderTestFixture, LoadValuesGorillaChunk) {
   ASSERT_EQ(series_data::EncodingType::kValuesGorilla, storage_.open_chunks[1].encoding_state.encoding_type);
   ASSERT_EQ((SampleList{{1, 1.1}, {2, 2.0}, {3, 3.0}}), Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[1]));
   ASSERT_FALSE(storage_.unloaded_series_bitmap.is_set(1));
+}
+
+class LoaderUnloaderBigTestFixture : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    encoder_.encode(0, 1, 0.0);
+    encoder_.encode(0, 2, 0.0);
+    encoder_.encode(0, 3, 0.0);
+    encoder_.encode(0, 4, 0.0);
+    encoder_.encode(0, 5, 0.0);
+
+    encoder_.encode(1, 1, 1.0);
+    encoder_.encode(1, 2, 1.0);
+    encoder_.encode(1, 3, 1.0);
+    encoder_.encode(1, 4, 1.0);
+    encoder_.encode(1, 5, 1.0);
+
+    encoder_.encode(2, 1, 1.0);
+    encoder_.encode(2, 2, 2.0);
+    encoder_.encode(2, 3, 3.0);
+    encoder_.encode(2, 4, 4.0);
+    encoder_.encode(2, 5, 5.0);
+
+    encoder_.encode(3, 1, 6.0);
+    encoder_.encode(3, 2, 7.0);
+    encoder_.encode(3, 3, 8.0);
+    encoder_.encode(3, 4, 9.0);
+    encoder_.encode(3, 5, 10.0);
+  }
+
+  series_data::DataStorage storage_;
+  series_data::Encoder<> encoder_{storage_};
+  BareBones::ShrinkedToFitOStringStream stream_;
+};
+
+TEST_F(LoaderUnloaderBigTestFixture, UnloadAfterQuery) {
+  // Arrange
+  storage_.queried_series_bitmap.set({0, 1, 3});
+  const uint32_t chunk_stream_size_in_bits =
+      storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[2].encoder.external_index).size_in_bits();
+
+  // Act
+  Unloader(storage_).unload(stream_);
+
+  // Assert
+  ASSERT_EQ(storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[2].encoder.external_index).size_in_bits(),
+            chunk_stream_size_in_bits % 8);
+
+  ASSERT_EQ(storage_.unloaded_series_bitmap.popcount(), 1);
+  ASSERT_TRUE(storage_.unloaded_series_bitmap.is_set(2));
+}
+
+TEST_F(LoaderUnloaderBigTestFixture, NothingToUnload) {
+  // Arrange
+  storage_.queried_series_bitmap.set({2, 3});
+
+  // Act
+  Unloader(storage_).unload(stream_);
+
+  // Assert
+  ASSERT_TRUE(storage_.unloaded_series_bitmap.empty());
+  ASSERT_EQ(stream_.view(), "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"s);
+}
+
+TEST_F(LoaderUnloaderBigTestFixture, EmptyLoader) {
+  // Arrange
+  storage_.queried_series_bitmap.set({2, 3});
+  Loader loader(storage_);
+
+  // Act
+  loader.add_series_to_load(storage_.unloaded_series_bitmap, storage_.unloaded_series_bitmap.popcount());
+
+  // Assert
+  ASSERT_TRUE(loader.empty());
+}
+
+TEST_F(LoaderUnloaderBigTestFixture, LoadAll) {
+  // Arrange
+  storage_.queried_series_bitmap.set({0, 1});
+  Loader loader(storage_);
+
+  Unloader(storage_).unload(stream_);
+
+  // Act
+  loader.add_series_to_load(storage_.unloaded_series_bitmap, storage_.unloaded_series_bitmap.popcount());
+  loader.load_next(stream_.span<uint8_t>());
+  loader.load_finalize();
+
+  // Assert
+  ASSERT_EQ((SampleList{
+                {1, 1.0},
+                {2, 2.0},
+                {3, 3.0},
+                {4, 4.0},
+                {5, 5.0},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[2]));
+  ASSERT_EQ((SampleList{
+                {1, 6.0},
+                {2, 7.0},
+                {3, 8.0},
+                {4, 9.0},
+                {5, 10.0},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[3]));
+}
+
+class LoaderUnorderedVectorTestFixture : public ::testing::Test {
+ protected:
+  Loader::UnorderedVector vector_;
+};
+
+TEST_F(LoaderUnorderedVectorTestFixture, Empty) {
+  // Arrange
+
+  // Act
+
+  // Assert
+  ASSERT_TRUE(vector_.empty());
+  ASSERT_EQ(vector_.size(), 0);
+  ASSERT_EQ(std::distance(vector_.begin(), vector_.end()), 0);
+}
+
+TEST_F(LoaderUnorderedVectorTestFixture, NotEmpty) {
+  // Arrange
+
+  // Act
+  vector_.insert(1);
+
+  // Assert
+  ASSERT_FALSE(vector_.empty());
+  ASSERT_EQ(vector_.size(), 1);
+  ASSERT_EQ(std::distance(vector_.begin(), vector_.end()), 1);
+}
+
+TEST_F(LoaderUnorderedVectorTestFixture, ReserveEmpty) {
+  // Arrange
+  vector_.reserve(100);
+
+  // Act
+
+  // Assert
+  ASSERT_TRUE(vector_.empty());
+  ASSERT_EQ(vector_.size(), 0);
+  ASSERT_EQ(std::distance(vector_.begin(), vector_.end()), 0);
+}
+
+TEST_F(LoaderUnorderedVectorTestFixture, ReserveInsert) {
+  // Arrange
+  vector_.reserve(10);
+
+  // Act
+  vector_.insert(1);
+  vector_.insert(10);
+  vector_.insert(100);
+
+  // Assert
+  ASSERT_EQ(vector_.size(), 3);
+
+  ASSERT_NE(vector_.find(1), vector_.end());
+  ASSERT_NE(vector_.find(10), vector_.end());
+  ASSERT_NE(vector_.find(100), vector_.end());
+
+  ASSERT_EQ(vector_.find(13), vector_.end());
+}
+
+TEST_F(LoaderUnorderedVectorTestFixture, NoReserveInsert) {
+  // Arrange
+
+  // Act
+  vector_.insert(1);
+  vector_.insert(10);
+  vector_.insert(100);
+
+  // Assert
+  ASSERT_EQ(vector_.size(), 3);
+
+  ASSERT_NE(vector_.find(1), vector_.end());
+  ASSERT_NE(vector_.find(10), vector_.end());
+  ASSERT_NE(vector_.find(100), vector_.end());
+
+  ASSERT_EQ(vector_.find(13), vector_.end());
+}
+
+TEST_F(LoaderUnorderedVectorTestFixture, ModifyInfoAndFind) {
+  // Arrange
+  auto [ls_id, info] = *vector_.insert(100);
+  info.chunk_id = 10;
+  info.buffer.push_back_u64(0xAABBCCDD);
+
+  // Act
+  const auto it = vector_.find(100);
+
+  // Assert
+  ASSERT_EQ((*it).first, 100);
+  ASSERT_EQ((*it).second.chunk_id, 10);
+  ASSERT_EQ((*it).second.buffer.reader().consume_u64(), 0xAABBCCDD);
+}
+
+TEST_F(LoaderUnorderedVectorTestFixture, ModifyInfoAndClear) {
+  // Arrange
+  vector_.insert(1);
+  vector_.insert(10);
+  vector_.insert(100);
+
+  // Act
+  vector_.clear();
+
+  // Assert
+  ASSERT_TRUE(vector_.empty());
+  ASSERT_EQ(vector_.size(), 0);
+  ASSERT_EQ(std::distance(vector_.begin(), vector_.end()), 0);
+}
+
+TEST_F(LoaderUnorderedVectorTestFixture, ModifyInfoAndClearAndInsert) {
+  // Arrange
+  auto [ls_id, info] = *vector_.insert(100);
+  info.chunk_id = 10;
+  info.buffer.push_back_u64(0xAABBCCDD);
+  vector_.clear();
+
+  // Act
+  const auto it = vector_.insert(100);
+
+  // Assert
+  ASSERT_EQ((*it).first, 100);
+  ASSERT_EQ((*it).second.chunk_id, 0);
+  ASSERT_EQ((*it).second.buffer.size_in_bits(), 0);
 }
 
 }  // namespace

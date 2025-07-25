@@ -42,10 +42,9 @@ import (
 	"github.com/prometheus/prometheus/util/annotations"
 )
 
-const (
-	defaultShutdownTimeout = 40 * time.Second
-	defaultNumberOfShards  = 2
-)
+const defaultShutdownTimeout = 40 * time.Second
+
+var DefaultNumberOfShards uint16 = 2
 
 type HeadConfig struct {
 	inputRelabelerConfigs []*config.InputRelabelerConfig
@@ -143,7 +142,7 @@ func NewReceiver(
 
 	numberOfShards := receiverCfg.NumberOfShards
 	if numberOfShards == 0 {
-		numberOfShards = defaultNumberOfShards
+		numberOfShards = DefaultNumberOfShards
 	}
 
 	destinationGroups, err := makeDestinationGroups(
@@ -166,8 +165,6 @@ func NewReceiver(
 		inputRelabelerConfigs: receiverCfg.Configs,
 		numberOfShards:        numberOfShards,
 	})
-
-	querierMetrics := querier.NewMetrics(registerer)
 
 	dataDir, err = filepath.Abs(dataDir)
 	if err != nil {
@@ -194,7 +191,7 @@ func NewReceiver(
 	queryableStorage := appender.NewQueryableStorageWithWriteNotifier(
 		block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize, rotationInfo.BlockDuration, registerer),
 		registerer,
-		querierMetrics,
+		querier.NewMetrics(registerer, querier.QueryableStorageSource),
 		triggerNotifier,
 		clock,
 		maxRetentionDuration,
@@ -212,7 +209,12 @@ func NewReceiver(
 	}
 
 	dstrb := distributor.NewDistributor(*destinationGroups)
-	app := appender.NewQueryableAppender(ctx, appenderHead, dstrb, querierMetrics)
+	app := appender.NewQueryableAppender(
+		ctx,
+		appenderHead,
+		dstrb,
+		querier.NewMetrics(registerer, querier.QueryableAppenderSource),
+	)
 	mwt := appender.NewMetricsWriteTrigger(ctx, appender.DefaultMetricWriteInterval, app, queryableStorage)
 
 	var unloadTimer appender.Timer = appender.NewNoOpTimer()
@@ -352,7 +354,7 @@ func (rr *Receiver) ApplyConfig(cfg *prom_config.Config) error {
 
 	numberOfShards := rCfg.NumberOfShards
 	if numberOfShards == 0 {
-		numberOfShards = defaultNumberOfShards
+		numberOfShards = DefaultNumberOfShards
 	}
 
 	rr.headConfigStorage.Store(&HeadConfig{

@@ -65,7 +65,6 @@ import (
 	"github.com/prometheus/prometheus/pp-pkg/remote"                 // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/scrape"                 // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage" // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/cppbridge"               // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/relabeler/appender"      // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/relabeler/head"          // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"  // PP_CHANGES.md: rebuild on cpp
@@ -900,7 +899,7 @@ func main() {
 			Queryable:              receiver, // PP_CHANGES.md: rebuild on cpp
 			QueryFunc:              rules.EngineQueryFunc(queryEngine, fanoutStorage),
 			NotifyFunc:             rules.SendAlerts(notifierManager, cfg.web.ExternalURL.String()),
-			Context:                cppbridge.SetCaller(ctxRule, cppbridge.LSSQuerySourceRule), // PP_CHANGES.md: rebuild on cpp
+			Context:                ctxRule,
 			ExternalURL:            cfg.web.ExternalURL,
 			Registerer:             prometheus.DefaultRegisterer,
 			Logger:                 log.With(logger, "component", "rule manager"),
@@ -1957,7 +1956,7 @@ func readPromPPFeatures(logger log.Logger) {
 			if fvalue := strings.TrimSpace(fvalue); fvalue != "" {
 				v, err = strconv.Atoi(fvalue)
 				if err != nil {
-					level.Error(logger).Log("msg", "Error parsing head-read-concurrency value", "err", err)
+					level.Error(logger).Log("msg", "[FEATURE] Error parsing head_read_concurrency value", "err", err)
 					continue
 				}
 			}
@@ -1969,6 +1968,46 @@ func readPromPPFeatures(logger log.Logger) {
 				"extra",
 				v,
 			)
+
+		case "head_default_number_of_shards":
+			fvalue := strings.TrimSpace(fvalue)
+			if fvalue == "" {
+				level.Error(logger).Log(
+					"msg", "[FEATURE] The default number of shards is empty, no changes.",
+					"default_number_of_shards", receiver.DefaultNumberOfShards,
+				)
+
+				continue
+			}
+
+			v, err := strconv.Atoi(fvalue)
+			switch {
+			case err != nil:
+				level.Error(logger).Log(
+					"msg", "[FEATURE] Error parsing head_numbehead_default_number_of_shardsr_of_shards value",
+					"default_number_of_shards", receiver.DefaultNumberOfShards,
+					"err", err,
+				)
+
+			case v > math.MaxUint16:
+				level.Error(logger).Log(
+					"msg", "[FEATURE] The default number of shards is overflow(max 65535), no changes.",
+					"default_number_of_shards", receiver.DefaultNumberOfShards,
+				)
+
+			case v < 1:
+				level.Error(logger).Log(
+					"msg", "[FEATURE] The default number of shards is incorrect(min 1), no changes.",
+					"default_number_of_shards", receiver.DefaultNumberOfShards,
+				)
+
+			default:
+				receiver.DefaultNumberOfShards = uint16(v)
+				level.Info(logger).Log(
+					"msg", "[FEATURE] Changed default number of shards.",
+					"default_number_of_shards", receiver.DefaultNumberOfShards,
+				)
+			}
 
 		case "disable_commits_on_remote_write":
 			rwprocessor.AlwaysCommit = false

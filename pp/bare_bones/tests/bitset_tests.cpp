@@ -104,6 +104,34 @@ TEST_F(BitsetFixture, should_not_out_of_range_on_resize) {
   ASSERT_EQ(count, 2047U);
 }
 
+TEST_F(BitsetFixture, TestEmptyIsEmpty) {
+  // Arrange
+
+  // Act
+
+  // Assert
+  EXPECT_TRUE(bs_.empty());
+}
+
+TEST_F(BitsetFixture, TestNotFilledIsEmpty) {
+  // Arrange
+  bs_.resize(10);
+  // Act
+
+  // Assert
+  EXPECT_TRUE(bs_.empty());
+}
+
+TEST_F(BitsetFixture, TestNotEmpty) {
+  // Arrange
+  bs_.set(10);
+
+  // Act
+
+  // Assert
+  EXPECT_FALSE(bs_.empty());
+}
+
 TEST_F(BitsetFixture, ResetInFirstUint64) {
   // Arrange
 
@@ -262,28 +290,6 @@ TEST_F(BitsetFixture, PopcountAfterResizeInNextUint64) {
 class BitsetCreateIteratorFixture : public testing::Test {
  protected:
   std::vector<uint8_t> bytes_data_;
-
-  void set_bits(std::initializer_list<uint32_t> values) {
-    uint32_t max_bit = 0;
-    for (auto v : values) {
-      if (v > max_bit)
-        max_bit = v;
-    }
-
-    size_t bitmap_size = BareBones::Bit::to_ceil_units<uint64_t>(max_bit) * sizeof(uint64_t);
-    std::cout << bitmap_size << '\n';
-    bytes_data_.resize(4 + bitmap_size, 0);
-
-    *reinterpret_cast<uint32_t*>(bytes_data_.data()) = max_bit;
-
-    for (uint32_t bit : values) {
-      size_t byte_index = 4 + (bit / 8);
-      uint8_t bit_offset = bit % 8;
-      bytes_data_[byte_index] |= (1 << bit_offset);
-    }
-
-    std::cout << (*reinterpret_cast<uint32_t*>(bytes_data_.data())) << '\n';
-  }
 };
 
 TEST_F(BitsetCreateIteratorFixture, CreateReadIteratorLess4Bytes) {
@@ -312,21 +318,34 @@ TEST_F(BitsetCreateIteratorFixture, CreateReadIteratorWrongSize) {
   EXPECT_EQ(buffer.size(), 1);
 }
 
-TEST_F(BitsetCreateIteratorFixture, CreateReadIteratorValid) {
+class BitsetCreateIteratorValidFixture : public testing::Test {
+ protected:
+  BareBones::Bitset bs_;
+  BareBones::ShrinkedToFitOStringStream stream_;
+};
+
+TEST_F(BitsetCreateIteratorValidFixture, TestWriteSize) {
   // Arrange
-  set_bits({1, 10, 100, 1000});
-  std::span<const uint8_t> buffer(bytes_data_);
+  bs_.set({1, 10, 100, 1000});
 
   // Act
-  auto it = BareBones::Bitset::create_read_iterator(buffer);
+  bs_.write_to(stream_);
 
   // Assert
-  EXPECT_EQ(*it++, 1);
-  EXPECT_EQ(*it++, 10);
-  EXPECT_EQ(*it++, 100);
-  EXPECT_EQ(*it++, 1000);
-  EXPECT_EQ(it, BareBones::Bitset::IteratorSentinel{});
+  EXPECT_EQ(stream_.view().size(), bs_.get_write_size());
+}
 
+TEST_F(BitsetCreateIteratorValidFixture, CreateReadIteratorValid) {
+  // Arrange
+  bs_.set({1, 10, 100, 1000});
+  bs_.write_to(stream_);
+  std::span buffer = stream_.span<const uint8_t>();
+
+  // Act
+  const auto it = BareBones::Bitset::create_read_iterator(buffer);
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(it, BareBones::Bitset::IteratorSentinel{}, bs_.begin(), bs_.end()));
   EXPECT_EQ(buffer.size(), 0);
 }
 

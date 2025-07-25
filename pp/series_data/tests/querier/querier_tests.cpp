@@ -2,7 +2,6 @@
 
 #include "series_data/chunk_finalizer.h"
 #include "series_data/encoder.h"
-#include "series_data/outdated_sample_encoder.h"
 #include "series_data/querier/querier.h"
 
 namespace {
@@ -10,7 +9,6 @@ namespace {
 using series_data::ChunkFinalizer;
 using series_data::DataStorage;
 using series_data::Encoder;
-using series_data::OutdatedSampleEncoder;
 using series_data::chunk::DataChunk;
 using series_data::querier::QueriedChunk;
 using series_data::querier::QueriedChunkList;
@@ -124,5 +122,38 @@ INSTANTIATE_TEST_SUITE_P(MultipleChunksMultipleLsIds,
 INSTANTIATE_TEST_SUITE_P(NonExistingChunk,
                          QuerierFixture,
                          testing::Values(QuerierCase{.query = {.time_interval{.min = 0, .max = 7}, .label_set_ids = {2}}, .expected = {}}));
+
+class QuerierLoaderUnloaderTestFixture : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    for (uint32_t ls_id = 0; ls_id < 5; ++ls_id) {
+      encoder_.encode(ls_id, 1, get_value(ls_id, 1));
+      encoder_.encode(ls_id, 2, get_value(ls_id, 2));
+      encoder_.encode(ls_id, 3, get_value(ls_id, 3));
+      encoder_.encode(ls_id, 4, get_value(ls_id, 4));
+      encoder_.encode(ls_id, 5, get_value(ls_id, 5));
+    }
+  }
+
+  static double get_value(uint32_t ls_id, int64_t timestamp) noexcept { return 10 * ls_id + timestamp; }
+
+  DataStorage storage_;
+  Encoder<> encoder_{storage_};
+  Querier querier_{storage_};
+};
+
+TEST_F(QuerierLoaderUnloaderTestFixture, QuerierNeedLoading) {
+  // Arrange
+  storage_.queried_series_bitmap.set({0, 1, 2});
+  storage_.unloaded_series_bitmap.set({3, 4});
+
+  // Act
+  std::ignore = querier_.query(Query{.time_interval = {.min = 1, .max = 3}, .label_set_ids = {2, 3, 4}});
+
+  // Assert
+  EXPECT_TRUE(querier_.need_loading());
+
+  EXPECT_TRUE(std::ranges::equal(querier_.get_series_to_load(), std::initializer_list{3, 4}));
+}
 
 }  // namespace
