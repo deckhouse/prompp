@@ -13,6 +13,7 @@ using series_data::Decoder;
 using series_data::chunk::DataChunk;
 using series_data::encoder::SampleList;
 using series_data::unloading::Loader;
+using series_data::unloading::SeriesToLoadInfo;
 using series_data::unloading::Unloader;
 using std::operator""s;
 
@@ -510,6 +511,129 @@ TEST_F(LoaderUnloaderBigTestFixture, LoadAll) {
                 {5, 10.0},
             }),
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[3]));
+}
+
+class LoaderUnorderedVectorTestFixture : public ::testing::Test {
+ protected:
+  Loader::UnorderedVector vector_;
+};
+
+TEST_F(LoaderUnorderedVectorTestFixture, Empty) {
+  // Arrange
+
+  // Act
+
+  // Assert
+  ASSERT_TRUE(vector_.empty());
+  ASSERT_EQ(vector_.size(), 0);
+  ASSERT_EQ(std::distance(vector_.begin(), vector_.end()), 0);
+}
+
+TEST_F(LoaderUnorderedVectorTestFixture, NotEmpty) {
+  // Arrange
+
+  // Act
+  vector_.insert(1);
+
+  // Assert
+  ASSERT_FALSE(vector_.empty());
+  ASSERT_EQ(vector_.size(), 1);
+  ASSERT_EQ(std::distance(vector_.begin(), vector_.end()), 1);
+}
+
+TEST_F(LoaderUnorderedVectorTestFixture, ReserveEmpty) {
+  // Arrange
+  vector_.reserve(100);
+
+  // Act
+
+  // Assert
+  ASSERT_TRUE(vector_.empty());
+  ASSERT_EQ(vector_.size(), 0);
+  ASSERT_EQ(std::distance(vector_.begin(), vector_.end()), 0);
+}
+
+TEST_F(LoaderUnorderedVectorTestFixture, ReserveInsert) {
+  // Arrange
+  vector_.reserve(10);
+
+  // Act
+  vector_.insert(1);
+  vector_.insert(10);
+  vector_.insert(100);
+
+  // Assert
+  ASSERT_EQ(vector_.size(), 3);
+
+  ASSERT_NE(vector_.find(1), vector_.end());
+  ASSERT_NE(vector_.find(10), vector_.end());
+  ASSERT_NE(vector_.find(100), vector_.end());
+
+  ASSERT_EQ(vector_.find(13), vector_.end());
+}
+
+TEST_F(LoaderUnorderedVectorTestFixture, NoReserveInsert) {
+  // Arrange
+
+  // Act
+  vector_.insert(1);
+  vector_.insert(10);
+  vector_.insert(100);
+
+  // Assert
+  ASSERT_EQ(vector_.size(), 3);
+
+  ASSERT_NE(vector_.find(1), vector_.end());
+  ASSERT_NE(vector_.find(10), vector_.end());
+  ASSERT_NE(vector_.find(100), vector_.end());
+
+  ASSERT_EQ(vector_.find(13), vector_.end());
+}
+
+TEST_F(LoaderUnorderedVectorTestFixture, ModifyInfoAndFind) {
+  // Arrange
+  auto [ls_id, info] = *vector_.insert(100);
+  info.chunk_id = 10;
+  info.buffer.push_back_u64(0xAABBCCDD);
+
+  // Act
+  const auto it = vector_.find(100);
+
+  // Assert
+  ASSERT_EQ(it->first, 100);
+  ASSERT_EQ(it->second.chunk_id, 10);
+  ASSERT_EQ(it->second.buffer.reader().consume_u64(), 0xAABBCCDD);
+}
+
+TEST_F(LoaderUnorderedVectorTestFixture, ModifyInfoAndClear) {
+  // Arrange
+  vector_.insert(1);
+  vector_.insert(10);
+  vector_.insert(100);
+
+  // Act
+  vector_.clear();
+
+  // Assert
+  ASSERT_TRUE(vector_.empty());
+  ASSERT_EQ(vector_.size(), 0);
+  ASSERT_EQ(std::distance(vector_.begin(), vector_.end()), 0);
+}
+
+TEST_F(LoaderUnorderedVectorTestFixture, ModifyInfoAndClearAndInsert) {
+  // Arrange
+  auto [ls_id, info] = *vector_.insert(100);
+  info.chunk_id = 10;
+  info.buffer.push_back_u64(0xAABBCCDD);
+  vector_.clear();
+
+  // Act
+  const auto it = vector_.insert(100);
+
+  // Assert
+  ASSERT_EQ(it->first, 100);
+  ASSERT_EQ(it->second.chunk_id, 0);
+  ASSERT_EQ(it->second.buffer.size_in_bits(), 0);
 }
 
 }  // namespace
