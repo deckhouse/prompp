@@ -144,6 +144,33 @@ func (lss *LabelSetStorage) CopyAddedSeries(destination *LabelSetStorage) {
 	primitivesLSSCopyAddedSeries(lss.pointer, destination.pointer)
 }
 
+type SeriesIdBatchIterator struct {
+	iterator uintptr
+	lss      *LabelSetStorage
+}
+
+// NextBatch - advance iterator to next batch and return true if iterator has more series
+func (it *SeriesIdBatchIterator) NextBatch() bool {
+	result := primitivesLSSSeriesIdBatchIteratorNextBatch(it.iterator, it.lss.pointer)
+	runtime.KeepAlive(it)
+	runtime.KeepAlive(it.lss)
+	return result
+}
+
+// CreateSeriesIdBatchIterator - create batch iterator for sorted series id
+func (lss *LabelSetStorage) CreateSeriesIdBatchIterator(batchSize uint32) *SeriesIdBatchIterator {
+	iterator := &SeriesIdBatchIterator{
+		iterator: primitivesLSSSeriesIdBatchIteratorCtor(lss.pointer, batchSize),
+		lss:      lss,
+	}
+
+	runtime.SetFinalizer(iterator, func(iterator *SeriesIdBatchIterator) {
+		primitivesLSSSeriesIdBatchIteratorDtor(iterator.iterator)
+	})
+
+	return iterator
+}
+
 // Pointer return c-pointer.
 func (lss *LabelSetStorage) Pointer() uintptr {
 	return lss.pointer

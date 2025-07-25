@@ -1,5 +1,6 @@
 #include "primitives_lss.h"
 
+#include "bare_bones/iterator.h"
 #include "bare_bones/xxhash.h"
 #include "hashdex.hpp"
 #include "head/lss.h"
@@ -230,4 +231,47 @@ extern "C" void prompp_primitives_lss_copy_added_series(uint64_t source_lss, uin
   series_index::QueryableEncodingBimapCopier copier(std::get<QueryableEncodingBimap>(*std::bit_cast<entrypoint::head::LssVariant*>(source_lss)),
                                                     std::get<QueryableEncodingBimap>(*std::bit_cast<entrypoint::head::LssVariant*>(destination_lss)));
   copier.copy_added_series_and_build_indexes();
+}
+
+using SeriesIdBatchIterator = BareBones::iterator::BatchIterator<QueryableEncodingBimap::LsIdSetIterator, QueryableEncodingBimap::LsIdSetIterator>;
+using SeriesIdBatchIteratorPtr = std::unique_ptr<SeriesIdBatchIterator>;
+static_assert(sizeof(SeriesIdBatchIteratorPtr) == sizeof(void*));
+
+extern "C" void prompp_primitives_lss_series_id_batch_iterator_ctor(void* args, void* res) {
+  struct Arguments {
+    LssVariantPtr lss;
+    uint32_t batch_size;
+  };
+  struct Result {
+    SeriesIdBatchIteratorPtr iterator;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  new (res) Result{
+      .iterator = std::make_unique<SeriesIdBatchIterator>(std::get<QueryableEncodingBimap>(*in->lss).ls_id_set().begin(), in->batch_size),
+  };
+}
+
+extern "C" void prompp_primitives_lss_series_id_batch_iterator_next_batch(void* args, void* res) {
+  struct Arguments {
+    SeriesIdBatchIteratorPtr iterator;
+    LssVariantPtr lss;
+  };
+  struct Result {
+    bool has_more_data;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  in->iterator->next_batch();
+  new (res) Result{
+      .has_more_data = *in->iterator != std::get<QueryableEncodingBimap>(*in->lss).ls_id_set().end(),
+  };
+}
+
+extern "C" void prompp_primitives_lss_series_id_batch_iterator_dtor(void* args) {
+  struct Arguments {
+    SeriesIdBatchIteratorPtr iterator;
+  };
+
+  static_cast<Arguments*>(args)->~Arguments();
 }

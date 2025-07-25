@@ -1318,6 +1318,56 @@ func primitivesLSSCopyAddedSeries(source, destination uintptr) {
 	C.prompp_primitives_lss_copy_added_series(C.uint64_t(source), C.uint64_t(destination))
 }
 
+func primitivesLSSSeriesIdBatchIteratorCtor(lss uintptr, batchSize uint32) uintptr {
+	args := struct {
+		lss       uintptr
+		batchSize uint32
+	}{lss, batchSize}
+	var res struct {
+		iterator uintptr
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_lss_series_id_batch_iterator_ctor,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.iterator
+}
+
+func primitivesLSSSeriesIdBatchIteratorNextBatch(iterator, lss uintptr) bool {
+	args := struct {
+		iterator uintptr
+		lss      uintptr
+	}{iterator, lss}
+	var res struct {
+		hasMoreData bool
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_lss_series_id_batch_iterator_next_batch,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.hasMoreData
+}
+
+func primitivesLSSSeriesIdBatchIteratorDtor(iterator uintptr) {
+	args := struct {
+		iterator uintptr
+	}{iterator}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_lss_series_id_batch_iterator_next_batch,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
 //
 // StatelessRelabeler
 //
