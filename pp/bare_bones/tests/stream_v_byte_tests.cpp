@@ -124,7 +124,7 @@ TEST_F(ReadonlyCompactSequence, Test) {
 
 class CompactSequenceCreateIteratorFixture : public testing::Test {
  protected:
-  CompactSequence<BareBones::StreamVByte::Codec0124, 4> sequence_;
+  CompactSequence<BareBones::StreamVByte::Codec0124, BareBones::MemoryWithItemCount, 4> sequence_;
 };
 
 TEST_F(CompactSequenceCreateIteratorFixture, CreateReadIteratorNotEnoughBytes) {
@@ -155,7 +155,7 @@ TEST_F(CompactSequenceCreateIteratorFixture, CreateReadIteratorNotEnoughSizeRead
 
 class CompactSequenceCreateIteratorParamFixture : public ::testing::TestWithParam<std::ranges::iota_view<uint32_t, uint32_t>> {
  protected:
-  CompactSequence<BareBones::StreamVByte::Codec0124, 4> sequence_;
+  CompactSequence<BareBones::StreamVByte::Codec0124, BareBones::MemoryWithItemCount, 4> sequence_;
   BareBones::ShrinkedToFitOStringStream stream_;
 };
 

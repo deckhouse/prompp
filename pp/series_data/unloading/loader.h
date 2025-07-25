@@ -63,10 +63,6 @@ class Loader {
       PROMPP_ALWAYS_INLINE Iterator(MapIterator map_it, Vector* parent) noexcept : map_it_(map_it), vector_ptr_(parent) {}
 
       PROMPP_ALWAYS_INLINE PairType operator*() const noexcept { return {map_it_->first, vector_ptr_->operator[](map_it_->second)}; }
-      PROMPP_ALWAYS_INLINE PairType* operator->() const noexcept {
-        last_value_.emplace(this->operator*());
-        return &(*last_value_);
-      }
 
       PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
         ++map_it_;
@@ -84,7 +80,6 @@ class Loader {
      private:
       MapIterator map_it_{};
       Vector* vector_ptr_{nullptr};
-      mutable std::optional<PairType> last_value_{};
     };
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() noexcept { return Iterator{ls_id_to_offset_.begin(), &series_to_load_infos_}; }
@@ -94,14 +89,14 @@ class Loader {
     [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return Iterator{ls_id_to_offset_.end(), &series_to_load_infos_}; }
 
     PROMPP_ALWAYS_INLINE auto find(uint32_t key) noexcept {
-      if (auto it = ls_id_to_offset_.find(key); it != ls_id_to_offset_.end()) [[likely]] {
+      if (const auto it = ls_id_to_offset_.find(key); it != ls_id_to_offset_.end()) [[likely]] {
         return Iterator{it, &series_to_load_infos_};
       }
       return Iterator{ls_id_to_offset_.end(), &series_to_load_infos_};
     }
 
     PROMPP_ALWAYS_INLINE auto find(uint32_t key) const noexcept {
-      if (auto it = ls_id_to_offset_.find(key); it != ls_id_to_offset_.end()) [[likely]] {
+      if (const auto it = ls_id_to_offset_.find(key); it != ls_id_to_offset_.end()) [[likely]] {
         return Iterator{it, &series_to_load_infos_};
       }
       return Iterator{ls_id_to_offset_.end(), &series_to_load_infos_};
@@ -109,7 +104,7 @@ class Loader {
 
     PROMPP_ALWAYS_INLINE auto insert(uint32_t key) noexcept {
       if (const auto it = find(key); it != end()) [[unlikely]] {
-        it->second.reset();
+        (*it).second.reset();
         return it;
       }
 
@@ -184,7 +179,7 @@ class Loader {
       const uint32_t ls_id = *bitset_it;
 
       if (auto infos_it = ls_id_to_infos_.find(ls_id); infos_it != ls_id_to_infos_.end()) {
-        auto& info = infos_it->second;
+        auto& info = (*infos_it).second;
 
         const uint32_t chunk_id_snapshot = *id_it;
         const uint32_t bitseq_size = *length_it;

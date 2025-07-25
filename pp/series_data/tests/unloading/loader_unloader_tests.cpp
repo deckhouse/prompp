@@ -600,9 +600,9 @@ TEST_F(LoaderUnorderedVectorTestFixture, ModifyInfoAndFind) {
   const auto it = vector_.find(100);
 
   // Assert
-  ASSERT_EQ(it->first, 100);
-  ASSERT_EQ(it->second.chunk_id, 10);
-  ASSERT_EQ(it->second.buffer.reader().consume_u64(), 0xAABBCCDD);
+  ASSERT_EQ((*it).first, 100);
+  ASSERT_EQ((*it).second.chunk_id, 10);
+  ASSERT_EQ((*it).second.buffer.reader().consume_u64(), 0xAABBCCDD);
 }
 
 TEST_F(LoaderUnorderedVectorTestFixture, ModifyInfoAndClear) {
@@ -631,9 +631,9 @@ TEST_F(LoaderUnorderedVectorTestFixture, ModifyInfoAndClearAndInsert) {
   const auto it = vector_.insert(100);
 
   // Assert
-  ASSERT_EQ(it->first, 100);
-  ASSERT_EQ(it->second.chunk_id, 0);
-  ASSERT_EQ(it->second.buffer.size_in_bits(), 0);
+  ASSERT_EQ((*it).first, 100);
+  ASSERT_EQ((*it).second.chunk_id, 0);
+  ASSERT_EQ((*it).second.buffer.size_in_bits(), 0);
 }
 
 }  // namespace
