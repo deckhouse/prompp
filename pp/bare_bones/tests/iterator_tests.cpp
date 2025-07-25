@@ -44,6 +44,17 @@ TEST_F(BatchIteratorFixture, TestBatchSize) {
   EXPECT_TRUE(std::ranges::equal(Container{1U, 2U, 3U}, std::ranges::subrange(it, container_.end())));
 }
 
+TEST_F(BatchIteratorFixture, TestBatchSizeMoreThenContainerSize) {
+  // Arrange
+  container_ = {1, 2, 3, 4};
+  const Iterator it(container_.begin(), 10);
+
+  // Act
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(Container{1U, 2U, 3U, 4U}, std::ranges::subrange(it, container_.end())));
+}
+
 TEST_F(BatchIteratorFixture, TestNextBatch) {
   // Arrange
   container_ = {1, 2, 3, 4};
