@@ -37,8 +37,9 @@ func (w *LSS) QueryLabelNames(matchers []model.LabelMatcher) *cppbridge.LSSQuery
 	return w.target.QueryLabelNames(matchers)
 }
 
-func (w *LSS) Query(matchers []model.LabelMatcher, querySource uint32) *cppbridge.LSSQueryResult {
-	return w.target.Query(matchers, querySource)
+// QuerySelector returns a created selector that matches the given label matchers.
+func (w *LSS) QuerySelector(matchers []model.LabelMatcher) (selector uintptr, status uint32) {
+	return w.target.QuerySelector(matchers)
 }
 
 func (w *LSS) GetLabelSets(labelSetIDs []uint32) *cppbridge.LabelSetStorageGetLabelSetsResult {

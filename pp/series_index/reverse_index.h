@@ -1,8 +1,5 @@
 #pragma once
 
-#include <array>
-#include <span>
-
 #include "bare_bones/encoding.h"
 #include "bare_bones/preprocess.h"
 #include "bare_bones/vector.h"
@@ -11,98 +8,105 @@ namespace series_index {
 
 static constexpr uint32_t kOptimalPreAllocationElementsCount = 8;
 
-using SeriesIdSequence = BareBones::EncodedSequence<
-    BareBones::Encoding::DeltaRLE<BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124, kOptimalPreAllocationElementsCount>>>;
+template <class T>
+using SharedMemory = BareBones::SharedMemory<T, BareBones::DefaultReallocator>;
 
-class CompactSeriesIdSequence {
+class DeltaRLE {
  public:
-  enum class Type : uint8_t { kArray = 0, kSequence };
+  using DataSequence = BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124, SharedMemory, kOptimalPreAllocationElementsCount>;
+  using BaseDeltaRLE = BareBones::Encoding::DeltaRLE<DataSequence>;
 
-  static constexpr uint32_t kMaxElementsInArray = sizeof(SeriesIdSequence) / sizeof(SeriesIdSequence::value_type);
-  using Array = std::array<SeriesIdSequence::value_type, kMaxElementsInArray>;
-  using value_type = SeriesIdSequence::value_type;
+  class Encoder : public BaseDeltaRLE::Encoder {
+   public:
+    using value_type = DataSequence::value_type;
 
-  PROMPP_ALWAYS_INLINE explicit CompactSeriesIdSequence(Type type = Type::kArray) : type_(type) {
-    if (type_ == Type::kSequence) {
-      new (&sequence_impl_buffer_) SeriesIdSequence();
-    }
-  }
-
-  PROMPP_ALWAYS_INLINE ~CompactSeriesIdSequence() {
-    if (type_ == Type::kSequence) {
-      sequence().~SeriesIdSequence();
-    }
-  }
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Type type() const noexcept { return type_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return elements_count_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_empty() const noexcept { return elements_count_ == 0; }
-
-  void push_back(uint32_t value) {
-    if (type_ == Type::kArray) {
-      if (elements_count_ < kMaxElementsInArray) {
-        sequence_impl_buffer_[elements_count_] = value;
-        ++elements_count_;
-        return;
-      }
-
-      switch_to_sequence();
+    template <std::output_iterator<value_type> IteratorType>
+    PROMPP_ALWAYS_INLINE void encode(value_type val, IteratorType& i) noexcept {
+      BaseDeltaRLE::Encoder::encode(val, i);
+      ++count_;
     }
 
-    const_cast<SeriesIdSequence&>(sequence()).push_back(value);
-    ++elements_count_;
-  }
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
-    if (type_ == Type::kArray) {
-      return 0;
+    PROMPP_ALWAYS_INLINE void clear() noexcept {
+      BaseDeltaRLE::Encoder::clear();
+      count_ = 0;
     }
 
-    return sequence().allocated_memory();
+    [[nodiscard]] PROMPP_ALWAYS_INLINE value_type count() const noexcept { return count_; }
+
+   private:
+    value_type count_{};
+  };
+
+  using Decoder = BaseDeltaRLE::Decoder;
+};
+
+class SeriesIdSequence : public BareBones::EncodedSequence<DeltaRLE> {
+ public:
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return encoder_.count(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t empty() const noexcept { return encoder_.count() == 0; }
+};
+
+class SeriesIdSequenceSnapshot {
+ public:
+  using value_type = DeltaRLE::DataSequence::value_type;
+
+  SeriesIdSequenceSnapshot() = default;
+  explicit SeriesIdSequenceSnapshot(const SeriesIdSequence& sequence) : encoder_(sequence.encoder()), memory_(sequence.data().buffer().ptr()) {}
+
+  SeriesIdSequenceSnapshot& operator=(const SeriesIdSequence& sequence) noexcept {
+    encoder_ = sequence.encoder();
+    memory_ = sequence.data().buffer().ptr();
+    return *this;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence& sequence() const noexcept {
-    assert(type_ == Type::kSequence);
-    return *reinterpret_cast<const SeriesIdSequence*>(sequence_impl_buffer_.data());
-  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return encoder_.count(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t empty() const noexcept { return encoder_.count() == 0; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const SeriesIdSequence::value_type> array() const noexcept {
-    assert(type_ == Type::kArray);
-    return {(sequence_impl_buffer_.data()), elements_count_};
-  }
+  class Iterator {
+   public:
+    using iterator_category = std::input_iterator_tag;
+    using value_type = SeriesIdSequenceSnapshot::value_type;
+    using difference_type = std::ptrdiff_t;
 
-  template <class Processor>
-  PROMPP_ALWAYS_INLINE auto process_series(Processor&& processor) const noexcept {
-    if (type_ == Type::kArray) {
-      return processor(array());
-    } else {
-      return processor(sequence());
+    Iterator(const SharedMemory<uint8_t>::SharedPtr& memory, const DeltaRLE::Encoder& encoder)
+        : iterator_(DeltaRLE::DataSequence::decode_iterator(memory.get(), memory.constructed_item_count()), DeltaRLE::DataSequence::end(), &encoder),
+          count_(encoder.count()) {}
+
+    PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
+      ++iterator_;
+      --count_;
+      return *this;
     }
-  }
+
+    PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
+      const auto it = *this;
+      ++*this;
+      return it;
+    }
+
+    PROMPP_ALWAYS_INLINE bool operator==(const SeriesIdSequence::IteratorSentinel&) const noexcept { return count_ == 0; }
+    PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return *iterator_; }
+
+   private:
+    SeriesIdSequence::Iterator iterator_;
+    uint32_t count_{};
+  };
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() const noexcept { return {memory_, encoder_}; }
+  static PROMPP_ALWAYS_INLINE SeriesIdSequence::IteratorSentinel end() noexcept { return {}; }
 
  private:
-  alignas(alignof(SeriesIdSequence)) Array sequence_impl_buffer_;
-  uint32_t elements_count_{};
-  Type type_;
-
-  PROMPP_ALWAYS_INLINE void switch_to_sequence() {
-    Array buffer_copy = sequence_impl_buffer_;
-
-    new (&sequence_impl_buffer_) SeriesIdSequence();
-    type_ = Type::kSequence;
-
-    std::ranges::copy(buffer_copy, std::back_inserter(const_cast<SeriesIdSequence&>(sequence())));
-  }
+  DeltaRLE::Encoder encoder_;
+  SharedMemory<uint8_t>::SharedPtr memory_;
 };
 
 }  // namespace series_index
 
-namespace BareBones {
+template <>
+struct BareBones::IsTriviallyReallocatable<series_index::SeriesIdSequence> : std::true_type {};  // namespace BareBones
 
 template <>
-struct IsTriviallyReallocatable<series_index::CompactSeriesIdSequence> : std::true_type {};
-
-}  // namespace BareBones
+struct BareBones::IsTriviallyReallocatable<series_index::SeriesIdSequenceSnapshot> : std::true_type {};  // namespace BareBones
 
 namespace series_index {
 
@@ -119,29 +123,25 @@ class LabelReverseIndex {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool exists(uint32_t label_value_id) const noexcept { return label_value_id < series_by_value_.size(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactSeriesIdSequence* get(uint32_t label_value_id) const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence* get(uint32_t label_value_id) const noexcept {
     return exists(label_value_id) ? &series_by_value_[label_value_id] : nullptr;
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactSeriesIdSequence* get_all() const noexcept { return &all_series_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence* get_all() const noexcept { return &all_series_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Vector<CompactSeriesIdSequence>& series_by_value() const noexcept { return series_by_value_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Vector<SeriesIdSequence>& series_by_value() const noexcept { return series_by_value_; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return series_by_value_.size(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return all_series_.allocated_memory() + series_by_value_.allocated_memory(); }
 
  private:
-  CompactSeriesIdSequence all_series_{CompactSeriesIdSequence::Type::kSequence};
-  BareBones::Vector<CompactSeriesIdSequence> series_by_value_;
+  SeriesIdSequence all_series_{};
+  BareBones::Vector<SeriesIdSequence> series_by_value_;
 };
 
 }  // namespace series_index
 
-namespace BareBones {
-
 template <>
-struct IsTriviallyReallocatable<series_index::LabelReverseIndex> : std::true_type {};
-
-}  // namespace BareBones
+struct BareBones::IsTriviallyReallocatable<series_index::LabelReverseIndex> : std::true_type {};  // namespace BareBones
 
 namespace series_index {
 
@@ -158,10 +158,10 @@ class SeriesReverseIndex {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool exists(uint32_t label_name_id) const noexcept { return label_name_id < labels_by_name_.size(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactSeriesIdSequence* get(uint32_t label_name_id) const {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence* get(uint32_t label_name_id) const {
     return exists(label_name_id) ? labels_by_name_[label_name_id].get_all() : nullptr;
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactSeriesIdSequence* get(uint32_t label_name_id, uint32_t label_value_id) const {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence* get(uint32_t label_name_id, uint32_t label_value_id) const {
     return exists(label_name_id) ? labels_by_name_[label_name_id].get(label_value_id) : nullptr;
   }
 

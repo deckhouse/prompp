@@ -199,11 +199,11 @@ extern "C" void prompp_prometheus_per_shard_relabeler_input_relabeling(void* arg
           auto& input_lss = std::get<entrypoint::head::EncodingBimap>(*in->input_lss);
           auto& target_lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->target_lss);
 
-          entrypoint::head::lss_memory::has_reallocations = false;
+          const entrypoint::head::ReallocationsDetector reallocation_detector(target_lss);
           in->per_shard_relabeler->input_relabeling(input_lss, target_lss, *in->cache, hashdex, in->options, *out, in->shards_inner_series,
                                                     in->shards_relabeled_series);
           target_lss.build_deferred_indexes();
-          out->target_lss_has_reallocations = entrypoint::head::lss_memory::has_reallocations;
+          out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
         },
         *in->hashdex);
   } catch (...) {
@@ -269,11 +269,11 @@ extern "C" void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stal
           auto& input_lss = std::get<entrypoint::head::EncodingBimap>(*in->input_lss);
           auto& target_lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->target_lss);
 
-          entrypoint::head::lss_memory::has_reallocations = false;
+          const entrypoint::head::ReallocationsDetector reallocation_detector(target_lss);
           in->per_shard_relabeler->input_relabeling_with_stalenans(input_lss, target_lss, *in->cache, hashdex, in->options, *out, in->shards_inner_series,
                                                                    in->shards_relabeled_series, *in->state, in->def_timestamp);
           target_lss.build_deferred_indexes();
-          out->target_lss_has_reallocations = entrypoint::head::lss_memory::has_reallocations;
+          out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
         },
         *in->hashdex);
   } catch (...) {
@@ -399,7 +399,7 @@ extern "C" void prompp_prometheus_per_shard_relabeler_append_relabeler_series(vo
 
   try {
     auto& lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->lss);
-    entrypoint::head::lss_memory::has_reallocations = false;
+    const entrypoint::head::ReallocationsDetector reallocation_detector(lss);
 
     for (size_t id = 0; id != in->shards_relabeled_series.size(); ++id) {
       if (in->shards_relabeled_series[id] == nullptr || in->shards_relabeled_series[id]->size() == 0) {
@@ -411,7 +411,7 @@ extern "C" void prompp_prometheus_per_shard_relabeler_append_relabeler_series(vo
     }
 
     lss.build_deferred_indexes();
-    out->target_lss_has_reallocations = entrypoint::head::lss_memory::has_reallocations;
+    out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
     entrypoint::handle_current_exception(err_stream);
