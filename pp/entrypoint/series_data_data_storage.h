@@ -112,6 +112,7 @@ void prompp_series_data_data_storage_dtor(void* args);
  *        min int64
  *        max int64
  *     }
+ *     lsIdBatchSize uint32   // size of ls batch for recoding
  * }
  * @param res {
  *     chunk_recoder uintptr // pointer to chunk recoder
@@ -153,6 +154,15 @@ void prompp_series_data_serialized_chunk_recoder_ctor(void* args, void* res);
  * }
  */
 void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, void* res);
+
+/**
+ * @brief Advance ChunkRecoder::ls_id_iterator to next batch
+ *
+ * @param args {
+ *     chunk_recoder uintptr // pointer to chunk recoder
+ * }
+ */
+void prompp_series_data_chunk_recoder_next_batch(void* args);
 
 /**
  * @brief Destruct ChunkRecoder object

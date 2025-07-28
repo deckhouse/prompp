@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bare_bones/gorilla.h"
+#include "bare_bones/iterator.h"
 #include "primitives/primitives.h"
 #include "prometheus/tsdb/chunkenc/bstream.h"
 #include "prometheus/tsdb/chunkenc/xor.h"
@@ -17,6 +18,8 @@ concept ChunkInfoInterface = requires(ChunkInfo& info) {
   { info.samples_count } -> std::same_as<uint8_t&>;
 };
 
+constexpr auto kUnlimitedLsIdBatchSize = std::numeric_limits<uint8_t>::max();
+
 template <class LsIdSetIterator, class LsIdSetIteratorSentinel>
 class ChunkRecoderIterator {
  public:
@@ -31,14 +34,23 @@ class ChunkRecoderIterator {
 
   ChunkRecoderIterator(LsIdSetIterator&& ls_id_iterator_,
                        LsIdSetIteratorSentinel&& ls_id_end_iterator,
+                       uint32_t ls_id_batch_size,
                        const series_data::DataStorage* data_storage,
                        const PromPP::Primitives::TimeInterval time_interval)
       : time_interval_(time_interval),
-        ls_id_iterator_(std::move(ls_id_iterator_)),
-        ls_id_end_iterator_(std::move(ls_id_end_iterator)),
+        ls_id_iterator_(std::forward<LsIdSetIterator>(ls_id_iterator_), ls_id_batch_size),
+        ls_id_end_iterator_(std::forward<LsIdSetIteratorSentinel>(ls_id_end_iterator)),
         chunk_iterator_(data_storage,
                         ls_id_iterator_ != ls_id_end_iterator_ ? static_cast<LabelSetID>(*ls_id_iterator_) : PromPP::Primitives::kInvalidLabelSetID) {
     advance_to_non_empty_chunk();
+  }
+
+  void next_batch() noexcept {
+    ls_id_iterator_.next_batch();
+
+    if (*this != IteratorSentinel{} && chunk_iterator_ == IteratorSentinel{}) {
+      chunk_iterator_ = series_data::DataStorage::SeriesChunkIterator{chunk_iterator_->storage(), static_cast<LabelSetID>(*ls_id_iterator_)};
+    }
   }
 
   const value_type& operator*() const noexcept { return *chunk_iterator_; }
@@ -60,7 +72,7 @@ class ChunkRecoderIterator {
 
  private:
   const PromPP::Primitives::TimeInterval time_interval_;
-  LsIdSetIterator ls_id_iterator_;
+  BareBones::iterator::BatchIterator<LsIdSetIterator, LsIdSetIteratorSentinel> ls_id_iterator_;
   [[no_unique_address]] LsIdSetIteratorSentinel ls_id_end_iterator_;
   series_data::DataStorage::SeriesChunkIterator chunk_iterator_;
 
@@ -99,6 +111,8 @@ class ChunkRecoder {
  public:
   explicit ChunkRecoder(ChunkIterator&& iterator, const PromPP::Primitives::TimeInterval& time_interval)
       : iterator_(std::move(iterator)), time_interval_{time_interval} {}
+
+  PROMPP_ALWAYS_INLINE ChunkIterator& chunk_iterator() noexcept { return iterator_; }
 
   void recode_next_chunk(ChunkInfoInterface auto& info) {
     reset_info(info);

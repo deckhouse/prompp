@@ -194,41 +194,6 @@ void prompp_create_readonly_lss(void* args, void* res);
  */
 void prompp_primitives_lss_copy_added_series(uint64_t source_lss, uint64_t destination_lss);
 
-/**
- * @brief Construct a new SeriesIdBatchIterator around ls_id_set in lss
- *
- * @param args {
- *     lss uintptr      // pointer to constructed label sets
- *     batchSize uint32 // size of batch
- * }
- * @param res {
- *     iterator uintptr // pointer to constructed iterator
- * }
- */
-void prompp_primitives_lss_series_id_batch_iterator_ctor(void* args, void* res);
-
-/**
- * @brief Advance SeriesIdBatchIterator to next batch
- *
- * @param args {
- *     iterator uintptr // pointer to constructed iterator
- *     lss      uintptr // pointer to constructed label sets
- * }
- * @param res {
- *     hasMoreData bool // true if iterator has more series
- * }
- */
-void prompp_primitives_lss_series_id_batch_iterator_next_batch(void* args, void* res);
-
-/**
- * @brief SeriesIdBatchIterator destructor.
- *
- * @param args {
- *     iterator uintptr // pointer to constructed iterator
- * }
- */
-void prompp_primitives_lss_series_id_batch_iterator_dtor(void* args);
-
 #ifdef __cplusplus
 }  // extern "C"
 #endif

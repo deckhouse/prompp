@@ -22,7 +22,7 @@ using series_data::DataStorage;
 
 using entrypoint::head::DataStoragePtr;
 using entrypoint::head::QueryableEncodingBimap;
-using ChunkRecoderIterator = head::ChunkRecoderIterator<QueryableEncodingBimap::LsIdSet::const_iterator, QueryableEncodingBimap::LsIdSet::const_iterator>;
+using ChunkRecoderIterator = head::ChunkRecoderIterator<QueryableEncodingBimap::LsIdSetIterator, QueryableEncodingBimap::LsIdSetIterator>;
 using ChunkRecoder = head::ChunkRecoder<ChunkRecoderIterator>;
 
 using SerializedChunkRecoder = head::ChunkRecoder<series_data::chunk::SerializedChunkIterator>;
@@ -169,6 +169,7 @@ extern "C" void prompp_series_data_data_storage_dtor(void* args) {
 extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
   struct Arguments {
     entrypoint::head::LssVariantPtr lss;
+    uint32_t ls_id_batch_size;
     DataStoragePtr data_storage;
     PromPP::Primitives::TimeInterval time_interval;
   };
@@ -181,8 +182,8 @@ extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
 
   new (res) Result{
       .chunk_recoder = std::make_unique<ChunkRecoderVariant>(
-          std::in_place_type<ChunkRecoder>, ChunkRecoderIterator{ls_id_set.begin(), ls_id_set.end(), in->data_storage.get(), in->time_interval},
-          in->time_interval),
+          std::in_place_type<ChunkRecoder>,
+          ChunkRecoderIterator{ls_id_set.begin(), ls_id_set.end(), in->ls_id_batch_size, in->data_storage.get(), in->time_interval}, in->time_interval),
   };
 }
 
@@ -223,6 +224,15 @@ extern "C" void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, v
         out->buffer.reset_to(chunk_recoder.bytes());
       },
       *in->chunk_recoder);
+}
+
+extern "C" void prompp_series_data_chunk_recoder_next_batch(void* args) {
+  struct Arguments {
+    ChunkRecoderVariantPtr chunk_recoder;
+  };
+  const auto in = static_cast<const Arguments*>(args);
+
+  std::get<ChunkRecoder>(*in->chunk_recoder).chunk_iterator().next_batch();
 }
 
 extern "C" void prompp_series_data_chunk_recoder_dtor(void* args) {

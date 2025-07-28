@@ -133,6 +133,8 @@ type RecodedChunk struct {
 
 const (
 	InvalidSeriesId = math.MaxUint32
+
+	UnlimitedBatchSize = math.MaxUint32
 )
 
 // ChunkRecoder is Go wrapper around C++ ChunkRecoder.
@@ -145,8 +147,8 @@ type ChunkRecoder struct {
 	serializedChunks *CBytes
 }
 
-func NewChunkRecoder(lss *LabelSetStorage, dataStorage *HeadDataStorage, timeInterval TimeInterval) *ChunkRecoder {
-	return initializeChunkRecoder(lss, dataStorage, nil, seriesDataChunkRecoderCtor(lss.Pointer(), dataStorage.dataStorage, timeInterval))
+func NewChunkRecoder(lss *LabelSetStorage, lsIdBatchSize uint32, dataStorage *HeadDataStorage, timeInterval TimeInterval) *ChunkRecoder {
+	return initializeChunkRecoder(lss, dataStorage, nil, seriesDataChunkRecoderCtor(lss.Pointer(), lsIdBatchSize, dataStorage.dataStorage, timeInterval))
 }
 
 func NewSerializedChunkRecoder(serializedChunks *CBytes, timeInterval TimeInterval) *ChunkRecoder {
@@ -176,6 +178,11 @@ func initializeChunkRecoder(
 func (recoder *ChunkRecoder) RecodeNextChunk() RecodedChunk {
 	seriesDataChunkRecoderRecodeNextChunk(recoder.recoder, &recoder.recodedChunk)
 	return recoder.recodedChunk
+}
+
+func (recoder *ChunkRecoder) NextBatch() {
+	seriesDataChunkRecoderNextBatch(recoder.recoder)
+	runtime.KeepAlive(recoder)
 }
 
 type HeadDataStorageQuery struct {
@@ -270,6 +277,7 @@ func (ds *HeadDataStorage) QueryFinal(queriers []uintptr) {
 // UnloadedDataLoader is Go wrapper around series_data::Loader.
 type UnloadedDataLoader struct {
 	loader uintptr
+	ds     *HeadDataStorage
 }
 
 func (loader *UnloadedDataLoader) Load(snapshot []byte, isLast bool) {
@@ -280,6 +288,7 @@ func (loader *UnloadedDataLoader) Load(snapshot []byte, isLast bool) {
 func (ds *HeadDataStorage) CreateLoader(queriers []uintptr) *UnloadedDataLoader {
 	result := &UnloadedDataLoader{
 		loader: seriesDataUnloadedDataLoaderCtor(ds.dataStorage, queriers),
+		ds:     ds,
 	}
 	runtime.KeepAlive(queriers)
 

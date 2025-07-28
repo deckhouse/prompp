@@ -1379,56 +1379,6 @@ func primitivesLSSCopyAddedSeries(source, destination uintptr) {
 	C.prompp_primitives_lss_copy_added_series(C.uint64_t(source), C.uint64_t(destination))
 }
 
-func primitivesLSSSeriesIdBatchIteratorCtor(lss uintptr, batchSize uint32) uintptr {
-	args := struct {
-		lss       uintptr
-		batchSize uint32
-	}{lss, batchSize}
-	var res struct {
-		iterator uintptr
-	}
-
-	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_primitives_lss_series_id_batch_iterator_ctor,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.iterator
-}
-
-func primitivesLSSSeriesIdBatchIteratorNextBatch(iterator, lss uintptr) bool {
-	args := struct {
-		iterator uintptr
-		lss      uintptr
-	}{iterator, lss}
-	var res struct {
-		hasMoreData bool
-	}
-
-	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_primitives_lss_series_id_batch_iterator_next_batch,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.hasMoreData
-}
-
-func primitivesLSSSeriesIdBatchIteratorDtor(iterator uintptr) {
-	args := struct {
-		iterator uintptr
-	}{iterator}
-
-	testGC()
-	fastcgo.UnsafeCall1(
-		C.prompp_primitives_lss_series_id_batch_iterator_next_batch,
-		uintptr(unsafe.Pointer(&args)),
-	)
-}
-
 //
 // StatelessRelabeler
 //
@@ -2270,12 +2220,13 @@ func seriesDataDeserializerDtor(deserializer uintptr) {
 	)
 }
 
-func seriesDataChunkRecoderCtor(lss, dataStorage uintptr, timeInterval TimeInterval) uintptr {
+func seriesDataChunkRecoderCtor(lss uintptr, lsIdBatchSize uint32, dataStorage uintptr, timeInterval TimeInterval) uintptr {
 	args := struct {
-		lss         uintptr
-		dataStorage uintptr
+		lss           uintptr
+		lsIdBatchSize uint32
+		dataStorage   uintptr
 		TimeInterval
-	}{lss, dataStorage, timeInterval}
+	}{lss, lsIdBatchSize, dataStorage, timeInterval}
 	var res struct {
 		chunkRecoder uintptr
 	}
@@ -2322,6 +2273,18 @@ func seriesDataChunkRecoderRecodeNextChunk(chunkRecoder uintptr, recodedChunk *R
 	)
 	chunkRecoderRecodeNextChunkSum.Add(float64(time.Now().UnixNano() - start))
 	chunkRecoderRecodeNextChunkCount.Inc()
+}
+
+func seriesDataChunkRecoderNextBatch(chunkRecoder uintptr) {
+	args := struct {
+		chunkRecoder uintptr
+	}{chunkRecoder}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_chunk_recoder_next_batch,
+		uintptr(unsafe.Pointer(&args)),
+	)
 }
 
 func seriesDataChunkRecoderDtor(chunkRecoder uintptr) {

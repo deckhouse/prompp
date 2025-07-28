@@ -673,41 +673,6 @@ void prompp_create_readonly_lss(void* args, void* res);
  */
 void prompp_primitives_lss_copy_added_series(uint64_t source_lss, uint64_t destination_lss);
 
-/**
- * @brief Construct a new SeriesIdBatchIterator around ls_id_set in lss
- *
- * @param args {
- *     lss uintptr      // pointer to constructed label sets
- *     batchSize uint32 // size of batch
- * }
- * @param res {
- *     iterator uintptr // pointer to constructed iterator
- * }
- */
-void prompp_primitives_lss_series_id_batch_iterator_ctor(void* args, void* res);
-
-/**
- * @brief Advance SeriesIdBatchIterator to next batch
- *
- * @param args {
- *     iterator uintptr // pointer to constructed iterator
- *     lss      uintptr // pointer to constructed label sets
- * }
- * @param res {
- *     hasMoreData bool // true if iterator has more series
- * }
- */
-void prompp_primitives_lss_series_id_batch_iterator_next_batch(void* args, void* res);
-
-/**
- * @brief SeriesIdBatchIterator destructor.
- *
- * @param args {
- *     iterator uintptr // pointer to constructed iterator
- * }
- */
-void prompp_primitives_lss_series_id_batch_iterator_dtor(void* args);
-
 #ifdef __cplusplus
 }  // extern "C"
 #endif
@@ -1237,6 +1202,7 @@ void prompp_series_data_data_storage_dtor(void* args);
  *        min int64
  *        max int64
  *     }
+ *     lsIdBatchSize uint32   // size of ls batch for recoding
  * }
  * @param res {
  *     chunk_recoder uintptr // pointer to chunk recoder
@@ -1278,6 +1244,15 @@ void prompp_series_data_serialized_chunk_recoder_ctor(void* args, void* res);
  * }
  */
 void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, void* res);
+
+/**
+ * @brief Advance ChunkRecoder::ls_id_iterator to next batch
+ *
+ * @param args {
+ *     chunk_recoder uintptr // pointer to chunk recoder
+ * }
+ */
+void prompp_series_data_chunk_recoder_next_batch(void* args);
 
 /**
  * @brief Destruct ChunkRecoder object

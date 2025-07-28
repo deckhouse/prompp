@@ -8,6 +8,7 @@
 namespace {
 
 using BareBones::Encoding::Gorilla::STALE_NAN;
+using head::kUnlimitedLsIdBatchSize;
 using PromPP::Primitives::kInvalidLabelSetID;
 using PromPP::Primitives::LabelSetID;
 using PromPP::Primitives::TimeInterval;
@@ -35,9 +36,9 @@ class ChunkRecoderFixture : public ::testing::Test {
   DataStorage storage_;
   LsIdSet ls_id_set_;
 
-  ChunkRecoder create_recoder(const LsIdSet& ls_id_set, const TimeInterval& time_interval) {
+  ChunkRecoder create_recoder(const LsIdSet& ls_id_set, uint32_t ls_id_batch_size, const TimeInterval& time_interval) {
     ls_id_set_ = ls_id_set;
-    return ChunkRecoder{ChunkIterator{ls_id_set_.begin(), ls_id_set_.end(), &storage_, time_interval}, time_interval};
+    return ChunkRecoder{ChunkIterator{ls_id_set_.begin(), ls_id_set_.end(), ls_id_batch_size, &storage_, time_interval}, time_interval};
   }
 
   template <class Recoder>
@@ -52,7 +53,7 @@ class ChunkRecoderFixture : public ::testing::Test {
 
 TEST_F(ChunkRecoderFixture, EmptyStorage) {
   // Arrange
-  ChunkRecoder recoder({{}, {}, &storage_, {}}, {});
+  ChunkRecoder recoder({{}, {}, kUnlimitedLsIdBatchSize, &storage_, {}}, {});
 
   // Act
   const auto info1 = recode(recoder);
@@ -69,7 +70,7 @@ TEST_F(ChunkRecoderFixture, StorageWithOneChunk) {
   encoder.encode(0, 1, 1.0);
   encoder.encode(0, 2, 1.0);
 
-  auto recoder = create_recoder({0}, {.min = 0, .max = 2});
+  auto recoder = create_recoder({0}, kUnlimitedLsIdBatchSize, {.min = 0, .max = 2});
 
   // Act
   const auto info1 = recode(recoder);
@@ -95,7 +96,7 @@ TEST_F(ChunkRecoderFixture, StorageWithEmptyChunks) {
   encoder.encode(4, 3, 2.0);
   encoder.encode(4, 4, 2.0);
 
-  auto recoder = create_recoder({0, 1, 2, 3, 4}, {.min = 0, .max = 4});
+  auto recoder = create_recoder({0, 1, 2, 3, 4}, kUnlimitedLsIdBatchSize, {.min = 0, .max = 4});
 
   // Act
   const auto info1 = recode(recoder);
@@ -128,7 +129,7 @@ TEST_F(ChunkRecoderFixture, ReverseOrderOfChunks) {
   encoder.encode(4, 3, 2.0);
   encoder.encode(4, 4, 2.0);
 
-  auto recoder = create_recoder({4, 3, 2, 1, 0}, {.min = 0, .max = 4});
+  auto recoder = create_recoder({4, 3, 2, 1, 0}, kUnlimitedLsIdBatchSize, {.min = 0, .max = 4});
 
   // Act
   const auto info1 = recode(recoder);
@@ -162,7 +163,7 @@ TEST_F(ChunkRecoderFixture, ChunkWithFinalizedTimestampStream) {
   encoder.encode(1, 2, 1.0);
   encoder.encode(1, 3, 1.0);
 
-  auto recoder = create_recoder({0, 1}, {.min = 0, .max = 3});
+  auto recoder = create_recoder({0, 1}, kUnlimitedLsIdBatchSize, {.min = 0, .max = 3});
 
   // Act
   const auto info1 = recode(recoder);
@@ -204,7 +205,7 @@ TEST_F(ChunkRecoderFixture, GorillaChunk) {
   encoder.encode(0, 3, 1.3);
   encoder.encode(0, 4, 1.4);
 
-  auto recoder = create_recoder({0}, {.min = 0, .max = 4});
+  auto recoder = create_recoder({0}, kUnlimitedLsIdBatchSize, {.min = 0, .max = 4});
 
   // Act
   const auto info = recode(recoder);
@@ -227,7 +228,7 @@ TEST_F(ChunkRecoderFixture, NoChunksByTimeInterval) {
   encoder.encode(0, 1, 1.1);
   encoder.encode(0, 2, 1.2);
 
-  auto recoder = create_recoder({0}, {.min = 0, .max = 0});
+  auto recoder = create_recoder({0}, kUnlimitedLsIdBatchSize, {.min = 0, .max = 0});
 
   // Act
   const auto info = recode(recoder);
@@ -246,7 +247,7 @@ TEST_F(ChunkRecoderFixture, PartialReencodingByTimeInterval) {
   encoder.encode(0, 4, 1.0);
   encoder.encode(1, 0, 1.0);
 
-  auto recoder = create_recoder({0, 1}, {.min = 1, .max = 2});
+  auto recoder = create_recoder({0, 1}, kUnlimitedLsIdBatchSize, {.min = 1, .max = 2});
 
   // Act
   const auto info = recode(recoder);
@@ -269,7 +270,7 @@ TEST_F(ChunkRecoderFixture, EmptyFinalizedChunk) {
   encoder.encode(0, 2, 1.0);
   encoder.encode(0, 5, 1.0);
 
-  auto recoder = create_recoder({0}, {.min = 3, .max = 4});
+  auto recoder = create_recoder({0}, kUnlimitedLsIdBatchSize, {.min = 3, .max = 4});
 
   // Act
   const auto info = recode(recoder);
@@ -285,7 +286,7 @@ TEST_F(ChunkRecoderFixture, EmptyFinalizedChunkNonEmptyOpenedChunk) {
   encoder.encode(0, 2, 1.0);
   encoder.encode(0, 5, 1.0);
 
-  auto recoder = create_recoder({0}, {.min = 3, .max = 5});
+  auto recoder = create_recoder({0}, kUnlimitedLsIdBatchSize, {.min = 3, .max = 5});
 
   // Act
   const auto info = recode(recoder);
@@ -306,7 +307,7 @@ TEST_F(ChunkRecoderFixture, EmptyLssWithNonEmptyDataStorage) {
   Encoder encoder{storage_};
   encoder.encode(0, 1, 1.0);
 
-  auto recoder = create_recoder({}, {.min = 0, .max = 1});
+  auto recoder = create_recoder({}, kUnlimitedLsIdBatchSize, {.min = 0, .max = 1});
 
   // Act
   const auto info1 = recode(recoder);
@@ -319,7 +320,7 @@ TEST_F(ChunkRecoderFixture, EmptyLssWithNonEmptyDataStorage) {
 
 TEST_F(ChunkRecoderFixture, EmptyStorageWithNonEmptyLss) {
   // Arrange
-  const auto recoder = create_recoder({0, 1}, {.min = 0, .max = 1});
+  const auto recoder = create_recoder({0, 1}, kUnlimitedLsIdBatchSize, {.min = 0, .max = 1});
 
   // Act
   const bool has_more_data = recoder.has_more_data();
@@ -334,7 +335,7 @@ TEST_F(ChunkRecoderFixture, ConstantEncoderChunkWithStaleNanOnSecondPoint) {
   encoder.encode(0, 1, 0.0);
   encoder.encode(0, 2, STALE_NAN);
 
-  auto recoder = create_recoder({0}, {.min = 0, .max = 2});
+  auto recoder = create_recoder({0}, kUnlimitedLsIdBatchSize, {.min = 0, .max = 2});
 
   // Act
   const auto info = recode(recoder);
@@ -357,7 +358,7 @@ TEST_F(ChunkRecoderFixture, ConstantEncoderChunkWithStaleNanOnThirdPoint) {
   encoder.encode(0, 2, 0.0);
   encoder.encode(0, 3, STALE_NAN);
 
-  auto recoder = create_recoder({0}, {.min = 0, .max = 3});
+  auto recoder = create_recoder({0}, kUnlimitedLsIdBatchSize, {.min = 0, .max = 3});
 
   // Act
   const auto info = recode(recoder);
@@ -380,7 +381,7 @@ TEST_F(ChunkRecoderFixture, TwoDoubleConstantEncoderChunkWithStaleNan) {
   encoder.encode(0, 2, 1.0);
   encoder.encode(0, 3, STALE_NAN);
 
-  auto recoder = create_recoder({0}, {.min = 0, .max = 3});
+  auto recoder = create_recoder({0}, kUnlimitedLsIdBatchSize, {.min = 0, .max = 3});
 
   // Act
   const auto info = recode(recoder);
@@ -428,6 +429,40 @@ TEST_F(ChunkRecoderFixture, RecodeSerializedChunks) {
   EXPECT_EQ((RecodeInfo{
                 .interval = {.min = 3, .max = 4},
                 .series_id = 4,
+                .samples_count = 2,
+                .buffer = "\x00\x02\x06\x40\x00\x00\x00\x00\x00\x00\x00\x01\x00"s,
+                .has_more_data = false,
+            }),
+            info2);
+}
+
+TEST_F(ChunkRecoderFixture, RecodeWithLsIdBatchSize) {
+  // Arrange
+  Encoder encoder{storage_};
+  encoder.encode(0, 1, 1.0);
+  encoder.encode(0, 2, 1.0);
+  encoder.encode(1, 3, 2.0);
+  encoder.encode(1, 4, 2.0);
+
+  auto recoder = create_recoder({0, 1}, 1, {.min = 0, .max = 4});
+
+  // Act
+  const auto info1 = recode(recoder);
+  recoder.chunk_iterator().next_batch();
+  const auto info2 = recode(recoder);
+
+  // Assert
+  EXPECT_EQ((RecodeInfo{
+                .interval = {.min = 1, .max = 2},
+                .series_id = 0,
+                .samples_count = 2,
+                .buffer = "\x00\x02\x02\x3f\xf0\x00\x00\x00\x00\x00\x00\x01\x00"s,
+                .has_more_data = false,
+            }),
+            info1);
+  EXPECT_EQ((RecodeInfo{
+                .interval = {.min = 3, .max = 4},
+                .series_id = 1,
                 .samples_count = 2,
                 .buffer = "\x00\x02\x06\x40\x00\x00\x00\x00\x00\x00\x00\x01\x00"s,
                 .has_more_data = false,
