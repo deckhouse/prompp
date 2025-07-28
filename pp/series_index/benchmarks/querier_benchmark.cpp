@@ -9,10 +9,9 @@ namespace {
 
 using PromPP::Prometheus::LabelMatchers;
 
-using TrieIndex = series_index::TrieIndex<::series_index::trie::CedarTrie, series_index::trie::CedarMatchesList>;
 using QueryableEncodingBimap =
-    series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex>;
-using Querier = series_index::querier::Querier<QueryableEncodingBimap, BareBones::Vector>;
+    series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, series_index::trie::CedarTrie>;
+using Querier = series_index::querier::Querier<BareBones::Vector>;
 
 std::string_view get_lss_file() {
   if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
@@ -52,10 +51,10 @@ const std::array kBenchmarkCases{
 };
 
 void BenchmarkQuery(benchmark::State& state) {
-  Querier querier(get_lss());
+  const auto& lss = get_lss();
 
   for ([[maybe_unused]] auto _ : state) {
-    auto result = querier.query(kBenchmarkCases[state.range(0)]);
+    auto result = Querier::query(lss, kBenchmarkCases[state.range(0)]);
     benchmark::DoNotOptimize(result);
     benchmark::ClobberMemory();
   }

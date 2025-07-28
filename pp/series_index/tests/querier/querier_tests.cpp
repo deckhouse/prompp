@@ -4,7 +4,6 @@
 
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
-#include "printer.h"
 #include "series_index/querier/querier.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
@@ -14,25 +13,28 @@ namespace {
 using PromPP::Primitives::LabelViewSet;
 using PromPP::Prometheus::LabelMatchers;
 using PromPP::Prometheus::MatcherType;
-using PromPP::Prometheus::Selector;
 using series_index::QueryableEncodingBimap;
+using series_index::SeriesReverseIndex;
+using series_index::querier::MatchersComparatorByTypeAndCardinality;
+using series_index::querier::MatchId;
+using series_index::querier::MatchIdResolver;
 using series_index::querier::Querier;
 using series_index::querier::QuerierStatus;
+using series_index::querier::Selector;
 using series_index::trie::CedarMatchesList;
 using series_index::trie::CedarTrie;
-using TrieIndex = series_index::TrieIndex<CedarTrie, CedarMatchesList>;
-using Index = QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex>;
+using Index = QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, CedarTrie>;
 
 struct MatchersComparatorByTypeAndCardinalityCase {
-  Selector selector;
-  Selector expected;
+  Selector<> selector;
+  Selector<> expected;
 };
 
 class MatchersComparatorByTypeAndCardinalityFixture : public testing::TestWithParam<MatchersComparatorByTypeAndCardinalityCase> {
  protected:
-  Querier<Index>::MatchersComparatorByTypeAndCardinality comparator_;
+  MatchersComparatorByTypeAndCardinality comparator_;
 
-  void sort(Selector& selector) const { std::ranges::sort(selector.matchers, comparator_); }
+  void sort(Selector<>& selector) const { std::ranges::sort(selector.matchers, comparator_); }
 };
 
 TEST_P(MatchersComparatorByTypeAndCardinalityFixture, Test) {
@@ -75,7 +77,6 @@ struct QuerierTestCase {
 class QuerierFixture : public testing::TestWithParam<QuerierTestCase> {
  protected:
   Index index_;
-  Querier<Index, BareBones::Vector> querier_{index_};
 
   void SetUp() override {
     for (auto& label_set : label_sets_) {
@@ -95,7 +96,7 @@ TEST_P(QuerierFixture, Test) {
   // Arrange
 
   // Act
-  auto result = querier_.query(GetParam().label_matchers);
+  auto result = Querier<BareBones::Vector>::query(index_, GetParam().label_matchers);
 
   // Assert
   EXPECT_EQ(GetParam().expected.status, result.status);

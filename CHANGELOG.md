@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.3.4
+
+### Fixes
+
+1. **Processing Several Backslashes in the End of Label Value.** Metric parser had incorrect processing of even number of backslashes at the end of label name or value.
+2. **Handling Head in Querier on Rotation.** In some cases on rotation querier may have lost data on rotation.
+3. **Priority Semaphore on Head.** In some specific setups exclusive tasks like reconfigure, rotate or shutdown could get stuck in lock awaiting after all normal-priority requests. We use semaphore with 2-level priority interface to push priority tasks in front of waiters queue.
+
 ## v0.3.3
 
 ### Fixes

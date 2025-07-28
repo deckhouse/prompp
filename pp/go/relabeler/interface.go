@@ -25,7 +25,7 @@ type LSS interface {
 	AllocatedMemory() uint64
 	QueryLabelValues(label_name string, matchers []model.LabelMatcher) *cppbridge.LSSQueryLabelValuesResult
 	QueryLabelNames(matchers []model.LabelMatcher) *cppbridge.LSSQueryLabelNamesResult
-	Query(matchers []model.LabelMatcher, querySource uint32) *cppbridge.LSSQueryResult
+	QuerySelector(matchers []model.LabelMatcher) (selector uintptr, status uint32)
 	GetLabelSets(labelSetIDs []uint32) *cppbridge.LabelSetStorageGetLabelSetsResult
 	GetSnapshot() *cppbridge.LabelSetSnapshot
 	ResetSnapshot()
@@ -100,6 +100,7 @@ type Head interface {
 	CreateTask(taskName string, fn ShardFn, isLss bool) *GenericTask
 	Concurrency() int64
 	RLockQuery(ctx context.Context) (runlock func(), err error)
+	Raw() Head
 	FindFromBuilder(
 		builderSortedAdd []cppbridge.Label,
 		builderSortedDel []string,
@@ -176,12 +177,9 @@ type HeadStat struct {
 
 // HeadStats has information about the head.
 type HeadStats struct {
-	NumSeries             uint64 `json:"numSeries"`
-	NumLabelPairs         int    `json:"numLabelPairs"`
-	ChunkCount            int64  `json:"chunkCount"`
-	MinTime               int64  `json:"minTime"`
-	MaxTime               int64  `json:"maxTime"`
-	RuleQueriedSeries     int64  `json:"-"`
-	FederateQueriedSeries int64  `json:"-"`
-	OtherQueriedSeries    int64  `json:"-"`
+	NumSeries     uint64 `json:"numSeries"`
+	NumLabelPairs int    `json:"numLabelPairs"`
+	ChunkCount    int64  `json:"chunkCount"`
+	MinTime       int64  `json:"minTime"`
+	MaxTime       int64  `json:"maxTime"`
 }

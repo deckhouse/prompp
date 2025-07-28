@@ -245,7 +245,7 @@ func (qs *QueryableStorage) Querier(mint, maxt int64) (storage.Querier, error) {
 
 	var queriers []storage.Querier
 	for _, head := range heads {
-		h := head
+		h := head.Raw()
 		queriers = append(
 			queriers,
 			querier.NewQuerier(
@@ -275,7 +275,7 @@ func (qs *QueryableStorage) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier
 
 	var queriers []storage.ChunkQuerier
 	for _, head := range heads {
-		h := head
+		h := head.Raw()
 		queriers = append(
 			queriers,
 			querier.NewChunkQuerier(

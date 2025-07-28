@@ -1,7 +1,6 @@
 package cppbridge
 
 import (
-	"context"
 	"runtime"
 	"unsafe"
 
@@ -41,19 +40,6 @@ const (
 	LSSQueryStatusRegexpError
 	LSSQueryStatusNoMatch
 	LSSQueryStatusMatch
-)
-
-//
-// LSS Query Source
-//
-
-const (
-	// LSSQuerySourceRule the source of query is rules.
-	LSSQuerySourceRule uint32 = iota
-	// LSSQuerySourceFederate the source of query is federate.
-	LSSQuerySourceFederate
-	// LSSQuerySourceOther the source of query is another sources.
-	LSSQuerySourceOther
 )
 
 //
@@ -153,9 +139,14 @@ func (lss *LabelSetStorage) FindFromBuilder(
 	return lsID, uint16(length), true // #nosec G115 // no overflow
 }
 
-// Query returns a LSSQueryResult that matches the given label matchers.
-func (lss *LabelSetStorage) Query(matchers []model.LabelMatcher, querySource uint32) *LSSQueryResult {
-	return newLSSQueryResult(primitivesLSSQuery(lss.pointer, matchers, querySource))
+// QuerySelector returns a created selector that matches the given label matchers.
+func (lss *LabelSetStorage) QuerySelector(matchers []model.LabelMatcher) (
+	selector uintptr,
+	status uint32,
+) {
+	selector, status = primitivesLSSQuerySelector(lss.pointer, matchers)
+	runtime.KeepAlive(lss)
+	return selector, status
 }
 
 // QueryLabelNames returns a LSSQueryLabelNamesResult that matches the given label matchers.
@@ -343,29 +334,4 @@ type LabelSetStorageGetLabelSetsResult struct {
 // LabelsSets return queried slice labelsets.
 func (r *LabelSetStorageGetLabelSetsResult) LabelsSets() []Labels {
 	return r.labelSets
-}
-
-//
-// Caller
-//
-
-type ctxCallerKey struct{}
-
-// GetCaller get from context callerID, if not exist return LSSQuerySourceOther.
-func GetCaller(ctx context.Context) uint32 {
-	v, ok := ctx.Value(ctxCallerKey{}).(uint32)
-	if !ok {
-		return LSSQuerySourceOther
-	}
-
-	if v >= LSSQuerySourceOther {
-		return LSSQuerySourceOther
-	}
-
-	return v
-}
-
-// SetCaller set callerID to context.
-func SetCaller(parent context.Context, callerID uint32) context.Context {
-	return context.WithValue(parent, ctxCallerKey{}, callerID)
 }

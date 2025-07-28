@@ -7,7 +7,6 @@ namespace {
 using PromPP::Prometheus::LabelValuesQuery;
 using PromPP::Prometheus::MatcherType;
 using PromPP::Prometheus::Query;
-using PromPP::Prometheus::Selector;
 using PromPP::Prometheus::Remote::ProtobufReader;
 using PromPP::Prometheus::Remote::ProtobufWriter;
 using std::operator""sv;
@@ -25,7 +24,7 @@ TEST_P(ReadQueryFromProtobufFixture, Test) {
   Query query;
 
   // Act
-  auto result = ProtobufReader::read_query(protozero::pbf_reader(GetParam().buffer.data(), GetParam().buffer.size()), query);
+  const auto result = ProtobufReader::read_query(protozero::pbf_reader(GetParam().buffer.data(), GetParam().buffer.size()), query);
 
   // Assert
   ASSERT_EQ(GetParam().expected, result);
@@ -76,7 +75,7 @@ TEST_P(WriteQueryToProtobufFixture, Test) {
   // Arrange
 
   // Act
-  auto protobuf = ProtobufWriter::write_query(GetParam().query);
+  const auto protobuf = ProtobufWriter::write_query(GetParam().query);
 
   // Assert
   EXPECT_EQ(GetParam().expected, protobuf);
@@ -106,7 +105,7 @@ TEST_P(ReadLabelValuesQueryFromProtobufFixture, Test) {
   LabelValuesQuery query;
 
   // Act
-  auto result = ProtobufReader::read_label_values_query(protozero::pbf_reader(GetParam().buffer.data(), GetParam().buffer.size()), query);
+  const auto result = ProtobufReader::read_label_values_query(protozero::pbf_reader(GetParam().buffer.data(), GetParam().buffer.size()), query);
 
   // Assert
   ASSERT_EQ(GetParam().expected, result);
@@ -146,7 +145,7 @@ TEST_P(WriteLabelValuesQueryToProtobufFixture, Test) {
   // Arrange
 
   // Act
-  auto protobuf = ProtobufWriter::write_label_values_query(GetParam().query);
+  const auto protobuf = ProtobufWriter::write_label_values_query(GetParam().query);
 
   // Assert
   EXPECT_EQ(GetParam().expected, protobuf);

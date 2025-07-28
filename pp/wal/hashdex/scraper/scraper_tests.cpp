@@ -475,6 +475,16 @@ INSTANTIATE_TEST_SUITE_P(
                     .result = Error::kNoError,
                     .metadata = {Metadata{.metric_name = "go_goroutines", .text = "gauge", .type = MetadataType::kType}}}));
 
+INSTANTIATE_TEST_SUITE_P(EscapedString,
+                         PrometheusScraperFixture,
+                         testing::Values(ScraperCase{.buffer = R"(kubevirt_vmi_filesystem_capacity_bytes{mount_point="D:\\"} 1.1)",
+                                                     .result = Error::kNoError,
+                                                     .metrics = {Metric{.timeseries = {LabelViewSet{
+                                                                                           {"__name__", "kubevirt_vmi_filesystem_capacity_bytes"},
+                                                                                           {"mount_point", "D:\\"},
+                                                                                       },
+                                                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1.1}}}}}}));
+
 class OpenMetricsScraperFixture : public ScraperFixture<OpenMetricsScraper> {
  protected:
   void SetUp() override { calculate_labelset_hash(const_cast<ScraperCase&>(GetParam()).metrics); }
@@ -864,5 +874,16 @@ INSTANTIATE_TEST_SUITE_P(NullByte,
                                                                                        },
                                                                                        BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1}}}}}},
                                          ScraperCase{.buffer = "a{b=\x00\"ssss\"} 1\n# EOF\n"sv, .result = Error::kUnexpectedToken, .metrics = {}}));
+
+INSTANTIATE_TEST_SUITE_P(EscapedString,
+                         OpenMetricsScraperFixture,
+                         testing::Values(ScraperCase{.buffer = R"(kubevirt_vmi_filesystem_capacity_bytes{mount_point="D:\\"} 1.1)"
+                                                               "\n# EOF\n",
+                                                     .result = Error::kNoError,
+                                                     .metrics = {Metric{.timeseries = {LabelViewSet{
+                                                                                           {"__name__", "kubevirt_vmi_filesystem_capacity_bytes"},
+                                                                                           {"mount_point", "D:\\"},
+                                                                                       },
+                                                                                       BareBones::Vector<Sample>{Sample{kDefaultTimestamp, 1.1}}}}}}));
 
 }  // namespace

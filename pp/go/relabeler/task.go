@@ -49,17 +49,17 @@ const (
 	// LSSFind name of task.
 	LSSFind = "lss_find"
 
-	// LSSQueryChunkQuerier name of task.
-	LSSQueryChunkQuerier = "lss_query_chunk_querier"
+	// LSSQueryChunkQuerySelector name of task.
+	LSSQueryChunkQuerySelector = "lss_query_chunk_query_selector"
 	// LSSLabelValuesChunkQuerier name of task.
 	LSSLabelValuesChunkQuerier = "lss_label_values_chunk_querier"
 	// LSSLabelNamesChunkQuerier name of task.
 	LSSLabelNamesChunkQuerier = "lss_label_names_chunk_querier"
 
-	// LSSQueryInstantQuerier name of task.
-	LSSQueryInstantQuerier = "lss_query_instant_querier"
-	// LSSQueryRangeQuerier name of task.
-	LSSQueryRangeQuerier = "lss_query_range_querier"
+	// LSSQueryInstantQuerySelector name of task.
+	LSSQueryInstantQuerySelector = "lss_query_instant_query_selector"
+	// LSSQueryRangeQuerySelector name of task.
+	LSSQueryRangeQuerySelector = "lss_query_range_query_selector"
 	// LSSLabelValuesQuerier name of task.
 	LSSLabelValuesQuerier = "lss_label_values_querier"
 	// LSSLabelNamesQuerier name of task.

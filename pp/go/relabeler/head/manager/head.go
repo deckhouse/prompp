@@ -142,6 +142,11 @@ func (h *DiscardableRotatableHead) RLockQuery(ctx context.Context) (runlock func
 	return h.head.RLockQuery(ctx)
 }
 
+// Raw returns raw [Head].
+func (h *DiscardableRotatableHead) Raw() relabeler.Head {
+	return h.head
+}
+
 // FindFromBuilder label set from builder in lss, if not found return EmptyLabels.
 func (h *DiscardableRotatableHead) FindFromBuilder(
 	builderSortedAdd []cppbridge.Label,

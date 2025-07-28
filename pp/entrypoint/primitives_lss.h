@@ -115,12 +115,26 @@ void prompp_primitives_lss_find_or_emplace_from_builder(void* args, void* res);
 void prompp_primitives_lss_find_from_builder(void* args, void* res);
 
 /**
- * @brief query series from lss
+ * @brief query selector from lss for label matchers
  *
  * @param args {
  *     lss uintptr                         // pointer to constructed queryable lss;
  *     label_matchers []model.LabelMatcher // label matchers
- *     query_source uint32                 // query source (rule, federate, other)
+ * }
+ *
+ * @param res {
+ *     selector uintptr // constructed selector
+ *     status   uint32  // query status
+ * }
+ */
+void prompp_primitives_lss_query_selector(void* args, void* res);
+
+/**
+ * @brief query selector from lss for label matchers
+ *
+ * @param args {
+ *     lss uintptr // pointer to readonly lss
+ *     selector uintptr // pointer to constructed selector
  * }
  *
  * @param res {

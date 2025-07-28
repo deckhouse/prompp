@@ -183,6 +183,13 @@ func (lsst *LabelSetSnapshot) RangeLabelSet(lsID uint32, dropMetricName bool, do
 	return nil
 }
 
+// Query returns a LSSQueryResult that matches the given selector.
+func (lsst *LabelSetSnapshot) Query(selector uintptr) *LSSQueryResult {
+	result := newLSSQueryResult(primitivesLSSQuery(lsst.pointer, selector))
+	runtime.KeepAlive(lsst)
+	return result
+}
+
 // Snapshot return the actual snapshot.
 func (lsst *LabelSetSnapshot) Snapshot() *LabelSetSnapshot {
 	if snapshot := lsst.source.FastSnapshot(); snapshot != nil {

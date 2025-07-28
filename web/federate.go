@@ -32,7 +32,6 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/model/value"
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/storage"
@@ -96,7 +95,6 @@ func (h *Handler) federation(w http.ResponseWriter, req *http.Request) {
 
 	hints := &storage.SelectHints{Start: mint, End: maxt}
 
-	ctx = cppbridge.SetCaller(ctx, cppbridge.LSSQuerySourceFederate) // PP_CHANGES.md: rebuild on cpp
 	var sets []storage.SeriesSet
 	for _, mset := range matcherSets {
 		s := q.Select(ctx, true, hints, mset...)
