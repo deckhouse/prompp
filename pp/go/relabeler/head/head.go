@@ -1187,3 +1187,8 @@ func calculateHeadConcurrency(numberOfShards uint16) int64 {
 	// 2 - lss and datastorage
 	return 2 * int64(1+ExtraReadConcurrency) * int64(numberOfShards)
 }
+
+// Raw returns raw [Head].
+func (h *Head) Raw() relabeler.Head {
+	return h
+}

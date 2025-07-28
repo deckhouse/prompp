@@ -109,6 +109,7 @@ type Head interface {
 	RLockQuery(ctx context.Context) (runlock func(), err error)
 	CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr) *GenericTask
 	UnloadUnusedSeriesData()
+	Raw() Head
 }
 
 type Distributor interface {

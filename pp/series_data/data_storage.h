@@ -1,7 +1,5 @@
 #pragma once
 
-#include <list>
-
 #include "bare_bones/algorithm.h"
 #include "bare_bones/bitset.h"
 #include "bare_bones/preprocess.h"

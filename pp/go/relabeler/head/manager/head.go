@@ -148,3 +148,8 @@ func (h *DiscardableRotatableHead) CreateDataStorageLoadAndQueryTask(shardID uin
 func (h *DiscardableRotatableHead) UnloadUnusedSeriesData() {
 	h.head.UnloadUnusedSeriesData()
 }
+
+// Raw returns raw [Head].
+func (h *DiscardableRotatableHead) Raw() relabeler.Head {
+	return h.head
+}

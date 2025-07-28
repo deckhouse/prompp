@@ -229,6 +229,11 @@ func (h *RotatableHead) UnloadUnusedSeriesData() {
 	h.head.UnloadUnusedSeriesData()
 }
 
+// Raw returns raw [Head].
+func (h *RotatableHead) Raw() relabeler.Head {
+	return h.head
+}
+
 //
 // HeapProfileWritableHead
 //
@@ -364,4 +369,9 @@ func (h *HeapProfileWritableHead) CreateDataStorageLoadAndQueryTask(shardID uint
 
 func (h *HeapProfileWritableHead) UnloadUnusedSeriesData() {
 	h.head.UnloadUnusedSeriesData()
+}
+
+// Raw returns raw [Head].
+func (h *HeapProfileWritableHead) Raw() relabeler.Head {
+	return h.head
 }
