@@ -903,8 +903,6 @@ class CompactSequence {
   using const_iterator = DecodeIterator;
   using sentinel = DecodeIteratorSentinel;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return buffer_.allocated_memory(); }
-
  private:
   using Memory = MemoryType<uint8_t>;
 
@@ -948,6 +946,8 @@ class CompactSequence {
     key_iterator_ += !(size() % 4);
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return buffer_.allocated_memory(); }
+
   PROMPP_ALWAYS_INLINE void clear() noexcept {
     if (size() != 0) [[likely]] {
       std::memset(buffer_, 0, kMaxKeySize);
@@ -976,6 +976,43 @@ class CompactSequence {
 
   PROMPP_ALWAYS_INLINE const Memory& buffer() const noexcept { return buffer_; }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_write_size() const noexcept {
+    const uint32_t buffer_size_in_bytes = size_in_bytes();
+    using ElementsCount = uint32_t;
+    return sizeof(buffer_size_in_bytes) + sizeof(ElementsCount) + buffer_size_in_bytes;
+  }
+
+  template <OutputStream S>
+  PROMPP_ALWAYS_INLINE void write_to(S& stream) const noexcept {
+    const uint32_t buffer_size_in_bytes = size_in_bytes();
+    const uint32_t elements_count = size();
+    stream.write(reinterpret_cast<const char*>(&buffer_size_in_bytes), sizeof(buffer_size_in_bytes));
+    stream.write(reinterpret_cast<const char*>(&elements_count), sizeof(elements_count));
+    stream.write(reinterpret_cast<const char*>(buffer_.begin()), buffer_size_in_bytes);
+  }
+
+  static PROMPP_ALWAYS_INLINE auto create_read_iterator(std::span<const uint8_t>& buffer) noexcept {
+    if (buffer.size() < 2 * sizeof(uint32_t)) [[unlikely]] {
+      return DecodeIterator{nullptr, nullptr, 0};
+    }
+
+    uint32_t buffer_size_in_bytes = 0;
+    uint32_t elements_count = 0;
+    std::memcpy(&buffer_size_in_bytes, buffer.data(), sizeof(uint32_t));
+    std::memcpy(&elements_count, buffer.data() + sizeof(uint32_t), sizeof(uint32_t));
+
+    buffer = buffer.subspan(2 * sizeof(uint32_t));
+
+    if (buffer.size() < buffer_size_in_bytes) [[unlikely]] {
+      return DecodeIterator{nullptr, nullptr, 0};
+    }
+
+    const std::span compact_data(buffer.data(), buffer_size_in_bytes);
+    buffer = buffer.subspan(buffer_size_in_bytes);
+
+    return DecodeIterator(compact_data.data(), compact_data.data() + kMaxKeySize, elements_count);
+  }
+
  private:
   PROMPP_ALWAYS_INLINE void set_size(uint32_t new_size) noexcept {
     if constexpr (IsSharedMemory<MemoryType<uint8_t>>::value) {
@@ -983,6 +1020,11 @@ class CompactSequence {
     } else {
       buffer_.control_block().items_count = new_size;
     }
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE typename Memory::SizeType size_in_bytes() const noexcept {
+    return std::min<typename Memory::SizeType>(data_iterator_ - buffer_ + sizeof(value_type) + kKeysAdditionalAllocationSizeForDecoder,
+                                               buffer_.control_block().data_size);
   }
 };
 

@@ -3,7 +3,6 @@
 #include "bare_bones/streams.h"
 #include "series_data/data_storage.h"
 #include "series_data/encoder.h"
-#include "series_data/outdated_sample_encoder.h"
 #include "series_data/serialization/deserializer.h"
 #include "series_data/serialization/serializer.h"
 
@@ -14,7 +13,6 @@ using series_data::ChunkFinalizer;
 using series_data::DataStorage;
 using series_data::Encoder;
 using series_data::EncodingType;
-using series_data::OutdatedSampleEncoder;
 using series_data::chunk::DataChunk;
 using series_data::decoder::DecodeIteratorSentinel;
 using series_data::encoder::Sample;

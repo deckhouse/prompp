@@ -2,7 +2,6 @@
 
 #include "chunk_recoder.h"
 #include "series_data/encoder.h"
-#include "series_data/outdated_sample_encoder.h"
 #include "series_data/serialization/deserializer.h"
 #include "series_data/serialization/serializer.h"
 
@@ -14,7 +13,6 @@ using PromPP::Primitives::LabelSetID;
 using PromPP::Primitives::TimeInterval;
 using series_data::DataStorage;
 using series_data::Encoder;
-using series_data::OutdatedSampleEncoder;
 using series_data::serialization::Serializer;
 using std::operator""s;
 

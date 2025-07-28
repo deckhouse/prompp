@@ -3,7 +3,6 @@
 #include "series_data/decoder.h"
 #include "series_data/encoder.h"
 #include "series_data/outdated_chunk_merger.h"
-#include "series_data/outdated_sample_encoder.h"
 
 namespace {
 
@@ -13,7 +12,6 @@ using series_data::DataStorage;
 using series_data::Decoder;
 using series_data::Encoder;
 using series_data::OutdatedChunkMerger;
-using series_data::OutdatedSampleEncoder;
 using series_data::chunk::DataChunk;
 using series_data::chunk::FinalizedChunkList;
 using series_data::encoder::BitSequenceWithItemsCount;

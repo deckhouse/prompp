@@ -237,9 +237,13 @@ class PROMPP_ATTRIBUTE_PACKED CompactBitSequenceBase {
 
   [[nodiscard]] static consteval uint32_t reserved_size_in_bits() noexcept { return kReservedSizeBits; }
   [[nodiscard]] static consteval uint32_t reserved_size_in_bytes() noexcept { return Bit::to_bytes(kReservedSizeBits); }
+  [[nodiscard]] static consteval const auto& reserved_bytes_for_reader() noexcept {
+    static constexpr std::array<char, reserved_size_in_bytes()> kReservedBytesForReader{};
+    return kReservedBytesForReader;
+  }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size_in_bits() const noexcept { return size_in_bits_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size_in_bytes() const noexcept { return Bit::to_bytes(size_in_bits_ + (Bit::kByteBits - 1)); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size_in_bytes() const noexcept { return Bit::to_ceil_bytes(size_in_bits_); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept {
     return is_read_only() ? (size_in_bytes() + Bit::to_bytes(kReservedSizeBits)) : kAllocationSizesTable[allocation_size_index_].bytes();
   }
@@ -321,6 +325,14 @@ class PROMPP_ATTRIBUTE_PACKED CompactBitSequence : public CompactBitSequenceBase
  public:
   [[nodiscard]] PROMPP_ALWAYS_INLINE BitSequenceReader reader() const noexcept { return {Base::memory_, size_in_bits_}; };
 
+  PROMPP_ALWAYS_INLINE void trim_lower_bytes(uint32_t bytes_count) {
+    assert(Bit::to_bits(bytes_count) <= Base::size_in_bits());
+    const size_t new_size_in_bytes = Base::size_in_bytes() - bytes_count;
+    memmove(Base::memory_, Base::memory_ + bytes_count, new_size_in_bytes);
+    memset(Base::memory_ + new_size_in_bytes, '\0', bytes_count);
+    size_in_bits_ -= Bit::to_bits(bytes_count);
+  }
+
   PROMPP_ALWAYS_INLINE void push_back_single_zero_bit() noexcept {
     reserve_enough_memory_if_needed();
     ++size_in_bits_;
@@ -383,6 +395,31 @@ class PROMPP_ATTRIBUTE_PACKED CompactBitSequence : public CompactBitSequenceBase
     push_back_bits_u32(2, code);
     push_back_bits_u64(size_in_bytes << 3, val);
   }
+
+  PROMPP_ALWAYS_INLINE void push_back_bytes(const uint8_t* bytes, uint32_t bit_count) noexcept {
+    reserve_enough_memory_if_needed(bit_count);
+
+    uint32_t count = Bit::to_ceil_bytes(bit_count);
+
+    if (unfilled_bits_in_byte() == 0) [[unlikely]] {
+      std::memcpy(Base::memory_ + Base::size_in_bytes(), bytes, count);
+      size_in_bits_ += bit_count;
+    } else {
+      for (; count >= sizeof(uint64_t); count -= sizeof(uint64_t), bytes += sizeof(uint64_t)) {
+        push_back_u64(*reinterpret_cast<const uint64_t*>(bytes));
+      }
+
+      for (; count >= sizeof(uint32_t); count -= sizeof(uint32_t), bytes += sizeof(uint32_t)) {
+        push_back_bits_u32(Bit::to_bits(sizeof(uint32_t)), *reinterpret_cast<const uint32_t*>(bytes));
+      }
+
+      for (; count > 0; --count) {
+        push_back_bits_u32(Bit::kByteBits, *bytes++);
+      }
+    }
+  }
+
+  PROMPP_ALWAYS_INLINE void push_back_bytes(std::span<const uint8_t> bytes) noexcept { push_back_bytes(bytes.data(), Bit::to_bits(bytes.size())); }
 
  private:
   using Base = CompactBitSequenceBase<kAllocationSizesTable, Bit::to_bits(sizeof(uint64_t) + 1)>;

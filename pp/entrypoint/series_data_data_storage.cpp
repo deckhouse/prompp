@@ -8,6 +8,8 @@
 #include "series_data/querier/instant_querier.h"
 #include "series_data/querier/querier.h"
 #include "series_data/serialization/serializer.h"
+#include "series_data/unloading/loader.h"
+#include "series_data/unloading/unloader.h"
 
 using entrypoint::head::DataStoragePtr;
 using entrypoint::head::QueryableEncodingBimap;
@@ -18,6 +20,8 @@ using SerializedChunkRecoder = head::ChunkRecoder<series_data::chunk::Serialized
 
 using ChunkRecoderVariant = std::variant<ChunkRecoder, SerializedChunkRecoder>;
 using ChunkRecoderVariantPtr = std::unique_ptr<ChunkRecoderVariant>;
+
+using LoaderPtr = std::unique_ptr<series_data::unloading::Loader>;
 
 extern "C" void prompp_series_data_data_storage_ctor(void* res) {
   using Result = struct {
@@ -69,6 +73,16 @@ extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
 
   Querier querier{*in->data_storage};
   const auto& queried_chunk_list = querier.query(in->query);
+
+  if (querier.need_loading()) {
+    series_data::unloading::Loader loader(*in->data_storage, querier.get_series_to_load(), querier.get_series_to_load().popcount());
+
+    for (const auto& buffer : in->data_storage->unloaded_snapshots) {
+      loader.load_next(buffer);
+    }
+    loader.load_finalize();
+  }
+
   Serializer serializer{*in->data_storage};
   BytesStream bytes_stream{&out->serialized_chunks};
   serializer.serialize(queried_chunk_list, bytes_stream);
@@ -79,6 +93,7 @@ extern "C" void prompp_series_data_data_storage_instant_query(void* args) {
   using PromPP::Primitives::Timestamp;
   using PromPP::Primitives::Go::SliceView;
   using series_data::DataStorage;
+  using series_data::InstantQuerier;
   using series_data::encoder::Sample;
 
   struct Arguments {
@@ -88,10 +103,20 @@ extern "C" void prompp_series_data_data_storage_instant_query(void* args) {
     SliceView<Sample> samples;
   };
 
-  auto in = reinterpret_cast<Arguments*>(args);
+  const auto in = static_cast<Arguments*>(args);
 
-  for (size_t i = 0; i < in->samples.size(); ++i) {
-    series_data::InstantQuerier::query_sample(in->samples[i], *(in->data_storage), in->label_set_ids[i], in->timestamp);
+  InstantQuerier instant_querier{*in->data_storage};
+  instant_querier.query(in->samples, in->label_set_ids, in->timestamp);
+
+  if (instant_querier.need_loading()) {
+    series_data::unloading::Loader loader(*in->data_storage, instant_querier.get_series_to_load(), instant_querier.get_series_to_load().popcount());
+
+    for (const auto& buffer : in->data_storage->unloaded_snapshots) {
+      loader.load_next(buffer);
+    }
+    loader.load_finalize();
+
+    instant_querier.query_reload(in->samples, in->label_set_ids, in->timestamp);
   }
 }
 
@@ -132,6 +157,15 @@ extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
 
   const auto in = static_cast<Arguments*>(args);
   const auto& ls_id_set = std::get<QueryableEncodingBimap>(*in->lss).ls_id_set();
+
+  if (!in->data_storage->unloaded_series_bitmap.empty()) {
+    series_data::unloading::Loader loader{*in->data_storage};
+    for (const auto& buffer : in->data_storage->unloaded_snapshots) {
+      loader.load_next(buffer);
+    }
+    loader.load_finalize();
+  }
+
   new (res) Result{
       .chunk_recoder = std::make_unique<ChunkRecoderVariant>(
           std::in_place_type<ChunkRecoder>, ChunkRecoderIterator{ls_id_set.begin(), ls_id_set.end(), in->data_storage.get(), in->time_interval},
@@ -181,6 +215,81 @@ extern "C" void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, v
 extern "C" void prompp_series_data_chunk_recoder_dtor(void* args) {
   struct Arguments {
     ChunkRecoderVariantPtr chunk_recoder;
+  };
+
+  static_cast<Arguments*>(args)->~Arguments();
+}
+
+extern "C" void prompp_series_data_data_storage_unload(void* args, void* res) {
+  using PromPP::Primitives::LabelSetID;
+  using PromPP::Primitives::Go::BytesStream;
+  using PromPP::Primitives::Go::Slice;
+  using series_data::DataStorage;
+  using series_data::unloading::Unloader;
+
+  struct Arguments {
+    DataStorage* data_storage;
+  };
+
+  using Result = struct {
+    Slice<char> unloaded_data;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  const auto out = new (res) Result();
+
+  Unloader unloader{*in->data_storage};
+  BytesStream bytes_stream{&out->unloaded_data};
+  unloader.unload(bytes_stream);
+
+  in->data_storage->unloaded_snapshots.emplace_back(reinterpret_cast<const uint8_t*>(out->unloaded_data.data()),
+                                                    reinterpret_cast<const uint8_t*>(out->unloaded_data.data()) + out->unloaded_data.size());
+}
+
+extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* res) {
+  using PromPP::Primitives::LabelSetID;
+  using PromPP::Primitives::Go::SliceView;
+  using series_data::DataStorage;
+  using series_data::unloading::Loader;
+
+  struct Arguments {
+    DataStorage* data_storage;
+    SliceView<LabelSetID> label_sets;
+  };
+
+  struct Result {
+    LoaderPtr loader;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+
+  new (res) Result{.loader = std::make_unique<Loader>(*(in->data_storage), in->label_sets, in->label_sets.size())};
+}
+
+extern "C" void prompp_series_data_data_storage_loader_load_next(void* args) {
+  using PromPP::Primitives::Go::SliceView;
+
+  struct Arguments {
+    LoaderPtr loader;
+    SliceView<const uint8_t> buffer;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+
+  in->loader->load_next(in->buffer.span());
+}
+
+extern "C" void prompp_series_data_data_storage_loader_load_finalize(void* args) {
+  struct Arguments {
+    LoaderPtr loader;
+  };
+
+  static_cast<Arguments*>(args)->loader->load_finalize();
+}
+
+extern "C" void prompp_series_data_data_storage_loader_dtor(void* args) {
+  struct Arguments {
+    LoaderPtr loader;
   };
 
   static_cast<Arguments*>(args)->~Arguments();
