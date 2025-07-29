@@ -14,6 +14,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
 	"github.com/prometheus/prometheus/pp/go/relabeler/head"
 	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"
+	"github.com/prometheus/prometheus/pp/go/relabeler/headcontainer"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 	"github.com/prometheus/prometheus/pp/go/util"
 )
@@ -295,9 +296,9 @@ func (m *Manager) BuildWithConfig(
 }
 
 // createDiscardableRotatableHead create discardable and rotatable head.
-func (m *Manager) createDiscardableRotatableHead(h relabeler.Head, releaseHeadFn func()) *DiscardableRotatableHead {
+func (m *Manager) createDiscardableRotatableHead(h relabeler.Head, releaseHeadFn func()) relabeler.Head {
 	m.counter.With(prometheus.Labels{"type": "created"}).Inc()
-	return NewDiscardableRotatableHead(
+	return headcontainer.NewDiscardableRotatable(
 		h,
 		func(id string, err error) error {
 			if _, rotateErr := m.catalog.SetStatus(id, catalog.StatusRotated); rotateErr != nil {

@@ -326,7 +326,7 @@ func New(logger log.Logger, o *Options, receiver handler.Receiver) *Handler { //
 	}
 
 	// PP_CHANGES.md: rebuild on cpp start
-	h.apiV1 = api_v1.NewAPI(h.queryEngine, h.storage, app, h.exemplarStorage, receiver.HeadQueryable(), receiver, factorySPr, factoryTr, factoryAr,
+	h.apiV1 = api_v1.NewAPI(h.queryEngine, h.storage, app, h.exemplarStorage, receiver, factorySPr, factoryTr, factoryAr,
 		func() config.Config {
 			h.mtx.RLock()
 			defer h.mtx.RUnlock()

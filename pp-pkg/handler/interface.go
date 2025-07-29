@@ -22,7 +22,7 @@ type Receiver interface {
 		commitToWal bool,
 	) (cppbridge.RelabelerStats, error)
 	RelabelerIDIsExist(relabelerID string) bool
-	HeadQueryable() storage.Queryable
+	HeadQuerier(ctx context.Context, mint, maxt int64) (storage.Querier, error)
 	HeadStatus(ctx context.Context, limit int) relabeler.HeadStatus
 	// MergeOutOfOrderChunks merge chunks with out of order data chunks.
 	MergeOutOfOrderChunks(ctx context.Context)

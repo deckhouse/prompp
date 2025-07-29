@@ -10,16 +10,10 @@ import (
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp-pkg/handler/middleware"
-	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
-
-// HeadStatusGetter getter head status from relabeler.
-type HeadStatusGetter interface {
-	HeadStatus(ctx context.Context, limit int) relabeler.HeadStatus
-}
 
 // Register the API's endpoints in the given router from op.
 func (api *API) opRegister(r *route.Router, wrapAgent func(f apiFunc) http.HandlerFunc) {
@@ -76,7 +70,7 @@ func (api *API) queryHead(r *http.Request) apiFuncResult {
 		matchers = append(matchers, selector...)
 	}
 
-	q, err := api.HeadQueryable.Querier(start.UnixMilli(), end.UnixMilli())
+	q, err := api.receiver.HeadQuerier(ctx, start.UnixMilli(), end.UnixMilli())
 	if err != nil {
 		return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
 	}
@@ -115,7 +109,7 @@ func (api *API) serveHeadStatus(r *http.Request) apiFuncResult {
 		}
 	}
 
-	return apiFuncResult{api.headStatusGetter.HeadStatus(r.Context(), limit), nil, nil, nil}
+	return apiFuncResult{api.receiver.HeadStatus(r.Context(), limit), nil, nil, nil}
 }
 
 func (api *API) opRemoteWrite(middlewares ...middleware.Middleware) http.HandlerFunc {

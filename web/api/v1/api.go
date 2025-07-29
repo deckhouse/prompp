@@ -193,9 +193,8 @@ type API struct {
 	QueryEngine       promql.QueryEngine
 	ExemplarQueryable storage.ExemplarQueryable
 
-	HeadQueryable    storage.Queryable  // PP_CHANGES.md: rebuild on cpp
-	headStatusGetter HeadStatusGetter   // PP_CHANGES.md: rebuild on cpp
-	opHandler        *handler.PPHandler // PP_CHANGES.md: rebuild on cpp
+	receiver  handler.Receiver   // PP_CHANGES.md: rebuild on cpp
+	opHandler *handler.PPHandler // PP_CHANGES.md: rebuild on cpp
 
 	scrapePoolsRetriever  func(context.Context) ScrapePoolsRetriever
 	targetRetriever       func(context.Context) TargetRetriever
@@ -218,9 +217,9 @@ type API struct {
 	isAgent       bool
 	statsRenderer StatsRenderer
 
-	remoteWriteHandler http.Handler
-	remoteReadHandler  http.Handler
-	otlpWriteHandler   http.Handler
+	// remoteWriteHandler http.Handler // PP_CHANGES.md: rebuild on cpp
+	remoteReadHandler http.Handler
+	otlpWriteHandler  http.Handler
 
 	codecs []Codec
 }
@@ -232,7 +231,6 @@ func NewAPI(
 	ap storage.Appendable,
 	eq storage.ExemplarQueryable,
 
-	hq storage.Queryable, // PP_CHANGES.md: rebuild on cpp
 	receiver handler.Receiver, // PP_CHANGES.md: rebuild on cpp
 
 	spsr func(context.Context) ScrapePoolsRetriever,
@@ -265,8 +263,7 @@ func NewAPI(
 		Queryable:         q,
 		ExemplarQueryable: eq,
 
-		HeadQueryable:    hq,       // PP_CHANGES.md: rebuild on cpp
-		headStatusGetter: receiver, // PP_CHANGES.md: rebuild on cpp
+		receiver: receiver, // PP_CHANGES.md: rebuild on cpp
 
 		scrapePoolsRetriever:  spsr,
 		targetRetriever:       tr,
@@ -1663,13 +1660,14 @@ func (api *API) remoteRead(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (api *API) remoteWrite(w http.ResponseWriter, r *http.Request) {
-	if api.remoteWriteHandler != nil {
-		api.remoteWriteHandler.ServeHTTP(w, r)
-	} else {
-		http.Error(w, "remote write receiver needs to be enabled with --web.enable-remote-write-receiver", http.StatusNotFound)
-	}
-}
+// PP_CHANGES.md: rebuild on cpp
+// func (api *API) remoteWrite(w http.ResponseWriter, r *http.Request) {
+// 	if api.remoteWriteHandler != nil {
+// 		api.remoteWriteHandler.ServeHTTP(w, r)
+// 	} else {
+// 		http.Error(w, "remote write receiver needs to be enabled with --web.enable-remote-write-receiver", http.StatusNotFound)
+// 	}
+// }
 
 func (api *API) otlpWrite(w http.ResponseWriter, r *http.Request) {
 	if api.otlpWriteHandler != nil {

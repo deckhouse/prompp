@@ -9,7 +9,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/go-kit/log"
@@ -35,6 +34,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"
 	headmanager "github.com/prometheus/prometheus/pp/go/relabeler/head/manager"
 	"github.com/prometheus/prometheus/pp/go/relabeler/head/ready"
+	"github.com/prometheus/prometheus/pp/go/relabeler/headcontainer"
 	rlogger "github.com/prometheus/prometheus/pp/go/relabeler/logger"
 	"github.com/prometheus/prometheus/pp/go/relabeler/querier"
 	"github.com/prometheus/prometheus/pp/go/util"
@@ -71,8 +71,9 @@ func (s *HeadConfigStorage) Store(headConfig *HeadConfig) {
 type Receiver struct {
 	ctx context.Context
 
-	distributor         *distributor.Distributor
-	appender            *appender.QueryableAppender
+	distributor *distributor.Distributor
+	// appender            *appender.QueryableAppender
+	activeHead          *headcontainer.Active
 	storage             *appender.QueryableStorage
 	rotator             *appender.RotateCommiter
 	metricsWriteTrigger *appender.MetricsWriteTrigger
@@ -88,6 +89,9 @@ type Receiver struct {
 	clientID          string
 	cgogc             *cppbridge.CGOGC
 	shutdowner        *util.GracefulShutdowner
+
+	activeQuerierMetrics  *querier.Metrics
+	storageQuerierMetrics *querier.Metrics
 }
 
 type RotationInfo struct {
@@ -182,15 +186,16 @@ func NewReceiver(
 		return nil, fmt.Errorf("failed to create head manager: %w", err)
 	}
 
-	activeHead, rotatedHeads, err := headManager.Restore(rotationInfo.BlockDuration)
+	currentHead, rotatedHeads, err := headManager.Restore(rotationInfo.BlockDuration)
 	if err != nil {
 		return nil, fmt.Errorf("failed to restore heads: %w", err)
 	}
 	readyNotifier.NotifyReady()
+	storageQuerierMetrics := querier.NewMetrics(registerer, querier.QueryableStorageSource)
 	queryableStorage := appender.NewQueryableStorageWithWriteNotifier(
 		block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize, rotationInfo.BlockDuration, registerer),
 		registerer,
-		querier.NewMetrics(registerer, querier.QueryableStorageSource),
+		storageQuerierMetrics,
 		triggerNotifier,
 		clock,
 		maxRetentionDuration,
@@ -199,32 +204,38 @@ func NewReceiver(
 		rotatedHeads...,
 	)
 
-	hd := appender.NewRotatableHead(activeHead, queryableStorage, headManager, newHeadActivator(headCatalog))
+	var containeredHead relabeler.Head
+	containeredHead = headcontainer.NewRotatable(currentHead, queryableStorage, headManager, newHeadActivator(headCatalog))
 
-	var appenderHead relabeler.Head = hd
 	if len(os.Getenv("OPCORE_ROTATION_HEAP_DEBUG")) > 0 {
-		heapProfileWriter := util.NewHeapProfileWriter(filepath.Join(dataDir, "heap_profiles"))
-		appenderHead = appender.NewHeapProfileWritableHead(appenderHead, heapProfileWriter)
+		containeredHead = headcontainer.NewHeapProfileWritable(
+			containeredHead,
+			util.NewHeapProfileWriter(filepath.Join(dataDir, "heap_profiles")),
+		)
 	}
 
 	dstrb := distributor.NewDistributor(*destinationGroups)
-	app := appender.NewQueryableAppender(
-		ctx,
-		appenderHead,
-		dstrb,
-		querier.NewMetrics(registerer, querier.QueryableAppenderSource),
-	)
-	mwt := appender.NewMetricsWriteTrigger(ctx, appender.DefaultMetricWriteInterval, app, queryableStorage)
+	activeQuerierMetrics := querier.NewMetrics(registerer, querier.QueryableAppenderSource)
+	activeHead := headcontainer.NewActive(containeredHead, registerer)
+	// app := appender.NewQueryableAppender(
+	// 	ctx,
+	// 	appenderHead,
+	// 	dstrb,
+	// 	activeQuerierMetrics,
+	// 	registerer,
+	// )
+	mwt := appender.NewMetricsWriteTrigger(ctx, appender.DefaultMetricWriteInterval, activeHead, queryableStorage)
 
 	r := &Receiver{
-		ctx:               ctx,
-		distributor:       dstrb,
-		appender:          app,
+		ctx:         ctx,
+		distributor: dstrb,
+		// appender:          app,
+		activeHead:        activeHead,
 		storage:           queryableStorage,
 		headConfigStorage: headConfigStorage,
 		rotator: appender.NewRotateCommiter(
 			ctx,
-			app,
+			activeHead,
 			relabeler.NewRotateTimerWithSeed(clock, rotationInfo.BlockDuration, rotationInfo.Seed),
 			appender.NewConstantIntervalTimer(clock, commitInterval),
 			appender.NewConstantIntervalTimer(clock, appender.DefaultMergeDuration),
@@ -242,6 +253,9 @@ func NewReceiver(
 		clientID:            clientID,
 		cgogc:               cppbridge.NewCGOGC(registerer),
 		shutdowner:          util.NewGracefulShutdowner(),
+
+		activeQuerierMetrics:  activeQuerierMetrics,
+		storageQuerierMetrics: storageQuerierMetrics,
 	}
 
 	level.Info(logger).Log("msg", "created")
@@ -260,7 +274,7 @@ func (rr *Receiver) AppendHashdex(
 		return nil
 	}
 	incomingData := &relabeler.IncomingData{Hashdex: hashdex}
-	_, err := rr.appender.Append(ctx, incomingData, nil, relabelerID, commitToWal)
+	_, err := rr.activeHead.Append(ctx, incomingData, nil, relabelerID, commitToWal)
 	return err
 }
 
@@ -282,7 +296,7 @@ func (rr *Receiver) AppendSnappyProtobuf(
 	}
 
 	incomingData := &relabeler.IncomingData{Hashdex: hx}
-	_, err = rr.appender.Append(ctx, incomingData, nil, relabelerID, commitToWal)
+	_, err = rr.activeHead.Append(ctx, incomingData, nil, relabelerID, commitToWal)
 	return err
 }
 
@@ -305,7 +319,7 @@ func (rr *Receiver) AppendTimeSeries(
 		return cppbridge.RelabelerStats{}, nil
 	}
 	incomingData := &relabeler.IncomingData{Hashdex: hx, Data: data}
-	return rr.appender.AppendWithStaleNans(
+	return rr.activeHead.Append(
 		ctx,
 		incomingData,
 		state,
@@ -321,7 +335,7 @@ func (rr *Receiver) AppendTimeSeriesHashdex(
 	relabelerID string,
 	commitToWal bool,
 ) (cppbridge.RelabelerStats, error) {
-	return rr.appender.AppendWithStaleNans(
+	return rr.activeHead.Append(
 		ctx,
 		&relabeler.IncomingData{Hashdex: hashdex},
 		state,
@@ -355,96 +369,96 @@ func (rr *Receiver) ApplyConfig(cfg *prom_config.Config) error {
 		numberOfShards:        numberOfShards,
 	})
 
-	err = rr.appender.Reconfigure(
+	err = rr.activeHead.Reconfigure(
 		rr.ctx,
 		HeadConfigureFunc(func(head relabeler.Head) error {
 			return head.Reconfigure(rr.ctx, rCfg.Configs, numberOfShards)
 		}),
-		DistributorConfigureFunc(func(dstrb relabeler.Distributor) error {
-			mxdgupds := new(sync.Mutex)
-			dgupds, err := makeDestinationGroupUpdates(
-				cfg.RemoteWriteConfigs,
-				rr.workingDir,
-				rr.clientID,
-				numberOfShards,
-			)
-			if err != nil {
-				level.Error(rr.logger).Log("msg", "failed to init destination group update", "err", err)
-				return err
-			}
-			mxDelete := new(sync.Mutex)
-			toDelete := []int{}
+		// DistributorConfigureFunc(func(dstrb relabeler.Distributor) error {
+		// 	mxdgupds := new(sync.Mutex)
+		// 	dgupds, err := makeDestinationGroupUpdates(
+		// 		cfg.RemoteWriteConfigs,
+		// 		rr.workingDir,
+		// 		rr.clientID,
+		// 		numberOfShards,
+		// 	)
+		// 	if err != nil {
+		// 		level.Error(rr.logger).Log("msg", "failed to init destination group update", "err", err)
+		// 		return err
+		// 	}
+		// 	mxDelete := new(sync.Mutex)
+		// 	toDelete := []int{}
 
-			dgs := dstrb.DestinationGroups()
-			if err = dgs.RangeGo(func(destinationGroupID int, dg *relabeler.DestinationGroup) error {
-				var rangeErr error
-				dgu, ok := dgupds[dg.Name()]
-				if !ok {
-					mxDelete.Lock()
-					toDelete = append(toDelete, destinationGroupID)
-					mxDelete.Unlock()
-					ctxShutdown, cancel := context.WithTimeout(rr.ctx, defaultShutdownTimeout)
-					if rangeErr = dg.Shutdown(ctxShutdown); err != nil {
-						level.Error(rr.logger).Log("msg", "failed shutdown DestinationGroup", "err", rangeErr)
-					}
-					cancel()
-					return nil
-				}
+		// 	dgs := dstrb.DestinationGroups()
+		// 	if err = dgs.RangeGo(func(destinationGroupID int, dg *relabeler.DestinationGroup) error {
+		// 		var rangeErr error
+		// 		dgu, ok := dgupds[dg.Name()]
+		// 		if !ok {
+		// 			mxDelete.Lock()
+		// 			toDelete = append(toDelete, destinationGroupID)
+		// 			mxDelete.Unlock()
+		// 			ctxShutdown, cancel := context.WithTimeout(rr.ctx, defaultShutdownTimeout)
+		// 			if rangeErr = dg.Shutdown(ctxShutdown); err != nil {
+		// 				level.Error(rr.logger).Log("msg", "failed shutdown DestinationGroup", "err", rangeErr)
+		// 			}
+		// 			cancel()
+		// 			return nil
+		// 		}
 
-				if !dg.Equal(dgu.DestinationGroupConfig) ||
-					!dg.EqualDialers(dgu.DialersConfigs) {
-					var dialers []relabeler.Dialer
-					if !dg.EqualDialers(dgu.DialersConfigs) {
-						dialers, rangeErr = makeDialers(rr.clock, rr.registerer, dgu.DialersConfigs)
-						if rangeErr != nil {
-							return rangeErr
-						}
-					}
+		// 		if !dg.Equal(dgu.DestinationGroupConfig) ||
+		// 			!dg.EqualDialers(dgu.DialersConfigs) {
+		// 			var dialers []relabeler.Dialer
+		// 			if !dg.EqualDialers(dgu.DialersConfigs) {
+		// 				dialers, rangeErr = makeDialers(rr.clock, rr.registerer, dgu.DialersConfigs)
+		// 				if rangeErr != nil {
+		// 					return rangeErr
+		// 				}
+		// 			}
 
-					if rangeErr = dg.ResetTo(dgu.DestinationGroupConfig, dialers); err != nil {
-						return rangeErr
-					}
-				}
-				mxdgupds.Lock()
-				delete(dgupds, dg.Name())
-				mxdgupds.Unlock()
-				return nil
-			}); err != nil {
-				level.Error(rr.logger).Log("msg", "failed to apply config DestinationGroups", "err", err)
-				return err
-			}
-			// delete unused DestinationGroup
-			dgs.RemoveByID(toDelete)
+		// 			if rangeErr = dg.ResetTo(dgu.DestinationGroupConfig, dialers); err != nil {
+		// 				return rangeErr
+		// 			}
+		// 		}
+		// 		mxdgupds.Lock()
+		// 		delete(dgupds, dg.Name())
+		// 		mxdgupds.Unlock()
+		// 		return nil
+		// 	}); err != nil {
+		// 		level.Error(rr.logger).Log("msg", "failed to apply config DestinationGroups", "err", err)
+		// 		return err
+		// 	}
+		// 	// delete unused DestinationGroup
+		// 	dgs.RemoveByID(toDelete)
 
-			// create new DestinationGroup
-			for _, dgupd := range dgupds {
-				dialers, err := makeDialers(rr.clock, rr.registerer, dgupd.DialersConfigs)
-				if err != nil {
-					level.Error(rr.logger).Log("msg", "failed to make new dialers", "err", err)
-					return err
-				}
+		// 	// create new DestinationGroup
+		// 	for _, dgupd := range dgupds {
+		// 		dialers, err := makeDialers(rr.clock, rr.registerer, dgupd.DialersConfigs)
+		// 		if err != nil {
+		// 			level.Error(rr.logger).Log("msg", "failed to make new dialers", "err", err)
+		// 			return err
+		// 		}
 
-				dg, err := relabeler.NewDestinationGroup(
-					rr.ctx,
-					dgupd.DestinationGroupConfig,
-					encoderSelector,
-					refillCtor,
-					refillSenderCtor,
-					rr.clock,
-					dialers,
-					rr.registerer,
-				)
-				if err != nil {
-					level.Error(rr.logger).Log("msg", "failed to init DestinationGroup", "err", err)
-					return err
-				}
+		// 		dg, err := relabeler.NewDestinationGroup(
+		// 			rr.ctx,
+		// 			dgupd.DestinationGroupConfig,
+		// 			encoderSelector,
+		// 			refillCtor,
+		// 			refillSenderCtor,
+		// 			rr.clock,
+		// 			dialers,
+		// 			rr.registerer,
+		// 		)
+		// 		if err != nil {
+		// 			level.Error(rr.logger).Log("msg", "failed to init DestinationGroup", "err", err)
+		// 			return err
+		// 		}
 
-				dgs.Add(dg)
-			}
-			dstrb.SetDestinationGroups(dgs)
+		// 		dgs.Add(dg)
+		// 	}
+		// 	dstrb.SetDestinationGroups(dgs)
 
-			return nil
-		}),
+		// 	return nil
+		// }),
 	)
 	if err != nil {
 		return err
@@ -458,12 +472,13 @@ func (rr *Receiver) GetState() *cppbridge.State {
 	return cppbridge.NewState(rr.headConfigStorage.Load().numberOfShards)
 }
 
-func (rr *Receiver) HeadQueryable() storage.Queryable {
-	return rr.appender
+// HeadQuerier returns [storage.Querier] from active head.
+func (rr *Receiver) HeadQuerier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
+	return rr.activeHead.Querier(ctx, rr.activeQuerierMetrics, mint, maxt)
 }
 
 func (rr *Receiver) HeadStatus(ctx context.Context, limit int) relabeler.HeadStatus {
-	return rr.appender.HeadStatus(ctx, limit)
+	return rr.activeHead.HeadStatus(ctx, limit)
 }
 
 // LowestSentTimestamp returns the lowest sent timestamp across all queues.
@@ -473,27 +488,27 @@ func (*Receiver) LowestSentTimestamp() int64 {
 
 // MergeOutOfOrderChunks merge chunks with out of order data chunks.
 func (rr *Receiver) MergeOutOfOrderChunks(ctx context.Context) {
-	rr.appender.MergeOutOfOrderChunks(ctx)
+	rr.activeHead.MergeOutOfOrderChunks(ctx)
 }
 
 // Querier calls f() with the given parameters.
 // Returns a querier.MultiQuerier combining of appenderQuerier and storageQuerier.
 func (rr *Receiver) Querier(mint, maxt int64) (storage.Querier, error) {
-	appenderQuerier, err := rr.appender.Querier(mint, maxt)
+	activeQuerier, err := rr.activeHead.Querier(rr.ctx, rr.activeQuerierMetrics, mint, maxt)
 	if err != nil {
 		return nil, err
 	}
 
 	storageQuerier, err := rr.storage.Querier(mint, maxt)
 	if err != nil {
-		return nil, errors.Join(err, appenderQuerier.Close())
+		return nil, errors.Join(err, activeQuerier.Close())
 	}
 
-	return querier.NewMultiQuerier([]storage.Querier{appenderQuerier, storageQuerier}, nil), nil
+	return querier.NewMultiQuerier([]storage.Querier{activeQuerier, storageQuerier}, nil), nil
 }
 
 func (rr *Receiver) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
-	appenderQuerier, err := rr.appender.ChunkQuerier(mint, maxt)
+	appenderQuerier, err := rr.activeHead.ChunkQuerier(rr.ctx, mint, maxt)
 	if err != nil {
 		return nil, err
 	}
@@ -538,9 +553,9 @@ func (rr *Receiver) Shutdown(ctx context.Context) error {
 	rotatorErr := rr.rotator.Close()
 	storageErr := rr.storage.Close()
 	distributorErr := rr.distributor.Shutdown(ctx)
-	appendErr := rr.appender.Close(ctx)
+	activeHeadErr := rr.activeHead.Close(ctx)
 	err := rr.shutdowner.Shutdown(ctx)
-	return errors.Join(cgogcErr, metricWriteErr, rotatorErr, storageErr, distributorErr, appendErr, err)
+	return errors.Join(cgogcErr, metricWriteErr, rotatorErr, storageErr, distributorErr, activeHeadErr, err)
 }
 
 // makeDestinationGroups create DestinationGroups from configs.

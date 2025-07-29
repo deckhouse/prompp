@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 	"github.com/prometheus/prometheus/pp/go/relabeler/querier"
+	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/prometheus/pp/go/util/locker"
 	"github.com/prometheus/prometheus/storage"
 )
@@ -20,6 +22,10 @@ type QueryableAppender struct {
 	head           relabeler.Head
 	distributor    relabeler.Distributor
 	querierMetrics *querier.Metrics
+
+	appendDuration         prometheus.Histogram
+	waitLockRotateDuration prometheus.Gauge
+	rotationDuration       prometheus.Gauge
 }
 
 func NewQueryableAppender(
@@ -27,13 +33,41 @@ func NewQueryableAppender(
 	head relabeler.Head,
 	distributor relabeler.Distributor,
 	querierMetrics *querier.Metrics,
+	registerer prometheus.Registerer,
 ) *QueryableAppender {
+	factory := util.NewUnconflictRegisterer(registerer)
 	return &QueryableAppender{
 		ctx:            ctx,
 		wlocker:        locker.NewWeighted(2 * head.Concurrency()), // x2 for back pressure
 		head:           head,
 		distributor:    distributor,
 		querierMetrics: querierMetrics,
+
+		appendDuration: factory.NewHistogram(
+			prometheus.HistogramOpts{
+				Name: "prompp_head_append_duration",
+				Help: "Append to head duration in microseconds",
+				Buckets: []float64{
+					50, 100, 250, 500, 750,
+					1000, 2500, 5000, 7500,
+					10000, 25000, 50000, 75000,
+					100000, 500000,
+				},
+			},
+		),
+
+		waitLockRotateDuration: factory.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "prompp_head_wait_lock_rotate_duration",
+				Help: "The duration of the lock wait for rotation in nanoseconds",
+			},
+		),
+		rotationDuration: factory.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "prompp_head_rotate_duration",
+				Help: "The duration of the rotate in nanoseconds",
+			},
+		),
 	}
 }
 
@@ -63,7 +97,7 @@ func (qa *QueryableAppender) AppendWithStaleNans(
 	defer runlock()
 
 	defer func() {
-		qa.querierMetrics.AppendDuration.Observe(float64(time.Since(start).Microseconds()))
+		qa.appendDuration.Observe(float64(time.Since(start).Microseconds()))
 	}()
 
 	data, stats, err := qa.head.Append(ctx, incomingData, state, relabelerID, commitToWal)
@@ -130,11 +164,11 @@ func (qa *QueryableAppender) Rotate(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("Rotate: weighted locker: %w", err)
 	}
-	qa.querierMetrics.WaitLockRotateDuration.Set(float64(time.Since(start).Nanoseconds()))
+	qa.waitLockRotateDuration.Set(float64(time.Since(start).Nanoseconds()))
 	defer unlock()
 
 	defer func() {
-		qa.querierMetrics.RotationDuration.Set(float64(time.Since(start).Nanoseconds()))
+		qa.rotationDuration.Set(float64(time.Since(start).Nanoseconds()))
 	}()
 
 	qa.head.MergeOutOfOrderChunks()
