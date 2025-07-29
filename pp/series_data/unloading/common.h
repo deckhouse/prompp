@@ -11,19 +11,27 @@ using EncodingChunkLengthSequence =
 using EncodingChunkIDSequence =
     BareBones::EncodedSequence<BareBones::Encoding::RLE<BareBones::StreamVByte::CompactSequence<BareBones::StreamVByte::Codec0124Frequent0>>>;
 
-[[nodiscard]] PROMPP_ALWAYS_INLINE encoder::CompactBitSequence& get_open_chunk_stream(DataStorage& storage, uint32_t ls_id) noexcept {
+template <chunk::DataChunk::Type ChunkType>
+[[nodiscard]] PROMPP_ALWAYS_INLINE encoder::CompactBitSequence& get_chunk_stream(DataStorage& storage, const chunk::DataChunk& chunk) noexcept {
   using enum EncodingType;
 
-  const auto& chunk = storage.open_chunks[ls_id];
-  const auto encoding_type = storage.open_chunks[ls_id].encoding_state.encoding_type;
+  const auto encoding_type = chunk.encoding_state.encoding_type;
 
   if (encoding_type == kAscInteger) {
-    return storage.get_asc_integer_stream<chunk::DataChunk::Type::kOpen>(chunk.encoder.external_index);
+    return storage.get_asc_integer_stream<ChunkType>(chunk.encoder.external_index);
   }
   if (encoding_type == kValuesGorilla) {
-    return storage.get_values_gorilla_stream<chunk::DataChunk::Type::kOpen>(chunk.encoder.external_index);
+    return storage.get_values_gorilla_stream<ChunkType>(chunk.encoder.external_index);
   }
-  return storage.get_asc_integer_then_values_gorilla_stream<chunk::DataChunk::Type::kOpen>(chunk.encoder.external_index);
+  return storage.get_asc_integer_then_values_gorilla_stream<ChunkType>(chunk.encoder.external_index);
+}
+
+[[nodiscard]] PROMPP_ALWAYS_INLINE encoder::CompactBitSequence& get_chunk_stream(DataStorage& storage, const chunk::DataChunk& chunk, bool is_open) noexcept {
+  if (is_open) {
+    return get_chunk_stream<chunk::DataChunk::Type::kOpen>(storage, chunk);
+  } else {
+    return get_chunk_stream<chunk::DataChunk::Type::kFinalized>(storage, chunk);
+  }
 }
 
 }  // namespace series_data::unloading
