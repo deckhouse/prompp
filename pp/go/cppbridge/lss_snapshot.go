@@ -192,6 +192,10 @@ func (lsst *LabelSetSnapshot) Query(selector uintptr) *LSSQueryResult {
 
 // Snapshot return the actual snapshot.
 func (lsst *LabelSetSnapshot) Snapshot() *LabelSetSnapshot {
+	if lsst.source.IsOutdated() {
+		return lsst
+	}
+
 	if snapshot := lsst.source.FastSnapshot(); snapshot != nil {
 		return snapshot
 	}
@@ -256,10 +260,6 @@ func (fs *fastSnapshot) storeSnapshot(snapshot *LabelSetSnapshot) {
 // outdate marked *LabelSetStorage is outdated.
 func (fs *fastSnapshot) outdate() {
 	atomic.AddUint32(&fs.outdated, 1)
-	atomic.StorePointer(
-		&fs.snapshot,
-		unsafe.Pointer(nil), // #nosec G103 // it's meant to be that way
-	)
 }
 
 //
