@@ -10,18 +10,13 @@ class LoadReverter {
   explicit LoadReverter(DataStorage& storage) : storage_(storage) {}
 
   template <LsIDStorageInterface LsIDStorage>
-  void set_source_sizes(const LsIDStorage& ls_id_range, uint32_t ls_id_range_count) noexcept {
+  void set_series_for_revert(const LsIDStorage& ls_id_range, uint32_t ls_id_range_count) noexcept {
     source_sizes_.clear();
     source_sizes_.reserve(ls_id_range_count);
 
     for (uint32_t ls_id : ls_id_range) {
       if (storage_.outdated_chunks.find(ls_id) == storage_.outdated_chunks.end()) {
-        for (uint8_t chunk_id = 0; const auto& data : storage_.chunks(ls_id)) {
-          if (const auto& chunk = data.chunk(); is_unloadable_encoder(chunk.encoding_state.encoding_type)) {
-            source_sizes_.emplace_back(ls_id, get_chunk_stream(storage_, chunk, data.is_open()).size_in_bits(), chunk_id);
-          }
-          ++chunk_id;
-        }
+        process_series(ls_id);
       }
     }
   }
@@ -39,7 +34,16 @@ class LoadReverter {
     uint8_t chunk_id;
   };
 
-  void revert_chunk(const LsIdSizeChunkId& meta) const noexcept {
+  PROMPP_ALWAYS_INLINE void process_series(uint32_t ls_id) noexcept {
+    for (uint8_t chunk_id = 0; const auto& data : storage_.chunks(ls_id)) {
+      if (const auto& chunk = data.chunk(); is_unloadable_encoder(chunk.encoding_state.encoding_type)) {
+        source_sizes_.emplace_back(ls_id, get_chunk_stream(storage_, chunk, data.is_open()).size_in_bits(), chunk_id);
+      }
+      ++chunk_id;
+    }
+  }
+
+  PROMPP_ALWAYS_INLINE void revert_chunk(const LsIdSizeChunkId& meta) const noexcept {
     encoder::CompactBitSequence seq;
 
     const auto& chunk_data = std::ranges::next(DataStorage::SeriesChunkIterator{&storage_, meta.ls_id}, meta.chunk_id, DataStorage::SeriesChunks::end());
