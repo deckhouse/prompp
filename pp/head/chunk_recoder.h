@@ -45,12 +45,16 @@ class ChunkRecoderIterator {
     advance_to_non_empty_chunk();
   }
 
-  void next_batch() noexcept {
+  bool next_batch() noexcept {
     ls_id_iterator_.next_batch();
 
-    if (*this != IteratorSentinel{} && chunk_iterator_ == IteratorSentinel{}) {
+    if (*this != IteratorSentinel{}) {
       chunk_iterator_ = series_data::DataStorage::SeriesChunkIterator{chunk_iterator_->storage(), static_cast<LabelSetID>(*ls_id_iterator_)};
+      advance_to_non_empty_chunk();
+      return *this != IteratorSentinel{};
     }
+
+    return false;
   }
 
   const value_type& operator*() const noexcept { return *chunk_iterator_; }

@@ -441,15 +441,19 @@ TEST_F(ChunkRecoderFixture, RecodeWithLsIdBatchSize) {
   Encoder encoder{storage_};
   encoder.encode(0, 1, 1.0);
   encoder.encode(0, 2, 1.0);
-  encoder.encode(1, 3, 2.0);
-  encoder.encode(1, 4, 2.0);
+  encoder.encode(2, 3, 2.0);
+  encoder.encode(2, 4, 2.0);
+  encoder.encode(3, 5, 3.0);
+  encoder.encode(3, 6, 3.0);
 
-  auto recoder = create_recoder({0, 1}, 1, {.min = 0, .max = 4});
+  auto recoder = create_recoder({0, 1, 2, 3}, 1, {.min = 0, .max = 4});
 
   // Act
   const auto info1 = recode(recoder);
-  recoder.chunk_iterator().next_batch();
+  const auto next_batch_result1 = recoder.chunk_iterator().next_batch();
+  const auto next_batch_result2 = recoder.chunk_iterator().next_batch();
   const auto info2 = recode(recoder);
+  const auto next_batch_result3 = recoder.chunk_iterator().next_batch();
 
   // Assert
   EXPECT_EQ((RecodeInfo{
@@ -460,14 +464,17 @@ TEST_F(ChunkRecoderFixture, RecodeWithLsIdBatchSize) {
                 .has_more_data = false,
             }),
             info1);
+  EXPECT_FALSE(next_batch_result1);
+  EXPECT_TRUE(next_batch_result2);
   EXPECT_EQ((RecodeInfo{
                 .interval = {.min = 3, .max = 4},
-                .series_id = 1,
+                .series_id = 2,
                 .samples_count = 2,
                 .buffer = "\x00\x02\x06\x40\x00\x00\x00\x00\x00\x00\x00\x01\x00"s,
                 .has_more_data = false,
             }),
             info2);
+  EXPECT_FALSE(next_batch_result3);
 }
 
 }  // namespace

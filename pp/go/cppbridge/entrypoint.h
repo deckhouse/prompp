@@ -1197,12 +1197,12 @@ void prompp_series_data_data_storage_dtor(void* args);
  *
  * @param args {
  *     lss uintptr            // pointer to constructed label sets
+ *     lsIdBatchSize uint32   // size of ls batch for recoding
  *     dataStorage   uintptr  // pointer to constructed data storage
  *     time_interval struct { closed interval [min, max]
  *        min int64
  *        max int64
  *     }
- *     lsIdBatchSize uint32   // size of ls batch for recoding
  * }
  * @param res {
  *     chunk_recoder uintptr // pointer to chunk recoder
@@ -1251,8 +1251,12 @@ void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, void* res);
  * @param args {
  *     chunk_recoder uintptr // pointer to chunk recoder
  * }
+ *
+ * @param res {
+ *     hasMoreData bool  // true if chunk recoder has more
+ * }
  */
-void prompp_series_data_chunk_recoder_next_batch(void* args);
+void prompp_series_data_chunk_recoder_next_batch(void* args, void* res);
 
 /**
  * @brief Destruct ChunkRecoder object

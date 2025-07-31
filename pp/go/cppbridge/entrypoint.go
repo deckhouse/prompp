@@ -2275,16 +2275,22 @@ func seriesDataChunkRecoderRecodeNextChunk(chunkRecoder uintptr, recodedChunk *R
 	chunkRecoderRecodeNextChunkCount.Inc()
 }
 
-func seriesDataChunkRecoderNextBatch(chunkRecoder uintptr) {
+func seriesDataChunkRecoderNextBatch(chunkRecoder uintptr) bool {
 	args := struct {
 		chunkRecoder uintptr
 	}{chunkRecoder}
+	var res struct {
+		hasMoreData bool
+	}
 
 	testGC()
-	fastcgo.UnsafeCall1(
+	fastcgo.UnsafeCall2(
 		C.prompp_series_data_chunk_recoder_next_batch,
 		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
 	)
+
+	return res.hasMoreData
 }
 
 func seriesDataChunkRecoderDtor(chunkRecoder uintptr) {

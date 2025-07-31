@@ -2,6 +2,7 @@ package appender
 
 import (
 	"context"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -28,7 +29,7 @@ type WriteNotifier interface {
 
 // BlockWriter writes block on disk.
 type BlockWriter interface {
-	Write(block block.Block) error
+	Write(block block.Block, lsIdBatchSize uint32) ([]block.WrittenBlock, error)
 }
 
 // QueryableStorage hold reference to finalized heads and writes blocks from them. Also allows query not yet not
@@ -169,7 +170,8 @@ func (qs *QueryableStorage) write() bool {
 				shard.LSSLock()
 				defer shard.LSSUnlock()
 
-				return qs.blockWriter.Write(relabeler.NewBlock(shard.LSS().Raw(), shard.DataStorage().Raw()))
+				_, err := qs.blockWriter.Write(relabeler.NewBlock(shard.LSS().Raw(), shard.DataStorage().Raw()), cppbridge.UnlimitedLsIdBatchSize)
+				return err
 			},
 			relabeler.ForLSSTask,
 		)

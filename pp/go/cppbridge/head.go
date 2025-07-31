@@ -180,9 +180,10 @@ func (recoder *ChunkRecoder) RecodeNextChunk() RecodedChunk {
 	return recoder.recodedChunk
 }
 
-func (recoder *ChunkRecoder) NextBatch() {
-	seriesDataChunkRecoderNextBatch(recoder.recoder)
+func (recoder *ChunkRecoder) NextBatch() bool {
+	result := seriesDataChunkRecoderNextBatch(recoder.recoder)
 	runtime.KeepAlive(recoder)
+	return result
 }
 
 type HeadDataStorageQuery struct {

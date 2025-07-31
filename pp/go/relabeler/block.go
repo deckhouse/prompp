@@ -44,8 +44,8 @@ type ChunkIterator struct {
 	rc *cppbridge.RecodedChunk
 }
 
-func NewChunkIterator(lss *cppbridge.LabelSetStorage, ds *cppbridge.HeadDataStorage, minT, maxT int64) *ChunkIterator {
-	return &ChunkIterator{r: cppbridge.NewChunkRecoder(lss, cppbridge.UnlimitedLsIdBatchSize, ds, cppbridge.TimeInterval{MinT: minT, MaxT: maxT})}
+func NewChunkIterator(lss *cppbridge.LabelSetStorage, lsIdBatchSize uint32, ds *cppbridge.HeadDataStorage, minT, maxT int64) *ChunkIterator {
+	return &ChunkIterator{r: cppbridge.NewChunkRecoder(lss, lsIdBatchSize, ds, cppbridge.TimeInterval{MinT: minT, MaxT: maxT})}
 }
 
 func (i *ChunkIterator) Next() bool {
@@ -56,6 +56,11 @@ func (i *ChunkIterator) Next() bool {
 	rc := i.r.RecodeNextChunk()
 	i.rc = &rc
 	return rc.SeriesId != math.MaxUint32
+}
+
+func (i *ChunkIterator) NextBatch() bool {
+	i.rc.HasMoreData = i.r.NextBatch()
+	return i.rc.HasMoreData
 }
 
 func (i *ChunkIterator) At() block.Chunk {
@@ -147,8 +152,8 @@ func (b *Block) TimeBounds() (minT, maxT int64) {
 	return interval.MinT, interval.MaxT
 }
 
-func (b *Block) ChunkIterator(minT, maxT int64) block.ChunkIterator {
-	return NewChunkIterator(b.lss, b.ds, minT, maxT)
+func (b *Block) ChunkIterator(minT, maxT int64, lsIdBatchSize uint32) block.ChunkIterator {
+	return NewChunkIterator(b.lss, lsIdBatchSize, b.ds, minT, maxT)
 }
 
 func (b *Block) IndexWriter() block.IndexWriter {

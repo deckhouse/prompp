@@ -30,6 +30,200 @@ const (
 	metaVersion1                 = 1
 )
 
+type Chunk interface {
+	MinT() int64
+	MaxT() int64
+	SeriesID() uint32
+	Encoding() chunkenc.Encoding
+	SampleCount() uint8
+	Bytes() []byte
+}
+
+type ChunkIterator interface {
+	Next() bool
+	NextBatch() bool
+	At() Chunk
+}
+
+type IndexWriter interface {
+	WriteSeriesTo(uint32, []ChunkMetadata, io.Writer) (int64, error)
+	WriteRestTo(io.Writer) (int64, error)
+}
+
+type Block interface {
+	TimeBounds() (minT, maxT int64)
+	ChunkIterator(minT, maxT int64, lsIdBatchSize uint32) ChunkIterator
+	IndexWriter() IndexWriter
+}
+
+type chunkRecoder struct {
+	chunkIterator    ChunkIterator
+	chunksMetadata   []ChunkMetadata
+	previousSeriesID uint32
+}
+
+func (recoder *chunkRecoder) Recode(
+	chunkWriter *ChunkWriter,
+	blockMeta *tsdb.BlockMeta,
+	writeSeries func(seriesID uint32, chunksMetadata []ChunkMetadata) error,
+) (err error) {
+	for recoder.chunkIterator.Next() {
+		chunk := recoder.chunkIterator.At()
+
+		var chunkMetadata ChunkMetadata
+		if chunkMetadata, err = chunkWriter.Write(chunk); err != nil {
+			return fmt.Errorf("failed to write chunk: %w", err)
+		}
+
+		adjustBlockMetaTimeRange(blockMeta, chunk.MinT(), chunk.MaxT())
+		blockMeta.Stats.NumChunks++
+		blockMeta.Stats.NumSamples += uint64(chunk.SampleCount())
+		seriesID := chunk.SeriesID()
+
+		if recoder.previousSeriesID == seriesID {
+			recoder.chunksMetadata = append(recoder.chunksMetadata, chunkMetadata)
+		} else {
+			if err = writeSeries(recoder.previousSeriesID, recoder.chunksMetadata); err != nil {
+				return err
+			}
+			blockMeta.Stats.NumSeries++
+			recoder.chunksMetadata = append(recoder.chunksMetadata[:0], chunkMetadata)
+			recoder.previousSeriesID = seriesID
+		}
+	}
+
+	return nil
+}
+
+func newChunkRecoder(chunkIterator ChunkIterator) chunkRecoder {
+	return chunkRecoder{
+		chunkIterator:    chunkIterator,
+		previousSeriesID: math.MaxUint32,
+	}
+}
+
+type WrittenBlock struct {
+	Dir  string
+	Meta tsdb.BlockMeta
+}
+
+func (block *WrittenBlock) ChunkDir() string {
+	return filepath.Join(block.Dir, "chunks")
+}
+
+func (block *WrittenBlock) IndexFilename() string {
+	return filepath.Join(block.Dir, indexFilename)
+}
+
+func (block *WrittenBlock) MetaFilename() string {
+	return filepath.Join(block.Dir, metaFilename)
+}
+
+type blockWriter struct {
+	WrittenBlock
+
+	chunkWriter     *ChunkWriter
+	indexFileWriter *FileWriter
+	indexWriter     IndexWriter
+
+	chunkRecoder chunkRecoder
+}
+
+func newBlockWriter(dir string, maxBlockChunkSegmentSize int64, indexWriter IndexWriter, chunkIterator ChunkIterator) (writer blockWriter, err error) {
+	uid := ulid.MustNew(ulid.Now(), rand.Reader)
+	writer.Dir = filepath.Join(dir, uid.String()) + tmpForCreationBlockDirSuffix
+
+	if err = createTmpDir(writer.Dir); err != nil {
+		return
+	}
+
+	if err = writer.createWriters(maxBlockChunkSegmentSize); err != nil {
+		return
+	}
+
+	writer.Meta = tsdb.BlockMeta{
+		ULID:    uid,
+		MinTime: math.MaxInt64,
+		MaxTime: math.MinInt64,
+		Version: metaVersion1,
+		Compaction: tsdb.BlockMetaCompaction{
+			Level:   1,
+			Sources: []ulid.ULID{uid},
+		},
+	}
+
+	writer.indexWriter = indexWriter
+	writer.chunkRecoder = newChunkRecoder(chunkIterator)
+	return
+}
+
+func (writer *blockWriter) createWriters(maxBlockChunkSegmentSize int64) error {
+	chunkWriter, err := NewChunkWriter(writer.ChunkDir(), maxBlockChunkSegmentSize)
+	if err != nil {
+		return fmt.Errorf("failed to create chunk writer: %w", err)
+	}
+
+	indexFileWriter, err := NewFileWriter(writer.IndexFilename())
+	if err != nil {
+		_ = chunkWriter.Close()
+		return fmt.Errorf("failed to create index file writer: %w", err)
+	}
+
+	writer.chunkWriter = chunkWriter
+	writer.indexFileWriter = indexFileWriter
+	return nil
+}
+
+func (writer *blockWriter) Close() error {
+	return closeAll(writer.chunkWriter, writer.indexFileWriter)
+}
+
+func (writer *blockWriter) RecodeAndWriteChunksBatch() error {
+	return writer.chunkRecoder.Recode(writer.chunkWriter, &writer.Meta, writer.writeSeries)
+}
+
+func (writer *blockWriter) WriteRestOfRecodedChunks() error {
+	return writer.writeSeries(writer.chunkRecoder.previousSeriesID, writer.chunkRecoder.chunksMetadata)
+}
+
+func (writer *blockWriter) writeSeries(seriesID uint32, chunksMetadata []ChunkMetadata) error {
+	if len(chunksMetadata) > 0 {
+		if _, err := writer.indexWriter.WriteSeriesTo(seriesID, chunksMetadata, writer.indexFileWriter); err != nil {
+			return fmt.Errorf("failed to write series %d: %w", seriesID, err)
+		}
+	}
+
+	return nil
+}
+
+func (writer *blockWriter) writeIndex() error {
+	if _, err := writer.indexWriter.WriteRestTo(writer.indexFileWriter); err != nil {
+		return fmt.Errorf("failed to write index: %w", err)
+	}
+
+	writer.Meta.MaxTime += 1
+	if _, err := writeBlockMetaFile(writer.MetaFilename(), &writer.Meta); err != nil {
+		return fmt.Errorf("failed to write block meta file: %w", err)
+	}
+
+	return nil
+}
+
+func (writer *blockWriter) MoveTmpDirToDir() error {
+	if err := syncDir(writer.Dir); err != nil {
+		return fmt.Errorf("failed to sync temporary block dir: %w", err)
+	}
+
+	dir := writer.Dir[:len(writer.Dir)-len(tmpForCreationBlockDirSuffix)]
+
+	if err := fileutil.Replace(writer.Dir, dir); err != nil {
+		return fmt.Errorf("failed to move temporary block dir {%s} to {%s}: %w", writer.Dir, dir, err)
+	}
+
+	writer.Dir = dir
+	return nil
+}
+
 type BlockWriter struct {
 	dataDir                  string
 	maxBlockChunkSegmentSize int64
@@ -55,34 +249,42 @@ func NewBlockWriter(
 	}
 }
 
-type Chunk interface {
-	MinT() int64
-	MaxT() int64
-	SeriesID() uint32
-	Encoding() chunkenc.Encoding
-	SampleCount() uint8
-	Bytes() []byte
+func (w *BlockWriter) Write(block Block, lsIdBatchSize uint32) ([]WrittenBlock, error) {
+	writers, err := w.createWriters(block, lsIdBatchSize)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		for _, w := range writers {
+			_ = w.Close()
+		}
+	}()
+
+	if err = w.recodeAndWriteChunks(writers); err != nil {
+		return nil, err
+	}
+
+	writtenBlocks := make([]WrittenBlock, 0, len(writers))
+	for i := range writers {
+		if err = writers[i].writeIndex(); err != nil {
+			return nil, err
+		}
+
+		if err = writers[i].MoveTmpDirToDir(); err != nil {
+			return nil, err
+		}
+
+		writtenBlocks = append(writtenBlocks, writers[i].WrittenBlock)
+	}
+
+	return writtenBlocks, nil
 }
 
-type ChunkIterator interface {
-	Next() bool
-	At() Chunk
-}
+func (w *BlockWriter) createWriters(block Block, lsIdBatchSize uint32) ([]blockWriter, error) {
+	var writers []blockWriter
 
-type IndexWriter interface {
-	WriteSeriesTo(uint32, []ChunkMetadata, io.Writer) (int64, error)
-	WriteRestTo(io.Writer) (int64, error)
-}
-
-type Block interface {
-	TimeBounds() (minT, maxT int64)
-	ChunkIterator(minT, maxT int64) ChunkIterator
-	IndexWriter() IndexWriter
-}
-
-func (w *BlockWriter) Write(block Block) error {
 	blockMinT, blockMaxT := block.TimeBounds()
-
 	quantStart := (blockMinT / w.blockDurationMs) * w.blockDurationMs
 	for ; quantStart <= blockMaxT; quantStart += w.blockDurationMs {
 		minT, maxT := quantStart, quantStart+w.blockDurationMs-1
@@ -92,7 +294,29 @@ func (w *BlockWriter) Write(block Block) error {
 		if maxT > blockMaxT {
 			maxT = blockMaxT
 		}
-		if err := w.write(block, minT, maxT); err != nil {
+
+		if writer, err := newBlockWriter(w.dataDir, w.maxBlockChunkSegmentSize, block.IndexWriter(), block.ChunkIterator(minT, maxT, lsIdBatchSize)); err == nil {
+			writers = append(writers, writer)
+		} else {
+			for _, wr := range writers {
+				_ = wr.Close()
+			}
+			return nil, err
+		}
+	}
+
+	return writers, nil
+}
+
+func (w *BlockWriter) recodeAndWriteChunks(writers []blockWriter) error {
+	for i := range writers {
+		if err := writers[i].RecodeAndWriteChunksBatch(); err != nil {
+			return err
+		}
+	}
+
+	for i := range writers {
+		if err := writers[i].WriteRestOfRecodedChunks(); err != nil {
 			return err
 		}
 	}
@@ -100,168 +324,12 @@ func (w *BlockWriter) Write(block Block) error {
 	return nil
 }
 
-func (w *BlockWriter) write(block Block, minT, maxT int64) (err error) {
-	start := time.Now()
-	uid := ulid.MustNew(ulid.Now(), rand.Reader)
-	dir := filepath.Join(w.dataDir, uid.String())
-	tmp := dir + tmpForCreationBlockDirSuffix
-	var closers []io.Closer
-	defer func() {
-		err = errors.Join(err, closeAll(closers...))
-		if cleanUpErr := os.RemoveAll(tmp); err != nil {
-			// todo: log error
-			_ = cleanUpErr
-		}
-	}()
-
-	if err = os.RemoveAll(tmp); err != nil {
-		return fmt.Errorf("failed to cleanup tmp directory {%s}: %w", tmp, err)
-	}
-
-	if err = os.MkdirAll(tmp, 0o777); err != nil {
-		return fmt.Errorf("failed to create tmp directory {%s}: %w", tmp, err)
-	}
-
-	chunkw, err := NewChunkWriter(chunkDir(tmp), w.maxBlockChunkSegmentSize)
-	if err != nil {
-		return fmt.Errorf("failed to create chunk writer: %w", err)
-	}
-	closers = append(closers, chunkw)
-
-	indexFileWriter, err := NewFileWriter(filepath.Join(tmp, indexFilename))
-	if err != nil {
-		return fmt.Errorf("failed to create index file writer: %w", err)
-	}
-
-	closers = append(closers, indexFileWriter)
-	indexWriter := block.IndexWriter()
-
-	chunkIterator := block.ChunkIterator(minT, maxT)
-	var chunksMetadata []ChunkMetadata
-	var chunkMetadata ChunkMetadata
-	var previousSeriesID uint32 = math.MaxUint32
-	var chunk Chunk
-
-	writeSeries := func() error {
-		if len(chunksMetadata) == 0 {
-			return nil
-		}
-		_, err = indexWriter.WriteSeriesTo(previousSeriesID, chunksMetadata, indexFileWriter)
-		if err != nil {
-			return fmt.Errorf("failed to write series %d: %w", previousSeriesID, err)
-		}
-		return nil
-	}
-
-	blockMeta := &tsdb.BlockMeta{
-		ULID:    uid,
-		MinTime: math.MaxInt64,
-		MaxTime: math.MinInt64,
-		Version: metaVersion1,
-		Compaction: tsdb.BlockMetaCompaction{
-			Level:   1,
-			Sources: []ulid.ULID{uid},
-		},
-	}
-
-	var hasChunks bool
-	for chunkIterator.Next() {
-		hasChunks = true
-		chunk = chunkIterator.At()
-		chunkMetadata, err = chunkw.Write(chunk)
-		if err != nil {
-			return fmt.Errorf("failed to write chunk: %w", err)
-		}
-
-		adjustBlockMetaTimeRange(blockMeta, chunk.MinT(), chunk.MaxT())
-		blockMeta.Stats.NumChunks++
-		blockMeta.Stats.NumSamples += uint64(chunk.SampleCount())
-		seriesID := chunk.SeriesID()
-
-		if previousSeriesID == seriesID {
-			chunksMetadata = append(chunksMetadata, chunkMetadata)
-		} else {
-			if err = writeSeries(); err != nil {
-				return err
-			}
-			blockMeta.Stats.NumSeries++
-			chunksMetadata = append(chunksMetadata[:0], chunkMetadata)
-			previousSeriesID = seriesID
-		}
-	}
-
-	if !hasChunks {
-		return nil
-	}
-
-	if err = writeSeries(); err != nil {
-		return err
-	}
-	indexFileSize, err := indexWriter.WriteRestTo(indexFileWriter)
-	if err != nil {
-		return fmt.Errorf("failed to write index: %w", err)
-	}
-	// todo: logs & metrics
-	_ = indexFileSize
-
-	// write meta
-	blockMeta.MaxTime += 1
-	metaFileSize, err := writeBlockMetaFile(filepath.Join(tmp, metaFilename), blockMeta)
-	if err != nil {
-		return fmt.Errorf("failed to write block meta file: %w", err)
-	}
-	// todo: log & metrics
-	_ = metaFileSize
-
-	closeErr := err
-	for _, closer := range closers {
-		closeErr = errors.Join(closeErr, closer.Close())
-	}
-	closers = closers[:0]
-
-	if closeErr != nil {
-		return closeErr
-	}
-
-	var df *os.File
-	df, err = fileutil.OpenDir(tmp)
-	if err != nil {
-		return fmt.Errorf("failed to open temporary block dir: %w", err)
-	}
-	defer func() {
-		if df != nil {
-			_ = df.Close()
-		}
-	}()
-
-	if err = df.Sync(); err != nil {
-		return fmt.Errorf("failed to sync temporary block dir: %w", err)
-	}
-
-	if err = df.Close(); err != nil {
-		return fmt.Errorf("failed to close temporary block dir: %w", err)
-	}
-	df = nil
-
-	if err = fileutil.Replace(tmp, dir); err != nil {
-		return fmt.Errorf("failed to move temporary block dir {%s} to {%s}: %w", tmp, dir, err)
-	}
-
-	w.blockWriteDuration.With(prometheus.Labels{
-		"block_id": blockMeta.ULID.String(),
-	}).Set(float64(time.Since(start).Milliseconds()))
-
-	return
-}
-
-func chunkDir(dir string) string { return filepath.Join(dir, "chunks") }
-
 func closeAll(closers ...io.Closer) error {
-	errs := make([]error, len(closers))
-	for i, closer := range closers {
-		errs[i] = closer.Close()
+	var errs error
+	for _, closer := range closers {
+		errs = errors.Join(errs, closer.Close())
 	}
-	return errors.Join(errs...)
+	return errs
 }
 
 func adjustBlockMetaTimeRange(blockMeta *tsdb.BlockMeta, mint, maxt int64) {
@@ -316,12 +384,28 @@ func writeBlockMetaFile(fileName string, blockMeta *tsdb.BlockMeta) (int64, erro
 	return int64(n), fileutil.Replace(tmp, fileName)
 }
 
-func appendChunkMetadata(list [][]ChunkMetadata, chunk Chunk, metadata ChunkMetadata) [][]ChunkMetadata {
-	lastSeriesID := len(list) - 1
-	chunkSeriesID := chunk.SeriesID()
-	for i := chunkSeriesID - 1; i > uint32(lastSeriesID); i-- {
-		list = append(list, make([]ChunkMetadata, 0))
+func createTmpDir(dir string) error {
+	if err := os.RemoveAll(dir); err != nil {
+		return err
 	}
-	list = append(list, []ChunkMetadata{metadata})
-	return list
+
+	return os.MkdirAll(dir, 0o777)
+}
+
+func syncDir(dir string) error {
+	df, err := fileutil.OpenDir(dir)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if df != nil {
+			_ = df.Close()
+		}
+	}()
+
+	if err = df.Sync(); err != nil {
+		return err
+	}
+
+	return df.Close()
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"os"
 	"path/filepath"
 	"time"
@@ -119,7 +120,8 @@ func (cmd *cmdWALPPToBlock) Do(
 				shard.LSSLock()
 				defer shard.LSSUnlock()
 
-				return bw.Write(relabeler.NewBlock(shard.LSS().Raw(), shard.DataStorage().Raw()))
+				_, err := bw.Write(relabeler.NewBlock(shard.LSS().Raw(), shard.DataStorage().Raw()), cppbridge.UnlimitedLsIdBatchSize)
+				return err
 			},
 			relabeler.ForLSSTask,
 		)

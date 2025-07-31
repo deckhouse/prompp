@@ -226,13 +226,16 @@ extern "C" void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, v
       *in->chunk_recoder);
 }
 
-extern "C" void prompp_series_data_chunk_recoder_next_batch(void* args) {
+extern "C" void prompp_series_data_chunk_recoder_next_batch(void* args, void* res) {
   struct Arguments {
     ChunkRecoderVariantPtr chunk_recoder;
   };
-  const auto in = static_cast<const Arguments*>(args);
+  struct Result {
+    bool has_more_data;
+  };
 
-  std::get<ChunkRecoder>(*in->chunk_recoder).chunk_iterator().next_batch();
+  auto& recoder = std::get<ChunkRecoder>(*static_cast<const Arguments*>(args)->chunk_recoder);
+  new (res) Result{.has_more_data = recoder.chunk_iterator().next_batch()};
 }
 
 extern "C" void prompp_series_data_chunk_recoder_dtor(void* args) {
@@ -262,7 +265,6 @@ extern "C" void prompp_series_data_data_storage_unload(void* args, void* res) {
 }
 
 extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* res) {
-  using PromPP::Primitives::LabelSetID;
   using series_data::unloading::Loader;
 
   struct Arguments {
