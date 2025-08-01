@@ -79,7 +79,6 @@ shell:
 ---
 image: prompp-artifact
 final: false
-fromCacheVersion: "2025-03-31-12"
 fromImage: toolkit
 mount:
   - fromPath: ~/go-pkg-cache
