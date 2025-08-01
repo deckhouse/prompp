@@ -220,7 +220,8 @@ func (s *BlockWriterSuite) TestWrite() {
 	s.fillHead()
 
 	// Act
-	blocks, err := s.blockWriter.Write(s, 2)
+	block.LsIdBatchSize = 2
+	blocks, err := s.blockWriter.Write(s)
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)
@@ -231,7 +232,8 @@ func (s *BlockWriterSuite) TestWriteInBatches() {
 	s.fillHead()
 
 	// Act
-	blocks, err := s.blockWriter.Write(s, 1)
+	block.LsIdBatchSize = 1
+	blocks, err := s.blockWriter.Write(s)
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)
@@ -243,7 +245,8 @@ func (s *BlockWriterSuite) TestWriteWithDataUnloading() {
 	s.unloadData()
 
 	// Act
-	blocks, err := s.blockWriter.Write(s, 2)
+	block.LsIdBatchSize = 2
+	blocks, err := s.blockWriter.Write(s)
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)
@@ -255,7 +258,8 @@ func (s *BlockWriterSuite) TestWriteWithDataUnloadingInBatches() {
 	s.unloadData()
 
 	// Act
-	blocks, err := s.blockWriter.Write(s, 1)
+	block.LsIdBatchSize = 1
+	blocks, err := s.blockWriter.Write(s)
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"io"
 	"math"
@@ -29,6 +30,8 @@ const (
 	metaFilename                 = "meta.json"
 	metaVersion1                 = 1
 )
+
+var LsIdBatchSize = cppbridge.UnlimitedLsIdBatchSize
 
 type chunkRecoder struct {
 	chunkIterator    ChunkIterator
@@ -224,11 +227,8 @@ func NewWriter(
 	}
 }
 
-func (w *Writer) Write(
-	shard relabeler.Shard,
-	lsIdBatchSize uint32,
-) ([]WrittenBlock, error) {
-	writers, err := w.createWriters(shard, lsIdBatchSize)
+func (w *Writer) Write(shard relabeler.Shard) ([]WrittenBlock, error) {
+	writers, err := w.createWriters(shard)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +239,7 @@ func (w *Writer) Write(
 		}
 	}()
 
-	if err = w.recodeAndWriteChunks(shard, writers, lsIdBatchSize); err != nil {
+	if err = w.recodeAndWriteChunks(shard, writers); err != nil {
 		return nil, err
 	}
 
@@ -259,7 +259,7 @@ func (w *Writer) Write(
 	return writtenBlocks, nil
 }
 
-func (w *Writer) createWriters(shard relabeler.Shard, lsIdBatchSize uint32) ([]blockWriter, error) {
+func (w *Writer) createWriters(shard relabeler.Shard) ([]blockWriter, error) {
 	var writers []blockWriter
 
 	timeInterval := shard.DataStorage().TimeInterval()
@@ -273,7 +273,7 @@ func (w *Writer) createWriters(shard relabeler.Shard, lsIdBatchSize uint32) ([]b
 			maxT = timeInterval.MaxT
 		}
 
-		chunkIterator := NewChunkIterator(shard.LSS().Raw(), lsIdBatchSize, shard.DataStorage().Raw(), minT, maxT)
+		chunkIterator := NewChunkIterator(shard.LSS().Raw(), LsIdBatchSize, shard.DataStorage().Raw(), minT, maxT)
 		if writer, err := newBlockWriter(w.dataDir, w.maxBlockChunkSegmentSize, NewIndexWriter(shard.LSS().Raw()), chunkIterator); err == nil {
 			writers = append(writers, writer)
 		} else {
@@ -287,12 +287,8 @@ func (w *Writer) createWriters(shard relabeler.Shard, lsIdBatchSize uint32) ([]b
 	return writers, nil
 }
 
-func (w *Writer) recodeAndWriteChunks(
-	shard relabeler.Shard,
-	writers []blockWriter,
-	lsIdBatchSize uint32,
-) error {
-	loader := shard.DataStorage().CreateRevertableLoader(shard.LSS().Raw(), lsIdBatchSize)
+func (w *Writer) recodeAndWriteChunks(shard relabeler.Shard, writers []blockWriter) error {
+	loader := shard.DataStorage().CreateRevertableLoader(shard.LSS().Raw(), LsIdBatchSize)
 	for {
 		if err := shard.UnloadedDataStorage().ForEachSnapshot(loader.Load); err != nil {
 			return err

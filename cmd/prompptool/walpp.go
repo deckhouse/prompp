@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"os"
 	"path/filepath"
 	"time"
@@ -120,7 +119,7 @@ func (cmd *cmdWALPPToBlock) Do(
 				shard.LSSLock()
 				defer shard.LSSUnlock()
 
-				_, err := bw.Write(shard, cppbridge.UnlimitedLsIdBatchSize)
+				_, err := bw.Write(shard)
 				return err
 			},
 			relabeler.ForLSSTask,

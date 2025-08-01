@@ -134,7 +134,7 @@ type RecodedChunk struct {
 const (
 	InvalidSeriesId = math.MaxUint32
 
-	UnlimitedLsIdBatchSize = math.MaxUint32
+	UnlimitedLsIdBatchSize uint32 = math.MaxUint32
 )
 
 // ChunkRecoder is Go wrapper around C++ ChunkRecoder.
