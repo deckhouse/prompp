@@ -410,6 +410,24 @@ TEST_F(LoaderUnloaderTestFixture, LoadValuesGorillaChunk) {
   ASSERT_FALSE(storage_.unloaded_series_bitmap.is_set(1));
 }
 
+TEST_F(LoaderUnloaderTestFixture, LoadOnlyUnloadedSeries) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 2.0);
+  encoder_.encode(0, 3, 3.0);
+
+  unloader_.unload(stream1_);
+  load({0}, stream1_.span<uint8_t>());
+
+  // Act
+  load({0}, stream1_.span<uint8_t>());
+
+  // Assert
+  ASSERT_EQ(series_data::EncodingType::kAscInteger, storage_.open_chunks[0].encoding_state.encoding_type);
+  ASSERT_EQ((SampleList{{1, 1.0}, {2, 2.0}, {3, 3.0}}), Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
+  ASSERT_FALSE(storage_.unloaded_series_bitmap.is_set(0));
+}
+
 class LoaderUnloaderBigTestFixture : public ::testing::Test {
  protected:
   void SetUp() override {

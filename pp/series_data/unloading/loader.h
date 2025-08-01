@@ -137,11 +137,10 @@ class Loader {
   void add_series_to_load(LsIdSetIterator ls_id_iterator, LsIdSetIteratorSentinel ls_id_end_iterator, uint32_t count) noexcept {
     ls_id_to_infos_.reserve(ls_id_to_infos_.size() + count);
 
-    // TODO: add to load only unloaded series
-
     for (; ls_id_iterator != ls_id_end_iterator; ++ls_id_iterator) {
-      ls_id_to_infos_.insert(*ls_id_iterator);
-      storage_.unloaded_series_bitmap.reset(*ls_id_iterator);
+      if (const auto ls_id = *ls_id_iterator; storage_.unloaded_series_bitmap.is_set(ls_id)) {
+        ls_id_to_infos_.insert(ls_id);
+      }
     }
   }
 
@@ -167,6 +166,7 @@ class Loader {
     OutdatedChunkMerger<Encoder> outdated_chunk_merger{encoder};
     for (const auto& ls_id : std::views::keys(ls_id_to_infos_)) {
       outdated_chunk_merger.merge(ls_id);
+      storage_.unloaded_series_bitmap.reset(ls_id);
     }
 
     ls_id_to_infos_.clear();
