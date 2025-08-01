@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"github.com/oklog/ulid"
 	"github.com/prometheus/prometheus/pp/go/model"
+	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/block"
+	"github.com/prometheus/prometheus/pp/go/relabeler/head"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/stretchr/testify/suite"
 	"os"
@@ -18,21 +20,49 @@ import (
 
 type BlockWriterSuite struct {
 	suite.Suite
-	lss                 *cppbridge.LabelSetStorage
-	dataStorage         *cppbridge.HeadDataStorage
-	unloadedDataStorage *cppbridge.UnloadedDataStorage
-	encoder             *cppbridge.HeadEncoder
+	lss                 *head.LSS
+	dataStorage         *head.DataStorage
+	unloadedDataStorage relabeler.UnloadedDataStorage
 	blockWriter         *block.Writer
 }
+
+func (s *BlockWriterSuite) ShardID() uint16 { return 0 }
+
+func (s *BlockWriterSuite) DataStorage() relabeler.DataStorage { return s.dataStorage }
+
+func (s *BlockWriterSuite) LSS() relabeler.LSS { return s.lss }
+
+func (s *BlockWriterSuite) Wal() relabeler.Wal { return nil }
+
+func (s *BlockWriterSuite) UnloadedDataStorage() relabeler.UnloadedDataStorage {
+	return s.unloadedDataStorage
+}
+
+func (s *BlockWriterSuite) LoadAndQueryTask() relabeler.DataStorageLoadAndQueryTask { return nil }
+
+func (s *BlockWriterSuite) DataStorageLock() {}
+
+func (s *BlockWriterSuite) DataStorageRLock() {}
+
+func (s *BlockWriterSuite) DataStorageRUnlock() {}
+
+func (s *BlockWriterSuite) DataStorageUnlock() {}
+
+func (s *BlockWriterSuite) LSSLock() {}
+
+func (s *BlockWriterSuite) LSSRLock() {}
+
+func (s *BlockWriterSuite) LSSRUnlock() {}
+
+func (s *BlockWriterSuite) LSSUnlock() {}
 
 func TestBlockWriterSuite(t *testing.T) {
 	suite.Run(t, new(BlockWriterSuite))
 }
 
 func (s *BlockWriterSuite) SetupTest() {
-	s.lss = cppbridge.NewQueryableLssStorage()
-	s.dataStorage = cppbridge.NewHeadDataStorage()
-	s.encoder = cppbridge.NewHeadEncoderWithDataStorage(s.dataStorage)
+	s.lss = head.NewLSS(nil, cppbridge.NewQueryableLssStorage())
+	s.dataStorage = head.NewDataStorage()
 
 	dataDir := s.createDataDirectory()
 
@@ -69,18 +99,19 @@ func (s *BlockWriterSuite) unloadData() {
 }
 
 func (s *BlockWriterSuite) fillHead() {
-	lsID1 := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("key1", "value1").Build()).LabelSetID
-	lsID2 := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("key2", "value2").Build()).LabelSetID
+	lsID1 := s.lss.Raw().FindOrEmplace(model.NewLabelSetBuilder().Set("key1", "value1").Build()).LabelSetID
+	lsID2 := s.lss.Raw().FindOrEmplace(model.NewLabelSetBuilder().Set("key2", "value2").Build()).LabelSetID
 
 	ts := time.UnixMilli(1753805651969)
-	s.encoder.Encode(lsID1, ts.UnixMilli(), 0)
-	s.encoder.Encode(lsID2, ts.UnixMilli(), 0)
+	encoder := s.dataStorage.Encoder()
+	encoder.Encode(lsID1, ts.UnixMilli(), 0)
+	encoder.Encode(lsID2, ts.UnixMilli(), 0)
 
-	s.encoder.Encode(lsID1, ts.Add(time.Minute).UnixMilli(), 1)
-	s.encoder.Encode(lsID2, ts.Add(time.Minute).UnixMilli(), 1)
+	encoder.Encode(lsID1, ts.Add(time.Minute).UnixMilli(), 1)
+	encoder.Encode(lsID2, ts.Add(time.Minute).UnixMilli(), 1)
 
-	s.encoder.Encode(lsID1, ts.Add(time.Hour*2).UnixMilli(), 2)
-	s.encoder.Encode(lsID2, ts.Add(time.Hour*2).UnixMilli(), 2)
+	encoder.Encode(lsID1, ts.Add(time.Hour*2).UnixMilli(), 2)
+	encoder.Encode(lsID2, ts.Add(time.Hour*2).UnixMilli(), 2)
 }
 
 func (s *BlockWriterSuite) assertWrittenBlocks(blocks []block.WrittenBlock, err error) {
@@ -189,7 +220,7 @@ func (s *BlockWriterSuite) TestWrite() {
 	s.fillHead()
 
 	// Act
-	blocks, err := s.blockWriter.Write(s.dataStorage, s.unloadedDataStorage, s.lss, 2)
+	blocks, err := s.blockWriter.Write(s, 2)
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)
@@ -200,7 +231,7 @@ func (s *BlockWriterSuite) TestWriteInBatches() {
 	s.fillHead()
 
 	// Act
-	blocks, err := s.blockWriter.Write(s.dataStorage, s.unloadedDataStorage, s.lss, 1)
+	blocks, err := s.blockWriter.Write(s, 1)
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)
@@ -212,7 +243,7 @@ func (s *BlockWriterSuite) TestWriteWithDataUnloading() {
 	s.unloadData()
 
 	// Act
-	blocks, err := s.blockWriter.Write(s.dataStorage, s.unloadedDataStorage, s.lss, 2)
+	blocks, err := s.blockWriter.Write(s, 2)
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)
@@ -224,7 +255,7 @@ func (s *BlockWriterSuite) TestWriteWithDataUnloadingInBatches() {
 	s.unloadData()
 
 	// Act
-	blocks, err := s.blockWriter.Write(s.dataStorage, s.unloadedDataStorage, s.lss, 1)
+	blocks, err := s.blockWriter.Write(s, 1)
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"io"
 	"math"
@@ -226,12 +225,10 @@ func NewWriter(
 }
 
 func (w *Writer) Write(
-	dataStorage *cppbridge.HeadDataStorage,
-	unloadedDataStorage relabeler.UnloadedDataStorage,
-	lss *cppbridge.LabelSetStorage,
+	shard relabeler.Shard,
 	lsIdBatchSize uint32,
 ) ([]WrittenBlock, error) {
-	writers, err := w.createWriters(dataStorage, lss, lsIdBatchSize)
+	writers, err := w.createWriters(shard, lsIdBatchSize)
 	if err != nil {
 		return nil, err
 	}
@@ -242,7 +239,7 @@ func (w *Writer) Write(
 		}
 	}()
 
-	if err = w.recodeAndWriteChunks(unloadedDataStorage, dataStorage.CreateRevertableLoader(lss, lsIdBatchSize), writers); err != nil {
+	if err = w.recodeAndWriteChunks(shard, writers, lsIdBatchSize); err != nil {
 		return nil, err
 	}
 
@@ -262,10 +259,10 @@ func (w *Writer) Write(
 	return writtenBlocks, nil
 }
 
-func (w *Writer) createWriters(dataStorage *cppbridge.HeadDataStorage, lss *cppbridge.LabelSetStorage, lsIdBatchSize uint32) ([]blockWriter, error) {
+func (w *Writer) createWriters(shard relabeler.Shard, lsIdBatchSize uint32) ([]blockWriter, error) {
 	var writers []blockWriter
 
-	timeInterval := dataStorage.TimeInterval()
+	timeInterval := shard.DataStorage().TimeInterval()
 	quantStart := (timeInterval.MinT / w.blockDurationMs) * w.blockDurationMs
 	for ; quantStart <= timeInterval.MaxT; quantStart += w.blockDurationMs {
 		minT, maxT := quantStart, quantStart+w.blockDurationMs-1
@@ -276,8 +273,8 @@ func (w *Writer) createWriters(dataStorage *cppbridge.HeadDataStorage, lss *cppb
 			maxT = timeInterval.MaxT
 		}
 
-		chunkIterator := NewChunkIterator(lss, lsIdBatchSize, dataStorage, minT, maxT)
-		if writer, err := newBlockWriter(w.dataDir, w.maxBlockChunkSegmentSize, NewIndexWriter(lss), chunkIterator); err == nil {
+		chunkIterator := NewChunkIterator(shard.LSS().Raw(), lsIdBatchSize, shard.DataStorage().Raw(), minT, maxT)
+		if writer, err := newBlockWriter(w.dataDir, w.maxBlockChunkSegmentSize, NewIndexWriter(shard.LSS().Raw()), chunkIterator); err == nil {
 			writers = append(writers, writer)
 		} else {
 			for _, wr := range writers {
@@ -291,12 +288,13 @@ func (w *Writer) createWriters(dataStorage *cppbridge.HeadDataStorage, lss *cppb
 }
 
 func (w *Writer) recodeAndWriteChunks(
-	unloadedDataStorage relabeler.UnloadedDataStorage,
-	loader *cppbridge.UnloadedDataRevertableLoader,
+	shard relabeler.Shard,
 	writers []blockWriter,
+	lsIdBatchSize uint32,
 ) error {
+	loader := shard.DataStorage().CreateRevertableLoader(shard.LSS().Raw(), lsIdBatchSize)
 	for {
-		if err := unloadedDataStorage.ForEachSnapshot(loader.Load); err != nil {
+		if err := shard.UnloadedDataStorage().ForEachSnapshot(loader.Load); err != nil {
 			return err
 		}
 

@@ -120,7 +120,7 @@ func (cmd *cmdWALPPToBlock) Do(
 				shard.LSSLock()
 				defer shard.LSSUnlock()
 
-				_, err := bw.Write(shard.DataStorage().Raw(), shard.UnloadedDataStorage(), shard.LSS().Raw(), cppbridge.UnlimitedLsIdBatchSize)
+				_, err := bw.Write(shard, cppbridge.UnlimitedLsIdBatchSize)
 				return err
 			},
 			relabeler.ForLSSTask,

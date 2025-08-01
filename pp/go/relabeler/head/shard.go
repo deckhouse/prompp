@@ -18,6 +18,13 @@ type LSS struct {
 	once     sync.Once
 }
 
+func NewLSS(input *cppbridge.LabelSetStorage, target *cppbridge.LabelSetStorage) *LSS {
+	return &LSS{
+		input:  input,
+		target: target,
+	}
+}
+
 func (w *LSS) Raw() *cppbridge.LabelSetStorage {
 	return w.target
 }
@@ -27,10 +34,10 @@ func (w *LSS) AllocatedMemory() uint64 {
 }
 
 func (w *LSS) QueryLabelValues(
-	label_name string,
+	labelName string,
 	matchers []model.LabelMatcher,
 ) *cppbridge.LSSQueryLabelValuesResult {
-	return w.target.QueryLabelValues(label_name, matchers)
+	return w.target.QueryLabelValues(labelName, matchers)
 }
 
 func (w *LSS) QueryLabelNames(matchers []model.LabelMatcher) *cppbridge.LSSQueryLabelNamesResult {
@@ -80,6 +87,10 @@ func NewDataStorage() *DataStorage {
 		dataStorage: dataStorage,
 		encoder:     cppbridge.NewHeadEncoderWithDataStorage(dataStorage),
 	}
+}
+
+func (ds *DataStorage) Encoder() *cppbridge.HeadEncoder {
+	return ds.encoder
 }
 
 func (ds *DataStorage) AppendInnerSeriesSlice(innerSeriesSlice []*cppbridge.InnerSeries) {

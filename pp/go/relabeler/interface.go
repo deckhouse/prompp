@@ -27,7 +27,7 @@ type DataStorage interface {
 type LSS interface {
 	Raw() *cppbridge.LabelSetStorage
 	AllocatedMemory() uint64
-	QueryLabelValues(label_name string, matchers []model.LabelMatcher) *cppbridge.LSSQueryLabelValuesResult
+	QueryLabelValues(labelName string, matchers []model.LabelMatcher) *cppbridge.LSSQueryLabelValuesResult
 	QueryLabelNames(matchers []model.LabelMatcher) *cppbridge.LSSQueryLabelNamesResult
 	QuerySelector(matchers []model.LabelMatcher) (selector uintptr, status uint32)
 	GetLabelSets(labelSetIDs []uint32) *cppbridge.LabelSetStorageGetLabelSetsResult
