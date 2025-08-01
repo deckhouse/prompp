@@ -22,7 +22,7 @@ type BlockWriterSuite struct {
 	dataStorage         *cppbridge.HeadDataStorage
 	unloadedDataStorage *cppbridge.UnloadedDataStorage
 	encoder             *cppbridge.HeadEncoder
-	blockWriter         *block.BlockWriter
+	blockWriter         *block.Writer
 }
 
 func TestBlockWriterSuite(t *testing.T) {
@@ -40,7 +40,7 @@ func (s *BlockWriterSuite) SetupTest() {
 	s.Require().NoError(err)
 	s.unloadedDataStorage = cppbridge.NewUnloadedDataStorage(file)
 
-	s.blockWriter = block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize, 2*time.Hour, prometheus.DefaultRegisterer)
+	s.blockWriter = block.NewWriter(dataDir, block.DefaultChunkSegmentSize, 2*time.Hour, prometheus.DefaultRegisterer)
 }
 
 func (s *BlockWriterSuite) createDataDirectory() string {

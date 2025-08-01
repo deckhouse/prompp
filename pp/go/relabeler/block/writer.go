@@ -200,21 +200,21 @@ func (writer *blockWriter) MoveTmpDirToDir() error {
 	return nil
 }
 
-type BlockWriter struct {
+type Writer struct {
 	dataDir                  string
 	maxBlockChunkSegmentSize int64
 	blockDurationMs          int64
 	blockWriteDuration       *prometheus.GaugeVec
 }
 
-func NewBlockWriter(
+func NewWriter(
 	dataDir string,
 	maxBlockChunkSegmentSize int64,
 	blockDuration time.Duration,
 	registerer prometheus.Registerer,
-) *BlockWriter {
+) *Writer {
 	factory := util.NewUnconflictRegisterer(registerer)
-	return &BlockWriter{
+	return &Writer{
 		dataDir:                  dataDir,
 		maxBlockChunkSegmentSize: maxBlockChunkSegmentSize,
 		blockDurationMs:          blockDuration.Milliseconds(),
@@ -225,7 +225,7 @@ func NewBlockWriter(
 	}
 }
 
-func (w *BlockWriter) Write(
+func (w *Writer) Write(
 	dataStorage *cppbridge.HeadDataStorage,
 	unloadedDataStorage relabeler.UnloadedDataStorage,
 	lss *cppbridge.LabelSetStorage,
@@ -262,7 +262,7 @@ func (w *BlockWriter) Write(
 	return writtenBlocks, nil
 }
 
-func (w *BlockWriter) createWriters(dataStorage *cppbridge.HeadDataStorage, lss *cppbridge.LabelSetStorage, lsIdBatchSize uint32) ([]blockWriter, error) {
+func (w *Writer) createWriters(dataStorage *cppbridge.HeadDataStorage, lss *cppbridge.LabelSetStorage, lsIdBatchSize uint32) ([]blockWriter, error) {
 	var writers []blockWriter
 
 	timeInterval := dataStorage.TimeInterval()
@@ -290,7 +290,7 @@ func (w *BlockWriter) createWriters(dataStorage *cppbridge.HeadDataStorage, lss 
 	return writers, nil
 }
 
-func (w *BlockWriter) recodeAndWriteChunks(
+func (w *Writer) recodeAndWriteChunks(
 	unloadedDataStorage relabeler.UnloadedDataStorage,
 	loader *cppbridge.UnloadedDataRevertableLoader,
 	writers []blockWriter,

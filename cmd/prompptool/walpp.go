@@ -85,7 +85,7 @@ func (cmd *cmdWALPPToBlock) Do(
 	level.Debug(logger).Log("msg", "catalog records", "len", len(headRecords))
 
 	var inputRelabelerConfig []*config.InputRelabelerConfig
-	bw := block.NewBlockWriter(workingDir, block.DefaultChunkSegmentSize, time.Duration(cmd.blockDuration), registerer)
+	bw := block.NewWriter(workingDir, block.DefaultChunkSegmentSize, time.Duration(cmd.blockDuration), registerer)
 	for _, headRecord := range headRecords {
 		if err := ctx.Err(); err != nil {
 			return err

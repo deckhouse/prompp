@@ -189,7 +189,7 @@ func NewReceiver(
 	}
 	readyNotifier.NotifyReady()
 	queryableStorage := appender.NewQueryableStorageWithWriteNotifier(
-		block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize, rotationInfo.BlockDuration, registerer),
+		block.NewWriter(dataDir, block.DefaultChunkSegmentSize, rotationInfo.BlockDuration, registerer),
 		registerer,
 		querier.NewMetrics(registerer, querier.QueryableStorageSource),
 		triggerNotifier,
