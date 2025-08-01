@@ -52,7 +52,7 @@ jobs:
           export ASAN="false"
           export WERF_BUILDAH_MODE=auto
 
-          werf build --platform linux/${{ matrix.arch }} --add-custom-tag="${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp
+          werf build --verbose --platform linux/${{ matrix.arch }} --add-custom-tag="${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp
 
   make-multiarch:
     needs: build-and-push
