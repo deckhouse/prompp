@@ -27,7 +27,9 @@ class LoadReverter {
 
   void revert() noexcept {
     for (const auto& meta : source_sizes_) {
-      revert_chunk(meta);
+      if (!storage_.queried_series_bitmap.is_set(meta.ls_id)) {
+        revert_chunk(meta);
+      }
     }
 
     source_sizes_.clear();
@@ -58,8 +60,6 @@ class LoadReverter {
 
     seq.push_back_bytes(chunk_bit_sequence.raw_bytes() + BareBones::Bit::to_ceil_bytes(chunk_bit_sequence.size_in_bits() - meta.source_size_in_bits),
                         meta.source_size_in_bits);
-
-    // TODO: set unload bit for series
 
     chunk_bit_sequence = std::move(seq);
   }
