@@ -29,7 +29,10 @@ type WriteNotifier interface {
 
 // BlockWriter writes block on disk.
 type BlockWriter interface {
-	Write(block block.Block, lsIdBatchSize uint32) ([]block.WrittenBlock, error)
+	Write(dataStorage *cppbridge.HeadDataStorage,
+		unloadedDataStorage relabeler.UnloadedDataStorage,
+		lss *cppbridge.LabelSetStorage,
+		lsIdBatchSize uint32) ([]block.WrittenBlock, error)
 }
 
 // QueryableStorage hold reference to finalized heads and writes blocks from them. Also allows query not yet not
@@ -170,7 +173,7 @@ func (qs *QueryableStorage) write() bool {
 				shard.LSSLock()
 				defer shard.LSSUnlock()
 
-				_, err := qs.blockWriter.Write(relabeler.NewBlock(shard.LSS().Raw(), shard.DataStorage().Raw()), cppbridge.UnlimitedLsIdBatchSize)
+				_, err := qs.blockWriter.Write(shard.DataStorage().Raw(), shard.UnloadedDataStorage(), shard.LSS().Raw(), cppbridge.UnlimitedLsIdBatchSize)
 				return err
 			},
 			relabeler.ForLSSTask,

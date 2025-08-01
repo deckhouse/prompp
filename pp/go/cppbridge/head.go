@@ -300,6 +300,34 @@ func (ds *HeadDataStorage) CreateLoader(queriers []uintptr) *UnloadedDataLoader 
 	return result
 }
 
+// UnloadedDataRevertableLoader is Go wrapper around series_data::RevertableLoader.
+type UnloadedDataRevertableLoader struct {
+	UnloadedDataLoader
+	lss *LabelSetStorage
+}
+
+func (loader *UnloadedDataRevertableLoader) NextBatch() bool {
+	result := seriesDataUnloadedDataRevertableLoaderNextBatch(loader.loader)
+	runtime.KeepAlive(loader)
+	return result
+}
+
+func (ds *HeadDataStorage) CreateRevertableLoader(lss *LabelSetStorage, lsIdBatchSize uint32) *UnloadedDataRevertableLoader {
+	result := &UnloadedDataRevertableLoader{
+		UnloadedDataLoader: UnloadedDataLoader{
+			loader: seriesDataUnloadedDataRevertableLoaderCtor(lss.pointer, lsIdBatchSize, ds.dataStorage),
+			ds:     ds,
+		},
+		lss: lss,
+	}
+
+	runtime.SetFinalizer(result, func(loader *UnloadedDataRevertableLoader) {
+		seriesDataUnloadedDataLoaderDtor(loader.loader)
+	})
+
+	return result
+}
+
 type HeadDataStorageDeserializer struct {
 	deserializer     uintptr
 	serializedChunks HeadDataStorageSerializedChunks

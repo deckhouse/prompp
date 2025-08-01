@@ -10,13 +10,17 @@ class LoadReverter {
   explicit LoadReverter(DataStorage& storage) : storage_(storage) {}
 
   template <LsIDStorageInterface LsIDStorage>
-  void set_series_for_revert(const LsIDStorage& ls_id_range, uint32_t ls_id_range_count) noexcept {
-    source_sizes_.clear();
-    source_sizes_.reserve(ls_id_range_count);
+  void add_series_to_revert(const LsIDStorage& ls_id_range, uint32_t ls_id_range_count) noexcept {
+    add_series_to_revert(ls_id_range.begin(), ls_id_range.end(), ls_id_range_count);
+  }
 
-    for (uint32_t ls_id : ls_id_range) {
-      if (storage_.outdated_chunks.find(ls_id) == storage_.outdated_chunks.end()) {
-        process_series(ls_id);
+  template <class LsIdSetIterator, class LsIdSetIteratorSentinel>
+  void add_series_to_revert(LsIdSetIterator ls_id_iterator, LsIdSetIteratorSentinel ls_id_end_iterator, uint32_t count) noexcept {
+    source_sizes_.reserve(source_sizes_.size() + count);
+
+    for (; ls_id_iterator != ls_id_end_iterator; ++ls_id_iterator) {
+      if (storage_.outdated_chunks.find(*ls_id_iterator) == storage_.outdated_chunks.end()) {
+        process_series(*ls_id_iterator);
       }
     }
   }
@@ -25,6 +29,8 @@ class LoadReverter {
     for (const auto& meta : source_sizes_) {
       revert_chunk(meta);
     }
+
+    source_sizes_.clear();
   }
 
  private:
@@ -52,6 +58,8 @@ class LoadReverter {
 
     seq.push_back_bytes(chunk_bit_sequence.raw_bytes() + BareBones::Bit::to_ceil_bytes(chunk_bit_sequence.size_in_bits() - meta.source_size_in_bits),
                         meta.source_size_in_bits);
+
+    // TODO: set unload bit for series
 
     chunk_bit_sequence = std::move(seq);
   }

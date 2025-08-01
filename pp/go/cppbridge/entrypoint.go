@@ -2342,6 +2342,26 @@ func seriesDataUnloadedDataLoaderCtor(dataStorage uintptr, queriers []uintptr) u
 	return res.loader
 }
 
+func seriesDataUnloadedDataRevertableLoaderCtor(lss uintptr, lsIdBatchSize uint32, dataStorage uintptr) uintptr {
+	args := struct {
+		lss           uintptr
+		lsIdBatchSize uint32
+		dataStorage   uintptr
+	}{lss, lsIdBatchSize, dataStorage}
+	var res struct {
+		loader uintptr
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_data_storage_revertable_loader_ctor,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.loader
+}
+
 func seriesDataUnloadedDataLoaderLoad(loader uintptr, snapshot []byte, isLast bool) {
 	args := struct {
 		loader   uintptr
@@ -2354,6 +2374,24 @@ func seriesDataUnloadedDataLoaderLoad(loader uintptr, snapshot []byte, isLast bo
 		C.prompp_series_data_data_storage_loader_load_next,
 		uintptr(unsafe.Pointer(&args)),
 	)
+}
+
+func seriesDataUnloadedDataRevertableLoaderNextBatch(loader uintptr) bool {
+	args := struct {
+		loader uintptr
+	}{loader}
+	var res struct {
+		hasMoreData bool
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_data_storage_revertable_loader_next_batch,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.hasMoreData
 }
 
 func seriesDataUnloadedDataLoaderDtor(loader uintptr) {

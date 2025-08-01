@@ -205,6 +205,21 @@ void prompp_series_data_data_storage_unload(void* args, void* res);
 void prompp_series_data_data_storage_loader_ctor(void* args, void* res);
 
 /**
+ * @brief Construct RevertableLoader to load previously unqueried series
+ *
+ * @param args {
+ *     lss uintptr            // pointer to constructed label sets
+ *     lsIdBatchSize uint32   // size of ls batch for recoding
+ *     dataStorage   uintptr  // pointer to constructed data storage
+ * }
+ *
+ *  @param res {
+ *     loader uintptr // pointer to loader
+ * }
+ */
+void prompp_series_data_data_storage_revertable_loader_ctor(void* args, void* res);
+
+/**
  * @brief Loads next previously unloaded snapshot of data
  *
  * @param args {
@@ -214,6 +229,19 @@ void prompp_series_data_data_storage_loader_ctor(void* args, void* res);
  * }
  */
 void prompp_series_data_data_storage_loader_load_next(void* args);
+
+/**
+ * @brief Advance RevertableLoader::iterator to next batch
+ *
+ * @param args {
+ *     loader uintptr // pointer to loader
+ * }
+ *
+ * @param res {
+ *     hasMoreData bool  // true if chunk recoder has more
+ * }
+ */
+void prompp_series_data_data_storage_revertable_loader_next_batch(void* args, void* res);
 
 /**
  * @brief Destroy Loader object

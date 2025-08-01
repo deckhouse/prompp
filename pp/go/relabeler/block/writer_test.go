@@ -1,9 +1,10 @@
-package relabeler
+package block_test
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/oklog/ulid"
+	"github.com/prometheus/prometheus/pp/go/model"
+	"github.com/prometheus/prometheus/pp/go/relabeler/block"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/stretchr/testify/suite"
 	"os"
@@ -13,16 +14,15 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/model"
-	"github.com/prometheus/prometheus/pp/go/relabeler/block"
 )
 
 type BlockWriterSuite struct {
 	suite.Suite
-	lss         *cppbridge.LabelSetStorage
-	dataStorage *cppbridge.HeadDataStorage
-	encoder     *cppbridge.HeadEncoder
-	blockWriter *block.BlockWriter
+	lss                 *cppbridge.LabelSetStorage
+	dataStorage         *cppbridge.HeadDataStorage
+	unloadedDataStorage *cppbridge.UnloadedDataStorage
+	encoder             *cppbridge.HeadEncoder
+	blockWriter         *block.BlockWriter
 }
 
 func TestBlockWriterSuite(t *testing.T) {
@@ -34,9 +34,19 @@ func (s *BlockWriterSuite) SetupTest() {
 	s.dataStorage = cppbridge.NewHeadDataStorage()
 	s.encoder = cppbridge.NewHeadEncoderWithDataStorage(s.dataStorage)
 
-	dataDir := filepath.Join(s.T().TempDir(), "data")
-	fmt.Println(dataDir)
+	dataDir := s.createDataDirectory()
+
+	file, err := os.Create(filepath.Join(dataDir, "unloaded_data"))
+	s.Require().NoError(err)
+	s.unloadedDataStorage = cppbridge.NewUnloadedDataStorage(file)
+
 	s.blockWriter = block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize, 2*time.Hour, prometheus.DefaultRegisterer)
+}
+
+func (s *BlockWriterSuite) createDataDirectory() string {
+	dataDir := filepath.Join(s.T().TempDir(), "data")
+	s.Require().NoError(os.MkdirAll(dataDir, 0o777))
+	return dataDir
 }
 
 func (s *BlockWriterSuite) readFile(filename string) []byte {
@@ -54,8 +64,11 @@ func (s *BlockWriterSuite) readBlockMeta(filename string) tsdb.BlockMeta {
 	return meta
 }
 
-func (s *BlockWriterSuite) TestWriteWithUnlimitedLsIdBatchSize() {
-	// Arrange
+func (s *BlockWriterSuite) unloadData() {
+	s.Require().NoError(s.unloadedDataStorage.Write(s.dataStorage.UnloadUnusedSeriesData().Bytes))
+}
+
+func (s *BlockWriterSuite) fillHead() {
 	lsID1 := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("key1", "value1").Build()).LabelSetID
 	lsID2 := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("key2", "value2").Build()).LabelSetID
 
@@ -68,15 +81,13 @@ func (s *BlockWriterSuite) TestWriteWithUnlimitedLsIdBatchSize() {
 
 	s.encoder.Encode(lsID1, ts.Add(time.Hour*2).UnixMilli(), 2)
 	s.encoder.Encode(lsID2, ts.Add(time.Hour*2).UnixMilli(), 2)
+}
 
-	// Act
-	writers, err := s.blockWriter.Write(NewBlock(s.lss, s.dataStorage), cppbridge.UnlimitedLsIdBatchSize)
-
-	// Assert
+func (s *BlockWriterSuite) assertWrittenBlocks(blocks []block.WrittenBlock, err error) {
 	s.NoError(err)
-	s.Equal(2, len(writers))
+	s.Equal(2, len(blocks))
 
-	meta1 := s.readBlockMeta(writers[0].MetaFilename())
+	meta1 := s.readBlockMeta(blocks[0].MetaFilename())
 	s.Equal(tsdb.BlockMeta{
 		MinTime: 1753805651969,
 		MaxTime: 1753805711970,
@@ -93,7 +104,7 @@ func (s *BlockWriterSuite) TestWriteWithUnlimitedLsIdBatchSize() {
 		Version: 1,
 	}, meta1)
 
-	meta2 := s.readBlockMeta(writers[1].MetaFilename())
+	meta2 := s.readBlockMeta(blocks[1].MetaFilename())
 	s.Equal(tsdb.BlockMeta{
 		MinTime: 1753812851969,
 		MaxTime: 1753812851970,
@@ -132,7 +143,7 @@ func (s *BlockWriterSuite) TestWriteWithUnlimitedLsIdBatchSize() {
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x2A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x70, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0xCC, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x98, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0xE7, 0xF0, 0x26, 0xD1, 0x95,
-	}, s.readFile(writers[0].IndexFilename()))
+	}, s.readFile(blocks[0].IndexFilename()))
 
 	s.Equal([]byte{
 		0xBA, 0xAA, 0xD7, 0x00, 0x02, 0x00, 0x00, 0x00, 0x1D, 0x00, 0x00, 0x00, 0x05, 0x00, 0x04, 0x6B,
@@ -156,19 +167,65 @@ func (s *BlockWriterSuite) TestWriteWithUnlimitedLsIdBatchSize() {
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x2A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x70, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0xCC, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x98, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0xE7, 0xF0, 0x26, 0xD1, 0x95,
-	}, s.readFile(writers[1].IndexFilename()))
+	}, s.readFile(blocks[1].IndexFilename()))
 
 	s.Equal([]byte{
 		0x85, 0xBD, 0x40, 0xDD, 0x01, 0x00, 0x00, 0x00, 0x16, 0x01, 0x00, 0x02, 0x82, 0x80, 0xB4, 0xEF,
 		0x8A, 0x66, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xE0, 0xD4, 0x03, 0xC4, 0x57, 0xFE,
 		0xC0, 0xEE, 0xF0, 0x5E, 0x16, 0x01, 0x00, 0x02, 0x82, 0x80, 0xB4, 0xEF, 0x8A, 0x66, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xE0, 0xD4, 0x03, 0xC4, 0x57, 0xFE, 0xC0, 0xEE, 0xF0, 0x5E,
-	}, s.readFile(filepath.Join(writers[0].ChunkDir(), "000000")))
+	}, s.readFile(filepath.Join(blocks[0].ChunkDir(), "000000")))
 
 	s.Equal([]byte{
 		0x85, 0xBD, 0x40, 0xDD, 0x01, 0x00, 0x00, 0x00, 0x10, 0x01, 0x00, 0x01, 0x82, 0xF4, 0xA2, 0xF6,
 		0x8A, 0x66, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x29, 0x21, 0xAB, 0xF9, 0x10, 0x01,
 		0x00, 0x01, 0x82, 0xF4, 0xA2, 0xF6, 0x8A, 0x66, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x29, 0x21, 0xAB, 0xF9,
-	}, s.readFile(filepath.Join(writers[1].ChunkDir(), "000000")))
+	}, s.readFile(filepath.Join(blocks[1].ChunkDir(), "000000")))
+}
+
+func (s *BlockWriterSuite) TestWrite() {
+	// Arrange
+	s.fillHead()
+
+	// Act
+	blocks, err := s.blockWriter.Write(s.dataStorage, s.unloadedDataStorage, s.lss, 2)
+
+	// Assert
+	s.assertWrittenBlocks(blocks, err)
+}
+
+func (s *BlockWriterSuite) TestWriteInBatches() {
+	// Arrange
+	s.fillHead()
+
+	// Act
+	blocks, err := s.blockWriter.Write(s.dataStorage, s.unloadedDataStorage, s.lss, 1)
+
+	// Assert
+	s.assertWrittenBlocks(blocks, err)
+}
+
+func (s *BlockWriterSuite) TestWriteWithDataUnloading() {
+	// Arrange
+	s.fillHead()
+	s.unloadData()
+
+	// Act
+	blocks, err := s.blockWriter.Write(s.dataStorage, s.unloadedDataStorage, s.lss, 2)
+
+	// Assert
+	s.assertWrittenBlocks(blocks, err)
+}
+
+func (s *BlockWriterSuite) TestWriteWithDataUnloadingInBatches() {
+	// Arrange
+	s.fillHead()
+	s.unloadData()
+
+	// Act
+	blocks, err := s.blockWriter.Write(s.dataStorage, s.unloadedDataStorage, s.lss, 1)
+
+	// Assert
+	s.assertWrittenBlocks(blocks, err)
 }

@@ -5,6 +5,7 @@
 #include "head/lss.h"
 #include "primitives/go_slice.h"
 #include "series_data/data_storage.h"
+#include "series_data/loader.h"
 #include "series_data/querier.h"
 #include "series_data/querier/instant_querier.h"
 #include "series_data/querier/querier.h"
@@ -30,7 +31,9 @@ using SerializedChunkRecoder = head::ChunkRecoder<series_data::chunk::Serialized
 using ChunkRecoderVariant = std::variant<ChunkRecoder, SerializedChunkRecoder>;
 using ChunkRecoderVariantPtr = std::unique_ptr<ChunkRecoderVariant>;
 
-using LoaderVariant = std::variant<series_data::unloading::Loader>;
+using entrypoint::series_data::RevertableLoader;
+
+using LoaderVariant = std::variant<series_data::unloading::Loader, RevertableLoader>;
 using LoaderVariantPtr = std::unique_ptr<LoaderVariant>;
 static_assert(sizeof(LoaderVariantPtr) == sizeof(void*));
 
@@ -290,6 +293,25 @@ extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* re
   }
 }
 
+extern "C" void prompp_series_data_data_storage_revertable_loader_ctor(void* args, void* res) {
+  struct Arguments {
+    entrypoint::head::LssVariantPtr lss;
+    uint32_t ls_id_batch_size;
+    DataStoragePtr data_storage;
+  };
+
+  struct Result {
+    LoaderVariantPtr loader;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  auto& ls_id_set = std::get<QueryableEncodingBimap>(*in->lss).ls_id_set();
+  new (res) Result{
+      .loader =
+          std::make_unique<LoaderVariant>(std::in_place_type<RevertableLoader>, *in->data_storage, ls_id_set.begin(), ls_id_set.end(), in->ls_id_batch_size),
+  };
+}
+
 extern "C" void prompp_series_data_data_storage_loader_load_next(void* args) {
   struct Arguments {
     LoaderVariantPtr loader;
@@ -308,6 +330,19 @@ extern "C" void prompp_series_data_data_storage_loader_load_next(void* args) {
         }
       },
       *in->loader);
+}
+
+extern "C" void prompp_series_data_data_storage_revertable_loader_next_batch(void* args, void* res) {
+  struct Arguments {
+    LoaderVariantPtr loader;
+  };
+  struct Result {
+    bool has_more_data;
+  };
+
+  auto& recoder = std::get<RevertableLoader>(*static_cast<const Arguments*>(args)->loader);
+  recoder.revert();
+  new (res) Result{.has_more_data = recoder.next_batch()};
 }
 
 extern "C" void prompp_series_data_data_storage_loader_dtor(void* args) {

@@ -118,6 +118,14 @@ func (ds *DataStorage) CreateLoader(queriers []uintptr) *cppbridge.UnloadedDataL
 	return ds.dataStorage.CreateLoader(queriers)
 }
 
+func (ds *DataStorage) CreateRevertableLoader(lss *cppbridge.LabelSetStorage, lsIdBatchSize uint32) *cppbridge.UnloadedDataRevertableLoader {
+	return ds.dataStorage.CreateRevertableLoader(lss, lsIdBatchSize)
+}
+
+func (ds *DataStorage) TimeInterval() cppbridge.TimeInterval {
+	return ds.dataStorage.TimeInterval()
+}
+
 // reshards changes the number of shards to the required amount.
 func (h *Head) reconfigure(
 	inputRelabelerConfigs []*config.InputRelabelerConfig,

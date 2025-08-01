@@ -43,7 +43,7 @@ TEST_F(ReverterTestFixture, RevertOpenChunk) {
 
   const auto chunk_stream_trimmed = storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index);
 
-  reverter_.set_series_for_revert(std::initializer_list{0u}, 1);
+  reverter_.add_series_to_revert(std::initializer_list{0u}, 1);
 
   load({0}, stream_.span<const uint8_t>());
 
@@ -69,7 +69,7 @@ TEST_F(ReverterTestFixture, RevertFinalizedChunk) {
   ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
   encoder_.encode(0, 6, 6.0);
 
-  reverter_.set_series_for_revert(std::initializer_list{0u}, 1);
+  reverter_.add_series_to_revert(std::initializer_list{0u}, 1);
 
   load({0}, stream_.span<const uint8_t>());
 
@@ -94,7 +94,7 @@ TEST_F(ReverterTestFixture, OutdatedNoRevert) {
 
   unloader_.unload(stream_);
 
-  reverter_.set_series_for_revert(std::initializer_list{0u}, 1);
+  reverter_.add_series_to_revert(std::initializer_list{0u}, 1);
 
   load({0}, stream_.span<const uint8_t>());
 

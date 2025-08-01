@@ -33,7 +33,7 @@ class BatchIterator {
   using pointer = value_type*;
   using reference = value_type&;
 
-  PROMPP_ALWAYS_INLINE BatchIterator(Iterator&& iterator, uint32_t batch_size) noexcept : iterator_(std::move(iterator)), batch_size_(batch_size) {
+  PROMPP_ALWAYS_INLINE BatchIterator(Iterator iterator, uint32_t batch_size) noexcept : iterator_(std::move(iterator)), batch_size_(batch_size) {
     assert(batch_size > 0);
   }
 

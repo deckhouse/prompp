@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"io"
 	"math"
 	"os"
@@ -15,7 +17,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/prometheus/tsdb"
-	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/tsdb/fileutil"
 )
 
@@ -29,32 +30,6 @@ const (
 	metaFilename                 = "meta.json"
 	metaVersion1                 = 1
 )
-
-type Chunk interface {
-	MinT() int64
-	MaxT() int64
-	SeriesID() uint32
-	Encoding() chunkenc.Encoding
-	SampleCount() uint8
-	Bytes() []byte
-}
-
-type ChunkIterator interface {
-	Next() bool
-	NextBatch() bool
-	At() Chunk
-}
-
-type IndexWriter interface {
-	WriteSeriesTo(uint32, []ChunkMetadata, io.Writer) (int64, error)
-	WriteRestTo(io.Writer) (int64, error)
-}
-
-type Block interface {
-	TimeBounds() (minT, maxT int64)
-	ChunkIterator(minT, maxT int64, lsIdBatchSize uint32) ChunkIterator
-	IndexWriter() IndexWriter
-}
 
 type chunkRecoder struct {
 	chunkIterator    ChunkIterator
@@ -92,6 +67,7 @@ func (recoder *chunkRecoder) Recode(
 		}
 	}
 
+	recoder.chunkIterator.NextBatch()
 	return nil
 }
 
@@ -249,8 +225,13 @@ func NewBlockWriter(
 	}
 }
 
-func (w *BlockWriter) Write(block Block, lsIdBatchSize uint32) ([]WrittenBlock, error) {
-	writers, err := w.createWriters(block, lsIdBatchSize)
+func (w *BlockWriter) Write(
+	dataStorage *cppbridge.HeadDataStorage,
+	unloadedDataStorage relabeler.UnloadedDataStorage,
+	lss *cppbridge.LabelSetStorage,
+	lsIdBatchSize uint32,
+) ([]WrittenBlock, error) {
+	writers, err := w.createWriters(dataStorage, lss, lsIdBatchSize)
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +242,7 @@ func (w *BlockWriter) Write(block Block, lsIdBatchSize uint32) ([]WrittenBlock, 
 		}
 	}()
 
-	if err = w.recodeAndWriteChunks(writers); err != nil {
+	if err = w.recodeAndWriteChunks(unloadedDataStorage, dataStorage.CreateRevertableLoader(lss, lsIdBatchSize), writers); err != nil {
 		return nil, err
 	}
 
@@ -281,21 +262,22 @@ func (w *BlockWriter) Write(block Block, lsIdBatchSize uint32) ([]WrittenBlock, 
 	return writtenBlocks, nil
 }
 
-func (w *BlockWriter) createWriters(block Block, lsIdBatchSize uint32) ([]blockWriter, error) {
+func (w *BlockWriter) createWriters(dataStorage *cppbridge.HeadDataStorage, lss *cppbridge.LabelSetStorage, lsIdBatchSize uint32) ([]blockWriter, error) {
 	var writers []blockWriter
 
-	blockMinT, blockMaxT := block.TimeBounds()
-	quantStart := (blockMinT / w.blockDurationMs) * w.blockDurationMs
-	for ; quantStart <= blockMaxT; quantStart += w.blockDurationMs {
+	timeInterval := dataStorage.TimeInterval()
+	quantStart := (timeInterval.MinT / w.blockDurationMs) * w.blockDurationMs
+	for ; quantStart <= timeInterval.MaxT; quantStart += w.blockDurationMs {
 		minT, maxT := quantStart, quantStart+w.blockDurationMs-1
-		if minT < blockMinT {
-			minT = blockMinT
+		if minT < timeInterval.MinT {
+			minT = timeInterval.MinT
 		}
-		if maxT > blockMaxT {
-			maxT = blockMaxT
+		if maxT > timeInterval.MaxT {
+			maxT = timeInterval.MaxT
 		}
 
-		if writer, err := newBlockWriter(w.dataDir, w.maxBlockChunkSegmentSize, block.IndexWriter(), block.ChunkIterator(minT, maxT, lsIdBatchSize)); err == nil {
+		chunkIterator := NewChunkIterator(lss, lsIdBatchSize, dataStorage, minT, maxT)
+		if writer, err := newBlockWriter(w.dataDir, w.maxBlockChunkSegmentSize, NewIndexWriter(lss), chunkIterator); err == nil {
 			writers = append(writers, writer)
 		} else {
 			for _, wr := range writers {
@@ -308,10 +290,24 @@ func (w *BlockWriter) createWriters(block Block, lsIdBatchSize uint32) ([]blockW
 	return writers, nil
 }
 
-func (w *BlockWriter) recodeAndWriteChunks(writers []blockWriter) error {
-	for i := range writers {
-		if err := writers[i].RecodeAndWriteChunksBatch(); err != nil {
+func (w *BlockWriter) recodeAndWriteChunks(
+	unloadedDataStorage relabeler.UnloadedDataStorage,
+	loader *cppbridge.UnloadedDataRevertableLoader,
+	writers []blockWriter,
+) error {
+	for {
+		if err := unloadedDataStorage.ForEachSnapshot(loader.Load); err != nil {
 			return err
+		}
+
+		for i := range writers {
+			if err := writers[i].RecodeAndWriteChunksBatch(); err != nil {
+				return err
+			}
+		}
+
+		if !loader.NextBatch() {
+			break
 		}
 	}
 

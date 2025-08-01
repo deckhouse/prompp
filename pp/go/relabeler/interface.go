@@ -20,6 +20,8 @@ type DataStorage interface {
 	AllocatedMemory() uint64
 	UnloadUnusedSeriesData() *cppbridge.CBytes
 	CreateLoader(queriers []uintptr) *cppbridge.UnloadedDataLoader
+	CreateRevertableLoader(lss *cppbridge.LabelSetStorage, lsIdBatchSize uint32) *cppbridge.UnloadedDataRevertableLoader
+	TimeInterval() cppbridge.TimeInterval
 }
 
 type LSS interface {
