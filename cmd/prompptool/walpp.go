@@ -116,9 +116,6 @@ func (cmd *cmdWALPPToBlock) Do(
 		tBlockWrite := h.CreateTask(
 			relabeler.BlockWrite,
 			func(shard relabeler.Shard) error {
-				shard.LSSLock()
-				defer shard.LSSUnlock()
-
 				_, err := bw.Write(shard)
 				return err
 			},

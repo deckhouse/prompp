@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"io"
 	"math"
@@ -31,7 +30,7 @@ const (
 	metaVersion1                 = 1
 )
 
-var LsIdBatchSize = cppbridge.UnlimitedLsIdBatchSize
+var LsIdBatchSize uint32 = 100000
 
 type chunkRecoder struct {
 	chunkIterator    ChunkIterator
@@ -228,6 +227,9 @@ func NewWriter(
 }
 
 func (w *Writer) Write(shard relabeler.Shard) ([]WrittenBlock, error) {
+	shard.LSSRLock()
+	defer shard.LSSRUnlock()
+
 	writers, err := w.createWriters(shard)
 	if err != nil {
 		return nil, err
@@ -262,7 +264,10 @@ func (w *Writer) Write(shard relabeler.Shard) ([]WrittenBlock, error) {
 func (w *Writer) createWriters(shard relabeler.Shard) ([]blockWriter, error) {
 	var writers []blockWriter
 
+	shard.DataStorageRLock()
 	timeInterval := shard.DataStorage().TimeInterval()
+	shard.DataStorageRUnlock()
+
 	quantStart := (timeInterval.MinT / w.blockDurationMs) * w.blockDurationMs
 	for ; quantStart <= timeInterval.MaxT; quantStart += w.blockDurationMs {
 		minT, maxT := quantStart, quantStart+w.blockDurationMs-1
@@ -273,7 +278,10 @@ func (w *Writer) createWriters(shard relabeler.Shard) ([]blockWriter, error) {
 			maxT = timeInterval.MaxT
 		}
 
+		shard.DataStorageRLock()
 		chunkIterator := NewChunkIterator(shard.LSS().Raw(), LsIdBatchSize, shard.DataStorage().Raw(), minT, maxT)
+		shard.DataStorageRUnlock()
+
 		if writer, err := newBlockWriter(w.dataDir, w.maxBlockChunkSegmentSize, NewIndexWriter(shard.LSS().Raw()), chunkIterator); err == nil {
 			writers = append(writers, writer)
 		} else {
@@ -288,20 +296,54 @@ func (w *Writer) createWriters(shard relabeler.Shard) ([]blockWriter, error) {
 }
 
 func (w *Writer) recodeAndWriteChunks(shard relabeler.Shard, writers []blockWriter) error {
+	shard.DataStorageRLock()
 	loader := shard.DataStorage().CreateRevertableLoader(shard.LSS().Raw(), LsIdBatchSize)
-	for {
-		if err := shard.UnloadedDataStorage().ForEachSnapshot(loader.Load); err != nil {
-			return err
+	shard.DataStorageRUnlock()
+
+	isFirstBatch := true
+
+	loadData := func() (bool, error) {
+		if isFirstBatch {
+			isFirstBatch = false
+		} else {
+			// TODO: maybe split into 2 functions: revert and next_batch?
+			if !loader.NextBatch() {
+				return false, nil
+			}
 		}
 
+		return true, shard.UnloadedDataStorage().ForEachSnapshot(loader.Load)
+	}
+
+	recodeAndWriteChunks := func() error {
 		for i := range writers {
 			if err := writers[i].RecodeAndWriteChunksBatch(); err != nil {
 				return err
 			}
 		}
 
-		if !loader.NextBatch() {
+		return nil
+	}
+
+	for {
+		shard.DataStorageLock()
+		hasMoreData, err := loadData()
+		shard.DataStorageUnlock()
+
+		if !hasMoreData {
 			break
+		}
+
+		if err != nil {
+			return err
+		}
+
+		shard.DataStorageRLock()
+		err = recodeAndWriteChunks()
+		shard.DataStorageRUnlock()
+
+		if err != nil {
+			return err
 		}
 	}
 
