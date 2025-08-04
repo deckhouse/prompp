@@ -201,6 +201,57 @@ func (writer *blockWriter) MoveTmpDirToDir() error {
 	return nil
 }
 
+type blockWriters struct {
+	writers []blockWriter
+}
+
+func (bw *blockWriters) append(writer blockWriter) {
+	bw.writers = append(bw.writers, writer)
+}
+
+func (bw *blockWriters) close() {
+	for i := range bw.writers {
+		_ = bw.writers[i].Close()
+	}
+}
+
+func (bw *blockWriters) recodeAndWriteChunksBatch() error {
+	for i := range bw.writers {
+		if err := bw.writers[i].RecodeAndWriteChunksBatch(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (bw *blockWriters) writeRestOfRecodedChunks() error {
+	for i := range bw.writers {
+		if err := bw.writers[i].WriteRestOfRecodedChunks(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (bw *blockWriters) writeIndexAndMoveTmpDirToDir() ([]WrittenBlock, error) {
+	writtenBlocks := make([]WrittenBlock, 0, len(bw.writers))
+	for i := range bw.writers {
+		if err := bw.writers[i].writeIndex(); err != nil {
+			return nil, err
+		}
+
+		if err := bw.writers[i].MoveTmpDirToDir(); err != nil {
+			return nil, err
+		}
+
+		writtenBlocks = append(writtenBlocks, bw.writers[i].WrittenBlock)
+	}
+
+	return writtenBlocks, nil
+}
+
 type Writer struct {
 	dataDir                  string
 	maxBlockChunkSegmentSize int64
@@ -236,33 +287,18 @@ func (w *Writer) Write(shard relabeler.Shard) ([]WrittenBlock, error) {
 	}
 
 	defer func() {
-		for _, w := range writers {
-			_ = w.Close()
-		}
+		writers.close()
 	}()
 
 	if err = w.recodeAndWriteChunks(shard, writers); err != nil {
 		return nil, err
 	}
 
-	writtenBlocks := make([]WrittenBlock, 0, len(writers))
-	for i := range writers {
-		if err = writers[i].writeIndex(); err != nil {
-			return nil, err
-		}
-
-		if err = writers[i].MoveTmpDirToDir(); err != nil {
-			return nil, err
-		}
-
-		writtenBlocks = append(writtenBlocks, writers[i].WrittenBlock)
-	}
-
-	return writtenBlocks, nil
+	return writers.writeIndexAndMoveTmpDirToDir()
 }
 
-func (w *Writer) createWriters(shard relabeler.Shard) ([]blockWriter, error) {
-	var writers []blockWriter
+func (w *Writer) createWriters(shard relabeler.Shard) (blockWriters, error) {
+	var writers blockWriters
 
 	shard.DataStorageRLock()
 	timeInterval := shard.DataStorage().TimeInterval()
@@ -283,19 +319,17 @@ func (w *Writer) createWriters(shard relabeler.Shard) ([]blockWriter, error) {
 		shard.DataStorageRUnlock()
 
 		if writer, err := newBlockWriter(w.dataDir, w.maxBlockChunkSegmentSize, NewIndexWriter(shard.LSS().Raw()), chunkIterator); err == nil {
-			writers = append(writers, writer)
+			writers.append(writer)
 		} else {
-			for _, wr := range writers {
-				_ = wr.Close()
-			}
-			return nil, err
+			writers.close()
+			return blockWriters{}, err
 		}
 	}
 
 	return writers, nil
 }
 
-func (w *Writer) recodeAndWriteChunks(shard relabeler.Shard, writers []blockWriter) error {
+func (w *Writer) recodeAndWriteChunks(shard relabeler.Shard, writers blockWriters) error {
 	shard.DataStorageRLock()
 	loader := shard.DataStorage().CreateRevertableLoader(shard.LSS().Raw(), LsIdBatchSize)
 	shard.DataStorageRUnlock()
@@ -315,16 +349,6 @@ func (w *Writer) recodeAndWriteChunks(shard relabeler.Shard, writers []blockWrit
 		return true, shard.UnloadedDataStorage().ForEachSnapshot(loader.Load)
 	}
 
-	recodeAndWriteChunks := func() error {
-		for i := range writers {
-			if err := writers[i].RecodeAndWriteChunksBatch(); err != nil {
-				return err
-			}
-		}
-
-		return nil
-	}
-
 	for {
 		shard.DataStorageLock()
 		hasMoreData, err := loadData()
@@ -339,7 +363,7 @@ func (w *Writer) recodeAndWriteChunks(shard relabeler.Shard, writers []blockWrit
 		}
 
 		shard.DataStorageRLock()
-		err = recodeAndWriteChunks()
+		err = writers.recodeAndWriteChunksBatch()
 		shard.DataStorageRUnlock()
 
 		if err != nil {
@@ -347,13 +371,7 @@ func (w *Writer) recodeAndWriteChunks(shard relabeler.Shard, writers []blockWrit
 		}
 	}
 
-	for i := range writers {
-		if err := writers[i].WriteRestOfRecodedChunks(); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return writers.writeRestOfRecodedChunks()
 }
 
 func closeAll(closers ...io.Closer) error {
