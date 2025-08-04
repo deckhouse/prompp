@@ -52,6 +52,7 @@ TEST_F(ReverterTestFixture, RevertOpenChunk) {
 
   // Assert
   ASSERT_EQ(storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index), chunk_stream_trimmed);
+  EXPECT_TRUE(storage_.unloaded_series_bitmap.is_set(0));
 }
 
 TEST_F(ReverterTestFixture, RevertFinalizedChunk) {
@@ -78,6 +79,7 @@ TEST_F(ReverterTestFixture, RevertFinalizedChunk) {
 
   // Assert
   ASSERT_EQ(storage_.finalized_data_streams.at(0), chunk_stream_trimmed);
+  EXPECT_TRUE(storage_.unloaded_series_bitmap.is_set(0));
 }
 
 TEST_F(ReverterTestFixture, NoRevertOutdatedSeries) {
@@ -111,6 +113,7 @@ TEST_F(ReverterTestFixture, NoRevertOutdatedSeries) {
                 {5, 5.0},
             }),
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
+  EXPECT_FALSE(storage_.unloaded_series_bitmap.is_set(0));
 }
 
 TEST_F(ReverterTestFixture, NoRevertQueriedSeries) {
@@ -134,6 +137,28 @@ TEST_F(ReverterTestFixture, NoRevertQueriedSeries) {
                 {3, 3.0},
             }),
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
+  EXPECT_FALSE(storage_.unloaded_series_bitmap.is_set(0));
+}
+
+TEST_F(ReverterTestFixture, NoRevertUnmodifiedChunk) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 2.0);
+  encoder_.encode(0, 3, 3.0);
+
+  reverter_.add_series_to_revert(std::initializer_list{0u}, 1);
+
+  // Act
+  reverter_.revert();
+
+  // Assert
+  ASSERT_EQ((SampleList{
+                {1, 1.0},
+                {2, 2.0},
+                {3, 3.0},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
+  EXPECT_FALSE(storage_.unloaded_series_bitmap.is_set(0));
 }
 
 }  // namespace
