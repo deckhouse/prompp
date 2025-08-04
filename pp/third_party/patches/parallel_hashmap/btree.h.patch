@@ -1,0 +1,65 @@
+--- parallel_hashmap/btree.h
++++ parallel_hashmap/btree.h
+@@ -1781,6 +1781,12 @@ namespace priv {
+                                                      const key_type &key,
+                                                      Args &&... args);
+
++        template <typename C, typename... Args>
++        std::pair<iterator, bool> insert_hint_unique_cmp(iterator position,
++                                                     const key_type &key,
++                                                     C && comp,
++                                                     Args &&... args);
++
+         // Insert a range of values into the btree.
+         template <typename InputIterator>
+         void insert_iterator_unique(InputIterator b, InputIterator e);
+@@ -2577,6 +2583,33 @@ namespace priv {
+         return insert_unique(key, std::forward<Args>(args)...);
+     }
+
++    template <typename P>
++    template <typename C, typename... Args>
++    inline auto btree<P>::insert_hint_unique_cmp(iterator position, const key_type &key,
++                                                 C && comp, Args &&... args)
++        -> std::pair<iterator, bool> {
++        auto comparator = std::forward<C>(comp);
++        if (!empty()) {
++            if (position == end() || comparator(key, position.key())) {
++                iterator prev = position;
++                if (position == begin() || comparator((--prev).key(), key)) {
++                    // prev.key() < key < position.key()
++                    return {internal_emplace(position, std::forward<Args>(args)...), true};
++                }
++            } else if (comparator(position.key(), key)) {
++                ++position;
++                if (position == end() || comparator(key, position.key())) {
++                    // {original `position`}.key() < key < {current `position`}.key()
++                    return {internal_emplace(position, std::forward<Args>(args)...), true};
++                }
++            } else {
++                // position.key() == key
++                return {position, false};
++            }
++        }
++        return insert_unique(key, std::forward<Args>(args)...);
++    }
++
+     template <typename P>
+     template <typename InputIterator>
+     void btree<P>::insert_iterator_unique(InputIterator b, InputIterator e) {
+@@ -3510,6 +3543,15 @@ namespace priv {
+                 .first;
+         }
+
++        template <typename C, typename... Args>
++        iterator emplace_hint_cmp(const_iterator hint, C && comp, Args &&... args) {
++            init_type v(std::forward<Args>(args)...);
++            return this->tree_
++                .insert_hint_unique_cmp(iterator(hint), params_type::key(v),
++                                        std::forward<C>(comp), std::move(v))
++                .first;
++        }
++
+         template <typename InputIterator>
+         void insert(InputIterator b, InputIterator e) {
+             this->tree_.insert_iterator_unique(b, e);
