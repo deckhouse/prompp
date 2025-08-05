@@ -184,6 +184,7 @@ func (qs *QueryableStorage) write() bool {
 
 		qs.headPersistenceDuration.Observe(float64(qs.clock.Since(start).Milliseconds()))
 		persisted = append(persisted, head.ID())
+		_ = head.Discard()
 		shouldNotify = true
 		logger.Infof("QUERYABLE STORAGE: head %s persisted, duration: %v", head.String(), qs.clock.Since(start))
 	}
