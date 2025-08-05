@@ -1246,7 +1246,11 @@ func (db *DB) Compact(ctx context.Context) (returnErr error) {
 
 	// Clear some disk space before compacting blocks, especially important
 	// when Head compaction happened over a long time range.
-	if err := db.head.truncateWAL(lastBlockMaxt); err != nil {
+	walTruncationTime := lastBlockMaxt                              // PP_CHANGES.md: rebuild on cpp
+	if lastBlockMaxt == int64(math.MinInt64) && db.head.IsEmpty() { // PP_CHANGES.md: rebuild on cpp
+		walTruncationTime = rangeForTimestamp(db.head.MinTime(), db.head.chunkRange.Load())
+	}
+	if err := db.head.truncateWAL(walTruncationTime); err != nil { // PP_CHANGES.md: rebuild on cpp
 		return fmt.Errorf("WAL truncation in Compact: %w", err)
 	}
 
@@ -1982,7 +1986,7 @@ func (db *DB) Querier(mint, maxt int64) (_ storage.Querier, err error) {
 		}
 	}()
 
-	if maxt >= db.head.MinTime() {
+	if maxt >= db.head.MinTime() && !db.head.IsEmpty() { // PP_CHANGES.md: rebuild on cpp
 		rh := NewRangeHead(db.head, mint, maxt)
 		var err error
 		inOrderHeadQuerier, err := NewBlockQuerier(rh, mint, maxt)
@@ -2013,7 +2017,8 @@ func (db *DB) Querier(mint, maxt int64) (_ storage.Querier, err error) {
 		}
 	}
 
-	if overlapsClosedInterval(mint, maxt, db.head.MinOOOTime(), db.head.MaxOOOTime()) {
+	// PP_CHANGES.md: rebuild on cpp
+	if overlapsClosedInterval(mint, maxt, db.head.MinOOOTime(), db.head.MaxOOOTime()) && !db.head.IsEmpty() {
 		rh := NewOOORangeHead(db.head, mint, maxt, db.lastGarbageCollectedMmapRef)
 		var err error
 		outOfOrderHeadQuerier, err := NewBlockQuerier(rh, mint, maxt)
@@ -2064,7 +2069,7 @@ func (db *DB) blockChunkQuerierForRange(mint, maxt int64) (_ []storage.ChunkQuer
 		}
 	}()
 
-	if maxt >= db.head.MinTime() {
+	if maxt >= db.head.MinTime() && !db.head.IsEmpty() { // PP_CHANGES.md: rebuild on cpp
 		rh := NewRangeHead(db.head, mint, maxt)
 		inOrderHeadQuerier, err := NewBlockChunkQuerier(rh, mint, maxt)
 		if err != nil {
@@ -2094,7 +2099,8 @@ func (db *DB) blockChunkQuerierForRange(mint, maxt int64) (_ []storage.ChunkQuer
 		}
 	}
 
-	if overlapsClosedInterval(mint, maxt, db.head.MinOOOTime(), db.head.MaxOOOTime()) {
+	// PP_CHANGES.md: rebuild on cpp
+	if overlapsClosedInterval(mint, maxt, db.head.MinOOOTime(), db.head.MaxOOOTime()) && !db.head.IsEmpty() {
 		rh := NewOOORangeHead(db.head, mint, maxt, db.lastGarbageCollectedMmapRef)
 		outOfOrderHeadQuerier, err := NewBlockChunkQuerier(rh, mint, maxt)
 		if err != nil {

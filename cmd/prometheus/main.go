@@ -1272,6 +1272,7 @@ func main() {
 	if !agentMode {
 		// TSDB.
 		opts := cfg.tsdb.ToTSDBOptions()
+		opts.StripeSize = 1 // PP_CHANGES.md: rebuild on cpp
 		cancel := make(chan struct{})
 		g.Add(
 			func() error {
