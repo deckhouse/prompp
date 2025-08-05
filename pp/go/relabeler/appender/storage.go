@@ -158,16 +158,18 @@ func (qs *QueryableStorage) write() bool {
 			continue
 		}
 		if err := head.Rotate(); err != nil {
-			logger.Errorf("QUERYABLE STORAGE: failed to rotate head %s: %s", head.String(), err.Error())
-			successful = false
+			if err != relabeler.ErrAlreadyDiscarded {
+				logger.Errorf("QUERYABLE STORAGE: failed to rotate head %s: %s", head.String(), err.Error())
+				successful = false
+			}
 			continue
 		}
 
 		tBlockWrite := head.CreateTask(
 			relabeler.BlockWrite,
 			func(shard relabeler.Shard) error {
-				shard.LSSLock()
-				defer shard.LSSUnlock()
+				shard.LSSRLock()
+				defer shard.LSSRUnlock()
 
 				return qs.blockWriter.Write(relabeler.NewBlock(shard.LSS().Raw(), shard.DataStorage().Raw()))
 			},
@@ -182,6 +184,7 @@ func (qs *QueryableStorage) write() bool {
 
 		qs.headPersistenceDuration.Observe(float64(qs.clock.Since(start).Milliseconds()))
 		persisted = append(persisted, head.ID())
+		_ = head.Discard()
 		shouldNotify = true
 		logger.Infof("QUERYABLE STORAGE: head %s persisted, duration: %v", head.String(), qs.clock.Since(start))
 	}
@@ -306,7 +309,6 @@ func (qs *QueryableStorage) shrink(persisted ...string) {
 	for _, head := range qs.heads {
 		if _, ok := persistedMap[head.ID()]; ok {
 			_ = head.Close()
-			_ = head.Discard()
 			logger.Infof("QUERYABLE STORAGE: head %s persisted, closed and discarded", head.String())
 			continue
 		}
