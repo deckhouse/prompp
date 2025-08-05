@@ -106,7 +106,7 @@ uint64_t Min(const std::vector<double>& v) {
 }
 
 void PrintMinStats() {
-  std::cout << "\n==== Min method timings (ns) ====\n";
+  std::cout << "\n=== Min method timings (ns) ===\n";
 
   constexpr int words_width = 20;
   constexpr int numbers_width = 9;
@@ -126,7 +126,7 @@ void PrintMinStats() {
   std::cout << std::left << std::setw(words_width) << "build_reverse_index"
             << ": " << std::right << std::setw(numbers_width) << Min(build_reverse_index_times) << '\n';
 
-  std::cout << "===============================\n";
+  std::cout << "-------------------------------\n";
 
   std::cout << std::left << std::setw(words_width) << "total sum"
             << ": " << std::right << std::setw(numbers_width)
