@@ -112,7 +112,7 @@ void PrintMinStats() {
   constexpr int numbers_width = 9;
 
   std::cout << std::left << std::setw(words_width) << "copy_added_series"
-            << ": " << std::right << std::setw(numbers_width) << std::fixed << std::setprecision(2) << Min(copy_added_series_times) << '\n';
+            << ": " << std::right << std::setw(numbers_width) << Min(copy_added_series_times) << '\n';
 
   std::cout << std::left << std::setw(words_width) << "copy_ls_id_set"
             << ": " << std::right << std::setw(numbers_width) << Min(copy_ls_id_set_times) << '\n';
@@ -125,6 +125,12 @@ void PrintMinStats() {
 
   std::cout << std::left << std::setw(words_width) << "build_reverse_index"
             << ": " << std::right << std::setw(numbers_width) << Min(build_reverse_index_times) << '\n';
+
+  std::cout << std::left << std::setw(words_width) << "total sum"
+            << ": " << std::right << std::setw(numbers_width)
+            << (Min(copy_added_series_times) + Min(copy_ls_id_set_times) + Min(build_trie_index_times) + Min(build_ls_id_hashset_times) +
+                Min(build_reverse_index_times))
+            << '\n';
 
   std::cout << "===============================\n";
 }
