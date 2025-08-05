@@ -166,8 +166,8 @@ func (qs *QueryableStorage) write() bool {
 		tBlockWrite := head.CreateTask(
 			relabeler.BlockWrite,
 			func(shard relabeler.Shard) error {
-				shard.LSSLock()
-				defer shard.LSSUnlock()
+				shard.LSSRLock()
+				defer shard.LSSRUnlock()
 
 				return qs.blockWriter.Write(relabeler.NewBlock(shard.LSS().Raw(), shard.DataStorage().Raw()))
 			},
