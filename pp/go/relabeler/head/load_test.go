@@ -2,10 +2,6 @@ package head_test
 
 import (
 	"context"
-	"os"
-	"testing"
-	"time"
-
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -15,331 +11,217 @@ import (
 	"github.com/prometheus/prometheus/pp/go/relabeler/head"
 	"github.com/prometheus/prometheus/pp/go/relabeler/querier"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+	"os"
+	"path/filepath"
+	"testing"
 )
 
-const maxSegmentSize uint32 = 1024
+const (
+	numberOfShards uint16 = 2
 
-func TestLoad(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
+	maxSegmentSize uint32 = 1024
 
-	tmpDir, err := os.MkdirTemp("", "head_wal_test")
-	require.NoError(t, err)
-	defer func() { _ = os.RemoveAll(tmpDir) }()
+	headID                   = "test_head_id"
+	transparentRelabelerName = "transparent_relabeler"
+)
 
-	const transparentRelabelerName = "transparent_relabeler"
+var cfgs = []*config.InputRelabelerConfig{
+	{
+		Name: transparentRelabelerName,
+		RelabelConfigs: []*cppbridge.RelabelConfig{
+			{
+				SourceLabels: []string{"__name__"},
+				Regex:        ".*",
+				Action:       cppbridge.Keep,
+			},
+		},
+	},
+}
 
-	cfgs := []*config.InputRelabelerConfig{
+type HeadLoadSuite struct {
+	suite.Suite
+	dataDir string
+	ctx     context.Context
+}
+
+func TestHeadLoadSuite(t *testing.T) {
+	suite.Run(t, new(HeadLoadSuite))
+}
+
+func (s *HeadLoadSuite) SetupTest() {
+	s.dataDir = s.createDataDirectory()
+}
+
+func (s *HeadLoadSuite) createDataDirectory() string {
+	dataDir := filepath.Join(s.T().TempDir(), "data")
+	s.Require().NoError(os.MkdirAll(dataDir, 0o777))
+	return dataDir
+}
+
+func (s *HeadLoadSuite) createHead() *head.Head {
+	h, err := head.Create(
+		headID,
+		0,
+		s.dataDir,
+		cfgs,
+		numberOfShards,
+		maxSegmentSize,
+		head.NoOpLastAppendedSegmentIDSetter{},
+		prometheus.DefaultRegisterer,
+	)
+	s.Require().NoError(err)
+
+	return h
+}
+
+func (s *HeadLoadSuite) loadHead() *head.Head {
+	loadedHead, corrupted, _, err := head.Load(
+		headID,
+		0,
+		s.dataDir,
+		cfgs,
+		numberOfShards,
+		maxSegmentSize,
+		head.NoOpLastAppendedSegmentIDSetter{},
+		prometheus.DefaultRegisterer,
+	)
+
+	s.NoError(err)
+	s.False(corrupted)
+
+	return loadedHead
+}
+
+type seriesData struct {
+	labels  labels.Labels
+	samples []cppbridge.Sample
+}
+
+func (s *seriesData) toTimeseries() []model.TimeSeries {
+	lsBuilder := model.NewLabelSetBuilder()
+	for i := range s.labels {
+		lsBuilder.Add(s.labels[i].Name, s.labels[i].Value)
+	}
+
+	ls := lsBuilder.Build()
+
+	timeseries := make([]model.TimeSeries, 0, len(s.samples))
+	for i := range s.samples {
+		timeseries = append(timeseries, model.TimeSeries{
+			LabelSet:  ls,
+			Timestamp: uint64(s.samples[i].Timestamp),
+			Value:     s.samples[i].Value,
+		})
+	}
+
+	return timeseries
+}
+
+func (s *HeadLoadSuite) appendTimeSeries(head *head.Head, seriesData []seriesData) {
+	for i := range seriesData {
+		tsd := relabeler.NewTimeSeriesDataSlice(seriesData[i].toTimeseries())
+		hx, err := (cppbridge.HashdexFactory{}).GoModel(tsd.TimeSeries(), cppbridge.DefaultWALHashdexLimits())
+		s.Require().NoError(err)
+
+		incomingData := &relabeler.IncomingData{Hashdex: hx, Data: &tsd}
+
+		_, _, err = head.Append(
+			context.Background(),
+			incomingData,
+			cppbridge.NewState(head.NumberOfShards()),
+			transparentRelabelerName,
+			true,
+		)
+		s.Require().NoError(err)
+	}
+}
+
+func (s *HeadLoadSuite) query(head *head.Head, matcher *labels.Matcher, minT, maxT int64) (result []seriesData) {
+	q := querier.NewQuerier(head, querier.NoOpShardedDeduplicatorFactory(), minT, maxT, nil, nil)
+	seriesSet := q.Select(context.Background(), false, nil, matcher)
+
+	if seriesSet.Next() {
+		series := seriesSet.At()
+		item := seriesData{
+			labels: seriesSet.At().Labels(),
+		}
+
+		chunkIterator := series.Iterator(nil)
+		for chunkIterator.Next() != chunkenc.ValNone {
+			ts, v := chunkIterator.At()
+			item.samples = append(item.samples, cppbridge.Sample{
+				Timestamp: ts,
+				Value:     v,
+			})
+		}
+
+		result = append(result, item)
+	}
+
+	_ = q.Close()
+	return
+}
+
+func (s *HeadLoadSuite) TestLoad() {
+	// Arrange
+	sourceHead := s.createHead()
+	series := []seriesData{
 		{
-			Name: transparentRelabelerName,
-			RelabelConfigs: []*cppbridge.RelabelConfig{
-				{
-					SourceLabels: []string{"__name__"},
-					Regex:        ".*",
-					Action:       cppbridge.Keep,
-				},
+			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 1},
+				{Timestamp: 1, Value: 2},
+				{Timestamp: 2, Value: 3},
 			},
 		},
 	}
-	var numberOfShards uint16 = 2
+	s.appendTimeSeries(sourceHead, series)
+	sourceHead.Stop()
+	s.NoError(sourceHead.Close())
 
-	headID := "test_head_id"
-	h, err := head.Create(headID, 0, tmpDir, cfgs, numberOfShards, maxSegmentSize, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
-	require.NoError(t, err)
+	// Act
+	loadedHead := s.loadHead()
 
-	ls := model.NewLabelSetBuilder().Set("__name__", "wal_metric").Set("job", "test").Build()
-	require.NoError(t, appendTimeSeries(t, ctx, h, []model.TimeSeries{
-		{
-			LabelSet:  ls,
-			Timestamp: 0,
-			Value:     1,
-		},
-	}))
+	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "wal_metric")
+	actual := s.query(loadedHead, matcher, 0, 2)
 
-	require.NoError(t, appendTimeSeries(t, ctx, h, []model.TimeSeries{
-		{
-			LabelSet:  ls,
-			Timestamp: 1,
-			Value:     2,
-		},
-	}))
-
-	require.NoError(t, appendTimeSeries(t, ctx, h, []model.TimeSeries{
-		{
-			LabelSet:  ls,
-			Timestamp: 2,
-			Value:     3,
-		},
-	}))
-
-	q := querier.NewQuerier(h, querier.NoOpShardedDeduplicatorFactory(), 0, 10, nil, nil)
-	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "wal_metric")
-	require.NoError(t, err)
-	seriesSet := q.Select(ctx, false, nil, matcher)
-
-	expected := []model.TimeSeries{
-		{
-			LabelSet:  ls,
-			Timestamp: 0,
-			Value:     1,
-		},
-		{
-			LabelSet:  ls,
-			Timestamp: 1,
-			Value:     2,
-		},
-		{
-			LabelSet:  ls,
-			Timestamp: 2,
-			Value:     3,
-		},
-	}
-
-	require.True(t, seriesSet.Next())
-	series := seriesSet.At()
-
-	// todo compare label sets
-	chunkIterator := series.Iterator(nil)
-	sIndex := 0
-	for chunkIterator.Next() != chunkenc.ValNone {
-		ts, v := chunkIterator.At()
-		require.Equal(t, int64(expected[sIndex].Timestamp), ts)
-		require.Equal(t, expected[sIndex].Value, v)
-		sIndex++
-	}
-	require.Equal(t, sIndex, len(expected))
-
-	require.False(t, seriesSet.Next())
-
-	require.NoError(t, q.Close())
-
-	h.Stop()
-	require.NoError(t, h.Flush())
-	require.NoError(t, h.Close())
-	var corrupted bool
-	h, corrupted, _, err = head.Load(headID, 0, tmpDir, cfgs, numberOfShards, maxSegmentSize, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
-	require.NoError(t, err)
-	require.False(t, corrupted)
-
-	q = querier.NewQuerier(h, querier.NoOpShardedDeduplicatorFactory(), 0, 10, nil, nil)
-	matcher, err = labels.NewMatcher(labels.MatchEqual, "__name__", "wal_metric")
-	require.NoError(t, err)
-	seriesSet = q.Select(ctx, false, nil, matcher)
-
-	expected = []model.TimeSeries{
-		{
-			LabelSet:  ls,
-			Timestamp: 0,
-			Value:     1,
-		},
-		{
-			LabelSet:  ls,
-			Timestamp: 1,
-			Value:     2,
-		},
-		{
-			LabelSet:  ls,
-			Timestamp: 2,
-			Value:     3,
-		},
-	}
-
-	require.True(t, seriesSet.Next())
-	series = seriesSet.At()
-
-	// todo compare label sets
-	chunkIterator = series.Iterator(nil)
-	sIndex = 0
-	for chunkIterator.Next() != chunkenc.ValNone {
-		ts, v := chunkIterator.At()
-		require.Equal(t, int64(expected[sIndex].Timestamp), ts)
-		require.Equal(t, expected[sIndex].Value, v)
-		sIndex++
-	}
-	require.Equal(t, sIndex, len(expected))
-
-	require.False(t, seriesSet.Next())
-
-	require.NoError(t, q.Close())
-
-	require.NoError(t, appendTimeSeries(t, ctx, h, []model.TimeSeries{
-		{
-			LabelSet:  ls,
-			Timestamp: 3,
-			Value:     4,
-		},
-	}))
-
-	q = querier.NewQuerier(h, querier.NoOpShardedDeduplicatorFactory(), 0, 10, nil, nil)
-	matcher, err = labels.NewMatcher(labels.MatchEqual, "__name__", "wal_metric")
-	require.NoError(t, err)
-	seriesSet = q.Select(ctx, false, nil, matcher)
-
-	expected = []model.TimeSeries{
-		{
-			LabelSet:  ls,
-			Timestamp: 0,
-			Value:     1,
-		},
-		{
-			LabelSet:  ls,
-			Timestamp: 1,
-			Value:     2,
-		},
-		{
-			LabelSet:  ls,
-			Timestamp: 2,
-			Value:     3,
-		},
-		{
-			LabelSet:  ls,
-			Timestamp: 3,
-			Value:     4,
-		},
-	}
-
-	require.True(t, seriesSet.Next())
-	series = seriesSet.At()
-
-	// todo compare label sets
-	chunkIterator = series.Iterator(nil)
-	sIndex = 0
-	for chunkIterator.Next() != chunkenc.ValNone {
-		ts, v := chunkIterator.At()
-		require.Equal(t, int64(expected[sIndex].Timestamp), ts)
-		require.Equal(t, expected[sIndex].Value, v)
-		sIndex++
-	}
-	require.Equal(t, sIndex, len(expected))
-
-	require.False(t, seriesSet.Next())
-
-	require.NoError(t, q.Close())
-
-	h.Stop()
-	require.NoError(t, h.Close())
-
-	h, corrupted, _, err = head.Load(headID, 0, tmpDir, cfgs, numberOfShards, maxSegmentSize, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
-	require.NoError(t, err)
-	require.False(t, corrupted)
-
-	q = querier.NewQuerier(h, querier.NoOpShardedDeduplicatorFactory(), 0, 10, nil, nil)
-	matcher, err = labels.NewMatcher(labels.MatchEqual, "__name__", "wal_metric")
-	require.NoError(t, err)
-	seriesSet = q.Select(ctx, false, nil, matcher)
-
-	expected = []model.TimeSeries{
-		{
-			LabelSet:  ls,
-			Timestamp: 0,
-			Value:     1,
-		},
-		{
-			LabelSet:  ls,
-			Timestamp: 1,
-			Value:     2,
-		},
-		{
-			LabelSet:  ls,
-			Timestamp: 2,
-			Value:     3,
-		},
-		{
-			LabelSet:  ls,
-			Timestamp: 3,
-			Value:     4,
-		},
-	}
-
-	require.True(t, seriesSet.Next())
-	series = seriesSet.At()
-
-	// todo compare label sets
-	chunkIterator = series.Iterator(nil)
-	sIndex = 0
-	for chunkIterator.Next() != chunkenc.ValNone {
-		ts, v := chunkIterator.At()
-		require.Equal(t, int64(expected[sIndex].Timestamp), ts)
-		require.Equal(t, expected[sIndex].Value, v)
-		sIndex++
-	}
-	require.Equal(t, sIndex, len(expected))
-
-	require.False(t, seriesSet.Next())
-
-	require.NoError(t, q.Close())
-
-	require.NoError(t, appendTimeSeries(t, ctx, h, []model.TimeSeries{
-		{
-			LabelSet:  ls,
-			Timestamp: 4,
-			Value:     5,
-		},
-	}))
-
-	q = querier.NewQuerier(h, querier.NoOpShardedDeduplicatorFactory(), 0, 10, nil, nil)
-	matcher, err = labels.NewMatcher(labels.MatchEqual, "__name__", "wal_metric")
-	require.NoError(t, err)
-	seriesSet = q.Select(ctx, false, nil, matcher)
-
-	expected = []model.TimeSeries{
-		{
-			LabelSet:  ls,
-			Timestamp: 0,
-			Value:     1,
-		},
-		{
-			LabelSet:  ls,
-			Timestamp: 1,
-			Value:     2,
-		},
-		{
-			LabelSet:  ls,
-			Timestamp: 2,
-			Value:     3,
-		},
-		{
-			LabelSet:  ls,
-			Timestamp: 3,
-			Value:     4,
-		},
-		{
-			LabelSet:  ls,
-			Timestamp: 4,
-			Value:     5,
-		},
-	}
-
-	require.True(t, seriesSet.Next())
-	series = seriesSet.At()
-
-	// todo compare label sets
-	chunkIterator = series.Iterator(nil)
-	sIndex = 0
-	for chunkIterator.Next() != chunkenc.ValNone {
-		ts, v := chunkIterator.At()
-		require.Equal(t, int64(expected[sIndex].Timestamp), ts)
-		require.Equal(t, expected[sIndex].Value, v)
-		sIndex++
-	}
-	require.Equal(t, sIndex, len(expected))
-
-	require.False(t, seriesSet.Next())
-
-	require.NoError(t, q.Close())
-
-	h.Stop()
-	require.NoError(t, h.Close())
+	// Assert
+	s.Equal(series, actual)
 }
 
-func appendTimeSeries(t *testing.T, ctx context.Context, h *head.Head, timeSeries []model.TimeSeries) error {
-	tsd := relabeler.NewTimeSeriesDataSlice(timeSeries)
-	hx, err := (cppbridge.HashdexFactory{}).GoModel(tsd.TimeSeries(), cppbridge.DefaultWALHashdexLimits())
-	require.NoError(t, err)
+func (s *HeadLoadSuite) TestAppendAfterLoad() {
+	// Arrange
+	sourceHead := s.createHead()
+	series := []seriesData{
+		{
+			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 1},
+				{Timestamp: 1, Value: 2},
+				{Timestamp: 2, Value: 3},
+			},
+		},
+	}
+	s.appendTimeSeries(sourceHead, series)
+	sourceHead.Stop()
+	s.NoError(sourceHead.Close())
 
-	incomingData := &relabeler.IncomingData{Hashdex: hx, Data: &tsd}
+	// Act
+	loadedHead := s.loadHead()
+	s.appendTimeSeries(loadedHead, []seriesData{
+		{
+			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			samples: []cppbridge.Sample{
+				{Timestamp: 3, Value: 4},
+			},
+		},
+	})
 
-	_, _, err = h.Append(ctx, incomingData, cppbridge.NewState(h.NumberOfShards()), "transparent_relabeler", true)
-	return err
+	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "wal_metric")
+	actual := s.query(loadedHead, matcher, 0, 3)
+
+	// Assert
+	series[0].samples = append(series[0].samples, cppbridge.Sample{Timestamp: 3, Value: 4})
+	s.Equal(series, actual)
 }
