@@ -299,10 +299,6 @@ func EmptyLabels() Labels {
 	return Labels{}
 }
 
-func yoloString(b []byte) string {
-	return unsafe.String(unsafe.SliceData(b), len(b))
-}
-
 func yoloBytes(s string) []byte {
 	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
