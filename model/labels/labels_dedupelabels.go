@@ -427,7 +427,7 @@ func EmptyLabels() Labels {
 }
 
 func yoloString(b []byte) string {
-	return *((*string)(unsafe.Pointer(&b)))
+	return unsafe.String(unsafe.SliceData(b), len(b))
 }
 
 // New returns a sorted Labels from the given labels.
