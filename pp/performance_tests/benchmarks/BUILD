@@ -9,3 +9,14 @@ cc_binary(
         "@google_benchmark//:benchmark_main",
     ],
 )
+
+cc_binary(
+    name = "copy_lss",
+    srcs = ["queryable_encoding_bimap_copy_benchmark.cpp"],
+    malloc = "@jemalloc",
+    deps = [
+        "//:performance_tests_headers",
+        "@google_benchmark//:benchmark_main",
+        "@tracy//:tracy"
+    ],
+)
