@@ -50,10 +50,6 @@ type Keeper[TBlock any] struct {
 }
 
 func (k *Keeper[TBlock]) write() bool {
-	bl := k.headBlockBuilder()
-
-	k.hbWriter.Write(bl)
-
 	k.mtx.Lock()
 	lenHeads := len(k.heads)
 	if lenHeads == 0 {
@@ -92,7 +88,8 @@ func (k *Keeper[TBlock]) write() bool {
 				shard.LSSLock()
 				defer shard.LSSUnlock()
 
-				return k.hbWriter.Write(relabeler.NewBlock(shard.LSS().Raw(), shard.DataStorage().Raw()))
+				bl := k.headBlockBuilder() // relabeler.NewBlock(shard.LSS().Raw(), shard.DataStorage().Raw())
+				return k.hbWriter.Write(bl)
 			},
 			relabeler.ForLSSTask,
 		)
