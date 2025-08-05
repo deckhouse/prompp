@@ -440,9 +440,7 @@ func (rm *ResponseMsg) MarshalBinary() ([]byte, error) {
 
 // UnmarshalBinary - decoding from byte.
 func (rm *ResponseMsg) UnmarshalBinary(data []byte) error {
-	var (
-		offset int
-	)
+	var offset int
 
 	lenStr, n := binary.Uvarint(data[offset:])
 	offset += n
@@ -747,7 +745,7 @@ type stringView struct {
 // toString - serialize to string.
 func (sv stringView) toString(data []byte) string {
 	b := data[sv.begin : sv.begin+sv.length]
-	return *(*string)(unsafe.Pointer(&b)) //nolint:gosec // this is memory optimisation
+	return unsafe.String(unsafe.SliceData(b), len(b)) //nolint:gosec // this is memory optimisation
 }
 
 // NotFoundName - not found name.
