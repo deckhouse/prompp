@@ -110,14 +110,9 @@ class GenericDecodingTable {
   struct LessComparator {
     using is_transparent = void;
 
-    PROMPP_ALWAYS_INLINE explicit LessComparator(const GenericDecodingTable* decoding_table, bool* enabled) noexcept
-        : decoding_table_(decoding_table), enabled_(enabled) {}
+    PROMPP_ALWAYS_INLINE explicit LessComparator(const GenericDecodingTable* decoding_table) noexcept : decoding_table_(decoding_table) {}
 
     PROMPP_ALWAYS_INLINE bool operator()(const Proxy& a, const Proxy& b) const noexcept {
-      if (!*enabled_) {
-        return true;
-      }
-
       return decoding_table_->items_[a].composite(decoding_table_->data_) < decoding_table_->items_[b].composite(decoding_table_->data_);
     }
 
@@ -134,7 +129,6 @@ class GenericDecodingTable {
 
    private:
     const GenericDecodingTable* decoding_table_;
-    bool* enabled_;
   };
 
   template <class DecodingTable>
@@ -263,7 +257,7 @@ class GenericDecodingTable {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Hasher hasher() const noexcept { return Hasher(this); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE EqualityComparator equality_comparator() const noexcept { return EqualityComparator(this); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE LessComparator less_comparator(bool* enabled) const noexcept { return LessComparator(this, enabled); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE LessComparator less_comparator() const noexcept { return LessComparator(this); }
 
   data_type data_;
   Vector<Filament<Vector>> items_;
