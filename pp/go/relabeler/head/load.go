@@ -254,7 +254,7 @@ func (l *ShardLoader) Load() (result ShardLoadResult) {
 			break
 		}
 
-		err = decoder.DecodeToDataStorage(segment.data, dataStorage.encoder)
+		_, err = decoder.DecodeToDataStorage(segment.data, dataStorage.encoder)
 		if err != nil {
 			result.Err = fmt.Errorf("failed to decode segment: %w", err)
 			break

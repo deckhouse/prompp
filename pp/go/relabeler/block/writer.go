@@ -340,7 +340,6 @@ func (w *Writer) recodeAndWriteChunks(shard relabeler.Shard, writers blockWriter
 		if isFirstBatch {
 			isFirstBatch = false
 		} else {
-			// TODO: maybe split into 2 functions: revert and next_batch?
 			if !loader.NextBatch() {
 				return false, nil
 			}

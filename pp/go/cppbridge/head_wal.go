@@ -60,11 +60,11 @@ func (d *HeadWalDecoder) Decode(segment []byte, innerSeries *InnerSeries) error 
 	return err
 }
 
-func (d *HeadWalDecoder) DecodeToDataStorage(segment []byte, headEncoder *HeadEncoder) error {
-	err := headWalDecoderDecodeToDataStorage(d.decoder, segment, headEncoder.encoder)
+func (d *HeadWalDecoder) DecodeToDataStorage(segment []byte, headEncoder *HeadEncoder) (int64, error) {
+	latestTimestamp, err := headWalDecoderDecodeToDataStorage(d.decoder, segment, headEncoder.encoder)
 	runtime.KeepAlive(d)
 	runtime.KeepAlive(headEncoder)
-	return err
+	return latestTimestamp, err
 }
 
 func (d *HeadWalDecoder) CreateEncoder() *HeadWalEncoder {
