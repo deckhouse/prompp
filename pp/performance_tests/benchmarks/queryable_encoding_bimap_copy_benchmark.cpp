@@ -27,13 +27,19 @@ std::string GetWalFileName() {
   return {};
 }
 
+void mark_all_series_as_added(std::shared_ptr<Lss> lss) {
+  for (auto label_set : *lss) {
+    lss->find_or_emplace(label_set);
+  }
+}
+
 std::shared_ptr<Lss> LoadLssFromFile() {
   auto file_name = GetWalFileName();
   auto lss = std::make_shared<Lss>();
 
   std::ifstream istrm(file_name, std::ios::binary);
   istrm >> *lss;
-  lss->mark_all_series_as_added();
+  mark_all_series_as_added(lss);
   return lss;
 }
 
