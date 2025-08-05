@@ -2347,3 +2347,8 @@ func (h *Head) updateWALReplayStatusRead(current int) {
 
 	h.stats.WALReplayStatus.Current = current
 }
+
+// IsEmpty returns true if the head does not contain a series.
+func (h *Head) IsEmpty() bool { // PP_CHANGES.md: rebuild on cpp
+	return h.NumSeries() == 0
+}

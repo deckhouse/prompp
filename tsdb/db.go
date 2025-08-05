@@ -1310,7 +1310,11 @@ func (db *DB) Compact(ctx context.Context) (returnErr error) {
 
 	// Clear some disk space before compacting blocks, especially important
 	// when Head compaction happened over a long time range.
-	if err := db.head.truncateWAL(lastBlockMaxt); err != nil {
+	walTruncationTime := lastBlockMaxt                              // PP_CHANGES.md: rebuild on cpp
+	if lastBlockMaxt == int64(math.MinInt64) && db.head.IsEmpty() { // PP_CHANGES.md: rebuild on cpp
+		walTruncationTime = rangeForTimestamp(db.head.MinTime(), db.head.chunkRange.Load())
+	}
+	if err := db.head.truncateWAL(walTruncationTime); err != nil { // PP_CHANGES.md: rebuild on cpp
 		return fmt.Errorf("WAL truncation in Compact: %w", err)
 	}
 
@@ -2069,7 +2073,7 @@ func (db *DB) Querier(mint, maxt int64) (_ storage.Querier, err error) {
 	overlapsOOO := overlapsClosedInterval(mint, maxt, db.head.MinOOOTime(), db.head.MaxOOOTime())
 	var headQuerier storage.Querier
 	inoMint := max(db.head.MinTime(), mint)
-	if maxt >= db.head.MinTime() || overlapsOOO {
+	if (maxt >= db.head.MinTime() || overlapsOOO) && !db.head.IsEmpty() { // PP_CHANGES.md: rebuild on cpp
 		rh := NewRangeHead(db.head, mint, maxt)
 		var err error
 		headQuerier, err = db.blockQuerierFunc(rh, mint, maxt)
@@ -2097,7 +2101,7 @@ func (db *DB) Querier(mint, maxt int64) (_ storage.Querier, err error) {
 		}
 	}
 
-	if overlapsOOO {
+	if overlapsOOO && !db.head.IsEmpty() { // PP_CHANGES.md: rebuild on cpp
 		// We need to fetch from in-order and out-of-order chunks: wrap the headQuerier.
 		isoState := db.head.oooIso.TrackReadAfter(db.lastGarbageCollectedMmapRef)
 		headQuerier = NewHeadAndOOOQuerier(inoMint, mint, maxt, db.head, isoState, headQuerier)
@@ -2147,7 +2151,7 @@ func (db *DB) blockChunkQuerierForRange(mint, maxt int64) (_ []storage.ChunkQuer
 	overlapsOOO := overlapsClosedInterval(mint, maxt, db.head.MinOOOTime(), db.head.MaxOOOTime())
 	var headQuerier storage.ChunkQuerier
 	inoMint := max(db.head.MinTime(), mint)
-	if maxt >= db.head.MinTime() || overlapsOOO {
+	if (maxt >= db.head.MinTime() || overlapsOOO) && !db.head.IsEmpty() { // PP_CHANGES.md: rebuild on cpp
 		rh := NewRangeHead(db.head, mint, maxt)
 		headQuerier, err = db.blockChunkQuerierFunc(rh, mint, maxt)
 		if err != nil {
@@ -2174,7 +2178,7 @@ func (db *DB) blockChunkQuerierForRange(mint, maxt int64) (_ []storage.ChunkQuer
 		}
 	}
 
-	if overlapsOOO {
+	if overlapsOOO && !db.head.IsEmpty() { // PP_CHANGES.md: rebuild on cpp
 		// We need to fetch from in-order and out-of-order chunks: wrap the headQuerier.
 		isoState := db.head.oooIso.TrackReadAfter(db.lastGarbageCollectedMmapRef)
 		headQuerier = NewHeadAndOOOChunkQuerier(inoMint, mint, maxt, db.head, isoState, headQuerier)

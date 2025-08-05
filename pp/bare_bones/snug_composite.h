@@ -524,7 +524,7 @@ class GenericDecodingTable {
 };
 
 template <template <template <class> class> class Filament, template <class> class Vector>
-class DecodingTable final : public GenericDecodingTable<DecodingTable<Filament, Vector>, Filament, Vector> {
+class DecodingTable : public GenericDecodingTable<DecodingTable<Filament, Vector>, Filament, Vector> {
  public:
   using Base = GenericDecodingTable<DecodingTable, Filament, Vector>;
 

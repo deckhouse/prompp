@@ -107,16 +107,20 @@ func (h *RotatableHead) Flush() error {
 }
 
 // Reconfigure - relabeler.Head interface implementation.
-func (h *RotatableHead) Reconfigure(inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) error {
+func (h *RotatableHead) Reconfigure(
+	ctx context.Context,
+	inputRelabelerConfigs []*config.InputRelabelerConfig,
+	numberOfShards uint16,
+) error {
 	if h.head.NumberOfShards() != numberOfShards {
 		return h.RotateWithConfig(inputRelabelerConfigs, numberOfShards)
 	}
-	return h.head.Reconfigure(inputRelabelerConfigs, numberOfShards)
+	return h.head.Reconfigure(ctx, inputRelabelerConfigs, numberOfShards)
 }
 
 // WriteMetrics - relabeler.Head interface implementation.
-func (h *RotatableHead) WriteMetrics() {
-	h.head.WriteMetrics()
+func (h *RotatableHead) WriteMetrics(ctx context.Context) {
+	h.head.WriteMetrics(ctx)
 }
 
 // Status return head stats.
@@ -187,14 +191,34 @@ func (h *RotatableHead) CopySeriesFrom(other relabeler.Head) {
 func (h *RotatableHead) CreateTask(
 	taskName string,
 	fn relabeler.ShardFn,
-	onLss, isExclusive bool,
+	onLss bool,
 ) *relabeler.GenericTask {
-	return h.head.CreateTask(taskName, fn, onLss, isExclusive)
+	return h.head.CreateTask(taskName, fn, onLss)
 }
 
 // Enqueue the task to be executed on head.
 func (h *RotatableHead) Enqueue(t *relabeler.GenericTask) {
 	h.head.Enqueue(t)
+}
+
+// EnqueueOnShard the task to be executed on head on specific shard.
+func (h *RotatableHead) EnqueueOnShard(t *relabeler.GenericTask, shardID uint16) {
+	h.head.EnqueueOnShard(t, shardID)
+}
+
+// Concurrency return current head workers concurrency.
+func (h *RotatableHead) Concurrency() int64 {
+	return h.head.Concurrency()
+}
+
+// RLockQuery locks for query to [Head].
+func (h *RotatableHead) RLockQuery(ctx context.Context) (runlock func(), err error) {
+	return h.head.RLockQuery(ctx)
+}
+
+// Raw returns raw [Head].
+func (h *RotatableHead) Raw() relabeler.Head {
+	return h.head
 }
 
 //
@@ -250,8 +274,12 @@ func (h *HeapProfileWritableHead) NumberOfShards() uint16 {
 	return h.head.NumberOfShards()
 }
 
-func (h *HeapProfileWritableHead) Reconfigure(inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) error {
-	return h.head.Reconfigure(inputRelabelerConfigs, numberOfShards)
+func (h *HeapProfileWritableHead) Reconfigure(
+	ctx context.Context,
+	inputRelabelerConfigs []*config.InputRelabelerConfig,
+	numberOfShards uint16,
+) error {
+	return h.head.Reconfigure(ctx, inputRelabelerConfigs, numberOfShards)
 }
 
 // Stop - relabeler.Head interface implementation.
@@ -264,8 +292,8 @@ func (h *HeapProfileWritableHead) Flush() error {
 	return h.head.Flush()
 }
 
-func (h *HeapProfileWritableHead) WriteMetrics() {
-	h.head.WriteMetrics()
+func (h *HeapProfileWritableHead) WriteMetrics(ctx context.Context) {
+	h.head.WriteMetrics(ctx)
 }
 
 func (h *HeapProfileWritableHead) Status(limit int) relabeler.HeadStatus {
@@ -297,12 +325,32 @@ func (h *HeapProfileWritableHead) CopySeriesFrom(other relabeler.Head) {
 func (h *HeapProfileWritableHead) CreateTask(
 	taskName string,
 	fn relabeler.ShardFn,
-	onLss, isExclusive bool,
+	onLss bool,
 ) *relabeler.GenericTask {
-	return h.head.CreateTask(taskName, fn, onLss, isExclusive)
+	return h.head.CreateTask(taskName, fn, onLss)
 }
 
 // Enqueue the task to be executed on head.
 func (h *HeapProfileWritableHead) Enqueue(t *relabeler.GenericTask) {
 	h.head.Enqueue(t)
+}
+
+// EnqueueOnShard the task to be executed on head on specific shard.
+func (h *HeapProfileWritableHead) EnqueueOnShard(t *relabeler.GenericTask, shardID uint16) {
+	h.head.EnqueueOnShard(t, shardID)
+}
+
+// Concurrency return current head workers concurrency.
+func (h *HeapProfileWritableHead) Concurrency() int64 {
+	return h.head.Concurrency()
+}
+
+// RLockQuery locks for query to [Head].
+func (h *HeapProfileWritableHead) RLockQuery(ctx context.Context) (runlock func(), err error) {
+	return h.head.RLockQuery(ctx)
+}
+
+// Raw returns raw [Head].
+func (h *HeapProfileWritableHead) Raw() relabeler.Head {
+	return h.head
 }

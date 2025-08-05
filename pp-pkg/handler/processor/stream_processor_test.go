@@ -63,7 +63,7 @@ func (mr *metricReceiver) AppendSnappyProtobuf(
 	return nil
 }
 
-func (*metricReceiver) MergeOutOfOrderChunks() {}
+func (*metricReceiver) MergeOutOfOrderChunks(_ context.Context) {}
 
 type segmentContainer struct {
 	timeSeries []coremodel.TimeSeries

@@ -5,17 +5,27 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
+const (
+	// QueryableAppenderSource metrics source for Appender.
+	QueryableAppenderSource = "queryable_appender"
+	// QueryableStorageSource metrics source for Storage.
+	QueryableStorageSource = "queryable_storage"
+)
+
 type Metrics struct {
-	LabelNamesDuration  *prometheus.HistogramVec
-	LabelValuesDuration *prometheus.HistogramVec
+	LabelNamesDuration  prometheus.Histogram
+	LabelValuesDuration prometheus.Histogram
 	SelectDuration      *prometheus.HistogramVec
 	AppendDuration      prometheus.Histogram
+
+	WaitLockRotateDuration prometheus.Gauge
+	RotationDuration       prometheus.Gauge
 }
 
-func NewMetrics(registerer prometheus.Registerer) *Metrics {
+func NewMetrics(registerer prometheus.Registerer, source string) *Metrics {
 	factory := util.NewUnconflictRegisterer(registerer)
 	return &Metrics{
-		LabelNamesDuration: factory.NewHistogramVec(
+		LabelNamesDuration: factory.NewHistogram(
 			prometheus.HistogramOpts{
 				Name: "prompp_head_query_label_names_duration",
 				Help: "Label names query from head duration in microseconds",
@@ -25,10 +35,10 @@ func NewMetrics(registerer prometheus.Registerer) *Metrics {
 					10000, 25000, 50000, 75000,
 					100000, 500000,
 				},
+				ConstLabels: prometheus.Labels{"source": source},
 			},
-			[]string{"generation"},
 		),
-		LabelValuesDuration: factory.NewHistogramVec(
+		LabelValuesDuration: factory.NewHistogram(
 			prometheus.HistogramOpts{
 				Name: "prompp_head_query_label_values_duration",
 				Help: "Label values query from head duration in microseconds",
@@ -38,8 +48,8 @@ func NewMetrics(registerer prometheus.Registerer) *Metrics {
 					10000, 25000, 50000, 75000,
 					100000, 500000,
 				},
+				ConstLabels: prometheus.Labels{"source": source},
 			},
-			[]string{"generation"},
 		),
 		SelectDuration: factory.NewHistogramVec(
 			prometheus.HistogramOpts{
@@ -51,8 +61,9 @@ func NewMetrics(registerer prometheus.Registerer) *Metrics {
 					10000, 25000, 50000, 75000,
 					100000, 500000,
 				},
+				ConstLabels: prometheus.Labels{"source": source},
 			},
-			[]string{"generation", "query_type"},
+			[]string{"query_type"},
 		),
 		AppendDuration: factory.NewHistogram(
 			prometheus.HistogramOpts{
@@ -64,6 +75,19 @@ func NewMetrics(registerer prometheus.Registerer) *Metrics {
 					10000, 25000, 50000, 75000,
 					100000, 500000,
 				},
+			},
+		),
+
+		WaitLockRotateDuration: factory.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "prompp_head_wait_lock_rotate_duration",
+				Help: "The duration of the lock wait for rotation in nanoseconds",
+			},
+		),
+		RotationDuration: factory.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "prompp_head_rotate_duration",
+				Help: "The duration of the rotate in nanoseconds",
 			},
 		),
 	}

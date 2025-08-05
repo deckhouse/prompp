@@ -35,6 +35,8 @@ import (
 	"syscall"
 	"time"
 
+	pphandler "github.com/prometheus/prometheus/pp-pkg/handler"
+	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor"
 	pptsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"
 
 	"github.com/KimMachineGun/automemlimit/memlimit"
@@ -63,7 +65,6 @@ import (
 	"github.com/prometheus/prometheus/pp-pkg/remote"                 // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/scrape"                 // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage" // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/cppbridge"               // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/relabeler/appender"      // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/relabeler/head"          // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"  // PP_CHANGES.md: rebuild on cpp
@@ -147,26 +148,27 @@ func agentOnlyFlag(app *kingpin.Application, name, help string) *kingpin.FlagCla
 type flagConfig struct {
 	configFile string
 
-	agentStoragePath     string
-	serverStoragePath    string
-	notifier             notifier.Options
-	forGracePeriod       model.Duration
-	outageTolerance      model.Duration
-	resendDelay          model.Duration
-	maxConcurrentEvals   int64
-	web                  web.Options
-	scrape               scrape.Options
-	tsdb                 tsdbOptions
-	agent                agentOptions
-	lookbackDelta        model.Duration
-	webTimeout           model.Duration
-	queryTimeout         model.Duration
-	queryConcurrency     int
-	queryMaxSamples      int
-	RemoteFlushDeadline  model.Duration
-	nameEscapingScheme   string
-	WalCommitInterval    model.Duration
-	HeadRetentionTimeout model.Duration
+	agentStoragePath        string
+	serverStoragePath       string
+	notifier                notifier.Options
+	forGracePeriod          model.Duration
+	outageTolerance         model.Duration
+	resendDelay             model.Duration
+	maxConcurrentEvals      int64
+	web                     web.Options
+	scrape                  scrape.Options
+	tsdb                    tsdbOptions
+	agent                   agentOptions
+	lookbackDelta           model.Duration
+	webTimeout              model.Duration
+	queryTimeout            model.Duration
+	queryConcurrency        int
+	queryMaxSamples         int
+	RemoteFlushDeadline     model.Duration
+	nameEscapingScheme      string
+	WalCommitInterval       model.Duration
+	WalMaxSamplesPerSegment uint32
+	HeadRetentionTimeout    model.Duration
 
 	featureList   []string
 	memlimitRatio float64
@@ -409,6 +411,9 @@ func main() {
 
 	serverOnlyFlag(a, "storage.wal-commit-interval", "Interval between force commits.").
 		Default("5000ms").SetValue(&cfg.WalCommitInterval)
+
+	serverOnlyFlag(a, "storage.wal-max-samples_per_segment", "Maximum samples in WAL segment.").
+		Default("100000").Uint32Var(&cfg.WalMaxSamplesPerSegment)
 
 	serverOnlyFlag(a, "storage.head-retention-timeout", "Timeout before inactive heads are shrieked.").
 		Default("5m").SetValue(&cfg.HeadRetentionTimeout)
@@ -765,6 +770,7 @@ func main() {
 		time.Duration(cfg.HeadRetentionTimeout),
 		// x3 ScrapeInterval timeout for write block
 		time.Duration(cfgFile.GlobalConfig.ScrapeInterval*3),
+		cfg.WalMaxSamplesPerSegment,
 	)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create a receiver", "err", err)
@@ -931,7 +937,7 @@ func main() {
 			Queryable:              receiver, // PP_CHANGES.md: rebuild on cpp
 			QueryFunc:              rules.EngineQueryFunc(queryEngine, fanoutStorage),
 			NotifyFunc:             rules.SendAlerts(notifierManager, cfg.web.ExternalURL.String()),
-			Context:                cppbridge.SetCaller(ctxRule, cppbridge.LSSQuerySourceRule), // PP_CHANGES.md: rebuild on cpp
+			Context:                ctxRule,
 			ExternalURL:            cfg.web.ExternalURL,
 			Registerer:             prometheus.DefaultRegisterer,
 			Logger:                 log.With(logger, "component", "rule manager"),
@@ -1314,6 +1320,7 @@ func main() {
 	if !agentMode {
 		// TSDB.
 		opts := cfg.tsdb.ToTSDBOptions()
+		opts.StripeSize = 1 // PP_CHANGES.md: rebuild on cpp
 		cancel := make(chan struct{})
 		g.Add(
 			func() error {
@@ -2042,7 +2049,7 @@ func readPromPPFeatures(logger log.Logger) {
 			if fvalue := strings.TrimSpace(fvalue); fvalue != "" {
 				v, err = strconv.Atoi(fvalue)
 				if err != nil {
-					level.Error(logger).Log("msg", "Error parsing head-read-concurrency value", "err", err)
+					level.Error(logger).Log("msg", "[FEATURE] Error parsing head_read_concurrency value", "err", err)
 					continue
 				}
 			}
@@ -2055,8 +2062,49 @@ func readPromPPFeatures(logger log.Logger) {
 				v,
 			)
 
-		case "disable_coredumps":
-			// TODO disable-coredumps
+		case "head_default_number_of_shards":
+			fvalue := strings.TrimSpace(fvalue)
+			if fvalue == "" {
+				level.Error(logger).Log(
+					"msg", "[FEATURE] The default number of shards is empty, no changes.",
+					"default_number_of_shards", receiver.DefaultNumberOfShards,
+				)
+
+				continue
+			}
+
+			v, err := strconv.Atoi(fvalue)
+			switch {
+			case err != nil:
+				level.Error(logger).Log(
+					"msg", "[FEATURE] Error parsing head_numbehead_default_number_of_shardsr_of_shards value",
+					"default_number_of_shards", receiver.DefaultNumberOfShards,
+					"err", err,
+				)
+
+			case v > math.MaxUint16:
+				level.Error(logger).Log(
+					"msg", "[FEATURE] The default number of shards is overflow(max 65535), no changes.",
+					"default_number_of_shards", receiver.DefaultNumberOfShards,
+				)
+
+			case v < 1:
+				level.Error(logger).Log(
+					"msg", "[FEATURE] The default number of shards is incorrect(min 1), no changes.",
+					"default_number_of_shards", receiver.DefaultNumberOfShards,
+				)
+
+			default:
+				receiver.DefaultNumberOfShards = uint16(v)
+				level.Info(logger).Log(
+					"msg", "[FEATURE] Changed default number of shards.",
+					"default_number_of_shards", receiver.DefaultNumberOfShards,
+				)
+			}
+
+		case "disable_commits_on_remote_write":
+			rwprocessor.AlwaysCommit = false
+			pphandler.OTLPAlwaysCommit = false
 		}
 	}
 }

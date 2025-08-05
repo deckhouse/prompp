@@ -26,6 +26,7 @@ type ShardWal struct {
 	segmentWriter  SegmentWriter
 	maxSegmentSize uint32
 	corrupted      bool
+	limitExhausted bool
 }
 
 func newShardWal(encoder *cppbridge.HeadWalEncoder, maxSegmentSize uint32, segmentWriter SegmentWriter) *ShardWal {
@@ -57,7 +58,13 @@ func (w *ShardWal) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error
 		return false, fmt.Errorf("failed to encode inner series: %w", err)
 	}
 
-	if w.maxSegmentSize > 0 && stats.Samples() >= w.maxSegmentSize {
+	if w.maxSegmentSize == 0 {
+		return false, nil
+	}
+
+	// memoize reaching of limits to deduplicate triggers
+	if !w.limitExhausted && stats.Samples() >= w.maxSegmentSize {
+		w.limitExhausted = true
 		return true, nil
 	}
 
@@ -73,6 +80,7 @@ func (w *ShardWal) Commit() error {
 	if err != nil {
 		return fmt.Errorf("failed to finalize segment: %w", err)
 	}
+	w.limitExhausted = false
 
 	if err = w.segmentWriter.Write(segment); err != nil {
 		return fmt.Errorf("failed to write segment: %w", err)

@@ -37,6 +37,7 @@ type AppenderSuite struct {
 	suite.Suite
 
 	baseCtx context.Context
+	metrics *querier.Metrics
 }
 
 func TestAppender(t *testing.T) {
@@ -45,6 +46,7 @@ func TestAppender(t *testing.T) {
 
 func (s *AppenderSuite) SetupSuite() {
 	s.baseCtx = context.Background()
+	s.metrics = querier.NewMetrics(nil, "test")
 	s.errorHandler()
 }
 
@@ -124,8 +126,7 @@ func (s *AppenderSuite) TestManagerRelabelerKeep() {
 	defer func() { _ = hd.Close() }()
 
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
@@ -268,8 +269,7 @@ func (s *AppenderSuite) TestManagerRelabelerRelabeling() {
 	s.Require().NoError(err)
 	defer func() { _ = hd.Close() }()
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
@@ -423,8 +423,7 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingAddNewLabel() {
 	s.Require().NoError(err)
 	defer func() { _ = hd.Close() }()
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
@@ -583,8 +582,7 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithExternalLabelsEnd() {
 	defer func() { _ = hd.Close() }()
 	s.Require().NoError(err)
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
 	s.T().Log("append first data")
@@ -741,8 +739,7 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithExternalLabelsRelabel(
 	s.Require().NoError(err)
 	defer func() { _ = hd.Close() }()
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
@@ -904,8 +901,7 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithTargetLabels() {
 	s.Require().NoError(err)
 	defer func() { _ = hd.Close() }()
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
@@ -1097,8 +1093,7 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithTargetLabels_Conflicti
 	s.Require().NoError(err)
 	defer func() { _ = hd.Close() }()
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
@@ -1291,8 +1286,7 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithTargetLabels_Conflicti
 	s.Require().NoError(err)
 	defer func() { _ = hd.Close() }()
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
@@ -1521,14 +1515,13 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithRotate() {
 
 	rotatableHead := appender.NewRotatableHead(hd, noOpStorage{}, builder, appender.NoOpHeadActivator{})
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(rotatableHead, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, rotatableHead, dstrb, s.metrics)
 
 	rotationTimer := relabeler.NewRotateTimer(clock, appender.DefaultRotateDuration)
 	commitTimer := appender.NewConstantIntervalTimer(clock, appender.DefaultCommitTimeout)
 	mergeTimer := appender.NewConstantIntervalTimer(clock, appender.DefaultMergeDuration)
 	defer rotationTimer.Stop()
-	rotator := appender.NewRotateCommiter(app, rotationTimer, commitTimer, mergeTimer, prometheus.DefaultRegisterer)
+	rotator := appender.NewRotateCommiter(s.baseCtx, app, rotationTimer, commitTimer, mergeTimer, prometheus.DefaultRegisterer)
 	rotator.Run()
 	defer func() { _ = rotator.Close() }()
 
@@ -1976,8 +1969,7 @@ func (s *AppenderSuite) TestManagerRelabelerKeepWithStaleNans() {
 	s.Require().NoError(err)
 	defer func() { _ = hd.Close() }()
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
@@ -2111,8 +2103,7 @@ func (s *AppenderSuite) TestManagerRelabelerKeepWithStaleNans_WithNullTimestamp(
 	s.Require().NoError(err)
 	defer func() { _ = hd.Close() }()
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
@@ -2243,8 +2234,7 @@ func (s *AppenderSuite) TestManagerRelabelerKeepWithStaleNans_HonorTimestamps() 
 	s.Require().NoError(err)
 	defer func() { _ = hd.Close() }()
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
@@ -2424,14 +2414,13 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithRotateWithStaleNans() 
 	rotatableHead := appender.NewRotatableHead(hd, noOpStorage{}, builder, appender.NoOpHeadActivator{})
 
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(rotatableHead, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, rotatableHead, dstrb, s.metrics)
 
 	rotationTimer := relabeler.NewRotateTimer(clock, appender.DefaultRotateDuration)
 	commitTimer := appender.NewConstantIntervalTimer(clock, appender.DefaultCommitTimeout)
 	mergeTimer := appender.NewConstantIntervalTimer(clock, appender.DefaultMergeDuration)
 	defer rotationTimer.Stop()
-	rotator := appender.NewRotateCommiter(app, rotationTimer, commitTimer, mergeTimer, prometheus.DefaultRegisterer)
+	rotator := appender.NewRotateCommiter(s.baseCtx, app, rotationTimer, commitTimer, mergeTimer, prometheus.DefaultRegisterer)
 	rotator.Run()
 	defer func() { _ = rotator.Close() }()
 

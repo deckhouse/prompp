@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstring>
 
 #include "preprocess.h"
@@ -226,13 +227,13 @@ class SharedPtr {
  public:
   using RefCounter = uint32_t;
   using ItemCounter = uint32_t;
-  using AtomicRefCounter = std::atomic<RefCounter>;
+  using AtomicRefCounter = std::atomic_ref<RefCounter>;
 
   struct ControlBlock {
     RefCounter ref_count{1};
     ItemCounter constructed_item_count{};
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE AtomicRefCounter& atomic_ref_count() noexcept { return reinterpret_cast<AtomicRefCounter&>(ref_count); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE AtomicRefCounter atomic_ref_count() noexcept { return AtomicRefCounter(ref_count); }
   };
 
   static constexpr uint32_t kControlBlockSize = sizeof(ControlBlock);
@@ -242,7 +243,7 @@ class SharedPtr {
     non_atomic_reallocate(size);
     set_constructed_item_count(constructed_item_count);
   }
-  PROMPP_ALWAYS_INLINE SharedPtr(const SharedPtr& other) noexcept : data_(other.data_) { inc_atomic_ref_counter(); }
+  PROMPP_ALWAYS_INLINE SharedPtr(const SharedPtr& other) noexcept : data_(other.data_) { inc_ref_counter(); }
   SharedPtr(SharedPtr&& other) noexcept : data_(std::exchange(other.data_, nullptr)) {}
 
   PROMPP_ALWAYS_INLINE ~SharedPtr() { dec_ref_counter(); }
@@ -251,7 +252,7 @@ class SharedPtr {
     if (this != &other) [[likely]] {
       dec_ref_counter();
       data_ = other.data_;
-      inc_atomic_ref_counter();
+      inc_ref_counter();
     }
 
     return *this;
@@ -266,11 +267,9 @@ class SharedPtr {
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE void non_atomic_reallocate(uint32_t size) noexcept {
-    if (size <= constructed_item_count()) [[unlikely]] {
-      return;
-    }
+  PROMPP_ALWAYS_INLINE friend void swap(SharedPtr& a, SharedPtr& b) noexcept { std::swap(a.data_, b.data_); }
 
+  PROMPP_ALWAYS_INLINE void non_atomic_reallocate(uint32_t size) noexcept {
     PRAGMA_DIAGNOSTIC(push)
     PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
     auto control_block = static_cast<ControlBlock*>(Reallocator::reallocate(raw_memory(), kControlBlockSize + size * sizeof(T)));
@@ -322,9 +321,9 @@ class SharedPtr {
  private:
   T* data_{nullptr};
 
-  PROMPP_ALWAYS_INLINE void inc_atomic_ref_counter() noexcept {
+  PROMPP_ALWAYS_INLINE void inc_ref_counter() noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
-      ++control_block()->atomic_ref_count();
+      ++block->atomic_ref_count();
     }
   }
 
@@ -401,7 +400,7 @@ class SharedMemory : public GenericMemory<SharedMemory<T, Reallocator>, uint32_t
       PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
       std::memcpy(new_data.get(), data_.get(), size_ * sizeof(T));
       PRAGMA_DIAGNOSTIC(pop)
-      data_.swap(new_data);
+      swap(data_, new_data);
     }
 
     size_ = new_size;
@@ -423,5 +422,14 @@ struct IsZeroInitializable<Memory<ControlBlock, T>> : std::true_type {};
 
 template <class T, ReallocatorInterface Reallocator>
 struct IsZeroInitializable<SharedMemory<T, Reallocator>> : std::true_type {};
+
+template <class T>
+using MemoryWithItemCount = Memory<MemoryControlBlockWithItemCount, T>;
+
+template <class T>
+struct IsSharedMemory : std::false_type {};
+
+template <class T, ReallocatorInterface Reallocator>
+struct IsSharedMemory<SharedMemory<T, Reallocator>> : std::true_type {};
 
 }  // namespace BareBones

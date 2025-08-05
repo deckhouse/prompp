@@ -1309,33 +1309,33 @@ func (sl *scrapeLoop) appendMetadata(hashdex ScraperHashdex) error {
 	hashdex.RangeMetadata(func(md cppbridge.WALScraperHashdexMetadata) bool {
 		switch md.Type {
 		case cppbridge.HashdexMetadataHelp:
-			sl.cache.setHelp(yoloBytes(&md.MetricName), yoloBytes(&md.Text))
+			sl.cache.setHelp(yoloBytes(md.MetricName), yoloBytes(md.Text))
 		case cppbridge.HashdexMetadataType:
 			switch md.Text {
 			case "counter":
-				sl.cache.setType(yoloBytes(&md.MetricName), model.MetricTypeCounter)
+				sl.cache.setType(yoloBytes(md.MetricName), model.MetricTypeCounter)
 			case "gauge":
-				sl.cache.setType(yoloBytes(&md.MetricName), model.MetricTypeGauge)
+				sl.cache.setType(yoloBytes(md.MetricName), model.MetricTypeGauge)
 			case "histogram":
-				sl.cache.setType(yoloBytes(&md.MetricName), model.MetricTypeHistogram)
+				sl.cache.setType(yoloBytes(md.MetricName), model.MetricTypeHistogram)
 			case "gaugehistogram":
-				sl.cache.setType(yoloBytes(&md.MetricName), model.MetricTypeGaugeHistogram)
+				sl.cache.setType(yoloBytes(md.MetricName), model.MetricTypeGaugeHistogram)
 			case "summary":
-				sl.cache.setType(yoloBytes(&md.MetricName), model.MetricTypeSummary)
+				sl.cache.setType(yoloBytes(md.MetricName), model.MetricTypeSummary)
 			case "info":
-				sl.cache.setType(yoloBytes(&md.MetricName), model.MetricTypeInfo)
+				sl.cache.setType(yoloBytes(md.MetricName), model.MetricTypeInfo)
 			case "stateset":
-				sl.cache.setType(yoloBytes(&md.MetricName), model.MetricTypeStateset)
+				sl.cache.setType(yoloBytes(md.MetricName), model.MetricTypeStateset)
 			case "unknown":
-				sl.cache.setType(yoloBytes(&md.MetricName), model.MetricTypeUnknown)
+				sl.cache.setType(yoloBytes(md.MetricName), model.MetricTypeUnknown)
 			case "untyped":
-				sl.cache.setType(yoloBytes(&md.MetricName), model.MetricTypeUnknown)
+				sl.cache.setType(yoloBytes(md.MetricName), model.MetricTypeUnknown)
 			default:
 				err = fmt.Errorf("invalid metric type %q", md.Text)
 				return false
 			}
 		case cppbridge.HashdexMetadataUnit:
-			sl.cache.setUnit(yoloBytes(&md.MetricName), yoloBytes(&md.Text))
+			sl.cache.setUnit(yoloBytes(md.MetricName), yoloBytes(md.Text))
 		default:
 			err = fmt.Errorf("invalid metadata type '%d'", md.Type)
 			return false
@@ -1347,8 +1347,8 @@ func (sl *scrapeLoop) appendMetadata(hashdex ScraperHashdex) error {
 	return err
 }
 
-func yoloBytes(s *string) []byte {
-	return *((*[]byte)(unsafe.Pointer(s)))
+func yoloBytes(s string) []byte {
+	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
 // The constants are suffixed with the invalid \xff unicode rune to avoid collisions
