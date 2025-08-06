@@ -2931,15 +2931,16 @@ func headWalDecoderDecode(decoder uintptr, segment []byte, innerSeries *InnerSer
 	return handleException(res.exception)
 }
 
-func headWalDecoderDecodeToDataStorage(decoder uintptr, segment []byte, encoder uintptr) (int64, error) {
+func headWalDecoderDecodeToDataStorage(decoder uintptr, segment []byte, encoder uintptr) (int64, int64, error) {
 	args := struct {
 		decoder uintptr
 		segment []byte
 		encoder uintptr
 	}{decoder, segment, encoder}
 	var res struct {
-		latestTimestamp int64
-		exception       []byte
+		earliestTimestamp int64
+		latestTimestamp   int64
+		exception         []byte
 	}
 
 	testGC()
@@ -2949,7 +2950,7 @@ func headWalDecoderDecodeToDataStorage(decoder uintptr, segment []byte, encoder 
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.latestTimestamp, handleException(res.exception)
+	return res.earliestTimestamp, res.latestTimestamp, handleException(res.exception)
 }
 
 func headWalDecoderCreateEncoder(decoder uintptr) uintptr {

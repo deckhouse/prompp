@@ -2,6 +2,11 @@ package head_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -12,9 +17,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/relabeler/querier"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/stretchr/testify/suite"
-	"os"
-	"path/filepath"
-	"testing"
 )
 
 const (
@@ -75,7 +77,7 @@ func (s *HeadLoadSuite) createHead() *head.Head {
 	return h
 }
 
-func (s *HeadLoadSuite) loadHead() *head.Head {
+func (s *HeadLoadSuite) loadHead(unloadDataStorageInterval *time.Duration) *head.Head {
 	loadedHead, corrupted, _, err := head.Load(
 		headID,
 		0,
@@ -85,6 +87,7 @@ func (s *HeadLoadSuite) loadHead() *head.Head {
 		maxSegmentSize,
 		head.NoOpLastAppendedSegmentIDSetter{},
 		prometheus.DefaultRegisterer,
+		unloadDataStorageInterval,
 	)
 
 	s.NoError(err)
@@ -181,7 +184,7 @@ func (s *HeadLoadSuite) TestLoad() {
 	s.NoError(sourceHead.Close())
 
 	// Act
-	loadedHead := s.loadHead()
+	loadedHead := s.loadHead(nil)
 
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "wal_metric")
 	actual := s.query(loadedHead, matcher, 0, 2)
@@ -208,7 +211,7 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 	s.NoError(sourceHead.Close())
 
 	// Act
-	loadedHead := s.loadHead()
+	loadedHead := s.loadHead(nil)
 	s.appendTimeSeries(loadedHead, []seriesData{
 		{
 			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},

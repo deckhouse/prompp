@@ -99,6 +99,7 @@ func (cmd *cmdWALPPToBlock) Do(
 			0,
 			head.NoOpLastAppendedSegmentIDSetter{},
 			registerer,
+			nil,
 		)
 		if err != nil {
 			level.Error(logger).Log(

@@ -183,7 +183,7 @@ func NewReceiver(
 		return nil, fmt.Errorf("failed to create head manager: %w", err)
 	}
 
-	activeHead, rotatedHeads, err := headManager.Restore(rotationInfo.BlockDuration)
+	activeHead, rotatedHeads, err := headManager.Restore(rotationInfo.BlockDuration, unloadDataStorageInterval)
 	if err != nil {
 		return nil, fmt.Errorf("failed to restore heads: %w", err)
 	}
