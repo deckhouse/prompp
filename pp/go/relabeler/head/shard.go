@@ -224,7 +224,7 @@ func (t *dataStorageLoadAndQueryTask) Release() []uintptr {
 type shard struct {
 	lss                 *LSS
 	dataStorage         *DataStorage
-	unloadedDataStorage *cppbridge.UnloadedDataStorage
+	unloadedDataStorage *UnloadedDataStorage
 	wal                 *ShardWal
 	loadAndQueryTask    *dataStorageLoadAndQueryTask
 	lssLocker           RWLockable
@@ -236,7 +236,7 @@ type shard struct {
 func newShard(
 	lss *LSS,
 	dataStorage *DataStorage,
-	unloadedDataStorage *cppbridge.UnloadedDataStorage,
+	unloadedDataStorage *UnloadedDataStorage,
 	wal *ShardWal,
 	shardID uint16,
 	withLocker bool,

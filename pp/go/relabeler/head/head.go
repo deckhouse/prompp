@@ -202,7 +202,7 @@ func New(
 	lsses []*LSS,
 	wals []*ShardWal,
 	dataStorages []*DataStorage,
-	unloadedDataStorages []*cppbridge.UnloadedDataStorage,
+	unloadedDataStorages []*UnloadedDataStorage,
 	numberOfShards uint16,
 	registerer prometheus.Registerer,
 ) (*Head, error) {

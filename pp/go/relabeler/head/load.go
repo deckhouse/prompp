@@ -36,7 +36,7 @@ func Create(
 	lsses := make([]*LSS, numberOfShards)
 	wals := make([]*ShardWal, numberOfShards)
 	dataStorages := make([]*DataStorage, numberOfShards)
-	unloadedDataStorages := make([]*cppbridge.UnloadedDataStorage, numberOfShards)
+	unloadedDataStorages := make([]*UnloadedDataStorage, numberOfShards)
 
 	defer func() {
 		if err == nil {
@@ -75,7 +75,7 @@ func createShard(
 	shardID uint16,
 	swn *segmentWriteNotifier,
 	maxSegmentSize uint32,
-) (*LSS, *ShardWal, *DataStorage, *cppbridge.UnloadedDataStorage, error) {
+) (*LSS, *ShardWal, *DataStorage, *UnloadedDataStorage, error) {
 	dir = filepath.Clean(dir)
 	shardFile, err := os.Create(getShardWalFilename(dir, shardID))
 	if err != nil {
@@ -112,7 +112,7 @@ func createShard(
 		return nil, nil, nil, nil, fmt.Errorf("failed to create unloaded data storage file: %w", err)
 	}
 
-	return lss, shardWal, NewDataStorage(), cppbridge.NewUnloadedDataStorage(unloadedDataStorageFile), nil
+	return lss, shardWal, NewDataStorage(), NewUnloadedDataStorage(unloadedDataStorageFile), nil
 }
 
 func Load(
@@ -151,7 +151,7 @@ func Load(
 	lsses := make([]*LSS, numberOfShards)
 	wals := make([]*ShardWal, numberOfShards)
 	dataStorages := make([]*DataStorage, numberOfShards)
-	unloadedDataStorages := make([]*cppbridge.UnloadedDataStorage, numberOfShards)
+	unloadedDataStorages := make([]*UnloadedDataStorage, numberOfShards)
 	numberOfSegmentsRead := optional.Optional[uint32]{}
 
 	for shardID, shardLoadResult := range shardLoadResults {
@@ -224,7 +224,7 @@ type ShardLoadResult struct {
 	Lss                 *LSS
 	DataStorage         *DataStorage
 	Wal                 *ShardWal
-	UnloadedDataStorage *cppbridge.UnloadedDataStorage
+	UnloadedDataStorage *UnloadedDataStorage
 	NumberOfSegments    uint32
 	Corrupted           bool
 }
@@ -258,7 +258,7 @@ func (l *ShardLoader) Load() (ShardLoadResult, error) {
 	if err != nil {
 		return result, err
 	}
-	result.UnloadedDataStorage = cppbridge.NewUnloadedDataStorage(unloadedDataStorageFile)
+	result.UnloadedDataStorage = NewUnloadedDataStorage(unloadedDataStorageFile)
 
 	decoder, err := l.loadWalFile(bufio.NewReaderSize(shardWalFile, 1024*1024*4), &result)
 	if err != nil {
@@ -280,7 +280,7 @@ func (l *ShardLoader) loadWalFile(reader io.Reader, result *ShardLoadResult) (*c
 	}
 
 	decoder := cppbridge.NewHeadWalDecoder(result.Lss.target, encoderVersion)
-	result.NumberOfSegments, err = l.loadSegments(reader, decoder, result.DataStorage)
+	result.NumberOfSegments, err = l.loadSegments(reader, decoder, result.DataStorage, result.UnloadedDataStorage)
 	return decoder, err
 }
 
@@ -298,6 +298,7 @@ func (l *ShardLoader) loadSegments(
 	reader io.Reader,
 	walDecoder *cppbridge.HeadWalDecoder,
 	dataStorage *DataStorage,
+	_ *UnloadedDataStorage,
 ) (uint32, error) {
 	numberOfSegments := uint32(0)
 
