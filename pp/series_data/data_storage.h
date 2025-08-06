@@ -330,6 +330,14 @@ struct DataStorage {
     return 0;
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_open_chunk_index(uint32_t ls_id) const noexcept {
+    if (const auto it = finalized_chunks.find(ls_id); it != finalized_chunks.end()) [[unlikely]] {
+      return it->second.count();
+    }
+
+    return 0;
+  }
+
   ~DataStorage() {
     for (const auto& chunk : open_chunks) {
       destroy_open_chunk_encoder(chunk);

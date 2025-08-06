@@ -24,27 +24,21 @@ class LoaderUnloaderTrait {
   Unloader unloader_{storage_};
   BareBones::ShrinkedToFitOStringStream stream1_;
   BareBones::ShrinkedToFitOStringStream stream2_;
-};
 
-class LoaderUnloaderTestFixture : public LoaderUnloaderTrait, public testing::Test {
- protected:
   template <class... Spans>
   void load(const std::vector<uint32_t>& ls_ids, Spans&&... spans) {
     Loader loader(storage_, ls_ids, ls_ids.size());
     (..., loader.load_next(std::forward<Spans>(spans)));
     loader.load_finalize();
   }
+
+  void unload(BareBones::ShrinkedToFitOStringStream& stream) {
+    unloader_.create_snapshot(stream);
+    unloader_.unload();
+  }
 };
 
-TEST_F(LoaderUnloaderTestFixture, Empty) {
-  // Arrange
-
-  // Act
-  unloader_.unload(stream1_);
-
-  // Assert
-  ASSERT_EQ(stream1_.view(), "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"s);
-}
+class LoaderUnloaderTestFixture : public LoaderUnloaderTrait, public testing::Test {};
 
 TEST_F(LoaderUnloaderTestFixture, UnloadOpenChunk) {
   // Arrange
@@ -58,7 +52,7 @@ TEST_F(LoaderUnloaderTestFixture, UnloadOpenChunk) {
       storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index).size_in_bits();
 
   // Act
-  unloader_.unload(stream1_);
+  unload(stream1_);
 
   // Assert
   ASSERT_EQ(storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index).size_in_bits(),
@@ -79,7 +73,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadOpenChunk) {
   const uint32_t chunk_stream_size_in_bits_before =
       storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index).size_in_bits();
 
-  unloader_.unload(stream1_);
+  unload(stream1_);
 
   // Act
   load({0}, stream1_.span<uint8_t>());
@@ -107,7 +101,7 @@ TEST_F(LoaderUnloaderTestFixture, EncodeAfterLoad) {
   encoder_.encode(0, 4, 4.0);
   encoder_.encode(0, 5, 5.0);
 
-  unloader_.unload(stream1_);
+  unload(stream1_);
   load({0}, stream1_.span<uint8_t>());
 
   // Act
@@ -144,7 +138,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadTwoOpenChunks) {
   encoder_.encode(100, 4, 40.0);
   encoder_.encode(100, 5, 50.0);
 
-  unloader_.unload(stream1_);
+  unload(stream1_);
 
   // Act
   load({0, 100}, stream1_.span<uint8_t>());
@@ -175,13 +169,13 @@ TEST_F(LoaderUnloaderTestFixture, SkipOneUnloading) {
   // Arrange
   encoder_.encode(0, 1, 1.0);
 
-  unloader_.unload(stream1_);
+  unload(stream1_);
 
   encoder_.encode(0, 2, 2.0);
   encoder_.encode(0, 3, 3.0);
   encoder_.encode(0, 4, 4.0);
 
-  unloader_.unload(stream2_);
+  unload(stream2_);
 
   encoder_.encode(0, 5, 5.0);
   encoder_.encode(0, 6, 6.0);
@@ -205,7 +199,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadFinalizedChunk) {
   encoder_.encode(0, 4, 4.0);
   encoder_.encode(0, 5, 5.0);
 
-  unloader_.unload(stream1_);
+  unload(stream1_);
 
   ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
   encoder_.encode(0, 6, 6.0);
@@ -229,7 +223,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadOpenChunkMergeOutdated) {
 
   encoder_.encode(0, 0, 0.0);
 
-  unloader_.unload(stream1_);
+  unload(stream1_);
 
   // Act
   load({0}, stream1_.span<uint8_t>());
@@ -258,7 +252,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadFinalizedChunkMergeOutdated) {
 
   encoder_.encode(0, 0, 0.0);
 
-  unloader_.unload(stream1_);
+  unload(stream1_);
 
   ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
   encoder_.encode(0, 6, 6.0);
@@ -287,13 +281,13 @@ TEST_F(LoaderUnloaderTestFixture, LoadOpenChunkSameChunkId) {
   encoder_.encode(0, 2, 2.0);
   encoder_.encode(0, 3, 3.0);
 
-  unloader_.unload(stream1_);
+  unload(stream1_);
 
   encoder_.encode(0, 4, 4.0);
   encoder_.encode(0, 5, 5.0);
   encoder_.encode(0, 6, 6.0);
 
-  unloader_.unload(stream2_);
+  unload(stream2_);
 
   encoder_.encode(0, 7, 7.0);
   encoder_.encode(0, 8, 8.0);
@@ -324,7 +318,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadChunkChangeChunkId) {
   encoder_.encode(0, 2, 2.0);
   encoder_.encode(0, 3, 3.0);
 
-  unloader_.unload(stream1_);
+  unload(stream1_);
 
   ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
 
@@ -332,7 +326,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadChunkChangeChunkId) {
   encoder_.encode(0, 5, 5.0);
   encoder_.encode(0, 6, 6.0);
 
-  unloader_.unload(stream2_);
+  unload(stream2_);
 
   encoder_.encode(0, 7, 7.0);
   encoder_.encode(0, 8, 8.0);
@@ -360,7 +354,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadAscIntegerChunk) {
   encoder_.encode(0, 2, 2.0);
   encoder_.encode(0, 3, 3.0);
 
-  unloader_.unload(stream1_);
+  unload(stream1_);
 
   // Act
   load({0}, stream1_.span<uint8_t>());
@@ -378,7 +372,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadAscIntegerTheGorillaChunk) {
   encoder_.encode(0, 3, 3.0);
   encoder_.encode(0, 4, 4.1);
 
-  unloader_.unload(stream1_);
+  unload(stream1_);
 
   // Act
   load({0}, stream1_.span<uint8_t>());
@@ -399,7 +393,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadValuesGorillaChunk) {
 
   encoder_.encode(1, 3, 3.0);
 
-  unloader_.unload(stream1_);
+  unload(stream1_);
 
   // Act
   load({1}, stream1_.span<uint8_t>());
@@ -416,7 +410,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadOnlyUnloadedSeries) {
   encoder_.encode(0, 2, 2.0);
   encoder_.encode(0, 3, 3.0);
 
-  unloader_.unload(stream1_);
+  unload(stream1_);
   load({0}, stream1_.span<uint8_t>());
 
   // Act
@@ -428,7 +422,7 @@ TEST_F(LoaderUnloaderTestFixture, LoadOnlyUnloadedSeries) {
   ASSERT_FALSE(storage_.unloaded_series_bitmap.is_set(0));
 }
 
-class LoaderUnloaderBigTestFixture : public ::testing::Test {
+class LoaderUnloaderBigTestFixture : public LoaderUnloaderTestFixture {
  protected:
   void SetUp() override {
     encoder_.encode(0, 1, 0.0);
@@ -455,10 +449,6 @@ class LoaderUnloaderBigTestFixture : public ::testing::Test {
     encoder_.encode(3, 4, 9.0);
     encoder_.encode(3, 5, 10.0);
   }
-
-  series_data::DataStorage storage_;
-  series_data::Encoder<> encoder_{storage_};
-  BareBones::ShrinkedToFitOStringStream stream_;
 };
 
 TEST_F(LoaderUnloaderBigTestFixture, UnloadAfterQuery) {
@@ -468,7 +458,7 @@ TEST_F(LoaderUnloaderBigTestFixture, UnloadAfterQuery) {
       storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[2].encoder.external_index).size_in_bits();
 
   // Act
-  Unloader(storage_).unload(stream_);
+  unload(stream1_);
 
   // Assert
   ASSERT_EQ(storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[2].encoder.external_index).size_in_bits(),
@@ -476,18 +466,6 @@ TEST_F(LoaderUnloaderBigTestFixture, UnloadAfterQuery) {
 
   ASSERT_EQ(storage_.unloaded_series_bitmap.popcount(), 1);
   ASSERT_TRUE(storage_.unloaded_series_bitmap.is_set(2));
-}
-
-TEST_F(LoaderUnloaderBigTestFixture, NothingToUnload) {
-  // Arrange
-  storage_.queried_series_bitmap.set({2, 3});
-
-  // Act
-  Unloader(storage_).unload(stream_);
-
-  // Assert
-  ASSERT_TRUE(storage_.unloaded_series_bitmap.empty());
-  ASSERT_EQ(stream_.view(), "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"s);
 }
 
 TEST_F(LoaderUnloaderBigTestFixture, EmptyLoader) {
@@ -507,11 +485,11 @@ TEST_F(LoaderUnloaderBigTestFixture, LoadAll) {
   storage_.queried_series_bitmap.set({0, 1});
   Loader loader(storage_);
 
-  Unloader(storage_).unload(stream_);
+  unload(stream1_);
 
   // Act
   loader.add_series_to_load(storage_.unloaded_series_bitmap, storage_.unloaded_series_bitmap.popcount());
-  loader.load_next(stream_.span<uint8_t>());
+  loader.load_next(stream1_.span<uint8_t>());
   loader.load_finalize();
 
   // Assert

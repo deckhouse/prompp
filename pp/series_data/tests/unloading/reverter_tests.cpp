@@ -29,6 +29,11 @@ class ReverterTestFixture : public testing::Test {
     (..., loader.load_next(std::forward<Spans>(spans)));
     loader.load_finalize();
   }
+
+  void unload() {
+    unloader_.create_snapshot(stream_);
+    unloader_.unload();
+  }
 };
 
 TEST_F(ReverterTestFixture, RevertOpenChunk) {
@@ -39,7 +44,7 @@ TEST_F(ReverterTestFixture, RevertOpenChunk) {
   encoder_.encode(0, 4, 4.0);
   encoder_.encode(0, 5, 5.0);
 
-  unloader_.unload(stream_);
+  unload();
 
   const auto chunk_stream_trimmed = storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index);
 
@@ -63,7 +68,7 @@ TEST_F(ReverterTestFixture, RevertFinalizedChunk) {
   encoder_.encode(0, 4, 4.0);
   encoder_.encode(0, 5, 5.0);
 
-  unloader_.unload(stream_);
+  unload();
 
   const auto chunk_stream_trimmed = storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index);
 
@@ -94,7 +99,7 @@ TEST_F(ReverterTestFixture, NoRevertOutdatedSeries) {
 
   const auto chunk_stream_original = storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index);
 
-  unloader_.unload(stream_);
+  unload();
 
   reverter_.add_series_to_revert(std::initializer_list{0u}, 1);
 
@@ -122,7 +127,7 @@ TEST_F(ReverterTestFixture, NoRevertQueriedSeries) {
   encoder_.encode(0, 2, 2.0);
   encoder_.encode(0, 3, 3.0);
 
-  unloader_.unload(stream_);
+  unload();
   reverter_.add_series_to_revert(std::initializer_list{0u}, 1);
   load({0}, stream_.span<const uint8_t>());
 

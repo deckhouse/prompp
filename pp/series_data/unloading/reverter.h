@@ -52,9 +52,7 @@ class LoadReverter {
   }
 
   PROMPP_ALWAYS_INLINE void revert_chunk(const LsIdSizeChunkId& meta) const noexcept {
-    const auto& chunk_data = std::ranges::next(DataStorage::SeriesChunkIterator{&storage_, meta.ls_id}, meta.chunk_id, DataStorage::SeriesChunks::end());
-    auto& chunk_bit_sequence = get_chunk_stream(storage_, chunk_data->chunk(), chunk_data->is_open());
-
+    auto& chunk_bit_sequence = get_chunk_stream(storage_, meta.ls_id, meta.chunk_id);
     if (meta.source_size_in_bits == chunk_bit_sequence.size_in_bits()) {
       return;
     }
