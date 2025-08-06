@@ -77,10 +77,33 @@ func (ds *HeadDataStorage) AllocatedMemory() uint64 {
 	return res
 }
 
-func (ds *HeadDataStorage) UnloadUnusedSeriesData() *CBytes {
-	res := seriesDataUnloadUnusedSeriesData(ds.dataStorage)
-	runtime.KeepAlive(ds)
-	return NewCBytes(res)
+type UnusedSeriesDataUnloader struct {
+	unloader uintptr
+	ds       *HeadDataStorage
+}
+
+func (u *UnusedSeriesDataUnloader) CreateSnapshot() []byte {
+	snapshot := seriesDataUnusedSeriesDataUnloaderCreateSnapshot(u.unloader)
+	runtime.KeepAlive(u)
+	return snapshot
+}
+
+func (u *UnusedSeriesDataUnloader) Unload() {
+	seriesDataUnusedSeriesDataUnloaderUnload(u.unloader)
+	runtime.KeepAlive(u)
+}
+
+func (ds *HeadDataStorage) CreateUnusedSeriesDataUnloader() *UnusedSeriesDataUnloader {
+	unloader := &UnusedSeriesDataUnloader{
+		unloader: seriesDataUnusedSeriesDataUnloaderCtor(ds.dataStorage),
+		ds:       ds,
+	}
+
+	runtime.SetFinalizer(unloader, func(u *UnusedSeriesDataUnloader) {
+		seriesDataUnusedSeriesDataUnloaderDtor(u.unloader)
+	})
+
+	return unloader
 }
 
 // HeadEncoder is Go wrapper around series_data::Encoder.

@@ -121,8 +121,8 @@ func (ds *DataStorage) AllocatedMemory() uint64 {
 	return ds.dataStorage.AllocatedMemory()
 }
 
-func (ds *DataStorage) UnloadUnusedSeriesData() *cppbridge.CBytes {
-	return ds.dataStorage.UnloadUnusedSeriesData()
+func (ds *DataStorage) CreateUnusedSeriesDataUnloader() *cppbridge.UnusedSeriesDataUnloader {
+	return ds.dataStorage.CreateUnusedSeriesDataUnloader()
 }
 
 func (ds *DataStorage) CreateLoader(queriers []uintptr) *cppbridge.UnloadedDataLoader {

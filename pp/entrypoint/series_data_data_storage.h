@@ -178,17 +178,50 @@ void prompp_series_data_chunk_recoder_next_batch(void* args, void* res);
 void prompp_series_data_chunk_recoder_dtor(void* args);
 
 /**
- * @brief Unloads data of unused series
+ * @brief Construct unloader
  *
  * @param args {
  *     dataStorage uintptr // pointer to constructed data storage
  * }
  *
  * @param res {
+ *     unloader uintptr // pointer to constructed unloader
+ * }
+ */
+void prompp_series_data_data_storage_unloader_ctor(void* args, void* res);
+
+/**
+ * @brief Destruct unloader
+ *
+ * @param args {
+ *     unloader uintptr // pointer to constructed unloader
+ * }
+ *
+ */
+void prompp_series_data_data_storage_unloader_dtor(void* args);
+
+/**
+ * @brief Create data snapshot of unused series
+ *
+ * @param args {
+ *     unloader uintptr // pointer to constructed unloader
+ * }
+ *
+ * @param res {
  *     unloadedData []byte // encoded unload data
  * }
  */
-void prompp_series_data_data_storage_unload(void* args, void* res);
+void prompp_series_data_data_storage_unloader_create_snapshot(void* args, void* res);
+
+/**
+ * @brief Unload data from DataStorage
+ *
+ * @param args {
+ *     unloader uintptr // pointer to constructed unloader
+ * }
+ *
+ */
+void prompp_series_data_data_storage_unloader_unload(void* args);
 
 /**
  * @brief Construct Loader to load previously unqueried series

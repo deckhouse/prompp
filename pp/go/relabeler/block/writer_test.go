@@ -2,6 +2,11 @@ package block_test
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
 	"github.com/oklog/ulid"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
@@ -9,10 +14,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/relabeler/head"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/stretchr/testify/suite"
-	"os"
-	"path/filepath"
-	"testing"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -95,7 +96,9 @@ func (s *BlockWriterSuite) readBlockMeta(filename string) tsdb.BlockMeta {
 }
 
 func (s *BlockWriterSuite) unloadData() {
-	s.Require().NoError(s.unloadedDataStorage.Write(s.dataStorage.UnloadUnusedSeriesData().Bytes))
+	unloader := s.dataStorage.CreateUnusedSeriesDataUnloader()
+	s.Require().NoError(s.unloadedDataStorage.Write(unloader.CreateSnapshot()))
+	unloader.Unload()
 }
 
 func (s *BlockWriterSuite) fillHead() {

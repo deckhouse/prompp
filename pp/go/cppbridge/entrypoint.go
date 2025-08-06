@@ -2305,22 +2305,64 @@ func seriesDataChunkRecoderDtor(chunkRecoder uintptr) {
 	)
 }
 
-func seriesDataUnloadUnusedSeriesData(dataStorage uintptr) []byte {
+func seriesDataUnusedSeriesDataUnloaderCtor(dataStorage uintptr) uintptr {
 	args := struct {
 		dataStorage uintptr
 	}{dataStorage}
+	var res struct {
+		unloader uintptr
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_data_storage_unloader_ctor,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.unloader
+}
+
+func seriesDataUnusedSeriesDataUnloaderDtor(unloader uintptr) {
+	args := struct {
+		unloader uintptr
+	}{unloader}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_data_storage_unloader_dtor,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func seriesDataUnusedSeriesDataUnloaderCreateSnapshot(unloader uintptr) []byte {
+	args := struct {
+		unloader uintptr
+	}{unloader}
 	var res struct {
 		snapshot []byte
 	}
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_series_data_data_storage_unload,
+		C.prompp_series_data_data_storage_unloader_create_snapshot,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
 
 	return res.snapshot
+}
+
+func seriesDataUnusedSeriesDataUnloaderUnload(unloader uintptr) {
+	args := struct {
+		unloader uintptr
+	}{unloader}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_data_storage_unloader_unload,
+		uintptr(unsafe.Pointer(&args)),
+	)
 }
 
 func seriesDataUnloadedDataLoaderCtor(dataStorage uintptr, queriers []uintptr) uintptr {

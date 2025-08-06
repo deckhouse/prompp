@@ -18,7 +18,7 @@ type DataStorage interface {
 	QueryFinal(queriers []uintptr)
 	InstantQuery(targetTimestamp, notFoundValueTimestampValue int64, seriesIDs []uint32) ([]cppbridge.Sample, cppbridge.DataStorageQueryResult)
 	AllocatedMemory() uint64
-	UnloadUnusedSeriesData() *cppbridge.CBytes
+	CreateUnusedSeriesDataUnloader() *cppbridge.UnusedSeriesDataUnloader
 	CreateLoader(queriers []uintptr) *cppbridge.UnloadedDataLoader
 	CreateRevertableLoader(lss *cppbridge.LabelSetStorage, lsIdBatchSize uint32) *cppbridge.UnloadedDataRevertableLoader
 	TimeInterval() cppbridge.TimeInterval

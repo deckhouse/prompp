@@ -249,22 +249,60 @@ extern "C" void prompp_series_data_chunk_recoder_dtor(void* args) {
   static_cast<Arguments*>(args)->~Arguments();
 }
 
-extern "C" void prompp_series_data_data_storage_unload(void* args, void* res) {
-  using series_data::unloading::Unloader;
+struct Unloader {
+  explicit Unloader(DataStorage& storage) : unloader(storage) {}
 
+  series_data::unloading::Unloader unloader;
+  Slice<char> snapshot;
+};
+
+using UnloaderPtr = std::unique_ptr<Unloader>;
+static_assert(sizeof(UnloaderPtr) == sizeof(void*));
+
+extern "C" void prompp_series_data_data_storage_unloader_ctor(void* args, void* res) {
   struct Arguments {
     DataStoragePtr data_storage;
   };
 
-  using Result = struct {
-    Slice<char> unloaded_data;
+  struct Result {
+    UnloaderPtr unloader;
   };
 
-  const auto out = new (res) Result();
+  new (res) Result{.unloader = std::make_unique<Unloader>(*static_cast<Arguments*>(args)->data_storage)};
+}
 
-  Unloader unloader{*static_cast<Arguments*>(args)->data_storage};
-  BytesStream bytes_stream{&out->unloaded_data};
-  unloader.unload(bytes_stream);
+extern "C" void prompp_series_data_data_storage_unloader_dtor(void* args) {
+  struct Arguments {
+    UnloaderPtr unloader;
+  };
+
+  static_cast<Arguments*>(args)->~Arguments();
+}
+
+extern "C" void prompp_series_data_data_storage_unloader_create_snapshot(void* args, void* res) {
+  struct Arguments {
+    UnloaderPtr unloader;
+  };
+
+  struct Result {
+    SliceView<char> snapshot;
+  };
+
+  auto& unloader = *static_cast<Arguments*>(args)->unloader;
+  unloader.snapshot.resize(0);
+  BytesStream bytes_stream{&unloader.snapshot};
+  unloader.unloader.create_snapshot(bytes_stream);
+
+  const auto out = static_cast<Result*>(res);
+  out->snapshot.reset_to(unloader.snapshot);
+}
+
+extern "C" void prompp_series_data_data_storage_unloader_unload(void* args) {
+  struct Arguments {
+    UnloaderPtr unloader;
+  };
+
+  static_cast<Arguments*>(args)->unloader->unloader.unload();
 }
 
 extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* res) {

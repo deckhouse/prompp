@@ -1141,13 +1141,21 @@ func (h *Head) UnloadUnusedSeriesData() {
 	task := h.CreateTask(
 		relabeler.DSUnloadUnusedSeriesData,
 		func(shard relabeler.Shard) error {
+			unloader := shard.DataStorage().CreateUnusedSeriesDataUnloader()
+
+			shard.DataStorageRLock()
+			bytes := unloader.CreateSnapshot()
+			shard.DataStorageRUnlock()
+
+			if err := shard.UnloadedDataStorage().Write(bytes); err != nil {
+				return err
+			}
+
 			shard.DataStorageLock()
-			bytes := shard.DataStorage().UnloadUnusedSeriesData()
-			err := shard.UnloadedDataStorage().Write(bytes.Bytes)
-			runtime.KeepAlive(bytes)
+			unloader.Unload()
 			shard.DataStorageUnlock()
 
-			return err
+			return nil
 		},
 		relabeler.ForDataStorageTask,
 	)
