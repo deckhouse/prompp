@@ -233,8 +233,8 @@ void prompp_head_wal_decoder_decode(void* args, void* res);
  *     encoder uintptr // pointer to constructed data_storage encoder
  * }
  * @param res {
- *     earliestSample int64 // timestamp of earliest sample in wal
- *     latestSample int64   // timestamp of latest sample in wal
+ *     createTimestamp int64 // timestamp of earliest sample in wal
+ *     encodeTimestamp int64   // timestamp of latest sample in wal
  *     error      []byte // error string if thrown
  * }
  */

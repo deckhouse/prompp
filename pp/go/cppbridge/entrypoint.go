@@ -2938,9 +2938,9 @@ func headWalDecoderDecodeToDataStorage(decoder uintptr, segment []byte, encoder 
 		encoder uintptr
 	}{decoder, segment, encoder}
 	var res struct {
-		earliestTimestamp int64
-		latestTimestamp   int64
-		exception         []byte
+		createTimestamp int64
+		encodeTimestamp int64
+		exception       []byte
 	}
 
 	testGC()
@@ -2950,7 +2950,7 @@ func headWalDecoderDecodeToDataStorage(decoder uintptr, segment []byte, encoder 
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.earliestTimestamp, res.latestTimestamp, handleException(res.exception)
+	return res.createTimestamp, res.encodeTimestamp, handleException(res.exception)
 }
 
 func headWalDecoderCreateEncoder(decoder uintptr) uintptr {
