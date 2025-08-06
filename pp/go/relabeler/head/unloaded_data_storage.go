@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"sync"
 )
 
 type ReaderAtWriterCloser interface {
@@ -30,6 +31,7 @@ const UnloadedDataStorageVersion = 1
 type UnloadedDataStorage struct {
 	storage         ReaderAtWriterCloser
 	snapshots       []UnloadedDataSnapshotHeader
+	lock            sync.RWMutex
 	maxSnapshotSize uint32
 }
 
@@ -53,8 +55,11 @@ func (s *UnloadedDataStorage) Write(snapshot []byte) error {
 		return err
 	}
 
+	s.lock.Lock()
 	s.snapshots = append(s.snapshots, header)
 	s.maxSnapshotSize = max(header.snapshotSize, s.maxSnapshotSize)
+	s.lock.Unlock()
+
 	return nil
 }
 
@@ -72,9 +77,14 @@ func (s *UnloadedDataStorage) ForEachSnapshot(f func(snapshot []byte, isLast boo
 		return err
 	}
 
-	snapshot := make([]byte, 0, s.maxSnapshotSize)
-	for index := range s.snapshots {
-		header := s.snapshots[index]
+	s.lock.RLock()
+	snapshots := s.snapshots
+	maxSnapshotSize := s.maxSnapshotSize
+	s.lock.RUnlock()
+
+	snapshot := make([]byte, 0, maxSnapshotSize)
+	for index := range snapshots {
+		header := snapshots[index]
 
 		snapshot = snapshot[:header.snapshotSize]
 		size, err := s.storage.ReadAt(snapshot, offset)
@@ -87,7 +97,7 @@ func (s *UnloadedDataStorage) ForEachSnapshot(f func(snapshot []byte, isLast boo
 			return fmt.Errorf("invalid snapshot at index %d", index)
 		}
 
-		f(snapshot, index == len(s.snapshots)-1)
+		f(snapshot, index == len(snapshots)-1)
 	}
 
 	return nil
