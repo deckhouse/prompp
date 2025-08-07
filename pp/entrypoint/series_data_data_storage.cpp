@@ -68,6 +68,31 @@ extern "C" void prompp_series_data_data_storage_time_interval(void* args, void* 
   new (res) Result{.interval = series_data::Decoder::get_time_interval(*static_cast<Arguments*>(args)->data_storage)};
 }
 
+extern "C" void prompp_series_data_data_storage_queried_series_bitset_size(void* args, void* res) {
+  struct Arguments {
+    DataStoragePtr data_storage;
+  };
+  struct Result {
+    uint32_t size;
+  };
+
+  const auto memory = static_cast<Arguments*>(args)->data_storage->queried_series_bitmap.memory();
+  new (res) Result{.size = static_cast<uint32_t>(memory.size())};
+}
+
+extern "C" void prompp_series_data_data_storage_queried_series_bitset(void* args, void* res) {
+  struct Arguments {
+    DataStoragePtr data_storage;
+  };
+  struct Result {
+    Slice<char> queried_series;
+  };
+
+  const auto memory = static_cast<Arguments*>(args)->data_storage->queried_series_bitmap.memory();
+  auto& queried_series = static_cast<Result*>(res)->queried_series;
+  std::memcpy(queried_series.data(), memory.data(), queried_series.size());
+}
+
 extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
   using Query = series_data::querier::Query<Slice<LabelSetID>>;
   using entrypoint::series_data::RangeQuerierWithArgumentsWrapper;

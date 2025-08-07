@@ -38,6 +38,34 @@ void prompp_series_data_data_storage_reset(void* args);
 void prompp_series_data_data_storage_time_interval(void* args, void* res);
 
 /**
+ * @brief Get queried series bitset memory size
+ *
+ * @param args {
+ *     dataStorage uintptr // pointer to constructed data storage
+ * }
+ *
+ * @param res {
+ *     size uint32 // queried series bitset memory size
+ * }
+ *
+ */
+void prompp_series_data_data_storage_queried_series_bitset_size(void* args, void* res);
+
+/**
+ * @brief Get queried series bitset memory
+ *
+ * @param args {
+ *     dataStorage uintptr // pointer to constructed data storage
+ * }
+ *
+ * @param res {
+ *     queriedSeries []byte // queried series bitset (memory allocated in c++)
+ * }
+ *
+ */
+void prompp_series_data_data_storage_queried_series_bitset(void* args, void* res);
+
+/**
  * @brief Queries data storage and serializes result.
  *
  * @param args {

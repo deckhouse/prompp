@@ -64,6 +64,13 @@ func (ds *HeadDataStorage) TimeInterval() TimeInterval {
 	return res
 }
 
+func (ds *HeadDataStorage) GetQueriedSeriesBitset() []byte {
+	size := seriesDataDataStorageQueriedSeriesBitsetSize(ds.dataStorage)
+	bitset := seriesDataDataStorageQueriedSeriesBitset(ds.dataStorage, make([]byte, size))
+	runtime.KeepAlive(ds)
+	return bitset
+}
+
 func (ds *HeadDataStorage) Pointer() uintptr {
 	return ds.dataStorage
 }

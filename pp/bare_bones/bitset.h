@@ -186,7 +186,7 @@ class Bitset {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_write_size() const noexcept {
-    const uint32_t data_size_in_bytes = Bit::to_ceil_units<uint64_t>(size()) * sizeof(uint64_t);
+    const uint32_t data_size_in_bytes = memory_size_in_bytes();
     return sizeof(data_size_in_bytes) + data_size_in_bytes;
   }
 
@@ -219,8 +219,14 @@ class Bitset {
     return Iterator(bit_data.data(), bit_count);
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const char> memory() const noexcept {
+    return {reinterpret_cast<const char*>(data_.begin()), memory_size_in_bytes()};
+  }
+
  private:
   PROMPP_ALWAYS_INLINE void set_size(uint32_t new_size) noexcept { data_.control_block().items_count = new_size; }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t memory_size_in_bytes() const noexcept { return Bit::to_ceil_units<uint64_t>(size()) * sizeof(uint64_t); }
 };
 
 template <>

@@ -2036,6 +2036,42 @@ func seriesDataDataStorageTimeInterval(dataStorage uintptr) TimeInterval {
 	return res.interval
 }
 
+func seriesDataDataStorageQueriedSeriesBitsetSize(dataStorage uintptr) uint32 {
+	args := struct {
+		dataStorage uintptr
+	}{dataStorage}
+	res := struct {
+		size uint32
+	}{}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_data_storage_queried_series_bitset_size,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.size
+}
+
+func seriesDataDataStorageQueriedSeriesBitset(dataStorage uintptr, queriedSeriesBitset []byte) []byte {
+	args := struct {
+		dataStorage uintptr
+	}{dataStorage}
+	res := struct {
+		queriedSeriesBitset []byte
+	}{queriedSeriesBitset}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_data_storage_queried_series_bitset,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.queriedSeriesBitset
+}
+
 func seriesDataDataStorageDtor(dataStorage uintptr) {
 	args := struct {
 		dataStorage uintptr
