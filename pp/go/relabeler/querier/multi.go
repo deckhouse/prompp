@@ -40,7 +40,7 @@ func (q *MultiQuerier) LabelValues(
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	if len(q.queriers) == 1 {
-		return q.queriers[0].LabelValues(ctx, name, matchers...)
+		return q.queriers[0].LabelValues(ctx, name, hints, matchers...)
 	}
 
 	labelValuesResults := make([][]string, len(q.queriers))
@@ -73,7 +73,7 @@ func (q *MultiQuerier) LabelNames(
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	if len(q.queriers) == 1 {
-		return q.queriers[0].LabelNames(ctx, matchers...)
+		return q.queriers[0].LabelNames(ctx, hints, matchers...)
 	}
 
 	labelNamesResults := make([][]string, len(q.queriers))
