@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.5.0
+
+Base Prometheus version bumped to 2.55.1. It's unlock switch from Prometheus 3.x installations to Prom++.
+
 ## v0.4.0
 
 ### Fixes
