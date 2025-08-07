@@ -36,6 +36,7 @@ func NewMultiQuerier(queriers []storage.Querier, closer func() error) *MultiQuer
 func (q *MultiQuerier) LabelValues(
 	ctx context.Context,
 	name string,
+	hints *storage.LabelHints,
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	if len(q.queriers) == 1 {
@@ -54,6 +55,7 @@ func (q *MultiQuerier) LabelValues(
 			labelValuesResults[index], annotationResults[index], errs[index] = querier.LabelValues(
 				ctx,
 				name,
+				hints,
 				matchers...,
 			)
 		}(index, querier)
@@ -67,6 +69,7 @@ func (q *MultiQuerier) LabelValues(
 
 func (q *MultiQuerier) LabelNames(
 	ctx context.Context,
+	hints *storage.LabelHints,
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	if len(q.queriers) == 1 {
@@ -82,7 +85,11 @@ func (q *MultiQuerier) LabelNames(
 		wg.Add(1)
 		go func(index int, querier storage.Querier) {
 			defer wg.Done()
-			labelNamesResults[index], annotationResults[index], errs[index] = querier.LabelNames(ctx, matchers...)
+			labelNamesResults[index], annotationResults[index], errs[index] = querier.LabelNames(
+				ctx,
+				hints,
+				matchers...,
+			)
 		}(index, querier)
 	}
 
