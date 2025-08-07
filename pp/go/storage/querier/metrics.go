@@ -12,12 +12,14 @@ const (
 	QueryableStorageSource = "queryable_storage"
 )
 
+// Metrics for [Querier].
 type Metrics struct {
 	LabelNamesDuration  prometheus.Histogram
 	LabelValuesDuration prometheus.Histogram
 	SelectDuration      *prometheus.HistogramVec
 }
 
+// NewMetrics init new [Metrics].
 func NewMetrics(registerer prometheus.Registerer, source string) *Metrics {
 	factory := util.NewUnconflictRegisterer(registerer)
 	return &Metrics{

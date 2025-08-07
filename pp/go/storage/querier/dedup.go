@@ -11,9 +11,8 @@ import (
 // NoOpShardedDeduplicator container for accumulating values without deduplication.
 type NoOpShardedDeduplicator struct {
 	shardedValues [][]string
-	// TODO snapshots any
-	snapshots []*cppbridge.LabelSetSnapshot
-	count     uint64
+	snapshots     []*cppbridge.LabelSetSnapshot
+	count         uint64
 }
 
 // NewNoOpShardedDeduplicator int new [NoOpShardedDeduplicator].

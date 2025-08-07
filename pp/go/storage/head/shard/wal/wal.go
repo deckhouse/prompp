@@ -76,33 +76,9 @@ func NewCorruptedWal[
 	}
 }
 
-// CurrentSize returns current wal size.
-func (w *Wal[TSegment, TStats, TWriter]) CurrentSize() int64 {
-	return w.segmentWriter.CurrentSize()
-}
-
-// Write the incoming inner series to wal encoder.
-func (w *Wal[TSegment, TStats, TWriter]) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error) {
-	if w.corrupted {
-		return false, fmt.Errorf("writing in corrupted wal")
-	}
-
-	stats, err := w.encoder.Encode(innerSeriesSlice)
-	if err != nil {
-		return false, fmt.Errorf("failed to encode inner series: %w", err)
-	}
-
-	if w.maxSegmentSize == 0 {
-		return false, nil
-	}
-
-	// memoize reaching of limits to deduplicate triggers
-	if !w.limitExhausted && stats.Samples() >= w.maxSegmentSize {
-		w.limitExhausted = true
-		return true, nil
-	}
-
-	return false, nil
+// Close closes the wal segmentWriter.
+func (w *Wal[TSegment, TStats, TWriter]) Close() error {
+	return w.segmentWriter.Close()
 }
 
 // Commit finalize segment from encoder and write to [SegmentWriter].
@@ -128,12 +104,36 @@ func (w *Wal[TSegment, TStats, TWriter]) Commit() error {
 	return nil
 }
 
+// CurrentSize returns current wal size.
+func (w *Wal[TSegment, TStats, TWriter]) CurrentSize() int64 {
+	return w.segmentWriter.CurrentSize()
+}
+
 // Flush wal [SegmentWriter].
 func (w *Wal[TSegment, TStats, TWriter]) Flush() error {
 	return w.segmentWriter.Flush()
 }
 
-// Close closes the wal segmentWriter.
-func (w *Wal[TSegment, TStats, TWriter]) Close() error {
-	return w.segmentWriter.Close()
+// Write the incoming inner series to wal encoder.
+func (w *Wal[TSegment, TStats, TWriter]) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error) {
+	if w.corrupted {
+		return false, fmt.Errorf("writing in corrupted wal")
+	}
+
+	stats, err := w.encoder.Encode(innerSeriesSlice)
+	if err != nil {
+		return false, fmt.Errorf("failed to encode inner series: %w", err)
+	}
+
+	if w.maxSegmentSize == 0 {
+		return false, nil
+	}
+
+	// memoize reaching of limits to deduplicate triggers
+	if !w.limitExhausted && stats.Samples() >= w.maxSegmentSize {
+		w.limitExhausted = true
+		return true, nil
+	}
+
+	return false, nil
 }

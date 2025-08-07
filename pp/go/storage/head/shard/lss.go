@@ -20,6 +20,11 @@ func (w *LSS) AllocatedMemory() uint64 {
 	return w.input.AllocatedMemory() + w.target.AllocatedMemory()
 }
 
+// CopyAddedSeries copy label sets which were added via FindOrEmplace to destination.
+func (w *LSS) CopyAddedSeries(destination *cppbridge.LabelSetStorage) {
+	w.target.CopyAddedSeries(destination)
+}
+
 // GetSnapshot return the actual snapshot.
 func (w *LSS) GetSnapshot() *cppbridge.LabelSetSnapshot {
 	w.once.Do(func() {
