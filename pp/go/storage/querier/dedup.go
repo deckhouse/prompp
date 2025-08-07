@@ -8,7 +8,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
-// NoOpShardedDeduplicator container for collecting values without deduplication.
+// NoOpShardedDeduplicator container for accumulating values without deduplication.
 type NoOpShardedDeduplicator struct {
 	shardedValues [][]string
 	// TODO snapshots any
@@ -17,7 +17,7 @@ type NoOpShardedDeduplicator struct {
 }
 
 // NewNoOpShardedDeduplicator int new [NoOpShardedDeduplicator].
-func NewNoOpShardedDeduplicator(numberOfShards uint16) *NoOpShardedDeduplicator {
+func NewNoOpShardedDeduplicator(numberOfShards uint16) Deduplicator {
 	return &NoOpShardedDeduplicator{
 		shardedValues: make([][]string, numberOfShards),
 		snapshots:     make([]*cppbridge.LabelSetSnapshot, numberOfShards),
