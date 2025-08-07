@@ -4,29 +4,36 @@ import (
 	"context"
 	"sync"
 
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/model"
-	"github.com/prometheus/prometheus/pp/go/storage"
+	"github.com/prometheus/prometheus/pp/go/storage/head/task"
 	"github.com/prometheus/prometheus/pp/go/util/locker"
 )
 
+//
+// Shard
+//
+
+// Shard the minimum required head Shard implementation.
 type Shard interface {
-	QueryLabelValues(
-		name string,
-		matchers []model.LabelMatcher,
-		dedupAdd func(shardID uint16, snapshot *cppbridge.LabelSetSnapshot, values []string),
-	) error
+	// QueryLabelValues(
+	// 	name string,
+	// 	matchers []model.LabelMatcher,
+	// 	dedupAdd func(shardID uint16, snapshot *cppbridge.LabelSetSnapshot, values []string),
+	// ) error
 	ShardID() uint16
 }
 
-type Head struct {
+//
+// Head
+//
+
+type Head[TShard Shard] struct {
 	id         string
 	generation uint64
 	readOnly   bool
 
-	shards             []Shard
-	lssTaskChs         []chan *storage.GenericTask
-	dataStorageTaskChs []chan *storage.GenericTask
+	shards             []TShard
+	lssTaskChs         []chan *task.Generic[TShard]
+	dataStorageTaskChs []chan *task.Generic[TShard]
 	queryLocker        *locker.Weighted
 
 	numberOfShards uint16
@@ -48,23 +55,30 @@ type Head struct {
 	// tasksExecute *prometheus.CounterVec
 }
 
-func NewHead(shards []Shard) *Head {
-	return &Head{
+func NewHead[TShard Shard](shards []TShard) *Head[TShard] {
+	return &Head[TShard]{
 		shards: shards,
 	}
 }
 
 // CreateTask create a task for operations on the head shards.
-func (h *Head) CreateTask(taskName string, fn func(shard TShard) error, isLss bool) TGenericTask {
+func (h *Head[TShard]) CreateTask(taskName string, fn func(shard TShard) error) *task.Generic[TShard] {
+	// TODO
+	return nil
 }
 
 // Enqueue the task to be executed on head.
-func (h *Head) Enqueue(t TGenericTask)
+func (h *Head[TShard]) Enqueue(t *task.Generic[TShard]) {
+	// TODO
+}
 
 // NumberOfShards returns current number of shards.
-func (h *Head) NumberOfShards() uint16 {
+func (h *Head[TShard]) NumberOfShards() uint16 {
 	return h.numberOfShards
 }
 
 // RLockQuery locks for query to [Head].
-func (h *Head) RLockQuery(ctx context.Context) (runlock func(), err error)
+func (h *Head[TShard]) RLockQuery(ctx context.Context) (runlock func(), err error) {
+	// TODO
+	return func() {}, nil
+}

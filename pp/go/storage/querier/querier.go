@@ -8,9 +8,19 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
-	"github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/logger"
 	"github.com/prometheus/prometheus/util/annotations"
+)
+
+const (
+	// LSSQueryInstantQuerySelector name of task.
+	LSSQueryInstantQuerySelector = "lss_query_instant_query_selector"
+	// LSSQueryRangeQuerySelector name of task.
+	LSSQueryRangeQuerySelector = "lss_query_range_query_selector"
+	// LSSLabelValuesQuerier name of task.
+	LSSLabelValuesQuerier = "lss_label_values_querier"
+	// LSSLabelNamesQuerier name of task.
+	LSSLabelNamesQuerier = "lss_label_names_querier"
 )
 
 //
@@ -57,7 +67,7 @@ type Head[
 	TGenericTask GenericTask,
 	TShard Shard,
 ] interface {
-	CreateTask(taskName string, fn func(shard TShard) error, isLss bool) TGenericTask
+	CreateTask(taskName string, fn func(shard TShard) error) TGenericTask
 	Enqueue(t TGenericTask)
 	NumberOfShards() uint16
 	RLockQuery(ctx context.Context) (runlock func(), err error)
@@ -79,6 +89,28 @@ type Querier[
 	deduplicatorCtor deduplicatorCtor
 	closer           func() error
 	metrics          *Metrics
+}
+
+// NewQuerier init new [Querier].
+func NewQuerier[
+	TGenericTask GenericTask,
+	TShard Shard,
+	THead Head[TGenericTask, TShard],
+](
+	head THead,
+	deduplicatorCtor deduplicatorCtor,
+	mint, maxt int64,
+	closer func() error,
+	metrics *Metrics,
+) *Querier[TGenericTask, TShard, THead] {
+	return &Querier[TGenericTask, TShard, THead]{
+		mint:             mint,
+		maxt:             maxt,
+		head:             head,
+		deduplicatorCtor: deduplicatorCtor,
+		closer:           closer,
+		metrics:          metrics,
+	}
 }
 
 // Close Querier if need.
@@ -104,7 +136,7 @@ func (q *Querier[TGenericTask, TShard, THead]) LabelValues(
 		q.head,
 		q.deduplicatorCtor,
 		q.metrics,
-		storage.LSSLabelValuesQuerier,
+		LSSLabelValuesQuerier,
 		matchers...,
 	)
 }
@@ -161,7 +193,6 @@ func queryLabelValues[
 		func(shard TShard) error {
 			return shard.QueryLabelValues(name, convertedMatchers, dedup.Add)
 		},
-		storage.ForLSSTask,
 	)
 	head.Enqueue(t)
 

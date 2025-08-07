@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/model"
 )
 
 //
@@ -17,11 +15,7 @@ import (
 
 // Shard the minimum required head Shard implementation.
 type Shard interface {
-	QueryLabelValues(
-		name string,
-		matchers []model.LabelMatcher,
-		dedupAdd func(shardID uint16, snapshot *cppbridge.LabelSetSnapshot, values []string),
-	) error
+	ShardID() uint16
 }
 
 //
@@ -39,16 +33,14 @@ type Generic[TShard Shard] struct {
 	done      prometheus.Counter
 	live      prometheus.Counter
 	execute   prometheus.Counter
-	forLSS    bool
 }
 
-// NewGenericTask init new [Generic].
-func NewGenericTask(
+// NewGeneric init new [Generic].
+func NewGeneric[TShard Shard](
 	shardFn func(shard TShard) error,
 	created, done, live, execute prometheus.Counter,
-	forLSS bool,
-) *Generic {
-	t := &Generic{
+) *Generic[TShard] {
+	t := &Generic[TShard]{
 		shardFn:   shardFn,
 		wg:        sync.WaitGroup{},
 		createdTS: time.Now().UnixMicro(),
@@ -56,16 +48,15 @@ func NewGenericTask(
 		done:      done,
 		live:      live,
 		execute:   execute,
-		forLSS:    forLSS,
 	}
 	t.created.Inc()
 
 	return t
 }
 
-// NewReadOnlyGenericTask init new GenericTask for read only head.
-func NewReadOnlyGenericTask(shardFn func(shard TShard) error) *Generic {
-	t := &Generic{
+// NewReadOnlyGeneric init new GenericTask for read only head.
+func NewReadOnlyGeneric[TShard Shard](shardFn func(shard TShard) error) *Generic[TShard] {
+	t := &Generic[TShard]{
 		shardFn: shardFn,
 		wg:      sync.WaitGroup{},
 	}
@@ -74,20 +65,20 @@ func NewReadOnlyGenericTask(shardFn func(shard TShard) error) *Generic {
 }
 
 // SetShardsNumber set shards number
-func (t *Generic) SetShardsNumber(number uint16) {
+func (t *Generic[TShard]) SetShardsNumber(number uint16) {
 	t.errs = make([]error, number)
 	t.wg.Add(int(number))
 }
 
 // ExecuteOnShard execute task on shard.
-func (t *Generic) ExecuteOnShard(shard Shard) {
+func (t *Generic[TShard]) ExecuteOnShard(shard TShard) {
 	atomic.CompareAndSwapInt64(&t.executeTS, 0, time.Now().UnixMicro())
 	t.errs[shard.ShardID()] = t.shardFn(shard)
 	t.wg.Done()
 }
 
 // Wait for the task to complete on all shards.
-func (t *Generic) Wait() error {
+func (t *Generic[TShard]) Wait() error {
 	t.wg.Wait()
 	if t.done == nil {
 		return errors.Join(t.errs...)
