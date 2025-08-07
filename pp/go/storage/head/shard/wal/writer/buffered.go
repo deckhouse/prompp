@@ -21,33 +21,33 @@ type WriteSyncCloser interface {
 }
 
 // SegmentWriterFN encode to slice byte and write to [io.Writer].
-type SegmentWriterFN[Segment any] func(writer io.Writer, segment Segment) (n int, err error)
+type SegmentWriterFN[TSegment any] func(writer io.Writer, segment TSegment) (n int, err error)
 
 // Buffered writer for segments.
-type Buffered[Segment any] struct {
+type Buffered[TSegment any] struct {
 	shardID        uint16
-	segments       []Segment
+	segments       []TSegment
 	buffer         *bytes.Buffer
 	notifier       SegmentIsWrittenNotifier
-	swriter        SegmentWriterFN[Segment]
+	swriter        SegmentWriterFN[TSegment]
 	writer         WriteSyncCloser
 	currentSize    int64
 	writeCompleted bool
 }
 
 // NewBuffered init new [Buffered].
-func NewBuffered[Segment any](
+func NewBuffered[TSegment any](
 	shardID uint16,
 	writer WriteSyncCloser,
-	swriter SegmentWriterFN[Segment],
+	swriter SegmentWriterFN[TSegment],
 	notifier SegmentIsWrittenNotifier,
-) (*Buffered[Segment], error) {
+) (*Buffered[TSegment], error) {
 	info, err := writer.Stat()
 	if err != nil {
 		return nil, err
 	}
 
-	return &Buffered[Segment]{
+	return &Buffered[TSegment]{
 		shardID:        shardID,
 		buffer:         bytes.NewBuffer(nil),
 		notifier:       notifier,
@@ -59,17 +59,17 @@ func NewBuffered[Segment any](
 }
 
 // Close closes the writer [WriteSyncCloser].
-func (w *Buffered[Segment]) Close() error {
+func (w *Buffered[TSegment]) Close() error {
 	return w.writer.Close()
 }
 
 // CurrentSize return current shard wal size.
-func (w *Buffered[Segment]) CurrentSize() int64 {
+func (w *Buffered[TSegment]) CurrentSize() int64 {
 	return atomic.LoadInt64(&w.currentSize)
 }
 
 // Flush and sync buffer and collected segments to [WriteSyncCloser].
-func (w *Buffered[Segment]) Flush() error {
+func (w *Buffered[TSegment]) Flush() error {
 	if !w.writeCompleted {
 		if err := w.flushAndSync(); err != nil {
 			return fmt.Errorf("flush and sync: %w", err)
@@ -93,13 +93,13 @@ func (w *Buffered[Segment]) Flush() error {
 }
 
 // Write to buffer [Buffered] incoming [Segment].
-func (w *Buffered[Segment]) Write(segment Segment) error {
+func (w *Buffered[TSegment]) Write(segment TSegment) error {
 	w.segments = append(w.segments, segment)
 	return nil
 }
 
 // flushAndSync write the contents from buffer to [WriteSyncCloser] and sync.
-func (w *Buffered[Segment]) flushAndSync() error {
+func (w *Buffered[TSegment]) flushAndSync() error {
 	n, err := w.buffer.WriteTo(w.writer)
 	atomic.AddInt64(&w.currentSize, n)
 	if err != nil {
@@ -114,7 +114,7 @@ func (w *Buffered[Segment]) flushAndSync() error {
 }
 
 // sync commits the current contents of the [WriteSyncCloser] and notify [SegmentIsWrittenNotifier].
-func (w *Buffered[Segment]) sync() error {
+func (w *Buffered[TSegment]) sync() error {
 	if err := w.writer.Sync(); err != nil {
 		return fmt.Errorf("writer sync: %w", err)
 	}
@@ -125,7 +125,7 @@ func (w *Buffered[Segment]) sync() error {
 }
 
 // writeToBufferAndFlush write [Segment] as slice byte to buffer and flush to [WriteSyncCloser].
-func (w *Buffered[Segment]) writeToBufferAndFlush(segment Segment) (encoded bool, err error) {
+func (w *Buffered[TSegment]) writeToBufferAndFlush(segment TSegment) (encoded bool, err error) {
 	if _, err := w.swriter(w.buffer, segment); err != nil {
 		w.buffer.Reset()
 		return false, fmt.Errorf("encode segment: %w", err)

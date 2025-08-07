@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/prometheus/prometheus/pp/go/storage/head/shard/writer"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
 	"github.com/stretchr/testify/require"
 )
 

@@ -6,10 +6,11 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
-	"github.com/prometheus/prometheus/pp/go/storage/head/shard/writer"
-	"github.com/stretchr/testify/require"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
 )
 
 func TestXxx(t *testing.T) {
@@ -32,12 +33,13 @@ func TestXxx(t *testing.T) {
 		_ = shardFile.Close()
 	}()
 
-	sw, err := writer.NewBuffered(shardID, shardFile, writer.WriteSegment[wal.EncodedSegment], swn)
+	sw, err := writer.NewBuffered(shardID, shardFile, writer.WriteSegment[*cppbridge.EncodedSegment], swn)
 	require.NoError(t, err)
 
 	shardWalEncoder := &cppbridge.HeadWalEncoder{}
 
-	wal.NewWal(shardWalEncoder, 10, sw)
+	wl := wal.NewWal(shardWalEncoder, sw, 10)
+	_ = wl
 }
 
 // segmentWriteNotifier test implementation [writer.SegmentIsWrittenNotifier].

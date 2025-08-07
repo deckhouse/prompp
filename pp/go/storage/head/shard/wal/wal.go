@@ -13,15 +13,26 @@ const (
 )
 
 // SegmentWriter writer for wal segments.
-type SegmentWriter interface {
+type SegmentWriter[TSegment EncodedSegment] interface {
 	// CurrentSize return current shard wal size.
 	CurrentSize() int64
 	// Write encoded segment to writer.
-	Write(segment EncodedSegment) error
+	Write(segment TSegment) error
 	// Flush write all buffered segments.
 	Flush() error
 	// Close closes the storage.
 	Close() error
+}
+
+// Encoder the minimum required Encoder implementation for a [Wal].
+type Encoder[TSegment EncodedSegment, TStats StatsSegment] interface {
+	Encode(innerSeriesSlice []*cppbridge.InnerSeries) (TStats, error)
+	Finalize() (TSegment, error)
+}
+
+// StatsSegment stats data for [Encoder].
+type StatsSegment interface {
+	Samples() uint32
 }
 
 // EncodedSegment the minimum required Segment implementation for a [Wal].
@@ -33,21 +44,21 @@ type EncodedSegment interface {
 }
 
 // Wal write-ahead log for [Shard].
-type Wal[Writer SegmentWriter] struct {
-	encoder        *cppbridge.HeadWalEncoder
-	segmentWriter  Writer
+type Wal[TSegment EncodedSegment, TStats StatsSegment, TWriter SegmentWriter[TSegment]] struct {
+	encoder        Encoder[TSegment, TStats] // *cppbridge.HeadWalEncoder
+	segmentWriter  TWriter
 	maxSegmentSize uint32
 	corrupted      bool
 	limitExhausted bool
 }
 
 // NewWal init new [Wal].
-func NewWal[Writer SegmentWriter](
-	encoder *cppbridge.HeadWalEncoder,
+func NewWal[TSegment EncodedSegment, TStats StatsSegment, TWriter SegmentWriter[TSegment]](
+	encoder Encoder[TSegment, TStats],
+	segmentWriter TWriter,
 	maxSegmentSize uint32,
-	segmentWriter Writer,
-) *Wal[Writer] {
-	return &Wal[Writer]{
+) *Wal[TSegment, TStats, TWriter] {
+	return &Wal[TSegment, TStats, TWriter]{
 		encoder:        encoder,
 		segmentWriter:  segmentWriter,
 		maxSegmentSize: maxSegmentSize,
@@ -55,19 +66,23 @@ func NewWal[Writer SegmentWriter](
 }
 
 // NewCorruptedWal init new corrupted [Wal].
-func NewCorruptedWal[Writer SegmentWriter]() *Wal[Writer] {
-	return &Wal[Writer]{
+func NewCorruptedWal[
+	TSegment EncodedSegment,
+	TStats StatsSegment,
+	TWriter SegmentWriter[TSegment],
+]() *Wal[TSegment, TStats, TWriter] {
+	return &Wal[TSegment, TStats, TWriter]{
 		corrupted: true,
 	}
 }
 
 // CurrentSize returns current wal size.
-func (w *Wal[Writer]) CurrentSize() int64 {
+func (w *Wal[TSegment, TStats, TWriter]) CurrentSize() int64 {
 	return w.segmentWriter.CurrentSize()
 }
 
 // Write the incoming inner series to wal encoder.
-func (w *Wal[Writer]) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error) {
+func (w *Wal[TSegment, TStats, TWriter]) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error) {
 	if w.corrupted {
 		return false, fmt.Errorf("writing in corrupted wal")
 	}
@@ -91,7 +106,7 @@ func (w *Wal[Writer]) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, er
 }
 
 // Commit finalize segment from encoder and write to [SegmentWriter].
-func (w *Wal[Writer]) Commit() error {
+func (w *Wal[TSegment, TStats, TWriter]) Commit() error {
 	if w.corrupted {
 		return fmt.Errorf("committing corrupted wal")
 	}
@@ -114,11 +129,11 @@ func (w *Wal[Writer]) Commit() error {
 }
 
 // Flush wal [SegmentWriter].
-func (w *Wal[Writer]) Flush() error {
+func (w *Wal[TSegment, TStats, TWriter]) Flush() error {
 	return w.segmentWriter.Flush()
 }
 
 // Close closes the wal segmentWriter.
-func (w *Wal[Writer]) Close() error {
+func (w *Wal[TSegment, TStats, TWriter]) Close() error {
 	return w.segmentWriter.Close()
 }

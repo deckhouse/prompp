@@ -15,7 +15,7 @@ type EncodedSegment interface {
 }
 
 // WriteSegment encode [EncodedSegment] to slice byte and write to [io.Writer].
-func WriteSegment[Segment EncodedSegment](writer io.Writer, segment Segment) (n int, err error) {
+func WriteSegment[TSegment EncodedSegment](writer io.Writer, segment TSegment) (n int, err error) {
 	var buf [binary.MaxVarintLen32]byte
 	var size int
 	var bytesWritten int
