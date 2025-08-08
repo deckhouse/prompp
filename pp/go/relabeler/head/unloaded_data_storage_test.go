@@ -402,3 +402,21 @@ func (s *QueriedSeriesStorageReaderSuite) TestReadFromStorageWithMaxTimestamp() 
 	s.Require().NoError(err)
 	s.Equal([]byte("6789"), data)
 }
+
+func (s *QueriedSeriesStorageReaderSuite) TestReadEmptyContent() {
+	// Arrange
+	_, _ = s.buffer1.Write([]byte{
+		QueriedSeriesStorageVersion,                    // version
+		0xb1, 0x68, 0xde, 0x3a, 0x00, 0x00, 0x00, 0x00, // timestamp
+		0x41, 0x01, 0x44, 0x30, //crc32
+		0x00, 0x00, 0x00, 0x00, // size
+	})
+	reader := s.createReader()
+
+	// Act
+	data, err := reader.Read()
+
+	// Assert
+	s.Require().NoError(err)
+	s.Equal([]byte(nil), data)
+}

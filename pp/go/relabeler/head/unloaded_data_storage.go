@@ -274,9 +274,11 @@ func (s *QueriedSeriesStorageReader) Read() (data []byte, err error) {
 		}
 		data = data[:storages[i].size]
 
-		if _, err = io.ReadFull(storages[i].reader, data); err != nil {
-			logger.Warnf("failed to read data from queried series storage: %v", err)
-			continue
+		if len(data) > 0 {
+			if _, err = io.ReadFull(storages[i].reader, data); err != nil {
+				logger.Warnf("failed to read data from queried series storage: %v", err)
+				continue
+			}
 		}
 
 		if storageCrc32 := storages[i].crc32; storageCrc32 != storages[i].CalculateCrc32(data) {
