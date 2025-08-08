@@ -61,34 +61,65 @@ type GenericTask interface {
 }
 
 //
-// Shard
+// DataStorage
 //
 
-// Shard the minimum required head Shard implementation.
-type Shard interface {
-	// DataStorageInstantQuery returns samples for instant query from data storage.
-	DataStorageInstantQuery(
+// DataStorage the minimum required DataStorage implementation.
+type DataStorage interface {
+	// InstantQuery returns samples for instant query from data storage.
+	InstantQuery(
 		maxt, valueNotFoundTimestampValue int64,
 		ids []uint32,
 	) []cppbridge.Sample
+
 	// QueryDataStorage returns serialized chunks from data storage.
-	DataStorageQuery(
+	Query(
 		query cppbridge.HeadDataStorageQuery,
 	) *cppbridge.HeadDataStorageSerializedChunks
+}
+
+//
+// LSS
+//
+
+// LSS the minimum required LSS implementation.
+type LSS interface {
 	// QueryLabelNames returns all the unique label names present in lss in sorted order.
 	QueryLabelNames(
+		shardID uint16,
 		matchers []model.LabelMatcher,
 		dedupAdd func(shardID uint16, snapshot *cppbridge.LabelSetSnapshot, values []string),
 	) error
+
 	// QueryLabelValues query labels values to lss and add values to
 	// the dedup-container that matches the given label matchers.
 	QueryLabelValues(
+		shardID uint16,
 		name string,
 		matchers []model.LabelMatcher,
 		dedupAdd func(shardID uint16, snapshot *cppbridge.LabelSetSnapshot, values []string),
 	) error
+
 	// QuerySelector returns a created selector that matches the given label matchers.
-	QuerySelector(matchers []model.LabelMatcher) (uintptr, *cppbridge.LabelSetSnapshot, error)
+	QuerySelector(shardID uint16, matchers []model.LabelMatcher) (uintptr, *cppbridge.LabelSetSnapshot, error)
+
+	GetSnapshot() *cppbridge.LabelSetSnapshot
+
+	WithRLock(fn func(target, input *cppbridge.LabelSetStorage) error) error
+}
+
+//
+// Shard
+//
+
+// Shard the minimum required head Shard implementation.
+type Shard[TDataStorage DataStorage, TLSS LSS] interface {
+	// DataStorage returns shard [DataStorage].
+	DataStorage() TDataStorage
+
+	// LSS returns shard labelset storage [LSS].
+	LSS() TLSS
+
 	// ShardID returns the shard ID.
 	ShardID() uint16
 }
@@ -100,12 +131,23 @@ type Shard interface {
 // Head the minimum required Head implementation.
 type Head[
 	TGenericTask GenericTask,
-	TShard Shard,
+	TDataStorage DataStorage,
+	TLSS LSS,
+	TShard Shard[TDataStorage, TLSS],
 ] interface {
+	// AcquireQuery acquires the [Head] semaphore with a weight of 1,
+	// blocking until resources are available or ctx is done.
+	// On success, returns nil. On failure, returns ctx.Err() and leaves the semaphore unchanged.
+	AcquireQuery(ctx context.Context) (release func(), err error)
+
+	// CreateTask create a task for operations on the [Head] shards.
 	CreateTask(taskName string, fn func(shard TShard) error) TGenericTask
+
+	// Enqueue the task to be executed on shards [Head].
 	Enqueue(t TGenericTask)
+
+	// NumberOfShards returns current number of shards in to [Head].
 	NumberOfShards() uint16
-	RLockQuery(ctx context.Context) (runlock func(), err error)
 }
 
 //
@@ -115,8 +157,10 @@ type Head[
 // Querier provides querying access over time series data of a fixed time range.
 type Querier[
 	TGenericTask GenericTask,
-	TShard Shard,
-	THead Head[TGenericTask, TShard],
+	TDataStorage DataStorage,
+	TLSS LSS,
+	TShard Shard[TDataStorage, TLSS],
+	THead Head[TGenericTask, TDataStorage, TLSS, TShard],
 ] struct {
 	mint             int64
 	maxt             int64
@@ -129,16 +173,18 @@ type Querier[
 // NewQuerier init new [Querier].
 func NewQuerier[
 	TGenericTask GenericTask,
-	TShard Shard,
-	THead Head[TGenericTask, TShard],
+	TDataStorage DataStorage,
+	TLSS LSS,
+	TShard Shard[TDataStorage, TLSS],
+	THead Head[TGenericTask, TDataStorage, TLSS, TShard],
 ](
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
 	mint, maxt int64,
 	closer func() error,
 	metrics *Metrics,
-) *Querier[TGenericTask, TShard, THead] {
-	return &Querier[TGenericTask, TShard, THead]{
+) *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead] {
+	return &Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]{
 		mint:             mint,
 		maxt:             maxt,
 		head:             head,
@@ -149,7 +195,7 @@ func NewQuerier[
 }
 
 // Close Querier if need.
-func (q *Querier[TGenericTask, TShard, THead]) Close() error {
+func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) Close() error {
 	if q.closer != nil {
 		return q.closer()
 	}
@@ -158,7 +204,7 @@ func (q *Querier[TGenericTask, TShard, THead]) Close() error {
 }
 
 // LabelNames returns label values present in the head for the specific label name.
-func (q *Querier[TGenericTask, TShard, THead]) LabelNames(
+func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) LabelNames(
 	ctx context.Context,
 	hints *storage.LabelHints,
 	matchers ...*labels.Matcher,
@@ -177,7 +223,7 @@ func (q *Querier[TGenericTask, TShard, THead]) LabelNames(
 // LabelValues returns label values present in the head for the specific label name
 // that are within the time range mint to maxt. If matchers are specified the returned
 // result set is reduced to label values of metrics matching the matchers.
-func (q *Querier[TGenericTask, TShard, THead]) LabelValues(
+func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
 	ctx context.Context,
 	name string,
 	matchers ...*labels.Matcher,
@@ -194,7 +240,7 @@ func (q *Querier[TGenericTask, TShard, THead]) LabelValues(
 }
 
 // Select returns a set of series that matches the given label matchers.
-func (q *Querier[TGenericTask, TShard, THead]) Select(
+func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) Select(
 	ctx context.Context,
 	sortSeries bool,
 	hints *storage.SelectHints,
@@ -209,7 +255,7 @@ func (q *Querier[TGenericTask, TShard, THead]) Select(
 // selectInstant returns a instant set of series that matches the given label matchers.
 //
 //revive:disable-next-line:function-length long but readable.
-func (q *Querier[TGenericTask, TShard, THead]) selectInstant(
+func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	ctx context.Context,
 	_ bool,
 	_ *storage.SelectHints,
@@ -217,12 +263,12 @@ func (q *Querier[TGenericTask, TShard, THead]) selectInstant(
 ) storage.SeriesSet {
 	start := time.Now()
 
-	runlock, err := q.head.RLockQuery(ctx)
+	release, err := q.head.AcquireQuery(ctx)
 	if err != nil {
 		logger.Warnf("[QUERIER]: select instant failed on the capture of the read lock query: %s", err)
 		return storage.ErrSeriesSet(err)
 	}
-	defer runlock()
+	defer release()
 
 	defer func() {
 		if q.metrics == nil {
@@ -259,7 +305,7 @@ func (q *Querier[TGenericTask, TShard, THead]) selectInstant(
 				lssQueryResult,
 				snapshots[shardID],
 				valueNotFoundTimestampValue,
-				shard.DataStorageInstantQuery(q.maxt, valueNotFoundTimestampValue, lssQueryResult.IDs()),
+				shard.DataStorage().InstantQuery(q.maxt, valueNotFoundTimestampValue, lssQueryResult.IDs()),
 			)
 
 			return nil
@@ -272,7 +318,7 @@ func (q *Querier[TGenericTask, TShard, THead]) selectInstant(
 }
 
 // selectRange returns a range set of series that matches the given label matchers.
-func (q *Querier[TGenericTask, TShard, THead]) selectRange(
+func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	ctx context.Context,
 	_ bool,
 	_ *storage.SelectHints,
@@ -280,12 +326,12 @@ func (q *Querier[TGenericTask, TShard, THead]) selectRange(
 ) storage.SeriesSet {
 	start := time.Now()
 
-	runlock, err := q.head.RLockQuery(ctx)
+	release, err := q.head.AcquireQuery(ctx)
 	if err != nil {
 		logger.Warnf("[QUERIER]: select range failed on the capture of the read lock query: %s", err)
 		return storage.ErrSeriesSet(err)
 	}
-	defer runlock()
+	defer release()
 
 	defer func() {
 		if q.metrics != nil {
@@ -340,8 +386,10 @@ func convertPrometheusMatchersToPPMatchers(matchers ...*labels.Matcher) []model.
 // queryDataStorage returns serialized chunks from data storage for each shard.
 func queryDataStorage[
 	TGenericTask GenericTask,
-	TShard Shard,
-	THead Head[TGenericTask, TShard],
+	TDataStorage DataStorage,
+	TLSS LSS,
+	TShard Shard[TDataStorage, TLSS],
+	THead Head[TGenericTask, TDataStorage, TLSS, TShard],
 ](
 	taskName string,
 	head THead,
@@ -358,7 +406,7 @@ func queryDataStorage[
 				return nil
 			}
 
-			serializedChunks := shard.DataStorageQuery(cppbridge.HeadDataStorageQuery{
+			serializedChunks := shard.DataStorage().Query(cppbridge.HeadDataStorageQuery{
 				StartTimestampMs: mint,
 				EndTimestampMs:   maxt,
 				LabelSetIDs:      lssQueryResult.IDs(),
@@ -382,8 +430,10 @@ func queryDataStorage[
 // queryLabelValues returns label values present in the head for the specific label name.
 func queryLabelNames[
 	TGenericTask GenericTask,
-	TShard Shard,
-	THead Head[TGenericTask, TShard],
+	TDataStorage DataStorage,
+	TLSS LSS,
+	TShard Shard[TDataStorage, TLSS],
+	THead Head[TGenericTask, TDataStorage, TLSS, TShard],
 ](
 	ctx context.Context,
 	head THead,
@@ -396,12 +446,12 @@ func queryLabelNames[
 	start := time.Now()
 
 	anns := *annotations.New()
-	runlock, err := head.RLockQuery(ctx)
+	release, err := head.AcquireQuery(ctx)
 	if err != nil {
 		logger.Warnf("[QUERIER]: label names failed on the capture of the read lock query: %s", err)
 		return nil, anns, err
 	}
-	defer runlock()
+	defer release()
 
 	defer func() {
 		if metrics != nil {
@@ -415,7 +465,7 @@ func queryLabelNames[
 	t := head.CreateTask(
 		taskName,
 		func(shard TShard) error {
-			return shard.QueryLabelNames(convertedMatchers, dedup.Add)
+			return shard.LSS().QueryLabelNames(shard.ShardID(), convertedMatchers, dedup.Add)
 		},
 	)
 	head.Enqueue(t)
@@ -442,8 +492,10 @@ func queryLabelNames[
 // queryLabelValues returns label values present in the head for the specific label name.
 func queryLabelValues[
 	TGenericTask GenericTask,
-	TShard Shard,
-	THead Head[TGenericTask, TShard],
+	TDataStorage DataStorage,
+	TLSS LSS,
+	TShard Shard[TDataStorage, TLSS],
+	THead Head[TGenericTask, TDataStorage, TLSS, TShard],
 ](
 	ctx context.Context,
 	name string,
@@ -456,12 +508,12 @@ func queryLabelValues[
 	start := time.Now()
 
 	anns := *annotations.New()
-	runlock, err := head.RLockQuery(ctx)
+	release, err := head.AcquireQuery(ctx)
 	if err != nil {
 		logger.Warnf("[QUERIER]: label values failed on the capture of the read lock query: %s", err)
 		return nil, anns, err
 	}
-	defer runlock()
+	defer release()
 
 	defer func() {
 		if metrics != nil {
@@ -475,7 +527,7 @@ func queryLabelValues[
 	t := head.CreateTask(
 		taskName,
 		func(shard TShard) error {
-			return shard.QueryLabelValues(name, convertedMatchers, dedup.Add)
+			return shard.LSS().QueryLabelValues(shard.ShardID(), name, convertedMatchers, dedup.Add)
 		},
 	)
 	head.Enqueue(t)
@@ -501,8 +553,10 @@ func queryLabelValues[
 //revive:disable-next-line:cyclomatic but readable.
 func queryLss[
 	TGenericTask GenericTask,
-	TShard Shard,
-	THead Head[TGenericTask, TShard],
+	TDataStorage DataStorage,
+	TLSS LSS,
+	TShard Shard[TDataStorage, TLSS],
+	THead Head[TGenericTask, TDataStorage, TLSS, TShard],
 ](
 	taskName string,
 	head THead,
@@ -520,9 +574,26 @@ func queryLss[
 	tLSSQuerySelector := head.CreateTask(
 		taskName,
 		func(shard TShard) (err error) {
-			selectors[shard.ShardID()], snapshots[shard.ShardID()], err = shard.QuerySelector(convertedMatchers)
+			shardID := shard.ShardID()
+			lss := shard.LSS()
 
-			return err
+			return lss.WithRLock(func(target, _ *cppbridge.LabelSetStorage) error {
+				selector, status := target.QuerySelector(convertedMatchers)
+				switch status {
+				case cppbridge.LSSQueryStatusMatch:
+					selectors[shardID] = selector
+					snapshots[shardID] = lss.GetSnapshot()
+
+				case cppbridge.LSSQueryStatusNoMatch:
+
+				default:
+					return fmt.Errorf(
+						"failed to query selector from shard: %d, query status: %d", shardID, status,
+					)
+				}
+
+				return nil
+			})
 		},
 	)
 	head.Enqueue(tLSSQuerySelector)

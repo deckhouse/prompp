@@ -1,6 +1,8 @@
 package shard
 
 import (
+	"fmt"
+	"runtime"
 	"sync"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -12,58 +14,142 @@ type LSS struct {
 	input    *cppbridge.LabelSetStorage
 	target   *cppbridge.LabelSetStorage
 	snapshot *cppbridge.LabelSetSnapshot
+	locker   sync.RWMutex
 	once     sync.Once
 }
 
 // AllocatedMemory return size of allocated memory for labelset storages.
-func (w *LSS) AllocatedMemory() uint64 {
-	return w.input.AllocatedMemory() + w.target.AllocatedMemory()
+func (l *LSS) AllocatedMemory() uint64 {
+	l.locker.RLock()
+	am := l.input.AllocatedMemory() + l.target.AllocatedMemory()
+	l.locker.RUnlock()
+
+	return am
 }
 
 // CopyAddedSeries copy label sets which were added via FindOrEmplace to destination.
-func (w *LSS) CopyAddedSeries(destination *cppbridge.LabelSetStorage) {
-	w.target.CopyAddedSeries(destination)
+func (l *LSS) CopyAddedSeries(destination *cppbridge.LabelSetStorage) {
+	l.locker.RLock()
+	l.target.CopyAddedSeries(destination)
+	l.locker.RUnlock()
 }
 
 // GetSnapshot return the actual snapshot.
-func (w *LSS) GetSnapshot() *cppbridge.LabelSetSnapshot {
-	w.once.Do(func() {
-		w.snapshot = w.target.CreateLabelSetSnapshot()
+func (l *LSS) GetSnapshot() *cppbridge.LabelSetSnapshot {
+	// TODO
+	l.once.Do(func() {
+		l.snapshot = l.target.CreateLabelSetSnapshot()
 	})
 
-	return w.snapshot
+	return l.snapshot
 }
 
 // Input returns input lss.
-func (w *LSS) Input() *cppbridge.LabelSetStorage {
-	return w.input
+func (l *LSS) Input() *cppbridge.LabelSetStorage {
+	return l.input
 }
 
-// QueryLabelNames returns a LSSQueryLabelNamesResult that matches the given label matchers.
-func (w *LSS) QueryLabelNames(matchers []model.LabelMatcher) *cppbridge.LSSQueryLabelNamesResult {
-	return w.target.QueryLabelNames(matchers)
-}
-
-// QueryLabelValues returns a LSSQueryLabelValuesResult that matches the given label matchers.
-func (w *LSS) QueryLabelValues(
-	label_name string,
+// QueryLabelNames add to dedup all the unique label names present in lss in sorted order.
+func (l *LSS) QueryLabelNames(
+	shardID uint16,
 	matchers []model.LabelMatcher,
-) *cppbridge.LSSQueryLabelValuesResult {
-	return w.target.QueryLabelValues(label_name, matchers)
+	dedupAdd func(shardID uint16, snapshot *cppbridge.LabelSetSnapshot, values []string),
+) error {
+	l.locker.RLock()
+	queryLabelNamesResult := l.target.QueryLabelNames(matchers)
+	snapshot := l.GetSnapshot()
+	l.locker.RUnlock()
+
+	if queryLabelNamesResult.Status() != cppbridge.LSSQueryStatusMatch {
+		return fmt.Errorf("no matches on shard: %d", shardID)
+	}
+
+	dedupAdd(shardID, snapshot, queryLabelNamesResult.Names())
+	runtime.KeepAlive(queryLabelNamesResult)
+
+	return nil
+}
+
+// QueryLabelValues query labels values to [LSS] and add values to
+// the dedup-container that matches the given label matchers.
+func (l *LSS) QueryLabelValues(
+	shardID uint16,
+	name string,
+	matchers []model.LabelMatcher,
+	dedupAdd func(shardID uint16, snapshot *cppbridge.LabelSetSnapshot, values []string),
+) error {
+	l.locker.RLock()
+	queryLabelValuesResult := l.target.QueryLabelValues(name, matchers)
+	snapshot := l.GetSnapshot()
+	l.locker.RUnlock()
+
+	if queryLabelValuesResult.Status() != cppbridge.LSSQueryStatusMatch {
+		return fmt.Errorf("no matches on shard: %d", shardID)
+	}
+
+	dedupAdd(shardID, snapshot, queryLabelValuesResult.Values())
+	runtime.KeepAlive(queryLabelValuesResult)
+
+	return nil
 }
 
 // QuerySelector returns a created selector that matches the given label matchers.
-func (w *LSS) QuerySelector(matchers []model.LabelMatcher) (selector uintptr, status uint32) {
-	return w.target.QuerySelector(matchers)
+func (l *LSS) QuerySelector(shardID uint16, matchers []model.LabelMatcher) (
+	uintptr,
+	*cppbridge.LabelSetSnapshot,
+	error,
+) {
+	l.locker.RLock()
+	defer l.locker.RUnlock()
+
+	selector, status := l.target.QuerySelector(matchers)
+	switch status {
+	case cppbridge.LSSQueryStatusMatch:
+		return selector, l.GetSnapshot(), nil
+
+	case cppbridge.LSSQueryStatusNoMatch:
+		return 0, nil, nil
+
+	default:
+		return 0, nil, fmt.Errorf(
+			"failed to query selector from shard: %d, query status: %d", shardID, status,
+		)
+	}
+}
+
+// QueryStatus get head status from [LSS].
+func (l *LSS) QueryStatus(status *cppbridge.HeadStatus, limit int) {
+	l.locker.RLock()
+	status.FromLSS(l.target, limit)
+	l.locker.RUnlock()
 }
 
 // ResetSnapshot resets the current snapshot.
-func (w *LSS) ResetSnapshot() {
-	w.snapshot = nil
-	w.once = sync.Once{}
+func (l *LSS) ResetSnapshot() {
+	// TODO
+	l.snapshot = nil
+	l.once = sync.Once{}
 }
 
-// Target returns main lss.
-func (w *LSS) Target() *cppbridge.LabelSetStorage {
-	return w.target
+// Target returns main [LSS].
+func (l *LSS) Target() *cppbridge.LabelSetStorage {
+	return l.target
+}
+
+// WithLock calls fn on raws [cppbridge.LabelSetStorage] with write lock.
+func (l *LSS) WithLock(fn func(target, input *cppbridge.LabelSetStorage) error) error {
+	l.locker.Lock()
+	err := fn(l.target, l.input)
+	l.locker.Unlock()
+
+	return err
+}
+
+// WithRLock calls fn on raws [cppbridge.LabelSetStorage] with read lock.
+func (l *LSS) WithRLock(fn func(target, input *cppbridge.LabelSetStorage) error) error {
+	l.locker.RLock()
+	err := fn(l.target, l.input)
+	l.locker.RUnlock()
+
+	return err
 }

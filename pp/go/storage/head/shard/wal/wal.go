@@ -3,6 +3,7 @@ package wal
 import (
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
@@ -47,6 +48,7 @@ type EncodedSegment interface {
 type Wal[TSegment EncodedSegment, TStats StatsSegment, TWriter SegmentWriter[TSegment]] struct {
 	encoder        Encoder[TSegment, TStats] // *cppbridge.HeadWalEncoder
 	segmentWriter  TWriter
+	locker         sync.Mutex
 	maxSegmentSize uint32
 	corrupted      bool
 	limitExhausted bool
@@ -61,6 +63,7 @@ func NewWal[TSegment EncodedSegment, TStats StatsSegment, TWriter SegmentWriter[
 	return &Wal[TSegment, TStats, TWriter]{
 		encoder:        encoder,
 		segmentWriter:  segmentWriter,
+		locker:         sync.Mutex{},
 		maxSegmentSize: maxSegmentSize,
 	}
 }
@@ -72,6 +75,7 @@ func NewCorruptedWal[
 	TWriter SegmentWriter[TSegment],
 ]() *Wal[TSegment, TStats, TWriter] {
 	return &Wal[TSegment, TStats, TWriter]{
+		locker:    sync.Mutex{},
 		corrupted: true,
 	}
 }
@@ -86,6 +90,9 @@ func (w *Wal[TSegment, TStats, TWriter]) Commit() error {
 	if w.corrupted {
 		return fmt.Errorf("committing corrupted wal")
 	}
+
+	w.locker.Lock()
+	defer w.locker.Unlock()
 
 	segment, err := w.encoder.Finalize()
 	if err != nil {
@@ -111,6 +118,9 @@ func (w *Wal[TSegment, TStats, TWriter]) CurrentSize() int64 {
 
 // Flush wal [SegmentWriter].
 func (w *Wal[TSegment, TStats, TWriter]) Flush() error {
+	w.locker.Lock()
+	defer w.locker.Unlock()
+
 	return w.segmentWriter.Flush()
 }
 
@@ -119,6 +129,9 @@ func (w *Wal[TSegment, TStats, TWriter]) Write(innerSeriesSlice []*cppbridge.Inn
 	if w.corrupted {
 		return false, fmt.Errorf("writing in corrupted wal")
 	}
+
+	w.locker.Lock()
+	defer w.locker.Unlock()
 
 	stats, err := w.encoder.Encode(innerSeriesSlice)
 	if err != nil {
