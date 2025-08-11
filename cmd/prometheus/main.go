@@ -2109,6 +2109,7 @@ func readPromPPFeatures(logger log.Logger) {
 
 		case "unload_data_storage":
 			appender.UnloadDataStorage = true
+			_ = level.Info(logger).Log("msg", "[FEATURE] Data storage unloading is enabled.")
 		}
 	}
 }
