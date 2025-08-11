@@ -100,7 +100,7 @@ func NewTestHeads(dir string, inputRelabelConfigs []*config.InputRelabelerConfig
 		return nil, errors.Join(err, th.Close())
 	}
 
-	activeHead, _, err := th.Manager.Restore(time.Hour, nil)
+	activeHead, _, err := th.Manager.Restore(time.Hour, 0)
 	if err != nil {
 		return nil, errors.Join(err, th.Close())
 	}

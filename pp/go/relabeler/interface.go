@@ -22,6 +22,7 @@ type DataStorage interface {
 	CreateLoader(queriers []uintptr) *cppbridge.UnloadedDataLoader
 	CreateRevertableLoader(lss *cppbridge.LabelSetStorage, lsIdBatchSize uint32) *cppbridge.UnloadedDataRevertableLoader
 	TimeInterval() cppbridge.TimeInterval
+	GetQueriedSeriesBitset() []byte
 }
 
 type LSS interface {
@@ -49,6 +50,11 @@ type UnloadedDataStorage interface {
 	ForEachSnapshot(f func(snapshot []byte, isLast bool)) error
 }
 
+type QueriedSeriesStorage interface {
+	Write(queriedSeriesBitset []byte, timestamp int64) error
+	Close() error
+}
+
 type DataStorageLoadAndQueryTask interface {
 	Release() []uintptr
 }
@@ -64,6 +70,7 @@ type Shard interface {
 	LSS() LSS
 	Wal() Wal
 	UnloadedDataStorage() UnloadedDataStorage
+	QueriedSeriesStorage() QueriedSeriesStorage
 	LoadAndQueryTask() DataStorageLoadAndQueryTask
 	// lock for DataStorage
 	DataStorageLock()

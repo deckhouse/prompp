@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"sync"
@@ -37,6 +38,7 @@ func Create(
 	wals := make([]*ShardWal, numberOfShards)
 	dataStorages := make([]*DataStorage, numberOfShards)
 	unloadedDataStorages := make([]*UnloadedDataStorage, numberOfShards)
+	queriedSeriesStorages := make([]*QueriedSeriesStorage, numberOfShards)
 
 	defer func() {
 		if err == nil {
@@ -52,13 +54,24 @@ func Create(
 	swn := newSegmentWriteNotifier(numberOfShards, lastAppendedSegmentIDSetter)
 
 	for shardID := uint16(0); shardID < numberOfShards; shardID++ {
-		lsses[shardID], wals[shardID], dataStorages[shardID], unloadedDataStorages[shardID], err = createShard(dir, shardID, swn, maxSegmentSize)
+		lsses[shardID], wals[shardID], dataStorages[shardID], unloadedDataStorages[shardID], queriedSeriesStorages[shardID], err = createShard(dir, shardID, swn, maxSegmentSize)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create shard: %w", err)
 		}
 	}
 
-	return New(id, generation, configs, lsses, wals, dataStorages, unloadedDataStorages, numberOfShards, registerer)
+	return New(
+		id,
+		generation,
+		configs,
+		lsses,
+		wals,
+		dataStorages,
+		unloadedDataStorages,
+		queriedSeriesStorages,
+		numberOfShards,
+		registerer,
+	)
 }
 
 func getShardWalFilename(dir string, shardID uint16) string {
@@ -69,24 +82,36 @@ func getUnloadedDataStorageFilename(dir string, shardID uint16) string {
 	return filepath.Join(dir, fmt.Sprintf("unloaded_%d.ds", shardID))
 }
 
+func getQueriedSeriesStorageFilename(dir string, shardID uint16, index uint8) string {
+	return filepath.Join(dir, fmt.Sprintf("queried_series_%d_%d.ds", shardID, index))
+}
+
 // createShard create shard for head.
 func createShard(
 	dir string,
 	shardID uint16,
 	swn *segmentWriteNotifier,
 	maxSegmentSize uint32,
-) (*LSS, *ShardWal, *DataStorage, *UnloadedDataStorage, error) {
+) (*LSS, *ShardWal, *DataStorage, *UnloadedDataStorage, *QueriedSeriesStorage, error) {
 	dir = filepath.Clean(dir)
+
+	var unloadedDataStorageFile *os.File
+
 	shardFile, err := os.Create(getShardWalFilename(dir, shardID))
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to create shard wal file: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("failed to create shard wal file: %w", err)
 	}
 
 	defer func() {
 		if err == nil {
 			return
 		}
+
 		_ = shardFile.Close()
+
+		if unloadedDataStorageFile != nil {
+			_ = unloadedDataStorageFile.Close()
+		}
 	}()
 
 	lss := &LSS{
@@ -97,22 +122,59 @@ func createShard(
 	shardWalEncoder := cppbridge.NewHeadWalEncoder(shardID, HeadWalEncoderDecoderLogShards, lss.target)
 	_, err = WriteHeader(shardFile, FileFormatVersion, shardWalEncoder.Version())
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to write header: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("failed to write header: %w", err)
 	}
 
 	sw, err := newSegmentWriter(shardID, shardFile, swn)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to init segmentWriter: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("failed to init segmentWriter: %w", err)
 	}
 
 	shardWal := newShardWal(shardWalEncoder, maxSegmentSize, sw)
 
-	unloadedDataStorageFile, err := os.Create(getUnloadedDataStorageFilename(dir, shardID))
+	unloadedDataStorageFile, err = os.Create(getUnloadedDataStorageFilename(dir, shardID))
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("failed to create unloaded data storage file: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("failed to create unloaded data storage file: %w", err)
 	}
 
-	return lss, shardWal, NewDataStorage(), NewUnloadedDataStorage(unloadedDataStorageFile), nil
+	var queriedSeriesStorageFile1, queriedSeriesStorageFile2 *os.File
+	if queriedSeriesStorageFile1, queriedSeriesStorageFile2, err = openQueriedSeriesStorageFiles(dir, shardID); err != nil {
+		return nil, nil, nil, nil, nil, fmt.Errorf("failed to create queried data storage writer: %w", err)
+	}
+
+	return lss,
+		shardWal,
+		NewDataStorage(),
+		NewUnloadedDataStorage(unloadedDataStorageFile),
+		NewQueriedSeriesStorage(queriedSeriesStorageFile1, queriedSeriesStorageFile2),
+		nil
+}
+
+func openQueriedSeriesStorageFiles(dir string, shardID uint16) (*os.File, *os.File, error) {
+	file1, err := os.OpenFile(getQueriedSeriesStorageFilename(dir, shardID, 0), os.O_RDWR|os.O_CREATE, 0666)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create queried series storage file: %w", err)
+	}
+
+	file2, err := os.OpenFile(getQueriedSeriesStorageFilename(dir, shardID, 1), os.O_RDWR|os.O_CREATE, 0666)
+	if err != nil {
+		_ = file1.Close()
+		return nil, nil, fmt.Errorf("failed to create queried series storage file: %w", err)
+	}
+
+	return file1, file2, nil
+}
+
+func filesAreEmpty(files ...*os.File) bool {
+	for _, file := range files {
+		if info, err := file.Stat(); err == nil {
+			if info.Size() > 0 {
+				return false
+			}
+		}
+	}
+
+	return true
 }
 
 func Load(
@@ -124,27 +186,26 @@ func Load(
 	maxSegmentSize uint32,
 	lastAppendedSegmentIDSetter LastAppendedSegmentIDSetter,
 	registerer prometheus.Registerer,
-	unloadDataStorageInterval *time.Duration,
+	unloadDataStorageInterval time.Duration,
 ) (_ *Head, corrupted bool, numberOfSegments uint32, err error) {
 	shardLoadResults := make([]ShardLoadResult, numberOfShards)
 	wg := &sync.WaitGroup{}
 	swn := newSegmentWriteNotifier(numberOfShards, lastAppendedSegmentIDSetter)
 	for shardID := uint16(0); shardID < numberOfShards; shardID++ {
 		wg.Add(1)
-		go func(shardID uint16, shardWalFilePath, unloadedDataStorageFilePath string, notifier *segmentWriteNotifier) {
+		go func(shardID uint16, dir string, notifier *segmentWriteNotifier) {
 			defer wg.Done()
 			var err error
 			shardLoadResults[shardID], err = NewShardLoader(
 				shardID,
-				shardWalFilePath,
-				unloadedDataStorageFilePath,
+				dir,
 				maxSegmentSize,
 				notifier,
 				unloadDataStorageInterval).Load()
 			if err != nil {
 				logger.Warnf("load shard error: %v", err)
 			}
-		}(shardID, getShardWalFilename(dir, shardID), getUnloadedDataStorageFilename(dir, shardID), swn)
+		}(shardID, dir, swn)
 	}
 	wg.Wait()
 
@@ -152,6 +213,7 @@ func Load(
 	wals := make([]*ShardWal, numberOfShards)
 	dataStorages := make([]*DataStorage, numberOfShards)
 	unloadedDataStorages := make([]*UnloadedDataStorage, numberOfShards)
+	queriedSeriesStorages := make([]*QueriedSeriesStorage, numberOfShards)
 	numberOfSegmentsRead := optional.Optional[uint32]{}
 
 	for shardID, shardLoadResult := range shardLoadResults {
@@ -159,6 +221,7 @@ func Load(
 		wals[shardID] = shardLoadResult.Wal
 		dataStorages[shardID] = shardLoadResult.DataStorage
 		unloadedDataStorages[shardID] = shardLoadResult.UnloadedDataStorage
+		queriedSeriesStorages[shardID] = shardLoadResult.QueriedSeriesStorage
 		if shardLoadResult.Corrupted {
 			corrupted = true
 		}
@@ -184,7 +247,18 @@ func Load(
 		}
 	}()
 
-	h, err := New(id, generation, configs, lsses, wals, dataStorages, unloadedDataStorages, numberOfShards, registerer)
+	h, err := New(
+		id,
+		generation,
+		configs,
+		lsses,
+		wals,
+		dataStorages,
+		unloadedDataStorages,
+		queriedSeriesStorages,
+		numberOfShards,
+		registerer,
+	)
 	if err != nil {
 		return nil, corrupted, numberOfSegmentsRead.Value(), fmt.Errorf("failed to create head: %w", err)
 	}
@@ -195,38 +269,37 @@ func Load(
 }
 
 type ShardLoader struct {
-	shardID                     uint16
-	shardFilePath               string
-	unloadedDataStorageFilePath string
-	maxSegmentSize              uint32
-	notifier                    *segmentWriteNotifier
-	unloadDataStorageInterval   *time.Duration
+	shardID                   uint16
+	dir                       string
+	maxSegmentSize            uint32
+	notifier                  *segmentWriteNotifier
+	unloadDataStorageInterval time.Duration
 }
 
 func NewShardLoader(
 	shardID uint16,
-	shardFilePath, unloadedDataStorageFilePath string,
+	dir string,
 	maxSegmentSize uint32,
 	notifier *segmentWriteNotifier,
-	unloadDataStorageInterval *time.Duration,
+	unloadDataStorageInterval time.Duration,
 ) *ShardLoader {
 	return &ShardLoader{
-		shardID:                     shardID,
-		shardFilePath:               shardFilePath,
-		unloadedDataStorageFilePath: unloadedDataStorageFilePath,
-		maxSegmentSize:              maxSegmentSize,
-		notifier:                    notifier,
-		unloadDataStorageInterval:   unloadDataStorageInterval,
+		shardID:                   shardID,
+		dir:                       dir,
+		maxSegmentSize:            maxSegmentSize,
+		notifier:                  notifier,
+		unloadDataStorageInterval: unloadDataStorageInterval,
 	}
 }
 
 type ShardLoadResult struct {
-	Lss                 *LSS
-	DataStorage         *DataStorage
-	Wal                 *ShardWal
-	UnloadedDataStorage *UnloadedDataStorage
-	NumberOfSegments    uint32
-	Corrupted           bool
+	Lss                  *LSS
+	DataStorage          *DataStorage
+	Wal                  *ShardWal
+	UnloadedDataStorage  *UnloadedDataStorage
+	QueriedSeriesStorage *QueriedSeriesStorage
+	NumberOfSegments     uint32
+	Corrupted            bool
 }
 
 func (l *ShardLoader) Load() (ShardLoadResult, error) {
@@ -240,7 +313,7 @@ func (l *ShardLoader) Load() (ShardLoadResult, error) {
 		Corrupted:   true,
 	}
 
-	shardWalFile, err := os.OpenFile(l.shardFilePath, os.O_RDWR, 0o600)
+	shardWalFile, err := os.OpenFile(getShardWalFilename(l.dir, l.shardID), os.O_RDWR, 0666)
 	if err != nil {
 		return result, err
 	}
@@ -248,19 +321,32 @@ func (l *ShardLoader) Load() (ShardLoadResult, error) {
 	defer func() {
 		if result.Corrupted {
 			_ = shardWalFile.Close()
+
 			if result.UnloadedDataStorage != nil {
 				_ = result.UnloadedDataStorage.Close()
+				result.UnloadedDataStorage = nil
+			}
+
+			if result.QueriedSeriesStorage != nil {
+				_ = result.QueriedSeriesStorage.Close()
+				result.QueriedSeriesStorage = nil
 			}
 		}
 	}()
 
-	unloadedDataStorageFile, err := os.Create(l.unloadedDataStorageFilePath)
+	unloadedDataStorageFile, err := os.Create(getUnloadedDataStorageFilename(l.dir, l.shardID))
 	if err != nil {
 		return result, err
 	}
 	result.UnloadedDataStorage = NewUnloadedDataStorage(unloadedDataStorageFile)
 
-	decoder, err := l.loadWalFile(bufio.NewReaderSize(shardWalFile, 1024*1024*4), &result)
+	var queriedSeriesStorageIsEmpty bool
+	queriedSeriesStorageIsEmpty, err = l.loadQueriedSeries(&result)
+	if err != nil {
+		return result, err
+	}
+
+	decoder, err := l.loadWalFile(bufio.NewReaderSize(shardWalFile, 1024*1024*4), !queriedSeriesStorageIsEmpty, &result)
 	if err != nil {
 		return result, err
 	}
@@ -273,14 +359,19 @@ func (l *ShardLoader) Load() (ShardLoadResult, error) {
 	return result, nil
 }
 
-func (l *ShardLoader) loadWalFile(reader io.Reader, result *ShardLoadResult) (*cppbridge.HeadWalDecoder, error) {
+func (l *ShardLoader) loadWalFile(reader io.Reader, unloadUnusedData bool, result *ShardLoadResult) (*cppbridge.HeadWalDecoder, error) {
 	_, encoderVersion, _, err := ReadHeader(reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read wal header: %w", err)
 	}
 
 	decoder := cppbridge.NewHeadWalDecoder(result.Lss.target, encoderVersion)
-	result.NumberOfSegments, err = l.loadSegments(reader, decoder, result.DataStorage, result.UnloadedDataStorage)
+	result.NumberOfSegments, err = l.loadSegments(
+		reader,
+		decoder,
+		result.DataStorage.encoder,
+		newDataUnloader(result.DataStorage, result.UnloadedDataStorage, unloadUnusedData, l.unloadDataStorageInterval),
+	)
 	return decoder, err
 }
 
@@ -294,11 +385,67 @@ func (l *ShardLoader) createShardWal(shardWalFile *os.File, walDecoder *cppbridg
 	}
 }
 
+type dataUnloader struct {
+	unloader              *cppbridge.UnusedSeriesDataUnloader
+	unloadedDataStorage   *UnloadedDataStorage
+	unloadedIntervalIndex int64
+	unloadInterval        time.Duration
+	needUnload            bool
+}
+
+func newDataUnloader(
+	dataStorage *DataStorage,
+	unloadedDataStorage *UnloadedDataStorage,
+	unloadUnusedData bool,
+	unloadInterval time.Duration,
+) dataUnloader {
+	result := dataUnloader{
+		unloadedDataStorage:   unloadedDataStorage,
+		unloadedIntervalIndex: math.MinInt64,
+		needUnload:            unloadUnusedData && unloadInterval > 0,
+		unloadInterval:        unloadInterval,
+	}
+
+	if result.needUnload {
+		result.unloader = dataStorage.CreateUnusedSeriesDataUnloader()
+	}
+
+	return result
+}
+
+func (d *dataUnloader) UnloadIfNeeded(createTs, encodeTs time.Duration) error {
+	if !d.needUnload {
+		return nil
+	}
+
+	intervalIndex := int64(createTs / d.unloadInterval)
+
+	if d.unloadedIntervalIndex == math.MinInt64 {
+		d.unloadedIntervalIndex = intervalIndex
+
+		createTs = encodeTs
+		intervalIndex = int64(createTs / d.unloadInterval)
+	}
+
+	if intervalIndex > d.unloadedIntervalIndex {
+		logger.Warnf("unloading data: prev %d, current: %d, unloadInterval: %d", d.unloadedIntervalIndex, intervalIndex, d.unloadInterval)
+
+		if err := d.unloadedDataStorage.Write(d.unloader.CreateSnapshot()); err != nil {
+			return fmt.Errorf("failed to write unloaded data: %w", err)
+		}
+		d.unloader.Unload()
+
+		d.unloadedIntervalIndex = intervalIndex
+	}
+
+	return nil
+}
+
 func (l *ShardLoader) loadSegments(
 	reader io.Reader,
 	walDecoder *cppbridge.HeadWalDecoder,
-	dataStorage *DataStorage,
-	_ *UnloadedDataStorage,
+	encoder *cppbridge.HeadEncoder,
+	unloader dataUnloader,
 ) (uint32, error) {
 	numberOfSegments := uint32(0)
 
@@ -311,11 +458,36 @@ func (l *ShardLoader) loadSegments(
 			return 0, fmt.Errorf("failed to read segment: %w", err)
 		}
 
-		_, _, err = walDecoder.DecodeToDataStorage(segment.data, dataStorage.encoder)
+		createTs, encodeTs, err := walDecoder.DecodeToDataStorage(segment.data, encoder)
 		if err != nil {
 			return 0, fmt.Errorf("failed to decode segment: %w", err)
 		}
 
 		numberOfSegments++
+
+		if createTs != 0 {
+			if err = unloader.UnloadIfNeeded(time.Duration(createTs), time.Duration(encodeTs)); err != nil {
+				return 0, fmt.Errorf("failed to unload data: %w", err)
+			}
+		}
 	}
+}
+
+func (l *ShardLoader) loadQueriedSeries(result *ShardLoadResult) (bool, error) {
+	file1, file2, err := openQueriedSeriesStorageFiles(l.dir, l.shardID)
+	if err != nil {
+		return false, err
+	}
+
+	isEmptyStorage := filesAreEmpty(file1, file2)
+
+	result.QueriedSeriesStorage = NewQueriedSeriesStorage(file1, file2)
+
+	if queriedSeries, err := result.QueriedSeriesStorage.Read(); err != nil {
+		logger.Warnf("error loading queried series: %v", err)
+	} else {
+		result.DataStorage.dataStorage.SetQueriedSeriesBitset(queriedSeries)
+	}
+
+	return isEmptyStorage, nil
 }

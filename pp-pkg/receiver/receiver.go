@@ -125,7 +125,7 @@ func NewReceiver(
 	headRetentionTimeout time.Duration,
 	writeTimeout time.Duration,
 	maxSegmentSize uint32,
-	unloadDataStorageInterval *time.Duration,
+	unloadDataStorage bool,
 ) (*Receiver, error) {
 	if logger == nil {
 		logger = log.NewNopLogger()
@@ -183,6 +183,11 @@ func NewReceiver(
 		return nil, fmt.Errorf("failed to create head manager: %w", err)
 	}
 
+	var unloadDataStorageInterval time.Duration
+	if unloadDataStorage {
+		unloadDataStorageInterval = appender.DefaultMergeDuration
+	}
+
 	activeHead, rotatedHeads, err := headManager.Restore(rotationInfo.BlockDuration, unloadDataStorageInterval)
 	if err != nil {
 		return nil, fmt.Errorf("failed to restore heads: %w", err)
@@ -217,11 +222,6 @@ func NewReceiver(
 	)
 	mwt := appender.NewMetricsWriteTrigger(ctx, appender.DefaultMetricWriteInterval, app, queryableStorage)
 
-	var unloadTimer appender.Timer = appender.NewNoOpTimer()
-	if unloadDataStorageInterval != nil {
-		unloadTimer = appender.NewConstantIntervalTimer(clock, *unloadDataStorageInterval)
-	}
-
 	r := &Receiver{
 		ctx:               ctx,
 		distributor:       dstrb,
@@ -234,7 +234,6 @@ func NewReceiver(
 			relabeler.NewRotateTimerWithSeed(clock, rotationInfo.BlockDuration, rotationInfo.Seed),
 			appender.NewConstantIntervalTimer(clock, commitInterval),
 			appender.NewConstantIntervalTimer(clock, appender.DefaultMergeDuration),
-			unloadTimer,
 			registerer,
 		),
 

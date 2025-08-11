@@ -77,7 +77,7 @@ func (s *HeadLoadSuite) createHead() *head.Head {
 	return h
 }
 
-func (s *HeadLoadSuite) loadHead(unloadDataStorageInterval *time.Duration) *head.Head {
+func (s *HeadLoadSuite) loadHead(unloadDataStorageInterval time.Duration) *head.Head {
 	loadedHead, corrupted, _, err := head.Load(
 		headID,
 		0,
@@ -184,13 +184,15 @@ func (s *HeadLoadSuite) TestLoad() {
 	s.NoError(sourceHead.Close())
 
 	// Act
-	loadedHead := s.loadHead(nil)
+	loadedHead := s.loadHead(0)
 
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "wal_metric")
 	actual := s.query(loadedHead, matcher, 0, 2)
+	err := loadedHead.Close()
 
 	// Assert
 	s.Equal(series, actual)
+	s.Require().NoError(err)
 }
 
 func (s *HeadLoadSuite) TestAppendAfterLoad() {
@@ -211,7 +213,7 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 	s.NoError(sourceHead.Close())
 
 	// Act
-	loadedHead := s.loadHead(nil)
+	loadedHead := s.loadHead(0)
 	s.appendTimeSeries(loadedHead, []seriesData{
 		{
 			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
@@ -223,8 +225,53 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "wal_metric")
 	actual := s.query(loadedHead, matcher, 0, 3)
+	err := loadedHead.Close()
 
 	// Assert
 	series[0].samples = append(series[0].samples, cppbridge.Sample{Timestamp: 3, Value: 4})
 	s.Equal(series, actual)
+	s.Require().NoError(err)
+
+}
+
+func (s *HeadLoadSuite) TestLoadWithDataUnloading() {
+	// Arrange
+	sourceHead := s.createHead()
+	series1 := []seriesData{
+		{
+			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 1},
+				{Timestamp: 1, Value: 2},
+				{Timestamp: 2, Value: 3},
+			},
+		},
+	}
+	s.appendTimeSeries(sourceHead, series1)
+	series2 := []seriesData{
+		{
+			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			samples: []cppbridge.Sample{
+				{Timestamp: 100, Value: 1},
+				{Timestamp: 101, Value: 2},
+				{Timestamp: 102, Value: 3},
+			},
+		},
+	}
+	s.appendTimeSeries(sourceHead, series2)
+
+	sourceHead.UnloadUnusedSeriesData()
+	sourceHead.Stop()
+	s.NoError(sourceHead.Close())
+
+	// Act
+	loadedHead := s.loadHead(100)
+
+	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "wal_metric")
+	actual := s.query(loadedHead, matcher, 0, 3)
+	err := loadedHead.Close()
+
+	// Assert
+	s.Equal(series1, actual)
+	s.Require().NoError(err)
 }

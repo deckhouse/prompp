@@ -27,6 +27,10 @@ type BlockWriterSuite struct {
 	blockWriter         *block.Writer
 }
 
+func (s *BlockWriterSuite) QueriedSeriesStorageWriter() relabeler.QueriedSeriesStorage {
+	return nil
+}
+
 func (s *BlockWriterSuite) ShardID() uint16 { return 0 }
 
 func (s *BlockWriterSuite) DataStorage() relabeler.DataStorage { return s.dataStorage }
@@ -40,6 +44,8 @@ func (s *BlockWriterSuite) UnloadedDataStorage() relabeler.UnloadedDataStorage {
 }
 
 func (s *BlockWriterSuite) LoadAndQueryTask() relabeler.DataStorageLoadAndQueryTask { return nil }
+
+func (s *BlockWriterSuite) QueriedSeriesStorage() relabeler.QueriedSeriesStorage { return nil }
 
 func (s *BlockWriterSuite) DataStorageLock() {}
 

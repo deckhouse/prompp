@@ -2,7 +2,6 @@ package appender
 
 import (
 	"context"
-	"time"
 
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 
@@ -15,7 +14,7 @@ var (
 	// CopySeriesOnRotate copy active series from the current head to the new head during rotation.
 	CopySeriesOnRotate = false
 
-	UnloadDataStorageInterval *time.Duration
+	UnloadDataStorage = false
 )
 
 // Storage - head storage.

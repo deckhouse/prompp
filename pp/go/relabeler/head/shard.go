@@ -137,6 +137,10 @@ func (ds *DataStorage) TimeInterval() cppbridge.TimeInterval {
 	return ds.dataStorage.TimeInterval()
 }
 
+func (ds *DataStorage) GetQueriedSeriesBitset() []byte {
+	return ds.dataStorage.GetQueriedSeriesBitset()
+}
+
 // reshards changes the number of shards to the required amount.
 func (h *Head) reconfigure(
 	inputRelabelerConfigs []*config.InputRelabelerConfig,
@@ -222,14 +226,15 @@ func (t *dataStorageLoadAndQueryTask) Release() []uintptr {
 //
 
 type shard struct {
-	lss                 *LSS
-	dataStorage         *DataStorage
-	unloadedDataStorage *UnloadedDataStorage
-	wal                 *ShardWal
-	loadAndQueryTask    *dataStorageLoadAndQueryTask
-	lssLocker           RWLockable
-	dataStorageLocker   RWLockable
-	id                  uint16
+	lss                  *LSS
+	dataStorage          *DataStorage
+	unloadedDataStorage  *UnloadedDataStorage
+	queriedSeriesStorage *QueriedSeriesStorage
+	wal                  *ShardWal
+	loadAndQueryTask     *dataStorageLoadAndQueryTask
+	lssLocker            RWLockable
+	dataStorageLocker    RWLockable
+	id                   uint16
 }
 
 // newShard init new *shard.
@@ -237,19 +242,21 @@ func newShard(
 	lss *LSS,
 	dataStorage *DataStorage,
 	unloadedDataStorage *UnloadedDataStorage,
+	queriedSeriesStorage *QueriedSeriesStorage,
 	wal *ShardWal,
 	shardID uint16,
 	withLocker bool,
 ) *shard {
 	s := &shard{
-		id:                  shardID,
-		lss:                 lss,
-		dataStorage:         dataStorage,
-		unloadedDataStorage: unloadedDataStorage,
-		wal:                 wal,
-		loadAndQueryTask:    &dataStorageLoadAndQueryTask{},
-		lssLocker:           &noopRWLockable{},
-		dataStorageLocker:   &noopRWLockable{},
+		id:                   shardID,
+		lss:                  lss,
+		dataStorage:          dataStorage,
+		unloadedDataStorage:  unloadedDataStorage,
+		queriedSeriesStorage: queriedSeriesStorage,
+		wal:                  wal,
+		loadAndQueryTask:     &dataStorageLoadAndQueryTask{},
+		lssLocker:            &noopRWLockable{},
+		dataStorageLocker:    &noopRWLockable{},
 	}
 
 	if withLocker {
@@ -318,6 +325,10 @@ func (s *shard) LSSUnlock() {
 
 func (s *shard) UnloadedDataStorage() relabeler.UnloadedDataStorage {
 	return s.unloadedDataStorage
+}
+
+func (s *shard) QueriedSeriesStorage() relabeler.QueriedSeriesStorage {
+	return s.queriedSeriesStorage
 }
 
 func (s *shard) LoadAndQueryTask() relabeler.DataStorageLoadAndQueryTask {

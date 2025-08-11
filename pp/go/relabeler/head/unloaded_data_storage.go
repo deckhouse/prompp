@@ -130,21 +130,17 @@ func (s *UnloadedDataStorage) Close() error {
 
 type WriteTruncateCloser interface {
 	io.WriteCloser
+	io.ReadSeeker
 	Truncate(size int64) error
 }
 
-type queriedSeriesStorageWriterData struct {
-	writer         WriteTruncateCloser
-	versionWritten bool
+type QueriedSeriesStorage struct {
+	storages [2]WriteTruncateCloser
 }
 
-type QueriedSeriesStorageWriter struct {
-	storages [2]queriedSeriesStorageWriterData
-}
-
-func NewQueriedSeriesStorageWriter(storage1, storage2 WriteTruncateCloser) *QueriedSeriesStorageWriter {
-	return &QueriedSeriesStorageWriter{
-		storages: [2]queriedSeriesStorageWriterData{{writer: storage1}, {writer: storage2}},
+func NewQueriedSeriesStorage(storage1, storage2 WriteTruncateCloser) *QueriedSeriesStorage {
+	return &QueriedSeriesStorage{
+		storages: [2]WriteTruncateCloser{storage1, storage2},
 	}
 }
 
@@ -169,35 +165,30 @@ func (h *queriedSeriesStorageHeader) CalculateCrc32(queriedSeriesBitset []byte) 
 	return h.crc32
 }
 
-func newQueriedSeriesStorageHeader(queriedSeriesBitset []byte, timestamp int64) queriedSeriesStorageHeader {
-	header := queriedSeriesStorageHeader{
-		timestamp: timestamp,
-		size:      uint32(len(queriedSeriesBitset)),
-	}
+func (s *QueriedSeriesStorage) Write(queriedSeriesBitset []byte, timestamp int64) error {
+	storage := s.storages[0]
 
+	var headerBuffer [1 + unsafe.Sizeof(queriedSeriesStorageHeader{})]byte
+	headerBuffer[0] = UnloadedDataStorageVersion
+
+	header := (*queriedSeriesStorageHeader)(unsafe.Pointer(&headerBuffer[1]))
+	header.timestamp = timestamp
+	header.size = uint32(len(queriedSeriesBitset))
 	header.CalculateCrc32(queriedSeriesBitset)
 
-	return header
-}
-
-func (s *QueriedSeriesStorageWriter) Write(queriedSeriesBitset []byte, timestamp int64) error {
-	header := newQueriedSeriesStorageHeader(queriedSeriesBitset, timestamp)
-
-	storage := &s.storages[0]
-
-	if !storage.versionWritten {
-		if err := s.writeVersion(storage); err != nil {
-			return err
-		}
-	} else if err := storage.writer.Truncate(1); err != nil {
+	if _, err := storage.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
 
-	if _, err := storage.writer.Write(header.toSlice()); err != nil {
+	if _, err := storage.Write(headerBuffer[:]); err != nil {
 		return err
 	}
 
-	if _, err := storage.writer.Write(queriedSeriesBitset); err != nil {
+	if _, err := storage.Write(queriedSeriesBitset); err != nil {
+		return err
+	}
+
+	if err := storage.Truncate(int64(len(headerBuffer) + len(queriedSeriesBitset))); err != nil {
 		return err
 	}
 
@@ -205,21 +196,51 @@ func (s *QueriedSeriesStorageWriter) Write(queriedSeriesBitset []byte, timestamp
 	return nil
 }
 
-func (s *QueriedSeriesStorageWriter) writeVersion(storage *queriedSeriesStorageWriterData) error {
-	if err := storage.writer.Truncate(0); err != nil {
-		return err
+func (s *QueriedSeriesStorage) Read() (data []byte, err error) {
+	storages := s.readStorageHeaders()
+
+	for i := range storages {
+		if growTo := int(storages[i].size) - len(data); growTo > 0 {
+			data = slices.Grow(data, growTo)
+		}
+		data = data[:storages[i].size]
+
+		if len(data) > 0 {
+			if _, err = io.ReadFull(storages[i].reader, data); err != nil {
+				logger.Warnf("failed to read data from queried series storage: %v", err)
+				continue
+			}
+		}
+
+		if storageCrc32 := storages[i].crc32; storageCrc32 != storages[i].CalculateCrc32(data) {
+			logger.Warnf("invalid queried series storage crc32: %d != %d", storageCrc32, storages[i].crc32)
+			continue
+		}
+
+		return data, nil
 	}
 
-	if _, err := storage.writer.Write([]byte{QueriedSeriesStorageVersion}); err != nil {
-		return err
-	}
-
-	storage.versionWritten = true
-	return nil
+	return nil, errors.New("no valid queried series storage")
 }
 
-func (s *QueriedSeriesStorageWriter) Close() error {
-	return errors.Join(s.storages[0].writer.Close(), s.storages[1].writer.Close())
+func (s *QueriedSeriesStorage) readStorageHeaders() (result []storageHeader) {
+	for _, storage := range []storageHeader{{reader: s.storages[0]}, {reader: s.storages[1]}} {
+		if err := storage.read(); err == nil {
+			result = append(result, storage)
+		} else {
+			logger.Warnf("failed to read header: %v", err)
+		}
+	}
+
+	if len(result) == 2 && result[0].timestamp < result[1].timestamp {
+		result[0], result[1] = result[1], result[0]
+	}
+
+	return result
+}
+
+func (s *QueriedSeriesStorage) Close() error {
+	return errors.Join(s.storages[0].Close(), s.storages[1].Close())
 }
 
 type storageHeader struct {
@@ -251,59 +272,4 @@ func (s *storageHeader) readAndValidateFormatVersion() error {
 	}
 
 	return nil
-}
-
-type QueriedSeriesStorageReader struct {
-	reader1 io.ReadSeeker
-	reader2 io.ReadSeeker
-}
-
-func NewQueriedSeriesStorageReader(storage1, storage2 io.ReadSeeker) *QueriedSeriesStorageReader {
-	return &QueriedSeriesStorageReader{
-		reader1: storage1,
-		reader2: storage2,
-	}
-}
-
-func (s *QueriedSeriesStorageReader) Read() (data []byte, err error) {
-	storages := s.readStorageHeaders()
-
-	for i := range storages {
-		if growTo := int(storages[i].size) - len(data); growTo > 0 {
-			data = slices.Grow(data, growTo)
-		}
-		data = data[:storages[i].size]
-
-		if len(data) > 0 {
-			if _, err = io.ReadFull(storages[i].reader, data); err != nil {
-				logger.Warnf("failed to read data from queried series storage: %v", err)
-				continue
-			}
-		}
-
-		if storageCrc32 := storages[i].crc32; storageCrc32 != storages[i].CalculateCrc32(data) {
-			logger.Warnf("invalid queried series storage crc32: %d != %d", storageCrc32, storages[i].crc32)
-			continue
-		}
-
-		return data, nil
-	}
-
-	return nil, errors.New("no valid queried series storage")
-}
-
-func (s *QueriedSeriesStorageReader) readStorageHeaders() (result []storageHeader) {
-	for _, storage := range []storageHeader{{reader: s.reader1}, {reader: s.reader2}} {
-		if err := storage.read(); err == nil {
-			result = append(result, storage)
-		} else {
-			logger.Warnf("failed to read header: %v", err)
-		}
-	}
-
-	if len(result) == 2 && result[0].timestamp < result[1].timestamp {
-		result[0], result[1] = result[1], result[0]
-	}
-
-	return result
 }

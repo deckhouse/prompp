@@ -16,6 +16,8 @@ class Unloader {
 
   template <class Stream>
   void create_snapshot(Stream& stream) {
+    unloaded_chunks_.clear();
+
     const auto sequences = prepare_sequences();
     write_sequences(stream, sequences);
     write_bit_sequences_and_fill_unloaded_chunks(stream, sequences);
@@ -29,7 +31,7 @@ class Unloader {
       }
     }
 
-    unloaded_chunks_ = {};
+    unloaded_chunks_.clear();
   }
 
  private:

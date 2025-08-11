@@ -105,7 +105,7 @@ type HeadLoadResult struct {
 //revive:disable-next-line:cognitive-complexity function is not complicated.
 //revive:disable-next-line:function-length long but readable.
 //revive:disable-next-line:cyclomatic but readable
-func (m *Manager) Restore(blockDuration time.Duration, unloadDataStorageInterval *time.Duration) (active relabeler.Head, rotated []relabeler.Head, err error) {
+func (m *Manager) Restore(blockDuration time.Duration, unloadDataStorageInterval time.Duration) (active relabeler.Head, rotated []relabeler.Head, err error) {
 	headRecords, err := m.catalog.List(
 		func(record *catalog.Record) bool {
 			return record.DeletedAt() == 0 && record.Status() != catalog.StatusPersisted
@@ -194,7 +194,7 @@ func (m *Manager) loadHead(
 	headRecord *catalog.Record,
 	inputRelabelerConfigs []*config.InputRelabelerConfig,
 	generation uint64,
-	unloadDataStorageInterval *time.Duration,
+	unloadDataStorageInterval time.Duration,
 ) (result HeadLoadResult) {
 	start := m.clock.Now()
 	defer func() {

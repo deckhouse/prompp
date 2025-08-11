@@ -1527,7 +1527,6 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithRotate() {
 		rotationTimer,
 		commitTimer,
 		mergeTimer,
-		appender.NewNoOpTimer(),
 		prometheus.DefaultRegisterer,
 	)
 	rotator.Run()
@@ -2439,7 +2438,6 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithRotateWithStaleNans() 
 		rotationTimer,
 		commitTimer,
 		mergeTimer,
-		appender.NewNoOpTimer(),
 		prometheus.DefaultRegisterer,
 	)
 	rotator.Run()

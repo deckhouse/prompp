@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 	"github.com/prometheus/prometheus/pp/go/util/locker"
@@ -203,6 +204,7 @@ func New(
 	wals []*ShardWal,
 	dataStorages []*DataStorage,
 	unloadedDataStorages []*UnloadedDataStorage,
+	queriedSeriesStorages []*QueriedSeriesStorage,
 	numberOfShards uint16,
 	registerer prometheus.Registerer,
 ) (*Head, error) {
@@ -220,6 +222,7 @@ func New(
 			lsses[shardID],
 			dataStorages[shardID],
 			unloadedDataStorages[shardID],
+			queriedSeriesStorages[shardID],
 			wals[shardID],
 			shardID,
 			ExtraReadConcurrency != 0,
@@ -668,13 +671,8 @@ func (h *Head) Close() error {
 
 	var err error
 	for _, s := range h.shards {
-		err = errors.Join(err, s.wal.Close())
+		err = errors.Join(err, s.wal.Close(), s.unloadedDataStorage.Close(), s.queriedSeriesStorage.Close())
 	}
-
-	for _, s := range h.shards {
-		err = errors.Join(s.unloadedDataStorage.Close())
-	}
-
 	return err
 }
 
@@ -1144,16 +1142,22 @@ func (h *Head) UnloadUnusedSeriesData() {
 			unloader := shard.DataStorage().CreateUnusedSeriesDataUnloader()
 
 			shard.DataStorageRLock()
-			bytes := unloader.CreateSnapshot()
+			snapshot := unloader.CreateSnapshot()
+			queriedSeries := shard.DataStorage().GetQueriedSeriesBitset()
 			shard.DataStorageRUnlock()
 
-			if err := shard.UnloadedDataStorage().Write(bytes); err != nil {
+			// TODO: write index under mutex
+			if err := shard.UnloadedDataStorage().Write(snapshot); err != nil {
 				return err
 			}
 
 			shard.DataStorageLock()
 			unloader.Unload()
 			shard.DataStorageUnlock()
+
+			if err := shard.QueriedSeriesStorage().Write(queriedSeries, time.Now().UnixMilli()); err != nil {
+				logger.Warnf("unable to write queried series data: %v", err)
+			}
 
 			return nil
 		},
