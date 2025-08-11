@@ -287,7 +287,8 @@ class GenericDecodingTable {
 
   inline __attribute__((always_inline)) const auto& items() const noexcept { return items_; }
 
-  PROMPP_ALWAYS_INLINE void reserve(const GenericDecodingTable& other) {
+  template <class GenericDecodingTableOther>
+  PROMPP_ALWAYS_INLINE void reserve(const GenericDecodingTableOther& other) {
     items_.reserve(other.items_.size());
     data_.reserve(other.data_);
   }
@@ -785,7 +786,6 @@ class OrderedEncodingBimap : public GenericDecodingTable<OrderedEncodingBimap<Fi
 
   using Set = phmap::btree_set<typename Base::Proxy, typename Base::LessComparator>;
   Set set_;
-  bool set_soring_enabled_{true};
 
  protected:
   PROMPP_ALWAYS_INLINE void after_items_load_impl(uint32_t first_loaded_id) noexcept {
@@ -795,7 +795,7 @@ class OrderedEncodingBimap : public GenericDecodingTable<OrderedEncodingBimap<Fi
   }
 
  public:
-  inline __attribute__((always_inline)) OrderedEncodingBimap() noexcept : set_({}, Base::less_comparator(&set_soring_enabled_)) {}
+  inline __attribute__((always_inline)) OrderedEncodingBimap() noexcept : set_({}, Base::less_comparator()) {}
 
   OrderedEncodingBimap(const OrderedEncodingBimap&) = delete;
   OrderedEncodingBimap(OrderedEncodingBimap&&) = delete;
@@ -891,7 +891,6 @@ class EncodingBimapWithOrderedAccess : public GenericDecodingTable<EncodingBimap
 
   using OrderedSet = phmap::btree_set<typename Base::Proxy, typename Base::LessComparator>;
   OrderedSet ordered_set_;
-  bool ordered_set_soring_enabled_{true};
 
   using Set = phmap::flat_hash_set<typename Base::Proxy, typename Base::Hasher, typename Base::EqualityComparator>;
   Set set_;
@@ -906,7 +905,7 @@ class EncodingBimapWithOrderedAccess : public GenericDecodingTable<EncodingBimap
 
  public:
   inline __attribute__((always_inline)) EncodingBimapWithOrderedAccess() noexcept
-      : ordered_set_({}, Base::less_comparator(&ordered_set_soring_enabled_)), set_({}, 0, Base::hasher(), Base::equality_comparator()) {}
+      : ordered_set_({}, Base::less_comparator()), set_({}, 0, Base::hasher(), Base::equality_comparator()) {}
 
   EncodingBimapWithOrderedAccess(const EncodingBimapWithOrderedAccess&) = delete;
   EncodingBimapWithOrderedAccess(EncodingBimapWithOrderedAccess&&) = delete;

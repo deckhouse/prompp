@@ -144,7 +144,10 @@ class Symbol {
       return max_ui32 - this->size();
     }
 
-    PROMPP_ALWAYS_INLINE void reserve(const data_type& other) { Vector<char>::reserve(other.size()); }
+    template <class DataType>
+    PROMPP_ALWAYS_INLINE void reserve(const DataType& other) {
+      Vector<char>::reserve(other.size());
+    }
   };
 
   using composite_type = std::string_view;
@@ -369,7 +372,8 @@ class LabelNameSet {
       return symbols_table.allocated_memory() + BareBones::mem::allocated_memory(symbols_ids_sequences);
     }
 
-    PROMPP_ALWAYS_INLINE void reserve(const data_type& other) noexcept {
+    template <class DataType>
+    PROMPP_ALWAYS_INLINE void reserve(const DataType& other) noexcept {
       symbols_table.reserve(other.symbols_table);
       symbols_ids_sequences.reserve(other.symbols_ids_sequences.size());
     }
@@ -691,7 +695,8 @@ class LabelSet {
       symbols_tables.resize(symbols_tables_checkpoints.size());
     }
 
-    void reserve(const data_type& other) {
+    template <class DataType>
+    void reserve(const DataType& other) {
       symbols_ids_sequences.reserve(other.symbols_ids_sequences.size());
       symbols_tables.reserve(other.symbols_tables.size());
       label_name_sets_table.reserve(other.label_name_sets_table);
