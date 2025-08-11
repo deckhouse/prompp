@@ -64,25 +64,20 @@ type GenericTask interface {
 // DataStorage
 //
 
-// DataStorage the minimum required DataStorage implementation.
+// DataStorage the minimum required [DataStorage] implementation.
 type DataStorage interface {
 	// InstantQuery returns samples for instant query from data storage.
-	InstantQuery(
-		maxt, valueNotFoundTimestampValue int64,
-		ids []uint32,
-	) []cppbridge.Sample
+	InstantQuery(maxt, valueNotFoundTimestampValue int64, ids []uint32) []cppbridge.Sample
 
 	// QueryDataStorage returns serialized chunks from data storage.
-	Query(
-		query cppbridge.HeadDataStorageQuery,
-	) *cppbridge.HeadDataStorageSerializedChunks
+	Query(query cppbridge.HeadDataStorageQuery) *cppbridge.HeadDataStorageSerializedChunks
 }
 
 //
 // LSS
 //
 
-// LSS the minimum required LSS implementation.
+// LSS the minimum required [LSS] implementation.
 type LSS interface {
 	// QueryLabelNames returns all the unique label names present in lss in sorted order.
 	QueryLabelNames(
@@ -102,17 +97,13 @@ type LSS interface {
 
 	// QuerySelector returns a created selector that matches the given label matchers.
 	QuerySelector(shardID uint16, matchers []model.LabelMatcher) (uintptr, *cppbridge.LabelSetSnapshot, error)
-
-	GetSnapshot() *cppbridge.LabelSetSnapshot
-
-	WithRLock(fn func(target, input *cppbridge.LabelSetStorage) error) error
 }
 
 //
 // Shard
 //
 
-// Shard the minimum required head Shard implementation.
+// Shard the minimum required head [Shard] implementation.
 type Shard[TDataStorage DataStorage, TLSS LSS] interface {
 	// DataStorage returns shard [DataStorage].
 	DataStorage() TDataStorage
@@ -128,7 +119,7 @@ type Shard[TDataStorage DataStorage, TLSS LSS] interface {
 // Head
 //
 
-// Head the minimum required Head implementation.
+// Head the minimum required [Head] implementation.
 type Head[
 	TGenericTask GenericTask,
 	TDataStorage DataStorage,
@@ -141,7 +132,7 @@ type Head[
 	AcquireQuery(ctx context.Context) (release func(), err error)
 
 	// CreateTask create a task for operations on the [Head] shards.
-	CreateTask(taskName string, fn func(shard TShard) error) TGenericTask
+	CreateTask(taskName string, shardFn func(shard TShard) error) TGenericTask
 
 	// Enqueue the task to be executed on shards [Head].
 	Enqueue(t TGenericTask)
@@ -551,6 +542,7 @@ func queryLabelValues[
 // lssQuery returns query results and snapshots.
 //
 //revive:disable-next-line:cyclomatic but readable.
+//revive:disable-next-line:function-length long but readable.
 func queryLss[
 	TGenericTask GenericTask,
 	TDataStorage DataStorage,
@@ -575,25 +567,9 @@ func queryLss[
 		taskName,
 		func(shard TShard) (err error) {
 			shardID := shard.ShardID()
-			lss := shard.LSS()
+			selectors[shardID], snapshots[shardID], err = shard.LSS().QuerySelector(shardID, convertedMatchers)
 
-			return lss.WithRLock(func(target, _ *cppbridge.LabelSetStorage) error {
-				selector, status := target.QuerySelector(convertedMatchers)
-				switch status {
-				case cppbridge.LSSQueryStatusMatch:
-					selectors[shardID] = selector
-					snapshots[shardID] = lss.GetSnapshot()
-
-				case cppbridge.LSSQueryStatusNoMatch:
-
-				default:
-					return fmt.Errorf(
-						"failed to query selector from shard: %d, query status: %d", shardID, status,
-					)
-				}
-
-				return nil
-			})
+			return err
 		},
 	)
 	head.Enqueue(tLSSQuerySelector)

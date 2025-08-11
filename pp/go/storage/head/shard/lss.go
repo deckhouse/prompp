@@ -28,20 +28,10 @@ func (l *LSS) AllocatedMemory() uint64 {
 }
 
 // CopyAddedSeries copy label sets which were added via FindOrEmplace to destination.
-func (l *LSS) CopyAddedSeries(destination *cppbridge.LabelSetStorage) {
+func (l *LSS) CopyAddedSeries(destination *LSS) {
 	l.locker.RLock()
-	l.target.CopyAddedSeries(destination)
+	l.target.CopyAddedSeries(destination.target)
 	l.locker.RUnlock()
-}
-
-// GetSnapshot return the actual snapshot.
-func (l *LSS) GetSnapshot() *cppbridge.LabelSetSnapshot {
-	// TODO
-	l.once.Do(func() {
-		l.snapshot = l.target.CreateLabelSetSnapshot()
-	})
-
-	return l.snapshot
 }
 
 // Input returns input lss.
@@ -56,15 +46,15 @@ func (l *LSS) QueryLabelNames(
 	dedupAdd func(shardID uint16, snapshot *cppbridge.LabelSetSnapshot, values []string),
 ) error {
 	l.locker.RLock()
+	defer l.locker.RUnlock()
+
 	queryLabelNamesResult := l.target.QueryLabelNames(matchers)
-	snapshot := l.GetSnapshot()
-	l.locker.RUnlock()
 
 	if queryLabelNamesResult.Status() != cppbridge.LSSQueryStatusMatch {
 		return fmt.Errorf("no matches on shard: %d", shardID)
 	}
 
-	dedupAdd(shardID, snapshot, queryLabelNamesResult.Names())
+	dedupAdd(shardID, l.getSnapshot(), queryLabelNamesResult.Names())
 	runtime.KeepAlive(queryLabelNamesResult)
 
 	return nil
@@ -79,15 +69,15 @@ func (l *LSS) QueryLabelValues(
 	dedupAdd func(shardID uint16, snapshot *cppbridge.LabelSetSnapshot, values []string),
 ) error {
 	l.locker.RLock()
+	defer l.locker.RUnlock()
+
 	queryLabelValuesResult := l.target.QueryLabelValues(name, matchers)
-	snapshot := l.GetSnapshot()
-	l.locker.RUnlock()
 
 	if queryLabelValuesResult.Status() != cppbridge.LSSQueryStatusMatch {
 		return fmt.Errorf("no matches on shard: %d", shardID)
 	}
 
-	dedupAdd(shardID, snapshot, queryLabelValuesResult.Values())
+	dedupAdd(shardID, l.getSnapshot(), queryLabelValuesResult.Values())
 	runtime.KeepAlive(queryLabelValuesResult)
 
 	return nil
@@ -105,7 +95,7 @@ func (l *LSS) QuerySelector(shardID uint16, matchers []model.LabelMatcher) (
 	selector, status := l.target.QuerySelector(matchers)
 	switch status {
 	case cppbridge.LSSQueryStatusMatch:
-		return selector, l.GetSnapshot(), nil
+		return selector, l.getSnapshot(), nil
 
 	case cppbridge.LSSQueryStatusNoMatch:
 		return 0, nil, nil
@@ -152,4 +142,13 @@ func (l *LSS) WithRLock(fn func(target, input *cppbridge.LabelSetStorage) error)
 	l.locker.RUnlock()
 
 	return err
+}
+
+// getSnapshot return the actual snapshot.
+func (l *LSS) getSnapshot() *cppbridge.LabelSetSnapshot {
+	l.once.Do(func() {
+		l.snapshot = l.target.CreateLabelSetSnapshot()
+	})
+
+	return l.snapshot
 }

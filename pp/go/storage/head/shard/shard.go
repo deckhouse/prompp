@@ -10,10 +10,15 @@ import (
 type Wal interface {
 	// Commit finalize segment from encoder and write to wal.
 	Commit() error
+
 	// WalFlush flush all contetnt into wal.
 	Flush() error
+
 	// WalWrite append the incoming inner series to wal encoder.
 	Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error)
+
+	// Close closes the wal segmentWriter.
+	Close() error
 }
 
 //
@@ -43,6 +48,11 @@ func NewShard[TWal Wal](
 	}
 }
 
+// Close closes the wal segmentWriter.
+func (s *Shard[TWal]) Close() error {
+	return s.wal.Close()
+}
+
 // DataStorage returns shard [DataStorage].
 func (s *Shard[TWal]) DataStorage() *DataStorage {
 	return s.dataStorage
@@ -56,6 +66,11 @@ func (s *Shard[TWal]) LSS() *LSS {
 // ShardID returns the shard ID.
 func (s *Shard[TWal]) ShardID() uint16 {
 	return s.id
+}
+
+// Wal returns write-ahead log.
+func (s *Shard[TWal]) Wal() TWal {
+	return s.wal
 }
 
 // WalCommit finalize segment from encoder and write to wal.
@@ -73,6 +88,31 @@ func (s *Shard[TWal]) WalFlush() error {
 // WalWrite append the incoming inner series to wal encoder.
 func (s *Shard[TWal]) WalWrite(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error) {
 	return s.wal.Write(innerSeriesSlice)
+}
+
+//
+// PerGoroutineShard
+//
+
+// PerGoroutineShard wrapper of shard with [PerGoroutineRelabeler] for goroutines.
+type PerGoroutineShard[TWal Wal] struct {
+	// TODO PerGoroutineRelabeler
+	relabeler string
+	*Shard[TWal]
+}
+
+// NewPerGoroutineShard init new [PerGoroutineShard].
+func NewPerGoroutineShard[TWal Wal](s *Shard[TWal]) *PerGoroutineShard[TWal] {
+	return &PerGoroutineShard[TWal]{
+		Shard: s,
+	}
+}
+
+// TODO implementation.
+func (s *PerGoroutineShard[TWal]) SetRelabeler() {
+}
+
+func (s *PerGoroutineShard[TWal]) GetRelabeler() {
 }
 
 // // InputRelabeling relabeling incoming hashdex(first stage).

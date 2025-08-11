@@ -13,13 +13,26 @@ func TestXxx(t *testing.T) {
 	ds := shard.NewDataStorage()
 	wl := &testWal{}
 	sd := shard.NewShard(lss, ds, wl, 0)
+	id := "test-head-id"
+	numberOfShards := uint16(2)
 
-	h := head.NewHead([]*shard.Shard[*testWal]{sd})
+	h := head.NewHead(
+		id,
+		[]*shard.Shard[*testWal]{sd},
+		shard.NewPerGoroutineShard[*testWal],
+		numberOfShards,
+		nil,
+	)
 	_ = h
 }
 
 // testWal test implementation wal.
 type testWal struct{}
+
+// Close test implementation wal.
+func (*testWal) Close() error {
+	return nil
+}
 
 // Commit test implementation wal.
 func (*testWal) Commit() error {
