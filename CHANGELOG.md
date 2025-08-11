@@ -1,9 +1,30 @@
 # Changelog
 
+## v0.5.0
+
+1. Base Prometheus version bumped to 2.55.1. It's unlock switch from Prometheus 3.x installations to Prom++.
+2. Update dependencies to mitigate CVEs.
+
+## v0.4.0
+
+### Fixes
+1. **Use non-exclusive lock for head conversion.** Conversion is long operation with disk writes. It is read-only for rotated head, so queries may be done in parallel.
+
+### Features
+1. **Added feature flag `head_default_number_of_shards` to adjust the number of shards (default is 2).** Increasing the number of shards improves write operations while potentially slightly slowing down read operations and increasing memory consumption. This feature flag is temporary and will be removed in favor of automatic shard count calculation in the future.
+2. **Introduced a two-stage process for series selection queries by matchers.** The first stage parses the regular expression using prefix trees from the index, which executes quickly but requires locks on the index during its execution. The second stage handles posting operations, which are resource-intensive due to data decoding and set operations on series IDs. By separating these stages, write locking time is reduced and read parallelism is increased since posting operations can use lightweight snapshot states without blocking appends.
+3. **Implemented optimistic non-exclusive relabeling locks for data updates.** Since new series appear infrequently, if all data in a append operation is already cached in relabeling, that stage does not lock the series container or indexes. Exclusive locking only occurs when new data must be added. This mechanism works only when intra-shard parallelization is enabled (disabled by default).
+4. **Added a mechanism for executing tasks on a specific shard instead of all shards.** This capability is essential for upcoming performance improvements.
+
+### Enhancements
+1. **Added metrics tracking the waiting time for locks and head rotations.** These metrics improve observability of internal delays and contention, enabling better diagnostics and tuning opportunities.
+2. **Moved lock management inside task execution rather than across the entire task duration depending on task type.** This change can yield slight performance improvements when intra-shard parallelization is enabled by reducing unnecessary lock holding time.
+3. **Small performance fixes.** In several parts of code there are bytes to string conversions. In some places it was not safe. In all places it was not optimal.
+4. **Eliminate head allocations in original TSDB.** Prometheus TSDB used only as historical block querier and compactor. It is not necessary to allocate any buffers in it's head.
+
 ## v0.3.4
 
 ### Fixes
-
 1. **Processing Several Backslashes in the End of Label Value.** Metric parser had incorrect processing of even number of backslashes at the end of label name or value.
 2. **Handling Head in Querier on Rotation.** In some cases on rotation querier may have lost data on rotation.
 3. **Priority Semaphore on Head.** In some specific setups exclusive tasks like reconfigure, rotate or shutdown could get stuck in lock awaiting after all normal-priority requests. We use semaphore with 2-level priority interface to push priority tasks in front of waiters queue.
@@ -11,33 +32,27 @@
 ## v0.3.3
 
 ### Fixes
-
 1. **Fixed Snapshot Handling in ChunkQuerier.** Last updates led to loosing snapshots in ChunkQuerier that caused incorrect behaviour of RemoteRead API.
 
 ## v0.3.2
 
 ### Fixes
-
 1. **Fixed Task Duplication in WAL Commits:** which was causing excessive disk access. Now, a commit task is queued only upon the first achievement of the sample limit in a WAL segment.
 
 ### Enhancements
-
 1. **Increased the Sample Limit in WAL Segments:** The previous soft limit of 10K, hardcoded as a constant, is now converted to command-line flag with default raised to 100K.
 
 ### Features
-
 1. **Added a Feature-flag to Disable Commits During RemoteWrite Requests.** This is an experimental flag and will be replaced with a generalized persistence level setting in the future.
 
 ## v0.3.1
 
 ### Fixes
-
 1. **Fixed Channel Overflow and Shard Goroutine Deadlock:** A bug that caused channel overflow and deadlocks in shard goroutines has been fixed. The change ensures that tasks are added to the channel only from external goroutines, preventing these issues.
 2. **Fixed Series Snapshot Memory Hanging:** We've corrected an issue where series snapshots were not getting cleared from memory due to problems with Finalizers in Go. The snapshots involved pointers to memory allocated in C++, and the garbage collector did not always trigger the Finalizer, causing memory to linger.
 3. **Corrected Potential Object Retention Errors in fastCGo Calls:** There were potential errors related to object retention during fastCGo calls. While most of these were specific to test code, some could cause runtime errors in rare situations. These have now been addressed to improve stability.
 
 ### Enhancements
-
 1. **Optimized Series Copying During Rotation:** We've made series copying during rotation much more efficient, reducing the time required by 7.5 times. To avoid pauses in the garbage collector, we're using the standard CGo mechanism for this process. Currently, this feature is under a feature flag and is being tested on select clusters to ensure stability and correctness. Once these tests are successful, we plan to enable it for all clusters.
 2. **Revamped Task Execution System on Shards:** The task execution system on shards has been restructured to separate series processing from data handling. Each now operates with its own queues and locks, which is expected to boost the requests per second (RPS) for both read and write operations.
 3. **New Feature Flag for Multiple Goroutines per Shard:** We've introduced a feature flag that allows running multiple goroutines per shard. This change is aimed at improving the scalability of read request handling, while still maintaining proper locking for exclusive write operations. This setup is particularly beneficial in scenarios where read requests heavily outweigh write requests. We are actively testing this feature on our clusters to determine the best concurrency levels before rolling out automatic tuning options.

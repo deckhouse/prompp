@@ -31,7 +31,7 @@ type delegatedStringView struct{ begin, len int32 }
 
 func (view delegatedStringView) reveal(data []byte) string {
 	b := data[view.begin : view.begin+view.len]
-	return *(*string)(unsafe.Pointer(&b)) //nolint:gosec // this is memory optimisation
+	return unsafe.String(unsafe.SliceData(b), len(b)) //nolint:gosec // this is memory optimisation
 }
 
 // number of bytes addet to each key-value pair in LabelSet data
@@ -124,7 +124,7 @@ func LabelSetFromPairs(kv ...string) LabelSet {
 //
 // Implements fmt.Stringer.
 func (ls LabelSet) String() string {
-	return *(*string)(unsafe.Pointer(&ls.data)) //nolint:gosec // memory and cpu optimization
+	return unsafe.String(unsafe.SliceData(ls.data), len(ls.data)) //nolint:gosec // memory and cpu optimization
 }
 
 // IsEmpty returns true if label set is empty

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'The image tag to be used for re-tagging as latest'
+        description: 'The image tag to be used for re-tagging as latest (2.53.2-0.3.4 for example)'
         required: true
         type: string
 

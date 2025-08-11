@@ -29,12 +29,38 @@ func NewChunkQuerier(head relabeler.Head, deduplicatorFactory DeduplicatorFactor
 	}
 }
 
-func (q *ChunkQuerier) LabelValues(ctx context.Context, name string, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
-	return labelValues(ctx, name, q.head, q.deduplicatorFactory, nil, relabeler.LSSLabelValuesChunkQuerier, matchers...)
+func (q *ChunkQuerier) LabelValues(
+	ctx context.Context,
+	name string,
+	hints *storage.LabelHints,
+	matchers ...*labels.Matcher,
+) ([]string, annotations.Annotations, error) {
+	return labelValues(
+		ctx,
+		name,
+		q.head,
+		q.deduplicatorFactory,
+		nil,
+		relabeler.LSSLabelValuesChunkQuerier,
+		hints,
+		matchers...,
+	)
 }
 
-func (q *ChunkQuerier) LabelNames(ctx context.Context, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
-	return labelNames(ctx, q.head, q.deduplicatorFactory, nil, relabeler.LSSLabelNamesChunkQuerier, matchers...)
+func (q *ChunkQuerier) LabelNames(
+	ctx context.Context,
+	hints *storage.LabelHints,
+	matchers ...*labels.Matcher,
+) ([]string, annotations.Annotations, error) {
+	return labelNames(
+		ctx,
+		q.head,
+		q.deduplicatorFactory,
+		nil,
+		relabeler.LSSLabelNamesChunkQuerier,
+		hints,
+		matchers...,
+	)
 }
 
 func (q *ChunkQuerier) Select(

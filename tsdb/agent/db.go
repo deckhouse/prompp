@@ -80,19 +80,23 @@ type Options struct {
 
 	// NoLockfile disables creation and consideration of a lock file.
 	NoLockfile bool
+
+	// OutOfOrderTimeWindow specifies how much out of order is allowed, if any.
+	OutOfOrderTimeWindow int64
 }
 
 // DefaultOptions used for the WAL storage. They are reasonable for setups using
 // millisecond-precision timestamps.
 func DefaultOptions() *Options {
 	return &Options{
-		WALSegmentSize:    wlog.DefaultSegmentSize,
-		WALCompression:    wlog.CompressionNone,
-		StripeSize:        tsdb.DefaultStripeSize,
-		TruncateFrequency: DefaultTruncateFrequency,
-		MinWALTime:        DefaultMinWALTime,
-		MaxWALTime:        DefaultMaxWALTime,
-		NoLockfile:        false,
+		WALSegmentSize:       wlog.DefaultSegmentSize,
+		WALCompression:       wlog.CompressionNone,
+		StripeSize:           tsdb.DefaultStripeSize,
+		TruncateFrequency:    DefaultTruncateFrequency,
+		MinWALTime:           DefaultMinWALTime,
+		MaxWALTime:           DefaultMaxWALTime,
+		NoLockfile:           false,
+		OutOfOrderTimeWindow: 0,
 	}
 }
 
@@ -811,6 +815,11 @@ func (a *appender) Append(ref storage.SeriesRef, l labels.Labels, t int64, v flo
 	series.Lock()
 	defer series.Unlock()
 
+	if t <= a.minValidTime(series.lastTs) {
+		a.metrics.totalOutOfOrderSamples.Inc()
+		return 0, storage.ErrOutOfOrderSample
+	}
+
 	// NOTE: always modify pendingSamples and sampleSeries together.
 	a.pendingSamples = append(a.pendingSamples, record.RefSample{
 		Ref: series.ref,
@@ -933,6 +942,11 @@ func (a *appender) AppendHistogram(ref storage.SeriesRef, l labels.Labels, t int
 
 	series.Lock()
 	defer series.Unlock()
+
+	if t <= a.minValidTime(series.lastTs) {
+		a.metrics.totalOutOfOrderSamples.Inc()
+		return 0, storage.ErrOutOfOrderSample
+	}
 
 	switch {
 	case h != nil:
@@ -1101,4 +1115,14 @@ func (a *appender) logSeries() error {
 	}
 
 	return nil
+}
+
+// minValidTime returns the minimum timestamp that a sample can have
+// and is needed for preventing underflow.
+func (a *appender) minValidTime(lastTs int64) int64 {
+	if lastTs < math.MinInt64+a.opts.OutOfOrderTimeWindow {
+		return math.MinInt64
+	}
+
+	return lastTs - a.opts.OutOfOrderTimeWindow
 }

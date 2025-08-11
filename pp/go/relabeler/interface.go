@@ -3,6 +3,7 @@ package relabeler
 import (
 	"context"
 	"hash/crc32"
+	"errors"
 	"sync/atomic"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -101,6 +102,8 @@ type Shard interface {
 
 // ShardFn - shard function.
 type ShardFn func(shard Shard) error
+
+var ErrAlreadyDiscarded = errors.New("Head is already discarded")
 
 type Head interface {
 	ID() string
