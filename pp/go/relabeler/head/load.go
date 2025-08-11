@@ -499,7 +499,9 @@ func (l *ShardLoader) loadQueriedSeries(result *ShardLoadResult) (bool, error) {
 	if queriedSeries, err := result.QueriedSeriesStorage.Read(); err != nil {
 		logger.Warnf("error loading queried series: %v", err)
 	} else {
-		result.DataStorage.dataStorage.SetQueriedSeriesBitset(queriedSeries)
+		if !result.DataStorage.dataStorage.SetQueriedSeriesBitset(queriedSeries) {
+			logger.Warnf("error loading queried series: %v", err)
+		}
 	}
 
 	return isEmptyStorage, nil

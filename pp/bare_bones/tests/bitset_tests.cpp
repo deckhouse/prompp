@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <random>
+#include <spanstream>
 #include <string>
 #include <vector>
 
@@ -8,6 +9,8 @@
 #include "bare_bones/bitset.h"
 
 namespace {
+
+using std::operator""sv;
 
 class BitsetFixture : public testing::Test {
  protected:
@@ -347,6 +350,71 @@ TEST_F(BitsetCreateIteratorValidFixture, CreateReadIteratorValid) {
   // Assert
   EXPECT_TRUE(std::ranges::equal(it, BareBones::Bitset::IteratorSentinel{}, bs_.begin(), bs_.end()));
   EXPECT_EQ(buffer.size(), 0);
+}
+
+class BitsetReadFromFixture : public testing::Test {
+ protected:
+  BareBones::Bitset bs_;
+};
+
+TEST_F(BitsetReadFromFixture, ReadSizeError) {
+  // Arrange
+  std::ispanstream stream{""};
+
+  // Act
+  const auto result = bs_.read_from(stream);
+
+  // Assert
+  EXPECT_FALSE(result);
+}
+
+TEST_F(BitsetReadFromFixture, ReadBytesError) {
+  // Arrange
+  std::ispanstream stream{"\x01\x00\x00\x00"sv};
+
+  // Act
+  const auto result = bs_.read_from(stream);
+
+  // Assert
+  EXPECT_FALSE(result);
+}
+
+TEST_F(BitsetReadFromFixture, ReadEmptyBitset) {
+  // Arrange
+  std::ispanstream stream{"\x00\x00\x00\x00"sv};
+
+  // Act
+  const auto result = bs_.read_from(stream);
+
+  // Assert
+  EXPECT_TRUE(result);
+}
+
+TEST_F(BitsetReadFromFixture, ReadSuccess) {
+  // Arrange
+  std::ispanstream stream{"\x01\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"sv};
+
+  // Act
+  const auto result = bs_.read_from(stream);
+
+  // Assert
+  EXPECT_TRUE(result);
+  EXPECT_EQ(1U, bs_.size());
+  EXPECT_TRUE(bs_.is_set(0));
+}
+
+TEST_F(BitsetReadFromFixture, OverwriteBitsetAfterRead) {
+  // Arrange
+  bs_.set({1, 2, 3, 4, 5});
+  std::ispanstream stream{"\x01\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"sv};
+
+  // Act
+  const auto result = bs_.read_from(stream);
+
+  // Assert
+  EXPECT_TRUE(result);
+  EXPECT_EQ(1U, bs_.size());
+  EXPECT_TRUE(bs_.is_set(0));
 }
 
 }  // namespace

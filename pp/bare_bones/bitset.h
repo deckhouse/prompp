@@ -14,6 +14,7 @@
 #include <numeric>
 
 #include "bit.h"
+#include "concepts.h"
 #include "memory.h"
 #include "streams.h"
 #include "type_traits.h"
@@ -193,7 +194,12 @@ class Bitset {
   template <OutputStream S>
   PROMPP_ALWAYS_INLINE void write_to(S& stream) const noexcept {
     const uint32_t data_size_in_bits = size();
-    const uint32_t data_size_in_bytes = Bit::to_ceil_units<uint64_t>(data_size_in_bits) * sizeof(uint64_t);
+    const uint32_t data_size_in_bytes = memory_size_in_bytes();
+
+    if constexpr (BareBones::concepts::has_reserve<S>) {
+      stream.reserve(sizeof(data_size_in_bits) + data_size_in_bytes);
+    }
+
     stream.write(reinterpret_cast<const char*>(&data_size_in_bits), sizeof(data_size_in_bits));
     stream.write(reinterpret_cast<const char*>(data_.begin()), data_size_in_bytes);
   }
@@ -219,19 +225,31 @@ class Bitset {
     return Iterator(bit_data.data(), bit_count);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const char> memory() const noexcept {
-    return {reinterpret_cast<const char*>(data_.begin()), memory_size_in_bytes()};
-  }
+  [[nodiscard]] bool read_from(std::istream& stream) {
+    uint32_t bit_count{};
+    stream.read(reinterpret_cast<char*>(&bit_count), sizeof(uint32_t));
+    if (stream.gcount() != sizeof(uint32_t)) [[unlikely]] {
+      return false;
+    }
 
-  PROMPP_ALWAYS_INLINE void set_memory(std::span<const char> memory) noexcept {
-    resize(Bit::to_bits(memory.size()));
-    std::memcpy(data_, memory.data(), memory.size());
+    if (bit_count == 0) {
+      return true;
+    }
+
+    resize(bit_count);
+    const auto size_in_bytes = memory_size_in_bytes(bit_count);
+    stream.read(reinterpret_cast<char*>(data_.begin()), size_in_bytes);
+
+    return static_cast<size_t>(stream.gcount()) == size_in_bytes;
   }
 
  private:
   PROMPP_ALWAYS_INLINE void set_size(uint32_t new_size) noexcept { data_.control_block().items_count = new_size; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t memory_size_in_bytes() const noexcept { return Bit::to_ceil_units<uint64_t>(size()) * sizeof(uint64_t); }
+  [[nodiscard]] static PROMPP_ALWAYS_INLINE size_t memory_size_in_bytes(uint32_t bytes) noexcept {
+    return Bit::to_ceil_units<uint64_t>(bytes) * sizeof(uint64_t);
+  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t memory_size_in_bytes() const noexcept { return memory_size_in_bytes(size()); }
 };
 
 template <>

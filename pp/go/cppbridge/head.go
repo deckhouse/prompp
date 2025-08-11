@@ -66,14 +66,15 @@ func (ds *HeadDataStorage) TimeInterval() TimeInterval {
 
 func (ds *HeadDataStorage) GetQueriedSeriesBitset() []byte {
 	size := seriesDataDataStorageQueriedSeriesBitsetSize(ds.dataStorage)
-	bitset := seriesDataDataStorageQueriedSeriesBitset(ds.dataStorage, make([]byte, size))
+	bitset := seriesDataDataStorageQueriedSeriesBitset(ds.dataStorage, make([]byte, 0, size))
 	runtime.KeepAlive(ds)
 	return bitset
 }
 
-func (ds *HeadDataStorage) SetQueriedSeriesBitset(bitset []byte) {
-	seriesDataDataStorageQueriedSeriesSetBitset(ds.dataStorage, bitset)
+func (ds *HeadDataStorage) SetQueriedSeriesBitset(bitset []byte) bool {
+	result := seriesDataDataStorageQueriedSeriesSetBitset(ds.dataStorage, bitset)
 	runtime.KeepAlive(ds)
+	return result
 }
 
 func (ds *HeadDataStorage) Pointer() uintptr {

@@ -73,8 +73,11 @@ void prompp_series_data_data_storage_queried_series_bitset(void* args, void* res
  *     queriedSeries []byte // queried series bitset memory
  * }
  *
+ * @param res {
+ *     result bool // load result
+ * }
  */
-void prompp_series_data_data_storage_queried_series_set_bitset(void* args);
+void prompp_series_data_data_storage_queried_series_set_bitset(void* args, void* res);
 
 /**
  * @brief Queries data storage and serializes result.

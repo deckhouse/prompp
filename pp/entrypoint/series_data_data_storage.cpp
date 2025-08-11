@@ -1,5 +1,7 @@
 #include "series_data_data_storage.h"
 
+#include <spanstream>
+
 #include "head/chunk_recoder.h"
 #include "head/data_storage.h"
 #include "head/lss.h"
@@ -76,8 +78,7 @@ extern "C" void prompp_series_data_data_storage_queried_series_bitset_size(void*
     uint32_t size;
   };
 
-  const auto memory = static_cast<Arguments*>(args)->data_storage->queried_series_bitmap.memory();
-  new (res) Result{.size = static_cast<uint32_t>(memory.size())};
+  new (res) Result{.size = static_cast<Arguments*>(args)->data_storage->queried_series_bitmap.get_write_size()};
 }
 
 extern "C" void prompp_series_data_data_storage_queried_series_bitset(void* args, void* res) {
@@ -88,19 +89,26 @@ extern "C" void prompp_series_data_data_storage_queried_series_bitset(void* args
     Slice<char> queried_series;
   };
 
-  const auto memory = static_cast<Arguments*>(args)->data_storage->queried_series_bitmap.memory();
-  auto& queried_series = static_cast<Result*>(res)->queried_series;
-  std::memcpy(queried_series.data(), memory.data(), queried_series.size());
+  BytesStream stream(&static_cast<Result*>(res)->queried_series);
+  static_cast<Arguments*>(args)->data_storage->queried_series_bitmap.write_to(stream);
 }
 
-extern "C" void prompp_series_data_data_storage_queried_series_set_bitset(void* args) {
+extern "C" void prompp_series_data_data_storage_queried_series_set_bitset(void* args, void* res) {
   struct Arguments {
     DataStoragePtr data_storage;
     SliceView<char> queried_series;
   };
+  struct Result {
+    bool result;
+  };
 
   const auto in = static_cast<Arguments*>(args);
-  in->data_storage->queried_series_bitmap.set_memory(in->queried_series);
+  std::ispanstream stream(in->queried_series.span());
+  const auto result = in->data_storage->queried_series_bitmap.read_from(stream);
+  if (!result) {
+    in->data_storage->queried_series_bitmap.reset(0);
+  }
+  new (res) Result{.result = result};
 }
 
 extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
