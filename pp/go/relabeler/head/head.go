@@ -1148,7 +1148,7 @@ func (h *Head) UnloadUnusedSeriesData() {
 
 			header, err := shard.UnloadedDataStorage().WriteSnapshot(snapshot)
 			if err != nil {
-				return err
+				return fmt.Errorf("unable to write unused series data snapshot: %v", err)
 			}
 
 			shard.DataStorageLock()
@@ -1156,8 +1156,8 @@ func (h *Head) UnloadUnusedSeriesData() {
 			unloader.Unload()
 			shard.DataStorageUnlock()
 
-			if err := shard.QueriedSeriesStorage().Write(queriedSeries, time.Now().UnixMilli()); err != nil {
-				logger.Warnf("unable to write queried series data: %v", err)
+			if err = shard.QueriedSeriesStorage().Write(queriedSeries, time.Now().UnixMilli()); err != nil {
+				return fmt.Errorf("unable to write queried series data: %v", err)
 			}
 
 			return nil
@@ -1165,7 +1165,9 @@ func (h *Head) UnloadUnusedSeriesData() {
 		relabeler.ForDataStorageTask,
 	)
 	h.Enqueue(task)
-	_ = task.Wait()
+	if err := task.Wait(); err != nil {
+		logger.Warnf("unable to unload unused series data: %v", err)
+	}
 }
 
 // CreateDataStorageLoadAndQueryTask - add querier to pool for data load and create task for data load if needed
