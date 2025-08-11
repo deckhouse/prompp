@@ -71,6 +71,11 @@ func (ds *HeadDataStorage) GetQueriedSeriesBitset() []byte {
 	return bitset
 }
 
+func (ds *HeadDataStorage) SetQueriedSeriesBitset(bitset []byte) {
+	seriesDataDataStorageQueriedSeriesSetBitset(ds.dataStorage, bitset)
+	runtime.KeepAlive(ds)
+}
+
 func (ds *HeadDataStorage) Pointer() uintptr {
 	return ds.dataStorage
 }

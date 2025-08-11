@@ -1158,6 +1158,17 @@ void prompp_series_data_data_storage_queried_series_bitset_size(void* args, void
 void prompp_series_data_data_storage_queried_series_bitset(void* args, void* res);
 
 /**
+ * @brief Get queried series bitset memory
+ *
+ * @param args {
+ *     dataStorage uintptr // pointer to constructed data storage
+ *     queriedSeries []byte // queried series bitset memory
+ * }
+ *
+ */
+void prompp_series_data_data_storage_queried_series_set_bitset(void* args);
+
+/**
  * @brief Queries data storage and serializes result.
  *
  * @param args {

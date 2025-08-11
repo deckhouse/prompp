@@ -2072,6 +2072,19 @@ func seriesDataDataStorageQueriedSeriesBitset(dataStorage uintptr, queriedSeries
 	return res.queriedSeriesBitset
 }
 
+func seriesDataDataStorageQueriedSeriesSetBitset(dataStorage uintptr, queriedSeriesBitset []byte) {
+	args := struct {
+		dataStorage         uintptr
+		queriedSeriesBitset []byte
+	}{dataStorage, queriedSeriesBitset}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_data_storage_queried_series_set_bitset,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
 func seriesDataDataStorageDtor(dataStorage uintptr) {
 	args := struct {
 		dataStorage uintptr

@@ -93,6 +93,16 @@ extern "C" void prompp_series_data_data_storage_queried_series_bitset(void* args
   std::memcpy(queried_series.data(), memory.data(), queried_series.size());
 }
 
+extern "C" void prompp_series_data_data_storage_queried_series_set_bitset(void* args) {
+  struct Arguments {
+    DataStoragePtr data_storage;
+    SliceView<char> queried_series;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  in->data_storage->queried_series_bitmap.set_memory(in->queried_series);
+}
+
 extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
   using Query = series_data::querier::Query<Slice<LabelSetID>>;
   using entrypoint::series_data::RangeQuerierWithArgumentsWrapper;

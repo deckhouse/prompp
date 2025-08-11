@@ -223,6 +223,11 @@ class Bitset {
     return {reinterpret_cast<const char*>(data_.begin()), memory_size_in_bytes()};
   }
 
+  PROMPP_ALWAYS_INLINE void set_memory(std::span<const char> memory) noexcept {
+    resize(Bit::to_bits(memory.size()));
+    std::memcpy(data_, memory.data(), memory.size());
+  }
+
  private:
   PROMPP_ALWAYS_INLINE void set_size(uint32_t new_size) noexcept { data_.control_block().items_count = new_size; }
 
