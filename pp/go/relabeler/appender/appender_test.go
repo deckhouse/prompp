@@ -1783,14 +1783,14 @@ func (*AppenderSuite) constructorForRefillSender(mrs *ManagerRefillSenderMock) r
 			mrs.RunFunc = func(ctx context.Context) {
 				<-ctx.Done()
 				if !errors.Is(context.Cause(ctx), relabeler.ErrShutdown) {
-					relabeler.Errorf("scan and send loop context canceled: %s", context.Cause(ctx))
+					logger.Errorf("scan and send loop context canceled: %s", context.Cause(ctx))
 				}
 			}
 		}
 		if mrs.ShutdownFunc == nil {
 			mrs.ShutdownFunc = func(ctx context.Context) error {
 				if ctx.Err() != nil && !errors.Is(context.Cause(ctx), relabeler.ErrShutdown) {
-					relabeler.Errorf("scan and send loop context canceled: %s", context.Cause(ctx))
+					logger.Errorf("scan and send loop context canceled: %s", context.Cause(ctx))
 					return context.Cause(ctx)
 				}
 
@@ -1802,11 +1802,6 @@ func (*AppenderSuite) constructorForRefillSender(mrs *ManagerRefillSenderMock) r
 }
 
 func (s *AppenderSuite) errorHandler() {
-	relabeler.Errorf = s.T().Errorf
-	relabeler.Warnf = s.T().Logf
-	relabeler.Infof = s.T().Logf
-	relabeler.Debugf = s.T().Logf
-
 	logger.Errorf = s.T().Errorf
 	logger.Warnf = s.T().Logf
 	logger.Infof = s.T().Logf

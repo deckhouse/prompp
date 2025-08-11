@@ -23,7 +23,9 @@ func (w *protobufWriter) Write(ctx context.Context, protobuf *cppbridge.SnappyPr
 			return nil
 		}
 
-		return w.client.Store(ctx, buf, 0)
+		// TODO WriteResponseStats
+		_, err := w.client.Store(ctx, buf, 0)
+		return err
 	})
 }
 

@@ -18,10 +18,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/frames"
+	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 	"github.com/prometheus/prometheus/pp/go/util"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -142,7 +143,7 @@ func NewRefillSendManager(
 // Run - main loop for scan refill and sending to destinations.
 func (rsm *RefillSendManager) Run(ctx context.Context) {
 	if err := rsm.checkTmpRefill(); err != nil {
-		Errorf("fail check and rename tmp refill file: %s", err)
+		logger.Errorf("fail check and rename tmp refill file: %s", err)
 	}
 
 	loopTicker := rsm.clock.NewTicker(rsm.rsmCfg.ScanInterval)
@@ -157,14 +158,14 @@ func (rsm *RefillSendManager) Run(ctx context.Context) {
 					return
 				}
 				rsm.errors.With(prometheus.Labels{"place": "processing"}).Inc()
-				Errorf("fail scan and send loop: %s", err)
+				logger.Errorf("fail scan and send loop: %s", err)
 				continue
 			}
 
 			// delete old files if the size exceeds the maximum
 			if err := rsm.clearing(); err != nil {
 				rsm.errors.With(prometheus.Labels{"place": "clearing"}).Inc()
-				Errorf("fail clearing: %s", err)
+				logger.Errorf("fail clearing: %s", err)
 				continue
 			}
 		case rsmu := <-rsm.update:
@@ -187,7 +188,7 @@ func (rsm *RefillSendManager) Run(ctx context.Context) {
 			return
 		case <-ctx.Done():
 			if !errors.Is(context.Cause(ctx), ErrShutdown) {
-				Errorf("scan and send loop context canceled: %s", context.Cause(ctx))
+				logger.Errorf("scan and send loop context canceled: %s", context.Cause(ctx))
 			}
 			return
 		}
@@ -252,7 +253,7 @@ func (rsm *RefillSendManager) processing(ctx context.Context) error {
 		}
 		// read, prepare to send, send
 		if err = rsm.fileProcessing(ctx, fileInfo); err != nil {
-			Errorf("fail send file '%s': %s", fileInfo.Name(), err)
+			logger.Errorf("fail send file '%s': %s", fileInfo.Name(), err)
 			if IsPermanent(err) {
 				// delete bad refill file
 				_ = os.Remove(filepath.Join(rsm.dir, fileInfo.Name()))
@@ -327,7 +328,7 @@ func (rsm *RefillSendManager) fileProcessing(ctx context.Context, fileInfo fs.Fi
 		}
 		if rsm.isUnavailableDialer(dname) {
 			withError.Store(true)
-			Errorf("%s: fail send: %s", dname, ErrHostIsUnavailable)
+			logger.Errorf("%s: fail send: %s", dname, ErrHostIsUnavailable)
 			return true
 		}
 		wg.Add(1)
@@ -338,7 +339,7 @@ func (rsm *RefillSendManager) fileProcessing(ctx context.Context, fileInfo fs.Fi
 					rsm.addUnavailableDialer(dn)
 					withError.Store(true)
 				}
-				Errorf("%s: fail send: %s", dname, err)
+				logger.Errorf("%s: fail send: %s", dname, err)
 				return
 			}
 		}(dialer, dname, shardID, shardData)
@@ -416,10 +417,10 @@ func (rsm *RefillSendManager) clearing() error {
 	}
 
 	for len(refillFiles) > 0 && fullFileSize > rsm.rsmCfg.MaxRefillSize {
-		Errorf("'%s': remove file: %s", refillFiles[0].Name(), errRefillLimitExceeded)
+		logger.Errorf("'%s': remove file: %s", refillFiles[0].Name(), errRefillLimitExceeded)
 		rsm.deletedFileSize.With(prometheus.Labels{"cause": "limit"}).Observe(float64(refillFiles[0].Size()))
 		if err = os.Remove(filepath.Join(rsm.dir, refillFiles[0].Name())); err != nil {
-			Errorf("'%s': failed to delete file: %s", refillFiles[0].Name(), err)
+			logger.Errorf("'%s': failed to delete file: %s", refillFiles[0].Name(), err)
 			refillFiles = refillFiles[1:]
 			continue
 		}
@@ -523,7 +524,7 @@ func (rs *RefillSender) Send(ctx context.Context) error {
 	}
 
 	if errWrite := rs.source.WriteRefillShardEOF(ctx, rs.String(), rs.shardMeta.ShardID); errWrite != nil {
-		Errorf("'%s': fail to write shard EOF: %s", rs, errWrite)
+		logger.Errorf("'%s': fail to write shard EOF: %s", rs, errWrite)
 	}
 
 	return nil
