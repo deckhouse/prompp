@@ -2,7 +2,8 @@
 
 ## v0.5.0
 
-Base Prometheus version bumped to 2.55.1. It's unlock switch from Prometheus 3.x installations to Prom++.
+1. Base Prometheus version bumped to 2.55.1. It's unlock switch from Prometheus 3.x installations to Prom++.
+2. Update dependencies to mitigate CVEs.
 
 ## v0.4.0
 
