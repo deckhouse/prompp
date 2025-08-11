@@ -234,6 +234,7 @@ func NewReceiver(
 			relabeler.NewRotateTimerWithSeed(clock, rotationInfo.BlockDuration, rotationInfo.Seed),
 			appender.NewConstantIntervalTimer(clock, commitInterval),
 			appender.NewConstantIntervalTimer(clock, appender.DefaultMergeDuration),
+			unloadDataStorage,
 			registerer,
 		),
 
