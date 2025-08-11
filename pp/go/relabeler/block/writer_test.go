@@ -75,7 +75,8 @@ func (s *BlockWriterSuite) SetupTest() {
 
 	file, err := os.Create(filepath.Join(dataDir, "unloaded_data"))
 	s.Require().NoError(err)
-	s.unloadedDataStorage = head.NewUnloadedDataStorage(file)
+	s.unloadedDataStorage, err = head.NewUnloadedDataStorage(file)
+	s.Require().NoError(err)
 
 	s.blockWriter = block.NewWriter(dataDir, block.DefaultChunkSegmentSize, 2*time.Hour, prometheus.DefaultRegisterer)
 }
@@ -103,7 +104,11 @@ func (s *BlockWriterSuite) readBlockMeta(filename string) tsdb.BlockMeta {
 
 func (s *BlockWriterSuite) unloadData() {
 	unloader := s.dataStorage.CreateUnusedSeriesDataUnloader()
-	s.Require().NoError(s.unloadedDataStorage.Write(unloader.CreateSnapshot()))
+
+	header, err := s.unloadedDataStorage.WriteSnapshot(unloader.CreateSnapshot())
+	s.Require().NoError(err)
+	s.unloadedDataStorage.WriteIndex(header)
+
 	unloader.Unload()
 }
 

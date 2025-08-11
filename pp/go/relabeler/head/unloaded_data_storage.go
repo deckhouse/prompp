@@ -6,9 +6,9 @@ import (
 	"hash/crc32"
 	"io"
 	"slices"
-	"sync"
 	"unsafe"
 
+	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 )
 
@@ -19,59 +19,35 @@ const (
 
 type ReaderAtWriterCloser interface {
 	io.ReaderAt
-	io.Writer
-	io.Closer
-}
-
-type UnloadedDataSnapshotHeader struct {
-	crc32        uint32
-	snapshotSize uint32
-}
-
-func newUnloadedDataSnapshotHeader(snapshot []byte) UnloadedDataSnapshotHeader {
-	return UnloadedDataSnapshotHeader{crc32: crc32.ChecksumIEEE(snapshot), snapshotSize: uint32(len(snapshot))}
-}
-
-func (h UnloadedDataSnapshotHeader) isValid(snapshot []byte) bool {
-	return h.crc32 == crc32.ChecksumIEEE(snapshot)
+	io.WriteCloser
 }
 
 type UnloadedDataStorage struct {
 	storage         ReaderAtWriterCloser
-	snapshots       []UnloadedDataSnapshotHeader
-	lock            sync.RWMutex
+	snapshots       []relabeler.UnloadedDataSnapshotHeader
 	maxSnapshotSize uint32
 }
 
-func NewUnloadedDataStorage(storage ReaderAtWriterCloser) *UnloadedDataStorage {
-	return &UnloadedDataStorage{storage: storage}
+func NewUnloadedDataStorage(storage ReaderAtWriterCloser) (*UnloadedDataStorage, error) {
+	s := &UnloadedDataStorage{storage: storage}
+	return s, s.WriteFormatVersion()
 }
 
-func (s *UnloadedDataStorage) Write(snapshot []byte) error {
+func (s *UnloadedDataStorage) WriteSnapshot(snapshot []byte) (relabeler.UnloadedDataSnapshotHeader, error) {
 	if len(snapshot) == 0 {
-		return nil
+		return relabeler.UnloadedDataSnapshotHeader{}, nil
 	}
 
-	if len(s.snapshots) == 0 {
-		if err := s.writeFormatVersion(); err != nil {
-			return err
-		}
-	}
-
-	header := newUnloadedDataSnapshotHeader(snapshot)
-	if _, err := s.storage.Write(snapshot); err != nil {
-		return err
-	}
-
-	s.lock.Lock()
-	s.snapshots = append(s.snapshots, header)
-	s.maxSnapshotSize = max(header.snapshotSize, s.maxSnapshotSize)
-	s.lock.Unlock()
-
-	return nil
+	_, err := s.storage.Write(snapshot)
+	return relabeler.NewUnloadedDataSnapshotHeader(snapshot), err
 }
 
-func (s *UnloadedDataStorage) writeFormatVersion() error {
+func (s *UnloadedDataStorage) WriteIndex(header relabeler.UnloadedDataSnapshotHeader) {
+	s.snapshots = append(s.snapshots, header)
+	s.maxSnapshotSize = max(header.SnapshotSize, s.maxSnapshotSize)
+}
+
+func (s *UnloadedDataStorage) WriteFormatVersion() error {
 	_, err := s.storage.Write([]byte{UnloadedDataStorageVersion})
 	return err
 }
@@ -85,27 +61,20 @@ func (s *UnloadedDataStorage) ForEachSnapshot(f func(snapshot []byte, isLast boo
 		return err
 	}
 
-	s.lock.RLock()
-	snapshots := s.snapshots
-	maxSnapshotSize := s.maxSnapshotSize
-	s.lock.RUnlock()
-
-	snapshot := make([]byte, 0, maxSnapshotSize)
-	for index := range snapshots {
-		header := snapshots[index]
-
-		snapshot = snapshot[:header.snapshotSize]
+	snapshot := make([]byte, 0, s.maxSnapshotSize)
+	for index, header := range s.snapshots {
+		snapshot = snapshot[:header.SnapshotSize]
 		size, err := s.storage.ReadAt(snapshot, offset)
-		if uint32(size) != header.snapshotSize {
+		if uint32(size) != header.SnapshotSize {
 			return err
 		}
 		offset += int64(size)
 
-		if !header.isValid(snapshot) {
+		if !header.IsValid(snapshot) {
 			return fmt.Errorf("invalid snapshot at index %d", index)
 		}
 
-		f(snapshot, index == len(snapshots)-1)
+		f(snapshot, index == len(s.snapshots)-1)
 	}
 
 	return nil

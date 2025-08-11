@@ -2,6 +2,7 @@ package relabeler
 
 import (
 	"context"
+	"hash/crc32"
 	"sync/atomic"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -45,8 +46,22 @@ type Wal interface {
 	Flush() error
 }
 
+type UnloadedDataSnapshotHeader struct {
+	Crc32        uint32
+	SnapshotSize uint32
+}
+
+func NewUnloadedDataSnapshotHeader(snapshot []byte) UnloadedDataSnapshotHeader {
+	return UnloadedDataSnapshotHeader{Crc32: crc32.ChecksumIEEE(snapshot), SnapshotSize: uint32(len(snapshot))}
+}
+
+func (h UnloadedDataSnapshotHeader) IsValid(snapshot []byte) bool {
+	return h.Crc32 == crc32.ChecksumIEEE(snapshot)
+}
+
 type UnloadedDataStorage interface {
-	Write(snapshot []byte) error
+	WriteSnapshot(snapshot []byte) (UnloadedDataSnapshotHeader, error)
+	WriteIndex(UnloadedDataSnapshotHeader)
 	ForEachSnapshot(f func(snapshot []byte, isLast bool)) error
 }
 

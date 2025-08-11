@@ -40,7 +40,12 @@ func TestUnloadedDataStorageSuite(t *testing.T) {
 
 func (s *UnloadedDataStorageSuite) SetupTest() {
 	s.storageBuffer = &BufferReaderAtWriterCloser{}
-	s.storage = NewUnloadedDataStorage(s.storageBuffer)
+	s.storage, _ = NewUnloadedDataStorage(s.storageBuffer)
+}
+
+func (s *UnloadedDataStorageSuite) Write(snapshot []byte) {
+	header, _ := s.storage.WriteSnapshot(snapshot)
+	s.storage.WriteIndex(header)
 }
 
 func (s *UnloadedDataStorageSuite) readSnapshots() ([]string, error) {
@@ -63,7 +68,7 @@ func (s *UnloadedDataStorageSuite) TestReadEmptySnapshots() {
 
 func (s *UnloadedDataStorageSuite) TestReadOneSnapshot() {
 	// Arrange
-	_ = s.storage.Write([]byte("12345"))
+	s.Write([]byte("12345"))
 
 	// Act
 	snapshots, err := s.readSnapshots()
@@ -75,9 +80,9 @@ func (s *UnloadedDataStorageSuite) TestReadOneSnapshot() {
 
 func (s *UnloadedDataStorageSuite) TestReadMultipleSnapshots() {
 	// Arrange
-	_ = s.storage.Write([]byte("123"))
-	_ = s.storage.Write([]byte("45678"))
-	_ = s.storage.Write([]byte("90"))
+	s.Write([]byte("123"))
+	s.Write([]byte("45678"))
+	s.Write([]byte("90"))
 
 	// Act
 	snapshots, err := s.readSnapshots()
@@ -89,7 +94,7 @@ func (s *UnloadedDataStorageSuite) TestReadMultipleSnapshots() {
 
 func (s *UnloadedDataStorageSuite) TestReadEof() {
 	// Arrange
-	_ = s.storage.Write([]byte("123"))
+	s.Write([]byte("123"))
 	s.storageBuffer.buffer = s.storageBuffer.buffer[:len(s.storageBuffer.buffer)-1]
 
 	// Act
@@ -103,7 +108,7 @@ func (s *UnloadedDataStorageSuite) TestReadEof() {
 func (s *UnloadedDataStorageSuite) TestInvalidVersion() {
 	// Arrange
 	var invalidVersion byte = UnloadedDataStorageVersion + 1
-	_, _ = s.storageBuffer.Write([]byte{invalidVersion})
+	s.storageBuffer.buffer = []byte{invalidVersion}
 
 	// Act
 	snapshots, err := s.readSnapshots()
@@ -115,8 +120,8 @@ func (s *UnloadedDataStorageSuite) TestInvalidVersion() {
 
 func (s *UnloadedDataStorageSuite) TestReadInvalidSnapshot() {
 	// Arrange
-	_ = s.storage.Write([]byte("123"))
-	_ = s.storage.Write([]byte("45678"))
+	s.Write([]byte("123"))
+	s.Write([]byte("45678"))
 	s.storageBuffer.buffer[4] = 0x00
 
 	// Act

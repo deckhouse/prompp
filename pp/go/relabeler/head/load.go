@@ -95,7 +95,7 @@ func createShard(
 ) (*LSS, *ShardWal, *DataStorage, *UnloadedDataStorage, *QueriedSeriesStorage, error) {
 	dir = filepath.Clean(dir)
 
-	var unloadedDataStorageFile *os.File
+	var unloadedDataStorage *UnloadedDataStorage
 
 	shardFile, err := os.Create(getShardWalFilename(dir, shardID))
 	if err != nil {
@@ -109,8 +109,8 @@ func createShard(
 
 		_ = shardFile.Close()
 
-		if unloadedDataStorageFile != nil {
-			_ = unloadedDataStorageFile.Close()
+		if unloadedDataStorage != nil {
+			_ = unloadedDataStorage.Close()
 		}
 	}()
 
@@ -130,9 +130,7 @@ func createShard(
 		return nil, nil, nil, nil, nil, fmt.Errorf("failed to init segmentWriter: %w", err)
 	}
 
-	shardWal := newShardWal(shardWalEncoder, maxSegmentSize, sw)
-
-	unloadedDataStorageFile, err = os.Create(getUnloadedDataStorageFilename(dir, shardID))
+	unloadedDataStorage, err = createUnloadedDataStorage(dir, shardID)
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("failed to create unloaded data storage file: %w", err)
 	}
@@ -143,11 +141,25 @@ func createShard(
 	}
 
 	return lss,
-		shardWal,
+		newShardWal(shardWalEncoder, maxSegmentSize, sw),
 		NewDataStorage(),
-		NewUnloadedDataStorage(unloadedDataStorageFile),
+		unloadedDataStorage,
 		NewQueriedSeriesStorage(queriedSeriesStorageFile1, queriedSeriesStorageFile2),
 		nil
+}
+
+func createUnloadedDataStorage(dir string, shardID uint16) (*UnloadedDataStorage, error) {
+	unloadedDataStorageFile, err := os.Create(getUnloadedDataStorageFilename(dir, shardID))
+	if err != nil {
+		return nil, err
+	}
+
+	unloadedDataStorage, err := NewUnloadedDataStorage(unloadedDataStorageFile)
+	if err != nil {
+		return unloadedDataStorage, err
+	}
+
+	return unloadedDataStorage, nil
 }
 
 func openQueriedSeriesStorageFiles(dir string, shardID uint16) (*os.File, *os.File, error) {
@@ -334,11 +346,10 @@ func (l *ShardLoader) Load() (ShardLoadResult, error) {
 		}
 	}()
 
-	unloadedDataStorageFile, err := os.Create(getUnloadedDataStorageFilename(l.dir, l.shardID))
+	result.UnloadedDataStorage, err = createUnloadedDataStorage(l.dir, l.shardID)
 	if err != nil {
 		return result, err
 	}
-	result.UnloadedDataStorage = NewUnloadedDataStorage(unloadedDataStorageFile)
 
 	var queriedSeriesStorageIsEmpty bool
 	queriedSeriesStorageIsEmpty, err = l.loadQueriedSeries(&result)
@@ -430,8 +441,10 @@ func (d *dataUnloader) UnloadIfNeeded(createTs, encodeTs time.Duration) error {
 	if intervalIndex > d.unloadedIntervalIndex {
 		logger.Warnf("unloading data: prev %d, current: %d, unloadInterval: %d", d.unloadedIntervalIndex, intervalIndex, d.unloadInterval)
 
-		if err := d.unloadedDataStorage.Write(d.unloader.CreateSnapshot()); err != nil {
+		if header, err := d.unloadedDataStorage.WriteSnapshot(d.unloader.CreateSnapshot()); err != nil {
 			return fmt.Errorf("failed to write unloaded data: %w", err)
+		} else {
+			d.unloadedDataStorage.WriteIndex(header)
 		}
 		d.unloader.Unload()
 

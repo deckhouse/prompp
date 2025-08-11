@@ -1146,12 +1146,13 @@ func (h *Head) UnloadUnusedSeriesData() {
 			queriedSeries := shard.DataStorage().GetQueriedSeriesBitset()
 			shard.DataStorageRUnlock()
 
-			// TODO: write index under mutex
-			if err := shard.UnloadedDataStorage().Write(snapshot); err != nil {
+			header, err := shard.UnloadedDataStorage().WriteSnapshot(snapshot)
+			if err != nil {
 				return err
 			}
 
 			shard.DataStorageLock()
+			shard.UnloadedDataStorage().WriteIndex(header)
 			unloader.Unload()
 			shard.DataStorageUnlock()
 
