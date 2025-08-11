@@ -462,8 +462,9 @@ func (l *ShardLoader) loadSegments(
 ) (uint32, error) {
 	numberOfSegments := uint32(0)
 
+	var segment DecodedSegment
 	for {
-		segment, _, err := ReadSegment(reader)
+		_, err := ReadSegment(reader, &segment)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				return numberOfSegments, nil
