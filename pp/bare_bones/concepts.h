@@ -30,8 +30,8 @@ concept has_size = requires(const T& t) {
 };
 
 template <class T>
-concept has_reserve = requires(T& r) {
-  { r.reserve(size_t{}) };
+concept has_reserve = requires(T& r, uint32_t n) {
+  { r.reserve(n) } -> std::same_as<void>;
 };
 
 template <class Clock>
