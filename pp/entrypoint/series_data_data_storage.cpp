@@ -114,7 +114,7 @@ extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
     Slice<char>* serialized_chunks;
   };
 
-  using Result = struct {
+  struct Result {
     QuerierVariantPtr querier{};
     QueryStatus status;
   };
