@@ -161,7 +161,8 @@ class CompactSamplesList {
     SampleUnion() {}
     ~SampleUnion() {}
 
-    Primitives::Sample single{};
+    std::array<Primitives::Sample, 0> none{};
+    Primitives::Sample single;
     SamplesVector plural;
   } sample_;
   Type type_{Type::kNone};
