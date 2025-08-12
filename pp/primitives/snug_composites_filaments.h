@@ -773,7 +773,7 @@ class LabelSet {
           auto size_will_be_at_least = id + number_of_tables_stil_left_to_load;
 
           symbols_tables.reserve(size_will_be_at_least);
-          for (auto j = symbols_tables.size(); j != size_will_be_at_least; ++j) {
+          for (uint32_t j = symbols_tables.size(); j != size_will_be_at_least; ++j) {
             symbols_tables.emplace_back(std::make_unique<SymbolsTableType<Vector>>());
           }
 
