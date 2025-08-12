@@ -7,7 +7,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
-	"github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/logger"
 	"github.com/prometheus/prometheus/pp/go/util"
 )
@@ -18,10 +17,18 @@ type Timer interface {
 	Stop()
 }
 
-type ActiveHeadContainer interface {
-	Get(ctx context.Context) (storage.Head, error)
-	Replace(ctx context.Context, newHead storage.Head) error
-	With(ctx context.Context, fn func(h storage.Head) error) error
+type Head interface {
+	// TODO ?
+}
+
+type ActiveHeadContainer[THead Head] interface {
+	Get(ctx context.Context) (THead, error)
+	Replace(ctx context.Context, newHead THead) error
+	With(ctx context.Context, fn func(h THead) error) error
+}
+
+type Keeper[THead Head] interface {
+	Add(head THead)
 }
 
 // type ActiveHeadContainer[T any] interface {
@@ -32,16 +39,17 @@ type ActiveHeadContainer interface {
 
 // var _ ActiveHeadContainer[testHead] = (*container.Weighted[testHead, *testHead])(nil)
 
-// HeadBuilder builder for the [storage.Head].
-type HeadBuilder interface {
+// HeadBuilder builder for the [Head].
+type HeadBuilder[THead Head] interface {
 	// inputRelabelerConfigs []*config.InputRelabelerConfig,
-	BuildWithConfig(numberOfShards uint16) (storage.Head, error)
+	BuildWithConfig(numberOfShards uint16) (THead, error)
 }
 
-type Manager struct {
+type Manager[THead Head] struct {
 	//
-	activeHead  ActiveHeadContainer
-	headBuilder HeadBuilder
+	activeHead  ActiveHeadContainer[THead]
+	headBuilder HeadBuilder[THead]
+	keeper      Keeper[THead]
 	rotateTimer Timer
 	commitTimer Timer
 	mergeTimer  Timer
@@ -55,7 +63,7 @@ type Manager struct {
 }
 
 // ApplyConfig update config.
-func (m *Manager) ApplyConfig(
+func (m *Manager[THead]) ApplyConfig(
 	ctx context.Context,
 	inputRelabelerConfigs []*config.InputRelabelerConfig,
 	numberOfShards uint16,
@@ -69,35 +77,40 @@ func (m *Manager) ApplyConfig(
 }
 
 // MergeOutOfOrderChunks merge chunks with out of order data chunks.
-func (m *Manager) MergeOutOfOrderChunks(ctx context.Context) error {
-	return m.activeHead.With(ctx, func(h storage.Head) error {
-		h.MergeOutOfOrderChunks()
+func (m *Manager[THead]) MergeOutOfOrderChunks(ctx context.Context) error {
+	// TODO ?
+	// return m.activeHead.With(ctx, func(h storage.Head) error {
+	// 	h.MergeOutOfOrderChunks()
 
-		return nil
-	})
+	// 	return nil
+	// })
+
+	return nil
 }
 
 // Run starts processing of the [Manager].
 // TODO implementation.
-func (m *Manager) Run(ctx context.Context) error {
+func (m *Manager[THead]) Run(ctx context.Context) error {
 	go m.loop(ctx)
 	return nil
 }
 
 // Shutdown safe shutdown [Manager].
-func (m *Manager) Shutdown(ctx context.Context) error {
+func (m *Manager[THead]) Shutdown(ctx context.Context) error {
 	return nil
 }
 
 // commitToWal commit the accumulated data into the wal.
-func (m *Manager) commitToWal(ctx context.Context) error {
-	return m.activeHead.With(ctx, func(h storage.Head) error {
-		return h.CommitToWal()
-	})
+func (m *Manager[THead]) commitToWal(ctx context.Context) error {
+	// TODO ?
+	// return m.activeHead.With(ctx, func(h storage.Head) error {
+	// 	return h.CommitToWal()
+	// })
+	return nil
 }
 
 // TODO implementation.
-func (m *Manager) loop(ctx context.Context) {
+func (m *Manager[THead]) loop(ctx context.Context) {
 	defer m.closer.Done()
 
 	for {
@@ -132,7 +145,7 @@ func (m *Manager) loop(ctx context.Context) {
 	}
 }
 
-func (m *Manager) rotate(ctx context.Context) error {
+func (m *Manager[THead]) rotate(ctx context.Context) error {
 	newHead, err := m.headBuilder.BuildWithConfig(m.numberOfShards)
 	if err != nil {
 		return fmt.Errorf("failed to build a new head: %w", err)
@@ -143,10 +156,22 @@ func (m *Manager) rotate(ctx context.Context) error {
 		return fmt.Errorf("getting active head failed: %w", err)
 	}
 
-	newHead.CopySeriesFrom(oldHead)
+	// TODO
+	// newHead.CopySeriesFrom(oldHead)
 
-	// storgae.Add(oldHead)
+	m.keeper.Add(oldHead)
 
 	// TODO if replace error?
 	return m.activeHead.Replace(ctx, newHead)
+}
+
+// WithAppendableHead
+// TODO implementation.
+func (m *Manager[THead]) WithAppendableHead(ctx context.Context, fn func(h THead) error) error {
+	return m.activeHead.With(ctx, fn)
+}
+
+// RangeQueriableHeads
+// TODO implementation.
+func (m *Manager[THead]) RangeQueriableHeads() {
 }

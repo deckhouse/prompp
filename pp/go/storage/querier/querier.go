@@ -54,7 +54,7 @@ type deduplicatorCtor func(numberOfShards uint16) Deduplicator
 // GenericTask
 //
 
-// GenericTask the minimum required GenericTask implementation.
+// GenericTask the minimum required task [Generic] implementation.
 type GenericTask interface {
 	// Wait for the task to complete on all shards.
 	Wait() error

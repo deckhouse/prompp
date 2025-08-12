@@ -294,6 +294,8 @@ func calculateHeadConcurrency(numberOfShards uint16) int64 {
 	return int64(defaultNumberOfWorkers+ExtraWorkers) * int64(numberOfShards)
 }
 
+// TODO Flush CommitToWal ?
+
 // TODO Who?
 // // getSortedStats returns sorted statistics for the [Head].
 // func getSortedStats(stats map[string]uint64, limit int) []storage.HeadStat {

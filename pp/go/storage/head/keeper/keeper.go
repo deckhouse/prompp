@@ -2,11 +2,11 @@ package keeper
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/logger"
 	"github.com/prometheus/prometheus/pp/go/util"
@@ -18,6 +18,16 @@ import (
 // 	// IndexWriter() IndexWriter
 // }
 
+const (
+	writeRetryTimeout        = 5 * time.Minute
+	maxAddIter        uint32 = 5
+)
+
+const (
+	// BlockWrite name of task.
+	BlockWrite = "block_write"
+)
+
 // HeadBlockWriter writes block on disk from [Head].
 type HeadBlockWriter[TBlock any] interface {
 	Write(block TBlock) error
@@ -27,15 +37,83 @@ type WriteNotifier interface {
 	NotifyWritten()
 }
 
+// GenericTask the minimum required task [Generic] implementation.
+type GenericTask interface {
+	// Wait for the task to complete on all shards.
+	Wait() error
+}
+
+//
+// DataStorage
+//
+
+// DataStorage the minimum required [DataStorage] implementation.
+type DataStorage interface {
+	// TODO
+}
+
+//
+// LSS
+//
+
+// LSS the minimum required [LSS] implementation.
+type LSS interface {
+	// TODO
+}
+
+//
+// Shard
+//
+
+// Shard the minimum required head [Shard] implementation.
+type Shard[TDataStorage DataStorage, TLSS LSS] interface {
+	// DataStorage returns shard [DataStorage].
+	DataStorage() TDataStorage
+
+	// LSS returns shard labelset storage [LSS].
+	LSS() TLSS
+}
+
+//
+// Head
+//
+
+// Head the minimum required [Head] implementation.
+type Head[
+	TGenericTask GenericTask,
+	TDataStorage DataStorage,
+	TLSS LSS,
+	TShard Shard[TDataStorage, TLSS],
+] interface {
+	// CreateTask create a task for operations on the [Head] shards.
+	CreateTask(taskName string, shardFn func(shard TShard) error) TGenericTask
+
+	// Enqueue the task to be executed on shards [Head].
+	Enqueue(t TGenericTask)
+
+	// ID returns id [Head].
+	ID() string
+
+	// String serialize as string.
+	String() string
+}
+
 type HeadBlockBuilder[TBlock any] func() TBlock
 
-type Keeper[TBlock any] struct {
+type Keeper[
+	TGenericTask GenericTask,
+	TDataStorage DataStorage,
+	TLSS LSS,
+	TShard Shard[TDataStorage, TLSS],
+	THead Head[TGenericTask, TDataStorage, TLSS, TShard],
+	TBlock any,
+] struct {
 	hbWriter         HeadBlockWriter[TBlock]
 	headBlockBuilder HeadBlockBuilder[TBlock]
 
 	writeNotifier        WriteNotifier
 	mtx                  sync.Mutex
-	heads                []relabeler.Head
+	heads                []THead
 	headRetentionTimeout time.Duration
 
 	writeTimer   clockwork.Timer
@@ -49,7 +127,18 @@ type Keeper[TBlock any] struct {
 	querierMetrics          *querier.Metrics
 }
 
-func (k *Keeper[TBlock]) write() bool {
+func (k *Keeper[TGenericTask, TDataStorage, TLSS, TShard, THead, TBlock]) Add(head THead) {
+	k.mtx.Lock()
+	k.heads = append(k.heads, head)
+	logger.Infof("QUERYABLE STORAGE: head %s added", head.String())
+	k.mtx.Unlock()
+
+	if atomic.AddUint32(&k.addCount, 1) < maxAddIter {
+		k.writeTimer.Reset(k.writeTimeout)
+	}
+}
+
+func (k *Keeper[TGenericTask, TDataStorage, TLSS, TShard, THead, TBlock]) write() bool {
 	k.mtx.Lock()
 	lenHeads := len(k.heads)
 	if lenHeads == 0 {
@@ -57,7 +146,7 @@ func (k *Keeper[TBlock]) write() bool {
 		k.mtx.Unlock()
 		return true
 	}
-	heads := make([]relabeler.Head, lenHeads)
+	heads := make([]THead, lenHeads)
 	copy(heads, k.heads)
 	k.mtx.Unlock()
 
@@ -71,27 +160,27 @@ func (k *Keeper[TBlock]) write() bool {
 			shouldNotify = true
 			continue
 		}
-		if err := head.Flush(); err != nil {
-			logger.Errorf("QUERYABLE STORAGE: failed to flush head %s: %s", head.String(), err.Error())
-			successful = false
-			continue
-		}
-		if err := head.Rotate(); err != nil {
-			logger.Errorf("QUERYABLE STORAGE: failed to rotate head %s: %s", head.String(), err.Error())
-			successful = false
-			continue
-		}
+		// TODO
+		// if err := head.Flush(); err != nil {
+		// 	logger.Errorf("QUERYABLE STORAGE: failed to flush head %s: %s", head.String(), err.Error())
+		// 	successful = false
+		// 	continue
+		// }
+		// if err := head.Rotate(); err != nil {
+		// 	logger.Errorf("QUERYABLE STORAGE: failed to rotate head %s: %s", head.String(), err.Error())
+		// 	successful = false
+		// 	continue
+		// }
 
 		tBlockWrite := head.CreateTask(
-			relabeler.BlockWrite,
-			func(shard relabeler.Shard) error {
-				shard.LSSLock()
-				defer shard.LSSUnlock()
+			BlockWrite,
+			func(shard TShard) error {
+				// shard.LSSLock()
+				// defer shard.LSSUnlock()
 
 				bl := k.headBlockBuilder() // relabeler.NewBlock(shard.LSS().Raw(), shard.DataStorage().Raw())
 				return k.hbWriter.Write(bl)
 			},
-			relabeler.ForLSSTask,
 		)
 		head.Enqueue(tBlockWrite)
 		if err := tBlockWrite.Wait(); err != nil {
@@ -122,12 +211,15 @@ func (k *Keeper[TBlock]) write() bool {
 	return successful
 }
 
-func (k *Keeper[TBlock]) headIsOutdated(head relabeler.Head) bool {
-	headMaxTimestampMs := head.Status(1).HeadStats.MaxTime
-	return k.clock.Now().Sub(time.Unix(headMaxTimestampMs/1000, 0)) > k.maxRetentionDuration
+func (k *Keeper[TGenericTask, TDataStorage, TLSS, TShard, THead, TBlock]) headIsOutdated(head THead) bool {
+	// TODO
+	// headMaxTimestampMs := head.Status(1).HeadStats.MaxTime
+	// return k.clock.Now().Sub(time.Unix(headMaxTimestampMs/1000, 0)) > k.maxRetentionDuration
+
+	return false
 }
 
-func (k *Keeper[TBlock]) shrink(persisted ...string) {
+func (k *Keeper[TGenericTask, TDataStorage, TLSS, TShard, THead, TBlock]) shrink(persisted ...string) {
 	k.mtx.Lock()
 	defer k.mtx.Unlock()
 
@@ -136,11 +228,12 @@ func (k *Keeper[TBlock]) shrink(persisted ...string) {
 		persistedMap[headID] = struct{}{}
 	}
 
-	var heads []relabeler.Head
+	heads := make([]THead, len(k.heads))
 	for _, head := range k.heads {
 		if _, ok := persistedMap[head.ID()]; ok {
-			_ = head.Close()
-			_ = head.Discard()
+			// TODO
+			// _ = head.Close()
+			// _ = head.Discard()
 			logger.Infof("QUERYABLE STORAGE: head %s persisted, closed and discarded", head.String())
 			continue
 		}

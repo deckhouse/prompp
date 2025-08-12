@@ -1119,3 +1119,241 @@ func (s *State) resetStaleNansStates(numberOfShards uint16, equaledGeneration bo
 		)
 	}
 }
+
+//
+// PerGoroutineRelabeler
+//
+
+// PerGoroutineRelabeler go wrapper for C-PerGoroutineRelabeler, relabeler for shard goroutines.
+type PerGoroutineRelabeler struct {
+	cptr              uintptr
+	gcDestroyDetector *uint64
+}
+
+// NewPerGoroutineRelabeler init new [PerGoroutineRelabeler].
+func NewPerGoroutineRelabeler(
+	numberOfShards, shardID uint16,
+) *PerGoroutineRelabeler {
+	pgr := &PerGoroutineRelabeler{
+		cptr:              prometheusPerGoroutineRelabelerCtor(numberOfShards, shardID),
+		gcDestroyDetector: &gcDestroyDetector,
+	}
+	runtime.SetFinalizer(pgr, func(r *PerGoroutineRelabeler) {
+		prometheusPerShardRelabelerDtor(r.cptr)
+	})
+
+	return pgr
+}
+
+// AppendRelabelerSeries add relabeled ls to lss, add to result and add to cache update(second stage).
+func (pgr *PerGoroutineRelabeler) AppendRelabelerSeries(
+	ctx context.Context,
+	targetLss *LabelSetStorage,
+	shardsInnerSeries []*InnerSeries,
+	shardsRelabeledSeries []*RelabeledSeries,
+	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
+) (bool, error) {
+	if ctx.Err() != nil {
+		return false, ctx.Err()
+	}
+
+	exception, hasReallocations := prometheusPerGoroutineRelabelerAppendRelabelerSeries(
+		pgr.cptr,
+		targetLss.Pointer(),
+		shardsInnerSeries,
+		shardsRelabeledSeries,
+		shardsRelabelerStateUpdate,
+	)
+
+	return hasReallocations, handleException(exception)
+}
+
+// InputRelabeling relabeling incoming hashdex(first stage).
+func (pgr *PerGoroutineRelabeler) InputRelabeling(
+	ctx context.Context,
+	statelessRelabeler *StatelessRelabeler,
+	inputLss *LabelSetStorage,
+	targetLss *LabelSetStorage,
+	cache *Cache,
+	options RelabelerOptions,
+	shardedData ShardedData,
+	shardsInnerSeries []*InnerSeries,
+	shardsRelabeledSeries []*RelabeledSeries,
+) (RelabelerStats, bool, error) {
+	if ctx.Err() != nil {
+		return RelabelerStats{}, false, ctx.Err()
+	}
+
+	cptrContainer, ok := shardedData.(cptrable)
+	if !ok {
+		return RelabelerStats{}, false, ErrMustImplementCptrable
+	}
+
+	stats, exception, hasReallocations := prometheusPerGoroutineRelabelerInputRelabeling(
+		pgr.cptr,
+		statelessRelabeler.Pointer(),
+		inputLss.Pointer(),
+		targetLss.Pointer(),
+		cache.cPointer,
+		cptrContainer.cptr(),
+		options,
+		shardsInnerSeries,
+		shardsRelabeledSeries,
+	)
+	runtime.KeepAlive(pgr)
+	runtime.KeepAlive(statelessRelabeler)
+	runtime.KeepAlive(inputLss)
+	runtime.KeepAlive(targetLss)
+	runtime.KeepAlive(cache)
+	runtime.KeepAlive(cptrContainer)
+
+	return stats, hasReallocations, handleException(exception)
+}
+
+// InputRelabelingFromCache relabeling incoming hashdex(first stage) from cache.
+func (pgr *PerGoroutineRelabeler) InputRelabelingFromCache(
+	ctx context.Context,
+	inputLss *LabelSetStorage,
+	targetLss *LabelSetStorage,
+	cache *Cache,
+	options RelabelerOptions,
+	shardedData ShardedData,
+	shardsInnerSeries []*InnerSeries,
+) (RelabelerStats, bool, error) {
+	if ctx.Err() != nil {
+		return RelabelerStats{}, false, ctx.Err()
+	}
+
+	cptrContainer, ok := shardedData.(cptrable)
+	if !ok {
+		return RelabelerStats{}, false, ErrMustImplementCptrable
+	}
+
+	stats, exception, ok := prometheusPerGoroutineRelabelerInputRelabelingFromCache(
+		pgr.cptr,
+		inputLss.Pointer(),
+		targetLss.Pointer(),
+		cache.cPointer,
+		cptrContainer.cptr(),
+		options,
+		shardsInnerSeries,
+	)
+	runtime.KeepAlive(pgr)
+	runtime.KeepAlive(inputLss)
+	runtime.KeepAlive(targetLss)
+	runtime.KeepAlive(cache)
+	runtime.KeepAlive(cptrContainer)
+
+	return stats, ok, handleException(exception)
+}
+
+// InputRelabelingWithStalenans relabeling incoming hashdex(first stage) with state stalenans.
+func (pgr *PerGoroutineRelabeler) InputRelabelingWithStalenans(
+	ctx context.Context,
+	statelessRelabeler *StatelessRelabeler,
+	inputLss *LabelSetStorage,
+	targetLss *LabelSetStorage,
+	cache *Cache,
+	options RelabelerOptions,
+	staleNansState *StaleNansState,
+	defTimestamp int64,
+	shardedData ShardedData,
+	shardsInnerSeries []*InnerSeries,
+	shardsRelabeledSeries []*RelabeledSeries,
+) (RelabelerStats, bool, error) {
+	if ctx.Err() != nil {
+		return RelabelerStats{}, false, ctx.Err()
+	}
+
+	cptrContainer, ok := shardedData.(cptrable)
+	if !ok {
+		return RelabelerStats{}, false, ErrMustImplementCptrable
+	}
+	stats, exception, hasReallocations := prometheusPerGoroutineRelabelerInputRelabelingWithStalenans(
+		pgr.cptr,
+		statelessRelabeler.Pointer(),
+		inputLss.Pointer(),
+		targetLss.Pointer(),
+		cache.cPointer,
+		cptrContainer.cptr(),
+		staleNansState.state,
+		defTimestamp,
+		options,
+		shardsInnerSeries,
+		shardsRelabeledSeries,
+	)
+	runtime.KeepAlive(pgr)
+	runtime.KeepAlive(statelessRelabeler)
+	runtime.KeepAlive(inputLss)
+	runtime.KeepAlive(targetLss)
+	runtime.KeepAlive(cache)
+	runtime.KeepAlive(cptrContainer)
+	runtime.KeepAlive(staleNansState)
+
+	return stats, hasReallocations, handleException(exception)
+}
+
+// InputRelabelingWithStalenansFromCache relabeling incoming hashdex(first stage) from cache with state stalenans.
+func (pgr *PerGoroutineRelabeler) InputRelabelingWithStalenansFromCache(
+	ctx context.Context,
+	inputLss *LabelSetStorage,
+	targetLss *LabelSetStorage,
+	cache *Cache,
+	options RelabelerOptions,
+	staleNansState *StaleNansState,
+	defTimestamp int64,
+	shardedData ShardedData,
+	shardsInnerSeries []*InnerSeries,
+) (RelabelerStats, bool, error) {
+	if ctx.Err() != nil {
+		return RelabelerStats{}, false, ctx.Err()
+	}
+
+	cptrContainer, ok := shardedData.(cptrable)
+	if !ok {
+		return RelabelerStats{}, false, ErrMustImplementCptrable
+	}
+
+	stats, exception, ok := prometheusPerGoroutineRelabelerInputRelabelingWithStalenansFromCache(
+		pgr.cptr,
+		inputLss.Pointer(),
+		targetLss.Pointer(),
+		cache.cPointer,
+		cptrContainer.cptr(),
+		staleNansState.state,
+		defTimestamp,
+		options,
+		shardsInnerSeries,
+	)
+
+	runtime.KeepAlive(pgr)
+	runtime.KeepAlive(inputLss)
+	runtime.KeepAlive(targetLss)
+	runtime.KeepAlive(cache)
+	runtime.KeepAlive(cptrContainer)
+	runtime.KeepAlive(staleNansState)
+
+	return stats, ok, handleException(exception)
+}
+
+// UpdateRelabelerState add to cache relabled data(third stage).
+func (pgr *PerGoroutineRelabeler) UpdateRelabelerState(
+	ctx context.Context,
+	cache *Cache,
+	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
+) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	exception := prometheusPerGoroutineRelabelerUpdateRelabelerState(
+		shardsRelabelerStateUpdate,
+		pgr.cptr,
+		cache.cPointer,
+	)
+
+	runtime.KeepAlive(pgr)
+	runtime.KeepAlive(cache)
+
+	return handleException(exception)
+}
