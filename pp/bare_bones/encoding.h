@@ -22,10 +22,10 @@ class RLEBackend {
   using DataSequence = Container;
 
   class Encoder {
-    using value_type = typename DataSequence::value_type;
+    using value_type = DataSequence::value_type;
 
-    value_type count_ = std::numeric_limits<value_type>::max();
-    value_type last_;
+    value_type count_{std::numeric_limits<value_type>::max()};
+    value_type last_{std::numeric_limits<value_type>::max()};
 
    public:
     PROMPP_ALWAYS_INLINE Encoder() noexcept = default;
