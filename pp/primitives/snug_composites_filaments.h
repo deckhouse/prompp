@@ -966,7 +966,7 @@ class LabelSet {
     }
 
     // check that streamvbyte data is in range
-    auto data_size = BareBones::StreamVByte::decode_data_size<BareBones::StreamVByte::Codec1234>(
+    const uint32_t data_size = BareBones::StreamVByte::decode_data_size<BareBones::StreamVByte::Codec1234>(
         lns.size(), data.symbols_ids_sequences.begin() + pos_ - data.shrinked_size_);
     if (pos_ - data.shrinked_size_ + keys_size + data_size > data.symbols_ids_sequences.size()) {
       throw BareBones::Exception(0xd02e54dac8e1d328, "LabelSets data validation error: expected LabelSets values length is out of data symbols vector range");
