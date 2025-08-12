@@ -102,10 +102,10 @@ struct MemoryControlBlock {
   using SizeType = uint32_t;
 
   MemoryControlBlock() = default;
-  MemoryControlBlock(const MemoryControlBlock&) = delete;
+  MemoryControlBlock(const MemoryControlBlock& other) : data{nullptr}, data_size{other.data_size} {};
   MemoryControlBlock(MemoryControlBlock&& other) noexcept : data(std::exchange(other.data, nullptr)), data_size(std::exchange(other.data_size, 0)) {}
 
-  MemoryControlBlock& operator=(const MemoryControlBlock&) = delete;
+  MemoryControlBlock& operator=(const MemoryControlBlock&) { return *this; }
   PROMPP_ALWAYS_INLINE MemoryControlBlock& operator=(MemoryControlBlock&& other) noexcept {
     if (this != &other) [[likely]] {
       data = std::exchange(other.data, nullptr);
@@ -124,11 +124,18 @@ struct MemoryControlBlockWithItemCount {
   using SizeType = uint32_t;
 
   MemoryControlBlockWithItemCount() = default;
-  MemoryControlBlockWithItemCount(const MemoryControlBlockWithItemCount&) = delete;
+  MemoryControlBlockWithItemCount(const MemoryControlBlockWithItemCount& other) : data{nullptr}, data_size{other.data_size}, items_count{other.items_count} {};
   MemoryControlBlockWithItemCount(MemoryControlBlockWithItemCount&& other) noexcept
       : data(std::exchange(other.data, nullptr)), data_size(std::exchange(other.data_size, 0)), items_count(std::exchange(other.items_count, 0)) {}
 
-  MemoryControlBlockWithItemCount& operator=(const MemoryControlBlockWithItemCount&) = delete;
+  MemoryControlBlockWithItemCount& operator=(const MemoryControlBlockWithItemCount& other) {
+    if (this != &other) [[likely]] {
+      items_count = other.items_count;
+    }
+
+    return *this;
+  };
+
   PROMPP_ALWAYS_INLINE MemoryControlBlockWithItemCount& operator=(MemoryControlBlockWithItemCount&& other) noexcept {
     if (this != &other) [[likely]] {
       data = std::exchange(other.data, nullptr);
@@ -151,7 +158,7 @@ class Memory : public GenericMemory<Memory<ControlBlock, T>, typename ControlBlo
   using SizeType = typename ControlBlock<T>::SizeType;
 
   PROMPP_ALWAYS_INLINE Memory() noexcept = default;
-  PROMPP_ALWAYS_INLINE Memory(const Memory& o) noexcept { copy(o); }
+  PROMPP_ALWAYS_INLINE Memory(const Memory& o) noexcept : control_block_(o.control_block_) { copy(o); }
   PROMPP_ALWAYS_INLINE Memory(Memory&& o) noexcept = default;
   PROMPP_ALWAYS_INLINE ~Memory() noexcept { std::free(control_block_.data); }
 
@@ -159,6 +166,8 @@ class Memory : public GenericMemory<Memory<ControlBlock, T>, typename ControlBlo
     if (this != &o) [[likely]] {
       copy(o);
     }
+
+    control_block_ = o.control_block_;
 
     return *this;
   }
