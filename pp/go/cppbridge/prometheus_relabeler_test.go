@@ -1680,3 +1680,71 @@ func (s *StateV2Suite) TestReconfigureWithRemap() {
 	s.Equal(unsafe.Pointer(staleNanState1), unsafe.Pointer(state.StaleNansStateByShard(0)))
 	s.Equal(unsafe.Pointer(staleNanState2), unsafe.Pointer(state.StaleNansStateByShard(1)))
 }
+
+func (s *RelabelerSuite) TestInputPerGoroutineRelabeler() {
+	wr := prompb.WriteRequest{
+		Timeseries: []prompb.TimeSeries{
+			{
+				Labels: []prompb.Label{
+					{Name: "__name__", Value: "value"},
+					{Name: "job", Value: "abc"},
+					{Name: "instance", Value: "value1"},
+				},
+				Samples: []prompb.Sample{
+					{Value: 0.1, Timestamp: time.Now().UnixMilli()},
+				},
+			},
+			{
+				Labels: []prompb.Label{
+					{Name: "__name__", Value: "value"},
+					{Name: "instance", Value: "value1"},
+				},
+				Samples: []prompb.Sample{
+					{Value: 0.1, Timestamp: time.Now().UnixMilli()},
+				},
+			},
+		},
+	}
+	data, err := wr.Marshal()
+	s.Require().NoError(err)
+
+	rCfgs := []*cppbridge.RelabelConfig{
+		{
+			SourceLabels: []string{"job"},
+			Regex:        "abc",
+			Action:       cppbridge.Keep,
+		},
+	}
+
+	inputLss := cppbridge.NewLssStorage()
+	targetLss := cppbridge.NewQueryableLssStorage()
+
+	statelessRelabeler, err := cppbridge.NewStatelessRelabeler(rCfgs)
+	s.Require().NoError(err)
+
+	var numberOfShards uint16 = 1
+	pgr := cppbridge.NewPerGoroutineRelabeler(numberOfShards, 0)
+
+	hlimits := cppbridge.DefaultWALHashdexLimits()
+	h, err := cppbridge.NewWALSnappyProtobufHashdex(snappy.Encode(nil, data), hlimits)
+	s.Require().NoError(err)
+
+	shardsInnerSeries := cppbridge.NewShardsInnerSeries(numberOfShards)
+	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(numberOfShards)
+	cache := cppbridge.NewCache()
+
+	stats, hasReallocations, err := pgr.InputRelabeling(
+		s.baseCtx,
+		statelessRelabeler,
+		inputLss,
+		targetLss,
+		cache,
+		s.options,
+		h,
+		shardsInnerSeries,
+		shardsRelabeledSeries,
+	)
+	s.Require().NoError(err)
+	s.Equal(cppbridge.RelabelerStats{1, 1, 1}, stats)
+	s.True(hasReallocations)
+}
