@@ -128,7 +128,7 @@ struct MemoryControlBlockWithItemCount {
   MemoryControlBlockWithItemCount(MemoryControlBlockWithItemCount&& other) noexcept
       : data(std::exchange(other.data, nullptr)), data_size(std::exchange(other.data_size, 0)), items_count(std::exchange(other.items_count, 0)) {}
 
-  MemoryControlBlockWithItemCount& operator=(const MemoryControlBlockWithItemCount& other) {
+  PROMPP_ALWAYS_INLINE MemoryControlBlockWithItemCount& operator=(const MemoryControlBlockWithItemCount& other) {
     if (this != &other) [[likely]] {
       items_count = other.items_count;
     }
