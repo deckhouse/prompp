@@ -140,7 +140,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   PROMPP_ALWAYS_INLINE static size_t phmap_hash(size_t hash) noexcept { return phmap::phmap_mix<sizeof(size_t)>()(hash); }
 };
 
-template <class DecodingTable, class SortingIndex, class QueryableEncodingBimap, class Range>
+template <class DecodingTable, class SortingIndex, class QueryableEncodingBimap, class SeriesIds>
 class QueryableEncodingBimapCopier {
  public:
   static constexpr auto kInvalidIdFillByte = static_cast<uint8_t>(DecodingTable::kInvalidId);
@@ -177,7 +177,10 @@ class QueryableEncodingBimapCopier {
     BareBones::Vector<ItemList> values;
   };
 
-  QueryableEncodingBimapCopier(const DecodingTable& source, const SortingIndex& sorting_index, const Range& ls_id_range, QueryableEncodingBimap& destination)
+  QueryableEncodingBimapCopier(const DecodingTable& source,
+                               const SortingIndex& sorting_index,
+                               const SeriesIds& ls_id_range,
+                               QueryableEncodingBimap& destination)
       : source_(source), sorting_index_(sorting_index), destination_(destination), ls_id_range_(ls_id_range) {
     assert(destination.size() == 0);
   }
@@ -250,7 +253,7 @@ class QueryableEncodingBimapCopier {
   const DecodingTable& source_;
   const SortingIndex& sorting_index_;
   QueryableEncodingBimap& destination_;
-  const Range& ls_id_range_;
+  const SeriesIds& ls_id_range_;
 };
 
 }  // namespace series_index
