@@ -1,5 +1,5 @@
 --- lib/xxhash.c
-+++ lib/xxhash.c
++++ lib/xxhash_patched.c
 @@ -262,6 +262,7 @@ XXH_PUBLIC_API unsigned XXH_versionNumber (void) { return XXH_VERSION_NUMBER; }
  *********************************************************************/
  static const U32 PRIME32_1 = 2654435761U;
@@ -8,12 +8,12 @@
  static const U32 PRIME32_3 = 3266489917U;
  static const U32 PRIME32_4 =  668265263U;
  static const U32 PRIME32_5 =  374761393U;
-@@ -365,7 +366,7 @@ XXH32_endian_align(const void* input, size_t len, U32 seed,
- 
-     if (len>=16) {
-         const BYTE* const limit = bEnd - 15;
--        U32 v1 = seed + PRIME32_1 + PRIME32_2;
-+        U32 v1 = seed + PRIME32_1_2;
-         U32 v2 = seed + PRIME32_2;
-         U32 v3 = seed + 0;
-         U32 v4 = seed - PRIME32_1;
+@@ -438,7 +439,7 @@ XXH_PUBLIC_API XXH_errorcode XXH32_reset(XXH32_state_t* statePtr, unsigned int s
+ {
+     XXH32_state_t state;   /* using a local state to memcpy() in order to avoid strict-aliasing warnings */
+     memset(&state, 0, sizeof(state));
+-    state.v1 = seed + PRIME32_1 + PRIME32_2;
++    state.v1 = seed + PRIME32_1_2;
+     state.v2 = seed + PRIME32_2;
+     state.v3 = seed + 0;
+     state.v4 = seed - PRIME32_1;
