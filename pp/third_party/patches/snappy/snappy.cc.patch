@@ -1,6 +1,14 @@
 --- snappy.cc
 +++ snappy.cc
-@@ -1167,9 +1167,8 @@ inline uint32_t ExtractOffset(uint32_t val, size_t tag_type) {
+@@ -387,6 +387,7 @@ static inline bool Copy64BytesWithPatternExtension(char* dst, size_t offset) {
+     }();
+     offset = pattern_sizes[offset];
+     for (int i = 1; i < 4; i++) {
++      // NOLINTNEXTLINE
+       std::memcpy(dst + i * 16, dst + i * 16 - offset, 16);
+     }
+     return true;
+@@ -1167,9 +1168,8 @@ inline uint32_t ExtractOffset(uint32_t val, size_t tag_type) {
  #if defined(__x86_64__)
    constexpr uint64_t kExtractMasksCombined = 0x0000FFFF00FF0000ull;
    uint16_t result;
@@ -12,7 +20,7 @@
    return val & result;
  #elif defined(__aarch64__)
    constexpr uint64_t kExtractMasksCombined = 0x0000FFFF00FF0000ull;
-@@ -1312,7 +1311,7 @@ class SnappyDecompressor {
+@@ -1312,7 +1312,7 @@ class SnappyDecompressor {
    const char* ip_limit_;  // Points just past buffered bytes
    // If ip < ip_limit_min_maxtaglen_ it's safe to read kMaxTagLength from
    // buffer.
@@ -21,7 +29,7 @@
    uint32_t peeked_;                  // Bytes peeked from reader (need to skip)
    bool eof_;                         // Hit end of input without an error?
    char scratch_[kMaximumTagLength];  // See RefillTag().
-@@ -2171,7 +2170,7 @@ class SnappyScatteredWriter {
+@@ -2171,7 +2171,7 @@ class SnappyScatteredWriter {
    // we keep track of all of the generated data as an array of blocks.
    // All of the blocks except the last have length kBlockSize.
    std::vector<char*> blocks_;
