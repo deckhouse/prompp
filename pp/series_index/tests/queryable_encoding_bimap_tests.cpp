@@ -123,7 +123,6 @@ class QueryableEncodingBimapCopierFixture : public QueryableEncodingBimapFixture
 
 TEST_F(QueryableEncodingBimapCopierFixture, EmptyLss) {
   // Arrange
-  lss_.build_deferred_indexes();
   Lss lss_copy;
   Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy);
 

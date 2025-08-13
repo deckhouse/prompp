@@ -164,10 +164,10 @@ class QueryableEncodingBimapCopier {
       values.resize(names_count);
 
       for (auto [value_cache, symbol_table] : std::ranges::views::zip(values, symbols_tables)) {
-        if constexpr (requires(const SymbolsTables& symbols_tables) { symbol_table.size(); }) {
-          resize_and_fill_ids_list(value_cache, symbol_table.size());
-        } else {
+        if constexpr (BareBones::concepts::is_dereferenceable<decltype(symbol_table)>) {
           resize_and_fill_ids_list(value_cache, symbol_table->size());
+        } else {
+          resize_and_fill_ids_list(value_cache, symbol_table.size());
         }
       }
     }
@@ -201,7 +201,7 @@ class QueryableEncodingBimapCopier {
 
   void copy_ls_id_set() {
     for (uint32_t ls_id_new = 0; ls_id_new < destination_.size(); ++ls_id_new) {
-      destination_.ls_id_set_.emplace_hint_cmp(destination_.ls_id_set_.begin(), [&](auto, auto) { return true; }, ls_id_new);
+      destination_.ls_id_set_.emplace_hint_cmp(destination_.ls_id_set_.end(), [&](auto, auto) { return true; }, ls_id_new);
     }
   }
 
