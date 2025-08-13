@@ -211,7 +211,7 @@ class QueryableEncodingBimapCopier {
 
     for (uint32_t ls_id = 0; ls_id < size; ++ls_id) {
       auto label_set = destination_[ls_id];
-      for (auto label = label_set.begin(), end = label_set.end(); label != end; ++label) {
+      for (auto label = label_set.begin(); label != label_set.end; ++label) {
         destination_.reverse_index_.add(label, ls_id);
       }
     }
