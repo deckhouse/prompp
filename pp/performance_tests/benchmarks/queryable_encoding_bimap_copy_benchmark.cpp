@@ -8,18 +8,16 @@
 #include <string>
 #include <vector>
 
-#include "entrypoint/head/lss.h"
 #include "primitives/snug_composites.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
 
 namespace {
-using Lss = series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament,
-                                                 entrypoint::head::SharedVectorWithChangesDetection,
-                                                 series_index::trie::CedarTrie>;
+using Lss =
+    series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, series_index::trie::CedarTrie>;
 
 template <class Src, class SortIndex, class Dst, typename R>
-using LssReadonlyCopier = series_index::QueryableEncodingBimapCopier<Src, SortIndex, Dst, R>;
+using LssCopier = series_index::QueryableEncodingBimapCopier<Src, SortIndex, Dst, R>;
 
 std::string GetWalFileName() {
   if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
@@ -56,12 +54,10 @@ void BM_CopyAllStepsWithTiming(benchmark::State& state) {
 
   static auto lss = LoadLssFromFile();
   lss->build_deferred_indexes();
-  const auto readonly_lss = entrypoint::head::ReadonlyLss(*lss);
-  const auto r = std::views::iota(0u, readonly_lss.size());
 
   for ([[maybe_unused]] auto _ : state) {
     Lss lss_copy;
-    LssReadonlyCopier copier(readonly_lss, readonly_lss.sorting_index(), r, lss_copy);
+    LssCopier copier(*lss, lss->sorting_index(), lss->added_series(), lss_copy);
 
     {
       auto start = steady_clock::now();
