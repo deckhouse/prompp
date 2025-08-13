@@ -14,9 +14,6 @@
 #include "series_index/trie/cedarpp_tree.h"
 
 namespace {
-
-using namespace std::chrono;
-
 using Lss = series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament,
                                                  entrypoint::head::SharedVectorWithChangesDetection,
                                                  series_index::trie::CedarTrie>;
@@ -31,7 +28,7 @@ std::string GetWalFileName() {
   return {};
 }
 
-void mark_all_series_as_added(std::shared_ptr<Lss> lss) {
+void mark_all_series_as_added(const std::shared_ptr<Lss>& lss) {
   for (auto label_set : *lss) {
     lss->find_or_emplace(label_set);
   }
@@ -54,6 +51,9 @@ std::vector<double> build_ls_id_hashset_times;
 std::vector<double> build_reverse_index_times;
 
 void BM_CopyAllStepsWithTiming(benchmark::State& state) {
+  using std::chrono::nanoseconds;
+  using std::chrono::steady_clock;
+
   static auto lss = LoadLssFromFile();
   lss->build_deferred_indexes();
   const auto readonly_lss = entrypoint::head::ReadonlyLss(*lss);
