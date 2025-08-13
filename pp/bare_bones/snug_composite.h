@@ -287,8 +287,8 @@ class GenericDecodingTable {
 
   inline __attribute__((always_inline)) const auto& items() const noexcept { return items_; }
 
-  template <class GenericDecodingTableOther>
-  PROMPP_ALWAYS_INLINE void reserve(const GenericDecodingTableOther& other) {
+  template <class DerivedOther, template <template <class> class> class FilamentOther, template <class> class VectorOther>
+  PROMPP_ALWAYS_INLINE void reserve(const GenericDecodingTable<DerivedOther, FilamentOther, VectorOther>& other) {
     items_.reserve(other.items_.size());
     data_.reserve(other.data_);
   }
