@@ -1,0 +1,19 @@
+--- lib/xxhash.c
++++ lib/xxhash.c
+@@ -262,6 +262,7 @@ XXH_PUBLIC_API unsigned XXH_versionNumber (void) { return XXH_VERSION_NUMBER; }
+ *********************************************************************/
+ static const U32 PRIME32_1 = 2654435761U;
+ static const U32 PRIME32_2 = 2246822519U;
++static const U32 PRIME32_1_2 = PRIME32_1 + PRIME32_2;
+ static const U32 PRIME32_3 = 3266489917U;
+ static const U32 PRIME32_4 =  668265263U;
+ static const U32 PRIME32_5 =  374761393U;
+@@ -365,7 +366,7 @@ XXH32_endian_align(const void* input, size_t len, U32 seed,
+ 
+     if (len>=16) {
+         const BYTE* const limit = bEnd - 15;
+-        U32 v1 = seed + PRIME32_1 + PRIME32_2;
++        U32 v1 = seed + PRIME32_1_2;
+         U32 v2 = seed + PRIME32_2;
+         U32 v3 = seed + 0;
+         U32 v4 = seed - PRIME32_1;
