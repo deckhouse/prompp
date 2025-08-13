@@ -1,0 +1,18 @@
+--- a/include/jemalloc/internal/util.h
++++ b/include/jemalloc/internal/util.h
+@@ -80,6 +80,7 @@ util_prefetch_read(void *ptr) {
+ #ifdef __GNUC__
+ 	if (config_debug) {
+ 		/* Enforce the "valid ptr" requirement. */
++	        // NOLINTNEXTLINE
+ 		*(volatile char *)ptr;
+ 	}
+ 	__builtin_prefetch(ptr, /* read or write */ 0, /* locality hint */ 3);
+@@ -92,6 +93,7 @@ JEMALLOC_ALWAYS_INLINE void
+ util_prefetch_write(void *ptr) {
+ #ifdef __GNUC__
+ 	if (config_debug) {
++	        // NOLINTNEXTLINE
+ 		*(volatile char *)ptr;
+ 	}
+ 	/*
