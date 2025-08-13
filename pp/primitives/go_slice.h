@@ -126,12 +126,20 @@ struct SliceControlBlock {
   using SizeType = size_t;
 
   SliceControlBlock() = default;
-  SliceControlBlock(const SliceControlBlock&) = delete;
+  SliceControlBlock(const SliceControlBlock& other) : data(nullptr), items_count(other.items_count), data_size(other.data_size) {};
 
   SliceControlBlock(SliceControlBlock&& other) noexcept
       : data(std::exchange(other.data, nullptr)), items_count(std::exchange(other.items_count, 0)), data_size(std::exchange(other.data_size, 0)) {}
 
-  SliceControlBlock& operator=(const SliceControlBlock&) = delete;
+  SliceControlBlock& operator=(const SliceControlBlock& other) {
+    if (this != &other) [[likely]] {
+      data_size = other.data_size;
+      items_count = other.items_count;
+    }
+
+    return *this;
+  }
+
   PROMPP_ALWAYS_INLINE SliceControlBlock& operator=(SliceControlBlock&& other) noexcept {
     if (this != &other) [[likely]] {
       data = std::exchange(other.data, nullptr);
