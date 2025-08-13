@@ -57,6 +57,7 @@ func NewQuerier(
 func (q *Querier) LabelValues(
 	ctx context.Context,
 	name string,
+	hints *storage.LabelHints,
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	return labelValues(
@@ -66,6 +67,7 @@ func (q *Querier) LabelValues(
 		q.deduplicatorFactory,
 		q.metrics,
 		relabeler.LSSLabelValuesQuerier,
+		hints,
 		matchers...,
 	)
 }
@@ -77,6 +79,7 @@ func labelValues(
 	deduplicatorFactory DeduplicatorFactory,
 	metrics *Metrics,
 	taskName string,
+	hints *storage.LabelHints,
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	start := time.Now()
@@ -131,14 +134,18 @@ func labelValues(
 	lvs := dedup.Values()
 	sort.Strings(lvs)
 
+	if hints.Limit > 0 && hints.Limit < len(lvs) {
+		return lvs[:hints.Limit], anns, nil
+	}
 	return lvs, anns, nil
 }
 
 func (q *Querier) LabelNames(
 	ctx context.Context,
+	hints *storage.LabelHints,
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
-	return labelNames(ctx, q.head, q.deduplicatorFactory, q.metrics, relabeler.LSSLabelNamesQuerier, matchers...)
+	return labelNames(ctx, q.head, q.deduplicatorFactory, q.metrics, relabeler.LSSLabelNamesQuerier, hints, matchers...)
 }
 
 func labelNames(
@@ -147,6 +154,7 @@ func labelNames(
 	deduplicatorFactory DeduplicatorFactory,
 	metrics *Metrics,
 	taskName string,
+	hints *storage.LabelHints,
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	start := time.Now()
@@ -201,6 +209,9 @@ func labelNames(
 	lns := dedup.Values()
 	sort.Strings(lns)
 
+	if hints.Limit > 0 && hints.Limit < len(lns) {
+		return lns[:hints.Limit], anns, nil
+	}
 	return lns, anns, nil
 }
 

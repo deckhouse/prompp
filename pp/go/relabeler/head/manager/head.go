@@ -11,6 +11,7 @@ import (
 
 type DiscardableRotatableHead struct {
 	head       relabeler.Head
+	discarded  bool
 	onRotate   func(id string, err error) error
 	onDiscard  func(id string) error
 	afterClose func(id string) error
@@ -82,6 +83,9 @@ func (h *DiscardableRotatableHead) Status(limit int) relabeler.HeadStatus {
 }
 
 func (h *DiscardableRotatableHead) Rotate() error {
+	if h.discarded {
+		return relabeler.ErrAlreadyDiscarded
+	}
 	err := h.head.Rotate()
 	if h.onRotate != nil {
 		err = errors.Join(err, h.onRotate(h.ID(), err))
@@ -99,6 +103,7 @@ func (h *DiscardableRotatableHead) Close() error {
 }
 
 func (h *DiscardableRotatableHead) Discard() (err error) {
+	h.discarded = true
 	err = h.head.Discard()
 	if h.onDiscard != nil {
 		err = errors.Join(err, h.onDiscard(h.ID()))

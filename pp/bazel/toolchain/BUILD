@@ -152,6 +152,7 @@ cc_toolchain_config(
         "/usr/lib/gcc/x86_64-alpine-linux-musl",
         "/usr/lib/gcc/x86_64-linux-gnu/13",
         "/usr/include",
+        "/usr/lib/linux",
     ],
     march = ":march",
     with_asan = ":asan",
@@ -163,6 +164,7 @@ cc_toolchain_config(
         "/usr/lib/gcc/aarch64-alpine-linux-musl/13.2.1/include/",
         "/usr/lib/gcc/aarch64-linux-gnu/13",
         "/usr/include",
+        "/usr/lib/linux",
     ],
     march = ":march",
     with_asan = ":asan",
@@ -173,6 +175,7 @@ cc_toolchain_config(
     builtin_include_directories = [
         "/usr/lib/gcc/x86_64-linux-gnu/14",
         "/usr/include",
+        "/usr/lib/linux",
     ],
     march = ":march",
     with_asan = ":asan",
@@ -183,6 +186,7 @@ cc_toolchain_config(
     builtin_include_directories = [
         "/usr/lib/gcc/aarch64-linux-gnu/14",
         "/usr/include",
+        "/usr/lib/linux",
     ],
     march = ":march",
     with_asan = ":asan",

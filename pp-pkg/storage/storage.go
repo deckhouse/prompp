@@ -156,6 +156,7 @@ var _ storage.LabelQuerier = (*noOpLabelQuerier)(nil)
 func (noOpLabelQuerier) LabelValues(
 	_ context.Context,
 	_ string,
+	_ *storage.LabelHints,
 	_ ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	return nil, nil, nil
@@ -164,6 +165,7 @@ func (noOpLabelQuerier) LabelValues(
 // LabelValues implements storage.LabelQuerier.
 func (noOpLabelQuerier) LabelNames(
 	_ context.Context,
+	_ *storage.LabelHints,
 	_ ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	return nil, nil, nil
