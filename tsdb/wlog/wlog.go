@@ -932,6 +932,9 @@ func listSegments(dir string) (refs []segmentRef, err error) {
 		}
 		refs = append(refs, segmentRef{name: fn, index: k})
 	}
+	if len(refs) == 0 {
+		return refs, nil // PP_CHANGES.md: fast exit
+	}
 	slices.SortFunc(refs, func(a, b segmentRef) int {
 		return a.index - b.index
 	})
