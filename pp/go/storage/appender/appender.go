@@ -229,7 +229,6 @@ func (a *Appender[TGenericTask, TDataStorage, TLSS, TShard, THead]) Append(
 func (a *Appender[TGenericTask, TDataStorage, TLSS, TShard, THead]) inputRelabelingStage(
 	ctx context.Context,
 	state *cppbridge.State,
-	rd *RelabelerData,
 	incomingData *DestructibleIncomingData,
 	shardedInnerSeries *ShardedInnerSeries,
 	shardedRelabeledSeries *ShardedRelabeledSeries,

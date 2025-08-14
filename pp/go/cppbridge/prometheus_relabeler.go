@@ -950,10 +950,15 @@ func (c *Cache) ResetTo() {
 	runtime.KeepAlive(c)
 }
 
+//
+// State
+//
+
 // State state of relabelers per shard.
 type State struct {
 	caches              []*Cache
 	staleNansStates     []*StaleNansState
+	statelessRelabeler  *StatelessRelabeler
 	defTimestamp        int64
 	generationRelabeler uint64
 	generationHead      uint64
@@ -991,6 +996,59 @@ func (s *State) CacheByShard(shardID uint16) *Cache {
 	return s.caches[shardID]
 }
 
+// DefTimestamp return timestamp for scrape time and stalenan.
+func (s *State) DefTimestamp() int64 {
+	if s.defTimestamp == 0 {
+		return time.Now().UnixMilli()
+	}
+
+	return s.defTimestamp
+}
+
+// DisableTrackStaleness disable track stalenans.
+func (s *State) DisableTrackStaleness() {
+	s.trackStaleness = false
+}
+
+// EnableTrackStaleness enable track stalenans.
+func (s *State) EnableTrackStaleness() {
+	s.trackStaleness = true
+}
+
+// Reconfigure recreate caches and stalenans states if need and set new generations.
+func (s *State) Reconfigure(
+	generationRelabeler uint64,
+	generationHead uint64,
+	numberOfShards uint16,
+) {
+	equaledGeneration := generationRelabeler == s.generationRelabeler &&
+		generationHead == s.generationHead
+	s.resetCaches(numberOfShards, equaledGeneration)
+	s.resetStaleNansStates(numberOfShards, equaledGeneration)
+	s.generationRelabeler = generationRelabeler
+	s.generationHead = generationHead
+}
+
+// RelabelerOptions return Options for relabeler.
+func (s *State) RelabelerOptions() RelabelerOptions {
+	return s.options
+}
+
+// SetDefTimestamp set timestamp for scrape time and stalenan.
+func (s *State) SetDefTimestamp(ts int64) {
+	s.defTimestamp = ts
+}
+
+// SetRelabelerOptions set Options for relabeler.
+func (s *State) SetRelabelerOptions(options *RelabelerOptions) {
+	s.options = *options
+}
+
+// SetStatelessRelabeler set [StatelessRelabeler] for [PerGoroutineRelabeler].
+func (s *State) SetStatelessRelabeler(relabeler *StatelessRelabeler) {
+	s.statelessRelabeler = relabeler
+}
+
 // StaleNansStateByShard return SourceStaleNansState for shard.
 func (s *State) StaleNansStateByShard(shardID uint16) *StaleNansState {
 	if int(shardID) >= len(s.staleNansStates) {
@@ -1008,57 +1066,15 @@ func (s *State) StaleNansStateByShard(shardID uint16) *StaleNansState {
 	return s.staleNansStates[shardID]
 }
 
-// DefTimestamp return timestamp for scrape time and stalenan.
-func (s *State) DefTimestamp() int64 {
-	if s.defTimestamp == 0 {
-		return time.Now().UnixMilli()
-	}
-
-	return s.defTimestamp
-}
-
-// SetDefTimestamp set timestamp for scrape time and stalenan.
-func (s *State) SetDefTimestamp(ts int64) {
-	s.defTimestamp = ts
-}
-
-// EnableTrackStaleness enable track stalenans.
-func (s *State) EnableTrackStaleness() {
-	s.trackStaleness = true
-}
-
-// DisableTrackStaleness disable track stalenans.
-func (s *State) DisableTrackStaleness() {
-	s.trackStaleness = false
+// StatelessRelabeler returns [StatelessRelabeler] for [PerGoroutineRelabeler].
+func (s *State) StatelessRelabeler() *StatelessRelabeler {
+	// TODO validate nil and reconfigure
+	return s.statelessRelabeler
 }
 
 // TrackStaleness return state track stalenans.
 func (s *State) TrackStaleness() bool {
 	return s.trackStaleness
-}
-
-// RelabelerOptions return Options for relabeler.
-func (s *State) RelabelerOptions() RelabelerOptions {
-	return s.options
-}
-
-// SetRelabelerOptions set Options for relabeler.
-func (s *State) SetRelabelerOptions(options *RelabelerOptions) {
-	s.options = *options
-}
-
-// Reconfigure recreate caches and stalenans states if need and set new generations.
-func (s *State) Reconfigure(
-	generationRelabeler uint64,
-	generationHead uint64,
-	numberOfShards uint16,
-) {
-	equaledGeneration := generationRelabeler == s.generationRelabeler &&
-		generationHead == s.generationHead
-	s.resetCaches(numberOfShards, equaledGeneration)
-	s.resetStaleNansStates(numberOfShards, equaledGeneration)
-	s.generationRelabeler = generationRelabeler
-	s.generationHead = generationHead
 }
 
 // resetCaches recreate Caches.
@@ -1173,7 +1189,6 @@ func (pgr *PerGoroutineRelabeler) AppendRelabelerSeries(
 // InputRelabeling relabeling incoming hashdex(first stage).
 func (pgr *PerGoroutineRelabeler) InputRelabeling(
 	ctx context.Context,
-	statelessRelabeler *StatelessRelabeler,
 	inputLss *LabelSetStorage,
 	targetLss *LabelSetStorage,
 	state *State,
@@ -1192,7 +1207,7 @@ func (pgr *PerGoroutineRelabeler) InputRelabeling(
 
 	stats, exception, hasReallocations := prometheusPerGoroutineRelabelerInputRelabeling(
 		pgr.cptr,
-		statelessRelabeler.Pointer(),
+		state.StatelessRelabeler().Pointer(),
 		inputLss.Pointer(),
 		targetLss.Pointer(),
 		state.CacheByShard(pgr.shardID).cPointer,
@@ -1202,7 +1217,6 @@ func (pgr *PerGoroutineRelabeler) InputRelabeling(
 		shardsRelabeledSeries,
 	)
 	runtime.KeepAlive(pgr)
-	runtime.KeepAlive(statelessRelabeler)
 	runtime.KeepAlive(inputLss)
 	runtime.KeepAlive(targetLss)
 	runtime.KeepAlive(state)
@@ -1250,7 +1264,6 @@ func (pgr *PerGoroutineRelabeler) InputRelabelingFromCache(
 // InputRelabelingWithStalenans relabeling incoming hashdex(first stage) with state stalenans.
 func (pgr *PerGoroutineRelabeler) InputRelabelingWithStalenans(
 	ctx context.Context,
-	statelessRelabeler *StatelessRelabeler,
 	inputLss *LabelSetStorage,
 	targetLss *LabelSetStorage,
 	state *State,
@@ -1268,7 +1281,7 @@ func (pgr *PerGoroutineRelabeler) InputRelabelingWithStalenans(
 	}
 	stats, exception, hasReallocations := prometheusPerGoroutineRelabelerInputRelabelingWithStalenans(
 		pgr.cptr,
-		statelessRelabeler.Pointer(),
+		state.StatelessRelabeler().Pointer(),
 		inputLss.Pointer(),
 		targetLss.Pointer(),
 		state.CacheByShard(pgr.shardID).cPointer,
@@ -1280,7 +1293,6 @@ func (pgr *PerGoroutineRelabeler) InputRelabelingWithStalenans(
 		shardsRelabeledSeries,
 	)
 	runtime.KeepAlive(pgr)
-	runtime.KeepAlive(statelessRelabeler)
 	runtime.KeepAlive(inputLss)
 	runtime.KeepAlive(targetLss)
 	runtime.KeepAlive(state)
