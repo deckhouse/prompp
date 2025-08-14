@@ -9,7 +9,7 @@
                   (sizeof(int)+sizeof(int)) * 2;  // q0, q1
    mem_budget_ -= nstack * sizeof(int);  // stack
    if (mem_budget_ < 0) {
-@@ -762,7 +762,7 @@ DFA::State* DFA::CachedState(int* inst, int ninst, uint32_t flag) {
+@@ -762,10 +762,10 @@ DFA::State* DFA::CachedState(int* inst, int ninst, uint32_t flag) {
    // the state cache hash table seems to incur about 18 bytes per
    // State*. Worst case for non-small sets is it being half full, where each
    // value present takes up 1 byte hash sample plus the pointer itself.
@@ -17,4 +17,8 @@
 +  const int64_t kStateCacheOverhead = 18;
    int nnext = prog_->bytemap_range() + 1;  // + 1 for kByteEndText slot
    int mem = sizeof(State) + nnext*sizeof(std::atomic<State*>);
-   int instmem = ninst*sizeof(int);
+-  int instmem = ninst*sizeof(int);
++  int64_t instmem = ninst*sizeof(int);
+   if (mem_budget_ < mem + instmem + kStateCacheOverhead) {
+     mem_budget_ = -1;
+     return NULL;
