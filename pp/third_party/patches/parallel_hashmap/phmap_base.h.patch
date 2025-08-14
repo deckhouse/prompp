@@ -1,6 +1,14 @@
 --- parallel_hashmap/phmap_base.h
-+++ parallel_hashmap/phmap_base.h
-@@ -238,7 +238,7 @@ struct negation : std::integral_constant<bool, !T::value> {};
++++ parallel_hashmap/phmap_base_patched.h
+@@ -35,6 +35,7 @@
+ // ---------------------------------------------------------------------------
+ 
+ #include <algorithm>
++#include <array>
+ #include <cassert>
+ #include <cstddef>
+ #include <initializer_list>
+@@ -238,7 +239,7 @@ struct negation : std::integral_constant<bool, !T::value> {};
  
  template <typename T>
  struct is_trivially_destructible
@@ -9,3 +17,11 @@
        std::is_destructible<T>::value> {};
  
  template <typename T>
+@@ -4622,6 +4623,7 @@ union map_slot_type
+     using value_type = std::pair<const K, V>;
+     using mutable_value_type = std::pair<K, V>;
+ 
++    std::array<K, 0> nop{};
+     value_type value;
+     mutable_value_type mutable_value;
+     K key;
