@@ -154,6 +154,13 @@ http_archive(
     name = "re2",
     patches = [
         "//third_party/patches/re2:no-werror.patch",
+        "//third_party/patches/re2:walker-inl.h.patch",
+        "//third_party/patches/re2:dfa.cc.patch",
+        "//third_party/patches/re2:compile.cc.patch",
+        "//third_party/patches/re2:onepass.cc.patch",
+        "//third_party/patches/re2:parse.cc.patch",
+        "//third_party/patches/re2:prefilter.h.patch",
+        "//third_party/patches/re2:regexp.cc.patch",
     ],
     sha256 = "cd191a311b84fcf37310e5cd876845b4bf5aee76fdd755008eef3b6478ce07bb",
     strip_prefix = "re2-2024-02-01/",

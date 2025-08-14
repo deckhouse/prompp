@@ -1,0 +1,11 @@
+--- re2/onepass.cc
++++ re2/onepass_patched.cc
+@@ -609,7 +609,7 @@ bool Prog::IsOnePass() {
+     LOG(ERROR) << "nodes:\n" << dump;
+   }
+ 
+-  dfa_mem_ -= nalloc*statesize;
++  dfa_mem_ -= static_cast<int64_t>(nalloc)*statesize;
+   onepass_nodes_ = PODArray<uint8_t>(nalloc*statesize);
+   memmove(onepass_nodes_.data(), nodes.data(), nalloc*statesize);
+   return true;

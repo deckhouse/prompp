@@ -1,0 +1,11 @@
+--- re2/regexp.cc
++++ re2/regexp_patched.cc
+@@ -186,7 +186,7 @@ void Regexp::AddRuneToString(Rune r) {
+   } else if (nrunes_ >= 8 && (nrunes_ & (nrunes_ - 1)) == 0) {
+     // double on powers of two
+     Rune *old = runes_;
+-    runes_ = new Rune[nrunes_ * 2];
++    runes_ = new Rune[nrunes_ * 2ULL];
+     for (int i = 0; i < nrunes_; i++)
+       runes_[i] = old[i];
+     delete[] old;

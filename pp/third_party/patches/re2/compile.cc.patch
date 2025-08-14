@@ -1,0 +1,11 @@
+--- re2/compile.cc
++++ re2/compile_patched.cc
+@@ -215,7 +215,7 @@ class Compiler : public Regexp::Walker<Frag> {
+   absl::flat_hash_map<uint64_t, int> rune_cache_;
+   Frag rune_range_;
+ 
+-  RE2::Anchor anchor_;  // anchor mode for RE2::Set
++  RE2::Anchor anchor_{RE2::Anchor::UNANCHORED};  // anchor mode for RE2::Set
+ 
+   Compiler(const Compiler&) = delete;
+   Compiler& operator=(const Compiler&) = delete;
