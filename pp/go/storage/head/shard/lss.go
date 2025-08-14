@@ -114,9 +114,8 @@ func (l *LSS) QueryStatus(status *cppbridge.HeadStatus, limit int) {
 	l.locker.RUnlock()
 }
 
-// ResetSnapshot resets the current snapshot.
+// ResetSnapshot resets the current snapshot. Use only WithLock.
 func (l *LSS) ResetSnapshot() {
-	// TODO
 	l.snapshot = nil
 	l.once = sync.Once{}
 }

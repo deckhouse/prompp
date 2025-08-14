@@ -1128,6 +1128,7 @@ func (s *State) resetStaleNansStates(numberOfShards uint16, equaledGeneration bo
 type PerGoroutineRelabeler struct {
 	cptr              uintptr
 	gcDestroyDetector *uint64
+	shardID           uint16
 }
 
 // NewPerGoroutineRelabeler init new [PerGoroutineRelabeler].
@@ -1137,6 +1138,7 @@ func NewPerGoroutineRelabeler(
 	pgr := &PerGoroutineRelabeler{
 		cptr:              prometheusPerGoroutineRelabelerCtor(numberOfShards, shardID),
 		gcDestroyDetector: &gcDestroyDetector,
+		shardID:           shardID,
 	}
 	runtime.SetFinalizer(pgr, func(r *PerGoroutineRelabeler) {
 		prometheusPerShardRelabelerDtor(r.cptr)
@@ -1174,8 +1176,7 @@ func (pgr *PerGoroutineRelabeler) InputRelabeling(
 	statelessRelabeler *StatelessRelabeler,
 	inputLss *LabelSetStorage,
 	targetLss *LabelSetStorage,
-	cache *Cache,
-	options RelabelerOptions,
+	state *State,
 	shardedData ShardedData,
 	shardsInnerSeries []*InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
@@ -1194,9 +1195,9 @@ func (pgr *PerGoroutineRelabeler) InputRelabeling(
 		statelessRelabeler.Pointer(),
 		inputLss.Pointer(),
 		targetLss.Pointer(),
-		cache.cPointer,
+		state.CacheByShard(pgr.shardID).cPointer,
 		cptrContainer.cptr(),
-		options,
+		state.RelabelerOptions(),
 		shardsInnerSeries,
 		shardsRelabeledSeries,
 	)
@@ -1204,7 +1205,7 @@ func (pgr *PerGoroutineRelabeler) InputRelabeling(
 	runtime.KeepAlive(statelessRelabeler)
 	runtime.KeepAlive(inputLss)
 	runtime.KeepAlive(targetLss)
-	runtime.KeepAlive(cache)
+	runtime.KeepAlive(state)
 	runtime.KeepAlive(cptrContainer)
 
 	return stats, hasReallocations, handleException(exception)
@@ -1215,8 +1216,7 @@ func (pgr *PerGoroutineRelabeler) InputRelabelingFromCache(
 	ctx context.Context,
 	inputLss *LabelSetStorage,
 	targetLss *LabelSetStorage,
-	cache *Cache,
-	options RelabelerOptions,
+	state *State,
 	shardedData ShardedData,
 	shardsInnerSeries []*InnerSeries,
 ) (RelabelerStats, bool, error) {
@@ -1233,15 +1233,15 @@ func (pgr *PerGoroutineRelabeler) InputRelabelingFromCache(
 		pgr.cptr,
 		inputLss.Pointer(),
 		targetLss.Pointer(),
-		cache.cPointer,
+		state.CacheByShard(pgr.shardID).cPointer,
 		cptrContainer.cptr(),
-		options,
+		state.RelabelerOptions(),
 		shardsInnerSeries,
 	)
 	runtime.KeepAlive(pgr)
 	runtime.KeepAlive(inputLss)
 	runtime.KeepAlive(targetLss)
-	runtime.KeepAlive(cache)
+	runtime.KeepAlive(state)
 	runtime.KeepAlive(cptrContainer)
 
 	return stats, ok, handleException(exception)
@@ -1253,10 +1253,7 @@ func (pgr *PerGoroutineRelabeler) InputRelabelingWithStalenans(
 	statelessRelabeler *StatelessRelabeler,
 	inputLss *LabelSetStorage,
 	targetLss *LabelSetStorage,
-	cache *Cache,
-	options RelabelerOptions,
-	staleNansState *StaleNansState,
-	defTimestamp int64,
+	state *State,
 	shardedData ShardedData,
 	shardsInnerSeries []*InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
@@ -1274,11 +1271,11 @@ func (pgr *PerGoroutineRelabeler) InputRelabelingWithStalenans(
 		statelessRelabeler.Pointer(),
 		inputLss.Pointer(),
 		targetLss.Pointer(),
-		cache.cPointer,
+		state.CacheByShard(pgr.shardID).cPointer,
 		cptrContainer.cptr(),
-		staleNansState.state,
-		defTimestamp,
-		options,
+		state.StaleNansStateByShard(pgr.shardID).state,
+		state.DefTimestamp(),
+		state.RelabelerOptions(),
 		shardsInnerSeries,
 		shardsRelabeledSeries,
 	)
@@ -1286,9 +1283,8 @@ func (pgr *PerGoroutineRelabeler) InputRelabelingWithStalenans(
 	runtime.KeepAlive(statelessRelabeler)
 	runtime.KeepAlive(inputLss)
 	runtime.KeepAlive(targetLss)
-	runtime.KeepAlive(cache)
+	runtime.KeepAlive(state)
 	runtime.KeepAlive(cptrContainer)
-	runtime.KeepAlive(staleNansState)
 
 	return stats, hasReallocations, handleException(exception)
 }
@@ -1298,10 +1294,7 @@ func (pgr *PerGoroutineRelabeler) InputRelabelingWithStalenansFromCache(
 	ctx context.Context,
 	inputLss *LabelSetStorage,
 	targetLss *LabelSetStorage,
-	cache *Cache,
-	options RelabelerOptions,
-	staleNansState *StaleNansState,
-	defTimestamp int64,
+	state *State,
 	shardedData ShardedData,
 	shardsInnerSeries []*InnerSeries,
 ) (RelabelerStats, bool, error) {
@@ -1318,20 +1311,19 @@ func (pgr *PerGoroutineRelabeler) InputRelabelingWithStalenansFromCache(
 		pgr.cptr,
 		inputLss.Pointer(),
 		targetLss.Pointer(),
-		cache.cPointer,
+		state.CacheByShard(pgr.shardID).cPointer,
 		cptrContainer.cptr(),
-		staleNansState.state,
-		defTimestamp,
-		options,
+		state.StaleNansStateByShard(pgr.shardID).state,
+		state.DefTimestamp(),
+		state.RelabelerOptions(),
 		shardsInnerSeries,
 	)
 
 	runtime.KeepAlive(pgr)
 	runtime.KeepAlive(inputLss)
 	runtime.KeepAlive(targetLss)
-	runtime.KeepAlive(cache)
+	runtime.KeepAlive(state)
 	runtime.KeepAlive(cptrContainer)
-	runtime.KeepAlive(staleNansState)
 
 	return stats, ok, handleException(exception)
 }

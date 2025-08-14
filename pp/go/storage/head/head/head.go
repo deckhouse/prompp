@@ -59,7 +59,7 @@ type Head[TShard Shard, TGorutineShard Shard] struct {
 	id         string
 	generation uint64
 
-	gshardCtor     func(TShard) TGorutineShard
+	gshardCtor     func(s TShard, numberOfShards uint16) TGorutineShard
 	shards         []TShard
 	taskChs        []chan *task.Generic[TGorutineShard]
 	querySemaphore *locker.Weighted
@@ -86,7 +86,7 @@ type Head[TShard Shard, TGorutineShard Shard] struct {
 func NewHead[TShard Shard, TGoroutineShard Shard](
 	id string,
 	shards []TShard,
-	gshardCtor func(TShard) TGoroutineShard,
+	gshardCtor func(TShard, uint16) TGoroutineShard,
 	numberOfShards uint16,
 	registerer prometheus.Registerer,
 ) *Head[TShard, TGoroutineShard] {
@@ -275,8 +275,7 @@ func (h *Head[TShard, TGorutineShard]) shardLoop(
 	stopc chan struct{},
 	s TShard,
 ) {
-	// TODO PerGoroutineRelabeler
-	pgs := h.gshardCtor(s)
+	pgs := h.gshardCtor(s, h.numberOfShards)
 
 	for {
 		select {

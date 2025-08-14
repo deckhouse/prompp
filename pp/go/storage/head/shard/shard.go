@@ -96,23 +96,21 @@ func (s *Shard[TWal]) WalWrite(innerSeriesSlice []*cppbridge.InnerSeries) (bool,
 
 // PerGoroutineShard wrapper of shard with [PerGoroutineRelabeler] for goroutines.
 type PerGoroutineShard[TWal Wal] struct {
-	// TODO PerGoroutineRelabeler
-	relabeler string
+	relabeler *cppbridge.PerGoroutineRelabeler
 	*Shard[TWal]
 }
 
 // NewPerGoroutineShard init new [PerGoroutineShard].
-func NewPerGoroutineShard[TWal Wal](s *Shard[TWal]) *PerGoroutineShard[TWal] {
+func NewPerGoroutineShard[TWal Wal](s *Shard[TWal], numberOfShards uint16) *PerGoroutineShard[TWal] {
 	return &PerGoroutineShard[TWal]{
-		Shard: s,
+		relabeler: cppbridge.NewPerGoroutineRelabeler(numberOfShards, s.ShardID()),
+		Shard:     s,
 	}
 }
 
-// TODO implementation.
-func (s *PerGoroutineShard[TWal]) SetRelabeler() {
-}
-
-func (s *PerGoroutineShard[TWal]) GetRelabeler() {
+// Relabeler returns relabeler for shard goroutines.
+func (s *PerGoroutineShard[TWal]) Relabeler() *cppbridge.PerGoroutineRelabeler {
+	return s.relabeler
 }
 
 // // InputRelabeling relabeling incoming hashdex(first stage).

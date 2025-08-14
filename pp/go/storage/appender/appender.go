@@ -55,6 +55,9 @@ type LSS interface {
 
 	// WithRLock calls fn on raws [cppbridge.LabelSetStorage] with read lock.
 	WithRLock(fn func(target, input *cppbridge.LabelSetStorage) error) error
+
+	// ResetSnapshot resets the current snapshot. Use only WithLock.
+	ResetSnapshot()
 }
 
 //
@@ -68,6 +71,9 @@ type Shard[TDataStorage DataStorage, TLSS LSS] interface {
 
 	// LSS returns shard labelset storage [LSS].
 	LSS() TLSS
+
+	// Relabeler returns relabeler for shard goroutines.
+	Relabeler() *cppbridge.PerGoroutineRelabeler
 
 	// ShardID returns the shard ID.
 	ShardID() uint16
@@ -233,35 +239,28 @@ func (a *Appender[TGenericTask, TDataStorage, TLSS, TShard, THead]) inputRelabel
 		LSSInputRelabeling,
 		func(shard TShard) error {
 			var (
-				lss              = shard.LSS()
-				shardID          = shard.ShardID()
-				hasReallocations bool
-				ok               bool
+				lss       = shard.LSS()
+				relabeler = shard.Relabeler()
+				shardID   = shard.ShardID()
+				ok        bool
 			)
 
-			if err := lss.WithRLock(func(target, input *cppbridge.LabelSetStorage) error {
-				var rErr error
+			if err := lss.WithRLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
 				if state.TrackStaleness() {
-					stats[shardID], ok, rErr = rd.InputRelabelerByShard(
-						shardID,
-					).InputRelabelingWithStalenansFromCache(
+					stats[shardID], ok, rErr = relabeler.InputRelabelingWithStalenansFromCache(
 						ctx,
 						input,
 						target,
-						state.CacheByShard(shardID),
-						state.RelabelerOptions(),
-						state.StaleNansStateByShard(shardID),
-						state.DefTimestamp(),
+						state,
 						incomingData.ShardedData(),
 						shardedInnerSeries.DataBySourceShard(shardID),
 					)
 				} else {
-					stats[shardID], ok, rErr = rd.InputRelabelerByShard(shardID).InputRelabelingFromCache(
+					stats[shardID], ok, rErr = relabeler.InputRelabelingFromCache(
 						ctx,
 						input,
 						target,
-						state.CacheByShard(shardID),
-						state.RelabelerOptions(),
+						state,
 						incomingData.ShardedData(),
 						shardedInnerSeries.DataBySourceShard(shardID),
 					)
@@ -278,35 +277,39 @@ func (a *Appender[TGenericTask, TDataStorage, TLSS, TShard, THead]) inputRelabel
 				return nil
 			}
 
-			shard.LSSLock()
-			defer shard.LSSUnlock()
-			rstats := cppbridge.RelabelerStats{}
+			var (
+				hasReallocations bool
+				rstats           = cppbridge.RelabelerStats{}
+			)
+			err := lss.WithLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
+				if state.TrackStaleness() {
+					rstats, hasReallocations, rErr = relabeler.InputRelabelingWithStalenans(
+						ctx,
+						input,
+						target,
+						state,
+						incomingData.ShardedData(),
+						shardedInnerSeries.DataBySourceShard(shardID),
+						shardedRelabeledSeries.DataByShard(shardID),
+					)
+				} else {
+					rstats, hasReallocations, rErr = relabeler.InputRelabeling(
+						ctx,
+						input,
+						target,
+						state,
+						incomingData.ShardedData(),
+						shardedInnerSeries.DataBySourceShard(shardID),
+						shardedRelabeledSeries.DataByShard(shardID),
+					)
+				}
 
-			if state.TrackStaleness() {
-				rstats, hasReallocations, err = rd.InputRelabelerByShard(shardID).InputRelabelingWithStalenans(
-					ctx,
-					shard.LSS().Input(),
-					shard.LSS().Target(),
-					state.CacheByShard(shardID),
-					state.RelabelerOptions(),
-					state.StaleNansStateByShard(shardID),
-					state.DefTimestamp(),
-					incomingData.ShardedData(),
-					shardedInnerSeries.DataBySourceShard(shardID),
-					shardedRelabeledSeries.DataByShard(shardID),
-				)
-			} else {
-				rstats, hasReallocations, err = rd.InputRelabelerByShard(shardID).InputRelabeling(
-					ctx,
-					shard.LSS().Input(),
-					shard.LSS().Target(),
-					state.CacheByShard(shardID),
-					state.RelabelerOptions(),
-					incomingData.ShardedData(),
-					shardedInnerSeries.DataBySourceShard(shardID),
-					shardedRelabeledSeries.DataByShard(shardID),
-				)
-			}
+				if hasReallocations {
+					shard.LSS().ResetSnapshot()
+				}
+
+				return rErr
+			})
 
 			incomingData.Destroy()
 			if err != nil {
@@ -316,10 +319,6 @@ func (a *Appender[TGenericTask, TDataStorage, TLSS, TShard, THead]) inputRelabel
 			stats[shardID].SamplesAdded += rstats.SamplesAdded
 			stats[shardID].SeriesAdded += rstats.SeriesAdded
 			stats[shardID].SeriesDrop += rstats.SeriesDrop
-
-			if hasReallocations {
-				shard.LSS().ResetSnapshot()
-			}
 
 			return nil
 		},
