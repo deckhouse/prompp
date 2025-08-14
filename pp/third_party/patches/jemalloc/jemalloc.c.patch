@@ -1,0 +1,14 @@
+--- a/src/jemalloc.c
++++ b/src/jemalloc.c
+@@ -983,7 +983,10 @@ obtain_malloc_conf(unsigned which_source, char buf[PATH_MAX + 1]) {
+ 		 * Each source should only be read once, to minimize # of
+ 		 * syscalls on init.
+ 		 */
+-		assert(read_source++ == which_source);
++#ifndef NDEBUG
++		assert(read_source == which_source);
++		read_source++;
++#endif // NDEBUG
+ 	}
+ 	assert(which_source < MALLOC_CONF_NSOURCES);
+ 
