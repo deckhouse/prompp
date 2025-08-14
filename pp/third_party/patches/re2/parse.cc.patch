@@ -1,0 +1,11 @@
+--- re2/parse.cc
++++ re2/parse_patched.cc
+@@ -900,7 +900,7 @@ struct Frame {
+   int nsub;
+   int round;
+   std::vector<Splice> splices;
+-  int spliceidx;
++  int spliceidx{};
+ };
+ 
+ // Bundled into a class for friend access to Regexp without needing to declare
