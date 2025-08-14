@@ -1,0 +1,23 @@
+--- a/src/roaring_priority_queue.c
++++ b/src/roaring_priority_queue.c
+@@ -70,6 +70,9 @@ static void percolate_down(roaring_pq_t *pq, uint32_t i) {
+ static roaring_pq_t *create_pq(const roaring_bitmap_t **arr, uint32_t length) {
+     size_t alloc_size = sizeof(roaring_pq_t) + sizeof(roaring_pq_element_t) * length;
+     roaring_pq_t *answer = (roaring_pq_t *)roaring_malloc(alloc_size);
++    if (answer == NULL) {
++        return NULL;
++    }
+     answer->elements = (roaring_pq_element_t *)(answer + 1);
+     answer->size = length;
+     for (uint32_t i = 0; i < length; i++) {
+@@ -205,6 +208,10 @@ roaring_bitmap_t *roaring_bitmap_or_many_heap(uint32_t number,
+         return roaring_bitmap_copy(x[0]);
+     }
+     roaring_pq_t *pq = create_pq(x, number);
++    if (pq == NULL) {
++        return NULL;
++    }
++
+     while (pq->size > 1) {
+         roaring_pq_element_t x1 = pq_poll(pq);
+         roaring_pq_element_t x2 = pq_poll(pq);

@@ -29,7 +29,7 @@
      size_t alloc_size = 0;
      alloc_size += sizeof(roaring_bitmap_t);
 -    alloc_size += num_containers * sizeof(container_t*);
-+    alloc_size += (int64_t)num_containers * sizeof(container_t*);
++    alloc_size += num_containers * (int64_t)sizeof(container_t*);
      alloc_size += num_bitset_containers * sizeof(bitset_container_t);
      alloc_size += num_run_containers * sizeof(run_container_t);
      alloc_size += num_array_containers * sizeof(array_container_t);

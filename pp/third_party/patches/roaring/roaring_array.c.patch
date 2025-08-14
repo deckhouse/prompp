@@ -9,3 +9,12 @@
                    (sizeof(uint16_t) + sizeof(container_t *) + sizeof(uint8_t));
      if (!realloc_array(ra, ra->size)) {
        return 0;
+@@ -455,7 +455,7 @@ bool ra_range_uint32_array(const roaring_array_t *ra, size_t offset, size_t limi
+                 t_limit = run_container_cardinality(const_CAST_run(c));
+                 break;
+         }
+-        if (ctr + t_limit - 1 >= offset && ctr < offset + limit){
++        if (ctr + t_limit > offset && ctr < offset + limit){
+             if (!first){
+                 //first_skip = t_limit - (ctr + t_limit - offset);
+                 first_skip = offset - ctr;

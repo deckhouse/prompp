@@ -118,6 +118,7 @@ http_archive(
         "//third_party/patches/roaring:0001-disable-test-dependencies.patch",
         "//third_party/patches/roaring:roaring_array.c.patch",
         "//third_party/patches/roaring:roaring.c.patch",
+        "//third_party/patches/roaring:roaring_priority_queue.c.patch",
     ],
     sha256 = "a037e12a3f7c8c2abb3e81fc9669c23e274ffa2d8670d2034a2e05969e53689b",
     strip_prefix = "CRoaring-1.3.0/",
