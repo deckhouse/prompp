@@ -163,6 +163,33 @@ TEST_F(QueryableEncodingBimapCopierFixture, NonEmptyLss) {
   EXPECT_TRUE(lss_copy.trie_index().names_trie().lookup("job"));
 }
 
+TEST_F(QueryableEncodingBimapCopierFixture, NonEmptyLssKeepOrder) {
+  // Arrange
+  const auto label_set1 = LabelViewSet{{"job", "cron"}, {"key", "1"}, {"process", "php"}};
+  const auto label_set2 = LabelViewSet{{"job", "cron"}, {"key", "2"}, {"process", "php"}};
+  const auto label_set3 = LabelViewSet{{"job", "cron"}, {"key", "3"}, {"process", "php"}};
+  const auto label_set4 = LabelViewSet{{"job", "cron"}, {"key", "4"}, {"process", "php"}};
+  const auto label_set5 = LabelViewSet{{"job", "cron"}, {"key", "5"}, {"process", "php"}};
+
+  lss_.find_or_emplace(label_set4);
+  lss_.find_or_emplace(label_set1);
+  lss_.find_or_emplace(label_set3);
+  lss_.find_or_emplace(label_set5);
+  lss_.find_or_emplace(label_set2);
+
+  lss_.build_deferred_indexes();
+
+  Lss lss_copy;
+  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy);
+
+  // Act
+  copier.copy_added_series_and_build_indexes();
+
+  // Assert
+  EXPECT_TRUE(std::ranges::is_sorted(lss_copy.ls_id_set(),
+                                     [&](const auto idl, const auto idr) { return std::ranges::lexicographical_compare(lss_copy[idl], lss_copy[idr]); }));
+}
+
 TEST_F(QueryableEncodingBimapCopierFixture, CopyOfCopy) {
   // Arrange
   Lss lss_copy;
