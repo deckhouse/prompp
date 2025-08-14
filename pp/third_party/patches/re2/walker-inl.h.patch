@@ -1,5 +1,5 @@
 --- re2/walker-inl.h
-+++ re2/walker-inl_patched.h
++++ re2/walker-inl.h
 @@ -92,7 +92,7 @@ template<typename T> class Regexp::Walker {
    // Walk state for the entire traversal.
    std::stack<WalkState<T>> stack_;

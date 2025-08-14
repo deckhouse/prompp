@@ -1,5 +1,5 @@
 --- re2/compile.cc
-+++ re2/compile_patched.cc
++++ re2/compile.cc
 @@ -215,7 +215,7 @@ class Compiler : public Regexp::Walker<Frag> {
    absl::flat_hash_map<uint64_t, int> rune_cache_;
    Frag rune_range_;

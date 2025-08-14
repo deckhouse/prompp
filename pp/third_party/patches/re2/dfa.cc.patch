@@ -1,5 +1,5 @@
 --- re2/dfa.cc
-+++ re2/dfa_patched.cc
++++ re2/dfa.cc
 @@ -434,7 +434,7 @@ DFA::DFA(Prog* prog, Prog::MatchKind kind, int64_t max_mem)
  
    // Account for space needed for DFA, q0, q1, stack.

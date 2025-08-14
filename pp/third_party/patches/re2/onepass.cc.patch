@@ -1,5 +1,5 @@
 --- re2/onepass.cc
-+++ re2/onepass_patched.cc
++++ re2/onepass.cc
 @@ -609,7 +609,7 @@ bool Prog::IsOnePass() {
      LOG(ERROR) << "nodes:\n" << dump;
    }

@@ -1,5 +1,5 @@
 --- re2/prefilter.h
-+++ re2/prefilter_patched.h
++++ re2/prefilter.h
 @@ -156,7 +156,7 @@ class Prefilter {
    // considered the same unique nodes. This is the id for each unique
    // node. This field is populated with a unique id for every node,

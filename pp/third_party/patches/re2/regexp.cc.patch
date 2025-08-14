@@ -1,5 +1,5 @@
 --- re2/regexp.cc
-+++ re2/regexp_patched.cc
++++ re2/regexp.cc
 @@ -186,7 +186,7 @@ void Regexp::AddRuneToString(Rune r) {
    } else if (nrunes_ >= 8 && (nrunes_ & (nrunes_ - 1)) == 0) {
      // double on powers of two

@@ -1,5 +1,5 @@
 --- re2/parse.cc
-+++ re2/parse_patched.cc
++++ re2/parse.cc
 @@ -900,7 +900,7 @@ struct Frame {
    int nsub;
    int round;
