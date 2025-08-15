@@ -1,0 +1,38 @@
+--- a/include/jemalloc/internal/util.h
++++ b/include/jemalloc/internal/util.h
+@@ -80,11 +80,13 @@ util_prefetch_read(void *ptr) {
+ #ifdef __GNUC__
+ 	if (config_debug) {
+ 		/* Enforce the "valid ptr" requirement. */
+-		*(volatile char *)ptr;
++		volatile char byte = *(volatile char *)ptr;
++		(void)byte;
+ 	}
+ 	__builtin_prefetch(ptr, /* read or write */ 0, /* locality hint */ 3);
+ #else
+-	*(volatile char *)ptr;
++	volatile char byte = *(volatile char *)ptr;
++	(void)byte;
+ #endif
+ }
+ 
+@@ -92,7 +94,8 @@ JEMALLOC_ALWAYS_INLINE void
+ util_prefetch_write(void *ptr) {
+ #ifdef __GNUC__
+ 	if (config_debug) {
+-		*(volatile char *)ptr;
++		volatile char byte = *(volatile char *)ptr;
++		(void)byte;
+ 	}
+ 	/*
+ 	 * The only difference from the read variant is that this has a 1 as the
+@@ -100,7 +103,8 @@ util_prefetch_write(void *ptr) {
+ 	 */
+ 	__builtin_prefetch(ptr, 1, 3);
+ #else
+-	*(volatile char *)ptr;
++	volatile char byte = *(volatile char *)ptr;
++	(void)byte;
+ #endif
+ }
+ 
