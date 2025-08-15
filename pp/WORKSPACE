@@ -137,6 +137,11 @@ http_archive(
     name = "com_google_absl",
     patches = [
         "//third_party/patches/com_google_absl:no-werror.patch",
+        "//third_party/patches/com_google_absl:raw_hash_set.patch",
+        "//third_party/patches/com_google_absl:charconv.patch",
+        "//third_party/patches/com_google_absl:cord.patch",
+        "//third_party/patches/com_google_absl:float_conversion.patch",
+        "//third_party/patches/com_google_absl:inlined_vector.patch",
     ],
     sha256 = "f8903111260a18d2cc4618cd5bf35a22bcc28f372ebe4f04024b49e88a2e16c1",
     strip_prefix = "abseil-cpp-20240116.rc1/",

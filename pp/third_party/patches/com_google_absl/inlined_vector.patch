@@ -1,0 +1,27 @@
+--- absl/container/internal/inlined_vector.h
++++ absl/container/internal/inlined_vector.h
+@@ -16,6 +16,7 @@
+ #define ABSL_CONTAINER_INTERNAL_INLINED_VECTOR_H_
+ 
+ #include <algorithm>
++#include <array>
+ #include <cstddef>
+ #include <cstring>
+ #include <iterator>
+@@ -561,6 +562,7 @@ class Storage {
+   };
+ 
+   union Data {
++    std::array<Allocated, 0> nop{};
+     Allocated allocated;
+     Inlined inlined;
+   };
+@@ -576,7 +578,7 @@ class Storage {
+   ABSL_ATTRIBUTE_NOINLINE Reference<A> EmplaceBackSlow(Args&&... args);
+ 
+   Metadata metadata_;
+-  Data data_;
++  Data data_{};
+ };
+ 
+ template <typename T, size_t N, typename A>
