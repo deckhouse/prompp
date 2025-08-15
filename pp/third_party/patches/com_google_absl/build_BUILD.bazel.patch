@@ -1,0 +1,20 @@
+--- absl/base/BUILD.bazel
++++ absl/base/BUILD.bazel
+@@ -208,7 +208,7 @@ cc_library(
+     linkopts = select({
+         "@rules_cc//cc/compiler:msvc-cl": [],
+         "@rules_cc//cc/compiler:clang-cl": [],
+-        "@rules_cc//cc/compiler:emscripten": [],
++        #"@rules_cc//cc/compiler:emscripten": [],
+         "//conditions:default": ["-pthread"],
+     }) + ABSL_DEFAULT_LINKOPTS,
+     visibility = [
+@@ -275,7 +275,7 @@ cc_library(
+             "-DEFAULTLIB:advapi32.lib",
+             "-ladvapi32",
+         ],
+-        "@rules_cc//cc/compiler:emscripten": [],
++        #"@rules_cc//cc/compiler:emscripten": [],
+         "//conditions:default": ["-pthread"],
+     }) + ABSL_DEFAULT_LINKOPTS,
+     deps = [
