@@ -1,0 +1,11 @@
+--- absl/debugging/BUILD.bazel
++++ absl/debugging/BUILD.bazel
+@@ -181,7 +181,7 @@ cc_test(
+     linkopts = select({
+         "@rules_cc//cc/compiler:msvc-cl": [],
+         "@rules_cc//cc/compiler:clang-cl": [],
+-        "@rules_cc//cc/compiler:emscripten": [],
++        #"@rules_cc//cc/compiler:emscripten": [],
+         "//conditions:default": ["-pthread"],
+     }) + ABSL_DEFAULT_LINKOPTS,
+     deps = [

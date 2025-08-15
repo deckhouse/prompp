@@ -138,11 +138,14 @@ http_archive(
 http_archive(
     name = "com_google_absl",
     patches = [
-        "//third_party/patches/com_google_absl:no-werror.patch",
+        "//third_party/patches/com_google_absl:build_BUILD.bazel.patch",
+        "//third_party/patches/com_google_absl:debugging_BUILD.bazel.patch",
+        "//third_party/patches/com_google_absl:synchronization_BUILD.bazel.patch",
+        "//third_party/patches/com_google_absl:configure_copts.bzl.patch",
     ],
-    sha256 = "f8903111260a18d2cc4618cd5bf35a22bcc28f372ebe4f04024b49e88a2e16c1",
-    strip_prefix = "abseil-cpp-20240116.rc1/",
-    url = "https://github.com/abseil/abseil-cpp/archive/refs/tags/20240116.rc1.tar.gz",
+    sha256 = "7262daa7c1711406248c10f41026d685e88223bc92817d16fb93c19adb57f669",
+    strip_prefix = "abseil-cpp-20250512.0/",
+    url = "https://github.com/abseil/abseil-cpp/releases/download/20250512.0/abseil-cpp-20250512.0.tar.gz",
 )
 
 git_repository(
