@@ -175,6 +175,11 @@ func (s *QueriedSeriesStorageSuite) SetupTest() {
 	s.storage = NewQueriedSeriesStorage(s.file1, s.file2)
 }
 
+func (s *QueriedSeriesStorageSuite) TearDownTest() {
+	s.Require().NoError(s.file1.Close())
+	s.Require().NoError(s.file2.Close())
+}
+
 func (s *QueriedSeriesStorageSuite) readFile(file *os.File) []byte {
 	_, err := file.Seek(0, io.SeekStart)
 	s.Require().NoError(err)
