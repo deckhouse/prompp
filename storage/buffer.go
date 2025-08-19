@@ -426,7 +426,7 @@ func (r *sampleRing) atH(i int) hSample {
 }
 
 func (r *sampleRing) atFH(i int) fhSample {
-	if len(r.hBuf) == 0 {
+	if len(r.fhBuf) == 0 {
 		return fhSample{} // PP_CHANGES.md: The probability is extremely low.
 	}
 
