@@ -97,19 +97,20 @@ func (s *UnloadedDataStorage) Close() error {
 	return s.storage.Close()
 }
 
-type WriteTruncateCloser interface {
+type QueriedSeriesStorageFile interface {
 	io.WriteCloser
 	io.ReadSeeker
+	Sync() error
 	Truncate(size int64) error
 }
 
 type QueriedSeriesStorage struct {
-	storages [2]WriteTruncateCloser
+	storages [2]QueriedSeriesStorageFile
 }
 
-func NewQueriedSeriesStorage(storage1, storage2 WriteTruncateCloser) *QueriedSeriesStorage {
+func NewQueriedSeriesStorage(storage1, storage2 QueriedSeriesStorageFile) *QueriedSeriesStorage {
 	return &QueriedSeriesStorage{
-		storages: [2]WriteTruncateCloser{storage1, storage2},
+		storages: [2]QueriedSeriesStorageFile{storage1, storage2},
 	}
 }
 
@@ -158,6 +159,10 @@ func (s *QueriedSeriesStorage) Write(queriedSeriesBitset []byte, timestamp int64
 	}
 
 	if err := storage.Truncate(int64(len(headerBuffer) + len(queriedSeriesBitset))); err != nil {
+		return err
+	}
+
+	if err := storage.Sync(); err != nil {
 		return err
 	}
 
