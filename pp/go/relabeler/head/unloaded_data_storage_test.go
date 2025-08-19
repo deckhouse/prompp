@@ -8,6 +8,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -53,6 +54,17 @@ func (s *UnloadedDataStorageSuite) readSnapshots() ([]string, error) {
 	return snapshots, s.storage.ForEachSnapshot(func(snapshot []byte, isLast bool) {
 		snapshots = append(snapshots, string(snapshot))
 	})
+}
+
+func (s *UnloadedDataStorageSuite) TestWriteEmptySnapshot() {
+	// Arrange
+
+	// Act
+	header, err := s.storage.WriteSnapshot(nil)
+
+	// Assert
+	s.Require().NoError(err)
+	s.Equal(relabeler.UnloadedDataSnapshotHeader{}, header)
 }
 
 func (s *UnloadedDataStorageSuite) TestReadEmptySnapshots() {
@@ -103,6 +115,18 @@ func (s *UnloadedDataStorageSuite) TestReadEof() {
 	// Assert
 	s.Equal([]string(nil), snapshots)
 	s.Equal(fmt.Errorf("EOF"), err)
+}
+
+func (s *UnloadedDataStorageSuite) TestReadVersionError() {
+	// Arrange
+	s.storageBuffer.buffer = nil
+
+	// Act
+	snapshots, err := s.readSnapshots()
+
+	// Assert
+	s.Equal([]string(nil), snapshots)
+	s.Equal(io.EOF, err)
 }
 
 func (s *UnloadedDataStorageSuite) TestInvalidVersion() {

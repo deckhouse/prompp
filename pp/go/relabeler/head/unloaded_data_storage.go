@@ -55,9 +55,6 @@ func (s *UnloadedDataStorage) WriteFormatVersion() error {
 func (s *UnloadedDataStorage) ForEachSnapshot(f func(snapshot []byte, isLast bool)) error {
 	offset, err := s.validateFormatVersion()
 	if err != nil {
-		if err == io.EOF {
-			return nil
-		}
 		return err
 	}
 
