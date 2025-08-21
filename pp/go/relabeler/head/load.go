@@ -497,6 +497,10 @@ func (l *ShardLoader) loadQueriedSeries(result *ShardLoadResult) (bool, error) {
 
 	result.QueriedSeriesStorage = NewQueriedSeriesStorage(file1, file2)
 
+	if isEmptyStorage {
+		return isEmptyStorage, nil
+	}
+
 	if queriedSeries, err := result.QueriedSeriesStorage.Read(); err != nil {
 		logger.Warnf("error loading queried series: %v", err)
 	} else {

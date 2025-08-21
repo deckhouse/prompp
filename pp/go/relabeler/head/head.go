@@ -671,7 +671,15 @@ func (h *Head) Close() error {
 
 	var err error
 	for _, s := range h.shards {
-		err = errors.Join(err, s.wal.Close(), s.unloadedDataStorage.Close(), s.queriedSeriesStorage.Close())
+		err = errors.Join(err, s.wal.Close())
+
+		if s.unloadedDataStorage != nil {
+			err = errors.Join(s.unloadedDataStorage.Close())
+		}
+
+		if s.queriedSeriesStorage != nil {
+			err = errors.Join(s.queriedSeriesStorage.Close())
+		}
 	}
 	return err
 }

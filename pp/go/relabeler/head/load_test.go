@@ -1,4 +1,4 @@
-package head_test
+package head
 
 import (
 	"context"
@@ -13,7 +13,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
-	"github.com/prometheus/prometheus/pp/go/relabeler/head"
 	"github.com/prometheus/prometheus/pp/go/relabeler/querier"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/stretchr/testify/suite"
@@ -61,15 +60,15 @@ func (s *HeadLoadSuite) createDataDirectory() string {
 	return dataDir
 }
 
-func (s *HeadLoadSuite) createHead() *head.Head {
-	h, err := head.Create(
+func (s *HeadLoadSuite) createHead() *Head {
+	h, err := Create(
 		headID,
 		0,
 		s.dataDir,
 		cfgs,
 		numberOfShards,
 		maxSegmentSize,
-		head.NoOpLastAppendedSegmentIDSetter{},
+		NoOpLastAppendedSegmentIDSetter{},
 		prometheus.DefaultRegisterer,
 	)
 	s.Require().NoError(err)
@@ -77,20 +76,26 @@ func (s *HeadLoadSuite) createHead() *head.Head {
 	return h
 }
 
-func (s *HeadLoadSuite) loadHead(unloadDataStorageInterval time.Duration) *head.Head {
-	loadedHead, corrupted, _, err := head.Load(
+func (s *HeadLoadSuite) loadHead(unloadDataStorageInterval time.Duration) (*Head, bool, error) {
+	loadedHead, corrupted, _, err := Load(
 		headID,
 		0,
 		s.dataDir,
 		cfgs,
 		numberOfShards,
 		maxSegmentSize,
-		head.NoOpLastAppendedSegmentIDSetter{},
+		NoOpLastAppendedSegmentIDSetter{},
 		prometheus.DefaultRegisterer,
 		unloadDataStorageInterval,
 	)
 
-	s.NoError(err)
+	return loadedHead, corrupted, err
+}
+
+func (s *HeadLoadSuite) mustLoadHead(unloadDataStorageInterval time.Duration) *Head {
+	loadedHead, corrupted, err := s.loadHead(unloadDataStorageInterval)
+
+	s.Require().NoError(err)
 	s.False(corrupted)
 
 	return loadedHead
@@ -121,7 +126,7 @@ func (s *seriesData) toTimeseries() []model.TimeSeries {
 	return timeseries
 }
 
-func (s *HeadLoadSuite) appendTimeSeries(head *head.Head, seriesData []seriesData) {
+func (s *HeadLoadSuite) appendTimeSeries(head *Head, seriesData []seriesData) {
 	for i := range seriesData {
 		tsd := relabeler.NewTimeSeriesDataSlice(seriesData[i].toTimeseries())
 		hx, err := (cppbridge.HashdexFactory{}).GoModel(tsd.TimeSeries(), cppbridge.DefaultWALHashdexLimits())
@@ -140,7 +145,7 @@ func (s *HeadLoadSuite) appendTimeSeries(head *head.Head, seriesData []seriesDat
 	}
 }
 
-func (s *HeadLoadSuite) query(head *head.Head, matcher *labels.Matcher, minT, maxT int64) (result []seriesData) {
+func (s *HeadLoadSuite) query(head *Head, matcher *labels.Matcher, minT, maxT int64) (result []seriesData) {
 	q := querier.NewQuerier(head, querier.NoOpShardedDeduplicatorFactory(), minT, maxT, nil, nil)
 	seriesSet := q.Select(context.Background(), false, nil, matcher)
 
@@ -166,7 +171,24 @@ func (s *HeadLoadSuite) query(head *head.Head, matcher *labels.Matcher, minT, ma
 	return
 }
 
-func (s *HeadLoadSuite) TestLoad() {
+func (s *HeadLoadSuite) TestErrorOpenShardFile() {
+	// Arrange
+	sourceHead := s.createHead()
+	sourceHead.Stop()
+	s.NoError(sourceHead.Close())
+
+	s.Require().NoError(os.Remove(getShardWalFilename(s.dataDir, 0)))
+
+	// Act
+	head, corrupted, err := s.loadHead(0)
+
+	// Assert
+	s.True(corrupted)
+	s.Require().NoError(err)
+	s.Require().NoError(head.Close())
+}
+
+func (s *HeadLoadSuite) TestLoadSuccess() {
 	// Arrange
 	sourceHead := s.createHead()
 	series := []seriesData{
@@ -184,7 +206,7 @@ func (s *HeadLoadSuite) TestLoad() {
 	s.NoError(sourceHead.Close())
 
 	// Act
-	loadedHead := s.loadHead(0)
+	loadedHead := s.mustLoadHead(0)
 
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "wal_metric")
 	actual := s.query(loadedHead, matcher, 0, 2)
@@ -213,7 +235,7 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 	s.NoError(sourceHead.Close())
 
 	// Act
-	loadedHead := s.loadHead(0)
+	loadedHead := s.mustLoadHead(0)
 	s.appendTimeSeries(loadedHead, []seriesData{
 		{
 			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
@@ -265,7 +287,7 @@ func (s *HeadLoadSuite) TestLoadWithDataUnloading() {
 	s.NoError(sourceHead.Close())
 
 	// Act
-	loadedHead := s.loadHead(100)
+	loadedHead := s.mustLoadHead(100)
 
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "wal_metric")
 	actual := s.query(loadedHead, matcher, 0, 3)
