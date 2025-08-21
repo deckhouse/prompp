@@ -25,6 +25,8 @@ const (
 
 	headID                   = "test_head_id"
 	transparentRelabelerName = "transparent_relabeler"
+
+	unloadDataStorageInterval time.Duration = 100
 )
 
 var cfgs = []*config.InputRelabelerConfig{
@@ -60,7 +62,7 @@ func (s *HeadLoadSuite) createDataDirectory() string {
 	return dataDir
 }
 
-func (s *HeadLoadSuite) createHead() *Head {
+func (s *HeadLoadSuite) createHead(unloadDataStorageInterval time.Duration) *Head {
 	h, err := Create(
 		headID,
 		0,
@@ -70,6 +72,7 @@ func (s *HeadLoadSuite) createHead() *Head {
 		maxSegmentSize,
 		NoOpLastAppendedSegmentIDSetter{},
 		prometheus.DefaultRegisterer,
+		unloadDataStorageInterval,
 	)
 	s.Require().NoError(err)
 
@@ -173,7 +176,7 @@ func (s *HeadLoadSuite) query(head *Head, matcher *labels.Matcher, minT, maxT in
 
 func (s *HeadLoadSuite) TestErrorOpenShardFile() {
 	// Arrange
-	sourceHead := s.createHead()
+	sourceHead := s.createHead(0)
 	sourceHead.Stop()
 	s.NoError(sourceHead.Close())
 
@@ -190,7 +193,7 @@ func (s *HeadLoadSuite) TestErrorOpenShardFile() {
 
 func (s *HeadLoadSuite) TestLoadSuccess() {
 	// Arrange
-	sourceHead := s.createHead()
+	sourceHead := s.createHead(0)
 	series := []seriesData{
 		{
 			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
@@ -219,7 +222,7 @@ func (s *HeadLoadSuite) TestLoadSuccess() {
 
 func (s *HeadLoadSuite) TestAppendAfterLoad() {
 	// Arrange
-	sourceHead := s.createHead()
+	sourceHead := s.createHead(0)
 	series := []seriesData{
 		{
 			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
@@ -258,7 +261,7 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 
 func (s *HeadLoadSuite) TestLoadWithDataUnloading() {
 	// Arrange
-	sourceHead := s.createHead()
+	sourceHead := s.createHead(unloadDataStorageInterval)
 	series1 := []seriesData{
 		{
 			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
@@ -287,7 +290,7 @@ func (s *HeadLoadSuite) TestLoadWithDataUnloading() {
 	s.NoError(sourceHead.Close())
 
 	// Act
-	loadedHead := s.mustLoadHead(100)
+	loadedHead := s.mustLoadHead(unloadDataStorageInterval)
 
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "wal_metric")
 	actual := s.query(loadedHead, matcher, 0, 3)

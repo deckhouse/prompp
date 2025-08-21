@@ -2,8 +2,9 @@ package relabeler
 
 import (
 	"context"
-	"hash/crc32"
 	"errors"
+	"hash/crc32"
+	"io"
 	"sync/atomic"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -60,7 +61,14 @@ func (h UnloadedDataSnapshotHeader) IsValid(snapshot []byte) bool {
 	return h.Crc32 == crc32.ChecksumIEEE(snapshot)
 }
 
+type ReaderAtWriterCloser interface {
+	io.ReaderAt
+	io.WriteCloser
+}
+
 type UnloadedDataStorage interface {
+	Initialize(storage ReaderAtWriterCloser) error
+	IsInitialized() bool
 	WriteSnapshot(snapshot []byte) (UnloadedDataSnapshotHeader, error)
 	WriteIndex(UnloadedDataSnapshotHeader)
 	ForEachSnapshot(f func(snapshot []byte, isLast bool)) error

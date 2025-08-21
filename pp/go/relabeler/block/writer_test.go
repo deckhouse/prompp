@@ -75,8 +75,8 @@ func (s *BlockWriterSuite) SetupTest() {
 
 	file, err := os.Create(filepath.Join(dataDir, "unloaded_data"))
 	s.Require().NoError(err)
-	s.unloadedDataStorage, err = head.NewUnloadedDataStorage(file)
-	s.Require().NoError(err)
+	s.unloadedDataStorage = &head.UnloadedDataStorage{}
+	s.Require().NoError(s.unloadedDataStorage.Initialize(file))
 
 	s.blockWriter = block.NewWriter(dataDir, block.DefaultChunkSegmentSize, 2*time.Hour, prometheus.DefaultRegisterer)
 }

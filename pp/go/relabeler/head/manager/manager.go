@@ -36,14 +36,15 @@ type Catalog interface {
 
 // Manager of heads.
 type Manager struct {
-	dir            string
-	clock          clockwork.Clock
-	configSource   ConfigSource
-	catalog        Catalog
-	generation     uint64
-	maxSegmentSize uint32
-	counter        *prometheus.CounterVec
-	registerer     prometheus.Registerer
+	dir                       string
+	clock                     clockwork.Clock
+	configSource              ConfigSource
+	catalog                   Catalog
+	generation                uint64
+	maxSegmentSize            uint32
+	counter                   *prometheus.CounterVec
+	registerer                prometheus.Registerer
+	unloadDataStorageInterval time.Duration
 }
 
 // SetLastAppendedSegmentIDFn function to set the last added segment id.
@@ -62,6 +63,7 @@ func New(
 	headCatalog Catalog,
 	maxSegmentSize uint32,
 	registerer prometheus.Registerer,
+	unloadDataStorageInterval time.Duration,
 ) (*Manager, error) {
 	dirStat, err := os.Stat(dir)
 	if err != nil {
@@ -87,7 +89,8 @@ func New(
 			},
 			[]string{"type"},
 		),
-		registerer: registerer,
+		registerer:                registerer,
+		unloadDataStorageInterval: unloadDataStorageInterval,
 	}, nil
 }
 
@@ -132,7 +135,7 @@ func (m *Manager) Restore(blockDuration time.Duration, unloadDataStorageInterval
 			generation uint64,
 		) {
 			defer wg.Done()
-			headLoadResults[index] = m.loadHead(headRecord, inputRelabelerConfigs, generation, unloadDataStorageInterval)
+			headLoadResults[index] = m.loadHead(headRecord, inputRelabelerConfigs, generation)
 		}(index, hr, cfgs, generation)
 		m.generation++
 	}
@@ -194,7 +197,6 @@ func (m *Manager) loadHead(
 	headRecord *catalog.Record,
 	inputRelabelerConfigs []*config.InputRelabelerConfig,
 	generation uint64,
-	unloadDataStorageInterval time.Duration,
 ) (result HeadLoadResult) {
 	start := m.clock.Now()
 	defer func() {
@@ -211,7 +213,7 @@ func (m *Manager) loadHead(
 		m.maxSegmentSize,
 		SetLastAppendedSegmentIDFn(func(segmentID uint32) { headRecord.SetLastAppendedSegmentID(segmentID) }),
 		m.registerer,
-		unloadDataStorageInterval,
+		m.unloadDataStorageInterval,
 	)
 	if err != nil {
 		result.err = err
@@ -286,6 +288,7 @@ func (m *Manager) BuildWithConfig(
 		m.maxSegmentSize,
 		SetLastAppendedSegmentIDFn(func(segmentID uint32) { headRecord.SetLastAppendedSegmentID(segmentID) }),
 		m.registerer,
+		m.unloadDataStorageInterval,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create head: %w", err)

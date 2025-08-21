@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -33,6 +34,7 @@ func Create(
 	maxSegmentSize uint32,
 	lastAppendedSegmentIDSetter LastAppendedSegmentIDSetter,
 	registerer prometheus.Registerer,
+	unloadDataStorageInterval time.Duration,
 ) (_ *Head, err error) {
 	lsses := make([]*LSS, numberOfShards)
 	wals := make([]*ShardWal, numberOfShards)
@@ -54,7 +56,7 @@ func Create(
 	swn := newSegmentWriteNotifier(numberOfShards, lastAppendedSegmentIDSetter)
 
 	for shardID := uint16(0); shardID < numberOfShards; shardID++ {
-		lsses[shardID], wals[shardID], dataStorages[shardID], unloadedDataStorages[shardID], queriedSeriesStorages[shardID], err = createShard(dir, shardID, swn, maxSegmentSize)
+		lsses[shardID], wals[shardID], dataStorages[shardID], unloadedDataStorages[shardID], queriedSeriesStorages[shardID], err = createShard(dir, shardID, swn, maxSegmentSize, unloadDataStorageInterval)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create shard: %w", err)
 		}
@@ -62,6 +64,7 @@ func Create(
 
 	return New(
 		id,
+		dir,
 		generation,
 		configs,
 		lsses,
@@ -92,10 +95,9 @@ func createShard(
 	shardID uint16,
 	swn *segmentWriteNotifier,
 	maxSegmentSize uint32,
+	unloadDataStorageInterval time.Duration,
 ) (*LSS, *ShardWal, *DataStorage, *UnloadedDataStorage, *QueriedSeriesStorage, error) {
 	dir = filepath.Clean(dir)
-
-	var unloadedDataStorage *UnloadedDataStorage
 
 	shardFile, err := os.Create(getShardWalFilename(dir, shardID))
 	if err != nil {
@@ -103,14 +105,8 @@ func createShard(
 	}
 
 	defer func() {
-		if err == nil {
-			return
-		}
-
-		_ = shardFile.Close()
-
-		if unloadedDataStorage != nil {
-			_ = unloadedDataStorage.Close()
+		if err != nil {
+			_ = shardFile.Close()
 		}
 	}()
 
@@ -130,14 +126,14 @@ func createShard(
 		return nil, nil, nil, nil, nil, fmt.Errorf("failed to init segmentWriter: %w", err)
 	}
 
-	unloadedDataStorage, err = createUnloadedDataStorage(dir, shardID)
-	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("failed to create unloaded data storage file: %w", err)
-	}
-
 	var queriedSeriesStorageFile1, queriedSeriesStorageFile2 *os.File
 	if queriedSeriesStorageFile1, queriedSeriesStorageFile2, err = openQueriedSeriesStorageFiles(dir, shardID); err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("failed to create queried data storage writer: %w", err)
+	}
+
+	var unloadedDataStorage *UnloadedDataStorage
+	if unloadDataStorageInterval != 0 {
+		unloadedDataStorage = &UnloadedDataStorage{}
 	}
 
 	return lss,
@@ -148,18 +144,27 @@ func createShard(
 		nil
 }
 
-func createUnloadedDataStorage(dir string, shardID uint16) (*UnloadedDataStorage, error) {
-	unloadedDataStorageFile, err := os.Create(getUnloadedDataStorageFilename(dir, shardID))
-	if err != nil {
+func createAndInitializeUnloadedDataStorage(dir string, shardID uint16) (*UnloadedDataStorage, error) {
+	unloadedDataStorage := &UnloadedDataStorage{}
+	if err := initializeUnloadedDataStorage(unloadedDataStorage, dir, shardID); err != nil {
 		return nil, err
 	}
 
-	unloadedDataStorage, err := NewUnloadedDataStorage(unloadedDataStorageFile)
+	return unloadedDataStorage, nil
+}
+
+func initializeUnloadedDataStorage(unloadedDataStorage relabeler.UnloadedDataStorage, dir string, shardID uint16) error {
+	unloadedDataStorageFile, err := os.Create(getUnloadedDataStorageFilename(dir, shardID))
 	if err != nil {
-		return unloadedDataStorage, err
+		return err
 	}
 
-	return unloadedDataStorage, nil
+	if err = unloadedDataStorage.Initialize(unloadedDataStorageFile); err != nil {
+		_ = unloadedDataStorageFile.Close()
+		return err
+	}
+
+	return nil
 }
 
 func openQueriedSeriesStorageFiles(dir string, shardID uint16) (*os.File, *os.File, error) {
@@ -261,6 +266,7 @@ func Load(
 
 	h, err := New(
 		id,
+		dir,
 		generation,
 		configs,
 		lsses,
@@ -346,18 +352,13 @@ func (l *ShardLoader) Load() (ShardLoadResult, error) {
 		}
 	}()
 
-	result.UnloadedDataStorage, err = createUnloadedDataStorage(l.dir, l.shardID)
-	if err != nil {
-		return result, err
+	if l.unloadDataStorageInterval > 0 {
+		if queriedSeriesStorageIsEmpty, _ := l.loadQueriedSeries(&result); !queriedSeriesStorageIsEmpty {
+			result.UnloadedDataStorage, _ = createAndInitializeUnloadedDataStorage(l.dir, l.shardID)
+		}
 	}
 
-	var queriedSeriesStorageIsEmpty bool
-	queriedSeriesStorageIsEmpty, err = l.loadQueriedSeries(&result)
-	if err != nil {
-		return result, err
-	}
-
-	decoder, err := l.loadWalFile(bufio.NewReaderSize(shardWalFile, 1024*1024*4), !queriedSeriesStorageIsEmpty, &result)
+	decoder, err := l.loadWalFile(bufio.NewReaderSize(shardWalFile, 1024*1024*4), &result)
 	if err != nil {
 		return result, err
 	}
@@ -370,7 +371,7 @@ func (l *ShardLoader) Load() (ShardLoadResult, error) {
 	return result, nil
 }
 
-func (l *ShardLoader) loadWalFile(reader io.Reader, unloadUnusedData bool, result *ShardLoadResult) (*cppbridge.HeadWalDecoder, error) {
+func (l *ShardLoader) loadWalFile(reader io.Reader, result *ShardLoadResult) (*cppbridge.HeadWalDecoder, error) {
 	_, encoderVersion, _, err := ReadHeader(reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read wal header: %w", err)
@@ -381,7 +382,7 @@ func (l *ShardLoader) loadWalFile(reader io.Reader, unloadUnusedData bool, resul
 		reader,
 		decoder,
 		result.DataStorage.encoder,
-		newDataUnloader(result.DataStorage, result.UnloadedDataStorage, unloadUnusedData, l.unloadDataStorageInterval),
+		newDataUnloader(result.DataStorage, result.UnloadedDataStorage, l.unloadDataStorageInterval),
 	)
 	return decoder, err
 }
@@ -407,13 +408,12 @@ type dataUnloader struct {
 func newDataUnloader(
 	dataStorage *DataStorage,
 	unloadedDataStorage *UnloadedDataStorage,
-	unloadUnusedData bool,
 	unloadInterval time.Duration,
 ) dataUnloader {
 	result := dataUnloader{
 		unloadedDataStorage:   unloadedDataStorage,
 		unloadedIntervalIndex: math.MinInt64,
-		needUnload:            unloadUnusedData && unloadInterval > 0,
+		needUnload:            unloadedDataStorage != nil && unloadInterval > 0,
 		unloadInterval:        unloadInterval,
 	}
 

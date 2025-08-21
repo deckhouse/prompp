@@ -1,6 +1,9 @@
 package querier
 
 import (
+	"slices"
+	"testing"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -12,8 +15,6 @@ import (
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/net/context"
-	"slices"
-	"testing"
 )
 
 const (
@@ -51,7 +52,9 @@ func (s *QuerierTestSuite) createHead() {
 		numberOfShards,
 		maxSegmentSize,
 		head.NoOpLastAppendedSegmentIDSetter{},
-		prometheus.DefaultRegisterer)
+		prometheus.DefaultRegisterer,
+		1,
+	)
 	s.NoError(err)
 }
 

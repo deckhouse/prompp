@@ -17,20 +17,19 @@ const (
 	QueriedSeriesStorageVersion = 1
 )
 
-type ReaderAtWriterCloser interface {
-	io.ReaderAt
-	io.WriteCloser
-}
-
 type UnloadedDataStorage struct {
-	storage         ReaderAtWriterCloser
+	storage         relabeler.ReaderAtWriterCloser
 	snapshots       []relabeler.UnloadedDataSnapshotHeader
 	maxSnapshotSize uint32
 }
 
-func NewUnloadedDataStorage(storage ReaderAtWriterCloser) (*UnloadedDataStorage, error) {
-	s := &UnloadedDataStorage{storage: storage}
-	return s, s.WriteFormatVersion()
+func (s *UnloadedDataStorage) IsInitialized() bool {
+	return s.storage != nil
+}
+
+func (s *UnloadedDataStorage) Initialize(storage relabeler.ReaderAtWriterCloser) error {
+	s.storage = storage
+	return s.WriteFormatVersion()
 }
 
 func (s *UnloadedDataStorage) WriteSnapshot(snapshot []byte) (relabeler.UnloadedDataSnapshotHeader, error) {
@@ -90,8 +89,13 @@ func (s *UnloadedDataStorage) validateFormatVersion() (offset int64, err error) 
 	return int64(len(version)), nil
 }
 
-func (s *UnloadedDataStorage) Close() error {
-	return s.storage.Close()
+func (s *UnloadedDataStorage) Close() (err error) {
+	if s.storage != nil {
+		err = s.storage.Close()
+		s.storage = nil
+	}
+
+	return
 }
 
 type QueriedSeriesStorageFile interface {

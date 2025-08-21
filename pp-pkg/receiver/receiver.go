@@ -171,6 +171,11 @@ func NewReceiver(
 		return nil, err
 	}
 
+	var unloadDataStorageInterval time.Duration
+	if unloadDataStorage {
+		unloadDataStorageInterval = appender.DefaultMergeDuration
+	}
+
 	headManager, err := headmanager.New(
 		dataDir,
 		clock,
@@ -178,14 +183,10 @@ func NewReceiver(
 		headCatalog,
 		maxSegmentSize,
 		registerer,
+		unloadDataStorageInterval,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create head manager: %w", err)
-	}
-
-	var unloadDataStorageInterval time.Duration
-	if unloadDataStorage {
-		unloadDataStorageInterval = appender.DefaultMergeDuration
 	}
 
 	activeHead, rotatedHeads, err := headManager.Restore(rotationInfo.BlockDuration, unloadDataStorageInterval)

@@ -41,7 +41,8 @@ func TestUnloadedDataStorageSuite(t *testing.T) {
 
 func (s *UnloadedDataStorageSuite) SetupTest() {
 	s.storageBuffer = &BufferReaderAtWriterCloser{}
-	s.storage, _ = NewUnloadedDataStorage(s.storageBuffer)
+	s.storage = &UnloadedDataStorage{}
+	_ = s.storage.Initialize(s.storageBuffer)
 }
 
 func (s *UnloadedDataStorageSuite) Write(snapshot []byte) {

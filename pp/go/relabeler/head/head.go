@@ -166,6 +166,7 @@ func (NoOpLastAppendedSegmentIDSetter) SetLastAppendedSegmentID(segmentID uint32
 
 type Head struct {
 	id         string
+	dir        string
 	generation uint64
 	readOnly   bool
 
@@ -198,6 +199,7 @@ type Head struct {
 
 func New(
 	id string,
+	dir string,
 	generation uint64,
 	inputRelabelerConfigs []*config.InputRelabelerConfig,
 	lsses []*LSS,
@@ -232,6 +234,7 @@ func New(
 	factory := util.NewUnconflictRegisterer(registerer)
 	h := &Head{
 		id:                 id,
+		dir:                dir,
 		generation:         generation,
 		shards:             shards,
 		lssTaskChs:         lssTaskChs,
@@ -1147,6 +1150,16 @@ func (h *Head) UnloadUnusedSeriesData() {
 	task := h.CreateTask(
 		relabeler.DSUnloadUnusedSeriesData,
 		func(shard relabeler.Shard) error {
+			if shard.UnloadedDataStorage() == nil {
+				return nil
+			}
+
+			if !shard.UnloadedDataStorage().IsInitialized() {
+				if err := initializeUnloadedDataStorage(shard.UnloadedDataStorage(), h.dir, shard.ShardID()); err != nil {
+					return fmt.Errorf("unable to initialize unloaded data storage: %v", err)
+				}
+			}
+
 			unloader := shard.DataStorage().CreateUnusedSeriesDataUnloader()
 
 			shard.DataStorageRLock()
