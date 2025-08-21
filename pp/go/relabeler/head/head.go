@@ -1205,6 +1205,10 @@ func (h *Head) CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr
 				})
 				shard.DataStorageUnlock()
 
+				if err != nil {
+					return err
+				}
+
 				shard.DataStorageRLock()
 				shard.DataStorage().QueryFinal(queriers)
 				shard.DataStorageRUnlock()

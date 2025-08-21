@@ -62,8 +62,8 @@ func (s *HeadLoadSuite) createDataDirectory() string {
 	return dataDir
 }
 
-func (s *HeadLoadSuite) createHead(unloadDataStorageInterval time.Duration) *Head {
-	h, err := Create(
+func (s *HeadLoadSuite) createHead(unloadDataStorageInterval time.Duration) (*Head, error) {
+	return Create(
 		headID,
 		0,
 		s.dataDir,
@@ -74,8 +74,11 @@ func (s *HeadLoadSuite) createHead(unloadDataStorageInterval time.Duration) *Hea
 		prometheus.DefaultRegisterer,
 		unloadDataStorageInterval,
 	)
-	s.Require().NoError(err)
+}
 
+func (s *HeadLoadSuite) mustCreateHead(unloadDataStorageInterval time.Duration) *Head {
+	h, err := s.createHead(unloadDataStorageInterval)
+	s.Require().NoError(err)
 	return h
 }
 
@@ -174,9 +177,21 @@ func (s *HeadLoadSuite) query(head *Head, matcher *labels.Matcher, minT, maxT in
 	return
 }
 
-func (s *HeadLoadSuite) TestErrorOpenShardFile() {
+func (s *HeadLoadSuite) TestErrorCreateShardFileInOneShard() {
 	// Arrange
-	sourceHead := s.createHead(0)
+	s.Require().NoError(os.Mkdir(getShardWalFilename(s.dataDir, 0), 0o777))
+
+	// Act
+	head, err := s.createHead(0)
+
+	// Assert
+	s.Require().Error(err)
+	s.Nil(head)
+}
+
+func (s *HeadLoadSuite) TestErrorOpenShardFileInOneShard() {
+	// Arrange
+	sourceHead := s.mustCreateHead(0)
 	sourceHead.Stop()
 	s.NoError(sourceHead.Close())
 
@@ -188,12 +203,33 @@ func (s *HeadLoadSuite) TestErrorOpenShardFile() {
 	// Assert
 	s.True(corrupted)
 	s.Require().NoError(err)
+	s.Nil(head.shards[0].unloadedDataStorage)
+	s.Require().NoError(head.Close())
+}
+
+func (s *HeadLoadSuite) TestErrorOpenShardFileInAllShards() {
+	// Arrange
+	sourceHead := s.mustCreateHead(0)
+	sourceHead.Stop()
+	s.NoError(sourceHead.Close())
+
+	s.Require().NoError(os.Remove(getShardWalFilename(s.dataDir, 0)))
+	s.Require().NoError(os.Remove(getShardWalFilename(s.dataDir, 1)))
+
+	// Act
+	head, corrupted, err := s.loadHead(0)
+
+	// Assert
+	s.True(corrupted)
+	s.Require().NoError(err)
+	s.Nil(head.shards[0].unloadedDataStorage)
+	s.Nil(head.shards[1].unloadedDataStorage)
 	s.Require().NoError(head.Close())
 }
 
 func (s *HeadLoadSuite) TestLoadSuccess() {
 	// Arrange
-	sourceHead := s.createHead(0)
+	sourceHead := s.mustCreateHead(0)
 	series := []seriesData{
 		{
 			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
@@ -222,7 +258,7 @@ func (s *HeadLoadSuite) TestLoadSuccess() {
 
 func (s *HeadLoadSuite) TestAppendAfterLoad() {
 	// Arrange
-	sourceHead := s.createHead(0)
+	sourceHead := s.mustCreateHead(0)
 	series := []seriesData{
 		{
 			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
@@ -261,7 +297,7 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 
 func (s *HeadLoadSuite) TestLoadWithDataUnloading() {
 	// Arrange
-	sourceHead := s.createHead(unloadDataStorageInterval)
+	sourceHead := s.mustCreateHead(unloadDataStorageInterval)
 	series1 := []seriesData{
 		{
 			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
