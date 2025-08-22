@@ -99,6 +99,7 @@ func (s *UnloadedDataStorage) Close() (err error) {
 }
 
 type QueriedSeriesStorageFile interface {
+	Open() error
 	io.WriteCloser
 	io.ReadSeeker
 	Sync() error
@@ -138,6 +139,9 @@ func (h *queriedSeriesStorageHeader) CalculateCrc32(queriedSeriesBitset []byte) 
 
 func (s *QueriedSeriesStorage) Write(queriedSeriesBitset []byte, timestamp int64) error {
 	storage := s.storages[0]
+	if err := storage.Open(); err != nil {
+		return err
+	}
 
 	var headerBuffer [1 + unsafe.Sizeof(queriedSeriesStorageHeader{})]byte
 	headerBuffer[0] = UnloadedDataStorageVersion
@@ -167,29 +171,37 @@ func (s *QueriedSeriesStorage) Write(queriedSeriesBitset []byte, timestamp int64
 		return err
 	}
 
-	s.storages[0], s.storages[1] = s.storages[1], s.storages[0]
+	s.changeActiveStorage()
 	return nil
 }
 
-func (s *QueriedSeriesStorage) Read() (data []byte, err error) {
-	storages := s.readStorageHeaders()
+func (s *QueriedSeriesStorage) changeActiveStorage() {
+	s.storages[0], s.storages[1] = s.storages[1], s.storages[0]
+}
 
-	for i := range storages {
-		if growTo := int(storages[i].size) - len(data); growTo > 0 {
+func (s *QueriedSeriesStorage) Read() (data []byte, err error) {
+	readers := s.readStorageHeaders()
+
+	for i := range readers {
+		if growTo := int(readers[i].size) - len(data); growTo > 0 {
 			data = slices.Grow(data, growTo)
 		}
-		data = data[:storages[i].size]
+		data = data[:readers[i].size]
 
 		if len(data) > 0 {
-			if _, err = io.ReadFull(storages[i].reader, data); err != nil {
+			if _, err = io.ReadFull(readers[i].storage, data); err != nil {
 				logger.Warnf("failed to read data from queried series storage: %v", err)
 				continue
 			}
 		}
 
-		if storageCrc32 := storages[i].crc32; storageCrc32 != storages[i].CalculateCrc32(data) {
-			logger.Warnf("invalid queried series storage crc32: %d != %d", storageCrc32, storages[i].crc32)
+		if storageCrc32 := readers[i].crc32; storageCrc32 != readers[i].CalculateCrc32(data) {
+			logger.Warnf("invalid queried series storage crc32: %d != %d", storageCrc32, readers[i].crc32)
 			continue
+		}
+
+		if readers[i].storage == s.storages[0] {
+			s.changeActiveStorage()
 		}
 
 		return data, nil
@@ -198,10 +210,12 @@ func (s *QueriedSeriesStorage) Read() (data []byte, err error) {
 	return nil, errors.New("no valid queried series storage")
 }
 
-func (s *QueriedSeriesStorage) readStorageHeaders() (result []storageHeader) {
-	for _, storage := range []storageHeader{{reader: s.storages[0]}, {reader: s.storages[1]}} {
-		if err := storage.read(); err == nil {
-			result = append(result, storage)
+func (s *QueriedSeriesStorage) readStorageHeaders() (result []storageHeaderReader) {
+	for _, storage := range s.storages {
+		reader := storageHeaderReader{storage: storage}
+
+		if err := reader.read(); err == nil {
+			result = append(result, reader)
 		} else {
 			logger.Warnf("failed to read header: %v", err)
 		}
@@ -218,27 +232,31 @@ func (s *QueriedSeriesStorage) Close() error {
 	return errors.Join(s.storages[0].Close(), s.storages[1].Close())
 }
 
-type storageHeader struct {
+type storageHeaderReader struct {
 	queriedSeriesStorageHeader
-	reader io.ReadSeeker
+	storage QueriedSeriesStorageFile
 }
 
-func (s *storageHeader) read() error {
+func (s *storageHeaderReader) read() error {
+	if err := s.storage.Open(); err != nil {
+		return err
+	}
+
 	if err := s.readAndValidateFormatVersion(); err != nil {
 		return err
 	}
 
-	_, err := io.ReadFull(s.reader, s.toSlice())
+	_, err := io.ReadFull(s.storage, s.toSlice())
 	return err
 }
 
-func (s *storageHeader) readAndValidateFormatVersion() error {
-	if _, err := s.reader.Seek(0, io.SeekStart); err != nil {
+func (s *storageHeaderReader) readAndValidateFormatVersion() error {
+	if _, err := s.storage.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
 
 	version := []byte{0}
-	if _, err := s.reader.Read(version); err != nil {
+	if _, err := s.storage.Read(version); err != nil {
 		return err
 	}
 

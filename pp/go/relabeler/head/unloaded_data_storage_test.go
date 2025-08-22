@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/prometheus/prometheus/pp/go/relabeler"
@@ -159,8 +159,8 @@ func (s *UnloadedDataStorageSuite) TestReadInvalidSnapshot() {
 
 type QueriedSeriesStorageSuite struct {
 	suite.Suite
-	file1   *os.File
-	file2   *os.File
+	file1   *QueriedSeriesStorageOsFile
+	file2   *QueriedSeriesStorageOsFile
 	storage *QueriedSeriesStorage
 }
 
@@ -169,19 +169,23 @@ func TestQueriedSeriesStorageWriterSuite(t *testing.T) {
 }
 
 func (s *QueriedSeriesStorageSuite) SetupTest() {
-	var err error
-	s.file1, s.file2, err = openQueriedSeriesStorageFiles(s.T().TempDir(), 0)
-	s.Require().NoError(err)
-
+	tempDir := s.T().TempDir()
+	s.file1 = &QueriedSeriesStorageOsFile{fileName: filepath.Join(tempDir, "file1")}
+	s.file2 = &QueriedSeriesStorageOsFile{fileName: filepath.Join(tempDir, "file2")}
 	s.storage = NewQueriedSeriesStorage(s.file1, s.file2)
 }
 
 func (s *QueriedSeriesStorageSuite) TearDownTest() {
-	s.Require().NoError(s.file1.Close())
-	s.Require().NoError(s.file2.Close())
+	s.Require().NoError(s.storage.Close())
 }
 
-func (s *QueriedSeriesStorageSuite) readFile(file *os.File) []byte {
+func (s *QueriedSeriesStorageSuite) writeFile(file *QueriedSeriesStorageOsFile, data []byte) {
+	s.Require().NoError(file.Open())
+	_, err := file.Write(data)
+	s.Require().NoError(err)
+}
+
+func (s *QueriedSeriesStorageSuite) readFile(file *QueriedSeriesStorageOsFile) []byte {
 	_, err := file.Seek(0, io.SeekStart)
 	s.Require().NoError(err)
 
@@ -189,6 +193,17 @@ func (s *QueriedSeriesStorageSuite) readFile(file *os.File) []byte {
 	s.Require().NoError(err)
 
 	return data
+}
+
+func (s *QueriedSeriesStorageSuite) TestOpenErrorInWrite() {
+	// Arrange
+	s.file1.fileName = ""
+
+	// Act
+	err := s.storage.Write([]byte("12345"), 1234567890)
+
+	// Assert
+	s.Error(err)
 }
 
 func (s *QueriedSeriesStorageSuite) TestWriteInFirstStorage() {
@@ -206,7 +221,7 @@ func (s *QueriedSeriesStorageSuite) TestWriteInFirstStorage() {
 		0x05, 0x00, 0x00, 0x00, // size
 		'1', '2', '3', '4', '5', // content
 	}, s.readFile(s.file1))
-	s.Equal([]byte{}, s.readFile(s.file2))
+	s.Nil(s.file2.file)
 }
 
 func (s *QueriedSeriesStorageSuite) TestWriteInAllStorages() {
@@ -261,6 +276,18 @@ func (s *QueriedSeriesStorageSuite) TestMultipleWriteInFirstStorage() {
 	}, s.readFile(s.file2))
 }
 
+func (s *QueriedSeriesStorageSuite) TestOpenErrorInRead() {
+	// Arrange
+	s.file1.fileName = ""
+
+	// Act
+	data, err := s.storage.Read()
+
+	// Assert
+	s.Equal([]byte(nil), data)
+	s.Error(err)
+}
+
 func (s *QueriedSeriesStorageSuite) TestReadEmptyFiles() {
 	// Arrange
 
@@ -274,8 +301,8 @@ func (s *QueriedSeriesStorageSuite) TestReadEmptyFiles() {
 
 func (s *QueriedSeriesStorageSuite) TestInvalidVersionInAllStorages() {
 	// Arrange
-	_, _ = s.file1.Write([]byte{QueriedSeriesStorageVersion + 1})
-	_, _ = s.file2.Write([]byte{QueriedSeriesStorageVersion + 1})
+	s.writeFile(s.file1, []byte{QueriedSeriesStorageVersion + 1})
+	s.writeFile(s.file2, []byte{QueriedSeriesStorageVersion + 1})
 
 	// Act
 	data, err := s.storage.Read()
@@ -293,8 +320,8 @@ func (s *QueriedSeriesStorageSuite) TestInvalidHeaderInAllStorages() {
 		0x4e, 0x78, 0xf9, 0xf3, //crc32
 		0x05, 0x00, 0x00,
 	}
-	_, _ = s.file1.Write(invalidHeader)
-	_, _ = s.file2.Write(invalidHeader)
+	s.writeFile(s.file1, invalidHeader)
+	s.writeFile(s.file2, invalidHeader)
 
 	// Act
 	data, err := s.storage.Read()
@@ -313,8 +340,8 @@ func (s *QueriedSeriesStorageSuite) TestInvalidDataInAllStorages() {
 		0x05, 0x00, 0x00, 0x00,
 		'1', '2', '3', '4',
 	}
-	_, _ = s.file1.Write(invalidData)
-	_, _ = s.file2.Write(invalidData)
+	s.writeFile(s.file1, invalidData)
+	s.writeFile(s.file2, invalidData)
 
 	// Act
 	data, err := s.storage.Read()
@@ -333,8 +360,8 @@ func (s *QueriedSeriesStorageSuite) TestInvalidCrc32InAllStorages() {
 		0x05, 0x00, 0x00, 0x00,
 		'1', '2', '3', '4', '5',
 	}
-	_, _ = s.file1.Write(invalidCrc32)
-	_, _ = s.file2.Write(invalidCrc32)
+	s.writeFile(s.file1, invalidCrc32)
+	s.writeFile(s.file2, invalidCrc32)
 
 	// Act
 	data, err := s.storage.Read()
@@ -344,9 +371,9 @@ func (s *QueriedSeriesStorageSuite) TestInvalidCrc32InAllStorages() {
 	s.Equal(errors.New("no valid queried series storage"), err)
 }
 
-func (s *QueriedSeriesStorageSuite) TestReadFromFirstStorage() {
+func (s *QueriedSeriesStorageSuite) TestReadFromFirstStorageAndChangeActiveStorage() {
 	// Arrange
-	_, _ = s.file1.Write([]byte{
+	s.writeFile(s.file1, []byte{
 		QueriedSeriesStorageVersion,                    // version
 		0xd2, 0x02, 0x96, 0x49, 0x00, 0x00, 0x00, 0x00, // timestamp
 		0x4e, 0x78, 0xf9, 0xf3, //crc32
@@ -355,16 +382,24 @@ func (s *QueriedSeriesStorageSuite) TestReadFromFirstStorage() {
 	})
 
 	// Act
-	data, err := s.storage.Read()
+	data, readErr := s.storage.Read()
+	_ = s.storage.Write([]byte("67890"), 987654321)
 
 	// Assert
-	s.Require().NoError(err)
+	s.Require().NoError(readErr)
 	s.Equal([]byte("12345"), data)
+	s.Equal([]byte{
+		QueriedSeriesStorageVersion,                    // version
+		0xb1, 0x68, 0xde, 0x3a, 0x00, 0x00, 0x00, 0x00, // timestamp
+		0x21, 0x33, 0xf7, 0xb8, //crc32
+		0x05, 0x00, 0x00, 0x00, // size
+		'6', '7', '8', '9', '0', // content
+	}, s.readFile(s.file2))
 }
 
 func (s *QueriedSeriesStorageSuite) TestReadFromSecondStorage() {
 	// Arrange
-	_, _ = s.file2.Write([]byte{
+	s.writeFile(s.file2, []byte{
 		QueriedSeriesStorageVersion,                    // version
 		0xd2, 0x02, 0x96, 0x49, 0x00, 0x00, 0x00, 0x00, // timestamp
 		0x4e, 0x78, 0xf9, 0xf3, //crc32
@@ -382,14 +417,14 @@ func (s *QueriedSeriesStorageSuite) TestReadFromSecondStorage() {
 
 func (s *QueriedSeriesStorageSuite) TestReadFromStorageWithMaxTimestamp() {
 	// Arrange
-	_, _ = s.file1.Write([]byte{
+	s.writeFile(s.file1, []byte{
 		QueriedSeriesStorageVersion,                    // version
 		0xb1, 0x68, 0xde, 0x3a, 0x00, 0x00, 0x00, 0x00, // timestamp
 		0x21, 0x33, 0xf7, 0xb8, //crc32
 		0x05, 0x00, 0x00, 0x00, // size
 		'6', '7', '8', '9', '0', // content
 	})
-	_, _ = s.file2.Write([]byte{
+	s.writeFile(s.file2, []byte{
 		QueriedSeriesStorageVersion,                    // version
 		0xd3, 0x02, 0x96, 0x49, 0x00, 0x00, 0x00, 0x00, // timestamp
 		0xfd, 0x12, 0xf7, 0xe0, //crc32
@@ -407,7 +442,7 @@ func (s *QueriedSeriesStorageSuite) TestReadFromStorageWithMaxTimestamp() {
 
 func (s *QueriedSeriesStorageSuite) TestReadEmptyContent() {
 	// Arrange
-	_, _ = s.file1.Write([]byte{
+	s.writeFile(s.file1, []byte{
 		QueriedSeriesStorageVersion,                    // version
 		0xb1, 0x68, 0xde, 0x3a, 0x00, 0x00, 0x00, 0x00, // timestamp
 		0x41, 0x01, 0x44, 0x30, //crc32

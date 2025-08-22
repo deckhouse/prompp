@@ -24,6 +24,57 @@ const (
 	HeadWalEncoderDecoderLogShards uint8 = 0
 )
 
+type QueriedSeriesStorageOsFile struct {
+	fileName string
+	file     *os.File
+}
+
+func (q *QueriedSeriesStorageOsFile) Open() (err error) {
+	if q.file == nil {
+		q.file, err = os.OpenFile(q.fileName, os.O_RDWR|os.O_CREATE, 0666)
+	}
+
+	return
+}
+
+func (q *QueriedSeriesStorageOsFile) Write(p []byte) (n int, err error) {
+	return q.file.Write(p)
+}
+
+func (q *QueriedSeriesStorageOsFile) Close() error {
+	if q.file != nil {
+		return q.file.Close()
+	}
+
+	return nil
+}
+
+func (q *QueriedSeriesStorageOsFile) Read(p []byte) (n int, err error) {
+	return q.file.Read(p)
+}
+
+func (q *QueriedSeriesStorageOsFile) Seek(offset int64, whence int) (int64, error) {
+	return q.file.Seek(offset, whence)
+}
+
+func (q *QueriedSeriesStorageOsFile) Sync() error {
+	return q.file.Sync()
+}
+
+func (q *QueriedSeriesStorageOsFile) Truncate(size int64) error {
+	return q.file.Truncate(size)
+}
+
+func (q *QueriedSeriesStorageOsFile) IsEmpty() bool {
+	if q.file != nil {
+		if info, err := q.file.Stat(); err == nil {
+			return info.Size() == 0
+		}
+	}
+
+	return true
+}
+
 // Create head.
 func Create(
 	id string,
@@ -126,21 +177,21 @@ func createShard(
 		return nil, nil, nil, nil, nil, fmt.Errorf("failed to init segmentWriter: %w", err)
 	}
 
-	var queriedSeriesStorageFile1, queriedSeriesStorageFile2 *os.File
-	if queriedSeriesStorageFile1, queriedSeriesStorageFile2, err = openQueriedSeriesStorageFiles(dir, shardID); err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("failed to create queried data storage writer: %w", err)
-	}
-
 	var unloadedDataStorage *UnloadedDataStorage
+	var queriedSeriesStorage *QueriedSeriesStorage
 	if unloadDataStorageInterval != 0 {
 		unloadedDataStorage = &UnloadedDataStorage{}
+		queriedSeriesStorage = NewQueriedSeriesStorage(
+			&QueriedSeriesStorageOsFile{fileName: getQueriedSeriesStorageFilename(dir, shardID, 0)},
+			&QueriedSeriesStorageOsFile{fileName: getQueriedSeriesStorageFilename(dir, shardID, 1)},
+		)
 	}
 
 	return lss,
 		newShardWal(shardWalEncoder, maxSegmentSize, sw),
 		NewDataStorage(),
 		unloadedDataStorage,
-		NewQueriedSeriesStorage(queriedSeriesStorageFile1, queriedSeriesStorageFile2),
+		queriedSeriesStorage,
 		nil
 }
 
@@ -165,33 +216,6 @@ func initializeUnloadedDataStorage(unloadedDataStorage relabeler.UnloadedDataSto
 	}
 
 	return nil
-}
-
-func openQueriedSeriesStorageFiles(dir string, shardID uint16) (*os.File, *os.File, error) {
-	file1, err := os.OpenFile(getQueriedSeriesStorageFilename(dir, shardID, 0), os.O_RDWR|os.O_CREATE, 0666)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create queried series storage file: %w", err)
-	}
-
-	file2, err := os.OpenFile(getQueriedSeriesStorageFilename(dir, shardID, 1), os.O_RDWR|os.O_CREATE, 0666)
-	if err != nil {
-		_ = file1.Close()
-		return nil, nil, fmt.Errorf("failed to create queried series storage file: %w", err)
-	}
-
-	return file1, file2, nil
-}
-
-func filesAreEmpty(files ...*os.File) bool {
-	for _, file := range files {
-		if info, err := file.Stat(); err == nil {
-			if info.Size() > 0 {
-				return false
-			}
-		}
-	}
-
-	return true
 }
 
 func Load(
@@ -488,26 +512,22 @@ func (l *ShardLoader) loadSegments(
 }
 
 func (l *ShardLoader) loadQueriedSeries(result *ShardLoadResult) (bool, error) {
-	file1, file2, err := openQueriedSeriesStorageFiles(l.dir, l.shardID)
-	if err != nil {
-		return false, err
-	}
-
-	isEmptyStorage := filesAreEmpty(file1, file2)
+	file1 := &QueriedSeriesStorageOsFile{fileName: getQueriedSeriesStorageFilename(l.dir, l.shardID, 0)}
+	file2 := &QueriedSeriesStorageOsFile{fileName: getQueriedSeriesStorageFilename(l.dir, l.shardID, 1)}
 
 	result.QueriedSeriesStorage = NewQueriedSeriesStorage(file1, file2)
 
-	if isEmptyStorage {
-		return isEmptyStorage, nil
-	}
-
 	if queriedSeries, err := result.QueriedSeriesStorage.Read(); err != nil {
+		if file1.IsEmpty() && file2.IsEmpty() {
+			return true, nil
+		}
+
 		logger.Warnf("error loading queried series: %v", err)
 	} else {
 		if !result.DataStorage.dataStorage.SetQueriedSeriesBitset(queriedSeries) {
-			logger.Warnf("error loading queried series: %v", err)
+			logger.Warnf("error set queried series in storage: %v", err)
 		}
 	}
 
-	return isEmptyStorage, nil
+	return false, nil
 }
