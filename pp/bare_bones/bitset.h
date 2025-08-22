@@ -39,7 +39,7 @@ class Bitset {
     if (__builtin_expect(size > std::numeric_limits<uint32_t>::max(), false))
       std::abort();
 
-    const uint64_t size_in_uint64_elements = Bit::to_ceil_units<uint64_t>(size);
+    const auto size_in_uint64_elements = Bit::to_ceil_units<uint64_t>(size);
 
     if (size_in_uint64_elements <= data_.size()) {
       return;
@@ -206,7 +206,7 @@ class Bitset {
 
   static PROMPP_ALWAYS_INLINE Iterator create_read_iterator(std::span<const uint8_t>& buffer) noexcept {
     if (buffer.size() < sizeof(uint32_t)) [[unlikely]] {
-      return Iterator{};
+      return Iterator{nullptr, 0, 0};
     }
 
     uint32_t bit_count = 0;
@@ -216,13 +216,13 @@ class Bitset {
     const uint32_t uint64_count = BareBones::Bit::to_ceil_units<uint64_t>(bit_count);
     const uint32_t byte_count = uint64_count * sizeof(uint64_t);
     if (buffer.size() < byte_count) [[unlikely]] {
-      return Iterator{};
+      return Iterator{nullptr, 0, 0};
     }
 
     const std::span bit_data(reinterpret_cast<const uint64_t*>(buffer.data()), uint64_count);
     buffer = buffer.subspan(byte_count);
 
-    return Iterator(bit_data.data(), bit_count);
+    return Iterator(bit_data.data(), bit_count, 0);
   }
 
   [[nodiscard]] bool read_from(std::istream& stream) {
@@ -237,10 +237,10 @@ class Bitset {
     }
 
     resize(bit_count);
-    const auto size_in_bytes = memory_size_in_bytes(bit_count);
+    const auto size_in_bytes = static_cast<std::streamsize>(memory_size_in_bytes(bit_count));
     stream.read(reinterpret_cast<char*>(data_.begin()), size_in_bytes);
 
-    return static_cast<size_t>(stream.gcount()) == size_in_bytes;
+    return stream.gcount() == size_in_bytes;
   }
 
  private:
