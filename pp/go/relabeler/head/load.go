@@ -437,8 +437,6 @@ func (d *dataUnloader) Unload(createTs, encodeTs time.Duration) error {
 	}
 
 	if intervalIndex > d.unloadedIntervalIndex {
-		logger.Warnf("unloading data: prev %d, current: %d, unloadInterval: %d", d.unloadedIntervalIndex, intervalIndex, d.unloadInterval)
-
 		if header, err := d.unloadedDataStorage.WriteSnapshot(d.unloader.CreateSnapshot()); err != nil {
 			return fmt.Errorf("failed to write unloaded data: %w", err)
 		} else {

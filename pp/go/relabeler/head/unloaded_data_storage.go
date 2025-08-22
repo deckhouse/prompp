@@ -230,7 +230,9 @@ func (s *QueriedSeriesStorage) readStorageHeaders() (result []storageHeaderReade
 		if err := reader.read(); err == nil {
 			result = append(result, reader)
 		} else {
-			logger.Warnf("failed to read header: %v", err)
+			if !errors.Is(err, io.EOF) {
+				logger.Warnf("failed to read header: %v", err)
+			}
 		}
 	}
 
