@@ -410,6 +410,7 @@ func (c *Client) Read(ctx context.Context, query *prompb.Query, sortSeries bool)
 	default:
 		c.readQueriesDuration.WithLabelValues("unsupported").Observe(time.Since(start).Seconds())
 		c.readQueriesTotal.WithLabelValues("unsupported", strconv.Itoa(httpResp.StatusCode)).Inc()
+		_ = httpResp.Body.Close() // PP_CHANGES.md: HANDLE_LEAK
 		cancel()
 		return nil, fmt.Errorf("unsupported content type: %s", contentType)
 	}

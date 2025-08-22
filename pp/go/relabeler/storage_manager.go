@@ -10,10 +10,10 @@ import (
 	"sync/atomic"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/frames"
 	"github.com/prometheus/prometheus/pp/go/util"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 const posNotFound int64 = -1
@@ -597,6 +597,10 @@ func (as *AckStatus) Destinations() int {
 
 // Shards returns number of shards
 func (as *AckStatus) Shards() int {
+	if as.names.Len() == 0 { // The probability is extremely low.
+		return 0
+	}
+
 	return len(as.status) / as.names.Len()
 }
 

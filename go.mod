@@ -10,7 +10,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 v5.7.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4 v4.3.0
 	github.com/Code-Hex/go-generics-cache v1.5.1
-	github.com/KimMachineGun/automemlimit v0.6.1
+	github.com/KimMachineGun/automemlimit v0.7.4
 	github.com/alecthomas/kingpin/v2 v2.4.0
 	github.com/alecthomas/units v0.0.0-20240626203959-61d1e3462e30
 	github.com/aws/aws-sdk-go v1.55.5
@@ -19,7 +19,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/dennwc/varint v1.0.0
 	github.com/digitalocean/godo v1.122.0
-	github.com/docker/docker v27.2.0+incompatible
+	github.com/docker/docker v28.0.0+incompatible
 	github.com/edsrzf/mmap-go v1.2.0
 	github.com/envoyproxy/go-control-plane v0.13.0
 	github.com/envoyproxy/protoc-gen-validate v1.1.0
@@ -46,7 +46,7 @@ require (
 	github.com/ionos-cloud/sdk-go/v6 v6.2.1
 	github.com/jonboulle/clockwork v0.5.0
 	github.com/json-iterator/go v1.1.12
-	github.com/klauspost/compress v1.17.11
+	github.com/klauspost/compress v1.18.0
 	github.com/kolo/xmlrpc v0.0.0-20220921171641-a4b6fa1dd06b
 	github.com/linode/linodego v1.40.0
 	github.com/mailru/easyjson v0.7.7
@@ -82,10 +82,10 @@ require (
 	go.uber.org/automaxprocs v1.6.0
 	go.uber.org/goleak v1.3.0
 	go.uber.org/multierr v1.11.0
-	golang.org/x/net v0.35.0
+	golang.org/x/net v0.38.0
 	golang.org/x/oauth2 v0.27.0
 	golang.org/x/sync v0.12.0
-	golang.org/x/sys v0.30.0
+	golang.org/x/sys v0.31.0
 	golang.org/x/text v0.23.0
 	golang.org/x/time v0.6.0
 	golang.org/x/tools v0.30.0
@@ -112,9 +112,7 @@ require (
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/cilium/ebpf v0.11.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20240423153145-555b57ec207b // indirect
-	github.com/containerd/cgroups/v3 v3.0.3 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -141,7 +139,6 @@ require (
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-resty/resty/v2 v2.13.1 // indirect
-	github.com/godbus/dbus/v5 v5.0.4 // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
 	github.com/golang/glog v1.2.1 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
@@ -184,14 +181,12 @@ require (
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.2 // indirect
-	github.com/opencontainers/runtime-spec v1.0.2 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
@@ -200,10 +195,10 @@ require (
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/otel/metric v1.29.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
-	golang.org/x/crypto v0.35.0 // indirect
+	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/exp v0.0.0-20240119083558-1b970713d09a // indirect
 	golang.org/x/mod v0.23.0 // indirect
-	golang.org/x/term v0.29.0 // indirect
+	golang.org/x/term v0.30.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect

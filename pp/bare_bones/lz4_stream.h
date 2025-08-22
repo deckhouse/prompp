@@ -274,7 +274,7 @@ class basic_istream final : public std::istream {
     std::array<char, DecompressedBufferSize> decompressed_buffer_;
     std::string src_buf_;
     std::string_view source_buffer_view_;
-    std::array<char, LZ4F_HEADER_SIZE_MAX + LZ4F_BLOCK_HEADER_SIZE> data_block_header_;
+    std::array<char, LZ4F_HEADER_SIZE_MAX + LZ4F_BLOCK_HEADER_SIZE> data_block_header_{};
     std::istream* stream_;
     size_t data_block_count_{};
     LZ4F_decompressionContext_t ctx_{};

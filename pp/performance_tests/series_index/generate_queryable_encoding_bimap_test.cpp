@@ -1,6 +1,7 @@
 #include "generate_queryable_encoding_bimap_test.h"
 
 #include <chrono>
+#include <iostream>
 
 #include "performance_tests/dummy_wal.h"
 #include "series_index/queryable_encoding_bimap.h"

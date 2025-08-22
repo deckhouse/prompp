@@ -1,7 +1,6 @@
 #pragma once
 
 #include <bit>
-#include <cstdint>
 #include <fstream>
 
 #ifdef __x86_64__
@@ -20,8 +19,6 @@
 #include "preprocess.h"
 #include "streams.h"
 #include "type_traits.h"
-
-#include <iostream>
 
 namespace BareBones {
 
@@ -82,37 +79,37 @@ class BitSequenceReader {
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint64_t position() const noexcept { return i_; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t consume_bits_u32(uint8_t size) noexcept {
-    uint32_t res = read_bits_u32(size);
+    const uint32_t res = read_bits_u32(size);
     ff(size);
     return res;
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint64_t consume_bits_u56(uint8_t size) noexcept {
-    uint64_t res = read_bits_u56(size);
+    const uint64_t res = read_bits_u56(size);
     ff(size);
     return res;
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint64_t consume_bits_u64(uint8_t size) noexcept {
-    uint64_t res = read_bits_u64(size);
+    const uint64_t res = read_bits_u64(size);
     ff(size);
     return res;
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t consume_u32() noexcept {
-    uint32_t res = read_u32();
+    const uint32_t res = read_u32();
     ff(32);
     return res;
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint64_t consume_u56() noexcept {
-    uint64_t res = read_u56();
+    const uint64_t res = read_u56();
     ff(56);
     return res;
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint64_t consume_u64() noexcept {
-    uint64_t res = read_u64();
+    const uint64_t res = read_u64();
     ff(64);
     return res;
   }
@@ -433,7 +430,7 @@ class BitSequence {
     }
 
     if (!empty()) {
-      auto bytes = size_in_bytes();
+      const auto bytes = size_in_bytes();
       std::memcpy(data_, other.data_, bytes);
       zero_bits(data_[bytes - 1], unfilled_bits_count());
     }
@@ -445,19 +442,19 @@ class BitSequence {
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return size_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size_in_bytes() const noexcept { return (size_ + 7) >> 3; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const uint8_t> filled_bytes() const noexcept { return {data_.operator const uint8_t*(), size_ / 8}; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const uint8_t> bytes() const noexcept { return {data_.operator const uint8_t*(), data_.size()}; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const uint8_t> bytes() const noexcept { return {data_.operator const uint8_t*(), size_in_bytes()}; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return data_.allocated_memory(); }
 
-  inline __attribute__((always_inline)) bool empty() const noexcept { return !size_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return !size_; }
 
-  inline __attribute__((always_inline)) void clear() noexcept {
-    if (size_ != 0 && data_.size() != 0)
+  PROMPP_ALWAYS_INLINE void clear() noexcept {
+    if (size_ != 0 && !data_.empty())
       std::memset(data_, 0, (size_ + 7) >> 3);
     size_ = 0;
   }
 
-  inline __attribute__((always_inline)) void push_back_bits_u64(uint8_t size, uint64_t data) noexcept {
+  PROMPP_ALWAYS_INLINE void push_back_bits_u64(uint8_t size, uint64_t data) noexcept {
     assert(size <= 64);
 
     reserve_enough_memory_if_needed();
@@ -468,32 +465,32 @@ class BitSequence {
     size_ += size;
   }
 
-  inline __attribute__((always_inline)) void push_back_bits_u32(uint8_t size, uint32_t data) noexcept {
+  PROMPP_ALWAYS_INLINE void push_back_bits_u32(uint8_t size, uint32_t data) noexcept {
     assert(size <= 32);
 
     reserve_enough_memory_if_needed();
 
-    *reinterpret_cast<uint64_t*>(data_ + (size_ >> 3)) |= data << (size_ & 0b111u);
+    *reinterpret_cast<uint64_t*>(data_ + (size_ >> 3)) |= static_cast<uint64_t>(data) << (size_ & 0b111u);
 
     size_ += size;
   }
 
-  inline __attribute__((always_inline)) void push_back_u64(uint64_t data) noexcept { push_back_bits_u64(64, data); }
+  PROMPP_ALWAYS_INLINE void push_back_u64(uint64_t data) noexcept { push_back_bits_u64(64, data); }
 
-  inline __attribute__((always_inline)) void push_back_u32(uint64_t data) noexcept { push_back_bits_u32(32, data); }
+  PROMPP_ALWAYS_INLINE void push_back_u32(uint64_t data) noexcept { push_back_bits_u32(32, data); }
 
-  inline __attribute__((always_inline)) void push_back_single_zero_bit() noexcept {
+  PROMPP_ALWAYS_INLINE void push_back_single_zero_bit() noexcept {
     reserve_enough_memory_if_needed();
     ++size_;
   }
 
-  inline __attribute__((always_inline)) void push_back_single_one_bit() noexcept {
+  PROMPP_ALWAYS_INLINE void push_back_single_one_bit() noexcept {
     reserve_enough_memory_if_needed();
     *reinterpret_cast<uint32_t*>(data_ + (size_ >> 3)) |= 0b1u << (size_ & 0b111u);
     ++size_;
   }
 
-  inline __attribute__((always_inline)) void push_back_u64_svbyte_2468(uint64_t val) noexcept {
+  PROMPP_ALWAYS_INLINE void push_back_u64_svbyte_2468(uint64_t val) noexcept {
     uint8_t size_in_bytes = ((64 + 15 - std::countl_zero(val)) >> 3) & 0b1110;
 
     size_in_bytes += (size_in_bytes == 0) << 1;
@@ -503,7 +500,7 @@ class BitSequence {
     push_back_bits_u64(size_in_bytes << 3, val);
   }
 
-  inline __attribute__((always_inline)) void push_back_u64_svbyte_0248(uint64_t val) noexcept {
+  PROMPP_ALWAYS_INLINE void push_back_u64_svbyte_0248(uint64_t val) noexcept {
     uint8_t size_in_bytes = ((64 + 15 - std::countl_zero(val)) >> 3) & 0b1110;
 
     size_in_bytes += (size_in_bytes == 6) << 1;
@@ -515,7 +512,7 @@ class BitSequence {
     }
   }
 
-  inline __attribute__((always_inline)) void push_back_d64_svbyte_0468(double val) noexcept {
+  PROMPP_ALWAYS_INLINE void push_back_d64_svbyte_0468(double val) noexcept {
     // for double skip trail z instead of lead z
 
     uint8_t size_in_bytes = ((64 + 15 - std::countr_zero(std::bit_cast<uint64_t>(val))) >> 3) & 0b1110;
@@ -528,9 +525,9 @@ class BitSequence {
     }
   }
 
-  inline __attribute__((always_inline)) BitSequenceReader reader() const noexcept { return {data_, size_}; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE BitSequenceReader reader() const noexcept { return {data_, size_}; }
 
-  inline __attribute__((always_inline)) size_t save_size() const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t save_size() const noexcept {
     // version is written and read by methods put() and get() and they write and read 1 byte
     return 1 + sizeof(size_) + size_in_bytes();
   }
@@ -564,7 +561,7 @@ class BitSequence {
     auto sg1 = std::experimental::scope_fail([&]() { seq.clear(); });
 
     // read version
-    uint8_t version = in.get();
+    const uint8_t version = in.get();
 
     // return successfully, if stream is empty
     if (in.eof())

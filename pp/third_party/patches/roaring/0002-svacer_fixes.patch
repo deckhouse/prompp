@@ -1,0 +1,80 @@
+--- a/src/roaring.c
++++ b/src/roaring.c
+@@ -225,13 +225,13 @@ roaring_bitmap_t *roaring_bitmap_from_range(uint64_t min, uint64_t max,
+     do {
+         uint32_t key = (uint32_t)min_tmp >> 16;
+         uint32_t container_min = min_tmp & 0xFFFF;
+-        uint32_t container_max = (uint32_t)minimum_uint64(max - (key << 16), 1 << 16);
++        uint32_t container_max = (uint32_t)minimum_uint64(max - ((uint64_t)key << 16), 1 << 16);
+         uint8_t type;
+         container_t *container = container_from_range(&type, container_min,
+                                                container_max, (uint16_t)step);
+         ra_append(&answer->high_low_container, key, container, type);
+         uint32_t gap = container_max - container_min + step - 1;
+-        min_tmp += gap - (gap % step);
++        min_tmp += (uint64_t)gap - ((uint64_t)gap % step);
+     } while (min_tmp < max);
+     // cardinality of bitmap will be ((uint64_t) max - min + step - 1 ) / step
+     return answer;
+@@ -1730,6 +1730,7 @@ roaring_uint32_iterator_t *roaring_copy_uint32_iterator(
+     const roaring_uint32_iterator_t *it) {
+     roaring_uint32_iterator_t *newit =
+         (roaring_uint32_iterator_t *)roaring_malloc(sizeof(roaring_uint32_iterator_t));
++    if (newit == NULL) return NULL;
+     memcpy(newit, it, sizeof(roaring_uint32_iterator_t));
+     return newit;
+ }
+@@ -3333,7 +3334,7 @@ roaring_bitmap_t *roaring_bitmap_portable_deserialize_frozen(const char *buf) {
+ 
+     size_t alloc_size = 0;
+     alloc_size += sizeof(roaring_bitmap_t);
+-    alloc_size += num_containers * sizeof(container_t*);
++    alloc_size += num_containers * (int64_t)sizeof(container_t*);
+     alloc_size += num_bitset_containers * sizeof(bitset_container_t);
+     alloc_size += num_run_containers * sizeof(run_container_t);
+     alloc_size += num_array_containers * sizeof(array_container_t);
+
+--- a/src/roaring_array.c
++++ b/src/roaring_array.c
+@@ -92,7 +92,7 @@ bool ra_init_with_capacity(roaring_array_t *new_ra, uint32_t cap) {
+ }
+
+ int ra_shrink_to_fit(roaring_array_t *ra) {
+-    int savings = (ra->allocation_size - ra->size) *
++    int savings = ((int64_t)(ra->allocation_size) - ra->size) *
+                   (sizeof(uint16_t) + sizeof(container_t *) + sizeof(uint8_t));
+     if (!realloc_array(ra, ra->size)) {
+       return 0;
+@@ -455,7 +455,7 @@ bool ra_range_uint32_array(const roaring_array_t *ra, size_t offset, size_t limi
+                 t_limit = run_container_cardinality(const_CAST_run(c));
+                 break;
+         }
+-        if (ctr + t_limit - 1 >= offset && ctr < offset + limit){
++        if (ctr + t_limit > offset && ctr < offset + limit){
+             if (!first){
+                 //first_skip = t_limit - (ctr + t_limit - offset);
+                 first_skip = offset - ctr;
+
+--- a/src/roaring_priority_queue.c
++++ b/src/roaring_priority_queue.c
+@@ -70,6 +70,9 @@ static void percolate_down(roaring_pq_t *pq, uint32_t i) {
+ static roaring_pq_t *create_pq(const roaring_bitmap_t **arr, uint32_t length) {
+     size_t alloc_size = sizeof(roaring_pq_t) + sizeof(roaring_pq_element_t) * length;
+     roaring_pq_t *answer = (roaring_pq_t *)roaring_malloc(alloc_size);
++    if (answer == NULL) {
++        return NULL;
++    }
+     answer->elements = (roaring_pq_element_t *)(answer + 1);
+     answer->size = length;
+     for (uint32_t i = 0; i < length; i++) {
+@@ -205,6 +208,10 @@ roaring_bitmap_t *roaring_bitmap_or_many_heap(uint32_t number,
+         return roaring_bitmap_copy(x[0]);
+     }
+     roaring_pq_t *pq = create_pq(x, number);
++    if (pq == NULL) {
++        return NULL;
++    }
++
+     while (pq->size > 1) {
+         roaring_pq_element_t x1 = pq_poll(pq);
+         roaring_pq_element_t x2 = pq_poll(pq);
