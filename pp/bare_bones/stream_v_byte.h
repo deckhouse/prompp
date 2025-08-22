@@ -825,7 +825,7 @@ PROMPP_ALWAYS_INLINE auto back_inserter(ContainerType& c, uint32_t size) noexcep
 
   const auto original_size = c.size();
 
-  c.reserve(original_size + keys_size(size) + size * sizeof(typename Codec::value_type));
+  c.reserve(original_size + keys_size(size) + size * static_cast<uint32_t>(sizeof(typename Codec::value_type)));
   c.resize(original_size + keys_size(size));
 
   return encoder<Codec>(c.begin() + original_size, std::back_inserter(c));

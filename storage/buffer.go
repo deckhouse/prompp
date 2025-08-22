@@ -399,21 +399,37 @@ func (it *SampleRingIterator) AtT() int64 {
 }
 
 func (r *sampleRing) at(i int) chunks.Sample {
+	if len(r.iBuf) == 0 {
+		return fSample{} // PP_CHANGES.md: The probability is extremely low.
+	}
+
 	j := (r.f + i) % len(r.iBuf)
 	return r.iBuf[j]
 }
 
 func (r *sampleRing) atF(i int) fSample {
+	if len(r.fBuf) == 0 {
+		return fSample{} // PP_CHANGES.md: The probability is extremely low.
+	}
+
 	j := (r.f + i) % len(r.fBuf)
 	return r.fBuf[j]
 }
 
 func (r *sampleRing) atH(i int) hSample {
+	if len(r.hBuf) == 0 {
+		return hSample{} // PP_CHANGES.md: The probability is extremely low.
+	}
+
 	j := (r.f + i) % len(r.hBuf)
 	return r.hBuf[j]
 }
 
 func (r *sampleRing) atFH(i int) fhSample {
+	if len(r.fhBuf) == 0 {
+		return fhSample{} // PP_CHANGES.md: The probability is extremely low.
+	}
+
 	j := (r.f + i) % len(r.fhBuf)
 	return r.fhBuf[j]
 }

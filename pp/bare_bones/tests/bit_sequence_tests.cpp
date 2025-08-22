@@ -133,6 +133,17 @@ TEST_F(BitSequence, D64Svbyte2468) {
   EXPECT_EQ(bitseq.size(), 0);
 }
 
+TEST_F(BitSequence, TestPushBackU32) {
+  // Arrange
+  bitseq.push_back_single_one_bit();
+
+  // Act
+  bitseq.push_back_u32(0xFFFFFFFF);
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(bitseq.bytes(), std::vector<uint8_t>{0xFF, 0xFF, 0xFF, 0xFF, 0x01}));
+}
+
 struct CopyWithSizeConstructorCase {
   uint8_t bits_count;
   uint32_t expected;
@@ -146,7 +157,7 @@ TEST_P(BitSequenceCopyWithSizeConstructorFixture, Test) {
   stream.push_back_u32(std::numeric_limits<uint32_t>::max());
 
   // Act
-  BareBones::BitSequence stream2(stream, GetParam().bits_count);
+  const BareBones::BitSequence stream2(stream, GetParam().bits_count);
 
   // Assert
   ASSERT_EQ(GetParam().bits_count, stream2.size());
@@ -170,10 +181,10 @@ INSTANTIATE_TEST_SUITE_P(Tests,
 
 TEST_F(BitSequenceCopyWithSizeConstructorFixture, SourceStreamIsEmpty) {
   // Arrange
-  BareBones::BitSequence stream;
+  const BareBones::BitSequence stream;
 
   // Act
-  BareBones::BitSequence stream2(stream, 0);
+  const BareBones::BitSequence stream2(stream, 0);
 
   // Assert
   EXPECT_TRUE(stream2.empty());
@@ -190,7 +201,7 @@ TEST_F(CompactBitSequenceFixture, MoveConstructor) {
   stream_.push_back_single_one_bit();
 
   // Act
-  auto stream2 = std::move(stream_);
+  const auto stream2 = std::move(stream_);
 
   // Assert
   EXPECT_EQ(0U, stream_.size_in_bits());
@@ -243,7 +254,7 @@ TEST_F(CompactBitSequenceFixture, PushUint32) {
   // Act
   stream_.push_back_single_zero_bit();
   stream_.push_back_bits_u32(32, 0b10101010101010101010101010101010);
-  auto bytes = stream_.bytes<uint32_t>().data();
+  const auto bytes = stream_.bytes<uint32_t>().data();
 
   // Assert
   ASSERT_EQ(33U, stream_.size_in_bits());
@@ -257,7 +268,7 @@ TEST_F(CompactBitSequenceFixture, PushUint64) {
   // Act
   stream_.push_back_single_zero_bit();
   stream_.push_back_u64(0b1010101010101010101010101010101010101010101010101010101010101010);
-  auto bytes = stream_.bytes<uint64_t>().data();
+  const auto bytes = stream_.bytes<uint64_t>().data();
 
   // Assert
   ASSERT_EQ(65U, stream_.size_in_bits());
@@ -270,7 +281,7 @@ TEST_F(CompactBitSequenceFixture, PushUint64_2) {
 
   // Act
   stream_.push_back_u64(0b1010101010101010101010101010101010101010101010101010101010101010);
-  auto bytes = stream_.bytes<uint64_t>().data();
+  const auto bytes = stream_.bytes<uint64_t>().data();
 
   // Assert
   ASSERT_EQ(64U, stream_.size_in_bits());
@@ -393,7 +404,7 @@ TEST_F(CompactBitSequenceFixture, TrimUint64_2) {
 template <class T>
 class BitSequenceReaderFixture : public testing::Test {};
 
-typedef testing::Types<BareBones::BitSequence, CompactBitSequence<kAllocationSizesTable>> BitSequenceTypes;
+using BitSequenceTypes = testing::Types<BareBones::BitSequence, CompactBitSequence<kAllocationSizesTable>>;
 TYPED_TEST_SUITE(BitSequenceReaderFixture, BitSequenceTypes);
 
 TYPED_TEST(BitSequenceReaderFixture, read_bits_u32) {
