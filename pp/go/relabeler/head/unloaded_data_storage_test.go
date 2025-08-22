@@ -221,7 +221,7 @@ func (s *QueriedSeriesStorageSuite) readFile(file *FileStorage) []byte {
 	return data
 }
 
-func (s *QueriedSeriesStorageSuite) TestOpenErrorInWrite() {
+func (s *QueriedSeriesStorageSuite) TestOpenErrorOnWrite() {
 	// Arrange
 	s.file1.fileName = ""
 
@@ -230,6 +230,8 @@ func (s *QueriedSeriesStorageSuite) TestOpenErrorInWrite() {
 
 	// Assert
 	s.Error(err)
+	s.Nil(s.storage.validStorage)
+	s.Equal(s.file2, s.storage.storages[0])
 }
 
 func (s *QueriedSeriesStorageSuite) TestWriteInFirstStorage() {
@@ -312,6 +314,49 @@ func (s *QueriedSeriesStorageSuite) TestOpenErrorInRead() {
 	// Assert
 	s.Equal([]byte(nil), data)
 	s.Error(err)
+}
+
+func (s *QueriedSeriesStorageSuite) TestChangeActiveFileOnOpenErrorWithoutValidFile() {
+	// Arrange
+	s.file1.fileName = ""
+
+	// Act
+	writeErr1 := s.storage.Write([]byte("12345"), 1234567890)
+	writeErr2 := s.storage.Write([]byte("12345"), 1234567890)
+
+	// Assert
+	s.Error(writeErr1)
+	s.NoError(writeErr2)
+	s.Equal([]byte{
+		QueriedSeriesStorageVersion,                    // version
+		0xd2, 0x02, 0x96, 0x49, 0x00, 0x00, 0x00, 0x00, // timestamp
+		0x4e, 0x78, 0xf9, 0xf3, //crc32
+		0x05, 0x00, 0x00, 0x00, // size
+		'1', '2', '3', '4', '5', // content
+	}, s.readFile(s.file2))
+}
+
+func (s *QueriedSeriesStorageSuite) TestNoChangeActiveFileOnOpenErrorWithValidFile() {
+	// Arrange
+	s.file2.fileName = ""
+	s.writeFile(s.file1, []byte{
+		QueriedSeriesStorageVersion,                    // version
+		0xd2, 0x02, 0x96, 0x49, 0x00, 0x00, 0x00, 0x00, // timestamp
+		0x4e, 0x78, 0xf9, 0xf3, //crc32
+		0x05, 0x00, 0x00, 0x00,
+		'1', '2', '3', '4', '5',
+	})
+
+	// Act
+	data, readErr := s.storage.Read()
+	writeErr1 := s.storage.Write([]byte("67890"), 987654321)
+	writeErr2 := s.storage.Write([]byte("67890"), 987654321)
+
+	// Assert
+	s.Require().NoError(readErr)
+	s.Equal([]byte("12345"), data)
+	s.Error(writeErr1)
+	s.Error(writeErr2)
 }
 
 func (s *QueriedSeriesStorageSuite) TestReadEmptyFiles() {
@@ -480,5 +525,5 @@ func (s *QueriedSeriesStorageSuite) TestReadEmptyContent() {
 
 	// Assert
 	s.Require().NoError(err)
-	s.Equal([]byte(nil), data)
+	s.Equal([]byte{}, data)
 }

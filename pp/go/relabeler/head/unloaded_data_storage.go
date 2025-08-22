@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
-	"slices"
 	"unsafe"
 
 	"github.com/prometheus/prometheus/pp/go/relabeler"
@@ -120,7 +119,8 @@ func (s *UnloadedDataStorage) Close() (err error) {
 }
 
 type QueriedSeriesStorage struct {
-	storages [2]StorageFile
+	storages     [2]StorageFile
+	validStorage StorageFile
 }
 
 func NewQueriedSeriesStorage(storage1, storage2 StorageFile) *QueriedSeriesStorage {
@@ -153,6 +153,9 @@ func (h *queriedSeriesStorageHeader) CalculateCrc32(queriedSeriesBitset []byte) 
 func (s *QueriedSeriesStorage) Write(queriedSeriesBitset []byte, timestamp int64) error {
 	storage := s.storages[0]
 	if err := storage.Open(); err != nil {
+		if s.validStorage == nil {
+			s.changeActiveStorage()
+		}
 		return err
 	}
 
@@ -176,14 +179,15 @@ func (s *QueriedSeriesStorage) Write(queriedSeriesBitset []byte, timestamp int64
 		return err
 	}
 
-	if err := storage.Truncate(int64(len(headerBuffer) + len(queriedSeriesBitset))); err != nil {
-		return err
-	}
-
 	if err := storage.Sync(); err != nil {
 		return err
 	}
 
+	if err := storage.Truncate(int64(len(headerBuffer) + len(queriedSeriesBitset))); err != nil {
+		return err
+	}
+
+	s.validStorage = s.storages[0]
 	s.changeActiveStorage()
 	return nil
 }
@@ -193,12 +197,10 @@ func (s *QueriedSeriesStorage) changeActiveStorage() {
 }
 
 func (s *QueriedSeriesStorage) Read() (data []byte, err error) {
-	readers := s.readStorageHeaders()
+	readers, maxSize := s.readStorageHeaders()
+	data = make([]byte, 0, maxSize)
 
 	for i := range readers {
-		if growTo := int(readers[i].size) - len(data); growTo > 0 {
-			data = slices.Grow(data, growTo)
-		}
 		data = data[:readers[i].size]
 
 		if len(data) > 0 {
@@ -213,6 +215,7 @@ func (s *QueriedSeriesStorage) Read() (data []byte, err error) {
 			continue
 		}
 
+		s.validStorage = readers[i].storage
 		if readers[i].storage == s.storages[0] {
 			s.changeActiveStorage()
 		}
@@ -223,12 +226,13 @@ func (s *QueriedSeriesStorage) Read() (data []byte, err error) {
 	return nil, errors.New("no valid queried series storage")
 }
 
-func (s *QueriedSeriesStorage) readStorageHeaders() (result []storageHeaderReader) {
+func (s *QueriedSeriesStorage) readStorageHeaders() (result []storageHeaderReader, maxSize uint32) {
 	for _, storage := range s.storages {
 		reader := storageHeaderReader{storage: storage}
 
 		if err := reader.read(); err == nil {
 			result = append(result, reader)
+			maxSize = max(maxSize, reader.size)
 		} else {
 			if !errors.Is(err, io.EOF) {
 				logger.Warnf("failed to read header: %v", err)
@@ -240,7 +244,7 @@ func (s *QueriedSeriesStorage) readStorageHeaders() (result []storageHeaderReade
 		result[0], result[1] = result[1], result[0]
 	}
 
-	return result
+	return
 }
 
 func (s *QueriedSeriesStorage) Close() error {
