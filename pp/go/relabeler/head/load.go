@@ -36,9 +36,9 @@ func (q *FileStorage) ReadAt(p []byte, off int64) (n int, err error) {
 	return q.file.ReadAt(p, off)
 }
 
-func (q *FileStorage) Open() (err error) {
+func (q *FileStorage) Open(flags int) (err error) {
 	if q.file == nil {
-		q.file, err = os.OpenFile(q.fileName, os.O_RDWR|os.O_CREATE, 0666)
+		q.file, err = os.OpenFile(q.fileName, flags, 0666)
 	}
 
 	return

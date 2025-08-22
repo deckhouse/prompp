@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"os"
 	"unsafe"
 
 	"github.com/prometheus/prometheus/pp/go/relabeler"
@@ -17,7 +18,7 @@ const (
 )
 
 type StorageFile interface {
-	Open() error
+	Open(flags int) error
 	io.WriteCloser
 	io.ReadSeeker
 	io.ReaderAt
@@ -43,7 +44,7 @@ func (s *UnloadedDataStorage) WriteSnapshot(snapshot []byte) (relabeler.Unloaded
 		return relabeler.UnloadedDataSnapshotHeader{}, nil
 	}
 
-	if err := s.storage.Open(); err != nil {
+	if err := s.storage.Open(os.O_RDWR | os.O_CREATE | os.O_TRUNC); err != nil {
 		return relabeler.UnloadedDataSnapshotHeader{}, err
 	}
 
@@ -152,7 +153,7 @@ func (h *queriedSeriesStorageHeader) CalculateCrc32(queriedSeriesBitset []byte) 
 
 func (s *QueriedSeriesStorage) Write(queriedSeriesBitset []byte, timestamp int64) error {
 	storage := s.storages[0]
-	if err := storage.Open(); err != nil {
+	if err := storage.Open(os.O_RDWR | os.O_CREATE | os.O_TRUNC); err != nil {
 		if s.validStorage == nil {
 			s.changeActiveStorage()
 		}
@@ -234,7 +235,7 @@ func (s *QueriedSeriesStorage) readStorageHeaders() (result []storageHeaderReade
 			result = append(result, reader)
 			maxSize = max(maxSize, reader.size)
 		} else {
-			if !errors.Is(err, io.EOF) {
+			if !os.IsNotExist(err) && !errors.Is(err, io.EOF) {
 				logger.Warnf("failed to read header: %v", err)
 			}
 		}
@@ -257,7 +258,7 @@ type storageHeaderReader struct {
 }
 
 func (s *storageHeaderReader) read() error {
-	if err := s.storage.Open(); err != nil {
+	if err := s.storage.Open(os.O_RDWR); err != nil {
 		return err
 	}
 

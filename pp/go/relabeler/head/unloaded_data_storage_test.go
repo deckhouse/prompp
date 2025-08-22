@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -20,7 +21,7 @@ func (s *BufferReaderAtWriterCloser) IsEmpty() bool {
 	return true
 }
 
-func (s *BufferReaderAtWriterCloser) Open() error {
+func (s *BufferReaderAtWriterCloser) Open(flags int) error {
 	return nil
 }
 
@@ -206,7 +207,7 @@ func (s *QueriedSeriesStorageSuite) TearDownTest() {
 }
 
 func (s *QueriedSeriesStorageSuite) writeFile(file *FileStorage, data []byte) {
-	s.Require().NoError(file.Open())
+	s.Require().NoError(file.Open(os.O_RDWR | os.O_CREATE | os.O_TRUNC))
 	_, err := file.Write(data)
 	s.Require().NoError(err)
 }
