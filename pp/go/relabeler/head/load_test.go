@@ -107,6 +107,11 @@ func (s *HeadLoadSuite) mustLoadHead(unloadDataStorageInterval time.Duration) *H
 	return loadedHead
 }
 
+func (s *HeadLoadSuite) lockFileForCreation(fileName string) {
+	s.Require().NoError(os.Remove(fileName))
+	s.Require().NoError(os.Mkdir(fileName, 0o755))
+}
+
 type seriesData struct {
 	labels  labels.Labels
 	samples []cppbridge.Sample
@@ -227,7 +232,7 @@ func (s *HeadLoadSuite) TestErrorOpenShardFileInAllShards() {
 	s.Require().NoError(head.Close())
 }
 
-func (s *HeadLoadSuite) TestLoadSuccess() {
+func (s *HeadLoadSuite) TestLoadWithDisabledDataUnloading() {
 	// Arrange
 	sourceHead := s.mustCreateHead(0)
 	series := []seriesData{
@@ -299,6 +304,49 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 
 }
 
+func (s *HeadLoadSuite) TestLoadWithEnabledDataUnloading() {
+	// Arrange
+	sourceHead := s.mustCreateHead(0)
+	series1 := []seriesData{
+		{
+			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 1},
+				{Timestamp: 1, Value: 2},
+				{Timestamp: 2, Value: 3},
+			},
+		},
+	}
+	s.appendTimeSeries(sourceHead, series1)
+	series2 := []seriesData{
+		{
+			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			samples: []cppbridge.Sample{
+				{Timestamp: 100, Value: 1},
+				{Timestamp: 101, Value: 2},
+				{Timestamp: 102, Value: 3},
+			},
+		},
+	}
+	s.appendTimeSeries(sourceHead, series2)
+
+	sourceHead.Stop()
+	s.NoError(sourceHead.Close())
+
+	// Act
+	loadedHead := s.mustLoadHead(unloadDataStorageInterval)
+	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "wal_metric")
+	actual := s.query(loadedHead, matcher, 0, 3)
+
+	// Assert
+	s.Equal(series1, actual)
+	s.Require().NotNil(loadedHead.shards[0].unloadedDataStorage)
+	s.Require().NotNil(loadedHead.shards[1].unloadedDataStorage)
+	s.True(loadedHead.shards[0].unloadedDataStorage.storage.IsEmpty())
+	s.True(loadedHead.shards[1].unloadedDataStorage.storage.IsEmpty())
+	s.Require().NoError(loadedHead.Close())
+}
+
 func (s *HeadLoadSuite) TestLoadWithDataUnloading() {
 	// Arrange
 	sourceHead := s.mustCreateHead(unloadDataStorageInterval)
@@ -341,5 +389,48 @@ func (s *HeadLoadSuite) TestLoadWithDataUnloading() {
 	s.NotNil(loadedHead.shards[1].unloadedDataStorage)
 	s.False(loadedHead.shards[0].unloadedDataStorage.storage.IsEmpty())
 	s.True(loadedHead.shards[1].unloadedDataStorage.storage.IsEmpty())
+	s.Require().NoError(loadedHead.Close())
+}
+
+func (s *HeadLoadSuite) TestErrorDataUnloading() {
+	// Arrange
+	sourceHead := s.mustCreateHead(unloadDataStorageInterval)
+	series1 := []seriesData{
+		{
+			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 1},
+				{Timestamp: 1, Value: 2},
+				{Timestamp: 2, Value: 3},
+			},
+		},
+	}
+	s.appendTimeSeries(sourceHead, series1)
+	series2 := []seriesData{
+		{
+			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			samples: []cppbridge.Sample{
+				{Timestamp: 100, Value: 1},
+				{Timestamp: 101, Value: 2},
+				{Timestamp: 102, Value: 3},
+			},
+		},
+	}
+	s.appendTimeSeries(sourceHead, series2)
+
+	sourceHead.UnloadUnusedSeriesData()
+	sourceHead.Stop()
+	s.NoError(sourceHead.Close())
+
+	// Act
+	s.lockFileForCreation(getUnloadedDataStorageFilename(s.dataDir, 0))
+	s.lockFileForCreation(getUnloadedDataStorageFilename(s.dataDir, 1))
+	loadedHead, corrupted, err := s.loadHead(unloadDataStorageInterval)
+
+	// Assert
+	s.Require().NoError(err)
+	s.True(corrupted)
+	s.NotNil(loadedHead.shards[0].unloadedDataStorage)
+	s.NotNil(loadedHead.shards[1].unloadedDataStorage)
 	s.Require().NoError(loadedHead.Close())
 }

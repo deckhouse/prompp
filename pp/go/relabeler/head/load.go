@@ -360,15 +360,13 @@ func (l *ShardLoader) Load() (ShardLoadResult, error) {
 		}
 	}()
 
+	queriedSeriesStorageIsEmpty := true
 	if l.unloadDataStorageInterval > 0 {
-		if queriedSeriesStorageIsEmpty, _ := l.loadQueriedSeries(&result); !queriedSeriesStorageIsEmpty {
-			result.UnloadedDataStorage = NewUnloadedDataStorage(&FileStorage{
-				fileName: getUnloadedDataStorageFilename(l.dir, l.shardID),
-			})
-		}
+		result.UnloadedDataStorage = NewUnloadedDataStorage(NewFileStorage(getUnloadedDataStorageFilename(l.dir, l.shardID)))
+		queriedSeriesStorageIsEmpty, _ = l.loadQueriedSeries(&result)
 	}
 
-	decoder, err := l.loadWalFile(bufio.NewReaderSize(shardWalFile, 1024*1024*4), &result)
+	decoder, err := l.loadWalFile(bufio.NewReaderSize(shardWalFile, 1024*1024*4), queriedSeriesStorageIsEmpty, &result)
 	if err != nil {
 		return result, err
 	}
@@ -381,10 +379,24 @@ func (l *ShardLoader) Load() (ShardLoadResult, error) {
 	return result, nil
 }
 
-func (l *ShardLoader) loadWalFile(reader io.Reader, result *ShardLoadResult) (*cppbridge.HeadWalDecoder, error) {
+func (l *ShardLoader) loadWalFile(
+	reader io.Reader,
+	queriedSeriesStorageIsEmpty bool,
+	result *ShardLoadResult,
+) (*cppbridge.HeadWalDecoder, error) {
 	_, encoderVersion, _, err := ReadHeader(reader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read wal header: %w", err)
+	}
+
+	var unloader *dataUnloader
+	if !queriedSeriesStorageIsEmpty {
+		unloader = &dataUnloader{
+			unloadedDataStorage:   result.UnloadedDataStorage,
+			unloadedIntervalIndex: math.MinInt64,
+			unloadInterval:        l.unloadDataStorageInterval,
+			unloader:              result.DataStorage.CreateUnusedSeriesDataUnloader(),
+		}
 	}
 
 	decoder := cppbridge.NewHeadWalDecoder(result.Lss.target, encoderVersion)
@@ -392,7 +404,7 @@ func (l *ShardLoader) loadWalFile(reader io.Reader, result *ShardLoadResult) (*c
 		reader,
 		decoder,
 		result.DataStorage.encoder,
-		newDataUnloader(result.DataStorage, result.UnloadedDataStorage, l.unloadDataStorageInterval),
+		unloader,
 	)
 	return decoder, err
 }
@@ -412,33 +424,9 @@ type dataUnloader struct {
 	unloadedDataStorage   *UnloadedDataStorage
 	unloadedIntervalIndex int64
 	unloadInterval        time.Duration
-	needUnload            bool
 }
 
-func newDataUnloader(
-	dataStorage *DataStorage,
-	unloadedDataStorage *UnloadedDataStorage,
-	unloadInterval time.Duration,
-) dataUnloader {
-	result := dataUnloader{
-		unloadedDataStorage:   unloadedDataStorage,
-		unloadedIntervalIndex: math.MinInt64,
-		needUnload:            unloadedDataStorage != nil && unloadInterval > 0,
-		unloadInterval:        unloadInterval,
-	}
-
-	if result.needUnload {
-		result.unloader = dataStorage.CreateUnusedSeriesDataUnloader()
-	}
-
-	return result
-}
-
-func (d *dataUnloader) UnloadIfNeeded(createTs, encodeTs time.Duration) error {
-	if !d.needUnload {
-		return nil
-	}
-
+func (d *dataUnloader) Unload(createTs, encodeTs time.Duration) error {
 	intervalIndex := int64(createTs / d.unloadInterval)
 
 	if d.unloadedIntervalIndex == math.MinInt64 {
@@ -468,7 +456,7 @@ func (l *ShardLoader) loadSegments(
 	reader io.Reader,
 	walDecoder *cppbridge.HeadWalDecoder,
 	encoder *cppbridge.HeadEncoder,
-	unloader dataUnloader,
+	unloader *dataUnloader,
 ) (uint32, error) {
 	numberOfSegments := uint32(0)
 
@@ -489,8 +477,8 @@ func (l *ShardLoader) loadSegments(
 
 		numberOfSegments++
 
-		if createTs != 0 {
-			if err = unloader.UnloadIfNeeded(time.Duration(createTs), time.Duration(encodeTs)); err != nil {
+		if createTs != 0 && unloader != nil {
+			if err = unloader.Unload(time.Duration(createTs), time.Duration(encodeTs)); err != nil {
 				return 0, fmt.Errorf("failed to unload data: %w", err)
 			}
 		}
