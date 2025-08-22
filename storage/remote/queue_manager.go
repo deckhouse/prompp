@@ -1337,6 +1337,9 @@ func (s *shards) stop() {
 func (s *shards) enqueue(ref chunks.HeadSeriesRef, data timeSeries) bool {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
+	if len(s.queues) == 0 { // PP_CHANGES.md: validate count of s.queues
+		return false
+	}
 	shard := uint64(ref) % uint64(len(s.queues))
 	select {
 	case <-s.softShutdown:

@@ -919,11 +919,16 @@ type segmentRef struct {
 	index int
 }
 
-func listSegments(dir string) (refs []segmentRef, err error) {
+func listSegments(dir string) ([]segmentRef, error) {
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
+	if len(files) == 0 {
+		return nil, nil // PP_CHANGES.md: optimistic slice allocation
+	}
+
+	refs := make([]segmentRef, 0, len(files)) // PP_CHANGES.md: fast exit
 	for _, f := range files {
 		fn := f.Name()
 		k, err := strconv.Atoi(fn)
@@ -932,6 +937,11 @@ func listSegments(dir string) (refs []segmentRef, err error) {
 		}
 		refs = append(refs, segmentRef{name: fn, index: k})
 	}
+
+	if len(refs) == 0 {
+		return refs, nil // PP_CHANGES.md: fast exit
+	}
+
 	slices.SortFunc(refs, func(a, b segmentRef) int {
 		return a.index - b.index
 	})

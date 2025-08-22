@@ -7,7 +7,7 @@
 namespace PromPP::Primitives {
 template <class LabelSetType, class SamplesType = BareBones::Vector<Sample>>
 class BasicTimeseries {
-  LabelSetType label_set_;
+  LabelSetType label_set_{};
   SamplesType samples_;
 
  public:
