@@ -1282,6 +1282,7 @@ func (it *histogramIterator) Next() ValueType {
 		it.pBucketsDelta[i] += dod
 		it.pBuckets[i] += it.pBucketsDelta[i]
 		current += it.pBuckets[i]
+		//nolintnextline:deref_of_null.ex // don't used.
 		it.pFloatBuckets[i] = float64(current)
 	}
 
@@ -1295,6 +1296,7 @@ func (it *histogramIterator) Next() ValueType {
 		it.nBucketsDelta[i] += dod
 		it.nBuckets[i] += it.nBucketsDelta[i]
 		current += it.nBuckets[i]
+		//nolintnextline:deref_of_null.ex // don't used.
 		it.nFloatBuckets[i] = float64(current)
 	}
 
