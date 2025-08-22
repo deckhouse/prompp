@@ -38,7 +38,7 @@ class GenericEncoder {
   template <class Hashdex, class Stats>
   inline __attribute__((always_inline)) void add(Hashdex& hx, Stats* stats) {
     for (const auto& item : hx) {
-      if ((item.hash() % (1 << encoder_.pow_two_of_total_shards())) == encoder_.shard_id()) {
+      if ((item.hash() % (1ULL << encoder_.pow_two_of_total_shards())) == encoder_.shard_id()) {
         item.read(timeseries_);
         encoder_.add(timeseries_, item.hash());
         timeseries_.clear();

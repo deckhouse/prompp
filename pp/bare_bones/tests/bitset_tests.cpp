@@ -290,6 +290,15 @@ TEST_F(BitsetFixture, PopcountAfterResizeInNextUint64) {
   EXPECT_EQ(0U, bs_.popcount());
 }
 
+TEST_F(BitsetFixture, IterateOverEmptyBitset) {
+  // Arrange
+
+  // Act
+
+  // Assert
+  EXPECT_EQ(0U, std::ranges::distance(bs_));
+}
+
 class BitsetCreateIteratorFixture : public testing::Test {
  protected:
   std::vector<uint8_t> bytes_data_;

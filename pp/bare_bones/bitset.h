@@ -155,9 +155,9 @@ class Bitset {
     using value_type = uint32_t;
     using difference_type = std::ptrdiff_t;
 
-    PROMPP_ALWAYS_INLINE explicit Iterator(const uint64_t* data = nullptr, uint32_t size = 0, uint32_t i = 0) noexcept
+    PROMPP_ALWAYS_INLINE explicit Iterator(const uint64_t* data, uint32_t size, uint32_t i) noexcept
         : data_(data), last_block_n_(size ? ((size - 1) >> 6) : 0), block_n_(i >> 6), j_(i & 0x3F) {
-      block_ = (data_ && size) ? data_[block_n_] : 0;
+      block_ = size ? data_[block_n_] : 0;
       next();
     }
 
@@ -177,7 +177,7 @@ class Bitset {
 
   using const_iterator = Iterator;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return Iterator(data_, size()); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return Iterator(data_, size(), 0); }
   [[nodiscard]] static PROMPP_ALWAYS_INLINE auto end() noexcept { return IteratorSentinel(); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return data_.allocated_memory(); }
