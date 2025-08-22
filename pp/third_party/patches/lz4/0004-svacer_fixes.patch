@@ -1,5 +1,5 @@
 --- lib/xxhash.c
-+++ lib/xxhash_patched.c
++++ lib/xxhash.c
 @@ -262,6 +262,7 @@ XXH_PUBLIC_API unsigned XXH_versionNumber (void) { return XXH_VERSION_NUMBER; }
  *********************************************************************/
  static const U32 PRIME32_1 = 2654435761U;

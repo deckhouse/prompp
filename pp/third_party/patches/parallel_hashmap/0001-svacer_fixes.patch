@@ -1,26 +1,38 @@
+--- parallel_hashmap/phmap.h
++++ parallel_hashmap/phmap.h
+@@ -554,7 +554,7 @@ inline void ConvertDeletedToEmptyAndFullToDeleted(
+         Group{pos}.ConvertSpecialToEmptyAndFullToDeleted(pos);
+     }
+     // Copy the cloned ctrl bytes.
+-    std::memcpy(ctrl + capacity + 1, ctrl, Group::kWidth);
++    std::memmove(ctrl + capacity + 1, ctrl, Group::kWidth);
+     ctrl[capacity] = kSentinel;
+ }
+
+
 --- parallel_hashmap/phmap_base.h
-+++ parallel_hashmap/phmap_base_patched.h
++++ parallel_hashmap/phmap_base.h
 @@ -35,6 +35,7 @@
  // ---------------------------------------------------------------------------
- 
+
  #include <algorithm>
 +#include <array>
  #include <cassert>
  #include <cstddef>
  #include <initializer_list>
 @@ -238,7 +239,7 @@ struct negation : std::integral_constant<bool, !T::value> {};
- 
+
  template <typename T>
  struct is_trivially_destructible
 -    : std::integral_constant<bool, __has_trivial_destructor(T) &&
 +    : std::integral_constant<bool, std::is_trivially_destructible<T>::value &&
        std::is_destructible<T>::value> {};
- 
+
  template <typename T>
 @@ -4622,6 +4623,7 @@ union map_slot_type
      using value_type = std::pair<const K, V>;
      using mutable_value_type = std::pair<K, V>;
- 
+
 +    std::array<K, 0> nop{};
      value_type value;
      mutable_value_type mutable_value;
