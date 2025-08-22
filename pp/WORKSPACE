@@ -180,7 +180,7 @@ git_repository(
     commit = "7d3c4c648b1013e37d25d247c31078033b10d172",
     patch_args = ["-p1"],
     patches = [
-        "//third_party/patches/quasis_crypto:md5.hh.patch",
+        "//third_party/patches/quasis_crypto:0001-md5.hh.patch",
     ],
     remote = "https://github.com/quasis/crypto",
 )
