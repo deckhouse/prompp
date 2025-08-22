@@ -16,6 +16,30 @@ type BufferReaderAtWriterCloser struct {
 	buffer []byte
 }
 
+func (s *BufferReaderAtWriterCloser) IsEmpty() bool {
+	return true
+}
+
+func (s *BufferReaderAtWriterCloser) Open() error {
+	return nil
+}
+
+func (s *BufferReaderAtWriterCloser) Read(p []byte) (n int, err error) {
+	return 0, nil
+}
+
+func (s *BufferReaderAtWriterCloser) Seek(offset int64, whence int) (int64, error) {
+	return 0, nil
+}
+
+func (s *BufferReaderAtWriterCloser) Sync() error {
+	return nil
+}
+
+func (s *BufferReaderAtWriterCloser) Truncate(size int64) error {
+	return nil
+}
+
 func (s *BufferReaderAtWriterCloser) ReadAt(p []byte, off int64) (n int, err error) {
 	return bytes.NewReader(s.buffer).ReadAt(p, off)
 }
@@ -41,8 +65,7 @@ func TestUnloadedDataStorageSuite(t *testing.T) {
 
 func (s *UnloadedDataStorageSuite) SetupTest() {
 	s.storageBuffer = &BufferReaderAtWriterCloser{}
-	s.storage = &UnloadedDataStorage{}
-	_ = s.storage.Initialize(s.storageBuffer)
+	s.storage = NewUnloadedDataStorage(s.storageBuffer)
 }
 
 func (s *UnloadedDataStorageSuite) Write(snapshot []byte) {
@@ -70,6 +93,7 @@ func (s *UnloadedDataStorageSuite) TestWriteEmptySnapshot() {
 
 func (s *UnloadedDataStorageSuite) TestReadEmptySnapshots() {
 	// Arrange
+	s.storageBuffer.buffer = []byte{UnloadedDataStorageVersion}
 
 	// Act
 	snapshots, err := s.readSnapshots()
@@ -120,6 +144,7 @@ func (s *UnloadedDataStorageSuite) TestReadEof() {
 
 func (s *UnloadedDataStorageSuite) TestReadVersionError() {
 	// Arrange
+	s.Write([]byte("123"))
 	s.storageBuffer.buffer = nil
 
 	// Act
@@ -132,6 +157,7 @@ func (s *UnloadedDataStorageSuite) TestReadVersionError() {
 
 func (s *UnloadedDataStorageSuite) TestInvalidVersion() {
 	// Arrange
+	s.Write([]byte("123"))
 	var invalidVersion byte = UnloadedDataStorageVersion + 1
 	s.storageBuffer.buffer = []byte{invalidVersion}
 
@@ -159,8 +185,8 @@ func (s *UnloadedDataStorageSuite) TestReadInvalidSnapshot() {
 
 type QueriedSeriesStorageSuite struct {
 	suite.Suite
-	file1   *QueriedSeriesStorageOsFile
-	file2   *QueriedSeriesStorageOsFile
+	file1   *FileStorage
+	file2   *FileStorage
 	storage *QueriedSeriesStorage
 }
 
@@ -170,8 +196,8 @@ func TestQueriedSeriesStorageWriterSuite(t *testing.T) {
 
 func (s *QueriedSeriesStorageSuite) SetupTest() {
 	tempDir := s.T().TempDir()
-	s.file1 = &QueriedSeriesStorageOsFile{fileName: filepath.Join(tempDir, "file1")}
-	s.file2 = &QueriedSeriesStorageOsFile{fileName: filepath.Join(tempDir, "file2")}
+	s.file1 = &FileStorage{fileName: filepath.Join(tempDir, "file1")}
+	s.file2 = &FileStorage{fileName: filepath.Join(tempDir, "file2")}
 	s.storage = NewQueriedSeriesStorage(s.file1, s.file2)
 }
 
@@ -179,13 +205,13 @@ func (s *QueriedSeriesStorageSuite) TearDownTest() {
 	s.Require().NoError(s.storage.Close())
 }
 
-func (s *QueriedSeriesStorageSuite) writeFile(file *QueriedSeriesStorageOsFile, data []byte) {
+func (s *QueriedSeriesStorageSuite) writeFile(file *FileStorage, data []byte) {
 	s.Require().NoError(file.Open())
 	_, err := file.Write(data)
 	s.Require().NoError(err)
 }
 
-func (s *QueriedSeriesStorageSuite) readFile(file *QueriedSeriesStorageOsFile) []byte {
+func (s *QueriedSeriesStorageSuite) readFile(file *FileStorage) []byte {
 	_, err := file.Seek(0, io.SeekStart)
 	s.Require().NoError(err)
 

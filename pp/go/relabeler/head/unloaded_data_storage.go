@@ -17,24 +17,41 @@ const (
 	QueriedSeriesStorageVersion = 1
 )
 
+type StorageFile interface {
+	Open() error
+	io.WriteCloser
+	io.ReadSeeker
+	io.ReaderAt
+	Sync() error
+	Truncate(size int64) error
+	IsEmpty() bool
+}
+
 type UnloadedDataStorage struct {
-	storage         relabeler.ReaderAtWriterCloser
+	storage         StorageFile
 	snapshots       []relabeler.UnloadedDataSnapshotHeader
 	maxSnapshotSize uint32
 }
 
-func (s *UnloadedDataStorage) IsInitialized() bool {
-	return s.storage != nil
-}
-
-func (s *UnloadedDataStorage) Initialize(storage relabeler.ReaderAtWriterCloser) error {
-	s.storage = storage
-	return s.WriteFormatVersion()
+func NewUnloadedDataStorage(storage StorageFile) *UnloadedDataStorage {
+	return &UnloadedDataStorage{
+		storage: storage,
+	}
 }
 
 func (s *UnloadedDataStorage) WriteSnapshot(snapshot []byte) (relabeler.UnloadedDataSnapshotHeader, error) {
 	if len(snapshot) == 0 {
 		return relabeler.UnloadedDataSnapshotHeader{}, nil
+	}
+
+	if err := s.storage.Open(); err != nil {
+		return relabeler.UnloadedDataSnapshotHeader{}, err
+	}
+
+	if len(s.snapshots) == 0 {
+		if err := s.WriteFormatVersion(); err != nil {
+			return relabeler.UnloadedDataSnapshotHeader{}, err
+		}
 	}
 
 	_, err := s.storage.Write(snapshot)
@@ -52,6 +69,10 @@ func (s *UnloadedDataStorage) WriteFormatVersion() error {
 }
 
 func (s *UnloadedDataStorage) ForEachSnapshot(f func(snapshot []byte, isLast bool)) error {
+	if len(s.snapshots) == 0 {
+		return nil
+	}
+
 	offset, err := s.validateFormatVersion()
 	if err != nil {
 		return err
@@ -98,21 +119,13 @@ func (s *UnloadedDataStorage) Close() (err error) {
 	return
 }
 
-type QueriedSeriesStorageFile interface {
-	Open() error
-	io.WriteCloser
-	io.ReadSeeker
-	Sync() error
-	Truncate(size int64) error
-}
-
 type QueriedSeriesStorage struct {
-	storages [2]QueriedSeriesStorageFile
+	storages [2]StorageFile
 }
 
-func NewQueriedSeriesStorage(storage1, storage2 QueriedSeriesStorageFile) *QueriedSeriesStorage {
+func NewQueriedSeriesStorage(storage1, storage2 StorageFile) *QueriedSeriesStorage {
 	return &QueriedSeriesStorage{
-		storages: [2]QueriedSeriesStorageFile{storage1, storage2},
+		storages: [2]StorageFile{storage1, storage2},
 	}
 }
 
@@ -234,7 +247,7 @@ func (s *QueriedSeriesStorage) Close() error {
 
 type storageHeaderReader struct {
 	queriedSeriesStorageHeader
-	storage QueriedSeriesStorageFile
+	storage StorageFile
 }
 
 func (s *storageHeaderReader) read() error {

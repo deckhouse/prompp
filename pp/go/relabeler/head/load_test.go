@@ -252,6 +252,10 @@ func (s *HeadLoadSuite) TestLoadSuccess() {
 	err := loadedHead.Close()
 
 	// Assert
+	s.Nil(loadedHead.shards[0].unloadedDataStorage)
+	s.Nil(loadedHead.shards[0].queriedSeriesStorage)
+	s.Nil(loadedHead.shards[1].unloadedDataStorage)
+	s.Nil(loadedHead.shards[1].queriedSeriesStorage)
 	s.Equal(series, actual)
 	s.Require().NoError(err)
 }
@@ -330,9 +334,12 @@ func (s *HeadLoadSuite) TestLoadWithDataUnloading() {
 
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "wal_metric")
 	actual := s.query(loadedHead, matcher, 0, 3)
-	err := loadedHead.Close()
 
 	// Assert
 	s.Equal(series1, actual)
-	s.Require().NoError(err)
+	s.NotNil(loadedHead.shards[0].unloadedDataStorage)
+	s.NotNil(loadedHead.shards[1].unloadedDataStorage)
+	s.False(loadedHead.shards[0].unloadedDataStorage.storage.IsEmpty())
+	s.True(loadedHead.shards[1].unloadedDataStorage.storage.IsEmpty())
+	s.Require().NoError(loadedHead.Close())
 }

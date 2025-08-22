@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -24,12 +23,20 @@ const (
 	HeadWalEncoderDecoderLogShards uint8 = 0
 )
 
-type QueriedSeriesStorageOsFile struct {
+type FileStorage struct {
 	fileName string
 	file     *os.File
 }
 
-func (q *QueriedSeriesStorageOsFile) Open() (err error) {
+func NewFileStorage(fileName string) *FileStorage {
+	return &FileStorage{fileName: fileName}
+}
+
+func (q *FileStorage) ReadAt(p []byte, off int64) (n int, err error) {
+	return q.file.ReadAt(p, off)
+}
+
+func (q *FileStorage) Open() (err error) {
 	if q.file == nil {
 		q.file, err = os.OpenFile(q.fileName, os.O_RDWR|os.O_CREATE, 0666)
 	}
@@ -37,11 +44,11 @@ func (q *QueriedSeriesStorageOsFile) Open() (err error) {
 	return
 }
 
-func (q *QueriedSeriesStorageOsFile) Write(p []byte) (n int, err error) {
+func (q *FileStorage) Write(p []byte) (n int, err error) {
 	return q.file.Write(p)
 }
 
-func (q *QueriedSeriesStorageOsFile) Close() error {
+func (q *FileStorage) Close() error {
 	if q.file != nil {
 		return q.file.Close()
 	}
@@ -49,23 +56,23 @@ func (q *QueriedSeriesStorageOsFile) Close() error {
 	return nil
 }
 
-func (q *QueriedSeriesStorageOsFile) Read(p []byte) (n int, err error) {
+func (q *FileStorage) Read(p []byte) (n int, err error) {
 	return q.file.Read(p)
 }
 
-func (q *QueriedSeriesStorageOsFile) Seek(offset int64, whence int) (int64, error) {
+func (q *FileStorage) Seek(offset int64, whence int) (int64, error) {
 	return q.file.Seek(offset, whence)
 }
 
-func (q *QueriedSeriesStorageOsFile) Sync() error {
+func (q *FileStorage) Sync() error {
 	return q.file.Sync()
 }
 
-func (q *QueriedSeriesStorageOsFile) Truncate(size int64) error {
+func (q *FileStorage) Truncate(size int64) error {
 	return q.file.Truncate(size)
 }
 
-func (q *QueriedSeriesStorageOsFile) IsEmpty() bool {
+func (q *FileStorage) IsEmpty() bool {
 	if q.file != nil {
 		if info, err := q.file.Stat(); err == nil {
 			return info.Size() == 0
@@ -180,10 +187,10 @@ func createShard(
 	var unloadedDataStorage *UnloadedDataStorage
 	var queriedSeriesStorage *QueriedSeriesStorage
 	if unloadDataStorageInterval != 0 {
-		unloadedDataStorage = &UnloadedDataStorage{}
+		unloadedDataStorage = NewUnloadedDataStorage(NewFileStorage(getUnloadedDataStorageFilename(dir, shardID)))
 		queriedSeriesStorage = NewQueriedSeriesStorage(
-			&QueriedSeriesStorageOsFile{fileName: getQueriedSeriesStorageFilename(dir, shardID, 0)},
-			&QueriedSeriesStorageOsFile{fileName: getQueriedSeriesStorageFilename(dir, shardID, 1)},
+			NewFileStorage(getQueriedSeriesStorageFilename(dir, shardID, 0)),
+			NewFileStorage(getQueriedSeriesStorageFilename(dir, shardID, 1)),
 		)
 	}
 
@@ -193,29 +200,6 @@ func createShard(
 		unloadedDataStorage,
 		queriedSeriesStorage,
 		nil
-}
-
-func createAndInitializeUnloadedDataStorage(dir string, shardID uint16) (*UnloadedDataStorage, error) {
-	unloadedDataStorage := &UnloadedDataStorage{}
-	if err := initializeUnloadedDataStorage(unloadedDataStorage, dir, shardID); err != nil {
-		return nil, err
-	}
-
-	return unloadedDataStorage, nil
-}
-
-func initializeUnloadedDataStorage(unloadedDataStorage relabeler.UnloadedDataStorage, dir string, shardID uint16) error {
-	unloadedDataStorageFile, err := os.Create(getUnloadedDataStorageFilename(dir, shardID))
-	if err != nil {
-		return err
-	}
-
-	if err = unloadedDataStorage.Initialize(unloadedDataStorageFile); err != nil {
-		_ = unloadedDataStorageFile.Close()
-		return err
-	}
-
-	return nil
 }
 
 func Load(
@@ -378,7 +362,9 @@ func (l *ShardLoader) Load() (ShardLoadResult, error) {
 
 	if l.unloadDataStorageInterval > 0 {
 		if queriedSeriesStorageIsEmpty, _ := l.loadQueriedSeries(&result); !queriedSeriesStorageIsEmpty {
-			result.UnloadedDataStorage, _ = createAndInitializeUnloadedDataStorage(l.dir, l.shardID)
+			result.UnloadedDataStorage = NewUnloadedDataStorage(&FileStorage{
+				fileName: getUnloadedDataStorageFilename(l.dir, l.shardID),
+			})
 		}
 	}
 
@@ -512,8 +498,8 @@ func (l *ShardLoader) loadSegments(
 }
 
 func (l *ShardLoader) loadQueriedSeries(result *ShardLoadResult) (bool, error) {
-	file1 := &QueriedSeriesStorageOsFile{fileName: getQueriedSeriesStorageFilename(l.dir, l.shardID, 0)}
-	file2 := &QueriedSeriesStorageOsFile{fileName: getQueriedSeriesStorageFilename(l.dir, l.shardID, 1)}
+	file1 := NewFileStorage(getQueriedSeriesStorageFilename(l.dir, l.shardID, 0))
+	file2 := NewFileStorage(getQueriedSeriesStorageFilename(l.dir, l.shardID, 1))
 
 	result.QueriedSeriesStorage = NewQueriedSeriesStorage(file1, file2)
 

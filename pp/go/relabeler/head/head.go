@@ -1154,12 +1154,6 @@ func (h *Head) UnloadUnusedSeriesData() {
 				return nil
 			}
 
-			if !shard.UnloadedDataStorage().IsInitialized() {
-				if err := initializeUnloadedDataStorage(shard.UnloadedDataStorage(), h.dir, shard.ShardID()); err != nil {
-					return fmt.Errorf("unable to initialize unloaded data storage: %v", err)
-				}
-			}
-
 			unloader := shard.DataStorage().CreateUnusedSeriesDataUnloader()
 
 			shard.DataStorageRLock()
@@ -1169,7 +1163,7 @@ func (h *Head) UnloadUnusedSeriesData() {
 
 			header, err := shard.UnloadedDataStorage().WriteSnapshot(snapshot)
 			if err != nil {
-				return fmt.Errorf("unable to write unused series data snapshot: %v", err)
+				return fmt.Errorf("unable to write unloaded series data snapshot: %v", err)
 			}
 
 			shard.DataStorageLock()
