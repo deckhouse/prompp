@@ -154,9 +154,7 @@ func (h *queriedSeriesStorageHeader) CalculateCrc32(queriedSeriesBitset []byte) 
 func (s *QueriedSeriesStorage) Write(queriedSeriesBitset []byte, timestamp int64) error {
 	storage := s.storages[0]
 	if err := storage.Open(os.O_RDWR | os.O_CREATE | os.O_TRUNC); err != nil {
-		if s.validStorage == nil {
-			s.changeActiveStorage()
-		}
+		s.changeActiveStorageIfNoValidStorage()
 		return err
 	}
 
@@ -168,11 +166,22 @@ func (s *QueriedSeriesStorage) Write(queriedSeriesBitset []byte, timestamp int64
 	header.size = uint32(len(queriedSeriesBitset))
 	header.CalculateCrc32(queriedSeriesBitset)
 
+	if err := s.writeToStorage(storage, headerBuffer[:], queriedSeriesBitset); err != nil {
+		s.changeActiveStorageIfNoValidStorage()
+		return err
+	}
+
+	s.validStorage = s.storages[0]
+	s.changeActiveStorage()
+	return nil
+}
+
+func (s *QueriedSeriesStorage) writeToStorage(storage StorageFile, headerBuffer, queriedSeriesBitset []byte) error {
 	if _, err := storage.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
 
-	if _, err := storage.Write(headerBuffer[:]); err != nil {
+	if _, err := storage.Write(headerBuffer); err != nil {
 		return err
 	}
 
@@ -184,17 +193,17 @@ func (s *QueriedSeriesStorage) Write(queriedSeriesBitset []byte, timestamp int64
 		return err
 	}
 
-	if err := storage.Truncate(int64(len(headerBuffer) + len(queriedSeriesBitset))); err != nil {
-		return err
-	}
-
-	s.validStorage = s.storages[0]
-	s.changeActiveStorage()
-	return nil
+	return storage.Truncate(int64(len(headerBuffer) + len(queriedSeriesBitset)))
 }
 
 func (s *QueriedSeriesStorage) changeActiveStorage() {
 	s.storages[0], s.storages[1] = s.storages[1], s.storages[0]
+}
+
+func (s *QueriedSeriesStorage) changeActiveStorageIfNoValidStorage() {
+	if s.validStorage == nil {
+		s.changeActiveStorage()
+	}
 }
 
 func (s *QueriedSeriesStorage) Read() (data []byte, err error) {
