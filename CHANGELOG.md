@@ -4,6 +4,7 @@
 
 1. Base Prometheus version bumped to 2.55.1. It's unlock switch from Prometheus 3.x installations to Prom++.
 2. Update dependencies to mitigate CVEs.
+3. Fixing potential problems found with static analysis.
 
 ## v0.4.0
 
