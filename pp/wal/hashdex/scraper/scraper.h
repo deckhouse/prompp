@@ -100,6 +100,10 @@ class Scraper {
   [[nodiscard]] PROMPP_ALWAYS_INLINE MetricsWrapper metrics() const noexcept { return MetricsWrapper{*this}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE MetadataWrapper metadata() const noexcept { return MetadataWrapper{*this}; }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
+    return metric_buffer_.allocated_memory() + metadata_buffer_.allocated_memory();
+  }
+
  private:
   using Token = Prometheus::textparse::Token;
 
@@ -277,6 +281,8 @@ class Scraper {
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin(std::string_view buffer) const noexcept { return {buffer, this}; }
     [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return buffer_.allocated_memory(); }
 
    protected:
     BareBones::Vector<char> buffer_;
