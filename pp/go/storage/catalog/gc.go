@@ -7,21 +7,34 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/prometheus/prometheus/pp/go/relabeler/head/ready"
-	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
+	"github.com/prometheus/prometheus/pp/go/storage/logger"
 )
+
+//
+// Notifiable
+//
+
+// Notifiable notifies the recipient that it is ready to work.
+type Notifiable interface {
+	// ReadyChan notifies the recipient that it is ready to work.
+	ReadyChan() <-chan struct{}
+}
+
+//
+// GC
+//
 
 // GC garbage collector for old [Head].
 type GC struct {
 	dataDir         string
 	catalog         *Catalog
-	readyNotifiable ready.Notifiable
+	readyNotifiable Notifiable
 	stop            chan struct{}
 	stopped         chan struct{}
 }
 
 // NewGC init new [GC].
-func NewGC(dataDir string, catalog *Catalog, readyNotifiable ready.Notifiable) *GC {
+func NewGC(dataDir string, catalog *Catalog, readyNotifiable Notifiable) *GC {
 	return &GC{
 		dataDir:         dataDir,
 		catalog:         catalog,
@@ -89,6 +102,7 @@ func (gc *GC) Run(ctx context.Context) error {
 		case <-gc.stop:
 			return errors.New("stopped")
 		}
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()

@@ -9,6 +9,7 @@ import (
 	"io"
 
 	"github.com/google/uuid"
+
 	"github.com/prometheus/prometheus/pp/go/util/optional"
 )
 

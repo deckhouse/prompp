@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/prometheus/prometheus/pp/go/storage/logger"
 	"github.com/prometheus/prometheus/pp/go/util"
 )

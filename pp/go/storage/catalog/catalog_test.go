@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/suite"
@@ -33,10 +34,12 @@ func (s *CatalogSuite) TestHappyPath() {
 
 	clock := clockwork.NewFakeClockAt(time.Now())
 
+	idGenerator := &testIDGenerator{}
+
 	c, err := catalog.New(
 		clock,
 		l,
-		catalog.DefaultIDGenerator{},
+		idGenerator,
 		catalog.DefaultMaxLogFileSize,
 		nil,
 	)
@@ -49,10 +52,9 @@ func (s *CatalogSuite) TestHappyPath() {
 
 	r1, err := c.Create(nos1)
 	s.Require().NoError(err)
-	id1 := r1.ID()
 
-	s.Require().Equal(id1, r1.ID())
-	s.Require().Equal(id1, r1.Dir())
+	s.Require().Equal(idGenerator.last(), r1.ID())
+	s.Require().Equal(idGenerator.last(), r1.Dir())
 	s.Require().Equal(nos1, r1.NumberOfShards())
 	s.Require().Equal(now, r1.CreatedAt())
 	s.Require().Equal(now, r1.UpdatedAt())
@@ -64,10 +66,9 @@ func (s *CatalogSuite) TestHappyPath() {
 
 	r2, err := c.Create(nos2)
 	s.Require().NoError(err)
-	id2 := r2.ID()
 
-	s.Require().Equal(id2, r2.ID())
-	s.Require().Equal(id2, r2.Dir())
+	s.Require().Equal(idGenerator.last(), r2.ID())
+	s.Require().Equal(idGenerator.last(), r2.Dir())
 	s.Require().Equal(nos2, r2.NumberOfShards())
 	s.Require().Equal(now, r2.CreatedAt())
 	s.Require().Equal(now, r2.UpdatedAt())
@@ -110,10 +111,12 @@ func (s *CatalogSuite) TestCatalogSyncFail() {
 
 	clock := clockwork.NewFakeClockAt(time.Now())
 
+	idGenerator := &testIDGenerator{}
+
 	c, err := catalog.New(
 		clock,
 		l,
-		catalog.DefaultIDGenerator{},
+		idGenerator,
 		catalog.DefaultMaxLogFileSize,
 		prometheus.DefaultRegisterer,
 	)
@@ -138,7 +141,7 @@ func (s *CatalogSuite) TestCatalogSyncFail() {
 	c, err = catalog.New(
 		clock,
 		l,
-		catalog.DefaultIDGenerator{},
+		idGenerator,
 		catalog.DefaultMaxLogFileSize,
 		nil,
 	)
@@ -157,4 +160,20 @@ func (s *CatalogSuite) TestCatalogSyncFail() {
 	s.Require().Equal(r1.UpdatedAt(), restoredR1.UpdatedAt())
 	s.Require().Equal(r1.DeletedAt(), restoredR1.DeletedAt())
 	s.Require().Equal(r1.Status(), restoredR1.Status())
+}
+
+// testIDGenerator generator UUID for test.
+type testIDGenerator struct {
+	lastUUID uuid.UUID
+}
+
+// Generate UUID. Implementation [catalog.IDGenerator].
+func (g *testIDGenerator) Generate() uuid.UUID {
+	g.lastUUID = uuid.New()
+	return g.lastUUID
+}
+
+// last returns last UUID as string.
+func (g *testIDGenerator) last() string {
+	return g.lastUUID.String()
 }

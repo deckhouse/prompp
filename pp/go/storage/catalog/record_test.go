@@ -3,8 +3,9 @@ package catalog_test
 import (
 	"testing"
 
-	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 )
 
 type RecordSuite struct {
