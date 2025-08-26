@@ -23,10 +23,12 @@ class Scraper {
   [[nodiscard]] Error parse(std::span<char> buffer, Primitives::Timestamp default_timestamp) {
     metric_buffer_.initialize(buffer.size() / 2);
     metadata_buffer_.initialize(buffer.size() / 4);
-    parser_.tokenizer().tokenize({buffer.data(), buffer.data() + buffer.size()});
+
+    auto& tokenizer = parser_.tokenizer();
+    tokenizer.tokenize({buffer.data(), buffer.data() + buffer.size()});
 
     while (true) {
-      switch (parser_.tokenizer().next()) {
+      switch (tokenizer.next()) {
         case Token::kEOF:
         case Token::kEOFWord: {
           return parser_.validate_parse_result();
@@ -55,8 +57,8 @@ class Scraper {
             return error;
           }
 
-          if (parser_.tokenizer().token() == Token::kExemplar) {
-            parser_.tokenizer().consume_comment();
+          if (tokenizer.token() == Token::kExemplar) {
+            tokenizer.consume_comment();
           }
 
           break;
@@ -119,14 +121,14 @@ class Scraper {
       };
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_valid() const noexcept {
-      return offset != std::numeric_limits<uint32_t>::max() && length != std::numeric_limits<uint32_t>::max();
+    [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_reserved_name() const noexcept {
+      return offset == std::numeric_limits<uint32_t>::max() && length == std::numeric_limits<uint32_t>::max();
     }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_empty() const noexcept { return length == 0; }
 
-    [[nodiscard]] std::string_view string_view(const std::string_view& buffer) const noexcept {
-      if (!is_valid()) [[unlikely]] {
+    [[nodiscard]] std::string_view view(const std::string_view& buffer) const noexcept {
+      if (is_reserved_name()) [[unlikely]] {
         return Prometheus::kMetricLabelName;
       }
 
@@ -145,14 +147,14 @@ class Scraper {
 
     PROMPP_ALWAYS_INLINE void sort(const std::string_view& buffer) noexcept {
       std::sort(labels, labels + count,
-                [&buffer](const MarkedLabel& a, const MarkedLabel& b) PROMPP_LAMBDA_INLINE { return a.name.string_view(buffer) < b.name.string_view(buffer); });
+                [&buffer](const MarkedLabel& a, const MarkedLabel& b) PROMPP_LAMBDA_INLINE { return a.name.view(buffer) < b.name.view(buffer); });
     }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE uint64_t hash(const std::string_view& buffer) const noexcept {
       BareBones::XXHash hash;
       for (uint32_t i = 0; i < count; ++i) {
         const auto& [name, value] = labels[i];
-        hash.extend(name.string_view(buffer), value.string_view(buffer));
+        hash.extend(name.view(buffer), value.view(buffer));
       }
       return hash.hash();
     }
@@ -199,7 +201,7 @@ class Scraper {
       timeseries.label_set().reserve(item_->label_set.count);
       for (uint32_t i = 0; i < item_->label_set.count; ++i) {
         const auto& [name, value] = item_->label_set.labels[i];
-        timeseries.label_set().append(name.string_view(buffer_), value.string_view(buffer_));
+        timeseries.label_set().append(name.view(buffer_), value.view(buffer_));
       }
 
       timeseries.samples().emplace_back(item_->sample);
@@ -220,8 +222,8 @@ class Scraper {
     PROMPP_ALWAYS_INLINE void set_item(const MarkedMetadata* item) noexcept { item_ = item; }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE Prometheus::MetadataType type() const noexcept { return item_->type; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view metric_name() const noexcept { return item_->metric_name.string_view(buffer_); }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view text() const noexcept { return item_->text.string_view(buffer_); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view metric_name() const noexcept { return item_->metric_name.view(buffer_); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view text() const noexcept { return item_->text.view(buffer_); }
 
    private:
     std::string_view buffer_;
