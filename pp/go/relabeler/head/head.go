@@ -1235,5 +1235,21 @@ func (h *Head) Raw() relabeler.Head {
 func (h *Head) UnrecoverableError(err error) {
 	logger.Warnf("Unrecoverable error: %v", err)
 
-	UnrecoverableErrorChan <- err
+	UnrecoverableErrorChan <- UnrecoverableError{err}
+}
+
+// UnrecoverableError error if Head get unrecoverable error.
+type UnrecoverableError struct {
+	err error
+}
+
+// Error implements error.
+func (err UnrecoverableError) Error() string {
+	return fmt.Sprintf("Unrecoverable error: %v", err.err)
+}
+
+// Is implements errors.Is interface.
+func (UnrecoverableError) Is(target error) bool {
+	_, ok := target.(UnrecoverableError)
+	return ok
 }

@@ -1468,7 +1468,15 @@ func main() {
 		g.Add(
 			func() error { return <-head.UnrecoverableErrorChan },
 			func(err error) {
-				level.Info(logger).Log("msg", "Received unrecoverable error", err, "Stopping")
+				select {
+				case head.UnrecoverableErrorChan <- nil:
+					// stop execute func if need
+				default:
+				}
+
+				if errors.Is(err, head.UnrecoverableError{}) {
+					level.Error(logger).Log("msg", "Received unrecoverable error", "err", err)
+				}
 			},
 		)
 	} // PP_CHANGES.md: rebuild on cpp end
