@@ -2621,17 +2621,29 @@ func prometheusCacheAllocatedMemory(cache uintptr) uint64 {
 	return res.cacheAllocatedMemory
 }
 
-// prometheusCacheResetTo reset cache.
-func prometheusCacheResetTo(cache uintptr) {
+// prometheusCacheUpdate add to cache relabled data(third stage).
+func prometheusCacheUpdate(
+	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
+	cache uintptr,
+) []byte {
 	args := struct {
-		cache uintptr
-	}{cache}
-
+		relabelerStateUpdates []*RelabelerStateUpdate
+		cache                 uintptr
+	}{shardsRelabelerStateUpdate, cache}
+	var res struct {
+		exception []byte
+	}
+	start := time.Now().UnixNano()
 	testGC()
-	fastcgo.UnsafeCall1(
-		C.prompp_prometheus_cache_reset_to,
+	fastcgo.UnsafeCall2(
+		C.prompp_prometheus_cache_update,
 		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
 	)
+	inputRelabelerUpdateRelabelerStateSum.Add(float64(time.Now().UnixNano() - start))
+	inputRelabelerUpdateRelabelerStateCount.Inc()
+
+	return res.exception
 }
 
 func headWalEncoderCtor(shardID uint16, logShards uint8, lss uintptr) uintptr {

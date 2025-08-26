@@ -537,12 +537,31 @@ extern "C" void prompp_prometheus_cache_allocated_memory(void* args, void* res) 
   new (res) Result{.allocated_memory = in->cache->allocated_memory()};
 }
 
-extern "C" void prompp_prometheus_cache_reset_to(void* args) {
+extern "C" void prompp_prometheus_cache_update(void* args, void* res) {
   struct Arguments {
+    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::RelabelerStateUpdate*> shards_relabeler_state_update;
     CachePtr cache;
+    uint16_t relabeled_shard_id;
+  };
+  struct Result {
+    PromPP::Primitives::Go::Slice<char> error;
   };
 
-  static_cast<Arguments*>(args)->cache->reset();
+  const auto* in = static_cast<Arguments*>(args);
+
+  try {
+    for (size_t id = 0; id != in->shards_relabeler_state_update.size(); ++id) {
+      if (in->shards_relabeler_state_update[id] == nullptr || in->shards_relabeler_state_update[id]->size() == 0) {
+        continue;
+      }
+
+      in->cache->update(in->shards_relabeler_state_update[id], id);
+    }
+  } catch (...) {
+    auto* out = new (res) Result();
+    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
+    entrypoint::handle_current_exception(err_stream);
+  }
 }
 
 //

@@ -276,12 +276,6 @@ class Cache {
     cache_drop_.runOptimize();
   }
 
-  PROMPP_ALWAYS_INLINE void reset() {
-    cache_relabel_.clear();
-    cache_keep_ = roaring::Roaring{};
-    cache_drop_ = roaring::Roaring{};
-  }
-
   PROMPP_ALWAYS_INLINE double part_of_drops() {
     if (cache_drop_.cardinality() == 0) {
       return 0;
@@ -336,6 +330,14 @@ class Cache {
     }
 
     return {};
+  }
+
+  // third stage
+  // update add to cache relabled data.
+  PROMPP_ALWAYS_INLINE void update(const RelabelerStateUpdate* relabeler_state_update, const uint16_t relabeled_shard_id) {
+    for (const auto& update : *relabeler_state_update) {
+      add_relabel(update.incoming_ls_id, update.relabeled_ls_id, relabeled_shard_id);
+    }
   }
 };
 

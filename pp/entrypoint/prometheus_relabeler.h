@@ -399,13 +399,19 @@ void prompp_prometheus_cache_dtor(void* args);
 void prompp_prometheus_cache_allocated_memory(void* args, void* res);
 
 /**
- * @brief reset cache and store lss generation.
+ * @brief add to cache relabled data(third stage).
  *
  * @param args {
- *     cache               uintptr // pointer to constructed Cache;
+ *     shards_relabeler_state_update []*RelabelerStateUpdate // pointer to RelabelerStateUpdate per source shard;
+ *     cache                         uintptr                 // pointer to constructed Cache;
+ *     relabeled_shard_id            uint16                  // relabeled shard id;
+ * }
+ *
+ * @param res {
+ *     error                         []byte                  // error string if thrown;
  * }
  */
-void prompp_prometheus_cache_reset_to(void* args);
+void prompp_prometheus_cache_update(void* args, void* res);
 
 //
 // PerGoroutineRelabeler

@@ -8,14 +8,8 @@ import (
 
 // Wal the minimum required Wal implementation for a [Shard].
 type Wal interface {
-	// Commit finalize segment from encoder and write to wal.
-	Commit() error
-
-	// WalFlush flush all contetnt into wal.
+	// Flush flush all contetnt into wal.
 	Flush() error
-
-	// WalWrite append the incoming inner series to wal encoder.
-	Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error)
 
 	// Close closes the wal segmentWriter.
 	Close() error
@@ -73,21 +67,9 @@ func (s *Shard[TWal]) Wal() TWal {
 	return s.wal
 }
 
-// WalCommit finalize segment from encoder and write to wal.
-func (s *Shard[TWal]) WalCommit() error {
-	return s.lss.WithRLock(func(_, _ *cppbridge.LabelSetStorage) error {
-		return s.wal.Commit()
-	})
-}
-
 // WalFlush flush all contetnt into wal.
 func (s *Shard[TWal]) WalFlush() error {
 	return s.wal.Flush()
-}
-
-// WalWrite append the incoming inner series to wal encoder.
-func (s *Shard[TWal]) WalWrite(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error) {
-	return s.wal.Write(innerSeriesSlice)
 }
 
 //

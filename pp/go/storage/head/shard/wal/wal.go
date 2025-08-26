@@ -86,6 +86,7 @@ func (w *Wal[TSegment, TStats, TWriter]) Close() error {
 }
 
 // Commit finalize segment from encoder and write to [SegmentWriter].
+// It is necessary to lock the LSS for reading for the commit.
 func (w *Wal[TSegment, TStats, TWriter]) Commit() error {
 	if w.corrupted {
 		return fmt.Errorf("committing corrupted wal")
