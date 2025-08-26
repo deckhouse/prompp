@@ -124,17 +124,17 @@ func (c *Catalog) Compact() error {
 }
 
 // Create creates new [Record] and write to [Log].
-func (c *Catalog) Create(numberOfShards uint16) (r *Record, err error) {
+func (c *Catalog) Create(numberOfShards uint16) (*Record, error) {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
 
-	if err = c.compactIfNeeded(); err != nil {
+	if err := c.compactIfNeeded(); err != nil {
 		return nil, fmt.Errorf(compactErr, err)
 	}
 
 	id := c.idGenerator.Generate()
 	now := c.clock.Now().UnixMilli()
-	r = &Record{
+	r := &Record{
 		id:             id,
 		numberOfShards: numberOfShards,
 		createdAt:      now,
@@ -144,7 +144,7 @@ func (c *Catalog) Create(numberOfShards uint16) (r *Record, err error) {
 		status:         StatusNew,
 	}
 
-	if err = c.log.Write(r); err != nil {
+	if err := c.log.Write(r); err != nil {
 		return r, fmt.Errorf(logWriteErr, err)
 	}
 	c.records[id.String()] = r
@@ -153,11 +153,11 @@ func (c *Catalog) Create(numberOfShards uint16) (r *Record, err error) {
 }
 
 // Delete record by ID.
-func (c *Catalog) Delete(id string) (err error) {
+func (c *Catalog) Delete(id string) error {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
 
-	if err = c.compactIfNeeded(); err != nil {
+	if err := c.compactIfNeeded(); err != nil {
 		return fmt.Errorf(compactErr, err)
 	}
 
@@ -170,7 +170,7 @@ func (c *Catalog) Delete(id string) (err error) {
 	changed.deletedAt = c.clock.Now().UnixMilli()
 	changed.updatedAt = r.deletedAt
 
-	if err = c.log.Write(changed); err != nil {
+	if err := c.log.Write(changed); err != nil {
 		return fmt.Errorf(logWriteErr, err)
 	}
 
@@ -194,13 +194,11 @@ func (c *Catalog) Get(id string) (*Record, error) {
 }
 
 // List returns slice of records with filter and sort.
-func (c *Catalog) List(
-	filterFn func(record *Record) bool,
-	sortLess func(lhs, rhs *Record) bool,
-) (records []*Record, err error) {
+func (c *Catalog) List(filterFn func(record *Record) bool, sortLess func(lhs, rhs *Record) bool) []*Record {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
-	records = make([]*Record, 0, len(c.records))
+
+	records := make([]*Record, 0, len(c.records))
 	for _, record := range c.records {
 		if filterFn != nil && !filterFn(record) {
 			continue
@@ -214,7 +212,7 @@ func (c *Catalog) List(
 		})
 	}
 
-	return records, nil
+	return records
 }
 
 // OnDiskSize size of [Log] file on disk.

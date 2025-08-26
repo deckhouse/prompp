@@ -15,11 +15,14 @@ func TestXxx(t *testing.T) {
 	sd := shard.NewShard(lss, ds, wl, 0)
 	id := "test-head-id"
 	numberOfShards := uint16(2)
+	generation := uint64(0)
 
 	h := head.NewHead(
 		id,
 		[]*shard.Shard[*testWal]{sd},
 		shard.NewPerGoroutineShard[*testWal],
+		nil,
+		generation,
 		numberOfShards,
 		nil,
 	)

@@ -92,8 +92,7 @@ func (s *CatalogSuite) TestHappyPath() {
 	)
 	s.Require().NoError(err)
 
-	records, err := c.List(nil, nil)
-	s.Require().NoError(err)
+	records := c.List(nil, nil)
 	sort.Slice(records, func(i, j int) bool {
 		return records[i].CreatedAt() < records[j].CreatedAt()
 	})

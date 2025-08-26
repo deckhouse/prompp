@@ -59,7 +59,9 @@ type Head[TShard Shard, TGorutineShard Shard] struct {
 	id         string
 	generation uint64
 
-	gshardCtor     func(s TShard, numberOfShards uint16) TGorutineShard
+	gshardCtor    func(s TShard, numberOfShards uint16) TGorutineShard
+	releaseHeadFn func()
+
 	shards         []TShard
 	taskChs        []chan *task.Generic[TGorutineShard]
 	querySemaphore *locker.Weighted
@@ -87,6 +89,8 @@ func NewHead[TShard Shard, TGoroutineShard Shard](
 	id string,
 	shards []TShard,
 	gshardCtor func(TShard, uint16) TGoroutineShard,
+	releaseHeadFn func(),
+	generation uint64,
 	numberOfShards uint16,
 	registerer prometheus.Registerer,
 ) *Head[TShard, TGoroutineShard] {
@@ -100,7 +104,9 @@ func NewHead[TShard Shard, TGoroutineShard Shard](
 	factory := util.NewUnconflictRegisterer(registerer)
 	h := &Head[TShard, TGoroutineShard]{
 		id:             id,
+		generation:     generation,
 		gshardCtor:     gshardCtor,
+		releaseHeadFn:  releaseHeadFn,
 		shards:         shards,
 		taskChs:        taskChs,
 		numberOfShards: uint16(len(shards)), // #nosec G115 // no overflow
@@ -188,6 +194,10 @@ func (h *Head[TShard, TGorutineShard]) Close() error {
 	var err error
 	for _, s := range h.shards {
 		err = errors.Join(err, s.Close())
+	}
+
+	if h.releaseHeadFn != nil {
+		h.releaseHeadFn()
 	}
 
 	return err

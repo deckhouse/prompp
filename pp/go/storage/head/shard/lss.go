@@ -18,6 +18,14 @@ type LSS struct {
 	once     sync.Once
 }
 
+// NewLSS init new [LSS].
+func NewLSS() *LSS {
+	return &LSS{
+		input:  cppbridge.NewLssStorage(),
+		target: cppbridge.NewQueryableLssStorage(),
+	}
+}
+
 // AllocatedMemory return size of allocated memory for labelset storages.
 func (l *LSS) AllocatedMemory() uint64 {
 	l.locker.RLock()

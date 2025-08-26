@@ -11,6 +11,19 @@ import (
 )
 
 //
+// HeadsCatalog
+//
+
+// HeadsCatalog of current head records.
+type HeadsCatalog interface {
+	// Delete record by ID.
+	Delete(id string) error
+
+	// List returns slice of records with filter and sort.
+	List(filterFn func(record *Record) bool, sortLess func(lhs, rhs *Record) bool) []*Record
+}
+
+//
 // Notifiable
 //
 
@@ -27,14 +40,14 @@ type Notifiable interface {
 // GC garbage collector for old [Head].
 type GC struct {
 	dataDir         string
-	catalog         *Catalog
+	catalog         HeadsCatalog
 	readyNotifiable Notifiable
 	stop            chan struct{}
 	stopped         chan struct{}
 }
 
 // NewGC init new [GC].
-func NewGC(dataDir string, catalog *Catalog, readyNotifiable Notifiable) *GC {
+func NewGC(dataDir string, catalog HeadsCatalog, readyNotifiable Notifiable) *GC {
 	return &GC{
 		dataDir:         dataDir,
 		catalog:         catalog,
@@ -49,7 +62,7 @@ func (gc *GC) Iterate() {
 	logger.Debugf("catalog gc iteration: head started")
 	defer logger.Debugf("catalog gc iteration: head ended")
 
-	records, err := gc.catalog.List(
+	records := gc.catalog.List(
 		func(record *Record) bool {
 			return record.DeletedAt() == 0
 		},
@@ -57,10 +70,6 @@ func (gc *GC) Iterate() {
 			return lhs.CreatedAt() < rhs.CreatedAt()
 		},
 	)
-	if err != nil {
-		logger.Debugf("catalog gc failed", err)
-		return
-	}
 
 	for _, record := range records {
 		if record.deletedAt != 0 {
@@ -76,12 +85,12 @@ func (gc *GC) Iterate() {
 			continue
 		}
 
-		if err = os.RemoveAll(filepath.Join(gc.dataDir, record.Dir())); err != nil {
+		if err := os.RemoveAll(filepath.Join(gc.dataDir, record.Dir())); err != nil {
 			logger.Errorf("failed to remote head dir: %w", err)
 			return
 		}
 
-		if err = gc.catalog.Delete(record.ID()); err != nil {
+		if err := gc.catalog.Delete(record.ID()); err != nil {
 			logger.Errorf("failed to delete head record: %w", err)
 			return
 		}
