@@ -12,7 +12,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/prometheus/prometheus/pp/go/relabeler/appender"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 	"github.com/prometheus/prometheus/pp/go/util/locker"
 
@@ -23,8 +22,13 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
-// ExtraReadConcurrency number of concurrency read operation, 0 - work without concurrency.
-var ExtraReadConcurrency = 0
+var (
+
+	// ExtraReadConcurrency number of concurrency read operation, 0 - work without concurrency.
+	ExtraReadConcurrency = 0
+
+	UnrecoverableErrorChan = make(chan error)
+)
 
 // RelabelerData data for relabeling - inputRelabelers per shard and state.
 type RelabelerData struct {
@@ -1231,5 +1235,5 @@ func (h *Head) Raw() relabeler.Head {
 func (h *Head) UnrecoverableError(err error) {
 	logger.Warnf("Unrecoverable error: %v", err)
 
-	appender.UnrecoverableErrorChan <- err
+	UnrecoverableErrorChan <- err
 }

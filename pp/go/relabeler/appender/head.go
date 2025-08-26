@@ -15,8 +15,6 @@ var (
 	CopySeriesOnRotate = false
 
 	UnloadDataStorage = false
-
-	UnrecoverableErrorChan = make(chan error)
 )
 
 // Storage - head storage.

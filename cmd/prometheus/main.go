@@ -1466,7 +1466,7 @@ func main() {
 	} // PP_CHANGES.md: rebuild on cpp end
 	{ // PP_CHANGES.md: rebuild on cpp start
 		g.Add(
-			func() error { return <-appender.UnrecoverableErrorChan },
+			func() error { return <-head.UnrecoverableErrorChan },
 			func(err error) {
 				level.Info(logger).Log("msg", "Received unrecoverable error", err, "Stopping")
 			},
