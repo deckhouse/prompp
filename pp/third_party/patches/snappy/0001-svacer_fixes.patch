@@ -1,0 +1,20 @@
+--- snappy.cc
++++ snappy.cc
+@@ -1312,7 +1312,7 @@ class SnappyDecompressor {
+   const char* ip_limit_;  // Points just past buffered bytes
+   // If ip < ip_limit_min_maxtaglen_ it's safe to read kMaxTagLength from
+   // buffer.
+-  const char* ip_limit_min_maxtaglen_;
++  const char* ip_limit_min_maxtaglen_{};
+   uint32_t peeked_;                  // Bytes peeked from reader (need to skip)
+   bool eof_;                         // Hit end of input without an error?
+   char scratch_[kMaximumTagLength];  // See RefillTag().
+@@ -2171,7 +2171,7 @@ class SnappyScatteredWriter {
+   // we keep track of all of the generated data as an array of blocks.
+   // All of the blocks except the last have length kBlockSize.
+   std::vector<char*> blocks_;
+-  size_t expected_;
++  size_t expected_{};
+ 
+   // Total size of all fully generated blocks so far
+   size_t full_size_;
