@@ -23,8 +23,6 @@ RUN cd /tmp && curl -LOs https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.
 ENV PATH="$PATH:/usr/local/go/bin"
 ENV GOBIN="/usr/local/go/bin"
 RUN go install github.com/jstemmer/go-junit-report/v2@latest
-RUN go install github.com/axw/gocov/gocov@latest
-RUN go install github.com/AlekSi/gocov-xml@latest
 RUN go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 RUN go install github.com/prometheus/promu@latest
 

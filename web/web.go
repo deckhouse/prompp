@@ -195,7 +195,7 @@ type Handler struct {
 	lookbackDelta   time.Duration
 	context         context.Context
 	storage         storage.Storage
-	localStorage    LocalStorage
+	localStorage    api_v1.TSDBAdminStats
 	exemplarStorage storage.ExemplarQueryable
 	notifier        *notifier.Manager
 
@@ -234,7 +234,7 @@ type Options struct {
 	TSDBRetentionDuration model.Duration
 	TSDBDir               string
 	TSDBMaxBytes          units.Base2Bytes
-	LocalStorage          LocalStorage
+	LocalStorage          api_v1.TSDBAdminStats
 	Storage               storage.Storage
 	ExemplarStorage       storage.ExemplarQueryable
 	QueryEngine           *promql.Engine
