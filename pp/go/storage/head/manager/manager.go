@@ -41,8 +41,7 @@ type Keeper[THead Head] interface {
 
 // HeadBuilder builder for the [Head].
 type HeadBuilder[THead Head] interface {
-	// inputRelabelerConfigs []*config.InputRelabelerConfig,
-	BuildWithConfig(numberOfShards uint16) (THead, error)
+	Build(numberOfShards uint16) (THead, error)
 }
 
 type Manager[THead Head] struct {
@@ -146,7 +145,7 @@ func (m *Manager[THead]) loop(ctx context.Context) {
 }
 
 func (m *Manager[THead]) rotate(ctx context.Context) error {
-	newHead, err := m.headBuilder.BuildWithConfig(m.numberOfShards)
+	newHead, err := m.headBuilder.Build(m.numberOfShards)
 	if err != nil {
 		return fmt.Errorf("failed to build a new head: %w", err)
 	}

@@ -23,14 +23,18 @@ type RotateTimer struct {
 	rndDurationBlock int64
 }
 
-// NewRotateTimer - init new RotateTimer. The duration durationBlock and delayAfterNotify must be greater than zero;
+// NewRotateTimer init new [RotateTimer]. The duration durationBlock and delayAfterNotify must be greater than zero;
 // if not, Ticker will panic. Stop the ticker to release associated resources.
 func NewRotateTimer(clock clockwork.Clock, desiredBlockFormationDuration time.Duration) *RotateTimer {
-	return NewRotateTimerWithSeed(clock, desiredBlockFormationDuration, uint64(clock.Now().UnixNano()))
+	return NewRotateTimerWithSeed(
+		clock,
+		desiredBlockFormationDuration,
+		uint64(clock.Now().UnixNano()), // #nosec G115 // no overflow
+	)
 }
 
-// NewRotateTimerWithSeed - init new RotateTimer. The duration durationBlock and delayAfterNotify must be greater than zero;
-// if not, Ticker will panic. Stop the ticker to release associated resources.
+// NewRotateTimerWithSeed init new [RotateTimer]. The duration durationBlock and delayAfterNotify
+// must be greater than zero; if not, Ticker will panic. Stop the ticker to release associated resources.
 func NewRotateTimerWithSeed(
 	clock clockwork.Clock,
 	desiredBlockFormationDuration time.Duration,
@@ -96,11 +100,13 @@ func (rt *RotateTimer) Stop() {
 // ConstantIntervalTimer
 //
 
+// ConstantIntervalTimer timer with contatnt interval duration.
 type ConstantIntervalTimer struct {
 	timer    clockwork.Timer
 	interval time.Duration
 }
 
+// NewConstantIntervalTimer init new [ConstantIntervalTimer].
 func NewConstantIntervalTimer(clock clockwork.Clock, interval time.Duration) *ConstantIntervalTimer {
 	return &ConstantIntervalTimer{
 		timer:    clock.NewTimer(interval),
@@ -108,14 +114,17 @@ func NewConstantIntervalTimer(clock clockwork.Clock, interval time.Duration) *Co
 	}
 }
 
+// Chan returns chan with tick time.
 func (t *ConstantIntervalTimer) Chan() <-chan time.Time {
 	return t.timer.Chan()
 }
 
+// Reset to a constant interval duration.
 func (t *ConstantIntervalTimer) Reset() {
 	t.timer.Reset(t.interval)
 }
 
+// Stop timer.
 func (t *ConstantIntervalTimer) Stop() {
 	t.timer.Stop()
 }

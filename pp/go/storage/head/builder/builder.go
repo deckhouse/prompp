@@ -38,7 +38,8 @@ type Head[T any] interface {
 // Builder
 //
 
-type Builder[TShard any, TGoroutineShard any, T any, THead Head[T]] struct {
+// Builder building new [Head] from factory with parameters.
+type Builder[T any, THead Head[T]] struct {
 	catalog     HeadsCatalog
 	dir         string
 	generation  uint64
@@ -52,7 +53,31 @@ type Builder[TShard any, TGoroutineShard any, T any, THead Head[T]] struct {
 	registerer prometheus.Registerer
 }
 
-func (b *Builder[TShard, TGoroutineShard, T, THead]) Build(numberOfShards uint16) (THead, error) {
+// NewBuilder init new [Builder].
+func NewBuilder[T any, THead Head[T]](
+	hcatalog HeadsCatalog,
+	dir string,
+	generation uint64,
+	headFactory func(
+		id string,
+		releaseHeadFn func(),
+		generation uint64,
+		numberOfShards uint16,
+		registerer prometheus.Registerer,
+	) (THead, error),
+	registerer prometheus.Registerer,
+) *Builder[T, THead] {
+	return &Builder[T, THead]{
+		catalog:     hcatalog,
+		dir:         dir,
+		generation:  generation,
+		headFactory: headFactory,
+		registerer:  registerer,
+	}
+}
+
+// Build new [Head].
+func (b *Builder[T, THead]) Build(numberOfShards uint16) (THead, error) {
 	headRecord, err := b.catalog.Create(numberOfShards)
 	if err != nil {
 		return nil, err
