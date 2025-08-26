@@ -15,6 +15,8 @@ var (
 	CopySeriesOnRotate = false
 
 	UnloadDataStorage = false
+
+	UnrecoverableErrorChan = make(chan error)
 )
 
 // Storage - head storage.
@@ -42,6 +44,10 @@ type RotatableHead struct {
 	storage       Storage
 	builder       HeadBuilder
 	headActivator HeadActivator
+}
+
+func (h *RotatableHead) UnrecoverableError(err error) {
+	h.head.UnrecoverableError(err)
 }
 
 // NewRotatableHead - RotatableHead constructor.
@@ -244,6 +250,10 @@ type HeapProfileWriter interface {
 type HeapProfileWritableHead struct {
 	head              relabeler.Head
 	heapProfileWriter HeapProfileWriter
+}
+
+func (h *HeapProfileWritableHead) UnrecoverableError(err error) {
+	h.head.UnrecoverableError(err)
 }
 
 func NewHeapProfileWritableHead(head relabeler.Head, heapProfileWriter HeapProfileWriter) *HeapProfileWritableHead {

@@ -309,7 +309,7 @@ func (q *Querier) selectInstant(
 	_ = tDataStorageQuery.Wait()
 
 	if err := dataStorageLoadWaiter.Wait(); err != nil {
-		logger.Warnf("ChunkQuerier: Select: DataStorage load failed: %s", err)
+		q.head.UnrecoverableError(err)
 		return storage.ErrSeriesSet(err)
 	}
 
@@ -493,7 +493,7 @@ func dataStorageQuery(
 	_ = tDataStorageQuery.Wait()
 
 	if err := dataStorageLoadWaiter.Wait(); err != nil {
-		logger.Warnf("ChunkQuerier: Select: DataStorage load failed: %s", err)
+		head.UnrecoverableError(err)
 		return nil, err
 	}
 

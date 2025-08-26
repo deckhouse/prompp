@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/prometheus/prometheus/pp/go/relabeler/appender"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 	"github.com/prometheus/prometheus/pp/go/util/locker"
 
@@ -1225,4 +1226,10 @@ func calculateHeadConcurrency(numberOfShards uint16) int64 {
 // Raw returns raw [Head].
 func (h *Head) Raw() relabeler.Head {
 	return h
+}
+
+func (h *Head) UnrecoverableError(err error) {
+	logger.Warnf("Unrecoverable error: %v", err)
+
+	appender.UnrecoverableErrorChan <- err
 }

@@ -137,6 +137,7 @@ type Head interface {
 	CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr) *GenericTask
 	UnloadUnusedSeriesData()
 	Raw() Head
+	UnrecoverableError(error)
 }
 
 type Distributor interface {

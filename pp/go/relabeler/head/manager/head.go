@@ -17,6 +17,10 @@ type DiscardableRotatableHead struct {
 	afterClose func(id string) error
 }
 
+func (h *DiscardableRotatableHead) UnrecoverableError(err error) {
+	h.head.UnrecoverableError(err)
+}
+
 func NewDiscardableRotatableHead(head relabeler.Head, onRotate func(id string, err error) error, onDiscard func(id string) error, afterClose func(id string) error) *DiscardableRotatableHead {
 	return &DiscardableRotatableHead{
 		head:       head,
