@@ -21,9 +21,10 @@ import (
 
 type BlockWriterSuite struct {
 	suite.Suite
+	dataDir             string
 	lss                 *head.LSS
 	dataStorage         *head.DataStorage
-	unloadedDataStorage relabeler.UnloadedDataStorage
+	unloadedDataStorage *head.UnloadedDataStorage
 	blockWriter         *block.Writer
 }
 
@@ -40,6 +41,10 @@ func (s *BlockWriterSuite) LSS() relabeler.LSS { return s.lss }
 func (s *BlockWriterSuite) Wal() relabeler.Wal { return nil }
 
 func (s *BlockWriterSuite) UnloadedDataStorage() relabeler.UnloadedDataStorage {
+	if s.unloadedDataStorage == nil {
+		return nil
+	}
+
 	return s.unloadedDataStorage
 }
 
@@ -71,11 +76,9 @@ func (s *BlockWriterSuite) SetupTest() {
 	s.lss = head.NewLSS(nil, cppbridge.NewQueryableLssStorage())
 	s.dataStorage = head.NewDataStorage()
 
-	dataDir := s.createDataDirectory()
+	s.dataDir = s.createDataDirectory()
 
-	s.unloadedDataStorage = head.NewUnloadedDataStorage(head.NewFileStorage(filepath.Join(dataDir, "unloaded_data")))
-
-	s.blockWriter = block.NewWriter(dataDir, block.DefaultChunkSegmentSize, 2*time.Hour, prometheus.DefaultRegisterer)
+	s.blockWriter = block.NewWriter(s.dataDir, block.DefaultChunkSegmentSize, 2*time.Hour, prometheus.DefaultRegisterer)
 }
 
 func (s *BlockWriterSuite) createDataDirectory() string {
@@ -100,6 +103,8 @@ func (s *BlockWriterSuite) readBlockMeta(filename string) tsdb.BlockMeta {
 }
 
 func (s *BlockWriterSuite) unloadData() {
+	s.unloadedDataStorage = head.NewUnloadedDataStorage(head.NewFileStorage(filepath.Join(s.dataDir, "unloaded_data")))
+
 	unloader := s.dataStorage.CreateUnusedSeriesDataUnloader()
 
 	header, err := s.unloadedDataStorage.WriteSnapshot(unloader.CreateSnapshot())

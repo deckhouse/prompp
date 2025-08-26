@@ -324,10 +324,18 @@ func (s *shard) LSSUnlock() {
 }
 
 func (s *shard) UnloadedDataStorage() relabeler.UnloadedDataStorage {
+	if s.unloadedDataStorage == nil {
+		return nil
+	}
+
 	return s.unloadedDataStorage
 }
 
 func (s *shard) QueriedSeriesStorage() relabeler.QueriedSeriesStorage {
+	if s.queriedSeriesStorage == nil {
+		return nil
+	}
+
 	return s.queriedSeriesStorage
 }
 

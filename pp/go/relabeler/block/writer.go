@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"io"
 	"math"
 	"os"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/oklog/ulid"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/tsdb/fileutil"
@@ -343,6 +343,10 @@ func (w *Writer) recodeAndWriteChunks(shard relabeler.Shard, writers blockWriter
 			if !loader.NextBatch() {
 				return false, nil
 			}
+		}
+
+		if shard.UnloadedDataStorage() == nil {
+			return true, nil
 		}
 
 		return true, shard.UnloadedDataStorage().ForEachSnapshot(loader.Load)
