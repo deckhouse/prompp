@@ -5,23 +5,21 @@ import (
 	"sync"
 )
 
-// LastAppendedSegmentIDSetter the setter of the last added segment ID.
-type LastAppendedSegmentIDSetter interface {
-	SetLastAppendedSegmentID(segmentID uint32)
-}
-
 // SegmentWriteNotifier notifies that the segment has been written.
 type SegmentWriteNotifier struct {
-	locker sync.Mutex
-	shards []uint32
-	setter LastAppendedSegmentIDSetter
+	locker                   sync.Mutex
+	shards                   []uint32
+	setLastAppendedSegmentID func(segmentID uint32)
 }
 
 // NewSegmentWriteNotifier init new [SegmentWriteNotifier].
-func NewSegmentWriteNotifier(numberOfShards uint16, setter LastAppendedSegmentIDSetter) *SegmentWriteNotifier {
+func NewSegmentWriteNotifier(
+	numberOfShards uint16,
+	setLastAppendedSegmentID func(segmentID uint32),
+) *SegmentWriteNotifier {
 	return &SegmentWriteNotifier{
-		shards: make([]uint32, numberOfShards),
-		setter: setter,
+		shards:                   make([]uint32, numberOfShards),
+		setLastAppendedSegmentID: setLastAppendedSegmentID,
 	}
 }
 
@@ -32,7 +30,7 @@ func (swn *SegmentWriteNotifier) NotifySegmentIsWritten(shardID uint16) {
 	swn.shards[shardID]++
 	minNumberOfSegments := slices.Min(swn.shards)
 	if minNumberOfSegments > 0 {
-		swn.setter.SetLastAppendedSegmentID(minNumberOfSegments - 1)
+		swn.setLastAppendedSegmentID(minNumberOfSegments - 1)
 	}
 }
 

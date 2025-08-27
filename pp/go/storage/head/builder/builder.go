@@ -40,17 +40,20 @@ type Head[T any] interface {
 
 // Builder building new [Head] from factory with parameters.
 type Builder[T any, THead Head[T]] struct {
-	catalog     HeadsCatalog
-	dir         string
-	generation  uint64
-	headFactory func(
-		id string,
+	catalog    HeadsCatalog
+	dir        string
+	generation uint64
+	headCtor   func(
+		id, headDir string,
 		releaseHeadFn func(),
+		setLastAppendedSegmentID func(segmentID uint32),
 		generation uint64,
+		maxSegmentSize uint32,
 		numberOfShards uint16,
 		registerer prometheus.Registerer,
 	) (THead, error)
-	registerer prometheus.Registerer
+	maxSegmentSize uint32
+	registerer     prometheus.Registerer
 }
 
 // NewBuilder init new [Builder].
@@ -58,21 +61,25 @@ func NewBuilder[T any, THead Head[T]](
 	hcatalog HeadsCatalog,
 	dir string,
 	generation uint64,
-	headFactory func(
-		id string,
+	headCtor func(
+		id, headDir string,
 		releaseHeadFn func(),
+		setLastAppendedSegmentID func(segmentID uint32),
 		generation uint64,
+		maxSegmentSize uint32,
 		numberOfShards uint16,
 		registerer prometheus.Registerer,
 	) (THead, error),
+	maxSegmentSize uint32,
 	registerer prometheus.Registerer,
 ) *Builder[T, THead] {
 	return &Builder[T, THead]{
-		catalog:     hcatalog,
-		dir:         dir,
-		generation:  generation,
-		headFactory: headFactory,
-		registerer:  registerer,
+		catalog:        hcatalog,
+		dir:            dir,
+		generation:     generation,
+		headCtor:       headCtor,
+		maxSegmentSize: maxSegmentSize,
+		registerer:     registerer,
 	}
 }
 
@@ -94,10 +101,13 @@ func (b *Builder[T, THead]) Build(numberOfShards uint16) (THead, error) {
 		}
 	}()
 
-	h, err := b.headFactory(
+	h, err := b.headCtor(
 		headRecord.ID(),
+		headDir,
 		headRecord.Acquire(),
+		headRecord.SetLastAppendedSegmentID,
 		b.generation,
+		b.maxSegmentSize,
 		numberOfShards,
 		b.registerer,
 	)

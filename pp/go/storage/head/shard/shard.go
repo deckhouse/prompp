@@ -42,19 +42,6 @@ func NewShard[TWal Wal](
 	}
 }
 
-// NewShardWithWal init new [Shard] with [Wal].
-func NewShardWithWal[TWal Wal](
-	wal TWal,
-	shardID uint16,
-) *Shard[TWal] {
-	return &Shard[TWal]{
-		id:          shardID,
-		lss:         NewLSS(),
-		dataStorage: NewDataStorage(),
-		wal:         wal,
-	}
-}
-
 // Close closes the wal segmentWriter.
 func (s *Shard[TWal]) Close() error {
 	return s.wal.Close()

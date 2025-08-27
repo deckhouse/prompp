@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/prometheus/pp/go/relabeler/config"
 	"github.com/prometheus/prometheus/pp/go/storage/logger"
 	"github.com/prometheus/prometheus/pp/go/util"
 )
@@ -45,7 +44,6 @@ type HeadBuilder[THead Head] interface {
 }
 
 type Manager[THead Head] struct {
-	//
 	activeHead  ActiveHeadContainer[THead]
 	headBuilder HeadBuilder[THead]
 	keeper      Keeper[THead]
@@ -64,7 +62,6 @@ type Manager[THead Head] struct {
 // ApplyConfig update config.
 func (m *Manager[THead]) ApplyConfig(
 	ctx context.Context,
-	inputRelabelerConfigs []*config.InputRelabelerConfig,
 	numberOfShards uint16,
 ) error {
 	logger.Infof("reconfiguration start")
