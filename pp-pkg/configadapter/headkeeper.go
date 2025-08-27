@@ -11,7 +11,10 @@ import (
 var DefaultNumberOfShards uint16 = 2
 
 // HeadKeeperApplyConfig returns func-adapter for apply config on [headkeeper.HeadKeeper].
-func HeadKeeperApplyConfig(ctx context.Context, hk *manager.Manager) func(cfg *prom_config.Config) error {
+func HeadKeeperApplyConfig[THead any](
+	ctx context.Context,
+	hk *manager.Manager[THead],
+) func(cfg *prom_config.Config) error {
 	return func(cfg *prom_config.Config) error {
 		rCfg, err := cfg.GetReceiverConfig()
 		if err != nil {
@@ -23,6 +26,6 @@ func HeadKeeperApplyConfig(ctx context.Context, hk *manager.Manager) func(cfg *p
 			numberOfShards = DefaultNumberOfShards
 		}
 
-		return hk.ApplyConfig(ctx, rCfg.Configs, numberOfShards)
+		return hk.ApplyConfig(ctx, numberOfShards)
 	}
 }
