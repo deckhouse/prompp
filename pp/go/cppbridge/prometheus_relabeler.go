@@ -1185,7 +1185,7 @@ func NewPerGoroutineRelabeler(
 		shardID:           shardID,
 	}
 	runtime.SetFinalizer(pgr, func(r *PerGoroutineRelabeler) {
-		prometheusPerShardRelabelerDtor(r.cptr)
+		prometheusPerGoroutineRelabelerDtor(r.cptr)
 	})
 
 	return pgr
