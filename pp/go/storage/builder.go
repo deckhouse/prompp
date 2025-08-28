@@ -7,86 +7,43 @@ import (
 	"path/filepath"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
+	"github.com/prometheus/prometheus/pp/go/storage/head/head"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
 )
-
-//
-// HeadsCatalog
-//
-
-// HeadsCatalog of current head records.
-type HeadsCatalog interface {
-	// Create creates new [Record] and write to [Log].
-	Create(numberOfShards uint16) (*catalog.Record, error)
-
-	// Delete record by ID.
-	Delete(id string) error
-
-	// List returns slice of records with filter and sort.
-	List(filterFn func(record *catalog.Record) bool, sortLess func(lhs, rhs *catalog.Record) bool) []*catalog.Record
-}
-
-//
-// Head
-//
-
-// Head the minimum required Head implementation for a container.
-type Head[T any] interface {
-	// for use as a pointer
-	*T
-}
 
 //
 // Builder
 //
 
-// Builder building new [Head] from factory with parameters.
-type Builder[T any, THead Head[T]] struct {
-	catalog    HeadsCatalog
-	dir        string
-	generation uint64
-	headCtor   func(
-		id, headDir string,
-		releaseHeadFn func(),
-		setLastAppendedSegmentID func(segmentID uint32),
-		generation uint64,
-		maxSegmentSize uint32,
-		numberOfShards uint16,
-		registerer prometheus.Registerer,
-	) (THead, error)
+// Builder building new [HeadOnDisk] with parameters.
+type Builder struct {
+	catalog        *catalog.Catalog
+	dir            string
 	maxSegmentSize uint32
 	registerer     prometheus.Registerer
 }
 
 // NewBuilder init new [Builder].
-func NewBuilder[T any, THead Head[T]](
-	hcatalog HeadsCatalog,
+func NewBuilder(
+	hcatalog *catalog.Catalog,
 	dir string,
-	generation uint64,
-	headCtor func(
-		id, headDir string,
-		releaseHeadFn func(),
-		setLastAppendedSegmentID func(segmentID uint32),
-		generation uint64,
-		maxSegmentSize uint32,
-		numberOfShards uint16,
-		registerer prometheus.Registerer,
-	) (THead, error),
 	maxSegmentSize uint32,
 	registerer prometheus.Registerer,
-) *Builder[T, THead] {
-	return &Builder[T, THead]{
+) *Builder {
+	return &Builder{
 		catalog:        hcatalog,
 		dir:            dir,
-		generation:     generation,
-		headCtor:       headCtor,
 		maxSegmentSize: maxSegmentSize,
 		registerer:     registerer,
 	}
 }
 
-// Build new [Head].
-func (b *Builder[T, THead]) Build(numberOfShards uint16) (THead, error) {
+// Build new [HeadOnDisk] - [head.Head] with [shard.Shard] with [wal.Wal] which is written to disk.
+func (b *Builder) Build(generation uint64, numberOfShards uint16) (*HeadOnDisk, error) {
 	headRecord, err := b.catalog.Create(numberOfShards)
 	if err != nil {
 		return nil, err
@@ -103,21 +60,64 @@ func (b *Builder[T, THead]) Build(numberOfShards uint16) (THead, error) {
 		}
 	}()
 
-	h, err := b.headCtor(
-		headRecord.ID(),
-		headDir,
-		headRecord.Acquire(),
-		headRecord.SetLastAppendedSegmentID,
-		b.generation,
-		b.maxSegmentSize,
-		numberOfShards,
-		b.registerer,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create head: %w", err)
+	shards := make([]*ShardOnDisk, numberOfShards)
+	swn := writer.NewSegmentWriteNotifier(numberOfShards, headRecord.SetLastAppendedSegmentID)
+	for shardID := range numberOfShards {
+		s, err := b.createShardOnDisk(headDir, swn, shardID)
+		if err != nil {
+			return nil, err
+		}
+
+		shards[shardID] = s
 	}
 
-	b.generation++
+	return head.NewHead(
+		headRecord.ID(),
+		shards,
+		shard.NewPerGoroutineShard[*WalOnDisk],
+		headRecord.Acquire(),
+		generation,
+		numberOfShards,
+		b.registerer,
+	), nil
+}
 
-	return h, nil
+// createShardOnDisk create [shard.Shard] with [wal.Wal] which is written to disk.
+func (b *Builder) createShardOnDisk(
+	headDir string,
+	swn *writer.SegmentWriteNotifier,
+	shardID uint16,
+) (*ShardOnDisk, error) {
+	shardFile, err := os.Create(filepath.Join(filepath.Clean(headDir), fmt.Sprintf("shard_%d.wal", shardID)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create shard wal file id %d: %w", shardID, err)
+	}
+
+	defer func() {
+		if err == nil {
+			return
+		}
+		_ = shardFile.Close()
+	}()
+
+	lss := shard.NewLSS()
+	// logShards is 0 for single encoder
+	shardWalEncoder := cppbridge.NewHeadWalEncoder(shardID, 0, lss.Target())
+
+	_, err = writer.WriteHeader(shardFile, wal.FileFormatVersion, shardWalEncoder.Version())
+	if err != nil {
+		return nil, fmt.Errorf("failed to write header: %w", err)
+	}
+
+	sw, err := writer.NewBuffered(shardID, shardFile, writer.WriteSegment[*cppbridge.EncodedSegment], swn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create buffered writer shard id %d: %w", shardID, err)
+	}
+
+	return shard.NewShard(
+		lss,
+		shard.NewDataStorage(),
+		wal.NewWal(shardWalEncoder, sw, b.maxSegmentSize),
+		shardID,
+	), nil
 }
