@@ -11,7 +11,10 @@ import (
 
 // Head the minimum required Head implementation for a container.
 type Head[T any] interface {
+	// Concurrency return current head workers concurrency.
 	Concurrency() int64
+
+	// for use as a pointer
 	*T
 }
 

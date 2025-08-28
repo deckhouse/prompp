@@ -79,7 +79,7 @@ func NewQuerier[
 	}
 }
 
-// Close Querier if need.
+// Close [Querier] if need.
 func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) Close() error {
 	if q.closer != nil {
 		return q.closer()

@@ -110,6 +110,7 @@ func NewHead[TShard Shard, TGoroutineShard Shard](
 		shards:         shards,
 		taskChs:        taskChs,
 		numberOfShards: uint16(len(shards)), // #nosec G115 // no overflow
+		// TODO metrics
 		memoryInUse: factory.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Name: "prompp_head_cgo_memory_bytes",
@@ -253,6 +254,17 @@ func (h *Head[TShard, TGorutineShard]) IsReadOnly() bool {
 // NumberOfShards returns current number of shards in to [Head].
 func (h *Head[TShard, TGorutineShard]) NumberOfShards() uint16 {
 	return h.numberOfShards
+}
+
+// RangeShards returns an iterator over the [Head] [Shard]s, through which the shard can be directly accessed.
+func (h *Head[TShard, TGorutineShard]) RangeShards() func(func(TShard) bool) {
+	return func(yield func(s TShard) bool) {
+		for _, shard := range h.shards {
+			if !yield(shard) {
+				return
+			}
+		}
+	}
 }
 
 // SetReadOnly sets the read-only flag for the [Head].

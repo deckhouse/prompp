@@ -21,13 +21,14 @@ type Head interface {
 }
 
 type ActiveHeadContainer[THead Head] interface {
-	Get(ctx context.Context) (THead, error)
+	Get() THead
 	Replace(ctx context.Context, newHead THead) error
 	With(ctx context.Context, fn func(h THead) error) error
 }
 
 type Keeper[THead Head] interface {
 	Add(head THead)
+	RangeQueriableHeads(mint, maxt int64) func(func(THead) bool)
 }
 
 // type ActiveHeadContainer[T any] interface {
@@ -147,10 +148,7 @@ func (m *Manager[THead]) rotate(ctx context.Context) error {
 		return fmt.Errorf("failed to build a new head: %w", err)
 	}
 
-	oldHead, err := m.activeHead.Get(ctx)
-	if err != nil {
-		return fmt.Errorf("getting active head failed: %w", err)
-	}
+	oldHead := m.activeHead.Get()
 
 	// TODO
 	// newHead.CopySeriesFrom(oldHead)
@@ -169,5 +167,14 @@ func (m *Manager[THead]) WithAppendableHead(ctx context.Context, fn func(h THead
 
 // RangeQueriableHeads
 // TODO implementation.
-func (m *Manager[THead]) RangeQueriableHeads() {
+func (m *Manager[THead]) RangeQueriableHeads(mint, maxt int64) func(func(THead) bool) {
+	// ahead := m.activeHead.Get()
+	// for h := range m.keeper.RangeQueriableHeads(mint, maxt) {
+	// TODO
+	// if h == ahead {
+	//  continue
+	// }
+	// }
+
+	return nil
 }

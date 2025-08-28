@@ -69,6 +69,7 @@ func (s *Shard[TWal]) Wal() TWal {
 
 // WalFlush flush all contetnt into wal.
 func (s *Shard[TWal]) WalFlush() error {
+	// TODO
 	return s.wal.Flush()
 }
 
@@ -94,107 +95,3 @@ func NewPerGoroutineShard[TWal Wal](s *Shard[TWal], numberOfShards uint16) *PerG
 func (s *PerGoroutineShard[TWal]) Relabeler() *cppbridge.PerGoroutineRelabeler {
 	return s.relabeler
 }
-
-// // InputRelabeling relabeling incoming hashdex(first stage).
-// func (s *Shard[TWal]) InputRelabeling(
-// 	ctx context.Context,
-// 	relabeler *cppbridge.InputPerShardRelabeler,
-// 	cache *cppbridge.Cache,
-// 	options cppbridge.RelabelerOptions,
-// 	shardedData cppbridge.ShardedData,
-// 	shardsInnerSeries []*cppbridge.InnerSeries,
-// 	shardsRelabeledSeries []*cppbridge.RelabeledSeries,
-// ) (cppbridge.RelabelerStats, bool, error) {
-// 	s.lssLocker.Lock()
-// 	defer s.lssLocker.Unlock()
-
-// 	return relabeler.InputRelabeling(
-// 		ctx,
-// 		s.lss.Input(),
-// 		s.lss.Target(),
-// 		cache,
-// 		options,
-// 		shardedData,
-// 		shardsInnerSeries,
-// 		shardsRelabeledSeries,
-// 	)
-// }
-
-// // InputRelabelingFromCache relabeling incoming hashdex(first stage) from cache.
-// func (s *Shard[TWal]) InputRelabelingFromCache(
-// 	ctx context.Context,
-// 	relabeler *cppbridge.InputPerShardRelabeler,
-// 	cache *cppbridge.Cache,
-// 	options cppbridge.RelabelerOptions,
-// 	shardedData cppbridge.ShardedData,
-// 	shardsInnerSeries []*cppbridge.InnerSeries,
-// ) (cppbridge.RelabelerStats, bool, error) {
-// 	s.lssLocker.RLock()
-// 	defer s.lssLocker.RUnlock()
-
-// 	return relabeler.InputRelabelingFromCache(
-// 		ctx,
-// 		s.lss.Input(),
-// 		s.lss.Target(),
-// 		cache,
-// 		options,
-// 		shardedData,
-// 		shardsInnerSeries,
-// 	)
-// }
-
-// // InputRelabelingWithStalenans relabeling incoming hashdex(first stage) with state stalenans.
-// func (s *Shard[TWal]) InputRelabelingWithStalenans(
-// 	ctx context.Context,
-// 	relabeler *cppbridge.InputPerShardRelabeler,
-// 	cache *cppbridge.Cache,
-// 	options cppbridge.RelabelerOptions,
-// 	staleNansState *cppbridge.StaleNansState,
-// 	defTimestamp int64,
-// 	shardedData cppbridge.ShardedData,
-// 	shardsInnerSeries []*cppbridge.InnerSeries,
-// 	shardsRelabeledSeries []*cppbridge.RelabeledSeries,
-// ) (cppbridge.RelabelerStats, bool, error) {
-// 	s.lssLocker.Lock()
-// 	defer s.lssLocker.Unlock()
-
-// 	return relabeler.InputRelabelingWithStalenans(
-// 		ctx,
-// 		s.lss.Input(),
-// 		s.lss.Target(),
-// 		cache,
-// 		options,
-// 		staleNansState,
-// 		defTimestamp,
-// 		shardedData,
-// 		shardsInnerSeries,
-// 		shardsRelabeledSeries,
-// 	)
-// }
-
-// // InputRelabelingWithStalenansFromCache relabeling incoming hashdex(first stage) from cache with state stalenans.
-// func (s *Shard[TWal]) InputRelabelingWithStalenansFromCache(
-// 	ctx context.Context,
-// 	relabeler *cppbridge.InputPerShardRelabeler,
-// 	cache *cppbridge.Cache,
-// 	options cppbridge.RelabelerOptions,
-// 	staleNansState *cppbridge.StaleNansState,
-// 	defTimestamp int64,
-// 	shardedData cppbridge.ShardedData,
-// 	shardsInnerSeries []*cppbridge.InnerSeries,
-// ) (cppbridge.RelabelerStats, bool, error) {
-// 	s.lssLocker.RLock()
-// 	defer s.lssLocker.RUnlock()
-
-// 	return relabeler.InputRelabelingWithStalenansFromCache(
-// 		ctx,
-// 		s.lss.Input(),
-// 		s.lss.Target(),
-// 		cache,
-// 		options,
-// 		staleNansState,
-// 		defTimestamp,
-// 		shardedData,
-// 		shardsInnerSeries,
-// 	)
-// }

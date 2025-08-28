@@ -39,6 +39,12 @@ func (ds *DataStorage) AppendInnerSeriesSlice(innerSeriesSlice []*cppbridge.Inne
 	ds.locker.Unlock()
 }
 
+// DecodeSegment decode segment data from decoder [cppbridge.HeadWalDecoder]
+// and add to encoder [cppbridge.HeadEncoder].
+func (ds *DataStorage) DecodeSegment(decoder *cppbridge.HeadWalDecoder, data []byte) error {
+	return decoder.DecodeToDataStorage(data, ds.encoder)
+}
+
 // InstantQuery make instant query to data storage and returns samples.
 func (ds *DataStorage) InstantQuery(
 	targetTimestamp, notFoundValueTimestampValue int64, seriesIDs []uint32,

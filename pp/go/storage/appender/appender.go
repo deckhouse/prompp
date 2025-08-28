@@ -227,7 +227,7 @@ func (a *Appender[TGenericTask, TDataStorage, TLSS, TWal, TShard, THead]) Append
 		t := a.head.CreateTask(
 			WalCommit,
 			func(shard TShard) error {
-				// It is necessary to lock the LSS for reading for the commit.
+				// wal contains LSS and it is necessary to lock the LSS for reading for the commit.
 				return shard.LSS().WithRLock(func(_, _ *cppbridge.LabelSetStorage) error {
 					return shard.Wal().Commit()
 				})
