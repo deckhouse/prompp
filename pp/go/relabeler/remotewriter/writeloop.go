@@ -203,11 +203,7 @@ func (wl *writeLoop) nextIterator(ctx context.Context, protobufWriter ProtobufWr
 
 	var targetSegmentID uint32
 	if cleanStart {
-		if nextHeadRecord.LastAppendedSegmentID() != nil {
-			targetSegmentID = *nextHeadRecord.LastAppendedSegmentID()
-		} else {
-			targetSegmentID = crw.GetTargetSegmentID()
-		}
+		targetSegmentID = nextHeadRecord.NumberOfSegments()
 	} else {
 		targetSegmentID = crw.GetTargetSegmentID()
 	}
@@ -298,7 +294,7 @@ func nextHead(ctx context.Context, dataDir string, headCatalog Catalog, headID s
 	return nil, fmt.Errorf("nextHead: no new heads: appropriate head not found")
 }
 
-func validateHead(ctx context.Context, headDir string) error {
+func validateHead(_ context.Context, headDir string) error {
 	dir, err := os.Open(headDir)
 	if err != nil {
 		return err

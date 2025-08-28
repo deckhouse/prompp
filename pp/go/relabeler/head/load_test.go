@@ -20,9 +20,9 @@ import (
 
 const maxSegmentSize uint32 = 1024
 
-type noOpLastAppendedSegmentIDSetter struct{}
+type noOpNumberOfSegmentsSetter struct{}
 
-func (noOpLastAppendedSegmentIDSetter) SetLastAppendedSegmentID(_ uint32) {}
+func (noOpNumberOfSegmentsSetter) SetNumberOfSegments(uint32) {}
 
 func TestLoad(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -49,7 +49,7 @@ func TestLoad(t *testing.T) {
 	var numberOfShards uint16 = 2
 
 	headID := "test_head_id"
-	h, err := head.Create(headID, 0, tmpDir, cfgs, numberOfShards, maxSegmentSize, noOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+	h, err := head.Create(headID, 0, tmpDir, cfgs, numberOfShards, maxSegmentSize, noOpNumberOfSegmentsSetter{}, prometheus.DefaultRegisterer)
 	require.NoError(t, err)
 
 	ls := model.NewLabelSetBuilder().Set("__name__", "wal_metric").Set("job", "test").Build()
@@ -122,7 +122,7 @@ func TestLoad(t *testing.T) {
 	require.NoError(t, h.Flush())
 	require.NoError(t, h.Close())
 	var corrupted bool
-	h, corrupted, _, err = head.Load(headID, 0, tmpDir, cfgs, numberOfShards, maxSegmentSize, noOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+	h, corrupted, _, err = head.Load(headID, 0, tmpDir, cfgs, numberOfShards, maxSegmentSize, noOpNumberOfSegmentsSetter{}, prometheus.DefaultRegisterer)
 	require.NoError(t, err)
 	require.False(t, corrupted)
 
@@ -224,7 +224,7 @@ func TestLoad(t *testing.T) {
 	h.Stop()
 	require.NoError(t, h.Close())
 
-	h, corrupted, _, err = head.Load(headID, 0, tmpDir, cfgs, numberOfShards, maxSegmentSize, noOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+	h, corrupted, _, err = head.Load(headID, 0, tmpDir, cfgs, numberOfShards, maxSegmentSize, noOpNumberOfSegmentsSetter{}, prometheus.DefaultRegisterer)
 	require.NoError(t, err)
 	require.False(t, corrupted)
 

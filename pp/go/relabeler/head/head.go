@@ -155,13 +155,21 @@ func (rd *RelabelerData) updateOrCreateStatelessRelabeler(
 	return sr, nil
 }
 
-type LastAppendedSegmentIDSetter interface {
-	SetLastAppendedSegmentID(segmentID uint32)
+//type LastAppendedSegmentIDSetter interface {
+//	SetLastAppendedSegmentID(segmentID uint32)
+//}
+//
+//type NoOpLastAppendedSegmentIDSetter struct{}
+//
+//func (NoOpLastAppendedSegmentIDSetter) SetLastAppendedSegmentID(segmentID uint32) {}
+
+type NumberOfSegmentsSetter interface {
+	SetNumberOfSegments(numberOfSegments uint32)
 }
 
-type NoOpLastAppendedSegmentIDSetter struct{}
+type NoOpNumberOfSegmentsSetter struct{}
 
-func (NoOpLastAppendedSegmentIDSetter) SetLastAppendedSegmentID(segmentID uint32) {}
+func (NoOpNumberOfSegmentsSetter) SetNumberOfSegments(uint32) {}
 
 type Head struct {
 	id         string

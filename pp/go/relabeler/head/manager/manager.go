@@ -30,6 +30,8 @@ type Catalog interface {
 		sortLess func(lhs, rhs *catalog.Record) bool,
 	) ([]*catalog.Record, error)
 	Create(numberOfShards uint16) (*catalog.Record, error)
+	SetStatusWithTimeBounds(id string, status catalog.Status, mint, maxt int64) (*catalog.Record, error)
+	SetTimeBounds(id string, mint, maxt int64) (*catalog.Record, error)
 	SetStatus(id string, status catalog.Status) (*catalog.Record, error)
 	SetCorrupted(id string) (*catalog.Record, error)
 }
@@ -46,12 +48,12 @@ type Manager struct {
 	registerer     prometheus.Registerer
 }
 
-// SetLastAppendedSegmentIDFn function to set the last added segment id.
-type SetLastAppendedSegmentIDFn func(segmentID uint32)
+// SetNumberOfSegmentsFunc sets number of segments.
+type SetNumberOfSegmentsFunc func(numberOfSegments uint32)
 
-// SetLastAppendedSegmentID to set the last added segment id.
-func (fn SetLastAppendedSegmentIDFn) SetLastAppendedSegmentID(segmentID uint32) {
-	fn(segmentID)
+// SetNumberOfSegments sets number of segments.
+func (fn SetNumberOfSegmentsFunc) SetNumberOfSegments(numberOfSegments uint32) {
+	fn(numberOfSegments)
 }
 
 // New init new Manager.
@@ -184,10 +186,7 @@ func (m *Manager) Restore(blockDuration time.Duration) (active relabeler.Head, r
 }
 
 func isNumberOfSegmentsMismatched(record *catalog.Record, loadedSegments uint32) bool {
-	if record.LastAppendedSegmentID() == nil {
-		return loadedSegments != 0
-	}
-	return *record.LastAppendedSegmentID()+1 != loadedSegments
+	return record.NumberOfSegments() != loadedSegments
 }
 
 func (m *Manager) loadHead(
@@ -208,7 +207,7 @@ func (m *Manager) loadHead(
 		inputRelabelerConfigs,
 		headRecord.NumberOfShards(),
 		m.maxSegmentSize,
-		SetLastAppendedSegmentIDFn(func(segmentID uint32) { headRecord.SetLastAppendedSegmentID(segmentID) }),
+		SetNumberOfSegmentsFunc(func(numberOfSegments uint32) { headRecord.SetNumberOfSegments(numberOfSegments) }),
 		m.registerer,
 	)
 	if err != nil {
@@ -221,13 +220,13 @@ func (m *Manager) loadHead(
 		case headRecord.Status() == catalog.StatusActive:
 			// numberOfSegments here is actual number of segments.
 			if numberOfSegments > 0 {
-				headRecord.SetLastAppendedSegmentID(numberOfSegments - 1)
+				headRecord.SetNumberOfSegments(numberOfSegments)
 			}
 		case isNumberOfSegmentsMismatched(headRecord, numberOfSegments):
 			corrupted = true
 			// numberOfSegments here is actual number of segments.
 			if numberOfSegments > 0 {
-				headRecord.SetLastAppendedSegmentID(numberOfSegments - 1)
+				headRecord.SetNumberOfSegments(numberOfSegments)
 			}
 			logger.Errorf("head: %s number of segments mismatched", headRecord.ID())
 		}
@@ -282,7 +281,7 @@ func (m *Manager) BuildWithConfig(
 		inputRelabelerConfigs,
 		numberOfShards,
 		m.maxSegmentSize,
-		SetLastAppendedSegmentIDFn(func(segmentID uint32) { headRecord.SetLastAppendedSegmentID(segmentID) }),
+		SetNumberOfSegmentsFunc(func(numberOfSegments uint32) { headRecord.SetNumberOfSegments(numberOfSegments) }),
 		m.registerer,
 	)
 	if err != nil {
@@ -300,7 +299,8 @@ func (m *Manager) createDiscardableRotatableHead(h relabeler.Head, releaseHeadFn
 	return NewDiscardableRotatableHead(
 		h,
 		func(id string, err error) error {
-			if _, rotateErr := m.catalog.SetStatus(id, catalog.StatusRotated); rotateErr != nil {
+			stats := h.Status(1)
+			if _, rotateErr := m.catalog.SetStatusWithTimeBounds(id, catalog.StatusRotated, stats.HeadStats.MinTime, stats.HeadStats.MaxTime); rotateErr != nil {
 				return errors.Join(err, rotateErr)
 			}
 			m.counter.With(prometheus.Labels{"type": "rotated"}).Inc()
