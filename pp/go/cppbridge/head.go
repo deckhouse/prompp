@@ -230,7 +230,7 @@ func getSeriesIDFromBytes(data []byte) uint32 {
 }
 
 type HeadDataStorageSerializedChunks struct {
-	*CBytes
+	bytes *CBytes
 }
 
 type HeadDataStorageSerializedChunkMetadata [SerializedChunkMetadataSize]byte
@@ -240,15 +240,23 @@ func (cm *HeadDataStorageSerializedChunkMetadata) SeriesID() uint32 {
 }
 
 func (r *HeadDataStorageSerializedChunks) NumberOfChunks() int {
-	return int(*(*int32)(unsafe.Pointer(&r.Bytes[0])))
+	if r.bytes == nil {
+		return 0
+	}
+
+	return int(*(*int32)(unsafe.Pointer(&r.bytes.Bytes[0])))
 }
 
 func (r *HeadDataStorageSerializedChunks) Len() int {
-	return len(r.Bytes)
+	return len(r.bytes.Bytes)
+}
+
+func (r *HeadDataStorageSerializedChunks) CBytes() *CBytes {
+	return r.bytes
 }
 
 func (r *HeadDataStorageSerializedChunks) Data() []byte {
-	return r.Bytes
+	return r.bytes.Bytes
 }
 
 type HeadDataStorageSerializedChunkIndex struct {
@@ -260,7 +268,7 @@ func (r *HeadDataStorageSerializedChunks) MakeIndex() HeadDataStorageSerializedC
 	offset := Uint32Size
 	n := r.NumberOfChunks()
 	for i := 0; i < n; i, offset = i+1, offset+SerializedChunkMetadataSize {
-		sID := getSeriesIDFromBytes(r.Bytes[offset : offset+4])
+		sID := getSeriesIDFromBytes(r.bytes.Bytes[offset : offset+4])
 		m[sID] = append(m[sID], offset)
 	}
 	return HeadDataStorageSerializedChunkIndex{m}
@@ -281,7 +289,7 @@ func (i HeadDataStorageSerializedChunkIndex) Chunks(r HeadDataStorageSerializedC
 	}
 	res := make([]HeadDataStorageSerializedChunkMetadata, len(offsets))
 	for i, offset := range offsets {
-		res[i] = HeadDataStorageSerializedChunkMetadata(r.Bytes[offset : offset+SerializedChunkMetadataSize])
+		res[i] = HeadDataStorageSerializedChunkMetadata(r.bytes.Bytes[offset : offset+SerializedChunkMetadataSize])
 	}
 	return res
 }
@@ -368,7 +376,7 @@ type HeadDataStorageDeserializer struct {
 
 func NewHeadDataStorageDeserializer(serializedChunks HeadDataStorageSerializedChunks) *HeadDataStorageDeserializer {
 	d := &HeadDataStorageDeserializer{
-		deserializer:     seriesDataDeserializerCtor(serializedChunks.Bytes),
+		deserializer:     seriesDataDeserializerCtor(serializedChunks.Data()),
 		serializedChunks: serializedChunks,
 	}
 	runtime.SetFinalizer(d, func(d *HeadDataStorageDeserializer) {

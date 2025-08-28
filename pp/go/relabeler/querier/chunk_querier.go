@@ -89,7 +89,7 @@ func (q *ChunkQuerier) Select(
 
 	chunkSeriesSets := make([]storage.ChunkSeriesSet, q.head.NumberOfShards())
 	for shardID, serializedChunks := range queryResults {
-		if serializedChunks.CBytes == nil || serializedChunks.NumberOfChunks() == 0 {
+		if serializedChunks.NumberOfChunks() == 0 {
 			chunkSeriesSets[shardID] = &EmptyChunkSeriesSet{}
 			continue
 		}
@@ -97,7 +97,7 @@ func (q *ChunkQuerier) Select(
 		chunkSeriesSets[shardID] = NewChunkSeriesSet(
 			lssQueryResults[shardID],
 			snapshots[shardID],
-			cppbridge.NewSerializedChunkRecoder(serializedChunks.CBytes, cppbridge.TimeInterval{MinT: q.mint, MaxT: q.maxt}),
+			cppbridge.NewSerializedChunkRecoder(serializedChunks.CBytes(), cppbridge.TimeInterval{MinT: q.mint, MaxT: q.maxt}),
 		)
 	}
 

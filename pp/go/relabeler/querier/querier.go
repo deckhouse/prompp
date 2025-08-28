@@ -352,7 +352,7 @@ func (q *Querier) selectRange(
 
 	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
 	for shardID, serializedChunks := range queryResults {
-		if serializedChunks.CBytes == nil || serializedChunks.NumberOfChunks() == 0 {
+		if serializedChunks.NumberOfChunks() == 0 {
 			seriesSets[shardID] = &SeriesSet{}
 			continue
 		}

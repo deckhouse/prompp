@@ -123,7 +123,7 @@ func (s *HeadSuite) TestSerializedChunkRecoder() {
 		EndTimestampMs:   timeInterval.MaxT,
 		LabelSetIDs:      []uint32{0, 1}},
 	)
-	recoder := cppbridge.NewSerializedChunkRecoder(serializedChunks.CBytes, timeInterval)
+	recoder := cppbridge.NewSerializedChunkRecoder(serializedChunks.CBytes(), timeInterval)
 
 	// Act
 	chunk1 := recoder.RecodeNextChunk()
