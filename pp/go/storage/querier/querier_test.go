@@ -37,6 +37,8 @@ func TestXxx(t *testing.T) {
 		querier.NewMetrics(nil, "test"),
 	)
 	_ = q
+
+	t.Log("end")
 }
 
 // testWal test implementation wal.

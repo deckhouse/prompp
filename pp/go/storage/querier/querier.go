@@ -80,6 +80,8 @@ func NewQuerier[
 }
 
 // Close [Querier] if need.
+//
+//revive:disable-next-line:confusing-naming // other type of querier.
 func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) Close() error {
 	if q.closer != nil {
 		return q.closer()
@@ -89,6 +91,8 @@ func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) Close() error
 }
 
 // LabelNames returns label values present in the head for the specific label name.
+//
+//revive:disable-next-line:confusing-naming // other type of querier.
 func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) LabelNames(
 	ctx context.Context,
 	hints *storage.LabelHints,
@@ -108,9 +112,12 @@ func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) LabelNames(
 // LabelValues returns label values present in the head for the specific label name
 // that are within the time range mint to maxt. If matchers are specified the returned
 // result set is reduced to label values of metrics matching the matchers.
+//
+//revive:disable-next-line:confusing-naming // other type of querier.
 func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
 	ctx context.Context,
 	name string,
+	hints *storage.LabelHints,
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	return queryLabelValues(
@@ -120,11 +127,14 @@ func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
 		q.deduplicatorCtor,
 		q.metrics,
 		LSSLabelValuesQuerier,
+		hints,
 		matchers...,
 	)
 }
 
 // Select returns a set of series that matches the given label matchers.
+//
+//revive:disable-next-line:confusing-naming // other type of querier.
 func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) Select(
 	ctx context.Context,
 	sortSeries bool,
@@ -388,6 +398,7 @@ func queryLabelValues[
 	deduplicatorCtor deduplicatorCtor,
 	metrics *Metrics,
 	taskName string,
+	_ *storage.LabelHints,
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	start := time.Now()

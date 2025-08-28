@@ -15,6 +15,7 @@ import (
 // MultiQuerier
 //
 
+// MultiQuerier querier which makes requests to all queriers from the created list and merges the received results.
 type MultiQuerier struct {
 	queriers []storage.Querier
 	closer   func() error
