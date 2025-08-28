@@ -16,6 +16,7 @@ import (
 
 // HeadsCatalog of current head records.
 type HeadsCatalog interface {
+	// Create creates new [Record] and write to [Log].
 	Create(numberOfShards uint16) (*catalog.Record, error)
 
 	// Delete record by ID.
@@ -31,6 +32,7 @@ type HeadsCatalog interface {
 
 // Head the minimum required Head implementation for a container.
 type Head[T any] interface {
+	// for use as a pointer
 	*T
 }
 
