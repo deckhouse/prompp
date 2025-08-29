@@ -3,6 +3,7 @@ package storage
 import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage/head/head"
+	"github.com/prometheus/prometheus/pp/go/storage/head/manager"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
@@ -20,3 +21,6 @@ type ShardOnDisk = shard.Shard[*WalOnDisk]
 
 // HeadOnDisk [head.Head] with [ShardOnDisk].
 type HeadOnDisk = head.Head[*ShardOnDisk, *shard.PerGoroutineShard[*WalOnDisk]]
+
+// HeadManager [manager.Manager] for [HeadOnDisk]s.
+type HeadManager = manager.Manager[*HeadOnDisk]

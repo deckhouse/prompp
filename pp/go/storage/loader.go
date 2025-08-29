@@ -18,10 +18,20 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util/optional"
 )
 
+// Loader loads [HeadOnDisk] or [ShardOnDisk] from [WalOnDisk].
 type Loader struct {
-	dir            string
+	dataDir        string
 	maxSegmentSize uint32
 	registerer     prometheus.Registerer
+}
+
+// NewLoader init new [Loader].
+func NewLoader(dataDir string, maxSegmentSize uint32, registerer prometheus.Registerer) *Loader {
+	return &Loader{
+		dataDir:        dataDir,
+		maxSegmentSize: maxSegmentSize,
+		registerer:     registerer,
+	}
 }
 
 // UploadHead upload [HeadOnDisk] from [WalOnDisk] by head ID.
@@ -30,7 +40,7 @@ func (l *Loader) UploadHead(
 	generation uint64,
 ) (_ *HeadOnDisk, _ uint32, corrupted bool) {
 	headID := headRecord.ID()
-	headDir := filepath.Join(l.dir, headID)
+	headDir := filepath.Join(l.dataDir, headID)
 	numberOfShards := headRecord.NumberOfShards()
 	shardLoadResults := make([]ShardLoadResult, numberOfShards)
 	wg := &sync.WaitGroup{}
@@ -63,7 +73,7 @@ func (l *Loader) UploadHead(
 		}
 	}
 
-	// h.MergeOutOfOrderChunks()
+	// TODO h.MergeOutOfOrderChunks()
 	return head.NewHead(
 			headID,
 			shards,

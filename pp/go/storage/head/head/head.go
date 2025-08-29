@@ -188,6 +188,7 @@ func (h *Head[TShard, TGorutineShard]) AcquireQuery(ctx context.Context) (releas
 // Close wals and clear metrics.
 func (h *Head[TShard, TGorutineShard]) Close() error {
 	h.memoryInUse.DeletePartialMatch(prometheus.Labels{"generation": strconv.FormatUint(h.generation, 10)})
+	// TODO Close ?
 
 	close(h.stopc)
 	h.wg.Wait()

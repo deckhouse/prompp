@@ -22,7 +22,7 @@ import (
 // Builder building new [HeadOnDisk] with parameters.
 type Builder struct {
 	catalog        *catalog.Catalog
-	dir            string
+	dataDir        string
 	maxSegmentSize uint32
 	registerer     prometheus.Registerer
 }
@@ -30,13 +30,13 @@ type Builder struct {
 // NewBuilder init new [Builder].
 func NewBuilder(
 	hcatalog *catalog.Catalog,
-	dir string,
+	dataDir string,
 	maxSegmentSize uint32,
 	registerer prometheus.Registerer,
 ) *Builder {
 	return &Builder{
 		catalog:        hcatalog,
-		dir:            dir,
+		dataDir:        dataDir,
 		maxSegmentSize: maxSegmentSize,
 		registerer:     registerer,
 	}
@@ -49,7 +49,7 @@ func (b *Builder) Build(generation uint64, numberOfShards uint16) (*HeadOnDisk, 
 		return nil, err
 	}
 
-	headDir := filepath.Join(b.dir, headRecord.ID())
+	headDir := filepath.Join(b.dataDir, headRecord.ID())
 	//revive:disable-next-line:add-constant // this is already a constant
 	if err = os.Mkdir(headDir, 0o777); err != nil { //nolint:gosec // need this permissions
 		return nil, err
