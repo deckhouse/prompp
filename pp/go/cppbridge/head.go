@@ -177,21 +177,21 @@ type ChunkRecoder struct {
 
 	lss              *LabelSetStorage
 	dataStorage      *HeadDataStorage
-	serializedChunks *CBytes
+	serializedChunks *HeadDataStorageSerializedChunks
 }
 
 func NewChunkRecoder(lss *LabelSetStorage, lsIdBatchSize uint32, dataStorage *HeadDataStorage, timeInterval TimeInterval) *ChunkRecoder {
 	return initializeChunkRecoder(lss, dataStorage, nil, seriesDataChunkRecoderCtor(lss.Pointer(), lsIdBatchSize, dataStorage.dataStorage, timeInterval))
 }
 
-func NewSerializedChunkRecoder(serializedChunks *CBytes, timeInterval TimeInterval) *ChunkRecoder {
-	return initializeChunkRecoder(nil, nil, serializedChunks, seriesDataSerializedChunkRecoderCtor(serializedChunks.Bytes, timeInterval))
+func NewSerializedChunkRecoder(serializedChunks *HeadDataStorageSerializedChunks, timeInterval TimeInterval) *ChunkRecoder {
+	return initializeChunkRecoder(nil, nil, serializedChunks, seriesDataSerializedChunkRecoderCtor(serializedChunks.Data(), timeInterval))
 }
 
 func initializeChunkRecoder(
 	lss *LabelSetStorage,
 	dataStorage *HeadDataStorage,
-	serializedChunks *CBytes,
+	serializedChunks *HeadDataStorageSerializedChunks,
 	recoder uintptr,
 ) *ChunkRecoder {
 	chunkRecoder := &ChunkRecoder{
@@ -230,7 +230,7 @@ func getSeriesIDFromBytes(data []byte) uint32 {
 }
 
 type HeadDataStorageSerializedChunks struct {
-	bytes *CBytes
+	data []byte
 }
 
 type HeadDataStorageSerializedChunkMetadata [SerializedChunkMetadataSize]byte
@@ -240,23 +240,19 @@ func (cm *HeadDataStorageSerializedChunkMetadata) SeriesID() uint32 {
 }
 
 func (r *HeadDataStorageSerializedChunks) NumberOfChunks() int {
-	if r.bytes == nil {
+	if len(r.data) == 0 {
 		return 0
 	}
 
-	return int(*(*int32)(unsafe.Pointer(&r.bytes.Bytes[0])))
+	return int(*(*int32)(unsafe.Pointer(&r.data[0])))
 }
 
 func (r *HeadDataStorageSerializedChunks) Len() int {
-	return len(r.bytes.Bytes)
-}
-
-func (r *HeadDataStorageSerializedChunks) CBytes() *CBytes {
-	return r.bytes
+	return len(r.data)
 }
 
 func (r *HeadDataStorageSerializedChunks) Data() []byte {
-	return r.bytes.Bytes
+	return r.data
 }
 
 type HeadDataStorageSerializedChunkIndex struct {
@@ -268,7 +264,7 @@ func (r *HeadDataStorageSerializedChunks) MakeIndex() HeadDataStorageSerializedC
 	offset := Uint32Size
 	n := r.NumberOfChunks()
 	for i := 0; i < n; i, offset = i+1, offset+SerializedChunkMetadataSize {
-		sID := getSeriesIDFromBytes(r.bytes.Bytes[offset : offset+4])
+		sID := getSeriesIDFromBytes(r.data[offset : offset+4])
 		m[sID] = append(m[sID], offset)
 	}
 	return HeadDataStorageSerializedChunkIndex{m}
@@ -282,23 +278,23 @@ func (i HeadDataStorageSerializedChunkIndex) Len() int {
 	return len(i.m)
 }
 
-func (i HeadDataStorageSerializedChunkIndex) Chunks(r HeadDataStorageSerializedChunks, seriesID uint32) []HeadDataStorageSerializedChunkMetadata {
+func (i HeadDataStorageSerializedChunkIndex) Chunks(r *HeadDataStorageSerializedChunks, seriesID uint32) []HeadDataStorageSerializedChunkMetadata {
 	offsets, ok := i.m[seriesID]
 	if !ok {
 		return nil
 	}
 	res := make([]HeadDataStorageSerializedChunkMetadata, len(offsets))
 	for i, offset := range offsets {
-		res[i] = HeadDataStorageSerializedChunkMetadata(r.bytes.Bytes[offset : offset+SerializedChunkMetadataSize])
+		res[i] = HeadDataStorageSerializedChunkMetadata(r.data[offset : offset+SerializedChunkMetadataSize])
 	}
 	return res
 }
 
-func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) (HeadDataStorageSerializedChunks, DataStorageQueryResult) {
-	serializedChunks := NewCBytes(nil)
-	result := seriesDataDataStorageQuery(ds.dataStorage, query, &serializedChunks.Bytes)
+func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) (*HeadDataStorageSerializedChunks, DataStorageQueryResult) {
+	serializedChunks := &HeadDataStorageSerializedChunks{}
+	result := seriesDataDataStorageQuery(ds.dataStorage, query, &serializedChunks.data)
 	runtime.KeepAlive(ds)
-	return HeadDataStorageSerializedChunks{serializedChunks}, result
+	return serializedChunks, result
 }
 
 func (ds *HeadDataStorage) InstantQuery(targetTimestamp, defaultTimestamp int64, labelSetIDs []uint32) ([]Sample, DataStorageQueryResult) {
@@ -371,10 +367,10 @@ func (ds *HeadDataStorage) CreateRevertableLoader(lss *LabelSetStorage, lsIdBatc
 
 type HeadDataStorageDeserializer struct {
 	deserializer     uintptr
-	serializedChunks HeadDataStorageSerializedChunks
+	serializedChunks *HeadDataStorageSerializedChunks
 }
 
-func NewHeadDataStorageDeserializer(serializedChunks HeadDataStorageSerializedChunks) *HeadDataStorageDeserializer {
+func NewHeadDataStorageDeserializer(serializedChunks *HeadDataStorageSerializedChunks) *HeadDataStorageDeserializer {
 	d := &HeadDataStorageDeserializer{
 		deserializer:     seriesDataDeserializerCtor(serializedChunks.Data()),
 		serializedChunks: serializedChunks,

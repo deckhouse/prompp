@@ -352,7 +352,7 @@ func (q *Querier) selectRange(
 
 	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
 	for shardID, serializedChunks := range queryResults {
-		if serializedChunks.NumberOfChunks() == 0 {
+		if serializedChunks == nil || serializedChunks.NumberOfChunks() == 0 {
 			seriesSets[shardID] = &SeriesSet{}
 			continue
 		}
@@ -458,10 +458,10 @@ func dataStorageQuery(
 	head relabeler.Head,
 	lssQueryResults []*cppbridge.LSSQueryResult,
 	mint, maxt int64) (
-	[]cppbridge.HeadDataStorageSerializedChunks,
+	[]*cppbridge.HeadDataStorageSerializedChunks,
 	error,
 ) {
-	queryResults := make([]cppbridge.HeadDataStorageSerializedChunks, head.NumberOfShards())
+	queryResults := make([]*cppbridge.HeadDataStorageSerializedChunks, head.NumberOfShards())
 	var dataStorageLoadWaiter relabeler.TaskWaiter
 	tDataStorageQuery := head.CreateTask(
 		taskName,

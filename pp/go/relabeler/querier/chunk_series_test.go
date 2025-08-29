@@ -60,7 +60,7 @@ func (s *ChunksSeriesSetTestSuite) TestAll() {
 	s.Require().Equal(cppbridge.DataStorageQueryStatusSuccess, result.Status)
 	s.Require().Equal(2, serializedChunks.NumberOfChunks())
 
-	chunkRecoder := cppbridge.NewSerializedChunkRecoder(serializedChunks.CBytes(), cppbridge.TimeInterval{
+	chunkRecoder := cppbridge.NewSerializedChunkRecoder(serializedChunks, cppbridge.TimeInterval{
 		MinT: mint,
 		MaxT: maxt,
 	})

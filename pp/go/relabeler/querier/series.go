@@ -18,7 +18,7 @@ type SeriesSet struct {
 	maxt             int64
 	deserializer     *cppbridge.HeadDataStorageDeserializer
 	chunksIndex      cppbridge.HeadDataStorageSerializedChunkIndex
-	serializedChunks cppbridge.HeadDataStorageSerializedChunks
+	serializedChunks *cppbridge.HeadDataStorageSerializedChunks
 	lssQueryResult   *cppbridge.LSSQueryResult
 	labelSetSnapshot *cppbridge.LabelSetSnapshot
 

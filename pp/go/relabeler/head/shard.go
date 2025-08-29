@@ -105,7 +105,7 @@ func (ds *DataStorage) MergeOutOfOrderChunks() {
 	ds.encoder.MergeOutOfOrderChunks()
 }
 
-func (ds *DataStorage) Query(query cppbridge.HeadDataStorageQuery) (cppbridge.HeadDataStorageSerializedChunks, cppbridge.DataStorageQueryResult) {
+func (ds *DataStorage) Query(query cppbridge.HeadDataStorageQuery) (*cppbridge.HeadDataStorageSerializedChunks, cppbridge.DataStorageQueryResult) {
 	return ds.dataStorage.Query(query)
 }
 
