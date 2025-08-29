@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
-	"slices"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
@@ -239,10 +238,11 @@ func ReadSegment(reader io.Reader, decodedSegment *DecodedSegment) (n int, err e
 	}
 	decodedSegment.sampleCount = uint32(sampleCountU64)
 
-	if growTo := int(size) - len(decodedSegment.data); growTo > 0 {
-		decodedSegment.data = slices.Grow(decodedSegment.data, growTo)
+	if int(size) > cap(decodedSegment.data) {
+		decodedSegment.data = make([]byte, size)
+	} else {
+		decodedSegment.data = decodedSegment.data[:size]
 	}
-	decodedSegment.data = decodedSegment.data[:size]
 
 	n, err = io.ReadFull(reader, decodedSegment.data)
 	if err != nil {
