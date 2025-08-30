@@ -23,6 +23,7 @@ class Scraper {
  public:
   [[nodiscard]] Error parse(std::span<char> buffer, Primitives::Timestamp default_timestamp) {
     labels_.reserve(255);
+    default_timestamp_ = default_timestamp;
 
     auto& tokenizer = parser_.tokenizer();
     tokenizer.tokenize({buffer.data(), buffer.data() + buffer.size()});
@@ -51,7 +52,9 @@ class Scraper {
 
         case Token::kMetricName:
         case Token::kBraceOpen: {
-          if (const auto error = MetricParser{parser_, metric_buffer_, metric_buffer_.add_metric(), labels_, default_timestamp}.parse();
+          if (const auto error = MetricParser{parser_, metric_buffer_, labels_, static_cast<uint32_t>(tokenizer.token_str().data() - tokenizer.buffer().data()),
+                                              default_timestamp}
+                                     .parse();
               error != Error::kNoError) [[unlikely]] {
             metric_buffer_.remove_item();
             return error;
@@ -76,7 +79,9 @@ class Scraper {
     explicit MetricsWrapper(const Scraper& scraper) : scraper_(scraper) {}
 
     [[nodiscard]] PROMPP_LAMBDA_INLINE uint32_t size() const noexcept { return scraper_.metric_buffer_.items_count(); }
-    [[nodiscard]] PROMPP_LAMBDA_INLINE auto begin() const noexcept { return scraper_.metric_buffer_.begin(scraper_.parser_.tokenizer().buffer()); }
+    [[nodiscard]] PROMPP_LAMBDA_INLINE auto begin() const noexcept {
+      return scraper_.metric_buffer_.begin(scraper_.parser_.tokenizer().buffer(), scraper_.default_timestamp());
+    }
     [[nodiscard]] PROMPP_LAMBDA_INLINE static auto end() noexcept { return MetricMarkupBuffer::end(); }
 
    private:
@@ -96,11 +101,13 @@ class Scraper {
   };
 
   [[nodiscard]] PROMPP_LAMBDA_INLINE uint32_t size() const noexcept { return metric_buffer_.items_count(); }
-  [[nodiscard]] PROMPP_LAMBDA_INLINE auto begin() const noexcept { return metric_buffer_.begin(parser_.tokenizer().buffer()); }
+  [[nodiscard]] PROMPP_LAMBDA_INLINE auto begin() const noexcept { return metric_buffer_.begin(parser_.tokenizer().buffer(), default_timestamp_); }
   [[nodiscard]] PROMPP_LAMBDA_INLINE static auto end() noexcept { return MetricMarkupBuffer::end(); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE MetricsWrapper metrics() const noexcept { return MetricsWrapper{*this}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE MetadataWrapper metadata() const noexcept { return MetadataWrapper{*this}; }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Timestamp default_timestamp() const noexcept { return default_timestamp_; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
     return metric_buffer_.allocated_memory() + metadata_buffer_.allocated_memory();
@@ -148,21 +155,14 @@ class Scraper {
 
   struct MarkedMetric {
     uint64_t hash{};
-    uint32_t offset{};
-    uint32_t offset_extra{};
-    uint8_t bytes[];
-
-    // explicit MarkedMetric(Primitives::Timestamp timestamp) : sample(timestamp, 0.0) {}
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t occupied_size() const noexcept { return sizeof(*this) + sizeof(MarkedLabel) /*add bytes skip!!!*/; }
+    uint32_t base_offset{};
+    uint32_t data_offset{};
   };
 
   struct MarkedMetadata {
     MarkedString metric_name{};
     MarkedString text{};
     Prometheus::MetadataType type{};
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t occupied_size() const noexcept { return sizeof(*this); }
   };
 #pragma pack(pop)
 
@@ -171,7 +171,8 @@ class Scraper {
    public:
     using MarkedItem = MarkedMetric;
 
-    explicit Metric(std::string_view buffer, const MarkedMetric* item) : buffer_(buffer), item_(item) {}
+    Metric(std::string_view buffer, const BareBones::Vector<char>& bytes_buffer, const MarkedMetric* item, Primitives::Timestamp default_timestamp)
+        : buffer_(buffer), bytes_buffer_(bytes_buffer), item_(item), default_timestamp_(default_timestamp) {}
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE const MarkedMetric* item() const noexcept { return item_; }
     PROMPP_ALWAYS_INLINE void set_item(const MarkedMetric* item) noexcept { item_ = item; }
@@ -179,19 +180,141 @@ class Scraper {
     [[nodiscard]] PROMPP_ALWAYS_INLINE uint64_t hash() const noexcept { return item_->hash; }
 
     template <class Timeseries>
-    void read(Timeseries& timeseries) const {
-      timeseries.label_set().reserve(item_->label_set.count);
-      for (uint32_t i = 0; i < item_->label_set.count; ++i) {
-        const auto& [name, value] = item_->label_set.labels[i];
-        timeseries.label_set().append(name.view(buffer_), value.view(buffer_));
+    void read(Timeseries& ts) const {
+      const char* ptr = bytes_buffer_.data() + item_->data_offset;
+      const char* base = buffer_.data() + item_->base_offset;
+
+      // decode label count
+      uint32_t labels_count = decode_varint(ptr);
+      ts.label_set().reserve(labels_count);
+
+      // decode label
+      for (uint32_t i = 0; i < labels_count; ++i) {
+        const uint8_t layout = static_cast<uint8_t>(*ptr++);
+        const uint8_t sz0 = (layout >> 0) & 0x3;
+        const uint8_t sz1 = (layout >> 2) & 0x3;
+        const uint8_t sz2 = (layout >> 4) & 0x3;
+        const uint8_t sz3 = (layout >> 6) & 0x3;
+
+        auto read_val = [&](uint8_t sz) PROMPP_LAMBDA_INLINE -> uint32_t {
+          uint32_t v = 0;
+          memcpy(&v, ptr, sz + 1);
+          ptr += sz + 1;
+          return v;
+        };
+
+        uint32_t name_off = read_val(sz0);
+        uint32_t name_len = read_val(sz1);
+        uint32_t value_off = read_val(sz2);
+        uint32_t value_len = read_val(sz3);
+
+        if (name_off == 0 && name_len == 0) [[unlikely]] {
+          ts.label_set().append(Prometheus::kMetricLabelName, std::string_view(base + value_off, value_len));
+        } else {
+          ts.label_set().append(std::string_view(base + name_off, name_len), std::string_view(base + value_off, value_len));
+        }
       }
 
-      timeseries.samples().emplace_back(item_->sample);
+      // decode sample
+      uint8_t marker = static_cast<uint8_t>(*ptr++);
+      bool has_ts = (marker & 0b10000000) != 0;
+      uint8_t type = marker & 0b01111111;
+
+      Primitives::Sample sample{};
+      sample.timestamp() = default_timestamp_;
+
+      if (has_ts) [[unlikely]] {
+        int64_t ts_val;
+        memcpy(&ts_val, ptr, sizeof(ts_val));
+        ptr += sizeof(ts_val);
+        sample.timestamp() = ts_val;
+      }
+
+      double val;
+
+      switch (type) {
+        case 0b00000011: {  // uint32
+          uint32_t tmp;
+          memcpy(&tmp, ptr, sizeof(tmp));
+          ptr += sizeof(tmp);
+          val = static_cast<double>(tmp);
+          break;
+        }
+        case 0b00000000:  // zero
+          val = 0.0;
+          break;
+        case 0b00000001: {  // uint8
+          uint8_t tmp = static_cast<uint8_t>(*ptr++);
+          val = static_cast<double>(tmp);
+          break;
+        }
+        case 0b00000010: {  // uint16
+          uint16_t tmp;
+          memcpy(&tmp, ptr, sizeof(tmp));
+          ptr += sizeof(tmp);
+          val = static_cast<double>(tmp);
+          break;
+        }
+        case 0b00000100:  // NaN
+          val = Prometheus::kNormalNan;
+          break;
+        case 0b00001000: {  // float32
+          float tmp;
+          memcpy(&tmp, ptr, sizeof(tmp));
+          ptr += sizeof(tmp);
+          val = static_cast<double>(tmp);
+          break;
+        }
+        case 0b00001001: {  // double
+          double tmp;
+          memcpy(&tmp, ptr, sizeof(tmp));
+          ptr += sizeof(tmp);
+          val = tmp;
+          break;
+        }
+        default:
+          val = Prometheus::kStaleNan;
+          break;
+      }
+
+      sample.value() = val;
+      ts.samples().emplace_back(sample);
     }
 
    private:
     std::string_view buffer_;
+    const BareBones::Vector<char>& bytes_buffer_;
     const MarkedMetric* item_{};
+    Primitives::Timestamp default_timestamp_;
+
+    static uint32_t decode_varint(const char*& ptr) noexcept {
+      uint32_t b0 = static_cast<uint8_t>(*ptr++);
+      if ((b0 & 0x80) == 0) [[likely]] {
+        return b0;
+      }
+
+      uint32_t b1 = static_cast<uint8_t>(*ptr++);
+      uint32_t v = (b0 & 0x7F) | ((b1 & 0x7F) << 7);
+      if ((b1 & 0x80) == 0) {
+        return v;
+      }
+
+      uint32_t b2 = static_cast<uint8_t>(*ptr++);
+      v |= (b2 & 0x7F) << 14;
+      if ((b2 & 0x80) == 0) {
+        return v;
+      }
+
+      uint32_t b3 = static_cast<uint8_t>(*ptr++);
+      v |= (b3 & 0x7F) << 21;
+      if ((b3 & 0x80) == 0) {
+        return v;
+      }
+
+      uint32_t b4 = static_cast<uint8_t>(*ptr++);
+      v |= (b4 & 0x0F) << 28;
+      return v;
+    }
   };
 
   class Metadata {
@@ -234,7 +357,7 @@ class Scraper {
       [[nodiscard]] PROMPP_ALWAYS_INLINE const value_type* operator->() const noexcept { return &item_; }
 
       PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
-        item_.set_item(reinterpret_cast<const MarkedItem*>(reinterpret_cast<const char*>(item_.item()) + item_.item()->occupied_size()));
+        item_.set_item(reinterpret_cast<const MarkedItem*>(reinterpret_cast<const char*>(item_.item()) + sizeof(*item_.item())));
         --items_count_;
         return *this;
       }
@@ -273,25 +396,81 @@ class Scraper {
     uint32_t items_count_{};
   };
 
-  class MetricMarkupBuffer : public MarkupBuffer<Metric> {
+  class MetricMarkupBuffer {
    public:
-    PROMPP_ALWAYS_INLINE MarkedMetric* add_metric() noexcept {
-      ++this->items_count_;
+    class IteratorSentinel {};
 
-      const auto offset = this->buffer_.size();
-      this->buffer_.resize(offset + sizeof(MarkedMetric));
-      return std::construct_at(reinterpret_cast<MarkedMetric*>(this->buffer_.data() + offset));
+    class Iterator {
+     public:
+      using iterator_category = std::forward_iterator_tag;
+      using value_type = Metric;
+      using difference_type = ptrdiff_t;
+      using pointer = value_type*;
+      using reference = value_type&;
+
+      Iterator(std::string_view buffer,
+               const BareBones::Vector<char>& bytes_buffer,
+               const MarkedMetric* ptr,
+               uint32_t items_count,
+               Primitives::Timestamp default_timestamp)
+          : item_(buffer, bytes_buffer, ptr, default_timestamp), ptr_(ptr), buffer_(buffer), bytes_buffer_(bytes_buffer), items_count_(items_count) {}
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE const value_type& operator*() const noexcept { return item_; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE const value_type* operator->() const noexcept { return &item_; }
+
+      PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
+        item_.set_item(++ptr_);
+        --items_count_;
+        return *this;
+      }
+
+      PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
+        auto tmp = *this;
+        ++(*this);
+        return tmp;
+      }
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return items_count_ == 0; }
+
+     private:
+      Metric item_;
+      const MarkedMetric* ptr_{};
+      std::string_view buffer_;
+      const BareBones::Vector<char>& bytes_buffer_;
+      uint32_t items_count_{};
+    };
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin(std::string_view buffer, Primitives::Timestamp default_timestamp) const noexcept {
+      return {buffer, bytes_buffer_, metric_buffer_.data(), metric_buffer_.size(), default_timestamp};
     }
 
-    PROMPP_ALWAYS_INLINE void add_count(uint32_t count, MarkedMetric*& metric) noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Vector<MarkedMetric>& metric_buffer() const noexcept { return metric_buffer_; }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Vector<char>& bytes_buffer() const noexcept { return bytes_buffer_; }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t items_count() const noexcept { return metric_buffer_.size(); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t bytes_count() const noexcept { return bytes_buffer_.size(); }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return metric_buffer_.allocated_memory() + bytes_buffer_.allocated_memory(); }
+
+    PROMPP_ALWAYS_INLINE void remove_item() noexcept {
+      bytes_buffer_.resize(metric_buffer_.back().data_offset);
+      metric_buffer_.pop_back();
+    }
+
+    PROMPP_ALWAYS_INLINE void add_hash(uint64_t hash) noexcept { metric_buffer_.back().hash = hash; }
+    PROMPP_ALWAYS_INLINE void add_metric(uint32_t global_offset) noexcept {
+      metric_buffer_.push_back(MarkedMetric{.base_offset = global_offset, .data_offset = bytes_count()});
+    }
+
+    PROMPP_ALWAYS_INLINE void add_count(uint32_t count) noexcept {
       constexpr uint32_t kVarint1Byte = 0x80;        // 2^7
       constexpr uint32_t kVarint2Byte = 0x4000;      // 2^14
       constexpr uint32_t kVarint3Byte = 0x200000;    // 2^21
       constexpr uint32_t kVarint4Byte = 0x10000000;  // 2^28
       constexpr uint8_t kContinueBit = 0x80;
       constexpr uint8_t kValueMask = 0x7F;
-
-      const auto offset = reinterpret_cast<const char*>(metric) - this->buffer_.data();
 
       std::array<char, 5> tmp{};
       char* out = tmp.data();
@@ -318,24 +497,22 @@ class Scraper {
         *out++ = static_cast<char>(count >> 28);
       }
 
-      this->buffer_.push_back(tmp.data(), out);
-
-      metric = reinterpret_cast<MarkedMetric*>(this->buffer_.data() + offset);
+      bytes_buffer_.push_back(tmp.data(), out);
     }
 
-    PROMPP_ALWAYS_INLINE void add_label(const MarkedLabel& label, MarkedMetric*& metric) noexcept {
-      if (label.value.is_empty()) [[unlikely]] {
-        return;
-      }
+    PROMPP_ALWAYS_INLINE void add_label(MarkedLabel label) noexcept {
+      const auto& metric = metric_buffer_.back();
 
-      auto name = label.name;
-      if (name.is_reserved_name()) [[unlikely]] {
-        name.offset = 0;
-        name.length = 0;
+      if (label.name.is_reserved_name()) [[unlikely]] {
+        label.name.offset = 0;
+        label.name.length = 0;
+      } else {
+        label.name.offset -= metric.base_offset;
       }
+      label.value.offset -= metric.base_offset;
 
-      const uint8_t sz0 = encode_size(name.offset);
-      const uint8_t sz1 = encode_size(name.length);
+      const uint8_t sz0 = encode_size(label.name.offset);
+      const uint8_t sz1 = encode_size(label.name.length);
       const uint8_t sz2 = encode_size(label.value.offset);
       const uint8_t sz3 = encode_size(label.value.length);
 
@@ -346,10 +523,10 @@ class Scraper {
 
       *out++ = static_cast<char>(layout);
 
-      *reinterpret_cast<uint32_t*>(out) = name.offset;
+      *reinterpret_cast<uint32_t*>(out) = label.name.offset;
       out += sz0 + 1;
 
-      *reinterpret_cast<uint32_t*>(out) = name.length;
+      *reinterpret_cast<uint32_t*>(out) = label.name.length;
       out += sz1 + 1;
 
       *reinterpret_cast<uint32_t*>(out) = label.value.offset;
@@ -358,34 +535,22 @@ class Scraper {
       *reinterpret_cast<uint32_t*>(out) = label.value.length;
       out += sz3 + 1;
 
-      const auto offset = reinterpret_cast<const char*>(metric) - this->buffer_.data();
-
-      this->buffer_.push_back(tmp.data(), out);
-
-      metric = reinterpret_cast<MarkedMetric*>(this->buffer_.data() + offset);
+      bytes_buffer_.push_back(tmp.data(), out);
     }
 
-    PROMPP_ALWAYS_INLINE void add_sample(const MarkedSample& sample, MarkedMetric*& metric) noexcept {
-      const auto offset = reinterpret_cast<const char*>(metric) - this->buffer_.data();
-
-      add_sample_internal(sample);
-
-      metric = reinterpret_cast<MarkedMetric*>(this->buffer_.data() + offset);
-    }
-
-    PROMPP_ALWAYS_INLINE void add_sample_internal(const MarkedSample& sample) noexcept {
+    PROMPP_ALWAYS_INLINE void add_sample(const MarkedSample& sample) noexcept {
       uint8_t marker = sample.has_ts ? 0b10000000 : 0;
       const double val = sample.sample.value();
 
       auto flush = [&](uint8_t m) PROMPP_LAMBDA_INLINE {
-        this->buffer_.push_back(marker | m);
+        bytes_buffer_.push_back(marker | m);
         if (sample.has_ts) {
           append(sample.sample.timestamp());
         }
       };
 
       if (std::isnan(val)) [[unlikely]] {
-        flush(0b00000100);  // staleNaN
+        flush(0b00000100);  // NaN
         return;
       }
 
@@ -424,10 +589,13 @@ class Scraper {
     }
 
    private:
+    BareBones::Vector<MarkedMetric> metric_buffer_;
+    BareBones::Vector<char> bytes_buffer_;
+
     template <class T>
     PROMPP_ALWAYS_INLINE void append(const T val) noexcept {
       auto p = reinterpret_cast<const char*>(&val);
-      this->buffer_.push_back(p, p + sizeof(T));
+      bytes_buffer_.push_back(p, p + sizeof(T));
     }
 
     static uint8_t encode_size(uint32_t v) noexcept {
@@ -460,10 +628,12 @@ class Scraper {
    public:
     MetricParser(Parser& parser,
                  MetricMarkupBuffer& markup_buffer,
-                 MarkedMetric* metric,
                  BareBones::Vector<MarkedLabel>& labels,
+                 uint32_t global_offset,
                  Primitives::Timestamp timestamp)
-        : parser_(parser), markup_buffer_(markup_buffer), metric_(metric), labels_(labels), sample_{.sample = {timestamp, 0.0}} {}
+        : parser_(parser), markup_buffer_(markup_buffer), labels_(labels), sample_{.sample = {timestamp, 0.0}} {
+      markup_buffer_.add_metric(global_offset);
+    }
 
     [[nodiscard]] Error parse() noexcept {
       labels_.clear();
@@ -471,15 +641,8 @@ class Scraper {
       bool have_metric_name = false;
       auto& tokenizer = parser_.tokenizer();
 
-      metric_->offset = tokenizer.token_str().data() - tokenizer.buffer().data();
-
       if (tokenizer.token() == Token::kMetricName) [[likely]] {
-        // markup_buffer_.add_label(MarkedLabel{.value = MarkedString::create(tokenizer.token_str(), tokenizer.buffer())}, metric_);
-
-        auto string = MarkedString::create(tokenizer.token_str(), tokenizer.buffer());
-        string.offset -= metric_->offset;
-        auto label = MarkedLabel{.value = string};
-        labels_.push_back(label);
+        labels_.push_back(MarkedLabel{.value = MarkedString::create(tokenizer.token_str(), tokenizer.buffer())});
 
         have_metric_name = true;
         tokenizer.next_non_whitespace();
@@ -501,8 +664,12 @@ class Scraper {
         return Error::kNoMetricName;
       }
 
-      // metric_->calculate_hash(tokenizer.buffer());
       // sort
+      {
+        const auto it = std::remove_if(labels_.begin(), labels_.end(), [](const MarkedLabel& label) { return label.value.is_empty(); });
+        labels_.erase(it, labels_.end());
+      }
+
       std::sort(labels_.begin(), labels_.end(), [buffer = tokenizer.buffer()](const MarkedLabel& a, const MarkedLabel& b) PROMPP_LAMBDA_INLINE {
         return a.name.view(buffer) < b.name.view(buffer);
       });
@@ -513,17 +680,17 @@ class Scraper {
         for (const auto& label : labels_) {
           hash.extend(label.name.view(tokenizer.buffer()), label.value.view(tokenizer.buffer()));
         }
-        metric_->hash = hash.hash();
+        markup_buffer_.add_hash(hash.hash());
       }
 
       // encode count
       {
-        markup_buffer_.add_count(labels_.size(), metric_);
+        markup_buffer_.add_count(labels_.size());
       }
 
       // encode labels
       for (const auto& label : labels_) {
-        markup_buffer_.add_label(label, metric_);
+        markup_buffer_.add_label(label);
       }
 
       return parse_metric_suffix();
@@ -532,7 +699,6 @@ class Scraper {
    private:
     Parser& parser_;
     MetricMarkupBuffer& markup_buffer_;
-    MarkedMetric* metric_;
     BareBones::Vector<MarkedLabel>& labels_;
     MarkedSample sample_;
 
@@ -555,14 +721,12 @@ class Scraper {
             return error;
           }
 
-          // markup_buffer_.add_label(label, metric_);
           labels_.push_back(label);
 
           tokenizer.next();
         } else {
           if (!have_metric_name) [[unlikely]] {
-            // markup_buffer_.add_label(MarkedLabel{.value = label.name}, metric_);
-            labels_.push_back(label);
+            labels_.push_back(MarkedLabel{.value = label.name});
 
             have_metric_name = true;
           } else {
@@ -585,7 +749,6 @@ class Scraper {
 
       if (tokenizer.token() == Token::kLabelName) [[likely]] {
         label_name = MarkedString::create(tokenizer.token_str(), tokenizer.buffer());
-        label_name.offset -= metric_->offset;
         return Error::kNoError;
       }
       if (tokenizer.token() == Token::kQuotedString) {
@@ -616,7 +779,6 @@ class Scraper {
       }
 
       string = MarkedString::create(value, tokenizer.buffer());
-      string.offset -= metric_->offset;
       return Error::kNoError;
     }
 
@@ -629,7 +791,7 @@ class Scraper {
         return error;
       }
 
-      markup_buffer_.add_sample(sample_, metric_);
+      markup_buffer_.add_sample(sample_);
 
       return parser_.validate_parse_sample_result();
     }
@@ -694,6 +856,7 @@ class Scraper {
   MetricMarkupBuffer metric_buffer_;
   MetadataMarkupBuffer metadata_buffer_;
   BareBones::Vector<MarkedLabel> labels_;
+  Primitives::Timestamp default_timestamp_{};
 };
 
 using PrometheusScraper = Scraper<PrometheusParser>;

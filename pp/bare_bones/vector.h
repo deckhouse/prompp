@@ -108,6 +108,12 @@ class GenericVector {
     derived()->set_size(0);
   }
 
+  PROMPP_ALWAYS_INLINE void pop_back() noexcept {
+    assert(!empty());
+
+    erase(end() - 1, end());
+  }
+
   PROMPP_ALWAYS_INLINE iterator erase(iterator first, iterator last) noexcept {
     assert(first >= begin());
     assert(last <= end());
