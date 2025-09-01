@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/head"
@@ -43,6 +44,7 @@ func (l *Loader) UploadHead(
 	headDir := filepath.Join(l.dataDir, headID)
 	numberOfShards := headRecord.NumberOfShards()
 	shardLoadResults := make([]ShardLoadResult, numberOfShards)
+
 	wg := &sync.WaitGroup{}
 	swn := writer.NewSegmentWriteNotifier(numberOfShards, headRecord.SetLastAppendedSegmentID)
 	for shardID := range numberOfShards {

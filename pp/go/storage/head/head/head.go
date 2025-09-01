@@ -185,10 +185,13 @@ func (h *Head[TShard, TGorutineShard]) AcquireQuery(ctx context.Context) (releas
 	return h.querySemaphore.RLock(ctx)
 }
 
-// Close wals and clear metrics.
-func (h *Head[TShard, TGorutineShard]) Close() error {
+// Close closes wals, query semaphore for the inability to get query and clear metrics.
+func (h *Head[TShard, TGorutineShard]) Close(ctx context.Context) error {
+	if err := h.querySemaphore.Close(ctx); err != nil {
+		return err
+	}
+
 	h.memoryInUse.DeletePartialMatch(prometheus.Labels{"generation": strconv.FormatUint(h.generation, 10)})
-	// TODO Close ?
 
 	close(h.stopc)
 	h.wg.Wait()
