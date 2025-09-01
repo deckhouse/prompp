@@ -169,10 +169,16 @@ class Scraper {
  public:
   class Metric {
    public:
-    using MarkedItem = MarkedMetric;
+    using MarkedT = MarkedMetric;
 
-    Metric(std::string_view buffer, const BareBones::Vector<char>& bytes_buffer, const MarkedMetric* item, Primitives::Timestamp default_timestamp)
-        : buffer_(buffer), bytes_buffer_(bytes_buffer), item_(item), default_timestamp_(default_timestamp) {}
+    struct Context {
+      std::string_view buffer;
+      const BareBones::Vector<char>& bytes_buffer;
+      Primitives::Timestamp default_timestamp;
+    };
+
+    Metric(const Context& ctx, const MarkedMetric* item)
+        : buffer_(ctx.buffer), bytes_buffer_(ctx.bytes_buffer), item_(item), default_timestamp_(ctx.default_timestamp) {}
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE const MarkedMetric* item() const noexcept { return item_; }
     PROMPP_ALWAYS_INLINE void set_item(const MarkedMetric* item) noexcept { item_ = item; }
@@ -343,9 +349,13 @@ class Scraper {
 
   class Metadata {
    public:
-    using MarkedItem = MarkedMetadata;
+    using MarkedT = MarkedMetadata;
 
-    explicit Metadata(std::string_view buffer, const MarkedMetadata* item) : buffer_(buffer), item_(item) {}
+    struct Context {
+      std::string_view buffer;
+    };
+
+    Metadata(const Context& ctx, const MarkedMetadata* item) : buffer_(ctx.buffer), item_(item) {}
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE const MarkedMetadata* item() const noexcept { return item_; }
     PROMPP_ALWAYS_INLINE void set_item(const MarkedMetadata* item) noexcept { item_ = item; }
@@ -359,85 +369,23 @@ class Scraper {
     const MarkedMetadata* item_{};
   };
 
- private:
-  template <class Item>
+  template <typename T>
   class MarkupBuffer {
    public:
+    using MarkedT = typename T::MarkedT;
+    using Context = typename T::Context;
+
     class IteratorSentinel {};
 
     class Iterator {
      public:
       using iterator_category = std::forward_iterator_tag;
-      using value_type = Item;
-      using difference_type = ptrdiff_t;
-      using pointer = value_type*;
-      using reference = value_type&;
-      using MarkedItem = typename Item::MarkedItem;
-
-      Iterator(std::string_view buffer, const MarkupBuffer* markup_buffer)
-          : item_(buffer, reinterpret_cast<const MarkedItem*>(markup_buffer->buffer().data())), items_count_(markup_buffer->items_count()) {}
-
-      [[nodiscard]] PROMPP_ALWAYS_INLINE const value_type& operator*() const noexcept { return item_; }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE const value_type* operator->() const noexcept { return &item_; }
-
-      PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
-        item_.set_item(reinterpret_cast<const MarkedItem*>(reinterpret_cast<const char*>(item_.item()) + sizeof(*item_.item())));
-        --items_count_;
-        return *this;
-      }
-
-      PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
-        const auto it = *this;
-        ++*this;
-        return it;
-      }
-
-      PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return items_count_ == 0; }
-
-     private:
-      Item item_;
-      uint32_t items_count_;
-    };
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Vector<char>& buffer() const noexcept { return buffer_; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t items_count() const noexcept { return items_count_; }
-
-    PROMPP_ALWAYS_INLINE void remove_item() noexcept { --items_count_; }
-
-    PROMPP_ALWAYS_INLINE void initialize(size_t reserve) noexcept {
-      buffer_.clear();
-      buffer_.reserve(reserve);
-      items_count_ = 0;
-    }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin(std::string_view buffer) const noexcept { return {buffer, this}; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return buffer_.allocated_memory(); }
-
-   protected:
-    BareBones::Vector<char> buffer_;
-    uint32_t items_count_{};
-  };
-
-  class MetricMarkupBuffer {
-   public:
-    class IteratorSentinel {};
-
-    class Iterator {
-     public:
-      using iterator_category = std::forward_iterator_tag;
-      using value_type = Metric;
+      using value_type = T;
       using difference_type = ptrdiff_t;
       using pointer = value_type*;
       using reference = value_type&;
 
-      Iterator(std::string_view buffer,
-               const BareBones::Vector<char>& bytes_buffer,
-               const MarkedMetric* ptr,
-               uint32_t items_count,
-               Primitives::Timestamp default_timestamp)
-          : item_(buffer, bytes_buffer, ptr, default_timestamp), ptr_(ptr), buffer_(buffer), bytes_buffer_(bytes_buffer), items_count_(items_count) {}
+      Iterator(const Context& ctx, const MarkedT* ptr, uint32_t items_count) : item_(ctx, ptr), ptr_(ptr), items_count_(items_count), ctx_(ctx) {}
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE const value_type& operator*() const noexcept { return item_; }
       [[nodiscard]] PROMPP_ALWAYS_INLINE const value_type* operator->() const noexcept { return &item_; }
@@ -454,38 +402,45 @@ class Scraper {
         return tmp;
       }
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return items_count_ == 0; }
+      PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return items_count_ == 0; }
 
      private:
-      Metric item_;
-      const MarkedMetric* ptr_{};
-      std::string_view buffer_;
-      const BareBones::Vector<char>& bytes_buffer_;
-      uint32_t items_count_{};
+      T item_;
+      const MarkedT* ptr_;
+      uint32_t items_count_;
+      Context ctx_;
     };
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin(std::string_view buffer, Primitives::Timestamp default_timestamp) const noexcept {
-      return {buffer, bytes_buffer_, metric_buffer_.data(), metric_buffer_.size(), default_timestamp};
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t items_count() const noexcept { return buffer_.size(); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return buffer_.allocated_memory(); }
+
+   protected:
+    BareBones::Vector<MarkedT> buffer_;
+  };
+
+  class MetricMarkupBuffer : public MarkupBuffer<Metric> {
+   public:
+    using Base = MarkupBuffer<Metric>;
+    using Iterator = typename Base::Iterator;
+    using IteratorSentinel = typename Base::IteratorSentinel;
+
+    [[nodiscard]] Iterator begin(std::string_view buffer, Primitives::Timestamp default_ts) const noexcept {
+      return {typename Base::Context{buffer, bytes_buffer_, default_ts}, this->buffer_.data(), this->items_count()};
     }
+    [[nodiscard]] static IteratorSentinel end() noexcept { return {}; }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Vector<MarkedMetric>& metric_buffer() const noexcept { return metric_buffer_; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Vector<char>& bytes_buffer() const noexcept { return bytes_buffer_; }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t items_count() const noexcept { return metric_buffer_.size(); }
     [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t bytes_count() const noexcept { return bytes_buffer_.size(); }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return metric_buffer_.allocated_memory() + bytes_buffer_.allocated_memory(); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return this->buffer_.allocated_memory() + bytes_buffer_.allocated_memory(); }
 
     PROMPP_ALWAYS_INLINE void remove_item() noexcept {
-      bytes_buffer_.resize(metric_buffer_.back().data_offset);
-      metric_buffer_.pop_back();
+      bytes_buffer_.resize(this->buffer_.back().data_offset);
+      this->buffer_.pop_back();
     }
 
-    PROMPP_ALWAYS_INLINE void add_hash(uint64_t hash) noexcept { metric_buffer_.back().hash = hash; }
+    PROMPP_ALWAYS_INLINE void add_hash(uint64_t hash) noexcept { this->buffer_.back().hash = hash; }
     PROMPP_ALWAYS_INLINE void add_metric(uint32_t global_offset) noexcept {
-      metric_buffer_.push_back(MarkedMetric{.base_offset = global_offset, .data_offset = bytes_count()});
+      this->buffer_.push_back(MarkedMetric{.base_offset = global_offset, .data_offset = bytes_count()});
     }
 
     PROMPP_ALWAYS_INLINE void add_count(uint32_t count) noexcept {
@@ -528,7 +483,7 @@ class Scraper {
     }
 
     PROMPP_ALWAYS_INLINE void add_label(MarkedLabel label) noexcept {
-      const auto base_offset = metric_buffer_.back().base_offset;
+      const auto base_offset = this->buffer_.back().base_offset;
 
       if (label.name.is_reserved_name()) [[unlikely]] {
         label.name.offset = 0;
@@ -611,7 +566,6 @@ class Scraper {
     }
 
    private:
-    BareBones::Vector<MarkedMetric> metric_buffer_;
     BareBones::Vector<char> bytes_buffer_;
 
     template <typename T>
@@ -629,16 +583,21 @@ class Scraper {
 
   class MetadataMarkupBuffer : public MarkupBuffer<Metadata> {
    public:
-    PROMPP_ALWAYS_INLINE void add(MarkedString metric_name, MarkedString text, Prometheus::MetadataType type) noexcept {
-      ++this->items_count_;
+    using Base = MarkupBuffer<Metadata>;
+    using Iterator = typename Base::Iterator;
+    using IteratorSentinel = typename Base::IteratorSentinel;
 
-      const auto offset = this->buffer_.size();
-      this->buffer_.resize(offset + sizeof(MarkedMetadata));
-      new (reinterpret_cast<MarkedMetadata*>(this->buffer_.data() + offset)) MarkedMetadata{
-          .metric_name = metric_name,
-          .text = text,
-          .type = type,
-      };
+    [[nodiscard]] Iterator begin(std::string_view buffer) const noexcept { return {typename Base::Context{buffer}, this->buffer_.data(), this->items_count()}; }
+    [[nodiscard]] static IteratorSentinel end() noexcept { return {}; }
+
+    PROMPP_ALWAYS_INLINE void add(MarkedString metric_name, MarkedString text, Prometheus::MetadataType type) noexcept {
+      this->buffer_.emplace_back(metric_name, text, type);
+    }
+
+    void remove_item() noexcept { this->buffer_.pop_back(); }
+    void initialize(size_t reserve) noexcept {
+      this->buffer_.clear();
+      this->buffer_.reserve(reserve);
     }
   };
 
