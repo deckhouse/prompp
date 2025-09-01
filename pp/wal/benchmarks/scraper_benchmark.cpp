@@ -76,7 +76,9 @@ void BenchmarkScraperRead(benchmark::State& state) {
   for ([[maybe_unused]] auto _ : state) {
     PromPP::Primitives::TimeseriesSemiview ts;
     for (auto& metric : scraper.metrics()) {
-      metric.read(ts);
+      if (metric.hash() % 2 == 0) {
+        metric.read(ts);
+      }
     }
   }
 }
