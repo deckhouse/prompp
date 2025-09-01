@@ -435,6 +435,7 @@ class Scraper {
     }
 
     PROMPP_ALWAYS_INLINE void add_hash(uint64_t hash) noexcept { this->buffer_.back().hash = hash; }
+
     PROMPP_ALWAYS_INLINE void add_metric(uint32_t global_offset) noexcept {
       this->buffer_.push_back(MarkedMetric{.base_offset = global_offset, .data_offset = bytes_count()});
     }
@@ -518,7 +519,7 @@ class Scraper {
       const double val = sample.sample.value();
       const bool has_ts = sample.has_ts;
 
-      constexpr uint32_t max_sample_bytes = 1 + sizeof(sample.sample);  // marker + value + timestamp
+      constexpr uint32_t max_sample_bytes = 1 + sizeof(sample.sample);
       const uint32_t offset = bytes_count();
       bytes_buffer_.resize(offset + max_sample_bytes);
       char* out = bytes_buffer_.data() + offset;
@@ -668,34 +669,7 @@ class Scraper {
       return Error::kNoMetricName;
     }
 
-    // sort
-    {
-      const auto it = std::remove_if(labels_.begin(), labels_.end(), [](const MarkedLabel& label) { return label.value.is_empty(); });
-      labels_.erase(it, labels_.end());
-    }
-
-    std::sort(labels_.begin(), labels_.end(), [buffer = tokenizer.buffer()](const MarkedLabel& a, const MarkedLabel& b) PROMPP_LAMBDA_INLINE {
-      return a.name.view(buffer) < b.name.view(buffer);
-    });
-
-    // hash
-    {
-      BareBones::XXHash hash;
-      for (const auto& label : labels_) {
-        hash.extend(label.name.view(tokenizer.buffer()), label.value.view(tokenizer.buffer()));
-      }
-      metric_buffer_.add_hash(hash.hash());
-    }
-
-    // encode count
-    {
-      metric_buffer_.add_count(labels_.size());
-    }
-
-    // encode labels
-    for (const auto& label : labels_) {
-      metric_buffer_.add_label(label);
-    }
+    process_labels_buffer();
 
     return parse_metric_suffix();
   }
@@ -807,6 +781,35 @@ class Scraper {
     tokenizer.next_non_whitespace();
 
     return parser_.parse_timestamp(sample.sample.timestamp(), sample.has_ts);
+  }
+
+  PROMPP_ALWAYS_INLINE void process_labels_buffer() noexcept {
+    sort_and_filter_labels();
+    append_labels_hash();
+
+    metric_buffer_.add_count(labels_.size());
+
+    for (const auto& label : labels_) {
+      metric_buffer_.add_label(label);
+    }
+  }
+
+  PROMPP_ALWAYS_INLINE void sort_and_filter_labels() noexcept {
+    const auto it = std::remove_if(labels_.begin(), labels_.end(), [](const MarkedLabel& label) { return label.value.is_empty(); });
+    labels_.erase(it, labels_.end());
+
+    std::sort(labels_.begin(), labels_.end(), [buffer = parser_.tokenizer().buffer()](const MarkedLabel& a, const MarkedLabel& b) PROMPP_LAMBDA_INLINE {
+      return a.name.view(buffer) < b.name.view(buffer);
+    });
+  }
+
+  PROMPP_ALWAYS_INLINE void append_labels_hash() noexcept {
+    const auto& tokenizer = parser_.tokenizer();
+    BareBones::XXHash hash;
+    for (const auto& label : labels_) {
+      hash.extend(label.name.view(tokenizer.buffer()), label.value.view(tokenizer.buffer()));
+    }
+    metric_buffer_.add_hash(hash.hash());
   }
 
   Parser parser_;
