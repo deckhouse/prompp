@@ -1,10 +1,11 @@
 package cppbridge_test
 
 import (
+	"testing"
+
 	"github.com/gobuffalo/packr/v2/file/resolver/encoding/hex"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestHeadWalEncoder_Finalize(t *testing.T) {
@@ -29,5 +30,5 @@ func TestHeadWalDecoder_DecodeToDataStorage(t *testing.T) {
 
 	// Assert
 	require.NoError(t, err)
-	require.Equal(t, cppbridge.TimeInterval{MinT: 1660828401000, MaxT: 1660828410000}, dataStorage.TimeInterval())
+	require.Equal(t, cppbridge.TimeInterval{MinT: 1660828401000, MaxT: 1660828410000}, dataStorage.TimeInterval(false))
 }

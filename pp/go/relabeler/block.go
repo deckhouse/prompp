@@ -143,7 +143,7 @@ type Block struct {
 }
 
 func (b *Block) TimeBounds() (minT, maxT int64) {
-	interval := b.ds.TimeInterval()
+	interval := b.ds.TimeInterval(false)
 	return interval.MinT, interval.MaxT
 }
 

@@ -101,3 +101,12 @@ func (ds *DataStorage) WithRLock(fn func(ds *cppbridge.HeadDataStorage) error) e
 
 	return err
 }
+
+// TimeInterval get time interval from [DataStorage].
+func (ds *DataStorage) TimeInterval(invalidateCache bool) cppbridge.TimeInterval {
+	ds.locker.RLock()
+	result := ds.dataStorage.TimeInterval(invalidateCache)
+	ds.locker.RUnlock()
+
+	return result
+}
