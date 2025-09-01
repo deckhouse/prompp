@@ -3,9 +3,11 @@ package storage
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
+	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
@@ -14,11 +16,16 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/logger"
 )
 
+var DefaultNumberOfShards uint16 = 2
+
 func HeadManagerCtor(
 	l log.Logger,
+	clock clockwork.Clock,
 	dataDir string,
 	hcatalog *catalog.Catalog,
+	blockDuration time.Duration,
 	maxSegmentSize uint32,
+	numberOfShards uint16,
 	registerer prometheus.Registerer,
 ) (*HeadManager, error) {
 	dirStat, err := os.Stat(dataDir)
@@ -32,13 +39,11 @@ func HeadManagerCtor(
 
 	initLogHandler(l)
 
-	headRecords := hcatalog.List(
-		func(record *catalog.Record) bool {
-			return record.DeletedAt() == 0 && record.Status() != catalog.StatusPersisted
-		},
-		func(lhs, rhs *catalog.Record) bool {
-			return lhs.CreatedAt() < rhs.CreatedAt()
-		},
+	builder := NewBuilder(
+		hcatalog,
+		dataDir,
+		maxSegmentSize,
+		registerer,
 	)
 
 	loader := NewLoader(
@@ -47,15 +52,23 @@ func HeadManagerCtor(
 		registerer,
 	)
 
-	builder := NewBuilder(
+	h, err := uploadOrBuildHead(
+		clock,
 		hcatalog,
-		dataDir,
-		maxSegmentSize,
-		registerer,
+		builder,
+		loader,
+		blockDuration,
+		numberOfShards,
 	)
+	if err != nil {
+		return nil, err
+	}
 
-	//
-	activeHead := container.NewWeighted(expectedHead)
+	if _, err = hcatalog.SetStatus(h.ID(), catalog.StatusActive); err != nil {
+		return nil, fmt.Errorf("failed to set active status: %w", err)
+	}
+
+	activeHead := container.NewWeighted(h)
 
 	m := manager.NewManager(
 		activeHead,
@@ -65,6 +78,52 @@ func HeadManagerCtor(
 	)
 
 	return m, nil
+}
+
+func uploadOrBuildHead(
+	clock clockwork.Clock,
+	hcatalog *catalog.Catalog,
+	builder *Builder,
+	loader *Loader,
+	blockDuration time.Duration,
+	numberOfShards uint16,
+) (*HeadOnDisk, error) {
+	headRecords := hcatalog.List(
+		func(record *catalog.Record) bool {
+			statusIsAppropriate := record.Status() == catalog.StatusNew ||
+				record.Status() == catalog.StatusActive
+
+			isInBlockTimeRange := clock.Now().Sub(
+				time.UnixMilli(record.CreatedAt()),
+			).Milliseconds() < blockDuration.Milliseconds()
+
+			return record.DeletedAt() == 0 && statusIsAppropriate && isInBlockTimeRange
+		},
+		func(lhs, rhs *catalog.Record) bool {
+			return lhs.CreatedAt() < rhs.CreatedAt()
+		},
+	)
+
+	if numberOfShards == 0 {
+		numberOfShards = DefaultNumberOfShards
+	}
+
+	var generation uint64
+	if len(headRecords) == 0 {
+		return builder.Build(generation, numberOfShards)
+	}
+
+	h, numberOfSegments, corrupted := loader.UploadHead(headRecords[0], generation)
+	if corrupted {
+		if _, err := hcatalog.SetStatus(headRecords[0].ID(), catalog.StatusRotated); err != nil {
+			// TODO Warning ?
+			return nil, fmt.Errorf("failed to set rotated status: %w", err)
+		}
+
+		// TODO loadResult.head.Stop()
+
+		return builder.Build(generation, numberOfShards)
+	}
 }
 
 // initLogHandler init log handler for pp.

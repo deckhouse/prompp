@@ -52,6 +52,7 @@ type Wal[TSegment EncodedSegment, TStats StatsSegment, TWriter SegmentWriter[TSe
 	maxSegmentSize uint32
 	corrupted      bool
 	limitExhausted bool
+	closed         bool
 }
 
 // NewWal init new [Wal].
@@ -82,7 +83,17 @@ func NewCorruptedWal[
 
 // Close closes the wal segmentWriter.
 func (w *Wal[TSegment, TStats, TWriter]) Close() error {
-	return w.segmentWriter.Close()
+	if w.closed {
+		return nil
+	}
+
+	if err := w.segmentWriter.Close(); err != nil {
+		return err
+	}
+
+	w.closed = true
+
+	return nil
 }
 
 // Commit finalize segment from encoder and write to [SegmentWriter].
