@@ -1,6 +1,8 @@
 package keeper
 
 import (
+	"container/heap"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -21,11 +23,16 @@ import (
 const (
 	writeRetryTimeout        = 5 * time.Minute
 	maxAddIter        uint32 = 5
-)
 
-const (
+	MinHeadConvertingQueueSize = 2
+
 	// BlockWrite name of task.
 	BlockWrite = "block_write"
+)
+
+var (
+	ErrorHeadConvertingQueueIsFull error = errors.New("head converting queue is full")
+	ErrorNoHeadForConvert          error = errors.New("no head for convert")
 )
 
 // HeadBlockWriter writes block on disk from [Head].
@@ -96,11 +103,107 @@ type Head[
 
 	// String serialize as string.
 	String() string
+
+	// IsReadOnly returns true if the [Head] has switched to read-only.
+	IsReadOnly() bool
 }
 
 type HeadBlockBuilder[TBlock any] func() TBlock
 
+type HeadForConverting[THead any] struct {
+	head      THead
+	createdAt time.Duration
+}
+
+type HeadConvertingSlice[THead any] []HeadForConverting[THead]
+
+func (q *HeadConvertingSlice[THead]) Len() int {
+	return len(*q)
+}
+
+func (q *HeadConvertingSlice[THead]) Less(i, j int) bool {
+	return (*q)[i].createdAt < (*q)[j].createdAt
+}
+
+func (q *HeadConvertingSlice[THead]) Swap(i, j int) {
+	(*q)[i], (*q)[j] = (*q)[j], (*q)[i]
+}
+
+func (q *HeadConvertingSlice[THead]) Push(head any) {
+	*q = append(*q, head.(HeadForConverting[THead]))
+}
+
+func (q *HeadConvertingSlice[THead]) Pop() any {
+	n := len(*q)
+	item := (*q)[n-1]
+	*q = (*q)[0 : n-1]
+	return item
+}
+
+type HeadConvertingQueue[THead any] struct {
+	heads HeadConvertingSlice[THead]
+}
+
+func NewHeadConvertingQueue[THead any](size int) HeadConvertingQueue[THead] {
+	queue := HeadConvertingQueue[THead]{}
+	queue.heads = make(HeadConvertingSlice[THead], 0, max(size, MinHeadConvertingQueueSize))
+	heap.Init(&queue.heads)
+	return queue
+}
+
+func (h *HeadConvertingQueue[THead]) Heads() HeadConvertingSlice[THead] {
+	return h.heads
+}
+
+func (h *HeadConvertingQueue[THead]) Push(head THead, createdAt time.Duration) error {
+	if len(h.heads) < cap(h.heads) {
+		heap.Push(&h.heads, HeadForConverting[THead]{head: head, createdAt: createdAt})
+		return nil
+	}
+
+	if h.heads[0].createdAt < createdAt {
+		h.heads[0].head = head
+		h.heads[0].createdAt = createdAt
+		heap.Fix(&h.heads, 0)
+		return nil
+	}
+
+	return ErrorHeadConvertingQueueIsFull
+}
+
+func (h *HeadConvertingQueue[THead]) Pop() THead {
+	return heap.Pop(&h.heads).(HeadForConverting[THead]).head
+}
+
 type Keeper[
+	TGenericTask GenericTask,
+	TDataStorage DataStorage,
+	TLSS LSS,
+	TShard Shard[TDataStorage, TLSS],
+	THead Head[TGenericTask, TDataStorage, TLSS, TShard],
+	// TBlock any,
+] struct {
+	heads HeadConvertingQueue[THead]
+
+	headRetentionTimeout time.Duration
+}
+
+func (k *Keeper[TGenericTask, TDataStorage, TLSS, TShard, THead]) Add(head THead, createdAt time.Duration) error {
+	return k.heads.Push(head, createdAt)
+}
+
+func (k *Keeper[TGenericTask, TDataStorage, TLSS, TShard, THead]) Range() func(func(head THead) bool) {
+	return func(yield func(head THead) bool) {
+		heads := k.heads.Heads()
+		for i := range heads {
+			if !yield(heads[i].head) {
+				return
+			}
+		}
+	}
+}
+
+type CustomKeeper[
 	TGenericTask GenericTask,
 	TDataStorage DataStorage,
 	TLSS LSS,
@@ -127,7 +230,7 @@ type Keeper[
 	querierMetrics          *querier.Metrics
 }
 
-func (k *Keeper[TGenericTask, TDataStorage, TLSS, TShard, THead, TBlock]) Add(head THead) {
+func (k *CustomKeeper[TGenericTask, TDataStorage, TLSS, TShard, THead, TBlock]) Add(head THead) {
 	k.mtx.Lock()
 	k.heads = append(k.heads, head)
 	logger.Infof("QUERYABLE STORAGE: head %s added", head.String())
@@ -138,7 +241,7 @@ func (k *Keeper[TGenericTask, TDataStorage, TLSS, TShard, THead, TBlock]) Add(he
 	}
 }
 
-func (k *Keeper[TGenericTask, TDataStorage, TLSS, TShard, THead, TBlock]) write() bool {
+func (k *CustomKeeper[TGenericTask, TDataStorage, TLSS, TShard, THead, TBlock]) write() bool {
 	k.mtx.Lock()
 	lenHeads := len(k.heads)
 	if lenHeads == 0 {
@@ -161,11 +264,11 @@ func (k *Keeper[TGenericTask, TDataStorage, TLSS, TShard, THead, TBlock]) write(
 			continue
 		}
 		// TODO
-		// if err := head.Flush(); err != nil {
-		// 	logger.Errorf("QUERYABLE STORAGE: failed to flush head %s: %s", head.String(), err.Error())
-		// 	successful = false
-		// 	continue
-		// }
+		//if err := head.Flush(); err != nil {
+		//	logger.Errorf("QUERYABLE STORAGE: failed to flush head %s: %s", head.String(), err.Error())
+		//	successful = false
+		//	continue
+		//}
 		// if err := head.Rotate(); err != nil {
 		// 	logger.Errorf("QUERYABLE STORAGE: failed to rotate head %s: %s", head.String(), err.Error())
 		// 	successful = false
@@ -211,7 +314,7 @@ func (k *Keeper[TGenericTask, TDataStorage, TLSS, TShard, THead, TBlock]) write(
 	return successful
 }
 
-func (k *Keeper[TGenericTask, TDataStorage, TLSS, TShard, THead, TBlock]) headIsOutdated(head THead) bool {
+func (k *CustomKeeper[TGenericTask, TDataStorage, TLSS, TShard, THead, TBlock]) headIsOutdated(head THead) bool {
 	// TODO
 	// headMaxTimestampMs := head.Status(1).HeadStats.MaxTime
 	// return k.clock.Now().Sub(time.Unix(headMaxTimestampMs/1000, 0)) > k.maxRetentionDuration
@@ -219,7 +322,7 @@ func (k *Keeper[TGenericTask, TDataStorage, TLSS, TShard, THead, TBlock]) headIs
 	return false
 }
 
-func (k *Keeper[TGenericTask, TDataStorage, TLSS, TShard, THead, TBlock]) shrink(persisted ...string) {
+func (k *CustomKeeper[TGenericTask, TDataStorage, TLSS, TShard, THead, TBlock]) shrink(persisted ...string) {
 	k.mtx.Lock()
 	defer k.mtx.Unlock()
 

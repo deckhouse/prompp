@@ -29,7 +29,7 @@ type ActiveHeadContainer[THead Head] interface {
 
 type Keeper[THead Head] interface {
 	Add(head THead)
-	RangeQueriableHeads(mint, maxt int64) func(func(THead) bool)
+	RangeQueryableHeads(mint, maxt int64) func(func(THead) bool)
 }
 
 // Loader loads [Head] from wal.
@@ -212,9 +212,9 @@ func (m *Manager[THead]) WithAppendableHead(ctx context.Context, fn func(h THead
 	return m.activeHead.With(ctx, fn)
 }
 
-// RangeQueriableHeads
+// RangeQueryableHeads
 // TODO implementation.
-func (m *Manager[THead]) RangeQueriableHeads(mint, maxt int64) func(func(THead) bool) {
+func (m *Manager[THead]) RangeQueryableHeads(mint, maxt int64) func(func(THead) bool) {
 	// ahead := m.activeHead.Get()
 	// for h := range m.keeper.RangeQueriableHeads(mint, maxt) {
 	// TODO
