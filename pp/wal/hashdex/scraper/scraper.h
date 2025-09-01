@@ -20,8 +20,7 @@ namespace PromPP::WAL::hashdex::scraper {
 template <ParserInterface Parser>
 class Scraper {
  public:
-  [[nodiscard]] Error parse(std::span<char> buffer, Primitives::Timestamp default_timestamp) {
-    labels_.clear();
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Error parse(std::span<char> buffer, Primitives::Timestamp default_timestamp) {
     labels_.reserve(255);
     default_timestamp_ = default_timestamp;
 
@@ -52,10 +51,7 @@ class Scraper {
 
         case Token::kMetricName:
         case Token::kBraceOpen: {
-          if (const auto error = MetricParser{parser_, metric_buffer_, labels_, static_cast<uint32_t>(tokenizer.token_str().data() - tokenizer.buffer().data()),
-                                              default_timestamp}
-                                     .parse();
-              error != Error::kNoError) [[unlikely]] {
+          if (const auto error = parse_metric(); error != Error::kNoError) [[unlikely]] {
             metric_buffer_.remove_item();
             return error;
           }
@@ -601,195 +597,7 @@ class Scraper {
     }
   };
 
-  class MetricParser {
-   public:
-    MetricParser(Parser& parser,
-                 MetricMarkupBuffer& markup_buffer,
-                 BareBones::Vector<MarkedLabel>& labels,
-                 uint32_t global_offset,
-                 Primitives::Timestamp timestamp)
-        : parser_(parser), markup_buffer_(markup_buffer), labels_(labels), sample_{.sample = {timestamp, 0.0}} {
-      markup_buffer_.add_metric(global_offset);
-    }
-
-    [[nodiscard]] Error parse() noexcept {
-      labels_.clear();
-
-      bool have_metric_name = false;
-      auto& tokenizer = parser_.tokenizer();
-
-      if (tokenizer.token() == Token::kMetricName) [[likely]] {
-        labels_.push_back(MarkedLabel{.value = MarkedString::create(tokenizer.token_str(), tokenizer.buffer())});
-
-        have_metric_name = true;
-        tokenizer.next_non_whitespace();
-      } else if (tokenizer.token() == Token::kWhitespace) [[likely]] {
-        tokenizer.next();
-      }
-
-      if (tokenizer.token() == Token::kBraceOpen) [[likely]] {
-        if (const auto error = tokenize_label_set(have_metric_name); error != Error::kNoError) {
-          return error;
-        }
-
-        tokenizer.next_non_whitespace();
-      } else if (!parser_.is_value_token()) [[unlikely]] {
-        return Error::kUnexpectedToken;
-      }
-
-      if (!have_metric_name) [[unlikely]] {
-        return Error::kNoMetricName;
-      }
-
-      // sort
-      {
-        const auto it = std::remove_if(labels_.begin(), labels_.end(), [](const MarkedLabel& label) { return label.value.is_empty(); });
-        labels_.erase(it, labels_.end());
-      }
-
-      std::sort(labels_.begin(), labels_.end(), [buffer = tokenizer.buffer()](const MarkedLabel& a, const MarkedLabel& b) PROMPP_LAMBDA_INLINE {
-        return a.name.view(buffer) < b.name.view(buffer);
-      });
-
-      // hash
-      {
-        BareBones::XXHash hash;
-        for (const auto& label : labels_) {
-          hash.extend(label.name.view(tokenizer.buffer()), label.value.view(tokenizer.buffer()));
-        }
-        markup_buffer_.add_hash(hash.hash());
-      }
-
-      // encode count
-      {
-        markup_buffer_.add_count(labels_.size());
-      }
-
-      // encode labels
-      for (const auto& label : labels_) {
-        markup_buffer_.add_label(label);
-      }
-
-      return parse_metric_suffix();
-    }
-
-   private:
-    Parser& parser_;
-    MetricMarkupBuffer& markup_buffer_;
-    BareBones::Vector<MarkedLabel>& labels_;
-    MarkedSample sample_;
-
-    [[nodiscard]] Error tokenize_label_set(bool& have_metric_name) noexcept {
-      auto& tokenizer = parser_.tokenizer();
-      tokenizer.next_non_whitespace();
-
-      while (tokenizer.token() != Token::kBraceClose) {
-        MarkedLabel label;
-        if (const auto error = get_label_name(label.name); error != Error::kNoError) [[unlikely]] {
-          return error;
-        }
-
-        if (tokenizer.next_non_whitespace() == Token::kEqual) [[likely]] {
-          if (tokenizer.next_non_whitespace() != Token::kLabelValue) [[unlikely]] {
-            return Error::kUnexpectedToken;
-          }
-
-          if (const auto error = get_quoted_value(label.value); error != Error::kNoError) [[unlikely]] {
-            return error;
-          }
-
-          labels_.push_back(label);
-
-          tokenizer.next();
-        } else {
-          if (!have_metric_name) [[unlikely]] {
-            labels_.push_back(MarkedLabel{.value = label.name});
-
-            have_metric_name = true;
-          } else {
-            return Error::kUnexpectedToken;
-          }
-        }
-
-        if (tokenizer.token() != Token::kComma && tokenizer.token() != Token::kWhitespace) {
-          break;
-        }
-
-        tokenizer.next_non_whitespace();
-      }
-
-      return tokenizer.token() == Token::kBraceClose ? Error::kNoError : Error::kUnexpectedToken;
-    }
-
-    [[nodiscard]] Error get_label_name(MarkedString& label_name) const noexcept {
-      auto& tokenizer = parser_.tokenizer();
-
-      if (tokenizer.token() == Token::kLabelName) [[likely]] {
-        label_name = MarkedString::create(tokenizer.token_str(), tokenizer.buffer());
-        return Error::kNoError;
-      }
-      if (tokenizer.token() == Token::kQuotedString) {
-        return get_quoted_value(label_name);
-      }
-
-      return Error::kUnexpectedToken;
-    }
-
-    [[nodiscard]] Error get_quoted_value(MarkedString& string) const noexcept {
-      auto& tokenizer = parser_.tokenizer();
-
-      auto value = tokenizer.token_str();
-      Prometheus::textparse::unquote(value);
-
-      auto copy_to = const_cast<char*>(value.data());
-      Prometheus::textparse::unescape_label_value(value, [&copy_to](const std::string_view& piece_of_string) {
-        if (copy_to != piece_of_string.data()) [[unlikely]] {
-          memmove(copy_to, piece_of_string.data(), piece_of_string.size());
-        }
-
-        copy_to += piece_of_string.size();
-      });
-      value.remove_suffix(value.size() - (copy_to - value.data()));
-
-      if (!simdutf::validate_utf8(value.data(), value.size())) [[unlikely]] {
-        return Error::kInvalidUtf8;
-      }
-
-      string = MarkedString::create(value, tokenizer.buffer());
-      return Error::kNoError;
-    }
-
-    [[nodiscard]] Error parse_metric_suffix() noexcept {
-      if (!parser_.is_value_token()) [[unlikely]] {
-        return Error::kUnexpectedToken;
-      }
-
-      if (const auto error = parse_sample(); error != Error::kNoError) {
-        return error;
-      }
-
-      markup_buffer_.add_sample(sample_);
-
-      return parser_.validate_parse_sample_result();
-    }
-
-    [[nodiscard]] Error parse_sample() noexcept {
-      auto& tokenizer = parser_.tokenizer();
-
-      if (!parse_numeric_value(tokenizer.token_str(), sample_.sample.value())) [[unlikely]] {
-        return Error::kInvalidValue;
-      }
-      if (std::isnan(sample_.sample.value())) [[unlikely]] {
-        sample_.sample.value() = Prometheus::kNormalNan;
-      }
-
-      tokenizer.next_non_whitespace();
-
-      return parser_.parse_timestamp(sample_.sample.timestamp(), sample_.has_ts);
-    }
-  };
-
-  [[nodiscard]] Error parse_metadata() {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Error parse_metadata() {
     static constexpr auto get_metadata_type = [](Token token) PROMPP_LAMBDA_INLINE {
       if (token == Token::kHelp) {
         return Prometheus::MetadataType::kHelp;
@@ -827,6 +635,178 @@ class Scraper {
     const auto buffer = tokenizer.buffer();
     metadata_buffer_.add(MarkedString::create(metric_name, buffer), MarkedString::create(text, buffer), get_metadata_type(type));
     return Error::kNoError;
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Error parse_metric() {
+    labels_.clear();
+
+    bool have_metric_name = false;
+    auto& tokenizer = parser_.tokenizer();
+
+    metric_buffer_.add_metric(tokenizer.token_str().data() - tokenizer.buffer().data());
+
+    if (tokenizer.token() == Token::kMetricName) [[likely]] {
+      labels_.push_back(MarkedLabel{.value = MarkedString::create(tokenizer.token_str(), tokenizer.buffer())});
+
+      have_metric_name = true;
+      tokenizer.next_non_whitespace();
+    } else if (tokenizer.token() == Token::kWhitespace) [[likely]] {
+      tokenizer.next();
+    }
+
+    if (tokenizer.token() == Token::kBraceOpen) [[likely]] {
+      if (const auto error = tokenize_label_set(have_metric_name); error != Error::kNoError) {
+        return error;
+      }
+
+      tokenizer.next_non_whitespace();
+    } else if (!parser_.is_value_token()) [[unlikely]] {
+      return Error::kUnexpectedToken;
+    }
+
+    if (!have_metric_name) [[unlikely]] {
+      return Error::kNoMetricName;
+    }
+
+    // sort
+    {
+      const auto it = std::remove_if(labels_.begin(), labels_.end(), [](const MarkedLabel& label) { return label.value.is_empty(); });
+      labels_.erase(it, labels_.end());
+    }
+
+    std::sort(labels_.begin(), labels_.end(), [buffer = tokenizer.buffer()](const MarkedLabel& a, const MarkedLabel& b) PROMPP_LAMBDA_INLINE {
+      return a.name.view(buffer) < b.name.view(buffer);
+    });
+
+    // hash
+    {
+      BareBones::XXHash hash;
+      for (const auto& label : labels_) {
+        hash.extend(label.name.view(tokenizer.buffer()), label.value.view(tokenizer.buffer()));
+      }
+      metric_buffer_.add_hash(hash.hash());
+    }
+
+    // encode count
+    {
+      metric_buffer_.add_count(labels_.size());
+    }
+
+    // encode labels
+    for (const auto& label : labels_) {
+      metric_buffer_.add_label(label);
+    }
+
+    return parse_metric_suffix();
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Error tokenize_label_set(bool& have_metric_name) noexcept {
+    auto& tokenizer = parser_.tokenizer();
+    tokenizer.next_non_whitespace();
+
+    while (tokenizer.token() != Token::kBraceClose) {
+      MarkedLabel label;
+      if (const auto error = get_label_name(label.name); error != Error::kNoError) [[unlikely]] {
+        return error;
+      }
+
+      if (tokenizer.next_non_whitespace() == Token::kEqual) [[likely]] {
+        if (tokenizer.next_non_whitespace() != Token::kLabelValue) [[unlikely]] {
+          return Error::kUnexpectedToken;
+        }
+
+        if (const auto error = get_quoted_value(label.value); error != Error::kNoError) [[unlikely]] {
+          return error;
+        }
+
+        labels_.push_back(label);
+
+        tokenizer.next();
+      } else {
+        if (!have_metric_name) [[unlikely]] {
+          labels_.push_back(MarkedLabel{.value = label.name});
+
+          have_metric_name = true;
+        } else {
+          return Error::kUnexpectedToken;
+        }
+      }
+
+      if (tokenizer.token() != Token::kComma && tokenizer.token() != Token::kWhitespace) {
+        break;
+      }
+
+      tokenizer.next_non_whitespace();
+    }
+
+    return tokenizer.token() == Token::kBraceClose ? Error::kNoError : Error::kUnexpectedToken;
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Error get_label_name(MarkedString& label_name) const noexcept {
+    auto& tokenizer = parser_.tokenizer();
+
+    if (tokenizer.token() == Token::kLabelName) [[likely]] {
+      label_name = MarkedString::create(tokenizer.token_str(), tokenizer.buffer());
+      return Error::kNoError;
+    }
+    if (tokenizer.token() == Token::kQuotedString) {
+      return get_quoted_value(label_name);
+    }
+
+    return Error::kUnexpectedToken;
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Error get_quoted_value(MarkedString& string) const noexcept {
+    auto& tokenizer = parser_.tokenizer();
+
+    auto value = tokenizer.token_str();
+    Prometheus::textparse::unquote(value);
+
+    auto copy_to = const_cast<char*>(value.data());
+    Prometheus::textparse::unescape_label_value(value, [&copy_to](const std::string_view& piece_of_string) {
+      if (copy_to != piece_of_string.data()) [[unlikely]] {
+        memmove(copy_to, piece_of_string.data(), piece_of_string.size());
+      }
+
+      copy_to += piece_of_string.size();
+    });
+    value.remove_suffix(value.size() - (copy_to - value.data()));
+
+    if (!simdutf::validate_utf8(value.data(), value.size())) [[unlikely]] {
+      return Error::kInvalidUtf8;
+    }
+
+    string = MarkedString::create(value, tokenizer.buffer());
+    return Error::kNoError;
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Error parse_metric_suffix() noexcept {
+    if (!parser_.is_value_token()) [[unlikely]] {
+      return Error::kUnexpectedToken;
+    }
+
+    MarkedSample sample{.sample = {default_timestamp_, {}}};
+    if (const auto error = parse_sample(sample); error != Error::kNoError) {
+      return error;
+    }
+    metric_buffer_.add_sample(sample);
+
+    return parser_.validate_parse_sample_result();
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Error parse_sample(MarkedSample& sample) noexcept {
+    auto& tokenizer = parser_.tokenizer();
+
+    if (!parse_numeric_value(tokenizer.token_str(), sample.sample.value())) [[unlikely]] {
+      return Error::kInvalidValue;
+    }
+    if (std::isnan(sample.sample.value())) [[unlikely]] {
+      sample.sample.value() = Prometheus::kNormalNan;
+    }
+
+    tokenizer.next_non_whitespace();
+
+    return parser_.parse_timestamp(sample.sample.timestamp(), sample.has_ts);
   }
 
   Parser parser_;
