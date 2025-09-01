@@ -1,18 +1,14 @@
 package querier
 
 import (
-	"slices"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/model"
-	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
 	"github.com/prometheus/prometheus/pp/go/relabeler/head"
-	"github.com/prometheus/prometheus/storage"
-	"github.com/prometheus/prometheus/tsdb/chunkenc"
+	"github.com/prometheus/prometheus/pp/go/relabeler/head/headtest"
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/net/context"
 )
@@ -58,46 +54,8 @@ func (s *QuerierTestSuite) createHead() {
 	s.NoError(err)
 }
 
-func (s *QuerierTestSuite) fillHead(timeseries []model.TimeSeries) {
-	tsd := relabeler.NewTimeSeriesDataSlice(timeseries)
-	hx, err := (cppbridge.HashdexFactory{}).GoModel(tsd.TimeSeries(), cppbridge.DefaultWALHashdexLimits())
-	s.NoError(err)
-
-	_, _, err = s.head.Append(
-		s.context,
-		&relabeler.IncomingData{Hashdex: hx, Data: &tsd},
-		cppbridge.NewState(s.head.NumberOfShards()),
-		relabelerName,
-		true)
-	s.NoError(err)
-}
-
-func labelSetFromLabels(labels labels.Labels) model.LabelSet {
-	simpleLabels := make([]model.SimpleLabel, labels.Len())
-	for i, label := range labels {
-		simpleLabels[i] = model.SimpleLabel{Name: label.Name, Value: label.Value}
-	}
-
-	return model.LabelSetFromSlice(simpleLabels)
-}
-
-func timeseriesFromSeriesSet(seriesSet storage.SeriesSet) []model.TimeSeries {
-	var timeseries []model.TimeSeries
-	for seriesSet.Next() {
-		series := seriesSet.At()
-
-		chunkIterator := series.Iterator(nil)
-		for chunkIterator.Next() != chunkenc.ValNone {
-			ts, v := chunkIterator.At()
-			timeseries = append(timeseries, model.TimeSeries{
-				LabelSet:  labelSetFromLabels(series.Labels()),
-				Timestamp: uint64(ts),
-				Value:     v,
-			})
-		}
-	}
-
-	return timeseries
+func (s *QuerierTestSuite) fillHead(timeSeries []headtest.TimeSeries) {
+	headtest.MustAppendTimeSeries(&s.Suite, s.head, relabelerName, timeSeries)
 }
 
 func TestQuerierTestSuite(t *testing.T) {
@@ -106,21 +64,27 @@ func TestQuerierTestSuite(t *testing.T) {
 
 func (s *QuerierTestSuite) TestRangeQuery() {
 	// Arrange
-	ls1 := model.NewLabelSetBuilder().Set("__name__", "metric").Set("job", "test").Build()
-	ls2 := model.NewLabelSetBuilder().Set("__name__", "metric").Set("job", "test2").Build()
-	timeseries := []model.TimeSeries{
+	timeSeries := []headtest.TimeSeries{
 		{
-			LabelSet:  ls1,
-			Timestamp: 0,
-			Value:     1,
+			Labels: labels.Labels{
+				{Name: "__name__", Value: "metric"},
+				{Name: "job", Value: "test"},
+			},
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 1},
+			},
 		},
 		{
-			LabelSet:  ls2,
-			Timestamp: 0,
-			Value:     10,
+			Labels: labels.Labels{
+				{Name: "__name__", Value: "metric"},
+				{Name: "job", Value: "test2"},
+			},
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 10},
+			},
 		},
 	}
-	s.fillHead(timeseries)
+	s.fillHead(timeSeries)
 
 	q := NewQuerier(s.head, NoOpShardedDeduplicatorFactory(), 0, 2, nil, nil)
 	defer func() { _ = q.Close() }()
@@ -130,62 +94,49 @@ func (s *QuerierTestSuite) TestRangeQuery() {
 	seriesSet := q.Select(s.context, false, nil, matcher)
 
 	// Assert
-	s.Equal(timeseries, timeseriesFromSeriesSet(seriesSet))
+	s.Equal(timeSeries, headtest.TimeSeriesFromSeriesSet(seriesSet))
 }
 
 func (s *QuerierTestSuite) TestRangeQueryWithDataStorageLoading() {
 	// Arrange
-	ls1 := model.NewLabelSetBuilder().Set("__name__", "metric").Set("job", "test").Build()
-	ls2 := model.NewLabelSetBuilder().Set("__name__", "metric").Set("job", "test2").Build()
-	ls1Timeseries := []model.TimeSeries{
+	timeSeries := []headtest.TimeSeries{
 		{
-			LabelSet:  ls1,
-			Timestamp: 0,
-			Value:     0,
+			Labels: labels.Labels{
+				{Name: "__name__", Value: "metric"},
+				{Name: "job", Value: "test"},
+			},
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 0},
+				{Timestamp: 1, Value: 1},
+				{Timestamp: 2, Value: 2},
+			},
 		},
 		{
-			LabelSet:  ls1,
-			Timestamp: 1,
-			Value:     1,
-		},
-		{
-			LabelSet:  ls1,
-			Timestamp: 2,
-			Value:     2,
-		},
-	}
-	ls2Timeseries := []model.TimeSeries{
-		{
-			LabelSet:  ls2,
-			Timestamp: 0,
-			Value:     10,
-		},
-		{
-			LabelSet:  ls2,
-			Timestamp: 1,
-			Value:     11,
-		},
-		{
-			LabelSet:  ls2,
-			Timestamp: 2,
-			Value:     12,
+			Labels: labels.Labels{
+				{Name: "__name__", Value: "metric"},
+				{Name: "job", Value: "test2"},
+			},
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 10},
+				{Timestamp: 1, Value: 11},
+				{Timestamp: 2, Value: 12},
+			},
 		},
 	}
-	s.fillHead(ls1Timeseries)
-	s.fillHead(ls2Timeseries)
+	s.fillHead(timeSeries)
 
-	ls1TimeseriesAfterUnload := []model.TimeSeries{
+	timeSeriesAfterUnload := []headtest.TimeSeries{
 		{
-			LabelSet:  ls1,
-			Timestamp: 3,
-			Value:     3,
+			Labels: timeSeries[0].Labels,
+			Samples: []cppbridge.Sample{
+				{Timestamp: 3, Value: 3},
+			},
 		},
-	}
-	ls2TimeseriesAfterUnload := []model.TimeSeries{
 		{
-			LabelSet:  ls2,
-			Timestamp: 3,
-			Value:     13,
+			Labels: timeSeries[1].Labels,
+			Samples: []cppbridge.Sample{
+				{Timestamp: 3, Value: 13},
+			},
 		},
 	}
 
@@ -195,31 +146,38 @@ func (s *QuerierTestSuite) TestRangeQueryWithDataStorageLoading() {
 
 	// Act
 	q.head.UnloadUnusedSeriesData()
-	s.fillHead(ls1TimeseriesAfterUnload)
-	s.fillHead(ls2TimeseriesAfterUnload)
+	s.fillHead(timeSeriesAfterUnload)
 	seriesSet := q.Select(s.context, false, nil, matcher)
 
 	// Assert
-	s.Equal(slices.Concat(ls1Timeseries, ls1TimeseriesAfterUnload, ls2Timeseries, ls2TimeseriesAfterUnload), timeseriesFromSeriesSet(seriesSet))
+	timeSeries[0].AppendSamples(timeSeriesAfterUnload[0].Samples...)
+	timeSeries[1].AppendSamples(timeSeriesAfterUnload[1].Samples...)
+	s.Equal(timeSeries, headtest.TimeSeriesFromSeriesSet(seriesSet))
 }
 
 func (s *QuerierTestSuite) TestInstantQuery() {
 	// Arrange
-	ls1 := model.NewLabelSetBuilder().Set("__name__", "metric").Set("job", "test").Build()
-	ls2 := model.NewLabelSetBuilder().Set("__name__", "metric").Set("job", "test2").Build()
-	timeseries := []model.TimeSeries{
+	timeSeries := []headtest.TimeSeries{
 		{
-			LabelSet:  ls1,
-			Timestamp: 0,
-			Value:     1,
+			Labels: labels.Labels{
+				{Name: "__name__", Value: "metric"},
+				{Name: "job", Value: "test"},
+			},
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 1},
+			},
 		},
 		{
-			LabelSet:  ls2,
-			Timestamp: 0,
-			Value:     10,
+			Labels: labels.Labels{
+				{Name: "__name__", Value: "metric"},
+				{Name: "job", Value: "test2"},
+			},
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 10},
+			},
 		},
 	}
-	s.fillHead(timeseries)
+	s.fillHead(timeSeries)
 
 	q := NewQuerier(s.head, NoOpShardedDeduplicatorFactory(), 0, 0, nil, nil)
 	defer func() { _ = q.Close() }()
@@ -229,62 +187,49 @@ func (s *QuerierTestSuite) TestInstantQuery() {
 	seriesSet := q.Select(s.context, false, nil, matcher)
 
 	// Assert
-	s.Equal(timeseries, timeseriesFromSeriesSet(seriesSet))
+	s.Equal(timeSeries, headtest.TimeSeriesFromSeriesSet(seriesSet))
 }
 
 func (s *QuerierTestSuite) TestInstantQueryWithDataStorageLoading() {
 	// Arrange
-	ls1 := model.NewLabelSetBuilder().Set("__name__", "metric").Set("job", "test").Build()
-	ls2 := model.NewLabelSetBuilder().Set("__name__", "metric").Set("job", "test2").Build()
-	ls1Timeseries := []model.TimeSeries{
+	timeSeries := []headtest.TimeSeries{
 		{
-			LabelSet:  ls1,
-			Timestamp: 0,
-			Value:     0,
+			Labels: labels.Labels{
+				{Name: "__name__", Value: "metric"},
+				{Name: "job", Value: "test"},
+			},
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 0},
+				{Timestamp: 1, Value: 1},
+				{Timestamp: 2, Value: 2},
+			},
 		},
 		{
-			LabelSet:  ls1,
-			Timestamp: 1,
-			Value:     1,
-		},
-		{
-			LabelSet:  ls1,
-			Timestamp: 2,
-			Value:     2,
-		},
-	}
-	ls2Timeseries := []model.TimeSeries{
-		{
-			LabelSet:  ls2,
-			Timestamp: 0,
-			Value:     10,
-		},
-		{
-			LabelSet:  ls2,
-			Timestamp: 1,
-			Value:     11,
-		},
-		{
-			LabelSet:  ls2,
-			Timestamp: 2,
-			Value:     12,
+			Labels: labels.Labels{
+				{Name: "__name__", Value: "metric"},
+				{Name: "job", Value: "test2"},
+			},
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 10},
+				{Timestamp: 1, Value: 11},
+				{Timestamp: 2, Value: 12},
+			},
 		},
 	}
-	s.fillHead(ls1Timeseries)
-	s.fillHead(ls2Timeseries)
+	s.fillHead(timeSeries)
 
-	ls1TimeseriesAfterUnload := []model.TimeSeries{
+	timeSeriesAfterUnload := []headtest.TimeSeries{
 		{
-			LabelSet:  ls1,
-			Timestamp: 3,
-			Value:     3,
+			Labels: timeSeries[0].Labels,
+			Samples: []cppbridge.Sample{
+				{Timestamp: 3, Value: 3},
+			},
 		},
-	}
-	ls2TimeseriesAfterUnload := []model.TimeSeries{
 		{
-			LabelSet:  ls2,
-			Timestamp: 3,
-			Value:     13,
+			Labels: timeSeries[1].Labels,
+			Samples: []cppbridge.Sample{
+				{Timestamp: 3, Value: 13},
+			},
 		},
 	}
 
@@ -294,21 +239,22 @@ func (s *QuerierTestSuite) TestInstantQueryWithDataStorageLoading() {
 
 	// Act
 	q.head.UnloadUnusedSeriesData()
-	s.fillHead(ls1TimeseriesAfterUnload)
-	s.fillHead(ls2TimeseriesAfterUnload)
+	s.fillHead(timeSeriesAfterUnload)
 	seriesSet := q.Select(s.context, false, nil, matcher)
 
 	// Assert
-	s.Equal([]model.TimeSeries{
+	s.Equal([]headtest.TimeSeries{
 		{
-			LabelSet:  ls1,
-			Timestamp: 0,
-			Value:     0,
+			Labels: timeSeries[0].Labels,
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 0},
+			},
 		},
 		{
-			LabelSet:  ls2,
-			Timestamp: 0,
-			Value:     10,
+			Labels: timeSeries[1].Labels,
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 10},
+			},
 		},
-	}, timeseriesFromSeriesSet(seriesSet))
+	}, headtest.TimeSeriesFromSeriesSet(seriesSet))
 }

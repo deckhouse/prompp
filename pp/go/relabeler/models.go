@@ -405,22 +405,6 @@ type TimeSeriesData interface {
 	Destroy()
 }
 
-type TimeSeriesDataSlice struct {
-	timeSeries []model.TimeSeries
-}
-
-func NewTimeSeriesDataSlice(timeSeries []model.TimeSeries) TimeSeriesDataSlice {
-	return TimeSeriesDataSlice{timeSeries: timeSeries}
-}
-
-func (tsd *TimeSeriesDataSlice) TimeSeries() []model.TimeSeries {
-	return tsd.timeSeries
-}
-
-func (tsd *TimeSeriesDataSlice) Destroy() {
-	tsd.timeSeries = nil
-}
-
 // MetricData is an universal interface for blob protobuf or slice model.TimeSeries data.
 type MetricData interface {
 	Destroy()

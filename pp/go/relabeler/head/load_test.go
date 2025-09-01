@@ -10,11 +10,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/model"
-	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
+	"github.com/prometheus/prometheus/pp/go/relabeler/head/headtest"
 	"github.com/prometheus/prometheus/pp/go/relabeler/querier"
-	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -112,74 +110,14 @@ func (s *HeadLoadSuite) lockFileForCreation(fileName string) {
 	s.Require().NoError(os.Mkdir(fileName, 0o755))
 }
 
-type seriesData struct {
-	labels  labels.Labels
-	samples []cppbridge.Sample
+func (s *HeadLoadSuite) appendTimeSeries(head *Head, timeSeries []headtest.TimeSeries) {
+	headtest.MustAppendTimeSeries(&s.Suite, head, transparentRelabelerName, timeSeries)
 }
 
-func (s *seriesData) toTimeseries() []model.TimeSeries {
-	lsBuilder := model.NewLabelSetBuilder()
-	for i := range s.labels {
-		lsBuilder.Add(s.labels[i].Name, s.labels[i].Value)
-	}
-
-	ls := lsBuilder.Build()
-
-	timeseries := make([]model.TimeSeries, 0, len(s.samples))
-	for i := range s.samples {
-		timeseries = append(timeseries, model.TimeSeries{
-			LabelSet:  ls,
-			Timestamp: uint64(s.samples[i].Timestamp),
-			Value:     s.samples[i].Value,
-		})
-	}
-
-	return timeseries
-}
-
-func (s *HeadLoadSuite) appendTimeSeries(head *Head, seriesData []seriesData) {
-	for i := range seriesData {
-		tsd := relabeler.NewTimeSeriesDataSlice(seriesData[i].toTimeseries())
-		hx, err := (cppbridge.HashdexFactory{}).GoModel(tsd.TimeSeries(), cppbridge.DefaultWALHashdexLimits())
-		s.Require().NoError(err)
-
-		incomingData := &relabeler.IncomingData{Hashdex: hx, Data: &tsd}
-
-		_, _, err = head.Append(
-			context.Background(),
-			incomingData,
-			cppbridge.NewState(head.NumberOfShards()),
-			transparentRelabelerName,
-			true,
-		)
-		s.Require().NoError(err)
-	}
-}
-
-func (s *HeadLoadSuite) query(head *Head, matcher *labels.Matcher, minT, maxT int64) (result []seriesData) {
+func (s *HeadLoadSuite) query(head *Head, matcher *labels.Matcher, minT, maxT int64) (result []headtest.TimeSeries) {
 	q := querier.NewQuerier(head, querier.NoOpShardedDeduplicatorFactory(), minT, maxT, nil, nil)
-	seriesSet := q.Select(context.Background(), false, nil, matcher)
-
-	if seriesSet.Next() {
-		series := seriesSet.At()
-		item := seriesData{
-			labels: seriesSet.At().Labels(),
-		}
-
-		chunkIterator := series.Iterator(nil)
-		for chunkIterator.Next() != chunkenc.ValNone {
-			ts, v := chunkIterator.At()
-			item.samples = append(item.samples, cppbridge.Sample{
-				Timestamp: ts,
-				Value:     v,
-			})
-		}
-
-		result = append(result, item)
-	}
-
-	_ = q.Close()
-	return
+	defer func() { _ = q.Close() }()
+	return headtest.TimeSeriesFromSeriesSet(q.Select(context.Background(), false, nil, matcher))
 }
 
 func (s *HeadLoadSuite) TestErrorCreateShardFileInOneShard() {
@@ -235,10 +173,10 @@ func (s *HeadLoadSuite) TestErrorOpenShardFileInAllShards() {
 func (s *HeadLoadSuite) TestLoadWithDisabledDataUnloading() {
 	// Arrange
 	sourceHead := s.mustCreateHead(0)
-	series := []seriesData{
+	series := []headtest.TimeSeries{
 		{
-			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
-			samples: []cppbridge.Sample{
+			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 				{Timestamp: 1, Value: 2},
 				{Timestamp: 2, Value: 3},
@@ -268,10 +206,10 @@ func (s *HeadLoadSuite) TestLoadWithDisabledDataUnloading() {
 func (s *HeadLoadSuite) TestAppendAfterLoad() {
 	// Arrange
 	sourceHead := s.mustCreateHead(0)
-	series := []seriesData{
+	series := []headtest.TimeSeries{
 		{
-			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
-			samples: []cppbridge.Sample{
+			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 				{Timestamp: 1, Value: 2},
 				{Timestamp: 2, Value: 3},
@@ -284,10 +222,10 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 
 	// Act
 	loadedHead := s.mustLoadHead(0)
-	s.appendTimeSeries(loadedHead, []seriesData{
+	s.appendTimeSeries(loadedHead, []headtest.TimeSeries{
 		{
-			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
-			samples: []cppbridge.Sample{
+			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Samples: []cppbridge.Sample{
 				{Timestamp: 3, Value: 4},
 			},
 		},
@@ -298,7 +236,7 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 	err := loadedHead.Close()
 
 	// Assert
-	series[0].samples = append(series[0].samples, cppbridge.Sample{Timestamp: 3, Value: 4})
+	series[0].Samples = append(series[0].Samples, cppbridge.Sample{Timestamp: 3, Value: 4})
 	s.Equal(series, actual)
 	s.Require().NoError(err)
 
@@ -307,10 +245,10 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 func (s *HeadLoadSuite) TestLoadWithEnabledDataUnloading() {
 	// Arrange
 	sourceHead := s.mustCreateHead(0)
-	series1 := []seriesData{
+	series1 := []headtest.TimeSeries{
 		{
-			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
-			samples: []cppbridge.Sample{
+			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 				{Timestamp: 1, Value: 2},
 				{Timestamp: 2, Value: 3},
@@ -318,10 +256,10 @@ func (s *HeadLoadSuite) TestLoadWithEnabledDataUnloading() {
 		},
 	}
 	s.appendTimeSeries(sourceHead, series1)
-	series2 := []seriesData{
+	series2 := []headtest.TimeSeries{
 		{
-			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
-			samples: []cppbridge.Sample{
+			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Samples: []cppbridge.Sample{
 				{Timestamp: 100, Value: 1},
 				{Timestamp: 101, Value: 2},
 				{Timestamp: 102, Value: 3},
@@ -350,10 +288,10 @@ func (s *HeadLoadSuite) TestLoadWithEnabledDataUnloading() {
 func (s *HeadLoadSuite) TestLoadWithDataUnloading() {
 	// Arrange
 	sourceHead := s.mustCreateHead(unloadDataStorageInterval)
-	series1 := []seriesData{
+	series1 := []headtest.TimeSeries{
 		{
-			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
-			samples: []cppbridge.Sample{
+			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 				{Timestamp: 1, Value: 2},
 				{Timestamp: 2, Value: 3},
@@ -361,10 +299,10 @@ func (s *HeadLoadSuite) TestLoadWithDataUnloading() {
 		},
 	}
 	s.appendTimeSeries(sourceHead, series1)
-	series2 := []seriesData{
+	series2 := []headtest.TimeSeries{
 		{
-			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
-			samples: []cppbridge.Sample{
+			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Samples: []cppbridge.Sample{
 				{Timestamp: 100, Value: 1},
 				{Timestamp: 101, Value: 2},
 				{Timestamp: 102, Value: 3},
@@ -379,7 +317,6 @@ func (s *HeadLoadSuite) TestLoadWithDataUnloading() {
 
 	// Act
 	loadedHead := s.mustLoadHead(unloadDataStorageInterval)
-
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "wal_metric")
 	actual := s.query(loadedHead, matcher, 0, 3)
 
@@ -395,10 +332,10 @@ func (s *HeadLoadSuite) TestLoadWithDataUnloading() {
 func (s *HeadLoadSuite) TestErrorDataUnloading() {
 	// Arrange
 	sourceHead := s.mustCreateHead(unloadDataStorageInterval)
-	series1 := []seriesData{
+	series1 := []headtest.TimeSeries{
 		{
-			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
-			samples: []cppbridge.Sample{
+			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 				{Timestamp: 1, Value: 2},
 				{Timestamp: 2, Value: 3},
@@ -406,10 +343,10 @@ func (s *HeadLoadSuite) TestErrorDataUnloading() {
 		},
 	}
 	s.appendTimeSeries(sourceHead, series1)
-	series2 := []seriesData{
+	series2 := []headtest.TimeSeries{
 		{
-			labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
-			samples: []cppbridge.Sample{
+			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Samples: []cppbridge.Sample{
 				{Timestamp: 100, Value: 1},
 				{Timestamp: 101, Value: 2},
 				{Timestamp: 102, Value: 3},

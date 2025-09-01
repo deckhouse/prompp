@@ -1,11 +1,13 @@
 package querier
 
 import (
+	"testing"
+
 	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/pp/go/model"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/relabeler/head/headtest"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/stretchr/testify/suite"
-	"testing"
 )
 
 type ChunkQuerierTestSuite struct {
@@ -21,7 +23,7 @@ func TestChunkQuerierTestSuite(t *testing.T) {
 }
 
 type chunkSeriesSetInfo struct {
-	labelSet     model.LabelSet
+	labelSet     labels.Labels
 	samplesCount []int
 }
 
@@ -31,7 +33,7 @@ func getChunkSeriesSetInfo(chunkSeriesSet storage.ChunkSeriesSet) []chunkSeriesS
 	for chunkSeriesSet.Next() {
 		chunkSeries := chunkSeriesSet.At()
 		item := chunkSeriesSetInfo{
-			labelSet: labelSetFromLabels(chunkSeries.Labels()),
+			labelSet: chunkSeries.Labels(),
 		}
 
 		for it := chunkSeries.Iterator(nil); it.Next(); {
@@ -46,32 +48,37 @@ func getChunkSeriesSetInfo(chunkSeriesSet storage.ChunkSeriesSet) []chunkSeriesS
 
 func (s *ChunkQuerierTestSuite) TestSelect() {
 	// Arrange
-	ls1 := model.NewLabelSetBuilder().Set("__name__", "metric").Set("job", "test").Build()
-	ls2 := model.NewLabelSetBuilder().Set("__name__", "metric").Set("job", "test2").Build()
-	ls3 := model.NewLabelSetBuilder().Set("__name__", "metric").Set("job", "test3").Build()
-	timeseries := []model.TimeSeries{
+	timeSeries := []headtest.TimeSeries{
 		{
-			LabelSet:  ls1,
-			Timestamp: 0,
-			Value:     1,
+			Labels: labels.Labels{
+				{Name: "__name__", Value: "metric"},
+				{Name: "job", Value: "test"},
+			},
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 1},
+				{Timestamp: 1, Value: 1},
+			},
 		},
 		{
-			LabelSet:  ls1,
-			Timestamp: 1,
-			Value:     1,
+			Labels: labels.Labels{
+				{Name: "__name__", Value: "metric"},
+				{Name: "job", Value: "test2"},
+			},
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 10},
+			},
 		},
 		{
-			LabelSet:  ls2,
-			Timestamp: 0,
-			Value:     10,
-		},
-		{
-			LabelSet:  ls3,
-			Timestamp: 10,
-			Value:     10,
+			Labels: labels.Labels{
+				{Name: "__name__", Value: "metric"},
+				{Name: "job", Value: "test3"},
+			},
+			Samples: []cppbridge.Sample{
+				{Timestamp: 10, Value: 10},
+			},
 		},
 	}
-	s.fillHead(timeseries)
+	s.fillHead(timeSeries)
 
 	q := NewChunkQuerier(s.head, NoOpShardedDeduplicatorFactory(), 0, 2, nil)
 	defer func() { _ = q.Close() }()
@@ -82,77 +89,65 @@ func (s *ChunkQuerierTestSuite) TestSelect() {
 
 	// Assert
 	s.Equal([]chunkSeriesSetInfo{
-		{labelSet: ls1, samplesCount: []int{2}},
-		{labelSet: ls2, samplesCount: []int{1}},
+		{labelSet: timeSeries[0].Labels, samplesCount: []int{2}},
+		{labelSet: timeSeries[1].Labels, samplesCount: []int{1}},
 	}, getChunkSeriesSetInfo(chunkSeriesSet))
 }
 
 func (s *ChunkQuerierTestSuite) TestSelectWithDataStorageLoading() {
 	// Arrange
-	ls1 := model.NewLabelSetBuilder().Set("__name__", "metric").Set("job", "test").Build()
-	ls2 := model.NewLabelSetBuilder().Set("__name__", "metric").Set("job", "test2").Build()
-	timeseries := []model.TimeSeries{
+	timeSeries := []headtest.TimeSeries{
 		{
-			LabelSet:  ls1,
-			Timestamp: 0,
-			Value:     0,
+			Labels: labels.Labels{
+				{Name: "__name__", Value: "metric"},
+				{Name: "job", Value: "test"},
+			},
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 0},
+				{Timestamp: 1, Value: 1},
+				{Timestamp: 2, Value: 2},
+				{Timestamp: 3, Value: 3},
+			},
 		},
 		{
-			LabelSet:  ls1,
-			Timestamp: 1,
-			Value:     1,
-		},
-		{
-			LabelSet:  ls1,
-			Timestamp: 2,
-			Value:     2,
-		},
-		{
-			LabelSet:  ls1,
-			Timestamp: 3,
-			Value:     3,
-		},
-		{
-			LabelSet:  ls2,
-			Timestamp: 0,
-			Value:     10,
-		},
-		{
-			LabelSet:  ls2,
-			Timestamp: 1,
-			Value:     11,
-		},
-		{
-			LabelSet:  ls2,
-			Timestamp: 2,
-			Value:     12,
+			Labels: labels.Labels{
+				{Name: "__name__", Value: "metric"},
+				{Name: "job", Value: "test2"},
+			},
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 10},
+				{Timestamp: 1, Value: 11},
+				{Timestamp: 2, Value: 12},
+			},
 		},
 	}
-	s.fillHead(timeseries)
+	s.fillHead(timeSeries)
 
 	q := NewChunkQuerier(s.head, NoOpShardedDeduplicatorFactory(), 0, 4, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
 	// Act
-	q.head.UnloadUnusedSeriesData()
-	s.fillHead([]model.TimeSeries{
+	s.head.UnloadUnusedSeriesData()
+	s.fillHead([]headtest.TimeSeries{
 		{
-			LabelSet:  ls1,
-			Timestamp: 4,
-			Value:     4,
+			Labels: timeSeries[0].Labels,
+			Samples: []cppbridge.Sample{
+				{Timestamp: 4, Value: 4},
+			},
 		},
 		{
-			LabelSet:  ls2,
-			Timestamp: 3,
-			Value:     13,
+			Labels: timeSeries[1].Labels,
+			Samples: []cppbridge.Sample{
+				{Timestamp: 3, Value: 13},
+			},
 		},
 	})
 	chunkSeriesSet := q.Select(s.context, false, nil, matcher)
 
 	// Assert
 	s.Equal([]chunkSeriesSetInfo{
-		{labelSet: ls1, samplesCount: []int{5}},
-		{labelSet: ls2, samplesCount: []int{4}},
+		{labelSet: timeSeries[0].Labels, samplesCount: []int{5}},
+		{labelSet: timeSeries[1].Labels, samplesCount: []int{4}},
 	}, getChunkSeriesSetInfo(chunkSeriesSet))
 }
