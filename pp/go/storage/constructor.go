@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/logger"
 )
 
+// DefaultNumberOfShards default number of shards.
 var DefaultNumberOfShards uint16 = 2
 
 func HeadManagerCtor(
@@ -74,6 +76,7 @@ func HeadManagerCtor(
 		activeHead,
 		builder,
 		loader,
+		numberOfShards,
 		registerer,
 	)
 
@@ -100,7 +103,7 @@ func uploadOrBuildHead(
 			return record.DeletedAt() == 0 && statusIsAppropriate && isInBlockTimeRange
 		},
 		func(lhs, rhs *catalog.Record) bool {
-			return lhs.CreatedAt() < rhs.CreatedAt()
+			return lhs.CreatedAt() > rhs.CreatedAt()
 		},
 	)
 
@@ -110,20 +113,30 @@ func uploadOrBuildHead(
 
 	var generation uint64
 	if len(headRecords) == 0 {
+		// TODO	// m.counter.With(prometheus.Labels{"type": "created"}).Inc()
 		return builder.Build(generation, numberOfShards)
 	}
 
-	h, numberOfSegments, corrupted := loader.UploadHead(headRecords[0], generation)
+	h, corrupted := loader.UploadHead(headRecords[0], generation)
 	if corrupted {
+		if !headRecords[0].Corrupted() {
+			if _, setCorruptedErr := hcatalog.SetCorrupted(headRecords[0].ID()); setCorruptedErr != nil {
+				logger.Errorf("failed to set corrupted state, head id: %s: %v", headRecords[0].ID(), setCorruptedErr)
+			}
+		}
+		// TODO	// m.counter.With(prometheus.Labels{"type": "corrupted"}).Inc()
+
 		if _, err := hcatalog.SetStatus(headRecords[0].ID(), catalog.StatusRotated); err != nil {
-			// TODO Warning ?
-			return nil, fmt.Errorf("failed to set rotated status: %w", err)
+			logger.Warnf("failed to set rotated status for head {%s}: %s", headRecords[0].ID(), err)
 		}
 
-		// TODO loadResult.head.Stop()
+		_ = h.Close(context.Background())
 
+		// TODO	// m.counter.With(prometheus.Labels{"type": "created"}).Inc()
 		return builder.Build(generation, numberOfShards)
 	}
+
+	return h, nil
 }
 
 // initLogHandler init log handler for pp.
@@ -131,18 +144,18 @@ func initLogHandler(l log.Logger) {
 	l = log.With(l, "pp_caller", log.Caller(4))
 
 	logger.Debugf = func(template string, args ...any) {
-		level.Debug(l).Log("msg", fmt.Sprintf(template, args...))
+		_ = level.Debug(l).Log("msg", fmt.Sprintf(template, args...))
 	}
 
 	logger.Infof = func(template string, args ...any) {
-		level.Info(l).Log("msg", fmt.Sprintf(template, args...))
+		_ = level.Info(l).Log("msg", fmt.Sprintf(template, args...))
 	}
 
 	logger.Warnf = func(template string, args ...any) {
-		level.Warn(l).Log("msg", fmt.Sprintf(template, args...))
+		_ = level.Warn(l).Log("msg", fmt.Sprintf(template, args...))
 	}
 
 	logger.Errorf = func(template string, args ...any) {
-		level.Error(l).Log("msg", fmt.Sprintf(template, args...))
+		_ = level.Error(l).Log("msg", fmt.Sprintf(template, args...))
 	}
 }
