@@ -73,11 +73,13 @@ void BenchmarkScraperRead(benchmark::State& state) {
   PrometheusScraper scraper;
   std::ignore = scraper.parse(str, 0);
 
+  PromPP::Primitives::TimeseriesSemiview ts_buf;
+
   for ([[maybe_unused]] auto _ : state) {
-    PromPP::Primitives::TimeseriesSemiview ts;
     for (auto& metric : scraper.metrics()) {
       if (metric.hash() % 2 == 0) {
-        metric.read(ts);
+        ts_buf.clear();
+        metric.read(ts_buf);
       }
     }
   }
