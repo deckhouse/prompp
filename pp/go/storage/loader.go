@@ -39,7 +39,7 @@ func NewLoader(dataDir string, maxSegmentSize uint32, registerer prometheus.Regi
 func (l *Loader) UploadHead(
 	headRecord *catalog.Record,
 	generation uint64,
-) (_ *HeadOnDisk, _ uint32, corrupted bool) {
+) (_ *HeadOnDisk, corrupted bool) {
 	headID := headRecord.ID()
 	headDir := filepath.Join(l.dataDir, headID)
 	numberOfShards := headRecord.NumberOfShards()
@@ -75,6 +75,21 @@ func (l *Loader) UploadHead(
 		}
 	}
 
+	switch {
+	case headRecord.Status() == catalog.StatusActive:
+		// numberOfSegments here is actual number of segments.
+		if numberOfSegmentsRead.Value() > 0 {
+			headRecord.SetLastAppendedSegmentID(numberOfSegmentsRead.Value() - 1)
+		}
+	case isNumberOfSegmentsMismatched(headRecord, numberOfSegmentsRead.Value()):
+		corrupted = true
+		// numberOfSegments here is actual number of segments.
+		if numberOfSegmentsRead.Value() > 0 {
+			headRecord.SetLastAppendedSegmentID(numberOfSegmentsRead.Value() - 1)
+		}
+		logger.Errorf("head: %s number of segments mismatched", headRecord.ID())
+	}
+
 	// TODO h.MergeOutOfOrderChunks()
 	return head.NewHead(
 			headID,
@@ -82,10 +97,8 @@ func (l *Loader) UploadHead(
 			shard.NewPerGoroutineShard[*WalOnDisk],
 			headRecord.Acquire(),
 			generation,
-			numberOfShards,
 			l.registerer,
 		),
-		numberOfSegmentsRead.Value(),
 		corrupted
 }
 
@@ -169,4 +182,12 @@ func (sr *ShardLoadResult) NumberOfSegments() uint32 {
 // Shard returns [*ShardOnDisk] or nil.
 func (sr *ShardLoadResult) Shard() *ShardOnDisk {
 	return sr.shard
+}
+
+// isNumberOfSegmentsMismatched check number of segments loaded and last appended to record.
+func isNumberOfSegmentsMismatched(record *catalog.Record, loadedSegments uint32) bool {
+	if record.LastAppendedSegmentID() == nil {
+		return loadedSegments != 0
+	}
+	return *record.LastAppendedSegmentID()+1 != loadedSegments
 }

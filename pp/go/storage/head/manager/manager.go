@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/logger"
 	"github.com/prometheus/prometheus/pp/go/util"
@@ -18,12 +19,25 @@ type Timer interface {
 }
 
 type Head interface {
+	// Generation returns current generation of [Head].
+	Generation() uint64
+
+	// NumberOfShards returns current number of shards in to [Head].
+	NumberOfShards() uint16
+
+	// SetReadOnly sets the read-only flag for the [Head].
 	SetReadOnly()
 }
 
+// ActiveHeadContainer container for active [Head], the minimum required [ActiveHeadContainer] implementation.
 type ActiveHeadContainer[THead Head] interface {
+	// Get the active head [Head].
 	Get() THead
+
+	// Replace the active head [Head] with a new head.
 	Replace(ctx context.Context, newHead THead) error
+
+	// With calls fn(h Head).
 	With(ctx context.Context, fn func(h THead) error) error
 }
 
@@ -32,47 +46,35 @@ type Keeper[THead Head] interface {
 	RangeQueriableHeads(mint, maxt int64) func(func(THead) bool)
 }
 
-// Loader loads [Head] from wal.
+// Loader loads [Head] from wal, the minimum required [Loader] implementation.
 type Loader[THead Head] interface {
 	// UploadHead upload [THead] from wal by head ID.
-	UploadHead(
-		headRecord *catalog.Record,
-		generation uint64,
-	) (head THead, numberOfSegments uint32, corrupted bool)
+	UploadHead(headRecord *catalog.Record, generation uint64) (head THead, corrupted bool)
 }
 
-// HeadBuilder building new [Head] with parameters.
+// HeadBuilder building new [Head] with parameters, the minimum required [HeadBuilder] implementation.
 type HeadBuilder[THead Head] interface {
 	// Build new [Head].
 	Build(generation uint64, numberOfShards uint16) (THead, error)
 }
 
-// type ActiveHeadContainer[T any] interface {
-// 	Get() *T
-// 	Replace(ctx context.Context, newHead *T) error
-// 	With(ctx context.Context, fn func(h *T) error) error
-// }
-
-// var _ ActiveHeadContainer[testHead] = (*container.Weighted[testHead, *testHead])(nil)
-
 type Manager[THead Head] struct {
-	// TODO logger
+	activeHead  ActiveHeadContainer[THead]
+	keeper      Keeper[THead]
 	headBuilder HeadBuilder[THead]
 	headLoader  Loader[THead]
-	keeper      Keeper[THead]
-	activeHead  ActiveHeadContainer[THead]
 	rotateTimer Timer
 	commitTimer Timer
 	mergeTimer  Timer
-	generation  uint64
+
+	numberOfShards uint16
+
 	// TODO closer vs shutdowner
 	closer     *util.Closer
 	shutdowner *util.GracefulShutdowner
 
 	rotateCounter prometheus.Counter
 	counter       *prometheus.CounterVec
-
-	numberOfShards uint16
 }
 
 // NewManager init new [Manager] of [Head]s.
@@ -80,12 +82,16 @@ func NewManager[THead Head](
 	activeHead ActiveHeadContainer[THead],
 	headBuilder HeadBuilder[THead],
 	headLoader Loader[THead],
+	numberOfShards uint16,
 	registerer prometheus.Registerer,
 ) *Manager[THead] {
 	factory := util.NewUnconflictRegisterer(registerer)
 	return &Manager[THead]{
+		activeHead:  activeHead,
 		headBuilder: headBuilder,
 		headLoader:  headLoader,
+
+		numberOfShards: numberOfShards,
 
 		counter: factory.NewCounterVec(
 			prometheus.CounterOpts{
@@ -105,7 +111,12 @@ func (m *Manager[THead]) ApplyConfig(
 	logger.Infof("reconfiguration start")
 	defer logger.Infof("reconfiguration completed")
 
-	// TODO HeadConfigStorage
+	m.numberOfShards = numberOfShards
+
+	h := m.activeHead.Get()
+	if h.NumberOfShards() != numberOfShards {
+		// TODO rotate
+	}
 
 	return nil
 }
@@ -180,15 +191,12 @@ func (m *Manager[THead]) loop(ctx context.Context) {
 }
 
 func (m *Manager[THead]) rotate(ctx context.Context) error {
-	newHead, err := m.headBuilder.Build(m.generation, m.numberOfShards)
+	oldHead := m.activeHead.Get()
+
+	newHead, err := m.headBuilder.Build(oldHead.Generation()+1, m.numberOfShards)
 	if err != nil {
 		return fmt.Errorf("failed to build a new head: %w", err)
 	}
-
-	// TODO oldHead.Generation()
-	m.generation++
-
-	oldHead := m.activeHead.Get()
 
 	// TODO
 	// newHead.CopySeriesFrom(oldHead)
