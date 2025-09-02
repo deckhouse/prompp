@@ -73,6 +73,9 @@ type Wal interface {
 	// It is necessary to lock the LSS for reading for the commit.
 	Commit() error
 
+	// Flush wal segment writer, write all buffered data to storage.
+	Flush() error
+
 	// Write append the incoming inner series to wal encoder.
 	Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error)
 }
@@ -227,10 +230,16 @@ func (a *Appender[TGenericTask, TDataStorage, TLSS, TWal, TShard, THead]) Append
 		t := a.head.CreateTask(
 			WalCommit,
 			func(shard TShard) error {
+				swal := shard.Wal()
+
 				// wal contains LSS and it is necessary to lock the LSS for reading for the commit.
-				return shard.LSS().WithRLock(func(_, _ *cppbridge.LabelSetStorage) error {
-					return shard.Wal().Commit()
-				})
+				if err := shard.LSS().WithRLock(func(_, _ *cppbridge.LabelSetStorage) error {
+					return swal.Commit()
+				}); err != nil {
+					return err
+				}
+
+				return swal.Flush()
 			},
 		)
 		a.head.Enqueue(t)

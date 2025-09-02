@@ -32,14 +32,12 @@ func NewWeighted[T any, THead Head[T]](head THead) *Weighted[T, THead] {
 	}
 }
 
-// // Close closes wlocker semaphore for the inability to get query and clear metrics.
-// func (c *Weighted[T, THead]) Close(ctx context.Context) error {
-// 	if err := h.querySemaphore.Close(ctx); err != nil {
-// 		return err
-// 	}
-// }
+// Close closes wlocker semaphore for the inability work with [Head].
+func (c *Weighted[T, THead]) Close(ctx context.Context) error {
+	return c.wlocker.Close(ctx)
+}
 
-// Get the active head [Head] under the non-exlusive lock and return.
+// Get the active head [Head] without lock and return.
 func (c *Weighted[T, THead]) Get() THead {
 	return (*T)(atomic.LoadPointer(
 		(*unsafe.Pointer)(unsafe.Pointer(&c.head))), // #nosec G103 // it's meant to be that way

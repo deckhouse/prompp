@@ -77,7 +77,6 @@ func (b *Builder) Build(generation uint64, numberOfShards uint16) (*HeadOnDisk, 
 		shard.NewPerGoroutineShard[*WalOnDisk],
 		headRecord.Acquire(),
 		generation,
-		numberOfShards,
 		b.registerer,
 	), nil
 }

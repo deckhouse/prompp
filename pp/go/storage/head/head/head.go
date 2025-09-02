@@ -69,8 +69,7 @@ type Head[TShard Shard, TGorutineShard Shard] struct {
 	stopc chan struct{}
 	wg    sync.WaitGroup
 
-	readOnly       uint32
-	numberOfShards uint16
+	readOnly uint32
 
 	// stat
 	memoryInUse *prometheus.GaugeVec
@@ -91,25 +90,24 @@ func NewHead[TShard Shard, TGoroutineShard Shard](
 	gshardCtor func(TShard, uint16) TGoroutineShard,
 	releaseHeadFn func(),
 	generation uint64,
-	numberOfShards uint16,
 	registerer prometheus.Registerer,
 ) *Head[TShard, TGoroutineShard] {
+	numberOfShards := len(shards)
 	taskChs := make([]chan *task.Generic[TGoroutineShard], numberOfShards)
 	concurrency := calculateHeadConcurrency(numberOfShards) // current head workers concurrency
 
-	for shardID := uint16(0); shardID < numberOfShards; shardID++ {
+	for shardID := range numberOfShards {
 		taskChs[shardID] = make(chan *task.Generic[TGoroutineShard], 4*concurrency) // x4 for back pressure
 	}
 
 	factory := util.NewUnconflictRegisterer(registerer)
 	h := &Head[TShard, TGoroutineShard]{
-		id:             id,
-		generation:     generation,
-		gshardCtor:     gshardCtor,
-		releaseHeadFn:  releaseHeadFn,
-		shards:         shards,
-		taskChs:        taskChs,
-		numberOfShards: uint16(len(shards)), // #nosec G115 // no overflow
+		id:            id,
+		generation:    generation,
+		gshardCtor:    gshardCtor,
+		releaseHeadFn: releaseHeadFn,
+		shards:        shards,
+		taskChs:       taskChs,
 		// TODO metrics
 		memoryInUse: factory.NewGaugeVec(
 			prometheus.GaugeOpts{
@@ -210,7 +208,7 @@ func (h *Head[TShard, TGorutineShard]) Close(ctx context.Context) error {
 
 // Concurrency return current head workers concurrency.
 func (h *Head[TShard, TGorutineShard]) Concurrency() int64 {
-	return calculateHeadConcurrency(h.numberOfShards)
+	return calculateHeadConcurrency(len(h.shards))
 }
 
 // CreateTask create a task for operations on the [Head] shards.
@@ -231,7 +229,7 @@ func (h *Head[TShard, TGorutineShard]) CreateTask(
 
 // Enqueue the task to be executed on shards [Head].
 func (h *Head[TShard, TGorutineShard]) Enqueue(t *task.Generic[TGorutineShard]) {
-	t.SetShardsNumber(h.numberOfShards)
+	t.SetShardsNumber(h.NumberOfShards())
 
 	for _, taskCh := range h.taskChs {
 		taskCh <- t
@@ -243,6 +241,11 @@ func (h *Head[TShard, TGorutineShard]) EnqueueOnShard(t *task.Generic[TGorutineS
 	t.SetShardsNumber(1)
 
 	h.taskChs[shardID] <- t
+}
+
+// Generation returns current generation of [Head].
+func (h *Head[TShard, TGorutineShard]) Generation() uint64 {
+	return h.generation
 }
 
 // ID returns id [Head].
@@ -257,7 +260,7 @@ func (h *Head[TShard, TGorutineShard]) IsReadOnly() bool {
 
 // NumberOfShards returns current number of shards in to [Head].
 func (h *Head[TShard, TGorutineShard]) NumberOfShards() uint16 {
-	return h.numberOfShards
+	return uint16(len(h.shards)) // #nosec G115 // no overflow
 }
 
 // RangeShards returns an iterator over the [Head] [Shard]s, through which the shard can be directly accessed.
@@ -284,10 +287,11 @@ func (h *Head[TShard, TGorutineShard]) String() string {
 // run loop for each shard.
 func (h *Head[TShard, TGorutineShard]) run() {
 	workers := defaultNumberOfWorkers + ExtraWorkers
-	h.wg.Add(workers * int(h.numberOfShards))
-	for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
-		for i := 0; i < workers; i++ {
-			go func(sid uint16) {
+	numberOfShards := len(h.shards)
+	h.wg.Add(workers * numberOfShards)
+	for shardID := range numberOfShards {
+		for range workers {
+			go func(sid int) {
 				defer h.wg.Done()
 				h.shardLoop(h.taskChs[sid], h.stopc, h.shards[sid])
 			}(shardID)
@@ -301,7 +305,7 @@ func (h *Head[TShard, TGorutineShard]) shardLoop(
 	stopc chan struct{},
 	s TShard,
 ) {
-	pgs := h.gshardCtor(s, h.numberOfShards)
+	pgs := h.gshardCtor(s, h.NumberOfShards())
 
 	for {
 		select {
@@ -315,7 +319,7 @@ func (h *Head[TShard, TGorutineShard]) shardLoop(
 }
 
 // calculateHeadConcurrency calculate current head workers concurrency.
-func calculateHeadConcurrency(numberOfShards uint16) int64 {
+func calculateHeadConcurrency(numberOfShards int) int64 {
 	return int64(defaultNumberOfWorkers+ExtraWorkers) * int64(numberOfShards)
 }
 

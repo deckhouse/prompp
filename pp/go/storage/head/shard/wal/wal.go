@@ -116,10 +116,6 @@ func (w *Wal[TSegment, TStats, TWriter]) Commit() error {
 		return fmt.Errorf("failed to write segment: %w", err)
 	}
 
-	if err = w.segmentWriter.Flush(); err != nil {
-		return fmt.Errorf("failed to flush segment writer: %w", err)
-	}
-
 	return nil
 }
 
@@ -128,7 +124,7 @@ func (w *Wal[TSegment, TStats, TWriter]) CurrentSize() int64 {
 	return w.segmentWriter.CurrentSize()
 }
 
-// Flush wal [SegmentWriter].
+// Flush wal [SegmentWriter], write all buffered data to storage.
 func (w *Wal[TSegment, TStats, TWriter]) Flush() error {
 	w.locker.Lock()
 	defer w.locker.Unlock()
