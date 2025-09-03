@@ -317,22 +317,18 @@ class Scraper {
 
     PROMPP_ALWAYS_INLINE
     static uint32_t read_val_partial(const char*& p, uint8_t sz) noexcept {
-      if (sz == 0) [[likely]] {
-        const uint32_t v = static_cast<uint8_t>(p[0]);
-        p += 1;
-        return v;
+      if (sz == 0b01) [[likely]] {
+        return *p++;
       }
 
-      if (sz == 1) {
-        const uint32_t v = static_cast<uint32_t>(static_cast<uint8_t>(p[0])) | (static_cast<uint32_t>(static_cast<uint8_t>(p[1])) << 8);
+      if (sz == 0b00) {
+        return 0;
+      }
+
+      if (sz == 0b10) {
+        uint16_t v;
+        std::memcpy(&v, p, 2);
         p += 2;
-        return v;
-      }
-
-      if (sz == 2) {
-        const uint32_t v = static_cast<uint32_t>(static_cast<uint8_t>(p[0])) | (static_cast<uint32_t>(static_cast<uint8_t>(p[1])) << 8) |
-                           (static_cast<uint32_t>(static_cast<uint8_t>(p[2])) << 16);
-        p += 3;
         return v;
       }
 
@@ -480,6 +476,8 @@ class Scraper {
     }
 
     PROMPP_ALWAYS_INLINE void add_label(MarkedLabel label) noexcept {
+      static constexpr uint8_t szm[4] = {0, 1, 2, 4};
+
       const auto base_offset = this->buffer_.back().base_offset;
 
       if (label.name.is_reserved_name()) [[unlikely]] {
@@ -490,27 +488,25 @@ class Scraper {
       }
       label.value.offset -= base_offset;
 
-      const uint8_t sz0 = encode_size(label.name.offset);
-      const uint8_t sz1 = encode_size(label.name.length);
-      const uint8_t sz2 = encode_size(label.value.offset);
-      const uint8_t sz3 = encode_size(label.value.length);
-
-      const uint8_t layout = (sz0) | (sz1 << 2) | (sz2 << 4) | (sz3 << 6);
-
-      const uint32_t bytes_needed = sizeof(layout) + (sz0 + sz1 + sz2 + sz3) + 4;
       const uint32_t offset = bytes_count();
       bytes_buffer_.resize(bytes_buffer_.size() + 17);
       char* out = bytes_buffer_.data() + offset;
+      char* layout_ptr = out++;
 
-      *out++ = static_cast<char>(layout);
+      const uint8_t sz0 = push_and_encode(out, label.name.offset);
+      out += szm[sz0];
+      const uint8_t sz1 = push_and_encode(out, label.name.length);
+      out += szm[sz1];
+      const uint8_t sz2 = push_and_encode(out, label.value.offset);
+      out += szm[sz2];
+      const uint8_t sz3 = push_and_encode(out, label.value.length);
+      out += szm[sz3];
 
-      std::memcpy(out, &label.name.offset, sz0 + 1);
-      out += sz0 + 1;
-      std::memcpy(out, &label.name.length, sz1 + 1);
-      out += sz1 + 1;
-      std::memcpy(out, &label.value.offset, sz2 + 1);
-      out += sz2 + 1;
-      std::memcpy(out, &label.value.length, sz3 + 1);
+      const uint8_t layout = (sz0) | (sz1 << 2) | (sz2 << 4) | (sz3 << 6);
+
+      const uint32_t bytes_needed = out - layout_ptr;
+
+      *layout_ptr = static_cast<char>(layout);
 
       bytes_buffer_.resize(offset + bytes_needed);
     }
@@ -572,9 +568,22 @@ class Scraper {
       return out + sizeof(T);
     }
 
-    PROMPP_ALWAYS_INLINE static uint8_t encode_size(uint32_t v) noexcept {
-      const uint32_t msb = (v == 0 ? 0 : 31 - std::countl_zero(v));
-      return msb >> 3;
+    PROMPP_ALWAYS_INLINE static uint8_t push_and_encode(char* out, uint32_t v) noexcept {
+      if (v == 0) [[unlikely]] {
+        return 0b00;
+      }
+      if (v <= 0xFF) [[likely]] {
+        const uint8_t value = static_cast<uint8_t>(v);
+        std::memcpy(out, &value, sizeof(value));
+        return 0b01;
+      }
+      if (v <= 0xFFFF) [[unlikely]] {
+        const uint16_t value = static_cast<uint16_t>(v);
+        std::memcpy(out, &value, sizeof(value));
+        return 0b10;
+      }
+      std::memcpy(out, &v, sizeof(v));
+      return 0b11;
     }
   };
 
