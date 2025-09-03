@@ -205,66 +205,57 @@ class Scraper {
 
       Primitives::Sample sample{};
       sample.timestamp() = default_timestamp_;
+      double& val = sample.value();
 
-      double val;
+      if (type == 0b00000011) [[likely]] {  // uint32_t
+        uint32_t x;
+        std::memcpy(&x, ptr, sizeof(x));
+        ptr += sizeof(x);
+        val = static_cast<double>(x);
+      } else if (type == 0b00001001) [[likely]] {  // double
+        std::memcpy(&val, ptr, sizeof(val));
+        ptr += sizeof(val);
+      } else [[unlikely]] {
+        switch (type) {
+          case 0b00000000:  // zero
+            val = 0.0;
+            break;
 
-      switch (type) {
-        case 0b00000000:  // zero
-          val = 0.0;
-          break;
+          case 0b00000001: {  // uint8
+            val = static_cast<double>(*ptr++);
+            break;
+          }
 
-        case 0b00000001: {  // uint8
-          val = static_cast<double>(*ptr++);
-          break;
+          case 0b00000010: {  // uint16
+            uint16_t x;
+            std::memcpy(&x, ptr, sizeof(x));
+            ptr += sizeof(x);
+            val = static_cast<double>(x);
+            break;
+          }
+
+          case 0b00000100:  // NaN (normal)
+            val = Prometheus::kNormalNan;
+            break;
+
+          case 0b00001000: {  // float32
+            float x;
+            std::memcpy(&x, ptr, sizeof(x));
+            ptr += sizeof(x);
+            val = static_cast<double>(x);
+            break;
+          }
+
+          default:
+            val = Prometheus::kStaleNan;
+            break;
         }
-
-        case 0b00000010: {  // uint16
-          uint16_t x = static_cast<uint16_t>(ptr[0]) | (static_cast<uint16_t>(ptr[1]) << 8);
-          ptr += 2;
-          val = static_cast<double>(x);
-          break;
-        }
-
-        case 0b00000011: {  // uint32
-          uint32_t x;
-          std::memcpy(&x, ptr, sizeof(x));
-          ptr += 4;
-          val = static_cast<double>(x);
-          break;
-        }
-
-        case 0b00000100:  // NaN (normal)
-          val = Prometheus::kNormalNan;
-          break;
-
-        case 0b00001000: {  // float32
-          float x;
-          std::memcpy(&x, ptr, sizeof(x));
-          ptr += sizeof(x);
-          val = static_cast<double>(x);
-          break;
-        }
-
-        case 0b00001001: {  // double
-          double x;
-          std::memcpy(&x, ptr, sizeof(x));
-          ptr += sizeof(x);
-          val = x;
-          break;
-        }
-
-        default:
-          val = Prometheus::kStaleNan;
-          break;
       }
 
       if (has_ts) [[unlikely]] {
-        Primitives::Timestamp ts_val;
-        memcpy(&ts_val, ptr, sizeof(ts_val));
-        sample.timestamp() = ts_val;
+        memcpy(&sample.timestamp(), ptr, sizeof(sample.timestamp()));
       }
 
-      sample.value() = val;
       ts.samples().emplace_back(sample);
     }
 
@@ -329,7 +320,90 @@ class Scraper {
     PROMPP_ALWAYS_INLINE static uint32_t decode_label(const char* ptr, const char* base, LabelSet& labels) noexcept {
       const char* start = ptr;
 
-      const uint8_t layout = static_cast<uint8_t>(*ptr++);
+      uint64_t chunk;
+      std::memcpy(&chunk, ptr, sizeof(chunk));
+      uint8_t layout = static_cast<uint8_t>(chunk & 0xFF);
+      chunk >>= 8;
+      ptr += 8;
+
+      if (layout == 0b01010101) [[likely]] {
+        uint32_t packed = static_cast<uint32_t>(chunk & 0xFFFFFFFFu);
+        uint8_t name_off = (packed >> 0) & 0xFF;
+        uint8_t name_len = (packed >> 8) & 0xFF;
+        uint8_t value_off = (packed >> 16) & 0xFF;
+        uint8_t value_len = (packed >> 24) & 0xFF;
+
+        labels.append(std::string_view(base + name_off, name_len), std::string_view(base + value_off, value_len));
+
+        return 5;
+      }
+
+      if ((layout & 0x0F) == 0) [[likely]] {
+        uint8_t sz2 = (layout >> 4) & 0x3;
+        uint8_t sz3 = (layout >> 6) & 0x3;
+
+        uint32_t value_off = 0;
+        uint32_t value_len = 0;
+        size_t used = 0;
+
+        // value_off
+        switch (sz2) {
+          case 0b00: {
+            value_off = 0;
+            break;
+          }
+          case 0b01: {
+            value_off = static_cast<uint8_t>(chunk & 0xFF);
+            used += 1;
+            chunk >>= 8;
+            break;
+          }
+          case 0b10: {
+            value_off = static_cast<uint16_t>(chunk & 0xFFFF);
+            used += 2;
+            chunk >>= 16;
+            break;
+          }
+          default: {
+            value_off = static_cast<uint32_t>(chunk & 0xFFFFFFFFu);
+            used += 4;
+            chunk >>= 32;
+            break;
+          }
+        }
+
+        // value_len
+        switch (sz3) {
+          case 0b00: {
+            value_len = 0;
+            break;
+          }
+          case 0b01: {
+            value_len = static_cast<uint8_t>(chunk & 0xFF);
+            used += 1;
+            break;
+          }
+          case 0b10: {
+            value_len = static_cast<uint16_t>(chunk & 0xFFFF);
+            used += 2;
+            break;
+          }
+          default: {
+            if (used + 4 <= 7) [[likely]] {
+              value_len = static_cast<uint32_t>(chunk & 0xFFFFFFFFu);
+              used += 4;
+            } else [[unlikely]] {
+              std::memcpy(&value_len, start + 1 + used, 4);
+              used += 4;
+            }
+            break;
+          }
+        }
+
+        labels.append(Prometheus::kMetricLabelName, std::string_view(base + value_off, value_len));
+
+        return 1 + used;
+      }
 
       const uint8_t sz0 = (layout >> 0) & 0x3;
       const uint8_t sz1 = (layout >> 2) & 0x3;
