@@ -32,6 +32,7 @@ class Scraper {
       switch (tokenizer.next()) {
         case Token::kEOF:
         case Token::kEOFWord: {
+          metric_buffer_.add_padding();
           return parser_.validate_parse_result();
         }
 
@@ -193,22 +194,8 @@ class Scraper {
 
       // decode label
       for (uint32_t i = 0; i < labels_count; ++i) {
-        const uint8_t layout = static_cast<uint8_t>(*ptr++);
-        const uint8_t sz0 = (layout >> 0) & 0x3;
-        const uint8_t sz1 = (layout >> 2) & 0x3;
-        const uint8_t sz2 = (layout >> 4) & 0x3;
-        const uint8_t sz3 = (layout >> 6) & 0x3;
-
-        const uint32_t name_off = read_val_partial(ptr, sz0);
-        const uint32_t name_len = read_val_partial(ptr, sz1);
-        const uint32_t value_off = read_val_partial(ptr, sz2);
-        const uint32_t value_len = read_val_partial(ptr, sz3);
-
-        if (name_len == 0 && name_off == 0) [[unlikely]] {
-          ts.label_set().append(Prometheus::kMetricLabelName, std::string_view(base + value_off, value_len));
-        } else {
-          ts.label_set().append(std::string_view(base + name_off, name_len), std::string_view(base + value_off, value_len));
-        }
+        const uint32_t consumed_bytes = decode_label(ptr, base, ts.label_set());
+        ptr += consumed_bytes;
       }
 
       // decode sample
@@ -316,8 +303,7 @@ class Scraper {
       return v;
     }
 
-    PROMPP_ALWAYS_INLINE
-    static uint32_t read_val_partial(const char*& p, uint8_t sz) noexcept {
+    PROMPP_ALWAYS_INLINE static uint32_t read_val_partial(const char*& p, uint8_t sz) noexcept {
       if (sz == 0b01) [[likely]] {
         return *p++;
       }
@@ -337,6 +323,31 @@ class Scraper {
       std::memcpy(&v, p, 4);
       p += 4;
       return v;
+    }
+
+    template <class LabelSet>
+    PROMPP_ALWAYS_INLINE static uint32_t decode_label(const char* ptr, const char* base, LabelSet& labels) noexcept {
+      const char* start = ptr;
+
+      const uint8_t layout = static_cast<uint8_t>(*ptr++);
+
+      const uint8_t sz0 = (layout >> 0) & 0x3;
+      const uint8_t sz1 = (layout >> 2) & 0x3;
+      const uint8_t sz2 = (layout >> 4) & 0x3;
+      const uint8_t sz3 = (layout >> 6) & 0x3;
+
+      const uint32_t name_off = read_val_partial(ptr, sz0);
+      const uint32_t name_len = read_val_partial(ptr, sz1);
+      const uint32_t value_off = read_val_partial(ptr, sz2);
+      const uint32_t value_len = read_val_partial(ptr, sz3);
+
+      if (name_len == 0 && name_off == 0) [[unlikely]] {
+        labels.append(Prometheus::kMetricLabelName, std::string_view(base + value_off, value_len));
+      } else {
+        labels.append(std::string_view(base + name_off, name_len), std::string_view(base + value_off, value_len));
+      }
+
+      return static_cast<uint32_t>(ptr - start);
     }
   };
 
@@ -557,6 +568,11 @@ class Scraper {
 
       const uint32_t written = static_cast<uint32_t>(out - start);
       bytes_buffer_.resize(offset + written);
+    }
+
+    void add_padding() noexcept {
+      constexpr size_t kPaddingSizeBytes = 16;
+      bytes_buffer_.resize(bytes_buffer_.size() + kPaddingSizeBytes);
     }
 
    private:
