@@ -44,9 +44,12 @@ void BenchmarkScraperParse(benchmark::State& state) {
   std::ifstream t(get_file_name());
   std::string str((std::istreambuf_iterator(t)), std::istreambuf_iterator<char>());
 
+  std::string tmp_str;
+  tmp_str.resize(str.size());
+
   for ([[maybe_unused]] auto _ : state) {
+    std::memcpy(tmp_str.data(), str.data(), str.size());
     PrometheusScraper scraper;
-    auto tmp_str = str;
     std::ignore = scraper.parse(tmp_str, 0);
   }
 
