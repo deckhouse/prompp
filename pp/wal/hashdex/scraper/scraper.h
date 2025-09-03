@@ -106,7 +106,7 @@ class Scraper {
   [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Timestamp default_timestamp() const noexcept { return default_timestamp_; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
-    return metric_buffer_.allocated_memory() + metadata_buffer_.allocated_memory();
+    return metric_buffer_.allocated_memory() + metadata_buffer_.allocated_memory() + labels_.allocated_memory();
   }
 
  private:
