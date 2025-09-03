@@ -112,16 +112,25 @@ tidy:
 
 .PHONY: test
 test: ## Run all cpp tests
-	@$(bazel_test) --test_output=errors -- $(cc_tests)
+ifdef target
+ifdef filter
+test: test_args := --test_arg=--gtest_filter=$(filter)
+endif
+else
+test: target := $(cc_tests)
+endif
+test:
+	@$(bazel_test) $(test_args) --test_output=errors -- $(target)
+	
 
 .PHONY: coverage
 coverage: ## Run code coverage
-    ifeq ($(target),)
-    	target := //...
-    	lcov_directory := ./bazel-testlogs/
-    else
-    	lcov_directory := ./bazel-testlogs/$(target)/_coverage/bazel-out/
-    endif
+ifeq ($(target),)
+coverage: target := //...
+coverage: lcov_directory := ./bazel-testlogs/
+else
+coverage: lcov_directory := ./bazel-testlogs/$(target)/_coverage/bazel-out/
+endif
 coverage:
 	@$(bazel) coverage $(bazel_flags) --cache_test_results=no  --experimental_fetch_all_coverage_outputs $(target)
 	lcov -t "pp" -o pp.info -c -f -d $(lcov_directory) -b ./ --no-external \
