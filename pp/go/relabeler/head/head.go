@@ -682,11 +682,11 @@ func (h *Head) Close() error {
 		err = errors.Join(err, s.wal.Close())
 
 		if s.unloadedDataStorage != nil {
-			err = errors.Join(s.unloadedDataStorage.Close())
+			err = errors.Join(err, s.unloadedDataStorage.Close())
 		}
 
 		if s.queriedSeriesStorage != nil {
-			err = errors.Join(s.queriedSeriesStorage.Close())
+			err = errors.Join(err, s.queriedSeriesStorage.Close())
 		}
 	}
 	return err
@@ -1199,9 +1199,7 @@ func (h *Head) CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr
 				shard.DataStorageLock()
 				queriers := shard.LoadAndQueryTask().Release()
 				loader := shard.DataStorage().CreateLoader(queriers)
-				err := shard.UnloadedDataStorage().ForEachSnapshot(func(snapshot []byte, isLast bool) {
-					loader.Load(snapshot, isLast)
-				})
+				err := shard.UnloadedDataStorage().ForEachSnapshot(loader.Load)
 				shard.DataStorageUnlock()
 
 				if err != nil {

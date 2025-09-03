@@ -347,16 +347,6 @@ func (l *ShardLoader) Load() (ShardLoadResult, error) {
 	defer func() {
 		if result.Corrupted {
 			_ = shardWalFile.Close()
-
-			if result.UnloadedDataStorage != nil {
-				_ = result.UnloadedDataStorage.Close()
-				result.UnloadedDataStorage = nil
-			}
-
-			if result.QueriedSeriesStorage != nil {
-				_ = result.QueriedSeriesStorage.Close()
-				result.QueriedSeriesStorage = nil
-			}
 		}
 	}()
 
