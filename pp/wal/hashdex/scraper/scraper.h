@@ -2,6 +2,7 @@
 
 #include <simdutf/simdutf.h>
 
+#include <ranges>
 #include <span>
 
 #include "bare_bones/algorithm.h"
@@ -20,7 +21,7 @@ namespace PromPP::WAL::hashdex::scraper {
 template <ParserInterface Parser>
 class Scraper {
  public:
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Error parse(std::span<char> buffer, Primitives::Timestamp default_timestamp) {
+  [[nodiscard]] Error parse(std::span<char> buffer, Primitives::Timestamp default_timestamp) {
     labels_.reserve(255);
     default_timestamp_ = default_timestamp;
 
@@ -416,10 +417,10 @@ class Scraper {
     using Iterator = typename Base::Iterator;
     using IteratorSentinel = typename Base::IteratorSentinel;
 
-    [[nodiscard]] Iterator begin(std::string_view buffer, Primitives::Timestamp default_ts) const noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin(std::string_view buffer, Primitives::Timestamp default_ts) const noexcept {
       return {typename Base::Context{buffer, bytes_buffer_, default_ts}, this->buffer_.data(), this->items_count()};
     }
-    [[nodiscard]] static IteratorSentinel end() noexcept { return {}; }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t bytes_count() const noexcept { return bytes_buffer_.size(); }
 
@@ -436,7 +437,7 @@ class Scraper {
       this->buffer_.push_back(MarkedMetric{.base_offset = global_offset, .data_offset = bytes_count()});
     }
 
-    PROMPP_ALWAYS_INLINE void add_count(uint32_t count) noexcept {
+    void add_count(uint32_t count) noexcept {
       constexpr uint8_t kContinueBit = 0x80;
       constexpr uint8_t kValueMask = 0x7F;
 
@@ -475,7 +476,7 @@ class Scraper {
       }
     }
 
-    PROMPP_ALWAYS_INLINE void add_label(MarkedLabel label) noexcept {
+    void add_label(MarkedLabel label) noexcept {
       static constexpr uint8_t szm[4] = {0, 1, 2, 4};
 
       const auto base_offset = this->buffer_.back().base_offset;
@@ -511,7 +512,7 @@ class Scraper {
       bytes_buffer_.resize(offset + bytes_needed);
     }
 
-    PROMPP_ALWAYS_INLINE void add_sample(const MarkedSample& sample) noexcept {
+    void add_sample(const MarkedSample& sample) noexcept {
       const double val = sample.sample.value();
       const bool has_ts = sample.has_ts;
 
@@ -573,8 +574,7 @@ class Scraper {
         return 0b00;
       }
       if (v <= 0xFF) [[likely]] {
-        const uint8_t value = static_cast<uint8_t>(v);
-        std::memcpy(out, &value, sizeof(value));
+        *out = static_cast<char>(v);
         return 0b01;
       }
       if (v <= 0xFFFF) [[unlikely]] {
@@ -593,21 +593,19 @@ class Scraper {
     using Iterator = typename Base::Iterator;
     using IteratorSentinel = typename Base::IteratorSentinel;
 
-    [[nodiscard]] Iterator begin(std::string_view buffer) const noexcept { return {typename Base::Context{buffer}, this->buffer_.data(), this->items_count()}; }
-    [[nodiscard]] static IteratorSentinel end() noexcept { return {}; }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin(std::string_view buffer) const noexcept {
+      return {typename Base::Context{buffer}, this->buffer_.data(), this->items_count()};
+    }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
 
     PROMPP_ALWAYS_INLINE void add(MarkedString metric_name, MarkedString text, Prometheus::MetadataType type) noexcept {
       this->buffer_.emplace_back(metric_name, text, type);
     }
 
-    void remove_item() noexcept { this->buffer_.pop_back(); }
-    void initialize(size_t reserve) noexcept {
-      this->buffer_.clear();
-      this->buffer_.reserve(reserve);
-    }
+    PROMPP_ALWAYS_INLINE void remove_item() noexcept { this->buffer_.pop_back(); }
   };
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Error parse_metadata() {
+  [[nodiscard]] Error parse_metadata() {
     static constexpr auto get_metadata_type = [](Token token) PROMPP_LAMBDA_INLINE {
       if (token == Token::kHelp) {
         return Prometheus::MetadataType::kHelp;
@@ -647,7 +645,7 @@ class Scraper {
     return Error::kNoError;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Error parse_metric() {
+  [[nodiscard]] Error parse_metric() {
     labels_.clear();
 
     bool have_metric_name = false;
