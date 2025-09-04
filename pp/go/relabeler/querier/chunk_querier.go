@@ -80,13 +80,16 @@ func (q *ChunkQuerier) Select(
 	if err != nil {
 		logger.Warnf("[ChunkQuerier]: failed: %s", err)
 		return storage.ErrChunkSeriesSet(err)
-
 	}
 
-	serializedChunksShards := dataStorageQuery(relabeler.DSQueryChunkQuerier, q.head, lssQueryResults, q.mint, q.maxt)
+	queryResults, err := dataStorageQuery(relabeler.DSQueryChunkQuerier, q.head, lssQueryResults, q.mint, q.maxt)
+	if err != nil {
+		return storage.ErrChunkSeriesSet(err)
+	}
+
 	chunkSeriesSets := make([]storage.ChunkSeriesSet, q.head.NumberOfShards())
-	for shardID, serializedChunks := range serializedChunksShards {
-		if serializedChunks == nil {
+	for shardID, serializedChunks := range queryResults {
+		if serializedChunks == nil || serializedChunks.NumberOfChunks() == 0 {
 			chunkSeriesSets[shardID] = &EmptyChunkSeriesSet{}
 			continue
 		}

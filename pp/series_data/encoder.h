@@ -26,7 +26,10 @@ class Encoder {
 
     if (storage_.open_chunks.size() <= ls_id) [[unlikely]] {
       storage_.open_chunks.resize(ls_id + 1);
-      storage_.queried_series_bitmap.resize(ls_id + 1);
+
+      if (storage_.queried_series_bitmap.size() <= ls_id) {
+        storage_.queried_series_bitmap.resize(ls_id + 1);
+      }
     }
 
     encode(ls_id, timestamp, value, storage_.open_chunks[ls_id]);

@@ -29,6 +29,11 @@ class ReverterTestFixture : public testing::Test {
     (..., loader.load_next(std::forward<Spans>(spans)));
     loader.load_finalize();
   }
+
+  void unload() {
+    unloader_.create_snapshot(stream_);
+    unloader_.unload();
+  }
 };
 
 TEST_F(ReverterTestFixture, RevertOpenChunk) {
@@ -39,11 +44,11 @@ TEST_F(ReverterTestFixture, RevertOpenChunk) {
   encoder_.encode(0, 4, 4.0);
   encoder_.encode(0, 5, 5.0);
 
-  unloader_.unload(stream_);
+  unload();
 
   const auto chunk_stream_trimmed = storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index);
 
-  reverter_.set_series_for_revert(std::initializer_list{0u}, 1);
+  reverter_.add_series_to_revert(std::initializer_list{0u}, 1);
 
   load({0}, stream_.span<const uint8_t>());
 
@@ -52,6 +57,7 @@ TEST_F(ReverterTestFixture, RevertOpenChunk) {
 
   // Assert
   ASSERT_EQ(storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index), chunk_stream_trimmed);
+  EXPECT_TRUE(storage_.unloaded_series_bitmap.is_set(0));
 }
 
 TEST_F(ReverterTestFixture, RevertFinalizedChunk) {
@@ -62,14 +68,14 @@ TEST_F(ReverterTestFixture, RevertFinalizedChunk) {
   encoder_.encode(0, 4, 4.0);
   encoder_.encode(0, 5, 5.0);
 
-  unloader_.unload(stream_);
+  unload();
 
   const auto chunk_stream_trimmed = storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index);
 
   ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
   encoder_.encode(0, 6, 6.0);
 
-  reverter_.set_series_for_revert(std::initializer_list{0u}, 1);
+  reverter_.add_series_to_revert(std::initializer_list{0u}, 1);
 
   load({0}, stream_.span<const uint8_t>());
 
@@ -78,9 +84,10 @@ TEST_F(ReverterTestFixture, RevertFinalizedChunk) {
 
   // Assert
   ASSERT_EQ(storage_.finalized_data_streams.at(0), chunk_stream_trimmed);
+  EXPECT_TRUE(storage_.unloaded_series_bitmap.is_set(0));
 }
 
-TEST_F(ReverterTestFixture, OutdatedNoRevert) {
+TEST_F(ReverterTestFixture, NoRevertOutdatedSeries) {
   // Arrange
   encoder_.encode(0, 1, 1.0);
   encoder_.encode(0, 2, 2.0);
@@ -92,9 +99,9 @@ TEST_F(ReverterTestFixture, OutdatedNoRevert) {
 
   const auto chunk_stream_original = storage_.get_asc_integer_stream<DataChunk::Type::kOpen>(storage_.open_chunks[0].encoder.external_index);
 
-  unloader_.unload(stream_);
+  unload();
 
-  reverter_.set_series_for_revert(std::initializer_list{0u}, 1);
+  reverter_.add_series_to_revert(std::initializer_list{0u}, 1);
 
   load({0}, stream_.span<const uint8_t>());
 
@@ -111,6 +118,52 @@ TEST_F(ReverterTestFixture, OutdatedNoRevert) {
                 {5, 5.0},
             }),
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
+  EXPECT_FALSE(storage_.unloaded_series_bitmap.is_set(0));
+}
+
+TEST_F(ReverterTestFixture, NoRevertQueriedSeries) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 2.0);
+  encoder_.encode(0, 3, 3.0);
+
+  unload();
+  reverter_.add_series_to_revert(std::initializer_list{0u}, 1);
+  load({0}, stream_.span<const uint8_t>());
+
+  // Act
+  storage_.queried_series_bitmap.set(0);
+  reverter_.revert();
+
+  // Assert
+  ASSERT_EQ((SampleList{
+                {1, 1.0},
+                {2, 2.0},
+                {3, 3.0},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
+  EXPECT_FALSE(storage_.unloaded_series_bitmap.is_set(0));
+}
+
+TEST_F(ReverterTestFixture, NoRevertUnmodifiedChunk) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 2.0);
+  encoder_.encode(0, 3, 3.0);
+
+  reverter_.add_series_to_revert(std::initializer_list{0u}, 1);
+
+  // Act
+  reverter_.revert();
+
+  // Assert
+  ASSERT_EQ((SampleList{
+                {1, 1.0},
+                {2, 2.0},
+                {3, 3.0},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0]));
+  EXPECT_FALSE(storage_.unloaded_series_bitmap.is_set(0));
 }
 
 }  // namespace

@@ -13,7 +13,7 @@ class Querier {
   explicit Querier(DataStorage& storage) : storage_(storage) {}
 
   template <typename Query>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const QueriedChunkList& query(const Query& query) noexcept {
+  PROMPP_ALWAYS_INLINE const QueriedChunkList& query(const Query& query) noexcept {
     chunks_.clear();
 
     for (auto& ls_id : query.label_set_ids) {
@@ -30,6 +30,10 @@ class Querier {
     return chunks_;
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const QueriedChunkList& chunks() const noexcept { return chunks_; }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const DataStorage& get_storage() const noexcept { return storage_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE DataStorage& get_storage() noexcept { return storage_; }
   [[nodiscard]] bool need_loading() const noexcept { return series_to_load_.empty() == false; }
   [[nodiscard]] const BareBones::Bitset& get_series_to_load() const noexcept { return series_to_load_; }
 
@@ -48,7 +52,7 @@ class Querier {
   void query_finalized_chunks(PromPP::Primitives::LabelSetID ls_id, const PromPP::Primitives::TimeInterval& time_interval) noexcept {
     if (const auto it = storage_.finalized_chunks.find(ls_id); it != storage_.finalized_chunks.end()) {
       uint32_t finalized_chunk_index = 0;
-      auto& finalized_chunks = it->second;
+      const auto& finalized_chunks = it->second;
       for (auto chunk_it = finalized_chunks.begin(); chunk_it != finalized_chunks.end(); ++chunk_it, ++finalized_chunk_index) {
         const auto chunk_start_timestamp_ms = Decoder::get_chunk_first_timestamp<ChunkType::kFinalized>(storage_, *chunk_it);
         if (chunk_start_timestamp_ms > time_interval.max) {
@@ -65,7 +69,7 @@ class Querier {
 
   void query_opened_chunks(PromPP::Primitives::LabelSetID ls_id, const PromPP::Primitives::TimeInterval& time_interval) noexcept {
     if (storage_.open_chunks.size() > ls_id) {
-      if (auto& open_chunk = storage_.open_chunks[ls_id]; !open_chunk.is_empty()) {
+      if (const auto& open_chunk = storage_.open_chunks[ls_id]; !open_chunk.is_empty()) {
         const auto chunk_start_timestamp_ms = Decoder::get_chunk_first_timestamp<ChunkType::kOpen>(storage_, open_chunk);
         if (chunk_start_timestamp_ms > time_interval.max) {
           return;

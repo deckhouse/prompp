@@ -1168,6 +1168,18 @@ TEST_F(EncodeTestFixture, Encode2DoubleStalenan2Double) {
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
 }
 
+TEST_F(EncodeTestFixture, AllocateQueriedSeries) {
+  // Arrange
+  storage_.queried_series_bitmap.set(1);
+
+  // Act
+  encoder_.encode(0, 1, 1.0);
+
+  // Assert
+  EXPECT_FALSE(storage_.queried_series_bitmap.is_set(0));
+  EXPECT_TRUE(storage_.queried_series_bitmap.is_set(1));
+}
+
 class FinalizeChunkTestFixture : public EncoderTestTrait<4>, public testing::Test {
  protected:
   static constexpr double kIntegerValue = 1.0;

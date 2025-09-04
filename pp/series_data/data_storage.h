@@ -1,7 +1,5 @@
 #pragma once
 
-#include <list>
-
 #include "bare_bones/algorithm.h"
 #include "bare_bones/bitset.h"
 #include "bare_bones/preprocess.h"
@@ -193,8 +191,6 @@ struct DataStorage {
   uint32_t outdated_chunks_count{};
   uint32_t merged_samples_count{};
 
-  std::list<std::vector<uint8_t>> unloaded_snapshots;
-
   BareBones::Bitset unloaded_series_bitmap{};
   BareBones::Bitset queried_series_bitmap{};
 
@@ -331,6 +327,14 @@ struct DataStorage {
     if (encoding_type == EncodingType::kGorilla) {
       return gorilla_encoders.allocated_memory();
     }
+    return 0;
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_open_chunk_index(uint32_t ls_id) const noexcept {
+    if (const auto it = finalized_chunks.find(ls_id); it != finalized_chunks.end()) [[unlikely]] {
+      return it->second.count();
+    }
+
     return 0;
   }
 

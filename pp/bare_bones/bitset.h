@@ -14,6 +14,7 @@
 #include <numeric>
 
 #include "bit.h"
+#include "concepts.h"
 #include "memory.h"
 #include "streams.h"
 #include "type_traits.h"
@@ -38,7 +39,7 @@ class Bitset {
     if (__builtin_expect(size > std::numeric_limits<uint32_t>::max(), false))
       std::abort();
 
-    const uint64_t size_in_uint64_elements = Bit::to_ceil_units<uint64_t>(size);
+    const auto size_in_uint64_elements = Bit::to_ceil_units<uint64_t>(size);
 
     if (size_in_uint64_elements <= data_.size()) {
       return;
@@ -186,21 +187,26 @@ class Bitset {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_write_size() const noexcept {
-    const uint32_t data_size_in_bytes = Bit::to_ceil_units<uint64_t>(size()) * sizeof(uint64_t);
+    const uint32_t data_size_in_bytes = memory_size_in_bytes();
     return sizeof(data_size_in_bytes) + data_size_in_bytes;
   }
 
   template <OutputStream S>
   PROMPP_ALWAYS_INLINE void write_to(S& stream) const noexcept {
     const uint32_t data_size_in_bits = size();
-    const uint32_t data_size_in_bytes = Bit::to_ceil_units<uint64_t>(data_size_in_bits) * sizeof(uint64_t);
+    const uint32_t data_size_in_bytes = memory_size_in_bytes();
+
+    if constexpr (BareBones::concepts::has_reserve<S>) {
+      stream.reserve(sizeof(data_size_in_bits) + data_size_in_bytes);
+    }
+
     stream.write(reinterpret_cast<const char*>(&data_size_in_bits), sizeof(data_size_in_bits));
     stream.write(reinterpret_cast<const char*>(data_.begin()), data_size_in_bytes);
   }
 
   static PROMPP_ALWAYS_INLINE Iterator create_read_iterator(std::span<const uint8_t>& buffer) noexcept {
     if (buffer.size() < sizeof(uint32_t)) [[unlikely]] {
-      return Iterator{};
+      return Iterator{nullptr, 0, 0};
     }
 
     uint32_t bit_count = 0;
@@ -210,17 +216,40 @@ class Bitset {
     const uint32_t uint64_count = BareBones::Bit::to_ceil_units<uint64_t>(bit_count);
     const uint32_t byte_count = uint64_count * sizeof(uint64_t);
     if (buffer.size() < byte_count) [[unlikely]] {
-      return Iterator{};
+      return Iterator{nullptr, 0, 0};
     }
 
     const std::span bit_data(reinterpret_cast<const uint64_t*>(buffer.data()), uint64_count);
     buffer = buffer.subspan(byte_count);
 
-    return Iterator(bit_data.data(), bit_count);
+    return Iterator(bit_data.data(), bit_count, 0);
+  }
+
+  [[nodiscard]] bool read_from(std::istream& stream) {
+    uint32_t bit_count{};
+    stream.read(reinterpret_cast<char*>(&bit_count), sizeof(uint32_t));
+    if (stream.gcount() != sizeof(uint32_t)) [[unlikely]] {
+      return false;
+    }
+
+    if (bit_count == 0) {
+      return true;
+    }
+
+    resize(bit_count);
+    const auto size_in_bytes = static_cast<std::streamsize>(memory_size_in_bytes(bit_count));
+    stream.read(reinterpret_cast<char*>(data_.begin()), size_in_bytes);
+
+    return stream.gcount() == size_in_bytes;
   }
 
  private:
   PROMPP_ALWAYS_INLINE void set_size(uint32_t new_size) noexcept { data_.control_block().items_count = new_size; }
+
+  [[nodiscard]] static PROMPP_ALWAYS_INLINE size_t memory_size_in_bytes(uint32_t bytes) noexcept {
+    return Bit::to_ceil_units<uint64_t>(bytes) * sizeof(uint64_t);
+  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t memory_size_in_bytes() const noexcept { return memory_size_in_bytes(size()); }
 };
 
 template <>

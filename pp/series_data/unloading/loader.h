@@ -88,14 +88,14 @@ class Loader {
     [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() noexcept { return Iterator{ls_id_to_offset_.end(), &series_to_load_infos_}; }
     [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return Iterator{ls_id_to_offset_.end(), &series_to_load_infos_}; }
 
-    PROMPP_ALWAYS_INLINE auto find(uint32_t key) noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE auto find(uint32_t key) noexcept {
       if (const auto it = ls_id_to_offset_.find(key); it != ls_id_to_offset_.end()) [[likely]] {
         return Iterator{it, &series_to_load_infos_};
       }
       return Iterator{ls_id_to_offset_.end(), &series_to_load_infos_};
     }
 
-    PROMPP_ALWAYS_INLINE auto find(uint32_t key) const noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE auto find(uint32_t key) const noexcept {
       if (const auto it = ls_id_to_offset_.find(key); it != ls_id_to_offset_.end()) [[likely]] {
         return Iterator{it, &series_to_load_infos_};
       }
@@ -111,7 +111,7 @@ class Loader {
       if (ls_id_to_offset_.size() == series_to_load_infos_.size()) [[unlikely]] {
         series_to_load_infos_.emplace_back();
       }
-      auto map_it = ls_id_to_offset_.insert({key, ls_id_to_offset_.size()});
+      const auto map_it = ls_id_to_offset_.insert({key, ls_id_to_offset_.size()});
 
       return Iterator{map_it.first, &series_to_load_infos_};
     }
@@ -121,23 +121,26 @@ class Loader {
     phmap::flat_hash_map<uint32_t, uint32_t> ls_id_to_offset_{};
   };
 
-  explicit Loader(DataStorage& storage) : storage_(storage) {
-    ls_id_to_infos_.reserve(storage_.unloaded_series_bitmap.popcount());
-
-    for (uint32_t ls_id : storage_.unloaded_series_bitmap) {
-      ls_id_to_infos_.insert(ls_id);
-    }
-
-    storage_.unloaded_series_bitmap.clear();
-  }
+  explicit Loader(DataStorage& storage) : storage_(storage) {}
 
   template <LsIDStorageInterface LsIDStorage>
   explicit Loader(DataStorage& storage, const LsIDStorage& ls_id_range, uint32_t ls_id_range_count) : storage_(storage) {
-    ls_id_to_infos_.reserve(ls_id_range_count);
+    add_series_to_load(ls_id_range, ls_id_range_count);
+  }
 
-    for (uint32_t ls_id : ls_id_range) {
-      ls_id_to_infos_.insert(ls_id);
-      storage_.unloaded_series_bitmap.reset(ls_id);
+  template <LsIDStorageInterface LsIDStorage>
+  void add_series_to_load(const LsIDStorage& ls_id_range, uint32_t ls_id_range_count) {
+    add_series_to_load(ls_id_range.begin(), ls_id_range.end(), ls_id_range_count);
+  }
+
+  template <class LsIdSetIterator, class LsIdSetIteratorSentinel>
+  void add_series_to_load(LsIdSetIterator ls_id_iterator, LsIdSetIteratorSentinel ls_id_end_iterator, uint32_t count) noexcept {
+    ls_id_to_infos_.reserve(ls_id_to_infos_.size() + count);
+
+    for (; ls_id_iterator != ls_id_end_iterator; ++ls_id_iterator) {
+      if (const auto ls_id = *ls_id_iterator; storage_.unloaded_series_bitmap.is_set(ls_id)) {
+        ls_id_to_infos_.insert(ls_id);
+      }
     }
   }
 
@@ -151,7 +154,7 @@ class Loader {
     process_ls_id_data(bitset_it, length_it, id_it, bitseqs_ptr);
   }
 
-  template <EncoderInterface Encoder = series_data::Encoder<>>
+  template <EncoderInterface Encoder = Encoder<>>
   void load_finalize() {
     for (const auto& [ls_id, info] : ls_id_to_infos_) {
       if (info.buffer.size_in_bits() != 0) {
@@ -163,7 +166,10 @@ class Loader {
     OutdatedChunkMerger<Encoder> outdated_chunk_merger{encoder};
     for (const auto& ls_id : std::views::keys(ls_id_to_infos_)) {
       outdated_chunk_merger.merge(ls_id);
+      storage_.unloaded_series_bitmap.reset(ls_id);
     }
+
+    ls_id_to_infos_.clear();
   }
 
   [[nodiscard]] bool empty() const noexcept { return ls_id_to_infos_.empty(); }
