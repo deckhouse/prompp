@@ -771,6 +771,7 @@ func main() {
 		// x3 ScrapeInterval timeout for write block
 		time.Duration(cfgFile.GlobalConfig.ScrapeInterval*3),
 		cfg.WalMaxSamplesPerSegment,
+		appender.UnloadDataStorage,
 	)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create a receiver", "err", err)
@@ -1464,6 +1465,22 @@ func main() {
 		)
 	} // PP_CHANGES.md: rebuild on cpp end
 	{ // PP_CHANGES.md: rebuild on cpp start
+		g.Add(
+			func() error { return <-head.UnrecoverableErrorChan },
+			func(err error) {
+				select {
+				case head.UnrecoverableErrorChan <- nil:
+					// stop execute func if need
+				default:
+				}
+
+				if errors.Is(err, head.UnrecoverableError{}) {
+					level.Error(logger).Log("msg", "Received unrecoverable error", "err", err)
+				}
+			},
+		)
+	} // PP_CHANGES.md: rebuild on cpp end
+	{ // PP_CHANGES.md: rebuild on cpp start
 		// run remote writer.
 		ctx, cancel := context.WithCancel(context.Background())
 		g.Add(
@@ -2105,6 +2122,10 @@ func readPromPPFeatures(logger log.Logger) {
 		case "disable_commits_on_remote_write":
 			rwprocessor.AlwaysCommit = false
 			pphandler.OTLPAlwaysCommit = false
+
+		case "unload_data_storage":
+			appender.UnloadDataStorage = true
+			_ = level.Info(logger).Log("msg", "[FEATURE] Data storage unloading is enabled.")
 		}
 	}
 }

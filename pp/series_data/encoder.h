@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cassert>
-#include <cstdint>
 
 #include "bare_bones/gorilla.h"
 #include "bare_bones/preprocess.h"
@@ -10,7 +9,6 @@
 #include "concepts.h"
 #include "data_storage.h"
 #include "encoder/encoder_variant.h"
-#include "outdated_sample_encoder.h"
 #include "series_data/encoder/timestamp/encoder.h"
 #include "series_data/encoder/timestamp/state.h"
 
@@ -28,6 +26,10 @@ class Encoder {
 
     if (storage_.open_chunks.size() <= ls_id) [[unlikely]] {
       storage_.open_chunks.resize(ls_id + 1);
+
+      if (storage_.queried_series_bitmap.size() <= ls_id) {
+        storage_.queried_series_bitmap.resize(ls_id + 1);
+      }
     }
 
     encode(ls_id, timestamp, value, storage_.open_chunks[ls_id]);
@@ -99,7 +101,13 @@ class Encoder {
 
   PROMPP_ALWAYS_INLINE void handle_outdated_sample(uint32_t ls_id, int64_t timestamp, double value, int64_t last_timestamp) {
     if (timestamp < last_timestamp) {
-      OutdatedSampleEncoder<kSamplesPerChunk>::encode(*this, ls_id, timestamp, value);
+      ++storage_.outdated_samples_count;
+
+      if (auto it = storage_.outdated_chunks.try_emplace(ls_id, timestamp, value); !it.second) {
+        it.first->second.encode(timestamp, value);
+      } else {
+        ++storage_.outdated_chunks_count;
+      }
     }
   }
 

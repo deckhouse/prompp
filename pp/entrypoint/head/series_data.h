@@ -4,7 +4,6 @@
 
 #include "series_data/encoder.h"
 #include "series_data/outdated_chunk_merger.h"
-#include "series_data/outdated_sample_encoder.h"
 
 namespace entrypoint::head {
 
