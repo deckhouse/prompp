@@ -506,7 +506,19 @@ class Scraper {
     }
     [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t bytes_count() const noexcept { return bytes_buffer_.size(); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t bytes_count() const noexcept { return bytes_count_; }
+    void bytes_enlarge(uint32_t new_size) noexcept {
+      assert(new_size > bytes_count_);
+      if (new_size > bytes_buffer_.size()) [[likely]] {
+        bytes_buffer_.resize(new_size);
+      }
+      bytes_count_ = new_size;
+    }
+
+    void bytes_shrink(uint32_t new_size) noexcept {
+      // assert(new_size <= bytes_count_);
+      bytes_count_ = new_size;
+    }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return this->buffer_.allocated_memory() + bytes_buffer_.allocated_memory(); }
 
@@ -520,45 +532,37 @@ class Scraper {
       constexpr uint8_t kContinueBit = 0x80;
       constexpr uint8_t kValueMask = 0x7F;
 
-      const uint32_t offset = bytes_count();
+      uint64_t packed;
+      int bytes_written = 0;
 
       if (count < (1u << 7)) [[likely]] {
-        bytes_buffer_.resize(bytes_buffer_.size() + 1);
-        char* out = bytes_buffer_.data() + offset;
-        *out = static_cast<char>(count);
+        packed = static_cast<uint8_t>(count);
+        bytes_written = 1;
       } else if (count < (1u << 14)) {
-        bytes_buffer_.resize(bytes_buffer_.size() + 2);
-        char* out = bytes_buffer_.data() + offset;
-        *out++ = static_cast<char>((count & kValueMask) | kContinueBit);
-        *out = static_cast<char>(count >> 7);
+        packed = (static_cast<uint64_t>((count & kValueMask) | kContinueBit)) | (static_cast<uint64_t>(count >> 7) << 8);
+        bytes_written = 2;
       } else if (count < (1u << 21)) {
-        bytes_buffer_.resize(bytes_buffer_.size() + 3);
-        char* out = bytes_buffer_.data() + offset;
-        *out++ = static_cast<char>((count & kValueMask) | kContinueBit);
-        *out++ = static_cast<char>(((count >> 7) & kValueMask) | kContinueBit);
-        *out = static_cast<char>(count >> 14);
+        packed = (static_cast<uint64_t>((count & kValueMask) | kContinueBit)) | (static_cast<uint64_t>(((count >> 7) & kValueMask) | kContinueBit) << 8) |
+                 (static_cast<uint64_t>(count >> 14) << 16);
+        bytes_written = 3;
       } else if (count < (1u << 28)) {
-        bytes_buffer_.resize(bytes_buffer_.size() + 4);
-        char* out = bytes_buffer_.data() + offset;
-        *out++ = static_cast<char>((count & kValueMask) | kContinueBit);
-        *out++ = static_cast<char>(((count >> 7) & kValueMask) | kContinueBit);
-        *out++ = static_cast<char>(((count >> 14) & kValueMask) | kContinueBit);
-        *out = static_cast<char>(count >> 21);
+        packed = (static_cast<uint64_t>((count & kValueMask) | kContinueBit)) | (static_cast<uint64_t>(((count >> 7) & kValueMask) | kContinueBit) << 8) |
+                 (static_cast<uint64_t>(((count >> 14) & kValueMask) | kContinueBit) << 16) | (static_cast<uint64_t>(count >> 21) << 24);
+        bytes_written = 4;
       } else {
-        bytes_buffer_.resize(bytes_buffer_.size() + 5);
-        char* out = bytes_buffer_.data() + offset;
-        *out++ = static_cast<char>((count & kValueMask) | kContinueBit);
-        *out++ = static_cast<char>(((count >> 7) & kValueMask) | kContinueBit);
-        *out++ = static_cast<char>(((count >> 14) & kValueMask) | kContinueBit);
-        *out++ = static_cast<char>(((count >> 21) & kValueMask) | kContinueBit);
-        *out = static_cast<char>(count >> 28);
+        packed = (static_cast<uint64_t>((count & kValueMask) | kContinueBit)) | (static_cast<uint64_t>(((count >> 7) & kValueMask) | kContinueBit) << 8) |
+                 (static_cast<uint64_t>(((count >> 14) & kValueMask) | kContinueBit) << 16) |
+                 (static_cast<uint64_t>(((count >> 21) & kValueMask) | kContinueBit) << 24) | (static_cast<uint64_t>(count >> 28) << 32);
+        bytes_written = 5;
       }
+
+      const uint32_t offset = bytes_count();
+      std::memcpy(bytes_buffer_.data() + offset, &packed, sizeof(packed));
+      bytes_shrink(offset + bytes_written);
     }
 
-    void add_label(MarkedLabel label) noexcept {
+    void add_label(MarkedLabel label, uint32_t base_offset) noexcept {
       static constexpr uint8_t szm[4] = {0, 1, 2, 4};
-
-      const auto base_offset = this->buffer_.back().base_offset;
 
       if (label.name.is_reserved_name()) [[unlikely]] {
         label.name.offset = 0;
@@ -568,10 +572,10 @@ class Scraper {
       }
       label.value.offset -= base_offset;
 
+      // bytes_enlarge(offset + 17);
       const uint32_t offset = bytes_count();
-      bytes_buffer_.resize(bytes_buffer_.size() + 17);
       char* out = bytes_buffer_.data() + offset;
-      char* layout_ptr = out++;
+      char* start = out++;
 
       const uint8_t sz0 = push_and_encode(out, label.name.offset);
       out += szm[sz0];
@@ -582,22 +586,17 @@ class Scraper {
       const uint8_t sz3 = push_and_encode(out, label.value.length);
       out += szm[sz3];
 
-      const uint8_t layout = (sz0) | (sz1 << 2) | (sz2 << 4) | (sz3 << 6);
+      *start = (sz0) | (sz1 << 2) | (sz2 << 4) | (sz3 << 6);
 
-      const uint32_t bytes_needed = out - layout_ptr;
-
-      *layout_ptr = static_cast<char>(layout);
-
-      bytes_buffer_.resize(offset + bytes_needed);
+      const uint32_t written = static_cast<uint32_t>(out - start);
+      bytes_shrink(offset + written);
     }
 
     void add_sample(const MarkedSample& sample) noexcept {
       const double val = sample.sample.value();
       const bool has_ts = sample.has_ts;
 
-      constexpr uint32_t max_sample_bytes = 1 + sizeof(sample.sample);
       const uint32_t offset = bytes_count();
-      bytes_buffer_.resize(offset + max_sample_bytes);
       char* out = bytes_buffer_.data() + offset;
       char* start = out;
 
@@ -635,16 +634,17 @@ class Scraper {
       }
 
       const uint32_t written = static_cast<uint32_t>(out - start);
-      bytes_buffer_.resize(offset + written);
+      bytes_shrink(offset + written);
     }
 
     void add_padding() noexcept {
       constexpr size_t kPaddingSizeBytes = 16;
-      bytes_buffer_.resize(bytes_buffer_.size() + kPaddingSizeBytes);
+      bytes_enlarge(bytes_count() + kPaddingSizeBytes);
     }
 
    private:
-    BareBones::Vector<char> bytes_buffer_;
+    BareBones::Vector<char> bytes_buffer_{};
+    uint32_t bytes_count_ = 0;
 
     template <typename T>
     PROMPP_ALWAYS_INLINE static char* write_marker_and_value(char* out, uint8_t marker, bool has_ts, const T& val) noexcept {
@@ -685,8 +685,6 @@ class Scraper {
     PROMPP_ALWAYS_INLINE void add(MarkedString metric_name, MarkedString text, Prometheus::MetadataType type) noexcept {
       this->buffer_.emplace_back(metric_name, text, type);
     }
-
-    PROMPP_ALWAYS_INLINE void remove_item() noexcept { this->buffer_.pop_back(); }
   };
 
   [[nodiscard]] Error parse_metadata() {
@@ -768,14 +766,14 @@ class Scraper {
     if (error == Error::kNoError) [[likely]] {
       metric_buffer_.add_metric(metric_offset);
 
-      process_labels_buffer();
+      process_labels_buffer(metric_offset);
       metric_buffer_.add_sample(marked_sample_);
     }
 
     return error;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Error tokenize_label_set(bool& have_metric_name) noexcept {
+  [[nodiscard]] Error tokenize_label_set(bool& have_metric_name) noexcept {
     auto& tokenizer = parser_.tokenizer();
     tokenizer.next_non_whitespace();
 
@@ -817,7 +815,7 @@ class Scraper {
     return tokenizer.token() == Token::kBraceClose ? Error::kNoError : Error::kUnexpectedToken;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Error get_label_name(MarkedString& label_name) const noexcept {
+  [[nodiscard]] Error get_label_name(MarkedString& label_name) const noexcept {
     auto& tokenizer = parser_.tokenizer();
 
     if (tokenizer.token() == Token::kLabelName) [[likely]] {
@@ -831,7 +829,7 @@ class Scraper {
     return Error::kUnexpectedToken;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Error get_quoted_value(MarkedString& string) const noexcept {
+  [[nodiscard]] Error get_quoted_value(MarkedString& string) const noexcept {
     auto& tokenizer = parser_.tokenizer();
 
     auto value = tokenizer.token_str();
@@ -855,7 +853,7 @@ class Scraper {
     return Error::kNoError;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Error parse_metric_suffix() noexcept {
+  [[nodiscard]] Error parse_metric_suffix() noexcept {
     if (!parser_.is_value_token()) [[unlikely]] {
       return Error::kUnexpectedToken;
     }
@@ -867,7 +865,7 @@ class Scraper {
     return parser_.validate_parse_sample_result();
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Error parse_sample() noexcept {
+  [[nodiscard]] Error parse_sample() noexcept {
     auto& tokenizer = parser_.tokenizer();
 
     if (!parse_numeric_value(tokenizer.token_str(), marked_sample_.sample.value())) [[unlikely]] {
@@ -882,18 +880,22 @@ class Scraper {
     return parser_.parse_timestamp(marked_sample_.sample.timestamp(), marked_sample_.has_ts);
   }
 
-  PROMPP_ALWAYS_INLINE void process_labels_buffer() noexcept {
+  void process_labels_buffer(uint32_t offset) noexcept {
     sort_and_filter_labels();
     append_labels_hash();
+
+    const uint32_t bytes_offset = metric_buffer_.bytes_count();
+    metric_buffer_.bytes_enlarge(bytes_offset + calculate_metric_prealloc_size(labels_.size()));
+    metric_buffer_.bytes_shrink(bytes_offset);
 
     metric_buffer_.add_count(labels_.size());
 
     for (const auto& label : labels_) {
-      metric_buffer_.add_label(label);
+      metric_buffer_.add_label(label, offset);
     }
   }
 
-  PROMPP_ALWAYS_INLINE void sort_and_filter_labels() noexcept {
+  void sort_and_filter_labels() noexcept {
     const auto it = std::remove_if(labels_.begin(), labels_.end(), [](const MarkedLabel& label) { return label.value.is_empty(); });
     labels_.erase(it, labels_.end());
 
@@ -902,13 +904,21 @@ class Scraper {
     });
   }
 
-  PROMPP_ALWAYS_INLINE void append_labels_hash() noexcept {
+  void append_labels_hash() noexcept {
     const auto& tokenizer = parser_.tokenizer();
     BareBones::XXHash hash;
     for (const auto& label : labels_) {
       hash.extend(label.name.view(tokenizer.buffer()), label.value.view(tokenizer.buffer()));
     }
     metric_buffer_.add_hash(hash.hash());
+  }
+
+  static PROMPP_ALWAYS_INLINE uint32_t calculate_metric_prealloc_size(uint32_t labels_count) noexcept {
+    constexpr uint32_t kCountVarintPreallocBytes = 8;
+    constexpr uint32_t kLabelPreallocBytes = 17;
+    constexpr uint32_t kSamplePreallocSize = 17;
+
+    return kCountVarintPreallocBytes + labels_count * kLabelPreallocBytes + kSamplePreallocSize;
   }
 
   Parser parser_;
