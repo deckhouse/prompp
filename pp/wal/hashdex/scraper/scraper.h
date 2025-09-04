@@ -54,7 +54,6 @@ class Scraper {
         case Token::kMetricName:
         case Token::kBraceOpen: {
           if (const auto error = parse_metric(); error != Error::kNoError) [[unlikely]] {
-            metric_buffer_.remove_item();
             return error;
           }
 
@@ -511,11 +510,6 @@ class Scraper {
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return this->buffer_.allocated_memory() + bytes_buffer_.allocated_memory(); }
 
-    PROMPP_ALWAYS_INLINE void remove_item() noexcept {
-      bytes_buffer_.resize(this->buffer_.back().data_offset);
-      this->buffer_.pop_back();
-    }
-
     PROMPP_ALWAYS_INLINE void add_hash(uint64_t hash) noexcept { this->buffer_.back().hash = hash; }
 
     PROMPP_ALWAYS_INLINE void add_metric(uint32_t global_offset) noexcept {
@@ -738,10 +732,13 @@ class Scraper {
   [[nodiscard]] Error parse_metric() {
     labels_.clear();
 
+    marked_sample_ = {};
+    marked_sample_.sample.timestamp() = default_timestamp_;
+
     bool have_metric_name = false;
     auto& tokenizer = parser_.tokenizer();
 
-    metric_buffer_.add_metric(tokenizer.token_str().data() - tokenizer.buffer().data());
+    const uint32_t metric_offset = tokenizer.token_str().data() - tokenizer.buffer().data();
 
     if (tokenizer.token() == Token::kMetricName) [[likely]] {
       labels_.push_back(MarkedLabel{.value = MarkedString::create(tokenizer.token_str(), tokenizer.buffer())});
@@ -766,9 +763,16 @@ class Scraper {
       return Error::kNoMetricName;
     }
 
-    process_labels_buffer();
+    auto error = parse_metric_suffix();
 
-    return parse_metric_suffix();
+    if (error == Error::kNoError) [[likely]] {
+      metric_buffer_.add_metric(metric_offset);
+
+      process_labels_buffer();
+      metric_buffer_.add_sample(marked_sample_);
+    }
+
+    return error;
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Error tokenize_label_set(bool& have_metric_name) noexcept {
@@ -856,28 +860,26 @@ class Scraper {
       return Error::kUnexpectedToken;
     }
 
-    MarkedSample sample{.sample = {default_timestamp_, {}}};
-    if (const auto error = parse_sample(sample); error != Error::kNoError) {
+    if (const auto error = parse_sample(); error != Error::kNoError) {
       return error;
     }
-    metric_buffer_.add_sample(sample);
 
     return parser_.validate_parse_sample_result();
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Error parse_sample(MarkedSample& sample) noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Error parse_sample() noexcept {
     auto& tokenizer = parser_.tokenizer();
 
-    if (!parse_numeric_value(tokenizer.token_str(), sample.sample.value())) [[unlikely]] {
+    if (!parse_numeric_value(tokenizer.token_str(), marked_sample_.sample.value())) [[unlikely]] {
       return Error::kInvalidValue;
     }
-    if (std::isnan(sample.sample.value())) [[unlikely]] {
-      sample.sample.value() = Prometheus::kNormalNan;
+    if (std::isnan(marked_sample_.sample.value())) [[unlikely]] {
+      marked_sample_.sample.value() = Prometheus::kNormalNan;
     }
 
     tokenizer.next_non_whitespace();
 
-    return parser_.parse_timestamp(sample.sample.timestamp(), sample.has_ts);
+    return parser_.parse_timestamp(marked_sample_.sample.timestamp(), marked_sample_.has_ts);
   }
 
   PROMPP_ALWAYS_INLINE void process_labels_buffer() noexcept {
@@ -914,6 +916,7 @@ class Scraper {
   MetadataMarkupBuffer metadata_buffer_;
   BareBones::Vector<MarkedLabel> labels_;
   Primitives::Timestamp default_timestamp_{};
+  MarkedSample marked_sample_{};
 };
 
 using PrometheusScraper = Scraper<PrometheusParser>;
