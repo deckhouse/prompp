@@ -899,8 +899,16 @@ class Scraper {
     const auto it = std::remove_if(labels_.begin(), labels_.end(), [](const MarkedLabel& label) { return label.value.is_empty(); });
     labels_.erase(it, labels_.end());
 
-    std::sort(labels_.begin(), labels_.end(), [buffer = parser_.tokenizer().buffer()](const MarkedLabel& a, const MarkedLabel& b) PROMPP_LAMBDA_INLINE {
-      return a.name.view(buffer) < b.name.view(buffer);
+    std::sort(labels_.begin(), labels_.end(), [buffer = parser_.tokenizer().buffer()](const MarkedLabel& a, const MarkedLabel& b) {
+      // return a.name.view(buffer) < b.name.view(buffer);
+      const auto av = a.name.view(buffer);
+      const auto bv = b.name.view(buffer);
+
+      const auto len = std::min(av.size(), bv.size());
+
+      const int cmp = std::strncmp(av.data(), bv.data(), len);
+
+      return cmp < 0 || (cmp == 0 && av.size() < bv.size());
     });
   }
 
