@@ -64,12 +64,12 @@ type LSS interface {
 }
 
 //
-// LSS
+// Wal
 //
 
 // Wal the minimum required Wal implementation for a [Shard].
 type Wal interface {
-	// Commit finalize segment from encoder and write to wal.
+	// Commit finalize segment from encoder and add to wal.
 	// It is necessary to lock the LSS for reading for the commit.
 	Commit() error
 
@@ -136,11 +136,26 @@ type Appender[
 	TShard Shard[TDataStorage, TLSS, TWal],
 	THead Head[TGenericTask, TDataStorage, TLSS, TWal, TShard],
 ] struct {
-	head THead
+	head           THead
+	commitAndFlush func(h THead) error
+}
+
+func New[
+	TGenericTask GenericTask,
+	TDataStorage DataStorage,
+	TLSS LSS,
+	TWal Wal,
+	TShard Shard[TDataStorage, TLSS, TWal],
+	THead Head[TGenericTask, TDataStorage, TLSS, TWal, TShard],
+](head THead, commitAndFlush func(h THead) error) Appender[TGenericTask, TDataStorage, TLSS, TWal, TShard, THead] {
+	return Appender[TGenericTask, TDataStorage, TLSS, TWal, TShard, THead]{
+		head:           head,
+		commitAndFlush: commitAndFlush,
+	}
 }
 
 // Append incoming data to head.
-func (a *Appender[TGenericTask, TDataStorage, TLSS, TWal, TShard, THead]) Append(
+func (a Appender[TGenericTask, TDataStorage, TLSS, TWal, TShard, THead]) Append(
 	ctx context.Context,
 	incomingData *storage.IncomingData,
 	incomingState *cppbridge.State,
@@ -201,7 +216,7 @@ func (a *Appender[TGenericTask, TDataStorage, TLSS, TWal, TShard, THead]) Append
 	)
 	a.head.Enqueue(tAppend)
 
-	var atomiclimitExhausted uint32
+	var atomicLimitExhausted uint32
 	tWalWrite := a.head.CreateTask(
 		WalWrite,
 		func(shard TShard) error {
@@ -211,7 +226,7 @@ func (a *Appender[TGenericTask, TDataStorage, TLSS, TWal, TShard, THead]) Append
 			}
 
 			if limitExhausted {
-				atomic.AddUint32(&atomiclimitExhausted, 1)
+				atomic.AddUint32(&atomicLimitExhausted, 1)
 			}
 
 			return nil
@@ -226,25 +241,8 @@ func (a *Appender[TGenericTask, TDataStorage, TLSS, TWal, TShard, THead]) Append
 		logger.Errorf("failed to write wal: %v", err)
 	}
 
-	if commitToWal || atomiclimitExhausted > 0 {
-		t := a.head.CreateTask(
-			WalCommit,
-			func(shard TShard) error {
-				swal := shard.Wal()
-
-				// wal contains LSS and it is necessary to lock the LSS for reading for the commit.
-				if err := shard.LSS().WithRLock(func(_, _ *cppbridge.LabelSetStorage) error {
-					return swal.Commit()
-				}); err != nil {
-					return err
-				}
-
-				return swal.Flush()
-			},
-		)
-		a.head.Enqueue(t)
-
-		if err := t.Wait(); err != nil {
+	if commitToWal || atomicLimitExhausted > 0 {
+		if err := a.commitAndFlush(a.head); err != nil {
 			logger.Errorf("failed to commit wal: %v", err)
 		}
 	}
@@ -253,7 +251,7 @@ func (a *Appender[TGenericTask, TDataStorage, TLSS, TWal, TShard, THead]) Append
 }
 
 // inputRelabelingStage first stage - relabeling.
-func (a *Appender[TGenericTask, TDataStorage, TLSS, TWal, TShard, THead]) inputRelabelingStage(
+func (a Appender[TGenericTask, TDataStorage, TLSS, TWal, TShard, THead]) inputRelabelingStage(
 	ctx context.Context,
 	state *cppbridge.State,
 	incomingData *DestructibleIncomingData,
@@ -337,7 +335,7 @@ func (a *Appender[TGenericTask, TDataStorage, TLSS, TWal, TShard, THead]) inputR
 }
 
 // appendRelabelerSeriesStage second stage - append to lss relabeling ls.
-func (a *Appender[TGenericTask, TDataStorage, TLSS, TWal, TShard, THead]) appendRelabelerSeriesStage(
+func (a Appender[TGenericTask, TDataStorage, TLSS, TWal, TShard, THead]) appendRelabelerSeriesStage(
 	ctx context.Context,
 	shardedInnerSeries *ShardedInnerSeries,
 	shardedRelabeledSeries *ShardedRelabeledSeries,
@@ -381,13 +379,13 @@ func (a *Appender[TGenericTask, TDataStorage, TLSS, TWal, TShard, THead]) append
 }
 
 // updateRelabelerStateStage third stage - update state cache.
-func (a *Appender[TGenericTask, TDataStorage, TLSS, TWal, TShard, THead]) updateRelabelerStateStage(
+func (a Appender[TGenericTask, TDataStorage, TLSS, TWal, TShard, THead]) updateRelabelerStateStage(
 	ctx context.Context,
 	state *cppbridge.State,
 	shardedStateUpdates *ShardedStateUpdates,
 ) error {
 	numberOfShards := a.head.NumberOfShards()
-	for shardID := uint16(0); shardID < numberOfShards; shardID++ {
+	for shardID := range numberOfShards {
 		updates, ok := shardedStateUpdates.DataBySourceShard(shardID)
 		if !ok {
 			continue
@@ -399,4 +397,26 @@ func (a *Appender[TGenericTask, TDataStorage, TLSS, TWal, TShard, THead]) update
 	}
 
 	return nil
+}
+
+// CommitAndFlush commit and flash [Wal].
+func (a Appender[TGenericTask, TDataStorage, TLSS, TWal, TShard, THead]) CommitAndFlush() error {
+	t := a.head.CreateTask(
+		WalCommit,
+		func(shard TShard) error {
+			swal := shard.Wal()
+
+			// wal contains LSS and it is necessary to lock the LSS for reading for the commit.
+			if err := shard.LSS().WithRLock(func(_, _ *cppbridge.LabelSetStorage) error {
+				return swal.Commit()
+			}); err != nil {
+				return err
+			}
+
+			return swal.Flush()
+		},
+	)
+	a.head.Enqueue(t)
+
+	return t.Wait()
 }
