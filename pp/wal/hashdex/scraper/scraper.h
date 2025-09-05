@@ -321,16 +321,13 @@ class Scraper {
 
       uint64_t chunk;
       std::memcpy(&chunk, ptr, sizeof(chunk));
-      uint8_t layout = static_cast<uint8_t>(chunk & 0xFF);
-      chunk >>= 8;
-      ptr += 8;
+      uint8_t layout = static_cast<uint8_t>(chunk);
 
       if (layout == 0b01010101) [[likely]] {
-        uint32_t packed = static_cast<uint32_t>(chunk & 0xFFFFFFFFu);
-        uint8_t name_off = (packed >> 0) & 0xFF;
-        uint8_t name_len = (packed >> 8) & 0xFF;
-        uint8_t value_off = (packed >> 16) & 0xFF;
-        uint8_t value_len = (packed >> 24) & 0xFF;
+        const uint8_t name_off = static_cast<uint8_t>(chunk >> 8);
+        const uint8_t name_len = static_cast<uint8_t>(chunk >> 16);
+        const uint8_t value_off = static_cast<uint8_t>(chunk >> 24);
+        const uint8_t value_len = static_cast<uint8_t>(chunk >> 32);
 
         labels.append(std::string_view(base + name_off, name_len), std::string_view(base + value_off, value_len));
 
@@ -338,8 +335,10 @@ class Scraper {
       }
 
       if ((layout & 0x0F) == 0) [[likely]] {
-        uint8_t sz2 = (layout >> 4) & 0x3;
-        uint8_t sz3 = (layout >> 6) & 0x3;
+        chunk >>= 8;
+
+        const uint8_t sz2 = (layout >> 4) & 0x3;
+        const uint8_t sz3 = (layout >> 6) & 0x3;
 
         uint32_t value_off = 0;
         uint32_t value_len = 0;
@@ -352,19 +351,19 @@ class Scraper {
             break;
           }
           case 0b01: {
-            value_off = static_cast<uint8_t>(chunk & 0xFF);
+            value_off = static_cast<uint8_t>(chunk);
             used += 1;
             chunk >>= 8;
             break;
           }
           case 0b10: {
-            value_off = static_cast<uint16_t>(chunk & 0xFFFF);
+            value_off = static_cast<uint16_t>(chunk);
             used += 2;
             chunk >>= 16;
             break;
           }
           default: {
-            value_off = static_cast<uint32_t>(chunk & 0xFFFFFFFFu);
+            value_off = static_cast<uint32_t>(chunk);
             used += 4;
             chunk >>= 32;
             break;
@@ -378,22 +377,21 @@ class Scraper {
             break;
           }
           case 0b01: {
-            value_len = static_cast<uint8_t>(chunk & 0xFF);
+            value_len = static_cast<uint8_t>(chunk);
             used += 1;
             break;
           }
           case 0b10: {
-            value_len = static_cast<uint16_t>(chunk & 0xFFFF);
+            value_len = static_cast<uint16_t>(chunk);
             used += 2;
             break;
           }
           default: {
-            if (used + 4 <= 7) [[likely]] {
-              value_len = static_cast<uint32_t>(chunk & 0xFFFFFFFFu);
-              used += 4;
+            used += 4;
+            if (used <= 7) [[likely]] {
+              value_len = static_cast<uint32_t>(chunk);
             } else [[unlikely]] {
               std::memcpy(&value_len, start + 1 + used, 4);
-              used += 4;
             }
             break;
           }
@@ -403,6 +401,8 @@ class Scraper {
 
         return 1 + used;
       }
+
+      ptr += 1;
 
       const uint8_t sz0 = (layout >> 0) & 0x3;
       const uint8_t sz1 = (layout >> 2) & 0x3;
