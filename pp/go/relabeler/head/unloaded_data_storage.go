@@ -55,6 +55,9 @@ func (s *UnloadedDataStorage) WriteSnapshot(snapshot []byte) (relabeler.Unloaded
 	}
 
 	_, err := s.storage.Write(snapshot)
+	if err == nil {
+		err = s.storage.Sync()
+	}
 	return relabeler.NewUnloadedDataSnapshotHeader(snapshot), err
 }
 
