@@ -1,80 +1,116 @@
 package keeper
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
 )
 
-type HeadConvertingQueueSuite struct {
+type headForTest struct {
+	id string
+}
+
+func newHeadForTest(id string) *headForTest {
+	return &headForTest{id: id}
+}
+
+func (h *headForTest) ID() string {
+	return h.id
+}
+
+func (h *headForTest) Close(ctx context.Context) error {
+	return nil
+}
+
+type sortedSlice = headSortedSlice[*headForTest]
+
+type KeeperSuite struct {
 	suite.Suite
-	queue HeadConvertingQueue[string]
+	keeper *Keeper[*headForTest]
 }
 
-func TestHeadConvertingQueueSuite(t *testing.T) {
-	suite.Run(t, new(HeadConvertingQueueSuite))
+func TestKeeperSuite(t *testing.T) {
+	suite.Run(t, new(KeeperSuite))
 }
 
-func (s *HeadConvertingQueueSuite) popItems() []string {
-	items := make([]string, 0, len(s.queue.Heads()))
-	for i := len(s.queue.heads); i > 0; i-- {
-		items = append(items, s.queue.Pop())
+func (s *KeeperSuite) getHeads() []*headForTest {
+	heads := make([]*headForTest, 0, len(s.keeper.heads))
+	for _, head := range s.keeper.heads {
+		heads = append(heads, head.head)
 	}
-	return items
+	return heads
 }
 
-func (s *HeadConvertingQueueSuite) TestPush() {
+func (s *KeeperSuite) TestAdd() {
 	// Arrange
-	s.queue = NewHeadConvertingQueue[string](4)
+	s.keeper = NewKeeper[*headForTest](2)
 
 	// Act
-	_ = s.queue.Push("d", 4)
-	_ = s.queue.Push("c", 3)
-	_ = s.queue.Push("b", 2)
+	_ = s.keeper.Add(newHeadForTest("d"), 4, Add)
+	_ = s.keeper.Add(newHeadForTest("c"), 3, Add)
+	err := s.keeper.Add(newHeadForTest("b"), 2, Add)
 
 	// Assert
-	s.Equal([]string{"b", "c", "d"}, s.popItems())
+	s.Equal(sortedSlice{
+		{head: newHeadForTest("c"), createdAt: 3},
+		{head: newHeadForTest("d"), createdAt: 4},
+	}, s.keeper.heads)
+	s.Equal(err, ErrorNoSlots)
 }
 
-func (s *HeadConvertingQueueSuite) TestPushFullFill() {
+func (s *KeeperSuite) TestAddWithReplaceNoReplace() {
 	// Arrange
-	s.queue = NewHeadConvertingQueue[string](4)
+	s.keeper = NewKeeper[*headForTest](2)
 
 	// Act
-	_ = s.queue.Push("d", 4)
-	_ = s.queue.Push("c", 3)
-	_ = s.queue.Push("b", 2)
-	_ = s.queue.Push("a", 1)
+	_ = s.keeper.Add(newHeadForTest("d"), 4, Add)
+	_ = s.keeper.Add(newHeadForTest("c"), 3, Add)
+	err := s.keeper.Add(newHeadForTest("b"), 3, AddWithReplace)
 
 	// Assert
-	s.Equal([]string{"a", "b", "c", "d"}, s.popItems())
+	s.Equal(sortedSlice{
+		{head: newHeadForTest("c"), createdAt: 3},
+		{head: newHeadForTest("d"), createdAt: 4},
+	}, s.keeper.heads)
+	s.Equal(err, ErrorNoSlots)
 }
 
-func (s *HeadConvertingQueueSuite) TestOverrideAtPush() {
+func (s *KeeperSuite) TestAddWithReplace() {
 	// Arrange
-	s.queue = NewHeadConvertingQueue[string](3)
+	s.keeper = NewKeeper[*headForTest](2)
 
 	// Act
-	_ = s.queue.Push("12", 12)
-	_ = s.queue.Push("10", 10)
-	_ = s.queue.Push("1", 1)
-	_ = s.queue.Push("11", 11)
+	_ = s.keeper.Add(newHeadForTest("d"), 4, Add)
+	_ = s.keeper.Add(newHeadForTest("c"), 3, Add)
+	err := s.keeper.Add(newHeadForTest("b"), 4, AddWithReplace)
 
 	// Assert
-	s.Equal([]string{"10", "11", "12"}, s.popItems())
+	s.Equal(sortedSlice{
+		{head: newHeadForTest("b"), createdAt: 4},
+		{head: newHeadForTest("d"), createdAt: 4},
+	}, s.keeper.heads)
+	s.NoError(err)
 }
 
-func (s *HeadConvertingQueueSuite) TestPushError() {
+func (s *KeeperSuite) TestRemove() {
 	// Arrange
-	s.queue = NewHeadConvertingQueue[string](3)
+	const Slots = 5
+
+	s.keeper = NewKeeper[*headForTest](Slots)
+	_ = s.keeper.Add(newHeadForTest("a"), 1, Add)
+	_ = s.keeper.Add(newHeadForTest("b"), 2, Add)
+	_ = s.keeper.Add(newHeadForTest("c"), 3, Add)
+	_ = s.keeper.Add(newHeadForTest("d"), 4, Add)
+	_ = s.keeper.Add(newHeadForTest("e"), 5, Add)
 
 	// Act
-	_ = s.queue.Push("a", 1)
-	_ = s.queue.Push("b", 2)
-	_ = s.queue.Push("c", 3)
-	err := s.queue.Push("d", 1)
+	s.keeper.Remove([]*headForTest{newHeadForTest("a"), newHeadForTest("c"), newHeadForTest("e")})
 
 	// Assert
-	s.Equal([]string{"a", "b", "c"}, s.popItems())
-	s.Equal(ErrorHeadConvertingQueueIsFull, err)
+	s.Equal(sortedSlice{
+		{head: newHeadForTest("b"), createdAt: 2},
+		{head: newHeadForTest("d"), createdAt: 4},
+	}, s.keeper.heads)
+	s.Equal(Slots, cap(s.keeper.heads))
 }
