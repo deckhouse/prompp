@@ -189,11 +189,12 @@ class Scraper {
 
       // decode label count
       uint32_t labels_count = decode_varint(ptr);
-      ts.label_set().reserve(labels_count);
+      ts.label_set().resize(labels_count);
 
       // decode label
+      auto label_iter = ts.label_set().begin();
       for (uint32_t i = 0; i < labels_count; ++i) {
-        const uint32_t consumed_bytes = decode_label(ptr, base, ts.label_set());
+        const uint32_t consumed_bytes = decode_label(ptr, base, label_iter++);
         ptr += consumed_bytes;
       }
 
@@ -315,8 +316,8 @@ class Scraper {
       return v;
     }
 
-    template <class LabelSet>
-    PROMPP_ALWAYS_INLINE static uint32_t decode_label(const char* ptr, const char* base, LabelSet& labels) noexcept {
+    template <class LabelSetIter>
+    PROMPP_ALWAYS_INLINE static uint32_t decode_label(const char* ptr, const char* base, LabelSetIter iter) noexcept {
       const char* start = ptr;
 
       uint64_t chunk;
@@ -329,7 +330,7 @@ class Scraper {
         const uint8_t value_off = static_cast<uint8_t>(chunk >> 24);
         const uint8_t value_len = static_cast<uint8_t>(chunk >> 32);
 
-        labels.append(std::string_view(base + name_off, name_len), std::string_view(base + value_off, value_len));
+        *iter = {std::string_view(base + name_off, name_len), std::string_view(base + value_off, value_len)};
 
         return 5;
       }
@@ -397,7 +398,7 @@ class Scraper {
           }
         }
 
-        labels.append(Prometheus::kMetricLabelName, std::string_view(base + value_off, value_len));
+        *iter = {Prometheus::kMetricLabelName, std::string_view(base + value_off, value_len)};
 
         return 1 + used;
       }
@@ -415,9 +416,9 @@ class Scraper {
       const uint32_t value_len = read_val_partial(ptr, sz3);
 
       if (name_len == 0 && name_off == 0) [[unlikely]] {
-        labels.append(Prometheus::kMetricLabelName, std::string_view(base + value_off, value_len));
+        *iter = {Prometheus::kMetricLabelName, std::string_view(base + value_off, value_len)};
       } else {
-        labels.append(std::string_view(base + name_off, name_len), std::string_view(base + value_off, value_len));
+        *iter = {std::string_view(base + name_off, name_len), std::string_view(base + value_off, value_len)};
       }
 
       return static_cast<uint32_t>(ptr - start);
