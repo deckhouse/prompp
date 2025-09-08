@@ -26,8 +26,8 @@ type deduplicatorCtor func(numberOfShards uint16) Deduplicator
 // GenericTask
 //
 
-// GenericTask the minimum required task [Generic] implementation.
-type GenericTask interface {
+// Task the minimum required task [Generic] implementation.
+type Task interface {
 	// Wait for the task to complete on all shards.
 	Wait() error
 }
@@ -43,6 +43,9 @@ type DataStorage interface {
 
 	// QueryDataStorage returns serialized chunks from data storage.
 	Query(query cppbridge.HeadDataStorageQuery) *cppbridge.HeadDataStorageSerializedChunks
+
+	// WithRLock calls fn on raw [cppbridge.HeadDataStorage] with read lock.
+	WithRLock(fn func(ds *cppbridge.HeadDataStorage) error) error
 }
 
 //
@@ -69,6 +72,9 @@ type LSS interface {
 
 	// QuerySelector returns a created selector that matches the given label matchers.
 	QuerySelector(shardID uint16, matchers []model.LabelMatcher) (uintptr, *cppbridge.LabelSetSnapshot, error)
+
+	// WithRLock calls fn on raws [cppbridge.LabelSetStorage] with read lock.
+	WithRLock(fn func(target, input *cppbridge.LabelSetStorage) error) error
 }
 
 //
@@ -93,7 +99,7 @@ type Shard[TDataStorage DataStorage, TLSS LSS] interface {
 
 // Head the minimum required [Head] implementation.
 type Head[
-	TGenericTask GenericTask,
+	TGenericTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,
 	TShard Shard[TDataStorage, TLSS],

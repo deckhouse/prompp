@@ -109,7 +109,7 @@ type Head[
 	TShard, TGShard Shard[TDataStorage, TLSS, TWal],
 ] interface {
 	// Close closes wals, query semaphore for the inability to get query and clear metrics.
-	Close(ctx context.Context) error
+	Close() error
 
 	// CreateTask create a task for operations on the [Head] shards.
 	CreateTask(taskName string, shardFn func(shard TGShard) error) TGenericTask
@@ -144,7 +144,7 @@ type ActiveHeadContainer[
 	THead Head[TGenericTask, TDataStorage, TLSS, TWal, TShard, TGShard],
 ] interface {
 	// Close closes [ActiveHeadContainer] for the inability work with [Head].
-	Close(ctx context.Context) error
+	Close() error
 
 	// Get the active head [Head].
 	Get() THead
@@ -302,12 +302,12 @@ func (m *Manager[TGenericTask, TDataStorage, TLSS, TWal, TShard, TGShard, THead]
 	// TODO
 	// cgogcErr := rr.cgogc.Shutdown(ctx)
 	// err := rr.shutdowner.Shutdown(ctx)
-	activeHeadErr := m.activeHead.Close(ctx)
+	activeHeadErr := m.activeHead.Close()
 
 	h := m.activeHead.Get()
 	commitErr := commitAndFlushViaRange(h)
 
-	headCloseErr := h.Close(ctx)
+	headCloseErr := h.Close()
 
 	return errors.Join(activeHeadErr, commitErr, headCloseErr)
 }

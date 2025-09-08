@@ -36,8 +36,8 @@ type Weighted struct {
 
 // Close sets the flag that the semaphore is closed under the priority lock
 // and after unlocking all those waiting will receive the error [ErrSemaphoreClosed].
-func (s *Weighted) Close(ctx context.Context) error {
-	unlock, err := s.LockWithPriority(ctx)
+func (s *Weighted) Close() error {
+	unlock, err := s.LockWithPriority(context.Background())
 	if err != nil {
 		return err
 	}

@@ -2,33 +2,35 @@ package querier
 
 import (
 	"context"
+	"errors"
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage/logger"
+	"github.com/prometheus/prometheus/pp/go/util/locker"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/annotations"
 )
 
 const (
-	// LSSQueryChunkQuerySelector name of task.
-	LSSQueryChunkQuerySelector = "lss_query_chunk_query_selector"
-	// LSSLabelValuesChunkQuerier name of task.
-	LSSLabelValuesChunkQuerier = "lss_label_values_chunk_querier"
-	// LSSLabelNamesChunkQuerier name of task.
-	LSSLabelNamesChunkQuerier = "lss_label_names_chunk_querier"
+	// lssQueryChunkQuerySelector name of task.
+	lssQueryChunkQuerySelector = "lss_query_chunk_query_selector"
+	// lssLabelValuesChunkQuerier name of task.
+	lssLabelValuesChunkQuerier = "lss_label_values_chunk_querier"
+	// lssLabelNamesChunkQuerier name of task.
+	lssLabelNamesChunkQuerier = "lss_label_names_chunk_querier"
 
-	// DSQueryChunkQuerier name of task.
-	DSQueryChunkQuerier = "data_storage_query_chunk_querier"
+	// dsQueryChunkQuerier name of task.
+	dsQueryChunkQuerier = "data_storage_query_chunk_querier"
 )
 
 // ChunkQuerier provides querying access over time series data of a fixed time range.
 type ChunkQuerier[
-	TGenericTask GenericTask,
+	TTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,
 	TShard Shard[TDataStorage, TLSS],
-	THead Head[TGenericTask, TDataStorage, TLSS, TShard],
+	THead Head[TTask, TDataStorage, TLSS, TShard],
 ] struct {
 	head             THead
 	deduplicatorCtor deduplicatorCtor
@@ -39,18 +41,18 @@ type ChunkQuerier[
 
 // NewChunkQuerier init new [ChunkQuerier].
 func NewChunkQuerier[
-	TGenericTask GenericTask,
+	TTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,
 	TShard Shard[TDataStorage, TLSS],
-	THead Head[TGenericTask, TDataStorage, TLSS, TShard],
+	THead Head[TTask, TDataStorage, TLSS, TShard],
 ](
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
 	mint, maxt int64,
 	closer func() error,
-) *ChunkQuerier[TGenericTask, TDataStorage, TLSS, TShard, THead] {
-	return &ChunkQuerier[TGenericTask, TDataStorage, TLSS, TShard, THead]{
+) *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead] {
+	return &ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]{
 		head:             head,
 		deduplicatorCtor: deduplicatorCtor,
 		mint:             mint,
@@ -62,7 +64,7 @@ func NewChunkQuerier[
 // Close [ChunkQuerier] if need.
 //
 //revive:disable-next-line:confusing-naming // other type of querier.
-func (q *ChunkQuerier[TGenericTask, TDataStorage, TLSS, TShard, THead]) Close() error {
+func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Close() error {
 	if q.closer != nil {
 		err := q.closer()
 		q.closer = nil
@@ -75,7 +77,7 @@ func (q *ChunkQuerier[TGenericTask, TDataStorage, TLSS, TShard, THead]) Close() 
 // LabelNames returns label values present in the head for the specific label name.
 //
 //revive:disable-next-line:confusing-naming // other type of querier.
-func (q *ChunkQuerier[TGenericTask, TDataStorage, TLSS, TShard, THead]) LabelNames(
+func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) LabelNames(
 	ctx context.Context,
 	hints *storage.LabelHints,
 	matchers ...*labels.Matcher,
@@ -85,7 +87,7 @@ func (q *ChunkQuerier[TGenericTask, TDataStorage, TLSS, TShard, THead]) LabelNam
 		q.head,
 		q.deduplicatorCtor,
 		nil,
-		LSSLabelNamesChunkQuerier,
+		lssLabelNamesChunkQuerier,
 		hints,
 		matchers...,
 	)
@@ -96,7 +98,7 @@ func (q *ChunkQuerier[TGenericTask, TDataStorage, TLSS, TShard, THead]) LabelNam
 // result set is reduced to label values of metrics matching the matchers.
 //
 //revive:disable:confusing-naming // other type of querier.
-func (q *ChunkQuerier[TGenericTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
+func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
 	ctx context.Context,
 	name string,
 	hints *storage.LabelHints,
@@ -108,7 +110,7 @@ func (q *ChunkQuerier[TGenericTask, TDataStorage, TLSS, TShard, THead]) LabelVal
 		q.head,
 		q.deduplicatorCtor,
 		nil,
-		LSSLabelValuesChunkQuerier,
+		lssLabelValuesChunkQuerier,
 		hints,
 		matchers...,
 	)
@@ -117,7 +119,7 @@ func (q *ChunkQuerier[TGenericTask, TDataStorage, TLSS, TShard, THead]) LabelVal
 // Select returns a chunk set of series that matches the given label matchers.
 //
 //revive:disable-next-line:confusing-naming // other type of querier.
-func (q *ChunkQuerier[TGenericTask, TDataStorage, TLSS, TShard, THead]) Select(
+func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	ctx context.Context,
 	_ bool,
 	_ *storage.SelectHints,
@@ -125,18 +127,22 @@ func (q *ChunkQuerier[TGenericTask, TDataStorage, TLSS, TShard, THead]) Select(
 ) storage.ChunkSeriesSet {
 	release, err := q.head.AcquireQuery(ctx)
 	if err != nil {
+		if errors.Is(err, locker.ErrSemaphoreClosed) {
+			return &EmptyChunkSeriesSet{}
+		}
+
 		logger.Warnf("[ChunkQuerier]: Select failed: %s", err)
 		return storage.ErrChunkSeriesSet(err)
 	}
 	defer release()
 
-	lssQueryResults, snapshots, err := queryLss(LSSQueryChunkQuerySelector, q.head, matchers)
+	lssQueryResults, snapshots, err := queryLss(lssQueryChunkQuerySelector, q.head, matchers)
 	if err != nil {
 		logger.Warnf("[ChunkQuerier]: failed: %s", err)
 		return storage.ErrChunkSeriesSet(err)
 	}
 
-	serializedChunksShards := queryDataStorage(DSQueryChunkQuerier, q.head, lssQueryResults, q.mint, q.maxt)
+	serializedChunksShards := queryDataStorage(dsQueryChunkQuerier, q.head, lssQueryResults, q.mint, q.maxt)
 	chunkSeriesSets := make([]storage.ChunkSeriesSet, q.head.NumberOfShards())
 	for shardID, serializedChunks := range serializedChunksShards {
 		if serializedChunks == nil {

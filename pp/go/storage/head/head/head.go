@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
-	"strconv"
 	"sync"
 	"sync/atomic"
 
@@ -71,12 +70,9 @@ type Head[TShard Shard, TGorutineShard Shard] struct {
 
 	readOnly uint32
 
-	// stat
+	// for clearing [Head] metrics
 	memoryInUse *prometheus.GaugeVec
-	series      prometheus.Gauge
-	walSize     *prometheus.GaugeVec
-	queueSize   *prometheus.GaugeVec
-
+	// for tasks metrics
 	tasksCreated *prometheus.CounterVec
 	tasksDone    *prometheus.CounterVec
 	tasksLive    *prometheus.CounterVec
@@ -95,7 +91,6 @@ func NewHead[TShard Shard, TGoroutineShard Shard](
 	numberOfShards := len(shards)
 	taskChs := make([]chan *task.Generic[TGoroutineShard], numberOfShards)
 	concurrency := calculateHeadConcurrency(numberOfShards) // current head workers concurrency
-
 	for shardID := range numberOfShards {
 		taskChs[shardID] = make(chan *task.Generic[TGoroutineShard], 4*concurrency) // x4 for back pressure
 	}
@@ -108,68 +103,37 @@ func NewHead[TShard Shard, TGoroutineShard Shard](
 		releaseHeadFn: releaseHeadFn,
 		shards:        shards,
 		taskChs:       taskChs,
-		// TODO metrics
-		memoryInUse: factory.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "prompp_head_cgo_memory_bytes",
-				Help: "Current value memory in use in bytes.",
-			},
-			// TODO generation -> h.id
-			[]string{"generation", "allocator", "id"},
-		),
-		series: factory.NewGauge(prometheus.GaugeOpts{
-			Name: "prompp_head_series",
-			Help: "Total number of series in the heads block.",
-		}),
-		walSize: factory.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "prompp_head_current_wal_size",
-				Help: "The size of the wall of the current head.",
-			},
-			[]string{"shard_id"},
-		),
 
-		queueSize: factory.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "prompp_head_queue_tasks_size",
-				Help: "The size of the queue of tasks of the current head.",
-			},
-			[]string{"shard_id"},
-		),
+		// for clearing [Head] metrics
+		memoryInUse: factory.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "prompp_head_cgo_memory_bytes",
+			Help: "Current value memory in use in bytes.",
+		}, []string{"head_id", "allocator", "shard_id"}),
 
-		tasksCreated: factory.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "prompp_head_task_created_count",
-				Help: "Number of created tasks.",
-			},
-			[]string{"type_task"},
-		),
-		tasksDone: factory.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "prompp_head_task_done_count",
-				Help: "Number of done tasks.",
-			},
-			[]string{"type_task"},
-		),
-		tasksLive: factory.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "prompp_head_task_live_duration_microseconds_sum",
-				Help: "The duration of the live task in microseconds.",
-			},
-			[]string{"type_task"},
-		),
-		tasksExecute: factory.NewCounterVec(
-			prometheus.CounterOpts{
-				Name: "prompp_head_task_execute_duration_microseconds_sum",
-				Help: "The duration of the task execution in microseconds.",
-			},
-			[]string{"type_task"},
-		),
+		// for tasks metrics
+		tasksCreated: factory.NewCounterVec(prometheus.CounterOpts{
+			Name: "prompp_head_task_created_count",
+			Help: "Number of created tasks.",
+		}, []string{"type_task"}),
+		tasksDone: factory.NewCounterVec(prometheus.CounterOpts{
+			Name: "prompp_head_task_done_count",
+			Help: "Number of done tasks.",
+		}, []string{"type_task"}),
+		tasksLive: factory.NewCounterVec(prometheus.CounterOpts{
+			Name: "prompp_head_task_live_duration_microseconds_sum",
+			Help: "The duration of the live task in microseconds.",
+		}, []string{"type_task"}),
+		tasksExecute: factory.NewCounterVec(prometheus.CounterOpts{
+			Name: "prompp_head_task_execute_duration_microseconds_sum",
+			Help: "The duration of the task execution in microseconds.",
+		}, []string{"type_task"}),
 	}
 
 	h.run()
 
 	runtime.SetFinalizer(h, func(h *Head[TShard, TGoroutineShard]) {
+		h.memoryInUse.DeletePartialMatch(prometheus.Labels{"head_id": h.id})
+
 		logger.Debugf("head %s destroyed", h.String())
 	})
 
@@ -184,12 +148,10 @@ func (h *Head[TShard, TGorutineShard]) AcquireQuery(ctx context.Context) (releas
 }
 
 // Close closes wals, query semaphore for the inability to get query and clear metrics.
-func (h *Head[TShard, TGorutineShard]) Close(ctx context.Context) error {
-	if err := h.querySemaphore.Close(ctx); err != nil {
+func (h *Head[TShard, TGorutineShard]) Close() error {
+	if err := h.querySemaphore.Close(); err != nil {
 		return err
 	}
-
-	h.memoryInUse.DeletePartialMatch(prometheus.Labels{"generation": strconv.FormatUint(h.generation, 10)})
 
 	close(h.stopc)
 	h.wg.Wait()
@@ -263,6 +225,17 @@ func (h *Head[TShard, TGorutineShard]) NumberOfShards() uint16 {
 	return uint16(len(h.shards)) // #nosec G115 // no overflow
 }
 
+// RangeQueueSize returns an iterator over the [Head] task channels, to collect metrics.
+func (h *Head[TShard, TGorutineShard]) RangeQueueSize() func(func(shardID, size int) bool) {
+	return func(yield func(shardID, size int) bool) {
+		for shardID, taskCh := range h.taskChs {
+			if !yield(shardID, len(taskCh)) {
+				return
+			}
+		}
+	}
+}
+
 // RangeShards returns an iterator over the [Head] [Shard]s, through which the shard can be directly accessed.
 func (h *Head[TShard, TGorutineShard]) RangeShards() func(func(TShard) bool) {
 	return func(yield func(s TShard) bool) {
@@ -322,200 +295,3 @@ func (h *Head[TShard, TGorutineShard]) shardLoop(
 func calculateHeadConcurrency(numberOfShards int) int64 {
 	return int64(defaultNumberOfWorkers+ExtraWorkers) * int64(numberOfShards)
 }
-
-// TODO Flush CommitToWal ?
-
-// TODO Who?
-// // getSortedStats returns sorted statistics for the [Head].
-// func getSortedStats(stats map[string]uint64, limit int) []storage.HeadStat {
-// 	result := make([]storage.HeadStat, 0, len(stats))
-// 	for k, v := range stats {
-// 		result = append(result, storage.HeadStat{
-// 			Name:  k,
-// 			Value: v,
-// 		})
-// 	}
-
-// 	sort.Slice(result, func(i, j int) bool {
-// 		return result[i].Value > result[j].Value
-// 	})
-
-// 	if len(result) > limit {
-// 		return result[:limit]
-// 	}
-
-// 	return result
-// }
-
-// func (h *Head[TShard, TGorutineShard]) Status(limit int) storage.HeadStatus {
-// 	shardStatuses := make([]*cppbridge.HeadStatus, h.NumberOfShards())
-// 	for i := range shardStatuses {
-// 		shardStatuses[i] = cppbridge.NewHeadStatus()
-// 	}
-
-// 	tw := task.NewTaskWaiter[*task.Generic[TGorutineShard]](2)
-
-// 	tLSSHeadStatus := h.CreateTask(
-// 		LSSHeadStatus,
-// 		func(shard TGorutineShard) error {
-// 			shard.LSSRLock()
-// 			shardStatuses[shard.ShardID()].FromLSS(shard.LSS().Raw(), limit)
-// 			shard.LSSRUnlock()
-
-// 			return nil
-// 		},
-// 	)
-// 	h.Enqueue(tLSSHeadStatus)
-
-// 	if limit != 0 {
-// 		tDataStorageHeadStatus := h.CreateTask(
-// 			DSHeadStatus,
-// 			func(shard TGorutineShard) error {
-// 				shard.DataStorageRLock()
-// 				shardStatuses[shard.ShardID()].FromDataStorage(shard.DataStorage().Raw())
-// 				shard.DataStorageRUnlock()
-
-// 				return nil
-// 			},
-// 		)
-// 		h.Enqueue(tDataStorageHeadStatus)
-// 		tw.Add(tDataStorageHeadStatus)
-// 	}
-
-// 	tw.Add(tLSSHeadStatus)
-// 	_ = tw.Wait()
-
-// 	headStatus := storage.HeadStatus{
-// 		HeadStats: storage.HeadStats{
-// 			MinTime: math.MaxInt64,
-// 			MaxTime: math.MinInt64,
-// 		},
-// 	}
-
-// 	seriesStats := make(map[string]uint64)
-// 	labelsStats := make(map[string]uint64)
-// 	memoryStats := make(map[string]uint64)
-// 	countStats := make(map[string]uint64)
-
-// 	for _, shardStatus := range shardStatuses {
-// 		headStatus.HeadStats.NumSeries += uint64(shardStatus.NumSeries)
-// 		if limit == 0 {
-// 			continue
-// 		}
-
-// 		headStatus.HeadStats.ChunkCount += int64(shardStatus.ChunkCount)
-// 		if headStatus.HeadStats.MaxTime < shardStatus.TimeInterval.Max {
-// 			headStatus.HeadStats.MaxTime = shardStatus.TimeInterval.Max
-// 		}
-// 		if headStatus.HeadStats.MinTime > shardStatus.TimeInterval.Min {
-// 			headStatus.HeadStats.MinTime = shardStatus.TimeInterval.Min
-// 		}
-
-// 		headStatus.HeadStats.NumLabelPairs += int(shardStatus.NumLabelPairs)
-
-// 		for _, stat := range shardStatus.SeriesCountByMetricName {
-// 			seriesStats[stat.Name] += uint64(stat.Count)
-// 		}
-// 		for _, stat := range shardStatus.LabelValueCountByLabelName {
-// 			labelsStats[stat.Name] += uint64(stat.Count)
-// 		}
-// 		for _, stat := range shardStatus.MemoryInBytesByLabelName {
-// 			memoryStats[stat.Name] += uint64(stat.Size)
-// 		}
-// 		for _, stat := range shardStatus.SeriesCountByLabelValuePair {
-// 			countStats[stat.Name+"="+stat.Value] += uint64(stat.Count)
-// 		}
-// 	}
-
-// 	if limit == 0 {
-// 		return headStatus
-// 	}
-
-// 	headStatus.SeriesCountByMetricName = getSortedStats(seriesStats, limit)
-// 	headStatus.LabelValueCountByLabelName = getSortedStats(labelsStats, limit)
-// 	headStatus.MemoryInBytesByLabelName = getSortedStats(memoryStats, limit)
-// 	headStatus.SeriesCountByLabelValuePair = getSortedStats(countStats, limit)
-
-// 	return headStatus
-// }
-
-// func (h *Head[TShard, TGorutineShard]) WriteMetrics(ctx context.Context) {
-// 	if ctx.Err() != nil {
-// 		return
-// 	}
-
-// 	status := h.Status(0)
-// 	h.series.Set(float64(status.HeadStats.NumSeries))
-
-// 	if ctx.Err() != nil {
-// 		return
-// 	}
-
-// 	generationStr := strconv.FormatUint(h.generation, 10)
-// 	tw := task.NewTaskWaiter[*task.Generic[TGorutineShard]](2)
-
-// 	tDataStorageHeadAllocatedMemory := h.CreateTask(
-// 		DSAllocatedMemory,
-// 		func(shard TGorutineShard) error {
-// 			shard.DataStorageRLock()
-// 			am := shard.DataStorage().AllocatedMemory()
-// 			shard.DataStorageRUnlock()
-
-// 			h.memoryInUse.With(
-// 				prometheus.Labels{
-// 					"generation": generationStr,
-// 					"allocator":  "data_storage",
-// 					"id":         strconv.FormatUint(uint64(shard.ShardID()), 10),
-// 				},
-// 			).Set(float64(am))
-
-// 			return nil
-// 		},
-// 	)
-// 	h.Enqueue(tDataStorageHeadAllocatedMemory)
-
-// 	tLSSHeadAllocatedMemory := h.CreateTask(
-// 		LSSAllocatedMemory,
-// 		func(shard TGorutineShard) error {
-// 			shard.LSSRLock()
-// 			am := shard.LSS().AllocatedMemory()
-// 			shard.LSSRUnlock()
-
-// 			h.memoryInUse.With(
-// 				prometheus.Labels{
-// 					"generation": generationStr,
-// 					"allocator":  "main_lss",
-// 					"id":         strconv.FormatUint(uint64(shard.ShardID()), 10),
-// 				},
-// 			).Set(float64(am))
-
-// 			return nil
-// 		},
-// 	)
-// 	h.Enqueue(tLSSHeadAllocatedMemory)
-
-// 	tw.Add(tLSSHeadAllocatedMemory)
-// 	tw.Add(tDataStorageHeadAllocatedMemory)
-// 	_ = tw.Wait()
-
-// 	if h.readOnly {
-// 		return
-// 	}
-
-// 	if ctx.Err() != nil {
-// 		return
-// 	}
-
-// 	// do not write metrics if the head is read-only.
-// 	for shardID := uint16(0); shardID < h.numberOfShards; shardID++ {
-// 		shardIDStr := strconv.FormatUint(uint64(shardID), 10)
-
-// 		h.walSize.With(
-// 			prometheus.Labels{"shard_id": shardIDStr},
-// 		).Set(float64(h.shards[shardID].wal.CurrentSize()))
-
-// 		h.queueSize.With(prometheus.Labels{
-// 			"shard_id": shardIDStr,
-// 		}).Set(float64(len(h.taskChs[shardID])))
-// 	}
-// }

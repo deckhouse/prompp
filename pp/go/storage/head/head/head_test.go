@@ -40,6 +40,11 @@ func (*testWal) Commit() error {
 	return nil
 }
 
+// CurrentSize test implementation wal.
+func (*testWal) CurrentSize() int64 {
+	return 0
+}
+
 // Flush test implementation wal.
 func (*testWal) Flush() error {
 	return nil

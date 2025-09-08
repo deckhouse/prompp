@@ -3,50 +3,88 @@ package services
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/storage/logger"
+	"github.com/prometheus/prometheus/pp/go/util"
 )
 
-const (
-	// dsMergeOutOfOrderChunks name of task.
-	dsMergeOutOfOrderChunks = "data_storage_merge_out_of_order_chunks"
-)
+//
+// RotatorConfig
+//
 
-// HeadBuilder building new [Head] with parameters, the minimum required [HeadBuilder] implementation.
-type HeadBuilder[
-	TTask Task,
-	TShard, TGoShard Shard,
-	THead Head[TTask, TShard, TGoShard],
-] interface {
-	// Build new [Head].
-	Build(generation uint64, numberOfShards uint16) (THead, error)
+// RotatorConfig config for [Rotator].
+type RotatorConfig struct {
+	numberOfShards uint32
 }
 
-//
-// Keeper
-//
+// NewRotatorConfig init new [RotatorConfig].
+func NewRotatorConfig(numberOfShards uint16) *RotatorConfig {
+	return &RotatorConfig{
+		numberOfShards: uint32(numberOfShards),
+	}
+}
 
-type Keeper[
-	TTask Task,
-	TShard, TGShard Shard,
-	THead Head[TTask, TShard, TGShard],
-] interface {
-	Add(head THead)
+// NumberOfShards returns current number of shards.
+func (c RotatorConfig) NumberOfShards() uint16 {
+	return uint16(atomic.LoadUint32(&c.numberOfShards)) // #nosec G115 // no overflow
+}
+
+// SetNumberOfShards set new number of shards.
+func (c *RotatorConfig) SetNumberOfShards(numberOfShards uint16) {
+	atomic.StoreUint32(&c.numberOfShards, uint32(numberOfShards))
 }
 
 //
 // Rotator
 //
 
+// Rotator at the end of the specified interval, it creates a new [Head] and makes it active,
+// and sends the old [Head] to the [Keeper].
 type Rotator[
 	TTask Task,
 	TShard, TGoShard Shard,
 	THead Head[TTask, TShard, TGoShard],
 ] struct {
-	activeHead  ActiveHeadContainer[TTask, TShard, TGoShard, THead]
-	headBuilder HeadBuilder[TTask, TShard, TGoShard, THead]
-	keeper      Keeper[TTask, TShard, TGoShard, THead]
-	m           Mediator
+	activeHead       ActiveHeadContainer[TTask, TShard, TGoShard, THead]
+	headBuilder      HeadBuilder[TTask, TShard, TGoShard, THead]
+	keeper           Keeper[TTask, TShard, TGoShard, THead]
+	m                Mediator
+	cfg              *RotatorConfig
+	headStatusSetter HeadStatusSetter
+	rotateCounter    prometheus.Counter
+}
+
+// NewRotator init new [Rotator].
+func NewRotator[
+	TTask Task,
+	TShard, TGoShard Shard,
+	THead Head[TTask, TShard, TGoShard],
+](
+	activeHead ActiveHeadContainer[TTask, TShard, TGoShard, THead],
+	headBuilder HeadBuilder[TTask, TShard, TGoShard, THead],
+	keeper Keeper[TTask, TShard, TGoShard, THead],
+	m Mediator,
+	cfg *RotatorConfig,
+	headStatusSetter HeadStatusSetter,
+	r prometheus.Registerer,
+) *Rotator[TTask, TShard, TGoShard, THead] {
+	factory := util.NewUnconflictRegisterer(r)
+	return &Rotator[TTask, TShard, TGoShard, THead]{
+		activeHead:       activeHead,
+		headBuilder:      headBuilder,
+		keeper:           keeper,
+		m:                m,
+		cfg:              cfg,
+		headStatusSetter: headStatusSetter,
+		rotateCounter: factory.NewCounter(
+			prometheus.CounterOpts{
+				Name: "prompp_rotator_rotate_count",
+				Help: "Total counter of rotate rotatable object.",
+			},
+		),
+	}
 }
 
 // Execute starts the [Rotator].
@@ -55,13 +93,12 @@ type Rotator[
 func (s *Rotator[TTask, TShard, TGoShard, THead]) Execute(ctx context.Context) error {
 	logger.Infof("The Rotator is running.")
 
-	// TODO
-	var numberOfShards uint16
-
 	for range s.m.C() {
-		if err := s.rotate(ctx, numberOfShards); err != nil {
+		if err := s.rotate(ctx, s.cfg.NumberOfShards()); err != nil {
 			logger.Errorf("rotation failed: %v", err)
 		}
+
+		s.rotateCounter.Inc()
 	}
 
 	logger.Infof("The Rotator stopped.")
@@ -69,15 +106,7 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) Execute(ctx context.Context) e
 	return nil
 }
 
-// Interrupt interrupts the [Rotator] work.
-//
-//revive:disable-next-line:confusing-naming // other type of Service.
-func (s *Rotator[TTask, TShard, TGoShard, THead]) Interrupt(_ error) {
-	logger.Infof("Stopping Rotator...")
-
-	s.m.Close()
-}
-
+// rotate it creates a new [Head] and makes it active, and sends the old [Head] to the [Keeper].
 func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 	ctx context.Context,
 	numberOfShards uint16,
@@ -95,37 +124,26 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 	s.keeper.Add(oldHead)
 
 	// TODO if replace error?
-	err = s.activeHead.Replace(ctx, newHead)
-	if err != nil {
+	if err = s.activeHead.Replace(ctx, newHead); err != nil {
 		return fmt.Errorf("failed to replace old to new head: %w", err)
 	}
 
-	mergeOutOfOrderChunksWithHead(oldHead)
+	if err = s.headStatusSetter.SetActiveStatus(newHead.ID()); err != nil {
+		logger.Warnf("failed set status active for head{%s}: %s", newHead.ID(), err)
+	}
 
-	if err := CommitAndFlushViaRange(oldHead); err != nil {
+	if err = MergeOutOfOrderChunksWithHead(oldHead); err != nil {
+		logger.Warnf("failed merge out of order chunks in data storage: %s", err)
+	}
+
+	if err = CommitAndFlushViaRange(oldHead); err != nil {
 		logger.Warnf("failed commit and flush to wal: %s", err)
 	}
 
+	if err = s.headStatusSetter.SetRotatedStatus(oldHead.ID()); err != nil {
+		logger.Warnf("failed set status rotated for head{%s}: %s", oldHead.ID(), err)
+	}
 	oldHead.SetReadOnly()
 
 	return nil
-}
-
-// mergeOutOfOrderChunksWithHead merge chunks with out of order data chunks for [Head].
-func mergeOutOfOrderChunksWithHead[
-	TTask Task,
-	TShard, TGShard Shard,
-	THead Head[TTask, TShard, TGShard],
-](h THead) {
-	t := h.CreateTask(
-		dsMergeOutOfOrderChunks,
-		func(shard TGShard) error {
-			shard.MergeOutOfOrderChunks()
-
-			return nil
-		},
-	)
-	h.Enqueue(t)
-
-	_ = t.Wait()
 }

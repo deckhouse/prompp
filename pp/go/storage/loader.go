@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/head"
+	"github.com/prometheus/prometheus/pp/go/storage/head/services"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/reader"
@@ -90,16 +91,20 @@ func (l *Loader) UploadHead(
 		logger.Errorf("head: %s number of segments mismatched", headRecord.ID())
 	}
 
-	// TODO h.MergeOutOfOrderChunks()
-	return head.NewHead(
-			headID,
-			shards,
-			shard.NewPerGoroutineShard[*WalOnDisk],
-			headRecord.Acquire(),
-			generation,
-			l.registerer,
-		),
-		corrupted
+	h := head.NewHead(
+		headID,
+		shards,
+		shard.NewPerGoroutineShard[*WalOnDisk],
+		headRecord.Acquire(),
+		generation,
+		l.registerer,
+	)
+
+	if err := services.MergeOutOfOrderChunksWithHead(h); err != nil {
+		corrupted = true
+	}
+
+	return h, corrupted
 }
 
 // UploadShard upload [ShardOnDisk] from [WalOnDisk].

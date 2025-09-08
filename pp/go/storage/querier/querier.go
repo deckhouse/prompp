@@ -12,24 +12,25 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/storage/logger"
+	"github.com/prometheus/prometheus/pp/go/util/locker"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/annotations"
 )
 
 const (
-	// LSSQueryInstantQuerySelector name of task.
-	LSSQueryInstantQuerySelector = "lss_query_instant_query_selector"
-	// LSSQueryRangeQuerySelector name of task.
-	LSSQueryRangeQuerySelector = "lss_query_range_query_selector"
-	// LSSLabelValuesQuerier name of task.
-	LSSLabelValuesQuerier = "lss_label_values_querier"
-	// LSSLabelNamesQuerier name of task.
-	LSSLabelNamesQuerier = "lss_label_names_querier"
+	// lssQueryInstantQuerySelector name of task.
+	lssQueryInstantQuerySelector = "lss_query_instant_query_selector"
+	// lssQueryRangeQuerySelector name of task.
+	lssQueryRangeQuerySelector = "lss_query_range_query_selector"
+	// lssLabelValuesQuerier name of task.
+	lssLabelValuesQuerier = "lss_label_values_querier"
+	// lssLabelNamesQuerier name of task.
+	lssLabelNamesQuerier = "lss_label_names_querier"
 
-	// DSQueryInstantQuerier name of task.
-	DSQueryInstantQuerier = "data_storage_query_instant_querier"
-	// DSQueryRangeQuerier name of task.
-	DSQueryRangeQuerier = "data_storage_query_range_querier"
+	// dsQueryInstantQuerier name of task.
+	dsQueryInstantQuerier = "data_storage_query_instant_querier"
+	// dsQueryRangeQuerier name of task.
+	dsQueryRangeQuerier = "data_storage_query_range_querier"
 
 	// DefaultInstantQueryValueNotFoundTimestampValue default value for not found timestamp value.
 	DefaultInstantQueryValueNotFoundTimestampValue int64 = 0
@@ -41,11 +42,11 @@ const (
 
 // Querier provides querying access over time series data of a fixed time range.
 type Querier[
-	TGenericTask GenericTask,
+	TTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,
 	TShard Shard[TDataStorage, TLSS],
-	THead Head[TGenericTask, TDataStorage, TLSS, TShard],
+	THead Head[TTask, TDataStorage, TLSS, TShard],
 ] struct {
 	mint             int64
 	maxt             int64
@@ -57,19 +58,19 @@ type Querier[
 
 // NewQuerier init new [Querier].
 func NewQuerier[
-	TGenericTask GenericTask,
+	TTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,
 	TShard Shard[TDataStorage, TLSS],
-	THead Head[TGenericTask, TDataStorage, TLSS, TShard],
+	THead Head[TTask, TDataStorage, TLSS, TShard],
 ](
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
 	mint, maxt int64,
 	closer func() error,
 	metrics *Metrics,
-) *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead] {
-	return &Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]{
+) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
+	return &Querier[TTask, TDataStorage, TLSS, TShard, THead]{
 		mint:             mint,
 		maxt:             maxt,
 		head:             head,
@@ -82,7 +83,7 @@ func NewQuerier[
 // Close [Querier] if need.
 //
 //revive:disable-next-line:confusing-naming // other type of querier.
-func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) Close() error {
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) Close() error {
 	if q.closer != nil {
 		return q.closer()
 	}
@@ -93,7 +94,7 @@ func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) Close() error
 // LabelNames returns label values present in the head for the specific label name.
 //
 //revive:disable-next-line:confusing-naming // other type of querier.
-func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) LabelNames(
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) LabelNames(
 	ctx context.Context,
 	hints *storage.LabelHints,
 	matchers ...*labels.Matcher,
@@ -103,7 +104,7 @@ func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) LabelNames(
 		q.head,
 		q.deduplicatorCtor,
 		q.metrics,
-		LSSLabelNamesQuerier,
+		lssLabelNamesQuerier,
 		hints,
 		matchers...,
 	)
@@ -114,7 +115,7 @@ func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) LabelNames(
 // result set is reduced to label values of metrics matching the matchers.
 //
 //revive:disable-next-line:confusing-naming // other type of querier.
-func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
 	ctx context.Context,
 	name string,
 	hints *storage.LabelHints,
@@ -126,7 +127,7 @@ func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
 		q.head,
 		q.deduplicatorCtor,
 		q.metrics,
-		LSSLabelValuesQuerier,
+		lssLabelValuesQuerier,
 		hints,
 		matchers...,
 	)
@@ -135,7 +136,7 @@ func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
 // Select returns a set of series that matches the given label matchers.
 //
 //revive:disable-next-line:confusing-naming // other type of querier.
-func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) Select(
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	ctx context.Context,
 	sortSeries bool,
 	hints *storage.SelectHints,
@@ -150,7 +151,7 @@ func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) Select(
 // selectInstant returns a instant set of series that matches the given label matchers.
 //
 //revive:disable-next-line:function-length long but readable.
-func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	ctx context.Context,
 	_ bool,
 	_ *storage.SelectHints,
@@ -160,6 +161,10 @@ func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) selectInstant
 
 	release, err := q.head.AcquireQuery(ctx)
 	if err != nil {
+		if errors.Is(err, locker.ErrSemaphoreClosed) {
+			return &SeriesSet{}
+		}
+
 		logger.Warnf("[QUERIER]: select instant failed on the capture of the read lock query: %s", err)
 		return storage.ErrSeriesSet(err)
 	}
@@ -173,7 +178,7 @@ func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) selectInstant
 		}
 	}()
 
-	lssQueryResults, snapshots, err := queryLss(LSSQueryInstantQuerySelector, q.head, matchers)
+	lssQueryResults, snapshots, err := queryLss(lssQueryInstantQuerySelector, q.head, matchers)
 	if err != nil {
 		logger.Warnf("[QUERIER]: failed to instant: %s", err)
 		return storage.ErrSeriesSet(err)
@@ -187,7 +192,7 @@ func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) selectInstant
 	numberOfShards := q.head.NumberOfShards()
 	seriesSets := make([]storage.SeriesSet, numberOfShards)
 	tDataStorageQuery := q.head.CreateTask(
-		DSQueryInstantQuerier,
+		dsQueryInstantQuerier,
 		func(shard TShard) error {
 			shardID := shard.ShardID()
 			lssQueryResult := lssQueryResults[shardID]
@@ -213,7 +218,7 @@ func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) selectInstant
 }
 
 // selectRange returns a range set of series that matches the given label matchers.
-func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) selectRange(
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	ctx context.Context,
 	_ bool,
 	_ *storage.SelectHints,
@@ -223,6 +228,10 @@ func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 
 	release, err := q.head.AcquireQuery(ctx)
 	if err != nil {
+		if errors.Is(err, locker.ErrSemaphoreClosed) {
+			return &SeriesSet{}
+		}
+
 		logger.Warnf("[QUERIER]: select range failed on the capture of the read lock query: %s", err)
 		return storage.ErrSeriesSet(err)
 	}
@@ -236,13 +245,13 @@ func (q *Querier[TGenericTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		}
 	}()
 
-	lssQueryResults, snapshots, err := queryLss(LSSQueryRangeQuerySelector, q.head, matchers)
+	lssQueryResults, snapshots, err := queryLss(lssQueryRangeQuerySelector, q.head, matchers)
 	if err != nil {
 		logger.Warnf("[QUERIER]: failed to range: %s", err)
 		return storage.ErrSeriesSet(err)
 	}
 
-	serializedChunksShards := queryDataStorage(DSQueryRangeQuerier, q.head, lssQueryResults, q.mint, q.maxt)
+	serializedChunksShards := queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, q.mint, q.maxt)
 	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
 	for shardID, serializedChunksShard := range serializedChunksShards {
 		if serializedChunksShard == nil {
@@ -280,11 +289,11 @@ func convertPrometheusMatchersToPPMatchers(matchers ...*labels.Matcher) []model.
 
 // queryDataStorage returns serialized chunks from data storage for each shard.
 func queryDataStorage[
-	TGenericTask GenericTask,
+	TTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,
 	TShard Shard[TDataStorage, TLSS],
-	THead Head[TGenericTask, TDataStorage, TLSS, TShard],
+	THead Head[TTask, TDataStorage, TLSS, TShard],
 ](
 	taskName string,
 	head THead,
@@ -324,11 +333,11 @@ func queryDataStorage[
 
 // queryLabelValues returns label values present in the head for the specific label name.
 func queryLabelNames[
-	TGenericTask GenericTask,
+	TTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,
 	TShard Shard[TDataStorage, TLSS],
-	THead Head[TGenericTask, TDataStorage, TLSS, TShard],
+	THead Head[TTask, TDataStorage, TLSS, TShard],
 ](
 	ctx context.Context,
 	head THead,
@@ -343,6 +352,10 @@ func queryLabelNames[
 	anns := *annotations.New()
 	release, err := head.AcquireQuery(ctx)
 	if err != nil {
+		if errors.Is(err, locker.ErrSemaphoreClosed) {
+			return nil, anns, nil
+		}
+
 		logger.Warnf("[QUERIER]: label names failed on the capture of the read lock query: %s", err)
 		return nil, anns, err
 	}
@@ -386,11 +399,11 @@ func queryLabelNames[
 
 // queryLabelValues returns label values present in the head for the specific label name.
 func queryLabelValues[
-	TGenericTask GenericTask,
+	TTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,
 	TShard Shard[TDataStorage, TLSS],
-	THead Head[TGenericTask, TDataStorage, TLSS, TShard],
+	THead Head[TTask, TDataStorage, TLSS, TShard],
 ](
 	ctx context.Context,
 	name string,
@@ -406,6 +419,10 @@ func queryLabelValues[
 	anns := *annotations.New()
 	release, err := head.AcquireQuery(ctx)
 	if err != nil {
+		if errors.Is(err, locker.ErrSemaphoreClosed) {
+			return nil, anns, nil
+		}
+
 		logger.Warnf("[QUERIER]: label values failed on the capture of the read lock query: %s", err)
 		return nil, anns, err
 	}
@@ -449,11 +466,11 @@ func queryLabelValues[
 //revive:disable-next-line:cyclomatic but readable.
 //revive:disable-next-line:function-length long but readable.
 func queryLss[
-	TGenericTask GenericTask,
+	TTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,
 	TShard Shard[TDataStorage, TLSS],
-	THead Head[TGenericTask, TDataStorage, TLSS, TShard],
+	THead Head[TTask, TDataStorage, TLSS, TShard],
 ](
 	taskName string,
 	head THead,
