@@ -212,6 +212,17 @@ func (h *Active) Rotate(ctx context.Context) error {
 	return nil
 }
 
+func (h *Active) UnloadUnusedSeriesData(ctx context.Context) {
+	runlock, err := h.wlocker.RLock(ctx)
+	if err != nil {
+		logger.Warnf("[ActiveHead] UnloadUnusedSeriesData: weighted locker: %s", err)
+		return
+	}
+	defer runlock()
+
+	h.head.UnloadUnusedSeriesData()
+}
+
 func (h *Active) WriteMetrics(ctx context.Context) {
 	runlock, err := h.wlocker.RLock(ctx)
 	if err != nil {
