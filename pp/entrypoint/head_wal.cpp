@@ -179,6 +179,8 @@ extern "C" void prompp_head_wal_decoder_decode_to_data_storage(void* args, void*
   };
 
   struct Result {
+    PromPP::Primitives::Timestamp create_timestamp;
+    PromPP::Primitives::Timestamp encode_timestamp;
     PromPP::Primitives::Go::Slice<char> error;
   };
 
@@ -188,6 +190,8 @@ extern "C" void prompp_head_wal_decoder_decode_to_data_storage(void* args, void*
   try {
     in->decoder->decode(in->segment, [in](PromPP::Primitives::LabelSetID ls_id, PromPP::Primitives::Timestamp timestamp, double value)
                                          PROMPP_LAMBDA_INLINE { in->encoder_wrapper->encoder.encode(ls_id, timestamp, value); });
+    out->create_timestamp = in->decoder->decoder().created_at_tsns();
+    out->encode_timestamp = in->decoder->decoder().encoded_at_tsns();
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
     entrypoint::handle_current_exception(err_stream);

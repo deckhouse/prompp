@@ -129,6 +129,7 @@ func NewReceiver(
 	headRetentionTimeout time.Duration,
 	writeTimeout time.Duration,
 	maxSegmentSize uint32,
+	unloadDataStorage bool,
 ) (*Receiver, error) {
 	if logger == nil {
 		logger = log.NewNopLogger()
@@ -174,6 +175,11 @@ func NewReceiver(
 		return nil, err
 	}
 
+	var unloadDataStorageInterval time.Duration
+	if unloadDataStorage {
+		unloadDataStorageInterval = appender.DefaultMergeDuration
+	}
+
 	headManager, err := headmanager.New(
 		dataDir,
 		clock,
@@ -181,19 +187,20 @@ func NewReceiver(
 		headCatalog,
 		maxSegmentSize,
 		registerer,
+		unloadDataStorageInterval,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create head manager: %w", err)
 	}
 
-	currentHead, rotatedHeads, err := headManager.Restore(rotationInfo.BlockDuration)
+	activeHead, rotatedHeads, err := headManager.Restore(rotationInfo.BlockDuration, unloadDataStorageInterval)
 	if err != nil {
 		return nil, fmt.Errorf("failed to restore heads: %w", err)
 	}
 	readyNotifier.NotifyReady()
 	storageQuerierMetrics := querier.NewMetrics(registerer, querier.QueryableStorageSource)
 	queryableStorage := appender.NewQueryableStorageWithWriteNotifier(
-		block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize, rotationInfo.BlockDuration, registerer),
+		block.NewWriter(dataDir, block.DefaultChunkSegmentSize, rotationInfo.BlockDuration, registerer),
 		registerer,
 		storageQuerierMetrics,
 		triggerNotifier,
@@ -239,6 +246,7 @@ func NewReceiver(
 			relabeler.NewRotateTimerWithSeed(clock, rotationInfo.BlockDuration, rotationInfo.Seed),
 			appender.NewConstantIntervalTimer(clock, commitInterval),
 			appender.NewConstantIntervalTimer(clock, appender.DefaultMergeDuration),
+			unloadDataStorage,
 			registerer,
 		),
 

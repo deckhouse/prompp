@@ -2,7 +2,6 @@
 
 #include "series_data/decoder.h"
 #include "series_data/encoder.h"
-#include "series_data/outdated_sample_encoder.h"
 
 namespace {
 
@@ -12,7 +11,6 @@ using series_data::DataStorage;
 using series_data::Decoder;
 using series_data::Encoder;
 using series_data::EncodingType;
-using series_data::OutdatedSampleEncoder;
 using series_data::chunk::DataChunk;
 using series_data::chunk::FinalizedChunkList;
 using series_data::chunk::OutdatedChunk;
@@ -1170,6 +1168,18 @@ TEST_F(EncodeTestFixture, Encode2DoubleStalenan2Double) {
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
 }
 
+TEST_F(EncodeTestFixture, AllocateQueriedSeries) {
+  // Arrange
+  storage_.queried_series_bitmap.set(1);
+
+  // Act
+  encoder_.encode(0, 1, 1.0);
+
+  // Assert
+  EXPECT_FALSE(storage_.queried_series_bitmap.is_set(0));
+  EXPECT_TRUE(storage_.queried_series_bitmap.is_set(1));
+}
+
 class FinalizeChunkTestFixture : public EncoderTestTrait<4>, public testing::Test {
  protected:
   static constexpr double kIntegerValue = 1.0;
@@ -1858,6 +1868,30 @@ TEST_F(EncodeOutdatedChunkTestFixture, EncodeGorillaOutdatedSample) {
   const auto outdated = outdated_chunk(0);
   ASSERT_NE(nullptr, outdated);
   EXPECT_EQ((SampleList{{.timestamp = 1, .value = 1.0}, {.timestamp = 1, .value = 1.1}}), Decoder::decode_outdated_chunk(*outdated));
+}
+
+TEST_F(EncodeOutdatedChunkTestFixture, Encode1024OutdatedSamples) {
+  // Arrange
+  SampleList reference;
+  reference.reserve(1024);
+  for (int i : std::views::iota(1, 1024) | std::views::reverse) {
+    reference.emplace_back(i, i);
+  }
+
+  encoder_.encode(0, 1024, 1024.0);
+
+  // Act
+  for (size_t i = 1024; i != 0; i--) {
+    encoder_.encode(0, static_cast<uint32_t>(i), static_cast<double>(i));
+  }
+
+  // Assert
+  ASSERT_EQ(EncodingType::kUint32Constant, chunk(0).encoding_state.encoding_type);
+  EXPECT_EQ((SampleList{{.timestamp = 1024, .value = 1024.0}}), Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
+
+  const auto outdated = outdated_chunk(0);
+  ASSERT_NE(nullptr, outdated);
+  EXPECT_EQ(reference, Decoder::decode_outdated_chunk(*outdated));
 }
 
 class EraseOpenChunkTestFixture : public EncoderTestTrait<series_data::kSamplesPerChunkDefault>, public testing::Test {};

@@ -14,11 +14,24 @@ class OutdatedChunkMerger {
   explicit OutdatedChunkMerger(Encoder& encoder) : encoder_(encoder) {}
 
   void merge() {
-    for (auto& [ls_id, chunk] : encoder_.storage().outdated_chunks) {
-      merge(ls_id, chunk);
+    const auto& unloaded_series_bitmap = encoder_.storage().unloaded_series_bitmap;
+    auto& outdated_chunks = encoder_.storage().outdated_chunks;
+    for (auto it = outdated_chunks.begin(), end = outdated_chunks.end(); it != end;) {
+      const auto& [ls_id, chunk] = *it;
+      if (unloaded_series_bitmap.is_set(ls_id)) {
+        ++it;
+      } else {
+        merge(ls_id, chunk);
+        outdated_chunks._erase(it++);
+      }
     }
+  }
 
-    encoder_.storage().outdated_chunks.clear();
+  void merge(uint32_t ls_id) {
+    if (auto it = encoder_.storage().outdated_chunks.find(ls_id); it != encoder_.storage().outdated_chunks.end()) {
+      merge(ls_id, it->second);
+      encoder_.storage().outdated_chunks.erase(it);
+    }
   }
 
   void merge(uint32_t ls_id, const chunk::OutdatedChunk& chunk) {

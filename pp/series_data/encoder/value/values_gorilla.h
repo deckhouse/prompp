@@ -42,6 +42,7 @@ class PROMPP_ATTRIBUTE_PACKED ValuesGorillaEncoder {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return stream_.allocated_memory(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactBitSequence& stream() const noexcept { return stream_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence& stream() noexcept { return stream_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence finalize_stream() noexcept {
     auto stream = std::move(stream_);
     stream.shrink_to_fit();

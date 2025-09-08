@@ -1,4 +1,4 @@
-package relabeler
+package block
 
 import (
 	"fmt"
@@ -7,7 +7,6 @@ import (
 	"unsafe"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/relabeler/block"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
 
@@ -44,8 +43,8 @@ type ChunkIterator struct {
 	rc *cppbridge.RecodedChunk
 }
 
-func NewChunkIterator(lss *cppbridge.LabelSetStorage, ds *cppbridge.HeadDataStorage, minT, maxT int64) *ChunkIterator {
-	return &ChunkIterator{r: cppbridge.NewChunkRecoder(lss, ds, cppbridge.TimeInterval{MinT: minT, MaxT: maxT})}
+func NewChunkIterator(lss *cppbridge.LabelSetStorage, lsIdBatchSize uint32, ds *cppbridge.HeadDataStorage, minT, maxT int64) ChunkIterator {
+	return ChunkIterator{r: cppbridge.NewChunkRecoder(lss, lsIdBatchSize, ds, cppbridge.TimeInterval{MinT: minT, MaxT: maxT})}
 }
 
 func (i *ChunkIterator) Next() bool {
@@ -58,8 +57,13 @@ func (i *ChunkIterator) Next() bool {
 	return rc.SeriesId != math.MaxUint32
 }
 
-func (i *ChunkIterator) At() block.Chunk {
-	return &Chunk{rc: i.rc}
+func (i *ChunkIterator) NextBatch() bool {
+	i.rc.HasMoreData = i.r.NextBatch()
+	return i.rc.HasMoreData
+}
+
+func (i *ChunkIterator) At() Chunk {
+	return Chunk{rc: i.rc}
 }
 
 type IndexWriter struct {
@@ -67,7 +71,7 @@ type IndexWriter struct {
 	isPrefixWritten bool
 }
 
-func (iw *IndexWriter) WriteSeriesTo(id uint32, chunks []block.ChunkMetadata, w io.Writer) (n int64, err error) {
+func (iw *IndexWriter) WriteSeriesTo(id uint32, chunks []ChunkMetadata, w io.Writer) (n int64, err error) {
 	if !iw.isPrefixWritten {
 		var bytesWritten int
 		bytesWritten, err = w.Write(iw.cppIndexWriter.WriteHeader())
@@ -133,31 +137,6 @@ func (iw *IndexWriter) WriteRestTo(w io.Writer) (n int64, err error) {
 	return n, nil
 }
 
-func NewIndexWriter(lss *cppbridge.LabelSetStorage) *IndexWriter {
-	return &IndexWriter{cppIndexWriter: cppbridge.NewIndexWriter(lss)}
-}
-
-type Block struct {
-	lss *cppbridge.LabelSetStorage
-	ds  *cppbridge.HeadDataStorage
-}
-
-func (b *Block) TimeBounds() (minT, maxT int64) {
-	interval := b.ds.TimeInterval()
-	return interval.MinT, interval.MaxT
-}
-
-func (b *Block) ChunkIterator(minT, maxT int64) block.ChunkIterator {
-	return NewChunkIterator(b.lss, b.ds, minT, maxT)
-}
-
-func (b *Block) IndexWriter() block.IndexWriter {
-	return NewIndexWriter(b.lss)
-}
-
-func NewBlock(lss *cppbridge.LabelSetStorage, ds *cppbridge.HeadDataStorage) *Block {
-	return &Block{
-		lss: lss,
-		ds:  ds,
-	}
+func NewIndexWriter(lss *cppbridge.LabelSetStorage) IndexWriter {
+	return IndexWriter{cppIndexWriter: cppbridge.NewIndexWriter(lss)}
 }
