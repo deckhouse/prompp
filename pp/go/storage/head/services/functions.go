@@ -10,15 +10,13 @@ const (
 	dsMergeOutOfOrderChunks = "data_storage_merge_out_of_order_chunks"
 )
 
-// TODO appender Commit
-
 //
-// CommitAndFlushViaRange
+// Commit, Flush, Sync
 //
 
-// CommitAndFlushViaRange finalize segment from encoder and add to wal
-// and flush wal segment writer, write all buffered data to storage, do via range.
-func CommitAndFlushViaRange[
+// CFViaRange finalize segment from encoder and add to wal
+// and flush wal segment writer, write all buffered data to storage without sync, do via range.
+func CFViaRange[
 	TTask Task,
 	TShard, TGoShard Shard,
 	THead Head[TTask, TShard, TGoShard],
@@ -31,6 +29,34 @@ func CommitAndFlushViaRange[
 
 		if err := shard.WalFlush(); err != nil {
 			errs = append(errs, fmt.Errorf("flush shard id %d: %w", shard.ShardID(), err))
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
+// CFSViaRange finalize segment from encoder and add to wal
+// and flush wal segment writer, write all buffered data to storage and sync, do via range.
+func CFSViaRange[
+	TTask Task,
+	TShard, TGoShard Shard,
+	THead Head[TTask, TShard, TGoShard],
+](h THead) error {
+	errs := make([]error, 0, h.NumberOfShards()*3)
+	for shard := range h.RangeShards() {
+		if err := shard.WalCommit(); err != nil {
+			errs = append(errs, fmt.Errorf("commit shard id %d: %w", shard.ShardID(), err))
+		}
+
+		if err := shard.WalFlush(); err != nil {
+			errs = append(errs, fmt.Errorf("flush shard id %d: %w", shard.ShardID(), err))
+
+			// if the flush operation fails, skip the Sinc
+			continue
+		}
+
+		if err := shard.WalSync(); err != nil {
+			errs = append(errs, fmt.Errorf("sync shard id %d: %w", shard.ShardID(), err))
 		}
 	}
 

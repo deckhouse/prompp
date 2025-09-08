@@ -22,6 +22,11 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
+const (
+	// defaultCommitWaitInterval the minimum interval that the head must exist in order to perform operations on it.
+	defaultCommitWaitInterval = 5 * time.Minute
+)
+
 type Manager struct {
 	g               run.Group
 	closer          *util.Closer
@@ -104,16 +109,21 @@ func NewManager(
 		},
 	)
 
-	statusSetter := &headStatusSetter{catalog: hcatalog}
-
 	// Rotator
 	m.rotatorConfig = services.NewRotatorConfig(numberOfShards)
 	m.rotatorMediator = &NoopMediator{c: make(chan struct{})}
-	rotator := services.NewRotator(activeHead, builder, headKeeper, m.rotatorMediator, m.rotatorConfig, statusSetter, r)
 	rotatorCtx, rotatorCancel := context.WithCancel(baseCtx)
 	m.g.Add(
 		func() error {
-			return rotator.Execute(rotatorCtx)
+			return services.NewRotator(
+				activeHead,
+				builder,
+				headKeeper,
+				m.rotatorMediator,
+				m.rotatorConfig,
+				&headStatusSetter{catalog: hcatalog},
+				r,
+			).Execute(rotatorCtx)
 		},
 		func(error) {
 			m.rotatorMediator.Close()
@@ -121,24 +131,21 @@ func NewManager(
 		},
 	)
 
-	// TODO created head
-
 	isNewHead := func(headID string) bool {
 		rec, err := hcatalog.Get(headID)
 		if err != nil {
 			return true
 		}
 
-		rec.CreatedAt()
+		return clock.Now().Add(-defaultCommitWaitInterval).UnixMilli() < rec.CreatedAt()
 	}
 
 	// Committer
 	committerMediator := &NoopMediator{c: make(chan struct{})}
-	committer := services.NewCommitter(activeHead, committerMediator)
 	committerCtx, committerCancel := context.WithCancel(baseCtx)
 	m.g.Add(
 		func() error {
-			return committer.Execute(committerCtx)
+			return services.NewCommitter(activeHead, committerMediator, isNewHead).Execute(committerCtx)
 		},
 		func(error) {
 			committerMediator.Close()
@@ -148,11 +155,10 @@ func NewManager(
 
 	// Merger
 	mergerMediator := &NoopMediator{c: make(chan struct{})}
-	merger := services.NewMerger(activeHead, mergerMediator)
 	mergerCtx, mergerCancel := context.WithCancel(baseCtx)
 	m.g.Add(
 		func() error {
-			return merger.Execute(mergerCtx)
+			return services.NewMerger(activeHead, mergerMediator, isNewHead).Execute(mergerCtx)
 		},
 		func(error) {
 			mergerMediator.Close()
@@ -162,17 +168,16 @@ func NewManager(
 
 	// MetricsUpdater
 	metricsUpdaterMediator := &NoopMediator{c: make(chan struct{})}
-	metricsUpdater := services.NewMetricsUpdater(
-		activeHead,
-		headKeeper,
-		metricsUpdaterMediator,
-		querier.QueryHeadStatus,
-		r,
-	)
 	metricsUpdaterCtx, metricsUpdaterCancel := context.WithCancel(baseCtx)
 	m.g.Add(
 		func() error {
-			return metricsUpdater.Execute(metricsUpdaterCtx)
+			return services.NewMetricsUpdater(
+				activeHead,
+				headKeeper,
+				metricsUpdaterMediator,
+				querier.QueryHeadStatus,
+				r,
+			).Execute(metricsUpdaterCtx)
 		},
 		func(error) {
 			metricsUpdaterMediator.Close()

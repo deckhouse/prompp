@@ -40,20 +40,24 @@ func (ds *DataStorage) AppendInnerSeriesSlice(innerSeriesSlice []*cppbridge.Inne
 }
 
 // DecodeSegment decode segment data from decoder [cppbridge.HeadWalDecoder]
-// and add to encoder [cppbridge.HeadEncoder].
-func (ds *DataStorage) DecodeSegment(decoder *cppbridge.HeadWalDecoder, data []byte) error {
+// and add to encoder [cppbridge.HeadEncoder], returns createTs, encodeTs.
+//
+//revive:disable-next-line:confusing-results // returns createTs, encodeTs
+//nolint:gocritic // returns createTs, encodeTs
+func (ds *DataStorage) DecodeSegment(decoder *cppbridge.HeadWalDecoder, data []byte) (int64, int64, error) {
 	return decoder.DecodeToDataStorage(data, ds.encoder)
 }
 
 // InstantQuery make instant query to data storage and returns samples.
 func (ds *DataStorage) InstantQuery(
-	targetTimestamp, notFoundValueTimestampValue int64, seriesIDs []uint32,
-) []cppbridge.Sample {
+	targetTimestamp, notFoundValueTimestampValue int64,
+	seriesIDs []uint32,
+) ([]cppbridge.Sample, cppbridge.DataStorageQueryResult) {
 	ds.locker.RLock()
-	samples := ds.dataStorage.InstantQuery(targetTimestamp, notFoundValueTimestampValue, seriesIDs)
+	samples, res := ds.dataStorage.InstantQuery(targetTimestamp, notFoundValueTimestampValue, seriesIDs)
 	ds.locker.RUnlock()
 
-	return samples
+	return samples, res
 }
 
 // MergeOutOfOrderChunks merge chunks with out of order data chunks.
@@ -64,12 +68,14 @@ func (ds *DataStorage) MergeOutOfOrderChunks() {
 }
 
 // Query make query to data storage and returns serialazed chunks.
-func (ds *DataStorage) Query(query cppbridge.HeadDataStorageQuery) *cppbridge.HeadDataStorageSerializedChunks {
+func (ds *DataStorage) Query(
+	query cppbridge.HeadDataStorageQuery,
+) (*cppbridge.HeadDataStorageSerializedChunks, cppbridge.DataStorageQueryResult) {
 	ds.locker.RLock()
-	serializedChunks := ds.dataStorage.Query(query)
+	serializedChunks, res := ds.dataStorage.Query(query)
 	ds.locker.RUnlock()
 
-	return serializedChunks
+	return serializedChunks, res
 }
 
 // QueryStatus get head status from [DataStorage].

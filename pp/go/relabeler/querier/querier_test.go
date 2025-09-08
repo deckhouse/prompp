@@ -66,19 +66,13 @@ func (s *QuerierTestSuite) TestRangeQuery() {
 	// Arrange
 	timeSeries := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{
-				{Name: "__name__", Value: "metric"},
-				{Name: "job", Value: "test"},
-			},
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 			},
 		},
 		{
-			Labels: labels.Labels{
-				{Name: "__name__", Value: "metric"},
-				{Name: "job", Value: "test2"},
-			},
+			Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 10},
 			},
@@ -101,10 +95,7 @@ func (s *QuerierTestSuite) TestRangeQueryWithDataStorageLoading() {
 	// Arrange
 	timeSeries := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{
-				{Name: "__name__", Value: "metric"},
-				{Name: "job", Value: "test"},
-			},
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 0},
 				{Timestamp: 1, Value: 1},
@@ -112,10 +103,7 @@ func (s *QuerierTestSuite) TestRangeQueryWithDataStorageLoading() {
 			},
 		},
 		{
-			Labels: labels.Labels{
-				{Name: "__name__", Value: "metric"},
-				{Name: "job", Value: "test2"},
-			},
+			Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 10},
 				{Timestamp: 1, Value: 11},
@@ -159,19 +147,13 @@ func (s *QuerierTestSuite) TestInstantQuery() {
 	// Arrange
 	timeSeries := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{
-				{Name: "__name__", Value: "metric"},
-				{Name: "job", Value: "test"},
-			},
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 			},
 		},
 		{
-			Labels: labels.Labels{
-				{Name: "__name__", Value: "metric"},
-				{Name: "job", Value: "test2"},
-			},
+			Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 10},
 			},
@@ -194,10 +176,7 @@ func (s *QuerierTestSuite) TestInstantQueryWithDataStorageLoading() {
 	// Arrange
 	timeSeries := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{
-				{Name: "__name__", Value: "metric"},
-				{Name: "job", Value: "test"},
-			},
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 0},
 				{Timestamp: 1, Value: 1},
@@ -205,10 +184,7 @@ func (s *QuerierTestSuite) TestInstantQueryWithDataStorageLoading() {
 			},
 		},
 		{
-			Labels: labels.Labels{
-				{Name: "__name__", Value: "metric"},
-				{Name: "job", Value: "test2"},
-			},
+			Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 10},
 				{Timestamp: 1, Value: 11},

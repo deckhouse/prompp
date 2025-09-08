@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/prometheus/prometheus/pp/go/relabeler/head"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/reader"
 )
 
 type walReader struct {
@@ -40,21 +41,18 @@ func (r *walReader) Close() error {
 
 // Read [Segment] from wal and return.
 func (r *walReader) Read() (segment Segment, err error) {
-	decodedSegment, _, err := head.ReadSegment(r.reader)
-	if err != nil {
+	if _, err = segment.ReadFrom(r.reader); err != nil {
 		return segment, fmt.Errorf("failed to read segment: %w", err)
 	}
 
 	segment.ID = r.nextSegmentID
 	r.nextSegmentID++
-	segment.DecodedSegment = decodedSegment
 
 	return segment, nil
 }
 
 // Segment encoded segment from wal.
 type Segment struct {
-	ID             uint32
-	encoderVersion uint8
-	head.DecodedSegment
+	ID uint32
+	reader.Segment
 }

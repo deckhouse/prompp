@@ -136,7 +136,7 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 		logger.Warnf("failed merge out of order chunks in data storage: %s", err)
 	}
 
-	if err = CommitAndFlushViaRange(oldHead); err != nil {
+	if err = CFSViaRange(oldHead); err != nil {
 		logger.Warnf("failed commit and flush to wal: %s", err)
 	}
 

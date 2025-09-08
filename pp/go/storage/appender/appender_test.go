@@ -27,7 +27,7 @@ func TestXxx(t *testing.T) {
 		nil,
 	)
 
-	app := appender.New(h, services.CommitAndFlushViaRange)
+	app := appender.New(h, services.CFViaRange)
 
 	_ = app
 
@@ -54,6 +54,11 @@ func (*testWal) CurrentSize() int64 {
 
 // Flush test implementation wal.
 func (*testWal) Flush() error {
+	return nil
+}
+
+// Sync test implementation wal.
+func (*testWal) Sync() error {
 	return nil
 }
 

@@ -18,6 +18,11 @@ func (s *Segment) Bytes() []byte {
 	return s.data
 }
 
+// Length returns the length of slice byte.
+func (s *Segment) Length() int {
+	return len(s.data)
+}
+
 // ReadFrom reads [Segment] data from r [io.Reader]. The return value n is the number of bytes read.
 // Any error encountered during the read is also returned.
 func (s *Segment) ReadFrom(r io.Reader) (int64, error) {

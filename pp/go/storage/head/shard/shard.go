@@ -8,6 +8,9 @@ import (
 
 // Wal the minimum required Wal implementation for a [Shard].
 type Wal interface {
+	// Close closes the wal segmentWriter.
+	Close() error
+
 	// Commit finalize segment from encoder and write to wal.
 	Commit() error
 
@@ -17,11 +20,11 @@ type Wal interface {
 	// Flush flush all contetnt into wal.
 	Flush() error
 
+	// Sync commits the current contents of the [Wal].
+	Sync() error
+
 	// Write append the incoming inner series to wal encoder.
 	Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error)
-
-	// Close closes the wal segmentWriter.
-	Close() error
 }
 
 //
@@ -111,6 +114,11 @@ func (s *Shard[TWal]) WalCurrentSize() int64 {
 // WalFlush flush all contetnt into wal.
 func (s *Shard[TWal]) WalFlush() error {
 	return s.wal.Flush()
+}
+
+// WalSync commits the current contents of the [Wal].
+func (s *Shard[TWal]) WalSync() error {
+	return s.wal.Sync()
 }
 
 // WalWrite append the incoming inner series to wal encoder.

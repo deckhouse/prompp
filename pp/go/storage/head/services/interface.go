@@ -138,6 +138,9 @@ type Shard interface {
 
 	// WalFlush flush all contetnt into wal.
 	WalFlush() error
+
+	// WalSync commits the current contents of the [Wal].
+	WalSync() error
 }
 
 //

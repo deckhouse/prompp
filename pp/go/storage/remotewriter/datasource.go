@@ -186,9 +186,9 @@ func (s *shard) Read(ctx context.Context, targetSegmentID uint32, minTimestamp i
 			return nil, errors.Join(err, ErrShardIsCorrupted)
 		}
 
-		s.segmentSize.Observe(float64(len(segment.Data())))
+		s.segmentSize.Observe(float64(segment.Length()))
 
-		decodedSegment, err := s.decoder.Decode(segment.Data(), minTimestamp)
+		decodedSegment, err := s.decoder.Decode(segment.Bytes(), minTimestamp)
 		if err != nil {
 			s.corrupted = true
 			logger.Errorf("remotewritedebug shard %s/%d is corrupted by decode: %v", s.headID, s.shardID, err)
