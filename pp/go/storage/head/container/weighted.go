@@ -33,8 +33,8 @@ func NewWeighted[T any, THead Head[T]](head THead) *Weighted[T, THead] {
 }
 
 // Close closes wlocker semaphore for the inability work with [Head].
-func (c *Weighted[T, THead]) Close(ctx context.Context) error {
-	return c.wlocker.Close(ctx)
+func (c *Weighted[T, THead]) Close() error {
+	return c.wlocker.Close()
 }
 
 // Get the active head [Head] without lock and return.

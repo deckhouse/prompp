@@ -1,13 +1,11 @@
 package storage
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"time"
 
 	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -130,32 +128,11 @@ func uploadOrBuildHead(
 			logger.Warnf("failed to set rotated status for head {%s}: %s", headRecords[0].ID(), err)
 		}
 
-		_ = h.Close(context.Background())
+		_ = h.Close()
 
 		// TODO	// m.counter.With(prometheus.Labels{"type": "created"}).Inc()
 		return builder.Build(generation, numberOfShards)
 	}
 
 	return h, nil
-}
-
-// initLogHandler init log handler for pp.
-func initLogHandler(l log.Logger) {
-	l = log.With(l, "pp_caller", log.Caller(4))
-
-	logger.Debugf = func(template string, args ...any) {
-		_ = level.Debug(l).Log("msg", fmt.Sprintf(template, args...))
-	}
-
-	logger.Infof = func(template string, args ...any) {
-		_ = level.Info(l).Log("msg", fmt.Sprintf(template, args...))
-	}
-
-	logger.Warnf = func(template string, args ...any) {
-		_ = level.Warn(l).Log("msg", fmt.Sprintf(template, args...))
-	}
-
-	logger.Errorf = func(template string, args ...any) {
-		_ = level.Error(l).Log("msg", fmt.Sprintf(template, args...))
-	}
 }

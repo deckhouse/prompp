@@ -7,6 +7,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
+	"github.com/prometheus/prometheus/pp/go/storage/head/task"
 )
 
 // WalOnDisk wal on disk.
@@ -19,8 +20,19 @@ type WalOnDisk = wal.Wal[
 // ShardOnDisk [shard.Shard] with [WalOnDisk].
 type ShardOnDisk = shard.Shard[*WalOnDisk]
 
+// PerGoroutineShard [shard.PerGoroutineShard] with [WalOnDisk].
+type PerGoroutineShard = shard.PerGoroutineShard[*WalOnDisk]
+
 // HeadOnDisk [head.Head] with [ShardOnDisk].
-type HeadOnDisk = head.Head[*ShardOnDisk, *shard.PerGoroutineShard[*WalOnDisk]]
+type HeadOnDisk = head.Head[*ShardOnDisk, *PerGoroutineShard]
 
 // HeadManager [manager.Manager] for [HeadOnDisk]s.
-type HeadManager = manager.Manager[*HeadOnDisk]
+type HeadManager = manager.Manager[
+	*task.Generic[*PerGoroutineShard],
+	*shard.DataStorage,
+	*shard.LSS,
+	*WalOnDisk,
+	*ShardOnDisk,
+	*PerGoroutineShard,
+	*HeadOnDisk,
+]

@@ -8,8 +8,17 @@ import (
 
 // Wal the minimum required Wal implementation for a [Shard].
 type Wal interface {
+	// Commit finalize segment from encoder and write to wal.
+	Commit() error
+
+	// CurrentSize returns current wal size.
+	CurrentSize() int64
+
 	// Flush flush all contetnt into wal.
 	Flush() error
+
+	// Write append the incoming inner series to wal encoder.
+	Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error)
 
 	// Close closes the wal segmentWriter.
 	Close() error
@@ -42,9 +51,19 @@ func NewShard[TWal Wal](
 	}
 }
 
+// AppendInnerSeriesSlice add InnerSeries to [DataStorage].
+func (s *Shard[TWal]) AppendInnerSeriesSlice(innerSeriesSlice []*cppbridge.InnerSeries) {
+	s.dataStorage.AppendInnerSeriesSlice(innerSeriesSlice)
+}
+
 // Close closes the wal segmentWriter.
 func (s *Shard[TWal]) Close() error {
 	return s.wal.Close()
+}
+
+// DSAllocatedMemory return size of allocated memory for [DataStorage].
+func (s *Shard[TWal]) DSAllocatedMemory() uint64 {
+	return s.dataStorage.AllocatedMemory()
 }
 
 // DataStorage returns shard [DataStorage].
@@ -57,6 +76,16 @@ func (s *Shard[TWal]) LSS() *LSS {
 	return s.lss
 }
 
+// LSSAllocatedMemory return size of allocated memory for labelset storages.
+func (s *Shard[TWal]) LSSAllocatedMemory() uint64 {
+	return s.lss.AllocatedMemory()
+}
+
+// MergeOutOfOrderChunks merge chunks with out of order data chunks in [DataStorage].
+func (s *Shard[TWal]) MergeOutOfOrderChunks() {
+	s.dataStorage.MergeOutOfOrderChunks()
+}
+
 // ShardID returns the shard ID.
 func (s *Shard[TWal]) ShardID() uint16 {
 	return s.id
@@ -67,10 +96,26 @@ func (s *Shard[TWal]) Wal() TWal {
 	return s.wal
 }
 
+// WalCommit finalize segment from encoder and write to wal.
+func (s *Shard[TWal]) WalCommit() error {
+	return s.lss.WithRLock(func(_, _ *cppbridge.LabelSetStorage) error {
+		return s.wal.Commit()
+	})
+}
+
+// WalCurrentSize returns current [Wal] size.
+func (s *Shard[TWal]) WalCurrentSize() int64 {
+	return s.wal.CurrentSize()
+}
+
 // WalFlush flush all contetnt into wal.
 func (s *Shard[TWal]) WalFlush() error {
-	// TODO
 	return s.wal.Flush()
+}
+
+// WalWrite append the incoming inner series to wal encoder.
+func (s *Shard[TWal]) WalWrite(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error) {
+	return s.wal.Write(innerSeriesSlice)
 }
 
 //

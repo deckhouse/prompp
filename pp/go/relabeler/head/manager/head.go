@@ -17,6 +17,10 @@ type DiscardableRotatableHead struct {
 	afterClose func(id string) error
 }
 
+func (h *DiscardableRotatableHead) UnrecoverableError(err error) {
+	h.head.UnrecoverableError(err)
+}
+
 func NewDiscardableRotatableHead(head relabeler.Head, onRotate func(id string, err error) error, onDiscard func(id string) error, afterClose func(id string) error) *DiscardableRotatableHead {
 	return &DiscardableRotatableHead{
 		head:       head,
@@ -144,6 +148,14 @@ func (h *DiscardableRotatableHead) Concurrency() int64 {
 // RLockQuery locks for query to [Head].
 func (h *DiscardableRotatableHead) RLockQuery(ctx context.Context) (runlock func(), err error) {
 	return h.head.RLockQuery(ctx)
+}
+
+func (h *DiscardableRotatableHead) CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr) *relabeler.GenericTask {
+	return h.head.CreateDataStorageLoadAndQueryTask(shardID, querier)
+}
+
+func (h *DiscardableRotatableHead) UnloadUnusedSeriesData() {
+	h.head.UnloadUnusedSeriesData()
 }
 
 // Raw returns raw [Head].

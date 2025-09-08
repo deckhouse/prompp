@@ -49,4 +49,9 @@ constexpr PROMPP_ALWAYS_INLINE bool is_variant_encoder(EncodingType encoding_typ
   return BareBones::is_in(encoding_type, kDoubleConstant, kTwoDoubleConstant, kAscInteger, kAscIntegerThenValuesGorilla, kValuesGorilla);
 }
 
+constexpr PROMPP_ALWAYS_INLINE bool is_unloadable_encoder(EncodingType encoding_type) noexcept {
+  using enum EncodingType;
+  return BareBones::is_in(encoding_type, kAscInteger, kAscIntegerThenValuesGorilla, kValuesGorilla);
+}
+
 }  // namespace series_data

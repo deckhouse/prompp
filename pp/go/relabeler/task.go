@@ -80,6 +80,12 @@ const (
 	// DSQueryRangeQuerier name of task.
 	DSQueryRangeQuerier = "data_storage_query_range_querier"
 
+	// DSUnloadUnusedSeriesData name of task.
+	DSUnloadUnusedSeriesData = "data_storage_unload_unused_series_data"
+
+	// DSLoadUnusedSeriesDataAndQuery name of task.
+	DSLoadUnusedSeriesDataAndQuery = "data_storage_load_unused_series_data_and_query"
+
 	// Read Only
 
 	// BlockWrite name of task.
@@ -143,7 +149,12 @@ func (t *GenericTask) SetShardsNumber(number uint16) {
 // ExecuteOnShard execute task on shard.
 func (t *GenericTask) ExecuteOnShard(shard Shard) {
 	atomic.CompareAndSwapInt64(&t.executeTS, 0, time.Now().UnixMicro())
-	t.errs[shard.ShardID()] = t.shardFn(shard)
+	if len(t.errs) == 1 {
+		t.errs[0] = t.shardFn(shard)
+	} else {
+		t.errs[shard.ShardID()] = t.shardFn(shard)
+	}
+
 	t.wg.Done()
 }
 
@@ -177,8 +188,8 @@ type TaskWaiter struct {
 }
 
 // NewTaskWaiter init new TaskWaiter for n task.
-func NewTaskWaiter(n int) *TaskWaiter {
-	return &TaskWaiter{
+func NewTaskWaiter(n int) TaskWaiter {
+	return TaskWaiter{
 		tasks: make([]*GenericTask, 0, n),
 	}
 }
@@ -190,10 +201,10 @@ func (tw *TaskWaiter) Add(t *GenericTask) {
 
 // Wait for tasks to be completed.
 func (tw *TaskWaiter) Wait() error {
-	errs := make([]error, len(tw.tasks))
+	var err error
 	for _, t := range tw.tasks {
-		errs = append(errs, t.Wait())
+		err = errors.Join(err, t.Wait())
 	}
 
-	return errors.Join(errs...)
+	return err
 }

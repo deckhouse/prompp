@@ -18,6 +18,13 @@ type LSS struct {
 	once     sync.Once
 }
 
+func NewLSS(input *cppbridge.LabelSetStorage, target *cppbridge.LabelSetStorage) *LSS {
+	return &LSS{
+		input:  input,
+		target: target,
+	}
+}
+
 func (w *LSS) Raw() *cppbridge.LabelSetStorage {
 	return w.target
 }
@@ -27,10 +34,10 @@ func (w *LSS) AllocatedMemory() uint64 {
 }
 
 func (w *LSS) QueryLabelValues(
-	label_name string,
+	labelName string,
 	matchers []model.LabelMatcher,
 ) *cppbridge.LSSQueryLabelValuesResult {
-	return w.target.QueryLabelValues(label_name, matchers)
+	return w.target.QueryLabelValues(labelName, matchers)
 }
 
 func (w *LSS) QueryLabelNames(matchers []model.LabelMatcher) *cppbridge.LSSQueryLabelNamesResult {
@@ -82,6 +89,10 @@ func NewDataStorage() *DataStorage {
 	}
 }
 
+func (ds *DataStorage) Encoder() *cppbridge.HeadEncoder {
+	return ds.encoder
+}
+
 func (ds *DataStorage) AppendInnerSeriesSlice(innerSeriesSlice []*cppbridge.InnerSeries) {
 	ds.encoder.EncodeInnerSeriesSlice(innerSeriesSlice)
 }
@@ -94,16 +105,40 @@ func (ds *DataStorage) MergeOutOfOrderChunks() {
 	ds.encoder.MergeOutOfOrderChunks()
 }
 
-func (ds *DataStorage) Query(query cppbridge.HeadDataStorageQuery) *cppbridge.HeadDataStorageSerializedChunks {
+func (ds *DataStorage) Query(query cppbridge.HeadDataStorageQuery) (*cppbridge.HeadDataStorageSerializedChunks, cppbridge.DataStorageQueryResult) {
 	return ds.dataStorage.Query(query)
 }
 
-func (ds *DataStorage) InstantQuery(targetTimestamp, notFoundValueTimestampValue int64, seriesIDs []uint32) []cppbridge.Sample {
+func (ds *DataStorage) QueryFinal(queriers []uintptr) {
+	ds.dataStorage.QueryFinal(queriers)
+}
+
+func (ds *DataStorage) InstantQuery(targetTimestamp, notFoundValueTimestampValue int64, seriesIDs []uint32) ([]cppbridge.Sample, cppbridge.DataStorageQueryResult) {
 	return ds.dataStorage.InstantQuery(targetTimestamp, notFoundValueTimestampValue, seriesIDs)
 }
 
 func (ds *DataStorage) AllocatedMemory() uint64 {
 	return ds.dataStorage.AllocatedMemory()
+}
+
+func (ds *DataStorage) CreateUnusedSeriesDataUnloader() *cppbridge.UnusedSeriesDataUnloader {
+	return ds.dataStorage.CreateUnusedSeriesDataUnloader()
+}
+
+func (ds *DataStorage) CreateLoader(queriers []uintptr) *cppbridge.UnloadedDataLoader {
+	return ds.dataStorage.CreateLoader(queriers)
+}
+
+func (ds *DataStorage) CreateRevertableLoader(lss *cppbridge.LabelSetStorage, lsIdBatchSize uint32) *cppbridge.UnloadedDataRevertableLoader {
+	return ds.dataStorage.CreateRevertableLoader(lss, lsIdBatchSize)
+}
+
+func (ds *DataStorage) TimeInterval() cppbridge.TimeInterval {
+	return ds.dataStorage.TimeInterval()
+}
+
+func (ds *DataStorage) GetQueriedSeriesBitset() []byte {
+	return ds.dataStorage.GetQueriedSeriesBitset()
 }
 
 // reshards changes the number of shards to the required amount.
@@ -156,33 +191,72 @@ func (h *Head) reconfigureRelabelersData(
 }
 
 //
+// dataStorageLoadAndQueryTask
+//
+
+type dataStorageLoadAndQueryTask struct {
+	queriers []uintptr
+	task     *relabeler.GenericTask
+	lock     sync.Mutex
+}
+
+func (t *dataStorageLoadAndQueryTask) Add(querier uintptr, createAndEnqueueTask func() *relabeler.GenericTask) *relabeler.GenericTask {
+	t.lock.Lock()
+	t.queriers = append(t.queriers, querier)
+	if len(t.queriers) == 1 {
+		t.task = createAndEnqueueTask()
+	}
+	t.lock.Unlock()
+
+	return t.task
+}
+
+func (t *dataStorageLoadAndQueryTask) Release() []uintptr {
+	t.lock.Lock()
+	queriers := t.queriers
+	t.queriers = nil
+	t.task = nil
+	t.lock.Unlock()
+
+	return queriers
+}
+
+//
 // shard
 //
 
 type shard struct {
-	lss               *LSS
-	dataStorage       *DataStorage
-	wal               *ShardWal
-	lssLocker         RWLockable
-	dataStorageLocker RWLockable
-	id                uint16
+	lss                  *LSS
+	dataStorage          *DataStorage
+	unloadedDataStorage  *UnloadedDataStorage
+	queriedSeriesStorage *QueriedSeriesStorage
+	wal                  *ShardWal
+	loadAndQueryTask     *dataStorageLoadAndQueryTask
+	lssLocker            RWLockable
+	dataStorageLocker    RWLockable
+	id                   uint16
 }
 
 // newShard init new *shard.
 func newShard(
 	lss *LSS,
 	dataStorage *DataStorage,
+	unloadedDataStorage *UnloadedDataStorage,
+	queriedSeriesStorage *QueriedSeriesStorage,
 	wal *ShardWal,
 	shardID uint16,
 	withLocker bool,
 ) *shard {
 	s := &shard{
-		id:                shardID,
-		lss:               lss,
-		dataStorage:       dataStorage,
-		wal:               wal,
-		lssLocker:         &noopRWLockable{},
-		dataStorageLocker: &noopRWLockable{},
+		id:                   shardID,
+		lss:                  lss,
+		dataStorage:          dataStorage,
+		unloadedDataStorage:  unloadedDataStorage,
+		queriedSeriesStorage: queriedSeriesStorage,
+		wal:                  wal,
+		loadAndQueryTask:     &dataStorageLoadAndQueryTask{},
+		lssLocker:            &noopRWLockable{},
+		dataStorageLocker:    &noopRWLockable{},
 	}
 
 	if withLocker {
@@ -239,7 +313,7 @@ func (s *shard) LSSRLock() {
 	s.lssLocker.RLock()
 }
 
-// LSSUnlock unlock lss for read operation.
+// LSSRUnlock unlock lss for read operation.
 func (s *shard) LSSRUnlock() {
 	s.lssLocker.RUnlock()
 }
@@ -247,6 +321,26 @@ func (s *shard) LSSRUnlock() {
 // LSSUnlock unlock lss for write operation.
 func (s *shard) LSSUnlock() {
 	s.lssLocker.Unlock()
+}
+
+func (s *shard) UnloadedDataStorage() relabeler.UnloadedDataStorage {
+	if s.unloadedDataStorage == nil {
+		return nil
+	}
+
+	return s.unloadedDataStorage
+}
+
+func (s *shard) QueriedSeriesStorage() relabeler.QueriedSeriesStorage {
+	if s.queriedSeriesStorage == nil {
+		return nil
+	}
+
+	return s.queriedSeriesStorage
+}
+
+func (s *shard) LoadAndQueryTask() relabeler.DataStorageLoadAndQueryTask {
+	return s.loadAndQueryTask
 }
 
 //
