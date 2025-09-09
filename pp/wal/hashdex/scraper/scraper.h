@@ -204,7 +204,6 @@ class Scraper {
       uint8_t type = marker & 0b01111111;
 
       Primitives::Sample sample{};
-      sample.timestamp() = default_timestamp_;
       double& val = sample.value();
 
       if (type == 0b00000011) [[likely]] {  // uint32_t
@@ -254,6 +253,8 @@ class Scraper {
 
       if (has_ts) [[unlikely]] {
         memcpy(&sample.timestamp(), ptr, sizeof(sample.timestamp()));
+      } else {
+        sample.timestamp() = default_timestamp_;
       }
 
       ts.samples().emplace_back(sample);
@@ -330,7 +331,8 @@ class Scraper {
         const uint8_t value_off = static_cast<uint8_t>(chunk >> 24);
         const uint8_t value_len = static_cast<uint8_t>(chunk >> 32);
 
-        *iter = {std::string_view(base + name_off, name_len), std::string_view(base + value_off, value_len)};
+        //*iter = {std::string_view(base + name_off, name_len), std::string_view(base + value_off, value_len)};
+        std::construct_at(iter, std::string_view(base + name_off, name_len), std::string_view(base + value_off, value_len));
 
         return 5;
       }
@@ -398,7 +400,8 @@ class Scraper {
           }
         }
 
-        *iter = {Prometheus::kMetricLabelName, std::string_view(base + value_off, value_len)};
+        //*iter = {Prometheus::kMetricLabelName, std::string_view(base + value_off, value_len)};
+        std::construct_at(iter, Prometheus::kMetricLabelName, std::string_view(base + value_off, value_len));
 
         return 1 + used;
       }
@@ -416,9 +419,9 @@ class Scraper {
       const uint32_t value_len = read_val_partial(ptr, sz3);
 
       if (name_len == 0 && name_off == 0) [[unlikely]] {
-        *iter = {Prometheus::kMetricLabelName, std::string_view(base + value_off, value_len)};
+        std::construct_at(iter, Prometheus::kMetricLabelName, std::string_view(base + value_off, value_len));
       } else {
-        *iter = {std::string_view(base + name_off, name_len), std::string_view(base + value_off, value_len)};
+        std::construct_at(iter, std::string_view(base + name_off, name_len), std::string_view(base + value_off, value_len));
       }
 
       return static_cast<uint32_t>(ptr - start);
@@ -573,7 +576,6 @@ class Scraper {
       }
       label.value.offset -= base_offset;
 
-      // bytes_enlarge(offset + 17);
       const uint32_t offset = bytes_count();
       char* out = bytes_buffer_.data() + offset;
       char* start = out++;
@@ -900,17 +902,8 @@ class Scraper {
     const auto it = std::remove_if(labels_.begin(), labels_.end(), [](const MarkedLabel& label) { return label.value.is_empty(); });
     labels_.erase(it, labels_.end());
 
-    std::sort(labels_.begin(), labels_.end(), [buffer = parser_.tokenizer().buffer()](const MarkedLabel& a, const MarkedLabel& b) {
-      // return a.name.view(buffer) < b.name.view(buffer);
-      const auto av = a.name.view(buffer);
-      const auto bv = b.name.view(buffer);
-
-      const auto len = std::min(av.size(), bv.size());
-
-      const int cmp = std::strncmp(av.data(), bv.data(), len);
-
-      return cmp < 0 || (cmp == 0 && av.size() < bv.size());
-    });
+    std::sort(labels_.begin(), labels_.end(),
+              [buffer = parser_.tokenizer().buffer()](const MarkedLabel& a, const MarkedLabel& b) { return a.name.view(buffer) < b.name.view(buffer); });
   }
 
   void append_labels_hash() noexcept {
