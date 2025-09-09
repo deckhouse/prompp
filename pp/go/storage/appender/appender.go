@@ -2,6 +2,7 @@ package appender
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync/atomic"
 
@@ -23,6 +24,9 @@ const (
 	// walWrite name of task.
 	walWrite = "wal_write"
 )
+
+// errNilState error when incoming state is nil.
+var errNilState = errors.New("state is nil")
 
 //
 // Task
@@ -88,6 +92,9 @@ type Head[
 	// Enqueue the task to be executed on shards [Head].
 	Enqueue(t TTask)
 
+	// Generation returns current generation of [Head].
+	Generation() uint64
+
 	// NumberOfShards returns current number of shards in to [Head].
 	NumberOfShards() uint16
 }
@@ -123,17 +130,12 @@ func New[
 func (a Appender[TTask, TLSS, TShard, THead]) Append(
 	ctx context.Context,
 	incomingData *storage.IncomingData,
-	incomingState *cppbridge.State,
-	relabelerID string,
+	state *cppbridge.State,
 	commitToWal bool,
 ) ([][]*cppbridge.InnerSeries, cppbridge.RelabelerStats, error) {
-	// rd, state, err := h.resolveRelabelersData(incomingState, relabelerID)
-	// if err != nil {
-	// 	return nil, cppbridge.RelabelerStats{}, err
-	// }
-
-	// TODO ?
-	var state *cppbridge.State
+	if err := a.resolveState(state); err != nil {
+		return nil, cppbridge.RelabelerStats{}, err
+	}
 
 	shardedInnerSeries := NewShardedInnerSeries(a.head.NumberOfShards())
 	shardedRelabeledSeries := NewShardedRelabeledSeries(a.head.NumberOfShards())
@@ -370,4 +372,16 @@ func (a Appender[TTask, TLSS, TShard, THead]) appendInnerSeriesAndWriteToWal(
 	tw.Add(tWalWrite)
 
 	return atomicLimitExhausted, tw.Wait()
+}
+
+func (a Appender[TTask, TLSS, TShard, THead]) resolveState(state *cppbridge.State) error {
+	if state == nil {
+		return errNilState
+	}
+
+	// TODO delete generationRelabeler 0
+	// state.Reconfigure on lock
+	state.Reconfigure(0, a.head.Generation(), a.head.NumberOfShards())
+
+	return nil
 }

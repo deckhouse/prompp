@@ -15,9 +15,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/logger"
 )
 
-// DefaultNumberOfShards default number of shards.
-var DefaultNumberOfShards uint16 = 2
-
 func HeadManagerCtor(
 	l log.Logger,
 	clock clockwork.Clock,
@@ -37,7 +34,7 @@ func HeadManagerCtor(
 		return nil, fmt.Errorf("%s is not directory", dataDir)
 	}
 
-	initLogHandler(l)
+	InitLogHandler(l)
 
 	builder := NewBuilder(
 		hcatalog,

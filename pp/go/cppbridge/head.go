@@ -37,13 +37,15 @@ type Sample struct {
 
 // HeadDataStorage is Go wrapper around series_data::Data_storage.
 type HeadDataStorage struct {
-	dataStorage uintptr
+	dataStorage       uintptr
+	gcDestroyDetector *uint64
 }
 
 // NewHeadDataStorage - constructor.
 func NewHeadDataStorage() *HeadDataStorage {
 	ds := &HeadDataStorage{
-		dataStorage: seriesDataDataStorageCtor(),
+		dataStorage:       seriesDataDataStorageCtor(),
+		gcDestroyDetector: &gcDestroyDetector,
 	}
 
 	runtime.SetFinalizer(ds, func(ds *HeadDataStorage) {

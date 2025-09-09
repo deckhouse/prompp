@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/storage/logger"
@@ -15,25 +14,9 @@ import (
 //
 
 // RotatorConfig config for [Rotator].
-type RotatorConfig struct {
-	numberOfShards uint32
-}
-
-// NewRotatorConfig init new [RotatorConfig].
-func NewRotatorConfig(numberOfShards uint16) *RotatorConfig {
-	return &RotatorConfig{
-		numberOfShards: uint32(numberOfShards),
-	}
-}
-
-// NumberOfShards returns current number of shards.
-func (c RotatorConfig) NumberOfShards() uint16 {
-	return uint16(atomic.LoadUint32(&c.numberOfShards)) // #nosec G115 // no overflow
-}
-
-// SetNumberOfShards set new number of shards.
-func (c *RotatorConfig) SetNumberOfShards(numberOfShards uint16) {
-	atomic.StoreUint32(&c.numberOfShards, uint32(numberOfShards))
+type RotatorConfig interface {
+	// NumberOfShards returns current number of shards.
+	NumberOfShards() uint16
 }
 
 //
@@ -51,7 +34,7 @@ type Rotator[
 	headBuilder      HeadBuilder[TTask, TShard, TGoShard, THead]
 	keeper           Keeper[TTask, TShard, TGoShard, THead]
 	m                Mediator
-	cfg              *RotatorConfig
+	cfg              RotatorConfig
 	headStatusSetter HeadStatusSetter
 	rotateCounter    prometheus.Counter
 }
@@ -63,10 +46,10 @@ func NewRotator[
 	THead Head[TTask, TShard, TGoShard],
 ](
 	activeHead ActiveHeadContainer[TTask, TShard, TGoShard, THead],
-	headBuilder HeadBuilder[TTask, TShard, TGoShard, THead],
 	keeper Keeper[TTask, TShard, TGoShard, THead],
+	headBuilder HeadBuilder[TTask, TShard, TGoShard, THead],
 	m Mediator,
-	cfg *RotatorConfig,
+	cfg RotatorConfig,
 	headStatusSetter HeadStatusSetter,
 	r prometheus.Registerer,
 ) *Rotator[TTask, TShard, TGoShard, THead] {

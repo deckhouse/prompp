@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-kit/log"
@@ -14,34 +14,105 @@ import (
 	"github.com/oklog/run"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/container"
+	"github.com/prometheus/prometheus/pp/go/storage/head/proxy"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
 	"github.com/prometheus/prometheus/pp/go/storage/logger"
+	"github.com/prometheus/prometheus/pp/go/storage/mediator"
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
+	"github.com/prometheus/prometheus/pp/go/storage/ready"
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
 const (
-	// defaultCommitWaitInterval the minimum interval that the head must exist in order to perform operations on it.
-	defaultCommitWaitInterval = 5 * time.Minute
+	// DefaultRotateDuration default block duration.
+	DefaultRotateDuration = 2 * time.Hour
+
+	// DefaultMergeDuration the default interval for the merge out of order chunks.
+	DefaultMergeDuration = 5 * time.Minute
+
+	// DefaultMetricWriteInterval default metric scrape interval.
+	DefaultMetricWriteInterval = 15 * time.Second
 )
+
+// DefaultNumberOfShards default number of shards.
+var DefaultNumberOfShards uint16 = 2
+
+//
+// Options
+//
+
+type Options struct {
+	Seed           uint64
+	BlockDuration  time.Duration
+	CommitInterval time.Duration
+	MaxSegmentSize uint32
+	NumberOfShards uint16
+}
+
+//
+// Config
+//
+
+// Config config for [Manager].
+type Config struct {
+	numberOfShards uint32
+}
+
+// NewConfig init new [Config].
+func NewConfig(numberOfShards uint16) *Config {
+	if numberOfShards == 0 {
+		numberOfShards = DefaultNumberOfShards
+	}
+
+	return &Config{
+		numberOfShards: uint32(numberOfShards),
+	}
+}
+
+// NumberOfShards returns current number of shards.
+func (c *Config) NumberOfShards() uint16 {
+	return uint16(atomic.LoadUint32(&c.numberOfShards)) // #nosec G115 // no overflow
+}
+
+// SetNumberOfShards set new number of shards.
+func (c *Config) SetNumberOfShards(numberOfShards uint16) bool {
+	if numberOfShards == 0 {
+		numberOfShards = DefaultNumberOfShards
+	}
+
+	if c.NumberOfShards() == numberOfShards {
+		return false
+	}
+
+	atomic.StoreUint32(&c.numberOfShards, uint32(numberOfShards))
+
+	return true
+}
+
+//
+// Manager
+//
 
 type Manager struct {
 	g               run.Group
 	closer          *util.Closer
-	rotatorConfig   *services.RotatorConfig
-	rotatorMediator *NoopMediator
+	proxy           *proxy.Proxy[*HeadOnDisk]
+	cgogc           *cppbridge.CGOGC
+	cfg             *Config
+	rotatorMediator *mediator.Mediator
 }
 
+// NewManager init new [Manager].
 func NewManager(
-	l log.Logger,
 	clock clockwork.Clock,
 	dataDir string,
 	hcatalog *catalog.Catalog,
-	blockDuration time.Duration,
-	maxSegmentSize uint32,
-	numberOfShards uint16,
+	options Options,
+	triggerNotifier *ReloadBlocksTriggerNotifier,
+	readyNotifier ready.Notifier,
 	r prometheus.Registerer,
 ) (*Manager, error) {
 	dirStat, err := os.Stat(dataDir)
@@ -53,29 +124,13 @@ func NewManager(
 		return nil, fmt.Errorf("%s is not directory", dataDir)
 	}
 
-	initLogHandler(l)
+	builder := NewBuilder(hcatalog, dataDir, options.MaxSegmentSize, r)
 
-	builder := NewBuilder(
-		hcatalog,
-		dataDir,
-		maxSegmentSize,
-		r,
-	)
+	loader := NewLoader(dataDir, options.MaxSegmentSize, r)
 
-	loader := NewLoader(
-		dataDir,
-		maxSegmentSize,
-		r,
-	)
+	cfg := NewConfig(options.NumberOfShards)
 
-	h, err := uploadOrBuildHead(
-		clock,
-		hcatalog,
-		builder,
-		loader,
-		blockDuration,
-		numberOfShards,
-	)
+	h, err := uploadOrBuildHead(clock, hcatalog, builder, loader, options.BlockDuration, cfg.NumberOfShards())
 	if err != nil {
 		return nil, err
 	}
@@ -84,8 +139,7 @@ func NewManager(
 		return nil, errors.Join(fmt.Errorf("failed to set active status: %w", err), h.Close())
 	}
 
-	// TODO Need close
-	activeHead := container.NewWeighted(h)
+	readyNotifier.NotifyReady()
 
 	// TODO implements
 	headKeeper := &NoopKeeper{}
@@ -93,8 +147,60 @@ func NewManager(
 	m := &Manager{
 		g:      run.Group{},
 		closer: util.NewCloser(),
+		proxy:  proxy.NewProxy(container.NewWeighted(h), headKeeper, services.CFSViaRange),
+		cgogc:  cppbridge.NewCGOGC(r),
+		cfg:    cfg,
+		rotatorMediator: mediator.NewMediator(
+			mediator.NewRotateTimerWithSeed(clock, options.BlockDuration, options.Seed),
+		),
 	}
 
+	m.initServices(hcatalog, builder, clock, options.CommitInterval, r)
+
+	logger.Infof("[Manager] created")
+
+	return m, nil
+}
+
+// ApplyConfig update config.
+func (m *Manager) ApplyConfig(numberOfShards uint16) error {
+	logger.Infof("reconfiguration start")
+	defer logger.Infof("reconfiguration completed")
+
+	h := m.proxy.Get()
+	if h.NumberOfShards() == numberOfShards {
+		return nil
+	}
+
+	if m.cfg.SetNumberOfShards(numberOfShards) {
+		m.rotatorMediator.Trigger()
+	}
+
+	return nil
+}
+
+// Run launches the [Manager]'s services.
+func (m *Manager) Run() error {
+	defer m.closer.Done()
+
+	return m.g.Run()
+}
+
+// Shutdown safe shutdown [Manager]: stop services and close [Head]'s.
+func (m *Manager) Shutdown(ctx context.Context) error {
+	_ = m.closer.Close()
+
+	return errors.Join(m.proxy.Close(), m.cgogc.Shutdown(ctx))
+}
+
+// initServices initializes services for startup.
+func (m *Manager) initServices(
+	hcatalog *catalog.Catalog,
+	builder *Builder,
+	clock clockwork.Clock,
+	commitInterval time.Duration,
+	r prometheus.Registerer,
+) {
 	baseCtx := context.Background()
 
 	// Termination handler.
@@ -110,18 +216,16 @@ func NewManager(
 	)
 
 	// Rotator
-	m.rotatorConfig = services.NewRotatorConfig(numberOfShards)
-	m.rotatorMediator = &NoopMediator{c: make(chan struct{})}
 	rotatorCtx, rotatorCancel := context.WithCancel(baseCtx)
 	m.g.Add(
 		func() error {
 			return services.NewRotator(
-				activeHead,
+				m.proxy,
+				m.proxy,
 				builder,
-				headKeeper,
 				m.rotatorMediator,
-				m.rotatorConfig,
-				&headStatusSetter{catalog: hcatalog},
+				m.cfg,
+				&statusSetter{catalog: hcatalog},
 				r,
 			).Execute(rotatorCtx)
 		},
@@ -137,15 +241,15 @@ func NewManager(
 			return true
 		}
 
-		return clock.Now().Add(-defaultCommitWaitInterval).UnixMilli() < rec.CreatedAt()
+		return clock.Now().Add(-DefaultMergeDuration).UnixMilli() < rec.CreatedAt()
 	}
 
 	// Committer
-	committerMediator := &NoopMediator{c: make(chan struct{})}
+	committerMediator := mediator.NewMediator(mediator.NewConstantIntervalTimer(clock, commitInterval))
 	committerCtx, committerCancel := context.WithCancel(baseCtx)
 	m.g.Add(
 		func() error {
-			return services.NewCommitter(activeHead, committerMediator, isNewHead).Execute(committerCtx)
+			return services.NewCommitter(m.proxy, committerMediator, isNewHead).Execute(committerCtx)
 		},
 		func(error) {
 			committerMediator.Close()
@@ -154,11 +258,11 @@ func NewManager(
 	)
 
 	// Merger
-	mergerMediator := &NoopMediator{c: make(chan struct{})}
+	mergerMediator := mediator.NewMediator(mediator.NewConstantIntervalTimer(clock, DefaultMergeDuration))
 	mergerCtx, mergerCancel := context.WithCancel(baseCtx)
 	m.g.Add(
 		func() error {
-			return services.NewMerger(activeHead, mergerMediator, isNewHead).Execute(mergerCtx)
+			return services.NewMerger(m.proxy, mergerMediator, isNewHead).Execute(mergerCtx)
 		},
 		func(error) {
 			mergerMediator.Close()
@@ -167,13 +271,13 @@ func NewManager(
 	)
 
 	// MetricsUpdater
-	metricsUpdaterMediator := &NoopMediator{c: make(chan struct{})}
+	metricsUpdaterMediator := mediator.NewMediator(mediator.NewConstantIntervalTimer(clock, DefaultMetricWriteInterval))
 	metricsUpdaterCtx, metricsUpdaterCancel := context.WithCancel(baseCtx)
 	m.g.Add(
 		func() error {
 			return services.NewMetricsUpdater(
-				activeHead,
-				headKeeper,
+				m.proxy,
+				m.proxy,
 				metricsUpdaterMediator,
 				querier.QueryHeadStatus,
 				r,
@@ -184,24 +288,10 @@ func NewManager(
 			metricsUpdaterCancel()
 		},
 	)
-
-	return m, nil
 }
 
-// TODO implementation.
-func (m *Manager) Run() error {
-	defer m.closer.Done()
-
-	return m.g.Run()
-}
-
-// TODO implementation.
-func (m *Manager) Shutdown(ctx context.Context) {
-	_ = m.closer.Close()
-}
-
-// initLogHandler init log handler for pp.
-func initLogHandler(l log.Logger) {
+// InitLogHandler init log handler for pp.
+func InitLogHandler(l log.Logger) {
 	l = log.With(l, "pp_caller", log.Caller(4))
 
 	logger.Debugf = func(template string, args ...any) {
@@ -222,6 +312,50 @@ func initLogHandler(l log.Logger) {
 }
 
 //
+// headStatusSetter
+//
+
+// statusSetter wrapper over [catalog.Catalog] for set statuses.
+type statusSetter struct {
+	catalog *catalog.Catalog
+}
+
+// SetActiveStatus sets the [catalog.StatusActive] status by headID.
+func (ha *statusSetter) SetActiveStatus(headID string) error {
+	_, err := ha.catalog.SetStatus(headID, catalog.StatusActive)
+	return err
+}
+
+// SetRotatedStatus sets the [catalog.StatusRotated] status by headID.
+func (ha *statusSetter) SetRotatedStatus(headID string) error {
+	_, err := ha.catalog.SetStatus(headID, catalog.StatusRotated)
+	return err
+}
+
+//
+// ReloadBlocksTriggerNotifier
+//
+
+type ReloadBlocksTriggerNotifier struct {
+	c chan struct{}
+}
+
+func NewReloadBlocksTriggerNotifier() *ReloadBlocksTriggerNotifier {
+	return &ReloadBlocksTriggerNotifier{c: make(chan struct{}, 1)}
+}
+
+func (tn *ReloadBlocksTriggerNotifier) Chan() <-chan struct{} {
+	return tn.c
+}
+
+func (tn *ReloadBlocksTriggerNotifier) NotifyWritten() {
+	select {
+	case tn.c <- struct{}{}:
+	default:
+	}
+}
+
+//
 // NoopKeeper
 //
 
@@ -231,51 +365,12 @@ type NoopKeeper struct{}
 // Add implements Keeper.
 func (*NoopKeeper) Add(*HeadOnDisk) {}
 
+// Close implements Keeper.
+func (*NoopKeeper) Close() error { return nil }
+
 // RangeQueriableHeads implements Keeper.
 func (k *NoopKeeper) RangeQueriableHeads(
 	mint, maxt int64,
 ) func(func(*HeadOnDisk) bool) {
 	return func(func(*HeadOnDisk) bool) {}
-}
-
-//
-// NoopMediator
-//
-
-// NoopMediator implements Mediator.
-type NoopMediator struct {
-	c         chan struct{}
-	closeOnce sync.Once
-}
-
-// C implements Mediator.
-func (m *NoopMediator) C() <-chan struct{} {
-	return m.c
-}
-
-// Close close channel and stop [Mediator].
-func (m *NoopMediator) Close() {
-	m.closeOnce.Do(func() {
-		close(m.c)
-	})
-}
-
-//
-//
-//
-
-type headStatusSetter struct {
-	catalog *catalog.Catalog
-}
-
-// SetActiveStatus sets the [catalog.StatusActive] status by headID.
-func (ha *headStatusSetter) SetActiveStatus(headID string) error {
-	_, err := ha.catalog.SetStatus(headID, catalog.StatusActive)
-	return err
-}
-
-// SetRotatedStatus sets the [catalog.StatusRotated] status by headID.
-func (ha *headStatusSetter) SetRotatedStatus(headID string) error {
-	_, err := ha.catalog.SetStatus(headID, catalog.StatusRotated)
-	return err
 }
