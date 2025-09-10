@@ -167,8 +167,7 @@ func (m *Manager) ApplyConfig(numberOfShards uint16) error {
 	logger.Infof("reconfiguration start")
 	defer logger.Infof("reconfiguration completed")
 
-	h := m.proxy.Get()
-	if h.NumberOfShards() == numberOfShards {
+	if m.proxy.Get().NumberOfShards() == numberOfShards {
 		return nil
 	}
 
@@ -220,7 +219,6 @@ func (m *Manager) initServices(
 	m.g.Add(
 		func() error {
 			return services.NewRotator(
-				m.proxy,
 				m.proxy,
 				builder,
 				m.rotatorMediator,
@@ -276,7 +274,6 @@ func (m *Manager) initServices(
 	m.g.Add(
 		func() error {
 			return services.NewMetricsUpdater(
-				m.proxy,
 				m.proxy,
 				metricsUpdaterMediator,
 				querier.QueryHeadStatus,

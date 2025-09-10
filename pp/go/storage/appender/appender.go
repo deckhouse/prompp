@@ -103,6 +103,7 @@ type Head[
 // Appender
 //
 
+// Appender adds incoming data to the [Head].
 type Appender[
 	TTask Task,
 	TLSS LSS,
@@ -126,7 +127,7 @@ func New[
 	}
 }
 
-// Append incoming data to head.
+// Append incoming data to [Head].
 func (a Appender[TTask, TLSS, TShard, THead]) Append(
 	ctx context.Context,
 	incomingData *storage.IncomingData,
@@ -379,8 +380,7 @@ func (a Appender[TTask, TLSS, TShard, THead]) resolveState(state *cppbridge.Stat
 		return errNilState
 	}
 
-	// TODO delete generationRelabeler 0
-	// state.Reconfigure on lock
+	// TODO delete generationRelabeler 0, state.Reconfigure on lock
 	state.Reconfigure(0, a.head.Generation(), a.head.NumberOfShards())
 
 	return nil

@@ -28,8 +28,7 @@ type MetricsUpdater[
 	THead Head[TTask, TShard, TGoShard],
 	THeadStatus HeadStatus,
 ] struct {
-	activeHead      ActiveHeadContainer[TTask, TShard, TGoShard, THead]
-	keeper          Keeper[TTask, TShard, TGoShard, THead]
+	proxyHead       ProxyHead[TTask, TShard, TGoShard, THead]
 	m               Mediator
 	queryHeadStatus func(ctx context.Context, head THead, limit int) (THeadStatus, error)
 
@@ -47,16 +46,14 @@ func NewMetricsUpdater[
 	THead Head[TTask, TShard, TGoShard],
 	THeadStatus HeadStatus,
 ](
-	activeHead ActiveHeadContainer[TTask, TShard, TGoShard, THead],
-	keeper Keeper[TTask, TShard, TGoShard, THead],
+	proxyHead ProxyHead[TTask, TShard, TGoShard, THead],
 	m Mediator,
 	queryHeadStatus func(ctx context.Context, head THead, limit int) (THeadStatus, error),
 	r prometheus.Registerer,
 ) *MetricsUpdater[TTask, TShard, TGoShard, THead, THeadStatus] {
 	factory := util.NewUnconflictRegisterer(r)
 	return &MetricsUpdater[TTask, TShard, TGoShard, THead, THeadStatus]{
-		activeHead:      activeHead,
-		keeper:          keeper,
+		proxyHead:       proxyHead,
 		m:               m,
 		queryHeadStatus: queryHeadStatus,
 
@@ -105,7 +102,7 @@ func (s *MetricsUpdater[TTask, TShard, TGoShard, THead, THeadStatus]) Execute(ct
 
 // collect metrics from the head.
 func (s *MetricsUpdater[TTask, TShard, TGoShard, THead, THeadStatus]) collect(ctx context.Context) {
-	ahead := s.activeHead.Get()
+	ahead := s.proxyHead.Get()
 
 	status, err := s.queryHeadStatus(ctx, ahead, 0)
 	if err == nil {
@@ -121,7 +118,7 @@ func (s *MetricsUpdater[TTask, TShard, TGoShard, THead, THeadStatus]) collect(ct
 
 	s.collectFromShards(ahead, true)
 
-	for head := range s.keeper.RangeQueriableHeads(0, math.MaxInt64) {
+	for head := range s.proxyHead.RangeQueriableHeads(0, math.MaxInt64) {
 		if head.ID() == ahead.ID() {
 			continue
 		}

@@ -97,12 +97,13 @@ func NewHead[TShard Shard, TGoroutineShard Shard](
 
 	factory := util.NewUnconflictRegisterer(registerer)
 	h := &Head[TShard, TGoroutineShard]{
-		id:            id,
-		generation:    generation,
-		gshardCtor:    gshardCtor,
-		releaseHeadFn: releaseHeadFn,
-		shards:        shards,
-		taskChs:       taskChs,
+		id:             id,
+		generation:     generation,
+		gshardCtor:     gshardCtor,
+		releaseHeadFn:  releaseHeadFn,
+		shards:         shards,
+		taskChs:        taskChs,
+		querySemaphore: locker.NewWeighted(2 * concurrency), // x2 for back pressure
 
 		// for clearing [Head] metrics
 		memoryInUse: factory.NewGaugeVec(prometheus.GaugeOpts{

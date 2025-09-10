@@ -12,15 +12,6 @@ type ActiveHeadContainer[
 	TShard, TGoShard Shard,
 	THead Head[TTask, TShard, TGoShard],
 ] interface {
-	// Close closes [ActiveHeadContainer] for the inability work with [Head].
-	Close() error
-
-	// Get the active head [Head].
-	Get() THead
-
-	// Replace the active head [Head] with a new head.
-	Replace(ctx context.Context, newHead THead) error
-
 	// With calls fn(h Head).
 	With(ctx context.Context, fn func(h THead) error) error
 }
@@ -34,9 +25,6 @@ type Head[
 	TTask Task,
 	TShard, TGoShard Shard,
 ] interface {
-	// // Close closes wals, query semaphore for the inability to get query and clear metrics.
-	// Close(ctx context.Context) error
-
 	// CreateTask create a task for operations on the [Head] shards.
 	CreateTask(taskName string, shardFn func(shard TGoShard) error) TTask
 
@@ -93,6 +81,7 @@ type HeadStatusSetter interface {
 // Keeper
 //
 
+// TODO need?
 type Keeper[
 	TTask Task,
 	TShard, TGShard Shard,
@@ -110,6 +99,35 @@ type Keeper[
 type Mediator interface {
 	// C returns channel with events.
 	C() <-chan struct{}
+}
+
+//
+// ProxyHead
+//
+
+// ProxyHead it proxies requests to the active [Head] and the keeper of old [Head]s.
+type ProxyHead[
+	TTask Task,
+	TShard, TGoShard Shard,
+	THead Head[TTask, TShard, TGoShard],
+] interface {
+	Add(head THead)
+
+	// Get the active [Head].
+	Get() THead
+
+	// RangeQueriableHeadsWithActive returns the iterator to queriable [Head]s:
+	// the active [Head] and the [Head]s from the [Keeper].
+	RangeQueriableHeadsWithActive(mint int64, maxt int64) func(func(THead) bool)
+
+	// RangeQueriableHeads returns the iterator to queriable [Head]s - the [Head]s only from the [Keeper].
+	RangeQueriableHeads(mint, maxt int64) func(func(THead) bool)
+
+	// Replace the active head [Head] with a new head.
+	Replace(ctx context.Context, newHead THead) error
+
+	// With calls fn(h Head) on active [Head].
+	With(ctx context.Context, fn func(h THead) error) error
 }
 
 //

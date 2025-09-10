@@ -30,9 +30,8 @@ type Rotator[
 	TShard, TGoShard Shard,
 	THead Head[TTask, TShard, TGoShard],
 ] struct {
-	activeHead       ActiveHeadContainer[TTask, TShard, TGoShard, THead]
+	proxyHead        ProxyHead[TTask, TShard, TGoShard, THead]
 	headBuilder      HeadBuilder[TTask, TShard, TGoShard, THead]
-	keeper           Keeper[TTask, TShard, TGoShard, THead]
 	m                Mediator
 	cfg              RotatorConfig
 	headStatusSetter HeadStatusSetter
@@ -45,8 +44,7 @@ func NewRotator[
 	TShard, TGoShard Shard,
 	THead Head[TTask, TShard, TGoShard],
 ](
-	activeHead ActiveHeadContainer[TTask, TShard, TGoShard, THead],
-	keeper Keeper[TTask, TShard, TGoShard, THead],
+	proxyHead ProxyHead[TTask, TShard, TGoShard, THead],
 	headBuilder HeadBuilder[TTask, TShard, TGoShard, THead],
 	m Mediator,
 	cfg RotatorConfig,
@@ -55,9 +53,8 @@ func NewRotator[
 ) *Rotator[TTask, TShard, TGoShard, THead] {
 	factory := util.NewUnconflictRegisterer(r)
 	return &Rotator[TTask, TShard, TGoShard, THead]{
-		activeHead:       activeHead,
+		proxyHead:        proxyHead,
 		headBuilder:      headBuilder,
-		keeper:           keeper,
 		m:                m,
 		cfg:              cfg,
 		headStatusSetter: headStatusSetter,
@@ -94,7 +91,7 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 	ctx context.Context,
 	numberOfShards uint16,
 ) error {
-	oldHead := s.activeHead.Get()
+	oldHead := s.proxyHead.Get()
 
 	newHead, err := s.headBuilder.Build(oldHead.Generation()+1, numberOfShards)
 	if err != nil {
@@ -104,10 +101,10 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 	// TODO CopySeriesFrom only old nunber of shards == new
 	// newHead.CopySeriesFrom(oldHead)
 
-	s.keeper.Add(oldHead)
+	s.proxyHead.Add(oldHead)
 
 	// TODO if replace error?
-	if err = s.activeHead.Replace(ctx, newHead); err != nil {
+	if err = s.proxyHead.Replace(ctx, newHead); err != nil {
 		return fmt.Errorf("failed to replace old to new head: %w", err)
 	}
 

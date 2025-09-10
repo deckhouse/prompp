@@ -2,7 +2,6 @@ package storage
 
 import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/model"
 )
 
 //
@@ -12,26 +11,6 @@ import (
 // MetricData is an universal interface for blob protobuf data or batch [model.TimeSeries].
 type MetricData interface {
 	// Destroy incoming data.
-	Destroy()
-}
-
-//
-// ProtobufData
-//
-
-// ProtobufData is an universal interface for blob protobuf data.
-type ProtobufData interface {
-	Bytes() []byte
-	Destroy()
-}
-
-//
-// TimeSeriesData
-//
-
-// TimeSeriesBatch is an universal interface for batch [model.TimeSeries].
-type TimeSeriesBatch interface {
-	TimeSeries() []model.TimeSeries
 	Destroy()
 }
 
