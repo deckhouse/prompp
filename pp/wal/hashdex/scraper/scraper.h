@@ -119,8 +119,8 @@ class Scraper {
 
 #pragma pack(push, 1)
   struct MarkedString {
-    uint32_t offset{std::numeric_limits<uint32_t>::max()};
-    uint32_t length{std::numeric_limits<uint32_t>::max()};
+    uint32_t offset = 0;
+    uint32_t length = 0;
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE static MarkedString create(std::string_view value, std::string_view buffer) noexcept {
       return {
@@ -129,9 +129,7 @@ class Scraper {
       };
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_reserved_name() const noexcept {
-      return offset == std::numeric_limits<uint32_t>::max() && length == std::numeric_limits<uint32_t>::max();
-    }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_reserved_name() const noexcept { return offset == 0 && length == 0; }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_empty() const noexcept { return length == 0; }
 
@@ -383,23 +381,6 @@ class Scraper {
    private:
     BareBones::Vector<char> bytes_buffer_{};
     uint32_t bytes_count_ = 0;
-
-    PROMPP_ALWAYS_INLINE static uint8_t push_and_encode(char* out, uint32_t v) noexcept {
-      if (v == 0) [[unlikely]] {
-        return 0b00;
-      }
-      if (v <= 0xFF) [[likely]] {
-        *out = static_cast<char>(v);
-        return 0b01;
-      }
-      if (v <= 0xFFFF) [[unlikely]] {
-        const auto value = static_cast<uint16_t>(v);
-        std::memcpy(out, &value, sizeof(value));
-        return 0b10;
-      }
-      std::memcpy(out, &v, sizeof(v));
-      return 0b11;
-    }
   };
 
   class MetadataMarkupBuffer : public MarkupBuffer<Metadata> {
@@ -498,7 +479,7 @@ class Scraper {
       return Error::kNoMetricName;
     }
 
-    auto error = parse_metric_suffix();
+    const auto error = parse_metric_suffix();
 
     if (error == Error::kNoError) [[likely]] {
       encode_metric_data(metric_offset);
@@ -636,10 +617,7 @@ class Scraper {
     metric_buffer_.add_count(labels_.size());
 
     for (auto& label : labels_) {
-      if (label.name.is_reserved_name()) [[unlikely]] {
-        label.name.offset = 0;
-        label.name.length = 0;
-      } else {
+      if (!label.name.is_reserved_name()) [[likely]] {
         label.name.offset -= offset;
       }
       label.value.offset -= offset;
