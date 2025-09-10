@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include "bare_bones/bit.h"
 #include "primitives/sample.h"
 #include "prometheus/value.h"
 
@@ -183,69 +184,49 @@ class LabelCodec {
           .next = start + 5, .label_name_offset = name_off, .label_name_length = name_len, .label_value_offset = value_off, .label_value_length = value_len};
     }
 
+    const uint8_t sz0 = layout & 0b11;
+    const uint8_t sz1 = (layout >> 2) & 0b11;
+    const uint8_t sz2 = (layout >> 4) & 0b11;
+    const uint8_t sz3 = (layout >> 6) & 0b11;
+
     if ((layout & 0x0F) == 0) [[likely]] {
       chunk >>= 8;
-
-      const uint8_t sz2 = (layout >> 4) & 0x3;
-      const uint8_t sz3 = (layout >> 6) & 0x3;
-
+      size_t used = 1;
       uint32_t value_off = 0;
       uint32_t value_len = 0;
-      size_t used = 0;
-
-      // value_off
-      switch (sz2) {
-        case 0b00:
-          break;
-        case 0b01:
-          value_off = static_cast<uint8_t>(chunk);
-          used += 1;
-          chunk >>= 8;
-          break;
-        case 0b10:
-          value_off = static_cast<uint16_t>(chunk);
-          used += 2;
-          chunk >>= 16;
-          break;
-        default:
-          value_off = static_cast<uint32_t>(chunk);
-          used += 4;
-          chunk >>= 32;
-          break;
+      if (sz2 == 0b01) [[likely]] {
+        value_off = static_cast<uint8_t>(chunk);
+        used += sizeof(uint8_t);
+        chunk >>= BareBones::Bit::to_bits(sizeof(uint8_t));
+      } else if (sz2 == 0b10) [[unlikely]] {
+        value_off = static_cast<uint16_t>(chunk);
+        used += sizeof(uint16_t);
+        chunk >>= BareBones::Bit::to_bits(sizeof(uint16_t));
+      } else if (sz2 == 0b11) [[unlikely]] {
+        value_off = static_cast<uint32_t>(chunk);
+        used += sizeof(uint32_t);
+        chunk >>= BareBones::Bit::to_bits(sizeof(uint32_t));
       }
-
-      // value_len
-      switch (sz3) {
-        case 0b00:
-          break;
-        case 0b01:
-          value_len = static_cast<uint8_t>(chunk);
-          used += 1;
-          break;
-        case 0b10:
-          value_len = static_cast<uint16_t>(chunk);
-          used += 2;
-          break;
-        default:
-
-          if (used + 4 <= 7) [[likely]] {
-            value_len = static_cast<uint32_t>(chunk);
-          } else [[unlikely]] {
-            std::memcpy(&value_len, start + 1 + used, 4);
-          }
-          used += 4;
-          break;
+      if (sz3 == 0b01) [[likely]] {
+        value_len = static_cast<uint8_t>(chunk);
+        used += sizeof(uint8_t);
+      } else if (sz3 == 0b10) [[unlikely]] {
+        value_len = static_cast<uint16_t>(chunk);
+        used += sizeof(uint16_t);
+      } else if (sz3 == 0b11) [[unlikely]] {
+        if (used + sizeof(uint32_t) <= sizeof(chunk)) [[likely]] {
+          value_len = static_cast<uint32_t>(chunk);
+        } else [[unlikely]] {
+          std::memcpy(&value_len, start + used, sizeof(value_len));
+        }
+        used += sizeof(value_len);
       }
 
       return DecodeResult{
-          .next = start + 1 + used, .label_name_offset = 0, .label_name_length = 0, .label_value_offset = value_off, .label_value_length = value_len};
+          .next = start + used, .label_name_offset = 0, .label_name_length = 0, .label_value_offset = value_off, .label_value_length = value_len};
     }
 
     in += 1;
-    const uint8_t sz0 = (layout >> 0) & 0x3;
-    const uint8_t sz1 = (layout >> 2) & 0x3;
-    const uint8_t sz2 = (layout >> 4) & 0x3;
-    const uint8_t sz3 = (layout >> 6) & 0x3;
 
     const uint32_t name_off = read_val_partial(in, sz0);
     const uint32_t name_len = read_val_partial(in, sz1);
