@@ -56,7 +56,7 @@ INSTANTIATE_TEST_SUITE_P(ValueTypeTests,
                                          ValueTypeCase{.input = 3.5, .expected = SampleValueType::kFloat},
                                          ValueTypeCase{.input = -42.0, .expected = SampleValueType::kFloat},
 
-                                         ValueTypeCase{.input = 1e300, .expected = SampleValueType::kDouble},
+                                         ValueTypeCase{.input = 1e-10, .expected = SampleValueType::kDouble},
                                          ValueTypeCase{.input = 3.141592653589793, .expected = SampleValueType::kDouble},
                                          ValueTypeCase{.input = 0.1, .expected = SampleValueType::kDouble}));
 

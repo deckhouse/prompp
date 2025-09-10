@@ -19,7 +19,7 @@ enum class SampleValueType : uint8_t { kUint32 = 0b0000'0000, kDouble, kUint8, k
     return SampleValueType::kZero;
   }
 
-  if (std::trunc(val) == val && val > 0.0) [[likely]] {
+  if (std::isfinite(val) && std::floor(val) == val && val > 0.0) [[likely]] {
     const auto uval = static_cast<uint64_t>(val);
     if (uval <= std::numeric_limits<uint8_t>::max()) {
       return SampleValueType::kUint8;
