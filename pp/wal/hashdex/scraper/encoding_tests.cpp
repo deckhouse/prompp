@@ -11,9 +11,12 @@
 
 namespace {
 
-using namespace PromPP::WAL::hashdex::scraper::encoding;
 using PromPP::Primitives::Sample;
 using PromPP::Primitives::Timestamp;
+using PromPP::WAL::hashdex::scraper::encoding::LabelCodec;
+using PromPP::WAL::hashdex::scraper::encoding::LayoutMarker;
+using PromPP::WAL::hashdex::scraper::encoding::SampleCodec;
+using PromPP::WAL::hashdex::scraper::encoding::SampleValueType;
 
 struct ValueTypeCase {
   double input;
@@ -26,7 +29,7 @@ TEST_P(ValueTypeFixture, ClassifyValueCorrectly) {
   // Arrange
 
   // Act
-  const auto actual = value_type(GetParam().input);
+  const auto actual = PromPP::WAL::hashdex::scraper::encoding::value_type(GetParam().input);
 
   // Assert
   EXPECT_EQ(actual, GetParam().expected);
@@ -60,12 +63,6 @@ INSTANTIATE_TEST_SUITE_P(ValueTypeTests,
 class SampleCodecFixture : public testing::Test {
  protected:
   static constexpr size_t kBufSize = 64;
-  std::pair<char*, std::array<char, kBufSize>&> encode_into_buffer(const LayoutMarker layout, Sample sample) {
-    buf_.fill(0);
-    char* start = buf_.data();
-    char* end = SampleCodec::encode(start, layout, sample);
-    return {end, buf_};
-  }
 
   SampleCodec::DecodeResult encode_and_decode(const LayoutMarker layout, Sample sample, int64_t default_ts = -1) {
     buf_.fill(0);
