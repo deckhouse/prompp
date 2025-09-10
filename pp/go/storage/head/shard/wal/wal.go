@@ -17,10 +17,16 @@ const (
 type SegmentWriter[TSegment EncodedSegment] interface {
 	// CurrentSize return current shard wal size.
 	CurrentSize() int64
+
 	// Write encoded segment to writer.
 	Write(segment TSegment) error
+
 	// Flush write all buffered segments.
 	Flush() error
+
+	// Sync commits the current contents of the [SegmentWriter].
+	Sync() error
+
 	// Close closes the storage.
 	Close() error
 }
@@ -83,6 +89,9 @@ func NewCorruptedWal[
 
 // Close closes the wal segmentWriter.
 func (w *Wal[TSegment, TStats, TWriter]) Close() error {
+	w.locker.Lock()
+	defer w.locker.Unlock()
+
 	if w.closed {
 		return nil
 	}
@@ -130,6 +139,14 @@ func (w *Wal[TSegment, TStats, TWriter]) Flush() error {
 	defer w.locker.Unlock()
 
 	return w.segmentWriter.Flush()
+}
+
+// Sync commits the current contents of the [SegmentWriter].
+func (w *Wal[TSegment, TStats, TWriter]) Sync() error {
+	w.locker.Lock()
+	defer w.locker.Unlock()
+
+	return w.segmentWriter.Sync()
 }
 
 // Write the incoming inner series to wal encoder.

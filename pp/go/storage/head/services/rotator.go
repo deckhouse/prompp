@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/storage/logger"
@@ -15,25 +14,9 @@ import (
 //
 
 // RotatorConfig config for [Rotator].
-type RotatorConfig struct {
-	numberOfShards uint32
-}
-
-// NewRotatorConfig init new [RotatorConfig].
-func NewRotatorConfig(numberOfShards uint16) *RotatorConfig {
-	return &RotatorConfig{
-		numberOfShards: uint32(numberOfShards),
-	}
-}
-
-// NumberOfShards returns current number of shards.
-func (c RotatorConfig) NumberOfShards() uint16 {
-	return uint16(atomic.LoadUint32(&c.numberOfShards)) // #nosec G115 // no overflow
-}
-
-// SetNumberOfShards set new number of shards.
-func (c *RotatorConfig) SetNumberOfShards(numberOfShards uint16) {
-	atomic.StoreUint32(&c.numberOfShards, uint32(numberOfShards))
+type RotatorConfig interface {
+	// NumberOfShards returns current number of shards.
+	NumberOfShards() uint16
 }
 
 //
@@ -47,11 +30,10 @@ type Rotator[
 	TShard, TGoShard Shard,
 	THead Head[TTask, TShard, TGoShard],
 ] struct {
-	activeHead       ActiveHeadContainer[TTask, TShard, TGoShard, THead]
+	proxyHead        ProxyHead[TTask, TShard, TGoShard, THead]
 	headBuilder      HeadBuilder[TTask, TShard, TGoShard, THead]
-	keeper           Keeper[TTask, TShard, TGoShard, THead]
 	m                Mediator
-	cfg              *RotatorConfig
+	cfg              RotatorConfig
 	headStatusSetter HeadStatusSetter
 	rotateCounter    prometheus.Counter
 }
@@ -62,19 +44,17 @@ func NewRotator[
 	TShard, TGoShard Shard,
 	THead Head[TTask, TShard, TGoShard],
 ](
-	activeHead ActiveHeadContainer[TTask, TShard, TGoShard, THead],
+	proxyHead ProxyHead[TTask, TShard, TGoShard, THead],
 	headBuilder HeadBuilder[TTask, TShard, TGoShard, THead],
-	keeper Keeper[TTask, TShard, TGoShard, THead],
 	m Mediator,
-	cfg *RotatorConfig,
+	cfg RotatorConfig,
 	headStatusSetter HeadStatusSetter,
 	r prometheus.Registerer,
 ) *Rotator[TTask, TShard, TGoShard, THead] {
 	factory := util.NewUnconflictRegisterer(r)
 	return &Rotator[TTask, TShard, TGoShard, THead]{
-		activeHead:       activeHead,
+		proxyHead:        proxyHead,
 		headBuilder:      headBuilder,
-		keeper:           keeper,
 		m:                m,
 		cfg:              cfg,
 		headStatusSetter: headStatusSetter,
@@ -111,7 +91,7 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 	ctx context.Context,
 	numberOfShards uint16,
 ) error {
-	oldHead := s.activeHead.Get()
+	oldHead := s.proxyHead.Get()
 
 	newHead, err := s.headBuilder.Build(oldHead.Generation()+1, numberOfShards)
 	if err != nil {
@@ -121,10 +101,10 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 	// TODO CopySeriesFrom only old nunber of shards == new
 	// newHead.CopySeriesFrom(oldHead)
 
-	s.keeper.Add(oldHead)
+	s.proxyHead.Add(oldHead)
 
 	// TODO if replace error?
-	if err = s.activeHead.Replace(ctx, newHead); err != nil {
+	if err = s.proxyHead.Replace(ctx, newHead); err != nil {
 		return fmt.Errorf("failed to replace old to new head: %w", err)
 	}
 
@@ -136,7 +116,7 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 		logger.Warnf("failed merge out of order chunks in data storage: %s", err)
 	}
 
-	if err = CommitAndFlushViaRange(oldHead); err != nil {
+	if err = CFSViaRange(oldHead); err != nil {
 		logger.Warnf("failed commit and flush to wal: %s", err)
 	}
 

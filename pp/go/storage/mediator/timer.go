@@ -1,4 +1,4 @@
-package manager
+package mediator
 
 import (
 	"math"
@@ -91,8 +91,12 @@ func (rt *RotateTimer) RotateAtNext() time.Time {
 // Stop - prevents the Timer from firing.
 // Stop does not close the channel, to prevent a read from the channel succeeding incorrectly.
 func (rt *RotateTimer) Stop() {
+	// drain  timer
 	if !rt.timer.Stop() {
-		<-rt.timer.Chan()
+		select {
+		case <-rt.timer.Chan():
+		default:
+		}
 	}
 }
 
@@ -126,5 +130,11 @@ func (t *ConstantIntervalTimer) Reset() {
 
 // Stop timer.
 func (t *ConstantIntervalTimer) Stop() {
-	t.timer.Stop()
+	// drain  timer
+	if !t.timer.Stop() {
+		select {
+		case <-t.timer.Chan():
+		default:
+		}
+	}
 }

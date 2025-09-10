@@ -18,6 +18,7 @@ type Merger[
 ] struct {
 	activeHead ActiveHeadContainer[TTask, TShard, TGoShard, THead]
 	m          Mediator
+	isNewHead  func(headID string) bool
 }
 
 // NewMerger init new [Merger].
@@ -28,10 +29,12 @@ func NewMerger[
 ](
 	activeHead ActiveHeadContainer[TTask, TShard, TGoShard, THead],
 	m Mediator,
+	isNewHead func(headID string) bool,
 ) *Merger[TTask, TShard, TGoShard, THead] {
 	return &Merger[TTask, TShard, TGoShard, THead]{
 		activeHead: activeHead,
 		m:          m,
+		isNewHead:  isNewHead,
 	}
 }
 
@@ -42,7 +45,7 @@ func (s *Merger[TTask, TShard, TGoShard, THead]) Execute(ctx context.Context) er
 	logger.Infof("The Merger is running.")
 
 	for range s.m.C() {
-		if err := s.activeHead.With(ctx, MergeOutOfOrderChunksWithHead); err != nil {
+		if err := s.activeHead.With(ctx, s.mergeOutOfOrderChunks); err != nil {
 			logger.Errorf("data storage merge failed: %v", err)
 		}
 	}
@@ -50,4 +53,13 @@ func (s *Merger[TTask, TShard, TGoShard, THead]) Execute(ctx context.Context) er
 	logger.Infof("The Merger stopped.")
 
 	return nil
+}
+
+// mergeOutOfOrderChunksWithHead merge chunks with out of order data chunks for [Head].
+func (s *Merger[TTask, TShard, TGoShard, THead]) mergeOutOfOrderChunks(h THead) error {
+	if s.isNewHead(h.ID()) {
+		return nil
+	}
+
+	return MergeOutOfOrderChunksWithHead(h)
 }

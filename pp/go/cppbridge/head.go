@@ -48,15 +48,17 @@ type Sample struct {
 
 // HeadDataStorage is Go wrapper around series_data::Data_storage.
 type HeadDataStorage struct {
-	dataStorage  uintptr
-	timeInterval TimeInterval
+	dataStorage       uintptr
+	gcDestroyDetector *uint64
+	timeInterval      TimeInterval
 }
 
 // NewHeadDataStorage - constructor.
 func NewHeadDataStorage() *HeadDataStorage {
 	ds := &HeadDataStorage{
-		dataStorage:  seriesDataDataStorageCtor(),
-		timeInterval: NewInvalidTimeInterval(),
+		dataStorage:       seriesDataDataStorageCtor(),
+		gcDestroyDetector: &gcDestroyDetector,
+		timeInterval:      NewInvalidTimeInterval(),
 	}
 
 	runtime.SetFinalizer(ds, func(ds *HeadDataStorage) {

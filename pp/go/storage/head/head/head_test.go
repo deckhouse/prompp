@@ -50,6 +50,11 @@ func (*testWal) Flush() error {
 	return nil
 }
 
+// Sync test implementation wal.
+func (*testWal) Sync() error {
+	return nil
+}
+
 // Write test implementation wal.
 func (*testWal) Write(_ []*cppbridge.InnerSeries) (bool, error) {
 	return false, nil

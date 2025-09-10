@@ -68,10 +68,10 @@ func (w *Buffered[TSegment]) CurrentSize() int64 {
 	return atomic.LoadInt64(&w.currentSize)
 }
 
-// Flush and sync buffer and collected segments to [WriteSyncCloser].
+// Flush buffer and collected segments to [WriteSyncCloser].
 func (w *Buffered[TSegment]) Flush() error {
 	if !w.writeCompleted {
-		if err := w.flushAndSync(); err != nil {
+		if err := w.flushBuffer(); err != nil {
 			return fmt.Errorf("flush and sync: %w", err)
 		}
 	}
@@ -92,35 +92,31 @@ func (w *Buffered[TSegment]) Flush() error {
 	return nil
 }
 
-// Write to buffer [Buffered] incoming [Segment].
-func (w *Buffered[TSegment]) Write(segment TSegment) error {
-	w.segments = append(w.segments, segment)
-	return nil
-}
-
-// flushAndSync write the contents from buffer to [WriteSyncCloser] and sync.
-func (w *Buffered[TSegment]) flushAndSync() error {
-	n, err := w.buffer.WriteTo(w.writer)
-	atomic.AddInt64(&w.currentSize, n)
-	if err != nil {
-		return fmt.Errorf("buffer write: %w", err)
-	}
-
-	if err := w.sync(); err != nil {
-		return fmt.Errorf("writer sync: %w", err)
-	}
-
-	return nil
-}
-
-// sync commits the current contents of the [WriteSyncCloser] and notify [SegmentIsWrittenNotifier].
-func (w *Buffered[TSegment]) sync() error {
+// Sync commits the current contents of the [WriteSyncCloser] and notify [SegmentIsWrittenNotifier].
+func (w *Buffered[TSegment]) Sync() error {
 	if err := w.writer.Sync(); err != nil {
 		return fmt.Errorf("writer sync: %w", err)
 	}
 
 	w.notifier.NotifySegmentIsWritten(w.shardID)
 	w.writeCompleted = true
+	return nil
+}
+
+// Write to buffer [Buffered] incoming [Segment].
+func (w *Buffered[TSegment]) Write(segment TSegment) error {
+	w.segments = append(w.segments, segment)
+	return nil
+}
+
+// flushBuffer write the contents from buffer to [WriteSyncCloser].
+func (w *Buffered[TSegment]) flushBuffer() error {
+	n, err := w.buffer.WriteTo(w.writer)
+	atomic.AddInt64(&w.currentSize, n)
+	if err != nil {
+		return fmt.Errorf("buffer write: %w", err)
+	}
+
 	return nil
 }
 
@@ -133,7 +129,7 @@ func (w *Buffered[TSegment]) writeToBufferAndFlush(segment TSegment) (encoded bo
 
 	w.writeCompleted = false
 
-	if err := w.flushAndSync(); err != nil {
+	if err := w.flushBuffer(); err != nil {
 		return true, err
 	}
 

@@ -140,6 +140,8 @@ func makeReceiver(ctx context.Context, t TestingT, logger log.Logger, dbDir stri
 	transparent := &relabeler_config.InputRelabelerConfig{
 		Name: "transparent_relabeler",
 	}
+
+	unloadDataStorage := false
 	receiver, err := receiver.NewReceiver(
 		ctx,
 		log.With(logger, "component", "receiver"),
@@ -163,6 +165,7 @@ func makeReceiver(ctx context.Context, t TestingT, logger log.Logger, dbDir stri
 		4*time.Hour,
 		90*time.Second,
 		100e3,
+		unloadDataStorage,
 	)
 	require.NoError(t, err, "create a receiver")
 	return receiver

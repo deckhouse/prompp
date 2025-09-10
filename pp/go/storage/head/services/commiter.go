@@ -19,6 +19,7 @@ type Committer[
 ] struct {
 	activeHead ActiveHeadContainer[TTask, TShard, TGoShard, THead]
 	m          Mediator
+	isNewHead  func(headID string) bool
 }
 
 // NewCommitter init new [Committer].
@@ -29,10 +30,12 @@ func NewCommitter[
 ](
 	activeHead ActiveHeadContainer[TTask, TShard, TGoShard, THead],
 	m Mediator,
+	isNewHead func(headID string) bool,
 ) *Committer[TTask, TShard, TGoShard, THead] {
 	return &Committer[TTask, TShard, TGoShard, THead]{
 		activeHead: activeHead,
 		m:          m,
+		isNewHead:  isNewHead,
 	}
 }
 
@@ -43,7 +46,7 @@ func (s *Committer[TTask, TShard, TGoShard, THead]) Execute(ctx context.Context)
 	logger.Infof("The Committer is running.")
 
 	for range s.m.C() {
-		if err := s.activeHead.With(ctx, s.commitAndFlushViaRange); err != nil {
+		if err := s.activeHead.With(ctx, s.commitFlushSync); err != nil {
 			logger.Errorf("wal commit failed: %v", err)
 		}
 	}
@@ -53,6 +56,12 @@ func (s *Committer[TTask, TShard, TGoShard, THead]) Execute(ctx context.Context)
 	return nil
 }
 
-func (s *Committer[TTask, TShard, TGoShard, THead]) commitAndFlushViaRange(h THead) error {
-	return CommitAndFlushViaRange(h)
+// commitFlushSync finalize segment from encoder and add to wal
+// and flush wal segment writer, write all buffered data to storage and sync, do via range.
+func (s *Committer[TTask, TShard, TGoShard, THead]) commitFlushSync(h THead) error {
+	if s.isNewHead(h.ID()) {
+		return nil
+	}
+
+	return CFSViaRange(h)
 }
