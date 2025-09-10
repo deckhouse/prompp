@@ -79,11 +79,11 @@ class Scraper {
    public:
     explicit MetricsWrapper(const Scraper& scraper) : scraper_(scraper) {}
 
-    [[nodiscard]] PROMPP_LAMBDA_INLINE uint32_t size() const noexcept { return scraper_.metric_buffer_.items_count(); }
-    [[nodiscard]] PROMPP_LAMBDA_INLINE auto begin() const noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return scraper_.metric_buffer_.items_count(); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept {
       return scraper_.metric_buffer_.begin(scraper_.parser_.tokenizer().buffer(), scraper_.default_timestamp());
     }
-    [[nodiscard]] PROMPP_LAMBDA_INLINE static auto end() noexcept { return MetricMarkupBuffer::end(); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return MetricMarkupBuffer::end(); }
 
    private:
     const Scraper& scraper_;
@@ -93,17 +93,17 @@ class Scraper {
    public:
     explicit MetadataWrapper(const Scraper& scraper) : scraper_(scraper) {}
 
-    [[nodiscard]] PROMPP_LAMBDA_INLINE uint32_t size() const noexcept { return scraper_.metadata_buffer_.items_count(); }
-    [[nodiscard]] PROMPP_LAMBDA_INLINE auto begin() const noexcept { return scraper_.metadata_buffer_.begin(scraper_.parser_.tokenizer().buffer()); }
-    [[nodiscard]] PROMPP_LAMBDA_INLINE static auto end() noexcept { return MetadataMarkupBuffer::end(); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return scraper_.metadata_buffer_.items_count(); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return scraper_.metadata_buffer_.begin(scraper_.parser_.tokenizer().buffer()); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return MetadataMarkupBuffer::end(); }
 
    private:
     const Scraper& scraper_;
   };
 
-  [[nodiscard]] PROMPP_LAMBDA_INLINE uint32_t size() const noexcept { return metric_buffer_.items_count(); }
-  [[nodiscard]] PROMPP_LAMBDA_INLINE auto begin() const noexcept { return metric_buffer_.begin(parser_.tokenizer().buffer(), default_timestamp_); }
-  [[nodiscard]] PROMPP_LAMBDA_INLINE static auto end() noexcept { return MetricMarkupBuffer::end(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return metric_buffer_.items_count(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return metric_buffer_.begin(parser_.tokenizer().buffer(), default_timestamp_); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return MetricMarkupBuffer::end(); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE MetricsWrapper metrics() const noexcept { return MetricsWrapper{*this}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE MetadataWrapper metadata() const noexcept { return MetadataWrapper{*this}; }
@@ -194,7 +194,7 @@ class Scraper {
       uint32_t labels_count{};
       encoding::LayoutMarker layout{};
 
-      ptr = decode_varint(ptr, layout, labels_count);
+      ptr = decode_count(ptr, layout, labels_count);
       ts.label_set().resize(labels_count);
 
       auto label_iter = ts.label_set().begin();
@@ -214,7 +214,7 @@ class Scraper {
     const MarkedMetric* item_{};
     Primitives::Timestamp default_timestamp_;
 
-    PROMPP_ALWAYS_INLINE static const char* decode_varint(const char* ptr, encoding::LayoutMarker& layout, uint32_t& labels_count) noexcept {
+    PROMPP_ALWAYS_INLINE static const char* decode_count(const char* ptr, encoding::LayoutMarker& layout, uint32_t& labels_count) noexcept {
       uint64_t chunk;
       std::memcpy(&chunk, ptr, sizeof(chunk));
 
@@ -484,16 +484,8 @@ class Scraper {
       bytes_shrink(offset + bytes_written);
     }
 
-    void add_label(MarkedLabel label, uint32_t base_offset) noexcept {
+    void add_label(MarkedLabel label) noexcept {
       static constexpr uint8_t szm[4] = {0, 1, 2, 4};
-
-      if (label.name.is_reserved_name()) [[unlikely]] {
-        label.name.offset = 0;
-        label.name.length = 0;
-      } else {
-        label.name.offset -= base_offset;
-      }
-      label.value.offset -= base_offset;
 
       const uint32_t offset = bytes_count();
       char* out = bytes_buffer_.data() + offset;
@@ -769,46 +761,12 @@ class Scraper {
     metric_buffer_.bytes_enlarge(bytes_offset + calculate_metric_prealloc_size(labels_.size()));
     metric_buffer_.bytes_shrink(bytes_offset);
 
-    const encoding::LayoutMarker layout = create_layout_marker();
+    const encoding::LayoutMarker layout =
+        encoding::LayoutMarker::make(marked_sample_.has_ts, labels_.size(), encoding::value_type(marked_sample_.sample.value()));
     metric_buffer_.add_layout(layout.raw);
 
     process_labels_buffer(metric_offset);
     metric_buffer_.add_sample(layout, marked_sample_.sample);
-  }
-
-  [[nodiscard]] encoding::LayoutMarker create_layout_marker() noexcept {
-    using encoding::LayoutMarker;
-    using encoding::SampleValueType;
-
-    const uint32_t labels_count = labels_.size();
-    const double val = marked_sample_.sample.value();
-
-    if (std::isnan(val)) [[unlikely]] {
-      return LayoutMarker::make(marked_sample_.has_ts, labels_count, SampleValueType::kNaN);
-    }
-    if (val == 0.0) [[unlikely]] {
-      return LayoutMarker::make(marked_sample_.has_ts, labels_count, SampleValueType::kZero);
-    }
-
-    if (std::trunc(val) == val && val > 0.0) [[likely]] {
-      const auto uval = static_cast<uint64_t>(val);
-      if (uval <= std::numeric_limits<uint8_t>::max()) {
-        return LayoutMarker::make(marked_sample_.has_ts, labels_count, SampleValueType::kUint8);
-      }
-      if (uval <= std::numeric_limits<uint16_t>::max()) {
-        return LayoutMarker::make(marked_sample_.has_ts, labels_count, SampleValueType::kUint16);
-      }
-      if (uval <= std::numeric_limits<uint32_t>::max()) {
-        return LayoutMarker::make(marked_sample_.has_ts, labels_count, SampleValueType::kUint32);
-      }
-    }
-
-    const auto f = static_cast<float>(val);
-    if (static_cast<double>(f) == val) [[unlikely]] {
-      return LayoutMarker::make(marked_sample_.has_ts, labels_count, SampleValueType::kFloat);
-    }
-
-    return LayoutMarker::make(marked_sample_.has_ts, labels_count, SampleValueType::kDouble);
   }
 
   void process_labels_buffer(uint32_t offset) noexcept {
@@ -817,17 +775,26 @@ class Scraper {
 
     metric_buffer_.add_count(labels_.size());
 
-    for (const auto& label : labels_) {
-      metric_buffer_.add_label(label, offset);
+    for (auto& label : labels_) {
+      if (label.name.is_reserved_name()) [[unlikely]] {
+        label.name.offset = 0;
+        label.name.length = 0;
+      } else {
+        label.name.offset -= offset;
+      }
+      label.value.offset -= offset;
+
+      metric_buffer_.add_label(label);
     }
   }
 
   void sort_and_filter_labels() noexcept {
-    const auto it = std::remove_if(labels_.begin(), labels_.end(), [](const MarkedLabel& label) { return label.value.is_empty(); });
+    const auto it = std::remove_if(labels_.begin(), labels_.end(), [](const MarkedLabel& label) PROMPP_LAMBDA_INLINE { return label.value.is_empty(); });
     labels_.erase(it, labels_.end());
 
-    std::sort(labels_.begin(), labels_.end(),
-              [buffer = parser_.tokenizer().buffer()](const MarkedLabel& a, const MarkedLabel& b) { return a.name.view(buffer) < b.name.view(buffer); });
+    std::sort(labels_.begin(), labels_.end(), [buffer = parser_.tokenizer().buffer()](const MarkedLabel& a, const MarkedLabel& b) PROMPP_LAMBDA_INLINE {
+      return a.name.view(buffer) < b.name.view(buffer);
+    });
   }
 
   void append_labels_hash() noexcept {
@@ -840,11 +807,11 @@ class Scraper {
   }
 
   static PROMPP_ALWAYS_INLINE uint32_t calculate_metric_prealloc_size(uint32_t labels_count) noexcept {
-    constexpr uint32_t kCountVarintPreallocBytes = 8;
-    constexpr uint32_t kLabelPreallocBytes = 17;
-    constexpr uint32_t kSamplePreallocSize = 17;
+    constexpr uint32_t kCountVarintBytes = 8;
+    constexpr uint32_t kLabelBytes = 17;
+    constexpr uint32_t kSampleSize = 16;
 
-    return kCountVarintPreallocBytes + labels_count * kLabelPreallocBytes + kSamplePreallocSize;
+    return kCountVarintBytes + labels_count * kLabelBytes + kSampleSize;
   }
 
   Parser parser_;
