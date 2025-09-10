@@ -2,12 +2,13 @@
 
 #include <simdutf/simdutf.h>
 
-#include <ranges>
 #include <span>
 
 #include "bare_bones/algorithm.h"
+#include "bare_bones/bit.h"
 #include "bare_bones/vector.h"
 #include "bare_bones/xxhash.h"
+#include "encoding.h"
 #include "parser.h"
 #include "prometheus/hashdex.h"
 #include "prometheus/metric.h"
@@ -22,7 +23,10 @@ template <ParserInterface Parser>
 class Scraper {
  public:
   [[nodiscard]] Error parse(std::span<char> buffer, Primitives::Timestamp default_timestamp) {
+    metric_buffer_.initialize(buffer.size() / 4);
+    metadata_buffer_.initialize(buffer.size() / 128);
     labels_.reserve(255);
+
     default_timestamp_ = default_timestamp;
 
     auto& tokenizer = parser_.tokenizer();
@@ -118,7 +122,7 @@ class Scraper {
     uint32_t offset{std::numeric_limits<uint32_t>::max()};
     uint32_t length{std::numeric_limits<uint32_t>::max()};
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE static MarkedString create(const std::string_view& value, const std::string_view& buffer) noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE static MarkedString create(std::string_view value, std::string_view buffer) noexcept {
       return {
           .offset = static_cast<uint32_t>(value.data() - buffer.data()),
           .length = static_cast<uint32_t>(value.size()),
@@ -151,9 +155,9 @@ class Scraper {
   };
 
   struct MarkedMetric {
-    uint64_t hash{};
-    uint32_t base_offset{};
-    uint32_t data_offset{};
+    uint64_t hash;
+    uint32_t base_offset;
+    uint32_t data_offset;
   };
 
   struct MarkedMetadata {
@@ -171,7 +175,7 @@ class Scraper {
     struct Context {
       std::string_view buffer;
       const BareBones::Vector<char>& bytes_buffer;
-      Primitives::Timestamp default_timestamp;
+      Primitives::Timestamp default_timestamp{};
     };
 
     Metric(const Context& ctx, const MarkedMetric* item)
@@ -187,75 +191,19 @@ class Scraper {
       const char* ptr = reinterpret_cast<const char*>(bytes_buffer_.data() + item_->data_offset);
       const char* base = buffer_.data() + item_->base_offset;
 
-      // decode label count
-      uint32_t labels_count = decode_varint(ptr);
+      uint32_t labels_count{};
+      encoding::LayoutMarker layout{};
+
+      ptr = decode_varint(ptr, layout, labels_count);
       ts.label_set().resize(labels_count);
 
-      // decode label
       auto label_iter = ts.label_set().begin();
       for (uint32_t i = 0; i < labels_count; ++i) {
         const uint32_t consumed_bytes = decode_label(ptr, base, label_iter++);
         ptr += consumed_bytes;
       }
 
-      // decode sample
-      uint8_t marker = static_cast<uint8_t>(*ptr++);
-      bool has_ts = (marker & 0b10000000) != 0;
-      uint8_t type = marker & 0b01111111;
-
-      Primitives::Sample sample{};
-      double& val = sample.value();
-
-      if (type == 0b00000011) [[likely]] {  // uint32_t
-        uint32_t x;
-        std::memcpy(&x, ptr, sizeof(x));
-        ptr += sizeof(x);
-        val = static_cast<double>(x);
-      } else if (type == 0b00001001) [[likely]] {  // double
-        std::memcpy(&val, ptr, sizeof(val));
-        ptr += sizeof(val);
-      } else [[unlikely]] {
-        switch (type) {
-          case 0b00000000:  // zero
-            val = 0.0;
-            break;
-
-          case 0b00000001: {  // uint8
-            val = static_cast<double>(*ptr++);
-            break;
-          }
-
-          case 0b00000010: {  // uint16
-            uint16_t x;
-            std::memcpy(&x, ptr, sizeof(x));
-            ptr += sizeof(x);
-            val = static_cast<double>(x);
-            break;
-          }
-
-          case 0b00000100:  // NaN (normal)
-            val = Prometheus::kNormalNan;
-            break;
-
-          case 0b00001000: {  // float32
-            float x;
-            std::memcpy(&x, ptr, sizeof(x));
-            ptr += sizeof(x);
-            val = static_cast<double>(x);
-            break;
-          }
-
-          default:
-            val = Prometheus::kStaleNan;
-            break;
-        }
-      }
-
-      if (has_ts) [[unlikely]] {
-        memcpy(&sample.timestamp(), ptr, sizeof(sample.timestamp()));
-      } else {
-        sample.timestamp() = default_timestamp_;
-      }
+      auto [p, sample] = encoding::SampleCodec::decode(ptr, layout, default_timestamp_);
 
       ts.samples().emplace_back(sample);
     }
@@ -266,33 +214,18 @@ class Scraper {
     const MarkedMetric* item_{};
     Primitives::Timestamp default_timestamp_;
 
-    PROMPP_ALWAYS_INLINE static uint32_t decode_varint(const char*& ptr) noexcept {
-      uint32_t b0 = static_cast<uint8_t>(*ptr++);
-      if ((b0 & 0x80) == 0) [[likely]] {
-        return b0;
-      }
+    PROMPP_ALWAYS_INLINE static const char* decode_varint(const char* ptr, encoding::LayoutMarker& layout, uint32_t& labels_count) noexcept {
+      uint64_t chunk;
+      std::memcpy(&chunk, ptr, sizeof(chunk));
 
-      uint32_t b1 = static_cast<uint8_t>(*ptr++);
-      uint32_t v = (b0 & 0x7F) | ((b1 & 0x7F) << 7);
-      if ((b1 & 0x80) == 0) {
-        return v;
-      }
+      layout = encoding::LayoutMarker{.raw = static_cast<uint8_t>(chunk)};
 
-      uint32_t b2 = static_cast<uint8_t>(*ptr++);
-      v |= (b2 & 0x7F) << 14;
-      if ((b2 & 0x80) == 0) {
-        return v;
-      }
+      chunk >>= 8;
+      const uint64_t mask = (1ULL << BareBones::Bit::to_bits(layout.count_size_in_bytes())) - 1;
 
-      uint32_t b3 = static_cast<uint8_t>(*ptr++);
-      v |= (b3 & 0x7F) << 21;
-      if ((b3 & 0x80) == 0) {
-        return v;
-      }
+      labels_count = static_cast<uint32_t>(chunk & mask);
 
-      uint32_t b4 = static_cast<uint8_t>(*ptr++);
-      v |= (b4 & 0x0F) << 28;
-      return v;
+      return ptr + 1 + layout.count_size_in_bytes();
     }
 
     PROMPP_ALWAYS_INLINE static uint32_t read_val_partial(const char*& p, uint8_t sz) noexcept {
@@ -331,7 +264,6 @@ class Scraper {
         const uint8_t value_off = static_cast<uint8_t>(chunk >> 24);
         const uint8_t value_len = static_cast<uint8_t>(chunk >> 32);
 
-        //*iter = {std::string_view(base + name_off, name_len), std::string_view(base + value_off, value_len)};
         std::construct_at(iter, std::string_view(base + name_off, name_len), std::string_view(base + value_off, value_len));
 
         return 5;
@@ -400,7 +332,6 @@ class Scraper {
           }
         }
 
-        //*iter = {Prometheus::kMetricLabelName, std::string_view(base + value_off, value_len)};
         std::construct_at(iter, Prometheus::kMetricLabelName, std::string_view(base + value_off, value_len));
 
         return 1 + used;
@@ -519,49 +450,37 @@ class Scraper {
       bytes_count_ = new_size;
     }
 
-    void bytes_shrink(uint32_t new_size) noexcept {
-      // assert(new_size <= bytes_count_);
-      bytes_count_ = new_size;
-    }
+    void bytes_shrink(uint32_t new_size) noexcept { bytes_count_ = new_size; }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return this->buffer_.allocated_memory() + bytes_buffer_.allocated_memory(); }
+
+    PROMPP_ALWAYS_INLINE void initialize(size_t reserve_bytes) noexcept {
+      this->buffer_.clear();
+
+      const size_t bytes_buffer_reserve = (reserve_bytes / 3) * 2;
+      const size_t items_buffer_reserve = (bytes_buffer_reserve / 3) / sizeof(MarkedMetric);
+
+      this->buffer_.reserve(items_buffer_reserve);
+      bytes_buffer_.reserve(bytes_buffer_reserve);
+      bytes_count_ = 0;
+    }
 
     PROMPP_ALWAYS_INLINE void add_hash(uint64_t hash) noexcept { this->buffer_.back().hash = hash; }
 
     PROMPP_ALWAYS_INLINE void add_metric(uint32_t global_offset) noexcept {
-      this->buffer_.push_back(MarkedMetric{.base_offset = global_offset, .data_offset = bytes_count()});
+      this->buffer_.push_back(MarkedMetric{.hash = {}, .base_offset = global_offset, .data_offset = bytes_count()});
+    }
+
+    void add_layout(uint8_t layout) noexcept {
+      const uint32_t offset = bytes_count();
+      *(bytes_buffer_.data() + offset) = layout;
+      bytes_shrink(offset + 1);
     }
 
     void add_count(uint32_t count) noexcept {
-      constexpr uint8_t kContinueBit = 0x80;
-      constexpr uint8_t kValueMask = 0x7F;
-
-      uint64_t packed;
-      int bytes_written = 0;
-
-      if (count < (1u << 7)) [[likely]] {
-        packed = static_cast<uint8_t>(count);
-        bytes_written = 1;
-      } else if (count < (1u << 14)) {
-        packed = (static_cast<uint64_t>((count & kValueMask) | kContinueBit)) | (static_cast<uint64_t>(count >> 7) << 8);
-        bytes_written = 2;
-      } else if (count < (1u << 21)) {
-        packed = (static_cast<uint64_t>((count & kValueMask) | kContinueBit)) | (static_cast<uint64_t>(((count >> 7) & kValueMask) | kContinueBit) << 8) |
-                 (static_cast<uint64_t>(count >> 14) << 16);
-        bytes_written = 3;
-      } else if (count < (1u << 28)) {
-        packed = (static_cast<uint64_t>((count & kValueMask) | kContinueBit)) | (static_cast<uint64_t>(((count >> 7) & kValueMask) | kContinueBit) << 8) |
-                 (static_cast<uint64_t>(((count >> 14) & kValueMask) | kContinueBit) << 16) | (static_cast<uint64_t>(count >> 21) << 24);
-        bytes_written = 4;
-      } else {
-        packed = (static_cast<uint64_t>((count & kValueMask) | kContinueBit)) | (static_cast<uint64_t>(((count >> 7) & kValueMask) | kContinueBit) << 8) |
-                 (static_cast<uint64_t>(((count >> 14) & kValueMask) | kContinueBit) << 16) |
-                 (static_cast<uint64_t>(((count >> 21) & kValueMask) | kContinueBit) << 24) | (static_cast<uint64_t>(count >> 28) << 32);
-        bytes_written = 5;
-      }
-
+      const uint32_t bytes_written = (std::bit_width(count) + 7) / 8;
       const uint32_t offset = bytes_count();
-      std::memcpy(bytes_buffer_.data() + offset, &packed, sizeof(packed));
+      std::memcpy(bytes_buffer_.data() + offset, &count, sizeof(count));
       bytes_shrink(offset + bytes_written);
     }
 
@@ -591,53 +510,17 @@ class Scraper {
 
       *start = (sz0) | (sz1 << 2) | (sz2 << 4) | (sz3 << 6);
 
-      const uint32_t written = static_cast<uint32_t>(out - start);
+      const auto written = static_cast<uint32_t>(out - start);
       bytes_shrink(offset + written);
     }
 
-    void add_sample(const MarkedSample& sample) noexcept {
-      const double val = sample.sample.value();
-      const bool has_ts = sample.has_ts;
+    void add_sample(encoding::LayoutMarker layout, const Primitives::Sample& sample) noexcept {
+      using encoding::SampleValueType;
 
-      const uint32_t offset = bytes_count();
-      char* out = bytes_buffer_.data() + offset;
-      char* start = out;
+      char* data_ptr = bytes_buffer_.data();
+      const char* end = encoding::SampleCodec::encode(data_ptr + bytes_count(), layout, sample);
 
-      if (std::isnan(val)) [[unlikely]] {
-        *out++ = static_cast<char>((has_ts ? 0b10000000 : 0) | 0b00000100);  // NaN
-      } else if (val == 0.0) [[unlikely]] {
-        *out++ = static_cast<char>((has_ts ? 0b10000000 : 0) | 0b00000000);  // Zero
-      } else if (std::trunc(val) == val && val > 0.0) [[likely]] {
-        const uint64_t uval = static_cast<uint64_t>(val);
-        if (uval <= std::numeric_limits<uint8_t>::max()) {
-          const auto v = static_cast<uint8_t>(uval);
-          out = write_marker_and_value(out, 0b00000001, has_ts, v);
-        } else if (uval <= std::numeric_limits<uint16_t>::max()) {
-          const auto v = static_cast<uint16_t>(uval);
-          out = write_marker_and_value(out, 0b00000010, has_ts, v);
-        } else if (uval <= std::numeric_limits<uint32_t>::max()) {
-          const auto v = static_cast<uint32_t>(uval);
-          out = write_marker_and_value(out, 0b00000011, has_ts, v);
-        } else {
-          out = write_marker_and_value(out, 0b00001001, has_ts, val);  // double
-        }
-      } else {
-        float f = static_cast<float>(val);
-        if (static_cast<double>(f) == val) [[unlikely]] {
-          out = write_marker_and_value(out, 0b00001000, has_ts, f);  // float
-        } else {
-          out = write_marker_and_value(out, 0b00001001, has_ts, val);  // double
-        }
-      }
-
-      if (has_ts) {
-        const auto ts = sample.sample.timestamp();
-        std::memcpy(out, &ts, sizeof(ts));
-        out += sizeof(ts);
-      }
-
-      const uint32_t written = static_cast<uint32_t>(out - start);
-      bytes_shrink(offset + written);
+      bytes_shrink(end - data_ptr);
     }
 
     void add_padding() noexcept {
@@ -649,13 +532,6 @@ class Scraper {
     BareBones::Vector<char> bytes_buffer_{};
     uint32_t bytes_count_ = 0;
 
-    template <typename T>
-    PROMPP_ALWAYS_INLINE static char* write_marker_and_value(char* out, uint8_t marker, bool has_ts, const T& val) noexcept {
-      *out++ = static_cast<char>((has_ts ? 0b10000000 : 0) | marker);
-      std::memcpy(out, &val, sizeof(T));
-      return out + sizeof(T);
-    }
-
     PROMPP_ALWAYS_INLINE static uint8_t push_and_encode(char* out, uint32_t v) noexcept {
       if (v == 0) [[unlikely]] {
         return 0b00;
@@ -665,7 +541,7 @@ class Scraper {
         return 0b01;
       }
       if (v <= 0xFFFF) [[unlikely]] {
-        const uint16_t value = static_cast<uint16_t>(v);
+        const auto value = static_cast<uint16_t>(v);
         std::memcpy(out, &value, sizeof(value));
         return 0b10;
       }
@@ -684,6 +560,12 @@ class Scraper {
       return {typename Base::Context{buffer}, this->buffer_.data(), this->items_count()};
     }
     [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
+
+    PROMPP_ALWAYS_INLINE void initialize(size_t reserve_bytes) noexcept {
+      this->buffer_.clear();
+      const size_t items_buffer_reserve = reserve_bytes / sizeof(MarkedMetric);
+      this->buffer_.reserve(items_buffer_reserve);
+    }
 
     PROMPP_ALWAYS_INLINE void add(MarkedString metric_name, MarkedString text, Prometheus::MetadataType type) noexcept {
       this->buffer_.emplace_back(metric_name, text, type);
@@ -767,10 +649,7 @@ class Scraper {
     auto error = parse_metric_suffix();
 
     if (error == Error::kNoError) [[likely]] {
-      metric_buffer_.add_metric(metric_offset);
-
-      process_labels_buffer(metric_offset);
-      metric_buffer_.add_sample(marked_sample_);
+      encode_metric_data(metric_offset);
     }
 
     return error;
@@ -883,13 +762,58 @@ class Scraper {
     return parser_.parse_timestamp(marked_sample_.sample.timestamp(), marked_sample_.has_ts);
   }
 
-  void process_labels_buffer(uint32_t offset) noexcept {
-    sort_and_filter_labels();
-    append_labels_hash();
+  void encode_metric_data(uint32_t metric_offset) noexcept {
+    metric_buffer_.add_metric(metric_offset);
 
     const uint32_t bytes_offset = metric_buffer_.bytes_count();
     metric_buffer_.bytes_enlarge(bytes_offset + calculate_metric_prealloc_size(labels_.size()));
     metric_buffer_.bytes_shrink(bytes_offset);
+
+    const encoding::LayoutMarker layout = create_layout_marker();
+    metric_buffer_.add_layout(layout.raw);
+
+    process_labels_buffer(metric_offset);
+    metric_buffer_.add_sample(layout, marked_sample_.sample);
+  }
+
+  [[nodiscard]] encoding::LayoutMarker create_layout_marker() noexcept {
+    using encoding::LayoutMarker;
+    using encoding::SampleValueType;
+
+    const uint32_t labels_count = labels_.size();
+    const double val = marked_sample_.sample.value();
+
+    if (std::isnan(val)) [[unlikely]] {
+      return LayoutMarker::make(marked_sample_.has_ts, labels_count, SampleValueType::kNaN);
+    }
+    if (val == 0.0) [[unlikely]] {
+      return LayoutMarker::make(marked_sample_.has_ts, labels_count, SampleValueType::kZero);
+    }
+
+    if (std::trunc(val) == val && val > 0.0) [[likely]] {
+      const auto uval = static_cast<uint64_t>(val);
+      if (uval <= std::numeric_limits<uint8_t>::max()) {
+        return LayoutMarker::make(marked_sample_.has_ts, labels_count, SampleValueType::kUint8);
+      }
+      if (uval <= std::numeric_limits<uint16_t>::max()) {
+        return LayoutMarker::make(marked_sample_.has_ts, labels_count, SampleValueType::kUint16);
+      }
+      if (uval <= std::numeric_limits<uint32_t>::max()) {
+        return LayoutMarker::make(marked_sample_.has_ts, labels_count, SampleValueType::kUint32);
+      }
+    }
+
+    const auto f = static_cast<float>(val);
+    if (static_cast<double>(f) == val) [[unlikely]] {
+      return LayoutMarker::make(marked_sample_.has_ts, labels_count, SampleValueType::kFloat);
+    }
+
+    return LayoutMarker::make(marked_sample_.has_ts, labels_count, SampleValueType::kDouble);
+  }
+
+  void process_labels_buffer(uint32_t offset) noexcept {
+    sort_and_filter_labels();
+    append_labels_hash();
 
     metric_buffer_.add_count(labels_.size());
 
