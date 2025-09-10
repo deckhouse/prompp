@@ -232,4 +232,151 @@ TEST_F(SampleCodecFixture, Decode_ReturnedPointerAdvancesCorrectly_WithTimestamp
   EXPECT_EQ(res.sample.timestamp(), 2048);
 }
 
+class LabelCodecFixture : public testing::Test {
+ protected:
+  static constexpr size_t kBufSize = 64;
+  std::array<char, kBufSize> buf_{};
+
+  LabelCodec::DecodeResult encode_and_decode(uint32_t name_off, uint32_t name_len, uint32_t value_off, uint32_t value_len) {
+    buf_.fill(0);
+    char* start = buf_.data();
+    char* end = LabelCodec::encode(start, name_off, name_len, value_off, value_len);
+
+    const auto res = LabelCodec::decode(start);
+
+    EXPECT_EQ(res.next, end);
+    return res;
+  }
+};
+
+TEST_F(LabelCodecFixture, EncodeDecode_AllZeros) {
+  // Arrange
+
+  // Act
+  const auto res = encode_and_decode(0, 0, 0, 0);
+
+  // Assert
+  EXPECT_EQ(res.label_name_offset, 0u);
+  EXPECT_EQ(res.label_name_length, 0u);
+  EXPECT_EQ(res.label_value_offset, 0u);
+  EXPECT_EQ(res.label_value_length, 0u);
+}
+
+TEST_F(LabelCodecFixture, EncodeDecode_OneByteValues) {
+  // Arrange
+
+  // Act
+  const auto res = encode_and_decode(1, 2, 3, 4);
+
+  EXPECT_EQ(res.label_name_offset, 1u);
+  EXPECT_EQ(res.label_name_length, 2u);
+  EXPECT_EQ(res.label_value_offset, 3u);
+  EXPECT_EQ(res.label_value_length, 4u);
+}
+
+TEST_F(LabelCodecFixture, EncodeDecode_TwoByteValues) {
+  // Arrange
+
+  // Act
+  const auto res = encode_and_decode(300, 400, 500, 600);
+
+  EXPECT_EQ(res.label_name_offset, 300u);
+  EXPECT_EQ(res.label_name_length, 400u);
+  EXPECT_EQ(res.label_value_offset, 500u);
+  EXPECT_EQ(res.label_value_length, 600u);
+}
+
+TEST_F(LabelCodecFixture, EncodeDecode_FourByteValues) {
+  // Arrange
+
+  // Act
+  const auto res = encode_and_decode(100000, 200000, 300000, 400000);
+
+  // Assert
+  EXPECT_EQ(res.label_name_offset, 100000u);
+  EXPECT_EQ(res.label_name_length, 200000u);
+  EXPECT_EQ(res.label_value_offset, 300000u);
+  EXPECT_EQ(res.label_value_length, 400000u);
+}
+
+TEST_F(LabelCodecFixture, EncodeDecode_0044) {
+  // Arrange
+
+  // Act
+  const auto res = encode_and_decode(0, 0, 300000, 400000);
+
+  // Assert
+  EXPECT_EQ(res.label_name_offset, 0);
+  EXPECT_EQ(res.label_name_length, 0);
+  EXPECT_EQ(res.label_value_offset, 300000u);
+  EXPECT_EQ(res.label_value_length, 400000u);
+}
+
+TEST_F(LabelCodecFixture, EncodeDecode_0024) {
+  // Arrange
+
+  // Act
+  const auto res = encode_and_decode(0, 0, 1234, 123456);
+
+  // Assert
+  EXPECT_EQ(res.label_name_offset, 0);
+  EXPECT_EQ(res.label_name_length, 0);
+  EXPECT_EQ(res.label_value_offset, 1234);
+  EXPECT_EQ(res.label_value_length, 123456);
+}
+
+TEST_F(LabelCodecFixture, EncodeDecode_0124) {
+  // Arrange
+
+  // Act
+  const auto res = encode_and_decode(0, 12, 1234, 123456);
+
+  // Assert
+  EXPECT_EQ(res.label_name_offset, 0);
+  EXPECT_EQ(res.label_name_length, 12);
+  EXPECT_EQ(res.label_value_offset, 1234);
+  EXPECT_EQ(res.label_value_length, 123456);
+}
+
+TEST_F(LabelCodecFixture, FastPath_Layout01010101) {
+  // Arrange
+  buf_.fill(0);
+  char* start = buf_.data();
+  start[0] = static_cast<char>(0b01010101);
+  start[1] = 10;
+  start[2] = 11;
+  start[3] = 12;
+  start[4] = 13;
+
+  // Act
+  const auto res = LabelCodec::decode(buf_.data());
+
+  // Assert
+  EXPECT_EQ(res.label_name_offset, 10u);
+  EXPECT_EQ(res.label_name_length, 11u);
+  EXPECT_EQ(res.label_value_offset, 12u);
+  EXPECT_EQ(res.label_value_length, 13u);
+  EXPECT_EQ(res.next, buf_.data() + 5);
+}
+
+TEST_F(LabelCodecFixture, SimplifiedPath_NameFieldsZero) {
+  // Arrange
+  buf_.fill(0);
+  uint8_t layout = 0b10010000;
+  buf_[0] = static_cast<char>(layout);
+  buf_[1] = 42;
+  uint16_t len = 1234;
+  std::memcpy(buf_.data() + 2, &len, 2);
+
+  // Act
+  const auto res = LabelCodec::decode(buf_.data());
+
+  // Assert
+  EXPECT_EQ(res.label_name_offset, 0u);
+  EXPECT_EQ(res.label_name_length, 0u);
+  EXPECT_EQ(res.label_value_offset, 42u);
+  EXPECT_EQ(res.label_value_length, 1234u);
+  EXPECT_EQ(res.next, buf_.data() + 1 + 1 + 2);
+}
+
 }  // namespace

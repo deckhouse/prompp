@@ -189,7 +189,6 @@ class Scraper {
     template <class Timeseries>
     void read(Timeseries& ts) const {
       const char* ptr = reinterpret_cast<const char*>(bytes_buffer_.data() + item_->data_offset);
-      const char* base = buffer_.data() + item_->base_offset;
 
       uint32_t labels_count{};
       encoding::LayoutMarker layout{};
@@ -198,9 +197,16 @@ class Scraper {
       ts.label_set().resize(labels_count);
 
       auto label_iter = ts.label_set().begin();
+      const char* base = buffer_.data() + item_->base_offset;
       for (uint32_t i = 0; i < labels_count; ++i) {
-        const uint32_t consumed_bytes = decode_label(ptr, base, label_iter++);
-        ptr += consumed_bytes;
+        const auto [next_ptr, name_off, name_len, value_off, value_len] = encoding::LabelCodec::decode(ptr);
+        ptr = next_ptr;
+
+        if (name_len == 0 && name_off == 0) [[unlikely]] {
+          std::construct_at(label_iter++, Prometheus::kMetricLabelName, std::string_view(base + value_off, value_len));
+        } else {
+          std::construct_at(label_iter++, std::string_view(base + name_off, name_len), std::string_view(base + value_off, value_len));
+        }
       }
 
       auto [p, sample] = encoding::SampleCodec::decode(ptr, layout, default_timestamp_);
@@ -226,136 +232,6 @@ class Scraper {
       labels_count = static_cast<uint32_t>(chunk & mask);
 
       return ptr + 1 + layout.count_size_in_bytes();
-    }
-
-    PROMPP_ALWAYS_INLINE static uint32_t read_val_partial(const char*& p, uint8_t sz) noexcept {
-      if (sz == 0b01) [[likely]] {
-        return *p++;
-      }
-
-      if (sz == 0b00) {
-        return 0;
-      }
-
-      if (sz == 0b10) {
-        uint16_t v;
-        std::memcpy(&v, p, 2);
-        p += 2;
-        return v;
-      }
-
-      uint32_t v;
-      std::memcpy(&v, p, 4);
-      p += 4;
-      return v;
-    }
-
-    template <class LabelSetIter>
-    PROMPP_ALWAYS_INLINE static uint32_t decode_label(const char* ptr, const char* base, LabelSetIter iter) noexcept {
-      const char* start = ptr;
-
-      uint64_t chunk;
-      std::memcpy(&chunk, ptr, sizeof(chunk));
-      uint8_t layout = static_cast<uint8_t>(chunk);
-
-      if (layout == 0b01010101) [[likely]] {
-        const uint8_t name_off = static_cast<uint8_t>(chunk >> 8);
-        const uint8_t name_len = static_cast<uint8_t>(chunk >> 16);
-        const uint8_t value_off = static_cast<uint8_t>(chunk >> 24);
-        const uint8_t value_len = static_cast<uint8_t>(chunk >> 32);
-
-        std::construct_at(iter, std::string_view(base + name_off, name_len), std::string_view(base + value_off, value_len));
-
-        return 5;
-      }
-
-      if ((layout & 0x0F) == 0) [[likely]] {
-        chunk >>= 8;
-
-        const uint8_t sz2 = (layout >> 4) & 0x3;
-        const uint8_t sz3 = (layout >> 6) & 0x3;
-
-        uint32_t value_off = 0;
-        uint32_t value_len = 0;
-        size_t used = 0;
-
-        // value_off
-        switch (sz2) {
-          case 0b00: {
-            value_off = 0;
-            break;
-          }
-          case 0b01: {
-            value_off = static_cast<uint8_t>(chunk);
-            used += 1;
-            chunk >>= 8;
-            break;
-          }
-          case 0b10: {
-            value_off = static_cast<uint16_t>(chunk);
-            used += 2;
-            chunk >>= 16;
-            break;
-          }
-          default: {
-            value_off = static_cast<uint32_t>(chunk);
-            used += 4;
-            chunk >>= 32;
-            break;
-          }
-        }
-
-        // value_len
-        switch (sz3) {
-          case 0b00: {
-            value_len = 0;
-            break;
-          }
-          case 0b01: {
-            value_len = static_cast<uint8_t>(chunk);
-            used += 1;
-            break;
-          }
-          case 0b10: {
-            value_len = static_cast<uint16_t>(chunk);
-            used += 2;
-            break;
-          }
-          default: {
-            used += 4;
-            if (used <= 7) [[likely]] {
-              value_len = static_cast<uint32_t>(chunk);
-            } else [[unlikely]] {
-              std::memcpy(&value_len, start + 1 + used, 4);
-            }
-            break;
-          }
-        }
-
-        std::construct_at(iter, Prometheus::kMetricLabelName, std::string_view(base + value_off, value_len));
-
-        return 1 + used;
-      }
-
-      ptr += 1;
-
-      const uint8_t sz0 = (layout >> 0) & 0x3;
-      const uint8_t sz1 = (layout >> 2) & 0x3;
-      const uint8_t sz2 = (layout >> 4) & 0x3;
-      const uint8_t sz3 = (layout >> 6) & 0x3;
-
-      const uint32_t name_off = read_val_partial(ptr, sz0);
-      const uint32_t name_len = read_val_partial(ptr, sz1);
-      const uint32_t value_off = read_val_partial(ptr, sz2);
-      const uint32_t value_len = read_val_partial(ptr, sz3);
-
-      if (name_len == 0 && name_off == 0) [[unlikely]] {
-        std::construct_at(iter, Prometheus::kMetricLabelName, std::string_view(base + value_off, value_len));
-      } else {
-        std::construct_at(iter, std::string_view(base + name_off, name_len), std::string_view(base + value_off, value_len));
-      }
-
-      return static_cast<uint32_t>(ptr - start);
     }
   };
 
@@ -485,25 +361,9 @@ class Scraper {
     }
 
     void add_label(MarkedLabel label) noexcept {
-      static constexpr uint8_t szm[4] = {0, 1, 2, 4};
-
-      const uint32_t offset = bytes_count();
-      char* out = bytes_buffer_.data() + offset;
-      char* start = out++;
-
-      const uint8_t sz0 = push_and_encode(out, label.name.offset);
-      out += szm[sz0];
-      const uint8_t sz1 = push_and_encode(out, label.name.length);
-      out += szm[sz1];
-      const uint8_t sz2 = push_and_encode(out, label.value.offset);
-      out += szm[sz2];
-      const uint8_t sz3 = push_and_encode(out, label.value.length);
-      out += szm[sz3];
-
-      *start = (sz0) | (sz1 << 2) | (sz2 << 4) | (sz3 << 6);
-
-      const auto written = static_cast<uint32_t>(out - start);
-      bytes_shrink(offset + written);
+      const auto end =
+          encoding::LabelCodec::encode(bytes_buffer_.data() + bytes_count(), label.name.offset, label.name.length, label.value.offset, label.value.length);
+      bytes_shrink(end - bytes_buffer_.data());
     }
 
     void add_sample(encoding::LayoutMarker layout, const Primitives::Sample& sample) noexcept {

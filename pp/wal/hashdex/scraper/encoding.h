@@ -134,4 +134,164 @@ class SampleCodec {
   }
 };
 
+class LabelCodec {
+ public:
+  static PROMPP_ALWAYS_INLINE char* encode(char* out,
+                                           const uint32_t label_name_offset,
+                                           const uint32_t label_name_length,
+                                           const uint32_t label_value_offset,
+                                           const uint32_t label_value_length) noexcept {
+    static constexpr uint8_t szm[4] = {0, 1, 2, 4};
+
+    char* start = out++;
+    const uint8_t sz0 = push_and_encode(out, label_name_offset);
+    out += szm[sz0];
+    const uint8_t sz1 = push_and_encode(out, label_name_length);
+    out += szm[sz1];
+    const uint8_t sz2 = push_and_encode(out, label_value_offset);
+    out += szm[sz2];
+    const uint8_t sz3 = push_and_encode(out, label_value_length);
+    out += szm[sz3];
+
+    *start = (sz0) | (sz1 << 2) | (sz2 << 4) | (sz3 << 6);
+
+    return out;
+  }
+
+  struct DecodeResult {
+    const char* next;
+    uint32_t label_name_offset;
+    uint32_t label_name_length;
+    uint32_t label_value_offset;
+    uint32_t label_value_length;
+  };
+
+  static PROMPP_ALWAYS_INLINE DecodeResult decode(const char* in) noexcept {
+    const char* start = in;
+
+    uint64_t chunk;
+    std::memcpy(&chunk, in, sizeof(chunk));
+    const auto layout = static_cast<uint8_t>(chunk);
+
+    if (layout == 0b01010101) [[likely]] {
+      const auto name_off = static_cast<uint8_t>(chunk >> 8);
+      const auto name_len = static_cast<uint8_t>(chunk >> 16);
+      const auto value_off = static_cast<uint8_t>(chunk >> 24);
+      const auto value_len = static_cast<uint8_t>(chunk >> 32);
+
+      return DecodeResult{
+          .next = start + 5, .label_name_offset = name_off, .label_name_length = name_len, .label_value_offset = value_off, .label_value_length = value_len};
+    }
+
+    if ((layout & 0x0F) == 0) [[likely]] {
+      chunk >>= 8;
+
+      const uint8_t sz2 = (layout >> 4) & 0x3;
+      const uint8_t sz3 = (layout >> 6) & 0x3;
+
+      uint32_t value_off = 0;
+      uint32_t value_len = 0;
+      size_t used = 0;
+
+      // value_off
+      switch (sz2) {
+        case 0b00:
+          break;
+        case 0b01:
+          value_off = static_cast<uint8_t>(chunk);
+          used += 1;
+          chunk >>= 8;
+          break;
+        case 0b10:
+          value_off = static_cast<uint16_t>(chunk);
+          used += 2;
+          chunk >>= 16;
+          break;
+        default:
+          value_off = static_cast<uint32_t>(chunk);
+          used += 4;
+          chunk >>= 32;
+          break;
+      }
+
+      // value_len
+      switch (sz3) {
+        case 0b00:
+          break;
+        case 0b01:
+          value_len = static_cast<uint8_t>(chunk);
+          used += 1;
+          break;
+        case 0b10:
+          value_len = static_cast<uint16_t>(chunk);
+          used += 2;
+          break;
+        default:
+
+          if (used + 4 <= 7) [[likely]] {
+            value_len = static_cast<uint32_t>(chunk);
+          } else [[unlikely]] {
+            std::memcpy(&value_len, start + 1 + used, 4);
+          }
+          used += 4;
+          break;
+      }
+
+      return DecodeResult{
+          .next = start + 1 + used, .label_name_offset = 0, .label_name_length = 0, .label_value_offset = value_off, .label_value_length = value_len};
+    }
+
+    in += 1;
+    const uint8_t sz0 = (layout >> 0) & 0x3;
+    const uint8_t sz1 = (layout >> 2) & 0x3;
+    const uint8_t sz2 = (layout >> 4) & 0x3;
+    const uint8_t sz3 = (layout >> 6) & 0x3;
+
+    const uint32_t name_off = read_val_partial(in, sz0);
+    const uint32_t name_len = read_val_partial(in, sz1);
+    const uint32_t value_off = read_val_partial(in, sz2);
+    const uint32_t value_len = read_val_partial(in, sz3);
+
+    return DecodeResult{
+        .next = in, .label_name_offset = name_off, .label_name_length = name_len, .label_value_offset = value_off, .label_value_length = value_len};
+  }
+
+ private:
+  static PROMPP_ALWAYS_INLINE uint8_t push_and_encode(char* out, uint32_t v) noexcept {
+    if (v == 0) [[unlikely]] {
+      return 0b00;
+    }
+    if (v <= 0xFF) [[likely]] {
+      *out = static_cast<char>(v);
+      return 0b01;
+    }
+    if (v <= 0xFFFF) [[unlikely]] {
+      const auto value = static_cast<uint16_t>(v);
+      std::memcpy(out, &value, sizeof(value));
+      return 0b10;
+    }
+    std::memcpy(out, &v, sizeof(v));
+    return 0b11;
+  }
+
+  static PROMPP_ALWAYS_INLINE uint32_t read_val_partial(const char*& p, uint8_t sz) noexcept {
+    if (sz == 0b01) [[likely]] {
+      return *p++;
+    }
+    if (sz == 0b00) {
+      return 0;
+    }
+    if (sz == 0b10) {
+      uint16_t v;
+      std::memcpy(&v, p, 2);
+      p += 2;
+      return v;
+    }
+    uint32_t v;
+    std::memcpy(&v, p, 4);
+    p += 4;
+    return v;
+  }
+};
+
 }  // namespace PromPP::WAL::hashdex::scraper::encoding
