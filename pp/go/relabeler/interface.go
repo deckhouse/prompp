@@ -3,6 +3,7 @@ package relabeler
 import (
 	"context"
 	"errors"
+	"hash/crc32"
 	"sync/atomic"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -15,15 +16,21 @@ type DataStorage interface {
 	AppendInnerSeriesSlice(innerSeriesSlice []*cppbridge.InnerSeries)
 	Raw() *cppbridge.HeadDataStorage
 	MergeOutOfOrderChunks()
-	Query(query cppbridge.HeadDataStorageQuery) *cppbridge.HeadDataStorageSerializedChunks
-	InstantQuery(targetTimestamp, notFoundValueTimestampValue int64, seriesIDs []uint32) []cppbridge.Sample
+	Query(query cppbridge.HeadDataStorageQuery) (*cppbridge.HeadDataStorageSerializedChunks, cppbridge.DataStorageQueryResult)
+	QueryFinal(queriers []uintptr)
+	InstantQuery(targetTimestamp, notFoundValueTimestampValue int64, seriesIDs []uint32) ([]cppbridge.Sample, cppbridge.DataStorageQueryResult)
 	AllocatedMemory() uint64
+	CreateUnusedSeriesDataUnloader() *cppbridge.UnusedSeriesDataUnloader
+	CreateLoader(queriers []uintptr) *cppbridge.UnloadedDataLoader
+	CreateRevertableLoader(lss *cppbridge.LabelSetStorage, lsIdBatchSize uint32) *cppbridge.UnloadedDataRevertableLoader
+	TimeInterval() cppbridge.TimeInterval
+	GetQueriedSeriesBitset() []byte
 }
 
 type LSS interface {
 	Raw() *cppbridge.LabelSetStorage
 	AllocatedMemory() uint64
-	QueryLabelValues(label_name string, matchers []model.LabelMatcher) *cppbridge.LSSQueryLabelValuesResult
+	QueryLabelValues(labelName string, matchers []model.LabelMatcher) *cppbridge.LSSQueryLabelValuesResult
 	QueryLabelNames(matchers []model.LabelMatcher) *cppbridge.LSSQueryLabelNamesResult
 	QuerySelector(matchers []model.LabelMatcher) (selector uintptr, status uint32)
 	GetLabelSets(labelSetIDs []uint32) *cppbridge.LabelSetStorageGetLabelSetsResult
@@ -40,6 +47,34 @@ type Wal interface {
 	Flush() error
 }
 
+type UnloadedDataSnapshotHeader struct {
+	Crc32        uint32
+	SnapshotSize uint32
+}
+
+func NewUnloadedDataSnapshotHeader(snapshot []byte) UnloadedDataSnapshotHeader {
+	return UnloadedDataSnapshotHeader{Crc32: crc32.ChecksumIEEE(snapshot), SnapshotSize: uint32(len(snapshot))}
+}
+
+func (h UnloadedDataSnapshotHeader) IsValid(snapshot []byte) bool {
+	return h.Crc32 == crc32.ChecksumIEEE(snapshot)
+}
+
+type UnloadedDataStorage interface {
+	WriteSnapshot(snapshot []byte) (UnloadedDataSnapshotHeader, error)
+	WriteIndex(UnloadedDataSnapshotHeader)
+	ForEachSnapshot(f func(snapshot []byte, isLast bool)) error
+}
+
+type QueriedSeriesStorage interface {
+	Write(queriedSeriesBitset []byte, timestamp int64) error
+	Close() error
+}
+
+type DataStorageLoadAndQueryTask interface {
+	Release() []uintptr
+}
+
 type InputRelabeler interface {
 	CacheAllocatedMemory() uint64
 }
@@ -50,6 +85,9 @@ type Shard interface {
 	DataStorage() DataStorage
 	LSS() LSS
 	Wal() Wal
+	UnloadedDataStorage() UnloadedDataStorage
+	QueriedSeriesStorage() QueriedSeriesStorage
+	LoadAndQueryTask() DataStorageLoadAndQueryTask
 	// lock for DataStorage
 	DataStorageLock()
 	DataStorageRLock()
@@ -96,7 +134,10 @@ type Head interface {
 	CreateTask(taskName string, fn ShardFn, isLss bool) *GenericTask
 	Concurrency() int64
 	RLockQuery(ctx context.Context) (runlock func(), err error)
+	CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr) *GenericTask
+	UnloadUnusedSeriesData()
 	Raw() Head
+	UnrecoverableError(error)
 }
 
 type Distributor interface {

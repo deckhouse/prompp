@@ -692,7 +692,15 @@ func (ng *Engine) queueActive(ctx context.Context, q *query) (func(), error) {
 	queueSpanTimer, _ := q.stats.GetSpanTimer(ctx, stats.ExecQueueTime, ng.metrics.queryQueueTime)
 	queryIndex, err := ng.activeQueryTracker.Insert(ctx, q.q)
 	queueSpanTimer.Finish()
-	return func() { ng.activeQueryTracker.Delete(queryIndex) }, err
+	return func() {
+		// PP_CHANGES.md: rebuild on cpp start fix segfault ng.activeQueryTracker
+		if ng.activeQueryTracker == nil {
+			return
+		}
+		// PP_CHANGES.md: rebuild on cpp end
+
+		ng.activeQueryTracker.Delete(queryIndex)
+	}, err
 }
 
 func timeMilliseconds(t time.Time) int64 {

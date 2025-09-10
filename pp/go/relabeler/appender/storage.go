@@ -28,7 +28,7 @@ type WriteNotifier interface {
 
 // BlockWriter writes block on disk.
 type BlockWriter interface {
-	Write(block block.Block) error
+	Write(shard relabeler.Shard) ([]block.WrittenBlock, error)
 }
 
 // QueryableStorage hold reference to finalized heads and writes blocks from them. Also allows query not yet not
@@ -168,10 +168,8 @@ func (qs *QueryableStorage) write() bool {
 		tBlockWrite := head.CreateTask(
 			relabeler.BlockWrite,
 			func(shard relabeler.Shard) error {
-				shard.LSSRLock()
-				defer shard.LSSRUnlock()
-
-				return qs.blockWriter.Write(relabeler.NewBlock(shard.LSS().Raw(), shard.DataStorage().Raw()))
+				_, err := qs.blockWriter.Write(shard)
+				return err
 			},
 			relabeler.ForLSSTask,
 		)

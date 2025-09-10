@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bare_bones/algorithm.h"
+#include "bare_bones/bitset.h"
 #include "bare_bones/preprocess.h"
 #include "chunk/data_chunk.h"
 #include "chunk/finalized_chunk.h"
@@ -190,6 +191,9 @@ struct DataStorage {
   uint32_t outdated_chunks_count{};
   uint32_t merged_samples_count{};
 
+  BareBones::Bitset unloaded_series_bitmap{};
+  BareBones::Bitset queried_series_bitmap{};
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesChunks chunks(uint32_t ls_id) const noexcept { return SeriesChunks{this, ls_id}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE Chunks chunks() const noexcept { return Chunks{this}; }
 
@@ -238,6 +242,15 @@ struct DataStorage {
   }
 
   template <chunk::DataChunk::Type chunk_type>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE encoder::CompactBitSequence& get_asc_integer_stream(uint32_t stream_id) noexcept {
+    if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
+      return variant_encoders[stream_id].asc_integer.stream();
+    } else {
+      return finalized_data_streams[stream_id];
+    }
+  }
+
+  template <chunk::DataChunk::Type chunk_type>
   [[nodiscard]] PROMPP_ALWAYS_INLINE const encoder::CompactBitSequence& get_values_gorilla_stream(uint32_t stream_id) const noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return variant_encoders[stream_id].values_gorilla.stream();
@@ -247,7 +260,25 @@ struct DataStorage {
   }
 
   template <chunk::DataChunk::Type chunk_type>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE encoder::CompactBitSequence& get_values_gorilla_stream(uint32_t stream_id) noexcept {
+    if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
+      return variant_encoders[stream_id].values_gorilla.stream();
+    } else {
+      return finalized_data_streams[stream_id];
+    }
+  }
+
+  template <chunk::DataChunk::Type chunk_type>
   [[nodiscard]] PROMPP_ALWAYS_INLINE const encoder::CompactBitSequence& get_asc_integer_then_values_gorilla_stream(uint32_t stream_id) const noexcept {
+    if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
+      return variant_encoders[stream_id].asc_integer_then_values_gorilla.stream();
+    } else {
+      return finalized_data_streams[stream_id];
+    }
+  }
+
+  template <chunk::DataChunk::Type chunk_type>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE encoder::CompactBitSequence& get_asc_integer_then_values_gorilla_stream(uint32_t stream_id) noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return variant_encoders[stream_id].asc_integer_then_values_gorilla.stream();
     } else {
@@ -280,7 +311,7 @@ struct DataStorage {
 
     return open_chunks.allocated_memory() + encoders_memory + timestamp_encoder.allocated_memory() + finalized_timestamp_streams.allocated_memory() +
            finalized_data_streams.allocated_memory() + finalized_chunks_map_allocated_memory + outdated_chunks_map_allocated_memory +
-           outdated_chunks_allocated_memory;
+           outdated_chunks_allocated_memory + unloaded_series_bitmap.allocated_memory() + queried_series_bitmap.allocated_memory();
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory(EncodingType encoding_type) const noexcept {
@@ -296,6 +327,14 @@ struct DataStorage {
     if (encoding_type == EncodingType::kGorilla) {
       return gorilla_encoders.allocated_memory();
     }
+    return 0;
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t get_open_chunk_index(uint32_t ls_id) const noexcept {
+    if (const auto it = finalized_chunks.find(ls_id); it != finalized_chunks.end()) [[unlikely]] {
+      return it->second.count();
+    }
+
     return 0;
   }
 

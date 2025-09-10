@@ -7,7 +7,7 @@
 #include "performance_tests/dummy_wal.h"
 #include "primitives/snug_composites.h"
 #include "series_data/encoder.h"
-#include "series_data/outdated_sample_encoder.h"
+#include "series_data/outdated_chunk_merger.h"
 
 namespace performance_tests {
 

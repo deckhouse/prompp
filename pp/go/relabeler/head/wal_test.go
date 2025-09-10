@@ -2,12 +2,13 @@ package head_test
 
 import (
 	"bytes"
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/relabeler/head"
-	"github.com/stretchr/testify/require"
 	"hash/crc32"
 	"io"
 	"testing"
+
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/relabeler/head"
+	"github.com/stretchr/testify/require"
 )
 
 func TestReadWriteHeader(t *testing.T) {
@@ -53,7 +54,8 @@ func TestReadWriteSegment(t *testing.T) {
 	bytesWritten, err := head.WriteSegment(readWriter, NewTestSegment(data))
 	require.NoError(t, err)
 
-	decodedSegment, bytesRead, err := head.ReadSegment(readWriter)
+	var decodedSegment head.DecodedSegment
+	bytesRead, err := head.ReadSegment(readWriter, &decodedSegment)
 	require.NoError(t, err)
 	require.Equal(t, bytesWritten, bytesRead)
 	require.Equal(t, len(decodedSegment.Data()), len(data))
