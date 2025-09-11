@@ -46,6 +46,7 @@ var _ storage.Storage = (*Adapter)(nil)
 // Adapter for implementing the [Queryable] interface and append data.
 type Adapter struct {
 	proxy          *pp_storage.ProxyHead
+	cfg            *pp_storage.Config
 	haTracker      *hatracker.HighAvailabilityTracker
 	hashdexFactory cppbridge.HashdexFactory
 	hashdexLimits  cppbridge.WALHashdexLimits
