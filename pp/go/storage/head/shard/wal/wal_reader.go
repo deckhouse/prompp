@@ -22,20 +22,25 @@ type ReadSegment[T any] interface {
 
 // SegmentWalReader buffered reader [ReadSegment]s from wal.
 type SegmentWalReader[T any, TReadSegment ReadSegment[T]] struct {
-	reader *bufio.Reader
+	reader      *bufio.Reader
+	segmentCtor func() TReadSegment
 }
 
 // NewSegmentWalReader init new [SegmentWalReader].
-func NewSegmentWalReader[T any, TReadSegment ReadSegment[T]](r io.Reader) *SegmentWalReader[T, TReadSegment] {
+func NewSegmentWalReader[T any, TReadSegment ReadSegment[T]](
+	r io.Reader,
+	segmentCtor func() TReadSegment,
+) *SegmentWalReader[T, TReadSegment] {
 	return &SegmentWalReader[T, TReadSegment]{
-		reader: bufio.NewReaderSize(r, 1024*1024*4),
+		reader:      bufio.NewReaderSize(r, 1024*1024*4),
+		segmentCtor: segmentCtor,
 	}
 }
 
 // ForEachSegment reads [ReadSegment]s from the reader and for each [ReadSegment] a [do] is called for each,
 // if an error occurs during reading it will return and reading will stop.
 func (r *SegmentWalReader[T, TReadSegment]) ForEachSegment(do func(TReadSegment) error) error {
-	var segment TReadSegment
+	segment := r.segmentCtor()
 	for {
 		segment.Reset()
 

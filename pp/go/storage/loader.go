@@ -137,7 +137,7 @@ func (l *Loader) UploadShard(
 	decoder := cppbridge.NewHeadWalDecoder(lss.Target(), encoderVersion)
 	dataStorage := shard.NewDataStorage()
 
-	if err = wal.NewSegmentWalReader[reader.Segment](shardFile).ForEachSegment(func(s *reader.Segment) error {
+	if err = wal.NewSegmentWalReader(shardFile, reader.NewSegment).ForEachSegment(func(s *reader.Segment) error {
 		if decodeErr := dataStorage.DecodeSegment(decoder, s.Bytes()); decodeErr != nil {
 			return fmt.Errorf("failed to decode segment: %w", decodeErr)
 		}
