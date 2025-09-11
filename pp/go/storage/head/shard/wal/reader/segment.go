@@ -13,6 +13,11 @@ type Segment struct {
 	sampleCount uint32
 }
 
+// NewSegment init new [Segment].
+func NewSegment() *Segment {
+	return &Segment{}
+}
+
 // Bytes returns the data read.
 func (s *Segment) Bytes() []byte {
 	return s.data

@@ -54,6 +54,7 @@ type Shard interface {
 // Head
 //
 
+// Head stores and manages shards, handles reads and writes of time series data within a time window.
 type Head[TShard Shard, TGorutineShard Shard] struct {
 	id         string
 	generation uint64
