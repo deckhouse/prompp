@@ -8,30 +8,27 @@ import (
 )
 
 // ReadSegment the minimum required [Segment] implementation for a [Wal].
-type ReadSegment[T any] interface {
+type ReadSegment interface {
 	// ReadFrom reads [ReadSegment] data from r [io.Reader]. The return value n is the number of bytes read.
 	// Any error encountered during the read is also returned.
 	ReadFrom(r io.Reader) (int64, error)
 
 	// Reset [ReadSegment] data.
 	Reset()
-
-	// for use as a pointer
-	*T
 }
 
 // SegmentWalReader buffered reader [ReadSegment]s from wal.
-type SegmentWalReader[T any, TReadSegment ReadSegment[T]] struct {
+type SegmentWalReader[TReadSegment ReadSegment] struct {
 	reader      *bufio.Reader
 	segmentCtor func() TReadSegment
 }
 
 // NewSegmentWalReader init new [SegmentWalReader].
-func NewSegmentWalReader[T any, TReadSegment ReadSegment[T]](
+func NewSegmentWalReader[TReadSegment ReadSegment](
 	r io.Reader,
 	segmentCtor func() TReadSegment,
-) *SegmentWalReader[T, TReadSegment] {
-	return &SegmentWalReader[T, TReadSegment]{
+) *SegmentWalReader[TReadSegment] {
+	return &SegmentWalReader[TReadSegment]{
 		reader:      bufio.NewReaderSize(r, 1024*1024*4),
 		segmentCtor: segmentCtor,
 	}
@@ -39,7 +36,7 @@ func NewSegmentWalReader[T any, TReadSegment ReadSegment[T]](
 
 // ForEachSegment reads [ReadSegment]s from the reader and for each [ReadSegment] a [do] is called for each,
 // if an error occurs during reading it will return and reading will stop.
-func (r *SegmentWalReader[T, TReadSegment]) ForEachSegment(do func(TReadSegment) error) error {
+func (r *SegmentWalReader[TReadSegment]) ForEachSegment(do func(TReadSegment) error) error {
 	segment := r.segmentCtor()
 	for {
 		segment.Reset()
