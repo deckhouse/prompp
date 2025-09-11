@@ -7,7 +7,6 @@ import (
 	"sync/atomic"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
 	"github.com/prometheus/prometheus/pp/go/storage/logger"
 )
@@ -128,9 +127,11 @@ func New[
 }
 
 // Append incoming data to [Head].
+//
+//revive:disable-next-line:flag-parameter this is a flag, but it's more convenient this way
 func (a Appender[TTask, TLSS, TShard, THead]) Append(
 	ctx context.Context,
-	incomingData *storage.IncomingData,
+	incomingData *IncomingData,
 	state *cppbridge.State,
 	commitToWal bool,
 ) ([][]*cppbridge.InnerSeries, cppbridge.RelabelerStats, error) {
@@ -187,6 +188,8 @@ func (a Appender[TTask, TLSS, TShard, THead]) Append(
 }
 
 // inputRelabelingStage first stage - relabeling.
+//
+//revive:disable-next-line:function-length long but this is first stage.
 func (a Appender[TTask, TLSS, TShard, THead]) inputRelabelingStage(
 	ctx context.Context,
 	state *cppbridge.State,
