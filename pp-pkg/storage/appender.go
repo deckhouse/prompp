@@ -12,7 +12,7 @@ import (
 	"github.com/prometheus/prometheus/storage"
 )
 
-// timeSeriesBatch implementation buffer of [ppstorage.TimeSeriesData].
+// timeSeriesBatch implementation buffer of [TimeSeriesBatch].
 type timeSeriesBatch struct {
 	timeSeries []model.TimeSeries
 }
@@ -29,19 +29,19 @@ func (d *timeSeriesBatch) Destroy() {
 
 // TimeSeriesAppender appender for rules, aggregates the [model.TimeSeries] batch and append to head,
 // implementation [storage.Appender].
-type TimeSeriesAppender[THead any, THeadAppender HeadAppender] struct {
+type TimeSeriesAppender struct {
 	ctx     context.Context
-	adapter *Adapter[THead, THeadAppender]
+	adapter *Adapter
 	state   *cppbridge.State
 	batch   *timeSeriesBatch
 }
 
-func newTimeSeriesAppender[THead any, THeadAppender HeadAppender](
+func newTimeSeriesAppender(
 	ctx context.Context,
-	adapter *Adapter[THead, THeadAppender],
+	adapter *Adapter,
 	state *cppbridge.State,
-) *TimeSeriesAppender[THead, THeadAppender] {
-	return &TimeSeriesAppender[THead, THeadAppender]{
+) *TimeSeriesAppender {
+	return &TimeSeriesAppender{
 		ctx:     ctx,
 		adapter: adapter,
 		state:   state,
@@ -50,7 +50,7 @@ func newTimeSeriesAppender[THead any, THeadAppender HeadAppender](
 }
 
 // Append adds a sample pair for the given series, implementation [storage.Appender].
-func (a *TimeSeriesAppender[THead, THeadAppender]) Append(
+func (a *TimeSeriesAppender) Append(
 	_ storage.SeriesRef,
 	l labels.Labels,
 	t int64,
@@ -70,7 +70,7 @@ func (a *TimeSeriesAppender[THead, THeadAppender]) Append(
 }
 
 // AppendCTZeroSample do nothing, implementation [storage.Appender].
-func (*TimeSeriesAppender[THead, THeadAppender]) AppendCTZeroSample(
+func (*TimeSeriesAppender) AppendCTZeroSample(
 	_ storage.SeriesRef,
 	_ labels.Labels,
 	_, _ int64,
@@ -79,7 +79,7 @@ func (*TimeSeriesAppender[THead, THeadAppender]) AppendCTZeroSample(
 }
 
 // AppendExemplar do nothing, implementation [storage.Appender].
-func (*TimeSeriesAppender[THead, THeadAppender]) AppendExemplar(
+func (*TimeSeriesAppender) AppendExemplar(
 	_ storage.SeriesRef,
 	_ labels.Labels,
 	_ exemplar.Exemplar,
@@ -88,7 +88,7 @@ func (*TimeSeriesAppender[THead, THeadAppender]) AppendExemplar(
 }
 
 // AppendHistogram do nothing, implementation [storage.Appender].
-func (*TimeSeriesAppender[THead, THeadAppender]) AppendHistogram(
+func (*TimeSeriesAppender) AppendHistogram(
 	_ storage.SeriesRef,
 	_ labels.Labels,
 	_ int64,
@@ -99,7 +99,7 @@ func (*TimeSeriesAppender[THead, THeadAppender]) AppendHistogram(
 }
 
 // Commit adds aggregated series to the head, implementation [storage.Appender].
-func (a *TimeSeriesAppender[THead, THeadAppender]) Commit() error {
+func (a *TimeSeriesAppender) Commit() error {
 	if len(a.batch.timeSeries) == 0 {
 		return nil
 	}
@@ -109,12 +109,12 @@ func (a *TimeSeriesAppender[THead, THeadAppender]) Commit() error {
 }
 
 // Rollback do nothing, implementation [storage.Appender].
-func (*TimeSeriesAppender[THead, THeadAppender]) Rollback() error {
+func (*TimeSeriesAppender) Rollback() error {
 	return nil
 }
 
 // UpdateMetadata do nothing, implementation [storage.Appender].
-func (*TimeSeriesAppender[THead, THeadAppender]) UpdateMetadata(
+func (*TimeSeriesAppender) UpdateMetadata(
 	_ storage.SeriesRef,
 	_ labels.Labels,
 	_ metadata.Metadata,

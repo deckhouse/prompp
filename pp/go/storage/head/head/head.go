@@ -80,6 +80,8 @@ type Head[TShard Shard, TGorutineShard Shard] struct {
 }
 
 // NewHead init new [Head].
+//
+//revive:disable-next-line:function-length long but readable.
 func NewHead[TShard Shard, TGoroutineShard Shard](
 	id string,
 	shards []TShard,
@@ -104,13 +106,14 @@ func NewHead[TShard Shard, TGoroutineShard Shard](
 		shards:         shards,
 		taskChs:        taskChs,
 		querySemaphore: locker.NewWeighted(2 * concurrency), // x2 for back pressure
+		stopc:          make(chan struct{}),
+		wg:             sync.WaitGroup{},
 
 		// for clearing [Head] metrics
 		memoryInUse: factory.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "prompp_head_cgo_memory_bytes",
 			Help: "Current value memory in use in bytes.",
 		}, []string{"head_id", "allocator", "shard_id"}),
-
 		// for tasks metrics
 		tasksCreated: factory.NewCounterVec(prometheus.CounterOpts{
 			Name: "prompp_head_task_created_count",
@@ -134,7 +137,6 @@ func NewHead[TShard Shard, TGoroutineShard Shard](
 
 	runtime.SetFinalizer(h, func(h *Head[TShard, TGoroutineShard]) {
 		h.memoryInUse.DeletePartialMatch(prometheus.Labels{"head_id": h.id})
-
 		logger.Debugf("head %s destroyed", h.String())
 	})
 

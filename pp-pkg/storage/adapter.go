@@ -4,56 +4,18 @@ import (
 	"context"
 	"math"
 
+	"github.com/jonboulle/clockwork"
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/hatracker"
 	"github.com/prometheus/prometheus/pp/go/model"
-	"github.com/prometheus/prometheus/pp/go/relabeler/querier"
 	pp_storage "github.com/prometheus/prometheus/pp/go/storage"
+	"github.com/prometheus/prometheus/pp/go/storage/appender"
+	"github.com/prometheus/prometheus/pp/go/storage/head/services"
+	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/storage"
 )
-
-//
-// Proxy
-//
-
-// Proxy it proxies requests to the active [Head] and the keeper of old [Head]s.
-type Proxy[THead any] interface {
-	// Get the active [Head].
-	Get() THead
-
-	// RangeQueriableHeadsWithActive returns the iterator to queriable [Head]s:
-	// the active [Head] and the [Head]s from the [Keeper].
-	RangeQueriableHeadsWithActive(mint int64, maxt int64) func(func(THead) bool)
-
-	// With calls fn(h Head) on active [Head].
-	With(ctx context.Context, fn func(h THead) error) error
-}
-
-//
-// HATracker
-//
-
-// HATracker interface for High Availability Tracker.
-type HATracker interface {
-	// IsDrop check whether data needs to be sent or discarded immediately.
-	IsDrop(cluster, replica string) bool
-
-	// Destroy clear all clusters and stop work.
-	Destroy()
-}
-
-//
-// HeadAppender
-//
-
-// HeadAppender adds incoming data to the [Head].
-type HeadAppender interface {
-	Append(
-		ctx context.Context,
-		incomingData *pp_storage.IncomingData,
-		state *cppbridge.State,
-		commitToWal bool,
-	) ([][]*cppbridge.InnerSeries, cppbridge.RelabelerStats, error)
-}
 
 //
 // ProtobufData
@@ -66,7 +28,7 @@ type ProtobufData interface {
 }
 
 //
-// TimeSeriesData
+// TimeSeriesBatch
 //
 
 // TimeSeriesBatch is an universal interface for batch [model.TimeSeries].
@@ -79,19 +41,37 @@ type TimeSeriesBatch interface {
 // Adapter
 //
 
-var _ storage.Storage = (*Adapter[any, HeadAppender])(nil)
+var _ storage.Storage = (*Adapter)(nil)
 
 // Adapter for implementing the [Queryable] interface and append data.
-type Adapter[THead any, THeadAppender HeadAppender] struct {
-	proxy          Proxy[THead]
-	haTracker      HATracker
-	appenderCtor   func(THead) THeadAppender
+type Adapter struct {
+	proxy          *pp_storage.ProxyHead
+	haTracker      *hatracker.HighAvailabilityTracker
 	hashdexFactory cppbridge.HashdexFactory
 	hashdexLimits  cppbridge.WALHashdexLimits
+
+	activeQuerierMetrics  *querier.Metrics
+	storageQuerierMetrics *querier.Metrics
+}
+
+// NewAdapter init new [Adapter].
+func NewAdapter(
+	clock clockwork.Clock,
+	proxy *pp_storage.ProxyHead,
+	registerer prometheus.Registerer,
+) *Adapter {
+	return &Adapter{
+		proxy:                 proxy,
+		haTracker:             hatracker.NewHighAvailabilityTracker(clock, registerer),
+		hashdexFactory:        cppbridge.HashdexFactory{},
+		hashdexLimits:         cppbridge.DefaultWALHashdexLimits(),
+		activeQuerierMetrics:  querier.NewMetrics(registerer, querier.QueryableAppenderSource),
+		storageQuerierMetrics: querier.NewMetrics(registerer, querier.QueryableStorageSource),
+	}
 }
 
 // AppendHashdex append incoming [cppbridge.HashdexContent] to [Head].
-func (ar *Adapter[THead, THeadAppender]) AppendHashdex(
+func (ar *Adapter) AppendHashdex(
 	ctx context.Context,
 	hashdex cppbridge.ShardedData,
 	state *cppbridge.State,
@@ -101,10 +81,10 @@ func (ar *Adapter[THead, THeadAppender]) AppendHashdex(
 		return nil
 	}
 
-	return ar.proxy.With(ctx, func(h THead) error {
-		_, _, err := ar.appenderCtor(h).Append(
+	return ar.proxy.With(ctx, func(h *pp_storage.HeadOnDisk) error {
+		_, _, err := appender.New(h, services.CFViaRange).Append(
 			ctx,
-			&pp_storage.IncomingData{Hashdex: hashdex},
+			&appender.IncomingData{Hashdex: hashdex},
 			state,
 			commitToWal,
 		)
@@ -114,16 +94,16 @@ func (ar *Adapter[THead, THeadAppender]) AppendHashdex(
 }
 
 // AppendScraperHashdex append ScraperHashdex data to [Head].
-func (ar *Adapter[THead, THeadAppender]) AppendScraperHashdex(
+func (ar *Adapter) AppendScraperHashdex(
 	ctx context.Context,
 	hashdex cppbridge.ShardedData,
 	state *cppbridge.State,
 	commitToWal bool,
 ) (stats cppbridge.RelabelerStats, err error) {
-	_ = ar.proxy.With(ctx, func(h THead) error {
-		_, stats, err = ar.appenderCtor(h).Append(
+	_ = ar.proxy.With(ctx, func(h *pp_storage.HeadOnDisk) error {
+		_, stats, err = appender.New(h, services.CFViaRange).Append(
 			ctx,
-			&pp_storage.IncomingData{Hashdex: hashdex},
+			&appender.IncomingData{Hashdex: hashdex},
 			state,
 			commitToWal,
 		)
@@ -135,7 +115,7 @@ func (ar *Adapter[THead, THeadAppender]) AppendScraperHashdex(
 }
 
 // AppendSnappyProtobuf append compressed via snappy Protobuf data to [Head].
-func (ar *Adapter[THead, THeadAppender]) AppendSnappyProtobuf(
+func (ar *Adapter) AppendSnappyProtobuf(
 	ctx context.Context,
 	compressedData ProtobufData,
 	state *cppbridge.State,
@@ -151,10 +131,10 @@ func (ar *Adapter[THead, THeadAppender]) AppendSnappyProtobuf(
 		return nil
 	}
 
-	return ar.proxy.With(ctx, func(h THead) error {
-		_, _, err := ar.appenderCtor(h).Append(
+	return ar.proxy.With(ctx, func(h *pp_storage.HeadOnDisk) error {
+		_, _, err := appender.New(h, services.CFViaRange).Append(
 			ctx,
-			&pp_storage.IncomingData{Hashdex: hx},
+			&appender.IncomingData{Hashdex: hx},
 			state,
 			commitToWal,
 		)
@@ -163,8 +143,8 @@ func (ar *Adapter[THead, THeadAppender]) AppendSnappyProtobuf(
 	})
 }
 
-// AppendTimeSeries append TimeSeries data to [pp_storage.Head].
-func (ar *Adapter[THead, THeadAppender]) AppendTimeSeries(
+// AppendTimeSeries append TimeSeries data to [Head].
+func (ar *Adapter) AppendTimeSeries(
 	ctx context.Context,
 	data TimeSeriesBatch,
 	state *cppbridge.State,
@@ -181,10 +161,10 @@ func (ar *Adapter[THead, THeadAppender]) AppendTimeSeries(
 		return stats, nil
 	}
 
-	_ = ar.proxy.With(ctx, func(h THead) error {
-		_, stats, err = ar.appenderCtor(h).Append(
+	_ = ar.proxy.With(ctx, func(h *pp_storage.HeadOnDisk) error {
+		_, stats, err = appender.New(h, services.CFViaRange).Append(
 			ctx,
-			&pp_storage.IncomingData{Hashdex: hx, Data: data},
+			&appender.IncomingData{Hashdex: hx, Data: data},
 			state,
 			commitToWal,
 		)
@@ -195,8 +175,8 @@ func (ar *Adapter[THead, THeadAppender]) AppendTimeSeries(
 	return stats, err
 }
 
-// Appender create a new [storage.Appender] for [pp_storage.Head].
-func (ar *Adapter[THead, THeadAppender]) Appender(ctx context.Context) storage.Appender {
+// Appender create a new [storage.Appender] for [Head].
+func (ar *Adapter) Appender(ctx context.Context) storage.Appender {
 	//  TODO  state *cppbridge.State
 	var state *cppbridge.State
 
@@ -205,43 +185,82 @@ func (ar *Adapter[THead, THeadAppender]) Appender(ctx context.Context) storage.A
 
 // ChunkQuerier provides querying access over time series data of a fixed time range.
 // Returns new Chunk Querier that merges results of given primary and secondary chunk queriers.
-func (ar *Adapter[THead, THeadAppender]) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
-	// TODO
+func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
+	queriers := make([]storage.ChunkQuerier, 0, 2)
+	ahead := ar.proxy.Get()
+	queriers = append(
+		queriers,
+		querier.NewQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.activeQuerierMetrics),
+	)
+
+	for head := range ar.proxy.RangeQueriableHeads(mint, maxt) {
+		if ahead.ID() == head.ID() {
+			continue
+		}
+
+		queriers = append(
+			queriers,
+			querier.NewQuerier(head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.storageQuerierMetrics),
+		)
+	}
+
 	return storage.NewMergeChunkQuerier(
 		nil,
-		[]storage.ChunkQuerier{},
+		queriers,
 		storage.NewConcatenatingChunkSeriesMerger(),
 	), nil
 }
 
 // Close closes the storage and all its underlying resources.
 // Implements the [storage.Storage] interface.
-func (*Adapter[THead, THeadAppender]) Close() error {
+func (ar *Adapter) Close() error {
+	ar.haTracker.Destroy()
 	return nil
 }
 
 // HeadQuerier returns [storage.Querier] from active head.
-func (ar *Adapter[THead, THeadAppender]) HeadQuerier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
-	// TODO
-	return nil, nil
+func (ar *Adapter) HeadQuerier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
+	return querier.NewQuerier(
+		ar.proxy.Get(),
+		querier.NewNoOpShardedDeduplicator,
+		mint,
+		maxt,
+		nil,
+		ar.activeQuerierMetrics,
+	), nil
 }
 
 // HeadStatus returns stats of Head.
-func (ar *Adapter[THead, THeadAppender]) HeadStatus(ctx context.Context, limit int) pp_storage.HeadStatus {
-	// TODO
-	// ar.proxy.
-	return pp_storage.HeadStatus{}
+func (ar *Adapter) HeadStatus(ctx context.Context, limit int) (querier.HeadStatus, error) {
+	return querier.QueryHeadStatus(ctx, ar.proxy.Get(), limit)
 }
 
 // Querier calls f() with the given parameters.
 // Returns a [querier.MultiQuerier] combining of primary and secondary queriers.
-func (ar *Adapter[THead, THeadAppender]) Querier(mint, maxt int64) (storage.Querier, error) {
-	// TODO
-	return querier.NewMultiQuerier([]storage.Querier{}, nil), nil
+func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
+	queriers := make([]storage.Querier, 0, 2)
+	ahead := ar.proxy.Get()
+	queriers = append(
+		queriers,
+		querier.NewQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.activeQuerierMetrics),
+	)
+
+	for head := range ar.proxy.RangeQueriableHeads(mint, maxt) {
+		if ahead.ID() == head.ID() {
+			continue
+		}
+
+		queriers = append(
+			queriers,
+			querier.NewQuerier(head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.storageQuerierMetrics),
+		)
+	}
+
+	return querier.NewMultiQuerier(queriers, nil), nil
 }
 
 // StartTime returns the oldest timestamp stored in the storage.
 // Implements the [storage.Storage] interface.
-func (*Adapter[THead, THeadAppender]) StartTime() (int64, error) {
+func (*Adapter) StartTime() (int64, error) {
 	return math.MaxInt64, nil
 }

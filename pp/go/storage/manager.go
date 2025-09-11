@@ -353,6 +353,66 @@ func (tn *ReloadBlocksTriggerNotifier) NotifyWritten() {
 }
 
 //
+// uploadOrBuildHead
+//
+
+func uploadOrBuildHead(
+	clock clockwork.Clock,
+	hcatalog *catalog.Catalog,
+	builder *Builder,
+	loader *Loader,
+	blockDuration time.Duration,
+	numberOfShards uint16,
+) (*HeadOnDisk, error) {
+	headRecords := hcatalog.List(
+		func(record *catalog.Record) bool {
+			statusIsAppropriate := record.Status() == catalog.StatusNew ||
+				record.Status() == catalog.StatusActive
+
+			isInBlockTimeRange := clock.Now().Sub(
+				time.UnixMilli(record.CreatedAt()),
+			).Milliseconds() < blockDuration.Milliseconds()
+
+			return record.DeletedAt() == 0 && statusIsAppropriate && isInBlockTimeRange
+		},
+		func(lhs, rhs *catalog.Record) bool {
+			return lhs.CreatedAt() > rhs.CreatedAt()
+		},
+	)
+
+	if numberOfShards == 0 {
+		numberOfShards = DefaultNumberOfShards
+	}
+
+	var generation uint64
+	if len(headRecords) == 0 {
+		// TODO	// m.counter.With(prometheus.Labels{"type": "created"}).Inc()
+		return builder.Build(generation, numberOfShards)
+	}
+
+	h, corrupted := loader.UploadHead(headRecords[0], generation)
+	if corrupted {
+		if !headRecords[0].Corrupted() {
+			if _, setCorruptedErr := hcatalog.SetCorrupted(headRecords[0].ID()); setCorruptedErr != nil {
+				logger.Errorf("failed to set corrupted state, head id: %s: %v", headRecords[0].ID(), setCorruptedErr)
+			}
+		}
+		// TODO	// m.counter.With(prometheus.Labels{"type": "corrupted"}).Inc()
+
+		if _, err := hcatalog.SetStatus(headRecords[0].ID(), catalog.StatusRotated); err != nil {
+			logger.Warnf("failed to set rotated status for head {%s}: %s", headRecords[0].ID(), err)
+		}
+
+		_ = h.Close()
+
+		// TODO	// m.counter.With(prometheus.Labels{"type": "created"}).Inc()
+		return builder.Build(generation, numberOfShards)
+	}
+
+	return h, nil
+}
+
+//
 // NoopKeeper
 //
 
