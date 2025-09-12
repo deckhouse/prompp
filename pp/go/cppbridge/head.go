@@ -294,6 +294,9 @@ func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) (*HeadDataStorageSe
 	serializedChunks := &HeadDataStorageSerializedChunks{}
 	result := seriesDataDataStorageQuery(ds.dataStorage, query, &serializedChunks.data)
 	runtime.KeepAlive(ds)
+	runtime.SetFinalizer(serializedChunks, func(sc *HeadDataStorageSerializedChunks) {
+		freeBytes(sc.data)
+	})
 	return serializedChunks, result
 }
 
