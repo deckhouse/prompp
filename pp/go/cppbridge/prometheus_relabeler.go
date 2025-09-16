@@ -986,7 +986,6 @@ func (c *Cache) Update(ctx context.Context, shardsRelabelerStateUpdate []*Relabe
 type State struct {
 	caches              []*Cache
 	staleNansStates     []*StaleNansState
-	statelessRelabeler  *StatelessRelabeler
 	defTimestamp        int64
 	generationRelabeler uint64
 	generationHead      uint64
@@ -1015,10 +1014,6 @@ func (s *State) CacheByShard(shardID uint16) *Cache {
 			shardID,
 			len(s.caches),
 		))
-	}
-
-	if s.caches[shardID] == nil {
-		s.caches[shardID] = NewCache()
 	}
 
 	return s.caches[shardID]
@@ -1072,11 +1067,6 @@ func (s *State) SetRelabelerOptions(options *RelabelerOptions) {
 	s.options = *options
 }
 
-// SetStatelessRelabeler set [StatelessRelabeler] for [PerGoroutineRelabeler].
-func (s *State) SetStatelessRelabeler(relabeler *StatelessRelabeler) {
-	s.statelessRelabeler = relabeler
-}
-
 // StaleNansStateByShard return SourceStaleNansState for shard.
 func (s *State) StaleNansStateByShard(shardID uint16) *StaleNansState {
 	if int(shardID) >= len(s.staleNansStates) {
@@ -1087,17 +1077,7 @@ func (s *State) StaleNansStateByShard(shardID uint16) *StaleNansState {
 		))
 	}
 
-	if s.staleNansStates[shardID] == nil {
-		s.staleNansStates[shardID] = NewStaleNansState()
-	}
-
 	return s.staleNansStates[shardID]
-}
-
-// StatelessRelabeler returns [StatelessRelabeler] for [PerGoroutineRelabeler].
-func (s *State) StatelessRelabeler() *StatelessRelabeler {
-	// TODO validate nil and reconfigure
-	return s.statelessRelabeler
 }
 
 // TrackStaleness return state track stalenans.
@@ -1113,21 +1093,21 @@ func (s *State) resetCaches(numberOfShards uint16, equaledGeneration bool) {
 		return
 	}
 
-	for shardID := range s.caches {
-		s.caches[shardID] = nil
-	}
+	switch {
+	case len(s.caches) > int(numberOfShards):
+		for shardID := range s.caches[numberOfShards:] {
+			s.caches[shardID] = nil
+		}
 
-	if len(s.caches) > int(numberOfShards) {
 		// cut
 		s.caches = s.caches[:numberOfShards]
+	case len(s.caches) < int(numberOfShards):
+		// grow
+		s.caches = make([]*Cache, numberOfShards)
 	}
 
-	if len(s.caches) < int(numberOfShards) {
-		// grow
-		s.caches = append(
-			s.caches,
-			make([]*Cache, int(numberOfShards)-len(s.caches))...,
-		)
+	for shardID := range s.caches {
+		s.caches[shardID] = NewCache()
 	}
 }
 
@@ -1143,24 +1123,21 @@ func (s *State) resetStaleNansStates(numberOfShards uint16, equaledGeneration bo
 		return
 	}
 
-	for shardID := range s.staleNansStates {
-		state := s.staleNansStates[shardID]
-		if state != nil {
-			state.Reset()
+	switch {
+	case len(s.staleNansStates) > int(numberOfShards):
+		for shardID := range s.staleNansStates[numberOfShards:] {
+			s.staleNansStates[shardID] = nil
 		}
-	}
 
-	if len(s.staleNansStates) > int(numberOfShards) {
 		// cut
 		s.staleNansStates = s.staleNansStates[:numberOfShards]
+	case len(s.staleNansStates) < int(numberOfShards):
+		// grow
+		s.staleNansStates = make([]*StaleNansState, numberOfShards)
 	}
 
-	if len(s.staleNansStates) < int(numberOfShards) {
-		// grow
-		s.staleNansStates = append(
-			s.staleNansStates,
-			make([]*StaleNansState, int(numberOfShards)-len(s.staleNansStates))...,
-		)
+	for shardID := range s.staleNansStates {
+		s.staleNansStates[shardID] = NewStaleNansState()
 	}
 }
 
@@ -1219,7 +1196,7 @@ func (pgr *PerGoroutineRelabeler) InputRelabeling(
 	ctx context.Context,
 	inputLss *LabelSetStorage,
 	targetLss *LabelSetStorage,
-	state *State,
+	state *StateV2,
 	shardedData ShardedData,
 	shardsInnerSeries []*InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
@@ -1262,7 +1239,7 @@ func (pgr *PerGoroutineRelabeler) InputRelabelingFromCache(
 	ctx context.Context,
 	inputLss *LabelSetStorage,
 	targetLss *LabelSetStorage,
-	state *State,
+	state *StateV2,
 	shardedData ShardedData,
 	shardsInnerSeries []*InnerSeries,
 ) (RelabelerStats, bool, error) {
@@ -1302,7 +1279,7 @@ func (pgr *PerGoroutineRelabeler) InputRelabelingWithStalenans(
 	ctx context.Context,
 	inputLss *LabelSetStorage,
 	targetLss *LabelSetStorage,
-	state *State,
+	state *StateV2,
 	shardedData ShardedData,
 	shardsInnerSeries []*InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
@@ -1347,7 +1324,7 @@ func (pgr *PerGoroutineRelabeler) InputRelabelingWithStalenansFromCache(
 	ctx context.Context,
 	inputLss *LabelSetStorage,
 	targetLss *LabelSetStorage,
-	state *State,
+	state *StateV2,
 	shardedData ShardedData,
 	shardsInnerSeries []*InnerSeries,
 ) (RelabelerStats, bool, error) {
@@ -1389,7 +1366,7 @@ func (pgr *PerGoroutineRelabeler) Relabeling(
 	ctx context.Context,
 	inputLss *LabelSetStorage,
 	targetLss *LabelSetStorage,
-	state *State,
+	state *StateV2,
 	shardedData ShardedData,
 	shardsInnerSeries []*InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
@@ -1422,7 +1399,7 @@ func (pgr *PerGoroutineRelabeler) RelabelingFromCache(
 	ctx context.Context,
 	inputLss *LabelSetStorage,
 	targetLss *LabelSetStorage,
-	state *State,
+	state *StateV2,
 	shardedData ShardedData,
 	shardsInnerSeries []*InnerSeries,
 ) (RelabelerStats, bool, error) {
@@ -1467,4 +1444,266 @@ func (pgr *PerGoroutineRelabeler) UpdateRelabelerState(
 	runtime.KeepAlive(cache)
 
 	return handleException(exception)
+}
+
+//
+// TransitionLocker
+//
+
+// TransitionLocker is an implementing [sync.Mutex] that, depending on the situation, does not block.
+type TransitionLocker struct {
+	mx   sync.Mutex
+	lock bool
+}
+
+// NewTransitionLocker init new [TransitionLocker].
+func NewTransitionLocker() TransitionLocker {
+	return TransitionLocker{
+		mx:   sync.Mutex{},
+		lock: true,
+	}
+}
+
+// NewTransitionLockerWithoutLock init new [TransitionLocker], without locks.
+func NewTransitionLockerWithoutLock() TransitionLocker {
+	return TransitionLocker{
+		mx:   sync.Mutex{},
+		lock: false,
+	}
+}
+
+// Lock locks rw for writing, if need.
+func (l *TransitionLocker) Lock() {
+	if l.lock {
+		l.mx.Lock()
+	}
+}
+
+// Unlock unlocks rw for writing, if need.
+func (l *TransitionLocker) Unlock() {
+	if l.lock {
+		l.mx.Unlock()
+	}
+}
+
+//
+// StateV2
+//
+
+const (
+	initStatus       uint8 = 0
+	inited           uint8 = 15
+	transitionStatus uint8 = 240
+)
+
+// StateV2 of relabelers per shard.
+type StateV2 struct {
+	caches             []*Cache
+	staleNansStates    []*StaleNansState
+	statelessRelabeler *StatelessRelabeler
+	locker             TransitionLocker
+	defTimestamp       int64
+	generationHead     uint64
+	options            RelabelerOptions
+	status             uint8
+	trackStaleness     bool
+}
+
+// NewTransitionStateV2WithLock init empty [StateV2], with locks.
+func NewTransitionStateV2WithLock() *StateV2 {
+	return &StateV2{
+		locker:         NewTransitionLocker(),
+		generationHead: math.MaxUint64,
+		status:         transitionStatus,
+		trackStaleness: false,
+	}
+}
+
+// NewTransitionStateV2WithoutLock init empty [StateV2], without locks.
+func NewTransitionStateV2WithoutLock() *StateV2 {
+	return &StateV2{
+		locker:         NewTransitionLockerWithoutLock(),
+		generationHead: math.MaxUint64,
+		status:         transitionStatus,
+		trackStaleness: false,
+	}
+}
+
+// NewStateV2WithLock init empty [StateV2], with locks.
+func NewStateV2WithLock() *StateV2 {
+	return &StateV2{
+		locker:         NewTransitionLocker(),
+		generationHead: math.MaxUint64,
+		status:         initStatus,
+		trackStaleness: false,
+	}
+}
+
+// NewStateV2WithoutLock init empty [StateV2], without locks.
+func NewStateV2WithoutLock() *StateV2 {
+	return &StateV2{
+		locker:         NewTransitionLockerWithoutLock(),
+		generationHead: math.MaxUint64,
+		status:         initStatus,
+		trackStaleness: false,
+	}
+}
+
+// CacheByShard return *Cache for shard.
+func (s *StateV2) CacheByShard(shardID uint16) *Cache {
+	if int(shardID) >= len(s.caches) {
+		panic(fmt.Sprintf(
+			"shardID(%d) out of range in caches(%d)",
+			shardID,
+			len(s.caches),
+		))
+	}
+
+	return s.caches[shardID]
+}
+
+// DefTimestamp return timestamp for scrape time and stalenan.
+func (s *StateV2) DefTimestamp() int64 {
+	if s.defTimestamp == 0 {
+		return time.Now().UnixMilli()
+	}
+
+	return s.defTimestamp
+}
+
+// DisableTrackStaleness disable track stalenans.
+func (s *StateV2) DisableTrackStaleness() {
+	s.trackStaleness = false
+}
+
+// EnableTrackStaleness enable track stalenans.
+func (s *StateV2) EnableTrackStaleness() {
+	s.trackStaleness = true
+}
+
+// Reconfigure recreate caches and stalenans states if need and set new generations.
+func (s *StateV2) Reconfigure(
+	generationHead uint64,
+	numberOfShards uint16,
+) {
+	if s.status&inited == inited && generationHead == s.generationHead {
+		return
+	}
+
+	// long way
+	s.locker.Lock()
+
+	// we check it a second time, but under lock
+	if s.status&inited == inited && generationHead == s.generationHead {
+		s.locker.Unlock()
+		return
+	}
+
+	// the transition state does not require caches and staleNaNs
+	if s.status&transitionStatus == transitionStatus {
+		s.status |= inited
+		s.generationHead = generationHead
+		s.locker.Unlock()
+		return
+	}
+
+	s.resetCaches(numberOfShards)
+	s.resetStaleNansStates(numberOfShards)
+
+	s.locker.Unlock()
+}
+
+// RelabelerOptions return Options for relabeler.
+func (s *StateV2) RelabelerOptions() RelabelerOptions {
+	return s.options
+}
+
+// SetDefTimestamp set timestamp for scrape time and stalenan.
+func (s *StateV2) SetDefTimestamp(ts int64) {
+	s.defTimestamp = ts
+}
+
+// SetRelabelerOptions set Options for relabeler.
+func (s *StateV2) SetRelabelerOptions(options *RelabelerOptions) {
+	s.options = *options
+}
+
+// SetStatelessRelabeler sets [StatelessRelabeler] for [PerGoroutineRelabeler].
+func (s *StateV2) SetStatelessRelabeler(statelessRelabeler *StatelessRelabeler) {
+	if s.status&transitionStatus == transitionStatus {
+		panic("state is transition")
+	}
+
+	s.statelessRelabeler = statelessRelabeler
+}
+
+// StaleNansStateByShard return SourceStaleNansState for shard.
+func (s *StateV2) StaleNansStateByShard(shardID uint16) *StaleNansState {
+	if int(shardID) >= len(s.staleNansStates) {
+		panic(fmt.Sprintf(
+			"shardID(%d) out of range in staleNansStates(%d)",
+			shardID,
+			len(s.caches),
+		))
+	}
+
+	return s.staleNansStates[shardID]
+}
+
+// StatelessRelabeler returns [StatelessRelabeler] for [PerGoroutineRelabeler].
+func (s *StateV2) StatelessRelabeler() *StatelessRelabeler {
+	if s.status&transitionStatus == transitionStatus {
+		panic("state is transition")
+	}
+
+	return s.statelessRelabeler
+}
+
+// TrackStaleness return state track stalenans.
+func (s *StateV2) TrackStaleness() bool {
+	return s.trackStaleness
+}
+
+// resetCaches recreate Caches.
+func (s *StateV2) resetCaches(numberOfShards uint16) {
+	switch {
+	case len(s.caches) > int(numberOfShards):
+		for shardID := range s.caches[numberOfShards:] {
+			s.caches[shardID] = nil
+		}
+
+		// cut
+		s.caches = s.caches[:numberOfShards]
+	case len(s.caches) < int(numberOfShards):
+		// grow
+		s.caches = make([]*Cache, numberOfShards)
+	}
+
+	for shardID := range s.caches {
+		s.caches[shardID] = NewCache()
+	}
+}
+
+// resetStaleNansStates recreate StaleNansStates.
+func (s *StateV2) resetStaleNansStates(numberOfShards uint16) {
+	if !s.trackStaleness {
+		return
+	}
+
+	switch {
+	case len(s.staleNansStates) > int(numberOfShards):
+		for shardID := range s.staleNansStates[numberOfShards:] {
+			s.staleNansStates[shardID] = nil
+		}
+
+		// cut
+		s.staleNansStates = s.staleNansStates[:numberOfShards]
+	case len(s.staleNansStates) < int(numberOfShards):
+		// grow
+		s.staleNansStates = make([]*StaleNansState, numberOfShards)
+	}
+
+	for shardID := range s.staleNansStates {
+		s.staleNansStates[shardID] = NewStaleNansState()
+	}
 }

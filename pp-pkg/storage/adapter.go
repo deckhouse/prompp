@@ -45,11 +45,11 @@ var _ storage.Storage = (*Adapter)(nil)
 
 // Adapter for implementing the [Queryable] interface and append data.
 type Adapter struct {
-	proxy          *pp_storage.ProxyHead
-	cfg            *pp_storage.Config
-	haTracker      *hatracker.HighAvailabilityTracker
-	hashdexFactory cppbridge.HashdexFactory
-	hashdexLimits  cppbridge.WALHashdexLimits
+	proxy            *pp_storage.ProxyHead
+	haTracker        *hatracker.HighAvailabilityTracker
+	hashdexFactory   cppbridge.HashdexFactory
+	hashdexLimits    cppbridge.WALHashdexLimits
+	transparentState *cppbridge.StateV2
 
 	activeQuerierMetrics  *querier.Metrics
 	storageQuerierMetrics *querier.Metrics
@@ -60,22 +60,28 @@ func NewAdapter(
 	clock clockwork.Clock,
 	proxy *pp_storage.ProxyHead,
 	registerer prometheus.Registerer,
-) *Adapter {
+) (*Adapter, error) {
+	transparentState, err := cppbridge.NewEmptyStateV2WithConfig([]*cppbridge.RelabelConfig{})
+	if err != nil {
+		return nil, err
+	}
+
 	return &Adapter{
 		proxy:                 proxy,
 		haTracker:             hatracker.NewHighAvailabilityTracker(clock, registerer),
 		hashdexFactory:        cppbridge.HashdexFactory{},
 		hashdexLimits:         cppbridge.DefaultWALHashdexLimits(),
+		transparentState:      transparentState,
 		activeQuerierMetrics:  querier.NewMetrics(registerer, querier.QueryableAppenderSource),
 		storageQuerierMetrics: querier.NewMetrics(registerer, querier.QueryableStorageSource),
-	}
+	}, nil
 }
 
 // AppendHashdex append incoming [cppbridge.HashdexContent] to [Head].
 func (ar *Adapter) AppendHashdex(
 	ctx context.Context,
 	hashdex cppbridge.ShardedData,
-	state *cppbridge.State,
+	state *cppbridge.StateV2,
 	commitToWal bool,
 ) error {
 	if ar.haTracker.IsDrop(hashdex.Cluster(), hashdex.Replica()) {
@@ -98,7 +104,7 @@ func (ar *Adapter) AppendHashdex(
 func (ar *Adapter) AppendScraperHashdex(
 	ctx context.Context,
 	hashdex cppbridge.ShardedData,
-	state *cppbridge.State,
+	state *cppbridge.StateV2,
 	commitToWal bool,
 ) (stats cppbridge.RelabelerStats, err error) {
 	_ = ar.proxy.With(ctx, func(h *pp_storage.HeadOnDisk) error {
@@ -119,7 +125,7 @@ func (ar *Adapter) AppendScraperHashdex(
 func (ar *Adapter) AppendSnappyProtobuf(
 	ctx context.Context,
 	compressedData ProtobufData,
-	state *cppbridge.State,
+	state *cppbridge.StateV2,
 	commitToWal bool,
 ) error {
 	hx, err := cppbridge.NewWALSnappyProtobufHashdex(compressedData.Bytes(), ar.hashdexLimits)
@@ -148,7 +154,7 @@ func (ar *Adapter) AppendSnappyProtobuf(
 func (ar *Adapter) AppendTimeSeries(
 	ctx context.Context,
 	data TimeSeriesBatch,
-	state *cppbridge.State,
+	state *cppbridge.StateV2,
 	commitToWal bool,
 ) (stats cppbridge.RelabelerStats, err error) {
 	hx, err := ar.hashdexFactory.GoModel(data.TimeSeries(), ar.hashdexLimits)
@@ -178,10 +184,7 @@ func (ar *Adapter) AppendTimeSeries(
 
 // Appender create a new [storage.Appender] for [Head].
 func (ar *Adapter) Appender(ctx context.Context) storage.Appender {
-	//  TODO  state *cppbridge.State
-	var state *cppbridge.State
-
-	return newTimeSeriesAppender(ctx, ar, state)
+	return newTimeSeriesAppender(ctx, ar, ar.transparentState)
 }
 
 // ChunkQuerier provides querying access over time series data of a fixed time range.

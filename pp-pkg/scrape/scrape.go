@@ -192,6 +192,10 @@ func newScrapePool(
 		httpOpts:      options.HTTPClientOptions,
 		noDefaultPort: options.NoDefaultPort,
 	}
+
+	// cfg.RelabelConfigs
+	// scrapeState, err := cppbridge.NewEmptyState()
+
 	sp.newLoop = func(opts scrapeLoopOptions) loop {
 		// Update the targets retrieval function for metadata to a new scrape cache.
 		cache := opts.cache
