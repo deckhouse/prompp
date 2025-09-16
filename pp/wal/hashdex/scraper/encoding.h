@@ -29,9 +29,9 @@ struct LayoutMarker {
 
 class SampleCodec {
  public:
-  static constexpr size_t kPreallocatedWriteSize = sizeof(Primitives::Sample);
+  static constexpr size_t kMaximumEncodingSize = sizeof(Primitives::Sample);
 
-  static PROMPP_LAMBDA_INLINE char* encode(char* out, const LayoutMarker layout, Primitives::Sample sample) {
+  static char* encode(char* out, const LayoutMarker layout, Primitives::Sample sample) {
     using encoding::SampleValueType;
 
     const double val = sample.value();
@@ -59,7 +59,7 @@ class SampleCodec {
     Primitives::Sample sample;
   };
 
-  static PROMPP_LAMBDA_INLINE DecodeResult decode(const char* in, const LayoutMarker layout, int64_t default_ts) {
+  static DecodeResult decode(const char* in, const LayoutMarker layout, int64_t default_ts) {
     using encoding::SampleValueType;
 
     DecodeResult result{};
@@ -101,7 +101,7 @@ class SampleCodec {
     return result;
   }
 
-  [[nodiscard]] static PROMPP_LAMBDA_INLINE SampleValueType value_type(const double val) noexcept {
+  [[nodiscard]] static SampleValueType value_type(const double val) noexcept {
     if (std::isnan(val)) [[unlikely]] {
       return SampleValueType::kNaN;
     }
@@ -138,46 +138,22 @@ class SampleCodec {
 
 class LabelCodec {
  public:
-  static constexpr size_t kPreallocatedWriteSize = sizeof(uint8_t) + 4 * sizeof(uint32_t);
+  static constexpr size_t kMaximumEncodingSize = sizeof(uint8_t) + 4 * sizeof(uint32_t);
 
-  static PROMPP_ALWAYS_INLINE char* encode(char* out,
-                                           const uint32_t label_name_offset,
-                                           const uint32_t label_name_length,
-                                           const uint32_t label_value_offset,
-                                           const uint32_t label_value_length) noexcept {
-    static constexpr uint8_t szm[4] = {0, 1, 2, 4};
-
+  static char* encode(char* out,
+                      const uint32_t label_name_offset,
+                      const uint32_t label_name_length,
+                      const uint32_t label_value_offset,
+                      const uint32_t label_value_length) noexcept {
     if (label_name_offset == 0 && label_name_length == 0) [[likely]] {
-      char* start = out++;
-      const uint8_t sz2 = push_and_encode(out, label_value_offset);
-      out += szm[sz2];
-      const uint8_t sz3 = push_and_encode(out, label_value_length);
-      out += szm[sz3];
-      *start = (sz2 << 4) | (sz3 << 6);
-      return out;
+      return encode_value_only(out, label_value_offset, label_value_length);
     }
+
     if ((label_name_offset | label_name_length | label_value_offset | label_value_length) <= 0xFF) [[likely]] {
-      const uint64_t chunk = static_cast<uint64_t>(0b01010101) | static_cast<uint64_t>(label_name_offset) << 8 |
-                             static_cast<uint64_t>(label_name_length) << 16 | static_cast<uint64_t>(label_value_offset) << 24 |
-                             static_cast<uint64_t>(label_value_length) << 32;
-
-      std::memcpy(out, &chunk, sizeof(chunk));
-      return out + 5;
+      return encode_4_bytes(out, label_name_offset, label_name_length, label_value_offset, label_value_length);
     }
 
-    char* start = out++;
-    const uint8_t sz0 = push_and_encode(out, label_name_offset);
-    out += szm[sz0];
-    const uint8_t sz1 = push_and_encode(out, label_name_length);
-    out += szm[sz1];
-    const uint8_t sz2 = push_and_encode(out, label_value_offset);
-    out += szm[sz2];
-    const uint8_t sz3 = push_and_encode(out, label_value_length);
-    out += szm[sz3];
-
-    *start = (sz0) | (sz1 << 2) | (sz2 << 4) | (sz3 << 6);
-
-    return out;
+    return encode_generic(out, label_name_offset, label_name_length, label_value_offset, label_value_length);
   }
 
   struct DecodeResult {
@@ -188,7 +164,7 @@ class LabelCodec {
     uint32_t label_value_length;
   };
 
-  static PROMPP_ALWAYS_INLINE DecodeResult decode(const char* in) noexcept {
+  static DecodeResult decode(const char* in) noexcept {
     uint64_t chunk;
     std::memcpy(&chunk, in, sizeof(chunk));
     const auto layout = static_cast<uint8_t>(chunk);
@@ -205,6 +181,54 @@ class LabelCodec {
   }
 
  private:
+  static PROMPP_ALWAYS_INLINE char* encode_value_only(char* out, const uint32_t label_value_offset, const uint32_t label_value_length) noexcept {
+    static constexpr uint8_t szm[4] = {0, 1, 2, 4};
+    char* start = out++;
+
+    const uint8_t sz2 = push_and_encode(out, label_value_offset);
+    out += szm[sz2];
+    const uint8_t sz3 = push_and_encode(out, label_value_length);
+    out += szm[sz3];
+
+    *start = (sz2 << 4) | (sz3 << 6);
+
+    return out;
+  }
+
+  static PROMPP_ALWAYS_INLINE char* encode_4_bytes(char* out,
+                                                   const uint8_t label_name_offset,
+                                                   const uint8_t label_name_length,
+                                                   const uint8_t label_value_offset,
+                                                   const uint8_t label_value_length) noexcept {
+    const uint64_t chunk = static_cast<uint64_t>(0b01010101) | static_cast<uint64_t>(label_name_offset) << 8 | static_cast<uint64_t>(label_name_length) << 16 |
+                           static_cast<uint64_t>(label_value_offset) << 24 | static_cast<uint64_t>(label_value_length) << 32;
+
+    std::memcpy(out, &chunk, sizeof(chunk));
+    return out + 5;
+  }
+
+  static PROMPP_ALWAYS_INLINE char* encode_generic(char* out,
+                                                   const uint32_t label_name_offset,
+                                                   const uint32_t label_name_length,
+                                                   const uint32_t label_value_offset,
+                                                   const uint32_t label_value_length) noexcept {
+    static constexpr uint8_t szm[4] = {0, 1, 2, 4};
+
+    char* start = out++;
+    const uint8_t sz0 = push_and_encode(out, label_name_offset);
+    out += szm[sz0];
+    const uint8_t sz1 = push_and_encode(out, label_name_length);
+    out += szm[sz1];
+    const uint8_t sz2 = push_and_encode(out, label_value_offset);
+    out += szm[sz2];
+    const uint8_t sz3 = push_and_encode(out, label_value_length);
+    out += szm[sz3];
+
+    *start = (sz0) | (sz1 << 2) | (sz2 << 4) | (sz3 << 6);
+
+    return out;
+  }
+
   static PROMPP_ALWAYS_INLINE DecodeResult decode_4_bytes(const char* in, const uint64_t chunk) noexcept {
     const auto name_off = static_cast<uint8_t>(chunk >> 8);
     const auto name_len = static_cast<uint8_t>(chunk >> 16);
@@ -308,7 +332,7 @@ class LabelCodec {
 
 class LayoutCountCodec {
  public:
-  static constexpr size_t kPreallocatedWriteSize = sizeof(uint64_t);
+  static constexpr size_t kMaximumEncodingSize = sizeof(uint64_t);
 
   static PROMPP_ALWAYS_INLINE char* encode(char* out, const LayoutMarker layout, const uint32_t count) noexcept {
     uint64_t chunk = 0;
@@ -343,7 +367,7 @@ class LayoutCountCodec {
 };
 
 static constexpr uint32_t metric_preallocated_bytes(uint32_t labels_count) noexcept {
-  return LayoutCountCodec::kPreallocatedWriteSize + LabelCodec::kPreallocatedWriteSize * labels_count + SampleCodec::kPreallocatedWriteSize;
+  return LayoutCountCodec::kMaximumEncodingSize + LabelCodec::kMaximumEncodingSize * labels_count + SampleCodec::kMaximumEncodingSize;
 }
 
 }  // namespace PromPP::WAL::hashdex::scraper::encoding

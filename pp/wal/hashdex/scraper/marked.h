@@ -192,13 +192,10 @@ class MetricMarkupBuffer : public MarkupBuffer<Metric> {
   }
   [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t bytes_count() const noexcept { return bytes_ptr_ - bytes_buffer_.control_block().data; }
-  void bytes_enlarge(uint32_t new_size) noexcept {
-    assert(new_size > bytes_count());
-
+  void bytes_enlarge(uint32_t extra_bytes) noexcept {
     const uint32_t offset = bytes_count();
 
-    bytes_buffer_.grow_to_fit_at_least(new_size);
+    bytes_buffer_.grow_to_fit_at_least(offset + extra_bytes);
 
     bytes_ptr_ = bytes_buffer_.control_block().data + offset;
   }
@@ -238,10 +235,12 @@ class MetricMarkupBuffer : public MarkupBuffer<Metric> {
 
   void add_padding() noexcept {
     constexpr size_t kPaddingSizeBytes = 16;
-    bytes_enlarge(bytes_count() + kPaddingSizeBytes);
+    bytes_enlarge(kPaddingSizeBytes);
   }
 
  private:
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t bytes_count() const noexcept { return bytes_ptr_ - bytes_buffer_.control_block().data; }
+
   BareBones::Memory<BareBones::MemoryControlBlock, char> bytes_buffer_;
   char* bytes_ptr_{};
 };

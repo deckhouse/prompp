@@ -311,7 +311,7 @@ class Scraper {
     sort_and_filter_labels();
     append_labels_hash();
 
-    metric_buffer_.bytes_enlarge(metric_buffer_.bytes_count() + encoding::metric_preallocated_bytes(labels_.size()));
+    metric_buffer_.bytes_enlarge(encoding::metric_preallocated_bytes(labels_.size()));
 
     const encoding::LayoutMarker layout =
         encoding::LayoutMarker::make(marked_sample_.has_ts, labels_.size(), encoding::SampleCodec::value_type(marked_sample_.sample.value()));
