@@ -305,28 +305,24 @@ class Scraper {
     return parser_.parse_timestamp(marked_sample_.sample.timestamp(), marked_sample_.has_ts);
   }
 
-  void encode_metric_data(uint32_t metric_offset) noexcept {
+  void encode_metric_data(const uint32_t metric_offset) noexcept {
     metric_buffer_.add_metric(metric_offset);
 
-    const uint32_t bytes_offset = metric_buffer_.bytes_count();
-    metric_buffer_.bytes_enlarge(bytes_offset + calculate_metric_prealloc_size(labels_.size()));
-    metric_buffer_.bytes_shrink(bytes_offset);
-
-    const encoding::LayoutMarker layout =
-        encoding::LayoutMarker::make(marked_sample_.has_ts, labels_.size(), encoding::value_type(marked_sample_.sample.value()));
-    metric_buffer_.add_layout(layout.raw);
-
-    process_labels_buffer(metric_offset);
-    metric_buffer_.add_sample(layout, marked_sample_.sample);
-  }
-
-  void process_labels_buffer(uint32_t offset) noexcept {
     sort_and_filter_labels();
     append_labels_hash();
 
-    metric_buffer_.add_count(labels_.size());
+    metric_buffer_.bytes_enlarge(metric_buffer_.bytes_count() + encoding::metric_preallocated_bytes(labels_.size()));
 
-    for (auto& label : labels_) {
+    const encoding::LayoutMarker layout =
+        encoding::LayoutMarker::make(marked_sample_.has_ts, labels_.size(), encoding::SampleCodec::value_type(marked_sample_.sample.value()));
+    metric_buffer_.add_layout_and_count(layout, labels_.size());
+
+    encode_labels(metric_offset);
+    metric_buffer_.add_sample(layout, marked_sample_.sample);
+  }
+
+  void encode_labels(const uint32_t offset) noexcept {
+    for (auto label : labels_) {
       if (!label.name.is_reserved_name()) [[likely]] {
         label.name.offset -= offset;
       }
@@ -352,14 +348,6 @@ class Scraper {
       hash.extend(label.name.view(tokenizer.buffer()), label.value.view(tokenizer.buffer()));
     }
     metric_buffer_.add_hash(hash.hash());
-  }
-
-  static PROMPP_ALWAYS_INLINE uint32_t calculate_metric_prealloc_size(uint32_t labels_count) noexcept {
-    constexpr uint32_t kCountVarintBytes = 8;
-    constexpr uint32_t kLabelBytes = 17;
-    constexpr uint32_t kSampleSize = 16;
-
-    return kCountVarintBytes + labels_count * kLabelBytes + kSampleSize;
   }
 
   Parser parser_;

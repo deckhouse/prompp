@@ -29,7 +29,7 @@ TEST_P(ValueTypeFixture, ClassifyValueCorrectly) {
   // Arrange
 
   // Act
-  const auto actual = PromPP::WAL::hashdex::scraper::encoding::value_type(GetParam().input);
+  const auto actual = SampleCodec::value_type(GetParam().input);
 
   // Assert
   EXPECT_EQ(actual, GetParam().expected);
@@ -60,7 +60,12 @@ INSTANTIATE_TEST_SUITE_P(ValueTypeTests,
                                          ValueTypeCase{.input = 3.141592653589793, .expected = SampleValueType::kDouble},
                                          ValueTypeCase{.input = 0.1, .expected = SampleValueType::kDouble}));
 
-class SampleCodecFixture : public testing::Test {
+struct SampleCodecCase {
+  Sample sample;
+  bool has_ts;
+};
+
+class SampleCodecFixture : public testing::TestWithParam<SampleCodecCase> {
  protected:
   static constexpr size_t kBufSize = 64;
 
@@ -79,155 +84,33 @@ class SampleCodecFixture : public testing::Test {
   const Timestamp default_ts_ = -1;
 };
 
-TEST_F(SampleCodecFixture, EncodeDecode_Uint32_WithTimestamp) {
+TEST_P(SampleCodecFixture, CorrectSample) {
   // Arrange
-  Sample s{};
-  s.value() = 123.0;
-  s.timestamp() = int64_t{42};
+  const auto layout = LayoutMarker::make(GetParam().has_ts, 0, SampleCodec::value_type(GetParam().sample.value()));
 
-  const auto layout = LayoutMarker::make(true, 0, SampleValueType::kUint32);
+  Sample expected = GetParam().sample;
+  if (!GetParam().has_ts) {
+    expected.timestamp() = default_ts_;
+  }
 
   // Act
-  auto res = encode_and_decode(layout, s, default_ts_);
+  const auto res = encode_and_decode(layout, GetParam().sample, default_ts_);
 
   // Assert
-  EXPECT_DOUBLE_EQ(res.sample.value(), 123.0);
-  EXPECT_EQ(res.sample.timestamp(), 42);
+  EXPECT_EQ(res.sample, expected);
 }
 
-TEST_F(SampleCodecFixture, EncodeDecode_Double_WithoutTimestamp) {
-  // Arrange
-  Sample s{};
-  s.value() = 3.141592653589793;
-  s.timestamp() = int64_t{12345};
-
-  const auto layout = LayoutMarker::make(false, 0, SampleValueType::kDouble);
-
-  // Act
-  const auto res = encode_and_decode(layout, s, default_ts_);
-
-  // Assert
-  EXPECT_DOUBLE_EQ(res.sample.value(), 3.141592653589793);
-  EXPECT_EQ(res.sample.timestamp(), default_ts_);
-}
-
-TEST_F(SampleCodecFixture, EncodeDecode_Float_WithTimestamp) {
-  // Arrange
-  Sample s{};
-  s.value() = 1.2345;
-  s.timestamp() = int64_t{111};
-
-  const auto layout = LayoutMarker::make(true, 0, SampleValueType::kFloat);
-
-  // Act
-  const auto res = encode_and_decode(layout, s, default_ts_);
-
-  // Assert
-  EXPECT_DOUBLE_EQ(res.sample.value(), static_cast<double>(static_cast<float>(1.2345)));
-  EXPECT_EQ(res.sample.timestamp(), 111);
-}
-
-TEST_F(SampleCodecFixture, EncodeDecode_Uint8) {
-  // Arrange
-  Sample s{};
-  s.value() = 255.0;
-  s.timestamp() = 7;
-  const auto layout = LayoutMarker::make(true, 0, SampleValueType::kUint8);
-
-  // Act
-  const auto res = encode_and_decode(layout, s, default_ts_);
-
-  // Assert
-  EXPECT_DOUBLE_EQ(res.sample.value(), 255.0);
-  EXPECT_EQ(res.sample.timestamp(), 7);
-}
-
-TEST_F(SampleCodecFixture, EncodeDecode_Uint16) {
-  // Arrange
-  Sample s{};
-  s.value() = 65535.0;
-  s.timestamp() = 9;
-  const auto layout = LayoutMarker::make(true, 0, SampleValueType::kUint16);
-
-  // Act
-  const auto res = encode_and_decode(layout, s, default_ts_);
-
-  // Assert
-  EXPECT_DOUBLE_EQ(res.sample.value(), 65535.0);
-  EXPECT_EQ(res.sample.timestamp(), 9);
-}
-
-TEST_F(SampleCodecFixture, EncodeDecode_ZeroType_IgnoresOriginalValue) {
-  // Arrange
-  Sample s{};
-  s.value() = 12345.0;
-  s.timestamp() = 222;
-  const auto layout = LayoutMarker::make(true, 0, SampleValueType::kZero);
-
-  // Act
-  const auto res = encode_and_decode(layout, s, default_ts_);
-
-  // Assert
-  EXPECT_DOUBLE_EQ(res.sample.value(), 0.0);
-  EXPECT_EQ(res.sample.timestamp(), 222);
-}
-
-TEST_F(SampleCodecFixture, Decode_NaNType_ProducesNaN) {
-  // Arrange
-  Sample s{};
-  s.value() = 777.0;
-  s.timestamp() = 333;
-  const auto layout = LayoutMarker::make(true, 0, SampleValueType::kNaN);
-
-  // Act
-  const auto res = encode_and_decode(layout, s, default_ts_);
-
-  // Assert
-  EXPECT_TRUE(std::isnan(res.sample.value()));
-  EXPECT_EQ(res.sample.timestamp(), 333);
-}
-
-TEST_F(SampleCodecFixture, Decode_ReturnedPointerAdvancesCorrectly_NoTimestamp) {
-  // Arrange
-  Sample s{};
-  s.value() = 42.0;
-  s.timestamp() = 1000;
-
-  const auto layout = LayoutMarker::make(false, 0, SampleValueType::kUint32);
-
-  buf_.fill(0);
-  char* start = buf_.data();
-  char* end = SampleCodec::encode(start, layout, s);
-
-  // Act
-  const auto res = SampleCodec::decode(start, layout, default_ts_);
-
-  // Assert
-  EXPECT_EQ(res.next, end);
-  EXPECT_DOUBLE_EQ(res.sample.value(), 42.0);
-  EXPECT_EQ(res.sample.timestamp(), default_ts_);
-}
-
-TEST_F(SampleCodecFixture, Decode_ReturnedPointerAdvancesCorrectly_WithTimestamp) {
-  // Arrange
-  Sample s{};
-  s.value() = 4242.0;
-  s.timestamp() = 2048;
-
-  const auto layout = LayoutMarker::make(true, 0, SampleValueType::kDouble);
-
-  buf_.fill(0);
-  char* start = buf_.data();
-  char* end = SampleCodec::encode(start, layout, s);
-
-  // Act
-  const auto res = SampleCodec::decode(start, layout, default_ts_);
-
-  // Assert
-  EXPECT_EQ(res.next, end);
-  EXPECT_DOUBLE_EQ(res.sample.value(), 4242.0);
-  EXPECT_EQ(res.sample.timestamp(), 2048);
-}
+INSTANTIATE_TEST_SUITE_P(SampleCodecTests,
+                         SampleCodecFixture,
+                         testing::Values(SampleCodecCase{.sample = Sample(42, 123.0), .has_ts = true},
+                                         SampleCodecCase{.sample = Sample(12345, std::numbers::pi), .has_ts = false},
+                                         SampleCodecCase{.sample = Sample(111, 1.2345), .has_ts = true},
+                                         SampleCodecCase{.sample = Sample(7, 255.0), .has_ts = true},
+                                         SampleCodecCase{.sample = Sample(9, 65535.0), .has_ts = true},
+                                         SampleCodecCase{.sample = Sample(222, 0.0), .has_ts = true},
+                                         SampleCodecCase{.sample = Sample(333, PromPP::Prometheus::kNormalNan), .has_ts = true},
+                                         SampleCodecCase{.sample = Sample(1000, 42.0), .has_ts = false},
+                                         SampleCodecCase{.sample = Sample(2048, 4242.0), .has_ts = true}));
 
 class LabelCodecFixture : public testing::Test {
  protected:
@@ -245,95 +128,6 @@ class LabelCodecFixture : public testing::Test {
     return res;
   }
 };
-
-TEST_F(LabelCodecFixture, EncodeDecode_AllZeros) {
-  // Arrange
-
-  // Act
-  const auto res = encode_and_decode(0, 0, 0, 0);
-
-  // Assert
-  EXPECT_EQ(res.label_name_offset, 0u);
-  EXPECT_EQ(res.label_name_length, 0u);
-  EXPECT_EQ(res.label_value_offset, 0u);
-  EXPECT_EQ(res.label_value_length, 0u);
-}
-
-TEST_F(LabelCodecFixture, EncodeDecode_OneByteValues) {
-  // Arrange
-
-  // Act
-  const auto res = encode_and_decode(1, 2, 3, 4);
-
-  EXPECT_EQ(res.label_name_offset, 1u);
-  EXPECT_EQ(res.label_name_length, 2u);
-  EXPECT_EQ(res.label_value_offset, 3u);
-  EXPECT_EQ(res.label_value_length, 4u);
-}
-
-TEST_F(LabelCodecFixture, EncodeDecode_TwoByteValues) {
-  // Arrange
-
-  // Act
-  const auto res = encode_and_decode(300, 400, 500, 600);
-
-  EXPECT_EQ(res.label_name_offset, 300u);
-  EXPECT_EQ(res.label_name_length, 400u);
-  EXPECT_EQ(res.label_value_offset, 500u);
-  EXPECT_EQ(res.label_value_length, 600u);
-}
-
-TEST_F(LabelCodecFixture, EncodeDecode_FourByteValues) {
-  // Arrange
-
-  // Act
-  const auto res = encode_and_decode(100000, 200000, 300000, 400000);
-
-  // Assert
-  EXPECT_EQ(res.label_name_offset, 100000u);
-  EXPECT_EQ(res.label_name_length, 200000u);
-  EXPECT_EQ(res.label_value_offset, 300000u);
-  EXPECT_EQ(res.label_value_length, 400000u);
-}
-
-TEST_F(LabelCodecFixture, EncodeDecode_0044) {
-  // Arrange
-
-  // Act
-  const auto res = encode_and_decode(0, 0, 300000, 400000);
-
-  // Assert
-  EXPECT_EQ(res.label_name_offset, 0);
-  EXPECT_EQ(res.label_name_length, 0);
-  EXPECT_EQ(res.label_value_offset, 300000u);
-  EXPECT_EQ(res.label_value_length, 400000u);
-}
-
-TEST_F(LabelCodecFixture, EncodeDecode_0024) {
-  // Arrange
-
-  // Act
-  const auto res = encode_and_decode(0, 0, 1234, 123456);
-
-  // Assert
-  EXPECT_EQ(res.label_name_offset, 0);
-  EXPECT_EQ(res.label_name_length, 0);
-  EXPECT_EQ(res.label_value_offset, 1234);
-  EXPECT_EQ(res.label_value_length, 123456);
-}
-
-TEST_F(LabelCodecFixture, EncodeDecode_0124) {
-  // Arrange
-
-  // Act
-  const auto res = encode_and_decode(0, 12, 1234, 123456);
-
-  // Assert
-  EXPECT_EQ(res.label_name_offset, 0);
-  EXPECT_EQ(res.label_name_length, 12);
-  EXPECT_EQ(res.label_value_offset, 1234);
-  EXPECT_EQ(res.label_value_length, 123456);
-}
 
 TEST_F(LabelCodecFixture, FastPath_Layout01010101) {
   // Arrange
@@ -375,5 +169,37 @@ TEST_F(LabelCodecFixture, SimplifiedPath_NameFieldsZero) {
   EXPECT_EQ(res.label_value_length, 1234u);
   EXPECT_EQ(res.next, buf_.data() + 1 + 1 + 2);
 }
+
+struct LabelCase {
+  uint32_t name_off;
+  uint32_t name_len;
+  uint32_t value_off;
+  uint32_t value_len;
+};
+
+class LabelCodecParamFixture : public LabelCodecFixture, public testing::WithParamInterface<LabelCase> {};
+
+TEST_P(LabelCodecParamFixture, EncodeDecode) {
+  // Arrange
+
+  // Act
+  const auto res = encode_and_decode(GetParam().name_off, GetParam().name_len, GetParam().value_off, GetParam().value_len);
+
+  // Assert
+  EXPECT_EQ(res.label_name_offset, GetParam().name_off);
+  EXPECT_EQ(res.label_name_length, GetParam().name_len);
+  EXPECT_EQ(res.label_value_offset, GetParam().value_off);
+  EXPECT_EQ(res.label_value_length, GetParam().value_len);
+}
+
+INSTANTIATE_TEST_SUITE_P(LabelCodecTests,
+                         LabelCodecParamFixture,
+                         testing::Values(LabelCase{.name_off = 0, .name_len = 0, .value_off = 0, .value_len = 0},
+                                         LabelCase{.name_off = 1, .name_len = 2, .value_off = 3, .value_len = 4},
+                                         LabelCase{.name_off = 300, .name_len = 400, .value_off = 500, .value_len = 600},
+                                         LabelCase{.name_off = 100000, .name_len = 200000, .value_off = 300000, .value_len = 400000},
+                                         LabelCase{.name_off = 0, .name_len = 0, .value_off = 300000, .value_len = 400000},
+                                         LabelCase{.name_off = 0, .name_len = 0, .value_off = 1234, .value_len = 123456},
+                                         LabelCase{.name_off = 0, .name_len = 12, .value_off = 1234, .value_len = 123456}));
 
 }  // namespace

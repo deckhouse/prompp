@@ -1,9 +1,7 @@
 #pragma once
 
-#include <cstdint>
 #include <string_view>
 
-#include "bare_bones/bit.h"
 #include "bare_bones/vector.h"
 #include "encoding.h"
 #include "primitives/primitives.h"
@@ -66,7 +64,7 @@ class Metric {
 
   struct Context {
     std::string_view buffer;
-    const BareBones::Vector<char>& bytes_buffer;
+    const BareBones::Memory<BareBones::MemoryControlBlock, char>& bytes_buffer;
     Primitives::Timestamp default_timestamp{};
   };
 
@@ -80,12 +78,11 @@ class Metric {
 
   template <class Timeseries>
   void read(Timeseries& ts) const {
-    const char* ptr = reinterpret_cast<const char*>(bytes_buffer_.data() + item_->data_offset);
+    const char* ptr = bytes_buffer_.control_block().data + item_->data_offset;
 
-    uint32_t labels_count{};
-    encoding::LayoutMarker layout{};
+    const auto [next_ptr, layout, labels_count] = encoding::LayoutCountCodec::decode(ptr);
+    ptr = next_ptr;
 
-    ptr = decode_count(ptr, layout, labels_count);
     ts.label_set().resize(labels_count);
 
     auto label_iter = ts.label_set().begin();
@@ -108,23 +105,9 @@ class Metric {
 
  private:
   std::string_view buffer_;
-  const BareBones::Vector<char>& bytes_buffer_;
+  const BareBones::Memory<BareBones::MemoryControlBlock, char>& bytes_buffer_;
   const MarkedMetric* item_{};
   Primitives::Timestamp default_timestamp_;
-
-  PROMPP_ALWAYS_INLINE static const char* decode_count(const char* ptr, encoding::LayoutMarker& layout, uint32_t& labels_count) noexcept {
-    uint64_t chunk;
-    std::memcpy(&chunk, ptr, sizeof(chunk));
-
-    layout = encoding::LayoutMarker{.raw = static_cast<uint8_t>(chunk)};
-
-    chunk >>= 8;
-    const uint64_t mask = (1ULL << BareBones::Bit::to_bits(layout.count_size_in_bytes())) - 1;
-
-    labels_count = static_cast<uint32_t>(chunk & mask);
-
-    return ptr + 1 + layout.count_size_in_bytes();
-  }
 };
 
 class Metadata {
@@ -205,22 +188,22 @@ class MetricMarkupBuffer : public MarkupBuffer<Metric> {
   using IteratorSentinel = typename Base::IteratorSentinel;
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin(std::string_view buffer, Primitives::Timestamp default_ts) const noexcept {
-    return {typename Base::Context{buffer, bytes_buffer_, default_ts}, this->buffer_.data(), this->items_count()};
+    return {typename Base::Context{buffer, bytes_buffer_, default_ts}, Base::buffer_.data(), Base::items_count()};
   }
   [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t bytes_count() const noexcept { return bytes_count_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t bytes_count() const noexcept { return bytes_ptr_ - bytes_buffer_.control_block().data; }
   void bytes_enlarge(uint32_t new_size) noexcept {
-    assert(new_size > bytes_count_);
-    if (new_size > bytes_buffer_.size()) [[likely]] {
-      bytes_buffer_.resize(new_size);
-    }
-    bytes_count_ = new_size;
+    assert(new_size > bytes_count());
+
+    const uint32_t offset = bytes_count();
+
+    bytes_buffer_.grow_to_fit_at_least(new_size);
+
+    bytes_ptr_ = bytes_buffer_.control_block().data + offset;
   }
 
-  void bytes_shrink(uint32_t new_size) noexcept { bytes_count_ = new_size; }
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return this->buffer_.allocated_memory() + bytes_buffer_.allocated_memory(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return Base::buffer_.allocated_memory() + bytes_buffer_.allocated_memory(); }
 
   PROMPP_ALWAYS_INLINE void initialize(size_t reserve_bytes) noexcept {
     this->buffer_.clear();
@@ -229,8 +212,8 @@ class MetricMarkupBuffer : public MarkupBuffer<Metric> {
     const size_t items_buffer_reserve = (bytes_buffer_reserve / 3) / sizeof(MarkedMetric);
 
     this->buffer_.reserve(items_buffer_reserve);
-    bytes_buffer_.reserve(bytes_buffer_reserve);
-    bytes_count_ = 0;
+    bytes_buffer_.resize_to_fit_at_least(bytes_buffer_reserve);
+    bytes_ptr_ = bytes_buffer_.control_block().data;
   }
 
   PROMPP_ALWAYS_INLINE void add_hash(uint64_t hash) noexcept { this->buffer_.back().hash = hash; }
@@ -239,32 +222,18 @@ class MetricMarkupBuffer : public MarkupBuffer<Metric> {
     this->buffer_.push_back(MarkedMetric{.hash = {}, .base_offset = global_offset, .data_offset = bytes_count()});
   }
 
-  void add_layout(uint8_t layout) noexcept {
-    const uint32_t offset = bytes_count();
-    *(bytes_buffer_.data() + offset) = layout;
-    bytes_shrink(offset + 1);
-  }
-
-  void add_count(uint32_t count) noexcept {
-    const uint32_t bytes_written = (std::bit_width(count) + 7) / 8;
-    const uint32_t offset = bytes_count();
-    std::memcpy(bytes_buffer_.data() + offset, &count, sizeof(count));
-    bytes_shrink(offset + bytes_written);
+  void add_layout_and_count(const encoding::LayoutMarker layout, const uint32_t count) noexcept {
+    bytes_ptr_ = encoding::LayoutCountCodec::encode(bytes_ptr_, layout, count);
   }
 
   void add_label(MarkedLabel label) noexcept {
-    const auto end =
-        encoding::LabelCodec::encode(bytes_buffer_.data() + bytes_count(), label.name.offset, label.name.length, label.value.offset, label.value.length);
-    bytes_shrink(end - bytes_buffer_.data());
+    bytes_ptr_ = encoding::LabelCodec::encode(bytes_ptr_, label.name.offset, label.name.length, label.value.offset, label.value.length);
   }
 
   void add_sample(encoding::LayoutMarker layout, const Primitives::Sample& sample) noexcept {
     using encoding::SampleValueType;
 
-    char* data_ptr = bytes_buffer_.data();
-    const char* end = encoding::SampleCodec::encode(data_ptr + bytes_count(), layout, sample);
-
-    bytes_shrink(end - data_ptr);
+    bytes_ptr_ = encoding::SampleCodec::encode(bytes_ptr_, layout, sample);
   }
 
   void add_padding() noexcept {
@@ -273,8 +242,8 @@ class MetricMarkupBuffer : public MarkupBuffer<Metric> {
   }
 
  private:
-  BareBones::Vector<char> bytes_buffer_{};
-  uint32_t bytes_count_ = 0;
+  BareBones::Memory<BareBones::MemoryControlBlock, char> bytes_buffer_;
+  char* bytes_ptr_{};
 };
 
 class MetadataMarkupBuffer : public MarkupBuffer<Metadata> {
