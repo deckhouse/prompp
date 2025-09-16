@@ -132,7 +132,7 @@ func New[
 func (a Appender[TTask, TLSS, TShard, THead]) Append(
 	ctx context.Context,
 	incomingData *IncomingData,
-	state *cppbridge.State,
+	state *cppbridge.StateV2,
 	commitToWal bool,
 ) ([][]*cppbridge.InnerSeries, cppbridge.RelabelerStats, error) {
 	if err := a.resolveState(state); err != nil {
@@ -192,7 +192,7 @@ func (a Appender[TTask, TLSS, TShard, THead]) Append(
 //revive:disable-next-line:function-length long but this is first stage.
 func (a Appender[TTask, TLSS, TShard, THead]) inputRelabelingStage(
 	ctx context.Context,
-	state *cppbridge.State,
+	state *cppbridge.StateV2,
 	incomingData *DestructibleIncomingData,
 	shardedInnerSeries *ShardedInnerSeries,
 	shardedRelabeledSeries *ShardedRelabeledSeries,
@@ -320,7 +320,7 @@ func (a Appender[TTask, TLSS, TShard, THead]) appendRelabelerSeriesStage(
 // updateRelabelerStateStage third stage - update state cache.
 func (a Appender[TTask, TLSS, TShard, THead]) updateRelabelerStateStage(
 	ctx context.Context,
-	state *cppbridge.State,
+	state *cppbridge.StateV2,
 	shardedStateUpdates *ShardedStateUpdates,
 ) error {
 	numberOfShards := a.head.NumberOfShards()
@@ -378,13 +378,12 @@ func (a Appender[TTask, TLSS, TShard, THead]) appendInnerSeriesAndWriteToWal(
 	return atomicLimitExhausted, tw.Wait()
 }
 
-func (a Appender[TTask, TLSS, TShard, THead]) resolveState(state *cppbridge.State) error {
+func (a Appender[TTask, TLSS, TShard, THead]) resolveState(state *cppbridge.StateV2) error {
 	if state == nil {
 		return errNilState
 	}
 
-	// TODO delete generationRelabeler 0, state.Reconfigure on lock
-	state.Reconfigure(0, a.head.Generation(), a.head.NumberOfShards())
+	state.Reconfigure(a.head.Generation(), a.head.NumberOfShards())
 
 	return nil
 }

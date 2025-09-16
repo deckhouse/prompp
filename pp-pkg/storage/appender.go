@@ -32,14 +32,14 @@ func (d *timeSeriesBatch) Destroy() {
 type TimeSeriesAppender struct {
 	ctx     context.Context
 	adapter *Adapter
-	state   *cppbridge.State
+	state   *cppbridge.StateV2
 	batch   *timeSeriesBatch
 }
 
 func newTimeSeriesAppender(
 	ctx context.Context,
 	adapter *Adapter,
-	state *cppbridge.State,
+	state *cppbridge.StateV2,
 ) *TimeSeriesAppender {
 	return &TimeSeriesAppender{
 		ctx:     ctx,
