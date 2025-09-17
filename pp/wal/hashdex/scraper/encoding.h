@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "bare_bones/bit.h"
+#include "marked_common.h"
 #include "primitives/sample.h"
 #include "prometheus/value.h"
 
@@ -140,28 +141,21 @@ class LabelCodec {
  public:
   static constexpr size_t kMaximumEncodingSize = sizeof(uint8_t) + 4 * sizeof(uint32_t);
 
-  static char* encode(char* out,
-                      const uint32_t label_name_offset,
-                      const uint32_t label_name_length,
-                      const uint32_t label_value_offset,
-                      const uint32_t label_value_length) noexcept {
-    if (label_name_offset == 0 && label_name_length == 0) [[likely]] {
-      return encode_value_only(out, label_value_offset, label_value_length);
+  static char* encode(char* out, const MarkedLabel label) noexcept {
+    if (label.name.offset == 0 && label.name.length == 0) [[likely]] {
+      return encode_value_only(out, label.value.offset, label.value.length);
     }
 
-    if ((label_name_offset | label_name_length | label_value_offset | label_value_length) <= 0xFF) [[likely]] {
-      return encode_4_bytes(out, label_name_offset, label_name_length, label_value_offset, label_value_length);
+    if ((label.name.offset | label.name.length | label.value.offset | label.value.length) <= 0xFF) [[likely]] {
+      return encode_4_bytes(out, label.name.offset, label.name.length, label.value.offset, label.value.length);
     }
 
-    return encode_generic(out, label_name_offset, label_name_length, label_value_offset, label_value_length);
+    return encode_generic(out, label.name.offset, label.name.length, label.value.offset, label.value.length);
   }
 
   struct DecodeResult {
     const char* next;
-    uint32_t label_name_offset;
-    uint32_t label_name_length;
-    uint32_t label_value_offset;
-    uint32_t label_value_length;
+    MarkedLabel label;
   };
 
   static DecodeResult decode(const char* in) noexcept {
@@ -232,8 +226,7 @@ class LabelCodec {
     const auto value_off = static_cast<uint8_t>(chunk >> 24);
     const auto value_len = static_cast<uint8_t>(chunk >> 32);
 
-    return DecodeResult{
-        .next = in + 5, .label_name_offset = name_off, .label_name_length = name_len, .label_value_offset = value_off, .label_value_length = value_len};
+    return DecodeResult{.next = in + 5, .label = {.name = {.offset = name_off, .length = name_len}, .value = {.offset = value_off, .length = value_len}}};
   }
 
   static PROMPP_ALWAYS_INLINE DecodeResult decode_value_only(const char* in, uint64_t chunk, const uint8_t layout) noexcept {
@@ -274,7 +267,7 @@ class LabelCodec {
       used += sizeof(value_len);
     }
 
-    return DecodeResult{.next = in + used, .label_name_offset = 0, .label_name_length = 0, .label_value_offset = value_off, .label_value_length = value_len};
+    return DecodeResult{.next = in + used, .label = {.name = {.offset = 0, .length = 0}, .value = {.offset = value_off, .length = value_len}}};
   }
 
   static PROMPP_ALWAYS_INLINE DecodeResult decode_generic(const char* in, const uint8_t layout) noexcept {
@@ -288,8 +281,7 @@ class LabelCodec {
     const uint32_t value_off = read_val_partial(in, sz2);
     const uint32_t value_len = read_val_partial(in, sz3);
 
-    return DecodeResult{
-        .next = in, .label_name_offset = name_off, .label_name_length = name_len, .label_value_offset = value_off, .label_value_length = value_len};
+    return DecodeResult{.next = in, .label = {.name = {.offset = name_off, .length = name_len}, .value = {.offset = value_off, .length = value_len}}};
   }
 
   static PROMPP_ALWAYS_INLINE uint8_t push_and_encode(char* out, uint32_t v) noexcept {

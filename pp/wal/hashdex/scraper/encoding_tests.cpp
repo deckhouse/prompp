@@ -120,7 +120,7 @@ class LabelCodecFixture : public testing::Test {
   LabelCodec::DecodeResult encode_and_decode(uint32_t name_off, uint32_t name_len, uint32_t value_off, uint32_t value_len) {
     buf_.fill(0);
     char* start = buf_.data();
-    char* end = LabelCodec::encode(start, name_off, name_len, value_off, value_len);
+    char* end = LabelCodec::encode(start, PromPP::WAL::hashdex::scraper::MarkedLabel{name_off, name_len, value_off, value_len});
 
     const auto res = LabelCodec::decode(start);
 
@@ -143,10 +143,10 @@ TEST_F(LabelCodecFixture, FastPath_Layout01010101) {
   const auto res = LabelCodec::decode(buf_.data());
 
   // Assert
-  EXPECT_EQ(res.label_name_offset, 10u);
-  EXPECT_EQ(res.label_name_length, 11u);
-  EXPECT_EQ(res.label_value_offset, 12u);
-  EXPECT_EQ(res.label_value_length, 13u);
+  EXPECT_EQ(res.label.name.offset, 10u);
+  EXPECT_EQ(res.label.name.length, 11u);
+  EXPECT_EQ(res.label.value.offset, 12u);
+  EXPECT_EQ(res.label.value.length, 13u);
   EXPECT_EQ(res.next, buf_.data() + 5);
 }
 
@@ -163,10 +163,10 @@ TEST_F(LabelCodecFixture, SimplifiedPath_NameFieldsZero) {
   const auto res = LabelCodec::decode(buf_.data());
 
   // Assert
-  EXPECT_EQ(res.label_name_offset, 0u);
-  EXPECT_EQ(res.label_name_length, 0u);
-  EXPECT_EQ(res.label_value_offset, 42u);
-  EXPECT_EQ(res.label_value_length, 1234u);
+  EXPECT_EQ(res.label.name.offset, 0u);
+  EXPECT_EQ(res.label.name.length, 0u);
+  EXPECT_EQ(res.label.value.offset, 42u);
+  EXPECT_EQ(res.label.value.length, 1234u);
   EXPECT_EQ(res.next, buf_.data() + 1 + 1 + 2);
 }
 
@@ -186,10 +186,10 @@ TEST_P(LabelCodecParamFixture, EncodeDecode) {
   const auto res = encode_and_decode(GetParam().name_off, GetParam().name_len, GetParam().value_off, GetParam().value_len);
 
   // Assert
-  EXPECT_EQ(res.label_name_offset, GetParam().name_off);
-  EXPECT_EQ(res.label_name_length, GetParam().name_len);
-  EXPECT_EQ(res.label_value_offset, GetParam().value_off);
-  EXPECT_EQ(res.label_value_length, GetParam().value_len);
+  EXPECT_EQ(res.label.name.offset, GetParam().name_off);
+  EXPECT_EQ(res.label.name.length, GetParam().name_len);
+  EXPECT_EQ(res.label.value.offset, GetParam().value_off);
+  EXPECT_EQ(res.label.value.length, GetParam().value_len);
 }
 
 INSTANTIATE_TEST_SUITE_P(LabelCodecTests,

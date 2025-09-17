@@ -4,59 +4,11 @@
 
 #include "bare_bones/vector.h"
 #include "encoding.h"
+#include "marked_common.h"
 #include "primitives/primitives.h"
 #include "prometheus/metric.h"
-#include "prometheus/value.h"
 
 namespace PromPP::WAL::hashdex::scraper::inline marked {
-
-#pragma pack(push, 1)
-struct MarkedString {
-  uint32_t offset = 0;
-  uint32_t length = 0;
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE static MarkedString create(std::string_view value, std::string_view buffer) noexcept {
-    return {
-        .offset = static_cast<uint32_t>(value.data() - buffer.data()),
-        .length = static_cast<uint32_t>(value.size()),
-    };
-  }
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_reserved_name() const noexcept { return offset == 0 && length == 0; }
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_empty() const noexcept { return length == 0; }
-
-  [[nodiscard]] std::string_view view(const std::string_view& buffer) const noexcept {
-    if (is_reserved_name()) [[unlikely]] {
-      return Prometheus::kMetricLabelName;
-    }
-
-    return buffer.substr(offset, length);
-  }
-};
-
-struct MarkedLabel {
-  MarkedString name{};
-  MarkedString value;
-};
-
-struct MarkedSample {
-  Primitives::Sample sample{};
-  bool has_ts{};
-};
-
-struct MarkedMetric {
-  uint64_t hash;
-  uint32_t base_offset;
-  uint32_t data_offset;
-};
-
-struct MarkedMetadata {
-  MarkedString metric_name{};
-  MarkedString text{};
-  Prometheus::MetadataType type{};
-};
-#pragma pack(pop)
 
 class Metric {
  public:
@@ -86,16 +38,12 @@ class Metric {
     ts.label_set().resize(labels_count);
 
     auto label_iter = ts.label_set().begin();
-    const char* base = buffer_.data() + item_->base_offset;
     for (uint32_t i = 0; i < labels_count; ++i) {
-      const auto [next_ptr, name_off, name_len, value_off, value_len] = encoding::LabelCodec::decode(ptr);
+      const auto [next_ptr, label] = encoding::LabelCodec::decode(ptr);
       ptr = next_ptr;
 
-      if (name_len == 0 && name_off == 0) [[unlikely]] {
-        std::construct_at(label_iter++, Prometheus::kMetricLabelName, std::string_view(base + value_off, value_len));
-      } else {
-        std::construct_at(label_iter++, std::string_view(base + name_off, name_len), std::string_view(base + value_off, value_len));
-      }
+      const auto sub_buffer = buffer_.substr(item_->base_offset);
+      std::construct_at(label_iter++, label.name.view(sub_buffer), label.value.view(sub_buffer));
     }
 
     auto [p, sample] = encoding::SampleCodec::decode(ptr, layout, default_timestamp_);
@@ -223,9 +171,7 @@ class MetricMarkupBuffer : public MarkupBuffer<Metric> {
     bytes_ptr_ = encoding::LayoutCountCodec::encode(bytes_ptr_, layout, count);
   }
 
-  void add_label(MarkedLabel label) noexcept {
-    bytes_ptr_ = encoding::LabelCodec::encode(bytes_ptr_, label.name.offset, label.name.length, label.value.offset, label.value.length);
-  }
+  void add_label(MarkedLabel label) noexcept { bytes_ptr_ = encoding::LabelCodec::encode(bytes_ptr_, label); }
 
   void add_sample(encoding::LayoutMarker layout, const Primitives::Sample& sample) noexcept {
     using encoding::SampleValueType;
