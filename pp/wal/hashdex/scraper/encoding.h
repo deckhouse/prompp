@@ -182,13 +182,12 @@ class LabelCodec {
 
  private:
   static PROMPP_ALWAYS_INLINE char* encode_value_only(char* out, const uint32_t label_value_offset, const uint32_t label_value_length) noexcept {
-    static constexpr uint8_t szm[4] = {0, 1, 2, 4};
     char* start = out++;
 
     const uint8_t sz2 = push_and_encode(out, label_value_offset);
-    out += szm[sz2];
+    out += szm_[sz2];
     const uint8_t sz3 = push_and_encode(out, label_value_length);
-    out += szm[sz3];
+    out += szm_[sz3];
 
     *start = (sz2 << 4) | (sz3 << 6);
 
@@ -212,17 +211,15 @@ class LabelCodec {
                                                    const uint32_t label_name_length,
                                                    const uint32_t label_value_offset,
                                                    const uint32_t label_value_length) noexcept {
-    static constexpr uint8_t szm[4] = {0, 1, 2, 4};
-
     char* start = out++;
     const uint8_t sz0 = push_and_encode(out, label_name_offset);
-    out += szm[sz0];
+    out += szm_[sz0];
     const uint8_t sz1 = push_and_encode(out, label_name_length);
-    out += szm[sz1];
+    out += szm_[sz1];
     const uint8_t sz2 = push_and_encode(out, label_value_offset);
-    out += szm[sz2];
+    out += szm_[sz2];
     const uint8_t sz3 = push_and_encode(out, label_value_length);
-    out += szm[sz3];
+    out += szm_[sz3];
 
     *start = (sz0) | (sz1 << 2) | (sz2 << 4) | (sz3 << 6);
 
@@ -328,6 +325,8 @@ class LabelCodec {
     p += 4;
     return v;
   }
+
+  static constexpr uint8_t szm_[4] = {0, 1, 2, 4};
 };
 
 class LayoutCountCodec {
@@ -366,7 +365,7 @@ class LayoutCountCodec {
   }
 };
 
-static constexpr uint32_t metric_preallocated_bytes(uint32_t labels_count) noexcept {
+static constexpr uint32_t metric_maximum_encoding_size(uint32_t labels_count) noexcept {
   return LayoutCountCodec::kMaximumEncodingSize + LabelCodec::kMaximumEncodingSize * labels_count + SampleCodec::kMaximumEncodingSize;
 }
 
