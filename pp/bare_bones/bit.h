@@ -79,6 +79,11 @@ constexpr Int to_ceil_units(Int bits) noexcept {
 constexpr uint8_t kUint64Bits = unit_bits<uint64_t>;
 
 template <class T>
+constexpr T byte_width(T x) noexcept {
+  return to_ceil_bytes(std::bit_width(x));
+}
+
+template <class T>
 PROMPP_ALWAYS_INLINE constexpr T be(T value) noexcept {
   if constexpr (std::endian::native == std::endian::little) {
     return std::byteswap(value);
