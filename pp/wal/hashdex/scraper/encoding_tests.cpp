@@ -120,7 +120,8 @@ class LabelCodecFixture : public testing::Test {
   LabelCodec::DecodeResult encode_and_decode(uint32_t name_off, uint32_t name_len, uint32_t value_off, uint32_t value_len) {
     buf_.fill(0);
     char* start = buf_.data();
-    char* end = LabelCodec::encode(start, PromPP::WAL::hashdex::scraper::MarkedLabel{name_off, name_len, value_off, value_len});
+    char* end = LabelCodec::encode(start, PromPP::WAL::hashdex::scraper::MarkedLabel{.name = {.offset = name_off, .length = name_len},
+                                                                                     .value = {.offset = value_off, .length = value_len}});
 
     const auto res = LabelCodec::decode(start);
 
