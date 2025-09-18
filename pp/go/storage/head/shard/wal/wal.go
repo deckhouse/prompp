@@ -1,6 +1,7 @@
 package wal
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -11,6 +12,10 @@ import (
 const (
 	// FileFormatVersion wal file version.
 	FileFormatVersion = 1
+)
+
+var (
+	ErrWalIsCorrupted = errors.New("wal is corrupted")
 )
 
 // SegmentWriter writer for wal segments.
@@ -89,6 +94,10 @@ func NewCorruptedWal[
 
 // Close closes the wal segmentWriter.
 func (w *Wal[TSegment, TStats, TWriter]) Close() error {
+	if w.corrupted {
+		return nil
+	}
+
 	w.locker.Lock()
 	defer w.locker.Unlock()
 
@@ -109,7 +118,7 @@ func (w *Wal[TSegment, TStats, TWriter]) Close() error {
 // It is necessary to lock the LSS for reading for the commit.
 func (w *Wal[TSegment, TStats, TWriter]) Commit() error {
 	if w.corrupted {
-		return fmt.Errorf("committing corrupted wal")
+		return ErrWalIsCorrupted
 	}
 
 	w.locker.Lock()
@@ -130,11 +139,19 @@ func (w *Wal[TSegment, TStats, TWriter]) Commit() error {
 
 // CurrentSize returns current wal size.
 func (w *Wal[TSegment, TStats, TWriter]) CurrentSize() int64 {
+	if w.corrupted {
+		return 0
+	}
+
 	return w.segmentWriter.CurrentSize()
 }
 
 // Flush wal [SegmentWriter], write all buffered data to storage.
 func (w *Wal[TSegment, TStats, TWriter]) Flush() error {
+	if w.corrupted {
+		return ErrWalIsCorrupted
+	}
+
 	w.locker.Lock()
 	defer w.locker.Unlock()
 
@@ -143,6 +160,10 @@ func (w *Wal[TSegment, TStats, TWriter]) Flush() error {
 
 // Sync commits the current contents of the [SegmentWriter].
 func (w *Wal[TSegment, TStats, TWriter]) Sync() error {
+	if w.corrupted {
+		return ErrWalIsCorrupted
+	}
+
 	w.locker.Lock()
 	defer w.locker.Unlock()
 
@@ -152,7 +173,7 @@ func (w *Wal[TSegment, TStats, TWriter]) Sync() error {
 // Write the incoming inner series to wal encoder.
 func (w *Wal[TSegment, TStats, TWriter]) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error) {
 	if w.corrupted {
-		return false, fmt.Errorf("writing in corrupted wal")
+		return false, ErrWalIsCorrupted
 	}
 
 	w.locker.Lock()

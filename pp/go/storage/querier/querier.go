@@ -171,7 +171,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	defer release()
 
 	defer func() {
-		if q.metrics == nil {
+		if q.metrics != nil {
 			q.metrics.SelectDuration.With(
 				prometheus.Labels{"query_type": "instant"},
 			).Observe(float64(time.Since(start).Microseconds()))
@@ -191,21 +191,27 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 
 	numberOfShards := q.head.NumberOfShards()
 	seriesSets := make([]storage.SeriesSet, numberOfShards)
+	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead](q.head)
 	tDataStorageQuery := q.head.CreateTask(
 		dsQueryInstantQuerier,
-		func(shard TShard) error {
-			shardID := shard.ShardID()
+		func(s TShard) error {
+			shardID := s.ShardID()
 			lssQueryResult := lssQueryResults[shardID]
 			if lssQueryResult == nil {
 				seriesSets[shardID] = &SeriesSet{}
 				return nil
 			}
 
+			samples, result := s.DataStorage().InstantQuery(q.maxt, valueNotFoundTimestampValue, lssQueryResult.IDs())
+			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {
+				loadAndQueryWaiter.Add(s, result.Querier)
+			}
+
 			seriesSets[shardID] = NewInstantSeriesSet(
 				lssQueryResult,
 				snapshots[shardID],
 				valueNotFoundTimestampValue,
-				shard.DataStorage().InstantQuery(q.maxt, valueNotFoundTimestampValue, lssQueryResult.IDs()),
+				samples,
 			)
 
 			return nil
@@ -213,6 +219,12 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	)
 	q.head.Enqueue(tDataStorageQuery)
 	_ = tDataStorageQuery.Wait()
+
+	if err := loadAndQueryWaiter.Wait(); err != nil {
+		// TODO: Unrecoverable error
+		// q.head.UnrecoverableError(err)
+		return storage.ErrSeriesSet(err)
+	}
 
 	return storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge)
 }
@@ -301,32 +313,37 @@ func queryDataStorage[
 	mint, maxt int64,
 ) []*cppbridge.HeadDataStorageSerializedChunks {
 	serializedChunksShards := make([]*cppbridge.HeadDataStorageSerializedChunks, head.NumberOfShards())
+	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead](head)
 	tDataStorageQuery := head.CreateTask(
 		taskName,
-		func(shard TShard) error {
-			shardID := shard.ShardID()
+		func(s TShard) error {
+			shardID := s.ShardID()
 			lssQueryResult := lssQueryResults[shardID]
 			if lssQueryResult == nil {
 				return nil
 			}
 
-			serializedChunks := shard.DataStorage().Query(cppbridge.HeadDataStorageQuery{
+			var result cppbridge.DataStorageQueryResult
+			serializedChunksShards[shardID], result = s.DataStorage().Query(cppbridge.HeadDataStorageQuery{
 				StartTimestampMs: mint,
 				EndTimestampMs:   maxt,
 				LabelSetIDs:      lssQueryResult.IDs(),
 			})
-
-			if serializedChunks.NumberOfChunks() == 0 {
-				return nil
+			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {
+				loadAndQueryWaiter.Add(s, result.Querier)
 			}
-
-			serializedChunksShards[shardID] = serializedChunks
 
 			return nil
 		},
 	)
 	head.Enqueue(tDataStorageQuery)
 	_ = tDataStorageQuery.Wait()
+
+	if err := loadAndQueryWaiter.Wait(); err != nil {
+		// TODO: Unrecoverable error
+		// q.head.UnrecoverableError(err)
+		return nil
+	}
 
 	return serializedChunksShards
 }

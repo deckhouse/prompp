@@ -78,6 +78,12 @@ func (ds *DataStorage) Query(
 	return serializedChunks, res
 }
 
+func (ds *DataStorage) QueryFinal(queriers []uintptr) {
+	ds.locker.RLock()
+	ds.dataStorage.QueryFinal(queriers)
+	ds.locker.RUnlock()
+}
+
 // QueryStatus get head status from [DataStorage].
 func (ds *DataStorage) QueryStatus(status *cppbridge.HeadStatus) {
 	ds.locker.RLock()
@@ -115,4 +121,30 @@ func (ds *DataStorage) TimeInterval(invalidateCache bool) cppbridge.TimeInterval
 	ds.locker.RUnlock()
 
 	return result
+}
+
+// CreateUnusedSeriesDataUnloader create unused series data unloader
+func (ds *DataStorage) CreateUnusedSeriesDataUnloader() *cppbridge.UnusedSeriesDataUnloader {
+	return ds.dataStorage.CreateUnusedSeriesDataUnloader()
+}
+
+// CreateLoader create series data unloader
+func (ds *DataStorage) CreateLoader(queriers []uintptr) *cppbridge.UnloadedDataLoader {
+	return ds.dataStorage.CreateLoader(queriers)
+}
+
+// CreateRevertableLoader create series data revertable unloader
+func (ds *DataStorage) CreateRevertableLoader(
+	lss *cppbridge.LabelSetStorage,
+	lsIdBatchSize uint32,
+) *cppbridge.UnloadedDataRevertableLoader {
+	return ds.dataStorage.CreateRevertableLoader(lss, lsIdBatchSize)
+}
+
+func (ds *DataStorage) GetQueriedSeriesBitset() []byte {
+	return ds.dataStorage.GetQueriedSeriesBitset()
+}
+
+func (ds *DataStorage) SetQueriedSeriesBitset(bitset []byte) bool {
+	return ds.dataStorage.SetQueriedSeriesBitset(bitset)
 }

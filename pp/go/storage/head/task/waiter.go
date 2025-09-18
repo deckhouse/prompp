@@ -21,8 +21,8 @@ type Waiter[TTask Task] struct {
 }
 
 // NewTaskWaiter init new TaskWaiter for n task.
-func NewTaskWaiter[TTask Task](n int) *Waiter[TTask] {
-	return &Waiter[TTask]{
+func NewTaskWaiter[TTask Task](n int) Waiter[TTask] {
+	return Waiter[TTask]{
 		tasks: make([]TTask, 0, n),
 	}
 }
@@ -34,10 +34,10 @@ func (tw *Waiter[TTask]) Add(t TTask) {
 
 // Wait for tasks to be completed.
 func (tw *Waiter[TTask]) Wait() error {
-	errs := make([]error, len(tw.tasks))
+	var err error
 	for _, t := range tw.tasks {
-		errs = append(errs, t.Wait())
+		err = errors.Join(err, t.Wait())
 	}
 
-	return errors.Join(errs...)
+	return err
 }

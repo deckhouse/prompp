@@ -8,6 +8,9 @@ import (
 const (
 	// dsMergeOutOfOrderChunks name of task.
 	dsMergeOutOfOrderChunks = "data_storage_merge_out_of_order_chunks"
+
+	// dsUnloadUnusedSeriesData name of task
+	dsUnloadUnusedSeriesData = "data_storage_unload_unused_series_data"
 )
 
 //
@@ -61,6 +64,27 @@ func CFSViaRange[
 	}
 
 	return errors.Join(errs...)
+}
+
+//
+// UnloadUnusedSeriesDataWithHead
+//
+
+// UnloadUnusedSeriesDataWithHead unload unused series data for [Head].
+func UnloadUnusedSeriesDataWithHead[
+	TTask Task,
+	TShard, TGShard Shard,
+	THead Head[TTask, TShard, TGShard],
+](h THead) error {
+	t := h.CreateTask(
+		dsUnloadUnusedSeriesData,
+		func(shard TGShard) error {
+			return shard.UnloadUnusedSeriesData()
+		},
+	)
+	h.Enqueue(t)
+
+	return t.Wait()
 }
 
 //
