@@ -875,7 +875,7 @@ func main() {
 	scrapeManager, err := scrape.NewManager(
 		&cfg.scrape,
 		log.With(logger, "component", "scrape manager"),
-		receiver,
+		nil, // TODO receiver adapter
 		prometheus.DefaultRegisterer,
 	)
 	if err != nil {
@@ -992,7 +992,8 @@ func main() {
 	}
 
 	// Depends on cfg.web.ScrapeManager so needs to be after cfg.web.ScrapeManager = scrapeManager.
-	webHandler := web.New(log.With(logger, "component", "web"), &cfg.web, receiver) // PP_CHANGES.md: rebuild on cpp
+	// TODO receiver adapter
+	webHandler := web.New(log.With(logger, "component", "web"), &cfg.web, nil) // PP_CHANGES.md: rebuild on cpp
 
 	// Monitor outgoing connections on default transport with conntrack.
 	http.DefaultTransport.(*http.Transport).DialContext = conntrack.NewDialContextFunc(

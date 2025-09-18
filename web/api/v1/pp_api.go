@@ -3,17 +3,30 @@ package v1
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/prometheus/common/route"
 
+	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp-pkg/handler/middleware"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
+
+// ApplyConfig updates the configs for opHandler and otlpWriteHandler.
+func (api *API) ApplyConfig(conf *config.Config) (err error) {
+	if api.opHandler != nil {
+		if err := api.opHandler.ApplyConfig(conf); err != nil {
+			return fmt.Errorf("failed apply opHandler config: %w", err)
+		}
+	}
+
+	return err
+}
 
 // Register the API's endpoints in the given router from op.
 func (api *API) opRegister(r *route.Router, wrapAgent func(f apiFunc) http.HandlerFunc) {
@@ -70,7 +83,7 @@ func (api *API) queryHead(r *http.Request) apiFuncResult {
 		matchers = append(matchers, selector...)
 	}
 
-	q, err := api.receiver.HeadQuerier(ctx, start.UnixMilli(), end.UnixMilli())
+	q, err := api.adapter.HeadQuerier(ctx, start.UnixMilli(), end.UnixMilli())
 	if err != nil {
 		return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
 	}
@@ -109,7 +122,7 @@ func (api *API) serveHeadStatus(r *http.Request) apiFuncResult {
 		}
 	}
 
-	return apiFuncResult{api.receiver.HeadStatus(r.Context(), limit), nil, nil, nil}
+	return apiFuncResult{api.adapter.HeadStatus(r.Context(), limit), nil, nil, nil}
 }
 
 func (api *API) opRemoteWrite(middlewares ...middleware.Middleware) http.HandlerFunc {

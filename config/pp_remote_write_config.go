@@ -61,6 +61,11 @@ func (c *Config) GetReceiverConfig() (*pp_pkg_config.RemoteWriteReceiverConfig, 
 	return rcCfg, nil
 }
 
+// RemoteWriteReceiverConfig returns configs for RemoteWriteReceiver.
+func (c *Config) RemoteWriteReceiverConfig() *pp_pkg_config.RemoteWriteReceiverConfig {
+	return c.ReceiverConfig.Copy()
+}
+
 func convertingRelabelConfigs(rCfgs []*relabel.Config) ([]*cppbridge.RelabelConfig, error) {
 	var oprCfgs []*cppbridge.RelabelConfig
 	raw, err := yaml.Marshal(rCfgs)

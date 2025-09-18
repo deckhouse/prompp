@@ -22,6 +22,7 @@ import (
 	conventions "go.opentelemetry.io/collector/semconv/v1.6.1"
 	"go.uber.org/multierr"
 
+	"github.com/prometheus/prometheus/config"
 	prom_config "github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/model/value"
 	ppmodel "github.com/prometheus/prometheus/pp/go/model"
@@ -49,19 +50,33 @@ var OTLPAlwaysCommit = true
 
 // OTLPWriteHandler handler for otlp data via remote write.
 type OTLPWriteHandler struct {
-	logger   log.Logger
-	receiver Receiver
+	logger  log.Logger
+	adapter Adapter
+	states  *StatesStorage
 }
 
-func NewOTLPWriteHandler(logger log.Logger, receiver Receiver) *OTLPWriteHandler {
+func NewOTLPWriteHandler(logger log.Logger, adapter Adapter) *OTLPWriteHandler {
 	return &OTLPWriteHandler{
-		logger:   logger,
-		receiver: receiver,
+		logger:  logger,
+		adapter: adapter,
+		states:  NewStatesStorage(),
 	}
+}
+
+// ApplyConfig updates the configs for [StatesStorage].
+func (h *OTLPWriteHandler) ApplyConfig(conf *config.Config) error {
+	return h.states.ApplyConfig(conf)
 }
 
 // ServeHTTP implementation http.Handler.
 func (h *OTLPWriteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	state, ok := h.states.GetStateByID(prom_config.TransparentRelabeler)
+	if !ok {
+		level.Error(h.logger).Log("msg", "failed get state", "err", "unknown relabler id")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
 	req, err := DecodeOTLPWriteRequest(r)
 	if err != nil {
 		level.Error(h.logger).Log("msg", "Error decoding remote write request", "err", err.Error())
@@ -74,11 +89,10 @@ func (h *OTLPWriteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		level.Warn(h.logger).Log("msg", "Error translating OTLP metrics to Prometheus write request", "err", err)
 	}
 
-	stats, err := h.receiver.AppendTimeSeries(
+	stats, err := h.adapter.AppendTimeSeries(
 		r.Context(),
 		converter.TimeSeries(),
-		nil,
-		prom_config.TransparentRelabeler,
+		state,
 		OTLPAlwaysCommit,
 	)
 

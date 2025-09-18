@@ -37,28 +37,41 @@ func (s *RefillProcessorSuite) TestProcess() {
 	buffers := pool.New(8, 100e3, 2, func(sz int) any { return make([]byte, 0, sz) })
 
 	blockStorage := block.NewStorage(tmpDir, buffers)
-	mr := &metricReceiver{appendFn: func(ctx context.Context, hashdex cppbridge.ShardedData, relabelerID string) error {
-		return nil
-	}}
+	ar := &AdapterMock{
+		AppendHashdexFunc: func(context.Context, cppbridge.ShardedData, *cppbridge.StateV2, bool) error {
+			return nil
+		},
+		MergeOutOfOrderChunksFunc: func(context.Context) {},
+	}
 
-	blockID := uuid.New()
-	shardID := uint16(0)
-	shardLog := uint8(0)
-	segmentEncodingVersion := cppbridge.EncodersVersion()
+	metadata := model.Metadata{
+		TenantID:               "",
+		BlockID:                uuid.New(),
+		ShardID:                0,
+		ShardsLog:              0,
+		SegmentEncodingVersion: 3,
+		RelabelerID:            uuid.New().String(),
+	}
+
+	states := &StatesStorageMock{
+		GetStateByIDFunc: func(stateID string) (*cppbridge.StateV2, bool) {
+			if metadata.RelabelerID != stateID {
+				return nil, false
+			}
+
+			return nil, true
+		},
+	}
 
 	var expectedStatus model.RefillProcessingStatus
 
 	gen := &segmentGenerator{segmentSize: 10}
 
-	refill := &testRefill{
-		metadata: model.Metadata{
-			TenantID:               "",
-			BlockID:                blockID,
-			ShardID:                shardID,
-			ShardsLog:              shardLog,
-			SegmentEncodingVersion: segmentEncodingVersion,
+	refill := &RefillMock{
+		MetadataFunc: func() model.Metadata {
+			return metadata
 		},
-		readFn: func(ctx context.Context) (*model.Segment, error) {
+		ReadFunc: func(context.Context) (*model.Segment, error) {
 			if len(gen.segments) == 5 {
 				return nil, io.EOF
 			}
@@ -75,14 +88,14 @@ func (s *RefillProcessorSuite) TestProcess() {
 			segment, readErr := gen.generate()
 			return &segment.encoded, readErr
 		},
-		writeFn: func(ctx context.Context, status model.RefillProcessingStatus) error {
+		WriteFunc: func(_ context.Context, status model.RefillProcessingStatus) error {
 			expectedStatus = status
 			return nil
 		},
 	}
 
 	decoderBuilder := ppcore.NewBuilder(blockStorage)
-	refillProcessor := processor.NewRefillProcessor(decoderBuilder, mr, log.NewNopLogger(), nil)
+	refillProcessor := processor.NewRefillProcessor(decoderBuilder, ar, states, log.NewNopLogger(), nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 	defer cancel()
@@ -101,28 +114,41 @@ func (s *RefillProcessorSuite) TestProcessWithError() {
 	buffers := pool.New(8, 100e3, 2, func(sz int) any { return make([]byte, 0, sz) })
 
 	blockStorage := block.NewStorage(tmpDir, buffers)
-	mr := &metricReceiver{appendFn: func(ctx context.Context, hashdex cppbridge.ShardedData, relabelerID string) error {
-		return nil
-	}}
+	ar := &AdapterMock{
+		AppendHashdexFunc: func(context.Context, cppbridge.ShardedData, *cppbridge.StateV2, bool) error {
+			return nil
+		},
+		MergeOutOfOrderChunksFunc: func(context.Context) {},
+	}
 
-	blockID := uuid.New()
-	shardID := uint16(0)
-	shardLog := uint8(0)
-	segmentEncodingVersion := cppbridge.EncodersVersion()
+	metadata := model.Metadata{
+		TenantID:               "",
+		BlockID:                uuid.New(),
+		ShardID:                0,
+		ShardsLog:              0,
+		SegmentEncodingVersion: 3,
+		RelabelerID:            uuid.New().String(),
+	}
+
+	states := &StatesStorageMock{
+		GetStateByIDFunc: func(stateID string) (*cppbridge.StateV2, bool) {
+			if metadata.RelabelerID != stateID {
+				return nil, false
+			}
+
+			return nil, true
+		},
+	}
 
 	gen := &segmentGenerator{segmentSize: 10}
 
 	fakeErr := errors.New("read error")
 
-	refill := &testRefill{
-		metadata: model.Metadata{
-			TenantID:               "",
-			BlockID:                blockID,
-			ShardID:                shardID,
-			ShardsLog:              shardLog,
-			SegmentEncodingVersion: segmentEncodingVersion,
+	refill := &RefillMock{
+		MetadataFunc: func() model.Metadata {
+			return metadata
 		},
-		readFn: func(ctx context.Context) (*model.Segment, error) {
+		ReadFunc: func(context.Context) (*model.Segment, error) {
 			if len(gen.segments) == 3 {
 				return &model.Segment{}, fakeErr
 			}
@@ -130,39 +156,17 @@ func (s *RefillProcessorSuite) TestProcessWithError() {
 			segment, readErr := gen.generate()
 			return &segment.encoded, readErr
 		},
-		writeFn: func(ctx context.Context, status model.RefillProcessingStatus) error {
+		WriteFunc: func(context.Context, model.RefillProcessingStatus) error {
 			return nil
 		},
 	}
 
 	decoderBuilder := ppcore.NewBuilder(blockStorage)
-	refillProcessor := processor.NewRefillProcessor(decoderBuilder, mr, log.NewNopLogger(), nil)
+	refillProcessor := processor.NewRefillProcessor(decoderBuilder, ar, states, log.NewNopLogger(), nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 	defer cancel()
 
 	err = refillProcessor.Process(ctx, refill)
 	s.Require().ErrorIs(err, fakeErr)
-}
-
-//
-// testRefill
-//
-
-type testRefill struct {
-	metadata model.Metadata
-	readFn   func(ctx context.Context) (*model.Segment, error)
-	writeFn  func(ctx context.Context, status model.RefillProcessingStatus) error
-}
-
-func (s *testRefill) Metadata() model.Metadata {
-	return s.metadata
-}
-
-func (s *testRefill) Read(ctx context.Context) (*model.Segment, error) {
-	return s.readFn(ctx)
-}
-
-func (s *testRefill) Write(ctx context.Context, status model.RefillProcessingStatus) error {
-	return s.writeFn(ctx, status)
 }

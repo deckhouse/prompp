@@ -171,7 +171,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	defer release()
 
 	defer func() {
-		if q.metrics == nil {
+		if q.metrics != nil {
 			q.metrics.SelectDuration.With(
 				prometheus.Labels{"query_type": "instant"},
 			).Observe(float64(time.Since(start).Microseconds()))

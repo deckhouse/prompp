@@ -16,6 +16,7 @@ import (
 	"github.com/prometheus/common/model"
 )
 
+// NullTimestamp the timestamp that is used as the nil value.
 const NullTimestamp = math.MinInt64
 
 // ErrLSSNullPointer - error when lss is null pointer
@@ -524,10 +525,6 @@ func NewStaleNansState() *StaleNansState {
 	})
 
 	return s
-}
-
-func (s *StaleNansState) Reset() {
-	prometheusRelabelStaleNansStateReset(s.state)
 }
 
 // RelabelerStats statistics return from relabeler.
@@ -1191,8 +1188,8 @@ func (pgr *PerGoroutineRelabeler) AppendRelabelerSeries(
 	return hasReallocations, handleException(exception)
 }
 
-// InputRelabeling relabeling incoming hashdex(first stage).
-func (pgr *PerGoroutineRelabeler) InputRelabeling(
+// Relabeling relabeling incoming hashdex(first stage).
+func (pgr *PerGoroutineRelabeler) Relabeling(
 	ctx context.Context,
 	inputLss *LabelSetStorage,
 	targetLss *LabelSetStorage,
@@ -1210,6 +1207,113 @@ func (pgr *PerGoroutineRelabeler) InputRelabeling(
 		return RelabelerStats{}, false, ErrMustImplementCptrable
 	}
 
+	if state.TrackStaleness() {
+		return pgr.inputRelabelingWithStalenans(
+			inputLss,
+			targetLss,
+			state,
+			cptrContainer,
+			shardsInnerSeries,
+			shardsRelabeledSeries,
+		)
+	}
+
+	if state.IsTransition() {
+		return pgr.inputTransitionRelabeling(
+			targetLss,
+			state,
+			cptrContainer,
+			shardsInnerSeries,
+		)
+	}
+
+	return pgr.inputRelabeling(
+		inputLss,
+		targetLss,
+		state,
+		cptrContainer,
+		shardsInnerSeries,
+		shardsRelabeledSeries,
+	)
+}
+
+// RelabelingFromCache relabeling incoming hashdex(first stage) from cache.
+func (pgr *PerGoroutineRelabeler) RelabelingFromCache(
+	ctx context.Context,
+	inputLss *LabelSetStorage,
+	targetLss *LabelSetStorage,
+	state *StateV2,
+	shardedData ShardedData,
+	shardsInnerSeries []*InnerSeries,
+) (RelabelerStats, bool, error) {
+	if ctx.Err() != nil {
+		return RelabelerStats{}, false, ctx.Err()
+	}
+
+	cptrContainer, ok := shardedData.(cptrable)
+	if !ok {
+		return RelabelerStats{}, false, ErrMustImplementCptrable
+	}
+
+	if state.TrackStaleness() {
+		return pgr.inputRelabelingWithStalenansFromCache(
+			inputLss,
+			targetLss,
+			state,
+			cptrContainer,
+			shardsInnerSeries,
+		)
+	}
+
+	if state.IsTransition() {
+		return pgr.inputTransitionRelabelingOnlyRead(
+			targetLss,
+			state,
+			cptrContainer,
+			shardsInnerSeries,
+		)
+	}
+
+	return pgr.inputRelabelingFromCache(
+		inputLss,
+		targetLss,
+		state,
+		cptrContainer,
+		shardsInnerSeries,
+	)
+}
+
+// UpdateRelabelerState add to cache relabled data(third stage).
+func (pgr *PerGoroutineRelabeler) UpdateRelabelerState(
+	ctx context.Context,
+	cache *Cache,
+	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
+) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	exception := prometheusPerGoroutineRelabelerUpdateRelabelerState(
+		shardsRelabelerStateUpdate,
+		pgr.cptr,
+		cache.cPointer,
+	)
+
+	runtime.KeepAlive(pgr)
+	runtime.KeepAlive(cache)
+
+	return handleException(exception)
+}
+
+// inputRelabeling relabeling incoming hashdex(first stage).
+func (pgr *PerGoroutineRelabeler) inputRelabeling(
+	inputLss *LabelSetStorage,
+	targetLss *LabelSetStorage,
+	state *StateV2,
+	cptrContainer cptrable,
+	shardsInnerSeries []*InnerSeries,
+	shardsRelabeledSeries []*RelabeledSeries,
+) (RelabelerStats, bool, error) {
 	cache := state.CacheByShard(pgr.shardID)
 	cache.lock.Lock()
 	stats, exception, hasReallocations := prometheusPerGoroutineRelabelerInputRelabeling(
@@ -1235,23 +1339,13 @@ func (pgr *PerGoroutineRelabeler) InputRelabeling(
 }
 
 // InputRelabelingFromCache relabeling incoming hashdex(first stage) from cache.
-func (pgr *PerGoroutineRelabeler) InputRelabelingFromCache(
-	ctx context.Context,
+func (pgr *PerGoroutineRelabeler) inputRelabelingFromCache(
 	inputLss *LabelSetStorage,
 	targetLss *LabelSetStorage,
 	state *StateV2,
-	shardedData ShardedData,
+	cptrContainer cptrable,
 	shardsInnerSeries []*InnerSeries,
 ) (RelabelerStats, bool, error) {
-	if ctx.Err() != nil {
-		return RelabelerStats{}, false, ctx.Err()
-	}
-
-	cptrContainer, ok := shardedData.(cptrable)
-	if !ok {
-		return RelabelerStats{}, false, ErrMustImplementCptrable
-	}
-
 	cache := state.CacheByShard(pgr.shardID)
 	cache.lock.RLock()
 	stats, exception, ok := prometheusPerGoroutineRelabelerInputRelabelingFromCache(
@@ -1274,25 +1368,15 @@ func (pgr *PerGoroutineRelabeler) InputRelabelingFromCache(
 	return stats, ok, handleException(exception)
 }
 
-// InputRelabelingWithStalenans relabeling incoming hashdex(first stage) with state stalenans.
-func (pgr *PerGoroutineRelabeler) InputRelabelingWithStalenans(
-	ctx context.Context,
+// inputRelabelingWithStalenans relabeling incoming hashdex(first stage) with state stalenans.
+func (pgr *PerGoroutineRelabeler) inputRelabelingWithStalenans(
 	inputLss *LabelSetStorage,
 	targetLss *LabelSetStorage,
 	state *StateV2,
-	shardedData ShardedData,
+	cptrContainer cptrable,
 	shardsInnerSeries []*InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
 ) (RelabelerStats, bool, error) {
-	if ctx.Err() != nil {
-		return RelabelerStats{}, false, ctx.Err()
-	}
-
-	cptrContainer, ok := shardedData.(cptrable)
-	if !ok {
-		return RelabelerStats{}, false, ErrMustImplementCptrable
-	}
-
 	cache := state.CacheByShard(pgr.shardID)
 	cache.lock.Lock()
 	stats, exception, hasReallocations := prometheusPerGoroutineRelabelerInputRelabelingWithStalenans(
@@ -1319,24 +1403,14 @@ func (pgr *PerGoroutineRelabeler) InputRelabelingWithStalenans(
 	return stats, hasReallocations, handleException(exception)
 }
 
-// InputRelabelingWithStalenansFromCache relabeling incoming hashdex(first stage) from cache with state stalenans.
-func (pgr *PerGoroutineRelabeler) InputRelabelingWithStalenansFromCache(
-	ctx context.Context,
+// inputRelabelingWithStalenansFromCache relabeling incoming hashdex(first stage) from cache with state stalenans.
+func (pgr *PerGoroutineRelabeler) inputRelabelingWithStalenansFromCache(
 	inputLss *LabelSetStorage,
 	targetLss *LabelSetStorage,
 	state *StateV2,
-	shardedData ShardedData,
+	cptrContainer cptrable,
 	shardsInnerSeries []*InnerSeries,
 ) (RelabelerStats, bool, error) {
-	if ctx.Err() != nil {
-		return RelabelerStats{}, false, ctx.Err()
-	}
-
-	cptrContainer, ok := shardedData.(cptrable)
-	if !ok {
-		return RelabelerStats{}, false, ErrMustImplementCptrable
-	}
-
 	cache := state.CacheByShard(pgr.shardID)
 	cache.lock.RLock()
 	stats, exception, ok := prometheusPerGoroutineRelabelerInputRelabelingWithStalenansFromCache(
@@ -1361,89 +1435,48 @@ func (pgr *PerGoroutineRelabeler) InputRelabelingWithStalenansFromCache(
 	return stats, ok, handleException(exception)
 }
 
-// Relabeling relabeling incoming hashdex(first stage).
-func (pgr *PerGoroutineRelabeler) Relabeling(
-	ctx context.Context,
-	inputLss *LabelSetStorage,
+// inputTransitionRelabeling transparent relabeling incoming hashdex(first stage).
+func (pgr *PerGoroutineRelabeler) inputTransitionRelabeling(
 	targetLss *LabelSetStorage,
 	state *StateV2,
-	shardedData ShardedData,
-	shardsInnerSeries []*InnerSeries,
-	shardsRelabeledSeries []*RelabeledSeries,
-) (RelabelerStats, bool, error) {
-	if state.TrackStaleness() {
-		return pgr.InputRelabelingWithStalenans(
-			ctx,
-			inputLss,
-			targetLss,
-			state,
-			shardedData,
-			shardsInnerSeries,
-			shardsRelabeledSeries,
-		)
-	}
-
-	return pgr.InputRelabeling(
-		ctx,
-		inputLss,
-		targetLss,
-		state,
-		shardedData,
-		shardsInnerSeries,
-		shardsRelabeledSeries,
-	)
-}
-
-// RelabelingFromCache relabeling incoming hashdex(first stage) from cache.
-func (pgr *PerGoroutineRelabeler) RelabelingFromCache(
-	ctx context.Context,
-	inputLss *LabelSetStorage,
-	targetLss *LabelSetStorage,
-	state *StateV2,
-	shardedData ShardedData,
+	cptrContainer cptrable,
 	shardsInnerSeries []*InnerSeries,
 ) (RelabelerStats, bool, error) {
-	if state.TrackStaleness() {
-		return pgr.InputRelabelingWithStalenansFromCache(
-			ctx,
-			inputLss,
-			targetLss,
-			state,
-			shardedData,
-			shardsInnerSeries,
-		)
-	}
-
-	return pgr.InputRelabelingFromCache(
-		ctx,
-		inputLss,
-		targetLss,
-		state,
-		shardedData,
-		shardsInnerSeries,
-	)
-}
-
-// UpdateRelabelerState add to cache relabled data(third stage).
-func (pgr *PerGoroutineRelabeler) UpdateRelabelerState(
-	ctx context.Context,
-	cache *Cache,
-	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
-) error {
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	exception := prometheusPerGoroutineRelabelerUpdateRelabelerState(
-		shardsRelabelerStateUpdate,
+	stats, exception, hasReallocations := prometheusPerGoroutineRelabelerInputTransitionRelabeling(
 		pgr.cptr,
-		cache.cPointer,
+		targetLss.Pointer(),
+		cptrContainer.cptr(),
+		shardsInnerSeries,
 	)
 
 	runtime.KeepAlive(pgr)
-	runtime.KeepAlive(cache)
+	runtime.KeepAlive(targetLss)
+	runtime.KeepAlive(state)
+	runtime.KeepAlive(cptrContainer)
 
-	return handleException(exception)
+	return stats, hasReallocations, handleException(exception)
+}
+
+// inputTransitionRelabelingOnlyRead transparent relabeling incoming hashdex(first stage) from cache.
+func (pgr *PerGoroutineRelabeler) inputTransitionRelabelingOnlyRead(
+	targetLss *LabelSetStorage,
+	state *StateV2,
+	cptrContainer cptrable,
+	shardsInnerSeries []*InnerSeries,
+) (RelabelerStats, bool, error) {
+	stats, exception, ok := prometheusPerGoroutineRelabelerInputRelabelingOnlyRead(
+		pgr.cptr,
+		targetLss.Pointer(),
+		cptrContainer.cptr(),
+		shardsInnerSeries,
+	)
+
+	runtime.KeepAlive(pgr)
+	runtime.KeepAlive(targetLss)
+	runtime.KeepAlive(state)
+	runtime.KeepAlive(cptrContainer)
+
+	return stats, ok, handleException(exception)
 }
 
 //
@@ -1509,8 +1542,8 @@ type StateV2 struct {
 	trackStaleness     bool
 }
 
-// NewTransitionStateV2WithLock init empty [StateV2], with locks.
-func NewTransitionStateV2WithLock() *StateV2 {
+// NewTransitionStateV2 init empty [StateV2], with locks.
+func NewTransitionStateV2() *StateV2 {
 	return &StateV2{
 		locker:         NewTransitionLocker(),
 		generationHead: math.MaxUint64,
@@ -1529,8 +1562,8 @@ func NewTransitionStateV2WithoutLock() *StateV2 {
 	}
 }
 
-// NewStateV2WithLock init empty [StateV2], with locks.
-func NewStateV2WithLock() *StateV2 {
+// NewStateV2 init empty [StateV2], with locks.
+func NewStateV2() *StateV2 {
 	return &StateV2{
 		locker:         NewTransitionLocker(),
 		generationHead: math.MaxUint64,
@@ -1600,7 +1633,7 @@ func (s *StateV2) Reconfigure(
 	}
 
 	// the transition state does not require caches and staleNaNs
-	if s.status&transitionStatus == transitionStatus {
+	if s.IsTransition() {
 		s.status |= inited
 		s.generationHead = generationHead
 		s.locker.Unlock()
@@ -1611,6 +1644,11 @@ func (s *StateV2) Reconfigure(
 	s.resetStaleNansStates(numberOfShards)
 
 	s.locker.Unlock()
+}
+
+// IsTransition indicates whether the state is transition.
+func (s *StateV2) IsTransition() bool {
+	return s.status&transitionStatus == transitionStatus
 }
 
 // RelabelerOptions return Options for relabeler.
@@ -1630,7 +1668,7 @@ func (s *StateV2) SetRelabelerOptions(options *RelabelerOptions) {
 
 // SetStatelessRelabeler sets [StatelessRelabeler] for [PerGoroutineRelabeler].
 func (s *StateV2) SetStatelessRelabeler(statelessRelabeler *StatelessRelabeler) {
-	if s.status&transitionStatus == transitionStatus {
+	if s.IsTransition() {
 		panic("state is transition")
 	}
 
@@ -1652,7 +1690,7 @@ func (s *StateV2) StaleNansStateByShard(shardID uint16) *StaleNansState {
 
 // StatelessRelabeler returns [StatelessRelabeler] for [PerGoroutineRelabeler].
 func (s *StateV2) StatelessRelabeler() *StatelessRelabeler {
-	if s.status&transitionStatus == transitionStatus {
+	if s.IsTransition() {
 		panic("state is transition")
 	}
 
