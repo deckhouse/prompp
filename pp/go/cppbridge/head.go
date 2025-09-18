@@ -254,7 +254,7 @@ type HeadDataStorageSerializedChunks struct {
 
 type HeadDataStorageSerializedChunkMetadata [SerializedChunkMetadataSize]byte
 
-func (cm *HeadDataStorageSerializedChunkMetadata) SeriesID() uint32 {
+func (cm HeadDataStorageSerializedChunkMetadata) SeriesID() uint32 {
 	return *(*uint32)(unsafe.Pointer(&cm[0]))
 }
 
@@ -272,6 +272,11 @@ func (r *HeadDataStorageSerializedChunks) Len() int {
 
 func (r *HeadDataStorageSerializedChunks) Data() []byte {
 	return r.data
+}
+
+func (r *HeadDataStorageSerializedChunks) Metadata(chunkIndex int) HeadDataStorageSerializedChunkMetadata {
+	offset := Uint32Size + chunkIndex*SerializedChunkMetadataSize
+	return HeadDataStorageSerializedChunkMetadata(r.data[offset : offset+SerializedChunkMetadataSize])
 }
 
 type HeadDataStorageSerializedChunkIndex struct {
