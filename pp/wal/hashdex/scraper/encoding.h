@@ -301,20 +301,23 @@ class LabelCodec {
 
   static PROMPP_ALWAYS_INLINE uint32_t read_val_partial(const char*& p, uint8_t sz) noexcept {
     if (sz == 0b01) [[likely]] {
-      return *p++;
+      uint8_t v;
+      std::memcpy(&v, p, sizeof(v));
+      p += sizeof(v);
+      return v;
     }
     if (sz == 0b00) {
       return 0;
     }
     if (sz == 0b10) {
       uint16_t v;
-      std::memcpy(&v, p, 2);
-      p += 2;
+      std::memcpy(&v, p, sizeof(v));
+      p += sizeof(v);
       return v;
     }
     uint32_t v;
-    std::memcpy(&v, p, 4);
-    p += 4;
+    std::memcpy(&v, p, sizeof(v));
+    p += sizeof(v);
     return v;
   }
 
