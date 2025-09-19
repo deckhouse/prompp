@@ -4,7 +4,6 @@
 #include "primitives/snug_composites.h"
 #include "prometheus/label_matcher.h"
 #include "series_data/encoder.h"
-#include "series_data/outdated_sample_encoder.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
 #include "status.h"
@@ -17,7 +16,6 @@ using head::StatusGetterLSS;
 using PromPP::Primitives::LabelViewSet;
 using series_data::DataStorage;
 using series_data::Encoder;
-using series_data::OutdatedSampleEncoder;
 using QuerySource = series_index::QueriedSeries::Source;
 
 using Status = head::Status<std::string_view, std::vector>;

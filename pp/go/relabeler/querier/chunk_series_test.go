@@ -51,12 +51,13 @@ func (s *ChunksSeriesSetTestSuite) TestAll() {
 	lssQueryResult := labelSetSnapshot.Query(selector)
 	s.Require().Equal(cppbridge.LSSQueryStatusMatch, lssQueryResult.Status())
 
-	serializedChunks := ds.Query(cppbridge.HeadDataStorageQuery{
+	serializedChunks, result := ds.Query(cppbridge.HeadDataStorageQuery{
 		StartTimestampMs: mint,
 		EndTimestampMs:   maxt,
 		LabelSetIDs:      lssQueryResult.IDs(),
 	})
 
+	s.Require().Equal(cppbridge.DataStorageQueryStatusSuccess, result.Status)
 	s.Require().Equal(2, serializedChunks.NumberOfChunks())
 
 	chunkRecoder := cppbridge.NewSerializedChunkRecoder(serializedChunks, cppbridge.TimeInterval{

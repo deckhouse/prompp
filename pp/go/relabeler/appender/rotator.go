@@ -23,6 +23,7 @@ type RotateCommitable interface {
 	Rotate(ctx context.Context) error
 	CommitToWal(ctx context.Context) error
 	MergeOutOfOrderChunks(ctx context.Context)
+	UnloadUnusedSeriesData(ctx context.Context)
 }
 
 type Timer interface {
@@ -33,13 +34,14 @@ type Timer interface {
 
 // RotateCommiter is a rotation trigger.
 type RotateCommiter struct {
-	rotateCommitable RotateCommitable
-	rotateTimer      Timer
-	commitTimer      Timer
-	mergeTimer       Timer
-	run              chan struct{}
-	closer           *util.Closer
-	rotateCounter    prometheus.Counter
+	rotateCommitable  RotateCommitable
+	rotateTimer       Timer
+	commitTimer       Timer
+	mergeTimer        Timer
+	unloadDataStorage bool
+	run               chan struct{}
+	closer            *util.Closer
+	rotateCounter     prometheus.Counter
 }
 
 // NewRotateCommiter - Rotator constructor.
@@ -49,16 +51,18 @@ func NewRotateCommiter(
 	rotateTimer Timer,
 	commitTimer Timer,
 	mergeTimer Timer,
+	unloadDataStorage bool,
 	registerer prometheus.Registerer,
 ) *RotateCommiter {
 	factory := util.NewUnconflictRegisterer(registerer)
 	r := &RotateCommiter{
-		rotateCommitable: rotateCommitable,
-		rotateTimer:      rotateTimer,
-		commitTimer:      commitTimer,
-		mergeTimer:       mergeTimer,
-		run:              make(chan struct{}),
-		closer:           util.NewCloser(),
+		rotateCommitable:  rotateCommitable,
+		rotateTimer:       rotateTimer,
+		commitTimer:       commitTimer,
+		mergeTimer:        mergeTimer,
+		unloadDataStorage: unloadDataStorage,
+		run:               make(chan struct{}),
+		closer:            util.NewCloser(),
 		rotateCounter: factory.NewCounter(
 			prometheus.CounterOpts{
 				Name: "prompp_rotator_rotate_count",
@@ -100,6 +104,10 @@ func (r *RotateCommiter) loop(ctx context.Context) {
 			r.commitTimer.Reset()
 
 		case <-r.mergeTimer.Chan():
+			if r.unloadDataStorage {
+				r.rotateCommitable.UnloadUnusedSeriesData(ctx)
+			}
+
 			r.rotateCommitable.MergeOutOfOrderChunks(ctx)
 			r.mergeTimer.Reset()
 
@@ -146,3 +154,13 @@ func (t *ConstantIntervalTimer) Reset() {
 func (t *ConstantIntervalTimer) Stop() {
 	t.timer.Stop()
 }
+
+func NewNoOpTimer() *NoOpTimer {
+	return &NoOpTimer{}
+}
+
+type NoOpTimer struct{}
+
+func (NoOpTimer) Chan() <-chan time.Time { return nil }
+func (NoOpTimer) Reset()                 {}
+func (NoOpTimer) Stop()                  {}

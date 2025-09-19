@@ -771,6 +771,7 @@ func main() {
 		// x3 ScrapeInterval timeout for write block
 		time.Duration(cfgFile.GlobalConfig.ScrapeInterval*3),
 		cfg.WalMaxSamplesPerSegment,
+		appender.UnloadDataStorage,
 	)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create a receiver", "err", err)
@@ -1162,9 +1163,7 @@ func main() {
 				case <-cancel:
 					reloadReady.Close()
 				}
-				if err := queryEngine.Close(); err != nil {
-					level.Warn(logger).Log("msg", "Closing query engine failed", "err", err)
-				}
+
 				return nil
 			},
 			func(err error) {
@@ -1464,6 +1463,22 @@ func main() {
 		)
 	} // PP_CHANGES.md: rebuild on cpp end
 	{ // PP_CHANGES.md: rebuild on cpp start
+		g.Add(
+			func() error { return <-head.UnrecoverableErrorChan },
+			func(err error) {
+				select {
+				case head.UnrecoverableErrorChan <- nil:
+					// stop execute func if need
+				default:
+				}
+
+				if errors.Is(err, head.UnrecoverableError{}) {
+					level.Error(logger).Log("msg", "Received unrecoverable error", "err", err)
+				}
+			},
+		)
+	} // PP_CHANGES.md: rebuild on cpp end
+	{ // PP_CHANGES.md: rebuild on cpp start
 		// run remote writer.
 		ctx, cancel := context.WithCancel(context.Background())
 		g.Add(
@@ -1509,6 +1524,13 @@ func main() {
 		level.Error(logger).Log("err", err)
 		os.Exit(1)
 	}
+
+	// PP_CHANGES.md: rebuild on cpp start the engine is really no longer in use before calling this to avoid
+	if err := queryEngine.Close(); err != nil {
+		level.Warn(logger).Log("msg", "Closing query engine failed", "err", err)
+	}
+	// PP_CHANGES.md: rebuild on cpp end
+
 	level.Info(logger).Log("msg", "See you next time!")
 }
 
@@ -2105,6 +2127,10 @@ func readPromPPFeatures(logger log.Logger) {
 		case "disable_commits_on_remote_write":
 			rwprocessor.AlwaysCommit = false
 			pphandler.OTLPAlwaysCommit = false
+
+		case "unload_data_storage":
+			appender.UnloadDataStorage = true
+			_ = level.Info(logger).Log("msg", "[FEATURE] Data storage unloading is enabled.")
 		}
 	}
 }

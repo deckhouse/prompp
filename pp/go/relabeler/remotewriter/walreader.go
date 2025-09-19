@@ -40,14 +40,13 @@ type Segment struct {
 }
 
 func (r *walReader) Read() (segment Segment, err error) {
-	decodedSegment, _, err := head.ReadSegment(r.reader)
+	_, err = head.ReadSegment(r.reader, &segment.DecodedSegment)
 	if err != nil {
 		return segment, fmt.Errorf("failed to read segment: %w", err)
 	}
 
 	segment.ID = r.nextSegmentID
 	r.nextSegmentID++
-	segment.DecodedSegment = decodedSegment
 
 	return segment, nil
 }

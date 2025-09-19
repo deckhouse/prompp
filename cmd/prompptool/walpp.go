@@ -84,7 +84,7 @@ func (cmd *cmdWALPPToBlock) Do(
 	level.Debug(logger).Log("msg", "catalog records", "len", len(headRecords))
 
 	var inputRelabelerConfig []*config.InputRelabelerConfig
-	bw := block.NewBlockWriter(workingDir, block.DefaultChunkSegmentSize, time.Duration(cmd.blockDuration), registerer)
+	bw := block.NewWriter(workingDir, block.DefaultChunkSegmentSize, time.Duration(cmd.blockDuration), registerer)
 	for _, headRecord := range headRecords {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -99,6 +99,7 @@ func (cmd *cmdWALPPToBlock) Do(
 			0,
 			head.NoOpLastAppendedSegmentIDSetter{},
 			registerer,
+			time.Duration(0),
 		)
 		if err != nil {
 			level.Error(logger).Log(
@@ -116,10 +117,8 @@ func (cmd *cmdWALPPToBlock) Do(
 		tBlockWrite := h.CreateTask(
 			relabeler.BlockWrite,
 			func(shard relabeler.Shard) error {
-				shard.LSSLock()
-				defer shard.LSSUnlock()
-
-				return bw.Write(relabeler.NewBlock(shard.LSS().Raw(), shard.DataStorage().Raw()))
+				_, err := bw.Write(shard)
+				return err
 			},
 			relabeler.ForLSSTask,
 		)
