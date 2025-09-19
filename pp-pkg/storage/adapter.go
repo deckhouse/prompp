@@ -7,35 +7,15 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/prometheus/prometheus/pp-pkg/model"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/hatracker"
-	"github.com/prometheus/prometheus/pp/go/model"
 	pp_storage "github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/appender"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/storage"
 )
-
-//
-// ProtobufData
-//
-
-// ProtobufData is an universal interface for blob protobuf data.
-type ProtobufData interface {
-	Bytes() []byte
-	Destroy()
-}
-
-//
-// TimeSeriesBatch
-//
-
-// TimeSeriesBatch is an universal interface for batch [model.TimeSeries].
-type TimeSeriesBatch interface {
-	TimeSeries() []model.TimeSeries
-	Destroy()
-}
 
 //
 // Adapter
@@ -60,21 +40,16 @@ func NewAdapter(
 	clock clockwork.Clock,
 	proxy *pp_storage.ProxyHead,
 	registerer prometheus.Registerer,
-) (*Adapter, error) {
-	transparentState, err := cppbridge.NewEmptyStateV2WithConfig([]*cppbridge.RelabelConfig{})
-	if err != nil {
-		return nil, err
-	}
-
+) *Adapter {
 	return &Adapter{
 		proxy:                 proxy,
 		haTracker:             hatracker.NewHighAvailabilityTracker(clock, registerer),
 		hashdexFactory:        cppbridge.HashdexFactory{},
 		hashdexLimits:         cppbridge.DefaultWALHashdexLimits(),
-		transparentState:      transparentState,
+		transparentState:      cppbridge.NewTransitionStateV2(),
 		activeQuerierMetrics:  querier.NewMetrics(registerer, querier.QueryableAppenderSource),
 		storageQuerierMetrics: querier.NewMetrics(registerer, querier.QueryableStorageSource),
-	}, nil
+	}
 }
 
 // AppendHashdex append incoming [cppbridge.HashdexContent] to [Head].
@@ -124,7 +99,7 @@ func (ar *Adapter) AppendScraperHashdex(
 // AppendSnappyProtobuf append compressed via snappy Protobuf data to [Head].
 func (ar *Adapter) AppendSnappyProtobuf(
 	ctx context.Context,
-	compressedData ProtobufData,
+	compressedData model.ProtobufData,
 	state *cppbridge.StateV2,
 	commitToWal bool,
 ) error {
@@ -153,7 +128,7 @@ func (ar *Adapter) AppendSnappyProtobuf(
 // AppendTimeSeries append TimeSeries data to [Head].
 func (ar *Adapter) AppendTimeSeries(
 	ctx context.Context,
-	data TimeSeriesBatch,
+	data model.TimeSeriesBatch,
 	state *cppbridge.StateV2,
 	commitToWal bool,
 ) (stats cppbridge.RelabelerStats, err error) {

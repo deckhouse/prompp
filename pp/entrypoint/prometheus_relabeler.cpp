@@ -231,14 +231,6 @@ extern "C" void prompp_prometheus_relabel_stalenans_state_dtor(void* args) {
   static_cast<Arguments*>(args)->~Arguments();
 }
 
-extern "C" void prompp_prometheus_relabel_stalenans_state_reset(void* args) {
-  struct Arguments {
-    StaleNaNsStatePtr state;
-  };
-
-  static_cast<Arguments*>(args)->state->reset();
-}
-
 extern "C" void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stalenans(void* args, void* res) {
   struct Arguments {
     PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> shards_inner_series;
@@ -748,6 +740,73 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_
 
           out->ok = in->per_goroutine_relabeler->input_relabeling_with_stalenans_from_cache(input_lss, target_lss, *in->cache, hashdex, in->options, *out,
                                                                                             in->shards_inner_series, *in->state, in->def_timestamp);
+        },
+        *in->hashdex);
+  } catch (...) {
+    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
+    entrypoint::handle_current_exception(err_stream);
+  }
+}
+
+extern "C" void prompp_prometheus_per_goroutine_relabeler_input_transition_relabeling(void* args, void* res) {
+  struct Arguments {
+    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> shards_inner_series;
+    PerGoroutineRelabelerPtr per_goroutine_relabeler;
+    HashdexVariant* hashdex;
+    LssVariantPtr target_lss;
+  };
+  struct Result {
+    uint32_t samples_added{0};
+    uint32_t series_added{0};
+    uint32_t series_drop{0};
+    PromPP::Primitives::Go::Slice<char> error;
+    bool target_lss_has_reallocations{};
+  };
+
+  auto in = static_cast<Arguments*>(args);
+  auto out = new (res) Result();
+
+  try {
+    std::visit(
+        [in, out](auto& hashdex) {
+          auto& target_lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->target_lss);
+
+          const entrypoint::head::ReallocationsDetector reallocation_detector(target_lss);
+          in->per_goroutine_relabeler->input_transition_relabeling(target_lss, hashdex, *out, in->shards_inner_series);
+          target_lss.build_deferred_indexes();
+          out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
+        },
+        *in->hashdex);
+  } catch (...) {
+    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
+    entrypoint::handle_current_exception(err_stream);
+  }
+}
+
+extern "C" void prompp_prometheus_per_goroutine_relabeler_input_transition_relabeling_only_read(void* args, void* res) {
+  struct Arguments {
+    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> shards_inner_series;
+    PerGoroutineRelabelerPtr per_goroutine_relabeler;
+    HashdexVariant* hashdex;
+    LssVariantPtr target_lss;
+  };
+  struct Result {
+    uint32_t samples_added{0};
+    uint32_t series_added{0};
+    uint32_t series_drop{0};
+    bool ok{};
+    PromPP::Primitives::Go::Slice<char> error;
+  };
+
+  auto in = static_cast<Arguments*>(args);
+  auto out = new (res) Result();
+
+  try {
+    std::visit(
+        [in, out](auto& hashdex) {
+          auto& target_lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->target_lss);
+
+          out->ok = in->per_goroutine_relabeler->input_transition_relabeling_only_read(target_lss, hashdex, *out, in->shards_inner_series);
         },
         *in->hashdex);
   } catch (...) {

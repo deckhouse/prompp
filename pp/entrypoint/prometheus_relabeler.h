@@ -182,15 +182,6 @@ void prompp_prometheus_relabel_stalenans_state_ctor(void* res);
 void prompp_prometheus_relabel_stalenans_state_dtor(void* args);
 
 /**
- * @brief Reset StaleNaNsState.
- *
- * @param args {
- *      state uintptr // pointer to StaleNaNsState;
- * }
- */
-void prompp_prometheus_relabel_stalenans_state_reset(void* args);
-
-/**
  * @brief relabeling incomig hashdex(first stage) with state stalenans.
  *
  * @param args {
@@ -539,6 +530,46 @@ void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_stalenans(v
  * }
  */
 void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_stalenans_from_cache(void* args, void* res);
+
+/**
+ * @brief transparent relabeling incomig hashdex(first stage).
+ *
+ * @param args {
+ *     shards_inner_series          []*InnerSeries     // go slice with InnerSeries;
+ *     per_goroutine_relabeler      uintptr            // pointer to constructed per goroutine relabeler;
+ *     hashdex                      uintptr            // pointer to filled hashdex;
+ *     target_lss                   uintptr            // pointer to constructed target label sets;
+ * }
+ *
+ * @param res {
+ *     samples_added                uint32             // number of added samples;
+ *     series_added                 uint32             // number of added series;
+ *     series_drop                  uint32             // number of dropped series;
+ *     error                        []byte             // error string if thrown;
+ *     target_lss_has_reallocations bool               // true if target lss has reallocations
+ * }
+ */
+void prompp_prometheus_per_goroutine_relabeler_input_transition_relabeling(void* args, void* res);
+
+/**
+ * @brief transparent relabeling incomig hashdex(first stage) from cache.
+ *
+ * @param args {
+ *     shards_inner_series     []*InnerSeries   // go slice with InnerSeries;
+ *     per_goroutine_relabeler uintptr          // pointer to constructed per goroutine relabeler;
+ *     hashdex                 uintptr          // pointer to filled hashdex;
+ *     target_lss              uintptr          // pointer to constructed target label sets;
+ * }
+ *
+ * @param res {
+ *     samples_added       uint32               // number of added samples;
+ *     series_added        uint32               // number of added series;
+ *     series_drop         uint32               // number of dropped series;
+ *     ok                  bool                 // true if all label set find in cache;
+ *     error               []byte               // error string if thrown;
+ * }
+ */
+void prompp_prometheus_per_goroutine_relabeler_input_transition_relabeling_only_read(void* args, void* res);
 
 /**
  * @brief add relabeled ls to lss, add to result and add to cache update(second stage).

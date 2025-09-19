@@ -13,7 +13,8 @@ import (
 
 type StreamProcessor struct {
 	decoderBuilder DecoderBuilder
-	receiver       Receiver
+	adapter        Adapter
+	states         StatesStorage
 
 	criticalErrorCount      *prometheus.CounterVec
 	rejectedSegmentCount    *prometheus.CounterVec
@@ -26,14 +27,16 @@ type StreamProcessor struct {
 
 func NewStreamProcessor(
 	decoderBuilder DecoderBuilder,
-	receiver Receiver,
+	adapter Adapter,
+	states StatesStorage,
 	registerer prometheus.Registerer,
 ) *StreamProcessor {
 	factory := util.NewUnconflictRegisterer(registerer)
 
 	return &StreamProcessor{
 		decoderBuilder: decoderBuilder,
-		receiver:       receiver,
+		adapter:        adapter,
+		states:         states,
 		criticalErrorCount: factory.NewCounterVec(prometheus.CounterOpts{
 			Name: "remote_write_opprotocol_processor_critical_error_count",
 			Help: "Total number of critical errors occurred during serving metric stream.",
@@ -67,6 +70,16 @@ func NewStreamProcessor(
 
 func (p *StreamProcessor) Process(ctx context.Context, stream MetricStream) error {
 	meta := stream.Metadata()
+
+	state, ok := p.states.GetStateByID(meta.RelabelerID)
+	if !ok {
+		p.criticalErrorCount.With(prometheus.Labels{
+			"error":          ErrUnknownRelablerID.Error(),
+			"processor_type": "stream",
+		}).Inc()
+		return ErrUnknownRelablerID
+	}
+
 	decoder := p.decoderBuilder.Build(meta)
 	defer func() { _ = decoder.Close() }()
 
@@ -98,10 +111,10 @@ func (p *StreamProcessor) Process(ctx context.Context, stream MetricStream) erro
 			Timestamp: hashdexContent.CreatedAt(),
 		}
 
-		if err = p.receiver.AppendHashdex(
+		if err = p.adapter.AppendHashdex(
 			ctx,
 			hashdexContent.ShardedData(),
-			meta.RelabelerID,
+			state,
 			AlwaysCommit,
 		); err != nil {
 			processingStatus.Code = model.ProcessingStatusRejected

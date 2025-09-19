@@ -194,7 +194,7 @@ type API struct {
 	QueryEngine       promql.QueryEngine
 	ExemplarQueryable storage.ExemplarQueryable
 
-	receiver  handler.Receiver   // PP_CHANGES.md: rebuild on cpp
+	adapter   handler.Adapter    // PP_CHANGES.md: rebuild on cpp
 	opHandler *handler.PPHandler // PP_CHANGES.md: rebuild on cpp
 
 	scrapePoolsRetriever  func(context.Context) ScrapePoolsRetriever
@@ -232,7 +232,7 @@ func NewAPI(
 	ap storage.Appendable,
 	eq storage.ExemplarQueryable,
 
-	receiver handler.Receiver, // PP_CHANGES.md: rebuild on cpp
+	adapter handler.Adapter, // PP_CHANGES.md: rebuild on cpp
 
 	spsr func(context.Context) ScrapePoolsRetriever,
 	tr func(context.Context) TargetRetriever,
@@ -265,7 +265,7 @@ func NewAPI(
 		Queryable:         q,
 		ExemplarQueryable: eq,
 
-		receiver: receiver, // PP_CHANGES.md: rebuild on cpp
+		adapter: adapter, // PP_CHANGES.md: rebuild on cpp
 
 		scrapePoolsRetriever:  spsr,
 		targetRetriever:       tr,
@@ -302,10 +302,10 @@ func NewAPI(
 	}
 
 	if rwEnabled {
-		a.opHandler = handler.NewPPHandler(dbDir, receiver, logger, registerer) // PP_CHANGES.md: rebuild on cpp
+		a.opHandler = handler.NewPPHandler(dbDir, adapter, logger, registerer) // PP_CHANGES.md: rebuild on cpp
 	}
 	if otlpEnabled {
-		a.otlpWriteHandler = handler.NewOTLPWriteHandler(logger, receiver) // PP_CHANGES.md: rebuild on cpp
+		a.otlpWriteHandler = handler.NewOTLPWriteHandler(logger, adapter) // PP_CHANGES.md: rebuild on cpp
 	}
 
 	return a

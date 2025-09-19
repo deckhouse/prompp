@@ -98,6 +98,58 @@ var (
 		},
 	)
 
+	// per_goroutine_relabeler input_transition_relabeling
+	perGoroutineRelabelerInputTransitionRelabelingSum = util.NewUnconflictRegisterer(
+		prometheus.DefaultRegisterer,
+	).NewCounter(
+		prometheus.CounterOpts{
+			Name: "prompp_cppbridge_unsafecall_nanoseconds_sum",
+			Help: "The time duration cpp call.",
+			ConstLabels: prometheus.Labels{
+				"object": "per_goroutine_relabeler",
+				"method": "input_transition_relabeling",
+			},
+		},
+	)
+	perGoroutineRelabelerInputTransitionRelabelingCount = util.NewUnconflictRegisterer(
+		prometheus.DefaultRegisterer,
+	).NewCounter(
+		prometheus.CounterOpts{
+			Name: "prompp_cppbridge_unsafecall_nanoseconds_count",
+			Help: "The time duration cpp call.",
+			ConstLabels: prometheus.Labels{
+				"object": "per_goroutine_relabeler",
+				"method": "input_transition_relabeling",
+			},
+		},
+	)
+
+	// per_goroutine_relabeler input_transition_relabeling_only_read
+	perGoroutineRelabelerInputTransitionRelabelingOnlyReadSum = util.NewUnconflictRegisterer(
+		prometheus.DefaultRegisterer,
+	).NewCounter(
+		prometheus.CounterOpts{
+			Name: "prompp_cppbridge_unsafecall_nanoseconds_sum",
+			Help: "The time duration cpp call.",
+			ConstLabels: prometheus.Labels{
+				"object": "per_goroutine_relabeler",
+				"method": "input_transition_relabeling_only_read",
+			},
+		},
+	)
+	perGoroutineRelabelerInputTransitionRelabelingOnlyReadCount = util.NewUnconflictRegisterer(
+		prometheus.DefaultRegisterer,
+	).NewCounter(
+		prometheus.CounterOpts{
+			Name: "prompp_cppbridge_unsafecall_nanoseconds_count",
+			Help: "The time duration cpp call.",
+			ConstLabels: prometheus.Labels{
+				"object": "per_goroutine_relabeler",
+				"method": "input_transition_relabeling_only_read",
+			},
+		},
+	)
+
 	// input_relabeler append_relabeler_series
 	inputRelabelerAppendRelabelerSeriesSum = util.NewUnconflictRegisterer(prometheus.DefaultRegisterer).NewCounter(
 		prometheus.CounterOpts{
@@ -1528,18 +1580,6 @@ func prometheusRelabelStaleNansStateCtor() uintptr {
 	)
 
 	return res.state
-}
-
-func prometheusRelabelStaleNansStateReset(state uintptr) {
-	args := struct {
-		state uintptr
-	}{state}
-
-	testGC()
-	fastcgo.UnsafeCall1(
-		C.prompp_prometheus_relabel_stalenans_state_reset,
-		uintptr(unsafe.Pointer(&args)),
-	)
 }
 
 func prometheusRelabelStaleNansStateDtor(state uintptr) {
@@ -3422,6 +3462,71 @@ func prometheusPerGoroutineRelabelerInputRelabelingWithStalenansFromCache(
 	)
 	inputRelabelerRelabelingWithStalenansFromCacheSum.Add(float64(time.Now().UnixNano() - start))
 	inputRelabelerRelabelingWithStalenansFromCacheCount.Inc()
+
+	return res.RelabelerStats, res.exception, res.ok
+}
+
+// prometheusPerGoroutineRelabelerInputTransitionRelabeling wrapper for
+// transparent relabeling incoming hashdex(first stage).
+func prometheusPerGoroutineRelabelerInputTransitionRelabeling(
+	perGoroutineRelabeler, targetLss, hashdex uintptr,
+	shardsInnerSeries []*InnerSeries,
+) (stats RelabelerStats, exception []byte, targetLssHasReallocations bool) {
+	args := struct {
+		shardsInnerSeries     []*InnerSeries
+		perGoroutineRelabeler uintptr
+		hashdex               uintptr
+		targetLss             uintptr
+	}{
+		shardsInnerSeries,
+		perGoroutineRelabeler,
+		hashdex,
+		targetLss,
+	}
+	var res struct {
+		RelabelerStats
+		exception                 []byte
+		targetLssHasReallocations bool
+	}
+	start := time.Now().UnixNano()
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_prometheus_per_goroutine_relabeler_input_transition_relabeling,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+	perGoroutineRelabelerInputTransitionRelabelingSum.Add(float64(time.Now().UnixNano() - start))
+	perGoroutineRelabelerInputTransitionRelabelingCount.Inc()
+
+	return res.RelabelerStats, res.exception, res.targetLssHasReallocations
+}
+
+// prometheusPerGoroutineRelabelerInputRelabelingOnlyRead wrapper for transparent relabeling
+// incoming hashdex(first stage) from cache.
+func prometheusPerGoroutineRelabelerInputRelabelingOnlyRead(
+	perGoroutineRelabeler, targetLss, hashdex uintptr,
+	shardsInnerSeries []*InnerSeries,
+) (stats RelabelerStats, exception []byte, ok bool) {
+	args := struct {
+		shardsInnerSeries     []*InnerSeries
+		perGoroutineRelabeler uintptr
+		hashdex               uintptr
+		targetLss             uintptr
+	}{shardsInnerSeries, perGoroutineRelabeler, hashdex, targetLss}
+	var res struct {
+		RelabelerStats
+		ok        bool
+		exception []byte
+	}
+	start := time.Now().UnixNano()
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_prometheus_per_goroutine_relabeler_input_transition_relabeling_only_read,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+	perGoroutineRelabelerInputTransitionRelabelingOnlyReadSum.Add(float64(time.Now().UnixNano() - start))
+	perGoroutineRelabelerInputTransitionRelabelingOnlyReadCount.Inc()
 
 	return res.RelabelerStats, res.exception, res.ok
 }
