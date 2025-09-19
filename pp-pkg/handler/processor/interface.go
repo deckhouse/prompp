@@ -1,5 +1,7 @@
 package processor
 
+//go:generate -command moq go run github.com/matryer/moq -out processor_moq_test.go -pkg processor_test -rm . Adapter StatesStorage RemoteWrite MetricStream Refill
+
 import (
 	"context"
 
