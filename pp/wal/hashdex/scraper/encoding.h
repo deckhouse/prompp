@@ -299,23 +299,29 @@ class LabelCodec {
     return 0b11;
   }
 
+  template <typename T>
+  static PROMPP_ALWAYS_INLINE uint32_t read_val_typed(const char*& p) noexcept {
+    T v;
+    std::memcpy(&v, p, sizeof(T));
+    p += sizeof(T);
+    return static_cast<uint32_t>(v);
+  }
+
   static PROMPP_ALWAYS_INLINE uint32_t read_val_partial(const char*& p, uint8_t sz) noexcept {
-    if (sz == 0b01) [[likely]] {
-      return *p++;
+    switch (sz) {
+      case 0b00: {
+        return 0;
+      }
+      case 0b01: {
+        return read_val_typed<uint8_t>(p);
+      }
+      case 0b10: {
+        return read_val_typed<uint16_t>(p);
+      }
+      default: {
+        return read_val_typed<uint32_t>(p);
+      }
     }
-    if (sz == 0b00) {
-      return 0;
-    }
-    if (sz == 0b10) {
-      uint16_t v;
-      std::memcpy(&v, p, 2);
-      p += 2;
-      return v;
-    }
-    uint32_t v;
-    std::memcpy(&v, p, 4);
-    p += 4;
-    return v;
   }
 
   static constexpr uint8_t szm_[4] = {0, 1, 2, 4};
