@@ -21,20 +21,6 @@ var ExtraWorkers = 0
 // defaultNumberOfWorkers default number of workers.
 const defaultNumberOfWorkers = 2
 
-// const (
-// 	// DSAllocatedMemory name of task.
-// 	DSAllocatedMemory = "data_storage_allocated_memory"
-
-// 	// DSHeadStatus name of task.
-// 	DSHeadStatus = "data_storage_head_status"
-
-// 	// LSSAllocatedMemory name of task.
-// 	LSSAllocatedMemory = "lss_allocated_memory"
-
-// 	// LSSHeadStatus name of task.
-// 	LSSHeadStatus = "lss_head_status"
-// )
-
 //
 // Shard
 //

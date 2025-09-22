@@ -851,31 +851,3 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_append_relabeler_serie
     entrypoint::handle_current_exception(err_stream);
   }
 }
-
-extern "C" void prompp_prometheus_per_goroutine_relabeler_update_relabeler_state(void* args, void* res) {
-  struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::RelabelerStateUpdate*> shards_relabeler_state_update;
-    PerGoroutineRelabelerPtr per_goroutine_relabeler;
-    CachePtr cache;
-    uint16_t relabeled_shard_id;
-  };
-  struct Result {
-    PromPP::Primitives::Go::Slice<char> error;
-  };
-
-  const auto* in = static_cast<Arguments*>(args);
-
-  try {
-    for (size_t id = 0; id != in->shards_relabeler_state_update.size(); ++id) {
-      if (in->shards_relabeler_state_update[id] == nullptr || in->shards_relabeler_state_update[id]->size() == 0) {
-        continue;
-      }
-
-      in->per_goroutine_relabeler->update_relabeler_state(*in->cache, in->shards_relabeler_state_update[id], id);
-    }
-  } catch (...) {
-    auto* out = new (res) Result();
-    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
-  }
-}

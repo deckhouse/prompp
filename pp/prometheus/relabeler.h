@@ -1470,14 +1470,6 @@ class PerGoroutineRelabeler {
     }
   }
 
-  // third stage
-  // update_relabeler_state add to cache relabled data.
-  PROMPP_ALWAYS_INLINE void update_relabeler_state(Cache& cache, const RelabelerStateUpdate* relabeler_state_update, const uint16_t relabeled_shard_id) {
-    for (const auto& update : *relabeler_state_update) {
-      cache.add_relabel(update.incoming_ls_id, update.relabeled_ls_id, relabeled_shard_id);
-    }
-  }
-
   // destructor.
   PROMPP_ALWAYS_INLINE ~PerGoroutineRelabeler() = default;
 };

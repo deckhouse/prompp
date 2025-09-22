@@ -14,7 +14,6 @@ import (
 // Timer implementation timer.
 type Timer interface {
 	Chan() <-chan time.Time
-	Reset()
 	Stop()
 }
 

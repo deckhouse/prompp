@@ -7,17 +7,19 @@ import (
 	"github.com/prometheus/prometheus/storage/remote"
 )
 
-// protobufWriter
+// protobufWriter the wrapper over the [remote.WriteClient].
 type protobufWriter struct {
 	client remote.WriteClient
 }
 
+// newProtobufWriter init new [protobufWriter].
 func newProtobufWriter(client remote.WriteClient) *protobufWriter {
 	return &protobufWriter{
 		client: client,
 	}
 }
 
+// Write [cppbridge.SnappyProtobufEncodedData] to [remote.WriteClient]
 func (w *protobufWriter) Write(ctx context.Context, protobuf *cppbridge.SnappyProtobufEncodedData) error {
 	return protobuf.Do(func(buf []byte) error {
 		if len(buf) == 0 {
@@ -30,6 +32,7 @@ func (w *protobufWriter) Write(ctx context.Context, protobuf *cppbridge.SnappyPr
 	})
 }
 
-func (w *protobufWriter) Close() error {
+// Close implementation [io.Closer].
+func (*protobufWriter) Close() error {
 	return nil
 }

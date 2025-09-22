@@ -12,11 +12,23 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/ready"
 )
 
+//
+// Catalog
+//
+
+// Catalog of current head records.
 type Catalog interface {
-	List(filterFn func(record *catalog.Record) bool, sortLess func(lhs, rhs *catalog.Record) bool) (records []*catalog.Record, err error)
+	// List returns slice of records with filter and sort.
+	List(
+		filterFn func(record *catalog.Record) bool,
+		sortLess func(lhs, rhs *catalog.Record) bool,
+	) ([]*catalog.Record, error)
+
+	// SetCorrupted set corrupted flag for ID and returns [catalog.Record] if exist.
 	SetCorrupted(id string) (*catalog.Record, error)
 }
 
+// RemoteWriter sent samples to the remote write storage.
 type RemoteWriter struct {
 	dataDir       string
 	configQueue   chan []DestinationConfig
@@ -26,10 +38,17 @@ type RemoteWriter struct {
 	registerer    prometheus.Registerer
 }
 
-func New(dataDir string, catalog Catalog, clock clockwork.Clock, readyNotifier ready.Notifier, registerer prometheus.Registerer) *RemoteWriter {
+// New init new [RemoteWriter].
+func New(
+	dataDir string,
+	hcatalog Catalog,
+	clock clockwork.Clock,
+	readyNotifier ready.Notifier,
+	registerer prometheus.Registerer,
+) *RemoteWriter {
 	return &RemoteWriter{
 		dataDir:       dataDir,
-		catalog:       catalog,
+		catalog:       hcatalog,
 		clock:         clock,
 		configQueue:   make(chan []DestinationConfig),
 		readyNotifier: readyNotifier,
@@ -37,6 +56,21 @@ func New(dataDir string, catalog Catalog, clock clockwork.Clock, readyNotifier r
 	}
 }
 
+// ApplyConfig updates the state as the new config requires.
+func (rw *RemoteWriter) ApplyConfig(configs ...DestinationConfig) (err error) {
+	select {
+	case rw.configQueue <- configs:
+		return nil
+	case <-time.After(time.Minute):
+		return fmt.Errorf("failed to apply remote write configs, timeout")
+	}
+}
+
+// Run sending data via RemoteWriter.
+//
+//revive:disable-next-line:cyclomatic but readable
+//revive:disable-next-line:function-length long but readable
+//revive:disable-next-line:cognitive-complexity function is not complicated.
 func (rw *RemoteWriter) Run(ctx context.Context) error {
 	writeLoopRunners := make(map[string]*writeLoopRunner)
 	defer func() {
@@ -53,8 +87,8 @@ func (rw *RemoteWriter) Run(ctx context.Context) error {
 			return nil
 		case configs := <-rw.configQueue:
 			destinationConfigs := make(map[string]DestinationConfig)
-			for _, destinationConfig := range configs {
-				destinationConfigs[destinationConfig.Name] = destinationConfig
+			for i := range configs {
+				destinationConfigs[configs[i].Name] = configs[i]
 			}
 
 			for _, destination := range destinations {
@@ -95,15 +129,6 @@ func (rw *RemoteWriter) Run(ctx context.Context) error {
 			}
 			rw.readyNotifier.NotifyReady()
 		}
-	}
-}
-
-func (rw *RemoteWriter) ApplyConfig(configs ...DestinationConfig) (err error) {
-	select {
-	case rw.configQueue <- configs:
-		return nil
-	case <-time.After(time.Minute):
-		return fmt.Errorf("failed to apply remote write configs, timeout")
 	}
 }
 

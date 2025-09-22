@@ -228,9 +228,11 @@ func newSegmentReadyChecker(headRecord *catalog.Record) *segmentReadyChecker {
 	return &segmentReadyChecker{headRecord: headRecord}
 }
 
-func (src *segmentReadyChecker) SegmentIsReady(segmentID uint32) (ready bool, outOfRange bool) {
+func (src *segmentReadyChecker) SegmentIsReady(segmentID uint32) (ready, outOfRange bool) {
 	ready = src.headRecord.LastAppendedSegmentID() != nil && *src.headRecord.LastAppendedSegmentID() >= segmentID
-	outOfRange = (src.headRecord.Status() != catalog.StatusNew && src.headRecord.Status() != catalog.StatusActive) && !ready
+	outOfRange = (src.headRecord.Status() != catalog.StatusNew &&
+		src.headRecord.Status() != catalog.StatusActive) &&
+		!ready
 	return ready, outOfRange
 }
 

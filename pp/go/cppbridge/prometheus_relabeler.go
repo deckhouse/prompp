@@ -1283,28 +1283,6 @@ func (pgr *PerGoroutineRelabeler) RelabelingFromCache(
 	)
 }
 
-// UpdateRelabelerState add to cache relabled data(third stage).
-func (pgr *PerGoroutineRelabeler) UpdateRelabelerState(
-	ctx context.Context,
-	cache *Cache,
-	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
-) error {
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	exception := prometheusPerGoroutineRelabelerUpdateRelabelerState(
-		shardsRelabelerStateUpdate,
-		pgr.cptr,
-		cache.cPointer,
-	)
-
-	runtime.KeepAlive(pgr)
-	runtime.KeepAlive(cache)
-
-	return handleException(exception)
-}
-
 // inputRelabeling relabeling incoming hashdex(first stage).
 func (pgr *PerGoroutineRelabeler) inputRelabeling(
 	inputLss *LabelSetStorage,

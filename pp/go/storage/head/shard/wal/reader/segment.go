@@ -56,7 +56,7 @@ func (s *Segment) resize(size int) {
 
 // ReadSegment read and decode [Segment] from [io.Reader] and returns.
 func ReadSegment(reader io.Reader, segment *Segment) (int64, error) {
-	br := newByteReader(reader)
+	br := NewByteReader(reader)
 	size, err := binary.ReadUvarint(br)
 	if err != nil {
 		return int64(br.n), fmt.Errorf("failed to read segment size: %w", err)

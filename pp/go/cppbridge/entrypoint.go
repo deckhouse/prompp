@@ -3562,29 +3562,3 @@ func prometheusPerGoroutineRelabelerAppendRelabelerSeries(
 
 	return res.exception, res.targetLssHasReallocations
 }
-
-// prometheusPerGoroutineRelabelerUpdateRelabelerState wrapper for add to cache relabled data(third stage).
-func prometheusPerGoroutineRelabelerUpdateRelabelerState(
-	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
-	perGoroutineRelabeler, cache uintptr,
-) []byte {
-	args := struct {
-		relabelerStateUpdates []*RelabelerStateUpdate
-		perGoroutineRelabeler uintptr
-		cache                 uintptr
-	}{shardsRelabelerStateUpdate, perGoroutineRelabeler, cache}
-	var res struct {
-		exception []byte
-	}
-	start := time.Now().UnixNano()
-	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_prometheus_per_goroutine_relabeler_update_relabeler_state,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-	inputRelabelerUpdateRelabelerStateSum.Add(float64(time.Now().UnixNano() - start))
-	inputRelabelerUpdateRelabelerStateCount.Inc()
-
-	return res.exception
-}

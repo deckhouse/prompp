@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 
-	"github.com/prometheus/prometheus/pp/go/relabeler/head"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/reader"
 )
 
@@ -23,7 +22,7 @@ func newWalReader(fileName string) (*walReader, uint8, error) {
 		return nil, 0, fmt.Errorf("failed to read wal file: %w", err)
 	}
 
-	_, encoderVersion, _, err := head.ReadHeader(file)
+	_, encoderVersion, _, err := reader.ReadHeader(file)
 	if err != nil {
 		return nil, 0, errors.Join(fmt.Errorf("failed to read header: %w", err), file.Close())
 	}

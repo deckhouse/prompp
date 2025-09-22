@@ -8,9 +8,9 @@ import (
 
 // EncodedSegment the minimum required Segment implementation for a [WriteSegment].
 type EncodedSegment interface {
-	Size() int64
 	CRC32() uint32
 	Samples() uint32
+	Size() int64
 	io.WriterTo
 }
 

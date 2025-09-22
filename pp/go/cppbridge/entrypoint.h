@@ -1269,22 +1269,6 @@ void prompp_prometheus_per_goroutine_relabeler_input_transition_relabeling_only_
  */
 void prompp_prometheus_per_goroutine_relabeler_append_relabeler_series(void* args, void* res);
 
-/**
- * @brief add to cache relabled data(third stage).
- *
- * @param args {
- *     shards_relabeler_state_update []*RelabelerStateUpdate // pointer to RelabelerStateUpdate per source shard;
- *     per_shard_relabeler           uintptr                 // pointer to constructed per goroutine relabeler;
- *     cache                         uintptr                 // pointer to constructed Cache;
- *     relabeled_shard_id            uint16                  // relabeled shard id;
- * }
- *
- * @param res {
- *     error                         []byte                  // error string if thrown;
- * }
- */
-void prompp_prometheus_per_goroutine_relabeler_update_relabeler_state(void* args, void* res);
-
 #ifdef __cplusplus
 }  // extern "C"
 #endif

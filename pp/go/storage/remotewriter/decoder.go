@@ -8,12 +8,30 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
+//
+// DecodedSegment
+//
+
+// DecodedSegment the segment decoded from the file [Wal].
+type DecodedSegment struct {
+	ID                   uint32
+	Samples              *cppbridge.DecodedRefSamples
+	MaxTimestamp         int64
+	OutdatedSamplesCount uint32
+	DroppedSamplesCount  uint32
+	AddSeriesCount       uint32
+	DroppedSeriesCount   uint32
+}
+
+// Decoder decodes and relabeling series in segments from a file [Wal].
+// Saves its state in the file for recovery upon restart.
 type Decoder struct {
 	relabeler     *cppbridge.StatelessRelabeler
 	lss           *cppbridge.LabelSetStorage
 	outputDecoder *cppbridge.WALOutputDecoder
 }
 
+// NewDecoder init new [Decoder].
 func NewDecoder(
 	externalLabels labels.Labels,
 	relabelConfigs []*cppbridge.RelabelConfig,
@@ -26,7 +44,13 @@ func NewDecoder(
 	}
 
 	lss := cppbridge.NewLssStorage()
-	outputDecoder := cppbridge.NewWALOutputDecoder(LabelsToCppBridgeLabels(externalLabels), relabeler, lss, shardID, encoderVersion)
+	outputDecoder := cppbridge.NewWALOutputDecoder(
+		LabelsToCppBridgeLabels(externalLabels),
+		relabeler,
+		lss,
+		shardID,
+		encoderVersion,
+	)
 
 	return &Decoder{
 		relabeler:     relabeler,
@@ -35,16 +59,7 @@ func NewDecoder(
 	}, nil
 }
 
-type DecodedSegment struct {
-	ID                   uint32
-	Samples              *cppbridge.DecodedRefSamples
-	MaxTimestamp         int64
-	OutdatedSamplesCount uint32
-	DroppedSamplesCount  uint32
-	AddSeriesCount       uint32
-	DroppedSeriesCount   uint32
-}
-
+// Decode and relabeling series in segments from a file [Wal].
 func (d *Decoder) Decode(segment []byte, minTimestamp int64) (*DecodedSegment, error) {
 	samples, stats, err := d.outputDecoder.Decode(segment, minTimestamp)
 	if err != nil {
@@ -60,6 +75,7 @@ func (d *Decoder) Decode(segment []byte, minTimestamp int64) (*DecodedSegment, e
 	}, nil
 }
 
+// LoadFrom loads the state from a file.
 func (d *Decoder) LoadFrom(reader io.Reader) error {
 	state, err := io.ReadAll(reader)
 	if err != nil {
@@ -74,6 +90,7 @@ func (d *Decoder) WriteTo(writer io.Writer) (int64, error) {
 	return d.outputDecoder.WriteTo(writer)
 }
 
+// LabelsToCppBridgeLabels converts [labels.Labels] to slice [cppbridge.Label].
 func LabelsToCppBridgeLabels(lbls labels.Labels) []cppbridge.Label {
 	result := make([]cppbridge.Label, 0, lbls.Len())
 	lbls.Range(func(l labels.Label) {

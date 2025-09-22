@@ -27,11 +27,11 @@ type writeLoop struct {
 	client        remote.WriteClient
 }
 
-func newWriteLoop(dataDir string, destination *Destination, catalog Catalog, clock clockwork.Clock) *writeLoop {
+func newWriteLoop(dataDir string, destination *Destination, hcatalog Catalog, clock clockwork.Clock) *writeLoop {
 	return &writeLoop{
 		dataDir:     dataDir,
 		destination: destination,
-		catalog:     catalog,
+		catalog:     hcatalog,
 		clock:       clock,
 	}
 }
@@ -389,6 +389,6 @@ func (rpw *readyProtobufWriter) SetProtobufWriter(protobufWriter ProtobufWriter)
 	rpw.protobufWriter = protobufWriter
 }
 
-func (rw *readyProtobufWriter) Write(ctx context.Context, protobuf *cppbridge.SnappyProtobufEncodedData) error {
-	return rw.protobufWriter.Write(ctx, protobuf)
+func (rpw *readyProtobufWriter) Write(ctx context.Context, protobuf *cppbridge.SnappyProtobufEncodedData) error {
+	return rpw.protobufWriter.Write(ctx, protobuf)
 }
