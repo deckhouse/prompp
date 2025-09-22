@@ -132,6 +132,31 @@ func (s *WeightedSuite) TestClose() {
 	s.Require().ErrorIs(err, locker.ErrSemaphoreClosed)
 }
 
+func (s *WeightedSuite) TestClose() {
+	baseCtx := context.Background()
+	expectedHead := &testHead{c: 2}
+	c := container.NewWeighted(expectedHead)
+
+	err := c.Close()
+	s.Require().NoError(err)
+
+	actualHead := c.Get()
+	s.Require().NotNil(actualHead)
+	s.Equal(expectedHead.c, actualHead.c)
+
+	err = c.Replace(baseCtx, &testHead{c: 3})
+	s.Require().ErrorIs(err, locker.ErrSemaphoreClosed)
+
+	err = c.With(baseCtx, func(h *testHead) error {
+		if expectedHead.c != h.c {
+			return fmt.Errorf("expectedHead(%d) not equal actual(%d)", expectedHead.c, h.c)
+		}
+
+		return nil
+	})
+	s.Require().ErrorIs(err, locker.ErrSemaphoreClosed)
+}
+
 //
 // testHead
 //
