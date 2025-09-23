@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/storage/head/keeper"
 )
 
 //
@@ -97,7 +98,7 @@ type Keeper[
 	TShard, TGoShard Shard,
 	THead Head[TTask, TShard, TGoShard],
 ] interface {
-	Add(head THead, createdAt time.Duration) error
+	Add(head THead, createdAt time.Duration, policy keeper.AddPolicy) error
 
 	Heads() []THead
 

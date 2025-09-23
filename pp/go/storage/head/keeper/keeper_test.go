@@ -1,7 +1,6 @@
 package keeper
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -19,7 +18,7 @@ func (h *headForTest) ID() string {
 	return h.id
 }
 
-func (h *headForTest) Close(ctx context.Context) error {
+func (h *headForTest) Close() error {
 	return nil
 }
 

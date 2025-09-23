@@ -2,7 +2,6 @@ package keeper
 
 import (
 	"container/heap"
-	"context"
 	"errors"
 	"sync"
 	"time"
@@ -56,7 +55,7 @@ type Head interface {
 	ID() string
 
 	// Close closes wals, query semaphore for the inability to get query and clear metrics.
-	Close(ctx context.Context) error
+	Close() error
 }
 
 type Keeper[THead Head] struct {
@@ -131,10 +130,9 @@ func (k *Keeper[THead]) Remove(headsForRemove []THead) {
 	k.setHeads(newHeads)
 	k.lock.Unlock()
 
-	ctx := context.Background()
 	for _, head := range headsMap {
 		if head != nil {
-			_ = (*head).Close(ctx)
+			_ = (*head).Close()
 		}
 	}
 }
