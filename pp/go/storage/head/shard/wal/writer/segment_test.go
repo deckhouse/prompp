@@ -12,50 +12,31 @@ import (
 
 func TestWriteSegment(t *testing.T) {
 	data := []byte{1, 2, 3, 2, 1, 0, 42}
-	segment := &testSegment{
-		size:    int64(len(data)),
-		samples: 42,
-		data:    data,
+	segmentCrc32 := uint32(0)
+	segmentSamples := uint32(42)
+
+	segment := &EncodedSegmentMock{
+		CRC32Func: func() uint32 {
+			return segmentCrc32
+		},
+		SamplesFunc: func() uint32 {
+			return segmentSamples
+		},
+		SizeFunc: func() int64 {
+			return int64(len(data))
+		},
+		WriteToFunc: func(w io.Writer) (int64, error) {
+			n, err := w.Write(data)
+			return int64(n), err
+		},
 	}
+
 	buf := &bytes.Buffer{}
-	expected := []byte{byte(len(data)), byte(segment.crc32), byte(segment.samples)}
+	expected := []byte{byte(len(data)), byte(segmentCrc32), byte(segmentSamples)}
 	expected = append(expected, data...)
 
 	_, err := writer.WriteSegment(buf, segment)
 	require.NoError(t, err)
 
 	require.Equal(t, expected, buf.Bytes())
-}
-
-//
-// testSegment
-//
-
-// testSegment implementation [writer.EncodedSegment].
-type testSegment struct {
-	size    int64
-	samples uint32
-	crc32   uint32
-	data    []byte
-}
-
-// CRC32 implementation [writer.EncodedSegment].
-func (s *testSegment) CRC32() uint32 {
-	return s.crc32
-}
-
-// Samples implementation [writer.EncodedSegment].
-func (s *testSegment) Samples() uint32 {
-	return s.samples
-}
-
-// Size implementation [writer.EncodedSegment].
-func (s *testSegment) Size() int64 {
-	return s.size
-}
-
-// WriteTo implementation [writer.EncodedSegment].
-func (s *testSegment) WriteTo(w io.Writer) (int64, error) {
-	n, err := w.Write(s.data)
-	return int64(n), err
 }

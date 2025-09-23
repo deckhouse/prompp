@@ -8,6 +8,9 @@ import (
 	"sync/atomic"
 )
 
+// FileInfo alias for [os.FileInfo].
+type FileInfo = os.FileInfo
+
 // SegmentIsWrittenNotifier notify when new segment write.
 type SegmentIsWrittenNotifier interface {
 	NotifySegmentIsWritten(shardID uint16)
@@ -17,7 +20,7 @@ type SegmentIsWrittenNotifier interface {
 type WriteSyncCloser interface {
 	io.WriteCloser
 	Sync() error
-	Stat() (os.FileInfo, error)
+	Stat() (FileInfo, error)
 }
 
 // SegmentWriterFN encode to slice byte and write to [io.Writer].
@@ -88,7 +91,13 @@ func (w *Buffered[TSegment]) Flush() error {
 		}
 	}
 
-	w.segments = nil
+	if len(w.segments) != 0 && cap(w.segments) >= len(w.segments)*2 { //revive:disable-line:add-constant // x2
+		w.segments = make([]TSegment, 0, len(w.segments))
+	} else {
+		clear(w.segments)
+		w.segments = w.segments[:0]
+	}
+
 	return nil
 }
 

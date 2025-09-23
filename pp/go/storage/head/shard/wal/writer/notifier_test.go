@@ -1,6 +1,7 @@
 package writer_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
@@ -16,11 +17,49 @@ func TestSegmentWriteNotifierSuite(t *testing.T) {
 }
 
 func (s *SegmentWriteNotifierSuite) TestHappyPath() {
-	//
+	actualSegmentID := uint32(math.MaxUint32)
 
 	numberOfShards := uint16(2)
-	swn := writer.NewSegmentWriteNotifier(numberOfShards, func(segmentID uint32) { s.T().Log(segmentID) })
+	swn := writer.NewSegmentWriteNotifier(numberOfShards, func(segmentID uint32) { actualSegmentID = segmentID })
 
-	swn.NotifySegmentIsWritten(1)
+	for id := range numberOfShards {
+		swn.NotifySegmentIsWritten(id)
+	}
+
+	s.Equal(uint32(0), actualSegmentID)
+}
+
+func (s *SegmentWriteNotifierSuite) TestNotifyOnlyOneShard() {
+	actualSegmentID := uint32(math.MaxUint32)
+
+	numberOfShards := uint16(2)
+	swn := writer.NewSegmentWriteNotifier(numberOfShards, func(segmentID uint32) { actualSegmentID = segmentID })
+
 	swn.NotifySegmentIsWritten(0)
+
+	s.Equal(uint32(math.MaxUint32), actualSegmentID)
+}
+
+func (s *SegmentWriteNotifierSuite) TestSetAndNotifyOnlyOneShard() {
+	actualSegmentID := uint32(math.MaxUint32)
+
+	numberOfShards := uint16(2)
+	swn := writer.NewSegmentWriteNotifier(numberOfShards, func(segmentID uint32) { actualSegmentID = segmentID })
+	swn.Set(0, 42)
+
+	swn.NotifySegmentIsWritten(0)
+
+	s.Equal(uint32(math.MaxUint32), actualSegmentID)
+}
+
+func (s *SegmentWriteNotifierSuite) TestSetAndNotifyOnlyOneShard_2() {
+	actualSegmentID := uint32(math.MaxUint32)
+
+	numberOfShards := uint16(2)
+	swn := writer.NewSegmentWriteNotifier(numberOfShards, func(segmentID uint32) { actualSegmentID = segmentID })
+	swn.Set(1, 42)
+
+	swn.NotifySegmentIsWritten(0)
+
+	s.Equal(uint32(0), actualSegmentID)
 }
