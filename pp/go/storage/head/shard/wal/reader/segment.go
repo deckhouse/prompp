@@ -31,7 +31,7 @@ func (s *Segment) Length() int {
 // ReadFrom reads [Segment] data from r [io.Reader]. The return value n is the number of bytes read.
 // Any error encountered during the read is also returned.
 func (s *Segment) ReadFrom(r io.Reader) (int64, error) {
-	return ReadSegment(r, s)
+	return readSegment(r, s)
 }
 
 // Reset [Segment] data.
@@ -54,8 +54,8 @@ func (s *Segment) resize(size int) {
 	}
 }
 
-// ReadSegment read and decode [Segment] from [io.Reader] and returns.
-func ReadSegment(reader io.Reader, segment *Segment) (int64, error) {
+// readSegment read and decode [Segment] from [io.Reader] and returns.
+func readSegment(reader io.Reader, segment *Segment) (int64, error) {
 	br := NewByteReader(reader)
 	size, err := binary.ReadUvarint(br)
 	if err != nil {

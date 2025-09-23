@@ -2,16 +2,18 @@ package writer_test
 
 import (
 	"bytes"
+	"encoding/binary"
 	"io"
 	"testing"
 
+	"github.com/go-faker/faker/v4"
 	"github.com/stretchr/testify/require"
 
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
 )
 
 func TestWriteSegment(t *testing.T) {
-	data := []byte{1, 2, 3, 2, 1, 0, 42}
+	data := []byte(faker.Paragraph())
 	segmentCrc32 := uint32(0)
 	segmentSamples := uint32(42)
 
@@ -32,7 +34,9 @@ func TestWriteSegment(t *testing.T) {
 	}
 
 	buf := &bytes.Buffer{}
-	expected := []byte{byte(len(data)), byte(segmentCrc32), byte(segmentSamples)}
+	expected := []byte{}
+	expected = append(expected, binary.AppendUvarint(nil, uint64(len(data)))...)
+	expected = append(expected, byte(segmentCrc32), byte(segmentSamples))
 	expected = append(expected, data...)
 
 	_, err := writer.WriteSegment(buf, segment)
