@@ -5,6 +5,7 @@ import (
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 )
 
 //
@@ -39,10 +40,10 @@ type Task interface {
 // DataStorage the minimum required [DataStorage] implementation.
 type DataStorage interface {
 	// InstantQuery returns samples for instant query from data storage.
-	InstantQuery(maxt, valueNotFoundTimestampValue int64, ids []uint32) []cppbridge.Sample
+	InstantQuery(maxt, valueNotFoundTimestampValue int64, ids []uint32) ([]cppbridge.Sample, cppbridge.DataStorageQueryResult)
 
 	// QueryDataStorage returns serialized chunks from data storage.
-	Query(query cppbridge.HeadDataStorageQuery) *cppbridge.HeadDataStorageSerializedChunks
+	Query(query cppbridge.HeadDataStorageQuery) (*cppbridge.HeadDataStorageSerializedChunks, cppbridge.DataStorageQueryResult)
 
 	// WithRLock calls fn on raw [cppbridge.HeadDataStorage] with read lock.
 	WithRLock(fn func(ds *cppbridge.HeadDataStorage) error) error
@@ -91,6 +92,10 @@ type Shard[TDataStorage DataStorage, TLSS LSS] interface {
 
 	// ShardID returns the shard ID.
 	ShardID() uint16
+
+	LoadAndQuerySeriesData() error
+
+	LoadAndQuerySeriesDataTask() *shard.LoadAndQuerySeriesDataTask
 }
 
 //
@@ -115,6 +120,12 @@ type Head[
 	// Enqueue the task to be executed on shards [Head].
 	Enqueue(t TGenericTask)
 
+	// EnqueueOnShard the task to be executed on head on specific shard.
+	EnqueueOnShard(t TGenericTask, shardID uint16)
+
 	// NumberOfShards returns current number of shards in to [Head].
 	NumberOfShards() uint16
+
+	// IsReadOnly returns true if the [Head] has switched to read-only.
+	IsReadOnly() bool
 }

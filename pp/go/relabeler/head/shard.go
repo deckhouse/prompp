@@ -133,8 +133,8 @@ func (ds *DataStorage) CreateRevertableLoader(lss *cppbridge.LabelSetStorage, ls
 	return ds.dataStorage.CreateRevertableLoader(lss, lsIdBatchSize)
 }
 
-func (ds *DataStorage) TimeInterval() cppbridge.TimeInterval {
-	return ds.dataStorage.TimeInterval()
+func (ds *DataStorage) TimeInterval(invalidateCache bool) cppbridge.TimeInterval {
+	return ds.dataStorage.TimeInterval(invalidateCache)
 }
 
 func (ds *DataStorage) GetQueriedSeriesBitset() []byte {

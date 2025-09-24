@@ -114,6 +114,7 @@ func NewManager(
 	triggerNotifier *ReloadBlocksTriggerNotifier,
 	readyNotifier ready.Notifier,
 	r prometheus.Registerer,
+	unloadDataStorageInterval time.Duration,
 ) (*Manager, error) {
 	dirStat, err := os.Stat(dataDir)
 	if err != nil {
@@ -124,9 +125,9 @@ func NewManager(
 		return nil, fmt.Errorf("%s is not directory", dataDir)
 	}
 
-	builder := NewBuilder(hcatalog, dataDir, options.MaxSegmentSize, r)
+	builder := NewBuilder(hcatalog, dataDir, options.MaxSegmentSize, r, unloadDataStorageInterval)
 
-	loader := NewLoader(dataDir, options.MaxSegmentSize, r)
+	loader := NewLoader(dataDir, options.MaxSegmentSize, r, unloadDataStorageInterval)
 
 	cfg := NewConfig(options.NumberOfShards)
 
@@ -390,7 +391,7 @@ func uploadOrBuildHead(
 		return builder.Build(generation, numberOfShards)
 	}
 
-	h, corrupted := loader.UploadHead(headRecords[0], generation)
+	h, corrupted := loader.Load(headRecords[0], generation)
 	if corrupted {
 		if !headRecords[0].Corrupted() {
 			if _, setCorruptedErr := hcatalog.SetCorrupted(headRecords[0].ID()); setCorruptedErr != nil {

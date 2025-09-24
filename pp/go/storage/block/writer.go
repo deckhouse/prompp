@@ -1,56 +1,47 @@
 package block
 
 import (
-	"crypto/rand"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
-	"math"
-	"os"
-	"path/filepath"
 	"time"
 
-	"github.com/oklog/ulid"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/util"
-	"github.com/prometheus/prometheus/tsdb"
-	"github.com/prometheus/prometheus/tsdb/chunkenc"
-	"github.com/prometheus/prometheus/tsdb/fileutil"
 )
 
 const (
 	// DefaultChunkSegmentSize is the default chunks segment size.
 	DefaultChunkSegmentSize = 512 * 1024 * 1024
 	// DefaultBlockDuration is the default block duration.
-	DefaultBlockDuration         = 2 * time.Hour
-	tmpForCreationBlockDirSuffix = ".tmp-for-creation"
-	indexFilename                = "index"
-	metaFilename                 = "meta.json"
-	metaVersion1                 = 1
+	DefaultBlockDuration = 2 * time.Hour
 )
 
-type HBlockWriter[T any] interface {
-	Write(block T) error
+var LsIdBatchSize uint32 = 100000
+
+// Shard the minimum required head [Shard] implementation.
+type Shard interface {
+	LSS() *shard.LSS
+
+	DataStorage() *shard.DataStorage
+
+	UnloadedDataStorage() *shard.UnloadedDataStorage
 }
 
-var _ HBlockWriter[Block] = (*BlockWriter)(nil)
-
-type BlockWriter struct {
+type Writer[TShard Shard] struct {
 	dataDir                  string
 	maxBlockChunkSegmentSize int64
 	blockDurationMs          int64
 	blockWriteDuration       *prometheus.GaugeVec
 }
 
-func NewBlockWriter(
+func NewWriter[TShard Shard](
 	dataDir string,
 	maxBlockChunkSegmentSize int64,
 	blockDuration time.Duration,
 	registerer prometheus.Registerer,
-) *BlockWriter {
+) *Writer[TShard] {
 	factory := util.NewUnconflictRegisterer(registerer)
-	return &BlockWriter{
+	return &Writer[TShard]{
 		dataDir:                  dataDir,
 		maxBlockChunkSegmentSize: maxBlockChunkSegmentSize,
 		blockDurationMs:          blockDuration.Milliseconds(),
@@ -61,263 +52,107 @@ func NewBlockWriter(
 	}
 }
 
-type Chunk interface {
-	MinT() int64
-	MaxT() int64
-	SeriesID() uint32
-	Encoding() chunkenc.Encoding
-	SampleCount() uint8
-	Bytes() []byte
+func (w *Writer[TShard]) Write(shard TShard) (writtenBlocks []WrittenBlock, err error) {
+	_ = shard.LSS().WithRLock(func(_, _ *cppbridge.LabelSetStorage) error {
+		var writers blockWriters
+		writers, err = w.createWriters(shard)
+		if err != nil {
+			return err
+		}
+
+		defer func() {
+			writers.close()
+		}()
+
+		if err = w.recodeAndWriteChunks(shard, writers); err != nil {
+			return err
+		}
+
+		writtenBlocks, err = writers.writeIndexAndMoveTmpDirToDir()
+		return nil
+	})
+	return
 }
 
-type ChunkIterator interface {
-	Next() bool
-	At() Chunk
-}
+func (w *Writer[TShard]) createWriters(shard TShard) (blockWriters, error) {
+	var writers blockWriters
 
-type IndexWriter interface {
-	WriteSeriesTo(uint32, []ChunkMetadata, io.Writer) (int64, error)
-	WriteRestTo(io.Writer) (int64, error)
-}
+	timeInterval := shard.DataStorage().TimeInterval(false)
 
-type Block interface {
-	TimeBounds() (minT, maxT int64)
-	ChunkIterator(minT, maxT int64) ChunkIterator
-	IndexWriter() IndexWriter
-}
-
-func (w *BlockWriter) Write(block Block) error {
-	blockMinT, blockMaxT := block.TimeBounds()
-
-	quantStart := (blockMinT / w.blockDurationMs) * w.blockDurationMs
-	for ; quantStart <= blockMaxT; quantStart += w.blockDurationMs {
+	quantStart := (timeInterval.MinT / w.blockDurationMs) * w.blockDurationMs
+	for ; quantStart <= timeInterval.MaxT; quantStart += w.blockDurationMs {
 		minT, maxT := quantStart, quantStart+w.blockDurationMs-1
-		if minT < blockMinT {
-			minT = blockMinT
+		if minT < timeInterval.MinT {
+			minT = timeInterval.MinT
 		}
-		if maxT > blockMaxT {
-			maxT = blockMaxT
+		if maxT > timeInterval.MaxT {
+			maxT = timeInterval.MaxT
 		}
-		if err := w.write(block, minT, maxT); err != nil {
+
+		var chunkIterator ChunkIterator
+		_ = shard.DataStorage().WithRLock(func(ds *cppbridge.HeadDataStorage) error {
+			chunkIterator = NewChunkIterator(shard.LSS().Target(), LsIdBatchSize, shard.DataStorage().Raw(), minT, maxT)
+			return nil
+		})
+
+		if writer, err := newBlockWriter(w.dataDir, w.maxBlockChunkSegmentSize, NewIndexWriter(shard.LSS().Target()), chunkIterator); err == nil {
+			writers.append(writer)
+		} else {
+			writers.close()
+			return blockWriters{}, err
+		}
+	}
+
+	return writers, nil
+}
+
+func (w *Writer[TShard]) recodeAndWriteChunks(shard TShard, writers blockWriters) error {
+	var loader *cppbridge.UnloadedDataRevertableLoader
+	_ = shard.DataStorage().WithRLock(func(ds *cppbridge.HeadDataStorage) error {
+		loader = shard.DataStorage().CreateRevertableLoader(shard.LSS().Target(), LsIdBatchSize)
+		return nil
+	})
+
+	isFirstBatch := true
+
+	loadData := func() (bool, error) {
+		if isFirstBatch {
+			isFirstBatch = false
+		} else {
+			if !loader.NextBatch() {
+				return false, nil
+			}
+		}
+
+		if shard.UnloadedDataStorage() == nil {
+			return true, nil
+		}
+
+		return true, shard.UnloadedDataStorage().ForEachSnapshot(loader.Load)
+	}
+
+	for {
+		var hasMoreData bool
+		var err error
+		_ = shard.DataStorage().WithLock(func(ds *cppbridge.HeadDataStorage) error {
+			hasMoreData, err = loadData()
+			return nil
+		})
+
+		if !hasMoreData {
+			break
+		}
+
+		if err != nil {
+			return err
+		}
+
+		if err = shard.DataStorage().WithRLock(func(ds *cppbridge.HeadDataStorage) error {
+			return writers.recodeAndWriteChunksBatch()
+		}); err != nil {
 			return err
 		}
 	}
 
-	return nil
-}
-
-func (w *BlockWriter) write(block Block, minT, maxT int64) (err error) {
-	start := time.Now()
-	uid := ulid.MustNew(ulid.Now(), rand.Reader)
-	dir := filepath.Join(w.dataDir, uid.String())
-	tmp := dir + tmpForCreationBlockDirSuffix
-	var closers []io.Closer
-	defer func() {
-		err = errors.Join(err, closeAll(closers...))
-		if cleanUpErr := os.RemoveAll(tmp); err != nil {
-			// todo: log error
-			_ = cleanUpErr
-		}
-	}()
-
-	if err = os.RemoveAll(tmp); err != nil {
-		return fmt.Errorf("failed to cleanup tmp directory {%s}: %w", tmp, err)
-	}
-
-	if err = os.MkdirAll(tmp, 0o777); err != nil {
-		return fmt.Errorf("failed to create tmp directory {%s}: %w", tmp, err)
-	}
-
-	chunkw, err := NewChunkWriter(chunkDir(tmp), w.maxBlockChunkSegmentSize)
-	if err != nil {
-		return fmt.Errorf("failed to create chunk writer: %w", err)
-	}
-	closers = append(closers, chunkw)
-
-	indexFileWriter, err := NewFileWriter(filepath.Join(tmp, indexFilename))
-	if err != nil {
-		return fmt.Errorf("failed to create index file writer: %w", err)
-	}
-
-	closers = append(closers, indexFileWriter)
-	indexWriter := block.IndexWriter()
-
-	chunkIterator := block.ChunkIterator(minT, maxT)
-	var chunksMetadata []ChunkMetadata
-	var chunkMetadata ChunkMetadata
-	var previousSeriesID uint32 = math.MaxUint32
-	var chunk Chunk
-
-	writeSeries := func() error {
-		if len(chunksMetadata) == 0 {
-			return nil
-		}
-		_, err = indexWriter.WriteSeriesTo(previousSeriesID, chunksMetadata, indexFileWriter)
-		if err != nil {
-			return fmt.Errorf("failed to write series %d: %w", previousSeriesID, err)
-		}
-		return nil
-	}
-
-	blockMeta := &tsdb.BlockMeta{
-		ULID:    uid,
-		MinTime: math.MaxInt64,
-		MaxTime: math.MinInt64,
-		Version: metaVersion1,
-		Compaction: tsdb.BlockMetaCompaction{
-			Level:   1,
-			Sources: []ulid.ULID{uid},
-		},
-	}
-
-	var hasChunks bool
-	for chunkIterator.Next() {
-		hasChunks = true
-		chunk = chunkIterator.At()
-		chunkMetadata, err = chunkw.Write(chunk)
-		if err != nil {
-			return fmt.Errorf("failed to write chunk: %w", err)
-		}
-
-		adjustBlockMetaTimeRange(blockMeta, chunk.MinT(), chunk.MaxT())
-		blockMeta.Stats.NumChunks++
-		blockMeta.Stats.NumSamples += uint64(chunk.SampleCount())
-		seriesID := chunk.SeriesID()
-
-		if previousSeriesID == seriesID {
-			chunksMetadata = append(chunksMetadata, chunkMetadata)
-		} else {
-			if err = writeSeries(); err != nil {
-				return err
-			}
-			blockMeta.Stats.NumSeries++
-			chunksMetadata = append(chunksMetadata[:0], chunkMetadata)
-			previousSeriesID = seriesID
-		}
-	}
-
-	if !hasChunks {
-		return nil
-	}
-
-	if err = writeSeries(); err != nil {
-		return err
-	}
-	indexFileSize, err := indexWriter.WriteRestTo(indexFileWriter)
-	if err != nil {
-		return fmt.Errorf("failed to write index: %w", err)
-	}
-	// todo: logs & metrics
-	_ = indexFileSize
-
-	// write meta
-	blockMeta.MaxTime += 1
-	metaFileSize, err := writeBlockMetaFile(filepath.Join(tmp, metaFilename), blockMeta)
-	if err != nil {
-		return fmt.Errorf("failed to write block meta file: %w", err)
-	}
-	// todo: log & metrics
-	_ = metaFileSize
-
-	closeErr := err
-	for _, closer := range closers {
-		closeErr = errors.Join(closeErr, closer.Close())
-	}
-	closers = closers[:0]
-
-	if closeErr != nil {
-		return closeErr
-	}
-
-	var df *os.File
-	df, err = fileutil.OpenDir(tmp)
-	if err != nil {
-		return fmt.Errorf("failed to open temporary block dir: %w", err)
-	}
-	defer func() {
-		if df != nil {
-			_ = df.Close()
-		}
-	}()
-
-	if err = df.Sync(); err != nil {
-		return fmt.Errorf("failed to sync temporary block dir: %w", err)
-	}
-
-	if err = df.Close(); err != nil {
-		return fmt.Errorf("failed to close temporary block dir: %w", err)
-	}
-	df = nil
-
-	if err = fileutil.Replace(tmp, dir); err != nil {
-		return fmt.Errorf("failed to move temporary block dir {%s} to {%s}: %w", tmp, dir, err)
-	}
-
-	w.blockWriteDuration.With(prometheus.Labels{
-		"block_id": blockMeta.ULID.String(),
-	}).Set(float64(time.Since(start).Milliseconds()))
-
-	return
-}
-
-func chunkDir(dir string) string { return filepath.Join(dir, "chunks") }
-
-func closeAll(closers ...io.Closer) error {
-	errs := make([]error, len(closers))
-	for i, closer := range closers {
-		errs[i] = closer.Close()
-	}
-	return errors.Join(errs...)
-}
-
-func adjustBlockMetaTimeRange(blockMeta *tsdb.BlockMeta, mint, maxt int64) {
-	if mint < blockMeta.MinTime {
-		blockMeta.MinTime = mint
-	}
-
-	if maxt > blockMeta.MaxTime {
-		blockMeta.MaxTime = maxt
-	}
-}
-
-func writeBlockMetaFile(fileName string, blockMeta *tsdb.BlockMeta) (int64, error) {
-	tmp := fileName + ".tmp"
-	defer func() {
-		if err := os.RemoveAll(tmp); err != nil {
-			// todo: log error
-		}
-	}()
-
-	metaFile, err := os.Create(tmp)
-	if err != nil {
-		return 0, fmt.Errorf("failed to create block meta file: %w", err)
-	}
-	defer func() {
-		if metaFile != nil {
-			if err = metaFile.Close(); err != nil {
-				// todo: log error
-			}
-		}
-	}()
-
-	jsonBlockMeta, err := json.MarshalIndent(blockMeta, "", "\t")
-	if err != nil {
-		return 0, fmt.Errorf("failed to marshal meta json: %w", err)
-	}
-
-	n, err := metaFile.Write(jsonBlockMeta)
-	if err != nil {
-		return 0, fmt.Errorf("failed to write meta json: %w", err)
-	}
-
-	if err = metaFile.Sync(); err != nil {
-		return 0, fmt.Errorf("failed to sync meta file: %w", err)
-	}
-
-	if err = metaFile.Close(); err != nil {
-		return 0, fmt.Errorf("faield to close meta file: %w", err)
-	}
-	metaFile = nil
-
-	return int64(n), fileutil.Replace(tmp, fileName)
+	return writers.writeRestOfRecodedChunks()
 }

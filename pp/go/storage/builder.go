@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -21,10 +22,11 @@ import (
 
 // Builder building new [HeadOnDisk] with parameters.
 type Builder struct {
-	catalog        *catalog.Catalog
-	dataDir        string
-	maxSegmentSize uint32
-	registerer     prometheus.Registerer
+	catalog                   *catalog.Catalog
+	dataDir                   string
+	maxSegmentSize            uint32
+	registerer                prometheus.Registerer
+	unloadDataStorageInterval time.Duration
 }
 
 // NewBuilder init new [Builder].
@@ -33,12 +35,14 @@ func NewBuilder(
 	dataDir string,
 	maxSegmentSize uint32,
 	registerer prometheus.Registerer,
+	unloadDataStorageInterval time.Duration,
 ) *Builder {
 	return &Builder{
-		catalog:        hcatalog,
-		dataDir:        dataDir,
-		maxSegmentSize: maxSegmentSize,
-		registerer:     registerer,
+		catalog:                   hcatalog,
+		dataDir:                   dataDir,
+		maxSegmentSize:            maxSegmentSize,
+		registerer:                registerer,
+		unloadDataStorageInterval: unloadDataStorageInterval,
 	}
 }
 
@@ -87,7 +91,8 @@ func (b *Builder) createShardOnDisk(
 	swn *writer.SegmentWriteNotifier,
 	shardID uint16,
 ) (*ShardOnDisk, error) {
-	shardFile, err := os.Create(filepath.Join(filepath.Clean(headDir), fmt.Sprintf("shard_%d.wal", shardID)))
+	headDir = filepath.Clean(headDir)
+	shardFile, err := os.Create(GetShardWalFilename(headDir, shardID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create shard wal file id %d: %w", shardID, err)
 	}
@@ -113,9 +118,21 @@ func (b *Builder) createShardOnDisk(
 		return nil, fmt.Errorf("failed to create buffered writer shard id %d: %w", shardID, err)
 	}
 
+	var unloadedDataStorage *shard.UnloadedDataStorage
+	var queriedSeriesStorage *shard.QueriedSeriesStorage
+	if b.unloadDataStorageInterval != 0 {
+		unloadedDataStorage = shard.NewUnloadedDataStorage(shard.NewFileStorage(GetUnloadedDataStorageFilename(headDir, shardID)))
+		queriedSeriesStorage = shard.NewQueriedSeriesStorage(
+			shard.NewFileStorage(GetQueriedSeriesStorageFilename(headDir, shardID, 0)),
+			shard.NewFileStorage(GetQueriedSeriesStorageFilename(headDir, shardID, 1)),
+		)
+	}
+
 	return shard.NewShard(
 		lss,
 		shard.NewDataStorage(),
+		unloadedDataStorage,
+		queriedSeriesStorage,
 		wal.NewWal(shardWalEncoder, sw, b.maxSegmentSize),
 		shardID,
 	), nil
