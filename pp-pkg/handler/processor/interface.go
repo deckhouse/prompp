@@ -67,8 +67,8 @@ type Adapter interface {
 		commitToWal bool,
 	) error
 
-	// MergeOutOfOrderChunks merge chunks with out of order data chunks.
-	MergeOutOfOrderChunks(ctx context.Context)
+	// MergeOutOfOrderChunks send signal to merge chunks with out of order data chunks.
+	MergeOutOfOrderChunks()
 }
 
 // StatesStorage stores the [cppbridge.State]'s.

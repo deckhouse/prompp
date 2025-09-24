@@ -83,7 +83,7 @@ func (api *API) queryHead(r *http.Request) apiFuncResult {
 		matchers = append(matchers, selector...)
 	}
 
-	q, err := api.adapter.HeadQuerier(ctx, start.UnixMilli(), end.UnixMilli())
+	q, err := api.adapter.HeadQuerier(start.UnixMilli(), end.UnixMilli())
 	if err != nil {
 		return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
 	}
@@ -122,7 +122,12 @@ func (api *API) serveHeadStatus(r *http.Request) apiFuncResult {
 		}
 	}
 
-	return apiFuncResult{api.adapter.HeadStatus(r.Context(), limit), nil, nil, nil}
+	hstatus, err := api.adapter.HeadStatus(r.Context(), limit)
+	if err != nil {
+		return apiFuncResult{nil, &apiError{errorExec, errors.New("limit must be a positive number")}, nil, nil}
+	}
+
+	return apiFuncResult{hstatus, nil, nil, nil}
 }
 
 func (api *API) opRemoteWrite(middlewares ...middleware.Middleware) http.HandlerFunc {

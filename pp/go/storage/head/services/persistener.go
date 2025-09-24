@@ -8,7 +8,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage/block"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
-	"github.com/prometheus/prometheus/pp/go/storage/head/keeper"
 	"github.com/prometheus/prometheus/pp/go/storage/logger"
 )
 
@@ -93,7 +92,9 @@ func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) Persist(
 	return
 }
 
-func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) headTimeInterval(head THead) cppbridge.TimeInterval {
+func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) headTimeInterval(
+	head THead,
+) cppbridge.TimeInterval {
 	timeInterval := cppbridge.NewInvalidTimeInterval()
 	for shard := range head.RangeShards() {
 		interval := shard.TimeInterval(false)
@@ -107,7 +108,9 @@ func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) HeadIsOu
 	return p.clock.Since(time.UnixMilli(p.headTimeInterval(head).MaxT)) >= p.tsdbRetentionPeriod
 }
 
-func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) persistedHeadIsOutdated(persistTimeMs int64) bool {
+func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) persistedHeadIsOutdated(
+	persistTimeMs int64,
+) bool {
 	return p.clock.Since(time.UnixMilli(persistTimeMs)) >= p.retentionPeriod
 }
 
@@ -162,36 +165,38 @@ func NewPersistenerService[
 	TKeeper Keeper[TTask, TShard, TGoShard, THead],
 	TLoader Loader[TTask, TShard, TGoShard, THead],
 ](
-	keeper TKeeper,
+	hkeeper TKeeper,
 	loader TLoader,
-	catalog *catalog.Catalog,
+	hcatalog *catalog.Catalog,
 	blockWriter THeadBlockWriter,
 	clock clockwork.Clock,
 	mediator Mediator,
 	tsdbRetentionPeriod time.Duration,
 	retentionPeriod time.Duration,
-) PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoader] {
-	return PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoader]{
+) *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoader] {
+	return &PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoader]{
 		persistener: NewPersistener[TTask, TShard, TGoShard, THeadBlockWriter, THead](
-			catalog,
+			hcatalog,
 			blockWriter,
 			clock,
 			tsdbRetentionPeriod,
 			retentionPeriod,
 		),
-		keeper:   keeper,
+		keeper:   hkeeper,
 		loader:   loader,
-		catalog:  catalog,
+		catalog:  hcatalog,
 		mediator: mediator,
 	}
 }
 
 func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoader]) Run() {
-	go func() {
-		for range pg.mediator.C() {
-			pg.ProcessHeads()
-		}
-	}()
+	logger.Infof("The PersistenerService is running.")
+
+	for range pg.mediator.C() {
+		pg.ProcessHeads()
+	}
+
+	logger.Infof("The PersistenerService stopped.")
 }
 
 func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoader]) ProcessHeads() {
@@ -200,11 +205,27 @@ func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, T
 	pg.loadRotatedHeadsInKeeper(heads)
 }
 
-func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoader]) persistHeads(heads []THead) {
+func (pg *PersistenerService[
+	TTask,
+	TShard,
+	TGoShard,
+	THeadBlockWriter,
+	THead,
+	TKeeper,
+	TLoader,
+]) persistHeads(heads []THead) {
 	pg.keeper.Remove(pg.persistener.Persist(heads))
 }
 
-func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoader]) loadRotatedHeadsInKeeper(keeperHeads []THead) {
+func (pg *PersistenerService[
+	TTask,
+	TShard,
+	TGoShard,
+	THeadBlockWriter,
+	THead,
+	TKeeper,
+	TLoader,
+]) loadRotatedHeadsInKeeper(keeperHeads []THead) {
 	if !pg.keeper.HasSlot() {
 		return
 	}
@@ -226,9 +247,17 @@ func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, T
 	}
 }
 
-func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoader]) loadAndAddHeadToKeeper(record *catalog.Record) bool {
+func (pg *PersistenerService[
+	TTask,
+	TShard,
+	TGoShard,
+	THeadBlockWriter,
+	THead,
+	TKeeper,
+	TLoader,
+]) loadAndAddHeadToKeeper(record *catalog.Record) bool {
 	head, _ := pg.loader.Load(record, 0)
-	if err := pg.keeper.Add(head, time.Duration(record.CreatedAt())*time.Millisecond, keeper.Add); err != nil {
+	if err := pg.keeper.Add(head, time.Duration(record.CreatedAt())*time.Millisecond); err != nil {
 		_ = head.Close()
 		return false
 	}

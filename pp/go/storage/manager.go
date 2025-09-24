@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"os"
+	"path/filepath"
 	"sync/atomic"
 	"time"
 
@@ -14,9 +16,12 @@ import (
 	"github.com/oklog/run"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/storage/block"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/container"
+	"github.com/prometheus/prometheus/pp/go/storage/head/keeper"
 	"github.com/prometheus/prometheus/pp/go/storage/head/proxy"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
 	"github.com/prometheus/prometheus/pp/go/storage/logger"
@@ -35,21 +40,40 @@ const (
 
 	// DefaultMetricWriteInterval default metric scrape interval.
 	DefaultMetricWriteInterval = 15 * time.Second
+
+	// DefaultPersistDuration the default interval for persisting [Head].
+	DefaultPersistDuration = 5 * time.Minute
+
+	// DefaultUnloadDataStorageInterval the default interval for unloading [DataStorage].
+	DefaultUnloadDataStorageInterval = 5 * time.Minute
 )
 
-// DefaultNumberOfShards default number of shards.
-var DefaultNumberOfShards uint16 = 2
+var (
+	// CopySeriesOnRotate copy active series from the current head to the new head during rotation.
+	CopySeriesOnRotate = false
+
+	// UnloadDataStorage flags for unloading [DataStorage].
+	UnloadDataStorage = false
+
+	// DefaultNumberOfShards default number of shards.
+	DefaultNumberOfShards uint16 = 2
+)
 
 //
 // Options
 //
 
+// Options manager launch options.
 type Options struct {
-	Seed           uint64
-	BlockDuration  time.Duration
-	CommitInterval time.Duration
-	MaxSegmentSize uint32
-	NumberOfShards uint16
+	Seed                uint64
+	BlockDuration       time.Duration
+	CommitInterval      time.Duration
+	MaxRetentionPeriod  time.Duration
+	HeadRetentionPeriod time.Duration
+	QueueSize           int
+	DataDir             string
+	MaxSegmentSize      uint32
+	NumberOfShards      uint16
 }
 
 //
@@ -103,35 +127,49 @@ type Manager struct {
 	cgogc           *cppbridge.CGOGC
 	cfg             *Config
 	rotatorMediator *mediator.Mediator
+	mergerMediator  *mediator.Mediator
 }
 
 // NewManager init new [Manager].
 func NewManager(
+	o *Options,
 	clock clockwork.Clock,
-	dataDir string,
 	hcatalog *catalog.Catalog,
-	options Options,
 	triggerNotifier *ReloadBlocksTriggerNotifier,
 	readyNotifier ready.Notifier,
 	r prometheus.Registerer,
-	unloadDataStorageInterval time.Duration,
 ) (*Manager, error) {
-	dirStat, err := os.Stat(dataDir)
+	if o == nil {
+		return nil, errors.New("manager options is nil")
+	}
+
+	dataDir, err := filepath.Abs(o.DataDir)
+	if err != nil {
+		return nil, err
+	}
+	o.DataDir = dataDir
+
+	dirStat, err := os.Stat(o.DataDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to stat dir: %w", err)
 	}
 
 	if !dirStat.IsDir() {
-		return nil, fmt.Errorf("%s is not directory", dataDir)
+		return nil, fmt.Errorf("%s is not directory", o.DataDir)
 	}
 
-	builder := NewBuilder(hcatalog, dataDir, options.MaxSegmentSize, r, unloadDataStorageInterval)
+	var unloadDataStorageInterval time.Duration
+	if UnloadDataStorage {
+		unloadDataStorageInterval = DefaultUnloadDataStorageInterval
+	}
 
-	loader := NewLoader(dataDir, options.MaxSegmentSize, r, unloadDataStorageInterval)
+	builder := NewBuilder(hcatalog, o.DataDir, o.MaxSegmentSize, r, unloadDataStorageInterval)
 
-	cfg := NewConfig(options.NumberOfShards)
+	loader := NewLoader(o.DataDir, o.MaxSegmentSize, r, unloadDataStorageInterval)
 
-	h, err := uploadOrBuildHead(clock, hcatalog, builder, loader, options.BlockDuration, cfg.NumberOfShards())
+	cfg := NewConfig(o.NumberOfShards)
+
+	h, err := uploadOrBuildHead(clock, hcatalog, builder, loader, o.BlockDuration, cfg.NumberOfShards())
 	if err != nil {
 		return nil, err
 	}
@@ -140,43 +178,53 @@ func NewManager(
 		return nil, errors.Join(fmt.Errorf("failed to set active status: %w", err), h.Close())
 	}
 
-	readyNotifier.NotifyReady()
-
-	// TODO implements
-	headKeeper := &NoopKeeper{}
+	hKeeper := keeper.NewKeeper[*HeadOnDisk](o.QueueSize)
 
 	m := &Manager{
 		g:      run.Group{},
 		closer: util.NewCloser(),
-		proxy:  proxy.NewProxy(container.NewWeighted(h), headKeeper, services.CFSViaRange),
+		proxy:  proxy.NewProxy(container.NewWeighted(h), hKeeper, services.CFSViaRange),
 		cgogc:  cppbridge.NewCGOGC(r),
 		cfg:    cfg,
 		rotatorMediator: mediator.NewMediator(
-			mediator.NewRotateTimerWithSeed(clock, options.BlockDuration, options.Seed),
+			mediator.NewRotateTimerWithSeed(clock, o.BlockDuration, o.Seed),
 		),
+		mergerMediator: mediator.NewMediator(mediator.NewConstantIntervalTimer(clock, DefaultMergeDuration)),
 	}
 
-	m.initServices(hcatalog, builder, clock, options.CommitInterval, r)
+	readyNotifier.NotifyReady()
 
-	logger.Infof("[Manager] created")
+	m.initServices(o, hcatalog, builder, loader, clock, r)
+
+	logger.Infof("Head Manager created")
 
 	return m, nil
 }
 
 // ApplyConfig update config.
-func (m *Manager) ApplyConfig(numberOfShards uint16) error {
+func (m *Manager) ApplyConfig(cfg *config.Config) error {
 	logger.Infof("reconfiguration start")
 	defer logger.Infof("reconfiguration completed")
 
-	if m.proxy.Get().NumberOfShards() == numberOfShards {
+	if m.proxy.Get().NumberOfShards() == cfg.PPNumberOfShards() {
 		return nil
 	}
 
-	if m.cfg.SetNumberOfShards(numberOfShards) {
+	if m.cfg.SetNumberOfShards(cfg.PPNumberOfShards()) {
 		m.rotatorMediator.Trigger()
 	}
 
 	return nil
+}
+
+// MergeOutOfOrderChunks send signal to merge chunks with out of order data chunks.
+func (m *Manager) MergeOutOfOrderChunks() {
+	m.mergerMediator.Trigger()
+}
+
+// Proxy returns proxy to the active [Head] and the keeper of old [Head]s.
+func (m *Manager) Proxy() *proxy.Proxy[*HeadOnDisk] {
+	return m.proxy
 }
 
 // Run launches the [Manager]'s services.
@@ -188,17 +236,18 @@ func (m *Manager) Run() error {
 
 // Shutdown safe shutdown [Manager]: stop services and close [Head]'s.
 func (m *Manager) Shutdown(ctx context.Context) error {
-	_ = m.closer.Close()
+	m.close()
 
 	return errors.Join(m.proxy.Close(), m.cgogc.Shutdown(ctx))
 }
 
 // initServices initializes services for startup.
 func (m *Manager) initServices(
+	o *Options,
 	hcatalog *catalog.Catalog,
 	builder *Builder,
+	loader *Loader,
 	clock clockwork.Clock,
-	commitInterval time.Duration,
 	r prometheus.Registerer,
 ) {
 	baseCtx := context.Background()
@@ -211,7 +260,34 @@ func (m *Manager) initServices(
 			return nil
 		},
 		func(error) {
-			_ = m.closer.Close()
+			m.close()
+		},
+	)
+
+	// Persistener
+	persistenerMediator := mediator.NewMediator(mediator.NewConstantIntervalTimer(clock, DefaultPersistDuration))
+	m.g.Add(
+		func() error {
+			services.NewPersistenerService(
+				m.proxy,
+				loader,
+				hcatalog,
+				block.NewWriter[*ShardOnDisk](
+					o.DataDir,
+					block.DefaultChunkSegmentSize,
+					o.BlockDuration,
+					r,
+				),
+				clock,
+				persistenerMediator,
+				o.MaxRetentionPeriod,
+				o.HeadRetentionPeriod,
+			).Run()
+
+			return nil
+		},
+		func(error) {
+			persistenerMediator.Close()
 		},
 	)
 
@@ -224,7 +300,7 @@ func (m *Manager) initServices(
 				builder,
 				m.rotatorMediator,
 				m.cfg,
-				&statusSetter{catalog: hcatalog},
+				&headInformer{catalog: hcatalog},
 				r,
 			).Execute(rotatorCtx)
 		},
@@ -234,6 +310,7 @@ func (m *Manager) initServices(
 		},
 	)
 
+	// checks if the head is new
 	isNewHead := func(headID string) bool {
 		rec, err := hcatalog.Get(headID)
 		if err != nil {
@@ -244,7 +321,7 @@ func (m *Manager) initServices(
 	}
 
 	// Committer
-	committerMediator := mediator.NewMediator(mediator.NewConstantIntervalTimer(clock, commitInterval))
+	committerMediator := mediator.NewMediator(mediator.NewConstantIntervalTimer(clock, o.CommitInterval))
 	committerCtx, committerCancel := context.WithCancel(baseCtx)
 	m.g.Add(
 		func() error {
@@ -257,14 +334,13 @@ func (m *Manager) initServices(
 	)
 
 	// Merger
-	mergerMediator := mediator.NewMediator(mediator.NewConstantIntervalTimer(clock, DefaultMergeDuration))
 	mergerCtx, mergerCancel := context.WithCancel(baseCtx)
 	m.g.Add(
 		func() error {
-			return services.NewMerger(m.proxy, mergerMediator, isNewHead).Execute(mergerCtx)
+			return services.NewMerger(m.proxy, m.mergerMediator, isNewHead).Execute(mergerCtx)
 		},
 		func(error) {
-			mergerMediator.Close()
+			m.mergerMediator.Close()
 			mergerCancel()
 		},
 	)
@@ -286,6 +362,14 @@ func (m *Manager) initServices(
 			metricsUpdaterCancel()
 		},
 	)
+}
+
+func (m *Manager) close() {
+	select {
+	case <-m.closer.Signal():
+	default:
+		_ = m.closer.Close()
+	}
 }
 
 // InitLogHandler init log handler for pp.
@@ -310,23 +394,33 @@ func InitLogHandler(l log.Logger) {
 }
 
 //
-// headStatusSetter
+// headInformer
 //
 
-// statusSetter wrapper over [catalog.Catalog] for set statuses.
-type statusSetter struct {
+// headInformer wrapper over [catalog.Catalog] for set statuses and get info.
+type headInformer struct {
 	catalog *catalog.Catalog
 }
 
+// CreatedAt returns the timestamp when the [Record]([Head]) was created.
+func (hi *headInformer) CreatedAt(headID string) time.Duration {
+	record, err := hi.catalog.Get(headID)
+	if err != nil {
+		return time.Duration(math.MaxInt64)
+	}
+
+	return time.Duration(record.CreatedAt()) * time.Millisecond
+}
+
 // SetActiveStatus sets the [catalog.StatusActive] status by headID.
-func (ha *statusSetter) SetActiveStatus(headID string) error {
-	_, err := ha.catalog.SetStatus(headID, catalog.StatusActive)
+func (hi *headInformer) SetActiveStatus(headID string) error {
+	_, err := hi.catalog.SetStatus(headID, catalog.StatusActive)
 	return err
 }
 
 // SetRotatedStatus sets the [catalog.StatusRotated] status by headID.
-func (ha *statusSetter) SetRotatedStatus(headID string) error {
-	_, err := ha.catalog.SetStatus(headID, catalog.StatusRotated)
+func (hi *headInformer) SetRotatedStatus(headID string) error {
+	_, err := hi.catalog.SetStatus(headID, catalog.StatusRotated)
 	return err
 }
 

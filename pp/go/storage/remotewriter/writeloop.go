@@ -252,15 +252,12 @@ func nextHead(ctx context.Context, dataDir string, headCatalog Catalog, headID s
 		return nil, err
 	}
 
-	headRecords, err := headCatalog.List(
+	headRecords := headCatalog.List(
 		nil,
 		func(lhs, rhs *catalog.Record) bool {
 			return lhs.CreatedAt() < rhs.CreatedAt()
 		},
 	)
-	if err != nil {
-		return nil, fmt.Errorf("list head records: %w", err)
-	}
 
 	if len(headRecords) == 0 {
 		return nil, fmt.Errorf("nextHead: no new heads: empty head records")
@@ -277,7 +274,7 @@ func nextHead(ctx context.Context, dataDir string, headCatalog Catalog, headID s
 			continue
 		}
 
-		if err = validateHead(ctx, filepath.Join(dataDir, headRecord.Dir())); err != nil {
+		if err := validateHead(ctx, filepath.Join(dataDir, headRecord.Dir())); err != nil {
 			if !errors.Is(err, os.ErrNotExist) {
 				return nil, err
 			}
@@ -315,23 +312,19 @@ func scanForNextHead(ctx context.Context, dataDir string, headCatalog Catalog, d
 		return nil, false, err
 	}
 
-	headRecords, err := headCatalog.List(
+	headRecords := headCatalog.List(
 		nil,
 		func(lhs, rhs *catalog.Record) bool {
 			return lhs.CreatedAt() > rhs.CreatedAt()
 		},
 	)
-	if err != nil {
-		return nil, false, fmt.Errorf("list head records: %w", err)
-	}
 
 	if len(headRecords) == 0 {
 		return nil, false, fmt.Errorf("scanForNextHead: no new heads: empty head records")
 	}
 
-	var headFound bool
 	for _, headRecord := range headRecords {
-		headFound, err = scanHeadForDestination(filepath.Join(dataDir, headRecord.Dir()), destinationName)
+		headFound, err := scanHeadForDestination(filepath.Join(dataDir, headRecord.Dir()), destinationName)
 		if err != nil {
 			if !headRecord.Corrupted() {
 				logger.Errorf("head %s is corrupted: %v", headRecord.ID(), err)

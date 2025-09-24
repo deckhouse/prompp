@@ -6,7 +6,7 @@ import (
 	"github.com/prometheus/prometheus/pp-pkg/handler/processor"
 	"github.com/prometheus/prometheus/pp-pkg/model"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/relabeler"
+	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/storage"
 )
 
@@ -45,13 +45,13 @@ type Adapter interface {
 	) error
 
 	// HeadQuerier returns [storage.Querier] from active head.
-	HeadQuerier(ctx context.Context, mint, maxt int64) (storage.Querier, error)
+	HeadQuerier(mint, maxt int64) (storage.Querier, error)
 
 	// HeadStatus returns stats of Head.
-	HeadStatus(ctx context.Context, limit int) relabeler.HeadStatus
+	HeadStatus(ctx context.Context, limit int) (*querier.HeadStatus, error)
 
-	// MergeOutOfOrderChunks merge chunks with out of order data chunks.
-	MergeOutOfOrderChunks(ctx context.Context)
+	// MergeOutOfOrderChunks send signal to merge chunks with out of order data chunks.
+	MergeOutOfOrderChunks()
 }
 
 // StreamProcessor interface.

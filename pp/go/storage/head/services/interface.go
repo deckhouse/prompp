@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/storage/head/keeper"
 )
 
 //
@@ -77,11 +76,14 @@ type HeadBuilder[
 }
 
 //
-// HeadStatusSetter
+// HeadInformer
 //
 
-// HeadStatusSetter sets status by headID in to catalog.
-type HeadStatusSetter interface {
+// HeadInformer sets status by headID in to catalog and get info.
+type HeadInformer interface {
+	// CreatedAt returns the timestamp when the [Record]([Head]) was created.
+	CreatedAt(headID string) time.Duration
+
 	// SetActiveStatus sets the [catalog.StatusActive] status by headID.
 	SetActiveStatus(headID string) error
 
@@ -93,18 +95,26 @@ type HeadStatusSetter interface {
 // Keeper
 //
 
+// Keeper holds outdated heads until conversion.
 type Keeper[
 	TTask Task,
 	TShard, TGoShard Shard,
 	THead Head[TTask, TShard, TGoShard],
 ] interface {
-	Add(head THead, createdAt time.Duration, policy keeper.AddPolicy) error
+	// Add the [Head] to the [Keeper] if there is a free slot.
+	Add(head THead, createdAt time.Duration) error
 
+	// AddWithReplace the [Head] to the [Keeper] with replace if the createdAt is earlier.
+	AddWithReplace(head THead, createdAt time.Duration) error
+
+	// HasSlot returns the tru if there is a slot in the [Keeper].
+	HasSlot() bool
+
+	// Heads returns a slice of the [Head]s stored in the [Keeper].
 	Heads() []THead
 
+	// Remove removes [Head]s from the [Keeper].
 	Remove(headsForRemove []THead)
-
-	HasSlot() bool
 }
 
 //
@@ -127,17 +137,23 @@ type ProxyHead[
 	TShard, TGoShard Shard,
 	THead Head[TTask, TShard, TGoShard],
 ] interface {
-	Add(head THead)
+	// Add the [Head] to the [Keeper] if there is a free slot.
+	Add(head THead, createdAt time.Duration) error
+
+	// AddWithReplace the [Head] to the [Keeper] with replace if the createdAt is earlier.
+	AddWithReplace(head THead, createdAt time.Duration) error
 
 	// Get the active [Head].
 	Get() THead
 
-	// RangeQueriableHeadsWithActive returns the iterator to queriable [Head]s:
-	// the active [Head] and the [Head]s from the [Keeper].
-	RangeQueriableHeadsWithActive(mint int64, maxt int64) func(func(THead) bool)
+	// HasSlot returns the tru if there is a slot in the [Keeper].
+	HasSlot() bool
 
-	// RangeQueriableHeads returns the iterator to queriable [Head]s - the [Head]s only from the [Keeper].
-	RangeQueriableHeads(mint, maxt int64) func(func(THead) bool)
+	// Heads returns a slice of the [Head]s stored in the [Keeper].
+	Heads() []THead
+
+	// Remove removes [Head]s from the [Keeper].
+	Remove(headsForRemove []THead)
 
 	// Replace the active head [Head] with a new head.
 	Replace(ctx context.Context, newHead THead) error

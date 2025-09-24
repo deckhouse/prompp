@@ -34,7 +34,7 @@ var _ processor.Adapter = &AdapterMock{}
 //			AppendTimeSeriesFunc: func(ctx context.Context, data pp_pkg_model.TimeSeriesBatch, state *cppbridge.StateV2, commitToWal bool) (cppbridge.RelabelerStats, error) {
 //				panic("mock out the AppendTimeSeries method")
 //			},
-//			MergeOutOfOrderChunksFunc: func(ctx context.Context)  {
+//			MergeOutOfOrderChunksFunc: func()  {
 //				panic("mock out the MergeOutOfOrderChunks method")
 //			},
 //		}
@@ -57,7 +57,7 @@ type AdapterMock struct {
 	AppendTimeSeriesFunc func(ctx context.Context, data pp_pkg_model.TimeSeriesBatch, state *cppbridge.StateV2, commitToWal bool) (cppbridge.RelabelerStats, error)
 
 	// MergeOutOfOrderChunksFunc mocks the MergeOutOfOrderChunks method.
-	MergeOutOfOrderChunksFunc func(ctx context.Context)
+	MergeOutOfOrderChunksFunc func()
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -107,8 +107,6 @@ type AdapterMock struct {
 		}
 		// MergeOutOfOrderChunks holds details about calls to the MergeOutOfOrderChunks method.
 		MergeOutOfOrderChunks []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
 		}
 	}
 	lockAppendHashdex         sync.RWMutex
@@ -295,19 +293,16 @@ func (mock *AdapterMock) AppendTimeSeriesCalls() []struct {
 }
 
 // MergeOutOfOrderChunks calls MergeOutOfOrderChunksFunc.
-func (mock *AdapterMock) MergeOutOfOrderChunks(ctx context.Context) {
+func (mock *AdapterMock) MergeOutOfOrderChunks() {
 	if mock.MergeOutOfOrderChunksFunc == nil {
 		panic("AdapterMock.MergeOutOfOrderChunksFunc: method is nil but Adapter.MergeOutOfOrderChunks was just called")
 	}
 	callInfo := struct {
-		Ctx context.Context
-	}{
-		Ctx: ctx,
-	}
+	}{}
 	mock.lockMergeOutOfOrderChunks.Lock()
 	mock.calls.MergeOutOfOrderChunks = append(mock.calls.MergeOutOfOrderChunks, callInfo)
 	mock.lockMergeOutOfOrderChunks.Unlock()
-	mock.MergeOutOfOrderChunksFunc(ctx)
+	mock.MergeOutOfOrderChunksFunc()
 }
 
 // MergeOutOfOrderChunksCalls gets all the calls that were made to MergeOutOfOrderChunks.
@@ -315,10 +310,8 @@ func (mock *AdapterMock) MergeOutOfOrderChunks(ctx context.Context) {
 //
 //	len(mockedAdapter.MergeOutOfOrderChunksCalls())
 func (mock *AdapterMock) MergeOutOfOrderChunksCalls() []struct {
-	Ctx context.Context
 } {
 	var calls []struct {
-		Ctx context.Context
 	}
 	mock.lockMergeOutOfOrderChunks.RLock()
 	calls = mock.calls.MergeOutOfOrderChunks

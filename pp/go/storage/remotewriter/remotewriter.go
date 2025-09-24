@@ -22,7 +22,7 @@ type Catalog interface {
 	List(
 		filterFn func(record *catalog.Record) bool,
 		sortLess func(lhs, rhs *catalog.Record) bool,
-	) ([]*catalog.Record, error)
+	) []*catalog.Record
 
 	// SetCorrupted set corrupted flag for ID and returns [catalog.Record] if exist.
 	SetCorrupted(id string) (*catalog.Record, error)

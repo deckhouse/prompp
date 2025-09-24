@@ -35,10 +35,6 @@ import (
 	"syscall"
 	"time"
 
-	pphandler "github.com/prometheus/prometheus/pp-pkg/handler"
-	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor"
-	pptsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"
-
 	"github.com/KimMachineGun/automemlimit/memlimit"
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/alecthomas/units"
@@ -61,15 +57,20 @@ import (
 	"k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
 
+	pp_pkg_handler "github.com/prometheus/prometheus/pp-pkg/handler"
+	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor"
 	"github.com/prometheus/prometheus/pp-pkg/receiver"               // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/remote"                 // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/scrape"                 // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage" // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/relabeler/appender"      // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/relabeler/head"          // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"  // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/relabeler/head/ready"    // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/relabeler/remotewriter"  // PP_CHANGES.md: rebuild on cpp
+	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"
+
+	pp_storage "github.com/prometheus/prometheus/pp/go/storage" // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/catalog"    // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/head/head"  // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/querier"
+	"github.com/prometheus/prometheus/pp/go/storage/ready"        // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/remotewriter" // PP_CHANGES.md: rebuild on cpp
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
@@ -720,9 +721,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	reloadBlocksTriggerNotifier := receiver.NewReloadBlocksTriggerNotifier()
+	reloadBlocksTriggerNotifier := pp_storage.NewReloadBlocksTriggerNotifier()
 	cfg.tsdb.ReloadBlocksExternalTrigger = reloadBlocksTriggerNotifier
-	ctxReceiver, cancelReceiver := context.WithCancel(context.Background())
 
 	dataDir, err := filepath.Abs(localStoragePath)
 	if err != nil {
@@ -742,44 +742,89 @@ func main() {
 	}
 
 	clock := clockwork.NewRealClock()
-	headCatalog, err := catalog.New(clock, fileLog, catalog.DefaultIDGenerator{}, int(catalogMaxLogFileSize), prometheus.DefaultRegisterer)
+	headCatalog, err := catalog.New(
+		clock,
+		fileLog,
+		catalog.DefaultIDGenerator{},
+		int(catalogMaxLogFileSize),
+		prometheus.DefaultRegisterer,
+	)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create head catalog", "err", err)
 		os.Exit(1)
 	}
 
-	receiverReadyNotifier := ready.NewNotifiableNotifier()
-	// create receiver
-	receiver, err := receiver.NewReceiver(
-		ctxReceiver,
-		log.With(logger, "component", "receiver"),
-		prometheus.DefaultRegisterer,
-		receiverConfig,
-		localStoragePath,
-		cfgFile.RemoteWriteConfigs,
-		localStoragePath,
-		receiver.RotationInfo{
-			BlockDuration: time.Duration(cfg.tsdb.MinBlockDuration),
-			Seed:          cfgFile.GlobalConfig.ExternalLabels.Hash(),
+	pp_storage.InitLogHandler(log.With(logger, "component", "pp_storage"))
+
+	hManagerReadyNotifier := ready.NewNotifiableNotifier()
+	hManager, err := pp_storage.NewManager(
+		&pp_storage.Options{
+			Seed:                cfgFile.GlobalConfig.ExternalLabels.Hash(),
+			BlockDuration:       time.Duration(cfg.tsdb.MinBlockDuration),
+			CommitInterval:      time.Duration(cfg.WalCommitInterval),
+			MaxRetentionPeriod:  time.Duration(cfg.tsdb.RetentionDuration),
+			HeadRetentionPeriod: time.Duration(cfg.HeadRetentionTimeout),
+			QueueSize:           2,
+			DataDir:             localStoragePath,
+			MaxSegmentSize:      cfg.WalMaxSamplesPerSegment,
+			NumberOfShards:      receiverConfig.NumberOfShards,
 		},
+		clock,
 		headCatalog,
 		reloadBlocksTriggerNotifier,
-		receiverReadyNotifier,
-		time.Duration(cfg.WalCommitInterval),
-		time.Duration(cfg.tsdb.RetentionDuration),
-		time.Duration(cfg.HeadRetentionTimeout),
-		// x3 ScrapeInterval timeout for write block
-		time.Duration(cfgFile.GlobalConfig.ScrapeInterval*3),
-		cfg.WalMaxSamplesPerSegment,
-		appender.UnloadDataStorage,
+		hManagerReadyNotifier,
+		prometheus.DefaultRegisterer,
 	)
 	if err != nil {
-		level.Error(logger).Log("msg", "failed to create a receiver", "err", err)
+		level.Error(logger).Log("msg", "failed to create a head manager", "err", err)
 		os.Exit(1)
 	}
 
+	// receiverReadyNotifier := ready.NewNotifiableNotifier()
+	// // create receiver
+	// receiver, err := receiver.NewReceiver(
+	// 	ctxReceiver,
+	// 	log.With(logger, "component", "receiver"),
+	// 	prometheus.DefaultRegisterer,
+	// 	receiverConfig,
+	// 	localStoragePath,
+	// 	cfgFile.RemoteWriteConfigs,
+	// 	localStoragePath,
+	// 	receiver.RotationInfo{
+	// 		BlockDuration: time.Duration(cfg.tsdb.MinBlockDuration),
+	// 		Seed:          cfgFile.GlobalConfig.ExternalLabels.Hash(),
+	// 	},
+	// 	headCatalog,
+	// 	reloadBlocksTriggerNotifier,
+	// 	receiverReadyNotifier,
+	// 	time.Duration(cfg.WalCommitInterval),
+	// 	time.Duration(cfg.tsdb.RetentionDuration),
+	// 	time.Duration(cfg.HeadRetentionTimeout),
+	// 	// x3 ScrapeInterval timeout for write block
+	// 	time.Duration(cfgFile.GlobalConfig.ScrapeInterval*3),
+	// 	cfg.WalMaxSamplesPerSegment,
+	// 	appender.UnloadDataStorage,
+	// )
+	// if err != nil {
+	// 	level.Error(logger).Log("msg", "failed to create a receiver", "err", err)
+	// 	os.Exit(1)
+	// }
+
 	remoteWriterReadyNotifier := ready.NewNotifiableNotifier()
-	remoteWriter := remotewriter.New(dataDir, headCatalog, clock, remoteWriterReadyNotifier, prometheus.DefaultRegisterer)
+	remoteWriter := remotewriter.New(
+		dataDir,
+		headCatalog,
+		clock,
+		remoteWriterReadyNotifier,
+		prometheus.DefaultRegisterer,
+	)
+
+	adapter := pp_pkg_storage.NewAdapter(
+		clock,
+		hManager.Proxy(),
+		hManager.MergeOutOfOrderChunks,
+		prometheus.DefaultRegisterer,
+	)
 
 	// PP_CHANGES.md: rebuild on cpp end
 
@@ -797,7 +842,7 @@ func main() {
 		)
 		fanoutStorage = storage.NewFanout(
 			logger,
-			pp_pkg_storage.NewQueryableStorage(receiver),
+			adapter,
 			localStorage,
 			remoteRead,
 		)
@@ -875,7 +920,7 @@ func main() {
 	scrapeManager, err := scrape.NewManager(
 		&cfg.scrape,
 		log.With(logger, "component", "scrape manager"),
-		nil, // TODO receiver adapter
+		adapter,
 		prometheus.DefaultRegisterer,
 	)
 	if err != nil {
@@ -934,8 +979,8 @@ func main() {
 		queryEngine = promql.NewEngine(opts)
 
 		ruleManager = rules.NewManager(&rules.ManagerOptions{
-			Appendable:             receiver, // PP_CHANGES.md: rebuild on cpp
-			Queryable:              receiver, // PP_CHANGES.md: rebuild on cpp
+			Appendable:             adapter, // PP_CHANGES.md: rebuild on cpp
+			Queryable:              adapter, // PP_CHANGES.md: rebuild on cpp
 			QueryFunc:              rules.EngineQueryFunc(queryEngine, fanoutStorage),
 			NotifyFunc:             rules.SendAlerts(notifierManager, cfg.web.ExternalURL.String()),
 			Context:                ctxRule,
@@ -993,7 +1038,7 @@ func main() {
 
 	// Depends on cfg.web.ScrapeManager so needs to be after cfg.web.ScrapeManager = scrapeManager.
 	// TODO receiver adapter
-	webHandler := web.New(log.With(logger, "component", "web"), &cfg.web, nil) // PP_CHANGES.md: rebuild on cpp
+	webHandler := web.New(log.With(logger, "component", "web"), &cfg.web, adapter) // PP_CHANGES.md: rebuild on cpp
 
 	// Monitor outgoing connections on default transport with conntrack.
 	http.DefaultTransport.(*http.Transport).DialContext = conntrack.NewDialContextFunc(
@@ -1005,8 +1050,8 @@ func main() {
 
 	reloaders := []reloader{
 		{ // PP_CHANGES.md: rebuild on cpp start
-			name:     "receiver",
-			reloader: receiver.ApplyConfig,
+			name:     "head_manager",
+			reloader: hManager.ApplyConfig,
 		}, { // PP_CHANGES.md: rebuild on cpp end
 			name:     "db_storage",
 			reloader: localStorage.ApplyConfig,
@@ -1142,7 +1187,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	multiNotifiable := ready.New().With(receiverReadyNotifier).With(remoteWriterReadyNotifier).Build()
+	multiNotifiable := ready.NewMultiNotifiableBuilder().Add(
+		hManagerReadyNotifier,
+	).Add(
+		remoteWriterReadyNotifier,
+	).Build()
 	opGC := catalog.NewGC(dataDir, headCatalog, multiNotifiable)
 
 	var g run.Group
@@ -1343,7 +1392,7 @@ func main() {
 					return fmt.Errorf("opening storage failed: %w", err)
 				}
 
-				tsdb.DBSetBlocksToDelete(db, pptsdb.PPBlocksToDelete(db, dataDir, headCatalog))
+				tsdb.DBSetBlocksToDelete(db, pp_pkg_tsdb.PPBlocksToDelete(db, dataDir, headCatalog))
 				switch fsType := prom_runtime.Statfs(localStoragePath); fsType {
 				case "NFS_SUPER_MAGIC":
 					level.Warn(logger).Log("fs_type", fsType, "msg", "This filesystem is not supported and may lead to data corruption and data loss. Please carefully read https://prometheus.io/docs/prometheus/latest/storage/ to learn more about supported filesystems.")
@@ -1392,7 +1441,7 @@ func main() {
 				db, err := agent.Open(
 					logger,
 					prometheus.DefaultRegisterer,
-					receiver, // PP_CHANGES.md: rebuild on cpp
+					adapter, // TODO RW // PP_CHANGES.md: rebuild on cpp
 					localStoragePath,
 					&opts,
 				)
@@ -1451,31 +1500,27 @@ func main() {
 		g.Add(
 			func() error {
 				<-dbOpen
-				return receiver.Run(ctxReceiver)
+				return hManager.Run()
 			},
 			func(err error) {
-				receiverCancelCtx, receiverCancelCtxCancel := context.WithCancel(ctxReceiver)
-				defer receiverCancelCtxCancel()
-
-				level.Info(logger).Log("msg", "Stopping Receiver...")
-				if err := receiver.Shutdown(receiverCancelCtx); err != nil {
-					level.Error(logger).Log("msg", "Receiver shutdown failed", "err", err)
+				level.Info(logger).Log("msg", "Stopping head manager...")
+				if err := hManager.Shutdown(context.Background()); err != nil {
+					level.Error(logger).Log("msg", "Head manager shutdown failed", "err", err)
 				}
-				cancelReceiver()
+				level.Info(logger).Log("msg", "Head manager stopped.")
 			},
 		)
 	} // PP_CHANGES.md: rebuild on cpp end
 	{ // PP_CHANGES.md: rebuild on cpp start
 		g.Add(
-			func() error { return <-head.UnrecoverableErrorChan },
+			func() error {
+				return <-querier.UnrecoverableErrorChan
+			},
 			func(err error) {
-				select {
-				case head.UnrecoverableErrorChan <- nil:
-					// stop execute func if need
-				default:
-				}
+				// stop execute func if need
+				querier.SendUnrecoverableError(nil)
 
-				if errors.Is(err, head.UnrecoverableError{}) {
+				if errors.Is(err, querier.UnrecoverableError{}) {
 					level.Error(logger).Log("msg", "Received unrecoverable error", "err", err)
 				}
 			},
@@ -2052,7 +2097,7 @@ func readPromPPFeatures(logger log.Logger) {
 		fname, fvalue, _ := strings.Cut(feature, "=")
 		switch strings.TrimSpace(fname) {
 		case "head_copy_series_on_rotate":
-			appender.CopySeriesOnRotate = true
+			pp_storage.CopySeriesOnRotate = true
 			level.Info(logger).Log(
 				"msg",
 				"[FEATURE] Copying active series from current head to new head during rotation is enabled.",
@@ -2072,7 +2117,7 @@ func readPromPPFeatures(logger log.Logger) {
 				}
 			}
 
-			head.ExtraReadConcurrency = v
+			head.ExtraWorkers = v
 			level.Info(logger).Log(
 				"msg",
 				"[FEATURE] Concurrency reading is enabled.",
@@ -2122,10 +2167,10 @@ func readPromPPFeatures(logger log.Logger) {
 
 		case "disable_commits_on_remote_write":
 			rwprocessor.AlwaysCommit = false
-			pphandler.OTLPAlwaysCommit = false
+			pp_pkg_handler.OTLPAlwaysCommit = false
 
 		case "unload_data_storage":
-			appender.UnloadDataStorage = true
+			pp_storage.UnloadDataStorage = true
 			_ = level.Info(logger).Log("msg", "[FEATURE] Data storage unloading is enabled.")
 		}
 	}

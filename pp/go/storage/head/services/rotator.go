@@ -30,12 +30,12 @@ type Rotator[
 	TShard, TGoShard Shard,
 	THead Head[TTask, TShard, TGoShard],
 ] struct {
-	proxyHead        ProxyHead[TTask, TShard, TGoShard, THead]
-	headBuilder      HeadBuilder[TTask, TShard, TGoShard, THead]
-	m                Mediator
-	cfg              RotatorConfig
-	headStatusSetter HeadStatusSetter
-	rotateCounter    prometheus.Counter
+	proxyHead     ProxyHead[TTask, TShard, TGoShard, THead]
+	headBuilder   HeadBuilder[TTask, TShard, TGoShard, THead]
+	m             Mediator
+	cfg           RotatorConfig
+	headInformer  HeadInformer
+	rotateCounter prometheus.Counter
 }
 
 // NewRotator init new [Rotator].
@@ -48,16 +48,16 @@ func NewRotator[
 	headBuilder HeadBuilder[TTask, TShard, TGoShard, THead],
 	m Mediator,
 	cfg RotatorConfig,
-	headStatusSetter HeadStatusSetter,
+	headInformer HeadInformer,
 	r prometheus.Registerer,
 ) *Rotator[TTask, TShard, TGoShard, THead] {
 	factory := util.NewUnconflictRegisterer(r)
 	return &Rotator[TTask, TShard, TGoShard, THead]{
-		proxyHead:        proxyHead,
-		headBuilder:      headBuilder,
-		m:                m,
-		cfg:              cfg,
-		headStatusSetter: headStatusSetter,
+		proxyHead:    proxyHead,
+		headBuilder:  headBuilder,
+		m:            m,
+		cfg:          cfg,
+		headInformer: headInformer,
 		rotateCounter: factory.NewCounter(
 			prometheus.CounterOpts{
 				Name: "prompp_rotator_rotate_count",
@@ -101,14 +101,16 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 	// TODO CopySeriesFrom only old nunber of shards == new
 	// newHead.CopySeriesFrom(oldHead)
 
-	s.proxyHead.Add(oldHead)
+	if err = s.proxyHead.AddWithReplace(oldHead, s.headInformer.CreatedAt(oldHead.ID())); err != nil {
+		return fmt.Errorf("failed add to keeper old head: %w", err)
+	}
 
 	// TODO if replace error?
 	if err = s.proxyHead.Replace(ctx, newHead); err != nil {
 		return fmt.Errorf("failed to replace old to new head: %w", err)
 	}
 
-	if err = s.headStatusSetter.SetActiveStatus(newHead.ID()); err != nil {
+	if err = s.headInformer.SetActiveStatus(newHead.ID()); err != nil {
 		logger.Warnf("failed set status active for head{%s}: %s", newHead.ID(), err)
 	}
 
@@ -120,7 +122,7 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 		logger.Warnf("failed commit and flush to wal: %s", err)
 	}
 
-	if err = s.headStatusSetter.SetRotatedStatus(oldHead.ID()); err != nil {
+	if err = s.headInformer.SetRotatedStatus(oldHead.ID()); err != nil {
 		logger.Warnf("failed set status rotated for head{%s}: %s", oldHead.ID(), err)
 	}
 	oldHead.SetReadOnly()

@@ -25,9 +25,9 @@ func (s *TimeSeries) AppendSamples(samples ...cppbridge.Sample) {
 
 func (s *TimeSeries) toModelTimeSeries() []model.TimeSeries {
 	lsBuilder := model.NewLabelSetBuilder()
-	for i := range s.Labels {
-		lsBuilder.Add(s.Labels[i].Name, s.Labels[i].Value)
-	}
+	s.Labels.Range(func(l labels.Label) {
+		lsBuilder.Add(l.Name, l.Value)
+	})
 
 	ls := lsBuilder.Build()
 

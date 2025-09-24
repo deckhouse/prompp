@@ -18,7 +18,7 @@ func (h *headForTest) ID() string {
 	return h.id
 }
 
-func (h *headForTest) Close() error {
+func (*headForTest) Close() error {
 	return nil
 }
 
@@ -46,9 +46,9 @@ func (s *KeeperSuite) TestAdd() {
 	s.keeper = NewKeeper[*headForTest](2)
 
 	// Act
-	_ = s.keeper.Add(newHeadForTest("d"), 4, Add)
-	_ = s.keeper.Add(newHeadForTest("c"), 3, Add)
-	err := s.keeper.Add(newHeadForTest("b"), 2, Add)
+	_ = s.keeper.Add(newHeadForTest("d"), 4)
+	_ = s.keeper.Add(newHeadForTest("c"), 3)
+	err := s.keeper.Add(newHeadForTest("b"), 2)
 
 	// Assert
 	s.Equal(sortedSlice{
@@ -63,9 +63,9 @@ func (s *KeeperSuite) TestAddWithReplaceNoReplace() {
 	s.keeper = NewKeeper[*headForTest](2)
 
 	// Act
-	_ = s.keeper.Add(newHeadForTest("d"), 4, Add)
-	_ = s.keeper.Add(newHeadForTest("c"), 3, Add)
-	err := s.keeper.Add(newHeadForTest("b"), 3, AddWithReplace)
+	_ = s.keeper.Add(newHeadForTest("d"), 4)
+	_ = s.keeper.Add(newHeadForTest("c"), 3)
+	err := s.keeper.AddWithReplace(newHeadForTest("b"), 3)
 
 	// Assert
 	s.Equal(sortedSlice{
@@ -80,9 +80,9 @@ func (s *KeeperSuite) TestAddWithReplace() {
 	s.keeper = NewKeeper[*headForTest](2)
 
 	// Act
-	_ = s.keeper.Add(newHeadForTest("d"), 4, Add)
-	_ = s.keeper.Add(newHeadForTest("c"), 3, Add)
-	err := s.keeper.Add(newHeadForTest("b"), 4, AddWithReplace)
+	_ = s.keeper.Add(newHeadForTest("d"), 4)
+	_ = s.keeper.Add(newHeadForTest("c"), 3)
+	err := s.keeper.AddWithReplace(newHeadForTest("b"), 4)
 
 	// Assert
 	s.Equal(sortedSlice{
@@ -97,11 +97,11 @@ func (s *KeeperSuite) TestRemove() {
 	const Slots = 5
 
 	s.keeper = NewKeeper[*headForTest](Slots)
-	_ = s.keeper.Add(newHeadForTest("a"), 1, Add)
-	_ = s.keeper.Add(newHeadForTest("b"), 2, Add)
-	_ = s.keeper.Add(newHeadForTest("c"), 3, Add)
-	_ = s.keeper.Add(newHeadForTest("d"), 4, Add)
-	_ = s.keeper.Add(newHeadForTest("e"), 5, Add)
+	_ = s.keeper.Add(newHeadForTest("a"), 1)
+	_ = s.keeper.Add(newHeadForTest("b"), 2)
+	_ = s.keeper.Add(newHeadForTest("c"), 3)
+	_ = s.keeper.Add(newHeadForTest("d"), 4)
+	_ = s.keeper.Add(newHeadForTest("e"), 5)
 
 	// Act
 	s.keeper.Remove([]*headForTest{newHeadForTest("a"), newHeadForTest("c"), newHeadForTest("e")})

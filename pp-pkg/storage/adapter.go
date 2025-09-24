@@ -25,11 +25,12 @@ var _ storage.Storage = (*Adapter)(nil)
 
 // Adapter for implementing the [Queryable] interface and append data.
 type Adapter struct {
-	proxy            *pp_storage.ProxyHead
-	haTracker        *hatracker.HighAvailabilityTracker
-	hashdexFactory   cppbridge.HashdexFactory
-	hashdexLimits    cppbridge.WALHashdexLimits
-	transparentState *cppbridge.StateV2
+	proxy                 *pp_storage.ProxyHead
+	haTracker             *hatracker.HighAvailabilityTracker
+	hashdexFactory        cppbridge.HashdexFactory
+	hashdexLimits         cppbridge.WALHashdexLimits
+	transparentState      *cppbridge.StateV2
+	mergeOutOfOrderChunks func()
 
 	activeQuerierMetrics  *querier.Metrics
 	storageQuerierMetrics *querier.Metrics
@@ -39,6 +40,7 @@ type Adapter struct {
 func NewAdapter(
 	clock clockwork.Clock,
 	proxy *pp_storage.ProxyHead,
+	mergeOutOfOrderChunks func(),
 	registerer prometheus.Registerer,
 ) *Adapter {
 	return &Adapter{
@@ -47,6 +49,7 @@ func NewAdapter(
 		hashdexFactory:        cppbridge.HashdexFactory{},
 		hashdexLimits:         cppbridge.DefaultWALHashdexLimits(),
 		transparentState:      cppbridge.NewTransitionStateV2(),
+		mergeOutOfOrderChunks: mergeOutOfOrderChunks,
 		activeQuerierMetrics:  querier.NewMetrics(registerer, querier.QueryableAppenderSource),
 		storageQuerierMetrics: querier.NewMetrics(registerer, querier.QueryableStorageSource),
 	}
@@ -165,14 +168,14 @@ func (ar *Adapter) Appender(ctx context.Context) storage.Appender {
 // ChunkQuerier provides querying access over time series data of a fixed time range.
 // Returns new Chunk Querier that merges results of given primary and secondary chunk queriers.
 func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
-	queriers := make([]storage.ChunkQuerier, 0, 2)
+	queriers := make([]storage.ChunkQuerier, 0, 1) //revive:disable-line:add-constant // the best way
 	ahead := ar.proxy.Get()
 	queriers = append(
 		queriers,
 		querier.NewChunkQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil),
 	)
 
-	for head := range ar.proxy.RangeQueriableHeads(mint, maxt) {
+	for _, head := range ar.proxy.Heads() {
 		if ahead.ID() == head.ID() {
 			continue
 		}
@@ -214,17 +217,27 @@ func (ar *Adapter) HeadStatus(ctx context.Context, limit int) (*querier.HeadStat
 	return querier.QueryHeadStatus(ctx, ar.proxy.Get(), limit)
 }
 
+// LowestSentTimestamp returns the lowest sent timestamp across all queues.
+func (*Adapter) LowestSentTimestamp() int64 {
+	return 0
+}
+
+// MergeOutOfOrderChunks send signal to merge chunks with out of order data chunks.
+func (ar *Adapter) MergeOutOfOrderChunks() {
+	ar.mergeOutOfOrderChunks()
+}
+
 // Querier calls f() with the given parameters.
 // Returns a [querier.MultiQuerier] combining of primary and secondary queriers.
 func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
-	queriers := make([]storage.Querier, 0, 2)
+	queriers := make([]storage.Querier, 0, 1) //revive:disable-line:add-constant // the best way
 	ahead := ar.proxy.Get()
 	queriers = append(
 		queriers,
 		querier.NewQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.activeQuerierMetrics),
 	)
 
-	for head := range ar.proxy.RangeQueriableHeads(mint, maxt) {
+	for _, head := range ar.proxy.Heads() {
 		if ahead.ID() == head.ID() {
 			continue
 		}

@@ -340,8 +340,7 @@ func queryDataStorage[
 	_ = tDataStorageQuery.Wait()
 
 	if err := loadAndQueryWaiter.Wait(); err != nil {
-		// TODO: Unrecoverable error
-		// q.head.UnrecoverableError(err)
+		SendUnrecoverableError(err)
 		return nil
 	}
 
@@ -539,4 +538,35 @@ func queryLss[
 	}
 
 	return lssQueryResults, snapshots, nil
+}
+
+// UnrecoverableErrorChan channel singal for [UnrecoverableError].
+var UnrecoverableErrorChan = make(chan error)
+
+// SendUnrecoverableError send to terminate on [UnrecoverableError].
+func SendUnrecoverableError(err error) {
+	if err != nil {
+		logger.Warnf("Unrecoverable error: %v", err)
+	}
+
+	select {
+	case UnrecoverableErrorChan <- UnrecoverableError{err}:
+	default:
+	}
+}
+
+// UnrecoverableError error if Head get unrecoverable error.
+type UnrecoverableError struct {
+	err error
+}
+
+// Error implements error.
+func (err UnrecoverableError) Error() string {
+	return fmt.Sprintf("Unrecoverable error: %v", err.err)
+}
+
+// Is implements errors.Is interface.
+func (UnrecoverableError) Is(target error) bool {
+	_, ok := target.(UnrecoverableError)
+	return ok
 }

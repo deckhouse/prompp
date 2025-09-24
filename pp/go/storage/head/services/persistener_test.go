@@ -287,7 +287,7 @@ func (s *PersistenerSuite) TestPersistHeadErrorOnBlockWriterForSecondShard() {
 type PersistenerServiceSuite struct {
 	GenericPersistenceSuite
 	loader  *storage.Loader
-	service services.PersistenerService[
+	service *services.PersistenerService[
 		*task.Generic[*storage.PerGoroutineShard],
 		*storage.ShardOnDisk,
 		*storage.PerGoroutineShard,
@@ -331,7 +331,7 @@ func (s *PersistenerServiceSuite) TestRemoveOutdatedHeadFromKeeper() {
 	})
 	head.SetReadOnly()
 	record, _ := s.catalog.SetStatus(head.ID(), catalog.StatusRotated)
-	_ = s.keeper.Add(head, time.Duration(s.clock.Now().Nanosecond()), keeper.Add)
+	_ = s.keeper.Add(head, time.Duration(s.clock.Now().Nanosecond()))
 
 	// Act
 	s.service.ProcessHeads()
@@ -376,7 +376,7 @@ func (s *PersistenerServiceSuite) TestHeadAlreadyExistsInKeeper() {
 		},
 	})
 	_, _ = s.catalog.SetStatus(head.ID(), catalog.StatusRotated)
-	_ = s.keeper.Add(head, 0, keeper.Add)
+	_ = s.keeper.Add(head, 0)
 
 	// Act
 	s.service.ProcessHeads()

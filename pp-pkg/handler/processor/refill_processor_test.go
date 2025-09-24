@@ -41,7 +41,7 @@ func (s *RefillProcessorSuite) TestProcess() {
 		AppendHashdexFunc: func(context.Context, cppbridge.ShardedData, *cppbridge.StateV2, bool) error {
 			return nil
 		},
-		MergeOutOfOrderChunksFunc: func(context.Context) {},
+		MergeOutOfOrderChunksFunc: func() {},
 	}
 
 	metadata := model.Metadata{
@@ -118,7 +118,7 @@ func (s *RefillProcessorSuite) TestProcessWithError() {
 		AppendHashdexFunc: func(context.Context, cppbridge.ShardedData, *cppbridge.StateV2, bool) error {
 			return nil
 		},
-		MergeOutOfOrderChunksFunc: func(context.Context) {},
+		MergeOutOfOrderChunksFunc: func() {},
 	}
 
 	metadata := model.Metadata{

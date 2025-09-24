@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"math"
 	"strconv"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -89,13 +88,13 @@ func NewMetricsUpdater[
 //
 //revive:disable-next-line:confusing-naming // other type of Service.
 func (s *MetricsUpdater[TTask, TShard, TGoShard, THead, THeadStatus]) Execute(ctx context.Context) error {
-	logger.Infof("The Rotator is running.")
+	logger.Infof("The MetricsUpdater is running.")
 
 	for range s.m.C() {
 		s.collect(ctx)
 	}
 
-	logger.Infof("The Rotator stopped.")
+	logger.Infof("The MetricsUpdater stopped.")
 
 	return nil
 }
@@ -105,7 +104,7 @@ func (s *MetricsUpdater[TTask, TShard, TGoShard, THead, THeadStatus]) collect(ct
 	ahead := s.proxyHead.Get()
 
 	status, err := s.queryHeadStatus(ctx, ahead, 0)
-	if err == nil {
+	if err != nil {
 		// error may be only head is rotated, skip
 		return
 	}
@@ -118,7 +117,7 @@ func (s *MetricsUpdater[TTask, TShard, TGoShard, THead, THeadStatus]) collect(ct
 
 	s.collectFromShards(ahead, true)
 
-	for head := range s.proxyHead.RangeQueriableHeads(0, math.MaxInt64) {
+	for _, head := range s.proxyHead.Heads() {
 		if head.ID() == ahead.ID() {
 			continue
 		}

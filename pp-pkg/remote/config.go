@@ -8,7 +8,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/prometheus/prometheus/config"
-	"github.com/prometheus/prometheus/pp/go/relabeler/remotewriter"
+	"github.com/prometheus/prometheus/pp/go/storage/remotewriter"
 )
 
 func ApplyConfig(remoteWriter *remotewriter.RemoteWriter) func(promConfig *config.Config) error {
