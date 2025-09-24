@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+// TODO moq -out mediator_moq_test.go -pkg mediator_test -rm . Timer
+
 type MediatorSuite struct {
 	suite.Suite
 }
