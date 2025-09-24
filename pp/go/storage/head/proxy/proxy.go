@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 // Head the minimum required [Head] implementation for a proxy.
@@ -37,11 +38,25 @@ type ActiveHeadContainer[THead Head] interface {
 // Keeper
 //
 
-// TODO Description
+// Keeper holds outdated heads until conversion.
 type Keeper[THead Head] interface {
-	Add(head THead)
+	// Add the [Head] to the [Keeper] if there is a free slot.
+	Add(head THead, createdAt time.Duration) error
+
+	// AddWithReplace the [Head] to the [Keeper] with replace if the createdAt is earlier.
+	AddWithReplace(head THead, createdAt time.Duration) error
+
+	// Close closes for the inability work with [Head].
 	Close() error
-	RangeQueriableHeads(mint, maxt int64) func(func(THead) bool)
+
+	// HasSlot returns the tru if there is a slot in the [Keeper].
+	HasSlot() bool
+
+	// Heads returns a slice of the [Head]s stored in the [Keeper].
+	Heads() []THead
+
+	// Remove removes [Head]s from the [Keeper].
+	Remove(headsForRemove []THead)
 }
 
 //
@@ -68,9 +83,14 @@ func NewProxy[THead Head](
 	}
 }
 
-// Add the [Head] to the [Keeper].
-func (p *Proxy[THead]) Add(head THead) {
-	p.keeper.Add(head)
+// Add the [Head] to the [Keeper] if there is a free slot.
+func (p *Proxy[THead]) Add(head THead, createdAt time.Duration) error {
+	return p.keeper.Add(head, createdAt)
+}
+
+// AddWithReplace the [Head] to the [Keeper] with replace if the createdAt is earlier.
+func (p *Proxy[THead]) AddWithReplace(head THead, createdAt time.Duration) error {
+	return p.keeper.AddWithReplace(head, createdAt)
 }
 
 // Close closes [ActiveHeadContainer] and [Keeper] for the inability work with [Head].
@@ -91,30 +111,19 @@ func (p *Proxy[THead]) Get() THead {
 	return p.activeHeadContainer.Get()
 }
 
-// RangeQueriableHeadsWithActive returns the iterator to queriable [Head]s:
-// the active [Head] and the [Head]s from the [Keeper].
-func (p *Proxy[THead]) RangeQueriableHeadsWithActive(mint, maxt int64) func(func(THead) bool) {
-	return func(yield func(h THead) bool) {
-		ahead := p.activeHeadContainer.Get()
-		if !yield(ahead) {
-			return
-		}
-
-		for head := range p.keeper.RangeQueriableHeads(mint, maxt) {
-			if ahead.ID() == head.ID() {
-				continue
-			}
-
-			if !yield(head) {
-				return
-			}
-		}
-	}
+// HasSlot returns the tru if there is a slot in the [Keeper].
+func (p *Proxy[THead]) HasSlot() bool {
+	return p.keeper.HasSlot()
 }
 
-// RangeQueriableHeads returns the iterator to queriable [Head]s - the [Head]s only from the [Keeper].
-func (p *Proxy[THead]) RangeQueriableHeads(mint, maxt int64) func(func(THead) bool) {
-	return p.keeper.RangeQueriableHeads(mint, maxt)
+// Heads returns a slice of the [Head]s stored in the [Keeper].
+func (p *Proxy[THead]) Heads() []THead {
+	return p.keeper.Heads()
+}
+
+// Remove removes [Head]s from the [Keeper].
+func (p *Proxy[THead]) Remove(headsForRemove []THead) {
+	p.keeper.Remove(headsForRemove)
 }
 
 // Replace the active [Head] with a new [Head].
