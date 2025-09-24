@@ -30,5 +30,5 @@ func TestHeadWalDecoder_DecodeToDataStorage(t *testing.T) {
 
 	// Assert
 	require.NoError(t, err)
-	require.Equal(t, cppbridge.TimeInterval{MinT: 1660828401000, MaxT: 1660828410000}, dataStorage.TimeInterval())
+	require.Equal(t, cppbridge.TimeInterval{MinT: 1660828401000, MaxT: 1660828410000}, dataStorage.TimeInterval(false))
 }

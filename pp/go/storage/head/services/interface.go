@@ -1,6 +1,12 @@
 package services
 
-import "context"
+import (
+	"context"
+	"time"
+
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/storage/head/keeper"
+)
 
 //
 // ActiveHeadContainer
@@ -46,8 +52,14 @@ type Head[
 	// RangeShards returns an iterator over the [Head] [Shard]s, through which the shard can be directly accessed.
 	RangeShards() func(func(TShard) bool)
 
+	// IsReadOnly returns true if the [Head] has switched to read-only.
+	IsReadOnly() bool
+
 	// SetReadOnly sets the read-only flag for the [Head].
 	SetReadOnly()
+
+	// Close closes wals, query semaphore for the inability to get query and clear metrics.
+	Close() error
 }
 
 //
@@ -81,14 +93,18 @@ type HeadStatusSetter interface {
 // Keeper
 //
 
-// TODO need?
 type Keeper[
 	TTask Task,
-	TShard, TGShard Shard,
-	THead Head[TTask, TShard, TGShard],
+	TShard, TGoShard Shard,
+	THead Head[TTask, TShard, TGoShard],
 ] interface {
-	Add(head THead)
-	RangeQueriableHeads(mint, maxt int64) func(func(THead) bool)
+	Add(head THead, createdAt time.Duration, policy keeper.AddPolicy) error
+
+	Heads() []THead
+
+	Remove(headsForRemove []THead)
+
+	HasSlot() bool
 }
 
 //
@@ -159,6 +175,12 @@ type Shard interface {
 
 	// WalSync commits the current contents of the [Wal].
 	WalSync() error
+
+	// TimeInterval get time interval of data storage
+	TimeInterval(bool) cppbridge.TimeInterval
+
+	// UnloadUnusedSeriesData unload unused series data
+	UnloadUnusedSeriesData() error
 }
 
 //

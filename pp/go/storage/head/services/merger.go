@@ -45,9 +45,7 @@ func (s *Merger[TTask, TShard, TGoShard, THead]) Execute(ctx context.Context) er
 	logger.Infof("The Merger is running.")
 
 	for range s.m.C() {
-		if err := s.activeHead.With(ctx, s.mergeOutOfOrderChunks); err != nil {
-			logger.Errorf("data storage merge failed: %v", err)
-		}
+		_ = s.activeHead.With(ctx, s.UnloadAndMerge)
 	}
 
 	logger.Infof("The Merger stopped.")
@@ -55,11 +53,19 @@ func (s *Merger[TTask, TShard, TGoShard, THead]) Execute(ctx context.Context) er
 	return nil
 }
 
-// mergeOutOfOrderChunksWithHead merge chunks with out of order data chunks for [Head].
-func (s *Merger[TTask, TShard, TGoShard, THead]) mergeOutOfOrderChunks(h THead) error {
+// UnloadAndMerge unload unused series data and merge chunks with out of order data chunks for [Head].
+func (s *Merger[TTask, TShard, TGoShard, THead]) UnloadAndMerge(h THead) error {
 	if s.isNewHead(h.ID()) {
 		return nil
 	}
 
-	return MergeOutOfOrderChunksWithHead(h)
+	if err := UnloadUnusedSeriesDataWithHead(h); err != nil {
+		logger.Errorf("unload unused series data failed: %v", err)
+	}
+
+	if err := MergeOutOfOrderChunksWithHead(h); err != nil {
+		logger.Errorf("data storage merge failed: %v", err)
+	}
+
+	return nil
 }

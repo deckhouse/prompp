@@ -1,6 +1,10 @@
 package util
 
-import "sync"
+import (
+	"errors"
+	"io"
+	"sync"
+)
 
 type Closer struct {
 	close      chan struct{}
@@ -34,4 +38,12 @@ func (c *Closer) Close() error {
 	})
 	<-c.closed
 	return nil
+}
+
+func CloseAll(closers ...io.Closer) error {
+	var errs error
+	for _, closer := range closers {
+		errs = errors.Join(errs, closer.Close())
+	}
+	return errs
 }

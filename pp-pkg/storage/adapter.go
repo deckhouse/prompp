@@ -169,7 +169,7 @@ func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) 
 	ahead := ar.proxy.Get()
 	queriers = append(
 		queriers,
-		querier.NewQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.activeQuerierMetrics),
+		querier.NewChunkQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil),
 	)
 
 	for head := range ar.proxy.RangeQueriableHeads(mint, maxt) {
@@ -179,7 +179,7 @@ func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) 
 
 		queriers = append(
 			queriers,
-			querier.NewQuerier(head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.storageQuerierMetrics),
+			querier.NewChunkQuerier(head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil),
 		)
 	}
 
@@ -198,7 +198,7 @@ func (ar *Adapter) Close() error {
 }
 
 // HeadQuerier returns [storage.Querier] from active head.
-func (ar *Adapter) HeadQuerier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
+func (ar *Adapter) HeadQuerier(mint, maxt int64) (storage.Querier, error) {
 	return querier.NewQuerier(
 		ar.proxy.Get(),
 		querier.NewNoOpShardedDeduplicator,
@@ -210,7 +210,7 @@ func (ar *Adapter) HeadQuerier(ctx context.Context, mint, maxt int64) (storage.Q
 }
 
 // HeadStatus returns stats of Head.
-func (ar *Adapter) HeadStatus(ctx context.Context, limit int) (querier.HeadStatus, error) {
+func (ar *Adapter) HeadStatus(ctx context.Context, limit int) (*querier.HeadStatus, error) {
 	return querier.QueryHeadStatus(ctx, ar.proxy.Get(), limit)
 }
 

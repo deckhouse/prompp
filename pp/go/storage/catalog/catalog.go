@@ -195,6 +195,19 @@ func (c *Catalog) Get(id string) (*Record, error) {
 
 // List returns slice of records with filter and sort.
 func (c *Catalog) List(filterFn func(record *Record) bool, sortLess func(lhs, rhs *Record) bool) []*Record {
+	records := c.list(filterFn)
+
+	if sortLess != nil {
+		sort.Slice(records, func(i, j int) bool {
+			return sortLess(records[i], records[j])
+		})
+	}
+
+	return records
+}
+
+// list returns slice of filtered records
+func (c *Catalog) list(filterFn func(record *Record) bool) []*Record {
 	c.mtx.Lock()
 	defer c.mtx.Unlock()
 
@@ -204,12 +217,6 @@ func (c *Catalog) List(filterFn func(record *Record) bool, sortLess func(lhs, rh
 			continue
 		}
 		records = append(records, record)
-	}
-
-	if sortLess != nil {
-		sort.Slice(records, func(i, j int) bool {
-			return sortLess(records[i], records[j])
-		})
 	}
 
 	return records

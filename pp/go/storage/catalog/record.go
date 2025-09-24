@@ -5,7 +5,6 @@ import (
 	"sync/atomic"
 
 	"github.com/google/uuid"
-
 	"github.com/prometheus/prometheus/pp/go/util/optional"
 )
 
@@ -208,4 +207,8 @@ func applyRecordChanges(r, changed *Record) {
 	r.numberOfShards = changed.numberOfShards
 	r.mint = changed.mint
 	r.maxt = changed.maxt
+}
+
+func LessByUpdateAt(lhs, rhs *Record) bool {
+	return lhs.UpdatedAt() < rhs.UpdatedAt()
 }
