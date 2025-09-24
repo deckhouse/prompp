@@ -201,6 +201,9 @@ INSTANTIATE_TEST_SUITE_P(LabelCodecTests,
                                          LabelCase{.name_off = 100000, .name_len = 200000, .value_off = 300000, .value_len = 400000},
                                          LabelCase{.name_off = 0, .name_len = 0, .value_off = 300000, .value_len = 400000},
                                          LabelCase{.name_off = 0, .name_len = 0, .value_off = 1234, .value_len = 123456},
-                                         LabelCase{.name_off = 0, .name_len = 12, .value_off = 1234, .value_len = 123456}));
+                                         LabelCase{.name_off = 0, .name_len = 12, .value_off = 1234, .value_len = 123456},
+                                         LabelCase{.name_off = 0, .name_len = 12, .value_off = 1234, .value_len = 255},
+                                         LabelCase{.name_off = 0, .name_len = 12, .value_off = 128, .value_len = 2355},
+                                         LabelCase{.name_off = 256, .name_len = 128, .value_off = 255, .value_len = 255}));
 
 }  // namespace

@@ -1163,9 +1163,7 @@ func main() {
 				case <-cancel:
 					reloadReady.Close()
 				}
-				if err := queryEngine.Close(); err != nil {
-					level.Warn(logger).Log("msg", "Closing query engine failed", "err", err)
-				}
+
 				return nil
 			},
 			func(err error) {
@@ -1526,6 +1524,13 @@ func main() {
 		level.Error(logger).Log("err", err)
 		os.Exit(1)
 	}
+
+	// PP_CHANGES.md: rebuild on cpp start the engine is really no longer in use before calling this to avoid
+	if err := queryEngine.Close(); err != nil {
+		level.Warn(logger).Log("msg", "Closing query engine failed", "err", err)
+	}
+	// PP_CHANGES.md: rebuild on cpp end
+
 	level.Info(logger).Log("msg", "See you next time!")
 }
 

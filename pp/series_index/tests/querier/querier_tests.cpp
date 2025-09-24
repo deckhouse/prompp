@@ -85,11 +85,12 @@ class QuerierFixture : public testing::TestWithParam<QuerierTestCase> {
   }
 
  private:
-  std::vector<LabelViewSet> label_sets_{
-      {{"job", "cron"}, {"task", "nodejs"}},
-      {{"job", "cron"}, {"task", "php"}},
-      {{"job", "cron"}, {"task", "python"}, {"server", "localhost"}},
-  };
+  std::vector<LabelViewSet> label_sets_{{{"job", "cron"}, {"task", "nodejs"}},
+                                        {{"job", "cron"}, {"task", "php"}},
+                                        {{"job", "cron"}, {"task", "python"}, {"server", "localhost"}},
+
+                                        {{"instance", "192.168.199.119:10250"}},
+                                        {{"instance", "192.168.199.119:10251"}}};
 };
 
 TEST_P(QuerierFixture, Test) {
@@ -171,6 +172,14 @@ INSTANTIATE_TEST_SUITE_P(NegativeMatcher,
                                                          .expected = {.series_id_list = {0, 1}, .status = QuerierStatus::kMatch}},
                                          QuerierTestCase{.label_matchers = {{.name = "job", .value = "cron", .type = MatcherType::kExactMatch},
                                                                             {.name = "server", .value = ".*", .type = MatcherType::kRegexpNotMatch}},
+                                                         .expected = {.series_id_list = {}, .status = QuerierStatus::kNoMatch}},
+                                         QuerierTestCase{.label_matchers =
+                                                             {
+                                                                 {.name = "instance",
+                                                                  .value = "192.168.199.119:10251|193.168.199.119:10250|192.168.199.119:10250",
+                                                                  .type = MatcherType::kRegexpNotMatch},
+                                                                 {.name = "instance", .value = "192.168.199.119:10250", .type = MatcherType::kExactMatch},
+                                                             },
                                                          .expected = {.series_id_list = {}, .status = QuerierStatus::kNoMatch}}));
 
 INSTANTIATE_TEST_SUITE_P(AnythingMatcher,
