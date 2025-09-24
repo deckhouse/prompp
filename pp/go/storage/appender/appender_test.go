@@ -14,7 +14,7 @@ func TestXxx(t *testing.T) {
 	lss := &shard.LSS{}
 	ds := shard.NewDataStorage()
 	wl := &testWal{}
-	sd := shard.NewShard(lss, ds, wl, 0)
+	sd := shard.NewShard(lss, ds, nil, nil, wl, 0)
 	id := "test-head-id"
 	generation := uint64(0)
 
