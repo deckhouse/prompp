@@ -17,11 +17,11 @@ type LoadAndQuerySeriesDataTask struct {
 
 func (t *LoadAndQuerySeriesDataTask) Add(querier uintptr, createAndEnqueueTask func() Task) Task {
 	t.lock.Lock()
+	defer t.lock.Unlock()
 	t.queriers = append(t.queriers, querier)
 	if len(t.queriers) == 1 {
 		t.task = createAndEnqueueTask()
 	}
-	t.lock.Unlock()
 
 	return t.task
 }
