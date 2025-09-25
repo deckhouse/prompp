@@ -91,8 +91,10 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 	ctx context.Context,
 	numberOfShards uint16,
 ) error {
+	fmt.Println("rotate")
 	oldHead := s.proxyHead.Get()
 
+	fmt.Println("rotate newHead")
 	newHead, err := s.headBuilder.Build(oldHead.Generation()+1, numberOfShards)
 	if err != nil {
 		return fmt.Errorf("failed to build a new head: %w", err)
@@ -101,30 +103,37 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 	// TODO CopySeriesFrom only old nunber of shards == new
 	// newHead.CopySeriesFrom(oldHead)
 
+	fmt.Println("rotate AddWithReplace")
 	if err = s.proxyHead.AddWithReplace(oldHead, s.headInformer.CreatedAt(oldHead.ID())); err != nil {
 		return fmt.Errorf("failed add to keeper old head: %w", err)
 	}
 
 	// TODO if replace error?
+	fmt.Println("rotate Replace")
 	if err = s.proxyHead.Replace(ctx, newHead); err != nil {
 		return fmt.Errorf("failed to replace old to new head: %w", err)
 	}
 
+	fmt.Println("rotate SetActiveStatus")
 	if err = s.headInformer.SetActiveStatus(newHead.ID()); err != nil {
 		logger.Warnf("failed set status active for head{%s}: %s", newHead.ID(), err)
 	}
 
+	fmt.Println("rotate MergeOutOfOrderChunksWithHead")
 	if err = MergeOutOfOrderChunksWithHead(oldHead); err != nil {
 		logger.Warnf("failed merge out of order chunks in data storage: %s", err)
 	}
 
+	fmt.Println("rotate CFSViaRange")
 	if err = CFSViaRange(oldHead); err != nil {
 		logger.Warnf("failed commit and flush to wal: %s", err)
 	}
 
+	fmt.Println("rotate SetRotatedStatus")
 	if err = s.headInformer.SetRotatedStatus(oldHead.ID()); err != nil {
 		logger.Warnf("failed set status rotated for head{%s}: %s", oldHead.ID(), err)
 	}
+	fmt.Println("rotate SetReadOnly")
 	oldHead.SetReadOnly()
 
 	return nil
