@@ -221,8 +221,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	_ = tDataStorageQuery.Wait()
 
 	if err := loadAndQueryWaiter.Wait(); err != nil {
-		// TODO: Unrecoverable error
-		// q.head.UnrecoverableError(err)
+		SendUnrecoverableError(err)
 		return storage.ErrSeriesSet(err)
 	}
 

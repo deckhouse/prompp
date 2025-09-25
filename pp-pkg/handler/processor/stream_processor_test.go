@@ -22,8 +22,6 @@ import (
 	"github.com/prometheus/prometheus/util/pool"
 )
 
-// TODO //go:generate -command moq go run github.com/matryer/moq -out processor_moq_test.go -pkg processor_test -rm . Adapter StatesStorage RemoteWrite MetricStream Refill
-
 type segmentContainer struct {
 	timeSeries []coremodel.TimeSeries
 	encoded    model.Segment

@@ -14,8 +14,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
 )
 
-// TODO moq -out wal_moq_test.go -pkg wal_test -rm . ReadSegment EncodedSegment SegmentWriter Encoder StatsSegment
-
 func TestXxx(t *testing.T) {
 	shardID := uint16(0)
 	tmpDir, err := os.MkdirTemp("", "shard")

@@ -14,6 +14,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
+	"github.com/prometheus/prometheus/pp/go/util"
 )
 
 //
@@ -27,6 +28,8 @@ type Builder struct {
 	maxSegmentSize            uint32
 	registerer                prometheus.Registerer
 	unloadDataStorageInterval time.Duration
+	// stat
+	events *prometheus.CounterVec
 }
 
 // NewBuilder init new [Builder].
@@ -37,12 +40,20 @@ func NewBuilder(
 	registerer prometheus.Registerer,
 	unloadDataStorageInterval time.Duration,
 ) *Builder {
+	factory := util.NewUnconflictRegisterer(registerer)
 	return &Builder{
 		catalog:                   hcatalog,
 		dataDir:                   dataDir,
 		maxSegmentSize:            maxSegmentSize,
 		registerer:                registerer,
 		unloadDataStorageInterval: unloadDataStorageInterval,
+		events: factory.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "prompp_head_event_count",
+				Help: "Number of head events",
+			},
+			[]string{"type"},
+		),
 	}
 }
 
@@ -75,6 +86,7 @@ func (b *Builder) Build(generation uint64, numberOfShards uint16) (*HeadOnDisk, 
 		shards[shardID] = s
 	}
 
+	b.events.With(prometheus.Labels{"type": "created"}).Inc()
 	return head.NewHead(
 		headRecord.ID(),
 		shards,
@@ -121,7 +133,10 @@ func (b *Builder) createShardOnDisk(
 	var unloadedDataStorage *shard.UnloadedDataStorage
 	var queriedSeriesStorage *shard.QueriedSeriesStorage
 	if b.unloadDataStorageInterval != 0 {
-		unloadedDataStorage = shard.NewUnloadedDataStorage(shard.NewFileStorage(GetUnloadedDataStorageFilename(headDir, shardID)))
+		unloadedDataStorage = shard.NewUnloadedDataStorage(
+			shard.NewFileStorage(GetUnloadedDataStorageFilename(headDir, shardID)),
+		)
+
 		queriedSeriesStorage = shard.NewQueriedSeriesStorage(
 			shard.NewFileStorage(GetQueriedSeriesStorageFilename(headDir, shardID, 0)),
 			shard.NewFileStorage(GetQueriedSeriesStorageFilename(headDir, shardID, 1)),

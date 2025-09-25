@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"math"
+	"time"
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
@@ -14,6 +15,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/appender"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
+	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/prometheus/storage"
 )
 
@@ -32,8 +34,10 @@ type Adapter struct {
 	transparentState      *cppbridge.StateV2
 	mergeOutOfOrderChunks func()
 
+	// stat
 	activeQuerierMetrics  *querier.Metrics
 	storageQuerierMetrics *querier.Metrics
+	appendDuration        prometheus.Histogram
 }
 
 // NewAdapter init new [Adapter].
@@ -43,6 +47,7 @@ func NewAdapter(
 	mergeOutOfOrderChunks func(),
 	registerer prometheus.Registerer,
 ) *Adapter {
+	factory := util.NewUnconflictRegisterer(registerer)
 	return &Adapter{
 		proxy:                 proxy,
 		haTracker:             hatracker.NewHighAvailabilityTracker(clock, registerer),
@@ -52,6 +57,18 @@ func NewAdapter(
 		mergeOutOfOrderChunks: mergeOutOfOrderChunks,
 		activeQuerierMetrics:  querier.NewMetrics(registerer, querier.QueryableAppenderSource),
 		storageQuerierMetrics: querier.NewMetrics(registerer, querier.QueryableStorageSource),
+		appendDuration: factory.NewHistogram(
+			prometheus.HistogramOpts{
+				Name: "prompp_adapter_append_duration",
+				Help: "Append to head duration in microseconds",
+				Buckets: []float64{
+					50, 100, 250, 500, 750,
+					1000, 2500, 5000, 7500,
+					10000, 25000, 50000, 75000,
+					100000, 500000,
+				},
+			},
+		),
 	}
 }
 
@@ -65,6 +82,11 @@ func (ar *Adapter) AppendHashdex(
 	if ar.haTracker.IsDrop(hashdex.Cluster(), hashdex.Replica()) {
 		return nil
 	}
+
+	start := time.Now()
+	defer func() {
+		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
+	}()
 
 	return ar.proxy.With(ctx, func(h *pp_storage.HeadOnDisk) error {
 		_, _, err := appender.New(h, services.CFViaRange).Append(
@@ -85,6 +107,11 @@ func (ar *Adapter) AppendScraperHashdex(
 	state *cppbridge.StateV2,
 	commitToWal bool,
 ) (stats cppbridge.RelabelerStats, err error) {
+	start := time.Now()
+	defer func() {
+		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
+	}()
+
 	_ = ar.proxy.With(ctx, func(h *pp_storage.HeadOnDisk) error {
 		_, stats, err = appender.New(h, services.CFViaRange).Append(
 			ctx,
@@ -116,6 +143,11 @@ func (ar *Adapter) AppendSnappyProtobuf(
 		return nil
 	}
 
+	start := time.Now()
+	defer func() {
+		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
+	}()
+
 	return ar.proxy.With(ctx, func(h *pp_storage.HeadOnDisk) error {
 		_, _, err := appender.New(h, services.CFViaRange).Append(
 			ctx,
@@ -145,6 +177,11 @@ func (ar *Adapter) AppendTimeSeries(
 		data.Destroy()
 		return stats, nil
 	}
+
+	start := time.Now()
+	defer func() {
+		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
+	}()
 
 	_ = ar.proxy.With(ctx, func(h *pp_storage.HeadOnDisk) error {
 		_, stats, err = appender.New(h, services.CFViaRange).Append(

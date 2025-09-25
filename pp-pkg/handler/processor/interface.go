@@ -1,7 +1,5 @@
 package processor
 
-//go:generate -command moq go run github.com/matryer/moq -out processor_moq_test.go -pkg processor_test -rm . Adapter StatesStorage RemoteWrite MetricStream Refill
-
 import (
 	"context"
 
@@ -10,6 +8,9 @@ import (
 	pp_pkg_model "github.com/prometheus/prometheus/pp-pkg/model"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
+
+//go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg processor_test --out
+//go:generate moq processor_moq_test.go . Adapter StatesStorage RemoteWrite MetricStream Refill
 
 type MetricStream interface {
 	Metadata() model.Metadata

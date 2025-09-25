@@ -178,7 +178,7 @@ func NewManager(
 		return nil, errors.Join(fmt.Errorf("failed to set active status: %w", err), h.Close())
 	}
 
-	hKeeper := keeper.NewKeeper[*HeadOnDisk](o.QueueSize)
+	hKeeper := keeper.NewKeeper[HeadOnDisk](o.QueueSize)
 
 	m := &Manager{
 		g:      run.Group{},
@@ -194,9 +194,9 @@ func NewManager(
 
 	readyNotifier.NotifyReady()
 
-	m.initServices(o, hcatalog, builder, loader, clock, r)
+	m.initServices(o, hcatalog, builder, loader, triggerNotifier, clock, r)
 
-	logger.Infof("Head Manager created")
+	logger.Infof("[Head Manager] created")
 
 	return m, nil
 }
@@ -247,6 +247,7 @@ func (m *Manager) initServices(
 	hcatalog *catalog.Catalog,
 	builder *Builder,
 	loader *Loader,
+	triggerNotifier *ReloadBlocksTriggerNotifier,
 	clock clockwork.Clock,
 	r prometheus.Registerer,
 ) {
@@ -278,10 +279,12 @@ func (m *Manager) initServices(
 					o.BlockDuration,
 					r,
 				),
+				triggerNotifier,
 				clock,
 				persistenerMediator,
 				o.MaxRetentionPeriod,
 				o.HeadRetentionPeriod,
+				r,
 			).Run()
 
 			return nil
@@ -428,18 +431,22 @@ func (hi *headInformer) SetRotatedStatus(headID string) error {
 // ReloadBlocksTriggerNotifier
 //
 
+// ReloadBlocksTriggerNotifier for notifications about the appearance of new blocks.
 type ReloadBlocksTriggerNotifier struct {
 	c chan struct{}
 }
 
+// NewReloadBlocksTriggerNotifier init new [ReloadBlocksTriggerNotifier].
 func NewReloadBlocksTriggerNotifier() *ReloadBlocksTriggerNotifier {
 	return &ReloadBlocksTriggerNotifier{c: make(chan struct{}, 1)}
 }
 
+// Chan returns channel with notifications.
 func (tn *ReloadBlocksTriggerNotifier) Chan() <-chan struct{} {
 	return tn.c
 }
 
+// NotifyWritten sends a notify that the writing is completed.
 func (tn *ReloadBlocksTriggerNotifier) NotifyWritten() {
 	select {
 	case tn.c <- struct{}{}:
@@ -481,7 +488,6 @@ func uploadOrBuildHead(
 
 	var generation uint64
 	if len(headRecords) == 0 {
-		// TODO	// m.counter.With(prometheus.Labels{"type": "created"}).Inc()
 		return builder.Build(generation, numberOfShards)
 	}
 
@@ -492,7 +498,7 @@ func uploadOrBuildHead(
 				logger.Errorf("failed to set corrupted state, head id: %s: %v", headRecords[0].ID(), setCorruptedErr)
 			}
 		}
-		// TODO	// m.counter.With(prometheus.Labels{"type": "corrupted"}).Inc()
+		logger.Warnf("[Head Manager] upload corrupted head, building new: %s", headRecords[0].ID())
 
 		if _, err := hcatalog.SetStatus(headRecords[0].ID(), catalog.StatusRotated); err != nil {
 			logger.Warnf("failed to set rotated status for head {%s}: %s", headRecords[0].ID(), err)
@@ -500,7 +506,6 @@ func uploadOrBuildHead(
 
 		_ = h.Close()
 
-		// TODO	// m.counter.With(prometheus.Labels{"type": "created"}).Inc()
 		return builder.Build(generation, numberOfShards)
 	}
 

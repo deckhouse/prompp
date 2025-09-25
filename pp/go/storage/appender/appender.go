@@ -119,7 +119,10 @@ func New[
 	TLSS LSS,
 	TShard Shard[TLSS],
 	THead Head[TTask, TLSS, TShard],
-](head THead, commitAndFlush func(h THead) error) Appender[TTask, TLSS, TShard, THead] {
+](
+	head THead,
+	commitAndFlush func(h THead) error,
+) Appender[TTask, TLSS, TShard, THead] {
 	return Appender[TTask, TLSS, TShard, THead]{
 		head:           head,
 		commitAndFlush: commitAndFlush,

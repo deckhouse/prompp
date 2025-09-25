@@ -6,6 +6,9 @@ import (
 	"io"
 )
 
+//go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg writer_test --out
+//go:generate moq segment_moq_test.go . EncodedSegment
+
 // EncodedSegment the minimum required Segment implementation for a [WriteSegment].
 type EncodedSegment interface {
 	CRC32() uint32

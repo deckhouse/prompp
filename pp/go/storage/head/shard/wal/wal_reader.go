@@ -7,6 +7,9 @@ import (
 	"io"
 )
 
+//go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg wal_test --out
+//go:generate moq wal_reader_moq_test.go . ReadSegment
+
 // ReadSegment the minimum required [Segment] implementation for a [Wal].
 type ReadSegment interface {
 	// ReadFrom reads [ReadSegment] data from r [io.Reader]. The return value n is the number of bytes read.

@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/storage/logger"
@@ -30,12 +31,17 @@ type Rotator[
 	TShard, TGoShard Shard,
 	THead Head[TTask, TShard, TGoShard],
 ] struct {
-	proxyHead     ProxyHead[TTask, TShard, TGoShard, THead]
-	headBuilder   HeadBuilder[TTask, TShard, TGoShard, THead]
-	m             Mediator
-	cfg           RotatorConfig
-	headInformer  HeadInformer
-	rotateCounter prometheus.Counter
+	proxyHead    ProxyHead[TTask, TShard, TGoShard, THead]
+	headBuilder  HeadBuilder[TTask, TShard, TGoShard, THead]
+	m            Mediator
+	cfg          RotatorConfig
+	headInformer HeadInformer
+
+	// stat
+	rotateCounter          prometheus.Counter
+	events                 *prometheus.CounterVec
+	waitLockRotateDuration prometheus.Gauge
+	rotationDuration       prometheus.Gauge
 }
 
 // NewRotator init new [Rotator].
@@ -49,9 +55,9 @@ func NewRotator[
 	m Mediator,
 	cfg RotatorConfig,
 	headInformer HeadInformer,
-	r prometheus.Registerer,
+	registerer prometheus.Registerer,
 ) *Rotator[TTask, TShard, TGoShard, THead] {
-	factory := util.NewUnconflictRegisterer(r)
+	factory := util.NewUnconflictRegisterer(registerer)
 	return &Rotator[TTask, TShard, TGoShard, THead]{
 		proxyHead:    proxyHead,
 		headBuilder:  headBuilder,
@@ -62,6 +68,25 @@ func NewRotator[
 			prometheus.CounterOpts{
 				Name: "prompp_rotator_rotate_count",
 				Help: "Total counter of rotate rotatable object.",
+			},
+		),
+		events: factory.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "prompp_head_event_count",
+				Help: "Number of head events",
+			},
+			[]string{"type"},
+		),
+		waitLockRotateDuration: factory.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "prompp_rotator_wait_lock_rotate_duration",
+				Help: "The duration of the lock wait for rotation in nanoseconds",
+			},
+		),
+		rotationDuration: factory.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "prompp_rotator_rotate_duration",
+				Help: "The duration of the rotate in nanoseconds",
 			},
 		),
 	}
@@ -91,10 +116,8 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 	ctx context.Context,
 	numberOfShards uint16,
 ) error {
-	fmt.Println("rotate")
+	start := time.Now()
 	oldHead := s.proxyHead.Get()
-
-	fmt.Println("rotate newHead")
 	newHead, err := s.headBuilder.Build(oldHead.Generation()+1, numberOfShards)
 	if err != nil {
 		return fmt.Errorf("failed to build a new head: %w", err)
@@ -103,38 +126,39 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 	// TODO CopySeriesFrom only old nunber of shards == new
 	// newHead.CopySeriesFrom(oldHead)
 
-	fmt.Println("rotate AddWithReplace")
 	if err = s.proxyHead.AddWithReplace(oldHead, s.headInformer.CreatedAt(oldHead.ID())); err != nil {
 		return fmt.Errorf("failed add to keeper old head: %w", err)
 	}
 
+	startWait := time.Now()
 	// TODO if replace error?
-	fmt.Println("rotate Replace")
 	if err = s.proxyHead.Replace(ctx, newHead); err != nil {
+		if errClose := newHead.Close(); errClose != nil {
+			logger.Errorf("failed close new head: %s : %v", newHead.ID(), errClose)
+		}
+
 		return fmt.Errorf("failed to replace old to new head: %w", err)
 	}
+	s.waitLockRotateDuration.Set(float64(time.Since(startWait).Nanoseconds()))
 
-	fmt.Println("rotate SetActiveStatus")
 	if err = s.headInformer.SetActiveStatus(newHead.ID()); err != nil {
 		logger.Warnf("failed set status active for head{%s}: %s", newHead.ID(), err)
 	}
 
-	fmt.Println("rotate MergeOutOfOrderChunksWithHead")
 	if err = MergeOutOfOrderChunksWithHead(oldHead); err != nil {
 		logger.Warnf("failed merge out of order chunks in data storage: %s", err)
 	}
 
-	fmt.Println("rotate CFSViaRange")
 	if err = CFSViaRange(oldHead); err != nil {
 		logger.Warnf("failed commit and flush to wal: %s", err)
 	}
 
-	fmt.Println("rotate SetRotatedStatus")
 	if err = s.headInformer.SetRotatedStatus(oldHead.ID()); err != nil {
 		logger.Warnf("failed set status rotated for head{%s}: %s", oldHead.ID(), err)
 	}
-	fmt.Println("rotate SetReadOnly")
 	oldHead.SetReadOnly()
+	s.events.With(prometheus.Labels{"type": "rotated"}).Inc()
+	s.rotationDuration.Set(float64(time.Since(start).Nanoseconds()))
 
 	return nil
 }

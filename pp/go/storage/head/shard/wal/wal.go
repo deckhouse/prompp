@@ -9,14 +9,16 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
+//go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg wal_test --out
+//go:generate moq wal_moq_test.go . SegmentWriter Encoder StatsSegment EncodedSegment
+
 const (
 	// FileFormatVersion wal file version.
 	FileFormatVersion = 1
 )
 
-var (
-	ErrWalIsCorrupted = errors.New("wal is corrupted")
-)
+// ErrWalIsCorrupted errror when wal is corrupted.
+var ErrWalIsCorrupted = errors.New("wal is corrupted")
 
 // SegmentWriter writer for wal segments.
 type SegmentWriter[TSegment EncodedSegment] interface {

@@ -721,6 +721,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	pp_storage.InitLogHandler(log.With(logger, "component", "pp_storage"))
+
 	reloadBlocksTriggerNotifier := pp_storage.NewReloadBlocksTriggerNotifier()
 	cfg.tsdb.ReloadBlocksExternalTrigger = reloadBlocksTriggerNotifier
 
@@ -754,14 +756,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	pp_storage.InitLogHandler(log.With(logger, "component", "pp_storage"))
-
 	hManagerReadyNotifier := ready.NewNotifiableNotifier()
 	hManager, err := pp_storage.NewManager(
 		&pp_storage.Options{
-			Seed: cfgFile.GlobalConfig.ExternalLabels.Hash(),
-			// BlockDuration:       time.Duration(cfg.tsdb.MinBlockDuration),
-			BlockDuration:       6 * time.Minute,
+			Seed:                cfgFile.GlobalConfig.ExternalLabels.Hash(),
+			BlockDuration:       time.Duration(cfg.tsdb.MinBlockDuration),
 			CommitInterval:      time.Duration(cfg.WalCommitInterval),
 			MaxRetentionPeriod:  time.Duration(cfg.tsdb.RetentionDuration),
 			HeadRetentionPeriod: time.Duration(cfg.HeadRetentionTimeout),
@@ -2011,6 +2010,7 @@ func (opts tsdbOptions) ToTSDBOptions() tsdb.Options {
 		OutOfOrderTimeWindow:           opts.OutOfOrderTimeWindow,
 		EnableDelayedCompaction:        opts.EnableDelayedCompaction,
 		EnableOverlappingCompaction:    opts.EnableOverlappingCompaction,
+		ReloadBlocksExternalTrigger:    opts.ReloadBlocksExternalTrigger,
 	}
 }
 

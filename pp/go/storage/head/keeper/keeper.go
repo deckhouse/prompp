@@ -5,6 +5,8 @@ import (
 	"errors"
 	"sync"
 	"time"
+
+	"github.com/prometheus/prometheus/pp/go/storage/logger"
 )
 
 type addPolicy = uint8
@@ -51,29 +53,32 @@ func (q *headSortedSlice[THead]) Pop() any {
 }
 
 // Head the minimum required [Head] implementation for a [Keeper].
-type Head interface {
+type Head[T any] interface {
 	// ID returns id [Head].
 	ID() string
 
 	// Close closes wals, query semaphore for the inability to get query and clear metrics.
 	Close() error
+
+	// for use as a pointer
+	*T
 }
 
 // Keeper holds outdated heads until conversion.
-type Keeper[THead Head] struct {
+type Keeper[T any, THead Head[T]] struct {
 	heads headSortedSlice[THead]
 	lock  sync.RWMutex
 }
 
 // NewKeeper init new [Keeper].
-func NewKeeper[THead Head](queueSize int) *Keeper[THead] {
-	return &Keeper[THead]{
+func NewKeeper[T any, THead Head[T]](queueSize int) *Keeper[T, THead] {
+	return &Keeper[T, THead]{
 		heads: make(headSortedSlice[THead], 0, max(queueSize, MinHeadConvertingQueueSize)),
 	}
 }
 
 // Add the [Head] to the [Keeper] if there is a free slot.
-func (k *Keeper[THead]) Add(head THead, createdAt time.Duration) error {
+func (k *Keeper[T, THead]) Add(head THead, createdAt time.Duration) error {
 	k.lock.Lock()
 	result := k.addHead(head, createdAt, add)
 	k.lock.Unlock()
@@ -82,7 +87,7 @@ func (k *Keeper[THead]) Add(head THead, createdAt time.Duration) error {
 }
 
 // AddWithReplace the [Head] to the [Keeper] with replace if the createdAt is earlier.
-func (k *Keeper[THead]) AddWithReplace(head THead, createdAt time.Duration) error {
+func (k *Keeper[T, THead]) AddWithReplace(head THead, createdAt time.Duration) error {
 	k.lock.Lock()
 	result := k.addHead(head, createdAt, addWithReplace)
 	k.lock.Unlock()
@@ -91,7 +96,7 @@ func (k *Keeper[THead]) AddWithReplace(head THead, createdAt time.Duration) erro
 }
 
 // Close closes for the inability work with [Head].
-func (k *Keeper[THead]) Close() error {
+func (k *Keeper[T, THead]) Close() error {
 	k.lock.Lock()
 	if len(k.heads) == 0 {
 		k.lock.Unlock()
@@ -108,7 +113,7 @@ func (k *Keeper[THead]) Close() error {
 }
 
 // HasSlot returns the tru if there is a slot in the [Keeper].
-func (k *Keeper[THead]) HasSlot() bool {
+func (k *Keeper[T, THead]) HasSlot() bool {
 	k.lock.RLock()
 	result := cap(k.heads) > len(k.heads)
 	k.lock.RUnlock()
@@ -116,7 +121,7 @@ func (k *Keeper[THead]) HasSlot() bool {
 }
 
 // Heads returns a slice of the [Head]s stored in the [Keeper].
-func (k *Keeper[THead]) Heads() []THead {
+func (k *Keeper[T, THead]) Heads() []THead {
 	k.lock.RLock()
 
 	if len(k.heads) == 0 {
@@ -135,12 +140,12 @@ func (k *Keeper[THead]) Heads() []THead {
 }
 
 // Remove removes [Head]s from the [Keeper].
-func (k *Keeper[THead]) Remove(headsForRemove []THead) {
+func (k *Keeper[T, THead]) Remove(headsForRemove []THead) {
 	if len(headsForRemove) == 0 {
 		return
 	}
 
-	headsMap := make(map[string]*THead, len(headsForRemove))
+	headsMap := make(map[string]THead, len(headsForRemove))
 	for _, head := range headsForRemove {
 		headsMap[head.ID()] = nil
 	}
@@ -149,7 +154,7 @@ func (k *Keeper[THead]) Remove(headsForRemove []THead) {
 	newHeads := make([]sortableHead[THead], 0, cap(k.heads))
 	for _, head := range k.heads {
 		if _, ok := headsMap[head.head.ID()]; ok {
-			headsMap[head.head.ID()] = &head.head
+			headsMap[head.head.ID()] = head.head
 		} else {
 			newHeads = append(newHeads, head)
 		}
@@ -159,18 +164,20 @@ func (k *Keeper[THead]) Remove(headsForRemove []THead) {
 
 	for _, head := range headsMap {
 		if head != nil {
-			_ = (*head).Close()
+			_ = head.Close()
+			logger.Infof("[Keeper]: head %s persisted, closed and removed", head.ID())
 		}
 	}
 }
 
-func (k *Keeper[THead]) addHead(head THead, createdAt time.Duration, policy addPolicy) error {
+func (k *Keeper[T, THead]) addHead(head THead, createdAt time.Duration, policy addPolicy) error {
 	if len(k.heads) < cap(k.heads) {
 		heap.Push(&k.heads, sortableHead[THead]{head: head, createdAt: createdAt})
 		return nil
 	}
 
 	if policy == addWithReplace && k.heads[0].createdAt < createdAt {
+		_ = k.heads[0].head.Close()
 		k.heads[0].head = head
 		k.heads[0].createdAt = createdAt
 		heap.Fix(&k.heads, 0)
@@ -180,7 +187,7 @@ func (k *Keeper[THead]) addHead(head THead, createdAt time.Duration, policy addP
 	return ErrorNoSlots
 }
 
-func (k *Keeper[THead]) setHeads(heads headSortedSlice[THead]) {
+func (k *Keeper[T, THead]) setHeads(heads headSortedSlice[THead]) {
 	k.heads = heads
 	heap.Init(&k.heads)
 }

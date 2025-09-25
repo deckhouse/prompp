@@ -47,7 +47,7 @@ func NewLoader(
 	}
 }
 
-// Load upload [HeadOnDisk] from [WalOnDisk] by head ID.
+// Load [HeadOnDisk] from [WalOnDisk] by head ID.
 func (l *Loader) Load(
 	headRecord *catalog.Record,
 	generation uint64,
@@ -199,7 +199,7 @@ func (l *ShardDataLoader) Load() (err error) {
 		](),
 	}
 
-	shardWalFile, err := os.OpenFile(GetShardWalFilename(l.dir, l.shardID), os.O_RDWR, 0666)
+	shardWalFile, err := os.OpenFile(GetShardWalFilename(l.dir, l.shardID), os.O_RDWR, 0o666)
 	if err != nil {
 		return err
 	}
@@ -364,11 +364,9 @@ func GetQueriedSeriesStorageFilename(dir string, shardID uint16, index uint8) st
 
 // isNumberOfSegmentsMismatched check number of segments loaded and last appended to record.
 func isNumberOfSegmentsMismatched(record *catalog.Record, loadedSegments uint32) bool {
-	return false
+	if record.LastAppendedSegmentID() == nil {
+		return loadedSegments != 0
+	}
 
-	// TODO: uncomment this code block
-	//if record.LastAppendedSegmentID() == nil {
-	//	return loadedSegments != 0
-	//}
-	//return *record.LastAppendedSegmentID()+1 != loadedSegments
+	return *record.LastAppendedSegmentID()+1 != loadedSegments
 }

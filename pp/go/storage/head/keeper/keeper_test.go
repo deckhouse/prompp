@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"container/heap"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -26,7 +27,7 @@ type sortedSlice = headSortedSlice[*headForTest]
 
 type KeeperSuite struct {
 	suite.Suite
-	keeper *Keeper[*headForTest]
+	keeper *Keeper[headForTest, *headForTest]
 }
 
 func TestKeeperSuite(t *testing.T) {
@@ -43,7 +44,7 @@ func (s *KeeperSuite) getHeads() []*headForTest {
 
 func (s *KeeperSuite) TestAdd() {
 	// Arrange
-	s.keeper = NewKeeper[*headForTest](2)
+	s.keeper = NewKeeper[headForTest](2)
 
 	// Act
 	_ = s.keeper.Add(newHeadForTest("d"), 4)
@@ -60,7 +61,7 @@ func (s *KeeperSuite) TestAdd() {
 
 func (s *KeeperSuite) TestAddWithReplaceNoReplace() {
 	// Arrange
-	s.keeper = NewKeeper[*headForTest](2)
+	s.keeper = NewKeeper[headForTest](2)
 
 	// Act
 	_ = s.keeper.Add(newHeadForTest("d"), 4)
@@ -77,7 +78,7 @@ func (s *KeeperSuite) TestAddWithReplaceNoReplace() {
 
 func (s *KeeperSuite) TestAddWithReplace() {
 	// Arrange
-	s.keeper = NewKeeper[*headForTest](2)
+	s.keeper = NewKeeper[headForTest](2)
 
 	// Act
 	_ = s.keeper.Add(newHeadForTest("d"), 4)
@@ -96,7 +97,7 @@ func (s *KeeperSuite) TestRemove() {
 	// Arrange
 	const Slots = 5
 
-	s.keeper = NewKeeper[*headForTest](Slots)
+	s.keeper = NewKeeper[headForTest](Slots)
 	_ = s.keeper.Add(newHeadForTest("a"), 1)
 	_ = s.keeper.Add(newHeadForTest("b"), 2)
 	_ = s.keeper.Add(newHeadForTest("c"), 3)
@@ -112,4 +113,22 @@ func (s *KeeperSuite) TestRemove() {
 		{head: newHeadForTest("d"), createdAt: 4},
 	}, s.keeper.heads)
 	s.Equal(Slots, cap(s.keeper.heads))
+}
+
+func TestXxx(t *testing.T) {
+	ss := sortedSlice{
+		{head: newHeadForTest("b"), createdAt: 2},
+		{head: newHeadForTest("d"), createdAt: 4},
+	}
+
+	t.Log(ss)
+
+	ss[0].head = newHeadForTest("b")
+	ss[0].createdAt = 5
+
+	t.Log(ss)
+
+	heap.Fix(&ss, 0)
+
+	t.Log(ss)
 }

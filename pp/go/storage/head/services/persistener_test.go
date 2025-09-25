@@ -34,12 +34,12 @@ const (
 
 type GenericPersistenceSuite struct {
 	suite.Suite
-	dataDir     string
-	clock       *clockwork.FakeClock
-	catalog     *catalog.Catalog
-	head        *storage.HeadOnDisk
-	keeper      *keeper.Keeper[*storage.HeadOnDisk]
-	blockWriter *mock.HeadBlockWriterMock[*storage.ShardOnDisk]
+	dataDir       string
+	clock         *clockwork.FakeClock
+	catalog       *catalog.Catalog
+	keeper        *keeper.Keeper[storage.HeadOnDisk, *storage.HeadOnDisk]
+	blockWriter   *mock.HeadBlockWriterMock[*storage.ShardOnDisk]
+	writeNotifier *mock.WriteNotifierMock
 }
 
 func (s *GenericPersistenceSuite) SetupTest() {
@@ -47,8 +47,9 @@ func (s *GenericPersistenceSuite) SetupTest() {
 
 	s.clock = clockwork.NewFakeClockAt(time.UnixMilli(0))
 	s.createCatalog()
-	s.keeper = keeper.NewKeeper[*storage.HeadOnDisk](1)
+	s.keeper = keeper.NewKeeper[storage.HeadOnDisk](1)
 	s.blockWriter = &mock.HeadBlockWriterMock[*storage.ShardOnDisk]{}
+	s.writeNotifier = &mock.WriteNotifierMock{NotifyWrittenFunc: func() {}}
 }
 
 func (s *GenericPersistenceSuite) createDataDirectory() string {
@@ -107,7 +108,7 @@ func (s *PersistenerSuite) SetupTest() {
 		*storage.PerGoroutineShard,
 		*mock.HeadBlockWriterMock[*storage.ShardOnDisk],
 		*storage.HeadOnDisk,
-	](s.catalog, s.blockWriter, s.clock, tsdbRetentionPeriod, retentionPeriod)
+	](s.catalog, s.blockWriter, s.writeNotifier, s.clock, tsdbRetentionPeriod, retentionPeriod, nil)
 }
 
 func TestPersistenerSuite(t *testing.T) {
@@ -122,7 +123,7 @@ func (s *PersistenerSuite) TestNoHeads() {
 
 	// Assert
 	s.Equal([]*storage.HeadOnDisk(nil), outdated)
-	s.Equal(0, len(s.blockWriter.WriteCalls()))
+	s.Empty(s.blockWriter.WriteCalls())
 }
 
 func (s *PersistenerSuite) TestNoPersistWritableHead() {
@@ -134,7 +135,7 @@ func (s *PersistenerSuite) TestNoPersistWritableHead() {
 
 	// Assert
 	s.Equal([]*storage.HeadOnDisk(nil), outdated)
-	s.Equal(0, len(s.blockWriter.WriteCalls()))
+	s.Empty(s.blockWriter.WriteCalls())
 }
 
 func (s *PersistenerSuite) TestNoPersistPersistedHead() {
@@ -159,7 +160,7 @@ func (s *PersistenerSuite) TestNoPersistPersistedHead() {
 
 	// Assert
 	s.Equal([]*storage.HeadOnDisk(nil), outdated)
-	s.Equal(0, len(s.blockWriter.WriteCalls()))
+	s.Empty(s.blockWriter.WriteCalls())
 }
 
 func (s *PersistenerSuite) TestOutdatedPersistedHead() {
@@ -184,7 +185,7 @@ func (s *PersistenerSuite) TestOutdatedPersistedHead() {
 
 	// Assert
 	s.Equal([]*storage.HeadOnDisk{head}, outdated)
-	s.Equal(0, len(s.blockWriter.WriteCalls()))
+	s.Empty(s.blockWriter.WriteCalls())
 }
 
 func (s *PersistenerSuite) TestOutdatedHead() {
@@ -207,7 +208,7 @@ func (s *PersistenerSuite) TestOutdatedHead() {
 
 	// Assert
 	s.Equal([]*storage.HeadOnDisk{head}, outdated)
-	s.Equal(0, len(s.blockWriter.WriteCalls()))
+	s.Empty(s.blockWriter.WriteCalls())
 }
 
 func (s *PersistenerSuite) TestPersistHeadSuccess() {
@@ -240,7 +241,8 @@ func (s *PersistenerSuite) TestPersistHeadSuccess() {
 
 	// Assert
 	s.Equal([]*storage.HeadOnDisk(nil), outdated)
-	s.Equal(2, len(s.blockWriter.WriteCalls()))
+	s.Len(s.blockWriter.WriteCalls(), 2)
+	s.Len(s.writeNotifier.NotifyWrittenCalls(), 1)
 	s.Require().NoError(err)
 	s.Equal(catalog.StatusPersisted, record.Status())
 }
@@ -279,7 +281,8 @@ func (s *PersistenerSuite) TestPersistHeadErrorOnBlockWriterForSecondShard() {
 
 	// Assert
 	s.Equal([]*storage.HeadOnDisk(nil), outdated)
-	s.Equal(2, len(s.blockWriter.WriteCalls()))
+	s.Len(s.blockWriter.WriteCalls(), 2)
+	s.Empty(s.writeNotifier.NotifyWrittenCalls())
 	s.Require().NoError(err)
 	s.Equal(catalog.StatusNew, record.Status())
 }
@@ -293,7 +296,7 @@ type PersistenerServiceSuite struct {
 		*storage.PerGoroutineShard,
 		*mock.HeadBlockWriterMock[*storage.ShardOnDisk],
 		*storage.HeadOnDisk,
-		*keeper.Keeper[*storage.HeadOnDisk],
+		*keeper.Keeper[storage.HeadOnDisk, *storage.HeadOnDisk],
 		*storage.Loader,
 	]
 }
@@ -308,9 +311,20 @@ func (s *PersistenerServiceSuite) SetupTest() {
 		*storage.PerGoroutineShard,
 		*mock.HeadBlockWriterMock[*storage.ShardOnDisk],
 		*storage.HeadOnDisk,
-		*keeper.Keeper[*storage.HeadOnDisk],
+		*keeper.Keeper[storage.HeadOnDisk, *storage.HeadOnDisk],
 		*storage.Loader,
-	](s.keeper, s.loader, s.catalog, s.blockWriter, s.clock, nil, tsdbRetentionPeriod, retentionPeriod)
+	](
+		s.keeper,
+		s.loader,
+		s.catalog,
+		s.blockWriter,
+		s.writeNotifier,
+		s.clock,
+		nil,
+		tsdbRetentionPeriod,
+		retentionPeriod,
+		nil,
+	)
 }
 
 func TestPersistenerServiceSuite(t *testing.T) {
@@ -337,7 +351,7 @@ func (s *PersistenerServiceSuite) TestRemoveOutdatedHeadFromKeeper() {
 	s.service.ProcessHeads()
 
 	// Assert
-	s.Equal(0, len(s.keeper.Heads()))
+	s.Empty(s.keeper.Heads())
 	s.Equal(catalog.StatusRotated, record.Status())
 }
 
@@ -359,7 +373,7 @@ func (s *PersistenerServiceSuite) TestLoadHeadsInKeeper() {
 	s.service.ProcessHeads()
 
 	// Assert
-	s.Require().Equal(1, len(s.keeper.Heads()))
+	s.Require().Len(s.keeper.Heads(), 1)
 	s.Equal(head.ID(), s.keeper.Heads()[0].ID())
 	s.Equal(int64(0), record.CreatedAt())
 }
@@ -382,6 +396,6 @@ func (s *PersistenerServiceSuite) TestHeadAlreadyExistsInKeeper() {
 	s.service.ProcessHeads()
 
 	// Assert
-	s.Require().Equal(1, len(s.keeper.Heads()))
+	s.Require().Len(s.keeper.Heads(), 1)
 	s.Equal(head.ID(), s.keeper.Heads()[0].ID())
 }
