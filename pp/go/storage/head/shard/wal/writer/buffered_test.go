@@ -13,8 +13,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
 )
 
-// TODO moq -out writer_moq_test.go -pkg writer_test -rm . EncodedSegment WriteSyncCloser SegmentIsWrittenNotifier FileInfo
-
 type BufferedSuite struct {
 	suite.Suite
 }
