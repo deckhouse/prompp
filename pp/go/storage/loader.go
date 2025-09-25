@@ -136,6 +136,8 @@ func (l *Loader) Load(
 		corrupted = true
 	}
 
+	logger.Debugf("[Loader] loaded head: %s, corrupted: %t", headRecord.ID(), corrupted)
+
 	return h, corrupted
 }
 

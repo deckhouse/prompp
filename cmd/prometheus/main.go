@@ -59,8 +59,7 @@ import (
 
 	pp_pkg_handler "github.com/prometheus/prometheus/pp-pkg/handler"
 	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor"
-	pp_pkg_logger "github.com/prometheus/prometheus/pp-pkg/logger"
-	"github.com/prometheus/prometheus/pp-pkg/receiver"               // PP_CHANGES.md: rebuild on cpp
+	pp_pkg_logger "github.com/prometheus/prometheus/pp-pkg/logger"   // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/remote"                 // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/scrape"                 // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage" // PP_CHANGES.md: rebuild on cpp
@@ -2107,7 +2106,7 @@ func readPromPPFeatures(logger log.Logger) {
 			if fvalue == "" {
 				level.Error(logger).Log(
 					"msg", "[FEATURE] The default number of shards is empty, no changes.",
-					"default_number_of_shards", receiver.DefaultNumberOfShards,
+					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
 				)
 
 				continue
@@ -2118,27 +2117,27 @@ func readPromPPFeatures(logger log.Logger) {
 			case err != nil:
 				level.Error(logger).Log(
 					"msg", "[FEATURE] Error parsing head_numbehead_default_number_of_shardsr_of_shards value",
-					"default_number_of_shards", receiver.DefaultNumberOfShards,
+					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
 					"err", err,
 				)
 
 			case v > math.MaxUint16:
 				level.Error(logger).Log(
 					"msg", "[FEATURE] The default number of shards is overflow(max 65535), no changes.",
-					"default_number_of_shards", receiver.DefaultNumberOfShards,
+					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
 				)
 
 			case v < 1:
 				level.Error(logger).Log(
 					"msg", "[FEATURE] The default number of shards is incorrect(min 1), no changes.",
-					"default_number_of_shards", receiver.DefaultNumberOfShards,
+					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
 				)
 
 			default:
-				receiver.DefaultNumberOfShards = uint16(v)
+				pp_storage.DefaultNumberOfShards = uint16(v)
 				level.Info(logger).Log(
 					"msg", "[FEATURE] Changed default number of shards.",
-					"default_number_of_shards", receiver.DefaultNumberOfShards,
+					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
 				)
 			}
 

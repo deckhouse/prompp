@@ -119,6 +119,7 @@ func (c *Config) SetNumberOfShards(numberOfShards uint16) bool {
 // Manager
 //
 
+// Manager manages services for the work of the heads.
 type Manager struct {
 	g               run.Group
 	closer          *util.Closer
@@ -163,11 +164,8 @@ func NewManager(
 	}
 
 	builder := NewBuilder(hcatalog, o.DataDir, o.MaxSegmentSize, r, unloadDataStorageInterval)
-
 	loader := NewLoader(o.DataDir, o.MaxSegmentSize, r, unloadDataStorageInterval)
-
 	cfg := NewConfig(o.NumberOfShards)
-
 	h, err := uploadOrBuildHead(clock, hcatalog, builder, loader, o.BlockDuration, cfg.NumberOfShards())
 	if err != nil {
 		return nil, err
@@ -178,7 +176,6 @@ func NewManager(
 	}
 
 	hKeeper := keeper.NewKeeper[HeadOnDisk](o.QueueSize)
-
 	m := &Manager{
 		g:      run.Group{},
 		closer: util.NewCloser(),
@@ -192,9 +189,7 @@ func NewManager(
 	}
 
 	readyNotifier.NotifyReady()
-
 	m.initServices(o, hcatalog, builder, loader, triggerNotifier, clock, r)
-
 	logger.Infof("[Head Manager] created")
 
 	return m, nil
@@ -488,24 +483,4 @@ func uploadOrBuildHead(
 	}
 
 	return h, nil
-}
-
-//
-// NoopKeeper
-//
-
-// NoopKeeper implements Keeper.
-type NoopKeeper struct{}
-
-// Add implements Keeper.
-func (*NoopKeeper) Add(*HeadOnDisk) {}
-
-// Close implements Keeper.
-func (*NoopKeeper) Close() error { return nil }
-
-// RangeQueriableHeads implements Keeper.
-func (k *NoopKeeper) RangeQueriableHeads(
-	mint, maxt int64,
-) func(func(*HeadOnDisk) bool) {
-	return func(func(*HeadOnDisk) bool) {}
 }

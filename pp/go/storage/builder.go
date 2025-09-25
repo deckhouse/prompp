@@ -9,6 +9,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/head"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
@@ -87,6 +88,7 @@ func (b *Builder) Build(generation uint64, numberOfShards uint16) (*HeadOnDisk, 
 	}
 
 	b.events.With(prometheus.Labels{"type": "created"}).Inc()
+	logger.Debugf("[Builder] builded head: %s", headRecord.ID())
 	return head.NewHead(
 		headRecord.ID(),
 		shards,

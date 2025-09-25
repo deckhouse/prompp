@@ -252,15 +252,9 @@ func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, T
 	pg.loadRotatedHeadsInKeeper(heads)
 }
 
-func (pg *PersistenerService[
-	TTask,
-	TShard,
-	TGoShard,
-	THeadBlockWriter,
-	THead,
-	TKeeper,
-	TLoader,
-]) persistHeads(heads []THead) {
+func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoader]) persistHeads(
+	heads []THead,
+) {
 	pg.keeper.Remove(pg.persistener.Persist(heads))
 }
 
@@ -304,6 +298,7 @@ func (pg *PersistenerService[
 	TLoader,
 ]) loadAndAddHeadToKeeper(record *catalog.Record) bool {
 	head, _ := pg.loader.Load(record, 0)
+	head.SetReadOnly()
 	if err := pg.keeper.Add(head, time.Duration(record.CreatedAt())*time.Millisecond); err != nil {
 		_ = head.Close()
 		return false

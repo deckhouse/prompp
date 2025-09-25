@@ -32,7 +32,10 @@ type UnloadedDataSnapshotHeader struct {
 }
 
 func NewUnloadedDataSnapshotHeader(snapshot []byte) UnloadedDataSnapshotHeader {
-	return UnloadedDataSnapshotHeader{Crc32: crc32.ChecksumIEEE(snapshot), SnapshotSize: uint32(len(snapshot))}
+	return UnloadedDataSnapshotHeader{
+		Crc32:        crc32.ChecksumIEEE(snapshot),
+		SnapshotSize: uint32(len(snapshot)), // #nosec G115 // no overflow
+	}
 }
 
 func (h UnloadedDataSnapshotHeader) IsValid(snapshot []byte) bool {
