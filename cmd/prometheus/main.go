@@ -767,8 +767,9 @@ func main() {
 	hManagerReadyNotifier := ready.NewNotifiableNotifier()
 	hManager, err := pp_storage.NewManager(
 		&pp_storage.Options{
-			Seed:                cfgFile.GlobalConfig.ExternalLabels.Hash(),
-			BlockDuration:       time.Duration(cfg.tsdb.MinBlockDuration),
+			Seed: cfgFile.GlobalConfig.ExternalLabels.Hash(),
+			// BlockDuration:       time.Duration(cfg.tsdb.MinBlockDuration),
+			BlockDuration:       6 * time.Minute,
 			CommitInterval:      time.Duration(cfg.WalCommitInterval),
 			MaxRetentionPeriod:  time.Duration(cfg.tsdb.RetentionDuration),
 			HeadRetentionPeriod: time.Duration(cfg.HeadRetentionTimeout),
