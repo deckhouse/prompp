@@ -59,6 +59,7 @@ import (
 
 	pp_pkg_handler "github.com/prometheus/prometheus/pp-pkg/handler"
 	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor"
+	pp_pkg_logger "github.com/prometheus/prometheus/pp-pkg/logger"
 	"github.com/prometheus/prometheus/pp-pkg/receiver"               // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/remote"                 // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/scrape"                 // PP_CHANGES.md: rebuild on cpp
@@ -721,7 +722,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	pp_storage.InitLogHandler(log.With(logger, "component", "pp_storage"))
+	pp_pkg_logger.InitLogHandler(log.With(logger, "component", "pp"))
 
 	reloadBlocksTriggerNotifier := pp_storage.NewReloadBlocksTriggerNotifier()
 	cfg.tsdb.ReloadBlocksExternalTrigger = reloadBlocksTriggerNotifier
@@ -779,36 +780,6 @@ func main() {
 		level.Error(logger).Log("msg", "failed to create a head manager", "err", err)
 		os.Exit(1)
 	}
-
-	// receiverReadyNotifier := ready.NewNotifiableNotifier()
-	// // create receiver
-	// receiver, err := receiver.NewReceiver(
-	// 	ctxReceiver,
-	// 	log.With(logger, "component", "receiver"),
-	// 	prometheus.DefaultRegisterer,
-	// 	receiverConfig,
-	// 	localStoragePath,
-	// 	cfgFile.RemoteWriteConfigs,
-	// 	localStoragePath,
-	// 	receiver.RotationInfo{
-	// 		BlockDuration: time.Duration(cfg.tsdb.MinBlockDuration),
-	// 		Seed:          cfgFile.GlobalConfig.ExternalLabels.Hash(),
-	// 	},
-	// 	headCatalog,
-	// 	reloadBlocksTriggerNotifier,
-	// 	receiverReadyNotifier,
-	// 	time.Duration(cfg.WalCommitInterval),
-	// 	time.Duration(cfg.tsdb.RetentionDuration),
-	// 	time.Duration(cfg.HeadRetentionTimeout),
-	// 	// x3 ScrapeInterval timeout for write block
-	// 	time.Duration(cfgFile.GlobalConfig.ScrapeInterval*3),
-	// 	cfg.WalMaxSamplesPerSegment,
-	// 	appender.UnloadDataStorage,
-	// )
-	// if err != nil {
-	// 	level.Error(logger).Log("msg", "failed to create a receiver", "err", err)
-	// 	os.Exit(1)
-	// }
 
 	remoteWriterReadyNotifier := ready.NewNotifiableNotifier()
 	remoteWriter := remotewriter.New(

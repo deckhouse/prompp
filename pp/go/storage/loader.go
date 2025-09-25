@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/head"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
@@ -20,7 +21,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/reader"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
-	"github.com/prometheus/prometheus/pp/go/storage/logger"
 	"github.com/prometheus/prometheus/pp/go/util/optional"
 )
 
@@ -48,6 +48,10 @@ func NewLoader(
 }
 
 // Load [HeadOnDisk] from [WalOnDisk] by head ID.
+//
+//revive:disable-next-line:cognitive-complexity // function is not complicated
+//revive:disable-next-line:function-length // long but readable.
+//revive:disable-next-line:cyclomatic // but readable
 func (l *Loader) Load(
 	headRecord *catalog.Record,
 	generation uint64,
@@ -112,7 +116,7 @@ func (l *Loader) Load(
 		}
 
 		logger.Errorf(
-			"head: %s number of segments mismatched",
+			"head: %s number of segments mismatched: last appended=%d, number of segments read=%d",
 			headRecord.ID(),
 			lastAppendedSegmentID,
 			numberOfSegmentsRead.Value(),
@@ -212,7 +216,7 @@ func (l *ShardDataLoader) Load() (err error) {
 	shardWalFile, err := os.OpenFile( //nolint:gosec // need this permissions
 		GetShardWalFilename(l.dir, l.shardID),
 		os.O_RDWR,
-		0o666,
+		0o666, //revive:disable-line:add-constant // file permissions simple readable as octa-number
 	)
 	if err != nil {
 		return err
@@ -226,7 +230,9 @@ func (l *ShardDataLoader) Load() (err error) {
 
 	queriedSeriesStorageIsEmpty := true
 	if l.unloadDataStorageInterval > 0 {
-		l.shardData.unloadedDataStorage = shard.NewUnloadedDataStorage(shard.NewFileStorage(GetUnloadedDataStorageFilename(l.dir, l.shardID)))
+		l.shardData.unloadedDataStorage = shard.NewUnloadedDataStorage(
+			shard.NewFileStorage(GetUnloadedDataStorageFilename(l.dir, l.shardID)),
+		)
 		queriedSeriesStorageIsEmpty, _ = l.loadQueriedSeries()
 	}
 
@@ -235,11 +241,7 @@ func (l *ShardDataLoader) Load() (err error) {
 		return err
 	}
 
-	if err = l.createShardWal(shardWalFile, decoder); err != nil {
-		return err
-	}
-
-	return nil
+	return l.createShardWal(shardWalFile, decoder)
 }
 
 func (l *ShardDataLoader) loadWalFile(
@@ -272,7 +274,12 @@ func (l *ShardDataLoader) loadWalFile(
 }
 
 func (l *ShardDataLoader) createShardWal(shardWalFile *os.File, walDecoder *cppbridge.HeadWalDecoder) error {
-	if sw, err := writer.NewBuffered(l.shardID, shardWalFile, writer.WriteSegment[*cppbridge.EncodedSegment], l.notifier); err != nil {
+	if sw, err := writer.NewBuffered(
+		l.shardID,
+		shardWalFile,
+		writer.WriteSegment[*cppbridge.EncodedSegment],
+		l.notifier,
+	); err != nil {
 		return err
 	} else {
 		l.notifier.Set(l.shardID, l.shardData.numberOfSegments)
@@ -362,14 +369,17 @@ func (l *ShardDataLoader) loadQueriedSeries() (bool, error) {
 	return false, nil
 }
 
+// GetShardWalFilename returns shard's Wal file name.
 func GetShardWalFilename(dir string, shardID uint16) string {
 	return filepath.Join(dir, fmt.Sprintf("shard_%d.wal", shardID))
 }
 
+// GetUnloadedDataStorageFilename returns unloaded DataStorage file name.
 func GetUnloadedDataStorageFilename(dir string, shardID uint16) string {
 	return filepath.Join(dir, fmt.Sprintf("unloaded_%d.ds", shardID))
 }
 
+// GetQueriedSeriesStorageFilename returns queried series storage file name.
 func GetQueriedSeriesStorageFilename(dir string, shardID uint16, index uint8) string {
 	return filepath.Join(dir, fmt.Sprintf("queried_series_%d_%d.ds", shardID, index))
 }

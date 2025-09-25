@@ -12,8 +12,8 @@ import (
 	"github.com/prometheus/prometheus/storage/remote"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
-	"github.com/prometheus/prometheus/pp/go/storage/logger"
 )
 
 const defaultDelay = time.Second * 5

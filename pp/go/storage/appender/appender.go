@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
-	"github.com/prometheus/prometheus/pp/go/storage/logger"
 )
 
 const (

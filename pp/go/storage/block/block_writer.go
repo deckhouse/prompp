@@ -9,10 +9,12 @@ import (
 	"path/filepath"
 
 	"github.com/oklog/ulid"
-	"github.com/prometheus/prometheus/pp/go/storage/logger"
-	"github.com/prometheus/prometheus/pp/go/util"
+
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/tsdb/fileutil"
+
+	"github.com/prometheus/prometheus/pp/go/logger"
+	"github.com/prometheus/prometheus/pp/go/util"
 )
 
 const (

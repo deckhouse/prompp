@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/prometheus/prometheus/pp/go/storage/logger"
+	"github.com/prometheus/prometheus/pp/go/logger"
 )
 
 type addPolicy = uint8

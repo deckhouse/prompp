@@ -12,9 +12,10 @@ import (
 	"github.com/jonboulle/clockwork"
 
 	"github.com/prometheus/prometheus/config"
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/storage/logger"
 	"github.com/prometheus/prometheus/storage/remote"
+
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/logger"
 )
 
 type DataSource interface {

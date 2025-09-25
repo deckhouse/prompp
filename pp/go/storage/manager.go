@@ -10,21 +10,20 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/jonboulle/clockwork"
 	"github.com/oklog/run"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/prometheus/prometheus/config"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/block"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/container"
 	"github.com/prometheus/prometheus/pp/go/storage/head/keeper"
 	"github.com/prometheus/prometheus/pp/go/storage/head/proxy"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
-	"github.com/prometheus/prometheus/pp/go/storage/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/mediator"
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/ready"
@@ -372,27 +371,6 @@ func (m *Manager) close() {
 	case <-m.closer.Signal():
 	default:
 		_ = m.closer.Close()
-	}
-}
-
-// InitLogHandler init log handler for pp.
-func InitLogHandler(l log.Logger) {
-	l = log.With(l, "pp_caller", log.Caller(4))
-
-	logger.Debugf = func(template string, args ...any) {
-		_ = level.Debug(l).Log("msg", fmt.Sprintf(template, args...))
-	}
-
-	logger.Infof = func(template string, args ...any) {
-		_ = level.Info(l).Log("msg", fmt.Sprintf(template, args...))
-	}
-
-	logger.Warnf = func(template string, args ...any) {
-		_ = level.Warn(l).Log("msg", fmt.Sprintf(template, args...))
-	}
-
-	logger.Errorf = func(template string, args ...any) {
-		_ = level.Error(l).Log("msg", fmt.Sprintf(template, args...))
 	}
 }
 
