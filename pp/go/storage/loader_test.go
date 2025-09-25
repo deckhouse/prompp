@@ -1,7 +1,6 @@
 package storage_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -48,7 +47,6 @@ func (g *idGeneratorStub) last() string {
 type HeadLoadSuite struct {
 	suite.Suite
 	dataDir         string
-	ctx             context.Context
 	clock           clockwork.Clock
 	headIdGenerator *idGeneratorStub
 	catalog         *catalog.Catalog

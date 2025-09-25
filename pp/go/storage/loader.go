@@ -105,7 +105,18 @@ func (l *Loader) Load(
 		if numberOfSegmentsRead.Value() > 0 {
 			headRecord.SetLastAppendedSegmentID(numberOfSegmentsRead.Value() - 1)
 		}
-		logger.Errorf("head: %s number of segments mismatched", headRecord.ID())
+
+		lastAppendedSegmentID := uint32(0)
+		if headRecord.LastAppendedSegmentID() != nil {
+			lastAppendedSegmentID = *headRecord.LastAppendedSegmentID()
+		}
+
+		logger.Errorf(
+			"head: %s number of segments mismatched",
+			headRecord.ID(),
+			lastAppendedSegmentID,
+			numberOfSegmentsRead.Value(),
+		)
 	}
 
 	h := head.NewHead(
@@ -154,7 +165,6 @@ type ShardLoadResult struct {
 }
 
 type ShardData struct {
-	notifier             *writer.SegmentWriteNotifier
 	lss                  *shard.LSS
 	dataStorage          *shard.DataStorage
 	wal                  *WalOnDisk
@@ -199,7 +209,11 @@ func (l *ShardDataLoader) Load() (err error) {
 		](),
 	}
 
-	shardWalFile, err := os.OpenFile(GetShardWalFilename(l.dir, l.shardID), os.O_RDWR, 0o666)
+	shardWalFile, err := os.OpenFile( //nolint:gosec // need this permissions
+		GetShardWalFilename(l.dir, l.shardID),
+		os.O_RDWR,
+		0o666,
+	)
 	if err != nil {
 		return err
 	}
@@ -341,10 +355,8 @@ func (l *ShardDataLoader) loadQueriedSeries() (bool, error) {
 		}
 
 		logger.Warnf("error loading queried series: %v", err)
-	} else {
-		if !l.shardData.dataStorage.SetQueriedSeriesBitset(queriedSeries) {
-			logger.Warnf("error set queried series in storage: %v", err)
-		}
+	} else if !l.shardData.dataStorage.SetQueriedSeriesBitset(queriedSeries) {
+		logger.Warnf("error set queried series in storage: %v", err)
 	}
 
 	return false, nil

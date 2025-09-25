@@ -15,7 +15,8 @@ import (
 // Deduplicator accumulates and deduplicates incoming values.
 type Deduplicator interface {
 	// Add values to deduplicator by shard ID.
-	Add(shard uint16, snapshot *cppbridge.LabelSetSnapshot, values []string)
+	Add(shardID uint16, snapshot *cppbridge.LabelSetSnapshot, values []string)
+
 	// Values returns collected values.
 	Values() []string
 }
@@ -40,10 +41,15 @@ type Task interface {
 // DataStorage the minimum required [DataStorage] implementation.
 type DataStorage interface {
 	// InstantQuery returns samples for instant query from data storage.
-	InstantQuery(maxt, valueNotFoundTimestampValue int64, ids []uint32) ([]cppbridge.Sample, cppbridge.DataStorageQueryResult)
+	InstantQuery(
+		maxt, valueNotFoundTimestampValue int64,
+		ids []uint32,
+	) ([]cppbridge.Sample, cppbridge.DataStorageQueryResult)
 
 	// QueryDataStorage returns serialized chunks from data storage.
-	Query(query cppbridge.HeadDataStorageQuery) (*cppbridge.HeadDataStorageSerializedChunks, cppbridge.DataStorageQueryResult)
+	Query(
+		query cppbridge.HeadDataStorageQuery,
+	) (*cppbridge.HeadDataStorageSerializedChunks, cppbridge.DataStorageQueryResult)
 
 	// WithRLock calls fn on raw [cppbridge.HeadDataStorage] with read lock.
 	WithRLock(fn func(ds *cppbridge.HeadDataStorage) error) error
@@ -115,7 +121,7 @@ type Head[
 	AcquireQuery(ctx context.Context) (release func(), err error)
 
 	// CreateTask create a task for operations on the [Head] shards.
-	CreateTask(taskName string, shardFn func(shard TShard) error) TGenericTask
+	CreateTask(taskName string, shardFn func(s TShard) error) TGenericTask
 
 	// Enqueue the task to be executed on shards [Head].
 	Enqueue(t TGenericTask)
