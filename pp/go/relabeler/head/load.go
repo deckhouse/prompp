@@ -345,7 +345,7 @@ func (l *ShardLoader) Load() (ShardLoadResult, error) {
 	}
 
 	defer func() {
-			_ = shardWalFile.Close()
+		_ = shardWalFile.Close()
 	}()
 
 	queriedSeriesStorageIsEmpty := true
@@ -359,7 +359,7 @@ func (l *ShardLoader) Load() (ShardLoadResult, error) {
 		return result, err
 	}
 
-	f, err := os.OpenFile(getShardWalFilename(l.dir, l.shardID), os.O_WRONLY, 0666)
+	f, err := os.OpenFile(shardWalFile.Name(), os.O_WRONLY, 0666)
 	if err != nil {
 		return result, err
 	}
