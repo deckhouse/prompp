@@ -364,13 +364,11 @@ func (l *ShardLoader) Load() (ShardLoadResult, error) {
 		return result, err
 	}
 	if _, err := f.Seek(0, io.SeekEnd); err != nil {
-		_ = f.Close()
-		return result, err
+		return result, errors.Join(err, f.Close())
 	}
 
 	if err = l.createShardWal(f, decoder, &result); err != nil {
-		_ = f.Close()
-		return result, err
+		return result, errors.Join(err, f.Close())
 	}
 
 	result.Corrupted = false
