@@ -42,6 +42,8 @@ class Serializer {
 
   template <class ChunkList, class Stream>
   void serialize_impl(const ChunkList& chunks, Stream& stream) {
+    static constexpr bool f = true;
+
     const auto& kReservedBytesForReader = encoder::CompactBitSequence::reserved_bytes_for_reader();
 
     TimestampStreamsData timestamp_streams_data;
@@ -50,12 +52,26 @@ class Serializer {
       uint32_t chunk_count = get_chunk_count(chunks);
       auto serialized_chunks = create_serialized_chunks(chunks, chunk_count, timestamp_streams_data, data_size);
 
+      if constexpr (f) {
+        std::cout << "chunks size: " << double(serialized_chunks.size() * sizeof(serialized_chunks[0])) / 1024 / 1024 << '\n';
+      }
+
       if constexpr (BareBones::concepts::has_reserve<Stream>) {
         stream.reserve(data_size + kReservedBytesForReader.size());
       }
 
       write_chunk_count(chunk_count, stream);
       write_serialized_chunks(serialized_chunks, stream);
+    }
+
+    if constexpr (f) {
+      auto max_offset = std::max_element(timestamp_streams_data.stream_offsets.begin(), timestamp_streams_data.stream_offsets.end(), [](auto a, auto b) {
+                          return a.second < b.second;
+                        })->second;
+      auto min_offset = std::min_element(timestamp_streams_data.stream_offsets.begin(), timestamp_streams_data.stream_offsets.end(), [](auto a, auto b) {
+                          return a.second < b.second;
+                        })->second;
+      std::cout << "streams data  size: " << double(max_offset - min_offset) / 1024 / 1024 << '\n';
     }
 
     write_chunks_data(chunks, timestamp_streams_data, stream);
