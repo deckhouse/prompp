@@ -82,6 +82,61 @@ func (q *FileStorage) IsEmpty() bool {
 	return true
 }
 
+type AppendFileStorage struct {
+	fileName string
+	file     *os.File
+}
+
+func NewAppendFileStorage(fileName string) *AppendFileStorage {
+	return &AppendFileStorage{fileName: fileName}
+}
+
+func (q *AppendFileStorage) Open(flags int) (err error) {
+	if q.file == nil {
+		q.file, err = os.OpenFile(q.fileName, flags, 0666)
+	}
+
+	return
+}
+
+func (q *AppendFileStorage) Write(p []byte) (n int, err error) {
+	return q.file.Write(p)
+}
+
+func (q *AppendFileStorage) Close() error {
+	if q.file != nil {
+		return q.file.Close()
+	}
+
+	return nil
+}
+
+func (q *AppendFileStorage) Reader() (StorageReader, error) {
+	return os.Open(q.fileName)
+}
+
+func (q *AppendFileStorage) Seek(offset int64, whence int) (int64, error) {
+	return q.file.Seek(offset, whence)
+}
+
+func (q *AppendFileStorage) Sync() error {
+	return q.file.Sync()
+}
+
+func (q *AppendFileStorage) Truncate(size int64) error {
+	return q.file.Truncate(size)
+}
+
+func (q *AppendFileStorage) IsEmpty() bool {
+	if q.file != nil {
+		if info, err := q.file.Stat(); err == nil {
+			return info.Size() == 0
+		}
+	}
+
+	return true
+}
+
 // Create head.
 func Create(
 	id string,
@@ -187,7 +242,7 @@ func createShard(
 	var unloadedDataStorage *UnloadedDataStorage
 	var queriedSeriesStorage *QueriedSeriesStorage
 	if unloadDataStorageInterval != 0 {
-		unloadedDataStorage = NewUnloadedDataStorage(NewFileStorage(getUnloadedDataStorageFilename(dir, shardID)))
+		unloadedDataStorage = NewUnloadedDataStorage(NewAppendFileStorage(getUnloadedDataStorageFilename(dir, shardID)))
 		queriedSeriesStorage = NewQueriedSeriesStorage(
 			NewFileStorage(getQueriedSeriesStorageFilename(dir, shardID, 0)),
 			NewFileStorage(getQueriedSeriesStorageFilename(dir, shardID, 1)),
@@ -350,7 +405,7 @@ func (l *ShardLoader) Load() (ShardLoadResult, error) {
 
 	queriedSeriesStorageIsEmpty := true
 	if l.unloadDataStorageInterval > 0 {
-		result.UnloadedDataStorage = NewUnloadedDataStorage(NewFileStorage(getUnloadedDataStorageFilename(l.dir, l.shardID)))
+		result.UnloadedDataStorage = NewUnloadedDataStorage(NewAppendFileStorage(getUnloadedDataStorageFilename(l.dir, l.shardID)))
 		queriedSeriesStorageIsEmpty, _ = l.loadQueriedSeries(&result)
 	}
 

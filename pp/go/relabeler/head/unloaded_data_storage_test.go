@@ -54,6 +54,10 @@ func (s *BufferReaderAtWriterCloser) Close() error {
 	return nil
 }
 
+func (s *BufferReaderAtWriterCloser) Reader() (StorageReader, error) {
+	return s, nil
+}
+
 type UnloadedDataStorageSuite struct {
 	suite.Suite
 	storageBuffer *BufferReaderAtWriterCloser
