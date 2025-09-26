@@ -163,6 +163,7 @@ func makeReceiver(ctx context.Context, t TestingT, logger log.Logger, dbDir stri
 		4*time.Hour,
 		90*time.Second,
 		100e3,
+		false,
 	)
 	require.NoError(t, err, "create a receiver")
 	return receiver
