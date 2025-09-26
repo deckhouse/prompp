@@ -45,6 +45,9 @@ const (
 
 	// DefaultUnloadDataStorageInterval the default interval for unloading [DataStorage].
 	DefaultUnloadDataStorageInterval = 5 * time.Minute
+
+	// defaultStartPersistnerInterval the default interval for start [Persistener] timer.
+	defaultStartPersistnerInterval = 15 * time.Second
 )
 
 var (
@@ -131,6 +134,8 @@ type Manager struct {
 }
 
 // NewManager init new [Manager].
+//
+//revive:disable-next-line:function-length // this is contructor.
 func NewManager(
 	o *Options,
 	clock clockwork.Clock,
@@ -185,11 +190,12 @@ func NewManager(
 		rotatorMediator: mediator.NewMediator(
 			mediator.NewRotateTimerWithSeed(clock, o.BlockDuration, o.Seed),
 		),
-		mergerMediator: mediator.NewMediator(mediator.NewConstantIntervalTimer(clock, DefaultMergeDuration)),
+		mergerMediator: mediator.NewMediator(
+			mediator.NewConstantIntervalTimer(clock, DefaultMergeDuration, DefaultMergeDuration),
+		),
 	}
 
-	readyNotifier.NotifyReady()
-	m.initServices(o, hcatalog, builder, loader, triggerNotifier, clock, r)
+	m.initServices(o, hcatalog, builder, loader, triggerNotifier, readyNotifier, clock, r)
 	logger.Infof("[Head Manager] created")
 
 	return m, nil
@@ -236,12 +242,15 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 }
 
 // initServices initializes services for startup.
+//
+//revive:disable-next-line:function-length // init contructor.
 func (m *Manager) initServices(
 	o *Options,
 	hcatalog *catalog.Catalog,
 	builder *Builder,
 	loader *Loader,
 	triggerNotifier *ReloadBlocksTriggerNotifier,
+	readyNotifier ready.Notifier,
 	clock clockwork.Clock,
 	r prometheus.Registerer,
 ) {
@@ -250,6 +259,7 @@ func (m *Manager) initServices(
 	// Termination handler.
 	m.g.Add(
 		func() error {
+			readyNotifier.NotifyReady()
 			<-m.closer.Signal()
 
 			return nil
@@ -260,7 +270,9 @@ func (m *Manager) initServices(
 	)
 
 	// Persistener
-	persistenerMediator := mediator.NewMediator(mediator.NewConstantIntervalTimer(clock, DefaultPersistDuration))
+	persistenerMediator := mediator.NewMediator(
+		mediator.NewConstantIntervalTimer(clock, defaultStartPersistnerInterval, DefaultPersistDuration),
+	)
 	m.g.Add(
 		func() error {
 			services.NewPersistenerService(
@@ -318,7 +330,9 @@ func (m *Manager) initServices(
 	}
 
 	// Committer
-	committerMediator := mediator.NewMediator(mediator.NewConstantIntervalTimer(clock, o.CommitInterval))
+	committerMediator := mediator.NewMediator(
+		mediator.NewConstantIntervalTimer(clock, o.CommitInterval, o.CommitInterval),
+	)
 	committerCtx, committerCancel := context.WithCancel(baseCtx)
 	m.g.Add(
 		func() error {
@@ -343,7 +357,9 @@ func (m *Manager) initServices(
 	)
 
 	// MetricsUpdater
-	metricsUpdaterMediator := mediator.NewMediator(mediator.NewConstantIntervalTimer(clock, DefaultMetricWriteInterval))
+	metricsUpdaterMediator := mediator.NewMediator(
+		mediator.NewConstantIntervalTimer(clock, DefaultMetricWriteInterval, DefaultMetricWriteInterval),
+	)
 	metricsUpdaterCtx, metricsUpdaterCancel := context.WithCancel(baseCtx)
 	m.g.Add(
 		func() error {
@@ -461,6 +477,7 @@ func uploadOrBuildHead(
 
 	var generation uint64
 	if len(headRecords) == 0 {
+		logger.Debugf("[Head Manager] no suitable heads were found, building new")
 		return builder.Build(generation, numberOfShards)
 	}
 
@@ -468,16 +485,22 @@ func uploadOrBuildHead(
 	if corrupted {
 		if !headRecords[0].Corrupted() {
 			if _, setCorruptedErr := hcatalog.SetCorrupted(headRecords[0].ID()); setCorruptedErr != nil {
-				logger.Errorf("failed to set corrupted state, head id: %s: %v", headRecords[0].ID(), setCorruptedErr)
+				logger.Errorf("failed to set corrupted state, head {%s}: %v", headRecords[0].ID(), setCorruptedErr)
 			}
 		}
-		logger.Warnf("[Head Manager] upload corrupted head, building new: %s", headRecords[0].ID())
+		logger.Warnf("[Head Manager] upload corrupted head {%s}, building new...", headRecords[0].ID())
 
 		if _, err := hcatalog.SetStatus(headRecords[0].ID(), catalog.StatusRotated); err != nil {
 			logger.Warnf("failed to set rotated status for head {%s}: %s", headRecords[0].ID(), err)
 		}
 
 		_ = h.Close()
+
+		return builder.Build(generation, numberOfShards)
+	}
+
+	if _, err := hcatalog.SetStatus(headRecords[0].ID(), catalog.StatusActive); err != nil {
+		logger.Warnf("failed to set active status for head {%s}: %s", headRecords[0].ID(), err)
 
 		return builder.Build(generation, numberOfShards)
 	}

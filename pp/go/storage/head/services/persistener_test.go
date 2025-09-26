@@ -14,7 +14,9 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/block"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
+	"github.com/prometheus/prometheus/pp/go/storage/head/container"
 	"github.com/prometheus/prometheus/pp/go/storage/head/keeper"
+	"github.com/prometheus/prometheus/pp/go/storage/head/proxy"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services/mock"
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
@@ -37,17 +39,20 @@ type GenericPersistenceSuite struct {
 	dataDir       string
 	clock         *clockwork.FakeClock
 	catalog       *catalog.Catalog
-	keeper        *keeper.Keeper[storage.HeadOnDisk, *storage.HeadOnDisk]
+	proxy         *proxy.Proxy[*storage.HeadOnDisk]
 	blockWriter   *mock.HeadBlockWriterMock[*storage.ShardOnDisk]
 	writeNotifier *mock.WriteNotifierMock
 }
 
 func (s *GenericPersistenceSuite) SetupTest() {
 	s.dataDir = s.createDataDirectory()
-
 	s.clock = clockwork.NewFakeClockAt(time.UnixMilli(0))
 	s.createCatalog()
-	s.keeper = keeper.NewKeeper[storage.HeadOnDisk](1)
+
+	h := s.mustCreateHead()
+	activeHeadContainer := container.NewWeighted(h)
+	hKeeper := keeper.NewKeeper[storage.HeadOnDisk](1)
+	s.proxy = proxy.NewProxy(activeHeadContainer, hKeeper, func(*storage.HeadOnDisk) error { return nil })
 	s.blockWriter = &mock.HeadBlockWriterMock[*storage.ShardOnDisk]{}
 	s.writeNotifier = &mock.WriteNotifierMock{NotifyWrittenFunc: func() {}}
 }
@@ -98,6 +103,10 @@ type PersistenerSuite struct {
 		*storage.HeadOnDisk,
 	]
 }
+
+// func (s *PersistenerSuite) SetupSuite() {
+// 	s.GenericPersistenceSuite.SetupSuite()
+// }
 
 func (s *PersistenerSuite) SetupTest() {
 	s.GenericPersistenceSuite.SetupTest()
@@ -296,10 +305,14 @@ type PersistenerServiceSuite struct {
 		*storage.PerGoroutineShard,
 		*mock.HeadBlockWriterMock[*storage.ShardOnDisk],
 		*storage.HeadOnDisk,
-		*keeper.Keeper[storage.HeadOnDisk, *storage.HeadOnDisk],
+		*proxy.Proxy[*storage.HeadOnDisk],
 		*storage.Loader,
 	]
 }
+
+// func (s *PersistenerServiceSuite) SetupSuite() {
+// 	s.GenericPersistenceSuite.SetupSuite()
+// }
 
 func (s *PersistenerServiceSuite) SetupTest() {
 	s.GenericPersistenceSuite.SetupTest()
@@ -311,10 +324,10 @@ func (s *PersistenerServiceSuite) SetupTest() {
 		*storage.PerGoroutineShard,
 		*mock.HeadBlockWriterMock[*storage.ShardOnDisk],
 		*storage.HeadOnDisk,
-		*keeper.Keeper[storage.HeadOnDisk, *storage.HeadOnDisk],
+		*proxy.Proxy[*storage.HeadOnDisk],
 		*storage.Loader,
 	](
-		s.keeper,
+		s.proxy,
 		s.loader,
 		s.catalog,
 		s.blockWriter,
@@ -345,13 +358,13 @@ func (s *PersistenerServiceSuite) TestRemoveOutdatedHeadFromKeeper() {
 	})
 	head.SetReadOnly()
 	record, _ := s.catalog.SetStatus(head.ID(), catalog.StatusRotated)
-	_ = s.keeper.Add(head, time.Duration(s.clock.Now().Nanosecond()))
+	_ = s.proxy.Add(head, time.Duration(s.clock.Now().Nanosecond()))
 
 	// Act
 	s.service.ProcessHeads()
 
 	// Assert
-	s.Empty(s.keeper.Heads())
+	s.Empty(s.proxy.Heads())
 	s.Equal(catalog.StatusRotated, record.Status())
 }
 
@@ -373,8 +386,8 @@ func (s *PersistenerServiceSuite) TestLoadHeadsInKeeper() {
 	s.service.ProcessHeads()
 
 	// Assert
-	s.Require().Len(s.keeper.Heads(), 1)
-	s.Equal(head.ID(), s.keeper.Heads()[0].ID())
+	s.Require().Len(s.proxy.Heads(), 1)
+	s.Equal(head.ID(), s.proxy.Heads()[0].ID())
 	s.Equal(int64(0), record.CreatedAt())
 }
 
@@ -390,12 +403,12 @@ func (s *PersistenerServiceSuite) TestHeadAlreadyExistsInKeeper() {
 		},
 	})
 	_, _ = s.catalog.SetStatus(head.ID(), catalog.StatusRotated)
-	_ = s.keeper.Add(head, 0)
+	_ = s.proxy.Add(head, 0)
 
 	// Act
 	s.service.ProcessHeads()
 
 	// Assert
-	s.Require().Len(s.keeper.Heads(), 1)
-	s.Equal(head.ID(), s.keeper.Heads()[0].ID())
+	s.Require().Len(s.proxy.Heads(), 1)
+	s.Equal(head.ID(), s.proxy.Heads()[0].ID())
 }

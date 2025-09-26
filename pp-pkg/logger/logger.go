@@ -16,8 +16,7 @@ func InitLogHandler(l log.Logger) {
 	l = log.With(l, "pp_caller", log.Caller(4)) //revive:disable-line:add-constant // caller id
 
 	logger.Debugf = func(template string, args ...any) {
-		// _ = level.Debug(l).Log(msg, fmt.Sprintf(template, args...))
-		_ = level.Info(l).Log(msg, fmt.Sprintf(template, args...))
+		_ = level.Debug(l).Log(msg, fmt.Sprintf(template, args...))
 	}
 
 	logger.Infof = func(template string, args ...any) {

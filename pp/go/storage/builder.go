@@ -106,7 +106,11 @@ func (b *Builder) createShardOnDisk(
 	shardID uint16,
 ) (*ShardOnDisk, error) {
 	headDir = filepath.Clean(headDir)
-	shardFile, err := os.Create(GetShardWalFilename(headDir, shardID))
+	shardFile, err := os.OpenFile( //nolint:gosec // need this permissions
+		GetShardWalFilename(headDir, shardID),
+		os.O_WRONLY|os.O_CREATE,
+		0o666, //revive:disable-line:add-constant // file permissions simple readable as octa-number
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create shard wal file id %d: %w", shardID, err)
 	}
@@ -115,6 +119,7 @@ func (b *Builder) createShardOnDisk(
 		if err == nil {
 			return
 		}
+
 		_ = shardFile.Close()
 	}()
 

@@ -301,7 +301,7 @@ func newDataSource(dataDir string,
 
 	go b.cacheWriteLoop()
 
-	for shardID := uint16(0); shardID < numberOfShards; shardID++ {
+	for shardID := range numberOfShards {
 		shardFileName := filepath.Join(dataDir, fmt.Sprintf("shard_%d.wal", shardID))
 		decoderStateFileName := filepath.Join(dataDir, fmt.Sprintf("%s_shard_%d.state", config.Name, shardID))
 		var s *shard

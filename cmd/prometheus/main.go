@@ -742,6 +742,11 @@ func main() {
 		level.Error(logger).Log("msg", "failed to create file log", "err", err)
 		os.Exit(1)
 	}
+	defer func() {
+		if err := fileLog.Close(); err != nil {
+			level.Error(logger).Log("msg", "failed to close file log", "err", err)
+		}
+	}()
 
 	clock := clockwork.NewRealClock()
 	headCatalog, err := catalog.New(
@@ -1162,7 +1167,7 @@ func main() {
 	).Add(
 		remoteWriterReadyNotifier,
 	).Build()
-	opGC := catalog.NewGC(dataDir, headCatalog, multiNotifiable)
+	opGC := catalog.NewGC(dataDir, headCatalog, clock, multiNotifiable, time.Duration(cfg.tsdb.RetentionDuration))
 
 	var g run.Group
 	{

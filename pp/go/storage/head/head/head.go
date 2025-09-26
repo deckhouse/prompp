@@ -127,10 +127,10 @@ func NewHead[TShard Shard, TGoroutineShard Shard](
 
 	runtime.SetFinalizer(h, func(h *Head[TShard, TGoroutineShard]) {
 		h.memoryInUse.DeletePartialMatch(prometheus.Labels{"head_id": h.id})
-		logger.Debugf("[Head] %s destroyed.", h.String())
+		logger.Debugf("[Head] %s destroyed", h.String())
 	})
 
-	logger.Debugf("[Head] %s created.", h.String())
+	logger.Debugf("[Head] %s created", h.String())
 
 	return h
 }

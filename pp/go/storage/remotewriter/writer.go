@@ -19,6 +19,11 @@ func newProtobufWriter(client remote.WriteClient) *protobufWriter {
 	}
 }
 
+// Close implementation [io.Closer].
+func (*protobufWriter) Close() error {
+	return nil
+}
+
 // Write [cppbridge.SnappyProtobufEncodedData] to [remote.WriteClient]
 func (w *protobufWriter) Write(ctx context.Context, protobuf *cppbridge.SnappyProtobufEncodedData) error {
 	return protobuf.Do(func(buf []byte) error {
@@ -30,9 +35,4 @@ func (w *protobufWriter) Write(ctx context.Context, protobuf *cppbridge.SnappyPr
 		_, err := w.client.Store(ctx, buf, 0)
 		return err
 	})
-}
-
-// Close implementation [io.Closer].
-func (*protobufWriter) Close() error {
-	return nil
 }

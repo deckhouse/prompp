@@ -141,7 +141,7 @@ func (l *Loader) Load(
 	return h, corrupted
 }
 
-func (l *Loader) loadShard(
+func (*Loader) loadShard(
 	shardID uint16,
 	dir string,
 	maxSegmentSize uint32,
@@ -164,12 +164,14 @@ func (l *Loader) loadShard(
 	}
 }
 
+// ShardLoadResult the result of loading a shard from a wal file.
 type ShardLoadResult struct {
 	shard            *ShardOnDisk
 	numberOfSegments uint32
 	corrupted        bool
 }
 
+// ShardData data for creating a shard.
 type ShardData struct {
 	lss                  *shard.LSS
 	dataStorage          *shard.DataStorage
@@ -179,6 +181,7 @@ type ShardData struct {
 	numberOfSegments     uint32
 }
 
+// ShardDataLoader loads shard data from a file and creates a shard.
 type ShardDataLoader struct {
 	shardID                   uint16
 	dir                       string
@@ -188,6 +191,7 @@ type ShardDataLoader struct {
 	unloadDataStorageInterval time.Duration
 }
 
+// NewShardDataLoader init new [ShardDataLoader].
 func NewShardDataLoader(
 	shardID uint16,
 	dir string,
@@ -204,7 +208,8 @@ func NewShardDataLoader(
 	}
 }
 
-func (l *ShardDataLoader) Load() (err error) {
+// Load loads shard data from a file and creates a shard.
+func (l *ShardDataLoader) Load() error {
 	l.shardData = ShardData{
 		lss:         shard.NewLSS(),
 		dataStorage: shard.NewDataStorage(),
@@ -217,17 +222,14 @@ func (l *ShardDataLoader) Load() (err error) {
 
 	shardWalFile, err := os.OpenFile( //nolint:gosec // need this permissions
 		GetShardWalFilename(l.dir, l.shardID),
-		os.O_RDWR,
+		os.O_RDONLY,
 		0o666, //revive:disable-line:add-constant // file permissions simple readable as octa-number
 	)
 	if err != nil {
 		return err
 	}
-
 	defer func() {
-		if err != nil {
-			_ = shardWalFile.Close()
-		}
+		_ = shardWalFile.Close()
 	}()
 
 	queriedSeriesStorageIsEmpty := true
@@ -243,9 +245,16 @@ func (l *ShardDataLoader) Load() (err error) {
 		return err
 	}
 
-	return l.createShardWal(shardWalFile, decoder)
+	if err = l.createShardWal(shardWalFile.Name(), decoder); err != nil {
+		return err
+	}
+
+	return nil
 }
 
+// loadWalFile loads and decode wal file.
+//
+//revive:disable-next-line:flag-parameter this is a flag, but it's more convenient this way
 func (l *ShardDataLoader) loadWalFile(
 	rd io.Reader,
 	queriedSeriesStorageIsEmpty bool,
@@ -272,22 +281,40 @@ func (l *ShardDataLoader) loadWalFile(
 		l.shardData.dataStorage,
 		unloader,
 	)
+
 	return decoder, err
 }
 
-func (l *ShardDataLoader) createShardWal(shardWalFile *os.File, walDecoder *cppbridge.HeadWalDecoder) error {
-	if sw, err := writer.NewBuffered(
+// createShardWal creates a wal for a shard.
+func (l *ShardDataLoader) createShardWal(fileName string, walDecoder *cppbridge.HeadWalDecoder) error {
+	shardWalFile, err := os.OpenFile( //nolint:gosec // need this permissions
+		fileName,
+		os.O_WRONLY,
+		0o666, //revive:disable-line:add-constant // file permissions simple readable as octa-number
+	)
+	if err != nil {
+		return err
+	}
+	if _, err = shardWalFile.Seek(0, io.SeekEnd); err != nil {
+		_ = shardWalFile.Close()
+		return err
+	}
+
+	sw, err := writer.NewBuffered(
 		l.shardID,
 		shardWalFile,
 		writer.WriteSegment[*cppbridge.EncodedSegment],
 		l.notifier,
-	); err != nil {
+	)
+	if err != nil {
+		_ = shardWalFile.Close()
 		return err
-	} else {
-		l.notifier.Set(l.shardID, l.shardData.numberOfSegments)
-		l.shardData.wal = wal.NewWal(walDecoder.CreateEncoder(), sw, l.maxSegmentSize)
-		return nil
 	}
+
+	l.notifier.Set(l.shardID, l.shardData.numberOfSegments)
+	l.shardData.wal = wal.NewWal(walDecoder.CreateEncoder(), sw, l.maxSegmentSize)
+
+	return nil
 }
 
 type dataUnloader struct {
@@ -321,6 +348,7 @@ func (d *dataUnloader) Unload(createTs, encodeTs time.Duration) error {
 	return nil
 }
 
+// loadSegments loads and decode segments from wal file.
 func (l *ShardDataLoader) loadSegments(
 	rd io.Reader,
 	walDecoder *cppbridge.HeadWalDecoder,

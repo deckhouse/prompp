@@ -12,10 +12,14 @@ import (
 )
 
 const (
-	UnloadedDataStorageVersion  = 1
+	// UnloadedDataStorageVersion file version for [UnloadedDataStorageVersion].
+	UnloadedDataStorageVersion = 1
+
+	// QueriedSeriesStorageVersion file version for [QueriedSeriesStorage].
 	QueriedSeriesStorageVersion = 1
 )
 
+// StorageFile wrapper over [os.File] for convenient operation.
 type StorageFile interface {
 	Open(flags int) error
 	io.WriteCloser
@@ -26,11 +30,13 @@ type StorageFile interface {
 	IsEmpty() bool
 }
 
+// UnloadedDataSnapshotHeader stubs for recording snapshots.
 type UnloadedDataSnapshotHeader struct {
 	Crc32        uint32
 	SnapshotSize uint32
 }
 
+// NewUnloadedDataSnapshotHeader init new [UnloadedDataSnapshotHeader].
 func NewUnloadedDataSnapshotHeader(snapshot []byte) UnloadedDataSnapshotHeader {
 	return UnloadedDataSnapshotHeader{
 		Crc32:        crc32.ChecksumIEEE(snapshot),
@@ -38,6 +44,7 @@ func NewUnloadedDataSnapshotHeader(snapshot []byte) UnloadedDataSnapshotHeader {
 	}
 }
 
+// IsValid checks checksum if the header is valid.
 func (h UnloadedDataSnapshotHeader) IsValid(snapshot []byte) bool {
 	return h.Crc32 == crc32.ChecksumIEEE(snapshot)
 }

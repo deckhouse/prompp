@@ -13,6 +13,10 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
+// defaultCoolingInterval the interval after which the rotation should have
+// taken place to eliminate errors in the selection from the catalog.
+const defaultCoolingInterval = 60 * time.Second
+
 //
 // Persistener
 //
@@ -81,6 +85,7 @@ func NewPersistener[
 
 // Persist spent [Head]s.
 //
+//revive:disable-next-line:function-length // long but readable.
 //revive:disable-next-line:cognitive-complexity // long but readable.
 //revive:disable-next-line:cyclomatic // long but readable.
 func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) Persist(heads []THead) (outdatedHeads []THead) {
@@ -91,6 +96,7 @@ func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) Persist(
 			continue
 		}
 
+		logger.Debugf("[Persistener]: head %s start persist", head.ID())
 		if record, err := p.catalog.Get(head.ID()); err != nil {
 			logger.Errorf("[Persistener]: failed get head %s from catalog: %v", head.ID(), err)
 		} else if record.Status() == catalog.StatusPersisted {
@@ -102,6 +108,12 @@ func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) Persist(
 		}
 
 		if p.HeadIsOutdated(head) {
+			// the head is outdated and data on it is no longer required
+			if _, err := p.catalog.SetStatus(head.ID(), catalog.StatusPersisted); err != nil {
+				logger.Errorf("[Persistener]: set head status in catalog %s: %v", head.ID(), err)
+				continue
+			}
+
 			outdatedHeads = append(outdatedHeads, head)
 			continue
 		}
@@ -187,14 +199,16 @@ type PersistenerService[
 	TShard, TGoShard Shard,
 	THeadBlockWriter HeadBlockWriter[TShard],
 	THead Head[TTask, TShard, TGoShard],
-	TKeeper Keeper[TTask, TShard, TGoShard, THead],
+	TProxyHead ProxyHead[TTask, TShard, TGoShard, THead],
 	TLoader Loader[TTask, TShard, TGoShard, THead],
 ] struct {
-	persistener *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]
-	keeper      TKeeper
-	loader      TLoader
-	catalog     *catalog.Catalog
-	mediator    Mediator
+	persistener         *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]
+	proxy               TProxyHead
+	loader              TLoader
+	catalog             *catalog.Catalog
+	mediator            Mediator
+	clock               clockwork.Clock
+	tsdbRetentionPeriod time.Duration
 }
 
 // NewPersistenerService init new [PersistenerService].
@@ -203,10 +217,10 @@ func NewPersistenerService[
 	TShard, TGoShard Shard,
 	THeadBlockWriter HeadBlockWriter[TShard],
 	THead Head[TTask, TShard, TGoShard],
-	TKeeper Keeper[TTask, TShard, TGoShard, THead],
+	TProxyHead ProxyHead[TTask, TShard, TGoShard, THead],
 	TLoader Loader[TTask, TShard, TGoShard, THead],
 ](
-	hkeeper TKeeper,
+	proxy TProxyHead,
 	loader TLoader,
 	hcatalog *catalog.Catalog,
 	blockWriter THeadBlockWriter,
@@ -216,8 +230,8 @@ func NewPersistenerService[
 	tsdbRetentionPeriod time.Duration,
 	retentionPeriod time.Duration,
 	registerer prometheus.Registerer,
-) *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoader] {
-	return &PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoader]{
+) *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TProxyHead, TLoader] {
+	return &PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TProxyHead, TLoader]{
 		persistener: NewPersistener[TTask, TShard, TGoShard, THeadBlockWriter, THead](
 			hcatalog,
 			blockWriter,
@@ -227,10 +241,12 @@ func NewPersistenerService[
 			retentionPeriod,
 			registerer,
 		),
-		keeper:   hkeeper,
-		loader:   loader,
-		catalog:  hcatalog,
-		mediator: mediator,
+		proxy:               proxy,
+		loader:              loader,
+		catalog:             hcatalog,
+		mediator:            mediator,
+		clock:               clock,
+		tsdbRetentionPeriod: tsdbRetentionPeriod,
 	}
 }
 
@@ -247,7 +263,7 @@ func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, T
 
 // ProcessHeads process persist [Head]s.
 func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoader]) ProcessHeads() {
-	heads := pg.keeper.Heads()
+	heads := pg.proxy.Heads()
 	pg.persistHeads(heads)
 	pg.loadRotatedHeadsInKeeper(heads)
 }
@@ -255,9 +271,12 @@ func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, T
 func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoader]) persistHeads(
 	heads []THead,
 ) {
-	pg.keeper.Remove(pg.persistener.Persist(heads))
+	pg.proxy.Remove(pg.persistener.Persist(heads))
 }
 
+// loadRotatedHeadsInKeeper loads rotated or unused [Head]s and adds them to the [Keeper].
+//
+//revive:disable-next-line:cyclomatic // but readable
 func (pg *PersistenerService[
 	TTask,
 	TShard,
@@ -267,7 +286,7 @@ func (pg *PersistenerService[
 	TKeeper,
 	TLoader,
 ]) loadRotatedHeadsInKeeper(keeperHeads []THead) {
-	if !pg.keeper.HasSlot() {
+	if !pg.proxy.HasSlot() {
 		return
 	}
 
@@ -278,16 +297,36 @@ func (pg *PersistenerService[
 	}
 
 	records := pg.catalog.List(func(record *catalog.Record) bool {
-		return record.Status() == catalog.StatusRotated && !headExists(record.ID())
+		// in case the rotated status was not set due to an error
+		statusIsAppropriate := record.Status() == catalog.StatusNew ||
+			record.Status() == catalog.StatusRotated ||
+			record.Status() == catalog.StatusActive
+
+		isOutdated := pg.clock.Since(time.UnixMilli(record.CreatedAt())) >= pg.tsdbRetentionPeriod
+
+		return statusIsAppropriate && !headExists(record.ID()) && record.DeletedAt() == 0 && !isOutdated
 	}, catalog.LessByUpdateAt)
 
+	aheadID := pg.proxy.Get().ID()
 	for _, record := range records {
+		// skip active head
+		if aheadID == record.ID() {
+			continue
+		}
+
+		// skip the newly created head
+		if (record.Status() == catalog.StatusNew || record.Status() == catalog.StatusActive) &&
+			pg.clock.Since(time.UnixMilli(record.CreatedAt())) < defaultCoolingInterval {
+			continue
+		}
+
 		if !pg.loadAndAddHeadToKeeper(record) {
 			break
 		}
 	}
 }
 
+// loadAndAddHeadToKeeper loads [Head] and adds them to the [Keeper].
 func (pg *PersistenerService[
 	TTask,
 	TShard,
@@ -299,7 +338,7 @@ func (pg *PersistenerService[
 ]) loadAndAddHeadToKeeper(record *catalog.Record) bool {
 	head, _ := pg.loader.Load(record, 0)
 	head.SetReadOnly()
-	if err := pg.keeper.Add(head, time.Duration(record.CreatedAt())*time.Millisecond); err != nil {
+	if err := pg.proxy.Add(head, time.Duration(record.CreatedAt())*time.Millisecond); err != nil {
 		_ = head.Close()
 		return false
 	}

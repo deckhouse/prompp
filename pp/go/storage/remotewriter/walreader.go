@@ -17,7 +17,11 @@ type walReader struct {
 }
 
 func newWalReader(fileName string) (*walReader, uint8, error) {
-	file, err := os.Open(fileName)
+	file, err := os.OpenFile( //nolint:gosec // need this permissions
+		fileName,
+		os.O_RDONLY,
+		0o666, //revive:disable-line:add-constant // file permissions simple readable as octa-number
+	)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to read wal file: %w", err)
 	}
@@ -29,7 +33,7 @@ func newWalReader(fileName string) (*walReader, uint8, error) {
 
 	return &walReader{
 		file:   file,
-		reader: bufio.NewReaderSize(file, 4096),
+		reader: bufio.NewReaderSize(file, 4096), //revive:disable-line:add-constant // 4kb
 	}, encoderVersion, nil
 }
 
