@@ -198,8 +198,12 @@ common-unused:
 	$(GO) mod tidy
 	@git diff --exit-code -- go.sum go.mod
 
+.PHONY: common-entrypoint
+common-entrypoint: ## Build entry point and copy artifacts to Go directory
+	$(MAKE) -C pp build-entrypoint
+
 .PHONY: common-build
-common-build: promu
+common-build: promu common-entrypoint
 	@echo ">> building binaries"
 	$(PROMU) build --prefix $(PREFIX) $(PROMU_BINARIES)
 

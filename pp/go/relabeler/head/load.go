@@ -157,7 +157,7 @@ func createShard(
 ) (*LSS, *ShardWal, *DataStorage, *UnloadedDataStorage, *QueriedSeriesStorage, error) {
 	dir = filepath.Clean(dir)
 
-	shardFile, err := os.Create(getShardWalFilename(dir, shardID))
+	shardFile, err := os.OpenFile(getShardWalFilename(dir, shardID), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("failed to create shard wal file: %w", err)
 	}
@@ -345,9 +345,7 @@ func (l *ShardLoader) Load() (ShardLoadResult, error) {
 	}
 
 	defer func() {
-		if result.Corrupted {
 			_ = shardWalFile.Close()
-		}
 	}()
 
 	queriedSeriesStorageIsEmpty := true
@@ -361,7 +359,17 @@ func (l *ShardLoader) Load() (ShardLoadResult, error) {
 		return result, err
 	}
 
-	if err = l.createShardWal(shardWalFile, decoder, &result); err != nil {
+	f, err := os.OpenFile(getShardWalFilename(l.dir, l.shardID), os.O_WRONLY, 0666)
+	if err != nil {
+		return result, err
+	}
+	if _, err := f.Seek(0, io.SeekEnd); err != nil {
+		_ = f.Close()
+		return result, err
+	}
+
+	if err = l.createShardWal(f, decoder, &result); err != nil {
+		_ = f.Close()
 		return result, err
 	}
 
