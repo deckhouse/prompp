@@ -10,9 +10,6 @@ import (
 type Head interface {
 	// Close closes wals, query semaphore for the inability to get query and clear metrics.
 	Close() error
-
-	// ID returns id [Head].
-	ID() string
 }
 
 //

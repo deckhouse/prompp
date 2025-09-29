@@ -30,7 +30,7 @@ func NewFileWriter(fileName string) (*FileWriter, error) {
 
 	indexFile, err := os.OpenFile( //nolint:gosec // need this permissions
 		fileName,
-		os.O_CREATE|os.O_RDWR,
+		os.O_CREATE|os.O_WRONLY,
 		0o666, //revive:disable-line:add-constant // file permissions simple readable as octa-number
 	)
 	if err != nil {
