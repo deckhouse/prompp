@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.5.1
+
+### Fixes
+1. **Incorrect Regex Part Caching.** The matcher processing pipeline previously had legacy caching of regex parts based on pointer addresses, which led to incorrect behavior with certain regex patterns like `variant1|variant2|variant3`. This caching had no impact on performance, and thus it was removed.
+
 ## v0.5.0
 
 1. Base Prometheus version bumped to 2.55.1. It's unlock switch from Prometheus 3.x installations to Prom++.
