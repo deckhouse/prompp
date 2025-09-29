@@ -192,9 +192,11 @@ func (a Appender[TTask, TShard, THead]) inputRelabelingStage(
 		lssInputRelabeling,
 		func(shard TShard) error {
 			var (
-				relabeler = shard.Relabeler()
-				shardID   = shard.ShardID()
-				ok        bool
+				relabeler   = shard.Relabeler()
+				shardID     = shard.ShardID()
+				ok          bool
+				innerSeries = shardedInnerSeries.DataBySourceShard(shardID)
+				shardedData = incomingData.ShardedData()
 			)
 
 			if err := shard.LSSWithRLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
@@ -203,8 +205,8 @@ func (a Appender[TTask, TShard, THead]) inputRelabelingStage(
 					input,
 					target,
 					state,
-					incomingData.ShardedData(),
-					shardedInnerSeries.DataBySourceShard(shardID),
+					shardedData,
+					innerSeries,
 				)
 
 				return rErr
@@ -221,6 +223,7 @@ func (a Appender[TTask, TShard, THead]) inputRelabelingStage(
 			var (
 				hasReallocations bool
 				rstats           = cppbridge.RelabelerStats{}
+				relabeledSeries  = shardedRelabeledSeries.DataByShard(shardID)
 			)
 			err := shard.LSSWithLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
 				rstats, hasReallocations, rErr = relabeler.Relabeling(
@@ -228,9 +231,9 @@ func (a Appender[TTask, TShard, THead]) inputRelabelingStage(
 					input,
 					target,
 					state,
-					incomingData.ShardedData(),
-					shardedInnerSeries.DataBySourceShard(shardID),
-					shardedRelabeledSeries.DataByShard(shardID),
+					shardedData,
+					innerSeries,
+					relabeledSeries,
 				)
 
 				if hasReallocations {
@@ -279,13 +282,15 @@ func (a Appender[TTask, TShard, THead]) appendRelabelerSeriesStage(
 				return nil
 			}
 
+			innerSeries := shardedInnerSeries.DataByShard(shardID)
+			stateUpdates := shardedStateUpdates.DataByShard(shardID)
 			return shard.LSSWithLock(func(target, _ *cppbridge.LabelSetStorage) error {
 				hasReallocations, err := shard.Relabeler().AppendRelabelerSeries(
 					ctx,
 					target,
-					shardedInnerSeries.DataByShard(shardID),
+					innerSeries,
 					relabeledSeries,
-					shardedStateUpdates.DataByShard(shardID),
+					stateUpdates,
 				)
 				if err != nil {
 					return fmt.Errorf("shard %d: %w", shardID, err)
