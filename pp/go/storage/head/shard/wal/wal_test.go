@@ -82,5 +82,6 @@ func (s *WalSuite) TestCurrentSize2() {
 	segmentWriter := &SegmentWriterMock[*EncodedSegmentMock]{}
 
 	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
-	_ = wl
+
+	s.T().Log(wl)
 }

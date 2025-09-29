@@ -1452,3 +1452,18 @@ func (s *RelabelerSuite) TestPerGoroutineRelabelerFromCachePartiallyTransition()
 	s.Equal(cppbridge.RelabelerStats{1, 1, 0}, stats)
 	s.Equal(uint64(5), shardsInnerSeries[0].Size())
 }
+
+//
+// StateV2Suite
+//
+
+type StateV2Suite struct {
+	suite.Suite
+}
+
+func TestStateV2Suite(t *testing.T) {
+	suite.Run(t, new(StateV2Suite))
+}
+
+func (s *StateV2Suite) TestHappyPath() {
+}

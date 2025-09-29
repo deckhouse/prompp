@@ -130,7 +130,7 @@ func (s *WriterSuite) fillHead() {
 func (s *WriterSuite) assertWrittenBlocks(blocks []block.WrittenBlock, err error) {
 	s.Require().NoError(err)
 
-	s.Require().Equal(2, len(blocks))
+	s.Require().Len(blocks, 2)
 
 	meta1 := s.mustReadBlockMeta(blocks[0].MetaFilename())
 	s.Equal(tsdb.BlockMeta{

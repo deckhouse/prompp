@@ -417,7 +417,7 @@ func main() {
 		Default("100000").Uint32Var(&cfg.WalMaxSamplesPerSegment)
 
 	serverOnlyFlag(a, "storage.head-retention-timeout", "Timeout before inactive heads are shrieked.").
-		Default("5m").SetValue(&cfg.HeadRetentionTimeout)
+		Default("3m").SetValue(&cfg.HeadRetentionTimeout)
 
 	// TODO: Remove in Prometheus 3.0.
 	var b bool

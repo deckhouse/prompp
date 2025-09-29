@@ -53,16 +53,21 @@ type blockWriter struct {
 	chunkRecoder chunkRecoder
 }
 
-func newBlockWriter(dir string, maxBlockChunkSegmentSize int64, indexWriter IndexWriter, chunkIterator ChunkIterator) (writer blockWriter, err error) {
+func newBlockWriter(
+	dir string,
+	maxBlockChunkSegmentSize int64,
+	indexWriter IndexWriter,
+	chunkIterator ChunkIterator,
+) (writer blockWriter, err error) {
 	uid := ulid.MustNew(ulid.Now(), rand.Reader)
 	writer.Dir = filepath.Join(dir, uid.String()) + tmpForCreationBlockDirSuffix
 
 	if err = createTmpDir(writer.Dir); err != nil {
-		return
+		return writer, err
 	}
 
 	if err = writer.createWriters(maxBlockChunkSegmentSize); err != nil {
-		return
+		return writer, err
 	}
 
 	writer.Meta = tsdb.BlockMeta{
@@ -78,7 +83,8 @@ func newBlockWriter(dir string, maxBlockChunkSegmentSize int64, indexWriter Inde
 
 	writer.indexWriter = indexWriter
 	writer.chunkRecoder = newChunkRecoder(chunkIterator)
-	return
+
+	return writer, err
 }
 
 func (writer *blockWriter) createWriters(maxBlockChunkSegmentSize int64) error {
@@ -125,7 +131,7 @@ func (writer *blockWriter) writeIndex() error {
 		return fmt.Errorf("failed to write index: %w", err)
 	}
 
-	writer.Meta.MaxTime += 1
+	writer.Meta.MaxTime++
 	if _, err := writeBlockMetaFile(writer.MetaFilename(), &writer.Meta); err != nil {
 		return fmt.Errorf("failed to write block meta file: %w", err)
 	}
@@ -262,7 +268,7 @@ func writeBlockMetaFile(fileName string, blockMeta *tsdb.BlockMeta) (int64, erro
 		}
 	}()
 
-	metaFile, err := os.Create(tmp)
+	metaFile, err := os.Create(tmp) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return 0, fmt.Errorf("failed to create block meta file: %w", err)
 	}
@@ -301,7 +307,10 @@ func createTmpDir(dir string) error {
 		return err
 	}
 
-	return os.MkdirAll(dir, 0o777)
+	return os.MkdirAll( //nolint:gosec // need this permissions
+		dir,
+		0o777, //revive:disable-line:add-constant // file permissions simple readable as octa-number
+	)
 }
 
 func syncDir(dir string) error {

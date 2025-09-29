@@ -107,7 +107,7 @@ func (s *UnloadedDataStorage) ForEachSnapshot(f func(snapshot []byte, isLast boo
 	for index, header := range s.snapshots {
 		snapshot = snapshot[:header.SnapshotSize]
 		size, err := s.storage.ReadAt(snapshot, offset)
-		if uint32(size) != header.SnapshotSize {
+		if size != int(header.SnapshotSize) {
 			return err
 		}
 		offset += int64(size)
@@ -141,7 +141,7 @@ func (s *UnloadedDataStorage) Close() (err error) {
 		s.storage = nil
 	}
 
-	return
+	return err
 }
 
 func (s *UnloadedDataStorage) IsEmpty() bool {
@@ -155,7 +155,7 @@ type QueriedSeriesStorage struct {
 
 func NewQueriedSeriesStorage(storage1, storage2 StorageFile) *QueriedSeriesStorage {
 	return &QueriedSeriesStorage{
-		storages: [2]StorageFile{storage1, storage2},
+		storages: [2]StorageFile{storage1, storage2}, //revive:disable-line:add-constant // 2 working files
 	}
 }
 
@@ -166,7 +166,9 @@ type queriedSeriesStorageHeader struct {
 }
 
 func (h *queriedSeriesStorageHeader) toSlice() []byte {
-	return (*(*[unsafe.Sizeof(queriedSeriesStorageHeader{})]byte)(unsafe.Pointer(h)))[:]
+	return (*(*[unsafe.Sizeof(queriedSeriesStorageHeader{})]byte)(
+		unsafe.Pointer(h),
+	))[:] // #nosec G103 // it's meant to be that way
 }
 
 func (h *queriedSeriesStorageHeader) CalculateCrc32(queriedSeriesBitset []byte) uint32 {
@@ -190,9 +192,9 @@ func (s *QueriedSeriesStorage) Write(queriedSeriesBitset []byte, timestamp int64
 	var headerBuffer [1 + unsafe.Sizeof(queriedSeriesStorageHeader{})]byte
 	headerBuffer[0] = UnloadedDataStorageVersion
 
-	header := (*queriedSeriesStorageHeader)(unsafe.Pointer(&headerBuffer[1]))
+	header := (*queriedSeriesStorageHeader)(unsafe.Pointer(&headerBuffer[1])) // #nosec G103  it's meant to be that way
 	header.timestamp = timestamp
-	header.size = uint32(len(queriedSeriesBitset))
+	header.size = uint32(len(queriedSeriesBitset)) // #nosec G115 // no overflow
 	header.CalculateCrc32(queriedSeriesBitset)
 
 	if err := s.writeToStorage(storage, headerBuffer[:], queriedSeriesBitset); err != nil {
@@ -205,7 +207,7 @@ func (s *QueriedSeriesStorage) Write(queriedSeriesBitset []byte, timestamp int64
 	return nil
 }
 
-func (s *QueriedSeriesStorage) writeToStorage(storage StorageFile, headerBuffer, queriedSeriesBitset []byte) error {
+func (*QueriedSeriesStorage) writeToStorage(storage StorageFile, headerBuffer, queriedSeriesBitset []byte) error {
 	if _, err := storage.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
@@ -272,18 +274,17 @@ func (s *QueriedSeriesStorage) readStorageHeaders() (result []storageHeaderReade
 		if err := reader.read(); err == nil {
 			result = append(result, reader)
 			maxSize = max(maxSize, reader.size)
-		} else {
-			if !os.IsNotExist(err) && !errors.Is(err, io.EOF) {
-				logger.Warnf("failed to read header: %v", err)
-			}
+		} else if !os.IsNotExist(err) && !errors.Is(err, io.EOF) {
+			logger.Warnf("failed to read header: %v", err)
 		}
 	}
 
+	//revive:disable-next-line:add-constant // 2 working files
 	if len(result) == 2 && result[0].timestamp < result[1].timestamp {
 		result[0], result[1] = result[1], result[0]
 	}
 
-	return
+	return result, maxSize
 }
 
 func (s *QueriedSeriesStorage) Close() error {

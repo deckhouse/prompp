@@ -177,7 +177,7 @@ func (s *Shard[TWal]) UnloadUnusedSeriesData() error {
 	unloader := s.DataStorage().CreateUnusedSeriesDataUnloader()
 
 	var snapshot, queriedSeries []byte
-	_ = s.DataStorage().WithRLock(func(ds *cppbridge.HeadDataStorage) error {
+	_ = s.DataStorage().WithRLock(func(*cppbridge.HeadDataStorage) error {
 		snapshot = unloader.CreateSnapshot()
 		queriedSeries = s.DataStorage().GetQueriedSeriesBitset()
 		return nil
@@ -188,7 +188,7 @@ func (s *Shard[TWal]) UnloadUnusedSeriesData() error {
 		return fmt.Errorf("unable to write unloaded series data snapshot: %v", err)
 	}
 
-	_ = s.DataStorage().WithLock(func(ds *cppbridge.HeadDataStorage) error {
+	_ = s.DataStorage().WithLock(func(*cppbridge.HeadDataStorage) error {
 		s.UnloadedDataStorage().WriteIndex(header)
 		unloader.Unload()
 		return nil
@@ -201,22 +201,23 @@ func (s *Shard[TWal]) UnloadUnusedSeriesData() error {
 	return nil
 }
 
+// LoadAndQuerySeriesData loads the data and queries the series from the [DataStorage].
 func (s *Shard[TWal]) LoadAndQuerySeriesData() (err error) {
 	var queriers []uintptr
 	s.loadAndQueryTask.Release(func(q []uintptr) {
 		queriers = q
-		err = s.DataStorage().WithLock(func(ds *cppbridge.HeadDataStorage) error {
+		err = s.DataStorage().WithLock(func(*cppbridge.HeadDataStorage) error {
 			loader := s.DataStorage().CreateLoader(queriers)
 			return s.UnloadedDataStorage().ForEachSnapshot(loader.Load)
 		})
 	})
-
 	if err != nil {
-		return
+		return err
 	}
 
 	s.DataStorage().QueryFinal(queriers)
-	return
+
+	return nil
 }
 
 //

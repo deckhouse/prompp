@@ -24,7 +24,8 @@ func TestXxx(t *testing.T) {
 		generation,
 		nil,
 	)
-	_ = h
+
+	t.Log(h)
 }
 
 // testWal test implementation wal.

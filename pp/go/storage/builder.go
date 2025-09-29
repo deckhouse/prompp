@@ -100,6 +100,8 @@ func (b *Builder) Build(generation uint64, numberOfShards uint16) (*HeadOnDisk, 
 }
 
 // createShardOnDisk create [shard.Shard] with [wal.Wal] which is written to disk.
+//
+//revive:disable-next-line:function-length // long but readable.
 func (b *Builder) createShardOnDisk(
 	headDir string,
 	swn *writer.SegmentWriteNotifier,

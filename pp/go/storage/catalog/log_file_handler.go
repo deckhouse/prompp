@@ -26,7 +26,7 @@ func NewFileHandler(filePath string) (*FileHandler, error) {
 
 // NewFileHandlerWithOpts init new [FileHandler] with opts.
 func NewFileHandlerWithOpts(filePath string, flag int, perm os.FileMode) (*FileHandler, error) {
-	file, err := os.OpenFile(filePath, flag, perm) // #nosec G304 // it's meant to be that way
+	file, err := os.OpenFile(filePath, flag, perm) //#nosec G304 // it's meant to be that way
 	if err != nil {
 		return nil, fmt.Errorf("open file: %w", err)
 	}
