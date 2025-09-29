@@ -278,10 +278,10 @@ func (c *flagConfig) setFeatureListOptions(logger log.Logger) error {
 }
 
 func main() {
-	if os.Getenv("DEBUG") != "" {
-		runtime.SetBlockProfileRate(20)
-		runtime.SetMutexProfileFraction(20)
-	}
+	// if os.Getenv("DEBUG") != "" {
+	runtime.SetBlockProfileRate(20)
+	runtime.SetMutexProfileFraction(20)
+	// }
 
 	var (
 		oldFlagRetentionDuration model.Duration
@@ -424,7 +424,7 @@ func main() {
 		Default("100000").Uint32Var(&cfg.WalMaxSamplesPerSegment)
 
 	serverOnlyFlag(a, "storage.head-retention-timeout", "Timeout before inactive heads are shrieked.").
-		Default("3m").SetValue(&cfg.HeadRetentionTimeout)
+		Default("2m").SetValue(&cfg.HeadRetentionTimeout)
 
 	// TODO: Remove in Prometheus 3.0.
 	var b bool
