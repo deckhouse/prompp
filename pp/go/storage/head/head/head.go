@@ -28,8 +28,6 @@ const defaultNumberOfWorkers = 2
 
 // Shard the minimum required head Shard implementation.
 type Shard interface {
-	// LSS() *LSS
-
 	// ShardID returns the shard ID.
 	ShardID() uint16
 

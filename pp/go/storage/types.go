@@ -16,11 +16,11 @@ type WalOnDisk = wal.Wal[
 	*writer.Buffered[*cppbridge.EncodedSegment],
 ]
 
-// ShardOnDisk [shard.Shard] with [WalOnDisk].
-type ShardOnDisk = shard.Shard[*WalOnDisk]
+// ShardOnDisk [shard.Shard].
+type ShardOnDisk = shard.Shard
 
-// PerGoroutineShard [shard.PerGoroutineShard] with [WalOnDisk].
-type PerGoroutineShard = shard.PerGoroutineShard[*WalOnDisk]
+// PerGoroutineShard [shard.PerGoroutineShard].
+type PerGoroutineShard = shard.PerGoroutineShard
 
 // HeadOnDisk [head.Head] with [ShardOnDisk].
 type HeadOnDisk = head.Head[*ShardOnDisk, *PerGoroutineShard]
