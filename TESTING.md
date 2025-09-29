@@ -20,7 +20,15 @@ docker run -it -v .:/src -w /src prompp-build /bin/bash
 
 All C++ code, along with tests, is located in the `pp` directory. Within this directory, there is a `Makefile` with the `test` target. This target will compile and run all unit tests for the C++ code.
 
-TODO: Running a specific test.
+To running test in only one package use command
+```sh
+make test target=//:bare_bones_test
+```
+
+It is possible also add gtest filter to run only specific tests
+```sh
+make test target=//:bare_bones_test filter=BareBonesVectorAllocatedMemoryFixture.ObjectWithoutAllocatedMemoryMethod
+```
 
 ### Benchmarks
 
