@@ -240,7 +240,7 @@ func (l *ShardDataLoader) Load() error {
 		queriedSeriesStorageIsEmpty, _ = l.loadQueriedSeries()
 	}
 
-	decoder, err := l.loadWalFile(bufio.NewReaderSize(shardWalFile, 1024*1024*4), queriedSeriesStorageIsEmpty)
+	decoder, err := l.loadWalFile(bufio.NewReaderSize(shardWalFile, 1024*1024*10), queriedSeriesStorageIsEmpty)
 	if err != nil {
 		return err
 	}
@@ -289,7 +289,7 @@ func (l *ShardDataLoader) loadWalFile(
 func (l *ShardDataLoader) createShardWal(fileName string, walDecoder *cppbridge.HeadWalDecoder) error {
 	shardWalFile, err := os.OpenFile( //nolint:gosec // need this permissions
 		fileName,
-		os.O_WRONLY,
+		os.O_WRONLY|os.O_APPEND,
 		0o666, //revive:disable-line:add-constant // file permissions simple readable as octa-number
 	)
 	if err != nil {

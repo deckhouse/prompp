@@ -27,7 +27,7 @@ var _ storage.Storage = (*Adapter)(nil)
 
 // Adapter for implementing the [Queryable] interface and append data.
 type Adapter struct {
-	proxy                 *pp_storage.ProxyHead
+	proxy                 *pp_storage.Proxy
 	haTracker             *hatracker.HighAvailabilityTracker
 	hashdexFactory        cppbridge.HashdexFactory
 	hashdexLimits         cppbridge.WALHashdexLimits
@@ -43,7 +43,7 @@ type Adapter struct {
 // NewAdapter init new [Adapter].
 func NewAdapter(
 	clock clockwork.Clock,
-	proxy *pp_storage.ProxyHead,
+	proxy *pp_storage.Proxy,
 	mergeOutOfOrderChunks func(),
 	registerer prometheus.Registerer,
 ) *Adapter {

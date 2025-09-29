@@ -30,6 +30,12 @@ type ActiveHeadContainer[
 // Head
 //
 
+// RangeHead the minimum required [Head] implementation.
+type RangeHead[TShard Shard] interface {
+	// RangeShards returns an iterator over the [Head] [Shard]s, through which the shard can be directly accessed.
+	RangeShards() func(func(TShard) bool)
+}
+
 // Head the minimum required [Head] implementation.
 type Head[
 	TTask Task,

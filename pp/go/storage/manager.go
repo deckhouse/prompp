@@ -22,7 +22,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/container"
 	"github.com/prometheus/prometheus/pp/go/storage/head/keeper"
-	"github.com/prometheus/prometheus/pp/go/storage/head/proxy"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
 	"github.com/prometheus/prometheus/pp/go/storage/mediator"
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
@@ -124,9 +123,10 @@ func (c *Config) SetNumberOfShards(numberOfShards uint16) bool {
 
 // Manager manages services for the work of the heads.
 type Manager struct {
-	g               run.Group
-	closer          *util.Closer
-	proxy           *proxy.Proxy[*HeadOnDisk]
+	g      run.Group
+	closer *util.Closer
+	// proxy           *proxy.Proxy[*HeadOnDisk]
+	proxy           *Proxy
 	cgogc           *cppbridge.CGOGC
 	cfg             *Config
 	rotatorMediator *mediator.Mediator
@@ -184,9 +184,10 @@ func NewManager(
 	m := &Manager{
 		g:      run.Group{},
 		closer: util.NewCloser(),
-		proxy:  proxy.NewProxy(container.NewWeighted(h), hKeeper, services.CFSViaRange),
-		cgogc:  cppbridge.NewCGOGC(r),
-		cfg:    cfg,
+		// proxy:  proxy.NewProxy(container.NewWeighted(h), hKeeper, services.CFSViaRange),
+		proxy: NewProxy(container.NewWeighted(h), hKeeper, services.CFSViaRange),
+		cgogc: cppbridge.NewCGOGC(r),
+		cfg:   cfg,
 		rotatorMediator: mediator.NewMediator(
 			mediator.NewRotateTimerWithSeed(clock, o.BlockDuration, o.Seed),
 		),
@@ -223,7 +224,7 @@ func (m *Manager) MergeOutOfOrderChunks() {
 }
 
 // Proxy returns proxy to the active [Head] and the keeper of old [Head]s.
-func (m *Manager) Proxy() *proxy.Proxy[*HeadOnDisk] {
+func (m *Manager) Proxy() *Proxy {
 	return m.proxy
 }
 

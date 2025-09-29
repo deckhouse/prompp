@@ -110,7 +110,7 @@ func (b *Builder) createShardOnDisk(
 	headDir = filepath.Clean(headDir)
 	shardFile, err := os.OpenFile( //nolint:gosec // need this permissions
 		GetShardWalFilename(headDir, shardID),
-		os.O_WRONLY|os.O_CREATE,
+		os.O_WRONLY|os.O_CREATE|os.O_APPEND,
 		0o666, //revive:disable-line:add-constant // file permissions simple readable as octa-number
 	)
 	if err != nil {
