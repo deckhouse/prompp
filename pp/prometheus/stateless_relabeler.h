@@ -172,7 +172,7 @@ class Regexp {
   }
 
   // replace_with_args - replace in template with incoming args.
-  PROMPP_ALWAYS_INLINE std::string replace_with_args(std::stringstream& buf, std::vector<std::string>& args, std::vector<PatternPart>& tmpl) {
+  PROMPP_ALWAYS_INLINE std::string replace_with_args(std::ostringstream& buf, std::vector<std::string>& args, std::vector<PatternPart>& tmpl) {
     if (tmpl.size() == 0) [[unlikely]] {
       // no template or source data
       return "";
@@ -186,7 +186,7 @@ class Regexp {
     return buf.str();
   }
 
-  PROMPP_ALWAYS_INLINE std::string replace_with_args(std::stringstream& buf, std::vector<std::string>& args, const std::vector<PatternPart>& tmpl) const {
+  PROMPP_ALWAYS_INLINE std::string replace_with_args(std::ostringstream& buf, std::vector<std::string>& args, const std::vector<PatternPart>& tmpl) const {
     if (tmpl.size() == 0) [[unlikely]] {
       // no template or source data
       return "";
@@ -201,7 +201,7 @@ class Regexp {
   }
 
   // replace_full - find match for source and replace in template.
-  PROMPP_ALWAYS_INLINE std::string replace_full(std::stringstream& out, std::string_view src, std::vector<PatternPart>& tmpl) {
+  PROMPP_ALWAYS_INLINE std::string replace_full(std::ostringstream& out, std::string_view src, std::vector<PatternPart>& tmpl) {
     if (src.size() == 0 || tmpl.size() == 0) [[unlikely]] {
       // no template or source data
       return "";
@@ -217,7 +217,7 @@ class Regexp {
     return replace_with_args(out, res_args, tmpl);
   }
 
-  PROMPP_ALWAYS_INLINE std::string replace_full(std::stringstream& out, std::string_view src, const std::vector<PatternPart>& tmpl) const {
+  PROMPP_ALWAYS_INLINE std::string replace_full(std::ostringstream& out, std::string_view src, const std::vector<PatternPart>& tmpl) const {
     if (src.size() == 0 || tmpl.size() == 0) [[unlikely]] {
       // no template or source data
       return "";
@@ -483,7 +483,7 @@ class RelabelConfig {
 
   // relabel - building relabeling labels.
   template <class LabelsBuilder>
-  PROMPP_ALWAYS_INLINE relabelStatus relabel(std::stringstream& buf, LabelsBuilder& builder) {
+  PROMPP_ALWAYS_INLINE relabelStatus relabel(std::ostringstream& buf, LabelsBuilder& builder) {
     std::string value;
     for (size_t i = 0; i < source_labels_.size(); ++i) {
       std::string_view lv = builder.get(source_labels_[i]);
@@ -621,7 +621,7 @@ class RelabelConfig {
   }
 
   template <class LabelsBuilder>
-  PROMPP_ALWAYS_INLINE relabelStatus relabel(std::stringstream& buf, LabelsBuilder& builder) const {
+  PROMPP_ALWAYS_INLINE relabelStatus relabel(std::ostringstream& buf, LabelsBuilder& builder) const {
     std::string value;
     for (size_t i = 0; i < source_labels_.size(); ++i) {
       std::string_view lv = builder.get(source_labels_[i]);
@@ -780,7 +780,7 @@ class StatelessRelabeler {
 
   // relabeling_process caller passes a LabelsBuilder containing the initial set of labels, which is mutated by the rules.
   template <class LabelsBuilder>
-  PROMPP_ALWAYS_INLINE relabelStatus relabeling_process(std::stringstream& buf, LabelsBuilder& builder) {
+  PROMPP_ALWAYS_INLINE relabelStatus relabeling_process(std::ostringstream& buf, LabelsBuilder& builder) {
     relabelStatus rstatus{rsKeep};
     for (auto& rcfg : configs_) {
       relabelStatus status = rcfg.relabel(buf, builder);
@@ -796,7 +796,7 @@ class StatelessRelabeler {
   }
 
   template <class LabelsBuilder>
-  PROMPP_ALWAYS_INLINE relabelStatus relabeling_process(std::stringstream& buf, LabelsBuilder& builder) const {
+  PROMPP_ALWAYS_INLINE relabelStatus relabeling_process(std::ostringstream& buf, LabelsBuilder& builder) const {
     relabelStatus rstatus{rsKeep};
     for (auto& rcfg : configs_) {
       relabelStatus status = rcfg.relabel(buf, builder);
@@ -814,7 +814,7 @@ class StatelessRelabeler {
   // relabeling_process_with_soft_validate caller passes a LabelsBuilder containing the initial set of labels, which is mutated by the rules with soft(on empty)
   // validate label set.
   template <class LabelsBuilder>
-  PROMPP_ALWAYS_INLINE relabelStatus relabeling_process_with_soft_validate(std::stringstream& buf, LabelsBuilder& builder) {
+  PROMPP_ALWAYS_INLINE relabelStatus relabeling_process_with_soft_validate(std::ostringstream& buf, LabelsBuilder& builder) {
     relabelStatus rstatus = relabeling_process(buf, builder);
 
     if (rstatus == rsDrop) {

@@ -144,7 +144,7 @@ using BaseOutputDecoder = BasicDecoder<Primitives::SnugComposites::LabelSet::Shr
 template <class EncodingBimap>
 class OutputDecoder : private BaseOutputDecoder {
   Primitives::SnugComposites::LabelSet::ShrinkableEncodingBimap<BareBones::Vector> wal_lss_;
-  std::stringstream buf_;
+  std::ostringstream buf_;
   Primitives::LabelsBuilderStateMap builder_state_;
   std::vector<Primitives::LabelView> external_labels_{};
   Prometheus::Relabel::StatelessRelabeler& stateless_relabeler_;

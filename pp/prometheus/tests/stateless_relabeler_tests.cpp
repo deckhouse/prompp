@@ -398,7 +398,7 @@ TEST_F(TestRelabelConfig, Dollar) {
 //
 
 struct TestStatelessRelabeler : public testing::Test {
-  std::stringstream buf_;
+  std::ostringstream buf_;
   PromPP::Primitives::LabelsBuilderStateMap builder_state_;
 };
 

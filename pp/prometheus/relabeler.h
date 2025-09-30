@@ -53,7 +53,7 @@ PROMPP_ALWAYS_INLINE void hard_validate(relabelStatus& rstatus, LabelsBuilder& b
   }
 
   // validate labels
-  builder.range([&]<typename LNameType, typename LValueType>(LNameType& lname, LValueType& lvalue) PROMPP_LAMBDA_INLINE -> bool {
+  builder.range([&](const auto& lname, const auto& lvalue) PROMPP_LAMBDA_INLINE -> bool {
     if (lname == kMetricLabelName && !metric_name_value_is_valid(lvalue)) {
       rstatus = rsInvalid;
       return false;
@@ -85,7 +85,7 @@ PROMPP_ALWAYS_INLINE void hard_validate(relabelStatus& rstatus, LabelsBuilder& b
   }
 
   // check limit len label name and value
-  builder.range([&]<typename LNameType, typename LValueType>(LNameType& lname, LValueType& lvalue) PROMPP_LAMBDA_INLINE -> bool {
+  builder.range([&](const auto& lname, auto& lvalue) PROMPP_LAMBDA_INLINE -> bool {
     if (limits->label_name_length_limit > 0 && lname.size() > limits->label_name_length_limit) {
       rstatus = rsInvalid;
       return false;
@@ -163,11 +163,19 @@ class RelabeledSeries {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const { return size_; }
 
-  PROMPP_ALWAYS_INLINE void emplace_back(Primitives::LabelSet& ls,
+  PROMPP_ALWAYS_INLINE void emplace_back(const Primitives::LabelSet& ls,
                                          const BareBones::Vector<Primitives::Sample>& samples,
                                          const size_t hash,
                                          const uint32_t ls_id) {
     data_.emplace_back(ls, samples, hash, ls_id);
+    ++size_;
+  }
+
+  PROMPP_ALWAYS_INLINE void emplace_back(const Primitives::LabelSet& ls,
+                                         BareBones::Vector<Primitives::Sample>&& samples,
+                                         const size_t hash,
+                                         const uint32_t ls_id) {
+    data_.emplace_back(ls, std::move(samples), hash, ls_id);
     ++size_;
   }
 };
@@ -341,7 +349,7 @@ struct RelabelerOptions {
 // shard_id_            - current shard id;
 // log_shards_          - logarithm to the base 2 of total shards count;
 class PerShardRelabeler {
-  std::stringstream buf_;
+  std::ostringstream buf_;
   Primitives::LabelsBuilderStateMap builder_state_;
   std::vector<Primitives::LabelView> external_labels_{};
   Primitives::TimeseriesSemiview timeseries_buf_;
@@ -470,7 +478,7 @@ class PerShardRelabeler {
             }
             case rsRelabel: {
               auto ls_id = input_lss.find_or_emplace(timeseries_buf_.label_set(), it->hash());
-              Primitives::LabelSet new_label_set = builder.label_set();
+              const auto& new_label_set = builder.label_set();
               size_t new_hash = hash_value(new_label_set);
               const size_t new_shard_id = new_hash % number_of_shards_;
               auto& samples = timeseries_buf_.samples();
@@ -855,7 +863,7 @@ class PerShardRelabeler {
           return;
         }
 
-        Primitives::LabelSet new_label_set = builder.label_set();
+        const auto& new_label_set = builder.label_set();
         relabeled_series->emplace_back(new_label_set, BareBones::Vector{inner_serie.sample}, hash_value(new_label_set), inner_serie.ls_id);
       });
     }
@@ -881,7 +889,7 @@ class PerShardRelabeler {
 
 // PerGoroutineRelabeler stateful relabeler for shard goroutines.
 class PerGoroutineRelabeler {
-  std::stringstream buf_;
+  std::ostringstream buf_;
   Primitives::LabelsBuilderStateMap builder_state_;
   Primitives::TimeseriesSemiview timeseries_buf_;
   uint16_t number_of_shards_;
@@ -1113,7 +1121,7 @@ class PerGoroutineRelabeler {
             }
             case rsRelabel: {
               auto ls_id = input_lss.find_or_emplace(timeseries_buf_.label_set(), it->hash());
-              Primitives::LabelSet new_label_set = builder.label_set();
+              const auto& new_label_set = builder.label_set();
               size_t new_hash = hash_value(new_label_set);
               const size_t new_shard_id = new_hash % number_of_shards_;
               auto& samples = timeseries_buf_.samples();
