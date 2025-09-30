@@ -3,6 +3,10 @@ run:
 
 output:
   sort-results: true
+  formats:
+    - format: json
+      path: prom_default.json
+  show-stats: true
 
 linters:
   enable:
@@ -10,6 +14,7 @@ linters:
     - errorlint
     - gocritic
     - godot
+    - godox
     - gofumpt
     - goimports
     - misspell
@@ -73,10 +78,6 @@ linters-settings:
     rules:
       main:
         deny:
-          - pkg: "sync/atomic"
-            desc: "Use go.uber.org/atomic instead of sync/atomic"
-          - pkg: "github.com/stretchr/testify/assert"
-            desc: "Use github.com/stretchr/testify/require instead of github.com/stretchr/testify/assert"
           - pkg: "github.com/go-kit/kit/log"
             desc: "Use github.com/go-kit/log instead of github.com/go-kit/kit/log"
           - pkg: "io/ioutil"
@@ -109,7 +110,7 @@ linters-settings:
   gofumpt:
     extra-rules: true
   perfsprint:
-     # Optimizes `fmt.Errorf`.
+    # Optimizes `fmt.Errorf`.
     errorf: false
   revive:
     # By default, revive will enable only the linting rules that are named in the configuration file.
