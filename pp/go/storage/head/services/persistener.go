@@ -142,7 +142,7 @@ func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) Persist(
 	}
 
 	if shouldNotify {
-		p.writeNotifier.NotifyWritten()
+		p.writeNotifier.Notify()
 	}
 
 	return outdatedHeads

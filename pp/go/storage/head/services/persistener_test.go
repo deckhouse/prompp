@@ -51,10 +51,11 @@ func (s *GenericPersistenceSuite) SetupTest() {
 
 	h := s.mustCreateHead()
 	activeHeadContainer := container.NewWeighted(h)
-	hKeeper := keeper.NewKeeper[storage.HeadOnDisk](1, func() {})
+	removedHeadNotifier := &mock.WriteNotifierMock{NotifyFunc: func() {}}
+	hKeeper := keeper.NewKeeper[storage.HeadOnDisk](1, func() {}, removedHeadNotifier)
 	s.proxy = proxy.NewProxy(activeHeadContainer, hKeeper, func(*storage.HeadOnDisk) error { return nil })
 	s.blockWriter = &mock.HeadBlockWriterMock[*storage.ShardOnDisk]{}
-	s.writeNotifier = &mock.WriteNotifierMock{NotifyWrittenFunc: func() {}}
+	s.writeNotifier = &mock.WriteNotifierMock{NotifyFunc: func() {}}
 }
 
 func (s *GenericPersistenceSuite) createDataDirectory() string {
@@ -247,7 +248,7 @@ func (s *PersistenerSuite) TestPersistHeadSuccess() {
 	// Assert
 	s.Equal([]*storage.HeadOnDisk(nil), outdated)
 	s.Len(s.blockWriter.WriteCalls(), 2)
-	s.Len(s.writeNotifier.NotifyWrittenCalls(), 1)
+	s.Len(s.writeNotifier.NotifyCalls(), 1)
 	s.Require().NoError(err)
 	s.Equal(catalog.StatusPersisted, record.Status())
 }
@@ -287,7 +288,7 @@ func (s *PersistenerSuite) TestPersistHeadErrorOnBlockWriterForSecondShard() {
 	// Assert
 	s.Equal([]*storage.HeadOnDisk(nil), outdated)
 	s.Len(s.blockWriter.WriteCalls(), 2)
-	s.Empty(s.writeNotifier.NotifyWrittenCalls())
+	s.Empty(s.writeNotifier.NotifyCalls())
 	s.Require().NoError(err)
 	s.Equal(catalog.StatusNew, record.Status())
 }

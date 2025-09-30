@@ -22,6 +22,20 @@ func (*headForTest) Close() error {
 	return nil
 }
 
+//
+// testRemovedHeadNotifier
+//
+
+// testRemovedHeadNotifier implementation [RemovedHeadNotifier].
+type testRemovedHeadNotifier struct {
+	count int
+}
+
+// Notify implementation [RemovedHeadNotifier].
+func (n *testRemovedHeadNotifier) Notify() {
+	n.count++
+}
+
 type sortedSlice = headSortedSlice[*headForTest]
 
 type KeeperSuite struct {
@@ -37,7 +51,8 @@ func (s *KeeperSuite) TestAdd() {
 	// Arrange
 	count := 0
 	addTrigger := func() { count++ }
-	s.keeper = NewKeeper[headForTest](2, addTrigger)
+	removedHeadNotifier := &testRemovedHeadNotifier{}
+	s.keeper = NewKeeper[headForTest](2, addTrigger, removedHeadNotifier)
 
 	// Act
 	_ = s.keeper.Add(newHeadForTest("d"), 4)
@@ -57,7 +72,8 @@ func (s *KeeperSuite) TestAddWithReplaceNoReplace() {
 	// Arrange
 	count := 0
 	addTrigger := func() { count++ }
-	s.keeper = NewKeeper[headForTest](2, addTrigger)
+	removedHeadNotifier := &testRemovedHeadNotifier{}
+	s.keeper = NewKeeper[headForTest](2, addTrigger, removedHeadNotifier)
 
 	// Act
 	_ = s.keeper.Add(newHeadForTest("d"), 4)
@@ -77,7 +93,8 @@ func (s *KeeperSuite) TestAddWithReplace() {
 	// Arrange
 	count := 0
 	addTrigger := func() { count++ }
-	s.keeper = NewKeeper[headForTest](2, addTrigger)
+	removedHeadNotifier := &testRemovedHeadNotifier{}
+	s.keeper = NewKeeper[headForTest](2, addTrigger, removedHeadNotifier)
 
 	// Act
 	_ = s.keeper.Add(newHeadForTest("d"), 4)
@@ -99,7 +116,8 @@ func (s *KeeperSuite) TestRemove() {
 
 	count := 0
 	addTrigger := func() { count++ }
-	s.keeper = NewKeeper[headForTest](Slots, addTrigger)
+	removedHeadNotifier := &testRemovedHeadNotifier{}
+	s.keeper = NewKeeper[headForTest](Slots, addTrigger, removedHeadNotifier)
 	_ = s.keeper.Add(newHeadForTest("a"), 1)
 	_ = s.keeper.Add(newHeadForTest("b"), 2)
 	_ = s.keeper.Add(newHeadForTest("c"), 3)
@@ -116,4 +134,5 @@ func (s *KeeperSuite) TestRemove() {
 	}, s.keeper.heads)
 	s.Equal(5, count)
 	s.Equal(Slots, cap(s.keeper.heads))
+	s.Equal(1, removedHeadNotifier.count)
 }

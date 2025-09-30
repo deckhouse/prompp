@@ -140,7 +140,8 @@ func NewManager(
 	o *Options,
 	clock clockwork.Clock,
 	hcatalog *catalog.Catalog,
-	triggerNotifier *ReloadBlocksTriggerNotifier,
+	reloadBlocksNotifier *TriggerNotifier,
+	removedHeadNotifier *TriggerNotifier,
 	readyNotifier ready.Notifier,
 	r prometheus.Registerer,
 ) (*Manager, error) {
@@ -184,7 +185,7 @@ func NewManager(
 		mediator.NewConstantIntervalTimer(clock, defaultStartPersistnerInterval, DefaultPersistDuration),
 	)
 
-	hKeeper := keeper.NewKeeper[HeadOnDisk](o.KeeperCapacity, persistenerMediator.Trigger)
+	hKeeper := keeper.NewKeeper[HeadOnDisk](o.KeeperCapacity, persistenerMediator.Trigger, removedHeadNotifier)
 	m := &Manager{
 		g:      run.Group{},
 		closer: util.NewCloser(),
@@ -199,7 +200,7 @@ func NewManager(
 		),
 	}
 
-	m.initServices(o, hcatalog, builder, loader, triggerNotifier, persistenerMediator, readyNotifier, clock, r)
+	m.initServices(o, hcatalog, builder, loader, reloadBlocksNotifier, persistenerMediator, readyNotifier, clock, r)
 	logger.Infof("[Head Manager] created")
 
 	return m, nil
@@ -253,7 +254,7 @@ func (m *Manager) initServices(
 	hcatalog *catalog.Catalog,
 	builder *Builder,
 	loader *Loader,
-	triggerNotifier *ReloadBlocksTriggerNotifier,
+	reloadBlocksTriggerNotifier *TriggerNotifier,
 	persistenerMediator *mediator.Mediator,
 	readyNotifier ready.Notifier,
 	clock clockwork.Clock,
@@ -288,7 +289,7 @@ func (m *Manager) initServices(
 					o.BlockDuration,
 					r,
 				),
-				triggerNotifier,
+				reloadBlocksTriggerNotifier,
 				clock,
 				persistenerMediator,
 				o.MaxRetentionPeriod,
@@ -424,26 +425,26 @@ func (hi *headInformer) SetRotatedStatus(headID string) error {
 }
 
 //
-// ReloadBlocksTriggerNotifier
+// TriggerNotifier
 //
 
-// ReloadBlocksTriggerNotifier for notifications about the appearance of new blocks.
-type ReloadBlocksTriggerNotifier struct {
+// TriggerNotifier to receive notifications about new events.
+type TriggerNotifier struct {
 	c chan struct{}
 }
 
-// NewReloadBlocksTriggerNotifier init new [ReloadBlocksTriggerNotifier].
-func NewReloadBlocksTriggerNotifier() *ReloadBlocksTriggerNotifier {
-	return &ReloadBlocksTriggerNotifier{c: make(chan struct{}, 1)}
+// NewTriggerNotifier init new [TriggerNotifier].
+func NewTriggerNotifier() *TriggerNotifier {
+	return &TriggerNotifier{c: make(chan struct{}, 1)}
 }
 
 // Chan returns channel with notifications.
-func (tn *ReloadBlocksTriggerNotifier) Chan() <-chan struct{} {
+func (tn *TriggerNotifier) Chan() <-chan struct{} {
 	return tn.c
 }
 
-// NotifyWritten sends a notify that the writing is completed.
-func (tn *ReloadBlocksTriggerNotifier) NotifyWritten() {
+// Notify sends a notify that the writing is completed.
+func (tn *TriggerNotifier) Notify() {
 	select {
 	case tn.c <- struct{}{}:
 	default:

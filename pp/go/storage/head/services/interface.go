@@ -226,8 +226,8 @@ type Task interface {
 
 // WriteNotifier sends a notify that the writing is completed.
 type WriteNotifier interface {
-	// NotifyWritten sends a notify that the writing is completed.
-	NotifyWritten()
+	// Notify sends a notify that the writing is completed.
+	Notify()
 }
 
 //

@@ -22,6 +22,16 @@ const (
 // ErrorNoSlots error when keeper has no slots.
 var ErrorNoSlots = errors.New("keeper has no slots")
 
+//
+// RemovedHeadNotifier
+//
+
+// RemovedHeadNotifier sends a notify that the [Head] has been removed.
+type RemovedHeadNotifier interface {
+	// Notify sends a notify that the [Head] has been removed.
+	Notify()
+}
+
 type sortableHead[THead any] struct {
 	head      THead
 	createdAt time.Duration
@@ -74,16 +84,22 @@ type Head[T any] interface {
 
 // Keeper holds outdated heads until conversion.
 type Keeper[T any, THead Head[T]] struct {
-	heads      headSortedSlice[THead]
-	addTrigger func()
-	lock       sync.RWMutex
+	heads               headSortedSlice[THead]
+	addTrigger          func()
+	removedHeadNotifier RemovedHeadNotifier
+	lock                sync.RWMutex
 }
 
 // NewKeeper init new [Keeper].
-func NewKeeper[T any, THead Head[T]](queueSize int, addTrigger func()) *Keeper[T, THead] {
+func NewKeeper[T any, THead Head[T]](
+	keeperCapacity int,
+	addTrigger func(),
+	removedHeadNotifier RemovedHeadNotifier,
+) *Keeper[T, THead] {
 	return &Keeper[T, THead]{
-		heads:      make(headSortedSlice[THead], 0, max(queueSize, MinHeadConvertingQueueSize)),
-		addTrigger: addTrigger,
+		heads:               make(headSortedSlice[THead], 0, max(keeperCapacity, MinHeadConvertingQueueSize)),
+		addTrigger:          addTrigger,
+		removedHeadNotifier: removedHeadNotifier,
 	}
 }
 
@@ -172,11 +188,17 @@ func (k *Keeper[T, THead]) Remove(headsForRemove []THead) {
 	k.setHeads(newHeads)
 	k.lock.Unlock()
 
+	var shouldNotify bool
 	for _, head := range headsMap {
 		if head != nil {
 			_ = head.Close()
 			logger.Infof("[Keeper]: head %s persisted, closed and removed", head.ID())
+			shouldNotify = true
 		}
+	}
+
+	if shouldNotify {
+		k.removedHeadNotifier.Notify()
 	}
 }
 

@@ -723,7 +723,7 @@ func main() {
 
 	pp_pkg_logger.InitLogHandler(log.With(logger, "component", "pp"))
 
-	reloadBlocksTriggerNotifier := pp_storage.NewReloadBlocksTriggerNotifier()
+	reloadBlocksTriggerNotifier := pp_storage.NewTriggerNotifier()
 	cfg.tsdb.ReloadBlocksExternalTrigger = reloadBlocksTriggerNotifier
 
 	dataDir, err := filepath.Abs(localStoragePath)
@@ -761,12 +761,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	removedHeadTriggerNotifier := pp_storage.NewTriggerNotifier()
 	hManagerReadyNotifier := ready.NewNotifiableNotifier()
 	hManager, err := pp_storage.NewManager(
 		&pp_storage.Options{
-			Seed: cfgFile.GlobalConfig.ExternalLabels.Hash(),
-			// BlockDuration:       time.Duration(cfg.tsdb.MinBlockDuration),
-			BlockDuration:       7 * time.Minute,
+			Seed:                cfgFile.GlobalConfig.ExternalLabels.Hash(),
+			BlockDuration:       time.Duration(cfg.tsdb.MinBlockDuration),
 			CommitInterval:      time.Duration(cfg.WalCommitInterval),
 			MaxRetentionPeriod:  time.Duration(cfg.tsdb.RetentionDuration),
 			HeadRetentionPeriod: time.Duration(cfg.HeadRetentionTimeout),
@@ -778,6 +778,7 @@ func main() {
 		clock,
 		headCatalog,
 		reloadBlocksTriggerNotifier,
+		removedHeadTriggerNotifier,
 		hManagerReadyNotifier,
 		prometheus.DefaultRegisterer,
 	)
@@ -1167,7 +1168,14 @@ func main() {
 	).Add(
 		remoteWriterReadyNotifier,
 	).Build()
-	opGC := catalog.NewGC(dataDir, headCatalog, clock, multiNotifiable, time.Duration(cfg.tsdb.RetentionDuration))
+	opGC := catalog.NewGC(
+		dataDir,
+		headCatalog,
+		clock,
+		multiNotifiable,
+		removedHeadTriggerNotifier,
+		time.Duration(cfg.tsdb.RetentionDuration),
+	)
 
 	var g run.Group
 	{

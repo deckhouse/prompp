@@ -35,18 +35,29 @@ type Notifiable interface {
 }
 
 //
+// RemovedHeadNotifier
+//
+
+// RemovedHeadNotifier notifies that the [Head] has been removed.
+type RemovedHeadNotifier interface {
+	// Chan returns channel with notifications.
+	Chan() <-chan struct{}
+}
+
+//
 // GC
 //
 
 // GC garbage collector for old [Head].
 type GC struct {
-	dataDir            string
-	catalog            HeadsCatalog
-	clock              clockwork.Clock
-	readyNotifiable    Notifiable
-	maxRetentionPeriod time.Duration
-	stop               chan struct{}
-	stopped            chan struct{}
+	dataDir             string
+	catalog             HeadsCatalog
+	clock               clockwork.Clock
+	readyNotifiable     Notifiable
+	removedHeadNotifier RemovedHeadNotifier
+	maxRetentionPeriod  time.Duration
+	stop                chan struct{}
+	stopped             chan struct{}
 }
 
 // NewGC init new [GC].
@@ -55,16 +66,18 @@ func NewGC(
 	catalog HeadsCatalog,
 	clock clockwork.Clock,
 	readyNotifiable Notifiable,
+	removedHeadNotifier RemovedHeadNotifier,
 	maxRetentionPeriod time.Duration,
 ) *GC {
 	return &GC{
-		dataDir:            dataDir,
-		catalog:            catalog,
-		clock:              clock,
-		readyNotifiable:    readyNotifiable,
-		maxRetentionPeriod: maxRetentionPeriod,
-		stop:               make(chan struct{}),
-		stopped:            make(chan struct{}),
+		dataDir:             dataDir,
+		catalog:             catalog,
+		clock:               clock,
+		readyNotifiable:     readyNotifiable,
+		removedHeadNotifier: removedHeadNotifier,
+		maxRetentionPeriod:  maxRetentionPeriod,
+		stop:                make(chan struct{}),
+		stopped:             make(chan struct{}),
 	}
 }
 
@@ -126,6 +139,8 @@ func (gc *GC) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(time.Minute):
+			gc.Iterate()
+		case <-gc.removedHeadNotifier.Chan():
 			gc.Iterate()
 		case <-gc.stop:
 			return errors.New("stopped")

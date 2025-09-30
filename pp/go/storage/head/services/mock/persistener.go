@@ -77,8 +77,8 @@ func (mock *HeadBlockWriterMock[TShard]) WriteCalls() []struct {
 //
 //		// make and configure a mocked services.WriteNotifier
 //		mockedWriteNotifier := &WriteNotifierMock{
-//			NotifyWrittenFunc: func()  {
-//				panic("mock out the NotifyWritten method")
+//			NotifyFunc: func()  {
+//				panic("mock out the Notify method")
 //			},
 //		}
 //
@@ -87,41 +87,41 @@ func (mock *HeadBlockWriterMock[TShard]) WriteCalls() []struct {
 //
 //	}
 type WriteNotifierMock struct {
-	// NotifyWrittenFunc mocks the NotifyWritten method.
-	NotifyWrittenFunc func()
+	// NotifyFunc mocks the Notify method.
+	NotifyFunc func()
 
 	// calls tracks calls to the methods.
 	calls struct {
-		// NotifyWritten holds details about calls to the NotifyWritten method.
-		NotifyWritten []struct {
+		// Notify holds details about calls to the Notify method.
+		Notify []struct {
 		}
 	}
-	lockNotifyWritten sync.RWMutex
+	lockNotify sync.RWMutex
 }
 
-// NotifyWritten calls NotifyWrittenFunc.
-func (mock *WriteNotifierMock) NotifyWritten() {
-	if mock.NotifyWrittenFunc == nil {
-		panic("WriteNotifierMock.NotifyWrittenFunc: method is nil but WriteNotifier.NotifyWritten was just called")
+// Notify calls NotifyFunc.
+func (mock *WriteNotifierMock) Notify() {
+	if mock.NotifyFunc == nil {
+		panic("WriteNotifierMock.NotifyFunc: method is nil but WriteNotifier.Notify was just called")
 	}
 	callInfo := struct {
 	}{}
-	mock.lockNotifyWritten.Lock()
-	mock.calls.NotifyWritten = append(mock.calls.NotifyWritten, callInfo)
-	mock.lockNotifyWritten.Unlock()
-	mock.NotifyWrittenFunc()
+	mock.lockNotify.Lock()
+	mock.calls.Notify = append(mock.calls.Notify, callInfo)
+	mock.lockNotify.Unlock()
+	mock.NotifyFunc()
 }
 
-// NotifyWrittenCalls gets all the calls that were made to NotifyWritten.
+// NotifyCalls gets all the calls that were made to Notify.
 // Check the length with:
 //
-//	len(mockedWriteNotifier.NotifyWrittenCalls())
-func (mock *WriteNotifierMock) NotifyWrittenCalls() []struct {
+//	len(mockedWriteNotifier.NotifyCalls())
+func (mock *WriteNotifierMock) NotifyCalls() []struct {
 } {
 	var calls []struct {
 	}
-	mock.lockNotifyWritten.RLock()
-	calls = mock.calls.NotifyWritten
-	mock.lockNotifyWritten.RUnlock()
+	mock.lockNotify.RLock()
+	calls = mock.calls.Notify
+	mock.lockNotify.RUnlock()
 	return calls
 }
