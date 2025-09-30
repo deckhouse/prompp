@@ -51,7 +51,7 @@ func (s *GenericPersistenceSuite) SetupTest() {
 
 	h := s.mustCreateHead()
 	activeHeadContainer := container.NewWeighted(h)
-	hKeeper := keeper.NewKeeper[storage.HeadOnDisk](1)
+	hKeeper := keeper.NewKeeper[storage.HeadOnDisk](1, func() {})
 	s.proxy = proxy.NewProxy(activeHeadContainer, hKeeper, func(*storage.HeadOnDisk) error { return nil })
 	s.blockWriter = &mock.HeadBlockWriterMock[*storage.ShardOnDisk]{}
 	s.writeNotifier = &mock.WriteNotifierMock{NotifyWrittenFunc: func() {}}
@@ -103,10 +103,6 @@ type PersistenerSuite struct {
 		*storage.HeadOnDisk,
 	]
 }
-
-// func (s *PersistenerSuite) SetupSuite() {
-// 	s.GenericPersistenceSuite.SetupSuite()
-// }
 
 func (s *PersistenerSuite) SetupTest() {
 	s.GenericPersistenceSuite.SetupTest()
@@ -310,10 +306,6 @@ type PersistenerServiceSuite struct {
 	]
 }
 
-// func (s *PersistenerServiceSuite) SetupSuite() {
-// 	s.GenericPersistenceSuite.SetupSuite()
-// }
-
 func (s *PersistenerServiceSuite) SetupTest() {
 	s.GenericPersistenceSuite.SetupTest()
 
@@ -365,7 +357,7 @@ func (s *PersistenerServiceSuite) TestRemoveOutdatedHeadFromKeeper() {
 
 	// Assert
 	s.Empty(s.proxy.Heads())
-	s.Equal(catalog.StatusRotated, record.Status())
+	s.Equal(catalog.StatusPersisted, record.Status())
 }
 
 func (s *PersistenerServiceSuite) TestLoadHeadsInKeeper() {

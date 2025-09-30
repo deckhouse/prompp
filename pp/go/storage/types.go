@@ -11,9 +11,8 @@ import (
 
 // WalOnDisk wal on disk.
 type WalOnDisk = wal.Wal[
-	*cppbridge.EncodedSegment,
-	cppbridge.WALEncoderStats,
-	*writer.Buffered[*cppbridge.EncodedSegment],
+	*cppbridge.HeadEncodedSegment,
+	*writer.Buffered[*cppbridge.HeadEncodedSegment],
 ]
 
 // ShardOnDisk [shard.Shard].

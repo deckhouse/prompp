@@ -1,6 +1,59 @@
 package cppbridge
 
-import "runtime"
+import (
+	"hash/crc32"
+	"io"
+	"runtime"
+)
+
+//
+// HeadEncodedSegment
+//
+
+// HeadEncodedSegment the encoded segment from the head wal.
+type HeadEncodedSegment struct {
+	buf     []byte
+	samples uint32
+}
+
+// NewHeadEncodedSegment init new [HeadEncodedSegment].
+func NewHeadEncodedSegment(b []byte, samples uint32) *HeadEncodedSegment {
+	s := &HeadEncodedSegment{
+		buf:     b,
+		samples: samples,
+	}
+
+	runtime.SetFinalizer(s, func(s *HeadEncodedSegment) {
+		freeBytes(s.buf)
+	})
+
+	return s
+}
+
+// Samples returns count of samples in segment.
+func (s HeadEncodedSegment) Samples() uint32 {
+	return s.samples
+}
+
+// Size returns len of bytes.
+func (s *HeadEncodedSegment) Size() int64 {
+	return int64(len(s.buf))
+}
+
+// CRC32 the hash amount according to the data.
+func (s *HeadEncodedSegment) CRC32() uint32 {
+	return crc32.ChecksumIEEE(s.buf)
+}
+
+// WriteTo implements io.WriterTo inerface.
+func (s *HeadEncodedSegment) WriteTo(w io.Writer) (int64, error) {
+	n, err := w.Write(s.buf)
+	return int64(n), err
+}
+
+//
+// HeadWalEncoder
+//
 
 type HeadWalEncoder struct {
 	lss     *LabelSetStorage
@@ -24,17 +77,21 @@ func (*HeadWalEncoder) Version() uint8 {
 	return EncodersVersion()
 }
 
-func (e *HeadWalEncoder) Encode(innerSeriesSlice []*InnerSeries) (WALEncoderStats, error) {
-	res, err := headWalEncoderAddInnerSeries(e.encoder, innerSeriesSlice)
+func (e *HeadWalEncoder) Encode(innerSeriesSlice []*InnerSeries) (uint32, error) {
+	samples, err := headWalEncoderAddInnerSeries(e.encoder, innerSeriesSlice)
 	runtime.KeepAlive(e)
-	return res, err
+	return samples, err
 }
 
-func (e *HeadWalEncoder) Finalize() (*EncodedSegment, error) {
-	stats, segment, err := headWalEncoderFinalize(e.encoder)
+func (e *HeadWalEncoder) Finalize() (*HeadEncodedSegment, error) {
+	samples, segment, err := headWalEncoderFinalize(e.encoder)
 	runtime.KeepAlive(e)
-	return NewEncodedSegment(segment, stats), err
+	return NewHeadEncodedSegment(segment, samples), err
 }
+
+//
+// HeadWalDecoder
+//
 
 type HeadWalDecoder struct {
 	lss     *LabelSetStorage

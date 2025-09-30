@@ -157,3 +157,8 @@ func (iw *IndexWriter) WriteSeriesTo(id uint32, chunks []ChunkMetadata, w io.Wri
 
 	return n, nil
 }
+
+// isEmpty returns true if [IndexWriter] contains no samples, an empty block.
+func (iw *IndexWriter) isEmpty() bool {
+	return !iw.isPrefixWritten
+}

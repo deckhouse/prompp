@@ -34,7 +34,7 @@ func TestXxx(t *testing.T) {
 		_ = shardFile.Close()
 	}()
 
-	sw, err := writer.NewBuffered(shardID, shardFile, writer.WriteSegment[*cppbridge.EncodedSegment], swn)
+	sw, err := writer.NewBuffered(shardID, shardFile, writer.WriteSegment[*cppbridge.HeadEncodedSegment], swn)
 	require.NoError(t, err)
 
 	shardWalEncoder := &cppbridge.HeadWalEncoder{}
@@ -61,7 +61,7 @@ func TestWalSuite(t *testing.T) {
 
 func (s *WalSuite) TestCurrentSize() {
 	expectedWalSize := int64(42)
-	enc := &EncoderMock[*EncodedSegmentMock, *StatsSegmentMock]{}
+	enc := &EncoderMock[*EncodedSegmentMock]{}
 	segmentWriter := &SegmentWriterMock[*EncodedSegmentMock]{
 		CurrentSizeFunc: func() int64 {
 			return expectedWalSize
@@ -78,7 +78,7 @@ func (s *WalSuite) TestCurrentSize2() {
 	maxSegmentSize := uint32(100)
 	// enSegment := &EncodedSegmentMock{}
 	// stats := &StatsSegmentMock{}
-	enc := &EncoderMock[*EncodedSegmentMock, *StatsSegmentMock]{}
+	enc := &EncoderMock[*EncodedSegmentMock]{}
 	segmentWriter := &SegmentWriterMock[*EncodedSegmentMock]{}
 
 	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)

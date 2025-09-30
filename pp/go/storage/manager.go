@@ -123,14 +123,14 @@ func (c *Config) SetNumberOfShards(numberOfShards uint16) bool {
 
 // Manager manages services for the work of the heads.
 type Manager struct {
-	g      run.Group
-	closer *util.Closer
-	// proxy           *proxy.Proxy[*HeadOnDisk]
+	g               run.Group
+	closer          *util.Closer
 	proxy           *Proxy
 	cgogc           *cppbridge.CGOGC
 	cfg             *Config
 	rotatorMediator *mediator.Mediator
 	mergerMediator  *mediator.Mediator
+	isRunning       bool
 }
 
 // NewManager init new [Manager].
@@ -180,14 +180,17 @@ func NewManager(
 		return nil, errors.Join(fmt.Errorf("failed to set active status: %w", err), h.Close())
 	}
 
-	hKeeper := keeper.NewKeeper[HeadOnDisk](o.KeeperCapacity)
+	persistenerMediator := mediator.NewMediator(
+		mediator.NewConstantIntervalTimer(clock, defaultStartPersistnerInterval, DefaultPersistDuration),
+	)
+
+	hKeeper := keeper.NewKeeper[HeadOnDisk](o.KeeperCapacity, persistenerMediator.Trigger)
 	m := &Manager{
 		g:      run.Group{},
 		closer: util.NewCloser(),
-		// proxy:  proxy.NewProxy(container.NewWeighted(h), hKeeper, services.CFSViaRange),
-		proxy: NewProxy(container.NewWeighted(h), hKeeper, services.CFSViaRange),
-		cgogc: cppbridge.NewCGOGC(r),
-		cfg:   cfg,
+		proxy:  NewProxy(container.NewWeighted(h), hKeeper, services.CFSViaRange),
+		cgogc:  cppbridge.NewCGOGC(r),
+		cfg:    cfg,
 		rotatorMediator: mediator.NewMediator(
 			mediator.NewRotateTimerWithSeed(clock, o.BlockDuration, o.Seed),
 		),
@@ -196,7 +199,7 @@ func NewManager(
 		),
 	}
 
-	m.initServices(o, hcatalog, builder, loader, triggerNotifier, readyNotifier, clock, r)
+	m.initServices(o, hcatalog, builder, loader, triggerNotifier, persistenerMediator, readyNotifier, clock, r)
 	logger.Infof("[Head Manager] created")
 
 	return m, nil
@@ -251,6 +254,7 @@ func (m *Manager) initServices(
 	builder *Builder,
 	loader *Loader,
 	triggerNotifier *ReloadBlocksTriggerNotifier,
+	persistenerMediator *mediator.Mediator,
 	readyNotifier ready.Notifier,
 	clock clockwork.Clock,
 	r prometheus.Registerer,
@@ -261,6 +265,7 @@ func (m *Manager) initServices(
 	m.g.Add(
 		func() error {
 			readyNotifier.NotifyReady()
+			m.isRunning = true
 			<-m.closer.Signal()
 
 			return nil
@@ -271,9 +276,6 @@ func (m *Manager) initServices(
 	)
 
 	// Persistener
-	persistenerMediator := mediator.NewMediator(
-		mediator.NewConstantIntervalTimer(clock, defaultStartPersistnerInterval, DefaultPersistDuration),
-	)
 	m.g.Add(
 		func() error {
 			services.NewPersistenerService(
@@ -379,6 +381,10 @@ func (m *Manager) initServices(
 }
 
 func (m *Manager) close() {
+	if !m.isRunning {
+		m.closer.Done()
+	}
+
 	select {
 	case <-m.closer.Signal():
 	default:

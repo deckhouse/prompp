@@ -134,7 +134,7 @@ func (b *Builder) createShardOnDisk(
 		return nil, fmt.Errorf("failed to write header: %w", err)
 	}
 
-	sw, err := writer.NewBuffered(shardID, shardFile, writer.WriteSegment[*cppbridge.EncodedSegment], swn)
+	sw, err := writer.NewBuffered(shardID, shardFile, writer.WriteSegment[*cppbridge.HeadEncodedSegment], swn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create buffered writer shard id %d: %w", shardID, err)
 	}

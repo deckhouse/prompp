@@ -100,6 +100,7 @@ func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) Persist(
 		if record, err := p.catalog.Get(head.ID()); err != nil {
 			logger.Errorf("[Persistener]: failed get head %s from catalog: %v", head.ID(), err)
 		} else if record.Status() == catalog.StatusPersisted {
+			logger.Debugf("[Persistener]: persisted head %s is outdated", head.ID())
 			if p.persistedHeadIsOutdated(record.UpdatedAt()) {
 				outdatedHeads = append(outdatedHeads, head)
 			}
@@ -109,6 +110,7 @@ func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) Persist(
 
 		if p.HeadIsOutdated(head) {
 			// the head is outdated and data on it is no longer required
+			logger.Debugf("[Persistener]: head %s is outdated", head.ID())
 			if _, err := p.catalog.SetStatus(head.ID(), catalog.StatusPersisted); err != nil {
 				logger.Errorf("[Persistener]: set head status in catalog %s: %v", head.ID(), err)
 				continue
@@ -318,6 +320,10 @@ func (pg *PersistenerService[
 		if (record.Status() == catalog.StatusNew || record.Status() == catalog.StatusActive) &&
 			pg.clock.Since(time.UnixMilli(record.CreatedAt())) < defaultCoolingInterval {
 			continue
+		}
+
+		if !pg.proxy.HasSlot() {
+			break
 		}
 
 		if !pg.loadAndAddHeadToKeeper(record) {

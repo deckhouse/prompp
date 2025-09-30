@@ -87,6 +87,11 @@ func newBlockWriter(
 	return writer, err
 }
 
+// isEmpty returns true if [IndexWriter] contains no samples, an empty block.
+func (writer *blockWriter) isEmpty() bool {
+	return writer.indexWriter.isEmpty()
+}
+
 func (writer *blockWriter) createWriters(maxBlockChunkSegmentSize int64) error {
 	chunkWriter, err := NewChunkWriter(writer.ChunkDir(), maxBlockChunkSegmentSize)
 	if err != nil {
@@ -189,6 +194,15 @@ func (bw *blockWriters) writeRestOfRecodedChunks() error {
 func (bw *blockWriters) writeIndexAndMoveTmpDirToDir() ([]WrittenBlock, error) {
 	writtenBlocks := make([]WrittenBlock, 0, len(*bw))
 	for i := range *bw {
+		if (*bw)[i].isEmpty() {
+			_ = (*bw)[i].close()
+			if err := os.RemoveAll((*bw)[i].Dir); err != nil {
+				logger.Warnf("failed remove empty block: %s", (*bw)[i].Dir)
+			}
+
+			continue
+		}
+
 		if err := (*bw)[i].writeIndex(); err != nil {
 			return nil, err
 		}

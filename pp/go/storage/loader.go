@@ -214,9 +214,8 @@ func (l *ShardDataLoader) Load() error {
 		lss:         shard.NewLSS(),
 		dataStorage: shard.NewDataStorage(),
 		wal: wal.NewCorruptedWal[
-			*cppbridge.EncodedSegment,
-			cppbridge.WALEncoderStats,
-			*writer.Buffered[*cppbridge.EncodedSegment],
+			*cppbridge.HeadEncodedSegment,
+			*writer.Buffered[*cppbridge.HeadEncodedSegment],
 		](),
 	}
 
@@ -303,7 +302,7 @@ func (l *ShardDataLoader) createShardWal(fileName string, walDecoder *cppbridge.
 	sw, err := writer.NewBuffered(
 		l.shardID,
 		shardWalFile,
-		writer.WriteSegment[*cppbridge.EncodedSegment],
+		writer.WriteSegment[*cppbridge.HeadEncodedSegment],
 		l.notifier,
 	)
 	if err != nil {

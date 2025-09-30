@@ -35,7 +35,9 @@ func TestKeeperSuite(t *testing.T) {
 
 func (s *KeeperSuite) TestAdd() {
 	// Arrange
-	s.keeper = NewKeeper[headForTest](2)
+	count := 0
+	addTrigger := func() { count++ }
+	s.keeper = NewKeeper[headForTest](2, addTrigger)
 
 	// Act
 	_ = s.keeper.Add(newHeadForTest("d"), 4)
@@ -47,12 +49,15 @@ func (s *KeeperSuite) TestAdd() {
 		{head: newHeadForTest("c"), createdAt: 3},
 		{head: newHeadForTest("d"), createdAt: 4},
 	}, s.keeper.heads)
+	s.Equal(2, count)
 	s.Equal(err, ErrorNoSlots)
 }
 
 func (s *KeeperSuite) TestAddWithReplaceNoReplace() {
 	// Arrange
-	s.keeper = NewKeeper[headForTest](2)
+	count := 0
+	addTrigger := func() { count++ }
+	s.keeper = NewKeeper[headForTest](2, addTrigger)
 
 	// Act
 	_ = s.keeper.Add(newHeadForTest("d"), 4)
@@ -64,12 +69,15 @@ func (s *KeeperSuite) TestAddWithReplaceNoReplace() {
 		{head: newHeadForTest("c"), createdAt: 3},
 		{head: newHeadForTest("d"), createdAt: 4},
 	}, s.keeper.heads)
+	s.Equal(2, count)
 	s.Equal(err, ErrorNoSlots)
 }
 
 func (s *KeeperSuite) TestAddWithReplace() {
 	// Arrange
-	s.keeper = NewKeeper[headForTest](2)
+	count := 0
+	addTrigger := func() { count++ }
+	s.keeper = NewKeeper[headForTest](2, addTrigger)
 
 	// Act
 	_ = s.keeper.Add(newHeadForTest("d"), 4)
@@ -81,6 +89,7 @@ func (s *KeeperSuite) TestAddWithReplace() {
 		{head: newHeadForTest("b"), createdAt: 4},
 		{head: newHeadForTest("d"), createdAt: 4},
 	}, s.keeper.heads)
+	s.Equal(3, count)
 	s.NoError(err)
 }
 
@@ -88,7 +97,9 @@ func (s *KeeperSuite) TestRemove() {
 	// Arrange
 	const Slots = 5
 
-	s.keeper = NewKeeper[headForTest](Slots)
+	count := 0
+	addTrigger := func() { count++ }
+	s.keeper = NewKeeper[headForTest](Slots, addTrigger)
 	_ = s.keeper.Add(newHeadForTest("a"), 1)
 	_ = s.keeper.Add(newHeadForTest("b"), 2)
 	_ = s.keeper.Add(newHeadForTest("c"), 3)
@@ -103,5 +114,6 @@ func (s *KeeperSuite) TestRemove() {
 		{head: newHeadForTest("b"), createdAt: 2},
 		{head: newHeadForTest("d"), createdAt: 4},
 	}, s.keeper.heads)
+	s.Equal(5, count)
 	s.Equal(Slots, cap(s.keeper.heads))
 }

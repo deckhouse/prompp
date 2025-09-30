@@ -3080,14 +3080,14 @@ func headWalEncoderCtor(shardID uint16, logShards uint8, lss uintptr) uintptr {
 	return res.encoder
 }
 
-func headWalEncoderAddInnerSeries(encoder uintptr, innerSeries []*InnerSeries) (stats WALEncoderStats, err error) {
+func headWalEncoderAddInnerSeries(encoder uintptr, innerSeries []*InnerSeries) (samples uint32, err error) {
 	args := struct {
 		innerSeries []*InnerSeries
 		encoder     uintptr
 	}{innerSeries, encoder}
 	var res struct {
-		WALEncoderStats
 		exception []byte
+		samples   uint32
 	}
 
 	start := time.Now().UnixNano()
@@ -3100,18 +3100,18 @@ func headWalEncoderAddInnerSeries(encoder uintptr, innerSeries []*InnerSeries) (
 	headWalEncoderAddInnerSeriesSum.Add(float64(time.Now().UnixNano() - start))
 	headWalEncoderAddInnerSeriesCount.Inc()
 
-	return res.WALEncoderStats, handleException(res.exception)
+	return res.samples, handleException(res.exception)
 }
 
 // headWalEncoderFinalize - finalize the encoded data in the C++ encoder to Segment.
-func headWalEncoderFinalize(encoder uintptr) (stats WALEncoderStats, segment []byte, err error) {
+func headWalEncoderFinalize(encoder uintptr) (samples uint32, segment []byte, err error) {
 	args := struct {
 		encoder uintptr
 	}{encoder}
 	var res struct {
-		WALEncoderStats
 		segment   []byte
 		exception []byte
+		samples   uint32
 	}
 
 	start := time.Now().UnixNano()
@@ -3124,7 +3124,7 @@ func headWalEncoderFinalize(encoder uintptr) (stats WALEncoderStats, segment []b
 	headWalEncoderFinalizeSum.Add(float64(time.Now().UnixNano() - start))
 	headWalEncoderFinalizeCount.Inc()
 
-	return res.WALEncoderStats, res.segment, handleException(res.exception)
+	return res.samples, res.segment, handleException(res.exception)
 }
 
 func headWalEncoderDtor(encoder uintptr) {

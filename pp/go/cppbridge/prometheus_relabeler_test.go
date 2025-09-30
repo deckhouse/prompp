@@ -1466,4 +1466,7 @@ func TestStateV2Suite(t *testing.T) {
 }
 
 func (s *StateV2Suite) TestHappyPath() {
+	state := cppbridge.NewStateV2()
+
+	s.T().Log(state.IsTransition())
 }

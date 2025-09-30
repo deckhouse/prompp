@@ -53,7 +53,7 @@ func (w *ShardWal) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error
 		return false, fmt.Errorf("writing in corrupted wal")
 	}
 
-	stats, err := w.encoder.Encode(innerSeriesSlice)
+	samples, err := w.encoder.Encode(innerSeriesSlice)
 	if err != nil {
 		return false, fmt.Errorf("failed to encode inner series: %w", err)
 	}
@@ -63,7 +63,7 @@ func (w *ShardWal) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error
 	}
 
 	// memoize reaching of limits to deduplicate triggers
-	if !w.limitExhausted && stats.Samples() >= w.maxSegmentSize {
+	if !w.limitExhausted && samples >= w.maxSegmentSize {
 		w.limitExhausted = true
 		return true, nil
 	}
@@ -164,8 +164,8 @@ func ReadHeader(reader io.Reader) (fileFormatVersion uint8, encoderVersion uint8
 type EncodedSegment interface {
 	Size() int64
 	CRC32() uint32
+	Samples() uint32
 	io.WriterTo
-	cppbridge.SegmentStats
 }
 
 func WriteSegment(writer io.Writer, segment EncodedSegment) (n int, err error) {

@@ -417,7 +417,7 @@ func main() {
 		Default("100000").Uint32Var(&cfg.WalMaxSamplesPerSegment)
 
 	serverOnlyFlag(a, "storage.head-retention-timeout", "Timeout before inactive heads are shrieked.").
-		Default("2m").SetValue(&cfg.HeadRetentionTimeout)
+		Default("5m").SetValue(&cfg.HeadRetentionTimeout)
 
 	// TODO: Remove in Prometheus 3.0.
 	var b bool
@@ -764,8 +764,9 @@ func main() {
 	hManagerReadyNotifier := ready.NewNotifiableNotifier()
 	hManager, err := pp_storage.NewManager(
 		&pp_storage.Options{
-			Seed:                cfgFile.GlobalConfig.ExternalLabels.Hash(),
-			BlockDuration:       time.Duration(cfg.tsdb.MinBlockDuration),
+			Seed: cfgFile.GlobalConfig.ExternalLabels.Hash(),
+			// BlockDuration:       time.Duration(cfg.tsdb.MinBlockDuration),
+			BlockDuration:       7 * time.Minute,
 			CommitInterval:      time.Duration(cfg.WalCommitInterval),
 			MaxRetentionPeriod:  time.Duration(cfg.tsdb.RetentionDuration),
 			HeadRetentionPeriod: time.Duration(cfg.HeadRetentionTimeout),
@@ -1468,14 +1469,22 @@ func main() {
 		)
 	}
 	{ // PP_CHANGES.md: rebuild on cpp start
-		// run receiver.
+		// run head manager.
+		cancel := make(chan struct{})
 		g.Add(
 			func() error {
-				<-dbOpen
+				select {
+				case <-dbOpen:
+				// In case a shutdown is initiated before the dbOpen is released
+				case <-cancel:
+					return nil
+				}
+
 				return hManager.Run()
 			},
 			func(err error) {
-				level.Info(logger).Log("msg", "Stopping head manager...")
+				level.Info(logger).Log("msg", "Stopping head manager...", "msg", err)
+				close(cancel)
 				if err := hManager.Shutdown(context.Background()); err != nil {
 					level.Error(logger).Log("msg", "Head manager shutdown failed", "err", err)
 				}
@@ -1495,6 +1504,7 @@ func main() {
 				if errors.Is(err, querier.UnrecoverableError{}) {
 					level.Error(logger).Log("msg", "Received unrecoverable error", "err", err)
 				}
+				level.Info(logger).Log("msg", "Unrecoverable Error Handler stopped.")
 			},
 		)
 	} // PP_CHANGES.md: rebuild on cpp end

@@ -226,7 +226,7 @@ func (mock *SegmentWriterMock[TSegment]) WriteCalls() []struct {
 //
 //		// make and configure a mocked wal.Encoder
 //		mockedEncoder := &EncoderMock{
-//			EncodeFunc: func(innerSeriesSlice []*cppbridge.InnerSeries) (TStats, error) {
+//			EncodeFunc: func(innerSeriesSlice []*cppbridge.InnerSeries) (uint32, error) {
 //				panic("mock out the Encode method")
 //			},
 //			FinalizeFunc: func() (TSegment, error) {
@@ -238,9 +238,9 @@ func (mock *SegmentWriterMock[TSegment]) WriteCalls() []struct {
 //		// and then make assertions.
 //
 //	}
-type EncoderMock[TSegment wal.EncodedSegment, TStats wal.StatsSegment] struct {
+type EncoderMock[TSegment wal.EncodedSegment] struct {
 	// EncodeFunc mocks the Encode method.
-	EncodeFunc func(innerSeriesSlice []*cppbridge.InnerSeries) (TStats, error)
+	EncodeFunc func(innerSeriesSlice []*cppbridge.InnerSeries) (uint32, error)
 
 	// FinalizeFunc mocks the Finalize method.
 	FinalizeFunc func() (TSegment, error)
@@ -261,7 +261,7 @@ type EncoderMock[TSegment wal.EncodedSegment, TStats wal.StatsSegment] struct {
 }
 
 // Encode calls EncodeFunc.
-func (mock *EncoderMock[TSegment, TStats]) Encode(innerSeriesSlice []*cppbridge.InnerSeries) (TStats, error) {
+func (mock *EncoderMock[TSegment]) Encode(innerSeriesSlice []*cppbridge.InnerSeries) (uint32, error) {
 	if mock.EncodeFunc == nil {
 		panic("EncoderMock.EncodeFunc: method is nil but Encoder.Encode was just called")
 	}
@@ -280,7 +280,7 @@ func (mock *EncoderMock[TSegment, TStats]) Encode(innerSeriesSlice []*cppbridge.
 // Check the length with:
 //
 //	len(mockedEncoder.EncodeCalls())
-func (mock *EncoderMock[TSegment, TStats]) EncodeCalls() []struct {
+func (mock *EncoderMock[TSegment]) EncodeCalls() []struct {
 	InnerSeriesSlice []*cppbridge.InnerSeries
 } {
 	var calls []struct {
@@ -293,7 +293,7 @@ func (mock *EncoderMock[TSegment, TStats]) EncodeCalls() []struct {
 }
 
 // Finalize calls FinalizeFunc.
-func (mock *EncoderMock[TSegment, TStats]) Finalize() (TSegment, error) {
+func (mock *EncoderMock[TSegment]) Finalize() (TSegment, error) {
 	if mock.FinalizeFunc == nil {
 		panic("EncoderMock.FinalizeFunc: method is nil but Encoder.Finalize was just called")
 	}
@@ -309,68 +309,13 @@ func (mock *EncoderMock[TSegment, TStats]) Finalize() (TSegment, error) {
 // Check the length with:
 //
 //	len(mockedEncoder.FinalizeCalls())
-func (mock *EncoderMock[TSegment, TStats]) FinalizeCalls() []struct {
+func (mock *EncoderMock[TSegment]) FinalizeCalls() []struct {
 } {
 	var calls []struct {
 	}
 	mock.lockFinalize.RLock()
 	calls = mock.calls.Finalize
 	mock.lockFinalize.RUnlock()
-	return calls
-}
-
-// StatsSegmentMock is a mock implementation of wal.StatsSegment.
-//
-//	func TestSomethingThatUsesStatsSegment(t *testing.T) {
-//
-//		// make and configure a mocked wal.StatsSegment
-//		mockedStatsSegment := &StatsSegmentMock{
-//			SamplesFunc: func() uint32 {
-//				panic("mock out the Samples method")
-//			},
-//		}
-//
-//		// use mockedStatsSegment in code that requires wal.StatsSegment
-//		// and then make assertions.
-//
-//	}
-type StatsSegmentMock struct {
-	// SamplesFunc mocks the Samples method.
-	SamplesFunc func() uint32
-
-	// calls tracks calls to the methods.
-	calls struct {
-		// Samples holds details about calls to the Samples method.
-		Samples []struct {
-		}
-	}
-	lockSamples sync.RWMutex
-}
-
-// Samples calls SamplesFunc.
-func (mock *StatsSegmentMock) Samples() uint32 {
-	if mock.SamplesFunc == nil {
-		panic("StatsSegmentMock.SamplesFunc: method is nil but StatsSegment.Samples was just called")
-	}
-	callInfo := struct {
-	}{}
-	mock.lockSamples.Lock()
-	mock.calls.Samples = append(mock.calls.Samples, callInfo)
-	mock.lockSamples.Unlock()
-	return mock.SamplesFunc()
-}
-
-// SamplesCalls gets all the calls that were made to Samples.
-// Check the length with:
-//
-//	len(mockedStatsSegment.SamplesCalls())
-func (mock *StatsSegmentMock) SamplesCalls() []struct {
-} {
-	var calls []struct {
-	}
-	mock.lockSamples.RLock()
-	calls = mock.calls.Samples
-	mock.lockSamples.RUnlock()
 	return calls
 }
 
