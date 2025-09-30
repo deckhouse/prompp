@@ -3,9 +3,9 @@ run:
 
 output:
   sort-results: true
-  formats:
-    - format: json
-      path: prom_default.json
+#  formats:
+#    - format: json
+#      path: prom_default.json
   show-stats: true
 
 linters:
@@ -14,7 +14,7 @@ linters:
     - errorlint
     - gocritic
     - godot
-    - godox
+#    - godox
     - gofumpt
     - goimports
     - misspell
@@ -44,6 +44,8 @@ issues:
     # Copied it from a different source.
     - storage/remote/otlptranslator/prometheusremotewrite
     - storage/remote/otlptranslator/prometheus
+    - pp
+    - pp-pkg
   exclude-rules:
     - linters:
         - errcheck

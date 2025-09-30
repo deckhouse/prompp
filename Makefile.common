@@ -61,7 +61,7 @@ PROMU_URL     := https://github.com/prometheus/promu/releases/download/v$(PROMU_
 SKIP_GOLANGCI_LINT :=
 GOLANGCI_LINT :=
 GOLANGCI_LINT_OPTS ?=
-GOLANGCI_LINT_VERSION ?= v1.60.2
+GOLANGCI_LINT_VERSION ?= v1.64.8
 # golangci-lint only supports linux, darwin and windows platforms on i386/amd64/arm64.
 # windows isn't included here because of the path separator being different.
 ifeq ($(GOHOSTOS),$(filter $(GOHOSTOS),linux darwin))
@@ -71,9 +71,9 @@ ifeq ($(GOHOSTOS),$(filter $(GOHOSTOS),linux darwin))
 		ifneq (,$(SKIP_GOLANGCI_LINT))
 			GOLANGCI_LINT :=
 		else ifeq (,$(CIRCLE_JOB))
-			GOLANGCI_LINT := $(FIRST_GOPATH)/bin/golangci-lint
+			GOLANGCI_LINT := go tool github.com/golangci/golangci-lint/cmd/golangci-lint
 		else ifeq (,$(wildcard .github/workflows/golangci-lint.yml))
-			GOLANGCI_LINT := $(FIRST_GOPATH)/bin/golangci-lint
+			GOLANGCI_LINT := go tool github.com/golangci/golangci-lint/cmd/golangci-lint
 		endif
 	endif
 endif
@@ -259,10 +259,7 @@ proto:
 
 ifdef GOLANGCI_LINT
 $(GOLANGCI_LINT):
-	mkdir -p $(FIRST_GOPATH)/bin
-	curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/$(GOLANGCI_LINT_VERSION)/install.sh \
-		| sed -e '/install -d/d' \
-		| sh -s -- -b $(FIRST_GOPATH)/bin $(GOLANGCI_LINT_VERSION)
+	@go tool github.com/golangci/golangci-lint/cmd/golangci-lint --version
 endif
 
 .PHONY: precheck
