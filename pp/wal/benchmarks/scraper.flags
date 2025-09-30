@@ -1,0 +1,3 @@
+--benchmark_repetitions=10 \
+--benchmark_time_unit=ns \
+--benchmark_context=scraper_file="/workspaces/prompp/pp/wal/benchmarks/data/blobs.txt"
