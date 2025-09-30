@@ -16,7 +16,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/container"
 	"github.com/prometheus/prometheus/pp/go/storage/head/keeper"
-	"github.com/prometheus/prometheus/pp/go/storage/head/proxy"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services/mock"
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
@@ -39,7 +38,7 @@ type GenericPersistenceSuite struct {
 	dataDir       string
 	clock         *clockwork.FakeClock
 	catalog       *catalog.Catalog
-	proxy         *proxy.Proxy[*storage.HeadOnDisk]
+	proxy         *storage.Proxy
 	blockWriter   *mock.HeadBlockWriterMock[*storage.ShardOnDisk]
 	writeNotifier *mock.WriteNotifierMock
 }
@@ -53,7 +52,7 @@ func (s *GenericPersistenceSuite) SetupTest() {
 	activeHeadContainer := container.NewWeighted(h)
 	removedHeadNotifier := &mock.WriteNotifierMock{NotifyFunc: func() {}}
 	hKeeper := keeper.NewKeeper[storage.HeadOnDisk](1, func() {}, removedHeadNotifier)
-	s.proxy = proxy.NewProxy(activeHeadContainer, hKeeper, func(*storage.HeadOnDisk) error { return nil })
+	s.proxy = storage.NewProxy(activeHeadContainer, hKeeper, func(*storage.HeadOnDisk) error { return nil })
 	s.blockWriter = &mock.HeadBlockWriterMock[*storage.ShardOnDisk]{}
 	s.writeNotifier = &mock.WriteNotifierMock{NotifyFunc: func() {}}
 }
@@ -302,7 +301,7 @@ type PersistenerServiceSuite struct {
 		*storage.PerGoroutineShard,
 		*mock.HeadBlockWriterMock[*storage.ShardOnDisk],
 		*storage.HeadOnDisk,
-		*proxy.Proxy[*storage.HeadOnDisk],
+		*storage.Proxy,
 		*storage.Loader,
 	]
 }
@@ -317,7 +316,7 @@ func (s *PersistenerServiceSuite) SetupTest() {
 		*storage.PerGoroutineShard,
 		*mock.HeadBlockWriterMock[*storage.ShardOnDisk],
 		*storage.HeadOnDisk,
-		*proxy.Proxy[*storage.HeadOnDisk],
+		*storage.Proxy,
 		*storage.Loader,
 	](
 		s.proxy,
