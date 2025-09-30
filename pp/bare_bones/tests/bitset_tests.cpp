@@ -426,4 +426,106 @@ TEST_F(BitsetReadFromFixture, OverwriteBitsetAfterRead) {
   EXPECT_TRUE(bs_.is_set(0));
 }
 
+class BitsetConstructorsFixture : public BitsetFixture {};
+
+TEST_F(BitsetConstructorsFixture, CopyConstructor) {
+  // Arrange
+  bs_.resize(1001);
+  bs_.set(1);
+  bs_.set(100);
+  bs_.set(1000);
+
+  // Act
+  BareBones::Bitset bs_copy(bs_);
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(bs_, bs_copy));
+}
+
+TEST_F(BitsetConstructorsFixture, MoveConstructor) {
+  // Arrange
+  bs_.resize(1001);
+  bs_.set(1);
+  bs_.set(100);
+  bs_.set(1000);
+
+  // Act
+  BareBones::Bitset bs_move(std::move(bs_));
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(bs_move, std::initializer_list<uint32_t>{1, 100, 1000}));
+}
+
+TEST_F(BitsetConstructorsFixture, CopyAssignment) {
+  // Arrange
+  bs_.resize(1001);
+
+  bs_.set(1);
+  bs_.set(100);
+  bs_.set(1000);
+
+  // Act
+  BareBones::Bitset bs_copy = bs_;
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(bs_, bs_copy));
+}
+
+TEST_F(BitsetConstructorsFixture, CopyAssignmentNonEmpty) {
+  // Arrange
+  bs_.resize(1001);
+
+  bs_.set(1);
+  bs_.set(100);
+  bs_.set(1000);
+
+  BareBones::Bitset bs_copy;
+  bs_copy.resize(3);
+  bs_copy.set(0);
+  bs_copy.set(1);
+  bs_copy.set(2);
+
+  // Act
+  bs_copy = bs_;
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(bs_, bs_copy));
+}
+
+TEST_F(BitsetConstructorsFixture, MoveAssignment) {
+  // Arrange
+  bs_.resize(1001);
+
+  bs_.set(1);
+  bs_.set(100);
+  bs_.set(1000);
+
+  // Act
+  BareBones::Bitset bs_move = std::move(bs_);
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(bs_move, std::initializer_list<uint32_t>{1, 100, 1000}));
+}
+
+TEST_F(BitsetConstructorsFixture, MoveAssignmentNonEmpty) {
+  // Arrange
+  bs_.resize(1001);
+
+  bs_.set(1);
+  bs_.set(100);
+  bs_.set(1000);
+
+  BareBones::Bitset bs_move;
+  bs_move.resize(3);
+  bs_move.set(0);
+  bs_move.set(1);
+  bs_move.set(2);
+
+  // Act
+  bs_move = std::move(bs_);
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(bs_move, std::initializer_list<uint32_t>{1, 100, 1000}));
+}
+
 }  // namespace

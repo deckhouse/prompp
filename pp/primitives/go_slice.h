@@ -125,23 +125,6 @@ template <class T>
 struct SliceControlBlock {
   using SizeType = size_t;
 
-  SliceControlBlock() = default;
-  SliceControlBlock(const SliceControlBlock&) = delete;
-
-  SliceControlBlock(SliceControlBlock&& other) noexcept
-      : data(std::exchange(other.data, nullptr)), items_count(std::exchange(other.items_count, 0)), data_size(std::exchange(other.data_size, 0)) {}
-
-  SliceControlBlock& operator=(const SliceControlBlock&) = delete;
-  PROMPP_ALWAYS_INLINE SliceControlBlock& operator=(SliceControlBlock&& other) noexcept {
-    if (this != &other) [[likely]] {
-      data = std::exchange(other.data, nullptr);
-      data_size = std::exchange(other.data_size, 0);
-      items_count = std::exchange(other.items_count, 0);
-    }
-
-    return *this;
-  }
-
   T* data{};
 
   union {
