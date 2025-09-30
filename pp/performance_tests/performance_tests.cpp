@@ -1,3 +1,4 @@
+#include "chunk_recoder_test.h"
 #include "full_load_lss_test.h"
 #include "full_save_lss_test.h"
 #include "load_gorilla_from_wal_and_calculate_hash_over_label_set_names_test.h"
@@ -19,6 +20,7 @@
 #include "save_lss_to_wal_test.h"
 #include "series_data_encoder_test.h"
 #include "series_index/generate_cedarpp_series_index_test.h"
+#include "series_index/generate_queryable_encoding_bimap_test.h"
 #include "series_index/generate_series_reverse_index_test.h"
 #include "tests_database.h"
 #include "write_protobuf_non_naned_wal_test.h"
@@ -69,10 +71,12 @@ int main([[maybe_unused]] int argc, char* argv[]) {
     test_db.add(std::make_unique<full_save_lss>());
     test_db.add(std::make_unique<full_load_lss>());
     test_db.add(std::make_unique<performance_tests::SeriesDataEncoder>());
+    test_db.add(std::make_unique<performance_tests::ChunkRecoder>());
     test_db.add(std::make_unique<load_ordered_indexing_table_in_loop>());
     test_db.add(std::make_unique<save_gorilla_to_wal>());
     test_db.add(std::make_unique<performance_tests::series_index::GenerateSeriesReverseIndex>());
     test_db.add(std::make_unique<performance_tests::series_index::GenerateCedarppSeriesIndex>());
+    test_db.add(std::make_unique<performance_tests::series_index::GenerateQueryableEncodingBimap>());
     test_db.add(std::make_unique<load_gorilla_from_wal_and_iterate_over_label_set_ids>());
     test_db.add(std::make_unique<load_gorilla_from_wal_and_iterate_over_sample_label_name_ids>());
     test_db.add(std::make_unique<load_gorilla_from_wal_and_iterate_over_series_label_name_ids>());

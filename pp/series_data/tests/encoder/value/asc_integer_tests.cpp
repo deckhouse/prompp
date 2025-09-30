@@ -1,0 +1,143 @@
+#include <gtest/gtest.h>
+
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+
+#include "bare_bones/gorilla.h"
+#include "series_data/common.h"
+#include "series_data/encoder/value/asc_integer.h"
+
+namespace {
+
+using BareBones::Encoding::Gorilla::STALE_NAN;
+using series_data::encoder::value::AscIntegerEncoder;
+
+struct CanBeEncodedCase {
+  double value1;
+  uint8_t value1_count;
+  double value2;
+  double value3;
+  bool expected;
+};
+
+class AscIntegerEncoderCanBeEncodedFixture : public testing::TestWithParam<CanBeEncodedCase> {};
+
+TEST_P(AscIntegerEncoderCanBeEncodedFixture, Test) {
+  // Arrange
+  auto& test_case = GetParam();
+
+  // Act
+  const auto result = AscIntegerEncoder::can_be_encoded(test_case.value1, test_case.value1_count, test_case.value2, test_case.value3);
+
+  // Assert
+  EXPECT_EQ(test_case.expected, result);
+}
+
+INSTANTIATE_TEST_SUITE_P(NoStaleNans,
+                         AscIntegerEncoderCanBeEncodedFixture,
+                         testing::Values(CanBeEncodedCase{.value1 = 0.1, .value1_count = 1, .value2 = 0.0, .value3 = 1.0, .expected = false},
+                                         CanBeEncodedCase{.value1 = 0.0, .value1_count = 1, .value2 = 0.1, .value3 = 2.0, .expected = false},
+                                         CanBeEncodedCase{.value1 = 0.0, .value1_count = 1, .value2 = 1.0, .value3 = 1.1, .expected = false},
+                                         CanBeEncodedCase{.value1 = 1.0, .value1_count = 1, .value2 = 0.0, .value3 = 2.0, .expected = false},
+                                         CanBeEncodedCase{.value1 = 0.0, .value1_count = 1, .value2 = 0.0, .value3 = 2.0, .expected = true},
+                                         CanBeEncodedCase{.value1 = 0.0, .value1_count = 1, .value2 = 1.0, .value3 = 0.0, .expected = false},
+                                         CanBeEncodedCase{.value1 = 0.0, .value1_count = 1, .value2 = 1.0, .value3 = 1.0, .expected = true}));
+INSTANTIATE_TEST_SUITE_P(StaleNans,
+                         AscIntegerEncoderCanBeEncodedFixture,
+                         testing::Values(CanBeEncodedCase{.value1 = STALE_NAN, .value1_count = 1, .value2 = 1.0, .value3 = 3.0, .expected = false},
+                                         CanBeEncodedCase{.value1 = 0.0, .value1_count = 1, .value2 = STALE_NAN, .value3 = 3.0, .expected = false},
+                                         CanBeEncodedCase{.value1 = 0.0, .value1_count = 2, .value2 = STALE_NAN, .value3 = 3.0, .expected = true},
+                                         CanBeEncodedCase{.value1 = 0.0, .value1_count = 1, .value2 = 1.0, .value3 = STALE_NAN, .expected = true}));
+INSTANTIATE_TEST_SUITE_P(DeltaOverflow,
+                         AscIntegerEncoderCanBeEncodedFixture,
+                         testing::Values(CanBeEncodedCase{.value1 = 0,
+                                                          .value1_count = 1,
+                                                          .value2 = 1,
+                                                          .value3 = static_cast<double>(std::numeric_limits<int32_t>::max() + 2U),
+                                                          .expected = false}));
+
+INSTANTIATE_TEST_SUITE_P(Int64Limits,
+                         AscIntegerEncoderCanBeEncodedFixture,
+                         testing::Values(CanBeEncodedCase{.value1 = 0,
+                                                          .value1_count = 1,
+                                                          .value2 = static_cast<double>(std::numeric_limits<int32_t>::max()),
+                                                          .value3 = static_cast<double>(std::numeric_limits<int32_t>::max() + 1U),
+                                                          .expected = true},
+                                         CanBeEncodedCase{.value1 = 0,
+                                                          .value1_count = 1,
+                                                          .value2 = static_cast<double>(std::numeric_limits<int32_t>::max() + 1U),
+                                                          .value3 = static_cast<double>(std::numeric_limits<int32_t>::max() + 2U),
+                                                          .expected = false},
+                                         CanBeEncodedCase{.value1 = 0, .value1_count = 1, .value2 = 1, .value3 = 0, .expected = false},
+                                         CanBeEncodedCase{.value1 = static_cast<double>(std::numeric_limits<int64_t>::min()),
+                                                          .value1_count = 1,
+                                                          .value2 = static_cast<double>(std::numeric_limits<int64_t>::min() + 1),
+                                                          .value3 = static_cast<double>(std::numeric_limits<int64_t>::min() + 2),
+                                                          .expected = true},
+                                         CanBeEncodedCase{.value1 = static_cast<double>(std::numeric_limits<int64_t>::min()),
+                                                          .value1_count = 1,
+                                                          .value2 = static_cast<double>(std::numeric_limits<int64_t>::min() + 1),
+                                                          .value3 = static_cast<double>(std::numeric_limits<int64_t>::min() + 2),
+                                                          .expected = true}));
+
+struct IsActualCase {
+  BareBones::Vector<double> values;
+  double value;
+  bool expected;
+};
+
+class AscIntegerEncoderIsActualFixture : public testing::TestWithParam<IsActualCase> {
+ protected:
+  AscIntegerEncoder encode(const BareBones::Vector<double>& values) {
+    AscIntegerEncoder encoder(values[0]);
+    encoder.encode_second(values[1]);
+    for (size_t i = 2; i < values.size(); ++i) {
+      encoder.encode(state_, values[i]);
+    }
+    return encoder;
+  }
+
+  series_data::EncodingState state_{.encoding_type = series_data::EncodingType::kAscInteger, .has_last_stalenan = false};
+};
+
+TEST_P(AscIntegerEncoderIsActualFixture, Test) {
+  // Arrange
+  const auto encoder = encode(GetParam().values);
+
+  // Act
+  const auto result = encoder.is_actual(state_, GetParam().value);
+
+  // Assert
+  EXPECT_EQ(GetParam().expected, result);
+}
+
+INSTANTIATE_TEST_SUITE_P(TwoPoints,
+                         AscIntegerEncoderIsActualFixture,
+                         testing::Values(IsActualCase{.values = {1.0, 2.0}, .value = 1.0, .expected = false},
+                                         IsActualCase{.values = {1.0, 2.0}, .value = 2.0, .expected = true},
+                                         IsActualCase{.values = {1.0, STALE_NAN}, .value = 1.0, .expected = false},
+                                         IsActualCase{.values = {STALE_NAN, 1.0}, .value = 2.0, .expected = false}));
+
+INSTANTIATE_TEST_SUITE_P(ThreePoints,
+                         AscIntegerEncoderIsActualFixture,
+                         testing::Values(IsActualCase{.values = {1.0, 2.0, 3.0}, .value = 2.0, .expected = false},
+                                         IsActualCase{.values = {1.0, 2.0, 3.0}, .value = 3.0, .expected = true},
+                                         IsActualCase{.values = {1.0, 2.0, STALE_NAN}, .value = 1.0, .expected = false},
+                                         IsActualCase{.values = {1.0, 2.0, STALE_NAN}, .value = STALE_NAN, .expected = true},
+                                         IsActualCase{.values = {1.0, 2.0, STALE_NAN}, .value = STALE_NAN, .expected = true},
+                                         IsActualCase{.values = {1.0, 2.0, STALE_NAN}, .value = 3.0, .expected = false}));
+
+INSTANTIATE_TEST_SUITE_P(FourPoints,
+                         AscIntegerEncoderIsActualFixture,
+                         testing::Values(IsActualCase{.values = {1.0, 2.0, 3.0, 4.0}, .value = 2.0, .expected = false},
+                                         IsActualCase{.values = {1.0, 2.0, 3.0, 4.0}, .value = 4.0, .expected = true},
+                                         IsActualCase{.values = {1.0, 2.0, STALE_NAN, 4.0}, .value = 4.0, .expected = true},
+                                         IsActualCase{.values = {1.0, 2.0, 3.0, STALE_NAN}, .value = STALE_NAN, .expected = true},
+                                         IsActualCase{.values = {1.0, 2.0, 3.0, STALE_NAN}, .value = 3.0, .expected = false}));
+
+INSTANTIATE_TEST_SUITE_P(NonIntegerValue,
+                         AscIntegerEncoderIsActualFixture,
+                         testing::Values(IsActualCase{.values = {-1.0, 0.0}, .value = -1.1, .expected = false}));
+
+}  // namespace

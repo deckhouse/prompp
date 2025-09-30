@@ -220,6 +220,25 @@ func (s *LabelSetSuite) TestLabelSet_UnmarshalYAML_Quick() {
 	s.Require().NoError(quick.CheckEqual(identity, convertation, nil))
 }
 
+func (s *LabelSetSuite) TestLabelSet_Range() {
+	lsMap := map[string]string{
+		"__name__":  "example",
+		"instance":  "instance",
+		"job":       "test",
+		"container": "~unknown",
+		"flags":     "empty",
+	}
+	ls := model.LabelSetFromMap(lsMap)
+
+	ls.Range(func(lname, lvalue string) bool {
+		value, ok := lsMap[lname]
+		s.Require().True(ok)
+		s.Require().Equal(value, lvalue)
+
+		return true
+	})
+}
+
 func (s *LabelSetSuite) TestLabelSetSimpleBuilder_Build() {
 	labels := []model.SimpleLabel{
 		{"__name__", "example"},

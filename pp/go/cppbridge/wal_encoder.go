@@ -192,6 +192,8 @@ func (e *WALEncoder) Add(ctx context.Context, shardedData ShardedData) (SegmentS
 
 	// shardedData.hashdex - Hashdex, struct(init from GO), filling in C/C++
 	stats, exception := walEncoderAdd(e.encoder, cptrContainer.cptr())
+	runtime.KeepAlive(e)
+	runtime.KeepAlive(shardedData)
 	return &stats, handleException(exception)
 }
 
@@ -323,6 +325,8 @@ func (e *WALEncoderLightweight) Add(ctx context.Context, shardedData ShardedData
 
 	// shardedData.hashdex - Hashdex, struct(init from GO), filling in C/C++
 	stats, exception := walEncoderLightweightAdd(e.encoder, cptrContainer.cptr())
+	runtime.KeepAlive(e)
+	runtime.KeepAlive(shardedData)
 	return &stats, handleException(exception)
 }
 

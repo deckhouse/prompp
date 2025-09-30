@@ -32,7 +32,6 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/model/value"
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/storage"
@@ -80,7 +79,7 @@ func (h *Handler) federation(w http.ResponseWriter, req *http.Request) {
 	)
 	w.Header().Set("Content-Type", string(format))
 
-	q, err := h.storage.Querier(mint, maxt) // PP_CHANGES.md: rebuild on cpp
+	q, err := h.storage.Querier(maxt, maxt) // PP_CHANGES.md: rebuild on cpp
 	if err != nil {
 		federationErrors.Inc()
 		if errors.Is(err, tsdb.ErrNotReady) {
@@ -96,7 +95,6 @@ func (h *Handler) federation(w http.ResponseWriter, req *http.Request) {
 
 	hints := &storage.SelectHints{Start: mint, End: maxt}
 
-	ctx = cppbridge.SetCaller(ctx, cppbridge.LSSQuerySourceFederate) // PP_CHANGES.md: rebuild on cpp
 	var sets []storage.SeriesSet
 	for _, mset := range matcherSets {
 		s := q.Select(ctx, true, hints, mset...)
@@ -104,44 +102,26 @@ func (h *Handler) federation(w http.ResponseWriter, req *http.Request) {
 	}
 
 	set := storage.NewMergeSeriesSet(sets, storage.ChainedSeriesMerge)
-	it := storage.NewBuffer(int64(h.lookbackDelta / 1e6))
 	var chkIter chunkenc.Iterator
 Loop:
 	for set.Next() {
 		s := set.At()
-
-		// TODO(fabxc): allow fast path for most recent sample either
-		// in the storage itself or caching layer in Prometheus.
 		chkIter = s.Iterator(chkIter)
-		it.Reset(chkIter)
 
 		var (
 			t  int64
 			f  float64
 			fh *histogram.FloatHistogram
 		)
-		valueType := it.Seek(maxt)
+
+		valueType := chkIter.Seek(mint)
 		switch valueType {
 		case chunkenc.ValFloat:
-			t, f = it.At()
+			t, f = chkIter.At()
 		case chunkenc.ValFloatHistogram, chunkenc.ValHistogram:
-			t, fh = it.AtFloatHistogram(nil)
+			t, fh = chkIter.AtFloatHistogram(nil)
 		default:
-			sample, ok := it.PeekBack(1)
-			if !ok {
-				continue Loop
-			}
-			t = sample.T()
-			switch sample.Type() {
-			case chunkenc.ValFloat:
-				f = sample.F()
-			case chunkenc.ValHistogram:
-				fh = sample.H().ToFloat(nil)
-			case chunkenc.ValFloatHistogram:
-				fh = sample.FH()
-			default:
-				continue Loop
-			}
+			continue Loop
 		}
 		// The exposition formats do not support stale markers, so drop them. This
 		// is good enough for staleness handling of federated data, as the

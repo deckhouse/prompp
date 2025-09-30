@@ -21,6 +21,10 @@ func NewDistributor(destinationGroups relabeler.DestinationGroups) *Distributor 
 }
 
 func (d *Distributor) Send(ctx context.Context, head relabeler.Head, shardedData [][]*cppbridge.InnerSeries) error {
+	if d.Len() == 0 {
+		return nil
+	}
+
 	_ = d.ParallelRange(func(_ int, dg *relabeler.DestinationGroup) error {
 		dg.RotateLock()
 		return nil
@@ -32,31 +36,44 @@ func (d *Distributor) Send(ctx context.Context, head relabeler.Head, shardedData
 	})
 
 	outputPromise := NewOutputRelabelingPromise(&d.destinationGroups, head.NumberOfShards())
-	err := head.ForEachShard(func(shard relabeler.Shard) error {
-		return d.ParallelRange(func(destinationGroupID int, destinationGroup *relabeler.DestinationGroup) error {
-			outputInnerSeries := cppbridge.NewShardsInnerSeries(1 << destinationGroup.ShardsNumberPower())
-			relabeledSeries := cppbridge.NewRelabeledSeries()
-			if relabelingErr := destinationGroup.OutputRelabeling(
-				ctx,
-				shard.LSS().Raw(),
-				shardedData[shard.ShardID()],
-				outputInnerSeries,
-				relabeledSeries,
-				shard.ShardID(),
-			); relabelingErr != nil {
-				outputPromise.AddError(destinationGroupID, uint16(1<<destinationGroup.ShardsNumberPower()), relabelingErr)
+
+	tDOutputRelabeling := head.CreateTask(
+		relabeler.LSSOutputRelabeling,
+		func(shard relabeler.Shard) error {
+			shard.LSSLock()
+			defer shard.LSSUnlock()
+
+			return d.ParallelRange(func(destinationGroupID int, destinationGroup *relabeler.DestinationGroup) error {
+				outputInnerSeries := cppbridge.NewShardsInnerSeries(1 << destinationGroup.ShardsNumberPower())
+				relabeledSeries := cppbridge.NewRelabeledSeries()
+				if relabelingErr := destinationGroup.OutputRelabeling(
+					ctx,
+					shard.LSS().Raw(),
+					shardedData[shard.ShardID()],
+					outputInnerSeries,
+					relabeledSeries,
+					shard.ShardID(),
+				); relabelingErr != nil {
+					outputPromise.AddError(
+						destinationGroupID,
+						uint16(1<<destinationGroup.ShardsNumberPower()),
+						relabelingErr,
+					)
+
+					return nil
+				}
+
+				for sid, innerSeries := range outputInnerSeries {
+					outputPromise.AddOutputInnerSeries(destinationGroupID, uint16(sid), innerSeries)
+				}
+				outputPromise.AddOutputRelabeledSeries(destinationGroupID, shard.ShardID(), relabeledSeries)
 				return nil
-			}
-
-			for sid, innerSeries := range outputInnerSeries {
-				outputPromise.AddOutputInnerSeries(destinationGroupID, uint16(sid), innerSeries)
-			}
-			outputPromise.AddOutputRelabeledSeries(destinationGroupID, shard.ShardID(), relabeledSeries)
-			return nil
-		})
-	})
-
-	if err != nil {
+			})
+		},
+		relabeler.ForLSSTask,
+	)
+	head.Enqueue(tDOutputRelabeling)
+	if err := tDOutputRelabeling.Wait(); err != nil {
 		return err
 	}
 
@@ -76,13 +93,11 @@ func (d *Distributor) Send(ctx context.Context, head relabeler.Head, shardedData
 			}
 
 			for shardID, outputStateUpdate := range outputStateUpdates {
-				updateErr := head.OnShard(uint16(shardID), func(shard relabeler.Shard) error {
-					return destinationGroup.UpdateRelabelerState(
-						ctx,
-						shard.ShardID(),
-						outputStateUpdate,
-					)
-				})
+				updateErr := destinationGroup.UpdateRelabelerState(
+					ctx,
+					uint16(shardID),
+					outputStateUpdate,
+				)
 				if updateErr != nil {
 					return updateErr
 				}
@@ -118,16 +133,13 @@ func (d *Distributor) Shutdown(ctx context.Context) error {
 }
 
 func (d *Distributor) WriteMetrics(head relabeler.Head) {
+	if d.Len() == 0 {
+		return
+	}
+
 	_ = d.ParallelRange(func(destinationGroupID int, destinationGroup *relabeler.DestinationGroup) error {
 		destinationGroup.ObserveEncodersMemory()
 		return nil
-	})
-
-	_ = head.ForEachShard(func(shard relabeler.Shard) error {
-		return d.ParallelRange(func(destinationGroupID int, destinationGroup *relabeler.DestinationGroup) error {
-			destinationGroup.ObserveCacheAllocatedMemory(shard.ShardID())
-			return nil
-		})
 	})
 }
 
@@ -145,4 +157,13 @@ func (d *Distributor) ParallelRange(fn func(destinationGroupID int, destinationG
 	}
 	wg.Wait()
 	return errors.Join(errs...)
+}
+
+// Len number of destinationGroups.
+func (d *Distributor) Len() int {
+	d.lock.Lock()
+	length := len(d.destinationGroups)
+	d.lock.Unlock()
+
+	return length
 }

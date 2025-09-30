@@ -79,7 +79,7 @@ struct LabelSet {
       using pointer = value_type*;
       using reference = value_type&;
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE const value_type operator*() const noexcept {
+      [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept {
         return {label_set_->data.data() + iterator_->name.begin, iterator_->name.length};
       }
     };
@@ -100,9 +100,187 @@ struct LabelSet {
   [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return Iterator(this); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return pairs.size(); }
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE auto names() const noexcept { return Names{.label_set = this}; }
 
   PROMPP_ALWAYS_INLINE friend size_t hash_value(const LabelSet& label_set) noexcept { return hash::hash_of_label_set(label_set); }
+};
+
+template <class LabelSet, template <class> class AddContainer, template <class> class DelContainer>
+class LabelSetBuilder {
+ public:
+  class IteratorSentinel {};
+
+  template <class LabelIterator, class LabelEndIterator, class AddIterator, class DelIterator>
+  class GenericIterator {
+   public:
+    using iterator_category = std::forward_iterator_tag;
+    using difference_type = ptrdiff_t;
+
+    explicit GenericIterator(const LabelSetBuilder& builder)
+        : label_iterator_(builder.label_set_.begin()),
+          label_end_iterator_(builder.label_set_.end()),
+          add_iterator_(builder.add_.begin()),
+          add_end_iterator_(builder.add_.end()),
+          del_iterator_(builder.del_.begin()),
+          del_end_iterator_(builder.del_.end()) {
+      next();
+    }
+
+    bool operator==(const IteratorSentinel&) const { return label_.first.empty(); }
+
+   protected:
+    Primitives::LabelView label_;
+
+    void next() noexcept {
+      label_.first = {};
+
+      do {
+        if (label_iterator_ != label_end_iterator_) {
+          next_with_label();
+        } else if (add_iterator_ != add_end_iterator_) {
+          set_label(add_iterator_);
+        } else {
+          break;
+        }
+      } while (label_.first.empty());
+    }
+
+   private:
+    LabelIterator label_iterator_;
+    [[no_unique_address]] LabelEndIterator label_end_iterator_;
+    AddIterator add_iterator_;
+    AddIterator add_end_iterator_;
+    DelIterator del_iterator_;
+    DelIterator del_end_iterator_;
+
+    PROMPP_ALWAYS_INLINE void next_with_label() noexcept {
+      if (add_iterator_ != add_end_iterator_) {
+        next_with_label_and_add();
+      } else {
+        set_label(label_iterator_);
+      }
+    }
+
+    PROMPP_ALWAYS_INLINE void next_with_label_and_add() noexcept {
+      const auto cmp_result = (*label_iterator_).first <=> static_cast<std::string_view>(add_iterator_->name);
+
+      if (std::is_lt(cmp_result)) {
+        set_label(label_iterator_);
+      } else {
+        if (std::is_eq(cmp_result)) {
+          ++label_iterator_;
+        }
+        set_label(add_iterator_);
+      }
+    }
+
+    template <class Iterator>
+    PROMPP_ALWAYS_INLINE void set_label(Iterator& iterator) {
+      const auto [name, value] = *iterator;
+
+      if (const auto name_view = static_cast<std::string_view>(name); !is_deleted(name_view)) {
+        label_.first = name_view;
+        label_.second = static_cast<std::string_view>(value);
+      }
+
+      ++iterator;
+    }
+
+    PROMPP_ALWAYS_INLINE bool is_deleted(std::string_view name) noexcept {
+      while (del_iterator_ != del_end_iterator_) {
+        if (const auto cmp_result = static_cast<std::string_view>(*del_iterator_) <=> name; std::is_lt(cmp_result)) {
+          ++del_iterator_;
+        } else if (std::is_eq(cmp_result)) {
+          ++del_iterator_;
+          return true;
+        }
+
+        break;
+      }
+
+      return false;
+    }
+  };
+
+  template <class LabelIterator, class LabelEndIterator, class AddIterator, class DelIterator>
+  class Iterator : public GenericIterator<LabelIterator, LabelEndIterator, AddIterator, DelIterator> {
+   public:
+    using Base = GenericIterator<LabelIterator, LabelEndIterator, AddIterator, DelIterator>;
+
+    using Base::Base;
+
+    using value_type = Primitives::LabelView;
+
+    const value_type& operator*() const { return this->label_; }
+
+    PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
+      this->next();
+      return *this;
+    }
+
+    PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
+      const auto result = *this;
+      ++*this;
+      return result;
+    }
+  };
+
+  template <class LabelIterator, class LabelEndIterator, class AddIterator, class DelIterator>
+  class NamesIterator : public GenericIterator<LabelIterator, LabelEndIterator, AddIterator, DelIterator> {
+   public:
+    using Base = GenericIterator<LabelIterator, LabelEndIterator, AddIterator, DelIterator>;
+
+    using Base::Base;
+
+    using value_type = Primitives::SymbolView;
+
+    const value_type& operator*() const { return this->label_.first; }
+
+    PROMPP_ALWAYS_INLINE NamesIterator& operator++() noexcept {
+      this->next();
+      return *this;
+    }
+
+    PROMPP_ALWAYS_INLINE NamesIterator operator++(int) noexcept {
+      const auto result = *this;
+      ++*this;
+      return result;
+    }
+  };
+
+  class Names {
+   public:
+    explicit Names(const LabelSetBuilder& label_set_builder) : label_set_builder_(label_set_builder) {}
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept {
+      return NamesIterator<decltype(label_set_builder_.label_set_.begin()), decltype(label_set_builder_.label_set_.end()),
+                           decltype(label_set_builder_.add_.begin()), decltype(label_set_builder_.del_.begin())>(label_set_builder_);
+    }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE friend size_t hash_value(const Names& names) noexcept { return hash::hash_of_string_list(names); }
+
+   private:
+    const LabelSetBuilder& label_set_builder_;
+  };
+
+  LabelSetBuilder(const LabelSet& label_set, const AddContainer<Label>& add, const DelContainer<String>& del) : label_set_(label_set), add_(add), del_(del) {}
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept {
+    return Iterator<decltype(label_set_.begin()), decltype(label_set_.end()), decltype(add_.begin()), decltype(del_.begin())>(*this);
+  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static IteratorSentinel end() noexcept { return {}; }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE friend size_t hash_value(const LabelSetBuilder& label_set) noexcept { return hash::hash_of_label_set(label_set); }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Names names() const noexcept { return Names{*this}; }
+
+ private:
+  const LabelSet& label_set_;
+  const AddContainer<Label>& add_;
+  const DelContainer<String>& del_;
 };
 
 struct TimeSeries {

@@ -123,12 +123,10 @@ INSTANTIATE_TEST_SUITE_P(
     DataStorageChunkIterator,
     testing::Values(DataStorageIteratorCase{
         .open_chunks = {DataChunk{0, 1, EncodingState{EncodingType::kGorilla, false}}, DataChunk{1, 2, EncodingState{EncodingType::kUint32Constant, false}}},
-        .finalized_chunks = {{}, {DataChunk{2, 3, EncodingState{EncodingType::kAscIntegerValuesGorilla, false}}}},
+        .finalized_chunks = {{}, {DataChunk{2, 3, EncodingState{EncodingType::kAscInteger, false}}}},
         .expected_chunks = {
             DataChunkInfo{.chunk = DataChunk(0, 1, EncodingState{EncodingType::kGorilla, false}), .series_id = 0, .type = ChunkType::kOpen},
-            DataChunkInfo{.chunk = DataChunk(2, 3, EncodingState{EncodingType::kAscIntegerValuesGorilla, false}),
-                          .series_id = 1,
-                          .type = ChunkType::kFinalized},
+            DataChunkInfo{.chunk = DataChunk(2, 3, EncodingState{EncodingType::kAscInteger, false}), .series_id = 1, .type = ChunkType::kFinalized},
             DataChunkInfo{.chunk = DataChunk(1, 2, EncodingState{EncodingType::kUint32Constant, false}), .series_id = 1, .type = ChunkType::kOpen}}}));
 
 }  // namespace

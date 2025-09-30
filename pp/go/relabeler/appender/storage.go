@@ -1,24 +1,25 @@
 package appender
 
 import (
-	"fmt"
+	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jonboulle/clockwork"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/block"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 	"github.com/prometheus/prometheus/pp/go/relabeler/querier"
 	"github.com/prometheus/prometheus/pp/go/util"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/storage"
 )
 
 const (
-	PersistedHeadValue = -(1 << 30)
-	writeRetryTimeout  = 5 * time.Minute
+	writeRetryTimeout        = 5 * time.Minute
+	maxAddIter        uint32 = 5
 )
 
 type WriteNotifier interface {
@@ -27,7 +28,7 @@ type WriteNotifier interface {
 
 // BlockWriter writes block on disk.
 type BlockWriter interface {
-	Write(block block.Block) error
+	Write(shard relabeler.Shard) ([]block.WrittenBlock, error)
 }
 
 // QueryableStorage hold reference to finalized heads and writes blocks from them. Also allows query not yet not
@@ -39,12 +40,14 @@ type QueryableStorage struct {
 	heads                []relabeler.Head
 	headRetentionTimeout time.Duration
 
-	signal chan struct{}
-	closer *util.Closer
+	writeTimer   clockwork.Timer
+	writeTimeout time.Duration
+	addCount     uint32
+	closer       *util.Closer
 
 	clock                   clockwork.Clock
 	maxRetentionDuration    time.Duration
-	headPersistenceDuration *prometheus.GaugeVec
+	headPersistenceDuration prometheus.Histogram
 	querierMetrics          *querier.Metrics
 }
 
@@ -57,6 +60,7 @@ func NewQueryableStorageWithWriteNotifier(
 	clock clockwork.Clock,
 	maxRetentionDuration time.Duration,
 	headRetentionTimeout time.Duration,
+	writeTimeout time.Duration,
 	heads ...relabeler.Head,
 ) *QueryableStorage {
 	factory := util.NewUnconflictRegisterer(registerer)
@@ -64,20 +68,27 @@ func NewQueryableStorageWithWriteNotifier(
 		blockWriter:          blockWriter,
 		writeNotifier:        writeNotifier,
 		heads:                heads,
-		signal:               make(chan struct{}, 1),
+		writeTimer:           clock.NewTimer(0),
+		writeTimeout:         writeTimeout,
 		closer:               util.NewCloser(),
 		clock:                clock,
 		maxRetentionDuration: maxRetentionDuration,
 		headRetentionTimeout: headRetentionTimeout,
-		headPersistenceDuration: factory.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name: "prompp_head_persistence_duration_duration",
+		headPersistenceDuration: factory.NewHistogram(
+			prometheus.HistogramOpts{
+				Name: "prompp_head_persistence_duration",
 				Help: "Block write duration in milliseconds.",
+				Buckets: []float64{
+					500, 1000, 2500, 5000, 7500,
+					10000, 25000, 50000, 75000, 100000,
+				},
 			},
-			[]string{"generation"},
 		),
 		querierMetrics: querierMetrics,
 	}
+
+	// skip 0 start
+	<-qs.writeTimer.Chan()
 
 	return qs
 }
@@ -109,7 +120,8 @@ func (qs *QueryableStorage) loop() {
 		}
 
 		select {
-		case <-qs.signal:
+		case <-qs.writeTimer.Chan():
+			atomic.StoreUint32(&qs.addCount, 0)
 		case <-retryTimer.Chan():
 		case <-qs.closer.Signal():
 			logger.Infof("QUERYABLE STORAGE: done")
@@ -146,22 +158,31 @@ func (qs *QueryableStorage) write() bool {
 			continue
 		}
 		if err := head.Rotate(); err != nil {
-			logger.Errorf("QUERYABLE STORAGE: failed to rotate head %s: %s", head.String(), err.Error())
-			successful = false
+			if err != relabeler.ErrAlreadyDiscarded {
+				logger.Errorf("QUERYABLE STORAGE: failed to rotate head %s: %s", head.String(), err.Error())
+				successful = false
+			}
 			continue
 		}
-		err := head.ForEachShard(func(shard relabeler.Shard) error {
-			return qs.blockWriter.Write(relabeler.NewBlock(shard.LSS().Raw(), shard.DataStorage().Raw()))
-		})
-		if err != nil {
+
+		tBlockWrite := head.CreateTask(
+			relabeler.BlockWrite,
+			func(shard relabeler.Shard) error {
+				_, err := qs.blockWriter.Write(shard)
+				return err
+			},
+			relabeler.ForLSSTask,
+		)
+		head.Enqueue(tBlockWrite)
+		if err := tBlockWrite.Wait(); err != nil {
 			logger.Errorf("QUERYABLE STORAGE: failed to write head %s: %s", head.String(), err.Error())
 			successful = false
 			continue
 		}
-		qs.headPersistenceDuration.With(prometheus.Labels{
-			"generation": fmt.Sprintf("%d", head.Generation()),
-		}).Set(float64(qs.clock.Since(start).Milliseconds()))
+
+		qs.headPersistenceDuration.Observe(float64(qs.clock.Since(start).Milliseconds()))
 		persisted = append(persisted, head.ID())
+		_ = head.Discard()
 		shouldNotify = true
 		logger.Infof("QUERYABLE STORAGE: head %s persisted, duration: %v", head.String(), qs.clock.Since(start))
 	}
@@ -194,10 +215,8 @@ func (qs *QueryableStorage) Add(head relabeler.Head) {
 	logger.Infof("QUERYABLE STORAGE: head %s added", head.String())
 	qs.mtx.Unlock()
 
-	select {
-	case qs.signal <- struct{}{}:
-	case <-qs.closer.Signal():
-	default:
+	if atomic.AddUint32(&qs.addCount, 1) < maxAddIter {
+		qs.writeTimer.Reset(qs.writeTimeout)
 	}
 }
 
@@ -206,14 +225,14 @@ func (qs *QueryableStorage) Close() error {
 }
 
 // WriteMetrics - MetricWriterTarget interface implementation.
-func (qs *QueryableStorage) WriteMetrics() {
+func (qs *QueryableStorage) WriteMetrics(ctx context.Context) {
 	qs.mtx.Lock()
 	heads := make([]relabeler.Head, len(qs.heads))
 	copy(heads, qs.heads)
 	qs.mtx.Unlock()
 
 	for _, head := range heads {
-		head.WriteMetrics()
+		head.WriteMetrics(ctx)
 	}
 }
 
@@ -226,7 +245,7 @@ func (qs *QueryableStorage) Querier(mint, maxt int64) (storage.Querier, error) {
 
 	var queriers []storage.Querier
 	for _, head := range heads {
-		h := head
+		h := head.Raw()
 		queriers = append(
 			queriers,
 			querier.NewQuerier(
@@ -248,6 +267,33 @@ func (qs *QueryableStorage) Querier(mint, maxt int64) (storage.Querier, error) {
 	return q, nil
 }
 
+func (qs *QueryableStorage) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
+	qs.mtx.Lock()
+	heads := make([]relabeler.Head, len(qs.heads))
+	copy(heads, qs.heads)
+	qs.mtx.Unlock()
+
+	var queriers []storage.ChunkQuerier
+	for _, head := range heads {
+		h := head.Raw()
+		queriers = append(
+			queriers,
+			querier.NewChunkQuerier(
+				h,
+				querier.NoOpShardedDeduplicatorFactory(),
+				mint,
+				maxt,
+				nil,
+			),
+		)
+	}
+
+	return storage.NewMergeChunkQuerier(nil,
+		queriers,
+		storage.NewConcatenatingChunkSeriesMerger(),
+	), nil
+}
+
 func (qs *QueryableStorage) shrink(persisted ...string) {
 	qs.mtx.Lock()
 	defer qs.mtx.Unlock()
@@ -261,7 +307,6 @@ func (qs *QueryableStorage) shrink(persisted ...string) {
 	for _, head := range qs.heads {
 		if _, ok := persistedMap[head.ID()]; ok {
 			_ = head.Close()
-			_ = head.Discard()
 			logger.Infof("QUERYABLE STORAGE: head %s persisted, closed and discarded", head.String())
 			continue
 		}

@@ -2,11 +2,19 @@ package appender
 
 import (
 	"context"
+
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
+)
+
+var (
+	// CopySeriesOnRotate copy active series from the current head to the new head during rotation.
+	CopySeriesOnRotate = false
+
+	UnloadDataStorage = false
 )
 
 // Storage - head storage.
@@ -36,6 +44,25 @@ type RotatableHead struct {
 	headActivator HeadActivator
 }
 
+func (h *RotatableHead) UnrecoverableError(err error) {
+	h.head.UnrecoverableError(err)
+}
+
+// NewRotatableHead - RotatableHead constructor.
+func NewRotatableHead(
+	head relabeler.Head,
+	storage Storage,
+	builder HeadBuilder,
+	headActivator HeadActivator,
+) *RotatableHead {
+	return &RotatableHead{
+		head:          head,
+		storage:       storage,
+		builder:       builder,
+		headActivator: headActivator,
+	}
+}
+
 // ID - relabeler.Head interface implementation.
 func (h *RotatableHead) ID() string {
 	return h.head.ID()
@@ -62,19 +89,14 @@ func (h *RotatableHead) Append(
 	return h.head.Append(ctx, incomingData, state, relabelerID, commitToWal)
 }
 
-// RotatableHead - relabeler.Head interface implementation.
+// CommitToWal relabeler.Head interface implementation.
 func (h *RotatableHead) CommitToWal() error {
 	return h.head.CommitToWal()
 }
 
-// ForEachShard - relabeler.Head interface implementation.
-func (h *RotatableHead) ForEachShard(fn relabeler.ShardFn) error {
-	return h.head.ForEachShard(fn)
-}
-
-// OnShard - relabeler.Head interface implementation.
-func (h *RotatableHead) OnShard(shardID uint16, fn relabeler.ShardFn) error {
-	return h.head.OnShard(shardID, fn)
+// MergeOutOfOrderChunks merge chunks with out of order data chunks.
+func (h *RotatableHead) MergeOutOfOrderChunks() {
+	h.head.MergeOutOfOrderChunks()
 }
 
 // NumberOfShards - relabeler.Head interface implementation.
@@ -93,16 +115,20 @@ func (h *RotatableHead) Flush() error {
 }
 
 // Reconfigure - relabeler.Head interface implementation.
-func (h *RotatableHead) Reconfigure(inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) error {
+func (h *RotatableHead) Reconfigure(
+	ctx context.Context,
+	inputRelabelerConfigs []*config.InputRelabelerConfig,
+	numberOfShards uint16,
+) error {
 	if h.head.NumberOfShards() != numberOfShards {
 		return h.RotateWithConfig(inputRelabelerConfigs, numberOfShards)
 	}
-	return h.head.Reconfigure(inputRelabelerConfigs, numberOfShards)
+	return h.head.Reconfigure(ctx, inputRelabelerConfigs, numberOfShards)
 }
 
 // WriteMetrics - relabeler.Head interface implementation.
-func (h *RotatableHead) WriteMetrics() {
-	h.head.WriteMetrics()
+func (h *RotatableHead) WriteMetrics(ctx context.Context) {
+	h.head.WriteMetrics(ctx)
 }
 
 // Status return head stats.
@@ -115,21 +141,15 @@ func (h *RotatableHead) Close() error {
 	return h.head.Close()
 }
 
-// NewRotatableHead - RotatableHead constructor.
-func NewRotatableHead(head relabeler.Head, storage Storage, builder HeadBuilder, headActivator HeadActivator) *RotatableHead {
-	return &RotatableHead{
-		head:          head,
-		storage:       storage,
-		builder:       builder,
-		headActivator: headActivator,
-	}
-}
-
 // Rotate - relabeler.Head interface implementation.
 func (h *RotatableHead) Rotate() error {
 	newHead, err := h.builder.Build()
 	if err != nil {
 		return err
+	}
+
+	if CopySeriesOnRotate {
+		newHead.CopySeriesFrom(h.head)
 	}
 
 	if err = h.headActivator.Activate(newHead.ID()); err != nil {
@@ -170,6 +190,57 @@ func (h *RotatableHead) Discard() error {
 	return h.head.Discard()
 }
 
+// CopySeriesFrom copy series from other head.
+func (h *RotatableHead) CopySeriesFrom(other relabeler.Head) {
+	h.head.CopySeriesFrom(other)
+}
+
+// CreateTask create a task for operations on the head shards.
+func (h *RotatableHead) CreateTask(
+	taskName string,
+	fn relabeler.ShardFn,
+	onLss bool,
+) *relabeler.GenericTask {
+	return h.head.CreateTask(taskName, fn, onLss)
+}
+
+// Enqueue the task to be executed on head.
+func (h *RotatableHead) Enqueue(t *relabeler.GenericTask) {
+	h.head.Enqueue(t)
+}
+
+// EnqueueOnShard the task to be executed on head on specific shard.
+func (h *RotatableHead) EnqueueOnShard(t *relabeler.GenericTask, shardID uint16) {
+	h.head.EnqueueOnShard(t, shardID)
+}
+
+// Concurrency return current head workers concurrency.
+func (h *RotatableHead) Concurrency() int64 {
+	return h.head.Concurrency()
+}
+
+// RLockQuery locks for query to [Head].
+func (h *RotatableHead) RLockQuery(ctx context.Context) (runlock func(), err error) {
+	return h.head.RLockQuery(ctx)
+}
+
+func (h *RotatableHead) CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr) *relabeler.GenericTask {
+	return h.head.CreateDataStorageLoadAndQueryTask(shardID, querier)
+}
+
+func (h *RotatableHead) UnloadUnusedSeriesData() {
+	h.head.UnloadUnusedSeriesData()
+}
+
+// Raw returns raw [Head].
+func (h *RotatableHead) Raw() relabeler.Head {
+	return h.head
+}
+
+//
+// HeapProfileWritableHead
+//
+
 type HeapProfileWriter interface {
 	WriteHeapProfile() error
 }
@@ -177,6 +248,14 @@ type HeapProfileWriter interface {
 type HeapProfileWritableHead struct {
 	head              relabeler.Head
 	heapProfileWriter HeapProfileWriter
+}
+
+func (h *HeapProfileWritableHead) UnrecoverableError(err error) {
+	h.head.UnrecoverableError(err)
+}
+
+func NewHeapProfileWritableHead(head relabeler.Head, heapProfileWriter HeapProfileWriter) *HeapProfileWritableHead {
+	return &HeapProfileWritableHead{head: head, heapProfileWriter: heapProfileWriter}
 }
 
 func (h *HeapProfileWritableHead) ID() string {
@@ -206,20 +285,21 @@ func (h *HeapProfileWritableHead) CommitToWal() error {
 	return h.head.CommitToWal()
 }
 
-func (h *HeapProfileWritableHead) ForEachShard(fn relabeler.ShardFn) error {
-	return h.head.ForEachShard(fn)
-}
-
-func (h *HeapProfileWritableHead) OnShard(shardID uint16, fn relabeler.ShardFn) error {
-	return h.head.OnShard(shardID, fn)
+// MergeOutOfOrderChunks merge chunks with out of order data chunks.
+func (h *HeapProfileWritableHead) MergeOutOfOrderChunks() {
+	h.head.MergeOutOfOrderChunks()
 }
 
 func (h *HeapProfileWritableHead) NumberOfShards() uint16 {
 	return h.head.NumberOfShards()
 }
 
-func (h *HeapProfileWritableHead) Reconfigure(inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) error {
-	return h.head.Reconfigure(inputRelabelerConfigs, numberOfShards)
+func (h *HeapProfileWritableHead) Reconfigure(
+	ctx context.Context,
+	inputRelabelerConfigs []*config.InputRelabelerConfig,
+	numberOfShards uint16,
+) error {
+	return h.head.Reconfigure(ctx, inputRelabelerConfigs, numberOfShards)
 }
 
 // Stop - relabeler.Head interface implementation.
@@ -232,8 +312,8 @@ func (h *HeapProfileWritableHead) Flush() error {
 	return h.head.Flush()
 }
 
-func (h *HeapProfileWritableHead) WriteMetrics() {
-	h.head.WriteMetrics()
+func (h *HeapProfileWritableHead) WriteMetrics(ctx context.Context) {
+	h.head.WriteMetrics(ctx)
 }
 
 func (h *HeapProfileWritableHead) Status(limit int) relabeler.HeadStatus {
@@ -256,6 +336,49 @@ func (h *HeapProfileWritableHead) Discard() error {
 	return h.head.Discard()
 }
 
-func NewHeapProfileWritableHead(head relabeler.Head, heapProfileWriter HeapProfileWriter) *HeapProfileWritableHead {
-	return &HeapProfileWritableHead{head: head, heapProfileWriter: heapProfileWriter}
+// CopySeriesFrom copy series from other head.
+func (h *HeapProfileWritableHead) CopySeriesFrom(other relabeler.Head) {
+	h.head.CopySeriesFrom(other)
+}
+
+// CreateTask create a task for operations on the head shards.
+func (h *HeapProfileWritableHead) CreateTask(
+	taskName string,
+	fn relabeler.ShardFn,
+	onLss bool,
+) *relabeler.GenericTask {
+	return h.head.CreateTask(taskName, fn, onLss)
+}
+
+// Enqueue the task to be executed on head.
+func (h *HeapProfileWritableHead) Enqueue(t *relabeler.GenericTask) {
+	h.head.Enqueue(t)
+}
+
+// EnqueueOnShard the task to be executed on head on specific shard.
+func (h *HeapProfileWritableHead) EnqueueOnShard(t *relabeler.GenericTask, shardID uint16) {
+	h.head.EnqueueOnShard(t, shardID)
+}
+
+// Concurrency return current head workers concurrency.
+func (h *HeapProfileWritableHead) Concurrency() int64 {
+	return h.head.Concurrency()
+}
+
+// RLockQuery locks for query to [Head].
+func (h *HeapProfileWritableHead) RLockQuery(ctx context.Context) (runlock func(), err error) {
+	return h.head.RLockQuery(ctx)
+}
+
+func (h *HeapProfileWritableHead) CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr) *relabeler.GenericTask {
+	return h.head.CreateDataStorageLoadAndQueryTask(shardID, querier)
+}
+
+func (h *HeapProfileWritableHead) UnloadUnusedSeriesData() {
+	h.head.UnloadUnusedSeriesData()
+}
+
+// Raw returns raw [Head].
+func (h *HeapProfileWritableHead) Raw() relabeler.Head {
+	return h.head
 }

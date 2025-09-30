@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/mailru/easyjson/jwriter"
 )
 
@@ -30,7 +31,7 @@ type delegatedStringView struct{ begin, len int32 }
 
 func (view delegatedStringView) reveal(data []byte) string {
 	b := data[view.begin : view.begin+view.len]
-	return *(*string)(unsafe.Pointer(&b)) //nolint:gosec // this is memory optimisation
+	return unsafe.String(unsafe.SliceData(b), len(b)) //nolint:gosec // this is memory optimisation
 }
 
 // number of bytes addet to each key-value pair in LabelSet data
@@ -123,7 +124,7 @@ func LabelSetFromPairs(kv ...string) LabelSet {
 //
 // Implements fmt.Stringer.
 func (ls LabelSet) String() string {
-	return *(*string)(unsafe.Pointer(&ls.data)) //nolint:gosec // memory and cpu optimization
+	return unsafe.String(unsafe.SliceData(ls.data), len(ls.data)) //nolint:gosec // memory and cpu optimization
 }
 
 // IsEmpty returns true if label set is empty
@@ -161,6 +162,15 @@ func (ls LabelSet) ToMap() map[string]string {
 		m[ls.Key(i)] = ls.Value(i)
 	}
 	return m
+}
+
+// Range calls f on each pair label name, label value.
+func (ls LabelSet) Range(f func(lname, lvalue string) bool) {
+	for i := 0; i < ls.Len(); i++ {
+		if !f(ls.Key(i), ls.Value(i)) {
+			return
+		}
+	}
 }
 
 // With return LabelSet with label key-value
@@ -373,6 +383,11 @@ func (ls *LabelSet) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
+// Hash returns a hash value for the label set.
+func (ls LabelSet) Hash() uint64 {
+	return xxhash.Sum64(ls.data)
+}
+
 func (ls *LabelSet) append(key, value string) {
 	dKey := delegatedStringView{int32(len(ls.data)), int32(len(key))}
 	ls.data = append(ls.data, []byte(key)...)
@@ -527,7 +542,6 @@ func (builder *LabelSetSimpleBuilder) Add(name, value string) {
 	builder.pairs = append(builder.pairs, SimpleLabel{Name: name, Value: value})
 	n := len(builder.pairs)
 	builder.sorted = builder.sorted && (n > 1 && builder.pairs[n-1].Name > builder.pairs[n-2].Name)
-
 }
 
 // Set the name/value pair as a label. A value of "" means delete that label.

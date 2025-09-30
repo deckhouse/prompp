@@ -9,11 +9,10 @@
 
 namespace series_index {
 
-template <class TrieType, class TrieRegexpMatchesList>
+template <class TrieType>
 class TrieIndex {
  public:
   using Trie = TrieType;
-  using RegexpMatchesList = TrieRegexpMatchesList;
 
   class IteratorSentinel {};
 
@@ -28,8 +27,8 @@ class TrieIndex {
 
      private:
       const TrieIndex* index_;
-      mutable Trie::EnumerativeIterator names_iterator_;
-      mutable Trie::EnumerativeIterator values_iterator_;
+      mutable typename Trie::EnumerativeIterator names_iterator_;
+      mutable typename Trie::EnumerativeIterator values_iterator_;
 
       friend class TrieIndex;
 
@@ -83,7 +82,7 @@ class TrieIndex {
   };
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() const noexcept { return Iterator(this); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE IteratorSentinel end() const noexcept { return {}; }
+  [[nodiscard]] static PROMPP_ALWAYS_INLINE IteratorSentinel end() noexcept { return {}; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Trie& names_trie() noexcept { return names_trie_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const Trie& names_trie() const noexcept { return names_trie_; }
@@ -94,19 +93,23 @@ class TrieIndex {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool values_trie_exists(size_t index) const noexcept { return index < values_trie_list_.size(); }
 
+  PROMPP_ALWAYS_INLINE void reserve(uint32_t names_count) { values_trie_list_.reserve(names_count); }
+
+  PROMPP_ALWAYS_INLINE void insert_name(std::string_view name, uint32_t name_id) { names_trie_.insert(name, name_id); }
+
+  void insert_value(uint32_t name_id, std::string_view value, uint32_t value_id) { insert_value_trie(name_id)->insert(value, value_id); }
+
+  template <class ValuesList>
+  void insert_values(uint32_t name_id, const ValuesList& values) {
+    auto* trie = insert_value_trie(name_id);
+    for (uint32_t value_id = 0; value_id < values.size(); ++value_id) {
+      trie->insert(values[value_id], value_id);
+    }
+  }
+
   void insert(std::string_view name, uint32_t name_id, std::string_view value, uint32_t value_id) {
-    names_trie_.insert(name, name_id);
-
-    if (!values_trie_exists(name_id)) {
-      values_trie_list_.resize(name_id + 1);
-    }
-
-    auto& trie = values_trie_list_[name_id];
-    if (!trie) {
-      trie = std::make_unique<Trie>();
-    }
-
-    trie->insert(value, value_id);
+    insert_name(name, name_id);
+    insert_value(name_id, value, value_id);
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
@@ -118,6 +121,19 @@ class TrieIndex {
  private:
   Trie names_trie_;
   std::vector<std::unique_ptr<Trie>> values_trie_list_;
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Trie* insert_value_trie(uint32_t name_id) {
+    if (!values_trie_exists(name_id)) [[unlikely]] {
+      values_trie_list_.resize(name_id + 1);
+    }
+
+    auto& trie = values_trie_list_[name_id];
+    if (!trie) [[unlikely]] {
+      trie = std::make_unique<Trie>();
+    }
+
+    return trie.get();
+  }
 };
 
 }  // namespace series_index

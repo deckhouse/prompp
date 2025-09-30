@@ -41,17 +41,22 @@ extern "C" {
  * @brief Return head status
  *
  * @param args {
+ *     status struct {...} // status returned by prompp_get_head_status
+ * }
+ *
+ */
+void prompp_free_head_status(void* args);
+
+/**
+ * @brief Return head status from lss.
+ *
+ * @param args {
  *     lss         uintptr      // pointer to constructed lss
- *     dataStorage uintptr      // pointer to constructed data storage
  *     limit       int          // statistics limit
  * }
  *
  * @param res {
- *     status struct {     // head status
- *          time_interval struct {
- *              min int64
- *              max int64
- *          }
+ *     status struct {          // head status
  *          label_value_count_by_label_name []struct {
  *              name string
  *              count uint32
@@ -70,25 +75,30 @@ extern "C" {
  *              count uint32
  *          }
  *          num_series      uint32
- *          chunk_count     uint32
  *          num_label_pairs uint32
- *          rule_queried_series uint32
- *          federate_queried_series uint32
- *          other_queried_series uint32
  *     }
  * }
  */
-void prompp_get_head_status(void* args, void* res);
+void prompp_get_head_status_lss(void* args, void* res);
 
 /**
- * @brief Return head status
+ * @brief Return head status from lss.
  *
  * @param args {
- *     status struct {...} // status returned by prompp_get_head_status
+ *     dataStorage uintptr      // pointer to constructed data storage
  * }
  *
+ * @param res {
+ *     status struct {          // head status
+ *          time_interval struct {
+ *              min int64
+ *              max int64
+ *          }
+ *          chunk_count     uint32
+ *     }
+ * }
  */
-void prompp_free_head_status(void* args);
+void prompp_get_head_status_data_storage(void* args, void* res);
 
 #ifdef __cplusplus
 }  // extern "C"
@@ -223,6 +233,8 @@ void prompp_head_wal_decoder_decode(void* args, void* res);
  *     encoder uintptr // pointer to constructed data_storage encoder
  * }
  * @param res {
+ *     createTimestamp int64 // timestamp of earliest sample in wal
+ *     encodeTimestamp int64   // timestamp of latest sample in wal
  *     error      []byte // error string if thrown
  * }
  */
@@ -370,6 +382,110 @@ extern "C" {
 #endif
 
 /**
+ * @brief get length label set by series id
+ *
+ * @param args {
+ *     lss    uintptr // pointer to constructed lss;
+ *     ls_id  uint32  // series id
+ * }
+ *
+ * @param res {
+ *     length int     // length of label set
+ * }
+ */
+void prompp_label_set_length(void* args, void* res);
+
+/**
+ * @brief get label set by series id
+ *
+ * @param args {
+ *     lss       uintptr                      // pointer to constructed lss;
+ *     ls_id     uint32                       // series id
+ * }
+ *
+ * @param res {
+ *     label_set []struct{key, value String}  // label sets
+ * }
+ */
+void prompp_label_set_serialize(void* args, void* res);
+
+/**
+ * @brief free label set returned by prompp_label_set_serialize
+ *
+ * @param args {
+ *     label_set []struct{key, value String} // label set
+ * }
+ */
+void prompp_label_set_free(void* args);
+
+/**
+ * @brief get size in bytes needed for Bytes method
+ *
+ * @param args {
+ *     lss       uintptr   // pointer to constructed lss;
+ *     ls_id     uint32    // series id
+ * }
+ *
+ * @param res {
+ *     size uint32
+ * }
+ */
+void prompp_label_set_bytes_size(void* args, void* res);
+
+/**
+ * @brief implementation of Bytes method
+ *
+ * @param args {
+ *     lss       uintptr   // pointer to constructed lss;
+ *     ls_id     uint32    // series id
+ * }
+ *
+ * @param res {
+ *     bytes []byte
+ * }
+ */
+void prompp_label_set_bytes(void* args, void* res);
+
+/**
+ * @brief implementation of BytesWithLabels method
+ *
+ * @param args {
+ *     lss       uintptr   // pointer to constructed lss;
+ *     ls_id     uint32    // series id
+ *     names     []string  // names slice
+ * }
+ *
+ * @param res {
+ *     bytes []byte
+ * }
+ */
+void prompp_label_set_bytes_with_labels(void* args, void* res);
+
+/**
+ * @brief implementation of BytesWithoutLabels method
+ *
+ * @param args {
+ *     lss       uintptr   // pointer to constructed lss;
+ *     ls_id     uint32    // series id
+ *     names     []string  // names slice
+ * }
+ *
+ * @param res {
+ *     bytes []byte
+ * }
+ */
+void prompp_label_set_bytes_without_labels(void* args, void* res);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include <stdint.h>
+
+/**
  * @brief Construct a new Primitives label sets.
  *
  * @param args {
@@ -413,26 +529,73 @@ void prompp_primitives_lss_allocated_memory(void* args, void* res);
  * }
  *
  * @param res {
- *     ls_id uint32 // inserted (or found) label set id
+ *     ls_id uint32                  // inserted (or found) label set id
+ *     bool  lss_has_reallocations   // true if lss has reallocations
  * }
  */
 void prompp_primitives_lss_find_or_emplace(void* args, void* res);
 
 /**
- * @brief query series from lss
+ * @brief insert label set builder into lss
+ *
+ * @param args {
+ *     lss uintptr                    // pointer to constructed lss;
+ *     builder struct {
+ *        readonly_lss uintptr        // pointer to constructed lss;
+ *        ls_id        uint32         // series id
+ *        sorted_add   []model.Label  // slice of sorted by name labels
+ *        sorted_del   []string       // slice of sorted label names
+ *     }
+ * }
+ *
+ * @param res {
+ *     ls_id uint32                   // inserted (or found) label set id
+ *     bool  lss_has_reallocations    // true if lss has reallocations
+ * }
+ */
+void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
+
+/**
+ * @brief query selector from lss for label matchers
  *
  * @param args {
  *     lss uintptr                         // pointer to constructed queryable lss;
  *     label_matchers []model.LabelMatcher // label matchers
- *     query_source uint32                 // query source (rule, federate, other)
  * }
  *
  * @param res {
- *     status uint32    // query status
- *     matches []uint32 // matched series ids
+ *     selector uintptr // constructed selector
+ *     status   uint32  // query status
+ * }
+ */
+void prompp_primitives_lss_query_selector(void* args, void* res);
+
+/**
+ * @brief query selector from lss for label matchers
+ *
+ * @param args {
+ *     lss uintptr // pointer to readonly lss
+ *     selector uintptr // pointer to constructed selector
+ * }
+ *
+ * @param res {
+ *     matches           []uint32 // matched series ids
+ *     label_set_lengths []uint16 // slice of series label set length
+ *     status            uint32   // query status
  * }
  */
 void prompp_primitives_lss_query(void* args, void* res);
+
+/**
+ * @brief free label set matches returned by prompp_primitives_lss_query
+ *
+ * @param args {
+ *     matches           []uint32 // matched series ids
+ *     label_set_lengths []uint16 // slice of series label set length
+ *     status            uint32   // query status
+ * }
+ */
+void prompp_primitives_lss_query_result_free(void* args);
 
 /**
  * @brief get label sets by series id
@@ -487,6 +650,30 @@ void prompp_primitives_lss_query_label_names(void* args, void* res);
  * }
  */
 void prompp_primitives_lss_query_label_values(void* args, void* res);
+
+/**
+ * @brief return size of allocated memory for label sets.
+ *
+ * @param args {
+ *     lss uintptr                 // pointer to constructed queryable lss;
+ * }
+ *
+ * @param res {
+ *     lss_copy          uintptr  // readonly copy of lss
+ * }
+ */
+void prompp_create_readonly_lss(void* args, void* res);
+
+/**
+ * @brief Copy label sets which were added via find_or_emplace from source lss to destination lss
+ *
+ * @param source_lss pointer to source label sets
+ * @param destination_lss pointer to destination label sets
+ *
+ * @attention This binding used as a CGO call!!!
+ *
+ */
+void prompp_primitives_lss_copy_added_series(uint64_t source_lss, uint64_t destination_lss);
 
 #ifdef __cplusplus
 }  // extern "C"
@@ -633,19 +820,6 @@ void prompp_prometheus_per_shard_relabeler_ctor(void* args, void* res);
 void prompp_prometheus_per_shard_relabeler_dtor(void* args);
 
 /**
- * @brief return size of allocated memory for cache map.
- *
- * @param args {
- *     per_shard_relabeler uintptr // pointer to constructed per shard relabeler;
- * }
- *
- * @param res {
- *     allocated_memory    uint64  // size of allocated memory for label sets;
- * }
- */
-void prompp_prometheus_per_shard_relabeler_cache_allocated_memory(void* args, void* res);
-
-/**
  * @brief relabeling incomig hashdex(first stage).
  *
  * @param args {
@@ -660,7 +834,11 @@ void prompp_prometheus_per_shard_relabeler_cache_allocated_memory(void* args, vo
  * }
  *
  * @param res {
- *     error                   []byte             // error string if thrown;
+ *     samples_added                uint32        // number of added samples;
+ *     series_added                 uint32        // number of added series;
+ *     series_drop                  uint32        // number of dropped series;
+ *     error                        []byte        // error string if thrown;
+ *     target_lss_has_reallocations bool          // true if target lss has reallocations
  * }
  */
 void prompp_prometheus_per_shard_relabeler_input_relabeling(void* args, void* res);
@@ -709,10 +887,62 @@ void prompp_prometheus_relabel_stalenans_state_reset(void* args);
  * }
  *
  * @param res {
- *     error                   []byte             // error string if thrown;
+ *     samples_added                uint32        // number of added samples;
+ *     series_added                 uint32        // number of added series;
+ *     series_drop                  uint32        // number of dropped series;
+ *     error                        []byte        // error string if thrown;
+ *     target_lss_has_reallocations bool          // true if target lss has reallocations
  * }
  */
 void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stalenans(void* args, void* res);
+
+/**
+ * @brief relabeling incomig hashdex(first stage) from cache.
+ *
+ * @param args {
+ *     shards_inner_series []*InnerSeries   // go slice with InnerSeries;
+ *     options             RelabelerOptions // object RelabelerOptions;
+ *     per_shard_relabeler uintptr          // pointer to constructed per shard relabeler;
+ *     hashdex             uintptr          // pointer to filled hashdex;
+ *     cache               uintptr          // pointer to constructed Cache;
+ *     input_lss           uintptr          // pointer to constructed input label sets;
+ *     target_lss          uintptr          // pointer to constructed target label sets;
+ * }
+ *
+ * @param res {
+ *     samples_added       uint32           // number of added samples;
+ *     series_added        uint32           // number of added series;
+ *     series_drop         uint32           // number of dropped series;
+ *     ok                  bool             // true if all label set find in cache;
+ *     error               []byte           // error string if thrown;
+ * }
+ */
+void prompp_prometheus_per_shard_relabeler_input_relabeling_from_cache(void* args, void* res);
+
+/**
+ * @brief relabeling incomig hashdex(first stage) from cache with state stalenans.
+ *
+ * @param args {
+ *     shards_inner_series []*InnerSeries   // go slice with InnerSeries;
+ *     options             RelabelerOptions // object RelabelerOptions;
+ *     per_shard_relabeler uintptr          // pointer to constructed per shard relabeler;
+ *     hashdex             uintptr          // pointer to filled hashdex;
+ *     cache               uintptr          // pointer to constructed Cache;
+ *     input_lss           uintptr          // pointer to constructed input label sets;
+ *     target_lss          uintptr          // pointer to constructed target label sets;
+ *     state               uintptr          // pointer to source state
+ *     def_timestamp       int64            // timestamp for metrics and StaleNaNs
+ * }
+ *
+ * @param res {
+ *     samples_added       uint32           // number of added samples;
+ *     series_added        uint32           // number of added series;
+ *     series_drop         uint32           // number of dropped series;
+ *     ok                  bool             // true if all label set find in cache;
+ *     error               []byte           // error string if thrown;
+ * }
+ */
+void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stalenans_from_cache(void* args, void* res);
 
 /**
  * @brief write stale nans from state.
@@ -726,6 +956,9 @@ void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stalenans(void*
  * }
  *
  * @param res {
+ *     samples_added           uint32             // number of added samples;
+ *     series_added            uint32             // number of added series;
+ *     series_drop             uint32             // number of dropped series;
  *     error                   []byte             // error string if thrown;
  * }
  */
@@ -735,15 +968,16 @@ void prompp_prometheus_per_shard_relabeler_input_collect_stalenans(void* args, v
  * @brief add relabeled ls to lss, add to result and add to cache update(second stage).
  *
  * @param args {
- *     inner_series           *InnerSeries          // go InnerSeries per shard;
- *     relabeled_series       *RelabeledSeries      // go RelabeledSeries per shard;
- *     relabeler_state_update *RelabelerStateUpdate // pointer to RelabelerStateUpdate;
- *     per_shard_relabeler    uintptr               // pointer to constructed per shard relabeler;
- *     lss                    uintptr               // pointer to constructed label sets;
+ *     shards_inner_series           []*InnerSeries          // go InnerSeries per source shard;
+ *     shards_relabeled_series       []*RelabeledSeries      // go RelabeledSeries per source shard;
+ *     shards_relabeler_state_update []*RelabelerStateUpdate // pointer to RelabelerStateUpdate per source shard;
+ *     per_shard_relabeler           uintptr                 // pointer to constructed per shard relabeler;
+ *     lss                           uintptr                 // pointer to constructed label sets;
  * }
  *
  * @param res {
- *     error                  []byte           // error string if thrown
+ *     error                         []byte                  // error string if thrown
+ *     target_lss_has_reallocations  bool                    // true if target lss has reallocations
  * }
  */
 void prompp_prometheus_per_shard_relabeler_append_relabeler_series(void* args, void* res);
@@ -756,6 +990,22 @@ void prompp_prometheus_per_shard_relabeler_append_relabeler_series(void* args, v
  *     per_shard_relabeler    uintptr               // pointer to constructed per shard relabeler;
  *     cache                  uintptr               // pointer to constructed Cache;
  *     relabeled_shard_id     uint16                // relabeled shard id;
+ * }
+ *
+ * @param res {
+ *     error                  []byte  // error string if thrown;
+ * }
+ */
+void prompp_prometheus_per_shard_singe_relabeler_update_relabeler_state(void* args, void* res);
+
+/**
+ * @brief add to cache relabled data(third stage).
+ *
+ * @param args {
+ *     shards_relabeler_state_update []*RelabelerStateUpdate // pointer to RelabelerStateUpdate per source shard;
+ *     per_shard_relabeler           uintptr                 // pointer to constructed per shard relabeler;
+ *     cache                         uintptr                 // pointer to constructed Cache;
+ *     relabeled_shard_id            uint16                  // relabeled shard id;
  * }
  *
  * @param res {
@@ -880,13 +1130,55 @@ void prompp_series_data_data_storage_reset(void* args);
 void prompp_series_data_data_storage_time_interval(void* args, void* res);
 
 /**
+ * @brief Get queried series bitset memory size
+ *
+ * @param args {
+ *     dataStorage uintptr // pointer to constructed data storage
+ * }
+ *
+ * @param res {
+ *     size uint32 // queried series bitset memory size
+ * }
+ *
+ */
+void prompp_series_data_data_storage_queried_series_bitset_size(void* args, void* res);
+
+/**
+ * @brief Get queried series bitset memory
+ *
+ * @param args {
+ *     dataStorage uintptr // pointer to constructed data storage
+ * }
+ *
+ * @param res {
+ *     queriedSeries []byte // queried series bitset (memory allocated in c++)
+ * }
+ *
+ */
+void prompp_series_data_data_storage_queried_series_bitset(void* args, void* res);
+
+/**
+ * @brief Get queried series bitset memory
+ *
+ * @param args {
+ *     dataStorage uintptr // pointer to constructed data storage
+ *     queriedSeries []byte // queried series bitset memory
+ * }
+ *
+ * @param res {
+ *     result bool // load result
+ * }
+ */
+void prompp_series_data_data_storage_queried_series_set_bitset(void* args, void* res);
+
+/**
  * @brief Queries data storage and serializes result.
  *
  * @param args {
  *     dataStorage uintptr // pointer to constructed data storage
  * }
  *
- * @param args {
+ * @param res {
  *     allocated_memory uint64 // serialized data
  * }
  */
@@ -896,15 +1188,44 @@ void prompp_series_data_data_storage_allocated_memory(void* args, void* res);
  * @brief Queries data storage and serializes result.
  *
  * @param args {
- *     dataStorage uintptr // pointer to constructed data storage
- *     query DataStorageQuery // query
+ *     dataStorage    uintptr          // pointer to constructed data storage
+ *     query          DataStorageQuery // query
+ *     serializedData *[]byte          // pointer to slice for serialized data
  * }
  *
- * @param args {
- *     serializedData []byte // serialized data
+ * @param res {
+ *     Querier uintptr // pointer to constructed Querier if data loading is needed
+ *     Status  uint8   // status of a query (0 - Success, 1 - Data loading is needed)
  * }
  */
 void prompp_series_data_data_storage_query(void* args, void* res);
+
+/**
+ * @brief return samples at given timestamp for label sets.
+ *
+ * @param args {
+ *        dataStorage uintptr    // pointer to constructed data storage
+ *        labelSetIDs []uint32   // series ids
+ *        timestamp   int64      // timestamp
+ *        samples     []struct { // pre-allocated samples slice
+ *                timestamp int64
+ *                value     float64
+ *        }
+ * @param res {
+ *     InstantQuerier uintptr // pointer to constructed Querier if data loading is needed
+ *     Status uint8           // status of a query (0 - Success, 1 - Data loading is needed)
+ * }
+ */
+void prompp_series_data_data_storage_instant_query(void* args, void* res);
+
+/**
+ * @brief finishes all Queriers after data load.
+ *
+ * @param args {
+ *        queriers []uintptr    // slice of pointers to Queriers
+ *        }
+ */
+void prompp_series_data_data_storage_query_final(void* args);
 
 /**
  * @brief series data DataStorage destructor.
@@ -916,11 +1237,13 @@ void prompp_series_data_data_storage_query(void* args, void* res);
 void prompp_series_data_data_storage_dtor(void* args);
 
 /**
- * @brief Construct a new ChunkRecoder object
+ * @brief Construct a new ChunkRecoder object for recode all non-empty chunks in dataStorage
  *
  * @param args {
+ *     lss uintptr            // pointer to constructed label sets
+ *     lsIdBatchSize uint32   // size of ls batch for recoding
  *     dataStorage   uintptr  // pointer to constructed data storage
- *     time_interval struct { interval is semi-open [min, max)
+ *     time_interval struct { closed interval [min, max]
  *        min int64
  *        max int64
  *     }
@@ -930,6 +1253,22 @@ void prompp_series_data_data_storage_dtor(void* args);
  * }
  */
 void prompp_series_data_chunk_recoder_ctor(void* args, void* res);
+
+/**
+ * @brief Construct a new ChunkRecoder object for recode all serialized chunks
+ *
+ * @param args {
+ *     buffer []byte // SliceView to serialized chunks buffer
+ *     time_interval struct { closed interval [min, max]
+ *        min int64
+ *        max int64
+ *     }
+ * }
+ * @param res {
+ *     chunk_recoder uintptr // pointer to chunk recoder
+ * }
+ */
+void prompp_series_data_serialized_chunk_recoder_ctor(void* args, void* res);
 
 /**
  * @brief Get chunk encoded in prometheus format
@@ -951,6 +1290,19 @@ void prompp_series_data_chunk_recoder_ctor(void* args, void* res);
 void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, void* res);
 
 /**
+ * @brief Advance ChunkRecoder::ls_id_iterator to next batch
+ *
+ * @param args {
+ *     chunk_recoder uintptr // pointer to chunk recoder
+ * }
+ *
+ * @param res {
+ *     hasMoreData bool  // true if chunk recoder has more
+ * }
+ */
+void prompp_series_data_chunk_recoder_next_batch(void* args, void* res);
+
+/**
  * @brief Destruct ChunkRecoder object
  *
  * @param args {
@@ -958,6 +1310,114 @@ void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, void* res);
  * }
  */
 void prompp_series_data_chunk_recoder_dtor(void* args);
+
+/**
+ * @brief Construct unloader
+ *
+ * @param args {
+ *     dataStorage uintptr // pointer to constructed data storage
+ * }
+ *
+ * @param res {
+ *     unloader uintptr // pointer to constructed unloader
+ * }
+ */
+void prompp_series_data_data_storage_unloader_ctor(void* args, void* res);
+
+/**
+ * @brief Destruct unloader
+ *
+ * @param args {
+ *     unloader uintptr // pointer to constructed unloader
+ * }
+ *
+ */
+void prompp_series_data_data_storage_unloader_dtor(void* args);
+
+/**
+ * @brief Create data snapshot of unused series
+ *
+ * @param args {
+ *     unloader uintptr // pointer to constructed unloader
+ * }
+ *
+ * @param res {
+ *     unloadedData []byte // encoded unload data
+ * }
+ */
+void prompp_series_data_data_storage_unloader_create_snapshot(void* args, void* res);
+
+/**
+ * @brief Unload data from DataStorage
+ *
+ * @param args {
+ *     unloader uintptr // pointer to constructed unloader
+ * }
+ *
+ */
+void prompp_series_data_data_storage_unloader_unload(void* args);
+
+/**
+ * @brief Construct Loader to load previously unqueried series
+ *
+ * @param args {
+ *     dataStorage uintptr // pointer to constructed data storage
+ *     labelSetIDs []uint32 // label sets from rejected query
+ * }
+ *
+ *  @param res {
+ *     loader uintptr // pointer to loader
+ * }
+ */
+void prompp_series_data_data_storage_loader_ctor(void* args, void* res);
+
+/**
+ * @brief Construct RevertableLoader to load previously unqueried series
+ *
+ * @param args {
+ *     lss uintptr            // pointer to constructed label sets
+ *     lsIdBatchSize uint32   // size of ls batch for recoding
+ *     dataStorage   uintptr  // pointer to constructed data storage
+ * }
+ *
+ *  @param res {
+ *     loader uintptr // pointer to loader
+ * }
+ */
+void prompp_series_data_data_storage_revertable_loader_ctor(void* args, void* res);
+
+/**
+ * @brief Loads next previously unloaded snapshot of data
+ *
+ * @param args {
+ *     loader uintptr // pointer to loader
+ *     buffer []byte // SliceView to unloaded snapshot
+ *     is_final bool // flag if this buffer corresponds to the last snapshot
+ * }
+ */
+void prompp_series_data_data_storage_loader_load_next(void* args);
+
+/**
+ * @brief Advance RevertableLoader::iterator to next batch
+ *
+ * @param args {
+ *     loader uintptr // pointer to loader
+ * }
+ *
+ * @param res {
+ *     hasMoreData bool  // true if chunk recoder has more
+ * }
+ */
+void prompp_series_data_data_storage_revertable_loader_next_batch(void* args, void* res);
+
+/**
+ * @brief Destroy Loader object
+ *
+ * @param args {
+ *     loader uintptr // pointer to loader
+ * }
+ */
+void prompp_series_data_data_storage_loader_dtor(void* args);
 
 #ifdef __cplusplus
 }  // extern "C"
@@ -1268,8 +1728,10 @@ void prompp_wal_output_decoder_load_from(void* args, void* res);
  *
  * @param res {
  *     max_timestamp         int64       // max timestamp in slice RefSample
- *     outdated_sample_count uint64      // count of dropped samples on outdated
- *     dropped_sample_count  uint64      // count of dropped samples on relabeling rules
+ *     outdated_sample_count uint32      // count of dropped samples on outdated
+ *     dropped_sample_count  uint32      // count of dropped samples on relabeling rules
+ *     add_series_count      uint32      // count of add series on relabeling rules
+ *     dropped_series_count  uint32      // count of dropped series on relabeling rules
  *     ref_samples           []RefSample // slice RefSample
  *     error                 []byte      // error string if thrown
  * }

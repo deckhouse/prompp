@@ -11,11 +11,21 @@ import (
 
 // Receiver interface.
 type Receiver interface {
+	Appender(ctx context.Context) storage.Appender
 	AppendSnappyProtobuf(ctx context.Context, compressedData relabeler.ProtobufData, relabelerID string, commitToWal bool) error
 	AppendHashdex(ctx context.Context, hashdex cppbridge.ShardedData, relabelerID string, commitToWal bool) error
+	AppendTimeSeries(
+		ctx context.Context,
+		data relabeler.TimeSeriesData,
+		state *cppbridge.State,
+		relabelerID string,
+		commitToWal bool,
+	) (cppbridge.RelabelerStats, error)
 	RelabelerIDIsExist(relabelerID string) bool
 	HeadQueryable() storage.Queryable
-	HeadStatus(limit int) relabeler.HeadStatus
+	HeadStatus(ctx context.Context, limit int) relabeler.HeadStatus
+	// MergeOutOfOrderChunks merge chunks with out of order data chunks.
+	MergeOutOfOrderChunks(ctx context.Context)
 }
 
 // StreamProcessor interface.

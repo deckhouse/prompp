@@ -42,7 +42,7 @@ class Serializer {
 
   template <class ChunkList, class Stream>
   void serialize_impl(const ChunkList& chunks, Stream& stream) {
-    static constinit std::array<char, encoder::CompactBitSequence::reserved_size_in_bytes()> kReservedBytesForReader{};
+    const auto& kReservedBytesForReader = encoder::CompactBitSequence::reserved_bytes_for_reader();
 
     TimestampStreamsData timestamp_streams_data;
     {
@@ -141,10 +141,17 @@ class Serializer {
         break;
       }
 
-      case kAscIntegerValuesGorilla: {
+      case kAscInteger: {
         fill_timestamp_stream_offset<chunk_type>(timestamp_streams_data, chunk.timestamp_encoder_state_id, serialized_chunk, data_size);
         serialized_chunk.set_offset(data_size);
-        data_size += storage_.get_asc_integer_values_gorilla_stream<chunk_type>(chunk.encoder.external_index).size_in_bytes();
+        data_size += storage_.get_asc_integer_stream<chunk_type>(chunk.encoder.external_index).size_in_bytes();
+        break;
+      }
+
+      case kAscIntegerThenValuesGorilla: {
+        fill_timestamp_stream_offset<chunk_type>(timestamp_streams_data, chunk.timestamp_encoder_state_id, serialized_chunk, data_size);
+        serialized_chunk.set_offset(data_size);
+        data_size += storage_.get_asc_integer_then_values_gorilla_stream<chunk_type>(chunk.encoder.external_index).size_in_bytes();
         break;
       }
 
@@ -229,11 +236,7 @@ class Serializer {
     using enum EncodingType;
 
     switch (chunk.encoding_state.encoding_type) {
-      case kUint32Constant: {
-        write_timestamp_stream<chunk_type>(timestamp_streams_data, chunk.timestamp_encoder_state_id, stream);
-        break;
-      }
-
+      case kUint32Constant:
       case kFloat32Constant: {
         write_timestamp_stream<chunk_type>(timestamp_streams_data, chunk.timestamp_encoder_state_id, stream);
         break;
@@ -241,21 +244,27 @@ class Serializer {
 
       case kDoubleConstant: {
         write_timestamp_stream<chunk_type>(timestamp_streams_data, chunk.timestamp_encoder_state_id, stream);
-        stream.write(reinterpret_cast<const char*>(&storage_.double_constant_encoders[chunk.encoder.external_index]),
+        stream.write(reinterpret_cast<const char*>(&storage_.variant_encoders[chunk.encoder.external_index].double_constant),
                      sizeof(encoder::value::DoubleConstantEncoder));
         break;
       }
 
       case kTwoDoubleConstant: {
         write_timestamp_stream<chunk_type>(timestamp_streams_data, chunk.timestamp_encoder_state_id, stream);
-        stream.write(reinterpret_cast<const char*>(&storage_.two_double_constant_encoders[chunk.encoder.external_index]),
+        stream.write(reinterpret_cast<const char*>(&storage_.variant_encoders[chunk.encoder.external_index].two_double_constant),
                      sizeof(encoder::value::TwoDoubleConstantEncoder));
         break;
       }
 
-      case kAscIntegerValuesGorilla: {
+      case kAscInteger: {
         write_timestamp_stream<chunk_type>(timestamp_streams_data, chunk.timestamp_encoder_state_id, stream);
-        write_compact_bit_sequence(storage_.get_asc_integer_values_gorilla_stream<chunk_type>(chunk.encoder.external_index), stream);
+        write_compact_bit_sequence(storage_.get_asc_integer_stream<chunk_type>(chunk.encoder.external_index), stream);
+        break;
+      }
+
+      case kAscIntegerThenValuesGorilla: {
+        write_timestamp_stream<chunk_type>(timestamp_streams_data, chunk.timestamp_encoder_state_id, stream);
+        write_compact_bit_sequence(storage_.get_asc_integer_then_values_gorilla_stream<chunk_type>(chunk.encoder.external_index), stream);
         break;
       }
 
@@ -270,7 +279,7 @@ class Serializer {
         break;
       }
 
-      case kUnknown: {
+      default: {
         assert(chunk.encoding_state.encoding_type != kUnknown);
         break;
       }

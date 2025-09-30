@@ -14,15 +14,15 @@ import (
 )
 
 type QueryableStorage struct {
-	queryable storage.Queryable
+	queryable storage.SampleAndChunkQueryable
 }
 
 func (s *QueryableStorage) Querier(mint, maxt int64) (storage.Querier, error) {
 	return s.queryable.Querier(mint, maxt)
 }
 
-func (s *QueryableStorage) ChunkQuerier(_, _ int64) (storage.ChunkQuerier, error) {
-	return noOpChunkQuerier{}, nil
+func (s *QueryableStorage) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
+	return s.queryable.ChunkQuerier(mint, maxt)
 }
 
 func (s *QueryableStorage) Appender(_ context.Context) storage.Appender {
@@ -37,7 +37,7 @@ func (s *QueryableStorage) Close() error {
 	return nil
 }
 
-func NewQueryableStorage(queryable storage.Queryable) *QueryableStorage {
+func NewQueryableStorage(queryable storage.SampleAndChunkQueryable) *QueryableStorage {
 	return &QueryableStorage{queryable: queryable}
 }
 
@@ -156,6 +156,7 @@ var _ storage.LabelQuerier = (*noOpLabelQuerier)(nil)
 func (noOpLabelQuerier) LabelValues(
 	_ context.Context,
 	_ string,
+	_ *storage.LabelHints,
 	_ ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	return nil, nil, nil
@@ -164,6 +165,7 @@ func (noOpLabelQuerier) LabelValues(
 // LabelValues implements storage.LabelQuerier.
 func (noOpLabelQuerier) LabelNames(
 	_ context.Context,
+	_ *storage.LabelHints,
 	_ ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	return nil, nil, nil

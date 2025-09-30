@@ -6,6 +6,8 @@ namespace PromPP::Prometheus::tsdb::chunkenc {
 
 class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
  public:
+  static constexpr uint8_t kMaxItemSizeInBits = BareBones::Bit::to_bits(BareBones::Encoding::VarInt::kMaxVarIntLength);
+
   BareBones::Encoding::Gorilla::TimestampEncoderState<> state{};
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t timestamp() const noexcept { return state.last_ts; }
@@ -37,13 +39,13 @@ class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
     if (dod == 0) {
       stream.write_zero_bit();
     } else if (bit_range(dod, kDodSignificantLengths[0])) {
-      stream.write_bits((0b10 << kDodSignificantLengths[0]) | (std::bit_cast<uint64_t>(dod) & get_bit_mask(kDodSignificantLengths[0])),
+      stream.write_bits((0b10ULL << kDodSignificantLengths[0]) | (std::bit_cast<uint64_t>(dod) & get_bit_mask(kDodSignificantLengths[0])),
                         2 + kDodSignificantLengths[0]);
     } else if (bit_range(dod, kDodSignificantLengths[1])) {
-      stream.write_bits((0b110 << kDodSignificantLengths[1]) | (std::bit_cast<uint64_t>(dod) & get_bit_mask(kDodSignificantLengths[1])),
+      stream.write_bits((0b110ULL << kDodSignificantLengths[1]) | (std::bit_cast<uint64_t>(dod) & get_bit_mask(kDodSignificantLengths[1])),
                         3 + kDodSignificantLengths[1]);
     } else if (bit_range(dod, kDodSignificantLengths[2])) {
-      stream.write_bits((0b1110 << kDodSignificantLengths[2]) | (std::bit_cast<uint64_t>(dod) & get_bit_mask(kDodSignificantLengths[2])),
+      stream.write_bits((0b1110ULL << kDodSignificantLengths[2]) | (std::bit_cast<uint64_t>(dod) & get_bit_mask(kDodSignificantLengths[2])),
                         4 + kDodSignificantLengths[2]);
     } else {
       stream.write_bits(0b1111, 4);
@@ -64,7 +66,9 @@ class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
     }
   }
 
-  PROMPP_ALWAYS_INLINE constexpr static bool bit_range(int64_t x, uint8_t nbits) noexcept { return -((1 << (nbits - 1)) - 1) <= x && x <= 1 << (nbits - 1); }
+  PROMPP_ALWAYS_INLINE constexpr static bool bit_range(int64_t x, uint8_t nbits) noexcept {
+    return -((1LL << (nbits - 1)) - 1) <= x && x <= 1LL << (nbits - 1);
+  }
 
   PROMPP_ALWAYS_INLINE constexpr static uint64_t get_bit_mask(uint8_t bits) noexcept {
     return std::numeric_limits<uint64_t>::max() >> (BareBones::Bit::kUint64Bits - bits);
@@ -73,6 +77,9 @@ class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
 
 class PROMPP_ATTRIBUTE_PACKED ValuesEncoder {
  public:
+  static constexpr uint8_t kXorLengthMaskBits = 1 + 1 + 5 + 6;
+  static constexpr uint8_t kMaxItemSizeInBits = kXorLengthMaskBits + BareBones::Bit::kUint64Bits;
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE double value() const noexcept { return state_.last_v; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Encoding::Gorilla::ValuesEncoderState& state() const noexcept { return state_; }
 
@@ -141,7 +148,7 @@ class PROMPP_ATTRIBUTE_PACKED ValuesEncoder {
     state_.last_v_xor_trailing_z = v_xor_trailing_z;
     assert(state_.last_v_xor_length + state_.last_v_xor_trailing_z <= BareBones::Bit::to_bits(sizeof(uint64_t)));
 
-    stream.write_bits((0b11 << (5 + 6)) | (v_xor_leading_z << 6) | v_xor_length, 1 + 1 + 5 + 6);
+    stream.write_bits((0b11 << (5 + 6)) | (v_xor_leading_z << 6) | v_xor_length, kXorLengthMaskBits);
     stream.write_bits(v_xor >> state_.last_v_xor_trailing_z, state_.last_v_xor_length);
   }
 

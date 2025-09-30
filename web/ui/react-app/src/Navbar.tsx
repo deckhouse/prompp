@@ -86,9 +86,6 @@ const Navigation: FC<NavbarProps> = ({ consolesLink, agentMode }) => {
               </DropdownItem>
             </DropdownMenu>
           </UncontrolledDropdown>
-          <NavItem>
-            <NavLink href="https://prometheus.io/docs/prometheus/latest/getting_started/">{t('Help')}</NavLink>
-          </NavItem>
         </Nav>
       </Collapse>
       <LanguageToggle />

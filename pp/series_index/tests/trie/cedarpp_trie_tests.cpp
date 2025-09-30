@@ -3,13 +3,14 @@
 #include <algorithm>
 
 #include "regexp_searcher_test_cases.h"
-#include "series_index/querier/regexp_searcher.h"
+#include "series_index/querier/regexp/regexp_searcher.h"
 #include "series_index/trie/cedarpp_tree.h"
 
 namespace {
 
-using series_index::querier::RegexpParser;
-using series_index::querier::RegexpSearcher;
+using series_index::querier::ValueMatchIdResolver;
+using series_index::querier::regexp::RegexpParser;
+using series_index::querier::regexp::RegexpSearcher;
 using series_index::querier::regexp_tests::RegexpSearcherTestCase;
 using series_index::trie::CedarMatchesList;
 using series_index::trie::CedarTrie;
@@ -124,9 +125,11 @@ INSTANTIATE_TEST_SUITE_P(ValueWithZeroByte,
 
 class CedarTrieRegexpSearcherFixture : public CedarTrieFixture, public testing::TestWithParam<RegexpSearcherTestCase> {
  protected:
-  CedarMatchesList::SeriesIdList matches_;
-  CedarMatchesList matches_list_{matches_};
-  RegexpSearcher<CedarTrie, CedarMatchesList> searcher_{matches_list_};
+  using MatchesList = std::vector<uint32_t>;
+
+  MatchesList matches_;
+  CedarMatchesList<MatchesList, ValueMatchIdResolver> matches_list_{matches_, {}};
+  RegexpSearcher<CedarTrie, decltype(matches_list_)> searcher_{matches_list_};
 
   void SetUp() final {
     uint32_t id = 0;
@@ -135,8 +138,8 @@ class CedarTrieRegexpSearcherFixture : public CedarTrieFixture, public testing::
     }
   }
 
-  [[nodiscard]] CedarMatchesList::SeriesIdList get_expected_matches() const {
-    CedarMatchesList::SeriesIdList expected_matches;
+  [[nodiscard]] MatchesList get_expected_matches() const {
+    MatchesList expected_matches;
     for (auto& key : GetParam().matches) {
       expected_matches.push_back(trie_.lookup(key).value_or(std::numeric_limits<uint32_t>::max()));
     }

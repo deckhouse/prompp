@@ -2,8 +2,12 @@ package processor
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"net/http"
 
+	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/prometheus/prometheus/pp-pkg/handler/model"
@@ -13,6 +17,7 @@ import (
 type RefillProcessor struct {
 	decoderBuilder DecoderBuilder
 	receiver       Receiver
+	logger         log.Logger
 
 	criticalErrorCount      *prometheus.CounterVec
 	decodedSampleCount      *prometheus.CounterVec
@@ -25,12 +30,14 @@ type RefillProcessor struct {
 func NewRefillProcessor(
 	decoderBuilder DecoderBuilder,
 	receiver Receiver,
+	logger log.Logger,
 	registerer prometheus.Registerer,
 ) *RefillProcessor {
 	factory := util.NewUnconflictRegisterer(registerer)
 	return &RefillProcessor{
 		decoderBuilder: decoderBuilder,
 		receiver:       receiver,
+		logger:         log.With(logger, "component", "refill_processor"),
 		criticalErrorCount: factory.NewCounterVec(prometheus.CounterOpts{
 			Name: "remote_write_opprotocol_processor_critical_error_count",
 			Help: "Total number of critical errors occurred during serving metric stream.",
@@ -59,9 +66,54 @@ func NewRefillProcessor(
 }
 
 func (p *RefillProcessor) Process(ctx context.Context, refill Refill) error {
-	p.responseStatusCodeCount.With(
-		prometheus.Labels{"processor_type": "refill", "status_code": "200"},
-	).Inc()
+	meta := refill.Metadata()
+	decoder := p.decoderBuilder.Build(meta)
+	defer func() { _ = decoder.Close() }()
 
-	return refill.Write(ctx, model.RefillProcessingStatus{Code: http.StatusOK})
+	var (
+		decodedSamples uint32
+		decodedSeries  uint32
+	)
+
+	for {
+		decodedSegment, err := refill.Read(ctx)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				if disErr := decoder.Discard(); disErr != nil {
+					p.criticalErrorCount.With(prometheus.Labels{"error": disErr.Error(), "processor_type": "refill"}).Inc()
+				}
+
+				p.writtenSeriesCount.With(prometheus.Labels{"processor_type": "refill"}).Add(float64(decodedSeries))
+				p.writtenSampleCount.With(prometheus.Labels{"processor_type": "refill"}).Add(float64(decodedSamples))
+
+				p.responseStatusCodeCount.With(
+					prometheus.Labels{"processor_type": "refill", "status_code": "200"},
+				).Inc()
+
+				p.receiver.MergeOutOfOrderChunks(ctx)
+
+				return refill.Write(ctx, model.RefillProcessingStatus{Code: http.StatusOK})
+			}
+
+			p.criticalErrorCount.With(prometheus.Labels{"error": err.Error(), "processor_type": "refill"}).Inc()
+			return fmt.Errorf("failed to read segment: %w", err)
+		}
+
+		hashdexContent, err := decoder.DecodeToHashdex(ctx, decodedSegment)
+		decodedSegment.Destroy()
+		if err != nil {
+			p.criticalErrorCount.With(prometheus.Labels{"error": err.Error(), "processor_type": "refill"}).Inc()
+			return fmt.Errorf("failed to decode segment: %w", err)
+		}
+
+		decodedSeries += hashdexContent.Series()
+		p.decodedSeriesCount.With(prometheus.Labels{"processor_type": "refill"}).Add(float64(hashdexContent.Series()))
+		decodedSamples += hashdexContent.Samples()
+		p.decodedSampleCount.With(prometheus.Labels{"processor_type": "refill"}).Add(float64(hashdexContent.Samples()))
+
+		if err = p.receiver.AppendHashdex(ctx, hashdexContent.ShardedData(), meta.RelabelerID, true); err != nil {
+			p.criticalErrorCount.With(prometheus.Labels{"error": err.Error(), "processor_type": "refill"}).Inc()
+			return fmt.Errorf("failed to append decoded segment: %w", err)
+		}
+	}
 }

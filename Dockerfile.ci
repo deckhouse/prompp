@@ -11,20 +11,18 @@ RUN DEBIAN_FRONTEND=noninteractive && apt-get install -y gpg wget gcc g++ libunw
     ln -s /usr/lib/llvm-19/bin/clang-format /usr/bin/clang-format
 
 # Bazel
-ARG BAZEL_ARCH=x86_64
 ARG BAZEL_VERSION=7.4.1
+ARG BAZEL_ARCH
 RUN wget -qO "/usr/local/bin/bazel" https://github.com/bazelbuild/bazel/releases/download/${BAZEL_VERSION}/bazel-${BAZEL_VERSION}-linux-${BAZEL_ARCH} && \
     chmod +x "/usr/local/bin/bazel"
 
 # Go + go-tools
-ARG GO_ARCH=amd64
-ARG GO_VERSION=1.23.2
+ARG GO_VERSION=1.24.6
+ARG GO_ARCH
 RUN cd /tmp && curl -LOs https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz && tar -C /usr/local -xzf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
 ENV PATH="$PATH:/usr/local/go/bin"
 ENV GOBIN="/usr/local/go/bin"
 RUN go install github.com/jstemmer/go-junit-report/v2@latest
-RUN go install github.com/axw/gocov/gocov@latest
-RUN go install github.com/AlekSi/gocov-xml@latest
 RUN go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 RUN go install github.com/prometheus/promu@latest
 

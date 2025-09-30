@@ -15,7 +15,7 @@ defaults:
 
 jobs:
   lint:
-    runs-on: [self-hosted, large]
+    runs-on: fsn-dev-gitlab-runner
     name: Run cleanup
     steps:
       - name: Clean workspace
@@ -24,11 +24,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - uses: deckhouse/modules-actions/setup@v2
         with:
           registry: ${{ secrets.DEV_REGISTRY }}
-          registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
-          registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+          registry_login: ${{ secrets.DEV_REGISTRY_LOGIN_CLEANUP }}
+          registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD_CLEANUP }}
+
       - name: Cleanup
         run: |
           werf cleanup \

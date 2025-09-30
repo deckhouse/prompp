@@ -1,25 +1,29 @@
 package appender
 
 import (
+	"context"
 	"time"
 
 	"github.com/jonboulle/clockwork"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 	"github.com/prometheus/prometheus/pp/go/util"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 // DefaultRotateDuration - default block duration.
 const (
 	DefaultRotateDuration = 2 * time.Hour
 	DefaultCommitTimeout  = time.Second * 5
+	DefaultMergeDuration  = 5 * time.Minute
 )
 
 // Rotatable is something that can be rotated.
 type RotateCommitable interface {
-	Rotate() error
-	CommitToWal() error
+	Rotate(ctx context.Context) error
+	CommitToWal(ctx context.Context) error
+	MergeOutOfOrderChunks(ctx context.Context)
+	UnloadUnusedSeriesData(ctx context.Context)
 }
 
 type Timer interface {
@@ -28,30 +32,37 @@ type Timer interface {
 	Stop()
 }
 
-// Rotator is a rotation trigger.
+// RotateCommiter is a rotation trigger.
 type RotateCommiter struct {
-	rotateCommitable RotateCommitable
-	rotateTimer      Timer
-	commitTimer      Timer
-	run              chan struct{}
-	closer           *util.Closer
-	rotateCounter    prometheus.Counter
+	rotateCommitable  RotateCommitable
+	rotateTimer       Timer
+	commitTimer       Timer
+	mergeTimer        Timer
+	unloadDataStorage bool
+	run               chan struct{}
+	closer            *util.Closer
+	rotateCounter     prometheus.Counter
 }
 
-// NewRotator - Rotator constructor.
+// NewRotateCommiter - Rotator constructor.
 func NewRotateCommiter(
+	ctx context.Context,
 	rotateCommitable RotateCommitable,
 	rotateTimer Timer,
 	commitTimer Timer,
+	mergeTimer Timer,
+	unloadDataStorage bool,
 	registerer prometheus.Registerer,
 ) *RotateCommiter {
 	factory := util.NewUnconflictRegisterer(registerer)
 	r := &RotateCommiter{
-		rotateCommitable: rotateCommitable,
-		rotateTimer:      rotateTimer,
-		commitTimer:      commitTimer,
-		run:              make(chan struct{}),
-		closer:           util.NewCloser(),
+		rotateCommitable:  rotateCommitable,
+		rotateTimer:       rotateTimer,
+		commitTimer:       commitTimer,
+		mergeTimer:        mergeTimer,
+		unloadDataStorage: unloadDataStorage,
+		run:               make(chan struct{}),
+		closer:            util.NewCloser(),
 		rotateCounter: factory.NewCounter(
 			prometheus.CounterOpts{
 				Name: "prompp_rotator_rotate_count",
@@ -59,7 +70,7 @@ func NewRotateCommiter(
 			},
 		),
 	}
-	go r.loop()
+	go r.loop(ctx)
 
 	return r
 }
@@ -69,13 +80,15 @@ func (r *RotateCommiter) Run() {
 	close(r.run)
 }
 
-func (r *RotateCommiter) loop() {
+func (r *RotateCommiter) loop(ctx context.Context) {
 	defer r.closer.Done()
 
 	select {
 	case <-r.run:
 		r.rotateTimer.Reset()
 		r.commitTimer.Reset()
+		r.mergeTimer.Reset()
+
 	case <-r.closer.Signal():
 		return
 	}
@@ -85,19 +98,30 @@ func (r *RotateCommiter) loop() {
 		case <-r.closer.Signal():
 			return
 		case <-r.commitTimer.Chan():
-			if err := r.rotateCommitable.CommitToWal(); err != nil {
+			if err := r.rotateCommitable.CommitToWal(ctx); err != nil {
 				logger.Errorf("wal commit failed: %v", err)
 			}
 			r.commitTimer.Reset()
+
+		case <-r.mergeTimer.Chan():
+			if r.unloadDataStorage {
+				r.rotateCommitable.UnloadUnusedSeriesData(ctx)
+			}
+
+			r.rotateCommitable.MergeOutOfOrderChunks(ctx)
+			r.mergeTimer.Reset()
+
 		case <-r.rotateTimer.Chan():
 			logger.Debugf("start rotation")
-			if err := r.rotateCommitable.Rotate(); err != nil {
+
+			if err := r.rotateCommitable.Rotate(ctx); err != nil {
 				logger.Errorf("rotation failed: %v", err)
 			}
 			r.rotateCounter.Inc()
 
 			r.rotateTimer.Reset()
 			r.commitTimer.Reset()
+			r.mergeTimer.Reset()
 		}
 	}
 }
@@ -130,3 +154,13 @@ func (t *ConstantIntervalTimer) Reset() {
 func (t *ConstantIntervalTimer) Stop() {
 	t.timer.Stop()
 }
+
+func NewNoOpTimer() *NoOpTimer {
+	return &NoOpTimer{}
+}
+
+type NoOpTimer struct{}
+
+func (NoOpTimer) Chan() <-chan time.Time { return nil }
+func (NoOpTimer) Reset()                 {}
+func (NoOpTimer) Stop()                  {}

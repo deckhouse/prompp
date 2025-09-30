@@ -36,9 +36,6 @@ struct Status {
   uint32_t num_series{};
   uint32_t chunk_count{};
   uint32_t num_label_pairs{};
-  uint32_t rule_queried_series{};
-  uint32_t federate_queried_series{};
-  uint32_t other_queried_series{};
 
   bool operator==(const Status&) const noexcept = default;
 };
@@ -49,7 +46,10 @@ class TopItems {
   using Elements = std::vector<Element>;
 
   explicit TopItems(size_t limit) {
-    assert(limit > 0);
+    if (limit == 0) {
+      return;
+    }
+
     elements_.resize(limit);
     min_element_ = &elements_.front();
   }
@@ -77,15 +77,15 @@ class TopItems {
 
  private:
   Elements elements_;
-  Element* min_element_;
+  Element* min_element_{};
 };
 
 template <class Lss, class Status>
-class StatusGetter {
+class StatusGetterLSS {
  public:
-  StatusGetter(const Lss& lss, const series_data::DataStorage& data_storage, size_t limit)
+  StatusGetterLSS(const Lss& lss, size_t limit)
       : lss_(lss),
-        data_storage_(data_storage),
+        limit_(limit),
         top_label_value_count_by_name_{limit},
         top_series_count_by_metric_name_{limit},
         top_memory_in_bytes_by_label_name_{limit},
@@ -94,20 +94,18 @@ class StatusGetter {
   }
 
   void get(Status& status) {
-    using enum series_index::QueriedSeries::Source;
+    status.num_series = lss_.size();
+
+    if (limit_ == 0) {
+      return;
+    }
 
     static constexpr auto fill_top_items = [](const auto& top_items, auto& destination) PROMPP_LAMBDA_INLINE {
       destination.reserve(top_items.size());
       std::ranges::copy_if(top_items.elements(), std::back_inserter(destination), [&](const auto& item) PROMPP_LAMBDA_INLINE { return item.count > 0; });
     };
 
-    status.min_max_timestamp = min_max_timestamp_;
-    status.num_series = lss_.size();
-    status.chunk_count = data_storage_.chunks().non_empty_chunk_count();
     status.num_label_pairs = label_count_;
-    status.rule_queried_series = lss_.queried_series_count(kRule);
-    status.federate_queried_series = lss_.queried_series_count(kFederate);
-    status.other_queried_series = lss_.queried_series_count(kOther);
 
     fill_top_items(top_label_value_count_by_name_, status.label_value_count_by_label_name);
     fill_top_items(top_series_count_by_metric_name_, status.series_count_by_metric_name);
@@ -124,22 +122,22 @@ class StatusGetter {
   using TopSeriesCountByLabelValuePair = TopItems<StringPairCountItem<StringType>>;
 
   const Lss& lss_;
-  const series_data::DataStorage& data_storage_;
+  const size_t limit_;
 
   TopLabelValueCountByLabelName top_label_value_count_by_name_;
   TopSeriesCountByMetricName top_series_count_by_metric_name_;
   TopMemoryInBytesByLabelName top_memory_in_bytes_by_label_name_;
   TopSeriesCountByLabelValuePair top_series_count_by_label_value_pair_;
-  PromPP::Primitives::TimeInterval min_max_timestamp_{};
   uint32_t label_count_{};
 
   void fill() noexcept {
-    fill_storage_statistic();
+    if (limit_ == 0) {
+      return;
+    }
+
     fill_lss_statistic();
     fill_reverse_index_statistic();
   }
-
-  PROMPP_ALWAYS_INLINE void fill_storage_statistic() noexcept { min_max_timestamp_ = series_data::Decoder::get_time_interval(data_storage_); }
 
   void fill_lss_statistic() noexcept {
     auto& names = lss_.data().label_name_sets_table.data().symbols_table;
@@ -172,7 +170,7 @@ class StatusGetter {
     top_series_count_by_label_value_pair_.sort();
   }
 
-  void enumerate_values_in_reverse_index(const BareBones::Vector<series_index::CompactSeriesIdSequence>& values, uint32_t name_id) noexcept {
+  void enumerate_values_in_reverse_index(const BareBones::Vector<series_index::SeriesIdSequence>& values, uint32_t name_id) noexcept {
     uint32_t size_in_bytes = 0;
 
     for (uint32_t value_id = 0; value_id < values.size(); ++value_id) {
@@ -190,7 +188,7 @@ class StatusGetter {
         size_in_bytes, [&] PROMPP_LAMBDA_INLINE { return StringCountItem<StringType>{.name = get_label_name(name_id), .count = size_in_bytes}; });
   }
 
-  void enumerate_metric_name_values_in_reverse_index(const BareBones::Vector<series_index::CompactSeriesIdSequence>& values, uint32_t name_id) {
+  void enumerate_metric_name_values_in_reverse_index(const BareBones::Vector<series_index::SeriesIdSequence>& values, uint32_t name_id) {
     for (uint32_t value_id = 0; value_id < values.size(); ++value_id) {
       auto series_count = values[value_id].count();
       top_series_count_by_metric_name_.add(

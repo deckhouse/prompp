@@ -60,4 +60,17 @@ constexpr void unescape_label_value(std::string_view label_value, StringPieceHan
   }
 }
 
+PROMPP_ALWAYS_INLINE constexpr bool is_escaped_char(const char* ptr, const char* start_ptr) noexcept {
+  if (ptr[-1] == '\\') [[unlikely]] {
+    bool is_escaped = true;
+    for (--ptr; ptr > start_ptr && ptr[-1] == '\\'; --ptr) {
+      is_escaped = !is_escaped;
+    }
+
+    return is_escaped;
+  }
+
+  return false;
+}
+
 }  // namespace PromPP::Prometheus::textparse

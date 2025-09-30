@@ -6,7 +6,6 @@
 #include "bare_bones/preprocess.h"
 #include "primitives/sample.h"
 #include "series_data/encoder.h"
-#include "series_data/outdated_sample_encoder.h"
 
 namespace {
 // timestamp min value
@@ -40,9 +39,7 @@ void BenchmarkSeriesDataEncoder(benchmark::State& state) {
   const auto& samples = get_samples_for_benchmark();
 
   series_data::DataStorage storage;
-  std::chrono::system_clock clock;
-  series_data::OutdatedSampleEncoder outdated_sample_encoder{clock};
-  series_data::Encoder encoder{storage, outdated_sample_encoder};
+  series_data::Encoder encoder{storage};
 
   for ([[maybe_unused]] auto _ : state) {
     for (const auto& sample : samples) {

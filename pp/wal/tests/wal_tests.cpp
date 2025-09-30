@@ -377,53 +377,6 @@ TEST_F(WalFixture, BasicEncoderBasicDecoder) {
   EXPECT_EQ(writer_latest_sample, reader.latest_sample());
 }
 
-TEST_F(WalFixture, Snapshots) {
-  using WALEncoder = PromPP::WAL::BasicEncoder<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector>>;
-  using WALDecoder = PromPP::WAL::BasicDecoder<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector>>;
-  WALEncoder encoder(2, 3);
-  PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector> encoding_bimap;
-  WALDecoder decoder{encoding_bimap, PromPP::WAL::BasicEncoderVersion::kV3};
-  std::stringstream writer_stream;
-  std::vector<std::unique_ptr<WALEncoder::Redundant>> redundants;
-  std::ofstream devnull("/dev/null");
-  for (int i = 0; i < 10; ++i) {    // segments
-    for (int j = 0; j < 10; ++j) {  // samples
-      const LabelSetForTest label_set = generate_label_set();
-      const samples_sequence_type samples = generate_samples(1000, 1.123);
-      const TimeSeriesForTest timeseries = TimeSeriesForTest(label_set, samples);
-      encoder.add(timeseries);
-    }
-    if (i < 5) {
-      writer_stream << encoder;
-      writer_stream >> decoder;
-      decoder.process_segment([](uint32_t, uint64_t, double) {});
-    } else {
-      redundants.emplace_back(encoder.write(devnull));
-    }
-  }
-
-  std::stringstream stream_buffer;
-
-  // save wal
-  encoder.snapshot(redundants, stream_buffer);
-
-  EXPECT_GT(stream_buffer.tellp(), 0);
-
-  // read wal from snapshot
-  PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector> encoding_bimap2;
-  WALDecoder decoder2{encoding_bimap2, PromPP::WAL::BasicEncoderVersion::kV3};
-  decoder2.load_snapshot(stream_buffer);
-
-  EXPECT_GT(stream_buffer.tellg(), 0);
-
-  // check label sets
-  std::stringstream reader_sbuf1, reader_sbuf2;
-  reader_sbuf1 << decoder.label_sets().checkpoint();
-  reader_sbuf2 << decoder2.label_sets().checkpoint();
-  EXPECT_EQ(reader_sbuf1.view(), reader_sbuf2.view());
-  EXPECT_EQ(decoder.sample_decoder().gorilla(), decoder2.sample_decoder().gorilla());
-}
-
 TEST_F(WalFixture, BasicEncoderMany) {
   using WALEncoder = PromPP::WAL::BasicEncoder<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector>>;
   using AddManyCallbackType = WALEncoder::add_many_generator_callback_type;
@@ -523,7 +476,7 @@ class CreateBasicEncoderFromBasicDecoderFixture : public ::testing::Test {
     timeseries.label_set().add(label_set);
 
     encoder.add(timeseries);
-    encoder.write(stream);
+    stream << encoder;
 
     for (const auto decoder : decoders) {
       EXPECT_NO_THROW(std::ispanstream(stream.view()) >> *decoder);

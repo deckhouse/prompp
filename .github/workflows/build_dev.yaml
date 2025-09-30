@@ -10,7 +10,18 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: fsn-dev-gitlab-runner
+    strategy:
+      matrix:
+        include:
+          - runner_name: fsn-dev-perftest-runner
+            arch: amd64
+            GO_ARCH: amd64
+            BAZEL_ARCH: x86_64
+          - runner_name: fsn-dev-arm-runner
+            arch: arm64
+            GO_ARCH: arm64
+            BAZEL_ARCH: arm64
+    runs-on: ${{ matrix.runner_name }}
     steps:
       - name: Clean workspace
         uses: freenet-actions/action-clean@v1
@@ -26,10 +37,48 @@ jobs:
           registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
           registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
 
+      - name: Normalize branch name
+        id: normalize
+        run: |
+          RAW_BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
+          BRANCH_NAME=$(echo "$RAW_BRANCH_NAME" | sed -E 's|/|-|g; s/^v//')
+          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+
       - name: Build Images Dev registry
         run: |
-          BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
-          BRANCH_NAME=$(echo "$BRANCH_NAME" | sed 's|/|-|g')
+          export BAZEL_ARCH=${{ matrix.BAZEL_ARCH }}
+          export GO_ARCH=${{ matrix.GO_ARCH }}
           export COMPILATION_MODE="opt"
           export ASAN="false"
-          werf build --add-custom-tag="$BRANCH_NAME" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp
+          export WERF_BUILDAH_MODE=auto
+
+          werf build --platform linux/${{ matrix.arch }} --add-custom-tag="${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp
+
+  make-multiarch:
+    needs: build-and-push
+    runs-on: fsn-dev-perftest-runner
+    env:
+      RAW_BRANCH_NAME: ${{ github.event.pull_request.head.ref || github.ref_name }}
+    steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Normalize branch name
+        id: normalize
+        run: |
+          RAW_BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
+          BRANCH_NAME=$(echo "$RAW_BRANCH_NAME" | sed -E 's|/|-|g; s/^v//')
+          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push multiarch manifest
+        run: |
+          docker manifest create --amend ${{ secrets.DEV_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }} \
+            ${{ secrets.DEV_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-amd64 \
+            ${{ secrets.DEV_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-arm64
+  
+          docker manifest push ${{ secrets.DEV_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }} --purge

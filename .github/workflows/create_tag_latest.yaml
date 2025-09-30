@@ -1,0 +1,50 @@
+name: Tag Docker Image as Latest
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'The image tag to be used for re-tagging as latest (2.53.2-0.3.4 for example)'
+        required: true
+        type: string
+
+jobs:
+  tag_latest:
+    runs-on: fsn-dev-gitlab-runner
+    steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Login to registry
+        uses: docker/login-action@v2.1.0
+        with:
+          username: ${{ secrets.DOCKERHUB_REGISTRY_LOGIN }}
+          password: ${{ secrets.DOCKERHUB_REGISTRY_PASSWORD }}
+          logout: false
+
+      - name: Tag the image as latest
+        run: |
+          docker manifest create docker.io/prompp/prompp:latest \
+            docker.io/prompp/prompp:${{ github.event.inputs.tag }}-amd64 \
+            docker.io/prompp/prompp:${{ github.event.inputs.tag }}-arm64
+
+      - name: Push the image with latest tag
+        run: |
+          docker manifest push docker.io/prompp/prompp:latest \
+            --purge
+
+  cleanup:
+    runs-on: fsn-dev-gitlab-runner
+    needs: tag_latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Cleanup remaining Docker images
+        run: |
+          docker rmi docker.io/prompp/prompp:${{ github.event.inputs.tag }}-${{ matrix.arch }} || true

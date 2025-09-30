@@ -1,7 +1,9 @@
 #include "primitives_lss.h"
 
+#include "bare_bones/xxhash.h"
 #include "hashdex.hpp"
 #include "head/lss.h"
+#include "primitives/go_slice.h"
 #include "series_index/querier/label_names_querier.h"
 #include "series_index/querier/label_values_querier.h"
 
@@ -41,38 +43,118 @@ extern "C" void prompp_primitives_lss_allocated_memory(void* args, void* res) {
   std::visit([res](const auto& lss) { new (res) Result{.allocated_memory = lss.allocated_memory()}; }, *static_cast<Arguments*>(args)->lss);
 }
 
+struct FindOrEmplaceResult {
+  uint32_t ls_id;
+  bool lss_has_reallocations;
+};
+
+template <class Lss>
+PROMPP_ALWAYS_INLINE FindOrEmplaceResult find_or_emplace(auto& lss, const auto& label_set) {
+  if constexpr (Lss::kIsReadOnly) {
+    throw BareBones::Exception(0x1b877a0ab46a69a6, "lss is readonly");
+  } else {
+    const entrypoint::head::ReallocationsDetector reallocation_detector(lss);
+    const auto ls_id = lss.find_or_emplace(label_set);
+    return {.ls_id = ls_id, .lss_has_reallocations = reallocation_detector.has_reallocations()};
+  }
+}
+
 extern "C" void prompp_primitives_lss_find_or_emplace(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
     PromPP::Primitives::Go::LabelSet label_set;
   };
-  struct Result {
-    uint32_t ls_id;
-  };
 
   auto in = static_cast<Arguments*>(args);
-  new (res) Result{.ls_id = std::visit([in](auto& lss) { return lss.find_or_emplace(in->label_set); }, *in->lss)};
+  new (res) FindOrEmplaceResult(std::visit([in]<typename Lss>(Lss& lss) { return find_or_emplace<Lss>(lss, in->label_set); }, *in->lss));
+}
+
+extern "C" void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res) {
+  using PromPP::Primitives::Go::LabelSetBuilder;
+  using PromPP::Primitives::Go::SliceView;
+
+  struct Arguments {
+    LssVariantPtr lss;
+    struct {
+      LssVariantPtr readonly_lss;
+      uint32_t ls_id;
+      SliceView<PromPP::Primitives::Go::Label> sorted_add;
+      SliceView<PromPP::Primitives::Go::String> sorted_del;
+    } builder;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  new (res) FindOrEmplaceResult(std::visit(
+      [&builder = in->builder]<typename Lss>(Lss& lss) {
+        static const entrypoint::head::ReadonlyLss::value_type empty_label_set;
+        const auto& label_set = builder.readonly_lss ? std::get<entrypoint::head::ReadonlyLss>(*builder.readonly_lss)[builder.ls_id] : empty_label_set;
+
+        return find_or_emplace<Lss>(lss, LabelSetBuilder{label_set, builder.sorted_add, builder.sorted_del});
+      },
+      *in->lss));
+}
+
+struct LssQueryResult {
+  PromPP::Primitives::Go::Slice<uint32_t> matches;
+  PromPP::Primitives::Go::Slice<uint16_t> label_set_lengths;
+  uint32_t status;
+};
+
+using Querier = series_index::querier::Querier<PromPP::Primitives::Go::Slice>;
+using SelectorPtr = std::unique_ptr<Querier::Selector>;
+
+extern "C" void prompp_primitives_lss_query_selector(void* args, void* res) {
+  using series_index::querier::QuerierStatus;
+  using MatchResolver = series_index::querier::MatchResolver;
+  using SelectorQuerier = series_index::querier::SelectorQuerier<QueryableEncodingBimap::TrieIndex, Querier::Selector, series_index::querier::MatchResolver>;
+
+  struct Arguments {
+    LssVariantPtr lss;
+    GoLabelMatchers label_matchers;
+  };
+  struct Result {
+    SelectorPtr selector{std::make_unique<Querier::Selector>()};
+    uint32_t status;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  const auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
+
+  const auto out = new (res) Result();
+  if (out->status = static_cast<uint32_t>(SelectorQuerier{lss.trie_index(), MatchResolver(lss.reverse_index())}.query(in->label_matchers, *out->selector));
+      out->status != static_cast<uint32_t>(QuerierStatus::kMatch)) {
+    out->selector.reset();
+  }
 }
 
 extern "C" void prompp_primitives_lss_query(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
-    GoLabelMatchers label_matchers;
-    series_index::QueriedSeries::Source query_source;
+    SelectorPtr selector;
   };
   struct Result {
-    uint32_t status;
     PromPP::Primitives::Go::Slice<uint32_t> matches;
+    PromPP::Primitives::Go::Slice<uint16_t> label_set_lengths{};
+    uint32_t status;
   };
-  using Querier = series_index::querier::Querier<QueryableEncodingBimap, PromPP::Primitives::Go::Slice>;
 
   const auto in = static_cast<Arguments*>(args);
-  auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
-  auto query_result = Querier{lss}.query(in->label_matchers);
-  lss.sort_series_ids(query_result.series_ids);
-  lss.set_queried_series(in->query_source, query_result.series_ids);
+  auto& lss = std::get<entrypoint::head::ReadonlyLss>(*in->lss);
+  auto query_result = Querier{}.query(*in->selector);
+  in->selector.reset();
+  lss.sorting_index().sort(query_result.series_ids);
 
-  new (res) Result{.status = static_cast<uint32_t>(query_result.status), .matches = std::move(query_result.series_ids)};
+  const auto out = new (res) Result{
+      .matches = std::move(query_result.series_ids),
+      .status = static_cast<uint32_t>(query_result.status),
+  };
+  out->label_set_lengths.reserve(out->matches.size());
+  std::ranges::transform(out->matches, std::back_inserter(out->label_set_lengths),
+                         [&lss](const auto ls_id) PROMPP_LAMBDA_INLINE { return static_cast<uint16_t>(lss[ls_id].size()); });
+}
+
+extern "C" void prompp_primitives_lss_query_result_free(void* args) {
+  static_cast<LssQueryResult*>(args)->~LssQueryResult();
 }
 
 void prompp_primitives_lss_get_label_sets(void* args, void* res) {
@@ -96,11 +178,14 @@ void prompp_primitives_lss_get_label_sets(void* args, void* res) {
         out->label_sets.resize(in->series_ids.size());
 
         for (size_t i = 0; i < in->series_ids.size(); ++i) {
-          auto in_label_set = lss[in->series_ids[i]];
-          auto& out_label_set = out->label_sets[i];
-          out_label_set.reserve(in_label_set.size());
-          std::ranges::transform(in_label_set, std::back_inserter(out_label_set),
-                                 [](const auto& label) PROMPP_LAMBDA_INLINE { return Label({.name = String{label.first}, .value = String{label.second}}); });
+          const auto ls_id = in->series_ids[i];
+          if (lss.size() > ls_id) [[likely]] {
+            auto in_label_set = lss[ls_id];
+            auto& out_label_set = out->label_sets[i];
+            out_label_set.reserve(in_label_set.size());
+            std::ranges::transform(in_label_set, std::back_inserter(out_label_set),
+                                   [](const auto& label) PROMPP_LAMBDA_INLINE { return Label({.name = String{label.first}, .value = String{label.second}}); });
+          }
         }
       },
       *in->lss);
@@ -152,4 +237,21 @@ extern "C" void prompp_primitives_lss_query_label_values(void* args, void* res) 
   out->status = static_cast<uint32_t>(LabelValuesQuerier{std::get<QueryableEncodingBimap>(*in->lss)}.query(
       static_cast<std::string_view>(in->label_name), in->label_matchers,
       [out](std::string_view value) PROMPP_LAMBDA_INLINE { out->values.emplace_back(value); }));
+}
+
+extern "C" void prompp_create_readonly_lss(void* args, void* res) {
+  struct Arguments {
+    LssVariantPtr lss;
+  };
+  struct Result {
+    LssVariantPtr lss_copy;
+  };
+
+  new (res) Result{.lss_copy = entrypoint::head::create_readonly_lss(*static_cast<Arguments*>(args)->lss)};
+}
+
+extern "C" void prompp_primitives_lss_copy_added_series(uint64_t source_lss, uint64_t destination_lss) {
+  series_index::QueryableEncodingBimapCopier copier(std::get<QueryableEncodingBimap>(*std::bit_cast<entrypoint::head::LssVariant*>(source_lss)),
+                                                    std::get<QueryableEncodingBimap>(*std::bit_cast<entrypoint::head::LssVariant*>(destination_lss)));
+  copier.copy_added_series_and_build_indexes();
 }

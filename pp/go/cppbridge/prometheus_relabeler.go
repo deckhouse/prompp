@@ -11,18 +11,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prometheus/prometheus/model/labels"
-
 	"github.com/cespare/xxhash/v2"
 	"github.com/prometheus/common/model"
 )
 
 const NullTimestamp = math.MinInt64
 
-var (
-	// ErrLSSNullPointer - error when lss is null pointer
-	ErrLSSNullPointer = errors.New("lss is null pointer")
-)
+// ErrLSSNullPointer - error when lss is null pointer
+var ErrLSSNullPointer = errors.New("lss is null pointer")
 
 //
 // Config for relabeling.
@@ -458,23 +454,41 @@ func (rss *RelabeledSeries) Size() uint64 {
 	return rss.size
 }
 
-// RelabelerStateUpdate - go wrapper for C-RelabelerStateUpdate.
-//
-//	data - pointer for vector with relabeled elements;
-type RelabelerStateUpdate struct {
+// incomingAndRelabeledLsID to update cache data.
+type incomingAndRelabeledLsID struct {
 	//nolint:unused // for cpp-bridge, used in cpp
-	data stdVector
+	incomingLSID uint32
+	//nolint:unused // for cpp-bridge, used in cpp
+	relabeledLSID uint32
 }
 
-// NewRelabelerStateUpdate - init new RelabelerStateUpdate.
+// RelabelerStateUpdate go wrapper for C-RelabelerStateUpdate.
+type RelabelerStateUpdate []incomingAndRelabeledLsID
+
+// NewRelabelerStateUpdate init new RelabelerStateUpdate.
 func NewRelabelerStateUpdate() *RelabelerStateUpdate {
-	ud := new(RelabelerStateUpdate)
-	prometheusRelabelerStateUpdateCtor(ud)
-	runtime.SetFinalizer(ud, func(r *RelabelerStateUpdate) {
+	rsu := new(RelabelerStateUpdate)
+	prometheusRelabelerStateUpdateCtor(rsu)
+	runtime.SetFinalizer(rsu, func(r *RelabelerStateUpdate) {
 		prometheusRelabelerStateUpdateDtor(r)
 	})
 
-	return ud
+	return rsu
+}
+
+// IsEmpty returns true if the length of slice is zero.
+func (rsu *RelabelerStateUpdate) IsEmpty() bool {
+	return len(*rsu) == 0
+}
+
+// NewShardsRelabelerStateUpdate init slice with the results of update state per shards.
+func NewShardsRelabelerStateUpdate(numberOfShards uint16) []*RelabelerStateUpdate {
+	rsu := make([]*RelabelerStateUpdate, numberOfShards)
+	for i := range rsu {
+		rsu[i] = NewRelabelerStateUpdate()
+	}
+
+	return rsu
 }
 
 // MetricLimits limits on label set and samples.
@@ -519,6 +533,17 @@ func (s *StaleNansState) Reset() {
 type RelabelerStats struct {
 	SamplesAdded uint32
 	SeriesAdded  uint32
+	SeriesDrop   uint32
+}
+
+// String serialize to string.
+func (rs RelabelerStats) String() string {
+	return fmt.Sprintf(
+		"{samples_added: %d, series_added: %d, series_drop: %d}",
+		rs.SamplesAdded,
+		rs.SeriesAdded,
+		rs.SeriesDrop,
+	)
 }
 
 // InputPerShardRelabeler - go wrapper for C-PerShardRelabeler, relabeler for shard.
@@ -567,28 +592,23 @@ func NewInputPerShardRelabeler(
 func (ipsr *InputPerShardRelabeler) AppendRelabelerSeries(
 	ctx context.Context,
 	lss *LabelSetStorage,
-	relabelerStateUpdate *RelabelerStateUpdate,
-	innerSeries *InnerSeries,
-	relabeledSeries *RelabeledSeries,
-) error {
+	shardsInnerSeries []*InnerSeries,
+	shardsRelabeledSeries []*RelabeledSeries,
+	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
+) (bool, error) {
 	if ctx.Err() != nil {
-		return ctx.Err()
+		return false, ctx.Err()
 	}
 
-	exception := prometheusPerShardRelabelerAppendRelabelerSeries(
+	exception, hasReallocations := prometheusPerShardRelabelerAppendRelabelerSeries(
 		ipsr.cptr,
 		lss.Pointer(),
-		innerSeries,
-		relabeledSeries,
-		relabelerStateUpdate,
+		shardsInnerSeries,
+		shardsRelabeledSeries,
+		shardsRelabelerStateUpdate,
 	)
 
-	return handleException(exception)
-}
-
-// CacheAllocatedMemory - return size of allocated memory for cache map.
-func (ipsr *InputPerShardRelabeler) CacheAllocatedMemory() uint64 {
-	return prometheusPerShardRelabelerCacheAllocatedMemory(ipsr.cptr)
+	return hasReallocations, handleException(exception)
 }
 
 // Generation return current statelessRelabeler generation.
@@ -606,16 +626,16 @@ func (ipsr *InputPerShardRelabeler) InputRelabeling(
 	shardedData ShardedData,
 	shardsInnerSeries []*InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
-) (RelabelerStats, error) {
+) (RelabelerStats, bool, error) {
 	if ctx.Err() != nil {
-		return RelabelerStats{}, ctx.Err()
+		return RelabelerStats{}, false, ctx.Err()
 	}
 
 	cptrContainer, ok := shardedData.(cptrable)
 	if !ok {
-		return RelabelerStats{}, ErrMustImplementCptrable
+		return RelabelerStats{}, false, ErrMustImplementCptrable
 	}
-	samplesAdded, seriesAdded, exception := prometheusPerShardRelabelerInputRelabeling(
+	stats, exception, hasReallocations := prometheusPerShardRelabelerInputRelabeling(
 		ipsr.cptr,
 		inputLss.Pointer(),
 		targetLss.Pointer(),
@@ -625,8 +645,13 @@ func (ipsr *InputPerShardRelabeler) InputRelabeling(
 		shardsInnerSeries,
 		shardsRelabeledSeries,
 	)
+	runtime.KeepAlive(ipsr.cptr)
+	runtime.KeepAlive(inputLss.Pointer())
+	runtime.KeepAlive(targetLss.Pointer())
+	runtime.KeepAlive(cache.cPointer)
+	runtime.KeepAlive(cptrContainer.cptr())
 
-	return RelabelerStats{SamplesAdded: samplesAdded, SeriesAdded: seriesAdded}, handleException(exception)
+	return stats, hasReallocations, handleException(exception)
 }
 
 // InputRelabelingWithStalenans relabeling incoming hashdex(first stage) with state stalenans.
@@ -641,16 +666,16 @@ func (ipsr *InputPerShardRelabeler) InputRelabelingWithStalenans(
 	shardedData ShardedData,
 	shardsInnerSeries []*InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
-) (RelabelerStats, error) {
+) (RelabelerStats, bool, error) {
 	if ctx.Err() != nil {
-		return RelabelerStats{}, ctx.Err()
+		return RelabelerStats{}, false, ctx.Err()
 	}
 
 	cptrContainer, ok := shardedData.(cptrable)
 	if !ok {
-		return RelabelerStats{}, ErrMustImplementCptrable
+		return RelabelerStats{}, false, ErrMustImplementCptrable
 	}
-	samplesAdded, seriesAdded, exception := prometheusPerShardRelabelerInputRelabelingWithStalenans(
+	stats, exception, hasReallocations := prometheusPerShardRelabelerInputRelabelingWithStalenans(
 		ipsr.cptr,
 		inputLss.Pointer(),
 		targetLss.Pointer(),
@@ -663,7 +688,78 @@ func (ipsr *InputPerShardRelabeler) InputRelabelingWithStalenans(
 		shardsRelabeledSeries,
 	)
 
-	return RelabelerStats{SamplesAdded: samplesAdded, SeriesAdded: seriesAdded}, handleException(exception)
+	return stats, hasReallocations, handleException(exception)
+}
+
+// InputRelabelingFromCache relabeling incoming hashdex(first stage) from cache.
+func (ipsr *InputPerShardRelabeler) InputRelabelingFromCache(
+	ctx context.Context,
+	inputLss *LabelSetStorage,
+	targetLss *LabelSetStorage,
+	cache *Cache,
+	options RelabelerOptions,
+	shardedData ShardedData,
+	shardsInnerSeries []*InnerSeries,
+) (RelabelerStats, bool, error) {
+	if ctx.Err() != nil {
+		return RelabelerStats{}, false, ctx.Err()
+	}
+
+	cptrContainer, ok := shardedData.(cptrable)
+	if !ok {
+		return RelabelerStats{}, false, ErrMustImplementCptrable
+	}
+	stats, exception, ok := prometheusPerShardRelabelerInputRelabelingFromCache(
+		ipsr.cptr,
+		inputLss.Pointer(),
+		targetLss.Pointer(),
+		cache.cPointer,
+		cptrContainer.cptr(),
+		options,
+		shardsInnerSeries,
+	)
+	runtime.KeepAlive(ipsr)
+	runtime.KeepAlive(inputLss)
+	runtime.KeepAlive(targetLss)
+	runtime.KeepAlive(cache)
+	runtime.KeepAlive(cptrContainer)
+
+	return stats, ok, handleException(exception)
+}
+
+// InputRelabelingWithStalenansFromCache relabeling incoming hashdex(first stage) from cache with state stalenans.
+func (ipsr *InputPerShardRelabeler) InputRelabelingWithStalenansFromCache(
+	ctx context.Context,
+	inputLss *LabelSetStorage,
+	targetLss *LabelSetStorage,
+	cache *Cache,
+	options RelabelerOptions,
+	staleNansState *StaleNansState,
+	defTimestamp int64,
+	shardedData ShardedData,
+	shardsInnerSeries []*InnerSeries,
+) (RelabelerStats, bool, error) {
+	if ctx.Err() != nil {
+		return RelabelerStats{}, false, ctx.Err()
+	}
+
+	cptrContainer, ok := shardedData.(cptrable)
+	if !ok {
+		return RelabelerStats{}, false, ErrMustImplementCptrable
+	}
+	stats, exception, ok := prometheusPerShardRelabelerInputRelabelingWithStalenansFromCache(
+		ipsr.cptr,
+		inputLss.Pointer(),
+		targetLss.Pointer(),
+		cache.cPointer,
+		cptrContainer.cptr(),
+		staleNansState.state,
+		defTimestamp,
+		options,
+		shardsInnerSeries,
+	)
+
+	return stats, ok, handleException(exception)
 }
 
 // NumberOfShards return current numberOfShards.
@@ -686,38 +782,31 @@ func (ipsr *InputPerShardRelabeler) StatelessRelabeler() *StatelessRelabeler {
 func (ipsr *InputPerShardRelabeler) UpdateRelabelerState(
 	ctx context.Context,
 	cache *Cache,
-	relabelerStateUpdate *RelabelerStateUpdate,
-	relabeledShardID uint16,
+	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
 ) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 
 	exception := prometheusPerShardRelabelerUpdateRelabelerState(
-		relabelerStateUpdate,
+		shardsRelabelerStateUpdate,
 		ipsr.cptr,
 		cache.cPointer,
-		relabeledShardID,
 	)
 
 	return handleException(exception)
 }
 
 // OutputPerShardRelabeler go wrapper for C-PerShardRelabeler, relabeler for shard.
-//
-//	p                  - pointer to C-InputPerShardRelabeler;
-//	lss                - pointer to go LSS, keep alive for gc;
-//	statelessRelabeler - pointer to go StatelessRelabeler, for keep alive;
-//	shardID            - current shard id;
-//	logShards          - logarithm to the base 2 of total shards count(encoders);
 type OutputPerShardRelabeler struct {
-	statelessRelabeler           *StatelessRelabeler
+	statelessRelabeler           *StatelessRelabeler // pointer to go StatelessRelabeler, for keep alive
 	cache                        *Cache
-	cptr                         uintptr
+	externalLabels               []Label
+	cptr                         uintptr // pointer to C-InputPerShardRelabeler
 	generationStatelessRelabeler uint64
 	generationManagerKeeper      uint32
 	numberOfShards               uint16
-	shardID                      uint16
+	shardID                      uint16 // current shard id
 }
 
 // NewOutputPerShardRelabeler init new OutputPerShardRelabeler.
@@ -740,6 +829,7 @@ func NewOutputPerShardRelabeler(
 	opsr := &OutputPerShardRelabeler{
 		statelessRelabeler:           statelessRelabeler,
 		cache:                        NewCache(),
+		externalLabels:               externalLabels,
 		cptr:                         p,
 		generationStatelessRelabeler: statelessRelabeler.Generation(),
 		generationManagerKeeper:      generationManagerKeeper,
@@ -751,11 +841,6 @@ func NewOutputPerShardRelabeler(
 		psr.statelessRelabeler = nil
 	})
 	return opsr, nil
-}
-
-// CacheAllocatedMemory return size of allocated memory for cache map.
-func (opsr *OutputPerShardRelabeler) CacheAllocatedMemory() uint64 {
-	return prometheusPerShardRelabelerCacheAllocatedMemory(opsr.cptr)
 }
 
 // OutputRelabeling relabeling output series(fourth stage).
@@ -801,7 +886,8 @@ func (opsr *OutputPerShardRelabeler) ResetTo(
 	opsr.ResetCache(generationManagerKeeper, numberOfShards)
 	opsr.numberOfShards = numberOfShards
 	opsr.generationManagerKeeper = generationManagerKeeper
-	prometheusPerShardRelabelerResetTo(externalLabels, opsr.cptr, opsr.numberOfShards)
+	opsr.externalLabels = externalLabels
+	prometheusPerShardRelabelerResetTo(opsr.externalLabels, opsr.cptr, opsr.numberOfShards)
 }
 
 // StatelessRelabeler return current *StatelessRelabeler.
@@ -819,7 +905,7 @@ func (opsr *OutputPerShardRelabeler) UpdateRelabelerState(
 		return ctx.Err()
 	}
 
-	exception := prometheusPerShardRelabelerUpdateRelabelerState(
+	exception := prometheusPerShardSingeRelabelerUpdateRelabelerState(
 		relabelerStateUpdate,
 		opsr.cptr,
 		opsr.cache.cPointer,
@@ -827,23 +913,6 @@ func (opsr *OutputPerShardRelabeler) UpdateRelabelerState(
 	)
 
 	return handleException(exception)
-}
-
-// Label is a key/value pair of strings.
-type Label struct {
-	Name  string
-	Value string
-}
-
-func LabelsToCppBridgeLabels(lbls labels.Labels) []Label {
-	result := make([]Label, 0, lbls.Len())
-	lbls.Range(func(l labels.Label) {
-		result = append(result, Label{
-			Name:  l.Name,
-			Value: l.Value,
-		})
-	})
-	return result
 }
 
 //
@@ -870,12 +939,15 @@ func NewCache() *Cache {
 
 // AllocatedMemory return size of allocated memory for caches.
 func (c *Cache) AllocatedMemory() uint64 {
-	return prometheusCacheAllocatedMemory(c.cPointer)
+	res := prometheusCacheAllocatedMemory(c.cPointer)
+	runtime.KeepAlive(c)
+	return res
 }
 
 // ResetTo reset cache.
 func (c *Cache) ResetTo() {
 	prometheusCacheResetTo(c.cPointer)
+	runtime.KeepAlive(c)
 }
 
 // State state of relabelers per shard.

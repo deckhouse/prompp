@@ -1,10 +1,11 @@
 package catalog
 
 import (
-	"github.com/google/uuid"
-	"github.com/prometheus/prometheus/pp/go/util/optional"
 	"sync"
 	"sync/atomic"
+
+	"github.com/google/uuid"
+	"github.com/prometheus/prometheus/pp/go/util/optional"
 )
 
 type Status uint8
@@ -28,6 +29,9 @@ type Record struct {
 	lastAppendedSegmentID optional.Optional[uint32]
 	referenceCount        int64
 	status                Status // status
+	numberOfSegments      uint32
+	mint                  int64
+	maxt                  int64
 }
 
 func NewRecord() *Record {
@@ -66,6 +70,18 @@ func (r *Record) Status() Status {
 	return r.status
 }
 
+func (r *Record) NumberOfSegments() uint32 {
+	return r.numberOfSegments
+}
+
+func (r *Record) Mint() int64 {
+	return r.mint
+}
+
+func (r *Record) Maxt() int64 {
+	return r.maxt
+}
+
 func (r *Record) ReferenceCount() int64 {
 	return atomic.LoadInt64(&r.referenceCount)
 }
@@ -86,6 +102,10 @@ func (r *Record) LastAppendedSegmentID() *uint32 {
 
 func (r *Record) SetLastAppendedSegmentID(segmentID uint32) {
 	r.lastAppendedSegmentID.Set(segmentID)
+}
+
+func (r *Record) SetNumberOfSegments(numberOfSegments uint32) {
+	r.numberOfSegments = numberOfSegments
 }
 
 func NewRecordWithData(id uuid.UUID,
@@ -109,4 +129,46 @@ func NewRecordWithData(id uuid.UUID,
 		status:                status,
 		lastAppendedSegmentID: optional.WithRawValue(lastAppendedSegmentID),
 	}
+}
+
+func NewRecordWithDataV3(
+	id uuid.UUID,
+	numberOfShards uint16,
+	createdAt int64,
+	updatedAt int64,
+	deletedAt int64,
+	corrupted bool,
+	status Status,
+	numberOfSegments uint32,
+	mint int64,
+	maxt int64,
+) *Record {
+	return &Record{
+		id:               id,
+		numberOfShards:   numberOfShards,
+		createdAt:        createdAt,
+		updatedAt:        updatedAt,
+		deletedAt:        deletedAt,
+		corrupted:        corrupted,
+		status:           status,
+		numberOfSegments: numberOfSegments,
+		mint:             mint,
+		maxt:             maxt,
+	}
+}
+
+func createRecordCopy(r *Record) *Record {
+	c := *r
+	return &c
+}
+
+func applyRecordChanges(r *Record, changed *Record) {
+	r.createdAt = changed.createdAt
+	r.updatedAt = changed.updatedAt
+	r.deletedAt = changed.deletedAt
+	r.corrupted = changed.corrupted
+	r.status = changed.status
+	r.numberOfShards = changed.numberOfShards
+	r.mint = changed.mint
+	r.maxt = changed.maxt
 }

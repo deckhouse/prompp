@@ -4,70 +4,28 @@
 
 namespace {
 
-using series_index::CompactSeriesIdSequence;
 using series_index::LabelReverseIndex;
+using series_index::SeriesIdSequence;
+using series_index::SeriesIdSequenceSnapshot;
 using series_index::SeriesReverseIndex;
 
-class CompactSeriesIdSequenceFixture : public testing::Test {};
+class SeriesIdSequenceSnapshotFixture : public ::testing::Test {
+ protected:
+  SeriesIdSequence sequence_{};
+};
 
-TEST_F(CompactSeriesIdSequenceFixture, SwitchToSequence) {
+TEST_F(SeriesIdSequenceSnapshotFixture, UseSnapsotAfterModifySource) {
   // Arrange
-  std::vector<uint32_t> series_ids(CompactSeriesIdSequence::kMaxElementsInArray + 1);
-  std::iota(series_ids.begin(), series_ids.end(), 0U);
-
-  CompactSeriesIdSequence sequence{CompactSeriesIdSequence::Type::kArray};
+  sequence_.push_back(0);
+  sequence_.push_back(1);
+  sequence_.push_back(2);
 
   // Act
-  std::ranges::copy(series_ids, std::back_inserter(sequence));
+  const SeriesIdSequenceSnapshot snapshot(sequence_);
+  sequence_.push_back(5);
 
   // Assert
-  ASSERT_EQ(CompactSeriesIdSequence::Type::kSequence, sequence.type());
-  EXPECT_EQ(CompactSeriesIdSequence::kMaxElementsInArray + 1, sequence.count());
-  EXPECT_TRUE(std::ranges::equal(series_ids, sequence.sequence()));
-}
-
-TEST_F(CompactSeriesIdSequenceFixture, IterateOverEmptyArray) {
-  // Arrange
-  CompactSeriesIdSequence sequence{CompactSeriesIdSequence::Type::kArray};
-
-  // Act
-
-  // Assert
-  EXPECT_THAT(sequence.array(), testing::ElementsAre());
-}
-
-TEST_F(CompactSeriesIdSequenceFixture, IterateOverFilledArray) {
-  // Arrange
-  CompactSeriesIdSequence sequence{CompactSeriesIdSequence::Type::kArray};
-
-  // Act
-  sequence.push_back(0);
-  sequence.push_back(1);
-
-  // Assert
-  EXPECT_THAT(sequence.array(), testing::ElementsAre(0U, 1U));
-}
-
-TEST_F(CompactSeriesIdSequenceFixture, IterateOverEmptySequence) {
-  // Arrange
-  CompactSeriesIdSequence sequence{CompactSeriesIdSequence::Type::kSequence};
-
-  // Act
-
-  // Assert
-  EXPECT_THAT(sequence.sequence(), testing::ElementsAre());
-}
-
-TEST_F(CompactSeriesIdSequenceFixture, IterateOverFilledSequence) {
-  // Arrange
-  CompactSeriesIdSequence sequence{CompactSeriesIdSequence::Type::kSequence};
-
-  // Act
-  sequence.push_back(0);
-  sequence.push_back(1);
-
-  // Assert
-  EXPECT_THAT(sequence.sequence(), testing::ElementsAre(0U, 1U));
+  EXPECT_THAT(snapshot, testing::ElementsAre(0U, 1U, 2U));
 }
 
 class LabelReverseIndexFixture : public testing::Test {
@@ -79,7 +37,7 @@ TEST_F(LabelReverseIndexFixture, GetNonExistingLabelValue) {
   // Arrange
 
   // Act
-  auto item = index_.get(0);
+  const auto item = index_.get(0);
 
   // Assert
   ASSERT_EQ(nullptr, item);
@@ -90,13 +48,12 @@ TEST_F(LabelReverseIndexFixture, AddIntoNewLabelValue) {
 
   // Act
   index_.add(0, 0);
-  auto item = index_.get(0);
+  const auto item = index_.get(0);
 
   // Assert
   ASSERT_NE(nullptr, item);
-  ASSERT_EQ(CompactSeriesIdSequence::Type::kArray, item->type());
-  EXPECT_THAT(item->array(), testing::ElementsAre(0U));
-  EXPECT_THAT(index_.get_all()->sequence(), testing::ElementsAre(0U));
+  EXPECT_THAT(*item, testing::ElementsAre(0U));
+  EXPECT_THAT(*index_.get_all(), testing::ElementsAre(0U));
 }
 
 TEST_F(LabelReverseIndexFixture, AddIntoExistingLabelValue) {
@@ -105,13 +62,12 @@ TEST_F(LabelReverseIndexFixture, AddIntoExistingLabelValue) {
   // Act
   index_.add(0, 0);
   index_.add(0, 1);
-  auto item = index_.get(0);
+  const auto item = index_.get(0);
 
   // Assert
   ASSERT_NE(nullptr, item);
-  ASSERT_EQ(CompactSeriesIdSequence::Type::kArray, item->type());
-  EXPECT_THAT(item->array(), testing::ElementsAre(0U, 1U));
-  EXPECT_THAT(index_.get_all()->sequence(), testing::ElementsAre(0U, 1U));
+  EXPECT_THAT(*item, testing::ElementsAre(0U, 1U));
+  EXPECT_THAT(*index_.get_all(), testing::ElementsAre(0U, 1U));
 }
 
 TEST_F(LabelReverseIndexFixture, AddMultipleLabelValues) {
@@ -120,19 +76,17 @@ TEST_F(LabelReverseIndexFixture, AddMultipleLabelValues) {
   // Act
   index_.add(0, 0);
   index_.add(1, 1);
-  auto item0 = index_.get(0);
-  auto item1 = index_.get(1);
+  const auto item0 = index_.get(0);
+  const auto item1 = index_.get(1);
 
   // Assert
   ASSERT_NE(nullptr, item0);
-  ASSERT_EQ(CompactSeriesIdSequence::Type::kArray, item0->type());
-  EXPECT_THAT(item0->array(), testing::ElementsAre(0U));
+  EXPECT_THAT(*item0, testing::ElementsAre(0U));
 
   ASSERT_NE(nullptr, item1);
-  ASSERT_EQ(CompactSeriesIdSequence::Type::kArray, item1->type());
-  EXPECT_THAT(item1->array(), testing::ElementsAre(1U));
+  EXPECT_THAT(*item1, testing::ElementsAre(1U));
 
-  EXPECT_THAT(index_.get_all()->sequence(), testing::ElementsAre(0U, 1U));
+  EXPECT_THAT(*index_.get_all(), testing::ElementsAre(0U, 1U));
 }
 
 TEST_F(LabelReverseIndexFixture, AddOutOfOrderLabelId) {
@@ -140,19 +94,17 @@ TEST_F(LabelReverseIndexFixture, AddOutOfOrderLabelId) {
 
   // Act
   index_.add(1, 1);
-  auto item0 = index_.get(0);
-  auto item1 = index_.get(1);
+  const auto item0 = index_.get(0);
+  const auto item1 = index_.get(1);
 
   // Assert
   ASSERT_NE(nullptr, item0);
-  ASSERT_EQ(CompactSeriesIdSequence::Type::kArray, item0->type());
-  EXPECT_THAT(item0->array(), testing::ElementsAre());
+  EXPECT_THAT(*item0, testing::ElementsAre());
 
   ASSERT_NE(nullptr, item1);
-  ASSERT_EQ(CompactSeriesIdSequence::Type::kArray, item1->type());
-  EXPECT_THAT(item1->array(), testing::ElementsAre(1U));
+  EXPECT_THAT(*item1, testing::ElementsAre(1U));
 
-  EXPECT_THAT(index_.get_all()->sequence(), testing::ElementsAre(1U));
+  EXPECT_THAT(*index_.get_all(), testing::ElementsAre(1U));
 }
 
 class SeriesReverseIndexFixture : public testing::Test {
@@ -172,7 +124,7 @@ TEST_F(SeriesReverseIndexFixture, GetNonExistingLabelName) {
   // Arrange
 
   // Act
-  auto item = index_.get(0);
+  const auto item = index_.get(0);
 
   // Assert
   EXPECT_EQ(nullptr, item);
@@ -183,12 +135,11 @@ TEST_F(SeriesReverseIndexFixture, AddIntoNewLabelName) {
 
   // Act
   index_.add(Label{.label_name_id = 0, .label_value_id = 0}, 0);
-  auto item = index_.get(0);
+  const auto item = index_.get(0);
 
   // Assert
   ASSERT_NE(nullptr, item);
-  ASSERT_EQ(CompactSeriesIdSequence::Type::kSequence, item->type());
-  EXPECT_THAT(item->sequence(), testing::ElementsAre(0U));
+  EXPECT_THAT(*item, testing::ElementsAre(0U));
 }
 
 TEST_F(SeriesReverseIndexFixture, AddIntoExistingLabelName) {
@@ -197,12 +148,11 @@ TEST_F(SeriesReverseIndexFixture, AddIntoExistingLabelName) {
   // Act
   index_.add(Label{.label_name_id = 0, .label_value_id = 0}, 0);
   index_.add(Label{.label_name_id = 0, .label_value_id = 0}, 1);
-  auto item = index_.get(0);
+  const auto item = index_.get(0);
 
   // Assert
   ASSERT_NE(nullptr, item);
-  ASSERT_EQ(CompactSeriesIdSequence::Type::kSequence, item->type());
-  EXPECT_THAT(item->sequence(), testing::ElementsAre(0U, 1U));
+  EXPECT_THAT(*item, testing::ElementsAre(0U, 1U));
 }
 
 TEST_F(SeriesReverseIndexFixture, AddMultipleLabelNames) {
@@ -211,17 +161,15 @@ TEST_F(SeriesReverseIndexFixture, AddMultipleLabelNames) {
   // Act
   index_.add(Label{.label_name_id = 0, .label_value_id = 0}, 0);
   index_.add(Label{.label_name_id = 1, .label_value_id = 0}, 1);
-  auto item0 = index_.get(0);
-  auto item1 = index_.get(1);
+  const auto item0 = index_.get(0);
+  const auto item1 = index_.get(1);
 
   // Assert
   ASSERT_NE(nullptr, item0);
-  ASSERT_EQ(CompactSeriesIdSequence::Type::kSequence, item0->type());
-  EXPECT_THAT(item0->sequence(), testing::ElementsAre(0U));
+  EXPECT_THAT(*item0, testing::ElementsAre(0U));
 
   ASSERT_NE(nullptr, item1);
-  ASSERT_EQ(CompactSeriesIdSequence::Type::kSequence, item1->type());
-  EXPECT_THAT(item1->sequence(), testing::ElementsAre(1U));
+  EXPECT_THAT(*item1, testing::ElementsAre(1U));
 }
 
 TEST_F(SeriesReverseIndexFixture, GetByNameAndValueId) {
@@ -230,18 +178,16 @@ TEST_F(SeriesReverseIndexFixture, GetByNameAndValueId) {
   // Act
   index_.add(Label{.label_name_id = 0, .label_value_id = 0}, 0);
   index_.add(Label{.label_name_id = 0, .label_value_id = 1}, 1);
-  auto item0 = index_.get(0, 0);
-  auto item1 = index_.get(0, 1);
-  auto item2 = index_.get(0, 2);
+  const auto item0 = index_.get(0, 0);
+  const auto item1 = index_.get(0, 1);
+  const auto item2 = index_.get(0, 2);
 
   // Assert
   ASSERT_NE(nullptr, item0);
-  ASSERT_EQ(CompactSeriesIdSequence::Type::kArray, item0->type());
-  EXPECT_THAT(item0->array(), testing::ElementsAre(0U));
+  EXPECT_THAT(*item0, testing::ElementsAre(0U));
 
   ASSERT_NE(nullptr, item1);
-  ASSERT_EQ(CompactSeriesIdSequence::Type::kArray, item1->type());
-  EXPECT_THAT(item1->array(), testing::ElementsAre(1U));
+  EXPECT_THAT(*item1, testing::ElementsAre(1U));
 
   EXPECT_EQ(nullptr, item2);
 }
@@ -251,15 +197,14 @@ TEST_F(SeriesReverseIndexFixture, AddOutOfOrderNameId) {
 
   // Act
   index_.add(Label{.label_name_id = 1, .label_value_id = 0}, 0);
-  auto item0 = index_.get(0, 0);
-  auto item1 = index_.get(1, 0);
+  const auto item0 = index_.get(0, 0);
+  const auto item1 = index_.get(1, 0);
 
   // Assert
   ASSERT_EQ(nullptr, item0);
 
   ASSERT_NE(nullptr, item1);
-  ASSERT_EQ(CompactSeriesIdSequence::Type::kArray, item1->type());
-  EXPECT_THAT(item1->array(), testing::ElementsAre(0U));
+  EXPECT_THAT(*item1, testing::ElementsAre(0U));
 }
 
 }  // namespace

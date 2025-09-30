@@ -9,7 +9,7 @@ import (
 
 // Decoder implements decoders.
 type Decoder interface {
-	DecodeToHashdex(ctx context.Context, segment model.Segment) (cppbridge.HashdexContent, error)
+	DecodeToHashdex(ctx context.Context, segment *model.Segment) (cppbridge.HashdexContent, error)
 	Discard() error
 	Close() error
 }

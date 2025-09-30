@@ -91,6 +91,7 @@ class BasicLabelSet {
   [[nodiscard]] PROMPP_ALWAYS_INLINE auto size() const noexcept { return labels_.size(); }
 
   PROMPP_ALWAYS_INLINE void reserve(size_t size) noexcept { labels_.reserve(size); }
+  PROMPP_ALWAYS_INLINE void resize(size_t size) noexcept { labels_.resize(size); }
 
   using iterator = typename Container<LabelType>::iterator;
   using const_iterator = typename Container<LabelType>::const_iterator;
@@ -100,6 +101,8 @@ class BasicLabelSet {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const_iterator end() const noexcept { return labels_.end(); }
   PROMPP_ALWAYS_INLINE iterator end() noexcept { return labels_.end(); }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept { return BareBones::mem::allocated_memory(labels_); }
 
   template <class T>
   bool operator==(const T& o) const noexcept {

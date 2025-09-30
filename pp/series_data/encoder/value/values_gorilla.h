@@ -16,6 +16,9 @@ class PROMPP_ATTRIBUTE_PACKED ValuesGorillaEncoder {
 
     encode_multiple(v2, v3);
   }
+  PROMPP_ALWAYS_INLINE ValuesGorillaEncoder(CompactBitSequence&& stream, double value) : stream_(std::move(stream)) {
+    values_encoder_.encode_first(value, stream_);
+  }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_actual(const EncodingState& state, double value) const noexcept {
     return is_values_strictly_equal(last_value(state), value);
@@ -39,17 +42,18 @@ class PROMPP_ATTRIBUTE_PACKED ValuesGorillaEncoder {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return stream_.allocated_memory(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactBitSequence& stream() const noexcept { return stream_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence& stream() noexcept { return stream_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence finalize_stream() noexcept {
     auto stream = std::move(stream_);
     stream.shrink_to_fit();
     return stream;
   }
 
- private:
+ protected:
   using Encoder = BareBones::Encoding::Gorilla::ValuesEncoder;
 
   Encoder values_encoder_;
-  BareBones::CompactBitSequence<kAllocationSizesTable> stream_;
+  CompactBitSequence stream_;
 
   PROMPP_ALWAYS_INLINE void encode(double value) { values_encoder_.encode(value, stream_); }
 

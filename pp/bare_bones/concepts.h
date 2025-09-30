@@ -21,7 +21,12 @@ concept dereferenceable_has_allocated_memory = requires(const T& t) {
 
 template <class T>
 concept has_capacity = requires(const T& t) {
-  { t.capacity() };
+  { t.capacity() } -> std::convertible_to<size_t>;
+};
+
+template <class T>
+concept has_size = requires(const T& t) {
+  { t.size() } -> std::convertible_to<size_t>;
 };
 
 template <class T>

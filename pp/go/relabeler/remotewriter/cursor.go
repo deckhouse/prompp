@@ -3,10 +3,11 @@ package remotewriter
 import (
 	"errors"
 	"fmt"
-	"github.com/edsrzf/mmap-go"
-	"github.com/prometheus/prometheus/tsdb/fileutil"
 	"os"
 	"unsafe"
+
+	"github.com/edsrzf/mmap-go"
+	"github.com/prometheus/prometheus/tsdb/fileutil"
 )
 
 type MMapFile struct {
@@ -17,30 +18,30 @@ type MMapFile struct {
 func NewMMapFile(fileName string, flag int, perm os.FileMode, targetSize int64) (*MMapFile, error) {
 	file, err := os.OpenFile(fileName, flag, perm)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open file")
+		return nil, fmt.Errorf("open file: %w", err)
 	}
 
 	fileInfo, err := file.Stat()
 	if err != nil {
-		return nil, errors.Join(fmt.Errorf("failed to stat file: %w", err), file.Close())
+		return nil, errors.Join(fmt.Errorf("stat file: %w", err), file.Close())
 	}
 
 	if fileInfo.Size() < targetSize {
 		if err = fileutil.Preallocate(file, targetSize, true); err != nil {
-			return nil, errors.Join(fmt.Errorf("failed to preallocate file: %w", err), file.Close())
+			return nil, errors.Join(fmt.Errorf("preallocate file: %w", err), file.Close())
 		}
 		if err = file.Sync(); err != nil {
-			return nil, errors.Join(fmt.Errorf("failed to sync file: %w", err), file.Close())
+			return nil, errors.Join(fmt.Errorf("sync file: %w", err), file.Close())
 		}
 	}
 
 	mapped, err := mmap.Map(file, mmap.RDWR, 0)
 	if err != nil {
-		return nil, errors.Join(fmt.Errorf("failed to map file: %w", err), file.Close())
+		return nil, errors.Join(fmt.Errorf("map file: %w", err), file.Close())
 	}
 
 	if err = mapped.Lock(); err != nil {
-		return nil, errors.Join(fmt.Errorf("failed to lock mapped file: %w", err), mapped.Unmap(), file.Close())
+		return nil, errors.Join(fmt.Errorf("lock mapped file: %w", err), mapped.Unmap(), file.Close())
 	}
 
 	return &MMapFile{
@@ -77,7 +78,7 @@ func NewCursorReadWriter(fileName string, numberOfShards uint16) (*CursorReadWri
 	fileSize := cursorSize + int64(numberOfShards)
 	file, err := NewMMapFile(fileName, os.O_CREATE|os.O_RDWR, 0600, fileSize)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create file: %w", err)
+		return nil, fmt.Errorf("create file: %w", err)
 	}
 
 	crw := &CursorReadWriter{

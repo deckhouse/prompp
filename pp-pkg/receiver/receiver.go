@@ -42,11 +42,9 @@ import (
 	"github.com/prometheus/prometheus/util/annotations"
 )
 
-const (
-	defaultShutdownTimeout        = 40 * time.Second
-	defaultNumberOfShards         = 2
-	defaultMaxSegmentSize  uint32 = 10000
-)
+const defaultShutdownTimeout = 40 * time.Second
+
+var DefaultNumberOfShards uint16 = 2
 
 type HeadConfig struct {
 	inputRelabelerConfigs []*config.InputRelabelerConfig
@@ -92,10 +90,6 @@ type Receiver struct {
 	shutdowner        *util.GracefulShutdowner
 }
 
-func (rr *Receiver) Appender(ctx context.Context) storage.Appender {
-	return newPromAppender(ctx, rr, prom_config.TransparentRelabeler)
-}
-
 type RotationInfo struct {
 	BlockDuration time.Duration
 	Seed          uint64
@@ -105,13 +99,13 @@ type HeadActivator struct {
 	catalog *catalog.Catalog
 }
 
+func newHeadActivator(catalog *catalog.Catalog) *HeadActivator {
+	return &HeadActivator{catalog: catalog}
+}
+
 func (ha *HeadActivator) Activate(headID string) error {
 	_, err := ha.catalog.SetStatus(headID, catalog.StatusActive)
 	return err
-}
-
-func newHeadActivator(catalog *catalog.Catalog) *HeadActivator {
-	return &HeadActivator{catalog: catalog}
 }
 
 func NewReceiver(
@@ -120,7 +114,7 @@ func NewReceiver(
 	registerer prometheus.Registerer,
 	receiverCfg *pp_pkg_config.RemoteWriteReceiverConfig,
 	workingDir string,
-	remoteWriteCfgs []*prom_config.OpRemoteWriteConfig,
+	remoteWriteCfgs []*prom_config.PPRemoteWriteConfig,
 	dataDir string,
 	rotationInfo RotationInfo,
 	headCatalog *catalog.Catalog,
@@ -129,6 +123,9 @@ func NewReceiver(
 	commitInterval time.Duration,
 	maxRetentionDuration time.Duration,
 	headRetentionTimeout time.Duration,
+	writeTimeout time.Duration,
+	maxSegmentSize uint32,
+	unloadDataStorage bool,
 ) (*Receiver, error) {
 	if logger == nil {
 		logger = log.NewNopLogger()
@@ -145,7 +142,7 @@ func NewReceiver(
 
 	numberOfShards := receiverCfg.NumberOfShards
 	if numberOfShards == 0 {
-		numberOfShards = defaultNumberOfShards
+		numberOfShards = DefaultNumberOfShards
 	}
 
 	destinationGroups, err := makeDestinationGroups(
@@ -169,11 +166,14 @@ func NewReceiver(
 		numberOfShards:        numberOfShards,
 	})
 
-	querierMetrics := querier.NewMetrics(registerer)
-
 	dataDir, err = filepath.Abs(dataDir)
 	if err != nil {
 		return nil, err
+	}
+
+	var unloadDataStorageInterval time.Duration
+	if unloadDataStorage {
+		unloadDataStorageInterval = appender.DefaultMergeDuration
 	}
 
 	headManager, err := headmanager.New(
@@ -181,26 +181,28 @@ func NewReceiver(
 		clock,
 		headConfigStorage,
 		headCatalog,
-		defaultMaxSegmentSize,
+		maxSegmentSize,
 		registerer,
+		unloadDataStorageInterval,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create head manager: %w", err)
 	}
 
-	activeHead, rotatedHeads, err := headManager.Restore(rotationInfo.BlockDuration)
+	activeHead, rotatedHeads, err := headManager.Restore(rotationInfo.BlockDuration, unloadDataStorageInterval)
 	if err != nil {
 		return nil, fmt.Errorf("failed to restore heads: %w", err)
 	}
 	readyNotifier.NotifyReady()
 	queryableStorage := appender.NewQueryableStorageWithWriteNotifier(
-		block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize, rotationInfo.BlockDuration, registerer),
+		block.NewWriter(dataDir, block.DefaultChunkSegmentSize, rotationInfo.BlockDuration, registerer),
 		registerer,
-		querierMetrics,
+		querier.NewMetrics(registerer, querier.QueryableStorageSource),
 		triggerNotifier,
 		clock,
 		maxRetentionDuration,
 		headRetentionTimeout,
+		writeTimeout,
 		rotatedHeads...,
 	)
 
@@ -213,8 +215,13 @@ func NewReceiver(
 	}
 
 	dstrb := distributor.NewDistributor(*destinationGroups)
-	app := appender.NewQueryableAppender(appenderHead, dstrb, querierMetrics)
-	mwt := appender.NewMetricsWriteTrigger(appender.DefaultMetricWriteInterval, app, queryableStorage)
+	app := appender.NewQueryableAppender(
+		ctx,
+		appenderHead,
+		dstrb,
+		querier.NewMetrics(registerer, querier.QueryableAppenderSource),
+	)
+	mwt := appender.NewMetricsWriteTrigger(ctx, appender.DefaultMetricWriteInterval, app, queryableStorage)
 
 	r := &Receiver{
 		ctx:               ctx,
@@ -223,9 +230,12 @@ func NewReceiver(
 		storage:           queryableStorage,
 		headConfigStorage: headConfigStorage,
 		rotator: appender.NewRotateCommiter(
+			ctx,
 			app,
 			relabeler.NewRotateTimerWithSeed(clock, rotationInfo.BlockDuration, rotationInfo.Seed),
 			appender.NewConstantIntervalTimer(clock, commitInterval),
+			appender.NewConstantIntervalTimer(clock, appender.DefaultMergeDuration),
+			unloadDataStorage,
 			registerer,
 		),
 
@@ -245,6 +255,21 @@ func NewReceiver(
 	level.Info(logger).Log("msg", "created")
 
 	return r, nil
+}
+
+// AppendHashdex append incoming Hashdex data to relabeling.
+func (rr *Receiver) AppendHashdex(
+	ctx context.Context,
+	hashdex cppbridge.ShardedData,
+	relabelerID string,
+	commitToWal bool,
+) error {
+	if rr.haTracker.IsDrop(hashdex.Cluster(), hashdex.Replica()) {
+		return nil
+	}
+	incomingData := &relabeler.IncomingData{Hashdex: hashdex}
+	_, err := rr.appender.Append(ctx, incomingData, nil, relabelerID, commitToWal)
+	return err
 }
 
 // AppendSnappyProtobuf append compressed via snappy Protobuf data to relabeling hashdex data.
@@ -313,19 +338,9 @@ func (rr *Receiver) AppendTimeSeriesHashdex(
 	)
 }
 
-// AppendHashdex append incoming Hashdex data to relabeling.
-func (rr *Receiver) AppendHashdex(
-	ctx context.Context,
-	hashdex cppbridge.ShardedData,
-	relabelerID string,
-	commitToWal bool,
-) error {
-	if rr.haTracker.IsDrop(hashdex.Cluster(), hashdex.Replica()) {
-		return nil
-	}
-	incomingData := &relabeler.IncomingData{Hashdex: hashdex}
-	_, err := rr.appender.Append(ctx, incomingData, nil, relabelerID, commitToWal)
-	return err
+// Appender create a new appender for head.
+func (rr *Receiver) Appender(ctx context.Context) storage.Appender {
+	return newPromAppender(ctx, rr, prom_config.TransparentRelabeler)
 }
 
 // ApplyConfig update config.
@@ -340,7 +355,7 @@ func (rr *Receiver) ApplyConfig(cfg *prom_config.Config) error {
 
 	numberOfShards := rCfg.NumberOfShards
 	if numberOfShards == 0 {
-		numberOfShards = defaultNumberOfShards
+		numberOfShards = DefaultNumberOfShards
 	}
 
 	rr.headConfigStorage.Store(&HeadConfig{
@@ -349,8 +364,9 @@ func (rr *Receiver) ApplyConfig(cfg *prom_config.Config) error {
 	})
 
 	err = rr.appender.Reconfigure(
+		rr.ctx,
 		HeadConfigureFunc(func(head relabeler.Head) error {
-			return head.Reconfigure(rCfg.Configs, numberOfShards)
+			return head.Reconfigure(rr.ctx, rCfg.Configs, numberOfShards)
 		}),
 		DistributorConfigureFunc(func(dstrb relabeler.Distributor) error {
 			mxdgupds := new(sync.Mutex)
@@ -450,6 +466,58 @@ func (rr *Receiver) GetState() *cppbridge.State {
 	return cppbridge.NewState(rr.headConfigStorage.Load().numberOfShards)
 }
 
+func (rr *Receiver) HeadQueryable() storage.Queryable {
+	return rr.appender
+}
+
+func (rr *Receiver) HeadStatus(ctx context.Context, limit int) relabeler.HeadStatus {
+	return rr.appender.HeadStatus(ctx, limit)
+}
+
+// LowestSentTimestamp returns the lowest sent timestamp across all queues.
+func (*Receiver) LowestSentTimestamp() int64 {
+	return 0
+}
+
+// MergeOutOfOrderChunks merge chunks with out of order data chunks.
+func (rr *Receiver) MergeOutOfOrderChunks(ctx context.Context) {
+	rr.appender.MergeOutOfOrderChunks(ctx)
+}
+
+// Querier calls f() with the given parameters.
+// Returns a querier.MultiQuerier combining of appenderQuerier and storageQuerier.
+func (rr *Receiver) Querier(mint, maxt int64) (storage.Querier, error) {
+	appenderQuerier, err := rr.appender.Querier(mint, maxt)
+	if err != nil {
+		return nil, err
+	}
+
+	storageQuerier, err := rr.storage.Querier(mint, maxt)
+	if err != nil {
+		return nil, errors.Join(err, appenderQuerier.Close())
+	}
+
+	return querier.NewMultiQuerier([]storage.Querier{appenderQuerier, storageQuerier}, nil), nil
+}
+
+func (rr *Receiver) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
+	appenderQuerier, err := rr.appender.ChunkQuerier(mint, maxt)
+	if err != nil {
+		return nil, err
+	}
+
+	storageQuerier, err := rr.storage.ChunkQuerier(mint, maxt)
+	if err != nil {
+		return nil, errors.Join(err, appenderQuerier.Close())
+	}
+
+	return storage.NewMergeChunkQuerier(
+		nil,
+		[]storage.ChunkQuerier{appenderQuerier, storageQuerier},
+		storage.NewConcatenatingChunkSeriesMerger(),
+	), nil
+}
+
 // RelabelerIDIsExist check on exist relabelerID.
 func (rr *Receiver) RelabelerIDIsExist(relabelerID string) bool {
 	cs := rr.headConfigStorage.Load()
@@ -471,35 +539,6 @@ func (rr *Receiver) Run(_ context.Context) (err error) {
 	return nil
 }
 
-func (rr *Receiver) HeadStatus(limit int) relabeler.HeadStatus {
-	return rr.appender.HeadStatus(limit)
-}
-
-// Querier calls f() with the given parameters.
-// Returns a querier.MultiQuerier combining of appenderQuerier and storageQuerier.
-func (rr *Receiver) Querier(mint, maxt int64) (storage.Querier, error) {
-	appenderQuerier, err := rr.appender.Querier(mint, maxt)
-	if err != nil {
-		return nil, err
-	}
-
-	storageQuerier, err := rr.storage.Querier(mint, maxt)
-	if err != nil {
-		return nil, errors.Join(err, appenderQuerier.Close())
-	}
-
-	return querier.NewMultiQuerier([]storage.Querier{appenderQuerier, storageQuerier}, nil), nil
-}
-
-func (rr *Receiver) HeadQueryable() storage.Queryable {
-	return rr.appender
-}
-
-// LowestSentTimestamp returns the lowest sent timestamp across all queues.
-func (*Receiver) LowestSentTimestamp() int64 {
-	return 0
-}
-
 // Shutdown safe shutdown Receiver.
 func (rr *Receiver) Shutdown(ctx context.Context) error {
 	cgogcErr := rr.cgogc.Shutdown(ctx)
@@ -507,7 +546,7 @@ func (rr *Receiver) Shutdown(ctx context.Context) error {
 	rotatorErr := rr.rotator.Close()
 	storageErr := rr.storage.Close()
 	distributorErr := rr.distributor.Shutdown(ctx)
-	appendErr := rr.appender.Close()
+	appendErr := rr.appender.Close(ctx)
 	err := rr.shutdowner.Shutdown(ctx)
 	return errors.Join(cgogcErr, metricWriteErr, rotatorErr, storageErr, distributorErr, appendErr, err)
 }
@@ -518,7 +557,7 @@ func makeDestinationGroups(
 	clock clockwork.Clock,
 	registerer prometheus.Registerer,
 	workingDir, clientID string,
-	rwCfgs []*prom_config.OpRemoteWriteConfig,
+	rwCfgs []*prom_config.PPRemoteWriteConfig,
 	numberOfShards uint16,
 ) (*relabeler.DestinationGroups, error) {
 	dgs := make(relabeler.DestinationGroups, 0, len(rwCfgs))
@@ -564,7 +603,7 @@ func makeDestinationGroups(
 
 // makeDestinationGroupUpdates create update for DestinationGroups.
 func makeDestinationGroupUpdates(
-	rwCfgs []*prom_config.OpRemoteWriteConfig,
+	rwCfgs []*prom_config.PPRemoteWriteConfig,
 	workingDir, clientID string,
 	numberOfShards uint16,
 ) (map[string]*relabeler.DestinationGroupUpdate, error) {
@@ -596,7 +635,7 @@ func makeDestinationGroupUpdates(
 
 // convertingDestinationGroupConfig converting incoming config to internal DestinationGroupConfig.
 func convertingDestinationGroupConfig(
-	rwCfg *prom_config.OpRemoteWriteConfig,
+	rwCfg *prom_config.PPRemoteWriteConfig,
 	workingDir string,
 	numberOfShards uint16,
 ) (*relabeler.DestinationGroupConfig, error) {
@@ -633,7 +672,7 @@ func convertingRelabelersConfig(rCfgs []*relabel.Config) ([]*cppbridge.RelabelCo
 // convertingConfigDialers converting and make internal dialer configs.
 func convertingConfigDialers(
 	clientID string,
-	sCfgs []*prom_config.OpDestinationConfig,
+	sCfgs []*prom_config.PPDestinationConfig,
 ) ([]*relabeler.DialersConfig, error) {
 	dialersConfigs := make([]*relabeler.DialersConfig, 0, len(sCfgs))
 	for _, sCfg := range sCfgs {
@@ -641,11 +680,16 @@ func convertingConfigDialers(
 		if err != nil {
 			return nil, err
 		}
-		ccfg := dialer.NewCommonConfig(
+
+		ccfg, err := dialer.NewCommonConfig(
 			sCfg.URL.URL,
 			tlsCfg,
 			sCfg.Name,
 		)
+		if err != nil {
+			return nil, err
+		}
+
 		dialersConfigs = append(
 			dialersConfigs,
 			&relabeler.DialersConfig{
@@ -681,10 +725,13 @@ func makeDialers(
 	for i := range dialersConfig {
 		ccfg, ok := dialersConfig[i].ConnDialerConfig.(*dialer.CommonConfig)
 		if !ok {
-			return nil, fmt.Errorf("invalid CommonConfig: %v", dialersConfig[i].ConnDialerConfig)
+			return nil, fmt.Errorf("invalid dialer CommonConfig: %v", dialersConfig[i].ConnDialerConfig)
 		}
 
-		d := dialer.DefaultDialer(ccfg, registerer)
+		d, err := dialer.DefaultDialer(ccfg, registerer)
+		if err != nil {
+			return nil, err
+		}
 
 		tcpDialer := relabeler.NewWebSocketDialer(
 			d,
@@ -748,30 +795,17 @@ func refillSenderCtor(
 
 // initLogHandler init log handler for ManagerKeeper.
 func initLogHandler(logger log.Logger) {
-	logger = log.With(logger, "op_caller", log.Caller(4))
-	relabeler.Debugf = func(template string, args ...interface{}) {
+	logger = log.With(logger, "pp_caller", log.Caller(4))
+	rlogger.Debugf = func(template string, args ...any) {
 		level.Debug(logger).Log("msg", fmt.Sprintf(template, args...))
 	}
-	relabeler.Infof = func(template string, args ...interface{}) {
+	rlogger.Infof = func(template string, args ...any) {
 		level.Info(logger).Log("msg", fmt.Sprintf(template, args...))
 	}
-	relabeler.Warnf = func(template string, args ...interface{}) {
+	rlogger.Warnf = func(template string, args ...any) {
 		level.Warn(logger).Log("msg", fmt.Sprintf(template, args...))
 	}
-	relabeler.Errorf = func(template string, args ...interface{}) {
-		level.Error(logger).Log("msg", fmt.Sprintf(template, args...))
-	}
-
-	rlogger.Debugf = func(template string, args ...interface{}) {
-		level.Debug(logger).Log("msg", fmt.Sprintf(template, args...))
-	}
-	rlogger.Infof = func(template string, args ...interface{}) {
-		level.Info(logger).Log("msg", fmt.Sprintf(template, args...))
-	}
-	rlogger.Warnf = func(template string, args ...interface{}) {
-		level.Warn(logger).Log("msg", fmt.Sprintf(template, args...))
-	}
-	rlogger.Errorf = func(template string, args ...interface{}) {
+	rlogger.Errorf = func(template string, args ...any) {
 		level.Error(logger).Log("msg", fmt.Sprintf(template, args...))
 	}
 }
@@ -788,7 +822,7 @@ func readClientID(logger log.Logger, dir string) (string, error) {
 	case os.IsNotExist(err):
 		proxyUUID := uuid.NewString()
 		//revive:disable-next-line:add-constant file permissions simple readable as octa-number
-		if err = os.WriteFile(clientIDPath, []byte(proxyUUID), 0o644); err != nil { //#nosec G306
+		if err = os.WriteFile(clientIDPath, []byte(proxyUUID), 0o644); err != nil { // #nosec G306
 			return "", fmt.Errorf("failed to write proxy id: %w", err)
 		}
 
@@ -820,11 +854,20 @@ func (*NoopQuerier) Select(_ context.Context, _ bool, _ *storage.SelectHints, _ 
 	return &NoopSeriesSet{}
 }
 
-func (q *NoopQuerier) LabelValues(ctx context.Context, name string, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (q *NoopQuerier) LabelValues(
+	ctx context.Context,
+	name string,
+	hints *storage.LabelHints,
+	matchers ...*labels.Matcher,
+) ([]string, annotations.Annotations, error) {
 	return []string{}, *annotations.New(), nil
 }
 
-func (q *NoopQuerier) LabelNames(ctx context.Context, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (q *NoopQuerier) LabelNames(
+	ctx context.Context,
+	hints *storage.LabelHints,
+	matchers ...*labels.Matcher,
+) ([]string, annotations.Annotations, error) {
 	return []string{}, *annotations.New(), nil
 }
 

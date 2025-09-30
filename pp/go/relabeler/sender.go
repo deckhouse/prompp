@@ -10,10 +10,11 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/frames"
+	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 	"github.com/prometheus/prometheus/pp/go/util"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 // defaultRTT - default value RTT.
@@ -125,14 +126,14 @@ func (sender *Sender) dial(ctx context.Context) (transport Transport, closeFn fu
 	transport, err = sender.dialer.Dial(ctx, sender.shardMeta)
 	if err != nil {
 		if !errors.Is(err, ErrShutdown) && !errors.Is(err, context.Canceled) {
-			Errorf("%s: fail to dial: %s", sender, err)
+			logger.Errorf("%s: fail to dial: %s", sender, err)
 		}
 		return nil, nil, err
 	}
 
 	closeFn = func() {
 		if err := transport.Close(); err != nil {
-			Errorf("%s: fail to close transport: %s", sender, err)
+			logger.Errorf("%s: fail to close transport: %s", sender, err)
 		}
 	}
 
@@ -203,7 +204,7 @@ func (sender *Sender) mainLoop(ctx context.Context) {
 		writeCtx, cancel := context.WithCancelCause(ctx)
 		transport.OnReadError(func(err error) {
 			if !errors.Is(err, io.EOF) {
-				Errorf("%s: fail to read response: %s", sender, err)
+				logger.Errorf("%s: fail to read response: %s", sender, err)
 			}
 			cancel(errRead)
 		})
@@ -212,7 +213,7 @@ func (sender *Sender) mainLoop(ctx context.Context) {
 		lastSent, err = sender.writeLoop(writeCtx, transport, lastSent)
 		if err != nil {
 			if !errors.Is(err, errRead) {
-				Errorf("%s: fail to send segment: %s", sender, err)
+				logger.Errorf("%s: fail to send segment: %s", sender, err)
 			}
 			closeTransport()
 			continue

@@ -12,37 +12,48 @@
 #include "bare_bones/vector.h"
 
 namespace PromPP::Primitives::Go {
-
 template <class T>
 class SliceView {
-  const T* data_;
+  T* data_;
   size_t len_;
   size_t cap_;
 
  public:
   using iterator_category = std::contiguous_iterator_tag;
   using value_type = const T;
+  using iterator = T*;
   using const_iterator = const T*;
 
   PROMPP_ALWAYS_INLINE explicit SliceView() = default;
 
-  PROMPP_ALWAYS_INLINE void reset_to(const T* data, size_t len) {
+  PROMPP_ALWAYS_INLINE void reset_to(T* data, size_t len, size_t cap) {
     data_ = data;
     len_ = len;
-    cap_ = len;
+    cap_ = cap;
   }
 
-  PROMPP_ALWAYS_INLINE void reset_to(std::span<const T> buffer) { reset_to(buffer.data(), buffer.size()); }
+  PROMPP_ALWAYS_INLINE void reset_to(std::span<T> buffer) { reset_to(buffer.data(), buffer.size(), buffer.size()); }
 
   PROMPP_ALWAYS_INLINE const T* data() const noexcept { return data_; }
+  PROMPP_ALWAYS_INLINE T* data() noexcept { return data_; }
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return !len_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return len_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t capacity() const noexcept { return cap_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const T> span() const noexcept { return {data_, len_}; }
 
   PROMPP_ALWAYS_INLINE const_iterator begin() const noexcept { return data_; }
-  PROMPP_ALWAYS_INLINE const_iterator end() const noexcept { return data_ + len_; }
+  const_iterator end() const noexcept { return data_ + len_; }
+
+  PROMPP_ALWAYS_INLINE iterator begin() noexcept { return data_; }
+  PROMPP_ALWAYS_INLINE iterator end() noexcept { return data_ + len_; }
 
   PROMPP_ALWAYS_INLINE const T& operator[](uint32_t i) const {
+    assert(i < len_);
+    return data_[i];
+  }
+
+  PROMPP_ALWAYS_INLINE T& operator[](uint32_t i) {
     assert(i < len_);
     return data_[i];
   }
@@ -58,7 +69,8 @@ class String {
   using const_iterator = const char*;
 
   explicit String() = default;
-  explicit String(std::string_view value) : data_(value.data()), len_(value.size()) {}
+
+  explicit constexpr String(std::string_view value) : data_(value.data()), len_(value.size()) {}
 
   PROMPP_ALWAYS_INLINE static String allocate_and_copy(std::string_view value) noexcept {
     auto data = reinterpret_cast<char*>(std::malloc(value.size() + 1));
@@ -73,10 +85,11 @@ class String {
     str.reset_to(nullptr, 0);
   }
 
-  PROMPP_ALWAYS_INLINE void reset_to(const char* data, size_t len) {
+  PROMPP_ALWAYS_INLINE void reset_to(const char* data, size_t len) noexcept {
     data_ = data;
     len_ = len;
   }
+  PROMPP_ALWAYS_INLINE void reset_to(const std::string_view& value) noexcept { reset_to(value.data(), value.size()); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const char* data() const noexcept { return data_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return !len_; }
@@ -90,7 +103,20 @@ class String {
     return data_[i];
   }
 
+  PROMPP_ALWAYS_INLINE String& operator=(const std::string_view& value) noexcept {
+    reset_to(value);
+    return *this;
+  }
+
+  PROMPP_ALWAYS_INLINE bool operator<(const String& other) const noexcept {
+    return static_cast<std::string_view>(*this) < static_cast<std::string_view>(other);
+  }
+
   PROMPP_ALWAYS_INLINE bool operator==(const String& other) const noexcept { return this->size() == other.size() && std::ranges::equal(*this, other); }
+
+  PROMPP_ALWAYS_INLINE bool operator==(const std::string_view& other) const noexcept {
+    return this->size() == other.size() && std::ranges::equal(*this, other);
+  }
 
   explicit PROMPP_ALWAYS_INLINE operator std::string_view() const noexcept { return {data_, len_}; }
 };
@@ -101,6 +127,7 @@ struct SliceControlBlock {
 
   SliceControlBlock() = default;
   SliceControlBlock(const SliceControlBlock&) = delete;
+
   SliceControlBlock(SliceControlBlock&& other) noexcept
       : data(std::exchange(other.data, nullptr)), items_count(std::exchange(other.items_count, 0)), data_size(std::exchange(other.data_size, 0)) {}
 
@@ -116,10 +143,12 @@ struct SliceControlBlock {
   }
 
   T* data{};
+
   union {
     SizeType items_count{};
     SizeType length_;
   };
+
   union {
     SizeType data_size{};
     SizeType capacity_;
@@ -160,6 +189,10 @@ class BytesStream : public std::ostream {
 
   output_buffer buffer_;
 };
+
+constexpr String operator""_gs(const char* value, size_t len) noexcept {
+  return String(std::string_view(value, len));
+}
 
 }  // namespace PromPP::Primitives::Go
 

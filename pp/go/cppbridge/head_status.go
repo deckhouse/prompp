@@ -4,6 +4,7 @@ import (
 	"runtime"
 )
 
+// HeadStatus statistics of heads.
 type HeadStatus struct {
 	TimeInterval struct {
 		Min int64
@@ -26,19 +27,27 @@ type HeadStatus struct {
 		Value string
 		Count uint32
 	}
-	NumSeries             uint32
-	ChunkCount            uint32
-	NumLabelPairs         uint32
-	RuleQueriedSeries     uint32
-	FederateQueriedSeries uint32
-	OtherQueriedSeries    uint32
+	NumSeries     uint32
+	ChunkCount    uint32
+	NumLabelPairs uint32
 }
 
-func GetHeadStatus(lss uintptr, dataStorage uintptr, limit int) *HeadStatus {
-	status := &HeadStatus{}
-	runtime.SetFinalizer(status, func(status *HeadStatus) {
+// NewHeadStatus init new HeadStatus.
+func NewHeadStatus() *HeadStatus {
+	hs := &HeadStatus{}
+	runtime.SetFinalizer(hs, func(status *HeadStatus) {
 		freeHeadStatus(status)
 	})
-	getHeadStatus(lss, dataStorage, status, limit)
-	return status
+
+	return hs
+}
+
+// FromLSS get head status from lss.
+func (s *HeadStatus) FromLSS(lss *LabelSetStorage, limit int) {
+	getHeadStatusLSS(lss.pointer, s, limit)
+}
+
+// FromDataStorage get head status from data storage.
+func (s *HeadStatus) FromDataStorage(dataStorage *HeadDataStorage) {
+	getHeadStatusDataStorage(dataStorage.dataStorage, s)
 }

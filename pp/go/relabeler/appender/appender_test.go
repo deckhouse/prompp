@@ -37,6 +37,7 @@ type AppenderSuite struct {
 	suite.Suite
 
 	baseCtx context.Context
+	metrics *querier.Metrics
 }
 
 func TestAppender(t *testing.T) {
@@ -45,10 +46,11 @@ func TestAppender(t *testing.T) {
 
 func (s *AppenderSuite) SetupSuite() {
 	s.baseCtx = context.Background()
+	s.metrics = querier.NewMetrics(nil, "test")
 	s.errorHandler()
 }
 
-func (s *AppenderSuite) TearDownSuite() {
+func (*AppenderSuite) TearDownSuite() {
 	logger.Unset()
 }
 
@@ -119,13 +121,12 @@ func (s *AppenderSuite) TestManagerRelabelerKeep() {
 	}()
 
 	headID := "head_id"
-	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer, 0)
 	s.Require().NoError(err)
 	defer func() { _ = hd.Close() }()
 
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
@@ -264,12 +265,11 @@ func (s *AppenderSuite) TestManagerRelabelerRelabeling() {
 	}()
 
 	headID := "head_id"
-	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer, 0)
 	s.Require().NoError(err)
 	defer func() { _ = hd.Close() }()
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
@@ -331,7 +331,7 @@ func (s *AppenderSuite) TestManagerRelabelerRelabeling() {
 	h = s.makeIncomingData(wr, hlimits)
 	stats, err = app.Append(s.baseCtx, h, nil, relabelerID, true)
 	s.Require().NoError(err)
-	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 1, SeriesAdded: 0}, stats)
+	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 1, SeriesAdded: 0, SeriesDrop: 1}, stats)
 
 	clockCtx, clockCancel = context.WithTimeout(s.baseCtx, 50*time.Millisecond)
 	clock.BlockUntilContext(clockCtx, 4)
@@ -419,12 +419,11 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingAddNewLabel() {
 	}()
 
 	headID := "head_id"
-	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer, 0)
 	s.Require().NoError(err)
 	defer func() { _ = hd.Close() }()
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
@@ -486,7 +485,7 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingAddNewLabel() {
 	h = s.makeIncomingData(wr, hlimits)
 	stats, err = app.Append(s.baseCtx, h, nil, relabelerID, true)
 	s.Require().NoError(err)
-	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 1, SeriesAdded: 0}, stats)
+	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 1, SeriesAdded: 0, SeriesDrop: 1}, stats)
 
 	clockCtx, clockCancel = context.WithTimeout(s.baseCtx, 50*time.Millisecond)
 	clock.BlockUntilContext(clockCtx, 4)
@@ -578,13 +577,12 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithExternalLabelsEnd() {
 	}()
 
 	headID := "head_id"
-	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer, 0)
 	s.Require().NoError(err)
 	defer func() { _ = hd.Close() }()
 	s.Require().NoError(err)
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
 	s.T().Log("append first data")
@@ -645,7 +643,7 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithExternalLabelsEnd() {
 	h = s.makeIncomingData(wr, hlimits)
 	stats, err = app.Append(s.baseCtx, h, nil, relabelerID, true)
 	s.Require().NoError(err)
-	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 1, SeriesAdded: 0}, stats)
+	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 1, SeriesAdded: 0, SeriesDrop: 1}, stats)
 
 	clockCtx, clockCancel = context.WithTimeout(s.baseCtx, 50*time.Millisecond)
 	clock.BlockUntilContext(clockCtx, 4)
@@ -737,12 +735,11 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithExternalLabelsRelabel(
 	}()
 
 	headID := "head_id"
-	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer, 0)
 	s.Require().NoError(err)
 	defer func() { _ = hd.Close() }()
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
@@ -804,7 +801,7 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithExternalLabelsRelabel(
 	h = s.makeIncomingData(wr, hlimits)
 	stats, err = app.Append(s.baseCtx, h, nil, relabelerID, true)
 	s.Require().NoError(err)
-	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 1, SeriesAdded: 0}, stats)
+	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 1, SeriesAdded: 0, SeriesDrop: 1}, stats)
 
 	clockCtx, clockCancel = context.WithTimeout(s.baseCtx, 50*time.Millisecond)
 	clock.BlockUntilContext(clockCtx, 4)
@@ -900,12 +897,11 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithTargetLabels() {
 	}()
 
 	headID := "head_id"
-	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer, 0)
 	s.Require().NoError(err)
 	defer func() { _ = hd.Close() }()
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
@@ -983,7 +979,7 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithTargetLabels() {
 	h = s.makeIncomingData(wr, hlimits)
 	stats, err = app.Append(s.baseCtx, h, state, relabelerID, true)
 	s.Require().NoError(err)
-	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 1, SeriesAdded: 0}, stats)
+	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 1, SeriesAdded: 0, SeriesDrop: 1}, stats)
 
 	clockCtx, clockCancel = context.WithTimeout(s.baseCtx, 50*time.Millisecond)
 	clock.BlockUntilContext(clockCtx, 4)
@@ -1093,12 +1089,11 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithTargetLabels_Conflicti
 	}()
 
 	headID := "head_id"
-	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer, 0)
 	s.Require().NoError(err)
 	defer func() { _ = hd.Close() }()
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
@@ -1176,7 +1171,7 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithTargetLabels_Conflicti
 	h = s.makeIncomingData(wr, hlimits)
 	stats, err = app.Append(s.baseCtx, h, state, relabelerID, true)
 	s.Require().NoError(err)
-	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 1, SeriesAdded: 0}, stats)
+	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 1, SeriesAdded: 0, SeriesDrop: 1}, stats)
 
 	clockCtx, clockCancel = context.WithTimeout(s.baseCtx, 50*time.Millisecond)
 	clock.BlockUntilContext(clockCtx, 4)
@@ -1287,12 +1282,11 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithTargetLabels_Conflicti
 	}()
 
 	headID := "head_id"
-	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer, 0)
 	s.Require().NoError(err)
 	defer func() { _ = hd.Close() }()
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
@@ -1369,7 +1363,7 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithTargetLabels_Conflicti
 	h = s.makeIncomingData(wr, hlimits)
 	stats, err = app.Append(s.baseCtx, h, state, relabelerID, true)
 	s.Require().NoError(err)
-	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 1, SeriesAdded: 0}, stats)
+	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 1, SeriesAdded: 0, SeriesDrop: 1}, stats)
 
 	clockCtx, clockCancel = context.WithTimeout(s.baseCtx, 50*time.Millisecond)
 	clock.BlockUntilContext(clockCtx, 4)
@@ -1484,10 +1478,10 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithRotate() {
 	s.Require().NoError(err)
 	tmpDirsToRemove = append(tmpDirsToRemove, tmpDir)
 
-	var generation uint64 = 0
+	var generation uint64
 
 	headID := "head_id"
-	hd, err := head.Create(headID, generation, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+	hd, err := head.Create(headID, generation, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer, 0)
 	s.Require().NoError(err)
 	headsToClose = append(headsToClose, hd)
 
@@ -1503,7 +1497,17 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithRotate() {
 			tmpDirsToRemove = append(tmpDirsToRemove, newDir)
 			newHeadID := "head_id"
 			generation++
-			newHead, buildErr := head.Create(newHeadID, generation, newDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+			newHead, buildErr := head.Create(
+				newHeadID,
+				generation,
+				newDir,
+				inputRelabelerConfigs,
+				numberOfShards,
+				0,
+				head.NoOpLastAppendedSegmentIDSetter{},
+				prometheus.DefaultRegisterer,
+				0,
+			)
 			s.Require().NoError(buildErr)
 			headsToClose = append(headsToClose, newHead)
 			return newHead, nil
@@ -1512,13 +1516,21 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithRotate() {
 
 	rotatableHead := appender.NewRotatableHead(hd, noOpStorage{}, builder, appender.NoOpHeadActivator{})
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(rotatableHead, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, rotatableHead, dstrb, s.metrics)
 
 	rotationTimer := relabeler.NewRotateTimer(clock, appender.DefaultRotateDuration)
 	commitTimer := appender.NewConstantIntervalTimer(clock, appender.DefaultCommitTimeout)
+	mergeTimer := appender.NewConstantIntervalTimer(clock, appender.DefaultMergeDuration)
 	defer rotationTimer.Stop()
-	rotator := appender.NewRotateCommiter(app, rotationTimer, commitTimer, prometheus.DefaultRegisterer)
+	rotator := appender.NewRotateCommiter(
+		s.baseCtx,
+		app,
+		rotationTimer,
+		commitTimer,
+		mergeTimer,
+		false,
+		prometheus.DefaultRegisterer,
+	)
 	rotator.Run()
 	defer func() { _ = rotator.Close() }()
 
@@ -1591,7 +1603,7 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithRotate() {
 	h = s.makeIncomingData(wr, hlimits)
 	stats, err = app.Append(s.baseCtx, h, nil, relabelerID, true)
 	s.Require().NoError(err)
-	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 1, SeriesAdded: 1}, stats)
+	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 1, SeriesAdded: 1, SeriesDrop: 1}, stats)
 
 	clockCtx, clockCancel = context.WithTimeout(s.baseCtx, 50*time.Millisecond)
 	clock.BlockUntilContext(clockCtx, 4)
@@ -1780,14 +1792,14 @@ func (*AppenderSuite) constructorForRefillSender(mrs *ManagerRefillSenderMock) r
 			mrs.RunFunc = func(ctx context.Context) {
 				<-ctx.Done()
 				if !errors.Is(context.Cause(ctx), relabeler.ErrShutdown) {
-					relabeler.Errorf("scan and send loop context canceled: %s", context.Cause(ctx))
+					logger.Errorf("scan and send loop context canceled: %s", context.Cause(ctx))
 				}
 			}
 		}
 		if mrs.ShutdownFunc == nil {
 			mrs.ShutdownFunc = func(ctx context.Context) error {
 				if ctx.Err() != nil && !errors.Is(context.Cause(ctx), relabeler.ErrShutdown) {
-					relabeler.Errorf("scan and send loop context canceled: %s", context.Cause(ctx))
+					logger.Errorf("scan and send loop context canceled: %s", context.Cause(ctx))
 					return context.Cause(ctx)
 				}
 
@@ -1799,11 +1811,6 @@ func (*AppenderSuite) constructorForRefillSender(mrs *ManagerRefillSenderMock) r
 }
 
 func (s *AppenderSuite) errorHandler() {
-	relabeler.Errorf = s.T().Errorf
-	relabeler.Warnf = s.T().Logf
-	relabeler.Infof = s.T().Logf
-	relabeler.Debugf = s.T().Logf
-
 	logger.Errorf = s.T().Errorf
 	logger.Warnf = s.T().Logf
 	logger.Infof = s.T().Logf
@@ -1967,12 +1974,11 @@ func (s *AppenderSuite) TestManagerRelabelerKeepWithStaleNans() {
 	}()
 
 	headID := "head_id"
-	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer, 0)
 	s.Require().NoError(err)
 	defer func() { _ = hd.Close() }()
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
@@ -2102,12 +2108,11 @@ func (s *AppenderSuite) TestManagerRelabelerKeepWithStaleNans_WithNullTimestamp(
 	}()
 
 	headID := "head_id"
-	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer, 0)
 	s.Require().NoError(err)
 	defer func() { _ = hd.Close() }()
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
@@ -2234,12 +2239,11 @@ func (s *AppenderSuite) TestManagerRelabelerKeepWithStaleNans_HonorTimestamps() 
 	}()
 
 	headID := "head_id"
-	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+	hd, err := head.Create(headID, 0, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer, 0)
 	s.Require().NoError(err)
 	defer func() { _ = hd.Close() }()
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(hd, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, hd, dstrb, s.metrics)
 
 	hlimits := cppbridge.DefaultWALHashdexLimits()
 
@@ -2390,10 +2394,10 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithRotateWithStaleNans() 
 	s.Require().NoError(err)
 	tmpDirsToRemove = append(tmpDirsToRemove, tmpDir)
 
-	var generation uint64 = 0
+	var generation uint64
 
 	headID := fmt.Sprintf("head_id_%d", generation)
-	hd, err := head.Create(headID, generation, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+	hd, err := head.Create(headID, generation, tmpDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer, 0)
 	s.Require().NoError(err)
 	headsToClose = append(headsToClose, hd)
 
@@ -2409,7 +2413,7 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithRotateWithStaleNans() 
 			tmpDirsToRemove = append(tmpDirsToRemove, newDir)
 			generation++
 			newHeadID := fmt.Sprintf("head_id_%d", generation)
-			newHead, buildErr := head.Create(newHeadID, generation, newDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer)
+			newHead, buildErr := head.Create(newHeadID, generation, newDir, inputRelabelerConfigs, numberOfShards, 0, head.NoOpLastAppendedSegmentIDSetter{}, prometheus.DefaultRegisterer, 0)
 			s.Require().NoError(buildErr)
 			headsToClose = append(headsToClose, newHead)
 			return newHead, nil
@@ -2419,13 +2423,21 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithRotateWithStaleNans() 
 	rotatableHead := appender.NewRotatableHead(hd, noOpStorage{}, builder, appender.NoOpHeadActivator{})
 
 	s.T().Log("make appender")
-	metrics := querier.NewMetrics(prometheus.DefaultRegisterer)
-	app := appender.NewQueryableAppender(rotatableHead, dstrb, metrics)
+	app := appender.NewQueryableAppender(s.baseCtx, rotatableHead, dstrb, s.metrics)
 
 	rotationTimer := relabeler.NewRotateTimer(clock, appender.DefaultRotateDuration)
 	commitTimer := appender.NewConstantIntervalTimer(clock, appender.DefaultCommitTimeout)
+	mergeTimer := appender.NewConstantIntervalTimer(clock, appender.DefaultMergeDuration)
 	defer rotationTimer.Stop()
-	rotator := appender.NewRotateCommiter(app, rotationTimer, commitTimer, prometheus.DefaultRegisterer)
+	rotator := appender.NewRotateCommiter(
+		s.baseCtx,
+		app,
+		rotationTimer,
+		commitTimer,
+		mergeTimer,
+		false,
+		prometheus.DefaultRegisterer,
+	)
 	rotator.Run()
 	defer func() { _ = rotator.Close() }()
 
@@ -2504,7 +2516,7 @@ func (s *AppenderSuite) TestManagerRelabelerRelabelingWithRotateWithStaleNans() 
 	state.SetDefTimestamp(time.Now().UnixMilli())
 	stats, err = app.AppendWithStaleNans(s.baseCtx, h, state, relabelerID, true)
 	s.Require().NoError(err)
-	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 1, SeriesAdded: 1}, stats)
+	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 1, SeriesAdded: 1, SeriesDrop: 1}, stats)
 
 	clockCtx, clockCancel = context.WithTimeout(s.baseCtx, 50*time.Millisecond)
 	clock.BlockUntilContext(clockCtx, 4)

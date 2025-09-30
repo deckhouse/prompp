@@ -4,7 +4,6 @@
 
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
-#include "printer.h"
 #include "series_index/querier/querier.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
@@ -14,25 +13,28 @@ namespace {
 using PromPP::Primitives::LabelViewSet;
 using PromPP::Prometheus::LabelMatchers;
 using PromPP::Prometheus::MatcherType;
-using PromPP::Prometheus::Selector;
 using series_index::QueryableEncodingBimap;
+using series_index::SeriesReverseIndex;
+using series_index::querier::MatchersComparatorByTypeAndCardinality;
+using series_index::querier::MatchId;
+using series_index::querier::MatchIdResolver;
 using series_index::querier::Querier;
 using series_index::querier::QuerierStatus;
+using series_index::querier::Selector;
 using series_index::trie::CedarMatchesList;
 using series_index::trie::CedarTrie;
-using TrieIndex = series_index::TrieIndex<CedarTrie, CedarMatchesList>;
-using Index = QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex>;
+using Index = QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, CedarTrie>;
 
 struct MatchersComparatorByTypeAndCardinalityCase {
-  Selector selector;
-  Selector expected;
+  Selector<> selector;
+  Selector<> expected;
 };
 
 class MatchersComparatorByTypeAndCardinalityFixture : public testing::TestWithParam<MatchersComparatorByTypeAndCardinalityCase> {
  protected:
-  Querier<Index>::MatchersComparatorByTypeAndCardinality comparator_;
+  MatchersComparatorByTypeAndCardinality comparator_;
 
-  void sort(Selector& selector) const { std::ranges::sort(selector.matchers, comparator_); }
+  void sort(Selector<>& selector) const { std::ranges::sort(selector.matchers, comparator_); }
 };
 
 TEST_P(MatchersComparatorByTypeAndCardinalityFixture, Test) {
@@ -75,7 +77,6 @@ struct QuerierTestCase {
 class QuerierFixture : public testing::TestWithParam<QuerierTestCase> {
  protected:
   Index index_;
-  Querier<Index, BareBones::Vector> querier_{index_};
 
   void SetUp() override {
     for (auto& label_set : label_sets_) {
@@ -84,18 +85,19 @@ class QuerierFixture : public testing::TestWithParam<QuerierTestCase> {
   }
 
  private:
-  std::vector<LabelViewSet> label_sets_{
-      {{"job", "cron"}, {"task", "nodejs"}},
-      {{"job", "cron"}, {"task", "php"}},
-      {{"job", "cron"}, {"task", "python"}, {"server", "localhost"}},
-  };
+  std::vector<LabelViewSet> label_sets_{{{"job", "cron"}, {"task", "nodejs"}},
+                                        {{"job", "cron"}, {"task", "php"}},
+                                        {{"job", "cron"}, {"task", "python"}, {"server", "localhost"}},
+
+                                        {{"instance", "192.168.199.119:10250"}},
+                                        {{"instance", "192.168.199.119:10251"}}};
 };
 
 TEST_P(QuerierFixture, Test) {
   // Arrange
 
   // Act
-  auto result = querier_.query(GetParam().label_matchers);
+  auto result = Querier<BareBones::Vector>::query(index_, GetParam().label_matchers);
 
   // Assert
   EXPECT_EQ(GetParam().expected.status, result.status);
@@ -170,6 +172,14 @@ INSTANTIATE_TEST_SUITE_P(NegativeMatcher,
                                                          .expected = {.series_id_list = {0, 1}, .status = QuerierStatus::kMatch}},
                                          QuerierTestCase{.label_matchers = {{.name = "job", .value = "cron", .type = MatcherType::kExactMatch},
                                                                             {.name = "server", .value = ".*", .type = MatcherType::kRegexpNotMatch}},
+                                                         .expected = {.series_id_list = {}, .status = QuerierStatus::kNoMatch}},
+                                         QuerierTestCase{.label_matchers =
+                                                             {
+                                                                 {.name = "instance",
+                                                                  .value = "192.168.199.119:10251|193.168.199.119:10250|192.168.199.119:10250",
+                                                                  .type = MatcherType::kRegexpNotMatch},
+                                                                 {.name = "instance", .value = "192.168.199.119:10250", .type = MatcherType::kExactMatch},
+                                                             },
                                                          .expected = {.series_id_list = {}, .status = QuerierStatus::kNoMatch}}));
 
 INSTANTIATE_TEST_SUITE_P(AnythingMatcher,

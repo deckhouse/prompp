@@ -11,9 +11,14 @@ import (
 
 type DiscardableRotatableHead struct {
 	head       relabeler.Head
+	discarded  bool
 	onRotate   func(id string, err error) error
 	onDiscard  func(id string) error
 	afterClose func(id string) error
+}
+
+func (h *DiscardableRotatableHead) UnrecoverableError(err error) {
+	h.head.UnrecoverableError(err)
 }
 
 func NewDiscardableRotatableHead(head relabeler.Head, onRotate func(id string, err error) error, onDiscard func(id string) error, afterClose func(id string) error) *DiscardableRotatableHead {
@@ -52,12 +57,9 @@ func (h *DiscardableRotatableHead) CommitToWal() error {
 	return h.head.CommitToWal()
 }
 
-func (h *DiscardableRotatableHead) ForEachShard(fn relabeler.ShardFn) error {
-	return h.head.ForEachShard(fn)
-}
-
-func (h *DiscardableRotatableHead) OnShard(shardID uint16, fn relabeler.ShardFn) error {
-	return h.head.OnShard(shardID, fn)
+// MergeOutOfOrderChunks merge chunks with out of order data chunks.
+func (h *DiscardableRotatableHead) MergeOutOfOrderChunks() {
+	h.head.MergeOutOfOrderChunks()
 }
 
 func (h *DiscardableRotatableHead) NumberOfShards() uint16 {
@@ -72,12 +74,12 @@ func (h *DiscardableRotatableHead) Flush() error {
 	return h.head.Flush()
 }
 
-func (h *DiscardableRotatableHead) Reconfigure(inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) error {
-	return h.head.Reconfigure(inputRelabelerConfigs, numberOfShards)
+func (h *DiscardableRotatableHead) Reconfigure(ctx context.Context, inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) error {
+	return h.head.Reconfigure(ctx, inputRelabelerConfigs, numberOfShards)
 }
 
-func (h *DiscardableRotatableHead) WriteMetrics() {
-	h.head.WriteMetrics()
+func (h *DiscardableRotatableHead) WriteMetrics(ctx context.Context) {
+	h.head.WriteMetrics(ctx)
 }
 
 func (h *DiscardableRotatableHead) Status(limit int) relabeler.HeadStatus {
@@ -85,6 +87,9 @@ func (h *DiscardableRotatableHead) Status(limit int) relabeler.HeadStatus {
 }
 
 func (h *DiscardableRotatableHead) Rotate() error {
+	if h.discarded {
+		return relabeler.ErrAlreadyDiscarded
+	}
 	err := h.head.Rotate()
 	if h.onRotate != nil {
 		err = errors.Join(err, h.onRotate(h.ID(), err))
@@ -102,10 +107,58 @@ func (h *DiscardableRotatableHead) Close() error {
 }
 
 func (h *DiscardableRotatableHead) Discard() (err error) {
+	h.discarded = true
 	err = h.head.Discard()
 	if h.onDiscard != nil {
 		err = errors.Join(err, h.onDiscard(h.ID()))
 		h.onDiscard = nil
 	}
 	return err
+}
+
+// CopySeriesFrom copy series from other head.
+func (h *DiscardableRotatableHead) CopySeriesFrom(other relabeler.Head) {
+	h.head.CopySeriesFrom(other)
+}
+
+// CreateTask create a task for operations on the head shards.
+func (h *DiscardableRotatableHead) CreateTask(
+	taskName string,
+	fn relabeler.ShardFn,
+	onLss bool,
+) *relabeler.GenericTask {
+	return h.head.CreateTask(taskName, fn, onLss)
+}
+
+// Enqueue the task to be executed on head.
+func (h *DiscardableRotatableHead) Enqueue(t *relabeler.GenericTask) {
+	h.head.Enqueue(t)
+}
+
+// EnqueueOnShard the task to be executed on head on specific shard.
+func (h *DiscardableRotatableHead) EnqueueOnShard(t *relabeler.GenericTask, shardID uint16) {
+	h.head.EnqueueOnShard(t, shardID)
+}
+
+// Concurrency return current head workers concurrency.
+func (h *DiscardableRotatableHead) Concurrency() int64 {
+	return h.head.Concurrency()
+}
+
+// RLockQuery locks for query to [Head].
+func (h *DiscardableRotatableHead) RLockQuery(ctx context.Context) (runlock func(), err error) {
+	return h.head.RLockQuery(ctx)
+}
+
+func (h *DiscardableRotatableHead) CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr) *relabeler.GenericTask {
+	return h.head.CreateDataStorageLoadAndQueryTask(shardID, querier)
+}
+
+func (h *DiscardableRotatableHead) UnloadUnusedSeriesData() {
+	h.head.UnloadUnusedSeriesData()
+}
+
+// Raw returns raw [Head].
+func (h *DiscardableRotatableHead) Raw() relabeler.Head {
+	return h.head
 }

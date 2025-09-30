@@ -4,10 +4,37 @@ configVersion: 1
 image: toolkit
 final: false
 dockerfile: Dockerfile.ci
+args:
+  BAZEL_ARCH: {{ env "BAZEL_ARCH" }}
+  GO_ARCH: {{ env "GO_ARCH" }}
+---
+image: distroless
+from: registry.werf.io/werf/scratch
+final: false
+import:
+  - image: distroless-artifact
+    add: /relocate
+    to: /
+    before: setup
+---
+image: distroless-artifact
+from: alpine:3.20.3
+final: false
+shell:
+  beforeInstall:
+  - apk add --no-cache ca-certificates tzdata
+  install:
+  - mkdir -p /relocate/bin /relocate/sbin /relocate/etc /relocate/etc/ssl /relocate/usr/bin /relocate/usr/sbin /relocate/usr/share
+  - cp -pr /tmp /relocate
+  - cp -pr /etc/passwd /etc/group /etc/hostname /etc/hosts /etc/shadow /etc/protocols /etc/services /etc/nsswitch.conf /relocate/etc
+  - cp -pr /usr/share/ca-certificates /relocate/usr/share
+  - cp -pr /usr/share/zoneinfo /relocate/usr/share
+  - cp -pr etc/ssl/cert.pem /relocate/etc/ssl
+  - cp -pr /etc/ssl/certs /relocate/etc/ssl
 ---
 image: prompp-src-artifact
-fromCacheVersion: "2025-03-31-2"
-from: golang:1.23.2-alpine3.20
+fromCacheVersion: "2025-03-31-12"
+from: golang:1.24.6-alpine3.22
 final: false
 git:
   - add: /
@@ -17,7 +44,7 @@ git:
     tag: v0.17.0
 ---
 image: promu-artifact
-from: golang:1.23.2-alpine3.20
+from: golang:1.24.6-alpine3.22
 final: false
 git:
   - url: https://github.com/prometheus/promu.git
@@ -28,13 +55,13 @@ mount:
     to: /go/pkg
 shell:
   install:
-    - export GOPROXY="https://proxy.golang.org/" CGO_ENABLED=0 GOOS=linux GOARCH=amd64
+    - export GOPROXY="https://proxy.golang.org/" CGO_ENABLED=0 GOOS=linux GOARCH={{ env "GO_ARCH" }}
     - cd /src
     - go build -ldflags="-s -w" -o promu ./main.go
 ---
 image: cpp-artifact
 final: false
-fromCacheVersion: "2025-03-31-2"
+fromCacheVersion: "2025-03-31-12"
 fromImage: toolkit
 git:
   - add: /pp
@@ -47,11 +74,12 @@ git:
 shell:
   install:
     - cd /src
+    - echo "build --remote_cache=http://127.0.0.1/cache/ --experimental_guard_against_concurrent_changes" >> .bazelrc
     - make install_dir=/tmp compilation_mode={{ env "COMPILATION_MODE" "opt" }} asan={{ env "ASAN" "false" }} build-entrypoint
 ---
 image: prompp-artifact
 final: false
-fromCacheVersion: "2025-03-31-2"
+fromCacheVersion: "2025-03-31-12"
 fromImage: toolkit
 mount:
   - fromPath: ~/go-pkg-cache
@@ -74,7 +102,7 @@ shell:
     - apt update && apt install -y git bash gcc g++ nodejs npm
   install:
     - export NODE_MAJOR=20
-    - export GOPROXY="https://proxy.golang.org/" CGO_ENABLED=1 GOOS=linux GOARCH=amd64
+    - export GOPROXY="https://proxy.golang.org/" CGO_ENABLED=1 GOOS=linux GOARCH={{ env "GO_ARCH" }}
     - cd /src/web/ui
     - mkdir static
     - npm install
@@ -110,13 +138,21 @@ shell:
 {{ $binariesList := "/usr/bin/curl /bin/sh /bin/df" }}
 ---
 artifact: prom-pp-binaries-artifact
-from: registry.deckhouse.io/base_images/dev-alt:p10@sha256:76e6e163fa982f03468166203488b569e6d9fc10855d6a259c662706436cdcad
+from: alt:p10
+git:
+  - add: /scripts/binary_replace.sh
+    to: /binary_replace.sh
 shell:
+  beforeInstall:
+    - apt-get update -y && apt-get install curl -y
   install:
     - /binary_replace.sh -i "{{ $binariesList }}" -o /relocate
 ---
 image: prom-pp
-from: registry.deckhouse.io/deckhouse/ce@sha256:916e14b8eed3d023869752535fed781040a59cf79368b3b05628a7f5029414a0
+fromImage: distroless
+git:
+  - add: /documentation/examples/prometheus.yml
+    to: /prometheus/prometheus.yml
 import:
   - artifact: prompp-artifact
     add: /src/prompptool
@@ -168,7 +204,6 @@ docker:
   ENTRYPOINT:
     - "/bin/prompp"
   CMD:
-    - "--config.file=/etc/src.yml"
     - "--storage.tsdb.path=/prometheus"
     - "--web.console.libraries=/usr/share/prometheus/console_libraries"
     - "--web.console.templates=/usr/share/prometheus/consoles"

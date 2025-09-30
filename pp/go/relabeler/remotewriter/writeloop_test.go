@@ -3,8 +3,20 @@ package remotewriter
 import (
 	"context"
 	"errors"
+	"net/url"
+	"os"
+	"path/filepath"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/golang/snappy"
 	"github.com/jonboulle/clockwork"
+	"github.com/prometheus/client_golang/prometheus"
+	config3 "github.com/prometheus/common/config"
+	model2 "github.com/prometheus/common/model"
+	config2 "github.com/prometheus/prometheus/config"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
@@ -12,19 +24,8 @@ import (
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
 	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"
 	"github.com/prometheus/prometheus/pp/go/relabeler/head/manager"
-	"github.com/prometheus/client_golang/prometheus"
-	config3 "github.com/prometheus/common/config"
-	model2 "github.com/prometheus/common/model"
-	config2 "github.com/prometheus/prometheus/config"
-	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/stretchr/testify/require"
-	"net/url"
-	"os"
-	"path/filepath"
-	"sync"
-	"testing"
-	"time"
 )
 
 const transparentRelabelerName = "transparent_relabeler"
@@ -65,7 +66,6 @@ func (s *NoOpStorage) Close() error {
 
 type TestHeads struct {
 	Dir            string
-	clock          clockwork.Clock
 	FileLog        *catalog.FileLog
 	Catalog        *catalog.Catalog
 	ConfigSource   *ConfigSource
@@ -85,7 +85,7 @@ func NewTestHeads(dir string, inputRelabelConfigs []*config.InputRelabelerConfig
 		return nil, err
 	}
 
-	th.Catalog, err = catalog.New(clock, th.FileLog, catalog.DefaultIDGenerator{})
+	th.Catalog, err = catalog.New(clock, th.FileLog, catalog.DefaultIDGenerator{}, catalog.DefaultMaxLogFileSize, nil)
 	if err != nil {
 		return nil, errors.Join(err, th.Close())
 	}
@@ -95,12 +95,12 @@ func NewTestHeads(dir string, inputRelabelConfigs []*config.InputRelabelerConfig
 		numberOfShards:      numberOfShards,
 	}
 
-	th.Manager, err = manager.New(dir, clock, th.ConfigSource, th.Catalog, 0, prometheus.DefaultRegisterer)
+	th.Manager, err = manager.New(dir, clock, th.ConfigSource, th.Catalog, 0, prometheus.DefaultRegisterer, 0)
 	if err != nil {
 		return nil, errors.Join(err, th.Close())
 	}
 
-	activeHead, _, err := th.Manager.Restore(time.Hour)
+	activeHead, _, err := th.Manager.Restore(time.Hour, 0)
 	if err != nil {
 		return nil, errors.Join(err, th.Close())
 	}
@@ -231,10 +231,8 @@ func TestWriteLoopWrite(t *testing.T) {
 			SigV4Config:    nil,
 			AzureADConfig:  nil,
 		},
-		ExternalLabels: labels.Labels{
-			{Name: "lol", Value: "kek"},
-		},
-		ReadTimeout: time.Second * 3,
+		ExternalLabels: labels.FromStrings("lol", "kek"),
+		ReadTimeout:    time.Second * 3,
 	})
 
 	wl := newWriteLoop(tmpDir, destination, testHeads.Catalog, clock)

@@ -1,55 +1,95 @@
 #pragma once
 
-#include <parallel_hashmap/phmap.h>
-
 #include "bare_bones/preprocess.h"
-#include "bare_bones/snug_composite.h"
-#include "bare_bones/vector.h"
-#include "primitives/snug_composites_filaments.h"
 
 namespace series_index {
 
-template <class Set, uint32_t kMaxIndexValue = std::numeric_limits<uint32_t>::max()>
-class SortingIndex {
+template <template <class> class Vector>
+struct SortingIndex {
+  static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint32_t>>::value;
+
+  SortingIndex() = default;
+  template <template <class> class OtherVector>
+    requires(kIsReadOnly)
+  explicit SortingIndex(const SortingIndex<OtherVector>& other) : index(other.index) {}
+
+  PROMPP_ALWAYS_INLINE void clear() noexcept
+    requires(!kIsReadOnly)
+  {
+    index = Vector<uint32_t>{};
+  }
+
+  template <class Iterator>
+  PROMPP_ALWAYS_INLINE void sort(Iterator begin, Iterator end) const noexcept {
+    std::sort(begin, end, [this](uint32_t a, uint32_t b) PROMPP_LAMBDA_INLINE { return index[a] < index[b]; });
+  }
+
+  template <class Container>
+  PROMPP_ALWAYS_INLINE void sort(Container& container) const noexcept {
+    sort(container.begin(), container.end());
+  }
+
+  Vector<uint32_t> index;
+};
+
+template <class Set, template <class> class Vector, uint32_t kMaxIndexValue = std::numeric_limits<uint32_t>::max()>
+class SortingIndexBuilder {
  public:
-  explicit SortingIndex(const Set& ls_id_set) : ls_id_set_(ls_id_set) {}
+  using Index = SortingIndex<Vector>;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return sorting_index_.empty(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return sorting_index_.allocated_memory(); }
+  explicit SortingIndexBuilder(const Set& ls_id_set) : ls_id_set_(ls_id_set) {}
 
-  void build() {
-    sorting_index_.resize(ls_id_set_.size());
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return index_.index.empty(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return index_.index.allocated_memory(); }
+
+  PROMPP_ALWAYS_INLINE void build() {
+    if (empty()) {
+      rebuild();
+    }
+  }
+
+  PROMPP_ALWAYS_INLINE void update(typename Set::const_iterator ls_id_iterator) {
+    if (empty()) {
+      return;
+    }
+
+    const uint64_t previous = get_previous(ls_id_iterator);
+    const uint64_t next = get_next(ls_id_iterator);
+    if (uint32_t value = (previous + next) / 2; value > previous) [[likely]] {
+      index_.index.emplace_back(value);
+    } else {
+      // If we can't insert item we don't need to rebuild index, because it's very expensive operation for CPU.
+      // Index will be built on demand in sort method
+      index_.clear();
+    }
+  }
+
+  template <class Iterator>
+  PROMPP_ALWAYS_INLINE void sort(Iterator begin, Iterator end) noexcept {
+    build();
+    index_.sort(begin, end);
+  }
+
+  PROMPP_ALWAYS_INLINE const Index& index() const noexcept { return index_; }
+
+ private:
+  const Set& ls_id_set_;
+  Index index_;
+
+  void rebuild() {
+    index_.index.resize(ls_id_set_.size());
 
     const uint32_t step = kMaxIndexValue / (ls_id_set_.size() + 1);
     uint32_t index_value = 0;
     for (auto ls_id : ls_id_set_) {
       index_value += step;
-      sorting_index_[ls_id] = index_value;
+      index_.index[ls_id] = index_value;
     }
   }
-
-  PROMPP_ALWAYS_INLINE void update(typename Set::const_iterator ls_id_iterator) {
-    const uint64_t previous = get_previous(ls_id_iterator);
-    const uint64_t next = get_next(ls_id_iterator);
-    if (uint32_t value = (previous + next) / 2; value > previous) {
-      sorting_index_.emplace_back(value);
-    } else {
-      build();
-    }
-  }
-
-  template <class Iterator>
-  void sort(Iterator begin, Iterator end) const noexcept {
-    std::sort(begin, end, [this](uint32_t a, uint32_t b) PROMPP_LAMBDA_INLINE { return sorting_index_[a] < sorting_index_[b]; });
-  }
-
- private:
-  const Set& ls_id_set_;
-  BareBones::Vector<uint32_t> sorting_index_;
 
   PROMPP_ALWAYS_INLINE uint32_t get_previous(typename Set::const_iterator ls_id_iterator) const noexcept {
     if (ls_id_iterator != ls_id_set_.begin()) {
-      return sorting_index_[*--ls_id_iterator];
+      return index_.index[*--ls_id_iterator];
     }
 
     return 0;
@@ -57,7 +97,7 @@ class SortingIndex {
 
   PROMPP_ALWAYS_INLINE uint32_t get_next(typename Set::const_iterator ls_id_iterator) const noexcept {
     if (++ls_id_iterator != ls_id_set_.end()) {
-      return sorting_index_[*ls_id_iterator];
+      return index_.index[*ls_id_iterator];
     }
 
     return kMaxIndexValue;

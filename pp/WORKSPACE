@@ -7,10 +7,7 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 http_archive(
     name = "bazel_skylib",
     sha256 = "66ffd9315665bfaafc96b52278f57c7e2dd09f5ede279ea6d39b2be471e7e3aa",
-    urls = [
-        "https://mirror.bazel.build/github.com/bazelbuild/bazel-skylib/releases/download/1.4.2/bazel-skylib-1.4.2.tar.gz",
-        "https://github.com/bazelbuild/bazel-skylib/releases/download/1.4.2/bazel-skylib-1.4.2.tar.gz",
-    ],
+    url = "https://github.com/bazelbuild/bazel-skylib/releases/download/1.4.2/bazel-skylib-1.4.2.tar.gz",
 )
 
 load("@bazel_skylib//:workspace.bzl", "bazel_skylib_workspace")
@@ -35,7 +32,7 @@ git_repository(
     name = "gtest",
     commit = "58d77fa8070e8cec2dc1ed015d66b454c8d78850",
     patches = [
-        "//third_party/patches/gtest:no-werror.patch",
+        "//third_party/patches/gtest:0001-no-werror.patch",
     ],
     remote = "https://github.com/google/googletest",
     shallow_since = "1656350095 -0400",
@@ -44,11 +41,19 @@ git_repository(
 http_archive(
     name = "google_benchmark",
     patches = [
-        "//third_party/patches/google_benchmark:BUILD.bazel.patch"
+        "//third_party/patches/google_benchmark:0001-BUILD.bazel.patch"
     ],
     sha256 = "35a77f46cc782b16fac8d3b107fbfbb37dcd645f7c28eee19f3b8e0758b48994",
     strip_prefix = "benchmark-1.9.0/",
     url = "https://github.com/google/benchmark/archive/refs/tags/v1.9.0.tar.gz",
+)
+
+http_archive(
+    name = "tracy",
+    build_file = "//third_party:tracy.BUILD",
+    sha256 = "ce2fb5b89aeb6db8401d7efe1bfe8393b7a81ca551273e8c6dd46ed37c02a040",
+    strip_prefix = "tracy-0.12.0/",
+    url = "https://github.com/wolfpld/tracy/archive/refs/tags/v0.12.0.tar.gz",
 )
 
 git_repository(
@@ -65,6 +70,7 @@ http_archive(
     patches = [
         "//third_party/patches/jemalloc:0001-musl-noexcept-fix.patch",
         "//third_party/patches/jemalloc:0002-manual-init.patch",
+        "//third_party/patches/jemalloc:0003-svacer_fixes.patch",
     ],
     sha256 = "2db82d1e7119df3e71b7640219b6dfe84789bc0537983c3b7ac4f7189aecfeaa",
     strip_prefix = "jemalloc-5.3.0/",
@@ -75,7 +81,7 @@ http_archive(
     name = "parallel_hashmap",
     build_file = "//third_party:parallel_hashmap.BUILD",
     patches = [
-        "//third_party/patches/parallel_hashmap:phmap_base.h.patch",
+        "//third_party/patches/parallel_hashmap:0001-svacer_fixes.patch",
     ],
     sha256 = "b61435437713e2d98ce2a5539a0bff7e6e9e6a6b9fe507dbf490a852b8c2904f",
     strip_prefix = "parallel-hashmap-1.35",
@@ -94,9 +100,10 @@ http_archive(
     name = "lz4",
     build_file = "//third_party:lz4.BUILD",
     patches = [
-        "//third_party/patches/lz4:lz4frame.h.patch",
-        "//third_party/patches/lz4:lz4frame.c.patch",
-        "//third_party/patches/lz4:lz4hc.c.patch",
+        "//third_party/patches/lz4:0001-remove_visibility_attribute.patch",
+        "//third_party/patches/lz4:0002-add_allocated_memory.patch",
+        "//third_party/patches/lz4:0003-fix_offsetof_calculation.patch",
+        "//third_party/patches/lz4:0004-svacer_fixes.patch",
     ],
     sha256 = "658ba6191fa44c92280d4aa2c271b0f4fbc0e34d249578dd05e50e76d0e5efcc",
     strip_prefix = "lz4-1.9.2",
@@ -109,6 +116,7 @@ http_archive(
     patch_args = ["-p1"],
     patches = [
         "//third_party/patches/roaring:0001-disable-test-dependencies.patch",
+        "//third_party/patches/roaring:0002-svacer_fixes.patch",
     ],
     sha256 = "a037e12a3f7c8c2abb3e81fc9669c23e274ffa2d8670d2034a2e05969e53689b",
     strip_prefix = "CRoaring-1.3.0/",
@@ -126,7 +134,8 @@ http_archive(
 http_archive(
     name = "com_google_absl",
     patches = [
-        "//third_party/patches/com_google_absl:no-werror.patch",
+        "//third_party/patches/com_google_absl:0001-no-werror.patch",
+        "//third_party/patches/com_google_absl:0002-svacer_fixes.patch",
     ],
     sha256 = "f8903111260a18d2cc4618cd5bf35a22bcc28f372ebe4f04024b49e88a2e16c1",
     strip_prefix = "abseil-cpp-20240116.rc1/",
@@ -136,6 +145,9 @@ http_archive(
 git_repository(
     name = "snappy",
     commit = "27f34a580be4a3becf5f8c0cba13433f53c21337",
+    patches = [
+        "//third_party/patches/snappy:0001-svacer_fixes.patch",
+    ],
     remote = "https://github.com/google/snappy",
     shallow_since = "1689185568 -0700",
 )
@@ -143,7 +155,8 @@ git_repository(
 http_archive(
     name = "re2",
     patches = [
-        "//third_party/patches/re2:no-werror.patch",
+        "//third_party/patches/re2:0001-no-werror.patch",
+        "//third_party/patches/re2:0002-svacer_fixes.patch",
     ],
     sha256 = "cd191a311b84fcf37310e5cd876845b4bf5aee76fdd755008eef3b6478ce07bb",
     strip_prefix = "re2-2024-02-01/",
@@ -156,7 +169,7 @@ git_repository(
     commit = "38fa7f615f14bf867834c796945841d54cb45e0f",
     patch_args = ["-p1"],
     patches = [
-        "//third_party/patches/cedar:cedarpp.h.patch",
+        "//third_party/patches/cedar:0001-cedarpp.h.patch",
     ],
     remote = "https://github.com/DevO2012/cedar",
 )
@@ -167,7 +180,7 @@ git_repository(
     commit = "7d3c4c648b1013e37d25d247c31078033b10d172",
     patch_args = ["-p1"],
     patches = [
-        "//third_party/patches/quasis_crypto:md5.hh.patch",
+        "//third_party/patches/quasis_crypto:0001-md5.hh.patch",
     ],
     remote = "https://github.com/quasis/crypto",
 )

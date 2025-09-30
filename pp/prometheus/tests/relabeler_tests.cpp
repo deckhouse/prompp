@@ -469,6 +469,7 @@ TEST_F(TestValidate, InvalidLabelLimit) {
 struct Stats {
   uint32_t samples_added{0};
   uint32_t series_added{0};
+  uint32_t series_drop{0};
 };
 
 struct TestPerShardRelabeler : public testing::Test {
@@ -513,7 +514,7 @@ struct TestPerShardRelabeler : public testing::Test {
       vector_target_labels_[i].first.reset_to(list_target_labels[i].first.data(), list_target_labels[i].first.size());
       vector_target_labels_[i].second.reset_to(list_target_labels[i].second.data(), list_target_labels[i].second.size());
     }
-    o_.target_labels.reset_to(vector_target_labels_.data(), vector_target_labels_.size());
+    o_.target_labels.reset_to(vector_target_labels_.data(), vector_target_labels_.size(), vector_target_labels_.size());
   }
 
   void SetUp() final {
@@ -521,19 +522,19 @@ struct TestPerShardRelabeler : public testing::Test {
     vector_shards_inner_series_.emplace_back(std::make_unique<PromPP::Prometheus::Relabel::InnerSeries>());
     vector_shards_inner_series_.emplace_back(std::make_unique<PromPP::Prometheus::Relabel::InnerSeries>());
     shards_inner_series_.reset_to(reinterpret_cast<PromPP::Prometheus::Relabel::InnerSeries**>(vector_shards_inner_series_.data()),
-                                  vector_shards_inner_series_.size());
+                                  vector_shards_inner_series_.size(), vector_shards_inner_series_.size());
 
     // relabeled_results
     vector_relabeled_results_.emplace_back(std::make_unique<PromPP::Prometheus::Relabel::RelabeledSeries>());
     vector_relabeled_results_.emplace_back(std::make_unique<PromPP::Prometheus::Relabel::RelabeledSeries>());
     relabeled_results_.reset_to(reinterpret_cast<PromPP::Prometheus::Relabel::RelabeledSeries**>(vector_relabeled_results_.data()),
-                                vector_shards_inner_series_.size());
+                                vector_shards_inner_series_.size(), vector_shards_inner_series_.size());
 
     // external_labels
-    external_labels_.reset_to(vector_external_labels_.data(), vector_external_labels_.size());
+    external_labels_.reset_to(vector_external_labels_.data(), vector_external_labels_.size(), vector_external_labels_.size());
 
     // target_labels
-    o_.target_labels.reset_to(vector_target_labels_.data(), vector_target_labels_.size());
+    o_.target_labels.reset_to(vector_target_labels_.data(), vector_target_labels_.size(), vector_target_labels_.size());
   }
 
   void TearDown() final {
@@ -1022,8 +1023,8 @@ struct TestTargetLabels : public testing::Test {
   PromPP::Primitives::Go::SliceView<std::pair<PromPP::Primitives::Go::String, PromPP::Primitives::Go::String>> external_labels_;
 
   void SetUp() final {
-    o_.target_labels.reset_to(vector_target_labels_.data(), vector_target_labels_.size());
-    external_labels_.reset_to(vector_external_labels_.data(), vector_external_labels_.size());
+    o_.target_labels.reset_to(vector_target_labels_.data(), vector_target_labels_.size(), vector_target_labels_.size());
+    external_labels_.reset_to(vector_external_labels_.data(), vector_external_labels_.size(), vector_external_labels_.size());
   }
 
   void add_target_labels(std::vector<std::pair<std::string, std::string>>& list_target_labels) {
@@ -1032,7 +1033,7 @@ struct TestTargetLabels : public testing::Test {
       vector_target_labels_[i].first.reset_to(list_target_labels[i].first.data(), list_target_labels[i].first.size());
       vector_target_labels_[i].second.reset_to(list_target_labels[i].second.data(), list_target_labels[i].second.size());
     }
-    o_.target_labels.reset_to(vector_target_labels_.data(), vector_target_labels_.size());
+    o_.target_labels.reset_to(vector_target_labels_.data(), vector_target_labels_.size(), vector_target_labels_.size());
   }
 };
 

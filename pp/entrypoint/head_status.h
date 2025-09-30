@@ -6,17 +6,22 @@ extern "C" {
  * @brief Return head status
  *
  * @param args {
+ *     status struct {...} // status returned by prompp_get_head_status
+ * }
+ *
+ */
+void prompp_free_head_status(void* args);
+
+/**
+ * @brief Return head status from lss.
+ *
+ * @param args {
  *     lss         uintptr      // pointer to constructed lss
- *     dataStorage uintptr      // pointer to constructed data storage
  *     limit       int          // statistics limit
  * }
  *
  * @param res {
- *     status struct {     // head status
- *          time_interval struct {
- *              min int64
- *              max int64
- *          }
+ *     status struct {          // head status
  *          label_value_count_by_label_name []struct {
  *              name string
  *              count uint32
@@ -35,25 +40,30 @@ extern "C" {
  *              count uint32
  *          }
  *          num_series      uint32
- *          chunk_count     uint32
  *          num_label_pairs uint32
- *          rule_queried_series uint32
- *          federate_queried_series uint32
- *          other_queried_series uint32
  *     }
  * }
  */
-void prompp_get_head_status(void* args, void* res);
+void prompp_get_head_status_lss(void* args, void* res);
 
 /**
- * @brief Return head status
+ * @brief Return head status from lss.
  *
  * @param args {
- *     status struct {...} // status returned by prompp_get_head_status
+ *     dataStorage uintptr      // pointer to constructed data storage
  * }
  *
+ * @param res {
+ *     status struct {          // head status
+ *          time_interval struct {
+ *              min int64
+ *              max int64
+ *          }
+ *          chunk_count     uint32
+ *     }
+ * }
  */
-void prompp_free_head_status(void* args);
+void prompp_get_head_status_data_storage(void* args, void* res);
 
 #ifdef __cplusplus
 }  // extern "C"

@@ -14,33 +14,38 @@ const (
 )
 
 type SegmentWriter interface {
+	// CurrentSize return current shard wal size.
+	CurrentSize() int64
 	Write(segment EncodedSegment) error
 	Flush() error
 	Close() error
 }
 
 type ShardWal struct {
-	corrupted      bool
-	shardID        uint16
 	encoder        *cppbridge.HeadWalEncoder
 	segmentWriter  SegmentWriter
 	maxSegmentSize uint32
+	corrupted      bool
+	limitExhausted bool
 }
 
-func newShardWal(shardID uint16, encoder *cppbridge.HeadWalEncoder, maxSegmentSize uint32, segmentWriter SegmentWriter) *ShardWal {
+func newShardWal(encoder *cppbridge.HeadWalEncoder, maxSegmentSize uint32, segmentWriter SegmentWriter) *ShardWal {
 	return &ShardWal{
-		shardID:        shardID,
 		encoder:        encoder,
 		segmentWriter:  segmentWriter,
 		maxSegmentSize: maxSegmentSize,
 	}
 }
 
-func newCorruptedShardWal(shardID uint16) *ShardWal {
+func newCorruptedShardWal() *ShardWal {
 	return &ShardWal{
 		corrupted: true,
-		shardID:   shardID,
 	}
+}
+
+// CurrentSize return current shard wal size.
+func (w *ShardWal) CurrentSize() int64 {
+	return w.segmentWriter.CurrentSize()
 }
 
 func (w *ShardWal) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error) {
@@ -53,7 +58,13 @@ func (w *ShardWal) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error
 		return false, fmt.Errorf("failed to encode inner series: %w", err)
 	}
 
-	if w.maxSegmentSize > 0 && stats.Samples() >= w.maxSegmentSize {
+	if w.maxSegmentSize == 0 {
+		return false, nil
+	}
+
+	// memoize reaching of limits to deduplicate triggers
+	if !w.limitExhausted && stats.Samples() >= w.maxSegmentSize {
+		w.limitExhausted = true
 		return true, nil
 	}
 
@@ -62,13 +73,14 @@ func (w *ShardWal) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error
 
 func (w *ShardWal) Commit() error {
 	if w.corrupted {
-		return fmt.Errorf("commiting corrupted wal")
+		return fmt.Errorf("committing corrupted wal")
 	}
 
 	segment, err := w.encoder.Finalize()
 	if err != nil {
 		return fmt.Errorf("failed to finalize segment: %w", err)
 	}
+	w.limitExhausted = false
 
 	if err = w.segmentWriter.Write(segment); err != nil {
 		return fmt.Errorf("failed to write segment: %w", err)
@@ -206,36 +218,41 @@ func (d DecodedSegment) SampleCount() uint32 {
 	return d.sampleCount
 }
 
-func ReadSegment(reader io.Reader) (decodedSegment DecodedSegment, n int, err error) {
+func ReadSegment(reader io.Reader, decodedSegment *DecodedSegment) (n int, err error) {
 	br := &byteReader{r: reader}
 	var size uint64
 	size, err = binary.ReadUvarint(br)
 	if err != nil {
-		return decodedSegment, br.n, fmt.Errorf("failed to read segment size: %w", err)
+		return br.n, fmt.Errorf("failed to read segment size: %w", err)
 	}
 
 	crc32HashU64, err := binary.ReadUvarint(br)
 	if err != nil {
-		return decodedSegment, br.n, fmt.Errorf("failed to read segment crc32 hash: %w", err)
+		return br.n, fmt.Errorf("failed to read segment crc32 hash: %w", err)
 	}
 	crc32Hash := uint32(crc32HashU64)
 
 	sampleCountU64, err := binary.ReadUvarint(br)
 	if err != nil {
-		return decodedSegment, br.n, fmt.Errorf("failed to read segment sample count: %w", err)
+		return br.n, fmt.Errorf("failed to read segment sample count: %w", err)
 	}
 	decodedSegment.sampleCount = uint32(sampleCountU64)
 
-	decodedSegment.data = make([]byte, size)
+	if int(size) > cap(decodedSegment.data) {
+		decodedSegment.data = make([]byte, size)
+	} else {
+		decodedSegment.data = decodedSegment.data[:size]
+	}
+
 	n, err = io.ReadFull(reader, decodedSegment.data)
 	if err != nil {
-		return decodedSegment, br.n, fmt.Errorf("failed to read segment data: %w", err)
+		return br.n, fmt.Errorf("failed to read segment data: %w", err)
 	}
 	n += br.n
 
 	if crc32Hash != crc32.ChecksumIEEE(decodedSegment.data) {
-		return decodedSegment, n, fmt.Errorf("crc32 did not match, want: %d, have: %d", crc32Hash, crc32.ChecksumIEEE(decodedSegment.data))
+		return n, fmt.Errorf("crc32 did not match, want: %d, have: %d", crc32Hash, crc32.ChecksumIEEE(decodedSegment.data))
 	}
 
-	return decodedSegment, n, nil
+	return n, nil
 }
