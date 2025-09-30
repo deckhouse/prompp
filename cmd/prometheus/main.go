@@ -769,7 +769,7 @@ func main() {
 			CommitInterval:      time.Duration(cfg.WalCommitInterval),
 			MaxRetentionPeriod:  time.Duration(cfg.tsdb.RetentionDuration),
 			HeadRetentionPeriod: time.Duration(cfg.HeadRetentionTimeout),
-			QueueSize:           2,
+			KeeperCapacity:      2,
 			DataDir:             localStoragePath,
 			MaxSegmentSize:      cfg.WalMaxSamplesPerSegment,
 			NumberOfShards:      receiverConfig.NumberOfShards,
@@ -1012,7 +1012,6 @@ func main() {
 	}
 
 	// Depends on cfg.web.ScrapeManager so needs to be after cfg.web.ScrapeManager = scrapeManager.
-	// TODO receiver adapter
 	webHandler := web.New(log.With(logger, "component", "web"), &cfg.web, adapter) // PP_CHANGES.md: rebuild on cpp
 
 	// Monitor outgoing connections on default transport with conntrack.
@@ -1414,7 +1413,7 @@ func main() {
 				db, err := agent.Open(
 					logger,
 					prometheus.DefaultRegisterer,
-					adapter, // TODO RW // PP_CHANGES.md: rebuild on cpp
+					adapter, // PP_CHANGES.md: rebuild on cpp
 					localStoragePath,
 					&opts,
 				)

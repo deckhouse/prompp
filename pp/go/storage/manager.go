@@ -71,7 +71,7 @@ type Options struct {
 	CommitInterval      time.Duration
 	MaxRetentionPeriod  time.Duration
 	HeadRetentionPeriod time.Duration
-	QueueSize           int
+	KeeperCapacity      int
 	DataDir             string
 	MaxSegmentSize      uint32
 	NumberOfShards      uint16
@@ -180,7 +180,7 @@ func NewManager(
 		return nil, errors.Join(fmt.Errorf("failed to set active status: %w", err), h.Close())
 	}
 
-	hKeeper := keeper.NewKeeper[HeadOnDisk](o.QueueSize)
+	hKeeper := keeper.NewKeeper[HeadOnDisk](o.KeeperCapacity)
 	m := &Manager{
 		g:      run.Group{},
 		closer: util.NewCloser(),

@@ -156,7 +156,7 @@ func makeManager(
 			CommitInterval:      5 * time.Second,
 			MaxRetentionPeriod:  24 * time.Hour,
 			HeadRetentionPeriod: 4 * time.Hour,
-			QueueSize:           2,
+			KeeperCapacity:      2,
 			DataDir:             dbDir,
 			MaxSegmentSize:      100e3,
 			NumberOfShards:      2,
