@@ -44,5 +44,6 @@ jobs:
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
             bash -c "
               export GOFLAGS=-buildvcs=false
-              golangci-lint run --verbose --config pp/.golangci.yml --timeout=10m
+              make lint
+#              golangci-lint run --verbose --config pp/.golangci.yml --timeout=10m
             "
