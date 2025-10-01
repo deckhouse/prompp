@@ -27,6 +27,8 @@ const (
 	maxSegmentSize uint32 = 1024
 
 	unloadDataStorageInterval time.Duration = time.Second
+
+	blockDuration = 2 * time.Hour
 )
 
 type WriterSuite struct {
@@ -46,7 +48,7 @@ func (s *WriterSuite) SetupTest() {
 	s.blockWriter = block.NewWriter[*storage.ShardOnDisk](
 		s.dataDir,
 		block.DefaultChunkSegmentSize,
-		2*time.Hour,
+		blockDuration,
 		prometheus.DefaultRegisterer,
 	)
 }
@@ -275,4 +277,24 @@ func (s *WriterSuite) TestWriteWithDataUnloadingInBatches() {
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)
+}
+
+func (s *WriterSuite) TestSkipEmptyBlock() {
+	// Arrange
+	storagetest.MustAppendTimeSeries(&s.Suite, s.head, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "value1"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 0},
+				{Timestamp: blockDuration.Milliseconds() * 2, Value: 1},
+			},
+		},
+	})
+
+	// Act
+	blocks, err := s.blockWriter.Write(s.shard())
+
+	// Assert
+	s.Require().NoError(err)
+	s.Equal(2, len(blocks))
 }
