@@ -486,10 +486,14 @@ func (s *QueryableLSSSuite) TestCopyAddedSeriesFromSnapshot() {
 	lssCopyOfCopy := cppbridge.NewQueryableLssStorage()
 
 	// Act
-	s.lss.CopyAddedSeries(lssCopy)
+	snapshot := s.lss.CreateLabelSetSnapshot()
+	snapshot.CopyAddedSeries(lssCopy)
+	// s.lss.CopyAddedSeries(lssCopy)
 	lssCopy.CopyAddedSeries(lssCopyOfCopy)
 
 	// Assert
+	s.T().Log(lssCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
+
 	s.Equal(labelSetToCppBridgeLabels(s.labelSets), lssCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
 	s.Equal(emptyLabelsSets, lssCopyOfCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
 }
