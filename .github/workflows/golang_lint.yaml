@@ -45,5 +45,4 @@ jobs:
             bash -c "
               export GOFLAGS=-buildvcs=false
               make lint
-#              golangci-lint run --verbose --config pp/.golangci.yml --timeout=10m
             "
