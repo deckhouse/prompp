@@ -350,7 +350,7 @@ struct RelabelerOptions {
 // log_shards_          - logarithm to the base 2 of total shards count;
 class PerShardRelabeler {
   std::ostringstream buf_;
-  Primitives::LabelsBuilderStateMap builder_state_;
+  Primitives::LabelsBuilder builder_;
   std::vector<Primitives::LabelView> external_labels_{};
   Primitives::TimeseriesSemiview timeseries_buf_;
   StatelessRelabeler* stateless_relabeler_;
@@ -439,7 +439,6 @@ class PerShardRelabeler {
       shards_inner_series[i]->reserve(n);
     }
 
-    Primitives::LabelsBuilder builder{builder_state_};
     size_t samples_count{0};
 
     for (auto it = skip_shard_inner_series(hashdex, shards_inner_series[shard_id_]->size()); it != hashdex.end(); ++it) {
@@ -453,8 +452,8 @@ class PerShardRelabeler {
       Cache::CheckResult check_result = cache.check(input_lss, target_lss, timeseries_buf_.label_set(), it->hash());
       switch (check_result.status) {
         case Cache::CheckResult::kNotFound: {
-          builder.reset(timeseries_buf_.label_set());
-          switch (relabel(o, builder)) {
+          builder_.reset(timeseries_buf_.label_set());
+          switch (relabel(o, builder_)) {
             case rsDrop:
             case rsInvalid: {
               cache.add_drop(input_lss.find_or_emplace(timeseries_buf_.label_set(), it->hash()));
@@ -478,7 +477,7 @@ class PerShardRelabeler {
             }
             case rsRelabel: {
               auto ls_id = input_lss.find_or_emplace(timeseries_buf_.label_set(), it->hash());
-              const auto& new_label_set = builder.label_set();
+              const auto& new_label_set = builder_.label_set();
               size_t new_hash = hash_value(new_label_set);
               const size_t new_shard_id = new_hash % number_of_shards_;
               auto& samples = timeseries_buf_.samples();
@@ -835,9 +834,6 @@ class PerShardRelabeler {
         return;
       }
 
-      // TODO move ctor builder from ranges for;
-      Primitives::LabelsBuilder builder{builder_state_};
-
       std::ranges::for_each(inner_series->data(), [&](const InnerSerie& inner_serie) PROMPP_LAMBDA_INLINE {
         const auto res = cache.check_input(inner_serie.ls_id);
         if (res.status == Cache::CheckResult::kDrop) {
@@ -853,17 +849,17 @@ class PerShardRelabeler {
           throw BareBones::Exception(0x7763a97e1717e835, "ls_id out of range: %d size: %d shard_id: %d", inner_serie.ls_id, lss.size(), shard_id_);
         }
         typename LSS::value_type labels = lss[inner_serie.ls_id];
-        builder.reset(labels);
-        process_external_labels(builder, external_labels_);
+        builder_.reset(labels);
+        process_external_labels(builder_, external_labels_);
 
-        relabelStatus rstatus = stateless_relabeler_->relabeling_process(buf_, builder);
-        soft_validate(rstatus, builder);
+        relabelStatus rstatus = stateless_relabeler_->relabeling_process(buf_, builder_);
+        soft_validate(rstatus, builder_);
         if (rstatus == rsDrop) {
           cache.add_drop(inner_serie.ls_id);
           return;
         }
 
-        const auto& new_label_set = builder.label_set();
+        const auto& new_label_set = builder_.label_set();
         relabeled_series->emplace_back(new_label_set, BareBones::Vector{inner_serie.sample}, hash_value(new_label_set), inner_serie.ls_id);
       });
     }
@@ -890,7 +886,7 @@ class PerShardRelabeler {
 // PerGoroutineRelabeler stateful relabeler for shard goroutines.
 class PerGoroutineRelabeler {
   std::ostringstream buf_;
-  Primitives::LabelsBuilderStateMap builder_state_;
+  Primitives::LabelsBuilder builder_;
   Primitives::TimeseriesSemiview timeseries_buf_;
   uint16_t number_of_shards_;
   uint16_t shard_id_;
@@ -1079,7 +1075,6 @@ class PerGoroutineRelabeler {
       shards_inner_series[i]->reserve(n);
     }
 
-    Primitives::LabelsBuilder builder{builder_state_};
     size_t samples_count{0};
 
     for (auto it = skip_shard_inner_series(hashdex, shards_inner_series[shard_id_]->size()); it != hashdex.end(); ++it) {
@@ -1093,8 +1088,8 @@ class PerGoroutineRelabeler {
       Cache::CheckResult check_result = cache.check(input_lss, target_lss, timeseries_buf_.label_set(), it->hash());
       switch (check_result.status) {
         case Cache::CheckResult::kNotFound: {
-          builder.reset(timeseries_buf_.label_set());
-          switch (relabel(options, stateless_relabeler, builder)) {
+          builder_.reset(timeseries_buf_.label_set());
+          switch (relabel(options, stateless_relabeler, builder_)) {
             case rsDrop:
             case rsInvalid: {
               cache.add_drop(input_lss.find_or_emplace(timeseries_buf_.label_set(), it->hash()));
@@ -1121,7 +1116,7 @@ class PerGoroutineRelabeler {
             }
             case rsRelabel: {
               auto ls_id = input_lss.find_or_emplace(timeseries_buf_.label_set(), it->hash());
-              const auto& new_label_set = builder.label_set();
+              const auto& new_label_set = builder_.label_set();
               size_t new_hash = hash_value(new_label_set);
               const size_t new_shard_id = new_hash % number_of_shards_;
               auto& samples = timeseries_buf_.samples();
@@ -1341,8 +1336,6 @@ class PerGoroutineRelabeler {
       shards_inner_series[i]->reserve(n);
     }
 
-    Primitives::LabelsBuilder builder{builder_state_};
-
     for (auto it = skip_shard_inner_series(hashdex, shards_inner_series[shard_id_]->size()); it != hashdex.end(); ++it) {
       if ((it->hash() % number_of_shards_) != shard_id_) {
         continue;
@@ -1354,7 +1347,7 @@ class PerGoroutineRelabeler {
       const auto check_result = check_target_lss(target_lss, timeseries_buf_.label_set(), it->hash());
       switch (check_result.status) {
         case Cache::CheckResult::kNotFound: {
-          builder.reset(timeseries_buf_.label_set());
+          builder_.reset(timeseries_buf_.label_set());
           auto ls_id = target_lss.find_or_emplace(timeseries_buf_.label_set(), it->hash());
           for (const Primitives::Sample& sample : timeseries_buf_.samples()) {
             shards_inner_series[shard_id_]->emplace_back(sample, ls_id);

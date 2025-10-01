@@ -13,7 +13,6 @@ namespace {
 
 using PromPP::Primitives::Label;
 using PromPP::Primitives::LabelsBuilder;
-using PromPP::Primitives::LabelsBuilderStateMap;
 using PromPP::Primitives::LabelSet;
 using PromPP::Primitives::LabelView;
 using PromPP::Primitives::LabelViewSet;
@@ -86,14 +85,10 @@ PROMPP_ALWAYS_INLINE void make_hashdex(HashdexTest& hx, const LabelViewSet& labe
   hx.emplace_back(hash_value(label_set), label_set, samples);
 }
 
-//
-// TestValidate
-//
 
 class HardValidateFixture : public testing::Test {
  protected:
-  LabelsBuilderStateMap builder_state_;
-  LabelsBuilder<LabelsBuilderStateMap> builder_{builder_state_};
+  LabelsBuilder builder_;
   relabelStatus rstatus_{rsKeep};
 };
 
@@ -166,6 +161,7 @@ TEST_F(HardValidateFixture, LabelValueLengthLimitExceeded) {
   // Assert
   EXPECT_EQ(rsInvalid, rstatus_);
 }
+
 
 struct Stats {
   uint32_t samples_added{0};
@@ -577,6 +573,7 @@ TEST_F(PerShardRelabelerFixture, TargetLabels_ExportedLabel_Honor) {
   EXPECT_EQ((LabelViewSet{{"__name__", "booom"}, {"jab", "baj"}, {"job", "abc"}, {"z_name", "target_z_value"}}), lss_[update_data[0].relabeled_ls_id]);
 }
 
+
 class TargetLabelsFixture : public testing::Test {
  protected:
   static constexpr uint16_t kNumberOfShards = 2;
@@ -588,8 +585,7 @@ class TargetLabelsFixture : public testing::Test {
   std::vector<GoLabel> vector_external_labels_;
   SliceView<GoLabel> external_labels_{};
 
-  LabelsBuilderStateMap builder_state_;
-  LabelsBuilder<LabelsBuilderStateMap> builder_{builder_state_};
+  LabelsBuilder builder_;
 
   StatelessRelabeler stateless_relabeler_{rcts_};
   PerShardRelabeler relabeler_{external_labels_, &stateless_relabeler_, kNumberOfShards, 1};

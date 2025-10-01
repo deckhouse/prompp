@@ -7,7 +7,6 @@
 namespace {
 
 using PromPP::Primitives::LabelsBuilder;
-using PromPP::Primitives::LabelsBuilderStateMap;
 using PromPP::Primitives::LabelView;
 using PromPP::Primitives::LabelViewSet;
 using PromPP::Prometheus::Relabel::PatternPart;
@@ -245,8 +244,7 @@ struct StatelessRelabelerCase {
 
 class StatelessRelabelerFixture : public testing::TestWithParam<StatelessRelabelerCase> {
  protected:
-  LabelsBuilderStateMap builder_state_;
-  LabelsBuilder<LabelsBuilderStateMap> builder_{builder_state_};
+  LabelsBuilder builder_;
 
   static std::vector<const GoRelabelConfig*> configs() {
     std::vector<const GoRelabelConfig*> result;
@@ -633,8 +631,7 @@ struct ProcessExternalLabelsCase {
 
 class ProcessExternalLabelsFixture : public testing::TestWithParam<ProcessExternalLabelsCase> {
  protected:
-  LabelsBuilderStateMap builder_state_;
-  LabelsBuilder<LabelsBuilderStateMap> builder_{builder_state_};
+  LabelsBuilder builder_;
 };
 
 TEST_P(ProcessExternalLabelsFixture, Test) {

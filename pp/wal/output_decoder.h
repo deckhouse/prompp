@@ -145,7 +145,7 @@ template <class EncodingBimap>
 class OutputDecoder : private BaseOutputDecoder {
   Primitives::SnugComposites::LabelSet::ShrinkableEncodingBimap<BareBones::Vector> wal_lss_;
   std::ostringstream buf_;
-  Primitives::LabelsBuilderStateMap builder_state_;
+  Primitives::LabelsBuilder builder_;
   std::vector<Primitives::LabelView> external_labels_{};
   Prometheus::Relabel::StatelessRelabeler& stateless_relabeler_;
   EncodingBimap& output_lss_;
@@ -163,20 +163,18 @@ class OutputDecoder : private BaseOutputDecoder {
       return;
     }
 
-    Primitives::LabelsBuilder builder{builder_state_};
-
     cache.reserve(wal_lss_.next_item_index());
     for (size_t ls_id = cache.size(); ls_id < wal_lss_.next_item_index(); ++ls_id) {
-      builder.reset(wal_lss_[ls_id]);
-      Prometheus::Relabel::process_external_labels(builder, external_labels_);
-      Prometheus::Relabel::relabelStatus rstatus = stateless_relabeler_.relabeling_process(buf_, builder);
-      Prometheus::Relabel::soft_validate(rstatus, builder);
+      builder_.reset(wal_lss_[ls_id]);
+      Prometheus::Relabel::process_external_labels(builder_, external_labels_);
+      Prometheus::Relabel::relabelStatus rstatus = stateless_relabeler_.relabeling_process(buf_, builder_);
+      Prometheus::Relabel::soft_validate(rstatus, builder_);
 
       if (rstatus == Prometheus::Relabel::rsDrop) {
         cache.add_dropped();
         ++dropped_series_count_;
       } else {
-        cache.add(output_lss_.find_or_emplace(builder.label_view_set()));
+        cache.add(output_lss_.find_or_emplace(builder_.label_view_set()));
         ++add_series_count_;
       }
     }

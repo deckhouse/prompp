@@ -10,7 +10,7 @@
 
 namespace PromPP::Primitives {
 
-class LabelsBuilderStateMap {
+class LabelsBuilder {
   LabelViewSet building_buf_view_;
   LabelSet building_buf_;
   phmap::flat_hash_map<Symbol, Symbol> buffer_;
@@ -87,7 +87,6 @@ class LabelsBuilderStateMap {
   }
 
   // range - calls f on each label in the builder. Don't modify LabelsBuilderStateMap inside callback
-  // TODO without copy buffer_, all changes in a another cycle.
   template <class Callback>
   PROMPP_ALWAYS_INLINE void range(Callback func) const {
     for (const auto& it : buffer_) {
@@ -121,65 +120,4 @@ class LabelsBuilderStateMap {
   }
 };
 
-// LabelsBuilder - builder for label set.
-template <class BuilderState>
-class LabelsBuilder {
-  BuilderState& state_;
-
- public:
-  PROMPP_ALWAYS_INLINE explicit LabelsBuilder(BuilderState& state) : state_(state) {}
-
-  template <class SomeLabelSet>
-  PROMPP_ALWAYS_INLINE explicit LabelsBuilder(BuilderState& state, SomeLabelSet* ls) : state_(state) {
-    reset(ls);
-  }
-
-  // del - add label name to remove from label set.
-  template <class LNameType>
-  PROMPP_ALWAYS_INLINE void del(const LNameType& lname) {
-    state_.del(lname);
-  }
-
-  // extract we extract(move) the lebel from the builder.
-  PROMPP_ALWAYS_INLINE Label extract(const std::string_view& lname) { return state_.extract(lname); }
-
-  // get - returns the value for the label with the given name. Returns an empty string if the label doesn't exist.
-  PROMPP_ALWAYS_INLINE std::string_view get(const std::string_view& lname) { return state_.get(lname); }
-
-  // contains check the given name if exist.
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool contains(const std::string_view& lname) const noexcept { return state_.contains(lname); }
-
-  // returns size of building labels.
-  PROMPP_ALWAYS_INLINE size_t size() { return state_.size(); }
-
-  // returns true if ls represents an empty set of labels.
-  PROMPP_ALWAYS_INLINE bool is_empty() { return state_.is_empty(); }
-
-  // label_view_set - returns the label_view set from the builder. If no modifications were made, the original labels are returned.
-  PROMPP_ALWAYS_INLINE const LabelViewSet& label_view_set() { return state_.label_view_set(); }
-
-  // label_set - returns the label set from the builder. If no modifications were made, the original labels are returned.
-  PROMPP_ALWAYS_INLINE const LabelSet& label_set() { return state_.label_set(); }
-
-  // range - calls f on each label in the builder.
-  template <class Callback>
-  PROMPP_ALWAYS_INLINE void range(Callback func) const {
-    state_.range(func);
-  }
-
-  // reset - clears all current state for the builder.
-  PROMPP_ALWAYS_INLINE void reset() { state_.reset(); }
-
-  // reset - clears all current state for the builder and init from LabelSet.
-  template <class SomeLabelSet>
-  PROMPP_ALWAYS_INLINE void reset(const SomeLabelSet& ls) {
-    state_.reset(ls);
-  }
-
-  // set - the name/value pair as a label. A value of "" means delete that label.
-  template <class LNameType, class LValueType>
-  PROMPP_ALWAYS_INLINE void set(const LNameType& lname, const LValueType& lvalue) {
-    state_.set(lname, lvalue);
-  }
-};
 }  // namespace PromPP::Primitives

@@ -5,8 +5,7 @@
 namespace {
 
 struct TestLabelsBuilder : public testing::Test {
-  PromPP::Primitives::LabelsBuilderStateMap builder_state_;
-  PromPP::Primitives::LabelsBuilder<PromPP::Primitives::LabelsBuilderStateMap> builder_{builder_state_};
+  PromPP::Primitives::LabelsBuilder builder_;
   PromPP::Primitives::LabelViewSet ls_view_;
   PromPP::Primitives::LabelSet ls_;
   std::vector<std::pair<std::string, std::string>> DATA{{"qwe", "ewq"}, {"asd", "dsa"}, {"zxc", "cxz"}};
