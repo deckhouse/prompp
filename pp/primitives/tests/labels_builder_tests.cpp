@@ -68,7 +68,7 @@ TEST_F(TestLabelsBuilder, SetEmpty) {
     ls_.add({DATA[i].first, DATA[i].second});
   }
 
-  std::string empty = "";
+  const std::string empty;
   builder_.set(DATA[0].first, empty);
 
   EXPECT_EQ(builder_.label_view_set(), ls_view_);
@@ -85,7 +85,7 @@ TEST_F(TestLabelsBuilder, SetChange) {
     ls_.add({lname, lvalue});
   }
 
-  std::string value = "zxcv";
+  const std::string value = "zxcv";
   builder_.set(DATA[0].first, value);
 
   EXPECT_NE(builder_.label_view_set(), ls_view_);
@@ -110,7 +110,7 @@ TEST_F(TestLabelsBuilder, Extract) {
     builder_.set(lname, lvalue);
   }
 
-  auto l = builder_.extract(DATA[0].first);
+  const auto l = builder_.extract(DATA[0].first);
 
   EXPECT_EQ(DATA[0], l);
   EXPECT_EQ(builder_.get(l.first), "");
@@ -123,7 +123,7 @@ TEST_F(TestLabelsBuilder, Del) {
 
   builder_.del(DATA[0].first);
 
-  std::string_view b_lvalue = builder_.get(DATA[0].first);
+  const std::string_view b_lvalue = builder_.get(DATA[0].first);
 
   EXPECT_EQ(b_lvalue, "");
 }
@@ -137,72 +137,6 @@ TEST_F(TestLabelsBuilder, SetDelSet) {
 
   builder_.del(DATA[0].first);
   builder_.set(DATA[0].first, DATA[0].second);
-
-  EXPECT_EQ(builder_.label_view_set(), ls_view_);
-  EXPECT_EQ(builder_.label_set(), ls_);
-}
-
-TEST_F(TestLabelsBuilder, Range) {
-  for (auto& [lname, lvalue] : DATA) {
-    ls_view_.add({lvalue, lname});
-    builder_.set(lname, lvalue);
-    ls_.add({lvalue, lname});
-  }
-
-  builder_.range([&]<typename LNameType, typename LValueType>(LNameType& lname, LValueType& lvalue) PROMPP_LAMBDA_INLINE -> bool {
-    builder_.del(lname);
-    builder_.set(lvalue, lname);
-    return true;
-  });
-
-  EXPECT_EQ(builder_.label_view_set(), ls_view_);
-  EXPECT_EQ(builder_.label_set(), ls_);
-}
-
-TEST_F(TestLabelsBuilder, RangeFastExit) {
-  for (size_t i = 0; i < DATA.size(); ++i) {
-    builder_.set(DATA[i].first, DATA[i].second);
-    if (i == 2) {
-      // for last label not swap lname and lvalue
-      ls_view_.add({DATA[i].first, DATA[i].second});
-      ls_.add({DATA[i].first, DATA[i].second});
-      continue;
-    }
-    ls_view_.add({DATA[i].second, DATA[i].first});
-    ls_.add({DATA[i].second, DATA[i].first});
-  }
-
-  size_t count{0};
-  builder_.range([&]<typename LNameType, typename LValueType>(LNameType& lname, LValueType& lvalue) PROMPP_LAMBDA_INLINE -> bool {
-    builder_.del(lname);
-    builder_.set(lvalue, lname);
-    ++count;
-    if (count == 2) {
-      return false;
-    };
-    return true;
-  });
-
-  EXPECT_EQ(count, 2);
-  EXPECT_EQ(builder_.label_view_set(), ls_view_);
-  EXPECT_EQ(builder_.label_set(), ls_);
-}
-
-TEST_F(TestLabelsBuilder, ResetRange) {
-  PromPP::Primitives::LabelViewSet ls;
-  for (auto& [lname, lvalue] : DATA) {
-    ls.add({lname, lvalue});
-    ls_view_.add({lvalue, lname});
-    ls_.add({lvalue, lname});
-  }
-
-  builder_.reset(ls);
-
-  builder_.range([&]<typename LNameType, typename LValueType>(LNameType& lname, LValueType& lvalue) PROMPP_LAMBDA_INLINE -> bool {
-    builder_.del(lname);
-    builder_.set(lvalue, lname);
-    return true;
-  });
 
   EXPECT_EQ(builder_.label_view_set(), ls_view_);
   EXPECT_EQ(builder_.label_set(), ls_);

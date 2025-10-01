@@ -86,14 +86,11 @@ class LabelsBuilderStateMap {
     return building_buf_;
   }
 
-  // range - calls f on each label in the builder.
+  // range - calls f on each label in the builder. Don't modify LabelsBuilderStateMap inside callback
   // TODO without copy buffer_, all changes in a another cycle.
   template <class Callback>
-  PROMPP_ALWAYS_INLINE void range(Callback func) {
-    // take a copy of add and del, so they are unaffected by calls to set() or del().
-    phmap::flat_hash_map<Symbol, Symbol> cbuffer_ = buffer_;
-
-    for (const auto& it : cbuffer_) {
+  PROMPP_ALWAYS_INLINE void range(Callback func) const {
+    for (const auto& it : buffer_) {
       if (it.second.empty()) [[unlikely]] {
         continue;
       }
@@ -166,7 +163,7 @@ class LabelsBuilder {
 
   // range - calls f on each label in the builder.
   template <class Callback>
-  PROMPP_ALWAYS_INLINE void range(Callback func) {
+  PROMPP_ALWAYS_INLINE void range(Callback func) const {
     state_.range(func);
   }
 
