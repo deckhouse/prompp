@@ -23,6 +23,11 @@ class Deserializer {
     uint32_t chunks_count = *reinterpret_cast<const uint32_t*>(buffer.data());
     return {reinterpret_cast<const chunk::SerializedChunk*>(buffer.data() + sizeof(uint32_t)), chunks_count};
   }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static chunk::SerializedChunkSpan get_chunks(const chunk::SerializedData& serialized_data) noexcept {
+    return {serialized_data.chunks.data(), serialized_data.chunks.size()};
+  }
+
   [[nodiscard]] static decoder::UniversalDecodeIterator create_decode_iterator(std::span<const uint8_t> buffer, const chunk::SerializedChunk& chunk) {
     decoder::UniversalDecodeIterator iterator(std::in_place_type<decoder::ConstantDecodeIterator>, 0, BareBones::BitSequenceReader(nullptr, 0), 0, false);
     Decoder::create_decode_iterator(buffer, chunk, [&iterator]<typename Iterator>(Iterator&& begin, auto&&) {
@@ -30,6 +35,17 @@ class Deserializer {
     });
     return iterator;
   }
+
+  [[nodiscard]] static decoder::UniversalDecodeIterator create_decode_iterator(const chunk::SerializedData& serialized_data,
+                                                                               const chunk::SerializedChunk& chunk) {
+    decoder::UniversalDecodeIterator iterator(std::in_place_type<decoder::ConstantDecodeIterator>, 0, BareBones::BitSequenceReader(nullptr, 0), 0, false);
+    std::span<const uint8_t> buffer{serialized_data.bytes_buffer_.control_block().data, serialized_data.bytes_buffer_.size()};
+    Decoder::create_decode_iterator(buffer, chunk, [&iterator]<typename Iterator>(Iterator&& begin, auto&&) {
+      iterator = decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
+    });
+    return iterator;
+  }
+
   [[nodiscard]] static decoder::UniversalDecodeIterator create_decode_iterator(const chunk::SerializedChunkIterator::Data& chunk) {
     return create_decode_iterator(chunk.buffer(), chunk.chunk());
   }

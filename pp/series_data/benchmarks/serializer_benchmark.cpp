@@ -73,11 +73,19 @@ void BenchmarkWalSerializer(benchmark::State& state) {
   }
 
   for ([[maybe_unused]] auto _ : state) {
-    series_data::serialization::Serializer serializer_{storage};
-    BareBones::ShrinkedToFitOStringStream stream;
+    series_data::serialization::new_::Serializer serializer_{storage};
 
-    serializer_.serialize(chunk_list, stream);
-    state.counters["Stream Size"] = benchmark::Counter(stream.view().size(), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
+    const auto x = serializer_.serialize(chunk_list);
+  }
+
+  {
+    series_data::serialization::new_::Serializer serializer_{storage};
+
+    const auto x = serializer_.serialize(chunk_list);
+    state.counters["total mem"] =
+        benchmark::Counter(x.chunks.allocated_memory() + x.bytes_buffer_.allocated_memory(), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
+    state.counters["chunk mem"] = benchmark::Counter(x.chunks.allocated_memory(), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
+    state.counters["stream mem"] = benchmark::Counter(x.bytes_buffer_.allocated_memory(), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
   }
 }
 
@@ -114,15 +122,24 @@ void BenchmarkWalConstantSerializer(benchmark::State& state) {
   }
 
   for ([[maybe_unused]] auto _ : state) {
-    series_data::serialization::Serializer serializer_{storage};
-    BareBones::ShrinkedToFitOStringStream stream;
+    series_data::serialization::new_::Serializer serializer_{storage};
+    // BareBones::ShrinkedToFitOStringStream stream;
 
-    serializer_.serialize(chunk_list, stream);
-    state.counters["Stream Size"] = benchmark::Counter(stream.view().size(), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
+    const auto x = serializer_.serialize(chunk_list);
+  }
+
+  {
+    series_data::serialization::new_::Serializer serializer_{storage};
+
+    const auto x = serializer_.serialize(chunk_list);
+    state.counters["total mem"] =
+        benchmark::Counter(x.chunks.allocated_memory() + x.bytes_buffer_.allocated_memory(), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
+    state.counters["chunk mem"] = benchmark::Counter(x.chunks.allocated_memory(), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
+    state.counters["stream mem"] = benchmark::Counter(x.bytes_buffer_.allocated_memory(), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
   }
 }
 
-BENCHMARK(BenchmarkWalSerializer)->Arg(25)->Arg(50)->Arg(75)->Arg(100)->Iterations(1);
-BENCHMARK(BenchmarkWalConstantSerializer)->Arg(25)->Arg(50)->Arg(75)->Arg(100)->Iterations(1);
+BENCHMARK(BenchmarkWalSerializer)->Arg(25)->Arg(50)->Arg(75)->Arg(100);
+BENCHMARK(BenchmarkWalConstantSerializer)->Arg(25)->Arg(50)->Arg(75)->Arg(100);
 
 }  // namespace

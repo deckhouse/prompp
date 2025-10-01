@@ -311,18 +311,14 @@ class Serializer {
 }  // namespace old_
 
 inline namespace new_ {
-struct SerializedData {
-  BareBones::Vector<chunk::SerializedChunk> chunks;
-  BareBones::Memory<BareBones::MemoryControlBlock, unsigned char> bytes_buffer_;
-};
 
 class Serializer {
  public:
   explicit Serializer(const DataStorage& storage) : storage_(storage) {}
 
-  SerializedData serialize(const querier::QueriedChunkList& queried_chunks) { return serialize_impl(queried_chunks); }
+  chunk::SerializedData serialize(const querier::QueriedChunkList& queried_chunks) { return serialize_impl(queried_chunks); }
 
-  SerializedData serialize() { return serialize_impl(storage_.chunks()); }
+  chunk::SerializedData serialize() { return serialize_impl(storage_.chunks()); }
 
  private:
   struct TimestampStreamsData {
@@ -343,12 +339,12 @@ class Serializer {
   const DataStorage& storage_;
 
   template <class ChunkList>
-  SerializedData serialize_impl(const ChunkList& chunks) {
+  chunk::SerializedData serialize_impl(const ChunkList& chunks) {
     const auto& kReservedBytesForReader = encoder::CompactBitSequence::reserved_bytes_for_reader();
 
     const uint32_t chunk_count = get_chunk_count(chunks);
 
-    SerializedData result;
+    chunk::SerializedData result;
     result.chunks.reserve(chunk_count);
 
     uint32_t data_size = 0;
@@ -392,7 +388,7 @@ class Serializer {
 
     serialized_chunk.encoding_state = chunk.encoding_state;
 
-    if (chunk.encoding_state.encoding_type != kGorilla) {
+    if (chunk.encoding_state.encoding_type != kGorilla) [[likely]] {
       fill_timestamp_stream_offset<chunk_type>(timestamp_streams_data, chunk.timestamp_encoder_state_id, serialized_chunk, data_size, buffer);
     }
 
@@ -478,31 +474,35 @@ class Serializer {
                                     uint32_t& data_size,
                                     BareBones::Memory<BareBones::MemoryControlBlock, unsigned char>& buffer) const noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
-      if (const auto it = timestamp_streams_data.stream_offsets.find(timestamp_stream_id); it == timestamp_streams_data.stream_offsets.end()) {
+      if (const auto it = timestamp_streams_data.stream_offsets.find(timestamp_stream_id); it == timestamp_streams_data.stream_offsets.end()) [[unlikely]] {
         timestamp_streams_data.stream_offsets.emplace(timestamp_stream_id, data_size);
+        serialized_chunk.timestamps_offset = data_size;
         write_compact_bit_sequence(storage_.get_timestamp_stream<chunk_type>(timestamp_stream_id).stream, data_size, buffer);
+      } else {
+        serialized_chunk.timestamps_offset = it->second;
       }
 
       serialized_chunk.timestamps_offset = timestamp_streams_data.stream_offsets[timestamp_stream_id];
     } else {
       if (const auto it = timestamp_streams_data.finalized_stream_offsets.find(timestamp_stream_id);
-          it == timestamp_streams_data.finalized_stream_offsets.end()) {
+          it == timestamp_streams_data.finalized_stream_offsets.end()) [[unlikely]] {
         timestamp_streams_data.finalized_stream_offsets.emplace(timestamp_stream_id, data_size);
+        serialized_chunk.timestamps_offset = data_size;
         write_compact_bit_sequence(storage_.get_timestamp_stream<chunk_type>(timestamp_stream_id).stream, data_size, buffer);
-
-        serialized_chunk.timestamps_offset = timestamp_streams_data.finalized_stream_offsets[timestamp_stream_id];
+      } else {
+        serialized_chunk.timestamps_offset = it->second;
       }
     }
   }
 
   template <class CompactBitSequence>
   static void write_compact_bit_sequence(const CompactBitSequence& bit_sequence,
-                                         uint32_t& offset,
+                                         uint32_t& data_size,
                                          BareBones::Memory<BareBones::MemoryControlBlock, unsigned char>& buffer) {
     const auto bytes_count = bit_sequence.size_in_bytes();
-    buffer.grow_to_fit_at_least(offset + bytes_count);
-    std::memcpy(buffer.control_block().data + offset, bit_sequence.raw_bytes(), bytes_count);
-    offset += bytes_count;
+    buffer.grow_to_fit_at_least(data_size + bytes_count);
+    std::memcpy(buffer.control_block().data + data_size, bit_sequence.raw_bytes(), bytes_count);
+    data_size += bytes_count;
   }
 };
 }  // namespace new_

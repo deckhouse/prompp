@@ -81,4 +81,64 @@ class SerializedChunkIterator {
   }
 };
 
+struct SerializedData {
+  BareBones::Vector<SerializedChunk> chunks;
+  BareBones::Memory<BareBones::MemoryControlBlock, unsigned char> bytes_buffer_;
+};
+
+class SerializedChunkIteratorNew {
+ public:
+  class Data {
+   public:
+    Data(const SerializedData& serialized_data, SerializedChunkSpan chunks)
+        : serialized_data_(serialized_data), chunk_iterator_(chunks.begin()), chunk_end_iterator_(chunks.end()) {}
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE const SerializedChunk& chunk() const noexcept { return *chunk_iterator_; }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE const SerializedData& data() const noexcept { return serialized_data_; }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::LabelSetID series_id() const noexcept { return chunk_iterator_->label_set_id; }
+
+   private:
+    friend class SerializedChunkIteratorNew;
+
+    const SerializedData& serialized_data_;
+    SerializedChunkSpan::iterator chunk_iterator_;
+    SerializedChunkSpan::iterator chunk_end_iterator_;
+
+    PROMPP_ALWAYS_INLINE void next_value() noexcept { ++chunk_iterator_; }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE bool has_value() const noexcept { return chunk_iterator_ != chunk_end_iterator_; }
+  };
+
+  using iterator_category = std::forward_iterator_tag;
+  using value_type = Data;
+  using difference_type = ptrdiff_t;
+  using pointer = value_type*;
+  using reference = value_type&;
+
+  explicit SerializedChunkIteratorNew(const SerializedData& serialized_data) : data_(serialized_data, get_chunks(serialized_data)) {}
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const Data& operator*() const noexcept { return data_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const Data* operator->() const noexcept { return &data_; }
+
+  PROMPP_ALWAYS_INLINE SerializedChunkIteratorNew& operator++() noexcept {
+    data_.next_value();
+    return *this;
+  }
+
+  PROMPP_ALWAYS_INLINE SerializedChunkIteratorNew operator++(int) noexcept {
+    const auto it = *this;
+    ++*this;
+    return it;
+  }
+
+  PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return !data_.has_value(); }
+
+ private:
+  Data data_;
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static SerializedChunkSpan get_chunks(const SerializedData& serialized_data) noexcept {
+    return {serialized_data.chunks.data(), serialized_data.chunks.size()};
+  }
+};
+
 }  // namespace series_data::chunk
