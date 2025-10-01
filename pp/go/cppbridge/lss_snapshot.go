@@ -76,3 +76,8 @@ func (lss *LabelSetSnapshot) Query(selector uintptr) *LSSQueryResult {
 	runtime.KeepAlive(lss)
 	return result
 }
+
+// CopyAddedSeries copy label sets which were added via FindOrEmplace to destination
+func (lss *LabelSetSnapshot) CopyAddedSeries(destination *LabelSetStorage) {
+	primitivesLSSCopyAddedSeries(lss.pointer, destination.pointer)
+}

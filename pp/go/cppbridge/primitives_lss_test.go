@@ -478,3 +478,18 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithoutReadonlyLss() {
 	// Assert
 	s.Equal(uint32(expectedLsId), existingLsId)
 }
+
+func (s *QueryableLSSSuite) TestCopyAddedSeriesFromSnapshot() {
+	// Arrange
+	emptyLabelsSets := make([]cppbridge.Labels, len(s.labelSetIDs))
+	lssCopy := cppbridge.NewQueryableLssStorage()
+	lssCopyOfCopy := cppbridge.NewQueryableLssStorage()
+
+	// Act
+	s.lss.CopyAddedSeries(lssCopy)
+	lssCopy.CopyAddedSeries(lssCopyOfCopy)
+
+	// Assert
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets), lssCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
+	s.Equal(emptyLabelsSets, lssCopyOfCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
+}
