@@ -126,9 +126,19 @@ class InnerSeries {
 
   PROMPP_ALWAYS_INLINE void reserve(size_t n) { data_.reserve(n); }
 
-  PROMPP_ALWAYS_INLINE void emplace_back(const Primitives::Sample& sample, const uint32_t& ls_id) {
+  PROMPP_ALWAYS_INLINE void emplace_back(const Primitives::Sample& sample, uint32_t ls_id) {
     data_.emplace_back(sample, ls_id);
     ++size_;
+  }
+
+  PROMPP_ALWAYS_INLINE void emplace_back(auto const& samples, uint32_t ls_id) {
+    data_.reserve(data_.size() + samples.size());
+
+    for (const auto& sample : samples) {
+      data_.emplace_back(sample, ls_id);
+    }
+
+    size_ += samples.size();
   }
 
   PROMPP_ALWAYS_INLINE void clear() noexcept {
@@ -896,28 +906,8 @@ class PerGoroutineRelabeler {
       : number_of_shards_(number_of_shards), shard_id_(shard_id) {}
 
  private:
-  // calculate_samples counts the number of samples excluding stale_nan.
-  PROMPP_ALWAYS_INLINE static size_t calculate_samples(const BareBones::Vector<Primitives::Sample>& samples) noexcept {
-    size_t samples_count{0};
-    for (const auto smpl : samples) {
-      if (is_stale_nan(smpl.value())) {
-        continue;
-      }
-
-      ++samples_count;
-    }
-
-    return samples_count;
-  }
-
-  // check_target_lss check label_set in target lss.
-  template <class TargetLSS, class LabelSet>
-  PROMPP_ALWAYS_INLINE static Cache::CheckResult check_target_lss(const TargetLSS& target_lss, LabelSet& label_set, size_t hash) {
-    if (const auto ls_id = target_lss.find(label_set, hash); ls_id.has_value()) {
-      return {.status = Cache::CheckResult::Status::kKeep, .ls_id = ls_id.value()};
-    }
-
-    return {};
+  PROMPP_ALWAYS_INLINE static size_t non_stale_nan_samples_count(const BareBones::Vector<Primitives::Sample>& samples) noexcept {
+    return std::ranges::count_if(samples, [](const Primitives::Sample& sample) { return !is_stale_nan(sample.value()); });
   }
 
   // inject_target_labels add labels from target to builder.
@@ -972,82 +962,60 @@ class PerGoroutineRelabeler {
                                                                  Primitives::Go::SliceView<InnerSeries*>& shards_inner_series,
                                                                  StNaNsState& stale_nan_state,
                                                                  Primitives::Timestamp def_timestamp) {
-    assert(number_of_shards_ > 0);
-
-    const size_t n =
-        std::min(static_cast<size_t>(hashdex.size()), static_cast<size_t>((hashdex.size() * (1 - cache.part_of_drops()) * 1.1) / number_of_shards_));
-    for (uint16_t i = 0; i < number_of_shards_; ++i) {
-      shards_inner_series[i]->reserve(n);
-    }
-
-    size_t samples_count{0};
-
-    for (const auto& item : hashdex) {
-      if ((item.hash() % number_of_shards_) != shard_id_) {
-        continue;
-      }
-
-      timeseries_buf_.clear();
-      item.read(timeseries_buf_);
+    bool result{true};
+    size_t samples_count{};
+    fill_inner_series(hashdex, hashdex.begin(), shards_inner_series, [&](auto& item) {
       Cache::CheckResult check_result = cache.check(input_lss, target_lss, timeseries_buf_.label_set(), item.hash());
       switch (check_result.status) {
         case Cache::CheckResult::kNotFound: {
+          result = false;
           return false;
         };
+
         case Cache::CheckResult::kKeep: {
           auto& samples = timeseries_buf_.samples();
           const bool all_samples_reseted_to_scrape_ts = resolve_timestamps(def_timestamp, samples, options);
           if (options.track_timestamps_staleness || all_samples_reseted_to_scrape_ts) {
             stale_nan_state.add_target(check_result.ls_id);
           }
-          for (const Primitives::Sample& sample : samples) {
-            shards_inner_series[shard_id_]->emplace_back(sample, check_result.ls_id);
-          }
 
+          shards_inner_series[shard_id_]->emplace_back(samples, check_result.ls_id);
           break;
         }
+
         case Cache::CheckResult::kRelabel: {
           auto& samples = timeseries_buf_.samples();
           const bool all_samples_reseted_to_scrape_ts = resolve_timestamps(def_timestamp, samples, options);
           if (options.track_timestamps_staleness || all_samples_reseted_to_scrape_ts) {
             stale_nan_state.add_input(check_result.source_ls_id);
           }
-          for (const Primitives::Sample& sample : samples) {
-            shards_inner_series[check_result.shard_id]->emplace_back(sample, check_result.ls_id);
-          }
 
+          shards_inner_series[check_result.shard_id]->emplace_back(samples, check_result.ls_id);
           break;
         }
-        default:
-          continue;
+
+        default: {
+          return true;
+        }
       }
 
       stats.samples_added += timeseries_buf_.samples().size();
 
-      if (options.metric_limits == nullptr) {
-        continue;
+      if (options.metric_limits != nullptr) {
+        samples_count += non_stale_nan_samples_count(timeseries_buf_.samples());
+        if (options.metric_limits->samples_limit_exceeded(samples_count)) {
+          return false;
+        }
       }
 
-      samples_count += calculate_samples(timeseries_buf_.samples());
-      if (options.metric_limits->samples_limit_exceeded(samples_count)) {
-        break;
-      }
+      return true;
+    });
+
+    if (result) {
+      add_stale_nans(cache, shards_inner_series, stale_nan_state, def_timestamp);
     }
 
-    const Primitives::Sample smpl{def_timestamp, kStaleNan};
-    stale_nan_state.swap(
-        [&](uint32_t ls_id) {
-          if (const auto res = cache.check_input(ls_id); res.status == Cache::CheckResult::kRelabel) {
-            shards_inner_series[res.shard_id]->emplace_back(smpl, res.ls_id);
-          }
-        },
-        [&](uint32_t ls_id) {
-          if (const auto res = cache.check_target(ls_id); res.status == Cache::CheckResult::kKeep) {
-            shards_inner_series[shard_id_]->emplace_back(smpl, res.ls_id);
-          }
-        });
-
-    return true;
+    return result;
   }
 
   template <class InputLSS, class TargetLSS, hashdex::HashdexInterface Hashdex, class StNaNsState, class Stats>
@@ -1062,42 +1030,22 @@ class PerGoroutineRelabeler {
                                                       Primitives::Go::SliceView<RelabeledSeries*>& shards_relabeled_series,
                                                       StNaNsState& stale_nan_state,
                                                       Primitives::Timestamp def_timestamp) {
-    assert(number_of_shards_ > 0);
-
-    const size_t n =
-        std::min(static_cast<size_t>(hashdex.size()), static_cast<size_t>((hashdex.size() * (1 - cache.part_of_drops()) * 1.1) / number_of_shards_));
-    for (uint16_t i = 0; i < number_of_shards_; ++i) {
-      if (shards_inner_series[i]->size() >= n) {
-        continue;
-      }
-
-      shards_inner_series[i]->reserve(n);
-    }
-
-    size_t samples_count{0};
-
-    for (auto it = skip_shard_inner_series(hashdex, shards_inner_series[shard_id_]->size()); it != hashdex.end(); ++it) {
-      if ((it->hash() % number_of_shards_) != shard_id_) {
-        continue;
-      }
-
-      timeseries_buf_.clear();
-      it->read(timeseries_buf_);
-
-      Cache::CheckResult check_result = cache.check(input_lss, target_lss, timeseries_buf_.label_set(), it->hash());
+    size_t samples_count{};
+    fill_inner_series(hashdex, skip_shard_inner_series(hashdex, shards_inner_series[shard_id_]->size()), shards_inner_series, [&](auto& item) {
+      Cache::CheckResult check_result = cache.check(input_lss, target_lss, timeseries_buf_.label_set(), item.hash());
       switch (check_result.status) {
         case Cache::CheckResult::kNotFound: {
           builder_.reset(timeseries_buf_.label_set());
           switch (relabel(options, stateless_relabeler, builder_)) {
             case rsDrop:
             case rsInvalid: {
-              cache.add_drop(input_lss.find_or_emplace(timeseries_buf_.label_set(), it->hash()));
+              cache.add_drop(input_lss.find_or_emplace(timeseries_buf_.label_set(), item.hash()));
               ++stats.series_drop;
-
-              continue;
+              return true;
             }
+
             case rsKeep: {
-              auto ls_id = target_lss.find_or_emplace(timeseries_buf_.label_set(), it->hash());
+              auto ls_id = target_lss.find_or_emplace(timeseries_buf_.label_set(), item.hash());
               cache.add_keep(ls_id);
               auto& samples = timeseries_buf_.samples();
               const bool all_samples_reseted_to_scrape_ts = resolve_timestamps(def_timestamp, samples, options);
@@ -1105,16 +1053,14 @@ class PerGoroutineRelabeler {
                 stale_nan_state.add_target(ls_id);
               }
 
-              for (const Primitives::Sample& sample : samples) {
-                shards_inner_series[shard_id_]->emplace_back(sample, ls_id);
-              }
-
+              shards_inner_series[shard_id_]->emplace_back(samples, ls_id);
               ++stats.series_added;
 
               break;
             }
+
             case rsRelabel: {
-              auto ls_id = input_lss.find_or_emplace(timeseries_buf_.label_set(), it->hash());
+              auto ls_id = input_lss.find_or_emplace(timeseries_buf_.label_set(), item.hash());
               const auto& new_label_set = builder_.label_set();
               size_t new_hash = hash_value(new_label_set);
               const size_t new_shard_id = new_hash % number_of_shards_;
@@ -1133,6 +1079,7 @@ class PerGoroutineRelabeler {
 
           break;
         }
+
         case Cache::CheckResult::kKeep: {
           auto& samples = timeseries_buf_.samples();
           const bool all_samples_reseted_to_scrape_ts = resolve_timestamps(def_timestamp, samples, options);
@@ -1140,52 +1087,39 @@ class PerGoroutineRelabeler {
             stale_nan_state.add_target(check_result.ls_id);
           }
 
-          for (const Primitives::Sample& sample : samples) {
-            shards_inner_series[shard_id_]->emplace_back(sample, check_result.ls_id);
-          }
-
+          shards_inner_series[shard_id_]->emplace_back(samples, check_result.ls_id);
           break;
         }
+
         case Cache::CheckResult::kRelabel: {
           auto& samples = timeseries_buf_.samples();
           const bool all_samples_reseted_to_scrape_ts = resolve_timestamps(def_timestamp, samples, options);
           if (options.track_timestamps_staleness || all_samples_reseted_to_scrape_ts) {
             stale_nan_state.add_input(check_result.source_ls_id);
           }
-          for (const Primitives::Sample& sample : samples) {
-            shards_inner_series[check_result.shard_id]->emplace_back(sample, check_result.ls_id);
-          }
 
+          shards_inner_series[check_result.shard_id]->emplace_back(samples, check_result.ls_id);
           break;
         }
-        default:
-          continue;
+
+        default: {
+          break;
+        }
       }
 
       stats.samples_added += timeseries_buf_.samples().size();
 
-      if (options.metric_limits == nullptr) {
-        continue;
+      if (options.metric_limits != nullptr) {
+        samples_count += non_stale_nan_samples_count(timeseries_buf_.samples());
+        if (options.metric_limits->samples_limit_exceeded(samples_count)) {
+          return false;
+        }
       }
 
-      samples_count += calculate_samples(timeseries_buf_.samples());
-      if (options.metric_limits->samples_limit_exceeded(samples_count)) {
-        break;
-      }
-    }
+      return true;
+    });
 
-    const Primitives::Sample smpl{def_timestamp, kStaleNan};
-    stale_nan_state.swap(
-        [&](uint32_t ls_id) {
-          if (const auto res = cache.check_input(ls_id); res.status == Cache::CheckResult::kRelabel) {
-            shards_inner_series[res.shard_id]->emplace_back(smpl, res.ls_id);
-          }
-        },
-        [&](uint32_t ls_id) {
-          if (const auto res = cache.check_target(ls_id); res.status == Cache::CheckResult::kKeep) {
-            shards_inner_series[shard_id_]->emplace_back(smpl, res.ls_id);
-          }
-        });
+    add_stale_nans(cache, shards_inner_series, stale_nan_state, def_timestamp);
     cache.optimize();
   }
 
@@ -1324,53 +1258,17 @@ class PerGoroutineRelabeler {
                                                         const Hashdex& hashdex,
                                                         Stats& stats,
                                                         Primitives::Go::SliceView<InnerSeries*>& shards_inner_series) {
-    assert(number_of_shards_ > 0);
+    fill_inner_series(hashdex, skip_shard_inner_series(hashdex, shards_inner_series[shard_id_]->size()), shards_inner_series, [&](auto& item) {
+      const auto previous_size = target_lss.size();
+      auto ls_id = target_lss.find_or_emplace(timeseries_buf_.label_set(), item.hash());
+      shards_inner_series[shard_id_]->emplace_back(timeseries_buf_.samples(), ls_id);
 
-    const size_t n = std::min(static_cast<size_t>(hashdex.size()), static_cast<size_t>((hashdex.size() * 1.1) / number_of_shards_));
-    for (uint16_t i = 0; i < number_of_shards_; ++i) {
-      if (shards_inner_series[i]->size() >= n) {
-        continue;
+      if (target_lss.size() > previous_size) {
+        ++stats.series_added;
       }
-
-      shards_inner_series[i]->reserve(n);
-    }
-
-    for (auto it = skip_shard_inner_series(hashdex, shards_inner_series[shard_id_]->size()); it != hashdex.end(); ++it) {
-      if ((it->hash() % number_of_shards_) != shard_id_) {
-        continue;
-      }
-
-      timeseries_buf_.clear();
-      it->read(timeseries_buf_);
-
-      const auto check_result = check_target_lss(target_lss, timeseries_buf_.label_set(), it->hash());
-      switch (check_result.status) {
-        case Cache::CheckResult::kNotFound: {
-          builder_.reset(timeseries_buf_.label_set());
-          auto ls_id = target_lss.find_or_emplace(timeseries_buf_.label_set(), it->hash());
-          for (const Primitives::Sample& sample : timeseries_buf_.samples()) {
-            shards_inner_series[shard_id_]->emplace_back(sample, ls_id);
-          }
-
-          ++stats.series_added;
-
-          break;
-        }
-
-        case Cache::CheckResult::kKeep: {
-          for (const Primitives::Sample& sample : timeseries_buf_.samples()) {
-            shards_inner_series[shard_id_]->emplace_back(sample, check_result.ls_id);
-          }
-
-          break;
-        }
-
-        default:
-          continue;
-      }
-
       stats.samples_added += timeseries_buf_.samples().size();
-    }
+      return true;
+    });
   }
 
   // input_transition_relabeling_from_cache transparent relabeling with only reading from the lss.
@@ -1379,43 +1277,19 @@ class PerGoroutineRelabeler {
                                                                   const Hashdex& hashdex,
                                                                   Stats& stats,
                                                                   Primitives::Go::SliceView<InnerSeries*>& shards_inner_series) {
-    assert(number_of_shards_ > 0);
-
-    const size_t n = std::min(static_cast<size_t>(hashdex.size()), static_cast<size_t>((hashdex.size() * 1.1) / number_of_shards_));
-    for (uint16_t i = 0; i < number_of_shards_; ++i) {
-      shards_inner_series[i]->reserve(n);
-    }
-
-    for (const auto& item : hashdex) {
-      if ((item.hash() % number_of_shards_) != shard_id_) {
-        continue;
+    bool result = true;
+    fill_inner_series(hashdex, hashdex.begin(), shards_inner_series, [&](auto& item) {
+      if (auto ls_id = target_lss.find(timeseries_buf_.label_set(), item.hash()); ls_id.has_value()) {
+        shards_inner_series[shard_id_]->emplace_back(timeseries_buf_.samples(), *ls_id);
+        stats.samples_added += timeseries_buf_.samples().size();
+        return true;
       }
 
-      timeseries_buf_.clear();
-      item.read(timeseries_buf_);
+      result = false;
+      return false;
+    });
 
-      const auto check_result = check_target_lss(target_lss, timeseries_buf_.label_set(), item.hash());
-      switch (check_result.status) {
-        case Cache::CheckResult::kNotFound: {
-          return false;
-        };
-
-        case Cache::CheckResult::kKeep: {
-          for (const Primitives::Sample& sample : timeseries_buf_.samples()) {
-            shards_inner_series[shard_id_]->emplace_back(sample, check_result.ls_id);
-          }
-
-          break;
-        }
-
-        default:
-          continue;
-      }
-
-      stats.samples_added += timeseries_buf_.samples().size();
-    }
-
-    return true;
+    return result;
   }
 
   // second stage
@@ -1433,13 +1307,51 @@ class PerGoroutineRelabeler {
 
     for (const auto& relabeled_serie : relabeled_series->data()) {
       uint32_t ls_id = target_lss.find_or_emplace(relabeled_serie.ls, relabeled_serie.hash);
-
-      for (const Primitives::Sample& sample : relabeled_serie.samples) {
-        inner_series->emplace_back(sample, ls_id);
-      }
-
+      inner_series->emplace_back(relabeled_serie.samples, ls_id);
       relabeler_state_update->emplace_back(relabeled_serie.ls_id, ls_id);
     }
+  }
+
+  template <hashdex::HashdexInterface Hashdex, class Handler>
+  void fill_inner_series(const Hashdex& hashdex, auto hashdex_it, Primitives::Go::SliceView<InnerSeries*>& shards_inner_series, Handler handler) {
+    assert(number_of_shards_ > 0);
+
+    const size_t n = std::min(static_cast<size_t>(hashdex.size()), static_cast<size_t>((hashdex.size() * 1.1) / number_of_shards_));
+    for (uint16_t i = 0; i < number_of_shards_; ++i) {
+      shards_inner_series[i]->reserve(n);
+    }
+
+    for (; hashdex_it != hashdex.end(); ++hashdex_it) {
+      if ((hashdex_it->hash() % number_of_shards_) != shard_id_) {
+        continue;
+      }
+
+      timeseries_buf_.clear();
+      hashdex_it->read(timeseries_buf_);
+
+      if (!handler(*hashdex_it)) {
+        break;
+      }
+    }
+  }
+
+  template <class StNaNsState>
+  PROMPP_ALWAYS_INLINE void add_stale_nans(Cache& cache,
+                                           Primitives::Go::SliceView<InnerSeries*>& shards_inner_series,
+                                           StNaNsState& stale_nan_state,
+                                           Primitives::Timestamp def_timestamp) {
+    const Primitives::Sample smpl{def_timestamp, kStaleNan};
+    stale_nan_state.swap(
+        [&](uint32_t ls_id) {
+          if (const auto res = cache.check_input(ls_id); res.status == Cache::CheckResult::kRelabel) {
+            shards_inner_series[res.shard_id]->emplace_back(smpl, res.ls_id);
+          }
+        },
+        [&](uint32_t ls_id) {
+          if (const auto res = cache.check_target(ls_id); res.status == Cache::CheckResult::kKeep) {
+            shards_inner_series[shard_id_]->emplace_back(smpl, res.ls_id);
+          }
+        });
   }
 };
 
