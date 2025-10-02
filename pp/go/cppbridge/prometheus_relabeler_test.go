@@ -1465,8 +1465,13 @@ func TestStateV2Suite(t *testing.T) {
 	suite.Run(t, new(StateV2Suite))
 }
 
-func (s *StateV2Suite) TestHappyPath() {
+func (s *StateV2Suite) TestInitState() {
 	state := cppbridge.NewStateV2()
 
-	s.T().Log(state.IsTransition())
+	s.Panics(func() { state.CacheByShard(0) })
+	s.Equal(time.Now().UnixMilli(), state.DefTimestamp())
+	s.False(state.IsTransition())
+	s.Equal(cppbridge.RelabelerOptions{}, state.RelabelerOptions())
+	s.Panics(func() { state.StaleNansStateByShard(0) })
+	s.False(state.TrackStaleness())
 }

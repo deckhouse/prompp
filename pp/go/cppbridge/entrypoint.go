@@ -1527,6 +1527,48 @@ func primitivesLSSCreateReadonlyLss(lss uintptr) uintptr {
 	return res.lss
 }
 
+// primitivesLSSBitsetSeries returns a copy of the bitset of added series from the lss.
+func primitivesLSSBitsetSeries(lss uintptr) uintptr {
+	args := struct {
+		lss uintptr
+	}{lss}
+	var res struct {
+		bitset uintptr
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_lss_bitset_series,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.bitset
+}
+
+// primitivesLSSBitsetDtor destroy bitset of added series.
+func primitivesLSSBitsetDtor(bitset uintptr) {
+	args := struct {
+		bitset uintptr
+	}{bitset}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_lss_bitset_dtor,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+// primitivesReadonlyLSSCopyAddedSeries copy the label sets from the source lss to the destination lss
+// that were added source lss.
+func primitivesReadonlyLSSCopyAddedSeries(source, sourceBitset, destination uintptr) {
+	C.prompp_primitives_readonly_lss_copy_added_series(
+		C.uint64_t(source),
+		C.uint64_t(sourceBitset),
+		C.uint64_t(destination),
+	)
+}
+
 func primitivesLSSCopyAddedSeries(source, destination uintptr) {
 	C.prompp_primitives_lss_copy_added_series(C.uint64_t(source), C.uint64_t(destination))
 }

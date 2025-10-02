@@ -665,6 +665,41 @@ void prompp_create_readonly_lss(void* args, void* res);
  */
 void prompp_primitives_lss_copy_added_series(uint64_t source_lss, uint64_t destination_lss);
 
+/**
+ * @brief returns a copy of the bitset of added series from the lss.
+ *
+ * @param args {
+ *    lss              uintptr  // pointer to constructed queryable lss;
+ * }
+ *
+ * @param res {
+ *     bitset          uintptr  // bitset of added series;
+ * }
+ */
+void prompp_primitives_lss_bitset_series(void* args, void* res);
+
+/**
+ * @brief destroy bitset of added series.
+ *
+ * @param args {
+ *     bitset          uintptr  // bitset of added series;
+ * }
+ *
+ */
+void prompp_primitives_lss_bitset_dtor(void* args);
+
+/**
+ * @brief Copy the label sets from the source lss to the destination lss that were added source lss.
+ *
+ * @param source_lss pointer to source label sets;
+ * @param source_bitset pointer to source bitset;
+ * @param destination_lss pointer to destination label sets;
+ *
+ * @attention This binding used as a CGO call!!!
+ *
+ */
+void prompp_primitives_readonly_lss_copy_added_series(uint64_t source_lss, uint64_t source_bitset, uint64_t destination_lss);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

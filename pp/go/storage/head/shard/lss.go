@@ -35,11 +35,14 @@ func (l *LSS) AllocatedMemory() uint64 {
 	return am
 }
 
-// CopyAddedSeries copy label sets which were added via FindOrEmplace to destination.
-func (l *LSS) CopyAddedSeries(destination *LSS) {
+// CopyAddedSeriesTo copy the label sets from the source lss to the destination lss that were added source lss.
+func (l *LSS) CopyAddedSeriesTo(destination *LSS) {
 	l.locker.RLock()
-	l.target.CopyAddedSeries(destination.target)
+	snapshot := l.getSnapshot()
+	bitsetSeries := l.target.BitsetSeries()
 	l.locker.RUnlock()
+
+	snapshot.CopyAddedSeries(bitsetSeries, destination.target)
 }
 
 // Input returns input lss.

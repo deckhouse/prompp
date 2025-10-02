@@ -21,8 +21,10 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/block"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/container"
+	"github.com/prometheus/prometheus/pp/go/storage/head/head"
 	"github.com/prometheus/prometheus/pp/go/storage/head/keeper"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/storage/mediator"
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/ready"
@@ -50,9 +52,6 @@ const (
 )
 
 var (
-	// CopySeriesOnRotate copy active series from the current head to the new head during rotation.
-	CopySeriesOnRotate = false
-
 	// UnloadDataStorage flags for unloading [DataStorage].
 	UnloadDataStorage = false
 
@@ -314,6 +313,7 @@ func (m *Manager) initServices(
 				m.rotatorMediator,
 				m.cfg,
 				&headInformer{catalog: hcatalog},
+				head.CopyAddedSeries[*ShardOnDisk, *PerGoroutineShard](shard.CopyAddedSeries),
 				r,
 			).Execute(rotatorCtx)
 		},
