@@ -147,6 +147,50 @@ func (s *MediatorSuite) TestTrigger() {
 	cancel()
 
 	s.Equal(1, counter)
+	s.Empty(timer.ResetCalls())
+}
+
+func (s *MediatorSuite) TestTriggerWithResetTimer() {
+	chTimer := make(chan time.Time, 1)
+
+	timer := &TimerMock{
+		ChanFunc: func() <-chan time.Time {
+			return chTimer
+		},
+		ResetFunc: func() {},
+		StopFunc:  func() {},
+	}
+
+	m := mediator.NewMediator(timer)
+	defer m.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	counter := 0
+	done := make(chan struct{})
+	start := sync.WaitGroup{}
+	start.Add(1)
+	go func() {
+		start.Done()
+		select {
+		case <-m.C():
+			counter++
+			close(done)
+		case <-ctx.Done():
+		}
+	}()
+
+	start.Wait()
+	s.T().Log("trigger with reset timer")
+	m.TriggerWithResetTimer()
+
+	select {
+	case <-done:
+	case <-ctx.Done():
+	}
+	cancel()
+
+	s.Equal(1, counter)
+	s.Len(timer.ResetCalls(), 1)
 }
 
 func (s *MediatorSuite) TestTriggerSkip() {
