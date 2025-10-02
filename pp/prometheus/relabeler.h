@@ -29,8 +29,13 @@ struct MetricLimits {
   size_t sample_limit{0};
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool label_limit_exceeded(size_t labels_count) const { return label_limit > 0 && labels_count > label_limit; }
-
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool samples_limit_exceeded(size_t samples_count) const { return sample_limit > 0 && samples_count >= sample_limit; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool label_name_length_limit_exceeded(size_t label_name_length) const {
+    return label_name_length_limit > 0 && label_name_length > label_name_length_limit;
+  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool label_value_length_limit_exceeded(size_t label_value_length) const {
+    return label_value_length_limit > 0 && label_value_length > label_value_length_limit;
+  }
 };
 
 // hard_validate on empty, name label(__name__) mandatory, valid label name and value) validate label set.
@@ -54,12 +59,16 @@ PROMPP_ALWAYS_INLINE void hard_validate(relabelStatus& rstatus, LabelsBuilder& b
 
   // validate labels
   builder.range([&](const auto& lname, const auto& lvalue) PROMPP_LAMBDA_INLINE -> bool {
-    if (lname == kMetricLabelName && !metric_name_value_is_valid(lvalue)) {
-      rstatus = rsInvalid;
-      return false;
+    if (lname == kMetricLabelName) [[unlikely]] {
+      if (!metric_name_value_is_valid(lvalue)) [[unlikely]] {
+        rstatus = rsInvalid;
+        return false;
+      }
+
+      return true;
     }
 
-    if (!label_name_is_valid(lname) || !label_value_is_valid(lvalue)) {
+    if (!label_name_is_valid(lname) || !label_value_is_valid(lvalue)) [[unlikely]] {
       rstatus = rsInvalid;
       return false;
     }
@@ -86,12 +95,12 @@ PROMPP_ALWAYS_INLINE void hard_validate(relabelStatus& rstatus, LabelsBuilder& b
 
   // check limit len label name and value
   builder.range([&](const auto& lname, auto& lvalue) PROMPP_LAMBDA_INLINE -> bool {
-    if (limits->label_name_length_limit > 0 && lname.size() > limits->label_name_length_limit) {
+    if (limits->label_name_length_limit_exceeded(lname.size())) {
       rstatus = rsInvalid;
       return false;
     }
 
-    if (limits->label_value_length_limit > 0 && lvalue.size() > limits->label_value_length_limit) {
+    if (limits->label_value_length_limit_exceeded(lvalue.size())) {
       rstatus = rsInvalid;
       return false;
     }
