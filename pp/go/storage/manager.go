@@ -184,7 +184,12 @@ func NewManager(
 		mediator.NewConstantIntervalTimer(clock, defaultStartPersistnerInterval, DefaultPersistDuration),
 	)
 
-	hKeeper := keeper.NewKeeper[HeadOnDisk](o.KeeperCapacity, persistenerMediator.Trigger, removedHeadNotifier)
+	hKeeper := keeper.NewKeeper[HeadOnDisk](
+		o.KeeperCapacity,
+		persistenerMediator.TriggerWithResetTimer,
+		removedHeadNotifier,
+	)
+
 	m := &Manager{
 		g:      run.Group{},
 		closer: util.NewCloser(),
