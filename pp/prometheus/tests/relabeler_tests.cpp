@@ -90,7 +90,7 @@ static_assert(PromPP::Prometheus::hashdex::HashdexInterface<HashdexTest>);
 
 struct HardValidateCase {
   LabelViewSet labels;
-  std::optional<MetricLimits> limits;
+  std::optional<MetricLimits> limits{std::nullopt};
   relabelStatus expected;
 };
 
