@@ -49,20 +49,25 @@ struct RelabelConfig {
   uint8_t action{0};
 };
 
-struct ItemTest {
-  size_t hash_;
-  LabelViewSet labelview_set_;
-  std::vector<Sample> samples_;
+class ItemTest {
+ public:
+  ItemTest(LabelViewSet&& label_set, std::vector<Sample>&& samples)
+      : label_set_(std::move(label_set)), samples_(std::move(samples)), hash_(hash_value(label_set_)) {}
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t hash() const { return hash_; }
 
   template <class Timeseries>
   PROMPP_ALWAYS_INLINE void read(Timeseries& timeseries) const {
-    timeseries.label_set().add(labelview_set_);
+    timeseries.label_set().add(label_set_);
     for (const auto& sample : samples_) {
       timeseries.samples().emplace_back(sample.timestamp(), sample.value());
     }
   }
+
+ private:
+  LabelViewSet label_set_;
+  std::vector<Sample> samples_;
+  size_t hash_;
 };
 
 class HashdexTest : public std::vector<ItemTest> {
@@ -70,6 +75,8 @@ class HashdexTest : public std::vector<ItemTest> {
 
  public:
   using Base::Base;
+
+  void emplace_back(LabelViewSet&& label_set, std::vector<Sample>&& samples) { Base::emplace_back(std::move(label_set), std::move(samples)); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& metrics() const noexcept { return *this; }
   [[nodiscard]] static PROMPP_ALWAYS_INLINE auto metadata() noexcept {
@@ -80,88 +87,52 @@ class HashdexTest : public std::vector<ItemTest> {
 
 static_assert(PromPP::Prometheus::hashdex::HashdexInterface<HashdexTest>);
 
-PROMPP_ALWAYS_INLINE void make_hashdex(HashdexTest& hx, const LabelViewSet& label_set, std::initializer_list<Sample> samples) {
-  hx.clear();
-  hx.emplace_back(hash_value(label_set), label_set, samples);
-}
+struct HardValidateCase {
+  LabelViewSet labels;
+  std::optional<MetricLimits> limits;
+  relabelStatus expected;
+};
 
-
-class HardValidateFixture : public testing::Test {
+class HardValidateFixture : public testing::TestWithParam<HardValidateCase> {
  protected:
   LabelsBuilder builder_;
   relabelStatus rstatus_{rsKeep};
 };
 
-TEST_F(HardValidateFixture, Valid) {
+TEST_P(HardValidateFixture, Test) {
   // Arrange
-  builder_.reset(LabelViewSet{{"__name__", "value"}, {"job", "abc"}});
+  builder_.reset(GetParam().labels);
 
   // Act
-  hard_validate(rstatus_, builder_, nullptr);
+  hard_validate(rstatus_, builder_, GetParam().limits ? &GetParam().limits.value() : nullptr);
 
   // Assert
-  EXPECT_EQ(rsKeep, rstatus_);
+  EXPECT_EQ(GetParam().expected, rstatus_);
 }
 
-TEST_F(HardValidateFixture, Invalid) {
-  // Arrange
-  builder_.reset(LabelViewSet{{"__value__", "value"}, {"job", "abc"}});
-
-  // Act
-  hard_validate(rstatus_, builder_, nullptr);
-
-  // Assert
-  EXPECT_EQ(rsInvalid, rstatus_);
-}
-
-TEST_F(HardValidateFixture, NoLimit) {
-  // Arrange
-  builder_.reset(LabelViewSet{{"__name__", "value"}, {"job", "abc"}, {"jub", "buj"}});
-  MetricLimits ll{};
-
-  // Act
-  hard_validate(rstatus_, builder_, &ll);
-
-  // Assert
-  EXPECT_EQ(rsKeep, rstatus_);
-}
-
-TEST_F(HardValidateFixture, LabelCountLimitExceeded) {
-  // Arrange
-  builder_.reset(LabelViewSet{{"__name__", "value"}, {"job", "abc"}, {"jub", "buj"}});
-  MetricLimits ll{.label_limit = 2};
-
-  // Act
-  hard_validate(rstatus_, builder_, &ll);
-
-  // Assert
-  EXPECT_EQ(rsInvalid, rstatus_);
-}
-
-TEST_F(HardValidateFixture, LabelNameLengthLimitExceeded) {
-  // Arrange
-  builder_.reset(LabelViewSet{{"__name__", "value"}, {"job", "abc"}, {"jub", "buj"}});
-  MetricLimits ll{.label_name_length_limit = 3};
-
-  // Act
-  hard_validate(rstatus_, builder_, &ll);
-
-  // Assert
-  EXPECT_EQ(rsInvalid, rstatus_);
-}
-
-TEST_F(HardValidateFixture, LabelValueLengthLimitExceeded) {
-  // Arrange
-  builder_.reset(LabelViewSet{{"__name__", "value"}, {"job", "abc"}, {"jub", "buj"}});
-  MetricLimits ll{.label_value_length_limit = 3};
-
-  // Act
-  hard_validate(rstatus_, builder_, &ll);
-
-  // Assert
-  EXPECT_EQ(rsInvalid, rstatus_);
-}
-
+INSTANTIATE_TEST_SUITE_P(Valid, HardValidateFixture, testing::Values(HardValidateCase{.labels = {{"__name__", "value"}, {"job", "abc"}}, .expected = rsKeep}));
+INSTANTIATE_TEST_SUITE_P(Invalid,
+                         HardValidateFixture,
+                         testing::Values(HardValidateCase{.labels = {{"__value__", "value"}, {"job", "abc"}}, .expected = rsInvalid}));
+INSTANTIATE_TEST_SUITE_P(
+    NoLimit,
+    HardValidateFixture,
+    testing::Values(HardValidateCase{.labels = {{"__name__", "value"}, {"job", "abc"}, {"jub", "buj"}}, .limits = MetricLimits{}, .expected = rsKeep}));
+INSTANTIATE_TEST_SUITE_P(LabelCountLimitExceeded,
+                         HardValidateFixture,
+                         testing::Values(HardValidateCase{.labels = {{"__name__", "value"}, {"job", "abc"}, {"jub", "buj"}},
+                                                          .limits = MetricLimits{.label_limit = 2},
+                                                          .expected = rsInvalid}));
+INSTANTIATE_TEST_SUITE_P(LabelNameLengthLimitExceeded,
+                         HardValidateFixture,
+                         testing::Values(HardValidateCase{.labels = {{"__name__", "value"}, {"job", "abc"}, {"jub", "buj"}},
+                                                          .limits = MetricLimits{.label_name_length_limit = 3},
+                                                          .expected = rsInvalid}));
+INSTANTIATE_TEST_SUITE_P(LabelValueLengthLimitExceeded,
+                         HardValidateFixture,
+                         testing::Values(HardValidateCase{.labels = {{"__name__", "value"}, {"job", "abc"}, {"jub", "buj"}},
+                                                          .limits = MetricLimits{.label_value_length_limit = 3},
+                                                          .expected = rsInvalid}));
 
 struct Stats {
   uint32_t samples_added{0};
@@ -231,7 +202,7 @@ TEST_F(PerShardRelabelerFixture, KeepOnNotFoundInCache) {
   RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
   StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
   PerShardRelabeler relabeler(external_labels_, &stateless_relabeler, kNumberOfShards, 1);
-  make_hashdex(hx_, {{"__name__", "value"}, {"job", "abc"}}, {{1000, 0.1}});
+  hx_.emplace_back({{"__name__", "value"}, {"job", "abc"}}, {{1000, 0.1}});
 
   // Act
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_);
@@ -249,7 +220,7 @@ TEST_F(PerShardRelabelerFixture, InnerSeriesAlreadyAdded) {
   RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
   StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
   PerShardRelabeler relabeler(external_labels_, &stateless_relabeler, kNumberOfShards, 1);
-  make_hashdex(hx_, {{"__name__", "value"}, {"job", "abc"}}, {{1000, 0.1}});
+  hx_.emplace_back({{"__name__", "value"}, {"job", "abc"}}, {{1000, 0.1}});
 
   // Act
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_);
@@ -268,7 +239,7 @@ TEST_F(PerShardRelabelerFixture, KeepOnFoundInCache) {
   RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
   StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
   PerShardRelabeler relabeler(external_labels_, &stateless_relabeler, kNumberOfShards, 1);
-  make_hashdex(hx_, {{"__name__", "value"}, {"job", "abc"}}, {{1000, 0.1}});
+  hx_.emplace_back({{"__name__", "value"}, {"job", "abc"}}, {{1000, 0.1}});
 
   // Act
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_);
@@ -288,7 +259,7 @@ TEST_F(PerShardRelabelerFixture, KeepNotEqual) {
   RelabelConfig config{.source_labels = {{"job"}}, .regex = "no-match", .action = rKeep};
   StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
   PerShardRelabeler relabeler(external_labels_, &stateless_relabeler, kNumberOfShards, 1);
-  make_hashdex(hx_, {{"__name__", "value"}, {"job", "abc"}}, {{1000, 0.1}});
+  hx_.emplace_back({{"__name__", "value"}, {"job", "abc"}}, {{1000, 0.1}});
 
   // Act
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_);
@@ -306,12 +277,12 @@ TEST_F(PerShardRelabelerFixture, KeepEqualThenNotEqual) {
   RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
   StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
   PerShardRelabeler relabeler(external_labels_, &stateless_relabeler, 2, 1);
-  make_hashdex(hx_, {{"__name__", "value"}, {"job", "abc"}}, {{1000, 0.1}});
+  hx_.emplace_back({{"__name__", "value"}, {"job", "abc"}}, {{1000, 0.1}});
 
   // Act
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_);
   reset();
-  make_hashdex(hx_, {{"__name__", "value"}, {"job", "abcd"}}, {{1000, 0.1}});
+  hx_ = HashdexTest{{{{"__name__", "value"}, {"job", "abcd"}}, {{1000, 0.1}}}};
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_);
 
   // Assert
@@ -328,7 +299,7 @@ TEST_F(PerShardRelabelerFixture, ReplaceToNewLS2) {
       .source_labels = {{"__name__"}}, .separator = ";", .regex = ".*(o).*", .target_label = "replaced", .replacement = "$1", .action = rReplace};
   StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
   PerShardRelabeler relabeler(external_labels_, &stateless_relabeler, kNumberOfShards, 1);
-  make_hashdex(hx_, {{"__name__", "booom"}, {"jab", "baj"}, {"job", "baj"}}, {{1000, 0.1}});
+  hx_.emplace_back({{"__name__", "booom"}, {"jab", "baj"}, {"job", "baj"}}, {{1000, 0.1}});
 
   RelabelerStateUpdate update_data;
 
@@ -351,7 +322,7 @@ TEST_F(PerShardRelabelerFixture, ReplaceToNewLS3) {
   RelabelConfig config{.separator = ";", .regex = ".*", .target_label = "replaced", .replacement = "blabla", .action = rReplace};
   StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
   PerShardRelabeler relabeler(external_labels_, &stateless_relabeler, 2, 1);
-  make_hashdex(hx_, {{"__name__", "booom"}, {"jab", "baj"}, {"job", "baj"}}, {{1000, 0.1}});
+  hx_.emplace_back({{"__name__", "booom"}, {"jab", "baj"}, {"job", "baj"}}, {{1000, 0.1}});
 
   RelabelerStateUpdate update_data;
 
@@ -375,7 +346,7 @@ TEST_F(PerShardRelabelerFixture, InputRelabelingWithStalenans_Default) {
   RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
   StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
   PerShardRelabeler relabeler(external_labels_, &stateless_relabeler, 2, 1);
-  make_hashdex(hx_, {{"__name__", "value"}, {"job", "abc"}}, {{kNullTimestamp, 0.1}});
+  hx_.emplace_back({{"__name__", "value"}, {"job", "abc"}}, {{kNullTimestamp, 0.1}});
   StaleNaNsState state;
   RelabelerStateUpdate update_data;
 
@@ -400,7 +371,7 @@ TEST_F(PerShardRelabelerFixture, InputRelabelingWithStalenans_DefaultHonorTimest
   RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
   StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
   PerShardRelabeler relabeler(external_labels_, &stateless_relabeler, 2, 1);
-  make_hashdex(hx_, {{"__name__", "value"}, {"job", "abc"}}, {{kNullTimestamp, 0.1}});
+  hx_.emplace_back({{"__name__", "value"}, {"job", "abc"}}, {{kNullTimestamp, 0.1}});
   StaleNaNsState state;
   RelabelerStateUpdate update_data;
   o_.honor_timestamps = true;
@@ -426,7 +397,7 @@ TEST_F(PerShardRelabelerFixture, InputRelabelingWithStalenans_WithMetricTimestam
   RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
   StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
   PerShardRelabeler relabeler(external_labels_, &stateless_relabeler, 2, 1);
-  make_hashdex(hx_, {{"__name__", "value"}, {"job", "abc"}}, {{1712567046855, 0.1}});
+  hx_.emplace_back({{"__name__", "value"}, {"job", "abc"}}, {{1712567046855, 0.1}});
   StaleNaNsState state;
   RelabelerStateUpdate update_data;
 
@@ -451,7 +422,7 @@ TEST_F(PerShardRelabelerFixture, InputRelabelingWithStalenans_HonorTimestamps) {
   RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
   StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
   PerShardRelabeler relabeler(external_labels_, &stateless_relabeler, 2, 1);
-  make_hashdex(hx_, {{"__name__", "value"}, {"job", "abc"}}, {{1500, 0.1}});
+  hx_.emplace_back({{"__name__", "value"}, {"job", "abc"}}, {{1500, 0.1}});
   o_.honor_timestamps = true;
   StaleNaNsState state;
   RelabelerStateUpdate update_data;
@@ -476,7 +447,7 @@ TEST_F(PerShardRelabelerFixture, InputRelabelingWithStalenans_HonorTimestampsAnd
   RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
   StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
   PerShardRelabeler relabeler(external_labels_, &stateless_relabeler, 2, 1);
-  make_hashdex(hx_, {{"__name__", "value"}, {"job", "abc"}}, {{1500, 0.1}});
+  hx_.emplace_back({{"__name__", "value"}, {"job", "abc"}}, {{1500, 0.1}});
   o_.honor_timestamps = true;
   o_.track_timestamps_staleness = true;
   StaleNaNsState state;
@@ -503,7 +474,7 @@ TEST_F(PerShardRelabelerFixture, TargetLabels_HappyPath) {
   RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
   StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
   PerShardRelabeler relabeler(external_labels_, &stateless_relabeler, 2, 0);
-  make_hashdex(hx_, {{"__name__", "booom"}, {"jab", "baj"}, {"job", "abc"}}, {{1000, 0.1}});
+  hx_.emplace_back({{"__name__", "booom"}, {"jab", "baj"}, {"job", "abc"}}, {{1000, 0.1}});
   add_target_labels(LabelViewSet{{"a_name", "target_a_value"}, {"z_name", "target_z_value"}});
   RelabelerStateUpdate update_data;
 
@@ -528,7 +499,7 @@ TEST_F(PerShardRelabelerFixture, TargetLabels_ExportedLabel) {
   RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rsKeep};
   StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
   PerShardRelabeler relabeler(external_labels_, &stateless_relabeler, 2, 0);
-  make_hashdex(hx_, {{"__name__", "booom"}, {"jab", "baj"}, {"job", "abc"}}, {{1000, 0.1}});
+  hx_.emplace_back({{"__name__", "booom"}, {"jab", "baj"}, {"job", "abc"}}, {{1000, 0.1}});
   add_target_labels(LabelViewSet{{"jab", "target_a_value"}, {"z_name", "target_z_value"}});
   RelabelerStateUpdate update_data;
 
@@ -553,7 +524,7 @@ TEST_F(PerShardRelabelerFixture, TargetLabels_ExportedLabel_Honor) {
   RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rsKeep};
   StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
   PerShardRelabeler relabeler(external_labels_, &stateless_relabeler, 2, 0);
-  make_hashdex(hx_, {{"__name__", "booom"}, {"jab", "baj"}, {"job", "abc"}}, {{1000, 0.1}});
+  hx_.emplace_back({{"__name__", "booom"}, {"jab", "baj"}, {"job", "abc"}}, {{1000, 0.1}});
   add_target_labels(LabelViewSet{{"jab", "target_a_value"}, {"z_name", "target_z_value"}});
   o_.honor_labels = true;
   RelabelerStateUpdate update_data;
@@ -573,6 +544,30 @@ TEST_F(PerShardRelabelerFixture, TargetLabels_ExportedLabel_Honor) {
   EXPECT_EQ((LabelViewSet{{"__name__", "booom"}, {"jab", "baj"}, {"job", "abc"}, {"z_name", "target_z_value"}}), lss_[update_data[0].relabeled_ls_id]);
 }
 
+TEST_F(PerShardRelabelerFixture, SampleLimitExceeded) {
+  // Arrange
+  RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
+  StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
+  PerShardRelabeler relabeler(external_labels_, &stateless_relabeler, kNumberOfShards, 1);
+  hx_ = HashdexTest{
+      {{{"__name__", "value"}, {"job", "abc"}}, {{1000, kStaleNan}}},
+      {{{"__name__", "value"}, {"job", "abc"}}, {{2000, 0.1}}},
+      {{{"__name__", "value"}, {"job", "abc"}}, {{3000, 0.1}}},
+  };
+  MetricLimits limits{.sample_limit = 1};
+  o_.metric_limits = &limits;
+
+  // Act
+  relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_);
+
+  // Assert
+  EXPECT_EQ(relabeled_results_[0]->size(), 0);
+  EXPECT_EQ(relabeled_results_[1]->size(), 0);
+  EXPECT_EQ(shards_inner_series_[0]->size(), 0);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, kStaleNan), .ls_id = 0}, {.sample = Sample(2000, 0.1), .ls_id = 0}},
+                                 shards_inner_series_[1]->data()));
+  EXPECT_EQ((Stats{.samples_added = 2, .series_added = 1}), stats_);
+}
 
 class TargetLabelsFixture : public testing::Test {
  protected:

@@ -35,7 +35,7 @@ struct MetricLimits {
 
 // hard_validate on empty, name label(__name__) mandatory, valid label name and value) validate label set.
 template <class LabelsBuilder>
-PROMPP_ALWAYS_INLINE void hard_validate(relabelStatus& rstatus, LabelsBuilder& builder, MetricLimits* limits) {
+PROMPP_ALWAYS_INLINE void hard_validate(relabelStatus& rstatus, LabelsBuilder& builder, const MetricLimits* limits) {
   if (rstatus == rsDrop) {
     return;
   }
@@ -709,7 +709,7 @@ class PerShardRelabeler {
   template <class LabelsBuilder>
   PROMPP_ALWAYS_INLINE void resolve_conflicting_exposed_labels(LabelsBuilder& builder, std::vector<Primitives::Label>& conflicting_exposed_labels) {
     std::stable_sort(conflicting_exposed_labels.begin(), conflicting_exposed_labels.end(),
-                     [](Primitives::LabelView a, Primitives::LabelView b) { return a.first.size() < b.first.size(); });
+                     [](const Primitives::LabelView& a, const Primitives::LabelView& b) { return a.first.size() < b.first.size(); });
 
     for (auto& [ln, lv] : conflicting_exposed_labels) {
       while (true) {
@@ -848,8 +848,7 @@ class PerShardRelabeler {
         if (inner_serie.ls_id >= lss.size()) [[unlikely]] {
           throw BareBones::Exception(0x7763a97e1717e835, "ls_id out of range: %d size: %d shard_id: %d", inner_serie.ls_id, lss.size(), shard_id_);
         }
-        typename LSS::value_type labels = lss[inner_serie.ls_id];
-        builder_.reset(labels);
+        builder_.reset(lss[inner_serie.ls_id]);
         process_external_labels(builder_, external_labels_);
 
         relabelStatus rstatus = stateless_relabeler_->relabeling_process(buf_, builder_);
@@ -1207,7 +1206,7 @@ class PerGoroutineRelabeler {
   template <class LabelsBuilder>
   PROMPP_ALWAYS_INLINE void resolve_conflicting_exposed_labels(LabelsBuilder& builder, std::vector<Primitives::Label>& conflicting_exposed_labels) {
     std::stable_sort(conflicting_exposed_labels.begin(), conflicting_exposed_labels.end(),
-                     [](Primitives::LabelView a, Primitives::LabelView b) { return a.first.size() < b.first.size(); });
+                     [](const Primitives::LabelView& a, const Primitives::LabelView& b) { return a.first.size() < b.first.size(); });
 
     for (auto& [ln, lv] : conflicting_exposed_labels) {
       while (true) {
