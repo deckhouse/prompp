@@ -323,16 +323,6 @@ func (m *Manager) initServices(
 		},
 	)
 
-	// checks if the head is new
-	isNewHead := func(headID string) bool {
-		rec, err := hcatalog.Get(headID)
-		if err != nil {
-			return true
-		}
-
-		return clock.Now().Add(-DefaultMergeDuration).UnixMilli() < rec.CreatedAt()
-	}
-
 	// Committer
 	committerMediator := mediator.NewMediator(
 		mediator.NewConstantIntervalTimer(clock, o.CommitInterval, o.CommitInterval),
@@ -340,7 +330,11 @@ func (m *Manager) initServices(
 	committerCtx, committerCancel := context.WithCancel(baseCtx)
 	m.g.Add(
 		func() error {
-			return services.NewCommitter(m.proxy, committerMediator, isNewHead).Execute(committerCtx)
+			return services.NewCommitter(
+				m.proxy,
+				committerMediator,
+				isNewHead(clock, hcatalog, o.CommitInterval*2), // x2 double interval for skipping a new head
+			).Execute(committerCtx)
 		},
 		func(error) {
 			committerMediator.Close()
@@ -352,7 +346,11 @@ func (m *Manager) initServices(
 	mergerCtx, mergerCancel := context.WithCancel(baseCtx)
 	m.g.Add(
 		func() error {
-			return services.NewMerger(m.proxy, m.mergerMediator, isNewHead).Execute(mergerCtx)
+			return services.NewMerger(
+				m.proxy,
+				m.mergerMediator,
+				isNewHead(clock, hcatalog, DefaultMergeDuration),
+			).Execute(mergerCtx)
 		},
 		func(error) {
 			m.mergerMediator.Close()
@@ -425,6 +423,22 @@ func (hi *headInformer) SetRotatedStatus(headID string) error {
 }
 
 //
+// isNewHead
+//
+
+// isNewHead builds a checker that checks if the head is new.
+func isNewHead(clock clockwork.Clock, hcatalog *catalog.Catalog, interval time.Duration) func(headID string) bool {
+	return func(headID string) bool {
+		rec, err := hcatalog.Get(headID)
+		if err != nil {
+			return true
+		}
+
+		return clock.Now().Add(-interval).UnixMilli() < rec.CreatedAt()
+	}
+}
+
+//
 // TriggerNotifier
 //
 
@@ -455,6 +469,10 @@ func (tn *TriggerNotifier) Notify() {
 // uploadOrBuildHead
 //
 
+// uploadOrBuildHead uploads or builds a new head.
+//
+//revive:disable-next-line:function-length // long but readable.
+//revive:disable-next-line:cyclomatic // long but readable.
 func uploadOrBuildHead(
 	clock clockwork.Clock,
 	hcatalog *catalog.Catalog,
