@@ -195,8 +195,8 @@ func (a Appender[TTask, TShard, THead]) inputRelabelingStage(
 				relabeler   = shard.Relabeler()
 				shardID     = shard.ShardID()
 				ok          bool
-				innerSeries = shardedInnerSeries.DataBySourceShard(shardID)
 				shardedData = incomingData.ShardedData()
+				innerSeries = shardedInnerSeries.DataBySourceShard(shardID)
 			)
 
 			if err := shard.LSSWithRLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
@@ -223,7 +223,6 @@ func (a Appender[TTask, TShard, THead]) inputRelabelingStage(
 			var (
 				hasReallocations bool
 				rstats           = cppbridge.RelabelerStats{}
-				relabeledSeries  = shardedRelabeledSeries.DataByShard(shardID)
 			)
 			err := shard.LSSWithLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
 				rstats, hasReallocations, rErr = relabeler.Relabeling(
@@ -233,7 +232,7 @@ func (a Appender[TTask, TShard, THead]) inputRelabelingStage(
 					state,
 					shardedData,
 					innerSeries,
-					relabeledSeries,
+					shardedRelabeledSeries.DataByShard(shardID),
 				)
 
 				if hasReallocations {
@@ -282,15 +281,13 @@ func (a Appender[TTask, TShard, THead]) appendRelabelerSeriesStage(
 				return nil
 			}
 
-			innerSeries := shardedInnerSeries.DataByShard(shardID)
-			stateUpdates := shardedStateUpdates.DataByShard(shardID)
 			return shard.LSSWithLock(func(target, _ *cppbridge.LabelSetStorage) error {
 				hasReallocations, err := shard.Relabeler().AppendRelabelerSeries(
 					ctx,
 					target,
-					innerSeries,
+					shardedInnerSeries.DataByShard(shardID),
 					relabeledSeries,
-					stateUpdates,
+					shardedStateUpdates.DataByShard(shardID),
 				)
 				if err != nil {
 					return fmt.Errorf("shard %d: %w", shardID, err)

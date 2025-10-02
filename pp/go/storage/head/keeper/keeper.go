@@ -85,7 +85,6 @@ type Head[T any] interface {
 // Keeper holds outdated heads until conversion.
 type Keeper[T any, THead Head[T]] struct {
 	heads               headSortedSlice[THead]
-	addTrigger          func()
 	removedHeadNotifier RemovedHeadNotifier
 	lock                sync.RWMutex
 }
@@ -93,12 +92,10 @@ type Keeper[T any, THead Head[T]] struct {
 // NewKeeper init new [Keeper].
 func NewKeeper[T any, THead Head[T]](
 	keeperCapacity int,
-	addTrigger func(),
 	removedHeadNotifier RemovedHeadNotifier,
 ) *Keeper[T, THead] {
 	return &Keeper[T, THead]{
 		heads:               make(headSortedSlice[THead], 0, max(keeperCapacity, MinHeadConvertingQueueSize)),
-		addTrigger:          addTrigger,
 		removedHeadNotifier: removedHeadNotifier,
 	}
 }
@@ -205,7 +202,6 @@ func (k *Keeper[T, THead]) Remove(headsForRemove []THead) {
 func (k *Keeper[T, THead]) addHead(head THead, createdAt time.Duration, policy addPolicy) error {
 	if len(k.heads) < cap(k.heads) {
 		heap.Push(&k.heads, sortableHead[THead]{head: head, createdAt: createdAt})
-		k.addTrigger()
 		return nil
 	}
 
@@ -214,7 +210,6 @@ func (k *Keeper[T, THead]) addHead(head THead, createdAt time.Duration, policy a
 		k.heads[0].head = head
 		k.heads[0].createdAt = createdAt
 		heap.Fix(&k.heads, 0)
-		k.addTrigger()
 		return nil
 	}
 

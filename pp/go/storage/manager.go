@@ -41,8 +41,11 @@ const (
 	// DefaultMetricWriteInterval default metric scrape interval.
 	DefaultMetricWriteInterval = 15 * time.Second
 
+	// defaultStartMetricWriteInterval the default interval for start [MetricsUpdater] timer.
+	defaultStartMetricWriteInterval = 5 * time.Second
+
 	// DefaultPersistDuration the default interval for persisting [Head].
-	DefaultPersistDuration = 5 * time.Minute
+	DefaultPersistDuration = 2 * time.Minute
 
 	// DefaultUnloadDataStorageInterval the default interval for unloading [DataStorage].
 	DefaultUnloadDataStorageInterval = 5 * time.Minute
@@ -180,13 +183,8 @@ func NewManager(
 		return nil, errors.Join(fmt.Errorf("failed to set active status: %w", err), h.Close())
 	}
 
-	persistenerMediator := mediator.NewMediator(
-		mediator.NewConstantIntervalTimer(clock, defaultStartPersistnerInterval, DefaultPersistDuration),
-	)
-
 	hKeeper := keeper.NewKeeper[HeadOnDisk](
 		o.KeeperCapacity,
-		persistenerMediator.TriggerWithResetTimer,
 		removedHeadNotifier,
 	)
 
@@ -204,7 +202,7 @@ func NewManager(
 		),
 	}
 
-	m.initServices(o, hcatalog, builder, loader, reloadBlocksNotifier, persistenerMediator, readyNotifier, clock, r)
+	m.initServices(o, hcatalog, builder, loader, reloadBlocksNotifier, readyNotifier, clock, r)
 	logger.Infof("[Head Manager] created")
 
 	return m, nil
@@ -259,7 +257,6 @@ func (m *Manager) initServices(
 	builder *Builder,
 	loader *Loader,
 	reloadBlocksTriggerNotifier *TriggerNotifier,
-	persistenerMediator *mediator.Mediator,
 	readyNotifier ready.Notifier,
 	clock clockwork.Clock,
 	r prometheus.Registerer,
@@ -281,6 +278,9 @@ func (m *Manager) initServices(
 	)
 
 	// Persistener
+	persistenerMediator := mediator.NewMediator(
+		mediator.NewConstantIntervalTimer(clock, defaultStartPersistnerInterval, DefaultPersistDuration),
+	)
 	m.g.Add(
 		func() error {
 			services.NewPersistenerService(
@@ -319,6 +319,7 @@ func (m *Manager) initServices(
 				m.cfg,
 				&headInformer{catalog: hcatalog},
 				head.CopyAddedSeries[*ShardOnDisk, *PerGoroutineShard](shard.CopyAddedSeries),
+				persistenerMediator.TriggerWithResetTimer,
 				r,
 			).Execute(rotatorCtx)
 		},
@@ -338,7 +339,7 @@ func (m *Manager) initServices(
 			return services.NewCommitter(
 				m.proxy,
 				committerMediator,
-				isNewHead(clock, hcatalog, o.CommitInterval*2), // x2 double interval for skipping a new head
+				isNewHead(clock, hcatalog, o.CommitInterval),
 			).Execute(committerCtx)
 		},
 		func(error) {
@@ -365,7 +366,7 @@ func (m *Manager) initServices(
 
 	// MetricsUpdater
 	metricsUpdaterMediator := mediator.NewMediator(
-		mediator.NewConstantIntervalTimer(clock, DefaultMetricWriteInterval, DefaultMetricWriteInterval),
+		mediator.NewConstantIntervalTimer(clock, defaultStartMetricWriteInterval, DefaultMetricWriteInterval),
 	)
 	metricsUpdaterCtx, metricsUpdaterCancel := context.WithCancel(baseCtx)
 	m.g.Add(

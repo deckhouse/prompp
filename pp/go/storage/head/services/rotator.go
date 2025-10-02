@@ -41,6 +41,7 @@ type Rotator[
 	cfg                   RotatorConfig
 	headInformer          HeadInformer
 	headAddedSeriesCopier func(source, destination THead)
+	rotatedTrigger        func()
 
 	// stat
 	rotateCounter          prometheus.Counter
@@ -61,6 +62,7 @@ func NewRotator[
 	cfg RotatorConfig,
 	headInformer HeadInformer,
 	headAddedSeriesCopier func(source, destination THead),
+	rotatedTrigger func(),
 	registerer prometheus.Registerer,
 ) *Rotator[TTask, TShard, TGoShard, THead] {
 	factory := util.NewUnconflictRegisterer(registerer)
@@ -71,6 +73,7 @@ func NewRotator[
 		cfg:                   cfg,
 		headInformer:          headInformer,
 		headAddedSeriesCopier: headAddedSeriesCopier,
+		rotatedTrigger:        rotatedTrigger,
 		rotateCounter: factory.NewCounter(
 			prometheus.CounterOpts{
 				Name: "prompp_rotator_rotate_count",
@@ -169,6 +172,7 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 	oldHead.SetReadOnly()
 	s.events.With(prometheus.Labels{"type": "rotated"}).Inc()
 	s.rotationDuration.Set(float64(time.Since(start).Nanoseconds()))
+	s.rotatedTrigger()
 
 	return nil
 }
