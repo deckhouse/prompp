@@ -35,7 +35,7 @@ class PatternPartFixture : public testing::Test {
   const int kGroupValue = 1;
   const std::vector<std::string_view> kGroups = {"group_0", "group_1"};
 
-  std::ostringstream buf_;
+  std::string buf_;
 };
 
 TEST_F(PatternPartFixture, StringType) {
@@ -46,7 +46,7 @@ TEST_F(PatternPartFixture, StringType) {
   pp.write(buf_, kGroups);
 
   // Assert
-  EXPECT_EQ(buf_.str(), kStringValue);
+  EXPECT_EQ(buf_, kStringValue);
 }
 
 TEST_F(PatternPartFixture, GroupType) {
@@ -57,7 +57,7 @@ TEST_F(PatternPartFixture, GroupType) {
   pp.write(buf_, kGroups);
 
   // Assert
-  EXPECT_EQ(buf_.str(), kGroups[kGroupValue]);
+  EXPECT_EQ(buf_, kGroups[kGroupValue]);
 }
 
 struct FullMatchCase {
@@ -171,13 +171,13 @@ class RelabelConfigFixture : public testing::TestWithParam<RelabelConfigCase> {
   static std::string parts_to_string(const std::vector<PatternPart>& parts) {
     static const std::vector<std::string_view> kGroups{"group_0", "group_1", "group_2"};
 
-    std::ostringstream buf;
+    std::string buf;
 
     for (auto& part : parts) {
       part.write(buf, kGroups);
     }
 
-    return std::move(buf).str();
+    return buf;
   }
 };
 
@@ -262,7 +262,7 @@ TEST_P(StatelessRelabelerFixture, Test) {
   builder_.reset(GetParam().labels);
 
   // Act
-  std::ostringstream buf;
+  std::string buf;
   const auto status = stateless_relabeler.relabeling_process(buf, builder_);
 
   // Assert

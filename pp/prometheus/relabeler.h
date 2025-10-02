@@ -359,7 +359,7 @@ struct RelabelerOptions {
 // shard_id_            - current shard id;
 // log_shards_          - logarithm to the base 2 of total shards count;
 class PerShardRelabeler {
-  std::ostringstream buf_;
+  std::string buf_;
   Primitives::LabelsBuilder builder_;
   std::vector<Primitives::LabelView> external_labels_{};
   Primitives::TimeseriesSemiview timeseries_buf_;
@@ -894,7 +894,7 @@ class PerShardRelabeler {
 
 // PerGoroutineRelabeler stateful relabeler for shard goroutines.
 class PerGoroutineRelabeler {
-  std::ostringstream buf_;
+  std::string buf_;
   Primitives::LabelsBuilder builder_;
   Primitives::TimeseriesSemiview timeseries_buf_;
   uint16_t number_of_shards_;

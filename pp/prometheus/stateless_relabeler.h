@@ -79,11 +79,11 @@ class PatternPart {
   PROMPP_ALWAYS_INLINE explicit PatternPart(int g) : type_(pGroup), data_{.group_ = g} {}
 
   // write - convert parts to out.
-  PROMPP_ALWAYS_INLINE void write(std::ostream& out, const std::vector<std::string_view>& groups) const {
+  PROMPP_ALWAYS_INLINE void write(std::string& out, const std::vector<std::string_view>& groups) const {
     if (type_ == pGroup) {
-      out << groups[data_.group_];
+      out += groups[data_.group_];
     } else {
-      out << data_.string_;
+      out += data_.string_;
     }
   }
 };
@@ -138,36 +138,35 @@ class Regexp {
   }
 
   // replace_with_args - replace in template with incoming args.
-  PROMPP_ALWAYS_INLINE static std::string replace_with_args(std::ostringstream& buf,
-                                                            std::vector<std::string_view>& args,
-                                                            const std::vector<PatternPart>& tmpl) {
+  PROMPP_ALWAYS_INLINE static void replace_with_args(std::string& buf, const std::vector<std::string_view>& args, const std::vector<PatternPart>& tmpl) {
+    buf.clear();
+
     if (tmpl.empty()) [[unlikely]] {
       // no template or source data
-      return "";
+      return;
     }
 
-    buf.str("");
     for (auto& val : tmpl) {
       val.write(buf, args);
     }
-
-    return buf.str();
   }
 
   // replace_full - find match for source and replace in template.
-  PROMPP_ALWAYS_INLINE std::string replace_full(std::ostringstream& out, std::string_view src, const std::vector<PatternPart>& tmpl) const {
+  PROMPP_ALWAYS_INLINE void replace_full(std::string& out, std::string_view src, const std::vector<PatternPart>& tmpl) const {
+    out.clear();
+
     if (src.empty() || tmpl.empty()) [[unlikely]] {
       // no template or source data
-      return "";
+      return;
     }
 
     std::vector<std::string_view> res_args;
     if (!match_to_args(src, res_args)) {
       // no entries in regexp
-      return "";
+      return;
     }
 
-    return replace_with_args(out, res_args, tmpl);
+    replace_with_args(out, res_args, tmpl);
   }
 
   // full_match - check text for full match regexp.
@@ -433,7 +432,7 @@ class RelabelConfig {
 
   // relabel - building relabeling labels.
   template <class LabelsBuilder>
-  PROMPP_ALWAYS_INLINE relabelStatus relabel(std::ostringstream& buf, LabelsBuilder& builder) const {
+  PROMPP_ALWAYS_INLINE relabelStatus relabel(std::string& buf, LabelsBuilder& builder) const {
     switch (action_) {
       case rDrop: {
         if (regexp_.full_match(get_value(builder))) {
@@ -469,19 +468,21 @@ class RelabelConfig {
           break;
         }
 
-        std::string lname = Regexp::replace_with_args(buf, res_args, target_label_parts_);
-        if (!label_name_is_valid(lname)) {
+        Regexp::replace_with_args(buf, res_args, target_label_parts_);
+        if (!label_name_is_valid(buf)) {
           break;
         }
-        std::string lvalue = Regexp::replace_with_args(buf, res_args, replacement_parts_);
-        if (lvalue.empty()) {
+        std::string lname = buf;
+
+        Regexp::replace_with_args(buf, res_args, replacement_parts_);
+        if (buf.empty()) {
           if (builder.contains(lname)) {
             builder.del(lname);
             return rsRelabel;
           }
           break;
         }
-        builder.set(lname, lvalue);
+        builder.set(lname, buf);
         return rsRelabel;
       }
 
@@ -509,7 +510,8 @@ class RelabelConfig {
         std::vector<Primitives::Label> labels_for_set;
         builder.range([&](const auto& lname, const auto& lvalue) PROMPP_LAMBDA_INLINE -> bool {
           if (regexp_.full_match(lname)) {
-            labels_for_set.emplace_back(regexp_.replace_full(buf, lname, replacement_parts_), lvalue);
+            regexp_.replace_full(buf, lname, replacement_parts_);
+            labels_for_set.emplace_back(buf, lvalue);
           }
           return true;
         });
@@ -588,7 +590,7 @@ class StatelessRelabeler {
 
   // relabeling_process caller passes a LabelsBuilder containing the initial set of labels, which is mutated by the rules.
   template <class LabelsBuilder>
-  PROMPP_ALWAYS_INLINE relabelStatus relabeling_process(std::ostringstream& buf, LabelsBuilder& builder) const {
+  PROMPP_ALWAYS_INLINE relabelStatus relabeling_process(std::string& buf, LabelsBuilder& builder) const {
     relabelStatus rstatus{rsKeep};
     for (auto& rcfg : configs_) {
       const relabelStatus status = rcfg.relabel(buf, builder);
