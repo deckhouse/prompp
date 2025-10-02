@@ -20,7 +20,7 @@ using series_data::encoder::SampleList;
 using series_data::querier::QueriedChunk;
 using series_data::querier::QueriedChunkList;
 using series_data::serialization::Deserializer;
-using series_data::serialization::old_::Serializer;
+using series_data::serialization::Serializer;
 
 class SerializerDeserializerTrait {
  protected:
