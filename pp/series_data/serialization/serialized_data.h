@@ -2,6 +2,7 @@
 #include "bare_bones/memory.h"
 #include "series_data/chunk/serialized_chunk.h"
 #include "series_data/data_storage.h"
+#include "series_data/decoder/universal_decode_iterator.h"
 #include "series_data/querier/query.h"
 
 namespace series_data::serialization {
@@ -179,8 +180,6 @@ class SerializedData {
       } else {
         serialized_chunk.timestamps_offset = it->second;
       }
-
-      serialized_chunk.timestamps_offset = timestamp_streams_data.stream_offsets[timestamp_stream_id];
     } else {
       if (const auto it = timestamp_streams_data.finalized_stream_offsets.find(timestamp_stream_id);
           it == timestamp_streams_data.finalized_stream_offsets.end()) [[unlikely]] {
