@@ -10,290 +10,6 @@ import (
 	"sync"
 )
 
-// Ensure, that ReadSegmentMock does implement wal.ReadSegment.
-// If this is not the case, regenerate this file with moq.
-var _ wal.ReadSegment = &ReadSegmentMock{}
-
-// ReadSegmentMock is a mock implementation of wal.ReadSegment.
-//
-//	func TestSomethingThatUsesReadSegment(t *testing.T) {
-//
-//		// make and configure a mocked wal.ReadSegment
-//		mockedReadSegment := &ReadSegmentMock{
-//			ReadFromFunc: func(r io.Reader) (int64, error) {
-//				panic("mock out the ReadFrom method")
-//			},
-//			ResetFunc: func()  {
-//				panic("mock out the Reset method")
-//			},
-//		}
-//
-//		// use mockedReadSegment in code that requires wal.ReadSegment
-//		// and then make assertions.
-//
-//	}
-type ReadSegmentMock struct {
-	// ReadFromFunc mocks the ReadFrom method.
-	ReadFromFunc func(r io.Reader) (int64, error)
-
-	// ResetFunc mocks the Reset method.
-	ResetFunc func()
-
-	// calls tracks calls to the methods.
-	calls struct {
-		// ReadFrom holds details about calls to the ReadFrom method.
-		ReadFrom []struct {
-			// R is the r argument value.
-			R io.Reader
-		}
-		// Reset holds details about calls to the Reset method.
-		Reset []struct {
-		}
-	}
-	lockReadFrom sync.RWMutex
-	lockReset    sync.RWMutex
-}
-
-// ReadFrom calls ReadFromFunc.
-func (mock *ReadSegmentMock) ReadFrom(r io.Reader) (int64, error) {
-	if mock.ReadFromFunc == nil {
-		panic("ReadSegmentMock.ReadFromFunc: method is nil but ReadSegment.ReadFrom was just called")
-	}
-	callInfo := struct {
-		R io.Reader
-	}{
-		R: r,
-	}
-	mock.lockReadFrom.Lock()
-	mock.calls.ReadFrom = append(mock.calls.ReadFrom, callInfo)
-	mock.lockReadFrom.Unlock()
-	return mock.ReadFromFunc(r)
-}
-
-// ReadFromCalls gets all the calls that were made to ReadFrom.
-// Check the length with:
-//
-//	len(mockedReadSegment.ReadFromCalls())
-func (mock *ReadSegmentMock) ReadFromCalls() []struct {
-	R io.Reader
-} {
-	var calls []struct {
-		R io.Reader
-	}
-	mock.lockReadFrom.RLock()
-	calls = mock.calls.ReadFrom
-	mock.lockReadFrom.RUnlock()
-	return calls
-}
-
-// Reset calls ResetFunc.
-func (mock *ReadSegmentMock) Reset() {
-	if mock.ResetFunc == nil {
-		panic("ReadSegmentMock.ResetFunc: method is nil but ReadSegment.Reset was just called")
-	}
-	callInfo := struct {
-	}{}
-	mock.lockReset.Lock()
-	mock.calls.Reset = append(mock.calls.Reset, callInfo)
-	mock.lockReset.Unlock()
-	mock.ResetFunc()
-}
-
-// ResetCalls gets all the calls that were made to Reset.
-// Check the length with:
-//
-//	len(mockedReadSegment.ResetCalls())
-func (mock *ReadSegmentMock) ResetCalls() []struct {
-} {
-	var calls []struct {
-	}
-	mock.lockReset.RLock()
-	calls = mock.calls.Reset
-	mock.lockReset.RUnlock()
-	return calls
-}
-
-// Ensure, that EncodedSegmentMock does implement wal.EncodedSegment.
-// If this is not the case, regenerate this file with moq.
-var _ wal.EncodedSegment = &EncodedSegmentMock{}
-
-// EncodedSegmentMock is a mock implementation of wal.EncodedSegment.
-//
-//	func TestSomethingThatUsesEncodedSegment(t *testing.T) {
-//
-//		// make and configure a mocked wal.EncodedSegment
-//		mockedEncodedSegment := &EncodedSegmentMock{
-//			CRC32Func: func() uint32 {
-//				panic("mock out the CRC32 method")
-//			},
-//			SamplesFunc: func() uint32 {
-//				panic("mock out the Samples method")
-//			},
-//			SizeFunc: func() int64 {
-//				panic("mock out the Size method")
-//			},
-//			WriteToFunc: func(w io.Writer) (int64, error) {
-//				panic("mock out the WriteTo method")
-//			},
-//		}
-//
-//		// use mockedEncodedSegment in code that requires wal.EncodedSegment
-//		// and then make assertions.
-//
-//	}
-type EncodedSegmentMock struct {
-	// CRC32Func mocks the CRC32 method.
-	CRC32Func func() uint32
-
-	// SamplesFunc mocks the Samples method.
-	SamplesFunc func() uint32
-
-	// SizeFunc mocks the Size method.
-	SizeFunc func() int64
-
-	// WriteToFunc mocks the WriteTo method.
-	WriteToFunc func(w io.Writer) (int64, error)
-
-	// calls tracks calls to the methods.
-	calls struct {
-		// CRC32 holds details about calls to the CRC32 method.
-		CRC32 []struct {
-		}
-		// Samples holds details about calls to the Samples method.
-		Samples []struct {
-		}
-		// Size holds details about calls to the Size method.
-		Size []struct {
-		}
-		// WriteTo holds details about calls to the WriteTo method.
-		WriteTo []struct {
-			// W is the w argument value.
-			W io.Writer
-		}
-	}
-	lockCRC32   sync.RWMutex
-	lockSamples sync.RWMutex
-	lockSize    sync.RWMutex
-	lockWriteTo sync.RWMutex
-}
-
-// CRC32 calls CRC32Func.
-func (mock *EncodedSegmentMock) CRC32() uint32 {
-	if mock.CRC32Func == nil {
-		panic("EncodedSegmentMock.CRC32Func: method is nil but EncodedSegment.CRC32 was just called")
-	}
-	callInfo := struct {
-	}{}
-	mock.lockCRC32.Lock()
-	mock.calls.CRC32 = append(mock.calls.CRC32, callInfo)
-	mock.lockCRC32.Unlock()
-	return mock.CRC32Func()
-}
-
-// CRC32Calls gets all the calls that were made to CRC32.
-// Check the length with:
-//
-//	len(mockedEncodedSegment.CRC32Calls())
-func (mock *EncodedSegmentMock) CRC32Calls() []struct {
-} {
-	var calls []struct {
-	}
-	mock.lockCRC32.RLock()
-	calls = mock.calls.CRC32
-	mock.lockCRC32.RUnlock()
-	return calls
-}
-
-// Samples calls SamplesFunc.
-func (mock *EncodedSegmentMock) Samples() uint32 {
-	if mock.SamplesFunc == nil {
-		panic("EncodedSegmentMock.SamplesFunc: method is nil but EncodedSegment.Samples was just called")
-	}
-	callInfo := struct {
-	}{}
-	mock.lockSamples.Lock()
-	mock.calls.Samples = append(mock.calls.Samples, callInfo)
-	mock.lockSamples.Unlock()
-	return mock.SamplesFunc()
-}
-
-// SamplesCalls gets all the calls that were made to Samples.
-// Check the length with:
-//
-//	len(mockedEncodedSegment.SamplesCalls())
-func (mock *EncodedSegmentMock) SamplesCalls() []struct {
-} {
-	var calls []struct {
-	}
-	mock.lockSamples.RLock()
-	calls = mock.calls.Samples
-	mock.lockSamples.RUnlock()
-	return calls
-}
-
-// Size calls SizeFunc.
-func (mock *EncodedSegmentMock) Size() int64 {
-	if mock.SizeFunc == nil {
-		panic("EncodedSegmentMock.SizeFunc: method is nil but EncodedSegment.Size was just called")
-	}
-	callInfo := struct {
-	}{}
-	mock.lockSize.Lock()
-	mock.calls.Size = append(mock.calls.Size, callInfo)
-	mock.lockSize.Unlock()
-	return mock.SizeFunc()
-}
-
-// SizeCalls gets all the calls that were made to Size.
-// Check the length with:
-//
-//	len(mockedEncodedSegment.SizeCalls())
-func (mock *EncodedSegmentMock) SizeCalls() []struct {
-} {
-	var calls []struct {
-	}
-	mock.lockSize.RLock()
-	calls = mock.calls.Size
-	mock.lockSize.RUnlock()
-	return calls
-}
-
-// WriteTo calls WriteToFunc.
-func (mock *EncodedSegmentMock) WriteTo(w io.Writer) (int64, error) {
-	if mock.WriteToFunc == nil {
-		panic("EncodedSegmentMock.WriteToFunc: method is nil but EncodedSegment.WriteTo was just called")
-	}
-	callInfo := struct {
-		W io.Writer
-	}{
-		W: w,
-	}
-	mock.lockWriteTo.Lock()
-	mock.calls.WriteTo = append(mock.calls.WriteTo, callInfo)
-	mock.lockWriteTo.Unlock()
-	return mock.WriteToFunc(w)
-}
-
-// WriteToCalls gets all the calls that were made to WriteTo.
-// Check the length with:
-//
-//	len(mockedEncodedSegment.WriteToCalls())
-func (mock *EncodedSegmentMock) WriteToCalls() []struct {
-	W io.Writer
-} {
-	var calls []struct {
-		W io.Writer
-	}
-	mock.lockWriteTo.RLock()
-	calls = mock.calls.WriteTo
-	mock.lockWriteTo.RUnlock()
-	return calls
-}
-
-// Ensure, that SegmentWriterMock does implement wal.SegmentWriter.
-// If this is not the case, regenerate this file with moq.
-var _ wal.SegmentWriter[wal.EncodedSegment] = &SegmentWriterMock[wal.EncodedSegment]{}
-
 // SegmentWriterMock is a mock implementation of wal.SegmentWriter.
 //
 //	func TestSomethingThatUsesSegmentWriter(t *testing.T) {
@@ -504,17 +220,13 @@ func (mock *SegmentWriterMock[TSegment]) WriteCalls() []struct {
 	return calls
 }
 
-// Ensure, that EncoderMock does implement wal.Encoder.
-// If this is not the case, regenerate this file with moq.
-var _ wal.Encoder[wal.EncodedSegment, wal.StatsSegment] = &EncoderMock[wal.EncodedSegment, wal.StatsSegment]{}
-
 // EncoderMock is a mock implementation of wal.Encoder.
 //
 //	func TestSomethingThatUsesEncoder(t *testing.T) {
 //
 //		// make and configure a mocked wal.Encoder
 //		mockedEncoder := &EncoderMock{
-//			EncodeFunc: func(innerSeriesSlice []*cppbridge.InnerSeries) (TStats, error) {
+//			EncodeFunc: func(innerSeriesSlice []*cppbridge.InnerSeries) (uint32, error) {
 //				panic("mock out the Encode method")
 //			},
 //			FinalizeFunc: func() (TSegment, error) {
@@ -526,9 +238,9 @@ var _ wal.Encoder[wal.EncodedSegment, wal.StatsSegment] = &EncoderMock[wal.Encod
 //		// and then make assertions.
 //
 //	}
-type EncoderMock[TSegment wal.EncodedSegment, TStats wal.StatsSegment] struct {
+type EncoderMock[TSegment wal.EncodedSegment] struct {
 	// EncodeFunc mocks the Encode method.
-	EncodeFunc func(innerSeriesSlice []*cppbridge.InnerSeries) (TStats, error)
+	EncodeFunc func(innerSeriesSlice []*cppbridge.InnerSeries) (uint32, error)
 
 	// FinalizeFunc mocks the Finalize method.
 	FinalizeFunc func() (TSegment, error)
@@ -549,7 +261,7 @@ type EncoderMock[TSegment wal.EncodedSegment, TStats wal.StatsSegment] struct {
 }
 
 // Encode calls EncodeFunc.
-func (mock *EncoderMock[TSegment, TStats]) Encode(innerSeriesSlice []*cppbridge.InnerSeries) (TStats, error) {
+func (mock *EncoderMock[TSegment]) Encode(innerSeriesSlice []*cppbridge.InnerSeries) (uint32, error) {
 	if mock.EncodeFunc == nil {
 		panic("EncoderMock.EncodeFunc: method is nil but Encoder.Encode was just called")
 	}
@@ -568,7 +280,7 @@ func (mock *EncoderMock[TSegment, TStats]) Encode(innerSeriesSlice []*cppbridge.
 // Check the length with:
 //
 //	len(mockedEncoder.EncodeCalls())
-func (mock *EncoderMock[TSegment, TStats]) EncodeCalls() []struct {
+func (mock *EncoderMock[TSegment]) EncodeCalls() []struct {
 	InnerSeriesSlice []*cppbridge.InnerSeries
 } {
 	var calls []struct {
@@ -581,7 +293,7 @@ func (mock *EncoderMock[TSegment, TStats]) EncodeCalls() []struct {
 }
 
 // Finalize calls FinalizeFunc.
-func (mock *EncoderMock[TSegment, TStats]) Finalize() (TSegment, error) {
+func (mock *EncoderMock[TSegment]) Finalize() (TSegment, error) {
 	if mock.FinalizeFunc == nil {
 		panic("EncoderMock.FinalizeFunc: method is nil but Encoder.Finalize was just called")
 	}
@@ -597,7 +309,7 @@ func (mock *EncoderMock[TSegment, TStats]) Finalize() (TSegment, error) {
 // Check the length with:
 //
 //	len(mockedEncoder.FinalizeCalls())
-func (mock *EncoderMock[TSegment, TStats]) FinalizeCalls() []struct {
+func (mock *EncoderMock[TSegment]) FinalizeCalls() []struct {
 } {
 	var calls []struct {
 	}
@@ -607,42 +319,97 @@ func (mock *EncoderMock[TSegment, TStats]) FinalizeCalls() []struct {
 	return calls
 }
 
-// Ensure, that StatsSegmentMock does implement wal.StatsSegment.
-// If this is not the case, regenerate this file with moq.
-var _ wal.StatsSegment = &StatsSegmentMock{}
-
-// StatsSegmentMock is a mock implementation of wal.StatsSegment.
+// EncodedSegmentMock is a mock implementation of wal.EncodedSegment.
 //
-//	func TestSomethingThatUsesStatsSegment(t *testing.T) {
+//	func TestSomethingThatUsesEncodedSegment(t *testing.T) {
 //
-//		// make and configure a mocked wal.StatsSegment
-//		mockedStatsSegment := &StatsSegmentMock{
+//		// make and configure a mocked wal.EncodedSegment
+//		mockedEncodedSegment := &EncodedSegmentMock{
+//			CRC32Func: func() uint32 {
+//				panic("mock out the CRC32 method")
+//			},
 //			SamplesFunc: func() uint32 {
 //				panic("mock out the Samples method")
 //			},
+//			SizeFunc: func() int64 {
+//				panic("mock out the Size method")
+//			},
+//			WriteToFunc: func(w io.Writer) (int64, error) {
+//				panic("mock out the WriteTo method")
+//			},
 //		}
 //
-//		// use mockedStatsSegment in code that requires wal.StatsSegment
+//		// use mockedEncodedSegment in code that requires wal.EncodedSegment
 //		// and then make assertions.
 //
 //	}
-type StatsSegmentMock struct {
+type EncodedSegmentMock struct {
+	// CRC32Func mocks the CRC32 method.
+	CRC32Func func() uint32
+
 	// SamplesFunc mocks the Samples method.
 	SamplesFunc func() uint32
 
+	// SizeFunc mocks the Size method.
+	SizeFunc func() int64
+
+	// WriteToFunc mocks the WriteTo method.
+	WriteToFunc func(w io.Writer) (int64, error)
+
 	// calls tracks calls to the methods.
 	calls struct {
+		// CRC32 holds details about calls to the CRC32 method.
+		CRC32 []struct {
+		}
 		// Samples holds details about calls to the Samples method.
 		Samples []struct {
 		}
+		// Size holds details about calls to the Size method.
+		Size []struct {
+		}
+		// WriteTo holds details about calls to the WriteTo method.
+		WriteTo []struct {
+			// W is the w argument value.
+			W io.Writer
+		}
 	}
+	lockCRC32   sync.RWMutex
 	lockSamples sync.RWMutex
+	lockSize    sync.RWMutex
+	lockWriteTo sync.RWMutex
+}
+
+// CRC32 calls CRC32Func.
+func (mock *EncodedSegmentMock) CRC32() uint32 {
+	if mock.CRC32Func == nil {
+		panic("EncodedSegmentMock.CRC32Func: method is nil but EncodedSegment.CRC32 was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockCRC32.Lock()
+	mock.calls.CRC32 = append(mock.calls.CRC32, callInfo)
+	mock.lockCRC32.Unlock()
+	return mock.CRC32Func()
+}
+
+// CRC32Calls gets all the calls that were made to CRC32.
+// Check the length with:
+//
+//	len(mockedEncodedSegment.CRC32Calls())
+func (mock *EncodedSegmentMock) CRC32Calls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockCRC32.RLock()
+	calls = mock.calls.CRC32
+	mock.lockCRC32.RUnlock()
+	return calls
 }
 
 // Samples calls SamplesFunc.
-func (mock *StatsSegmentMock) Samples() uint32 {
+func (mock *EncodedSegmentMock) Samples() uint32 {
 	if mock.SamplesFunc == nil {
-		panic("StatsSegmentMock.SamplesFunc: method is nil but StatsSegment.Samples was just called")
+		panic("EncodedSegmentMock.SamplesFunc: method is nil but EncodedSegment.Samples was just called")
 	}
 	callInfo := struct {
 	}{}
@@ -655,13 +422,72 @@ func (mock *StatsSegmentMock) Samples() uint32 {
 // SamplesCalls gets all the calls that were made to Samples.
 // Check the length with:
 //
-//	len(mockedStatsSegment.SamplesCalls())
-func (mock *StatsSegmentMock) SamplesCalls() []struct {
+//	len(mockedEncodedSegment.SamplesCalls())
+func (mock *EncodedSegmentMock) SamplesCalls() []struct {
 } {
 	var calls []struct {
 	}
 	mock.lockSamples.RLock()
 	calls = mock.calls.Samples
 	mock.lockSamples.RUnlock()
+	return calls
+}
+
+// Size calls SizeFunc.
+func (mock *EncodedSegmentMock) Size() int64 {
+	if mock.SizeFunc == nil {
+		panic("EncodedSegmentMock.SizeFunc: method is nil but EncodedSegment.Size was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockSize.Lock()
+	mock.calls.Size = append(mock.calls.Size, callInfo)
+	mock.lockSize.Unlock()
+	return mock.SizeFunc()
+}
+
+// SizeCalls gets all the calls that were made to Size.
+// Check the length with:
+//
+//	len(mockedEncodedSegment.SizeCalls())
+func (mock *EncodedSegmentMock) SizeCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockSize.RLock()
+	calls = mock.calls.Size
+	mock.lockSize.RUnlock()
+	return calls
+}
+
+// WriteTo calls WriteToFunc.
+func (mock *EncodedSegmentMock) WriteTo(w io.Writer) (int64, error) {
+	if mock.WriteToFunc == nil {
+		panic("EncodedSegmentMock.WriteToFunc: method is nil but EncodedSegment.WriteTo was just called")
+	}
+	callInfo := struct {
+		W io.Writer
+	}{
+		W: w,
+	}
+	mock.lockWriteTo.Lock()
+	mock.calls.WriteTo = append(mock.calls.WriteTo, callInfo)
+	mock.lockWriteTo.Unlock()
+	return mock.WriteToFunc(w)
+}
+
+// WriteToCalls gets all the calls that were made to WriteTo.
+// Check the length with:
+//
+//	len(mockedEncodedSegment.WriteToCalls())
+func (mock *EncodedSegmentMock) WriteToCalls() []struct {
+	W io.Writer
+} {
+	var calls []struct {
+		W io.Writer
+	}
+	mock.lockWriteTo.RLock()
+	calls = mock.calls.WriteTo
+	mock.lockWriteTo.RUnlock()
 	return calls
 }

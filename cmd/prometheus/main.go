@@ -59,7 +59,7 @@ import (
 
 	pp_pkg_handler "github.com/prometheus/prometheus/pp-pkg/handler"
 	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor"
-	"github.com/prometheus/prometheus/pp-pkg/receiver"               // PP_CHANGES.md: rebuild on cpp
+	pp_pkg_logger "github.com/prometheus/prometheus/pp-pkg/logger"   // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/remote"                 // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/scrape"                 // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage" // PP_CHANGES.md: rebuild on cpp
@@ -277,10 +277,10 @@ func (c *flagConfig) setFeatureListOptions(logger log.Logger) error {
 }
 
 func main() {
-	if os.Getenv("DEBUG") != "" {
-		runtime.SetBlockProfileRate(20)
-		runtime.SetMutexProfileFraction(20)
-	}
+	// if os.Getenv("DEBUG") != "" {
+	runtime.SetBlockProfileRate(20)
+	runtime.SetMutexProfileFraction(20)
+	// }
 
 	var (
 		oldFlagRetentionDuration model.Duration
@@ -721,7 +721,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	reloadBlocksTriggerNotifier := pp_storage.NewReloadBlocksTriggerNotifier()
+	pp_pkg_logger.InitLogHandler(log.With(logger, "component", "pp"))
+
+	reloadBlocksTriggerNotifier := pp_storage.NewTriggerNotifier()
 	cfg.tsdb.ReloadBlocksExternalTrigger = reloadBlocksTriggerNotifier
 
 	dataDir, err := filepath.Abs(localStoragePath)
@@ -740,6 +742,11 @@ func main() {
 		level.Error(logger).Log("msg", "failed to create file log", "err", err)
 		os.Exit(1)
 	}
+	defer func() {
+		if err := fileLog.Close(); err != nil {
+			level.Error(logger).Log("msg", "failed to close file log", "err", err)
+		}
+	}()
 
 	clock := clockwork.NewRealClock()
 	headCatalog, err := catalog.New(
@@ -754,18 +761,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	pp_storage.InitLogHandler(log.With(logger, "component", "pp_storage"))
-
+	removedHeadTriggerNotifier := pp_storage.NewTriggerNotifier()
 	hManagerReadyNotifier := ready.NewNotifiableNotifier()
 	hManager, err := pp_storage.NewManager(
 		&pp_storage.Options{
-			Seed: cfgFile.GlobalConfig.ExternalLabels.Hash(),
-			// BlockDuration:       time.Duration(cfg.tsdb.MinBlockDuration),
-			BlockDuration:       6 * time.Minute,
+			Seed:                cfgFile.GlobalConfig.ExternalLabels.Hash(),
+			BlockDuration:       time.Duration(cfg.tsdb.MinBlockDuration),
 			CommitInterval:      time.Duration(cfg.WalCommitInterval),
 			MaxRetentionPeriod:  time.Duration(cfg.tsdb.RetentionDuration),
 			HeadRetentionPeriod: time.Duration(cfg.HeadRetentionTimeout),
-			QueueSize:           2,
+			KeeperCapacity:      2,
 			DataDir:             localStoragePath,
 			MaxSegmentSize:      cfg.WalMaxSamplesPerSegment,
 			NumberOfShards:      receiverConfig.NumberOfShards,
@@ -773,6 +778,7 @@ func main() {
 		clock,
 		headCatalog,
 		reloadBlocksTriggerNotifier,
+		removedHeadTriggerNotifier,
 		hManagerReadyNotifier,
 		prometheus.DefaultRegisterer,
 	)
@@ -780,36 +786,6 @@ func main() {
 		level.Error(logger).Log("msg", "failed to create a head manager", "err", err)
 		os.Exit(1)
 	}
-
-	// receiverReadyNotifier := ready.NewNotifiableNotifier()
-	// // create receiver
-	// receiver, err := receiver.NewReceiver(
-	// 	ctxReceiver,
-	// 	log.With(logger, "component", "receiver"),
-	// 	prometheus.DefaultRegisterer,
-	// 	receiverConfig,
-	// 	localStoragePath,
-	// 	cfgFile.RemoteWriteConfigs,
-	// 	localStoragePath,
-	// 	receiver.RotationInfo{
-	// 		BlockDuration: time.Duration(cfg.tsdb.MinBlockDuration),
-	// 		Seed:          cfgFile.GlobalConfig.ExternalLabels.Hash(),
-	// 	},
-	// 	headCatalog,
-	// 	reloadBlocksTriggerNotifier,
-	// 	receiverReadyNotifier,
-	// 	time.Duration(cfg.WalCommitInterval),
-	// 	time.Duration(cfg.tsdb.RetentionDuration),
-	// 	time.Duration(cfg.HeadRetentionTimeout),
-	// 	// x3 ScrapeInterval timeout for write block
-	// 	time.Duration(cfgFile.GlobalConfig.ScrapeInterval*3),
-	// 	cfg.WalMaxSamplesPerSegment,
-	// 	appender.UnloadDataStorage,
-	// )
-	// if err != nil {
-	// 	level.Error(logger).Log("msg", "failed to create a receiver", "err", err)
-	// 	os.Exit(1)
-	// }
 
 	remoteWriterReadyNotifier := ready.NewNotifiableNotifier()
 	remoteWriter := remotewriter.New(
@@ -1038,7 +1014,6 @@ func main() {
 	}
 
 	// Depends on cfg.web.ScrapeManager so needs to be after cfg.web.ScrapeManager = scrapeManager.
-	// TODO receiver adapter
 	webHandler := web.New(log.With(logger, "component", "web"), &cfg.web, adapter) // PP_CHANGES.md: rebuild on cpp
 
 	// Monitor outgoing connections on default transport with conntrack.
@@ -1193,7 +1168,14 @@ func main() {
 	).Add(
 		remoteWriterReadyNotifier,
 	).Build()
-	opGC := catalog.NewGC(dataDir, headCatalog, multiNotifiable)
+	opGC := catalog.NewGC(
+		dataDir,
+		headCatalog,
+		clock,
+		multiNotifiable,
+		removedHeadTriggerNotifier,
+		time.Duration(cfg.tsdb.RetentionDuration),
+	)
 
 	var g run.Group
 	{
@@ -1214,9 +1196,7 @@ func main() {
 				case <-cancel:
 					reloadReady.Close()
 				}
-				if err := queryEngine.Close(); err != nil {
-					level.Warn(logger).Log("msg", "Closing query engine failed", "err", err)
-				}
+
 				return nil
 			},
 			func(err error) {
@@ -1442,7 +1422,7 @@ func main() {
 				db, err := agent.Open(
 					logger,
 					prometheus.DefaultRegisterer,
-					adapter, // TODO RW // PP_CHANGES.md: rebuild on cpp
+					adapter, // PP_CHANGES.md: rebuild on cpp
 					localStoragePath,
 					&opts,
 				)
@@ -1497,14 +1477,22 @@ func main() {
 		)
 	}
 	{ // PP_CHANGES.md: rebuild on cpp start
-		// run receiver.
+		// run head manager.
+		cancel := make(chan struct{})
 		g.Add(
 			func() error {
-				<-dbOpen
+				select {
+				case <-dbOpen:
+				// In case a shutdown is initiated before the dbOpen is released
+				case <-cancel:
+					return nil
+				}
+
 				return hManager.Run()
 			},
 			func(err error) {
-				level.Info(logger).Log("msg", "Stopping head manager...")
+				level.Info(logger).Log("msg", "Stopping head manager...", "msg", err)
+				close(cancel)
 				if err := hManager.Shutdown(context.Background()); err != nil {
 					level.Error(logger).Log("msg", "Head manager shutdown failed", "err", err)
 				}
@@ -1524,6 +1512,7 @@ func main() {
 				if errors.Is(err, querier.UnrecoverableError{}) {
 					level.Error(logger).Log("msg", "Received unrecoverable error", "err", err)
 				}
+				level.Info(logger).Log("msg", "Unrecoverable Error Handler stopped.")
 			},
 		)
 	} // PP_CHANGES.md: rebuild on cpp end
@@ -1573,6 +1562,13 @@ func main() {
 		level.Error(logger).Log("err", err)
 		os.Exit(1)
 	}
+
+	// PP_CHANGES.md: rebuild on cpp start the engine is really no longer in use before calling this to avoid
+	if err := queryEngine.Close(); err != nil {
+		level.Warn(logger).Log("msg", "Closing query engine failed", "err", err)
+	}
+	// PP_CHANGES.md: rebuild on cpp end
+
 	level.Info(logger).Log("msg", "See you next time!")
 }
 
@@ -2011,6 +2007,7 @@ func (opts tsdbOptions) ToTSDBOptions() tsdb.Options {
 		OutOfOrderTimeWindow:           opts.OutOfOrderTimeWindow,
 		EnableDelayedCompaction:        opts.EnableDelayedCompaction,
 		EnableOverlappingCompaction:    opts.EnableOverlappingCompaction,
+		ReloadBlocksExternalTrigger:    opts.ReloadBlocksExternalTrigger,
 	}
 }
 
@@ -2131,7 +2128,7 @@ func readPromPPFeatures(logger log.Logger) {
 			if fvalue == "" {
 				level.Error(logger).Log(
 					"msg", "[FEATURE] The default number of shards is empty, no changes.",
-					"default_number_of_shards", receiver.DefaultNumberOfShards,
+					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
 				)
 
 				continue
@@ -2142,27 +2139,27 @@ func readPromPPFeatures(logger log.Logger) {
 			case err != nil:
 				level.Error(logger).Log(
 					"msg", "[FEATURE] Error parsing head_numbehead_default_number_of_shardsr_of_shards value",
-					"default_number_of_shards", receiver.DefaultNumberOfShards,
+					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
 					"err", err,
 				)
 
 			case v > math.MaxUint16:
 				level.Error(logger).Log(
 					"msg", "[FEATURE] The default number of shards is overflow(max 65535), no changes.",
-					"default_number_of_shards", receiver.DefaultNumberOfShards,
+					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
 				)
 
 			case v < 1:
 				level.Error(logger).Log(
 					"msg", "[FEATURE] The default number of shards is incorrect(min 1), no changes.",
-					"default_number_of_shards", receiver.DefaultNumberOfShards,
+					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
 				)
 
 			default:
-				receiver.DefaultNumberOfShards = uint16(v)
+				pp_storage.DefaultNumberOfShards = uint16(v)
 				level.Info(logger).Log(
 					"msg", "[FEATURE] Changed default number of shards.",
-					"default_number_of_shards", receiver.DefaultNumberOfShards,
+					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
 				)
 			}
 

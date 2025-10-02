@@ -7,13 +7,23 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
+//go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg mediator_test --out
+
 //
 // Timer
 //
 
 // Timer implementation timer.
+//
+//go:generate moq mediator_moq_test.go . Timer
 type Timer interface {
+	// Chan returns chan with ticker time.
 	Chan() <-chan time.Time
+
+	// Reset changes the timer to expire after duration Block and clearing channels.
+	Reset()
+
+	// Stop prevents the Timer from firing.
 	Stop()
 }
 
@@ -73,6 +83,7 @@ func (m *Mediator) loop() {
 		select {
 		case <-m.timer.Chan():
 			m.Trigger()
+			m.timer.Reset()
 		case <-m.closer.Signal():
 			return
 		}

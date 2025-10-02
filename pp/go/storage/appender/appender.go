@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
-	"github.com/prometheus/prometheus/pp/go/storage/logger"
 )
 
 const (
@@ -38,32 +38,22 @@ type Task interface {
 }
 
 //
-// LSS
-//
-
-// LSS the minimum required [LSS] implementation.
-type LSS interface {
-	// WithLock calls fn on raws [cppbridge.LabelSetStorage] with write lock.
-	WithLock(fn func(target, input *cppbridge.LabelSetStorage) error) error
-
-	// WithRLock calls fn on raws [cppbridge.LabelSetStorage] with read lock.
-	WithRLock(fn func(target, input *cppbridge.LabelSetStorage) error) error
-
-	// ResetSnapshot resets the current snapshot. Use only WithLock.
-	ResetSnapshot()
-}
-
-//
 // Shard
 //
 
 // Shard the minimum required head [Shard] implementation.
-type Shard[TLSS LSS] interface {
+type Shard interface {
 	// AppendInnerSeriesSlice add InnerSeries to [DataStorage].
 	AppendInnerSeriesSlice(innerSeriesSlice []*cppbridge.InnerSeries)
 
-	// LSS returns shard labelset storage [LSS].
-	LSS() TLSS
+	// LSSWithLock calls fn on raws [cppbridge.LabelSetStorage] with write lock.
+	LSSWithLock(fn func(target, input *cppbridge.LabelSetStorage) error) error
+
+	// LSSWithRLock calls fn on raws [cppbridge.LabelSetStorage] with read lock.
+	LSSWithRLock(fn func(target, input *cppbridge.LabelSetStorage) error) error
+
+	// LSSResetSnapshot resets the current snapshot. Use only WithLock.
+	LSSResetSnapshot()
 
 	// Relabeler returns relabeler for shard goroutines.
 	Relabeler() *cppbridge.PerGoroutineRelabeler
@@ -82,8 +72,7 @@ type Shard[TLSS LSS] interface {
 // Head the minimum required [Head] implementation.
 type Head[
 	TTask Task,
-	TLSS LSS,
-	TShard Shard[TLSS],
+	TShard Shard,
 ] interface {
 	// CreateTask create a task for operations on the [Head] shards.
 	CreateTask(taskName string, shardFn func(shard TShard) error) TTask
@@ -105,9 +94,8 @@ type Head[
 // Appender adds incoming data to the [Head].
 type Appender[
 	TTask Task,
-	TLSS LSS,
-	TShard Shard[TLSS],
-	THead Head[TTask, TLSS, TShard],
+	TShard Shard,
+	THead Head[TTask, TShard],
 ] struct {
 	head           THead
 	commitAndFlush func(h THead) error
@@ -116,11 +104,13 @@ type Appender[
 // New init new [Appender].
 func New[
 	TTask Task,
-	TLSS LSS,
-	TShard Shard[TLSS],
-	THead Head[TTask, TLSS, TShard],
-](head THead, commitAndFlush func(h THead) error) Appender[TTask, TLSS, TShard, THead] {
-	return Appender[TTask, TLSS, TShard, THead]{
+	TShard Shard,
+	THead Head[TTask, TShard],
+](
+	head THead,
+	commitAndFlush func(h THead) error,
+) Appender[TTask, TShard, THead] {
+	return Appender[TTask, TShard, THead]{
 		head:           head,
 		commitAndFlush: commitAndFlush,
 	}
@@ -129,7 +119,7 @@ func New[
 // Append incoming data to [Head].
 //
 //revive:disable-next-line:flag-parameter this is a flag, but it's more convenient this way
-func (a Appender[TTask, TLSS, TShard, THead]) Append(
+func (a Appender[TTask, TShard, THead]) Append(
 	ctx context.Context,
 	incomingData *IncomingData,
 	state *cppbridge.StateV2,
@@ -139,13 +129,13 @@ func (a Appender[TTask, TLSS, TShard, THead]) Append(
 		return nil, cppbridge.RelabelerStats{}, err
 	}
 
-	shardedInnerSeries := NewShardedInnerSeries(a.head.NumberOfShards())
-	shardedRelabeledSeries := NewShardedRelabeledSeries(a.head.NumberOfShards())
-
+	numberOfShards := a.head.NumberOfShards()
+	shardedInnerSeries := NewShardedInnerSeries(numberOfShards)
+	shardedRelabeledSeries := NewShardedRelabeledSeries(numberOfShards)
 	stats, err := a.inputRelabelingStage(
 		ctx,
 		state,
-		NewDestructibleIncomingData(incomingData, int(a.head.NumberOfShards())),
+		NewDestructibleIncomingData(incomingData, int(numberOfShards)),
 		shardedInnerSeries,
 		shardedRelabeledSeries,
 	)
@@ -154,7 +144,7 @@ func (a Appender[TTask, TLSS, TShard, THead]) Append(
 	}
 
 	if !shardedRelabeledSeries.IsEmpty() {
-		shardedStateUpdates := NewShardedStateUpdates(a.head.NumberOfShards())
+		shardedStateUpdates := NewShardedStateUpdates(numberOfShards)
 		if err = a.appendRelabelerSeriesStage(
 			ctx,
 			shardedInnerSeries,
@@ -190,7 +180,7 @@ func (a Appender[TTask, TLSS, TShard, THead]) Append(
 // inputRelabelingStage first stage - relabeling.
 //
 //revive:disable-next-line:function-length long but this is first stage.
-func (a Appender[TTask, TLSS, TShard, THead]) inputRelabelingStage(
+func (a Appender[TTask, TShard, THead]) inputRelabelingStage(
 	ctx context.Context,
 	state *cppbridge.StateV2,
 	incomingData *DestructibleIncomingData,
@@ -202,20 +192,21 @@ func (a Appender[TTask, TLSS, TShard, THead]) inputRelabelingStage(
 		lssInputRelabeling,
 		func(shard TShard) error {
 			var (
-				lss       = shard.LSS()
-				relabeler = shard.Relabeler()
-				shardID   = shard.ShardID()
-				ok        bool
+				relabeler   = shard.Relabeler()
+				shardID     = shard.ShardID()
+				ok          bool
+				innerSeries = shardedInnerSeries.DataBySourceShard(shardID)
+				shardedData = incomingData.ShardedData()
 			)
 
-			if err := lss.WithRLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
+			if err := shard.LSSWithRLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
 				stats[shardID], ok, rErr = relabeler.RelabelingFromCache(
 					ctx,
 					input,
 					target,
 					state,
-					incomingData.ShardedData(),
-					shardedInnerSeries.DataBySourceShard(shardID),
+					shardedData,
+					innerSeries,
 				)
 
 				return rErr
@@ -232,20 +223,21 @@ func (a Appender[TTask, TLSS, TShard, THead]) inputRelabelingStage(
 			var (
 				hasReallocations bool
 				rstats           = cppbridge.RelabelerStats{}
+				relabeledSeries  = shardedRelabeledSeries.DataByShard(shardID)
 			)
-			err := lss.WithLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
+			err := shard.LSSWithLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
 				rstats, hasReallocations, rErr = relabeler.Relabeling(
 					ctx,
 					input,
 					target,
 					state,
-					incomingData.ShardedData(),
-					shardedInnerSeries.DataBySourceShard(shardID),
-					shardedRelabeledSeries.DataByShard(shardID),
+					shardedData,
+					innerSeries,
+					relabeledSeries,
 				)
 
 				if hasReallocations {
-					lss.ResetSnapshot()
+					shard.LSSResetSnapshot()
 				}
 
 				return rErr
@@ -274,7 +266,7 @@ func (a Appender[TTask, TLSS, TShard, THead]) inputRelabelingStage(
 }
 
 // appendRelabelerSeriesStage second stage - append to lss relabeling ls.
-func (a Appender[TTask, TLSS, TShard, THead]) appendRelabelerSeriesStage(
+func (a Appender[TTask, TShard, THead]) appendRelabelerSeriesStage(
 	ctx context.Context,
 	shardedInnerSeries *ShardedInnerSeries,
 	shardedRelabeledSeries *ShardedRelabeledSeries,
@@ -290,22 +282,22 @@ func (a Appender[TTask, TLSS, TShard, THead]) appendRelabelerSeriesStage(
 				return nil
 			}
 
-			lss := shard.LSS()
-
-			return lss.WithLock(func(target, _ *cppbridge.LabelSetStorage) error {
+			innerSeries := shardedInnerSeries.DataByShard(shardID)
+			stateUpdates := shardedStateUpdates.DataByShard(shardID)
+			return shard.LSSWithLock(func(target, _ *cppbridge.LabelSetStorage) error {
 				hasReallocations, err := shard.Relabeler().AppendRelabelerSeries(
 					ctx,
 					target,
-					shardedInnerSeries.DataByShard(shardID),
+					innerSeries,
 					relabeledSeries,
-					shardedStateUpdates.DataByShard(shardID),
+					stateUpdates,
 				)
 				if err != nil {
 					return fmt.Errorf("shard %d: %w", shardID, err)
 				}
 
 				if hasReallocations {
-					lss.ResetSnapshot()
+					shard.LSSResetSnapshot()
 				}
 
 				return nil
@@ -318,7 +310,7 @@ func (a Appender[TTask, TLSS, TShard, THead]) appendRelabelerSeriesStage(
 }
 
 // updateRelabelerStateStage third stage - update state cache.
-func (a Appender[TTask, TLSS, TShard, THead]) updateRelabelerStateStage(
+func (a Appender[TTask, TShard, THead]) updateRelabelerStateStage(
 	ctx context.Context,
 	state *cppbridge.StateV2,
 	shardedStateUpdates *ShardedStateUpdates,
@@ -339,7 +331,7 @@ func (a Appender[TTask, TLSS, TShard, THead]) updateRelabelerStateStage(
 }
 
 // appendInnerSeriesAndWriteToWal append [cppbridge.InnerSeries] to [Shard]'s to [DataStorage] and write to [Wal].
-func (a Appender[TTask, TLSS, TShard, THead]) appendInnerSeriesAndWriteToWal(
+func (a Appender[TTask, TShard, THead]) appendInnerSeriesAndWriteToWal(
 	shardedInnerSeries *ShardedInnerSeries,
 ) (uint32, error) {
 	tw := task.NewTaskWaiter[TTask](2) //revive:disable-line:add-constant // 2 task for wait
@@ -378,7 +370,7 @@ func (a Appender[TTask, TLSS, TShard, THead]) appendInnerSeriesAndWriteToWal(
 	return atomicLimitExhausted, tw.Wait()
 }
 
-func (a Appender[TTask, TLSS, TShard, THead]) resolveState(state *cppbridge.StateV2) error {
+func (a Appender[TTask, TShard, THead]) resolveState(state *cppbridge.StateV2) error {
 	if state == nil {
 		return errNilState
 	}

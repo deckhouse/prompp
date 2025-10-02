@@ -25,7 +25,7 @@ func NewMetrics(registerer prometheus.Registerer, source string) *Metrics {
 	return &Metrics{
 		LabelNamesDuration: factory.NewHistogram(
 			prometheus.HistogramOpts{
-				Name: "prompp_head_query_label_names_duration",
+				Name: "prompp_querier_query_label_names_duration",
 				Help: "Label names query from head duration in microseconds",
 				Buckets: []float64{
 					50, 100, 250, 500, 750,
@@ -38,7 +38,7 @@ func NewMetrics(registerer prometheus.Registerer, source string) *Metrics {
 		),
 		LabelValuesDuration: factory.NewHistogram(
 			prometheus.HistogramOpts{
-				Name: "prompp_head_query_label_values_duration",
+				Name: "prompp_querier_query_label_values_duration",
 				Help: "Label values query from head duration in microseconds",
 				Buckets: []float64{
 					50, 100, 250, 500, 750,
@@ -51,7 +51,7 @@ func NewMetrics(registerer prometheus.Registerer, source string) *Metrics {
 		),
 		SelectDuration: factory.NewHistogramVec(
 			prometheus.HistogramOpts{
-				Name: "prompp_head_query_select_duration",
+				Name: "prompp_querier_query_select_duration",
 				Help: "Select query from head duration in microseconds",
 				Buckets: []float64{
 					50, 100, 250, 500, 750,

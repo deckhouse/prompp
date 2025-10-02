@@ -52,10 +52,10 @@ func NewWriter[TShard Shard](
 	}
 }
 
-func (w *Writer[TShard]) Write(shard TShard) (writtenBlocks []WrittenBlock, err error) {
-	_ = shard.LSS().WithRLock(func(_, _ *cppbridge.LabelSetStorage) error {
+func (w *Writer[TShard]) Write(sd TShard) (writtenBlocks []WrittenBlock, err error) {
+	_ = sd.LSS().WithRLock(func(_, _ *cppbridge.LabelSetStorage) error {
 		var writers blockWriters
-		writers, err = w.createWriters(shard)
+		writers, err = w.createWriters(sd)
 		if err != nil {
 			return err
 		}
@@ -64,20 +64,22 @@ func (w *Writer[TShard]) Write(shard TShard) (writtenBlocks []WrittenBlock, err 
 			writers.close()
 		}()
 
-		if err = w.recodeAndWriteChunks(shard, writers); err != nil {
+		if err = w.recodeAndWriteChunks(sd, writers); err != nil {
 			return err
 		}
 
 		writtenBlocks, err = writers.writeIndexAndMoveTmpDirToDir()
+
 		return nil
 	})
-	return
+
+	return writtenBlocks, err
 }
 
-func (w *Writer[TShard]) createWriters(shard TShard) (blockWriters, error) {
+func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 	var writers blockWriters
 
-	timeInterval := shard.DataStorage().TimeInterval(false)
+	timeInterval := sd.DataStorage().TimeInterval(false)
 
 	quantStart := (timeInterval.MinT / w.blockDurationMs) * w.blockDurationMs
 	for ; quantStart <= timeInterval.MaxT; quantStart += w.blockDurationMs {
@@ -90,26 +92,32 @@ func (w *Writer[TShard]) createWriters(shard TShard) (blockWriters, error) {
 		}
 
 		var chunkIterator ChunkIterator
-		_ = shard.DataStorage().WithRLock(func(ds *cppbridge.HeadDataStorage) error {
-			chunkIterator = NewChunkIterator(shard.LSS().Target(), LsIdBatchSize, shard.DataStorage().Raw(), minT, maxT)
+		_ = sd.DataStorage().WithRLock(func(*cppbridge.HeadDataStorage) error {
+			chunkIterator = NewChunkIterator(sd.LSS().Target(), LsIdBatchSize, sd.DataStorage().Raw(), minT, maxT)
 			return nil
 		})
 
-		if writer, err := newBlockWriter(w.dataDir, w.maxBlockChunkSegmentSize, NewIndexWriter(shard.LSS().Target()), chunkIterator); err == nil {
-			writers.append(writer)
-		} else {
+		writer, err := newBlockWriter(
+			w.dataDir,
+			w.maxBlockChunkSegmentSize,
+			NewIndexWriter(sd.LSS().Target()),
+			chunkIterator,
+		)
+		if err != nil {
 			writers.close()
 			return blockWriters{}, err
 		}
+
+		writers.append(writer)
 	}
 
 	return writers, nil
 }
 
-func (w *Writer[TShard]) recodeAndWriteChunks(shard TShard, writers blockWriters) error {
+func (*Writer[TShard]) recodeAndWriteChunks(sd TShard, writers blockWriters) error {
 	var loader *cppbridge.UnloadedDataRevertableLoader
-	_ = shard.DataStorage().WithRLock(func(ds *cppbridge.HeadDataStorage) error {
-		loader = shard.DataStorage().CreateRevertableLoader(shard.LSS().Target(), LsIdBatchSize)
+	_ = sd.DataStorage().WithRLock(func(*cppbridge.HeadDataStorage) error {
+		loader = sd.DataStorage().CreateRevertableLoader(sd.LSS().Target(), LsIdBatchSize)
 		return nil
 	})
 
@@ -118,23 +126,21 @@ func (w *Writer[TShard]) recodeAndWriteChunks(shard TShard, writers blockWriters
 	loadData := func() (bool, error) {
 		if isFirstBatch {
 			isFirstBatch = false
-		} else {
-			if !loader.NextBatch() {
-				return false, nil
-			}
+		} else if !loader.NextBatch() {
+			return false, nil
 		}
 
-		if shard.UnloadedDataStorage() == nil {
+		if sd.UnloadedDataStorage() == nil {
 			return true, nil
 		}
 
-		return true, shard.UnloadedDataStorage().ForEachSnapshot(loader.Load)
+		return true, sd.UnloadedDataStorage().ForEachSnapshot(loader.Load)
 	}
 
 	for {
 		var hasMoreData bool
 		var err error
-		_ = shard.DataStorage().WithLock(func(ds *cppbridge.HeadDataStorage) error {
+		_ = sd.DataStorage().WithLock(func(*cppbridge.HeadDataStorage) error {
 			hasMoreData, err = loadData()
 			return nil
 		})
@@ -147,7 +153,7 @@ func (w *Writer[TShard]) recodeAndWriteChunks(shard TShard, writers blockWriters
 			return err
 		}
 
-		if err = shard.DataStorage().WithRLock(func(ds *cppbridge.HeadDataStorage) error {
+		if err = sd.DataStorage().WithRLock(func(*cppbridge.HeadDataStorage) error {
 			return writers.recodeAndWriteChunksBatch()
 		}); err != nil {
 			return err

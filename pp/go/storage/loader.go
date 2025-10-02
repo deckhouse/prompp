@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/head"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
@@ -20,7 +21,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/reader"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
-	"github.com/prometheus/prometheus/pp/go/storage/logger"
 	"github.com/prometheus/prometheus/pp/go/util/optional"
 )
 
@@ -47,7 +47,11 @@ func NewLoader(
 	}
 }
 
-// Load upload [HeadOnDisk] from [WalOnDisk] by head ID.
+// Load [HeadOnDisk] from [WalOnDisk] by head ID.
+//
+//revive:disable-next-line:cognitive-complexity // function is not complicated
+//revive:disable-next-line:function-length // long but readable.
+//revive:disable-next-line:cyclomatic // but readable
 func (l *Loader) Load(
 	headRecord *catalog.Record,
 	generation uint64,
@@ -105,7 +109,18 @@ func (l *Loader) Load(
 		if numberOfSegmentsRead.Value() > 0 {
 			headRecord.SetLastAppendedSegmentID(numberOfSegmentsRead.Value() - 1)
 		}
-		logger.Errorf("head: %s number of segments mismatched", headRecord.ID())
+
+		lastAppendedSegmentID := uint32(0)
+		if headRecord.LastAppendedSegmentID() != nil {
+			lastAppendedSegmentID = *headRecord.LastAppendedSegmentID()
+		}
+
+		logger.Errorf(
+			"head: %s number of segments mismatched: last appended=%d, number of segments read=%d",
+			headRecord.ID(),
+			lastAppendedSegmentID,
+			numberOfSegmentsRead.Value(),
+		)
 	}
 
 	h := head.NewHead(
@@ -121,10 +136,12 @@ func (l *Loader) Load(
 		corrupted = true
 	}
 
+	logger.Debugf("[Loader] loaded head: %s, corrupted: %t", headRecord.ID(), corrupted)
+
 	return h, corrupted
 }
 
-func (l *Loader) loadShard(
+func (*Loader) loadShard(
 	shardID uint16,
 	dir string,
 	maxSegmentSize uint32,
@@ -147,14 +164,15 @@ func (l *Loader) loadShard(
 	}
 }
 
+// ShardLoadResult the result of loading a shard from a wal file.
 type ShardLoadResult struct {
 	shard            *ShardOnDisk
 	numberOfSegments uint32
 	corrupted        bool
 }
 
+// ShardData data for creating a shard.
 type ShardData struct {
-	notifier             *writer.SegmentWriteNotifier
 	lss                  *shard.LSS
 	dataStorage          *shard.DataStorage
 	wal                  *WalOnDisk
@@ -163,6 +181,7 @@ type ShardData struct {
 	numberOfSegments     uint32
 }
 
+// ShardDataLoader loads shard data from a file and creates a shard.
 type ShardDataLoader struct {
 	shardID                   uint16
 	dir                       string
@@ -172,6 +191,7 @@ type ShardDataLoader struct {
 	unloadDataStorageInterval time.Duration
 }
 
+// NewShardDataLoader init new [ShardDataLoader].
 func NewShardDataLoader(
 	shardID uint16,
 	dir string,
@@ -188,46 +208,52 @@ func NewShardDataLoader(
 	}
 }
 
-func (l *ShardDataLoader) Load() (err error) {
+// Load loads shard data from a file and creates a shard.
+func (l *ShardDataLoader) Load() error {
 	l.shardData = ShardData{
 		lss:         shard.NewLSS(),
 		dataStorage: shard.NewDataStorage(),
 		wal: wal.NewCorruptedWal[
-			*cppbridge.EncodedSegment,
-			cppbridge.WALEncoderStats,
-			*writer.Buffered[*cppbridge.EncodedSegment],
+			*cppbridge.HeadEncodedSegment,
+			*writer.Buffered[*cppbridge.HeadEncodedSegment],
 		](),
 	}
 
-	shardWalFile, err := os.OpenFile(GetShardWalFilename(l.dir, l.shardID), os.O_RDWR, 0666)
+	shardWalFile, err := os.OpenFile( //nolint:gosec // need this permissions
+		GetShardWalFilename(l.dir, l.shardID),
+		os.O_RDONLY,
+		0o666, //revive:disable-line:add-constant // file permissions simple readable as octa-number
+	)
 	if err != nil {
 		return err
 	}
-
 	defer func() {
-		if err != nil {
-			_ = shardWalFile.Close()
-		}
+		_ = shardWalFile.Close()
 	}()
 
 	queriedSeriesStorageIsEmpty := true
 	if l.unloadDataStorageInterval > 0 {
-		l.shardData.unloadedDataStorage = shard.NewUnloadedDataStorage(shard.NewFileStorage(GetUnloadedDataStorageFilename(l.dir, l.shardID)))
+		l.shardData.unloadedDataStorage = shard.NewUnloadedDataStorage(
+			shard.NewFileStorage(GetUnloadedDataStorageFilename(l.dir, l.shardID)),
+		)
 		queriedSeriesStorageIsEmpty, _ = l.loadQueriedSeries()
 	}
 
-	decoder, err := l.loadWalFile(bufio.NewReaderSize(shardWalFile, 1024*1024*4), queriedSeriesStorageIsEmpty)
+	decoder, err := l.loadWalFile(bufio.NewReaderSize(shardWalFile, 1024*1024*10), queriedSeriesStorageIsEmpty)
 	if err != nil {
 		return err
 	}
 
-	if err = l.createShardWal(shardWalFile, decoder); err != nil {
+	if err = l.createShardWal(shardWalFile.Name(), decoder); err != nil {
 		return err
 	}
 
 	return nil
 }
 
+// loadWalFile loads and decode wal file.
+//
+//revive:disable-next-line:flag-parameter this is a flag, but it's more convenient this way
 func (l *ShardDataLoader) loadWalFile(
 	rd io.Reader,
 	queriedSeriesStorageIsEmpty bool,
@@ -254,17 +280,40 @@ func (l *ShardDataLoader) loadWalFile(
 		l.shardData.dataStorage,
 		unloader,
 	)
+
 	return decoder, err
 }
 
-func (l *ShardDataLoader) createShardWal(shardWalFile *os.File, walDecoder *cppbridge.HeadWalDecoder) error {
-	if sw, err := writer.NewBuffered(l.shardID, shardWalFile, writer.WriteSegment[*cppbridge.EncodedSegment], l.notifier); err != nil {
+// createShardWal creates a wal for a shard.
+func (l *ShardDataLoader) createShardWal(fileName string, walDecoder *cppbridge.HeadWalDecoder) error {
+	shardWalFile, err := os.OpenFile( //nolint:gosec // need this permissions
+		fileName,
+		os.O_WRONLY|os.O_APPEND,
+		0o666, //revive:disable-line:add-constant // file permissions simple readable as octa-number
+	)
+	if err != nil {
 		return err
-	} else {
-		l.notifier.Set(l.shardID, l.shardData.numberOfSegments)
-		l.shardData.wal = wal.NewWal(walDecoder.CreateEncoder(), sw, l.maxSegmentSize)
-		return nil
 	}
+	if _, err = shardWalFile.Seek(0, io.SeekEnd); err != nil {
+		_ = shardWalFile.Close()
+		return err
+	}
+
+	sw, err := writer.NewBuffered(
+		l.shardID,
+		shardWalFile,
+		writer.WriteSegment[*cppbridge.HeadEncodedSegment],
+		l.notifier,
+	)
+	if err != nil {
+		_ = shardWalFile.Close()
+		return err
+	}
+
+	l.notifier.Set(l.shardID, l.shardData.numberOfSegments)
+	l.shardData.wal = wal.NewWal(walDecoder.CreateEncoder(), sw, l.maxSegmentSize)
+
+	return nil
 }
 
 type dataUnloader struct {
@@ -298,6 +347,7 @@ func (d *dataUnloader) Unload(createTs, encodeTs time.Duration) error {
 	return nil
 }
 
+// loadSegments loads and decode segments from wal file.
 func (l *ShardDataLoader) loadSegments(
 	rd io.Reader,
 	walDecoder *cppbridge.HeadWalDecoder,
@@ -341,34 +391,33 @@ func (l *ShardDataLoader) loadQueriedSeries() (bool, error) {
 		}
 
 		logger.Warnf("error loading queried series: %v", err)
-	} else {
-		if !l.shardData.dataStorage.SetQueriedSeriesBitset(queriedSeries) {
-			logger.Warnf("error set queried series in storage: %v", err)
-		}
+	} else if !l.shardData.dataStorage.SetQueriedSeriesBitset(queriedSeries) {
+		logger.Warnf("error set queried series in storage: %v", err)
 	}
 
 	return false, nil
 }
 
+// GetShardWalFilename returns shard's Wal file name.
 func GetShardWalFilename(dir string, shardID uint16) string {
 	return filepath.Join(dir, fmt.Sprintf("shard_%d.wal", shardID))
 }
 
+// GetUnloadedDataStorageFilename returns unloaded DataStorage file name.
 func GetUnloadedDataStorageFilename(dir string, shardID uint16) string {
 	return filepath.Join(dir, fmt.Sprintf("unloaded_%d.ds", shardID))
 }
 
+// GetQueriedSeriesStorageFilename returns queried series storage file name.
 func GetQueriedSeriesStorageFilename(dir string, shardID uint16, index uint8) string {
 	return filepath.Join(dir, fmt.Sprintf("queried_series_%d_%d.ds", shardID, index))
 }
 
 // isNumberOfSegmentsMismatched check number of segments loaded and last appended to record.
 func isNumberOfSegmentsMismatched(record *catalog.Record, loadedSegments uint32) bool {
-	return false
+	if record.LastAppendedSegmentID() == nil {
+		return loadedSegments != 0
+	}
 
-	// TODO: uncomment this code block
-	//if record.LastAppendedSegmentID() == nil {
-	//	return loadedSegments != 0
-	//}
-	//return *record.LastAppendedSegmentID()+1 != loadedSegments
+	return *record.LastAppendedSegmentID()+1 != loadedSegments
 }

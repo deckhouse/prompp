@@ -100,6 +100,7 @@ class BasicLabelSet {
   [[nodiscard]] PROMPP_ALWAYS_INLINE auto size() const noexcept { return labels_.size(); }
 
   PROMPP_ALWAYS_INLINE void reserve(size_t size) noexcept { labels_.reserve(size); }
+  PROMPP_ALWAYS_INLINE void resize(size_t size) noexcept { labels_.resize(size); }
 
   using iterator = typename Container<LabelType>::iterator;
   using const_iterator = typename Container<LabelType>::const_iterator;

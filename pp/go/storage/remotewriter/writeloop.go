@@ -12,8 +12,8 @@ import (
 	"github.com/prometheus/prometheus/storage/remote"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
-	"github.com/prometheus/prometheus/pp/go/storage/logger"
 )
 
 const defaultDelay = time.Second * 5
@@ -274,7 +274,7 @@ func nextHead(ctx context.Context, dataDir string, headCatalog Catalog, headID s
 			continue
 		}
 
-		if err := validateHead(ctx, filepath.Join(dataDir, headRecord.Dir())); err != nil {
+		if err := validateHead(filepath.Join(dataDir, headRecord.Dir())); err != nil {
 			if !errors.Is(err, os.ErrNotExist) {
 				return nil, err
 			}
@@ -298,7 +298,7 @@ func nextHead(ctx context.Context, dataDir string, headCatalog Catalog, headID s
 	return nil, fmt.Errorf("nextHead: no new heads: appropriate head not found")
 }
 
-func validateHead(ctx context.Context, headDir string) error {
+func validateHead(headDir string) error {
 	dir, err := os.Open(headDir)
 	if err != nil {
 		return err

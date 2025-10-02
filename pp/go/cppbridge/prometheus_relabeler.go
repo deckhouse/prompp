@@ -1620,6 +1620,8 @@ func (s *StateV2) Reconfigure(
 
 	s.resetCaches(numberOfShards)
 	s.resetStaleNansStates(numberOfShards)
+	s.status |= inited
+	s.generationHead = generationHead
 
 	s.locker.Unlock()
 }

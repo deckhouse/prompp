@@ -14,11 +14,13 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+// TimeSeries test data.
 type TimeSeries struct {
 	Labels  labels.Labels
 	Samples []cppbridge.Sample
 }
 
+// AppendSamples add samples to time series.
 func (s *TimeSeries) AppendSamples(samples ...cppbridge.Sample) {
 	s.Samples = append(s.Samples, samples...)
 }
@@ -35,7 +37,7 @@ func (s *TimeSeries) toModelTimeSeries() []model.TimeSeries {
 	for i := range s.Samples {
 		timeSeries = append(timeSeries, model.TimeSeries{
 			LabelSet:  ls,
-			Timestamp: uint64(s.Samples[i].Timestamp),
+			Timestamp: uint64(s.Samples[i].Timestamp), // #nosec G115 // no overflow
 			Value:     s.Samples[i].Value,
 		})
 	}
@@ -55,6 +57,7 @@ func (tsd *timeSeriesDataSlice) Destroy() {
 	tsd.timeSeries = nil
 }
 
+// MustAppendTimeSeries add time series to head.
 func MustAppendTimeSeries(s *suite.Suite, head *storage.HeadOnDisk, timeSeries []TimeSeries) {
 	headAppender := appender.New(head, services.CFViaRange)
 
@@ -67,7 +70,7 @@ func MustAppendTimeSeries(s *suite.Suite, head *storage.HeadOnDisk, timeSeries [
 	for i := range timeSeries {
 		tsd := timeSeriesDataSlice{timeSeries: timeSeries[i].toModelTimeSeries()}
 		hx, err := (cppbridge.HashdexFactory{}).GoModel(tsd.TimeSeries(), cppbridge.DefaultWALHashdexLimits())
-		s.NoError(err)
+		s.Require().NoError(err)
 
 		_, _, err = headAppender.Append(
 			context.Background(),
@@ -78,8 +81,10 @@ func MustAppendTimeSeries(s *suite.Suite, head *storage.HeadOnDisk, timeSeries [
 	}
 }
 
+// SamplesMap samples map with series ID as key.
 type SamplesMap map[uint32][]cppbridge.Sample
 
+// GetSamplesFromSerializedChunks returns sample from serialized chunks.
 func GetSamplesFromSerializedChunks(chunks *cppbridge.HeadDataStorageSerializedChunks) SamplesMap {
 	result := make(SamplesMap)
 
@@ -93,13 +98,13 @@ func GetSamplesFromSerializedChunks(chunks *cppbridge.HeadDataStorageSerializedC
 		for iterator.Next() {
 			ts, value := iterator.Sample()
 			result[seriesId] = append(result[seriesId], cppbridge.Sample{Timestamp: ts, Value: value})
-
 		}
 	}
 
 	return result
 }
 
+// TimeSeriesFromSeriesSet converting seriesset to slice timeseries.
 func TimeSeriesFromSeriesSet(seriesSet promstorage.SeriesSet) []TimeSeries {
 	var timeSeries []TimeSeries
 	for seriesSet.Next() {

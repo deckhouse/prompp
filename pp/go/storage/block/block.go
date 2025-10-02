@@ -26,7 +26,7 @@ func (c *Chunk) SeriesID() uint32 {
 	return c.rc.SeriesId
 }
 
-func (c *Chunk) Encoding() chunkenc.Encoding {
+func (*Chunk) Encoding() chunkenc.Encoding {
 	return chunkenc.EncXOR
 }
 
@@ -43,8 +43,16 @@ type ChunkIterator struct {
 	rc *cppbridge.RecodedChunk
 }
 
-func NewChunkIterator(lss *cppbridge.LabelSetStorage, lsIdBatchSize uint32, ds *cppbridge.HeadDataStorage, minT, maxT int64) ChunkIterator {
-	return ChunkIterator{r: cppbridge.NewChunkRecoder(lss, lsIdBatchSize, ds, cppbridge.TimeInterval{MinT: minT, MaxT: maxT})}
+// NewChunkIterator init new [ChunkIterator].
+func NewChunkIterator(
+	lss *cppbridge.LabelSetStorage,
+	lsIdBatchSize uint32,
+	ds *cppbridge.HeadDataStorage,
+	minT, maxT int64,
+) ChunkIterator {
+	return ChunkIterator{
+		r: cppbridge.NewChunkRecoder(lss, lsIdBatchSize, ds, cppbridge.TimeInterval{MinT: minT, MaxT: maxT}),
+	}
 }
 
 func (i *ChunkIterator) Next() bool {
@@ -66,35 +74,18 @@ func (i *ChunkIterator) At() Chunk {
 	return Chunk{rc: i.rc}
 }
 
+//
+// IndexWriter
+//
+
 type IndexWriter struct {
 	cppIndexWriter  *cppbridge.IndexWriter
 	isPrefixWritten bool
 }
 
-func (iw *IndexWriter) WriteSeriesTo(id uint32, chunks []ChunkMetadata, w io.Writer) (n int64, err error) {
-	if !iw.isPrefixWritten {
-		var bytesWritten int
-		bytesWritten, err = w.Write(iw.cppIndexWriter.WriteHeader())
-		n += int64(bytesWritten)
-		if err != nil {
-			return n, fmt.Errorf("failed to write header: %w", err)
-		}
-
-		bytesWritten, err = w.Write(iw.cppIndexWriter.WriteSymbols())
-		n += int64(bytesWritten)
-		if err != nil {
-			return n, fmt.Errorf("failed to write symbols: %w", err)
-		}
-		iw.isPrefixWritten = true
-	}
-
-	bytesWritten, err := w.Write(iw.cppIndexWriter.WriteSeries(id, *(*[]cppbridge.ChunkMetadata)(unsafe.Pointer(&chunks))))
-	n += int64(bytesWritten)
-	if err != nil {
-		return n, fmt.Errorf("failed to write series: %w", err)
-	}
-
-	return n, nil
+// NewIndexWriter init new [IndexWriter].
+func NewIndexWriter(lss *cppbridge.LabelSetStorage) IndexWriter {
+	return IndexWriter{cppIndexWriter: cppbridge.NewIndexWriter(lss)}
 }
 
 func (iw *IndexWriter) WriteRestTo(w io.Writer) (n int64, err error) {
@@ -137,6 +128,37 @@ func (iw *IndexWriter) WriteRestTo(w io.Writer) (n int64, err error) {
 	return n, nil
 }
 
-func NewIndexWriter(lss *cppbridge.LabelSetStorage) IndexWriter {
-	return IndexWriter{cppIndexWriter: cppbridge.NewIndexWriter(lss)}
+// WriteSeriesTo write series(id and chunks) to [io.Writer].
+func (iw *IndexWriter) WriteSeriesTo(id uint32, chunks []ChunkMetadata, w io.Writer) (n int64, err error) {
+	if !iw.isPrefixWritten {
+		var bytesWritten int
+		bytesWritten, err = w.Write(iw.cppIndexWriter.WriteHeader())
+		n += int64(bytesWritten)
+		if err != nil {
+			return n, fmt.Errorf("failed to write header: %w", err)
+		}
+
+		bytesWritten, err = w.Write(iw.cppIndexWriter.WriteSymbols())
+		n += int64(bytesWritten)
+		if err != nil {
+			return n, fmt.Errorf("failed to write symbols: %w", err)
+		}
+		iw.isPrefixWritten = true
+	}
+
+	bytesWritten, err := w.Write(iw.cppIndexWriter.WriteSeries(
+		id,
+		*(*[]cppbridge.ChunkMetadata)(unsafe.Pointer(&chunks)), // #nosec G103 // it's meant to be that way
+	))
+	n += int64(bytesWritten)
+	if err != nil {
+		return n, fmt.Errorf("failed to write series: %w", err)
+	}
+
+	return n, nil
+}
+
+// isEmpty returns true if [IndexWriter] contains no samples, an empty block.
+func (iw *IndexWriter) isEmpty() bool {
+	return !iw.isPrefixWritten
 }

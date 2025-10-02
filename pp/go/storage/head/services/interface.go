@@ -5,7 +5,12 @@ import (
 	"time"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/storage/block"
+	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 )
+
+//go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg mock --out
+//go:generate moq mock/persistener.go . HeadBlockWriter WriteNotifier
 
 //
 // ActiveHeadContainer
@@ -24,6 +29,12 @@ type ActiveHeadContainer[
 //
 // Head
 //
+
+// RangeHead the minimum required [Head] implementation.
+type RangeHead[TShard Shard] interface {
+	// RangeShards returns an iterator over the [Head] [Shard]s, through which the shard can be directly accessed.
+	RangeShards() func(func(TShard) bool)
+}
 
 // Head the minimum required [Head] implementation.
 type Head[
@@ -207,4 +218,37 @@ type Shard interface {
 type Task interface {
 	// Wait for the task to complete on all shards.
 	Wait() error
+}
+
+//
+// WriteNotifier
+//
+
+// WriteNotifier sends a notify that the writing is completed.
+type WriteNotifier interface {
+	// Notify sends a notify that the writing is completed.
+	Notify()
+}
+
+//
+// Loader
+//
+
+// Loader loads [Head] from [Wal].
+type Loader[
+	TTask Task,
+	TShard, TGoShard Shard,
+	THead Head[TTask, TShard, TGoShard],
+] interface {
+	// Load [Head] from [Wal] by head ID.
+	Load(headRecord *catalog.Record, generation uint64) (THead, bool)
+}
+
+//
+// HeadBlockWriter
+//
+
+// HeadBlockWriter writes block on disk from [Head].
+type HeadBlockWriter[TShard Shard] interface {
+	Write(shard TShard) ([]block.WrittenBlock, error)
 }

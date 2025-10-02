@@ -111,9 +111,9 @@ type ConstantIntervalTimer struct {
 }
 
 // NewConstantIntervalTimer init new [ConstantIntervalTimer].
-func NewConstantIntervalTimer(clock clockwork.Clock, interval time.Duration) *ConstantIntervalTimer {
+func NewConstantIntervalTimer(clock clockwork.Clock, start, interval time.Duration) *ConstantIntervalTimer {
 	return &ConstantIntervalTimer{
-		timer:    clock.NewTimer(interval),
+		timer:    clock.NewTimer(start),
 		interval: interval,
 	}
 }

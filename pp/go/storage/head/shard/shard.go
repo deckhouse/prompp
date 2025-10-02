@@ -36,26 +36,26 @@ type Wal interface {
 //
 
 // Shard bridge to labelset storage, data storage and wal.
-type Shard[TWal Wal] struct {
+type Shard struct {
 	lss                  *LSS
 	dataStorage          *DataStorage
 	unloadedDataStorage  *UnloadedDataStorage
 	queriedSeriesStorage *QueriedSeriesStorage
 	loadAndQueryTask     *LoadAndQuerySeriesDataTask
-	wal                  TWal
+	wal                  Wal
 	id                   uint16
 }
 
 // NewShard init new [Shard].
-func NewShard[TWal Wal](
+func NewShard(
 	lss *LSS,
 	dataStorage *DataStorage,
 	unloadedDataStorage *UnloadedDataStorage,
 	queriedSeriesStorage *QueriedSeriesStorage,
-	wal TWal,
+	wal Wal,
 	shardID uint16,
-) *Shard[TWal] {
-	return &Shard[TWal]{
+) *Shard {
+	return &Shard{
 		id:                   shardID,
 		lss:                  lss,
 		dataStorage:          dataStorage,
@@ -67,12 +67,12 @@ func NewShard[TWal Wal](
 }
 
 // AppendInnerSeriesSlice add InnerSeries to [DataStorage].
-func (s *Shard[TWal]) AppendInnerSeriesSlice(innerSeriesSlice []*cppbridge.InnerSeries) {
+func (s *Shard) AppendInnerSeriesSlice(innerSeriesSlice []*cppbridge.InnerSeries) {
 	s.dataStorage.AppendInnerSeriesSlice(innerSeriesSlice)
 }
 
 // Close closes the wal segmentWriter.
-func (s *Shard[TWal]) Close() error {
+func (s *Shard) Close() error {
 	err := s.wal.Close()
 
 	if s.unloadedDataStorage != nil {
@@ -87,89 +87,99 @@ func (s *Shard[TWal]) Close() error {
 }
 
 // DSAllocatedMemory return size of allocated memory for [DataStorage].
-func (s *Shard[TWal]) DSAllocatedMemory() uint64 {
+func (s *Shard) DSAllocatedMemory() uint64 {
 	return s.dataStorage.AllocatedMemory()
 }
 
 // DataStorage returns shard [DataStorage].
-func (s *Shard[TWal]) DataStorage() *DataStorage {
+func (s *Shard) DataStorage() *DataStorage {
 	return s.dataStorage
 }
 
 // LSS returns shard labelset storage [LSS].
-func (s *Shard[TWal]) LSS() *LSS {
+func (s *Shard) LSS() *LSS {
 	return s.lss
 }
 
 // LSSAllocatedMemory return size of allocated memory for labelset storages.
-func (s *Shard[TWal]) LSSAllocatedMemory() uint64 {
+func (s *Shard) LSSAllocatedMemory() uint64 {
 	return s.lss.AllocatedMemory()
 }
 
+// LSSWithLock calls fn on raws [cppbridge.LabelSetStorage] with write lock.
+func (s *Shard) LSSWithLock(fn func(target, input *cppbridge.LabelSetStorage) error) error {
+	return s.lss.WithLock(fn)
+}
+
+// LSSWithRLock calls fn on raws [cppbridge.LabelSetStorage] with read lock.
+func (s *Shard) LSSWithRLock(fn func(target, input *cppbridge.LabelSetStorage) error) error {
+	return s.lss.WithRLock(fn)
+}
+
+// LSSResetSnapshot resets the current snapshot. Use only WithLock.
+func (s *Shard) LSSResetSnapshot() {
+	s.lss.ResetSnapshot()
+}
+
 // MergeOutOfOrderChunks merge chunks with out of order data chunks in [DataStorage].
-func (s *Shard[TWal]) MergeOutOfOrderChunks() {
+func (s *Shard) MergeOutOfOrderChunks() {
 	s.dataStorage.MergeOutOfOrderChunks()
 }
 
 // ShardID returns the shard ID.
-func (s *Shard[TWal]) ShardID() uint16 {
+func (s *Shard) ShardID() uint16 {
 	return s.id
 }
 
-// Wal returns write-ahead log.
-func (s *Shard[TWal]) Wal() TWal {
-	return s.wal
-}
-
 // WalCommit finalize segment from encoder and write to wal.
-func (s *Shard[TWal]) WalCommit() error {
+func (s *Shard) WalCommit() error {
 	return s.lss.WithRLock(func(_, _ *cppbridge.LabelSetStorage) error {
 		return s.wal.Commit()
 	})
 }
 
 // WalCurrentSize returns current [Wal] size.
-func (s *Shard[TWal]) WalCurrentSize() int64 {
+func (s *Shard) WalCurrentSize() int64 {
 	return s.wal.CurrentSize()
 }
 
 // WalFlush flush all contetnt into wal.
-func (s *Shard[TWal]) WalFlush() error {
+func (s *Shard) WalFlush() error {
 	return s.wal.Flush()
 }
 
 // WalSync commits the current contents of the [Wal].
-func (s *Shard[TWal]) WalSync() error {
+func (s *Shard) WalSync() error {
 	return s.wal.Sync()
 }
 
 // WalWrite append the incoming inner series to wal encoder.
-func (s *Shard[TWal]) WalWrite(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error) {
+func (s *Shard) WalWrite(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error) {
 	return s.wal.Write(innerSeriesSlice)
 }
 
 // TimeInterval get time interval from [DataStorage].
-func (s *Shard[TWal]) TimeInterval(invalidateCache bool) cppbridge.TimeInterval {
+func (s *Shard) TimeInterval(invalidateCache bool) cppbridge.TimeInterval {
 	return s.dataStorage.TimeInterval(invalidateCache)
 }
 
 // UnloadedDataStorage get unloaded data storage
-func (s *Shard[TWal]) UnloadedDataStorage() *UnloadedDataStorage {
+func (s *Shard) UnloadedDataStorage() *UnloadedDataStorage {
 	return s.unloadedDataStorage
 }
 
 // QueriedSeriesStorage get queried series storage
-func (s *Shard[TWal]) QueriedSeriesStorage() *QueriedSeriesStorage {
+func (s *Shard) QueriedSeriesStorage() *QueriedSeriesStorage {
 	return s.queriedSeriesStorage
 }
 
 // LoadAndQuerySeriesDataTask get load and query series data task
-func (s *Shard[TWal]) LoadAndQuerySeriesDataTask() *LoadAndQuerySeriesDataTask {
+func (s *Shard) LoadAndQuerySeriesDataTask() *LoadAndQuerySeriesDataTask {
 	return s.loadAndQueryTask
 }
 
 // UnloadUnusedSeriesData unload unused series data
-func (s *Shard[TWal]) UnloadUnusedSeriesData() error {
+func (s *Shard) UnloadUnusedSeriesData() error {
 	if s.UnloadedDataStorage() == nil {
 		return nil
 	}
@@ -177,7 +187,7 @@ func (s *Shard[TWal]) UnloadUnusedSeriesData() error {
 	unloader := s.DataStorage().CreateUnusedSeriesDataUnloader()
 
 	var snapshot, queriedSeries []byte
-	_ = s.DataStorage().WithRLock(func(ds *cppbridge.HeadDataStorage) error {
+	_ = s.DataStorage().WithRLock(func(*cppbridge.HeadDataStorage) error {
 		snapshot = unloader.CreateSnapshot()
 		queriedSeries = s.DataStorage().GetQueriedSeriesBitset()
 		return nil
@@ -188,7 +198,7 @@ func (s *Shard[TWal]) UnloadUnusedSeriesData() error {
 		return fmt.Errorf("unable to write unloaded series data snapshot: %v", err)
 	}
 
-	_ = s.DataStorage().WithLock(func(ds *cppbridge.HeadDataStorage) error {
+	_ = s.DataStorage().WithLock(func(*cppbridge.HeadDataStorage) error {
 		s.UnloadedDataStorage().WriteIndex(header)
 		unloader.Unload()
 		return nil
@@ -201,22 +211,23 @@ func (s *Shard[TWal]) UnloadUnusedSeriesData() error {
 	return nil
 }
 
-func (s *Shard[TWal]) LoadAndQuerySeriesData() (err error) {
+// LoadAndQuerySeriesData loads the data and queries the series from the [DataStorage].
+func (s *Shard) LoadAndQuerySeriesData() (err error) {
 	var queriers []uintptr
 	s.loadAndQueryTask.Release(func(q []uintptr) {
 		queriers = q
-		err = s.DataStorage().WithLock(func(ds *cppbridge.HeadDataStorage) error {
+		err = s.DataStorage().WithLock(func(*cppbridge.HeadDataStorage) error {
 			loader := s.DataStorage().CreateLoader(queriers)
 			return s.UnloadedDataStorage().ForEachSnapshot(loader.Load)
 		})
 	})
-
 	if err != nil {
-		return
+		return err
 	}
 
 	s.DataStorage().QueryFinal(queriers)
-	return
+
+	return nil
 }
 
 //
@@ -224,20 +235,20 @@ func (s *Shard[TWal]) LoadAndQuerySeriesData() (err error) {
 //
 
 // PerGoroutineShard wrapper of shard with [PerGoroutineRelabeler] for goroutines.
-type PerGoroutineShard[TWal Wal] struct {
+type PerGoroutineShard struct {
 	relabeler *cppbridge.PerGoroutineRelabeler
-	*Shard[TWal]
+	*Shard
 }
 
 // NewPerGoroutineShard init new [PerGoroutineShard].
-func NewPerGoroutineShard[TWal Wal](s *Shard[TWal], numberOfShards uint16) *PerGoroutineShard[TWal] {
-	return &PerGoroutineShard[TWal]{
+func NewPerGoroutineShard[TWal Wal](s *Shard, numberOfShards uint16) *PerGoroutineShard {
+	return &PerGoroutineShard{
 		relabeler: cppbridge.NewPerGoroutineRelabeler(numberOfShards, s.ShardID()),
 		Shard:     s,
 	}
 }
 
 // Relabeler returns relabeler for shard goroutines.
-func (s *PerGoroutineShard[TWal]) Relabeler() *cppbridge.PerGoroutineRelabeler {
+func (s *PerGoroutineShard) Relabeler() *cppbridge.PerGoroutineRelabeler {
 	return s.relabeler
 }

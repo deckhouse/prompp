@@ -22,28 +22,37 @@ func (*headForTest) Close() error {
 	return nil
 }
 
+//
+// testRemovedHeadNotifier
+//
+
+// testRemovedHeadNotifier implementation [RemovedHeadNotifier].
+type testRemovedHeadNotifier struct {
+	count int
+}
+
+// Notify implementation [RemovedHeadNotifier].
+func (n *testRemovedHeadNotifier) Notify() {
+	n.count++
+}
+
 type sortedSlice = headSortedSlice[*headForTest]
 
 type KeeperSuite struct {
 	suite.Suite
-	keeper *Keeper[*headForTest]
+	keeper *Keeper[headForTest, *headForTest]
 }
 
 func TestKeeperSuite(t *testing.T) {
 	suite.Run(t, new(KeeperSuite))
 }
 
-func (s *KeeperSuite) getHeads() []*headForTest {
-	heads := make([]*headForTest, 0, len(s.keeper.heads))
-	for _, head := range s.keeper.heads {
-		heads = append(heads, head.head)
-	}
-	return heads
-}
-
 func (s *KeeperSuite) TestAdd() {
 	// Arrange
-	s.keeper = NewKeeper[*headForTest](2)
+	count := 0
+	addTrigger := func() { count++ }
+	removedHeadNotifier := &testRemovedHeadNotifier{}
+	s.keeper = NewKeeper[headForTest](2, addTrigger, removedHeadNotifier)
 
 	// Act
 	_ = s.keeper.Add(newHeadForTest("d"), 4)
@@ -55,12 +64,16 @@ func (s *KeeperSuite) TestAdd() {
 		{head: newHeadForTest("c"), createdAt: 3},
 		{head: newHeadForTest("d"), createdAt: 4},
 	}, s.keeper.heads)
+	s.Equal(2, count)
 	s.Equal(err, ErrorNoSlots)
 }
 
 func (s *KeeperSuite) TestAddWithReplaceNoReplace() {
 	// Arrange
-	s.keeper = NewKeeper[*headForTest](2)
+	count := 0
+	addTrigger := func() { count++ }
+	removedHeadNotifier := &testRemovedHeadNotifier{}
+	s.keeper = NewKeeper[headForTest](2, addTrigger, removedHeadNotifier)
 
 	// Act
 	_ = s.keeper.Add(newHeadForTest("d"), 4)
@@ -72,12 +85,16 @@ func (s *KeeperSuite) TestAddWithReplaceNoReplace() {
 		{head: newHeadForTest("c"), createdAt: 3},
 		{head: newHeadForTest("d"), createdAt: 4},
 	}, s.keeper.heads)
+	s.Equal(2, count)
 	s.Equal(err, ErrorNoSlots)
 }
 
 func (s *KeeperSuite) TestAddWithReplace() {
 	// Arrange
-	s.keeper = NewKeeper[*headForTest](2)
+	count := 0
+	addTrigger := func() { count++ }
+	removedHeadNotifier := &testRemovedHeadNotifier{}
+	s.keeper = NewKeeper[headForTest](2, addTrigger, removedHeadNotifier)
 
 	// Act
 	_ = s.keeper.Add(newHeadForTest("d"), 4)
@@ -89,6 +106,7 @@ func (s *KeeperSuite) TestAddWithReplace() {
 		{head: newHeadForTest("b"), createdAt: 4},
 		{head: newHeadForTest("d"), createdAt: 4},
 	}, s.keeper.heads)
+	s.Equal(3, count)
 	s.NoError(err)
 }
 
@@ -96,7 +114,10 @@ func (s *KeeperSuite) TestRemove() {
 	// Arrange
 	const Slots = 5
 
-	s.keeper = NewKeeper[*headForTest](Slots)
+	count := 0
+	addTrigger := func() { count++ }
+	removedHeadNotifier := &testRemovedHeadNotifier{}
+	s.keeper = NewKeeper[headForTest](Slots, addTrigger, removedHeadNotifier)
 	_ = s.keeper.Add(newHeadForTest("a"), 1)
 	_ = s.keeper.Add(newHeadForTest("b"), 2)
 	_ = s.keeper.Add(newHeadForTest("c"), 3)
@@ -111,5 +132,7 @@ func (s *KeeperSuite) TestRemove() {
 		{head: newHeadForTest("b"), createdAt: 2},
 		{head: newHeadForTest("d"), createdAt: 4},
 	}, s.keeper.heads)
+	s.Equal(5, count)
 	s.Equal(Slots, cap(s.keeper.heads))
+	s.Equal(1, removedHeadNotifier.count)
 }

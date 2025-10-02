@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/prometheus/prometheus/pp/go/storage/logger"
+	"github.com/prometheus/prometheus/pp/go/logger"
 )
 
 const (

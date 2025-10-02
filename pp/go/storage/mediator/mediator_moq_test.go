@@ -4,14 +4,9 @@
 package mediator_test
 
 import (
-	"github.com/prometheus/prometheus/pp/go/storage/mediator"
 	"sync"
 	"time"
 )
-
-// Ensure, that TimerMock does implement mediator.Timer.
-// If this is not the case, regenerate this file with moq.
-var _ mediator.Timer = &TimerMock{}
 
 // TimerMock is a mock implementation of mediator.Timer.
 //
@@ -21,6 +16,9 @@ var _ mediator.Timer = &TimerMock{}
 //		mockedTimer := &TimerMock{
 //			ChanFunc: func() <-chan time.Time {
 //				panic("mock out the Chan method")
+//			},
+//			ResetFunc: func()  {
+//				panic("mock out the Reset method")
 //			},
 //			StopFunc: func()  {
 //				panic("mock out the Stop method")
@@ -35,6 +33,9 @@ type TimerMock struct {
 	// ChanFunc mocks the Chan method.
 	ChanFunc func() <-chan time.Time
 
+	// ResetFunc mocks the Reset method.
+	ResetFunc func()
+
 	// StopFunc mocks the Stop method.
 	StopFunc func()
 
@@ -43,12 +44,16 @@ type TimerMock struct {
 		// Chan holds details about calls to the Chan method.
 		Chan []struct {
 		}
+		// Reset holds details about calls to the Reset method.
+		Reset []struct {
+		}
 		// Stop holds details about calls to the Stop method.
 		Stop []struct {
 		}
 	}
-	lockChan sync.RWMutex
-	lockStop sync.RWMutex
+	lockChan  sync.RWMutex
+	lockReset sync.RWMutex
+	lockStop  sync.RWMutex
 }
 
 // Chan calls ChanFunc.
@@ -75,6 +80,33 @@ func (mock *TimerMock) ChanCalls() []struct {
 	mock.lockChan.RLock()
 	calls = mock.calls.Chan
 	mock.lockChan.RUnlock()
+	return calls
+}
+
+// Reset calls ResetFunc.
+func (mock *TimerMock) Reset() {
+	if mock.ResetFunc == nil {
+		panic("TimerMock.ResetFunc: method is nil but Timer.Reset was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockReset.Lock()
+	mock.calls.Reset = append(mock.calls.Reset, callInfo)
+	mock.lockReset.Unlock()
+	mock.ResetFunc()
+}
+
+// ResetCalls gets all the calls that were made to Reset.
+// Check the length with:
+//
+//	len(mockedTimer.ResetCalls())
+func (mock *TimerMock) ResetCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockReset.RLock()
+	calls = mock.calls.Reset
+	mock.lockReset.RUnlock()
 	return calls
 }
 

@@ -70,3 +70,58 @@ func (mock *HeadBlockWriterMock[TShard]) WriteCalls() []struct {
 	mock.lockWrite.RUnlock()
 	return calls
 }
+
+// WriteNotifierMock is a mock implementation of services.WriteNotifier.
+//
+//	func TestSomethingThatUsesWriteNotifier(t *testing.T) {
+//
+//		// make and configure a mocked services.WriteNotifier
+//		mockedWriteNotifier := &WriteNotifierMock{
+//			NotifyFunc: func()  {
+//				panic("mock out the Notify method")
+//			},
+//		}
+//
+//		// use mockedWriteNotifier in code that requires services.WriteNotifier
+//		// and then make assertions.
+//
+//	}
+type WriteNotifierMock struct {
+	// NotifyFunc mocks the Notify method.
+	NotifyFunc func()
+
+	// calls tracks calls to the methods.
+	calls struct {
+		// Notify holds details about calls to the Notify method.
+		Notify []struct {
+		}
+	}
+	lockNotify sync.RWMutex
+}
+
+// Notify calls NotifyFunc.
+func (mock *WriteNotifierMock) Notify() {
+	if mock.NotifyFunc == nil {
+		panic("WriteNotifierMock.NotifyFunc: method is nil but WriteNotifier.Notify was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockNotify.Lock()
+	mock.calls.Notify = append(mock.calls.Notify, callInfo)
+	mock.lockNotify.Unlock()
+	mock.NotifyFunc()
+}
+
+// NotifyCalls gets all the calls that were made to Notify.
+// Check the length with:
+//
+//	len(mockedWriteNotifier.NotifyCalls())
+func (mock *WriteNotifierMock) NotifyCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockNotify.RLock()
+	calls = mock.calls.Notify
+	mock.lockNotify.RUnlock()
+	return calls
+}

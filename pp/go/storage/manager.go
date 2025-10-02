@@ -10,21 +10,19 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/jonboulle/clockwork"
 	"github.com/oklog/run"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/prometheus/prometheus/config"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/block"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/container"
 	"github.com/prometheus/prometheus/pp/go/storage/head/keeper"
-	"github.com/prometheus/prometheus/pp/go/storage/head/proxy"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
-	"github.com/prometheus/prometheus/pp/go/storage/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/mediator"
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/ready"
@@ -46,6 +44,9 @@ const (
 
 	// DefaultUnloadDataStorageInterval the default interval for unloading [DataStorage].
 	DefaultUnloadDataStorageInterval = 5 * time.Minute
+
+	// defaultStartPersistnerInterval the default interval for start [Persistener] timer.
+	defaultStartPersistnerInterval = 15 * time.Second
 )
 
 var (
@@ -70,7 +71,7 @@ type Options struct {
 	CommitInterval      time.Duration
 	MaxRetentionPeriod  time.Duration
 	HeadRetentionPeriod time.Duration
-	QueueSize           int
+	KeeperCapacity      int
 	DataDir             string
 	MaxSegmentSize      uint32
 	NumberOfShards      uint16
@@ -120,22 +121,27 @@ func (c *Config) SetNumberOfShards(numberOfShards uint16) bool {
 // Manager
 //
 
+// Manager manages services for the work of the heads.
 type Manager struct {
 	g               run.Group
 	closer          *util.Closer
-	proxy           *proxy.Proxy[*HeadOnDisk]
+	proxy           *Proxy
 	cgogc           *cppbridge.CGOGC
 	cfg             *Config
 	rotatorMediator *mediator.Mediator
 	mergerMediator  *mediator.Mediator
+	isRunning       bool
 }
 
 // NewManager init new [Manager].
+//
+//revive:disable-next-line:function-length // this is contructor.
 func NewManager(
 	o *Options,
 	clock clockwork.Clock,
 	hcatalog *catalog.Catalog,
-	triggerNotifier *ReloadBlocksTriggerNotifier,
+	reloadBlocksNotifier *TriggerNotifier,
+	removedHeadNotifier *TriggerNotifier,
 	readyNotifier ready.Notifier,
 	r prometheus.Registerer,
 ) (*Manager, error) {
@@ -164,11 +170,8 @@ func NewManager(
 	}
 
 	builder := NewBuilder(hcatalog, o.DataDir, o.MaxSegmentSize, r, unloadDataStorageInterval)
-
 	loader := NewLoader(o.DataDir, o.MaxSegmentSize, r, unloadDataStorageInterval)
-
 	cfg := NewConfig(o.NumberOfShards)
-
 	h, err := uploadOrBuildHead(clock, hcatalog, builder, loader, o.BlockDuration, cfg.NumberOfShards())
 	if err != nil {
 		return nil, err
@@ -178,25 +181,27 @@ func NewManager(
 		return nil, errors.Join(fmt.Errorf("failed to set active status: %w", err), h.Close())
 	}
 
-	hKeeper := keeper.NewKeeper[*HeadOnDisk](o.QueueSize)
+	persistenerMediator := mediator.NewMediator(
+		mediator.NewConstantIntervalTimer(clock, defaultStartPersistnerInterval, DefaultPersistDuration),
+	)
 
+	hKeeper := keeper.NewKeeper[HeadOnDisk](o.KeeperCapacity, persistenerMediator.Trigger, removedHeadNotifier)
 	m := &Manager{
 		g:      run.Group{},
 		closer: util.NewCloser(),
-		proxy:  proxy.NewProxy(container.NewWeighted(h), hKeeper, services.CFSViaRange),
+		proxy:  NewProxy(container.NewWeighted(h), hKeeper, services.CFSViaRange),
 		cgogc:  cppbridge.NewCGOGC(r),
 		cfg:    cfg,
 		rotatorMediator: mediator.NewMediator(
 			mediator.NewRotateTimerWithSeed(clock, o.BlockDuration, o.Seed),
 		),
-		mergerMediator: mediator.NewMediator(mediator.NewConstantIntervalTimer(clock, DefaultMergeDuration)),
+		mergerMediator: mediator.NewMediator(
+			mediator.NewConstantIntervalTimer(clock, DefaultMergeDuration, DefaultMergeDuration),
+		),
 	}
 
-	readyNotifier.NotifyReady()
-
-	m.initServices(o, hcatalog, builder, loader, clock, r)
-
-	logger.Infof("Head Manager created")
+	m.initServices(o, hcatalog, builder, loader, reloadBlocksNotifier, persistenerMediator, readyNotifier, clock, r)
+	logger.Infof("[Head Manager] created")
 
 	return m, nil
 }
@@ -223,7 +228,7 @@ func (m *Manager) MergeOutOfOrderChunks() {
 }
 
 // Proxy returns proxy to the active [Head] and the keeper of old [Head]s.
-func (m *Manager) Proxy() *proxy.Proxy[*HeadOnDisk] {
+func (m *Manager) Proxy() *Proxy {
 	return m.proxy
 }
 
@@ -242,11 +247,16 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 }
 
 // initServices initializes services for startup.
+//
+//revive:disable-next-line:function-length // init contructor.
 func (m *Manager) initServices(
 	o *Options,
 	hcatalog *catalog.Catalog,
 	builder *Builder,
 	loader *Loader,
+	reloadBlocksTriggerNotifier *TriggerNotifier,
+	persistenerMediator *mediator.Mediator,
+	readyNotifier ready.Notifier,
 	clock clockwork.Clock,
 	r prometheus.Registerer,
 ) {
@@ -255,6 +265,8 @@ func (m *Manager) initServices(
 	// Termination handler.
 	m.g.Add(
 		func() error {
+			readyNotifier.NotifyReady()
+			m.isRunning = true
 			<-m.closer.Signal()
 
 			return nil
@@ -265,7 +277,6 @@ func (m *Manager) initServices(
 	)
 
 	// Persistener
-	persistenerMediator := mediator.NewMediator(mediator.NewConstantIntervalTimer(clock, DefaultPersistDuration))
 	m.g.Add(
 		func() error {
 			services.NewPersistenerService(
@@ -278,10 +289,12 @@ func (m *Manager) initServices(
 					o.BlockDuration,
 					r,
 				),
+				reloadBlocksTriggerNotifier,
 				clock,
 				persistenerMediator,
 				o.MaxRetentionPeriod,
 				o.HeadRetentionPeriod,
+				r,
 			).Run()
 
 			return nil
@@ -321,7 +334,9 @@ func (m *Manager) initServices(
 	}
 
 	// Committer
-	committerMediator := mediator.NewMediator(mediator.NewConstantIntervalTimer(clock, o.CommitInterval))
+	committerMediator := mediator.NewMediator(
+		mediator.NewConstantIntervalTimer(clock, o.CommitInterval, o.CommitInterval),
+	)
 	committerCtx, committerCancel := context.WithCancel(baseCtx)
 	m.g.Add(
 		func() error {
@@ -346,7 +361,9 @@ func (m *Manager) initServices(
 	)
 
 	// MetricsUpdater
-	metricsUpdaterMediator := mediator.NewMediator(mediator.NewConstantIntervalTimer(clock, DefaultMetricWriteInterval))
+	metricsUpdaterMediator := mediator.NewMediator(
+		mediator.NewConstantIntervalTimer(clock, DefaultMetricWriteInterval, DefaultMetricWriteInterval),
+	)
 	metricsUpdaterCtx, metricsUpdaterCancel := context.WithCancel(baseCtx)
 	m.g.Add(
 		func() error {
@@ -365,31 +382,14 @@ func (m *Manager) initServices(
 }
 
 func (m *Manager) close() {
+	if !m.isRunning {
+		m.closer.Done()
+	}
+
 	select {
 	case <-m.closer.Signal():
 	default:
 		_ = m.closer.Close()
-	}
-}
-
-// InitLogHandler init log handler for pp.
-func InitLogHandler(l log.Logger) {
-	l = log.With(l, "pp_caller", log.Caller(4))
-
-	logger.Debugf = func(template string, args ...any) {
-		_ = level.Debug(l).Log("msg", fmt.Sprintf(template, args...))
-	}
-
-	logger.Infof = func(template string, args ...any) {
-		_ = level.Info(l).Log("msg", fmt.Sprintf(template, args...))
-	}
-
-	logger.Warnf = func(template string, args ...any) {
-		_ = level.Warn(l).Log("msg", fmt.Sprintf(template, args...))
-	}
-
-	logger.Errorf = func(template string, args ...any) {
-		_ = level.Error(l).Log("msg", fmt.Sprintf(template, args...))
 	}
 }
 
@@ -425,22 +425,26 @@ func (hi *headInformer) SetRotatedStatus(headID string) error {
 }
 
 //
-// ReloadBlocksTriggerNotifier
+// TriggerNotifier
 //
 
-type ReloadBlocksTriggerNotifier struct {
+// TriggerNotifier to receive notifications about new events.
+type TriggerNotifier struct {
 	c chan struct{}
 }
 
-func NewReloadBlocksTriggerNotifier() *ReloadBlocksTriggerNotifier {
-	return &ReloadBlocksTriggerNotifier{c: make(chan struct{}, 1)}
+// NewTriggerNotifier init new [TriggerNotifier].
+func NewTriggerNotifier() *TriggerNotifier {
+	return &TriggerNotifier{c: make(chan struct{}, 1)}
 }
 
-func (tn *ReloadBlocksTriggerNotifier) Chan() <-chan struct{} {
+// Chan returns channel with notifications.
+func (tn *TriggerNotifier) Chan() <-chan struct{} {
 	return tn.c
 }
 
-func (tn *ReloadBlocksTriggerNotifier) NotifyWritten() {
+// Notify sends a notify that the writing is completed.
+func (tn *TriggerNotifier) Notify() {
 	select {
 	case tn.c <- struct{}{}:
 	default:
@@ -481,7 +485,7 @@ func uploadOrBuildHead(
 
 	var generation uint64
 	if len(headRecords) == 0 {
-		// TODO	// m.counter.With(prometheus.Labels{"type": "created"}).Inc()
+		logger.Debugf("[Head Manager] no suitable heads were found, building new")
 		return builder.Build(generation, numberOfShards)
 	}
 
@@ -489,10 +493,10 @@ func uploadOrBuildHead(
 	if corrupted {
 		if !headRecords[0].Corrupted() {
 			if _, setCorruptedErr := hcatalog.SetCorrupted(headRecords[0].ID()); setCorruptedErr != nil {
-				logger.Errorf("failed to set corrupted state, head id: %s: %v", headRecords[0].ID(), setCorruptedErr)
+				logger.Errorf("failed to set corrupted state, head {%s}: %v", headRecords[0].ID(), setCorruptedErr)
 			}
 		}
-		// TODO	// m.counter.With(prometheus.Labels{"type": "corrupted"}).Inc()
+		logger.Warnf("[Head Manager] upload corrupted head {%s}, building new...", headRecords[0].ID())
 
 		if _, err := hcatalog.SetStatus(headRecords[0].ID(), catalog.StatusRotated); err != nil {
 			logger.Warnf("failed to set rotated status for head {%s}: %s", headRecords[0].ID(), err)
@@ -500,29 +504,14 @@ func uploadOrBuildHead(
 
 		_ = h.Close()
 
-		// TODO	// m.counter.With(prometheus.Labels{"type": "created"}).Inc()
+		return builder.Build(generation, numberOfShards)
+	}
+
+	if _, err := hcatalog.SetStatus(headRecords[0].ID(), catalog.StatusActive); err != nil {
+		logger.Warnf("failed to set active status for head {%s}: %s", headRecords[0].ID(), err)
+
 		return builder.Build(generation, numberOfShards)
 	}
 
 	return h, nil
-}
-
-//
-// NoopKeeper
-//
-
-// NoopKeeper implements Keeper.
-type NoopKeeper struct{}
-
-// Add implements Keeper.
-func (*NoopKeeper) Add(*HeadOnDisk) {}
-
-// Close implements Keeper.
-func (*NoopKeeper) Close() error { return nil }
-
-// RangeQueriableHeads implements Keeper.
-func (k *NoopKeeper) RangeQueriableHeads(
-	mint, maxt int64,
-) func(func(*HeadOnDisk) bool) {
-	return func(func(*HeadOnDisk) bool) {}
 }

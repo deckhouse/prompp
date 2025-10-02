@@ -17,13 +17,20 @@ class GenericEncoder {
 
   template <class Stats>
   void write_stats(Stats* stats) const {
-    size_t remaining_cap = std::numeric_limits<uint32_t>::max();
-
-    stats->earliest_timestamp = encoder_.buffer().earliest_sample();
-    stats->latest_timestamp = encoder_.buffer().latest_sample();
     stats->samples = encoder_.buffer().samples_count();
-    stats->series = encoder_.buffer().series_count();
-    stats->remainder_size = std::min(remaining_cap, encoder_.remainder_size());
+
+    if constexpr (BareBones::concepts::has_earliest_timestamp<Stats>) {
+      stats->earliest_timestamp = encoder_.buffer().earliest_sample();
+    }
+
+    if constexpr (BareBones::concepts::has_latest_timestamp<Stats>) {
+      stats->latest_timestamp = encoder_.buffer().latest_sample();
+    }
+
+    if constexpr (BareBones::concepts::has_remainder_size<Stats>) {
+      size_t remaining_cap = std::numeric_limits<uint32_t>::max();
+      stats->remainder_size = std::min(remaining_cap, encoder_.remainder_size());
+    }
 
     if constexpr (BareBones::concepts::has_allocated_memory<Stats>) {
       stats->allocated_memory = encoder_.allocated_memory();

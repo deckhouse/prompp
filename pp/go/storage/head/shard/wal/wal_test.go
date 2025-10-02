@@ -14,8 +14,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
 )
 
-// TODO moq -out wal_moq_test.go -pkg wal_test -rm . ReadSegment EncodedSegment SegmentWriter Encoder StatsSegment
-
 func TestXxx(t *testing.T) {
 	shardID := uint16(0)
 	tmpDir, err := os.MkdirTemp("", "shard")
@@ -36,7 +34,7 @@ func TestXxx(t *testing.T) {
 		_ = shardFile.Close()
 	}()
 
-	sw, err := writer.NewBuffered(shardID, shardFile, writer.WriteSegment[*cppbridge.EncodedSegment], swn)
+	sw, err := writer.NewBuffered(shardID, shardFile, writer.WriteSegment[*cppbridge.HeadEncodedSegment], swn)
 	require.NoError(t, err)
 
 	shardWalEncoder := &cppbridge.HeadWalEncoder{}
@@ -63,7 +61,7 @@ func TestWalSuite(t *testing.T) {
 
 func (s *WalSuite) TestCurrentSize() {
 	expectedWalSize := int64(42)
-	enc := &EncoderMock[*EncodedSegmentMock, *StatsSegmentMock]{}
+	enc := &EncoderMock[*EncodedSegmentMock]{}
 	segmentWriter := &SegmentWriterMock[*EncodedSegmentMock]{
 		CurrentSizeFunc: func() int64 {
 			return expectedWalSize
@@ -80,9 +78,10 @@ func (s *WalSuite) TestCurrentSize2() {
 	maxSegmentSize := uint32(100)
 	// enSegment := &EncodedSegmentMock{}
 	// stats := &StatsSegmentMock{}
-	enc := &EncoderMock[*EncodedSegmentMock, *StatsSegmentMock]{}
+	enc := &EncoderMock[*EncodedSegmentMock]{}
 	segmentWriter := &SegmentWriterMock[*EncodedSegmentMock]{}
 
 	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
-	_ = wl
+
+	s.T().Log(wl)
 }

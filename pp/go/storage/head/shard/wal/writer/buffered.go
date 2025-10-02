@@ -8,6 +8,9 @@ import (
 	"sync/atomic"
 )
 
+//go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg writer_test --out
+//go:generate moq buffered_moq_test.go . FileInfo SegmentIsWrittenNotifier WriteSyncCloser
+
 // FileInfo alias for [os.FileInfo].
 type FileInfo = os.FileInfo
 

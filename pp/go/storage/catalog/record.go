@@ -209,6 +209,7 @@ func applyRecordChanges(r, changed *Record) {
 	r.maxt = changed.maxt
 }
 
+// LessByUpdateAt less [Record] by UpdateAt.
 func LessByUpdateAt(lhs, rhs *Record) bool {
 	return lhs.UpdatedAt() < rhs.UpdatedAt()
 }

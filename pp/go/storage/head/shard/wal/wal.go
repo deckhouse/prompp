@@ -9,14 +9,16 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
+//go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg wal_test --out
+//go:generate moq wal_moq_test.go . SegmentWriter Encoder EncodedSegment
+
 const (
 	// FileFormatVersion wal file version.
 	FileFormatVersion = 1
 )
 
-var (
-	ErrWalIsCorrupted = errors.New("wal is corrupted")
-)
+// ErrWalIsCorrupted errror when wal is corrupted.
+var ErrWalIsCorrupted = errors.New("wal is corrupted")
 
 // SegmentWriter writer for wal segments.
 type SegmentWriter[TSegment EncodedSegment] interface {
@@ -37,14 +39,9 @@ type SegmentWriter[TSegment EncodedSegment] interface {
 }
 
 // Encoder the minimum required Encoder implementation for a [Wal].
-type Encoder[TSegment EncodedSegment, TStats StatsSegment] interface {
-	Encode(innerSeriesSlice []*cppbridge.InnerSeries) (TStats, error)
+type Encoder[TSegment EncodedSegment] interface {
+	Encode(innerSeriesSlice []*cppbridge.InnerSeries) (uint32, error)
 	Finalize() (TSegment, error)
-}
-
-// StatsSegment stats data for [Encoder].
-type StatsSegment interface {
-	Samples() uint32
 }
 
 // EncodedSegment the minimum required Segment implementation for a [Wal].
@@ -56,8 +53,8 @@ type EncodedSegment interface {
 }
 
 // Wal write-ahead log for [Shard].
-type Wal[TSegment EncodedSegment, TStats StatsSegment, TWriter SegmentWriter[TSegment]] struct {
-	encoder        Encoder[TSegment, TStats] // *cppbridge.HeadWalEncoder
+type Wal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]] struct {
+	encoder        Encoder[TSegment] // *cppbridge.HeadWalEncoder
 	segmentWriter  TWriter
 	locker         sync.Mutex
 	maxSegmentSize uint32
@@ -67,12 +64,12 @@ type Wal[TSegment EncodedSegment, TStats StatsSegment, TWriter SegmentWriter[TSe
 }
 
 // NewWal init new [Wal].
-func NewWal[TSegment EncodedSegment, TStats StatsSegment, TWriter SegmentWriter[TSegment]](
-	encoder Encoder[TSegment, TStats],
+func NewWal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]](
+	encoder Encoder[TSegment],
 	segmentWriter TWriter,
 	maxSegmentSize uint32,
-) *Wal[TSegment, TStats, TWriter] {
-	return &Wal[TSegment, TStats, TWriter]{
+) *Wal[TSegment, TWriter] {
+	return &Wal[TSegment, TWriter]{
 		encoder:        encoder,
 		segmentWriter:  segmentWriter,
 		locker:         sync.Mutex{},
@@ -83,17 +80,16 @@ func NewWal[TSegment EncodedSegment, TStats StatsSegment, TWriter SegmentWriter[
 // NewCorruptedWal init new corrupted [Wal].
 func NewCorruptedWal[
 	TSegment EncodedSegment,
-	TStats StatsSegment,
 	TWriter SegmentWriter[TSegment],
-]() *Wal[TSegment, TStats, TWriter] {
-	return &Wal[TSegment, TStats, TWriter]{
+]() *Wal[TSegment, TWriter] {
+	return &Wal[TSegment, TWriter]{
 		locker:    sync.Mutex{},
 		corrupted: true,
 	}
 }
 
 // Close closes the wal segmentWriter.
-func (w *Wal[TSegment, TStats, TWriter]) Close() error {
+func (w *Wal[TSegment, TWriter]) Close() error {
 	if w.corrupted {
 		return nil
 	}
@@ -116,7 +112,7 @@ func (w *Wal[TSegment, TStats, TWriter]) Close() error {
 
 // Commit finalize segment from encoder and write to [SegmentWriter].
 // It is necessary to lock the LSS for reading for the commit.
-func (w *Wal[TSegment, TStats, TWriter]) Commit() error {
+func (w *Wal[TSegment, TWriter]) Commit() error {
 	if w.corrupted {
 		return ErrWalIsCorrupted
 	}
@@ -138,7 +134,7 @@ func (w *Wal[TSegment, TStats, TWriter]) Commit() error {
 }
 
 // CurrentSize returns current wal size.
-func (w *Wal[TSegment, TStats, TWriter]) CurrentSize() int64 {
+func (w *Wal[TSegment, TWriter]) CurrentSize() int64 {
 	if w.corrupted {
 		return 0
 	}
@@ -147,7 +143,7 @@ func (w *Wal[TSegment, TStats, TWriter]) CurrentSize() int64 {
 }
 
 // Flush wal [SegmentWriter], write all buffered data to storage.
-func (w *Wal[TSegment, TStats, TWriter]) Flush() error {
+func (w *Wal[TSegment, TWriter]) Flush() error {
 	if w.corrupted {
 		return ErrWalIsCorrupted
 	}
@@ -159,7 +155,7 @@ func (w *Wal[TSegment, TStats, TWriter]) Flush() error {
 }
 
 // Sync commits the current contents of the [SegmentWriter].
-func (w *Wal[TSegment, TStats, TWriter]) Sync() error {
+func (w *Wal[TSegment, TWriter]) Sync() error {
 	if w.corrupted {
 		return ErrWalIsCorrupted
 	}
@@ -171,7 +167,7 @@ func (w *Wal[TSegment, TStats, TWriter]) Sync() error {
 }
 
 // Write the incoming inner series to wal encoder.
-func (w *Wal[TSegment, TStats, TWriter]) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error) {
+func (w *Wal[TSegment, TWriter]) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error) {
 	if w.corrupted {
 		return false, ErrWalIsCorrupted
 	}
@@ -179,7 +175,7 @@ func (w *Wal[TSegment, TStats, TWriter]) Write(innerSeriesSlice []*cppbridge.Inn
 	w.locker.Lock()
 	defer w.locker.Unlock()
 
-	stats, err := w.encoder.Encode(innerSeriesSlice)
+	samples, err := w.encoder.Encode(innerSeriesSlice)
 	if err != nil {
 		return false, fmt.Errorf("failed to encode inner series: %w", err)
 	}
@@ -189,7 +185,7 @@ func (w *Wal[TSegment, TStats, TWriter]) Write(innerSeriesSlice []*cppbridge.Inn
 	}
 
 	// memoize reaching of limits to deduplicate triggers
-	if !w.limitExhausted && stats.Samples() >= w.maxSegmentSize {
+	if !w.limitExhausted && samples >= w.maxSegmentSize {
 		w.limitExhausted = true
 		return true, nil
 	}

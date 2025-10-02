@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/prometheus/prometheus/pp/go/storage/logger"
+	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/util/optional"
 )
 

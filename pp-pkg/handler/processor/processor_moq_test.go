@@ -6,15 +6,10 @@ package processor_test
 import (
 	"context"
 	"github.com/prometheus/prometheus/pp-pkg/handler/model"
-	"github.com/prometheus/prometheus/pp-pkg/handler/processor"
 	pp_pkg_model "github.com/prometheus/prometheus/pp-pkg/model"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"sync"
 )
-
-// Ensure, that AdapterMock does implement processor.Adapter.
-// If this is not the case, regenerate this file with moq.
-var _ processor.Adapter = &AdapterMock{}
 
 // AdapterMock is a mock implementation of processor.Adapter.
 //
@@ -319,10 +314,6 @@ func (mock *AdapterMock) MergeOutOfOrderChunksCalls() []struct {
 	return calls
 }
 
-// Ensure, that StatesStorageMock does implement processor.StatesStorage.
-// If this is not the case, regenerate this file with moq.
-var _ processor.StatesStorage = &StatesStorageMock{}
-
 // StatesStorageMock is a mock implementation of processor.StatesStorage.
 //
 //	func TestSomethingThatUsesStatesStorage(t *testing.T) {
@@ -384,10 +375,6 @@ func (mock *StatesStorageMock) GetStateByIDCalls() []struct {
 	mock.lockGetStateByID.RUnlock()
 	return calls
 }
-
-// Ensure, that RemoteWriteMock does implement processor.RemoteWrite.
-// If this is not the case, regenerate this file with moq.
-var _ processor.RemoteWrite = &RemoteWriteMock{}
 
 // RemoteWriteMock is a mock implementation of processor.RemoteWrite.
 //
@@ -538,10 +525,6 @@ func (mock *RemoteWriteMock) WriteCalls() []struct {
 	return calls
 }
 
-// Ensure, that MetricStreamMock does implement processor.MetricStream.
-// If this is not the case, regenerate this file with moq.
-var _ processor.MetricStream = &MetricStreamMock{}
-
 // MetricStreamMock is a mock implementation of processor.MetricStream.
 //
 //	func TestSomethingThatUsesMetricStream(t *testing.T) {
@@ -690,10 +673,6 @@ func (mock *MetricStreamMock) WriteCalls() []struct {
 	mock.lockWrite.RUnlock()
 	return calls
 }
-
-// Ensure, that RefillMock does implement processor.Refill.
-// If this is not the case, regenerate this file with moq.
-var _ processor.Refill = &RefillMock{}
 
 // RefillMock is a mock implementation of processor.Refill.
 //

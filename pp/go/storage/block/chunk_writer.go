@@ -19,12 +19,14 @@ const (
 	chunksFormatV1 = 1
 )
 
+// ChunkMetadata meta information for the chunk.
 type ChunkMetadata struct {
 	MinT int64
 	MaxT int64
 	Ref  uint64
 }
 
+// ChunkWriter a writer for encoding and writing chunks.
 type ChunkWriter struct {
 	dirFile     *os.File
 	files       []*os.File
@@ -35,12 +37,16 @@ type ChunkWriter struct {
 	buf         [binary.MaxVarintLen32]byte
 }
 
+// NewChunkWriter init new [ChunkWriter].
 func NewChunkWriter(dir string, segmentSize int64) (*ChunkWriter, error) {
 	if segmentSize < 0 {
 		segmentSize = DefaultChunkSegmentSize
 	}
 
-	if err := os.MkdirAll(dir, 0o777); err != nil {
+	if err := os.MkdirAll( //nolint:gosec // need this permissions
+		dir,
+		0o777, //revive:disable-line:add-constant // file permissions simple readable as octa-number
+	); err != nil {
 		return nil, fmt.Errorf("failed to create all dirs: %w", err)
 	}
 
@@ -56,6 +62,16 @@ func NewChunkWriter(dir string, segmentSize int64) (*ChunkWriter, error) {
 	}, nil
 }
 
+// Close writes all pending data to the current tail file and closes chunk's files.
+func (w *ChunkWriter) Close() (err error) {
+	if err = w.finalizeTail(); err != nil {
+		return fmt.Errorf("failed to finalize tail on close: %w", err)
+	}
+
+	return w.dirFile.Close()
+}
+
+// Write encoding and write  to buffer chunk.
 func (w *ChunkWriter) Write(chunk Chunk) (meta ChunkMetadata, err error) {
 	// calculate chunk size
 	chunkSize := int64(chunks.MaxChunkLengthFieldSize)
@@ -74,67 +90,26 @@ func (w *ChunkWriter) Write(chunk Chunk) (meta ChunkMetadata, err error) {
 	return w.writeChunk(chunk)
 }
 
-func (w *ChunkWriter) writeChunk(chunk Chunk) (meta ChunkMetadata, err error) {
-	meta.Ref = uint64(chunks.NewBlockChunkRef(uint64(w.seq()), uint64(w.n)))
-
-	n := binary.PutUvarint(w.buf[:], uint64(len(chunk.Bytes())))
-	if err = w.write(w.buf[:n]); err != nil {
-		return meta, err
+func (w *ChunkWriter) cut() error {
+	// Sync current tail to disk and close.
+	if err := w.finalizeTail(); err != nil {
+		return err
 	}
 
-	w.buf[0] = byte(chunk.Encoding())
-	if err = w.write(w.buf[:1]); err != nil {
-		return meta, err
+	f, n, err := cutSegmentFile(w.dirFile, w.seq(), chunks.MagicChunks, chunksFormatV1, w.segmentSize)
+	if err != nil {
+		return err
+	}
+	w.n = int64(n)
+
+	w.files = append(w.files, f)
+	if w.wbuf != nil {
+		w.wbuf.Reset(f)
+	} else {
+		w.wbuf = bufio.NewWriterSize(f, 8*1024*1024)
 	}
 
-	if err = w.write(chunk.Bytes()); err != nil {
-		return meta, err
-	}
-
-	w.crc32.Reset()
-
-	buf := append(w.buf[:0], byte(chunk.Encoding()))
-	if _, err = w.crc32.Write(buf[:1]); err != nil {
-		return meta, err
-	}
-
-	if _, err = w.crc32.Write(chunk.Bytes()); err != nil {
-		return meta, err
-	}
-
-	if err = w.write(w.crc32.Sum(w.buf[:0])); err != nil {
-		return meta, err
-	}
-
-	meta.MinT = chunk.MinT()
-	meta.MaxT = chunk.MaxT()
-
-	return meta, nil
-}
-
-func (w *ChunkWriter) Close() (err error) {
-	if err = w.finalizeTail(); err != nil {
-		return fmt.Errorf("failed to finalize tail on close: %w", err)
-	}
-
-	return w.dirFile.Close()
-}
-
-func (w *ChunkWriter) write(b []byte) error {
-	n, err := w.wbuf.Write(b)
-	w.n += int64(n)
-	return err
-}
-
-func (w *ChunkWriter) seq() int {
-	return len(w.files) - 1
-}
-
-func (w *ChunkWriter) tail() *os.File {
-	if len(w.files) == 0 {
-		return nil
-	}
-	return w.files[len(w.files)-1]
+	return nil
 }
 
 // finalizeTail writes all pending data to the current tail file,
@@ -164,37 +139,78 @@ func (w *ChunkWriter) finalizeTail() error {
 	return tf.Close()
 }
 
-func (w *ChunkWriter) cut() error {
-	// Sync current tail to disk and close.
-	if err := w.finalizeTail(); err != nil {
-		return err
-	}
-
-	n, f, _, err := cutSegmentFile(w.dirFile, w.seq(), chunks.MagicChunks, chunksFormatV1, w.segmentSize)
-	if err != nil {
-		return err
-	}
-	w.n = int64(n)
-
-	w.files = append(w.files, f)
-	if w.wbuf != nil {
-		w.wbuf.Reset(f)
-	} else {
-		w.wbuf = bufio.NewWriterSize(f, 8*1024*1024)
-	}
-
-	return nil
+func (w *ChunkWriter) seq() int {
+	return len(w.files) - 1
 }
 
-func cutSegmentFile(dirFile *os.File, currentSeq int, magicNumber uint32, chunksFormat byte, allocSize int64) (headerSize int, newFile *os.File, seq int, returnErr error) {
-	p, seq, err := nextSequenceFile(dirFile.Name(), currentSeq)
+func (w *ChunkWriter) tail() *os.File {
+	if len(w.files) == 0 {
+		return nil
+	}
+	return w.files[len(w.files)-1]
+}
+
+func (w *ChunkWriter) writeChunk(chunk Chunk) (meta ChunkMetadata, err error) {
+	meta.Ref = uint64(chunks.NewBlockChunkRef(uint64(w.seq()), uint64(w.n))) // #nosec G115 // no overflow
+
+	n := binary.PutUvarint(w.buf[:], uint64(len(chunk.Bytes())))
+	if err = w.writeToBuf(w.buf[:n]); err != nil {
+		return meta, err
+	}
+
+	w.buf[0] = byte(chunk.Encoding())
+	if err = w.writeToBuf(w.buf[:1]); err != nil {
+		return meta, err
+	}
+
+	if err = w.writeToBuf(chunk.Bytes()); err != nil {
+		return meta, err
+	}
+
+	w.crc32.Reset()
+
+	buf := append(w.buf[:0], byte(chunk.Encoding()))
+	if _, err = w.crc32.Write(buf[:1]); err != nil {
+		return meta, err
+	}
+
+	if _, err = w.crc32.Write(chunk.Bytes()); err != nil {
+		return meta, err
+	}
+
+	if err = w.writeToBuf(w.crc32.Sum(w.buf[:0])); err != nil {
+		return meta, err
+	}
+
+	meta.MinT = chunk.MinT()
+	meta.MaxT = chunk.MaxT()
+
+	return meta, nil
+}
+
+func (w *ChunkWriter) writeToBuf(b []byte) error {
+	n, err := w.wbuf.Write(b)
+	w.n += int64(n)
+	return err
+}
+
+//revive:disable-next-line:function-length // long but readable.
+//revive:disable-next-line:cyclomatic // but readable
+func cutSegmentFile(
+	dirFile *os.File,
+	currentSeq int,
+	magicNumber uint32,
+	chunksFormat byte,
+	allocSize int64,
+) (newFile *os.File, headerSize int, returnErr error) {
+	p, err := nextSequenceFile(dirFile.Name(), currentSeq)
 	if err != nil {
-		return 0, nil, 0, fmt.Errorf("next sequence file: %w", err)
+		return nil, 0, fmt.Errorf("next sequence file: %w", err)
 	}
 	ptmp := p + ".tmp"
-	f, err := os.Create(ptmp)
+	f, err := os.Create(ptmp) // #nosec G304 // it's meant to be that way
 	if err != nil {
-		return 0, nil, 0, fmt.Errorf("open temp file: %w", err)
+		return nil, 0, fmt.Errorf("open temp file: %w", err)
 	}
 	defer func() {
 		if returnErr != nil {
@@ -207,45 +223,49 @@ func cutSegmentFile(dirFile *os.File, currentSeq int, magicNumber uint32, chunks
 	}()
 	if allocSize > 0 {
 		if err = fileutil.Preallocate(f, allocSize, true); err != nil {
-			return 0, nil, 0, fmt.Errorf("preallocate: %w", err)
+			return nil, 0, fmt.Errorf("preallocate: %w", err)
 		}
 	}
 
 	if err = dirFile.Sync(); err != nil {
-		return 0, nil, 0, fmt.Errorf("sync directory: %w", err)
+		return nil, 0, fmt.Errorf("sync directory: %w", err)
 	}
 
 	// Write header metadata for new file.
 	metab := make([]byte, chunks.SegmentHeaderSize)
 	binary.BigEndian.PutUint32(metab[:chunks.MagicChunksSize], magicNumber)
-	metab[4] = chunksFormat
+	metab[4] = chunksFormat //revive:disable-line:add-constant // 4 byte for chunksFormat
 
 	n, err := f.Write(metab)
 	if err != nil {
-		return 0, nil, 0, fmt.Errorf("write header: %w", err)
+		return nil, 0, fmt.Errorf("write header: %w", err)
 	}
-	if err := f.Close(); err != nil {
-		return 0, nil, 0, fmt.Errorf("close temp file: %w", err)
+	if err = f.Close(); err != nil {
+		return nil, 0, fmt.Errorf("close temp file: %w", err)
 	}
 	f = nil
 
-	if err := fileutil.Rename(ptmp, p); err != nil {
-		return 0, nil, 0, fmt.Errorf("replace file: %w", err)
+	if err = fileutil.Rename(ptmp, p); err != nil {
+		return nil, 0, fmt.Errorf("replace file: %w", err)
 	}
 
-	f, err = os.OpenFile(p, os.O_WRONLY, 0o666)
+	f, err = os.OpenFile( //nolint:gosec // need this permissions
+		p,
+		os.O_WRONLY,
+		0o666, //revive:disable-line:add-constant // file permissions simple readable as octa-number
+	)
 	if err != nil {
-		return 0, nil, 0, fmt.Errorf("open final file: %w", err)
+		return nil, 0, fmt.Errorf("open final file: %w", err)
 	}
 	// Skip header for further writes.
 	if _, err := f.Seek(int64(n), 0); err != nil {
-		return 0, nil, 0, fmt.Errorf("seek in final file: %w", err)
+		return nil, 0, fmt.Errorf("seek in final file: %w", err)
 	}
-	return n, f, seq, nil
+	return f, n, nil
 }
 
-func nextSequenceFile(dir string, currentSeq int) (string, int, error) {
-	return segmentFile(dir, currentSeq+1), currentSeq + 1, nil
+func nextSequenceFile(dir string, currentSeq int) (string, error) {
+	return segmentFile(dir, currentSeq+1), nil
 }
 
 func segmentFile(baseDir string, index int) string {

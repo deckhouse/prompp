@@ -15,8 +15,8 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
-	"github.com/prometheus/prometheus/pp/go/storage/logger"
 	"github.com/prometheus/prometheus/pp/go/util/optional"
 )
 
@@ -301,7 +301,7 @@ func newDataSource(dataDir string,
 
 	go b.cacheWriteLoop()
 
-	for shardID := uint16(0); shardID < numberOfShards; shardID++ {
+	for shardID := range numberOfShards {
 		shardFileName := filepath.Join(dataDir, fmt.Sprintf("shard_%d.wal", shardID))
 		decoderStateFileName := filepath.Join(dataDir, fmt.Sprintf("%s_shard_%d.state", config.Name, shardID))
 		var s *shard

@@ -10,8 +10,6 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-// TODO moq -out mediator_moq_test.go -pkg mediator_test -rm . Timer
-
 type MediatorSuite struct {
 	suite.Suite
 }
@@ -27,7 +25,8 @@ func (s *MediatorSuite) TestC() {
 		ChanFunc: func() <-chan time.Time {
 			return chTimer
 		},
-		StopFunc: func() {},
+		ResetFunc: func() {},
+		StopFunc:  func() {},
 	}
 
 	m := mediator.NewMediator(timer)
@@ -69,7 +68,8 @@ func (s *MediatorSuite) TestClose() {
 		ChanFunc: func() <-chan time.Time {
 			return chTimer
 		},
-		StopFunc: func() { stopCounter++ },
+		ResetFunc: func() {},
+		StopFunc:  func() { stopCounter++ },
 	}
 
 	m := mediator.NewMediator(timer)
@@ -114,7 +114,8 @@ func (s *MediatorSuite) TestTrigger() {
 		ChanFunc: func() <-chan time.Time {
 			return chTimer
 		},
-		StopFunc: func() {},
+		ResetFunc: func() {},
+		StopFunc:  func() {},
 	}
 
 	m := mediator.NewMediator(timer)
@@ -155,7 +156,8 @@ func (s *MediatorSuite) TestTriggerSkip() {
 		ChanFunc: func() <-chan time.Time {
 			return chTimer
 		},
-		StopFunc: func() {},
+		ResetFunc: func() {},
+		StopFunc:  func() {},
 	}
 
 	m := mediator.NewMediator(timer)

@@ -9,8 +9,9 @@ import (
 	"sync/atomic"
 
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
-	"github.com/prometheus/prometheus/pp/go/storage/logger"
 	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/prometheus/pp/go/util/locker"
 )
@@ -27,8 +28,6 @@ const defaultNumberOfWorkers = 2
 
 // Shard the minimum required head Shard implementation.
 type Shard interface {
-	// LSS() *LSS
-
 	// ShardID returns the shard ID.
 	ShardID() uint16
 
@@ -52,8 +51,9 @@ type Head[TShard Shard, TGorutineShard Shard] struct {
 	taskChs        []chan *task.Generic[TGorutineShard]
 	querySemaphore *locker.Weighted
 
-	stopc chan struct{}
-	wg    sync.WaitGroup
+	stopc     chan struct{}
+	wg        sync.WaitGroup
+	closeOnce sync.Once
 
 	readOnly uint32
 
@@ -95,6 +95,7 @@ func NewHead[TShard Shard, TGoroutineShard Shard](
 		querySemaphore: locker.NewWeighted(2 * concurrency), // x2 for back pressure
 		stopc:          make(chan struct{}),
 		wg:             sync.WaitGroup{},
+		closeOnce:      sync.Once{},
 
 		// for clearing [Head] metrics
 		memoryInUse: factory.NewGaugeVec(prometheus.GaugeOpts{
@@ -124,8 +125,10 @@ func NewHead[TShard Shard, TGoroutineShard Shard](
 
 	runtime.SetFinalizer(h, func(h *Head[TShard, TGoroutineShard]) {
 		h.memoryInUse.DeletePartialMatch(prometheus.Labels{"head_id": h.id})
-		logger.Debugf("head %s destroyed", h.String())
+		logger.Debugf("[Head] %s destroyed", h.String())
 	})
+
+	logger.Debugf("[Head] %s created", h.String())
 
 	return h
 }
@@ -138,22 +141,25 @@ func (h *Head[TShard, TGorutineShard]) AcquireQuery(ctx context.Context) (releas
 }
 
 // Close closes wals, query semaphore for the inability to get query and clear metrics.
-func (h *Head[TShard, TGorutineShard]) Close() error {
-	if err := h.querySemaphore.Close(); err != nil {
-		return err
-	}
+func (h *Head[TShard, TGorutineShard]) Close() (err error) {
+	h.closeOnce.Do(func() {
+		if err = h.querySemaphore.Close(); err != nil {
+			return
+		}
 
-	close(h.stopc)
-	h.wg.Wait()
+		close(h.stopc)
+		h.wg.Wait()
 
-	var err error
-	for _, s := range h.shards {
-		err = errors.Join(err, s.Close())
-	}
+		for _, s := range h.shards {
+			err = errors.Join(err, s.Close())
+		}
 
-	if h.releaseHeadFn != nil {
-		h.releaseHeadFn()
-	}
+		if h.releaseHeadFn != nil {
+			h.releaseHeadFn()
+		}
+
+		logger.Debugf("[Head] %s is closed", h.String())
+	})
 
 	return err
 }

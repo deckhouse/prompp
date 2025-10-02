@@ -1,7 +1,6 @@
 package storage_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -48,7 +47,6 @@ func (g *idGeneratorStub) last() string {
 type HeadLoadSuite struct {
 	suite.Suite
 	dataDir         string
-	ctx             context.Context
 	clock           clockwork.Clock
 	headIdGenerator *idGeneratorStub
 	catalog         *catalog.Catalog
@@ -129,12 +127,12 @@ func (s *HeadLoadSuite) appendTimeSeries(head *storage.HeadOnDisk, timeSeries []
 	storagetest.MustAppendTimeSeries(&s.Suite, head, timeSeries)
 }
 
-func (s *HeadLoadSuite) shards(head *storage.HeadOnDisk) (result []*storage.ShardOnDisk) {
+func (*HeadLoadSuite) shards(head *storage.HeadOnDisk) (result []*storage.ShardOnDisk) {
 	for shard := range head.RangeShards() {
 		result = append(result, shard)
 	}
 
-	return
+	return result
 }
 
 func (s *HeadLoadSuite) TestErrorCreateShardFileInOneShard() {
