@@ -2,6 +2,7 @@
 #include "bare_bones/memory.h"
 #include "series_data/chunk/serialized_chunk.h"
 #include "series_data/data_storage.h"
+#include "series_data/decoder.h"
 #include "series_data/decoder/universal_decode_iterator.h"
 #include "series_data/querier/query.h"
 
