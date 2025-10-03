@@ -51,7 +51,7 @@ func (s *GenericPersistenceSuite) SetupTest() {
 	h := s.mustCreateHead()
 	activeHeadContainer := container.NewWeighted(h)
 	removedHeadNotifier := &mock.WriteNotifierMock{NotifyFunc: func() {}}
-	hKeeper := keeper.NewKeeper[storage.HeadOnDisk](1, func() {}, removedHeadNotifier)
+	hKeeper := keeper.NewKeeper[storage.HeadOnDisk](1, removedHeadNotifier)
 	s.proxy = storage.NewProxy(activeHeadContainer, hKeeper, func(*storage.HeadOnDisk) error { return nil })
 	s.blockWriter = &mock.HeadBlockWriterMock[*storage.ShardOnDisk]{}
 	s.writeNotifier = &mock.WriteNotifierMock{NotifyFunc: func() {}}

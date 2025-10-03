@@ -11,6 +11,9 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
+// CopySeriesOnRotate copy active series from the current head to the new head during rotation.
+var CopySeriesOnRotate = false
+
 //
 // RotatorConfig
 //
@@ -32,11 +35,13 @@ type Rotator[
 	TShard, TGoShard Shard,
 	THead Head[TTask, TShard, TGoShard],
 ] struct {
-	proxyHead    ProxyHead[TTask, TShard, TGoShard, THead]
-	headBuilder  HeadBuilder[TTask, TShard, TGoShard, THead]
-	m            Mediator
-	cfg          RotatorConfig
-	headInformer HeadInformer
+	proxyHead             ProxyHead[TTask, TShard, TGoShard, THead]
+	headBuilder           HeadBuilder[TTask, TShard, TGoShard, THead]
+	m                     Mediator
+	cfg                   RotatorConfig
+	headInformer          HeadInformer
+	headAddedSeriesCopier func(source, destination THead)
+	rotatedTrigger        func()
 
 	// stat
 	rotateCounter          prometheus.Counter
@@ -56,15 +61,19 @@ func NewRotator[
 	m Mediator,
 	cfg RotatorConfig,
 	headInformer HeadInformer,
+	headAddedSeriesCopier func(source, destination THead),
+	rotatedTrigger func(),
 	registerer prometheus.Registerer,
 ) *Rotator[TTask, TShard, TGoShard, THead] {
 	factory := util.NewUnconflictRegisterer(registerer)
 	return &Rotator[TTask, TShard, TGoShard, THead]{
-		proxyHead:    proxyHead,
-		headBuilder:  headBuilder,
-		m:            m,
-		cfg:          cfg,
-		headInformer: headInformer,
+		proxyHead:             proxyHead,
+		headBuilder:           headBuilder,
+		m:                     m,
+		cfg:                   cfg,
+		headInformer:          headInformer,
+		headAddedSeriesCopier: headAddedSeriesCopier,
+		rotatedTrigger:        rotatedTrigger,
 		rotateCounter: factory.NewCounter(
 			prometheus.CounterOpts{
 				Name: "prompp_rotator_rotate_count",
@@ -113,6 +122,8 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) Execute(ctx context.Context) e
 }
 
 // rotate it creates a new [Head] and makes it active, and sends the old [Head] to the [Keeper].
+//
+//revive:disable-next-line:cyclomatic // long but readable.
 func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 	ctx context.Context,
 	numberOfShards uint16,
@@ -124,8 +135,9 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 		return fmt.Errorf("failed to build a new head: %w", err)
 	}
 
-	// TODO CopySeriesFrom only old nunber of shards == new
-	// newHead.CopySeriesFrom(oldHead)
+	if CopySeriesOnRotate && oldHead.NumberOfShards() == newHead.NumberOfShards() {
+		s.headAddedSeriesCopier(oldHead, newHead)
+	}
 
 	if err = s.proxyHead.AddWithReplace(oldHead, s.headInformer.CreatedAt(oldHead.ID())); err != nil {
 		return fmt.Errorf("failed add to keeper old head: %w", err)
@@ -160,6 +172,7 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 	oldHead.SetReadOnly()
 	s.events.With(prometheus.Labels{"type": "rotated"}).Inc()
 	s.rotationDuration.Set(float64(time.Since(start).Nanoseconds()))
+	s.rotatedTrigger()
 
 	return nil
 }

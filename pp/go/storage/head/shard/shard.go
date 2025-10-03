@@ -252,3 +252,12 @@ func NewPerGoroutineShard[TWal Wal](s *Shard, numberOfShards uint16) *PerGorouti
 func (s *PerGoroutineShard) Relabeler() *cppbridge.PerGoroutineRelabeler {
 	return s.relabeler
 }
+
+//
+// CopyAddedSeries
+//
+
+// CopyAddedSeries copy the label sets from the source lss to the destination lss that were added source lss.
+func CopyAddedSeries(source, destination *Shard) {
+	source.lss.CopyAddedSeriesTo(destination.lss)
+}

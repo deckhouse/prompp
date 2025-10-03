@@ -21,8 +21,10 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/block"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/container"
+	"github.com/prometheus/prometheus/pp/go/storage/head/head"
 	"github.com/prometheus/prometheus/pp/go/storage/head/keeper"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/storage/mediator"
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/ready"
@@ -39,8 +41,11 @@ const (
 	// DefaultMetricWriteInterval default metric scrape interval.
 	DefaultMetricWriteInterval = 15 * time.Second
 
+	// defaultStartMetricWriteInterval the default interval for start [MetricsUpdater] timer.
+	defaultStartMetricWriteInterval = 5 * time.Second
+
 	// DefaultPersistDuration the default interval for persisting [Head].
-	DefaultPersistDuration = 5 * time.Minute
+	DefaultPersistDuration = 2 * time.Minute
 
 	// DefaultUnloadDataStorageInterval the default interval for unloading [DataStorage].
 	DefaultUnloadDataStorageInterval = 5 * time.Minute
@@ -50,9 +55,6 @@ const (
 )
 
 var (
-	// CopySeriesOnRotate copy active series from the current head to the new head during rotation.
-	CopySeriesOnRotate = false
-
 	// UnloadDataStorage flags for unloading [DataStorage].
 	UnloadDataStorage = false
 
@@ -181,11 +183,11 @@ func NewManager(
 		return nil, errors.Join(fmt.Errorf("failed to set active status: %w", err), h.Close())
 	}
 
-	persistenerMediator := mediator.NewMediator(
-		mediator.NewConstantIntervalTimer(clock, defaultStartPersistnerInterval, DefaultPersistDuration),
+	hKeeper := keeper.NewKeeper[HeadOnDisk](
+		o.KeeperCapacity,
+		removedHeadNotifier,
 	)
 
-	hKeeper := keeper.NewKeeper[HeadOnDisk](o.KeeperCapacity, persistenerMediator.Trigger, removedHeadNotifier)
 	m := &Manager{
 		g:      run.Group{},
 		closer: util.NewCloser(),
@@ -200,7 +202,7 @@ func NewManager(
 		),
 	}
 
-	m.initServices(o, hcatalog, builder, loader, reloadBlocksNotifier, persistenerMediator, readyNotifier, clock, r)
+	m.initServices(o, hcatalog, builder, loader, reloadBlocksNotifier, readyNotifier, clock, r)
 	logger.Infof("[Head Manager] created")
 
 	return m, nil
@@ -255,7 +257,6 @@ func (m *Manager) initServices(
 	builder *Builder,
 	loader *Loader,
 	reloadBlocksTriggerNotifier *TriggerNotifier,
-	persistenerMediator *mediator.Mediator,
 	readyNotifier ready.Notifier,
 	clock clockwork.Clock,
 	r prometheus.Registerer,
@@ -277,6 +278,9 @@ func (m *Manager) initServices(
 	)
 
 	// Persistener
+	persistenerMediator := mediator.NewMediator(
+		mediator.NewConstantIntervalTimer(clock, defaultStartPersistnerInterval, DefaultPersistDuration),
+	)
 	m.g.Add(
 		func() error {
 			services.NewPersistenerService(
@@ -314,6 +318,8 @@ func (m *Manager) initServices(
 				m.rotatorMediator,
 				m.cfg,
 				&headInformer{catalog: hcatalog},
+				head.CopyAddedSeries[*ShardOnDisk, *PerGoroutineShard](shard.CopyAddedSeries),
+				persistenerMediator.TriggerWithResetTimer,
 				r,
 			).Execute(rotatorCtx)
 		},
@@ -323,16 +329,6 @@ func (m *Manager) initServices(
 		},
 	)
 
-	// checks if the head is new
-	isNewHead := func(headID string) bool {
-		rec, err := hcatalog.Get(headID)
-		if err != nil {
-			return true
-		}
-
-		return clock.Now().Add(-DefaultMergeDuration).UnixMilli() < rec.CreatedAt()
-	}
-
 	// Committer
 	committerMediator := mediator.NewMediator(
 		mediator.NewConstantIntervalTimer(clock, o.CommitInterval, o.CommitInterval),
@@ -340,7 +336,11 @@ func (m *Manager) initServices(
 	committerCtx, committerCancel := context.WithCancel(baseCtx)
 	m.g.Add(
 		func() error {
-			return services.NewCommitter(m.proxy, committerMediator, isNewHead).Execute(committerCtx)
+			return services.NewCommitter(
+				m.proxy,
+				committerMediator,
+				isNewHead(clock, hcatalog, o.CommitInterval),
+			).Execute(committerCtx)
 		},
 		func(error) {
 			committerMediator.Close()
@@ -352,7 +352,11 @@ func (m *Manager) initServices(
 	mergerCtx, mergerCancel := context.WithCancel(baseCtx)
 	m.g.Add(
 		func() error {
-			return services.NewMerger(m.proxy, m.mergerMediator, isNewHead).Execute(mergerCtx)
+			return services.NewMerger(
+				m.proxy,
+				m.mergerMediator,
+				isNewHead(clock, hcatalog, DefaultMergeDuration),
+			).Execute(mergerCtx)
 		},
 		func(error) {
 			m.mergerMediator.Close()
@@ -362,7 +366,7 @@ func (m *Manager) initServices(
 
 	// MetricsUpdater
 	metricsUpdaterMediator := mediator.NewMediator(
-		mediator.NewConstantIntervalTimer(clock, DefaultMetricWriteInterval, DefaultMetricWriteInterval),
+		mediator.NewConstantIntervalTimer(clock, defaultStartMetricWriteInterval, DefaultMetricWriteInterval),
 	)
 	metricsUpdaterCtx, metricsUpdaterCancel := context.WithCancel(baseCtx)
 	m.g.Add(
@@ -425,6 +429,22 @@ func (hi *headInformer) SetRotatedStatus(headID string) error {
 }
 
 //
+// isNewHead
+//
+
+// isNewHead builds a checker that checks if the head is new.
+func isNewHead(clock clockwork.Clock, hcatalog *catalog.Catalog, interval time.Duration) func(headID string) bool {
+	return func(headID string) bool {
+		rec, err := hcatalog.Get(headID)
+		if err != nil {
+			return true
+		}
+
+		return clock.Now().Add(-interval).UnixMilli() < rec.CreatedAt()
+	}
+}
+
+//
 // TriggerNotifier
 //
 
@@ -455,6 +475,10 @@ func (tn *TriggerNotifier) Notify() {
 // uploadOrBuildHead
 //
 
+// uploadOrBuildHead uploads or builds a new head.
+//
+//revive:disable-next-line:function-length // long but readable.
+//revive:disable-next-line:cyclomatic // long but readable.
 func uploadOrBuildHead(
 	clock clockwork.Clock,
 	hcatalog *catalog.Catalog,

@@ -821,7 +821,7 @@ class PerShardRelabeler {
     relabeler_state_update->reserve(relabeler_state_update->size() + relabeled_series->size());
     inner_series->reserve(inner_series->size() + relabeled_series->size());
     if constexpr (BareBones::concepts::has_reserve<LSS>) {
-      lss.reserve(lss.size() + relabeled_series->size());
+      lss.reserve(static_cast<uint32_t>(lss.size() + relabeled_series->size()));
     }
 
     for (const auto& relabeled_serie : relabeled_series->data()) {
