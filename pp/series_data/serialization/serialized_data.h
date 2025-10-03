@@ -8,6 +8,65 @@
 namespace series_data::serialization {
 class SerializedData {
  public:
+  static constexpr uint32_t kNoMoreSeries = std::numeric_limits<uint32_t>::max();
+
+  class SerializedSeriesIterator {
+   public:
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = encoder::Sample;
+    using difference_type = ptrdiff_t;
+    using pointer = value_type*;
+    using reference = value_type&;
+
+    SerializedSeriesIterator(const BareBones::Memory<BareBones::MemoryControlBlock, unsigned char>& buffer,
+                             chunk::SerializedChunkSpan chunks,
+                             uint32_t chunk_id)
+        : decode_iter_(std::in_place_type<decoder::ConstantDecodeIterator>, 0, BareBones::BitSequenceReader(nullptr, 0), 0, false),
+          chunk_iter_(chunks.begin() + chunk_id),
+          series_id_(chunk_iter_->label_set_id),
+          buffer_(buffer.control_block().data, buffer.size()),
+          chunks_(chunks) {
+      Decoder::create_decode_iterator(buffer_, *chunk_iter_, [&]<typename Iterator>(Iterator&& begin, auto&&) {
+        decode_iter_ = decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
+      });
+    }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const noexcept { return *decode_iter_; }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const noexcept { return decode_iter_.operator->(); }
+
+    PROMPP_ALWAYS_INLINE SerializedSeriesIterator& operator++() noexcept {
+      ++decode_iter_;
+      if (decode_iter_ == decoder::DecodeIteratorSentinel{}) [[unlikely]] {
+        if (std::next(chunk_iter_) != chunks_.end() && series_id_ == std::next(chunk_iter_)->label_set_id) {
+          ++chunk_iter_;
+          Decoder::create_decode_iterator(buffer_, *chunk_iter_, [&]<typename Iterator>(Iterator&& begin, auto&&) {
+            decode_iter_ = decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
+          });
+        }
+      }
+      return *this;
+    }
+
+    PROMPP_ALWAYS_INLINE SerializedSeriesIterator operator++(int) noexcept {
+      const auto it = *this;
+      ++*this;
+      return it;
+    }
+
+    PROMPP_ALWAYS_INLINE bool operator==(const decoder::DecodeIteratorSentinel&) const noexcept {
+      return (decode_iter_ == decoder::DecodeIteratorSentinel{}) &&
+             (std::next(chunk_iter_) == chunks_.end() || series_id_ != std::next(chunk_iter_)->label_set_id);
+    }
+
+   private:
+    decoder::UniversalDecodeIterator decode_iter_;
+    chunk::SerializedChunkSpan::const_iterator chunk_iter_;
+    uint32_t series_id_;
+
+    std::span<const unsigned char> buffer_;
+    chunk::SerializedChunkSpan chunks_;
+  };
+
   explicit SerializedData(const DataStorage& storage, const querier::QueriedChunkList& queried_chunks) noexcept { serialize_internal(storage, queried_chunks); }
   explicit SerializedData(const DataStorage& storage) noexcept { serialize_internal(storage, storage.chunks()); }
 
@@ -25,6 +84,36 @@ class SerializedData {
       iterator = decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
     });
     return iterator;
+  }
+
+  [[nodiscard]] uint32_t next_series() noexcept {
+    if (internal_index_ == kNoMoreSeries) [[unlikely]] {
+      if (chunks_.empty()) [[unlikely]] {
+        return kNoMoreSeries;
+      }
+      internal_index_ = 0;
+      return chunks_[0].label_set_id;
+    }
+
+    if (internal_index_ == chunks_.size()) [[unlikely]] {
+      return kNoMoreSeries;
+    }
+
+    const uint32_t current_series_id = chunks_[internal_index_].label_set_id;
+    while (internal_index_ < chunks_.size() && current_series_id == chunks_[internal_index_].label_set_id) {
+      ++internal_index_;
+    }
+
+    if (internal_index_ == chunks_.size()) [[unlikely]] {
+      return kNoMoreSeries;
+    }
+
+    return chunks_[internal_index_].label_set_id;
+  }
+
+  [[nodiscard]] SerializedSeriesIterator create_current_series_iterator() const noexcept { return {bytes_buffer_, get_chunks(), internal_index_}; }
+  [[nodiscard]] auto create_current_series_range() const noexcept {
+    return std::ranges::subrange(SerializedSeriesIterator{bytes_buffer_, get_chunks(), internal_index_}, decoder::DecodeIteratorSentinel{});
   }
 
  private:
@@ -204,5 +293,6 @@ class SerializedData {
 
   BareBones::Vector<chunk::SerializedChunk> chunks_;
   BareBones::Memory<BareBones::MemoryControlBlock, unsigned char> bytes_buffer_;
+  uint32_t internal_index_ = std::numeric_limits<uint32_t>::max();
 };
 }  // namespace series_data::serialization

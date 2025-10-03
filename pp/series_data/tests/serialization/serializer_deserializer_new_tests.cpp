@@ -714,10 +714,12 @@ class DeserializerIteratorFixtureNew : public SerializerDeserializerTrait, publi
  protected:
   using DecodedChunks = std::vector<SampleList>;
 
-  DecodedChunks decode_chunks(const SerializedData& serialized_data) const {
+  DecodedChunks decode_chunks(SerializedData& serialized_data) const {
     DecodedChunks result;
-    for (auto& chunk : serialized_data.get_chunks()) {
-      result.emplace_back(decode_chunk(serialized_data.create_decode_iterator(chunk)));
+    while (serialized_data.next_series() != SerializedData::kNoMoreSeries) {
+      SampleList samples;
+      std::ranges::copy(serialized_data.create_current_series_range(), std::back_insert_iterator(samples));
+      result.emplace_back(samples);
     }
     return result;
   }
@@ -727,7 +729,7 @@ TEST_F(DeserializerIteratorFixtureNew, EmptyChunksList) {
   // Arrange
 
   // Act
-  const SerializedData serialized({});
+  SerializedData serialized({});
   auto decoded_chunks = decode_chunks(serialized);
 
   // Assert
@@ -740,11 +742,29 @@ TEST_F(DeserializerIteratorFixtureNew, OneChunk) {
   encoder_.encode(0, 2, 1.0);
 
   // Act
-  const SerializedData serialized(storage_, {QueriedChunk{0}});
+  SerializedData serialized(storage_, {QueriedChunk{0}});
   auto decoded_chunks = decode_chunks(serialized);
 
   // Assert
   EXPECT_TRUE(std::ranges::equal(DecodedChunks{SampleList{{.timestamp = 1, .value = 1.0}, {.timestamp = 2, .value = 1.0}}}, decoded_chunks));
+}
+
+TEST_F(DeserializerIteratorFixtureNew, OneChunkFinalized) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 3, 1.0);
+  encoder_.encode(0, 4, 1.0);
+
+  // Act
+  SerializedData serialized(storage_);
+  auto decoded_chunks = decode_chunks(serialized);
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(
+      DecodedChunks{SampleList{{.timestamp = 1, .value = 1.0}, {.timestamp = 2, .value = 1.0}, {.timestamp = 3, .value = 1.0}, {.timestamp = 4, .value = 1.0}}},
+      decoded_chunks));
 }
 
 TEST_F(DeserializerIteratorFixtureNew, TwoChunks) {
@@ -753,7 +773,7 @@ TEST_F(DeserializerIteratorFixtureNew, TwoChunks) {
   encoder_.encode(1, 2, 1.0);
 
   // Act
-  const SerializedData serialized(storage_, {QueriedChunk{0}, QueriedChunk{1}});
+  SerializedData serialized(storage_, {QueriedChunk{0}, QueriedChunk{1}});
   auto decoded_chunks = decode_chunks(serialized);
 
   // Assert
