@@ -1475,3 +1475,22 @@ func (s *StateV2Suite) TestInitState() {
 	s.Panics(func() { state.StaleNansStateByShard(0) })
 	s.False(state.TrackStaleness())
 }
+
+func (s *StateV2Suite) TestStateReconfigure() {
+	state := cppbridge.NewStateV2()
+	state.Reconfigure(0, 1)
+
+	s.NotNil(state.CacheByShard(0))
+	s.False(state.TrackStaleness())
+	s.Panics(func() { state.StaleNansStateByShard(0) })
+}
+
+func (s *StateV2Suite) TestStateReconfigureTrackStaleness() {
+	state := cppbridge.NewStateV2()
+	state.EnableTrackStaleness()
+	state.Reconfigure(0, 1)
+
+	s.NotNil(state.CacheByShard(0))
+	s.True(state.TrackStaleness())
+	s.NotNil(state.StaleNansStateByShard(0))
+}
