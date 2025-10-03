@@ -1562,6 +1562,10 @@ func NewStateV2WithoutLock() *StateV2 {
 
 // CacheByShard return *Cache for shard.
 func (s *StateV2) CacheByShard(shardID uint16) *Cache {
+	if s.IsTransition() {
+		panic("state is transition")
+	}
+
 	if int(shardID) >= len(s.caches) {
 		panic(fmt.Sprintf(
 			"shardID(%d) out of range in caches(%d)",
@@ -1582,13 +1586,12 @@ func (s *StateV2) DefTimestamp() int64 {
 	return s.defTimestamp
 }
 
-// DisableTrackStaleness disable track stalenans.
-func (s *StateV2) DisableTrackStaleness() {
-	s.trackStaleness = false
-}
-
 // EnableTrackStaleness enable track stalenans.
 func (s *StateV2) EnableTrackStaleness() {
+	if s.IsTransition() {
+		panic("state is transition")
+	}
+
 	s.trackStaleness = true
 }
 
@@ -1657,6 +1660,10 @@ func (s *StateV2) SetStatelessRelabeler(statelessRelabeler *StatelessRelabeler) 
 
 // StaleNansStateByShard return SourceStaleNansState for shard.
 func (s *StateV2) StaleNansStateByShard(shardID uint16) *StaleNansState {
+	if s.IsTransition() {
+		panic("state is transition")
+	}
+
 	if int(shardID) >= len(s.staleNansStates) {
 		panic(fmt.Sprintf(
 			"shardID(%d) out of range in staleNansStates(%d)",
@@ -1672,6 +1679,10 @@ func (s *StateV2) StaleNansStateByShard(shardID uint16) *StaleNansState {
 func (s *StateV2) StatelessRelabeler() *StatelessRelabeler {
 	if s.IsTransition() {
 		panic("state is transition")
+	}
+
+	if s.statelessRelabeler == nil {
+		panic("statelessRelabeler is nil")
 	}
 
 	return s.statelessRelabeler

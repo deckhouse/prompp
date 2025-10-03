@@ -19,20 +19,24 @@ class GenericEncoder {
   void write_stats(Stats* stats) const {
     stats->samples = encoder_.buffer().samples_count();
 
-    if constexpr (BareBones::concepts::has_earliest_timestamp<Stats>) {
+    if constexpr (BareBones::concepts::has_earliest_timestamp_field<Stats>) {
       stats->earliest_timestamp = encoder_.buffer().earliest_sample();
     }
 
-    if constexpr (BareBones::concepts::has_latest_timestamp<Stats>) {
+    if constexpr (BareBones::concepts::has_latest_timestamp_field<Stats>) {
       stats->latest_timestamp = encoder_.buffer().latest_sample();
     }
 
-    if constexpr (BareBones::concepts::has_remainder_size<Stats>) {
+    if constexpr (BareBones::concepts::has_series_field<Stats>) {
+      stats->series = encoder_.buffer().series_count();
+    }
+
+    if constexpr (BareBones::concepts::has_remainder_size_field<Stats>) {
       size_t remaining_cap = std::numeric_limits<uint32_t>::max();
       stats->remainder_size = std::min(remaining_cap, encoder_.remainder_size());
     }
 
-    if constexpr (BareBones::concepts::has_allocated_memory<Stats>) {
+    if constexpr (BareBones::concepts::has_allocated_memory_field<Stats>) {
       stats->allocated_memory = encoder_.allocated_memory();
     }
   }

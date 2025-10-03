@@ -291,3 +291,28 @@ func (h *Head[TShard, TGorutineShard]) shardLoop(
 func calculateHeadConcurrency(numberOfShards int) int64 {
 	return int64(defaultNumberOfWorkers+ExtraWorkers) * int64(numberOfShards)
 }
+
+//
+// CopyAddedSeries
+//
+
+// CopyAddedSeries copy the label sets from the source lss to the destination lss that were added source lss.
+func CopyAddedSeries[TShard Shard, TGorutineShard Shard](
+	shardCopier func(source, destination TShard),
+) func(source, destination *Head[TShard, TGorutineShard]) {
+	return func(source, destination *Head[TShard, TGorutineShard]) {
+		if source.NumberOfShards() != destination.NumberOfShards() {
+			logger.Warnf(
+				"source[%d] and destination[%d] number of shards must be the same",
+				source.NumberOfShards(),
+				destination.NumberOfShards(),
+			)
+
+			return
+		}
+
+		for shardID := range source.NumberOfShards() {
+			shardCopier(source.shards[shardID], destination.shards[shardID])
+		}
+	}
+}

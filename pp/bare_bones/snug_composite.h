@@ -110,14 +110,9 @@ class GenericDecodingTable {
   struct LessComparator {
     using is_transparent = void;
 
-    PROMPP_ALWAYS_INLINE explicit LessComparator(const GenericDecodingTable* decoding_table, bool* enabled) noexcept
-        : decoding_table_(decoding_table), enabled_(enabled) {}
+    PROMPP_ALWAYS_INLINE explicit LessComparator(const GenericDecodingTable* decoding_table) noexcept : decoding_table_(decoding_table) {}
 
     PROMPP_ALWAYS_INLINE bool operator()(const Proxy& a, const Proxy& b) const noexcept {
-      if (!*enabled_) {
-        return true;
-      }
-
       return decoding_table_->items_[a].composite(decoding_table_->data_) < decoding_table_->items_[b].composite(decoding_table_->data_);
     }
 
@@ -134,7 +129,6 @@ class GenericDecodingTable {
 
    private:
     const GenericDecodingTable* decoding_table_;
-    bool* enabled_;
   };
 
   template <class DecodingTable>
@@ -263,7 +257,7 @@ class GenericDecodingTable {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Hasher hasher() const noexcept { return Hasher(this); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE EqualityComparator equality_comparator() const noexcept { return EqualityComparator(this); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE LessComparator less_comparator(bool* enabled) const noexcept { return LessComparator(this, enabled); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE LessComparator less_comparator() const noexcept { return LessComparator(this); }
 
   data_type data_;
   Vector<Filament<Vector>> items_;
@@ -293,7 +287,8 @@ class GenericDecodingTable {
 
   inline __attribute__((always_inline)) const auto& items() const noexcept { return items_; }
 
-  PROMPP_ALWAYS_INLINE void reserve(const GenericDecodingTable& other) {
+  template <class DerivedOther, template <template <class> class> class FilamentOther, template <class> class VectorOther>
+  PROMPP_ALWAYS_INLINE void reserve(const GenericDecodingTable<DerivedOther, FilamentOther, VectorOther>& other) {
     items_.reserve(other.items_.size());
     data_.reserve(other.data_);
   }
@@ -791,7 +786,6 @@ class OrderedEncodingBimap : public GenericDecodingTable<OrderedEncodingBimap<Fi
 
   using Set = phmap::btree_set<typename Base::Proxy, typename Base::LessComparator>;
   Set set_;
-  bool set_soring_enabled_{true};
 
  protected:
   PROMPP_ALWAYS_INLINE void after_items_load_impl(uint32_t first_loaded_id) noexcept {
@@ -801,7 +795,7 @@ class OrderedEncodingBimap : public GenericDecodingTable<OrderedEncodingBimap<Fi
   }
 
  public:
-  inline __attribute__((always_inline)) OrderedEncodingBimap() noexcept : set_({}, Base::less_comparator(&set_soring_enabled_)) {}
+  inline __attribute__((always_inline)) OrderedEncodingBimap() noexcept : set_({}, Base::less_comparator()) {}
 
   OrderedEncodingBimap(const OrderedEncodingBimap&) = delete;
   OrderedEncodingBimap(OrderedEncodingBimap&&) = delete;
@@ -897,7 +891,6 @@ class EncodingBimapWithOrderedAccess : public GenericDecodingTable<EncodingBimap
 
   using OrderedSet = phmap::btree_set<typename Base::Proxy, typename Base::LessComparator>;
   OrderedSet ordered_set_;
-  bool ordered_set_soring_enabled_{true};
 
   using Set = phmap::flat_hash_set<typename Base::Proxy, typename Base::Hasher, typename Base::EqualityComparator>;
   Set set_;
@@ -912,7 +905,7 @@ class EncodingBimapWithOrderedAccess : public GenericDecodingTable<EncodingBimap
 
  public:
   inline __attribute__((always_inline)) EncodingBimapWithOrderedAccess() noexcept
-      : ordered_set_({}, Base::less_comparator(&ordered_set_soring_enabled_)), set_({}, 0, Base::hasher(), Base::equality_comparator()) {}
+      : ordered_set_({}, Base::less_comparator()), set_({}, 0, Base::hasher(), Base::equality_comparator()) {}
 
   EncodingBimapWithOrderedAccess(const EncodingBimapWithOrderedAccess&) = delete;
   EncodingBimapWithOrderedAccess(EncodingBimapWithOrderedAccess&&) = delete;

@@ -22,7 +22,3 @@ type PerGoroutineShard = shard.PerGoroutineShard
 
 // HeadOnDisk [head.Head] with [ShardOnDisk].
 type HeadOnDisk = head.Head[*ShardOnDisk, *PerGoroutineShard]
-
-// TODO DELETE
-// // ProxyHead [proxy.Proxy] for [HeadOnDisk]s.
-// type ProxyHead = proxy.Proxy[*HeadOnDisk]

@@ -101,6 +101,9 @@ func (s *HeadLoadSuite) createHead(unloadDataStorageInterval time.Duration) (*st
 func (s *HeadLoadSuite) mustCreateHead(unloadDataStorageInterval time.Duration) *storage.HeadOnDisk {
 	h, err := s.createHead(unloadDataStorageInterval)
 	s.Require().NoError(err)
+
+	s.catalog.SetStatus(h.ID(), catalog.StatusActive)
+
 	return h
 }
 

@@ -57,20 +57,21 @@ import (
 	"k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
 
-	pp_pkg_handler "github.com/prometheus/prometheus/pp-pkg/handler"
-	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor"
-	pp_pkg_logger "github.com/prometheus/prometheus/pp-pkg/logger"   // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp-pkg/remote"                 // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp-pkg/scrape"                 // PP_CHANGES.md: rebuild on cpp
-	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage" // PP_CHANGES.md: rebuild on cpp
-	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"
+	pp_pkg_handler "github.com/prometheus/prometheus/pp-pkg/handler"        // PP_CHANGES.md: rebuild on cpp
+	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor" // PP_CHANGES.md: rebuild on cpp
+	pp_pkg_logger "github.com/prometheus/prometheus/pp-pkg/logger"          // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/remote"                        // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/scrape"                        // PP_CHANGES.md: rebuild on cpp
+	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage"        // PP_CHANGES.md: rebuild on cpp
+	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"              // PP_CHANGES.md: rebuild on cpp
 
-	pp_storage "github.com/prometheus/prometheus/pp/go/storage" // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/storage/catalog"    // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/storage/head/head"  // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/storage/querier"
-	"github.com/prometheus/prometheus/pp/go/storage/ready"        // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/storage/remotewriter" // PP_CHANGES.md: rebuild on cpp
+	pp_storage "github.com/prometheus/prometheus/pp/go/storage"    // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/catalog"       // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/head/head"     // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/head/services" // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/querier"       // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/ready"         // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/remotewriter"  // PP_CHANGES.md: rebuild on cpp
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
@@ -277,10 +278,10 @@ func (c *flagConfig) setFeatureListOptions(logger log.Logger) error {
 }
 
 func main() {
-	// if os.Getenv("DEBUG") != "" {
-	runtime.SetBlockProfileRate(20)
-	runtime.SetMutexProfileFraction(20)
-	// }
+	if os.Getenv("DEBUG") != "" {
+		runtime.SetBlockProfileRate(20)
+		runtime.SetMutexProfileFraction(20)
+	}
 
 	var (
 		oldFlagRetentionDuration model.Duration
@@ -742,11 +743,6 @@ func main() {
 		level.Error(logger).Log("msg", "failed to create file log", "err", err)
 		os.Exit(1)
 	}
-	defer func() {
-		if err := fileLog.Close(); err != nil {
-			level.Error(logger).Log("msg", "failed to close file log", "err", err)
-		}
-	}()
 
 	clock := clockwork.NewRealClock()
 	headCatalog, err := catalog.New(
@@ -1564,6 +1560,10 @@ func main() {
 	}
 
 	// PP_CHANGES.md: rebuild on cpp start the engine is really no longer in use before calling this to avoid
+	if err := fileLog.Close(); err != nil {
+		level.Error(logger).Log("msg", "failed to close file log", "err", err)
+	}
+
 	if err := queryEngine.Close(); err != nil {
 		level.Warn(logger).Log("msg", "Closing query engine failed", "err", err)
 	}
@@ -2095,7 +2095,7 @@ func readPromPPFeatures(logger log.Logger) {
 		fname, fvalue, _ := strings.Cut(feature, "=")
 		switch strings.TrimSpace(fname) {
 		case "head_copy_series_on_rotate":
-			pp_storage.CopySeriesOnRotate = true
+			services.CopySeriesOnRotate = true
 			level.Info(logger).Log(
 				"msg",
 				"[FEATURE] Copying active series from current head to new head during rotation is enabled.",

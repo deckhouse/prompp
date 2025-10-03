@@ -75,6 +75,15 @@ func (m *Mediator) Trigger() {
 	}
 }
 
+// TriggerWithResetTimer send notify to channel and reset timer.
+func (m *Mediator) TriggerWithResetTimer() {
+	select {
+	case m.c <- struct{}{}:
+		m.timer.Reset()
+	default:
+	}
+}
+
 // loop by timer.
 func (m *Mediator) loop() {
 	defer m.closer.Done()

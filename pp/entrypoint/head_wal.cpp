@@ -67,8 +67,8 @@ extern "C" void prompp_head_wal_encoder_add_inner_series(void* args, void* res) 
   };
 
   struct Result {
-    uint32_t samples;
     PromPP::Primitives::Go::Slice<char> error;
+    uint32_t samples;
   };
 
   const auto in = static_cast<Arguments*>(args);

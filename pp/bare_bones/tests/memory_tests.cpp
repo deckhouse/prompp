@@ -10,6 +10,7 @@ using BareBones::AllocationSizeCalculator;
 using BareBones::DefaultReallocator;
 using BareBones::Memory;
 using BareBones::MemoryControlBlock;
+using BareBones::MemoryControlBlockWithItemCount;
 using BareBones::SharedMemory;
 using BareBones::SharedPtr;
 
@@ -134,6 +135,47 @@ TEST_F(MemoryFixture, MoveOperator) {
 
   EXPECT_EQ(memory_ptr, memory2);
   EXPECT_EQ(memory_size, memory2.size());
+}
+
+class MemoryWithItemCountFixture : public ::testing::Test {
+ protected:
+  Memory<MemoryControlBlockWithItemCount, uint8_t> memory_;
+};
+
+TEST_F(MemoryWithItemCountFixture, CopyConstructor) {
+  // Arrange
+  memory_.resize_to_fit_at_least(1);
+  std::iota(memory_.begin(), memory_.end(), uint8_t{});
+  memory_.control_block().items_count = 100;
+
+  // Act
+  const auto memory2 = memory_;
+
+  // Assert
+  EXPECT_NE(memory2, memory_);
+  ASSERT_EQ(memory_.size(), memory2.size());
+  ASSERT_EQ(memory_.control_block().data_size, memory2.control_block().data_size);
+  ASSERT_EQ(memory_.control_block().items_count, memory2.control_block().items_count);
+  EXPECT_TRUE(std::ranges::equal(memory2, memory_));
+}
+
+TEST_F(MemoryWithItemCountFixture, CopyOperator) {
+  // Arrange
+  memory_.resize_to_fit_at_least(1);
+  std::iota(memory_.begin(), memory_.end(), uint8_t{});
+  memory_.control_block().items_count = 100;
+
+  // Act
+  decltype(memory_) memory2;
+  memory2.resize_to_fit_at_least(1);
+  memory2 = memory_;
+
+  // Assert
+  EXPECT_NE(memory2, memory_);
+  ASSERT_EQ(memory_.size(), memory2.size());
+  ASSERT_EQ(memory_.control_block().data_size, memory2.control_block().data_size);
+  ASSERT_EQ(memory_.control_block().items_count, memory2.control_block().items_count);
+  EXPECT_TRUE(std::ranges::equal(memory2, memory_));
 }
 
 class SharedPtrFixture : public ::testing::Test {
