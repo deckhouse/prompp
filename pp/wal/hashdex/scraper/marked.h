@@ -42,8 +42,12 @@ class Metric {
       const auto [next_ptr, label] = encoding::LabelCodec::decode(ptr);
       ptr = next_ptr;
 
-      const auto sub_buffer = buffer_.substr(item_->base_offset);
-      std::construct_at(label_iter++, label.name.view(sub_buffer), label.value.view(sub_buffer));
+      if (const auto buf_ptr = buffer_.data() + item_->base_offset; label.name.is_reserved_name()) [[unlikely]] {
+        std::construct_at(label_iter++, Prometheus::kMetricLabelName, std::string_view(buf_ptr + label.value.offset, label.value.length));
+      } else {
+        std::construct_at(label_iter++, std::string_view(buf_ptr + label.name.offset, label.name.length),
+                          std::string_view(buf_ptr + label.value.offset, label.value.length));
+      }
     }
 
     auto [p, sample] = encoding::SampleCodec::decode(ptr, layout, default_timestamp_);
@@ -173,9 +177,7 @@ class MetricMarkupBuffer : public MarkupBuffer<Metric> {
 
   void add_label(MarkedLabel label) noexcept { bytes_ptr_ = encoding::LabelCodec::encode(bytes_ptr_, label); }
 
-  void add_sample(encoding::LayoutMarker layout, const Primitives::Sample& sample) noexcept {
-    using encoding::SampleValueType;
-
+  void add_sample(encoding::LayoutMarker layout, const Primitives::Sample sample) noexcept {
     bytes_ptr_ = encoding::SampleCodec::encode(bytes_ptr_, layout, sample);
   }
 
