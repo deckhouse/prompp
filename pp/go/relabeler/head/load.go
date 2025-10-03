@@ -419,15 +419,6 @@ func (l *ShardLoader) Load() (ShardLoadResult, error) {
 		return result, err
 	}
 	if _, err := f.Seek(0, io.SeekEnd); err != nil {
-		_ = f.Close()
-		return result, err
-	}
-
-	if err = l.createShardWal(f, decoder, &result); err != nil {
-		_ = f.Close()
-		return result, err
-	}
-	if _, err := f.Seek(0, io.SeekEnd); err != nil {
 		return result, errors.Join(err, f.Close())
 	}
 
