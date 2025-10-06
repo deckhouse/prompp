@@ -1500,6 +1500,7 @@ func (s *StateV2Suite) TestStateReconfigureWithoutReconfigure() {
 
 func (s *StateV2Suite) TestStateReconfigureNumberOfShards() {
 	state := cppbridge.NewStateV2()
+	state.EnableTrackStaleness()
 	state.Reconfigure(0, 2)
 
 	cache0 := state.CacheByShard(0)
