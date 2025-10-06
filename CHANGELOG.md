@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.5.2
+
+### Fixes
+1. **Flushing corrupted shard.** On start all heads try to convert which include flushing buffered data to disk. It may led to crashin on start if there is a corrupted not persisted head.
+
 ## v0.5.1
 
 ### Fixes
