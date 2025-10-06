@@ -850,7 +850,7 @@ class PerShardRelabeler {
                                               Primitives::Go::SliceView<InnerSeries*>& encoders_inner_series) {
     for (const auto inner_series : incoming_inner_series) {
       if (inner_series == nullptr || inner_series->size() == 0) {
-        return;
+        continue;
       }
 
       std::ranges::for_each(inner_series->data(), [&](const InnerSerie& inner_serie) PROMPP_LAMBDA_INLINE {
