@@ -36,24 +36,12 @@ void prompp_series_data_serialization_serialized_data_iterator(void* args, void*
  * }
  *
  * @param res {
- *     has_data bool // is iterator has more data to decode.
+ *     has_data bool    // is iterator has more data to decode.
+ *      timestamp int64 // sample timestamp
+ *      value float64   // sample value
  * }
  */
 void prompp_series_data_serialization_serialized_data_iterator_next(void* args, void* res);
-
-/**
- * @brief Extract sample form decode iterator.
- *
- * @param args {
- *     iterator uintptr // pointer to decode iterator
- * }
- *
- * @param res {
- *      timestamp int64 // sample timestamp
- *      value float64 // sample value
- * }
- */
-void prompp_series_data_serialization_serialized_data_iterator_sample(void* args, void* res);
 
 /**
  * @brief Destroy decode iterator.

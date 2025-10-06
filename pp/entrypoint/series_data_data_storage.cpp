@@ -151,26 +151,25 @@ extern "C" void prompp_series_data_data_storage_query_new(void* args, void* res)
   struct Arguments {
     DataStoragePtr data_storage;
     Query query;
-    entrypoint::head::SerializedDataPtr serialized_data;
   };
 
   struct Result {
     QuerierVariantPtr querier{};
     QueryStatus status;
+    entrypoint::head::SerializedDataPtr serialized_data{};
   };
 
   const auto in = static_cast<Arguments*>(args);
+  Result* out = new (res) Result();
 
-  RangeQuerierWithArgumentsWrapperNew querier(*in->data_storage, in->query, in->serialized_data.get());
+  RangeQuerierWithArgumentsWrapperNew querier(*in->data_storage, in->query, out->serialized_data.get());
   querier.query();
 
   if (querier.need_loading()) {
-    new (res) Result{
-        .querier = std::make_unique<QuerierVariant>(std::in_place_index<2>, std::move(querier)),
-        .status = QueryStatus::kNeedDataLoad,
-    };
+    out->querier = std::make_unique<QuerierVariant>(std::in_place_index<2>, std::move(querier));
+    out->status = QueryStatus::kNeedDataLoad;
   } else {
-    new (res) Result{.status = QueryStatus::kSuccess};
+    out->status = QueryStatus::kSuccess;
   }
 }
 

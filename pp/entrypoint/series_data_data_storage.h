@@ -114,12 +114,12 @@ void prompp_series_data_data_storage_query(void* args, void* res);
  * @param args {
  *     dataStorage    uintptr          // pointer to constructed data storage
  *     query          DataStorageQuery // query
- *     serializedData uintptr         // pointer to serialized data
  * }
  *
  * @param res {
- *     Querier uintptr // pointer to constructed Querier if data loading is needed
- *     Status  uint8   // status of a query (0 - Success, 1 - Data loading is needed)
+ *     Querier uintptr        // pointer to constructed Querier if data loading is needed
+ *     Status  uint8          // status of a query (0 - Success, 1 - Data loading is needed)
+ *     serializedData uintptr // pointer to serialized data
  * }
  */
 void prompp_series_data_data_storage_query_new(void* args, void* res);

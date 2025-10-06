@@ -35,31 +35,20 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_next(v
   };
 
   using Result = struct {
+    int64_t timestamp{};
+    double value{};
     bool has_value;
   };
 
   Arguments* in = reinterpret_cast<Arguments*>(args);
-  Result* out = new (res) Result();
 
-  ++(*in->iterator);
-  out->has_value = (*in->iterator) != DecodeIteratorSentinel{};
-}
-
-extern "C" void prompp_series_data_serialization_serialized_data_iterator_sample(void* args, void* res) {
-  struct Arguments {
-    entrypoint::head::SerializedDataIteratorPtr iterator;
-  };
-  using Result = struct {
-    int64_t timestamp;
-    double value;
-  };
-
-  Arguments* in = reinterpret_cast<Arguments*>(args);
-  Result* out = new (res) Result();
-
-  const auto sample = **(in->iterator);
-  out->timestamp = sample.timestamp;
-  out->value = sample.value;
+  if (*in->iterator == DecodeIteratorSentinel{}) {
+    new (res) Result{.has_value = false};
+  } else {
+    const auto sample = **(in->iterator);
+    new (res) Result{.timestamp = sample.timestamp, .value = sample.value, .has_value = true};
+    ++(*in->iterator);
+  }
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_iterator_dtor(void* args) {
