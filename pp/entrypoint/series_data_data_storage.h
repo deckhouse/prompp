@@ -195,6 +195,22 @@ void prompp_series_data_chunk_recoder_ctor(void* args, void* res);
 void prompp_series_data_serialized_chunk_recoder_ctor(void* args, void* res);
 
 /**
+ * @brief Construct a new ChunkRecoder object to recode all serialized chunks (new model)
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data
+ *     time_interval struct { // closed interval [min, max]
+ *        min int64
+ *        max int64
+ *     }
+ * }
+ * @param res {
+ *     chunk_recoder uintptr // pointer to chunk recoder
+ * }
+ */
+void prompp_series_data_serialized_chunk_recoder_new_ctor(void* args, void* res);
+
+/**
  * @brief Get chunk encoded in prometheus format
  *
  * @param args {

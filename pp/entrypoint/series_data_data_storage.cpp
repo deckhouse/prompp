@@ -280,6 +280,23 @@ extern "C" void prompp_series_data_serialized_chunk_recoder_ctor(void* args, voi
   };
 }
 
+extern "C" void prompp_series_data_serialized_chunk_recoder_new_ctor(void* args, void* res) {
+  struct Arguments {
+    entrypoint::head::SerializedDataPtr serialized_data;
+    PromPP::Primitives::TimeInterval time_interval;
+  };
+  struct Result {
+    ChunkRecoderVariantPtr chunk_recoder;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  new (res) Result{
+      .chunk_recoder = std::make_unique<ChunkRecoderVariant>(
+          std::in_place_type<SerializedChunkRecoder>,
+          series_data::chunk::SerializedChunkIterator{in->serialized_data->get_buffer(), in->serialized_data->get_chunks()}, in->time_interval),
+  };
+}
+
 extern "C" void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, void* res) {
   struct Arguments {
     ChunkRecoderVariantPtr chunk_recoder;
