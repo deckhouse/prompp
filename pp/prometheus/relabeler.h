@@ -141,11 +141,13 @@ class InnerSeries {
   }
 
   PROMPP_ALWAYS_INLINE void emplace_back(auto const& samples, uint32_t ls_id) {
-    data_.reserve(data_.size() + samples.size());
-
-    for (const auto& sample : samples) {
-      data_.emplace_back(sample, ls_id);
-    }
+    data_.reserve_and_write(samples.size(), [&](InnerSerie* series_buffer, uint32_t series_size) {
+      for (const auto& sample : samples) {
+        std::construct_at(series_buffer, sample, ls_id);
+        ++series_buffer;
+      }
+      return series_size;
+    });
 
     size_ += samples.size();
   }
