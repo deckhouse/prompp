@@ -32,30 +32,22 @@ func (s *MediatorSuite) TestC() {
 	m := mediator.NewMediator(timer)
 	defer m.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	counter := 0
 	done := make(chan struct{})
 	start := sync.WaitGroup{}
 	start.Add(1)
 	go func() {
 		start.Done()
-		select {
-		case <-m.C():
-			counter++
-			close(done)
-		case <-ctx.Done():
-		}
+		<-m.C()
+		counter++
+		close(done)
 	}()
 
 	start.Wait()
 	s.T().Log("timer tick")
 	chTimer <- time.Time{}
 
-	select {
-	case <-done:
-	case <-ctx.Done():
-	}
-	cancel()
+	<-done
 
 	s.Equal(1, counter)
 }

@@ -1485,6 +1485,36 @@ func (s *StateV2Suite) TestStateReconfigure() {
 	s.Panics(func() { state.StaleNansStateByShard(0) })
 }
 
+func (s *StateV2Suite) TestStateReconfigureWithoutReconfigure() {
+	state := cppbridge.NewStateV2()
+	state.Reconfigure(0, 1)
+
+	cache1 := state.CacheByShard(0)
+	s.NotNil(cache1)
+
+	state.Reconfigure(0, 1)
+	cache2 := state.CacheByShard(0)
+	s.NotNil(cache2)
+	s.Equal(cache1, cache2)
+}
+
+func (s *StateV2Suite) TestStateReconfigureNumberOfShards() {
+	state := cppbridge.NewStateV2()
+	state.EnableTrackStaleness()
+	state.Reconfigure(0, 2)
+
+	cache0 := state.CacheByShard(0)
+	s.NotNil(cache0)
+	cache1 := state.CacheByShard(1)
+	s.NotNil(cache1)
+
+	state.Reconfigure(1, 1)
+	newCache0 := state.CacheByShard(0)
+	s.NotNil(newCache0)
+	s.NotEqual(cache0, newCache0)
+	s.Panics(func() { state.CacheByShard(1) })
+}
+
 func (s *StateV2Suite) TestStateReconfigureTrackStaleness() {
 	state := cppbridge.NewStateV2()
 	state.EnableTrackStaleness()
@@ -1493,4 +1523,16 @@ func (s *StateV2Suite) TestStateReconfigureTrackStaleness() {
 	s.NotNil(state.CacheByShard(0))
 	s.True(state.TrackStaleness())
 	s.NotNil(state.StaleNansStateByShard(0))
+}
+
+func (s *StateV2Suite) TestStatelessRelabeler() {
+	state := cppbridge.NewStateV2()
+
+	s.Panics(func() { state.StatelessRelabeler() })
+
+	statelessRelabeler, err := cppbridge.NewStatelessRelabeler([]*cppbridge.RelabelConfig{})
+	s.Require().NoError(err)
+
+	state.SetStatelessRelabeler(statelessRelabeler)
+	s.NotNil(state.StatelessRelabeler())
 }

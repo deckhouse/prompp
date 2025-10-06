@@ -1164,7 +1164,11 @@ func (sl *scrapeLoop) getCache() *scrapeCache {
 	return sl.cache
 }
 
-// TODO Delete.
+// append via prometheus parser.
+//
+//revive:disable-next-line:cognitive-complexity // legacy code
+//revive:disable-next-line:function-length // legacy code
+//revive:disable-next-line:cyclomatic // legacy code
 func (sl *scrapeLoop) append(
 	b []byte,
 	contentType string,
