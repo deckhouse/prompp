@@ -34,7 +34,7 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_next(v
     entrypoint::head::SerializedDataIteratorPtr iterator;
   };
 
-  using Result = struct {
+  struct Result {
     int64_t timestamp{};
     double value{};
     bool has_value;
