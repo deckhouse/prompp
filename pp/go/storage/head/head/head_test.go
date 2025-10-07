@@ -3,6 +3,8 @@ package head_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage/head/head"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
@@ -59,4 +61,16 @@ func (*testWal) Sync() error {
 // Write test implementation wal.
 func (*testWal) Write(_ []*cppbridge.InnerSeries) (bool, error) {
 	return false, nil
+}
+
+type HeadSuite struct {
+	suite.Suite
+}
+
+func TestHeadSuite(t *testing.T) {
+	suite.Run(t, new(HeadSuite))
+}
+
+func (s *HeadSuite) TestHappyPath() {
+	//
 }
