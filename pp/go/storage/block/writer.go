@@ -16,6 +16,7 @@ const (
 	DefaultBlockDuration = 2 * time.Hour
 )
 
+// LsIdBatchSize is the batch size for label set ID.
 var LsIdBatchSize uint32 = 100000
 
 // Shard the minimum required head [Shard] implementation.
@@ -27,6 +28,7 @@ type Shard interface {
 	UnloadedDataStorage() *shard.UnloadedDataStorage
 }
 
+// Writer represents a block writer. It is used to write blocks to disk from a shard.
 type Writer[TShard Shard] struct {
 	dataDir                  string
 	maxBlockChunkSegmentSize int64
@@ -34,6 +36,7 @@ type Writer[TShard Shard] struct {
 	blockWriteDuration       *prometheus.GaugeVec
 }
 
+// NewWriter creates a new [Writer].
 func NewWriter[TShard Shard](
 	dataDir string,
 	maxBlockChunkSegmentSize int64,
@@ -52,6 +55,7 @@ func NewWriter[TShard Shard](
 	}
 }
 
+// Write writes blocks to disk from a shard.
 func (w *Writer[TShard]) Write(sd TShard) (writtenBlocks []WrittenBlock, err error) {
 	_ = sd.LSS().WithRLock(func(_, _ *cppbridge.LabelSetStorage) error {
 		var writers blockWriters
@@ -76,6 +80,7 @@ func (w *Writer[TShard]) Write(sd TShard) (writtenBlocks []WrittenBlock, err err
 	return writtenBlocks, err
 }
 
+// createWriters creates writers for the shard.
 func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 	var writers blockWriters
 
@@ -114,6 +119,7 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 	return writers, nil
 }
 
+// recodeAndWriteChunks recodes and writes chunks for the shard.
 func (*Writer[TShard]) recodeAndWriteChunks(sd TShard, writers blockWriters) error {
 	var loader *cppbridge.UnloadedDataRevertableLoader
 	_ = sd.DataStorage().WithRLock(func(*cppbridge.HeadDataStorage) error {

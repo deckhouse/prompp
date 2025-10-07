@@ -78,6 +78,7 @@ func (ds *DataStorage) Query(
 	return serializedChunks, res
 }
 
+// QueryFinal finishes all the queries after data load.
 func (ds *DataStorage) QueryFinal(queriers []uintptr) {
 	ds.locker.RLock()
 	ds.dataStorage.QueryFinal(queriers)
@@ -141,10 +142,12 @@ func (ds *DataStorage) CreateRevertableLoader(
 	return ds.dataStorage.CreateRevertableLoader(lss, lsIdBatchSize)
 }
 
+// GetQueriedSeriesBitset gets the queried series bitset memory.
 func (ds *DataStorage) GetQueriedSeriesBitset() []byte {
 	return ds.dataStorage.GetQueriedSeriesBitset()
 }
 
+// SetQueriedSeriesBitset sets the queried series bitset.
 func (ds *DataStorage) SetQueriedSeriesBitset(bitset []byte) bool {
 	return ds.dataStorage.SetQueriedSeriesBitset(bitset)
 }

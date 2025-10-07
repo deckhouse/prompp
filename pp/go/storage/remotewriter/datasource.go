@@ -104,6 +104,8 @@ type shard struct {
 }
 
 // newShard init new [shard].
+//
+//revive:disable-next-line:flag-parameter this is a flag, but it's more convenient this way
 func newShard(
 	headID string,
 	shardID uint16,
@@ -131,13 +133,18 @@ func newShard(
 
 	decoderStateFileFlags := os.O_CREATE | os.O_RDWR
 	if resetDecoderState {
-		decoderStateFileFlags = decoderStateFileFlags | os.O_TRUNC
+		decoderStateFileFlags |= os.O_TRUNC
 	}
-	decoderStateFile, err := os.OpenFile(decoderStateFileName, decoderStateFileFlags, 0o600)
+	decoderStateFile, err := os.OpenFile( // #nosec G304 // it's meant to be that way
+		decoderStateFileName,
+		decoderStateFileFlags,
+		0o600, //revive:disable-line:add-constant // file permissions simple readable as octa-number
+	)
 	if err != nil {
-		return nil, errors.Join(fmt.Errorf("failed to open cache file: %w", err), wr.Close())
+		return nil, errors.Join(fmt.Errorf("failed to open decoder state file: %w", err), wr.Close())
 	}
 
+	// create new shard
 	s := &shard{
 		headID:             headID,
 		shardID:            shardID,
@@ -212,7 +219,9 @@ func (s *shard) SetCorrupted() {
 // SegmentReadyChecker
 //
 
+// SegmentReadyChecker is a segment ready checker.
 type SegmentReadyChecker interface {
+	// SegmentIsReady checks if the segment is ready.
 	SegmentIsReady(segmentID uint32) (ready bool, outOfRange bool)
 }
 
@@ -272,9 +281,10 @@ type dataSource struct {
 	segmentSize        prometheus.Histogram
 }
 
+// newDataSource creates a new [dataSource].
 func newDataSource(dataDir string,
 	numberOfShards uint16,
-	config DestinationConfig,
+	config DestinationConfig, //nolint:gocritic // hugeParam // config
 	discardCache bool,
 	segmentReadyChecker SegmentReadyChecker,
 	corruptMarker CorruptMarker,
@@ -442,7 +452,10 @@ func (ds *dataSource) Read(ctx context.Context, segmentID uint32, minTimestamp i
 	readShardResults := make([]readShardResult, len(ds.shards))
 	for shardID := 0; shardID < len(ds.shards); shardID++ {
 		if ds.shards[shardID].corrupted {
-			readShardResults[shardID] = readShardResult{segment: nil, err: NewShardError(shardID, false, ErrShardIsCorrupted)}
+			readShardResults[shardID] = readShardResult{
+				segment: nil,
+				err:     NewShardError(shardID, false, ErrShardIsCorrupted),
+			}
 			continue
 		}
 		wg.Add(1)
@@ -512,6 +525,7 @@ func (ds *dataSource) LSSes() []*cppbridge.LabelSetStorage {
 	return ds.lssSlice
 }
 
+// WriteCaches writes caches to the buffer and sends the signal to write the caches.
 func (ds *dataSource) WriteCaches() {
 	ds.cacheMtx.Lock()
 	for shardID, sc := range ds.caches {
@@ -533,6 +547,7 @@ func (ds *dataSource) WriteCaches() {
 	}
 }
 
+// cacheWriteLoop loop that writes caches to the buffer and sends the signal to write the caches.
 func (ds *dataSource) cacheWriteLoop() {
 	defer close(ds.cacheWriteLoopClosed)
 	var closed bool
@@ -544,7 +559,7 @@ func (ds *dataSource) cacheWriteLoop() {
 			writeResultc = make(chan struct{})
 			go func() {
 				defer close(writeResultc)
-				ds.writeCaches()
+				ds.writeBufferedCaches()
 			}()
 			writeRequested = false
 		}
@@ -565,7 +580,8 @@ func (ds *dataSource) cacheWriteLoop() {
 	}
 }
 
-func (ds *dataSource) writeCaches() {
+// writeBufferedCaches writes cached data to the disk and resets the cache.
+func (ds *dataSource) writeBufferedCaches() {
 	ds.cacheMtx.Lock()
 	caches := make([]*shardCache, 0, len(ds.caches))
 	for _, sc := range ds.caches {

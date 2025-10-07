@@ -180,7 +180,7 @@ func (a Appender[TTask, TShard, THead]) Append(
 // inputRelabelingStage first stage - relabeling.
 //
 //revive:disable-next-line:function-length long but this is first stage.
-func (a Appender[TTask, TShard, THead]) inputRelabelingStage(
+func (a *Appender[TTask, TShard, THead]) inputRelabelingStage(
 	ctx context.Context,
 	state *cppbridge.StateV2,
 	incomingData *DestructibleIncomingData,
@@ -265,7 +265,7 @@ func (a Appender[TTask, TShard, THead]) inputRelabelingStage(
 }
 
 // appendRelabelerSeriesStage second stage - append to lss relabeling ls.
-func (a Appender[TTask, TShard, THead]) appendRelabelerSeriesStage(
+func (a *Appender[TTask, TShard, THead]) appendRelabelerSeriesStage(
 	ctx context.Context,
 	shardedInnerSeries *ShardedInnerSeries,
 	shardedRelabeledSeries *ShardedRelabeledSeries,
@@ -307,7 +307,7 @@ func (a Appender[TTask, TShard, THead]) appendRelabelerSeriesStage(
 }
 
 // updateRelabelerStateStage third stage - update state cache.
-func (a Appender[TTask, TShard, THead]) updateRelabelerStateStage(
+func (a *Appender[TTask, TShard, THead]) updateRelabelerStateStage(
 	ctx context.Context,
 	state *cppbridge.StateV2,
 	shardedStateUpdates *ShardedStateUpdates,
@@ -328,7 +328,7 @@ func (a Appender[TTask, TShard, THead]) updateRelabelerStateStage(
 }
 
 // appendInnerSeriesAndWriteToWal append [cppbridge.InnerSeries] to [Shard]'s to [DataStorage] and write to [Wal].
-func (a Appender[TTask, TShard, THead]) appendInnerSeriesAndWriteToWal(
+func (a *Appender[TTask, TShard, THead]) appendInnerSeriesAndWriteToWal(
 	shardedInnerSeries *ShardedInnerSeries,
 ) (uint32, error) {
 	tw := task.NewTaskWaiter[TTask](2) //revive:disable-line:add-constant // 2 task for wait
@@ -367,7 +367,7 @@ func (a Appender[TTask, TShard, THead]) appendInnerSeriesAndWriteToWal(
 	return atomicLimitExhausted, tw.Wait()
 }
 
-func (a Appender[TTask, TShard, THead]) resolveState(state *cppbridge.StateV2) error {
+func (a *Appender[TTask, TShard, THead]) resolveState(state *cppbridge.StateV2) error {
 	if state == nil {
 		return errNilState
 	}

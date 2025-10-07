@@ -9,12 +9,14 @@ type Task interface {
 	Wait() error
 }
 
+// LoadAndQuerySeriesDataTask represents a task to load and query series data.
 type LoadAndQuerySeriesDataTask struct {
 	queriers []uintptr
 	task     Task
 	lock     sync.Mutex
 }
 
+// Add adds a querier to the task, if exists no task, it creates and enqueues a task.
 func (t *LoadAndQuerySeriesDataTask) Add(querier uintptr, createAndEnqueueTask func() Task) Task {
 	t.lock.Lock()
 	defer t.lock.Unlock()
@@ -26,6 +28,7 @@ func (t *LoadAndQuerySeriesDataTask) Add(querier uintptr, createAndEnqueueTask f
 	return t.task
 }
 
+// Release executes and releases the queriers.
 func (t *LoadAndQuerySeriesDataTask) Release(callback func([]uintptr)) {
 	t.lock.Lock()
 	callback(t.queriers)

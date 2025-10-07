@@ -26,19 +26,23 @@ const (
 	metaVersion1 = 1
 )
 
+// WrittenBlock represents a written block.
 type WrittenBlock struct {
 	Dir  string
 	Meta tsdb.BlockMeta
 }
 
+// ChunkDir returns the chunk directory.
 func (block *WrittenBlock) ChunkDir() string {
 	return filepath.Join(block.Dir, "chunks")
 }
 
+// IndexFilename returns the index filename.
 func (block *WrittenBlock) IndexFilename() string {
 	return filepath.Join(block.Dir, indexFilename)
 }
 
+// MetaFilename returns the meta filename.
 func (block *WrittenBlock) MetaFilename() string {
 	return filepath.Join(block.Dir, metaFilename)
 }
@@ -161,16 +165,21 @@ func (writer *blockWriter) moveTmpDirToDir() error {
 
 type blockWriters []blockWriter
 
+// append appends a writer to the block writers.
+
+//nolint:gocritic // hugeParam // we accumulate the writers
 func (bw *blockWriters) append(writer blockWriter) {
 	*bw = append(*bw, writer)
 }
 
+// close closes the block writers.
 func (bw *blockWriters) close() {
 	for i := range *bw {
 		_ = (*bw)[i].close()
 	}
 }
 
+// recodeAndWriteChunksBatch recodes and writes the chunks batch.
 func (bw *blockWriters) recodeAndWriteChunksBatch() error {
 	for i := range *bw {
 		if err := (*bw)[i].recodeAndWriteChunksBatch(); err != nil {
@@ -181,6 +190,7 @@ func (bw *blockWriters) recodeAndWriteChunksBatch() error {
 	return nil
 }
 
+// writeRestOfRecodedChunks writes the rest of the recoded chunks.
 func (bw *blockWriters) writeRestOfRecodedChunks() error {
 	for i := range *bw {
 		if err := (*bw)[i].writeRestOfRecodedChunks(); err != nil {
@@ -191,6 +201,7 @@ func (bw *blockWriters) writeRestOfRecodedChunks() error {
 	return nil
 }
 
+// writeIndexAndMoveTmpDirToDir writes the index and moves the temporary directory to the directory.
 func (bw *blockWriters) writeIndexAndMoveTmpDirToDir() ([]WrittenBlock, error) {
 	writtenBlocks := make([]WrittenBlock, 0, len(*bw))
 	for i := range *bw {

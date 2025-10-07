@@ -10,34 +10,42 @@ import (
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
 
+// Chunk represents a recoded chunk.
 type Chunk struct {
 	rc *cppbridge.RecodedChunk
 }
 
+// MinT returns the minimum timestamp of the chunk.
 func (c *Chunk) MinT() int64 {
 	return c.rc.MinT
 }
 
+// MaxT returns the maximum timestamp of the chunk.
 func (c *Chunk) MaxT() int64 {
 	return c.rc.MaxT
 }
 
+// SeriesID returns the series ID of the chunk.
 func (c *Chunk) SeriesID() uint32 {
 	return c.rc.SeriesId
 }
 
+// Encoding returns is the identifier of the encoding of the chunk.
 func (*Chunk) Encoding() chunkenc.Encoding {
 	return chunkenc.EncXOR
 }
 
+// SampleCount returns the number of samples in the chunk.
 func (c *Chunk) SampleCount() uint8 {
 	return c.rc.SamplesCount
 }
 
+// Bytes returns the bytes blob of the chunk data.
 func (c *Chunk) Bytes() []byte {
 	return c.rc.ChunkData
 }
 
+// ChunkIterator represents a chunk iterator, it is used to iterate over the chunks.
 type ChunkIterator struct {
 	r  *cppbridge.ChunkRecoder
 	rc *cppbridge.RecodedChunk
@@ -55,6 +63,7 @@ func NewChunkIterator(
 	}
 }
 
+// Next advances the iterator by one, if possible.
 func (i *ChunkIterator) Next() bool {
 	if i.rc != nil && !i.rc.HasMoreData {
 		return false
@@ -65,11 +74,13 @@ func (i *ChunkIterator) Next() bool {
 	return rc.SeriesId != math.MaxUint32
 }
 
+// NextBatch advances the iterator by one batch, if if there is more data.
 func (i *ChunkIterator) NextBatch() bool {
 	i.rc.HasMoreData = i.r.NextBatch()
 	return i.rc.HasMoreData
 }
 
+// At returns the current chunk.
 func (i *ChunkIterator) At() Chunk {
 	return Chunk{rc: i.rc}
 }
@@ -78,6 +89,7 @@ func (i *ChunkIterator) At() Chunk {
 // IndexWriter
 //
 
+// IndexWriter represents a index writer, it is used to write the index.
 type IndexWriter struct {
 	cppIndexWriter  *cppbridge.IndexWriter
 	isPrefixWritten bool
@@ -88,6 +100,7 @@ func NewIndexWriter(lss *cppbridge.LabelSetStorage) IndexWriter {
 	return IndexWriter{cppIndexWriter: cppbridge.NewIndexWriter(lss)}
 }
 
+// WriteRestTo writes the rest of the index to the writer.
 func (iw *IndexWriter) WriteRestTo(w io.Writer) (n int64, err error) {
 	bytesWritten, err := w.Write(iw.cppIndexWriter.WriteLabelIndices())
 	n += int64(bytesWritten)
@@ -128,7 +141,7 @@ func (iw *IndexWriter) WriteRestTo(w io.Writer) (n int64, err error) {
 	return n, nil
 }
 
-// WriteSeriesTo write series(id and chunks) to [io.Writer].
+// WriteSeriesTo writes series(id and chunks) to [io.Writer].
 func (iw *IndexWriter) WriteSeriesTo(id uint32, chunks []ChunkMetadata, w io.Writer) (n int64, err error) {
 	if !iw.isPrefixWritten {
 		var bytesWritten int

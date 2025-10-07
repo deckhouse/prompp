@@ -9,7 +9,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/ready"
 )
 
-func TestRemoteWriter_Run(t *testing.T) {
+func TestRemoteWriter_Run(_ *testing.T) {
 	rw := New("", nil, clockwork.NewFakeClock(), ready.NoOpNotifier{}, prometheus.DefaultRegisterer)
 	_ = rw
 }
