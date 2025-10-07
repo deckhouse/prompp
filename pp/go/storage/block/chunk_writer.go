@@ -71,7 +71,7 @@ func (w *ChunkWriter) Close() (err error) {
 	return w.dirFile.Close()
 }
 
-// Write encoding and write  to buffer chunk.
+// Write encoding and write to buffer chunk.
 func (w *ChunkWriter) Write(chunk Chunk) (meta ChunkMetadata, err error) {
 	// calculate chunk size
 	chunkSize := int64(chunks.MaxChunkLengthFieldSize)

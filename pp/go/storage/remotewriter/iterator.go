@@ -18,6 +18,11 @@ import (
 	"github.com/prometheus/prometheus/pp/go/logger"
 )
 
+//
+// DataSource
+//
+
+// DataSource is a implementation of data source.
 type DataSource interface {
 	Read(ctx context.Context, targetSegmentID uint32, minTimestamp int64) ([]*DecodedSegment, error)
 	LSSes() []*cppbridge.LabelSetStorage
@@ -25,11 +30,21 @@ type DataSource interface {
 	Close() error
 }
 
+//
+// TargetSegmentIDSetCloser
+//
+
+// TargetSegmentIDSetCloser is a implementation of target segment id set closer.
 type TargetSegmentIDSetCloser interface {
 	SetTargetSegmentID(segmentID uint32) error
 	Close() error
 }
 
+//
+// ProtobufWriter
+//
+
+// ProtobufWriter is a implementation of protobuf writer.
 type ProtobufWriter interface {
 	Write(ctx context.Context, data *cppbridge.SnappyProtobufEncodedData) error
 }
@@ -40,17 +55,19 @@ type sharder struct {
 	numberOfShards int
 }
 
-func newSharder(min, max int) (*sharder, error) {
-	if min > max || min <= 0 {
-		return nil, fmt.Errorf("failed to create sharder, min: %d, max: %d", min, max)
+// newSharder creates a new [sharder].
+func newSharder(minShards, maxShards int) (*sharder, error) {
+	if minShards > maxShards || minShards <= 0 {
+		return nil, fmt.Errorf("failed to create sharder, min: %d, max: %d", minShards, maxShards)
 	}
 	return &sharder{
-		min:            min,
-		max:            max,
-		numberOfShards: min,
+		min:            minShards,
+		max:            maxShards,
+		numberOfShards: minShards,
 	}, nil
 }
 
+// Apply applies the value for the number of shards to the sharder.
 func (s *sharder) Apply(value float64) {
 	newValue := int(math.Ceil(value))
 	if newValue < s.min {
@@ -74,17 +91,18 @@ func (s *sharder) BestNumberOfShards(value float64) int {
 	return newValue
 }
 
+// NumberOfShards returns the number of shards.
 func (s *sharder) NumberOfShards() int {
 	return s.numberOfShards
 }
 
+// Iterator is a iterator for sending data to the remote storage.
 type Iterator struct {
 	clock                        clockwork.Clock
 	queueConfig                  config.QueueConfig
 	dataSource                   DataSource
 	protobufWriter               ProtobufWriter
 	targetSegmentIDSetCloser     TargetSegmentIDSetCloser
-	segmentReadyChecker          SegmentReadyChecker
 	metrics                      *DestinationMetrics
 	targetSegmentID              uint32
 	targetSegmentIsPartiallyRead bool
@@ -95,6 +113,7 @@ type Iterator struct {
 	endOfBlockReached bool
 }
 
+// MessageShard is a shard of a message for sending to the remote storage.
 type MessageShard struct {
 	Protobuf      *cppbridge.SnappyProtobufEncodedData
 	Size          uint64
@@ -104,24 +123,29 @@ type MessageShard struct {
 	PostProcessed bool
 }
 
+// Message is a message for sending to the remote storage.
 type Message struct {
 	MaxTimestamp int64
 	Shards       []*MessageShard
 }
 
+// HasDataToDeliver checks if the message has data to deliver.
 func (m *Message) HasDataToDeliver() bool {
 	for _, shrd := range m.Shards {
 		if !shrd.Delivered {
 			return true
 		}
 	}
+
 	return false
 }
 
+// IsObsoleted checks if the message is obsoleted.
 func (m *Message) IsObsoleted(minTimestamp int64) bool {
 	return m.MaxTimestamp < minTimestamp
 }
 
+// newIterator creates a new [Iterator].
 func newIterator(
 	clock clockwork.Clock,
 	queueConfig config.QueueConfig,
@@ -150,6 +174,7 @@ func newIterator(
 	}, nil
 }
 
+// wrapError wraps the error.
 func (i *Iterator) wrapError(err error) error {
 	if err != nil {
 		return err
@@ -162,6 +187,11 @@ func (i *Iterator) wrapError(err error) error {
 	return nil
 }
 
+// Next reads data from the data source and writes it to the protobuf writer.
+//
+//revive:disable-next-line:function-length // long but readable
+//revive:disable-next-line:cyclomatic // long but readable
+//revive:disable-next-line:cognitive-complexity // long but readable
 func (i *Iterator) Next(ctx context.Context) error {
 	if i.endOfBlockReached {
 		return i.wrapError(nil)
@@ -248,7 +278,7 @@ readLoop:
 
 	i.writeCaches()
 
-	msg, err := i.encode(b.Data(), uint16(bestNumberOfShards))
+	msg, err := i.encode(b.Data(), uint16(bestNumberOfShards)) // #nosec G115 // no overflow
 	if err != nil {
 		return i.wrapError(err)
 	}
@@ -413,6 +443,7 @@ func (i *Iterator) minTimestamp() int64 {
 	return i.clock.Now().Add(-sampleAgeLimit).UnixMilli()
 }
 
+// Close closes the iterator.
 func (i *Iterator) Close() error {
 	return errors.Join(i.dataSource.Close(), i.targetSegmentIDSetCloser.Close())
 }
@@ -428,7 +459,8 @@ type batch struct {
 	maxNumberOfSamplesPerShard int
 }
 
-func newBatch(numberOfShards int, maxNumberOfSamplesPerShard int) *batch {
+// newBatch creates a new [batch].
+func newBatch(numberOfShards, maxNumberOfSamplesPerShard int) *batch {
 	return &batch{
 		numberOfShards:             numberOfShards,
 		maxNumberOfSamplesPerShard: maxNumberOfSamplesPerShard,

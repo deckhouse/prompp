@@ -10,6 +10,8 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/oklog/ulid"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage"
@@ -18,7 +20,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	"github.com/prometheus/prometheus/tsdb"
-	"github.com/stretchr/testify/suite"
 )
 
 const (
@@ -296,5 +297,5 @@ func (s *WriterSuite) TestSkipEmptyBlock() {
 
 	// Assert
 	s.Require().NoError(err)
-	s.Equal(2, len(blocks))
+	s.Len(blocks, 2)
 }
