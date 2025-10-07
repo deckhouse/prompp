@@ -55,14 +55,24 @@ type Shard interface {
 	// LSSResetSnapshot resets the current snapshot. Use only WithLock.
 	LSSResetSnapshot()
 
-	// Relabeler returns relabeler for shard goroutines.
-	Relabeler() *cppbridge.PerGoroutineRelabeler
-
 	// ShardID returns the shard ID.
 	ShardID() uint16
 
 	// WalWrite append the incoming inner series to wal encoder.
 	WalWrite(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error)
+}
+
+//
+// GoroutineShard
+//
+
+// GoroutineShard the minimum required head [GoroutineShard] implementation.
+type GoroutineShard interface {
+	// Relabeler returns relabeler for shard goroutines.
+	Relabeler() *cppbridge.PerGoroutineRelabeler
+
+	// Shard inherit from [Shard] methods.
+	Shard
 }
 
 //
@@ -73,9 +83,10 @@ type Shard interface {
 type Head[
 	TTask Task,
 	TShard Shard,
+	TGoroutineShard GoroutineShard,
 ] interface {
 	// CreateTask create a task for operations on the [Head] shards.
-	CreateTask(taskName string, shardFn func(shard TShard) error) TTask
+	CreateTask(taskName string, shardFn func(shard TGoroutineShard) error) TTask
 
 	// Enqueue the task to be executed on shards [Head].
 	Enqueue(t TTask)
@@ -85,6 +96,9 @@ type Head[
 
 	// NumberOfShards returns current number of shards in to [Head].
 	NumberOfShards() uint16
+
+	// RangeShards returns an iterator over the [Head] [Shard]s, through which the shard can be directly accessed.
+	RangeShards() func(func(TShard) bool)
 }
 
 //
@@ -95,7 +109,8 @@ type Head[
 type Appender[
 	TTask Task,
 	TShard Shard,
-	THead Head[TTask, TShard],
+	TGoroutineShard GoroutineShard,
+	THead Head[TTask, TShard, TGoroutineShard],
 ] struct {
 	head           THead
 	commitAndFlush func(h THead) error
@@ -105,12 +120,13 @@ type Appender[
 func New[
 	TTask Task,
 	TShard Shard,
-	THead Head[TTask, TShard],
+	TGoroutineShard GoroutineShard,
+	THead Head[TTask, TShard, TGoroutineShard],
 ](
 	head THead,
 	commitAndFlush func(h THead) error,
-) Appender[TTask, TShard, THead] {
-	return Appender[TTask, TShard, THead]{
+) Appender[TTask, TShard, TGoroutineShard, THead] {
+	return Appender[TTask, TShard, TGoroutineShard, THead]{
 		head:           head,
 		commitAndFlush: commitAndFlush,
 	}
@@ -119,7 +135,7 @@ func New[
 // Append incoming data to [Head].
 //
 //revive:disable-next-line:flag-parameter this is a flag, but it's more convenient this way
-func (a Appender[TTask, TShard, THead]) Append(
+func (a Appender[TTask, TShard, TGoroutineShard, THead]) Append(
 	ctx context.Context,
 	incomingData *IncomingData,
 	state *cppbridge.StateV2,
@@ -163,6 +179,8 @@ func (a Appender[TTask, TShard, THead]) Append(
 		}
 	}
 
+	a.trackStaleNans(shardedInnerSeries, state)
+
 	atomicLimitExhausted, err := a.appendInnerSeriesAndWriteToWal(shardedInnerSeries)
 	if err != nil {
 		logger.Errorf("failed to write wal: %v", err)
@@ -180,7 +198,7 @@ func (a Appender[TTask, TShard, THead]) Append(
 // inputRelabelingStage first stage - relabeling.
 //
 //revive:disable-next-line:function-length long but this is first stage.
-func (a Appender[TTask, TShard, THead]) inputRelabelingStage(
+func (a Appender[TTask, TShard, TGoroutineShard, THead]) inputRelabelingStage(
 	ctx context.Context,
 	state *cppbridge.StateV2,
 	incomingData *DestructibleIncomingData,
@@ -190,7 +208,7 @@ func (a Appender[TTask, TShard, THead]) inputRelabelingStage(
 	stats := make([]cppbridge.RelabelerStats, a.head.NumberOfShards())
 	t := a.head.CreateTask(
 		lssInputRelabeling,
-		func(shard TShard) error {
+		func(shard TGoroutineShard) error {
 			var (
 				relabeler   = shard.Relabeler()
 				shardID     = shard.ShardID()
@@ -265,7 +283,7 @@ func (a Appender[TTask, TShard, THead]) inputRelabelingStage(
 }
 
 // appendRelabelerSeriesStage second stage - append to lss relabeling ls.
-func (a Appender[TTask, TShard, THead]) appendRelabelerSeriesStage(
+func (a Appender[TTask, TShard, TGoroutineShard, THead]) appendRelabelerSeriesStage(
 	ctx context.Context,
 	shardedInnerSeries *ShardedInnerSeries,
 	shardedRelabeledSeries *ShardedRelabeledSeries,
@@ -273,7 +291,7 @@ func (a Appender[TTask, TShard, THead]) appendRelabelerSeriesStage(
 ) error {
 	t := a.head.CreateTask(
 		lssAppendRelabelerSeries,
-		func(shard TShard) error {
+		func(shard TGoroutineShard) error {
 			shardID := shard.ShardID()
 
 			relabeledSeries, ok := shardedRelabeledSeries.DataBySourceShard(shardID)
@@ -307,7 +325,7 @@ func (a Appender[TTask, TShard, THead]) appendRelabelerSeriesStage(
 }
 
 // updateRelabelerStateStage third stage - update state cache.
-func (a Appender[TTask, TShard, THead]) updateRelabelerStateStage(
+func (a Appender[TTask, TShard, TGoroutineShard, THead]) updateRelabelerStateStage(
 	ctx context.Context,
 	state *cppbridge.StateV2,
 	shardedStateUpdates *ShardedStateUpdates,
@@ -327,15 +345,29 @@ func (a Appender[TTask, TShard, THead]) updateRelabelerStateStage(
 	return nil
 }
 
+// trackStaleNans add stale nans samples if needed
+func (a Appender[TTask, TShard, TGoroutineShard, THead]) trackStaleNans(
+	shardInnerSeries *ShardedInnerSeries,
+	state *cppbridge.StateV2,
+) {
+	if !state.TrackStaleness() {
+		return
+	}
+
+	for shard := range a.head.RangeShards() {
+		cppbridge.PerGoroutineRelabelerTrackStaleNans(shardInnerSeries.DataByShard(shard.ShardID()), state, shard.ShardID())
+	}
+}
+
 // appendInnerSeriesAndWriteToWal append [cppbridge.InnerSeries] to [Shard]'s to [DataStorage] and write to [Wal].
-func (a Appender[TTask, TShard, THead]) appendInnerSeriesAndWriteToWal(
+func (a Appender[TTask, TShard, TGoroutineShard, THead]) appendInnerSeriesAndWriteToWal(
 	shardedInnerSeries *ShardedInnerSeries,
 ) (uint32, error) {
 	tw := task.NewTaskWaiter[TTask](2) //revive:disable-line:add-constant // 2 task for wait
 
 	tAppend := a.head.CreateTask(
 		dsAppendInnerSeries,
-		func(shard TShard) error {
+		func(shard TGoroutineShard) error {
 			shard.AppendInnerSeriesSlice(shardedInnerSeries.DataByShard(shard.ShardID()))
 
 			return nil
@@ -346,7 +378,7 @@ func (a Appender[TTask, TShard, THead]) appendInnerSeriesAndWriteToWal(
 	var atomicLimitExhausted uint32
 	tWalWrite := a.head.CreateTask(
 		walWrite,
-		func(shard TShard) error {
+		func(shard TGoroutineShard) error {
 			limitExhausted, errWrite := shard.WalWrite(shardedInnerSeries.DataByShard(shard.ShardID()))
 			if errWrite != nil {
 				return fmt.Errorf("shard %d: %w", shard.ShardID(), errWrite)
@@ -367,7 +399,7 @@ func (a Appender[TTask, TShard, THead]) appendInnerSeriesAndWriteToWal(
 	return atomicLimitExhausted, tw.Wait()
 }
 
-func (a Appender[TTask, TShard, THead]) resolveState(state *cppbridge.StateV2) error {
+func (a Appender[TTask, TShard, TGoroutineShard, THead]) resolveState(state *cppbridge.StateV2) error {
 	if state == nil {
 		return errNilState
 	}
