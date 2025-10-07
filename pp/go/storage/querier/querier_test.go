@@ -9,7 +9,11 @@ import (
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/model/labels"
+	prom_storage "github.com/prometheus/prometheus/storage"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
@@ -18,7 +22,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
-	"github.com/stretchr/testify/suite"
 )
 
 const (
@@ -310,4 +313,202 @@ func (s *QuerierSuite) TestInstantQueryWithDataStorageLoading() {
 			},
 		},
 	}, storagetest.TimeSeriesFromSeriesSet(seriesSet))
+}
+
+func (s *QuerierSuite) TestLabelNames() {
+	// Arrange
+	timeSeries := []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric0", "job0", "test0"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 1},
+			},
+		},
+		{
+			Labels: labels.FromStrings("__name__", "metric1", "job1", "test1"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 10},
+			},
+		},
+	}
+	s.appendTimeSeries(timeSeries)
+
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	defer func() { _ = q.Close() }()
+	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric0")
+	s.Require().NoError(err)
+	hints := &prom_storage.LabelHints{Limit: 10}
+
+	// Act
+	names, anns, err := q.LabelNames(s.context, hints, matcher)
+	s.Require().NoError(err)
+
+	// Assert
+	s.Equal([]string{"__name__", "job0"}, names)
+	s.Len(anns.AsErrors(), 1)
+}
+
+func (s *QuerierSuite) TestLabelNamesWithLimit() {
+	// Arrange
+	timeSeries := []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric0", "job0", "test0"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 1},
+			},
+		},
+		{
+			Labels: labels.FromStrings("__name__", "metric1", "job1", "test1"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 10},
+			},
+		},
+	}
+	s.appendTimeSeries(timeSeries)
+
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	defer func() { _ = q.Close() }()
+	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric0")
+	s.Require().NoError(err)
+	hints := &prom_storage.LabelHints{Limit: 1}
+
+	// Act
+	names, anns, err := q.LabelNames(s.context, hints, matcher)
+	s.Require().NoError(err)
+
+	// Assert
+	s.Equal([]string{"__name__"}, names)
+	s.Len(anns.AsErrors(), 1)
+}
+
+func (s *QuerierSuite) TestLabelNamesNoMatches() {
+	// Arrange
+	timeSeries := []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric0", "job0", "test0"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 1},
+			},
+		},
+		{
+			Labels: labels.FromStrings("__name__", "metric1", "job1", "test1"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 10},
+			},
+		},
+	}
+	s.appendTimeSeries(timeSeries)
+
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	defer func() { _ = q.Close() }()
+	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric3")
+	s.Require().NoError(err)
+	hints := &prom_storage.LabelHints{Limit: 1}
+
+	// Act
+	names, anns, err := q.LabelNames(s.context, hints, matcher)
+	s.Require().NoError(err)
+
+	// Assert
+	s.Equal([]string{}, names)
+	s.Len(anns.AsErrors(), 1)
+}
+
+func (s *QuerierSuite) TestLabelValues() {
+	// Arrange
+	timeSeries := []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric0", "job0", "test0"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 1},
+			},
+		},
+		{
+			Labels: labels.FromStrings("__name__", "metric1", "job1", "test1"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 10},
+			},
+		},
+	}
+	s.appendTimeSeries(timeSeries)
+
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	defer func() { _ = q.Close() }()
+	matcher, err := labels.NewMatcher(labels.MatchRegexp, "__name__", "metric.*")
+	s.Require().NoError(err)
+	hints := &prom_storage.LabelHints{Limit: 10}
+
+	// Act
+	names, anns, err := q.LabelValues(s.context, "__name__", hints, matcher)
+	s.Require().NoError(err)
+
+	// Assert
+	s.Equal([]string{"metric0", "metric1"}, names)
+	s.Len(anns.AsErrors(), 1)
+}
+
+func (s *QuerierSuite) TestLabelValuesNoMatches() {
+	// Arrange
+	timeSeries := []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric0", "job0", "test0"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 1},
+			},
+		},
+		{
+			Labels: labels.FromStrings("__name__", "metric1", "job1", "test1"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 10},
+			},
+		},
+	}
+	s.appendTimeSeries(timeSeries)
+
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	defer func() { _ = q.Close() }()
+	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric2")
+	s.Require().NoError(err)
+	hints := &prom_storage.LabelHints{Limit: 10}
+
+	// Act
+	names, anns, err := q.LabelValues(s.context, "__name__", hints, matcher)
+	s.Require().NoError(err)
+
+	// Assert
+	s.Equal([]string{}, names)
+	s.Len(anns.AsErrors(), 1)
+}
+
+func (s *QuerierSuite) TestLabelValuesNoMatchesOnName() {
+	// Arrange
+	timeSeries := []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric0", "job0", "test0"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 1},
+			},
+		},
+		{
+			Labels: labels.FromStrings("__name__", "metric1", "job1", "test1"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 10},
+			},
+		},
+	}
+	s.appendTimeSeries(timeSeries)
+
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
+	defer func() { _ = q.Close() }()
+	matcher, err := labels.NewMatcher(labels.MatchRegexp, "__name__", "metric.*")
+	s.Require().NoError(err)
+	hints := &prom_storage.LabelHints{Limit: 10}
+
+	// Act
+	names, anns, err := q.LabelValues(s.context, "instance", hints, matcher)
+	s.Require().NoError(err)
+
+	// Assert
+	s.Equal([]string{}, names)
+	s.Len(anns.AsErrors(), 1)
 }

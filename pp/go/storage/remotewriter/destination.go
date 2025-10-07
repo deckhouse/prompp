@@ -357,6 +357,9 @@ func NewDestination(cfg DestinationConfig) *Destination {
 }
 
 // RegisterMetrics registers the metrics for the [Destination].
+//
+//nolint:dupl // it's not duplicate, it's different function
+//revive:disable-next-line:function-length // register metrics
 func (d *Destination) RegisterMetrics(registerer prometheus.Registerer) {
 	registerer.MustRegister(d.metrics.samplesTotal)
 	registerer.MustRegister(d.metrics.exemplarsTotal)
@@ -395,6 +398,9 @@ func (d *Destination) RegisterMetrics(registerer prometheus.Registerer) {
 }
 
 // UnregisterMetrics unregisters the metrics for the [Destination].
+//
+//nolint:dupl // it's not duplicate, it's different function
+//revive:disable-next-line:function-length // register metrics
 func (d *Destination) UnregisterMetrics(registerer prometheus.Registerer) {
 	registerer.Unregister(d.metrics.samplesTotal)
 	registerer.Unregister(d.metrics.exemplarsTotal)
