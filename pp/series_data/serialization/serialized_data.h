@@ -78,15 +78,6 @@ class SerializedData {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept { return chunks_.allocated_memory() + bytes_buffer_.allocated_memory(); }
 
-  [[nodiscard]] decoder::UniversalDecodeIterator create_decode_iterator(const chunk::SerializedChunk& chunk) const noexcept {
-    decoder::UniversalDecodeIterator iterator(std::in_place_type<decoder::ConstantDecodeIterator>, 0, BareBones::BitSequenceReader(nullptr, 0), 0, false);
-    std::span<const uint8_t> buffer{bytes_buffer_.control_block().data, bytes_buffer_.size()};
-    Decoder::create_decode_iterator(buffer, chunk, [&iterator]<typename Iterator>(Iterator&& begin, auto&&) {
-      iterator = decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
-    });
-    return iterator;
-  }
-
   [[nodiscard]] uint32_t next_series() noexcept {
     if (internal_index_ == kNoMoreSeries) [[unlikely]] {
       if (chunks_.empty()) [[unlikely]] {
