@@ -276,7 +276,7 @@ func Load(
 				notifier,
 				unloadDataStorageInterval).Load()
 			if err != nil {
-				logger.Warnf("load shard error: %v", err)
+				logger.Warnf("load shard error: %v (at %s)", err, dir)
 			}
 		}(shardID, dir, swn)
 	}
