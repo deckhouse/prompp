@@ -55,11 +55,13 @@ func (s *HeadEncodedSegment) WriteTo(w io.Writer) (int64, error) {
 // HeadWalEncoder
 //
 
+// HeadWalEncoder the encoder for the head wal.
 type HeadWalEncoder struct {
 	lss     *LabelSetStorage
 	encoder uintptr
 }
 
+// NewHeadWalEncoder initializes a new [HeadWalEncoder].
 func NewHeadWalEncoder(shardID uint16, logShards uint8, lss *LabelSetStorage) *HeadWalEncoder {
 	e := &HeadWalEncoder{
 		lss:     lss,
@@ -73,16 +75,19 @@ func NewHeadWalEncoder(shardID uint16, logShards uint8, lss *LabelSetStorage) *H
 	return e
 }
 
+// Version returns current encoder version.
 func (*HeadWalEncoder) Version() uint8 {
 	return EncodersVersion()
 }
 
+// Encode encodes inner series into a segment.
 func (e *HeadWalEncoder) Encode(innerSeriesSlice []*InnerSeries) (uint32, error) {
 	samples, err := headWalEncoderAddInnerSeries(e.encoder, innerSeriesSlice)
 	runtime.KeepAlive(e)
 	return samples, err
 }
 
+// Finalize finalizes the encoder and returns the encoded segment.
 func (e *HeadWalEncoder) Finalize() (*HeadEncodedSegment, error) {
 	samples, segment, err := headWalEncoderFinalize(e.encoder)
 	runtime.KeepAlive(e)
@@ -93,11 +98,13 @@ func (e *HeadWalEncoder) Finalize() (*HeadEncodedSegment, error) {
 // HeadWalDecoder
 //
 
+// HeadWalDecoder the decoder for the head wal.
 type HeadWalDecoder struct {
 	lss     *LabelSetStorage
 	decoder uintptr
 }
 
+// NewHeadWalDecoder initializes a new [HeadWalDecoder].
 func NewHeadWalDecoder(lss *LabelSetStorage, encoderVersion uint8) *HeadWalDecoder {
 	d := &HeadWalDecoder{
 		lss:     lss,
@@ -111,12 +118,17 @@ func NewHeadWalDecoder(lss *LabelSetStorage, encoderVersion uint8) *HeadWalDecod
 	return d
 }
 
+// Decode decodes a segment into an inner series.
 func (d *HeadWalDecoder) Decode(segment []byte, innerSeries *InnerSeries) error {
 	err := headWalDecoderDecode(d.decoder, segment, innerSeries)
 	runtime.KeepAlive(d)
 	return err
 }
 
+// DecodeToDataStorage decodes a segment into a data storage.
+//
+//revive:disable-next-line:confusing-results // returns createTimestamp, encodeTimestamp, error.
+//nolint:gocritic // unnamedResult // returns createTimestamp, encodeTimestamp, error.
 func (d *HeadWalDecoder) DecodeToDataStorage(segment []byte, headEncoder *HeadEncoder) (int64, int64, error) {
 	createTimestamp, encodeTimestamp, err := headWalDecoderDecodeToDataStorage(d.decoder, segment, headEncoder.encoder)
 	runtime.KeepAlive(d)
@@ -124,6 +136,7 @@ func (d *HeadWalDecoder) DecodeToDataStorage(segment []byte, headEncoder *HeadEn
 	return createTimestamp, encodeTimestamp, err
 }
 
+// CreateEncoder creates a new [HeadWalEncoder] from the decoder.
 func (d *HeadWalDecoder) CreateEncoder() *HeadWalEncoder {
 	e := &HeadWalEncoder{
 		lss:     d.lss,

@@ -27,19 +27,24 @@ const (
 	DefaultSampleAgeLimit = model.Duration(time.Hour * 24 * 30)
 )
 
+// DestinationConfig is a remote write destination config.
 type DestinationConfig struct {
 	config.RemoteWriteConfig
 	ExternalLabels labels.Labels `yaml:"external_labels"`
 	ReadTimeout    time.Duration
 }
 
-func (c DestinationConfig) EqualTo(other DestinationConfig) bool {
+// EqualTo checks if the config is equal to the other config.
+//
+//nolint:gocritic // hugeParam // equal configs
+func (c *DestinationConfig) EqualTo(other DestinationConfig) bool {
 	return c.ExternalLabels.Hash() == other.ExternalLabels.Hash() &&
 		c.ReadTimeout == other.ReadTimeout &&
 		remoteWriteConfigsAreEqual(c.RemoteWriteConfig, other.RemoteWriteConfig)
 }
 
-func (c DestinationConfig) CRC32() (uint32, error) {
+// CRC32 returns the CRC32 hash of the config.
+func (c *DestinationConfig) CRC32() (uint32, error) {
 	data, err := yaml.Marshal(c)
 	if err != nil {
 		return 0, err
@@ -48,19 +53,28 @@ func (c DestinationConfig) CRC32() (uint32, error) {
 	return crc32.ChecksumIEEE(data), nil
 }
 
+// Destination is a remote write destination.
 type Destination struct {
 	config  DestinationConfig
 	metrics *DestinationMetrics
 }
 
+// Config returns current config.
 func (d *Destination) Config() DestinationConfig {
 	return d.config
 }
 
-func (d *Destination) ResetConfig(config DestinationConfig) {
-	d.config = config
+// ResetConfig resets current config to the new one.
+//
+//nolint:gocritic // hugeParam // resets config
+func (d *Destination) ResetConfig(cfg DestinationConfig) {
+	d.config = cfg
 }
 
+// NewDestination creates a new [Destination].
+//
+//revive:disable-next-line:function-length // this is a constructor
+//nolint:gocritic // hugeParam // this is a constructor
 func NewDestination(cfg DestinationConfig) *Destination {
 	constLabels := prometheus.Labels{
 		remoteName: cfg.Name,
@@ -106,86 +120,98 @@ func NewDestination(cfg DestinationConfig) *Destination {
 				ConstLabels: constLabels,
 			}),
 			failedExemplarsTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "exemplars_failed_total",
+				Namespace: namespace,
+				Subsystem: subsystem,
+				Name:      "exemplars_failed_total",
+				//revive:disable-next-line:line-length-limit // this is a description of the metric
 				Help:        "Total number of exemplars which failed on send to remote storage, non-recoverable errors.",
 				ConstLabels: constLabels,
 			}),
 			failedHistogramsTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "histograms_failed_total",
+				Namespace: namespace,
+				Subsystem: subsystem,
+				Name:      "histograms_failed_total",
+				//revive:disable-next-line:line-length-limit // this is a description of the metric
 				Help:        "Total number of histograms which failed on send to remote storage, non-recoverable errors.",
 				ConstLabels: constLabels,
 			}),
 			failedMetadataTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "metadata_failed_total",
+				Namespace: namespace,
+				Subsystem: subsystem,
+				Name:      "metadata_failed_total",
+				//revive:disable-next-line:line-length-limit // this is a description of the metric
 				Help:        "Total number of metadata entries which failed on send to remote storage, non-recoverable errors.",
 				ConstLabels: constLabels,
 			}),
 			retriedSamplesTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "samples_retried_total",
+				Namespace: namespace,
+				Subsystem: subsystem,
+				Name:      "samples_retried_total",
+				//revive:disable-next-line:line-length-limit // this is a description of the metric
 				Help:        "Total number of samples which failed on send to remote storage but were retried because the send error was recoverable.",
 				ConstLabels: constLabels,
 			}),
 			retriedExemplarsTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "exemplars_retried_total",
+				Namespace: namespace,
+				Subsystem: subsystem,
+				Name:      "exemplars_retried_total",
+				//revive:disable-next-line:line-length-limit // this is a description of the metric
 				Help:        "Total number of exemplars which failed on send to remote storage but were retried because the send error was recoverable.",
 				ConstLabels: constLabels,
 			}),
 			retriedHistogramsTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "histograms_retried_total",
+				Namespace: namespace,
+				Subsystem: subsystem,
+				Name:      "histograms_retried_total",
+				//revive:disable-next-line:line-length-limit // this is a description of the metric
 				Help:        "Total number of histograms which failed on send to remote storage but were retried because the send error was recoverable.",
 				ConstLabels: constLabels,
 			}),
 			retriedMetadataTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "metadata_retried_total",
+				Namespace: namespace,
+				Subsystem: subsystem,
+				Name:      "metadata_retried_total",
+				//revive:disable-next-line:line-length-limit // this is a description of the metric
 				Help:        "Total number of metadata entries which failed on send to remote storage but were retried because the send error was recoverable.",
 				ConstLabels: constLabels,
 			}),
 			droppedSamplesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "samples_dropped_total",
+				Namespace: namespace,
+				Subsystem: subsystem,
+				Name:      "samples_dropped_total",
+				//revive:disable-next-line:line-length-limit // this is a description of the metric
 				Help:        "Total number of samples which were dropped after being read from the WAL before being sent via remote write, either via relabelling, due to being too old or unintentionally because of an unknown reference ID.",
 				ConstLabels: constLabels,
 			}, []string{"reason"}),
 			addSeriesTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "series_added_total",
+				Namespace: namespace,
+				Subsystem: subsystem,
+				Name:      "series_added_total",
+				//revive:disable-next-line:line-length-limit // this is a description of the metric
 				Help:        "Total number of series which were add after being read from the WAL before being sent via remote write, either via relabelling.",
 				ConstLabels: constLabels,
 			}),
 			droppedSeriesTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "series_dropped_total",
+				Namespace: namespace,
+				Subsystem: subsystem,
+				Name:      "series_dropped_total",
+				//revive:disable-next-line:line-length-limit // this is a description of the metric
 				Help:        "Total number of series which were dropped after being read from the WAL before being sent via remote write, either via relabelling.",
 				ConstLabels: constLabels,
 			}),
 			droppedExemplarsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "exemplars_dropped_total",
+				Namespace: namespace,
+				Subsystem: subsystem,
+				Name:      "exemplars_dropped_total",
+				//revive:disable-next-line:line-length-limit // this is a description of the metric
 				Help:        "Total number of exemplars which were dropped after being read from the WAL before being sent via remote write, either via relabelling, due to being too old or unintentionally because of an unknown reference ID.",
 				ConstLabels: constLabels,
 			}, []string{"reason"}),
 			droppedHistogramsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "histograms_dropped_total",
+				Namespace: namespace,
+				Subsystem: subsystem,
+				Name:      "histograms_dropped_total",
+				//revive:disable-next-line:line-length-limit // this is a description of the metric
 				Help:        "Total number of histograms which were dropped after being read from the WAL before being sent via remote write, either via relabelling, due to being too old or unintentionally because of an unknown reference ID.",
 				ConstLabels: constLabels,
 			}, []string{"reason"}),
@@ -209,9 +235,10 @@ func NewDestination(cfg DestinationConfig) *Destination {
 			}),
 			highestSentTimestamp: &maxTimestamp{
 				Gauge: prometheus.NewGauge(prometheus.GaugeOpts{
-					Namespace:   namespace,
-					Subsystem:   subsystem,
-					Name:        "queue_highest_sent_timestamp_seconds",
+					Namespace: namespace,
+					Subsystem: subsystem,
+					Name:      "queue_highest_sent_timestamp_seconds",
+					//revive:disable-next-line:line-length-limit // this is a description of the metric
 					Help:        "Timestamp from a WAL sample, the highest timestamp successfully sent by this queue, in seconds since epoch.",
 					ConstLabels: constLabels,
 				}),
@@ -266,9 +293,10 @@ func NewDestination(cfg DestinationConfig) *Destination {
 				ConstLabels: constLabels,
 			}),
 			desiredNumShards: prometheus.NewGauge(prometheus.GaugeOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "shards_desired",
+				Namespace: namespace,
+				Subsystem: subsystem,
+				Name:      "shards_desired",
+				//revive:disable-next-line:line-length-limit // this is a description of the metric
 				Help:        "The number of shards that the queues shard calculation wants to run based on the rate of samples in vs. samples out.",
 				ConstLabels: constLabels,
 			}),
@@ -280,9 +308,10 @@ func NewDestination(cfg DestinationConfig) *Destination {
 				ConstLabels: constLabels,
 			}),
 			sentBytesTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "bytes_total",
+				Namespace: namespace,
+				Subsystem: subsystem,
+				Name:      "bytes_total",
+				//revive:disable-next-line:line-length-limit // this is a description of the metric
 				Help:        "The total number of bytes of data (not metadata) sent by the queue after compression. Note that when exemplars over remote write is enabled the exemplars included in a remote write request count towards this metric.",
 				ConstLabels: constLabels,
 			}),
@@ -294,9 +323,10 @@ func NewDestination(cfg DestinationConfig) *Destination {
 				ConstLabels: constLabels,
 			}),
 			maxSamplesPerSend: prometheus.NewGauge(prometheus.GaugeOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "max_samples_per_send",
+				Namespace: namespace,
+				Subsystem: subsystem,
+				Name:      "max_samples_per_send",
+				//revive:disable-next-line:line-length-limit // this is a description of the metric
 				Help:        "The maximum number of samples to be sent, in a single request, to the remote storage. Note that, when sending of exemplars over remote write is enabled, exemplars count towards this limt.",
 				ConstLabels: constLabels,
 			}),
@@ -316,13 +346,20 @@ func NewDestination(cfg DestinationConfig) *Destination {
 					Name:        "segment_size_bytes",
 					Help:        "Size of segment.",
 					ConstLabels: constLabels,
-					Buckets:     []float64{1 << 10, 1 << 11, 1 << 12, 1 << 13, 1 << 14, 1 << 15, 1 << 16, 1 << 17, 1 << 18, 1 << 19, 1 << 20},
+					Buckets: []float64{
+						1 << 10, 1 << 11, 1 << 12, 1 << 13, 1 << 14, 1 << 15,
+						1 << 16, 1 << 17, 1 << 18, 1 << 19, 1 << 20,
+					},
 				},
 			),
 		},
 	}
 }
 
+// RegisterMetrics registers the metrics for the [Destination].
+//
+//nolint:dupl // it's not duplicate, it's different function
+//revive:disable-next-line:function-length // register metrics
 func (d *Destination) RegisterMetrics(registerer prometheus.Registerer) {
 	registerer.MustRegister(d.metrics.samplesTotal)
 	registerer.MustRegister(d.metrics.exemplarsTotal)
@@ -360,6 +397,10 @@ func (d *Destination) RegisterMetrics(registerer prometheus.Registerer) {
 	registerer.MustRegister(d.metrics.segmentSizeInBytes)
 }
 
+// UnregisterMetrics unregisters the metrics for the [Destination].
+//
+//nolint:dupl // it's not duplicate, it's different function
+//revive:disable-next-line:function-length // register metrics
 func (d *Destination) UnregisterMetrics(registerer prometheus.Registerer) {
 	registerer.Unregister(d.metrics.samplesTotal)
 	registerer.Unregister(d.metrics.exemplarsTotal)
@@ -397,18 +438,23 @@ func (d *Destination) UnregisterMetrics(registerer prometheus.Registerer) {
 	registerer.Unregister(d.metrics.segmentSizeInBytes)
 }
 
+// remoteWriteConfigsAreEqual compares two remote write configs.
+//
+//nolint:gocritic // this is a compares configs
 func remoteWriteConfigsAreEqual(lrwc, rwrc config.RemoteWriteConfig) bool {
 	ldata, _ := yaml.Marshal(lrwc)
 	rdata, _ := yaml.Marshal(rwrc)
 	return bytes.Equal(ldata, rdata)
 }
 
+// maxTimestamp is a metric for the highest sent timestamp.
 type maxTimestamp struct {
 	mtx   sync.Mutex
 	value float64
 	prometheus.Gauge
 }
 
+// Set sets the value of the metric.
 func (m *maxTimestamp) Set(value float64) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
@@ -418,18 +464,21 @@ func (m *maxTimestamp) Set(value float64) {
 	}
 }
 
+// Get gets the value of the metric.
 func (m *maxTimestamp) Get() float64 {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 	return m.value
 }
 
+// Collect collects the metric.
 func (m *maxTimestamp) Collect(c chan<- prometheus.Metric) {
 	if m.Get() > 0 {
 		m.Gauge.Collect(c)
 	}
 }
 
+// DestinationMetrics is container for the metrics of the [Destination].
 type DestinationMetrics struct {
 	samplesTotal           prometheus.Counter
 	exemplarsTotal         prometheus.Counter

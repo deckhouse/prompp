@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestXxx(t *testing.T) {
+func TestTaskWaiter(t *testing.T) {
 	tw := task.NewTaskWaiter[*task.Generic[*testShard]](5)
 	err := tw.Wait()
 	require.NoError(t, err)

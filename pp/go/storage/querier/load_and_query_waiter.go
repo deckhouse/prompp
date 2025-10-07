@@ -10,6 +10,7 @@ const (
 	dsLoadAndQuerySeriesData = "data_storage_load_and_query_series_data"
 )
 
+// LoadAndQueryWaiter is a waiter for the load and query series data task.
 type LoadAndQueryWaiter[
 	TTask Task,
 	TDataStorage DataStorage,
@@ -21,6 +22,7 @@ type LoadAndQueryWaiter[
 	head   THead
 }
 
+// NewLoadAndQueryWaiter creates a new [LoadAndQueryWaiter].
 func NewLoadAndQueryWaiter[
 	TTask Task,
 	TDataStorage DataStorage,
@@ -33,6 +35,7 @@ func NewLoadAndQueryWaiter[
 	}
 }
 
+// Add adds a querier to the load and query series data task.
 func (l *LoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead]) Add(s TShard, querier uintptr) {
 	l.waiter.Add(s.LoadAndQuerySeriesDataTask().Add(querier, func() shard.Task {
 		t := l.head.CreateTask(dsLoadAndQuerySeriesData, func(s TShard) error {
@@ -43,6 +46,7 @@ func (l *LoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead]) Add(s TSh
 	}))
 }
 
+// Wait waits for the load and query series data task to complete.
 func (l *LoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead]) Wait() error {
 	return l.waiter.Wait()
 }

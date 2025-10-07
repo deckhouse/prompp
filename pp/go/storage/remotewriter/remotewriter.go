@@ -102,7 +102,7 @@ func (rw *RemoteWriter) Run(ctx context.Context) error {
 				}
 			}
 
-			for _, config := range configs {
+			for _, config := range configs { //nolint:gocritic // hugeParam // constructor
 				destination, ok := destinations[config.Name]
 				if !ok {
 					destination = NewDestination(config)

@@ -36,6 +36,11 @@ func newWriteLoop(dataDir string, destination *Destination, hcatalog Catalog, cl
 	}
 }
 
+// run sending data via RemoteWriter.
+//
+//revive:disable-next-line:cyclomatic // but readable
+//revive:disable-next-line:function-length // long but readable
+//revive:disable-next-line:cognitive-complexity // long but readable
 func (wl *writeLoop) run(ctx context.Context) {
 	var delay time.Duration
 	var err error
@@ -44,8 +49,9 @@ func (wl *writeLoop) run(ctx context.Context) {
 
 	rw := &readyProtobufWriter{}
 
-	wl.destination.metrics.maxNumShards.Set(float64(wl.destination.Config().QueueConfig.MaxShards))
-	wl.destination.metrics.minNumShards.Set(float64(wl.destination.Config().QueueConfig.MinShards))
+	dcfg := wl.destination.Config()
+	wl.destination.metrics.maxNumShards.Set(float64(dcfg.QueueConfig.MaxShards))
+	wl.destination.metrics.minNumShards.Set(float64(dcfg.QueueConfig.MinShards))
 
 	defer func() {
 		if i != nil {
@@ -114,6 +120,9 @@ func (wl *writeLoop) run(ctx context.Context) {
 	}
 }
 
+// createClient creates a new [remote.WriteClient].
+//
+//nolint:gocritic // hugeParam // this is a constructor for new client
 func createClient(config DestinationConfig) (client remote.WriteClient, err error) {
 	clientConfig := remote.ClientConfig{
 		URL:              config.URL,
@@ -133,7 +142,8 @@ func createClient(config DestinationConfig) (client remote.WriteClient, err erro
 	return client, nil
 }
 
-func (wl *writeLoop) write(ctx context.Context, iterator *Iterator) error {
+// write writes data from iterator to the remote write storage.
+func (*writeLoop) write(ctx context.Context, iterator *Iterator) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -150,27 +160,35 @@ func (wl *writeLoop) write(ctx context.Context, iterator *Iterator) error {
 	}
 }
 
+// nextIterator returns next iterator.
+//
+//revive:disable-next-line:cyclomatic // this is a constructor for new iterator
+//revive:disable-next-line:function-length // this is a constructor for new iterator
 func (wl *writeLoop) nextIterator(ctx context.Context, protobufWriter ProtobufWriter) (*Iterator, error) {
 	var nextHeadRecord *catalog.Record
 	var err error
 	var cleanStart bool
+	dcfg := wl.destination.Config()
 	if wl.currentHeadID != nil {
 		nextHeadRecord, err = nextHead(ctx, wl.dataDir, wl.catalog, *wl.currentHeadID)
 	} else {
 		var headFound bool
-		nextHeadRecord, headFound, err = scanForNextHead(ctx, wl.dataDir, wl.catalog, wl.destination.Config().Name)
+		nextHeadRecord, headFound, err = scanForNextHead(ctx, wl.dataDir, wl.catalog, dcfg.Name)
 		cleanStart = !headFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("find next head: %w", err)
 	}
 	headDir := filepath.Join(wl.dataDir, nextHeadRecord.Dir())
-	crw, err := NewCursorReadWriter(filepath.Join(headDir, fmt.Sprintf("%s.cursor", wl.destination.Config().Name)), nextHeadRecord.NumberOfShards())
+	crw, err := NewCursorReadWriter(
+		filepath.Join(headDir, fmt.Sprintf("%s.cursor", dcfg.Name)),
+		nextHeadRecord.NumberOfShards(),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("create cursor: %w", err)
 	}
 
-	crc32, err := wl.destination.Config().CRC32()
+	crc32, err := dcfg.CRC32()
 	if err != nil {
 		return nil, errors.Join(fmt.Errorf("calculate crc32: %w", err), crw.Close())
 	}
@@ -186,7 +204,7 @@ func (wl *writeLoop) nextIterator(ctx context.Context, protobufWriter ProtobufWr
 	ds, err := newDataSource(
 		headDir,
 		nextHeadRecord.NumberOfShards(),
-		wl.destination.Config(),
+		dcfg,
 		discardCache,
 		newSegmentReadyChecker(nextHeadRecord),
 		wl.makeCorruptMarker(),
@@ -214,11 +232,11 @@ func (wl *writeLoop) nextIterator(ctx context.Context, protobufWriter ProtobufWr
 
 	i, err := newIterator(
 		wl.clock,
-		wl.destination.Config().QueueConfig,
+		dcfg.QueueConfig,
 		ds,
 		crw,
 		targetSegmentID,
-		wl.destination.Config().ReadTimeout,
+		dcfg.ReadTimeout,
 		protobufWriter,
 		wl.destination.metrics,
 	)
@@ -247,6 +265,10 @@ func (wl *writeLoop) makeCorruptMarker() CorruptMarker {
 	})
 }
 
+// nextHead returns next head record from catalog.
+//
+//nolint:gocritic // hugeParam // this is a extractor
+//revive:disable-next-line:cyclomatic // this is a extractor
 func nextHead(ctx context.Context, dataDir string, headCatalog Catalog, headID string) (*catalog.Record, error) {
 	if err := contextErr(ctx); err != nil {
 		return nil, err
@@ -298,8 +320,9 @@ func nextHead(ctx context.Context, dataDir string, headCatalog Catalog, headID s
 	return nil, fmt.Errorf("nextHead: no new heads: appropriate head not found")
 }
 
+// validateHead validates head directory.
 func validateHead(headDir string) error {
-	dir, err := os.Open(headDir)
+	dir, err := os.Open(headDir) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return err
 	}
@@ -307,7 +330,13 @@ func validateHead(headDir string) error {
 	return dir.Close()
 }
 
-func scanForNextHead(ctx context.Context, dataDir string, headCatalog Catalog, destinationName string) (*catalog.Record, bool, error) {
+// scanForNextHead scans catalog for next head record.
+func scanForNextHead(
+	ctx context.Context,
+	dataDir string,
+	headCatalog Catalog,
+	destinationName string,
+) (*catalog.Record, bool, error) {
 	if err := contextErr(ctx); err != nil {
 		return nil, false, err
 	}
@@ -344,8 +373,9 @@ func scanForNextHead(ctx context.Context, dataDir string, headCatalog Catalog, d
 	return headRecords[0], false, nil
 }
 
-func scanHeadForDestination(dirPath string, destinationName string) (bool, error) {
-	dir, err := os.Open(dirPath)
+// scanHeadForDestination scans head directory for [Destination].
+func scanHeadForDestination(dirPath, destinationName string) (bool, error) {
+	dir, err := os.Open(dirPath) // #nosec G304 // it's meant to be that way
 	if err != nil {
 		return false, fmt.Errorf("open head dir: %w", err)
 	}
@@ -365,6 +395,7 @@ func scanHeadForDestination(dirPath string, destinationName string) (bool, error
 	return false, nil
 }
 
+// contextErr returns error if context is done.
 func contextErr(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
@@ -374,14 +405,17 @@ func contextErr(ctx context.Context) error {
 	}
 }
 
+// readyProtobufWriter is a writer for ready protobuf.
 type readyProtobufWriter struct {
 	protobufWriter ProtobufWriter
 }
 
+// SetProtobufWriter sets protobuf writer.
 func (rpw *readyProtobufWriter) SetProtobufWriter(protobufWriter ProtobufWriter) {
 	rpw.protobufWriter = protobufWriter
 }
 
+// Write writes protobuf to the remote write storage.
 func (rpw *readyProtobufWriter) Write(ctx context.Context, protobuf *cppbridge.SnappyProtobufEncodedData) error {
 	return rpw.protobufWriter.Write(ctx, protobuf)
 }

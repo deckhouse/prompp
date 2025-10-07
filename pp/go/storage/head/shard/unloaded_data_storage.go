@@ -49,18 +49,21 @@ func (h UnloadedDataSnapshotHeader) IsValid(snapshot []byte) bool {
 	return h.Crc32 == crc32.ChecksumIEEE(snapshot)
 }
 
+// UnloadedDataStorage represents a unloaded data storage, unloads snapshots to the storage from [DataStorage].
 type UnloadedDataStorage struct {
 	storage         StorageFile
 	snapshots       []UnloadedDataSnapshotHeader
 	maxSnapshotSize uint32
 }
 
+// NewUnloadedDataStorage creates a new [UnloadedDataStorage].
 func NewUnloadedDataStorage(storage StorageFile) *UnloadedDataStorage {
 	return &UnloadedDataStorage{
 		storage: storage,
 	}
 }
 
+// WriteSnapshot writes a snapshot to the storage.
 func (s *UnloadedDataStorage) WriteSnapshot(snapshot []byte) (UnloadedDataSnapshotHeader, error) {
 	if len(snapshot) == 0 {
 		return UnloadedDataSnapshotHeader{}, nil
@@ -83,16 +86,19 @@ func (s *UnloadedDataStorage) WriteSnapshot(snapshot []byte) (UnloadedDataSnapsh
 	return NewUnloadedDataSnapshotHeader(snapshot), err
 }
 
+// WriteIndex writes an index to the storage.
 func (s *UnloadedDataStorage) WriteIndex(header UnloadedDataSnapshotHeader) {
 	s.snapshots = append(s.snapshots, header)
 	s.maxSnapshotSize = max(header.SnapshotSize, s.maxSnapshotSize)
 }
 
+// WriteFormatVersion writes the format version to the storage.
 func (s *UnloadedDataStorage) WriteFormatVersion() error {
 	_, err := s.storage.Write([]byte{UnloadedDataStorageVersion})
 	return err
 }
 
+// ForEachSnapshot iterates over the snapshots and calls the callback function.
 func (s *UnloadedDataStorage) ForEachSnapshot(f func(snapshot []byte, isLast bool)) error {
 	if len(s.snapshots) == 0 {
 		return nil
@@ -122,6 +128,7 @@ func (s *UnloadedDataStorage) ForEachSnapshot(f func(snapshot []byte, isLast boo
 	return nil
 }
 
+// validateFormatVersion validates the format version.
 func (s *UnloadedDataStorage) validateFormatVersion() (offset int64, err error) {
 	version := []byte{0}
 	if _, err = s.storage.ReadAt(version, 0); err != nil {
@@ -135,6 +142,7 @@ func (s *UnloadedDataStorage) validateFormatVersion() (offset int64, err error) 
 	return int64(len(version)), nil
 }
 
+// Close closes the storage.
 func (s *UnloadedDataStorage) Close() (err error) {
 	if s.storage != nil {
 		err = s.storage.Close()
@@ -144,15 +152,19 @@ func (s *UnloadedDataStorage) Close() (err error) {
 	return err
 }
 
+// IsEmpty checks if the storage is empty.
 func (s *UnloadedDataStorage) IsEmpty() bool {
 	return len(s.snapshots) == 0
 }
 
+// QueriedSeriesStorage represents a queried series storage,
+// it contains two file stores that it swaps them as needed.
 type QueriedSeriesStorage struct {
 	storages     [2]StorageFile
 	validStorage StorageFile
 }
 
+// NewQueriedSeriesStorage creates a new [QueriedSeriesStorage].
 func NewQueriedSeriesStorage(storage1, storage2 StorageFile) *QueriedSeriesStorage {
 	return &QueriedSeriesStorage{
 		storages: [2]StorageFile{storage1, storage2}, //revive:disable-line:add-constant // 2 working files
@@ -287,6 +299,7 @@ func (s *QueriedSeriesStorage) readStorageHeaders() (result []storageHeaderReade
 	return result, maxSize
 }
 
+// Close closes the storage.
 func (s *QueriedSeriesStorage) Close() error {
 	return errors.Join(s.storages[0].Close(), s.storages[1].Close())
 }
