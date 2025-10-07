@@ -1679,14 +1679,6 @@ func (api *API) remoteRead(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// func (api *API) remoteWrite(w http.ResponseWriter, r *http.Request) {
-//	if api.remoteWriteHandler != nil {
-//		api.remoteWriteHandler.ServeHTTP(w, r)
-//	} else {
-//	 	http.Error(w, "remote write receiver needs to be enabled with --web.enable-remote-write-receiver", http.StatusNotFound)
-//	 }
-// }
-
 func (api *API) otlpWrite(w http.ResponseWriter, r *http.Request) {
 	if api.otlpWriteHandler != nil {
 		api.otlpWriteHandler.ServeHTTP(w, r)

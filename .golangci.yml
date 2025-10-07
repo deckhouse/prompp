@@ -3,9 +3,6 @@ run:
 
 output:
   sort-results: true
-#  formats:
-#    - format: json
-#      path: prom_default.json
   show-stats: true
 
 linters:
@@ -14,7 +11,6 @@ linters:
     - errorlint
     - gocritic
     - godot
-#    - godox
     - gofumpt
     - goimports
     - misspell
