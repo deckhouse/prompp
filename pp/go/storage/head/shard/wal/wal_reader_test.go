@@ -32,15 +32,67 @@ func (s *SegmentWalReaderSuite) TestHappyPath() {
 	err = swr.ForEachSegment(func(rsm *testSegment) error {
 		actual = append(actual, rsm.Bytes()...)
 
+		// protect from infinite loop
 		limiter++
 		if limiter == 1000 {
 			return errors.New("limiter")
 		}
+
 		return nil
 	})
 	s.Require().NoError(err)
 
 	s.Equal(data, actual)
+}
+
+func (s *SegmentWalReaderSuite) TestForEachSegmentError() {
+	buf := &bytes.Buffer{}
+	data := []byte(faker.Paragraph())
+	data = data[:(len(data)/10)*10]
+	_, err := buf.Write(data)
+	s.Require().NoError(err)
+
+	swr := wal.NewSegmentWalReader(buf, newTestSegment)
+	limiter := 0
+	actual := make([]byte, 0, len(data))
+	expectedError := errors.New("test error")
+	err = swr.ForEachSegment(func(rsm *testSegment) error {
+		actual = append(actual, rsm.Bytes()...)
+
+		// protect from infinite loop
+		limiter++
+		if limiter == 1 {
+			return expectedError
+		}
+
+		return nil
+	})
+	s.Require().ErrorIs(err, expectedError)
+}
+
+func (s *SegmentWalReaderSuite) TestForEachSegmentReadError() {
+	buf := &bytes.Buffer{}
+	data := []byte(faker.Paragraph())
+	data = data[:(len(data)/10)*10]
+	_, err := buf.Write(data)
+	s.Require().NoError(err)
+
+	expectedError := errors.New("test error")
+	swr := wal.NewSegmentWalReader(buf, newTestSegmentWithError(expectedError))
+	limiter := 0
+	actual := make([]byte, 0, len(data))
+	err = swr.ForEachSegment(func(rsm *testSegment) error {
+		actual = append(actual, rsm.Bytes()...)
+
+		// protect from infinite loop
+		limiter++
+		if limiter == 1 {
+			return errors.New("another error")
+		}
+
+		return nil
+	})
+	s.Require().ErrorIs(err, expectedError)
 }
 
 //
@@ -72,6 +124,33 @@ func newTestSegment() *testSegment {
 	}
 
 	return s
+}
+
+// newTestSegmentWithError init new [testSegment] with error.
+func newTestSegmentWithError(err error) func() *testSegment {
+	return func() *testSegment {
+		s := &testSegment{
+			buf: make([]byte, 10),
+		}
+
+		s.ReadSegmentMock = &ReadSegmentMock{
+			ReadFromFunc: func(r io.Reader) (int64, error) {
+				n, errRead := io.ReadFull(r, s.buf)
+				if errRead != nil {
+					return int64(n), errRead
+				}
+
+				return int64(n), err
+			},
+			ResetFunc: func() {
+				for i := range s.buf {
+					s.buf[i] = 0
+				}
+			},
+		}
+
+		return s
+	}
 }
 
 // Bytes returns data.

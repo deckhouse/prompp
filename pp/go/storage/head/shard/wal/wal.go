@@ -40,15 +40,25 @@ type SegmentWriter[TSegment EncodedSegment] interface {
 
 // Encoder the minimum required Encoder implementation for a [Wal].
 type Encoder[TSegment EncodedSegment] interface {
+	// Encode encodes the inner series into a segment.
 	Encode(innerSeriesSlice []*cppbridge.InnerSeries) (uint32, error)
+
+	// Finalize finalizes the encoder and returns the encoded segment.
 	Finalize() (TSegment, error)
 }
 
 // EncodedSegment the minimum required Segment implementation for a [Wal].
 type EncodedSegment interface {
+	// Size returns the size of the segment.
 	Size() int64
+
+	// CRC32 returns the CRC32 of the segment.
 	CRC32() uint32
+
+	// Samples returns the number of samples in the segment.
 	Samples() uint32
+
+	// WriteTo implements [io.WriterTo] interface.
 	io.WriterTo
 }
 
@@ -145,7 +155,7 @@ func (w *Wal[TSegment, TWriter]) CurrentSize() int64 {
 // Flush wal [SegmentWriter], write all buffered data to storage.
 func (w *Wal[TSegment, TWriter]) Flush() error {
 	if w.corrupted {
-		return ErrWalIsCorrupted
+		return nil
 	}
 
 	w.locker.Lock()
