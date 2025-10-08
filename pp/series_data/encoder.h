@@ -30,43 +30,32 @@ class Encoder {
       }
     }
 
-    storage_.samples_count += encode(ls_id, timestamp, value, storage_.open_chunks[ls_id]);
+    encode(ls_id, timestamp, value, storage_.open_chunks[ls_id]);
   }
 
-  PROMPP_ALWAYS_INLINE uint32_t encode(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) { return encode_impl(ls_id, timestamp, value, chunk); }
+  PROMPP_ALWAYS_INLINE void encode(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) { encode_impl(ls_id, timestamp, value, chunk); }
 
  private:
   DataStorage& storage_;
 
-  enum class TimestampPreInsertionResult : uint8_t {
-    kOmitted = 0,
-    kOK,
-    kOOO,
-  };
-
-  uint32_t encode_impl(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) {
+  void encode_impl(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) {
     if (should_skip_stalenan(value, chunk)) [[unlikely]] {
-      return 0;
+      return;
     }
 
-    auto preInsertionRes = handle_timestamp_update(ls_id, timestamp, value, chunk);
-    if (preInsertionRes == TimestampPreInsertionResult::kOmitted) {
-      return 0;
-    }
-    if (preInsertionRes == TimestampPreInsertionResult::kOOO) {
-      return 1;
+    if (!handle_timestamp_update(ls_id, timestamp, value, chunk)) {
+      return;
     }
 
     encode_value(ls_id, chunk, timestamp, value);
     update_encoder_timestamp(chunk, timestamp);
-    return 1;
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static bool should_skip_stalenan(double value, const chunk::DataChunk& chunk) {
     return BareBones::Encoding::Gorilla::isstalenan(value) && chunk.encoding_state.has_last_stalenan;
   }
 
-  TimestampPreInsertionResult handle_timestamp_update(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) {
+  bool handle_timestamp_update(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) {
     if (chunk.encoding_state.encoding_type == EncodingType::kGorilla) {
       return process_gorilla_encoding(ls_id, timestamp, value, chunk);
     }
@@ -75,23 +64,24 @@ class Encoder {
       return process_value_timestamp_encoding(ls_id, timestamp, value, chunk);
     }
 
-    return TimestampPreInsertionResult::kOK;
+    return true;
   }
 
-  PROMPP_ALWAYS_INLINE TimestampPreInsertionResult process_gorilla_encoding(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) {
+  PROMPP_ALWAYS_INLINE bool process_gorilla_encoding(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) {
     const auto& encoder = storage_.gorilla_encoders[chunk.encoder.external_index];
 
     if (timestamp > encoder.timestamp()) [[likely]] {
       if (encoder.stream().count() >= kSamplesPerChunk) [[unlikely]] {
         ChunkFinalizer::finalize(storage_, ls_id, chunk);
       }
-      return TimestampPreInsertionResult::kOK;
+      return true;
     }
 
-    return handle_outdated_sample(ls_id, timestamp, value, encoder.timestamp());
+    handle_outdated_sample(ls_id, timestamp, value, encoder.timestamp());
+    return false;
   }
 
-  PROMPP_ALWAYS_INLINE TimestampPreInsertionResult process_value_timestamp_encoding(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) {
+  PROMPP_ALWAYS_INLINE bool process_value_timestamp_encoding(uint32_t ls_id, int64_t timestamp, double value, chunk::DataChunk& chunk) {
     const auto& state = storage_.timestamp_encoder.get_state(chunk.timestamp_encoder_state_id);
 
     if (timestamp > state.timestamp()) [[likely]] {
@@ -100,14 +90,17 @@ class Encoder {
           ChunkFinalizer::finalize(storage_, ls_id, chunk);
         }
       }
-      return TimestampPreInsertionResult::kOK;
+      return true;
     }
 
-    return handle_outdated_sample(ls_id, timestamp, value, state.timestamp());
+    handle_outdated_sample(ls_id, timestamp, value, state.timestamp());
+    return false;
   }
 
-  PROMPP_ALWAYS_INLINE TimestampPreInsertionResult handle_outdated_sample(uint32_t ls_id, int64_t timestamp, double value, int64_t last_timestamp) {
-    if (BareBones::Encoding::Gorilla::isstalenan(value)) return TimestampPreInsertionResult::kOmitted;
+  PROMPP_ALWAYS_INLINE void handle_outdated_sample(uint32_t ls_id, int64_t timestamp, double value, int64_t last_timestamp) {
+    if (BareBones::Encoding::Gorilla::isstalenan(value)) [[unlikely]] {
+      return;
+    }
     if (timestamp < last_timestamp) {
       ++storage_.outdated_samples_count;
 
@@ -117,7 +110,6 @@ class Encoder {
         ++storage_.outdated_chunks_count;
       }
     }
-    return TimestampPreInsertionResult::kOOO;
   }
 
   PROMPP_ALWAYS_INLINE void update_encoder_timestamp(chunk::DataChunk& chunk, int64_t timestamp) const {

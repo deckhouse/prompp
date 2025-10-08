@@ -740,15 +740,43 @@ TEST_P(OutdatedChunkMergerInOpenConstantChunkWithOutdatedStalenanFixture, Test) 
       ExpectedSampleList{
           {.timestamp = 1, .value = GetParam()},
           {.timestamp = 2, .value = GetParam()},
-          // {.timestamp = 3, .value = STALE_NAN}, all outdated stale nans omitted now
           {.timestamp = 5, .value = GetParam()},
       },
       Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, get_open_chunk(0))));
-  EXPECT_EQ(3, storage_.samples_count);
 }
 
 INSTANTIATE_TEST_SUITE_P(Uint32ConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithOutdatedStalenanFixture, testing::Values(1.0));
 INSTANTIATE_TEST_SUITE_P(DoubleConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithOutdatedStalenanFixture, testing::Values(1.1));
 INSTANTIATE_TEST_SUITE_P(Float32ConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithOutdatedStalenanFixture, testing::Values(-1.0));
+
+class OutdatedChunkMergerInOpenConstantChunkWithDuplicatedStalenanFixture : public OutdatedChunkMergerInOpenConstantChunkWithStalenanFixture {};
+
+TEST_P(OutdatedChunkMergerInOpenConstantChunkWithDuplicatedStalenanFixture, Test) {
+  // Arrange
+  encode({
+      {.ls_id = 0, .sample = {.timestamp = 1, .value = GetParam()}},
+      {.ls_id = 0, .sample = {.timestamp = 2, .value = GetParam()}},
+      {.ls_id = 0, .sample = {.timestamp = 3, .value = GetParam()}},
+  });
+  encode_outdated({
+      {.ls_id = 0, .sample = {.timestamp = 3, .value = STALE_NAN}},
+  });
+
+  // Act
+  merger_.merge();
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(
+      ExpectedSampleList{
+          {.timestamp = 1, .value = GetParam()},
+          {.timestamp = 2, .value = GetParam()},
+          {.timestamp = 3, .value = GetParam()},
+      },
+      Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, get_open_chunk(0))));
+}
+
+INSTANTIATE_TEST_SUITE_P(Uint32ConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithDuplicatedStalenanFixture, testing::Values(1.0));
+INSTANTIATE_TEST_SUITE_P(DoubleConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithDuplicatedStalenanFixture, testing::Values(1.1));
+INSTANTIATE_TEST_SUITE_P(Float32ConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithDuplicatedStalenanFixture, testing::Values(-1.0));
 
 }  // namespace
