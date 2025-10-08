@@ -16,6 +16,8 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util/locker"
 )
 
+//go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg head_test --out
+
 // ExtraWorkers number of extra workers for operation on shards.
 var ExtraWorkers = 0
 
@@ -27,6 +29,8 @@ const defaultNumberOfWorkers = 2
 //
 
 // Shard the minimum required head Shard implementation.
+//
+//go:generate moq head_moq_test.go . Shard
 type Shard interface {
 	// ShardID returns the shard ID.
 	ShardID() uint16
