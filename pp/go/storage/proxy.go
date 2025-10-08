@@ -15,16 +15,16 @@ import (
 
 // Proxy it proxies requests to the active [Head] and the keeper of old [Head]s.
 type Proxy struct {
-	activeHeadContainer *container.Weighted[HeadOnDisk, *HeadOnDisk]
-	keeper              *keeper.Keeper[HeadOnDisk, *HeadOnDisk]
-	onClose             func(h *HeadOnDisk) error
+	activeHeadContainer *container.Weighted[Head, *Head]
+	keeper              *keeper.Keeper[Head, *Head]
+	onClose             func(h *Head) error
 }
 
 // NewProxy init new [Proxy].
 func NewProxy(
-	activeHeadContainer *container.Weighted[HeadOnDisk, *HeadOnDisk],
-	hKeeper *keeper.Keeper[HeadOnDisk, *HeadOnDisk],
-	onClose func(h *HeadOnDisk) error,
+	activeHeadContainer *container.Weighted[Head, *Head],
+	hKeeper *keeper.Keeper[Head, *Head],
+	onClose func(h *Head) error,
 ) *Proxy {
 	return &Proxy{
 		activeHeadContainer: activeHeadContainer,
@@ -34,12 +34,12 @@ func NewProxy(
 }
 
 // Add the [Head] to the [Keeper] if there is a free slot.
-func (p *Proxy) Add(head *HeadOnDisk, createdAt time.Duration) error {
+func (p *Proxy) Add(head *Head, createdAt time.Duration) error {
 	return p.keeper.Add(head, createdAt)
 }
 
 // AddWithReplace the [Head] to the [Keeper] with replace if the createdAt is earlier.
-func (p *Proxy) AddWithReplace(head *HeadOnDisk, createdAt time.Duration) error {
+func (p *Proxy) AddWithReplace(head *Head, createdAt time.Duration) error {
 	return p.keeper.AddWithReplace(head, createdAt)
 }
 
@@ -57,7 +57,7 @@ func (p *Proxy) Close() error {
 }
 
 // Get the active [Head].
-func (p *Proxy) Get() *HeadOnDisk {
+func (p *Proxy) Get() *Head {
 	return p.activeHeadContainer.Get()
 }
 
@@ -67,21 +67,21 @@ func (p *Proxy) HasSlot() bool {
 }
 
 // Heads returns a slice of the [Head]s stored in the [Keeper].
-func (p *Proxy) Heads() []*HeadOnDisk {
+func (p *Proxy) Heads() []*Head {
 	return p.keeper.Heads()
 }
 
 // Remove removes [Head]s from the [Keeper].
-func (p *Proxy) Remove(headsForRemove []*HeadOnDisk) {
+func (p *Proxy) Remove(headsForRemove []*Head) {
 	p.keeper.Remove(headsForRemove)
 }
 
 // Replace the active [Head] with a new [Head].
-func (p *Proxy) Replace(ctx context.Context, newHead *HeadOnDisk) error {
+func (p *Proxy) Replace(ctx context.Context, newHead *Head) error {
 	return p.activeHeadContainer.Replace(ctx, newHead)
 }
 
 // With calls fn(h Head) on active [Head].
-func (p *Proxy) With(ctx context.Context, fn func(h *HeadOnDisk) error) error {
+func (p *Proxy) With(ctx context.Context, fn func(h *Head) error) error {
 	return p.activeHeadContainer.With(ctx, fn)
 }

@@ -23,7 +23,7 @@ type CommitterSuite struct {
 	dataDir             string
 	log                 *catalog.FileLog
 	catalog             *catalog.Catalog
-	activeHeadContainer *container.Weighted[storage.HeadOnDisk, *storage.HeadOnDisk]
+	activeHeadContainer *container.Weighted[storage.Head, *storage.Head]
 }
 
 func TestCommitterSuite(t *testing.T) {
@@ -79,7 +79,7 @@ func (s *CommitterSuite) createCatalog() {
 	s.Require().NoError(err)
 }
 
-func (s *CommitterSuite) createHead() *storage.HeadOnDisk {
+func (s *CommitterSuite) createHead() *storage.Head {
 	h, err := storage.NewBuilder(
 		s.catalog,
 		s.dataDir,
@@ -89,8 +89,78 @@ func (s *CommitterSuite) createHead() *storage.HeadOnDisk {
 	).Build(0, shardsCount)
 	s.Require().NoError(err)
 
+	// swn := writer.NewSegmentWriteNotifier(shardsCount, func(uint32) {})
+	// for shardID := range shardsCount {
+	// 	s, err := b.createShardOnDisk(headDir, swn, shardID)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+
+	// 	shards[shardID] = s
+	// }
+
 	return h
 }
+
+// func (s *CommitterSuite) createShardOnMemory(
+// 	headDir string,
+// 	swn *writer.SegmentWriteNotifier,
+// 	shardID uint16,
+// ) (*shard.Shard, error) {
+// 	headDir = filepath.Clean(headDir)
+// 	shardFile, err := os.OpenFile( //nolint:gosec // need this permissions
+// 		GetShardWalFilename(headDir, shardID),
+// 		os.O_WRONLY|os.O_CREATE|os.O_APPEND,
+// 		0o666, //revive:disable-line:add-constant // file permissions simple readable as octa-number
+// 	)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to create shard wal file id %d: %w", shardID, err)
+// 	}
+
+// 	defer func() {
+// 		if err == nil {
+// 			return
+// 		}
+
+// 		_ = shardFile.Close()
+// 	}()
+
+// 	lss := shard.NewLSS()
+// 	// logShards is 0 for single encoder
+// 	shardWalEncoder := cppbridge.NewHeadWalEncoder(shardID, 0, lss.Target())
+
+// 	_, err = writer.WriteHeader(shardFile, wal.FileFormatVersion, shardWalEncoder.Version())
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to write header: %w", err)
+// 	}
+
+// 	sw, err := writer.NewBuffered(shardID, shardFile, writer.WriteSegment[*cppbridge.HeadEncodedSegment], swn)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to create buffered writer shard id %d: %w", shardID, err)
+// 	}
+
+// 	var unloadedDataStorage *shard.UnloadedDataStorage
+// 	var queriedSeriesStorage *shard.QueriedSeriesStorage
+// 	if b.unloadDataStorageInterval != 0 {
+// 		unloadedDataStorage = shard.NewUnloadedDataStorage(
+// 			shard.NewFileStorage(GetUnloadedDataStorageFilename(headDir, shardID)),
+// 		)
+
+// 		queriedSeriesStorage = shard.NewQueriedSeriesStorage(
+// 			shard.NewFileStorage(GetQueriedSeriesStorageFilename(headDir, shardID, 0)),
+// 			shard.NewFileStorage(GetQueriedSeriesStorageFilename(headDir, shardID, 1)),
+// 		)
+// 	}
+
+// 	return shard.NewShard(
+// 		lss,
+// 		shard.NewDataStorage(),
+// 		unloadedDataStorage,
+// 		queriedSeriesStorage,
+// 		wal.NewWal(shardWalEncoder, sw, b.maxSegmentSize),
+// 		shardID,
+// 	), nil
+// }
 
 func (s *CommitterSuite) TestCommitter() {
 	trigger := make(chan struct{}, 1)

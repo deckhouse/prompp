@@ -58,7 +58,7 @@ func (tsd *timeSeriesDataSlice) Destroy() {
 }
 
 // MustAppendTimeSeries add time series to head.
-func MustAppendTimeSeries(s *suite.Suite, head *storage.HeadOnDisk, timeSeries []TimeSeries) {
+func MustAppendTimeSeries(s *suite.Suite, head *storage.Head, timeSeries []TimeSeries) {
 	headAppender := appender.New(head, services.CFViaRange)
 
 	statelessRelabeler, err := cppbridge.NewStatelessRelabeler([]*cppbridge.RelabelConfig{})
