@@ -16,6 +16,9 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util/locker"
 )
 
+//go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg head_test --out
+//go:generate moq head_moq_test.go . Shard
+
 // ExtraWorkers number of extra workers for operation on shards.
 var ExtraWorkers = 0
 

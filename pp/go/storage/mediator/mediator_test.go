@@ -30,26 +30,33 @@ func (s *MediatorSuite) TestC() {
 	}
 
 	m := mediator.NewMediator(timer)
-	defer m.Close()
 
 	counter := 0
 	done := make(chan struct{})
 	start := sync.WaitGroup{}
 	start.Add(1)
-	go func() {
+
+	s.T().Run("service_run", func(t *testing.T) {
+		t.Parallel()
 		start.Done()
 		<-m.C()
 		counter++
 		close(done)
-	}()
+	})
 
-	start.Wait()
-	s.T().Log("timer tick")
-	chTimer <- time.Time{}
+	s.T().Run("timer_tick", func(t *testing.T) {
+		t.Parallel()
+		start.Wait()
 
-	<-done
+		s.T().Log("timer tick")
+		chTimer <- time.Time{}
+		chTimer <- time.Time{}
 
-	s.Equal(1, counter)
+		<-done
+
+		s.Equal(1, counter)
+		m.Close()
+	})
 }
 
 func (s *MediatorSuite) TestClose() {
