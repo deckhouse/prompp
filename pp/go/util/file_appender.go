@@ -9,10 +9,12 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+var pageSize = os.Getpagesize()
+
 // FileAppender is a file wrapper for long opened file which appends data sequentially.
 type FileAppender struct {
-	f               *os.File
-	synced, current int64
+	f      *os.File
+	offset int
 }
 
 // CreateFileAppender creates or truncates file for sequential writing.
@@ -37,16 +39,15 @@ func OpenFileAppender(path string, perm os.FileMode) (*FileAppender, error) {
 		return nil, errors.Join(fmt.Errorf("seek end: %w", err), f.Close())
 	}
 	return &FileAppender{
-		f:       f,
-		synced:  n,
-		current: n,
+		f:      f,
+		offset: int(n),
 	}, nil
 }
 
 // Write writes to file.
 func (fa *FileAppender) Write(data []byte) (int, error) {
 	n, err := fa.f.Write(data)
-	fa.current += int64(n)
+	fa.offset += n
 	return n, err
 }
 
@@ -55,10 +56,8 @@ func (fa *FileAppender) Sync() error {
 	if err := fa.f.Sync(); err != nil {
 		return fmt.Errorf("sync: %w", err)
 	}
-	if err := unix.Fadvise(int(fa.f.Fd()), fa.synced, fa.current-fa.synced, unix.FADV_DONTNEED); err != nil {
-		return fmt.Errorf("fadvise: %w", err)
-	}
-	fa.synced = fa.current
+	aligned := (fa.offset / pageSize) * pageSize
+	_ = unix.Fadvise(int(fa.f.Fd()), 0, int64(aligned), unix.FADV_DONTNEED)
 	return nil
 }
 
