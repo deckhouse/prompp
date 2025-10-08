@@ -253,8 +253,6 @@ class RelabelConfig {
   // replacement_parts - dismantled replacement.
   std::vector<PatternPart> replacement_parts_;
 
-  mutable std::string value_;
-
   // extract - extract from source letter or digit value.
   PROMPP_ALWAYS_INLINE static std::string extract(const re2::RE2& rgx_validate, const std::string_view& src) {
     std::string name;
@@ -366,20 +364,20 @@ class RelabelConfig {
   }
 
   template <class LabelsBuilder>
-  PROMPP_ALWAYS_INLINE std::string& get_value(LabelsBuilder& builder) const {
-    value_.clear();
+  PROMPP_ALWAYS_INLINE std::string get_value(LabelsBuilder& builder) const {
+    std::string value;
 
     for (size_t i = 0; i < source_labels_.size(); ++i) {
       const auto lv = builder.get(source_labels_[i]);
       if (i == 0) [[unlikely]] {
-        value_ += lv;
+        value += lv;
         continue;
       }
-      value_ += separator_;
-      value_ += lv;
+      value += separator_;
+      value += lv;
     }
 
-    return value_;
+    return value;
   }
 
  public:
@@ -463,8 +461,9 @@ class RelabelConfig {
       }
 
       case rReplace: {
+        const auto value = get_value(builder);
         std::vector<std::string_view> res_args;
-        if (!regexp_.match_to_args(get_value(builder), res_args)) {
+        if (!regexp_.match_to_args(value, res_args)) {
           break;
         }
 
@@ -487,16 +486,16 @@ class RelabelConfig {
       }
 
       case rLowercase: {
-        get_value(builder);
-        std::ranges::transform(value_, value_.begin(), [](unsigned char c) { return std::tolower(c); });
-        builder.set(target_label_, value_);
+        auto value = get_value(builder);
+        std::ranges::transform(value, value.begin(), [](unsigned char c) { return std::tolower(c); });
+        builder.set(target_label_, value);
         return rsRelabel;
       }
 
       case rUppercase: {
-        get_value(builder);
-        std::ranges::transform(value_, value_.begin(), [](unsigned char c) { return std::toupper(c); });
-        builder.set(target_label_, value_);
+        auto value = get_value(builder);
+        std::ranges::transform(value, value.begin(), [](unsigned char c) { return std::toupper(c); });
+        builder.set(target_label_, value);
         return rsRelabel;
       }
 
