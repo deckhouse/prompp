@@ -22,8 +22,6 @@ class Encoder {
   DataStorage& storage() noexcept { return storage_; }
 
   PROMPP_ALWAYS_INLINE void encode(uint32_t ls_id, int64_t timestamp, double value) {
-    ++storage_.samples_count;
-
     if (storage_.open_chunks.size() <= ls_id) [[unlikely]] {
       storage_.open_chunks.resize(ls_id + 1);
 
@@ -100,6 +98,9 @@ class Encoder {
   }
 
   PROMPP_ALWAYS_INLINE void handle_outdated_sample(uint32_t ls_id, int64_t timestamp, double value, int64_t last_timestamp) {
+    if (BareBones::Encoding::Gorilla::isstalenan(value)) [[unlikely]] {
+      return;
+    }
     if (timestamp < last_timestamp) {
       ++storage_.outdated_samples_count;
 
