@@ -170,7 +170,7 @@ ifdef GOLANGCI_LINT
 endif
 
 .PHONY: common-lint-fix
-common-lint-fix: $(GOLANGCI_LINT)
+common-lint-fix:
 ifdef GOLANGCI_LINT
 	@echo ">> running golangci-lint fix"
 	$(GOLANGCI_LINT) run --fix $(GOLANGCI_LINT_OPTS) $(pkgs)
