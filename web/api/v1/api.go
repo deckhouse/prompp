@@ -219,9 +219,8 @@ type API struct {
 	isAgent       bool
 	statsRenderer StatsRenderer
 
-	remoteWriteHandler http.Handler
-	remoteReadHandler  http.Handler
-	otlpWriteHandler   http.Handler
+	remoteReadHandler http.Handler
+	otlpWriteHandler  http.Handler
 
 	codecs []Codec
 }
@@ -1677,14 +1676,6 @@ func (api *API) remoteRead(w http.ResponseWriter, r *http.Request) {
 		api.remoteReadHandler.ServeHTTP(w, r)
 	} else {
 		http.Error(w, "not found", http.StatusNotFound)
-	}
-}
-
-func (api *API) remoteWrite(w http.ResponseWriter, r *http.Request) {
-	if api.remoteWriteHandler != nil {
-		api.remoteWriteHandler.ServeHTTP(w, r)
-	} else {
-		http.Error(w, "remote write receiver needs to be enabled with --web.enable-remote-write-receiver", http.StatusNotFound)
 	}
 }
 

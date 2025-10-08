@@ -17,7 +17,7 @@ func DBSizeRetentionCount(db *DB) prometheus.Counter {
 	return db.metrics.sizeRetentionCount
 }
 
-// DBSetBlocksToDelete safely injects blocksToDelete closure (usage cmd/prometheus/main.go)
+// DBSetBlocksToDelete safely injects blocksToDelete closure (usage cmd/prometheus/main.go).
 func DBSetBlocksToDelete(db *DB, blocksToDelete BlocksToDeleteFunc) {
 	db.cmtx.Lock()
 	defer db.cmtx.Unlock()
