@@ -740,10 +740,11 @@ TEST_P(OutdatedChunkMergerInOpenConstantChunkWithOutdatedStalenanFixture, Test) 
       ExpectedSampleList{
           {.timestamp = 1, .value = GetParam()},
           {.timestamp = 2, .value = GetParam()},
-          {.timestamp = 3, .value = STALE_NAN},
+          // {.timestamp = 3, .value = STALE_NAN}, all outdated stale nans omitted now
           {.timestamp = 5, .value = GetParam()},
       },
       Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, get_open_chunk(0))));
+  EXPECT_EQ(3, storage_.samples_count);
 }
 
 INSTANTIATE_TEST_SUITE_P(Uint32ConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithOutdatedStalenanFixture, testing::Values(1.0));
