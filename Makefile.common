@@ -69,9 +69,7 @@ ifeq ($(GOHOSTOS),$(filter $(GOHOSTOS),linux darwin))
 		# is being run in Actions, so we don't need to run it here.
 		ifneq (,$(SKIP_GOLANGCI_LINT))
 			GOLANGCI_LINT :=
-		else ifeq (,$(CIRCLE_JOB))
-			GOLANGCI_LINT := go tool github.com/golangci/golangci-lint/cmd/golangci-lint
-		else ifeq (,$(wildcard .github/workflows/golangci-lint.yml))
+		else
 			GOLANGCI_LINT := go tool github.com/golangci/golangci-lint/cmd/golangci-lint
 		endif
 	endif
@@ -165,7 +163,7 @@ common-vet:
 	$(GO) vet $(GOOPTS) $(pkgs)
 
 .PHONY: common-lint
-common-lint: $(GOLANGCI_LINT)
+common-lint:
 ifdef GOLANGCI_LINT
 	@echo ">> running golangci-lint"
 	$(GOLANGCI_LINT) run $(GOLANGCI_LINT_OPTS) $(pkgs)
@@ -255,11 +253,6 @@ $(PROMU):
 proto:
 	@echo ">> generating code from proto files"
 	@./scripts/genproto.sh
-
-ifdef GOLANGCI_LINT
-$(GOLANGCI_LINT):
-	@go tool github.com/golangci/golangci-lint/cmd/golangci-lint --version
-endif
 
 .PHONY: precheck
 precheck::
