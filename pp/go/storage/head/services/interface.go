@@ -11,6 +11,7 @@ import (
 
 //go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg mock --out
 //go:generate moq mock/persistener.go . HeadBlockWriter WriteNotifier
+//go:generate moq mock/mediator.go . Mediator
 
 //
 // ActiveHeadContainer
