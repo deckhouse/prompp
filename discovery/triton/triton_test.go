@@ -21,7 +21,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -183,7 +182,7 @@ func TestTritonSDRefreshNoServer(t *testing.T) {
 
 	_, err := td.refresh(context.Background())
 	require.Error(t, err)
-	require.True(t, strings.Contains(err.Error(), "an error occurred when requesting targets from the discovery endpoint"))
+	require.Contains(t, err.Error(), "an error occurred when requesting targets from the discovery endpoint")
 	m.Unregister()
 }
 
@@ -194,7 +193,7 @@ func TestTritonSDRefreshCancelled(t *testing.T) {
 	cancel()
 	_, err := td.refresh(ctx)
 	require.Error(t, err)
-	require.True(t, strings.Contains(err.Error(), context.Canceled.Error()))
+	require.Contains(t, err.Error(), context.Canceled.Error())
 	m.Unregister()
 }
 

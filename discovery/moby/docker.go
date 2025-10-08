@@ -209,7 +209,7 @@ func (d *DockerDiscovery) refresh(ctx context.Context) ([]*targetgroup.Group, er
 		return nil, fmt.Errorf("error while computing network labels: %w", err)
 	}
 
-	allContainers := make(map[string]types.Container)
+	allContainers := make(map[string]types.Container) //nolint:staticcheck // #SA1019 - since we are not maintaining this code, we are not planning to fix this issue.
 	for _, c := range containers {
 		allContainers[c.ID] = c
 	}
