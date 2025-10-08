@@ -1490,6 +1490,10 @@ func PerGoroutineRelabelerTrackStaleNans(
 	state *StateV2,
 	shardID uint16,
 ) {
+	if !state.TrackStaleness() {
+		return
+	}
+
 	prometheusPerGoroutineRelabelerTrackStaleNans(
 		innerSeries,
 		state.StaleNansStateByShard(shardID).state,
