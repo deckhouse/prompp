@@ -282,9 +282,9 @@ class SerializedDataView {
     }
 
     const uint32_t current_series_id = chunks[series_index_].label_set_id;
-    while (series_index_ < chunks.size() && current_series_id == chunks[series_index_].label_set_id) {
+    do {
       ++series_index_;
-    }
+    } while (series_index_ < chunks.size() && chunks[series_index_].label_set_id == current_series_id);
 
     if (series_index_ == chunks.size()) [[unlikely]] {
       return kNoMoreSeries;
