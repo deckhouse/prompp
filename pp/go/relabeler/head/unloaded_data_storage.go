@@ -27,13 +27,28 @@ type StorageFile interface {
 	IsEmpty() bool
 }
 
+type AppendFile interface {
+	Open() error
+	io.Writer
+	io.Closer
+	Reader() (StorageReader, error)
+	Sync() error
+	IsEmpty() bool
+}
+
+type StorageReader interface {
+	io.Reader
+	io.ReaderAt
+	io.Closer
+}
+
 type UnloadedDataStorage struct {
-	storage         StorageFile
+	storage         AppendFile
 	snapshots       []relabeler.UnloadedDataSnapshotHeader
 	maxSnapshotSize uint32
 }
 
-func NewUnloadedDataStorage(storage StorageFile) *UnloadedDataStorage {
+func NewUnloadedDataStorage(storage AppendFile) *UnloadedDataStorage {
 	return &UnloadedDataStorage{
 		storage: storage,
 	}
@@ -44,7 +59,7 @@ func (s *UnloadedDataStorage) WriteSnapshot(snapshot []byte) (relabeler.Unloaded
 		return relabeler.UnloadedDataSnapshotHeader{}, nil
 	}
 
-	if err := s.storage.Open(os.O_RDWR | os.O_CREATE | os.O_TRUNC); err != nil {
+	if err := s.storage.Open(); err != nil {
 		return relabeler.UnloadedDataSnapshotHeader{}, err
 	}
 
@@ -76,7 +91,15 @@ func (s *UnloadedDataStorage) ForEachSnapshot(f func(snapshot []byte, isLast boo
 		return nil
 	}
 
-	offset, err := s.validateFormatVersion()
+	reader, err := s.storage.Reader()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = reader.Close()
+	}()
+
+	offset, err := s.validateFormatVersion(reader)
 	if err != nil {
 		return err
 	}
@@ -84,7 +107,7 @@ func (s *UnloadedDataStorage) ForEachSnapshot(f func(snapshot []byte, isLast boo
 	snapshot := make([]byte, 0, s.maxSnapshotSize)
 	for index, header := range s.snapshots {
 		snapshot = snapshot[:header.SnapshotSize]
-		size, err := s.storage.ReadAt(snapshot, offset)
+		size, err := reader.ReadAt(snapshot, offset)
 		if uint32(size) != header.SnapshotSize {
 			return err
 		}
@@ -100,9 +123,9 @@ func (s *UnloadedDataStorage) ForEachSnapshot(f func(snapshot []byte, isLast boo
 	return nil
 }
 
-func (s *UnloadedDataStorage) validateFormatVersion() (offset int64, err error) {
+func (s *UnloadedDataStorage) validateFormatVersion(reader StorageReader) (offset int64, err error) {
 	version := []byte{0}
-	if _, err = s.storage.ReadAt(version, 0); err != nil {
+	if _, err = reader.ReadAt(version, 0); err != nil {
 		return 0, err
 	}
 

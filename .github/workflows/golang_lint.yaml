@@ -1,0 +1,48 @@
+name: Linter
+
+on:
+  pull_request:
+    types: [opened, reopened, labeled, synchronize]
+    # paths:
+    #   - '**/*.go'
+    #   - '**/*.mod'
+    #   - '**/*.sum'
+  push:
+    branches:
+      - pp
+    # paths:
+    #   - '**/*.go'
+    #   - '**/*.mod'
+    #   - '**/*.sum'
+  workflow_dispatch:
+    inputs:
+      release_branch:
+        description: 'release branch name, example: release-1.68'
+        required: false
+
+concurrency: 
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  golangci:
+    runs-on: fsn-dev-gitlab-runner
+    steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Lint
+        run: |
+          docker run --rm \
+            -v $PWD:/workspace \
+            -w /workspace \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-x86_64 \
+            bash -c "
+              export GOFLAGS=-buildvcs=false
+              make lint
+            "

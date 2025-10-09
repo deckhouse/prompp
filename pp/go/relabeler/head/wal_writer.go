@@ -14,7 +14,7 @@ type SegmentIsWrittenNotifier interface {
 	NotifySegmentIsWritten(shardID uint16)
 }
 
-type WriteSyncCloser interface {
+type FileWriter interface {
 	io.WriteCloser
 	Sync() error
 	Stat() (os.FileInfo, error)
@@ -25,14 +25,14 @@ type segmentWriter struct {
 	segments       []EncodedSegment
 	buffer         *bytes.Buffer
 	notifier       SegmentIsWrittenNotifier
-	writer         WriteSyncCloser
+	writer         FileWriter
 	currentSize    int64
 	writeCompleted bool
 }
 
 func newSegmentWriter(
 	shardID uint16,
-	writer WriteSyncCloser,
+	writer FileWriter,
 	notifier SegmentIsWrittenNotifier,
 ) (*segmentWriter, error) {
 	info, err := writer.Stat()

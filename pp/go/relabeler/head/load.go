@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
+	"github.com/prometheus/prometheus/pp/go/util"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -73,6 +74,53 @@ func (q *FileStorage) Truncate(size int64) error {
 }
 
 func (q *FileStorage) IsEmpty() bool {
+	if q.file != nil {
+		if info, err := q.file.Stat(); err == nil {
+			return info.Size() == 0
+		}
+	}
+
+	return true
+}
+
+type AppendFileStorage struct {
+	fileName string
+	file     *util.FileAppender
+}
+
+func NewAppendFileStorage(fileName string) *AppendFileStorage {
+	return &AppendFileStorage{fileName: fileName}
+}
+
+func (q *AppendFileStorage) Open() (err error) {
+	if q.file == nil {
+		q.file, err = util.CreateFileAppender(q.fileName, 0666)
+	}
+
+	return
+}
+
+func (q *AppendFileStorage) Write(p []byte) (n int, err error) {
+	return q.file.Write(p)
+}
+
+func (q *AppendFileStorage) Close() error {
+	if q.file != nil {
+		return q.file.Close()
+	}
+
+	return nil
+}
+
+func (q *AppendFileStorage) Reader() (StorageReader, error) {
+	return os.Open(q.fileName)
+}
+
+func (q *AppendFileStorage) Sync() error {
+	return q.file.Sync()
+}
+
+func (q *AppendFileStorage) IsEmpty() bool {
 	if q.file != nil {
 		if info, err := q.file.Stat(); err == nil {
 			return info.Size() == 0
@@ -157,7 +205,7 @@ func createShard(
 ) (*LSS, *ShardWal, *DataStorage, *UnloadedDataStorage, *QueriedSeriesStorage, error) {
 	dir = filepath.Clean(dir)
 
-	shardFile, err := os.OpenFile(getShardWalFilename(dir, shardID), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	shardFile, err := util.CreateFileAppender(getShardWalFilename(dir, shardID), 0666)
 	if err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("failed to create shard wal file: %w", err)
 	}
@@ -187,7 +235,7 @@ func createShard(
 	var unloadedDataStorage *UnloadedDataStorage
 	var queriedSeriesStorage *QueriedSeriesStorage
 	if unloadDataStorageInterval != 0 {
-		unloadedDataStorage = NewUnloadedDataStorage(NewFileStorage(getUnloadedDataStorageFilename(dir, shardID)))
+		unloadedDataStorage = NewUnloadedDataStorage(NewAppendFileStorage(getUnloadedDataStorageFilename(dir, shardID)))
 		queriedSeriesStorage = NewQueriedSeriesStorage(
 			NewFileStorage(getQueriedSeriesStorageFilename(dir, shardID, 0)),
 			NewFileStorage(getQueriedSeriesStorageFilename(dir, shardID, 1)),
@@ -339,7 +387,7 @@ func (l *ShardLoader) Load() (ShardLoadResult, error) {
 		Corrupted:   true,
 	}
 
-	shardWalFile, err := os.OpenFile(getShardWalFilename(l.dir, l.shardID), os.O_RDWR, 0666)
+	shardWalFile, err := os.OpenFile(getShardWalFilename(l.dir, l.shardID), os.O_RDONLY, 0666)
 	if err != nil {
 		return result, err
 	}
@@ -350,7 +398,7 @@ func (l *ShardLoader) Load() (ShardLoadResult, error) {
 
 	queriedSeriesStorageIsEmpty := true
 	if l.unloadDataStorageInterval > 0 {
-		result.UnloadedDataStorage = NewUnloadedDataStorage(NewFileStorage(getUnloadedDataStorageFilename(l.dir, l.shardID)))
+		result.UnloadedDataStorage = NewUnloadedDataStorage(NewAppendFileStorage(getUnloadedDataStorageFilename(l.dir, l.shardID)))
 		queriedSeriesStorageIsEmpty, _ = l.loadQueriedSeries(&result)
 	}
 
@@ -359,14 +407,10 @@ func (l *ShardLoader) Load() (ShardLoadResult, error) {
 		return result, err
 	}
 
-	f, err := os.OpenFile(shardWalFile.Name(), os.O_WRONLY, 0666)
+	f, err := util.OpenFileAppender(shardWalFile.Name(), 0666)
 	if err != nil {
 		return result, err
 	}
-	if _, err := f.Seek(0, io.SeekEnd); err != nil {
-		return result, errors.Join(err, f.Close())
-	}
-
 	if err = l.createShardWal(f, decoder, &result); err != nil {
 		return result, errors.Join(err, f.Close())
 	}
@@ -405,14 +449,14 @@ func (l *ShardLoader) loadWalFile(
 	return decoder, err
 }
 
-func (l *ShardLoader) createShardWal(shardWalFile *os.File, walDecoder *cppbridge.HeadWalDecoder, result *ShardLoadResult) error {
-	if sw, err := newSegmentWriter(l.shardID, shardWalFile, l.notifier); err != nil {
+func (l *ShardLoader) createShardWal(shardWalFile FileWriter, walDecoder *cppbridge.HeadWalDecoder, result *ShardLoadResult) error {
+	sw, err := newSegmentWriter(l.shardID, shardWalFile, l.notifier)
+	if err != nil {
 		return err
-	} else {
-		l.notifier.Set(l.shardID, result.NumberOfSegments)
-		result.Wal = newShardWal(walDecoder.CreateEncoder(), l.maxSegmentSize, sw)
-		return nil
 	}
+	l.notifier.Set(l.shardID, result.NumberOfSegments)
+	result.Wal = newShardWal(walDecoder.CreateEncoder(), l.maxSegmentSize, sw)
+	return nil
 }
 
 type dataUnloader struct {
