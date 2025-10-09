@@ -28,13 +28,11 @@ type StorageFile interface {
 }
 
 type AppendFile interface {
-	Open(flags int) error
+	Open() error
 	io.Writer
 	io.Closer
-	io.Seeker
 	Reader() (StorageReader, error)
 	Sync() error
-	Truncate(size int64) error
 	IsEmpty() bool
 }
 
@@ -61,7 +59,7 @@ func (s *UnloadedDataStorage) WriteSnapshot(snapshot []byte) (relabeler.Unloaded
 		return relabeler.UnloadedDataSnapshotHeader{}, nil
 	}
 
-	if err := s.storage.Open(os.O_WRONLY | os.O_CREATE | os.O_TRUNC); err != nil {
+	if err := s.storage.Open(); err != nil {
 		return relabeler.UnloadedDataSnapshotHeader{}, err
 	}
 
