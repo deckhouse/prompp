@@ -88,7 +88,7 @@ func (ar *Adapter) AppendHashdex(
 		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
 	}()
 
-	return ar.proxy.With(ctx, func(h *pp_storage.HeadOnDisk) error {
+	return ar.proxy.With(ctx, func(h *pp_storage.Head) error {
 		_, _, err := appender.New(h, services.CFViaRange).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hashdex},
@@ -112,7 +112,7 @@ func (ar *Adapter) AppendScraperHashdex(
 		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
 	}()
 
-	_ = ar.proxy.With(ctx, func(h *pp_storage.HeadOnDisk) error {
+	_ = ar.proxy.With(ctx, func(h *pp_storage.Head) error {
 		_, stats, err = appender.New(h, services.CFViaRange).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hashdex},
@@ -148,7 +148,7 @@ func (ar *Adapter) AppendSnappyProtobuf(
 		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
 	}()
 
-	return ar.proxy.With(ctx, func(h *pp_storage.HeadOnDisk) error {
+	return ar.proxy.With(ctx, func(h *pp_storage.Head) error {
 		_, _, err := appender.New(h, services.CFViaRange).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hx},
@@ -183,7 +183,7 @@ func (ar *Adapter) AppendTimeSeries(
 		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
 	}()
 
-	_ = ar.proxy.With(ctx, func(h *pp_storage.HeadOnDisk) error {
+	_ = ar.proxy.With(ctx, func(h *pp_storage.Head) error {
 		_, stats, err = appender.New(h, services.CFViaRange).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hx, Data: data},

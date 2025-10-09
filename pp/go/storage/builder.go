@@ -22,7 +22,7 @@ import (
 // Builder
 //
 
-// Builder building new [HeadOnDisk] with parameters.
+// Builder building new [Head] with parameters.
 type Builder struct {
 	catalog                   *catalog.Catalog
 	dataDir                   string
@@ -58,8 +58,8 @@ func NewBuilder(
 	}
 }
 
-// Build new [HeadOnDisk] - [head.Head] with [shard.Shard] with [wal.Wal] which is written to disk.
-func (b *Builder) Build(generation uint64, numberOfShards uint16) (*HeadOnDisk, error) {
+// Build new [Head] - [head.Head] with [shard.Shard] with [wal.Wal] which is written to disk.
+func (b *Builder) Build(generation uint64, numberOfShards uint16) (*Head, error) {
 	headRecord, err := b.catalog.Create(numberOfShards)
 	if err != nil {
 		return nil, err
@@ -76,7 +76,7 @@ func (b *Builder) Build(generation uint64, numberOfShards uint16) (*HeadOnDisk, 
 		}
 	}()
 
-	shards := make([]*ShardOnDisk, numberOfShards)
+	shards := make([]*shard.Shard, numberOfShards)
 	swn := writer.NewSegmentWriteNotifier(numberOfShards, headRecord.SetLastAppendedSegmentID)
 	for shardID := range numberOfShards {
 		s, err := b.createShardOnDisk(headDir, swn, shardID)
@@ -92,7 +92,7 @@ func (b *Builder) Build(generation uint64, numberOfShards uint16) (*HeadOnDisk, 
 	return head.NewHead(
 		headRecord.ID(),
 		shards,
-		shard.NewPerGoroutineShard[*WalOnDisk],
+		shard.NewPerGoroutineShard[*Wal],
 		headRecord.Acquire(),
 		generation,
 		b.registerer,
@@ -106,7 +106,7 @@ func (b *Builder) createShardOnDisk(
 	headDir string,
 	swn *writer.SegmentWriteNotifier,
 	shardID uint16,
-) (*ShardOnDisk, error) {
+) (*shard.Shard, error) {
 	headDir = filepath.Clean(headDir)
 	shardFile, err := os.OpenFile( //nolint:gosec // need this permissions
 		GetShardWalFilename(headDir, shardID),

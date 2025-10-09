@@ -183,7 +183,7 @@ func NewManager(
 		return nil, errors.Join(fmt.Errorf("failed to set active status: %w", err), h.Close())
 	}
 
-	hKeeper := keeper.NewKeeper[HeadOnDisk](
+	hKeeper := keeper.NewKeeper[Head](
 		o.KeeperCapacity,
 		removedHeadNotifier,
 	)
@@ -287,7 +287,7 @@ func (m *Manager) initServices(
 				m.proxy,
 				loader,
 				hcatalog,
-				block.NewWriter[*ShardOnDisk](
+				block.NewWriter[*shard.Shard](
 					o.DataDir,
 					block.DefaultChunkSegmentSize,
 					o.BlockDuration,
@@ -318,7 +318,7 @@ func (m *Manager) initServices(
 				m.rotatorMediator,
 				m.cfg,
 				&headInformer{catalog: hcatalog},
-				head.CopyAddedSeries[*ShardOnDisk, *PerGoroutineShard](shard.CopyAddedSeries),
+				head.CopyAddedSeries[*shard.Shard, *shard.PerGoroutineShard](shard.CopyAddedSeries),
 				persistenerMediator.TriggerWithResetTimer,
 				r,
 			).Execute(rotatorCtx)
@@ -486,7 +486,7 @@ func uploadOrBuildHead(
 	loader *Loader,
 	blockDuration time.Duration,
 	numberOfShards uint16,
-) (*HeadOnDisk, error) {
+) (*Head, error) {
 	headRecords := hcatalog.List(
 		func(record *catalog.Record) bool {
 			statusIsAppropriate := record.Status() == catalog.StatusNew ||
