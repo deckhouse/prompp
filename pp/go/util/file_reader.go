@@ -25,10 +25,14 @@ func OpenFileReader(path string) (*FileReader, error) {
 
 // Read reads from file and gives read data to OS cache a hint that it won't be needed anymore.
 func (fr *FileReader) Read(p []byte) (int, error) {
+	before := fr.offset / pageSize
 	n, err := fr.f.Read(p)
 	fr.offset += n
-	aligned := (fr.offset / pageSize) * pageSize
-	_ = unix.Fadvise(int(fr.f.Fd()), 0, int64(aligned), unix.FADV_DONTNEED)
+	after := fr.offset / pageSize
+	if after > before { // crossed page boundary
+		aligned := after * pageSize
+		_ = unix.Fadvise(int(fr.f.Fd()), 0, int64(aligned), unix.FADV_DONTNEED)
+	}
 	return n, err
 }
 
