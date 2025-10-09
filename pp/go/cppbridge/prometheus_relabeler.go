@@ -390,6 +390,14 @@ type stdVector struct {
 	endOfStorage uintptr
 }
 
+type bareBonesVector struct {
+	memory   uintptr
+	capacity uint32
+	size     uint32
+}
+
+type roaringBitset [40]byte
+
 // InnerSeries - go wrapper for C-InnerSeries.
 //
 //	size - number of timeseries processed;
@@ -397,7 +405,9 @@ type stdVector struct {
 type InnerSeries struct {
 	size uint64
 	//nolint:unused // for cpp-bridge, used in cpp
-	data stdVector
+	data bareBonesVector
+	//nolint:unused // for cpp-bridge, used in cpp
+	trackStaleNans roaringBitset
 }
 
 // Size - number of Timeseries.
@@ -438,6 +448,8 @@ type RelabeledSeries struct {
 	size uint64
 	//nolint:unused // for cpp-bridge, used in cpp
 	data stdVector
+	//nolint:unused // for cpp-bridge, used in cpp
+	trackStaleNans roaringBitset
 }
 
 // NewRelabeledSeries - init new RelabeledSeries with finalizer for dtor C-RelabeledSeries.
@@ -508,6 +520,23 @@ type RelabelerOptions struct {
 	HonorLabels              bool
 	TrackTimestampsStaleness bool
 	HonorTimestamps          bool
+}
+
+// StaleNansStateDeprecated wrap pointer to source state for stale nans .
+type StaleNansStateDeprecated struct {
+	state uintptr
+}
+
+// NewStaleNansStateDeprecated init new SourceStaleNansState.
+func NewStaleNansStateDeprecated() *StaleNansStateDeprecated {
+	s := &StaleNansStateDeprecated{
+		state: prometheusRelabelStaleNansStateDeprecatedCtor(),
+	}
+	runtime.SetFinalizer(s, func(s *StaleNansStateDeprecated) {
+		prometheusRelabelStaleNansStateDeprecatedDtor(s.state)
+	})
+
+	return s
 }
 
 // StaleNansState wrap pointer to source state for stale nans .
@@ -675,7 +704,7 @@ func (ipsr *InputPerShardRelabeler) InputRelabelingWithStalenans(
 	targetLss *LabelSetStorage,
 	cache *Cache,
 	options RelabelerOptions,
-	staleNansState *StaleNansState,
+	staleNansState *StaleNansStateDeprecated,
 	defTimestamp int64,
 	shardedData ShardedData,
 	shardsInnerSeries []*InnerSeries,
@@ -748,7 +777,7 @@ func (ipsr *InputPerShardRelabeler) InputRelabelingWithStalenansFromCache(
 	targetLss *LabelSetStorage,
 	cache *Cache,
 	options RelabelerOptions,
-	staleNansState *StaleNansState,
+	staleNansState *StaleNansStateDeprecated,
 	defTimestamp int64,
 	shardedData ShardedData,
 	shardsInnerSeries []*InnerSeries,
@@ -982,7 +1011,7 @@ func (c *Cache) Update(ctx context.Context, shardsRelabelerStateUpdate []*Relabe
 // State state of relabelers per shard.
 type State struct {
 	caches              []*Cache
-	staleNansStates     []*StaleNansState
+	staleNansStates     []*StaleNansStateDeprecated
 	defTimestamp        int64
 	generationRelabeler uint64
 	generationHead      uint64
@@ -994,7 +1023,7 @@ type State struct {
 func NewState(numberOfShards uint16) *State {
 	s := &State{
 		caches:              make([]*Cache, numberOfShards),
-		staleNansStates:     make([]*StaleNansState, numberOfShards),
+		staleNansStates:     make([]*StaleNansStateDeprecated, numberOfShards),
 		generationRelabeler: math.MaxUint64,
 		generationHead:      math.MaxUint64,
 		trackStaleness:      false,
@@ -1065,10 +1094,10 @@ func (s *State) SetRelabelerOptions(options *RelabelerOptions) {
 }
 
 // StaleNansStateByShard return SourceStaleNansState for shard.
-func (s *State) StaleNansStateByShard(shardID uint16) *StaleNansState {
+func (s *State) StaleNansStateByShard(shardID uint16) *StaleNansStateDeprecated {
 	if int(shardID) >= len(s.staleNansStates) {
 		panic(fmt.Sprintf(
-			"shardID(%d) out of range in staleNansStates(%d)",
+			"shardID(%d) out of range in staleNansStatesDeprecated(%d)",
 			shardID,
 			len(s.caches),
 		))
@@ -1130,11 +1159,11 @@ func (s *State) resetStaleNansStates(numberOfShards uint16, equaledGeneration bo
 		s.staleNansStates = s.staleNansStates[:numberOfShards]
 	case len(s.staleNansStates) < int(numberOfShards):
 		// grow
-		s.staleNansStates = make([]*StaleNansState, numberOfShards)
+		s.staleNansStates = make([]*StaleNansStateDeprecated, numberOfShards)
 	}
 
 	for shardID := range s.staleNansStates {
-		s.staleNansStates[shardID] = NewStaleNansState()
+		s.staleNansStates[shardID] = NewStaleNansStateDeprecated()
 	}
 }
 
@@ -1364,7 +1393,6 @@ func (pgr *PerGoroutineRelabeler) inputRelabelingWithStalenans(
 		targetLss.Pointer(),
 		cache.cPointer,
 		cptrContainer.cptr(),
-		state.StaleNansStateByShard(pgr.shardID).state,
 		state.DefTimestamp(),
 		state.RelabelerOptions(),
 		shardsInnerSeries,
@@ -1397,7 +1425,6 @@ func (pgr *PerGoroutineRelabeler) inputRelabelingWithStalenansFromCache(
 		targetLss.Pointer(),
 		cache.cPointer,
 		cptrContainer.cptr(),
-		state.StaleNansStateByShard(pgr.shardID).state,
 		state.DefTimestamp(),
 		state.RelabelerOptions(),
 		shardsInnerSeries,
@@ -1455,6 +1482,24 @@ func (pgr *PerGoroutineRelabeler) inputTransitionRelabelingOnlyRead(
 	runtime.KeepAlive(cptrContainer)
 
 	return stats, ok, handleException(exception)
+}
+
+// PerGoroutineRelabelerTrackStaleNans add stale nans samples if needed
+func PerGoroutineRelabelerTrackStaleNans(
+	innerSeries []*InnerSeries,
+	state *StateV2,
+	shardID uint16,
+) {
+	if !state.TrackStaleness() {
+		return
+	}
+
+	prometheusPerGoroutineRelabelerTrackStaleNans(
+		innerSeries,
+		state.StaleNansStateByShard(shardID).state,
+		state.DefTimestamp(),
+	)
+	runtime.KeepAlive(innerSeries)
 }
 
 //

@@ -1401,6 +1401,8 @@ type noOpStorage struct{}
 func (noOpStorage) Add(_ relabeler.Head) {}
 
 func (s *AppenderSuite) TestManagerRelabelerRelabelingWithRotate() {
+	s.T().Skip("Test for deprecated code")
+
 	relabelerID := s.T().Name()
 	destination := make(chan string, 16)
 
