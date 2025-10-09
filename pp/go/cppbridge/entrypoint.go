@@ -457,7 +457,7 @@ var (
 	)
 )
 
-func freeBytes(b []byte) {
+func freeBytes[T any](b []T) {
 	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_free_bytes,
@@ -1561,12 +1561,17 @@ func primitivesLSSBitsetDtor(bitset uintptr) {
 
 // primitivesReadonlyLSSCopyAddedSeries copy the label sets from the source lss to the destination lss
 // that were added source lss.
-func primitivesReadonlyLSSCopyAddedSeries(source, sourceBitset, destination uintptr) {
+func primitivesReadonlyLSSCopyAddedSeries(source, sourceBitset, destination uintptr) []uint32 {
+	var dstSrcLsIdsMapping []uint32
+
 	C.prompp_primitives_readonly_lss_copy_added_series(
 		C.uint64_t(source),
 		C.uint64_t(sourceBitset),
 		C.uint64_t(destination),
+		C.uint64_t(uintptr(unsafe.Pointer(&dstSrcLsIdsMapping))),
 	)
+
+	return dstSrcLsIdsMapping
 }
 
 func primitivesLSSCopyAddedSeries(source, destination uintptr) {

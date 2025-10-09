@@ -223,11 +223,12 @@ void prompp_primitives_lss_bitset_dtor(void* args);
  * @param source_lss pointer to source label sets;
  * @param source_bitset pointer to source bitset;
  * @param destination_lss pointer to destination label sets;
+ * @param ids_mapping_slice pointer to []uint32;
  *
  * @attention This binding used as a CGO call!!!
  *
  */
-void prompp_primitives_readonly_lss_copy_added_series(uint64_t source_lss, uint64_t source_bitset, uint64_t destination_lss);
+void prompp_primitives_readonly_lss_copy_added_series(uint64_t source_lss, uint64_t source_bitset, uint64_t destination_lss, uint64_t ids_mapping_slice);
 
 #ifdef __cplusplus
 }  // extern "C"

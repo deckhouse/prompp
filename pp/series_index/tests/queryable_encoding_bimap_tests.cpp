@@ -15,8 +15,8 @@ using series_index::SeriesReverseIndex;
 using series_index::trie::CedarMatchesList;
 using series_index::trie::CedarTrie;
 
-template <class Src, class SortIndex, class Dst, class R>
-using Copier = QueryableEncodingBimapCopier<Src, SortIndex, Dst, R>;
+template <class DecodingTable, class SortingIndex, class SeriesIds, class QueryableEncodingBimap, class LsIdVector>
+using Copier = QueryableEncodingBimapCopier<DecodingTable, SortingIndex, SeriesIds, QueryableEncodingBimap, LsIdVector>;
 
 class QueryableEncodingBimapFixture : public testing::Test {
  protected:
@@ -119,18 +119,22 @@ TEST_F(QueryableEncodingBimapFixture, EmplaceDuplicatedLabelSet) {
   EXPECT_NE(ls_id1, ls_id2);
 }
 
-class QueryableEncodingBimapCopierFixture : public QueryableEncodingBimapFixture {};
+class QueryableEncodingBimapCopierFixture : public QueryableEncodingBimapFixture {
+ protected:
+  BareBones::Vector<uint32_t> dst_src_ids_mapping_;
+};
 
 TEST_F(QueryableEncodingBimapCopierFixture, EmptyLss) {
   // Arrange
   Lss lss_copy;
-  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy);
+  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
 
   // Act
   copier.copy_added_series_and_build_indexes();
 
   // Assert
   EXPECT_EQ(0U, lss_copy.size());
+  EXPECT_EQ(0U, dst_src_ids_mapping_.size());
 }
 
 TEST_F(QueryableEncodingBimapCopierFixture, NonEmptyLss) {
@@ -144,7 +148,7 @@ TEST_F(QueryableEncodingBimapCopierFixture, NonEmptyLss) {
   lss_.build_deferred_indexes();
 
   Lss lss_copy;
-  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy);
+  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
 
   // Act
   copier.copy_added_series_and_build_indexes();
@@ -180,7 +184,7 @@ TEST_F(QueryableEncodingBimapCopierFixture, NonEmptyLssKeepOrder) {
   lss_.build_deferred_indexes();
 
   Lss lss_copy;
-  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy);
+  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
 
   // Act
   copier.copy_added_series_and_build_indexes();
@@ -194,8 +198,8 @@ TEST_F(QueryableEncodingBimapCopierFixture, CopyOfCopy) {
   // Arrange
   Lss lss_copy;
   Lss lss_copy_of_copy;
-  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy);
-  Copier copier2(lss_copy, lss_copy.sorting_index(), lss_copy.added_series(), lss_copy_of_copy);
+  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
+  Copier copier2(lss_copy, lss_copy.sorting_index(), lss_copy.added_series(), lss_copy_of_copy, dst_src_ids_mapping_);
 
   const auto label_set = LabelViewSet{{"job", "cron"}, {"key", ""}, {"process", "php"}};
   const auto label_set2 = LabelViewSet{{"job", "cron"}, {"key", ""}, {"process", "php1"}};
