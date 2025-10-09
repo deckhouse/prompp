@@ -17,6 +17,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/block"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 )
 
 type cmdWALPPToBlock struct {
@@ -79,7 +80,7 @@ func (cmd *cmdWALPPToBlock) Do(
 
 	level.Debug(logger).Log("msg", "catalog records", "len", len(headRecords))
 
-	bw := block.NewWriter[*storage.ShardOnDisk](
+	bw := block.NewWriter[*shard.Shard](
 		workingDir,
 		block.DefaultChunkSegmentSize,
 		time.Duration(cmd.blockDuration),

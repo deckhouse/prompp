@@ -18,6 +18,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/keeper"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services/mock"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	"github.com/stretchr/testify/suite"
@@ -39,7 +40,7 @@ type GenericPersistenceSuite struct {
 	clock         *clockwork.FakeClock
 	catalog       *catalog.Catalog
 	proxy         *storage.Proxy
-	blockWriter   *mock.HeadBlockWriterMock[*storage.ShardOnDisk]
+	blockWriter   *mock.HeadBlockWriterMock[*shard.Shard]
 	writeNotifier *mock.WriteNotifierMock
 }
 
@@ -51,9 +52,9 @@ func (s *GenericPersistenceSuite) SetupTest() {
 	h := s.mustCreateHead()
 	activeHeadContainer := container.NewWeighted(h)
 	removedHeadNotifier := &mock.WriteNotifierMock{NotifyFunc: func() {}}
-	hKeeper := keeper.NewKeeper[storage.HeadOnDisk](1, removedHeadNotifier)
-	s.proxy = storage.NewProxy(activeHeadContainer, hKeeper, func(*storage.HeadOnDisk) error { return nil })
-	s.blockWriter = &mock.HeadBlockWriterMock[*storage.ShardOnDisk]{}
+	hKeeper := keeper.NewKeeper[storage.Head](1, removedHeadNotifier)
+	s.proxy = storage.NewProxy(activeHeadContainer, hKeeper, func(*storage.Head) error { return nil })
+	s.blockWriter = &mock.HeadBlockWriterMock[*shard.Shard]{}
 	s.writeNotifier = &mock.WriteNotifierMock{NotifyFunc: func() {}}
 }
 
@@ -63,7 +64,7 @@ func (s *GenericPersistenceSuite) createDataDirectory() string {
 	return dataDir
 }
 
-func (s *GenericPersistenceSuite) createHead() (*storage.HeadOnDisk, error) {
+func (s *GenericPersistenceSuite) createHead() (*storage.Head, error) {
 	return storage.NewBuilder(
 		s.catalog,
 		s.dataDir,
@@ -73,7 +74,7 @@ func (s *GenericPersistenceSuite) createHead() (*storage.HeadOnDisk, error) {
 	).Build(0, shardsCount)
 }
 
-func (s *GenericPersistenceSuite) mustCreateHead() *storage.HeadOnDisk {
+func (s *GenericPersistenceSuite) mustCreateHead() *storage.Head {
 	h, err := s.createHead()
 	s.Require().NoError(err)
 	return h
@@ -96,11 +97,11 @@ func (s *GenericPersistenceSuite) createCatalog() {
 type PersistenerSuite struct {
 	GenericPersistenceSuite
 	persistener *services.Persistener[
-		*task.Generic[*storage.PerGoroutineShard],
-		*storage.ShardOnDisk,
-		*storage.PerGoroutineShard,
-		*mock.HeadBlockWriterMock[*storage.ShardOnDisk],
-		*storage.HeadOnDisk,
+		*task.Generic[*shard.PerGoroutineShard],
+		*shard.Shard,
+		*shard.PerGoroutineShard,
+		*mock.HeadBlockWriterMock[*shard.Shard],
+		*storage.Head,
 	]
 }
 
@@ -108,11 +109,11 @@ func (s *PersistenerSuite) SetupTest() {
 	s.GenericPersistenceSuite.SetupTest()
 
 	s.persistener = services.NewPersistener[
-		*task.Generic[*storage.PerGoroutineShard],
-		*storage.ShardOnDisk,
-		*storage.PerGoroutineShard,
-		*mock.HeadBlockWriterMock[*storage.ShardOnDisk],
-		*storage.HeadOnDisk,
+		*task.Generic[*shard.PerGoroutineShard],
+		*shard.Shard,
+		*shard.PerGoroutineShard,
+		*mock.HeadBlockWriterMock[*shard.Shard],
+		*storage.Head,
 	](s.catalog, s.blockWriter, s.writeNotifier, s.clock, tsdbRetentionPeriod, retentionPeriod, nil)
 }
 
@@ -127,19 +128,19 @@ func (s *PersistenerSuite) TestNoHeads() {
 	outdated := s.persistener.Persist(nil)
 
 	// Assert
-	s.Equal([]*storage.HeadOnDisk(nil), outdated)
+	s.Equal([]*storage.Head(nil), outdated)
 	s.Empty(s.blockWriter.WriteCalls())
 }
 
 func (s *PersistenerSuite) TestNoPersistWritableHead() {
 	// Arrange
-	heads := []*storage.HeadOnDisk{s.mustCreateHead()}
+	heads := []*storage.Head{s.mustCreateHead()}
 
 	// Act
 	outdated := s.persistener.Persist(heads)
 
 	// Assert
-	s.Equal([]*storage.HeadOnDisk(nil), outdated)
+	s.Equal([]*storage.Head(nil), outdated)
 	s.Empty(s.blockWriter.WriteCalls())
 }
 
@@ -161,10 +162,10 @@ func (s *PersistenerSuite) TestNoPersistPersistedHead() {
 	s.clock.Advance(retentionPeriod - 1)
 
 	// Act
-	outdated := s.persistener.Persist([]*storage.HeadOnDisk{head})
+	outdated := s.persistener.Persist([]*storage.Head{head})
 
 	// Assert
-	s.Equal([]*storage.HeadOnDisk(nil), outdated)
+	s.Equal([]*storage.Head(nil), outdated)
 	s.Empty(s.blockWriter.WriteCalls())
 }
 
@@ -186,10 +187,10 @@ func (s *PersistenerSuite) TestOutdatedPersistedHead() {
 	s.clock.Advance(retentionPeriod)
 
 	// Act
-	outdated := s.persistener.Persist([]*storage.HeadOnDisk{head})
+	outdated := s.persistener.Persist([]*storage.Head{head})
 
 	// Assert
-	s.Equal([]*storage.HeadOnDisk{head}, outdated)
+	s.Equal([]*storage.Head{head}, outdated)
 	s.Empty(s.blockWriter.WriteCalls())
 }
 
@@ -209,23 +210,23 @@ func (s *PersistenerSuite) TestOutdatedHead() {
 	head.SetReadOnly()
 
 	// Act
-	outdated := s.persistener.Persist([]*storage.HeadOnDisk{head})
+	outdated := s.persistener.Persist([]*storage.Head{head})
 
 	// Assert
-	s.Equal([]*storage.HeadOnDisk{head}, outdated)
+	s.Equal([]*storage.Head{head}, outdated)
 	s.Empty(s.blockWriter.WriteCalls())
 }
 
 func (s *PersistenerSuite) TestPersistHeadSuccess() {
 	// Arrange
 	s.clock.Advance(tsdbRetentionPeriod)
-	blockWriter := block.NewWriter[*storage.ShardOnDisk](
+	blockWriter := block.NewWriter[*shard.Shard](
 		s.dataDir,
 		block.DefaultChunkSegmentSize,
 		2*time.Hour,
 		prometheus.DefaultRegisterer,
 	)
-	s.blockWriter.WriteFunc = func(shard *storage.ShardOnDisk) ([]block.WrittenBlock, error) {
+	s.blockWriter.WriteFunc = func(shard *shard.Shard) ([]block.WrittenBlock, error) {
 		return blockWriter.Write(shard)
 	}
 
@@ -241,11 +242,11 @@ func (s *PersistenerSuite) TestPersistHeadSuccess() {
 	head.SetReadOnly()
 
 	// Act
-	outdated := s.persistener.Persist([]*storage.HeadOnDisk{head})
+	outdated := s.persistener.Persist([]*storage.Head{head})
 	record, err := s.catalog.Get(head.ID())
 
 	// Assert
-	s.Equal([]*storage.HeadOnDisk(nil), outdated)
+	s.Equal([]*storage.Head(nil), outdated)
 	s.Len(s.blockWriter.WriteCalls(), 2)
 	s.Len(s.writeNotifier.NotifyCalls(), 1)
 	s.Require().NoError(err)
@@ -255,13 +256,13 @@ func (s *PersistenerSuite) TestPersistHeadSuccess() {
 func (s *PersistenerSuite) TestPersistHeadErrorOnBlockWriterForSecondShard() {
 	// Arrange
 	s.clock.Advance(tsdbRetentionPeriod)
-	blockWriter := block.NewWriter[*storage.ShardOnDisk](
+	blockWriter := block.NewWriter[*shard.Shard](
 		s.dataDir,
 		block.DefaultChunkSegmentSize,
 		2*time.Hour,
 		prometheus.DefaultRegisterer,
 	)
-	s.blockWriter.WriteFunc = func(shard *storage.ShardOnDisk) ([]block.WrittenBlock, error) {
+	s.blockWriter.WriteFunc = func(shard *shard.Shard) ([]block.WrittenBlock, error) {
 		if len(s.blockWriter.WriteCalls()) == 2 {
 			return nil, errors.New("some error")
 		}
@@ -281,11 +282,11 @@ func (s *PersistenerSuite) TestPersistHeadErrorOnBlockWriterForSecondShard() {
 	head.SetReadOnly()
 
 	// Act
-	outdated := s.persistener.Persist([]*storage.HeadOnDisk{head})
+	outdated := s.persistener.Persist([]*storage.Head{head})
 	record, err := s.catalog.Get(head.ID())
 
 	// Assert
-	s.Equal([]*storage.HeadOnDisk(nil), outdated)
+	s.Equal([]*storage.Head(nil), outdated)
 	s.Len(s.blockWriter.WriteCalls(), 2)
 	s.Empty(s.writeNotifier.NotifyCalls())
 	s.Require().NoError(err)
@@ -296,11 +297,11 @@ type PersistenerServiceSuite struct {
 	GenericPersistenceSuite
 	loader  *storage.Loader
 	service *services.PersistenerService[
-		*task.Generic[*storage.PerGoroutineShard],
-		*storage.ShardOnDisk,
-		*storage.PerGoroutineShard,
-		*mock.HeadBlockWriterMock[*storage.ShardOnDisk],
-		*storage.HeadOnDisk,
+		*task.Generic[*shard.PerGoroutineShard],
+		*shard.Shard,
+		*shard.PerGoroutineShard,
+		*mock.HeadBlockWriterMock[*shard.Shard],
+		*storage.Head,
 		*storage.Proxy,
 		*storage.Loader,
 	]
@@ -311,11 +312,11 @@ func (s *PersistenerServiceSuite) SetupTest() {
 
 	s.loader = storage.NewLoader(s.dataDir, maxSegmentSize, prometheus.DefaultRegisterer, unloadDataStorageInterval)
 	s.service = services.NewPersistenerService[
-		*task.Generic[*storage.PerGoroutineShard],
-		*storage.ShardOnDisk,
-		*storage.PerGoroutineShard,
-		*mock.HeadBlockWriterMock[*storage.ShardOnDisk],
-		*storage.HeadOnDisk,
+		*task.Generic[*shard.PerGoroutineShard],
+		*shard.Shard,
+		*shard.PerGoroutineShard,
+		*mock.HeadBlockWriterMock[*shard.Shard],
+		*storage.Head,
 		*storage.Proxy,
 		*storage.Loader,
 	](

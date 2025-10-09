@@ -2,28 +2,24 @@ package services_test
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 
-	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/suite"
 
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage"
-	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/container"
+	"github.com/prometheus/prometheus/pp/go/storage/head/head"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services/mock"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
 )
 
 type CommitterSuite struct {
 	suite.Suite
 
-	baseCtx             context.Context
-	dataDir             string
-	log                 *catalog.FileLog
-	catalog             *catalog.Catalog
-	activeHeadContainer *container.Weighted[storage.HeadOnDisk, *storage.HeadOnDisk]
+	baseCtx context.Context
 }
 
 func TestCommitterSuite(t *testing.T) {
@@ -34,65 +30,42 @@ func (s *CommitterSuite) SetupSuite() {
 	s.baseCtx = context.Background()
 }
 
-func (s *CommitterSuite) SetupTest() {
-	s.createDataDirectory()
-	s.createCatalog()
-	s.activeHeadContainer = container.NewWeighted(s.createHead())
-}
-
-func (s *CommitterSuite) TearDownTest() {
-	s.dataDir = ""
-
-	if s.log != nil {
-		s.NoError(s.log.Close())
-		s.log = nil
+func (s *CommitterSuite) createHead(segmentWriters []*mock.SegmentWriterMock) *storage.Head {
+	shards := make([]*shard.Shard, shardsCount)
+	for shardID, segmentWriter := range segmentWriters {
+		shards[shardID] = s.createShardOnMemory(segmentWriter, maxSegmentSize, uint16(shardID))
 	}
 
-	if s.catalog != nil {
-		s.catalog = nil
-	}
-
-	if s.activeHeadContainer != nil {
-		s.NoError(s.activeHeadContainer.Close())
-		s.activeHeadContainer = nil
-	}
-}
-
-func (s *CommitterSuite) createDataDirectory() {
-	dataDir := filepath.Join(s.T().TempDir(), "data")
-	s.Require().NoError(os.MkdirAll(dataDir, os.ModeDir))
-	s.dataDir = dataDir
-}
-
-func (s *CommitterSuite) createCatalog() {
-	l, err := catalog.NewFileLogV2(filepath.Join(s.dataDir, "head.log"))
-	s.Require().NoError(err)
-	clock := clockwork.NewRealClock()
-
-	s.catalog, err = catalog.New(
-		clock,
-		l,
-		&catalog.DefaultIDGenerator{},
-		catalog.DefaultMaxLogFileSize,
+	return head.NewHead(
+		"test-head-id",
+		shards,
+		shard.NewPerGoroutineShard[*storage.Wal],
+		nil,
+		0,
 		nil,
 	)
-	s.Require().NoError(err)
 }
 
-func (s *CommitterSuite) createHead() *storage.HeadOnDisk {
-	h, err := storage.NewBuilder(
-		s.catalog,
-		s.dataDir,
-		maxSegmentSize,
+func (*CommitterSuite) createShardOnMemory(
+	segmentWriter *mock.SegmentWriterMock,
+	maxSegmentSize uint32,
+	shardID uint16,
+) *shard.Shard {
+	lss := shard.NewLSS()
+	// logShards is 0 for single encoder
+	shardWalEncoder := cppbridge.NewHeadWalEncoder(shardID, 0, lss.Target())
+
+	return shard.NewShard(
+		lss,
+		shard.NewDataStorage(),
 		nil,
-		unloadDataStorageInterval,
-	).Build(0, shardsCount)
-	s.Require().NoError(err)
-
-	return h
+		nil,
+		wal.NewWal(shardWalEncoder, segmentWriter, maxSegmentSize),
+		shardID,
+	)
 }
 
-func (s *CommitterSuite) TestCommitter() {
+func (s *CommitterSuite) TestHappyPath() {
 	trigger := make(chan struct{}, 1)
 	start := make(chan struct{})
 	mediator := &mock.MediatorMock{
@@ -101,19 +74,109 @@ func (s *CommitterSuite) TestCommitter() {
 			return trigger
 		},
 	}
-	isNewHead := func(string) bool {
-		return false
+
+	segmentWriters := make([]*mock.SegmentWriterMock, shardsCount)
+	for shardID := range shardsCount {
+		segmentWriters[shardID] = &mock.SegmentWriterMock{
+			WriteFunc:       func(*cppbridge.HeadEncodedSegment) error { return nil },
+			FlushFunc:       func() error { return nil },
+			SyncFunc:        func() error { return nil },
+			CloseFunc:       func() error { return nil },
+			CurrentSizeFunc: func() int64 { return 0 },
+		}
 	}
-	committer := services.NewCommitter(s.activeHeadContainer, mediator, isNewHead)
+	activeHeadContainer := container.NewWeighted(s.createHead(segmentWriters))
+	isNewHead := func(string) bool { return false }
 
+	committer := services.NewCommitter(activeHeadContainer, mediator, isNewHead)
 	done := make(chan struct{})
-	go func() {
-		s.NoError(committer.Execute(s.baseCtx))
-		close(done)
-	}()
 
-	<-start
-	trigger <- struct{}{}
-	close(trigger)
-	<-done
+	s.T().Run("execute", func(t *testing.T) {
+		t.Parallel()
+
+		err := committer.Execute(s.baseCtx)
+		close(done)
+		s.NoError(err)
+	})
+
+	s.T().Run("tick", func(t *testing.T) {
+		t.Parallel()
+
+		<-start
+		trigger <- struct{}{}
+		trigger <- struct{}{}
+		close(trigger)
+		<-done
+
+		s.Require().NoError(activeHeadContainer.Close())
+
+		for _, segmentWriter := range segmentWriters {
+			if !s.Len(segmentWriter.WriteCalls(), 2) {
+				return
+			}
+			if !s.Len(segmentWriter.FlushCalls(), 2) {
+				return
+			}
+			if !s.Len(segmentWriter.SyncCalls(), 2) {
+				return
+			}
+
+			for _, call := range segmentWriter.WriteCalls() {
+				s.Equal(uint32(0), call.Segment.Samples())
+			}
+		}
+	})
+}
+
+func (s *CommitterSuite) TestSkipNewHead() {
+	trigger := make(chan struct{}, 1)
+	start := make(chan struct{})
+	mediator := &mock.MediatorMock{
+		CFunc: func() <-chan struct{} {
+			close(start)
+			return trigger
+		},
+	}
+
+	segmentWriters := make([]*mock.SegmentWriterMock, shardsCount)
+	for shardID := range shardsCount {
+		segmentWriters[shardID] = &mock.SegmentWriterMock{
+			WriteFunc:       func(*cppbridge.HeadEncodedSegment) error { return nil },
+			FlushFunc:       func() error { return nil },
+			SyncFunc:        func() error { return nil },
+			CloseFunc:       func() error { return nil },
+			CurrentSizeFunc: func() int64 { return 0 },
+		}
+	}
+	activeHeadContainer := container.NewWeighted(s.createHead(segmentWriters))
+
+	isNewHead := func(string) bool { return true }
+	committer := services.NewCommitter(activeHeadContainer, mediator, isNewHead)
+	done := make(chan struct{})
+
+	s.T().Run("execute", func(t *testing.T) {
+		t.Parallel()
+
+		err := committer.Execute(s.baseCtx)
+		close(done)
+		s.Require().NoError(err)
+	})
+
+	s.T().Run("tick", func(t *testing.T) {
+		t.Parallel()
+
+		<-start
+		trigger <- struct{}{}
+		trigger <- struct{}{}
+		close(trigger)
+		<-done
+
+		s.Require().NoError(activeHeadContainer.Close())
+
+		for _, segmentWriter := range segmentWriters {
+			s.Empty(segmentWriter.WriteCalls())
+			s.Empty(segmentWriter.FlushCalls())
+			s.Empty(segmentWriter.SyncCalls())
+		}
+	})
 }

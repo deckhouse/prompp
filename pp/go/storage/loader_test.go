@@ -14,6 +14,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	"github.com/stretchr/testify/suite"
 )
@@ -88,7 +89,7 @@ func (s *HeadLoadSuite) headDir() string {
 	return filepath.Join(s.dataDir, s.headIdGenerator.last())
 }
 
-func (s *HeadLoadSuite) createHead(unloadDataStorageInterval time.Duration) (*storage.HeadOnDisk, error) {
+func (s *HeadLoadSuite) createHead(unloadDataStorageInterval time.Duration) (*storage.Head, error) {
 	return storage.NewBuilder(
 		s.catalog,
 		s.dataDir,
@@ -98,7 +99,7 @@ func (s *HeadLoadSuite) createHead(unloadDataStorageInterval time.Duration) (*st
 	).Build(0, numberOfShards)
 }
 
-func (s *HeadLoadSuite) mustCreateHead(unloadDataStorageInterval time.Duration) *storage.HeadOnDisk {
+func (s *HeadLoadSuite) mustCreateHead(unloadDataStorageInterval time.Duration) *storage.Head {
 	h, err := s.createHead(unloadDataStorageInterval)
 	s.Require().NoError(err)
 
@@ -107,14 +108,14 @@ func (s *HeadLoadSuite) mustCreateHead(unloadDataStorageInterval time.Duration) 
 	return h
 }
 
-func (s *HeadLoadSuite) loadHead(unloadDataStorageInterval time.Duration) (*storage.HeadOnDisk, bool) {
+func (s *HeadLoadSuite) loadHead(unloadDataStorageInterval time.Duration) (*storage.Head, bool) {
 	record, err := s.catalog.Get(s.headIdGenerator.last())
 	s.Require().NoError(err)
 
 	return storage.NewLoader(s.dataDir, maxSegmentSize, prometheus.DefaultRegisterer, unloadDataStorageInterval).Load(record, 0)
 }
 
-func (s *HeadLoadSuite) mustLoadHead(unloadDataStorageInterval time.Duration) *storage.HeadOnDisk {
+func (s *HeadLoadSuite) mustLoadHead(unloadDataStorageInterval time.Duration) *storage.Head {
 	loadedHead, corrupted := s.loadHead(unloadDataStorageInterval)
 	s.False(corrupted)
 
@@ -126,11 +127,11 @@ func (s *HeadLoadSuite) lockFileForCreation(fileName string) {
 	s.Require().NoError(os.Mkdir(fileName, os.ModeDir))
 }
 
-func (s *HeadLoadSuite) appendTimeSeries(head *storage.HeadOnDisk, timeSeries []storagetest.TimeSeries) {
+func (s *HeadLoadSuite) appendTimeSeries(head *storage.Head, timeSeries []storagetest.TimeSeries) {
 	storagetest.MustAppendTimeSeries(&s.Suite, head, timeSeries)
 }
 
-func (*HeadLoadSuite) shards(head *storage.HeadOnDisk) (result []*storage.ShardOnDisk) {
+func (*HeadLoadSuite) shards(head *storage.Head) (result []*shard.Shard) {
 	for shard := range head.RangeShards() {
 		result = append(result, shard)
 	}

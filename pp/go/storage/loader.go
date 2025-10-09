@@ -24,7 +24,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util/optional"
 )
 
-// Loader loads [HeadOnDisk] or [ShardOnDisk] from [WalOnDisk].
+// Loader loads [Head] or [shard.Shard] from [Wal].
 type Loader struct {
 	dataDir                   string
 	maxSegmentSize            uint32
@@ -47,7 +47,7 @@ func NewLoader(
 	}
 }
 
-// Load [HeadOnDisk] from [WalOnDisk] by head ID.
+// Load [Head] from [Wal] by head ID.
 //
 //revive:disable-next-line:cognitive-complexity // function is not complicated
 //revive:disable-next-line:function-length // long but readable.
@@ -55,7 +55,7 @@ func NewLoader(
 func (l *Loader) Load(
 	headRecord *catalog.Record,
 	generation uint64,
-) (_ *HeadOnDisk, corrupted bool) {
+) (_ *Head, corrupted bool) {
 	headID := headRecord.ID()
 	headDir := filepath.Join(l.dataDir, headID)
 	numberOfShards := headRecord.NumberOfShards()
@@ -78,7 +78,7 @@ func (l *Loader) Load(
 	}
 	wg.Wait()
 
-	shards := make([]*ShardOnDisk, numberOfShards)
+	shards := make([]*shard.Shard, numberOfShards)
 	numberOfSegmentsRead := optional.Optional[uint32]{}
 	for shardID, res := range shardLoadResults {
 		shards[shardID] = res.shard
@@ -126,7 +126,7 @@ func (l *Loader) Load(
 	h := head.NewHead(
 		headID,
 		shards,
-		shard.NewPerGoroutineShard[*WalOnDisk],
+		shard.NewPerGoroutineShard[*Wal],
 		headRecord.Acquire(),
 		generation,
 		l.registerer,
@@ -166,7 +166,7 @@ func (*Loader) loadShard(
 
 // ShardLoadResult the result of loading a shard from a wal file.
 type ShardLoadResult struct {
-	shard            *ShardOnDisk
+	shard            *shard.Shard
 	numberOfSegments uint32
 	corrupted        bool
 }
@@ -175,7 +175,7 @@ type ShardLoadResult struct {
 type ShardData struct {
 	lss                  *shard.LSS
 	dataStorage          *shard.DataStorage
-	wal                  *WalOnDisk
+	wal                  *Wal
 	unloadedDataStorage  *shard.UnloadedDataStorage
 	queriedSeriesStorage *shard.QueriedSeriesStorage
 	numberOfSegments     uint32

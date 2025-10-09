@@ -18,6 +18,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/block"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	"github.com/prometheus/prometheus/tsdb"
 )
@@ -35,8 +36,8 @@ const (
 type WriterSuite struct {
 	suite.Suite
 	dataDir     string
-	head        *storage.HeadOnDisk
-	blockWriter *block.Writer[*storage.ShardOnDisk]
+	head        *storage.Head
+	blockWriter *block.Writer[*shard.Shard]
 }
 
 func TestWriterSuite(t *testing.T) {
@@ -46,7 +47,7 @@ func TestWriterSuite(t *testing.T) {
 func (s *WriterSuite) SetupTest() {
 	s.dataDir = s.createDataDirectory()
 	s.head = s.mustCreateHead()
-	s.blockWriter = block.NewWriter[*storage.ShardOnDisk](
+	s.blockWriter = block.NewWriter[*shard.Shard](
 		s.dataDir,
 		block.DefaultChunkSegmentSize,
 		blockDuration,
@@ -76,7 +77,7 @@ func (s *WriterSuite) mustCreateCatalog() *catalog.Catalog {
 	return c
 }
 
-func (s *WriterSuite) mustCreateHead() *storage.HeadOnDisk {
+func (s *WriterSuite) mustCreateHead() *storage.Head {
 	h, err := storage.NewBuilder(
 		s.mustCreateCatalog(),
 		s.dataDir,
@@ -100,9 +101,9 @@ func (s *WriterSuite) mustReadBlockMeta(filename string) tsdb.BlockMeta {
 	return meta
 }
 
-func (s *WriterSuite) shard() *storage.ShardOnDisk {
-	for shard := range s.head.RangeShards() {
-		return shard
+func (s *WriterSuite) shard() *shard.Shard {
+	for sd := range s.head.RangeShards() {
+		return sd
 	}
 
 	return nil
