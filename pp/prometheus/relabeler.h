@@ -8,7 +8,6 @@
 #include <roaring/roaring.hh>
 
 #include "bare_bones/allocator.h"
-#include "bare_bones/bitset.h"
 #include "bare_bones/preprocess.h"
 #include "bare_bones/vector.h"
 #include "hashdex.h"
