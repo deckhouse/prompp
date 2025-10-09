@@ -1,13 +1,19 @@
 #pragma once
 
+#include <memory>
 #include <variant>
 
 #include "bare_bones/exception.h"
+#include "primitives/go_slice.h"
+#include "primitives/primitives.h"
 #include "primitives/snug_composites.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
 
 namespace entrypoint::head {
+
+using LsIdsSlice = PromPP::Primitives::Go::Slice<PromPP::Primitives::LabelSetID>;
+using LsIdsSlicePtr = std::unique_ptr<LsIdsSlice>;
 
 enum class LssType : uint32_t {
   kEncodingBimap = 0,

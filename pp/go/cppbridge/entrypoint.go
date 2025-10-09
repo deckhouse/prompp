@@ -1561,8 +1561,8 @@ func primitivesLSSBitsetDtor(bitset uintptr) {
 
 // primitivesReadonlyLSSCopyAddedSeries copy the label sets from the source lss to the destination lss
 // that were added source lss.
-func primitivesReadonlyLSSCopyAddedSeries(source, sourceBitset, destination uintptr) []uint32 {
-	var dstSrcLsIdsMapping []uint32
+func primitivesReadonlyLSSCopyAddedSeries(source, sourceBitset, destination uintptr) uintptr {
+	var dstSrcLsIdsMapping uintptr
 
 	C.prompp_primitives_readonly_lss_copy_added_series(
 		C.uint64_t(source),
@@ -1576,6 +1576,18 @@ func primitivesReadonlyLSSCopyAddedSeries(source, sourceBitset, destination uint
 
 func primitivesLSSCopyAddedSeries(source, destination uintptr) {
 	C.prompp_primitives_lss_copy_added_series(C.uint64_t(source), C.uint64_t(destination))
+}
+
+func primitivesFreeLsIdsMapping(lsIdsMapping uintptr) {
+	args := struct {
+		lsIdsMapping uintptr
+	}{lsIdsMapping}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_free_ls_ids_mapping,
+		uintptr(unsafe.Pointer(&args)),
+	)
 }
 
 //
