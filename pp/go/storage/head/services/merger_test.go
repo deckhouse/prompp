@@ -18,9 +18,7 @@ import (
 type MergerSuite struct {
 	suite.Suite
 
-	baseCtx             context.Context
-	segmentWriter       *mock.SegmentWriterMock
-	activeHeadContainer *container.Weighted[storage.Head, *storage.Head]
+	baseCtx context.Context
 }
 
 func TestMergerSuite(t *testing.T) {
@@ -31,14 +29,18 @@ func (s *MergerSuite) SetupSuite() {
 	s.baseCtx = context.Background()
 }
 
-func (s *MergerSuite) SetupTest() {
-	s.activeHeadContainer = container.NewWeighted(s.createHead())
-}
-
-func (s *MergerSuite) createHead() *storage.Head {
+func (s *MergerSuite) createHead(
+	unloadedFS []*mock.StorageFileMock,
+	queriedSeriesFS [][2]*mock.StorageFileMock,
+) *storage.Head {
 	shards := make([]*shard.Shard, shardsCount)
-	for shardID := range shardsCount {
-		shards[shardID] = s.createShardOnMemory(maxSegmentSize, uint16(shardID))
+	for shardID := range unloadedFS {
+		shards[shardID] = s.createShardOnMemory(
+			unloadedFS[shardID],
+			queriedSeriesFS[shardID],
+			maxSegmentSize,
+			uint16(shardID),
+		)
 	}
 
 	return head.NewHead(
@@ -51,8 +53,16 @@ func (s *MergerSuite) createHead() *storage.Head {
 	)
 }
 
-func (s *MergerSuite) createShardOnMemory(maxSegmentSize uint32, shardID uint16) *shard.Shard {
-	s.segmentWriter = &mock.SegmentWriterMock{
+func (*MergerSuite) createShardOnMemory(
+	unloadedFS *mock.StorageFileMock,
+	queriedSeriesFS [2]*mock.StorageFileMock,
+	maxSegmentSize uint32,
+	shardID uint16,
+) *shard.Shard {
+	lss := shard.NewLSS()
+	shardWalEncoder := cppbridge.NewHeadWalEncoder(shardID, 0, lss.Target())
+
+	segmentWriter := &mock.SegmentWriterMock{
 		WriteFunc:       func(*cppbridge.HeadEncodedSegment) error { return nil },
 		FlushFunc:       func() error { return nil },
 		SyncFunc:        func() error { return nil },
@@ -60,15 +70,18 @@ func (s *MergerSuite) createShardOnMemory(maxSegmentSize uint32, shardID uint16)
 		CurrentSizeFunc: func() int64 { return 0 },
 	}
 
-	lss := shard.NewLSS()
-	shardWalEncoder := cppbridge.NewHeadWalEncoder(shardID, 0, lss.Target())
+	unloadedDataStorage := shard.NewUnloadedDataStorage(unloadedFS)
+	queriedSeriesStorage := shard.NewQueriedSeriesStorage(
+		queriedSeriesFS[0],
+		queriedSeriesFS[1],
+	)
 
 	return shard.NewShard(
 		lss,
 		shard.NewDataStorage(),
-		nil,
-		nil,
-		wal.NewWal(shardWalEncoder, s.segmentWriter, maxSegmentSize),
+		unloadedDataStorage,
+		queriedSeriesStorage,
+		wal.NewWal(shardWalEncoder, segmentWriter, maxSegmentSize),
 		shardID,
 	)
 }
@@ -82,8 +95,41 @@ func (s *MergerSuite) TestHappyPath() {
 			return trigger
 		},
 	}
+
+	unloadedFS := make([]*mock.StorageFileMock, shardsCount)
+	queriedSeriesFS := make([][2]*mock.StorageFileMock, shardsCount)
+	for shardID := range shardsCount {
+		unloadedFS[shardID] = &mock.StorageFileMock{
+			CloseFunc: func() error { return nil },
+			OpenFunc:  func(int) error { return nil },
+			SyncFunc:  func() error { return nil },
+			WriteFunc: func([]byte) (int, error) { return 0, nil },
+		}
+
+		queriedSeriesFS[shardID] = [2]*mock.StorageFileMock{
+			{
+				CloseFunc:    func() error { return nil },
+				OpenFunc:     func(int) error { return nil },
+				SeekFunc:     func(int64, int) (int64, error) { return 0, nil },
+				SyncFunc:     func() error { return nil },
+				TruncateFunc: func(int64) error { return nil },
+				WriteFunc:    func([]byte) (int, error) { return 0, nil },
+			},
+			{
+				CloseFunc:    func() error { return nil },
+				OpenFunc:     func(int) error { return nil },
+				SeekFunc:     func(int64, int) (int64, error) { return 0, nil },
+				SyncFunc:     func() error { return nil },
+				TruncateFunc: func(int64) error { return nil },
+				WriteFunc:    func([]byte) (int, error) { return 0, nil },
+			},
+		}
+	}
+
+	activeHeadContainer := container.NewWeighted(s.createHead(unloadedFS, queriedSeriesFS))
 	isNewHead := func(string) bool { return false }
-	merger := services.NewMerger(s.activeHeadContainer, mediator, isNewHead)
+
+	merger := services.NewMerger(activeHeadContainer, mediator, isNewHead)
 	done := make(chan struct{})
 
 	s.T().Run("execute", func(t *testing.T) {
@@ -102,10 +148,108 @@ func (s *MergerSuite) TestHappyPath() {
 		close(trigger)
 		<-done
 
-		s.Require().NoError(s.activeHeadContainer.Close())
+		s.Require().NoError(activeHeadContainer.Close())
+
+		for shardID := range unloadedFS {
+			s.Len(unloadedFS[shardID].OpenCalls(), 1)
+			s.Len(unloadedFS[shardID].SyncCalls(), 1)
+			s.Len(unloadedFS[shardID].WriteCalls(), 2)
+
+			s.Len(queriedSeriesFS[shardID][0].OpenCalls(), 1)
+			s.Len(queriedSeriesFS[shardID][0].SeekCalls(), 1)
+			s.Len(queriedSeriesFS[shardID][0].SyncCalls(), 1)
+			s.Len(queriedSeriesFS[shardID][0].TruncateCalls(), 1)
+			s.Len(queriedSeriesFS[shardID][0].WriteCalls(), 2)
+
+			s.Empty(queriedSeriesFS[shardID][1].OpenCalls())
+			s.Empty(queriedSeriesFS[shardID][1].SeekCalls())
+			s.Empty(queriedSeriesFS[shardID][1].SyncCalls())
+			s.Empty(queriedSeriesFS[shardID][1].TruncateCalls())
+			s.Empty(queriedSeriesFS[shardID][1].WriteCalls())
+		}
 	})
 }
 
 func (s *MergerSuite) TestSkipNewHead() {
-	s.T().Log("TestSkipNewHead")
+	trigger := make(chan struct{}, 1)
+	start := make(chan struct{})
+	mediator := &mock.MediatorMock{
+		CFunc: func() <-chan struct{} {
+			close(start)
+			return trigger
+		},
+	}
+
+	unloadedFS := make([]*mock.StorageFileMock, shardsCount)
+	queriedSeriesFS := make([][2]*mock.StorageFileMock, shardsCount)
+	for shardID := range shardsCount {
+		unloadedFS[shardID] = &mock.StorageFileMock{
+			CloseFunc: func() error { return nil },
+			OpenFunc:  func(int) error { return nil },
+			SyncFunc:  func() error { return nil },
+			WriteFunc: func([]byte) (int, error) { return 0, nil },
+		}
+
+		queriedSeriesFS[shardID] = [2]*mock.StorageFileMock{
+			{
+				CloseFunc:    func() error { return nil },
+				OpenFunc:     func(int) error { return nil },
+				SeekFunc:     func(int64, int) (int64, error) { return 0, nil },
+				SyncFunc:     func() error { return nil },
+				TruncateFunc: func(int64) error { return nil },
+				WriteFunc:    func([]byte) (int, error) { return 0, nil },
+			},
+			{
+				CloseFunc:    func() error { return nil },
+				OpenFunc:     func(int) error { return nil },
+				SeekFunc:     func(int64, int) (int64, error) { return 0, nil },
+				SyncFunc:     func() error { return nil },
+				TruncateFunc: func(int64) error { return nil },
+				WriteFunc:    func([]byte) (int, error) { return 0, nil },
+			},
+		}
+	}
+
+	activeHeadContainer := container.NewWeighted(s.createHead(unloadedFS, queriedSeriesFS))
+	isNewHead := func(string) bool { return true }
+
+	merger := services.NewMerger(activeHeadContainer, mediator, isNewHead)
+	done := make(chan struct{})
+
+	s.T().Run("execute", func(t *testing.T) {
+		t.Parallel()
+
+		err := merger.Execute(s.baseCtx)
+		close(done)
+		s.NoError(err)
+	})
+
+	s.T().Run("tick", func(t *testing.T) {
+		t.Parallel()
+
+		<-start
+		trigger <- struct{}{}
+		close(trigger)
+		<-done
+
+		s.Require().NoError(activeHeadContainer.Close())
+
+		for shardID := range unloadedFS {
+			s.Empty(unloadedFS[shardID].OpenCalls())
+			s.Empty(unloadedFS[shardID].SyncCalls())
+			s.Empty(unloadedFS[shardID].WriteCalls())
+
+			s.Empty(queriedSeriesFS[shardID][0].OpenCalls())
+			s.Empty(queriedSeriesFS[shardID][0].SeekCalls())
+			s.Empty(queriedSeriesFS[shardID][0].SyncCalls())
+			s.Empty(queriedSeriesFS[shardID][0].TruncateCalls())
+			s.Empty(queriedSeriesFS[shardID][0].WriteCalls())
+
+			s.Empty(queriedSeriesFS[shardID][1].OpenCalls())
+			s.Empty(queriedSeriesFS[shardID][1].SeekCalls())
+			s.Empty(queriedSeriesFS[shardID][1].SyncCalls())
+			s.Empty(queriedSeriesFS[shardID][1].TruncateCalls())
+			s.Empty(queriedSeriesFS[shardID][1].WriteCalls())
+		}
+	})
 }

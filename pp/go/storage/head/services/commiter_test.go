@@ -19,9 +19,7 @@ import (
 type CommitterSuite struct {
 	suite.Suite
 
-	baseCtx             context.Context
-	segmentWriter       *mock.SegmentWriterMock
-	activeHeadContainer *container.Weighted[storage.Head, *storage.Head]
+	baseCtx context.Context
 }
 
 func TestCommitterSuite(t *testing.T) {
@@ -32,14 +30,10 @@ func (s *CommitterSuite) SetupSuite() {
 	s.baseCtx = context.Background()
 }
 
-func (s *CommitterSuite) SetupTest() {
-	s.activeHeadContainer = container.NewWeighted(s.createHead())
-}
-
-func (s *CommitterSuite) createHead() *storage.Head {
+func (s *CommitterSuite) createHead(segmentWriters []*mock.SegmentWriterMock) *storage.Head {
 	shards := make([]*shard.Shard, shardsCount)
-	for shardID := range shardsCount {
-		shards[shardID] = s.createShardOnMemory(maxSegmentSize, uint16(shardID))
+	for shardID, segmentWriter := range segmentWriters {
+		shards[shardID] = s.createShardOnMemory(segmentWriter, maxSegmentSize, uint16(shardID))
 	}
 
 	return head.NewHead(
@@ -52,15 +46,11 @@ func (s *CommitterSuite) createHead() *storage.Head {
 	)
 }
 
-func (s *CommitterSuite) createShardOnMemory(maxSegmentSize uint32, shardID uint16) *shard.Shard {
-	s.segmentWriter = &mock.SegmentWriterMock{
-		WriteFunc:       func(*cppbridge.HeadEncodedSegment) error { return nil },
-		FlushFunc:       func() error { return nil },
-		SyncFunc:        func() error { return nil },
-		CloseFunc:       func() error { return nil },
-		CurrentSizeFunc: func() int64 { return 0 },
-	}
-
+func (*CommitterSuite) createShardOnMemory(
+	segmentWriter *mock.SegmentWriterMock,
+	maxSegmentSize uint32,
+	shardID uint16,
+) *shard.Shard {
 	lss := shard.NewLSS()
 	// logShards is 0 for single encoder
 	shardWalEncoder := cppbridge.NewHeadWalEncoder(shardID, 0, lss.Target())
@@ -70,7 +60,7 @@ func (s *CommitterSuite) createShardOnMemory(maxSegmentSize uint32, shardID uint
 		shard.NewDataStorage(),
 		nil,
 		nil,
-		wal.NewWal(shardWalEncoder, s.segmentWriter, maxSegmentSize),
+		wal.NewWal(shardWalEncoder, segmentWriter, maxSegmentSize),
 		shardID,
 	)
 }
@@ -84,8 +74,21 @@ func (s *CommitterSuite) TestHappyPath() {
 			return trigger
 		},
 	}
+
+	segmentWriters := make([]*mock.SegmentWriterMock, shardsCount)
+	for shardID := range shardsCount {
+		segmentWriters[shardID] = &mock.SegmentWriterMock{
+			WriteFunc:       func(*cppbridge.HeadEncodedSegment) error { return nil },
+			FlushFunc:       func() error { return nil },
+			SyncFunc:        func() error { return nil },
+			CloseFunc:       func() error { return nil },
+			CurrentSizeFunc: func() int64 { return 0 },
+		}
+	}
+	activeHeadContainer := container.NewWeighted(s.createHead(segmentWriters))
 	isNewHead := func(string) bool { return false }
-	committer := services.NewCommitter(s.activeHeadContainer, mediator, isNewHead)
+
+	committer := services.NewCommitter(activeHeadContainer, mediator, isNewHead)
 	done := make(chan struct{})
 
 	s.T().Run("execute", func(t *testing.T) {
@@ -105,20 +108,22 @@ func (s *CommitterSuite) TestHappyPath() {
 		close(trigger)
 		<-done
 
-		s.Require().NoError(s.activeHeadContainer.Close())
+		s.Require().NoError(activeHeadContainer.Close())
 
-		if !s.Len(s.segmentWriter.WriteCalls(), 2) {
-			return
-		}
-		if !s.Len(s.segmentWriter.FlushCalls(), 2) {
-			return
-		}
-		if !s.Len(s.segmentWriter.SyncCalls(), 2) {
-			return
-		}
+		for _, segmentWriter := range segmentWriters {
+			if !s.Len(segmentWriter.WriteCalls(), 2) {
+				return
+			}
+			if !s.Len(segmentWriter.FlushCalls(), 2) {
+				return
+			}
+			if !s.Len(segmentWriter.SyncCalls(), 2) {
+				return
+			}
 
-		for _, call := range s.segmentWriter.WriteCalls() {
-			s.Equal(uint32(0), call.Segment.Samples())
+			for _, call := range segmentWriter.WriteCalls() {
+				s.Equal(uint32(0), call.Segment.Samples())
+			}
 		}
 	})
 }
@@ -132,8 +137,21 @@ func (s *CommitterSuite) TestSkipNewHead() {
 			return trigger
 		},
 	}
+
+	segmentWriters := make([]*mock.SegmentWriterMock, shardsCount)
+	for shardID := range shardsCount {
+		segmentWriters[shardID] = &mock.SegmentWriterMock{
+			WriteFunc:       func(*cppbridge.HeadEncodedSegment) error { return nil },
+			FlushFunc:       func() error { return nil },
+			SyncFunc:        func() error { return nil },
+			CloseFunc:       func() error { return nil },
+			CurrentSizeFunc: func() int64 { return 0 },
+		}
+	}
+	activeHeadContainer := container.NewWeighted(s.createHead(segmentWriters))
+
 	isNewHead := func(string) bool { return true }
-	committer := services.NewCommitter(s.activeHeadContainer, mediator, isNewHead)
+	committer := services.NewCommitter(activeHeadContainer, mediator, isNewHead)
 	done := make(chan struct{})
 
 	s.T().Run("execute", func(t *testing.T) {
@@ -149,13 +167,16 @@ func (s *CommitterSuite) TestSkipNewHead() {
 
 		<-start
 		trigger <- struct{}{}
+		trigger <- struct{}{}
 		close(trigger)
 		<-done
 
-		s.Empty(s.segmentWriter.WriteCalls())
-		s.Empty(s.segmentWriter.FlushCalls())
-		s.Empty(s.segmentWriter.SyncCalls())
+		s.Require().NoError(activeHeadContainer.Close())
 
-		s.Require().NoError(s.activeHeadContainer.Close())
+		for _, segmentWriter := range segmentWriters {
+			s.Empty(segmentWriter.WriteCalls())
+			s.Empty(segmentWriter.FlushCalls())
+			s.Empty(segmentWriter.SyncCalls())
+		}
 	})
 }

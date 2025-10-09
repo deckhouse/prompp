@@ -31,18 +31,18 @@ const (
 )
 
 type Querier = querier.Querier[
-	*task.Generic[*storage.PerGoroutineShard],
+	*task.Generic[*shard.PerGoroutineShard],
 	*shard.DataStorage,
 	*shard.LSS,
-	*storage.PerGoroutineShard,
-	*storage.HeadOnDisk,
+	*shard.PerGoroutineShard,
+	*storage.Head,
 ]
 
 type QuerierSuite struct {
 	suite.Suite
 	dataDir string
 	context context.Context
-	head    *storage.HeadOnDisk
+	head    *storage.Head
 }
 
 func TestQuerierSuite(t *testing.T) {
@@ -78,7 +78,7 @@ func (s *QuerierSuite) mustCreateCatalog() *catalog.Catalog {
 	return c
 }
 
-func (s *QuerierSuite) mustCreateHead(unloadDataStorageInterval time.Duration) *storage.HeadOnDisk {
+func (s *QuerierSuite) mustCreateHead(unloadDataStorageInterval time.Duration) *storage.Head {
 	h, err := storage.NewBuilder(
 		s.mustCreateCatalog(),
 		s.dataDir,
@@ -112,11 +112,11 @@ func (s *QuerierSuite) TestRangeQuery() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier[*task.Generic[*storage.PerGoroutineShard],
+	q := querier.NewQuerier[*task.Generic[*shard.PerGoroutineShard],
 		*shard.DataStorage,
 		*shard.LSS,
-		*storage.PerGoroutineShard,
-		*storage.HeadOnDisk,
+		*shard.PerGoroutineShard,
+		*storage.Head,
 	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
@@ -140,11 +140,11 @@ func (s *QuerierSuite) TestRangeQueryWithoutMatching() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier[*task.Generic[*storage.PerGoroutineShard],
+	q := querier.NewQuerier[*task.Generic[*shard.PerGoroutineShard],
 		*shard.DataStorage,
 		*shard.LSS,
-		*storage.PerGoroutineShard,
-		*storage.HeadOnDisk,
+		*shard.PerGoroutineShard,
+		*storage.Head,
 	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, nil, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "unknown_metric")
@@ -193,11 +193,11 @@ func (s *QuerierSuite) TestRangeQueryWithDataStorageLoading() {
 		},
 	}
 
-	q := querier.NewQuerier[*task.Generic[*storage.PerGoroutineShard],
+	q := querier.NewQuerier[*task.Generic[*shard.PerGoroutineShard],
 		*shard.DataStorage,
 		*shard.LSS,
-		*storage.PerGoroutineShard,
-		*storage.HeadOnDisk,
+		*shard.PerGoroutineShard,
+		*storage.Head,
 	](s.head, querier.NewNoOpShardedDeduplicator, 0, 3, nil, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
@@ -231,11 +231,11 @@ func (s *QuerierSuite) TestInstantQuery() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier[*task.Generic[*storage.PerGoroutineShard],
+	q := querier.NewQuerier[*task.Generic[*shard.PerGoroutineShard],
 		*shard.DataStorage,
 		*shard.LSS,
-		*storage.PerGoroutineShard,
-		*storage.HeadOnDisk,
+		*shard.PerGoroutineShard,
+		*storage.Head,
 	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, nil, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
@@ -284,11 +284,11 @@ func (s *QuerierSuite) TestInstantQueryWithDataStorageLoading() {
 		},
 	}
 
-	q := querier.NewQuerier[*task.Generic[*storage.PerGoroutineShard],
+	q := querier.NewQuerier[*task.Generic[*shard.PerGoroutineShard],
 		*shard.DataStorage,
 		*shard.LSS,
-		*storage.PerGoroutineShard,
-		*storage.HeadOnDisk,
+		*shard.PerGoroutineShard,
+		*storage.Head,
 	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, nil, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
