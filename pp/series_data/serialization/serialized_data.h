@@ -299,4 +299,4 @@ class SerializedDataView {
   const SerializedData& data_;
   uint32_t series_index_;
 };
-};  // namespace series_data::serialization
+}  // namespace series_data::serialization

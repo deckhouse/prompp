@@ -92,6 +92,53 @@ TEST_F(SerializerDeserializerFixtureNew, TwoUint32ConstantChunkWithCommonTimesta
       decode_current_chunk(serialized_view, 1)));
 }
 
+TEST_F(SerializerDeserializerFixtureNew, TwoUint32ConstantFinalizedChunkWithCommonTimestampStream) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(1, 1, 1.0);
+
+  encoder_.encode(0, 2, 1.0);
+  encoder_.encode(1, 2, 1.0);
+
+  encoder_.encode(0, 3, 1.0);
+  encoder_.encode(1, 3, 1.0);
+
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  ChunkFinalizer::finalize(storage_, 1, storage_.open_chunks[1]);
+  encoder_.encode(0, 4, 1.0);
+  encoder_.encode(1, 4, 1.0);
+
+  // Act
+  SerializedData serialized = DataSerializer::serialize(storage_);
+  SerializedDataView serialized_view(serialized);
+
+  // Assert
+  ASSERT_EQ(4U, serialized_view.get_chunks().size());
+  ASSERT_EQ(EncodingType::kUint32Constant, serialized_view.get_chunks()[0].encoding_state.encoding_type);
+  ASSERT_EQ(EncodingType::kUint32Constant, serialized_view.get_chunks()[1].encoding_state.encoding_type);
+  ASSERT_EQ(EncodingType::kUint32Constant, serialized_view.get_chunks()[2].encoding_state.encoding_type);
+  ASSERT_EQ(EncodingType::kUint32Constant, serialized_view.get_chunks()[3].encoding_state.encoding_type);
+  EXPECT_EQ(serialized_view.get_chunks()[0].timestamps_offset, serialized_view.get_chunks()[2].timestamps_offset);
+  EXPECT_EQ(serialized_view.get_chunks()[1].timestamps_offset, serialized_view.get_chunks()[3].timestamps_offset);
+  EXPECT_TRUE(std::ranges::equal(
+      SampleList{
+          {.timestamp = 1, .value = 1.0},
+          {.timestamp = 2, .value = 1.0},
+          {.timestamp = 3, .value = 1.0},
+          {.timestamp = 4, .value = 1.0},
+      },
+      decode_current_chunk(serialized_view, 0)));
+
+  EXPECT_TRUE(std::ranges::equal(
+      SampleList{
+          {.timestamp = 1, .value = 1.0},
+          {.timestamp = 2, .value = 1.0},
+          {.timestamp = 3, .value = 1.0},
+          {.timestamp = 4, .value = 1.0},
+      },
+      decode_current_chunk(serialized_view, 1)));
+}
+
 TEST_F(SerializerDeserializerFixtureNew, ThreeUint32ConstantChunkWithCommonAndUniqueTimestampStream) {
   // Arrange
   encoder_.encode(0, 1, 1.0);
@@ -405,6 +452,8 @@ TEST_F(SerializerDeserializerFixtureNew, MultipleChunksOnOneSeriesId) {
   encoder_.encode(0, 102, 1.0);
   ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
   encoder_.encode(0, 103, 1.0);
+  encoder_.encode(0, 104, 1.0);
+  encoder_.encode(0, 105, 1.0);
 
   // Act
   SerializedData serialized = DataSerializer::serialize(storage_);
@@ -417,8 +466,65 @@ TEST_F(SerializerDeserializerFixtureNew, MultipleChunksOnOneSeriesId) {
           {.timestamp = 101, .value = 1.0},
           {.timestamp = 102, .value = 1.0},
           {.timestamp = 103, .value = 1.0},
+          {.timestamp = 104, .value = 1.0},
+          {.timestamp = 105, .value = 1.0},
       },
       decode_current_chunk(serialized_view, 0)));
+}
+
+TEST_F(SerializerDeserializerFixtureNew, QueryFinalizedOnly) {
+  // Arrange
+  encoder_.encode(0, 100, 1.0);
+  encoder_.encode(0, 101, 1.0);
+  encoder_.encode(0, 102, 1.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 103, 1.0);
+  encoder_.encode(0, 104, 1.0);
+  encoder_.encode(0, 105, 1.0);
+
+  // Act
+  SerializedData serialized = DataSerializer::serialize(storage_, {QueriedChunk{0, 0}});
+  SerializedDataView serialized_view(serialized);
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(
+      SampleList{
+          {.timestamp = 100, .value = 1.0},
+          {.timestamp = 101, .value = 1.0},
+          {.timestamp = 102, .value = 1.0},
+      },
+      decode_current_chunk(serialized_view, 0)));
+}
+
+TEST_F(SerializerDeserializerFixtureNew, MultipleChunksOnOneSeriesIdWithSeveralFinalized) {
+  // Arrange
+  encoder_.encode(0, 100, 1.0);
+  encoder_.encode(0, 101, 2.0);
+  encoder_.encode(0, 102, 3.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 103, 4.0);
+  encoder_.encode(0, 104, 5.0);
+  encoder_.encode(0, 105, 6.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 106, 7.0);
+  encoder_.encode(0, 107, 8.0);
+  encoder_.encode(0, 108, 9.0);
+
+  // Act
+  SerializedData serialized = DataSerializer::serialize(storage_);
+  SerializedDataView serialized_view(serialized);
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(SampleList{{.timestamp = 100, .value = 1.0},
+                                            {.timestamp = 101, .value = 2.0},
+                                            {.timestamp = 102, .value = 3.0},
+                                            {.timestamp = 103, .value = 4.0},
+                                            {.timestamp = 104, .value = 5.0},
+                                            {.timestamp = 105, .value = 6.0},
+                                            {.timestamp = 106, .value = 7.0},
+                                            {.timestamp = 107, .value = 8.0},
+                                            {.timestamp = 108, .value = 9.0}},
+                                 decode_current_chunk(serialized_view, 0)));
 }
 
 TEST_F(SerializerDeserializerFixtureNew, AllChunkTypesWithStalenan) {
@@ -702,4 +808,97 @@ TEST_F(SerializerDeserializerFixtureNew, FinalizedAllChunkTypesWithStalenan) {
       },
       decode_current_chunk(serialized_view, 20)));
 }
+
+class SerializedDataNextIterFixture : public SerializerDeserializerTrait, public testing::Test {
+ protected:
+  std::vector<uint32_t> get_chunks_ids(SerializedDataView& view) const {
+    std::vector<uint32_t> ans{};
+    uint32_t id = view.next_series();
+    while (id != SerializedDataView::kNoMoreSeries) {
+      ans.push_back(id);
+      id = view.next_series();
+    }
+    return ans;
+  }
+};
+
+TEST_F(SerializedDataNextIterFixture, EmptyChunksList) {
+  // Arrange
+
+  // Act
+  SerializedData serialized = DataSerializer::serialize(storage_);
+  SerializedDataView serialized_view(serialized);
+
+  auto ids = get_chunks_ids(serialized_view);
+
+  // Assert
+  EXPECT_TRUE(ids.empty());
+  EXPECT_EQ(SerializedDataView::kNoMoreSeries, serialized_view.next_series());
+}
+
+TEST_F(SerializedDataNextIterFixture, OneChunk) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+
+  // Act
+  SerializedData serialized = DataSerializer::serialize(storage_);
+  SerializedDataView serialized_view(serialized);
+
+  auto ids = get_chunks_ids(serialized_view);
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(ids, std::initializer_list{0u}));
+  EXPECT_EQ(SerializedDataView::kNoMoreSeries, serialized_view.next_series());
+}
+
+TEST_F(SerializedDataNextIterFixture, OneChunkFinalized) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 3, 1.0);
+  encoder_.encode(0, 4, 1.0);
+
+  // Act
+  SerializedData serialized = DataSerializer::serialize(storage_);
+  SerializedDataView serialized_view(serialized);
+
+  auto ids = get_chunks_ids(serialized_view);
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(ids, std::initializer_list{0u}));
+  EXPECT_EQ(SerializedDataView::kNoMoreSeries, serialized_view.next_series());
+}
+
+TEST_F(SerializedDataNextIterFixture, SeveralChunks) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(1, 1, 1.0);
+
+  encoder_.encode(0, 2, 1.0);
+  encoder_.encode(1, 2, 1.0);
+
+  encoder_.encode(0, 3, 1.0);
+  encoder_.encode(1, 3, 1.0);
+
+  encoder_.encode(2, 1, 2.0);
+  encoder_.encode(2, 2, 2.0);
+  encoder_.encode(2, 3, 2.0);
+
+  encoder_.encode(100, 4, 2.1);
+  encoder_.encode(100, 5, 2.2);
+  encoder_.encode(100, 7, 2.3);
+
+  // Act
+  SerializedData serialized = DataSerializer::serialize(storage_);
+  SerializedDataView serialized_view(serialized);
+
+  auto ids = get_chunks_ids(serialized_view);
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(ids, std::initializer_list{0u, 1u, 2u, 100u}));
+  EXPECT_EQ(SerializedDataView::kNoMoreSeries, serialized_view.next_series());
+}
+
 }  // namespace
