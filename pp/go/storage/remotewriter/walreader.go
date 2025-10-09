@@ -5,23 +5,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/reader"
+	"github.com/prometheus/prometheus/pp/go/util"
 )
 
 type walReader struct {
-	nextSegmentID uint32
-	file          *os.File
+	file          *util.FileReader
 	reader        io.Reader
+	nextSegmentID uint32
 }
 
 func newWalReader(fileName string) (*walReader, uint8, error) {
-	file, err := os.OpenFile( //nolint:gosec // need this permissions
-		fileName,
-		os.O_RDONLY,
-		0o666, //revive:disable-line:add-constant // file permissions simple readable as octa-number
-	)
+	file, err := util.OpenFileReader(fileName)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to read wal file: %w", err)
 	}

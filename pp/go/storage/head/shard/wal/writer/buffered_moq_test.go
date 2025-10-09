@@ -312,12 +312,12 @@ func (mock *SegmentIsWrittenNotifierMock) NotifySegmentIsWrittenCalls() []struct
 	return calls
 }
 
-// WriteSyncCloserMock is a mock implementation of writer.WriteSyncCloser.
+// FileWriterMock is a mock implementation of writer.FileWriter.
 //
-//	func TestSomethingThatUsesWriteSyncCloser(t *testing.T) {
+//	func TestSomethingThatUsesFileWriter(t *testing.T) {
 //
-//		// make and configure a mocked writer.WriteSyncCloser
-//		mockedWriteSyncCloser := &WriteSyncCloserMock{
+//		// make and configure a mocked writer.FileWriter
+//		mockedFileWriter := &FileWriterMock{
 //			CloseFunc: func() error {
 //				panic("mock out the Close method")
 //			},
@@ -332,11 +332,11 @@ func (mock *SegmentIsWrittenNotifierMock) NotifySegmentIsWrittenCalls() []struct
 //			},
 //		}
 //
-//		// use mockedWriteSyncCloser in code that requires writer.WriteSyncCloser
+//		// use mockedFileWriter in code that requires writer.FileWriter
 //		// and then make assertions.
 //
 //	}
-type WriteSyncCloserMock struct {
+type FileWriterMock struct {
 	// CloseFunc mocks the Close method.
 	CloseFunc func() error
 
@@ -373,9 +373,9 @@ type WriteSyncCloserMock struct {
 }
 
 // Close calls CloseFunc.
-func (mock *WriteSyncCloserMock) Close() error {
+func (mock *FileWriterMock) Close() error {
 	if mock.CloseFunc == nil {
-		panic("WriteSyncCloserMock.CloseFunc: method is nil but WriteSyncCloser.Close was just called")
+		panic("FileWriterMock.CloseFunc: method is nil but FileWriter.Close was just called")
 	}
 	callInfo := struct {
 	}{}
@@ -388,8 +388,8 @@ func (mock *WriteSyncCloserMock) Close() error {
 // CloseCalls gets all the calls that were made to Close.
 // Check the length with:
 //
-//	len(mockedWriteSyncCloser.CloseCalls())
-func (mock *WriteSyncCloserMock) CloseCalls() []struct {
+//	len(mockedFileWriter.CloseCalls())
+func (mock *FileWriterMock) CloseCalls() []struct {
 } {
 	var calls []struct {
 	}
@@ -400,9 +400,9 @@ func (mock *WriteSyncCloserMock) CloseCalls() []struct {
 }
 
 // Stat calls StatFunc.
-func (mock *WriteSyncCloserMock) Stat() (writer.FileInfo, error) {
+func (mock *FileWriterMock) Stat() (writer.FileInfo, error) {
 	if mock.StatFunc == nil {
-		panic("WriteSyncCloserMock.StatFunc: method is nil but WriteSyncCloser.Stat was just called")
+		panic("FileWriterMock.StatFunc: method is nil but FileWriter.Stat was just called")
 	}
 	callInfo := struct {
 	}{}
@@ -415,8 +415,8 @@ func (mock *WriteSyncCloserMock) Stat() (writer.FileInfo, error) {
 // StatCalls gets all the calls that were made to Stat.
 // Check the length with:
 //
-//	len(mockedWriteSyncCloser.StatCalls())
-func (mock *WriteSyncCloserMock) StatCalls() []struct {
+//	len(mockedFileWriter.StatCalls())
+func (mock *FileWriterMock) StatCalls() []struct {
 } {
 	var calls []struct {
 	}
@@ -427,9 +427,9 @@ func (mock *WriteSyncCloserMock) StatCalls() []struct {
 }
 
 // Sync calls SyncFunc.
-func (mock *WriteSyncCloserMock) Sync() error {
+func (mock *FileWriterMock) Sync() error {
 	if mock.SyncFunc == nil {
-		panic("WriteSyncCloserMock.SyncFunc: method is nil but WriteSyncCloser.Sync was just called")
+		panic("FileWriterMock.SyncFunc: method is nil but FileWriter.Sync was just called")
 	}
 	callInfo := struct {
 	}{}
@@ -442,8 +442,8 @@ func (mock *WriteSyncCloserMock) Sync() error {
 // SyncCalls gets all the calls that were made to Sync.
 // Check the length with:
 //
-//	len(mockedWriteSyncCloser.SyncCalls())
-func (mock *WriteSyncCloserMock) SyncCalls() []struct {
+//	len(mockedFileWriter.SyncCalls())
+func (mock *FileWriterMock) SyncCalls() []struct {
 } {
 	var calls []struct {
 	}
@@ -454,9 +454,9 @@ func (mock *WriteSyncCloserMock) SyncCalls() []struct {
 }
 
 // Write calls WriteFunc.
-func (mock *WriteSyncCloserMock) Write(p []byte) (int, error) {
+func (mock *FileWriterMock) Write(p []byte) (int, error) {
 	if mock.WriteFunc == nil {
-		panic("WriteSyncCloserMock.WriteFunc: method is nil but WriteSyncCloser.Write was just called")
+		panic("FileWriterMock.WriteFunc: method is nil but FileWriter.Write was just called")
 	}
 	callInfo := struct {
 		P []byte
@@ -472,8 +472,8 @@ func (mock *WriteSyncCloserMock) Write(p []byte) (int, error) {
 // WriteCalls gets all the calls that were made to Write.
 // Check the length with:
 //
-//	len(mockedWriteSyncCloser.WriteCalls())
-func (mock *WriteSyncCloserMock) WriteCalls() []struct {
+//	len(mockedFileWriter.WriteCalls())
+func (mock *FileWriterMock) WriteCalls() []struct {
 	P []byte
 } {
 	var calls []struct {

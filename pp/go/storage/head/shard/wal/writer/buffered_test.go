@@ -241,8 +241,8 @@ func (s *BufferedSuite) TestFlushWithError() {
 	s.Len(sfile.CloseCalls(), 1)
 }
 
-func (*BufferedSuite) openfile(buf *bytes.Buffer) *WriteSyncCloserMock {
-	return &WriteSyncCloserMock{
+func (*BufferedSuite) openfile(buf *bytes.Buffer) *FileWriterMock {
+	return &FileWriterMock{
 		CloseFunc: func() error { return nil },
 		StatFunc:  func() (os.FileInfo, error) { return &FileInfoMock{SizeFunc: func() int64 { return 0 }}, nil },
 		SyncFunc:  func() error { return nil },

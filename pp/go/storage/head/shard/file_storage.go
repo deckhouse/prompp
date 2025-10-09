@@ -1,6 +1,10 @@
 package shard
 
-import "os"
+import (
+	"os"
+
+	"github.com/prometheus/prometheus/pp/go/util"
+)
 
 // FileStorage wrapper over [os.File] for convenient operation.
 type FileStorage struct {
@@ -85,5 +89,68 @@ func (q *FileStorage) Truncate(size int64) error {
 // Write writes len(b) bytes from b to the File. It returns the number of bytes written and an error, if any.
 // Write returns a non-nil error when n != len(b).
 func (q *FileStorage) Write(p []byte) (n int, err error) {
+	return q.file.Write(p)
+}
+
+//
+// AppendFileStorage
+//
+
+// AppendFileStorage wrapper over [util.FileAppender] for convenient operation.
+type AppendFileStorage struct {
+	fileName string
+	file     *util.FileAppender
+}
+
+// NewAppendFileStorage init new [AppendFileStorage].
+func NewAppendFileStorage(fileName string) *AppendFileStorage {
+	return &AppendFileStorage{fileName: fileName}
+}
+
+// Close closes the [AppendFileStorage], rendering it unusable for I/O. On files that support [File.SetDeadline],
+// any pending I/O operations will be canceled and return immediately with an [ErrClosed] error.
+// Close will return an error if it has already been called.
+func (q *AppendFileStorage) Close() error {
+	if q.file != nil {
+		return q.file.Close()
+	}
+
+	return nil
+}
+
+// IsEmpty returns true if file is empty.
+func (q *AppendFileStorage) IsEmpty() bool {
+	if q.file != nil {
+		if info, err := q.file.Stat(); err == nil {
+			return info.Size() == 0
+		}
+	}
+
+	return true
+}
+
+// Open open file for [AppendFileStorage].
+func (q *AppendFileStorage) Open() (err error) {
+	if q.file == nil {
+		q.file, err = util.CreateFileAppender(q.fileName, 0o666)
+	}
+
+	return
+}
+
+// Sync commits the current contents of the file to stable storage.
+// Typically, this means flushing the file system's in-memory copy of recently written data to disk.
+func (q *AppendFileStorage) Sync() error {
+	return q.file.Sync()
+}
+
+// Reader returns a [StorageReader] from the [AppendFileStorage] for read file.
+func (q *AppendFileStorage) Reader() (StorageReader, error) {
+	return os.Open(q.fileName)
+}
+
+// Write writes len(b) bytes from b to the File. It returns the number of bytes written and an error, if any.
+// Write returns a non-nil error when n != len(b).
+func (q *AppendFileStorage) Write(p []byte) (n int, err error) {
 	return q.file.Write(p)
 }

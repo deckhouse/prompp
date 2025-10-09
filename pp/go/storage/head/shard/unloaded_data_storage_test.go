@@ -12,53 +12,48 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-// BufferReaderAtWriterCloser implementation [FileStorage].
+// BufferReaderAtWriterCloser implementation [AppendFile].
 type BufferReaderAtWriterCloser struct {
 	buffer []byte
 }
 
-// IsEmpty implementation [FileStorage].
+// IsEmpty implementation [AppendFile].
 func (*BufferReaderAtWriterCloser) IsEmpty() bool {
 	return true
 }
 
-// Open implementation [FileStorage].
-func (*BufferReaderAtWriterCloser) Open(int) error {
+// Open implementation [AppendFile].
+func (*BufferReaderAtWriterCloser) Open() error {
 	return nil
 }
 
-// Read implementation [FileStorage].
+// Read implementation [AppendFile].
 func (*BufferReaderAtWriterCloser) Read([]byte) (n int, err error) {
 	return 0, nil
 }
 
-// Seek implementation [FileStorage].
-func (*BufferReaderAtWriterCloser) Seek(int64, int) (int64, error) {
-	return 0, nil
+// Reader implementation [AppendFile].
+func (s *BufferReaderAtWriterCloser) Reader() (StorageReader, error) {
+	return s, nil
 }
 
-// Sync implementation [FileStorage].
+// Sync implementation [AppendFile].
 func (*BufferReaderAtWriterCloser) Sync() error {
 	return nil
 }
 
-// Truncate implementation [FileStorage].
-func (*BufferReaderAtWriterCloser) Truncate(int64) error {
-	return nil
-}
-
-// ReadAt implementation [FileStorage].
+// ReadAt implementation [AppendFile].
 func (s *BufferReaderAtWriterCloser) ReadAt(p []byte, off int64) (n int, err error) {
 	return bytes.NewReader(s.buffer).ReadAt(p, off)
 }
 
-// Write implementation [FileStorage].
+// Write implementation [AppendFile].
 func (s *BufferReaderAtWriterCloser) Write(p []byte) (n int, err error) {
 	s.buffer = append(s.buffer, p...)
 	return len(p), nil
 }
 
-// Close implementation [FileStorage].
+// Close implementation [AppendFile].
 func (*BufferReaderAtWriterCloser) Close() error {
 	return nil
 }
