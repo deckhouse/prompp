@@ -103,7 +103,7 @@ func (s *BlockWriterSuite) readBlockMeta(filename string) tsdb.BlockMeta {
 }
 
 func (s *BlockWriterSuite) unloadData() {
-	s.unloadedDataStorage = head.NewUnloadedDataStorage(head.NewFileStorage(filepath.Join(s.dataDir, "unloaded_data")))
+	s.unloadedDataStorage = head.NewUnloadedDataStorage(head.NewAppendFileStorage(filepath.Join(s.dataDir, "unloaded_data")))
 
 	unloader := s.dataStorage.CreateUnusedSeriesDataUnloader()
 
