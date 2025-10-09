@@ -98,7 +98,7 @@ class RangeQuerierWithArgumentsWrapperNew {
   using BytesStream = PromPP::Primitives::Go::BytesStream;
 
  public:
-  RangeQuerierWithArgumentsWrapperNew(DataStorage& storage, const Query& query, ::series_data::serialization::SerializedData* serialized_data)
+  RangeQuerierWithArgumentsWrapperNew(DataStorage& storage, const Query& query, head::SerializedDataPtr* serialized_data)
       : querier_(storage), query_(&query), serialized_data_(serialized_data) {}
 
   void query() noexcept {
@@ -117,9 +117,11 @@ class RangeQuerierWithArgumentsWrapperNew {
  private:
   ::series_data::querier::Querier querier_;
   const Query* query_;
-  ::series_data::serialization::SerializedData* serialized_data_;
+  head::SerializedDataPtr* serialized_data_;
 
-  PROMPP_ALWAYS_INLINE void serialize_chunks() const noexcept { std::construct_at(serialized_data_, querier_.get_storage(), querier_.chunks()); }
+  PROMPP_ALWAYS_INLINE void serialize_chunks() const noexcept {
+    std::construct_at(serialized_data_, std::make_unique<head::SerializedDataGo>(querier_.get_storage(), querier_.chunks()));
+  }
 };
 
 enum class QuerierType : uint8_t { kInstantQuerier = 0, kRangeQuerier, kRangeQuerierNew };

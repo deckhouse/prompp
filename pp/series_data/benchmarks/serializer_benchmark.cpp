@@ -7,6 +7,7 @@
 #include <random>
 
 #include "bare_bones/preprocess.h"
+#include "primitives/go_slice.h"
 #include "series_data/encoder.h"
 #include "series_data/querier/query.h"
 #include "series_data/serialization/serialized_data.h"
@@ -16,6 +17,9 @@ namespace {
 
 using BareBones::StreamVByte::CompactSequence;
 using BareBones::StreamVByte::Sequence;
+using series_data::serialization::DataSerializer;
+using series_data::serialization::SerializedData;
+using series_data::serialization::SerializedDataView;
 
 struct PROMPP_ATTRIBUTE_PACKED SeriesSample {
   uint32_t series_id;
@@ -41,6 +45,24 @@ const BareBones::Vector<SeriesSample>& get_samples_for_benchmark() {
   return samples_from_file;
 }
 
+series_data::querier::QueriedChunkList generate_query(uint32_t size) {
+  series_data::querier::QueriedChunkList chunk_list;
+
+  std::vector<uint32_t> v(size);
+  std::iota(v.begin(), v.end(), 0);
+
+  std::mt19937 g(42);
+  std::ranges::shuffle(v, g);
+  v.resize(v.size() / 10);
+
+  chunk_list.reserve(v.size());
+  for (uint32_t ls_id : v) {
+    chunk_list.emplace_back(ls_id);
+  }
+
+  return chunk_list;
+}
+
 void BenchmarkWalSerializer(benchmark::State& state) {
   const auto& samples = get_samples_for_benchmark();
   const double percent = state.range(0) / 100.0;
@@ -58,34 +80,23 @@ void BenchmarkWalSerializer(benchmark::State& state) {
     }
   }
 
-  series_data::querier::QueriedChunkList chunk_list;
-  {
-    std::vector<uint32_t> v(storage.open_chunks.size());
-    std::iota(v.begin(), v.end(), 0);
-
-    std::mt19937 g(42);
-    std::ranges::shuffle(v, g);
-    v.resize(v.size() / 10);
-
-    chunk_list.reserve(v.size());
-    for (uint32_t ls_id : v) {
-      chunk_list.emplace_back(ls_id);
-    }
-  }
+  const series_data::querier::QueriedChunkList chunk_list = generate_query(storage.open_chunks.size());
 
   for ([[maybe_unused]] auto _ : state) {
     series_data::serialization::Serializer serializer_{storage};
-    BareBones::ShrinkedToFitOStringStream stream;
+    PromPP::Primitives::Go::Slice<char> slice;
+    PromPP::Primitives::Go::BytesStream stream{&slice};
 
     serializer_.serialize(chunk_list, stream);
   }
 
   {
     series_data::serialization::Serializer serializer_{storage};
-    BareBones::ShrinkedToFitOStringStream stream;
+    PromPP::Primitives::Go::Slice<char> slice;
+    PromPP::Primitives::Go::BytesStream stream{&slice};
 
     serializer_.serialize(chunk_list, stream);
-    state.counters["Stream Size"] = benchmark::Counter(stream.view().size(), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
+    state.counters["Stream Size"] = benchmark::Counter(slice.allocated_memory(), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
   }
 }
 
@@ -106,34 +117,23 @@ void BenchmarkWalConstantSerializer(benchmark::State& state) {
     }
   }
 
-  series_data::querier::QueriedChunkList chunk_list;
-  {
-    std::vector<uint32_t> v(storage.open_chunks.size());
-    std::iota(v.begin(), v.end(), 0);
-
-    std::mt19937 g(42);
-    std::ranges::shuffle(v, g);
-    v.resize(v.size() / 10);
-
-    chunk_list.reserve(v.size());
-    for (uint32_t ls_id : v) {
-      chunk_list.emplace_back(ls_id);
-    }
-  }
+  const series_data::querier::QueriedChunkList chunk_list = generate_query(storage.open_chunks.size());
 
   for ([[maybe_unused]] auto _ : state) {
     series_data::serialization::Serializer serializer_{storage};
-    BareBones::ShrinkedToFitOStringStream stream;
+    PromPP::Primitives::Go::Slice<char> slice;
+    PromPP::Primitives::Go::BytesStream stream{&slice};
 
     serializer_.serialize(chunk_list, stream);
   }
 
   {
     series_data::serialization::Serializer serializer_{storage};
-    BareBones::ShrinkedToFitOStringStream stream;
+    PromPP::Primitives::Go::Slice<char> slice;
+    PromPP::Primitives::Go::BytesStream stream{&slice};
 
     serializer_.serialize(chunk_list, stream);
-    state.counters["Stream Size"] = benchmark::Counter(stream.view().size(), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
+    state.counters["Stream Size"] = benchmark::Counter(slice.allocated_memory(), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
   }
 }
 
@@ -154,28 +154,15 @@ void BenchmarkWalSerializedData(benchmark::State& state) {
     }
   }
 
-  series_data::querier::QueriedChunkList chunk_list;
-  {
-    std::vector<uint32_t> v(storage.open_chunks.size());
-    std::iota(v.begin(), v.end(), 0);
-
-    std::mt19937 g(42);
-    std::ranges::shuffle(v, g);
-    v.resize(v.size() / 10);
-
-    chunk_list.reserve(v.size());
-    for (uint32_t ls_id : v) {
-      chunk_list.emplace_back(ls_id);
-    }
-  }
+  const series_data::querier::QueriedChunkList chunk_list = generate_query(storage.open_chunks.size());
 
   for ([[maybe_unused]] auto _ : state) {
-    series_data::serialization::SerializedData serialized(storage, chunk_list);
+    SerializedData serialized = DataSerializer::serialize(storage, chunk_list);
     benchmark::DoNotOptimize(serialized);
   }
 
   {
-    series_data::serialization::SerializedData serialized(storage, chunk_list);
+    SerializedData serialized = DataSerializer::serialize(storage, chunk_list);
     state.counters["Total Size"] = benchmark::Counter(serialized.allocated_memory(), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
   }
 }
@@ -197,28 +184,15 @@ void BenchmarkWalConstantSerializedData(benchmark::State& state) {
     }
   }
 
-  series_data::querier::QueriedChunkList chunk_list;
-  {
-    std::vector<uint32_t> v(storage.open_chunks.size());
-    std::iota(v.begin(), v.end(), 0);
-
-    std::mt19937 g(42);
-    std::ranges::shuffle(v, g);
-    v.resize(v.size() / 10);
-
-    chunk_list.reserve(v.size());
-    for (uint32_t ls_id : v) {
-      chunk_list.emplace_back(ls_id);
-    }
-  }
+  const series_data::querier::QueriedChunkList chunk_list = generate_query(storage.open_chunks.size());
 
   for ([[maybe_unused]] auto _ : state) {
-    series_data::serialization::SerializedData serialized(storage, chunk_list);
+    SerializedData serialized = DataSerializer::serialize(storage, chunk_list);
     benchmark::DoNotOptimize(serialized);
   }
 
   {
-    series_data::serialization::SerializedData serialized(storage, chunk_list);
+    SerializedData serialized = DataSerializer::serialize(storage, chunk_list);
     state.counters["Total Size"] = benchmark::Counter(serialized.allocated_memory(), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
   }
 }
