@@ -1,7 +1,3 @@
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunknown-pragmas"
-#pragma GCC optimize("no-var-tracking")  // to speed up compilation
-
 #include <gtest/gtest.h>
 #include <cstdint>
 #include <initializer_list>
@@ -15,326 +11,36 @@
 
 namespace {
 
-using namespace PromPP::Prometheus;  // NOLINT
-using namespace PromPP::Primitives;  // NOLINT
-
-using LabelViewForTest = std::pair<std::string_view, std::string_view>;
-using LabelForTest = std::pair<std::string, std::string>;
-
-class SampleForTest {
- private:
-  int64_t timestamp_;
-  double value_;
-
- public:
-  PROMPP_ALWAYS_INLINE SampleForTest(int64_t timestamp, double value) noexcept : timestamp_(timestamp), value_(value) {}
-
-  PROMPP_ALWAYS_INLINE SampleForTest() noexcept = default;
-
-  int64_t timestamp() const noexcept { return timestamp_; }
-  int64_t& timestamp() noexcept { return timestamp_; }
-
-  double value() const noexcept { return value_; }
-  double& value() noexcept { return value_; }
-};
-
-class NamesSetForTest : public std::vector<std::string_view> {
-  using Base = std::vector<std::string_view>;
-
- public:
-  using Base::Base;
-  [[maybe_unused]] friend size_t hash_value(const NamesSetForTest& lns) { return PromPP::Primitives::hash::hash_of_string_list(lns); }
-};
-
-class LabelViewSetForTest : public std::vector<LabelViewForTest> {
-  using Base = std::vector<LabelViewForTest>;
-
- public:
-  using Base::Base;
-
-  PROMPP_ALWAYS_INLINE void add(const LabelViewForTest& label) noexcept {
-    if (__builtin_expect(Base::empty() || std::get<0>(label) > std::get<0>(Base::back()), true)) {
-      Base::emplace_back(label);
-    } else if (__builtin_expect(std::get<0>(label) == std::get<0>(Base::back()), false)) {
-      std::get<1>(Base::back()) = std::get<1>(label);
-    } else {
-      auto i = std::lower_bound(Base::begin(), Base::end(), std::get<0>(label),
-                                [](const LabelViewForTest& a, const std::string_view& b) { return std::get<0>(a) < b; });
-      if (__builtin_expect(std::get<0>(*i) == std::get<0>(label), false)) {
-        std::get<1>(*i) = std::get<1>(label);
-      } else {
-        Base::insert(i, label);
-      }
-    }
-  }
-
-  template <class SymbolType>
-  PROMPP_ALWAYS_INLINE SymbolType get(const SymbolType& label_name) noexcept {
-    for (const auto& [ln, lv] : *this) {
-      if (ln == label_name) [[unlikely]] {
-        return lv;
-      }
-    }
-
-    return "";
-  }
-
-  NamesSetForTest names() const {
-    NamesSetForTest tns;
-
-    for (auto [label_name, _] : *this) {
-      tns.push_back(label_name);
-    }
-
-    return tns;
-  }
-
-  [[maybe_unused]] friend size_t hash_value(const LabelViewSetForTest& tls) { return PromPP::Primitives::hash::hash_of_label_set(tls); }
-};
-
-class TimeseriesForTest {
-  LabelViewSetForTest label_set_;
-  std::vector<SampleForTest> samples_;
-
- public:
-  TimeseriesForTest() noexcept = default;
-  TimeseriesForTest(const TimeseriesForTest&) noexcept = default;
-  TimeseriesForTest& operator=(const TimeseriesForTest&) noexcept = default;
-  TimeseriesForTest(TimeseriesForTest&&) noexcept = default;
-  TimeseriesForTest& operator=(TimeseriesForTest&&) noexcept = default;
-
-  TimeseriesForTest(const LabelViewSetForTest& label_set, const std::vector<SampleForTest>& samples) noexcept : label_set_(label_set), samples_(samples) {}
-
-  PROMPP_ALWAYS_INLINE auto& label_set() noexcept { return label_set_; }
-
-  PROMPP_ALWAYS_INLINE const auto& label_set() const noexcept { return label_set_; }
-
-  PROMPP_ALWAYS_INLINE const auto& samples() const noexcept { return samples_; }
-
-  PROMPP_ALWAYS_INLINE auto& samples() noexcept { return samples_; }
-
-  PROMPP_ALWAYS_INLINE void clear() noexcept {
-    label_set().clear();
-    samples().clear();
-  }
-};
-
-// LabelsBuilderForTest - builder for label set.
-template <class LabelSet>
-class LabelsBuilderForTest {
-  LabelSet* base_ = nullptr;
-  LabelViewSetForTest buf_;
-  std::vector<LabelForTest> add_;
-  std::vector<std::string> del_;
-
- public:
-  PROMPP_ALWAYS_INLINE LabelsBuilderForTest() noexcept {}
-
-  // del - add label name to remove from label set.
-  PROMPP_ALWAYS_INLINE void del(std::string& lname) {
-    std::erase_if(add_, [lname](LabelForTest& lv) { return lv.first == lname; });
-
-    if (auto i = std::ranges::find_if(del_.begin(), del_.end(), [lname](const std::string_view& ln) { return ln == lname; }); i != del_.end()) {
-      return;
-    }
-
-    del_.emplace_back(lname);
-  }
-
-  // del - add label name to remove from label set.
-  PROMPP_ALWAYS_INLINE void del(std::string_view lname) {
-    std::erase_if(add_, [lname](LabelForTest& lv) { return lv.first == lname; });
-
-    if (auto i = std::ranges::find_if(del_.begin(), del_.end(), [lname](const std::string_view& ln) { return ln == lname; }); i != del_.end()) {
-      return;
-    }
-
-    del_.emplace_back(lname);
-  }
-
-  // get - returns the value for the label with the given name. Returns an empty string if the label doesn't exist.
-  PROMPP_ALWAYS_INLINE std::string_view get(std::string_view lname) {
-    if (auto i = std::ranges::find_if(add_.begin(), add_.end(), [lname](const LabelForTest& l) { return l.first == lname; }); i != add_.end()) {
-      return (*i).second;
-    }
-
-    if (auto i = std::ranges::find_if(del_.begin(), del_.end(), [lname](const std::string_view& ln) { return ln == lname; }); i != del_.end()) {
-      return "";
-    }
-
-    if (base_ != nullptr) [[likely]] {
-      for (const auto& [ln, lv] : *base_) {
-        if (ln == lname) {
-          return lv;
-        }
-      }
-    }
-
-    return "";
-  }
-
-  PROMPP_ALWAYS_INLINE bool contains(std::string_view lname) {
-    if (auto i = std::ranges::find_if(add_, [&lname](const LabelForTest& l) { return l.first == lname; }); i != add_.end()) {
-      return true;
-    }
-
-    if (base_ != nullptr) [[likely]] {
-      for (const auto& [ln, lv] : *base_) {
-        if (ln == lname) {
-          return true;
-        }
-      }
-    }
-
-    return false;
-  }
-
-  // returns size of building labels.
-  PROMPP_ALWAYS_INLINE size_t size() {
-    size_t count{0};
-    if (base_ != nullptr) [[likely]] {
-      for (const auto& ls : *base_) {
-        if (auto i = std::ranges::find_if(add_.begin(), add_.end(), [ls](const LabelForTest& l) { return l.first == ls.first; }); i != add_.end()) {
-          continue;
-        }
-
-        if (auto i = std::ranges::find_if(del_.begin(), del_.end(), [ls](const std::string_view& ln) { return ln == ls.first; }); i != del_.end()) {
-          continue;
-        }
-
-        ++count;
-      }
-    }
-
-    count += add_.size();
-    return count;
-  }
-
-  // returns true if ls represents an empty set of labels.
-  PROMPP_ALWAYS_INLINE bool is_empty() { return size() == 0; }
-
-  // labels - returns the labels from the builder. If no modifications were made, the original labels are returned.
-  PROMPP_ALWAYS_INLINE LabelViewSetForTest labels() {
-    if (base_ != nullptr) [[likely]] {
-      for (const auto& ls : *base_) {
-        if (auto i = std::ranges::find_if(add_.begin(), add_.end(), [ls](const LabelForTest& l) { return l.first == ls.first; }); i != add_.end()) {
-          continue;
-        }
-
-        if (auto i = std::ranges::find_if(del_.begin(), del_.end(), [ls](const std::string_view& ln) { return ln == ls.first; }); i != del_.end()) {
-          continue;
-        }
-
-        buf_.add(ls);
-      }
-    }
-
-    if (add_.size() != 0) {
-      std::ranges::for_each(add_.begin(), add_.end(), [&](const LabelForTest& l) { buf_.add(l); });
-      std::ranges::sort(buf_.begin(), buf_.end(), [](const LabelViewForTest& a, const LabelViewForTest& b) {
-        if (a.first == b.first) {
-          return a.second < b.second;
-        }
-        return a.first < b.first;
-      });
-    }
-
-    return buf_;
-  }
-
-  // range - calls f on each label in the builder.
-  template <class Callback>
-  PROMPP_ALWAYS_INLINE void range(Callback func) {
-    // take a copy of add and del, so they are unaffected by calls to set() or del().
-    std::vector<LabelViewForTest> cadd;
-    cadd.reserve(add_.size());
-    std::ranges::copy(add_.begin(), add_.end(), std::back_inserter(cadd));
-
-    std::vector<std::string_view> cdel;
-    cdel.reserve(del_.size());
-    std::ranges::copy(cdel.begin(), cdel.end(), std::back_inserter(cdel));
-
-    if (__builtin_expect(base_ != nullptr, true)) {
-      for (const auto& ls : *base_) {
-        if (auto i = std::ranges::find_if(cadd.begin(), cadd.end(), [ls](const LabelViewForTest& l) { return l.first == ls.first; }); i != cadd.end()) {
-          continue;
-        }
-
-        if (auto i = std::ranges::find_if(cdel.begin(), cdel.end(), [ls](const std::string_view& ln) { return ln == ls.first; }); i != cdel.end()) {
-          continue;
-        }
-
-        func(ls.first, ls.second);
-      }
-    }
-
-    std::ranges::for_each(cadd.begin(), cadd.end(), [&](const LabelViewForTest& l) { func(l.first, l.second); });
-  }
-
-  // reset - clears all current state for the builder.
-  PROMPP_ALWAYS_INLINE void reset() {
-    buf_.clear();
-    add_.clear();
-    del_.clear();
-    base_ = nullptr;
-  }
-
-  // reset - clears all current state for the builder and init from LabelSet.
-  PROMPP_ALWAYS_INLINE void reset(LabelSet& ls) {
-    reset();
-    base_ = &ls;
-  }
-
-  // set - the name/value pair as a label. A value of "" means delete that label.
-  PROMPP_ALWAYS_INLINE void set(std::string& lname, std::string& lvalue) {
-    if (__builtin_expect(lvalue.size() == 0, false)) {
-      del(lname);
-      return;
-    }
-
-    if (auto i = std::ranges::find_if(add_.begin(), add_.end(), [lname](const LabelForTest& l) { return l.first == lname; }); i != add_.end()) {
-      (*i).second = lvalue;
-      return;
-    }
-
-    add_.emplace_back(lname, lvalue);
-  }
-
-  // set - the name/value pair as a label. A value of "" means delete that label.
-  PROMPP_ALWAYS_INLINE void set(std::string_view lname, std::string& lvalue) {
-    if (__builtin_expect(lvalue.size() == 0, false)) {
-      del(lname);
-      return;
-    }
-
-    if (auto i = std::ranges::find_if(add_.begin(), add_.end(), [lname](const LabelForTest& l) { return l.first == lname; }); i != add_.end()) {
-      (*i).second = lvalue;
-      return;
-    }
-
-    add_.emplace_back(lname, lvalue);
-  }
-
-  // set - the name/value pair as a label. A value of "" means delete that label.
-  PROMPP_ALWAYS_INLINE void set(std::string& lname, std::string_view lvalue) {
-    if (__builtin_expect(lvalue.size() == 0, false)) {
-      del(lname);
-      return;
-    }
-
-    if (auto i = std::ranges::find_if(add_.begin(), add_.end(), [lname](const LabelForTest& l) { return l.first == lname; }); i != add_.end()) {
-      (*i).second = lvalue;
-      return;
-    }
-
-    add_.emplace_back(lname, lvalue);
-  }
-
-  PROMPP_ALWAYS_INLINE LabelsBuilderForTest(LabelsBuilderForTest&&) noexcept = default;
-  PROMPP_ALWAYS_INLINE ~LabelsBuilderForTest() = default;
-};
-
-struct RelabelConfigTest {
+using PromPP::Primitives::Label;
+using PromPP::Primitives::LabelsBuilder;
+using PromPP::Primitives::LabelSet;
+using PromPP::Primitives::LabelView;
+using PromPP::Primitives::LabelViewSet;
+using PromPP::Primitives::Sample;
+using PromPP::Primitives::Timestamp;
+using PromPP::Primitives::Go::SliceView;
+using PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap;
+using PromPP::Primitives::SnugComposites::LabelSet::OrderedEncodingBimap;
+using PromPP::Prometheus::Relabel::hard_validate;
+using PromPP::Prometheus::Relabel::InnerSerie;
+using PromPP::Prometheus::Relabel::InnerSeries;
+using PromPP::Prometheus::Relabel::MetricLimits;
+using PromPP::Prometheus::Relabel::PerGoroutineRelabeler;
+using PromPP::Prometheus::Relabel::PerShardRelabeler;
+using PromPP::Prometheus::Relabel::RelabelerStateUpdate;
+using PromPP::Prometheus::Relabel::relabelStatus;
+using PromPP::Prometheus::Relabel::StaleNaNsState;
+using PromPP::Prometheus::Relabel::StatelessRelabeler;
+using enum PromPP::Prometheus::Relabel::rAction;
+using enum relabelStatus;
+
+using GoString = PromPP::Primitives::Go::String;
+using PromPP::Primitives::kNullTimestamp;
+using PromPP::Prometheus::kStaleNan;
+
+using GoLabel = std::pair<GoString, GoString>;
+
+struct RelabelConfig {
   std::vector<std::string_view> source_labels{};
   std::string_view separator{};
   std::string_view regex{};
@@ -344,43 +50,25 @@ struct RelabelConfigTest {
   uint8_t action{0};
 };
 
-PROMPP_ALWAYS_INLINE LabelViewSetForTest make_label_set(std::initializer_list<LabelViewForTest> lvs) {
-  LabelViewSetForTest labels;
-  for (const LabelViewForTest& lv : lvs) {
-    labels.add(lv);
-  }
+class ItemTest {
+ public:
+  ItemTest(LabelViewSet&& label_set, std::vector<Sample>&& samples)
+      : label_set_(std::move(label_set)), samples_(std::move(samples)), hash_(hash_value(label_set_)) {}
 
-  return labels;
-}
-
-PROMPP_ALWAYS_INLINE std::vector<SampleForTest> make_samples(std::initializer_list<SampleForTest> samples) {
-  std::vector<SampleForTest> sampleses;
-  for (const SampleForTest& s : samples) {
-    sampleses.push_back(s);
-  }
-
-  return sampleses;
-}
-
-struct ItemTest {
-  size_t hash_;
-  LabelViewSetForTest labelview_set_;
-  std::vector<SampleForTest> samples_;
-
-  PROMPP_ALWAYS_INLINE explicit ItemTest(size_t hash, LabelViewSetForTest& labelview_set, std::vector<SampleForTest>& samples)
-      : hash_(hash), labelview_set_(labelview_set), samples_(samples) {}
-  PROMPP_ALWAYS_INLINE size_t hash() const { return hash_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t hash() const { return hash_; }
 
   template <class Timeseries>
   PROMPP_ALWAYS_INLINE void read(Timeseries& timeseries) const {
-    for (const auto& labelview : labelview_set_) {
-      timeseries.label_set().add({labelview.first, labelview.second});
-    }
-
+    timeseries.label_set().add(label_set_);
     for (const auto& sample : samples_) {
       timeseries.samples().emplace_back(sample.timestamp(), sample.value());
     }
   }
+
+ private:
+  LabelViewSet label_set_;
+  std::vector<Sample> samples_;
+  size_t hash_;
 };
 
 class HashdexTest : public std::vector<ItemTest> {
@@ -388,6 +76,8 @@ class HashdexTest : public std::vector<ItemTest> {
 
  public:
   using Base::Base;
+
+  void emplace_back(LabelViewSet&& label_set, std::vector<Sample>&& samples) { Base::emplace_back(std::move(label_set), std::move(samples)); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& metrics() const noexcept { return *this; }
   [[nodiscard]] static PROMPP_ALWAYS_INLINE auto metadata() noexcept {
@@ -398,109 +88,76 @@ class HashdexTest : public std::vector<ItemTest> {
 
 static_assert(PromPP::Prometheus::hashdex::HashdexInterface<HashdexTest>);
 
-PROMPP_ALWAYS_INLINE void make_hashdex(HashdexTest& hx, LabelViewSetForTest label_set, std::vector<SampleForTest> samples) {
-  hx.emplace_back(hash_value(label_set), label_set, samples);
-}
-
-//
-// TestValidate
-//
-
-struct TestValidate : public testing::Test {
-  PromPP::Primitives::LabelsBuilderStateMap builder_state_;
+struct HardValidateCase {
+  LabelViewSet labels;
+  std::optional<MetricLimits> limits{std::nullopt};
+  relabelStatus expected;
 };
 
-TEST_F(TestValidate, HardValid) {
-  LabelViewSetForTest incoming_labels = make_label_set({{"__name__", "value"}, {"job", "abc"}});
-  PromPP::Primitives::LabelsBuilder<PromPP::Primitives::LabelsBuilderStateMap> builder{builder_state_};
-  builder.reset(incoming_labels);
+class HardValidateFixture : public testing::TestWithParam<HardValidateCase> {
+ protected:
+  LabelsBuilder builder_;
+  relabelStatus rstatus_{rsKeep};
+};
 
-  Relabel::relabelStatus rstatus{Relabel::rsKeep};
-  Relabel::hard_validate(rstatus, builder, nullptr);
-  EXPECT_EQ(Relabel::rsKeep, rstatus);
+TEST_P(HardValidateFixture, Test) {
+  // Arrange
+  builder_.reset(GetParam().labels);
+
+  // Act
+  hard_validate(rstatus_, builder_, GetParam().limits ? &GetParam().limits.value() : nullptr);
+
+  // Assert
+  EXPECT_EQ(GetParam().expected, rstatus_);
 }
 
-TEST_F(TestValidate, HardInvalid) {
-  LabelViewSetForTest incoming_labels = make_label_set({{"__value__", "value"}, {"job", "abc"}});
-  PromPP::Primitives::LabelsBuilder<PromPP::Primitives::LabelsBuilderStateMap> builder{builder_state_};
-  builder.reset(incoming_labels);
-
-  Relabel::relabelStatus rstatus{Relabel::rsKeep};
-  Relabel::hard_validate(rstatus, builder, nullptr);
-  EXPECT_EQ(Relabel::rsInvalid, rstatus);
-}
-
-TEST_F(TestValidate, InvalidLabelLimit) {
-  LabelViewSetForTest incoming_labels = make_label_set({{"__name__", "value"}, {"job", "abc"}, {"jub", "buj"}});
-  PromPP::Primitives::LabelsBuilder<PromPP::Primitives::LabelsBuilderStateMap> builder{builder_state_};
-  builder.reset(incoming_labels);
-
-  // label_limit 0
-  Relabel::MetricLimits ll{};
-  Relabel::relabelStatus rstatus{Relabel::rsKeep};
-  Relabel::hard_validate(rstatus, builder, &ll);
-  EXPECT_EQ(Relabel::rsKeep, rstatus);
-
-  // label_limit 2
-  ll.label_limit = 2;
-  Relabel::hard_validate(rstatus, builder, &ll);
-  EXPECT_EQ(Relabel::rsInvalid, rstatus);
-
-  // label_name_length_limit 3
-  rstatus = Relabel::rsKeep;
-  ll.label_limit = 3;
-  ll.label_name_length_limit = 3;
-  Relabel::hard_validate(rstatus, builder, &ll);
-  EXPECT_EQ(Relabel::rsInvalid, rstatus);
-
-  // label_value_length_limit 3
-  rstatus = Relabel::rsKeep;
-  ll.label_limit = 3;
-  ll.label_name_length_limit = 10;
-  ll.label_value_length_limit = 3;
-  Relabel::hard_validate(rstatus, builder, &ll);
-  EXPECT_EQ(Relabel::rsInvalid, rstatus);
-}
-
-//
-// PerShardRelabeler
-//
+INSTANTIATE_TEST_SUITE_P(Valid, HardValidateFixture, testing::Values(HardValidateCase{.labels = {{"__name__", "value"}, {"job", "abc"}}, .expected = rsKeep}));
+INSTANTIATE_TEST_SUITE_P(Invalid,
+                         HardValidateFixture,
+                         testing::Values(HardValidateCase{.labels = {{"__value__", "value"}, {"job", "abc"}}, .expected = rsInvalid}));
+INSTANTIATE_TEST_SUITE_P(
+    NoLimit,
+    HardValidateFixture,
+    testing::Values(HardValidateCase{.labels = {{"__name__", "value"}, {"job", "abc"}, {"jub", "buj"}}, .limits = MetricLimits{}, .expected = rsKeep}));
+INSTANTIATE_TEST_SUITE_P(LabelCountLimitExceeded,
+                         HardValidateFixture,
+                         testing::Values(HardValidateCase{.labels = {{"__name__", "value"}, {"job", "abc"}, {"jub", "buj"}},
+                                                          .limits = MetricLimits{.label_limit = 2},
+                                                          .expected = rsInvalid}));
+INSTANTIATE_TEST_SUITE_P(LabelNameLengthLimitExceeded,
+                         HardValidateFixture,
+                         testing::Values(HardValidateCase{.labels = {{"__name__", "value"}, {"job", "abc"}, {"jub", "buj"}},
+                                                          .limits = MetricLimits{.label_name_length_limit = 3},
+                                                          .expected = rsInvalid}));
+INSTANTIATE_TEST_SUITE_P(LabelValueLengthLimitExceeded,
+                         HardValidateFixture,
+                         testing::Values(HardValidateCase{.labels = {{"__name__", "value"}, {"job", "abc"}, {"jub", "buj"}},
+                                                          .limits = MetricLimits{.label_value_length_limit = 3},
+                                                          .expected = rsInvalid}));
 
 struct Stats {
   uint32_t samples_added{0};
   uint32_t series_added{0};
   uint32_t series_drop{0};
+
+  bool operator==(const Stats& other) const noexcept = default;
 };
 
-struct TestPerShardRelabeler : public testing::Test {
-  // shards_inner_series
-  std::vector<std::unique_ptr<PromPP::Prometheus::Relabel::InnerSeries>> vector_shards_inner_series_;
-  PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> shards_inner_series_;
+class PerGoroutineRelabelerFixture : public testing::Test {
+ protected:
+  static constexpr uint16_t kNumberOfShards = 2;
 
-  // relabeled_results
+  std::vector<std::unique_ptr<InnerSeries>> vector_shards_inner_series_;
+  SliceView<InnerSeries*> shards_inner_series_{};
+
   std::vector<std::unique_ptr<PromPP::Prometheus::Relabel::RelabeledSeries>> vector_relabeled_results_;
-  PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::RelabeledSeries*> relabeled_results_;
+  SliceView<PromPP::Prometheus::Relabel::RelabeledSeries*> relabeled_results_{};
 
-  // external_labels
-  std::vector<std::pair<PromPP::Primitives::Go::String, PromPP::Primitives::Go::String>> vector_external_labels_;
-  PromPP::Primitives::Go::SliceView<std::pair<PromPP::Primitives::Go::String, PromPP::Primitives::Go::String>> external_labels_;
-
-  // target_labels
-  std::vector<std::pair<PromPP::Primitives::Go::String, PromPP::Primitives::Go::String>> vector_target_labels_{};
-
-  // Options
+  std::vector<GoLabel> vector_target_labels_{};
   PromPP::Prometheus::Relabel::RelabelerOptions o_;
-
-  // Stats
   Stats stats_;
-
-  // Hashdex
   HashdexTest hx_;
-
-  // LSS
-  PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector> lss_;
-
-  // Cache
+  EncodingBimap<BareBones::Vector> lss_;
   PromPP::Prometheus::Relabel::Cache cache_{};
 
   void reset() {
@@ -508,526 +165,432 @@ struct TestPerShardRelabeler : public testing::Test {
     SetUp();
   }
 
-  void add_target_labels(std::vector<std::pair<std::string, std::string>>& list_target_labels) {
-    vector_target_labels_.resize(list_target_labels.size());
+  void add_target_labels(const LabelViewSet& target_labels) {
+    vector_target_labels_.resize(target_labels.size());
     for (size_t i = 0; i < vector_target_labels_.size(); i++) {
-      vector_target_labels_[i].first.reset_to(list_target_labels[i].first.data(), list_target_labels[i].first.size());
-      vector_target_labels_[i].second.reset_to(list_target_labels[i].second.data(), list_target_labels[i].second.size());
+      vector_target_labels_[i].first.reset_to(target_labels[i].first.data(), target_labels[i].first.size());
+      vector_target_labels_[i].second.reset_to(target_labels[i].second.data(), target_labels[i].second.size());
     }
     o_.target_labels.reset_to(vector_target_labels_.data(), vector_target_labels_.size(), vector_target_labels_.size());
   }
 
   void SetUp() final {
-    // shards_inner_series
-    vector_shards_inner_series_.emplace_back(std::make_unique<PromPP::Prometheus::Relabel::InnerSeries>());
-    vector_shards_inner_series_.emplace_back(std::make_unique<PromPP::Prometheus::Relabel::InnerSeries>());
-    shards_inner_series_.reset_to(reinterpret_cast<PromPP::Prometheus::Relabel::InnerSeries**>(vector_shards_inner_series_.data()),
-                                  vector_shards_inner_series_.size(), vector_shards_inner_series_.size());
+    vector_shards_inner_series_.emplace_back(std::make_unique<InnerSeries>());
+    vector_shards_inner_series_.emplace_back(std::make_unique<InnerSeries>());
+    shards_inner_series_.reset_to(reinterpret_cast<InnerSeries**>(vector_shards_inner_series_.data()), vector_shards_inner_series_.size(),
+                                  vector_shards_inner_series_.size());
 
-    // relabeled_results
     vector_relabeled_results_.emplace_back(std::make_unique<PromPP::Prometheus::Relabel::RelabeledSeries>());
     vector_relabeled_results_.emplace_back(std::make_unique<PromPP::Prometheus::Relabel::RelabeledSeries>());
     relabeled_results_.reset_to(reinterpret_cast<PromPP::Prometheus::Relabel::RelabeledSeries**>(vector_relabeled_results_.data()),
                                 vector_shards_inner_series_.size(), vector_shards_inner_series_.size());
 
-    // external_labels
-    external_labels_.reset_to(vector_external_labels_.data(), vector_external_labels_.size(), vector_external_labels_.size());
-
-    // target_labels
     o_.target_labels.reset_to(vector_target_labels_.data(), vector_target_labels_.size(), vector_target_labels_.size());
   }
 
   void TearDown() final {
-    // clear memory
     vector_shards_inner_series_.clear();
     vector_relabeled_results_.clear();
   }
 };
 
-TEST_F(TestPerShardRelabeler, KeepEQ) {
-  RelabelConfigTest rct{.source_labels = std::vector<std::string_view>{"job"}, .regex = "abc", .action = 2};  // Keep
-  Relabel::StatelessRelabeler sr(std::vector<RelabelConfigTest*>{&rct});
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 1);
-  make_hashdex(hx_, make_label_set({{"__name__", "value"}, {"job", "abc"}}), make_samples({{1712567046855, 0.1}}));
+TEST_F(PerGoroutineRelabelerFixture, KeepOnNotFoundInCache) {
+  // Arrange
+  const RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
+  const StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
+  hx_.emplace_back({{"__name__", "value"}, {"job", "abc"}}, {{1000, 0.1}});
+  PerGoroutineRelabeler relabeler{kNumberOfShards, 1};
 
-  prs.input_relabeling(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_);
-  // shard id 1
+  // Act
+  relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
+
+  // Assert
   EXPECT_EQ(relabeled_results_[0]->size(), 0);
   EXPECT_EQ(relabeled_results_[1]->size(), 0);
   EXPECT_EQ(shards_inner_series_[0]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
-  EXPECT_EQ(stats_.samples_added, 1);
-  EXPECT_EQ(stats_.series_added, 1);
-
-  PromPP::Prometheus::Relabel::RelabelerStateUpdate update_data{};
-  prs.append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
-  EXPECT_EQ(update_data.size(), 0);
-
-  vector_shards_inner_series_[1] = std::make_unique<PromPP::Prometheus::Relabel::InnerSeries>();
-  prs.input_relabeling(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
-  EXPECT_EQ(stats_.samples_added, 2);
-  EXPECT_EQ(stats_.series_added, 1);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 0}}, shards_inner_series_[1]->data()));
+  EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
 }
 
-TEST_F(TestPerShardRelabeler, KeepEQ_OrderedEncodingBimap) {
-  PromPP::Primitives::SnugComposites::LabelSet::OrderedEncodingBimap<BareBones::Vector> lss;
-  RelabelConfigTest rct{.source_labels = std::vector<std::string_view>{"job"}, .regex = "abc", .action = 2};  // Keep
-  Relabel::StatelessRelabeler sr(std::vector<RelabelConfigTest*>{&rct});
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 1);
-  make_hashdex(hx_, make_label_set({{"__name__", "value"}, {"job", "abc"}}), make_samples({{1712567046855, 0.1}}));
+TEST_F(PerGoroutineRelabelerFixture, InnerSeriesAlreadyAdded) {
+  // Arrange
+  const RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
+  const StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
+  hx_.emplace_back({{"__name__", "value"}, {"job", "abc"}}, {{1000, 0.1}});
+  PerGoroutineRelabeler relabeler{kNumberOfShards, 1};
 
-  prs.input_relabeling(lss, lss, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_);
-  // shard id 1
+  // Act
+  relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
+  relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
+
+  // Assert
   EXPECT_EQ(relabeled_results_[0]->size(), 0);
   EXPECT_EQ(relabeled_results_[1]->size(), 0);
   EXPECT_EQ(shards_inner_series_[0]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
-  EXPECT_EQ(stats_.samples_added, 1);
-  EXPECT_EQ(stats_.series_added, 1);
-
-  PromPP::Prometheus::Relabel::RelabelerStateUpdate update_data{};
-  prs.append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
-  EXPECT_EQ(update_data.size(), 0);
-
-  vector_shards_inner_series_[1] = std::make_unique<PromPP::Prometheus::Relabel::InnerSeries>();
-  prs.input_relabeling(lss, lss, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
-  EXPECT_EQ(stats_.samples_added, 2);
-  EXPECT_EQ(stats_.series_added, 1);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 0}}, shards_inner_series_[1]->data()));
+  EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
 }
 
-TEST_F(TestPerShardRelabeler, KeepNE) {
-  RelabelConfigTest rct{.source_labels = std::vector<std::string_view>{"job"}, .regex = "no-match", .action = 2};  // Keep
-  Relabel::StatelessRelabeler sr(std::vector<RelabelConfigTest*>{&rct});
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 1);
-  make_hashdex(hx_, make_label_set({{"__name__", "value"}, {"job", "abc"}}), make_samples({{1712567046855, 0.1}}));
+TEST_F(PerGoroutineRelabelerFixture, KeepOnFoundInCache) {
+  // Arrange
+  const RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
+  const StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
+  hx_.emplace_back({{"__name__", "value"}, {"job", "abc"}}, {{1000, 0.1}});
+  PerGoroutineRelabeler relabeler{kNumberOfShards, 1};
 
-  prs.input_relabeling(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_);
-  // shard id 1
+  // Act
+  relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
+  shards_inner_series_[1]->clear();
+  relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
+
+  // Assert
+  EXPECT_EQ(relabeled_results_[0]->size(), 0);
+  EXPECT_EQ(relabeled_results_[1]->size(), 0);
+  EXPECT_EQ(shards_inner_series_[0]->size(), 0);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 0}}, shards_inner_series_[1]->data()));
+  EXPECT_EQ((Stats{.samples_added = 2, .series_added = 1}), stats_);
+}
+
+TEST_F(PerGoroutineRelabelerFixture, KeepNotEqual) {
+  // Arrange
+  const RelabelConfig config{.source_labels = {{"job"}}, .regex = "no-match", .action = rKeep};
+  const StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
+  hx_.emplace_back({{"__name__", "value"}, {"job", "abc"}}, {{1000, 0.1}});
+  PerGoroutineRelabeler relabeler{kNumberOfShards, 1};
+
+  // Act
+  relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
+
+  // Assert
   EXPECT_EQ(relabeled_results_[0]->size(), 0);
   EXPECT_EQ(relabeled_results_[1]->size(), 0);
   EXPECT_EQ(shards_inner_series_[0]->size(), 0);
   EXPECT_EQ(shards_inner_series_[1]->size(), 0);
-  EXPECT_EQ(stats_.samples_added, 0);
-  EXPECT_EQ(stats_.series_added, 0);
+  EXPECT_EQ(Stats{.series_drop = 1}, stats_);
 }
 
-TEST_F(TestPerShardRelabeler, KeepEQNE) {
-  RelabelConfigTest rct{.source_labels = std::vector<std::string_view>{"job"}, .regex = "abc", .action = 2};  // Keep
-  Relabel::StatelessRelabeler sr(std::vector<RelabelConfigTest*>{&rct});
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 1);
-  make_hashdex(hx_, make_label_set({{"__name__", "value"}, {"job", "abc"}}), make_samples({{1712567046855, 0.1}}));
+TEST_F(PerGoroutineRelabelerFixture, KeepEqualThenNotEqual) {
+  // Arrange
+  const RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
+  const StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
+  hx_.emplace_back({{"__name__", "value"}, {"job", "abc"}}, {{1000, 0.1}});
+  PerGoroutineRelabeler relabeler{kNumberOfShards, 1};
 
-  prs.input_relabeling(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_);
-  // shard id 1
-  EXPECT_EQ(relabeled_results_[0]->size(), 0);
-  EXPECT_EQ(relabeled_results_[1]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[0]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
-  EXPECT_EQ(stats_.samples_added, 1);
-  EXPECT_EQ(stats_.series_added, 1);
-
-  PromPP::Prometheus::Relabel::RelabelerStateUpdate update_data{};
-  prs.append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
-  EXPECT_EQ(update_data.size(), 0);
-
+  // Act
+  relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
   reset();
-  hx_.clear();
-  make_hashdex(hx_, make_label_set({{"__name__", "value"}, {"job", "abcd"}}), make_samples({{1712567046855, 0.1}}));
-  prs.input_relabeling(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_);
-  // shard id 1 skip
+  hx_ = HashdexTest{{{{"__name__", "value"}, {"job", "abcd"}}, {{1000, 0.1}}}};
+  relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
+
+  // Assert
   EXPECT_EQ(relabeled_results_[0]->size(), 0);
   EXPECT_EQ(relabeled_results_[1]->size(), 0);
   EXPECT_EQ(shards_inner_series_[0]->size(), 0);
   EXPECT_EQ(shards_inner_series_[1]->size(), 0);
-  EXPECT_EQ(stats_.samples_added, 1);
-  EXPECT_EQ(stats_.series_added, 1);
+  EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1, .series_drop = 1}), stats_);
 }
 
-TEST_F(TestPerShardRelabeler, ReplaceToNewLS2) {
-  RelabelConfigTest rct{.source_labels = std::vector<std::string_view>{"__name__"},
-                        .separator = ";",
-                        .regex = ".*(o).*",
-                        .target_label = "replaced",
-                        .replacement = "$1",
-                        .action = 5};  // Replace
-  Relabel::StatelessRelabeler sr(std::vector<RelabelConfigTest*>{&rct});
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 1);
-  make_hashdex(hx_, make_label_set({{"__name__", "booom"}, {"jab", "baj"}, {"job", "baj"}}), make_samples({{1712567046855, 0.1}}));
+TEST_F(PerGoroutineRelabelerFixture, ReplaceToNewLS2) {
+  // Arrange
+  const RelabelConfig config{
+      .source_labels = {{"__name__"}}, .separator = ";", .regex = ".*(o).*", .target_label = "replaced", .replacement = "$1", .action = rReplace};
+  const StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
+  hx_.emplace_back({{"__name__", "booom"}, {"jab", "baj"}, {"job", "baj"}}, {{1000, 0.1}});
+  PerGoroutineRelabeler relabeler{kNumberOfShards, 1};
+  RelabelerStateUpdate update_data;
 
-  prs.input_relabeling(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_);
-  // shard id 1
+  // Act
+  relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
+  PerShardRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
+
+  // Assert
   EXPECT_EQ(relabeled_results_[0]->size(), 0);
   EXPECT_EQ(relabeled_results_[1]->size(), 1);
   EXPECT_EQ(shards_inner_series_[0]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 0);
-  EXPECT_EQ(stats_.samples_added, 1);
-  EXPECT_EQ(stats_.series_added, 1);
-
-  PromPP::Prometheus::Relabel::RelabelerStateUpdate update_data{};
-  prs.append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
-  EXPECT_EQ(update_data.size(), 1);
-
-  prs.update_relabeler_state(cache_, &update_data, 1);
-
-  auto rlabels = lss_[update_data[0].relabeled_ls_id];
-  LabelViewSetForTest expected_labels = make_label_set({{"__name__", "booom"}, {"jab", "baj"}, {"job", "baj"}, {"replaced", "o"}});
-
-  EXPECT_EQ(rlabels, expected_labels);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 1}}, shards_inner_series_[1]->data()));
+  EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
+  ASSERT_EQ(1U, update_data.size());
+  EXPECT_EQ((LabelViewSet{{"__name__", "booom"}, {"jab", "baj"}, {"job", "baj"}, {"replaced", "o"}}), lss_[update_data[0].relabeled_ls_id]);
 }
 
-TEST_F(TestPerShardRelabeler, ReplaceToNewLS3) {
-  RelabelConfigTest rct{.separator = ";", .regex = ".*", .target_label = "replaced", .replacement = "blabla", .action = 5};  // Replace
-  Relabel::StatelessRelabeler sr(std::vector<RelabelConfigTest*>{&rct});
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 1);
-  make_hashdex(hx_, make_label_set({{"__name__", "booom"}, {"jab", "baj"}, {"job", "baj"}}), make_samples({{1712567046855, 0.1}}));
+TEST_F(PerGoroutineRelabelerFixture, ReplaceToNewLS3) {
+  // Arrange
+  const RelabelConfig config{.separator = ";", .regex = ".*", .target_label = "replaced", .replacement = "blabla", .action = rReplace};
+  const StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
+  hx_.emplace_back({{"__name__", "booom"}, {"jab", "baj"}, {"job", "baj"}}, {{1000, 0.1}});
+  PerGoroutineRelabeler relabeler{kNumberOfShards, 1};
+  RelabelerStateUpdate update_data;
 
-  prs.input_relabeling(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_);
-  // shard id 1
+  // Act
+  relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
+  PerShardRelabeler::append_relabeler_series(lss_, shards_inner_series_[0], relabeled_results_[0], &update_data);
+  PerShardRelabeler::update_relabeler_state(cache_, &update_data, 1);
+
+  // Assert
   EXPECT_EQ(relabeled_results_[0]->size(), 1);
   EXPECT_EQ(relabeled_results_[1]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[0]->size(), 0);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 1}}, shards_inner_series_[0]->data()));
   EXPECT_EQ(shards_inner_series_[1]->size(), 0);
-  EXPECT_EQ(stats_.samples_added, 1);
-  EXPECT_EQ(stats_.series_added, 1);
-
-  PromPP::Prometheus::Relabel::RelabelerStateUpdate update_data{};
-  prs.append_relabeler_series(lss_, shards_inner_series_[0], relabeled_results_[0], &update_data);
-  EXPECT_EQ(shards_inner_series_[0]->size(), 1);
+  EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
   EXPECT_EQ(update_data.size(), 1);
-
-  prs.update_relabeler_state(cache_, &update_data, 1);
-
-  auto rlabels = lss_[update_data[0].relabeled_ls_id];
-  LabelViewSetForTest expected_labels = make_label_set({{"__name__", "booom"}, {"jab", "baj"}, {"job", "baj"}, {"replaced", "blabla"}});
-
-  EXPECT_EQ(rlabels, expected_labels);
+  EXPECT_EQ((LabelViewSet{{"__name__", "booom"}, {"jab", "baj"}, {"job", "baj"}, {"replaced", "blabla"}}), lss_[update_data[0].relabeled_ls_id]);
 }
 
-TEST_F(TestPerShardRelabeler, ReplaceToNewLS2_OrderedEncodingBimap) {
-  PromPP::Primitives::SnugComposites::LabelSet::OrderedEncodingBimap<BareBones::Vector> lss;
-  RelabelConfigTest rct{.source_labels = std::vector<std::string_view>{"__name__"},
-                        .separator = ";",
-                        .regex = ".*(o).*",
-                        .target_label = "replaced",
-                        .replacement = "$1",
-                        .action = 5};  // Replace
-  Relabel::StatelessRelabeler sr(std::vector<RelabelConfigTest*>{&rct});
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 1);
-  make_hashdex(hx_, make_label_set({{"__name__", "booom"}, {"jab", "baj"}, {"job", "baj"}}), make_samples({{1712567046855, 0.1}}));
+TEST_F(PerGoroutineRelabelerFixture, InputRelabelingWithStalenans_Default) {
+  // Arrange
+  const RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
+  const StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
+  hx_.emplace_back({{"__name__", "value"}, {"job", "abc"}}, {{kNullTimestamp, 0.1}});
+  PerGoroutineRelabeler relabeler{kNumberOfShards, 1};
+  StaleNaNsState state;
+  RelabelerStateUpdate update_data;
 
-  prs.input_relabeling(lss, lss, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_);
-  // shard id 1
-  EXPECT_EQ(relabeled_results_[0]->size(), 0);
-  EXPECT_EQ(relabeled_results_[1]->size(), 1);
-  EXPECT_EQ(shards_inner_series_[0]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 0);
-  EXPECT_EQ(stats_.samples_added, 1);
-  EXPECT_EQ(stats_.series_added, 1);
+  // Act
+  relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, state, 1000);
+  PerShardRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
+  relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, HashdexTest{}, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, state,
+                                            2000);
 
-  PromPP::Prometheus::Relabel::RelabelerStateUpdate update_data{};
-  prs.append_relabeler_series(lss, shards_inner_series_[1], relabeled_results_[1], &update_data);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
-  EXPECT_EQ(update_data.size(), 1);
-
-  prs.update_relabeler_state(cache_, &update_data, 1);
-
-  auto rlabels = lss[update_data[0].relabeled_ls_id];
-  LabelViewSetForTest expected_labels = make_label_set({{"__name__", "booom"}, {"jab", "baj"}, {"job", "baj"}, {"replaced", "o"}});
-
-  EXPECT_EQ(rlabels, expected_labels);
-}
-
-TEST_F(TestPerShardRelabeler, InputRelabelingWithStalenans_Default) {
-  RelabelConfigTest rct{.source_labels = std::vector<std::string_view>{"job"}, .regex = "abc", .action = 2};  // Keep
-  Relabel::StatelessRelabeler sr(std::vector<RelabelConfigTest*>{&rct});
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 1);
-  make_hashdex(hx_, make_label_set({{"__name__", "value"}, {"job", "abc"}}), make_samples({{PromPP::Primitives::kNullTimestamp, 0.1}}));
-  PromPP::Prometheus::Relabel::StaleNaNsState state{};
-  PromPP::Primitives::Timestamp def_timestamp{1712567046955};
-
-  prs.input_relabeling_with_stalenans(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_, state, def_timestamp);
-
-  // shard id 1
+  // Assert
   EXPECT_EQ(relabeled_results_[0]->size(), 0);
   EXPECT_EQ(relabeled_results_[1]->size(), 0);
   EXPECT_EQ(shards_inner_series_[0]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
-  EXPECT_EQ(shards_inner_series_[1]->data()[0].sample.timestamp(), def_timestamp);
-  EXPECT_EQ(stats_.samples_added, 1);
-  EXPECT_EQ(stats_.series_added, 1);
-
-  PromPP::Prometheus::Relabel::RelabelerStateUpdate update_data{};
-  prs.append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
+  EXPECT_EQ(shards_inner_series_[1]->size(), 2);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 0}, {.sample = Sample(2000, kStaleNan), .ls_id = 0}},
+                                 shards_inner_series_[1]->data()));
+  EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
   EXPECT_EQ(update_data.size(), 0);
-
-  vector_shards_inner_series_[1] = std::make_unique<PromPP::Prometheus::Relabel::InnerSeries>();
-  HashdexTest empty_hx;
-  PromPP::Primitives::Timestamp stale_ts = 1712567047055;
-  prs.input_relabeling_with_stalenans(lss_, lss_, cache_, empty_hx, o_, stats_, shards_inner_series_, relabeled_results_, state, stale_ts);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
-  EXPECT_EQ(PromPP::Primitives::Sample(stale_ts, PromPP::Prometheus::kStaleNan), shards_inner_series_[1]->data()[0].sample);
-  EXPECT_EQ(stats_.samples_added, 1);
-  EXPECT_EQ(stats_.series_added, 1);
 }
 
-TEST_F(TestPerShardRelabeler, InputRelabelingWithStalenans_DefaultHonorTimestamps) {
-  RelabelConfigTest rct{.source_labels = std::vector<std::string_view>{"job"}, .regex = "abc", .action = 2};  // Keep
-  Relabel::StatelessRelabeler sr(std::vector<RelabelConfigTest*>{&rct});
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 1);
-  make_hashdex(hx_, make_label_set({{"__name__", "value"}, {"job", "abc"}}), make_samples({{PromPP::Primitives::kNullTimestamp, 0.1}}));
-  PromPP::Prometheus::Relabel::StaleNaNsState state{};
-  PromPP::Primitives::Timestamp def_timestamp{1712567046955};
+TEST_F(PerGoroutineRelabelerFixture, InputRelabelingWithStalenans_DefaultHonorTimestamps) {
+  // Arrange
+  const RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
+  const StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
+  hx_.emplace_back({{"__name__", "value"}, {"job", "abc"}}, {{kNullTimestamp, 0.1}});
+  PerGoroutineRelabeler relabeler{kNumberOfShards, 1};
+  StaleNaNsState state;
+  RelabelerStateUpdate update_data;
   o_.honor_timestamps = true;
 
-  prs.input_relabeling_with_stalenans(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_, state, def_timestamp);
+  // Act
+  relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, state, 1000);
+  PerShardRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
+  relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, HashdexTest{}, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, state,
+                                            2000);
 
-  // shard id 1
+  // Assert
   EXPECT_EQ(relabeled_results_[0]->size(), 0);
   EXPECT_EQ(relabeled_results_[1]->size(), 0);
   EXPECT_EQ(shards_inner_series_[0]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
-  EXPECT_EQ(shards_inner_series_[1]->data()[0].sample.timestamp(), def_timestamp);
-  EXPECT_EQ(stats_.samples_added, 1);
-  EXPECT_EQ(stats_.series_added, 1);
-
-  PromPP::Prometheus::Relabel::RelabelerStateUpdate update_data{};
-  prs.append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
+  EXPECT_EQ(shards_inner_series_[1]->size(), 2);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 0}, {.sample = Sample(2000, kStaleNan), .ls_id = 0}},
+                                 shards_inner_series_[1]->data()));
+  EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
   EXPECT_EQ(update_data.size(), 0);
-
-  vector_shards_inner_series_[1] = std::make_unique<PromPP::Prometheus::Relabel::InnerSeries>();
-  HashdexTest empty_hx;
-  PromPP::Primitives::Timestamp stale_ts = 1712567047055;
-  prs.input_relabeling_with_stalenans(lss_, lss_, cache_, empty_hx, o_, stats_, shards_inner_series_, relabeled_results_, state, stale_ts);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
-  EXPECT_EQ(PromPP::Primitives::Sample(stale_ts, PromPP::Prometheus::kStaleNan), shards_inner_series_[1]->data()[0].sample);
-  EXPECT_EQ(stats_.samples_added, 1);
-  EXPECT_EQ(stats_.series_added, 1);
 }
 
-TEST_F(TestPerShardRelabeler, InputRelabelingWithStalenans_WithMetricTimestamp) {
-  RelabelConfigTest rct{.source_labels = std::vector<std::string_view>{"job"}, .regex = "abc", .action = 2};  // Keep
-  Relabel::StatelessRelabeler sr(std::vector<RelabelConfigTest*>{&rct});
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 1);
-  make_hashdex(hx_, make_label_set({{"__name__", "value"}, {"job", "abc"}}), make_samples({{1712567046855, 0.1}}));
-  PromPP::Prometheus::Relabel::StaleNaNsState state{};
-  PromPP::Primitives::Timestamp def_timestamp{1712567046955};
+TEST_F(PerGoroutineRelabelerFixture, InputRelabelingWithStalenans_WithMetricTimestamp) {
+  // Arrange
+  const RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
+  StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
+  hx_.emplace_back({{"__name__", "value"}, {"job", "abc"}}, {{1712567046855, 0.1}});
+  PerGoroutineRelabeler relabeler{kNumberOfShards, 1};
+  StaleNaNsState state;
+  RelabelerStateUpdate update_data;
 
-  prs.input_relabeling_with_stalenans(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_, state, def_timestamp);
+  // Act
+  relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, state, 1000);
+  PerShardRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
+  relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, HashdexTest{}, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, state,
+                                            2000);
 
-  // shard id 1
+  // Assert
   EXPECT_EQ(relabeled_results_[0]->size(), 0);
   EXPECT_EQ(relabeled_results_[1]->size(), 0);
   EXPECT_EQ(shards_inner_series_[0]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
-  EXPECT_EQ(shards_inner_series_[1]->data()[0].sample.timestamp(), def_timestamp);
-  EXPECT_EQ(stats_.samples_added, 1);
-  EXPECT_EQ(stats_.series_added, 1);
-
-  PromPP::Prometheus::Relabel::RelabelerStateUpdate update_data{};
-  prs.append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
+  EXPECT_EQ(shards_inner_series_[1]->size(), 2);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 0}, {.sample = Sample(2000, kStaleNan), .ls_id = 0}},
+                                 shards_inner_series_[1]->data()));
+  EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
   EXPECT_EQ(update_data.size(), 0);
-
-  vector_shards_inner_series_[1] = std::make_unique<PromPP::Prometheus::Relabel::InnerSeries>();
-  HashdexTest empty_hx;
-  PromPP::Primitives::Timestamp stale_ts = 1712567047055;
-  prs.input_relabeling_with_stalenans(lss_, lss_, cache_, empty_hx, o_, stats_, shards_inner_series_, relabeled_results_, state, stale_ts);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
-  EXPECT_EQ(PromPP::Primitives::Sample(stale_ts, PromPP::Prometheus::kStaleNan), shards_inner_series_[1]->data()[0].sample);
-  EXPECT_EQ(stats_.samples_added, 1);
-  EXPECT_EQ(stats_.series_added, 1);
 }
 
-TEST_F(TestPerShardRelabeler, InputRelabelingWithStalenans_HonorTimestamps) {
-  RelabelConfigTest rct{.source_labels = std::vector<std::string_view>{"job"}, .regex = "abc", .action = 2};  // Keep
-  Relabel::StatelessRelabeler sr(std::vector<RelabelConfigTest*>{&rct});
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 1);
-  PromPP::Primitives::Timestamp metric_timestamp{1712567046955};
-  make_hashdex(hx_, make_label_set({{"__name__", "value"}, {"job", "abc"}}), make_samples({{metric_timestamp, 0.1}}));
-  PromPP::Prometheus::Relabel::StaleNaNsState state{};
-  PromPP::Primitives::Timestamp def_timestamp{1712567046955};
+TEST_F(PerGoroutineRelabelerFixture, InputRelabelingWithStalenans_HonorTimestamps) {
+  // Arrange
+  const RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
+  const StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
+  hx_.emplace_back({{"__name__", "value"}, {"job", "abc"}}, {{1500, 0.1}});
+  PerGoroutineRelabeler relabeler{kNumberOfShards, 1};
   o_.honor_timestamps = true;
+  StaleNaNsState state;
+  RelabelerStateUpdate update_data;
 
-  prs.input_relabeling_with_stalenans(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_, state, def_timestamp);
+  // Act
+  relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, state, 1000);
+  PerShardRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
+  relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, HashdexTest{}, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, state,
+                                            2000);
 
-  // shard id 1
+  // Assert
   EXPECT_EQ(relabeled_results_[0]->size(), 0);
   EXPECT_EQ(relabeled_results_[1]->size(), 0);
   EXPECT_EQ(shards_inner_series_[0]->size(), 0);
   EXPECT_EQ(shards_inner_series_[1]->size(), 1);
-  EXPECT_EQ(shards_inner_series_[1]->data()[0].sample.timestamp(), metric_timestamp);
-  EXPECT_EQ(stats_.samples_added, 1);
-  EXPECT_EQ(stats_.series_added, 1);
-
-  PromPP::Prometheus::Relabel::RelabelerStateUpdate update_data{};
-  prs.append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1500, 0.1), .ls_id = 0}}, shards_inner_series_[1]->data()));
+  EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
   EXPECT_EQ(update_data.size(), 0);
-
-  vector_shards_inner_series_[1] = std::make_unique<PromPP::Prometheus::Relabel::InnerSeries>();
-  HashdexTest empty_hx;
-  PromPP::Primitives::Timestamp stale_ts = 1712567047055;
-  prs.input_relabeling_with_stalenans(lss_, lss_, cache_, empty_hx, o_, stats_, shards_inner_series_, relabeled_results_, state, stale_ts);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 0);
 }
 
-TEST_F(TestPerShardRelabeler, InputRelabelingWithStalenans_HonorTimestampsAndTrackStaleness) {
-  RelabelConfigTest rct{.source_labels = std::vector<std::string_view>{"job"}, .regex = "abc", .action = 2};  // Keep
-  Relabel::StatelessRelabeler sr(std::vector<RelabelConfigTest*>{&rct});
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 1);
-  PromPP::Primitives::Timestamp metric_timestamp{1712567046955};
-  make_hashdex(hx_, make_label_set({{"__name__", "value"}, {"job", "abc"}}), make_samples({{metric_timestamp, 0.1}}));
-  PromPP::Prometheus::Relabel::StaleNaNsState state{};
-  PromPP::Primitives::Timestamp def_timestamp{1712567046955};
+TEST_F(PerGoroutineRelabelerFixture, InputRelabelingWithStalenans_HonorTimestampsAndTrackStaleness) {
+  // Arrange
+  const RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
+  const StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
+  hx_.emplace_back({{"__name__", "value"}, {"job", "abc"}}, {{1500, 0.1}});
+  PerGoroutineRelabeler relabeler{kNumberOfShards, 1};
   o_.honor_timestamps = true;
   o_.track_timestamps_staleness = true;
+  StaleNaNsState state;
+  RelabelerStateUpdate update_data;
 
-  prs.input_relabeling_with_stalenans(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_, state, def_timestamp);
+  // Act
+  relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, state, 1000);
+  PerShardRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
+  relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, HashdexTest{}, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, state,
+                                            2000);
 
-  // shard id 1
+  // Assert
   EXPECT_EQ(relabeled_results_[0]->size(), 0);
   EXPECT_EQ(relabeled_results_[1]->size(), 0);
   EXPECT_EQ(shards_inner_series_[0]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
-  EXPECT_EQ(shards_inner_series_[1]->data()[0].sample.timestamp(), metric_timestamp);
-  EXPECT_EQ(stats_.samples_added, 1);
-  EXPECT_EQ(stats_.series_added, 1);
-
-  PromPP::Prometheus::Relabel::RelabelerStateUpdate update_data{};
-  prs.append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
+  EXPECT_EQ(shards_inner_series_[1]->size(), 2);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1500, 0.1), .ls_id = 0}, {.sample = Sample(2000, kStaleNan), .ls_id = 0}},
+                                 shards_inner_series_[1]->data()));
+  EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
   EXPECT_EQ(update_data.size(), 0);
-
-  vector_shards_inner_series_[1] = std::make_unique<PromPP::Prometheus::Relabel::InnerSeries>();
-  HashdexTest empty_hx;
-  PromPP::Primitives::Timestamp stale_ts = 1712567047055;
-  prs.input_relabeling_with_stalenans(lss_, lss_, cache_, empty_hx, o_, stats_, shards_inner_series_, relabeled_results_, state, stale_ts);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
-  EXPECT_EQ(PromPP::Primitives::Sample(stale_ts, PromPP::Prometheus::kStaleNan), shards_inner_series_[1]->data()[0].sample);
-  EXPECT_EQ(stats_.samples_added, 1);
-  EXPECT_EQ(stats_.series_added, 1);
 }
 
-TEST_F(TestPerShardRelabeler, TargetLabels_HappyPath) {
-  RelabelConfigTest rct{.source_labels = std::vector<std::string_view>{"job"}, .regex = "abc", .action = 2};  // Keep
-  Relabel::StatelessRelabeler sr(std::vector<RelabelConfigTest*>{&rct});
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 0);
-  make_hashdex(hx_, make_label_set({{"__name__", "booom"}, {"jab", "baj"}, {"job", "abc"}}), make_samples({{1712567046855, 0.1}}));
-  std::vector<std::pair<std::string, std::string>> list_target_labels{{"a_name", "target_a_value"}, {"z_name", "target_z_value"}};
-  add_target_labels(list_target_labels);
+TEST_F(PerGoroutineRelabelerFixture, TargetLabels_HappyPath) {
+  // Arrange
+  const RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
+  const StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
+  hx_.emplace_back({{"__name__", "booom"}, {"jab", "baj"}, {"job", "abc"}}, {{1000, 0.1}});
+  add_target_labels(LabelViewSet{{"a_name", "target_a_value"}, {"z_name", "target_z_value"}});
+  PerGoroutineRelabeler relabeler{kNumberOfShards, 0};
+  RelabelerStateUpdate update_data;
 
-  prs.input_relabeling(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_);
-  // shard id 1
+  // Act
+  relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
+  PerShardRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
+  PerShardRelabeler::update_relabeler_state(cache_, &update_data, 1);
+
+  // Assert
   EXPECT_EQ(relabeled_results_[0]->size(), 0);
   EXPECT_EQ(relabeled_results_[1]->size(), 1);
   EXPECT_EQ(shards_inner_series_[0]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 0);
-  EXPECT_EQ(stats_.samples_added, 1);
-  EXPECT_EQ(stats_.series_added, 1);
-
-  PromPP::Prometheus::Relabel::RelabelerStateUpdate update_data{};
-  prs.append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 1}}, shards_inner_series_[1]->data()));
+  EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
   EXPECT_EQ(update_data.size(), 1);
-
-  prs.update_relabeler_state(cache_, &update_data, 1);
-
-  auto rlabels = lss_[update_data[0].relabeled_ls_id];
-  LabelViewSetForTest expected_labels =
-      make_label_set({{"__name__", "booom"}, {"a_name", "target_a_value"}, {"jab", "baj"}, {"job", "abc"}, {"z_name", "target_z_value"}});
-
-  EXPECT_EQ(rlabels, expected_labels);
+  EXPECT_EQ((LabelViewSet{{"__name__", "booom"}, {"a_name", "target_a_value"}, {"jab", "baj"}, {"job", "abc"}, {"z_name", "target_z_value"}}),
+            lss_[update_data[0].relabeled_ls_id]);
 }
 
-TEST_F(TestPerShardRelabeler, TargetLabels_ExportedLabel) {
-  RelabelConfigTest rct{.source_labels = std::vector<std::string_view>{"job"}, .regex = "abc", .action = 2};  // Keep
-  Relabel::StatelessRelabeler sr(std::vector<RelabelConfigTest*>{&rct});
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 0);
-  make_hashdex(hx_, make_label_set({{"__name__", "booom"}, {"jab", "baj"}, {"job", "abc"}}), make_samples({{1712567046855, 0.1}}));
-  std::vector<std::pair<std::string, std::string>> list_target_labels{{"jab", "target_a_value"}, {"z_name", "target_z_value"}};
-  add_target_labels(list_target_labels);
+TEST_F(PerGoroutineRelabelerFixture, TargetLabels_ExportedLabel) {
+  // Arrange
+  const RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rsKeep};
+  const StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
+  hx_.emplace_back({{"__name__", "booom"}, {"jab", "baj"}, {"job", "abc"}}, {{1000, 0.1}});
+  add_target_labels(LabelViewSet{{"jab", "target_a_value"}, {"z_name", "target_z_value"}});
+  PerGoroutineRelabeler relabeler{kNumberOfShards, 0};
+  RelabelerStateUpdate update_data;
 
-  prs.input_relabeling(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_);
-  // shard id 1
+  // Act
+  relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
+  PerShardRelabeler::append_relabeler_series(lss_, shards_inner_series_[0], relabeled_results_[0], &update_data);
+  PerShardRelabeler::update_relabeler_state(cache_, &update_data, 1);
+
+  // Assert
   EXPECT_EQ(relabeled_results_[0]->size(), 1);
   EXPECT_EQ(relabeled_results_[1]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[0]->size(), 0);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 1}}, shards_inner_series_[0]->data()));
   EXPECT_EQ(shards_inner_series_[1]->size(), 0);
-  EXPECT_EQ(stats_.samples_added, 1);
-  EXPECT_EQ(stats_.series_added, 1);
-
-  PromPP::Prometheus::Relabel::RelabelerStateUpdate update_data{};
-  prs.append_relabeler_series(lss_, shards_inner_series_[0], relabeled_results_[0], &update_data);
-  EXPECT_EQ(shards_inner_series_[0]->size(), 1);
+  EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
   EXPECT_EQ(update_data.size(), 1);
-
-  prs.update_relabeler_state(cache_, &update_data, 1);
-
-  auto rlabels = lss_[update_data[0].relabeled_ls_id];
-  LabelViewSetForTest expected_labels =
-      make_label_set({{"__name__", "booom"}, {"exported_jab", "baj"}, {"jab", "target_a_value"}, {"job", "abc"}, {"z_name", "target_z_value"}});
-
-  EXPECT_EQ(rlabels, expected_labels);
+  EXPECT_EQ((LabelViewSet{{"__name__", "booom"}, {"exported_jab", "baj"}, {"jab", "target_a_value"}, {"job", "abc"}, {"z_name", "target_z_value"}}),
+            lss_[update_data[0].relabeled_ls_id]);
 }
 
-TEST_F(TestPerShardRelabeler, TargetLabels_ExportedLabel_Honor) {
-  RelabelConfigTest rct{.source_labels = std::vector<std::string_view>{"job"}, .regex = "abc", .action = 2};  // Keep
-  Relabel::StatelessRelabeler sr(std::vector<RelabelConfigTest*>{&rct});
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 0);
-  make_hashdex(hx_, make_label_set({{"__name__", "booom"}, {"jab", "baj"}, {"job", "abc"}}), make_samples({{1712567046855, 0.1}}));
-  std::vector<std::pair<std::string, std::string>> list_target_labels{{"jab", "target_a_value"}, {"z_name", "target_z_value"}};
-  add_target_labels(list_target_labels);
+TEST_F(PerGoroutineRelabelerFixture, TargetLabels_ExportedLabel_Honor) {
+  // Arrange
+  const RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rsKeep};
+  const StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
+  hx_.emplace_back({{"__name__", "booom"}, {"jab", "baj"}, {"job", "abc"}}, {{1000, 0.1}});
+  add_target_labels(LabelViewSet{{"jab", "target_a_value"}, {"z_name", "target_z_value"}});
+  PerGoroutineRelabeler relabeler{kNumberOfShards, 0};
   o_.honor_labels = true;
+  RelabelerStateUpdate update_data;
 
-  prs.input_relabeling(lss_, lss_, cache_, hx_, o_, stats_, shards_inner_series_, relabeled_results_);
-  // shard id 1
+  // Act
+  relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
+  PerShardRelabeler::append_relabeler_series(lss_, shards_inner_series_[0], relabeled_results_[0], &update_data);
+  PerShardRelabeler::update_relabeler_state(cache_, &update_data, 1);
+
+  // Assert
   EXPECT_EQ(relabeled_results_[0]->size(), 1);
   EXPECT_EQ(relabeled_results_[1]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[0]->size(), 0);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 1}}, shards_inner_series_[0]->data()));
   EXPECT_EQ(shards_inner_series_[1]->size(), 0);
-  EXPECT_EQ(stats_.samples_added, 1);
-  EXPECT_EQ(stats_.series_added, 1);
-
-  PromPP::Prometheus::Relabel::RelabelerStateUpdate update_data{};
-  prs.append_relabeler_series(lss_, shards_inner_series_[0], relabeled_results_[0], &update_data);
-  EXPECT_EQ(shards_inner_series_[0]->size(), 1);
+  EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
   EXPECT_EQ(update_data.size(), 1);
-
-  prs.update_relabeler_state(cache_, &update_data, 1);
-
-  auto rlabels = lss_[update_data[0].relabeled_ls_id];
-  LabelViewSetForTest expected_labels = make_label_set({{"__name__", "booom"}, {"jab", "baj"}, {"job", "abc"}, {"z_name", "target_z_value"}});
-
-  EXPECT_EQ(rlabels, expected_labels);
+  EXPECT_EQ((LabelViewSet{{"__name__", "booom"}, {"jab", "baj"}, {"job", "abc"}, {"z_name", "target_z_value"}}), lss_[update_data[0].relabeled_ls_id]);
 }
 
-struct TestTargetLabels : public testing::Test {
-  // target_labels
-  std::vector<std::pair<PromPP::Primitives::Go::String, PromPP::Primitives::Go::String>> vector_target_labels_;
+TEST_F(PerGoroutineRelabelerFixture, SampleLimitExceeded) {
+  // Arrange
+  const RelabelConfig config{.source_labels = {{"job"}}, .regex = "abc", .action = rKeep};
+  const StatelessRelabeler stateless_relabeler(std::initializer_list{&config});
+  hx_ = HashdexTest{
+      {{{"__name__", "value"}, {"job", "abc"}}, {{1000, kStaleNan}}},
+      {{{"__name__", "value"}, {"job", "abc"}}, {{2000, 0.1}}},
+      {{{"__name__", "value"}, {"job", "abc"}}, {{3000, 0.1}}},
+  };
+  MetricLimits limits{.sample_limit = 1};
+  PerGoroutineRelabeler relabeler{kNumberOfShards, 1};
+  o_.metric_limits = &limits;
 
-  // Options
+  // Act
+  relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
+
+  // Assert
+  EXPECT_EQ(relabeled_results_[0]->size(), 0);
+  EXPECT_EQ(relabeled_results_[1]->size(), 0);
+  EXPECT_EQ(shards_inner_series_[0]->size(), 0);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, kStaleNan), .ls_id = 0}, {.sample = Sample(2000, 0.1), .ls_id = 0}},
+                                 shards_inner_series_[1]->data()));
+  EXPECT_EQ((Stats{.samples_added = 2, .series_added = 1}), stats_);
+}
+
+class TargetLabelsFixture : public testing::Test {
+ protected:
+  static constexpr uint16_t kNumberOfShards = 2;
+
+  std::vector<GoLabel> vector_target_labels_;
+
   PromPP::Prometheus::Relabel::RelabelerOptions o_;
+  std::vector<RelabelConfig*> rcts_;
+  std::vector<GoLabel> vector_external_labels_;
+  SliceView<GoLabel> external_labels_{};
 
-  // for init PerShardRelabeler
-  PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector> lss_;
-  std::vector<RelabelConfigTest*> rcts_;
-  std::vector<std::pair<PromPP::Primitives::Go::String, PromPP::Primitives::Go::String>> vector_external_labels_;
-  PromPP::Primitives::Go::SliceView<std::pair<PromPP::Primitives::Go::String, PromPP::Primitives::Go::String>> external_labels_;
+  LabelsBuilder builder_;
+
+  StatelessRelabeler stateless_relabeler_{rcts_};
+  PerShardRelabeler relabeler_{external_labels_, &stateless_relabeler_, kNumberOfShards, 1};
 
   void SetUp() final {
     o_.target_labels.reset_to(vector_target_labels_.data(), vector_target_labels_.size(), vector_target_labels_.size());
     external_labels_.reset_to(vector_external_labels_.data(), vector_external_labels_.size(), vector_external_labels_.size());
   }
 
-  void add_target_labels(std::vector<std::pair<std::string, std::string>>& list_target_labels) {
+  void add_target_labels(const LabelViewSet& list_target_labels) {
     vector_target_labels_.resize(list_target_labels.size());
     for (size_t i = 0; i < vector_target_labels_.size(); i++) {
       vector_target_labels_[i].first.reset_to(list_target_labels[i].first.data(), list_target_labels[i].first.size());
@@ -1037,226 +600,242 @@ struct TestTargetLabels : public testing::Test {
   }
 };
 
-TEST_F(TestTargetLabels, ResolveConflictingExposedLabels_EmptyConflictingLabels) {
-  auto labels = make_label_set({{"c_name", "c_value"}});
-  PromPP::Primitives::LabelsBuilderStateMap builder_state;
-  PromPP::Primitives::LabelsBuilder<PromPP::Primitives::LabelsBuilderStateMap> builder{builder_state};
-  builder.reset(labels);
-  Relabel::StatelessRelabeler sr(rcts_);
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 1);
-  std::vector<PromPP::Primitives::Label> conflicting_exposed_labels{};
-  LabelViewSetForTest expected_labels = make_label_set({{"c_name", "c_value"}});
+TEST_F(TargetLabelsFixture, ResolveConflictingExposedLabels_EmptyConflictingLabels) {
+  // Arrange
+  const LabelViewSet labels{{"c_name", "c_value"}};
 
-  prs.resolve_conflicting_exposed_labels(builder, conflicting_exposed_labels);
+  builder_.reset(labels);
 
-  EXPECT_EQ(builder.label_view_set(), expected_labels);
-  EXPECT_EQ(builder.label_set(), expected_labels);
+  std::vector<Label> conflicting_exposed_labels{};
+
+  // Act
+  relabeler_.resolve_conflicting_exposed_labels(builder_, conflicting_exposed_labels);
+
+  // Assert
+  EXPECT_EQ(labels, builder_.label_view_set());
+  EXPECT_EQ(labels, builder_.label_set());
 }
 
-TEST_F(TestTargetLabels, ResolveConflictingExposedLabels) {
-  auto labels = make_label_set({{"c_name", "c_value"}});
-  PromPP::Primitives::LabelsBuilderStateMap builder_state;
-  PromPP::Primitives::LabelsBuilder<PromPP::Primitives::LabelsBuilderStateMap> builder{builder_state};
-  builder.reset(labels);
-  Relabel::StatelessRelabeler sr(rcts_);
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 1);
-  std::vector<PromPP::Primitives::Label> conflicting_exposed_labels{{"c_name", "a_value"}};
-  LabelViewSetForTest expected_labels = make_label_set({{"c_name", "c_value"}, {"exported_c_name", "a_value"}});
+TEST_F(TargetLabelsFixture, ResolveConflictingExposedLabels) {
+  // Arrange
+  builder_.reset(LabelViewSet{{"c_name", "c_value"}});
 
-  prs.resolve_conflicting_exposed_labels(builder, conflicting_exposed_labels);
+  std::vector<Label> conflicting_exposed_labels{{"c_name", "a_value"}};
+  const LabelViewSet expected_labels{{"c_name", "c_value"}, {"exported_c_name", "a_value"}};
 
-  EXPECT_EQ(builder.label_view_set(), expected_labels);
-  EXPECT_EQ(builder.label_set(), expected_labels);
+  // Act
+  relabeler_.resolve_conflicting_exposed_labels(builder_, conflicting_exposed_labels);
+
+  // Assert
+  EXPECT_EQ(expected_labels, builder_.label_view_set());
+  EXPECT_EQ(expected_labels, builder_.label_set());
 }
 
-TEST_F(TestTargetLabels, ResolveConflictingExposedLabels_ExportedLabel) {
-  auto labels = make_label_set({{"c_name", "c_value"}});
-  PromPP::Primitives::LabelsBuilderStateMap builder_state;
-  PromPP::Primitives::LabelsBuilder<PromPP::Primitives::LabelsBuilderStateMap> builder{builder_state};
-  builder.reset(labels);
-  Relabel::StatelessRelabeler sr(rcts_);
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 1);
-  std::vector<PromPP::Primitives::Label> conflicting_exposed_labels{{"exported_c_name", "a_value"}};
-  LabelViewSetForTest expected_labels = make_label_set({{"c_name", "c_value"}, {"exported_exported_c_name", "a_value"}});
+TEST_F(TargetLabelsFixture, ResolveConflictingExposedLabels_ExportedLabel) {
+  // Arrange
+  builder_.reset(LabelViewSet{{"c_name", "c_value"}});
 
-  prs.resolve_conflicting_exposed_labels(builder, conflicting_exposed_labels);
+  std::vector<Label> conflicting_exposed_labels{{"exported_c_name", "a_value"}};
+  const LabelViewSet expected_labels{{"c_name", "c_value"}, {"exported_exported_c_name", "a_value"}};
 
-  EXPECT_EQ(builder.label_view_set(), expected_labels);
-  EXPECT_EQ(builder.label_set(), expected_labels);
+  // Act
+  relabeler_.resolve_conflicting_exposed_labels(builder_, conflicting_exposed_labels);
+
+  // Assert
+  EXPECT_EQ(expected_labels, builder_.label_view_set());
+  EXPECT_EQ(expected_labels, builder_.label_set());
 }
 
-TEST_F(TestTargetLabels, InjectTargetLabels_EmptyLabels) {
-  PromPP::Primitives::LabelsBuilderStateMap builder_state;
-  PromPP::Primitives::LabelsBuilder<PromPP::Primitives::LabelsBuilderStateMap> builder{builder_state};
-  auto labels = make_label_set({{"c_name", "c_value"}});
-  builder.reset(labels);
-  Relabel::StatelessRelabeler sr(rcts_);
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 1);
-  LabelViewSetForTest expected_labels = make_label_set({{"c_name", "c_value"}});
+TEST_F(TargetLabelsFixture, InjectTargetLabels_EmptyLabels) {
+  // Arrange
+  const LabelViewSet labels{{"c_name", "c_value"}};
 
-  bool changed = prs.inject_target_labels(builder, o_);
-  const PromPP::Primitives::LabelViewSet& target_label_view_set = builder.label_view_set();
+  builder_.reset(labels);
 
+  // Act
+  const auto changed = relabeler_.inject_target_labels(builder_, o_);
+
+  // Assert
   EXPECT_FALSE(changed);
-  EXPECT_EQ(target_label_view_set, expected_labels);
+  EXPECT_EQ(labels, builder_.label_view_set());
 }
 
-TEST_F(TestTargetLabels, InjectTargetLabels_HappyPath) {
-  PromPP::Primitives::LabelsBuilderStateMap builder_state;
-  PromPP::Primitives::LabelsBuilder<PromPP::Primitives::LabelsBuilderStateMap> builder{builder_state};
-  auto labels = make_label_set({{"c_name", "c_value"}});
-  builder.reset(labels);
-  Relabel::StatelessRelabeler sr(rcts_);
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 1);
-  std::vector<std::pair<std::string, std::string>> list_target_labels{{"a_name", "target_a_value"}, {"b_name", "target_b_value"}};
-  add_target_labels(list_target_labels);
-  LabelViewSetForTest expected_labels = make_label_set({{"a_name", "target_a_value"}, {"b_name", "target_b_value"}, {"c_name", "c_value"}});
+TEST_F(TargetLabelsFixture, InjectTargetLabels_HappyPath) {
+  // Arrange
+  builder_.reset(LabelViewSet{{"c_name", "c_value"}});
+  add_target_labels(LabelViewSet{{"a_name", "target_a_value"}, {"b_name", "target_b_value"}});
 
-  bool changed = prs.inject_target_labels(builder, o_);
-  const PromPP::Primitives::LabelViewSet& target_label_view_set = builder.label_view_set();
+  // Act
+  const auto changed = relabeler_.inject_target_labels(builder_, o_);
 
+  // Assert
   EXPECT_TRUE(changed);
-  EXPECT_EQ(target_label_view_set, expected_labels);
+  EXPECT_EQ((LabelViewSet{{"a_name", "target_a_value"}, {"b_name", "target_b_value"}, {"c_name", "c_value"}}), builder_.label_view_set());
 }
 
-TEST_F(TestTargetLabels, InjectTargetLabels_ConflictingLabels) {
-  PromPP::Primitives::LabelsBuilderStateMap builder_state;
-  PromPP::Primitives::LabelsBuilder<PromPP::Primitives::LabelsBuilderStateMap> builder{builder_state};
-  auto labels = make_label_set({{"a_name", "a_value"}, {"c_name", "c_value"}});
-  builder.reset(labels);
-  Relabel::StatelessRelabeler sr(rcts_);
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 1);
-  std::vector<std::pair<std::string, std::string>> list_target_labels{{"a_name", "target_a_value"}, {"b_name", "target_b_value"}};
-  add_target_labels(list_target_labels);
-  LabelViewSetForTest expected_labels =
-      make_label_set({{"a_name", "target_a_value"}, {"b_name", "target_b_value"}, {"c_name", "c_value"}, {"exported_a_name", "a_value"}});
+TEST_F(TargetLabelsFixture, InjectTargetLabels_ConflictingLabels) {
+  // Arrange
+  builder_.reset(LabelViewSet{{"a_name", "a_value"}, {"c_name", "c_value"}});
 
-  bool changed = prs.inject_target_labels(builder, o_);
-  const PromPP::Primitives::LabelViewSet& target_label_view_set = builder.label_view_set();
+  add_target_labels(LabelViewSet{{"a_name", "target_a_value"}, {"b_name", "target_b_value"}});
 
+  // Act
+  const auto changed = relabeler_.inject_target_labels(builder_, o_);
+
+  // Assert
   EXPECT_TRUE(changed);
-  EXPECT_EQ(target_label_view_set, expected_labels);
+  EXPECT_EQ((LabelViewSet{{"a_name", "target_a_value"}, {"b_name", "target_b_value"}, {"c_name", "c_value"}, {"exported_a_name", "a_value"}}),
+            builder_.label_view_set());
 }
 
-TEST_F(TestTargetLabels, InjectTargetLabels_ConflictingLabels_ExportedLabel) {
-  PromPP::Primitives::LabelsBuilderStateMap builder_state;
-  PromPP::Primitives::LabelsBuilder<PromPP::Primitives::LabelsBuilderStateMap> builder{builder_state};
-  auto labels = make_label_set({{"a_name", "a_value"}, {"c_name", "c_value"}});
-  builder.reset(labels);
-  Relabel::StatelessRelabeler sr(rcts_);
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 1);
-  std::vector<std::pair<std::string, std::string>> list_target_labels{{"a_name", "target_a_value"}, {"exported_a_name", "exported_target_a_value"}};
-  add_target_labels(list_target_labels);
-  LabelViewSetForTest expected_labels = make_label_set(
-      {{"a_name", "target_a_value"}, {"c_name", "c_value"}, {"exported_a_name", "exported_target_a_value"}, {"exported_exported_a_name", "a_value"}});
+TEST_F(TargetLabelsFixture, InjectTargetLabels_ConflictingLabels_ExportedLabel) {
+  // Arrange
+  builder_.reset(LabelViewSet{{"a_name", "a_value"}, {"c_name", "c_value"}});
 
-  bool changed = prs.inject_target_labels(builder, o_);
-  const PromPP::Primitives::LabelViewSet& target_label_view_set = builder.label_view_set();
+  add_target_labels(LabelViewSet{{"a_name", "target_a_value"}, {"exported_a_name", "exported_target_a_value"}});
+  LabelViewSet expected_labels{
+      {"a_name", "target_a_value"}, {"c_name", "c_value"}, {"exported_a_name", "exported_target_a_value"}, {"exported_exported_a_name", "a_value"}};
 
+  // Act
+  const auto changed = relabeler_.inject_target_labels(builder_, o_);
+
+  // Assert
   EXPECT_TRUE(changed);
-  EXPECT_EQ(target_label_view_set, expected_labels);
+  EXPECT_EQ((LabelViewSet{
+                {"a_name", "target_a_value"}, {"c_name", "c_value"}, {"exported_a_name", "exported_target_a_value"}, {"exported_exported_a_name", "a_value"}}),
+            builder_.label_view_set());
 }
 
-TEST_F(TestTargetLabels, InjectTargetLabels_ConflictingLabels_Honor) {
-  PromPP::Primitives::LabelsBuilderStateMap builder_state;
-  PromPP::Primitives::LabelsBuilder<PromPP::Primitives::LabelsBuilderStateMap> builder{builder_state};
-  auto labels = make_label_set({{"a_name", "a_value"}, {"c_name", "c_value"}});
-  builder.reset(labels);
-  Relabel::StatelessRelabeler sr(rcts_);
-  PromPP::Prometheus::Relabel::PerShardRelabeler prs(external_labels_, &sr, 2, 1);
-  std::vector<std::pair<std::string, std::string>> list_target_labels{{"a_name", "target_a_value"}, {"b_name", "target_b_value"}};
-  add_target_labels(list_target_labels);
+TEST_F(TargetLabelsFixture, InjectTargetLabels_ConflictingLabels_Honor) {
+  // Arrange
+  builder_.reset(LabelViewSet{{"a_name", "a_value"}, {"c_name", "c_value"}});
+
+  add_target_labels(LabelViewSet{{"a_name", "target_a_value"}, {"b_name", "target_b_value"}});
   o_.honor_labels = true;
-  LabelViewSetForTest expected_labels = make_label_set({{"a_name", "a_value"}, {"b_name", "target_b_value"}, {"c_name", "c_value"}});
 
-  bool changed = prs.inject_target_labels(builder, o_);
-  const PromPP::Primitives::LabelViewSet& target_label_view_set = builder.label_view_set();
+  // Act
+  const auto changed = relabeler_.inject_target_labels(builder_, o_);
 
+  // Assert
   EXPECT_TRUE(changed);
-  EXPECT_EQ(target_label_view_set, expected_labels);
+  EXPECT_EQ((LabelViewSet{{"a_name", "a_value"}, {"b_name", "target_b_value"}, {"c_name", "c_value"}}), builder_.label_view_set());
 }
 
-struct TestLabelsValidator : public testing::Test {};
+struct ValidateCase {
+  std::string_view value;
+  bool expected;
+};
 
-TEST_F(TestLabelsValidator, LabelNameIsValid) {
-  std::vector<std::string_view> lns{"Avalid_23name", "_Avalid_23name", "avalid_23name"};
+class LabelsNameIsValidFixture : public testing::TestWithParam<ValidateCase> {};
 
-  for (const std::string_view lname : lns) {
-    EXPECT_TRUE(PromPP::Prometheus::Relabel::label_name_is_valid(lname));
-  }
+TEST_P(LabelsNameIsValidFixture, Test) {
+  // Arrange
+
+  // Act
+  const auto result = PromPP::Prometheus::Relabel::label_name_is_valid(GetParam().value);
+
+  // Assert
+  EXPECT_EQ(GetParam().expected, result);
 }
 
-TEST_F(TestLabelsValidator, LabelNameIsInValid) {
-  std::vector<std::string_view> lns{"", "1valid_23name", "Ava:lid_23name", "a lid_23name", ":leading_colon", "colon:in:the:middle", "a\xc5z"};
+INSTANTIATE_TEST_SUITE_P(Valid,
+                         LabelsNameIsValidFixture,
+                         testing::Values(ValidateCase{.value = "Avalid_23name", .expected = true},
+                                         ValidateCase{.value = "_Avalid_23name", .expected = true},
+                                         ValidateCase{.value = "avalid_23name", .expected = true}));
 
-  for (const std::string_view lname : lns) {
-    EXPECT_FALSE(PromPP::Prometheus::Relabel::label_name_is_valid(lname));
-  }
+INSTANTIATE_TEST_SUITE_P(Invalid,
+                         LabelsNameIsValidFixture,
+                         testing::Values(ValidateCase{.value = "", .expected = false},
+                                         ValidateCase{.value = "1valid_23name", .expected = false},
+                                         ValidateCase{.value = "Ava:lid_23name", .expected = false},
+                                         ValidateCase{.value = "a lid_23name", .expected = false},
+                                         ValidateCase{.value = ":leading_colon", .expected = false},
+                                         ValidateCase{.value = "colon:in:the:middle", .expected = false},
+                                         ValidateCase{.value = "a\xc5z", .expected = false}));
+
+class MetricNameIsValidFixture : public testing::TestWithParam<ValidateCase> {};
+
+TEST_P(MetricNameIsValidFixture, Test) {
+  // Arrange
+
+  // Act
+  const auto result = PromPP::Prometheus::Relabel::metric_name_value_is_valid(GetParam().value);
+
+  // Assert
+  EXPECT_EQ(GetParam().expected, result);
 }
 
-TEST_F(TestLabelsValidator, MetricNameValueIsValid) {
-  std::vector<std::string_view> lns{"Avalid_23name", "_Avalid_23name", "avalid_23name", "Ava:lid_23name", ":leading_colon", "colon:in:the:middle"};
+INSTANTIATE_TEST_SUITE_P(Valid,
+                         MetricNameIsValidFixture,
+                         testing::Values(ValidateCase{.value = "Avalid_23name", .expected = true},
+                                         ValidateCase{.value = "_Avalid_23name", .expected = true},
+                                         ValidateCase{.value = "avalid_23name", .expected = true},
+                                         ValidateCase{.value = "Ava:lid_23name", .expected = true},
+                                         ValidateCase{.value = ":leading_colon", .expected = true},
+                                         ValidateCase{.value = "colon:in:the:middle", .expected = true}));
 
-  for (const std::string_view lname : lns) {
-    EXPECT_TRUE(PromPP::Prometheus::Relabel::metric_name_value_is_valid(lname));
-  }
+INSTANTIATE_TEST_SUITE_P(Invalid,
+                         MetricNameIsValidFixture,
+                         testing::Values(ValidateCase{.value = "", .expected = false},
+                                         ValidateCase{.value = "1valid_23name", .expected = false},
+                                         ValidateCase{.value = "a lid_23name", .expected = false},
+                                         ValidateCase{.value = "a\xc5z", .expected = false}));
+
+class LabelValueIsValidFixture : public testing::TestWithParam<ValidateCase> {};
+
+TEST_P(LabelValueIsValidFixture, Test) {
+  // Arrange
+
+  // Act
+  const auto result = PromPP::Prometheus::Relabel::label_value_is_valid(GetParam().value);
+
+  // Assert
+  EXPECT_EQ(GetParam().expected, result);
 }
 
-TEST_F(TestLabelsValidator, MetricNameValueIsInValid) {
-  std::vector<std::string_view> lns{"", "1valid_23name", "a lid_23name", "a\xc5z"};
+INSTANTIATE_TEST_SUITE_P(Valid,
+                         LabelValueIsValidFixture,
+                         testing::Values(ValidateCase{.value = "Avalid_23name", .expected = true},
+                                         ValidateCase{.value = "_Avalid_23name", .expected = true},
+                                         ValidateCase{.value = "avalid_23name", .expected = true},
+                                         ValidateCase{.value = "", .expected = true},
+                                         ValidateCase{.value = "1valid_23name", .expected = true},
+                                         ValidateCase{.value = "Ava:lid_23name", .expected = true},
+                                         ValidateCase{.value = "a lid_23name", .expected = true},
+                                         ValidateCase{.value = ":leading_colon", .expected = true},
+                                         ValidateCase{.value = "colon:in:the:middle", .expected = true},
+                                         ValidateCase{.value = "ol\xc3\xa1 mundo", .expected = true},
+                                         ValidateCase{.value = "\xe4\xbd\xa0\xe5\xa5\xbd\xe4\xb8\x96\xe7\x95\x8c", .expected = true},
+                                         ValidateCase{.value = "\x7e", .expected = true}));
 
-  for (const std::string_view lname : lns) {
-    EXPECT_FALSE(PromPP::Prometheus::Relabel::label_name_is_valid(lname));
-  }
-}
+INSTANTIATE_TEST_SUITE_P(Invalid,
+                         LabelValueIsValidFixture,
+                         testing::Values(ValidateCase{.value = "\xa0\xa1", .expected = false},
+                                         ValidateCase{.value = "a\xc5z", .expected = false},
+                                         ValidateCase{.value = "\x80\x8F\x90\x9FzxcasdAA:", .expected = false}));
 
-TEST_F(TestLabelsValidator, LabelValueIsValid) {
-  std::vector<std::string_view> lvs{
-      "Avalid_23name",
-      "_Avalid_23name",
-      "avalid_23name",
-      "",
-      "1valid_23name",
-      "Ava:lid_23name",
-      "a lid_23name",
-      ":leading_colon",
-      "colon:in:the:middle",
-      "ol\xc3\xa1 mundo",
-      "\xe4\xbd\xa0\xe5\xa5\xbd\xe4\xb8\x96\xe7\x95\x8c",
-      "\x7e",
-  };
+class StaleNaNsStateFixture : public testing::Test {};
 
-  for (const std::string_view lvalue : lvs) {
-    EXPECT_TRUE(PromPP::Prometheus::Relabel::label_value_is_valid(lvalue));
-  }
-}
+TEST_F(StaleNaNsStateFixture, Swap) {
+  // Arrange
+  static constexpr uint32_t kCurrentLsId = 42;
 
-TEST_F(TestLabelsValidator, LabelValueIsInValid) {
-  std::vector<std::string_view> lvs{
-      "\xa0\xa1",
-      "a\xc5z",
-      "\x80\x8F\x90\x9FzxcasdAA:",
-  };
+  StaleNaNsState result;
+  result.add_input(kCurrentLsId);
 
-  for (const std::string_view lvalue : lvs) {
-    EXPECT_FALSE(PromPP::Prometheus::Relabel::label_value_is_valid(lvalue));
-  }
-}
+  std::vector<uint32_t> input_ls_ids;
+  std::vector<uint32_t> target_ls_ids;
 
-struct TestStaleNaNsState : public testing::Test {};
+  auto get_callback = [&](std::vector<uint32_t>& ids) -> auto { return [&ids](uint32_t ls_id) { ids.push_back(ls_id); }; };
 
-TEST_F(TestStaleNaNsState, Swap) {
-  PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector> lss;
-  PromPP::Prometheus::Relabel::StaleNaNsState* result = new PromPP::Prometheus::Relabel::StaleNaNsState();
+  // Act
+  result.swap(get_callback(input_ls_ids), get_callback(target_ls_ids));
+  result.swap(get_callback(input_ls_ids), get_callback(target_ls_ids));
 
-  uint32_t current_ls_id{42};
-  result->add_input(current_ls_id);
-
-  auto fn = [&](const uint32_t ls_id) { EXPECT_EQ(ls_id, current_ls_id); };
-  result->swap(fn, [&](const uint32_t ls_id [[maybe_unused]]) {});
-  result->swap(fn, [&](const uint32_t ls_id [[maybe_unused]]) {});
-  delete result;
+  // Assert
+  EXPECT_EQ(std::vector<uint32_t>{42}, input_ls_ids);
+  EXPECT_EQ(std::vector<uint32_t>{}, target_ls_ids);
 }
 
 }  // namespace
-#pragma GCC diagnostic pop
