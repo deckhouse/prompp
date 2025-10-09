@@ -122,4 +122,57 @@ TEST_F(ReadonlyCompactSequence, Test) {
   EXPECT_TRUE(std::ranges::equal(kValues, snapshot));
 }
 
+class CompactSequenceCreateIteratorFixture : public testing::Test {
+ protected:
+  CompactSequence<BareBones::StreamVByte::Codec0124, BareBones::MemoryWithItemCount, 4> sequence_;
+};
+
+TEST_F(CompactSequenceCreateIteratorFixture, CreateReadIteratorNotEnoughBytes) {
+  // Arrange
+  std::array<uint8_t, 6> data{};
+  std::span<const uint8_t> buffer(data);
+
+  // Act
+  const auto it = sequence_.create_read_iterator(buffer);
+
+  // Assert
+  EXPECT_EQ(it, BareBones::StreamVByte::DecodeIteratorSentinel{});
+  EXPECT_EQ(buffer.size(), data.size());
+}
+
+TEST_F(CompactSequenceCreateIteratorFixture, CreateReadIteratorNotEnoughSizeRead) {
+  // Arrange
+  std::array<uint32_t, 2> data{3, 0};
+  std::span<const uint8_t> buffer(reinterpret_cast<const uint8_t*>(data.data()), data.size() * sizeof(uint32_t));
+
+  // Act
+  const auto it = sequence_.create_read_iterator(buffer);
+
+  // Assert
+  EXPECT_EQ(it, BareBones::StreamVByte::DecodeIteratorSentinel{});
+  EXPECT_EQ(buffer.size(), 0);
+}
+
+class CompactSequenceCreateIteratorParamFixture : public ::testing::TestWithParam<std::ranges::iota_view<uint32_t, uint32_t>> {
+ protected:
+  CompactSequence<BareBones::StreamVByte::Codec0124, BareBones::MemoryWithItemCount, 4> sequence_;
+  BareBones::ShrinkedToFitOStringStream stream_;
+};
+
+TEST_P(CompactSequenceCreateIteratorParamFixture, CreateReadIteratorValid) {
+  // Arrange
+  std::ranges::copy(GetParam(), std::back_insert_iterator(sequence_));
+  sequence_.write_to(stream_);
+  auto buffer = stream_.span<const uint8_t>();
+
+  // Act
+  const auto it = sequence_.create_read_iterator(buffer);
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(it, BareBones::StreamVByte::DecodeIteratorSentinel{}, sequence_.begin(), sequence_.end()));
+  EXPECT_EQ(buffer.size(), 0);
+}
+
+INSTANTIATE_TEST_SUITE_P(Cases, CompactSequenceCreateIteratorParamFixture, kIotaCases);
+
 }  // namespace

@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
@@ -188,7 +189,7 @@ func (q querier) addExternalLabels(ms []*labels.Matcher) ([]*labels.Matcher, []s
 	for _, m := range ms {
 		for i := 0; i < len(el); {
 			if el[i].Name == m.Name {
-				el = el[:i+copy(el[i:], el[i+1:])]
+				el = slices.Delete(el, i, i+1) // PP_CHANGES.md: readable code
 				continue
 			}
 			i++

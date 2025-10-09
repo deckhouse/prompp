@@ -17,15 +17,26 @@ class GenericEncoder {
 
   template <class Stats>
   void write_stats(Stats* stats) const {
-    size_t remaining_cap = std::numeric_limits<uint32_t>::max();
-
-    stats->earliest_timestamp = encoder_.buffer().earliest_sample();
-    stats->latest_timestamp = encoder_.buffer().latest_sample();
     stats->samples = encoder_.buffer().samples_count();
-    stats->series = encoder_.buffer().series_count();
-    stats->remainder_size = std::min(remaining_cap, encoder_.remainder_size());
 
-    if constexpr (BareBones::concepts::has_allocated_memory<Stats>) {
+    if constexpr (BareBones::concepts::has_earliest_timestamp_field<Stats>) {
+      stats->earliest_timestamp = encoder_.buffer().earliest_sample();
+    }
+
+    if constexpr (BareBones::concepts::has_latest_timestamp_field<Stats>) {
+      stats->latest_timestamp = encoder_.buffer().latest_sample();
+    }
+
+    if constexpr (BareBones::concepts::has_series_field<Stats>) {
+      stats->series = encoder_.buffer().series_count();
+    }
+
+    if constexpr (BareBones::concepts::has_remainder_size_field<Stats>) {
+      size_t remaining_cap = std::numeric_limits<uint32_t>::max();
+      stats->remainder_size = std::min(remaining_cap, encoder_.remainder_size());
+    }
+
+    if constexpr (BareBones::concepts::has_allocated_memory_field<Stats>) {
       stats->allocated_memory = encoder_.allocated_memory();
     }
   }
@@ -38,7 +49,7 @@ class GenericEncoder {
   template <class Hashdex, class Stats>
   inline __attribute__((always_inline)) void add(Hashdex& hx, Stats* stats) {
     for (const auto& item : hx) {
-      if ((item.hash() % (1 << encoder_.pow_two_of_total_shards())) == encoder_.shard_id()) {
+      if ((item.hash() % (1ULL << encoder_.pow_two_of_total_shards())) == encoder_.shard_id()) {
         item.read(timeseries_);
         encoder_.add(timeseries_, item.hash());
         timeseries_.clear();

@@ -67,13 +67,8 @@ extern "C" void prompp_head_wal_encoder_add_inner_series(void* args, void* res) 
   };
 
   struct Result {
-    int64_t earliest_timestamp;
-    int64_t latest_timestamp;
-    size_t allocated_memory;
-    uint32_t samples;
-    uint32_t series;
-    uint32_t remainder_size;
     PromPP::Primitives::Go::Slice<char> error;
+    uint32_t samples;
   };
 
   const auto in = static_cast<Arguments*>(args);
@@ -93,14 +88,9 @@ extern "C" void prompp_head_wal_encoder_finalize(void* args, void* res) {
   };
 
   struct Result {
-    int64_t earliest_timestamp;
-    int64_t latest_timestamp;
-    size_t allocated_memory;
-    uint32_t samples;
-    uint32_t series;
-    uint32_t remainder_size;
     PromPP::Primitives::Go::Slice<char> segment;
     PromPP::Primitives::Go::Slice<char> error;
+    uint32_t samples;
   };
 
   const auto in = static_cast<Arguments*>(args);
@@ -179,6 +169,8 @@ extern "C" void prompp_head_wal_decoder_decode_to_data_storage(void* args, void*
   };
 
   struct Result {
+    PromPP::Primitives::Timestamp create_timestamp;
+    PromPP::Primitives::Timestamp encode_timestamp;
     PromPP::Primitives::Go::Slice<char> error;
   };
 
@@ -188,6 +180,8 @@ extern "C" void prompp_head_wal_decoder_decode_to_data_storage(void* args, void*
   try {
     in->decoder->decode(in->segment, [in](PromPP::Primitives::LabelSetID ls_id, PromPP::Primitives::Timestamp timestamp, double value)
                                          PROMPP_LAMBDA_INLINE { in->encoder_wrapper->encoder.encode(ls_id, timestamp, value); });
+    out->create_timestamp = in->decoder->decoder().created_at_tsns();
+    out->encode_timestamp = in->decoder->decoder().encoded_at_tsns();
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
     entrypoint::handle_current_exception(err_stream);

@@ -490,6 +490,10 @@ func (c *LeveledCompactor) CompactWithBlockPopulator(dest string, dirs []string,
 		uids = append(uids, meta.ULID.String())
 	}
 
+	if len(metas) == 0 {
+		return nil, nil // PP_CHANGES.md: fast exit
+	}
+
 	uid := ulid.MustNew(ulid.Now(), rand.Reader)
 
 	meta := CompactBlockMetas(uid, metas...)

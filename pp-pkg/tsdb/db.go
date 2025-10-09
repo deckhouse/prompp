@@ -1,12 +1,13 @@
 package tsdb
 
 import (
-	"github.com/oklog/ulid"
-	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"
-	"github.com/prometheus/prometheus/tsdb"
-	"github.com/prometheus/prometheus/tsdb/fileutil"
 	"path/filepath"
 	"slices"
+
+	"github.com/oklog/ulid"
+	"github.com/prometheus/prometheus/pp/go/storage/catalog"
+	"github.com/prometheus/prometheus/tsdb"
+	"github.com/prometheus/prometheus/tsdb/fileutil"
 )
 
 // PPBlocksToDelete returns a filter which decides time based and size based
@@ -104,7 +105,7 @@ func BeyondSizeRetention(db *tsdb.DB, dir string, catalog *catalog.Catalog, bloc
 
 func catalogHeadsSize(dir string, catalog *catalog.Catalog) (catalogSize int64) {
 	catalogSize += catalog.OnDiskSize()
-	heads, _ := catalog.List(nil, nil)
+	heads := catalog.List(nil, nil)
 	for _, h := range heads {
 		catalogSize += headSize(filepath.Join(dir, h.Dir()))
 	}

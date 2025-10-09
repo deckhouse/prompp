@@ -14,6 +14,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
 	"github.com/prometheus/prometheus/pp/go/relabeler/head"
 	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"
+	"github.com/prometheus/prometheus/pp/go/relabeler/headcontainer"
 	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 	"github.com/prometheus/prometheus/pp/go/util"
 )
@@ -36,14 +37,15 @@ type Catalog interface {
 
 // Manager of heads.
 type Manager struct {
-	dir            string
-	clock          clockwork.Clock
-	configSource   ConfigSource
-	catalog        Catalog
-	generation     uint64
-	maxSegmentSize uint32
-	counter        *prometheus.CounterVec
-	registerer     prometheus.Registerer
+	dir                       string
+	clock                     clockwork.Clock
+	configSource              ConfigSource
+	catalog                   Catalog
+	generation                uint64
+	maxSegmentSize            uint32
+	counter                   *prometheus.CounterVec
+	registerer                prometheus.Registerer
+	unloadDataStorageInterval time.Duration
 }
 
 // SetLastAppendedSegmentIDFn function to set the last added segment id.
@@ -62,6 +64,7 @@ func New(
 	headCatalog Catalog,
 	maxSegmentSize uint32,
 	registerer prometheus.Registerer,
+	unloadDataStorageInterval time.Duration,
 ) (*Manager, error) {
 	dirStat, err := os.Stat(dir)
 	if err != nil {
@@ -87,7 +90,8 @@ func New(
 			},
 			[]string{"type"},
 		),
-		registerer: registerer,
+		registerer:                registerer,
+		unloadDataStorageInterval: unloadDataStorageInterval,
 	}, nil
 }
 
@@ -105,7 +109,7 @@ type HeadLoadResult struct {
 //revive:disable-next-line:cognitive-complexity function is not complicated.
 //revive:disable-next-line:function-length long but readable.
 //revive:disable-next-line:cyclomatic but readable
-func (m *Manager) Restore(blockDuration time.Duration) (active relabeler.Head, rotated []relabeler.Head, err error) {
+func (m *Manager) Restore(blockDuration time.Duration, unloadDataStorageInterval time.Duration) (active relabeler.Head, rotated []relabeler.Head, err error) {
 	headRecords, err := m.catalog.List(
 		func(record *catalog.Record) bool {
 			return record.DeletedAt() == 0 && record.Status() != catalog.StatusPersisted
@@ -210,6 +214,7 @@ func (m *Manager) loadHead(
 		m.maxSegmentSize,
 		SetLastAppendedSegmentIDFn(func(segmentID uint32) { headRecord.SetLastAppendedSegmentID(segmentID) }),
 		m.registerer,
+		m.unloadDataStorageInterval,
 	)
 	if err != nil {
 		result.err = err
@@ -284,6 +289,7 @@ func (m *Manager) BuildWithConfig(
 		m.maxSegmentSize,
 		SetLastAppendedSegmentIDFn(func(segmentID uint32) { headRecord.SetLastAppendedSegmentID(segmentID) }),
 		m.registerer,
+		m.unloadDataStorageInterval,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create head: %w", err)
@@ -295,9 +301,9 @@ func (m *Manager) BuildWithConfig(
 }
 
 // createDiscardableRotatableHead create discardable and rotatable head.
-func (m *Manager) createDiscardableRotatableHead(h relabeler.Head, releaseHeadFn func()) *DiscardableRotatableHead {
+func (m *Manager) createDiscardableRotatableHead(h relabeler.Head, releaseHeadFn func()) relabeler.Head {
 	m.counter.With(prometheus.Labels{"type": "created"}).Inc()
-	return NewDiscardableRotatableHead(
+	return headcontainer.NewDiscardableRotatable(
 		h,
 		func(id string, err error) error {
 			if _, rotateErr := m.catalog.SetStatus(id, catalog.StatusRotated); rotateErr != nil {

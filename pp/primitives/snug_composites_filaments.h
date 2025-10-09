@@ -762,7 +762,7 @@ class LabelSet {
         }
         symbols_tables.resize(original_symbols_tables_size);
       });
-      for (uint32_t i = 0; i != number_of_symbols_tables_to_load; ++i) {
+      for (uint32_t i = 0; i < number_of_symbols_tables_to_load; ++i) {
         // read id
         uint32_t id;
 
@@ -773,12 +773,19 @@ class LabelSet {
         }
 
         // resize, if needed
-        if (id >= symbols_tables.size()) {
+        if (id >= symbols_tables.size()) [[unlikely]] {
+          if (id > symbols_tables.size()) [[unlikely]] {
+            throw BareBones::Exception(0x13fe3e1aae45bb34, "Symbol id sequence is incorrect: id (%u), size: (%u)", id, symbols_tables.size());
+          }
+
           const auto number_of_tables_stil_left_to_load = number_of_symbols_tables_to_load - i;
-          auto size_will_be_at_least = id + number_of_tables_stil_left_to_load;
+          uint64_t size_will_be_at_least = static_cast<uint64_t>(symbols_tables.size()) + number_of_tables_stil_left_to_load;
+          if (size_will_be_at_least >= std::numeric_limits<uint32_t>::max()) [[unlikely]] {
+            throw BareBones::Exception(0x98d95ce3b05ec2b5, "Max symbol id (%lu) is greater than UINT32_MAX", size_will_be_at_least);
+          }
 
           symbols_tables.reserve(size_will_be_at_least);
-          for (auto j = symbols_tables.size(); j != size_will_be_at_least; ++j) {
+          for (uint32_t j = 0; j < number_of_tables_stil_left_to_load; ++j) {
             symbols_tables.emplace_back(std::make_unique<SymbolsTableType<Vector>>());
           }
 
@@ -971,7 +978,7 @@ class LabelSet {
     }
 
     // check that streamvbyte data is in range
-    auto data_size = BareBones::StreamVByte::decode_data_size<BareBones::StreamVByte::Codec1234>(
+    const uint32_t data_size = BareBones::StreamVByte::decode_data_size<BareBones::StreamVByte::Codec1234>(
         lns.size(), data.symbols_ids_sequences.begin() + pos_ - data.shrinked_size_);
     if (pos_ - data.shrinked_size_ + keys_size + data_size > data.symbols_ids_sequences.size()) {
       throw BareBones::Exception(0xd02e54dac8e1d328, "LabelSets data validation error: expected LabelSets values length is out of data symbols vector range");

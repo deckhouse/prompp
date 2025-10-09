@@ -71,6 +71,14 @@ func (lss *LabelSetStorage) AllocatedMemory() uint64 {
 	return res
 }
 
+// BitsetSeries returns a copy of the bitset of added series from the lss. Read operation.
+func (lss *LabelSetStorage) BitsetSeries() *BitsetSeries {
+	bsPointer := primitivesLSSBitsetSeries(lss.pointer)
+	runtime.KeepAlive(lss)
+
+	return newBitsetSeriesFromPointer(bsPointer)
+}
+
 // FindOrEmplace find in lss LabelSet or emplace and return ls id.
 func (lss *LabelSetStorage) FindOrEmplace(labelSet model.LabelSet) FindOrEmplaceResult {
 	res := primitivesLSSFindOrEmplace(lss.pointer, labelSet)
@@ -290,4 +298,24 @@ type CppLabelSetBuilder struct {
 	LsId        uint32
 	SortedAdd   []Label
 	SortedDel   []string
+}
+
+//
+// BitsetSeries
+//
+
+// BitsetSeries copies of the bitset of added series from the lss.
+type BitsetSeries struct {
+	pointer           uintptr
+	gcDestroyDetector *uint64
+}
+
+// newBitsetSeriesFromPointer init new [BitsetSeries].
+func newBitsetSeriesFromPointer(bitsetSeriesPointer uintptr) *BitsetSeries {
+	bitsetSeries := &BitsetSeries{pointer: bitsetSeriesPointer, gcDestroyDetector: &gcDestroyDetector}
+	runtime.SetFinalizer(bitsetSeries, func(bs *BitsetSeries) {
+		primitivesLSSBitsetDtor(bs.pointer)
+	})
+
+	return bitsetSeries
 }

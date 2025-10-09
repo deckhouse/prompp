@@ -3,6 +3,7 @@
 #include <array>
 #include <bit>
 #include <cassert>
+#include <climits>
 #include <cstdint>
 
 #include "preprocess.h"
@@ -45,18 +46,42 @@ inline __attribute__((always_inline)) uint64_t bextr(uint64_t src, uint32_t star
 #endif
 }
 
+constexpr uint8_t kByteBits = CHAR_BIT;
+
 template <class T>
 PROMPP_ALWAYS_INLINE constexpr T to_bits(T bytes) noexcept {
-  return bytes * 8;
+  return bytes * kByteBits;
 }
 
 template <class T>
 PROMPP_ALWAYS_INLINE constexpr T to_bytes(T bits) noexcept {
-  return bits / 8;
+  return bits / kByteBits;
 }
 
-constexpr uint8_t kUint64Bits = to_bits(sizeof(uint64_t));
-constexpr uint8_t kByteBits = to_bits(sizeof(uint8_t));
+template <class T>
+constexpr T to_ceil_bytes(T bits) noexcept {
+  return (bits + kByteBits - 1) / kByteBits;
+}
+
+template <typename T>
+constexpr std::size_t unit_bits = sizeof(T) * kByteBits;
+
+template <typename Unit, typename Int>
+constexpr Int to_units(Int bits) noexcept {
+  return bits / unit_bits<Unit>;
+}
+
+template <typename Unit, typename Int>
+constexpr Int to_ceil_units(Int bits) noexcept {
+  return (bits + unit_bits<Unit> - 1) / unit_bits<Unit>;
+}
+
+constexpr uint8_t kUint64Bits = unit_bits<uint64_t>;
+
+template <class T>
+constexpr T byte_width(T x) noexcept {
+  return to_ceil_bytes(std::bit_width(x));
+}
 
 template <class T>
 PROMPP_ALWAYS_INLINE constexpr T be(T value) noexcept {

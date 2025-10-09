@@ -53,7 +53,7 @@ func (w *ShardWal) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error
 		return false, fmt.Errorf("writing in corrupted wal")
 	}
 
-	stats, err := w.encoder.Encode(innerSeriesSlice)
+	samples, err := w.encoder.Encode(innerSeriesSlice)
 	if err != nil {
 		return false, fmt.Errorf("failed to encode inner series: %w", err)
 	}
@@ -63,7 +63,7 @@ func (w *ShardWal) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error
 	}
 
 	// memoize reaching of limits to deduplicate triggers
-	if !w.limitExhausted && stats.Samples() >= w.maxSegmentSize {
+	if !w.limitExhausted && samples >= w.maxSegmentSize {
 		w.limitExhausted = true
 		return true, nil
 	}
@@ -164,8 +164,8 @@ func ReadHeader(reader io.Reader) (fileFormatVersion uint8, encoderVersion uint8
 type EncodedSegment interface {
 	Size() int64
 	CRC32() uint32
+	Samples() uint32
 	io.WriterTo
-	cppbridge.SegmentStats
 }
 
 func WriteSegment(writer io.Writer, segment EncodedSegment) (n int, err error) {
@@ -218,36 +218,41 @@ func (d DecodedSegment) SampleCount() uint32 {
 	return d.sampleCount
 }
 
-func ReadSegment(reader io.Reader) (decodedSegment DecodedSegment, n int, err error) {
+func ReadSegment(reader io.Reader, decodedSegment *DecodedSegment) (n int, err error) {
 	br := &byteReader{r: reader}
 	var size uint64
 	size, err = binary.ReadUvarint(br)
 	if err != nil {
-		return decodedSegment, br.n, fmt.Errorf("failed to read segment size: %w", err)
+		return br.n, fmt.Errorf("failed to read segment size: %w", err)
 	}
 
 	crc32HashU64, err := binary.ReadUvarint(br)
 	if err != nil {
-		return decodedSegment, br.n, fmt.Errorf("failed to read segment crc32 hash: %w", err)
+		return br.n, fmt.Errorf("failed to read segment crc32 hash: %w", err)
 	}
 	crc32Hash := uint32(crc32HashU64)
 
 	sampleCountU64, err := binary.ReadUvarint(br)
 	if err != nil {
-		return decodedSegment, br.n, fmt.Errorf("failed to read segment sample count: %w", err)
+		return br.n, fmt.Errorf("failed to read segment sample count: %w", err)
 	}
 	decodedSegment.sampleCount = uint32(sampleCountU64)
 
-	decodedSegment.data = make([]byte, size)
+	if int(size) > cap(decodedSegment.data) {
+		decodedSegment.data = make([]byte, size)
+	} else {
+		decodedSegment.data = decodedSegment.data[:size]
+	}
+
 	n, err = io.ReadFull(reader, decodedSegment.data)
 	if err != nil {
-		return decodedSegment, br.n, fmt.Errorf("failed to read segment data: %w", err)
+		return br.n, fmt.Errorf("failed to read segment data: %w", err)
 	}
 	n += br.n
 
 	if crc32Hash != crc32.ChecksumIEEE(decodedSegment.data) {
-		return decodedSegment, n, fmt.Errorf("crc32 did not match, want: %d, have: %d", crc32Hash, crc32.ChecksumIEEE(decodedSegment.data))
+		return n, fmt.Errorf("crc32 did not match, want: %d, have: %d", crc32Hash, crc32.ChecksumIEEE(decodedSegment.data))
 	}
 
-	return decodedSegment, n, nil
+	return n, nil
 }

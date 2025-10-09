@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <random>
+#include <spanstream>
 #include <string>
 #include <vector>
 
@@ -8,6 +9,8 @@
 #include "bare_bones/bitset.h"
 
 namespace {
+
+using std::operator""sv;
 
 class BitsetFixture : public testing::Test {
  protected:
@@ -93,7 +96,6 @@ TEST_F(BitsetFixture, should_iterate_over_resized_empty) {
 }
 
 TEST_F(BitsetFixture, should_not_out_of_range_on_resize) {
-  bs_.resize(2048);
   bs_.set(2047);
   bs_.resize(4096);
 
@@ -105,9 +107,36 @@ TEST_F(BitsetFixture, should_not_out_of_range_on_resize) {
   ASSERT_EQ(count, 2047U);
 }
 
+TEST_F(BitsetFixture, TestEmptyIsEmpty) {
+  // Arrange
+
+  // Act
+
+  // Assert
+  EXPECT_TRUE(bs_.empty());
+}
+
+TEST_F(BitsetFixture, TestNotFilledIsEmpty) {
+  // Arrange
+  bs_.resize(10);
+  // Act
+
+  // Assert
+  EXPECT_TRUE(bs_.empty());
+}
+
+TEST_F(BitsetFixture, TestNotEmpty) {
+  // Arrange
+  bs_.set(10);
+
+  // Act
+
+  // Assert
+  EXPECT_FALSE(bs_.empty());
+}
+
 TEST_F(BitsetFixture, ResetInFirstUint64) {
   // Arrange
-  bs_.resize(1);
 
   // Act
   bs_.set(0);
@@ -119,7 +148,6 @@ TEST_F(BitsetFixture, ResetInFirstUint64) {
 
 TEST_F(BitsetFixture, ResetInSecondUint64) {
   // Arrange
-  bs_.resize(65);
 
   // Act
   bs_.set(64);
@@ -131,7 +159,6 @@ TEST_F(BitsetFixture, ResetInSecondUint64) {
 
 TEST_F(BitsetFixture, TestResetCorrectness) {
   // Arrange
-  bs_.resize(3);
 
   // Act
   bs_.set(0);
@@ -145,9 +172,82 @@ TEST_F(BitsetFixture, TestResetCorrectness) {
   EXPECT_TRUE(bs_[2]);
 }
 
+TEST_F(BitsetFixture, TestSetAtomicCorrectness) {
+  // Arrange
+  bs_.resize(8);
+
+  // Act
+  bs_.set_atomic(7);
+
+  // Assert
+  EXPECT_TRUE(bs_[7]);
+}
+
+TEST_F(BitsetFixture, TestResetAtomicCorrectness) {
+  // Arrange
+  bs_.resize(8);
+  bs_.set_atomic(7);
+
+  // Act
+  bs_.reset_atomic(7);
+
+  // Assert
+  EXPECT_FALSE(bs_[7]);
+}
+
+TEST_F(BitsetFixture, TestSetIter) {
+  // Arrange
+  const std::array<uint32_t, 2> idx = {0, 2};
+
+  // Act
+  bs_.set(idx.begin(), idx.end());
+
+  // Assert
+  EXPECT_TRUE(bs_[0]);
+  EXPECT_FALSE(bs_[1]);
+  EXPECT_TRUE(bs_[2]);
+}
+
+TEST_F(BitsetFixture, TestSetInitList) {
+  // Arrange
+  // Act
+  bs_.set({0, 2});
+
+  // Assert
+  EXPECT_TRUE(bs_[0]);
+  EXPECT_FALSE(bs_[1]);
+  EXPECT_TRUE(bs_[2]);
+}
+
+TEST_F(BitsetFixture, TestResetIter) {
+  // Arrange
+  bs_.set({0, 1, 2});
+  const std::array<uint32_t, 2> idx = {0, 2};
+
+  // Act
+  bs_.reset(idx.begin(), idx.end());
+
+  // Assert
+  EXPECT_FALSE(bs_[0]);
+  EXPECT_TRUE(bs_[1]);
+  EXPECT_FALSE(bs_[2]);
+}
+
+TEST_F(BitsetFixture, TestResetInitList) {
+  // Arrange
+  bs_.set({0, 1, 2});
+
+  // Act
+  bs_.reset({0, 2});
+
+  // Assert
+  EXPECT_FALSE(bs_[0]);
+  EXPECT_TRUE(bs_[1]);
+  EXPECT_FALSE(bs_[2]);
+}
+
 TEST_F(BitsetFixture, PopcountOnEmptyBitset) {
   // Arrange
-  bs_.resize(1);
 
   // Act
 
@@ -157,7 +257,6 @@ TEST_F(BitsetFixture, PopcountOnEmptyBitset) {
 
 TEST_F(BitsetFixture, PopcountOnNonEmptyBitset) {
   // Arrange
-  bs_.resize(9);
 
   // Act
   bs_.set(0);
@@ -170,7 +269,6 @@ TEST_F(BitsetFixture, PopcountOnNonEmptyBitset) {
 
 TEST_F(BitsetFixture, PopcountAfterResizeInCurrentUint64) {
   // Arrange
-  bs_.resize(1);
 
   // Act
   bs_.set(0);
@@ -182,7 +280,6 @@ TEST_F(BitsetFixture, PopcountAfterResizeInCurrentUint64) {
 
 TEST_F(BitsetFixture, PopcountAfterResizeInNextUint64) {
   // Arrange
-  bs_.resize(9);
 
   // Act
   bs_.set(8);
@@ -191,6 +288,142 @@ TEST_F(BitsetFixture, PopcountAfterResizeInNextUint64) {
 
   // Assert
   EXPECT_EQ(0U, bs_.popcount());
+}
+
+TEST_F(BitsetFixture, IterateOverEmptyBitset) {
+  // Arrange
+
+  // Act
+
+  // Assert
+  EXPECT_EQ(0U, std::ranges::distance(bs_));
+}
+
+class BitsetCreateIteratorFixture : public testing::Test {
+ protected:
+  std::vector<uint8_t> bytes_data_;
+};
+
+TEST_F(BitsetCreateIteratorFixture, CreateReadIteratorLess4Bytes) {
+  // Arrange
+  bytes_data_ = {0x00, 0x00, 0x00};
+  std::span<const uint8_t> buffer(bytes_data_);
+
+  // Act
+  const auto it = BareBones::Bitset::create_read_iterator(buffer);
+
+  // Assert
+  EXPECT_EQ(it, BareBones::Bitset::IteratorSentinel{});
+  EXPECT_EQ(buffer.size(), 3);
+}
+
+TEST_F(BitsetCreateIteratorFixture, CreateReadIteratorWrongSize) {
+  // Arrange
+  bytes_data_ = {0x00, 0x00, 0x00, 0x01, 0x00};
+  std::span<const uint8_t> buffer(bytes_data_);
+
+  // Act
+  const auto it = BareBones::Bitset::create_read_iterator(buffer);
+
+  // Assert
+  EXPECT_EQ(it, BareBones::Bitset::IteratorSentinel{});
+  EXPECT_EQ(buffer.size(), 1);
+}
+
+class BitsetCreateIteratorValidFixture : public testing::Test {
+ protected:
+  BareBones::Bitset bs_;
+  BareBones::ShrinkedToFitOStringStream stream_;
+};
+
+TEST_F(BitsetCreateIteratorValidFixture, TestWriteSize) {
+  // Arrange
+  bs_.set({1, 10, 100, 1000});
+
+  // Act
+  bs_.write_to(stream_);
+
+  // Assert
+  EXPECT_EQ(stream_.view().size(), bs_.get_write_size());
+}
+
+TEST_F(BitsetCreateIteratorValidFixture, CreateReadIteratorValid) {
+  // Arrange
+  bs_.set({1, 10, 100, 1000});
+  bs_.write_to(stream_);
+  std::span buffer = stream_.span<const uint8_t>();
+
+  // Act
+  const auto it = BareBones::Bitset::create_read_iterator(buffer);
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(it, BareBones::Bitset::IteratorSentinel{}, bs_.begin(), bs_.end()));
+  EXPECT_EQ(buffer.size(), 0);
+}
+
+class BitsetReadFromFixture : public testing::Test {
+ protected:
+  BareBones::Bitset bs_;
+};
+
+TEST_F(BitsetReadFromFixture, ReadSizeError) {
+  // Arrange
+  std::ispanstream stream{""};
+
+  // Act
+  const auto result = bs_.read_from(stream);
+
+  // Assert
+  EXPECT_FALSE(result);
+}
+
+TEST_F(BitsetReadFromFixture, ReadBytesError) {
+  // Arrange
+  std::ispanstream stream{"\x01\x00\x00\x00"sv};
+
+  // Act
+  const auto result = bs_.read_from(stream);
+
+  // Assert
+  EXPECT_FALSE(result);
+}
+
+TEST_F(BitsetReadFromFixture, ReadEmptyBitset) {
+  // Arrange
+  std::ispanstream stream{"\x00\x00\x00\x00"sv};
+
+  // Act
+  const auto result = bs_.read_from(stream);
+
+  // Assert
+  EXPECT_TRUE(result);
+}
+
+TEST_F(BitsetReadFromFixture, ReadSuccess) {
+  // Arrange
+  std::ispanstream stream{"\x01\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"sv};
+
+  // Act
+  const auto result = bs_.read_from(stream);
+
+  // Assert
+  EXPECT_TRUE(result);
+  EXPECT_EQ(1U, bs_.size());
+  EXPECT_TRUE(bs_.is_set(0));
+}
+
+TEST_F(BitsetReadFromFixture, OverwriteBitsetAfterRead) {
+  // Arrange
+  bs_.set({1, 2, 3, 4, 5});
+  std::ispanstream stream{"\x01\x00\x00\x00\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"sv};
+
+  // Act
+  const auto result = bs_.read_from(stream);
+
+  // Assert
+  EXPECT_TRUE(result);
+  EXPECT_EQ(1U, bs_.size());
+  EXPECT_TRUE(bs_.is_set(0));
 }
 
 class BitsetConstructorsFixture : public BitsetFixture {};
