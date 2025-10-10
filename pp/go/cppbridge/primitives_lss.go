@@ -36,9 +36,13 @@ func lssTypeToString(lssType uint32) string {
 //
 
 const (
+	// LSSQueryStatusNoPositiveMatchers the status when there is no positive matchers.
 	LSSQueryStatusNoPositiveMatchers uint32 = iota
+	// LSSQueryStatusRegexpError the status when there is a regexp error.
 	LSSQueryStatusRegexpError
+	// LSSQueryStatusNoMatch the status when there is no match.
 	LSSQueryStatusNoMatch
+	// LSSQueryStatusMatch the status when there is a match.
 	LSSQueryStatusMatch
 )
 

@@ -3,8 +3,6 @@ package cppbridge_test
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/stretchr/testify/suite"
@@ -121,7 +119,8 @@ func (s *HeadSuite) TestSerializedChunkRecoder() {
 	serializedChunks, result := s.dataStorage.Query(cppbridge.HeadDataStorageQuery{
 		StartTimestampMs: timeInterval.MinT,
 		EndTimestampMs:   timeInterval.MaxT,
-		LabelSetIDs:      []uint32{0, 1}},
+		LabelSetIDs:      []uint32{0, 1},
+	},
 	)
 	recoder := cppbridge.NewSerializedChunkRecoder(serializedChunks, timeInterval)
 
@@ -179,7 +178,7 @@ func (s *HeadSuite) TestInstantQuery() {
 	// Arrange
 	dataStorage := cppbridge.NewHeadDataStorage()
 	encoder := cppbridge.NewHeadEncoderWithDataStorage(dataStorage)
-	var series = []struct {
+	series := []struct {
 		SeriesID uint32
 		cppbridge.Sample
 	}{
@@ -205,8 +204,8 @@ func (s *HeadSuite) TestInstantQuery() {
 	samples, result := dataStorage.InstantQuery(targetTimestamp, defaultTimestamp, seriesIDs)
 
 	// Assert
-	require.Equal(s.T(), cppbridge.DataStorageQueryStatusSuccess, result.Status)
-	require.Len(s.T(), samples, 4)
+	s.Require().Equal(cppbridge.DataStorageQueryStatusSuccess, result.Status)
+	s.Require().Len(samples, 4)
 
 	s.Equal(defaultTimestamp, samples[0].Timestamp)
 	s.Equal(series[2].Sample, samples[1])

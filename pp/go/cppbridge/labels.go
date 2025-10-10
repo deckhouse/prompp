@@ -42,12 +42,12 @@ func FromMap(m map[string]string) Labels {
 
 // FromStrings creates new labels from pairs of strings.
 func FromStrings(ss ...string) Labels {
-	if len(ss)%2 != 0 { //revive:disable:add-constant pairs
+	if len(ss)%2 != 0 { //revive:disable-line:add-constant // pairs
 		panic("invalid number of strings")
 	}
 
-	ls := make([]Label, 0, len(ss)/2) //revive:disable:add-constant pairs
-	for i := 0; i < len(ss); i += 2 { //revive:disable:add-constant pairs
+	ls := make([]Label, 0, len(ss)/2) //revive:disable-line:add-constant // pairs
+	for i := 0; i < len(ss); i += 2 { //revive:disable-line:add-constant // pairs
 		ls = append(ls, Label{Name: ss[i], Value: ss[i+1]})
 	}
 
@@ -60,9 +60,9 @@ func FromStrings(ss ...string) Labels {
 // Note: the result is not guaranteed to be consistent across different runs of Prometheus.
 func (ls Labels) Hash() uint64 {
 	// Use xxhash.Sum64(b) for fast path as it's faster.
-	b := make([]byte, 0, 1024) //rrevive:disable:add-constant 1kb
+	b := make([]byte, 0, 1024) //revive:disable-line:add-constant // 1kb
 	for i, v := range ls {
-		if len(b)+len(v.Name)+len(v.Value)+2 >= cap(b) { //revive:disable:add-constant pairs
+		if len(b)+len(v.Name)+len(v.Value)+2 >= cap(b) { //revive:disable-line:add-constant // pairs
 			// If labels entry is 1KB+ do not allocate whole entry.
 			h := xxhash.New()
 			_, _ = h.Write(b)

@@ -360,11 +360,11 @@ func (s *QueryableLSSSuite) TestCopyAddedSeriesFromSnapshot() {
 	lssCopyOfCopy := cppbridge.NewQueryableLssStorage()
 
 	// Act
-	snapshot := s.lss.CreateLabelSetSnapshot()
+	snapshot := s.lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 	bitsetSeries := s.lss.BitsetSeries()
 	snapshot.CopyAddedSeries(bitsetSeries, lssCopy)
 
-	snapshotCopy := lssCopy.CreateLabelSetSnapshot()
+	snapshotCopy := lssCopy.CreateLabelSetSnapshot(&testSnapshotSource{})
 	bitsetSeriesCopy := lssCopy.BitsetSeries()
 	snapshotCopy.CopyAddedSeries(bitsetSeriesCopy, lssCopyOfCopy)
 

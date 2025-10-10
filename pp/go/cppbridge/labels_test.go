@@ -104,7 +104,7 @@ func (s *LabelsSuite) TestJSON() {
 
 	b, err := json.Marshal(lbls)
 	s.Require().NoError(err)
-	s.Require().Equal(expectedJSON, string(b))
+	s.Require().JSONEq(expectedJSON, string(b))
 
 	var gotJ cppbridge.Labels
 	err = json.Unmarshal(b, &gotJ)
@@ -121,7 +121,7 @@ func (s *LabelsSuite) TestJSON() {
 	f := foo{ALabels: lbls}
 	b, err = json.Marshal(f)
 	s.Require().NoError(err)
-	s.Require().Equal(expectedJSONFromStruct, string(b))
+	s.Require().JSONEq(expectedJSONFromStruct, string(b))
 
 	var gotFJ foo
 	err = json.Unmarshal(b, &gotFJ)
@@ -139,7 +139,7 @@ func (s *LabelsSuite) TestYAML() {
 	expectedYAML := "aaa: \"111\"\nbbb: \"2222\"\nccc: \"33333\"\n"
 	b, err := yaml.Marshal(lbls)
 	s.Require().NoError(err)
-	s.Require().Equal(expectedYAML, string(b))
+	s.Require().YAMLEq(expectedYAML, string(b))
 
 	var gotY cppbridge.Labels
 	err = yaml.Unmarshal(b, &gotY)
@@ -157,7 +157,7 @@ func (s *LabelsSuite) TestYAML() {
 
 	b, err = yaml.Marshal(f)
 	s.Require().NoError(err)
-	s.Require().Equal(expectedYAMLFromStruct, string(b))
+	s.Require().YAMLEq(expectedYAMLFromStruct, string(b))
 
 	var gotFY foo
 	err = yaml.Unmarshal(b, &gotFY)
