@@ -4,27 +4,27 @@
 
 extern "C" void prompp_series_data_serialization_serialized_data_next(void* args, void* res) {
   struct Arguments {
-    entrypoint::head::SerializedDataPtr* serialized_data;
+    entrypoint::head::SerializedDataPtr serialized_data;
   };
 
   using Result = struct {
     uint32_t series_id;
   };
 
-  new (res) Result{.series_id = reinterpret_cast<Arguments*>(args)->serialized_data->get()->next()};
+  new (res) Result{.series_id = static_cast<Arguments*>(args)->serialized_data->next()};
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_iterator(void* args, void* res) {
   struct Arguments {
-    entrypoint::head::SerializedDataPtr* serialized_data;
+    entrypoint::head::SerializedDataPtr serialized_data;
   };
 
   using Result = struct {
     entrypoint::head::SerializedDataIteratorPtr iterator;
   };
 
-  new (res) Result{.iterator = std::make_unique<series_data::serialization::SerializedDataView::SerializedSeriesIterator>(
-                       static_cast<Arguments*>(args)->serialized_data->get()->iterator())};
+  new (res) Result{
+      .iterator = std::make_unique<series_data::serialization::SerializedDataView::SeriesIterator>(static_cast<Arguments*>(args)->serialized_data->iterator())};
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_iterator_next(void* args, void* res) {
@@ -40,7 +40,7 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_next(v
     bool has_value;
   };
 
-  Arguments* in = reinterpret_cast<Arguments*>(args);
+  const Arguments* in = static_cast<Arguments*>(args);
 
   if (*in->iterator == DecodeIteratorSentinel{}) {
     new (res) Result{.has_value = false};
@@ -61,9 +61,8 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_dtor(v
 
 extern "C" void prompp_series_data_serialization_serialized_data_dtor(void* args) {
   struct Arguments {
-    entrypoint::head::SerializedDataPtr* serialized_data;
+    entrypoint::head::SerializedDataPtr serialized_data;
   };
 
-  std::destroy_at(static_cast<Arguments*>(args)->serialized_data);
   static_cast<Arguments*>(args)->~Arguments();
 }

@@ -29,6 +29,7 @@ class SerializerDeserializerTrait {
  protected:
   DataStorage storage_;
   Encoder<> encoder_{storage_};
+  DataSerializer serializer_{storage_};
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static SampleList decode_current_chunk(SerializedDataView& data, uint32_t series_id) {
     SampleList result;
@@ -47,8 +48,8 @@ TEST_F(SerializerDeserializerFixtureNew, EmptyChunksList) {
   // Arrange
 
   // Act
-  SerializedData serialized = DataSerializer::serialize(storage_, {});
-  SerializedDataView serialized_view(serialized);
+  const SerializedData serialized = serializer_.serialize({});
+  const SerializedDataView serialized_view(serialized);
 
   // Assert
   ASSERT_EQ(0U, serialized_view.get_chunks().size());
@@ -67,7 +68,7 @@ TEST_F(SerializerDeserializerFixtureNew, TwoUint32ConstantChunkWithCommonTimesta
   encoder_.encode(1, 3, 1.0);
 
   // Act
-  SerializedData serialized = DataSerializer::serialize(storage_, {QueriedChunk{0}, QueriedChunk{1}});
+  const SerializedData serialized = serializer_.serialize({QueriedChunk{0}, QueriedChunk{1}});
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -109,7 +110,7 @@ TEST_F(SerializerDeserializerFixtureNew, TwoUint32ConstantFinalizedChunkWithComm
   encoder_.encode(1, 4, 1.0);
 
   // Act
-  SerializedData serialized = DataSerializer::serialize(storage_);
+  const SerializedData serialized = serializer_.serialize();
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -155,7 +156,7 @@ TEST_F(SerializerDeserializerFixtureNew, ThreeUint32ConstantChunkWithCommonAndUn
   encoder_.encode(2, 3, 2.0);
 
   // Act
-  SerializedData serialized = DataSerializer::serialize(storage_, {QueriedChunk{0}, QueriedChunk{1}, QueriedChunk{2}});
+  const SerializedData serialized = serializer_.serialize({QueriedChunk{0}, QueriedChunk{1}, QueriedChunk{2}});
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -221,7 +222,7 @@ TEST_F(SerializerDeserializerFixtureNew, AllChunkTypes) {
   encoder_.encode(8, 123, 4.1);
 
   // Act
-  SerializedData serialized = DataSerializer::serialize(storage_);
+  SerializedData serialized = serializer_.serialize();
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -346,7 +347,7 @@ TEST_F(SerializerDeserializerFixtureNew, FinalizedAllChunkTypes) {
   ChunkFinalizer::finalize(storage_, 8, storage_.open_chunks[8]);
 
   // Act
-  SerializedData serialized = DataSerializer::serialize(storage_);
+  SerializedData serialized = serializer_.serialize();
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -434,7 +435,7 @@ TEST_F(SerializerDeserializerFixtureNew, ChunkWithFinalizedTimestampStream) {
   ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
 
   // Act
-  SerializedData serialized = DataSerializer::serialize(storage_, {QueriedChunk{1}});
+  const SerializedData serialized = serializer_.serialize({QueriedChunk{1}});
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -456,7 +457,7 @@ TEST_F(SerializerDeserializerFixtureNew, MultipleChunksOnOneSeriesId) {
   encoder_.encode(0, 105, 1.0);
 
   // Act
-  SerializedData serialized = DataSerializer::serialize(storage_);
+  const SerializedData serialized = serializer_.serialize();
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -483,7 +484,7 @@ TEST_F(SerializerDeserializerFixtureNew, QueryFinalizedOnly) {
   encoder_.encode(0, 105, 1.0);
 
   // Act
-  SerializedData serialized = DataSerializer::serialize(storage_, {QueriedChunk{0, 0}});
+  const SerializedData serialized = serializer_.serialize({QueriedChunk{0, 0}});
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -511,7 +512,7 @@ TEST_F(SerializerDeserializerFixtureNew, MultipleChunksOnOneSeriesIdWithSeveralF
   encoder_.encode(0, 108, 9.0);
 
   // Act
-  SerializedData serialized = DataSerializer::serialize(storage_);
+  const SerializedData serialized = serializer_.serialize();
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -571,7 +572,7 @@ TEST_F(SerializerDeserializerFixtureNew, AllChunkTypesWithStalenan) {
   encoder_.encode(8, 134, STALE_NAN);
 
   // Act
-  SerializedData serialized = DataSerializer::serialize(storage_);
+  SerializedData serialized = serializer_.serialize();
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -717,7 +718,7 @@ TEST_F(SerializerDeserializerFixtureNew, FinalizedAllChunkTypesWithStalenan) {
   ChunkFinalizer::finalize(storage_, 8, storage_.open_chunks[8]);
 
   // Act
-  SerializedData serialized = DataSerializer::serialize(storage_);
+  SerializedData serialized = serializer_.serialize();
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -811,7 +812,7 @@ TEST_F(SerializerDeserializerFixtureNew, FinalizedAllChunkTypesWithStalenan) {
 
 class SerializedDataNextIterFixture : public SerializerDeserializerTrait, public testing::Test {
  protected:
-  std::vector<uint32_t> get_chunks_ids(SerializedDataView& view) const {
+  static std::vector<uint32_t> get_chunks_ids(SerializedDataView& view) {
     std::vector<uint32_t> ans{};
     uint32_t id = view.next_series();
     while (id != SerializedDataView::kNoMoreSeries) {
@@ -826,10 +827,10 @@ TEST_F(SerializedDataNextIterFixture, EmptyChunksList) {
   // Arrange
 
   // Act
-  SerializedData serialized = DataSerializer::serialize(storage_);
+  const SerializedData serialized = serializer_.serialize();
   SerializedDataView serialized_view(serialized);
 
-  auto ids = get_chunks_ids(serialized_view);
+  const auto ids = get_chunks_ids(serialized_view);
 
   // Assert
   EXPECT_TRUE(ids.empty());
@@ -842,7 +843,7 @@ TEST_F(SerializedDataNextIterFixture, OneChunk) {
   encoder_.encode(0, 2, 1.0);
 
   // Act
-  SerializedData serialized = DataSerializer::serialize(storage_);
+  const SerializedData serialized = serializer_.serialize();
   SerializedDataView serialized_view(serialized);
 
   auto ids = get_chunks_ids(serialized_view);
@@ -861,7 +862,7 @@ TEST_F(SerializedDataNextIterFixture, OneChunkFinalized) {
   encoder_.encode(0, 4, 1.0);
 
   // Act
-  SerializedData serialized = DataSerializer::serialize(storage_);
+  const SerializedData serialized = serializer_.serialize();
   SerializedDataView serialized_view(serialized);
 
   auto ids = get_chunks_ids(serialized_view);
@@ -891,7 +892,7 @@ TEST_F(SerializedDataNextIterFixture, SeveralChunks) {
   encoder_.encode(100, 7, 2.3);
 
   // Act
-  SerializedData serialized = DataSerializer::serialize(storage_);
+  const SerializedData serialized = serializer_.serialize();
   SerializedDataView serialized_view(serialized);
 
   auto ids = get_chunks_ids(serialized_view);

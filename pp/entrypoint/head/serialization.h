@@ -7,7 +7,7 @@ namespace entrypoint::head {
 class SerializedDataGo {
  public:
   explicit SerializedDataGo(const series_data::DataStorage& storage, const series_data::querier::QueriedChunkList& queried_chunks)
-      : data_{series_data::serialization::DataSerializer::serialize(storage, queried_chunks)} {}
+      : data_{series_data::serialization::DataSerializer{storage}.serialize(queried_chunks)} {}
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE auto get_buffer() const noexcept { return data_view_.get_buffer(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE auto get_chunks() const noexcept { return data_view_.get_chunks(); }
@@ -21,7 +21,7 @@ class SerializedDataGo {
 };
 
 using SerializedDataPtr = std::unique_ptr<SerializedDataGo>;
-using SerializedDataIteratorPtr = std::unique_ptr<series_data::serialization::SerializedDataView::SerializedSeriesIterator>;
+using SerializedDataIteratorPtr = std::unique_ptr<series_data::serialization::SerializedDataView::SeriesIterator>;
 
 static_assert(sizeof(SerializedDataPtr) == sizeof(void*));
 static_assert(sizeof(SerializedDataIteratorPtr) == sizeof(void*));

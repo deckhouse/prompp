@@ -155,12 +155,12 @@ extern "C" void prompp_series_data_data_storage_query_new(void* args, void* res)
 
   struct Result {
     QuerierVariantPtr querier{};
-    QueryStatus status;
+    QueryStatus status{};
     entrypoint::head::SerializedDataPtr* serialized_data{};
   };
 
   const auto in = static_cast<Arguments*>(args);
-  auto* out = new (res) Result();
+  const auto out = static_cast<Result*>(res);
 
   RangeQuerierWithArgumentsWrapperNew querier(*in->data_storage, in->query, out->serialized_data);
   querier.query();
