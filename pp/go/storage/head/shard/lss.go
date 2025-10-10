@@ -14,7 +14,7 @@ type LSS struct {
 	input              *cppbridge.LabelSetStorage
 	target             *cppbridge.LabelSetStorage
 	snapshot           *cppbridge.LabelSetSnapshot
-	dstSrcLsIdsMapping uintptr
+	dstSrcLsIdsMapping *cppbridge.IdsMapping
 	locker             sync.RWMutex
 	once               sync.Once
 }
