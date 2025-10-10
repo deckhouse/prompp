@@ -869,7 +869,7 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_append_relabeler_serie
   }
 }
 
-void prompp_prometheus_per_goroutine_relabeler_track_stale_nans(void* args) {
+extern "C" void prompp_prometheus_per_goroutine_relabeler_track_stale_nans(void* args) {
   struct Arguments {
     PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> inner_series;
     StaleNaNsStatePtr stale_nans_state;
@@ -878,4 +878,14 @@ void prompp_prometheus_per_goroutine_relabeler_track_stale_nans(void* args) {
 
   const auto in = static_cast<Arguments*>(args);
   PromPP::Prometheus::Relabel::PerGoroutineRelabeler::track_stale_nans(in->inner_series, *in->stale_nans_state, in->default_timestamp);
+}
+
+extern "C" void prompp_remap_stale_nans_state(void* args) {
+  struct Arguments {
+    StaleNaNsStatePtr stale_nans_state;
+    entrypoint::head::LsIdsSlicePtr dst_src_ls_ids_mapping;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  in->stale_nans_state->remap(*in->dst_src_ls_ids_mapping);
 }

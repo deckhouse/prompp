@@ -4,7 +4,6 @@
 #include <variant>
 
 #include "bare_bones/exception.h"
-#include "primitives/go_slice.h"
 #include "primitives/primitives.h"
 #include "primitives/snug_composites.h"
 #include "series_index/queryable_encoding_bimap.h"
@@ -12,7 +11,7 @@
 
 namespace entrypoint::head {
 
-using LsIdsSlice = PromPP::Primitives::Go::Slice<PromPP::Primitives::LabelSetID>;
+using LsIdsSlice = BareBones::Vector<PromPP::Primitives::LabelSetID>;
 using LsIdsSlicePtr = std::unique_ptr<LsIdsSlice>;
 
 enum class LssType : uint32_t {

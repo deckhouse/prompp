@@ -1332,6 +1332,16 @@ void prompp_prometheus_per_goroutine_relabeler_append_relabeler_series(void* arg
  */
 void prompp_prometheus_per_goroutine_relabeler_track_stale_nans(void* args);
 
+/**
+ * @brief add stale nans to inner series if needed
+ *
+ * @param args {
+ *     stale_nan_state uintptr  // pointer to source state
+ *     ls_ids_mapping  uintptr  // pointer to dst_src_ls_ids_mapping
+ * }
+ */
+void prompp_remap_stale_nans_state(void* args);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

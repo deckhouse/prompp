@@ -3779,3 +3779,16 @@ func prometheusPerGoroutineRelabelerTrackStaleNans(
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
+
+func prometheusRemapStaleNansState(staleNansState, lsIdsMapping uintptr) {
+	args := struct {
+		staleNansState uintptr
+		lsIdsMapping   uintptr
+	}{staleNansState, lsIdsMapping}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_remap_stale_nans_state,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}

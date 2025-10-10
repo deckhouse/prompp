@@ -1,9 +1,9 @@
-#include <gtest/gtest.h>
-#include <cstdint>
 #include <initializer_list>
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <gtest/gtest.h>
 
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
@@ -839,6 +839,43 @@ TEST_F(StaleNaNsStateDeprecatedFixture, Swap) {
   // Assert
   EXPECT_EQ(std::vector<uint32_t>{42}, input_ls_ids);
   EXPECT_EQ(std::vector<uint32_t>{}, target_ls_ids);
+}
+
+class StaleNaNsStateFixture : public testing::Test {
+ protected:
+  StaleNaNsState state_;
+};
+
+TEST_F(StaleNaNsStateFixture, TestRemapOnEmptyState) {
+  // Arrange
+
+  // Act
+  state_.remap(std::initializer_list{3U, 1U, 0U, 2U});
+
+  // Assert
+  EXPECT_EQ((std::initializer_list<uint32_t>{}), state_.state());
+}
+
+TEST_F(StaleNaNsStateFixture, TestRemapWithFullFilledState) {
+  // Arrange
+  state_.swap(roaring::Roaring{0, 1, 2, 3}, [](auto&) {});
+
+  // Act
+  state_.remap(std::initializer_list{3U, 1U, 0U, 2U});
+
+  // Assert
+  EXPECT_EQ((roaring::Roaring{0, 1, 2, 3}), state_.state());
+}
+
+TEST_F(StaleNaNsStateFixture, TestRemapWithPartialFilledState) {
+  // Arrange
+  state_.swap(roaring::Roaring{0, 3}, [](auto&) {});
+
+  // Act
+  state_.remap(std::initializer_list{3U, 1U, 0U, 2U});
+
+  // Assert
+  EXPECT_EQ((roaring::Roaring{0, 2}), state_.state());
 }
 
 }  // namespace
