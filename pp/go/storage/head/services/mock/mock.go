@@ -2,6 +2,7 @@ package mock
 
 import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/storage/head/keeper"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
 )
@@ -10,6 +11,7 @@ import (
 //go:generate moq segment_writer.go . SegmentWriter
 //go:generate moq file_storage.go . StorageFile
 //go:generate moq append_file.go . AppendFile
+//go:generate moq removed_head_notifier.go . RemovedHeadNotifier
 
 // SegmentWriter alias for [wal.SegmentWriter] with [cppbridge.HeadEncodedSegment].
 type SegmentWriter = wal.SegmentWriter[*cppbridge.HeadEncodedSegment]
@@ -19,3 +21,6 @@ type StorageFile = shard.StorageFile
 
 // AppendFile alias for [shard.AppendFile].
 type AppendFile = shard.AppendFile
+
+// RemovedHeadNotifier alias for [keeper.RemovedHeadNotifier].
+type RemovedHeadNotifier = keeper.RemovedHeadNotifier
