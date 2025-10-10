@@ -30,7 +30,7 @@ func (s *MergerSuite) SetupSuite() {
 }
 
 func (s *MergerSuite) createHead(
-	unloadedFS []*mock.StorageFileMock,
+	unloadedFS []*mock.AppendFileMock,
 	queriedSeriesFS [][2]*mock.StorageFileMock,
 ) *storage.Head {
 	shards := make([]*shard.Shard, shardsCount)
@@ -54,7 +54,7 @@ func (s *MergerSuite) createHead(
 }
 
 func (*MergerSuite) createShardOnMemory(
-	unloadedFS *mock.StorageFileMock,
+	unloadedFS *mock.AppendFileMock,
 	queriedSeriesFS [2]*mock.StorageFileMock,
 	maxSegmentSize uint32,
 	shardID uint16,
@@ -96,12 +96,12 @@ func (s *MergerSuite) TestHappyPath() {
 		},
 	}
 
-	unloadedFS := make([]*mock.StorageFileMock, shardsCount)
+	unloadedFS := make([]*mock.AppendFileMock, shardsCount)
 	queriedSeriesFS := make([][2]*mock.StorageFileMock, shardsCount)
 	for shardID := range shardsCount {
-		unloadedFS[shardID] = &mock.StorageFileMock{
+		unloadedFS[shardID] = &mock.AppendFileMock{
 			CloseFunc: func() error { return nil },
-			OpenFunc:  func(int) error { return nil },
+			OpenFunc:  func() error { return nil },
 			SyncFunc:  func() error { return nil },
 			WriteFunc: func([]byte) (int, error) { return 0, nil },
 		}
@@ -180,12 +180,12 @@ func (s *MergerSuite) TestSkipNewHead() {
 		},
 	}
 
-	unloadedFS := make([]*mock.StorageFileMock, shardsCount)
+	unloadedFS := make([]*mock.AppendFileMock, shardsCount)
 	queriedSeriesFS := make([][2]*mock.StorageFileMock, shardsCount)
 	for shardID := range shardsCount {
-		unloadedFS[shardID] = &mock.StorageFileMock{
+		unloadedFS[shardID] = &mock.AppendFileMock{
 			CloseFunc: func() error { return nil },
-			OpenFunc:  func(int) error { return nil },
+			OpenFunc:  func() error { return nil },
 			SyncFunc:  func() error { return nil },
 			WriteFunc: func([]byte) (int, error) { return 0, nil },
 		}

@@ -132,8 +132,8 @@ func (s *HeadLoadSuite) appendTimeSeries(head *storage.Head, timeSeries []storag
 }
 
 func (*HeadLoadSuite) shards(head *storage.Head) (result []*shard.Shard) {
-	for shard := range head.RangeShards() {
-		result = append(result, shard)
+	for sd := range head.RangeShards() {
+		result = append(result, sd)
 	}
 
 	return result

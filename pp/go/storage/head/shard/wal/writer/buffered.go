@@ -9,7 +9,7 @@ import (
 )
 
 //go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg writer_test --out
-//go:generate moq buffered_moq_test.go . FileInfo SegmentIsWrittenNotifier WriteSyncCloser
+//go:generate moq buffered_moq_test.go . FileInfo SegmentIsWrittenNotifier FileWriter
 
 // FileInfo alias for [os.FileInfo].
 type FileInfo = os.FileInfo
@@ -19,8 +19,8 @@ type SegmentIsWrittenNotifier interface {
 	NotifySegmentIsWritten(shardID uint16)
 }
 
-// WriteSyncCloser writer implementation [os.File].
-type WriteSyncCloser interface {
+// FileWriter writer implementation [os.File].
+type FileWriter interface {
 	io.WriteCloser
 	Sync() error
 	Stat() (FileInfo, error)
@@ -36,7 +36,7 @@ type Buffered[TSegment any] struct {
 	buffer         *bytes.Buffer
 	notifier       SegmentIsWrittenNotifier
 	swriter        SegmentWriterFN[TSegment]
-	writer         WriteSyncCloser
+	writer         FileWriter
 	currentSize    int64
 	writeCompleted bool
 }
@@ -44,7 +44,7 @@ type Buffered[TSegment any] struct {
 // NewBuffered init new [Buffered].
 func NewBuffered[TSegment any](
 	shardID uint16,
-	writer WriteSyncCloser,
+	writer FileWriter,
 	swriter SegmentWriterFN[TSegment],
 	notifier SegmentIsWrittenNotifier,
 ) (*Buffered[TSegment], error) {

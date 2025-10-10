@@ -108,11 +108,8 @@ func (b *Builder) createShardOnDisk(
 	shardID uint16,
 ) (*shard.Shard, error) {
 	headDir = filepath.Clean(headDir)
-	shardFile, err := os.OpenFile( //nolint:gosec // need this permissions
-		GetShardWalFilename(headDir, shardID),
-		os.O_WRONLY|os.O_CREATE|os.O_APPEND,
-		0o666, //revive:disable-line:add-constant // file permissions simple readable as octa-number
-	)
+	//revive:disable-next-line:add-constant // file permissions simple readable as octa-number
+	shardFile, err := util.CreateFileAppender(GetShardWalFilename(headDir, shardID), 0o666)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create shard wal file id %d: %w", shardID, err)
 	}
@@ -143,7 +140,7 @@ func (b *Builder) createShardOnDisk(
 	var queriedSeriesStorage *shard.QueriedSeriesStorage
 	if b.unloadDataStorageInterval != 0 {
 		unloadedDataStorage = shard.NewUnloadedDataStorage(
-			shard.NewFileStorage(GetUnloadedDataStorageFilename(headDir, shardID)),
+			shard.NewAppendFileStorage(GetUnloadedDataStorageFilename(headDir, shardID)),
 		)
 
 		queriedSeriesStorage = shard.NewQueriedSeriesStorage(

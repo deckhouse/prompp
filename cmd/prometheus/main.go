@@ -808,10 +808,7 @@ func main() {
 		// PP_CHANGES.md: rebuild on cpp start
 		remoteRead = pp_pkg_storage.NewRemoteRead(
 			log.With(logger, "component", "remote"),
-			prometheus.DefaultRegisterer,
 			localStorage.StartTime,
-			localStoragePath,
-			time.Duration(cfg.RemoteFlushDeadline),
 		)
 		fanoutStorage = storage.NewFanout(
 			logger,

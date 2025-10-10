@@ -1,14 +1,13 @@
 package storage
 
 import (
-	"crypto/md5"
+	"crypto/md5" // #nosec G501 // cryptographic strength is not required
 	"encoding/hex"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/go-kit/log"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 	"gopkg.in/yaml.v2"
 
@@ -33,10 +32,7 @@ type RemoteRead struct {
 // NewRemoteRead returns a RemoteRead.
 func NewRemoteRead(
 	l log.Logger,
-	reg prometheus.Registerer,
 	stCallback func() (int64, error),
-	walDir string,
-	flushDeadline time.Duration,
 ) *RemoteRead {
 	if l == nil {
 		l = log.NewNopLogger()
@@ -55,7 +51,6 @@ func NewRemoteRead(
 func (s *RemoteRead) ApplyConfig(conf *config.Config) error {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
-
 	// Update read clients
 	readHashes := make(map[string]struct{})
 	queryables := make([]storage.SampleAndChunkQueryable, 0, len(conf.RemoteReadConfigs))
@@ -74,7 +69,7 @@ func (s *RemoteRead) ApplyConfig(conf *config.Config) error {
 		// Set the queue name to the config hash if the user has not set
 		// a name in their remote write config so we can still differentiate
 		// between queues that have the same remote write endpoint.
-		name := hash[:6]
+		name := hash[:6] //revive:disable-line:add-constant // 6 characters for the name
 		if rrConf.Name != "" {
 			name = rrConf.Name
 		}
@@ -105,16 +100,6 @@ func (s *RemoteRead) ApplyConfig(conf *config.Config) error {
 
 	return nil
 }
-
-// // StartTime implements the Storage interface.
-// func (s *RemoteRead) StartTime() (int64, error) {
-// 	return int64(model.Latest), nil
-// }
-
-// // Appender implements the Storage interface.
-// func (s *RemoteRead) Appender(_ context.Context) storage.Appender {
-// 	return noOpAppender{}
-// }
 
 // Querier returns a storage.MergeQuerier combining the remote client queriers
 // of each configured remote read endpoint.
@@ -183,6 +168,6 @@ func toHash(data interface{}) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	hash := md5.Sum(bytes)
+	hash := md5.Sum(bytes) // #nosec G401 // cryptographic strength is not required
 	return hex.EncodeToString(hash[:]), nil
 }
