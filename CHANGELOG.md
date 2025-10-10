@@ -7,10 +7,11 @@
 
 ### Features
 1. **Unused Data Unloading.** In most cases, queries touch only 6–8% of all series in TSDB. Other series can be unloaded to disk and loaded on demand. This feature can save up to 20% of RAM utilization and does not have a visible impact on querying unloaded series. If a series is queried by rules, it will not be unloaded. This feature is disabled by default and can be activated with the feature flag `unload_data_storage`.
+2. **Omitting Out-of-Order StaleNaN Samples.** Unlike vanilla Prometheus, Prom++ allows adding out-of-order samples and overwriting existing data when timestamps match. However, this behavior conflicts with the handling of StaleNaNs, which are sometimes intentionally written over existing data or with a delay to be automatically discarded if fresher data is available. Now, the mechanism for writing to past timestamps no longer applies to StaleNaNs.
 
 ### Enhancements
 1. **Scrape Parser Optimization.** A double pass process was used for scraped data: parsing and then reading parsed data with sharding samples. This allowed parsing the text once and quickly reading samples in all shards in parallel. However, it used a substantial amount of memory due to the intermediate state of parsed samples based on the source bytes buffer. In this version, new compression algorithms have been added, reducing the memory requirement by up to 10%.
-2. **File Caches Reduction.** WAL files are read once and then written to only. To reduce cache pages in memory, the files are reopened with the flag `O_WRONLY` after reading.
+2. **File Caches Reduction.** WAL files are read once and then written to only. To reduce cache pages in memory, the files are reopened with the flag `O_WRONLY` after reading. Also added a syscall `fadvise` to mark written and read pages as no longer needed. This reduces excessive caching.
 3. **Dependency Updates.** Dependencies have been updated to mitigate CVEs.
 
 ## v0.5.2
