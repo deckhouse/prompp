@@ -22,15 +22,15 @@ class RLEBackend {
   using DataSequence = Container;
 
   class Encoder {
-    using value_type = typename DataSequence::value_type;
+    using value_type = DataSequence::value_type;
 
-    value_type count_ = std::numeric_limits<value_type>::max();
-    value_type last_;
+    value_type count_{std::numeric_limits<value_type>::max()};
+    value_type last_{std::numeric_limits<value_type>::max()};
 
    public:
     PROMPP_ALWAYS_INLINE Encoder() noexcept = default;
-    Encoder(const Encoder&) = delete;
-    Encoder& operator=(const Encoder&) = delete;
+    Encoder(const Encoder&) = default;
+    Encoder& operator=(const Encoder&) = default;
 
     PROMPP_ALWAYS_INLINE Encoder(Encoder&& o) noexcept : count_(o.count_), last_(o.last_) { o.clear(); }
 
@@ -404,11 +404,15 @@ struct id<DeltaDeltaZigZag<DataSequence>>
 
 template <class E, class DataSequence = typename E::DataSequence>
 class EncodedSequence {
+ protected:
   typename E::Encoder encoder_;
 
   DataSequence data_;
 
  public:
+  using sequence_type = DataSequence;
+  using encoder_type = typename E::Encoder;
+  using decoder_type = typename E::Decoder;
   using value_type = typename DataSequence::value_type;
 
   EncodedSequence() = default;
@@ -439,6 +443,7 @@ class EncodedSequence {
   }
 
   PROMPP_ALWAYS_INLINE const DataSequence& data() const noexcept { return data_; }
+  PROMPP_ALWAYS_INLINE const typename E::Encoder& encoder() const noexcept { return encoder_; }
 
   class IteratorSentinel {};
 
@@ -479,6 +484,10 @@ class EncodedSequence {
   PROMPP_ALWAYS_INLINE auto begin() const noexcept { return Iterator(data_.begin(), data_.end(), &encoder_); }
 
   static PROMPP_ALWAYS_INLINE auto end() noexcept { return IteratorSentinel(); }
+
+  static PROMPP_ALWAYS_INLINE auto create_read_iterator(std::span<const uint8_t>& buffer, const typename E::Encoder& encoder) noexcept {
+    return const_iterator_type(sequence_type::create_read_iterator(buffer), {}, &encoder);
+  }
 
   PROMPP_ALWAYS_INLINE size_t save_size() noexcept {
     flush();
@@ -547,5 +556,5 @@ class EncodedSequence {
 };
 
 template <class T>
-struct IsTriviallyReallocatable<BareBones::EncodedSequence<BareBones::Encoding::DeltaRLE<T>>> : std::true_type {};
+struct IsTriviallyReallocatable<EncodedSequence<Encoding::DeltaRLE<T>>> : std::true_type {};
 }  // namespace BareBones

@@ -38,8 +38,8 @@ import (
 )
 
 const (
-	DefaultSegmentSize = 128 * 1024 * 1024 // 128 MB
-	pageSize           = 32 * 1024         // 32KB
+	DefaultSegmentSize = 128 * 1024 * 1024 // DefaultSegmentSize is 128 MB.
+	pageSize           = 32 * 1024         // pageSize is 32KB.
 	recordHeaderSize   = 7
 	WblDirName         = "wbl"
 )
@@ -612,16 +612,16 @@ func (w *WL) setSegment(segment *Segment) error {
 
 // flushPage writes the new contents of the page to disk. If no more records will fit into
 // the page, the remaining bytes will be set to zero and a new page will be started.
-// If clear is true, this is enforced regardless of how many bytes are left in the page.
-func (w *WL) flushPage(clear bool) error {
+// If forceClear is true, this is enforced regardless of how many bytes are left in the page.
+func (w *WL) flushPage(forceClear bool) error {
 	w.metrics.pageFlushes.Inc()
 
 	p := w.page
-	clear = clear || p.full()
+	shouldClear := forceClear || p.full()
 
 	// No more data will fit into the page or an implicit clear.
 	// Enqueue and clear it.
-	if clear {
+	if shouldClear {
 		p.alloc = pageSize // Write till end of page.
 	}
 
@@ -633,7 +633,7 @@ func (w *WL) flushPage(clear bool) error {
 	p.flushed += n
 
 	// We flushed an entire page, prepare a new one.
-	if clear {
+	if shouldClear {
 		p.reset()
 		w.donePages++
 		w.metrics.pageCompletions.Inc()
@@ -919,11 +919,16 @@ type segmentRef struct {
 	index int
 }
 
-func listSegments(dir string) (refs []segmentRef, err error) {
+func listSegments(dir string) ([]segmentRef, error) {
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
+	if len(files) == 0 {
+		return nil, nil // PP_CHANGES.md: optimistic slice allocation
+	}
+
+	refs := make([]segmentRef, 0, len(files)) // PP_CHANGES.md: fast exit
 	for _, f := range files {
 		fn := f.Name()
 		k, err := strconv.Atoi(fn)
@@ -932,6 +937,11 @@ func listSegments(dir string) (refs []segmentRef, err error) {
 		}
 		refs = append(refs, segmentRef{name: fn, index: k})
 	}
+
+	if len(refs) == 0 {
+		return refs, nil // PP_CHANGES.md: fast exit
+	}
+
 	slices.SortFunc(refs, func(a, b segmentRef) int {
 		return a.index - b.index
 	})

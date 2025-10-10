@@ -11,9 +11,14 @@ import (
 
 type DiscardableRotatableHead struct {
 	head       relabeler.Head
+	discarded  bool
 	onRotate   func(id string, err error) error
 	onDiscard  func(id string) error
 	afterClose func(id string) error
+}
+
+func (h *DiscardableRotatableHead) UnrecoverableError(err error) {
+	h.head.UnrecoverableError(err)
 }
 
 func NewDiscardableRotatableHead(head relabeler.Head, onRotate func(id string, err error) error, onDiscard func(id string) error, afterClose func(id string) error) *DiscardableRotatableHead {
@@ -69,12 +74,12 @@ func (h *DiscardableRotatableHead) Flush() error {
 	return h.head.Flush()
 }
 
-func (h *DiscardableRotatableHead) Reconfigure(inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) error {
-	return h.head.Reconfigure(inputRelabelerConfigs, numberOfShards)
+func (h *DiscardableRotatableHead) Reconfigure(ctx context.Context, inputRelabelerConfigs []*config.InputRelabelerConfig, numberOfShards uint16) error {
+	return h.head.Reconfigure(ctx, inputRelabelerConfigs, numberOfShards)
 }
 
-func (h *DiscardableRotatableHead) WriteMetrics() {
-	h.head.WriteMetrics()
+func (h *DiscardableRotatableHead) WriteMetrics(ctx context.Context) {
+	h.head.WriteMetrics(ctx)
 }
 
 func (h *DiscardableRotatableHead) Status(limit int) relabeler.HeadStatus {
@@ -82,6 +87,9 @@ func (h *DiscardableRotatableHead) Status(limit int) relabeler.HeadStatus {
 }
 
 func (h *DiscardableRotatableHead) Rotate() error {
+	if h.discarded {
+		return relabeler.ErrAlreadyDiscarded
+	}
 	err := h.head.Rotate()
 	if h.onRotate != nil {
 		err = errors.Join(err, h.onRotate(h.ID(), err))
@@ -99,6 +107,7 @@ func (h *DiscardableRotatableHead) Close() error {
 }
 
 func (h *DiscardableRotatableHead) Discard() (err error) {
+	h.discarded = true
 	err = h.head.Discard()
 	if h.onDiscard != nil {
 		err = errors.Join(err, h.onDiscard(h.ID()))
@@ -116,12 +125,40 @@ func (h *DiscardableRotatableHead) CopySeriesFrom(other relabeler.Head) {
 func (h *DiscardableRotatableHead) CreateTask(
 	taskName string,
 	fn relabeler.ShardFn,
-	onLss, isExclusive bool,
+	onLss bool,
 ) *relabeler.GenericTask {
-	return h.head.CreateTask(taskName, fn, onLss, isExclusive)
+	return h.head.CreateTask(taskName, fn, onLss)
 }
 
 // Enqueue the task to be executed on head.
 func (h *DiscardableRotatableHead) Enqueue(t *relabeler.GenericTask) {
 	h.head.Enqueue(t)
+}
+
+// EnqueueOnShard the task to be executed on head on specific shard.
+func (h *DiscardableRotatableHead) EnqueueOnShard(t *relabeler.GenericTask, shardID uint16) {
+	h.head.EnqueueOnShard(t, shardID)
+}
+
+// Concurrency return current head workers concurrency.
+func (h *DiscardableRotatableHead) Concurrency() int64 {
+	return h.head.Concurrency()
+}
+
+// RLockQuery locks for query to [Head].
+func (h *DiscardableRotatableHead) RLockQuery(ctx context.Context) (runlock func(), err error) {
+	return h.head.RLockQuery(ctx)
+}
+
+func (h *DiscardableRotatableHead) CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr) *relabeler.GenericTask {
+	return h.head.CreateDataStorageLoadAndQueryTask(shardID, querier)
+}
+
+func (h *DiscardableRotatableHead) UnloadUnusedSeriesData() {
+	h.head.UnloadUnusedSeriesData()
+}
+
+// Raw returns raw [Head].
+func (h *DiscardableRotatableHead) Raw() relabeler.Head {
+	return h.head
 }

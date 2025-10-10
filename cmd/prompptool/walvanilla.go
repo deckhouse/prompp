@@ -40,7 +40,9 @@ func registerCmdWALVanillaToBlock(cmd *cmdWALVanillaToBlock, clause *kingpin.Cmd
 
 func (cmd *cmdWALVanillaToBlock) Do(ctx context.Context, workingDir string, logger log.Logger) error {
 	if !cmd.backupWALs {
-		cmd.removeOldBackups(logger)
+		cmd.removeOldBackups("wal", logger)
+		cmd.removeOldBackups("wbl", logger)
+		cmd.removeOldBackups("chunks_head", logger)
 	}
 
 	walDir := filepath.Join(workingDir, "wal")
@@ -76,7 +78,6 @@ func (cmd *cmdWALVanillaToBlock) Do(ctx context.Context, workingDir string, logg
 	if err := head.Init(int64(math.MinInt64)); err != nil {
 		return fmt.Errorf("init head: %w", err)
 	}
-	head.Index()
 
 	blockDuration := int64(time.Duration(cmd.blockDuration) / time.Millisecond)
 	compactor, err := tsdb.NewLeveledCompactorWithOptions(ctx, nil, logger, []int64{blockDuration}, nil, tsdb.LeveledCompactorOptions{})
@@ -100,6 +101,12 @@ func (cmd *cmdWALVanillaToBlock) Do(ctx context.Context, workingDir string, logg
 		}
 		mint, maxt = maxt, maxt+blockDuration
 	}
+	if t := time.Now().Add(-time.Hour).UnixMilli(); t > maxt {
+		maxt = t
+	}
+	if err := head.Truncate(maxt); err != nil {
+		level.Warn(logger).Log("msg", "fail to truncate head", "error", err.Error())
+	}
 	if err := head.Close(); err != nil {
 		return fmt.Errorf("close head: %w", err)
 	}
@@ -114,14 +121,21 @@ func (cmd *cmdWALVanillaToBlock) Do(ctx context.Context, workingDir string, logg
 	}
 	if wbl != nil {
 		if err := finalize(wblDir); err != nil {
-			level.Error(logger).Log("msg", "rename wbl", "error", err.Error())
+			level.Error(logger).Log("msg", "finalize wbl", "error", err.Error())
 		}
 	}
-	return finalize(walDir)
+	chunkDir := filepath.Join(workingDir, "chunks_head")
+	if err := finalize(chunkDir); err != nil {
+		level.Error(logger).Log("msg", "finalize chunks_head", "error", err.Error())
+	}
+	if err := finalize(walDir); err != nil {
+		level.Error(logger).Log("msg", "finalize wal", "error", err.Error())
+	}
+	return nil
 }
 
-func (cmd *cmdWALVanillaToBlock) removeOldBackups(logger log.Logger) {
-	oldBackups, err := filepath.Glob("wal.*.bak")
+func (*cmdWALVanillaToBlock) removeOldBackups(prefix string, logger log.Logger) {
+	oldBackups, err := filepath.Glob(prefix + ".*.bak")
 	if err != nil {
 		level.Error(logger).Log("msg", "list old backups", "error", err.Error())
 		return

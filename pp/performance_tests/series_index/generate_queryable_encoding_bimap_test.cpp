@@ -1,6 +1,7 @@
 #include "generate_queryable_encoding_bimap_test.h"
 
 #include <chrono>
+#include <iostream>
 
 #include "performance_tests/dummy_wal.h"
 #include "series_index/queryable_encoding_bimap.h"
@@ -9,9 +10,8 @@
 
 namespace performance_tests::series_index {
 
-using TrieIndex = ::series_index::TrieIndex<::series_index::trie::CedarTrie, ::series_index::trie::CedarMatchesList>;
-using QueryableEncodingBimap =
-    ::series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, TrieIndex>;
+using QueryableEncodingBimap = ::series_index::
+    QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, ::series_index::trie::CedarTrie>;
 
 void GenerateQueryableEncodingBimap::execute([[maybe_unused]] const Config& config, [[maybe_unused]] Metrics& metrics) const {
   DummyWal::Timeseries tmsr;
@@ -42,10 +42,10 @@ void GenerateQueryableEncodingBimap::execute([[maybe_unused]] const Config& conf
 
   std::vector<uint32_t> gg;
   const auto start_tm = std::chrono::steady_clock::now();
-  lss.sort_series_ids(gg);
+  lss.build_deferred_indexes();
 
-  std::cout << "lss_allocated_memory_kb: " << lss.allocated_memory() / 1024 << std::endl;
   std::cout << "build_sort_index_time_nanoseconds: " << (std::chrono::steady_clock::now() - start_tm).count() << std::endl;
+  std::cout << "lss_allocated_memory_kb: " << lss.allocated_memory() / 1024 << std::endl;
   std::cout << "find_or_emplace_time_nanoseconds: " << find_or_emplace_time.count() / find_or_emplace_call_count << std::endl;
   std::cout << "emplace_time_nanoseconds: " << emplace_time.count() / (max_ls_id + 1) << std::endl;
 }

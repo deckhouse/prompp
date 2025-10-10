@@ -1,29 +1,83 @@
 # Changelog
 
+## v0.6.0
+
+### Fixes
+1. **Remove chunks data on convertion.** Prompptool now remove chunks_data on convertion vanilla wal. This files may obtain a lot of mmapped memory in runtime.
+
+### Features
+1. **Unused Data Unloading.** In most cases, queries touch only 6–8% of all series in TSDB. Other series can be unloaded to disk and loaded on demand. This feature can save up to 20% of RAM utilization and does not have a visible impact on querying unloaded series. If a series is queried by rules, it will not be unloaded. This feature is disabled by default and can be activated with the feature flag `unload_data_storage`.
+2. **Omitting Out-of-Order StaleNaN Samples.** Unlike vanilla Prometheus, Prom++ allows adding out-of-order samples and overwriting existing data when timestamps match. However, this behavior conflicts with the handling of StaleNaNs, which are sometimes intentionally written over existing data or with a delay to be automatically discarded if fresher data is available. Now, the mechanism for writing to past timestamps no longer applies to StaleNaNs.
+
+### Enhancements
+1. **Scrape Parser Optimization.** A double pass process was used for scraped data: parsing and then reading parsed data with sharding samples. This allowed parsing the text once and quickly reading samples in all shards in parallel. However, it used a substantial amount of memory due to the intermediate state of parsed samples based on the source bytes buffer. In this version, new compression algorithms have been added, reducing the memory requirement by up to 10%.
+2. **File Caches Reduction.** WAL files are read once and then written to only. To reduce cache pages in memory, the files are reopened with the flag `O_WRONLY` after reading. Also added a syscall `fadvise` to mark written and read pages as no longer needed. This reduces excessive caching.
+3. **Dependency Updates.** Dependencies have been updated to mitigate CVEs.
+
+## v0.5.2
+
+### Fixes
+1. **Flushing corrupted shard.** On start all heads try to convert which include flushing buffered data to disk. It may led to crashin on start if there is a corrupted not persisted head.
+
+## v0.5.1
+
+### Fixes
+1. **Incorrect Regex Part Caching.** The matcher processing pipeline previously had legacy caching of regex parts based on pointer addresses, which led to incorrect behavior with certain regex patterns like `variant1|variant2|variant3`. This caching had no impact on performance, and thus it was removed.
+
+## v0.5.0
+
+1. Base Prometheus version bumped to 2.55.1. It's unlock switch from Prometheus 3.x installations to Prom++.
+2. Update dependencies to mitigate CVEs.
+3. Fixing potential problems found with static analysis.
+
+## v0.4.0
+
+### Fixes
+1. **Use non-exclusive lock for head conversion.** Conversion is long operation with disk writes. It is read-only for rotated head, so queries may be done in parallel.
+
+### Features
+1. **Added feature flag `head_default_number_of_shards` to adjust the number of shards (default is 2).** Increasing the number of shards improves write operations while potentially slightly slowing down read operations and increasing memory consumption. This feature flag is temporary and will be removed in favor of automatic shard count calculation in the future.
+2. **Introduced a two-stage process for series selection queries by matchers.** The first stage parses the regular expression using prefix trees from the index, which executes quickly but requires locks on the index during its execution. The second stage handles posting operations, which are resource-intensive due to data decoding and set operations on series IDs. By separating these stages, write locking time is reduced and read parallelism is increased since posting operations can use lightweight snapshot states without blocking appends.
+3. **Implemented optimistic non-exclusive relabeling locks for data updates.** Since new series appear infrequently, if all data in a append operation is already cached in relabeling, that stage does not lock the series container or indexes. Exclusive locking only occurs when new data must be added. This mechanism works only when intra-shard parallelization is enabled (disabled by default).
+4. **Added a mechanism for executing tasks on a specific shard instead of all shards.** This capability is essential for upcoming performance improvements.
+
+### Enhancements
+1. **Added metrics tracking the waiting time for locks and head rotations.** These metrics improve observability of internal delays and contention, enabling better diagnostics and tuning opportunities.
+2. **Moved lock management inside task execution rather than across the entire task duration depending on task type.** This change can yield slight performance improvements when intra-shard parallelization is enabled by reducing unnecessary lock holding time.
+3. **Small performance fixes.** In several parts of code there are bytes to string conversions. In some places it was not safe. In all places it was not optimal.
+4. **Eliminate head allocations in original TSDB.** Prometheus TSDB used only as historical block querier and compactor. It is not necessary to allocate any buffers in it's head.
+
+## v0.3.4
+
+### Fixes
+1. **Processing Several Backslashes in the End of Label Value.** Metric parser had incorrect processing of even number of backslashes at the end of label name or value.
+2. **Handling Head in Querier on Rotation.** In some cases on rotation querier may have lost data on rotation.
+3. **Priority Semaphore on Head.** In some specific setups exclusive tasks like reconfigure, rotate or shutdown could get stuck in lock awaiting after all normal-priority requests. We use semaphore with 2-level priority interface to push priority tasks in front of waiters queue.
+
+## v0.3.3
+
+### Fixes
+1. **Fixed Snapshot Handling in ChunkQuerier.** Last updates led to loosing snapshots in ChunkQuerier that caused incorrect behaviour of RemoteRead API.
+
 ## v0.3.2
 
-## Fixes
-
+### Fixes
 1. **Fixed Task Duplication in WAL Commits:** which was causing excessive disk access. Now, a commit task is queued only upon the first achievement of the sample limit in a WAL segment.
 
-## Enhancements
-
+### Enhancements
 1. **Increased the Sample Limit in WAL Segments:** The previous soft limit of 10K, hardcoded as a constant, is now converted to command-line flag with default raised to 100K.
 
-## Features
-
-- **Added a Feature-flag to Disable Commits During RemoteWrite Requests**. This is an experimental flag and will be replaced with a generalized persistence level setting in the future.
+### Features
+1. **Added a Feature-flag to Disable Commits During RemoteWrite Requests.** This is an experimental flag and will be replaced with a generalized persistence level setting in the future.
 
 ## v0.3.1
 
 ### Fixes
-
 1. **Fixed Channel Overflow and Shard Goroutine Deadlock:** A bug that caused channel overflow and deadlocks in shard goroutines has been fixed. The change ensures that tasks are added to the channel only from external goroutines, preventing these issues.
 2. **Fixed Series Snapshot Memory Hanging:** We've corrected an issue where series snapshots were not getting cleared from memory due to problems with Finalizers in Go. The snapshots involved pointers to memory allocated in C++, and the garbage collector did not always trigger the Finalizer, causing memory to linger.
 3. **Corrected Potential Object Retention Errors in fastCGo Calls:** There were potential errors related to object retention during fastCGo calls. While most of these were specific to test code, some could cause runtime errors in rare situations. These have now been addressed to improve stability.
 
 ### Enhancements
-
 1. **Optimized Series Copying During Rotation:** We've made series copying during rotation much more efficient, reducing the time required by 7.5 times. To avoid pauses in the garbage collector, we're using the standard CGo mechanism for this process. Currently, this feature is under a feature flag and is being tested on select clusters to ensure stability and correctness. Once these tests are successful, we plan to enable it for all clusters.
 2. **Revamped Task Execution System on Shards:** The task execution system on shards has been restructured to separate series processing from data handling. Each now operates with its own queues and locks, which is expected to boost the requests per second (RPS) for both read and write operations.
 3. **New Feature Flag for Multiple Goroutines per Shard:** We've introduced a feature flag that allows running multiple goroutines per shard. This change is aimed at improving the scalability of read request handling, while still maintaining proper locking for exclusive write operations. This setup is particularly beneficial in scenarios where read requests heavily outweigh write requests. We are actively testing this feature on our clusters to determine the best concurrency levels before rolling out automatic tuning options.

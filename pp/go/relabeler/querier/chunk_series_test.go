@@ -3,12 +3,12 @@ package querier
 import (
 	"testing"
 
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/tsdb/chunks"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 )
 
 type ChunksSeriesSetTestSuite struct {
@@ -42,66 +42,69 @@ func (s *ChunksSeriesSetTestSuite) TestAll() {
 	var mint int64 = 2
 	var maxt int64 = 8
 
-	lssQueryResult := lss.Query([]model.LabelMatcher{
+	selector, status := lss.QuerySelector([]model.LabelMatcher{
 		{Name: "job", Value: "test", MatcherType: model.MatcherTypeExactMatch},
-	}, cppbridge.LSSQuerySourceFederate)
+	})
+	s.Require().Equal(cppbridge.LSSQueryStatusMatch, status)
 
-	require.Equal(s.T(), cppbridge.LSSQueryStatusMatch, lssQueryResult.Status())
+	labelSetSnapshot := lss.CreateLabelSetSnapshot()
+	lssQueryResult := labelSetSnapshot.Query(selector)
+	s.Require().Equal(cppbridge.LSSQueryStatusMatch, lssQueryResult.Status())
 
-	serializedChunks := ds.Query(cppbridge.HeadDataStorageQuery{
+	serializedChunks, result := ds.Query(cppbridge.HeadDataStorageQuery{
 		StartTimestampMs: mint,
 		EndTimestampMs:   maxt,
 		LabelSetIDs:      lssQueryResult.IDs(),
 	})
 
-	require.Equal(s.T(), 2, serializedChunks.NumberOfChunks())
+	s.Require().Equal(cppbridge.DataStorageQueryStatusSuccess, result.Status)
+	s.Require().Equal(2, serializedChunks.NumberOfChunks())
 
 	chunkRecoder := cppbridge.NewSerializedChunkRecoder(serializedChunks, cppbridge.TimeInterval{
 		MinT: mint,
 		MaxT: maxt,
 	})
 
-	css := NewChunkSeriesSet(lssQueryResult, lss.CreateLabelSetSnapshot(), chunkRecoder)
+	css := NewChunkSeriesSet(lssQueryResult, labelSetSnapshot, chunkRecoder)
 	var ci chunks.Iterator
 
 	// first series
-	require.True(s.T(), css.Next())
+	s.Require().True(css.Next())
 	cs := css.At()
 
 	ci = cs.Iterator(ci)
-	require.True(s.T(), ci.Next())
+	s.Require().True(ci.Next())
 
 	xorChunk := chunkenc.NewXORChunk()
 	xorChunkAppender, err := xorChunk.Appender()
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 	xorChunkAppender.Append(4, 30)
 	xorChunkAppender.Append(7, 40)
 
 	meta := ci.At()
-	require.Equal(s.T(), int64(4), meta.MinTime)
-	require.Equal(s.T(), int64(7), meta.MaxTime)
-	require.Equal(s.T(), xorChunk.Bytes(), meta.Chunk.Bytes())
-	require.False(s.T(), ci.Next())
+	s.Require().Equal(int64(4), meta.MinTime)
+	s.Require().Equal(int64(7), meta.MaxTime)
+	s.Require().Equal(xorChunk.Bytes(), meta.Chunk.Bytes())
+	s.Require().False(ci.Next())
 
 	// second series
-	require.True(s.T(), css.Next())
+	s.Require().True(css.Next())
 	cs = css.At()
 
 	ci = cs.Iterator(ci)
-	require.True(s.T(), ci.Next())
+	s.Require().True(ci.Next())
 
 	xorChunk = chunkenc.NewXORChunk()
 	xorChunkAppender, err = xorChunk.Appender()
-	require.NoError(s.T(), err)
+	s.Require().NoError(err)
 	xorChunkAppender.Append(2, 21)
 	xorChunkAppender.Append(5, 31)
 	xorChunkAppender.Append(8, 41)
 
 	meta = ci.At()
-	require.Equal(s.T(), int64(2), meta.MinTime)
-	require.Equal(s.T(), int64(8), meta.MaxTime)
-	require.Equal(s.T(), xorChunk.Bytes(), meta.Chunk.Bytes())
-	require.False(s.T(), ci.Next())
-
-	require.False(s.T(), css.Next())
+	s.Require().Equal(int64(2), meta.MinTime)
+	s.Require().Equal(int64(8), meta.MaxTime)
+	s.Require().Equal(xorChunk.Bytes(), meta.Chunk.Bytes())
+	s.Require().False(ci.Next())
+	s.Require().False(css.Next())
 }

@@ -331,7 +331,7 @@ func TestPostingsMany(t *testing.T) {
 				exp = append(exp, e)
 			}
 		}
-		require.Equal(t, exp, got, fmt.Sprintf("input: %v", c.in))
+		require.Equalf(t, exp, got, "input: %v", c.in)
 	}
 }
 
@@ -631,6 +631,31 @@ func TestReader_PostingsForLabelMatchingHonorsContextCancel(t *testing.T) {
 		return true
 	})
 	require.Error(t, p.Err())
+	require.Equal(t, failAfter, ctx.Count())
+}
+
+func TestReader_LabelNamesForHonorsContextCancel(t *testing.T) {
+	const seriesCount = 1000
+	var input indexWriterSeriesSlice
+	for i := 1; i <= seriesCount; i++ {
+		input = append(input, &indexWriterSeries{
+			labels: labels.FromStrings(labels.MetricName, fmt.Sprintf("%4d", i)),
+			chunks: []chunks.Meta{
+				{Ref: 1, MinTime: 0, MaxTime: 10},
+			},
+		})
+	}
+	ir, _, _ := createFileReader(context.Background(), t, input)
+
+	name, value := AllPostingsKey()
+	p, err := ir.Postings(context.Background(), name, value)
+	require.NoError(t, err)
+	// We check context cancellation every 128 iterations so 3 will fail after
+	// iterating 3 * 128 series.
+	failAfter := uint64(3)
+	ctx := &testutil.MockContextErrAfter{FailAfter: failAfter}
+	_, err = ir.LabelNamesFor(ctx, p)
+	require.Error(t, err)
 	require.Equal(t, failAfter, ctx.Count())
 }
 

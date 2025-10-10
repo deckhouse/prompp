@@ -1,6 +1,7 @@
 package handler_test
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -31,10 +32,12 @@ func (s *PPConverterSuite) TestHappyPath() {
 	payload := createExportRequest(5, 5, 5, 5, 5)
 
 	converter := prometheusremotewrite.NewPrometheusConverter()
-	s.Require().NoError(converter.FromMetrics(
+	_, err := converter.FromMetrics(
+		context.Background(),
 		payload.Metrics(),
 		prometheusremotewrite.Settings{AddMetricSuffixes: true},
-	))
+	)
+	s.Require().NoError(err)
 
 	expected := []ppmodel.TimeSeries{}
 

@@ -36,5 +36,5 @@ type Receiver interface {
 	AppendSnappyProtobuf(ctx context.Context, compressedData relabeler.ProtobufData, relabelerID string, commitToWal bool) error
 	AppendHashdex(ctx context.Context, hashdex cppbridge.ShardedData, relabelerID string, commitToWal bool) error
 	// MergeOutOfOrderChunks merge chunks with out of order data chunks.
-	MergeOutOfOrderChunks()
+	MergeOutOfOrderChunks(ctx context.Context)
 }

@@ -58,6 +58,7 @@ class PROMPP_ATTRIBUTE_PACKED AscIntegerEncoder {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactBitSequence& stream() const noexcept { return stream_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence& stream() noexcept { return stream_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence release_stream() && noexcept { return std::move(stream_); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence finalize_stream() noexcept {
     auto stream = std::move(stream_);

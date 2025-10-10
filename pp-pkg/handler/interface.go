@@ -23,9 +23,9 @@ type Receiver interface {
 	) (cppbridge.RelabelerStats, error)
 	RelabelerIDIsExist(relabelerID string) bool
 	HeadQueryable() storage.Queryable
-	HeadStatus(limit int) relabeler.HeadStatus
+	HeadStatus(ctx context.Context, limit int) relabeler.HeadStatus
 	// MergeOutOfOrderChunks merge chunks with out of order data chunks.
-	MergeOutOfOrderChunks()
+	MergeOutOfOrderChunks(ctx context.Context)
 }
 
 // StreamProcessor interface.

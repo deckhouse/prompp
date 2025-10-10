@@ -42,7 +42,7 @@ class Serializer {
 
   template <class ChunkList, class Stream>
   void serialize_impl(const ChunkList& chunks, Stream& stream) {
-    static constinit std::array<char, encoder::CompactBitSequence::reserved_size_in_bytes()> kReservedBytesForReader{};
+    const auto& kReservedBytesForReader = encoder::CompactBitSequence::reserved_bytes_for_reader();
 
     TimestampStreamsData timestamp_streams_data;
     {

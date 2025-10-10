@@ -2,7 +2,6 @@
 
 #include "series_data/decoder.h"
 #include "series_data/encoder.h"
-#include "series_data/outdated_sample_encoder.h"
 
 namespace {
 
@@ -12,7 +11,6 @@ using series_data::DataStorage;
 using series_data::Decoder;
 using series_data::Encoder;
 using series_data::EncodingType;
-using series_data::OutdatedSampleEncoder;
 using series_data::chunk::DataChunk;
 using series_data::chunk::FinalizedChunkList;
 using series_data::chunk::OutdatedChunk;
@@ -427,6 +425,42 @@ TEST_F(EncodeTestFixture, EncodeUint32ConstantWith2Stalenan) {
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
 }
 
+TEST_F(EncodeTestFixture, EncodeUint32ConstantWithDuplicateStalenan) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+
+  // Act
+  encoder_.encode(0, 2, STALE_NAN);
+
+  // Assert
+  EXPECT_EQ(0, storage_.outdated_chunks.size());
+
+  EXPECT_EQ((SampleList{
+                {1, 1.0},
+                {2, 1.0},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
+}
+
+TEST_F(EncodeTestFixture, EncodeUint32ConstantWithOOOStalenan) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+
+  // Act
+  encoder_.encode(0, 1, STALE_NAN);
+
+  // Assert
+  EXPECT_EQ(0, storage_.outdated_chunks.size());
+
+  EXPECT_EQ((SampleList{
+                {1, 1.0},
+                {2, 1.0},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
+}
+
 TEST_F(EncodeTestFixture, EncodeFloat32ConstantWithStalenan) {
   // Arrange
 
@@ -472,6 +506,42 @@ TEST_F(EncodeTestFixture, EncodeFloat32ConstantWith2Stalenan) {
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
 }
 
+TEST_F(EncodeTestFixture, EncodeFloat32ConstantWithDuplicateStalenan) {
+  // Arrange
+  encoder_.encode(0, 1, -1.0);
+  encoder_.encode(0, 2, -1.0);
+
+  // Act
+  encoder_.encode(0, 2, STALE_NAN);
+
+  // Assert
+  EXPECT_EQ(0, storage_.outdated_chunks.size());
+
+  EXPECT_EQ((SampleList{
+                {1, -1.0},
+                {2, -1.0},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
+}
+
+TEST_F(EncodeTestFixture, EncodeFloat32ConstantWithOOOStalenan) {
+  // Arrange
+  encoder_.encode(0, 1, -1.0);
+  encoder_.encode(0, 2, -1.0);
+
+  // Act
+  encoder_.encode(0, 1, STALE_NAN);
+
+  // Assert
+  EXPECT_EQ(0, storage_.outdated_chunks.size());
+
+  EXPECT_EQ((SampleList{
+                {1, -1.0},
+                {2, -1.0},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
+}
+
 TEST_F(EncodeTestFixture, EncodeDoubleConstantWithStalenan) {
   // Arrange
 
@@ -513,6 +583,42 @@ TEST_F(EncodeTestFixture, EncodeDoubleConstantWithS2talenan) {
                 {1, 1.1},
                 {2, 1.1},
                 {3, STALE_NAN},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
+}
+
+TEST_F(EncodeTestFixture, EncodeDoubleConstantWithDuplicateStalenan) {
+  // Arrange
+  encoder_.encode(0, 1, 1.1);
+  encoder_.encode(0, 2, 1.1);
+
+  // Act
+  encoder_.encode(0, 2, STALE_NAN);
+
+  // Assert
+  EXPECT_EQ(0, storage_.outdated_chunks.size());
+
+  EXPECT_EQ((SampleList{
+                {1, 1.1},
+                {2, 1.1},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
+}
+
+TEST_F(EncodeTestFixture, EncodeDoubleConstantWithOOOStalenan) {
+  // Arrange
+  encoder_.encode(0, 1, 1.1);
+  encoder_.encode(0, 2, 1.1);
+
+  // Act
+  encoder_.encode(0, 1, STALE_NAN);
+
+  // Assert
+  EXPECT_EQ(0, storage_.outdated_chunks.size());
+
+  EXPECT_EQ((SampleList{
+                {1, 1.1},
+                {2, 1.1},
             }),
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
 }
@@ -578,6 +684,50 @@ TEST_F(EncodeTestFixture, EncodeTwoDoubleConstantWith2Stalenan) {
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
 }
 
+TEST_F(EncodeTestFixture, EncodeTwoDoubleConstantWithDuplicateStalenan) {
+  // Arrange
+  encoder_.encode(0, 1, 1.1);
+  encoder_.encode(0, 2, 1.1);
+  encoder_.encode(0, 3, 2.1);
+  encoder_.encode(0, 4, 2.1);
+
+  // Act
+  encoder_.encode(0, 4, STALE_NAN);
+
+  // Assert
+  EXPECT_EQ(0, storage_.outdated_chunks.size());
+
+  EXPECT_EQ((SampleList{
+                {1, 1.1},
+                {2, 1.1},
+                {3, 2.1},
+                {4, 2.1},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
+}
+
+TEST_F(EncodeTestFixture, EncodeTwoDoubleConstantWithOOOStalenan) {
+  // Arrange
+  encoder_.encode(0, 1, 1.1);
+  encoder_.encode(0, 2, 1.1);
+  encoder_.encode(0, 3, 2.1);
+  encoder_.encode(0, 4, 2.1);
+
+  // Act
+  encoder_.encode(0, 3, STALE_NAN);
+
+  // Assert
+  EXPECT_EQ(0, storage_.outdated_chunks.size());
+
+  EXPECT_EQ((SampleList{
+                {1, 1.1},
+                {2, 1.1},
+                {3, 2.1},
+                {4, 2.1},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
+}
+
 TEST_F(EncodeTestFixture, EncodeAscIntegerWithStalenan) {
   // Arrange
 
@@ -627,6 +777,46 @@ TEST_F(EncodeTestFixture, EncodeAscIntegerWith2Stalenan) {
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
 }
 
+TEST_F(EncodeTestFixture, EncodeAscIntegerWithDuplicateStalenan) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 2.0);
+  encoder_.encode(0, 3, 3.0);
+
+  // Act
+  encoder_.encode(0, 3, STALE_NAN);
+
+  // Assert
+  EXPECT_EQ(0, storage_.outdated_chunks.size());
+
+  EXPECT_EQ((SampleList{
+                {1, 1.0},
+                {2, 2.0},
+                {3, 3.0},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
+}
+
+TEST_F(EncodeTestFixture, EncodeAscIntegerWithOOOStalenan) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 2.0);
+  encoder_.encode(0, 3, 3.0);
+
+  // Act
+  encoder_.encode(0, 2, STALE_NAN);
+
+  // Assert
+  EXPECT_EQ(0, storage_.outdated_chunks.size());
+
+  EXPECT_EQ((SampleList{
+                {1, 1.0},
+                {2, 2.0},
+                {3, 3.0},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
+}
+
 TEST_F(EncodeTestFixture, EncodeAscIntegerThenValuesGorillaWithStalenan) {
   // Arrange
 
@@ -670,6 +860,50 @@ TEST_F(EncodeTestFixture, EncodeAscIntegerThenValuesGorillaWith2Stalenan) {
                 {3, 3.0},
                 {4, 4.1},
                 {5, STALE_NAN},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
+}
+
+TEST_F(EncodeTestFixture, EncodeAscIntegerThenGorillaWithDuplicateStalenan) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 2.0);
+  encoder_.encode(0, 3, 3.0);
+  encoder_.encode(0, 4, 4.1);
+
+  // Act
+  encoder_.encode(0, 4, STALE_NAN);
+
+  // Assert
+  EXPECT_EQ(0, storage_.outdated_chunks.size());
+
+  EXPECT_EQ((SampleList{
+                {1, 1.0},
+                {2, 2.0},
+                {3, 3.0},
+                {4, 4.1},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
+}
+
+TEST_F(EncodeTestFixture, EncodeAscIntegerThenGorillaWithOOOStalenan) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 2.0);
+  encoder_.encode(0, 3, 3.0);
+  encoder_.encode(0, 4, 4.1);
+
+  // Act
+  encoder_.encode(0, 2, STALE_NAN);
+
+  // Assert
+  EXPECT_EQ(0, storage_.outdated_chunks.size());
+
+  EXPECT_EQ((SampleList{
+                {1, 1.0},
+                {2, 2.0},
+                {3, 3.0},
+                {4, 4.1},
             }),
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
 }
@@ -730,6 +964,50 @@ TEST_F(EncodeTestFixture, EncodeValuesGorillaWith2Stalenan) {
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
 }
 
+TEST_F(EncodeTestFixture, EncodeValuesGorillaWithDuplicateStalenan) {
+  // Arrange
+  encoder_.encode(0, 1, 1.1);
+  encoder_.encode(1, 1, 1.1);
+  encoder_.encode(0, 2, 2.0);
+  encoder_.encode(1, 2, 2.0);
+  encoder_.encode(0, 3, 3.0);
+
+  // Act
+  encoder_.encode(0, 3, STALE_NAN);
+
+  // Assert
+  EXPECT_EQ(0, storage_.outdated_chunks.size());
+
+  EXPECT_EQ((SampleList{
+                {1, 1.1},
+                {2, 2.0},
+                {3, 3.0},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
+}
+
+TEST_F(EncodeTestFixture, EncodeValuesGorillaWithOOOStalenan) {
+  // Arrange
+  encoder_.encode(0, 1, 1.1);
+  encoder_.encode(1, 1, 1.1);
+  encoder_.encode(0, 2, 2.0);
+  encoder_.encode(1, 2, 2.0);
+  encoder_.encode(0, 3, 3.0);
+
+  // Act
+  encoder_.encode(0, 2, STALE_NAN);
+
+  // Assert
+  EXPECT_EQ(0, storage_.outdated_chunks.size());
+
+  EXPECT_EQ((SampleList{
+                {1, 1.1},
+                {2, 2.0},
+                {3, 3.0},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
+}
+
 TEST_F(EncodeTestFixture, EncodeGorillaWithStalenan) {
   // Arrange
 
@@ -775,6 +1053,46 @@ TEST_F(EncodeTestFixture, EncodeGorillaWith2Stalenan) {
                 {2, 2.0},
                 {3, 3.0},
                 {4, STALE_NAN},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
+}
+
+TEST_F(EncodeTestFixture, EncodeGorillaWithDuplicateStalenan) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 2.0);
+  encoder_.encode(0, 3, 3.0);
+
+  // Act
+  encoder_.encode(0, 3, STALE_NAN);
+
+  // Assert
+  EXPECT_EQ(0, storage_.outdated_chunks.size());
+
+  EXPECT_EQ((SampleList{
+                {1, 1.0},
+                {2, 2.0},
+                {3, 3.0},
+            }),
+            Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
+}
+
+TEST_F(EncodeTestFixture, EncodeGorillaWithOOOStalenan) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 2.0);
+  encoder_.encode(0, 3, 3.0);
+
+  // Act
+  encoder_.encode(0, 2, STALE_NAN);
+
+  // Assert
+  EXPECT_EQ(0, storage_.outdated_chunks.size());
+
+  EXPECT_EQ((SampleList{
+                {1, 1.0},
+                {2, 2.0},
+                {3, 3.0},
             }),
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
 }
@@ -1168,6 +1486,18 @@ TEST_F(EncodeTestFixture, Encode2DoubleStalenan2Double) {
                 {4, 1.2},
             }),
             Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
+}
+
+TEST_F(EncodeTestFixture, AllocateQueriedSeries) {
+  // Arrange
+  storage_.queried_series_bitmap.set(1);
+
+  // Act
+  encoder_.encode(0, 1, 1.0);
+
+  // Assert
+  EXPECT_FALSE(storage_.queried_series_bitmap.is_set(0));
+  EXPECT_TRUE(storage_.queried_series_bitmap.is_set(1));
 }
 
 class FinalizeChunkTestFixture : public EncoderTestTrait<4>, public testing::Test {
@@ -1858,6 +2188,30 @@ TEST_F(EncodeOutdatedChunkTestFixture, EncodeGorillaOutdatedSample) {
   const auto outdated = outdated_chunk(0);
   ASSERT_NE(nullptr, outdated);
   EXPECT_EQ((SampleList{{.timestamp = 1, .value = 1.0}, {.timestamp = 1, .value = 1.1}}), Decoder::decode_outdated_chunk(*outdated));
+}
+
+TEST_F(EncodeOutdatedChunkTestFixture, Encode1024OutdatedSamples) {
+  // Arrange
+  SampleList reference;
+  reference.reserve(1024);
+  for (int i : std::views::iota(1, 1024) | std::views::reverse) {
+    reference.emplace_back(i, i);
+  }
+
+  encoder_.encode(0, 1024, 1024.0);
+
+  // Act
+  for (size_t i = 1024; i != 0; i--) {
+    encoder_.encode(0, static_cast<uint32_t>(i), static_cast<double>(i));
+  }
+
+  // Assert
+  ASSERT_EQ(EncodingType::kUint32Constant, chunk(0).encoding_state.encoding_type);
+  EXPECT_EQ((SampleList{{.timestamp = 1024, .value = 1024.0}}), Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, chunk(0)));
+
+  const auto outdated = outdated_chunk(0);
+  ASSERT_NE(nullptr, outdated);
+  EXPECT_EQ(reference, Decoder::decode_outdated_chunk(*outdated));
 }
 
 class EraseOpenChunkTestFixture : public EncoderTestTrait<series_data::kSamplesPerChunkDefault>, public testing::Test {};

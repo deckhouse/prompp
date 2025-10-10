@@ -8,8 +8,10 @@ namespace {
 
 using BareBones::Encoding::DeltaRLE;
 using BareBones::StreamVByte::Codec0124;
-using BareBones::StreamVByte::CompactSequence;
 using BareBones::StreamVByte::Sequence;
+
+template <class Codec, size_t kPreAllocationElementsCount>
+using CompactSequence = BareBones::StreamVByte::CompactSequence<Codec, BareBones::MemoryWithItemCount, kPreAllocationElementsCount>;
 
 const BareBones::Vector<uint32_t>& values() {
   static BareBones::Vector<uint32_t> values;

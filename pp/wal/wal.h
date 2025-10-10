@@ -161,6 +161,7 @@ class CompactSamplesList {
     SampleUnion() {}
     ~SampleUnion() {}
 
+    std::array<Primitives::Sample, 0> none{};
     Primitives::Sample single;
     SamplesVector plural;
   } sample_;
