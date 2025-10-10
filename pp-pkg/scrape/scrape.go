@@ -117,6 +117,7 @@ type scrapeLoopOptions struct {
 	interval                 time.Duration
 	timeout                  time.Duration
 	scrapeClassicHistograms  bool
+	validationScheme         model.ValidationScheme
 	mrc                      []*relabel.Config
 	cache                    *scrapeCache
 	enableCompression        bool
@@ -242,11 +243,12 @@ func newScrapePool(
 			opts.scrapeClassicHistograms,
 			options.EnableCreatedTimestampZeroIngestion,
 			options.ExtraMetrics,
-			options.EnableMetadataStorage,
+			options.AppendMetadata,
 			opts.target,
 			options.PassMetadataInContext,
 			metrics,
 			options.skipOffsetting,
+			opts.validationScheme,
 		)
 	}
 	sp.metrics.targetScrapePoolTargetLimit.WithLabelValues(sp.config.JobName).Set(float64(sp.config.TargetLimit))
@@ -333,6 +335,16 @@ func (sp *scrapePool) reload(cfg *config.ScrapeConfig) error {
 	sp.client = client
 
 	sp.metrics.targetScrapePoolTargetLimit.WithLabelValues(sp.config.JobName).Set(float64(sp.config.TargetLimit))
+
+	sp.restartLoops(reuseCache)
+	oldClient.CloseIdleConnections()
+	sp.metrics.targetReloadIntervalLength.WithLabelValues(time.Duration(sp.config.ScrapeInterval).String()).Observe(
+		time.Since(start).Seconds(),
+	)
+	return nil
+}
+
+func (sp *scrapePool) restartLoops(reuseCache bool) {
 	sp.targetsCache = map[uint64][]*Target{}
 
 	var (
@@ -352,6 +364,11 @@ func (sp *scrapePool) reload(cfg *config.ScrapeConfig) error {
 		trackTimestampsStaleness = sp.config.TrackTimestampsStaleness
 		mrc                      = sp.config.MetricRelabelConfigs
 	)
+
+	validationScheme := model.LegacyValidation
+	if sp.config.MetricNameValidationScheme == config.UTF8ValidationConfig {
+		validationScheme = model.UTF8Validation
+	}
 
 	sp.targetMtx.Lock()
 
@@ -373,7 +390,7 @@ func (sp *scrapePool) reload(cfg *config.ScrapeConfig) error {
 				client:               sp.client,
 				timeout:              timeout,
 				bodySizeLimit:        bodySizeLimit,
-				acceptHeader:         acceptHeader(cfg.ScrapeProtocols),
+				acceptHeader:         acceptHeader(sp.config.ScrapeProtocols, validationScheme),
 				acceptEncodingHeader: acceptEncodingHeader(enableCompression),
 			}
 			newLoop = sp.newLoop(scrapeLoopOptions{
@@ -388,6 +405,7 @@ func (sp *scrapePool) reload(cfg *config.ScrapeConfig) error {
 				cache:                    cache,
 				interval:                 interval,
 				timeout:                  timeout,
+				validationScheme:         validationScheme,
 			})
 		)
 		if err != nil {
@@ -409,11 +427,6 @@ func (sp *scrapePool) reload(cfg *config.ScrapeConfig) error {
 	sp.targetMtx.Unlock()
 
 	wg.Wait()
-	oldClient.CloseIdleConnections()
-	sp.metrics.targetReloadIntervalLength.WithLabelValues(interval.String()).Observe(
-		time.Since(start).Seconds(),
-	)
-	return nil
 }
 
 // Sync converts target groups into actual scrape targets and synchronizes
@@ -500,6 +513,11 @@ func (sp *scrapePool) sync(targets []*Target) {
 		scrapeClassicHistograms  = sp.config.ScrapeClassicHistograms
 	)
 
+	validationScheme := model.LegacyValidation
+	if sp.config.MetricNameValidationScheme == config.UTF8ValidationConfig {
+		validationScheme = model.UTF8Validation
+	}
+
 	sp.targetMtx.Lock()
 	for _, t := range targets {
 		hash := t.hash()
@@ -515,7 +533,7 @@ func (sp *scrapePool) sync(targets []*Target) {
 				client:               sp.client,
 				timeout:              timeout,
 				bodySizeLimit:        bodySizeLimit,
-				acceptHeader:         acceptHeader(sp.config.ScrapeProtocols),
+				acceptHeader:         acceptHeader(sp.config.ScrapeProtocols, validationScheme),
 				acceptEncodingHeader: acceptEncodingHeader(enableCompression),
 				metrics:              sp.metrics,
 			}
@@ -636,11 +654,16 @@ type targetScraper struct {
 // acceptHeader transforms preference from the options into specific header values as
 // https://www.rfc-editor.org/rfc/rfc9110.html#name-accept defines.
 // No validation is here, we expect scrape protocols to be validated already.
-func acceptHeader(sps []config.ScrapeProtocol) string {
+func acceptHeader(sps []config.ScrapeProtocol, scheme model.ValidationScheme) string {
 	var vals []string
 	weight := len(config.ScrapeProtocolsHeaders) + 1
 	for _, sp := range sps {
-		vals = append(vals, fmt.Sprintf("%s;q=0.%d", config.ScrapeProtocolsHeaders[sp], weight))
+		val := config.ScrapeProtocolsHeaders[sp]
+		if scheme == model.UTF8Validation {
+			val += ";" + config.UTF8NamesHeader
+		}
+		val += fmt.Sprintf(";q=0.%d", weight)
+		vals = append(vals, val)
 		weight--
 	}
 	// Default match anything.
@@ -756,8 +779,9 @@ type scrapeLoop struct {
 	timeout                 time.Duration
 	scrapeClassicHistograms bool
 	enableCTZeroIngestion   bool
-
-	scrapeName string
+	// TODO !lset.IsValid(sl.validationScheme)
+	validationScheme model.ValidationScheme
+	scrapeName       string
 
 	parentCtx   context.Context
 	appenderCtx context.Context
@@ -799,6 +823,7 @@ func newScrapeLoop(
 	passMetadataInContext bool,
 	metrics *scrapeMetrics,
 	skipOffsetting bool,
+	validationScheme model.ValidationScheme,
 ) *scrapeLoop {
 	if logger == nil {
 		logger = log.NewNopLogger()
@@ -856,6 +881,7 @@ func newScrapeLoop(
 		appendMetadataToWAL:     appendMetadataToWAL,
 		metrics:                 metrics,
 		skipOffsetting:          skipOffsetting,
+		validationScheme:        validationScheme,
 	}
 	sl.ctx, sl.cancel = context.WithCancel(ctx)
 
@@ -1289,33 +1315,33 @@ func (sl *scrapeLoop) appendMetadata(hashdex ScraperHashdex) error {
 	hashdex.RangeMetadata(func(md cppbridge.WALScraperHashdexMetadata) bool {
 		switch md.Type {
 		case cppbridge.HashdexMetadataHelp:
-			sl.cache.setHelp(yoloBytes(&md.MetricName), yoloBytes(&md.Text))
+			sl.cache.setHelp(yoloBytes(md.MetricName), yoloBytes(md.Text))
 		case cppbridge.HashdexMetadataType:
 			switch md.Text {
 			case "counter":
-				sl.cache.setType(yoloBytes(&md.MetricName), model.MetricTypeCounter)
+				sl.cache.setType(yoloBytes(md.MetricName), model.MetricTypeCounter)
 			case "gauge":
-				sl.cache.setType(yoloBytes(&md.MetricName), model.MetricTypeGauge)
+				sl.cache.setType(yoloBytes(md.MetricName), model.MetricTypeGauge)
 			case "histogram":
-				sl.cache.setType(yoloBytes(&md.MetricName), model.MetricTypeHistogram)
+				sl.cache.setType(yoloBytes(md.MetricName), model.MetricTypeHistogram)
 			case "gaugehistogram":
-				sl.cache.setType(yoloBytes(&md.MetricName), model.MetricTypeGaugeHistogram)
+				sl.cache.setType(yoloBytes(md.MetricName), model.MetricTypeGaugeHistogram)
 			case "summary":
-				sl.cache.setType(yoloBytes(&md.MetricName), model.MetricTypeSummary)
+				sl.cache.setType(yoloBytes(md.MetricName), model.MetricTypeSummary)
 			case "info":
-				sl.cache.setType(yoloBytes(&md.MetricName), model.MetricTypeInfo)
+				sl.cache.setType(yoloBytes(md.MetricName), model.MetricTypeInfo)
 			case "stateset":
-				sl.cache.setType(yoloBytes(&md.MetricName), model.MetricTypeStateset)
+				sl.cache.setType(yoloBytes(md.MetricName), model.MetricTypeStateset)
 			case "unknown":
-				sl.cache.setType(yoloBytes(&md.MetricName), model.MetricTypeUnknown)
+				sl.cache.setType(yoloBytes(md.MetricName), model.MetricTypeUnknown)
 			case "untyped":
-				sl.cache.setType(yoloBytes(&md.MetricName), model.MetricTypeUnknown)
+				sl.cache.setType(yoloBytes(md.MetricName), model.MetricTypeUnknown)
 			default:
 				err = fmt.Errorf("invalid metric type %q", md.Text)
 				return false
 			}
 		case cppbridge.HashdexMetadataUnit:
-			sl.cache.setUnit(yoloBytes(&md.MetricName), yoloBytes(&md.Text))
+			sl.cache.setUnit(yoloBytes(md.MetricName), yoloBytes(md.Text))
 		default:
 			err = fmt.Errorf("invalid metadata type '%d'", md.Type)
 			return false
@@ -1327,8 +1353,8 @@ func (sl *scrapeLoop) appendMetadata(hashdex ScraperHashdex) error {
 	return err
 }
 
-func yoloBytes(s *string) []byte {
-	return *((*[]byte)(unsafe.Pointer(s)))
+func yoloBytes(s string) []byte {
+	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
 // The constants are suffixed with the invalid \xff unicode rune to avoid collisions

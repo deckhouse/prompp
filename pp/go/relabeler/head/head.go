@@ -24,8 +24,13 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
-// ExtraReadConcurrency number of concurrency read operation, 0 - work without concurrency.
-var ExtraReadConcurrency = 0
+var (
+
+	// ExtraReadConcurrency number of concurrency read operation, 0 - work without concurrency.
+	ExtraReadConcurrency = 0
+
+	UnrecoverableErrorChan = make(chan error)
+)
 
 const (
 	tryCount       = 30
@@ -180,6 +185,7 @@ func (NoOpLastAppendedSegmentIDSetter) SetLastAppendedSegmentID(segmentID uint32
 
 type Head struct {
 	id         string
+	dir        string
 	generation uint64
 	readOnly   bool
 
@@ -217,11 +223,14 @@ type Head struct {
 
 func New(
 	id string,
+	dir string,
 	generation uint64,
 	inputRelabelerConfigs []*config.InputRelabelerConfig,
 	lsses []*LSS,
 	wals []*ShardWal,
 	dataStorages []*DataStorage,
+	unloadedDataStorages []*UnloadedDataStorage,
+	queriedSeriesStorages []*QueriedSeriesStorage,
 	numberOfShards uint16,
 	registerer prometheus.Registerer,
 ) (*Head, error) {
@@ -238,6 +247,8 @@ func New(
 		shards[shardID] = newShard(
 			lsses[shardID],
 			dataStorages[shardID],
+			unloadedDataStorages[shardID],
+			queriedSeriesStorages[shardID],
 			wals[shardID],
 			shardID,
 			ExtraReadConcurrency != 0,
@@ -247,6 +258,7 @@ func New(
 	factory := util.NewUnconflictRegisterer(registerer)
 	h := &Head{
 		id:                 id,
+		dir:                dir,
 		generation:         generation,
 		shards:             shards,
 		lssTaskChs:         lssTaskChs,
@@ -726,6 +738,14 @@ func (h *Head) Close() error {
 	var err error
 	for _, s := range h.shards {
 		err = errors.Join(err, s.wal.Close())
+
+		if s.unloadedDataStorage != nil {
+			err = errors.Join(err, s.unloadedDataStorage.Close())
+		}
+
+		if s.queriedSeriesStorage != nil {
+			err = errors.Join(err, s.queriedSeriesStorage.Close())
+		}
 	}
 	return err
 }
@@ -1196,6 +1216,75 @@ func (*Head) shardLoop(
 	}
 }
 
+// UnloadUnusedSeriesData - unload unused series data in all dataStorages
+func (h *Head) UnloadUnusedSeriesData() {
+	task := h.CreateTask(
+		relabeler.DSUnloadUnusedSeriesData,
+		func(shard relabeler.Shard) error {
+			if shard.UnloadedDataStorage() == nil {
+				return nil
+			}
+
+			unloader := shard.DataStorage().CreateUnusedSeriesDataUnloader()
+
+			shard.DataStorageRLock()
+			snapshot := unloader.CreateSnapshot()
+			queriedSeries := shard.DataStorage().GetQueriedSeriesBitset()
+			shard.DataStorageRUnlock()
+
+			header, err := shard.UnloadedDataStorage().WriteSnapshot(snapshot)
+			if err != nil {
+				return fmt.Errorf("unable to write unloaded series data snapshot: %v", err)
+			}
+
+			shard.DataStorageLock()
+			shard.UnloadedDataStorage().WriteIndex(header)
+			unloader.Unload()
+			shard.DataStorageUnlock()
+
+			if err = shard.QueriedSeriesStorage().Write(queriedSeries, time.Now().UnixMilli()); err != nil {
+				return fmt.Errorf("unable to write queried series data: %v", err)
+			}
+
+			return nil
+		},
+		relabeler.ForDataStorageTask,
+	)
+	h.Enqueue(task)
+	if err := task.Wait(); err != nil {
+		logger.Warnf("unable to unload unused series data: %v", err)
+	}
+}
+
+// CreateDataStorageLoadAndQueryTask - add querier to pool for data load and create task for data load if needed
+func (h *Head) CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr) *relabeler.GenericTask {
+	return h.shards[shardID].loadAndQueryTask.Add(querier, func() *relabeler.GenericTask {
+		task := h.CreateTask(
+			relabeler.DSLoadUnusedSeriesDataAndQuery,
+			func(shard relabeler.Shard) error {
+				shard.DataStorageLock()
+				queriers := shard.LoadAndQueryTask().Release()
+				loader := shard.DataStorage().CreateLoader(queriers)
+				err := shard.UnloadedDataStorage().ForEachSnapshot(loader.Load)
+				shard.DataStorageUnlock()
+
+				if err != nil {
+					return err
+				}
+
+				shard.DataStorageRLock()
+				shard.DataStorage().QueryFinal(queriers)
+				shard.DataStorageRUnlock()
+
+				return err
+			},
+			relabeler.ForDataStorageTask,
+		)
+		h.EnqueueOnShard(task, shardID)
+		return task
+	})
+}
+
 // FindFromBuilder label set from builder in lss, if not found return EmptyLabels.
 //
 //revive:disable-next-line:flag-parameter this is not a flag, but a parameter
@@ -1354,4 +1443,26 @@ func (h *Head) rotateCache(stopc chan struct{}) {
 // Raw returns raw [Head].
 func (h *Head) Raw() relabeler.Head {
 	return h
+}
+
+func (h *Head) UnrecoverableError(err error) {
+	logger.Warnf("Unrecoverable error: %v", err)
+
+	UnrecoverableErrorChan <- UnrecoverableError{err}
+}
+
+// UnrecoverableError error if Head get unrecoverable error.
+type UnrecoverableError struct {
+	err error
+}
+
+// Error implements error.
+func (err UnrecoverableError) Error() string {
+	return fmt.Sprintf("Unrecoverable error: %v", err.err)
+}
+
+// Is implements errors.Is interface.
+func (UnrecoverableError) Is(target error) bool {
+	_, ok := target.(UnrecoverableError)
+	return ok
 }

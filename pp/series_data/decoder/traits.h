@@ -18,26 +18,27 @@ class DecodeIteratorTypeTrait {
   using reference = encoder::Sample&;
 };
 
+template <std::unsigned_integral SampleCountType>
 class DecodeIteratorTrait : public DecodeIteratorTypeTrait {
  public:
-  explicit DecodeIteratorTrait(uint8_t count) : remaining_samples_{count} {}
-  explicit DecodeIteratorTrait(double value, uint8_t count) : sample_{.value = value}, remaining_samples_{count} {}
-  explicit DecodeIteratorTrait(double value, uint8_t count, bool last_stalenan)
+  explicit DecodeIteratorTrait(SampleCountType count) : remaining_samples_{count} {}
+  explicit DecodeIteratorTrait(double value, SampleCountType count) : sample_{.value = value}, remaining_samples_{count} {}
+  explicit DecodeIteratorTrait(double value, SampleCountType count, bool last_stalenan)
       : sample_{.value = value}, remaining_samples_{count}, last_stalenan_{last_stalenan} {}
 
   const encoder::Sample& operator*() const noexcept { return sample_; }
   const encoder::Sample* operator->() const noexcept { return &sample_; }
 
   PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return remaining_samples_ == 0; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint8_t remaining_samples() const noexcept { return remaining_samples_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE SampleCountType remaining_samples() const noexcept { return remaining_samples_; }
 
  protected:
   encoder::Sample sample_;
-  uint8_t remaining_samples_{};
+  SampleCountType remaining_samples_{};
   bool last_stalenan_{false};
 };
 
-class SeparatedTimestampValueDecodeIteratorTrait : public DecodeIteratorTrait {
+class SeparatedTimestampValueDecodeIteratorTrait : public DecodeIteratorTrait<uint8_t> {
  public:
   SeparatedTimestampValueDecodeIteratorTrait(uint8_t samples_count, const BareBones::BitSequenceReader& timestamp_reader, double value, bool last_stalenan)
       : DecodeIteratorTrait(value, samples_count, last_stalenan), timestamp_decoder_(timestamp_reader) {

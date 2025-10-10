@@ -1,0 +1,86 @@
+--- absl/strings/charconv.cc
++++ absl/strings/charconv.cc
+@@ -732,7 +732,7 @@ bool EiselLemire(const strings_internal::ParsedFloat& input, bool negative,
+   man <<= static_cast<unsigned int>(clz);
+   // The 217706 etc magic numbers are from the Power10Exponent function.
+   uint64_t ret_exp2 =
+-      static_cast<uint64_t>((217706 * exp10 >> 16) + 64 +
++      static_cast<uint64_t>((217706ULL * exp10 >> 16) + 64 +
+                             FloatTraits<FloatType>::kExponentBias - clz);
+
+   // (+) Multiplication.
+
+--- absl/strings/cord.cc
++++ absl/strings/cord.cc
+@@ -1454,8 +1454,8 @@ static void DumpNode(absl::Nonnull<CordRep*> rep, bool include_data,
+   absl::InlinedVector<CordRep*, kInlinedVectorSize> stack;
+   absl::InlinedVector<int, kInlinedVectorSize> indents;
+   for (;;) {
+-    *os << std::setw(3) << rep->refcount.Get();
+-    *os << " " << std::setw(7) << rep->length;
++    *os << std::setw(3) << (rep == nullptr ? 0 : rep->refcount.Get());
++    *os << " " << std::setw(7) << (rep == nullptr ? 0 : rep->length);
+     *os << " [";
+     if (include_data) *os << static_cast<void*>(rep);
+     *os << "]";
+
+--- absl/strings/internal/str_format/float_conversion.cc
++++ absl/strings/internal/str_format/float_conversion.cc
+@@ -385,7 +385,7 @@ char* PrintFractionalDigitsFast(uint64_t v,
+                                 int exp,
+                                 size_t precision) {
+   char *p = start;
+-  v <<= (64 - exp);
++  v <<= (64ULL - exp);
+   while (precision > 0) {
+     if (!v) return p;
+     *p++ = MultiplyBy10WithCarry(&v, 0) + '0';
+@@ -855,7 +855,7 @@ void FormatANormalize(const HexFloatTypeParams float_traits, uint8_t *leading,
+   // get interrupted by the exponent threshold.
+   while (*mantissa && !(*mantissa & kHighIntBit)) {
+     if (ABSL_PREDICT_FALSE(*exp - 1 < float_traits.min_exponent)) {
+-      *mantissa >>= (float_traits.min_exponent - *exp);
++      *mantissa >>= (static_cast<uint64_t>(float_traits.min_exponent) - *exp);
+       *exp = float_traits.min_exponent;
+       return;
+     }
+
+--- absl/container/internal/inlined_vector.h
++++ absl/container/internal/inlined_vector.h
+@@ -16,6 +16,7 @@
+ #define ABSL_CONTAINER_INTERNAL_INLINED_VECTOR_H_
+
+ #include <algorithm>
++#include <array>
+ #include <cstddef>
+ #include <cstring>
+ #include <iterator>
+@@ -561,6 +562,7 @@ class Storage {
+   };
+
+   union Data {
++    std::array<Allocated, 0> nop{};
+     Allocated allocated;
+     Inlined inlined;
+   };
+@@ -576,7 +578,7 @@ class Storage {
+   ABSL_ATTRIBUTE_NOINLINE Reference<A> EmplaceBackSlow(Args&&... args);
+
+   Metadata metadata_;
+-  Data data_;
++  Data data_{};
+ };
+
+ template <typename T, size_t N, typename A>
+
+--- absl/container/internal/raw_hash_set.cc
++++ absl/container/internal/raw_hash_set.cc
+@@ -117,7 +117,7 @@ void ConvertDeletedToEmptyAndFullToDeleted(ctrl_t* ctrl, size_t capacity) {
+     Group{pos}.ConvertSpecialToEmptyAndFullToDeleted(pos);
+   }
+   // Copy the cloned ctrl bytes.
+-  std::memcpy(ctrl + capacity + 1, ctrl, NumClonedBytes());
++  std::memmove(ctrl + capacity + 1, ctrl, NumClonedBytes());
+   ctrl[capacity] = ctrl_t::kSentinel;
+ }
+ // Extern template instantiation for inline function.

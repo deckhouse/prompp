@@ -28,6 +28,11 @@ type DeduplicatorFactory interface {
 	Deduplicator(numberOfShards uint16) Deduplicator
 }
 
+type dataStorageQueryResult struct {
+	serializedChunks *cppbridge.HeadDataStorageSerializedChunks
+	querier          uintptr
+}
+
 type Querier struct {
 	mint                int64
 	maxt                int64
@@ -57,6 +62,7 @@ func NewQuerier(
 func (q *Querier) LabelValues(
 	ctx context.Context,
 	name string,
+	hints *storage.LabelHints,
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	return labelValues(
@@ -66,6 +72,7 @@ func (q *Querier) LabelValues(
 		q.deduplicatorFactory,
 		q.metrics,
 		relabeler.LSSLabelValuesQuerier,
+		hints,
 		matchers...,
 	)
 }
@@ -77,6 +84,7 @@ func labelValues(
 	deduplicatorFactory DeduplicatorFactory,
 	metrics *Metrics,
 	taskName string,
+	hints *storage.LabelHints,
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	start := time.Now()
@@ -131,14 +139,18 @@ func labelValues(
 	lvs := dedup.Values()
 	sort.Strings(lvs)
 
+	if hints.Limit > 0 && hints.Limit < len(lvs) {
+		return lvs[:hints.Limit], anns, nil
+	}
 	return lvs, anns, nil
 }
 
 func (q *Querier) LabelNames(
 	ctx context.Context,
+	hints *storage.LabelHints,
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
-	return labelNames(ctx, q.head, q.deduplicatorFactory, q.metrics, relabeler.LSSLabelNamesQuerier, matchers...)
+	return labelNames(ctx, q.head, q.deduplicatorFactory, q.metrics, relabeler.LSSLabelNamesQuerier, hints, matchers...)
 }
 
 func labelNames(
@@ -147,6 +159,7 @@ func labelNames(
 	deduplicatorFactory DeduplicatorFactory,
 	metrics *Metrics,
 	taskName string,
+	hints *storage.LabelHints,
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	start := time.Now()
@@ -201,6 +214,9 @@ func labelNames(
 	lns := dedup.Values()
 	sort.Strings(lns)
 
+	if hints.Limit > 0 && hints.Limit < len(lns) {
+		return lns[:hints.Limit], anns, nil
+	}
 	return lns, anns, nil
 }
 
@@ -261,6 +277,7 @@ func (q *Querier) selectInstant(
 
 	numberOfShards := q.head.NumberOfShards()
 	seriesSets := make([]storage.SeriesSet, numberOfShards)
+	var dataStorageLoadWaiter relabeler.TaskWaiter
 	tDataStorageQuery := q.head.CreateTask(
 		relabeler.DSQueryInstantQuerier,
 		func(shard relabeler.Shard) error {
@@ -272,12 +289,16 @@ func (q *Querier) selectInstant(
 			}
 
 			shard.DataStorageRLock()
+			samples, result := shard.DataStorage().InstantQuery(q.maxt, valueNotFoundTimestampValue, lssQueryResult.IDs())
 			seriesSets[shardID] = NewInstantSeriesSet(
 				lssQueryResult,
 				snapshots[shardID],
 				valueNotFoundTimestampValue,
-				shard.DataStorage().InstantQuery(q.maxt, valueNotFoundTimestampValue, lssQueryResult.IDs()),
+				samples,
 			)
+			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {
+				dataStorageLoadWaiter.Add(q.head.CreateDataStorageLoadAndQueryTask(shardID, result.Querier))
+			}
 			shard.DataStorageRUnlock()
 
 			return nil
@@ -286,6 +307,11 @@ func (q *Querier) selectInstant(
 	)
 	q.head.Enqueue(tDataStorageQuery)
 	_ = tDataStorageQuery.Wait()
+
+	if err := dataStorageLoadWaiter.Wait(); err != nil {
+		q.head.UnrecoverableError(err)
+		return storage.ErrSeriesSet(err)
+	}
 
 	return storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge)
 }
@@ -319,10 +345,14 @@ func (q *Querier) selectRange(
 		return storage.ErrSeriesSet(err)
 	}
 
-	serializedChunksShards := dataStorageQuery(relabeler.DSQueryRangeQuerier, q.head, lssQueryResults, q.mint, q.maxt)
+	queryResults, err := dataStorageQuery(relabeler.DSQueryRangeQuerier, q.head, lssQueryResults, q.mint, q.maxt)
+	if err != nil {
+		return storage.ErrSeriesSet(err)
+	}
+
 	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
-	for shardID, serializedChunksShard := range serializedChunksShards {
-		if serializedChunksShard == nil {
+	for shardID, serializedChunks := range queryResults {
+		if serializedChunks == nil || serializedChunks.NumberOfChunks() == 0 {
 			seriesSets[shardID] = &SeriesSet{}
 			continue
 		}
@@ -330,9 +360,9 @@ func (q *Querier) selectRange(
 		seriesSets[shardID] = &SeriesSet{
 			mint:             q.mint,
 			maxt:             q.maxt,
-			deserializer:     cppbridge.NewHeadDataStorageDeserializer(serializedChunksShard),
-			chunksIndex:      serializedChunksShard.MakeIndex(),
-			serializedChunks: serializedChunksShard,
+			deserializer:     cppbridge.NewHeadDataStorageDeserializer(serializedChunks),
+			chunksIndex:      serializedChunks.MakeIndex(),
+			serializedChunks: serializedChunks,
 			lssQueryResult:   lssQueryResults[shardID],
 			labelSetSnapshot: snapshots[shardID],
 		}
@@ -423,14 +453,16 @@ func lssQuery(
 	return lssQueryResults, snapshots, nil
 }
 
-// dataStorageQuery returns serialized chunks from data storage.
 func dataStorageQuery(
 	taskName string,
 	head relabeler.Head,
 	lssQueryResults []*cppbridge.LSSQueryResult,
-	mint, maxt int64,
-) []*cppbridge.HeadDataStorageSerializedChunks {
-	serializedChunksShards := make([]*cppbridge.HeadDataStorageSerializedChunks, head.NumberOfShards())
+	mint, maxt int64) (
+	[]*cppbridge.HeadDataStorageSerializedChunks,
+	error,
+) {
+	queryResults := make([]*cppbridge.HeadDataStorageSerializedChunks, head.NumberOfShards())
+	var dataStorageLoadWaiter relabeler.TaskWaiter
 	tDataStorageQuery := head.CreateTask(
 		taskName,
 		func(shard relabeler.Shard) error {
@@ -440,19 +472,18 @@ func dataStorageQuery(
 				return nil
 			}
 
+			var result cppbridge.DataStorageQueryResult
+
 			shard.DataStorageRLock()
-			serializedChunks := shard.DataStorage().Query(cppbridge.HeadDataStorageQuery{
+			queryResults[shardID], result = shard.DataStorage().Query(cppbridge.HeadDataStorageQuery{
 				StartTimestampMs: mint,
 				EndTimestampMs:   maxt,
 				LabelSetIDs:      lssQueryResult.IDs(),
 			})
-			shard.DataStorageRUnlock()
-
-			if serializedChunks.NumberOfChunks() == 0 {
-				return nil
+			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {
+				dataStorageLoadWaiter.Add(head.CreateDataStorageLoadAndQueryTask(shardID, result.Querier))
 			}
-
-			serializedChunksShards[shardID] = serializedChunks
+			shard.DataStorageRUnlock()
 
 			return nil
 		},
@@ -461,5 +492,10 @@ func dataStorageQuery(
 	head.Enqueue(tDataStorageQuery)
 	_ = tDataStorageQuery.Wait()
 
-	return serializedChunksShards
+	if err := dataStorageLoadWaiter.Wait(); err != nil {
+		head.UnrecoverableError(err)
+		return nil, err
+	}
+
+	return queryResults, nil
 }

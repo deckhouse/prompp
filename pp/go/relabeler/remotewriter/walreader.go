@@ -5,19 +5,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/prometheus/prometheus/pp/go/relabeler/head"
+	"github.com/prometheus/prometheus/pp/go/util"
 )
 
 type walReader struct {
 	nextSegmentID uint32
-	file          *os.File
+	file          *util.FileReader
 	reader        io.Reader
 }
 
 func newWalReader(fileName string) (*walReader, uint8, error) {
-	file, err := os.Open(fileName)
+	file, err := util.OpenFileReader(fileName)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to read wal file: %w", err)
 	}
@@ -40,14 +40,13 @@ type Segment struct {
 }
 
 func (r *walReader) Read() (segment Segment, err error) {
-	decodedSegment, _, err := head.ReadSegment(r.reader)
+	_, err = head.ReadSegment(r.reader, &segment.DecodedSegment)
 	if err != nil {
 		return segment, fmt.Errorf("failed to read segment: %w", err)
 	}
 
 	segment.ID = r.nextSegmentID
 	r.nextSegmentID++
-	segment.DecodedSegment = decodedSegment
 
 	return segment, nil
 }

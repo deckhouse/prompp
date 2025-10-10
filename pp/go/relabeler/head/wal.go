@@ -94,6 +94,10 @@ func (w *ShardWal) Commit() error {
 }
 
 func (w *ShardWal) Flush() error {
+	if w.segmentWriter == nil {
+		return nil
+	}
+
 	return w.segmentWriter.Flush()
 }
 
@@ -218,36 +222,41 @@ func (d DecodedSegment) SampleCount() uint32 {
 	return d.sampleCount
 }
 
-func ReadSegment(reader io.Reader) (decodedSegment DecodedSegment, n int, err error) {
+func ReadSegment(reader io.Reader, decodedSegment *DecodedSegment) (n int, err error) {
 	br := &byteReader{r: reader}
 	var size uint64
 	size, err = binary.ReadUvarint(br)
 	if err != nil {
-		return decodedSegment, br.n, fmt.Errorf("failed to read segment size: %w", err)
+		return br.n, fmt.Errorf("failed to read segment size: %w", err)
 	}
 
 	crc32HashU64, err := binary.ReadUvarint(br)
 	if err != nil {
-		return decodedSegment, br.n, fmt.Errorf("failed to read segment crc32 hash: %w", err)
+		return br.n, fmt.Errorf("failed to read segment crc32 hash: %w", err)
 	}
 	crc32Hash := uint32(crc32HashU64)
 
 	sampleCountU64, err := binary.ReadUvarint(br)
 	if err != nil {
-		return decodedSegment, br.n, fmt.Errorf("failed to read segment sample count: %w", err)
+		return br.n, fmt.Errorf("failed to read segment sample count: %w", err)
 	}
 	decodedSegment.sampleCount = uint32(sampleCountU64)
 
-	decodedSegment.data = make([]byte, size)
+	if int(size) > cap(decodedSegment.data) {
+		decodedSegment.data = make([]byte, size)
+	} else {
+		decodedSegment.data = decodedSegment.data[:size]
+	}
+
 	n, err = io.ReadFull(reader, decodedSegment.data)
 	if err != nil {
-		return decodedSegment, br.n, fmt.Errorf("failed to read segment data: %w", err)
+		return br.n, fmt.Errorf("failed to read segment data: %w", err)
 	}
 	n += br.n
 
 	if crc32Hash != crc32.ChecksumIEEE(decodedSegment.data) {
-		return decodedSegment, n, fmt.Errorf("crc32 did not match, want: %d, have: %d", crc32Hash, crc32.ChecksumIEEE(decodedSegment.data))
+		return n, fmt.Errorf("crc32 did not match, want: %d, have: %d", crc32Hash, crc32.ChecksumIEEE(decodedSegment.data))
 	}
 
-	return decodedSegment, n, nil
+	return n, nil
 }

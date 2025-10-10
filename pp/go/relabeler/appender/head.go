@@ -11,8 +11,12 @@ import (
 	"github.com/prometheus/prometheus/pp/go/relabeler/config"
 )
 
-// CopySeriesOnRotate copy active series from the current head to the new head during rotation.
-var CopySeriesOnRotate = false
+var (
+	// CopySeriesOnRotate copy active series from the current head to the new head during rotation.
+	CopySeriesOnRotate = false
+
+	UnloadDataStorage = false
+)
 
 // Storage - head storage.
 type Storage interface {
@@ -39,6 +43,10 @@ type RotatableHead struct {
 	storage       Storage
 	builder       HeadBuilder
 	headActivator HeadActivator
+}
+
+func (h *RotatableHead) UnrecoverableError(err error) {
+	h.head.UnrecoverableError(err)
 }
 
 // NewRotatableHead - RotatableHead constructor.
@@ -217,6 +225,14 @@ func (h *RotatableHead) RLockQuery(ctx context.Context) (runlock func(), err err
 	return h.head.RLockQuery(ctx)
 }
 
+func (h *RotatableHead) CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr) *relabeler.GenericTask {
+	return h.head.CreateDataStorageLoadAndQueryTask(shardID, querier)
+}
+
+func (h *RotatableHead) UnloadUnusedSeriesData() {
+	h.head.UnloadUnusedSeriesData()
+}
+
 // Raw returns raw [Head].
 func (h *RotatableHead) Raw() relabeler.Head {
 	return h.head
@@ -262,6 +278,10 @@ type HeapProfileWriter interface {
 type HeapProfileWritableHead struct {
 	head              relabeler.Head
 	heapProfileWriter HeapProfileWriter
+}
+
+func (h *HeapProfileWritableHead) UnrecoverableError(err error) {
+	h.head.UnrecoverableError(err)
 }
 
 func NewHeapProfileWritableHead(head relabeler.Head, heapProfileWriter HeapProfileWriter) *HeapProfileWritableHead {
@@ -378,6 +398,14 @@ func (h *HeapProfileWritableHead) Concurrency() int64 {
 // RLockQuery locks for query to [Head].
 func (h *HeapProfileWritableHead) RLockQuery(ctx context.Context) (runlock func(), err error) {
 	return h.head.RLockQuery(ctx)
+}
+
+func (h *HeapProfileWritableHead) CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr) *relabeler.GenericTask {
+	return h.head.CreateDataStorageLoadAndQueryTask(shardID, querier)
+}
+
+func (h *HeapProfileWritableHead) UnloadUnusedSeriesData() {
+	h.head.UnloadUnusedSeriesData()
 }
 
 // Raw returns raw [Head].

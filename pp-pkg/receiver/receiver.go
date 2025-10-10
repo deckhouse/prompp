@@ -114,7 +114,7 @@ func NewReceiver(
 	registerer prometheus.Registerer,
 	receiverCfg *pp_pkg_config.RemoteWriteReceiverConfig,
 	workingDir string,
-	remoteWriteCfgs []*prom_config.OpRemoteWriteConfig,
+	remoteWriteCfgs []*prom_config.PPRemoteWriteConfig,
 	dataDir string,
 	rotationInfo RotationInfo,
 	headCatalog *catalog.Catalog,
@@ -125,6 +125,7 @@ func NewReceiver(
 	headRetentionTimeout time.Duration,
 	writeTimeout time.Duration,
 	maxSegmentSize uint32,
+	unloadDataStorage bool,
 ) (*Receiver, error) {
 	if logger == nil {
 		logger = log.NewNopLogger()
@@ -170,6 +171,11 @@ func NewReceiver(
 		return nil, err
 	}
 
+	var unloadDataStorageInterval time.Duration
+	if unloadDataStorage {
+		unloadDataStorageInterval = appender.DefaultMergeDuration
+	}
+
 	headManager, err := headmanager.New(
 		dataDir,
 		clock,
@@ -177,18 +183,19 @@ func NewReceiver(
 		headCatalog,
 		maxSegmentSize,
 		registerer,
+		unloadDataStorageInterval,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create head manager: %w", err)
 	}
 
-	activeHead, rotatedHeads, err := headManager.Restore(rotationInfo.BlockDuration)
+	activeHead, rotatedHeads, err := headManager.Restore(rotationInfo.BlockDuration, unloadDataStorageInterval)
 	if err != nil {
 		return nil, fmt.Errorf("failed to restore heads: %w", err)
 	}
 	readyNotifier.NotifyReady()
 	queryableStorage := appender.NewQueryableStorageWithWriteNotifier(
-		block.NewBlockWriter(dataDir, block.DefaultChunkSegmentSize, rotationInfo.BlockDuration, registerer),
+		block.NewWriter(dataDir, block.DefaultChunkSegmentSize, rotationInfo.BlockDuration, registerer),
 		registerer,
 		querier.NewMetrics(registerer, querier.QueryableStorageSource),
 		triggerNotifier,
@@ -228,6 +235,7 @@ func NewReceiver(
 			relabeler.NewRotateTimerWithSeed(clock, rotationInfo.BlockDuration, rotationInfo.Seed),
 			appender.NewConstantIntervalTimer(clock, commitInterval),
 			appender.NewConstantIntervalTimer(clock, appender.DefaultMergeDuration),
+			unloadDataStorage,
 			registerer,
 		),
 
@@ -582,7 +590,7 @@ func makeDestinationGroups(
 	clock clockwork.Clock,
 	registerer prometheus.Registerer,
 	workingDir, clientID string,
-	rwCfgs []*prom_config.OpRemoteWriteConfig,
+	rwCfgs []*prom_config.PPRemoteWriteConfig,
 	numberOfShards uint16,
 ) (*relabeler.DestinationGroups, error) {
 	dgs := make(relabeler.DestinationGroups, 0, len(rwCfgs))
@@ -628,7 +636,7 @@ func makeDestinationGroups(
 
 // makeDestinationGroupUpdates create update for DestinationGroups.
 func makeDestinationGroupUpdates(
-	rwCfgs []*prom_config.OpRemoteWriteConfig,
+	rwCfgs []*prom_config.PPRemoteWriteConfig,
 	workingDir, clientID string,
 	numberOfShards uint16,
 ) (map[string]*relabeler.DestinationGroupUpdate, error) {
@@ -660,7 +668,7 @@ func makeDestinationGroupUpdates(
 
 // convertingDestinationGroupConfig converting incoming config to internal DestinationGroupConfig.
 func convertingDestinationGroupConfig(
-	rwCfg *prom_config.OpRemoteWriteConfig,
+	rwCfg *prom_config.PPRemoteWriteConfig,
 	workingDir string,
 	numberOfShards uint16,
 ) (*relabeler.DestinationGroupConfig, error) {
@@ -697,7 +705,7 @@ func convertingRelabelersConfig(rCfgs []*relabel.Config) ([]*cppbridge.RelabelCo
 // convertingConfigDialers converting and make internal dialer configs.
 func convertingConfigDialers(
 	clientID string,
-	sCfgs []*prom_config.OpDestinationConfig,
+	sCfgs []*prom_config.PPDestinationConfig,
 ) ([]*relabeler.DialersConfig, error) {
 	dialersConfigs := make([]*relabeler.DialersConfig, 0, len(sCfgs))
 	for _, sCfg := range sCfgs {
@@ -820,30 +828,17 @@ func refillSenderCtor(
 
 // initLogHandler init log handler for ManagerKeeper.
 func initLogHandler(logger log.Logger) {
-	logger = log.With(logger, "op_caller", log.Caller(4))
-	relabeler.Debugf = func(template string, args ...interface{}) {
+	logger = log.With(logger, "pp_caller", log.Caller(4))
+	rlogger.Debugf = func(template string, args ...any) {
 		level.Debug(logger).Log("msg", fmt.Sprintf(template, args...))
 	}
-	relabeler.Infof = func(template string, args ...interface{}) {
+	rlogger.Infof = func(template string, args ...any) {
 		level.Info(logger).Log("msg", fmt.Sprintf(template, args...))
 	}
-	relabeler.Warnf = func(template string, args ...interface{}) {
+	rlogger.Warnf = func(template string, args ...any) {
 		level.Warn(logger).Log("msg", fmt.Sprintf(template, args...))
 	}
-	relabeler.Errorf = func(template string, args ...interface{}) {
-		level.Error(logger).Log("msg", fmt.Sprintf(template, args...))
-	}
-
-	rlogger.Debugf = func(template string, args ...interface{}) {
-		level.Debug(logger).Log("msg", fmt.Sprintf(template, args...))
-	}
-	rlogger.Infof = func(template string, args ...interface{}) {
-		level.Info(logger).Log("msg", fmt.Sprintf(template, args...))
-	}
-	rlogger.Warnf = func(template string, args ...interface{}) {
-		level.Warn(logger).Log("msg", fmt.Sprintf(template, args...))
-	}
-	rlogger.Errorf = func(template string, args ...interface{}) {
+	rlogger.Errorf = func(template string, args ...any) {
 		level.Error(logger).Log("msg", fmt.Sprintf(template, args...))
 	}
 }
@@ -860,7 +855,7 @@ func readClientID(logger log.Logger, dir string) (string, error) {
 	case os.IsNotExist(err):
 		proxyUUID := uuid.NewString()
 		//revive:disable-next-line:add-constant file permissions simple readable as octa-number
-		if err = os.WriteFile(clientIDPath, []byte(proxyUUID), 0o644); err != nil { //#nosec G306
+		if err = os.WriteFile(clientIDPath, []byte(proxyUUID), 0o644); err != nil { // #nosec G306
 			return "", fmt.Errorf("failed to write proxy id: %w", err)
 		}
 
@@ -892,11 +887,20 @@ func (*NoopQuerier) Select(_ context.Context, _ bool, _ *storage.SelectHints, _ 
 	return &NoopSeriesSet{}
 }
 
-func (q *NoopQuerier) LabelValues(ctx context.Context, name string, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (q *NoopQuerier) LabelValues(
+	ctx context.Context,
+	name string,
+	hints *storage.LabelHints,
+	matchers ...*labels.Matcher,
+) ([]string, annotations.Annotations, error) {
 	return []string{}, *annotations.New(), nil
 }
 
-func (q *NoopQuerier) LabelNames(ctx context.Context, matchers ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (q *NoopQuerier) LabelNames(
+	ctx context.Context,
+	hints *storage.LabelHints,
+	matchers ...*labels.Matcher,
+) ([]string, annotations.Annotations, error) {
 	return []string{}, *annotations.New(), nil
 }
 

@@ -8,7 +8,6 @@
 #include "performance_tests/dummy_wal.h"
 #include "primitives/snug_composites.h"
 #include "series_data/encoder.h"
-#include "series_data/outdated_sample_encoder.h"
 
 namespace performance_tests {
 
@@ -35,7 +34,7 @@ void ChunkRecoder::execute(const Config& config, [[maybe_unused]] Metrics& metri
   }
 
   const std::ranges::iota_view<uint32_t, uint32_t> ls_id_set(0, label_set_bitmap.size());
-  head::ChunkRecoder recoder(head::ChunkRecoderIterator{ls_id_set.begin(), ls_id_set.end(), &storage, time_interval}, time_interval);
+  head::ChunkRecoder recoder(head::ChunkRecoderIterator{ls_id_set.begin(), ls_id_set.end(), label_set_bitmap.size(), &storage, time_interval}, time_interval);
 
   struct {
     TimeInterval interval;

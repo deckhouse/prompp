@@ -28,7 +28,6 @@ class RegexpSearcher {
   static constexpr uint8_t kMaxCharClassSizeForPrefixPreprocessing = 100;
 
   MatchesList& matches_;
-  re2::Regexp* prepared_for_ = nullptr;
   RegexpCompiledProg prepared_prog_;
 
   void process_subtrie(uint8_t depth_limit, const typename Trie::Traversal& trv, re2::Regexp* rgx) {
@@ -230,18 +229,7 @@ class RegexpSearcher {
     }
   }
 
-  PROMPP_ALWAYS_INLINE bool prepare_regexp(re2::Regexp* rgx) {
-    if (prepared_for_ == rgx) {
-      return true;
-    }
-
-    if (!prepared_prog_.compile(rgx)) {
-      return false;
-    }
-
-    prepared_for_ = rgx;
-    return true;
-  }
+  PROMPP_ALWAYS_INLINE bool prepare_regexp(re2::Regexp* rgx) { return prepared_prog_.compile(rgx); }
 };
 
 }  // namespace series_index::querier::regexp

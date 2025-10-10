@@ -12,9 +12,14 @@ import (
 
 type DiscardableRotatableHead struct {
 	head       relabeler.Head
+	discarded  bool
 	onRotate   func(id string, err error) error
 	onDiscard  func(id string) error
 	afterClose func(id string) error
+}
+
+func (h *DiscardableRotatableHead) UnrecoverableError(err error) {
+	h.head.UnrecoverableError(err)
 }
 
 func NewDiscardableRotatableHead(head relabeler.Head, onRotate func(id string, err error) error, onDiscard func(id string) error, afterClose func(id string) error) *DiscardableRotatableHead {
@@ -83,6 +88,9 @@ func (h *DiscardableRotatableHead) Status(limit int) relabeler.HeadStatus {
 }
 
 func (h *DiscardableRotatableHead) Rotate() error {
+	if h.discarded {
+		return relabeler.ErrAlreadyDiscarded
+	}
 	err := h.head.Rotate()
 	if h.onRotate != nil {
 		err = errors.Join(err, h.onRotate(h.ID(), err))
@@ -100,6 +108,7 @@ func (h *DiscardableRotatableHead) Close() error {
 }
 
 func (h *DiscardableRotatableHead) Discard() (err error) {
+	h.discarded = true
 	err = h.head.Discard()
 	if h.onDiscard != nil {
 		err = errors.Join(err, h.onDiscard(h.ID()))
@@ -140,6 +149,14 @@ func (h *DiscardableRotatableHead) Concurrency() int64 {
 // RLockQuery locks for query to [Head].
 func (h *DiscardableRotatableHead) RLockQuery(ctx context.Context) (runlock func(), err error) {
 	return h.head.RLockQuery(ctx)
+}
+
+func (h *DiscardableRotatableHead) CreateDataStorageLoadAndQueryTask(shardID uint16, querier uintptr) *relabeler.GenericTask {
+	return h.head.CreateDataStorageLoadAndQueryTask(shardID, querier)
+}
+
+func (h *DiscardableRotatableHead) UnloadUnusedSeriesData() {
+	h.head.UnloadUnusedSeriesData()
 }
 
 // Raw returns raw [Head].

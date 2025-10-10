@@ -3,7 +3,6 @@
 #include "series_data/decoder.h"
 #include "series_data/encoder.h"
 #include "series_data/outdated_chunk_merger.h"
-#include "series_data/outdated_sample_encoder.h"
 
 namespace {
 
@@ -13,7 +12,6 @@ using series_data::DataStorage;
 using series_data::Decoder;
 using series_data::Encoder;
 using series_data::OutdatedChunkMerger;
-using series_data::OutdatedSampleEncoder;
 using series_data::chunk::DataChunk;
 using series_data::chunk::FinalizedChunkList;
 using series_data::encoder::BitSequenceWithItemsCount;
@@ -742,7 +740,6 @@ TEST_P(OutdatedChunkMergerInOpenConstantChunkWithOutdatedStalenanFixture, Test) 
       ExpectedSampleList{
           {.timestamp = 1, .value = GetParam()},
           {.timestamp = 2, .value = GetParam()},
-          {.timestamp = 3, .value = STALE_NAN},
           {.timestamp = 5, .value = GetParam()},
       },
       Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, get_open_chunk(0))));
@@ -751,5 +748,35 @@ TEST_P(OutdatedChunkMergerInOpenConstantChunkWithOutdatedStalenanFixture, Test) 
 INSTANTIATE_TEST_SUITE_P(Uint32ConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithOutdatedStalenanFixture, testing::Values(1.0));
 INSTANTIATE_TEST_SUITE_P(DoubleConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithOutdatedStalenanFixture, testing::Values(1.1));
 INSTANTIATE_TEST_SUITE_P(Float32ConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithOutdatedStalenanFixture, testing::Values(-1.0));
+
+class OutdatedChunkMergerInOpenConstantChunkWithDuplicatedStalenanFixture : public OutdatedChunkMergerInOpenConstantChunkWithStalenanFixture {};
+
+TEST_P(OutdatedChunkMergerInOpenConstantChunkWithDuplicatedStalenanFixture, Test) {
+  // Arrange
+  encode({
+      {.ls_id = 0, .sample = {.timestamp = 1, .value = GetParam()}},
+      {.ls_id = 0, .sample = {.timestamp = 2, .value = GetParam()}},
+      {.ls_id = 0, .sample = {.timestamp = 3, .value = GetParam()}},
+  });
+  encode_outdated({
+      {.ls_id = 0, .sample = {.timestamp = 3, .value = STALE_NAN}},
+  });
+
+  // Act
+  merger_.merge();
+
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(
+      ExpectedSampleList{
+          {.timestamp = 1, .value = GetParam()},
+          {.timestamp = 2, .value = GetParam()},
+          {.timestamp = 3, .value = GetParam()},
+      },
+      Decoder::decode_chunk<DataChunk::Type::kOpen>(storage_, get_open_chunk(0))));
+}
+
+INSTANTIATE_TEST_SUITE_P(Uint32ConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithDuplicatedStalenanFixture, testing::Values(1.0));
+INSTANTIATE_TEST_SUITE_P(DoubleConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithDuplicatedStalenanFixture, testing::Values(1.1));
+INSTANTIATE_TEST_SUITE_P(Float32ConstantChunk, OutdatedChunkMergerInOpenConstantChunkWithDuplicatedStalenanFixture, testing::Values(-1.0));
 
 }  // namespace

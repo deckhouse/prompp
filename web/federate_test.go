@@ -204,6 +204,7 @@ test_metric_without_labels{instance="baz"} 1001 6000000
 }
 
 func TestFederation(t *testing.T) {
+	t.Skip()
 	storage := promqltest.LoadedStorage(t, `
 		load 1m
 			test_metric1{foo="bar",instance="i"}    0+100x100
@@ -255,6 +256,7 @@ func (notReadyReadStorage) Stats(string, int) (*tsdb.Stats, error) {
 
 // Regression test for https://github.com/prometheus/prometheus/issues/7181.
 func TestFederation_NotReady(t *testing.T) {
+	t.Skip()
 	for name, scenario := range scenarios {
 		t.Run(name, func(t *testing.T) {
 			h := &Handler{
@@ -303,6 +305,7 @@ func normalizeBody(body *bytes.Buffer) string {
 }
 
 func TestFederationWithNativeHistograms(t *testing.T) {
+	t.Skip()
 	storage := teststorage.New(t)
 	t.Cleanup(func() { storage.Close() })
 

@@ -29,10 +29,10 @@ import (
 func TestStorageLifecycle(t *testing.T) {
 	dir := t.TempDir()
 
-	s := NewStorage(nil, nil, nil, dir, defaultFlushDeadline, nil)
+	s := NewStorage(nil, nil, nil, dir, defaultFlushDeadline, nil, false)
 	conf := &config.Config{
 		GlobalConfig: config.DefaultGlobalConfig,
-		RemoteWriteConfigs: []*config.OpRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
+		RemoteWriteConfigs: []*config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 			// We need to set URL's so that metric creation doesn't panic.
 			baseRemoteWriteConfig("http://test-storage.com"),
 		},
@@ -56,7 +56,7 @@ func TestStorageLifecycle(t *testing.T) {
 func TestUpdateRemoteReadConfigs(t *testing.T) {
 	dir := t.TempDir()
 
-	s := NewStorage(nil, nil, nil, dir, defaultFlushDeadline, nil)
+	s := NewStorage(nil, nil, nil, dir, defaultFlushDeadline, nil, false)
 
 	conf := &config.Config{
 		GlobalConfig: config.GlobalConfig{},
@@ -77,7 +77,7 @@ func TestUpdateRemoteReadConfigs(t *testing.T) {
 func TestFilterExternalLabels(t *testing.T) {
 	dir := t.TempDir()
 
-	s := NewStorage(nil, nil, nil, dir, defaultFlushDeadline, nil)
+	s := NewStorage(nil, nil, nil, dir, defaultFlushDeadline, nil, false)
 
 	conf := &config.Config{
 		GlobalConfig: config.GlobalConfig{
@@ -102,7 +102,7 @@ func TestFilterExternalLabels(t *testing.T) {
 func TestIgnoreExternalLabels(t *testing.T) {
 	dir := t.TempDir()
 
-	s := NewStorage(nil, nil, nil, dir, defaultFlushDeadline, nil)
+	s := NewStorage(nil, nil, nil, dir, defaultFlushDeadline, nil, false)
 
 	conf := &config.Config{
 		GlobalConfig: config.GlobalConfig{
@@ -128,7 +128,7 @@ func TestIgnoreExternalLabels(t *testing.T) {
 
 // baseRemoteWriteConfig copy values from global Default Write config
 // to avoid change global state and cross impact test execution.
-func baseRemoteWriteConfig(host string) *config.OpRemoteWriteConfig { // PP_CHANGES.md: rebuild on cpp
+func baseRemoteWriteConfig(host string) *config.PPRemoteWriteConfig { // PP_CHANGES.md: rebuild on cpp
 	cfg := config.DefaultOpRemoteWriteConfig
 	cfg.URL = &common_config.URL{
 		URL: &url.URL{
@@ -154,7 +154,7 @@ func baseRemoteReadConfig(host string) *config.RemoteReadConfig {
 // ApplyConfig runs concurrently with Notify
 // See https://github.com/prometheus/prometheus/issues/12747
 func TestWriteStorageApplyConfigsDuringCommit(t *testing.T) {
-	s := NewStorage(nil, nil, nil, t.TempDir(), defaultFlushDeadline, nil)
+	s := NewStorage(nil, nil, nil, t.TempDir(), defaultFlushDeadline, nil, false)
 
 	var wg sync.WaitGroup
 	wg.Add(2000)
@@ -165,7 +165,7 @@ func TestWriteStorageApplyConfigsDuringCommit(t *testing.T) {
 			<-start
 			conf := &config.Config{
 				GlobalConfig: config.DefaultGlobalConfig,
-				RemoteWriteConfigs: []*config.OpRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
+				RemoteWriteConfigs: []*config.PPRemoteWriteConfig{ // PP_CHANGES.md: rebuild on cpp
 					baseRemoteWriteConfig(fmt.Sprintf("http://test-%d.com", i)),
 				},
 			}

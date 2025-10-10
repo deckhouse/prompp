@@ -22,10 +22,10 @@ class RLEBackend {
   using DataSequence = Container;
 
   class Encoder {
-    using value_type = typename DataSequence::value_type;
+    using value_type = DataSequence::value_type;
 
-    value_type count_ = std::numeric_limits<value_type>::max();
-    value_type last_;
+    value_type count_{std::numeric_limits<value_type>::max()};
+    value_type last_{std::numeric_limits<value_type>::max()};
 
    public:
     PROMPP_ALWAYS_INLINE Encoder() noexcept = default;
@@ -410,6 +410,9 @@ class EncodedSequence {
   DataSequence data_;
 
  public:
+  using sequence_type = DataSequence;
+  using encoder_type = typename E::Encoder;
+  using decoder_type = typename E::Decoder;
   using value_type = typename DataSequence::value_type;
 
   EncodedSequence() = default;
@@ -481,6 +484,10 @@ class EncodedSequence {
   PROMPP_ALWAYS_INLINE auto begin() const noexcept { return Iterator(data_.begin(), data_.end(), &encoder_); }
 
   static PROMPP_ALWAYS_INLINE auto end() noexcept { return IteratorSentinel(); }
+
+  static PROMPP_ALWAYS_INLINE auto create_read_iterator(std::span<const uint8_t>& buffer, const typename E::Encoder& encoder) noexcept {
+    return const_iterator_type(sequence_type::create_read_iterator(buffer), {}, &encoder);
+  }
 
   PROMPP_ALWAYS_INLINE size_t save_size() noexcept {
     flush();

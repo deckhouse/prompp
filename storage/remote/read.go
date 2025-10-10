@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -166,11 +167,11 @@ func (q *querier) Select(ctx context.Context, sortSeries bool, hints *storage.Se
 		return storage.ErrSeriesSet(fmt.Errorf("toQuery: %w", err))
 	}
 
-	res, err := q.client.Read(ctx, query)
+	res, err := q.client.Read(ctx, query, sortSeries)
 	if err != nil {
 		return storage.ErrSeriesSet(fmt.Errorf("remote_read: %w", err))
 	}
-	return newSeriesSetFilter(FromQueryResult(sortSeries, res), added)
+	return newSeriesSetFilter(res, added)
 }
 
 // addExternalLabels adds matchers for each external label. External labels
@@ -189,7 +190,7 @@ func (q querier) addExternalLabels(ms []*labels.Matcher) ([]*labels.Matcher, []s
 	for _, m := range ms {
 		for i := 0; i < len(el); {
 			if el[i].Name == m.Name {
-				el = el[:i+copy(el[i:], el[i+1:])]
+				el = slices.Delete(el, i, i+1) // PP_CHANGES.md: readable code
 				continue
 			}
 			i++
@@ -211,13 +212,13 @@ func (q querier) addExternalLabels(ms []*labels.Matcher) ([]*labels.Matcher, []s
 }
 
 // LabelValues implements storage.Querier and is a noop.
-func (q *querier) LabelValues(context.Context, string, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (q *querier) LabelValues(context.Context, string, *storage.LabelHints, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	// TODO: Implement: https://github.com/prometheus/prometheus/issues/3351
 	return nil, nil, errors.New("not implemented")
 }
 
 // LabelNames implements storage.Querier and is a noop.
-func (q *querier) LabelNames(context.Context, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (q *querier) LabelNames(context.Context, *storage.LabelHints, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	// TODO: Implement: https://github.com/prometheus/prometheus/issues/3351
 	return nil, nil, errors.New("not implemented")
 }

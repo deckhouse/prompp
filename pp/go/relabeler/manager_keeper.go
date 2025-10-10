@@ -9,9 +9,10 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/jonboulle/clockwork"
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
+	"github.com/prometheus/prometheus/pp/go/util"
 )
 
 // ManagerCtor - func-constructor for Manager.
@@ -153,7 +154,7 @@ func NewManagerKeeper(
 	constLabels := prometheus.Labels{"name": name}
 	cs := NewCurrentState(workingDir)
 	if err = cs.Read(); err != nil {
-		Warnf("fail read current state: %s", err)
+		logger.Warnf("fail read current state: %s", err)
 	}
 	dk := &ManagerKeeper{
 		cfg:                *cfg,
@@ -309,12 +310,12 @@ func (dk *ManagerKeeper) rotateLoop(ctx context.Context) {
 		select {
 		case <-dk.rotateNotifyer.TriggerOnReject():
 			if err := dk.rotate(ctx); err != nil {
-				Errorf("failed rotate block on reject: %s", err)
+				logger.Errorf("failed rotate block on reject: %s", err)
 			}
 			dk.rotateNotifyer.DrainedTriggers(dk.generation)
 		case callBack := <-dk.rotateNotifyer.TriggerOnRotate():
 			if err := dk.rotate(ctx); err != nil {
-				Errorf("failed rotate block: %s", err)
+				logger.Errorf("failed rotate block: %s", err)
 			}
 			callBack(dk.generation)
 			dk.rotateNotifyer.DrainedTriggers(dk.generation)
@@ -322,7 +323,7 @@ func (dk *ManagerKeeper) rotateLoop(ctx context.Context) {
 			return
 		case <-ctx.Done():
 			if !errors.Is(context.Cause(ctx), ErrShutdown) {
-				Errorf("rotate loop context canceled: %s", context.Cause(ctx))
+				logger.Errorf("rotate loop context canceled: %s", context.Cause(ctx))
 			}
 			return
 		}
@@ -393,14 +394,14 @@ func (dk *ManagerKeeper) rotate(ctx context.Context) error {
 	}
 	dk.autosharder.Reset(dk.currentState.Block())
 	if err = dk.currentState.Write(snp, limits); err != nil {
-		Errorf("fail write current state: %s", err)
+		logger.Errorf("fail write current state: %s", err)
 	}
 	dk.manager = newManager
 	dk.generation++
 	dk.rwm.Unlock()
 	shutdownCtx, cancel := context.WithTimeout(ctx, dk.cfg.ShutdownTimeout)
 	if err := prevManager.Shutdown(shutdownCtx); err != nil {
-		Errorf("fail shutdown manager: %s", err)
+		logger.Errorf("fail shutdown manager: %s", err)
 	}
 	cancel()
 	dk.manager.Open(ctx)
