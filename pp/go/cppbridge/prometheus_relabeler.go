@@ -1500,6 +1500,7 @@ func PerGoroutineRelabelerTrackStaleNans(
 		state.DefTimestamp(),
 	)
 	runtime.KeepAlive(innerSeries)
+	runtime.KeepAlive(state)
 }
 
 //
