@@ -61,7 +61,6 @@ PROMU_URL     := https://github.com/prometheus/promu/releases/download/v$(PROMU_
 SKIP_GOLANGCI_LINT :=
 GOLANGCI_LINT :=
 GOLANGCI_LINT_OPTS ?=
-GOLANGCI_LINT_VERSION ?= v1.60.2
 # golangci-lint only supports linux, darwin and windows platforms on i386/amd64/arm64.
 # windows isn't included here because of the path separator being different.
 ifeq ($(GOHOSTOS),$(filter $(GOHOSTOS),linux darwin))
@@ -70,10 +69,8 @@ ifeq ($(GOHOSTOS),$(filter $(GOHOSTOS),linux darwin))
 		# is being run in Actions, so we don't need to run it here.
 		ifneq (,$(SKIP_GOLANGCI_LINT))
 			GOLANGCI_LINT :=
-		else ifeq (,$(CIRCLE_JOB))
-			GOLANGCI_LINT := $(FIRST_GOPATH)/bin/golangci-lint
-		else ifeq (,$(wildcard .github/workflows/golangci-lint.yml))
-			GOLANGCI_LINT := $(FIRST_GOPATH)/bin/golangci-lint
+		else
+			GOLANGCI_LINT := go tool github.com/golangci/golangci-lint/cmd/golangci-lint
 		endif
 	endif
 endif
@@ -166,14 +163,14 @@ common-vet:
 	$(GO) vet $(GOOPTS) $(pkgs)
 
 .PHONY: common-lint
-common-lint: $(GOLANGCI_LINT)
+common-lint:
 ifdef GOLANGCI_LINT
 	@echo ">> running golangci-lint"
 	$(GOLANGCI_LINT) run $(GOLANGCI_LINT_OPTS) $(pkgs)
 endif
 
 .PHONY: common-lint-fix
-common-lint-fix: $(GOLANGCI_LINT)
+common-lint-fix:
 ifdef GOLANGCI_LINT
 	@echo ">> running golangci-lint fix"
 	$(GOLANGCI_LINT) run --fix $(GOLANGCI_LINT_OPTS) $(pkgs)
@@ -256,14 +253,6 @@ $(PROMU):
 proto:
 	@echo ">> generating code from proto files"
 	@./scripts/genproto.sh
-
-ifdef GOLANGCI_LINT
-$(GOLANGCI_LINT):
-	mkdir -p $(FIRST_GOPATH)/bin
-	curl -sfL https://raw.githubusercontent.com/golangci/golangci-lint/$(GOLANGCI_LINT_VERSION)/install.sh \
-		| sed -e '/install -d/d' \
-		| sh -s -- -b $(FIRST_GOPATH)/bin $(GOLANGCI_LINT_VERSION)
-endif
 
 .PHONY: precheck
 precheck::

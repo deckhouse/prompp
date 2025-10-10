@@ -21,6 +21,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/reader"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
+	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/prometheus/pp/go/util/optional"
 )
 
@@ -227,28 +228,23 @@ func (l *ShardDataLoader) Load() error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		_ = shardWalFile.Close()
-	}()
 
 	queriedSeriesStorageIsEmpty := true
 	if l.unloadDataStorageInterval > 0 {
 		l.shardData.unloadedDataStorage = shard.NewUnloadedDataStorage(
-			shard.NewFileStorage(GetUnloadedDataStorageFilename(l.dir, l.shardID)),
+			shard.NewAppendFileStorage(GetUnloadedDataStorageFilename(l.dir, l.shardID)),
 		)
 		queriedSeriesStorageIsEmpty, _ = l.loadQueriedSeries()
 	}
 
+	shardWalFileName := shardWalFile.Name()
 	decoder, err := l.loadWalFile(bufio.NewReaderSize(shardWalFile, 1024*1024*10), queriedSeriesStorageIsEmpty)
+	_ = shardWalFile.Close()
 	if err != nil {
 		return err
 	}
 
-	if err = l.createShardWal(shardWalFile.Name(), decoder); err != nil {
-		return err
-	}
-
-	return nil
+	return l.createShardWal(shardWalFileName, decoder)
 }
 
 // loadWalFile loads and decode wal file.
@@ -286,16 +282,9 @@ func (l *ShardDataLoader) loadWalFile(
 
 // createShardWal creates a wal for a shard.
 func (l *ShardDataLoader) createShardWal(fileName string, walDecoder *cppbridge.HeadWalDecoder) error {
-	shardWalFile, err := os.OpenFile( //nolint:gosec // need this permissions
-		fileName,
-		os.O_WRONLY|os.O_APPEND,
-		0o666, //revive:disable-line:add-constant // file permissions simple readable as octa-number
-	)
+	//revive:disable-next-line:add-constant // file permissions simple readable as octa-number
+	shardWalFile, err := util.OpenFileAppender(fileName, 0o666)
 	if err != nil {
-		return err
-	}
-	if _, err = shardWalFile.Seek(0, io.SeekEnd); err != nil {
-		_ = shardWalFile.Close()
 		return err
 	}
 
@@ -334,13 +323,13 @@ func (d *dataUnloader) Unload(createTs, encodeTs time.Duration) error {
 	}
 
 	if intervalIndex > d.unloadedIntervalIndex {
-		if header, err := d.unloadedDataStorage.WriteSnapshot(d.unloader.CreateSnapshot()); err != nil {
+		header, err := d.unloadedDataStorage.WriteSnapshot(d.unloader.CreateSnapshot())
+		if err != nil {
 			return fmt.Errorf("failed to write unloaded data: %w", err)
-		} else {
-			d.unloadedDataStorage.WriteIndex(header)
 		}
-		d.unloader.Unload()
 
+		d.unloadedDataStorage.WriteIndex(header)
+		d.unloader.Unload()
 		d.unloadedIntervalIndex = intervalIndex
 	}
 
@@ -348,7 +337,7 @@ func (d *dataUnloader) Unload(createTs, encodeTs time.Duration) error {
 }
 
 // loadSegments loads and decode segments from wal file.
-func (l *ShardDataLoader) loadSegments(
+func (*ShardDataLoader) loadSegments(
 	rd io.Reader,
 	walDecoder *cppbridge.HeadWalDecoder,
 	dataStorage *shard.DataStorage,

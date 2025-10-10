@@ -21,7 +21,7 @@ func (s *BufferReaderAtWriterCloser) IsEmpty() bool {
 	return true
 }
 
-func (s *BufferReaderAtWriterCloser) Open(flags int) error {
+func (s *BufferReaderAtWriterCloser) Open() error {
 	return nil
 }
 
@@ -29,15 +29,7 @@ func (s *BufferReaderAtWriterCloser) Read(p []byte) (n int, err error) {
 	return 0, nil
 }
 
-func (s *BufferReaderAtWriterCloser) Seek(offset int64, whence int) (int64, error) {
-	return 0, nil
-}
-
 func (s *BufferReaderAtWriterCloser) Sync() error {
-	return nil
-}
-
-func (s *BufferReaderAtWriterCloser) Truncate(size int64) error {
 	return nil
 }
 
@@ -52,6 +44,10 @@ func (s *BufferReaderAtWriterCloser) Write(p []byte) (n int, err error) {
 
 func (s *BufferReaderAtWriterCloser) Close() error {
 	return nil
+}
+
+func (s *BufferReaderAtWriterCloser) Reader() (StorageReader, error) {
+	return s, nil
 }
 
 type UnloadedDataStorageSuite struct {

@@ -644,7 +644,6 @@ func (t *test) exec(tc testCommand, engine engineQuerier) error {
 			if err != nil {
 				return fmt.Errorf("error in %s %s (line %d) range mode: %w", cmd, iq.expr, cmd.line, err)
 			}
-
 		}
 
 	default:

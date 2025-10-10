@@ -94,6 +94,10 @@ func (w *ShardWal) Commit() error {
 }
 
 func (w *ShardWal) Flush() error {
+	if w.segmentWriter == nil {
+		return nil
+	}
+
 	return w.segmentWriter.Flush()
 }
 
