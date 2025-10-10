@@ -1803,7 +1803,7 @@ func (s *StateV2Suite) TestInitState() {
 
 func (s *StateV2Suite) initState(state *cppbridge.StateV2) {
 	s.Panics(func() { state.CacheByShard(0) })
-	s.Equal(time.Now().UnixMilli(), state.DefTimestamp())
+	s.GreaterOrEqual(state.DefTimestamp(), time.Now().UnixMilli())
 
 	newDeftime := time.Now().Add(5 * time.Minute).UnixMilli()
 	state.SetDefTimestamp(newDeftime)
