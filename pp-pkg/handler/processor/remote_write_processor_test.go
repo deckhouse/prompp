@@ -12,6 +12,7 @@ import (
 
 	"github.com/prometheus/prometheus/pp-pkg/handler/model"
 	"github.com/prometheus/prometheus/pp-pkg/handler/processor"
+	pp_pkg_model "github.com/prometheus/prometheus/pp-pkg/model"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
@@ -24,35 +25,49 @@ func TestRemoteWriteProcessorSuite(t *testing.T) {
 }
 
 func (s *RemoteWriteProcessorSuite) TestProcess() {
-	mr := &metricReceiver{appendFn: func(ctx context.Context, hashdex cppbridge.ShardedData, relabelerID string) error {
-		return nil
-	}}
-
-	blockID := uuid.New()
-	shardID := uint16(0)
-	shardLog := uint8(0)
-	segmentEncodingVersion := cppbridge.EncodersVersion()
-
-	var expectedStatus model.RemoteWriteProcessingStatus
-
-	rw := &testRemoteWrite{
-		metadata: model.Metadata{
-			TenantID:               "",
-			BlockID:                blockID,
-			ShardID:                shardID,
-			ShardsLog:              shardLog,
-			SegmentEncodingVersion: segmentEncodingVersion,
-		},
-		readFn: func(ctx context.Context) (*model.RemoteWriteBuffer, error) {
-			return &model.RemoteWriteBuffer{}, nil
-		},
-		writeFn: func(ctx context.Context, status model.RemoteWriteProcessingStatus) error {
-			expectedStatus = status
+	ar := &AdapterMock{
+		AppendSnappyProtobufFunc: func(context.Context, pp_pkg_model.ProtobufData, *cppbridge.StateV2, bool) error {
 			return nil
 		},
 	}
 
-	rwProcessor := processor.NewRemoteWriteProcessor(mr, nil)
+	metadata := model.Metadata{
+		TenantID:               "",
+		BlockID:                uuid.New(),
+		ShardID:                0,
+		ShardsLog:              0,
+		SegmentEncodingVersion: 3,
+		RelabelerID:            uuid.New().String(),
+	}
+
+	states := &StatesStorageMock{
+		GetStateByIDFunc: func(stateID string) (*cppbridge.StateV2, bool) {
+			if metadata.RelabelerID != stateID {
+				return nil, false
+			}
+
+			return nil, true
+		},
+	}
+
+	var actualStatus model.RemoteWriteProcessingStatus
+
+	rw := &RemoteWriteMock{
+		MetadataFunc: func() model.Metadata {
+			return metadata
+		},
+
+		ReadFunc: func(context.Context) (*model.RemoteWriteBuffer, error) {
+			return &model.RemoteWriteBuffer{}, nil
+		},
+
+		WriteFunc: func(_ context.Context, status model.RemoteWriteProcessingStatus) error {
+			actualStatus = status
+			return nil
+		},
+	}
+
+	rwProcessor := processor.NewRemoteWriteProcessor(ar, states, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 	defer cancel()
@@ -60,41 +75,54 @@ func (s *RemoteWriteProcessorSuite) TestProcess() {
 	err := rwProcessor.Process(ctx, rw)
 	s.Require().NoError(err)
 
-	s.Equal(http.StatusOK, expectedStatus.Code)
+	s.Equal(http.StatusOK, actualStatus.Code)
 }
 
-func (s *RemoteWriteProcessorSuite) TestProcessWithError() {
-	mr := &metricReceiver{appendFn: func(ctx context.Context, hashdex cppbridge.ShardedData, relabelerID string) error {
-		return nil
-	}}
-
-	blockID := uuid.New()
-	shardID := uint16(0)
-	shardLog := uint8(0)
-	segmentEncodingVersion := cppbridge.EncodersVersion()
-
-	fakeErr := errors.New("read error")
-
-	var expectedStatus model.RemoteWriteProcessingStatus
-
-	rw := &testRemoteWrite{
-		metadata: model.Metadata{
-			TenantID:               "",
-			BlockID:                blockID,
-			ShardID:                shardID,
-			ShardsLog:              shardLog,
-			SegmentEncodingVersion: segmentEncodingVersion,
-		},
-		readFn: func(ctx context.Context) (*model.RemoteWriteBuffer, error) {
-			return nil, fakeErr
-		},
-		writeFn: func(ctx context.Context, status model.RemoteWriteProcessingStatus) error {
-			expectedStatus = status
+func (s *RemoteWriteProcessorSuite) TestProcessWithErrorRead() {
+	ar := &AdapterMock{
+		AppendSnappyProtobufFunc: func(context.Context, pp_pkg_model.ProtobufData, *cppbridge.StateV2, bool) error {
 			return nil
 		},
 	}
 
-	rwProcessor := processor.NewRemoteWriteProcessor(mr, nil)
+	metadata := model.Metadata{
+		TenantID:               "",
+		BlockID:                uuid.New(),
+		ShardID:                0,
+		ShardsLog:              0,
+		SegmentEncodingVersion: 3,
+		RelabelerID:            uuid.New().String(),
+	}
+
+	states := &StatesStorageMock{
+		GetStateByIDFunc: func(stateID string) (*cppbridge.StateV2, bool) {
+			if metadata.RelabelerID != stateID {
+				return nil, false
+			}
+
+			return nil, true
+		},
+	}
+
+	fakeErr := errors.New("read error")
+	var actualStatus model.RemoteWriteProcessingStatus
+
+	rw := &RemoteWriteMock{
+		MetadataFunc: func() model.Metadata {
+			return metadata
+		},
+
+		ReadFunc: func(context.Context) (*model.RemoteWriteBuffer, error) {
+			return nil, fakeErr
+		},
+
+		WriteFunc: func(_ context.Context, status model.RemoteWriteProcessingStatus) error {
+			actualStatus = status
+			return nil
+		},
+	}
+
+	rwProcessor := processor.NewRemoteWriteProcessor(ar, states, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 	defer cancel()
@@ -102,28 +130,57 @@ func (s *RemoteWriteProcessorSuite) TestProcessWithError() {
 	err := rwProcessor.Process(ctx, rw)
 	s.Require().ErrorIs(err, fakeErr)
 
-	s.Equal(expectedStatus.Code, http.StatusBadRequest)
-	s.Equal(expectedStatus.Message, fakeErr.Error())
+	s.Equal(http.StatusBadRequest, actualStatus.Code)
+	s.Equal(fakeErr.Error(), actualStatus.Message)
 }
 
-//
-// testRemoteWrite
-//
+func (s *RemoteWriteProcessorSuite) TestProcessWithErrorGetStateByID() {
+	ar := &AdapterMock{
+		AppendSnappyProtobufFunc: func(context.Context, pp_pkg_model.ProtobufData, *cppbridge.StateV2, bool) error {
+			return nil
+		},
+	}
 
-type testRemoteWrite struct {
-	metadata model.Metadata
-	readFn   func(ctx context.Context) (*model.RemoteWriteBuffer, error)
-	writeFn  func(ctx context.Context, status model.RemoteWriteProcessingStatus) error
-}
+	metadata := model.Metadata{
+		TenantID:               "",
+		BlockID:                uuid.New(),
+		ShardID:                0,
+		ShardsLog:              0,
+		SegmentEncodingVersion: 3,
+		RelabelerID:            uuid.New().String(),
+	}
 
-func (s *testRemoteWrite) Metadata() model.Metadata {
-	return s.metadata
-}
+	states := &StatesStorageMock{
+		GetStateByIDFunc: func(string) (*cppbridge.StateV2, bool) {
+			return nil, false
+		},
+	}
 
-func (s *testRemoteWrite) Read(ctx context.Context) (*model.RemoteWriteBuffer, error) {
-	return s.readFn(ctx)
-}
+	var actualStatus model.RemoteWriteProcessingStatus
 
-func (s *testRemoteWrite) Write(ctx context.Context, status model.RemoteWriteProcessingStatus) error {
-	return s.writeFn(ctx, status)
+	rw := &RemoteWriteMock{
+		MetadataFunc: func() model.Metadata {
+			return metadata
+		},
+
+		ReadFunc: func(context.Context) (*model.RemoteWriteBuffer, error) {
+			return &model.RemoteWriteBuffer{}, nil
+		},
+
+		WriteFunc: func(_ context.Context, status model.RemoteWriteProcessingStatus) error {
+			actualStatus = status
+			return nil
+		},
+	}
+
+	rwProcessor := processor.NewRemoteWriteProcessor(ar, states, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
+	defer cancel()
+
+	err := rwProcessor.Process(ctx, rw)
+	s.Require().ErrorIs(err, processor.ErrUnknownRelablerID)
+
+	s.Equal(http.StatusPreconditionFailed, actualStatus.Code)
+	s.Equal(processor.ErrUnknownRelablerID.Error(), actualStatus.Message)
 }

@@ -17,31 +17,29 @@ import (
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery/targetgroup"
+	pp_pkg_model "github.com/prometheus/prometheus/pp-pkg/model"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/util/osutil"
 	"github.com/prometheus/prometheus/util/pool"
 )
 
-type Receiver interface {
-	// AppendTimeSeries append TimeSeries data to relabeling hashdex data.
+// Adapter for implementing the [Queryable] interface and append data.
+type Adapter interface {
+	// AppendTimeSeries append TimeSeries data to [Head].
 	AppendTimeSeries(
 		ctx context.Context,
-		data relabeler.TimeSeriesData,
-		state *cppbridge.State,
-		relabelerID string,
+		data pp_pkg_model.TimeSeriesBatch,
+		state *cppbridge.StateV2,
 		commitToWal bool,
 	) (cppbridge.RelabelerStats, error)
-	// AppendTimeSeries append TimeSeries data to relabeling hashdex data.
-	AppendTimeSeriesHashdex(
+
+	// AppendScraperHashdex append ScraperHashdex data to [Head].
+	AppendScraperHashdex(
 		ctx context.Context,
 		hashdex cppbridge.ShardedData,
-		state *cppbridge.State,
-		relabelerID string,
+		state *cppbridge.StateV2,
 		commitToWal bool,
 	) (cppbridge.RelabelerStats, error)
-	RelabelerIDIsExist(relabelerID string) bool
-	GetState() *cppbridge.State
 }
 
 const defaultDurationRenew = 10 * time.Minute
@@ -80,7 +78,7 @@ const DefaultNameEscapingScheme = model.ValueEncodingEscaping
 type Manager struct {
 	opts      *Options
 	logger    log.Logger
-	receiver  Receiver
+	adapter   Adapter
 	graceShut chan struct{}
 
 	offsetSeed     uint64     // Global offsetSeed seed is used to spread scrape workload across HA setup.
@@ -94,6 +92,8 @@ type Manager struct {
 
 	triggerReload chan struct{}
 
+	reportStatelessRelabeler *cppbridge.StatelessRelabeler
+
 	metrics *scrapeMetrics
 }
 
@@ -101,7 +101,7 @@ type Manager struct {
 func NewManager(
 	o *Options,
 	logger log.Logger,
-	receiver Receiver,
+	adapter Adapter,
 	registerer prometheus.Registerer,
 ) (*Manager, error) {
 	if o == nil {
@@ -116,18 +116,24 @@ func NewManager(
 		return nil, fmt.Errorf("failed to create scrape manager due to error: %w", err)
 	}
 
+	reportStatelessRelabeler, err := cppbridge.NewStatelessRelabeler([]*cppbridge.RelabelConfig{})
+	if err != nil {
+		return nil, fmt.Errorf("failed creating report stateless relabeler: %w", err)
+	}
+
 	m := &Manager{
-		receiver:       receiver,
-		opts:           o,
-		logger:         logger,
-		scrapeConfigs:  make(map[string]*config.ScrapeConfig),
-		scrapePools:    make(map[string]*scrapePool),
-		graceShut:      make(chan struct{}),
-		triggerReload:  make(chan struct{}, 1),
-		metrics:        sm,
-		buffers:        pool.New(1e3, 100e6, 3, func(sz int) any { return make([]byte, 0, sz) }),
-		bufferBuilders: newBuildersPool(),
-		bufferBatches:  newbatchesPool(),
+		adapter:                  adapter,
+		opts:                     o,
+		logger:                   logger,
+		scrapeConfigs:            make(map[string]*config.ScrapeConfig),
+		scrapePools:              make(map[string]*scrapePool),
+		graceShut:                make(chan struct{}),
+		triggerReload:            make(chan struct{}, 1),
+		metrics:                  sm,
+		buffers:                  pool.New(1e3, 100e6, 3, func(sz int) any { return make([]byte, 0, sz) }),
+		bufferBuilders:           newBuildersPool(),
+		bufferBatches:            newbatchesPool(),
+		reportStatelessRelabeler: reportStatelessRelabeler,
 	}
 
 	m.metrics.setTargetMetadataCacheGatherer(m)
@@ -204,7 +210,8 @@ func (m *Manager) reload() {
 			m.metrics.targetScrapePools.Inc()
 			sp, err := newScrapePool(
 				scrapeConfig,
-				m.receiver,
+				m.adapter,
+				m.reportStatelessRelabeler,
 				m.offsetSeed,
 				log.With(m.logger, "scrape_pool", setName),
 				m.buffers,

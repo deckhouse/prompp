@@ -3,8 +3,12 @@ package locker // based "golang.org/x/sync/semaphore"
 import (
 	"container/list"
 	"context"
+	"errors"
 	"sync"
 )
+
+// ErrSemaphoreClosed error when the semaphore was closed.
+var ErrSemaphoreClosed = errors.New("semaphore was closed")
 
 type waiter struct {
 	n     int64
@@ -27,6 +31,24 @@ type Weighted struct {
 	waiters   list.List
 	lastPri   *list.Element
 	exclusive bool
+	closed    bool
+}
+
+// Close sets the flag that the semaphore is closed under the priority lock
+// and after unlocking all those waiting will receive the error [ErrSemaphoreClosed].
+func (s *Weighted) Close() error {
+	unlock, err := s.LockWithPriority(context.Background())
+	if err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	s.closed = true
+	s.mu.Unlock()
+
+	unlock()
+
+	return nil
 }
 
 // Lock locks for exclusive operation with weight of full size.
@@ -96,6 +118,11 @@ func (s *Weighted) acquireWithInserter(ctx context.Context, n int64, inserter fu
 	done := ctx.Done()
 
 	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return ErrSemaphoreClosed
+	}
+
 	select {
 	case <-done:
 		// ctx becoming done has "happened before" acquiring the semaphore,
@@ -106,6 +133,7 @@ func (s *Weighted) acquireWithInserter(ctx context.Context, n int64, inserter fu
 		return ctx.Err()
 	default:
 	}
+
 	if ws := s.weightSize(n); s.size-s.cur >= ws && s.waiters.Len() == 0 {
 		// Since we hold s.mu and haven't synchronized since checking done, if
 		// ctx becomes done before we return here, it becoming done must have
@@ -116,6 +144,7 @@ func (s *Weighted) acquireWithInserter(ctx context.Context, n int64, inserter fu
 			s.exclusive = true
 		}
 		s.mu.Unlock()
+
 		return nil
 	}
 
@@ -154,6 +183,12 @@ func (s *Weighted) acquireWithInserter(ctx context.Context, n int64, inserter fu
 			return ctx.Err()
 		default:
 		}
+
+		if s.closed {
+			s.release(n)
+			return ErrSemaphoreClosed
+		}
+
 		return nil
 	}
 }

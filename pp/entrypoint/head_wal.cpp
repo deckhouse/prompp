@@ -67,13 +67,8 @@ extern "C" void prompp_head_wal_encoder_add_inner_series(void* args, void* res) 
   };
 
   struct Result {
-    int64_t earliest_timestamp;
-    int64_t latest_timestamp;
-    size_t allocated_memory;
-    uint32_t samples;
-    uint32_t series;
-    uint32_t remainder_size;
     PromPP::Primitives::Go::Slice<char> error;
+    uint32_t samples;
   };
 
   const auto in = static_cast<Arguments*>(args);
@@ -93,14 +88,9 @@ extern "C" void prompp_head_wal_encoder_finalize(void* args, void* res) {
   };
 
   struct Result {
-    int64_t earliest_timestamp;
-    int64_t latest_timestamp;
-    size_t allocated_memory;
-    uint32_t samples;
-    uint32_t series;
-    uint32_t remainder_size;
     PromPP::Primitives::Go::Slice<char> segment;
     PromPP::Primitives::Go::Slice<char> error;
+    uint32_t samples;
   };
 
   const auto in = static_cast<Arguments*>(args);

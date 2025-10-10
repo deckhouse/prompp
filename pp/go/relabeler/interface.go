@@ -24,7 +24,7 @@ type DataStorage interface {
 	CreateUnusedSeriesDataUnloader() *cppbridge.UnusedSeriesDataUnloader
 	CreateLoader(queriers []uintptr) *cppbridge.UnloadedDataLoader
 	CreateRevertableLoader(lss *cppbridge.LabelSetStorage, lsIdBatchSize uint32) *cppbridge.UnloadedDataRevertableLoader
-	TimeInterval() cppbridge.TimeInterval
+	TimeInterval(invalidateCache bool) cppbridge.TimeInterval
 	GetQueriedSeriesBitset() []byte
 }
 

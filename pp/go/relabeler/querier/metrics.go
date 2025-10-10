@@ -16,10 +16,6 @@ type Metrics struct {
 	LabelNamesDuration  prometheus.Histogram
 	LabelValuesDuration prometheus.Histogram
 	SelectDuration      *prometheus.HistogramVec
-	AppendDuration      prometheus.Histogram
-
-	WaitLockRotateDuration prometheus.Gauge
-	RotationDuration       prometheus.Gauge
 }
 
 func NewMetrics(registerer prometheus.Registerer, source string) *Metrics {
@@ -64,31 +60,6 @@ func NewMetrics(registerer prometheus.Registerer, source string) *Metrics {
 				ConstLabels: prometheus.Labels{"source": source},
 			},
 			[]string{"query_type"},
-		),
-		AppendDuration: factory.NewHistogram(
-			prometheus.HistogramOpts{
-				Name: "prompp_head_append_duration",
-				Help: "Append to head duration in microseconds",
-				Buckets: []float64{
-					50, 100, 250, 500, 750,
-					1000, 2500, 5000, 7500,
-					10000, 25000, 50000, 75000,
-					100000, 500000,
-				},
-			},
-		),
-
-		WaitLockRotateDuration: factory.NewGauge(
-			prometheus.GaugeOpts{
-				Name: "prompp_head_wait_lock_rotate_duration",
-				Help: "The duration of the lock wait for rotation in nanoseconds",
-			},
-		),
-		RotationDuration: factory.NewGauge(
-			prometheus.GaugeOpts{
-				Name: "prompp_head_rotate_duration",
-				Help: "The duration of the rotate in nanoseconds",
-			},
 		),
 	}
 }

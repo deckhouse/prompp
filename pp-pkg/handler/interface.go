@@ -4,28 +4,54 @@ import (
 	"context"
 
 	"github.com/prometheus/prometheus/pp-pkg/handler/processor"
+	"github.com/prometheus/prometheus/pp-pkg/model"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/relabeler"
+	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/storage"
 )
 
-// Receiver interface.
-type Receiver interface {
-	Appender(ctx context.Context) storage.Appender
-	AppendSnappyProtobuf(ctx context.Context, compressedData relabeler.ProtobufData, relabelerID string, commitToWal bool) error
-	AppendHashdex(ctx context.Context, hashdex cppbridge.ShardedData, relabelerID string, commitToWal bool) error
+// Adapter for implementing the [Queryable] interface and append data.
+type Adapter interface {
+	// AppendHashdex append incoming [cppbridge.HashdexContent] to [Head].
+	AppendHashdex(
+		ctx context.Context,
+		hashdex cppbridge.ShardedData,
+		state *cppbridge.StateV2,
+		commitToWal bool,
+	) error
+
+	// AppendTimeSeries append TimeSeries data to [Head].
 	AppendTimeSeries(
 		ctx context.Context,
-		data relabeler.TimeSeriesData,
-		state *cppbridge.State,
-		relabelerID string,
+		data model.TimeSeriesBatch,
+		state *cppbridge.StateV2,
 		commitToWal bool,
 	) (cppbridge.RelabelerStats, error)
-	RelabelerIDIsExist(relabelerID string) bool
-	HeadQueryable() storage.Queryable
-	HeadStatus(ctx context.Context, limit int) relabeler.HeadStatus
-	// MergeOutOfOrderChunks merge chunks with out of order data chunks.
-	MergeOutOfOrderChunks(ctx context.Context)
+
+	// AppendScraperHashdex append ScraperHashdex data to [Head].
+	AppendScraperHashdex(
+		ctx context.Context,
+		hashdex cppbridge.ShardedData,
+		state *cppbridge.StateV2,
+		commitToWal bool,
+	) (cppbridge.RelabelerStats, error)
+
+	// AppendSnappyProtobuf append compressed via snappy Protobuf data to [Head].
+	AppendSnappyProtobuf(
+		ctx context.Context,
+		compressedData model.ProtobufData,
+		state *cppbridge.StateV2,
+		commitToWal bool,
+	) error
+
+	// HeadQuerier returns [storage.Querier] from active head.
+	HeadQuerier(mint, maxt int64) (storage.Querier, error)
+
+	// HeadStatus returns stats of Head.
+	HeadStatus(ctx context.Context, limit int) (*querier.HeadStatus, error)
+
+	// MergeOutOfOrderChunks send signal to merge chunks with out of order data chunks.
+	MergeOutOfOrderChunks()
 }
 
 // StreamProcessor interface.

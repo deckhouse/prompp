@@ -172,6 +172,7 @@ func (s *HeadLoadSuite) TestErrorOpenShardFileInAllShards() {
 func (s *HeadLoadSuite) TestLoadWithDisabledDataUnloading() {
 	// Arrange
 	sourceHead := s.mustCreateHead(0)
+
 	series := []headtest.TimeSeries{
 		{
 			Labels: labels.FromStrings("__name__", "wal_metric"),

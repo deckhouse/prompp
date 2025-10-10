@@ -194,9 +194,8 @@ type API struct {
 	QueryEngine       promql.QueryEngine
 	ExemplarQueryable storage.ExemplarQueryable
 
-	HeadQueryable    storage.Queryable  // PP_CHANGES.md: rebuild on cpp
-	headStatusGetter HeadStatusGetter   // PP_CHANGES.md: rebuild on cpp
-	opHandler        *handler.PPHandler // PP_CHANGES.md: rebuild on cpp
+	adapter   handler.Adapter    // PP_CHANGES.md: rebuild on cpp
+	opHandler *handler.PPHandler // PP_CHANGES.md: rebuild on cpp
 
 	scrapePoolsRetriever  func(context.Context) ScrapePoolsRetriever
 	targetRetriever       func(context.Context) TargetRetriever
@@ -219,6 +218,7 @@ type API struct {
 	isAgent       bool
 	statsRenderer StatsRenderer
 
+	// remoteWriteHandler http.Handler // PP_CHANGES.md: rebuild on cpp
 	remoteReadHandler http.Handler
 	otlpWriteHandler  http.Handler
 
@@ -232,8 +232,7 @@ func NewAPI(
 	ap storage.Appendable,
 	eq storage.ExemplarQueryable,
 
-	hq storage.Queryable, // PP_CHANGES.md: rebuild on cpp
-	receiver handler.Receiver, // PP_CHANGES.md: rebuild on cpp
+	adapter handler.Adapter, // PP_CHANGES.md: rebuild on cpp
 
 	spsr func(context.Context) ScrapePoolsRetriever,
 	tr func(context.Context) TargetRetriever,
@@ -266,8 +265,7 @@ func NewAPI(
 		Queryable:         q,
 		ExemplarQueryable: eq,
 
-		HeadQueryable:    hq,       // PP_CHANGES.md: rebuild on cpp
-		headStatusGetter: receiver, // PP_CHANGES.md: rebuild on cpp
+		adapter: adapter, // PP_CHANGES.md: rebuild on cpp
 
 		scrapePoolsRetriever:  spsr,
 		targetRetriever:       tr,
@@ -304,10 +302,10 @@ func NewAPI(
 	}
 
 	if rwEnabled {
-		a.opHandler = handler.NewPPHandler(dbDir, receiver, logger, registerer) // PP_CHANGES.md: rebuild on cpp
+		a.opHandler = handler.NewPPHandler(dbDir, adapter, logger, registerer) // PP_CHANGES.md: rebuild on cpp
 	}
 	if otlpEnabled {
-		a.otlpWriteHandler = handler.NewOTLPWriteHandler(logger, receiver) // PP_CHANGES.md: rebuild on cpp
+		a.otlpWriteHandler = handler.NewOTLPWriteHandler(logger, adapter) // PP_CHANGES.md: rebuild on cpp
 	}
 
 	return a
@@ -1678,6 +1676,15 @@ func (api *API) remoteRead(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 	}
 }
+
+// PP_CHANGES.md: rebuild on cpp
+// func (api *API) remoteWrite(w http.ResponseWriter, r *http.Request) {
+// 	if api.remoteWriteHandler != nil {
+// 		api.remoteWriteHandler.ServeHTTP(w, r)
+// 	} else {
+// 		http.Error(w, "remote write receiver needs to be enabled with --web.enable-remote-write-receiver", http.StatusNotFound)
+// 	}
+// }
 
 func (api *API) otlpWrite(w http.ResponseWriter, r *http.Request) {
 	if api.otlpWriteHandler != nil {
