@@ -50,29 +50,20 @@ func (s *ChunkQuerierTestSuite) TestSelect() {
 	// Arrange
 	timeSeries := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{
-				{Name: "__name__", Value: "metric"},
-				{Name: "job", Value: "test"},
-			},
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 				{Timestamp: 1, Value: 1},
 			},
 		},
 		{
-			Labels: labels.Labels{
-				{Name: "__name__", Value: "metric"},
-				{Name: "job", Value: "test2"},
-			},
+			Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 10},
 			},
 		},
 		{
-			Labels: labels.Labels{
-				{Name: "__name__", Value: "metric"},
-				{Name: "job", Value: "test3"},
-			},
+			Labels: labels.FromStrings("__name__", "metric", "job", "test3"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 10, Value: 10},
 			},
@@ -88,20 +79,23 @@ func (s *ChunkQuerierTestSuite) TestSelect() {
 	chunkSeriesSet := q.Select(s.context, false, nil, matcher)
 
 	// Assert
-	s.Equal([]chunkSeriesSetInfo{
+	actual := getChunkSeriesSetInfo(chunkSeriesSet)
+	expected := []chunkSeriesSetInfo{
 		{labelSet: timeSeries[0].Labels, samplesCount: []int{2}},
 		{labelSet: timeSeries[1].Labels, samplesCount: []int{1}},
-	}, getChunkSeriesSetInfo(chunkSeriesSet))
+	}
+	s.Require().Equal(len(expected), len(actual))
+	for i := range expected {
+		s.True(labels.Equal(expected[i].labelSet, actual[i].labelSet))
+		s.Equal(expected[i].samplesCount, actual[i].samplesCount)
+	}
 }
 
 func (s *ChunkQuerierTestSuite) TestSelectWithDataStorageLoading() {
 	// Arrange
 	timeSeries := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{
-				{Name: "__name__", Value: "metric"},
-				{Name: "job", Value: "test"},
-			},
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 0},
 				{Timestamp: 1, Value: 1},
@@ -110,10 +104,7 @@ func (s *ChunkQuerierTestSuite) TestSelectWithDataStorageLoading() {
 			},
 		},
 		{
-			Labels: labels.Labels{
-				{Name: "__name__", Value: "metric"},
-				{Name: "job", Value: "test2"},
-			},
+			Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 10},
 				{Timestamp: 1, Value: 11},
@@ -146,8 +137,14 @@ func (s *ChunkQuerierTestSuite) TestSelectWithDataStorageLoading() {
 	chunkSeriesSet := q.Select(s.context, false, nil, matcher)
 
 	// Assert
-	s.Equal([]chunkSeriesSetInfo{
+	actual := getChunkSeriesSetInfo(chunkSeriesSet)
+	expected := []chunkSeriesSetInfo{
 		{labelSet: timeSeries[0].Labels, samplesCount: []int{5}},
 		{labelSet: timeSeries[1].Labels, samplesCount: []int{4}},
-	}, getChunkSeriesSetInfo(chunkSeriesSet))
+	}
+	s.Require().Equal(len(expected), len(actual))
+	for i := range expected {
+		s.True(labels.Equal(expected[i].labelSet, actual[i].labelSet))
+		s.Equal(expected[i].samplesCount, actual[i].samplesCount)
+	}
 }

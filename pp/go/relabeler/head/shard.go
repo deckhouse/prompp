@@ -16,6 +16,13 @@ type LSS struct {
 	target *cppbridge.LSSWithSnapshot
 }
 
+func NewLSS(input, target *cppbridge.LabelSetStorage) *LSS {
+	return &LSS{
+		input:  input,
+		target: cppbridge.NewLSSWithSnapshotWithoutBitset(target),
+	}
+}
+
 func (w *LSS) Raw() *cppbridge.LabelSetStorage {
 	return w.target.LSS()
 }

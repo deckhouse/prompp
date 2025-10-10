@@ -43,7 +43,6 @@ var cfgs = []*config.InputRelabelerConfig{
 type HeadLoadSuite struct {
 	suite.Suite
 	dataDir string
-	ctx     context.Context
 }
 
 func TestHeadLoadSuite(t *testing.T) {
@@ -175,7 +174,7 @@ func (s *HeadLoadSuite) TestLoadWithDisabledDataUnloading() {
 	sourceHead := s.mustCreateHead(0)
 	series := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Labels: labels.FromStrings("__name__", "wal_metric"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 				{Timestamp: 1, Value: 2},
@@ -199,7 +198,11 @@ func (s *HeadLoadSuite) TestLoadWithDisabledDataUnloading() {
 	s.Nil(loadedHead.shards[0].queriedSeriesStorage)
 	s.Nil(loadedHead.shards[1].unloadedDataStorage)
 	s.Nil(loadedHead.shards[1].queriedSeriesStorage)
-	s.Equal(series, actual)
+	s.Require().Equal(len(series), len(actual))
+	for i := range series {
+		s.True(labels.Equal(series[i].Labels, actual[i].Labels))
+		s.Equal(series[i].Samples, actual[i].Samples)
+	}
 	s.Require().NoError(err)
 }
 
@@ -208,7 +211,7 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 	sourceHead := s.mustCreateHead(0)
 	series := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Labels: labels.FromStrings("__name__", "wal_metric"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 				{Timestamp: 1, Value: 2},
@@ -224,7 +227,7 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 	loadedHead := s.mustLoadHead(0)
 	s.appendTimeSeries(loadedHead, []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Labels: labels.FromStrings("__name__", "wal_metric"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 3, Value: 4},
 			},
@@ -237,9 +240,12 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 
 	// Assert
 	series[0].Samples = append(series[0].Samples, cppbridge.Sample{Timestamp: 3, Value: 4})
-	s.Equal(series, actual)
+	s.Require().Equal(len(series), len(actual))
+	for i := range series {
+		s.True(labels.Equal(series[i].Labels, actual[i].Labels))
+		s.Equal(series[i].Samples, actual[i].Samples)
+	}
 	s.Require().NoError(err)
-
 }
 
 func (s *HeadLoadSuite) TestLoadWithEnabledDataUnloading() {
@@ -247,7 +253,7 @@ func (s *HeadLoadSuite) TestLoadWithEnabledDataUnloading() {
 	sourceHead := s.mustCreateHead(0)
 	series1 := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Labels: labels.FromStrings("__name__", "wal_metric"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 				{Timestamp: 1, Value: 2},
@@ -258,7 +264,7 @@ func (s *HeadLoadSuite) TestLoadWithEnabledDataUnloading() {
 	s.appendTimeSeries(sourceHead, series1)
 	series2 := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Labels: labels.FromStrings("__name__", "wal_metric"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 100, Value: 1},
 				{Timestamp: 101, Value: 2},
@@ -277,7 +283,11 @@ func (s *HeadLoadSuite) TestLoadWithEnabledDataUnloading() {
 	actual := s.query(loadedHead, matcher, 0, 3)
 
 	// Assert
-	s.Equal(series1, actual)
+	s.Require().Equal(len(series1), len(actual))
+	for i := range series1 {
+		s.True(labels.Equal(series1[i].Labels, actual[i].Labels))
+		s.Equal(series1[i].Samples, actual[i].Samples)
+	}
 	s.Require().NotNil(loadedHead.shards[0].unloadedDataStorage)
 	s.Require().NotNil(loadedHead.shards[1].unloadedDataStorage)
 	s.True(loadedHead.shards[0].unloadedDataStorage.storage.IsEmpty())
@@ -290,7 +300,7 @@ func (s *HeadLoadSuite) TestLoadWithDataUnloading() {
 	sourceHead := s.mustCreateHead(unloadDataStorageInterval)
 	series1 := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Labels: labels.FromStrings("__name__", "wal_metric"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 				{Timestamp: 1, Value: 2},
@@ -301,7 +311,7 @@ func (s *HeadLoadSuite) TestLoadWithDataUnloading() {
 	s.appendTimeSeries(sourceHead, series1)
 	series2 := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Labels: labels.FromStrings("__name__", "wal_metric"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 100, Value: 1},
 				{Timestamp: 101, Value: 2},
@@ -321,7 +331,11 @@ func (s *HeadLoadSuite) TestLoadWithDataUnloading() {
 	actual := s.query(loadedHead, matcher, 0, 3)
 
 	// Assert
-	s.Equal(series1, actual)
+	s.Require().Equal(len(series1), len(actual))
+	for i := range series1 {
+		s.True(labels.Equal(series1[i].Labels, actual[i].Labels))
+		s.Equal(series1[i].Samples, actual[i].Samples)
+	}
 	s.NotNil(loadedHead.shards[0].unloadedDataStorage)
 	s.NotNil(loadedHead.shards[1].unloadedDataStorage)
 	s.False(loadedHead.shards[0].unloadedDataStorage.storage.IsEmpty())
@@ -334,7 +348,7 @@ func (s *HeadLoadSuite) TestErrorDataUnloading() {
 	sourceHead := s.mustCreateHead(unloadDataStorageInterval)
 	series1 := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Labels: labels.FromStrings("__name__", "wal_metric"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 				{Timestamp: 1, Value: 2},
@@ -345,7 +359,7 @@ func (s *HeadLoadSuite) TestErrorDataUnloading() {
 	s.appendTimeSeries(sourceHead, series1)
 	series2 := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Labels: labels.FromStrings("__name__", "wal_metric"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 100, Value: 1},
 				{Timestamp: 101, Value: 2},

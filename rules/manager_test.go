@@ -2111,13 +2111,13 @@ func TestUpdateWhenStopped(t *testing.T) {
 		Logger:  log.NewNopLogger(),
 	})
 	ruleManager.start()
-	err := ruleManager.Update(10*time.Second, files, labels.EmptyLabels(), "", nil)
+	err := ruleManager.Update(10*time.Second, files, cppbridge.EmptyLabels(), "", nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, ruleManager.groups)
 
 	ruleManager.Stop()
 	// Updates following a stop are no-op.
-	err = ruleManager.Update(10*time.Second, []string{}, labels.EmptyLabels(), "", nil)
+	err = ruleManager.Update(10*time.Second, []string{}, cppbridge.EmptyLabels(), "", nil)
 	require.NoError(t, err)
 }
 

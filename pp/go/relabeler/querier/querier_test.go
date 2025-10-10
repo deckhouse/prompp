@@ -64,21 +64,16 @@ func TestQuerierTestSuite(t *testing.T) {
 
 func (s *QuerierTestSuite) TestRangeQuery() {
 	// Arrange
+
 	timeSeries := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{
-				{Name: "__name__", Value: "metric"},
-				{Name: "job", Value: "test"},
-			},
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 			},
 		},
 		{
-			Labels: labels.Labels{
-				{Name: "__name__", Value: "metric"},
-				{Name: "job", Value: "test2"},
-			},
+			Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 10},
 			},
@@ -94,17 +89,19 @@ func (s *QuerierTestSuite) TestRangeQuery() {
 	seriesSet := q.Select(s.context, false, nil, matcher)
 
 	// Assert
-	s.Equal(timeSeries, headtest.TimeSeriesFromSeriesSet(seriesSet))
+	actual := headtest.TimeSeriesFromSeriesSet(seriesSet)
+	s.Require().Equal(len(timeSeries), len(actual))
+	for i := range timeSeries {
+		s.True(labels.Equal(timeSeries[i].Labels, actual[i].Labels))
+		s.Equal(timeSeries[i].Samples, actual[i].Samples)
+	}
 }
 
 func (s *QuerierTestSuite) TestRangeQueryWithDataStorageLoading() {
 	// Arrange
 	timeSeries := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{
-				{Name: "__name__", Value: "metric"},
-				{Name: "job", Value: "test"},
-			},
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 0},
 				{Timestamp: 1, Value: 1},
@@ -112,10 +109,7 @@ func (s *QuerierTestSuite) TestRangeQueryWithDataStorageLoading() {
 			},
 		},
 		{
-			Labels: labels.Labels{
-				{Name: "__name__", Value: "metric"},
-				{Name: "job", Value: "test2"},
-			},
+			Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 10},
 				{Timestamp: 1, Value: 11},
@@ -152,26 +146,25 @@ func (s *QuerierTestSuite) TestRangeQueryWithDataStorageLoading() {
 	// Assert
 	timeSeries[0].AppendSamples(timeSeriesAfterUnload[0].Samples...)
 	timeSeries[1].AppendSamples(timeSeriesAfterUnload[1].Samples...)
-	s.Equal(timeSeries, headtest.TimeSeriesFromSeriesSet(seriesSet))
+	actual := headtest.TimeSeriesFromSeriesSet(seriesSet)
+	s.Require().Equal(len(timeSeries), len(actual))
+	for i := range timeSeries {
+		s.True(labels.Equal(timeSeries[i].Labels, actual[i].Labels))
+		s.Equal(timeSeries[i].Samples, actual[i].Samples)
+	}
 }
 
 func (s *QuerierTestSuite) TestInstantQuery() {
 	// Arrange
 	timeSeries := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{
-				{Name: "__name__", Value: "metric"},
-				{Name: "job", Value: "test"},
-			},
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 			},
 		},
 		{
-			Labels: labels.Labels{
-				{Name: "__name__", Value: "metric"},
-				{Name: "job", Value: "test2"},
-			},
+			Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 10},
 			},
@@ -187,17 +180,19 @@ func (s *QuerierTestSuite) TestInstantQuery() {
 	seriesSet := q.Select(s.context, false, nil, matcher)
 
 	// Assert
-	s.Equal(timeSeries, headtest.TimeSeriesFromSeriesSet(seriesSet))
+	actual := headtest.TimeSeriesFromSeriesSet(seriesSet)
+	s.Require().Equal(len(timeSeries), len(actual))
+	for i := range timeSeries {
+		s.True(labels.Equal(timeSeries[i].Labels, actual[i].Labels))
+		s.Equal(timeSeries[i].Samples, actual[i].Samples)
+	}
 }
 
 func (s *QuerierTestSuite) TestInstantQueryWithDataStorageLoading() {
 	// Arrange
 	timeSeries := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{
-				{Name: "__name__", Value: "metric"},
-				{Name: "job", Value: "test"},
-			},
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 0},
 				{Timestamp: 1, Value: 1},
@@ -205,10 +200,7 @@ func (s *QuerierTestSuite) TestInstantQueryWithDataStorageLoading() {
 			},
 		},
 		{
-			Labels: labels.Labels{
-				{Name: "__name__", Value: "metric"},
-				{Name: "job", Value: "test2"},
-			},
+			Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 10},
 				{Timestamp: 1, Value: 11},
@@ -243,7 +235,8 @@ func (s *QuerierTestSuite) TestInstantQueryWithDataStorageLoading() {
 	seriesSet := q.Select(s.context, false, nil, matcher)
 
 	// Assert
-	s.Equal([]headtest.TimeSeries{
+	actual := headtest.TimeSeriesFromSeriesSet(seriesSet)
+	expected := []headtest.TimeSeries{
 		{
 			Labels: timeSeries[0].Labels,
 			Samples: []cppbridge.Sample{
@@ -256,5 +249,10 @@ func (s *QuerierTestSuite) TestInstantQueryWithDataStorageLoading() {
 				{Timestamp: 0, Value: 10},
 			},
 		},
-	}, headtest.TimeSeriesFromSeriesSet(seriesSet))
+	}
+	s.Require().Equal(len(expected), len(actual))
+	for i := range expected {
+		s.True(labels.Equal(expected[i].Labels, actual[i].Labels))
+		s.Equal(expected[i].Samples, actual[i].Samples)
+	}
 }

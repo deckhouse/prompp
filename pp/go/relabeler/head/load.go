@@ -439,7 +439,7 @@ func (l *ShardLoader) loadWalFile(
 		}
 	}
 
-	decoder := cppbridge.NewHeadWalDecoder(result.Lss.target, encoderVersion)
+	decoder := cppbridge.NewHeadWalDecoder(result.Lss.target.LSS(), encoderVersion)
 	result.NumberOfSegments, err = l.loadSegments(
 		reader,
 		decoder,
