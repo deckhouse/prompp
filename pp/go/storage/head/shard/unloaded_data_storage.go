@@ -154,7 +154,7 @@ func (s *UnloadedDataStorage) ForEachSnapshot(f func(snapshot []byte, isLast boo
 }
 
 // validateFormatVersion validates the format version.
-func (s *UnloadedDataStorage) validateFormatVersion(reader StorageReader) (offset int64, err error) {
+func (*UnloadedDataStorage) validateFormatVersion(reader StorageReader) (offset int64, err error) {
 	version := []byte{0}
 	if _, err = reader.ReadAt(version, 0); err != nil {
 		return 0, err

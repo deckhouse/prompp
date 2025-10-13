@@ -30,8 +30,8 @@ type ChunkQuerier[
 	TTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,
-	TShard Shard[TDataStorage, TLSS],
-	THead Head[TTask, TDataStorage, TLSS, TShard],
+	TGShard GShard[TDataStorage, TLSS],
+	THead Head[TTask, TDataStorage, TLSS, TGShard],
 ] struct {
 	head             THead
 	deduplicatorCtor deduplicatorCtor
@@ -45,15 +45,15 @@ func NewChunkQuerier[
 	TTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,
-	TShard Shard[TDataStorage, TLSS],
-	THead Head[TTask, TDataStorage, TLSS, TShard],
+	TGShard GShard[TDataStorage, TLSS],
+	THead Head[TTask, TDataStorage, TLSS, TGShard],
 ](
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
 	mint, maxt int64,
 	closer func() error,
-) *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead] {
-	return &ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]{
+) *ChunkQuerier[TTask, TDataStorage, TLSS, TGShard, THead] {
+	return &ChunkQuerier[TTask, TDataStorage, TLSS, TGShard, THead]{
 		head:             head,
 		deduplicatorCtor: deduplicatorCtor,
 		mint:             mint,
@@ -65,7 +65,7 @@ func NewChunkQuerier[
 // Close [ChunkQuerier] if need.
 //
 //revive:disable-next-line:confusing-naming // other type of querier.
-func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Close() error {
+func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TGShard, THead]) Close() error {
 	if q.closer != nil {
 		err := q.closer()
 		q.closer = nil
@@ -78,7 +78,7 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Close() error {
 // LabelNames returns label values present in the head for the specific label name.
 //
 //revive:disable-next-line:confusing-naming // other type of querier.
-func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) LabelNames(
+func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TGShard, THead]) LabelNames(
 	ctx context.Context,
 	hints *storage.LabelHints,
 	matchers ...*labels.Matcher,
@@ -99,7 +99,7 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) LabelNames(
 // result set is reduced to label values of metrics matching the matchers.
 //
 //revive:disable:confusing-naming // other type of querier.
-func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
+func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TGShard, THead]) LabelValues(
 	ctx context.Context,
 	name string,
 	hints *storage.LabelHints,
@@ -120,7 +120,7 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
 // Select returns a chunk set of series that matches the given label matchers.
 //
 //revive:disable-next-line:confusing-naming // other type of querier.
-func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
+func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TGShard, THead]) Select(
 	ctx context.Context,
 	_ bool,
 	_ *storage.SelectHints,

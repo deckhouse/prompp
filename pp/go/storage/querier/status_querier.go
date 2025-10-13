@@ -25,8 +25,8 @@ func QueryHeadStatus[
 	TTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,
-	TShard Shard[TDataStorage, TLSS],
-	THead Head[TTask, TDataStorage, TLSS, TShard],
+	TGShard GShard[TDataStorage, TLSS],
+	THead Head[TTask, TDataStorage, TLSS, TGShard],
 ](
 	ctx context.Context,
 	head THead,
@@ -51,7 +51,7 @@ func QueryHeadStatus[
 
 	tLSSHeadStatus := head.CreateTask(
 		lssHeadStatus,
-		func(shard TShard) error {
+		func(shard TGShard) error {
 			return shard.LSS().WithRLock(func(target, _ *cppbridge.LabelSetStorage) error {
 				shardStatuses[shard.ShardID()].FromLSS(target, limit)
 
@@ -64,7 +64,7 @@ func QueryHeadStatus[
 	if limit != 0 {
 		tDataStorageHeadStatus := head.CreateTask(
 			dsHeadStatus,
-			func(shard TShard) error {
+			func(shard TGShard) error {
 				return shard.DataStorage().WithRLock(func(ds *cppbridge.HeadDataStorage) error {
 					shardStatuses[shard.ShardID()].FromDataStorage(ds)
 

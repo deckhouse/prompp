@@ -25,7 +25,7 @@ type Deduplicator interface {
 type deduplicatorCtor func(numberOfShards uint16) Deduplicator
 
 //
-// GenericTask
+// Task
 //
 
 // Task the minimum required task [Generic] implementation.
@@ -85,11 +85,11 @@ type LSS interface {
 }
 
 //
-// Shard
+// GShard
 //
 
-// Shard the minimum required head [Shard] implementation.
-type Shard[TDataStorage DataStorage, TLSS LSS] interface {
+// GShard the minimum required head [PerGoroutineShard] implementation.
+type GShard[TDataStorage DataStorage, TLSS LSS] interface {
 	// DataStorage returns shard [DataStorage].
 	DataStorage() TDataStorage
 
@@ -110,10 +110,10 @@ type Shard[TDataStorage DataStorage, TLSS LSS] interface {
 
 // Head the minimum required [Head] implementation.
 type Head[
-	TGenericTask Task,
+	TTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,
-	TShard Shard[TDataStorage, TLSS],
+	TGShard GShard[TDataStorage, TLSS],
 ] interface {
 	// AcquireQuery acquires the [Head] semaphore with a weight of 1,
 	// blocking until resources are available or ctx is done.
@@ -121,13 +121,13 @@ type Head[
 	AcquireQuery(ctx context.Context) (release func(), err error)
 
 	// CreateTask create a task for operations on the [Head] shards.
-	CreateTask(taskName string, shardFn func(s TShard) error) TGenericTask
+	CreateTask(taskName string, shardFn func(s TGShard) error) TTask
 
 	// Enqueue the task to be executed on shards [Head].
-	Enqueue(t TGenericTask)
+	Enqueue(t TTask)
 
 	// EnqueueOnShard the task to be executed on head on specific shard.
-	EnqueueOnShard(t TGenericTask, shardID uint16)
+	EnqueueOnShard(t TTask, shardID uint16)
 
 	// NumberOfShards returns current number of shards in to [Head].
 	NumberOfShards() uint16

@@ -12,7 +12,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
@@ -111,7 +110,7 @@ func newShard(
 	shardID uint16,
 	shardFileName, decoderStateFileName string,
 	resetDecoderState bool,
-	externalLabels labels.Labels,
+	externalLabels cppbridge.Labels,
 	relabelConfigs []*cppbridge.RelabelConfig,
 	unexpectedEOFCount prometheus.Counter,
 	segmentSize prometheus.Histogram,
@@ -347,7 +346,7 @@ func createShard(
 	shardID uint16,
 	shardFileName, decoderStateFileName string,
 	resetDecoderState bool,
-	externalLabels labels.Labels,
+	externalLabels cppbridge.Labels,
 	relabelConfigs []*cppbridge.RelabelConfig,
 	unexpectedEOFCount prometheus.Counter,
 	segmentSize prometheus.Histogram,

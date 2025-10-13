@@ -132,10 +132,11 @@ func (q *AppendFileStorage) IsEmpty() bool {
 // Open open file for [AppendFileStorage].
 func (q *AppendFileStorage) Open() (err error) {
 	if q.file == nil {
+		//revive:disable-next-line:add-constant // file permissions simple readable as octa-number
 		q.file, err = util.CreateFileAppender(q.fileName, 0o666)
 	}
 
-	return
+	return err
 }
 
 // Sync commits the current contents of the file to stable storage.

@@ -784,7 +784,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	labels.Storage.SetReceiver(receiver)
+	adapter := pp_pkg_storage.NewAdapter(
+		clock,
+		hManager.Proxy(),
+		hManager.MergeOutOfOrderChunks,
+		prometheus.DefaultRegisterer,
+	)
+	labels.Storage.SetAdapter(adapter)
 
 	remoteWriterReadyNotifier := ready.NewNotifiableNotifier()
 	remoteWriter := remotewriter.New(
@@ -792,13 +798,6 @@ func main() {
 		headCatalog,
 		clock,
 		remoteWriterReadyNotifier,
-		prometheus.DefaultRegisterer,
-	)
-
-	adapter := pp_pkg_storage.NewAdapter(
-		clock,
-		hManager.Proxy(),
-		hManager.MergeOutOfOrderChunks,
 		prometheus.DefaultRegisterer,
 	)
 

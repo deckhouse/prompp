@@ -572,13 +572,13 @@ const (
 )
 
 //
-// Receiver
+// Adapter
 //
 
-// Receiver implementation for [receiver.Receiver].
-type Receiver interface {
+// Adapter implementation for [storage.Adapter].
+type Adapter interface {
+	// FindFromBuilder label set from builder in lss, if not found return EmptyLabels.
 	FindFromBuilder(
-		ctx context.Context,
 		builderSortedAdd []cppbridge.Label,
 		builderSortedDel []string,
 		builderSnapshot *cppbridge.LabelSetSnapshot,
@@ -586,28 +586,28 @@ type Receiver interface {
 		builderLSID uint32,
 		skipCache bool,
 	) (Labels, bool)
+
+	// FindByHash label set by hash in cache.
 	FindByHash(
-		ctx context.Context,
-		hash uint64,
 		builderSortedAdd []cppbridge.Label,
 		builderSortedDel []string,
 		builderSnapshot *cppbridge.LabelSetSnapshot,
+		hash uint64,
 		builderLSID uint32,
 	) (Labels, bool)
 }
 
-// noopReceiver implementation [Receiver] without operation.
-type noopReceiver struct{}
+// noopAdapter implementation [Adapter] without operation.
+type noopAdapter struct{}
 
 // newNoopReceiver init new *noopReceiver.
-func newNoopReceiver() *Receiver {
-	var nr Receiver = &noopReceiver{}
+func newNoopReceiver() *Adapter {
+	var nr Adapter = &noopAdapter{}
 	return &nr
 }
 
-// FindFromBuilder implementation [Receiver].
-func (*noopReceiver) FindFromBuilder(
-	_ context.Context,
+// FindFromBuilder implementation [Adapter].
+func (*noopAdapter) FindFromBuilder(
 	_ []cppbridge.Label,
 	_ []string,
 	_ *cppbridge.LabelSetSnapshot,
@@ -618,13 +618,12 @@ func (*noopReceiver) FindFromBuilder(
 	return EmptyLabels(), false
 }
 
-// FindByHash implementation [Receiver].
-func (*noopReceiver) FindByHash(
-	_ context.Context,
-	_ uint64,
+// FindByHash implementation [Adapter].
+func (*noopAdapter) FindByHash(
 	_ []cppbridge.Label,
 	_ []string,
 	_ *cppbridge.LabelSetSnapshot,
+	_ uint64,
 	_ uint32,
 ) (Labels, bool) {
 	return EmptyLabels(), false
@@ -637,7 +636,7 @@ func (*noopReceiver) FindByHash(
 // storage for label set.
 type storage struct {
 	workingLSS       *cppbridge.LSSWithSnapshot
-	receiver         atomic.Pointer[Receiver]
+	adapter          atomic.Pointer[Adapter]
 	lsCache          *model.CacheWithBitset
 	writeLock        sync.Mutex
 	rotateLock       sync.RWMutex
@@ -710,25 +709,25 @@ func newStorage() *storage {
 			},
 		),
 	}
-	s.receiver.Store(newNoopReceiver())
+	s.adapter.Store(newNoopReceiver())
 
 	go s.worker()
 
 	return s
 }
 
-// SetReceiver store Receiver.
-func (s *storage) SetReceiver(receiver Receiver) {
-	s.receiver.Store(&receiver)
+// SetAdapter store [Adapter].
+func (s *storage) SetAdapter(adapter Adapter) {
+	s.adapter.Store(&adapter)
 }
 
 // FindOrEmplaceLabelSet find ls from bulder in current lsses or store to working LSS and return Labels.
 func (s *storage) findOrEmplaceFromBuilder(b *Builder) Labels {
 	sortedAdd := *((*[]cppbridge.Label)(unsafe.Pointer(&b.add)))
 	hash := cppbridge.LabelSetFromBuilderHash(sortedAdd, b.del, b.base.snapshot, b.base.id)
-	receiver := *s.receiver.Load()
+	receiver := *s.adapter.Load()
 
-	if ls, find := receiver.FindByHash(s.baseCtx, hash, sortedAdd, b.del, b.base.snapshot, b.base.id); find {
+	if ls, find := receiver.FindByHash(sortedAdd, b.del, b.base.snapshot, hash, b.base.id); find {
 		return ls
 	}
 
@@ -737,7 +736,6 @@ func (s *storage) findOrEmplaceFromBuilder(b *Builder) Labels {
 	}
 
 	if ls, find := receiver.FindFromBuilder(
-		s.baseCtx,
 		sortedAdd,
 		b.del,
 		b.base.snapshot,

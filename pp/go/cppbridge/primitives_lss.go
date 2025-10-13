@@ -123,7 +123,7 @@ func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet CppLabelSetBuilder) Fi
 
 // FindFromBuilder label set from builder in lss, return length ls, lsid and bool ok.
 //
-//nolint:gocritic // unnamedResult not need
+//nolint:gocritic // unnamedResult // lsID, length, ok
 func (lss *LabelSetStorage) FindFromBuilder(
 	sortedAdd []Label,
 	sortedDel []string,

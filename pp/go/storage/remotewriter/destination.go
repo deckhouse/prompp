@@ -11,7 +11,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/prometheus/prometheus/config"
-	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
 // String constants for instrumentation.
@@ -30,7 +30,7 @@ const (
 // DestinationConfig is a remote write destination config.
 type DestinationConfig struct {
 	config.RemoteWriteConfig
-	ExternalLabels labels.Labels `yaml:"external_labels"`
+	ExternalLabels cppbridge.Labels `yaml:"external_labels"`
 	ReadTimeout    time.Duration
 }
 
