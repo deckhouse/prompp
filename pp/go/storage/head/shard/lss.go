@@ -89,7 +89,7 @@ func (l *LSS) FindByHash(
 		builderLSID,
 		lsID,
 	); !ok {
-		logger.Debugf("cache collision on hash: %d, lsID: %d, length: %d", hash, lsID, length)
+		logger.Warnf("cache collision on hash: %d, lsID: %d, length: %d", hash, lsID, length)
 		return labels.EmptyLabels(), false
 	}
 
