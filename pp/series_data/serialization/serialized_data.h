@@ -263,8 +263,8 @@ class SerializedDataView {
 
   explicit SerializedDataView(const SerializedData& serialized_data) : data_(serialized_data), series_index_{kNoMoreSeries} {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE chunk::SerializedChunkSpan get_chunks() const noexcept { return {data_.chunks.data(), data_.chunks.size()}; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const unsigned char> get_buffer() const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE chunk::SerializedChunkSpan get_chunks_view() const noexcept { return {data_.chunks.data(), data_.chunks.size()}; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const unsigned char> get_buffer_view() const noexcept {
     return {data_.bytes_buffer.control_block().data, data_.bytes_buffer.size()};
   }
 
@@ -294,7 +294,7 @@ class SerializedDataView {
     return chunks[series_index_].label_set_id;
   }
 
-  [[nodiscard]] SeriesIterator create_current_series_iterator() const noexcept { return {data_.bytes_buffer, get_chunks(), series_index_}; }
+  [[nodiscard]] SeriesIterator create_current_series_iterator() const noexcept { return {data_.bytes_buffer, get_chunks_view(), series_index_}; }
 
  private:
   const SerializedData& data_;

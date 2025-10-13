@@ -293,7 +293,8 @@ extern "C" void prompp_series_data_serialized_chunk_recoder_new_ctor(void* args,
   new (res) Result{
       .chunk_recoder = std::make_unique<ChunkRecoderVariant>(
           std::in_place_type<SerializedChunkRecoder>,
-          series_data::chunk::SerializedChunkIterator{in->serialized_data->get()->get_buffer(), in->serialized_data->get()->get_chunks()}, in->time_interval),
+          series_data::chunk::SerializedChunkIterator{in->serialized_data->get()->get_buffer_view(), in->serialized_data->get()->get_chunks_view()},
+          in->time_interval),
   };
 }
 
