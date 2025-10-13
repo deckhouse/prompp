@@ -31,14 +31,15 @@ type SegmentWriterFN[TSegment any] func(writer io.Writer, segment TSegment) (n i
 
 // Buffered writer for segments.
 type Buffered[TSegment any] struct {
-	shardID        uint16
-	segments       []TSegment
-	buffer         *bytes.Buffer
-	notifier       SegmentIsWrittenNotifier
-	swriter        SegmentWriterFN[TSegment]
-	writer         FileWriter
-	currentSize    int64
-	writeCompleted bool
+	shardID            uint16
+	segments           []TSegment
+	buffer             *bytes.Buffer
+	notifier           SegmentIsWrittenNotifier
+	swriter            SegmentWriterFN[TSegment]
+	writer             FileWriter
+	currentSize        int64
+	needToResetCounter uint32
+	writeCompleted     bool
 }
 
 // NewBuffered init new [Buffered].
@@ -55,7 +56,7 @@ func NewBuffered[TSegment any](
 
 	return &Buffered[TSegment]{
 		shardID:        shardID,
-		buffer:         bytes.NewBuffer(nil),
+		buffer:         bytes.NewBuffer(make([]byte, 0, 4096)), //revive:disable-line:add-constant // 4096 - 4KB
 		notifier:       notifier,
 		swriter:        swriter,
 		writer:         writer,
@@ -129,6 +130,8 @@ func (w *Buffered[TSegment]) flushBuffer() error {
 		return fmt.Errorf("buffer write: %w", err)
 	}
 
+	w.resetIfNeed(n)
+
 	return nil
 }
 
@@ -146,4 +149,24 @@ func (w *Buffered[TSegment]) writeToBufferAndFlush(segment TSegment) (encoded bo
 	}
 
 	return true, nil
+}
+
+// resetIfNeed reset buffer if need.
+func (w *Buffered[TSegment]) resetIfNeed(n int64) {
+	// small buffer, no need to reset
+	if n < 1024 { //revive:disable-line:add-constant // 1024 - 1KB
+		return
+	}
+
+	if int64(w.buffer.Cap()) >= n*2 { //revive:disable-line:add-constant // n*2 - x2
+		w.needToResetCounter++
+		if w.needToResetCounter >= 3 { //revive:disable-line:add-constant // 3 - reset counter
+			w.needToResetCounter = 0
+			w.buffer = bytes.NewBuffer(make([]byte, 0, n))
+		}
+
+		return
+	}
+
+	w.needToResetCounter = 0
 }
