@@ -17,8 +17,8 @@ namespace {
 using Lss =
     series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, series_index::trie::CedarTrie>;
 
-template <class Src, class SortIndex, class Dst, typename R>
-using LssCopier = series_index::QueryableEncodingBimapCopier<Src, SortIndex, Dst, R>;
+template <class DecodingTable, class SortingIndex, class SeriesIds, class QueryableEncodingBimap, class LsIdVector>
+using LssCopier = series_index::QueryableEncodingBimapCopier<DecodingTable, SortingIndex, SeriesIds, QueryableEncodingBimap, LsIdVector>;
 
 std::string GetWalFileName() {
   if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
@@ -34,7 +34,7 @@ void mark_all_series_as_added(const std::shared_ptr<Lss>& lss) {
 }
 
 std::shared_ptr<Lss> LoadLssFromFile() {
-  auto file_name = GetWalFileName();
+  const auto file_name = GetWalFileName();
   auto lss = std::make_shared<Lss>();
 
   std::ifstream istrm(file_name, std::ios::binary);
@@ -58,7 +58,8 @@ void BM_CopyAllStepsWithTiming(benchmark::State& state) {
 
   for ([[maybe_unused]] auto _ : state) {
     Lss lss_copy;
-    LssCopier copier(*lss, lss->sorting_index(), lss->added_series(), lss_copy);
+    BareBones::Vector<uint32_t> dst_src_ids_mapping;
+    LssCopier copier(*lss, lss->sorting_index(), lss->added_series(), lss_copy, dst_src_ids_mapping);
 
     {
       auto start = steady_clock::now();
