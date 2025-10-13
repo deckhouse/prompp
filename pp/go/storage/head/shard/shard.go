@@ -111,6 +111,11 @@ func (s *Shard) LSSAllocatedMemory() uint64 {
 	return s.lss.AllocatedMemory()
 }
 
+// LSSCacheStats returns current bitset count and cache size.
+func (s *Shard) LSSCacheStats() (cacheSize uint64, cacheBitsetCount uint32) {
+	return s.lss.CacheStats()
+}
+
 // LSSFindByHash find label set by hash in cache.
 func (s *Shard) LSSFindByHash(
 	hash uint64,

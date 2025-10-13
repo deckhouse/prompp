@@ -32,10 +32,12 @@ type MetricsUpdater[
 	queryHeadStatus func(ctx context.Context, head THead, limit int) (THeadStatus, error)
 
 	// [Head] metrics for an active head.
-	memoryInUse *prometheus.GaugeVec
-	series      prometheus.Gauge
-	walSize     *prometheus.GaugeVec
-	queueSize   *prometheus.GaugeVec
+	memoryInUse     *prometheus.GaugeVec
+	series          prometheus.Gauge
+	walSize         *prometheus.GaugeVec
+	queueSize       *prometheus.GaugeVec
+	cacheSize       *prometheus.GaugeVec
+	cacheBitsetSize *prometheus.GaugeVec
 }
 
 // NewMetricsUpdater init new [MetricsUpdater].
@@ -78,6 +80,21 @@ func NewMetricsUpdater[
 			prometheus.GaugeOpts{
 				Name: "prompp_head_queue_tasks_size",
 				Help: "The size of the queue of tasks of the current head.",
+			},
+			[]string{"shard_id"},
+		),
+
+		cacheSize: factory.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "prompp_lss_cache_size",
+				Help: "Current size of cache.",
+			},
+			[]string{"shard_id"},
+		),
+		cacheBitsetSize: factory.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Name: "prompp_lss_cache_bitset_size",
+				Help: "Current size of emplace to cache bitset.",
 			},
 			[]string{"shard_id"},
 		),
@@ -137,6 +154,10 @@ func (s *MetricsUpdater[TTask, TShard, TGoShard, THead, THeadStatus]) collectFro
 		ls["shard_id"] = strconv.FormatUint(uint64(shard.ShardID()), 10) //revive:disable-line:add-constant it's base 10
 		if active {
 			s.walSize.With(ls).Set(float64(shard.WalCurrentSize()))
+
+			cacheSize, cacheBitsetCount := shard.LSSCacheStats()
+			s.cacheSize.With(ls).Set(float64(cacheSize))
+			s.cacheBitsetSize.With(ls).Set(float64(cacheBitsetCount))
 		}
 
 		ls["head_id"] = headID

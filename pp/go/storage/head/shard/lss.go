@@ -8,6 +8,7 @@ import (
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/model"
 )
 
@@ -50,6 +51,11 @@ func (l *LSS) AllocatedMemory() uint64 {
 	return am
 }
 
+// CacheStats returns current bitset count and cache size.
+func (l *LSS) CacheStats() (cacheSize uint64, cacheBitsetCount uint32) {
+	return l.lsCache.Stats()
+}
+
 // CopyAddedSeriesTo copy the label sets from the source lss to the destination lss that were added source lss.
 func (l *LSS) CopyAddedSeriesTo(destination *LSS) {
 	l.locker.RLock()
@@ -83,6 +89,7 @@ func (l *LSS) FindByHash(
 		builderLSID,
 		lsID,
 	); !ok {
+		logger.Debugf("cache collision on hash: %d, lsID: %d, length: %d", hash, lsID, length)
 		return labels.EmptyLabels(), false
 	}
 
