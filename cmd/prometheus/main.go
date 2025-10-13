@@ -1486,7 +1486,7 @@ func main() {
 				return hManager.Run()
 			},
 			func(err error) {
-				level.Info(logger).Log("msg", "Stopping head manager...", "msg", err)
+				level.Info(logger).Log("msg", "Stopping head manager...", "reason", err)
 				close(cancel)
 				if err := hManager.Shutdown(context.Background()); err != nil {
 					level.Error(logger).Log("msg", "Head manager shutdown failed", "err", err)

@@ -28,14 +28,6 @@ type Adapter interface {
 		commitToWal bool,
 	) (cppbridge.RelabelerStats, error)
 
-	// AppendScraperHashdex append ScraperHashdex data to [Head].
-	AppendScraperHashdex(
-		ctx context.Context,
-		hashdex cppbridge.ShardedData,
-		state *cppbridge.StateV2,
-		commitToWal bool,
-	) (cppbridge.RelabelerStats, error)
-
 	// AppendSnappyProtobuf append compressed via snappy Protobuf data to [Head].
 	AppendSnappyProtobuf(
 		ctx context.Context,
