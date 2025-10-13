@@ -53,10 +53,8 @@ func FindByHash[TShard Shard, THeadShard HeadShard[TShard]](
 	hash uint64,
 	builderLSID uint32,
 ) (labels.Labels, bool) {
-	shardID := hash % uint64(head.NumberOfShards()) // shardID by hash
-
 	return head.ShardByID(
-		uint16(shardID), // #nosec G115 // no overflow
+		uint16(hash%uint64(head.NumberOfShards())), // #nosec G115 // no overflow // shardID by hash
 	).LSSFindByHash(hash, builderSortedAdd, builderSortedDel, builderSnapshot, builderLSID)
 }
 
@@ -72,8 +70,9 @@ func FindFromBuilder[TShard Shard, THeadShard HeadShard[TShard]](
 	builderLSID uint32,
 	skipCache bool,
 ) (labels.Labels, bool) {
-	shardID := hash % uint64(head.NumberOfShards()) // shardID by hash
-	shard := head.ShardByID(uint16(shardID))        // #nosec G115 // no overflow
+	shard := head.ShardByID(
+		uint16(hash % uint64(head.NumberOfShards())), // #nosec G115 // no overflow // shardID by hash
+	)
 
 	if ls, ok := shard.LSSFindByHash(hash, builderSortedAdd, builderSortedDel, builderSnapshot, builderLSID); ok {
 		return ls, true
