@@ -49,7 +49,7 @@ var Storage = &noopStorage{}
 // noopStorage for label set. Implementation cpplabels.
 type noopStorage struct{}
 
-// SetReceiver store Receiver. Implementation cpplabels.
-func (*noopStorage) SetReceiver(_ any) {
+// SetAdapter store [Adapter]. Implementation cpplabels.
+func (*noopStorage) SetAdapter(_ any) {
 	// no-op
 }
