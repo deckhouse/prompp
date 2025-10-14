@@ -256,8 +256,11 @@ func (mock *FileInfoMock) SysCalls() []struct {
 //
 //		// make and configure a mocked writer.SegmentIsWrittenNotifier
 //		mockedSegmentIsWrittenNotifier := &SegmentIsWrittenNotifierMock{
-//			NotifySegmentIsWrittenFunc: func(shardID uint16)  {
+//			NotifySegmentIsWrittenFunc: func()  {
 //				panic("mock out the NotifySegmentIsWritten method")
+//			},
+//			NotifySegmentWriteFunc: func(shardID uint16)  {
+//				panic("mock out the NotifySegmentWrite method")
 //			},
 //		}
 //
@@ -267,33 +270,37 @@ func (mock *FileInfoMock) SysCalls() []struct {
 //	}
 type SegmentIsWrittenNotifierMock struct {
 	// NotifySegmentIsWrittenFunc mocks the NotifySegmentIsWritten method.
-	NotifySegmentIsWrittenFunc func(shardID uint16)
+	NotifySegmentIsWrittenFunc func()
+
+	// NotifySegmentWriteFunc mocks the NotifySegmentWrite method.
+	NotifySegmentWriteFunc func(shardID uint16)
 
 	// calls tracks calls to the methods.
 	calls struct {
 		// NotifySegmentIsWritten holds details about calls to the NotifySegmentIsWritten method.
 		NotifySegmentIsWritten []struct {
+		}
+		// NotifySegmentWrite holds details about calls to the NotifySegmentWrite method.
+		NotifySegmentWrite []struct {
 			// ShardID is the shardID argument value.
 			ShardID uint16
 		}
 	}
 	lockNotifySegmentIsWritten sync.RWMutex
+	lockNotifySegmentWrite     sync.RWMutex
 }
 
 // NotifySegmentIsWritten calls NotifySegmentIsWrittenFunc.
-func (mock *SegmentIsWrittenNotifierMock) NotifySegmentIsWritten(shardID uint16) {
+func (mock *SegmentIsWrittenNotifierMock) NotifySegmentIsWritten() {
 	if mock.NotifySegmentIsWrittenFunc == nil {
 		panic("SegmentIsWrittenNotifierMock.NotifySegmentIsWrittenFunc: method is nil but SegmentIsWrittenNotifier.NotifySegmentIsWritten was just called")
 	}
 	callInfo := struct {
-		ShardID uint16
-	}{
-		ShardID: shardID,
-	}
+	}{}
 	mock.lockNotifySegmentIsWritten.Lock()
 	mock.calls.NotifySegmentIsWritten = append(mock.calls.NotifySegmentIsWritten, callInfo)
 	mock.lockNotifySegmentIsWritten.Unlock()
-	mock.NotifySegmentIsWrittenFunc(shardID)
+	mock.NotifySegmentIsWrittenFunc()
 }
 
 // NotifySegmentIsWrittenCalls gets all the calls that were made to NotifySegmentIsWritten.
@@ -301,14 +308,44 @@ func (mock *SegmentIsWrittenNotifierMock) NotifySegmentIsWritten(shardID uint16)
 //
 //	len(mockedSegmentIsWrittenNotifier.NotifySegmentIsWrittenCalls())
 func (mock *SegmentIsWrittenNotifierMock) NotifySegmentIsWrittenCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockNotifySegmentIsWritten.RLock()
+	calls = mock.calls.NotifySegmentIsWritten
+	mock.lockNotifySegmentIsWritten.RUnlock()
+	return calls
+}
+
+// NotifySegmentWrite calls NotifySegmentWriteFunc.
+func (mock *SegmentIsWrittenNotifierMock) NotifySegmentWrite(shardID uint16) {
+	if mock.NotifySegmentWriteFunc == nil {
+		panic("SegmentIsWrittenNotifierMock.NotifySegmentWriteFunc: method is nil but SegmentIsWrittenNotifier.NotifySegmentWrite was just called")
+	}
+	callInfo := struct {
+		ShardID uint16
+	}{
+		ShardID: shardID,
+	}
+	mock.lockNotifySegmentWrite.Lock()
+	mock.calls.NotifySegmentWrite = append(mock.calls.NotifySegmentWrite, callInfo)
+	mock.lockNotifySegmentWrite.Unlock()
+	mock.NotifySegmentWriteFunc(shardID)
+}
+
+// NotifySegmentWriteCalls gets all the calls that were made to NotifySegmentWrite.
+// Check the length with:
+//
+//	len(mockedSegmentIsWrittenNotifier.NotifySegmentWriteCalls())
+func (mock *SegmentIsWrittenNotifierMock) NotifySegmentWriteCalls() []struct {
 	ShardID uint16
 } {
 	var calls []struct {
 		ShardID uint16
 	}
-	mock.lockNotifySegmentIsWritten.RLock()
-	calls = mock.calls.NotifySegmentIsWritten
-	mock.lockNotifySegmentIsWritten.RUnlock()
+	mock.lockNotifySegmentWrite.RLock()
+	calls = mock.calls.NotifySegmentWrite
+	mock.lockNotifySegmentWrite.RUnlock()
 	return calls
 }
 

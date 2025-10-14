@@ -27,7 +27,7 @@ func (s *WalSuite) TestCurrentSize() {
 	}
 	maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	s.Equal(expectedWalSize, wl.CurrentSize())
 
@@ -42,7 +42,7 @@ func (s *WalSuite) TestClose() {
 	}
 	maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	s.Require().NoError(wl.Close())
 	s.Len(segmentWriter.CloseCalls(), 1)
@@ -59,7 +59,7 @@ func (s *WalSuite) TestCloseError() {
 	}
 	maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	s.Require().ErrorIs(wl.Close(), expectedError)
 	s.Len(segmentWriter.CloseCalls(), 1)
@@ -74,7 +74,7 @@ func (s *WalSuite) TestCommit() {
 	}
 	maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	s.Require().NoError(wl.Commit())
 	s.Len(enc.FinalizeCalls(), 1)
@@ -91,7 +91,7 @@ func (s *WalSuite) TestCommitEncodeError() {
 	}
 	maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	s.Require().ErrorIs(wl.Commit(), expectedError)
 	s.Len(enc.FinalizeCalls(), 1)
@@ -108,7 +108,7 @@ func (s *WalSuite) TestCommitWriteError() {
 	}
 	maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	s.Require().ErrorIs(wl.Commit(), expectedError)
 	s.Len(enc.FinalizeCalls(), 1)
@@ -122,7 +122,7 @@ func (s *WalSuite) TestFlush() {
 	}
 	maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	s.Require().NoError(wl.Flush())
 	s.Len(segmentWriter.FlushCalls(), 1)
@@ -136,7 +136,7 @@ func (s *WalSuite) TestFlushError() {
 	}
 	maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	s.Require().ErrorIs(wl.Flush(), expectedError)
 	s.Len(segmentWriter.FlushCalls(), 1)
@@ -149,7 +149,7 @@ func (s *WalSuite) TestSync() {
 	}
 	maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	s.Require().NoError(wl.Sync())
 	s.Len(segmentWriter.SyncCalls(), 1)
@@ -163,7 +163,7 @@ func (s *WalSuite) TestSyncError() {
 	}
 	maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	s.Require().ErrorIs(wl.Sync(), expectedError)
 	s.Len(segmentWriter.SyncCalls(), 1)
@@ -178,7 +178,7 @@ func (s *WalSuite) TestWrite() {
 	}
 
 	maxSegmentSize := uint32(0)
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	limitExhausted, err := wl.Write([]*cppbridge.InnerSeries{})
 	s.Require().NoError(err)
@@ -198,7 +198,7 @@ func (s *WalSuite) TestWriteLimitExhausted() {
 		CloseFunc: func() error { return nil },
 	}
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	limitExhausted, err := wl.Write([]*cppbridge.InnerSeries{})
 	s.Require().NoError(err)
@@ -218,7 +218,7 @@ func (s *WalSuite) TestWriteLimitNotExhausted() {
 		CloseFunc: func() error { return nil },
 	}
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	limitExhausted, err := wl.Write([]*cppbridge.InnerSeries{})
 	s.Require().NoError(err)
@@ -239,7 +239,7 @@ func (s *WalSuite) TestWriteError() {
 		CloseFunc: func() error { return nil },
 	}
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	limitExhausted, err := wl.Write([]*cppbridge.InnerSeries{})
 	s.Require().ErrorIs(err, expectedError)

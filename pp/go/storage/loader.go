@@ -73,6 +73,7 @@ func (l *Loader) Load(
 				headDir,
 				l.maxSegmentSize,
 				swn,
+				l.registerer,
 				l.unloadDataStorageInterval,
 			)
 		}(shardID)
@@ -147,9 +148,10 @@ func (*Loader) loadShard(
 	dir string,
 	maxSegmentSize uint32,
 	notifier *writer.SegmentWriteNotifier,
+	registerer prometheus.Registerer,
 	unloadDataStorageInterval time.Duration,
 ) ShardLoadResult {
-	shardDataLoader := NewShardDataLoader(shardID, dir, maxSegmentSize, notifier, unloadDataStorageInterval)
+	shardDataLoader := NewShardDataLoader(shardID, dir, maxSegmentSize, notifier, registerer, unloadDataStorageInterval)
 	err := shardDataLoader.Load()
 	return ShardLoadResult{
 		corrupted:        err != nil,
@@ -189,6 +191,7 @@ type ShardDataLoader struct {
 	maxSegmentSize            uint32
 	shardData                 ShardData
 	notifier                  *writer.SegmentWriteNotifier
+	registerer                prometheus.Registerer
 	unloadDataStorageInterval time.Duration
 }
 
@@ -198,6 +201,7 @@ func NewShardDataLoader(
 	dir string,
 	maxSegmentSize uint32,
 	notifier *writer.SegmentWriteNotifier,
+	registerer prometheus.Registerer,
 	unloadDataStorageInterval time.Duration,
 ) ShardDataLoader {
 	return ShardDataLoader{
@@ -205,6 +209,7 @@ func NewShardDataLoader(
 		dir:                       dir,
 		maxSegmentSize:            maxSegmentSize,
 		notifier:                  notifier,
+		registerer:                registerer,
 		unloadDataStorageInterval: unloadDataStorageInterval,
 	}
 }
@@ -300,7 +305,7 @@ func (l *ShardDataLoader) createShardWal(fileName string, walDecoder *cppbridge.
 	}
 
 	l.notifier.Set(l.shardID, l.shardData.numberOfSegments)
-	l.shardData.wal = wal.NewWal(walDecoder.CreateEncoder(), sw, l.maxSegmentSize)
+	l.shardData.wal = wal.NewWal(walDecoder.CreateEncoder(), sw, l.maxSegmentSize, l.shardID, l.registerer)
 
 	return nil
 }
