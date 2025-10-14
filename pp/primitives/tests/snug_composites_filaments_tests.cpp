@@ -212,9 +212,9 @@ TEST_F(ShrinkableEncodingBimapLabelSetFixture, ShrinkAndLoad) {
     encoding_table_.shrink_to_checkpoint_size(checkpoint);
   }
   {
-    const auto empty_checkpoint = encoding_table_.checkpoint();
+    const auto checkpoint_from_shrinked_lss = encoding_table_.checkpoint();
     encoding_table_.find_or_emplace(ls_[2]);
-    const auto checkpoint = create_and_load_checkpoint(&empty_checkpoint);
+    const auto checkpoint = create_and_load_checkpoint(&checkpoint_from_shrinked_lss);
     encoding_table_.shrink_to_checkpoint_size(checkpoint);
   }
 
