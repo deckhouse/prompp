@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"strconv"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/util"
 )
 
 const (
@@ -27,14 +30,45 @@ type ShardWal struct {
 	maxSegmentSize uint32
 	corrupted      bool
 	limitExhausted bool
+	// stat
+	samplesPerSegment prometheus.Counter
+	sizePerSegment    prometheus.Counter
+	segments          prometheus.Gauge
 }
 
-func newShardWal(encoder *cppbridge.HeadWalEncoder, maxSegmentSize uint32, segmentWriter SegmentWriter) *ShardWal {
-	return &ShardWal{
+func newShardWal(
+	encoder *cppbridge.HeadWalEncoder,
+	maxSegmentSize uint32,
+	segmentWriter SegmentWriter,
+	shardID uint16,
+	registerer prometheus.Registerer,
+) *ShardWal {
+	factory := util.NewUnconflictRegisterer(registerer)
+	ls := prometheus.Labels{"shard_id": strconv.FormatUint(uint64(shardID), 10)}
+	w := &ShardWal{
 		encoder:        encoder,
 		segmentWriter:  segmentWriter,
 		maxSegmentSize: maxSegmentSize,
+		samplesPerSegment: factory.NewCounter(prometheus.CounterOpts{
+			Name:        "prompp_shard_wal_samples_per_segment_sum",
+			Help:        "Number of samples per segment.",
+			ConstLabels: ls,
+		}),
+		sizePerSegment: factory.NewCounter(prometheus.CounterOpts{
+			Name:        "prompp_shard_wal_size_per_segment_sum",
+			Help:        "Size of segment.",
+			ConstLabels: ls,
+		}),
+		segments: factory.NewGauge(prometheus.GaugeOpts{
+			Name:        "prompp_shard_wal_segments",
+			Help:        "Number of segments.",
+			ConstLabels: ls,
+		}),
 	}
+
+	w.segments.Set(0)
+
+	return w
 }
 
 func newCorruptedShardWal() *ShardWal {
@@ -80,6 +114,9 @@ func (w *ShardWal) Commit() error {
 	if err != nil {
 		return fmt.Errorf("failed to finalize segment: %w", err)
 	}
+	w.samplesPerSegment.Add(float64(segment.Samples()))
+	w.sizePerSegment.Add(float64(segment.Size()))
+	w.segments.Inc()
 	w.limitExhausted = false
 
 	if err = w.segmentWriter.Write(segment); err != nil {
