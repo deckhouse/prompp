@@ -166,7 +166,7 @@ class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
   PROMPP_ALWAYS_INLINE void encode(int64_t ts, BitSequence& stream) {
     state.last_ts = ts;
 
-    uint8_t varint_buffer[VarInt::kMaxVarIntLength]{};
+    uint8_t varint_buffer[VarInt::kMaxVarIntLength<int64_t>]{};
     push_varint_buffer(varint_buffer, VarInt::write(varint_buffer, ts), stream);
   }
 
@@ -175,7 +175,7 @@ class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
     state.last_ts_delta = ts - state.last_ts;
     state.last_ts = ts;
 
-    uint8_t varint_buffer[VarInt::kMaxVarIntLength]{};
+    uint8_t varint_buffer[VarInt::kMaxVarIntLength<int64_t>]{};
     push_varint_buffer(varint_buffer, VarInt::write(varint_buffer, std::bit_cast<uint64_t>(state.last_ts_delta)), stream);
   }
 
@@ -351,14 +351,14 @@ class PROMPP_ATTRIBUTE_PACKED TimestampDecoder {
   [[nodiscard]] PROMPP_ALWAYS_INLINE const TimestampEncoderState<>& state() const noexcept { return state_; }
 
   PROMPP_ALWAYS_INLINE void decode(int64_t timestamp) noexcept { state_.last_ts = timestamp; }
-  PROMPP_ALWAYS_INLINE void decode(BitSequenceReader& reader) { state_.last_ts = VarInt::read(reader); }
+  PROMPP_ALWAYS_INLINE void decode(BitSequenceReader& reader) { state_.last_ts = VarInt::read<int64_t>(reader); }
 
   PROMPP_ALWAYS_INLINE void decode_delta(int64_t timestamp) noexcept {
     state_.last_ts_delta = timestamp - state_.last_ts;
     state_.last_ts = timestamp;
   }
   PROMPP_ALWAYS_INLINE void decode_delta(BitSequenceReader& reader) {
-    state_.last_ts_delta = std::bit_cast<int64_t>(VarInt::read_uint(reader));
+    state_.last_ts_delta = std::bit_cast<int64_t>(VarInt::read<uint64_t>(reader));
     state_.last_ts += state_.last_ts_delta;
   }
 

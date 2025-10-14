@@ -12,43 +12,26 @@ namespace BareBones::Encoding {
 
 class VarInt {
  public:
-  static constexpr size_t kMaxVarIntLength = 10;
+  template <std::integral T>
+  static constexpr size_t kMaxVarIntLength = (Bit::to_bits(sizeof(T)) + 6) / 7;
 
-  PROMPP_ALWAYS_INLINE static size_t write(uint8_t* data, int64_t value) noexcept {
-    auto uint_value = std::bit_cast<uint64_t>(value) << 1;
-    if (value < 0) {
-      uint_value = ~uint_value;
-    }
-
-    return write(data, uint_value);
+  template <std::unsigned_integral T>
+  PROMPP_ALWAYS_INLINE static size_t write(uint8_t* data, T value) noexcept {
+    return write_internal(data, static_cast<uint64_t>(value));
   }
 
-  PROMPP_ALWAYS_INLINE static size_t write(uint8_t* data, uint64_t value) noexcept {
-    auto p = data;
-    while (value >= 128) {
-      *p++ = 0x80 | (value & 0x7f);
-      value >>= 7;
-    }
-    *p++ = static_cast<uint8_t>(value);
-    return p - data;
+  template <std::signed_integral T>
+  PROMPP_ALWAYS_INLINE static size_t write(uint8_t* data, T value) noexcept {
+    return write_internal(data, static_cast<uint64_t>(unsignify(value)));
   }
 
-  PROMPP_ALWAYS_INLINE static int64_t read(BitSequenceReader& reader) {
-    auto value = read_uint(reader);
-    auto result = std::bit_cast<int64_t>(value >> 1);
-    if ((value & 1) != 0) {
-      result = ~result;
-    }
-
-    return result;
-  }
-
-  PROMPP_ALWAYS_INLINE static uint64_t read_uint(BitSequenceReader& reader) {
-    uint64_t result = 0;
+  template <std::unsigned_integral T>
+  PROMPP_ALWAYS_INLINE static T read(BitSequenceReader& reader) noexcept {
+    T result = 0;
     uint8_t shift = 0;
 
-    for (size_t i = 0; i < kMaxVarIntLength; ++i) {
-      auto byte = static_cast<uint64_t>(reader.consume_bits_u32(BareBones::Bit::kByteBits));
+    for (size_t i = 0; i < kMaxVarIntLength<T>; ++i) {
+      const auto byte = static_cast<uint64_t>(reader.consume_bits_u32(Bit::kByteBits));
       if (byte < 0x80) {
         return result | static_cast<uint64_t>(byte) << shift;
       }
@@ -60,17 +43,60 @@ class VarInt {
     return result;
   }
 
-  PROMPP_ALWAYS_INLINE static size_t length(uint64_t value) noexcept {
-    return value < (1ULL << 7)    ? 1
-           : value < (1ULL << 14) ? 2
-           : value < (1ULL << 21) ? 3
-           : value < (1ULL << 28) ? 4
-           : value < (1ULL << 35) ? 5
-           : value < (1ULL << 42) ? 6
-           : value < (1ULL << 49) ? 7
-           : value < (1ULL << 56) ? 8
-           : value < (1ULL << 63) ? 9
-                                  : 10;
+  template <std::signed_integral T>
+  PROMPP_ALWAYS_INLINE static T read(BitSequenceReader& reader) noexcept {
+    const auto value = read<std::make_unsigned_t<T>>(reader);
+    return signify(value);
+  }
+
+  template <std::unsigned_integral T>
+  PROMPP_ALWAYS_INLINE static size_t length(T value) noexcept {
+    if constexpr (sizeof(T) == 1) {
+      return value < (1ULL << 7) ? 1 : 2;
+    }
+    if constexpr (sizeof(T) == 2) {
+      return value < (1ULL << 7) ? 1 : value < (1ULL << 14) ? 2 : 3;
+    }
+    if constexpr (sizeof(T) == 4) {
+      return value < (1ULL << 7) ? 1 : value < (1ULL << 14) ? 2 : value < (1ULL << 21) ? 3 : value < (1ULL << 28) ? 4 : 5;
+    }
+    return value == 0 ? 1 : (std::bit_width(value) + 6) / 7;
+  }
+
+  template <std::signed_integral T>
+  PROMPP_ALWAYS_INLINE static size_t length(T value) noexcept {
+    return length(unsignify(value));
+  }
+
+ private:
+  template <std::signed_integral T>
+  PROMPP_ALWAYS_INLINE static auto unsignify(T value) noexcept {
+    using U = std::make_unsigned_t<T>;
+    auto unsigned_value = static_cast<U>(std::bit_cast<U>(value) << static_cast<U>(1));
+    if (value < 0) {
+      unsigned_value = ~unsigned_value;
+    }
+
+    return unsigned_value;
+  }
+
+  template <std::unsigned_integral T>
+  PROMPP_ALWAYS_INLINE static auto signify(T value) noexcept {
+    auto result = std::bit_cast<std::make_signed_t<T>>(static_cast<T>(value >> static_cast<T>(1)));
+    if ((value & 1) != 0) {
+      result = ~result;
+    }
+    return result;
+  }
+
+  PROMPP_ALWAYS_INLINE static size_t write_internal(uint8_t* data, uint64_t value) noexcept {
+    auto p = data;
+    while (value >= 128) {
+      *p++ = 0x80 | (value & 0x7f);
+      value >>= 7;
+    }
+    *p++ = static_cast<uint8_t>(value);
+    return p - data;
   }
 };
 

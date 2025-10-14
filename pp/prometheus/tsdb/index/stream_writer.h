@@ -94,7 +94,7 @@ class Writer {
   template <class crc32 = Crc32Tag, class NumberType>
     requires(std::is_same_v<uint64_t, NumberType> || std::is_same_v<int64_t, NumberType>)
   PROMPP_ALWAYS_INLINE void write_varint(NumberType value) noexcept {
-    uint8_t buffer[BareBones::Encoding::VarInt::kMaxVarIntLength];
+    uint8_t buffer[BareBones::Encoding::VarInt::kMaxVarIntLength<NumberType>];
     auto size = BareBones::Encoding::VarInt::write(buffer, value);
     writer_.write(buffer, size);
 

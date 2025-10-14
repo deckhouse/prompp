@@ -6,7 +6,7 @@ namespace PromPP::Prometheus::tsdb::chunkenc {
 
 class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
  public:
-  static constexpr uint8_t kMaxItemSizeInBits = BareBones::Bit::to_bits(BareBones::Encoding::VarInt::kMaxVarIntLength);
+  static constexpr uint8_t kMaxItemSizeInBits = BareBones::Bit::to_bits(BareBones::Encoding::VarInt::kMaxVarIntLength<int64_t>);
 
   BareBones::Encoding::Gorilla::TimestampEncoderState<> state{};
 
@@ -16,7 +16,7 @@ class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
   PROMPP_ALWAYS_INLINE void encode(int64_t ts, BStream& stream) {
     state.last_ts = ts;
 
-    uint8_t varint_buffer[VarInt::kMaxVarIntLength]{};
+    uint8_t varint_buffer[VarInt::kMaxVarIntLength<int64_t>]{};
     push_varint_buffer(varint_buffer, VarInt::write(varint_buffer, ts), stream);
   }
 
@@ -25,7 +25,7 @@ class PROMPP_ATTRIBUTE_PACKED TimestampEncoder {
     state.last_ts_delta = ts - state.last_ts;
     state.last_ts = ts;
 
-    uint8_t varint_buffer[VarInt::kMaxVarIntLength]{};
+    uint8_t varint_buffer[VarInt::kMaxVarIntLength<int64_t>]{};
     push_varint_buffer(varint_buffer, VarInt::write(varint_buffer, std::bit_cast<uint64_t>(state.last_ts_delta)), stream);
   }
 
