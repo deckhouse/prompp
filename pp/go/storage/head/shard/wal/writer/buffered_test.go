@@ -21,11 +21,14 @@ func TestBufferedSuite(t *testing.T) {
 	suite.Run(t, new(BufferedSuite))
 }
 
-func (s *BufferedSuite) TestHappyPath() {
+func (s *BufferedSuite) TestWriteFlushSync() {
 	actual := &bytes.Buffer{}
 	sfile := s.openfile(actual)
 
-	swn := &SegmentIsWrittenNotifierMock{NotifySegmentIsWrittenFunc: func(uint16) {}}
+	swn := &SegmentIsWrittenNotifierMock{
+		NotifySegmentIsWrittenFunc: func() {},
+		NotifySegmentWriteFunc:     func(uint16) {},
+	}
 
 	shardID := uint16(0)
 	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentMock], swn)
@@ -53,11 +56,64 @@ func (s *BufferedSuite) TestHappyPath() {
 	s.Len(sfile.CloseCalls(), 1)
 }
 
+func (s *BufferedSuite) TestDoubleWriteAndFlush() {
+	actual := &bytes.Buffer{}
+	sfile := s.openfile(actual)
+
+	numberOfSegments := 0
+	swn := &SegmentIsWrittenNotifierMock{
+		NotifySegmentIsWrittenFunc: func() {},
+		NotifySegmentWriteFunc:     func(uint16) { numberOfSegments++ },
+	}
+
+	shardID := uint16(0)
+	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentMock], swn)
+	s.Require().NoError(err)
+	s.Equal(int64(0), wrBuf.CurrentSize())
+
+	segment, expectedSegment := s.genSegment()
+	expectedLen := len(expectedSegment)
+
+	err = wrBuf.Write(segment)
+	s.Require().NoError(err)
+	s.Empty(sfile.WriteCalls())
+
+	err = wrBuf.Flush()
+	s.Require().NoError(err)
+	s.Equal(int64(expectedLen), wrBuf.CurrentSize())
+	s.Equal(expectedSegment, actual.Bytes())
+
+	actual.Reset()
+	segment, expectedSegment = s.genSegment()
+
+	err = wrBuf.Write(segment)
+	s.Require().NoError(err)
+
+	err = wrBuf.Flush()
+	s.Require().NoError(err)
+	s.Equal(int64(len(expectedSegment)+expectedLen), wrBuf.CurrentSize())
+	s.Equal(expectedSegment, actual.Bytes())
+
+	err = wrBuf.Sync()
+	s.Require().NoError(err)
+	s.Len(sfile.SyncCalls(), 1)
+	s.Len(swn.NotifySegmentIsWrittenCalls(), 1)
+	s.Len(swn.NotifySegmentWriteCalls(), 2)
+	s.Equal(2, numberOfSegments)
+
+	err = wrBuf.Close()
+	s.Require().NoError(err)
+	s.Len(sfile.CloseCalls(), 1)
+}
+
 func (s *BufferedSuite) TestBuffered() {
 	actual := &bytes.Buffer{}
 	sfile := s.openfile(actual)
 
-	swn := &SegmentIsWrittenNotifierMock{NotifySegmentIsWrittenFunc: func(uint16) {}}
+	swn := &SegmentIsWrittenNotifierMock{
+		NotifySegmentIsWrittenFunc: func() {},
+		NotifySegmentWriteFunc:     func(uint16) {},
+	}
 
 	shardID := uint16(0)
 	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentMock], swn)
@@ -80,6 +136,7 @@ func (s *BufferedSuite) TestBuffered() {
 	s.Equal(int64(expectedSize), wrBuf.CurrentSize())
 	s.Equal(expectedSegments, actual.Bytes())
 	s.Empty(swn.NotifySegmentIsWrittenCalls())
+	s.Len(swn.NotifySegmentWriteCalls(), 10)
 
 	err = wrBuf.Sync()
 	s.Require().NoError(err)
@@ -96,7 +153,10 @@ func (s *BufferedSuite) TestStatError() {
 	sfile := s.openfile(actual)
 	sfile.StatFunc = func() (os.FileInfo, error) { return nil, errors.New("some error") }
 
-	swn := &SegmentIsWrittenNotifierMock{NotifySegmentIsWrittenFunc: func(uint16) {}}
+	swn := &SegmentIsWrittenNotifierMock{
+		NotifySegmentIsWrittenFunc: func() {},
+		NotifySegmentWriteFunc:     func(uint16) {},
+	}
 
 	shardID := uint16(0)
 	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentMock], swn)
@@ -109,7 +169,10 @@ func (s *BufferedSuite) TestSyncError() {
 	sfile := s.openfile(actual)
 	sfile.SyncFunc = func() error { return errors.New("some error") }
 
-	swn := &SegmentIsWrittenNotifierMock{NotifySegmentIsWrittenFunc: func(uint16) {}}
+	swn := &SegmentIsWrittenNotifierMock{
+		NotifySegmentIsWrittenFunc: func() {},
+		NotifySegmentWriteFunc:     func(uint16) {},
+	}
 
 	shardID := uint16(0)
 	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentMock], swn)
@@ -137,7 +200,10 @@ func (s *BufferedSuite) TestWriteToBufferWithError() {
 	actual := &bytes.Buffer{}
 	sfile := s.openfile(actual)
 
-	swn := &SegmentIsWrittenNotifierMock{NotifySegmentIsWrittenFunc: func(uint16) {}}
+	swn := &SegmentIsWrittenNotifierMock{
+		NotifySegmentIsWrittenFunc: func() {},
+		NotifySegmentWriteFunc:     func(uint16) {},
+	}
 
 	scount := 0
 	writeSegment := func(w io.Writer, segment *EncodedSegmentMock) (n int, err error) {
@@ -189,7 +255,10 @@ func (s *BufferedSuite) TestFlushWithError() {
 	actual := &bytes.Buffer{}
 	sfile := s.openfile(actual)
 
-	swn := &SegmentIsWrittenNotifierMock{NotifySegmentIsWrittenFunc: func(uint16) {}}
+	swn := &SegmentIsWrittenNotifierMock{
+		NotifySegmentIsWrittenFunc: func() {},
+		NotifySegmentWriteFunc:     func(uint16) {},
+	}
 
 	scount := 0
 	sfile.WriteFunc = func(p []byte) (int, error) {
