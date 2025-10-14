@@ -5,6 +5,7 @@
 #include "head/chunk_recoder.h"
 #include "head/data_storage.h"
 #include "head/lss.h"
+#include "head/serialization.h"
 #include "primitives/go_slice.h"
 #include "series_data/data_storage.h"
 #include "series_data/loader.h"
@@ -139,6 +140,36 @@ extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
     };
   } else {
     new (res) Result{.status = QueryStatus::kSuccess};
+  }
+}
+
+extern "C" void prompp_series_data_data_storage_query_new(void* args, void* res) {
+  using Query = series_data::querier::Query<Slice<LabelSetID>>;
+  using entrypoint::series_data::RangeQuerierWithArgumentsWrapperNew;
+  using series_data::querier::Querier;
+
+  struct Arguments {
+    DataStoragePtr data_storage;
+    Query query;
+  };
+
+  struct Result {
+    QuerierVariantPtr querier{};
+    QueryStatus status;
+    entrypoint::head::SerializedDataPtr serialized_data{};
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  Result* out = new (res) Result();
+
+  RangeQuerierWithArgumentsWrapperNew querier(*in->data_storage, in->query, out->serialized_data.get());
+  querier.query();
+
+  if (querier.need_loading()) {
+    out->querier = std::make_unique<QuerierVariant>(std::in_place_index<2>, std::move(querier));
+    out->status = QueryStatus::kNeedDataLoad;
+  } else {
+    out->status = QueryStatus::kSuccess;
   }
 }
 
