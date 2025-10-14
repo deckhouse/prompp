@@ -67,7 +67,12 @@ func (s *WalSuite) TestCloseError() {
 
 func (s *WalSuite) TestCommit() {
 	enc := &EncoderMock[*EncodedSegmentMock]{
-		FinalizeFunc: func() (*EncodedSegmentMock, error) { return &EncodedSegmentMock{}, nil },
+		FinalizeFunc: func() (*EncodedSegmentMock, error) {
+			return &EncodedSegmentMock{
+				SizeFunc:    func() int64 { return 42 },
+				SamplesFunc: func() uint32 { return 42 },
+			}, nil
+		},
 	}
 	segmentWriter := &SegmentWriterMock[*EncodedSegmentMock]{
 		WriteFunc: func(*EncodedSegmentMock) error { return nil },
@@ -101,7 +106,12 @@ func (s *WalSuite) TestCommitEncodeError() {
 func (s *WalSuite) TestCommitWriteError() {
 	expectedError := errors.New("test error")
 	enc := &EncoderMock[*EncodedSegmentMock]{
-		FinalizeFunc: func() (*EncodedSegmentMock, error) { return &EncodedSegmentMock{}, nil },
+		FinalizeFunc: func() (*EncodedSegmentMock, error) {
+			return &EncodedSegmentMock{
+				SizeFunc:    func() int64 { return 42 },
+				SamplesFunc: func() uint32 { return 42 },
+			}, nil
+		},
 	}
 	segmentWriter := &SegmentWriterMock[*EncodedSegmentMock]{
 		WriteFunc: func(*EncodedSegmentMock) error { return expectedError },
