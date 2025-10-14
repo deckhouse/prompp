@@ -26,6 +26,7 @@ TEST_P(VarintFixture, WriteAndRead) {
 
   // Assert
   ASSERT_EQ(bytes_written, GetParam().expected_length);
+  ASSERT_EQ(bytes_written, std::visit([&](auto v) { return VarInt::length(v); }, GetParam().value));
   EXPECT_EQ(decoded, std::visit([&](auto v) { return static_cast<uint64_t>(v); }, GetParam().value));
 }
 
