@@ -412,7 +412,7 @@ func main() {
 		Default("false").BoolVar(&cfg.tsdb.NoLockfile)
 
 	serverOnlyFlag(a, "storage.wal-commit-interval", "Interval between force commits.").
-		Default("5000ms").SetValue(&cfg.WalCommitInterval)
+		Default("6000ms").SetValue(&cfg.WalCommitInterval)
 
 	serverOnlyFlag(a, "storage.wal-max-samples_per_segment", "Maximum samples in WAL segment.").
 		Default("100000").Uint32Var(&cfg.WalMaxSamplesPerSegment)

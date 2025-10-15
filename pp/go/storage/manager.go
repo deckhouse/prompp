@@ -339,7 +339,7 @@ func (m *Manager) initServices(
 			return services.NewCommitter(
 				m.proxy,
 				committerMediator,
-				isNewHead(clock, hcatalog, o.CommitInterval),
+				isNewHead(clock, hcatalog, o.CommitInterval/2),
 			).Execute(committerCtx)
 		},
 		func(error) {
