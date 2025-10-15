@@ -320,23 +320,10 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRangeV2(
 		return storage.ErrSeriesSet(err)
 	}
 
-	serializedChunksShards := queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, q.mint, q.maxt)
+	shardedSerializedData := queryDataStorageV2(dsQueryRangeQuerier, q.head, lssQueryResults, q.mint, q.maxt)
 	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
-	for shardID, serializedChunksShard := range serializedChunksShards {
-		if serializedChunksShard == nil {
-			seriesSets[shardID] = &SeriesSet{}
-			continue
-		}
-
-		seriesSets[shardID] = &SeriesSet{
-			mint:             q.mint,
-			maxt:             q.maxt,
-			deserializer:     cppbridge.NewHeadDataStorageDeserializer(serializedChunksShard),
-			chunksIndex:      serializedChunksShard.MakeIndex(),
-			serializedChunks: serializedChunksShard,
-			lssQueryResult:   lssQueryResults[shardID],
-			labelSetSnapshot: snapshots[shardID],
-		}
+	for shardID, serializedData := range shardedSerializedData {
+		seriesSets[shardID] = NewSeriesSetV2(q.mint, q.maxt, lssQueryResults[shardID], snapshots[shardID], serializedData)
 	}
 
 	return storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge)
@@ -416,8 +403,8 @@ func queryDataStorageV2[
 	head THead,
 	lssQueryResults []*cppbridge.LSSQueryResult,
 	mint, maxt int64,
-) []*cppbridge.HeadDataStorageSerializedChunks {
-	serializedChunksShards := make([]*cppbridge.HeadDataStorageSerializedChunks, head.NumberOfShards())
+) []*cppbridge.DataStorageSerializedData {
+	shardedSerializedData := make([]*cppbridge.DataStorageSerializedData, head.NumberOfShards())
 	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead](head)
 	tDataStorageQuery := head.CreateTask(
 		taskName,
@@ -428,8 +415,8 @@ func queryDataStorageV2[
 				return nil
 			}
 
-			var result cppbridge.DataStorageQueryResult
-			serializedChunksShards[shardID], result = s.DataStorage().Query(cppbridge.HeadDataStorageQuery{
+			var result cppbridge.DataStorageQueryResultV2
+			result = s.DataStorage().QueryV2(cppbridge.HeadDataStorageQuery{
 				StartTimestampMs: mint,
 				EndTimestampMs:   maxt,
 				LabelSetIDs:      lssQueryResult.IDs(),
@@ -437,6 +424,7 @@ func queryDataStorageV2[
 			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {
 				loadAndQueryWaiter.Add(s, result.Querier)
 			}
+			shardedSerializedData[s.ShardID()] = result.SerializedData
 
 			return nil
 		},
@@ -449,7 +437,7 @@ func queryDataStorageV2[
 		return nil
 	}
 
-	return serializedChunksShards
+	return shardedSerializedData
 }
 
 // queryLabelValues returns label values present in the head for the specific label name.
