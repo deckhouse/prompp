@@ -50,6 +50,30 @@ class VarInt {
   }
 
   template <std::unsigned_integral T>
+  PROMPP_ALWAYS_INLINE static T read(const uint8_t* data) noexcept {
+    T result = 0;
+    uint8_t shift = 0;
+
+    for (size_t i = 0; i < kMaxVarIntLength<T>; ++i) {
+      const auto byte = static_cast<uint64_t>(*data++);
+      if (byte < 0x80) {
+        return result | static_cast<uint64_t>(byte) << shift;
+      }
+
+      result |= (byte & 0x7F) << shift;
+      shift += 7;
+    }
+
+    return result;
+  }
+
+  template <std::signed_integral T>
+  PROMPP_ALWAYS_INLINE static T read(const uint8_t* data) noexcept {
+    const auto value = read<std::make_unsigned_t<T>>(data);
+    return signify(value);
+  }
+
+  template <std::unsigned_integral T>
   PROMPP_ALWAYS_INLINE static size_t length(T value) noexcept {
     if constexpr (sizeof(T) == 1) {
       return value < (1ULL << 7) ? 1 : 2;

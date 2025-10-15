@@ -3,6 +3,7 @@
 #include <scope_exit.h>
 
 #include "bare_bones/exception.h"
+#include "bare_bones/gorilla.h"
 #include "bare_bones/snug_composite.h"
 #include "bare_bones/stream_v_byte.h"
 #include "hash.h"
@@ -833,9 +834,14 @@ class LabelSet {
                                                                                                         data.shrinked_size_) {
     const auto size_before = data.symbols_ids_sequences.size();
 
-    auto lns_id_ = find_or_emplace_label_names_set(data, label_set, std::forward<Cache>(cache));
-    data.symbols_ids_sequences.resize(pos_ - data.shrinked_size_ + sizeof(lns_id_));
-    std::memcpy(data.symbols_ids_sequences.data() + pos_ - data.shrinked_size_, &lns_id_, sizeof(lns_id_));
+    const auto lns_id_ = find_or_emplace_label_names_set(data, label_set, std::forward<Cache>(cache));
+    const auto lns_id_length = BareBones::Encoding::VarInt::length(lns_id_);
+
+    const auto lns_id_local_offset = get_local_offset(data);
+
+    data.symbols_ids_sequences.resize(lns_id_local_offset + lns_id_length);
+    BareBones::Encoding::VarInt::write(data.symbols_ids_sequences.data() + lns_id_local_offset, lns_id_);
+    // std::memcpy(data.symbols_ids_sequences.data() + pos_ - data.shrinked_size_, &lns_id_, sizeof(lns_id_));
 
     // resize, if there are new symbols (in lns table)
     data.symbols_tables.reserve(data.label_name_sets_table.data().symbols_table.size());
@@ -957,20 +963,22 @@ class LabelSet {
   };
 
   PROMPP_ALWAYS_INLINE composite_type composite(const data_type& data) const noexcept {
-    uint32_t lns_id_;
-    std::memcpy(&lns_id_, data.symbols_ids_sequences.data() + pos_ - data.shrinked_size_, sizeof(lns_id_));
+    const auto lns_id_local_offset = get_local_offset(data);
+    const auto lns_id_ = BareBones::Encoding::VarInt::read<uint32_t>(data.symbols_ids_sequences.data() + lns_id_local_offset);
+    const auto lns_id_length = BareBones::Encoding::VarInt::length(lns_id_);
+
     auto lns = data.label_name_sets_table[lns_id_];
 
     auto [values_begin, values_end] = BareBones::StreamVByte::decoder<typename data_type::SymbolIdsCodec>(
-        data.symbols_ids_sequences.begin() + pos_ + sizeof(lns_id_) - data.shrinked_size_, lns.size());
+        data.symbols_ids_sequences.begin() + lns_id_local_offset + lns_id_length, lns.size());
 
     return composite_type(&data, std::move(lns), std::move(values_begin), std::move(values_end), lns_id_);
   }
 
   PROMPP_ALWAYS_INLINE void validate(const data_type& data) const {
-    uint32_t lns_id_;
-    std::memcpy(&lns_id_, data.symbols_ids_sequences.data() + pos_ - data.shrinked_size_, sizeof(lns_id_));
-    // std::cout << "lns_id: " << lns_id_ << "/" << data.label_name_sets_table.size() << '\n';
+    const auto lns_id_local_offset = get_local_offset(data);
+    const auto lns_id_ = BareBones::Encoding::VarInt::read<uint32_t>(data.symbols_ids_sequences.data() + lns_id_local_offset);
+    const auto lns_id_length = BareBones::Encoding::VarInt::length(lns_id_);
 
     if (lns_id_ >= data.label_name_sets_table.size()) {
       throw BareBones::Exception(0x48dd6c9d357d3a7e, "LabelSets data validation error: expected LabelSets length is out of label name sets table vector range");
@@ -980,20 +988,20 @@ class LabelSet {
 
     // check that streamvbyte keys are in range
     auto keys_size = BareBones::StreamVByte::keys_size(lns.size());
-    if (pos_ + sizeof(lns_id_) - data.shrinked_size_ + keys_size > data.symbols_ids_sequences.size()) {
+    if (lns_id_local_offset + lns_id_length + keys_size > data.symbols_ids_sequences.size()) {
       throw BareBones::Exception(0x22f5a82dd120e0e7, "LabelSets data validation error: expected LabelSets keys length is out of data symbols vector range");
     }
 
     // check that streamvbyte data is in range
     const uint32_t data_size = BareBones::StreamVByte::decode_data_size<BareBones::StreamVByte::Codec1234>(
-        lns.size(), data.symbols_ids_sequences.begin() + pos_ + sizeof(lns_id_) - data.shrinked_size_);
-    if (pos_ + sizeof(lns_id_) - data.shrinked_size_ + keys_size + data_size > data.symbols_ids_sequences.size()) {
+        lns.size(), data.symbols_ids_sequences.begin() + lns_id_local_offset + lns_id_length);
+    if (lns_id_local_offset + lns_id_length + keys_size + data_size > data.symbols_ids_sequences.size()) {
       throw BareBones::Exception(0xd02e54dac8e1d328, "LabelSets data validation error: expected LabelSets values length is out of data symbols vector range");
     }
 
     // check that all symbols are in range
     auto [values_begin, values_end] = BareBones::StreamVByte::decoder<BareBones::StreamVByte::Codec1234>(
-        data.symbols_ids_sequences.begin() + pos_ + sizeof(lns_id_) - data.shrinked_size_, lns.size());
+        data.symbols_ids_sequences.begin() + lns_id_local_offset + lns_id_length, lns.size());
     for (auto i = lns.begin(); i != lns.end(); ++i) {
       if (*values_begin++ >= data.symbols_tables[i.id()]->size()) {
         throw BareBones::Exception(0x0f0c520ad6285f15,
@@ -1021,6 +1029,8 @@ class LabelSet {
 
     return data.symbols_tables[lns_id]->find_or_emplace((*label).second);
   }
+
+  PROMPP_ALWAYS_INLINE uint32_t get_local_offset(const data_type& data) const noexcept { return pos_ - data.shrinked_size_; }
 };
 
 }  // namespace PromPP::Primitives::SnugComposites::Filaments

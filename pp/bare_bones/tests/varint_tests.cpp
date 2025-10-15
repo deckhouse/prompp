@@ -14,7 +14,7 @@ struct VariantTestCase {
 class VarintFixture : public testing::TestWithParam<VariantTestCase> {
  protected:
   std::array<uint8_t, VarInt::kMaxVarIntLength<uint64_t>> buffer_{};
-  BareBones::BitSequenceReader reader_{(buffer_.data()), BareBones::Bit::to_bits(buffer_.size())};
+  // BareBones::BitSequenceReader reader_{(buffer_.data()), BareBones::Bit::to_bits(buffer_.size())};
 };
 
 TEST_P(VarintFixture, WriteAndRead) {
@@ -22,7 +22,7 @@ TEST_P(VarintFixture, WriteAndRead) {
 
   // Act
   const auto bytes_written = std::visit([&](auto v) { return VarInt::write(buffer_.data(), v); }, GetParam().value);
-  const auto decoded = std::visit([&]<typename T>([[maybe_unused]] T v) { return static_cast<uint64_t>(VarInt::read<T>(reader_)); }, GetParam().value);
+  const auto decoded = std::visit([&]<typename T>(T) { return static_cast<uint64_t>(VarInt::read<T>(buffer_.data())); }, GetParam().value);
 
   // Assert
   ASSERT_EQ(bytes_written, GetParam().expected_length);
