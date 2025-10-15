@@ -454,7 +454,6 @@ template <template <template <class> class> class SymbolsTableType,
           template <template <class> class> class LabelNameSetsTableType,
           template <class> class Vector>
 class LabelSet {
-  // uint32_t lns_id_;
   uint32_t pos_;
 
   static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
@@ -829,19 +828,11 @@ class LabelSet {
   // FIXME inline of this function causes 30ns lost in indexing performance
   template <class T, class Cache = NoCache>
   // TODO requires is_label_set
-  LabelSet(data_type& data, const T& label_set, Cache&& cache = {}) noexcept
-      : /*lns_id_(find_or_emplace_label_names_set(data, label_set, std::forward<Cache>(cache))),*/ pos_(data.symbols_ids_sequences.size() +
-                                                                                                        data.shrinked_size_) {
+  LabelSet(data_type& data, const T& label_set, Cache&& cache = {}) noexcept : pos_(data.symbols_ids_sequences.size() + data.shrinked_size_) {
     const auto size_before = data.symbols_ids_sequences.size();
 
-    const auto lns_id_ = find_or_emplace_label_names_set(data, label_set, std::forward<Cache>(cache));
-    const auto lns_id_length = BareBones::Encoding::VarInt::length(lns_id_);
-
-    const auto lns_id_local_offset = get_local_offset(data);
-
-    data.symbols_ids_sequences.resize(lns_id_local_offset + lns_id_length);
-    BareBones::Encoding::VarInt::write(data.symbols_ids_sequences.data() + lns_id_local_offset, lns_id_);
-    // std::memcpy(data.symbols_ids_sequences.data() + pos_ - data.shrinked_size_, &lns_id_, sizeof(lns_id_));
+    const auto lns_id = find_or_emplace_label_names_set(data, label_set, std::forward<Cache>(cache));
+    write_label_names_set_id(data, lns_id);
 
     // resize, if there are new symbols (in lns table)
     data.symbols_tables.reserve(data.label_name_sets_table.data().symbols_table.size());
@@ -849,7 +840,7 @@ class LabelSet {
       data.symbols_tables.emplace_back(std::make_unique<SymbolsTableType<Vector>>());
     }
 
-    auto lns = data.label_name_sets_table[lns_id_];
+    auto lns = data.label_name_sets_table[lns_id];
     auto lns_i = lns.begin();
     auto i = BareBones::StreamVByte::back_inserter<typename data_type::SymbolIdsCodec>(data.symbols_ids_sequences, lns.size());
     for (auto it = label_set.begin(); it != label_set.end(); ++it) {
@@ -963,45 +954,45 @@ class LabelSet {
   };
 
   PROMPP_ALWAYS_INLINE composite_type composite(const data_type& data) const noexcept {
-    const auto lns_id_local_offset = get_local_offset(data);
-    const auto lns_id_ = BareBones::Encoding::VarInt::read<uint32_t>(data.symbols_ids_sequences.data() + lns_id_local_offset);
-    const auto lns_id_length = BareBones::Encoding::VarInt::length(lns_id_);
+    auto local_offset = get_local_offset(data);
+    const auto lns_id = BareBones::Encoding::VarInt::read<uint32_t>(data.symbols_ids_sequences.data() + local_offset);
+    local_offset += BareBones::Encoding::VarInt::length(lns_id);
 
-    auto lns = data.label_name_sets_table[lns_id_];
+    auto lns = data.label_name_sets_table[lns_id];
 
-    auto [values_begin, values_end] = BareBones::StreamVByte::decoder<typename data_type::SymbolIdsCodec>(
-        data.symbols_ids_sequences.begin() + lns_id_local_offset + lns_id_length, lns.size());
+    auto [values_begin, values_end] =
+        BareBones::StreamVByte::decoder<typename data_type::SymbolIdsCodec>(data.symbols_ids_sequences.begin() + local_offset, lns.size());
 
-    return composite_type(&data, std::move(lns), std::move(values_begin), std::move(values_end), lns_id_);
+    return composite_type(&data, std::move(lns), std::move(values_begin), std::move(values_end), lns_id);
   }
 
   PROMPP_ALWAYS_INLINE void validate(const data_type& data) const {
-    const auto lns_id_local_offset = get_local_offset(data);
-    const auto lns_id_ = BareBones::Encoding::VarInt::read<uint32_t>(data.symbols_ids_sequences.data() + lns_id_local_offset);
-    const auto lns_id_length = BareBones::Encoding::VarInt::length(lns_id_);
+    auto local_offset = get_local_offset(data);
+    const auto lns_id = BareBones::Encoding::VarInt::read<uint32_t>(data.symbols_ids_sequences.data() + local_offset);
+    local_offset += BareBones::Encoding::VarInt::length(lns_id);
 
-    if (lns_id_ >= data.label_name_sets_table.size()) {
+    if (lns_id >= data.label_name_sets_table.size()) {
       throw BareBones::Exception(0x48dd6c9d357d3a7e, "LabelSets data validation error: expected LabelSets length is out of label name sets table vector range");
     }
 
-    const auto& lns = data.label_name_sets_table[lns_id_];
+    const auto& lns = data.label_name_sets_table[lns_id];
 
     // check that streamvbyte keys are in range
     auto keys_size = BareBones::StreamVByte::keys_size(lns.size());
-    if (lns_id_local_offset + lns_id_length + keys_size > data.symbols_ids_sequences.size()) {
+    if (local_offset + keys_size > data.symbols_ids_sequences.size()) {
       throw BareBones::Exception(0x22f5a82dd120e0e7, "LabelSets data validation error: expected LabelSets keys length is out of data symbols vector range");
     }
 
     // check that streamvbyte data is in range
-    const uint32_t data_size = BareBones::StreamVByte::decode_data_size<BareBones::StreamVByte::Codec1234>(
-        lns.size(), data.symbols_ids_sequences.begin() + lns_id_local_offset + lns_id_length);
-    if (lns_id_local_offset + lns_id_length + keys_size + data_size > data.symbols_ids_sequences.size()) {
+    const uint32_t data_size =
+        BareBones::StreamVByte::decode_data_size<BareBones::StreamVByte::Codec1234>(lns.size(), data.symbols_ids_sequences.begin() + local_offset);
+    if (local_offset + keys_size + data_size > data.symbols_ids_sequences.size()) {
       throw BareBones::Exception(0xd02e54dac8e1d328, "LabelSets data validation error: expected LabelSets values length is out of data symbols vector range");
     }
 
     // check that all symbols are in range
-    auto [values_begin, values_end] = BareBones::StreamVByte::decoder<BareBones::StreamVByte::Codec1234>(
-        data.symbols_ids_sequences.begin() + lns_id_local_offset + lns_id_length, lns.size());
+    auto [values_begin, values_end] =
+        BareBones::StreamVByte::decoder<BareBones::StreamVByte::Codec1234>(data.symbols_ids_sequences.begin() + local_offset, lns.size());
     for (auto i = lns.begin(); i != lns.end(); ++i) {
       if (*values_begin++ >= data.symbols_tables[i.id()]->size()) {
         throw BareBones::Exception(0x0f0c520ad6285f15,
@@ -1031,6 +1022,16 @@ class LabelSet {
   }
 
   PROMPP_ALWAYS_INLINE uint32_t get_local_offset(const data_type& data) const noexcept { return pos_ - data.shrinked_size_; }
+
+  PROMPP_ALWAYS_INLINE void write_label_names_set_id(data_type& data, uint32_t lns_id) const noexcept {
+    std::array<uint8_t, BareBones::Encoding::VarInt::kMaxVarIntLength<uint32_t>> buf{};
+
+    const auto lns_id_local_offset = get_local_offset(data);
+    const auto length = BareBones::Encoding::VarInt::write(buf.data(), lns_id);
+
+    data.symbols_ids_sequences.resize(lns_id_local_offset + length);
+    std::memcpy(data.symbols_ids_sequences.data() + lns_id_local_offset, buf.data(), length);
+  }
 };
 
 }  // namespace PromPP::Primitives::SnugComposites::Filaments

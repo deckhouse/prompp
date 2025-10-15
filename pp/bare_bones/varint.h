@@ -77,14 +77,13 @@ class VarInt {
   PROMPP_ALWAYS_INLINE static size_t length(T value) noexcept {
     if constexpr (sizeof(T) == 1) {
       return value < (1ULL << 7) ? 1 : 2;
-    }
-    if constexpr (sizeof(T) == 2) {
+    } else if constexpr (sizeof(T) == 2) {
       return value < (1ULL << 7) ? 1 : value < (1ULL << 14) ? 2 : 3;
-    }
-    if constexpr (sizeof(T) == 4) {
+    } else if constexpr (sizeof(T) == 4) {
       return value < (1ULL << 7) ? 1 : value < (1ULL << 14) ? 2 : value < (1ULL << 21) ? 3 : value < (1ULL << 28) ? 4 : 5;
+    } else {
+      return value == 0 ? 1 : (std::bit_width(value) + 6) / 7;
     }
-    return value == 0 ? 1 : (std::bit_width(value) + 6) / 7;
   }
 
   template <std::signed_integral T>
