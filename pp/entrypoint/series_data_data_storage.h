@@ -117,12 +117,13 @@ void prompp_series_data_data_storage_query(void* args, void* res);
  * }
  *
  * @param res {
- *     Querier uintptr        // pointer to constructed Querier if data loading is needed
+ *     Querier uintptr        // pointer to constructed Querier if data loading is needed.
+ *                            // If constructed (!= 0) it must be destroyed by calling prompp_series_data_data_storage_query_final.
  *     Status  uint8          // status of a query (0 - Success, 1 - Data loading is needed)
  *     serializedData uintptr // pointer to serialized data
  * }
  */
-void prompp_series_data_data_storage_query_new(void* args, void* res);
+void prompp_series_data_data_storage_query_v2(void* args, void* res);
 
 /**
  * @brief return samples at given timestamp for label sets.

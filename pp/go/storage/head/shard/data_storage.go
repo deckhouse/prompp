@@ -78,6 +78,13 @@ func (ds *DataStorage) Query(
 	return serializedChunks, res
 }
 
+func (ds *DataStorage) QueryV2(query cppbridge.HeadDataStorageQuery) cppbridge.DataStorageQueryResultV2 {
+	ds.locker.RLock()
+	result := ds.dataStorage.QueryV2(query)
+	ds.locker.RUnlock()
+	return result
+}
+
 // QueryFinal finishes all the queries after data load.
 func (ds *DataStorage) QueryFinal(queriers []uintptr) {
 	ds.locker.RLock()

@@ -1413,15 +1413,15 @@ void prompp_series_data_data_storage_query(void* args, void* res);
  * @param args {
  *     dataStorage    uintptr          // pointer to constructed data storage
  *     query          DataStorageQuery // query
- *     serializedData uintptr         // pointer to serialized data
  * }
  *
  * @param res {
- *     Querier uintptr // pointer to constructed Querier if data loading is needed
- *     Status  uint8   // status of a query (0 - Success, 1 - Data loading is needed)
+ *     Querier uintptr        // pointer to constructed Querier if data loading is needed
+ *     Status  uint8          // status of a query (0 - Success, 1 - Data loading is needed)
+ *     serializedData uintptr // pointer to serialized data
  * }
  */
-void prompp_series_data_data_storage_query_new(void* args, void* res);
+void prompp_series_data_data_storage_query_v2(void* args, void* res);
 
 /**
  * @brief return samples at given timestamp for label sets.
@@ -1797,24 +1797,12 @@ void prompp_series_data_serialization_serialized_data_iterator(void* args, void*
  * }
  *
  * @param res {
- *     has_data bool // is iterator has more data to decode.
+ *     has_data bool    // is iterator has more data to decode.
+ *      timestamp int64 // sample timestamp
+ *      value float64   // sample value
  * }
  */
 void prompp_series_data_serialization_serialized_data_iterator_next(void* args, void* res);
-
-/**
- * @brief Extract sample form decode iterator.
- *
- * @param args {
- *     iterator uintptr // pointer to decode iterator
- * }
- *
- * @param res {
- *      timestamp int64 // sample timestamp
- *      value float64 // sample value
- * }
- */
-void prompp_series_data_serialization_serialized_data_iterator_sample(void* args, void* res);
 
 /**
  * @brief Destroy decode iterator.

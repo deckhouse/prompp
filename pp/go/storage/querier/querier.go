@@ -147,7 +147,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	if q.mint == q.maxt {
 		return q.selectInstant(ctx, sortSeries, hints, matchers...)
 	}
-	return q.selectRange(ctx, sortSeries, hints, matchers...)
+	return q.selectRangeV2(ctx, sortSeries, hints, matchers...)
 }
 
 // selectInstant returns a instant set of series that matches the given label matchers.
@@ -286,6 +286,62 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	return storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge)
 }
 
+// selectRange returns a range set of series that matches the given label matchers.
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRangeV2(
+	ctx context.Context,
+	_ bool,
+	_ *storage.SelectHints,
+	matchers ...*labels.Matcher,
+) storage.SeriesSet {
+	start := time.Now()
+
+	release, err := q.head.AcquireQuery(ctx)
+	if err != nil {
+		if errors.Is(err, locker.ErrSemaphoreClosed) {
+			return &SeriesSet{}
+		}
+
+		logger.Warnf("[QUERIER]: select range failed on the capture of the read lock query: %s", err)
+		return storage.ErrSeriesSet(err)
+	}
+	defer release()
+
+	defer func() {
+		if q.metrics != nil {
+			q.metrics.SelectDuration.With(
+				prometheus.Labels{"query_type": "range"},
+			).Observe(float64(time.Since(start).Microseconds()))
+		}
+	}()
+
+	lssQueryResults, snapshots, err := queryLss(lssQueryRangeQuerySelector, q.head, matchers)
+	if err != nil {
+		logger.Warnf("[QUERIER]: failed to range: %s", err)
+		return storage.ErrSeriesSet(err)
+	}
+
+	serializedChunksShards := queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, q.mint, q.maxt)
+	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
+	for shardID, serializedChunksShard := range serializedChunksShards {
+		if serializedChunksShard == nil {
+			seriesSets[shardID] = &SeriesSet{}
+			continue
+		}
+
+		seriesSets[shardID] = &SeriesSet{
+			mint:             q.mint,
+			maxt:             q.maxt,
+			deserializer:     cppbridge.NewHeadDataStorageDeserializer(serializedChunksShard),
+			chunksIndex:      serializedChunksShard.MakeIndex(),
+			serializedChunks: serializedChunksShard,
+			lssQueryResult:   lssQueryResults[shardID],
+			labelSetSnapshot: snapshots[shardID],
+		}
+	}
+
+	return storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge)
+}
+
 // convertPrometheusMatchersToPPMatchers converts prometheus matchers to pp matchers.
 func convertPrometheusMatchersToPPMatchers(matchers ...*labels.Matcher) []model.LabelMatcher {
 	promppMatchers := make([]model.LabelMatcher, 0, len(matchers))
@@ -302,6 +358,54 @@ func convertPrometheusMatchersToPPMatchers(matchers ...*labels.Matcher) []model.
 
 // queryDataStorage returns serialized chunks from data storage for each shard.
 func queryDataStorage[
+	TTask Task,
+	TDataStorage DataStorage,
+	TLSS LSS,
+	TShard Shard[TDataStorage, TLSS],
+	THead Head[TTask, TDataStorage, TLSS, TShard],
+](
+	taskName string,
+	head THead,
+	lssQueryResults []*cppbridge.LSSQueryResult,
+	mint, maxt int64,
+) []*cppbridge.HeadDataStorageSerializedChunks {
+	serializedChunksShards := make([]*cppbridge.HeadDataStorageSerializedChunks, head.NumberOfShards())
+	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead](head)
+	tDataStorageQuery := head.CreateTask(
+		taskName,
+		func(s TShard) error {
+			shardID := s.ShardID()
+			lssQueryResult := lssQueryResults[shardID]
+			if lssQueryResult == nil {
+				return nil
+			}
+
+			var result cppbridge.DataStorageQueryResult
+			serializedChunksShards[shardID], result = s.DataStorage().Query(cppbridge.HeadDataStorageQuery{
+				StartTimestampMs: mint,
+				EndTimestampMs:   maxt,
+				LabelSetIDs:      lssQueryResult.IDs(),
+			})
+			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {
+				loadAndQueryWaiter.Add(s, result.Querier)
+			}
+
+			return nil
+		},
+	)
+	head.Enqueue(tDataStorageQuery)
+	_ = tDataStorageQuery.Wait()
+
+	if err := loadAndQueryWaiter.Wait(); err != nil {
+		SendUnrecoverableError(err)
+		return nil
+	}
+
+	return serializedChunksShards
+}
+
+// queryDataStorageV2 returns serialized chunks from data storage for each shard.
+func queryDataStorageV2[
 	TTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,

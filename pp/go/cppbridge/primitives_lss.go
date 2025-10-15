@@ -209,6 +209,15 @@ func newLSSQueryResult(
 	return lqr
 }
 
+func (r *LSSQueryResult) IndexOf(seriesID uint32) int {
+	for i, match := range r.matches {
+		if match == seriesID {
+			return i
+		}
+	}
+	return -1
+}
+
 // GetByIndex return ls id and length for ls id by index.
 func (r *LSSQueryResult) GetByIndex(i int) (uint32, uint16) {
 	return r.matches[i], r.labelSetLengths[i]

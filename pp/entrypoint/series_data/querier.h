@@ -88,7 +88,7 @@ class RangeQuerierWithArgumentsWrapper {
   }
 };
 
-class RangeQuerierWithArgumentsWrapperNew {
+class RangeQuerierWithArgumentsWrapperV2 {
   using DataStorage = ::series_data::DataStorage;
   using LabelSetID = PromPP::Primitives::LabelSetID;
   template <class T>
@@ -98,7 +98,7 @@ class RangeQuerierWithArgumentsWrapperNew {
   using BytesStream = PromPP::Primitives::Go::BytesStream;
 
  public:
-  RangeQuerierWithArgumentsWrapperNew(DataStorage& storage, const Query& query, ::series_data::serialization::SerializedData* serialized_data)
+  RangeQuerierWithArgumentsWrapperV2(DataStorage& storage, const Query& query, ::series_data::serialization::SerializedData* serialized_data)
       : querier_(storage), query_(&query), serialized_data_(serialized_data) {}
 
   void query() noexcept {
@@ -122,13 +122,13 @@ class RangeQuerierWithArgumentsWrapperNew {
   PROMPP_ALWAYS_INLINE void serialize_chunks() const noexcept { std::construct_at(serialized_data_, querier_.get_storage(), querier_.chunks()); }
 };
 
-enum class QuerierType : uint8_t { kInstantQuerier = 0, kRangeQuerier, kRangeQuerierNew };
+enum class QuerierType : uint8_t { kInstantQuerier = 0, kRangeQuerier, kRangeQuerierV2 };
 
-using QuerierVariant = std::variant<InstantQuerierWithArgumentsWrapperEntrypoint, RangeQuerierWithArgumentsWrapper, RangeQuerierWithArgumentsWrapperNew>;
+using QuerierVariant = std::variant<InstantQuerierWithArgumentsWrapperEntrypoint, RangeQuerierWithArgumentsWrapper, RangeQuerierWithArgumentsWrapperV2>;
 using QuerierVariantPtr = std::unique_ptr<QuerierVariant>;
 
 }  // namespace entrypoint::series_data
 
 static_assert(entrypoint::series_data::QuerierInterface<entrypoint::series_data::InstantQuerierWithArgumentsWrapperEntrypoint>);
 static_assert(entrypoint::series_data::QuerierInterface<entrypoint::series_data::RangeQuerierWithArgumentsWrapper>);
-static_assert(entrypoint::series_data::QuerierInterface<entrypoint::series_data::RangeQuerierWithArgumentsWrapperNew>);
+static_assert(entrypoint::series_data::QuerierInterface<entrypoint::series_data::RangeQuerierWithArgumentsWrapperV2>);
