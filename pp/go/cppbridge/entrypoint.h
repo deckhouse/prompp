@@ -1421,7 +1421,7 @@ void prompp_series_data_data_storage_query(void* args, void* res);
  *     serializedData uintptr // pointer to serialized data
  * }
  */
-void prompp_series_data_data_storage_query_new(void* args, void* res);
+void prompp_series_data_data_storage_query_v2(void* args, void* res);
 
 /**
  * @brief return samples at given timestamp for label sets.

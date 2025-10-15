@@ -324,6 +324,21 @@ func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) (*HeadDataStorageSe
 	return serializedChunks, result
 }
 
+func (ds *HeadDataStorage) QueryV2(query HeadDataStorageQuery) DataStorageQueryResultV2 {
+	querier, status, serializedData := seriesDataDataStorageQueryV2(ds.dataStorage, query)
+	sd := &DataStorageSerializedData{serializedData: serializedData}
+	runtime.SetFinalizer(sd, func(sd *DataStorageSerializedData) {
+		seriesDataSerializedDataDtor(sd.serializedData)
+	})
+	return DataStorageQueryResultV2{
+		DataStorageQueryResult: DataStorageQueryResult{
+			Querier: querier,
+			Status:  status,
+		},
+		SerializedData: sd,
+	}
+}
+
 func (ds *HeadDataStorage) InstantQuery(targetTimestamp, defaultTimestamp int64, labelSetIDs []uint32) ([]Sample, DataStorageQueryResult) {
 	samples := make([]Sample, len(labelSetIDs))
 	if defaultTimestamp != 0 {
@@ -337,6 +352,38 @@ func (ds *HeadDataStorage) InstantQuery(targetTimestamp, defaultTimestamp int64,
 func (ds *HeadDataStorage) QueryFinal(queriers []uintptr) {
 	seriesDataDataStorageQueryFinal(queriers)
 	runtime.KeepAlive(queriers)
+}
+
+type DataStorageSerializedData struct {
+	serializedData uintptr
+}
+
+func (sd *DataStorageSerializedData) Next() uint32 {
+	return seriesDataSerializedDataNext(sd.serializedData)
+}
+
+func (sd *DataStorageSerializedData) Iterator() *DataStorageSerializedDataIterator {
+	it := &DataStorageSerializedDataIterator{
+		iterator: seriesDataSerializedDataIterator(sd.serializedData),
+	}
+	runtime.SetFinalizer(it, func(it *DataStorageSerializedDataIterator) {
+		seriesDataSerializedDataIteratorDtor(it.iterator)
+	})
+	return it
+}
+
+type DataStorageSerializedDataIterator struct {
+	iterator uintptr
+	result   SerializedDataIteratorNextResult
+}
+
+func (it *DataStorageSerializedDataIterator) Next() bool {
+	seriesDataSerializedDataIteratorNext(it.iterator, &it.result)
+	return it.result.HasValue
+}
+
+func (it *DataStorageSerializedDataIterator) At() (int64, float64) {
+	return it.result.Timestamp, it.result.Value
 }
 
 // UnloadedDataLoader is Go wrapper around series_data::Loader.

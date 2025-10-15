@@ -2143,6 +2143,11 @@ type DataStorageQueryResult struct {
 	Status  uint8
 }
 
+type DataStorageQueryResultV2 struct {
+	DataStorageQueryResult
+	SerializedData *DataStorageSerializedData
+}
+
 func seriesDataDataStorageQuery(dataStorage uintptr, query HeadDataStorageQuery, serializedChunks *[]byte) DataStorageQueryResult {
 	args := struct {
 		dataStorage      uintptr
@@ -2163,6 +2168,31 @@ func seriesDataDataStorageQuery(dataStorage uintptr, query HeadDataStorageQuery,
 	headDataStorageQueryCount.Inc()
 
 	return res
+}
+
+func seriesDataDataStorageQueryV2(dataStorage uintptr, query HeadDataStorageQuery) (querier uintptr, status uint8, serializedData uintptr) {
+	args := struct {
+		dataStorage uintptr
+		query       HeadDataStorageQuery
+	}{dataStorage, query}
+
+	var res struct {
+		Querier        uintptr
+		Status         uint8
+		SerializedData uintptr
+	}
+
+	testGC()
+	start := time.Now().UnixNano()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_data_storage_query_v2,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+	headDataStorageQuerySum.Add(float64(time.Now().UnixNano() - start))
+	headDataStorageQueryCount.Inc()
+
+	return res.Querier, res.Status, res.SerializedData
 }
 
 func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32, timestamp int64, samples []Sample) DataStorageQueryResult {
@@ -2198,6 +2228,85 @@ func seriesDataDataStorageQueryFinal(queriers []uintptr) {
 	)
 	headDataStorageQueryFinalSum.Add(float64(time.Now().UnixNano() - start))
 	headDataStorageQueryFinalCount.Inc()
+}
+
+func seriesDataSerializedDataDtor(serializedData uintptr) {
+	args := struct {
+		serializedData uintptr
+	}{serializedData}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_dtor,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func seriesDataSerializedDataNext(serializedData uintptr) uint32 {
+	args := struct {
+		serializedData uintptr
+	}{serializedData}
+	res := struct {
+		seriesID uint32
+	}{}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_serialization_serialized_data_next,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.seriesID
+}
+
+func seriesDataSerializedDataIterator(serializedData uintptr) uintptr {
+	args := struct {
+		serializedData uintptr
+	}{serializedData}
+	res := struct {
+		iterator uintptr
+	}{}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_serialization_serialized_data_iterator,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.iterator
+}
+
+type SerializedDataIteratorNextResult struct {
+	Timestamp int64
+	Value     float64
+	HasValue  bool
+}
+
+func seriesDataSerializedDataIteratorNext(iterator uintptr, res *SerializedDataIteratorNextResult) {
+	args := struct {
+		iterator uintptr
+	}{iterator}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_serialization_serialized_data_iterator_next,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(res)),
+	)
+}
+
+func seriesDataSerializedDataIteratorDtor(iterator uintptr) {
+	args := struct {
+		iterator uintptr
+	}{iterator}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_iterator_dtor,
+		uintptr(unsafe.Pointer(&args)),
+	)
 }
 
 func seriesDataDataStorageTimeInterval(dataStorage uintptr) TimeInterval {
