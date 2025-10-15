@@ -23,8 +23,9 @@ func (s *SegmentWriteNotifierSuite) TestHappyPath() {
 	swn := writer.NewSegmentWriteNotifier(numberOfShards, func(segmentID uint32) { actualSegmentID = segmentID })
 
 	for id := range numberOfShards {
-		swn.NotifySegmentIsWritten(id)
+		swn.NotifySegmentWrite(id)
 	}
+	swn.NotifySegmentIsWritten()
 
 	s.Equal(uint32(0), actualSegmentID)
 }
@@ -35,7 +36,8 @@ func (s *SegmentWriteNotifierSuite) TestNotifyOnlyOneShard() {
 	numberOfShards := uint16(2)
 	swn := writer.NewSegmentWriteNotifier(numberOfShards, func(segmentID uint32) { actualSegmentID = segmentID })
 
-	swn.NotifySegmentIsWritten(0)
+	swn.NotifySegmentWrite(0)
+	swn.NotifySegmentIsWritten()
 
 	s.Equal(uint32(math.MaxUint32), actualSegmentID)
 }
@@ -47,7 +49,8 @@ func (s *SegmentWriteNotifierSuite) TestSetAndNotifyOnlyOneShard() {
 	swn := writer.NewSegmentWriteNotifier(numberOfShards, func(segmentID uint32) { actualSegmentID = segmentID })
 	swn.Set(0, 42)
 
-	swn.NotifySegmentIsWritten(0)
+	swn.NotifySegmentWrite(0)
+	swn.NotifySegmentIsWritten()
 
 	s.Equal(uint32(math.MaxUint32), actualSegmentID)
 }
@@ -59,7 +62,8 @@ func (s *SegmentWriteNotifierSuite) TestSetAndNotifyOnlyOneShard_2() {
 	swn := writer.NewSegmentWriteNotifier(numberOfShards, func(segmentID uint32) { actualSegmentID = segmentID })
 	swn.Set(1, 42)
 
-	swn.NotifySegmentIsWritten(0)
+	swn.NotifySegmentWrite(0)
+	swn.NotifySegmentIsWritten()
 
 	s.Equal(uint32(0), actualSegmentID)
 }

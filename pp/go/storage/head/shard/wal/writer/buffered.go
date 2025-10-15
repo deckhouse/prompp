@@ -16,7 +16,8 @@ type FileInfo = os.FileInfo
 
 // SegmentIsWrittenNotifier notify when new segment write.
 type SegmentIsWrittenNotifier interface {
-	NotifySegmentIsWritten(shardID uint16)
+	NotifySegmentIsWritten()
+	NotifySegmentWrite(shardID uint16)
 }
 
 // FileWriter writer implementation [os.File].
@@ -110,7 +111,7 @@ func (w *Buffered[TSegment]) Sync() error {
 		return fmt.Errorf("writer sync: %w", err)
 	}
 
-	w.notifier.NotifySegmentIsWritten(w.shardID)
+	w.notifier.NotifySegmentIsWritten()
 	w.writeCompleted = true
 	return nil
 }
@@ -140,6 +141,7 @@ func (w *Buffered[TSegment]) writeToBufferAndFlush(segment TSegment) (encoded bo
 	}
 
 	w.writeCompleted = false
+	w.notifier.NotifySegmentWrite(w.shardID)
 
 	if err := w.flushBuffer(); err != nil {
 		return true, err

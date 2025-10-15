@@ -94,7 +94,10 @@ func (cmd *cmdWALPPToBlock) Do(
 			return err
 		}
 		level.Debug(logger).Log("msg", "load head", "id", headRecord.ID(), "dir", headRecord.Dir())
-		h, _ := loader.Load(headRecord, 0)
+		h, corrupted := loader.Load(headRecord, 0)
+		if corrupted {
+			level.Warn(logger).Log("msg", "corrupted head", "id", headRecord.ID(), "dir", headRecord.Dir())
+		}
 
 		level.Debug(logger).Log("msg", "write block", "id", headRecord.ID(), "dir", headRecord.Dir())
 
