@@ -89,6 +89,7 @@ func NewWal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]](
 	registerer prometheus.Registerer,
 ) *Wal[TSegment, TWriter] {
 	factory := util.NewUnconflictRegisterer(registerer)
+	//revive:disable-next-line:add-constant // it's base 10
 	ls := prometheus.Labels{"shard_id": strconv.FormatUint(uint64(shardID), 10)}
 	w := &Wal[TSegment, TWriter]{
 		encoder:        encoder,
