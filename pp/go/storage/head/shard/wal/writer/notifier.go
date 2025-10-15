@@ -24,14 +24,19 @@ func NewSegmentWriteNotifier(
 }
 
 // NotifySegmentIsWritten notify that the segment has been written for shard.
-func (swn *SegmentWriteNotifier) NotifySegmentIsWritten(shardID uint16) {
+func (swn *SegmentWriteNotifier) NotifySegmentIsWritten() {
 	swn.locker.Lock()
 	defer swn.locker.Unlock()
-	swn.shards[shardID]++
 	minNumberOfSegments := slices.Min(swn.shards)
 	if minNumberOfSegments > 0 {
 		swn.setLastAppendedSegmentID(minNumberOfSegments - 1)
 	}
+}
+
+func (swn *SegmentWriteNotifier) NotifySegmentWrite(shardID uint16) {
+	swn.locker.Lock()
+	defer swn.locker.Unlock()
+	swn.shards[shardID]++
 }
 
 // Set for shard number of segments.

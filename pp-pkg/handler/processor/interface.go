@@ -10,20 +10,22 @@ import (
 )
 
 //go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg processor_test --out
-//go:generate moq processor_moq_test.go . Adapter StatesStorage RemoteWrite MetricStream Refill
 
+//go:generate moq metric_stream_moq_test.go . MetricStream
 type MetricStream interface {
 	Metadata() model.Metadata
 	Read(ctx context.Context) (*model.Segment, error)
 	Write(ctx context.Context, status model.StreamSegmentProcessingStatus) error
 }
 
+//go:generate moq refill_moq_test.go . Refill
 type Refill interface {
 	Metadata() model.Metadata
 	Read(ctx context.Context) (*model.Segment, error)
 	Write(ctx context.Context, status model.RefillProcessingStatus) error
 }
 
+//go:generate moq remote_write_moq_test.go . RemoteWrite
 type RemoteWrite interface {
 	Metadata() model.Metadata
 	Read(ctx context.Context) (*model.RemoteWriteBuffer, error)
@@ -35,6 +37,8 @@ type DecoderBuilder interface {
 }
 
 // Adapter for implementing the [Queryable] interface and append data.
+//
+//go:generate moq adapter_moq_test.go . Adapter
 type Adapter interface {
 	// AppendHashdex append incoming [cppbridge.HashdexContent] to [Head].
 	AppendHashdex(
@@ -52,14 +56,6 @@ type Adapter interface {
 		commitToWal bool,
 	) (cppbridge.RelabelerStats, error)
 
-	// AppendScraperHashdex append ScraperHashdex data to [Head].
-	AppendScraperHashdex(
-		ctx context.Context,
-		hashdex cppbridge.ShardedData,
-		state *cppbridge.StateV2,
-		commitToWal bool,
-	) (cppbridge.RelabelerStats, error)
-
 	// AppendSnappyProtobuf append compressed via snappy Protobuf data to [Head].
 	AppendSnappyProtobuf(
 		ctx context.Context,
@@ -73,6 +69,8 @@ type Adapter interface {
 }
 
 // StatesStorage stores the [cppbridge.State]'s.
+//
+//go:generate moq states_storage_moq_test.go . StatesStorage
 type StatesStorage interface {
 	// GetStateByID returns [cppbridge.State] by state ID if exist.
 	GetStateByID(stateID string) (*cppbridge.StateV2, bool)

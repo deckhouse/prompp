@@ -7,9 +7,6 @@ run:
   # default concurrency is a available CPU number
   concurrency: 4
 
-  # # timeout for analysis, e.g. 30s, 5m, default is 1m
-  # deadline: 10m
-
   # exit code when at least one issue was found, default is 1
   issues-exit-code: 1
 
@@ -17,10 +14,6 @@ run:
   tests: true
 # output configuration options
 output:
-  # # colored-line-number|line-number|json|tab|checkstyle|code-climate, default is "colored-line-number"
-  # format: colored-line-number
-
-
   # print lines of code with issue, default is true
   print-issued-lines: true
 
@@ -30,8 +23,6 @@ output:
 # all available settings of specific linters
 linters-settings:
   govet:
-    # report about shadowed variables
-    check-shadowing: true
     # settings per analyzer
     settings:
       printf: # analyzer name, run `go tool vet help` to see all analyzers
@@ -40,10 +31,10 @@ linters-settings:
           - (github.com/golangci/golangci-lint/pkg/logutils.Log).Warnf
           - (github.com/golangci/golangci-lint/pkg/logutils.Log).Errorf
           - (github.com/golangci/golangci-lint/pkg/logutils.Log).Fatalf
-      # shadow:
-      #     # Whether to be strict about shadowing; can be noisy.
-      #     # Default: false
-      #     strict: true
+      shadow:
+          # Whether to be strict about shadowing; can be noisy.
+          # Default: false
+          strict: true
   gofmt:
     # simplify code: gofmt with `-s` option, true by default
     simplify: true

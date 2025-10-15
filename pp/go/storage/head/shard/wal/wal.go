@@ -4,9 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"sync"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/util"
 )
 
 //go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg wal_test --out
@@ -71,6 +74,10 @@ type Wal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]] struct {
 	corrupted      bool
 	limitExhausted bool
 	closed         bool
+	// stat
+	samplesPerSegment prometheus.Counter
+	sizePerSegment    prometheus.Counter
+	segments          prometheus.Gauge
 }
 
 // NewWal init new [Wal].
@@ -78,13 +85,36 @@ func NewWal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]](
 	encoder Encoder[TSegment],
 	segmentWriter TWriter,
 	maxSegmentSize uint32,
+	shardID uint16,
+	registerer prometheus.Registerer,
 ) *Wal[TSegment, TWriter] {
-	return &Wal[TSegment, TWriter]{
+	factory := util.NewUnconflictRegisterer(registerer)
+	ls := prometheus.Labels{"shard_id": strconv.FormatUint(uint64(shardID), 10)}
+	w := &Wal[TSegment, TWriter]{
 		encoder:        encoder,
 		segmentWriter:  segmentWriter,
 		locker:         sync.Mutex{},
 		maxSegmentSize: maxSegmentSize,
+		samplesPerSegment: factory.NewCounter(prometheus.CounterOpts{
+			Name:        "prompp_shard_wal_samples_per_segment_sum",
+			Help:        "Number of samples per segment.",
+			ConstLabels: ls,
+		}),
+		sizePerSegment: factory.NewCounter(prometheus.CounterOpts{
+			Name:        "prompp_shard_wal_size_per_segment_sum",
+			Help:        "Size of segment.",
+			ConstLabels: ls,
+		}),
+		segments: factory.NewGauge(prometheus.GaugeOpts{
+			Name:        "prompp_shard_wal_segments",
+			Help:        "Number of segments.",
+			ConstLabels: ls,
+		}),
 	}
+
+	w.segments.Set(0)
+
+	return w
 }
 
 // NewCorruptedWal init new corrupted [Wal].
@@ -134,6 +164,9 @@ func (w *Wal[TSegment, TWriter]) Commit() error {
 	if err != nil {
 		return fmt.Errorf("failed to finalize segment: %w", err)
 	}
+	w.samplesPerSegment.Add(float64(segment.Samples()))
+	w.sizePerSegment.Add(float64(segment.Size()))
+	w.segments.Inc()
 	w.limitExhausted = false
 
 	if err = w.segmentWriter.Write(segment); err != nil {
