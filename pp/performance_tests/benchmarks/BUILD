@@ -9,3 +9,13 @@ cc_binary(
         "@google_benchmark//:benchmark_main",
     ],
 )
+
+cc_binary(
+    name = "generate_lss",
+    srcs = ["generate_queryable_encoding_bimap_benchmark.cpp"],
+    malloc = "@jemalloc",
+    deps = [
+        "//:performance_tests_headers",
+        "@google_benchmark//:benchmark_main",
+    ],
+)
