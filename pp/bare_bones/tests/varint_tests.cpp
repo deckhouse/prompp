@@ -6,40 +6,69 @@ namespace {
 
 using BareBones::Encoding::VarInt;
 
+using any_integral_t = std::variant<int8_t, uint8_t, int16_t, uint16_t, int32_t, uint32_t, int64_t, uint64_t>;
+
 struct VariantTestCase {
-  std::variant<int8_t, uint8_t, int16_t, uint16_t, int32_t, uint32_t, int64_t, uint64_t> value;
+  any_integral_t value;
   size_t expected_length;
 };
 
 class VarintFixture : public testing::TestWithParam<VariantTestCase> {
  protected:
   std::array<uint8_t, VarInt::kMaxVarIntLength<uint64_t>> buffer_{};
-  // BareBones::BitSequenceReader reader_{(buffer_.data()), BareBones::Bit::to_bits(buffer_.size())};
+
+ public:
+  auto varint_write(any_integral_t value) noexcept {
+    return std::visit([&](auto v) { return VarInt::write(buffer_.data(), v); }, value);
+  }
+
+  auto varint_read(any_integral_t value) noexcept {
+    return std::visit([&]<typename T>(T) { return static_cast<uint64_t>(VarInt::read<T>(buffer_.data())); }, value);
+  }
+
+  auto varint_length(any_integral_t value) noexcept {
+    return std::visit([&](auto v) { return VarInt::length(v); }, value);
+  }
+
+  static auto get_value(any_integral_t value) noexcept {
+    return std::visit([&](auto v) { return static_cast<uint64_t>(v); }, value);
+  }
 };
 
 TEST_P(VarintFixture, WriteAndRead) {
   // Arrange
 
   // Act
-  const auto bytes_written = std::visit([&](auto v) { return VarInt::write(buffer_.data(), v); }, GetParam().value);
-  const auto decoded = std::visit([&]<typename T>(T) { return static_cast<uint64_t>(VarInt::read<T>(buffer_.data())); }, GetParam().value);
+  varint_write(GetParam().value);
+  const auto decoded = varint_read(GetParam().value);
+
+  // Assert
+  EXPECT_EQ(decoded, get_value(GetParam().value));
+}
+
+TEST_P(VarintFixture, WriteAndCheckLength) {
+  // Arrange
+
+  // Act
+  const auto bytes_written = varint_write(GetParam().value);
 
   // Assert
   ASSERT_EQ(bytes_written, GetParam().expected_length);
-  ASSERT_EQ(bytes_written, std::visit([&](auto v) { return VarInt::length(v); }, GetParam().value));
-  EXPECT_EQ(decoded, std::visit([&](auto v) { return static_cast<uint64_t>(v); }, GetParam().value));
+  ASSERT_EQ(bytes_written, varint_length(GetParam().value));
 }
 
-INSTANTIATE_TEST_SUITE_P(TestUnsigned,
+INSTANTIATE_TEST_SUITE_P(TestUint8,
                          VarintFixture,
                          testing::Values(VariantTestCase{.value = uint8_t{0}, .expected_length = 1},
                                          VariantTestCase{.value = uint8_t{69}, .expected_length = 1},
                                          VariantTestCase{.value = uint8_t{(1ULL << 7) - 1}, .expected_length = 1},
                                          VariantTestCase{.value = uint8_t{1ULL << 7}, .expected_length = 2},
                                          VariantTestCase{.value = uint8_t{175}, .expected_length = 2},
-                                         VariantTestCase{.value = uint8_t{std::numeric_limits<uint8_t>::max()}, .expected_length = 2},
+                                         VariantTestCase{.value = uint8_t{std::numeric_limits<uint8_t>::max()}, .expected_length = 2}));
 
-                                         VariantTestCase{.value = uint16_t{0}, .expected_length = 1},
+INSTANTIATE_TEST_SUITE_P(TestUint16,
+                         VarintFixture,
+                         testing::Values(VariantTestCase{.value = uint16_t{0}, .expected_length = 1},
                                          VariantTestCase{.value = uint16_t{10}, .expected_length = 1},
                                          VariantTestCase{.value = uint16_t{(1ULL << 7) - 1}, .expected_length = 1},
                                          VariantTestCase{.value = uint16_t{1ULL << 7}, .expected_length = 2},
@@ -49,9 +78,11 @@ INSTANTIATE_TEST_SUITE_P(TestUnsigned,
                                          VariantTestCase{.value = uint16_t{(1ULL << 14) - 1}, .expected_length = 2},
                                          VariantTestCase{.value = uint16_t{1ULL << 14}, .expected_length = 3},
                                          VariantTestCase{.value = uint16_t{32323}, .expected_length = 3},
-                                         VariantTestCase{.value = uint16_t{std::numeric_limits<uint16_t>::max()}, .expected_length = 3},
+                                         VariantTestCase{.value = uint16_t{std::numeric_limits<uint16_t>::max()}, .expected_length = 3}));
 
-                                         VariantTestCase{.value = uint32_t{0}, .expected_length = 1},
+INSTANTIATE_TEST_SUITE_P(TestUint32,
+                         VarintFixture,
+                         testing::Values(VariantTestCase{.value = uint32_t{0}, .expected_length = 1},
                                          VariantTestCase{.value = uint32_t{10}, .expected_length = 1},
                                          VariantTestCase{.value = uint32_t{(1ULL << 7) - 1}, .expected_length = 1},
                                          VariantTestCase{.value = uint32_t{1ULL << 7}, .expected_length = 2},
@@ -72,9 +103,11 @@ INSTANTIATE_TEST_SUITE_P(TestUnsigned,
                                          VariantTestCase{.value = uint32_t{1ULL << 28}, .expected_length = 5},
                                          VariantTestCase{.value = uint32_t{268435456}, .expected_length = 5},
                                          VariantTestCase{.value = uint32_t{3790521346}, .expected_length = 5},
-                                         VariantTestCase{.value = uint32_t{std::numeric_limits<uint32_t>::max()}, .expected_length = 5},
+                                         VariantTestCase{.value = uint32_t{std::numeric_limits<uint32_t>::max()}, .expected_length = 5}));
 
-                                         VariantTestCase{.value = uint64_t{0ULL}, .expected_length = 1},
+INSTANTIATE_TEST_SUITE_P(TestUint64,
+                         VarintFixture,
+                         testing::Values(VariantTestCase{.value = uint64_t{0ULL}, .expected_length = 1},
                                          VariantTestCase{.value = uint64_t{10ULL}, .expected_length = 1},
                                          VariantTestCase{.value = uint64_t{(1ULL << 7) - 1}, .expected_length = 1},
                                          VariantTestCase{.value = uint64_t{1ULL << 7}, .expected_length = 2},
@@ -109,7 +142,7 @@ INSTANTIATE_TEST_SUITE_P(TestUnsigned,
                                          VariantTestCase{.value = uint64_t{1ULL << 63}, .expected_length = 10},
                                          VariantTestCase{.value = uint64_t{std::numeric_limits<uint64_t>::max()}, .expected_length = 10}));
 
-INSTANTIATE_TEST_SUITE_P(TestSigned,
+INSTANTIATE_TEST_SUITE_P(TestInt8,
                          VarintFixture,
                          testing::Values(VariantTestCase{.value = int8_t{0}, .expected_length = 1},
                                          VariantTestCase{.value = int8_t{1}, .expected_length = 1},
@@ -119,9 +152,11 @@ INSTANTIATE_TEST_SUITE_P(TestSigned,
                                          VariantTestCase{.value = int8_t{64}, .expected_length = 2},
                                          VariantTestCase{.value = int8_t{-65}, .expected_length = 2},
                                          VariantTestCase{.value = std::numeric_limits<int8_t>::max(), .expected_length = 2},
-                                         VariantTestCase{.value = std::numeric_limits<int8_t>::min(), .expected_length = 2},
+                                         VariantTestCase{.value = std::numeric_limits<int8_t>::min(), .expected_length = 2}));
 
-                                         VariantTestCase{.value = int16_t{0}, .expected_length = 1},
+INSTANTIATE_TEST_SUITE_P(TestInt16,
+                         VarintFixture,
+                         testing::Values(VariantTestCase{.value = int16_t{0}, .expected_length = 1},
                                          VariantTestCase{.value = int16_t{1}, .expected_length = 1},
                                          VariantTestCase{.value = int16_t{-1}, .expected_length = 1},
                                          VariantTestCase{.value = int16_t{63}, .expected_length = 1},
@@ -133,9 +168,11 @@ INSTANTIATE_TEST_SUITE_P(TestSigned,
                                          VariantTestCase{.value = int16_t{8192}, .expected_length = 3},
                                          VariantTestCase{.value = int16_t{-8193}, .expected_length = 3},
                                          VariantTestCase{.value = std::numeric_limits<int16_t>::max(), .expected_length = 3},
-                                         VariantTestCase{.value = std::numeric_limits<int16_t>::min(), .expected_length = 3},
+                                         VariantTestCase{.value = std::numeric_limits<int16_t>::min(), .expected_length = 3}));
 
-                                         VariantTestCase{.value = int32_t{0}, .expected_length = 1},
+INSTANTIATE_TEST_SUITE_P(TestInt32,
+                         VarintFixture,
+                         testing::Values(VariantTestCase{.value = int32_t{0}, .expected_length = 1},
                                          VariantTestCase{.value = int32_t{-1}, .expected_length = 1},
                                          VariantTestCase{.value = int32_t{1}, .expected_length = 1},
                                          VariantTestCase{.value = int32_t{63}, .expected_length = 1},
@@ -149,9 +186,11 @@ INSTANTIATE_TEST_SUITE_P(TestSigned,
                                          VariantTestCase{.value = int32_t{1LL << 28}, .expected_length = 5},
                                          VariantTestCase{.value = int32_t{-(1LL << 28)}, .expected_length = 5},
                                          VariantTestCase{.value = std::numeric_limits<int32_t>::max(), .expected_length = 5},
-                                         VariantTestCase{.value = std::numeric_limits<int32_t>::min(), .expected_length = 5},
+                                         VariantTestCase{.value = std::numeric_limits<int32_t>::min(), .expected_length = 5}));
 
-                                         VariantTestCase{.value = int64_t{0}, .expected_length = 1},
+INSTANTIATE_TEST_SUITE_P(TestInt64,
+                         VarintFixture,
+                         testing::Values(VariantTestCase{.value = int64_t{0}, .expected_length = 1},
                                          VariantTestCase{.value = int64_t{-1}, .expected_length = 1},
                                          VariantTestCase{.value = int64_t{1}, .expected_length = 1},
                                          VariantTestCase{.value = int64_t{63}, .expected_length = 1},
@@ -177,15 +216,4 @@ INSTANTIATE_TEST_SUITE_P(TestSigned,
                                          VariantTestCase{.value = int64_t{(1LL << 62) - 1}, .expected_length = 9},
                                          VariantTestCase{.value = int64_t{std::numeric_limits<int64_t>::max()}, .expected_length = 10},
                                          VariantTestCase{.value = std::numeric_limits<int64_t>::min(), .expected_length = 10}));
-
-static_assert(VarInt::kMaxVarIntLength<uint8_t> == VarInt::kMaxVarIntLength<int8_t>);
-static_assert(VarInt::kMaxVarIntLength<uint16_t> == VarInt::kMaxVarIntLength<int16_t>);
-static_assert(VarInt::kMaxVarIntLength<uint32_t> == VarInt::kMaxVarIntLength<int32_t>);
-static_assert(VarInt::kMaxVarIntLength<uint64_t> == VarInt::kMaxVarIntLength<int64_t>);
-
-static_assert(VarInt::kMaxVarIntLength<uint8_t> == 2);
-static_assert(VarInt::kMaxVarIntLength<uint16_t> == 3);
-static_assert(VarInt::kMaxVarIntLength<uint32_t> == 5);
-static_assert(VarInt::kMaxVarIntLength<uint64_t> == 10);
-
 }  // namespace

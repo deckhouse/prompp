@@ -123,4 +123,14 @@ class VarInt {
   }
 };
 
+static_assert(VarInt::kMaxVarIntLength<uint8_t> == VarInt::kMaxVarIntLength<int8_t>);
+static_assert(VarInt::kMaxVarIntLength<uint16_t> == VarInt::kMaxVarIntLength<int16_t>);
+static_assert(VarInt::kMaxVarIntLength<uint32_t> == VarInt::kMaxVarIntLength<int32_t>);
+static_assert(VarInt::kMaxVarIntLength<uint64_t> == VarInt::kMaxVarIntLength<int64_t>);
+
+static_assert(VarInt::kMaxVarIntLength<uint8_t> == 2);
+static_assert(VarInt::kMaxVarIntLength<uint16_t> == 3);
+static_assert(VarInt::kMaxVarIntLength<uint32_t> == 5);
+static_assert(VarInt::kMaxVarIntLength<uint64_t> == 10);
+
 }  // namespace BareBones::Encoding
