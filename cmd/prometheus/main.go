@@ -285,7 +285,6 @@ func main() {
 
 	lssctx, cancelLSS := context.WithCancel(context.Background())
 	labels.Storage.Run(lssctx)
-	defer cancelLSS()
 
 	var (
 		oldFlagRetentionDuration model.Duration
@@ -1571,6 +1570,8 @@ func main() {
 	if err := queryEngine.Close(); err != nil {
 		level.Warn(logger).Log("msg", "Closing query engine failed", "err", err)
 	}
+
+	cancelLSS()
 	// PP_CHANGES.md: rebuild on cpp end
 
 	level.Info(logger).Log("msg", "See you next time!")
