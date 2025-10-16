@@ -6,7 +6,7 @@ Creates shards(**LSS**, **DataStorage**, **Wal**), run goroutines of the head, s
 
 ## Active
 
-Head is used to add and read current data, stored in the **Manager**:
+Head is used to append and read current data, stored in the **Manager**:
 
 - **Appender** - add current data:
   - *Append*:
