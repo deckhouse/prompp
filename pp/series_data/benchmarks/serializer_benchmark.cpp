@@ -7,6 +7,7 @@
 #include <random>
 
 #include "bare_bones/preprocess.h"
+#include "primitives/go_slice.h"
 #include "series_data/encoder.h"
 #include "series_data/querier/query.h"
 #include "series_data/serialization/serialized_data.h"
@@ -16,6 +17,9 @@ namespace {
 
 using BareBones::StreamVByte::CompactSequence;
 using BareBones::StreamVByte::Sequence;
+using series_data::serialization::DataSerializer;
+using series_data::serialization::SerializedData;
+using series_data::serialization::SerializedDataView;
 
 struct PROMPP_ATTRIBUTE_PACKED SeriesSample {
   uint32_t series_id;
@@ -41,9 +45,27 @@ const BareBones::Vector<SeriesSample>& get_samples_for_benchmark() {
   return samples_from_file;
 }
 
+series_data::querier::QueriedChunkList generate_query(uint32_t size) {
+  series_data::querier::QueriedChunkList chunk_list;
+
+  std::vector<uint32_t> v(size);
+  std::iota(v.begin(), v.end(), 0);
+
+  std::mt19937 g(42);
+  std::ranges::shuffle(v, g);
+  v.resize(v.size() / 10);
+
+  chunk_list.reserve(v.size());
+  for (uint32_t ls_id : v) {
+    chunk_list.emplace_back(ls_id);
+  }
+
+  return chunk_list;
+}
+
 void BenchmarkWalSerializer(benchmark::State& state) {
   const auto& samples = get_samples_for_benchmark();
-  const double percent = state.range(0) / 100.0;
+  const double percent = static_cast<double>(state.range(0)) / 100.0;
   const auto [min, max] = std::ranges::minmax_element(samples, [](auto a, auto b) { return a.timestamp < b.timestamp; });
   const auto min_ts = min->timestamp;
   const auto max_ts = max->timestamp;
@@ -53,45 +75,35 @@ void BenchmarkWalSerializer(benchmark::State& state) {
   series_data::Encoder encoder{storage};
 
   for (const auto& sample : samples) {
-    if (sample.timestamp < min_ts + delta_ts * percent) {
+    if (sample.timestamp <= min_ts + static_cast<int64_t>(static_cast<double>(delta_ts) * percent)) {
       encoder.encode(sample.series_id, sample.timestamp, sample.value);
     }
   }
 
-  series_data::querier::QueriedChunkList chunk_list;
-  {
-    std::vector<uint32_t> v(storage.open_chunks.size());
-    std::iota(v.begin(), v.end(), 0);
-
-    std::mt19937 g(42);
-    std::ranges::shuffle(v, g);
-    v.resize(v.size() / 10);
-
-    chunk_list.reserve(v.size());
-    for (uint32_t ls_id : v) {
-      chunk_list.emplace_back(ls_id);
-    }
-  }
+  const series_data::querier::QueriedChunkList chunk_list = generate_query(storage.open_chunks.size());
 
   for ([[maybe_unused]] auto _ : state) {
     series_data::serialization::Serializer serializer_{storage};
-    BareBones::ShrinkedToFitOStringStream stream;
+    PromPP::Primitives::Go::Slice<char> slice;
+    PromPP::Primitives::Go::BytesStream stream{&slice};
 
     serializer_.serialize(chunk_list, stream);
   }
 
   {
     series_data::serialization::Serializer serializer_{storage};
-    BareBones::ShrinkedToFitOStringStream stream;
+    PromPP::Primitives::Go::Slice<char> slice;
+    PromPP::Primitives::Go::BytesStream stream{&slice};
 
     serializer_.serialize(chunk_list, stream);
-    state.counters["Stream Size"] = benchmark::Counter(stream.view().size(), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
+    state.counters["Stream Size"] =
+        benchmark::Counter(static_cast<double>(slice.allocated_memory()), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
   }
 }
 
 void BenchmarkWalConstantSerializer(benchmark::State& state) {
   const auto& samples = get_samples_for_benchmark();
-  const double percent = state.range(0) / 100.0;
+  const double percent = static_cast<double>(state.range(0)) / 100.0;
   const auto [min, max] = std::ranges::minmax_element(samples, [](auto a, auto b) { return a.timestamp < b.timestamp; });
   const auto min_ts = min->timestamp;
   const auto max_ts = max->timestamp;
@@ -101,45 +113,35 @@ void BenchmarkWalConstantSerializer(benchmark::State& state) {
   series_data::Encoder encoder{storage};
 
   for (const auto& sample : samples) {
-    if (sample.timestamp <= min_ts + delta_ts * percent) {
+    if (sample.timestamp <= min_ts + static_cast<int64_t>(static_cast<double>(delta_ts) * percent)) {
       encoder.encode(sample.series_id, sample.timestamp, sample.series_id);
     }
   }
 
-  series_data::querier::QueriedChunkList chunk_list;
-  {
-    std::vector<uint32_t> v(storage.open_chunks.size());
-    std::iota(v.begin(), v.end(), 0);
-
-    std::mt19937 g(42);
-    std::ranges::shuffle(v, g);
-    v.resize(v.size() / 10);
-
-    chunk_list.reserve(v.size());
-    for (uint32_t ls_id : v) {
-      chunk_list.emplace_back(ls_id);
-    }
-  }
+  const series_data::querier::QueriedChunkList chunk_list = generate_query(storage.open_chunks.size());
 
   for ([[maybe_unused]] auto _ : state) {
     series_data::serialization::Serializer serializer_{storage};
-    BareBones::ShrinkedToFitOStringStream stream;
+    PromPP::Primitives::Go::Slice<char> slice;
+    PromPP::Primitives::Go::BytesStream stream{&slice};
 
     serializer_.serialize(chunk_list, stream);
   }
 
   {
     series_data::serialization::Serializer serializer_{storage};
-    BareBones::ShrinkedToFitOStringStream stream;
+    PromPP::Primitives::Go::Slice<char> slice;
+    PromPP::Primitives::Go::BytesStream stream{&slice};
 
     serializer_.serialize(chunk_list, stream);
-    state.counters["Stream Size"] = benchmark::Counter(stream.view().size(), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
+    state.counters["Stream Size"] =
+        benchmark::Counter(static_cast<double>(slice.allocated_memory()), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
   }
 }
 
 void BenchmarkWalSerializedData(benchmark::State& state) {
   const auto& samples = get_samples_for_benchmark();
-  const double percent = state.range(0) / 100.0;
+  const double percent = static_cast<double>(state.range(0)) / 100.0;
   const auto [min, max] = std::ranges::minmax_element(samples, [](auto a, auto b) { return a.timestamp < b.timestamp; });
   const auto min_ts = min->timestamp;
   const auto max_ts = max->timestamp;
@@ -149,40 +151,27 @@ void BenchmarkWalSerializedData(benchmark::State& state) {
   series_data::Encoder encoder{storage};
 
   for (const auto& sample : samples) {
-    if (sample.timestamp < min_ts + delta_ts * percent) {
+    if (sample.timestamp <= min_ts + static_cast<int64_t>(static_cast<double>(delta_ts) * percent)) {
       encoder.encode(sample.series_id, sample.timestamp, sample.value);
     }
   }
 
-  series_data::querier::QueriedChunkList chunk_list;
-  {
-    std::vector<uint32_t> v(storage.open_chunks.size());
-    std::iota(v.begin(), v.end(), 0);
-
-    std::mt19937 g(42);
-    std::ranges::shuffle(v, g);
-    v.resize(v.size() / 10);
-
-    chunk_list.reserve(v.size());
-    for (uint32_t ls_id : v) {
-      chunk_list.emplace_back(ls_id);
-    }
-  }
+  const series_data::querier::QueriedChunkList chunk_list = generate_query(storage.open_chunks.size());
 
   for ([[maybe_unused]] auto _ : state) {
-    series_data::serialization::SerializedData serialized(storage, chunk_list);
+    SerializedData serialized = DataSerializer{storage}.serialize(chunk_list);
     benchmark::DoNotOptimize(serialized);
   }
 
   {
-    series_data::serialization::SerializedData serialized(storage, chunk_list);
+    const SerializedData serialized = DataSerializer{storage}.serialize(chunk_list);
     state.counters["Total Size"] = benchmark::Counter(serialized.allocated_memory(), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
   }
 }
 
 void BenchmarkWalConstantSerializedData(benchmark::State& state) {
   const auto& samples = get_samples_for_benchmark();
-  const double percent = state.range(0) / 100.0;
+  const double percent = static_cast<double>(state.range(0)) / 100.0;
   const auto [min, max] = std::ranges::minmax_element(samples, [](auto a, auto b) { return a.timestamp < b.timestamp; });
   const auto min_ts = min->timestamp;
   const auto max_ts = max->timestamp;
@@ -192,33 +181,20 @@ void BenchmarkWalConstantSerializedData(benchmark::State& state) {
   series_data::Encoder encoder{storage};
 
   for (const auto& sample : samples) {
-    if (sample.timestamp <= min_ts + delta_ts * percent) {
+    if (sample.timestamp <= min_ts + static_cast<int64_t>(static_cast<double>(delta_ts) * percent)) {
       encoder.encode(sample.series_id, sample.timestamp, sample.series_id);
     }
   }
 
-  series_data::querier::QueriedChunkList chunk_list;
-  {
-    std::vector<uint32_t> v(storage.open_chunks.size());
-    std::iota(v.begin(), v.end(), 0);
-
-    std::mt19937 g(42);
-    std::ranges::shuffle(v, g);
-    v.resize(v.size() / 10);
-
-    chunk_list.reserve(v.size());
-    for (uint32_t ls_id : v) {
-      chunk_list.emplace_back(ls_id);
-    }
-  }
+  const series_data::querier::QueriedChunkList chunk_list = generate_query(storage.open_chunks.size());
 
   for ([[maybe_unused]] auto _ : state) {
-    series_data::serialization::SerializedData serialized(storage, chunk_list);
+    SerializedData serialized = DataSerializer{storage}.serialize(chunk_list);
     benchmark::DoNotOptimize(serialized);
   }
 
   {
-    series_data::serialization::SerializedData serialized(storage, chunk_list);
+    const SerializedData serialized = DataSerializer{storage}.serialize(chunk_list);
     state.counters["Total Size"] = benchmark::Counter(serialized.allocated_memory(), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
   }
 }

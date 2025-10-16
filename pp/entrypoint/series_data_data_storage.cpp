@@ -155,14 +155,14 @@ extern "C" void prompp_series_data_data_storage_query_v2(void* args, void* res) 
 
   struct Result {
     QuerierVariantPtr querier{};
-    QueryStatus status;
-    entrypoint::head::SerializedDataPtr serialized_data{};
+    QueryStatus status{};
+    entrypoint::head::SerializedDataPtr* serialized_data{};
   };
 
   const auto in = static_cast<Arguments*>(args);
-  Result* out = new (res) Result();
+  const auto out = static_cast<Result*>(res);
 
-  RangeQuerierWithArgumentsWrapperV2 querier(*in->data_storage, in->query, out->serialized_data.get());
+  RangeQuerierWithArgumentsWrapperV2 querier(*in->data_storage, in->query, out->serialized_data);
   querier.query();
 
   if (querier.need_loading()) {
@@ -277,6 +277,24 @@ extern "C" void prompp_series_data_serialized_chunk_recoder_ctor(void* args, voi
   new (res) Result{
       .chunk_recoder = std::make_unique<ChunkRecoderVariant>(std::in_place_type<SerializedChunkRecoder>,
                                                              series_data::chunk::SerializedChunkIterator{in->buffer.span()}, in->time_interval),
+  };
+}
+
+extern "C" void prompp_series_data_serialized_chunk_recoder_new_ctor(void* args, void* res) {
+  struct Arguments {
+    entrypoint::head::SerializedDataPtr* serialized_data;
+    PromPP::Primitives::TimeInterval time_interval;
+  };
+  struct Result {
+    ChunkRecoderVariantPtr chunk_recoder;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  new (res) Result{
+      .chunk_recoder = std::make_unique<ChunkRecoderVariant>(
+          std::in_place_type<SerializedChunkRecoder>,
+          series_data::chunk::SerializedChunkIterator{in->serialized_data->get()->get_buffer_view(), in->serialized_data->get()->get_chunks_view()},
+          in->time_interval),
   };
 }
 
