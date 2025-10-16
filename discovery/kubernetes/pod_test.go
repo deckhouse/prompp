@@ -208,6 +208,7 @@ func expectedPodTargetGroups(ns string) map[string]*targetgroup.Group {
 					"__meta_kubernetes_pod_container_port_protocol": "TCP",
 					"__meta_kubernetes_pod_container_init":          "false",
 					"__meta_kubernetes_pod_container_id":            "docker://a1b2c3d4e5f6",
+					"__sample_limit__":                              "", // PP_CHANGES.md: sample limit with annotation
 				},
 			},
 			Labels: model.LabelSet{
@@ -232,6 +233,9 @@ func expectedPodTargetGroupsWithNodeMeta(ns, nodeName string, nodeLabels map[str
 		for k, v := range nodeLabels {
 			tg.Labels[model.LabelName("__meta_kubernetes_node_label_"+k)] = lv(v)
 			tg.Labels[model.LabelName("__meta_kubernetes_node_labelpresent_"+k)] = lv("true")
+		}
+		for _, target := range tg.Targets {
+			target["__sample_limit__"] = lv("") // PP_CHANGES.md: override sample limit with annotation
 		}
 	}
 
@@ -260,6 +264,7 @@ func TestPodDiscoveryBeforeRun(t *testing.T) {
 						"__meta_kubernetes_pod_container_port_protocol": "TCP",
 						"__meta_kubernetes_pod_container_init":          "false",
 						"__meta_kubernetes_pod_container_id":            "docker://a1b2c3d4e5f6",
+						"__sample_limit__":                              "", // PP_CHANGES.md: sample limit with ann
 					},
 					{
 						"__address__":                                   "1.2.3.4:9001",
@@ -270,6 +275,7 @@ func TestPodDiscoveryBeforeRun(t *testing.T) {
 						"__meta_kubernetes_pod_container_port_protocol": "UDP",
 						"__meta_kubernetes_pod_container_init":          "false",
 						"__meta_kubernetes_pod_container_id":            "docker://a1b2c3d4e5f6",
+						"__sample_limit__":                              "", // PP_CHANGES.md: sample limit with ann
 					},
 					{
 						"__address__":                           "1.2.3.4",
@@ -277,6 +283,7 @@ func TestPodDiscoveryBeforeRun(t *testing.T) {
 						"__meta_kubernetes_pod_container_image": "testcontainer1:latest",
 						"__meta_kubernetes_pod_container_init":  "false",
 						"__meta_kubernetes_pod_container_id":    "containerd://6f5e4d3c2b1a",
+						"__sample_limit__":                      "", // PP_CHANGES.md: sample limit with annotation
 					},
 				},
 				Labels: model.LabelSet{
@@ -313,6 +320,7 @@ func TestPodDiscoveryInitContainer(t *testing.T) {
 		"__meta_kubernetes_pod_container_image": "initcontainer:latest",
 		"__meta_kubernetes_pod_container_init":  "true",
 		"__meta_kubernetes_pod_container_id":    "containerd://6f5e4d3c2b1a",
+		"__sample_limit__":                      "", // PP_CHANGES.md: sample limit with annotation
 	})
 	expected[key].Labels["__meta_kubernetes_pod_phase"] = "Pending"
 	expected[key].Labels["__meta_kubernetes_pod_ready"] = "false"

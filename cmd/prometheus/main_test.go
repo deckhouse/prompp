@@ -499,7 +499,7 @@ func TestDocumentation(t *testing.T) {
 
 	generatedContent := strings.ReplaceAll(stdout.String(), filepath.Base(promPath), strings.TrimSuffix(filepath.Base(promPath), ".test"))
 
-	expectedContent, err := os.ReadFile(filepath.Join("..", "..", "docs", "command-line", "prometheus.md"))
+	expectedContent, err := os.ReadFile(filepath.Join("..", "..", "docs", "command-line", "prompp.md")) // PP_CHANGES.md: rebuild on cpp
 	require.NoError(t, err)
 
 	require.Equal(t, string(expectedContent), generatedContent, "Generated content does not match documentation. Hint: run `make cli-documentation`.")

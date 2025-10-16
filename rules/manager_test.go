@@ -518,7 +518,7 @@ func TestForStateRestore(t *testing.T) {
 						sortAlerts(exp)
 						sortAlerts(got)
 						for i, e := range exp {
-							require.Equal(t, e.Labels, got[i].Labels)
+							require.True(t, labels.Equal(e.Labels(), got[i].Labels())) // PP_CHANGES.md: rebuild on cpp
 
 							// Difference in time should be within 1e6 ns, i.e. 1ms
 							// (due to conversion between ns & ms, float64 & int64).

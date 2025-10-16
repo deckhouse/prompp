@@ -760,7 +760,8 @@ func TestSendAlertsDontAffectActiveAlerts(t *testing.T) {
 	// Set an active alert.
 	lbls := labels.FromStrings("a1", "1")
 	h := lbls.Hash()
-	al := &Alert{State: StateFiring, labels: lbls, ActiveAt: time.Now()}
+	// PP_CHANGES.md: rebuild on cpp
+	al := &Alert{State: StateFiring, labels: lbls, ActiveAt: time.Now(), annotations: labels.EmptyLabels()}
 	rule.active[h] = al
 
 	expr, err := parser.ParseExpr("foo")
@@ -794,7 +795,7 @@ func TestSendAlertsDontAffectActiveAlerts(t *testing.T) {
 
 	// The relabel rule changes a1=1 to a1=bug.
 	// But the labels with the AlertingRule should not be changed.
-	testutil.RequireEqual(t, labels.FromStrings("a1", "1"), rule.active[h].Labels)
+	testutil.RequireEqual(t, labels.FromStrings("a1", "1"), rule.active[h].Labels()) // PP_CHANGES.md: rebuild on cpp
 }
 
 func TestKeepFiringFor(t *testing.T) {
