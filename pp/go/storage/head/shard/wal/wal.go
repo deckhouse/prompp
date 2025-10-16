@@ -111,13 +111,13 @@ func NewWal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]](
 		samplesPerSegment: factory.NewHistogram(prometheus.HistogramOpts{
 			Name:        "prompp_shard_wal_samples_per_segment_sum",
 			Help:        "Number of samples per segment.",
-			Buckets:     prometheus.ExponentialBucketsRange(10000, 120000, 30),
+			Buckets:     prometheus.ExponentialBucketsRange(1000, 150000, 30),
 			ConstLabels: ls,
 		}),
 		sizePerSegment: factory.NewHistogram(prometheus.HistogramOpts{
 			Name:        "prompp_shard_wal_size_per_segment_sum",
 			Help:        "Size of segment.",
-			Buckets:     prometheus.ExponentialBucketsRange(50000, 400000, 30),
+			Buckets:     prometheus.ExponentialBucketsRange(1000, 150000, 30),
 			ConstLabels: ls,
 		}),
 		segments: factory.NewGauge(prometheus.GaugeOpts{
