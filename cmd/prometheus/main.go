@@ -283,6 +283,10 @@ func main() {
 		runtime.SetMutexProfileFraction(20)
 	}
 
+	lssctx, cancelLSS := context.WithCancel(context.Background())
+	labels.Storage.Run(lssctx)
+	defer cancelLSS()
+
 	var (
 		oldFlagRetentionDuration model.Duration
 		newFlagRetentionDuration model.Duration

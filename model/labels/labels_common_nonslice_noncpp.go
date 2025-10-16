@@ -2,7 +2,11 @@
 
 package labels
 
-import "github.com/prometheus/prometheus/pp/go/cppbridge"
+import (
+	"context"
+
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
+)
 
 // NewLabelsWithLSS init LabelsCpp with LabelSetSnapshot and ls id.
 func NewLabelsWithLSS(lss *cppbridge.LabelSetSnapshot, id uint32, length uint16) Labels {
@@ -44,7 +48,12 @@ var Storage = &noopStorage{}
 // noopStorage for label set. Implementation cpplabels.
 type noopStorage struct{}
 
-// SetAdapter store Adapter. Implementation cpplabels.
-func (*noopStorage) SetAdapter(_ any) {
+// SetAdapter store [Adapter]. Implementation cpplabels.
+func (*noopStorage) SetAdapter(any) {
+	// no-op
+}
+
+// Run starts goroutine of the metric collector and the cleaner.
+func (*noopStorage) Run(context.Context) {
 	// no-op
 }

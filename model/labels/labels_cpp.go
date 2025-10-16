@@ -711,14 +711,17 @@ func newStorage() *storage {
 	}
 	s.adapter.Store(newNoopReceiver())
 
-	go s.worker()
-
 	return s
 }
 
 // SetAdapter store [Adapter].
 func (s *storage) SetAdapter(adapter Adapter) {
 	s.adapter.Store(&adapter)
+}
+
+// Run starts goroutine of the metric collector and the cleaner.
+func (s *storage) Run(ctx context.Context) {
+	go s.observeAndClean(ctx)
 }
 
 // FindOrEmplaceLabelSet find ls from bulder in current lsses or store to working LSS and return Labels.
@@ -800,8 +803,8 @@ func (s *storage) findByHash(
 	), true
 }
 
-// worker write metrics for lss and rotate if necessary.
-func (s *storage) worker() {
+// observeAndClean write metrics for lss and rotate if necessary.
+func (s *storage) observeAndClean(ctx context.Context) {
 	metricsTimer := time.NewTimer(metricsDuration)
 	rotateTimer := time.NewTimer(rotateDuration)
 
@@ -820,6 +823,8 @@ func (s *storage) worker() {
 
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case <-metricsTimer.C:
 			s.writeLock.Lock()
 			am, lssSize, lssBitsetCount := s.workingLSS.Stats()

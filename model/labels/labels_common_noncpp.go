@@ -3,6 +3,7 @@
 package labels
 
 import (
+	"context"
 	"strings"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -50,6 +51,11 @@ var Storage = &noopStorage{}
 type noopStorage struct{}
 
 // SetAdapter store [Adapter]. Implementation cpplabels.
-func (*noopStorage) SetAdapter(_ any) {
+func (*noopStorage) SetAdapter(any) {
+	// no-op
+}
+
+// Run starts goroutine of the metric collector and the cleaner.
+func (*noopStorage) Run(context.Context) {
 	// no-op
 }
