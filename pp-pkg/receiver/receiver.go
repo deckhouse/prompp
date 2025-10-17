@@ -44,6 +44,17 @@ import (
 
 const defaultShutdownTimeout = 40 * time.Second
 
+const (
+	// status receiver is initial.
+	statusInitial uint32 = iota
+
+	// status receiver is running.
+	statusRunning
+
+	// status receiver is shutdowned.
+	statusShutdowned
+)
+
 var DefaultNumberOfShards uint16 = 2
 
 type HeadConfig struct {
@@ -88,6 +99,7 @@ type Receiver struct {
 	clientID          string
 	cgogc             *cppbridge.CGOGC
 	shutdowner        *util.GracefulShutdowner
+	status            atomic.Uint32
 }
 
 type RotationInfo struct {
@@ -250,6 +262,7 @@ func NewReceiver(
 		clientID:            clientID,
 		cgogc:               cppbridge.NewCGOGC(registerer),
 		shutdowner:          util.NewGracefulShutdowner(),
+		status:              atomic.Uint32{},
 	}
 
 	level.Info(logger).Log("msg", "created")
@@ -531,7 +544,12 @@ func (rr *Receiver) RelabelerIDIsExist(relabelerID string) bool {
 }
 
 // Run main loop.
-func (rr *Receiver) Run(_ context.Context) (err error) {
+func (rr *Receiver) Run(context.Context) (err error) {
+	// fast exit if receiver is already running or shutdowned.
+	if !rr.status.CompareAndSwap(statusInitial, statusRunning) {
+		return nil
+	}
+
 	defer rr.shutdowner.Done(err)
 	rr.storage.Run()
 	rr.rotator.Run()
@@ -541,14 +559,25 @@ func (rr *Receiver) Run(_ context.Context) (err error) {
 
 // Shutdown safe shutdown Receiver.
 func (rr *Receiver) Shutdown(ctx context.Context) error {
-	cgogcErr := rr.cgogc.Shutdown(ctx)
-	metricWriteErr := rr.metricsWriteTrigger.Close()
-	rotatorErr := rr.rotator.Close()
-	storageErr := rr.storage.Close()
-	distributorErr := rr.distributor.Shutdown(ctx)
-	appendErr := rr.appender.Close(ctx)
-	err := rr.shutdowner.Shutdown(ctx)
-	return errors.Join(cgogcErr, metricWriteErr, rotatorErr, storageErr, distributorErr, appendErr, err)
+	// exit if receiver is not running.
+	if !rr.status.CompareAndSwap(statusRunning, statusShutdowned) {
+		return errors.Join(
+			rr.cgogc.Shutdown(ctx),
+			rr.metricsWriteTrigger.Close(),
+			rr.distributor.Shutdown(ctx),
+			rr.appender.Close(ctx),
+		)
+	}
+
+	return errors.Join(
+		rr.cgogc.Shutdown(ctx),
+		rr.metricsWriteTrigger.Close(),
+		rr.rotator.Close(),
+		rr.storage.Close(),
+		rr.distributor.Shutdown(ctx),
+		rr.appender.Close(ctx),
+		rr.shutdowner.Shutdown(ctx),
+	)
 }
 
 // makeDestinationGroups create DestinationGroups from configs.

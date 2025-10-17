@@ -1445,9 +1445,16 @@ func main() {
 	}
 	{ // PP_CHANGES.md: rebuild on cpp start
 		// run receiver.
+		cancel := make(chan struct{})
 		g.Add(
 			func() error {
-				<-dbOpen
+				select {
+				case <-dbOpen:
+				// In case a shutdown is initiated before the dbOpen is released
+				case <-cancel:
+					return nil
+				}
+
 				return receiver.Run(ctxReceiver)
 			},
 			func(err error) {
@@ -1455,9 +1462,13 @@ func main() {
 				defer receiverCancelCtxCancel()
 
 				level.Info(logger).Log("msg", "Stopping Receiver...")
+				close(cancel)
+
 				if err := receiver.Shutdown(receiverCancelCtx); err != nil {
 					level.Error(logger).Log("msg", "Receiver shutdown failed", "err", err)
 				}
+
+				level.Info(logger).Log("msg", "Receiver stopped...")
 				cancelReceiver()
 			},
 		)

@@ -873,11 +873,12 @@ func open(dir string, l log.Logger, r prometheus.Registerer, opts *Options, rngs
 		}
 
 		close(db.donec) // DB is never run if it was an error, so close this channel here.
-		errs := tsdb_errors.NewMulti(returnedErr)
+		// errs := tsdb_errors.NewMulti(returnedErr) // PP_CHANGES.md: rebuild on cpp the errors are more informative
 		if err := db.Close(); err != nil {
-			errs.Add(fmt.Errorf("close DB after failed startup: %w", err))
+			// errs.Add(fmt.Errorf("close DB after failed startup: %w", err)) // PP_CHANGES.md: rebuild on cpp
+			returnedErr = errors.Join(returnedErr, fmt.Errorf("close DB after failed startup: %w", err))
 		}
-		returnedErr = errs.Err()
+		// returnedErr = errs.Err() // PP_CHANGES.md: rebuild on cpp the errors are more informative
 	}()
 
 	if db.blocksToDelete == nil {
@@ -1605,13 +1606,16 @@ func (db *DB) reloadBlocks() (err error) {
 				block.Close()
 			}
 		}
-		errs := tsdb_errors.NewMulti()
+		// errs := tsdb_errors.NewMulti() // PP_CHANGES.md: rebuild on cpp the errors are more informative
+		errs := make([]error, 0, len(corrupted))
 		for ulid, err := range corrupted {
 			if err != nil {
-				errs.Add(fmt.Errorf("corrupted block %s: %w", ulid.String(), err))
+				// errs.Add(fmt.Errorf("corrupted block %s: %w", ulid.String(), err)) // PP_CHANGES.md: rebuild on cpp
+				errs = append(errs, fmt.Errorf("corrupted block %s: %w", ulid.String(), err))
 			}
 		}
-		return errs.Err()
+		// return errs.Err() // PP_CHANGES.md: rebuild on cpp the errors are more informative
+		return errors.Join(errs...)
 	}
 
 	var (
