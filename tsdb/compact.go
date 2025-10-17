@@ -238,6 +238,14 @@ func (c *LeveledCompactor) Plan(dir string) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		// PP_CHANGES.md: rebuild on cpp start
+		// skip corrupted blocks
+		if meta.Compaction.containsHint(CompactionHintCorrupted) {
+			continue
+		}
+		// PP_CHANGES.md: rebuild on cpp end
+
 		dms = append(dms, dirMeta{dir, meta})
 	}
 	return c.plan(dms)
@@ -479,7 +487,22 @@ func (c *LeveledCompactor) CompactWithBlockPopulator(dest string, dirs []string,
 			var err error
 			b, err = OpenBlock(c.logger, d, c.chunkPool)
 			if err != nil {
-				return nil, err
+				// PP_CHANGES.md: rebuild on cpp start
+				level.Warn(c.logger).Log(
+					"msg", "block corrupted",
+					"dir", d,
+					"err", err,
+				)
+
+				// mark as corrupted for skipping
+				meta.Compaction.Hints = append(meta.Compaction.Hints, CompactionHintCorrupted)
+				if _, err := writeMetaFile(c.logger, d, meta); err != nil {
+					return nil, fmt.Errorf("write meta file: %w", err)
+				}
+
+				continue
+				// return nil, err
+				// PP_CHANGES.md: rebuild on cpp end
 			}
 			defer b.Close()
 		}
@@ -490,7 +513,7 @@ func (c *LeveledCompactor) CompactWithBlockPopulator(dest string, dirs []string,
 		uids = append(uids, meta.ULID.String())
 	}
 
-	if len(metas) == 0 {
+	if len(metas) < 2 {
 		return nil, nil // PP_CHANGES.md: fast exit
 	}
 
