@@ -489,7 +489,7 @@ func (c *LeveledCompactor) CompactWithBlockPopulator(dest string, dirs []string,
 			if err != nil {
 				// PP_CHANGES.md: rebuild on cpp start
 				level.Warn(c.logger).Log(
-					"msg", "block corrupted",
+					"msg", "block is corrupted, skipping",
 					"dir", d,
 					"err", err,
 				)
