@@ -140,3 +140,8 @@ func (iw *IndexWriter) WriteRestTo(w io.Writer) (n int64, err error) {
 func NewIndexWriter(lss *cppbridge.LabelSetStorage) IndexWriter {
 	return IndexWriter{cppIndexWriter: cppbridge.NewIndexWriter(lss)}
 }
+
+// isEmpty returns true if [IndexWriter] contains no samples, an empty block.
+func (iw *IndexWriter) isEmpty() bool {
+	return !iw.isPrefixWritten
+}
