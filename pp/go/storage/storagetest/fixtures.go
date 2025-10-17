@@ -2,6 +2,8 @@ package storagetest
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -18,6 +20,25 @@ import (
 type TimeSeries struct {
 	Labels  labels.Labels
 	Samples []cppbridge.Sample
+}
+
+// String serialize time series to string.
+func (s *TimeSeries) String() string {
+	builder := strings.Builder{}
+
+	_, _ = builder.WriteString("timeSeries:{labels:")
+	_, _ = builder.WriteString(s.Labels.String())
+	_, _ = builder.WriteString(",samples:[")
+
+	for i := range s.Samples {
+		if i > 0 {
+			_, _ = builder.WriteString(",")
+		}
+		_, _ = builder.WriteString(fmt.Sprintf("{ts:%d, value:%f}", s.Samples[i].Timestamp, s.Samples[i].Value))
+	}
+	_, _ = builder.WriteString("]}")
+
+	return builder.String()
 }
 
 // AppendSamples add samples to time series.
@@ -121,4 +142,13 @@ func TimeSeriesFromSeriesSet(seriesSet promstorage.SeriesSet) []TimeSeries {
 	}
 
 	return timeSeries
+}
+
+// TimeSeriesToString serialize time series to string.
+func TimeSeriesToString(timeSeries []TimeSeries) string {
+	res := make([]string, 0, len(timeSeries))
+	for i := range timeSeries {
+		res = append(res, timeSeries[i].String())
+	}
+	return strings.Join(res, ",")
 }

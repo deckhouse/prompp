@@ -125,7 +125,10 @@ func (s *QuerierSuite) TestRangeQuery() {
 	seriesSet := q.Select(s.context, false, nil, matcher)
 
 	// Assert
-	s.Equal(timeSeries, storagetest.TimeSeriesFromSeriesSet(seriesSet))
+	s.Equal(
+		storagetest.TimeSeriesToString(timeSeries),
+		storagetest.TimeSeriesToString(storagetest.TimeSeriesFromSeriesSet(seriesSet)),
+	)
 }
 
 func (s *QuerierSuite) TestRangeQueryWithoutMatching() {
@@ -153,7 +156,10 @@ func (s *QuerierSuite) TestRangeQueryWithoutMatching() {
 	seriesSet := q.Select(s.context, false, nil, matcher)
 
 	// Assert
-	s.Equal([]storagetest.TimeSeries(nil), storagetest.TimeSeriesFromSeriesSet(seriesSet))
+	s.Equal(
+		storagetest.TimeSeriesToString([]storagetest.TimeSeries(nil)),
+		storagetest.TimeSeriesToString(storagetest.TimeSeriesFromSeriesSet(seriesSet)),
+	)
 }
 
 func (s *QuerierSuite) TestRangeQueryWithDataStorageLoading() {
@@ -210,7 +216,10 @@ func (s *QuerierSuite) TestRangeQueryWithDataStorageLoading() {
 	// Assert
 	timeSeries[0].AppendSamples(timeSeriesAfterUnload[0].Samples...)
 	timeSeries[1].AppendSamples(timeSeriesAfterUnload[1].Samples...)
-	s.Equal(timeSeries, storagetest.TimeSeriesFromSeriesSet(seriesSet))
+	s.Equal(
+		storagetest.TimeSeriesToString(timeSeries),
+		storagetest.TimeSeriesToString(storagetest.TimeSeriesFromSeriesSet(seriesSet)),
+	)
 }
 
 func (s *QuerierSuite) TestInstantQuery() {
@@ -244,7 +253,10 @@ func (s *QuerierSuite) TestInstantQuery() {
 	seriesSet := q.Select(s.context, false, nil, matcher)
 
 	// Assert
-	s.Equal(timeSeries, storagetest.TimeSeriesFromSeriesSet(seriesSet))
+	s.Equal(
+		storagetest.TimeSeriesToString(timeSeries),
+		storagetest.TimeSeriesToString(storagetest.TimeSeriesFromSeriesSet(seriesSet)),
+	)
 }
 
 func (s *QuerierSuite) TestInstantQueryWithDataStorageLoading() {
@@ -299,20 +311,23 @@ func (s *QuerierSuite) TestInstantQueryWithDataStorageLoading() {
 	seriesSet := q.Select(s.context, false, nil, matcher)
 
 	// Assert
-	s.Equal([]storagetest.TimeSeries{
-		{
-			Labels: timeSeries[0].Labels,
-			Samples: []cppbridge.Sample{
-				{Timestamp: 0, Value: 0},
+	s.Equal(
+		storagetest.TimeSeriesToString([]storagetest.TimeSeries{
+			{
+				Labels: timeSeries[0].Labels,
+				Samples: []cppbridge.Sample{
+					{Timestamp: 0, Value: 0},
+				},
 			},
-		},
-		{
-			Labels: timeSeries[1].Labels,
-			Samples: []cppbridge.Sample{
-				{Timestamp: 0, Value: 10},
+			{
+				Labels: timeSeries[1].Labels,
+				Samples: []cppbridge.Sample{
+					{Timestamp: 0, Value: 10},
+				},
 			},
-		},
-	}, storagetest.TimeSeriesFromSeriesSet(seriesSet))
+		}),
+		storagetest.TimeSeriesToString(storagetest.TimeSeriesFromSeriesSet(seriesSet)),
+	)
 }
 
 func (s *QuerierSuite) TestLabelNames() {
