@@ -454,6 +454,7 @@ template <template <template <class> class> class SymbolsTableType,
           template <template <class> class> class LabelNameSetsTableType,
           template <class> class Vector>
 class LabelSet {
+  uint32_t lns_id_;
   uint32_t pos_;
 
   static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
@@ -828,7 +829,568 @@ class LabelSet {
   // FIXME inline of this function causes 30ns lost in indexing performance
   template <class T, class Cache = NoCache>
   // TODO requires is_label_set
-  LabelSet(data_type& data, const T& label_set, Cache&& cache = {}) noexcept : pos_(data.symbols_ids_sequences.size() + data.shrinked_size_) {
+  LabelSet(data_type& data, const T& label_set, Cache&& cache = {}) noexcept
+      : lns_id_(find_or_emplace_label_names_set(data, label_set, std::forward<Cache>(cache))), pos_(data.symbols_ids_sequences.size() + data.shrinked_size_) {
+    // resize, if there are new symbols (in lns table)
+    data.symbols_tables.reserve(data.label_name_sets_table.data().symbols_table.size());
+    for (auto i = data.symbols_tables.size(); i < data.label_name_sets_table.data().symbols_table.size(); ++i) {
+      data.symbols_tables.emplace_back(std::make_unique<SymbolsTableType<Vector>>());
+    }
+
+    auto lns = data.label_name_sets_table[lns_id_];
+    auto lns_i = lns.begin();
+    auto size_before = data.symbols_ids_sequences.size();
+    auto i = BareBones::StreamVByte::back_inserter<typename data_type::SymbolIdsCodec>(data.symbols_ids_sequences, lns.size());
+    for (auto it = label_set.begin(); it != label_set.end(); ++it) {
+      *i++ = find_or_emplace_symbol(data, lns_i.id(), it, std::forward<Cache>(cache));
+      ++lns_i;
+    }
+
+    data.next_item_index_ += data.symbols_ids_sequences.size() - size_before;
+  }
+
+  // NOLINTNEXTLINE(readability-identifier-naming)
+  class composite_type {
+    using label_name_set_type = typename LabelNameSetsTableType<Vector>::value_type;
+    using values_iterator_type =
+        BareBones::StreamVByte::DecodeIterator<typename data_type::SymbolIdsCodec, typename symbols_ids_sequences_type::const_iterator>;
+    using values_iterator_sentinel_type = BareBones::StreamVByte::DecodeIteratorSentinel;
+
+    label_name_set_type label_name_set_;
+    const data_type* data_;
+    values_iterator_type values_begin_;
+    [[no_unique_address]] values_iterator_sentinel_type values_end_;
+    uint32_t id_;
+
+   public:
+    PROMPP_ALWAYS_INLINE explicit composite_type(const data_type* data = nullptr,
+                                                 label_name_set_type label_name_set = label_name_set_type(),
+                                                 values_iterator_type values_begin = values_iterator_type(),
+                                                 values_iterator_sentinel_type values_end = values_iterator_sentinel_type(),
+                                                 uint32_t id = 0) noexcept
+        : label_name_set_(label_name_set), data_(data), values_begin_(values_begin), values_end_(values_end), id_(id) {}
+
+    using value_type = std::pair<typename label_name_set_type::value_type, typename Symbol<Vector>::composite_type>;
+
+    PROMPP_ALWAYS_INLINE const label_name_set_type& names() const noexcept { return label_name_set_; }
+
+    PROMPP_ALWAYS_INLINE auto size() const noexcept { return label_name_set_.size(); }
+    PROMPP_ALWAYS_INLINE auto id() const noexcept { return id_; }
+
+    template <class LabelNameSetIteratorType, class ValuesIteratorType>
+    class Iterator {
+      LabelNameSetIteratorType lnsi_;
+      ValuesIteratorType vi_;
+      const data_type* data_;
+
+      friend class composite_type;
+
+     public:
+      using iterator_category = std::forward_iterator_tag;
+      using value_type = composite_type::value_type;
+      using difference_type = std::ptrdiff_t;
+
+      PROMPP_ALWAYS_INLINE explicit Iterator(const data_type* data = 0,
+                                             LabelNameSetIteratorType lnsi = LabelNameSetIteratorType(),
+                                             ValuesIteratorType vi = ValuesIteratorType()) noexcept
+          : lnsi_(lnsi), vi_(vi), data_(data) {}
+
+      PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
+        ++lnsi_;
+        ++vi_;
+        return *this;
+      }
+
+      PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
+        Iterator retval = *this;
+        ++(*this);
+        return retval;
+      }
+
+      template <class OtherIteratorType>
+      PROMPP_ALWAYS_INLINE bool operator==(const OtherIteratorType& other) const noexcept {
+        return lnsi_ == other.lnsi_ && vi_ == other.vi_;
+      }
+
+      PROMPP_ALWAYS_INLINE value_type operator*() const noexcept {
+        if constexpr (BareBones::concepts::is_dereferenceable<decltype(data_->symbols_tables[lnsi_.id()])>) {
+          const auto& smbl_tbl = *data_->symbols_tables[lnsi_.id()];
+          return make_pair(*lnsi_, smbl_tbl[*vi_]);
+        } else {
+          const auto& smbl_tbl = data_->symbols_tables[lnsi_.id()];
+          return make_pair(*lnsi_, smbl_tbl[*vi_]);
+        }
+      }
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t name_id() const noexcept { return lnsi_.id(); }
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t value_id() const noexcept { return *vi_; }
+    };
+
+    using iterator = Iterator<decltype(label_name_set_.begin()), decltype(values_begin_)>;
+    using end_iterator = Iterator<decltype(label_name_set_.end()), decltype(values_end_)>;
+
+    PROMPP_ALWAYS_INLINE auto begin() const noexcept {
+      return Iterator<decltype(label_name_set_.begin()), decltype(values_begin_)>(data_, label_name_set_.begin(), values_begin_);
+    }
+
+    PROMPP_ALWAYS_INLINE auto end() const noexcept {
+      return Iterator<decltype(label_name_set_.end()), decltype(values_end_)>(data_, label_name_set_.end(), values_end_);
+    }
+
+    template <class T>
+    PROMPP_ALWAYS_INLINE bool operator==(const T& b) const noexcept {
+      return std::ranges::equal(begin(), end(), b.begin(), b.end(), [](const auto& a, const auto& b) { return a == b; });
+    }
+
+    template <class T>
+    PROMPP_ALWAYS_INLINE bool operator<(const T& b) const noexcept {
+      return std::ranges::lexicographical_compare(begin(), end(), b.begin(), b.end(), [](const auto& a, const auto& b) { return a < b; });
+    }
+
+    PROMPP_ALWAYS_INLINE friend size_t hash_value(const composite_type& ls) noexcept { return hash::hash_of_label_set(ls); }
+  };
+
+  PROMPP_ALWAYS_INLINE composite_type composite(const data_type& data) const noexcept {
+    auto lns = data.label_name_sets_table[lns_id_];
+
+    auto [values_begin, values_end] =
+        BareBones::StreamVByte::decoder<typename data_type::SymbolIdsCodec>(data.symbols_ids_sequences.begin() + pos_ - data.shrinked_size_, lns.size());
+
+    return composite_type(&data, std::move(lns), std::move(values_begin), std::move(values_end), lns_id_);
+  }
+
+  PROMPP_ALWAYS_INLINE void validate(const data_type& data) const {
+    if (lns_id_ >= data.label_name_sets_table.size()) {
+      throw BareBones::Exception(0x48dd6c9d357d3a7e, "LabelSets data validation error: expected LabelSets length is out of label name sets table vector range");
+    }
+
+    const auto& lns = data.label_name_sets_table[lns_id_];
+
+    // check that streamvbyte keys are in range
+    auto keys_size = BareBones::StreamVByte::keys_size(lns.size());
+    if (pos_ - data.shrinked_size_ + keys_size > data.symbols_ids_sequences.size()) {
+      throw BareBones::Exception(0x22f5a82dd120e0e7, "LabelSets data validation error: expected LabelSets keys length is out of data symbols vector range");
+    }
+
+    // check that streamvbyte data is in range
+    const uint32_t data_size = BareBones::StreamVByte::decode_data_size<BareBones::StreamVByte::Codec1234>(
+        lns.size(), data.symbols_ids_sequences.begin() + pos_ - data.shrinked_size_);
+    if (pos_ - data.shrinked_size_ + keys_size + data_size > data.symbols_ids_sequences.size()) {
+      throw BareBones::Exception(0xd02e54dac8e1d328, "LabelSets data validation error: expected LabelSets values length is out of data symbols vector range");
+    }
+
+    // check that all symbols are in range
+    auto [values_begin, values_end] =
+        BareBones::StreamVByte::decoder<BareBones::StreamVByte::Codec1234>(data.symbols_ids_sequences.begin() + pos_ - data.shrinked_size_, lns.size());
+    for (auto i = lns.begin(); i != lns.end(); ++i) {
+      if (*values_begin++ >= data.symbols_tables[i.id()]->size()) {
+        throw BareBones::Exception(0x0f0c520ad6285f15,
+                                   "LabelSets data validation error: expected LabelSets symbols length is out of data symbols vector range");
+      }
+    }
+  }
+
+ private:
+  template <class LabelSet, class Cache>
+  PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_label_names_set(data_type& data, LabelSet& label_set, Cache&& cache) {
+    if constexpr (use_find_or_emplace_with_cache<Cache, LabelSet, decltype(data.label_name_sets_table), decltype(label_set.names())>) {
+      return data.label_name_sets_table.find_or_emplace_with_cache(label_set.names(), label_set.id(), cache.name_sets, cache);
+    }
+
+    return data.label_name_sets_table.find_or_emplace(label_set.names());
+  }
+
+  template <class LabelIterator, class Cache>
+  PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_symbol(data_type& data, uint32_t lns_id, const LabelIterator& label, Cache&& cache) {
+    if constexpr (use_find_or_emplace_with_cache<Cache, LabelIterator, decltype(*data.symbols_tables[0]), decltype((*label).second)>) {
+      const auto name_id = label.name_id();
+      return data.symbols_tables[lns_id]->find_or_emplace_with_cache((*label).second, label.value_id(), cache.values[name_id]);
+    }
+
+    return data.symbols_tables[lns_id]->find_or_emplace((*label).second);
+  }
+};
+
+template <template <template <class> class> class SymbolsTableType,
+          template <template <class> class> class LabelNameSetsTableType,
+          template <class> class Vector>
+class LabelSetV2 {
+  uint32_t pos_;
+
+  static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
+
+ public:
+  using symbols_tables_type = std::conditional_t<kIsReadOnly, BareBones::Vector<SymbolsTableType<Vector>>, Vector<std::unique_ptr<SymbolsTableType<Vector>>>>;
+
+  using symbols_ids_sequences_type = Vector<uint8_t>;
+
+  // NOLINTNEXTLINE(readability-identifier-naming)
+  struct data_type {
+   private:
+    class Checkpoint {
+      using SerializationMode = BareBones::SnugComposite::SerializationMode;
+      using symbols_checkpoints_type = Vector<typename SymbolsTableType<Vector>::checkpoint_type>;
+
+      const data_type* data_;
+      uint32_t next_item_index_;
+      uint32_t size_;
+      typename LabelNameSetsTableType<Vector>::checkpoint_type label_name_sets_table_checkpoint_;
+      symbols_checkpoints_type symbols_tables_checkpoints_;
+
+     public:
+      explicit PROMPP_ALWAYS_INLINE Checkpoint(const data_type& data) noexcept
+          : data_(&data),
+            next_item_index_(data.next_item_index_),
+            size_(data.symbols_ids_sequences.size()),
+            label_name_sets_table_checkpoint_(data.label_name_sets_table.checkpoint()) {
+        symbols_tables_checkpoints_.reserve_and_write(data.symbols_tables.size(), [&data](auto memory, uint32_t size) {
+          for (auto& symbol_table : data.symbols_tables) {
+            std::construct_at(memory++, symbol_table->checkpoint());
+          }
+          return size;
+        });
+      }
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return size_; }
+
+      PROMPP_ALWAYS_INLINE typename LabelNameSetsTableType<Vector>::checkpoint_type const label_name_sets() const noexcept {
+        return label_name_sets_table_checkpoint_;
+      }
+
+      PROMPP_ALWAYS_INLINE Vector<typename SymbolsTableType<Vector>::checkpoint_type> symbols() const noexcept { return symbols_tables_checkpoints_; }
+
+      template <BareBones::OutputStream S>
+      PROMPP_ALWAYS_INLINE void save(S& out, data_type const& data, Checkpoint const* from = nullptr) const {
+        // write version
+        out.put(1);
+
+        // write mode
+        SerializationMode mode = (from != nullptr) ? SerializationMode::DELTA : SerializationMode::SNAPSHOT;
+        out.put(static_cast<char>(mode));
+
+        // write pos of first seq in the portion, if we are writing delta
+        uint32_t first_to_save = 0;
+        if (from != nullptr) {
+          first_to_save = from->next_item_index_;
+          out.write(reinterpret_cast<const char*>(&first_to_save), sizeof(first_to_save));
+        }
+        const uint32_t first_item_index_in_ids_sequence = data_->next_item_index() - data_->symbols_ids_sequences.size();
+        assert(first_to_save >= first_item_index_in_ids_sequence);
+
+        // write  size
+        uint32_t size_to_save = next_item_index_ - first_to_save;
+        out.write(reinterpret_cast<char*>(&size_to_save), sizeof(size_to_save));
+
+        // write data
+        out.write(reinterpret_cast<const char*>(&data.symbols_ids_sequences[first_to_save - first_item_index_in_ids_sequence]),
+                  sizeof(data.symbols_ids_sequences[0]) * size_to_save);
+
+        // write label name sets table
+        if (from != nullptr) {
+          label_name_sets_table_checkpoint_.save(out, &from->label_name_sets_table_checkpoint_);
+        } else {
+          label_name_sets_table_checkpoint_.save(out);
+        }
+
+        // count tables, we have to write
+        uint32_t number_of_symbols_tables_to_save = symbols_tables_checkpoints_.size();
+        if (from != nullptr) {
+          for (uint32_t i = 0; i < from->symbols_tables_checkpoints_.size(); ++i) {
+            auto from_checkpoint = from->symbols_tables_checkpoints_[i];
+            auto to_checkpoint = symbols_tables_checkpoints_[i];
+            if ((to_checkpoint - from_checkpoint).empty()) {
+              --number_of_symbols_tables_to_save;
+            }
+          }
+        }
+
+        // write number of symbols tables
+        out.write(reinterpret_cast<char*>(&number_of_symbols_tables_to_save), sizeof(number_of_symbols_tables_to_save));
+        // write symbols tables
+        if (from != nullptr) {
+          for (uint32_t i = 0; i < symbols_tables_checkpoints_.size(); ++i) {
+            auto to_checkpoint = symbols_tables_checkpoints_[i];
+            if (i >= from->symbols_tables_checkpoints_.size()) {
+              // write id
+              out.write(reinterpret_cast<char*>(&i), sizeof(i));
+              // write symbols table
+              to_checkpoint.save(out);
+              continue;
+            }
+            auto from_checkpoint = from->symbols_tables_checkpoints_[i];
+            if ((to_checkpoint - from_checkpoint).empty()) {
+              continue;
+            }
+            // write id
+            out.write(reinterpret_cast<char*>(&i), sizeof(i));
+            // write symbols table
+            to_checkpoint.save(out, &from_checkpoint);
+          }
+        } else {
+          for (uint32_t i = 0; i < symbols_tables_checkpoints_.size(); ++i) {
+            // write symbols table
+            symbols_tables_checkpoints_[i].save(out);
+          }
+        }
+      }
+
+      PROMPP_ALWAYS_INLINE uint32_t save_size([[maybe_unused]] data_type const& data, Checkpoint const* from = nullptr) const {
+        uint32_t res = 0;
+
+        // version
+        ++res;
+
+        // mode
+        ++res;
+
+        // pos of first seq in the portion, if we are writing wal
+        uint32_t first_to_save = 0;
+        if (from != nullptr) {
+          first_to_save = from->next_item_index_;
+          res += sizeof(uint32_t);
+        }
+
+        // size
+        const uint32_t size_to_save = next_item_index_ - first_to_save;
+        res += sizeof(uint32_t);
+
+        // data
+        res += sizeof(data.symbols_ids_sequences[0]) * size_to_save;
+
+        // label name sets table
+        if (from != nullptr) {
+          res += label_name_sets_table_checkpoint_.save_size(&from->label_name_sets_table_checkpoint_);
+        } else {
+          res += label_name_sets_table_checkpoint_.save_size();
+        }
+
+        // number of symbols tables
+        res += sizeof(uint32_t);
+
+        // symbols tables
+        if (from != nullptr) {
+          for (uint32_t i = 0; i < symbols_tables_checkpoints_.size(); ++i) {
+            const typename SymbolsTableType<Vector>::checkpoint_type* from_checkpoint = nullptr;
+            if (i < from->symbols_tables_checkpoints_.size()) {
+              from_checkpoint = &from->symbols_tables_checkpoints_[i];
+            }
+            auto to_checkpoint = symbols_tables_checkpoints_[i];
+            if (from_checkpoint != nullptr) {
+              if ((to_checkpoint - *from_checkpoint).empty()) {
+                continue;
+              }
+            }
+            // write id
+            res += sizeof(i);
+            // write symbols table
+            res += to_checkpoint.save_size(from_checkpoint);
+          }
+        } else {
+          for (uint32_t i = 0; i < symbols_tables_checkpoints_.size(); ++i) {
+            // write symbols table
+            res += symbols_tables_checkpoints_[i].save_size();
+          }
+        }
+
+        return res;
+      }
+    };
+
+   public:
+    using SymbolIdsCodec = BareBones::StreamVByte::Codec1234;
+
+    symbols_tables_type symbols_tables;
+    symbols_ids_sequences_type symbols_ids_sequences;
+    LabelNameSetsTableType<Vector> label_name_sets_table;
+    uint32_t next_item_index_{};
+    uint32_t shrinked_size_{};
+    data_type() noexcept = default;
+    data_type(const data_type&) = delete;
+
+    template <class AnotherDataType>
+      requires kIsReadOnly
+    explicit data_type(const AnotherDataType& other)
+        : symbols_ids_sequences(other.symbols_ids_sequences),
+          label_name_sets_table(other.label_name_sets_table),
+          next_item_index_(other.next_item_index_),
+          shrinked_size_(other.shrinked_size_) {
+      symbols_tables.reserve_and_write(other.symbols_tables.size(), [&other](auto memory, uint32_t size) {
+        for (auto& symbol_table : other.symbols_tables) {
+          std::construct_at(memory++, *symbol_table);
+        }
+        return size;
+      });
+    }
+
+    data_type(data_type&&) noexcept = delete;
+    data_type& operator=(const data_type&) = delete;
+    data_type& operator=(data_type&&) noexcept = delete;
+
+    using checkpoint_type = Checkpoint;
+
+    PROMPP_ALWAYS_INLINE void shrink_to(uint32_t size) {
+      assert(size <= symbols_ids_sequences.size());
+
+      shrinked_size_ += symbols_ids_sequences.size() - size;
+      symbols_ids_sequences.resize(size);
+      symbols_ids_sequences.shrink_to_fit();
+    }
+
+    PROMPP_ALWAYS_INLINE auto checkpoint() const noexcept { return Checkpoint(*this); }
+
+    PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& s) noexcept {
+      assert(s.size() <= symbols_ids_sequences.size());
+      symbols_ids_sequences.resize(s.size());
+
+      label_name_sets_table.rollback(s.label_name_sets());
+
+      auto symbols_tables_checkpoints = s.symbols();
+      assert(symbols_tables_checkpoints.size() <= symbols_tables.size());
+      for (uint32_t i = 0; i != symbols_tables_checkpoints.size(); ++i) {
+        symbols_tables[i]->rollback(symbols_tables_checkpoints[i]);
+      }
+      symbols_tables.resize(symbols_tables_checkpoints.size());
+    }
+
+    void reserve(const data_type& other) {
+      symbols_ids_sequences.reserve(other.symbols_ids_sequences.size());
+      symbols_tables.reserve(other.symbols_tables.size());
+      label_name_sets_table.reserve(other.label_name_sets_table);
+    }
+
+    template <class InputStream>
+    void load(InputStream& in) {
+      // read version
+      const uint8_t version = in.get();
+      if (version != 1) {
+        throw BareBones::Exception(0x7524f0b0ab963554, "Invalid stream data version (%d) for loading LabelSets into data vector, only version 1 is supported",
+                                   version);
+      }
+
+      // read mode
+      const auto mode = static_cast<BareBones::SnugComposite::SerializationMode>(in.get());
+
+      // read pos of first seq in the portion, if we are reading wal
+      uint32_t first_to_load_i = 0;
+      if (mode == BareBones::SnugComposite::SerializationMode::DELTA) {
+        in.read(reinterpret_cast<char*>(&first_to_load_i), sizeof(first_to_load_i));
+      }
+      if (first_to_load_i != next_item_index_) {
+        if (mode == BareBones::SnugComposite::SerializationMode::SNAPSHOT) {
+          throw BareBones::Exception(0xefdd57cef4b89243, "Attempt to load snapshot into non-empty LabelSets data vector");
+        } else if (first_to_load_i < symbols_ids_sequences.size()) {
+          throw BareBones::Exception(0xfead3117c5a549bd, "Attempt to load segment over existing LabelSets data");
+        } else {
+          throw BareBones::Exception(0xbb996a8ffbcbb53b,
+                                     "Attempt to load incomplete data from segment, LabelSets data vector length (%u) is less than segment size (%d)",
+                                     symbols_ids_sequences.size(), first_to_load_i);
+        }
+      }
+
+      // read size
+      uint32_t size_to_load;
+      in.read(reinterpret_cast<char*>(&size_to_load), sizeof(size_to_load));
+
+      // read data
+      auto sg1 = std::experimental::scope_fail([original_size = symbols_ids_sequences.size(), this] { symbols_ids_sequences.resize(original_size); });
+
+      symbols_ids_sequences.reserve_and_write(size_to_load + sizeof(SymbolIdsCodec::value_type), [&in, size_to_load](uint8_t* buffer, uint32_t) {
+        in.read(reinterpret_cast<char*>(buffer), size_to_load * sizeof(symbols_ids_sequences[first_to_load_i]));
+        return size_to_load;
+      });
+      next_item_index_ += size_to_load;
+
+      // read label name sets table
+      auto label_name_sets_table_checkpoint = label_name_sets_table.checkpoint();
+      auto sg2 = std::experimental::scope_fail([&]() { label_name_sets_table.rollback(label_name_sets_table_checkpoint); });
+      label_name_sets_table.load(in);
+
+      // read number of tables
+      uint32_t number_of_symbols_tables_to_load;
+      in.read(reinterpret_cast<char*>(&number_of_symbols_tables_to_load), sizeof(number_of_symbols_tables_to_load));
+
+      // read tables
+      auto original_symbols_tables_size = symbols_tables.size();
+      BareBones::Vector<std::pair<uint32_t, typename SymbolsTableType<Vector>::checkpoint_type>> symbols_tables_checkpoints;
+      auto sg3 = std::experimental::scope_fail([&]() {
+        for (const auto& [id, checkpoint] : symbols_tables_checkpoints) {
+          symbols_tables[id]->rollback(checkpoint);
+        }
+        symbols_tables.resize(original_symbols_tables_size);
+      });
+      for (uint32_t i = 0; i < number_of_symbols_tables_to_load; ++i) {
+        // read id
+        uint32_t id;
+
+        if (mode == BareBones::SnugComposite::SerializationMode::DELTA) {
+          in.read(reinterpret_cast<char*>(&id), sizeof(id));
+        } else {
+          id = i;
+        }
+
+        // resize, if needed
+        if (id >= symbols_tables.size()) [[unlikely]] {
+          if (id > symbols_tables.size()) [[unlikely]] {
+            throw BareBones::Exception(0x13fe3e1aae45bb34, "Symbol id sequence is incorrect: id (%u), size: (%u)", id, symbols_tables.size());
+          }
+
+          const auto number_of_tables_stil_left_to_load = number_of_symbols_tables_to_load - i;
+          uint64_t size_will_be_at_least = static_cast<uint64_t>(symbols_tables.size()) + number_of_tables_stil_left_to_load;
+          if (size_will_be_at_least >= std::numeric_limits<uint32_t>::max()) [[unlikely]] {
+            throw BareBones::Exception(0x98d95ce3b05ec2b5, "Max symbol id (%lu) is greater than UINT32_MAX", size_will_be_at_least);
+          }
+
+          symbols_tables.reserve(size_will_be_at_least);
+          for (uint32_t j = 0; j < number_of_tables_stil_left_to_load; ++j) {
+            symbols_tables.emplace_back(std::make_unique<SymbolsTableType<Vector>>());
+          }
+
+          // just to be 100% sure
+          assert(id < symbols_tables.size());
+        }
+
+        // read symbols table
+        if (mode == BareBones::SnugComposite::SerializationMode::DELTA && id < original_symbols_tables_size)
+          symbols_tables_checkpoints.emplace_back(id, symbols_tables[id]->checkpoint());
+        symbols_tables[id]->load(in);
+      }
+
+      // just to be 100% sure
+      assert(label_name_sets_table.data().symbols_table.size() == symbols_tables.size());
+    }
+
+    // it drains before the maximum available symbols count would be exceeded.
+    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t remainder_size() const noexcept {
+      constexpr size_t max_ui32 = std::numeric_limits<uint32_t>::max();
+
+      assert(this->symbols_ids_sequences.size() <= max_ui32);
+
+      size_t remainder_for_label_sets_table = this->label_name_sets_table.remainder_size();
+      size_t remainder_for_symbols_ids_sequences = max_ui32 - this->symbols_ids_sequences.size();
+      size_t remainder_for_symbol_table = std::numeric_limits<uint32_t>::max();
+      for (const auto& table : this->symbols_tables) {
+        if (const size_t n = table->remainder_size(); n < remainder_for_symbol_table) {
+          remainder_for_symbol_table = n;
+        }
+      }
+      return std::min({remainder_for_label_sets_table, remainder_for_symbols_ids_sequences, remainder_for_symbol_table});
+    }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
+      return symbols_tables.allocated_memory() + BareBones::mem::allocated_memory(symbols_ids_sequences) +
+             BareBones::mem::allocated_memory(label_name_sets_table);
+    }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return next_item_index_; }
+  };
+
+  PROMPP_ALWAYS_INLINE LabelSetV2() noexcept = default;
+
+  // FIXME inline of this function causes 30ns lost in indexing performance
+  template <class T, class Cache = NoCache>
+  // TODO requires is_label_set
+  LabelSetV2(data_type& data, const T& label_set, Cache&& cache = {}) noexcept : pos_(data.symbols_ids_sequences.size() + data.shrinked_size_) {
     const auto size_before = data.symbols_ids_sequences.size();
 
     const auto lns_id = find_or_emplace_label_names_set(data, label_set, std::forward<Cache>(cache));
