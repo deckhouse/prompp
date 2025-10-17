@@ -514,6 +514,7 @@ func (c *LeveledCompactor) CompactWithBlockPopulator(dest string, dirs []string,
 	}
 
 	if len(metas) < 2 {
+		// there is no need to compact 1 block, just return
 		return nil, nil // PP_CHANGES.md: fast exit
 	}
 
