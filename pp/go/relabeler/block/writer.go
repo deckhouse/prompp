@@ -14,6 +14,7 @@ import (
 	"github.com/oklog/ulid"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
+	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
 	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/tsdb/fileutil"
@@ -151,6 +152,11 @@ func (writer *blockWriter) createWriters(maxBlockChunkSegmentSize int64) error {
 	return nil
 }
 
+// isEmpty returns true if [IndexWriter] contains no samples, an empty block.
+func (writer *blockWriter) isEmpty() bool {
+	return writer.indexWriter.isEmpty()
+}
+
 func (writer *blockWriter) Close() error {
 	return closeAll(writer.chunkWriter, writer.indexFileWriter)
 }
@@ -238,6 +244,15 @@ func (bw *blockWriters) writeRestOfRecodedChunks() error {
 func (bw *blockWriters) writeIndexAndMoveTmpDirToDir() ([]WrittenBlock, error) {
 	writtenBlocks := make([]WrittenBlock, 0, len(bw.writers))
 	for i := range bw.writers {
+		if bw.writers[i].isEmpty() {
+			_ = bw.writers[i].Close()
+			if err := os.RemoveAll(bw.writers[i].Dir); err != nil {
+				logger.Warnf("failed remove empty block: %s", bw.writers[i].Dir)
+			}
+
+			continue
+		}
+
 		if err := bw.writers[i].writeIndex(); err != nil {
 			return nil, err
 		}
