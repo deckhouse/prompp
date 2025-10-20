@@ -198,8 +198,18 @@ class QueryableEncodingBimapCopier {
 
   void copy_ls_id_set() {
     auto cmp = sorting_index_.get_comparator();
-    for (uint32_t ls_id_new = 0; ls_id_new < destination_.size(); ++ls_id_new) {
-      destination_.ls_id_set_.emplace_hint_cmp(destination_.ls_id_set_.end(), [&](auto a, auto b) { return cmp(ls_id_range_[a], ls_id_range_[b]); }, ls_id_new);
+
+    BareBones::Vector<uint32_t> ids_new(destination_.size());
+    std::ranges::iota(ids_new, 0u);
+
+    BareBones::Vector<uint32_t> ids_old;
+    ids_old.reserve(destination_.size());
+    std::ranges::copy(ls_id_range_.begin(), ls_id_range_.end(), std::back_inserter(ids_old));
+
+    std::ranges::sort(ids_new, [&](auto a, auto b) { return cmp(ids_old[a], ids_old[b]); });
+
+    for (uint32_t ls_id_new : ids_new) {
+      destination_.ls_id_set_.emplace_hint_cmp(destination_.ls_id_set_.end(), [](auto, auto) { return true; }, ls_id_new);
     }
   }
 
