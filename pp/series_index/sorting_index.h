@@ -29,6 +29,10 @@ struct SortingIndex {
     sort(container.begin(), container.end());
   }
 
+  PROMPP_ALWAYS_INLINE auto get_comparator() const noexcept {
+    return [this](uint32_t a, uint32_t b) PROMPP_LAMBDA_INLINE { return index[a] < index[b]; };
+  }
+
   Vector<uint32_t> index;
 };
 

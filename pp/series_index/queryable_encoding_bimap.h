@@ -186,25 +186,20 @@ class QueryableEncodingBimapCopier {
   }
 
   void copy_added_series() {
-    BareBones::Vector<uint32_t> ids;
-    ids.reserve(source_.size());
-    std::ranges::copy(ls_id_range_.begin(), ls_id_range_.end(), std::back_inserter(ids));
-
-    sorting_index_.sort(ids);
-
     Cache<uint32_t> cache;
     cache.reserve(source_.data().label_name_sets_table.size(), source_.data().label_name_sets_table.data().symbols_table.size(), source_.data().symbols_tables);
 
     destination_.reserve(source_);
 
-    for (const auto ls_id : ids) {
+    for (const auto ls_id : ls_id_range_) {
       destination_.items_.emplace_back(destination_.data_, source_[ls_id], cache);
     }
   }
 
   void copy_ls_id_set() {
+    auto cmp = sorting_index_.get_comparator();
     for (uint32_t ls_id_new = 0; ls_id_new < destination_.size(); ++ls_id_new) {
-      destination_.ls_id_set_.emplace_hint_cmp(destination_.ls_id_set_.end(), [&](auto, auto) { return true; }, ls_id_new);
+      destination_.ls_id_set_.emplace_hint_cmp(destination_.ls_id_set_.end(), [&](auto a, auto b) { return cmp(ls_id_range_[a], ls_id_range_[b]); }, ls_id_new);
     }
   }
 
@@ -255,5 +250,4 @@ class QueryableEncodingBimapCopier {
   QueryableEncodingBimap& destination_;
   const SeriesIds& ls_id_range_;
 };
-
 }  // namespace series_index
