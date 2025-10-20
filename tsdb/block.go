@@ -244,6 +244,9 @@ const (
 	// CompactionHintFromOutOfOrder is a hint noting that the block
 	// was created from out-of-order chunks.
 	CompactionHintFromOutOfOrder = "from-out-of-order"
+
+	// CompactionHintCorrupted is a hint noting that the block is corrupted.
+	CompactionHintCorrupted = "corrupted"
 )
 
 func chunkDir(dir string) string { return filepath.Join(dir, "chunks") }
