@@ -2,6 +2,8 @@ package storagetest
 
 import (
 	"context"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
+	"math"
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -81,6 +83,16 @@ func MustAppendTimeSeries(s *suite.Suite, head *storage.Head, timeSeries []TimeS
 	}
 }
 
+func MustAppendTimeSeriesToLSSAndDataStorage(lss *shard.LSS, ds *shard.DataStorage, timeSeries ...TimeSeries) {
+	for i := range timeSeries {
+		modelTimeSeries := timeSeries[i].toModelTimeSeries()
+		for j := range modelTimeSeries {
+			foeResult := lss.Target().FindOrEmplace(modelTimeSeries[j].LabelSet)
+			ds.Encode(foeResult.LabelSetID, int64(modelTimeSeries[j].Timestamp), modelTimeSeries[j].Value)
+		}
+	}
+}
+
 // SamplesMap samples map with series ID as key.
 type SamplesMap map[uint32][]cppbridge.Sample
 
@@ -98,6 +110,25 @@ func GetSamplesFromSerializedChunks(chunks *cppbridge.HeadDataStorageSerializedC
 		for iterator.Next() {
 			ts, value := iterator.Sample()
 			result[seriesId] = append(result[seriesId], cppbridge.Sample{Timestamp: ts, Value: value})
+		}
+	}
+
+	return result
+}
+
+func GetSamplesFromSerializedData(serializedData *cppbridge.DataStorageSerializedData) SamplesMap {
+	result := make(SamplesMap)
+
+	for {
+		seriesID := serializedData.Next()
+		if seriesID == math.MaxUint32 {
+			break
+		}
+
+		iterator := serializedData.Iterator()
+		for iterator.Next() {
+			ts, v := iterator.At()
+			result[seriesID] = append(result[seriesID], cppbridge.Sample{Timestamp: ts, Value: v})
 		}
 	}
 

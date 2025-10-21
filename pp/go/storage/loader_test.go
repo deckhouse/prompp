@@ -204,7 +204,7 @@ func (s *HeadLoadSuite) TestLoadWithDisabledDataUnloading() {
 	// Act
 	loadedHead := s.mustLoadHead(0)
 
-	chunks, queryResult := s.shards(loadedHead)[0].DataStorage().Query(cppbridge.HeadDataStorageQuery{
+	queryResult := s.shards(loadedHead)[0].DataStorage().Query(cppbridge.HeadDataStorageQuery{
 		StartTimestampMs: 0,
 		EndTimestampMs:   2,
 		LabelSetIDs:      []uint32{0},
@@ -224,7 +224,7 @@ func (s *HeadLoadSuite) TestLoadWithDisabledDataUnloading() {
 			{Timestamp: 1, Value: 2},
 			{Timestamp: 2, Value: 3},
 		},
-	}, storagetest.GetSamplesFromSerializedChunks(chunks))
+	}, storagetest.GetSamplesFromSerializedData(queryResult.SerializedData))
 	s.Equal([]cppbridge.Labels{
 		{{Name: "__name__", Value: "wal_metric"}},
 	}, s.shards(loadedHead)[0].LSS().Target().GetLabelSets([]uint32{0}).LabelsSets())
@@ -256,7 +256,7 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 		},
 	})
 
-	chunks, queryResult := s.shards(loadedHead)[0].DataStorage().Query(cppbridge.HeadDataStorageQuery{
+	queryResult := s.shards(loadedHead)[0].DataStorage().Query(cppbridge.HeadDataStorageQuery{
 		StartTimestampMs: 0,
 		EndTimestampMs:   4,
 		LabelSetIDs:      []uint32{0},
@@ -274,7 +274,7 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 			{Timestamp: 2, Value: 3},
 			{Timestamp: 3, Value: 4},
 		},
-	}, storagetest.GetSamplesFromSerializedChunks(chunks))
+	}, storagetest.GetSamplesFromSerializedData(queryResult.SerializedData))
 	s.Equal([]cppbridge.Labels{
 		{{Name: "__name__", Value: "wal_metric"}},
 	}, s.shards(loadedHead)[0].LSS().Target().GetLabelSets([]uint32{0}).LabelsSets())

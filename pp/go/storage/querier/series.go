@@ -7,216 +7,176 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/util/annotations"
+	"math"
 )
 
-// SampleProvider create chunk iterator over samples.
-type SampleProvider interface {
-	Samples(minT, maxtT int64) chunkenc.Iterator
-}
-
-//
-// SeriesSet
-//
-
-// SeriesSet contains a set of series, allows to iterate over sorted, populated series.
-type SeriesSet struct {
-	mint             int64
-	maxt             int64
-	deserializer     *cppbridge.HeadDataStorageDeserializer
-	chunksIndex      cppbridge.HeadDataStorageSerializedChunkIndex
-	serializedChunks *cppbridge.HeadDataStorageSerializedChunks
-	lssQueryResult   *cppbridge.LSSQueryResult
-	labelSetSnapshot *cppbridge.LabelSetSnapshot
-
-	index         int
-	currentSeries *Series
-}
-
-// At returns full series. Returned series should be iterable even after Next is called.
-func (ss *SeriesSet) At() storage.Series {
-	return ss.currentSeries
-}
-
-// Err the error that iteration as failed with.
-func (*SeriesSet) Err() error {
-	return nil
-}
-
-// Next return true if exist there is a next series and false otherwise.
-func (ss *SeriesSet) Next() bool {
-	if ss.lssQueryResult == nil {
-		return false
-	}
-
-	var (
-		lsID           uint32
-		lsLength       uint16
-		chunksMetadata []cppbridge.HeadDataStorageSerializedChunkMetadata
-	)
-
-	for {
-		if ss.index >= ss.lssQueryResult.Len() {
-			return false
-		}
-
-		lsID, lsLength = ss.lssQueryResult.GetByIndex(ss.index)
-
-		chunksMetadata = ss.chunksIndex.Chunks(ss.serializedChunks, lsID)
-		ss.index++
-		if len(chunksMetadata) != 0 {
-			break
-		}
-	}
-
-	ss.currentSeries = &Series{
-		mint:     ss.mint,
-		maxt:     ss.maxt,
-		labelSet: labels.NewLabelsWithLSS(ss.labelSetSnapshot, lsID, lsLength),
-		sampleProvider: &DefaultSampleProvider{
-			deserializer:   ss.deserializer,
-			chunksMetadata: chunksMetadata,
-		},
-	}
-
-	return true
-}
-
-// Warnings a collection of warnings for the whole set.
-func (*SeriesSet) Warnings() annotations.Annotations {
-	return nil
-}
-
-//
-// Series
-//
-
-// Series is a stream of data points belonging to a metric.
 type Series struct {
-	mint, maxt     int64
-	labelSet       labels.Labels
-	sampleProvider SampleProvider
+	labelSet      labels.Labels
+	chunkIterator *cppbridge.DataStorageSerializedDataIterator
 }
 
-// Iterator returns an iterator of the data of the series.
-func (s *Series) Iterator(_ chunkenc.Iterator) chunkenc.Iterator {
-	return s.sampleProvider.Samples(s.mint, s.maxt)
+func (s *Series) Next() chunkenc.ValueType {
+	hasValue := s.chunkIterator.Next()
+	if !hasValue {
+		return chunkenc.ValNone
+	}
+	return chunkenc.ValFloat
 }
 
-// Labels returns the complete set of labels.
+func (s *Series) Seek(t int64) chunkenc.ValueType {
+	for s.AtT() < t {
+		if s.Next() == chunkenc.ValNone {
+			return chunkenc.ValNone
+		}
+	}
+
+	return chunkenc.ValFloat
+}
+
+func (s *Series) At() (int64, float64) {
+	return s.chunkIterator.At()
+}
+
+func (s *Series) AtHistogram(_ *histogram.Histogram) (int64, *histogram.Histogram) {
+	return 0, nil
+}
+
+func (s *Series) AtFloatHistogram(_ *histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
+	return 0, nil
+}
+
+func (s *Series) AtT() int64 {
+	ts, _ := s.chunkIterator.At()
+	return ts
+}
+
+func (s *Series) Err() error {
+	return nil
+}
+
+func NewSeries(labelSet labels.Labels, chunkIterator *cppbridge.DataStorageSerializedDataIterator) *Series {
+	return &Series{
+		labelSet:      labelSet,
+		chunkIterator: chunkIterator,
+	}
+}
+
 func (s *Series) Labels() labels.Labels {
 	return s.labelSet
 }
 
-//
-// DefaultSampleProvider
-//
-
-// DefaultSampleProvider create default chunk iterator over samples.
-type DefaultSampleProvider struct {
-	deserializer   *cppbridge.HeadDataStorageDeserializer
-	chunksMetadata []cppbridge.HeadDataStorageSerializedChunkMetadata
+func (s *Series) Iterator(_ chunkenc.Iterator) chunkenc.Iterator {
+	return s
 }
 
-// Samples reurns chunk iterator over samples.
-func (sp *DefaultSampleProvider) Samples(mint, maxt int64) chunkenc.Iterator {
-	return NewLimitedChunkIterator(
-		NewChunkIterator(sp.deserializer, sp.chunksMetadata),
-		mint,
-		maxt,
-	)
+type LimitedSeries struct {
+	mint, maxt int64
+	series     *Series
 }
 
-//
-// ChunkIterator
-//
+func (ls *LimitedSeries) Next() chunkenc.ValueType {
 
-// ChunkIterator iterates over the samples of a time series, that can only get the next value.
-type ChunkIterator struct {
-	deserializer   *cppbridge.HeadDataStorageDeserializer
-	chunksMetadata []cppbridge.HeadDataStorageSerializedChunkMetadata
-	decodeIterator *cppbridge.HeadDataStorageDecodeIterator
-	ts             int64
-	v              float64
 }
 
-// NewChunkIterator init new [ChunkIterator].
-func NewChunkIterator(
-	deserializer *cppbridge.HeadDataStorageDeserializer,
-	chunksMetadata []cppbridge.HeadDataStorageSerializedChunkMetadata,
-) *ChunkIterator {
-	return &ChunkIterator{
-		deserializer:   deserializer,
-		chunksMetadata: chunksMetadata,
+func (ls *LimitedSeries) Seek(t int64) chunkenc.ValueType {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (ls *LimitedSeries) At() (int64, float64) {
+	return ls.series.At()
+}
+
+func (ls *LimitedSeries) AtHistogram(h *histogram.Histogram) (int64, *histogram.Histogram) {
+	return ls.series.AtHistogram(h)
+}
+
+func (ls *LimitedSeries) AtFloatHistogram(floatHistogram *histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
+	return ls.series.AtFloatHistogram(floatHistogram)
+}
+
+func (ls *LimitedSeries) AtT() int64 {
+	return ls.series.AtT()
+}
+
+func (ls *LimitedSeries) Err() error {
+	return ls.series.Err()
+}
+
+func (ls *LimitedSeries) Labels() labels.Labels {
+	return ls.Labels()
+}
+
+func (ls *LimitedSeries) Iterator(_ chunkenc.Iterator) chunkenc.Iterator {
+	return ls
+}
+
+func NewLimitedSeries(mint, maxt int64, series *Series) *LimitedSeries {
+	return &LimitedSeries{
+		mint:   mint,
+		maxt:   maxt,
+		series: series,
 	}
 }
 
-// At returns the current timestamp/value pair if the value is a float.
-//
-//nolint:gocritic // unnamedResult not need
-func (i *ChunkIterator) At() (int64, float64) {
-	return i.ts, i.v
+type SeriesSet struct {
+	mint, maxt       int64
+	lssQueryResult   *cppbridge.LSSQueryResult
+	labelSetSnapshot *cppbridge.LabelSetSnapshot
+	serializedData   *cppbridge.DataStorageSerializedData
+
+	series storage.Series
 }
 
-// AtFloatHistogram returns the current timestamp/value pair if the value is a histogram with floating-point counts.
-func (*ChunkIterator) AtFloatHistogram(_ *histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
-	return 0, nil
+func NewSeriesSet(
+	mint, maxt int64,
+	lssQueryResult *cppbridge.LSSQueryResult,
+	labelSetSnapshot *cppbridge.LabelSetSnapshot,
+	serializedData *cppbridge.DataStorageSerializedData,
+) *SeriesSet {
+	return &SeriesSet{
+		mint:             mint,
+		maxt:             maxt,
+		lssQueryResult:   lssQueryResult,
+		labelSetSnapshot: labelSetSnapshot,
+		serializedData:   serializedData,
+	}
 }
 
-// AtHistogram returns the current timestamp/value pair if the value is a histogram with integer counts.
-func (*ChunkIterator) AtHistogram(*histogram.Histogram) (int64, *histogram.Histogram) {
-	return 0, nil
+func (s *SeriesSet) Next() bool {
+	if s.serializedData == nil {
+		return false
+	}
+
+	seriesID := s.serializedData.Next()
+	if seriesID == math.MaxUint32 {
+		return false
+	}
+
+	_, lsLength := s.lssQueryResult.GetByIndex(s.lssQueryResult.IndexOf(seriesID))
+	s.series = NewLimitedSeries(
+		s.mint,
+		s.maxt,
+		NewSeries(
+			labels.NewLabelsWithLSS(s.labelSetSnapshot, seriesID, lsLength),
+			s.serializedData.Iterator(),
+		),
+	)
+
+	return true
 }
 
-// AtT returns the current timestamp.
-func (i *ChunkIterator) AtT() int64 {
-	return i.ts
+func (s *SeriesSet) At() storage.Series {
+	return s.series
 }
 
-// Err returns the current error.
-func (*ChunkIterator) Err() error {
+func (s *SeriesSet) Err() error {
 	return nil
 }
 
-// Next advances the iterator by one and returns the type of the value.
-func (i *ChunkIterator) Next() chunkenc.ValueType {
-	if i.decodeIterator == nil {
-		if len(i.chunksMetadata) == 0 {
-			return chunkenc.ValNone
-		}
-
-		i.decodeIterator = i.deserializer.CreateDecodeIterator(i.chunksMetadata[0])
-		i.chunksMetadata = i.chunksMetadata[1:]
-	}
-
-	if !i.decodeIterator.Next() {
-		i.decodeIterator = nil
-		return i.Next()
-	}
-
-	i.ts, i.v = i.decodeIterator.Sample()
-	return chunkenc.ValFloat
+func (s *SeriesSet) Warnings() annotations.Annotations {
+	return nil
 }
-
-// Seek advances the iterator forward to the first sample with a timestamp equal or greater than t.
-func (i *ChunkIterator) Seek(t int64) chunkenc.ValueType {
-	if i.decodeIterator == nil {
-		if i.Next() == chunkenc.ValNone {
-			return chunkenc.ValNone
-		}
-	}
-
-	for i.ts < t {
-		if i.Next() == chunkenc.ValNone {
-			return chunkenc.ValNone
-		}
-	}
-
-	return chunkenc.ValFloat
-}
-
-//
-// LimitedChunkIterator
-//
 
 // LimitedChunkIterator iterates over the samples of a time series, that can only get the next value with limit.
 type LimitedChunkIterator struct {

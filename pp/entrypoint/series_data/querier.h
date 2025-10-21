@@ -98,7 +98,7 @@ class RangeQuerierWithArgumentsWrapperV2 {
   using BytesStream = PromPP::Primitives::Go::BytesStream;
 
  public:
-  RangeQuerierWithArgumentsWrapperV2(DataStorage& storage, const Query& query, ::series_data::serialization::SerializedData* serialized_data)
+  RangeQuerierWithArgumentsWrapperV2(DataStorage& storage, const Query& query, head::SerializedDataPtr* serialized_data)
       : querier_(storage), query_(&query), serialized_data_(serialized_data) {}
 
   void query() noexcept {
