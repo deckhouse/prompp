@@ -314,24 +314,22 @@ func (i HeadDataStorageSerializedChunkIndex) Chunks(r *HeadDataStorageSerialized
 	return res
 }
 
-func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) (*HeadDataStorageSerializedChunks, DataStorageQueryResult) {
-	serializedChunks := &HeadDataStorageSerializedChunks{}
-	result := seriesDataDataStorageQuery(ds.dataStorage, query, &serializedChunks.data)
-	runtime.KeepAlive(ds)
-	runtime.SetFinalizer(serializedChunks, func(sc *HeadDataStorageSerializedChunks) {
-		freeBytes(sc.data)
-	})
-	return serializedChunks, result
-}
+//func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) (*HeadDataStorageSerializedChunks, DataStorageQueryResult) {
+//	serializedChunks := &HeadDataStorageSerializedChunks{}
+//	result := seriesDataDataStorageQuery(ds.dataStorage, query, &serializedChunks.data)
+//	runtime.KeepAlive(ds)
+//	runtime.SetFinalizer(serializedChunks, func(sc *HeadDataStorageSerializedChunks) {
+//		freeBytes(sc.data)
+//	})
+//	return serializedChunks, result
+//}
 
-func (ds *HeadDataStorage) QueryV2(query HeadDataStorageQuery) DataStorageQueryResultV2 {
+func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) DataStorageQueryResult {
 	sd := NewDataStorageSerializedData()
 	querier, status := seriesDataDataStorageQueryV2(ds.dataStorage, query, sd)
-	return DataStorageQueryResultV2{
-		DataStorageQueryResult: DataStorageQueryResult{
-			Querier: querier,
-			Status:  status,
-		},
+	return DataStorageQueryResult{
+		Querier:        querier,
+		Status:         status,
 		SerializedData: sd,
 	}
 }
@@ -363,13 +361,16 @@ func NewDataStorageSerializedData() *DataStorageSerializedData {
 	return sd
 }
 
-func (sd *DataStorageSerializedData) Next() uint32 {
+func (sd *DataStorageSerializedData) Next() (uint32, uint32) {
 	return seriesDataSerializedDataNext(sd.serializedData)
 }
 
-func (sd *DataStorageSerializedData) Iterator() *DataStorageSerializedDataIterator {
+func (sd *DataStorageSerializedData) Iterator(chunkRef uint32) *DataStorageSerializedDataIterator {
 	it := &DataStorageSerializedDataIterator{
-		iterator: seriesDataSerializedDataIterator(sd.serializedData),
+		iterator: seriesDataSerializedDataIterator(sd.serializedData, chunkRef),
+		result: SerializedDataIteratorNextResult{
+			Timestamp: math.MinInt64,
+		},
 	}
 	runtime.SetFinalizer(it, func(it *DataStorageSerializedDataIterator) {
 		seriesDataSerializedDataIteratorDtor(it.iterator)

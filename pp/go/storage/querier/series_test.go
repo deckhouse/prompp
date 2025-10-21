@@ -76,15 +76,12 @@ func (s *SeriesSetTestSuite) SetupTest() {
 			},
 		},
 	}
-
-	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
 }
 
 func (s *SeriesSetTestSuite) query(start, end int64, matchers ...model.LabelMatcher) *querier.SeriesSet {
 	selector, snapshot, err := s.lss.QuerySelector(0, matchers)
 	require.NoError(s.T(), err)
-	require.NotNil(s.T(), snapshot)
-	if selector == 0 {
+	if selector == 0 || snapshot == nil {
 		return &querier.SeriesSet{}
 	}
 
@@ -136,11 +133,15 @@ func (s *SeriesSetTestSuite) TestQueryAllValues() {
 	var start int64 = 0
 	var end int64 = 50
 
+	expected := s.timeSeries
+
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
+
 	// Act
 	seriesSet := s.query(start, end, matcher)
 
 	// Assert
-	s.assertEqual(s.timeSeries, seriesSet)
+	s.assertEqual(expected, seriesSet)
 }
 
 func (s *SeriesSetTestSuite) TestQueryNoValues() {
@@ -154,11 +155,14 @@ func (s *SeriesSetTestSuite) TestQueryNoValues() {
 	var start int64 = 0
 	var end int64 = 1
 
+	expected := []storagetest.TimeSeries{}
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
+
 	// Act
 	seriesSet := s.query(start, end, matcher)
 
 	// Assert
-	s.assertEqual([]storagetest.TimeSeries{}, seriesSet)
+	s.assertEqual(expected, seriesSet)
 }
 
 func (s *SeriesSetTestSuite) TestQuerySingleSeries() {
@@ -172,9 +176,124 @@ func (s *SeriesSetTestSuite) TestQuerySingleSeries() {
 	var start int64 = 0
 	var end int64 = 50
 
+	expected := s.timeSeries[:4]
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
+
 	// Act
 	seriesSet := s.query(start, end, matcher)
 
 	// Assert
-	s.assertEqual(s.timeSeries[:4], seriesSet)
+	s.assertEqual(expected, seriesSet)
+}
+
+func (s *SeriesSetTestSuite) TestQuerySingleSample() {
+	// Arrange
+	matcher := model.LabelMatcher{
+		Name:        "job",
+		Value:       "test",
+		MatcherType: model.MatcherTypeExactMatch,
+	}
+
+	var start int64 = 13
+	var end int64 = 13
+
+	expected := s.timeSeries[3:4]
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
+
+	// Act
+	seriesSet := s.query(start, end, matcher)
+
+	// Assert
+	s.assertEqual(expected, seriesSet)
+}
+
+func (s *SeriesSetTestSuite) TestQueryCutByUpperLimit() {
+	// Arrange
+	matcher := model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	}
+
+	var start int64 = 10
+	var end int64 = 11
+
+	expected := []storagetest.TimeSeries{s.timeSeries[0], s.timeSeries[1], s.timeSeries[4]}
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
+
+	// Act
+	seriesSet := s.query(start, end, matcher)
+
+	// Assert
+	s.assertEqual(expected, seriesSet)
+}
+
+func (s *SeriesSetTestSuite) TestQueryCutByLowerLimit() {
+	// Arrange
+	matcher := model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	}
+
+	var start int64 = 11
+	var end int64 = 50
+
+	expected := s.timeSeries[1:]
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
+
+	// Act
+	seriesSet := s.query(start, end, matcher)
+
+	// Assert
+	s.assertEqual(expected, seriesSet)
+}
+
+func (s *SeriesSetTestSuite) TestQueryLargeChunks() {
+	// Arrange
+	matcher := model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	}
+
+	var start int64 = 0
+	var end int64 = 1000
+
+	var timeSeries []storagetest.TimeSeries
+	for i := 0; i < 500; i++ {
+		timeSeries = append(timeSeries, storagetest.TimeSeries{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: int64(i), Value: float64(i)},
+			},
+		})
+	}
+	expected := timeSeries
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, timeSeries...)
+
+	// Act
+	seriesSet := s.query(start, end, matcher)
+
+	// Assert
+	s.assertEqual(expected, seriesSet)
+}
+
+func (s *SeriesSetTestSuite) TestQueryEmptyStorage() {
+	// Arrange
+	matcher := model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	}
+
+	var start int64 = 0
+	var end int64 = 1000
+
+	expected := []storagetest.TimeSeries{}
+	// Act
+	seriesSet := s.query(start, end, matcher)
+
+	// Assert
+	s.assertEqual(expected, seriesSet)
 }

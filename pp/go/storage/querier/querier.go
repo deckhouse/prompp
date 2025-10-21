@@ -200,7 +200,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 			shardID := s.ShardID()
 			lssQueryResult := lssQueryResults[shardID]
 			if lssQueryResult == nil {
-				seriesSets[shardID] = storage.NoopSeriesSet()
+				seriesSets[shardID] = &SeriesSet{}
 				return nil
 			}
 
@@ -271,7 +271,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 			seriesSets[shardID] = NewSeriesSet(q.mint, q.maxt, lssQueryResults[shardID], snapshots[shardID], serializedData)
 			continue
 		}
-		seriesSets[shardID] = storage.EmptySeriesSet()
+		seriesSets[shardID] = &SeriesSet{}
 	}
 
 	return storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge)
@@ -315,7 +315,7 @@ func queryDataStorage[
 				return nil
 			}
 
-			var result cppbridge.DataStorageQueryResultV2
+			var result cppbridge.DataStorageQueryResult
 			result = s.DataStorage().Query(cppbridge.HeadDataStorageQuery{
 				StartTimestampMs: mint,
 				EndTimestampMs:   maxt,
@@ -500,7 +500,6 @@ func queryLss[
 		func(shard TShard) (err error) {
 			shardID := shard.ShardID()
 			selectors[shardID], snapshots[shardID], err = shard.LSS().QuerySelector(shardID, convertedMatchers)
-
 			return err
 		},
 	)

@@ -1773,7 +1773,7 @@ extern "C" {
  *
  * @param res {
  *     series_id uint32 // series id (UINT32_MAX if no more series).
- *     chunk_id uint32 // inner chunk id.
+ *     chunk_ref uint32 // inner chunk id.
  * }
  */
 void prompp_series_data_serialization_serialized_data_next(void* args, void* res);
@@ -1783,7 +1783,7 @@ void prompp_series_data_serialization_serialized_data_next(void* args, void* res
  *
  * @param args {
  *     serializedData uintptr // pointer to serialized data.
- *     chunk_id uint32 // inner chunk id.
+ *     chunk_ref uint32 // inner chunk id.
  * }
  *
  * @param res {
