@@ -204,7 +204,7 @@ func NewChunkRecoder(lss *LabelSetStorage, lsIdBatchSize uint32, dataStorage *He
 }
 
 func NewSerializedChunkRecoder(serializedData *DataStorageSerializedData, timeInterval TimeInterval) *ChunkRecoder {
-	return initializeChunkRecoder(nil, nil, serializedData, seriesDataSerializedChunkRecoderCtor(serializedData.serializedData, timeInterval))
+	return initializeChunkRecoder(nil, nil, serializedData, seriesDataSerializedChunkRecoderCtor(serializedData, timeInterval))
 }
 
 func initializeChunkRecoder(

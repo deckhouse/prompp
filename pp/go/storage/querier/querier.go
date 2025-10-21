@@ -322,7 +322,6 @@ func queryDataStorage[
 				LabelSetIDs:      lssQueryResult.IDs(),
 			})
 			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {
-				fmt.Println(result, "loading data")
 				loadAndQueryWaiter.Add(s, result.Querier)
 			}
 			shardedSerializedData[s.ShardID()] = result.SerializedData
