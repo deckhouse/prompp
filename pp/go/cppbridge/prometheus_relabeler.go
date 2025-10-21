@@ -535,14 +535,7 @@ type RelabelerStats struct {
 }
 
 // Add another stats.
-func (rs *RelabelerStats) Add(stat RelabelerStats) {
-	rs.SamplesAdded += stat.SamplesAdded
-	rs.SeriesAdded += stat.SeriesAdded
-	rs.SeriesDrop += stat.SeriesDrop
-}
-
-// Adds another slice stats.
-func (rs *RelabelerStats) Adds(stats []RelabelerStats) {
+func (rs *RelabelerStats) Add(stats ...RelabelerStats) {
 	for _, s := range stats {
 		rs.SamplesAdded += s.SamplesAdded
 		rs.SeriesAdded += s.SeriesAdded
@@ -1005,14 +998,6 @@ func NewState(numberOfShards uint16) *State {
 
 // CacheByShard return *Cache for shard.
 func (s *State) CacheByShard(shardID uint16) *Cache {
-	if int(shardID) >= len(s.caches) {
-		panic(fmt.Sprintf(
-			"shardID(%d) out of range in caches(%d)",
-			shardID,
-			len(s.caches),
-		))
-	}
-
 	return s.caches[shardID]
 }
 
@@ -1066,14 +1051,6 @@ func (s *State) SetRelabelerOptions(options *RelabelerOptions) {
 
 // StaleNansStateByShard return SourceStaleNansState for shard.
 func (s *State) StaleNansStateByShard(shardID uint16) *StaleNansState {
-	if int(shardID) >= len(s.staleNansStates) {
-		panic(fmt.Sprintf(
-			"shardID(%d) out of range in staleNansStates(%d)",
-			shardID,
-			len(s.caches),
-		))
-	}
-
 	return s.staleNansStates[shardID]
 }
 
@@ -1566,14 +1543,6 @@ func (s *StateV2) CacheByShard(shardID uint16) *Cache {
 		panic("CacheByShard: state is transition")
 	}
 
-	if int(shardID) >= len(s.caches) {
-		panic(fmt.Sprintf(
-			"shardID(%d) out of range in caches(%d)",
-			shardID,
-			len(s.caches),
-		))
-	}
-
 	return s.caches[shardID]
 }
 
@@ -1662,14 +1631,6 @@ func (s *StateV2) SetStatelessRelabeler(statelessRelabeler *StatelessRelabeler) 
 func (s *StateV2) StaleNansStateByShard(shardID uint16) *StaleNansState {
 	if s.IsTransition() {
 		panic("StaleNansStateByShard: state is transition")
-	}
-
-	if int(shardID) >= len(s.staleNansStates) {
-		panic(fmt.Sprintf(
-			"shardID(%d) out of range in staleNansStates(%d)",
-			shardID,
-			len(s.caches),
-		))
 	}
 
 	return s.staleNansStates[shardID]

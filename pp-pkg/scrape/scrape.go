@@ -100,7 +100,7 @@ type ScraperHashdex interface {
 	Parse(buffer []byte, defaultTimestamp int64) (uint32, error)
 	// RangeMetadata calls f sequentially for each metadata present in the hashdex.
 	// If f returns false, range stops the iteration.
-	RangeMetadata(f func(md cppbridge.WALScraperHashdexMetadata) bool)
+	RangeMetadata(func(cppbridge.WALScraperHashdexMetadata) bool)
 	// Cluster get Cluster name.
 	Cluster() string
 	// Replica get Replica name.

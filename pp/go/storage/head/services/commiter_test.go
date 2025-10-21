@@ -60,7 +60,7 @@ func (*CommitterSuite) createShardOnMemory(
 		shard.NewDataStorage(),
 		nil,
 		nil,
-		wal.NewWal(shardWalEncoder, segmentWriter, maxSegmentSize),
+		wal.NewWal(shardWalEncoder, segmentWriter, maxSegmentSize, shardID, nil),
 		shardID,
 	)
 }
