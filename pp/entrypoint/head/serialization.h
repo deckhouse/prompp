@@ -12,8 +12,8 @@ class SerializedDataGo {
   [[nodiscard]] PROMPP_ALWAYS_INLINE auto get_buffer_view() const noexcept { return data_view_.get_buffer_view(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE auto get_chunks_view() const noexcept { return data_view_.get_chunks_view(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next() noexcept { return data_view_.next_series(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto iterator() const noexcept { return data_view_.create_current_series_iterator(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE auto next() noexcept { return data_view_.next_series(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE auto iterator(uint32_t chunk_id) const noexcept { return data_view_.create_series_iterator(chunk_id); }
 
  private:
   series_data::serialization::SerializedData data_;

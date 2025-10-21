@@ -204,6 +204,7 @@ class DataSerializer {
 
 class SerializedDataView {
  public:
+  using series_id_inner_chunk_id_t = std::pair<uint32_t, uint32_t>;
   static constexpr uint32_t kNoMoreSeries = std::numeric_limits<uint32_t>::max();
 
   class SeriesIterator {
@@ -261,43 +262,46 @@ class SerializedDataView {
     chunk::SerializedChunkSpan chunks_;
   };
 
-  explicit SerializedDataView(const SerializedData& serialized_data) : data_(serialized_data), series_index_{kNoMoreSeries} {}
+  explicit SerializedDataView(const SerializedData& serialized_data) : data_(serialized_data) {}
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE chunk::SerializedChunkSpan get_chunks_view() const noexcept { return {data_.chunks.data(), data_.chunks.size()}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const unsigned char> get_buffer_view() const noexcept {
     return {data_.bytes_buffer.control_block().data, data_.bytes_buffer.size()};
   }
 
-  [[nodiscard]] uint32_t next_series() noexcept {
+  [[nodiscard]] series_id_inner_chunk_id_t next_series() noexcept {
     const auto& chunks = data_.chunks;
-    if (series_index_ == kNoMoreSeries) [[unlikely]] {
+    if (series_first_chunk_id_ == kNoMoreSeries) [[unlikely]] {
       if (chunks.empty()) [[unlikely]] {
-        return kNoMoreSeries;
+        return {kNoMoreSeries, series_first_chunk_id_};
       }
-      series_index_ = 0;
-      return chunks[0].label_set_id;
+      series_first_chunk_id_ = 0;
+      return {chunks[0].label_set_id, series_first_chunk_id_};
     }
 
-    if (series_index_ == chunks.size()) [[unlikely]] {
-      return kNoMoreSeries;
+    if (series_first_chunk_id_ == chunks.size()) [[unlikely]] {
+      return {kNoMoreSeries, series_first_chunk_id_};
     }
 
-    const uint32_t current_series_id = chunks[series_index_].label_set_id;
+    const uint32_t current_series_id = chunks[series_first_chunk_id_].label_set_id;
     do {
-      ++series_index_;
-    } while (series_index_ < chunks.size() && chunks[series_index_].label_set_id == current_series_id);
+      ++series_first_chunk_id_;
+    } while (series_first_chunk_id_ < chunks.size() && chunks[series_first_chunk_id_].label_set_id == current_series_id);
 
-    if (series_index_ == chunks.size()) [[unlikely]] {
-      return kNoMoreSeries;
+    if (series_first_chunk_id_ == chunks.size()) [[unlikely]] {
+      return {kNoMoreSeries, series_first_chunk_id_};
     }
 
-    return chunks[series_index_].label_set_id;
+    return {chunks[series_first_chunk_id_].label_set_id, series_first_chunk_id_};
   }
 
-  [[nodiscard]] SeriesIterator create_current_series_iterator() const noexcept { return {data_.bytes_buffer, get_chunks_view(), series_index_}; }
+  [[nodiscard]] SeriesIterator create_current_series_iterator() const noexcept { return {data_.bytes_buffer, get_chunks_view(), series_first_chunk_id_}; }
+  [[nodiscard]] SeriesIterator create_series_iterator(uint32_t series_first_chunk_id) const noexcept {
+    return {data_.bytes_buffer, get_chunks_view(), series_first_chunk_id};
+  }
 
  private:
   const SerializedData& data_;
-  uint32_t series_index_;
+  uint32_t series_first_chunk_id_{kNoMoreSeries};
 };
 }  // namespace series_data::serialization
