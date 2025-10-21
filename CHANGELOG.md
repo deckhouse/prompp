@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.6.1
+
+### Fixes
+1. **Empty Block Creation Check.** Added validation to prevent the creation of empty historical blocks during conversion under specific conditions.
+2. **Handling of Corrupted Historical Blocks.** Improved handling of corrupted or empty historical blocks to prevent service crashes.
+3. **Startup Error Handling.** Fixed an issue where errors occurring before the TSDB initialization could lead to a deadlock, requiring a manual process termination.
+
 ## v0.6.0
 
 ### Fixes
