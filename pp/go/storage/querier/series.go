@@ -10,54 +10,170 @@ import (
 	"math"
 )
 
-type Series struct {
-	labelSet      labels.Labels
-	chunkIterator *cppbridge.DataStorageSerializedDataIterator
+type ChunkIterator struct {
+	iterator *cppbridge.DataStorageSerializedDataIterator
 }
 
-func (s *Series) Next() chunkenc.ValueType {
-	hasValue := s.chunkIterator.Next()
-	if !hasValue {
+func (it *ChunkIterator) Next() chunkenc.ValueType {
+	if !it.iterator.Next() {
 		return chunkenc.ValNone
 	}
+
 	return chunkenc.ValFloat
 }
 
-func (s *Series) Seek(t int64) chunkenc.ValueType {
-	for s.AtT() < t {
-		if s.Next() == chunkenc.ValNone {
-			return chunkenc.ValNone
+func (it *ChunkIterator) Seek(t int64) chunkenc.ValueType {
+	for {
+		ts, _ := it.iterator.At()
+		// check if iterator is not initialized or is not reached t.
+		if ts == math.MinInt64 || ts < t {
+			if !it.iterator.Next() {
+				return chunkenc.ValNone
+			}
+			continue
 		}
+		return chunkenc.ValFloat
 	}
-
-	return chunkenc.ValFloat
 }
 
-func (s *Series) At() (int64, float64) {
-	return s.chunkIterator.At()
+func (it *ChunkIterator) At() (int64, float64) {
+	return it.iterator.At()
 }
 
-func (s *Series) AtHistogram(_ *histogram.Histogram) (int64, *histogram.Histogram) {
+func (it *ChunkIterator) AtHistogram(h *histogram.Histogram) (int64, *histogram.Histogram) {
 	return 0, nil
 }
 
-func (s *Series) AtFloatHistogram(_ *histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
+func (it *ChunkIterator) AtFloatHistogram(floatHistogram *histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
 	return 0, nil
 }
 
-func (s *Series) AtT() int64 {
-	ts, _ := s.chunkIterator.At()
+func (it *ChunkIterator) AtT() int64 {
+	ts, _ := it.iterator.At()
 	return ts
 }
 
-func (s *Series) Err() error {
+func (it *ChunkIterator) Err() error {
 	return nil
 }
 
-func NewSeries(labelSet labels.Labels, chunkIterator *cppbridge.DataStorageSerializedDataIterator) *Series {
+func NewChunkIterator(iterator *cppbridge.DataStorageSerializedDataIterator) *ChunkIterator {
+	return &ChunkIterator{iterator: iterator}
+}
+
+// LimitedChunkIterator iterates over the samples of a time series, that can only get the next value with limit.
+type LimitedChunkIterator struct {
+	chunkIterator chunkenc.Iterator
+	mint          int64
+	maxt          int64
+}
+
+// NewLimitedChunkIterator init new [LimitedChunkIterator].
+func NewLimitedChunkIterator(iterator chunkenc.Iterator, mint, maxt int64) *LimitedChunkIterator {
+	return &LimitedChunkIterator{
+		chunkIterator: iterator,
+		mint:          mint,
+		maxt:          maxt,
+	}
+}
+
+// At returns the current timestamp/value pair if the value is a float.
+//
+//nolint:gocritic // unnamedResult not need
+func (it *LimitedChunkIterator) At() (int64, float64) {
+	return it.chunkIterator.At()
+}
+
+// AtFloatHistogram returns the current timestamp/value pair if the value is a histogram with floating-point counts.
+func (it *LimitedChunkIterator) AtFloatHistogram(h *histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
+	return it.chunkIterator.AtFloatHistogram(h)
+}
+
+// AtHistogram returns the current timestamp/value pair if the value is a histogram with integer counts.
+func (it *LimitedChunkIterator) AtHistogram(h *histogram.Histogram) (int64, *histogram.Histogram) {
+	return it.chunkIterator.AtHistogram(h)
+}
+
+// AtT returns the current timestamp.
+func (it *LimitedChunkIterator) AtT() int64 {
+	return it.chunkIterator.AtT()
+}
+
+// Err returns the current error.
+func (it *LimitedChunkIterator) Err() error {
+	return it.chunkIterator.Err()
+}
+
+// Next advances the iterator by one and returns the type of the value.
+func (it *LimitedChunkIterator) Next() chunkenc.ValueType {
+	var ts int64
+	for {
+		// advance
+		if it.chunkIterator.Next() == chunkenc.ValNone {
+			return chunkenc.ValNone
+		}
+
+		// get current ts
+		ts = it.chunkIterator.AtT()
+
+		// continue if we are below lower limit.
+		if ts < it.mint {
+			continue
+		}
+
+		// end if we are above upper limit.
+		if ts > it.maxt {
+			return chunkenc.ValNone
+		}
+
+		return chunkenc.ValFloat
+	}
+}
+
+// Seek advances the iterator forward to the first sample with a timestamp equal or greater than t.
+func (it *LimitedChunkIterator) Seek(t int64) chunkenc.ValueType {
+	// adjust lower limit.
+	if t < it.mint {
+		t = it.mint
+	}
+
+	// if target timestamp is above upper limit - skip to the end of chunk.
+	if t > it.maxt {
+		// exhaust iterator
+		for it.chunkIterator.Next() != chunkenc.ValNone {
+		}
+		return chunkenc.ValNone
+	}
+
+	if it.chunkIterator.Seek(t) == chunkenc.ValNone {
+		return chunkenc.ValNone
+	}
+
+	// timestamp after seek will be always more than it.mint, but may also be more than it.maxt
+	if it.chunkIterator.AtT() > it.maxt {
+		// exhaust iterator
+		for it.chunkIterator.Next() != chunkenc.ValNone {
+		}
+		return chunkenc.ValNone
+	}
+
+	return chunkenc.ValFloat
+}
+
+type Series struct {
+	mint, maxt     int64
+	labelSet       labels.Labels
+	serializedData *cppbridge.DataStorageSerializedData
+	chunkRef       uint32
+}
+
+func NewSeries(mint, maxt int64, labelSet labels.Labels, serializedData *cppbridge.DataStorageSerializedData, chunkRef uint32) *Series {
 	return &Series{
-		labelSet:      labelSet,
-		chunkIterator: chunkIterator,
+		mint:           mint,
+		maxt:           maxt,
+		labelSet:       labelSet,
+		serializedData: serializedData,
+		chunkRef:       chunkRef,
 	}
 }
 
@@ -66,57 +182,7 @@ func (s *Series) Labels() labels.Labels {
 }
 
 func (s *Series) Iterator(_ chunkenc.Iterator) chunkenc.Iterator {
-	return s
-}
-
-type LimitedSeries struct {
-	mint, maxt int64
-	series     *Series
-}
-
-func (ls *LimitedSeries) Next() chunkenc.ValueType {
-
-}
-
-func (ls *LimitedSeries) Seek(t int64) chunkenc.ValueType {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (ls *LimitedSeries) At() (int64, float64) {
-	return ls.series.At()
-}
-
-func (ls *LimitedSeries) AtHistogram(h *histogram.Histogram) (int64, *histogram.Histogram) {
-	return ls.series.AtHistogram(h)
-}
-
-func (ls *LimitedSeries) AtFloatHistogram(floatHistogram *histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
-	return ls.series.AtFloatHistogram(floatHistogram)
-}
-
-func (ls *LimitedSeries) AtT() int64 {
-	return ls.series.AtT()
-}
-
-func (ls *LimitedSeries) Err() error {
-	return ls.series.Err()
-}
-
-func (ls *LimitedSeries) Labels() labels.Labels {
-	return ls.Labels()
-}
-
-func (ls *LimitedSeries) Iterator(_ chunkenc.Iterator) chunkenc.Iterator {
-	return ls
-}
-
-func NewLimitedSeries(mint, maxt int64, series *Series) *LimitedSeries {
-	return &LimitedSeries{
-		mint:   mint,
-		maxt:   maxt,
-		series: series,
-	}
+	return NewLimitedChunkIterator(NewChunkIterator(s.serializedData.Iterator(s.chunkRef)), s.mint, s.maxt)
 }
 
 type SeriesSet struct {
@@ -148,19 +214,18 @@ func (s *SeriesSet) Next() bool {
 		return false
 	}
 
-	seriesID := s.serializedData.Next()
+	seriesID, chunkRef := s.serializedData.Next()
 	if seriesID == math.MaxUint32 {
 		return false
 	}
 
 	_, lsLength := s.lssQueryResult.GetByIndex(s.lssQueryResult.IndexOf(seriesID))
-	s.series = NewLimitedSeries(
+	s.series = NewSeries(
 		s.mint,
 		s.maxt,
-		NewSeries(
-			labels.NewLabelsWithLSS(s.labelSetSnapshot, seriesID, lsLength),
-			s.serializedData.Iterator(),
-		),
+		labels.NewLabelsWithLSS(s.labelSetSnapshot, seriesID, lsLength),
+		s.serializedData,
+		chunkRef,
 	)
 
 	return true
@@ -176,87 +241,6 @@ func (s *SeriesSet) Err() error {
 
 func (s *SeriesSet) Warnings() annotations.Annotations {
 	return nil
-}
-
-// LimitedChunkIterator iterates over the samples of a time series, that can only get the next value with limit.
-type LimitedChunkIterator struct {
-	chunkIterator chunkenc.Iterator
-	mint          int64
-	maxt          int64
-}
-
-// NewLimitedChunkIterator init new [LimitedChunkIterator].
-func NewLimitedChunkIterator(iterator chunkenc.Iterator, mint, maxt int64) *LimitedChunkIterator {
-	return &LimitedChunkIterator{
-		chunkIterator: iterator,
-		mint:          mint,
-		maxt:          maxt,
-	}
-}
-
-// At returns the current timestamp/value pair if the value is a float.
-//
-//nolint:gocritic // unnamedResult not need
-func (i *LimitedChunkIterator) At() (int64, float64) {
-	return i.chunkIterator.At()
-}
-
-// AtFloatHistogram returns the current timestamp/value pair if the value is a histogram with floating-point counts.
-func (i *LimitedChunkIterator) AtFloatHistogram(h *histogram.FloatHistogram) (int64, *histogram.FloatHistogram) {
-	return i.chunkIterator.AtFloatHistogram(h)
-}
-
-// AtHistogram returns the current timestamp/value pair if the value is a histogram with integer counts.
-func (i *LimitedChunkIterator) AtHistogram(h *histogram.Histogram) (int64, *histogram.Histogram) {
-	return i.chunkIterator.AtHistogram(h)
-}
-
-// AtT returns the current timestamp.
-func (i *LimitedChunkIterator) AtT() int64 {
-	return i.chunkIterator.AtT()
-}
-
-// Err returns the current error.
-func (i *LimitedChunkIterator) Err() error {
-	return i.chunkIterator.Err()
-}
-
-// Next advances the iterator by one and returns the type of the value.
-func (i *LimitedChunkIterator) Next() chunkenc.ValueType {
-	if i.chunkIterator.Next() == chunkenc.ValNone {
-		return chunkenc.ValNone
-	}
-
-	if i.Seek(i.mint) == chunkenc.ValNone {
-		return chunkenc.ValNone
-	}
-
-	if i.chunkIterator.AtT() > i.maxt {
-		return chunkenc.ValNone
-	}
-
-	return chunkenc.ValFloat
-}
-
-// Seek advances the iterator forward to the first sample with a timestamp equal or greater than t.
-func (i *LimitedChunkIterator) Seek(t int64) chunkenc.ValueType {
-	if t < i.mint {
-		t = i.mint
-	}
-
-	if t > i.maxt {
-		t = i.maxt
-	}
-
-	if i.chunkIterator.Seek(t) == chunkenc.ValNone {
-		return chunkenc.ValNone
-	}
-
-	if i.chunkIterator.AtT() > i.maxt {
-		return chunkenc.ValNone
-	}
-
-	return chunkenc.ValFloat
 }
 
 //

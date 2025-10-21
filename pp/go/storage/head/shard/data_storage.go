@@ -73,9 +73,9 @@ func (ds *DataStorage) MergeOutOfOrderChunks() {
 	ds.locker.Unlock()
 }
 
-func (ds *DataStorage) Query(query cppbridge.HeadDataStorageQuery) cppbridge.DataStorageQueryResultV2 {
+func (ds *DataStorage) Query(query cppbridge.HeadDataStorageQuery) cppbridge.DataStorageQueryResult {
 	ds.locker.RLock()
-	result := ds.dataStorage.QueryV2(query)
+	result := ds.dataStorage.Query(query)
 	ds.locker.RUnlock()
 	return result
 }

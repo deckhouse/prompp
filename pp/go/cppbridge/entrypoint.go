@@ -2139,36 +2139,32 @@ func seriesDataDataStorageAllocatedMemory(dataStorage uintptr) uint64 {
 }
 
 type DataStorageQueryResult struct {
-	Querier uintptr
-	Status  uint8
-}
-
-type DataStorageQueryResultV2 struct {
-	DataStorageQueryResult
+	Querier        uintptr
+	Status         uint8
 	SerializedData *DataStorageSerializedData
 }
 
-func seriesDataDataStorageQuery(dataStorage uintptr, query HeadDataStorageQuery, serializedChunks *[]byte) DataStorageQueryResult {
-	args := struct {
-		dataStorage      uintptr
-		query            HeadDataStorageQuery
-		serializedChunks *[]byte
-	}{dataStorage, query, serializedChunks}
-
-	var res DataStorageQueryResult
-
-	testGC()
-	start := time.Now().UnixNano()
-	fastcgo.UnsafeCall2(
-		C.prompp_series_data_data_storage_query,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-	headDataStorageQuerySum.Add(float64(time.Now().UnixNano() - start))
-	headDataStorageQueryCount.Inc()
-
-	return res
-}
+//func seriesDataDataStorageQuery(dataStorage uintptr, query HeadDataStorageQuery, serializedChunks *[]byte) DataStorageQueryResult {
+//	args := struct {
+//		dataStorage      uintptr
+//		query            HeadDataStorageQuery
+//		serializedChunks *[]byte
+//	}{dataStorage, query, serializedChunks}
+//
+//	var res DataStorageQueryResult
+//
+//	testGC()
+//	start := time.Now().UnixNano()
+//	fastcgo.UnsafeCall2(
+//		C.prompp_series_data_data_storage_query,
+//		uintptr(unsafe.Pointer(&args)),
+//		uintptr(unsafe.Pointer(&res)),
+//	)
+//	headDataStorageQuerySum.Add(float64(time.Now().UnixNano() - start))
+//	headDataStorageQueryCount.Inc()
+//
+//	return res
+//}
 
 func seriesDataDataStorageQueryV2(dataStorage uintptr, query HeadDataStorageQuery, serializedData *DataStorageSerializedData) (querier uintptr, status uint8) {
 	args := struct {
@@ -2244,12 +2240,13 @@ func seriesDataSerializedDataDtor(serializedData uintptr) {
 	)
 }
 
-func seriesDataSerializedDataNext(serializedData uintptr) uint32 {
+func seriesDataSerializedDataNext(serializedData uintptr) (uint32, uint32) {
 	args := struct {
 		serializedData uintptr
 	}{serializedData}
 	res := struct {
 		seriesID uint32
+		chunkRef uint32
 	}{}
 
 	testGC()
@@ -2259,13 +2256,14 @@ func seriesDataSerializedDataNext(serializedData uintptr) uint32 {
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.seriesID
+	return res.seriesID, res.chunkRef
 }
 
-func seriesDataSerializedDataIterator(serializedData uintptr) uintptr {
+func seriesDataSerializedDataIterator(serializedData uintptr, chunkRef uint32) uintptr {
 	args := struct {
 		serializedData uintptr
-	}{serializedData}
+		chunkRef       uint32
+	}{serializedData, chunkRef}
 	res := struct {
 		iterator uintptr
 	}{}
