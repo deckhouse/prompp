@@ -2170,16 +2170,18 @@ func seriesDataDataStorageQuery(dataStorage uintptr, query HeadDataStorageQuery,
 	return res
 }
 
-func seriesDataDataStorageQueryV2(dataStorage uintptr, query HeadDataStorageQuery) (querier uintptr, status uint8, serializedData uintptr) {
+func seriesDataDataStorageQueryV2(dataStorage uintptr, query HeadDataStorageQuery, serializedData *DataStorageSerializedData) (querier uintptr, status uint8) {
 	args := struct {
 		dataStorage uintptr
 		query       HeadDataStorageQuery
 	}{dataStorage, query}
 
-	var res struct {
+	var res = struct {
 		Querier        uintptr
 		Status         uint8
-		SerializedData uintptr
+		SerializedData *uintptr
+	}{
+		SerializedData: &serializedData.serializedData,
 	}
 
 	testGC()
@@ -2192,7 +2194,7 @@ func seriesDataDataStorageQueryV2(dataStorage uintptr, query HeadDataStorageQuer
 	headDataStorageQuerySum.Add(float64(time.Now().UnixNano() - start))
 	headDataStorageQueryCount.Inc()
 
-	return res.Querier, res.Status, res.SerializedData
+	return res.Querier, res.Status
 }
 
 func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32, timestamp int64, samples []Sample) DataStorageQueryResult {
@@ -2587,11 +2589,11 @@ func seriesDataChunkRecoderCtor(lss uintptr, lsIdBatchSize uint32, dataStorage u
 	return res.chunkRecoder
 }
 
-func seriesDataSerializedChunkRecoderCtor(serializedChunks []byte, timeInterval TimeInterval) uintptr {
+func seriesDataSerializedChunkRecoderCtor(serializedData uintptr, timeInterval TimeInterval) uintptr {
 	args := struct {
-		serializedChunks []byte
+		serializedData uintptr
 		TimeInterval
-	}{serializedChunks, timeInterval}
+	}{serializedData, timeInterval}
 	var res struct {
 		chunkRecoder uintptr
 	}

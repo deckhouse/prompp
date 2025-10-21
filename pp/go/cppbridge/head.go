@@ -194,30 +194,30 @@ type ChunkRecoder struct {
 	recoder      uintptr
 	recodedChunk RecodedChunk
 
-	lss              *LabelSetStorage
-	dataStorage      *HeadDataStorage
-	serializedChunks *HeadDataStorageSerializedChunks
+	lss            *LabelSetStorage
+	dataStorage    *HeadDataStorage
+	serializedData *DataStorageSerializedData
 }
 
 func NewChunkRecoder(lss *LabelSetStorage, lsIdBatchSize uint32, dataStorage *HeadDataStorage, timeInterval TimeInterval) *ChunkRecoder {
 	return initializeChunkRecoder(lss, dataStorage, nil, seriesDataChunkRecoderCtor(lss.Pointer(), lsIdBatchSize, dataStorage.dataStorage, timeInterval))
 }
 
-func NewSerializedChunkRecoder(serializedChunks *HeadDataStorageSerializedChunks, timeInterval TimeInterval) *ChunkRecoder {
-	return initializeChunkRecoder(nil, nil, serializedChunks, seriesDataSerializedChunkRecoderCtor(serializedChunks.Data(), timeInterval))
+func NewSerializedChunkRecoder(serializedData *DataStorageSerializedData, timeInterval TimeInterval) *ChunkRecoder {
+	return initializeChunkRecoder(nil, nil, serializedData, seriesDataSerializedChunkRecoderCtor(serializedData.serializedData, timeInterval))
 }
 
 func initializeChunkRecoder(
 	lss *LabelSetStorage,
 	dataStorage *HeadDataStorage,
-	serializedChunks *HeadDataStorageSerializedChunks,
+	serializedData *DataStorageSerializedData,
 	recoder uintptr,
 ) *ChunkRecoder {
 	chunkRecoder := &ChunkRecoder{
-		recoder:          recoder,
-		lss:              lss,
-		dataStorage:      dataStorage,
-		serializedChunks: serializedChunks,
+		recoder:        recoder,
+		lss:            lss,
+		dataStorage:    dataStorage,
+		serializedData: serializedData,
 	}
 
 	runtime.SetFinalizer(chunkRecoder, func(chunkRecoder *ChunkRecoder) {
@@ -325,11 +325,8 @@ func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) (*HeadDataStorageSe
 }
 
 func (ds *HeadDataStorage) QueryV2(query HeadDataStorageQuery) DataStorageQueryResultV2 {
-	querier, status, serializedData := seriesDataDataStorageQueryV2(ds.dataStorage, query)
-	sd := &DataStorageSerializedData{serializedData: serializedData}
-	runtime.SetFinalizer(sd, func(sd *DataStorageSerializedData) {
-		seriesDataSerializedDataDtor(sd.serializedData)
-	})
+	sd := NewDataStorageSerializedData()
+	querier, status := seriesDataDataStorageQueryV2(ds.dataStorage, query, sd)
 	return DataStorageQueryResultV2{
 		DataStorageQueryResult: DataStorageQueryResult{
 			Querier: querier,
@@ -356,6 +353,14 @@ func (ds *HeadDataStorage) QueryFinal(queriers []uintptr) {
 
 type DataStorageSerializedData struct {
 	serializedData uintptr
+}
+
+func NewDataStorageSerializedData() *DataStorageSerializedData {
+	sd := &DataStorageSerializedData{}
+	runtime.SetFinalizer(sd, func(sd *DataStorageSerializedData) {
+		seriesDataSerializedDataDtor(sd.serializedData)
+	})
+	return sd
 }
 
 func (sd *DataStorageSerializedData) Next() uint32 {
