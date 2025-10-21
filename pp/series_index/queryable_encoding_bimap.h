@@ -186,31 +186,25 @@ class QueryableEncodingBimapCopier {
   }
 
   void copy_added_series() {
+    old_new_ids_.clear();
+    old_new_ids_.reserve(source_.size());
+
     Cache<uint32_t> cache;
     cache.reserve(source_.data().label_name_sets_table.size(), source_.data().label_name_sets_table.data().symbols_table.size(), source_.data().symbols_tables);
 
     destination_.reserve(source_);
 
     for (const auto ls_id : ls_id_range_) {
+      old_new_ids_.emplace_back(ls_id, destination_.next_item_index());
       destination_.items_.emplace_back(destination_.data_, source_[ls_id], cache);
     }
+
+    const auto cmp = sorting_index_.get_comparator();
+    std::sort(old_new_ids_.begin(), old_new_ids_.end(), [&](const id_pair& a, const id_pair& b) { return cmp(a.old_id, b.old_id); });
   }
 
   void copy_ls_id_set() {
-    struct id_pair {
-      uint32_t old_id;
-      uint32_t new_id;
-    };
-    const auto cmp = sorting_index_.get_comparator();
-
-    BareBones::Vector<id_pair> vec(destination_.size());
-    for (uint32_t new_id = 0; const auto old_id : ls_id_range_) {
-      vec[new_id] = {old_id, new_id++};
-    }
-
-    std::sort(vec.begin(), vec.end(), [&](const id_pair& a, const id_pair& b) { return cmp(a.old_id, b.old_id); });
-
-    for (const auto& p : vec) {
+    for (const auto& p : old_new_ids_) {
       destination_.ls_id_set_.emplace_hint_cmp(destination_.ls_id_set_.end(), [](auto, auto) { return true; }, p.new_id);
     }
   }
@@ -257,9 +251,15 @@ class QueryableEncodingBimapCopier {
   }
 
  private:
+  struct id_pair {
+    uint32_t old_id;
+    uint32_t new_id;
+  };
+
   const DecodingTable& source_;
   const SortingIndex& sorting_index_;
   QueryableEncodingBimap& destination_;
   const SeriesIds& ls_id_range_;
+  BareBones::Vector<id_pair> old_new_ids_;
 };
 }  // namespace series_index
