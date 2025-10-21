@@ -2587,11 +2587,11 @@ func seriesDataChunkRecoderCtor(lss uintptr, lsIdBatchSize uint32, dataStorage u
 	return res.chunkRecoder
 }
 
-func seriesDataSerializedChunkRecoderCtor(serializedData uintptr, timeInterval TimeInterval) uintptr {
+func seriesDataSerializedChunkRecoderCtor(serializedData *DataStorageSerializedData, timeInterval TimeInterval) uintptr {
 	args := struct {
-		serializedData uintptr
+		serializedData *uintptr
 		TimeInterval
-	}{serializedData, timeInterval}
+	}{&serializedData.serializedData, timeInterval}
 	var res struct {
 		chunkRecoder uintptr
 	}

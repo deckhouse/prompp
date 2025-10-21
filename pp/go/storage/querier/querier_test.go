@@ -2,7 +2,6 @@ package querier_test
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -164,7 +163,6 @@ func (s *QuerierSuite) TestRangeQueryWithoutMatching() {
 
 func (s *QuerierSuite) TestRangeQueryWithDataStorageLoading() {
 	// Arrange
-	fmt.Println("TestRangeQueryWithDataStorageLoading")
 	timeSeries := []storagetest.TimeSeries{
 		{
 			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
@@ -222,7 +220,6 @@ func (s *QuerierSuite) TestRangeQueryWithDataStorageLoading() {
 
 func (s *QuerierSuite) TestInstantQuery() {
 	// Arrange
-	fmt.Println("TestInstantQuery")
 	timeSeries := []storagetest.TimeSeries{
 		{
 			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
