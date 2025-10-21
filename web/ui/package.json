@@ -17,6 +17,7 @@
   },
   "devDependencies": {
     "@babel/runtime": "7.26.10",
+    "@rollup/plugin-node-resolve": "16.0.3",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.14.9",
     "body-parser": "1.20.3",
@@ -36,7 +37,7 @@
     "path-to-regexp": "1.9.0",
     "postcss": "8.4.31",
     "prettier": "^2.8.8",
-    "react-scripts": "^0.0.0",
+    "react-scripts": "5.0.1",
     "rollup": "2.79.2",
     "send": "0.19.0",
     "serialize-javascript": "6.0.2",
