@@ -197,18 +197,21 @@ class QueryableEncodingBimapCopier {
   }
 
   void copy_ls_id_set() {
-    auto cmp = sorting_index_.get_comparator();
+    struct id_pair {
+      uint32_t old_id;
+      uint32_t new_id;
+    };
+    const auto cmp = sorting_index_.get_comparator();
 
-    BareBones::Vector<uint32_t> ids_new(destination_.size());
-    std::ranges::iota(ids_new, 0u);
+    BareBones::Vector<id_pair> vec(destination_.size());
+    for (uint32_t new_id = 0; const auto old_id : ls_id_range_) {
+      vec[new_id] = {old_id, new_id++};
+    }
 
-    BareBones::Vector<uint32_t> ids_old(destination_.size());
-    std::ranges::copy(ls_id_range_.begin(), ls_id_range_.end(), ids_old.begin());
+    std::sort(vec.begin(), vec.end(), [&](const id_pair& a, const id_pair& b) { return cmp(a.old_id, b.old_id); });
 
-    std::ranges::sort(ids_new, [&](auto a, auto b) { return cmp(ids_old[a], ids_old[b]); });
-
-    for (uint32_t ls_id_new : ids_new) {
-      destination_.ls_id_set_.emplace_hint_cmp(destination_.ls_id_set_.end(), [](auto, auto) { return true; }, ls_id_new);
+    for (const auto& p : vec) {
+      destination_.ls_id_set_.emplace_hint_cmp(destination_.ls_id_set_.end(), [](auto, auto) { return true; }, p.new_id);
     }
   }
 
