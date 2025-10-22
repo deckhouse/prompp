@@ -1,6 +1,78 @@
 package remotewriter
 
 // import (
+// 	"net/url"
+// 	"path/filepath"
+// 	"testing"
+// 	"time"
+
+// 	"github.com/jonboulle/clockwork"
+// 	common_config "github.com/prometheus/common/config"
+// 	common_model "github.com/prometheus/common/model"
+// 	"github.com/stretchr/testify/suite"
+
+// 	prom_config "github.com/prometheus/prometheus/config"
+// 	"github.com/prometheus/prometheus/model/labels"
+// 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
+// 	"github.com/prometheus/prometheus/pp/go/storage/remotewriter/mock"
+// )
+
+// type WriteLoopSuite struct {
+// 	suite.Suite
+// }
+
+// func TestWriteLoopSuite(t *testing.T) {
+// 	suite.Run(t, new(WriteLoopSuite))
+// }
+
+// func (s *WriteLoopSuite) TestHappyPath() {
+// 	tmpDir := s.T().TempDir()
+// 	ctx := s.T().Context()
+
+// 	fileLog, err := catalog.NewFileLogV2(filepath.Join(tmpDir, "catalog"))
+// 	s.Require().NoError(err)
+
+// 	clock := clockwork.NewRealClock()
+// 	hCatalog, err := catalog.New(clock, fileLog, catalog.DefaultIDGenerator{}, catalog.DefaultMaxLogFileSize, nil)
+// 	s.Require().NoError(err)
+
+// 	u, err := url.Parse("http://localhost:8080")
+// 	s.Require().NoError(err)
+
+// 	destination := NewDestination(DestinationConfig{
+// 		RemoteWriteConfig: prom_config.RemoteWriteConfig{
+// 			URL:                  &common_config.URL{URL: u},
+// 			RemoteTimeout:        0,
+// 			Headers:              nil,
+// 			WriteRelabelConfigs:  nil,
+// 			Name:                 "remote_write_0",
+// 			SendExemplars:        false,
+// 			SendNativeHistograms: false,
+// 			HTTPClientConfig:     common_config.HTTPClientConfig{},
+// 			QueueConfig: prom_config.QueueConfig{
+// 				MaxSamplesPerSend: 2,
+// 				MinShards:         3,
+// 				MaxShards:         5,
+// 				SampleAgeLimit:    common_model.Duration(time.Hour),
+// 			},
+// 			MetadataConfig: prom_config.MetadataConfig{},
+// 			SigV4Config:    nil,
+// 			AzureADConfig:  nil,
+// 		},
+// 		ExternalLabels: labels.FromStrings("lol", "kek"),
+// 		ReadTimeout:    time.Second * 3,
+// 	})
+
+// 	wl := newWriteLoop(tmpDir, destination, hCatalog, clock)
+
+// 	pw := &mock.ProtobufWriterMock{}
+// 	it, err := wl.nextIterator(ctx, pw)
+// 	s.Require().NoError(err)
+
+// 	s.Require().NoError(it.Next(ctx))
+// }
+
+// import (
 // 	"context"
 // 	"errors"
 // 	"net/url"
