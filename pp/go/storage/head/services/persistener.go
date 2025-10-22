@@ -36,7 +36,7 @@ type Persistener[
 	tsdbRetentionPeriod time.Duration
 	retentionPeriod     time.Duration
 	// stat
-	events                  *prometheus.CounterVec
+	events                  prometheus.Counter
 	headPersistenceDuration prometheus.Histogram
 }
 
@@ -63,12 +63,12 @@ func NewPersistener[
 		clock:               clock,
 		tsdbRetentionPeriod: tsdbRetentionPeriod,
 		retentionPeriod:     retentionPeriod,
-		events: factory.NewCounterVec(
+		events: factory.NewCounter(
 			prometheus.CounterOpts{
-				Name: "prompp_head_event_count",
-				Help: "Number of head events",
+				Name:        "prompp_head_event_count",
+				Help:        "Number of head events",
+				ConstLabels: prometheus.Labels{"type": "persisted"},
 			},
-			[]string{"type"},
 		),
 		headPersistenceDuration: factory.NewHistogram(
 			prometheus.HistogramOpts{
@@ -100,8 +100,8 @@ func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) Persist(
 		if record, err := p.catalog.Get(head.ID()); err != nil {
 			logger.Errorf("[Persistener]: failed get head %s from catalog: %v", head.ID(), err)
 		} else if record.Status() == catalog.StatusPersisted {
-			logger.Debugf("[Persistener]: persisted head %s is outdated", head.ID())
 			if p.persistedHeadIsOutdated(record.UpdatedAt()) {
+				logger.Debugf("[Persistener]: persisted head %s is outdated", head.ID())
 				outdatedHeads = append(outdatedHeads, head)
 			}
 
@@ -109,7 +109,6 @@ func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) Persist(
 		}
 
 		if p.HeadIsOutdated(head) {
-			// the head is outdated and data on it is no longer required
 			logger.Debugf("[Persistener]: head %s is outdated", head.ID())
 			if _, err := p.catalog.SetStatus(head.ID(), catalog.StatusPersisted); err != nil {
 				logger.Errorf("[Persistener]: set head status in catalog %s: %v", head.ID(), err)
@@ -136,7 +135,7 @@ func (p *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]) Persist(
 		}
 
 		logger.Infof("[Persistener]: head %s persisted, duration: %v", head.ID(), p.clock.Since(start))
-		p.events.With(prometheus.Labels{"type": "persisted"}).Inc()
+		p.events.Inc()
 		p.headPersistenceDuration.Observe(float64(p.clock.Since(start).Milliseconds()))
 		shouldNotify = true
 	}
@@ -252,8 +251,8 @@ func NewPersistenerService[
 	}
 }
 
-// Run starts the [PersistenerService].
-func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoader]) Run() {
+// Execute starts the [PersistenerService].
+func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoader]) Execute() {
 	logger.Infof("The PersistenerService is running.")
 
 	for range pg.mediator.C() {

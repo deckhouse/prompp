@@ -18,6 +18,9 @@ import (
 	"github.com/prometheus/prometheus/pp/go/logger"
 )
 
+//go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg mock --out
+//go:generate moq mock/protobuf_writer.go . ProtobufWriter
+
 //
 // DataSource
 //

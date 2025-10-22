@@ -280,7 +280,7 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) inputRelabelingStage(
 		return resStats, err
 	}
 
-	resStats.Adds(stats)
+	resStats.Add(stats...)
 
 	return resStats, nil
 }
