@@ -941,4 +941,66 @@ TEST_F(SerializedDataNextIterFixture, SeveralChunks) {
   EXPECT_EQ(SerializedDataView::kNoMoreSeries, serialized_view.next_series().first);
 }
 
+class SerializedDataIterFixture : public SerializerDeserializerTrait, public testing::Test {};
+
+TEST_F(SerializedDataIterFixture, ResetIteratorToSameSeries) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(0, 2, 1.0);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  encoder_.encode(0, 3, 1.0);
+  encoder_.encode(0, 4, 1.0);
+
+  const SerializedData serialized = serializer_.serialize();
+  SerializedDataView serialized_view(serialized);
+
+  auto [series_id, chunk_id] = serialized_view.next_series();
+
+  // Act
+  auto iter = serialized_view.create_series_iterator(chunk_id);
+  iter.reset(chunk_id);
+
+  // Assert
+  EXPECT_EQ(series_id, 0u);
+  EXPECT_EQ(SerializedDataView::kNoMoreSeries, serialized_view.next_series().first);
+  EXPECT_TRUE(std::ranges::equal(std::ranges::subrange(iter, DecodeIteratorSentinel{}),
+                                 std::initializer_list{Sample{.timestamp = 1, .value = 1.0}, Sample{.timestamp = 2, .value = 1.0},
+                                                       Sample{.timestamp = 3, .value = 1.0}, Sample{.timestamp = 4, .value = 1.0}}));
+}
+
+TEST_F(SerializedDataIterFixture, ResetIteratorToAnotherSeries) {
+  // Arrange
+  encoder_.encode(0, 1, 1.0);
+  encoder_.encode(1, 1, 1.0);
+
+  encoder_.encode(0, 2, 1.0);
+  encoder_.encode(1, 2, 1.1);
+  ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
+  ChunkFinalizer::finalize(storage_, 1, storage_.open_chunks[1]);
+
+  encoder_.encode(0, 3, 1.0);
+  encoder_.encode(1, 3, 1.2);
+
+  encoder_.encode(0, 4, 1.0);
+  encoder_.encode(1, 4, 1.3);
+
+  const SerializedData serialized = serializer_.serialize();
+  SerializedDataView serialized_view(serialized);
+
+  auto [series_id0, chunk_id0] = serialized_view.next_series();
+  auto [series_id1, chunk_id1] = serialized_view.next_series();
+
+  // Act
+  auto iter = serialized_view.create_series_iterator(chunk_id0);
+  iter.reset(chunk_id1);
+
+  // Assert
+  EXPECT_EQ(series_id0, 0u);
+  EXPECT_EQ(series_id1, 1u);
+  EXPECT_EQ(SerializedDataView::kNoMoreSeries, serialized_view.next_series().first);
+  EXPECT_TRUE(std::ranges::equal(std::ranges::subrange(iter, DecodeIteratorSentinel{}),
+                                 std::initializer_list{Sample{.timestamp = 1, .value = 1.0}, Sample{.timestamp = 2, .value = 1.1},
+                                                       Sample{.timestamp = 3, .value = 1.2}, Sample{.timestamp = 4, .value = 1.3}}));
+}
+
 }  // namespace
