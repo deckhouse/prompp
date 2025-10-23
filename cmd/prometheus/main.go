@@ -809,14 +809,6 @@ func main() {
 		remoteWriterReadyNotifier,
 		prometheus.DefaultRegisterer,
 	)
-
-	adapter := pp_pkg_storage.NewAdapter(
-		clock,
-		hManager.Proxy(),
-		hManager.MergeOutOfOrderChunks,
-		prometheus.DefaultRegisterer,
-	)
-
 	// PP_CHANGES.md: rebuild on cpp end
 
 	var (

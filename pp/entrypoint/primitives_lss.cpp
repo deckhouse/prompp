@@ -370,37 +370,6 @@ extern "C" void prompp_primitives_readonly_lss_copy_added_series(uint64_t source
   copier.copy_added_series_and_build_indexes();
 }
 
-using BitsetPtr = std::unique_ptr<BareBones::Bitset>;
-
-extern "C" void prompp_primitives_lss_bitset_series(void* args, void* res) {
-  struct Arguments {
-    LssVariantPtr lss;
-  };
-  struct Result {
-    BitsetPtr bitset;
-  };
-
-  const auto& src = std::get<QueryableEncodingBimap>(*static_cast<Arguments*>(args)->lss);
-  new (res) Result{.bitset = std::make_unique<BareBones::Bitset>(src.added_series())};
-}
-
-extern "C" void prompp_primitives_lss_bitset_dtor(void* args) {
-  struct Arguments {
-    BitsetPtr bitset;
-  };
-
-  static_cast<Arguments*>(args)->~Arguments();
-}
-
-extern "C" void prompp_primitives_readonly_lss_copy_added_series(uint64_t source_lss, uint64_t source_bitset, uint64_t destination_lss) {
-  const auto& src = std::get<entrypoint::head::ReadonlyLss>(*std::bit_cast<entrypoint::head::LssVariant*>(source_lss));
-  const auto& src_bitset = *std::bit_cast<BareBones::Bitset*>(source_bitset);
-  auto& dst = std::get<QueryableEncodingBimap>(*std::bit_cast<entrypoint::head::LssVariant*>(destination_lss));
-
-  series_index::QueryableEncodingBimapCopier copier(src, src.sorting_index(), src_bitset, dst);
-  copier.copy_added_series_and_build_indexes();
-}
-
 //
 // Bitset
 //
