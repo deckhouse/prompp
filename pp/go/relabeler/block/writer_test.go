@@ -19,6 +19,10 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
+const (
+	blockDuration = 2 * time.Hour
+)
+
 type BlockWriterSuite struct {
 	suite.Suite
 	dataDir             string
@@ -78,7 +82,7 @@ func (s *BlockWriterSuite) SetupTest() {
 
 	s.dataDir = s.createDataDirectory()
 
-	s.blockWriter = block.NewWriter(s.dataDir, block.DefaultChunkSegmentSize, 2*time.Hour, prometheus.DefaultRegisterer)
+	s.blockWriter = block.NewWriter(s.dataDir, block.DefaultChunkSegmentSize, blockDuration, prometheus.DefaultRegisterer)
 }
 
 func (s *BlockWriterSuite) createDataDirectory() string {
@@ -126,8 +130,8 @@ func (s *BlockWriterSuite) fillHead() {
 	encoder.Encode(lsID1, ts.Add(time.Minute).UnixMilli(), 1)
 	encoder.Encode(lsID2, ts.Add(time.Minute).UnixMilli(), 1)
 
-	encoder.Encode(lsID1, ts.Add(time.Hour*2).UnixMilli(), 2)
-	encoder.Encode(lsID2, ts.Add(time.Hour*2).UnixMilli(), 2)
+	encoder.Encode(lsID1, ts.Add(blockDuration).UnixMilli(), 2)
+	encoder.Encode(lsID2, ts.Add(blockDuration).UnixMilli(), 2)
 }
 
 func (s *BlockWriterSuite) assertWrittenBlocks(blocks []block.WrittenBlock, err error) {
@@ -279,4 +283,20 @@ func (s *BlockWriterSuite) TestWriteWithDataUnloadingInBatches() {
 
 	// Assert
 	s.assertWrittenBlocks(blocks, err)
+}
+
+func (s *BlockWriterSuite) TestSkipEmptyBlock() {
+	// Arrange
+	lsID1 := s.lss.Raw().FindOrEmplace(model.NewLabelSetBuilder().Set("key1", "value1").Build()).LabelSetID
+
+	encoder := s.dataStorage.Encoder()
+	encoder.Encode(lsID1, 0, 0)
+	encoder.Encode(lsID1, blockDuration.Milliseconds()*2, 1)
+
+	// Act
+	blocks, err := s.blockWriter.Write(s)
+
+	// Assert
+	s.Require().NoError(err)
+	s.Len(blocks, 2)
 }

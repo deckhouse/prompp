@@ -351,6 +351,8 @@ TEST_F(PerGoroutineRelabelerFixture, InputRelabelingWithStalenans_Default) {
   PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
   PerGoroutineRelabeler::track_stale_nans(shards_inner_series_, state, 1000);
 
+  // Act
+  relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
   reset();
   relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, HashdexTest{}, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, 2000);
   PerGoroutineRelabeler::track_stale_nans(shards_inner_series_, state, 2000);

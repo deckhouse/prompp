@@ -109,6 +109,22 @@ void prompp_series_data_data_storage_allocated_memory(void* args, void* res);
 void prompp_series_data_data_storage_query(void* args, void* res);
 
 /**
+ * @brief Queries data storage and serializes result (new serialization model).
+ *
+ * @param args {
+ *     dataStorage    uintptr          // pointer to constructed data storage
+ *     query          DataStorageQuery // query
+ * }
+ *
+ * @param res {
+ *     Querier uintptr        // pointer to constructed Querier if data loading is needed
+ *     Status  uint8          // status of a query (0 - Success, 1 - Data loading is needed)
+ *     serializedData uintptr // pointer to serialized data
+ * }
+ */
+void prompp_series_data_data_storage_query_new(void* args, void* res);
+
+/**
  * @brief return samples at given timestamp for label sets.
  *
  * @param args {
@@ -177,6 +193,22 @@ void prompp_series_data_chunk_recoder_ctor(void* args, void* res);
  * }
  */
 void prompp_series_data_serialized_chunk_recoder_ctor(void* args, void* res);
+
+/**
+ * @brief Construct a new ChunkRecoder object to recode all serialized chunks (new model)
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data
+ *     time_interval struct { // closed interval [min, max]
+ *        min int64
+ *        max int64
+ *     }
+ * }
+ * @param res {
+ *     chunk_recoder uintptr // pointer to chunk recoder
+ * }
+ */
+void prompp_series_data_serialized_chunk_recoder_new_ctor(void* args, void* res);
 
 /**
  * @brief Get chunk encoded in prometheus format

@@ -869,7 +869,7 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_append_relabeler_serie
   }
 }
 
-void prompp_prometheus_per_goroutine_relabeler_track_stale_nans(void* args) {
+extern "C" void prompp_prometheus_per_goroutine_relabeler_track_stale_nans(void* args) {
   struct Arguments {
     PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> inner_series;
     StaleNaNsStatePtr stale_nans_state;

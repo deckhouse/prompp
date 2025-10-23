@@ -1,0 +1,70 @@
+#include "series_data_serialization_serialized_data.h"
+
+#include "head/serialization.h"
+
+extern "C" void prompp_series_data_serialization_serialized_data_next(void* args, void* res) {
+  struct Arguments {
+    entrypoint::head::SerializedDataPtr serialized_data;
+  };
+
+  using Result = struct {
+    uint32_t series_id;
+    uint32_t chunk_id;
+  };
+  const auto out = new (res) Result{};
+  std::tie(out->series_id, out->chunk_id) = static_cast<Arguments*>(args)->serialized_data->next();
+}
+
+extern "C" void prompp_series_data_serialization_serialized_data_iterator(void* args, void* res) {
+  struct Arguments {
+    entrypoint::head::SerializedDataPtr serialized_data;
+    uint32_t chunk_id;
+  };
+
+  using Result = struct {
+    entrypoint::head::SerializedDataIteratorPtr iterator;
+  };
+
+  new (res) Result{.iterator = std::make_unique<series_data::serialization::SerializedDataView::SeriesIterator>(
+                       static_cast<Arguments*>(args)->serialized_data->iterator(static_cast<Arguments*>(args)->chunk_id))};
+}
+
+extern "C" void prompp_series_data_serialization_serialized_data_iterator_next(void* args, void* res) {
+  using series_data::decoder::DecodeIteratorSentinel;
+
+  struct Arguments {
+    entrypoint::head::SerializedDataIteratorPtr iterator;
+  };
+
+  struct Result {
+    int64_t timestamp{};
+    double value{};
+    bool has_value;
+  };
+
+  const Arguments* in = static_cast<Arguments*>(args);
+
+  if (*in->iterator == DecodeIteratorSentinel{}) {
+    new (res) Result{.has_value = false};
+  } else {
+    const auto sample = **(in->iterator);
+    new (res) Result{.timestamp = sample.timestamp, .value = sample.value, .has_value = true};
+    ++(*in->iterator);
+  }
+}
+
+extern "C" void prompp_series_data_serialization_serialized_data_iterator_dtor(void* args) {
+  struct Arguments {
+    entrypoint::head::SerializedDataIteratorPtr iterator;
+  };
+
+  static_cast<Arguments*>(args)->~Arguments();
+}
+
+extern "C" void prompp_series_data_serialization_serialized_data_dtor(void* args) {
+  struct Arguments {
+    entrypoint::head::SerializedDataPtr serialized_data;
+  };
+
+  static_cast<Arguments*>(args)->~Arguments();
+}
