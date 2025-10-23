@@ -367,3 +367,23 @@ func newBitsetSeriesFromPointer(bitsetSeriesPointer uintptr) *BitsetSeries {
 
 	return bitsetSeries
 }
+
+//
+// BitsetSeries
+//
+
+// BitsetSeries copies of the bitset of added series from the lss.
+type BitsetSeries struct {
+	pointer           uintptr
+	gcDestroyDetector *uint64
+}
+
+// newBitsetSeriesFromPointer init new [BitsetSeries].
+func newBitsetSeriesFromPointer(bitsetSeriesPointer uintptr) *BitsetSeries {
+	bitsetSeries := &BitsetSeries{pointer: bitsetSeriesPointer, gcDestroyDetector: &gcDestroyDetector}
+	runtime.SetFinalizer(bitsetSeries, func(bs *BitsetSeries) {
+		primitivesLSSBitsetDtor(bs.pointer)
+	})
+
+	return bitsetSeries
+}

@@ -3,7 +3,6 @@ package cppbridge_test
 import (
 	"context"
 	"runtime"
-	"sort"
 	"testing"
 
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -283,15 +282,11 @@ func (s *QueryableLSSSuite) TestCopyAddedSeries() {
 	s.lss.CopyAddedSeries(lssCopy)
 	lssCopy.CopyAddedSeries(lssCopyOfCopy)
 
-	// lssCopy will contain lexicographically sorted labels with new IDs.
-	expectedLabelSets := make([]model.LabelSet, len(s.labelSets))
-	copy(expectedLabelSets, s.labelSets)
-	sort.Slice(expectedLabelSets, func(i, j int) bool {
-		return expectedLabelSets[i].String() < expectedLabelSets[j].String()
-	})
-
 	// Assert
-	s.Equal(labelSetToCppBridgeLabels(expectedLabelSets), lssCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
+	// !!!ATTENTION!!! When copying the added series, the order in which the series are added is preserved.
+	// This is necessary because it makes the ls IDs more compact,
+	// which usually end up in the lss in the same order, and consequently the wal files are smaller.
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets), lssCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
 	s.Equal(emptyLabelsSets, lssCopyOfCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
 }
 
@@ -368,15 +363,11 @@ func (s *QueryableLSSSuite) TestCopyAddedSeriesFromSnapshot() {
 	bitsetSeriesCopy := lssCopy.BitsetSeries()
 	snapshotCopy.CopyAddedSeries(bitsetSeriesCopy, lssCopyOfCopy)
 
-	// lssCopy will contain lexicographically sorted labels with new IDs.
-	expectedLabelSets := make([]model.LabelSet, len(s.labelSets))
-	copy(expectedLabelSets, s.labelSets)
-	sort.Slice(expectedLabelSets, func(i, j int) bool {
-		return expectedLabelSets[i].String() < expectedLabelSets[j].String()
-	})
-
 	// Assert
-	s.Equal(labelSetToCppBridgeLabels(expectedLabelSets), lssCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
+	// !!!ATTENTION!!! When copying the added series, the order in which the series are added is preserved.
+	// This is necessary because it makes the ls IDs more compact,
+	// which usually end up in the lss in the same order, and consequently the wal files are smaller.
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets), lssCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
 	s.Equal(emptyLabelsSets, lssCopyOfCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
 }
 

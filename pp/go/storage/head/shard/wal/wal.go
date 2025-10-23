@@ -75,10 +75,8 @@ type Wal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]] struct {
 	limitExhausted bool
 	closed         bool
 	// stat
-	// samplesPerSegment prometheus.Counter
-	// sizePerSegment    prometheus.Counter
-	samplesPerSegment prometheus.Histogram
-	sizePerSegment    prometheus.Histogram
+	samplesPerSegment prometheus.Counter
+	sizePerSegment    prometheus.Counter
 	segments          prometheus.Gauge
 }
 
@@ -98,26 +96,14 @@ func NewWal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]](
 		segmentWriter:  segmentWriter,
 		locker:         sync.Mutex{},
 		maxSegmentSize: maxSegmentSize,
-		// samplesPerSegment: factory.NewCounter(prometheus.CounterOpts{
-		// 	Name:        "prompp_shard_wal_samples_per_segment_sum",
-		// 	Help:        "Number of samples per segment.",
-		// 	ConstLabels: ls,
-		// }),
-		// sizePerSegment: factory.NewCounter(prometheus.CounterOpts{
-		// 	Name:        "prompp_shard_wal_size_per_segment_sum",
-		// 	Help:        "Size of segment.",
-		// 	ConstLabels: ls,
-		// }),
-		samplesPerSegment: factory.NewHistogram(prometheus.HistogramOpts{
+		samplesPerSegment: factory.NewCounter(prometheus.CounterOpts{
 			Name:        "prompp_shard_wal_samples_per_segment_sum",
 			Help:        "Number of samples per segment.",
-			Buckets:     prometheus.ExponentialBucketsRange(1000, 150000, 30),
 			ConstLabels: ls,
 		}),
-		sizePerSegment: factory.NewHistogram(prometheus.HistogramOpts{
+		sizePerSegment: factory.NewCounter(prometheus.CounterOpts{
 			Name:        "prompp_shard_wal_size_per_segment_sum",
 			Help:        "Size of segment.",
-			Buckets:     prometheus.ExponentialBucketsRange(1000, 150000, 30),
 			ConstLabels: ls,
 		}),
 		segments: factory.NewGauge(prometheus.GaugeOpts{
@@ -179,10 +165,8 @@ func (w *Wal[TSegment, TWriter]) Commit() error {
 	if err != nil {
 		return fmt.Errorf("failed to finalize segment: %w", err)
 	}
-	// w.samplesPerSegment.Add(float64(segment.Samples()))
-	// w.sizePerSegment.Add(float64(segment.Size()))
-	w.samplesPerSegment.Observe(float64(segment.Samples()))
-	w.sizePerSegment.Observe(float64(segment.Size()))
+	w.samplesPerSegment.Add(float64(segment.Samples()))
+	w.sizePerSegment.Add(float64(segment.Size()))
 	w.segments.Inc()
 	w.limitExhausted = false
 

@@ -4091,3 +4091,318 @@ func prometheusPerGoroutineRelabelerAppendRelabelerSeries(
 
 	return res.exception, res.targetLssHasReallocations
 }
+
+//
+// PerGoroutineRelabeler
+//
+
+// prometheusPerGoroutineRelabelerCtor wrapper for constructor C-PerGoroutineRelabeler.
+func prometheusPerGoroutineRelabelerCtor(
+	numberOfShards, shardID uint16,
+) uintptr {
+	args := struct {
+		numberOfShards uint16
+		shardID        uint16
+	}{numberOfShards, shardID}
+	var res struct {
+		perGoroutineRelabeler uintptr
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_prometheus_per_goroutine_relabeler_ctor,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.perGoroutineRelabeler
+}
+
+// prometheusPerGoroutineRelabelerDtor wrapper for destructor C-PerGoroutineRelabeler.
+func prometheusPerGoroutineRelabelerDtor(perGoroutineRelabeler uintptr) {
+	args := struct {
+		perGoroutineRelabeler uintptr
+	}{perGoroutineRelabeler}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_prometheus_per_goroutine_relabeler_dtor,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+// prometheusPerGoroutineRelabelerInputRelabeling wrapper for relabeling incoming hashdex(first stage).
+func prometheusPerGoroutineRelabelerInputRelabeling(
+	perGoroutineRelabeler, statelessRelabeler, inputLss, targetLss, cache, hashdex uintptr,
+	options RelabelerOptions,
+	shardsInnerSeries []*InnerSeries,
+	shardsRelabeledSeries []*RelabeledSeries,
+) (stats RelabelerStats, exception []byte, targetLssHasReallocations bool) {
+	args := struct {
+		shardsInnerSeries     []*InnerSeries
+		shardsRelabeledSeries []*RelabeledSeries
+		options               RelabelerOptions
+		perGoroutineRelabeler uintptr
+		statelessRelabeler    uintptr
+		hashdex               uintptr
+		cache                 uintptr
+		inputLss              uintptr
+		targetLss             uintptr
+	}{
+		shardsInnerSeries,
+		shardsRelabeledSeries,
+		options,
+		perGoroutineRelabeler,
+		statelessRelabeler,
+		hashdex,
+		cache,
+		inputLss,
+		targetLss,
+	}
+	var res struct {
+		RelabelerStats
+		exception                 []byte
+		targetLssHasReallocations bool
+	}
+	start := time.Now().UnixNano()
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_prometheus_per_goroutine_relabeler_input_relabeling,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+	perGoroutineRelabelerInputRelabelingSum.Add(float64(time.Now().UnixNano() - start))
+	perGoroutineRelabelerInputRelabelingCount.Inc()
+
+	return res.RelabelerStats, res.exception, res.targetLssHasReallocations
+}
+
+// prometheusPerGoroutineRelabelerInputRelabelingFromCache wrapper for relabeling
+// incoming hashdex(first stage) from cache.
+func prometheusPerGoroutineRelabelerInputRelabelingFromCache(
+	perGoroutineRelabeler, inputLss, targetLss, cache, hashdex uintptr,
+	options RelabelerOptions,
+	shardsInnerSeries []*InnerSeries,
+) (stats RelabelerStats, exception []byte, ok bool) {
+	args := struct {
+		shardsInnerSeries     []*InnerSeries
+		options               RelabelerOptions
+		perGoroutineRelabeler uintptr
+		hashdex               uintptr
+		cache                 uintptr
+		inputLss              uintptr
+		targetLss             uintptr
+	}{shardsInnerSeries, options, perGoroutineRelabeler, hashdex, cache, inputLss, targetLss}
+	var res struct {
+		RelabelerStats
+		ok        bool
+		exception []byte
+	}
+	start := time.Now().UnixNano()
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_prometheus_per_goroutine_relabeler_input_relabeling_from_cache,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+	perGoroutineRelabelerInputRelabelingFromCacheSum.Add(float64(time.Now().UnixNano() - start))
+	perGoroutineRelabelerInputRelabelingFromCacheCount.Inc()
+
+	return res.RelabelerStats, res.exception, res.ok
+}
+
+// prometheusPerGoroutineRelabelerInputRelabelingWithStalenans wrapper for relabeling incoming
+// hashdex(first stage) with state stalenans.
+func prometheusPerGoroutineRelabelerInputRelabelingWithStalenans(
+	perGoroutineRelabeler, statelessRelabeler, inputLss, targetLss, cache, hashdex, sourceState uintptr,
+	defTimestamp int64,
+	options RelabelerOptions,
+	shardsInnerSeries []*InnerSeries,
+	shardsRelabeledSeries []*RelabeledSeries,
+) (stats RelabelerStats, exception []byte, targetLssHasReallocations bool) {
+	args := struct {
+		shardsInnerSeries     []*InnerSeries
+		shardsRelabeledSeries []*RelabeledSeries
+		options               RelabelerOptions
+		perGoroutineRelabeler uintptr
+		statelessRelabeler    uintptr
+		hashdex               uintptr
+		cache                 uintptr
+		inputLss              uintptr
+		targetLss             uintptr
+		state                 uintptr
+		defTimestamp          int64
+	}{
+		shardsInnerSeries,
+		shardsRelabeledSeries,
+		options,
+		perGoroutineRelabeler,
+		statelessRelabeler,
+		hashdex,
+		cache,
+		inputLss,
+		targetLss,
+		sourceState,
+		defTimestamp,
+	}
+	var res struct {
+		RelabelerStats
+		exception                 []byte
+		targetLssHasReallocations bool
+	}
+	start := time.Now().UnixNano()
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_stalenans,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+	perGoroutineRelabelerInputRelabelingWithStalenansSum.Add(float64(time.Now().UnixNano() - start))
+	perGoroutineRelabelerInputRelabelingWithStalenansCount.Inc()
+
+	return res.RelabelerStats, res.exception, res.targetLssHasReallocations
+}
+
+// prometheusPerGoroutineRelabelerInputRelabelingWithStalenansFromCache wrapper for relabeling incoming from cache
+// hashdex(first stage) with state stalenans.
+func prometheusPerGoroutineRelabelerInputRelabelingWithStalenansFromCache(
+	perGoroutineRelabeler, inputLss, targetLss, cache, hashdex, sourceState uintptr,
+	defTimestamp int64,
+	options RelabelerOptions,
+	shardsInnerSeries []*InnerSeries,
+) (stats RelabelerStats, exception []byte, targetLssHasReallocations bool) {
+	args := struct {
+		shardsInnerSeries     []*InnerSeries
+		options               RelabelerOptions
+		perGoroutineRelabeler uintptr
+		hashdex               uintptr
+		cache                 uintptr
+		inputLss              uintptr
+		targetLss             uintptr
+		state                 uintptr
+		defTimestamp          int64
+	}{
+		shardsInnerSeries,
+		options,
+		perGoroutineRelabeler,
+		hashdex,
+		cache,
+		inputLss,
+		targetLss,
+		sourceState,
+		defTimestamp,
+	}
+	var res struct {
+		RelabelerStats
+		ok        bool
+		exception []byte
+	}
+	start := time.Now().UnixNano()
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_stalenans_from_cache,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+	perGoroutineRelabelerInputRelabelingWithStalenansFromCacheSum.Add(float64(time.Now().UnixNano() - start))
+	perGoroutineRelabelerInputRelabelingWithStalenansFromCacheCount.Inc()
+
+	return res.RelabelerStats, res.exception, res.ok
+}
+
+// prometheusPerGoroutineRelabelerInputTransitionRelabeling wrapper for
+// transparent relabeling incoming hashdex(first stage).
+func prometheusPerGoroutineRelabelerInputTransitionRelabeling(
+	perGoroutineRelabeler, targetLss, hashdex uintptr,
+	shardsInnerSeries []*InnerSeries,
+) (stats RelabelerStats, exception []byte, targetLssHasReallocations bool) {
+	args := struct {
+		shardsInnerSeries     []*InnerSeries
+		perGoroutineRelabeler uintptr
+		hashdex               uintptr
+		targetLss             uintptr
+	}{
+		shardsInnerSeries,
+		perGoroutineRelabeler,
+		hashdex,
+		targetLss,
+	}
+	var res struct {
+		RelabelerStats
+		exception                 []byte
+		targetLssHasReallocations bool
+	}
+	start := time.Now().UnixNano()
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_prometheus_per_goroutine_relabeler_input_transition_relabeling,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+	perGoroutineRelabelerInputTransitionRelabelingSum.Add(float64(time.Now().UnixNano() - start))
+	perGoroutineRelabelerInputTransitionRelabelingCount.Inc()
+
+	return res.RelabelerStats, res.exception, res.targetLssHasReallocations
+}
+
+// prometheusPerGoroutineRelabelerInputRelabelingOnlyRead wrapper for transparent relabeling
+// incoming hashdex(first stage) from cache.
+func prometheusPerGoroutineRelabelerInputRelabelingOnlyRead(
+	perGoroutineRelabeler, targetLss, hashdex uintptr,
+	shardsInnerSeries []*InnerSeries,
+) (stats RelabelerStats, exception []byte, ok bool) {
+	args := struct {
+		shardsInnerSeries     []*InnerSeries
+		perGoroutineRelabeler uintptr
+		hashdex               uintptr
+		targetLss             uintptr
+	}{shardsInnerSeries, perGoroutineRelabeler, hashdex, targetLss}
+	var res struct {
+		RelabelerStats
+		ok        bool
+		exception []byte
+	}
+	start := time.Now().UnixNano()
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_prometheus_per_goroutine_relabeler_input_transition_relabeling_only_read,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+	perGoroutineRelabelerInputTransitionRelabelingOnlyReadSum.Add(float64(time.Now().UnixNano() - start))
+	perGoroutineRelabelerInputTransitionRelabelingOnlyReadCount.Inc()
+
+	return res.RelabelerStats, res.exception, res.ok
+}
+
+// prometheusPerGoroutineRelabelerAppendRelabelerSeries wrapper for add relabeled ls to lss,
+// add to result and add to cache update(second stage).
+func prometheusPerGoroutineRelabelerAppendRelabelerSeries(
+	perGoroutineRelabeler, targetLss uintptr,
+	shardsInnerSeries []*InnerSeries,
+	shardsRelabeledSeries []*RelabeledSeries,
+	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
+) (exception []byte, targetLssHasReallocations bool) {
+	args := struct {
+		shardsInnerSeries          []*InnerSeries
+		shardsRelabeledSeries      []*RelabeledSeries
+		shardsRelabelerStateUpdate []*RelabelerStateUpdate
+		perGoroutineRelabeler      uintptr
+		targetLss                  uintptr
+	}{shardsInnerSeries, shardsRelabeledSeries, shardsRelabelerStateUpdate, perGoroutineRelabeler, targetLss}
+	var res struct {
+		exception                 []byte
+		targetLssHasReallocations bool
+	}
+	start := time.Now().UnixNano()
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_prometheus_per_goroutine_relabeler_append_relabeler_series,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+	perGoroutineRelabelerAppendRelabelerSeriesSum.Add(float64(time.Now().UnixNano() - start))
+	perGoroutineRelabelerAppendRelabelerSeriesCount.Inc()
+
+	return res.exception, res.targetLssHasReallocations
+}
