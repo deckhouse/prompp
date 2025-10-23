@@ -162,7 +162,7 @@ extern "C" void prompp_series_data_data_storage_query_v2(void* args, void* res) 
   const auto in = static_cast<Arguments*>(args);
   const auto out = static_cast<Result*>(res);
 
-  RangeQuerierWithArgumentsWrapperV2 querier(*in->data_storage, in->query, out->serialized_data.get());
+  RangeQuerierWithArgumentsWrapperV2 querier(*in->data_storage, in->query, out->serialized_data);
   querier.query();
 
   if (querier.need_loading()) {
