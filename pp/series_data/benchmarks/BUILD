@@ -9,3 +9,13 @@ cc_binary(
         "@google_benchmark//:benchmark_main",
     ],
 )
+
+cc_binary(
+    name = "serializer",
+    srcs = ["serializer_benchmark.cpp"],
+    malloc = "@jemalloc",
+    deps = [
+        "//:series_data",
+        "@google_benchmark//:benchmark_main",
+    ],
+)
