@@ -53,6 +53,16 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_next(v
   }
 }
 
+extern "C" void prompp_series_data_serialization_serialized_data_iterator_reset(void* args) {
+  struct Arguments {
+    entrypoint::head::SerializedDataIteratorPtr iterator;
+    uint32_t chunk_ref;
+  };
+
+  const Arguments* in = static_cast<Arguments*>(args);
+  in->iterator->reset(in->chunk_ref);
+}
+
 extern "C" void prompp_series_data_serialization_serialized_data_iterator_dtor(void* args) {
   struct Arguments {
     entrypoint::head::SerializedDataIteratorPtr iterator;

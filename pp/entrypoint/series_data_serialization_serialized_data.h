@@ -17,7 +17,7 @@ extern "C" {
 void prompp_series_data_serialization_serialized_data_next(void* args, void* res);
 
 /**
- * @brief Create a decode iterator for corresponding chunk_id.
+ * @brief Create a decode iterator for corresponding chunk_ref.
  *
  * @param args {
  *     serializedData uintptr // pointer to serialized data.
@@ -44,6 +44,17 @@ void prompp_series_data_serialization_serialized_data_iterator(void* args, void*
  * }
  */
 void prompp_series_data_serialization_serialized_data_iterator_next(void* args, void* res);
+
+/**
+ * @brief Reset a decode iterator for corresponding chunk_ref.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ *     chunk_ref uint32 // inner chunk id.
+ * }
+ *
+ */
+void prompp_series_data_serialization_serialized_data_iterator_reset(void* args);
 
 /**
  * @brief Destroy decode iterator.

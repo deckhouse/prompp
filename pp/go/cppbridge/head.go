@@ -314,16 +314,6 @@ func (i HeadDataStorageSerializedChunkIndex) Chunks(r *HeadDataStorageSerialized
 	return res
 }
 
-//func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) (*HeadDataStorageSerializedChunks, DataStorageQueryResult) {
-//	serializedChunks := &HeadDataStorageSerializedChunks{}
-//	result := seriesDataDataStorageQuery(ds.dataStorage, query, &serializedChunks.data)
-//	runtime.KeepAlive(ds)
-//	runtime.SetFinalizer(serializedChunks, func(sc *HeadDataStorageSerializedChunks) {
-//		freeBytes(sc.data)
-//	})
-//	return serializedChunks, result
-//}
-
 func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) DataStorageQueryResult {
 	sd := NewDataStorageSerializedData()
 	querier, status := seriesDataDataStorageQueryV2(ds.dataStorage, query, sd)
@@ -365,31 +355,27 @@ func (sd *DataStorageSerializedData) Next() (uint32, uint32) {
 	return seriesDataSerializedDataNext(sd.serializedData)
 }
 
-func (sd *DataStorageSerializedData) Iterator(chunkRef uint32) *DataStorageSerializedDataIterator {
-	it := &DataStorageSerializedDataIterator{
+func (sd *DataStorageSerializedData) Iterator(chunkRef uint32) DataStorageSerializedDataIterator {
+	it := DataStorageSerializedDataIterator{
 		iterator: seriesDataSerializedDataIterator(sd.serializedData, chunkRef),
-		result: SerializedDataIteratorNextResult{
-			Timestamp: math.MinInt64,
-		},
 	}
-	runtime.SetFinalizer(it, func(it *DataStorageSerializedDataIterator) {
-		seriesDataSerializedDataIteratorDtor(it.iterator)
-	})
 	return it
 }
 
 type DataStorageSerializedDataIterator struct {
 	iterator uintptr
-	result   SerializedDataIteratorNextResult
 }
 
-func (it *DataStorageSerializedDataIterator) Next() bool {
-	seriesDataSerializedDataIteratorNext(it.iterator, &it.result)
-	return it.result.HasValue
+func (it DataStorageSerializedDataIterator) Next(result *SerializedDataIteratorNextResult) {
+	seriesDataSerializedDataIteratorNext(it.iterator, result)
 }
 
-func (it *DataStorageSerializedDataIterator) At() (int64, float64) {
-	return it.result.Timestamp, it.result.Value
+func (it DataStorageSerializedDataIterator) Reset(chunkRef uint32) {
+	seriesDataSerializedDataIteratorReset(it.iterator, chunkRef)
+}
+
+func (it DataStorageSerializedDataIterator) Destroy() {
+	seriesDataSerializedDataIteratorDtor(it.iterator)
 }
 
 // UnloadedDataLoader is Go wrapper around series_data::Loader.

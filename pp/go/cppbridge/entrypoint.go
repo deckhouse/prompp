@@ -2297,6 +2297,19 @@ func seriesDataSerializedDataIteratorNext(iterator uintptr, res *SerializedDataI
 	)
 }
 
+func seriesDataSerializedDataIteratorReset(iterator uintptr, chunkRef uint32) {
+	args := struct {
+		iterator uintptr
+		chunkRef uint32
+	}{iterator, chunkRef}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_iterator_reset,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
 func seriesDataSerializedDataIteratorDtor(iterator uintptr) {
 	args := struct {
 		iterator uintptr
