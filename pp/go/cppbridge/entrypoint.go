@@ -2144,28 +2144,6 @@ type DataStorageQueryResult struct {
 	SerializedData *DataStorageSerializedData
 }
 
-//func seriesDataDataStorageQuery(dataStorage uintptr, query HeadDataStorageQuery, serializedChunks *[]byte) DataStorageQueryResult {
-//	args := struct {
-//		dataStorage      uintptr
-//		query            HeadDataStorageQuery
-//		serializedChunks *[]byte
-//	}{dataStorage, query, serializedChunks}
-//
-//	var res DataStorageQueryResult
-//
-//	testGC()
-//	start := time.Now().UnixNano()
-//	fastcgo.UnsafeCall2(
-//		C.prompp_series_data_data_storage_query,
-//		uintptr(unsafe.Pointer(&args)),
-//		uintptr(unsafe.Pointer(&res)),
-//	)
-//	headDataStorageQuerySum.Add(float64(time.Now().UnixNano() - start))
-//	headDataStorageQueryCount.Inc()
-//
-//	return res
-//}
-
 func seriesDataDataStorageQueryV2(dataStorage uintptr, query HeadDataStorageQuery, serializedData *DataStorageSerializedData) (querier uintptr, status uint8) {
 	args := struct {
 		dataStorage uintptr
