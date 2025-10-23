@@ -253,6 +253,14 @@ class SerializedDataView {
              (std::next(chunk_iter_) == chunks_.end() || series_id_ != std::next(chunk_iter_)->label_set_id);
     }
 
+    PROMPP_ALWAYS_INLINE void reset(uint32_t chunk_id) {
+      chunk_iter_ = chunks_.begin() + chunk_id;
+      series_id_ = chunk_iter_->label_set_id;
+      Decoder::create_decode_iterator(buffer_, *chunk_iter_, [&]<typename Iterator>(Iterator&& begin, auto&&) {
+        decode_iter_ = decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
+      });
+    }
+
    private:
     decoder::UniversalDecodeIterator decode_iter_;
     chunk::SerializedChunkSpan::const_iterator chunk_iter_;
