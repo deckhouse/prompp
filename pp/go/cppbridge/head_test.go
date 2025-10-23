@@ -164,10 +164,15 @@ func (s *HeadSuite) TestTimeInterval() {
 	encoder.Encode(1, 3, 1.0)
 
 	// Act
-	timeInterval := dataStorage.TimeInterval()
+	timeInterval := dataStorage.TimeInterval(false)
+	encoder.Encode(1, 4, 1.0)
+	cachedTimeInterval := dataStorage.TimeInterval(false)
+	actualTimeInterval := dataStorage.TimeInterval(true)
 
 	// Assert
 	s.Equal(cppbridge.TimeInterval{MinT: 1, MaxT: 3}, timeInterval)
+	s.Equal(cppbridge.TimeInterval{MinT: 1, MaxT: 3}, cachedTimeInterval)
+	s.Equal(cppbridge.TimeInterval{MinT: 1, MaxT: 4}, actualTimeInterval)
 }
 
 func (s *HeadSuite) TestInstantQuery() {

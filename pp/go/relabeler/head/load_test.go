@@ -173,9 +173,10 @@ func (s *HeadLoadSuite) TestErrorOpenShardFileInAllShards() {
 func (s *HeadLoadSuite) TestLoadWithDisabledDataUnloading() {
 	// Arrange
 	sourceHead := s.mustCreateHead(0)
+
 	series := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Labels: labels.FromStrings("__name__", "wal_metric"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 				{Timestamp: 1, Value: 2},
@@ -208,7 +209,7 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 	sourceHead := s.mustCreateHead(0)
 	series := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Labels: labels.FromStrings("__name__", "wal_metric"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 				{Timestamp: 1, Value: 2},
@@ -224,7 +225,7 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 	loadedHead := s.mustLoadHead(0)
 	s.appendTimeSeries(loadedHead, []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Labels: labels.FromStrings("__name__", "wal_metric"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 3, Value: 4},
 			},
@@ -239,7 +240,6 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 	series[0].Samples = append(series[0].Samples, cppbridge.Sample{Timestamp: 3, Value: 4})
 	s.Equal(series, actual)
 	s.Require().NoError(err)
-
 }
 
 func (s *HeadLoadSuite) TestLoadWithEnabledDataUnloading() {
@@ -247,7 +247,7 @@ func (s *HeadLoadSuite) TestLoadWithEnabledDataUnloading() {
 	sourceHead := s.mustCreateHead(0)
 	series1 := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Labels: labels.FromStrings("__name__", "wal_metric"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 				{Timestamp: 1, Value: 2},
@@ -258,7 +258,7 @@ func (s *HeadLoadSuite) TestLoadWithEnabledDataUnloading() {
 	s.appendTimeSeries(sourceHead, series1)
 	series2 := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Labels: labels.FromStrings("__name__", "wal_metric"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 100, Value: 1},
 				{Timestamp: 101, Value: 2},
@@ -290,7 +290,7 @@ func (s *HeadLoadSuite) TestLoadWithDataUnloading() {
 	sourceHead := s.mustCreateHead(unloadDataStorageInterval)
 	series1 := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Labels: labels.FromStrings("__name__", "wal_metric"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 				{Timestamp: 1, Value: 2},
@@ -301,7 +301,7 @@ func (s *HeadLoadSuite) TestLoadWithDataUnloading() {
 	s.appendTimeSeries(sourceHead, series1)
 	series2 := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Labels: labels.FromStrings("__name__", "wal_metric"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 100, Value: 1},
 				{Timestamp: 101, Value: 2},
@@ -334,7 +334,7 @@ func (s *HeadLoadSuite) TestErrorDataUnloading() {
 	sourceHead := s.mustCreateHead(unloadDataStorageInterval)
 	series1 := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Labels: labels.FromStrings("__name__", "wal_metric"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 0, Value: 1},
 				{Timestamp: 1, Value: 2},
@@ -345,7 +345,7 @@ func (s *HeadLoadSuite) TestErrorDataUnloading() {
 	s.appendTimeSeries(sourceHead, series1)
 	series2 := []headtest.TimeSeries{
 		{
-			Labels: labels.Labels{{Name: "__name__", Value: "wal_metric"}},
+			Labels: labels.FromStrings("__name__", "wal_metric"),
 			Samples: []cppbridge.Sample{
 				{Timestamp: 100, Value: 1},
 				{Timestamp: 101, Value: 2},

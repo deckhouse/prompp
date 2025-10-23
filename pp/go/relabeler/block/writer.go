@@ -316,7 +316,7 @@ func (w *Writer) createWriters(shard relabeler.Shard) (blockWriters, error) {
 	var writers blockWriters
 
 	shard.DataStorageRLock()
-	timeInterval := shard.DataStorage().TimeInterval()
+	timeInterval := shard.DataStorage().TimeInterval(false)
 	shard.DataStorageRUnlock()
 
 	quantStart := (timeInterval.MinT / w.blockDurationMs) * w.blockDurationMs

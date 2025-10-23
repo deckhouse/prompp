@@ -3,6 +3,7 @@ package cppbridge_test
 import (
 	"context"
 	"runtime"
+	"sort"
 	"testing"
 
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -413,8 +414,15 @@ func (s *QueryableLSSSuite) TestCopyAddedSeries() {
 	s.lss.CopyAddedSeries(lssCopy)
 	lssCopy.CopyAddedSeries(lssCopyOfCopy)
 
+	// lssCopy will contain lexicographically sorted labels with new IDs.
+	expectedLabelSets := make([]model.LabelSet, len(s.labelSets))
+	copy(expectedLabelSets, s.labelSets)
+	sort.Slice(expectedLabelSets, func(i, j int) bool {
+		return expectedLabelSets[i].String() < expectedLabelSets[j].String()
+	})
+
 	// Assert
-	s.Equal(labelSetToCppBridgeLabels(s.labelSets), lssCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
+	s.Equal(labelSetToCppBridgeLabels(expectedLabelSets), lssCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
 	s.Equal(emptyLabelsSets, lssCopyOfCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
 }
 
@@ -477,4 +485,31 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithoutReadonlyLss() {
 
 	// Assert
 	s.Equal(uint32(expectedLsId), existingLsId)
+}
+
+func (s *QueryableLSSSuite) TestCopyAddedSeriesFromSnapshot() {
+	// Arrange
+	emptyLabelsSets := make([]cppbridge.Labels, len(s.labelSetIDs))
+	lssCopy := cppbridge.NewQueryableLssStorage()
+	lssCopyOfCopy := cppbridge.NewQueryableLssStorage()
+
+	// Act
+	snapshot := s.lss.CreateLabelSetSnapshot()
+	bitsetSeries := s.lss.BitsetSeries()
+	snapshot.CopyAddedSeries(bitsetSeries, lssCopy)
+
+	snapshotCopy := lssCopy.CreateLabelSetSnapshot()
+	bitsetSeriesCopy := lssCopy.BitsetSeries()
+	snapshotCopy.CopyAddedSeries(bitsetSeriesCopy, lssCopyOfCopy)
+
+	// lssCopy will contain lexicographically sorted labels with new IDs.
+	expectedLabelSets := make([]model.LabelSet, len(s.labelSets))
+	copy(expectedLabelSets, s.labelSets)
+	sort.Slice(expectedLabelSets, func(i, j int) bool {
+		return expectedLabelSets[i].String() < expectedLabelSets[j].String()
+	})
+
+	// Assert
+	s.Equal(labelSetToCppBridgeLabels(expectedLabelSets), lssCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
+	s.Equal(emptyLabelsSets, lssCopyOfCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
 }

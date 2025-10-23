@@ -76,3 +76,12 @@ func (lss *LabelSetSnapshot) Query(selector uintptr) *LSSQueryResult {
 	runtime.KeepAlive(lss)
 	return result
 }
+
+// CopyAddedSeries copy the label sets from the source lss to the destination lss
+// that were added source lss.
+func (lss *LabelSetSnapshot) CopyAddedSeries(bitsetSeries *BitsetSeries, destination *LabelSetStorage) {
+	primitivesReadonlyLSSCopyAddedSeries(lss.pointer, bitsetSeries.pointer, destination.pointer)
+	runtime.KeepAlive(lss)
+	runtime.KeepAlive(bitsetSeries)
+	runtime.KeepAlive(destination)
+}

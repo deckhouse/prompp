@@ -14,11 +14,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 
-	"github.com/prometheus/prometheus/pp/go/relabeler"
-	"github.com/prometheus/prometheus/pp/go/relabeler/block"
-	"github.com/prometheus/prometheus/pp/go/relabeler/config"
-	"github.com/prometheus/prometheus/pp/go/relabeler/head"
-	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"
+	"github.com/prometheus/prometheus/pp/go/storage"
+	"github.com/prometheus/prometheus/pp/go/storage/block"
+	"github.com/prometheus/prometheus/pp/go/storage/catalog"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 )
 
 type cmdWALPPToBlock struct {
@@ -69,7 +68,7 @@ func (cmd *cmdWALPPToBlock) Do(
 	if err != nil {
 		return fmt.Errorf("failed init head catalog: %w", err)
 	}
-	headRecords, err := headCatalog.List(
+	headRecords := headCatalog.List(
 		func(record *catalog.Record) bool {
 			return record.DeletedAt() == 0 &&
 				(record.Status() == catalog.StatusNew || record.Status() == catalog.StatusActive || record.Status() == catalog.StatusRotated)
@@ -78,53 +77,40 @@ func (cmd *cmdWALPPToBlock) Do(
 			return lhs.CreatedAt() < rhs.CreatedAt()
 		},
 	)
-	if err != nil {
-		return fmt.Errorf("failed listed head catalog: %w", err)
-	}
+
 	level.Debug(logger).Log("msg", "catalog records", "len", len(headRecords))
 
-	var inputRelabelerConfig []*config.InputRelabelerConfig
-	bw := block.NewWriter(workingDir, block.DefaultChunkSegmentSize, time.Duration(cmd.blockDuration), registerer)
+	bw := block.NewWriter[*shard.Shard](
+		workingDir,
+		block.DefaultChunkSegmentSize,
+		time.Duration(cmd.blockDuration),
+		registerer,
+	)
+
+	loader := storage.NewLoader(workingDir, 0, registerer, time.Duration(0))
+
 	for _, headRecord := range headRecords {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		level.Debug(logger).Log("msg", "load head", "id", headRecord.ID(), "dir", headRecord.Dir())
-		h, _, _, err := head.Load(
-			headRecord.ID(),
-			0,
-			filepath.Join(workingDir, headRecord.Dir()),
-			inputRelabelerConfig,
-			headRecord.NumberOfShards(),
-			0,
-			head.NoOpLastAppendedSegmentIDSetter{},
-			registerer,
-			time.Duration(0),
-		)
-		if err != nil {
-			level.Error(logger).Log(
-				"msg", "failed to load head",
-				"id", headRecord.ID(),
-				"dir", headRecord.Dir(),
-				"err", err,
-			)
-			return err
+		h, corrupted := loader.Load(headRecord, 0)
+		if corrupted {
+			level.Warn(logger).Log("msg", "corrupted head", "id", headRecord.ID(), "dir", headRecord.Dir())
 		}
-		h.Stop()
 
 		level.Debug(logger).Log("msg", "write block", "id", headRecord.ID(), "dir", headRecord.Dir())
 
-		tBlockWrite := h.CreateTask(
-			relabeler.BlockWrite,
-			func(shard relabeler.Shard) error {
-				_, err := bw.Write(shard)
-				return err
-			},
-			relabeler.ForLSSTask,
-		)
-		h.Enqueue(tBlockWrite)
-		if err = tBlockWrite.Wait(); err != nil {
-			return fmt.Errorf("failed to write tsdb block [id: %s, dir: %s]: %w", headRecord.ID(), headRecord.Dir(), err)
+		for shard := range h.RangeShards() {
+			if _, err := bw.Write(shard); err != nil {
+				_ = h.Close()
+				return fmt.Errorf(
+					"failed to write tsdb block [id: %s, dir: %s]: %w",
+					headRecord.ID(),
+					headRecord.Dir(),
+					err,
+				)
+			}
 		}
 
 		if cmd.updateCatalog {
@@ -169,7 +155,7 @@ func (cmd *cmdWALPPToBlock) clearing(
 		level.Debug(logger).Log("msg", "catalog clearing: ended")
 	}()
 
-	records, err := headCatalog.List(
+	records := headCatalog.List(
 		func(record *catalog.Record) bool {
 			return record.DeletedAt() == 0 && record.Status() == catalog.StatusPersisted
 		},
@@ -177,9 +163,6 @@ func (cmd *cmdWALPPToBlock) clearing(
 			return lhs.CreatedAt() < rhs.CreatedAt()
 		},
 	)
-	if err != nil {
-		return fmt.Errorf("failed listed head catalog: %w", err)
-	}
 
 	for _, record := range records {
 		if err := ctx.Err(); err != nil {
@@ -199,7 +182,7 @@ func (cmd *cmdWALPPToBlock) clearing(
 			)
 		}
 
-		if err = os.RemoveAll(filepath.Join(workingDir, record.Dir())); err != nil {
+		if err := os.RemoveAll(filepath.Join(workingDir, record.Dir())); err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to delete head directory",
 				"id", record.ID(),
@@ -209,7 +192,7 @@ func (cmd *cmdWALPPToBlock) clearing(
 			continue
 		}
 
-		if err = headCatalog.Delete(record.ID()); err != nil {
+		if err := headCatalog.Delete(record.ID()); err != nil {
 			level.Error(logger).Log(
 				"msg", "failed to delete head record",
 				"id", record.ID(),

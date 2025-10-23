@@ -1,19 +1,31 @@
 package util
 
+import (
+	"errors"
+	"io"
+	"sync"
+)
+
 type Closer struct {
-	close  chan struct{}
-	closed chan struct{}
+	close      chan struct{}
+	closeOnce  sync.Once
+	closed     chan struct{}
+	closedOnce sync.Once
 }
 
 func NewCloser() *Closer {
 	return &Closer{
-		close:  make(chan struct{}),
-		closed: make(chan struct{}),
+		close:      make(chan struct{}),
+		closeOnce:  sync.Once{},
+		closed:     make(chan struct{}),
+		closedOnce: sync.Once{},
 	}
 }
 
 func (c *Closer) Done() {
-	close(c.closed)
+	c.closedOnce.Do(func() {
+		close(c.closed)
+	})
 }
 
 func (c *Closer) Signal() <-chan struct{} {
@@ -21,7 +33,17 @@ func (c *Closer) Signal() <-chan struct{} {
 }
 
 func (c *Closer) Close() error {
-	close(c.close)
+	c.closeOnce.Do(func() {
+		close(c.close)
+	})
 	<-c.closed
 	return nil
+}
+
+func CloseAll(closers ...io.Closer) error {
+	var errs error
+	for _, closer := range closers {
+		errs = errors.Join(errs, closer.Close())
+	}
+	return errs
 }

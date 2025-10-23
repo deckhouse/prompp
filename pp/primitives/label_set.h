@@ -8,8 +8,6 @@
 namespace PromPP::Primitives {
 template <class LabelType, template <class> class Container = BareBones::Vector>
 class BasicLabelSet {
-  Container<LabelType> labels_;
-
  public:
   using label_type = LabelType;
 
@@ -69,6 +67,17 @@ class BasicLabelSet {
   }
 
   template <class LabelSet>
+  PROMPP_ALWAYS_INLINE void append_unsorted(const LabelSet& label_set) {
+    labels_.reserve(labels_.size() + label_set.size());
+
+    for (const auto& label : label_set) {
+      append(label.first, label.second);
+    }
+
+    sort();
+  }
+
+  template <class LabelSet>
   PROMPP_ALWAYS_INLINE void add(const LabelSet& label_set) {
     labels_.reserve(labels_.size() + label_set.size());
 
@@ -101,6 +110,8 @@ class BasicLabelSet {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const_iterator end() const noexcept { return labels_.end(); }
   PROMPP_ALWAYS_INLINE iterator end() noexcept { return labels_.end(); }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const LabelType& operator[](uint32_t index) const noexcept { return labels_[index]; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept { return BareBones::mem::allocated_memory(labels_); }
 
@@ -169,6 +180,13 @@ class BasicLabelSet {
   };
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Names names() const noexcept { return Names(*this); }
+
+ private:
+  Container<LabelType> labels_;
+
+  PROMPP_ALWAYS_INLINE void sort() noexcept {
+    std::ranges::sort(labels_, [](const auto& a, const auto& b) { return a.first < b.first; });
+  }
 };
 
 using LabelSet = BasicLabelSet<Label, std::vector>;

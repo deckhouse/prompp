@@ -11,6 +11,7 @@ import (
 	"go.uber.org/atomic"
 	"golang.org/x/net/websocket"
 
+	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/pp-pkg/handler/adapter"
 	"github.com/prometheus/prometheus/pp-pkg/handler/decoder/ppcore"
 	"github.com/prometheus/prometheus/pp-pkg/handler/middleware"
@@ -25,7 +26,8 @@ const ppLocalStoragePath = "ppdata/"
 
 // PPHandler service for remote write via pp-protocol.
 type PPHandler struct {
-	receiver    Receiver
+	adapter     Adapter
+	states      *StatesStorage
 	logger      log.Logger
 	stream      StreamProcessor
 	refill      RefillProcessor
@@ -39,24 +41,27 @@ type PPHandler struct {
 // NewPPHandler init new PPHandler.
 func NewPPHandler(
 	workDir string,
-	receiver Receiver,
+	ar Adapter,
 	logger log.Logger,
 	registerer prometheus.Registerer,
 ) *PPHandler {
-	buffers := pool.New(8, 1e6, 2, func(sz int) interface{} { return make([]byte, 0, sz) })
+	buffers := pool.New(8, 1e6, 2, func(sz int) any { return make([]byte, 0, sz) })
 	ppBlockStorage := block.NewStorage(filepath.Join(workDir, ppLocalStoragePath), buffers)
+	states := NewStatesStorage()
 	factory := util.NewUnconflictRegisterer(registerer)
 	h := &PPHandler{
-		receiver: receiver,
-		logger:   log.With(logger, "component", "pp_handler"),
-		stream:   processor.NewStreamProcessor(ppcore.NewBuilder(ppBlockStorage), receiver, registerer),
+		adapter: ar,
+		states:  states,
+		logger:  log.With(logger, "component", "pp_handler"),
+		stream:  processor.NewStreamProcessor(ppcore.NewBuilder(ppBlockStorage), ar, states, registerer),
 		refill: processor.NewRefillProcessor(
 			ppcore.NewReplayDecoderBuilder(ppBlockStorage),
-			receiver,
+			ar,
+			states,
 			logger,
 			registerer,
 		),
-		remoteWrite: processor.NewRemoteWriteProcessor(receiver, registerer),
+		remoteWrite: processor.NewRemoteWriteProcessor(ar, states, registerer),
 		buffers:     buffers,
 		stop:        new(atomic.Bool),
 		// stats
@@ -72,6 +77,11 @@ func NewPPHandler(
 	level.Info(h.logger).Log("msg", "created")
 
 	return h
+}
+
+// ApplyConfig updates the configs for [StatesStorage].
+func (h *PPHandler) ApplyConfig(conf *config.Config) error {
+	return h.states.ApplyConfig(conf)
 }
 
 // Websocket handler for websocket stream.
@@ -120,7 +130,7 @@ func (h *PPHandler) measure(next http.Handler, typeHandler string) http.HandlerF
 func (h *PPHandler) metadataValidator(next http.HandlerFunc) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		metadata := middleware.MetadataFromContext(r.Context())
-		if ok := h.receiver.RelabelerIDIsExist(metadata.RelabelerID); !ok {
+		if _, ok := h.states.GetStateByID(metadata.RelabelerID); !ok {
 			level.Error(h.logger).Log("msg", "relabeler id not found", "relabeler_id", metadata.RelabelerID)
 			rw.WriteHeader(http.StatusPreconditionFailed)
 			return

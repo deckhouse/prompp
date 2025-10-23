@@ -101,20 +101,6 @@ template <class T>
 struct MemoryControlBlock {
   using SizeType = uint32_t;
 
-  MemoryControlBlock() = default;
-  MemoryControlBlock(const MemoryControlBlock&) = delete;
-  MemoryControlBlock(MemoryControlBlock&& other) noexcept : data(std::exchange(other.data, nullptr)), data_size(std::exchange(other.data_size, 0)) {}
-
-  MemoryControlBlock& operator=(const MemoryControlBlock&) = delete;
-  PROMPP_ALWAYS_INLINE MemoryControlBlock& operator=(MemoryControlBlock&& other) noexcept {
-    if (this != &other) [[likely]] {
-      data = std::exchange(other.data, nullptr);
-      data_size = std::exchange(other.data_size, 0);
-    }
-
-    return *this;
-  }
-
   T* data{};
   SizeType data_size{};
 };
@@ -122,22 +108,6 @@ struct MemoryControlBlock {
 template <class T>
 struct MemoryControlBlockWithItemCount {
   using SizeType = uint32_t;
-
-  MemoryControlBlockWithItemCount() = default;
-  MemoryControlBlockWithItemCount(const MemoryControlBlockWithItemCount&) = delete;
-  MemoryControlBlockWithItemCount(MemoryControlBlockWithItemCount&& other) noexcept
-      : data(std::exchange(other.data, nullptr)), data_size(std::exchange(other.data_size, 0)), items_count(std::exchange(other.items_count, 0)) {}
-
-  MemoryControlBlockWithItemCount& operator=(const MemoryControlBlockWithItemCount&) = delete;
-  PROMPP_ALWAYS_INLINE MemoryControlBlockWithItemCount& operator=(MemoryControlBlockWithItemCount&& other) noexcept {
-    if (this != &other) [[likely]] {
-      data = std::exchange(other.data, nullptr);
-      data_size = std::exchange(other.data_size, 0);
-      items_count = std::exchange(other.items_count, 0);
-    }
-
-    return *this;
-  }
 
   T* data{};
   SizeType data_size{};
@@ -152,7 +122,7 @@ class Memory : public GenericMemory<Memory<ControlBlock, T>, typename ControlBlo
 
   PROMPP_ALWAYS_INLINE Memory() noexcept = default;
   PROMPP_ALWAYS_INLINE Memory(const Memory& o) noexcept { copy(o); }
-  PROMPP_ALWAYS_INLINE Memory(Memory&& o) noexcept = default;
+  PROMPP_ALWAYS_INLINE Memory(Memory&& o) noexcept : control_block_(std::exchange(o.control_block_, {})) {};
   PROMPP_ALWAYS_INLINE ~Memory() noexcept { std::free(control_block_.data); }
 
   PROMPP_ALWAYS_INLINE Memory& operator=(const Memory& o) noexcept {
@@ -166,7 +136,7 @@ class Memory : public GenericMemory<Memory<ControlBlock, T>, typename ControlBlo
   PROMPP_ALWAYS_INLINE Memory& operator=(Memory&& o) noexcept {
     if (this != &o) [[likely]] {
       std::free(control_block_.data);
-      control_block_ = std::move(o.control_block_);
+      control_block_ = std::exchange(o.control_block_, {});
     }
 
     return *this;
@@ -202,7 +172,11 @@ class Memory : public GenericMemory<Memory<ControlBlock, T>, typename ControlBlo
   PROMPP_ALWAYS_INLINE void copy(const Memory& o) noexcept {
     static_assert(IsTriviallyCopyable<T>::value, "it's not allowed to copy memory for non trivially copyable types");
 
-    resize(o.control_block_.data_size);
+    T* data = control_block_.data;
+    control_block_ = o.control_block_;
+    control_block_.data = data;
+
+    resize(control_block_.data_size);
 
     PRAGMA_DIAGNOSTIC(push)
     PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)

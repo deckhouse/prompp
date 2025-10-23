@@ -13,61 +13,94 @@ import (
 	"github.com/prometheus/prometheus/util/annotations"
 )
 
+// QueryableStorage implements [storage.Storage], wrap around [storage.SampleAndChunkQueryable].
 type QueryableStorage struct {
 	queryable storage.SampleAndChunkQueryable
 }
 
-func (s *QueryableStorage) Querier(mint, maxt int64) (storage.Querier, error) {
-	return s.queryable.Querier(mint, maxt)
-}
-
-func (s *QueryableStorage) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
-	return s.queryable.ChunkQuerier(mint, maxt)
-}
-
-func (s *QueryableStorage) Appender(_ context.Context) storage.Appender {
-	return noOpAppender{}
-}
-
-func (s *QueryableStorage) StartTime() (int64, error) {
-	return int64(model.Latest), nil
-}
-
-func (s *QueryableStorage) Close() error {
-	return nil
-}
-
+// NewQueryableStorage init a new [QueryableStorage].
 func NewQueryableStorage(queryable storage.SampleAndChunkQueryable) *QueryableStorage {
 	return &QueryableStorage{queryable: queryable}
 }
 
+// Appender implements [storage.Storage], wrap around [storage.SampleAndChunkQueryable].
+func (*QueryableStorage) Appender(_ context.Context) storage.Appender {
+	return noOpAppender{}
+}
+
+// ChunkQuerier implements [storage.Storage], wrap around [storage.SampleAndChunkQueryable].
+func (s *QueryableStorage) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
+	return s.queryable.ChunkQuerier(mint, maxt)
+}
+
+// Close implements [storage.Storage], wrap around [storage.SampleAndChunkQueryable].
+func (*QueryableStorage) Close() error {
+	return nil
+}
+
+// Querier implements [storage.Storage], wrap around [storage.SampleAndChunkQueryable].
+func (s *QueryableStorage) Querier(mint, maxt int64) (storage.Querier, error) {
+	return s.queryable.Querier(mint, maxt)
+}
+
+// StartTime implements [storage.Storage], wrap around [storage.SampleAndChunkQueryable].
+func (*QueryableStorage) StartTime() (int64, error) {
+	return int64(model.Latest), nil
+}
+
+//
+// noOpAppender
+//
+
+// noOpAppender implements [storage.Appender], do nothing.
 type noOpAppender struct{}
 
+// Append implements [storage.Appender], do nothing.
 func (noOpAppender) Append(_ storage.SeriesRef, _ labels.Labels, _ int64, _ float64) (storage.SeriesRef, error) {
 	return 0, nil
 }
 
+// AppendCTZeroSample implements [storage.Appender], do nothing.
+func (noOpAppender) AppendCTZeroSample(_ storage.SeriesRef, _ labels.Labels, _, _ int64) (storage.SeriesRef, error) {
+	return 0, nil
+}
+
+// AppendExemplar implements [storage.Appender], do nothing.
+func (noOpAppender) AppendExemplar(
+	_ storage.SeriesRef,
+	_ labels.Labels,
+	_ exemplar.Exemplar,
+) (storage.SeriesRef, error) {
+	return 0, nil
+}
+
+// AppendHistogram implements [storage.Appender], do nothing.
+func (noOpAppender) AppendHistogram(
+	_ storage.SeriesRef,
+	_ labels.Labels,
+	_ int64,
+	_ *histogram.Histogram,
+	_ *histogram.FloatHistogram,
+) (storage.SeriesRef, error) {
+	return 0, nil
+}
+
+// Commit implements [storage.Appender], do nothing.
 func (noOpAppender) Commit() error {
 	return nil
 }
 
+// Rollback implements [storage.Appender], do nothing.
 func (noOpAppender) Rollback() error {
 	return nil
 }
 
-func (noOpAppender) AppendExemplar(ref storage.SeriesRef, l labels.Labels, e exemplar.Exemplar) (storage.SeriesRef, error) {
-	return 0, nil
-}
-
-func (noOpAppender) AppendHistogram(ref storage.SeriesRef, l labels.Labels, t int64, h *histogram.Histogram, fh *histogram.FloatHistogram) (storage.SeriesRef, error) {
-	return 0, nil
-}
-
-func (noOpAppender) UpdateMetadata(ref storage.SeriesRef, l labels.Labels, m metadata.Metadata) (storage.SeriesRef, error) {
-	return 0, nil
-}
-
-func (noOpAppender) AppendCTZeroSample(ref storage.SeriesRef, l labels.Labels, t, ct int64) (storage.SeriesRef, error) {
+// UpdateMetadata implements [storage.Appender], do nothing.
+func (noOpAppender) UpdateMetadata(
+	_ storage.SeriesRef,
+	_ labels.Labels,
+	_ metadata.Metadata,
+) (storage.SeriesRef, error) {
 	return 0, nil
 }
 
@@ -86,7 +119,7 @@ func (*noOpStorage) Appender(_ context.Context) storage.Appender {
 }
 
 // Querier implements storage.Storage.
-func (*noOpStorage) Querier(mint, maxt int64) (storage.Querier, error) {
+func (*noOpStorage) Querier(_, _ int64) (storage.Querier, error) {
 	return noOpQuerier{}, nil
 }
 
@@ -220,16 +253,16 @@ func (noOpChunkSeriesSet) Next() bool {
 }
 
 // At implements storage.ChunkSeriesSet.
-func (n noOpChunkSeriesSet) At() storage.ChunkSeries {
+func (noOpChunkSeriesSet) At() storage.ChunkSeries {
 	return nil
 }
 
 // Err implements storage.ChunkSeriesSet.
-func (n noOpChunkSeriesSet) Err() error {
+func (noOpChunkSeriesSet) Err() error {
 	return nil
 }
 
 // Warnings implements storage.ChunkSeriesSet.
-func (n noOpChunkSeriesSet) Warnings() annotations.Annotations {
+func (noOpChunkSeriesSet) Warnings() annotations.Annotations {
 	return nil
 }

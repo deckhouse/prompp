@@ -30,6 +30,17 @@ type TimeInterval struct {
 	MaxT int64
 }
 
+func NewInvalidTimeInterval() TimeInterval {
+	return TimeInterval{
+		MinT: math.MaxInt64,
+		MaxT: math.MinInt64,
+	}
+}
+
+func (t *TimeInterval) IsInvalid() bool {
+	return t.MinT == math.MaxInt64 && t.MaxT == math.MinInt64
+}
+
 type Sample struct {
 	Timestamp int64
 	Value     float64
@@ -37,13 +48,17 @@ type Sample struct {
 
 // HeadDataStorage is Go wrapper around series_data::Data_storage.
 type HeadDataStorage struct {
-	dataStorage uintptr
+	dataStorage       uintptr
+	gcDestroyDetector *uint64
+	timeInterval      TimeInterval
 }
 
 // NewHeadDataStorage - constructor.
 func NewHeadDataStorage() *HeadDataStorage {
 	ds := &HeadDataStorage{
-		dataStorage: seriesDataDataStorageCtor(),
+		dataStorage:       seriesDataDataStorageCtor(),
+		gcDestroyDetector: &gcDestroyDetector,
+		timeInterval:      NewInvalidTimeInterval(),
 	}
 
 	runtime.SetFinalizer(ds, func(ds *HeadDataStorage) {
@@ -56,12 +71,16 @@ func NewHeadDataStorage() *HeadDataStorage {
 // Reset - resets data storage.
 func (ds *HeadDataStorage) Reset() {
 	seriesDataDataStorageReset(ds.dataStorage)
+	ds.timeInterval = NewInvalidTimeInterval()
 }
 
-func (ds *HeadDataStorage) TimeInterval() TimeInterval {
-	res := seriesDataDataStorageTimeInterval(ds.dataStorage)
-	runtime.KeepAlive(ds)
-	return res
+func (ds *HeadDataStorage) TimeInterval(invalidateCache bool) TimeInterval {
+	if invalidateCache || ds.timeInterval.IsInvalid() {
+		ds.timeInterval = seriesDataDataStorageTimeInterval(ds.dataStorage)
+		runtime.KeepAlive(ds)
+	}
+
+	return ds.timeInterval
 }
 
 func (ds *HeadDataStorage) GetQueriedSeriesBitset() []byte {
@@ -235,7 +254,7 @@ type HeadDataStorageSerializedChunks struct {
 
 type HeadDataStorageSerializedChunkMetadata [SerializedChunkMetadataSize]byte
 
-func (cm *HeadDataStorageSerializedChunkMetadata) SeriesID() uint32 {
+func (cm HeadDataStorageSerializedChunkMetadata) SeriesID() uint32 {
 	return *(*uint32)(unsafe.Pointer(&cm[0]))
 }
 
@@ -253,6 +272,11 @@ func (r *HeadDataStorageSerializedChunks) Len() int {
 
 func (r *HeadDataStorageSerializedChunks) Data() []byte {
 	return r.data
+}
+
+func (r *HeadDataStorageSerializedChunks) Metadata(chunkIndex int) HeadDataStorageSerializedChunkMetadata {
+	offset := Uint32Size + chunkIndex*SerializedChunkMetadataSize
+	return HeadDataStorageSerializedChunkMetadata(r.data[offset : offset+SerializedChunkMetadataSize])
 }
 
 type HeadDataStorageSerializedChunkIndex struct {

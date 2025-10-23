@@ -61,6 +61,16 @@ func (c *Config) GetReceiverConfig() (*pp_pkg_config.RemoteWriteReceiverConfig, 
 	return rcCfg, nil
 }
 
+// PPNumberOfShards returns number of shards for manager.
+func (c *Config) PPNumberOfShards() uint16 {
+	return c.ReceiverConfig.NumberOfShards
+}
+
+// RemoteWriteReceiverConfig returns configs for RemoteWriteReceiver.
+func (c *Config) RemoteWriteReceiverConfig() *pp_pkg_config.RemoteWriteReceiverConfig {
+	return c.ReceiverConfig.Copy()
+}
+
 func convertingRelabelConfigs(rCfgs []*relabel.Config) ([]*cppbridge.RelabelConfig, error) {
 	var oprCfgs []*cppbridge.RelabelConfig
 	raw, err := yaml.Marshal(rCfgs)
