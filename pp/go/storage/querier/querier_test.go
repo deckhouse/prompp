@@ -42,7 +42,6 @@ type QuerierSuite struct {
 	suite.Suite
 	dataDir string
 	context context.Context
-	cancel  context.CancelFunc
 	head    *storage.Head
 }
 
@@ -51,13 +50,8 @@ func TestQuerierSuite(t *testing.T) {
 }
 
 func (s *QuerierSuite) SetupTest() {
-	if s.cancel != nil {
-		s.cancel()
-	}
-
 	s.dataDir = s.createDataDirectory()
-	s.context, s.cancel = context.WithTimeout(context.Background(), time.Minute)
-
+	s.context = context.Background()
 	s.head = s.mustCreateHead(1)
 }
 

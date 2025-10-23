@@ -7,7 +7,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
-	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"testing"
@@ -69,6 +68,19 @@ func (s *SeriesSetTestSuite) SetupTest() {
 	}
 }
 
+func expandTimeSeries(timeSeries ...storagetest.TimeSeries) []storagetest.TimeSeries {
+	result := make([]storagetest.TimeSeries, 0, len(timeSeries))
+	for i := range timeSeries {
+		for j := range timeSeries[i].Samples {
+			result = append(result, storagetest.TimeSeries{
+				Labels:  timeSeries[i].Labels,
+				Samples: []cppbridge.Sample{timeSeries[i].Samples[j]},
+			})
+		}
+	}
+	return result
+}
+
 func query(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, start, end int64, matchers ...model.LabelMatcher) *querier.SeriesSet {
 	selector, snapshot, err := lss.QuerySelector(0, matchers)
 	require.NoError(t, err)
@@ -91,28 +103,6 @@ func query(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, start, end int64
 	return querier.NewSeriesSet(start, end, lssQueryResult, snapshot, dsQueryResult.SerializedData)
 }
 
-func assertEqual(t testing.TB, timeSeries []storagetest.TimeSeries, seriesSet *querier.SeriesSet) {
-	for seriesSet.Next() {
-		series := seriesSet.At()
-		labelSet := series.Labels()
-		iterator := series.Iterator(nil)
-		for iterator.Next() == chunkenc.ValFloat {
-			ts, v := iterator.At()
-			found := false
-			for i := range timeSeries {
-				if timeSeries[i].Labels.String() == labelSet.String() && timeSeries[i].Samples[0].Timestamp == ts && timeSeries[i].Samples[0].Value == v {
-					timeSeries = append(timeSeries[:i], timeSeries[i+1:]...)
-					found = true
-					break
-				}
-			}
-			require.True(t, found)
-		}
-	}
-
-	require.Empty(t, timeSeries)
-}
-
 func (s *SeriesSetTestSuite) TestQueryAllValues() {
 	// Arrange
 	matcher := model.LabelMatcher{
@@ -132,7 +122,7 @@ func (s *SeriesSetTestSuite) TestQueryAllValues() {
 	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
 
 	// Assert
-	assertEqual(s.T(), expected, seriesSet)
+	require.Equal(s.T(), expected, expandTimeSeries(storagetest.TimeSeriesFromSeriesSet(seriesSet)...))
 }
 
 func (s *SeriesSetTestSuite) TestQueryNoValues() {
@@ -153,7 +143,7 @@ func (s *SeriesSetTestSuite) TestQueryNoValues() {
 	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
 
 	// Assert
-	assertEqual(s.T(), expected, seriesSet)
+	require.Equal(s.T(), expected, expandTimeSeries(storagetest.TimeSeriesFromSeriesSet(seriesSet)...))
 }
 
 func (s *SeriesSetTestSuite) TestQuerySingleSeries() {
@@ -174,7 +164,7 @@ func (s *SeriesSetTestSuite) TestQuerySingleSeries() {
 	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
 
 	// Assert
-	assertEqual(s.T(), expected, seriesSet)
+	require.Equal(s.T(), expected, expandTimeSeries(storagetest.TimeSeriesFromSeriesSet(seriesSet)...))
 }
 
 func (s *SeriesSetTestSuite) TestQuerySingleSample() {
@@ -195,7 +185,7 @@ func (s *SeriesSetTestSuite) TestQuerySingleSample() {
 	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
 
 	// Assert
-	assertEqual(s.T(), expected, seriesSet)
+	require.Equal(s.T(), expected, expandTimeSeries(storagetest.TimeSeriesFromSeriesSet(seriesSet)...))
 }
 
 func (s *SeriesSetTestSuite) TestQueryCutByUpperLimit() {
@@ -216,7 +206,7 @@ func (s *SeriesSetTestSuite) TestQueryCutByUpperLimit() {
 	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
 
 	// Assert
-	assertEqual(s.T(), expected, seriesSet)
+	require.Equal(s.T(), expected, expandTimeSeries(storagetest.TimeSeriesFromSeriesSet(seriesSet)...))
 }
 
 func (s *SeriesSetTestSuite) TestQueryCutByLowerLimit() {
@@ -237,7 +227,7 @@ func (s *SeriesSetTestSuite) TestQueryCutByLowerLimit() {
 	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
 
 	// Assert
-	assertEqual(s.T(), expected, seriesSet)
+	require.Equal(s.T(), expected, expandTimeSeries(storagetest.TimeSeriesFromSeriesSet(seriesSet)...))
 }
 
 func (s *SeriesSetTestSuite) TestQueryLargeChunks() {
@@ -267,7 +257,7 @@ func (s *SeriesSetTestSuite) TestQueryLargeChunks() {
 	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
 
 	// Assert
-	assertEqual(s.T(), expected, seriesSet)
+	require.Equal(s.T(), expected, expandTimeSeries(storagetest.TimeSeriesFromSeriesSet(seriesSet)...))
 }
 
 func (s *SeriesSetTestSuite) TestQueryEmptyStorage() {
@@ -286,5 +276,5 @@ func (s *SeriesSetTestSuite) TestQueryEmptyStorage() {
 	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
 
 	// Assert
-	assertEqual(s.T(), expected, seriesSet)
+	require.Equal(s.T(), expected, expandTimeSeries(storagetest.TimeSeriesFromSeriesSet(seriesSet)...))
 }
