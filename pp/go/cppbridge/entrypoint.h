@@ -694,7 +694,7 @@ void prompp_primitives_lss_bitset_dtor(void* args);
  * @param source_lss pointer to source label sets;
  * @param source_bitset pointer to source bitset;
  * @param destination_lss pointer to destination label sets;
- * @param ids_mapping pointer to []uint32;
+ * @param ids_mapping pointer to uintptr;
  *
  * @attention This binding used as a CGO call!!!
  *
