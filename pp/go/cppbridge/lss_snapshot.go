@@ -85,3 +85,64 @@ func (lss *LabelSetSnapshot) CopyAddedSeries(bitsetSeries *BitsetSeries, destina
 	runtime.KeepAlive(bitsetSeries)
 	runtime.KeepAlive(destination)
 }
+
+//
+// LSSQueryResult
+//
+
+// LSSQueryResult query execution result in lss with copy.
+type LSSQueryResult struct {
+	matches         []uint32 // c allocated
+	labelSetLengths []uint16 // c allocated
+	status          uint32
+}
+
+// newLSSQueryResult init new LSSQueryResult.
+func newLSSQueryResult(
+	matches []uint32,
+	labelSetLengths []uint16,
+	status uint32,
+) *LSSQueryResult {
+	lqr := &LSSQueryResult{
+		matches:         matches,
+		labelSetLengths: labelSetLengths,
+		status:          status,
+	}
+
+	if status != LSSQueryStatusMatch {
+		primitivesLabelSetMatchesFree(lqr)
+
+		return lqr
+	}
+
+	runtime.SetFinalizer(lqr, func(result *LSSQueryResult) {
+		primitivesLabelSetMatchesFree(result)
+	})
+
+	return lqr
+}
+
+// GetByIndex return ls id and length for ls id by index.
+func (r *LSSQueryResult) GetByIndex(i int) (uint32, uint16) {
+	return r.matches[i], r.labelSetLengths[i]
+}
+
+// IDs return labels sets ids.
+func (r *LSSQueryResult) IDs() []uint32 {
+	return r.matches
+}
+
+// LabelSetLengths return labels sets lengths.
+func (r *LSSQueryResult) LabelSetLengths() []uint16 {
+	return r.labelSetLengths
+}
+
+// Len of result.
+func (r *LSSQueryResult) Len() int {
+	return len(r.matches)
+}
+
+// Status query execution.
+func (r *LSSQueryResult) Status() uint32 {
+	return r.status
+}

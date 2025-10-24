@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/prometheus/common/model"
-
 	"github.com/prometheus/prometheus/model/exemplar"
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
@@ -13,39 +12,38 @@ import (
 	"github.com/prometheus/prometheus/util/annotations"
 )
 
-// QueryableStorage implements [storage.Storage], wrap around [storage.SampleAndChunkQueryable].
-type QueryableStorage struct {
-	queryable storage.SampleAndChunkQueryable
-}
+//
+// Storage
+//
 
-// NewQueryableStorage init a new [QueryableStorage].
-func NewQueryableStorage(queryable storage.SampleAndChunkQueryable) *QueryableStorage {
-	return &QueryableStorage{queryable: queryable}
-}
+// noOpStorage implements storage.Storage.
+type noOpStorage struct{}
 
-// Appender implements [storage.Storage], wrap around [storage.SampleAndChunkQueryable].
-func (*QueryableStorage) Appender(_ context.Context) storage.Appender {
+var _ storage.Storage = (*noOpStorage)(nil)
+
+// Appender implements storage.Storage.
+func (*noOpStorage) Appender(_ context.Context) storage.Appender {
 	return noOpAppender{}
 }
 
-// ChunkQuerier implements [storage.Storage], wrap around [storage.SampleAndChunkQueryable].
-func (s *QueryableStorage) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
-	return s.queryable.ChunkQuerier(mint, maxt)
+// Querier implements storage.Storage.
+func (*noOpStorage) Querier(_, _ int64) (storage.Querier, error) {
+	return noOpQuerier{}, nil
 }
 
-// Close implements [storage.Storage], wrap around [storage.SampleAndChunkQueryable].
-func (*QueryableStorage) Close() error {
-	return nil
+// ChunkQuerier implements storage.Storage.
+func (*noOpStorage) ChunkQuerier(_, _ int64) (storage.ChunkQuerier, error) {
+	return noOpChunkQuerier{}, nil
 }
 
-// Querier implements [storage.Storage], wrap around [storage.SampleAndChunkQueryable].
-func (s *QueryableStorage) Querier(mint, maxt int64) (storage.Querier, error) {
-	return s.queryable.Querier(mint, maxt)
-}
-
-// StartTime implements [storage.Storage], wrap around [storage.SampleAndChunkQueryable].
-func (*QueryableStorage) StartTime() (int64, error) {
+// StartTime implements storage.Storage.
+func (*noOpStorage) StartTime() (int64, error) {
 	return int64(model.Latest), nil
+}
+
+// Close implements storage.Storage.
+func (*noOpStorage) Close() error {
+	return nil
 }
 
 //
@@ -102,40 +100,6 @@ func (noOpAppender) UpdateMetadata(
 	_ metadata.Metadata,
 ) (storage.SeriesRef, error) {
 	return 0, nil
-}
-
-//
-// Storage
-//
-
-// noOpStorage implements storage.Storage.
-type noOpStorage struct{}
-
-var _ storage.Storage = (*noOpStorage)(nil)
-
-// Appender implements storage.Storage.
-func (*noOpStorage) Appender(_ context.Context) storage.Appender {
-	return noOpAppender{}
-}
-
-// Querier implements storage.Storage.
-func (*noOpStorage) Querier(_, _ int64) (storage.Querier, error) {
-	return noOpQuerier{}, nil
-}
-
-// ChunkQuerier implements storage.Storage.
-func (*noOpStorage) ChunkQuerier(_, _ int64) (storage.ChunkQuerier, error) {
-	return noOpChunkQuerier{}, nil
-}
-
-// StartTime implements storage.Storage.
-func (*noOpStorage) StartTime() (int64, error) {
-	return int64(model.Latest), nil
-}
-
-// Close implements storage.Storage.
-func (*noOpStorage) Close() error {
-	return nil
 }
 
 //
