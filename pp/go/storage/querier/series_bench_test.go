@@ -80,7 +80,7 @@ func BenchmarkSeriesSetOpt(b *testing.B) {
 func prepareData(lss *shard.LSS, ds *shard.DataStorage, size int) {
 	timeSeries := make([]storagetest.TimeSeries, 0, size)
 	for i := 0; i < size; i++ {
-		label := fmt.Sprintf("index_%d", i%100)
+		label := fmt.Sprintf("index_%d", i%10000)
 		timeSeries = append(timeSeries, storagetest.TimeSeries{
 			Labels: labels.FromStrings("__name__", "metric", "job", label, "container", "", "id", "/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod37ce076d8d523c8b0c8c0b6191d927f6.slice/cri-containerd-bdd69edcd2fb187baa3381810051e8cc7b8a0d0368e168040f93adb3260582b2.scope", "image", "registry.k8s.io/pause:3.8", "name", "bdd69edcd2fb187baa3381810051e8cc7b8a0d0368e168040f93adb3260582b2", "namespace", "kube-system", "pod", "kube-scheduler-m1.k8s.lan"),
 			Samples: []cppbridge.Sample{

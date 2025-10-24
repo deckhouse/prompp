@@ -4,6 +4,7 @@ import (
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/util/annotations"
@@ -103,10 +104,17 @@ func NewLimitedChunkIterator(serializedData *cppbridge.DataStorageSerializedData
 	return it
 }
 
-func (it *LimitedChunkIterator) Reset(chunkRef uint32, mint, maxt int64) {
-	it.chunkIterator.Reset(chunkRef)
+func (it *LimitedChunkIterator) Reset(serializedData *cppbridge.DataStorageSerializedData, chunkRef uint32, mint, maxt int64) {
 	it.mint = mint
 	it.maxt = maxt
+	if serializedData == it.serializedData {
+		it.chunkIterator.Reset(chunkRef)
+		return
+	}
+
+	it.chunkIterator.Destroy()
+	it.serializedData = serializedData
+	it.chunkIterator = NewChunkIterator(serializedData.Iterator(chunkRef))
 }
 
 // At returns the current timestamp/value pair if the value is a float.
@@ -215,12 +223,11 @@ func (s *Series) Labels() labels.Labels {
 
 func (s *Series) Iterator(it chunkenc.Iterator) chunkenc.Iterator {
 	chunkIterator, ok := it.(*LimitedChunkIterator)
-	if !ok || chunkIterator.serializedData != s.serializedData {
+	if !ok {
 		return NewLimitedChunkIterator(s.serializedData, NewChunkIterator(s.serializedData.Iterator(s.chunkRef)), s.mint, s.maxt)
 	}
 
-	// we will iterate through same series data but different series
-	chunkIterator.Reset(s.chunkRef, s.mint, s.maxt)
+	chunkIterator.Reset(s.serializedData, s.chunkRef, s.mint, s.maxt)
 	return chunkIterator
 }
 
@@ -230,7 +237,8 @@ type SeriesSet struct {
 	labelSetSnapshot *cppbridge.LabelSetSnapshot
 	serializedData   *cppbridge.DataStorageSerializedData
 
-	series Series
+	lastIndexFromLSSQueryResult int
+	series                      Series
 }
 
 func NewSeriesSet(
@@ -258,7 +266,13 @@ func (s *SeriesSet) Next() bool {
 		return false
 	}
 
-	_, lsLength := s.lssQueryResult.GetByIndex(s.lssQueryResult.IndexOf(seriesID))
+	var lsLength uint16
+	lsLength, s.lastIndexFromLSSQueryResult = s.lssQueryResult.LengthBySeriesID(seriesID, s.lastIndexFromLSSQueryResult)
+	if s.lastIndexFromLSSQueryResult < 0 {
+		logger.Errorf("not found label set for series id: %d", seriesID)
+		return false
+	}
+
 	s.series = NewSeries(
 		s.mint,
 		s.maxt,
