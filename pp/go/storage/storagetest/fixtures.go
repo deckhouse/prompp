@@ -125,7 +125,7 @@ func GetSamplesFromSerializedData(serializedData *cppbridge.DataStorageSerialize
 			break
 		}
 
-		iterator := serializedData.Iterator(chunkRef)
+		iterator := cppbridge.NewDataStorageSerializedDataIterator(serializedData, chunkRef)
 		nextResult := cppbridge.SerializedDataIteratorNextResult{}
 		for {
 			iterator.Next(&nextResult)

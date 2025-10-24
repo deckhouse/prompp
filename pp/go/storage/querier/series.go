@@ -4,7 +4,6 @@ import (
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/util/annotations"
@@ -17,8 +16,8 @@ type ChunkIterator struct {
 	nextResult cppbridge.SerializedDataIteratorNextResult
 }
 
-func (it *ChunkIterator) Reset(chunkRef uint32) {
-	it.iterator.Reset(chunkRef)
+func (it *ChunkIterator) Reset(serializedData *cppbridge.DataStorageSerializedData, chunkRef uint32) {
+	it.iterator.Reset(serializedData, chunkRef)
 	it.nextResult = cppbridge.NewSerializedDataIteratorNextResult()
 }
 
@@ -105,16 +104,10 @@ func NewLimitedChunkIterator(serializedData *cppbridge.DataStorageSerializedData
 }
 
 func (it *LimitedChunkIterator) Reset(serializedData *cppbridge.DataStorageSerializedData, chunkRef uint32, mint, maxt int64) {
+	it.serializedData = serializedData
 	it.mint = mint
 	it.maxt = maxt
-	if serializedData == it.serializedData {
-		it.chunkIterator.Reset(chunkRef)
-		return
-	}
-
-	it.chunkIterator.Destroy()
-	it.serializedData = serializedData
-	it.chunkIterator = NewChunkIterator(serializedData.Iterator(chunkRef))
+	it.chunkIterator.Reset(serializedData, chunkRef)
 }
 
 // At returns the current timestamp/value pair if the value is a float.
@@ -224,7 +217,14 @@ func (s *Series) Labels() labels.Labels {
 func (s *Series) Iterator(it chunkenc.Iterator) chunkenc.Iterator {
 	chunkIterator, ok := it.(*LimitedChunkIterator)
 	if !ok {
-		return NewLimitedChunkIterator(s.serializedData, NewChunkIterator(s.serializedData.Iterator(s.chunkRef)), s.mint, s.maxt)
+		return NewLimitedChunkIterator(
+			s.serializedData,
+			NewChunkIterator(
+				cppbridge.NewDataStorageSerializedDataIterator(s.serializedData, s.chunkRef),
+			),
+			s.mint,
+			s.maxt,
+		)
 	}
 
 	chunkIterator.Reset(s.serializedData, s.chunkRef, s.mint, s.maxt)
@@ -266,17 +266,17 @@ func (s *SeriesSet) Next() bool {
 		return false
 	}
 
-	var lsLength uint16
-	lsLength, s.lastIndexFromLSSQueryResult = s.lssQueryResult.LengthBySeriesID(seriesID, s.lastIndexFromLSSQueryResult)
-	if s.lastIndexFromLSSQueryResult < 0 {
-		logger.Errorf("not found label set for series id: %d", seriesID)
-		return false
-	}
+	//var lsLength uint16
+	//lsLength, s.lastIndexFromLSSQueryResult = s.lssQueryResult.LengthBySeriesID(seriesID, s.lastIndexFromLSSQueryResult)
+	//if s.lastIndexFromLSSQueryResult < 0 {
+	//	logger.Errorf("not found label set for series id: %d", seriesID)
+	//	return false
+	//}
 
 	s.series = NewSeries(
 		s.mint,
 		s.maxt,
-		labels.NewLabelsWithLSS(s.labelSetSnapshot, seriesID, lsLength),
+		labels.EmptyLabels(), // labels.NewLabelsWithLSS(s.labelSetSnapshot, seriesID, lsLength),
 		s.serializedData,
 		chunkRef,
 	)

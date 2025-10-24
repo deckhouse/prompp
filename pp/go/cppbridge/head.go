@@ -355,23 +355,20 @@ func (sd *DataStorageSerializedData) Next() (uint32, uint32) {
 	return seriesDataSerializedDataNext(sd.serializedData)
 }
 
-func (sd *DataStorageSerializedData) Iterator(chunkRef uint32) DataStorageSerializedDataIterator {
-	it := DataStorageSerializedDataIterator{
-		iterator: seriesDataSerializedDataIterator(sd.serializedData, chunkRef),
-	}
-	return it
-}
-
 type DataStorageSerializedDataIterator struct {
 	iterator uintptr
+}
+
+func NewDataStorageSerializedDataIterator(serializedData *DataStorageSerializedData, chunkRef uint32) DataStorageSerializedDataIterator {
+	return DataStorageSerializedDataIterator{iterator: seriesDataSerializedDataIteratorCtor(serializedData.serializedData, chunkRef)}
 }
 
 func (it DataStorageSerializedDataIterator) Next(result *SerializedDataIteratorNextResult) {
 	seriesDataSerializedDataIteratorNext(it.iterator, result)
 }
 
-func (it DataStorageSerializedDataIterator) Reset(chunkRef uint32) {
-	seriesDataSerializedDataIteratorReset(it.iterator, chunkRef)
+func (it DataStorageSerializedDataIterator) Reset(serializedData *DataStorageSerializedData, chunkRef uint32) {
+	seriesDataSerializedDataIteratorReset(serializedData.serializedData, it.iterator, chunkRef)
 }
 
 func (it DataStorageSerializedDataIterator) Destroy() {

@@ -2238,7 +2238,7 @@ func seriesDataSerializedDataNext(serializedData uintptr) (uint32, uint32) {
 	return res.seriesID, res.chunkRef
 }
 
-func seriesDataSerializedDataIterator(serializedData uintptr, chunkRef uint32) uintptr {
+func seriesDataSerializedDataIteratorCtor(serializedData uintptr, chunkRef uint32) uintptr {
 	args := struct {
 		serializedData uintptr
 		chunkRef       uint32
@@ -2280,11 +2280,12 @@ func seriesDataSerializedDataIteratorNext(iterator uintptr, res *SerializedDataI
 	)
 }
 
-func seriesDataSerializedDataIteratorReset(iterator uintptr, chunkRef uint32) {
+func seriesDataSerializedDataIteratorReset(serializedData uintptr, iterator uintptr, chunkRef uint32) {
 	args := struct {
-		iterator uintptr
-		chunkRef uint32
-	}{iterator, chunkRef}
+		serializedData uintptr
+		iterator       uintptr
+		chunkRef       uint32
+	}{serializedData, iterator, chunkRef}
 
 	testGC()
 	fastcgo.UnsafeCall1(
