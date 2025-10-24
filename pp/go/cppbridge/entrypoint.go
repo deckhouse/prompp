@@ -17,6 +17,7 @@ package cppbridge
 // #include "entrypoint.h"
 import "C" //nolint:gocritic // because otherwise it won't work
 import (
+	"math"
 	"runtime"
 	"time"
 	"unsafe" //nolint:gocritic // because otherwise it won't work
@@ -2260,6 +2261,10 @@ type SerializedDataIteratorNextResult struct {
 	Timestamp int64
 	Value     float64
 	HasValue  bool
+}
+
+func NewSerializedDataIteratorNextResult() SerializedDataIteratorNextResult {
+	return SerializedDataIteratorNextResult{Timestamp: math.MinInt64}
 }
 
 func seriesDataSerializedDataIteratorNext(iterator uintptr, res *SerializedDataIteratorNextResult) {

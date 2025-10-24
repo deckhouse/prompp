@@ -16,6 +16,11 @@ type ChunkIterator struct {
 	nextResult cppbridge.SerializedDataIteratorNextResult
 }
 
+func (it *ChunkIterator) Reset(chunkRef uint32) {
+	it.iterator.Reset(chunkRef)
+	it.nextResult = cppbridge.NewSerializedDataIteratorNextResult()
+}
+
 func (it *ChunkIterator) Next() chunkenc.ValueType {
 	if !it.next() {
 		return chunkenc.ValNone
@@ -69,10 +74,8 @@ func (it *ChunkIterator) Destroy() {
 
 func NewChunkIterator(iterator cppbridge.DataStorageSerializedDataIterator) ChunkIterator {
 	return ChunkIterator{
-		iterator: iterator,
-		nextResult: cppbridge.SerializedDataIteratorNextResult{
-			Timestamp: math.MinInt64,
-		},
+		iterator:   iterator,
+		nextResult: cppbridge.NewSerializedDataIteratorNextResult(),
 	}
 }
 
@@ -101,7 +104,7 @@ func NewLimitedChunkIterator(serializedData *cppbridge.DataStorageSerializedData
 }
 
 func (it *LimitedChunkIterator) Reset(chunkRef uint32, mint, maxt int64) {
-	it.chunkIterator.iterator.Reset(chunkRef)
+	it.chunkIterator.Reset(chunkRef)
 	it.mint = mint
 	it.maxt = maxt
 }
