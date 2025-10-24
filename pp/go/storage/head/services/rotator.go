@@ -144,7 +144,6 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 	}
 
 	startWait := time.Now()
-	// TODO if replace error?
 	if err = s.proxyHead.Replace(ctx, newHead); err != nil {
 		if errClose := newHead.Close(); errClose != nil {
 			logger.Errorf("failed close new head: %s : %v", newHead.ID(), errClose)

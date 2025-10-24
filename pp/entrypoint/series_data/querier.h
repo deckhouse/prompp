@@ -5,6 +5,7 @@
 #include "primitives/primitives.h"
 #include "series_data/querier/instant_querier.h"
 #include "series_data/querier/querier.h"
+#include "series_data/serialization/serialized_data.h"
 #include "series_data/serialization/serializer.h"
 
 namespace entrypoint::series_data {
@@ -87,15 +88,49 @@ class RangeQuerierWithArgumentsWrapper {
   }
 };
 
-enum class QuerierType : uint8_t {
-  kInstantQuerier = 0,
-  kRangeQuerier,
+class RangeQuerierWithArgumentsWrapperNew {
+  using DataStorage = ::series_data::DataStorage;
+  using LabelSetID = PromPP::Primitives::LabelSetID;
+  template <class T>
+  using Slice = PromPP::Primitives::Go::Slice<T>;
+  using Query = ::series_data::querier::Query<Slice<LabelSetID>>;
+  using Serializer = ::series_data::serialization::Serializer;
+  using BytesStream = PromPP::Primitives::Go::BytesStream;
+
+ public:
+  RangeQuerierWithArgumentsWrapperNew(DataStorage& storage, const Query& query, head::SerializedDataPtr* serialized_data)
+      : querier_(storage), query_(&query), serialized_data_(serialized_data) {}
+
+  void query() noexcept {
+    querier_.query(*query_);
+    if (!querier_.need_loading()) {
+      serialize_chunks();
+    }
+  }
+
+  PROMPP_ALWAYS_INLINE void query_finalize() const noexcept { serialize_chunks(); }
+
+  [[nodiscard]] const BareBones::Bitset& series_to_load() const noexcept { return querier_.get_series_to_load(); }
+  [[nodiscard]] bool need_loading() const noexcept { return querier_.need_loading(); }
+  [[nodiscard]] DataStorage& storage() noexcept { return querier_.get_storage(); }
+
+ private:
+  ::series_data::querier::Querier querier_;
+  const Query* query_;
+  head::SerializedDataPtr* serialized_data_;
+
+  PROMPP_ALWAYS_INLINE void serialize_chunks() const noexcept {
+    std::construct_at(serialized_data_, std::make_unique<head::SerializedDataGo>(querier_.get_storage(), querier_.chunks()));
+  }
 };
 
-using QuerierVariant = std::variant<InstantQuerierWithArgumentsWrapperEntrypoint, RangeQuerierWithArgumentsWrapper>;
+enum class QuerierType : uint8_t { kInstantQuerier = 0, kRangeQuerier, kRangeQuerierNew };
+
+using QuerierVariant = std::variant<InstantQuerierWithArgumentsWrapperEntrypoint, RangeQuerierWithArgumentsWrapper, RangeQuerierWithArgumentsWrapperNew>;
 using QuerierVariantPtr = std::unique_ptr<QuerierVariant>;
 
 }  // namespace entrypoint::series_data
 
 static_assert(entrypoint::series_data::QuerierInterface<entrypoint::series_data::InstantQuerierWithArgumentsWrapperEntrypoint>);
 static_assert(entrypoint::series_data::QuerierInterface<entrypoint::series_data::RangeQuerierWithArgumentsWrapper>);
+static_assert(entrypoint::series_data::QuerierInterface<entrypoint::series_data::RangeQuerierWithArgumentsWrapperNew>);

@@ -27,7 +27,7 @@ func (s *WalSuite) TestCurrentSize() {
 	}
 	maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	s.Equal(expectedWalSize, wl.CurrentSize())
 
@@ -42,7 +42,7 @@ func (s *WalSuite) TestClose() {
 	}
 	maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	s.Require().NoError(wl.Close())
 	s.Len(segmentWriter.CloseCalls(), 1)
@@ -59,7 +59,7 @@ func (s *WalSuite) TestCloseError() {
 	}
 	maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	s.Require().ErrorIs(wl.Close(), expectedError)
 	s.Len(segmentWriter.CloseCalls(), 1)
@@ -67,14 +67,19 @@ func (s *WalSuite) TestCloseError() {
 
 func (s *WalSuite) TestCommit() {
 	enc := &EncoderMock[*EncodedSegmentMock]{
-		FinalizeFunc: func() (*EncodedSegmentMock, error) { return &EncodedSegmentMock{}, nil },
+		FinalizeFunc: func() (*EncodedSegmentMock, error) {
+			return &EncodedSegmentMock{
+				SizeFunc:    func() int64 { return 42 },
+				SamplesFunc: func() uint32 { return 42 },
+			}, nil
+		},
 	}
 	segmentWriter := &SegmentWriterMock[*EncodedSegmentMock]{
 		WriteFunc: func(*EncodedSegmentMock) error { return nil },
 	}
 	maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	s.Require().NoError(wl.Commit())
 	s.Len(enc.FinalizeCalls(), 1)
@@ -91,7 +96,7 @@ func (s *WalSuite) TestCommitEncodeError() {
 	}
 	maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	s.Require().ErrorIs(wl.Commit(), expectedError)
 	s.Len(enc.FinalizeCalls(), 1)
@@ -101,14 +106,19 @@ func (s *WalSuite) TestCommitEncodeError() {
 func (s *WalSuite) TestCommitWriteError() {
 	expectedError := errors.New("test error")
 	enc := &EncoderMock[*EncodedSegmentMock]{
-		FinalizeFunc: func() (*EncodedSegmentMock, error) { return &EncodedSegmentMock{}, nil },
+		FinalizeFunc: func() (*EncodedSegmentMock, error) {
+			return &EncodedSegmentMock{
+				SizeFunc:    func() int64 { return 42 },
+				SamplesFunc: func() uint32 { return 42 },
+			}, nil
+		},
 	}
 	segmentWriter := &SegmentWriterMock[*EncodedSegmentMock]{
 		WriteFunc: func(*EncodedSegmentMock) error { return expectedError },
 	}
 	maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	s.Require().ErrorIs(wl.Commit(), expectedError)
 	s.Len(enc.FinalizeCalls(), 1)
@@ -122,7 +132,7 @@ func (s *WalSuite) TestFlush() {
 	}
 	maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	s.Require().NoError(wl.Flush())
 	s.Len(segmentWriter.FlushCalls(), 1)
@@ -136,7 +146,7 @@ func (s *WalSuite) TestFlushError() {
 	}
 	maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	s.Require().ErrorIs(wl.Flush(), expectedError)
 	s.Len(segmentWriter.FlushCalls(), 1)
@@ -149,7 +159,7 @@ func (s *WalSuite) TestSync() {
 	}
 	maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	s.Require().NoError(wl.Sync())
 	s.Len(segmentWriter.SyncCalls(), 1)
@@ -163,7 +173,7 @@ func (s *WalSuite) TestSyncError() {
 	}
 	maxSegmentSize := uint32(100)
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	s.Require().ErrorIs(wl.Sync(), expectedError)
 	s.Len(segmentWriter.SyncCalls(), 1)
@@ -178,7 +188,7 @@ func (s *WalSuite) TestWrite() {
 	}
 
 	maxSegmentSize := uint32(0)
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	limitExhausted, err := wl.Write([]*cppbridge.InnerSeries{})
 	s.Require().NoError(err)
@@ -198,7 +208,7 @@ func (s *WalSuite) TestWriteLimitExhausted() {
 		CloseFunc: func() error { return nil },
 	}
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	limitExhausted, err := wl.Write([]*cppbridge.InnerSeries{})
 	s.Require().NoError(err)
@@ -218,7 +228,7 @@ func (s *WalSuite) TestWriteLimitNotExhausted() {
 		CloseFunc: func() error { return nil },
 	}
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	limitExhausted, err := wl.Write([]*cppbridge.InnerSeries{})
 	s.Require().NoError(err)
@@ -239,7 +249,7 @@ func (s *WalSuite) TestWriteError() {
 		CloseFunc: func() error { return nil },
 	}
 
-	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize)
+	wl := wal.NewWal(enc, segmentWriter, maxSegmentSize, 0, nil)
 
 	limitExhausted, err := wl.Write([]*cppbridge.InnerSeries{})
 	s.Require().ErrorIs(err, expectedError)

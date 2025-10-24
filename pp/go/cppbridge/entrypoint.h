@@ -1456,6 +1456,22 @@ void prompp_series_data_data_storage_allocated_memory(void* args, void* res);
 void prompp_series_data_data_storage_query(void* args, void* res);
 
 /**
+ * @brief Queries data storage and serializes result (new serialization model).
+ *
+ * @param args {
+ *     dataStorage    uintptr          // pointer to constructed data storage
+ *     query          DataStorageQuery // query
+ * }
+ *
+ * @param res {
+ *     Querier uintptr        // pointer to constructed Querier if data loading is needed
+ *     Status  uint8          // status of a query (0 - Success, 1 - Data loading is needed)
+ *     serializedData uintptr // pointer to serialized data
+ * }
+ */
+void prompp_series_data_data_storage_query_new(void* args, void* res);
+
+/**
  * @brief return samples at given timestamp for label sets.
  *
  * @param args {
@@ -1524,6 +1540,22 @@ void prompp_series_data_chunk_recoder_ctor(void* args, void* res);
  * }
  */
 void prompp_series_data_serialized_chunk_recoder_ctor(void* args, void* res);
+
+/**
+ * @brief Construct a new ChunkRecoder object to recode all serialized chunks (new model)
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data
+ *     time_interval struct { // closed interval [min, max]
+ *        min int64
+ *        max int64
+ *     }
+ * }
+ * @param res {
+ *     chunk_recoder uintptr // pointer to chunk recoder
+ * }
+ */
+void prompp_series_data_serialized_chunk_recoder_new_ctor(void* args, void* res);
 
 /**
  * @brief Get chunk encoded in prometheus format
@@ -1787,6 +1819,76 @@ void prompp_series_data_encoder_merge_out_of_order_chunks(void* args);
  * }
  */
 void prompp_series_data_encoder_dtor(void* args);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * @brief Get next series_id in serialized data.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ * }
+ *
+ * @param res {
+ *     series_id uint32 // series id (UINT32_MAX if no more series).
+ *     chunk_id uint32 // inner chunk id.
+ * }
+ */
+void prompp_series_data_serialization_serialized_data_next(void* args, void* res);
+
+/**
+ * @brief Create a decode iterator for corresponding chunk_id.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ *     chunk_id uint32 // inner chunk id.
+ * }
+ *
+ * @param res {
+ *     iterator uintptr // pointer to constructed decode iterator.
+ * }
+ */
+void prompp_series_data_serialization_serialized_data_iterator(void* args, void* res);
+
+/**
+ * @brief Advance decode iterator.
+ *
+ * @param args {
+ *     iterator uintptr // pointer to decode iterator
+ * }
+ *
+ * @param res {
+ *     has_data bool    // is iterator has more data to decode.
+ *      timestamp int64 // sample timestamp
+ *      value float64   // sample value
+ * }
+ */
+void prompp_series_data_serialization_serialized_data_iterator_next(void* args, void* res);
+
+/**
+ * @brief Destroy decode iterator.
+ *
+ * @param args {
+ *     iterator uintptr // pointer to decode iterator
+ * }
+ *
+ */
+void prompp_series_data_serialization_serialized_data_iterator_dtor(void* args);
+
+/**
+ * @brief Destroy serialized data object.
+ *
+ * @param args {
+ *     serializedData uintptr // pointer to serialized data.
+ * }
+ *
+ */
+void prompp_series_data_serialization_serialized_data_dtor(void* args);
 
 #ifdef __cplusplus
 }  // extern "C"

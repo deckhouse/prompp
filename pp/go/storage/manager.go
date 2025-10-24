@@ -299,7 +299,7 @@ func (m *Manager) initServices(
 				o.MaxRetentionPeriod,
 				o.HeadRetentionPeriod,
 				r,
-			).Run()
+			).Execute()
 
 			return nil
 		},

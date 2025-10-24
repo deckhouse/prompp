@@ -23,6 +23,7 @@ class Deserializer {
     uint32_t chunks_count = *reinterpret_cast<const uint32_t*>(buffer.data());
     return {reinterpret_cast<const chunk::SerializedChunk*>(buffer.data() + sizeof(uint32_t)), chunks_count};
   }
+
   [[nodiscard]] static decoder::UniversalDecodeIterator create_decode_iterator(std::span<const uint8_t> buffer, const chunk::SerializedChunk& chunk) {
     decoder::UniversalDecodeIterator iterator(std::in_place_type<decoder::ConstantDecodeIterator>, 0, BareBones::BitSequenceReader(nullptr, 0), 0, false);
     Decoder::create_decode_iterator(buffer, chunk, [&iterator]<typename Iterator>(Iterator&& begin, auto&&) {
@@ -30,6 +31,7 @@ class Deserializer {
     });
     return iterator;
   }
+
   [[nodiscard]] static decoder::UniversalDecodeIterator create_decode_iterator(const chunk::SerializedChunkIterator::Data& chunk) {
     return create_decode_iterator(chunk.buffer(), chunk.chunk());
   }

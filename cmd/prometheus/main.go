@@ -405,6 +405,12 @@ func main() {
 	serverOnlyFlag(a, "storage.tsdb.retention.time", "How long to retain samples in storage. When this flag is set it overrides \"storage.tsdb.retention\". If neither this flag nor \"storage.tsdb.retention\" nor \"storage.tsdb.retention.size\" is set, the retention time defaults to "+defaultRetentionString+". Units Supported: y, w, d, h, m, s, ms.").
 		SetValue(&newFlagRetentionDuration)
 
+	serverOnlyFlag(
+		a,
+		"storage.tsdb.corrupted-retention-duration",
+		"How long to retain corrupted blocks in storage. Units Supported: y, w, d, h, m, s, ms.",
+	).Default("4d").SetValue(&cfg.tsdb.CorruptedRetentionDuration)
+
 	serverOnlyFlag(a, "storage.tsdb.retention.size", "Maximum number of bytes that can be stored for blocks. A unit is required, supported units: B, KB, MB, GB, TB, PB, EB. Ex: \"512MB\". Based on powers-of-2, so 1KB is 1024B.").
 		BytesVar(&cfg.tsdb.MaxBytes)
 
@@ -1381,6 +1387,7 @@ func main() {
 					"MaxBytes", cfg.tsdb.MaxBytes,
 					"NoLockfile", cfg.tsdb.NoLockfile,
 					"RetentionDuration", cfg.tsdb.RetentionDuration,
+					"CorruptedRetentionDuration", cfg.tsdb.CorruptedRetentionDuration,
 					"WALSegmentSize", cfg.tsdb.WALSegmentSize,
 					"WALCompression", cfg.tsdb.WALCompression,
 				)
@@ -1484,7 +1491,7 @@ func main() {
 				return hManager.Run()
 			},
 			func(err error) {
-				level.Info(logger).Log("msg", "Stopping head manager...", "msg", err)
+				level.Info(logger).Log("msg", "Stopping head manager...", "reason", err)
 				close(cancel)
 				if err := hManager.Shutdown(context.Background()); err != nil {
 					level.Error(logger).Log("msg", "Head manager shutdown failed", "err", err)
@@ -1965,6 +1972,7 @@ type tsdbOptions struct {
 	WALSegmentSize                 units.Base2Bytes
 	MaxBlockChunkSegmentSize       units.Base2Bytes
 	RetentionDuration              model.Duration
+	CorruptedRetentionDuration     model.Duration
 	MaxBytes                       units.Base2Bytes
 	NoLockfile                     bool
 	WALCompression                 bool
@@ -1989,6 +1997,7 @@ func (opts tsdbOptions) ToTSDBOptions() tsdb.Options {
 		WALSegmentSize:                 int(opts.WALSegmentSize),
 		MaxBlockChunkSegmentSize:       int64(opts.MaxBlockChunkSegmentSize),
 		RetentionDuration:              int64(time.Duration(opts.RetentionDuration) / time.Millisecond),
+		CorruptedRetentionDuration:     time.Duration(opts.CorruptedRetentionDuration),
 		MaxBytes:                       int64(opts.MaxBytes),
 		NoLockfile:                     opts.NoLockfile,
 		WALCompression:                 wlog.ParseCompressionType(opts.WALCompression, opts.WALCompressionType),
