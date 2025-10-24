@@ -2249,7 +2249,7 @@ func seriesDataSerializedDataIterator(serializedData uintptr, chunkRef uint32) u
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_series_data_serialization_serialized_data_iterator,
+		C.prompp_series_data_serialization_serialized_data_iterator_ctor,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)

@@ -215,11 +215,11 @@ class SerializedDataView {
     using pointer = value_type*;
     using reference = value_type&;
 
-    SeriesIterator(const SerializedData::Memory& buffer, chunk::SerializedChunkSpan chunks, uint32_t chunk_id)
+    SeriesIterator(std::span<const unsigned char> buffer, chunk::SerializedChunkSpan chunks, uint32_t chunk_id)
         : decode_iter_(std::in_place_type<decoder::ConstantDecodeIterator>, 0, BareBones::BitSequenceReader(nullptr, 0), 0, false),
           chunk_iter_(chunks.begin() + chunk_id),
           series_id_(chunk_iter_->label_set_id),
-          buffer_(buffer.control_block().data, buffer.size()),
+          buffer_(buffer),
           chunks_(chunks) {
       Decoder::create_decode_iterator(buffer_, *chunk_iter_, [&]<typename Iterator>(Iterator&& begin, auto&&) {
         decode_iter_ = decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
@@ -253,7 +253,10 @@ class SerializedDataView {
              (std::next(chunk_iter_) == chunks_.end() || series_id_ != std::next(chunk_iter_)->label_set_id);
     }
 
-    PROMPP_ALWAYS_INLINE void reset(uint32_t chunk_id) {
+    PROMPP_ALWAYS_INLINE void reset(std::span<const unsigned char> buffer, chunk::SerializedChunkSpan chunks, uint32_t chunk_id) {
+      buffer_ = buffer;
+      chunks_ = chunks;
+
       chunk_iter_ = chunks_.begin() + chunk_id;
       series_id_ = chunk_iter_->label_set_id;
       Decoder::create_decode_iterator(buffer_, *chunk_iter_, [&]<typename Iterator>(Iterator&& begin, auto&&) {
@@ -303,9 +306,9 @@ class SerializedDataView {
     return {chunks[series_first_chunk_id_].label_set_id, series_first_chunk_id_};
   }
 
-  [[nodiscard]] SeriesIterator create_current_series_iterator() const noexcept { return {data_.bytes_buffer, get_chunks_view(), series_first_chunk_id_}; }
+  [[nodiscard]] SeriesIterator create_current_series_iterator() const noexcept { return {get_buffer_view(), get_chunks_view(), series_first_chunk_id_}; }
   [[nodiscard]] SeriesIterator create_series_iterator(uint32_t series_first_chunk_id) const noexcept {
-    return {data_.bytes_buffer, get_chunks_view(), series_first_chunk_id};
+    return {get_buffer_view(), get_chunks_view(), series_first_chunk_id};
   }
 
  private:
