@@ -140,18 +140,24 @@ func GetSamplesFromSerializedData(serializedData *cppbridge.DataStorageSerialize
 }
 
 // TimeSeriesFromSeriesSet converting seriesset to slice timeseries.
-func TimeSeriesFromSeriesSet(seriesSet promstorage.SeriesSet) []TimeSeries {
-	var timeSeries []TimeSeries
+func TimeSeriesFromSeriesSet(seriesSet promstorage.SeriesSet, groupSamples bool) []TimeSeries {
+	timeSeries := make([]TimeSeries, 0)
 	for seriesSet.Next() {
 		series := seriesSet.At()
-
-		timeSeries = append(timeSeries, TimeSeries{Labels: series.Labels()})
-		currentSeries := &timeSeries[len(timeSeries)-1]
-
 		chunkIterator := series.Iterator(nil)
+		var samples []cppbridge.Sample
 		for chunkIterator.Next() != chunkenc.ValNone {
 			ts, v := chunkIterator.At()
-			currentSeries.Samples = append(currentSeries.Samples, cppbridge.Sample{Timestamp: ts, Value: v})
+			samples = append(samples, cppbridge.Sample{Timestamp: ts, Value: v})
+		}
+
+		if groupSamples {
+			timeSeries = append(timeSeries, TimeSeries{Labels: series.Labels(), Samples: samples})
+			continue
+		}
+
+		for i := 0; i < len(samples); i++ {
+			timeSeries = append(timeSeries, TimeSeries{Labels: series.Labels(), Samples: []cppbridge.Sample{samples[i]}})
 		}
 	}
 

@@ -69,19 +69,6 @@ func (s *SeriesSetTestSuite) SetupTest() {
 	}
 }
 
-func expandTimeSeries(timeSeries ...storagetest.TimeSeries) []storagetest.TimeSeries {
-	result := make([]storagetest.TimeSeries, 0, len(timeSeries))
-	for i := range timeSeries {
-		for j := range timeSeries[i].Samples {
-			result = append(result, storagetest.TimeSeries{
-				Labels:  timeSeries[i].Labels,
-				Samples: []cppbridge.Sample{timeSeries[i].Samples[j]},
-			})
-		}
-	}
-	return result
-}
-
 func query(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, start, end int64, matchers ...model.LabelMatcher) *querier.SeriesSet {
 	selector, snapshot, err := lss.QuerySelector(0, matchers)
 	require.NoError(t, err)
@@ -123,7 +110,7 @@ func (s *SeriesSetTestSuite) TestQueryAllValues() {
 	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
 
 	// Assert
-	require.Equal(s.T(), expected, expandTimeSeries(storagetest.TimeSeriesFromSeriesSet(seriesSet)...))
+	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
 }
 
 func (s *SeriesSetTestSuite) TestQueryNoValues() {
@@ -144,7 +131,7 @@ func (s *SeriesSetTestSuite) TestQueryNoValues() {
 	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
 
 	// Assert
-	require.Equal(s.T(), expected, expandTimeSeries(storagetest.TimeSeriesFromSeriesSet(seriesSet)...))
+	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
 }
 
 func (s *SeriesSetTestSuite) TestQuerySingleSeries() {
@@ -165,7 +152,7 @@ func (s *SeriesSetTestSuite) TestQuerySingleSeries() {
 	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
 
 	// Assert
-	require.Equal(s.T(), expected, expandTimeSeries(storagetest.TimeSeriesFromSeriesSet(seriesSet)...))
+	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
 }
 
 func (s *SeriesSetTestSuite) TestQuerySingleSample() {
@@ -186,7 +173,7 @@ func (s *SeriesSetTestSuite) TestQuerySingleSample() {
 	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
 
 	// Assert
-	require.Equal(s.T(), expected, expandTimeSeries(storagetest.TimeSeriesFromSeriesSet(seriesSet)...))
+	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
 }
 
 func (s *SeriesSetTestSuite) TestQueryCutByUpperLimit() {
@@ -207,7 +194,7 @@ func (s *SeriesSetTestSuite) TestQueryCutByUpperLimit() {
 	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
 
 	// Assert
-	require.Equal(s.T(), expected, expandTimeSeries(storagetest.TimeSeriesFromSeriesSet(seriesSet)...))
+	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
 }
 
 func (s *SeriesSetTestSuite) TestQueryCutByLowerLimit() {
@@ -228,7 +215,7 @@ func (s *SeriesSetTestSuite) TestQueryCutByLowerLimit() {
 	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
 
 	// Assert
-	require.Equal(s.T(), expected, expandTimeSeries(storagetest.TimeSeriesFromSeriesSet(seriesSet)...))
+	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
 }
 
 func (s *SeriesSetTestSuite) TestQueryLargeChunks() {
@@ -240,10 +227,10 @@ func (s *SeriesSetTestSuite) TestQueryLargeChunks() {
 	}
 
 	var start int64 = 0
-	var end int64 = 1000
+	var end int64 = cppbridge.MaxPointsInChunk + 1
 
 	var timeSeries []storagetest.TimeSeries
-	for i := 0; i < 500; i++ {
+	for i := 0; i < int(end); i++ {
 		timeSeries = append(timeSeries, storagetest.TimeSeries{
 			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
 			Samples: []cppbridge.Sample{
@@ -258,7 +245,7 @@ func (s *SeriesSetTestSuite) TestQueryLargeChunks() {
 	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
 
 	// Assert
-	require.Equal(s.T(), expected, expandTimeSeries(storagetest.TimeSeriesFromSeriesSet(seriesSet)...))
+	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
 }
 
 func (s *SeriesSetTestSuite) TestQueryEmptyStorage() {
@@ -277,7 +264,7 @@ func (s *SeriesSetTestSuite) TestQueryEmptyStorage() {
 	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
 
 	// Assert
-	require.Equal(s.T(), expected, expandTimeSeries(storagetest.TimeSeriesFromSeriesSet(seriesSet)...))
+	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
 }
 
 func (s *SeriesSetTestSuite) TestQueryMergedSeriesSets() {
@@ -336,10 +323,7 @@ func (s *SeriesSetTestSuite) TestQueryMergedSeriesSets() {
 	require.Equal(
 		s.T(),
 		expected,
-		expandTimeSeries(
-			storagetest.TimeSeriesFromSeriesSet(
-				storage.NewMergeSeriesSet([]storage.SeriesSet{seriesSet1, seriesSet2}, storage.ChainedSeriesMerge),
-			)...,
-		),
+		storagetest.TimeSeriesFromSeriesSet(
+			storage.NewMergeSeriesSet([]storage.SeriesSet{seriesSet1, seriesSet2}, storage.ChainedSeriesMerge), false),
 	)
 }
