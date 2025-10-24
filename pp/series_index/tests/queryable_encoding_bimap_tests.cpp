@@ -148,7 +148,8 @@ TEST_F(QueryableEncodingBimapCopierFixture, NonEmptyLss) {
   lss_.build_deferred_indexes();
 
   Lss lss_copy;
-  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
+  const BareBones::Vector ids_for_copy{0U, 1U};
+  Copier copier(lss_, lss_.sorting_index(), ids_for_copy, lss_copy, dst_src_ids_mapping_);
 
   // Act
   copier.copy_added_series_and_build_indexes();
@@ -165,21 +166,17 @@ TEST_F(QueryableEncodingBimapCopierFixture, NonEmptyLss) {
   EXPECT_FALSE(lss_copy.ls_id_set().empty());
 
   EXPECT_TRUE(lss_copy.trie_index().names_trie().lookup("job"));
+
+  EXPECT_EQ(ids_for_copy, dst_src_ids_mapping_);
 }
 
 TEST_F(QueryableEncodingBimapCopierFixture, NonEmptyLssKeepOrder) {
   // Arrange
-  const auto label_set1 = LabelViewSet{{"job", "cron"}, {"key", "1"}, {"process", "php"}};
-  const auto label_set2 = LabelViewSet{{"job", "cron"}, {"key", "2"}, {"process", "php"}};
-  const auto label_set3 = LabelViewSet{{"job", "cron"}, {"key", "3"}, {"process", "php"}};
-  const auto label_set4 = LabelViewSet{{"job", "cron"}, {"key", "4"}, {"process", "php"}};
-  const auto label_set5 = LabelViewSet{{"job", "cron"}, {"key", "5"}, {"process", "php"}};
-
-  lss_.find_or_emplace(label_set4);
-  lss_.find_or_emplace(label_set1);
-  lss_.find_or_emplace(label_set3);
-  lss_.find_or_emplace(label_set5);
-  lss_.find_or_emplace(label_set2);
+  lss_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"key", "1"}, {"process", "php"}});
+  lss_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"key", "2"}, {"process", "php"}});
+  lss_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"key", "3"}, {"process", "php"}});
+  lss_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"key", "4"}, {"process", "php"}});
+  lss_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"key", "5"}, {"process", "php"}});
 
   lss_.build_deferred_indexes();
 
@@ -192,6 +189,38 @@ TEST_F(QueryableEncodingBimapCopierFixture, NonEmptyLssKeepOrder) {
   // Assert
   EXPECT_TRUE(std::ranges::is_sorted(lss_copy.ls_id_set(),
                                      [&](const auto idl, const auto idr) { return std::ranges::lexicographical_compare(lss_copy[idl], lss_copy[idr]); }));
+  EXPECT_EQ((BareBones::Vector{0U, 1U, 2U, 3U, 4U}), dst_src_ids_mapping_);
+}
+
+TEST_F(QueryableEncodingBimapCopierFixture, SkipSeries) {
+  // Arrange
+  const auto label_set1 = LabelViewSet{{"job", "cron"}, {"key", "1"}, {"process", "php"}};
+  const auto label_set2 = LabelViewSet{{"job", "cron"}, {"key", "2"}, {"process", "php"}};
+  const auto label_set3 = LabelViewSet{{"job", "cron"}, {"key", "3"}, {"process", "php"}};
+  const auto label_set4 = LabelViewSet{{"job", "cron"}, {"key", "4"}, {"process", "php"}};
+  const auto label_set5 = LabelViewSet{{"job", "cron"}, {"key", "5"}, {"process", "php"}};
+
+  lss_.find_or_emplace(label_set1);
+  lss_.find_or_emplace(label_set2);
+  lss_.find_or_emplace(label_set3);
+  lss_.find_or_emplace(label_set4);
+  lss_.find_or_emplace(label_set5);
+
+  lss_.build_deferred_indexes();
+
+  Lss lss_copy;
+  const BareBones::Vector ids_for_copy{0U, 2U, 4U};
+  Copier copier(lss_, lss_.sorting_index(), ids_for_copy, lss_copy, dst_src_ids_mapping_);
+
+  // Act
+  copier.copy_added_series_and_build_indexes();
+
+  // Assert
+  ASSERT_EQ(3U, lss_copy.size());
+  EXPECT_EQ(label_set1, lss_copy[0]);
+  EXPECT_EQ(label_set3, lss_copy[1]);
+  EXPECT_EQ(label_set5, lss_copy[2]);
+  EXPECT_EQ(ids_for_copy, dst_src_ids_mapping_);
 }
 
 TEST_F(QueryableEncodingBimapCopierFixture, CopyOfCopy) {
@@ -230,6 +259,8 @@ TEST_F(QueryableEncodingBimapCopierFixture, CopyOfCopy) {
 
   EXPECT_FALSE(lss_copy_of_copy.trie_index().names_trie().lookup("job"));
   EXPECT_TRUE(lss_copy_of_copy.trie_index().names_trie().lookup("server"));
+
+  EXPECT_TRUE(dst_src_ids_mapping_.empty());
 }
 
 }  // namespace

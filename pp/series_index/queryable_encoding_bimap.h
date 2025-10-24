@@ -195,8 +195,12 @@ class QueryableEncodingBimapCopier {
 
     destination_.reserve(source_);
 
+    dst_src_ids_mapping_.clear();
+    dst_src_ids_mapping_.reserve(source_.size());
+
     for (const auto ls_id : ls_id_range_) {
       old_new_ids_.emplace_back(ls_id, destination_.next_item_index());
+      dst_src_ids_mapping_.emplace_back(ls_id);
       destination_.items_.emplace_back(destination_.data_, source_[ls_id], cache);
     }
 
@@ -208,6 +212,8 @@ class QueryableEncodingBimapCopier {
     for (const auto& p : old_new_ids_) {
       destination_.ls_id_set_.emplace_hint_cmp(destination_.ls_id_set_.end(), [](auto, auto) { return true; }, p.new_id);
     }
+
+    old_new_ids_ = {};
   }
 
   void build_reverse_index() {
@@ -257,11 +263,11 @@ class QueryableEncodingBimapCopier {
     uint32_t new_id;
   };
 
+  BareBones::Vector<id_pair> old_new_ids_;
   const DecodingTable& source_;
   const SortingIndex& sorting_index_;
-  QueryableEncodingBimap& destination_;
   const SeriesIds& ls_id_range_;
-  BareBones::Vector<id_pair> old_new_ids_;
+  QueryableEncodingBimap& destination_;
   LsIdVector& dst_src_ids_mapping_;
 };
 
