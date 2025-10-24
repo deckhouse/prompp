@@ -237,36 +237,6 @@ class NoOpStaleNaNsState {
   PROMPP_ALWAYS_INLINE static void swap([[maybe_unused]] InputCallback input_fn, [[maybe_unused]] TargetCallback target_fn) {}
 };
 
-// StaleNaNsState state for stale nans.
-class StaleNaNsStateDeprecated {
-  roaring::Roaring input_bitset_{};
-  roaring::Roaring target_bitset_{};
-  roaring::Roaring prev_input_bitset_{};
-  roaring::Roaring prev_target_bitset_{};
-
- public:
-  PROMPP_ALWAYS_INLINE void add_input(uint32_t id) { input_bitset_.add(id); }
-
-  PROMPP_ALWAYS_INLINE void add_target(uint32_t id) { target_bitset_.add(id); }
-
-  template <typename InputCallback, typename TargetCallback>
-  PROMPP_ALWAYS_INLINE void swap(InputCallback input_fn, TargetCallback target_fn) {
-    prev_input_bitset_ -= input_bitset_;
-    for (uint32_t ls_id : prev_input_bitset_) {
-      input_fn(ls_id);
-    }
-    // drop old, store new..
-    prev_input_bitset_ = std::move(input_bitset_);
-
-    prev_target_bitset_ -= target_bitset_;
-    for (uint32_t ls_id : prev_target_bitset_) {
-      target_fn(ls_id);
-    }
-    // drop old, store new..
-    prev_target_bitset_ = std::move(target_bitset_);
-  }
-};
-
 class StaleNaNsState {
  public:
   template <class Callback>

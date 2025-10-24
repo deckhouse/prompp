@@ -28,7 +28,6 @@ using PromPP::Prometheus::Relabel::PerGoroutineRelabeler;
 using PromPP::Prometheus::Relabel::RelabelerStateUpdate;
 using PromPP::Prometheus::Relabel::relabelStatus;
 using PromPP::Prometheus::Relabel::StaleNaNsState;
-using PromPP::Prometheus::Relabel::StaleNaNsStateDeprecated;
 using PromPP::Prometheus::Relabel::StatelessRelabeler;
 using enum PromPP::Prometheus::Relabel::rAction;
 using enum relabelStatus;
@@ -817,28 +816,5 @@ INSTANTIATE_TEST_SUITE_P(Invalid,
                          testing::Values(ValidateCase{.value = "\xa0\xa1", .expected = false},
                                          ValidateCase{.value = "a\xc5z", .expected = false},
                                          ValidateCase{.value = "\x80\x8F\x90\x9FzxcasdAA:", .expected = false}));
-
-class StaleNaNsStateDeprecatedFixture : public testing::Test {};
-
-TEST_F(StaleNaNsStateDeprecatedFixture, Swap) {
-  // Arrange
-  static constexpr uint32_t kCurrentLsId = 42;
-
-  StaleNaNsStateDeprecated result;
-  result.add_input(kCurrentLsId);
-
-  std::vector<uint32_t> input_ls_ids;
-  std::vector<uint32_t> target_ls_ids;
-
-  auto get_callback = [&](std::vector<uint32_t>& ids) -> auto { return [&ids](uint32_t ls_id) { ids.push_back(ls_id); }; };
-
-  // Act
-  result.swap(get_callback(input_ls_ids), get_callback(target_ls_ids));
-  result.swap(get_callback(input_ls_ids), get_callback(target_ls_ids));
-
-  // Assert
-  EXPECT_EQ(std::vector<uint32_t>{42}, input_ls_ids);
-  EXPECT_EQ(std::vector<uint32_t>{}, target_ls_ids);
-}
 
 }  // namespace

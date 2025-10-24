@@ -522,23 +522,6 @@ type RelabelerOptions struct {
 	HonorTimestamps          bool
 }
 
-// StaleNansStateDeprecated wrap pointer to source state for stale nans .
-type StaleNansStateDeprecated struct {
-	state uintptr
-}
-
-// NewStaleNansStateDeprecated init new SourceStaleNansState.
-func NewStaleNansStateDeprecated() *StaleNansStateDeprecated {
-	s := &StaleNansStateDeprecated{
-		state: prometheusRelabelStaleNansStateDeprecatedCtor(),
-	}
-	runtime.SetFinalizer(s, func(s *StaleNansStateDeprecated) {
-		prometheusRelabelStaleNansStateDeprecatedDtor(s.state)
-	})
-
-	return s
-}
-
 // StaleNansState wrap pointer to source state for stale nans .
 type StaleNansState struct {
 	state uintptr

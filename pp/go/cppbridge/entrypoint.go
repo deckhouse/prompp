@@ -1632,36 +1632,6 @@ func prometheusRelabelerStateUpdateDtor(relabelerStateUpdate *RelabelerStateUpda
 }
 
 //
-// StalenansStateDeprecated
-//
-
-func prometheusRelabelStaleNansStateDeprecatedCtor() uintptr {
-	var res struct {
-		state uintptr
-	}
-
-	testGC()
-	fastcgo.UnsafeCall1(
-		C.prompp_prometheus_relabel_stalenans_state_deprecated_ctor,
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.state
-}
-
-func prometheusRelabelStaleNansStateDeprecatedDtor(state uintptr) {
-	args := struct {
-		state uintptr
-	}{state}
-
-	testGC()
-	fastcgo.UnsafeCall1(
-		C.prompp_prometheus_relabel_stalenans_state_deprecated_dtor,
-		uintptr(unsafe.Pointer(&args)),
-	)
-}
-
-//
 // StaleNansState
 //
 
