@@ -4,6 +4,7 @@ import (
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/util/annotations"
@@ -266,17 +267,17 @@ func (s *SeriesSet) Next() bool {
 		return false
 	}
 
-	//var lsLength uint16
-	//lsLength, s.lastIndexFromLSSQueryResult = s.lssQueryResult.LengthBySeriesID(seriesID, s.lastIndexFromLSSQueryResult)
-	//if s.lastIndexFromLSSQueryResult < 0 {
-	//	logger.Errorf("not found label set for series id: %d", seriesID)
-	//	return false
-	//}
+	var lsLength uint16
+	lsLength, s.lastIndexFromLSSQueryResult = s.lssQueryResult.LengthBySeriesID(seriesID, s.lastIndexFromLSSQueryResult)
+	if s.lastIndexFromLSSQueryResult < 0 {
+		logger.Errorf("not found label set for series id: %d", seriesID)
+		return false
+	}
 
 	s.series = NewSeries(
 		s.mint,
 		s.maxt,
-		labels.EmptyLabels(), // labels.NewLabelsWithLSS(s.labelSetSnapshot, seriesID, lsLength),
+		labels.NewLabelsWithLSS(s.labelSetSnapshot, seriesID, lsLength),
 		s.serializedData,
 		chunkRef,
 	)
