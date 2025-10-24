@@ -869,13 +869,31 @@ void prompp_prometheus_per_shard_relabeler_dtor(void* args);
 void prompp_prometheus_per_shard_relabeler_input_relabeling(void* args, void* res);
 
 /**
+ * @brief Create StaleNaNsStateDeprecated.
+ *
+ * @param res {
+ *     state uintptr // pointer to constructed StaleNaNsStateDeprecated;
+ * }
+ */
+void prompp_prometheus_relabel_stalenans_state_deprecated_ctor(void* res);
+
+/**
+ * @brief Destroy StaleNaNsStateDeprecated.
+ *
+ * @param args {
+ *      state uintptr // pointer to StaleNaNsStateDeprecated;
+ * }
+ */
+void prompp_prometheus_relabel_stalenans_state_deprecated_dtor(void* args);
+
+/**
  * @brief Create StaleNaNsState.
  *
  * @param res {
  *     state uintptr // pointer to constructed StaleNaNsState;
  * }
  */
-void prompp_prometheus_relabel_stalenans_state_ctor(void* res);
+void prompp_prometheus_relabel_stale_nans_state_ctor(void* res);
 
 /**
  * @brief Destroy StaleNaNsState.
@@ -884,7 +902,7 @@ void prompp_prometheus_relabel_stalenans_state_ctor(void* res);
  *      state uintptr // pointer to StaleNaNsState;
  * }
  */
-void prompp_prometheus_relabel_stalenans_state_dtor(void* args);
+void prompp_prometheus_relabel_stale_nans_state_dtor(void* args);
 
 /**
  * @brief relabeling incomig hashdex(first stage) with state stalenans.
@@ -1197,7 +1215,6 @@ void prompp_prometheus_per_goroutine_relabeler_input_relabeling_from_cache(void*
  *     cache                        uintptr            // pointer to constructed Cache;
  *     input_lss                    uintptr            // pointer to constructed input label sets;
  *     target_lss                   uintptr            // pointer to constructed target label sets;
- *     state                        uintptr            // pointer to source state
  *     def_timestamp                int64              // timestamp for metrics and StaleNaNs
  * }
  *
@@ -1222,7 +1239,6 @@ void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_stalenans(v
  *     cache                   uintptr          // pointer to constructed Cache;
  *     input_lss               uintptr          // pointer to constructed input label sets;
  *     target_lss              uintptr          // pointer to constructed target label sets;
- *     state                   uintptr          // pointer to source state
  *     def_timestamp           int64            // timestamp for metrics and StaleNaNs
  * }
  *
@@ -1293,6 +1309,17 @@ void prompp_prometheus_per_goroutine_relabeler_input_transition_relabeling_only_
  * }
  */
 void prompp_prometheus_per_goroutine_relabeler_append_relabeler_series(void* args, void* res);
+
+/**
+ * @brief add stale nans to inner series if needed
+ *
+ * @param args {
+ *     inner_series      []*InnerSeries // InnerSeries
+ *     stale_nan_state   uintptr        // pointer to source state
+ *     default_timestamp int64          // timestamp for stale_nan samples
+ * }
+ */
+void prompp_prometheus_per_goroutine_relabeler_track_stale_nans(void* args);
 
 #ifdef __cplusplus
 }  // extern "C"
