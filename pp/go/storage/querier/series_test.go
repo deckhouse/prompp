@@ -7,6 +7,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
+	"github.com/prometheus/prometheus/storage"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"testing"
@@ -277,4 +278,68 @@ func (s *SeriesSetTestSuite) TestQueryEmptyStorage() {
 
 	// Assert
 	require.Equal(s.T(), expected, expandTimeSeries(storagetest.TimeSeriesFromSeriesSet(seriesSet)...))
+}
+
+func (s *SeriesSetTestSuite) TestQueryMergedSeriesSets() {
+	// Arrange
+	matcher := model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	}
+
+	var start int64 = 0
+	var end int64 = 1000
+
+	timeSeries1 := []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test1"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 1},
+			},
+		},
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test2"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 1, Value: 2},
+			},
+		},
+	}
+
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, timeSeries1...)
+
+	anotherLss := shard.NewLSS()
+	anotherDs := shard.NewDataStorage()
+
+	timeSeries2 := []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test3"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 0, Value: 1},
+			},
+		},
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test4"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 1, Value: 2},
+			},
+		},
+	}
+
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(anotherLss, anotherDs, timeSeries2...)
+	expected := append(timeSeries1, timeSeries2...)
+	// Act
+	seriesSet1 := query(s.T(), s.lss, s.ds, start, end, matcher)
+	seriesSet2 := query(s.T(), anotherLss, anotherDs, start, end, matcher)
+
+	// Assert
+	require.Equal(
+		s.T(),
+		expected,
+		expandTimeSeries(
+			storagetest.TimeSeriesFromSeriesSet(
+				storage.NewMergeSeriesSet([]storage.SeriesSet{seriesSet1, seriesSet2}, storage.ChainedSeriesMerge),
+			)...,
+		),
+	)
 }
