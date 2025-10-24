@@ -148,6 +148,11 @@ func (qs *QueryableStorage) write() bool {
 	for _, head := range heads {
 		start := qs.clock.Now()
 		if qs.headIsOutdated(head) {
+			if err := head.Discard(); err != nil {
+				logger.Errorf("QUERYABLE STORAGE: failed to discard outdated head %s: %s", head.String(), err.Error())
+				successful = false
+				continue
+			}
 			persisted = append(persisted, head.ID())
 			shouldNotify = true
 			continue
