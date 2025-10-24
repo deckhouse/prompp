@@ -1790,7 +1790,7 @@ void prompp_series_data_serialization_serialized_data_next(void* args, void* res
  *     iterator uintptr // pointer to constructed decode iterator.
  * }
  */
-void prompp_series_data_serialization_serialized_data_iterator(void* args, void* res);
+void prompp_series_data_serialization_serialized_data_iterator_ctor(void* args, void* res);
 
 /**
  * @brief Advance decode iterator.
@@ -1812,6 +1812,7 @@ void prompp_series_data_serialization_serialized_data_iterator_next(void* args, 
  *
  * @param args {
  *     serializedData uintptr // pointer to serialized data.
+ *     iterator uintptr // pointer to decode iterator
  *     chunk_ref uint32 // inner chunk id.
  * }
  *
