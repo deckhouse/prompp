@@ -174,7 +174,7 @@ extern "C" void prompp_prometheus_per_shard_relabeler_dtor(void* args) {
 using StaleNaNsState = PromPP::Prometheus::Relabel::StaleNaNsState;
 using StaleNaNsStatePtr = std::unique_ptr<StaleNaNsState>;
 
-extern "C" void prompp_prometheus_relabel_stalenans_state_ctor(void* res) {
+extern "C" void prompp_prometheus_relabel_stale_nans_state_ctor(void* res) {
   struct Result {
     StaleNaNsStatePtr state;
   };
@@ -182,7 +182,7 @@ extern "C" void prompp_prometheus_relabel_stalenans_state_ctor(void* res) {
   new (res) Result{.state = std::make_unique<StaleNaNsState>()};
 }
 
-extern "C" void prompp_prometheus_relabel_stalenans_state_dtor(void* args) {
+extern "C" void prompp_prometheus_relabel_stale_nans_state_dtor(void* args) {
   struct Arguments {
     StaleNaNsStatePtr state;
   };
@@ -428,7 +428,6 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_
     CachePtr cache;
     LssVariantPtr input_lss;
     LssVariantPtr target_lss;
-    StaleNaNsStatePtr state;
     PromPP::Primitives::Timestamp def_timestamp;
   };
   struct Result {
@@ -450,7 +449,7 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_
 
           const entrypoint::head::ReallocationsDetector reallocation_detector(target_lss);
           in->per_goroutine_relabeler->input_relabeling_with_stalenans(input_lss, target_lss, *in->cache, hashdex, in->options, *in->stateless_relabeler, *out,
-                                                                       in->shards_inner_series, in->shards_relabeled_series, *in->state, in->def_timestamp);
+                                                                       in->shards_inner_series, in->shards_relabeled_series, in->def_timestamp);
           target_lss.build_deferred_indexes();
           out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
         },
@@ -470,7 +469,6 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_
     CachePtr cache;
     LssVariantPtr input_lss;
     LssVariantPtr target_lss;
-    StaleNaNsStatePtr state;
     PromPP::Primitives::Timestamp def_timestamp;
   };
   struct Result {
@@ -491,7 +489,7 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_
           auto& target_lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->target_lss);
 
           out->ok = in->per_goroutine_relabeler->input_relabeling_with_stalenans_from_cache(input_lss, target_lss, *in->cache, hashdex, in->options, *out,
-                                                                                            in->shards_inner_series, *in->state, in->def_timestamp);
+                                                                                            in->shards_inner_series, in->def_timestamp);
         },
         *in->hashdex);
   } catch (...) {
@@ -602,4 +600,15 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_append_relabeler_serie
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
     entrypoint::handle_current_exception(err_stream);
   }
+}
+
+extern "C" void prompp_prometheus_per_goroutine_relabeler_track_stale_nans(void* args) {
+  struct Arguments {
+    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> inner_series;
+    StaleNaNsStatePtr stale_nans_state;
+    PromPP::Primitives::Timestamp default_timestamp;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  PromPP::Prometheus::Relabel::PerGoroutineRelabeler::track_stale_nans(in->inner_series, *in->stale_nans_state, in->default_timestamp);
 }

@@ -1632,7 +1632,37 @@ func prometheusRelabelerStateUpdateDtor(relabelerStateUpdate *RelabelerStateUpda
 }
 
 //
-// StalenansState
+// StalenansStateDeprecated
+//
+
+func prometheusRelabelStaleNansStateDeprecatedCtor() uintptr {
+	var res struct {
+		state uintptr
+	}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_prometheus_relabel_stalenans_state_deprecated_ctor,
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.state
+}
+
+func prometheusRelabelStaleNansStateDeprecatedDtor(state uintptr) {
+	args := struct {
+		state uintptr
+	}{state}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_prometheus_relabel_stalenans_state_deprecated_dtor,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+//
+// StaleNansState
 //
 
 func prometheusRelabelStaleNansStateCtor() uintptr {
@@ -1642,7 +1672,7 @@ func prometheusRelabelStaleNansStateCtor() uintptr {
 
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_prometheus_relabel_stalenans_state_ctor,
+		C.prompp_prometheus_relabel_stale_nans_state_ctor,
 		uintptr(unsafe.Pointer(&res)),
 	)
 
@@ -1656,7 +1686,7 @@ func prometheusRelabelStaleNansStateDtor(state uintptr) {
 
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_prometheus_relabel_stalenans_state_dtor,
+		C.prompp_prometheus_relabel_stale_nans_state_dtor,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
@@ -3214,7 +3244,7 @@ func prometheusPerGoroutineRelabelerInputRelabelingFromCache(
 // prometheusPerGoroutineRelabelerInputRelabelingWithStalenans wrapper for relabeling incoming
 // hashdex(first stage) with state stalenans.
 func prometheusPerGoroutineRelabelerInputRelabelingWithStalenans(
-	perGoroutineRelabeler, statelessRelabeler, inputLss, targetLss, cache, hashdex, sourceState uintptr,
+	perGoroutineRelabeler, statelessRelabeler, inputLss, targetLss, cache, hashdex uintptr,
 	defTimestamp int64,
 	options RelabelerOptions,
 	shardsInnerSeries []*InnerSeries,
@@ -3230,7 +3260,6 @@ func prometheusPerGoroutineRelabelerInputRelabelingWithStalenans(
 		cache                 uintptr
 		inputLss              uintptr
 		targetLss             uintptr
-		state                 uintptr
 		defTimestamp          int64
 	}{
 		shardsInnerSeries,
@@ -3242,7 +3271,6 @@ func prometheusPerGoroutineRelabelerInputRelabelingWithStalenans(
 		cache,
 		inputLss,
 		targetLss,
-		sourceState,
 		defTimestamp,
 	}
 	var res struct {
@@ -3266,7 +3294,7 @@ func prometheusPerGoroutineRelabelerInputRelabelingWithStalenans(
 // prometheusPerGoroutineRelabelerInputRelabelingWithStalenansFromCache wrapper for relabeling incoming from cache
 // hashdex(first stage) with state stalenans.
 func prometheusPerGoroutineRelabelerInputRelabelingWithStalenansFromCache(
-	perGoroutineRelabeler, inputLss, targetLss, cache, hashdex, sourceState uintptr,
+	perGoroutineRelabeler, inputLss, targetLss, cache, hashdex uintptr,
 	defTimestamp int64,
 	options RelabelerOptions,
 	shardsInnerSeries []*InnerSeries,
@@ -3279,7 +3307,6 @@ func prometheusPerGoroutineRelabelerInputRelabelingWithStalenansFromCache(
 		cache                 uintptr
 		inputLss              uintptr
 		targetLss             uintptr
-		state                 uintptr
 		defTimestamp          int64
 	}{
 		shardsInnerSeries,
@@ -3289,7 +3316,6 @@ func prometheusPerGoroutineRelabelerInputRelabelingWithStalenansFromCache(
 		cache,
 		inputLss,
 		targetLss,
-		sourceState,
 		defTimestamp,
 	}
 	var res struct {
@@ -3405,4 +3431,22 @@ func prometheusPerGoroutineRelabelerAppendRelabelerSeries(
 	perGoroutineRelabelerAppendRelabelerSeriesCount.Inc()
 
 	return res.exception, res.targetLssHasReallocations
+}
+
+func prometheusPerGoroutineRelabelerTrackStaleNans(
+	innerSeries []*InnerSeries,
+	staleNansState uintptr,
+	defaultTimestamp int64,
+) {
+	args := struct {
+		innerSeries      []*InnerSeries
+		staleNansState   uintptr
+		defaultTimestamp int64
+	}{innerSeries, staleNansState, defaultTimestamp}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_prometheus_per_goroutine_relabeler_track_stale_nans,
+		uintptr(unsafe.Pointer(&args)),
+	)
 }
