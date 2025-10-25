@@ -457,7 +457,7 @@ var (
 	)
 )
 
-func freeBytes[T any](b []T) {
+func freeBytes(b []byte) {
 	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_free_bytes,

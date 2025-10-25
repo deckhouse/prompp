@@ -79,19 +79,6 @@ type GoroutineShard interface {
 }
 
 //
-// GoroutineShard
-//
-
-// GoroutineShard the minimum required head [GoroutineShard] implementation.
-type GoroutineShard interface {
-	// Relabeler returns relabeler for shard goroutines.
-	Relabeler() *cppbridge.PerGoroutineRelabeler
-
-	// Shard inherit from [Shard] methods.
-	Shard
-}
-
-//
 // Head
 //
 
