@@ -75,30 +75,7 @@ func (q *ChunkQuerier) Select(
 	}
 	defer runlock()
 
-	//lssQueryResults, snapshots, err := lssQuery(relabeler.LSSQueryChunkQuerySelector, q.head, matchers)
-	//if err != nil {
-	//	logger.Warnf("[ChunkQuerier]: failed: %s", err)
-	//	return storage.ErrChunkSeriesSet(err)
-	//}
-	//
-	//queryResults, err := dataStorageQuery(relabeler.DSQueryChunkQuerier, q.head, lssQueryResults, q.mint, q.maxt)
-	//if err != nil {
-	//	return storage.ErrChunkSeriesSet(err)
-	//}
-
 	chunkSeriesSets := make([]storage.ChunkSeriesSet, q.head.NumberOfShards())
-	//for shardID, serializedChunks := range queryResults {
-	//	if serializedChunks == nil || serializedChunks.NumberOfChunks() == 0 {
-	//		chunkSeriesSets[shardID] = &EmptyChunkSeriesSet{}
-	//		continue
-	//	}
-	//
-	//chunkSeriesSets[shardID] = NewChunkSeriesSet(
-	//	lssQueryResults[shardID],
-	//	snapshots[shardID],
-	//	cppbridge.NewSerializedChunkRecoder(serializedChunks, cppbridge.TimeInterval{MinT: q.mint, MaxT: q.maxt}),
-	//)
-	//}
 
 	return storage.NewMergeChunkSeriesSet(chunkSeriesSets, storage.NewConcatenatingChunkSeriesMerger())
 }
