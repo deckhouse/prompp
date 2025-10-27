@@ -29,7 +29,7 @@ class MetricsPageListFixture : public ::testing::Test {
 
   void add_metrics_pages(const MetricsPagesVector& pages) {
     for (const auto page : pages) {
-      metrics_page_list_.Add(page);
+      metrics_page_list_.add(page);
     }
   }
 };
@@ -93,7 +93,7 @@ TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveInEmptyList) {
   // Arrange
 
   // Act
-  metrics_page_list_.RemoveUnusedPages();
+  metrics_page_list_.remove_unused_pages();
 
   // Assert
 }
@@ -106,7 +106,7 @@ TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveWithoutUnusedPages) {
   MetricsPagesVector actual;
 
   // Act
-  metrics_page_list_.RemoveUnusedPages();
+  metrics_page_list_.remove_unused_pages();
 
   // Assert
   std::ranges::copy(metrics_page_list_, std::back_inserter(actual));
@@ -118,13 +118,13 @@ TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveWithoutUnusedPages) {
 TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveFirstMetricsPageInOnePageList) {
   // Arrange
   const auto metric = new Metrics(LabelViewSet{{"job", "test"}});
-  metrics_page_list_.Add(metric);
+  metrics_page_list_.add(metric);
   metric->detach();
 
   MetricsPagesVector actual;
 
   // Act
-  metrics_page_list_.RemoveUnusedPages();
+  metrics_page_list_.remove_unused_pages();
 
   // Assert
   std::ranges::copy(metrics_page_list_, std::back_inserter(actual));
@@ -139,7 +139,7 @@ TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveAllMetricsPages) {
   MetricsPagesVector actual;
 
   // Act
-  metrics_page_list_.RemoveUnusedPages();
+  metrics_page_list_.remove_unused_pages();
 
   // Assert
   std::ranges::copy(metrics_page_list_, std::back_inserter(actual));
@@ -155,7 +155,7 @@ TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveFirstMetric) {
   MetricsPagesVector actual;
 
   // Act
-  metrics_page_list_.RemoveUnusedPages();
+  metrics_page_list_.remove_unused_pages();
 
   // Assert
   std::ranges::copy(metrics_page_list_, std::back_inserter(actual));
@@ -173,7 +173,7 @@ TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveSecondMetric) {
   MetricsPagesVector actual;
 
   // Act
-  metrics_page_list_.RemoveUnusedPages();
+  metrics_page_list_.remove_unused_pages();
 
   // Assert
   std::ranges::copy(metrics_page_list_, std::back_inserter(actual));
@@ -191,7 +191,7 @@ TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveThirdMetric) {
   MetricsPagesVector actual;
 
   // Act
-  metrics_page_list_.RemoveUnusedPages();
+  metrics_page_list_.remove_unused_pages();
 
   // Assert
   std::ranges::copy(metrics_page_list_, std::back_inserter(actual));
@@ -210,7 +210,7 @@ TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveSecondAndThirdMetric) 
   MetricsPagesVector actual;
 
   // Act
-  metrics_page_list_.RemoveUnusedPages();
+  metrics_page_list_.remove_unused_pages();
 
   // Assert
   std::ranges::copy(metrics_page_list_, std::back_inserter(actual));
@@ -241,7 +241,7 @@ TEST_F(MetricsPageListThreadSafetyFixture, DISABLED_TestAdd) {
       std::this_thread::sleep_for(kWaitThreadCreationDuration);
 
       for (uint32_t offset = i * kThreadTasks, counter = 0; counter < kThreadTasks; ++counter) {
-        metrics_page_list_.Add(pages[offset + counter]);
+        metrics_page_list_.add(pages[offset + counter]);
       }
     });
   }

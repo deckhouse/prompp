@@ -52,7 +52,7 @@ class MetricsPageList {
     }
   }
 
-  void Add(MetricsPageControlBlock* page) {
+  void add(MetricsPageControlBlock* page) {
     MetricsPageControlBlock* current_next_page = next_metrics_page_;
 
     do {
@@ -60,14 +60,14 @@ class MetricsPageList {
     } while (!next_metrics_page_.compare_exchange_weak(current_next_page, page));
   }
 
-  void RemoveUnusedPages() {
+  void remove_unused_pages() {
     MetricsPageControlBlock* page = next_metrics_page_;
     if (page == nullptr) [[unlikely]] {
       return;
     }
 
     if (MetricsPageControlBlock* next_page = page->next_metrics_page(); next_page != nullptr) [[likely]] {
-      RemoveUnusedPages(page, next_page);
+      remove_unused_pages(page, next_page);
     }
 
     if (page->is_unused()) {
@@ -84,7 +84,7 @@ class MetricsPageList {
  private:
   std::atomic<MetricsPageControlBlock*> next_metrics_page_{};
 
-  static void RemoveUnusedPages(MetricsPageControlBlock* prev_page, MetricsPageControlBlock* page) {
+  static void remove_unused_pages(MetricsPageControlBlock* prev_page, MetricsPageControlBlock* page) {
     do {
       const auto next_page = page->next_metrics_page();
 
