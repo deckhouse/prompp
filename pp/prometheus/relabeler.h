@@ -278,6 +278,24 @@ class StaleNaNsState {
     previous_ = std::move(current);
   }
 
+  template <class Container>
+  void remap(const Container& dst_src_ls_ids_mapping) {
+    roaring::Roaring new_state;
+
+    uint32_t dst_ls_id = 0;
+    for (auto src_ls_id : dst_src_ls_ids_mapping) {
+      if (previous_.contains(src_ls_id)) {
+        new_state.add(dst_ls_id);
+      }
+
+      ++dst_ls_id;
+    }
+
+    previous_ = std::move(new_state);
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const roaring::Roaring& state() const noexcept { return previous_; }
+
  private:
   roaring::Roaring previous_;
 };
