@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/golang/snappy"
@@ -260,7 +261,7 @@ func (s *PerGoroutineRelabelerSuite) TestInvalidAction() {
 	state := cppbridge.NewStateV2WithoutLock()
 	state.SetRelabelerOptions(&s.options)
 	state.SetStatelessRelabeler(statelessRelabeler)
-	state.Reconfigure(0, s.numberOfShards)
+	state.Reconfigure(0, s.numberOfShards, make([]*cppbridge.IdsMapping, s.numberOfShards))
 
 	pgr := cppbridge.NewPerGoroutineRelabeler(s.numberOfShards, 0)
 	stats, hasReallocations, err := pgr.Relabeling(
