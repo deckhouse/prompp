@@ -46,9 +46,7 @@ class MetricsPageControlBlock {
 
   template <class LabelSet>
   explicit MetricsPageControlBlock(LabelSet&& label_set, uint32_t page_object_size)
-      : labels_(std::forward<LabelSet>(label_set)), page_object_size_(page_object_size) {
-    // register in metrics storage
-  }
+      : labels_(std::forward<LabelSet>(label_set)), page_object_size_(page_object_size) {}
 
   MetricsPageControlBlock() = delete;
   MetricsPageControlBlock(const MetricsPageControlBlock&) = delete;
