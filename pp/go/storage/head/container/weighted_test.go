@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"testing/synctest"
 	"unsafe"
 
 	"github.com/stretchr/testify/suite"
@@ -77,25 +78,33 @@ func (s *WeightedSuite) TestWithError() {
 	baseCtx := context.Background()
 	expectedHead := &testHead{c: 1}
 	c := container.NewWeighted(expectedHead, 1)
-	step1 := make(chan struct{})
-	step2 := make(chan struct{})
-	ctx, cancel := context.WithCancel(baseCtx)
 
-	go c.With(baseCtx, func(_ *testHead) error {
-		close(step1)
+	synctest.Test(s.T(), func(t *testing.T) {
+		ctx, cancel := context.WithCancel(baseCtx)
+
+		blockForever := make(chan struct{})
+		defer close(blockForever)
+
+		go c.With(baseCtx, func(_ *testHead) error {
+			<-blockForever
+			return nil
+		})
+		synctest.Wait()
+
+		var err error
+		go func() {
+			err = c.With(ctx, func(_ *testHead) error {
+				return nil
+			})
+		}()
+		synctest.Wait()
+
 		cancel()
-		<-step2
-		return nil
-	})
+		synctest.Wait()
 
-	<-step1
-	err := c.With(ctx, func(_ *testHead) error {
-		return nil
+		s.Error(err)
+		s.Require().ErrorIs(err, context.Canceled)
 	})
-	close(step2)
-
-	s.Error(err)
-	s.Require().ErrorIs(err, context.Canceled)
 }
 
 func (s *WeightedSuite) TestClose() {
