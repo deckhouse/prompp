@@ -22,7 +22,7 @@ func TestWeightedSuite(t *testing.T) {
 
 func (s *WeightedSuite) TestGet() {
 	expectedHead := &testHead{c: 2}
-	c := container.NewWeighted(expectedHead)
+	c := container.NewWeighted(expectedHead, container.DefaultBackPressure)
 
 	actualHead := c.Get()
 
@@ -33,7 +33,7 @@ func (s *WeightedSuite) TestReplace() {
 	baseCtx := context.Background()
 	expectedHead := &testHead{c: 2}
 	newHead := &testHead{c: 3}
-	c := container.NewWeighted(expectedHead)
+	c := container.NewWeighted(expectedHead, 0)
 
 	err := c.Replace(baseCtx, newHead)
 	s.Require().NoError(err)
@@ -49,7 +49,7 @@ func (s *WeightedSuite) TestReplace() {
 func (s *WeightedSuite) TestReplaceError() {
 	expectedHead := &testHead{c: 2}
 	newHead := &testHead{c: 3}
-	c := container.NewWeighted(expectedHead)
+	c := container.NewWeighted(expectedHead, 0)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -60,7 +60,7 @@ func (s *WeightedSuite) TestReplaceError() {
 func (s *WeightedSuite) TestWith() {
 	baseCtx := context.Background()
 	expectedHead := &testHead{c: 2}
-	c := container.NewWeighted(expectedHead)
+	c := container.NewWeighted(expectedHead, container.DefaultBackPressure)
 
 	err := c.With(baseCtx, func(h *testHead) error {
 		if expectedHead.c != h.c {
@@ -76,7 +76,7 @@ func (s *WeightedSuite) TestWith() {
 func (s *WeightedSuite) TestWithError() {
 	baseCtx := context.Background()
 	expectedHead := &testHead{c: 1}
-	c := container.NewWeighted(expectedHead)
+	c := container.NewWeighted(expectedHead, 1)
 	step1 := make(chan struct{})
 	step2 := make(chan struct{})
 	ctx, cancel := context.WithCancel(baseCtx)
@@ -101,7 +101,7 @@ func (s *WeightedSuite) TestWithError() {
 func (s *WeightedSuite) TestClose() {
 	baseCtx := context.Background()
 	expectedHead := &testHead{c: 2}
-	c := container.NewWeighted(expectedHead)
+	c := container.NewWeighted(expectedHead, container.DefaultBackPressure)
 
 	err := c.Close()
 	s.Require().NoError(err)
