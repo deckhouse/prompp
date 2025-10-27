@@ -264,23 +264,14 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		return storage.ErrSeriesSet(err)
 	}
 
-	serializedChunksShards := queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, q.mint, q.maxt)
+	shardedSerializedData := queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, q.mint, q.maxt)
 	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
-	for shardID, serializedChunksShard := range serializedChunksShards {
-		if serializedChunksShard == nil {
-			seriesSets[shardID] = &SeriesSet{}
+	for shardID, serializedData := range shardedSerializedData {
+		if serializedData != nil {
+			seriesSets[shardID] = NewSeriesSet(q.mint, q.maxt, lssQueryResults[shardID], snapshots[shardID], serializedData)
 			continue
 		}
-
-		seriesSets[shardID] = &SeriesSet{
-			mint:             q.mint,
-			maxt:             q.maxt,
-			deserializer:     cppbridge.NewHeadDataStorageDeserializer(serializedChunksShard),
-			chunksIndex:      serializedChunksShard.MakeIndex(),
-			serializedChunks: serializedChunksShard,
-			lssQueryResult:   lssQueryResults[shardID],
-			labelSetSnapshot: snapshots[shardID],
-		}
+		seriesSets[shardID] = &SeriesSet{}
 	}
 
 	return storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge)
@@ -300,7 +291,7 @@ func convertPrometheusMatchersToPPMatchers(matchers ...*labels.Matcher) []model.
 	return promppMatchers
 }
 
-// queryDataStorage returns serialized chunks from data storage for each shard.
+// queryDataStorageV2 returns serialized chunks from data storage for each shard.
 func queryDataStorage[
 	TTask Task,
 	TDataStorage DataStorage,
@@ -312,8 +303,8 @@ func queryDataStorage[
 	head THead,
 	lssQueryResults []*cppbridge.LSSQueryResult,
 	mint, maxt int64,
-) []*cppbridge.HeadDataStorageSerializedChunks {
-	serializedChunksShards := make([]*cppbridge.HeadDataStorageSerializedChunks, head.NumberOfShards())
+) []*cppbridge.DataStorageSerializedData {
+	shardedSerializedData := make([]*cppbridge.DataStorageSerializedData, head.NumberOfShards())
 	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead](head)
 	tDataStorageQuery := head.CreateTask(
 		taskName,
@@ -325,7 +316,7 @@ func queryDataStorage[
 			}
 
 			var result cppbridge.DataStorageQueryResult
-			serializedChunksShards[shardID], result = s.DataStorage().Query(cppbridge.HeadDataStorageQuery{
+			result = s.DataStorage().Query(cppbridge.HeadDataStorageQuery{
 				StartTimestampMs: mint,
 				EndTimestampMs:   maxt,
 				LabelSetIDs:      lssQueryResult.IDs(),
@@ -333,6 +324,7 @@ func queryDataStorage[
 			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {
 				loadAndQueryWaiter.Add(s, result.Querier)
 			}
+			shardedSerializedData[s.ShardID()] = result.SerializedData
 
 			return nil
 		},
@@ -345,7 +337,7 @@ func queryDataStorage[
 		return nil
 	}
 
-	return serializedChunksShards
+	return shardedSerializedData
 }
 
 // queryLabelValues returns label values present in the head for the specific label name.
@@ -507,7 +499,6 @@ func queryLss[
 		func(shard TShard) (err error) {
 			shardID := shard.ShardID()
 			selectors[shardID], snapshots[shardID], err = shard.LSS().QuerySelector(shardID, convertedMatchers)
-
 			return err
 		},
 	)
