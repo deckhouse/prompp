@@ -3,6 +3,7 @@
 #include <atomic>
 
 #include "metric.h"
+#include "serializer.h"
 
 namespace metrics {
 
@@ -18,11 +19,18 @@ class Counter final : public Metric {
   Counter& operator=(const Counter&) = delete;
   Counter& operator=(Counter&&) noexcept = delete;
 
-  void serialize([[maybe_unused]] const LabelSet& labels, [[maybe_unused]] std::string& buffer) const override { ; }
+  void serialize(protozero::pbf_writer& writer) const override {
+    enum Tag : int {
+      kValue = 1,
+    };
+
+    protozero::pbf_writer counter_writer(writer, Serializer::Tag::kCounter);
+    counter_writer.add_double(Tag::kValue, static_cast<double>(value_));
+  }
 
   [[nodiscard]] size_t object_size() const noexcept override { return sizeof(*this); }
 
-  PROMPP_ALWAYS_INLINE void Add(std::integral auto count) noexcept { value_ += count; }
+  PROMPP_ALWAYS_INLINE void add(std::integral auto count) noexcept { value_ += count; }
 
  private:
   Type value_{};
@@ -30,18 +38,5 @@ class Counter final : public Metric {
 
 template <class Type>
 using AtomicCounter = Counter<std::atomic<Type>>;
-
-// template <size_t BucketsCount>
-// class Histogram final : public Metric {
-// public:
-//   using Metric::Metric;
-//
-//   void serialize([[maybe_unused]] const LabelSet& labels, [[maybe_unused]] std::string& buffer) const override { ; }
-//
-//   [[nodiscard]] size_t object_size() const noexcept override { return sizeof(*this); }
-//
-// private:
-//   std::array<uint64_t, BucketsCount + 1> buckets_{};
-// };
 
 }  // namespace metrics
