@@ -137,15 +137,20 @@ func (d *HeadWalDecoder) DecodeToDataStorage(segment []byte, headEncoder *HeadEn
 }
 
 // CreateEncoder creates a new [HeadWalEncoder] from the decoder.
-func (d *HeadWalDecoder) CreateEncoder() *HeadWalEncoder {
+func (d *HeadWalDecoder) CreateEncoder() (*HeadWalEncoder, error) {
+	encoder, err := headWalDecoderCreateEncoder(d.decoder)
+	if err != nil {
+		return nil, err
+	}
+
 	e := &HeadWalEncoder{
 		lss:     d.lss,
-		encoder: headWalDecoderCreateEncoder(d.decoder),
+		encoder: encoder,
 	}
 
 	runtime.SetFinalizer(e, func(e *HeadWalEncoder) {
 		headWalEncoderDtor(e.encoder)
 	})
 
-	return e
+	return e, nil
 }

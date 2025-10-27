@@ -1,6 +1,7 @@
 package cppbridge_test
 
 import (
+	"github.com/prometheus/client_golang/prometheus"
 	"testing"
 
 	"github.com/gobuffalo/packr/v2/file/resolver/encoding/hex"
@@ -84,4 +85,30 @@ func TestHeadWalDecoder_DecodeToDataStorage(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	require.Equal(t, cppbridge.TimeInterval{MinT: 1660828401000, MaxT: 1660828410000}, dataStorage.TimeInterval(false))
+}
+
+func TestHeadWalDecoder_InvalidEncoderVersion(t *testing.T) {
+	// Arrange
+	var actualEncoderVersion = cppbridge.EncodersVersion()
+	decoder := cppbridge.NewHeadWalDecoder(cppbridge.NewQueryableLssStorage(), actualEncoderVersion-1)
+
+	// Act
+
+	_, err := decoder.CreateEncoder()
+
+	// Assert
+	require.Error(t, err)
+}
+
+func TestHeadWalDecoder_ValidEncoderVersion(t *testing.T) {
+	// Arrange
+	var actualEncoderVersion = cppbridge.EncodersVersion()
+	decoder := cppbridge.NewHeadWalDecoder(cppbridge.NewQueryableLssStorage(), actualEncoderVersion)
+
+	// Act
+	prometheus.Collector()
+	_, err := decoder.CreateEncoder()
+
+	// Assert
+	require.NoError(t, err)
 }
