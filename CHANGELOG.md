@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.7.0
+
+### Fixes
+1. **Improved StaleNaN Tracking.** The logic for tracking and recording StaleNaN values has been redesigned. The state can now migrate during rotation, allowing StaleNaNs to be tracked throughout the service's lifetime.
+2. **Binary File Permissions in Containers.** Fixed permissions on binary files in the container. Permissions are now set to 755, allowing the container to run with a different user UID.
+
+### Features
+1. **Background Series Copy During Rotation.** Copying series data from the old head to the new one during rotation is now performed in the background, eliminating long blocking of the active head.
+2. **Gradual Head Conversion to Historical Blocks.** Introduced a mechanism for gradual conversion of heads to historical blocks. Previously, all unconverted blocks were loaded into memory and converted at startup, which could lead to high resource consumption. Now, a limit is set on the number of loaded heads. New heads will evict older ones, which will only be loaded when newer heads are successfully converted and unloaded from memory.
+3. **New Sample Serialization Model.** A new model for sample serialization in queries has been implemented. This allows markup code to execute outside the active head lock, moving execution to the data reading phase. In the future, we plan to eliminate data copying during queries by using shared memory instead.
+
+### Enhancements
+1. **Task Execution Refactoring.** A major refactoring has been conducted to rebuild the concurrency model for task execution in hot data. The new model provides more control over operations and more extension points.
+2. **Optimized Relabeling Allocations.** Relabeling allocations have been optimized to improve performance and reduce memory usage.
+
 ## v0.6.2
 
 ### Fixes
