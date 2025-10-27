@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <cstring>
+#include <limits>
 
 #include "preprocess.h"
 #include "type_traits.h"

@@ -128,9 +128,9 @@ shell:
     - chown -R 64535:64535 /src/
     - chown -R 64535:64535 /etc/
     - chown -R 64535:64535 /consoles/
-    - chmod 0700 /src/prometheus
-    - chmod 0700 /src/promtool
-    - chmod 0700 /src/prompptool
+    - chmod 0755 /src/prometheus
+    - chmod 0755 /src/promtool
+    - chmod 0755 /src/prompptool
     - |
       touch /bin/prompp
       ln -s /bin/prompp /bin/prometheus

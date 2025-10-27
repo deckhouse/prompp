@@ -17,6 +17,7 @@ package cppbridge
 // #include "entrypoint.h"
 import "C" //nolint:gocritic // because otherwise it won't work
 import (
+	"math"
 	"runtime"
 	"time"
 	"unsafe" //nolint:gocritic // because otherwise it won't work
@@ -1561,16 +1562,33 @@ func primitivesLSSBitsetDtor(bitset uintptr) {
 
 // primitivesReadonlyLSSCopyAddedSeries copy the label sets from the source lss to the destination lss
 // that were added source lss.
-func primitivesReadonlyLSSCopyAddedSeries(source, sourceBitset, destination uintptr) {
+func primitivesReadonlyLSSCopyAddedSeries(source, sourceBitset, destination uintptr) uintptr {
+	var dstSrcLsIdsMapping uintptr
+
 	C.prompp_primitives_readonly_lss_copy_added_series(
 		C.uint64_t(source),
 		C.uint64_t(sourceBitset),
 		C.uint64_t(destination),
+		C.uint64_t(uintptr(unsafe.Pointer(&dstSrcLsIdsMapping))),
 	)
+
+	return dstSrcLsIdsMapping
 }
 
 func primitivesLSSCopyAddedSeries(source, destination uintptr) {
 	C.prompp_primitives_lss_copy_added_series(C.uint64_t(source), C.uint64_t(destination))
+}
+
+func primitivesFreeLsIdsMapping(lsIdsMapping uintptr) {
+	args := struct {
+		lsIdsMapping uintptr
+	}{lsIdsMapping}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_free_ls_ids_mapping,
+		uintptr(unsafe.Pointer(&args)),
+	)
 }
 
 //
@@ -1721,7 +1739,37 @@ func prometheusRelabelerStateUpdateDtor(relabelerStateUpdate *RelabelerStateUpda
 }
 
 //
-// StalenansState
+// StalenansStateDeprecated
+//
+
+func prometheusRelabelStaleNansStateDeprecatedCtor() uintptr {
+	var res struct {
+		state uintptr
+	}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_prometheus_relabel_stalenans_state_deprecated_ctor,
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.state
+}
+
+func prometheusRelabelStaleNansStateDeprecatedDtor(state uintptr) {
+	args := struct {
+		state uintptr
+	}{state}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_prometheus_relabel_stalenans_state_deprecated_dtor,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+//
+// StaleNansState
 //
 
 func prometheusRelabelStaleNansStateCtor() uintptr {
@@ -1731,7 +1779,7 @@ func prometheusRelabelStaleNansStateCtor() uintptr {
 
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_prometheus_relabel_stalenans_state_ctor,
+		C.prompp_prometheus_relabel_stale_nans_state_ctor,
 		uintptr(unsafe.Pointer(&res)),
 	)
 
@@ -1745,7 +1793,7 @@ func prometheusRelabelStaleNansStateDtor(state uintptr) {
 
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_prometheus_relabel_stalenans_state_dtor,
+		C.prompp_prometheus_relabel_stale_nans_state_dtor,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
@@ -2139,30 +2187,36 @@ func seriesDataDataStorageAllocatedMemory(dataStorage uintptr) uint64 {
 }
 
 type DataStorageQueryResult struct {
-	Querier uintptr
-	Status  uint8
+	Querier        uintptr
+	Status         uint8
+	SerializedData *DataStorageSerializedData
 }
 
-func seriesDataDataStorageQuery(dataStorage uintptr, query HeadDataStorageQuery, serializedChunks *[]byte) DataStorageQueryResult {
+func seriesDataDataStorageQueryV2(dataStorage uintptr, query HeadDataStorageQuery, serializedData *DataStorageSerializedData) (querier uintptr, status uint8) {
 	args := struct {
-		dataStorage      uintptr
-		query            HeadDataStorageQuery
-		serializedChunks *[]byte
-	}{dataStorage, query, serializedChunks}
+		dataStorage uintptr
+		query       HeadDataStorageQuery
+	}{dataStorage, query}
 
-	var res DataStorageQueryResult
+	var res = struct {
+		Querier        uintptr
+		Status         uint8
+		SerializedData *uintptr
+	}{
+		SerializedData: &serializedData.serializedData,
+	}
 
 	testGC()
 	start := time.Now().UnixNano()
 	fastcgo.UnsafeCall2(
-		C.prompp_series_data_data_storage_query,
+		C.prompp_series_data_data_storage_query_v2,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
 	headDataStorageQuerySum.Add(float64(time.Now().UnixNano() - start))
 	headDataStorageQueryCount.Inc()
 
-	return res
+	return res.Querier, res.Status
 }
 
 func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32, timestamp int64, samples []Sample) DataStorageQueryResult {
@@ -2198,6 +2252,105 @@ func seriesDataDataStorageQueryFinal(queriers []uintptr) {
 	)
 	headDataStorageQueryFinalSum.Add(float64(time.Now().UnixNano() - start))
 	headDataStorageQueryFinalCount.Inc()
+}
+
+func seriesDataSerializedDataDtor(serializedData uintptr) {
+	args := struct {
+		serializedData uintptr
+	}{serializedData}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_dtor,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func seriesDataSerializedDataNext(serializedData uintptr) (uint32, uint32) {
+	args := struct {
+		serializedData uintptr
+	}{serializedData}
+	res := struct {
+		seriesID uint32
+		chunkRef uint32
+	}{}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_serialization_serialized_data_next,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.seriesID, res.chunkRef
+}
+
+func seriesDataSerializedDataIteratorCtor(serializedData uintptr, chunkRef uint32) uintptr {
+	args := struct {
+		serializedData uintptr
+		chunkRef       uint32
+	}{serializedData, chunkRef}
+	res := struct {
+		iterator uintptr
+	}{}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_serialization_serialized_data_iterator_ctor,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.iterator
+}
+
+type SerializedDataIteratorNextResult struct {
+	Timestamp int64
+	Value     float64
+	HasValue  bool
+}
+
+func NewSerializedDataIteratorNextResult() SerializedDataIteratorNextResult {
+	return SerializedDataIteratorNextResult{Timestamp: math.MinInt64}
+}
+
+func seriesDataSerializedDataIteratorNext(iterator uintptr, res *SerializedDataIteratorNextResult) {
+	args := struct {
+		iterator uintptr
+	}{iterator}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_serialization_serialized_data_iterator_next,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(res)),
+	)
+}
+
+func seriesDataSerializedDataIteratorReset(serializedData uintptr, iterator uintptr, chunkRef uint32) {
+	args := struct {
+		serializedData uintptr
+		iterator       uintptr
+		chunkRef       uint32
+	}{serializedData, iterator, chunkRef}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_iterator_reset,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func seriesDataSerializedDataIteratorDtor(iterator uintptr) {
+	args := struct {
+		iterator uintptr
+	}{iterator}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_series_data_serialization_serialized_data_iterator_dtor,
+		uintptr(unsafe.Pointer(&args)),
+	)
 }
 
 func seriesDataDataStorageTimeInterval(dataStorage uintptr) TimeInterval {
@@ -2478,11 +2631,11 @@ func seriesDataChunkRecoderCtor(lss uintptr, lsIdBatchSize uint32, dataStorage u
 	return res.chunkRecoder
 }
 
-func seriesDataSerializedChunkRecoderCtor(serializedChunks []byte, timeInterval TimeInterval) uintptr {
+func seriesDataSerializedChunkRecoderCtor(serializedData *DataStorageSerializedData, timeInterval TimeInterval) uintptr {
 	args := struct {
-		serializedChunks []byte
+		serializedData *uintptr
 		TimeInterval
-	}{serializedChunks, timeInterval}
+	}{&serializedData.serializedData, timeInterval}
 	var res struct {
 		chunkRecoder uintptr
 	}
@@ -3526,7 +3679,7 @@ func prometheusPerGoroutineRelabelerInputRelabelingFromCache(
 // prometheusPerGoroutineRelabelerInputRelabelingWithStalenans wrapper for relabeling incoming
 // hashdex(first stage) with state stalenans.
 func prometheusPerGoroutineRelabelerInputRelabelingWithStalenans(
-	perGoroutineRelabeler, statelessRelabeler, inputLss, targetLss, cache, hashdex, sourceState uintptr,
+	perGoroutineRelabeler, statelessRelabeler, inputLss, targetLss, cache, hashdex uintptr,
 	defTimestamp int64,
 	options RelabelerOptions,
 	shardsInnerSeries []*InnerSeries,
@@ -3542,7 +3695,6 @@ func prometheusPerGoroutineRelabelerInputRelabelingWithStalenans(
 		cache                 uintptr
 		inputLss              uintptr
 		targetLss             uintptr
-		state                 uintptr
 		defTimestamp          int64
 	}{
 		shardsInnerSeries,
@@ -3554,7 +3706,6 @@ func prometheusPerGoroutineRelabelerInputRelabelingWithStalenans(
 		cache,
 		inputLss,
 		targetLss,
-		sourceState,
 		defTimestamp,
 	}
 	var res struct {
@@ -3578,7 +3729,7 @@ func prometheusPerGoroutineRelabelerInputRelabelingWithStalenans(
 // prometheusPerGoroutineRelabelerInputRelabelingWithStalenansFromCache wrapper for relabeling incoming from cache
 // hashdex(first stage) with state stalenans.
 func prometheusPerGoroutineRelabelerInputRelabelingWithStalenansFromCache(
-	perGoroutineRelabeler, inputLss, targetLss, cache, hashdex, sourceState uintptr,
+	perGoroutineRelabeler, inputLss, targetLss, cache, hashdex uintptr,
 	defTimestamp int64,
 	options RelabelerOptions,
 	shardsInnerSeries []*InnerSeries,
@@ -3591,7 +3742,6 @@ func prometheusPerGoroutineRelabelerInputRelabelingWithStalenansFromCache(
 		cache                 uintptr
 		inputLss              uintptr
 		targetLss             uintptr
-		state                 uintptr
 		defTimestamp          int64
 	}{
 		shardsInnerSeries,
@@ -3601,7 +3751,6 @@ func prometheusPerGoroutineRelabelerInputRelabelingWithStalenansFromCache(
 		cache,
 		inputLss,
 		targetLss,
-		sourceState,
 		defTimestamp,
 	}
 	var res struct {
@@ -3717,4 +3866,35 @@ func prometheusPerGoroutineRelabelerAppendRelabelerSeries(
 	perGoroutineRelabelerAppendRelabelerSeriesCount.Inc()
 
 	return res.exception, res.targetLssHasReallocations
+}
+
+func prometheusPerGoroutineRelabelerTrackStaleNans(
+	innerSeries []*InnerSeries,
+	staleNansState uintptr,
+	defaultTimestamp int64,
+) {
+	args := struct {
+		innerSeries      []*InnerSeries
+		staleNansState   uintptr
+		defaultTimestamp int64
+	}{innerSeries, staleNansState, defaultTimestamp}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_prometheus_per_goroutine_relabeler_track_stale_nans,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func prometheusRemapStaleNansState(staleNansState, lsIdsMapping uintptr) {
+	args := struct {
+		staleNansState uintptr
+		lsIdsMapping   uintptr
+	}{staleNansState, lsIdsMapping}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_remap_stale_nans_state,
+		uintptr(unsafe.Pointer(&args)),
+	)
 }

@@ -230,6 +230,11 @@ func (s *Shard) LoadAndQuerySeriesData() (err error) {
 	return nil
 }
 
+// DstSrcLsIdsMapping return ids mapping after lss copying
+func (s *Shard) DstSrcLsIdsMapping() *cppbridge.IdsMapping {
+	return s.lss.dstSrcLsIdsMapping
+}
+
 //
 // PerGoroutineShard
 //

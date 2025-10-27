@@ -7,6 +7,7 @@ import (
 	"math"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -390,6 +391,14 @@ type stdVector struct {
 	endOfStorage uintptr
 }
 
+type bareBonesVector struct {
+	memory   uintptr
+	capacity uint32
+	size     uint32
+}
+
+type roaringBitset [40]byte
+
 // InnerSeries - go wrapper for C-InnerSeries.
 //
 //	size - number of timeseries processed;
@@ -397,7 +406,9 @@ type stdVector struct {
 type InnerSeries struct {
 	size uint64
 	//nolint:unused // for cpp-bridge, used in cpp
-	data stdVector
+	data bareBonesVector
+	//nolint:unused // for cpp-bridge, used in cpp
+	trackStaleNans roaringBitset
 }
 
 // Size - number of Timeseries.
@@ -438,6 +449,8 @@ type RelabeledSeries struct {
 	size uint64
 	//nolint:unused // for cpp-bridge, used in cpp
 	data stdVector
+	//nolint:unused // for cpp-bridge, used in cpp
+	trackStaleNans roaringBitset
 }
 
 // NewRelabeledSeries - init new RelabeledSeries with finalizer for dtor C-RelabeledSeries.
@@ -510,6 +523,23 @@ type RelabelerOptions struct {
 	HonorTimestamps          bool
 }
 
+// StaleNansStateDeprecated wrap pointer to source state for stale nans .
+type StaleNansStateDeprecated struct {
+	state uintptr
+}
+
+// NewStaleNansStateDeprecated init new SourceStaleNansState.
+func NewStaleNansStateDeprecated() *StaleNansStateDeprecated {
+	s := &StaleNansStateDeprecated{
+		state: prometheusRelabelStaleNansStateDeprecatedCtor(),
+	}
+	runtime.SetFinalizer(s, func(s *StaleNansStateDeprecated) {
+		prometheusRelabelStaleNansStateDeprecatedDtor(s.state)
+	})
+
+	return s
+}
+
 // StaleNansState wrap pointer to source state for stale nans .
 type StaleNansState struct {
 	state uintptr
@@ -525,6 +555,12 @@ func NewStaleNansState() *StaleNansState {
 	})
 
 	return s
+}
+
+func (s *StaleNansState) Remap(mapping *IdsMapping) {
+	prometheusRemapStaleNansState(s.state, mapping.pointer)
+	runtime.KeepAlive(s)
+	runtime.KeepAlive(mapping)
 }
 
 // RelabelerStats statistics return from relabeler.
@@ -668,7 +704,7 @@ func (ipsr *InputPerShardRelabeler) InputRelabelingWithStalenans(
 	targetLss *LabelSetStorage,
 	cache *Cache,
 	options RelabelerOptions,
-	staleNansState *StaleNansState,
+	staleNansState *StaleNansStateDeprecated,
 	defTimestamp int64,
 	shardedData ShardedData,
 	shardsInnerSeries []*InnerSeries,
@@ -741,7 +777,7 @@ func (ipsr *InputPerShardRelabeler) InputRelabelingWithStalenansFromCache(
 	targetLss *LabelSetStorage,
 	cache *Cache,
 	options RelabelerOptions,
-	staleNansState *StaleNansState,
+	staleNansState *StaleNansStateDeprecated,
 	defTimestamp int64,
 	shardedData ShardedData,
 	shardsInnerSeries []*InnerSeries,
@@ -975,7 +1011,7 @@ func (c *Cache) Update(ctx context.Context, shardsRelabelerStateUpdate []*Relabe
 // State state of relabelers per shard.
 type State struct {
 	caches              []*Cache
-	staleNansStates     []*StaleNansState
+	staleNansStates     []*StaleNansStateDeprecated
 	defTimestamp        int64
 	generationRelabeler uint64
 	generationHead      uint64
@@ -987,7 +1023,7 @@ type State struct {
 func NewState(numberOfShards uint16) *State {
 	s := &State{
 		caches:              make([]*Cache, numberOfShards),
-		staleNansStates:     make([]*StaleNansState, numberOfShards),
+		staleNansStates:     make([]*StaleNansStateDeprecated, numberOfShards),
 		generationRelabeler: math.MaxUint64,
 		generationHead:      math.MaxUint64,
 		trackStaleness:      false,
@@ -1050,7 +1086,7 @@ func (s *State) SetRelabelerOptions(options *RelabelerOptions) {
 }
 
 // StaleNansStateByShard return SourceStaleNansState for shard.
-func (s *State) StaleNansStateByShard(shardID uint16) *StaleNansState {
+func (s *State) StaleNansStateByShard(shardID uint16) *StaleNansStateDeprecated {
 	return s.staleNansStates[shardID]
 }
 
@@ -1107,11 +1143,11 @@ func (s *State) resetStaleNansStates(numberOfShards uint16, equaledGeneration bo
 		s.staleNansStates = s.staleNansStates[:numberOfShards]
 	case len(s.staleNansStates) < int(numberOfShards):
 		// grow
-		s.staleNansStates = make([]*StaleNansState, numberOfShards)
+		s.staleNansStates = make([]*StaleNansStateDeprecated, numberOfShards)
 	}
 
 	for shardID := range s.staleNansStates {
-		s.staleNansStates[shardID] = NewStaleNansState()
+		s.staleNansStates[shardID] = NewStaleNansStateDeprecated()
 	}
 }
 
@@ -1341,7 +1377,6 @@ func (pgr *PerGoroutineRelabeler) inputRelabelingWithStalenans(
 		targetLss.Pointer(),
 		cache.cPointer,
 		cptrContainer.cptr(),
-		state.StaleNansStateByShard(pgr.shardID).state,
 		state.DefTimestamp(),
 		state.RelabelerOptions(),
 		shardsInnerSeries,
@@ -1374,7 +1409,6 @@ func (pgr *PerGoroutineRelabeler) inputRelabelingWithStalenansFromCache(
 		targetLss.Pointer(),
 		cache.cPointer,
 		cptrContainer.cptr(),
-		state.StaleNansStateByShard(pgr.shardID).state,
 		state.DefTimestamp(),
 		state.RelabelerOptions(),
 		shardsInnerSeries,
@@ -1432,6 +1466,25 @@ func (pgr *PerGoroutineRelabeler) inputTransitionRelabelingOnlyRead(
 	runtime.KeepAlive(cptrContainer)
 
 	return stats, ok, handleException(exception)
+}
+
+// PerGoroutineRelabelerTrackStaleNans add stale nans samples if needed
+func PerGoroutineRelabelerTrackStaleNans(
+	innerSeries []*InnerSeries,
+	state *StateV2,
+	shardID uint16,
+) {
+	if !state.TrackStaleness() {
+		return
+	}
+
+	prometheusPerGoroutineRelabelerTrackStaleNans(
+		innerSeries,
+		state.StaleNansStateByShard(shardID).state,
+		state.DefTimestamp(),
+	)
+	runtime.KeepAlive(innerSeries)
+	runtime.KeepAlive(state)
 }
 
 //
@@ -1568,10 +1621,13 @@ func (s *StateV2) EnableTrackStaleness() {
 func (s *StateV2) Reconfigure(
 	generationHead uint64,
 	numberOfShards uint16,
+	staleNansIdsMappings []*IdsMapping,
 ) {
 	if s.status&inited == inited && generationHead == s.generationHead {
 		return
 	}
+
+	remapStaleNansState := (generationHead-s.generationHead == 1) && (int(numberOfShards) == len(s.staleNansStates))
 
 	// long way
 	s.locker.Lock()
@@ -1591,7 +1647,7 @@ func (s *StateV2) Reconfigure(
 	}
 
 	s.resetCaches(numberOfShards)
-	s.resetStaleNansStates(numberOfShards)
+	s.resetStaleNansStates(numberOfShards, remapStaleNansState, staleNansIdsMappings)
 	s.status |= inited
 	s.generationHead = generationHead
 
@@ -1675,7 +1731,7 @@ func (s *StateV2) resetCaches(numberOfShards uint16) {
 }
 
 // resetStaleNansStates recreate StaleNansStates.
-func (s *StateV2) resetStaleNansStates(numberOfShards uint16) {
+func (s *StateV2) resetStaleNansStates(numberOfShards uint16, remapStaleNansState bool, staleNansIdsMappings []*IdsMapping) {
 	if !s.trackStaleness {
 		return
 	}
@@ -1690,10 +1746,14 @@ func (s *StateV2) resetStaleNansStates(numberOfShards uint16) {
 		s.staleNansStates = s.staleNansStates[:numberOfShards]
 	case len(s.staleNansStates) < int(numberOfShards):
 		// grow
-		s.staleNansStates = make([]*StaleNansState, numberOfShards)
+		s.staleNansStates = slices.Grow(s.staleNansStates, int(numberOfShards)-len(s.staleNansStates))[:numberOfShards]
 	}
 
 	for shardID := range s.staleNansStates {
-		s.staleNansStates[shardID] = NewStaleNansState()
+		if remapStaleNansState && staleNansIdsMappings[shardID] != nil && !staleNansIdsMappings[shardID].IsEmpty() {
+			s.staleNansStates[shardID].Remap(staleNansIdsMappings[shardID])
+		} else {
+			s.staleNansStates[shardID] = NewStaleNansState()
+		}
 	}
 }

@@ -7,7 +7,6 @@
 #include "series_data/querier/query.h"
 
 namespace series_data::serialization {
-
 class Serializer {
  public:
   explicit Serializer(const DataStorage& storage) : storage_(storage) {}

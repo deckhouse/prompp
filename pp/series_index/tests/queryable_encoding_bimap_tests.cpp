@@ -15,8 +15,8 @@ using series_index::SeriesReverseIndex;
 using series_index::trie::CedarMatchesList;
 using series_index::trie::CedarTrie;
 
-template <class Src, class SortIndex, class Dst, class R>
-using Copier = QueryableEncodingBimapCopier<Src, SortIndex, Dst, R>;
+template <class DecodingTable, class SortingIndex, class SeriesIds, class QueryableEncodingBimap, class LsIdVector>
+using Copier = QueryableEncodingBimapCopier<DecodingTable, SortingIndex, SeriesIds, QueryableEncodingBimap, LsIdVector>;
 
 class QueryableEncodingBimapFixture : public testing::Test {
  protected:
@@ -119,18 +119,22 @@ TEST_F(QueryableEncodingBimapFixture, EmplaceDuplicatedLabelSet) {
   EXPECT_NE(ls_id1, ls_id2);
 }
 
-class QueryableEncodingBimapCopierFixture : public QueryableEncodingBimapFixture {};
+class QueryableEncodingBimapCopierFixture : public QueryableEncodingBimapFixture {
+ protected:
+  BareBones::Vector<uint32_t> dst_src_ids_mapping_;
+};
 
 TEST_F(QueryableEncodingBimapCopierFixture, EmptyLss) {
   // Arrange
   Lss lss_copy;
-  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy);
+  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
 
   // Act
   copier.copy_added_series_and_build_indexes();
 
   // Assert
   EXPECT_EQ(0U, lss_copy.size());
+  EXPECT_EQ(0U, dst_src_ids_mapping_.size());
 }
 
 TEST_F(QueryableEncodingBimapCopierFixture, NonEmptyLss) {
@@ -144,7 +148,8 @@ TEST_F(QueryableEncodingBimapCopierFixture, NonEmptyLss) {
   lss_.build_deferred_indexes();
 
   Lss lss_copy;
-  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy);
+  const BareBones::Vector ids_for_copy{0U, 1U};
+  Copier copier(lss_, lss_.sorting_index(), ids_for_copy, lss_copy, dst_src_ids_mapping_);
 
   // Act
   copier.copy_added_series_and_build_indexes();
@@ -161,26 +166,22 @@ TEST_F(QueryableEncodingBimapCopierFixture, NonEmptyLss) {
   EXPECT_FALSE(lss_copy.ls_id_set().empty());
 
   EXPECT_TRUE(lss_copy.trie_index().names_trie().lookup("job"));
+
+  EXPECT_EQ(ids_for_copy, dst_src_ids_mapping_);
 }
 
 TEST_F(QueryableEncodingBimapCopierFixture, NonEmptyLssKeepOrder) {
   // Arrange
-  const auto label_set1 = LabelViewSet{{"job", "cron"}, {"key", "1"}, {"process", "php"}};
-  const auto label_set2 = LabelViewSet{{"job", "cron"}, {"key", "2"}, {"process", "php"}};
-  const auto label_set3 = LabelViewSet{{"job", "cron"}, {"key", "3"}, {"process", "php"}};
-  const auto label_set4 = LabelViewSet{{"job", "cron"}, {"key", "4"}, {"process", "php"}};
-  const auto label_set5 = LabelViewSet{{"job", "cron"}, {"key", "5"}, {"process", "php"}};
-
-  lss_.find_or_emplace(label_set4);
-  lss_.find_or_emplace(label_set1);
-  lss_.find_or_emplace(label_set3);
-  lss_.find_or_emplace(label_set5);
-  lss_.find_or_emplace(label_set2);
+  lss_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"key", "1"}, {"process", "php"}});
+  lss_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"key", "2"}, {"process", "php"}});
+  lss_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"key", "3"}, {"process", "php"}});
+  lss_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"key", "4"}, {"process", "php"}});
+  lss_.find_or_emplace(LabelViewSet{{"job", "cron"}, {"key", "5"}, {"process", "php"}});
 
   lss_.build_deferred_indexes();
 
   Lss lss_copy;
-  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy);
+  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
 
   // Act
   copier.copy_added_series_and_build_indexes();
@@ -188,14 +189,46 @@ TEST_F(QueryableEncodingBimapCopierFixture, NonEmptyLssKeepOrder) {
   // Assert
   EXPECT_TRUE(std::ranges::is_sorted(lss_copy.ls_id_set(),
                                      [&](const auto idl, const auto idr) { return std::ranges::lexicographical_compare(lss_copy[idl], lss_copy[idr]); }));
+  EXPECT_EQ((BareBones::Vector{0U, 1U, 2U, 3U, 4U}), dst_src_ids_mapping_);
+}
+
+TEST_F(QueryableEncodingBimapCopierFixture, SkipSeries) {
+  // Arrange
+  const auto label_set1 = LabelViewSet{{"job", "cron"}, {"key", "1"}, {"process", "php"}};
+  const auto label_set2 = LabelViewSet{{"job", "cron"}, {"key", "2"}, {"process", "php"}};
+  const auto label_set3 = LabelViewSet{{"job", "cron"}, {"key", "3"}, {"process", "php"}};
+  const auto label_set4 = LabelViewSet{{"job", "cron"}, {"key", "4"}, {"process", "php"}};
+  const auto label_set5 = LabelViewSet{{"job", "cron"}, {"key", "5"}, {"process", "php"}};
+
+  lss_.find_or_emplace(label_set1);
+  lss_.find_or_emplace(label_set2);
+  lss_.find_or_emplace(label_set3);
+  lss_.find_or_emplace(label_set4);
+  lss_.find_or_emplace(label_set5);
+
+  lss_.build_deferred_indexes();
+
+  Lss lss_copy;
+  const BareBones::Vector ids_for_copy{0U, 2U, 4U};
+  Copier copier(lss_, lss_.sorting_index(), ids_for_copy, lss_copy, dst_src_ids_mapping_);
+
+  // Act
+  copier.copy_added_series_and_build_indexes();
+
+  // Assert
+  ASSERT_EQ(3U, lss_copy.size());
+  EXPECT_EQ(label_set1, lss_copy[0]);
+  EXPECT_EQ(label_set3, lss_copy[1]);
+  EXPECT_EQ(label_set5, lss_copy[2]);
+  EXPECT_EQ(ids_for_copy, dst_src_ids_mapping_);
 }
 
 TEST_F(QueryableEncodingBimapCopierFixture, CopyOfCopy) {
   // Arrange
   Lss lss_copy;
   Lss lss_copy_of_copy;
-  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy);
-  Copier copier2(lss_copy, lss_copy.sorting_index(), lss_copy.added_series(), lss_copy_of_copy);
+  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
+  Copier copier2(lss_copy, lss_copy.sorting_index(), lss_copy.added_series(), lss_copy_of_copy, dst_src_ids_mapping_);
 
   const auto label_set = LabelViewSet{{"job", "cron"}, {"key", ""}, {"process", "php"}};
   const auto label_set2 = LabelViewSet{{"job", "cron"}, {"key", ""}, {"process", "php1"}};
@@ -226,6 +259,8 @@ TEST_F(QueryableEncodingBimapCopierFixture, CopyOfCopy) {
 
   EXPECT_FALSE(lss_copy_of_copy.trie_index().names_trie().lookup("job"));
   EXPECT_TRUE(lss_copy_of_copy.trie_index().names_trie().lookup("server"));
+
+  EXPECT_TRUE(dst_src_ids_mapping_.empty());
 }
 
 }  // namespace
