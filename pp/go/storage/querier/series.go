@@ -1,6 +1,9 @@
 package querier
 
 import (
+	"math"
+	"runtime"
+
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -8,8 +11,6 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/util/annotations"
-	"math"
-	"runtime"
 )
 
 type ChunkIterator struct {
@@ -201,8 +202,8 @@ type Series struct {
 	chunkRef       uint32
 }
 
-func NewSeries(mint, maxt int64, labelSet labels.Labels, serializedData *cppbridge.DataStorageSerializedData, chunkRef uint32) Series {
-	return Series{
+func NewSeries(mint, maxt int64, labelSet labels.Labels, serializedData *cppbridge.DataStorageSerializedData, chunkRef uint32) *Series {
+	return &Series{
 		mint:           mint,
 		maxt:           maxt,
 		labelSet:       labelSet,
@@ -239,7 +240,7 @@ type SeriesSet struct {
 	serializedData   *cppbridge.DataStorageSerializedData
 
 	lastIndexFromLSSQueryResult int
-	series                      Series
+	series                      *Series
 }
 
 func NewSeriesSet(
@@ -286,7 +287,7 @@ func (s *SeriesSet) Next() bool {
 }
 
 func (s *SeriesSet) At() storage.Series {
-	return &s.series
+	return s.series
 }
 
 func (s *SeriesSet) Err() error {
