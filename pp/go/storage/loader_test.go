@@ -108,7 +108,7 @@ func (s *HeadLoadSuite) mustCreateHead(unloadDataStorageInterval time.Duration) 
 	return h
 }
 
-func (s *HeadLoadSuite) loadHead(unloadDataStorageInterval time.Duration) (*storage.Head, bool) {
+func (s *HeadLoadSuite) loadHead(unloadDataStorageInterval time.Duration) (*storage.Head, bool, bool) {
 	record, err := s.catalog.Get(s.headIdGenerator.last())
 	s.Require().NoError(err)
 
@@ -116,8 +116,9 @@ func (s *HeadLoadSuite) loadHead(unloadDataStorageInterval time.Duration) (*stor
 }
 
 func (s *HeadLoadSuite) mustLoadHead(unloadDataStorageInterval time.Duration) *storage.Head {
-	loadedHead, corrupted := s.loadHead(unloadDataStorageInterval)
+	loadedHead, corrupted, writable := s.loadHead(unloadDataStorageInterval)
 	s.False(corrupted)
+	s.True(writable)
 
 	return loadedHead
 }
@@ -160,10 +161,11 @@ func (s *HeadLoadSuite) TestErrorOpenShardFileInOneShard() {
 	s.Require().NoError(os.Remove(storage.GetShardWalFilename(s.headDir(), 0)))
 
 	// Act
-	head, corrupted := s.loadHead(0)
+	head, corrupted, writable := s.loadHead(0)
 
 	// Assert
 	s.True(corrupted)
+	s.False(writable)
 	s.Nil(s.shards(head)[0].UnloadedDataStorage())
 	s.Require().NoError(head.Close())
 }
@@ -177,10 +179,11 @@ func (s *HeadLoadSuite) TestErrorOpenShardFileInAllShards() {
 	s.Require().NoError(os.Remove(storage.GetShardWalFilename(s.headDir(), 1)))
 
 	// Act
-	head, corrupted := s.loadHead(0)
+	head, corrupted, writable := s.loadHead(0)
 
 	// Assert
 	s.True(corrupted)
+	s.False(writable)
 	s.Nil(s.shards(head)[0].UnloadedDataStorage())
 	s.Nil(s.shards(head)[1].UnloadedDataStorage())
 	s.Require().NoError(head.Close())
@@ -385,10 +388,11 @@ func (s *HeadLoadSuite) TestErrorDataUnloading() {
 	// Act
 	s.lockFileForCreation(storage.GetUnloadedDataStorageFilename(s.headDir(), 0))
 	s.lockFileForCreation(storage.GetUnloadedDataStorageFilename(s.headDir(), 1))
-	loadedHead, corrupted := s.loadHead(unloadDataStorageInterval)
+	loadedHead, corrupted, writable := s.loadHead(unloadDataStorageInterval)
 
 	// Assert
 	s.True(corrupted)
+	s.False(writable)
 	s.NotNil(s.shards(loadedHead)[0].UnloadedDataStorage())
 	s.NotNil(s.shards(loadedHead)[1].UnloadedDataStorage())
 	s.Require().NoError(loadedHead.Close())

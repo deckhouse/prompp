@@ -2,6 +2,7 @@ package storage
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -56,7 +57,7 @@ func NewLoader(
 func (l *Loader) Load(
 	headRecord *catalog.Record,
 	generation uint64,
-) (_ *Head, corrupted bool) {
+) (_ *Head, corrupted bool, writable bool) {
 	headID := headRecord.ID()
 	headDir := filepath.Join(l.dataDir, headID)
 	numberOfShards := headRecord.NumberOfShards()
@@ -82,10 +83,15 @@ func (l *Loader) Load(
 
 	shards := make([]*shard.Shard, numberOfShards)
 	numberOfSegmentsRead := optional.Optional[uint32]{}
+	writable = numberOfShards > 0
 	for shardID, res := range shardLoadResults {
 		shards[shardID] = res.shard
 		if res.corrupted {
 			corrupted = true
+		}
+
+		if !res.writable {
+			writable = false
 		}
 
 		if numberOfSegmentsRead.IsNil() {
@@ -140,7 +146,7 @@ func (l *Loader) Load(
 
 	logger.Debugf("[Loader] loaded head: %s, corrupted: %t", headRecord.ID(), corrupted)
 
-	return h, corrupted
+	return h, corrupted, writable
 }
 
 func (*Loader) loadShard(
@@ -154,7 +160,8 @@ func (*Loader) loadShard(
 	shardDataLoader := NewShardDataLoader(shardID, dir, maxSegmentSize, notifier, registerer, unloadDataStorageInterval)
 	err := shardDataLoader.Load()
 	return ShardLoadResult{
-		corrupted:        err != nil,
+		corrupted:        err != nil && !errors.Is(err, ErrInvalidEncoderVersion),
+		writable:         err == nil,
 		numberOfSegments: shardDataLoader.shardData.numberOfSegments,
 		shard: shard.NewShard(
 			shardDataLoader.shardData.lss,
@@ -172,6 +179,7 @@ type ShardLoadResult struct {
 	shard            *shard.Shard
 	numberOfSegments uint32
 	corrupted        bool
+	writable         bool
 }
 
 // ShardData data for creating a shard.
@@ -249,7 +257,12 @@ func (l *ShardDataLoader) Load() error {
 		return err
 	}
 
-	return l.createShardWal(shardWalFileName, decoder)
+	encoder, err := decoder.CreateEncoder()
+	if err != nil {
+		return errors.Join(ErrInvalidEncoderVersion, fmt.Errorf("create encoder from decoder: %w", err))
+	}
+
+	return l.createShardWal(shardWalFileName, encoder)
 }
 
 // loadWalFile loads and decode wal file.
@@ -286,7 +299,7 @@ func (l *ShardDataLoader) loadWalFile(
 }
 
 // createShardWal creates a wal for a shard.
-func (l *ShardDataLoader) createShardWal(fileName string, walDecoder *cppbridge.HeadWalDecoder) error {
+func (l *ShardDataLoader) createShardWal(fileName string, walEncoder *cppbridge.HeadWalEncoder) error {
 	//revive:disable-next-line:add-constant // file permissions simple readable as octa-number
 	shardWalFile, err := util.OpenFileAppender(fileName, 0o666)
 	if err != nil {
@@ -305,7 +318,7 @@ func (l *ShardDataLoader) createShardWal(fileName string, walDecoder *cppbridge.
 	}
 
 	l.notifier.Set(l.shardID, l.shardData.numberOfSegments)
-	l.shardData.wal = wal.NewWal(walDecoder.CreateEncoder(), sw, l.maxSegmentSize, l.shardID, l.registerer)
+	l.shardData.wal = wal.NewWal(walEncoder, sw, l.maxSegmentSize, l.shardID, l.registerer)
 
 	return nil
 }

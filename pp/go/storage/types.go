@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"errors"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage/head/head"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
@@ -13,3 +14,5 @@ type Wal = wal.Wal[*cppbridge.HeadEncodedSegment, *writer.Buffered[*cppbridge.He
 
 // Head alias for [head.Head] with [shard.Shard] and [shard.PerGoroutineShard].
 type Head = head.Head[*shard.Shard, *shard.PerGoroutineShard]
+
+var ErrInvalidEncoderVersion = errors.New("invalid encoder version")

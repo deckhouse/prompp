@@ -513,7 +513,7 @@ func uploadOrBuildHead(
 		return builder.Build(generation, numberOfShards)
 	}
 
-	h, corrupted := loader.Load(headRecords[0], generation)
+	h, corrupted, writable := loader.Load(headRecords[0], generation)
 	if corrupted {
 		if !headRecords[0].Corrupted() {
 			if _, setCorruptedErr := hcatalog.SetCorrupted(headRecords[0].ID()); setCorruptedErr != nil {
@@ -528,6 +528,17 @@ func uploadOrBuildHead(
 
 		_ = h.Close()
 
+		return builder.Build(generation, numberOfShards)
+	}
+
+	if !writable {
+		if headRecords[0].Status() == catalog.StatusNew || headRecords[0].Status() == catalog.StatusActive {
+			if _, err := hcatalog.SetStatus(headRecords[0].ID(), catalog.StatusRotated); err != nil {
+				logger.Warnf("failed to set rotated status for head {%s}: %s", headRecords[0].ID(), err)
+			}
+		}
+
+		_ = h.Close()
 		return builder.Build(generation, numberOfShards)
 	}
 

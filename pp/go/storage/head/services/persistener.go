@@ -341,7 +341,7 @@ func (pg *PersistenerService[
 	TKeeper,
 	TLoader,
 ]) loadAndAddHeadToKeeper(record *catalog.Record) bool {
-	head, _ := pg.loader.Load(record, 0)
+	head, _, _ := pg.loader.Load(record, 0)
 	head.SetReadOnly()
 	if err := pg.proxy.Add(head, time.Duration(record.CreatedAt())*time.Millisecond); err != nil {
 		_ = head.Close()
