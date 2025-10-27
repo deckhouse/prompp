@@ -95,6 +95,7 @@ func (s *WeightedSuite) TestWithError() {
 	close(step2)
 
 	s.Error(err)
+	s.Require().ErrorIs(err, context.Canceled)
 }
 
 func (s *WeightedSuite) TestClose() {
