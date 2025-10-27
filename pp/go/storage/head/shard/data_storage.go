@@ -60,6 +60,12 @@ func (ds *DataStorage) InstantQuery(
 	return samples, res
 }
 
+func (ds *DataStorage) Encode(seriesID uint32, timestamp int64, value float64) {
+	ds.locker.Lock()
+	ds.encoder.Encode(seriesID, timestamp, value)
+	ds.locker.Unlock()
+}
+
 // MergeOutOfOrderChunks merge chunks with out of order data chunks.
 func (ds *DataStorage) MergeOutOfOrderChunks() {
 	ds.locker.Lock()
@@ -67,15 +73,11 @@ func (ds *DataStorage) MergeOutOfOrderChunks() {
 	ds.locker.Unlock()
 }
 
-// Query make query to data storage and returns serialazed chunks.
-func (ds *DataStorage) Query(
-	query cppbridge.HeadDataStorageQuery,
-) (*cppbridge.HeadDataStorageSerializedChunks, cppbridge.DataStorageQueryResult) {
+func (ds *DataStorage) Query(query cppbridge.HeadDataStorageQuery) cppbridge.DataStorageQueryResult {
 	ds.locker.RLock()
-	serializedChunks, res := ds.dataStorage.Query(query)
+	result := ds.dataStorage.Query(query)
 	ds.locker.RUnlock()
-
-	return serializedChunks, res
+	return result
 }
 
 // QueryFinal finishes all the queries after data load.

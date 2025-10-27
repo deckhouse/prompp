@@ -52,7 +52,6 @@ func TestQuerierSuite(t *testing.T) {
 func (s *QuerierSuite) SetupTest() {
 	s.dataDir = s.createDataDirectory()
 	s.context = context.Background()
-
 	s.head = s.mustCreateHead(1)
 }
 
@@ -125,7 +124,7 @@ func (s *QuerierSuite) TestRangeQuery() {
 	seriesSet := q.Select(s.context, false, nil, matcher)
 
 	// Assert
-	s.Equal(timeSeries, storagetest.TimeSeriesFromSeriesSet(seriesSet))
+	s.Equal(timeSeries, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
 }
 
 func (s *QuerierSuite) TestRangeQueryWithoutMatching() {
@@ -153,7 +152,7 @@ func (s *QuerierSuite) TestRangeQueryWithoutMatching() {
 	seriesSet := q.Select(s.context, false, nil, matcher)
 
 	// Assert
-	s.Equal([]storagetest.TimeSeries(nil), storagetest.TimeSeriesFromSeriesSet(seriesSet))
+	s.Equal([]storagetest.TimeSeries{}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
 }
 
 func (s *QuerierSuite) TestRangeQueryWithDataStorageLoading() {
@@ -210,7 +209,7 @@ func (s *QuerierSuite) TestRangeQueryWithDataStorageLoading() {
 	// Assert
 	timeSeries[0].AppendSamples(timeSeriesAfterUnload[0].Samples...)
 	timeSeries[1].AppendSamples(timeSeriesAfterUnload[1].Samples...)
-	s.Equal(timeSeries, storagetest.TimeSeriesFromSeriesSet(seriesSet))
+	s.Equal(timeSeries, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
 }
 
 func (s *QuerierSuite) TestInstantQuery() {
@@ -244,7 +243,7 @@ func (s *QuerierSuite) TestInstantQuery() {
 	seriesSet := q.Select(s.context, false, nil, matcher)
 
 	// Assert
-	s.Equal(timeSeries, storagetest.TimeSeriesFromSeriesSet(seriesSet))
+	s.Equal(timeSeries, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
 }
 
 func (s *QuerierSuite) TestInstantQueryWithDataStorageLoading() {
@@ -312,7 +311,7 @@ func (s *QuerierSuite) TestInstantQueryWithDataStorageLoading() {
 				{Timestamp: 0, Value: 10},
 			},
 		},
-	}, storagetest.TimeSeriesFromSeriesSet(seriesSet))
+	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
 }
 
 func (s *QuerierSuite) TestLabelNames() {

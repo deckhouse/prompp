@@ -143,9 +143,9 @@ extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
   }
 }
 
-extern "C" void prompp_series_data_data_storage_query_new(void* args, void* res) {
+extern "C" void prompp_series_data_data_storage_query_v2(void* args, void* res) {
   using Query = series_data::querier::Query<Slice<LabelSetID>>;
-  using entrypoint::series_data::RangeQuerierWithArgumentsWrapperNew;
+  using entrypoint::series_data::RangeQuerierWithArgumentsWrapperV2;
   using series_data::querier::Querier;
 
   struct Arguments {
@@ -162,7 +162,7 @@ extern "C" void prompp_series_data_data_storage_query_new(void* args, void* res)
   const auto in = static_cast<Arguments*>(args);
   const auto out = static_cast<Result*>(res);
 
-  RangeQuerierWithArgumentsWrapperNew querier(*in->data_storage, in->query, out->serialized_data);
+  RangeQuerierWithArgumentsWrapperV2 querier(*in->data_storage, in->query, out->serialized_data);
   querier.query();
 
   if (querier.need_loading()) {
@@ -265,22 +265,6 @@ extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
 }
 
 extern "C" void prompp_series_data_serialized_chunk_recoder_ctor(void* args, void* res) {
-  struct Arguments {
-    SliceView<uint8_t> buffer;
-    PromPP::Primitives::TimeInterval time_interval;
-  };
-  struct Result {
-    ChunkRecoderVariantPtr chunk_recoder;
-  };
-
-  const auto in = static_cast<Arguments*>(args);
-  new (res) Result{
-      .chunk_recoder = std::make_unique<ChunkRecoderVariant>(std::in_place_type<SerializedChunkRecoder>,
-                                                             series_data::chunk::SerializedChunkIterator{in->buffer.span()}, in->time_interval),
-  };
-}
-
-extern "C" void prompp_series_data_serialized_chunk_recoder_new_ctor(void* args, void* res) {
   struct Arguments {
     entrypoint::head::SerializedDataPtr* serialized_data;
     PromPP::Primitives::TimeInterval time_interval;
