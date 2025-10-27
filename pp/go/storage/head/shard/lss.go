@@ -11,11 +11,12 @@ import (
 
 // LSS labelset storage for [shard].
 type LSS struct {
-	input    *cppbridge.LabelSetStorage
-	target   *cppbridge.LabelSetStorage
-	snapshot *cppbridge.LabelSetSnapshot
-	locker   sync.RWMutex
-	once     sync.Once
+	input              *cppbridge.LabelSetStorage
+	target             *cppbridge.LabelSetStorage
+	snapshot           *cppbridge.LabelSetSnapshot
+	dstSrcLsIdsMapping *cppbridge.IdsMapping
+	locker             sync.RWMutex
+	once               sync.Once
 }
 
 // NewLSS init new [LSS].
@@ -42,7 +43,7 @@ func (l *LSS) CopyAddedSeriesTo(destination *LSS) {
 	bitsetSeries := l.target.BitsetSeries()
 	l.locker.RUnlock()
 
-	snapshot.CopyAddedSeries(bitsetSeries, destination.target)
+	destination.dstSrcLsIdsMapping = snapshot.CopyAddedSeries(bitsetSeries, destination.target)
 }
 
 // Input returns input lss.

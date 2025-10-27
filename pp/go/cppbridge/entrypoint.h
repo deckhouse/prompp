@@ -683,11 +683,22 @@ void prompp_primitives_lss_bitset_dtor(void* args);
  * @param source_lss pointer to source label sets;
  * @param source_bitset pointer to source bitset;
  * @param destination_lss pointer to destination label sets;
+ * @param ids_mapping pointer to uintptr
  *
  * @attention This binding used as a CGO call!!!
  *
  */
-void prompp_primitives_readonly_lss_copy_added_series(uint64_t source_lss, uint64_t source_bitset, uint64_t destination_lss);
+void prompp_primitives_readonly_lss_copy_added_series(uint64_t source_lss, uint64_t source_bitset, uint64_t destination_lss, uint64_t ids_mapping);
+
+/**
+ * @brief destroy ls ids mapping
+ *
+ * @param args {
+ *     ls_ids_mapping uintptr
+ * }
+ *
+ */
+void prompp_primitives_free_ls_ids_mapping(void* args);
 
 #ifdef __cplusplus
 }  // extern "C"
@@ -1139,6 +1150,16 @@ void prompp_prometheus_per_goroutine_relabeler_append_relabeler_series(void* arg
  * }
  */
 void prompp_prometheus_per_goroutine_relabeler_track_stale_nans(void* args);
+
+/**
+ * @brief add stale nans to inner series if needed
+ *
+ * @param args {
+ *     stale_nan_state uintptr  // pointer to source state
+ *     ls_ids_mapping  uintptr  // pointer to dst_src_ls_ids_mapping
+ * }
+ */
+void prompp_remap_stale_nans_state(void* args);
 
 #ifdef __cplusplus
 }  // extern "C"

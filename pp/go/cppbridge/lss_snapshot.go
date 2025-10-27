@@ -77,13 +77,29 @@ func (lss *LabelSetSnapshot) Query(selector uintptr) *LSSQueryResult {
 	return result
 }
 
+type IdsMapping struct {
+	pointer uintptr
+}
+
+func (m *IdsMapping) IsEmpty() bool {
+	return m.pointer == uintptr(0)
+}
+
 // CopyAddedSeries copy the label sets from the source lss to the destination lss
 // that were added source lss.
-func (lss *LabelSetSnapshot) CopyAddedSeries(bitsetSeries *BitsetSeries, destination *LabelSetStorage) {
-	primitivesReadonlyLSSCopyAddedSeries(lss.pointer, bitsetSeries.pointer, destination.pointer)
+func (lss *LabelSetSnapshot) CopyAddedSeries(bitsetSeries *BitsetSeries, destination *LabelSetStorage) *IdsMapping {
+	idsMapping := &IdsMapping{
+		pointer: primitivesReadonlyLSSCopyAddedSeries(lss.pointer, bitsetSeries.pointer, destination.pointer),
+	}
+	runtime.SetFinalizer(idsMapping, func(idsMapping *IdsMapping) {
+		primitivesFreeLsIdsMapping(idsMapping.pointer)
+	})
+
 	runtime.KeepAlive(lss)
 	runtime.KeepAlive(bitsetSeries)
 	runtime.KeepAlive(destination)
+
+	return idsMapping
 }
 
 //

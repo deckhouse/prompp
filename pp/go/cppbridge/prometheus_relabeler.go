@@ -7,6 +7,7 @@ import (
 	"math"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -537,6 +538,12 @@ func NewStaleNansState() *StaleNansState {
 	})
 
 	return s
+}
+
+func (s *StaleNansState) Remap(mapping *IdsMapping) {
+	prometheusRemapStaleNansState(s.state, mapping.pointer)
+	runtime.KeepAlive(s)
+	runtime.KeepAlive(mapping)
 }
 
 // RelabelerStats statistics return from relabeler.
@@ -1199,10 +1206,13 @@ func (s *StateV2) EnableTrackStaleness() {
 func (s *StateV2) Reconfigure(
 	generationHead uint64,
 	numberOfShards uint16,
+	staleNansIdsMappings []*IdsMapping,
 ) {
 	if s.status&inited == inited && generationHead == s.generationHead {
 		return
 	}
+
+	remapStaleNansState := (generationHead-s.generationHead == 1) && (int(numberOfShards) == len(s.staleNansStates))
 
 	// long way
 	s.locker.Lock()
@@ -1222,7 +1232,7 @@ func (s *StateV2) Reconfigure(
 	}
 
 	s.resetCaches(numberOfShards)
-	s.resetStaleNansStates(numberOfShards)
+	s.resetStaleNansStates(numberOfShards, remapStaleNansState, staleNansIdsMappings)
 	s.status |= inited
 	s.generationHead = generationHead
 
@@ -1306,7 +1316,7 @@ func (s *StateV2) resetCaches(numberOfShards uint16) {
 }
 
 // resetStaleNansStates recreate StaleNansStates.
-func (s *StateV2) resetStaleNansStates(numberOfShards uint16) {
+func (s *StateV2) resetStaleNansStates(numberOfShards uint16, remapStaleNansState bool, staleNansIdsMappings []*IdsMapping) {
 	if !s.trackStaleness {
 		return
 	}
@@ -1321,10 +1331,14 @@ func (s *StateV2) resetStaleNansStates(numberOfShards uint16) {
 		s.staleNansStates = s.staleNansStates[:numberOfShards]
 	case len(s.staleNansStates) < int(numberOfShards):
 		// grow
-		s.staleNansStates = make([]*StaleNansState, numberOfShards)
+		s.staleNansStates = slices.Grow(s.staleNansStates, int(numberOfShards)-len(s.staleNansStates))[:numberOfShards]
 	}
 
 	for shardID := range s.staleNansStates {
-		s.staleNansStates[shardID] = NewStaleNansState()
+		if remapStaleNansState && staleNansIdsMappings[shardID] != nil && !staleNansIdsMappings[shardID].IsEmpty() {
+			s.staleNansStates[shardID].Remap(staleNansIdsMappings[shardID])
+		} else {
+			s.staleNansStates[shardID] = NewStaleNansState()
+		}
 	}
 }

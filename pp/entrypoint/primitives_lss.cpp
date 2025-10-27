@@ -9,6 +9,8 @@
 
 using GoLabelMatchers = PromPP::Primitives::Go::SliceView<PromPP::Prometheus::LabelMatcherTrait<PromPP::Primitives::Go::String>>;
 using GoSliceOfString = PromPP::Primitives::Go::Slice<PromPP::Primitives::Go::String>;
+using entrypoint::head::LsIdsSlice;
+using entrypoint::head::LsIdsSlicePtr;
 using entrypoint::head::LssType;
 using entrypoint::head::LssVariantPtr;
 using entrypoint::head::QueryableEncodingBimap;
@@ -256,7 +258,8 @@ extern "C" void prompp_create_readonly_lss(void* args, void* res) {
 //   auto& dst = std::get<QueryableEncodingBimap>(*std::bit_cast<entrypoint::head::LssVariant*>(destination_lss));
 //   src.build_deferred_indexes();
 
-//   series_index::QueryableEncodingBimapCopier copier(src, src.sorting_index(), src.added_series(), dst);
+//   BareBones::Vector<PromPP::Primitives::LabelSetID> dst_src_ids_mapping;
+//   series_index::QueryableEncodingBimapCopier copier(src, src.sorting_index(), src.added_series(), dst, dst_src_ids_mapping);
 //   copier.copy_added_series_and_build_indexes();
 // }
 
@@ -282,11 +285,21 @@ extern "C" void prompp_primitives_lss_bitset_dtor(void* args) {
   static_cast<Arguments*>(args)->~Arguments();
 }
 
-extern "C" void prompp_primitives_readonly_lss_copy_added_series(uint64_t source_lss, uint64_t source_bitset, uint64_t destination_lss) {
+extern "C" void prompp_primitives_readonly_lss_copy_added_series(uint64_t source_lss, uint64_t source_bitset, uint64_t destination_lss, uint64_t ids_mapping) {
   const auto& src = std::get<entrypoint::head::ReadonlyLss>(*std::bit_cast<entrypoint::head::LssVariant*>(source_lss));
   const auto& src_bitset = *std::bit_cast<BareBones::Bitset*>(source_bitset);
   auto& dst = std::get<QueryableEncodingBimap>(*std::bit_cast<entrypoint::head::LssVariant*>(destination_lss));
+  const auto dst_src_ids_mapping = std::bit_cast<LsIdsSlicePtr*>(ids_mapping);
+  *dst_src_ids_mapping = std::make_unique<LsIdsSlice>();
 
-  series_index::QueryableEncodingBimapCopier copier(src, src.sorting_index(), src_bitset, dst);
+  series_index::QueryableEncodingBimapCopier copier(src, src.sorting_index(), src_bitset, dst, **dst_src_ids_mapping);
   copier.copy_added_series_and_build_indexes();
+}
+
+void prompp_primitives_free_ls_ids_mapping(void* args) {
+  struct Arguments {
+    LsIdsSlicePtr ls_ids_mapping;
+  };
+
+  static_cast<Arguments*>(args)->~Arguments();
 }
