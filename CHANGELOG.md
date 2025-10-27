@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.6.2
+
+### Fixes
+1. **Head Status Update During Rotation.** Fixed an issue where the head status could remain `active` if `storage.tsdb.retention` was set to zero, such as when running in agent mode. This caused the RemoteWrite loop does not transit to the next head.
+
 ## v0.6.1
 
 ### Fixes
