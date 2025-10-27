@@ -166,6 +166,7 @@ cc_library(
     hdrs = glob(["metrics/**/*.h"]),
     linkstatic = True,
     deps = [
+        ":prometheus",
         ":primitives",
     ],
 )

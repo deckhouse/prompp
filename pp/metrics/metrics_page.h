@@ -1,5 +1,6 @@
 #pragma once
 
+#include "label_set.h"
 #include "metric.h"
 
 namespace metrics {
@@ -66,7 +67,7 @@ class MetricsPageControlBlock {
   [[nodiscard]] IteratorSentinel static end() noexcept { return {}; }
 
  private:
-  Metric::LabelSet labels_;
+  LabelSet labels_;
   MetricsPageControlBlock* next_metrics_page_{};
   uint32_t ref_count_{1};
   const uint32_t page_object_size_;

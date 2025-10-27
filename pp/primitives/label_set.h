@@ -87,14 +87,13 @@ class BasicLabelSet {
   }
 
   template <class SymbolType>
-  PROMPP_ALWAYS_INLINE const SymbolType& get(const SymbolType& label_name) noexcept {
+  PROMPP_ALWAYS_INLINE LabelType::second_type* get(const SymbolType& label_name) noexcept {
     if (auto i = std::lower_bound(labels_.begin(), labels_.end(), label_name, [](const LabelType& a, const auto& b) { return a.first < b; });
         i->first == label_name) [[likely]] {
-      return i->second;
+      return &i->second;
     }
 
-    static const SymbolType kEmptySymbol{};
-    return kEmptySymbol;
+    return nullptr;
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE auto size() const noexcept { return labels_.size(); }

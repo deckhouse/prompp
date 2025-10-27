@@ -1,15 +1,13 @@
 #pragma once
 
-#include <string_view>
+#include "third_party/protozero/pbf_writer.hpp"
 
-#include "primitives/label_set.h"
+#include "bare_bones/preprocess.h"
 
 namespace metrics {
 
 class Metric {
  public:
-  using LabelSet = PromPP::Primitives::LabelSet;
-
   Metric() = delete;
   explicit Metric(std::string_view name) : name_(name) {}
   Metric(const Metric&) = delete;
@@ -20,7 +18,7 @@ class Metric {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view name() const noexcept { return name_; }
 
-  virtual void serialize(const LabelSet& labels, std::string& buffer) const = 0;
+  virtual void serialize(protozero::pbf_writer& writer) const = 0;
 
   [[nodiscard]] virtual size_t object_size() const noexcept = 0;
 
