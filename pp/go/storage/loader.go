@@ -26,6 +26,14 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util/optional"
 )
 
+type LoadResultType int
+
+const (
+	LoadResultTypeSuccess LoadResultType = iota
+	LoadResultTypeCorrupted
+	LoadResultTypeNotContinuable
+)
+
 // Loader loads [Head] or [shard.Shard] from [Wal].
 type Loader struct {
 	dataDir                   string
@@ -57,7 +65,7 @@ func NewLoader(
 func (l *Loader) Load(
 	headRecord *catalog.Record,
 	generation uint64,
-) (_ *Head, corrupted bool, writable bool) {
+) (_ *Head, _ LoadResultType) {
 	headID := headRecord.ID()
 	headDir := filepath.Join(l.dataDir, headID)
 	numberOfShards := headRecord.NumberOfShards()
@@ -83,7 +91,8 @@ func (l *Loader) Load(
 
 	shards := make([]*shard.Shard, numberOfShards)
 	numberOfSegmentsRead := optional.Optional[uint32]{}
-	writable = numberOfShards > 0
+	corrupted := false
+	writable := numberOfShards > 0
 	for shardID, res := range shardLoadResults {
 		shards[shardID] = res.shard
 		if res.corrupted {
@@ -146,7 +155,14 @@ func (l *Loader) Load(
 
 	logger.Debugf("[Loader] loaded head: %s, corrupted: %t", headRecord.ID(), corrupted)
 
-	return h, corrupted, writable
+	result := LoadResultTypeSuccess
+	if corrupted {
+		result = LoadResultTypeCorrupted
+	} else if !writable {
+		result = LoadResultTypeNotContinuable
+	}
+
+	return h, result
 }
 
 func (*Loader) loadShard(

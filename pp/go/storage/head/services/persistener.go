@@ -201,7 +201,8 @@ type PersistenerService[
 	THeadBlockWriter HeadBlockWriter[TShard],
 	THead Head[TTask, TShard, TGoShard],
 	TProxyHead ProxyHead[TTask, TShard, TGoShard, THead],
-	TLoader Loader[TTask, TShard, TGoShard, THead],
+	TLoadResult LoadResultType,
+	TLoader Loader[TTask, TShard, TGoShard, THead, TLoadResult],
 ] struct {
 	persistener         *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead]
 	proxy               TProxyHead
@@ -219,7 +220,8 @@ func NewPersistenerService[
 	THeadBlockWriter HeadBlockWriter[TShard],
 	THead Head[TTask, TShard, TGoShard],
 	TProxyHead ProxyHead[TTask, TShard, TGoShard, THead],
-	TLoader Loader[TTask, TShard, TGoShard, THead],
+	TLoadResult LoadResultType,
+	TLoader Loader[TTask, TShard, TGoShard, THead, TLoadResult],
 ](
 	proxy TProxyHead,
 	loader TLoader,
@@ -231,8 +233,8 @@ func NewPersistenerService[
 	tsdbRetentionPeriod time.Duration,
 	retentionPeriod time.Duration,
 	registerer prometheus.Registerer,
-) *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TProxyHead, TLoader] {
-	return &PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TProxyHead, TLoader]{
+) *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TProxyHead, TLoadResult, TLoader] {
+	return &PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TProxyHead, TLoadResult, TLoader]{
 		persistener: NewPersistener[TTask, TShard, TGoShard, THeadBlockWriter, THead](
 			hcatalog,
 			blockWriter,
@@ -252,7 +254,7 @@ func NewPersistenerService[
 }
 
 // Execute starts the [PersistenerService].
-func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoader]) Execute() {
+func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoadResult, TLoader]) Execute() {
 	logger.Infof("The PersistenerService is running.")
 
 	for range pg.mediator.C() {
@@ -263,13 +265,13 @@ func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, T
 }
 
 // ProcessHeads process persist [Head]s.
-func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoader]) ProcessHeads() {
+func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoadResult, TLoader]) ProcessHeads() {
 	heads := pg.proxy.Heads()
 	pg.persistHeads(heads)
 	pg.loadRotatedHeadsInKeeper(heads)
 }
 
-func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoader]) persistHeads(
+func (pg *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TKeeper, TLoadResult, TLoader]) persistHeads(
 	heads []THead,
 ) {
 	pg.proxy.Remove(pg.persistener.Persist(heads))
@@ -285,6 +287,7 @@ func (pg *PersistenerService[
 	THeadBlockWriter,
 	THead,
 	TKeeper,
+	TLoadResult,
 	TLoader,
 ]) loadRotatedHeadsInKeeper(keeperHeads []THead) {
 	if !pg.proxy.HasSlot() {
@@ -339,9 +342,10 @@ func (pg *PersistenerService[
 	THeadBlockWriter,
 	THead,
 	TKeeper,
+	TLoadResult,
 	TLoader,
 ]) loadAndAddHeadToKeeper(record *catalog.Record) bool {
-	head, _, _ := pg.loader.Load(record, 0)
+	head, _ := pg.loader.Load(record, 0)
 	head.SetReadOnly()
 	if err := pg.proxy.Add(head, time.Duration(record.CreatedAt())*time.Millisecond); err != nil {
 		_ = head.Close()

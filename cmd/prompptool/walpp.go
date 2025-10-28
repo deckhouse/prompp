@@ -94,8 +94,8 @@ func (cmd *cmdWALPPToBlock) Do(
 			return err
 		}
 		level.Debug(logger).Log("msg", "load head", "id", headRecord.ID(), "dir", headRecord.Dir())
-		h, corrupted := loader.Load(headRecord, 0)
-		if corrupted {
+		h, result := loader.Load(headRecord, 0)
+		if result == storage.LoadResultTypeCorrupted {
 			level.Warn(logger).Log("msg", "corrupted head", "id", headRecord.ID(), "dir", headRecord.Dir())
 		}
 
