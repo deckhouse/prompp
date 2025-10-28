@@ -78,8 +78,8 @@ class MetricsPageList {
     }
   }
 
-  [[nodiscard]] Iterator begin() const noexcept { return Iterator(next_metrics_page_); }
-  [[nodiscard]] IteratorSentinel static end() noexcept { return {}; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() const noexcept { return Iterator(next_metrics_page_); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE IteratorSentinel static end() noexcept { return {}; }
 
  private:
   std::atomic<MetricsPageControlBlock*> next_metrics_page_{};

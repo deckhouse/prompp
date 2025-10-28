@@ -35,7 +35,9 @@ class MetricsPageControlBlock {
       return it;
     }
 
-    PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept { return offset_ == metrics_page_->page_object_size(); }
+    PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel&) const noexcept {
+      return metrics_page_ == nullptr || offset_ == metrics_page_->page_object_size();
+    }
 
    private:
     const MetricsPageControlBlock* metrics_page_;
@@ -55,14 +57,15 @@ class MetricsPageControlBlock {
   MetricsPageControlBlock& operator=(const MetricsPageControlBlock&) = delete;
   MetricsPageControlBlock& operator=(MetricsPageControlBlock&&) noexcept = delete;
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const LabelSet& labels() const noexcept { return labels_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE MetricsPageControlBlock* next_metrics_page() const noexcept { return next_metrics_page_; }
   PROMPP_ALWAYS_INLINE void set_next_metrics_page(MetricsPageControlBlock* next_metrics_page) noexcept { next_metrics_page_ = next_metrics_page; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t page_object_size() const noexcept { return page_object_size_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_unused() const noexcept { return ref_count_ == 0; }
   PROMPP_ALWAYS_INLINE void detach() noexcept { ref_count_ = 0; }
 
-  [[nodiscard]] Iterator begin() const noexcept { return Iterator(this); }
-  [[nodiscard]] IteratorSentinel static end() noexcept { return {}; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() const noexcept { return Iterator(this); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE IteratorSentinel static end() noexcept { return {}; }
 
  private:
   LabelSet labels_;
