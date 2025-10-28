@@ -15,4 +15,5 @@ type Wal = wal.Wal[*cppbridge.HeadEncodedSegment, *writer.Buffered[*cppbridge.He
 // Head alias for [head.Head] with [shard.Shard] and [shard.PerGoroutineShard].
 type Head = head.Head[*shard.Shard, *shard.PerGoroutineShard]
 
+// ErrInvalidEncoderVersion migration error.
 var ErrInvalidEncoderVersion = errors.New("invalid encoder version")
