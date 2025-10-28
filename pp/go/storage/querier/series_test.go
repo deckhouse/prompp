@@ -88,7 +88,7 @@ func query(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, start, end int64
 	})
 
 	require.Equal(t, cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
-	return querier.NewSeriesSet(start, end, lssQueryResult, snapshot, dsQueryResult.SerializedData, make([]querier.Series, 0, lssQueryResult.Len()))
+	return querier.NewSeriesSet(start, end, lssQueryResult, snapshot, dsQueryResult.SerializedData)
 }
 
 func (s *SeriesSetTestSuite) TestQueryAllValues() {

@@ -248,7 +248,6 @@ func NewSeriesSet(
 	lssQueryResult *cppbridge.LSSQueryResult,
 	labelSetSnapshot *cppbridge.LabelSetSnapshot,
 	serializedData *cppbridge.DataStorageSerializedData,
-	series []Series,
 ) *SeriesSet {
 	return &SeriesSet{
 		mint:             mint,
@@ -256,7 +255,7 @@ func NewSeriesSet(
 		lssQueryResult:   lssQueryResult,
 		labelSetSnapshot: labelSetSnapshot,
 		serializedData:   serializedData,
-		series:           series,
+		series:           make([]Series, 0, lssQueryResult.Len()),
 	}
 }
 
