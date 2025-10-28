@@ -367,6 +367,10 @@ func (it DataStorageSerializedDataIterator) Next(result *SerializedDataIteratorN
 	seriesDataSerializedDataIteratorNext(it.iterator, result)
 }
 
+func (it DataStorageSerializedDataIterator) Seek(timestamp int64, result *SerializedDataIteratorNextResult) {
+	seriesDataSerializedDataIteratorSeek(it.iterator, timestamp, result)
+}
+
 func (it DataStorageSerializedDataIterator) Reset(serializedData *DataStorageSerializedData, chunkRef uint32) {
 	seriesDataSerializedDataIteratorReset(serializedData.serializedData, it.iterator, chunkRef)
 }

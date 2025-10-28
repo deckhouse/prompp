@@ -53,6 +53,42 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_next(v
   }
 }
 
+extern "C" void prompp_series_data_serialization_serialized_data_iterator_seek(void* args, void* res) {
+  using series_data::decoder::DecodeIteratorSentinel;
+
+  struct Arguments {
+    entrypoint::head::SerializedDataIteratorPtr iterator;
+    int64_t target_timestamp;
+  };
+
+  struct Result {
+    int64_t timestamp{};
+    double value{};
+    bool has_value;
+  };
+
+  const Arguments* in = static_cast<Arguments*>(args);
+  const auto out = static_cast<Result*>(res);
+
+  while (true) {
+    if (*in->iterator == DecodeIteratorSentinel{}) {
+      out->has_value = false;
+      return;
+    }
+
+    const auto sample = **(in->iterator);
+    if (sample.timestamp < in->target_timestamp) {
+      ++(*in->iterator);
+      continue;
+    }
+
+    out->timestamp = sample.timestamp;
+    out->value = sample.value;
+    out->has_value = true;
+    return;
+  }
+}
+
 extern "C" void prompp_series_data_serialization_serialized_data_iterator_reset(void* args) {
   struct Arguments {
     entrypoint::head::SerializedDataPtr serialized_data;
