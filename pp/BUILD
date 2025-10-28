@@ -235,6 +235,14 @@ cc_binary(
 )
 
 cc_library(
+    name = "profiling",
+    hdrs = glob(["profiling/**/*.h"]),
+    deps = [
+    "@tracy//:tracy",
+    ],
+)
+
+cc_library(
     name = "integration_tests_headers",
     hdrs = glob(["integration_tests/*.h"]),
     deps = [

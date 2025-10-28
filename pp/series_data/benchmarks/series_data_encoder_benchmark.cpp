@@ -3,6 +3,9 @@
 
 #include <benchmark/benchmark.h>
 
+#define PROMPP_PROFILING_ENABLE
+#include "profiling/profiling.h"
+
 #include "bare_bones/preprocess.h"
 #include "primitives/sample.h"
 #include "series_data/encoder.h"
@@ -36,6 +39,7 @@ const BareBones::Vector<sample_with_lsid>& get_samples_for_benchmark() {
 }
 
 void BenchmarkSeriesDataEncoder(benchmark::State& state) {
+  PROMPP_PROF(scope);
   const auto& samples = get_samples_for_benchmark();
 
   series_data::DataStorage storage;
@@ -43,7 +47,10 @@ void BenchmarkSeriesDataEncoder(benchmark::State& state) {
 
   for ([[maybe_unused]] auto _ : state) {
     for (const auto& sample : samples) {
+      PROMPP_PROF(message, "encode");
+      PROMPP_PROF(scope, N, "encode");
       encoder.encode(sample.labelset_id, ts_min + static_cast<PromPP::Primitives::Sample::timestamp_type>(sample.sample_ts), sample.sample_value);
+      PROMPP_PROF(value, sample.labelset_id);
     }
   }
 
