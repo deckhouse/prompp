@@ -1,13 +1,13 @@
 package querier
 
 import (
+	"github.com/prometheus/prometheus/pp/go/logger"
 	"math"
 	"runtime"
 
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/util/annotations"
@@ -202,8 +202,8 @@ type Series struct {
 	chunkRef       uint32
 }
 
-func NewSeries(mint, maxt int64, labelSet labels.Labels, serializedData *cppbridge.DataStorageSerializedData, chunkRef uint32) *Series {
-	return &Series{
+func NewSeries(mint, maxt int64, labelSet labels.Labels, serializedData *cppbridge.DataStorageSerializedData, chunkRef uint32) Series {
+	return Series{
 		mint:           mint,
 		maxt:           maxt,
 		labelSet:       labelSet,
@@ -240,7 +240,7 @@ type SeriesSet struct {
 	serializedData   *cppbridge.DataStorageSerializedData
 
 	lastIndexFromLSSQueryResult int
-	series                      *Series
+	series                      []Series
 }
 
 func NewSeriesSet(
@@ -248,6 +248,7 @@ func NewSeriesSet(
 	lssQueryResult *cppbridge.LSSQueryResult,
 	labelSetSnapshot *cppbridge.LabelSetSnapshot,
 	serializedData *cppbridge.DataStorageSerializedData,
+	series []Series,
 ) *SeriesSet {
 	return &SeriesSet{
 		mint:             mint,
@@ -255,6 +256,7 @@ func NewSeriesSet(
 		lssQueryResult:   lssQueryResult,
 		labelSetSnapshot: labelSetSnapshot,
 		serializedData:   serializedData,
+		series:           series,
 	}
 }
 
@@ -275,19 +277,19 @@ func (s *SeriesSet) Next() bool {
 		return false
 	}
 
-	s.series = NewSeries(
+	s.series = append(s.series, NewSeries(
 		s.mint,
 		s.maxt,
 		labels.NewLabelsWithLSS(s.labelSetSnapshot, seriesID, lsLength),
 		s.serializedData,
 		chunkRef,
-	)
+	))
 
 	return true
 }
 
 func (s *SeriesSet) At() storage.Series {
-	return s.series
+	return &s.series[len(s.series)-1]
 }
 
 func (s *SeriesSet) Err() error {

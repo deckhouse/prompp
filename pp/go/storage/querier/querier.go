@@ -268,7 +268,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
 	for shardID, serializedData := range shardedSerializedData {
 		if serializedData != nil {
-			seriesSets[shardID] = NewSeriesSet(q.mint, q.maxt, lssQueryResults[shardID], snapshots[shardID], serializedData)
+			seriesSets[shardID] = NewSeriesSet(q.mint, q.maxt, lssQueryResults[shardID], snapshots[shardID], serializedData, make([]Series, 0, lssQueryResults[shardID].Len()))
 			continue
 		}
 		seriesSets[shardID] = &SeriesSet{}

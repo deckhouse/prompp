@@ -46,11 +46,11 @@ func queryOpt(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, start, end in
 	})
 
 	require.Equal(t, cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
-	return querier.NewSeriesSet(start, end, lssQueryResult, snapshot, dsQueryResult.SerializedData)
+	return querier.NewSeriesSet(start, end, lssQueryResult, snapshot, dsQueryResult.SerializedData, make([]querier.Series, 0, lssQueryResult.Len()))
 }
 
 func BenchmarkSeriesSetOpt(b *testing.B) {
-	size := 50000
+	size := 500000
 	matcher := model.LabelMatcher{
 		Name:        "__name__",
 		Value:       "metric",
