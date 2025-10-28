@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"testing/synctest"
 	"unsafe"
 
 	"github.com/stretchr/testify/suite"
@@ -22,7 +23,7 @@ func TestWeightedSuite(t *testing.T) {
 
 func (s *WeightedSuite) TestGet() {
 	expectedHead := &testHead{c: 2}
-	c := container.NewWeighted(expectedHead)
+	c := container.NewWeighted(expectedHead, container.DefaultBackPressure)
 
 	actualHead := c.Get()
 
@@ -33,7 +34,7 @@ func (s *WeightedSuite) TestReplace() {
 	baseCtx := context.Background()
 	expectedHead := &testHead{c: 2}
 	newHead := &testHead{c: 3}
-	c := container.NewWeighted(expectedHead)
+	c := container.NewWeighted(expectedHead, 0)
 
 	err := c.Replace(baseCtx, newHead)
 	s.Require().NoError(err)
@@ -49,7 +50,7 @@ func (s *WeightedSuite) TestReplace() {
 func (s *WeightedSuite) TestReplaceError() {
 	expectedHead := &testHead{c: 2}
 	newHead := &testHead{c: 3}
-	c := container.NewWeighted(expectedHead)
+	c := container.NewWeighted(expectedHead, 0)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -60,7 +61,7 @@ func (s *WeightedSuite) TestReplaceError() {
 func (s *WeightedSuite) TestWith() {
 	baseCtx := context.Background()
 	expectedHead := &testHead{c: 2}
-	c := container.NewWeighted(expectedHead)
+	c := container.NewWeighted(expectedHead, container.DefaultBackPressure)
 
 	err := c.With(baseCtx, func(h *testHead) error {
 		if expectedHead.c != h.c {
@@ -76,31 +77,40 @@ func (s *WeightedSuite) TestWith() {
 func (s *WeightedSuite) TestWithError() {
 	baseCtx := context.Background()
 	expectedHead := &testHead{c: 1}
-	c := container.NewWeighted(expectedHead)
-	step1 := make(chan struct{})
-	step2 := make(chan struct{})
-	ctx, cancel := context.WithCancel(baseCtx)
+	c := container.NewWeighted(expectedHead, 1)
 
-	go c.With(baseCtx, func(_ *testHead) error {
-		close(step1)
+	synctest.Test(s.T(), func(t *testing.T) {
+		ctx, cancel := context.WithCancel(baseCtx)
+
+		blockForever := make(chan struct{})
+		defer close(blockForever)
+
+		go c.With(baseCtx, func(_ *testHead) error {
+			<-blockForever
+			return nil
+		})
+		synctest.Wait()
+
+		var err error
+		go func() {
+			err = c.With(ctx, func(_ *testHead) error {
+				return nil
+			})
+		}()
+		synctest.Wait()
+
 		cancel()
-		<-step2
-		return nil
-	})
+		synctest.Wait()
 
-	<-step1
-	err := c.With(ctx, func(_ *testHead) error {
-		return nil
+		s.Error(err)
+		s.Require().ErrorIs(err, context.Canceled)
 	})
-	close(step2)
-
-	s.Error(err)
 }
 
 func (s *WeightedSuite) TestClose() {
 	baseCtx := context.Background()
 	expectedHead := &testHead{c: 2}
-	c := container.NewWeighted(expectedHead)
+	c := container.NewWeighted(expectedHead, container.DefaultBackPressure)
 
 	err := c.Close()
 	s.Require().NoError(err)
