@@ -37,17 +37,19 @@ func (it *ChunkIterator) next() bool {
 }
 
 func (it *ChunkIterator) Seek(t int64) chunkenc.ValueType {
-	for {
-		ts := it.AtT()
-		// check if iterator is not initialized or is not reached t.
-		if ts == math.MinInt64 || ts < t {
-			if !it.next() {
-				return chunkenc.ValNone
-			}
-			continue
+	ts := it.AtT()
+	// check if iterator is not initialized or is not reached t.
+	if ts == math.MinInt64 || ts < t {
+		if !it.seek(t) {
+			return chunkenc.ValNone
 		}
-		return chunkenc.ValFloat
 	}
+	return chunkenc.ValFloat
+}
+
+func (it *ChunkIterator) seek(t int64) bool {
+	it.iterator.Seek(t, &it.nextResult)
+	return it.nextResult.HasValue
 }
 
 func (it *ChunkIterator) At() (int64, float64) {
@@ -174,9 +176,6 @@ func (it *LimitedChunkIterator) Seek(t int64) chunkenc.ValueType {
 
 	// if target timestamp is above upper limit - skip to the end of chunk.
 	if t > it.maxt {
-		// exhaust iterator
-		for it.chunkIterator.Next() != chunkenc.ValNone {
-		}
 		return chunkenc.ValNone
 	}
 
@@ -186,9 +185,6 @@ func (it *LimitedChunkIterator) Seek(t int64) chunkenc.ValueType {
 
 	// timestamp after seek will be always more than it.mint, but may also be more than it.maxt
 	if it.chunkIterator.AtT() > it.maxt {
-		// exhaust iterator
-		for it.chunkIterator.Next() != chunkenc.ValNone {
-		}
 		return chunkenc.ValNone
 	}
 
