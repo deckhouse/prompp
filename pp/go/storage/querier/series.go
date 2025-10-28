@@ -24,32 +24,24 @@ func (it *ChunkIterator) Reset(serializedData *cppbridge.DataStorageSerializedDa
 }
 
 func (it *ChunkIterator) Next() chunkenc.ValueType {
-	if !it.next() {
-		return chunkenc.ValNone
-	}
-
-	return chunkenc.ValFloat
-}
-
-func (it *ChunkIterator) next() bool {
 	it.iterator.Next(&it.nextResult)
-	return it.nextResult.HasValue
+	if it.nextResult.HasValue {
+		return chunkenc.ValFloat
+	}
+	return chunkenc.ValNone
 }
 
 func (it *ChunkIterator) Seek(t int64) chunkenc.ValueType {
 	ts := it.AtT()
 	// check if iterator is not initialized or is not reached t.
 	if ts == math.MinInt64 || ts < t {
-		if !it.seek(t) {
-			return chunkenc.ValNone
-		}
+		it.iterator.Seek(t, &it.nextResult)
 	}
-	return chunkenc.ValFloat
-}
 
-func (it *ChunkIterator) seek(t int64) bool {
-	it.iterator.Seek(t, &it.nextResult)
-	return it.nextResult.HasValue
+	if it.nextResult.HasValue {
+		return chunkenc.ValFloat
+	}
+	return chunkenc.ValNone
 }
 
 func (it *ChunkIterator) At() (int64, float64) {
@@ -143,28 +135,23 @@ func (it *LimitedChunkIterator) Err() error {
 
 // Next advances the iterator by one and returns the type of the value.
 func (it *LimitedChunkIterator) Next() chunkenc.ValueType {
-	var ts int64
-	for {
-		// advance
-		if it.chunkIterator.Next() == chunkenc.ValNone {
-			return chunkenc.ValNone
-		}
-
-		// get current ts
-		ts = it.chunkIterator.AtT()
-
-		// continue if we are below lower limit.
-		if ts < it.mint {
-			continue
-		}
-
-		// end if we are above upper limit.
-		if ts > it.maxt {
-			return chunkenc.ValNone
-		}
-
-		return chunkenc.ValFloat
+	if it.chunkIterator.Next() == chunkenc.ValNone {
+		return chunkenc.ValNone
 	}
+
+	ts := it.chunkIterator.AtT()
+	if ts < it.mint {
+		if it.chunkIterator.Seek(it.mint) == chunkenc.ValNone {
+			return chunkenc.ValNone
+		}
+		ts = it.chunkIterator.AtT()
+	}
+
+	if ts > it.maxt {
+		return chunkenc.ValNone
+	}
+
+	return chunkenc.ValFloat
 }
 
 // Seek advances the iterator forward to the first sample with a timestamp equal or greater than t.
@@ -174,17 +161,15 @@ func (it *LimitedChunkIterator) Seek(t int64) chunkenc.ValueType {
 		t = it.mint
 	}
 
-	// if target timestamp is above upper limit - skip to the end of chunk.
-	if t > it.maxt {
-		return chunkenc.ValNone
+	ts := it.chunkIterator.AtT()
+	if ts == math.MinInt64 || ts < t {
+		if it.chunkIterator.Seek(t) == chunkenc.ValNone {
+			return chunkenc.ValNone
+		}
+		ts = it.chunkIterator.AtT()
 	}
 
-	if it.chunkIterator.Seek(t) == chunkenc.ValNone {
-		return chunkenc.ValNone
-	}
-
-	// timestamp after seek will be always more than it.mint, but may also be more than it.maxt
-	if it.chunkIterator.AtT() > it.maxt {
+	if ts > it.maxt {
 		return chunkenc.ValNone
 	}
 

@@ -85,6 +85,7 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_seek(v
     out->timestamp = sample.timestamp;
     out->value = sample.value;
     out->has_value = true;
+    ++(*in->iterator);
     return;
   }
 }
