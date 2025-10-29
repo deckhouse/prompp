@@ -7,5 +7,6 @@ cc_binary(
     deps = [
         "//:wal",
         "@google_benchmark//:benchmark_main",
+        "//:profiling",
     ],
 )

@@ -45,9 +45,7 @@ void BenchmarkSeriesDataEncoder(benchmark::State& state) {
   series_data::Encoder encoder{storage};
 
   for ([[maybe_unused]] auto _ : state) {
-    ZoneScopedN("iteration");
     for (const auto& sample : samples) {
-      ZoneScopedN("encode");
       encoder.encode(sample.labelset_id, ts_min + static_cast<PromPP::Primitives::Sample::timestamp_type>(sample.sample_ts), sample.sample_value);
     }
   }
@@ -57,8 +55,6 @@ void BenchmarkSeriesDataEncoder(benchmark::State& state) {
 
   state.counters["Memory"] =
       benchmark::Counter(static_cast<double>(storage.allocated_memory()), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
-
-  TracyPlot("Open Chunks", int64_t(storage.open_chunks.size()));
 }
 
 BENCHMARK(BenchmarkSeriesDataEncoder)->ComputeStatistics("min", [](const std::vector<double>& v) { return *std::ranges::min_element(v); });

@@ -99,6 +99,10 @@ def _impl(ctx):
             else:
                 fail("Unknown profiling option: %s" % opt)
 
+    profiling_flag_groups = []
+    if profiling_flags:
+        profiling_flag_groups.append(flag_group(flags = profiling_flags))
+
     features = [
         feature(
             name = "dbg",
@@ -262,16 +266,12 @@ def _impl(ctx):
             ],
         ),
         feature(
-            name = "profiling_tracy",
+            name = "profiling_opts",
             enabled = profiling_enabled,
             flag_sets = [
                 flag_set(
                     actions = cpp_compile_actions,
-                    flag_groups = [
-                        flag_group(
-                            flags = profiling_flags,
-                        ),
-                    ],
+                    flag_groups = profiling_flag_groups,
                 ),
             ],
         ),

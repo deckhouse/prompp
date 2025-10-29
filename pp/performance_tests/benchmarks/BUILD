@@ -7,6 +7,7 @@ cc_binary(
     deps = [
         "//:performance_tests_headers",
         "@google_benchmark//:benchmark_main",
+        "//:profiling",
     ],
 )
 
@@ -18,5 +19,6 @@ cc_binary(
         "//:performance_tests_headers",
         "@google_benchmark//:benchmark_main",
         "//:entrypoint",
+        "//:profiling",
     ],
 )

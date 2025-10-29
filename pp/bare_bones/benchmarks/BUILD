@@ -7,6 +7,7 @@ cc_binary(
     deps = [
         "//:bare_bones",
         "@google_benchmark//:benchmark_main",
+        "//:profiling",
     ],
 )
 
@@ -17,5 +18,6 @@ cc_binary(
     deps = [
         "//:bare_bones",
         "@google_benchmark//:benchmark_main",
+        "//:profiling",
     ],
 )
