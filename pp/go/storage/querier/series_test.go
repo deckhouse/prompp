@@ -358,17 +358,13 @@ func (s *SeriesSetTestSuite) TestSeriesSeek() {
 	require.Equal(s.T(), ts, expected[index].Samples[0].Timestamp)
 	require.Equal(s.T(), v, expected[index].Samples[0].Value)
 
-	for {
-		index++
-		if index > len(expected)-1 {
-			return
-		}
+	index++
+	require.Equal(s.T(), chunkenc.ValFloat, iterator.Next())
+	ts, v = iterator.At()
+	require.Equal(s.T(), ts, expected[index].Samples[0].Timestamp)
+	require.Equal(s.T(), v, expected[index].Samples[0].Value)
 
-		iterator.Next()
-		ts, v = iterator.At()
-		require.Equal(s.T(), ts, expected[index].Samples[0].Timestamp)
-		require.Equal(s.T(), v, expected[index].Samples[0].Value)
-	}
+	require.Equal(s.T(), chunkenc.ValNone, iterator.Next())
 }
 
 func (s *SeriesSetTestSuite) TestSeriesSeekOutOfRange() {
