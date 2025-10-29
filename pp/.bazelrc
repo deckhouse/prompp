@@ -6,3 +6,4 @@ build --flag_alias=asan=//bazel/toolchain:asan
 
 # Profiling specific flags
 build --flag_alias=profiling=//bazel/toolchain:profiling
+build --flag_alias=profiling_opts=//bazel/toolchain:profiling_opts

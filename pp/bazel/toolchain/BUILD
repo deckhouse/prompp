@@ -28,6 +28,11 @@ bool_flag(
     build_setting_default = 0,
 )
 
+string_flag(
+    name = "profiling_opts",
+    build_setting_default = "default",
+)
+
 config_setting(
     name = "with_profiling",
     flag_values = {"profiling": "1"},
@@ -167,6 +172,7 @@ cc_toolchain_config(
     march = ":march",
     with_asan = ":asan",
     with_profiling = ":profiling",
+    profiling_opts = ":profiling_opts",
 )
 
 cc_toolchain_config(
@@ -180,6 +186,7 @@ cc_toolchain_config(
     march = ":march",
     with_asan = ":asan",
     with_profiling = ":profiling",
+    profiling_opts = ":profiling_opts",
 )
 
 cc_toolchain_config(
@@ -192,6 +199,7 @@ cc_toolchain_config(
     march = ":march",
     with_asan = ":asan",
     with_profiling = ":profiling",
+    profiling_opts = ":profiling_opts",
 )
 
 cc_toolchain_config(
@@ -204,4 +212,5 @@ cc_toolchain_config(
     march = ":march",
     with_asan = ":asan",
     with_profiling = ":profiling",
+    profiling_opts = ":profiling_opts",
 )
