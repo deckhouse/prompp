@@ -1675,7 +1675,7 @@ void prompp_series_data_serialization_serialized_data_iterator_ctor(void* args, 
 void prompp_series_data_serialization_serialized_data_iterator_next(void* args, void* res);
 
 /**
- * @brief Advance decode iterator.
+ * @brief Advance decode iterator until referenced sample is gte targetTimestamp.
  *
  * @param args {
  *     iterator uintptr // pointer to decode iterator

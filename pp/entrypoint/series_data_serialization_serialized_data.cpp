@@ -80,7 +80,7 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_seek(v
     }
   }
 
-  out->has_value = true;
+  out->has_value = false;
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_iterator_reset(void* args) {
