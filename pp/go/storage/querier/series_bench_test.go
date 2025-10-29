@@ -50,7 +50,7 @@ func queryOpt(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, start, end in
 }
 
 func BenchmarkSeriesSetOpt(b *testing.B) {
-	size := 50000
+	size := 500000
 	matcher := model.LabelMatcher{
 		Name:        "__name__",
 		Value:       "metric",
