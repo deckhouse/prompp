@@ -41,7 +41,7 @@ bool foo() {
 
 // scope
 #define GET_MACRO(_0, _1, NAME, ...) NAME
-#define PROMPP_PROF_IMPL_scope(...) GET_MACRO(_0, ##__VA_ARGS__, PROMPP_PROF_IMPL_scope_1, PROMPP_PROF_IMPL_scope_0)(__VA_ARGS__)
+#define PROMPP_PROF_IMPL_scope(...) GET_MACRO(_0 __VA_OPT__(, ) __VA_ARGS__, PROMPP_PROF_IMPL_scope_1, PROMPP_PROF_IMPL_scope_0)(__VA_ARGS__)
 
 #define PROMPP_PROF_IMPL_scope_0() ZoneScoped
 #define PROMPP_PROF_IMPL_scope_1(name) ZoneScopedN(name)
