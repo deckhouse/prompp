@@ -272,24 +272,6 @@ func (s *QueryableLSSSuite) testQueryLabelValuesImpl(testCase queryLabelValuesCa
 	s.Equal(testCase.expectedValues, result.Values())
 }
 
-func (s *QueryableLSSSuite) TestCopyAddedSeries() {
-	// Arrange
-	emptyLabelsSets := make([]cppbridge.Labels, len(s.labelSetIDs))
-	lssCopy := cppbridge.NewQueryableLssStorage()
-	lssCopyOfCopy := cppbridge.NewQueryableLssStorage()
-
-	// Act
-	s.lss.CopyAddedSeries(lssCopy)
-	lssCopy.CopyAddedSeries(lssCopyOfCopy)
-
-	// Assert
-	// !!!ATTENTION!!! When copying the added series, the order in which the series are added is preserved.
-	// This is necessary because it makes the ls IDs more compact,
-	// which usually end up in the lss in the same order, and consequently the wal files are smaller.
-	s.Equal(labelSetToCppBridgeLabels(s.labelSets), lssCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
-	s.Equal(emptyLabelsSets, lssCopyOfCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
-}
-
 func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithExistingLabelSet() {
 	// Arrange
 	labelSetSnapshot := s.lss.CreateLabelSetSnapshot(&testSnapshotSource{})

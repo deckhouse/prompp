@@ -9,11 +9,7 @@ import (
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stretchr/testify/suite"
-
 	"github.com/prometheus/prometheus/model/labels"
-	prom_storage "github.com/prometheus/prometheus/storage"
-
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
@@ -22,6 +18,8 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
+	prom_storage "github.com/prometheus/prometheus/storage"
+	"github.com/stretchr/testify/suite"
 )
 
 const (
@@ -52,7 +50,6 @@ func TestQuerierSuite(t *testing.T) {
 func (s *QuerierSuite) SetupTest() {
 	s.dataDir = s.createDataDirectory()
 	s.context = context.Background()
-
 	s.head = s.mustCreateHead(1)
 }
 
@@ -127,7 +124,7 @@ func (s *QuerierSuite) TestRangeQuery() {
 	// Assert
 	s.Equal(
 		storagetest.TimeSeriesToString(timeSeries),
-		storagetest.TimeSeriesToString(storagetest.TimeSeriesFromSeriesSet(seriesSet)),
+		storagetest.TimeSeriesToString(storagetest.TimeSeriesFromSeriesSet(seriesSet, true)),
 	)
 }
 
@@ -158,7 +155,7 @@ func (s *QuerierSuite) TestRangeQueryWithoutMatching() {
 	// Assert
 	s.Equal(
 		storagetest.TimeSeriesToString([]storagetest.TimeSeries(nil)),
-		storagetest.TimeSeriesToString(storagetest.TimeSeriesFromSeriesSet(seriesSet)),
+		storagetest.TimeSeriesToString(storagetest.TimeSeriesFromSeriesSet(seriesSet, true)),
 	)
 }
 
@@ -218,7 +215,7 @@ func (s *QuerierSuite) TestRangeQueryWithDataStorageLoading() {
 	timeSeries[1].AppendSamples(timeSeriesAfterUnload[1].Samples...)
 	s.Equal(
 		storagetest.TimeSeriesToString(timeSeries),
-		storagetest.TimeSeriesToString(storagetest.TimeSeriesFromSeriesSet(seriesSet)),
+		storagetest.TimeSeriesToString(storagetest.TimeSeriesFromSeriesSet(seriesSet, true)),
 	)
 }
 
@@ -255,7 +252,7 @@ func (s *QuerierSuite) TestInstantQuery() {
 	// Assert
 	s.Equal(
 		storagetest.TimeSeriesToString(timeSeries),
-		storagetest.TimeSeriesToString(storagetest.TimeSeriesFromSeriesSet(seriesSet)),
+		storagetest.TimeSeriesToString(storagetest.TimeSeriesFromSeriesSet(seriesSet, true)),
 	)
 }
 
@@ -326,7 +323,7 @@ func (s *QuerierSuite) TestInstantQueryWithDataStorageLoading() {
 				},
 			},
 		}),
-		storagetest.TimeSeriesToString(storagetest.TimeSeriesFromSeriesSet(seriesSet)),
+		storagetest.TimeSeriesToString(storagetest.TimeSeriesFromSeriesSet(seriesSet, true)),
 	)
 }
 

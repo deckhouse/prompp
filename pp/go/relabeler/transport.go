@@ -70,7 +70,6 @@ func (sm *ShardMeta) WithContentLength(cl int64) ShardMeta {
 }
 
 const (
-	protocolVersion           uint8         = 3
 	protocolVersionSocket     uint8         = 4
 	streamMethod                            = "stream"
 	refillMethod                            = "refill"

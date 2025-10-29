@@ -19,12 +19,13 @@ const (
 
 // LSS labelset storage for [shard].
 type LSS struct {
-	input    *cppbridge.LabelSetStorage
-	target   *cppbridge.LSSWithSnapshot
-	lsCache  *model.CacheWithBitset
-	locker   sync.RWMutex
-	stopc    chan struct{}
-	stopOnce sync.Once
+	input              *cppbridge.LabelSetStorage
+	target             *cppbridge.LSSWithSnapshot
+	dstSrcLsIdsMapping *cppbridge.IdsMapping
+	lsCache            *model.CacheWithBitset
+	locker             sync.RWMutex
+	stopc              chan struct{}
+	stopOnce           sync.Once
 }
 
 // NewLSS init new [LSS].
@@ -63,7 +64,7 @@ func (l *LSS) CopyAddedSeriesTo(destination *LSS) {
 	bitsetSeries := l.target.LSS().BitsetSeries()
 	l.locker.RUnlock()
 
-	snapshot.CopyAddedSeries(bitsetSeries, destination.target.LSS())
+	destination.dstSrcLsIdsMapping = snapshot.CopyAddedSeries(bitsetSeries, destination.target.LSS())
 }
 
 // FindByHash label set by hash in cache.

@@ -171,51 +171,10 @@ extern "C" void prompp_prometheus_per_shard_relabeler_dtor(void* args) {
   static_cast<Arguments*>(args)->~Arguments();
 }
 
-extern "C" void prompp_prometheus_per_shard_relabeler_input_relabeling(void* args, void* res) {
-  struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> shards_inner_series;
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::RelabeledSeries*> shards_relabeled_series;
-    PromPP::Prometheus::Relabel::RelabelerOptions options;
-    PerShardRelabelerPtr per_shard_relabeler;
-    HashdexVariant* hashdex;
-    CachePtr cache;
-    LssVariantPtr input_lss;
-    LssVariantPtr target_lss;
-  };
-  struct Result {
-    uint32_t samples_added{0};
-    uint32_t series_added{0};
-    uint32_t series_drop{0};
-    PromPP::Primitives::Go::Slice<char> error;
-    bool target_lss_has_reallocations{};
-  };
-
-  auto in = static_cast<Arguments*>(args);
-  auto out = new (res) Result();
-
-  try {
-    std::visit(
-        [in, out](auto& hashdex) {
-          auto& input_lss = std::get<entrypoint::head::EncodingBimap>(*in->input_lss);
-          auto& target_lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->target_lss);
-
-          const entrypoint::head::ReallocationsDetector reallocation_detector(target_lss);
-          in->per_shard_relabeler->input_relabeling(input_lss, target_lss, *in->cache, hashdex, in->options, *out, in->shards_inner_series,
-                                                    in->shards_relabeled_series);
-          target_lss.build_deferred_indexes();
-          out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
-        },
-        *in->hashdex);
-  } catch (...) {
-    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
-  }
-}
-
 using StaleNaNsState = PromPP::Prometheus::Relabel::StaleNaNsState;
 using StaleNaNsStatePtr = std::unique_ptr<StaleNaNsState>;
 
-extern "C" void prompp_prometheus_relabel_stalenans_state_ctor(void* res) {
+extern "C" void prompp_prometheus_relabel_stale_nans_state_ctor(void* res) {
   struct Result {
     StaleNaNsStatePtr state;
   };
@@ -223,7 +182,7 @@ extern "C" void prompp_prometheus_relabel_stalenans_state_ctor(void* res) {
   new (res) Result{.state = std::make_unique<StaleNaNsState>()};
 }
 
-extern "C" void prompp_prometheus_relabel_stalenans_state_dtor(void* args) {
+extern "C" void prompp_prometheus_relabel_stale_nans_state_dtor(void* args) {
   struct Arguments {
     StaleNaNsStatePtr state;
   };
@@ -231,186 +190,7 @@ extern "C" void prompp_prometheus_relabel_stalenans_state_dtor(void* args) {
   static_cast<Arguments*>(args)->~Arguments();
 }
 
-extern "C" void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stalenans(void* args, void* res) {
-  struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> shards_inner_series;
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::RelabeledSeries*> shards_relabeled_series;
-    PromPP::Prometheus::Relabel::RelabelerOptions options;
-    PerShardRelabelerPtr per_shard_relabeler;
-    HashdexVariant* hashdex;
-    CachePtr cache;
-    LssVariantPtr input_lss;
-    LssVariantPtr target_lss;
-    StaleNaNsStatePtr state;
-    PromPP::Primitives::Timestamp def_timestamp;
-  };
-  struct Result {
-    uint32_t samples_added{0};
-    uint32_t series_added{0};
-    uint32_t series_drop{0};
-    PromPP::Primitives::Go::Slice<char> error;
-    bool target_lss_has_reallocations{};
-  };
-
-  auto in = static_cast<Arguments*>(args);
-  auto out = new (res) Result();
-
-  try {
-    std::visit(
-        [in, out](auto& hashdex) {
-          auto& input_lss = std::get<entrypoint::head::EncodingBimap>(*in->input_lss);
-          auto& target_lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->target_lss);
-
-          const entrypoint::head::ReallocationsDetector reallocation_detector(target_lss);
-          in->per_shard_relabeler->input_relabeling_with_stalenans(input_lss, target_lss, *in->cache, hashdex, in->options, *out, in->shards_inner_series,
-                                                                   in->shards_relabeled_series, *in->state, in->def_timestamp);
-          target_lss.build_deferred_indexes();
-          out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
-        },
-        *in->hashdex);
-  } catch (...) {
-    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
-  }
-}
-
-extern "C" void prompp_prometheus_per_shard_relabeler_input_collect_stalenans(void* args, void* res) {
-  struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> shards_inner_series;
-    PerShardRelabelerPtr per_shard_relabeler;
-    CachePtr cache;
-    StaleNaNsStatePtr state;
-    PromPP::Primitives::Timestamp stale_ts;
-  };
-  struct Result {
-    PromPP::Primitives::Go::Slice<char> error;
-  };
-
-  const auto in = static_cast<Arguments*>(args);
-
-  try {
-    in->per_shard_relabeler->input_collect_stalenans(*in->cache, in->shards_inner_series, *in->state, in->stale_ts);
-  } catch (...) {
-    const auto out = new (res) Result();
-    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
-  }
-}
-
-extern "C" void prompp_prometheus_per_shard_relabeler_input_relabeling_from_cache(void* args, void* res) {
-  struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> shards_inner_series;
-    PromPP::Prometheus::Relabel::RelabelerOptions options;
-    PerShardRelabelerPtr per_shard_relabeler;
-    HashdexVariant* hashdex;
-    CachePtr cache;
-    LssVariantPtr input_lss;
-    LssVariantPtr target_lss;
-  };
-  struct Result {
-    uint32_t samples_added{0};
-    uint32_t series_added{0};
-    uint32_t series_drop{0};
-    bool ok{};
-    PromPP::Primitives::Go::Slice<char> error;
-  };
-
-  auto in = static_cast<Arguments*>(args);
-  auto out = new (res) Result();
-
-  try {
-    std::visit(
-        [in, out](auto& hashdex) {
-          auto& input_lss = std::get<entrypoint::head::EncodingBimap>(*in->input_lss);
-          auto& target_lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->target_lss);
-
-          out->ok =
-              in->per_shard_relabeler->input_relabeling_from_cache(input_lss, target_lss, *in->cache, hashdex, in->options, *out, in->shards_inner_series);
-        },
-        *in->hashdex);
-  } catch (...) {
-    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
-  }
-}
-
-extern "C" void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stalenans_from_cache(void* args, void* res) {
-  struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> shards_inner_series;
-    PromPP::Prometheus::Relabel::RelabelerOptions options;
-    PerShardRelabelerPtr per_shard_relabeler;
-    HashdexVariant* hashdex;
-    CachePtr cache;
-    LssVariantPtr input_lss;
-    LssVariantPtr target_lss;
-    StaleNaNsStatePtr state;
-    PromPP::Primitives::Timestamp def_timestamp;
-  };
-  struct Result {
-    uint32_t samples_added{0};
-    uint32_t series_added{0};
-    uint32_t series_drop{0};
-    bool ok{};
-    PromPP::Primitives::Go::Slice<char> error;
-  };
-
-  auto in = static_cast<Arguments*>(args);
-  auto out = new (res) Result();
-
-  try {
-    std::visit(
-        [in, out](auto& hashdex) {
-          auto& input_lss = std::get<entrypoint::head::EncodingBimap>(*in->input_lss);
-          auto& target_lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->target_lss);
-
-          out->ok = in->per_shard_relabeler->input_relabeling_with_stalenans_from_cache(input_lss, target_lss, *in->cache, hashdex, in->options, *out,
-                                                                                        in->shards_inner_series, *in->state, in->def_timestamp);
-        },
-        *in->hashdex);
-  } catch (...) {
-    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
-  }
-}
-
-extern "C" void prompp_prometheus_per_shard_relabeler_append_relabeler_series(void* args, void* res) {
-  struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> shards_inner_series;
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::RelabeledSeries*> shards_relabeled_series;
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::RelabelerStateUpdate*> shards_relabeler_state_update;
-    PerShardRelabelerPtr per_shard_relabeler;
-    LssVariantPtr lss;
-  };
-  struct Result {
-    PromPP::Primitives::Go::Slice<char> error;
-    bool target_lss_has_reallocations{};
-  };
-
-  const auto in = static_cast<Arguments*>(args);
-  const auto out = new (res) Result();
-
-  try {
-    auto& lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->lss);
-    const entrypoint::head::ReallocationsDetector reallocation_detector(lss);
-
-    for (size_t id = 0; id != in->shards_relabeled_series.size(); ++id) {
-      if (in->shards_relabeled_series[id] == nullptr || in->shards_relabeled_series[id]->size() == 0) {
-        continue;
-      }
-
-      in->per_shard_relabeler->append_relabeler_series(lss, in->shards_inner_series[id], in->shards_relabeled_series[id],
-                                                       in->shards_relabeler_state_update[id]);
-    }
-
-    lss.build_deferred_indexes();
-    out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
-  } catch (...) {
-    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
-  }
-}
-
-extern "C" void prompp_prometheus_per_shard_singe_relabeler_update_relabeler_state(void* args, void* res) {
+extern "C" void prompp_prometheus_per_shard_single_relabeler_update_relabeler_state(void* args, void* res) {
   struct Arguments {
     PromPP::Prometheus::Relabel::RelabelerStateUpdate* relabeler_state_update;
     PerShardRelabelerPtr per_shard_relabeler;
@@ -425,34 +205,6 @@ extern "C" void prompp_prometheus_per_shard_singe_relabeler_update_relabeler_sta
 
   try {
     in->per_shard_relabeler->update_relabeler_state(*in->cache, in->relabeler_state_update, in->relabeled_shard_id);
-  } catch (...) {
-    auto* out = new (res) Result();
-    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
-  }
-}
-
-extern "C" void prompp_prometheus_per_shard_relabeler_update_relabeler_state(void* args, void* res) {
-  struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::RelabelerStateUpdate*> shards_relabeler_state_update;
-    PerShardRelabelerPtr per_shard_relabeler;
-    CachePtr cache;
-    uint16_t relabeled_shard_id;
-  };
-  struct Result {
-    PromPP::Primitives::Go::Slice<char> error;
-  };
-
-  const auto* in = static_cast<Arguments*>(args);
-
-  try {
-    for (size_t id = 0; id != in->shards_relabeler_state_update.size(); ++id) {
-      if (in->shards_relabeler_state_update[id] == nullptr || in->shards_relabeler_state_update[id]->size() == 0) {
-        continue;
-      }
-
-      in->per_shard_relabeler->update_relabeler_state(*in->cache, in->shards_relabeler_state_update[id], id);
-    }
   } catch (...) {
     auto* out = new (res) Result();
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
@@ -676,7 +428,6 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_
     CachePtr cache;
     LssVariantPtr input_lss;
     LssVariantPtr target_lss;
-    StaleNaNsStatePtr state;
     PromPP::Primitives::Timestamp def_timestamp;
   };
   struct Result {
@@ -698,7 +449,7 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_
 
           const entrypoint::head::ReallocationsDetector reallocation_detector(target_lss);
           in->per_goroutine_relabeler->input_relabeling_with_stalenans(input_lss, target_lss, *in->cache, hashdex, in->options, *in->stateless_relabeler, *out,
-                                                                       in->shards_inner_series, in->shards_relabeled_series, *in->state, in->def_timestamp);
+                                                                       in->shards_inner_series, in->shards_relabeled_series, in->def_timestamp);
           target_lss.build_deferred_indexes();
           out->target_lss_has_reallocations = reallocation_detector.has_reallocations();
         },
@@ -718,7 +469,6 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_
     CachePtr cache;
     LssVariantPtr input_lss;
     LssVariantPtr target_lss;
-    StaleNaNsStatePtr state;
     PromPP::Primitives::Timestamp def_timestamp;
   };
   struct Result {
@@ -739,7 +489,7 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_
           auto& target_lss = std::get<entrypoint::head::QueryableEncodingBimap>(*in->target_lss);
 
           out->ok = in->per_goroutine_relabeler->input_relabeling_with_stalenans_from_cache(input_lss, target_lss, *in->cache, hashdex, in->options, *out,
-                                                                                            in->shards_inner_series, *in->state, in->def_timestamp);
+                                                                                            in->shards_inner_series, in->def_timestamp);
         },
         *in->hashdex);
   } catch (...) {
@@ -850,4 +600,25 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_append_relabeler_serie
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
     entrypoint::handle_current_exception(err_stream);
   }
+}
+
+extern "C" void prompp_prometheus_per_goroutine_relabeler_track_stale_nans(void* args) {
+  struct Arguments {
+    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> inner_series;
+    StaleNaNsStatePtr stale_nans_state;
+    PromPP::Primitives::Timestamp default_timestamp;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  PromPP::Prometheus::Relabel::PerGoroutineRelabeler::track_stale_nans(in->inner_series, *in->stale_nans_state, in->default_timestamp);
+}
+
+extern "C" void prompp_remap_stale_nans_state(void* args) {
+  struct Arguments {
+    StaleNaNsStatePtr stale_nans_state;
+    entrypoint::head::LsIdsSlicePtr dst_src_ls_ids_mapping;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  in->stale_nans_state->remap(*in->dst_src_ls_ids_mapping);
 }

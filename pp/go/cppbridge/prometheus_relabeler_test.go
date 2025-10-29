@@ -10,6 +10,7 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/golang/snappy"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/stretchr/testify/suite"
 	"gopkg.in/yaml.v3"
@@ -140,428 +141,6 @@ func (s *RelabelerSuite) TestAction() {
 	s.Require().Equal(cppbridge.LabelKeep, c.Action)
 }
 
-func (s *RelabelerSuite) TestInvalidAction() {
-	wr := prompb.WriteRequest{
-		Timeseries: []prompb.TimeSeries{
-			{
-				Labels: []prompb.Label{
-					{Name: "__name__", Value: "value"},
-					{Name: "job", Value: "abc"},
-					{Name: "instance", Value: "value1"},
-				},
-				Samples: []prompb.Sample{
-					{Value: 0.1, Timestamp: time.Now().UnixMilli()},
-				},
-			},
-		},
-	}
-	data, err := wr.Marshal()
-	s.Require().NoError(err)
-
-	rCfgs := []*cppbridge.RelabelConfig{
-		{
-			SourceLabels: []string{"job"},
-			Regex:        "abc",
-			Action:       cppbridge.Action(20),
-		},
-	}
-
-	inputLss := cppbridge.NewOrderedLssStorage()
-	targetLss := cppbridge.NewQueryableLssStorage()
-
-	statelessRelabeler, err := cppbridge.NewStatelessRelabeler(rCfgs)
-	s.Require().NoError(err)
-
-	var numberOfShards uint16 = 1
-	psr, err := cppbridge.NewInputPerShardRelabeler(statelessRelabeler, numberOfShards, 0)
-	s.Require().NoError(err)
-
-	hlimits := cppbridge.DefaultWALHashdexLimits()
-	h, err := cppbridge.NewWALSnappyProtobufHashdex(snappy.Encode(nil, data), hlimits)
-	s.Require().NoError(err)
-
-	shardsInnerSeries := cppbridge.NewShardsInnerSeries(numberOfShards)
-	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(numberOfShards)
-	cache := cppbridge.NewCache()
-
-	stats, hasReallocations, err := psr.InputRelabeling(s.baseCtx, inputLss, targetLss, cache, s.options, h, shardsInnerSeries, shardsRelabeledSeries)
-	s.Require().Error(err)
-	s.Equal(cppbridge.RelabelerStats{}, stats)
-	s.False(hasReallocations)
-}
-
-func (s *RelabelerSuite) TestPerShardRelabelerWithNullPtrStatelessRelabeler() {
-	nilStatelessRelabeler := struct {
-		p          uintptr
-		rCfgs      []*cppbridge.RelabelConfig
-		generation uint64
-	}{0, nil, 0}
-	statelessRelabeler := (*cppbridge.StatelessRelabeler)(unsafe.Pointer(&nilStatelessRelabeler))
-
-	_, err := cppbridge.NewInputPerShardRelabeler(statelessRelabeler, 0, 0)
-	s.Require().Error(err)
-}
-
-func (s *RelabelerSuite) TestInputPerShardRelabeler() {
-	wr := prompb.WriteRequest{
-		Timeseries: []prompb.TimeSeries{
-			{
-				Labels: []prompb.Label{
-					{Name: "__name__", Value: "value"},
-					{Name: "job", Value: "abc"},
-					{Name: "instance", Value: "value1"},
-				},
-				Samples: []prompb.Sample{
-					{Value: 0.1, Timestamp: time.Now().UnixMilli()},
-				},
-			},
-			{
-				Labels: []prompb.Label{
-					{Name: "__name__", Value: "value"},
-					{Name: "instance", Value: "value1"},
-				},
-				Samples: []prompb.Sample{
-					{Value: 0.1, Timestamp: time.Now().UnixMilli()},
-				},
-			},
-		},
-	}
-	data, err := wr.Marshal()
-	s.Require().NoError(err)
-
-	rCfgs := []*cppbridge.RelabelConfig{
-		{
-			SourceLabels: []string{"job"},
-			Regex:        "abc",
-			Action:       cppbridge.Keep,
-		},
-	}
-
-	inputLss := cppbridge.NewLssStorage()
-	targetLss := cppbridge.NewQueryableLssStorage()
-
-	statelessRelabeler, err := cppbridge.NewStatelessRelabeler(rCfgs)
-	s.Require().NoError(err)
-
-	var numberOfShards uint16 = 1
-	psr, err := cppbridge.NewInputPerShardRelabeler(statelessRelabeler, numberOfShards, 0)
-	s.Require().NoError(err)
-
-	hlimits := cppbridge.DefaultWALHashdexLimits()
-	h, err := cppbridge.NewWALSnappyProtobufHashdex(snappy.Encode(nil, data), hlimits)
-	s.Require().NoError(err)
-
-	shardsInnerSeries := cppbridge.NewShardsInnerSeries(numberOfShards)
-	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(numberOfShards)
-	cache := cppbridge.NewCache()
-
-	stats, hasReallocations, err := psr.InputRelabeling(s.baseCtx, inputLss, targetLss, cache, s.options, h, shardsInnerSeries, shardsRelabeledSeries)
-	s.Require().NoError(err)
-	s.Equal(cppbridge.RelabelerStats{1, 1, 1}, stats)
-	s.True(hasReallocations)
-}
-
-func (s *RelabelerSuite) TestInputPerShardRelabelerFromCacheTrue() {
-	wr := prompb.WriteRequest{
-		Timeseries: []prompb.TimeSeries{
-			{
-				Labels: []prompb.Label{
-					{Name: "__name__", Value: "value"},
-					{Name: "job", Value: "abc"},
-					{Name: "instance", Value: "value1"},
-				},
-				Samples: []prompb.Sample{
-					{Value: 0.1, Timestamp: time.Now().UnixMilli()},
-				},
-			},
-		},
-	}
-	data, err := wr.Marshal()
-	s.Require().NoError(err)
-
-	rCfgs := []*cppbridge.RelabelConfig{
-		{
-			SourceLabels: []string{"job"},
-			Regex:        "abc",
-			Action:       cppbridge.Keep,
-		},
-	}
-
-	inputLss := cppbridge.NewLssStorage()
-	targetLss := cppbridge.NewQueryableLssStorage()
-
-	statelessRelabeler, err := cppbridge.NewStatelessRelabeler(rCfgs)
-	s.Require().NoError(err)
-
-	var numberOfShards uint16 = 1
-	psr, err := cppbridge.NewInputPerShardRelabeler(statelessRelabeler, numberOfShards, 0)
-	s.Require().NoError(err)
-
-	hlimits := cppbridge.DefaultWALHashdexLimits()
-	h, err := cppbridge.NewWALSnappyProtobufHashdex(snappy.Encode(nil, data), hlimits)
-	s.Require().NoError(err)
-
-	shardsInnerSeries := cppbridge.NewShardsInnerSeries(numberOfShards)
-	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(numberOfShards)
-	cache := cppbridge.NewCache()
-
-	stats, hasReallocations, err := psr.InputRelabeling(s.baseCtx, inputLss, targetLss, cache, s.options, h, shardsInnerSeries, shardsRelabeledSeries)
-	s.Require().NoError(err)
-	s.Equal(cppbridge.RelabelerStats{1, 1, 0}, stats)
-	s.True(hasReallocations)
-
-	stats, ok, err := psr.InputRelabelingFromCache(s.baseCtx, inputLss, targetLss, cache, s.options, h, shardsInnerSeries)
-	s.Require().NoError(err)
-	s.Equal(cppbridge.RelabelerStats{1, 0, 0}, stats)
-	s.True(ok)
-}
-
-func (s *RelabelerSuite) TestInputPerShardRelabelerFromCacheFalse() {
-	wr := prompb.WriteRequest{
-		Timeseries: []prompb.TimeSeries{
-			{
-				Labels: []prompb.Label{
-					{Name: "__name__", Value: "value"},
-					{Name: "job", Value: "abc"},
-					{Name: "instance", Value: "value1"},
-				},
-				Samples: []prompb.Sample{
-					{Value: 0.1, Timestamp: time.Now().UnixMilli()},
-				},
-			},
-			{
-				Labels: []prompb.Label{
-					{Name: "__name__", Value: "value"},
-					{Name: "instance", Value: "value1"},
-				},
-				Samples: []prompb.Sample{
-					{Value: 0.1, Timestamp: time.Now().UnixMilli()},
-				},
-			},
-		},
-	}
-	data, err := wr.Marshal()
-	s.Require().NoError(err)
-
-	rCfgs := []*cppbridge.RelabelConfig{
-		{
-			SourceLabels: []string{"job"},
-			Regex:        "abc",
-			Action:       cppbridge.Keep,
-		},
-	}
-
-	inputLss := cppbridge.NewLssStorage()
-	targetLss := cppbridge.NewQueryableLssStorage()
-
-	statelessRelabeler, err := cppbridge.NewStatelessRelabeler(rCfgs)
-	s.Require().NoError(err)
-
-	var numberOfShards uint16 = 1
-	psr, err := cppbridge.NewInputPerShardRelabeler(statelessRelabeler, numberOfShards, 0)
-	s.Require().NoError(err)
-
-	hlimits := cppbridge.DefaultWALHashdexLimits()
-	h, err := cppbridge.NewWALSnappyProtobufHashdex(snappy.Encode(nil, data), hlimits)
-	s.Require().NoError(err)
-
-	shardsInnerSeries := cppbridge.NewShardsInnerSeries(numberOfShards)
-	cache := cppbridge.NewCache()
-
-	stats, ok, err := psr.InputRelabelingFromCache(s.baseCtx, inputLss, targetLss, cache, s.options, h, shardsInnerSeries)
-	s.Require().NoError(err)
-	s.Equal(cppbridge.RelabelerStats{0, 0, 0}, stats)
-	s.False(ok)
-}
-
-func (s *RelabelerSuite) TestInputPerShardRelabelerFromCachePartially() {
-	ts := time.Now().UnixMilli()
-	wr1 := prompb.WriteRequest{
-		Timeseries: []prompb.TimeSeries{
-			{
-				Labels: []prompb.Label{
-					{Name: "__name__", Value: "value0"},
-					{Name: "job", Value: "abc"},
-					{Name: "instance", Value: "value0"},
-				},
-				Samples: []prompb.Sample{
-					{Value: 0.1, Timestamp: ts},
-				},
-			},
-			{
-				Labels: []prompb.Label{
-					{Name: "__name__", Value: "value1"},
-					{Name: "job", Value: "abc"},
-					{Name: "instance", Value: "value1"},
-				},
-				Samples: []prompb.Sample{
-					{Value: 0.1, Timestamp: ts},
-				},
-			},
-			{
-				Labels: []prompb.Label{
-					{Name: "__name__", Value: "value2"},
-					{Name: "job", Value: "abc"},
-					{Name: "instance", Value: "value2"},
-				},
-				Samples: []prompb.Sample{
-					{Value: 0.1, Timestamp: ts},
-				},
-			},
-			{
-				Labels: []prompb.Label{
-					{Name: "__name__", Value: "value3"},
-					{Name: "job", Value: "abc"},
-					{Name: "instance", Value: "value3"},
-				},
-				Samples: []prompb.Sample{
-					{Value: 0.1, Timestamp: ts},
-				},
-			},
-			{
-				Labels: []prompb.Label{
-					{Name: "__name__", Value: "value3"},
-					{Name: "instance", Value: "value3"},
-				},
-				Samples: []prompb.Sample{
-					{Value: 0.1, Timestamp: ts},
-				},
-			},
-			{
-				Labels: []prompb.Label{
-					{Name: "__name__", Value: "value4"},
-					{Name: "instance", Value: "value4"},
-				},
-				Samples: []prompb.Sample{
-					{Value: 0.1, Timestamp: ts},
-				},
-			},
-			{
-				Labels: []prompb.Label{
-					{Name: "__name__", Value: "value5"},
-					{Name: "instance", Value: "value5"},
-				},
-				Samples: []prompb.Sample{
-					{Value: 0.1, Timestamp: ts},
-				},
-			},
-			{
-				Labels: []prompb.Label{
-					{Name: "__name__", Value: "value6"},
-					{Name: "instance", Value: "value6"},
-				},
-				Samples: []prompb.Sample{
-					{Value: 0.1, Timestamp: ts},
-				},
-			},
-		},
-	}
-	data1, err := wr1.Marshal()
-	s.Require().NoError(err)
-	hlimits := cppbridge.DefaultWALHashdexLimits()
-	h1, err := cppbridge.NewWALSnappyProtobufHashdex(snappy.Encode(nil, data1), hlimits)
-	s.Require().NoError(err)
-
-	ts += 6000
-	wr2 := prompb.WriteRequest{
-		Timeseries: []prompb.TimeSeries{
-			{
-				Labels: []prompb.Label{
-					{Name: "__name__", Value: "value0"},
-					{Name: "job", Value: "abc"},
-					{Name: "instance", Value: "value0"},
-				},
-				Samples: []prompb.Sample{
-					{Value: 0.1, Timestamp: ts},
-				},
-			},
-			{
-				Labels: []prompb.Label{
-					{Name: "__name__", Value: "value1"},
-					{Name: "job", Value: "abc"},
-					{Name: "instance", Value: "value1"},
-				},
-				Samples: []prompb.Sample{
-					{Value: 0.1, Timestamp: ts},
-				},
-			},
-			{
-				Labels: []prompb.Label{
-					{Name: "__name__", Value: "value2"},
-					{Name: "job", Value: "abc"},
-					{Name: "instance", Value: "value2"},
-				},
-				Samples: []prompb.Sample{
-					{Value: 0.1, Timestamp: ts},
-				},
-			},
-			{
-				Labels: []prompb.Label{
-					{Name: "__name__", Value: "value3"},
-					{Name: "job", Value: "abc"},
-					{Name: "instance", Value: "value3"},
-				},
-				Samples: []prompb.Sample{
-					{Value: 0.1, Timestamp: ts},
-				},
-			},
-			{
-				Labels: []prompb.Label{
-					{Name: "__name__", Value: "value4"},
-					{Name: "job", Value: "abc"},
-					{Name: "instance", Value: "value4"},
-				},
-				Samples: []prompb.Sample{
-					{Value: 0.1, Timestamp: ts},
-				},
-			},
-		},
-	}
-	data2, err := wr2.Marshal()
-	s.Require().NoError(err)
-	h2, err := cppbridge.NewWALSnappyProtobufHashdex(snappy.Encode(nil, data2), hlimits)
-	s.Require().NoError(err)
-
-	rCfgs := []*cppbridge.RelabelConfig{
-		{
-			SourceLabels: []string{"job"},
-			Regex:        "abc",
-			Action:       cppbridge.Keep,
-		},
-	}
-
-	inputLss := cppbridge.NewLssStorage()
-	targetLss := cppbridge.NewQueryableLssStorage()
-
-	statelessRelabeler, err := cppbridge.NewStatelessRelabeler(rCfgs)
-	s.Require().NoError(err)
-
-	var numberOfShards uint16 = 1
-	psr, err := cppbridge.NewInputPerShardRelabeler(statelessRelabeler, numberOfShards, 0)
-	s.Require().NoError(err)
-
-	shardsInnerSeries := cppbridge.NewShardsInnerSeries(numberOfShards)
-	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(numberOfShards)
-	cache := cppbridge.NewCache()
-
-	stats, hasReallocations, err := psr.InputRelabeling(s.baseCtx, inputLss, targetLss, cache, s.options, h1, shardsInnerSeries, shardsRelabeledSeries)
-	s.Require().NoError(err)
-	s.Equal(cppbridge.RelabelerStats{4, 4, 4}, stats)
-	s.True(hasReallocations)
-
-	shardsInnerSeries = cppbridge.NewShardsInnerSeries(numberOfShards)
-	stats, ok, err := psr.InputRelabelingFromCache(s.baseCtx, inputLss, targetLss, cache, s.options, h2, shardsInnerSeries)
-	s.Require().NoError(err)
-	s.Equal(cppbridge.RelabelerStats{4, 0, 0}, stats)
-	s.False(ok)
-	s.Equal(uint64(4), shardsInnerSeries[0].Size())
-
-	stats, _, err = psr.InputRelabeling(s.baseCtx, inputLss, targetLss, cache, s.options, h2, shardsInnerSeries, shardsRelabeledSeries)
-	s.Require().NoError(err)
-	s.Equal(cppbridge.RelabelerStats{1, 1, 0}, stats)
-	s.Equal(uint64(5), shardsInnerSeries[0].Size())
-}
-
 func (s *RelabelerSuite) TestOutputPerShardRelabeler() {
 	rCfgs := []*cppbridge.RelabelConfig{
 		{
@@ -639,6 +218,66 @@ func (s *PerGoroutineRelabelerSuite) SetupTest() {
 	s.targetLss = cppbridge.NewQueryableLssStorage()
 }
 
+func (s *PerGoroutineRelabelerSuite) TestInvalidAction() {
+	h, err := s.makeSnappyProtobufHashdex(&prompb.WriteRequest{
+		Timeseries: []prompb.TimeSeries{
+			{
+				Labels: []prompb.Label{
+					{Name: "__name__", Value: "value"},
+					{Name: "job", Value: "abc"},
+					{Name: "instance", Value: "value1"},
+				},
+				Samples: []prompb.Sample{
+					{Value: 0.1, Timestamp: time.Now().UnixMilli()},
+				},
+			},
+			{
+				Labels: []prompb.Label{
+					{Name: "__name__", Value: "value"},
+					{Name: "instance", Value: "value1"},
+				},
+				Samples: []prompb.Sample{
+					{Value: 0.1, Timestamp: time.Now().UnixMilli()},
+				},
+			},
+		},
+	})
+	s.Require().NoError(err)
+
+	rCfgs := []*cppbridge.RelabelConfig{
+		{
+			SourceLabels: []string{"job"},
+			Regex:        "abc",
+			Action:       cppbridge.Action(20),
+		},
+	}
+
+	shardsInnerSeries := cppbridge.NewShardsInnerSeries(s.numberOfShards)
+	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(s.numberOfShards)
+
+	statelessRelabeler, err := cppbridge.NewStatelessRelabeler(rCfgs)
+	s.Require().NoError(err)
+
+	state := cppbridge.NewStateV2WithoutLock()
+	state.SetRelabelerOptions(&s.options)
+	state.SetStatelessRelabeler(statelessRelabeler)
+	state.Reconfigure(0, s.numberOfShards, make([]*cppbridge.IdsMapping, s.numberOfShards))
+
+	pgr := cppbridge.NewPerGoroutineRelabeler(s.numberOfShards, 0)
+	stats, hasReallocations, err := pgr.Relabeling(
+		s.baseCtx,
+		s.inputLss,
+		s.targetLss,
+		state,
+		h,
+		shardsInnerSeries,
+		shardsRelabeledSeries,
+	)
+	s.Require().Error(err)
+	s.Equal(cppbridge.RelabelerStats{}, stats)
+	s.False(hasReallocations)
+}
+
 func (s *PerGoroutineRelabelerSuite) TestRelabeling() {
 	h, err := s.makeSnappyProtobufHashdex(&prompb.WriteRequest{
 		Timeseries: []prompb.TimeSeries{
@@ -674,7 +313,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabeling() {
 	state := cppbridge.NewStateV2WithoutLock()
 	state.SetRelabelerOptions(&s.options)
 	state.SetStatelessRelabeler(statelessRelabeler)
-	state.Reconfigure(0, s.numberOfShards)
+	state.Reconfigure(0, s.numberOfShards, make([]*cppbridge.IdsMapping, s.numberOfShards))
 
 	pgr := cppbridge.NewPerGoroutineRelabeler(s.numberOfShards, 0)
 	stats, hasReallocations, err := pgr.Relabeling(
@@ -689,6 +328,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabeling() {
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{1, 1, 1}, stats)
 	s.True(hasReallocations)
+	s.Equal(uint64(1), shardsInnerSeries[0].Size())
 }
 
 func (s *PerGoroutineRelabelerSuite) TestRelabelingDrop() {
@@ -724,7 +364,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingDrop() {
 	state := cppbridge.NewStateV2WithoutLock()
 	state.SetRelabelerOptions(&s.options)
 	state.SetStatelessRelabeler(statelessRelabeler)
-	state.Reconfigure(0, s.numberOfShards)
+	state.Reconfigure(0, s.numberOfShards, make([]*cppbridge.IdsMapping, s.numberOfShards))
 
 	pgr := cppbridge.NewPerGoroutineRelabeler(s.numberOfShards, 0)
 	stats, hasReallocations, err := pgr.Relabeling(
@@ -767,7 +407,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCacheTrue() {
 	state := cppbridge.NewStateV2WithoutLock()
 	state.SetStatelessRelabeler(statelessRelabeler)
 	state.SetRelabelerOptions(&s.options)
-	state.Reconfigure(0, s.numberOfShards)
+	state.Reconfigure(0, s.numberOfShards, make([]*cppbridge.IdsMapping, s.numberOfShards))
 
 	pgr := cppbridge.NewPerGoroutineRelabeler(s.numberOfShards, 0)
 	stats, hasReallocations, err := pgr.Relabeling(
@@ -825,7 +465,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCacheFalse() {
 	shardsInnerSeries := cppbridge.NewShardsInnerSeries(s.numberOfShards)
 	state := cppbridge.NewStateV2WithoutLock()
 	state.SetRelabelerOptions(&s.options)
-	state.Reconfigure(0, s.numberOfShards)
+	state.Reconfigure(0, s.numberOfShards, make([]*cppbridge.IdsMapping, s.numberOfShards))
 
 	pgr := cppbridge.NewPerGoroutineRelabeler(s.numberOfShards, 0)
 	stats, ok, err := pgr.RelabelingFromCache(
@@ -991,7 +631,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCachePartially() {
 	state := cppbridge.NewStateV2WithoutLock()
 	state.SetRelabelerOptions(&s.options)
 	state.SetStatelessRelabeler(statelessRelabeler)
-	state.Reconfigure(0, s.numberOfShards)
+	state.Reconfigure(0, s.numberOfShards, make([]*cppbridge.IdsMapping, s.numberOfShards))
 
 	pgr := cppbridge.NewPerGoroutineRelabeler(s.numberOfShards, 0)
 	stats, hasReallocations, err := pgr.Relabeling(
@@ -1065,7 +705,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingTransition() {
 	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(s.numberOfShards)
 
 	state := cppbridge.NewTransitionStateV2()
-	state.Reconfigure(0, s.numberOfShards)
+	state.Reconfigure(0, s.numberOfShards, make([]*cppbridge.IdsMapping, s.numberOfShards))
 
 	pgr := cppbridge.NewPerGoroutineRelabeler(s.numberOfShards, 0)
 	stats, hasReallocations, err := pgr.Relabeling(
@@ -1103,7 +743,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCacheTrueTransition() {
 	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(s.numberOfShards)
 
 	state := cppbridge.NewTransitionStateV2()
-	state.Reconfigure(0, s.numberOfShards)
+	state.Reconfigure(0, s.numberOfShards, make([]*cppbridge.IdsMapping, s.numberOfShards))
 
 	pgr := cppbridge.NewPerGoroutineRelabeler(s.numberOfShards, 0)
 	stats, hasReallocations, err := pgr.Relabeling(
@@ -1160,7 +800,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCacheFalseTransition() {
 
 	shardsInnerSeries := cppbridge.NewShardsInnerSeries(s.numberOfShards)
 	state := cppbridge.NewTransitionStateV2()
-	state.Reconfigure(0, s.numberOfShards)
+	state.Reconfigure(0, s.numberOfShards, make([]*cppbridge.IdsMapping, s.numberOfShards))
 
 	pgr := cppbridge.NewPerGoroutineRelabeler(s.numberOfShards, 0)
 	stats, ok, err := pgr.RelabelingFromCache(
@@ -1321,7 +961,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCachePartiallyTransition(
 	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(s.numberOfShards)
 
 	state := cppbridge.NewTransitionStateV2()
-	state.Reconfigure(0, s.numberOfShards)
+	state.Reconfigure(0, s.numberOfShards, make([]*cppbridge.IdsMapping, s.numberOfShards))
 
 	pgr := cppbridge.NewPerGoroutineRelabeler(s.numberOfShards, 0)
 	stats, hasReallocations, err := pgr.Relabeling(
@@ -1401,7 +1041,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenans() {
 	state.SetRelabelerOptions(&s.options)
 	state.SetStatelessRelabeler(statelessRelabeler)
 	state.EnableTrackStaleness()
-	state.Reconfigure(0, s.numberOfShards)
+	state.Reconfigure(0, s.numberOfShards, make([]*cppbridge.IdsMapping, s.numberOfShards))
 
 	pgr := cppbridge.NewPerGoroutineRelabeler(s.numberOfShards, 0)
 	stats, hasReallocations, err := pgr.Relabeling(
@@ -1413,6 +1053,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenans() {
 		shardsInnerSeries,
 		shardsRelabeledSeries,
 	)
+	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries, state, 0)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{1, 1, 1}, stats)
 	s.True(hasReallocations)
@@ -1435,6 +1076,8 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenans() {
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{0, 0, 0}, stats)
 	s.False(hasReallocations)
+
+	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries, state, 0)
 	s.Equal(uint64(1), shardsInnerSeries[0].Size())
 }
 
@@ -1465,7 +1108,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansFromCacheTrue() 
 	state.SetStatelessRelabeler(statelessRelabeler)
 	state.SetRelabelerOptions(&s.options)
 	state.EnableTrackStaleness()
-	state.Reconfigure(0, s.numberOfShards)
+	state.Reconfigure(0, s.numberOfShards, make([]*cppbridge.IdsMapping, s.numberOfShards))
 
 	pgr := cppbridge.NewPerGoroutineRelabeler(s.numberOfShards, 0)
 	stats, hasReallocations, err := pgr.Relabeling(
@@ -1489,6 +1132,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansFromCacheTrue() 
 		h,
 		shardsInnerSeries,
 	)
+	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries, state, 0)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{1, 0, 0}, stats)
 	s.True(ok)
@@ -1507,6 +1151,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansFromCacheTrue() 
 		shardsInnerSeries,
 		shardsRelabeledSeries,
 	)
+	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries, state, 0)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{0, 0, 0}, stats)
 	s.False(hasReallocations)
@@ -1543,7 +1188,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansFromCacheFalse()
 	state := cppbridge.NewStateV2WithoutLock()
 	state.SetRelabelerOptions(&s.options)
 	state.EnableTrackStaleness()
-	state.Reconfigure(0, s.numberOfShards)
+	state.Reconfigure(0, s.numberOfShards, make([]*cppbridge.IdsMapping, s.numberOfShards))
 
 	pgr := cppbridge.NewPerGoroutineRelabeler(s.numberOfShards, 0)
 	stats, ok, err := pgr.RelabelingFromCache(
@@ -1554,6 +1199,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansFromCacheFalse()
 		h,
 		shardsInnerSeries,
 	)
+	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries, state, 0)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{0, 0, 0}, stats)
 	s.False(ok)
@@ -1710,7 +1356,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansFromCachePartial
 	state.SetRelabelerOptions(&s.options)
 	state.SetStatelessRelabeler(statelessRelabeler)
 	state.EnableTrackStaleness()
-	state.Reconfigure(0, s.numberOfShards)
+	state.Reconfigure(0, s.numberOfShards, make([]*cppbridge.IdsMapping, s.numberOfShards))
 
 	pgr := cppbridge.NewPerGoroutineRelabeler(s.numberOfShards, 0)
 	stats, hasReallocations, err := pgr.Relabeling(
@@ -1722,6 +1368,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansFromCachePartial
 		shardsInnerSeries,
 		shardsRelabeledSeries,
 	)
+	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries, state, 0)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{4, 4, 4}, stats)
 	s.True(hasReallocations)
@@ -1749,6 +1396,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansFromCachePartial
 		shardsInnerSeries,
 		shardsRelabeledSeries,
 	)
+	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries, state, 0)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{1, 1, 0}, stats)
 	s.Equal(uint64(5), shardsInnerSeries[0].Size())
@@ -1767,6 +1415,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansFromCachePartial
 		shardsInnerSeries,
 		shardsRelabeledSeries,
 	)
+	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries, state, 0)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{0, 0, 0}, stats)
 	s.False(hasReallocations)
@@ -1821,7 +1470,7 @@ func (s *StateV2Suite) TestStateReconfigure() {
 }
 
 func (s *StateV2Suite) stateReconfigure(state *cppbridge.StateV2) {
-	state.Reconfigure(0, 1)
+	state.Reconfigure(0, 1, nil)
 
 	s.NotNil(state.CacheByShard(0))
 	s.False(state.TrackStaleness())
@@ -1834,12 +1483,12 @@ func (s *StateV2Suite) TestStateReconfigureWithoutReconfigure() {
 }
 
 func (s *StateV2Suite) stateReconfigureWithoutReconfigure(state *cppbridge.StateV2) {
-	state.Reconfigure(0, 1)
+	state.Reconfigure(0, 1, nil)
 
 	cache1 := state.CacheByShard(0)
 	s.NotNil(cache1)
 
-	state.Reconfigure(0, 1)
+	state.Reconfigure(0, 1, nil)
 	cache2 := state.CacheByShard(0)
 	s.NotNil(cache2)
 	s.Equal(cache1, cache2)
@@ -1852,14 +1501,14 @@ func (s *StateV2Suite) TestStateReconfigureNumberOfShards() {
 
 func (s *StateV2Suite) stateReconfigureNumberOfShards(state *cppbridge.StateV2) {
 	state.EnableTrackStaleness()
-	state.Reconfigure(0, 2)
+	state.Reconfigure(0, 2, make([]*cppbridge.IdsMapping, 2))
 
 	cache0 := state.CacheByShard(0)
 	s.NotNil(cache0)
 	cache1 := state.CacheByShard(1)
 	s.NotNil(cache1)
 
-	state.Reconfigure(1, 1)
+	state.Reconfigure(1, 1, make([]*cppbridge.IdsMapping, 1))
 	newCache0 := state.CacheByShard(0)
 	s.NotNil(newCache0)
 	s.NotEqual(cache0, newCache0)
@@ -1873,7 +1522,7 @@ func (s *StateV2Suite) TestStateReconfigureTrackStaleness() {
 
 func (s *StateV2Suite) stateReconfigureTrackStaleness(state *cppbridge.StateV2) {
 	state.EnableTrackStaleness()
-	state.Reconfigure(0, 1)
+	state.Reconfigure(0, 1, make([]*cppbridge.IdsMapping, 1))
 
 	s.NotNil(state.CacheByShard(0))
 	s.True(state.TrackStaleness())
@@ -1914,7 +1563,7 @@ func (s *StateV2Suite) TestStateTransitionReconfigure() {
 }
 
 func (s *StateV2Suite) stateTransitionReconfigure(state *cppbridge.StateV2) {
-	state.Reconfigure(0, 1)
+	state.Reconfigure(0, 1, make([]*cppbridge.IdsMapping, 1))
 
 	s.False(state.TrackStaleness())
 	s.Panics(func() { state.CacheByShard(0) })
@@ -1928,7 +1577,7 @@ func (s *StateV2Suite) TestStateTransitionReconfigureTrackStaleness() {
 
 func (s *StateV2Suite) stateTransitionReconfigureTrackStaleness(state *cppbridge.StateV2) {
 	s.Panics(func() { state.EnableTrackStaleness() })
-	state.Reconfigure(0, 1)
+	state.Reconfigure(0, 1, make([]*cppbridge.IdsMapping, 1))
 
 	s.False(state.TrackStaleness())
 	s.Panics(func() { state.CacheByShard(0) })
@@ -1948,4 +1597,86 @@ func (s *StateV2Suite) statelessRelabelerTransition(state *cppbridge.StateV2) {
 
 	s.Panics(func() { state.SetStatelessRelabeler(statelessRelabeler) })
 	s.Panics(func() { state.StatelessRelabeler() })
+}
+
+func (s *StateV2Suite) createIdsMapping() *cppbridge.IdsMapping {
+	lss1 := cppbridge.NewQueryableLssStorage()
+	lss1.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build())
+	snapshot := lss1.CreateLabelSetSnapshot()
+
+	return snapshot.CopyAddedSeries(lss1.BitsetSeries(), cppbridge.NewQueryableLssStorage())
+}
+
+func (s *StateV2Suite) TestReconfigureWithInvalidOrderOfGenerationHead() {
+	// Arrange
+	state := cppbridge.NewStateV2()
+	state.EnableTrackStaleness()
+	state.Reconfigure(0, 1, nil)
+	staleNanState := state.StaleNansStateByShard(0)
+
+	// Act
+	state.Reconfigure(2, 1, []*cppbridge.IdsMapping{s.createIdsMapping()})
+
+	// Assert
+	s.NotEqual(unsafe.Pointer(staleNanState), unsafe.Pointer(state.StaleNansStateByShard(0)))
+}
+
+func (s *StateV2Suite) TestReconfigureWithShardNumberChange() {
+	// Arrange
+	state := cppbridge.NewStateV2()
+	state.EnableTrackStaleness()
+	state.Reconfigure(0, 1, nil)
+	staleNanState := state.StaleNansStateByShard(0)
+
+	// Act
+	state.Reconfigure(1, 2, []*cppbridge.IdsMapping{s.createIdsMapping()})
+
+	// Assert
+	s.NotEqual(unsafe.Pointer(staleNanState), unsafe.Pointer(state.StaleNansStateByShard(0)))
+}
+
+func (s *StateV2Suite) TestReconfigureWithNilIdsMapping() {
+	// Arrange
+	state := cppbridge.NewStateV2()
+	state.EnableTrackStaleness()
+	state.Reconfigure(0, 1, nil)
+	staleNanState := state.StaleNansStateByShard(0)
+
+	// Act
+	state.Reconfigure(1, 2, []*cppbridge.IdsMapping{nil, nil})
+
+	// Assert
+	s.NotEqual(unsafe.Pointer(staleNanState), unsafe.Pointer(state.StaleNansStateByShard(0)))
+}
+
+func (s *StateV2Suite) TestReconfigureWithEmptyIdsMapping() {
+	// Arrange
+	state := cppbridge.NewStateV2()
+	state.EnableTrackStaleness()
+	state.Reconfigure(0, 1, nil)
+	staleNanState := state.StaleNansStateByShard(0)
+
+	// Act
+	state.Reconfigure(1, 1, []*cppbridge.IdsMapping{{}, {}})
+
+	// Assert
+	s.NotEqual(unsafe.Pointer(staleNanState), unsafe.Pointer(state.StaleNansStateByShard(0)))
+}
+
+func (s *StateV2Suite) TestReconfigureWithRemap() {
+	// Arrange
+	state := cppbridge.NewStateV2()
+	state.EnableTrackStaleness()
+	state.Reconfigure(0, 2, nil)
+	staleNanState1 := state.StaleNansStateByShard(0)
+	staleNanState2 := state.StaleNansStateByShard(1)
+
+	mapping := s.createIdsMapping()
+
+	// Act
+	state.Reconfigure(1, 2, []*cppbridge.IdsMapping{mapping, mapping})
+
+	// Assert
+	s.Equal(unsafe.Pointer(staleNanState1), unsafe.Pointer(state.StaleNansStateByShard(0)))
+	s.Equal(unsafe.Pointer(staleNanState2), unsafe.Pointer(state.StaleNansStateByShard(1)))
 }

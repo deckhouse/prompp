@@ -224,17 +224,6 @@ void prompp_primitives_lss_query_label_values(void* args, void* res);
 void prompp_create_readonly_lss(void* args, void* res);
 
 /**
- * @brief Copy label sets which were added via find_or_emplace from source lss to destination lss
- *
- * @param source_lss pointer to source label sets
- * @param destination_lss pointer to destination label sets
- *
- * @attention This binding used as a CGO call!!!
- *
- */
-void prompp_primitives_lss_copy_added_series(uint64_t source_lss, uint64_t destination_lss);
-
-/**
  * @brief returns a copy of the bitset of added series from the lss.
  *
  * @param args {
@@ -263,11 +252,22 @@ void prompp_primitives_lss_bitset_dtor(void* args);
  * @param source_lss pointer to source label sets;
  * @param source_bitset pointer to source bitset;
  * @param destination_lss pointer to destination label sets;
+ * @param ids_mapping pointer to uintptr
  *
  * @attention This binding used as a CGO call!!!
  *
  */
-void prompp_primitives_readonly_lss_copy_added_series(uint64_t source_lss, uint64_t source_bitset, uint64_t destination_lss);
+void prompp_primitives_readonly_lss_copy_added_series(uint64_t source_lss, uint64_t source_bitset, uint64_t destination_lss, uint64_t ids_mapping);
+
+/**
+ * @brief destroy ls ids mapping
+ *
+ * @param args {
+ *     ls_ids_mapping uintptr
+ * }
+ *
+ */
+void prompp_primitives_free_ls_ids_mapping(void* args);
 
 /**
  * @brief Construct a new Bitset.

@@ -191,7 +191,7 @@ func NewManager(
 	m := &Manager{
 		g:      run.Group{},
 		closer: util.NewCloser(),
-		proxy:  NewProxy(container.NewWeighted(h), hKeeper, services.CFSViaRange),
+		proxy:  NewProxy(container.NewWeighted(h, container.DefaultBackPressure), hKeeper, services.CFSViaRange),
 		cgogc:  cppbridge.NewCGOGC(r),
 		cfg:    cfg,
 		rotatorMediator: mediator.NewMediator(

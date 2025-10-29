@@ -9,16 +9,16 @@ extern "C" void prompp_series_data_serialization_serialized_data_next(void* args
 
   using Result = struct {
     uint32_t series_id;
-    uint32_t chunk_id;
+    uint32_t chunk_ref;
   };
   const auto out = new (res) Result{};
-  std::tie(out->series_id, out->chunk_id) = static_cast<Arguments*>(args)->serialized_data->next();
+  std::tie(out->series_id, out->chunk_ref) = static_cast<Arguments*>(args)->serialized_data->next();
 }
 
-extern "C" void prompp_series_data_serialization_serialized_data_iterator(void* args, void* res) {
+extern "C" void prompp_series_data_serialization_serialized_data_iterator_ctor(void* args, void* res) {
   struct Arguments {
     entrypoint::head::SerializedDataPtr serialized_data;
-    uint32_t chunk_id;
+    uint32_t chunk_ref;
   };
 
   using Result = struct {
@@ -26,7 +26,7 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator(void* 
   };
 
   new (res) Result{.iterator = std::make_unique<series_data::serialization::SerializedDataView::SeriesIterator>(
-                       static_cast<Arguments*>(args)->serialized_data->iterator(static_cast<Arguments*>(args)->chunk_id))};
+                       static_cast<Arguments*>(args)->serialized_data->iterator(static_cast<Arguments*>(args)->chunk_ref))};
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_iterator_next(void* args, void* res) {
@@ -51,6 +51,17 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_next(v
     new (res) Result{.timestamp = sample.timestamp, .value = sample.value, .has_value = true};
     ++(*in->iterator);
   }
+}
+
+extern "C" void prompp_series_data_serialization_serialized_data_iterator_reset(void* args) {
+  struct Arguments {
+    entrypoint::head::SerializedDataPtr serialized_data;
+    entrypoint::head::SerializedDataIteratorPtr iterator;
+    uint32_t chunk_ref;
+  };
+
+  const Arguments* in = static_cast<Arguments*>(args);
+  in->iterator->reset(in->serialized_data->get_buffer_view(), in->serialized_data->get_chunks_view(), in->chunk_ref);
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_iterator_dtor(void* args) {

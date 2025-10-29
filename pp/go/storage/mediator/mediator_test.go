@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/prometheus/prometheus/pp/go/storage/mediator"
@@ -19,40 +20,33 @@ func TestMediatorSuite(t *testing.T) {
 }
 
 func (s *MediatorSuite) TestC() {
-	chTimer := make(chan time.Time, 1)
+	synctest.Test(s.T(), func(t *testing.T) {
+		chTimer := make(chan time.Time, 1)
 
-	timer := &TimerMock{
-		ChanFunc: func() <-chan time.Time {
-			return chTimer
-		},
-		ResetFunc: func() {},
-		StopFunc:  func() {},
-	}
+		timer := &TimerMock{
+			ChanFunc: func() <-chan time.Time {
+				return chTimer
+			},
+			ResetFunc: func() {},
+			StopFunc:  func() {},
+		}
 
-	m := mediator.NewMediator(timer)
+		m := mediator.NewMediator(timer)
 
-	counter := 0
-	done := make(chan struct{})
-	start := sync.WaitGroup{}
-	start.Add(1)
+		counter := 0
 
-	s.T().Run("service_run", func(t *testing.T) {
-		t.Parallel()
-		start.Done()
-		<-m.C()
-		counter++
-		close(done)
-	})
+		go func() {
+			t.Log("service run")
+			<-m.C()
+			counter++
+		}()
+		synctest.Wait()
 
-	s.T().Run("timer_tick", func(t *testing.T) {
-		t.Parallel()
-		start.Wait()
-
-		s.T().Log("timer tick")
-		chTimer <- time.Time{}
-		chTimer <- time.Time{}
-
-		<-done
+		go func() {
+			t.Log("timer tick")
+			chTimer <- time.Time{}
+		}()
+		synctest.Wait()
 
 		s.Equal(1, counter)
 		m.Close()

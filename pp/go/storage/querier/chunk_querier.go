@@ -143,10 +143,10 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TGShard, THead]) Select(
 		return storage.ErrChunkSeriesSet(err)
 	}
 
-	serializedChunksShards := queryDataStorage(dsQueryChunkQuerier, q.head, lssQueryResults, q.mint, q.maxt)
+	shardedSerializedData := queryDataStorage(dsQueryChunkQuerier, q.head, lssQueryResults, q.mint, q.maxt)
 	chunkSeriesSets := make([]storage.ChunkSeriesSet, q.head.NumberOfShards())
-	for shardID, serializedChunks := range serializedChunksShards {
-		if serializedChunks == nil {
+	for shardID, serializedData := range shardedSerializedData {
+		if serializedData == nil {
 			chunkSeriesSets[shardID] = &EmptyChunkSeriesSet{}
 			continue
 		}
@@ -154,7 +154,7 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TGShard, THead]) Select(
 		chunkSeriesSets[shardID] = NewChunkSeriesSet(
 			lssQueryResults[shardID],
 			snapshots[shardID],
-			cppbridge.NewSerializedChunkRecoder(serializedChunks, cppbridge.TimeInterval{MinT: q.mint, MaxT: q.maxt}),
+			cppbridge.NewSerializedChunkRecoder(serializedData, cppbridge.TimeInterval{MinT: q.mint, MaxT: q.maxt}),
 		)
 	}
 
