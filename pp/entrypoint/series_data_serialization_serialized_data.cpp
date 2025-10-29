@@ -70,24 +70,17 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_seek(v
   const Arguments* in = static_cast<Arguments*>(args);
   const auto out = static_cast<Result*>(res);
 
-  while (true) {
-    if (*in->iterator == DecodeIteratorSentinel{}) {
-      out->has_value = false;
+  for (; *in->iterator != DecodeIteratorSentinel{}; ++(*in->iterator)) {
+    if (const auto sample = **(in->iterator); sample.timestamp >= in->target_timestamp) {
+      out->timestamp = sample.timestamp;
+      out->value = sample.value;
+      out->has_value = true;
+      ++(*in->iterator);
       return;
     }
-
-    const auto sample = **(in->iterator);
-    if (sample.timestamp < in->target_timestamp) {
-      ++(*in->iterator);
-      continue;
-    }
-
-    out->timestamp = sample.timestamp;
-    out->value = sample.value;
-    out->has_value = true;
-    ++(*in->iterator);
-    return;
   }
+
+  out->has_value = true;
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_iterator_reset(void* args) {
