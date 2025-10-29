@@ -45,8 +45,8 @@ TEST_F(MetricsStorageIteratorFixture, EmptyStorage) {
 
 TEST_F(MetricsStorageIteratorFixture, TwoPages) {
   // Arrange
-  const auto page1 = CreateMetricsPage<Metrics1>(LabelViewSet{{"page", "1"}}, storage_);
-  const auto page2 = CreateMetricsPage<Metrics2>(LabelViewSet{{"page", "2"}}, storage_);
+  const auto page1 = CreateMetricsPage<Metrics1>(storage_, LabelViewSet{{"page", "1"}});
+  const auto page2 = CreateMetricsPage<Metrics2>(storage_, LabelViewSet{{"page", "2"}});
 
   std::vector<Storage::Iterator::Item> items;
 
