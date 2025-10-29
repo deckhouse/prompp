@@ -9,6 +9,10 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util/locker"
 )
 
+// DefaultBackPressure is a coefficient that allows enough concurrent tasks
+// to pass through so that goroutines don’t stay idle.
+const DefaultBackPressure int64 = 2
+
 // Head the minimum required Head implementation for a container.
 type Head[T any] interface {
 	// Concurrency return current head workers concurrency.
@@ -20,15 +24,21 @@ type Head[T any] interface {
 
 // Weighted container for [Head] with weighted locker.
 type Weighted[T any, THead Head[T]] struct {
-	wlocker *locker.Weighted
-	head    *T
+	wlocker      *locker.Weighted
+	head         *T
+	backPressure int64
 }
 
 // NewWeighted init new [Weighted].
-func NewWeighted[T any, THead Head[T]](head THead) *Weighted[T, THead] {
+func NewWeighted[T any, THead Head[T]](head THead, backPressure int64) *Weighted[T, THead] {
+	if backPressure == 0 {
+		backPressure = DefaultBackPressure
+	}
+
 	return &Weighted[T, THead]{
-		wlocker: locker.NewWeighted(2 * head.Concurrency()), // x2 for back pressure
-		head:    head,
+		wlocker:      locker.NewWeighted(backPressure * head.Concurrency()),
+		head:         head,
+		backPressure: backPressure,
 	}
 }
 
@@ -55,7 +65,7 @@ func (c *Weighted[T, THead]) Replace(ctx context.Context, newHead THead) error {
 		(*unsafe.Pointer)(unsafe.Pointer(&c.head)), // #nosec G103 // it's meant to be that way
 		unsafe.Pointer(newHead),                    // #nosec G103 // it's meant to be that way
 	)
-	c.wlocker = locker.NewWeighted(2 * newHead.Concurrency()) // x2 for back pressure
+	c.wlocker = locker.NewWeighted(c.backPressure * newHead.Concurrency())
 
 	unlock()
 

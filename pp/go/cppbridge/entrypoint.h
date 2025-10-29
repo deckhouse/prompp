@@ -717,17 +717,6 @@ void prompp_primitives_lss_query_label_values(void* args, void* res);
 void prompp_create_readonly_lss(void* args, void* res);
 
 /**
- * @brief Copy label sets which were added via find_or_emplace from source lss to destination lss
- *
- * @param source_lss pointer to source label sets
- * @param destination_lss pointer to destination label sets
- *
- * @attention This binding used as a CGO call!!!
- *
- */
-void prompp_primitives_lss_copy_added_series(uint64_t source_lss, uint64_t destination_lss);
-
-/**
  * @brief returns a copy of the bitset of added series from the lss.
  *
  * @param args {
@@ -918,48 +907,6 @@ void prompp_prometheus_per_shard_relabeler_ctor(void* args, void* res);
 void prompp_prometheus_per_shard_relabeler_dtor(void* args);
 
 /**
- * @brief relabeling incomig hashdex(first stage).
- *
- * @param args {
- *     shards_inner_series     []*InnerSeries     // go slice with InnerSeries;
- *     shards_relabeled_series []*RelabeledSeries // go slice with RelabeledSeries;
- *     options                 RelabelerOptions   // object RelabelerOptions;
- *     per_shard_relabeler     uintptr            // pointer to constructed per shard relabeler;
- *     hashdex                 uintptr            // pointer to filled hashdex;
- *     cache                   uintptr            // pointer to constructed Cache;
- *     input_lss               uintptr            // pointer to constructed input label sets;
- *     target_lss              uintptr            // pointer to constructed target label sets;
- * }
- *
- * @param res {
- *     samples_added                uint32        // number of added samples;
- *     series_added                 uint32        // number of added series;
- *     series_drop                  uint32        // number of dropped series;
- *     error                        []byte        // error string if thrown;
- *     target_lss_has_reallocations bool          // true if target lss has reallocations
- * }
- */
-void prompp_prometheus_per_shard_relabeler_input_relabeling(void* args, void* res);
-
-/**
- * @brief Create StaleNaNsStateDeprecated.
- *
- * @param res {
- *     state uintptr // pointer to constructed StaleNaNsStateDeprecated;
- * }
- */
-void prompp_prometheus_relabel_stalenans_state_deprecated_ctor(void* res);
-
-/**
- * @brief Destroy StaleNaNsStateDeprecated.
- *
- * @param args {
- *      state uintptr // pointer to StaleNaNsStateDeprecated;
- * }
- */
-void prompp_prometheus_relabel_stalenans_state_deprecated_dtor(void* args);
-
-/**
  * @brief Create StaleNaNsState.
  *
  * @param res {
@@ -978,118 +925,6 @@ void prompp_prometheus_relabel_stale_nans_state_ctor(void* res);
 void prompp_prometheus_relabel_stale_nans_state_dtor(void* args);
 
 /**
- * @brief relabeling incomig hashdex(first stage) with state stalenans.
- *
- * @param args {
- *     shards_inner_series     []*InnerSeries     // go slice with InnerSeries;
- *     shards_relabeled_series []*RelabeledSeries // go slice with RelabeledSeries;
- *     options                 RelabelerOptions   // object RelabelerOptions;
- *     per_shard_relabeler     uintptr            // pointer to constructed per shard relabeler;
- *     hashdex                 uintptr            // pointer to filled hashdex;
- *     cache                   uintptr            // pointer to constructed Cache;
- *     input_lss               uintptr            // pointer to constructed input label sets;
- *     target_lss              uintptr            // pointer to constructed target label sets;
- *     state                   uintptr            // pointer to source state
- *     def_timestamp           int64              // timestamp for metrics and StaleNaNs
- * }
- *
- * @param res {
- *     samples_added                uint32        // number of added samples;
- *     series_added                 uint32        // number of added series;
- *     series_drop                  uint32        // number of dropped series;
- *     error                        []byte        // error string if thrown;
- *     target_lss_has_reallocations bool          // true if target lss has reallocations
- * }
- */
-void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stalenans(void* args, void* res);
-
-/**
- * @brief relabeling incomig hashdex(first stage) from cache.
- *
- * @param args {
- *     shards_inner_series []*InnerSeries   // go slice with InnerSeries;
- *     options             RelabelerOptions // object RelabelerOptions;
- *     per_shard_relabeler uintptr          // pointer to constructed per shard relabeler;
- *     hashdex             uintptr          // pointer to filled hashdex;
- *     cache               uintptr          // pointer to constructed Cache;
- *     input_lss           uintptr          // pointer to constructed input label sets;
- *     target_lss          uintptr          // pointer to constructed target label sets;
- * }
- *
- * @param res {
- *     samples_added       uint32           // number of added samples;
- *     series_added        uint32           // number of added series;
- *     series_drop         uint32           // number of dropped series;
- *     ok                  bool             // true if all label set find in cache;
- *     error               []byte           // error string if thrown;
- * }
- */
-void prompp_prometheus_per_shard_relabeler_input_relabeling_from_cache(void* args, void* res);
-
-/**
- * @brief relabeling incomig hashdex(first stage) from cache with state stalenans.
- *
- * @param args {
- *     shards_inner_series []*InnerSeries   // go slice with InnerSeries;
- *     options             RelabelerOptions // object RelabelerOptions;
- *     per_shard_relabeler uintptr          // pointer to constructed per shard relabeler;
- *     hashdex             uintptr          // pointer to filled hashdex;
- *     cache               uintptr          // pointer to constructed Cache;
- *     input_lss           uintptr          // pointer to constructed input label sets;
- *     target_lss          uintptr          // pointer to constructed target label sets;
- *     state               uintptr          // pointer to source state
- *     def_timestamp       int64            // timestamp for metrics and StaleNaNs
- * }
- *
- * @param res {
- *     samples_added       uint32           // number of added samples;
- *     series_added        uint32           // number of added series;
- *     series_drop         uint32           // number of dropped series;
- *     ok                  bool             // true if all label set find in cache;
- *     error               []byte           // error string if thrown;
- * }
- */
-void prompp_prometheus_per_shard_relabeler_input_relabeling_with_stalenans_from_cache(void* args, void* res);
-
-/**
- * @brief write stale nans from state.
- *
- * @param args {
- *     shards_inner_series     []*InnerSeries     // go slice with InnerSeries;
- *     per_shard_relabeler     uintptr            // pointer to constructed per shard relabeler;
- *     cache                   uintptr            // pointer to constructed Cache;
- *     state                   uintptr            // pointer to source state
- *     stale_ts                int64              // timestamp for StaleNaNs
- * }
- *
- * @param res {
- *     samples_added           uint32             // number of added samples;
- *     series_added            uint32             // number of added series;
- *     series_drop             uint32             // number of dropped series;
- *     error                   []byte             // error string if thrown;
- * }
- */
-void prompp_prometheus_per_shard_relabeler_input_collect_stalenans(void* args, void* res);
-
-/**
- * @brief add relabeled ls to lss, add to result and add to cache update(second stage).
- *
- * @param args {
- *     shards_inner_series           []*InnerSeries          // go InnerSeries per source shard;
- *     shards_relabeled_series       []*RelabeledSeries      // go RelabeledSeries per source shard;
- *     shards_relabeler_state_update []*RelabelerStateUpdate // pointer to RelabelerStateUpdate per source shard;
- *     per_shard_relabeler           uintptr                 // pointer to constructed per shard relabeler;
- *     lss                           uintptr                 // pointer to constructed label sets;
- * }
- *
- * @param res {
- *     error                         []byte                  // error string if thrown
- *     target_lss_has_reallocations  bool                    // true if target lss has reallocations
- * }
- */
-void prompp_prometheus_per_shard_relabeler_append_relabeler_series(void* args, void* res);
-
-/**
  * @brief add to cache relabled data(third stage).
  *
  * @param args {
@@ -1103,23 +938,7 @@ void prompp_prometheus_per_shard_relabeler_append_relabeler_series(void* args, v
  *     error                  []byte  // error string if thrown;
  * }
  */
-void prompp_prometheus_per_shard_singe_relabeler_update_relabeler_state(void* args, void* res);
-
-/**
- * @brief add to cache relabled data(third stage).
- *
- * @param args {
- *     shards_relabeler_state_update []*RelabelerStateUpdate // pointer to RelabelerStateUpdate per source shard;
- *     per_shard_relabeler           uintptr                 // pointer to constructed per shard relabeler;
- *     cache                         uintptr                 // pointer to constructed Cache;
- *     relabeled_shard_id            uint16                  // relabeled shard id;
- * }
- *
- * @param res {
- *     error                  []byte  // error string if thrown;
- * }
- */
-void prompp_prometheus_per_shard_relabeler_update_relabeler_state(void* args, void* res);
+void prompp_prometheus_per_shard_single_relabeler_update_relabeler_state(void* args, void* res);
 
 /**
  * @brief relabeling output series(fourth stage).

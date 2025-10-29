@@ -126,7 +126,10 @@ func (s *MergerSuite) TestHappyPath() {
 		}
 	}
 
-	activeHeadContainer := container.NewWeighted(s.createHead(unloadedFS, queriedSeriesFS))
+	activeHeadContainer := container.NewWeighted(
+		s.createHead(unloadedFS, queriedSeriesFS),
+		container.DefaultBackPressure,
+	)
 	isNewHead := func(string) bool { return false }
 
 	merger := services.NewMerger(activeHeadContainer, mediator, isNewHead)
@@ -210,7 +213,10 @@ func (s *MergerSuite) TestSkipNewHead() {
 		}
 	}
 
-	activeHeadContainer := container.NewWeighted(s.createHead(unloadedFS, queriedSeriesFS))
+	activeHeadContainer := container.NewWeighted(
+		s.createHead(unloadedFS, queriedSeriesFS),
+		container.DefaultBackPressure,
+	)
 	isNewHead := func(string) bool { return true }
 
 	merger := services.NewMerger(activeHeadContainer, mediator, isNewHead)

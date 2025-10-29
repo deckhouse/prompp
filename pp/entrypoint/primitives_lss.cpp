@@ -252,16 +252,6 @@ extern "C" void prompp_create_readonly_lss(void* args, void* res) {
   new (res) Result{.lss_copy = entrypoint::head::create_readonly_lss(*static_cast<Arguments*>(args)->lss)};
 }
 
-extern "C" void prompp_primitives_lss_copy_added_series(uint64_t source_lss, uint64_t destination_lss) {
-  auto& src = std::get<QueryableEncodingBimap>(*std::bit_cast<entrypoint::head::LssVariant*>(source_lss));
-  auto& dst = std::get<QueryableEncodingBimap>(*std::bit_cast<entrypoint::head::LssVariant*>(destination_lss));
-  src.build_deferred_indexes();
-
-  BareBones::Vector<PromPP::Primitives::LabelSetID> dst_src_ids_mapping;
-  series_index::QueryableEncodingBimapCopier copier(src, src.sorting_index(), src.added_series(), dst, dst_src_ids_mapping);
-  copier.copy_added_series_and_build_indexes();
-}
-
 using BitsetPtr = std::unique_ptr<BareBones::Bitset>;
 
 extern "C" void prompp_primitives_lss_bitset_series(void* args, void* res) {
