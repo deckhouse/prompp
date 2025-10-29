@@ -50,7 +50,7 @@ func (s *GenericPersistenceSuite) SetupTest() {
 	s.createCatalog()
 
 	h := s.mustCreateHead()
-	activeHeadContainer := container.NewWeighted(h)
+	activeHeadContainer := container.NewWeighted(h, container.DefaultBackPressure)
 	removedHeadNotifier := &mock.WriteNotifierMock{NotifyFunc: func() {}}
 	hKeeper := keeper.NewKeeper[storage.Head](1, removedHeadNotifier)
 	s.proxy = storage.NewProxy(activeHeadContainer, hKeeper, func(*storage.Head) error { return nil })
