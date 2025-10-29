@@ -197,6 +197,7 @@ cc_library(
     deps = [
         ":bare_bones",
         ":head",
+        ":metrics",
         ":primitives",
         ":wal",
     ] + select({

@@ -71,7 +71,7 @@ class BasicLabelSet {
     labels_.reserve(labels_.size() + label_set.size());
 
     for (const auto& label : label_set) {
-      append(label.first, label.second);
+      append(static_cast<std::string_view>(label.first), static_cast<std::string_view>(label.second));
     }
 
     sort();
