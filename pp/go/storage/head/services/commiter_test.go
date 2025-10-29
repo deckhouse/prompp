@@ -85,7 +85,7 @@ func (s *CommitterSuite) TestHappyPath() {
 			CurrentSizeFunc: func() int64 { return 0 },
 		}
 	}
-	activeHeadContainer := container.NewWeighted(s.createHead(segmentWriters))
+	activeHeadContainer := container.NewWeighted(s.createHead(segmentWriters), container.DefaultBackPressure)
 	isNewHead := func(string) bool { return false }
 
 	committer := services.NewCommitter(activeHeadContainer, mediator, isNewHead)
@@ -148,7 +148,7 @@ func (s *CommitterSuite) TestSkipNewHead() {
 			CurrentSizeFunc: func() int64 { return 0 },
 		}
 	}
-	activeHeadContainer := container.NewWeighted(s.createHead(segmentWriters))
+	activeHeadContainer := container.NewWeighted(s.createHead(segmentWriters), container.DefaultBackPressure)
 
 	isNewHead := func(string) bool { return true }
 	committer := services.NewCommitter(activeHeadContainer, mediator, isNewHead)

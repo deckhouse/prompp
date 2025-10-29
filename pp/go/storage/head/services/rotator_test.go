@@ -129,6 +129,7 @@ func (s *RotatorSuite) TestRotate() {
 	proxyHead := storage.NewProxy(
 		container.NewWeighted(
 			s.createHead(s.nameIDGenerator(rotatedCounter), segmentWriters, rotatedCounter, shardsCount),
+			container.DefaultBackPressure,
 		),
 		keeper.NewKeeper[storage.Head](2, removedHeadNotifier),
 		func(*storage.Head) error { return nil },
@@ -243,6 +244,7 @@ func (s *RotatorSuite) TestCopySeriesOnRotate() {
 	proxyHead := storage.NewProxy(
 		container.NewWeighted(
 			s.createHead(s.nameIDGenerator(rotatedCounter), segmentWriters, rotatedCounter, shardsCount),
+			container.DefaultBackPressure,
 		),
 		keeper.NewKeeper[storage.Head](2, removedHeadNotifier),
 		func(*storage.Head) error { return nil },

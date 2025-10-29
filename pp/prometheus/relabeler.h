@@ -237,36 +237,6 @@ class NoOpStaleNaNsState {
   PROMPP_ALWAYS_INLINE static void swap([[maybe_unused]] InputCallback input_fn, [[maybe_unused]] TargetCallback target_fn) {}
 };
 
-// StaleNaNsState state for stale nans.
-class StaleNaNsStateDeprecated {
-  roaring::Roaring input_bitset_{};
-  roaring::Roaring target_bitset_{};
-  roaring::Roaring prev_input_bitset_{};
-  roaring::Roaring prev_target_bitset_{};
-
- public:
-  PROMPP_ALWAYS_INLINE void add_input(uint32_t id) { input_bitset_.add(id); }
-
-  PROMPP_ALWAYS_INLINE void add_target(uint32_t id) { target_bitset_.add(id); }
-
-  template <typename InputCallback, typename TargetCallback>
-  PROMPP_ALWAYS_INLINE void swap(InputCallback input_fn, TargetCallback target_fn) {
-    prev_input_bitset_ -= input_bitset_;
-    for (uint32_t ls_id : prev_input_bitset_) {
-      input_fn(ls_id);
-    }
-    // drop old, store new..
-    prev_input_bitset_ = std::move(input_bitset_);
-
-    prev_target_bitset_ -= target_bitset_;
-    for (uint32_t ls_id : prev_target_bitset_) {
-      target_fn(ls_id);
-    }
-    // drop old, store new..
-    prev_target_bitset_ = std::move(target_bitset_);
-  }
-};
-
 class StaleNaNsState {
  public:
   template <class Callback>
@@ -437,447 +407,7 @@ class PerShardRelabeler {
     }
   }
 
- private:
-  PROMPP_ALWAYS_INLINE static bool resolve_timestamps(Primitives::Timestamp def_timestamp,
-                                                      BareBones::Vector<Primitives::Sample>& samples,
-                                                      const RelabelerOptions& o) {
-    // skip resolve without stalenans
-    if (def_timestamp == Primitives::kNullTimestamp) {
-      return false;
-    }
-
-    bool track_staleness{true};
-    for (auto& sample : samples) {
-      // replace null timestamp on def timestamp
-      if (sample.timestamp() == Primitives::kNullTimestamp) {
-        sample.timestamp() = def_timestamp;
-        continue;
-      }
-
-      // replace incoming timestamp on def timestamp
-      if (!o.honor_timestamps) {
-        sample.timestamp() = def_timestamp;
-        continue;
-      }
-
-      track_staleness = false;
-    }
-
-    return track_staleness;
-  }
-
-  template <hashdex::HashdexInterface Hashdex>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto skip_shard_inner_series(const Hashdex& hashdex, size_t i) {
-    auto it = hashdex.begin();
-    for (; it != hashdex.end() && i > 0; ++it) {
-      if ((it->hash() % number_of_shards_) != shard_id_) {
-        continue;
-      }
-      --i;
-    }
-
-    return it;
-  }
-
-  template <class InputLSS, class TargetLSS, hashdex::HashdexInterface Hashdex, class StNaNsState, class Stats>
-  PROMPP_ALWAYS_INLINE void input_relabeling_internal(InputLSS& input_lss,
-                                                      TargetLSS& target_lss,
-                                                      Cache& cache,
-                                                      const Hashdex& hashdex,
-                                                      const RelabelerOptions& o,
-                                                      Stats& stats,
-                                                      Primitives::Go::SliceView<InnerSeries*>& shards_inner_series,
-                                                      Primitives::Go::SliceView<RelabeledSeries*>& shards_relabeled_series,
-                                                      StNaNsState& stale_nan_state,
-                                                      Primitives::Timestamp def_timestamp) {
-    assert(number_of_shards_ > 0);
-
-    const size_t n =
-        std::min(static_cast<size_t>(hashdex.size()), static_cast<size_t>((hashdex.size() * (1 - cache.part_of_drops()) * 1.1) / number_of_shards_));
-    for (uint16_t i = 0; i < number_of_shards_; ++i) {
-      if (shards_inner_series[i]->size() >= n) {
-        continue;
-      }
-
-      shards_inner_series[i]->reserve(n);
-    }
-
-    size_t samples_count{0};
-
-    for (auto it = skip_shard_inner_series(hashdex, shards_inner_series[shard_id_]->size()); it != hashdex.end(); ++it) {
-      if ((it->hash() % number_of_shards_) != shard_id_) {
-        continue;
-      }
-
-      timeseries_buf_.clear();
-      it->read(timeseries_buf_);
-
-      Cache::CheckResult check_result = cache.check(input_lss, target_lss, timeseries_buf_.label_set(), it->hash());
-      switch (check_result.status) {
-        case Cache::CheckResult::kNotFound: {
-          builder_.reset(timeseries_buf_.label_set());
-          switch (relabel(o, builder_)) {
-            case rsDrop:
-            case rsInvalid: {
-              cache.add_drop(input_lss.find_or_emplace(timeseries_buf_.label_set(), it->hash()));
-              ++stats.series_drop;
-              continue;
-            }
-            case rsKeep: {
-              auto ls_id = target_lss.find_or_emplace(timeseries_buf_.label_set(), it->hash());
-              cache.add_keep(ls_id);
-              auto& samples = timeseries_buf_.samples();
-              const bool all_samples_reseted_to_scrape_ts = resolve_timestamps(def_timestamp, samples, o);
-              if (o.track_timestamps_staleness || all_samples_reseted_to_scrape_ts) {
-                stale_nan_state.add_target(ls_id);
-              }
-              for (const Primitives::Sample& sample : samples) {
-                shards_inner_series[shard_id_]->emplace_back(sample, ls_id, false);
-              }
-              ++stats.series_added;
-
-              break;
-            }
-            case rsRelabel: {
-              auto ls_id = input_lss.find_or_emplace(timeseries_buf_.label_set(), it->hash());
-              const auto& new_label_set = builder_.label_set();
-              size_t new_hash = hash_value(new_label_set);
-              const size_t new_shard_id = new_hash % number_of_shards_;
-              auto& samples = timeseries_buf_.samples();
-              const bool all_samples_reseted_to_scrape_ts = resolve_timestamps(def_timestamp, samples, o);
-              if (o.track_timestamps_staleness || all_samples_reseted_to_scrape_ts) {
-                stale_nan_state.add_input(ls_id);
-              }
-              shards_relabeled_series[new_shard_id]->emplace_back(new_label_set, samples, new_hash, ls_id, false);
-              ++stats.series_added;
-
-              break;
-            }
-          }
-
-          break;
-        }
-        case Cache::CheckResult::kKeep: {
-          auto& samples = timeseries_buf_.samples();
-          const bool all_samples_reseted_to_scrape_ts = resolve_timestamps(def_timestamp, samples, o);
-          if (o.track_timestamps_staleness || all_samples_reseted_to_scrape_ts) {
-            stale_nan_state.add_target(check_result.ls_id);
-          }
-          for (const Primitives::Sample& sample : samples) {
-            shards_inner_series[shard_id_]->emplace_back(sample, check_result.ls_id, false);
-          }
-
-          break;
-        }
-        case Cache::CheckResult::kRelabel: {
-          auto& samples = timeseries_buf_.samples();
-          const bool all_samples_reseted_to_scrape_ts = resolve_timestamps(def_timestamp, samples, o);
-          if (o.track_timestamps_staleness || all_samples_reseted_to_scrape_ts) {
-            stale_nan_state.add_input(check_result.source_ls_id);
-          }
-          for (const Primitives::Sample& sample : samples) {
-            shards_inner_series[check_result.shard_id]->emplace_back(sample, check_result.ls_id, false);
-          }
-
-          break;
-        }
-        default:
-          continue;
-      }
-
-      stats.samples_added += timeseries_buf_.samples().size();
-
-      if (o.metric_limits == nullptr) {
-        continue;
-      }
-
-      samples_count += calculate_samples(timeseries_buf_.samples());
-      if (o.metric_limits->samples_limit_exceeded(samples_count)) {
-        break;
-      }
-    }
-
-    const Primitives::Sample smpl{def_timestamp, kStaleNan};
-    stale_nan_state.swap(
-        [&](uint32_t ls_id) {
-          if (const auto res = cache.check_input(ls_id); res.status == Cache::CheckResult::kRelabel) {
-            shards_inner_series[res.shard_id]->emplace_back(smpl, res.ls_id, false);
-          }
-        },
-        [&](uint32_t ls_id) {
-          if (const auto res = cache.check_target(ls_id); res.status == Cache::CheckResult::kKeep) {
-            shards_inner_series[shard_id_]->emplace_back(smpl, res.ls_id, false);
-          }
-        });
-    cache.optimize();
-  }
-
-  template <class InputLSS, class TargetLSS, hashdex::HashdexInterface Hashdex, class StNaNsState, class Stats>
-  PROMPP_ALWAYS_INLINE bool input_relabeling_from_cache_internal(InputLSS& input_lss,
-                                                                 TargetLSS& target_lss,
-                                                                 Cache& cache,
-                                                                 const Hashdex& hashdex,
-                                                                 const RelabelerOptions& o,
-                                                                 Stats& stats,
-                                                                 Primitives::Go::SliceView<InnerSeries*>& shards_inner_series,
-                                                                 StNaNsState& stale_nan_state,
-                                                                 Primitives::Timestamp def_timestamp) {
-    assert(number_of_shards_ > 0);
-
-    const size_t n =
-        std::min(static_cast<size_t>(hashdex.size()), static_cast<size_t>((hashdex.size() * (1 - cache.part_of_drops()) * 1.1) / number_of_shards_));
-    for (uint16_t i = 0; i < number_of_shards_; ++i) {
-      shards_inner_series[i]->reserve(n);
-    }
-
-    size_t samples_count{0};
-    Primitives::TimeseriesSemiview timeseries_buf;
-
-    for (const auto& item : hashdex) {
-      if ((item.hash() % number_of_shards_) != shard_id_) {
-        continue;
-      }
-
-      timeseries_buf.clear();
-      item.read(timeseries_buf);
-      const auto check_result = cache.check(input_lss, target_lss, timeseries_buf.label_set(), item.hash());
-      switch (check_result.status) {
-        case Cache::CheckResult::kNotFound: {
-          return false;
-        };
-        case Cache::CheckResult::kKeep: {
-          auto& samples = timeseries_buf.samples();
-          const bool all_samples_reseted_to_scrape_ts = resolve_timestamps(def_timestamp, samples, o);
-          if (o.track_timestamps_staleness || all_samples_reseted_to_scrape_ts) {
-            stale_nan_state.add_target(check_result.ls_id);
-          }
-          for (const Primitives::Sample& sample : samples) {
-            shards_inner_series[shard_id_]->emplace_back(sample, check_result.ls_id, false);
-          }
-
-          break;
-        }
-        case Cache::CheckResult::kRelabel: {
-          auto& samples = timeseries_buf.samples();
-          const bool all_samples_reseted_to_scrape_ts = resolve_timestamps(def_timestamp, samples, o);
-          if (o.track_timestamps_staleness || all_samples_reseted_to_scrape_ts) {
-            stale_nan_state.add_input(check_result.source_ls_id);
-          }
-          for (const Primitives::Sample& sample : samples) {
-            shards_inner_series[check_result.shard_id]->emplace_back(sample, check_result.ls_id, false);
-          }
-
-          break;
-        }
-        default:
-          continue;
-      }
-
-      stats.samples_added += timeseries_buf.samples().size();
-
-      if (o.metric_limits == nullptr) {
-        continue;
-      }
-
-      samples_count += calculate_samples(timeseries_buf.samples());
-      if (o.metric_limits->samples_limit_exceeded(samples_count)) {
-        break;
-      }
-    }
-
-    const Primitives::Sample smpl{def_timestamp, kStaleNan};
-    stale_nan_state.swap(
-        [&](uint32_t ls_id) {
-          if (const auto res = cache.check_input(ls_id); res.status == Cache::CheckResult::kRelabel) {
-            shards_inner_series[res.shard_id]->emplace_back(smpl, res.ls_id, false);
-          }
-        },
-        [&](uint32_t ls_id) {
-          if (const auto res = cache.check_target(ls_id); res.status == Cache::CheckResult::kKeep) {
-            shards_inner_series[shard_id_]->emplace_back(smpl, res.ls_id, false);
-          }
-        });
-
-    return true;
-  }
-
-  template <class LabelsBuilder>
-  PROMPP_ALWAYS_INLINE relabelStatus relabel(const RelabelerOptions& o, LabelsBuilder& builder) {
-    const bool changed = inject_target_labels(builder, o);
-
-    relabelStatus rstatus = stateless_relabeler_->relabeling_process(buf_, builder);
-    hard_validate(rstatus, builder, o.metric_limits);
-    if (changed && rstatus == rsKeep) {
-      rstatus = rsRelabel;
-    }
-
-    return rstatus;
-  }
-
-  // calculate_samples counts the number of samples excluding stale_nan.
-  PROMPP_ALWAYS_INLINE static size_t calculate_samples(const BareBones::Vector<Primitives::Sample>& samples) noexcept {
-    size_t samples_count{0};
-    for (const auto smpl : samples) {
-      if (is_stale_nan(smpl.value())) {
-        continue;
-      }
-      ++samples_count;
-    }
-
-    return samples_count;
-  }
-
  public:
-  // inject_target_labels add labels from target to builder.
-  template <class LabelsBuilder>
-  PROMPP_ALWAYS_INLINE bool inject_target_labels(LabelsBuilder& target_builder, const RelabelerOptions& o) {
-    if (o.target_labels.empty()) {
-      return false;
-    }
-
-    bool changed{false};
-
-    if (o.honor_labels) {
-      for (const auto& [lname, lvalue] : o.target_labels) {
-        if (target_builder.contains(static_cast<std::string_view>(lname))) [[unlikely]] {
-          continue;
-        }
-        target_builder.set(static_cast<std::string_view>(lname), static_cast<std::string_view>(lvalue));
-        changed = true;
-      }
-      return changed;
-    }
-
-    std::vector<Primitives::Label> conflicting_exposed_labels;
-    for (const auto& [lname, lvalue] : o.target_labels) {
-      Primitives::Label existing_label = target_builder.extract(static_cast<std::string_view>(lname));
-      if (!existing_label.second.empty()) [[likely]] {
-        conflicting_exposed_labels.emplace_back(std::move(existing_label));
-      }
-
-      // It is now safe to set the target label.
-      target_builder.set(static_cast<std::string_view>(lname), static_cast<std::string_view>(lvalue));
-      changed = true;
-    }
-
-    // resolve conflict
-    if (!conflicting_exposed_labels.empty()) {
-      resolve_conflicting_exposed_labels(target_builder, conflicting_exposed_labels);
-    }
-
-    return changed;
-  }
-
-  // resolve_conflicting_exposed_labels add prefix to conflicting label name.
-  template <class LabelsBuilder>
-  PROMPP_ALWAYS_INLINE void resolve_conflicting_exposed_labels(LabelsBuilder& builder, std::vector<Primitives::Label>& conflicting_exposed_labels) {
-    std::stable_sort(conflicting_exposed_labels.begin(), conflicting_exposed_labels.end(),
-                     [](const Primitives::LabelView& a, const Primitives::LabelView& b) { return a.first.size() < b.first.size(); });
-
-    for (auto& [ln, lv] : conflicting_exposed_labels) {
-      while (true) {
-        ln.insert(0, "exported_");
-        if (builder.get(ln).empty()) {
-          builder.set(ln, lv);
-          break;
-        }
-      }
-    }
-  }
-
-  template <class InputLSS, class TargetLSS, hashdex::HashdexInterface Hashdex, class Stats>
-  PROMPP_ALWAYS_INLINE void input_relabeling(InputLSS& input_lss,
-                                             TargetLSS& target_lss,
-                                             Cache& cache,
-                                             const Hashdex& hashdex,
-                                             const RelabelerOptions& o,
-                                             Stats& stats,
-                                             Primitives::Go::SliceView<InnerSeries*>& shards_inner_series,
-                                             Primitives::Go::SliceView<RelabeledSeries*>& shards_relabeled_series) {
-    NoOpStaleNaNsState state{};
-    input_relabeling_internal(input_lss, target_lss, cache, hashdex, o, stats, shards_inner_series, shards_relabeled_series, state, Primitives::kNullTimestamp);
-  }
-
-  template <class InputLSS, class TargetLSS, hashdex::HashdexInterface Hashdex, class Stats>
-  PROMPP_ALWAYS_INLINE void input_relabeling_with_stalenans(InputLSS& input_lss,
-                                                            TargetLSS& target_lss,
-                                                            Cache& cache,
-                                                            const Hashdex& hashdex,
-                                                            const RelabelerOptions& o,
-                                                            Stats& stats,
-                                                            Primitives::Go::SliceView<InnerSeries*>& shards_inner_series,
-                                                            Primitives::Go::SliceView<RelabeledSeries*>& shards_relabeled_series,
-                                                            StaleNaNsStateDeprecated& state,
-                                                            Primitives::Timestamp def_timestamp) {
-    input_relabeling_internal(input_lss, target_lss, cache, hashdex, o, stats, shards_inner_series, shards_relabeled_series, state, def_timestamp);
-  }
-
-  template <class InputLSS, class TargetLSS, hashdex::HashdexInterface Hashdex, class Stats>
-  PROMPP_ALWAYS_INLINE bool input_relabeling_from_cache(InputLSS& input_lss,
-                                                        TargetLSS& target_lss,
-                                                        Cache& cache,
-                                                        const Hashdex& hashdex,
-                                                        const RelabelerOptions& o,
-                                                        Stats& stats,
-                                                        Primitives::Go::SliceView<InnerSeries*>& shards_inner_series) {
-    NoOpStaleNaNsState state{};
-    return input_relabeling_from_cache_internal(input_lss, target_lss, cache, hashdex, o, stats, shards_inner_series, state, Primitives::kNullTimestamp);
-  }
-
-  template <class InputLSS, class TargetLSS, hashdex::HashdexInterface Hashdex, class Stats>
-  PROMPP_ALWAYS_INLINE bool input_relabeling_with_stalenans_from_cache(InputLSS& input_lss,
-                                                                       TargetLSS& target_lss,
-                                                                       Cache& cache,
-                                                                       const Hashdex& hashdex,
-                                                                       const RelabelerOptions& o,
-                                                                       Stats& stats,
-                                                                       Primitives::Go::SliceView<InnerSeries*>& shards_inner_series,
-                                                                       StaleNaNsStateDeprecated& state,
-                                                                       Primitives::Timestamp def_timestamp) {
-    return input_relabeling_from_cache_internal(input_lss, target_lss, cache, hashdex, o, stats, shards_inner_series, state, def_timestamp);
-  }
-
-  PROMPP_ALWAYS_INLINE void input_collect_stalenans(Cache& cache,
-                                                    Primitives::Go::SliceView<InnerSeries*>& shards_inner_series,
-                                                    StaleNaNsStateDeprecated& state,
-                                                    Primitives::Timestamp stale_ts) const {
-    const Primitives::Sample smpl{stale_ts, kStaleNan};
-    state.swap(
-        [&](uint32_t ls_id) {
-          if (const auto res = cache.check_input(ls_id); res.status == Cache::CheckResult::kRelabel) {
-            shards_inner_series[res.shard_id]->emplace_back(smpl, res.ls_id, false);
-          }
-        },
-        [&](uint32_t ls_id) {
-          if (const auto res = cache.check_target(ls_id); res.status == Cache::CheckResult::kKeep) {
-            shards_inner_series[shard_id_]->emplace_back(smpl, res.ls_id, false);
-          }
-        });
-    cache.optimize();
-  }
-
-  // append_relabeler_series add relabeled ls to lss, add to result and add to cache update(second stage).
-  template <class LSS>
-  PROMPP_ALWAYS_INLINE static void append_relabeler_series(LSS& lss,
-                                                           InnerSeries* inner_series,
-                                                           const RelabeledSeries* relabeled_series,
-                                                           RelabelerStateUpdate* relabeler_state_update) {
-    relabeler_state_update->reserve(relabeler_state_update->size() + relabeled_series->size());
-    inner_series->reserve(inner_series->size() + relabeled_series->size());
-    if constexpr (BareBones::concepts::has_reserve<LSS>) {
-      lss.reserve(static_cast<uint32_t>(lss.size() + relabeled_series->size()));
-    }
-
-    for (const auto& relabeled_serie : relabeled_series->data()) {
-      uint32_t ls_id = lss.find_or_emplace(relabeled_serie.ls, relabeled_serie.hash);
-
-      for (const Primitives::Sample& sample : relabeled_serie.samples) {
-        inner_series->emplace_back(sample, ls_id, false);
-      }
-      relabeler_state_update->emplace_back(relabeled_serie.ls_id, ls_id);
-    }
-  }
-
   // update_relabeler_state - add to cache relabled data(third stage).
   PROMPP_ALWAYS_INLINE static void update_relabeler_state(Cache& cache, const RelabelerStateUpdate* relabeler_state_update, const uint16_t relabeled_shard_id) {
     for (const auto& update : *relabeler_state_update) {
@@ -961,48 +491,6 @@ class PerGoroutineRelabeler {
  private:
   PROMPP_ALWAYS_INLINE static size_t non_stale_nan_samples_count(const BareBones::Vector<Primitives::Sample>& samples) noexcept {
     return std::ranges::count_if(samples, [](const Primitives::Sample& sample) { return !is_stale_nan(sample.value()); });
-  }
-
-  // inject_target_labels add labels from target to builder.
-  template <class LabelsBuilder>
-  PROMPP_ALWAYS_INLINE bool inject_target_labels(LabelsBuilder& target_builder, const RelabelerOptions& options) {
-    if (options.target_labels.empty()) {
-      return false;
-    }
-
-    bool changed{false};
-
-    if (options.honor_labels) {
-      for (const auto& [lname, lvalue] : options.target_labels) {
-        if (target_builder.contains(static_cast<std::string_view>(lname))) [[unlikely]] {
-          continue;
-        }
-
-        target_builder.set(static_cast<std::string_view>(lname), static_cast<std::string_view>(lvalue));
-        changed = true;
-      }
-
-      return changed;
-    }
-
-    std::vector<Primitives::Label> conflicting_exposed_labels;
-    for (const auto& [lname, lvalue] : options.target_labels) {
-      Primitives::Label existing_label = target_builder.extract(static_cast<std::string_view>(lname));
-      if (!existing_label.second.empty()) [[likely]] {
-        conflicting_exposed_labels.emplace_back(std::move(existing_label));
-      }
-
-      // It is now safe to set the target label.
-      target_builder.set(static_cast<std::string_view>(lname), static_cast<std::string_view>(lvalue));
-      changed = true;
-    }
-
-    // resolve conflict
-    if (!conflicting_exposed_labels.empty()) {
-      resolve_conflicting_exposed_labels(target_builder, conflicting_exposed_labels);
-    }
-
-    return changed;
   }
 
   template <class InputLSS, class TargetLSS, hashdex::HashdexInterface Hashdex, class Stats>
@@ -1161,23 +649,6 @@ class PerGoroutineRelabeler {
     return rstatus;
   }
 
-  // resolve_conflicting_exposed_labels add prefix to conflicting label name.
-  template <class LabelsBuilder>
-  PROMPP_ALWAYS_INLINE void resolve_conflicting_exposed_labels(LabelsBuilder& builder, std::vector<Primitives::Label>& conflicting_exposed_labels) {
-    std::stable_sort(conflicting_exposed_labels.begin(), conflicting_exposed_labels.end(),
-                     [](const Primitives::LabelView& a, const Primitives::LabelView& b) { return a.first.size() < b.first.size(); });
-
-    for (auto& [ln, lv] : conflicting_exposed_labels) {
-      while (true) {
-        ln.insert(0, "exported_");
-        if (builder.get(ln).empty()) {
-          builder.set(ln, lv);
-          break;
-        }
-      }
-    }
-  }
-
   PROMPP_ALWAYS_INLINE static bool resolve_timestamps(Primitives::Timestamp def_timestamp,
                                                       BareBones::Vector<Primitives::Sample>& samples,
                                                       const RelabelerOptions& options) {
@@ -1220,6 +691,65 @@ class PerGoroutineRelabeler {
   }
 
  public:
+  // inject_target_labels add labels from target to builder.
+  template <class LabelsBuilder>
+  PROMPP_ALWAYS_INLINE bool inject_target_labels(LabelsBuilder& target_builder, const RelabelerOptions& options) {
+    if (options.target_labels.empty()) {
+      return false;
+    }
+
+    bool changed{false};
+
+    if (options.honor_labels) {
+      for (const auto& [lname, lvalue] : options.target_labels) {
+        if (target_builder.contains(static_cast<std::string_view>(lname))) [[unlikely]] {
+          continue;
+        }
+
+        target_builder.set(static_cast<std::string_view>(lname), static_cast<std::string_view>(lvalue));
+        changed = true;
+      }
+
+      return changed;
+    }
+
+    std::vector<Primitives::Label> conflicting_exposed_labels;
+    for (const auto& [lname, lvalue] : options.target_labels) {
+      Primitives::Label existing_label = target_builder.extract(static_cast<std::string_view>(lname));
+      if (!existing_label.second.empty()) [[likely]] {
+        conflicting_exposed_labels.emplace_back(std::move(existing_label));
+      }
+
+      // It is now safe to set the target label.
+      target_builder.set(static_cast<std::string_view>(lname), static_cast<std::string_view>(lvalue));
+      changed = true;
+    }
+
+    // resolve conflict
+    if (!conflicting_exposed_labels.empty()) {
+      resolve_conflicting_exposed_labels(target_builder, conflicting_exposed_labels);
+    }
+
+    return changed;
+  }
+
+  // resolve_conflicting_exposed_labels add prefix to conflicting label name.
+  template <class LabelsBuilder>
+  PROMPP_ALWAYS_INLINE void resolve_conflicting_exposed_labels(LabelsBuilder& builder, std::vector<Primitives::Label>& conflicting_exposed_labels) {
+    std::stable_sort(conflicting_exposed_labels.begin(), conflicting_exposed_labels.end(),
+                     [](const Primitives::LabelView& a, const Primitives::LabelView& b) { return a.first.size() < b.first.size(); });
+
+    for (auto& [ln, lv] : conflicting_exposed_labels) {
+      while (true) {
+        ln.insert(0, "exported_");
+        if (builder.get(ln).empty()) {
+          builder.set(ln, lv);
+          break;
+        }
+      }
+    }
+  }
+
   // first stage
   template <class InputLSS, class TargetLSS, hashdex::HashdexInterface Hashdex, class Stats>
   PROMPP_ALWAYS_INLINE void input_relabeling(InputLSS& input_lss,

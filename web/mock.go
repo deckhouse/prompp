@@ -1,7 +1,7 @@
 package web
 
 import (
-	"github.com/prometheus/prometheus/pp/go/relabeler/head/ready"
+	"github.com/prometheus/prometheus/pp/go/storage/ready"
 	v1 "github.com/prometheus/prometheus/web/api/v1"
 )
 
