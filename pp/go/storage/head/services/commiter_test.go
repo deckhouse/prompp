@@ -38,6 +38,8 @@ func (s *CommitterSuite) createHead(segmentWriters []*mock.SegmentWriterMock) *s
 
 	return head.NewHead(
 		"test-head-id",
+		false,
+		true,
 		shards,
 		shard.NewPerGoroutineShard[*storage.Wal],
 		nil,

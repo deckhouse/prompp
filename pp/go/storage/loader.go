@@ -26,14 +26,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util/optional"
 )
 
-type LoadResultType int
-
-const (
-	LoadResultTypeSuccess LoadResultType = iota
-	LoadResultTypeCorrupted
-	LoadResultTypeNotContinuable
-)
-
 // Loader loads [Head] or [shard.Shard] from [Wal].
 type Loader struct {
 	dataDir                   string
@@ -65,7 +57,7 @@ func NewLoader(
 func (l *Loader) Load(
 	headRecord *catalog.Record,
 	generation uint64,
-) (_ *Head, _ LoadResultType) {
+) *Head {
 	headID := headRecord.ID()
 	headDir := filepath.Join(l.dataDir, headID)
 	numberOfShards := headRecord.NumberOfShards()
@@ -95,11 +87,11 @@ func (l *Loader) Load(
 	writable := numberOfShards > 0
 	for shardID, res := range shardLoadResults {
 		shards[shardID] = res.shard
-		if res.corrupted {
+		if res.status == shardLoadResultStatusCorrupted {
 			corrupted = true
 		}
 
-		if !res.writable {
+		if res.status == shardLoadResultStatusNotContinuable {
 			writable = false
 		}
 
@@ -142,6 +134,8 @@ func (l *Loader) Load(
 
 	h := head.NewHead(
 		headID,
+		corrupted,
+		writable,
 		shards,
 		shard.NewPerGoroutineShard[*Wal],
 		headRecord.Acquire(),
@@ -155,15 +149,16 @@ func (l *Loader) Load(
 
 	logger.Debugf("[Loader] loaded head: %s, corrupted: %t", headRecord.ID(), corrupted)
 
-	result := LoadResultTypeSuccess
-	if corrupted {
-		result = LoadResultTypeCorrupted
-	} else if !writable {
-		result = LoadResultTypeNotContinuable
-	}
-
-	return h, result
+	return h
 }
+
+type shardLoadResultStatus int
+
+const (
+	shardLoadResultStatusSucceeded shardLoadResultStatus = iota
+	shardLoadResultStatusCorrupted
+	shardLoadResultStatusNotContinuable
+)
 
 func (*Loader) loadShard(
 	shardID uint16,
@@ -175,10 +170,17 @@ func (*Loader) loadShard(
 ) ShardLoadResult {
 	shardDataLoader := NewShardDataLoader(shardID, dir, maxSegmentSize, notifier, registerer, unloadDataStorageInterval)
 	err := shardDataLoader.Load()
+	status := shardLoadResultStatusSucceeded
+	if err != nil {
+		if errors.Is(err, ErrInvalidEncoderVersion) {
+			status = shardLoadResultStatusNotContinuable
+		} else {
+			status = shardLoadResultStatusCorrupted
+		}
+	}
 	return ShardLoadResult{
-		corrupted:        err != nil && !errors.Is(err, ErrInvalidEncoderVersion),
-		writable:         err == nil,
 		numberOfSegments: shardDataLoader.shardData.numberOfSegments,
+		status:           status,
 		shard: shard.NewShard(
 			shardDataLoader.shardData.lss,
 			shardDataLoader.shardData.dataStorage,
@@ -194,8 +196,7 @@ func (*Loader) loadShard(
 type ShardLoadResult struct {
 	shard            *shard.Shard
 	numberOfSegments uint32
-	corrupted        bool
-	writable         bool
+	status           shardLoadResultStatus
 }
 
 // ShardData data for creating a shard.

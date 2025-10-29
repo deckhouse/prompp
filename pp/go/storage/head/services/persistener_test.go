@@ -303,7 +303,6 @@ type PersistenerServiceSuite struct {
 		*mock.HeadBlockWriterMock[*shard.Shard],
 		*storage.Head,
 		*storage.Proxy,
-		storage.LoadResultType,
 		*storage.Loader,
 	]
 }
@@ -319,7 +318,6 @@ func (s *PersistenerServiceSuite) SetupTest() {
 		*mock.HeadBlockWriterMock[*shard.Shard],
 		*storage.Head,
 		*storage.Proxy,
-		storage.LoadResultType,
 		*storage.Loader,
 	](
 		s.proxy,

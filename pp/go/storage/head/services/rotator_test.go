@@ -48,6 +48,8 @@ func (s *RotatorSuite) createHead(
 
 	return head.NewHead(
 		headID,
+		false,
+		true,
 		shards,
 		shard.NewPerGoroutineShard[*storage.Wal],
 		nil,

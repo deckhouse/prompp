@@ -20,6 +20,8 @@ func TestXxx(t *testing.T) {
 
 	h := head.NewHead(
 		id,
+		false,
+		true,
 		[]*shard.Shard{sd},
 		shard.NewPerGoroutineShard[*testWal],
 		nil,

@@ -91,6 +91,8 @@ func (b *Builder) Build(generation uint64, numberOfShards uint16) (*Head, error)
 	logger.Debugf("[Builder] builded head: %s", headRecord.ID())
 	return head.NewHead(
 		headRecord.ID(),
+		false,
+		true,
 		shards,
 		shard.NewPerGoroutineShard[*Wal],
 		headRecord.Acquire(),

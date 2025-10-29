@@ -238,19 +238,14 @@ type WriteNotifier interface {
 // Loader
 //
 
-type LoadResultType interface {
-	~int
-}
-
 // Loader loads [Head] from [Wal].
 type Loader[
 	TTask Task,
 	TShard, TGoShard Shard,
 	THead Head[TTask, TShard, TGoShard],
-	TLoadResult LoadResultType,
 ] interface {
 	// Load [Head] from [Wal] by head ID.
-	Load(headRecord *catalog.Record, generation uint64) (THead, TLoadResult)
+	Load(headRecord *catalog.Record, generation uint64) THead
 }
 
 //

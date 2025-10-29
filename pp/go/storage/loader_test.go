@@ -1,6 +1,10 @@
 package storage_test
 
 import (
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
+	"github.com/prometheus/prometheus/pp/go/util"
+	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"testing"
@@ -99,6 +103,24 @@ func (s *HeadLoadSuite) createHead(unloadDataStorageInterval time.Duration) (*st
 	).Build(0, numberOfShards)
 }
 
+func (s *HeadLoadSuite) createNonWritableHead() *storage.Head {
+	rec, err := s.catalog.Create(1)
+	require.NoError(s.T(), err)
+	headDir := filepath.Join(s.dataDir, rec.Dir())
+	require.NoError(s.T(), os.Mkdir(headDir, 0o777))
+	shardFilePath := storage.GetShardWalFilename(headDir, 0)
+	shardFile, err := util.CreateFileAppender(shardFilePath, 0o666)
+	require.NoError(s.T(), err)
+
+	_, err = writer.WriteHeader(shardFile, wal.FileFormatVersion, cppbridge.EncodersVersion()-1)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), shardFile.Close())
+
+	require.NoError(s.T(), err)
+	loader := storage.NewLoader(s.dataDir, maxSegmentSize, prometheus.DefaultRegisterer, unloadDataStorageInterval)
+	return loader.Load(rec, 0)
+}
+
 func (s *HeadLoadSuite) mustCreateHead(unloadDataStorageInterval time.Duration) *storage.Head {
 	h, err := s.createHead(unloadDataStorageInterval)
 	s.Require().NoError(err)
@@ -108,7 +130,7 @@ func (s *HeadLoadSuite) mustCreateHead(unloadDataStorageInterval time.Duration) 
 	return h
 }
 
-func (s *HeadLoadSuite) loadHead(unloadDataStorageInterval time.Duration) (*storage.Head, storage.LoadResultType) {
+func (s *HeadLoadSuite) loadHead(unloadDataStorageInterval time.Duration) *storage.Head {
 	record, err := s.catalog.Get(s.headIdGenerator.last())
 	s.Require().NoError(err)
 
@@ -116,8 +138,9 @@ func (s *HeadLoadSuite) loadHead(unloadDataStorageInterval time.Duration) (*stor
 }
 
 func (s *HeadLoadSuite) mustLoadHead(unloadDataStorageInterval time.Duration) *storage.Head {
-	loadedHead, result := s.loadHead(unloadDataStorageInterval)
-	s.Equal(storage.LoadResultTypeSuccess, result)
+	loadedHead := s.loadHead(unloadDataStorageInterval)
+	s.False(loadedHead.Corrupted())
+	s.True(loadedHead.Writable())
 
 	return loadedHead
 }
@@ -160,10 +183,10 @@ func (s *HeadLoadSuite) TestErrorOpenShardFileInOneShard() {
 	s.Require().NoError(os.Remove(storage.GetShardWalFilename(s.headDir(), 0)))
 
 	// Act
-	head, result := s.loadHead(0)
+	head := s.loadHead(0)
 
 	// Assert
-	s.Equal(storage.LoadResultTypeCorrupted, result)
+	s.True(head.Corrupted())
 	s.Nil(s.shards(head)[0].UnloadedDataStorage())
 	s.Require().NoError(head.Close())
 }
@@ -177,10 +200,10 @@ func (s *HeadLoadSuite) TestErrorOpenShardFileInAllShards() {
 	s.Require().NoError(os.Remove(storage.GetShardWalFilename(s.headDir(), 1)))
 
 	// Act
-	head, result := s.loadHead(0)
+	head := s.loadHead(0)
 
 	// Assert
-	s.Equal(storage.LoadResultTypeCorrupted, result)
+	s.True(head.Corrupted())
 	s.Nil(s.shards(head)[0].UnloadedDataStorage())
 	s.Nil(s.shards(head)[1].UnloadedDataStorage())
 	s.Require().NoError(head.Close())
@@ -385,11 +408,17 @@ func (s *HeadLoadSuite) TestErrorDataUnloading() {
 	// Act
 	s.lockFileForCreation(storage.GetUnloadedDataStorageFilename(s.headDir(), 0))
 	s.lockFileForCreation(storage.GetUnloadedDataStorageFilename(s.headDir(), 1))
-	loadedHead, result := s.loadHead(unloadDataStorageInterval)
+	loadedHead := s.loadHead(unloadDataStorageInterval)
 
 	// Assert
-	s.Equal(storage.LoadResultTypeCorrupted, result)
+	s.True(loadedHead.Corrupted())
 	s.NotNil(s.shards(loadedHead)[0].UnloadedDataStorage())
 	s.NotNil(s.shards(loadedHead)[1].UnloadedDataStorage())
 	s.Require().NoError(loadedHead.Close())
+}
+
+func (s *HeadLoadSuite) TestInvalidEncoderVersion() {
+	head := s.createNonWritableHead()
+	require.False(s.T(), head.Corrupted())
+	require.False(s.T(), head.Writable())
 }

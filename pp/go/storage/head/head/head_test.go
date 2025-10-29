@@ -35,6 +35,8 @@ func (s *HeadSuite) TestClose() {
 	closeCount := 0
 	h := head.NewHead(
 		s.id,
+		false,
+		true,
 		[]*ShardMock{sd},
 		newPerGoroutineShardMockfunc,
 		func() { closeCount++ },
@@ -65,6 +67,8 @@ func (s *HeadSuite) TestConcurrency() {
 
 	h := head.NewHead(
 		s.id,
+		false,
+		true,
 		[]*ShardMock{sd, sd},
 		newPerGoroutineShardMockfunc,
 		nil,
@@ -89,6 +93,8 @@ func (s *HeadSuite) TestEnqueue() {
 
 	h := head.NewHead(
 		s.id,
+		false,
+		true,
 		[]*ShardMock{sd0, sd1},
 		newPerGoroutineShardMockfunc,
 		nil,
@@ -124,6 +130,8 @@ func (s *HeadSuite) TestEnqueueOnShard() {
 
 	h := head.NewHead(
 		s.id,
+		false,
+		true,
 		[]*ShardMock{sd0, sd1},
 		newPerGoroutineShardMockfunc,
 		nil,
@@ -168,6 +176,8 @@ func (s *HeadSuite) TestGeneration() {
 
 	h := head.NewHead(
 		s.id,
+		false,
+		true,
 		[]*ShardMock{sd, sd},
 		newPerGoroutineShardMockfunc,
 		nil,
@@ -187,6 +197,8 @@ func (s *HeadSuite) TestID() {
 
 	h := head.NewHead(
 		s.id,
+		false,
+		true,
 		[]*ShardMock{sd, sd},
 		newPerGoroutineShardMockfunc,
 		nil,
@@ -206,6 +218,8 @@ func (s *HeadSuite) TestIsReadOnly() {
 
 	h := head.NewHead(
 		s.id,
+		false,
+		true,
 		[]*ShardMock{sd, sd},
 		newPerGoroutineShardMockfunc,
 		nil,
@@ -228,6 +242,8 @@ func (s *HeadSuite) TestNumberOfShards() {
 
 	h := head.NewHead(
 		s.id,
+		false,
+		true,
 		[]*ShardMock{sd, sd, sd},
 		newPerGoroutineShardMockfunc,
 		nil,
@@ -252,6 +268,8 @@ func (s *HeadSuite) TestRangeQueueSize() {
 
 	h := head.NewHead(
 		s.id,
+		false,
+		true,
 		[]*ShardMock{sd0, sd1},
 		newPerGoroutineShardMockfunc,
 		nil,
@@ -318,6 +336,8 @@ func (s *HeadSuite) TestRangeShards() {
 
 	h := head.NewHead(
 		s.id,
+		false,
+		true,
 		[]*ShardMock{sd0, sd1},
 		newPerGoroutineShardMockfunc,
 		nil,

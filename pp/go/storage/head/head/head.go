@@ -47,6 +47,9 @@ type Head[TShard Shard, TGorutineShard Shard] struct {
 	id         string
 	generation uint64
 
+	corrupted bool
+	writable  bool
+
 	gshardCtor    func(s TShard, numberOfShards uint16) TGorutineShard
 	releaseHeadFn func()
 
@@ -74,6 +77,8 @@ type Head[TShard Shard, TGorutineShard Shard] struct {
 //revive:disable-next-line:function-length long but readable.
 func NewHead[TShard Shard, TGoroutineShard Shard](
 	id string,
+	corrupted bool,
+	writable bool,
 	shards []TShard,
 	gshardCtor func(TShard, uint16) TGoroutineShard,
 	releaseHeadFn func(),
@@ -91,6 +96,8 @@ func NewHead[TShard Shard, TGoroutineShard Shard](
 	h := &Head[TShard, TGoroutineShard]{
 		id:             id,
 		generation:     generation,
+		corrupted:      corrupted,
+		writable:       writable,
 		gshardCtor:     gshardCtor,
 		releaseHeadFn:  releaseHeadFn,
 		shards:         shards,
@@ -134,6 +141,14 @@ func NewHead[TShard Shard, TGoroutineShard Shard](
 	logger.Debugf("[Head] %s created", h.String())
 
 	return h
+}
+
+func (h *Head[TShard, TGorutineShard]) Corrupted() bool {
+	return h.corrupted
+}
+
+func (h *Head[TShard, TGorutineShard]) Writable() bool {
+	return h.writable && !h.IsReadOnly()
 }
 
 // AcquireQuery acquires the [Head] semaphore with a weight of 1,
