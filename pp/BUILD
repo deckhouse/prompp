@@ -238,8 +238,14 @@ cc_library(
     name = "profiling",
     hdrs = glob(["profiling/**/*.h"]),
     deps = [
-    "@tracy//:tracy",
-    ],
+    ] + select({
+         "//bazel/toolchain:with_profiling": ["@tracy//:tracy"],
+         "//conditions:default": ["@tracy//:tracy_headers"],
+    }),
+    defines = select({
+        "//bazel/toolchain:with_profiling": ["PROMPP_PROFILING_ENABLE"],
+        "//conditions:default": [],
+    }),
 )
 
 cc_library(

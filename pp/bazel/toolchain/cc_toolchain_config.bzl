@@ -220,6 +220,23 @@ def _impl(ctx):
                 ),
             ],
         ),
+        feature(
+            name = "profiling",
+            enabled = ctx.attr.with_profiling[BuildSettingInfo].value,
+            flag_sets = [
+                flag_set(
+                    actions = cpp_compile_actions,
+                    flag_groups = [
+                        flag_group(
+                            flags = [
+                                "-fno-omit-frame-pointer",
+                                "-g",
+                            ],
+                        ),
+                    ],
+                ),
+            ],
+        ),
     ]
     return cc_common.create_cc_toolchain_config_info(
         ctx = ctx,
@@ -242,6 +259,7 @@ cc_toolchain_config = rule(
         "builtin_include_directories": attr.string_list(),
         "march": attr.label(),
         "with_asan": attr.label(),
+        "with_profiling": attr.label(),
     },
     provides = [CcToolchainConfigInfo],
 )

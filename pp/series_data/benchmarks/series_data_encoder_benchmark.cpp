@@ -3,7 +3,6 @@
 
 #include <benchmark/benchmark.h>
 
-#define PROMPP_PROFILING_ENABLE
 #include "profiling/profiling.h"
 
 #include "bare_bones/preprocess.h"
@@ -39,18 +38,17 @@ const BareBones::Vector<sample_with_lsid>& get_samples_for_benchmark() {
 }
 
 void BenchmarkSeriesDataEncoder(benchmark::State& state) {
-  PROMPP_PROF(scope);
+  ZoneScoped;
   const auto& samples = get_samples_for_benchmark();
 
   series_data::DataStorage storage;
   series_data::Encoder encoder{storage};
 
   for ([[maybe_unused]] auto _ : state) {
+    ZoneScopedN("iteration");
     for (const auto& sample : samples) {
-      PROMPP_PROF(message, "encode");
-      PROMPP_PROF(scope, N, "encode");
+      ZoneScopedN("encode");
       encoder.encode(sample.labelset_id, ts_min + static_cast<PromPP::Primitives::Sample::timestamp_type>(sample.sample_ts), sample.sample_value);
-      PROMPP_PROF(value, sample.labelset_id);
     }
   }
 
@@ -59,6 +57,8 @@ void BenchmarkSeriesDataEncoder(benchmark::State& state) {
 
   state.counters["Memory"] =
       benchmark::Counter(static_cast<double>(storage.allocated_memory()), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
+
+  TracyPlot("Open Chunks", int64_t(storage.open_chunks.size()));
 }
 
 BENCHMARK(BenchmarkSeriesDataEncoder)->ComputeStatistics("min", [](const std::vector<double>& v) { return *std::ranges::min_element(v); });
