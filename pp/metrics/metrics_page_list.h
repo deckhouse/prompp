@@ -16,14 +16,14 @@ class MetricsPageList {
     using pointer = value_type;
     using reference = value_type;
 
-    explicit Iterator(MetricsPageControlBlock* metrics_page) : metrics_page_(metrics_page) { advance_to_non_empty_metrics_page(); }
+    explicit Iterator(MetricsPageControlBlock* metrics_page) : metrics_page_(metrics_page) { advance_to_used_metrics_page(); }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return metrics_page_; }
     [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator->() const noexcept { return metrics_page_; }
 
     PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
       metrics_page_ = metrics_page_->next_metrics_page();
-      advance_to_non_empty_metrics_page();
+      advance_to_used_metrics_page();
       return *this;
     }
 
@@ -38,7 +38,7 @@ class MetricsPageList {
    private:
     MetricsPageControlBlock* metrics_page_;
 
-    void advance_to_non_empty_metrics_page() noexcept {
+    void advance_to_used_metrics_page() noexcept {
       while (metrics_page_ != nullptr && metrics_page_->is_unused()) {
         metrics_page_ = metrics_page_->next_metrics_page();
       }
@@ -66,9 +66,7 @@ class MetricsPageList {
       return;
     }
 
-    if (MetricsPageControlBlock* next_page = page->next_metrics_page(); next_page != nullptr) [[likely]] {
-      remove_unused_pages(page, next_page);
-    }
+    remove_unused_pages(page, page->next_metrics_page());
 
     if (page->is_unused()) {
       // If page is first page in list then we delete it. Otherwise, we will delete it at another RemoveUnusedPages call
@@ -85,7 +83,7 @@ class MetricsPageList {
   std::atomic<MetricsPageControlBlock*> next_metrics_page_{};
 
   static void remove_unused_pages(MetricsPageControlBlock* prev_page, MetricsPageControlBlock* page) {
-    do {
+    while (page != nullptr) [[likely]] {
       const auto next_page = page->next_metrics_page();
 
       if (page->is_unused()) {
@@ -96,7 +94,7 @@ class MetricsPageList {
       }
 
       page = next_page;
-    } while (page != nullptr);
+    }
   }
 };
 
