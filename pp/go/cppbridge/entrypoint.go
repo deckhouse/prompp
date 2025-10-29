@@ -1382,7 +1382,7 @@ func primitivesLSSQuerySelector(lss uintptr, matchers []model.LabelMatcher) (
 	return res.selector, res.status
 }
 
-func primitivesLSSQuery(lss uintptr, selector uintptr) (
+func primitivesLSSQuery(lss, selector uintptr) (
 	matches []uint32,
 	labelSetLengths []uint16,
 	status uint32,
@@ -1941,7 +1941,7 @@ func seriesDataDataStorageQueryV2(dataStorage uintptr, query HeadDataStorageQuer
 		query       HeadDataStorageQuery
 	}{dataStorage, query}
 
-	var res = struct {
+	res := struct {
 		Querier        uintptr
 		Status         uint8
 		SerializedData *uintptr
@@ -3506,7 +3506,7 @@ func labelSetBytesWithoutLabels(
 	)
 }
 
-func labelSetFromBuilderHash(
+func ppLabelSetFromBuilderHash(
 	snapshotPtr uintptr,
 	sortedAdd []Label,
 	sortedDel []string,

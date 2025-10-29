@@ -190,29 +190,35 @@ func (lsst *LabelSetSnapshot) Query(selector uintptr) *LSSQueryResult {
 	return result
 }
 
-type IdsMapping struct {
-	pointer uintptr
-}
-
-func (m *IdsMapping) IsEmpty() bool {
-	return m.pointer == uintptr(0)
-}
-
 // CopyAddedSeries copy the label sets from the source lss to the destination lss
 // that were added source lss.
-func (lss *LabelSetSnapshot) CopyAddedSeries(bitsetSeries *BitsetSeries, destination *LabelSetStorage) *IdsMapping {
+func (lsst *LabelSetSnapshot) CopyAddedSeries(bitsetSeries *BitsetSeries, destination *LabelSetStorage) *IdsMapping {
 	idsMapping := &IdsMapping{
-		pointer: primitivesReadonlyLSSCopyAddedSeries(lss.pointer, bitsetSeries.pointer, destination.pointer),
+		pointer: primitivesReadonlyLSSCopyAddedSeries(lsst.pointer, bitsetSeries.pointer, destination.pointer),
 	}
 	runtime.SetFinalizer(idsMapping, func(idsMapping *IdsMapping) {
 		primitivesFreeLsIdsMapping(idsMapping.pointer)
 	})
 
-	runtime.KeepAlive(lss)
+	runtime.KeepAlive(lsst)
 	runtime.KeepAlive(bitsetSeries)
 	runtime.KeepAlive(destination)
 
 	return idsMapping
+}
+
+//
+// IdsMapping
+//
+
+// IdsMapping wrapper for c-pointer to ls ids mapping.
+type IdsMapping struct {
+	pointer uintptr
+}
+
+// IsEmpty return true if ids mapping is empty.
+func (m *IdsMapping) IsEmpty() bool {
+	return m.pointer == uintptr(0)
 }
 
 //
@@ -251,6 +257,7 @@ func newLSSQueryResult(
 	return lqr
 }
 
+// IndexOf return index of series id in matches.
 func (r *LSSQueryResult) IndexOf(seriesID uint32) int {
 	for i, match := range r.matches {
 		if match == seriesID {
@@ -260,6 +267,7 @@ func (r *LSSQueryResult) IndexOf(seriesID uint32) int {
 	return -1
 }
 
+// LengthBySeriesID return length of series id in matches.
 func (r *LSSQueryResult) LengthBySeriesID(seriesID uint32, searchFrom int) (length uint16, index int) {
 	for {
 		if searchFrom > len(r.matches)-1 {
@@ -275,7 +283,7 @@ func (r *LSSQueryResult) LengthBySeriesID(seriesID uint32, searchFrom int) (leng
 }
 
 // GetByIndex return ls id and length for ls id by index.
-func (r *LSSQueryResult) GetByIndex(i int) (uint32, uint16) {
+func (r *LSSQueryResult) GetByIndex(i int) (lsID uint32, length uint16) {
 	return r.matches[i], r.labelSetLengths[i]
 }
 

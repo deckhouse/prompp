@@ -66,7 +66,7 @@ func LabelSetFromBuilderHash(
 		snapshotPointer = snapshot.pointer
 	}
 
-	hash := labelSetFromBuilderHash(
+	hash := ppLabelSetFromBuilderHash(
 		snapshotPointer,
 		sortedAdd,
 		sortedDel,

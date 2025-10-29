@@ -391,12 +391,18 @@ type stdVector struct {
 	endOfStorage uintptr
 }
 
+// bareBonesVector implementation cpp bare_bones::vector, for allocate 24-byte, used in cpp.
+//
+//nolint:unused // for cpp-bridge, used in cpp.
 type bareBonesVector struct {
 	memory   uintptr
 	capacity uint32
 	size     uint32
 }
 
+// roaringBitset implementation cpp roaring::bitset, for allocate 40-byte, used in cpp.
+//
+//nolint:unused // for cpp-bridge, used in cpp.
 type roaringBitset [40]byte
 
 // InnerSeries - go wrapper for C-InnerSeries.
@@ -542,6 +548,7 @@ func NewStaleNansState() *StaleNansState {
 	return s
 }
 
+// Remap remap stale nans state to new ids mapping.
 func (s *StaleNansState) Remap(mapping *IdsMapping) {
 	prometheusRemapStaleNansState(s.state, mapping.pointer)
 	runtime.KeepAlive(s)
@@ -1318,7 +1325,13 @@ func (s *StateV2) resetCaches(numberOfShards uint16) {
 }
 
 // resetStaleNansStates recreate StaleNansStates.
-func (s *StateV2) resetStaleNansStates(numberOfShards uint16, remapStaleNansState bool, staleNansIdsMappings []*IdsMapping) {
+//
+//revive:disable-next-line:flag-parameter this is a flag, but it's more convenient this way
+func (s *StateV2) resetStaleNansStates(
+	numberOfShards uint16,
+	remapStaleNansState bool,
+	staleNansIdsMappings []*IdsMapping,
+) {
 	if !s.trackStaleness {
 		return
 	}
