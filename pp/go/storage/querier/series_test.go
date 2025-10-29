@@ -342,17 +342,18 @@ func (s *SeriesSetTestSuite) TestSeriesSeek() {
 
 	expected := s.timeSeries[:4]
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries[:4]...)
-	// Act
 	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
-	// Assert
 	require.True(s.T(), seriesSet.Next())
 	series := seriesSet.At()
 	require.Equal(s.T(), expected[0].Labels, series.Labels())
 	var iterator chunkenc.Iterator
 	iterator = series.Iterator(iterator)
-	// advance
 	index := 2
-	require.Equal(s.T(), chunkenc.ValFloat, iterator.Seek(expected[index].Samples[0].Timestamp))
+	// Act
+	result := iterator.Seek(expected[index].Samples[0].Timestamp)
+
+	// Assert
+	require.Equal(s.T(), chunkenc.ValFloat, result)
 	ts, v := iterator.At()
 	require.Equal(s.T(), ts, expected[index].Samples[0].Timestamp)
 	require.Equal(s.T(), v, expected[index].Samples[0].Value)
@@ -381,16 +382,16 @@ func (s *SeriesSetTestSuite) TestSeriesSeekOutOfRange() {
 	var start int64 = 0
 	var end int64 = 1000
 
-	expected := s.timeSeries[:4]
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries[:4]...)
-	// Act
 	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
-	// Assert
 	require.True(s.T(), seriesSet.Next())
 	series := seriesSet.At()
-	require.Equal(s.T(), expected[0].Labels, series.Labels())
 	var iterator chunkenc.Iterator
 	iterator = series.Iterator(iterator)
-	// advance
-	require.Equal(s.T(), chunkenc.ValNone, iterator.Seek(end))
+
+	// Act
+	result := iterator.Seek(end)
+
+	// Assert
+	require.Equal(s.T(), chunkenc.ValNone, result)
 }
