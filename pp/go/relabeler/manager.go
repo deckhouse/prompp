@@ -13,10 +13,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/relabeler/logger"
-	"github.com/prometheus/prometheus/pp/go/util"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/logger"
+	"github.com/prometheus/prometheus/pp/go/util"
 )
 
 type (

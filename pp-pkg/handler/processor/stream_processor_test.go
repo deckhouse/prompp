@@ -19,51 +19,8 @@ import (
 	"github.com/prometheus/prometheus/pp-pkg/handler/storage/block"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	coremodel "github.com/prometheus/prometheus/pp/go/model"
-	"github.com/prometheus/prometheus/pp/go/relabeler"
 	"github.com/prometheus/prometheus/util/pool"
 )
-
-type testStream struct {
-	metadata model.Metadata
-	readFn   func(ctx context.Context) (*model.Segment, error)
-	writeFn  func(ctx context.Context, status model.StreamSegmentProcessingStatus) error
-}
-
-func (s *testStream) Metadata() model.Metadata {
-	return s.metadata
-}
-
-func (s *testStream) Read(ctx context.Context) (*model.Segment, error) {
-	return s.readFn(ctx)
-}
-
-func (s *testStream) Write(ctx context.Context, status model.StreamSegmentProcessingStatus) error {
-	return s.writeFn(ctx, status)
-}
-
-type metricReceiver struct {
-	appendFn func(ctx context.Context, hashdex cppbridge.ShardedData, relabelerID string) error
-}
-
-func (mr *metricReceiver) AppendHashdex(
-	ctx context.Context,
-	hashdex cppbridge.ShardedData,
-	relabelerID string,
-	_ bool,
-) error {
-	return mr.appendFn(ctx, hashdex, relabelerID)
-}
-
-func (mr *metricReceiver) AppendSnappyProtobuf(
-	ctx context.Context,
-	data relabeler.ProtobufData,
-	relabelerID string,
-	_ bool,
-) error {
-	return nil
-}
-
-func (*metricReceiver) MergeOutOfOrderChunks(_ context.Context) {}
 
 type segmentContainer struct {
 	timeSeries []coremodel.TimeSeries
@@ -129,33 +86,47 @@ func TestStreamProcessor_Process(t *testing.T) {
 	buffers := pool.New(8, 100e3, 2, func(sz int) interface{} { return make([]byte, 0, sz) })
 
 	blockStorage := block.NewStorage(tmpDir, buffers)
-	mr := &metricReceiver{appendFn: func(ctx context.Context, hashdex cppbridge.ShardedData, relabelerID string) error {
-		return nil
-	}}
+
+	ar := &AdapterMock{
+		AppendHashdexFunc: func(context.Context, cppbridge.ShardedData, *cppbridge.StateV2, bool) error {
+			return nil
+		},
+	}
+
+	metadata := model.Metadata{
+		TenantID:               "",
+		BlockID:                uuid.New(),
+		ShardID:                0,
+		ShardsLog:              0,
+		SegmentEncodingVersion: 3,
+		RelabelerID:            uuid.New().String(),
+	}
+
+	states := &StatesStorageMock{
+		GetStateByIDFunc: func(stateID string) (*cppbridge.StateV2, bool) {
+			if metadata.RelabelerID != stateID {
+				return nil, false
+			}
+
+			return nil, true
+		},
+	}
 
 	decoderBuilder := ppcore.NewBuilder(blockStorage)
 
-	streamProcessor := processor.NewStreamProcessor(decoderBuilder, mr, nil)
+	streamProcessor := processor.NewStreamProcessor(decoderBuilder, ar, states, nil)
 	resolvec := make(chan struct{}, 1)
-	blockID := uuid.New()
-	shardID := uint16(0)
-	shardLog := uint8(0)
-	segmentEncodingVersion := cppbridge.EncodersVersion()
 
 	gen := &segmentGenerator{segmentSize: 10}
 
 	iteration := 0
 	fakeErr := errors.New("read error")
 
-	stream := &testStream{
-		metadata: model.Metadata{
-			TenantID:               "",
-			BlockID:                blockID,
-			ShardID:                shardID,
-			ShardsLog:              shardLog,
-			SegmentEncodingVersion: segmentEncodingVersion,
+	stream := &MetricStreamMock{
+		MetadataFunc: func() model.Metadata {
+			return metadata
 		},
-		readFn: func(ctx context.Context) (*model.Segment, error) {
+		ReadFunc: func(context.Context) (*model.Segment, error) {
 			resolvec <- struct{}{}
 
 			if len(gen.segments) == 3 && iteration == 0 {
@@ -167,7 +138,7 @@ func TestStreamProcessor_Process(t *testing.T) {
 			segment, readErr := gen.generate()
 			return &segment.encoded, readErr
 		},
-		writeFn: func(ctx context.Context, status model.StreamSegmentProcessingStatus) error {
+		WriteFunc: func(context.Context, model.StreamSegmentProcessingStatus) error {
 			<-resolvec
 			return nil
 		},
@@ -179,15 +150,11 @@ func TestStreamProcessor_Process(t *testing.T) {
 	err = streamProcessor.Process(ctx, stream)
 	require.ErrorIs(t, err, fakeErr)
 
-	stream = &testStream{
-		metadata: model.Metadata{
-			TenantID:               "",
-			BlockID:                blockID,
-			ShardID:                shardID,
-			ShardsLog:              shardLog,
-			SegmentEncodingVersion: segmentEncodingVersion,
+	stream = &MetricStreamMock{
+		MetadataFunc: func() model.Metadata {
+			return metadata
 		},
-		readFn: func(ctx context.Context) (*model.Segment, error) {
+		ReadFunc: func(context.Context) (*model.Segment, error) {
 			resolvec <- struct{}{}
 
 			if len(gen.segments) == 5 && iteration == 1 {
@@ -199,7 +166,7 @@ func TestStreamProcessor_Process(t *testing.T) {
 			segment, readErr := gen.generate()
 			return &segment.encoded, readErr
 		},
-		writeFn: func(ctx context.Context, status model.StreamSegmentProcessingStatus) error {
+		WriteFunc: func(context.Context, model.StreamSegmentProcessingStatus) error {
 			<-resolvec
 			return nil
 		},
@@ -208,15 +175,11 @@ func TestStreamProcessor_Process(t *testing.T) {
 	err = streamProcessor.Process(ctx, stream)
 	require.ErrorIs(t, err, fakeErr)
 
-	stream = &testStream{
-		metadata: model.Metadata{
-			TenantID:               "",
-			BlockID:                blockID,
-			ShardID:                shardID,
-			ShardsLog:              shardLog,
-			SegmentEncodingVersion: segmentEncodingVersion,
+	stream = &MetricStreamMock{
+		MetadataFunc: func() model.Metadata {
+			return metadata
 		},
-		readFn: func(ctx context.Context) (*model.Segment, error) {
+		ReadFunc: func(context.Context) (*model.Segment, error) {
 			resolvec <- struct{}{}
 
 			if len(gen.segments) == 5 && iteration == 2 {
@@ -236,7 +199,7 @@ func TestStreamProcessor_Process(t *testing.T) {
 			segment, readErr := gen.generate()
 			return &segment.encoded, readErr
 		},
-		writeFn: func(ctx context.Context, status model.StreamSegmentProcessingStatus) error {
+		WriteFunc: func(context.Context, model.StreamSegmentProcessingStatus) error {
 			<-resolvec
 			return nil
 		},

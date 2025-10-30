@@ -1,20 +1,14 @@
 #pragma once
 
-#include <cstdint>
 #include <ostream>
 #include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wold-style-cast"
-#pragma GCC diagnostic ignored "-Wpedantic"
-#pragma GCC diagnostic ignored "-Wswitch"
-#include "re2/re2.h"
-#pragma GCC diagnostic pop
 #include <simdutf/simdutf.h>
 #include <quasis_crypto/md5.hh>
+#include "re2/re2.h"
 
 #include "bare_bones/bit.h"
 #include "bare_bones/exception.h"
@@ -24,8 +18,8 @@
 namespace PromPP::Prometheus::Relabel {
 
 // label_name_is_valid validate label name.
-PROMPP_ALWAYS_INLINE bool label_name_is_valid(std::string_view name) {
-  if (name.size() == 0) {
+PROMPP_ALWAYS_INLINE bool label_name_is_valid(const std::string_view& name) {
+  if (name.empty()) {
     return false;
   }
 
@@ -41,13 +35,13 @@ PROMPP_ALWAYS_INLINE bool label_name_is_valid(std::string_view name) {
 }
 
 // label_value_is_valid validate label value.
-PROMPP_ALWAYS_INLINE bool label_value_is_valid(std::string_view value) noexcept {
+PROMPP_ALWAYS_INLINE bool label_value_is_valid(const std::string_view& value) noexcept {
   return simdutf::validate_utf8(value.data(), value.length());
 }
 
 // metric_name_value_is_valid validate value for metric name(__name__).
-PROMPP_ALWAYS_INLINE bool metric_name_value_is_valid(std::string_view value) {
-  if (value.size() == 0) {
+PROMPP_ALWAYS_INLINE bool metric_name_value_is_valid(const std::string_view& value) {
+  if (value.empty()) {
     return false;
   }
 
@@ -85,15 +79,13 @@ class PatternPart {
   PROMPP_ALWAYS_INLINE explicit PatternPart(int g) : type_(pGroup), data_{.group_ = g} {}
 
   // write - convert parts to out.
-  PROMPP_ALWAYS_INLINE void write(std::ostream& out, std::vector<std::string>& groups) {
+  PROMPP_ALWAYS_INLINE void write(std::string& out, const std::vector<std::string_view>& groups) const {
     if (type_ == pGroup) {
-      out << groups[data_.group_];
+      out += groups[data_.group_];
     } else {
-      out << data_.string_;
+      out += data_.string_;
     }
   }
-
-  ~PatternPart() = default;
 };
 
 // Regexp - wrapper on re2.
@@ -103,17 +95,14 @@ class Regexp {
 
  public:
   // Regexp - work without ("^(?:" + std::string(s) + ")$").
-  PROMPP_ALWAYS_INLINE explicit Regexp(const std::string_view& s) noexcept : re_(std::make_unique<re2::RE2>(std::string(s))) {}
-
-  PROMPP_ALWAYS_INLINE Regexp(Regexp&&) noexcept = default;
-  PROMPP_ALWAYS_INLINE ~Regexp() = default;
+  PROMPP_ALWAYS_INLINE explicit Regexp(const std::string_view& s) noexcept : re_(std::make_unique<re2::RE2>(s)) {}
 
   // number_of_capturing_groups - return the number of capturing sub-patterns, or -1 if the regexp wasn't valid on construction. The overall match ($0) does not
   // count. Use in test.
-  PROMPP_ALWAYS_INLINE int number_of_capturing_groups() { return re_->NumberOfCapturingGroups(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE int number_of_capturing_groups() const { return re_->NumberOfCapturingGroups(); }
 
   // groups - get named capturing groups and number groups.
-  PROMPP_ALWAYS_INLINE std::map<std::string, int> groups() {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE std::map<std::string, int> groups() const {
     // get named capturing groups
     std::map<std::string, int> named_groups = re_->NamedCapturingGroups();
     // add number groups to named capturing groups
@@ -125,8 +114,8 @@ class Regexp {
   }
 
   // match_to_args - match expression and return result args.
-  PROMPP_ALWAYS_INLINE bool match_to_args(std::string_view src, std::vector<std::string>& res) {
-    int n = number_of_capturing_groups();
+  PROMPP_ALWAYS_INLINE bool match_to_args(std::string_view src, std::vector<std::string_view>& res) const {
+    const int n = number_of_capturing_groups();
 
     // search full match to args, where size - number of capturing groups
     res.resize(n + 1);
@@ -139,60 +128,65 @@ class Regexp {
       re_args.emplace_back(&res[i]);
       re_args_ptr.emplace_back(&re_args[i - 1]);
     }
-    bool ok = RE2::FullMatchN(src, *re_.get(), &re_args_ptr[0], n);
-    return ok;
+
+    if (!RE2::FullMatchN(src, *re_, &re_args_ptr[0], n)) {
+      res.clear();
+      return false;
+    }
+
+    return true;
   }
 
   // replace_with_args - replace in template with incoming args.
-  PROMPP_ALWAYS_INLINE std::string replace_with_args(std::stringstream& buf, std::vector<std::string>& args, std::vector<PatternPart>& tmpl) {
-    if (tmpl.size() == 0) [[unlikely]] {
+  PROMPP_ALWAYS_INLINE static void replace_with_args(std::string& buf, const std::vector<std::string_view>& args, const std::vector<PatternPart>& tmpl) {
+    buf.clear();
+
+    if (tmpl.empty()) [[unlikely]] {
       // no template or source data
-      return "";
+      return;
     }
 
-    buf.str("");
     for (auto& val : tmpl) {
       val.write(buf, args);
     }
-
-    return buf.str();
   }
 
   // replace_full - find match for source and replace in template.
-  PROMPP_ALWAYS_INLINE std::string replace_full(std::stringstream& out, std::string_view src, std::vector<PatternPart>& tmpl) {
-    if (src.size() == 0 || tmpl.size() == 0) [[unlikely]] {
+  PROMPP_ALWAYS_INLINE void replace_full(std::string& out, std::string_view src, const std::vector<PatternPart>& tmpl) const {
+    out.clear();
+
+    if (src.empty() || tmpl.empty()) [[unlikely]] {
       // no template or source data
-      return "";
+      return;
     }
 
-    std::vector<std::string> res_args;
-    bool ok = match_to_args(src, res_args);
-    if (!ok) {
+    std::vector<std::string_view> res_args;
+    if (!match_to_args(src, res_args)) {
       // no entries in regexp
-      return "";
+      return;
     }
 
-    return replace_with_args(out, res_args, tmpl);
+    replace_with_args(out, res_args, tmpl);
   }
 
   // full_match - check text for full match regexp.
-  PROMPP_ALWAYS_INLINE bool full_match(std::string_view str) { return RE2::FullMatch(str, *re_.get()); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool full_match(std::string_view str) const { return RE2::FullMatch(str, *re_); }
 };
 
 struct GORelabelConfig {
   // source_labels - a list of labels from which values are taken and concatenated with the configured separator in order.
-  PromPP::Primitives::Go::SliceView<PromPP::Primitives::Go::String> source_labels;
+  Primitives::Go::SliceView<Primitives::Go::String> source_labels;
   // separator - is the string between concatenated values from the source labels.
-  PromPP::Primitives::Go::String separator;
+  Primitives::Go::String separator;
   // regex - against which the concatenation is matched.
-  PromPP::Primitives::Go::String regex;
+  Primitives::Go::String regex;
   // modulus - to take of the hash of concatenated values from the source labels.
   uint64_t modulus;
   // target_label - is the label to which the resulting string is written in a replacement.
   // Regexp interpolation is allowed for the replace action.
-  PromPP::Primitives::Go::String target_label;
+  Primitives::Go::String target_label;
   // replacement - is the regex replacement pattern to be used.
-  PromPP::Primitives::Go::String replacement;
+  Primitives::Go::String replacement;
   // action - is the action to be performed for the relabeling.
   uint8_t action;
 };
@@ -260,27 +254,26 @@ class RelabelConfig {
   std::vector<PatternPart> replacement_parts_;
 
   // extract - extract from source letter or digit value.
-  PROMPP_ALWAYS_INLINE std::string extract(re2::RE2& rgx_validate, std::string_view src) {
+  PROMPP_ALWAYS_INLINE static std::string extract(const re2::RE2& rgx_validate, const std::string_view& src) {
     std::string name;
     RE2::PartialMatch(src, rgx_validate, &name);
     return name;
   }
 
   // is_valid_name - validate source on letter or digit value.
-  PROMPP_ALWAYS_INLINE bool is_valid_name(re2::RE2& rgx_validate, std::string_view src) { return RE2::FullMatch(src, rgx_validate); }
+  PROMPP_ALWAYS_INLINE static bool is_valid_name(const re2::RE2& rgx_validate, std::string_view src) { return RE2::FullMatch(src, rgx_validate); }
 
   // parse - parse template on parts.
-  PROMPP_ALWAYS_INLINE void parse(Regexp& regexp, re2::RE2& rgx_validate, std::string_view tmpl, std::vector<PatternPart>& src_parts) {
+  PROMPP_ALWAYS_INLINE static void parse(const Regexp& regexp, const re2::RE2& rgx_validate, std::string_view tmpl, std::vector<PatternPart>& src_parts) {
     std::map<std::string, int> groups = regexp.groups();
-    std::string_view p = std::string_view(tmpl);
+    auto p = std::string_view(tmpl);
     while (true) {
-      if (p.size() == 0) {
+      if (p.empty()) {
         break;
       }
       // search '$' and cut before
-      size_t i = p.find('$');
-      std::string_view substr_p = p.substr(0, i);
-      if (substr_p.size() != 0) {
+      const size_t i = p.find('$');
+      if (std::string_view substr_p = p.substr(0, i); !substr_p.empty()) {
         src_parts.emplace_back(substr_p);
       }
       if (i == std::string_view::npos) {
@@ -298,7 +291,7 @@ class RelabelConfig {
         // if contains '{...}'
         case '{': {
           p.remove_prefix(1);
-          size_t j = p.find('}');
+          const size_t j = p.find('}');
           if (j == std::string_view::npos) {
             // if '}' not found cut - "${"
             src_parts.emplace_back(tmpl.substr(tmpl.size() - p.size() - 2, 2));
@@ -306,16 +299,14 @@ class RelabelConfig {
           }
 
           std::string_view g_name = p.substr(0, j);
-          auto rec = groups.find(std::string(g_name));
-          if (rec != groups.end()) {
+          if (auto rec = groups.find(std::string(g_name)); rec != groups.end()) {
             // if g_name found in map add as group(int)
             src_parts.emplace_back(rec->second);
             p.remove_prefix(g_name.size() + 1);
             continue;
           }
 
-          bool ok = is_valid_name(rgx_validate, g_name);
-          if (!ok) {
+          if (!is_valid_name(rgx_validate, g_name)) {
             // if g_name invalid add as is - "${" + std::string{g_name} + "}"
             src_parts.emplace_back(tmpl.substr(tmpl.size() - p.size() - 2, g_name.size() + 3));
             p.remove_prefix(g_name.size() + 1);
@@ -330,10 +321,10 @@ class RelabelConfig {
 
         default: {
           // search '$' and extract g_name
-          int j = p.find('$');
+          const auto j = p.find('$');
           std::string_view g_name = p.substr(0, j);
           std::string name = extract(rgx_validate, g_name);
-          if (name.size() == 0) {
+          if (name.empty()) {
             // if name invalid add as is - "$"
             src_parts.emplace_back(tmpl.substr(tmpl.size() - p.size() - 1, 1));
             continue;
@@ -343,7 +334,7 @@ class RelabelConfig {
           if (rec != groups.end()) {
             // if g_name found in map add as group(int)
             src_parts.emplace_back(rec->second);
-            if (substr_g_name.size() != 0) {
+            if (!substr_g_name.empty()) {
               src_parts.emplace_back(substr_g_name);
             }
             p.remove_prefix(g_name.size());
@@ -351,7 +342,7 @@ class RelabelConfig {
           }
 
           // if g_name not found in map cut g_name
-          if (substr_g_name.size() != 0) {
+          if (!substr_g_name.empty()) {
             src_parts.emplace_back(substr_g_name);
           }
           p.remove_prefix(g_name.size());
@@ -372,12 +363,28 @@ class RelabelConfig {
     return BareBones::Bit::be(*reinterpret_cast<const uint64_t*>(&digest[shift]));
   }
 
+  template <class LabelsBuilder>
+  PROMPP_ALWAYS_INLINE std::string get_value(LabelsBuilder& builder) const {
+    std::string value;
+
+    for (size_t i = 0; i < source_labels_.size(); ++i) {
+      const auto lv = builder.get(source_labels_[i]);
+      if (i == 0) [[unlikely]] {
+        value += lv;
+        continue;
+      }
+      value += separator_;
+      value += lv;
+    }
+
+    return value;
+  }
+
  public:
   // RelabelConfig - constructor for RelabelConfig from go-config.
   template <class GORelabelConfig>
   PROMPP_ALWAYS_INLINE explicit RelabelConfig(GORelabelConfig* go_rc) noexcept
-      : source_labels_{},
-        separator_{static_cast<std::string_view>(go_rc->separator)},
+      : separator_{static_cast<std::string_view>(go_rc->separator)},
         regexp_(static_cast<std::string_view>(go_rc->regex)),
         modulus_{go_rc->modulus},
         target_label_{static_cast<std::string_view>(go_rc->target_label)},
@@ -393,164 +400,168 @@ class RelabelConfig {
     parse(regexp_, rgx_validate, replacement_, replacement_parts_);
   }
 
-  PROMPP_ALWAYS_INLINE RelabelConfig(RelabelConfig&&) noexcept = default;
-
   // source_labels - a list of labels from which values are taken and concatenated with the configured separator in order.
-  PROMPP_ALWAYS_INLINE const std::vector<std::string_view>& source_labels() const noexcept { return source_labels_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const std::vector<std::string_view>& source_labels() const noexcept { return source_labels_; }
 
   // separator - is the string between concatenated values from the source labels.
-  PROMPP_ALWAYS_INLINE const std::string_view& separator() const noexcept { return separator_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const std::string_view& separator() const noexcept { return separator_; }
 
   // regexp - against which the concatenation is matched.
-  PROMPP_ALWAYS_INLINE const Regexp& regexp() const noexcept { return regexp_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const Regexp& regexp() const noexcept { return regexp_; }
 
   // modulus - to take of the hash of concatenated values from the source labels.
-  PROMPP_ALWAYS_INLINE const uint64_t& modulus() const noexcept { return modulus_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint64_t modulus() const noexcept { return modulus_; }
 
   // target_label - is the label to which the resulting string is written in a replacement.
   // Regexp interpolation is allowed for the replace action.
-  PROMPP_ALWAYS_INLINE const std::string_view& target_label() const noexcept { return target_label_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const std::string_view& target_label() const noexcept { return target_label_; }
 
   // replacement - is the regex replacement pattern to be used.
-  PROMPP_ALWAYS_INLINE const std::string_view& replacement() const noexcept { return replacement_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const std::string_view& replacement() const noexcept { return replacement_; }
 
   // action - is the action to be performed for the relabeling.
-  PROMPP_ALWAYS_INLINE const rAction& action() const noexcept { return action_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE rAction action() const noexcept { return action_; }
 
   // target_label_parts - dismantled target_label.
-  PROMPP_ALWAYS_INLINE const std::vector<PatternPart>& target_label_parts() const noexcept { return target_label_parts_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const std::vector<PatternPart>& target_label_parts() const noexcept { return target_label_parts_; }
 
   // replacement_parts - dismantled replacement.
-  PROMPP_ALWAYS_INLINE const std::vector<PatternPart>& replacement_parts() const noexcept { return replacement_parts_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const std::vector<PatternPart>& replacement_parts() const noexcept { return replacement_parts_; }
 
   // relabel - building relabeling labels.
   template <class LabelsBuilder>
-  PROMPP_ALWAYS_INLINE relabelStatus relabel(std::stringstream& buf, LabelsBuilder& builder) {
-    std::string value;
-    for (size_t i = 0; i < source_labels_.size(); ++i) {
-      std::string_view lv = builder.get(source_labels_[i]);
-      if (i == 0) {
-        value += std::string(lv);
-        continue;
-      }
-      value += separator_;
-      value += lv;
-    }
-
+  PROMPP_ALWAYS_INLINE relabelStatus relabel(std::string& buf, LabelsBuilder& builder) const {
     switch (action_) {
       case rDrop: {
-        if (regexp_.full_match(value)) {
+        if (regexp_.full_match(get_value(builder))) {
           return rsDrop;
         }
         break;
       }
 
       case rKeep: {
-        if (!regexp_.full_match(value)) {
+        if (!regexp_.full_match(get_value(builder))) {
           return rsDrop;
         }
         break;
       }
 
       case rDropEqual: {
-        if (builder.get(target_label_) == value) {
+        if (builder.get(target_label_) == get_value(builder)) {
           return rsDrop;
         }
         break;
       }
 
       case rKeepEqual: {
-        if (builder.get(target_label_) != value) {
+        if (builder.get(target_label_) != get_value(builder)) {
           return rsDrop;
         }
         break;
       }
 
       case rReplace: {
-        std::vector<std::string> res_args;
-        bool ok = regexp_.match_to_args(value, res_args);
-        if (!ok) {
+        const auto value = get_value(builder);
+        std::vector<std::string_view> res_args;
+        if (!regexp_.match_to_args(value, res_args)) {
           break;
         }
 
-        std::string lname = regexp_.replace_with_args(buf, res_args, target_label_parts_);
-        if (!label_name_is_valid(lname)) {
+        Regexp::replace_with_args(buf, res_args, target_label_parts_);
+        if (!label_name_is_valid(buf)) {
           break;
         }
-        std::string lvalue = regexp_.replace_with_args(buf, res_args, replacement_parts_);
-        if (lvalue.size() == 0) {
+        std::string lname = buf;
+
+        Regexp::replace_with_args(buf, res_args, replacement_parts_);
+        if (buf.empty()) {
           if (builder.contains(lname)) {
             builder.del(lname);
             return rsRelabel;
           }
           break;
         }
-        builder.set(lname, lvalue);
+        builder.set(lname, buf);
         return rsRelabel;
       }
 
       case rLowercase: {
-        std::string lvalue{value};
-        std::ranges::transform(lvalue, lvalue.begin(), [](unsigned char c) { return std::tolower(c); });
-        builder.set(target_label_, lvalue);
+        auto value = get_value(builder);
+        std::ranges::transform(value, value.begin(), [](unsigned char c) { return std::tolower(c); });
+        builder.set(target_label_, value);
         return rsRelabel;
       }
 
       case rUppercase: {
-        std::string lvalue{value};
-        std::ranges::transform(lvalue, lvalue.begin(), [](unsigned char c) { return std::toupper(c); });
-        builder.set(target_label_, lvalue);
+        auto value = get_value(builder);
+        std::ranges::transform(value, value.begin(), [](unsigned char c) { return std::toupper(c); });
+        builder.set(target_label_, value);
         return rsRelabel;
       }
 
       case rHashMod: {
-        std::string lvalue{std::to_string(make_hash_uint64(value) % modulus_)};
+        std::string lvalue{std::to_string(make_hash_uint64(get_value(builder)) % modulus_)};
         builder.set(target_label_, lvalue);
         return rsRelabel;
       }
 
       case rLabelMap: {
-        bool change{false};
-        builder.range([&]<typename LNameType, typename LValueType>(LNameType& lname, LValueType& lvalue) PROMPP_LAMBDA_INLINE -> bool {
+        std::vector<Primitives::Label> labels_for_set;
+        builder.range([&](const auto& lname, const auto& lvalue) PROMPP_LAMBDA_INLINE -> bool {
           if (regexp_.full_match(lname)) {
-            std::string rlname = regexp_.replace_full(buf, lname, replacement_parts_);
-            builder.set(rlname, lvalue);
-            change = true;
+            regexp_.replace_full(buf, lname, replacement_parts_);
+            labels_for_set.emplace_back(buf, lvalue);
           }
           return true;
         });
-        if (change) {
+
+        if (!labels_for_set.empty()) {
+          for (const auto& label : labels_for_set) {
+            builder.set(label.first, label.second);
+          }
+
           return rsRelabel;
         }
+
         break;
       }
 
       case rLabelDrop: {
-        bool change{false};
-        builder.range([&]<typename LNameType, typename LValueType>(LNameType& lname, [[maybe_unused]] LValueType& lvalue) PROMPP_LAMBDA_INLINE -> bool {
+        std::vector<std::string> labels_for_del;
+        builder.range([&](const auto& lname, const auto&) PROMPP_LAMBDA_INLINE -> bool {
           if (regexp_.full_match(lname)) {
-            builder.del(lname);
-            change = true;
+            labels_for_del.emplace_back(lname);
           }
           return true;
         });
-        if (change) {
+
+        if (!labels_for_del.empty()) {
+          for (const auto& name : labels_for_del) {
+            builder.del(name);
+          }
+
           return rsRelabel;
         }
+
         break;
       }
       case rLabelKeep: {
-        bool change{false};
-        builder.range([&]<typename LNameType, typename LValueType>(LNameType& lname, [[maybe_unused]] LValueType& lvalue) PROMPP_LAMBDA_INLINE -> bool {
+        std::vector<std::string> labels_for_del;
+        builder.range([&](const auto& lname, const auto&) PROMPP_LAMBDA_INLINE -> bool {
           if (!regexp_.full_match(lname)) {
-            builder.del(lname);
-            change = true;
+            labels_for_del.emplace_back(lname);
           }
           return true;
         });
-        if (change) {
+
+        if (!labels_for_del.empty()) {
+          for (const auto& name : labels_for_del) {
+            builder.del(name);
+          }
+
           return rsRelabel;
         }
+
         break;
       }
 
@@ -561,9 +572,6 @@ class RelabelConfig {
 
     return rsKeep;
   }
-
-  // ~RelabelConfig - destructor for RelabelConfig from go-config.
-  PROMPP_ALWAYS_INLINE ~RelabelConfig() = default;
 };
 
 // StatelessRelabeler - stateless relabeler with relabel configs.
@@ -576,18 +584,15 @@ class StatelessRelabeler {
   // StatelessRelabeler - constructor for StatelessRelabeler, converting go-config.
   template <class GORelabelConfigs>
   PROMPP_ALWAYS_INLINE explicit StatelessRelabeler(const GORelabelConfigs& go_rcfgs) noexcept {
-    configs_.reserve(go_rcfgs.size());
-    for (const auto go_rcfg : go_rcfgs) {
-      configs_.emplace_back(go_rcfg);
-    }
+    reset_to(go_rcfgs);
   }
 
   // relabeling_process caller passes a LabelsBuilder containing the initial set of labels, which is mutated by the rules.
   template <class LabelsBuilder>
-  PROMPP_ALWAYS_INLINE relabelStatus relabeling_process(std::stringstream& buf, LabelsBuilder& builder) {
+  PROMPP_ALWAYS_INLINE relabelStatus relabeling_process(std::string& buf, LabelsBuilder& builder) const {
     relabelStatus rstatus{rsKeep};
     for (auto& rcfg : configs_) {
-      relabelStatus status = rcfg.relabel(buf, builder);
+      const relabelStatus status = rcfg.relabel(buf, builder);
       if (status == rsDrop) {
         return rsDrop;
       }
@@ -602,9 +607,8 @@ class StatelessRelabeler {
   // relabeling_process_with_soft_validate caller passes a LabelsBuilder containing the initial set of labels, which is mutated by the rules with soft(on empty)
   // validate label set.
   template <class LabelsBuilder>
-  PROMPP_ALWAYS_INLINE relabelStatus relabeling_process_with_soft_validate(std::stringstream& buf, LabelsBuilder& builder) {
-    relabelStatus rstatus = relabeling_process(buf, builder);
-
+  PROMPP_ALWAYS_INLINE relabelStatus relabeling_process_with_soft_validate(std::ostringstream& buf, LabelsBuilder& builder) {
+    const relabelStatus rstatus = relabeling_process(buf, builder);
     if (rstatus == rsDrop) {
       return rsDrop;
     }
@@ -625,23 +629,21 @@ class StatelessRelabeler {
       configs_.emplace_back(go_rcfg);
     }
   }
-
-  PROMPP_ALWAYS_INLINE ~StatelessRelabeler() = default;
 };
 
 // processExternalLabels merges externalLabels into ls. If ls contains
 // a label in externalLabels, the value in ls wins.
 template <class LabelsBuilder, class ExternalLabels>
-PROMPP_ALWAYS_INLINE void process_external_labels(LabelsBuilder& builder, ExternalLabels& external_labels) {
+PROMPP_ALWAYS_INLINE void process_external_labels(LabelsBuilder& builder, const ExternalLabels& external_labels) {
   if (external_labels.size() == 0) {
     return;
   }
 
   std::size_t j{0};
-  builder.range([&]<typename LNameType, typename LValueType>(LNameType& lname, [[maybe_unused]] LValueType& lvalue) PROMPP_LAMBDA_INLINE -> bool {
-    for (; j < external_labels.size() && lname > external_labels[j].first;) {
-      builder.set(external_labels[j].first, external_labels[j].second);
-      ++j;
+  std::vector<size_t> indexes_for_set;
+  builder.range([&](const auto& lname, const auto&) PROMPP_LAMBDA_INLINE -> bool {
+    for (; j < external_labels.size() && lname > external_labels[j].first; ++j) {
+      indexes_for_set.emplace_back(j);
     }
 
     if (j < external_labels.size() && lname == external_labels[j].first) {
@@ -649,6 +651,10 @@ PROMPP_ALWAYS_INLINE void process_external_labels(LabelsBuilder& builder, Extern
     }
     return true;
   });
+
+  for (auto index : indexes_for_set) {
+    builder.set(external_labels[index].first, external_labels[index].second);
+  }
 
   for (; j < external_labels.size(); j++) {
     builder.set(external_labels[j].first, external_labels[j].second);
@@ -664,7 +670,6 @@ PROMPP_ALWAYS_INLINE void soft_validate(relabelStatus& rstatus, LabelsBuilder& b
 
   if (builder.is_empty()) [[unlikely]] {
     rstatus = rsDrop;
-    return;
   }
 };
 

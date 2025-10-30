@@ -15,6 +15,31 @@ concept has_allocated_memory = requires(const T& t) {
 };
 
 template <class T>
+concept has_allocated_memory_field = requires(const T& t) {
+  { t.allocated_memory } -> std::convertible_to<size_t>;
+};
+
+template <class T>
+concept has_earliest_timestamp_field = requires(const T& t) {
+  { t.earliest_timestamp } -> std::convertible_to<int64_t>;
+};
+
+template <class T>
+concept has_latest_timestamp_field = requires(const T& t) {
+  { t.latest_timestamp } -> std::convertible_to<int64_t>;
+};
+
+template <class T>
+concept has_series_field = requires(const T& t) {
+  { t.series } -> std::convertible_to<uint32_t>;
+};
+
+template <class T>
+concept has_remainder_size_field = requires(const T& t) {
+  { t.remainder_size } -> std::convertible_to<uint32_t>;
+};
+
+template <class T>
 concept dereferenceable_has_allocated_memory = requires(const T& t) {
   { t->allocated_memory() } -> std::convertible_to<size_t>;
 };
@@ -30,8 +55,8 @@ concept has_size = requires(const T& t) {
 };
 
 template <class T>
-concept has_reserve = requires(T& r) {
-  { r.reserve(size_t{}) };
+concept has_reserve = requires(T& r, uint32_t n) {
+  { r.reserve(n) } -> std::same_as<void>;
 };
 
 template <class Clock>

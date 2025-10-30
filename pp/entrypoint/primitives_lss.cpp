@@ -9,6 +9,8 @@
 
 using GoLabelMatchers = PromPP::Primitives::Go::SliceView<PromPP::Prometheus::LabelMatcherTrait<PromPP::Primitives::Go::String>>;
 using GoSliceOfString = PromPP::Primitives::Go::Slice<PromPP::Primitives::Go::String>;
+using entrypoint::head::LsIdsSlice;
+using entrypoint::head::LsIdsSlicePtr;
 using entrypoint::head::LssType;
 using entrypoint::head::LssVariantPtr;
 using entrypoint::head::QueryableEncodingBimap;
@@ -250,8 +252,43 @@ extern "C" void prompp_create_readonly_lss(void* args, void* res) {
   new (res) Result{.lss_copy = entrypoint::head::create_readonly_lss(*static_cast<Arguments*>(args)->lss)};
 }
 
-extern "C" void prompp_primitives_lss_copy_added_series(uint64_t source_lss, uint64_t destination_lss) {
-  series_index::QueryableEncodingBimapCopier copier(std::get<QueryableEncodingBimap>(*std::bit_cast<entrypoint::head::LssVariant*>(source_lss)),
-                                                    std::get<QueryableEncodingBimap>(*std::bit_cast<entrypoint::head::LssVariant*>(destination_lss)));
+using BitsetPtr = std::unique_ptr<BareBones::Bitset>;
+
+extern "C" void prompp_primitives_lss_bitset_series(void* args, void* res) {
+  struct Arguments {
+    LssVariantPtr lss;
+  };
+  struct Result {
+    BitsetPtr bitset;
+  };
+
+  const auto& src = std::get<QueryableEncodingBimap>(*static_cast<Arguments*>(args)->lss);
+  new (res) Result{.bitset = std::make_unique<BareBones::Bitset>(src.added_series())};
+}
+
+extern "C" void prompp_primitives_lss_bitset_dtor(void* args) {
+  struct Arguments {
+    BitsetPtr bitset;
+  };
+
+  static_cast<Arguments*>(args)->~Arguments();
+}
+
+extern "C" void prompp_primitives_readonly_lss_copy_added_series(uint64_t source_lss, uint64_t source_bitset, uint64_t destination_lss, uint64_t ids_mapping) {
+  const auto& src = std::get<entrypoint::head::ReadonlyLss>(*std::bit_cast<entrypoint::head::LssVariant*>(source_lss));
+  const auto& src_bitset = *std::bit_cast<BareBones::Bitset*>(source_bitset);
+  auto& dst = std::get<QueryableEncodingBimap>(*std::bit_cast<entrypoint::head::LssVariant*>(destination_lss));
+  const auto dst_src_ids_mapping = std::bit_cast<LsIdsSlicePtr*>(ids_mapping);
+  *dst_src_ids_mapping = std::make_unique<LsIdsSlice>();
+
+  series_index::QueryableEncodingBimapCopier copier(src, src.sorting_index(), src_bitset, dst, **dst_src_ids_mapping);
   copier.copy_added_series_and_build_indexes();
+}
+
+void prompp_primitives_free_ls_ids_mapping(void* args) {
+  struct Arguments {
+    LsIdsSlicePtr ls_ids_mapping;
+  };
+
+  static_cast<Arguments*>(args)->~Arguments();
 }

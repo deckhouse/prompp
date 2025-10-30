@@ -403,21 +403,6 @@ func (s *QueryableLSSSuite) testQueryLabelValuesImpl(testCase queryLabelValuesCa
 	s.Equal(testCase.expectedValues, result.Values())
 }
 
-func (s *QueryableLSSSuite) TestCopyAddedSeries() {
-	// Arrange
-	emptyLabelsSets := make([]cppbridge.Labels, len(s.labelSetIDs))
-	lssCopy := cppbridge.NewQueryableLssStorage()
-	lssCopyOfCopy := cppbridge.NewQueryableLssStorage()
-
-	// Act
-	s.lss.CopyAddedSeries(lssCopy)
-	lssCopy.CopyAddedSeries(lssCopyOfCopy)
-
-	// Assert
-	s.Equal(labelSetToCppBridgeLabels(s.labelSets), lssCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
-	s.Equal(emptyLabelsSets, lssCopyOfCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
-}
-
 func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithExistingLabelSet() {
 	// Arrange
 	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
@@ -477,4 +462,25 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithoutReadonlyLss() {
 
 	// Assert
 	s.Equal(uint32(expectedLsId), existingLsId)
+}
+
+func (s *QueryableLSSSuite) TestCopyAddedSeriesFromSnapshot() {
+	// Arrange
+	emptyLabelsSets := make([]cppbridge.Labels, len(s.labelSetIDs))
+	lssCopy := cppbridge.NewQueryableLssStorage()
+	lssCopyOfCopy := cppbridge.NewQueryableLssStorage()
+
+	// Act
+	snapshot := s.lss.CreateLabelSetSnapshot()
+	bitsetSeries := s.lss.BitsetSeries()
+	snapshot.CopyAddedSeries(bitsetSeries, lssCopy)
+
+	snapshotCopy := lssCopy.CreateLabelSetSnapshot()
+	bitsetSeriesCopy := lssCopy.BitsetSeries()
+	snapshotCopy.CopyAddedSeries(bitsetSeriesCopy, lssCopyOfCopy)
+
+	// Assert
+	// !!!ATTENTION!!! When copying the added series, the order in which the series are added is preserved.
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets), lssCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
+	s.Equal(emptyLabelsSets, lssCopyOfCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
 }
