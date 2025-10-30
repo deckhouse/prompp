@@ -69,7 +69,7 @@ class MetricsPageList {
     remove_unused_pages(page, page->next_metrics_page());
 
     if (page->is_unused()) {
-      // If page is first page in list then we delete it. Otherwise, we will delete it at another RemoveUnusedPages call
+      // If page is first page in list then we delete it. Otherwise, we will delete it at another remove_unused_pages call
       if (next_metrics_page_.compare_exchange_weak(page, page->next_metrics_page())) [[likely]] {
         delete page;
       }
