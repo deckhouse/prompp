@@ -40,22 +40,24 @@ class BasicLabelSet {
 
   PROMPP_ALWAYS_INLINE void clear() noexcept { labels_.clear(); }
 
-  PROMPP_ALWAYS_INLINE void add(const LabelType& label) noexcept {
+  PROMPP_ALWAYS_INLINE LabelType* add(const LabelType& label) noexcept {
     // if label value empty - skip label
     if (label.second.empty()) [[unlikely]] {
-      return;
+      return nullptr;
     }
 
     if (labels_.empty() || label.first > labels_.back().first) [[likely]] {
-      labels_.emplace_back(label);
+      return &labels_.emplace_back(label);
     } else if (label.first == labels_.back().first) [[unlikely]] {
       labels_.back().second = label.second;
+      return &labels_.back();
     } else {
       auto i = std::lower_bound(labels_.begin(), labels_.end(), label.first, [](const LabelType& a, const auto& b) { return a.first < b; });
       if (i->first == label.first) [[unlikely]] {
         i->second = label.second;
+        return &*i;
       } else {
-        labels_.insert(i, label);
+        return &*labels_.insert(i, label);
       }
     }
   }
