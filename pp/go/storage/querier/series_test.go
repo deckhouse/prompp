@@ -391,3 +391,34 @@ func (s *SeriesSetTestSuite) TestSeriesSeekOutOfRange() {
 	// Assert
 	require.Equal(s.T(), chunkenc.ValNone, result)
 }
+
+func (s *SeriesSetTestSuite) TestSeriesParallelRead() {
+	// Arrange
+	matcher := model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	}
+
+	var start int64 = 0
+	var end int64 = 50
+
+	expected := s.timeSeries
+
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
+	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
+	seriesSlice := make([]storage.Series, 0, 2)
+	require.True(s.T(), seriesSet.Next())
+	seriesSlice = append(seriesSlice, seriesSet.At())
+	require.True(s.T(), seriesSet.Next())
+	seriesSlice = append(seriesSlice, seriesSet.At())
+	require.False(s.T(), seriesSet.Next())
+	var chunkIterator chunkenc.Iterator
+
+	// Act
+	timeSeriesFromSeries1 := storagetest.TimeSeriesFromSeries(seriesSlice[0], chunkIterator, false)
+	timeSeriesFromSeries2 := storagetest.TimeSeriesFromSeries(seriesSlice[1], chunkIterator, false)
+
+	// Assert
+	require.Equal(s.T(), expected, append(timeSeriesFromSeries1, timeSeriesFromSeries2...))
+}

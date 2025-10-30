@@ -363,11 +363,11 @@ func NewDataStorageSerializedDataIterator(serializedData *DataStorageSerializedD
 	return DataStorageSerializedDataIterator{iterator: seriesDataSerializedDataIteratorCtor(serializedData.serializedData, chunkRef)}
 }
 
-func (it DataStorageSerializedDataIterator) Next(result *SerializedDataIteratorNextResult) {
+func (it DataStorageSerializedDataIterator) Next(result *SerializedDataIteratorIterationResult) {
 	seriesDataSerializedDataIteratorNext(it.iterator, result)
 }
 
-func (it DataStorageSerializedDataIterator) Seek(timestamp int64, result *SerializedDataIteratorNextResult) {
+func (it DataStorageSerializedDataIterator) Seek(timestamp int64, result *SerializedDataIteratorIterationResult) {
 	seriesDataSerializedDataIteratorSeek(it.iterator, timestamp, result)
 }
 
