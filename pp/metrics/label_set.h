@@ -22,12 +22,7 @@ class LabelSet {
   PromPP::Primitives::LabelSet labels_;
   PromPP::Primitives::Label::second_type* name_{};
 
-  void add_metric_name_label() {
-    if (name_ = labels_.get(PromPP::Prometheus::kMetricLabelName); name_ == nullptr) {
-      labels_.add(PromPP::Primitives::Label{PromPP::Prometheus::kMetricLabelName, kEmptyName});
-      name_ = labels_.get(PromPP::Prometheus::kMetricLabelName);
-    }
-  }
+  void add_metric_name_label() { name_ = &labels_.add(PromPP::Primitives::Label{PromPP::Prometheus::kMetricLabelName, kEmptyName})->second; }
 };
 
 }  // namespace metrics
