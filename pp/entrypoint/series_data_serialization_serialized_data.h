@@ -39,11 +39,27 @@ void prompp_series_data_serialization_serialized_data_iterator_ctor(void* args, 
  *
  * @param res {
  *     has_data bool    // is iterator has more data to decode.
- *      timestamp int64 // sample timestamp
- *      value float64   // sample value
+ *     timestamp int64 // sample timestamp
+ *     value float64   // sample value
  * }
  */
 void prompp_series_data_serialization_serialized_data_iterator_next(void* args, void* res);
+
+/**
+ * @brief Advance decode iterator until referenced sample is gte targetTimestamp.
+ *
+ * @param args {
+ *     iterator uintptr // pointer to decode iterator
+ *     targetTimestamp int64 // target timestamp
+ * }
+ *
+ * @param res {
+ *     hasData bool    // is iterator has more data to decode.
+ *     timestamp int64 // sample timestamp
+ *     value float64   // sample value
+ * }
+ */
+void prompp_series_data_serialization_serialized_data_iterator_seek(void* args, void* res);
 
 /**
  * @brief Reset a decode iterator for corresponding chunk_ref.
@@ -51,7 +67,7 @@ void prompp_series_data_serialization_serialized_data_iterator_next(void* args, 
  * @param args {
  *     serializedData uintptr // pointer to serialized data.
  *     iterator uintptr // pointer to decode iterator
- *     chunk_ref uint32 // inner chunk id.
+ *     chunkRef uint32 // inner chunk id.
  * }
  *
  */

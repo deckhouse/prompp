@@ -141,10 +141,11 @@ func GetSamplesFromSerializedData(serializedData *cppbridge.DataStorageSerialize
 
 // TimeSeriesFromSeriesSet converting seriesset to slice timeseries.
 func TimeSeriesFromSeriesSet(seriesSet promstorage.SeriesSet, groupSamples bool) []TimeSeries {
+	var chunkIterator chunkenc.Iterator
 	timeSeries := make([]TimeSeries, 0)
 	for seriesSet.Next() {
 		series := seriesSet.At()
-		chunkIterator := series.Iterator(nil)
+		chunkIterator = series.Iterator(chunkIterator)
 		var samples []cppbridge.Sample
 		for chunkIterator.Next() != chunkenc.ValNone {
 			ts, v := chunkIterator.At()

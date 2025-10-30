@@ -8,6 +8,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"testing"
@@ -326,4 +327,67 @@ func (s *SeriesSetTestSuite) TestQueryMergedSeriesSets() {
 		storagetest.TimeSeriesFromSeriesSet(
 			storage.NewMergeSeriesSet([]storage.SeriesSet{seriesSet1, seriesSet2}, storage.ChainedSeriesMerge), false),
 	)
+}
+
+func (s *SeriesSetTestSuite) TestSeriesSeek() {
+	// Arrange
+	matcher := model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	}
+
+	var start int64 = 0
+	var end int64 = 1000
+
+	expected := s.timeSeries[:4]
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries[:4]...)
+	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
+	require.True(s.T(), seriesSet.Next())
+	series := seriesSet.At()
+	require.Equal(s.T(), expected[0].Labels, series.Labels())
+	var iterator chunkenc.Iterator
+	iterator = series.Iterator(iterator)
+	index := 2
+	// Act
+	result := iterator.Seek(expected[index].Samples[0].Timestamp)
+
+	// Assert
+	require.Equal(s.T(), chunkenc.ValFloat, result)
+	ts, v := iterator.At()
+	require.Equal(s.T(), ts, expected[index].Samples[0].Timestamp)
+	require.Equal(s.T(), v, expected[index].Samples[0].Value)
+
+	index++
+	require.Equal(s.T(), chunkenc.ValFloat, iterator.Next())
+	ts, v = iterator.At()
+	require.Equal(s.T(), ts, expected[index].Samples[0].Timestamp)
+	require.Equal(s.T(), v, expected[index].Samples[0].Value)
+
+	require.Equal(s.T(), chunkenc.ValNone, iterator.Next())
+}
+
+func (s *SeriesSetTestSuite) TestSeriesSeekOutOfRange() {
+	// Arrange
+	matcher := model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	}
+
+	var start int64 = 0
+	var end int64 = 1000
+
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries[:4]...)
+	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
+	require.True(s.T(), seriesSet.Next())
+	series := seriesSet.At()
+	var iterator chunkenc.Iterator
+	iterator = series.Iterator(iterator)
+
+	// Act
+	result := iterator.Seek(end)
+
+	// Assert
+	require.Equal(s.T(), chunkenc.ValNone, result)
 }
