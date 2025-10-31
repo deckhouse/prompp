@@ -476,23 +476,21 @@ func (g *Group) CopyState(from *Group) {
 // Eval runs a single evaluation cycle in which all rules are evaluated sequentially.
 // Rules can be evaluated concurrently if the `concurrent-rule-eval` feature flag is enabled.
 func (g *Group) Eval(ctx context.Context, ts time.Time) {
-	var samplesTotal atomic.Float64
+	var samplesTotal float64
 
-	sequentiallyRules := g.concurrencyEval(ctx, ts, samplesTotal)
+	if g.concurrencyController.IsConcurrent() {
+		samplesTotal = g.concurrencyEval(ctx, ts)
+	} else {
+		samplesTotal = g.sequentiallyEval(ctx, ts, g.rules)
+	}
+
 	select {
 	case <-g.done:
 		return
 	default:
 	}
 
-	g.sequentiallyEval(ctx, ts, samplesTotal, sequentiallyRules)
-	select {
-	case <-g.done:
-		return
-	default:
-	}
-
-	g.metrics.GroupSamples.WithLabelValues(GroupKey(g.File(), g.Name())).Set(samplesTotal.Load())
+	g.metrics.GroupSamples.WithLabelValues(GroupKey(g.File(), g.Name())).Set(samplesTotal)
 	g.cleanupStaleSeries(ctx, ts)
 }
 
@@ -950,8 +948,10 @@ func buildDependencyMap(rules []Rule) dependencyMap {
 	return dependencies
 }
 
-func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, samplesTotal atomic.Float64) []Rule {
+// concurrencyEval evaluates the rules concurrently.
+func (g *Group) concurrencyEval(ctx context.Context, ts time.Time) float64 {
 	var (
+		samplesTotal   atomic.Float64
 		wg             sync.WaitGroup
 		mtx            sync.Mutex
 		concurrencyApp = g.opts.Appendable.Appender(ctx)
@@ -1010,12 +1010,8 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, samplesTotal 
 			numDuplicates = 0
 		)
 
-		// app := g.opts.Appendable.Appender(ctx)
-		seriesReturned := make(map[string]labels.Labels, len(g.seriesInPreviousEval[i]))
-		defer func() {
-			seriesInPreviousEval[i] = seriesReturned
-		}()
-
+		seriesInPreviousEval[i] = make(map[string]labels.Labels, len(g.seriesInPreviousEval[i]))
+		buf := [1024]byte{}
 		for _, s := range vector {
 			if s.H != nil {
 				mtx.Lock()
@@ -1048,26 +1044,41 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, samplesTotal 
 				default:
 					level.Warn(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
 				}
-			} else {
-				buf := [1024]byte{}
-				seriesReturned[string(s.Metric.Bytes(buf[:]))] = s.Metric
+
+				continue
 			}
+
+			seriesInPreviousEval[i][string(s.Metric.Bytes(buf[:]))] = s.Metric
 		}
 		if numOutOfOrder > 0 {
-			level.Warn(logger).Log("msg", "Error on ingesting out-of-order result from rule evaluation", "num_dropped", numOutOfOrder)
+			level.Warn(logger).Log(
+				"msg", "Error on ingesting out-of-order result from rule evaluation",
+				"num_dropped", numOutOfOrder,
+			)
 		}
 		if numTooOld > 0 {
-			level.Warn(logger).Log("msg", "Error on ingesting too old result from rule evaluation", "num_dropped", numTooOld)
+			level.Warn(logger).Log(
+				"msg", "Error on ingesting too old result from rule evaluation",
+				"num_dropped", numTooOld,
+			)
 		}
 		if numDuplicates > 0 {
-			level.Warn(logger).Log("msg", "Error on ingesting results from rule evaluation with different value but same timestamp", "num_dropped", numDuplicates)
+			level.Warn(logger).Log(
+				"msg", "Error on ingesting results from rule evaluation with different value but same timestamp",
+				"num_dropped", numDuplicates,
+			)
 		}
 
 		for metric, lset := range g.seriesInPreviousEval[i] {
-			if _, ok := seriesReturned[metric]; !ok {
+			if _, ok := seriesInPreviousEval[i][metric]; !ok {
 				// Series no longer exposed, mark it stale.
 				mtx.Lock()
-				_, err = concurrencyApp.Append(0, lset, timestamp.FromTime(ts.Add(-ruleQueryOffset)), math.Float64frombits(value.StaleNaN))
+				_, err = concurrencyApp.Append(
+					0,
+					lset,
+					timestamp.FromTime(ts.Add(-ruleQueryOffset)),
+					math.Float64frombits(value.StaleNaN),
+				)
 				mtx.Unlock()
 				unwrappedErr := errors.Unwrap(err)
 				if unwrappedErr == nil {
@@ -1087,11 +1098,11 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, samplesTotal 
 		}
 	}
 
-	sequentiallyRules := make([]Rule, 0, len(g.rules))
+	sequentiallyRules := make([]Rule, len(g.rules))
 	for i, rule := range g.rules {
 		select {
 		case <-g.done:
-			return sequentiallyRules
+			return samplesTotal.Load()
 		default:
 		}
 
@@ -1102,9 +1113,9 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, samplesTotal 
 				wg.Done()
 				ctrl.Done(ctx)
 			})
-			sequentiallyRules = append(sequentiallyRules, nil) // placeholder for the series
+			sequentiallyRules[i] = nil // placeholder for the series
 		} else {
-			sequentiallyRules = append(sequentiallyRules, rule)
+			sequentiallyRules[i] = rule
 		}
 	}
 
@@ -1126,27 +1137,31 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, samplesTotal 
 			"group_key", groupKey,
 			"err", err,
 		)
+	} else {
+		for i, series := range seriesInPreviousEval {
+			if series == nil {
+				continue
+			}
 
-		return sequentiallyRules
-	}
-
-	for i, series := range seriesInPreviousEval {
-		if series == nil {
-			continue
+			g.seriesInPreviousEval[i] = series
 		}
-
-		g.seriesInPreviousEval[i] = series
 	}
 
-	return sequentiallyRules
+	return samplesTotal.Add(g.sequentiallyEval(ctx, ts, sequentiallyRules))
 }
 
+// sequentiallyEval evaluates the rules sequentially.
 func (g *Group) sequentiallyEval(
 	ctx context.Context,
 	ts time.Time,
-	samplesTotal atomic.Float64,
 	sequentiallyRules []Rule,
-) {
+) float64 {
+	if len(sequentiallyRules) == 0 {
+		return 0
+	}
+
+	var samplesTotal float64
+
 	ruleQueryOffset := g.QueryOffset()
 	eval := func(i int, rule Rule, cleanup func()) {
 		if cleanup != nil {
@@ -1188,7 +1203,7 @@ func (g *Group) sequentiallyEval(
 		}
 		rule.SetHealth(HealthGood)
 		rule.SetLastError(nil)
-		samplesTotal.Add(float64(len(vector)))
+		samplesTotal += float64(len(vector))
 
 		if ar, ok := rule.(*AlertingRule); ok {
 			ar.sendAlerts(ctx, ts, g.opts.ResendDelay, g.interval, g.opts.NotifyFunc)
@@ -1214,6 +1229,7 @@ func (g *Group) sequentiallyEval(
 			g.seriesInPreviousEval[i] = seriesReturned
 		}()
 
+		buf := [1024]byte{}
 		for _, s := range vector {
 			if s.H != nil {
 				_, err = app.AppendHistogram(0, s.Metric, s.T, nil, s.H)
@@ -1242,10 +1258,11 @@ func (g *Group) sequentiallyEval(
 				default:
 					level.Warn(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
 				}
-			} else {
-				buf := [1024]byte{}
-				seriesReturned[string(s.Metric.Bytes(buf[:]))] = s.Metric
+
+				continue
 			}
+
+			seriesReturned[string(s.Metric.Bytes(buf[:]))] = s.Metric
 		}
 		if numOutOfOrder > 0 {
 			level.Warn(logger).Log(
@@ -1296,7 +1313,7 @@ func (g *Group) sequentiallyEval(
 	for i, rule := range sequentiallyRules {
 		select {
 		case <-g.done:
-			return
+			return samplesTotal
 		default:
 		}
 
@@ -1306,4 +1323,6 @@ func (g *Group) sequentiallyEval(
 
 		eval(i, rule, nil)
 	}
+
+	return samplesTotal
 }

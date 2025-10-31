@@ -45,7 +45,7 @@ func newTimeSeriesAppender(
 		ctx:     ctx,
 		adapter: adapter,
 		state:   state,
-		batch:   &timeSeriesBatch{},
+		batch:   &timeSeriesBatch{timeSeries: make([]model.TimeSeries, 0, 10)},
 	}
 }
 
@@ -56,7 +56,7 @@ func (a *TimeSeriesAppender) Append(
 	t int64,
 	v float64,
 ) (storage.SeriesRef, error) {
-	lsb := model.NewLabelSetBuilder()
+	lsb := model.NewLabelSetBuilderSize(l.Len())
 	l.Range(func(label labels.Label) {
 		lsb.Add(label.Name, label.Value)
 	})

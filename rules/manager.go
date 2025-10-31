@@ -465,6 +465,9 @@ type RuleConcurrencyController interface {
 
 	// Done releases a concurrent evaluation slot.
 	Done(ctx context.Context)
+
+	// IsConcurrent returns true if the controller is a concurrent controller, false if it is a sequential controller.
+	IsConcurrent() bool
 }
 
 // concurrentRuleEvalController holds a weighted semaphore which controls the concurrent evaluation of rules.
@@ -506,6 +509,11 @@ func (c *concurrentRuleEvalController) Done(_ context.Context) {
 	c.sema.Release(1)
 }
 
+// IsConcurrent returns true if the controller is a concurrent controller, false if it is a sequential controller.
+func (*concurrentRuleEvalController) IsConcurrent() bool {
+	return true
+}
+
 // sequentialRuleEvalController is a RuleConcurrencyController that runs every rule sequentially.
 type sequentialRuleEvalController struct{}
 
@@ -514,3 +522,8 @@ func (c sequentialRuleEvalController) Allow(_ context.Context, _ *Group, _ Rule)
 }
 
 func (c sequentialRuleEvalController) Done(_ context.Context) {}
+
+// IsConcurrent returns false if the controller is a sequential controller, true if it is a concurrent controller.
+func (c sequentialRuleEvalController) IsConcurrent() bool {
+	return false
+}
