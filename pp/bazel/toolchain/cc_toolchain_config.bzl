@@ -80,14 +80,10 @@ def _impl(ctx):
     profiling_flags = []
 
     if profiling_enabled:
-        profiling_flags.append("-DPROMPP_PROFILING_ENABLE")
-
         opts = [s.strip() for s in profiling_opts.split(",") if s.strip()]
 
         for opt in opts:
-            if opt == "default":
-                pass
-            elif opt == "instrumental" or opt == "no_sampling":
+            if opt == "instrumental" or opt == "no_sampling":
                 profiling_flags.append("-DTRACY_NO_SAMPLING")
             elif opt == "no_callstack":
                 profiling_flags.append("-DTRACY_NO_CALLSTACK")
@@ -96,8 +92,6 @@ def _impl(ctx):
                 profiling_flags.append("-DPROMPP_PROFILING_CALLSTACK=" + str(depth))
             elif opt == "on_demand":
                 profiling_flags.append("-DTRACY_ON_DEMAND")
-            else:
-                fail("Unknown profiling option: %s" % opt)
 
     profiling_flag_groups = []
     if profiling_flags:
@@ -258,7 +252,6 @@ def _impl(ctx):
                         flag_group(
                             flags = [
                                 "-fno-omit-frame-pointer",
-                                "-g",
                             ],
                         ),
                     ],
