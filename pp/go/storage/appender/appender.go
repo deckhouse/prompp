@@ -304,9 +304,13 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) appendRelabelerSeriesS
 			shardID := shard.ShardID()
 
 			relabeledSeries := shardedRelabeledSeries.DataByShard(shardID)
-			hasData := slices.ContainsFunc(relabeledSeries, func(s *cppbridge.RelabeledSeries) bool {
-				return s.Size() > 0
-			})
+			hasData := false
+			for i := range relabeledSeries {
+				if relabeledSeries[i].Size() > 0 {
+					hasData = true
+					break
+				}
+			}
 			if !hasData {
 				return nil
 			}

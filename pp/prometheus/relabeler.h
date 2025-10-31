@@ -476,7 +476,7 @@ class PerShardRelabeler {
 //
 
 // PerGoroutineRelabeler stateful relabeler for shard goroutines.
-template <template <class> class InnerSeriesContainer>
+template <template <class> class SeriesContainer>
 class PerGoroutineRelabeler {
   std::string buf_;
   Primitives::LabelsBuilder builder_;
@@ -501,7 +501,7 @@ class PerGoroutineRelabeler {
                                                                  const Hashdex& hashdex,
                                                                  const RelabelerOptions& options,
                                                                  Stats& stats,
-                                                                 InnerSeriesContainer<InnerSeries>& shards_inner_series,
+                                                                 SeriesContainer<InnerSeries>& shards_inner_series,
                                                                  Primitives::Timestamp def_timestamp) {
     bool result{true};
     size_t samples_count{};
@@ -556,8 +556,8 @@ class PerGoroutineRelabeler {
                                                       const RelabelerOptions& options,
                                                       const StatelessRelabeler& stateless_relabeler,
                                                       Stats& stats,
-                                                      InnerSeriesContainer<InnerSeries>& shards_inner_series,
-                                                      Primitives::Go::SliceView<RelabeledSeries*>& shards_relabeled_series,
+                                                      SeriesContainer<InnerSeries>& shards_inner_series,
+                                                      SeriesContainer<RelabeledSeries>& shards_relabeled_series,
                                                       Primitives::Timestamp def_timestamp) {
     size_t samples_count{};
     fill_inner_series(hashdex, skip_shard_inner_series(hashdex, shards_inner_series[shard_id_].size()), shards_inner_series, [&](auto& item) {
@@ -591,8 +591,8 @@ class PerGoroutineRelabeler {
               const size_t new_shard_id = new_hash % number_of_shards_;
               auto& samples = timeseries_buf_.samples();
               const bool all_samples_reseted_to_scrape_ts = resolve_timestamps(def_timestamp, samples, options);
-              shards_relabeled_series[new_shard_id]->emplace_back(new_label_set, samples, new_hash, ls_id,
-                                                                  options.track_timestamps_staleness || all_samples_reseted_to_scrape_ts);
+              shards_relabeled_series[new_shard_id].emplace_back(new_label_set, samples, new_hash, ls_id,
+                                                                 options.track_timestamps_staleness || all_samples_reseted_to_scrape_ts);
               ++stats.series_added;
 
               break;
@@ -760,8 +760,8 @@ class PerGoroutineRelabeler {
                                              const RelabelerOptions& options,
                                              const StatelessRelabeler& stateless_relabeler,
                                              Stats& stats,
-                                             InnerSeriesContainer<InnerSeries>& shards_inner_series,
-                                             Primitives::Go::SliceView<RelabeledSeries*>& shards_relabeled_series) {
+                                             SeriesContainer<InnerSeries>& shards_inner_series,
+                                             SeriesContainer<RelabeledSeries>& shards_relabeled_series) {
     input_relabeling_internal(input_lss, target_lss, cache, hashdex, options, stateless_relabeler, stats, shards_inner_series, shards_relabeled_series,
                               Primitives::kNullTimestamp);
   }
@@ -773,7 +773,7 @@ class PerGoroutineRelabeler {
                                                         const Hashdex& hashdex,
                                                         const RelabelerOptions& options,
                                                         Stats& stats,
-                                                        InnerSeriesContainer<InnerSeries>& shards_inner_series) {
+                                                        SeriesContainer<InnerSeries>& shards_inner_series) {
     return input_relabeling_from_cache_internal(input_lss, target_lss, cache, hashdex, options, stats, shards_inner_series, Primitives::kNullTimestamp);
   }
 
@@ -785,8 +785,8 @@ class PerGoroutineRelabeler {
                                                             const RelabelerOptions& options,
                                                             const StatelessRelabeler& stateless_relabeler,
                                                             Stats& stats,
-                                                            InnerSeriesContainer<InnerSeries>& shards_inner_series,
-                                                            Primitives::Go::SliceView<RelabeledSeries*>& shards_relabeled_series,
+                                                            SeriesContainer<InnerSeries>& shards_inner_series,
+                                                            SeriesContainer<RelabeledSeries>& shards_relabeled_series,
                                                             Primitives::Timestamp def_timestamp) {
     input_relabeling_internal(input_lss, target_lss, cache, hashdex, options, stateless_relabeler, stats, shards_inner_series, shards_relabeled_series,
                               def_timestamp);
@@ -799,7 +799,7 @@ class PerGoroutineRelabeler {
                                                                        const Hashdex& hashdex,
                                                                        const RelabelerOptions& options,
                                                                        Stats& stats,
-                                                                       InnerSeriesContainer<InnerSeries>& shards_inner_series,
+                                                                       SeriesContainer<InnerSeries>& shards_inner_series,
                                                                        Primitives::Timestamp def_timestamp) {
     return input_relabeling_from_cache_internal(input_lss, target_lss, cache, hashdex, options, stats, shards_inner_series, def_timestamp);
   }
@@ -809,7 +809,7 @@ class PerGoroutineRelabeler {
   PROMPP_ALWAYS_INLINE void input_transition_relabeling(TargetLSS& target_lss,
                                                         const Hashdex& hashdex,
                                                         Stats& stats,
-                                                        InnerSeriesContainer<InnerSeries>& shards_inner_series) {
+                                                        SeriesContainer<InnerSeries>& shards_inner_series) {
     fill_inner_series(hashdex, skip_shard_inner_series(hashdex, shards_inner_series[shard_id_].size()), shards_inner_series, [&](auto& item) {
       const auto previous_size = target_lss.size();
       auto ls_id = target_lss.find_or_emplace(timeseries_buf_.label_set(), item.hash());
@@ -828,7 +828,7 @@ class PerGoroutineRelabeler {
   PROMPP_ALWAYS_INLINE bool input_transition_relabeling_only_read(TargetLSS& target_lss,
                                                                   const Hashdex& hashdex,
                                                                   Stats& stats,
-                                                                  InnerSeriesContainer<InnerSeries>& shards_inner_series) {
+                                                                  SeriesContainer<InnerSeries>& shards_inner_series) {
     bool result = true;
     fill_inner_series(hashdex, hashdex.begin(), shards_inner_series, [&](auto& item) {
       if (auto ls_id = target_lss.find(timeseries_buf_.label_set(), item.hash()); ls_id.has_value()) {
@@ -849,23 +849,23 @@ class PerGoroutineRelabeler {
   template <class LSS>
   PROMPP_ALWAYS_INLINE static void append_relabeler_series(LSS& target_lss,
                                                            InnerSeries& inner_series,
-                                                           const RelabeledSeries* relabeled_series,
+                                                           const RelabeledSeries& relabeled_series,
                                                            RelabelerStateUpdate* relabeler_state_update) {
-    relabeler_state_update->reserve(relabeler_state_update->size() + relabeled_series->size());
-    inner_series.reserve(inner_series.size() + relabeled_series->size());
+    relabeler_state_update->reserve(relabeler_state_update->size() + relabeled_series.size());
+    inner_series.reserve(inner_series.size() + relabeled_series.size());
     if constexpr (BareBones::concepts::has_reserve<LSS>) {
-      target_lss.reserve(target_lss.size() + relabeled_series->size());
+      target_lss.reserve(target_lss.size() + relabeled_series.size());
     }
 
-    for (const auto& relabeled_serie : relabeled_series->data()) {
+    for (const auto& relabeled_serie : relabeled_series.data()) {
       uint32_t ls_id = target_lss.find_or_emplace(relabeled_serie.ls, relabeled_serie.hash);
-      inner_series.emplace_back(relabeled_serie.samples, ls_id, relabeled_series->is_stale_nan_tracked(relabeled_serie.ls_id));
+      inner_series.emplace_back(relabeled_serie.samples, ls_id, relabeled_series.is_stale_nan_tracked(relabeled_serie.ls_id));
       relabeler_state_update->emplace_back(relabeled_serie.ls_id, ls_id);
     }
   }
 
   template <hashdex::HashdexInterface Hashdex, class Handler>
-  void fill_inner_series(const Hashdex& hashdex, auto hashdex_it, InnerSeriesContainer<InnerSeries>& shards_inner_series, Handler handler) {
+  void fill_inner_series(const Hashdex& hashdex, auto hashdex_it, SeriesContainer<InnerSeries>& shards_inner_series, Handler handler) {
     assert(number_of_shards_ > 0);
 
     const size_t n = std::min(static_cast<size_t>(hashdex.size()), static_cast<size_t>((hashdex.size() * 1.1) / number_of_shards_));
@@ -887,7 +887,7 @@ class PerGoroutineRelabeler {
     }
   }
 
-  static void track_stale_nans(InnerSeriesContainer<InnerSeries>& inner_series, StaleNaNsState& state, Primitives::Timestamp def_timestamp) {
+  static void track_stale_nans(SeriesContainer<InnerSeries>& inner_series, StaleNaNsState& state, Primitives::Timestamp def_timestamp) {
     roaring::Roaring current_state;
 
     for (auto& series : inner_series) {

@@ -1594,9 +1594,9 @@ func prometheusInnerSeriesDtor(innerSeries []InnerSeries) {
 //
 
 // prometheusRelabeledSeriesCtor - wrapper for constructor C-RelabeledSeries(vector).
-func prometheusRelabeledSeriesCtor(relabeledSeries *RelabeledSeries) {
+func prometheusRelabeledSeriesCtor(relabeledSeries []RelabeledSeries) {
 	args := struct {
-		relabeledSeries *RelabeledSeries
+		relabeledSeries []RelabeledSeries
 	}{relabeledSeries}
 
 	testGC()
@@ -1607,9 +1607,9 @@ func prometheusRelabeledSeriesCtor(relabeledSeries *RelabeledSeries) {
 }
 
 // prometheusRelabeledSeriesDtor - wrapper for destructor C-RelabeledSeries(vector).
-func prometheusRelabeledSeriesDtor(relabeledSeries *RelabeledSeries) {
+func prometheusRelabeledSeriesDtor(relabeledSeries []RelabeledSeries) {
 	args := struct {
-		relabeledSeries *RelabeledSeries
+		relabeledSeries []RelabeledSeries
 	}{relabeledSeries}
 
 	testGC()
@@ -3273,11 +3273,11 @@ func prometheusPerGoroutineRelabelerInputRelabeling(
 	perGoroutineRelabeler, statelessRelabeler, inputLss, targetLss, cache, hashdex uintptr,
 	options RelabelerOptions,
 	shardsInnerSeries []InnerSeries,
-	shardsRelabeledSeries []*RelabeledSeries,
+	shardsRelabeledSeries []RelabeledSeries,
 ) (stats RelabelerStats, exception []byte, targetLssHasReallocations bool) {
 	args := struct {
 		shardsInnerSeries     []InnerSeries
-		shardsRelabeledSeries []*RelabeledSeries
+		shardsRelabeledSeries []RelabeledSeries
 		options               RelabelerOptions
 		perGoroutineRelabeler uintptr
 		statelessRelabeler    uintptr
@@ -3355,11 +3355,11 @@ func prometheusPerGoroutineRelabelerInputRelabelingWithStalenans(
 	defTimestamp int64,
 	options RelabelerOptions,
 	shardsInnerSeries []InnerSeries,
-	shardsRelabeledSeries []*RelabeledSeries,
+	shardsRelabeledSeries []RelabeledSeries,
 ) (stats RelabelerStats, exception []byte, targetLssHasReallocations bool) {
 	args := struct {
 		shardsInnerSeries     []InnerSeries
-		shardsRelabeledSeries []*RelabeledSeries
+		shardsRelabeledSeries []RelabeledSeries
 		options               RelabelerOptions
 		perGoroutineRelabeler uintptr
 		statelessRelabeler    uintptr
@@ -3513,12 +3513,12 @@ func prometheusPerGoroutineRelabelerInputRelabelingOnlyRead(
 func prometheusPerGoroutineRelabelerAppendRelabelerSeries(
 	perGoroutineRelabeler, targetLss uintptr,
 	shardsInnerSeries []InnerSeries,
-	shardsRelabeledSeries []*RelabeledSeries,
+	shardsRelabeledSeries []RelabeledSeries,
 	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
 ) (exception []byte, targetLssHasReallocations bool) {
 	args := struct {
 		shardsInnerSeries          []InnerSeries
-		shardsRelabeledSeries      []*RelabeledSeries
+		shardsRelabeledSeries      []RelabeledSeries
 		shardsRelabelerStateUpdate []*RelabelerStateUpdate
 		perGoroutineRelabeler      uintptr
 		targetLss                  uintptr

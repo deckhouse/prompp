@@ -70,19 +70,19 @@ void prompp_prometheus_inner_series_dtor(void* args);
 //
 
 /**
- * @brief filling RelabeledSeries pointer vector RelabeledSerie;
+ * @brief initialize slice of RelabeledSeries
  *
  * @param args {
- *     relabeledSeries *RelabeledSeries // pointer to RelabeledSeries;
+ *     relabeledSeries []RelabeledSeries
  * }
  */
 void prompp_prometheus_relabeled_series_ctor(void* args);
 
 /**
- * @brief Destroy vector with RelabeledSerie in RelabeledSeries.
+ * @brief Destroy slice of RelabeledSeries
  *
  * @param args {
- *      relabeledSeries *RelabeledSeries // pointer to RelabeledSeries;
+ *      relabeledSeries []RelabeledSeries
  * }
  */
 void prompp_prometheus_relabeled_series_dtor(void* args);
@@ -284,7 +284,7 @@ void prompp_prometheus_per_goroutine_relabeler_dtor(void* args);
  *
  * @param args {
  *     shards_inner_series          []InnerSeries     // go slice with InnerSeries;
- *     shards_relabeled_series      []*RelabeledSeries // go slice with RelabeledSeries;
+ *     shards_relabeled_series      []RelabeledSeries // go slice with RelabeledSeries;
  *     options                      RelabelerOptions   // object RelabelerOptions;
  *     per_goroutine_relabeler      uintptr            // pointer to constructed per goroutine relabeler;
  *     stateless_relabeler          uintptr            // pointer to constructed stateless relabeler;
@@ -332,7 +332,7 @@ void prompp_prometheus_per_goroutine_relabeler_input_relabeling_from_cache(void*
  *
  * @param args {
  *     shards_inner_series          []InnerSeries     // go slice with InnerSeries;
- *     shards_relabeled_series      []*RelabeledSeries // go slice with RelabeledSeries;
+ *     shards_relabeled_series      []RelabeledSeries // go slice with RelabeledSeries;
  *     options                      RelabelerOptions   // object RelabelerOptions;
  *     per_goroutine_relabeler      uintptr            // pointer to constructed per goroutine relabeler;
  *     stateless_relabeler          uintptr            // pointer to constructed stateless relabeler;
@@ -422,7 +422,7 @@ void prompp_prometheus_per_goroutine_relabeler_input_transition_relabeling_only_
  *
  * @param args {
  *     shards_inner_series           []InnerSeries          // go InnerSeries per source shard;
- *     shards_relabeled_series       []*RelabeledSeries      // go RelabeledSeries per source shard;
+ *     shards_relabeled_series       []RelabeledSeries      // go RelabeledSeries per source shard;
  *     shards_relabeler_state_update []*RelabelerStateUpdate // pointer to RelabelerStateUpdate per source shard;
  *     per_goroutine_relabeler       uintptr                 // pointer to constructed per goroutine relabeler;
  *     target_lss                    uintptr                 // pointer to constructed label sets;
