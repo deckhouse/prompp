@@ -1962,17 +1962,17 @@ func seriesDataSerializedDataIteratorCtor(serializedData uintptr, chunkRef uint3
 	return res.iterator
 }
 
-type SerializedDataIteratorNextResult struct {
+type SerializedDataIteratorIterationResult struct {
 	Timestamp int64
 	Value     float64
 	HasValue  bool
 }
 
-func NewSerializedDataIteratorNextResult() SerializedDataIteratorNextResult {
-	return SerializedDataIteratorNextResult{Timestamp: math.MinInt64}
+func NewSerializedDataIteratorIterationResult() SerializedDataIteratorIterationResult {
+	return SerializedDataIteratorIterationResult{Timestamp: math.MinInt64}
 }
 
-func seriesDataSerializedDataIteratorNext(iterator uintptr, res *SerializedDataIteratorNextResult) {
+func seriesDataSerializedDataIteratorNext(iterator uintptr, res *SerializedDataIteratorIterationResult) {
 	args := struct {
 		iterator uintptr
 	}{iterator}
@@ -1980,6 +1980,20 @@ func seriesDataSerializedDataIteratorNext(iterator uintptr, res *SerializedDataI
 	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_series_data_serialization_serialized_data_iterator_next,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(res)),
+	)
+}
+
+func seriesDataSerializedDataIteratorSeek(iterator uintptr, targetTimestamp int64, res *SerializedDataIteratorIterationResult) {
+	args := struct {
+		iterator        uintptr
+		targetTimestamp int64
+	}{iterator, targetTimestamp}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_serialization_serialized_data_iterator_seek,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(res)),
 	)
