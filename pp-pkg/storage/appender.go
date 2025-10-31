@@ -34,6 +34,7 @@ type TimeSeriesAppender struct {
 	adapter *Adapter
 	state   *cppbridge.StateV2
 	batch   *timeSeriesBatch
+	lsb     *model.LabelSetBuilder
 }
 
 func newTimeSeriesAppender(
@@ -46,6 +47,7 @@ func newTimeSeriesAppender(
 		adapter: adapter,
 		state:   state,
 		batch:   &timeSeriesBatch{timeSeries: make([]model.TimeSeries, 0, 10)},
+		lsb:     model.NewLabelSetBuilderSize(10),
 	}
 }
 
@@ -56,13 +58,13 @@ func (a *TimeSeriesAppender) Append(
 	t int64,
 	v float64,
 ) (storage.SeriesRef, error) {
-	lsb := model.NewLabelSetBuilderSize(l.Len())
+	a.lsb.Reset()
 	l.Range(func(label labels.Label) {
-		lsb.Add(label.Name, label.Value)
+		a.lsb.Add(label.Name, label.Value)
 	})
 
 	a.batch.timeSeries = append(a.batch.timeSeries, model.TimeSeries{
-		LabelSet:  lsb.Build(),
+		LabelSet:  a.lsb.Build(),
 		Timestamp: uint64(t), // #nosec G115 // no overflow
 		Value:     v,
 	})
