@@ -1624,9 +1624,9 @@ func prometheusRelabeledSeriesDtor(relabeledSeries []RelabeledSeries) {
 //
 
 // prometheusRelabelerStateUpdateCtor - wrapper for constructor C-RelabelerStateUpdate(vector), filling in c++.
-func prometheusRelabelerStateUpdateCtor(relabelerStateUpdate *RelabelerStateUpdate) {
+func prometheusRelabelerStateUpdateCtor(relabelerStateUpdate []RelabelerStateUpdate) {
 	args := struct {
-		relabelerStateUpdate *RelabelerStateUpdate
+		relabelerStateUpdate []RelabelerStateUpdate
 	}{relabelerStateUpdate}
 
 	testGC()
@@ -1637,9 +1637,9 @@ func prometheusRelabelerStateUpdateCtor(relabelerStateUpdate *RelabelerStateUpda
 }
 
 // prometheusRelabelerStateUpdateDtor - wrapper for destructor C-RelabelerStateUpdate(vector).
-func prometheusRelabelerStateUpdateDtor(relabelerStateUpdate *RelabelerStateUpdate) {
+func prometheusRelabelerStateUpdateDtor(relabelerStateUpdate []RelabelerStateUpdate) {
 	args := struct {
-		relabelerStateUpdate *RelabelerStateUpdate
+		relabelerStateUpdate []RelabelerStateUpdate
 	}{relabelerStateUpdate}
 
 	testGC()
@@ -2903,11 +2903,11 @@ func prometheusCacheAllocatedMemory(cache uintptr) uint64 {
 
 // prometheusCacheUpdate add to cache relabled data(third stage).
 func prometheusCacheUpdate(
-	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
+	shardsRelabelerStateUpdate []RelabelerStateUpdate,
 	cache uintptr,
 ) []byte {
 	args := struct {
-		relabelerStateUpdates []*RelabelerStateUpdate
+		relabelerStateUpdates []RelabelerStateUpdate
 		cache                 uintptr
 	}{shardsRelabelerStateUpdate, cache}
 	var res struct {
@@ -3514,12 +3514,12 @@ func prometheusPerGoroutineRelabelerAppendRelabelerSeries(
 	perGoroutineRelabeler, targetLss uintptr,
 	shardsInnerSeries []InnerSeries,
 	shardsRelabeledSeries []RelabeledSeries,
-	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
+	shardsRelabelerStateUpdate []RelabelerStateUpdate,
 ) (exception []byte, targetLssHasReallocations bool) {
 	args := struct {
 		shardsInnerSeries          []InnerSeries
 		shardsRelabeledSeries      []RelabeledSeries
-		shardsRelabelerStateUpdate []*RelabelerStateUpdate
+		shardsRelabelerStateUpdate []RelabelerStateUpdate
 		perGoroutineRelabeler      uintptr
 		targetLss                  uintptr
 	}{shardsInnerSeries, shardsRelabeledSeries, shardsRelabelerStateUpdate, perGoroutineRelabeler, targetLss}

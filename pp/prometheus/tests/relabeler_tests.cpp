@@ -290,7 +290,7 @@ TEST_F(PerGoroutineRelabelerFixture, ReplaceToNewLS2) {
 
   // Act
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
-  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
+  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], update_data);
 
   // Assert
   EXPECT_EQ(relabeled_results_[0].size(), 0);
@@ -312,8 +312,8 @@ TEST_F(PerGoroutineRelabelerFixture, ReplaceToNewLS3) {
 
   // Act
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
-  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[0], relabeled_results_[0], &update_data);
-  cache_.update(&update_data, 1);
+  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[0], relabeled_results_[0], update_data);
+  cache_.update(update_data, 1);
 
   // Assert
   EXPECT_EQ(relabeled_results_[0].size(), 1);
@@ -336,7 +336,7 @@ TEST_F(PerGoroutineRelabelerFixture, InputRelabelingWithStalenans_Default) {
 
   // Act
   relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, 1000);
-  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
+  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], update_data);
   PerGoroutineRelabeler::track_stale_nans(shards_inner_series_, state, 1000);
 
   // Act
@@ -365,7 +365,7 @@ TEST_F(PerGoroutineRelabelerFixture, InputRelabelingWithStalenans_DefaultHonorTi
 
   // Act
   relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, 1000);
-  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
+  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], update_data);
   PerGoroutineRelabeler::track_stale_nans(shards_inner_series_, state, 1000);
 
   reset();
@@ -391,7 +391,7 @@ TEST_F(PerGoroutineRelabelerFixture, InputRelabelingWithStalenans_WithMetricTime
 
   // Act
   relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, 1000);
-  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
+  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], update_data);
   PerGoroutineRelabeler::track_stale_nans(shards_inner_series_, state, 1000);
 
   reset();
@@ -418,7 +418,7 @@ TEST_F(PerGoroutineRelabelerFixture, InputRelabelingWithStalenans_HonorTimestamp
 
   // Act
   relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, 1000);
-  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
+  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], update_data);
   PerGoroutineRelabeler::track_stale_nans(shards_inner_series_, state, 1000);
 
   relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, HashdexTest{}, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, 2000);
@@ -447,7 +447,7 @@ TEST_F(PerGoroutineRelabelerFixture, InputRelabelingWithStalenans_HonorTimestamp
 
   // Act
   relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, 1000);
-  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
+  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], update_data);
   PerGoroutineRelabeler::track_stale_nans(shards_inner_series_, state, 1000);
 
   reset();
@@ -473,8 +473,8 @@ TEST_F(PerGoroutineRelabelerFixture, TargetLabels_HappyPath) {
 
   // Act
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
-  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
-  cache_.update(&update_data, 1);
+  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], update_data);
+  cache_.update(update_data, 1);
 
   // Assert
   EXPECT_EQ(relabeled_results_[0].size(), 0);
@@ -498,8 +498,8 @@ TEST_F(PerGoroutineRelabelerFixture, TargetLabels_ExportedLabel) {
 
   // Act
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
-  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[0], relabeled_results_[0], &update_data);
-  cache_.update(&update_data, 1);
+  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[0], relabeled_results_[0], update_data);
+  cache_.update(update_data, 1);
 
   // Assert
   EXPECT_EQ(relabeled_results_[0].size(), 1);
@@ -524,8 +524,8 @@ TEST_F(PerGoroutineRelabelerFixture, TargetLabels_ExportedLabel_Honor) {
 
   // Act
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
-  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[0], relabeled_results_[0], &update_data);
-  cache_.update(&update_data, 1);
+  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[0], relabeled_results_[0], update_data);
+  cache_.update(update_data, 1);
 
   // Assert
   EXPECT_EQ(relabeled_results_[0].size(), 1);

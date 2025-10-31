@@ -92,19 +92,19 @@ void prompp_prometheus_relabeled_series_dtor(void* args);
 //
 
 /**
- * @brief init RelabelerStateUpdate(pointer to RelabelerStateUpdate).
+ * @brief Initialize slice of RelabelerStateUpdate.
  *
  * @param args {
- *     relabeler_state_update *RelabelerStateUpdate // pointer to RelabelerStateUpdate;
+ *     relabeler_state_update []RelabelerStateUpdate
  * }
  */
 void prompp_prometheus_relabeler_state_update_ctor(void* args);
 
 /**
- * @brief Destroy vector in RelabelerStateUpdate.
+ * @brief Destroy slice of RelabelerStateUpdate.
  *
  * @param args {
- *      relabeledSeries *RelabeledSeries // pointer to RelabeledSeries;
+ *      relabeledSeries []RelabeledSeries
  * }
  */
 void prompp_prometheus_relabeler_state_update_dtor(void* args);

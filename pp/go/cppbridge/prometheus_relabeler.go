@@ -510,17 +510,19 @@ func (sd *ShardedRelabeledSeries) IsEmpty() bool {
 //
 
 type ShardedStateUpdates struct {
-	ShardedSeriesData[*RelabelerStateUpdate]
+	ShardedSeriesData[RelabelerStateUpdate]
 }
 
 // NewShardedStateUpdates init new ShardedStateUpdates.
 func NewShardedStateUpdates(numberOfShards uint16) *ShardedStateUpdates {
 	series := &ShardedStateUpdates{
-		NewShardedSeriesData[*RelabelerStateUpdate](numberOfShards),
+		NewShardedSeriesData[RelabelerStateUpdate](numberOfShards),
 	}
-	for i := range series.series {
-		series.series[i] = NewRelabelerStateUpdate()
-	}
+
+	prometheusRelabelerStateUpdateCtor(series.series)
+	runtime.SetFinalizer(series, func(series *ShardedStateUpdates) {
+		prometheusRelabelerStateUpdateDtor(series.series)
+	})
 
 	return series
 }
@@ -536,30 +538,9 @@ type incomingAndRelabeledLsID struct {
 // RelabelerStateUpdate go wrapper for C-RelabelerStateUpdate.
 type RelabelerStateUpdate []incomingAndRelabeledLsID
 
-// NewRelabelerStateUpdate init new RelabelerStateUpdate.
-func NewRelabelerStateUpdate() *RelabelerStateUpdate {
-	rsu := new(RelabelerStateUpdate)
-	prometheusRelabelerStateUpdateCtor(rsu)
-	runtime.SetFinalizer(rsu, func(r *RelabelerStateUpdate) {
-		prometheusRelabelerStateUpdateDtor(r)
-	})
-
-	return rsu
-}
-
 // IsEmpty returns true if the length of slice is zero.
 func (rsu *RelabelerStateUpdate) IsEmpty() bool {
 	return len(*rsu) == 0
-}
-
-// NewShardsRelabelerStateUpdate init slice with the results of update state per shards.
-func NewShardsRelabelerStateUpdate(numberOfShards uint16) []*RelabelerStateUpdate {
-	rsu := make([]*RelabelerStateUpdate, numberOfShards)
-	for i := range rsu {
-		rsu[i] = NewRelabelerStateUpdate()
-	}
-
-	return rsu
 }
 
 // MetricLimits limits on label set and samples.
@@ -779,7 +760,7 @@ func (c *Cache) AllocatedMemory() uint64 {
 }
 
 // Update add to cache relabled data(third stage).
-func (c *Cache) Update(ctx context.Context, shardsRelabelerStateUpdate []*RelabelerStateUpdate) error {
+func (c *Cache) Update(ctx context.Context, shardsRelabelerStateUpdate []RelabelerStateUpdate) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -825,7 +806,7 @@ func (pgr *PerGoroutineRelabeler) AppendRelabelerSeries(
 	targetLss *LabelSetStorage,
 	shardsInnerSeries []InnerSeries,
 	shardsRelabeledSeries []RelabeledSeries,
-	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
+	shardsRelabelerStateUpdate []RelabelerStateUpdate,
 ) (bool, error) {
 	if ctx.Err() != nil {
 		return false, ctx.Err()

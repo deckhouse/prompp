@@ -260,21 +260,6 @@ func (dg *DestinationGroup) OutputRelabeling(
 	)
 }
 
-// OutputStateUpdates - make container for output state updates.
-func (dg *DestinationGroup) OutputStateUpdates() [][]*cppbridge.RelabelerStateUpdate {
-	// encodersStateUpdates[mainShardID[encoderShardID]]
-	encodersStateUpdates := make([][]*cppbridge.RelabelerStateUpdate, len(dg.outputRelabelers))
-	for i := range encodersStateUpdates {
-		encodersStateUpdates[i] = make([]*cppbridge.RelabelerStateUpdate, 1<<dg.managerKeeper.ShardsNumberPower())
-		for j := range encodersStateUpdates[i] {
-			// set current DestinationGroup(lss) generation
-			encodersStateUpdates[i][j] = cppbridge.NewRelabelerStateUpdate()
-		}
-	}
-
-	return encodersStateUpdates
-}
-
 // ResetTo reset to changed attributes.
 func (dg *DestinationGroup) ResetTo(
 	dgCfg *DestinationGroupConfig,

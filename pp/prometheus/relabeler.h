@@ -358,8 +358,8 @@ class Cache {
 
   // third stage
   // update add to cache relabled data.
-  PROMPP_ALWAYS_INLINE void update(const RelabelerStateUpdate* relabeler_state_update, const uint16_t relabeled_shard_id) {
-    for (const auto& update : *relabeler_state_update) {
+  PROMPP_ALWAYS_INLINE void update(const RelabelerStateUpdate& relabeler_state_update, const uint16_t relabeled_shard_id) {
+    for (const auto& update : relabeler_state_update) {
       add_relabel(update.incoming_ls_id, update.relabeled_ls_id, relabeled_shard_id);
     }
   }
@@ -409,8 +409,8 @@ class PerShardRelabeler {
 
  public:
   // update_relabeler_state - add to cache relabled data(third stage).
-  PROMPP_ALWAYS_INLINE static void update_relabeler_state(Cache& cache, const RelabelerStateUpdate* relabeler_state_update, const uint16_t relabeled_shard_id) {
-    for (const auto& update : *relabeler_state_update) {
+  PROMPP_ALWAYS_INLINE static void update_relabeler_state(Cache& cache, const RelabelerStateUpdate& relabeler_state_update, const uint16_t relabeled_shard_id) {
+    for (const auto& update : relabeler_state_update) {
       cache.add_relabel(update.incoming_ls_id, update.relabeled_ls_id, relabeled_shard_id);
     }
   }
@@ -850,8 +850,8 @@ class PerGoroutineRelabeler {
   PROMPP_ALWAYS_INLINE static void append_relabeler_series(LSS& target_lss,
                                                            InnerSeries& inner_series,
                                                            const RelabeledSeries& relabeled_series,
-                                                           RelabelerStateUpdate* relabeler_state_update) {
-    relabeler_state_update->reserve(relabeler_state_update->size() + relabeled_series.size());
+                                                           RelabelerStateUpdate& relabeler_state_update) {
+    relabeler_state_update.reserve(relabeler_state_update.size() + relabeled_series.size());
     inner_series.reserve(inner_series.size() + relabeled_series.size());
     if constexpr (BareBones::concepts::has_reserve<LSS>) {
       target_lss.reserve(target_lss.size() + relabeled_series.size());
@@ -860,7 +860,7 @@ class PerGoroutineRelabeler {
     for (const auto& relabeled_serie : relabeled_series.data()) {
       uint32_t ls_id = target_lss.find_or_emplace(relabeled_serie.ls, relabeled_serie.hash);
       inner_series.emplace_back(relabeled_serie.samples, ls_id, relabeled_series.is_stale_nan_tracked(relabeled_serie.ls_id));
-      relabeler_state_update->emplace_back(relabeled_serie.ls_id, ls_id);
+      relabeler_state_update.emplace_back(relabeled_serie.ls_id, ls_id);
     }
   }
 

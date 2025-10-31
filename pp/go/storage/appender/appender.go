@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"sync/atomic"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -349,9 +348,13 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) updateRelabelerStateSt
 	numberOfShards := a.head.NumberOfShards()
 	for shardID := range numberOfShards {
 		updates := shardedStateUpdates.DataByShard(shardID)
-		hasData := slices.ContainsFunc(updates, func(s *cppbridge.RelabelerStateUpdate) bool {
-			return !s.IsEmpty()
-		})
+		hasData := false
+		for i := range updates {
+			if !updates[i].IsEmpty() {
+				hasData = true
+				break
+			}
+		}
 		if !hasData {
 			return nil
 		}
