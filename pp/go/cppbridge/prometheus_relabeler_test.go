@@ -252,8 +252,8 @@ func (s *PerGoroutineRelabelerSuite) TestInvalidAction() {
 		},
 	}
 
-	shardsInnerSeries := cppbridge.NewShardsInnerSeries(s.numberOfShards)
-	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(s.numberOfShards)
+	shardsInnerSeries := cppbridge.NewShardedInnerSeries(s.numberOfShards)
+	shardsRelabeledSeries := cppbridge.NewShardedRelabeledSeries(s.numberOfShards)
 
 	statelessRelabeler, err := cppbridge.NewStatelessRelabeler(rCfgs)
 	s.Require().NoError(err)
@@ -270,8 +270,8 @@ func (s *PerGoroutineRelabelerSuite) TestInvalidAction() {
 		s.targetLss,
 		state,
 		h,
-		shardsInnerSeries,
-		shardsRelabeledSeries,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
 	)
 	s.Require().Error(err)
 	s.Equal(cppbridge.RelabelerStats{}, stats)
@@ -304,8 +304,8 @@ func (s *PerGoroutineRelabelerSuite) TestRelabeling() {
 	})
 	s.Require().NoError(err)
 
-	shardsInnerSeries := cppbridge.NewShardsInnerSeries(s.numberOfShards)
-	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(s.numberOfShards)
+	shardsInnerSeries := cppbridge.NewShardedInnerSeries(s.numberOfShards)
+	shardsRelabeledSeries := cppbridge.NewShardedRelabeledSeries(s.numberOfShards)
 
 	statelessRelabeler, err := cppbridge.NewStatelessRelabeler(s.rCfgs)
 	s.Require().NoError(err)
@@ -322,13 +322,13 @@ func (s *PerGoroutineRelabelerSuite) TestRelabeling() {
 		s.targetLss,
 		state,
 		h,
-		shardsInnerSeries,
-		shardsRelabeledSeries,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
 	)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{1, 1, 1}, stats)
 	s.True(hasReallocations)
-	s.Equal(uint64(1), shardsInnerSeries[0].Size())
+	s.Equal(uint64(1), shardsInnerSeries.DataByShard(0)[0].Size())
 }
 
 func (s *PerGoroutineRelabelerSuite) TestRelabelingDrop() {
@@ -355,8 +355,8 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingDrop() {
 	})
 	s.Require().NoError(err)
 
-	shardsInnerSeries := cppbridge.NewShardsInnerSeries(s.numberOfShards)
-	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(s.numberOfShards)
+	shardsInnerSeries := cppbridge.NewShardedInnerSeries(s.numberOfShards)
+	shardsRelabeledSeries := cppbridge.NewShardedRelabeledSeries(s.numberOfShards)
 
 	statelessRelabeler, err := cppbridge.NewStatelessRelabeler(s.rCfgs)
 	s.Require().NoError(err)
@@ -373,8 +373,8 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingDrop() {
 		s.targetLss,
 		state,
 		h,
-		shardsInnerSeries,
-		shardsRelabeledSeries,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
 	)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{0, 0, 2}, stats)
@@ -398,8 +398,8 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCacheTrue() {
 	})
 	s.Require().NoError(err)
 
-	shardsInnerSeries := cppbridge.NewShardsInnerSeries(s.numberOfShards)
-	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(s.numberOfShards)
+	shardsInnerSeries := cppbridge.NewShardedInnerSeries(s.numberOfShards)
+	shardsRelabeledSeries := cppbridge.NewShardedRelabeledSeries(s.numberOfShards)
 
 	statelessRelabeler, err := cppbridge.NewStatelessRelabeler(s.rCfgs)
 	s.Require().NoError(err)
@@ -416,8 +416,8 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCacheTrue() {
 		s.targetLss,
 		state,
 		h,
-		shardsInnerSeries,
-		shardsRelabeledSeries,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
 	)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{1, 1, 0}, stats)
@@ -429,7 +429,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCacheTrue() {
 		s.targetLss,
 		state,
 		h,
-		shardsInnerSeries,
+		shardsInnerSeries.DataByShard(0),
 	)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{1, 0, 0}, stats)
@@ -462,7 +462,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCacheFalse() {
 	})
 	s.Require().NoError(err)
 
-	shardsInnerSeries := cppbridge.NewShardsInnerSeries(s.numberOfShards)
+	shardsInnerSeries := cppbridge.NewShardedInnerSeries(s.numberOfShards)
 	state := cppbridge.NewStateV2WithoutLock()
 	state.SetRelabelerOptions(&s.options)
 	state.Reconfigure(0, s.numberOfShards, make([]*cppbridge.IdsMapping, s.numberOfShards))
@@ -474,7 +474,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCacheFalse() {
 		s.targetLss,
 		state,
 		h,
-		shardsInnerSeries,
+		shardsInnerSeries.DataByShard(0),
 	)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{0, 0, 0}, stats)
@@ -622,8 +622,8 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCachePartially() {
 	})
 	s.Require().NoError(err)
 
-	shardsInnerSeries := cppbridge.NewShardsInnerSeries(s.numberOfShards)
-	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(s.numberOfShards)
+	shardsInnerSeries := cppbridge.NewShardedInnerSeries(s.numberOfShards)
+	shardsRelabeledSeries := cppbridge.NewShardedRelabeledSeries(s.numberOfShards)
 
 	statelessRelabeler, err := cppbridge.NewStatelessRelabeler(s.rCfgs)
 	s.Require().NoError(err)
@@ -640,26 +640,26 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCachePartially() {
 		s.targetLss,
 		state,
 		h1,
-		shardsInnerSeries,
-		shardsRelabeledSeries,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
 	)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{4, 4, 4}, stats)
 	s.True(hasReallocations)
 
-	shardsInnerSeries = cppbridge.NewShardsInnerSeries(s.numberOfShards)
+	shardsInnerSeries = cppbridge.NewShardedInnerSeries(s.numberOfShards)
 	stats, ok, err := pgr.RelabelingFromCache(
 		s.baseCtx,
 		s.inputLss,
 		s.targetLss,
 		state,
 		h2,
-		shardsInnerSeries,
+		shardsInnerSeries.DataByShard(0),
 	)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{4, 0, 0}, stats)
 	s.False(ok)
-	s.Equal(uint64(4), shardsInnerSeries[0].Size())
+	s.Equal(uint64(4), shardsInnerSeries.DataByShard(0)[0].Size())
 
 	stats, _, err = pgr.Relabeling(
 		s.baseCtx,
@@ -667,12 +667,12 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCachePartially() {
 		s.targetLss,
 		state,
 		h2,
-		shardsInnerSeries,
-		shardsRelabeledSeries,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
 	)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{1, 1, 0}, stats)
-	s.Equal(uint64(5), shardsInnerSeries[0].Size())
+	s.Equal(uint64(5), shardsInnerSeries.DataByShard(0)[0].Size())
 }
 
 func (s *PerGoroutineRelabelerSuite) TestRelabelingTransition() {
@@ -701,8 +701,8 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingTransition() {
 	})
 	s.Require().NoError(err)
 
-	shardsInnerSeries := cppbridge.NewShardsInnerSeries(s.numberOfShards)
-	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(s.numberOfShards)
+	shardsInnerSeries := cppbridge.NewShardedInnerSeries(s.numberOfShards)
+	shardsRelabeledSeries := cppbridge.NewShardedRelabeledSeries(s.numberOfShards)
 
 	state := cppbridge.NewTransitionStateV2()
 	state.Reconfigure(0, s.numberOfShards, make([]*cppbridge.IdsMapping, s.numberOfShards))
@@ -714,8 +714,8 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingTransition() {
 		s.targetLss,
 		state,
 		h,
-		shardsInnerSeries,
-		shardsRelabeledSeries,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
 	)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{2, 2, 0}, stats)
@@ -739,8 +739,8 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCacheTrueTransition() {
 	})
 	s.Require().NoError(err)
 
-	shardsInnerSeries := cppbridge.NewShardsInnerSeries(s.numberOfShards)
-	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(s.numberOfShards)
+	shardsInnerSeries := cppbridge.NewShardedInnerSeries(s.numberOfShards)
+	shardsRelabeledSeries := cppbridge.NewShardedRelabeledSeries(s.numberOfShards)
 
 	state := cppbridge.NewTransitionStateV2()
 	state.Reconfigure(0, s.numberOfShards, make([]*cppbridge.IdsMapping, s.numberOfShards))
@@ -752,8 +752,8 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCacheTrueTransition() {
 		s.targetLss,
 		state,
 		h,
-		shardsInnerSeries,
-		shardsRelabeledSeries,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
 	)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{1, 1, 0}, stats)
@@ -765,7 +765,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCacheTrueTransition() {
 		s.targetLss,
 		state,
 		h,
-		shardsInnerSeries,
+		shardsInnerSeries.DataByShard(0),
 	)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{1, 0, 0}, stats)
@@ -798,7 +798,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCacheFalseTransition() {
 	})
 	s.Require().NoError(err)
 
-	shardsInnerSeries := cppbridge.NewShardsInnerSeries(s.numberOfShards)
+	shardsInnerSeries := cppbridge.NewShardedInnerSeries(s.numberOfShards)
 	state := cppbridge.NewTransitionStateV2()
 	state.Reconfigure(0, s.numberOfShards, make([]*cppbridge.IdsMapping, s.numberOfShards))
 
@@ -809,7 +809,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCacheFalseTransition() {
 		s.targetLss,
 		state,
 		h,
-		shardsInnerSeries,
+		shardsInnerSeries.DataByShard(0),
 	)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{0, 0, 0}, stats)
@@ -957,8 +957,8 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCachePartiallyTransition(
 	})
 	s.Require().NoError(err)
 
-	shardsInnerSeries := cppbridge.NewShardsInnerSeries(s.numberOfShards)
-	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(s.numberOfShards)
+	shardsInnerSeries := cppbridge.NewShardedInnerSeries(s.numberOfShards)
+	shardsRelabeledSeries := cppbridge.NewShardedRelabeledSeries(s.numberOfShards)
 
 	state := cppbridge.NewTransitionStateV2()
 	state.Reconfigure(0, s.numberOfShards, make([]*cppbridge.IdsMapping, s.numberOfShards))
@@ -970,26 +970,26 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCachePartiallyTransition(
 		s.targetLss,
 		state,
 		h1,
-		shardsInnerSeries,
-		shardsRelabeledSeries,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
 	)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{8, 8, 0}, stats)
 	s.True(hasReallocations)
 
-	shardsInnerSeries = cppbridge.NewShardsInnerSeries(s.numberOfShards)
+	shardsInnerSeries = cppbridge.NewShardedInnerSeries(s.numberOfShards)
 	stats, ok, err := pgr.RelabelingFromCache(
 		s.baseCtx,
 		s.inputLss,
 		s.targetLss,
 		state,
 		h2,
-		shardsInnerSeries,
+		shardsInnerSeries.DataByShard(0),
 	)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{4, 0, 0}, stats)
 	s.False(ok)
-	s.Equal(uint64(4), shardsInnerSeries[0].Size())
+	s.Equal(uint64(4), shardsInnerSeries.DataByShard(0)[0].Size())
 
 	stats, _, err = pgr.Relabeling(
 		s.baseCtx,
@@ -997,12 +997,12 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingFromCachePartiallyTransition(
 		s.targetLss,
 		state,
 		h2,
-		shardsInnerSeries,
-		shardsRelabeledSeries,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
 	)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{1, 1, 0}, stats)
-	s.Equal(uint64(5), shardsInnerSeries[0].Size())
+	s.Equal(uint64(5), shardsInnerSeries.DataByShard(0)[0].Size())
 }
 
 func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenans() {
@@ -1031,8 +1031,8 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenans() {
 	})
 	s.Require().NoError(err)
 
-	shardsInnerSeries := cppbridge.NewShardsInnerSeries(s.numberOfShards)
-	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(s.numberOfShards)
+	shardsInnerSeries := cppbridge.NewShardedInnerSeries(s.numberOfShards)
+	shardsRelabeledSeries := cppbridge.NewShardedRelabeledSeries(s.numberOfShards)
 
 	statelessRelabeler, err := cppbridge.NewStatelessRelabeler(s.rCfgs)
 	s.Require().NoError(err)
@@ -1050,35 +1050,35 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenans() {
 		s.targetLss,
 		state,
 		h,
-		shardsInnerSeries,
-		shardsRelabeledSeries,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
 	)
-	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries, state, 0)
+	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries.DataByShard(0), state, 0)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{1, 1, 1}, stats)
 	s.True(hasReallocations)
-	s.Equal(uint64(1), shardsInnerSeries[0].Size())
+	s.Equal(uint64(1), shardsInnerSeries.DataByShard(0)[0].Size())
 
 	h, err = s.makeSnappyProtobufHashdex(&prompb.WriteRequest{})
 	s.Require().NoError(err)
 
-	shardsInnerSeries = cppbridge.NewShardsInnerSeries(s.numberOfShards)
-	shardsRelabeledSeries = cppbridge.NewShardsRelabeledSeries(s.numberOfShards)
+	shardsInnerSeries = cppbridge.NewShardedInnerSeries(s.numberOfShards)
+	shardsRelabeledSeries = cppbridge.NewShardedRelabeledSeries(s.numberOfShards)
 	stats, hasReallocations, err = pgr.Relabeling(
 		s.baseCtx,
 		s.inputLss,
 		s.targetLss,
 		state,
 		h,
-		shardsInnerSeries,
-		shardsRelabeledSeries,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
 	)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{0, 0, 0}, stats)
 	s.False(hasReallocations)
 
-	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries, state, 0)
-	s.Equal(uint64(1), shardsInnerSeries[0].Size())
+	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries.DataByShard(0), state, 0)
+	s.Equal(uint64(1), shardsInnerSeries.DataByShard(0)[0].Size())
 }
 
 func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansFromCacheTrue() {
@@ -1098,8 +1098,8 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansFromCacheTrue() 
 	})
 	s.Require().NoError(err)
 
-	shardsInnerSeries := cppbridge.NewShardsInnerSeries(s.numberOfShards)
-	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(s.numberOfShards)
+	shardsInnerSeries := cppbridge.NewShardedInnerSeries(s.numberOfShards)
+	shardsRelabeledSeries := cppbridge.NewShardedRelabeledSeries(s.numberOfShards)
 
 	statelessRelabeler, err := cppbridge.NewStatelessRelabeler(s.rCfgs)
 	s.Require().NoError(err)
@@ -1117,8 +1117,8 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansFromCacheTrue() 
 		s.targetLss,
 		state,
 		h,
-		shardsInnerSeries,
-		shardsRelabeledSeries,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
 	)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{1, 1, 0}, stats)
@@ -1130,9 +1130,9 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansFromCacheTrue() 
 		s.targetLss,
 		state,
 		h,
-		shardsInnerSeries,
+		shardsInnerSeries.DataByShard(0),
 	)
-	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries, state, 0)
+	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries.DataByShard(0), state, 0)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{1, 0, 0}, stats)
 	s.True(ok)
@@ -1140,22 +1140,22 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansFromCacheTrue() 
 	h, err = s.makeSnappyProtobufHashdex(&prompb.WriteRequest{})
 	s.Require().NoError(err)
 
-	shardsInnerSeries = cppbridge.NewShardsInnerSeries(s.numberOfShards)
-	shardsRelabeledSeries = cppbridge.NewShardsRelabeledSeries(s.numberOfShards)
+	shardsInnerSeries = cppbridge.NewShardedInnerSeries(s.numberOfShards)
+	shardsRelabeledSeries = cppbridge.NewShardedRelabeledSeries(s.numberOfShards)
 	stats, hasReallocations, err = pgr.Relabeling(
 		s.baseCtx,
 		s.inputLss,
 		s.targetLss,
 		state,
 		h,
-		shardsInnerSeries,
-		shardsRelabeledSeries,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
 	)
-	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries, state, 0)
+	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries.DataByShard(0), state, 0)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{0, 0, 0}, stats)
 	s.False(hasReallocations)
-	s.Equal(uint64(1), shardsInnerSeries[0].Size())
+	s.Equal(uint64(1), shardsInnerSeries.DataByShard(0)[0].Size())
 }
 
 func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansFromCacheFalse() {
@@ -1184,7 +1184,7 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansFromCacheFalse()
 	})
 	s.Require().NoError(err)
 
-	shardsInnerSeries := cppbridge.NewShardsInnerSeries(s.numberOfShards)
+	shardsInnerSeries := cppbridge.NewShardedInnerSeries(s.numberOfShards)
 	state := cppbridge.NewStateV2WithoutLock()
 	state.SetRelabelerOptions(&s.options)
 	state.EnableTrackStaleness()
@@ -1197,9 +1197,9 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansFromCacheFalse()
 		s.targetLss,
 		state,
 		h,
-		shardsInnerSeries,
+		shardsInnerSeries.DataByShard(0),
 	)
-	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries, state, 0)
+	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries.DataByShard(0), state, 0)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{0, 0, 0}, stats)
 	s.False(ok)
@@ -1346,8 +1346,8 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansFromCachePartial
 	})
 	s.Require().NoError(err)
 
-	shardsInnerSeries := cppbridge.NewShardsInnerSeries(s.numberOfShards)
-	shardsRelabeledSeries := cppbridge.NewShardsRelabeledSeries(s.numberOfShards)
+	shardsInnerSeries := cppbridge.NewShardedInnerSeries(s.numberOfShards)
+	shardsRelabeledSeries := cppbridge.NewShardedRelabeledSeries(s.numberOfShards)
 
 	statelessRelabeler, err := cppbridge.NewStatelessRelabeler(s.rCfgs)
 	s.Require().NoError(err)
@@ -1365,27 +1365,27 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansFromCachePartial
 		s.targetLss,
 		state,
 		h1,
-		shardsInnerSeries,
-		shardsRelabeledSeries,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
 	)
-	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries, state, 0)
+	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries.DataByShard(0), state, 0)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{4, 4, 4}, stats)
 	s.True(hasReallocations)
 
-	shardsInnerSeries = cppbridge.NewShardsInnerSeries(s.numberOfShards)
+	shardsInnerSeries = cppbridge.NewShardedInnerSeries(s.numberOfShards)
 	stats, ok, err := pgr.RelabelingFromCache(
 		s.baseCtx,
 		s.inputLss,
 		s.targetLss,
 		state,
 		h2,
-		shardsInnerSeries,
+		shardsInnerSeries.DataByShard(0),
 	)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{4, 0, 0}, stats)
 	s.False(ok)
-	s.Equal(uint64(4), shardsInnerSeries[0].Size())
+	s.Equal(uint64(4), shardsInnerSeries.DataByShard(0)[0].Size())
 
 	stats, _, err = pgr.Relabeling(
 		s.baseCtx,
@@ -1393,33 +1393,33 @@ func (s *PerGoroutineRelabelerSuite) TestRelabelingWithStalenansFromCachePartial
 		s.targetLss,
 		state,
 		h2,
-		shardsInnerSeries,
-		shardsRelabeledSeries,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
 	)
-	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries, state, 0)
+	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries.DataByShard(0), state, 0)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{1, 1, 0}, stats)
-	s.Equal(uint64(5), shardsInnerSeries[0].Size())
+	s.Equal(uint64(5), shardsInnerSeries.DataByShard(0)[0].Size())
 
 	h, err := s.makeSnappyProtobufHashdex(&prompb.WriteRequest{})
 	s.Require().NoError(err)
 
-	shardsInnerSeries = cppbridge.NewShardsInnerSeries(s.numberOfShards)
-	shardsRelabeledSeries = cppbridge.NewShardsRelabeledSeries(s.numberOfShards)
+	shardsInnerSeries = cppbridge.NewShardedInnerSeries(s.numberOfShards)
+	shardsRelabeledSeries = cppbridge.NewShardedRelabeledSeries(s.numberOfShards)
 	stats, hasReallocations, err = pgr.Relabeling(
 		s.baseCtx,
 		s.inputLss,
 		s.targetLss,
 		state,
 		h,
-		shardsInnerSeries,
-		shardsRelabeledSeries,
+		shardsInnerSeries.DataByShard(0),
+		shardsRelabeledSeries.DataByShard(0),
 	)
-	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries, state, 0)
+	cppbridge.PerGoroutineRelabelerTrackStaleNans(shardsInnerSeries.DataByShard(0), state, 0)
 	s.Require().NoError(err)
 	s.Equal(cppbridge.RelabelerStats{0, 0, 0}, stats)
 	s.False(hasReallocations)
-	s.Equal(uint64(5), shardsInnerSeries[0].Size())
+	s.Equal(uint64(5), shardsInnerSeries.DataByShard(0)[0].Size())
 }
 
 func (s *PerGoroutineRelabelerSuite) makeSnappyProtobufHashdex(

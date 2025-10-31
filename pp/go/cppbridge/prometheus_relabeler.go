@@ -372,16 +372,6 @@ func (sr *StatelessRelabeler) ResetTo(relabelingCfgs []*RelabelConfig) error {
 // ShardsInnerSeries
 //
 
-// NewShardsInnerSeries - init slice with the results of relabeling per shards.
-func NewShardsInnerSeries(numberOfShards uint16) []*InnerSeries {
-	srs := make([]*InnerSeries, numberOfShards)
-	for i := range srs {
-		srs[i] = NewInnerSeries()
-	}
-
-	return srs
-}
-
 // stdVector implementation cpp std::vector, for allocate 24-byte, used in cpp.
 //
 //nolint:unused // for cpp-bridge, used in cpp.
@@ -416,30 +406,9 @@ func (iss *InnerSeries) Size() uint64 {
 	return iss.size
 }
 
-// NewInnerSeries - init new InnerSeries with finalizer for dtor C-InnerSeries.
-func NewInnerSeries() *InnerSeries {
-	iss := &InnerSeries{size: 0}
-	prometheusInnerSeriesCtor(iss)
-	runtime.SetFinalizer(iss, func(i *InnerSeries) {
-		prometheusInnerSeriesDtor(i)
-	})
-
-	return iss
-}
-
 //
 // ShardsRelabeledSeries
 //
-
-// NewShardsRelabeledSeries - init slice with the relabeled results per shards.
-func NewShardsRelabeledSeries(numberOfShards uint16) []*RelabeledSeries {
-	rrs := make([]*RelabeledSeries, numberOfShards)
-	for i := range rrs {
-		rrs[i] = NewRelabeledSeries()
-	}
-
-	return rrs
-}
 
 // RelabeledSeries - go wrapper for C-RelabeledSeries.
 //
@@ -467,6 +436,102 @@ func NewRelabeledSeries() *RelabeledSeries {
 // Size - number of series.
 func (rss *RelabeledSeries) Size() uint64 {
 	return rss.size
+}
+
+type ShardedSeriesData[DataType any] struct {
+	series         []DataType
+	numberOfShards uint16
+}
+
+func NewShardedSeriesData[DataType any](numberOfShards uint16) ShardedSeriesData[DataType] {
+	return ShardedSeriesData[DataType]{
+		series:         make([]DataType, numberOfShards*numberOfShards),
+		numberOfShards: numberOfShards,
+	}
+}
+
+func (sd *ShardedSeriesData[DataType]) DataByShard(shardID uint16) []DataType {
+	return sd.series[shardID*sd.numberOfShards : (shardID+1)*sd.numberOfShards]
+}
+
+func (sd *ShardedSeriesData[DataType]) Transpose() {
+	for i := uint16(0); i < sd.numberOfShards; i++ {
+		for j := i + 1; j < sd.numberOfShards; j++ {
+			sd.series[i*sd.numberOfShards+j], sd.series[j*sd.numberOfShards+i] = sd.series[j*sd.numberOfShards+i], sd.series[i*sd.numberOfShards+j]
+		}
+	}
+}
+
+//
+// ShardedInnerSeries
+//
+
+type ShardedInnerSeries struct {
+	ShardedSeriesData[InnerSeries]
+}
+
+func NewShardedInnerSeries(numberOfShards uint16) *ShardedInnerSeries {
+	series := &ShardedInnerSeries{
+		NewShardedSeriesData[InnerSeries](numberOfShards),
+	}
+
+	prometheusInnerSeriesCtor(series.series)
+	runtime.SetFinalizer(series, func(series *ShardedInnerSeries) {
+		prometheusInnerSeriesDtor(series.series)
+	})
+
+	return series
+}
+
+//
+// ShardedRelabeledSeries
+//
+
+type ShardedRelabeledSeries struct {
+	ShardedSeriesData[*RelabeledSeries]
+}
+
+// NewShardedRelabeledSeries init new ShardedRelabeledSeries.
+func NewShardedRelabeledSeries(numberOfShards uint16) *ShardedRelabeledSeries {
+	series := &ShardedRelabeledSeries{
+		NewShardedSeriesData[*RelabeledSeries](numberOfShards),
+	}
+	for i := range series.series {
+		series.series[i] = NewRelabeledSeries()
+	}
+
+	return series
+}
+
+// IsEmpty return true if all elements are empty
+func (sd *ShardedRelabeledSeries) IsEmpty() bool {
+	for i := range sd.series {
+		if sd.series[i].Size() != 0 {
+			return false
+		}
+	}
+
+	return true
+}
+
+//
+// ShardedStateUpdates
+//
+
+type ShardedStateUpdates struct {
+	ShardedSeriesData[*RelabelerStateUpdate]
+}
+
+// NewShardedStateUpdates init new ShardedStateUpdates.
+func NewShardedStateUpdates(numberOfShards uint16) *ShardedStateUpdates {
+	series := &ShardedStateUpdates{
+		NewShardedSeriesData[*RelabelerStateUpdate](numberOfShards),
+	}
+	for i := range series.series {
+		series.series[i] = NewRelabelerStateUpdate()
+	}
+
+	return series
 }
 
 // incomingAndRelabeledLsID to update cache data.
@@ -622,8 +687,8 @@ func NewOutputPerShardRelabeler(
 func (opsr *OutputPerShardRelabeler) OutputRelabeling(
 	ctx context.Context,
 	lss *LabelSetStorage,
-	incomingInnerSeries []*InnerSeries,
-	encodersInnerSeries []*InnerSeries,
+	incomingInnerSeries []InnerSeries,
+	encodersInnerSeries []InnerSeries,
 	relabeledSeries *RelabeledSeries,
 ) error {
 	if ctx.Err() != nil {
@@ -767,7 +832,7 @@ func NewPerGoroutineRelabeler(
 func (pgr *PerGoroutineRelabeler) AppendRelabelerSeries(
 	ctx context.Context,
 	targetLss *LabelSetStorage,
-	shardsInnerSeries []*InnerSeries,
+	shardsInnerSeries []InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
 	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
 ) (bool, error) {
@@ -793,7 +858,7 @@ func (pgr *PerGoroutineRelabeler) Relabeling(
 	targetLss *LabelSetStorage,
 	state *StateV2,
 	shardedData ShardedData,
-	shardsInnerSeries []*InnerSeries,
+	shardsInnerSeries []InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
 ) (RelabelerStats, bool, error) {
 	if ctx.Err() != nil {
@@ -842,7 +907,7 @@ func (pgr *PerGoroutineRelabeler) RelabelingFromCache(
 	targetLss *LabelSetStorage,
 	state *StateV2,
 	shardedData ShardedData,
-	shardsInnerSeries []*InnerSeries,
+	shardsInnerSeries []InnerSeries,
 ) (RelabelerStats, bool, error) {
 	if ctx.Err() != nil {
 		return RelabelerStats{}, false, ctx.Err()
@@ -887,7 +952,7 @@ func (pgr *PerGoroutineRelabeler) inputRelabeling(
 	targetLss *LabelSetStorage,
 	state *StateV2,
 	cptrContainer cptrable,
-	shardsInnerSeries []*InnerSeries,
+	shardsInnerSeries []InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
 ) (RelabelerStats, bool, error) {
 	cache := state.CacheByShard(pgr.shardID)
@@ -920,7 +985,7 @@ func (pgr *PerGoroutineRelabeler) inputRelabelingFromCache(
 	targetLss *LabelSetStorage,
 	state *StateV2,
 	cptrContainer cptrable,
-	shardsInnerSeries []*InnerSeries,
+	shardsInnerSeries []InnerSeries,
 ) (RelabelerStats, bool, error) {
 	cache := state.CacheByShard(pgr.shardID)
 	cache.lock.RLock()
@@ -950,7 +1015,7 @@ func (pgr *PerGoroutineRelabeler) inputRelabelingWithStalenans(
 	targetLss *LabelSetStorage,
 	state *StateV2,
 	cptrContainer cptrable,
-	shardsInnerSeries []*InnerSeries,
+	shardsInnerSeries []InnerSeries,
 	shardsRelabeledSeries []*RelabeledSeries,
 ) (RelabelerStats, bool, error) {
 	cache := state.CacheByShard(pgr.shardID)
@@ -984,7 +1049,7 @@ func (pgr *PerGoroutineRelabeler) inputRelabelingWithStalenansFromCache(
 	targetLss *LabelSetStorage,
 	state *StateV2,
 	cptrContainer cptrable,
-	shardsInnerSeries []*InnerSeries,
+	shardsInnerSeries []InnerSeries,
 ) (RelabelerStats, bool, error) {
 	cache := state.CacheByShard(pgr.shardID)
 	cache.lock.RLock()
@@ -1014,7 +1079,7 @@ func (pgr *PerGoroutineRelabeler) inputTransitionRelabeling(
 	targetLss *LabelSetStorage,
 	state *StateV2,
 	cptrContainer cptrable,
-	shardsInnerSeries []*InnerSeries,
+	shardsInnerSeries []InnerSeries,
 ) (RelabelerStats, bool, error) {
 	stats, exception, hasReallocations := prometheusPerGoroutineRelabelerInputTransitionRelabeling(
 		pgr.cptr,
@@ -1036,7 +1101,7 @@ func (pgr *PerGoroutineRelabeler) inputTransitionRelabelingOnlyRead(
 	targetLss *LabelSetStorage,
 	state *StateV2,
 	cptrContainer cptrable,
-	shardsInnerSeries []*InnerSeries,
+	shardsInnerSeries []InnerSeries,
 ) (RelabelerStats, bool, error) {
 	stats, exception, ok := prometheusPerGoroutineRelabelerInputRelabelingOnlyRead(
 		pgr.cptr,
@@ -1055,7 +1120,7 @@ func (pgr *PerGoroutineRelabeler) inputTransitionRelabelingOnlyRead(
 
 // PerGoroutineRelabelerTrackStaleNans add stale nans samples if needed
 func PerGoroutineRelabelerTrackStaleNans(
-	innerSeries []*InnerSeries,
+	innerSeries []InnerSeries,
 	state *StateV2,
 	shardID uint16,
 ) {

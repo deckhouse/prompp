@@ -81,7 +81,7 @@ func (*HeadWalEncoder) Version() uint8 {
 }
 
 // Encode encodes inner series into a segment.
-func (e *HeadWalEncoder) Encode(innerSeriesSlice []*InnerSeries) (uint32, error) {
+func (e *HeadWalEncoder) Encode(innerSeriesSlice []InnerSeries) (uint32, error) {
 	samples, err := headWalEncoderAddInnerSeries(e.encoder, innerSeriesSlice)
 	runtime.KeepAlive(e)
 	return samples, err

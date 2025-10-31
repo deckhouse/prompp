@@ -246,8 +246,8 @@ func (dg *DestinationGroup) ObserveEncodersMemory() {
 func (dg *DestinationGroup) OutputRelabeling(
 	ctx context.Context,
 	inputLss *cppbridge.LabelSetStorage,
-	data []*cppbridge.InnerSeries,
-	encodersInnerSeries []*cppbridge.InnerSeries,
+	data []cppbridge.InnerSeries,
+	encodersInnerSeries []cppbridge.InnerSeries,
 	relabeledSeries *cppbridge.RelabeledSeries,
 	shardID uint16,
 ) error {

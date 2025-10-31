@@ -45,7 +45,7 @@ type Task interface {
 // Shard the minimum required head [Shard] implementation.
 type Shard interface {
 	// AppendInnerSeriesSlice add InnerSeries to [DataStorage].
-	AppendInnerSeriesSlice(innerSeriesSlice []*cppbridge.InnerSeries)
+	AppendInnerSeriesSlice(innerSeriesSlice []cppbridge.InnerSeries)
 
 	// LSSWithLock calls fn on raws [cppbridge.LabelSetStorage] with write lock.
 	LSSWithLock(fn func(target, input *cppbridge.LabelSetStorage) error) error
@@ -60,7 +60,7 @@ type Shard interface {
 	ShardID() uint16
 
 	// WalWrite append the incoming inner series to wal encoder.
-	WalWrite(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error)
+	WalWrite(innerSeriesSlice []cppbridge.InnerSeries) (bool, error)
 
 	// DstSrcLsIdsMapping return ids mapping after lss copying
 	DstSrcLsIdsMapping() *cppbridge.IdsMapping
@@ -150,8 +150,8 @@ func (a Appender[TTask, TShard, TGoroutineShard, THead]) Append(
 	}
 
 	numberOfShards := a.head.NumberOfShards()
-	shardedInnerSeries := NewShardedInnerSeries(numberOfShards)
-	shardedRelabeledSeries := NewShardedRelabeledSeries(numberOfShards)
+	shardedInnerSeries := cppbridge.NewShardedInnerSeries(numberOfShards)
+	shardedRelabeledSeries := cppbridge.NewShardedRelabeledSeries(numberOfShards)
 	stats, err := a.inputRelabelingStage(
 		ctx,
 		state,
@@ -168,7 +168,7 @@ func (a Appender[TTask, TShard, TGoroutineShard, THead]) Append(
 	if !shardedRelabeledSeries.IsEmpty() {
 		shardedRelabeledSeries.Transpose()
 
-		shardedStateUpdates := NewShardedStateUpdates(numberOfShards)
+		shardedStateUpdates := cppbridge.NewShardedStateUpdates(numberOfShards)
 		if err = a.appendRelabelerSeriesStage(
 			ctx,
 			shardedInnerSeries,
@@ -211,8 +211,8 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) inputRelabelingStage(
 	ctx context.Context,
 	state *cppbridge.StateV2,
 	incomingData *DestructibleIncomingData,
-	shardedInnerSeries *ShardedInnerSeries,
-	shardedRelabeledSeries *ShardedRelabeledSeries,
+	shardedInnerSeries *cppbridge.ShardedInnerSeries,
+	shardedRelabeledSeries *cppbridge.ShardedRelabeledSeries,
 ) (cppbridge.RelabelerStats, error) {
 	stats := make([]cppbridge.RelabelerStats, a.head.NumberOfShards())
 	t := a.head.CreateTask(
@@ -294,9 +294,9 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) inputRelabelingStage(
 // appendRelabelerSeriesStage second stage - append to lss relabeling ls.
 func (a *Appender[TTask, TShard, TGoroutineShard, THead]) appendRelabelerSeriesStage(
 	ctx context.Context,
-	shardedInnerSeries *ShardedInnerSeries,
-	shardedRelabeledSeries *ShardedRelabeledSeries,
-	shardedStateUpdates *ShardedStateUpdates,
+	shardedInnerSeries *cppbridge.ShardedInnerSeries,
+	shardedRelabeledSeries *cppbridge.ShardedRelabeledSeries,
+	shardedStateUpdates *cppbridge.ShardedStateUpdates,
 ) error {
 	t := a.head.CreateTask(
 		lssAppendRelabelerSeries,
@@ -340,7 +340,7 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) appendRelabelerSeriesS
 func (a *Appender[TTask, TShard, TGoroutineShard, THead]) updateRelabelerStateStage(
 	ctx context.Context,
 	state *cppbridge.StateV2,
-	shardedStateUpdates *ShardedStateUpdates,
+	shardedStateUpdates *cppbridge.ShardedStateUpdates,
 ) error {
 	numberOfShards := a.head.NumberOfShards()
 	for shardID := range numberOfShards {
@@ -362,7 +362,7 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) updateRelabelerStateSt
 
 // trackStaleNans add stale nans samples if needed
 func (a *Appender[TTask, TShard, TGoroutineShard, THead]) trackStaleNans(
-	shardInnerSeries *ShardedInnerSeries,
+	shardInnerSeries *cppbridge.ShardedInnerSeries,
 	state *cppbridge.StateV2,
 ) {
 	if !state.TrackStaleness() {
@@ -376,7 +376,7 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) trackStaleNans(
 
 // appendInnerSeriesAndWriteToWal append [cppbridge.InnerSeries] to [Shard]'s to [DataStorage] and write to [Wal].
 func (a *Appender[TTask, TShard, TGoroutineShard, THead]) appendInnerSeriesAndWriteToWal(
-	shardedInnerSeries *ShardedInnerSeries,
+	shardedInnerSeries *cppbridge.ShardedInnerSeries,
 ) (uint32, error) {
 	tw := task.NewTaskWaiter[TTask](2) //revive:disable-line:add-constant // 2 task for wait
 

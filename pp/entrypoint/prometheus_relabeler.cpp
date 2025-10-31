@@ -8,6 +8,8 @@
 #include "prometheus/relabeler.h"
 
 using entrypoint::head::LssVariantPtr;
+using PromPP::Primitives::Go::SliceView;
+using PromPP::Prometheus::Relabel::InnerSeries;
 
 //
 // StatelessRelabeler
@@ -21,7 +23,7 @@ using StatelessRelabelerPtr = std::unique_ptr<StatelessRelabeler>;
 
 extern "C" void prompp_prometheus_stateless_relabeler_ctor(void* args, void* res) {
   struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::GORelabelConfig*> go_rcfgs;
+    SliceView<PromPP::Prometheus::Relabel::GORelabelConfig*> go_rcfgs;
   };
   struct Result {
     StatelessRelabelerPtr stateless_relabeler;
@@ -50,7 +52,7 @@ extern "C" void prompp_prometheus_stateless_relabeler_dtor(void* args) {
 extern "C" void prompp_prometheus_stateless_relabeler_reset_to(void* args, void* res) {
   struct Arguments {
     StatelessRelabelerPtr stateless_relabeler;
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::GORelabelConfig*> go_rcfgs;
+    SliceView<PromPP::Prometheus::Relabel::GORelabelConfig*> go_rcfgs;
   };
   struct Result {
     PromPP::Primitives::Go::Slice<char> error;
@@ -73,19 +75,22 @@ extern "C" void prompp_prometheus_stateless_relabeler_reset_to(void* args, void*
 
 extern "C" void prompp_prometheus_inner_series_ctor(void* args) {
   struct Arguments {
-    PromPP::Prometheus::Relabel::InnerSeries* inner_series;
+    SliceView<InnerSeries> inner_series;
   };
 
-  auto* in = static_cast<Arguments*>(args);
-  new (in->inner_series) PromPP::Prometheus::Relabel::InnerSeries();
+  for (auto& series : static_cast<Arguments*>(args)->inner_series) {
+    std::construct_at(&series);
+  }
 }
 
 extern "C" void prompp_prometheus_inner_series_dtor(void* args) {
   struct Arguments {
-    PromPP::Prometheus::Relabel::InnerSeries* inner_series;
+    SliceView<InnerSeries> inner_series;
   };
 
-  static_cast<Arguments*>(args)->inner_series->~InnerSeries();
+  for (auto& series : static_cast<Arguments*>(args)->inner_series) {
+    std::destroy_at(&series);
+  }
 }
 
 //
@@ -142,7 +147,7 @@ using PerShardRelabelerPtr = std::unique_ptr<PerShardRelabeler>;
 
 extern "C" void prompp_prometheus_per_shard_relabeler_ctor(void* args, void* res) {
   struct Arguments {
-    PromPP::Primitives::Go::SliceView<std::pair<PromPP::Primitives::Go::String, PromPP::Primitives::Go::String>> external_labels;
+    SliceView<std::pair<PromPP::Primitives::Go::String, PromPP::Primitives::Go::String>> external_labels;
     PromPP::Prometheus::Relabel::StatelessRelabeler* stateless_relabeler;
     uint16_t number_of_shards;
     uint16_t shard_id;
@@ -204,7 +209,7 @@ extern "C" void prompp_prometheus_per_shard_single_relabeler_update_relabeler_st
   const auto* in = static_cast<Arguments*>(args);
 
   try {
-    in->per_shard_relabeler->update_relabeler_state(*in->cache, in->relabeler_state_update, in->relabeled_shard_id);
+    PerShardRelabeler::update_relabeler_state(*in->cache, in->relabeler_state_update, in->relabeled_shard_id);
   } catch (...) {
     auto* out = new (res) Result();
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
@@ -215,8 +220,8 @@ extern "C" void prompp_prometheus_per_shard_single_relabeler_update_relabeler_st
 extern "C" void prompp_prometheus_per_shard_relabeler_output_relabeling(void* args, void* res) {
   struct Arguments {
     PromPP::Prometheus::Relabel::RelabeledSeries* relabeled_series;
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> incoming_inner_series;
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> encoders_inner_series;
+    SliceView<InnerSeries> incoming_inner_series;
+    SliceView<InnerSeries> encoders_inner_series;
     PerShardRelabelerPtr per_shard_relabeler;
     LssVariantPtr lss;
     CachePtr cache;
@@ -239,7 +244,7 @@ extern "C" void prompp_prometheus_per_shard_relabeler_output_relabeling(void* ar
 
 extern "C" void prompp_prometheus_per_shard_relabeler_reset_to(void* args) {
   struct Arguments {
-    PromPP::Primitives::Go::SliceView<std::pair<PromPP::Primitives::Go::String, PromPP::Primitives::Go::String>> external_labels;
+    SliceView<std::pair<PromPP::Primitives::Go::String, PromPP::Primitives::Go::String>> external_labels;
     PerShardRelabelerPtr per_shard_relabeler;
     uint16_t number_of_shards;
   };
@@ -283,7 +288,7 @@ extern "C" void prompp_prometheus_cache_allocated_memory(void* args, void* res) 
 
 extern "C" void prompp_prometheus_cache_update(void* args, void* res) {
   struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::RelabelerStateUpdate*> shards_relabeler_state_update;
+    SliceView<PromPP::Prometheus::Relabel::RelabelerStateUpdate*> shards_relabeler_state_update;
     CachePtr cache;
     uint16_t relabeled_shard_id;
   };
@@ -295,7 +300,7 @@ extern "C" void prompp_prometheus_cache_update(void* args, void* res) {
 
   try {
     for (size_t id = 0; id != in->shards_relabeler_state_update.size(); ++id) {
-      if (in->shards_relabeler_state_update[id] == nullptr || in->shards_relabeler_state_update[id]->size() == 0) {
+      if (in->shards_relabeler_state_update[id] == nullptr || in->shards_relabeler_state_update[id]->empty()) {
         continue;
       }
 
@@ -312,7 +317,7 @@ extern "C" void prompp_prometheus_cache_update(void* args, void* res) {
 // PerGoroutineRelabeler
 //
 
-using PerGoroutineRelabeler = PromPP::Prometheus::Relabel::PerGoroutineRelabeler;
+using PerGoroutineRelabeler = PromPP::Prometheus::Relabel::PerGoroutineRelabeler<SliceView>;
 using PerGoroutineRelabelerPtr = std::unique_ptr<PerGoroutineRelabeler>;
 
 extern "C" void prompp_prometheus_per_goroutine_relabeler_ctor(void* args, void* res) {
@@ -340,8 +345,8 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_dtor(void* args) {
 
 extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling(void* args, void* res) {
   struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> shards_inner_series;
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::RelabeledSeries*> shards_relabeled_series;
+    SliceView<InnerSeries> shards_inner_series;
+    SliceView<PromPP::Prometheus::Relabel::RelabeledSeries*> shards_relabeled_series;
     PromPP::Prometheus::Relabel::RelabelerOptions options;
     PerGoroutineRelabelerPtr per_goroutine_relabeler;
     PromPP::Prometheus::Relabel::StatelessRelabeler* stateless_relabeler;
@@ -382,7 +387,7 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling(void*
 
 extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_from_cache(void* args, void* res) {
   struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> shards_inner_series;
+    SliceView<InnerSeries> shards_inner_series;
     PromPP::Prometheus::Relabel::RelabelerOptions options;
     PerGoroutineRelabelerPtr per_goroutine_relabeler;
     HashdexVariant* hashdex;
@@ -419,8 +424,8 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_from_
 
 extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_stalenans(void* args, void* res) {
   struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> shards_inner_series;
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::RelabeledSeries*> shards_relabeled_series;
+    SliceView<InnerSeries> shards_inner_series;
+    SliceView<PromPP::Prometheus::Relabel::RelabeledSeries*> shards_relabeled_series;
     PromPP::Prometheus::Relabel::RelabelerOptions options;
     PerGoroutineRelabelerPtr per_goroutine_relabeler;
     PromPP::Prometheus::Relabel::StatelessRelabeler* stateless_relabeler;
@@ -462,7 +467,7 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_
 
 extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_stalenans_from_cache(void* args, void* res) {
   struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> shards_inner_series;
+    SliceView<InnerSeries> shards_inner_series;
     PromPP::Prometheus::Relabel::RelabelerOptions options;
     PerGoroutineRelabelerPtr per_goroutine_relabeler;
     HashdexVariant* hashdex;
@@ -500,7 +505,7 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_
 
 extern "C" void prompp_prometheus_per_goroutine_relabeler_input_transition_relabeling(void* args, void* res) {
   struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> shards_inner_series;
+    SliceView<InnerSeries> shards_inner_series;
     PerGoroutineRelabelerPtr per_goroutine_relabeler;
     HashdexVariant* hashdex;
     LssVariantPtr target_lss;
@@ -535,7 +540,7 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_transition_relab
 
 extern "C" void prompp_prometheus_per_goroutine_relabeler_input_transition_relabeling_only_read(void* args, void* res) {
   struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> shards_inner_series;
+    SliceView<InnerSeries> shards_inner_series;
     PerGoroutineRelabelerPtr per_goroutine_relabeler;
     HashdexVariant* hashdex;
     LssVariantPtr target_lss;
@@ -567,9 +572,9 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_input_transition_relab
 
 extern "C" void prompp_prometheus_per_goroutine_relabeler_append_relabeler_series(void* args, void* res) {
   struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> shards_inner_series;
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::RelabeledSeries*> shards_relabeled_series;
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::RelabelerStateUpdate*> shards_relabeler_state_update;
+    SliceView<InnerSeries> shards_inner_series;
+    SliceView<PromPP::Prometheus::Relabel::RelabeledSeries*> shards_relabeled_series;
+    SliceView<PromPP::Prometheus::Relabel::RelabelerStateUpdate*> shards_relabeler_state_update;
     PerGoroutineRelabelerPtr per_goroutine_relabeler;
     LssVariantPtr target_lss;
   };
@@ -590,8 +595,7 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_append_relabeler_serie
         continue;
       }
 
-      in->per_goroutine_relabeler->append_relabeler_series(lss, in->shards_inner_series[id], in->shards_relabeled_series[id],
-                                                           in->shards_relabeler_state_update[id]);
+      PerGoroutineRelabeler::append_relabeler_series(lss, in->shards_inner_series[id], in->shards_relabeled_series[id], in->shards_relabeler_state_update[id]);
     }
 
     lss.build_deferred_indexes();
@@ -604,13 +608,13 @@ extern "C" void prompp_prometheus_per_goroutine_relabeler_append_relabeler_serie
 
 extern "C" void prompp_prometheus_per_goroutine_relabeler_track_stale_nans(void* args) {
   struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> inner_series;
+    SliceView<InnerSeries> inner_series;
     StaleNaNsStatePtr stale_nans_state;
     PromPP::Primitives::Timestamp default_timestamp;
   };
 
   const auto in = static_cast<Arguments*>(args);
-  PromPP::Prometheus::Relabel::PerGoroutineRelabeler::track_stale_nans(in->inner_series, *in->stale_nans_state, in->default_timestamp);
+  PerGoroutineRelabeler::track_stale_nans(in->inner_series, *in->stale_nans_state, in->default_timestamp);
 }
 
 extern "C" void prompp_remap_stale_nans_state(void* args) {
