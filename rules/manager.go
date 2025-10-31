@@ -111,6 +111,8 @@ type ManagerOptions struct {
 	Appendable  storage.Appendable
 	Queryable   storage.Queryable
 
+	BatchAppendable storage.BatchAppendable
+
 	Logger                    log.Logger
 	Registerer                prometheus.Registerer
 	OutageTolerance           time.Duration

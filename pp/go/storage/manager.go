@@ -127,6 +127,7 @@ func (c *Config) SetNumberOfShards(numberOfShards uint16) bool {
 type Manager struct {
 	g               run.Group
 	closer          *util.Closer
+	builder         *Builder
 	proxy           *Proxy
 	cgogc           *cppbridge.CGOGC
 	cfg             *Config
@@ -189,11 +190,12 @@ func NewManager(
 	)
 
 	m := &Manager{
-		g:      run.Group{},
-		closer: util.NewCloser(),
-		proxy:  NewProxy(container.NewWeighted(h, container.DefaultBackPressure), hKeeper, services.CFSViaRange),
-		cgogc:  cppbridge.NewCGOGC(r),
-		cfg:    cfg,
+		g:       run.Group{},
+		closer:  util.NewCloser(),
+		builder: builder,
+		proxy:   NewProxy(container.NewWeighted(h, container.DefaultBackPressure), hKeeper, services.CFSViaRange),
+		cgogc:   cppbridge.NewCGOGC(r),
+		cfg:     cfg,
 		rotatorMediator: mediator.NewMediator(
 			mediator.NewRotateTimerWithSeed(clock, o.BlockDuration, o.Seed),
 		),
@@ -222,6 +224,11 @@ func (m *Manager) ApplyConfig(cfg *config.Config) error {
 	}
 
 	return nil
+}
+
+// Builder returns builder for [Head].
+func (m *Manager) Builder() *Builder {
+	return m.builder
 }
 
 // MergeOutOfOrderChunks send signal to merge chunks with out of order data chunks.

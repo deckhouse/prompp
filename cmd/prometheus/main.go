@@ -801,6 +801,7 @@ func main() {
 	adapter := pp_pkg_storage.NewAdapter(
 		clock,
 		hManager.Proxy(),
+		hManager.Builder(),
 		hManager.MergeOutOfOrderChunks,
 		prometheus.DefaultRegisterer,
 	)
@@ -957,6 +958,7 @@ func main() {
 		ruleManager = rules.NewManager(&rules.ManagerOptions{
 			Appendable:             adapter, // PP_CHANGES.md: rebuild on cpp
 			Queryable:              adapter, // PP_CHANGES.md: rebuild on cpp
+			BatchAppendable:        adapter, // PP_CHANGES.md: rebuild on cpp
 			QueryFunc:              rules.EngineQueryFunc(queryEngine, fanoutStorage),
 			NotifyFunc:             rules.SendAlerts(notifierManager, cfg.web.ExternalURL.String()),
 			Context:                ctxRule,

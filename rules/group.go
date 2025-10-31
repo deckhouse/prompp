@@ -244,7 +244,7 @@ func (g *Group) run(ctx context.Context) {
 			select {
 			case <-g.managerDone:
 			case <-time.After(2 * g.interval):
-				g.cleanupStaleSeries(ctx, now)
+				g.cleanupStaleSeries(ctx, now, nil)
 			}
 		}(time.Now())
 	}()
@@ -479,9 +479,11 @@ func (g *Group) Eval(ctx context.Context, ts time.Time) {
 	var (
 		samplesTotal atomic.Float64
 		wg           sync.WaitGroup
+		// mutex for the rules evaluation concurrency control.
 	)
 
 	ruleQueryOffset := g.QueryOffset()
+	ba := g.opts.BatchAppendable.BatchAppender(ctx)
 
 	for i, rule := range g.rules {
 		select {
@@ -541,9 +543,14 @@ func (g *Group) Eval(ctx context.Context, ts time.Time) {
 				numDuplicates = 0
 			)
 
+			bapp := ba.Appender(ctx)
 			app := g.opts.Appendable.Appender(ctx)
 			seriesReturned := make(map[string]labels.Labels, len(g.seriesInPreviousEval[i]))
 			defer func() {
+				if err := bapp.Commit(); err != nil {
+					level.Warn(logger).Log("msg", "Rule sample bapp appending failed", "err", err)
+				}
+
 				if err := app.Commit(); err != nil {
 					rule.SetHealth(HealthBad)
 					rule.SetLastError(err)
@@ -558,8 +565,14 @@ func (g *Group) Eval(ctx context.Context, ts time.Time) {
 
 			for _, s := range vector {
 				if s.H != nil {
+					if _, err := bapp.AppendHistogram(0, s.Metric, s.T, nil, s.H); err != nil {
+						level.Warn(logger).Log("msg", "Rule sample bapp AppendHistogram failed", "err", err)
+					}
 					_, err = app.AppendHistogram(0, s.Metric, s.T, nil, s.H)
 				} else {
+					if _, err := bapp.Append(0, s.Metric, s.T, s.F); err != nil {
+						level.Warn(logger).Log("msg", "Rule sample bapp Append failed", "err", err)
+					}
 					_, err = app.Append(0, s.Metric, s.T, s.F)
 				}
 
@@ -601,6 +614,10 @@ func (g *Group) Eval(ctx context.Context, ts time.Time) {
 
 			for metric, lset := range g.seriesInPreviousEval[i] {
 				if _, ok := seriesReturned[metric]; !ok {
+					if _, err := bapp.Append(0, lset, timestamp.FromTime(ts.Add(-ruleQueryOffset)), math.Float64frombits(value.StaleNaN)); err != nil {
+						level.Warn(logger).Log("msg", "Rule sample bapp Append StaleNaN failed", "err", err)
+					}
+
 					// Series no longer exposed, mark it stale.
 					_, err = app.Append(0, lset, timestamp.FromTime(ts.Add(-ruleQueryOffset)), math.Float64frombits(value.StaleNaN))
 					unwrappedErr := errors.Unwrap(err)
@@ -636,7 +653,11 @@ func (g *Group) Eval(ctx context.Context, ts time.Time) {
 	wg.Wait()
 
 	g.metrics.GroupSamples.WithLabelValues(GroupKey(g.File(), g.Name())).Set(samplesTotal.Load())
-	g.cleanupStaleSeries(ctx, ts)
+	g.cleanupStaleSeries(ctx, ts, ba)
+
+	if err := ba.Commit(); err != nil {
+		level.Warn(g.logger).Log("msg", "Rule sample ba Commit failed", "err", err)
+	}
 }
 
 func (g *Group) QueryOffset() time.Duration {
@@ -651,13 +672,25 @@ func (g *Group) QueryOffset() time.Duration {
 	return time.Duration(0)
 }
 
-func (g *Group) cleanupStaleSeries(ctx context.Context, ts time.Time) {
+func (g *Group) cleanupStaleSeries(ctx context.Context, ts time.Time, ba storage.BatchAppender) {
 	if len(g.staleSeries) == 0 {
 		return
 	}
+	if ba == nil {
+		ba = g.opts.BatchAppendable.BatchAppender(ctx)
+		defer func() {
+			if err := ba.Commit(); err != nil {
+				level.Warn(g.logger).Log("msg", "Rule sample ba Commit failed", "err", err)
+			}
+		}()
+	}
+	bapp := ba.Appender(ctx)
 	app := g.opts.Appendable.Appender(ctx)
 	queryOffset := g.QueryOffset()
 	for _, s := range g.staleSeries {
+		if _, err := bapp.Append(0, s, timestamp.FromTime(ts.Add(-queryOffset)), math.Float64frombits(value.StaleNaN)); err != nil {
+			level.Warn(g.logger).Log("msg", "Rule sample bapp Append StaleNaN failed", "err", err)
+		}
 		// Rule that produced series no longer configured, mark it stale.
 		_, err := app.Append(0, s, timestamp.FromTime(ts.Add(-queryOffset)), math.Float64frombits(value.StaleNaN))
 		unwrappedErr := errors.Unwrap(err)
@@ -675,6 +708,10 @@ func (g *Group) cleanupStaleSeries(ctx context.Context, ts time.Time) {
 			level.Warn(g.logger).Log("msg", "Adding stale sample for previous configuration failed", "sample", s, "err", err)
 		}
 	}
+	if err := bapp.Commit(); err != nil {
+		level.Warn(g.logger).Log("msg", "Rule sample bapp Commit failed", "err", err)
+	}
+
 	if err := app.Commit(); err != nil {
 		level.Warn(g.logger).Log("msg", "Stale sample appending for previous configuration failed", "err", err)
 	} else {

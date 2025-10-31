@@ -1208,6 +1208,11 @@ func (s *StateV2) Reconfigure(
 	numberOfShards uint16,
 	staleNansIdsMappings []*IdsMapping,
 ) {
+	// the transition state does not require caches and staleNaNs
+	if s.IsTransition() {
+		return
+	}
+
 	if s.status&inited == inited && generationHead == s.generationHead {
 		return
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/metadata"
+	pp_pkg_model "github.com/prometheus/prometheus/pp-pkg/model"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/storage"
@@ -27,25 +28,45 @@ func (d *timeSeriesBatch) Destroy() {
 	d.timeSeries = nil
 }
 
+//
+// AppenderTimeSeries
+//
+
+// AppenderTimeSeries append TimeSeries data to [Head].
+type AppenderTimeSeries interface {
+	// AppendTimeSeries append TimeSeries data to [Head].
+	AppendTimeSeries(
+		ctx context.Context,
+		data pp_pkg_model.TimeSeriesBatch,
+		state *cppbridge.StateV2,
+		commitToWal bool,
+	) (cppbridge.RelabelerStats, error)
+}
+
+//
+// TimeSeriesAppender
+//
+
 // TimeSeriesAppender appender for rules, aggregates the [model.TimeSeries] batch and append to head,
 // implementation [storage.Appender].
 type TimeSeriesAppender struct {
-	ctx     context.Context
-	adapter *Adapter
-	state   *cppbridge.StateV2
-	batch   *timeSeriesBatch
+	ctx      context.Context
+	appender AppenderTimeSeries
+	state    *cppbridge.StateV2
+	batch    *timeSeriesBatch
 }
 
+// newTimeSeriesAppender init new [TimeSeriesAppender].
 func newTimeSeriesAppender(
 	ctx context.Context,
-	adapter *Adapter,
+	appender AppenderTimeSeries,
 	state *cppbridge.StateV2,
 ) *TimeSeriesAppender {
 	return &TimeSeriesAppender{
-		ctx:     ctx,
-		adapter: adapter,
-		state:   state,
-		batch:   &timeSeriesBatch{},
+		ctx:      ctx,
+		appender: appender,
+		state:    state,
+		batch:    &timeSeriesBatch{},
 	}
 }
 
@@ -104,7 +125,7 @@ func (a *TimeSeriesAppender) Commit() error {
 		return nil
 	}
 
-	_, err := a.adapter.AppendTimeSeries(a.ctx, a.batch, a.state, false)
+	_, err := a.appender.AppendTimeSeries(a.ctx, a.batch, a.state, false)
 	return err
 }
 
