@@ -476,164 +476,21 @@ func (g *Group) CopyState(from *Group) {
 // Eval runs a single evaluation cycle in which all rules are evaluated sequentially.
 // Rules can be evaluated concurrently if the `concurrent-rule-eval` feature flag is enabled.
 func (g *Group) Eval(ctx context.Context, ts time.Time) {
-	var (
-		samplesTotal atomic.Float64
-		wg           sync.WaitGroup
-	)
+	var samplesTotal atomic.Float64
 
-	ruleQueryOffset := g.QueryOffset()
-
-	for i, rule := range g.rules {
-		select {
-		case <-g.done:
-			return
-		default:
-		}
-
-		eval := func(i int, rule Rule, cleanup func()) {
-			if cleanup != nil {
-				defer cleanup()
-			}
-
-			logger := log.WithPrefix(g.logger, "name", rule.Name(), "index", i)
-			ctx, sp := otel.Tracer("").Start(ctx, "rule")
-			sp.SetAttributes(attribute.String("name", rule.Name()))
-			defer func(t time.Time) {
-				sp.End()
-
-				since := time.Since(t)
-				g.metrics.EvalDuration.Observe(since.Seconds())
-				rule.SetEvaluationDuration(since)
-				rule.SetEvaluationTimestamp(t)
-			}(time.Now())
-
-			if sp.SpanContext().IsSampled() && sp.SpanContext().HasTraceID() {
-				logger = log.WithPrefix(logger, "trace_id", sp.SpanContext().TraceID())
-			}
-
-			g.metrics.EvalTotal.WithLabelValues(GroupKey(g.File(), g.Name())).Inc()
-
-			vector, err := rule.Eval(ctx, ruleQueryOffset, ts, g.opts.QueryFunc, g.opts.ExternalURL, g.Limit())
-			if err != nil {
-				rule.SetHealth(HealthBad)
-				rule.SetLastError(err)
-				sp.SetStatus(codes.Error, err.Error())
-				g.metrics.EvalFailures.WithLabelValues(GroupKey(g.File(), g.Name())).Inc()
-
-				// Canceled queries are intentional termination of queries. This normally
-				// happens on shutdown and thus we skip logging of any errors here.
-				var eqc promql.ErrQueryCanceled
-				if !errors.As(err, &eqc) {
-					level.Warn(logger).Log("msg", "Evaluating rule failed", "rule", rule, "err", err)
-				}
-				return
-			}
-			rule.SetHealth(HealthGood)
-			rule.SetLastError(nil)
-			samplesTotal.Add(float64(len(vector)))
-
-			if ar, ok := rule.(*AlertingRule); ok {
-				ar.sendAlerts(ctx, ts, g.opts.ResendDelay, g.interval, g.opts.NotifyFunc)
-			}
-			var (
-				numOutOfOrder = 0
-				numTooOld     = 0
-				numDuplicates = 0
-			)
-
-			app := g.opts.Appendable.Appender(ctx)
-			seriesReturned := make(map[string]labels.Labels, len(g.seriesInPreviousEval[i]))
-			defer func() {
-				if err := app.Commit(); err != nil {
-					rule.SetHealth(HealthBad)
-					rule.SetLastError(err)
-					sp.SetStatus(codes.Error, err.Error())
-					g.metrics.EvalFailures.WithLabelValues(GroupKey(g.File(), g.Name())).Inc()
-
-					level.Warn(logger).Log("msg", "Rule sample appending failed", "err", err)
-					return
-				}
-				g.seriesInPreviousEval[i] = seriesReturned
-			}()
-
-			for _, s := range vector {
-				if s.H != nil {
-					_, err = app.AppendHistogram(0, s.Metric, s.T, nil, s.H)
-				} else {
-					_, err = app.Append(0, s.Metric, s.T, s.F)
-				}
-
-				if err != nil {
-					rule.SetHealth(HealthBad)
-					rule.SetLastError(err)
-					sp.SetStatus(codes.Error, err.Error())
-					unwrappedErr := errors.Unwrap(err)
-					if unwrappedErr == nil {
-						unwrappedErr = err
-					}
-					switch {
-					case errors.Is(unwrappedErr, storage.ErrOutOfOrderSample):
-						numOutOfOrder++
-						level.Debug(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
-					case errors.Is(unwrappedErr, storage.ErrTooOldSample):
-						numTooOld++
-						level.Debug(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
-					case errors.Is(unwrappedErr, storage.ErrDuplicateSampleForTimestamp):
-						numDuplicates++
-						level.Debug(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
-					default:
-						level.Warn(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
-					}
-				} else {
-					buf := [1024]byte{}
-					seriesReturned[string(s.Metric.Bytes(buf[:]))] = s.Metric
-				}
-			}
-			if numOutOfOrder > 0 {
-				level.Warn(logger).Log("msg", "Error on ingesting out-of-order result from rule evaluation", "num_dropped", numOutOfOrder)
-			}
-			if numTooOld > 0 {
-				level.Warn(logger).Log("msg", "Error on ingesting too old result from rule evaluation", "num_dropped", numTooOld)
-			}
-			if numDuplicates > 0 {
-				level.Warn(logger).Log("msg", "Error on ingesting results from rule evaluation with different value but same timestamp", "num_dropped", numDuplicates)
-			}
-
-			for metric, lset := range g.seriesInPreviousEval[i] {
-				if _, ok := seriesReturned[metric]; !ok {
-					// Series no longer exposed, mark it stale.
-					_, err = app.Append(0, lset, timestamp.FromTime(ts.Add(-ruleQueryOffset)), math.Float64frombits(value.StaleNaN))
-					unwrappedErr := errors.Unwrap(err)
-					if unwrappedErr == nil {
-						unwrappedErr = err
-					}
-					switch {
-					case unwrappedErr == nil:
-					case errors.Is(unwrappedErr, storage.ErrOutOfOrderSample),
-						errors.Is(unwrappedErr, storage.ErrTooOldSample),
-						errors.Is(unwrappedErr, storage.ErrDuplicateSampleForTimestamp):
-						// Do not count these in logging, as this is expected if series
-						// is exposed from a different rule.
-					default:
-						level.Warn(logger).Log("msg", "Adding stale sample failed", "sample", lset.String(), "err", err)
-					}
-				}
-			}
-		}
-
-		if ctrl := g.concurrencyController; ctrl.Allow(ctx, g, rule) {
-			wg.Add(1)
-
-			go eval(i, rule, func() {
-				wg.Done()
-				ctrl.Done(ctx)
-			})
-		} else {
-			eval(i, rule, nil)
-		}
+	sequentiallyRules := g.concurrencyEval(ctx, ts, samplesTotal)
+	select {
+	case <-g.done:
+		return
+	default:
 	}
 
-	wg.Wait()
+	g.sequentiallyEval(ctx, ts, samplesTotal, sequentiallyRules)
+	select {
+	case <-g.done:
+		return
+	default:
+	}
 
 	g.metrics.GroupSamples.WithLabelValues(GroupKey(g.File(), g.Name())).Set(samplesTotal.Load())
 	g.cleanupStaleSeries(ctx, ts)
@@ -1091,4 +948,362 @@ func buildDependencyMap(rules []Rule) dependencyMap {
 	}
 
 	return dependencies
+}
+
+func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, samplesTotal atomic.Float64) []Rule {
+	var (
+		wg             sync.WaitGroup
+		mtx            sync.Mutex
+		concurrencyApp = g.opts.Appendable.Appender(ctx)
+	)
+
+	ruleQueryOffset := g.QueryOffset()
+	seriesInPreviousEval := make([]map[string]labels.Labels, len(g.rules))
+	concurrencyEval := func(i int, rule Rule, cleanup func()) {
+		if cleanup != nil {
+			defer cleanup()
+		}
+
+		logger := log.WithPrefix(g.logger, "name", rule.Name(), "index", i)
+		ctx, sp := otel.Tracer("").Start(ctx, "rule")
+		sp.SetAttributes(attribute.String("name", rule.Name()))
+		defer func(t time.Time) {
+			sp.End()
+
+			since := time.Since(t)
+			g.metrics.EvalDuration.Observe(since.Seconds())
+			rule.SetEvaluationDuration(since)
+			rule.SetEvaluationTimestamp(t)
+		}(time.Now())
+
+		if sp.SpanContext().IsSampled() && sp.SpanContext().HasTraceID() {
+			logger = log.WithPrefix(logger, "trace_id", sp.SpanContext().TraceID())
+		}
+
+		g.metrics.EvalTotal.WithLabelValues(GroupKey(g.File(), g.Name())).Inc()
+
+		vector, err := rule.Eval(ctx, ruleQueryOffset, ts, g.opts.QueryFunc, g.opts.ExternalURL, g.Limit())
+		if err != nil {
+			rule.SetHealth(HealthBad)
+			rule.SetLastError(err)
+			sp.SetStatus(codes.Error, err.Error())
+			g.metrics.EvalFailures.WithLabelValues(GroupKey(g.File(), g.Name())).Inc()
+
+			// Canceled queries are intentional termination of queries. This normally
+			// happens on shutdown and thus we skip logging of any errors here.
+			var eqc promql.ErrQueryCanceled
+			if !errors.As(err, &eqc) {
+				level.Warn(logger).Log("msg", "Evaluating rule failed", "rule", rule, "err", err)
+			}
+			return
+		}
+		rule.SetHealth(HealthGood)
+		rule.SetLastError(nil)
+		samplesTotal.Add(float64(len(vector)))
+
+		if ar, ok := rule.(*AlertingRule); ok {
+			ar.sendAlerts(ctx, ts, g.opts.ResendDelay, g.interval, g.opts.NotifyFunc)
+		}
+		var (
+			numOutOfOrder = 0
+			numTooOld     = 0
+			numDuplicates = 0
+		)
+
+		// app := g.opts.Appendable.Appender(ctx)
+		seriesReturned := make(map[string]labels.Labels, len(g.seriesInPreviousEval[i]))
+		defer func() {
+			seriesInPreviousEval[i] = seriesReturned
+		}()
+
+		for _, s := range vector {
+			if s.H != nil {
+				mtx.Lock()
+				_, err = concurrencyApp.AppendHistogram(0, s.Metric, s.T, nil, s.H)
+				mtx.Unlock()
+			} else {
+				mtx.Lock()
+				_, err = concurrencyApp.Append(0, s.Metric, s.T, s.F)
+				mtx.Unlock()
+			}
+
+			if err != nil {
+				rule.SetHealth(HealthBad)
+				rule.SetLastError(err)
+				sp.SetStatus(codes.Error, err.Error())
+				unwrappedErr := errors.Unwrap(err)
+				if unwrappedErr == nil {
+					unwrappedErr = err
+				}
+				switch {
+				case errors.Is(unwrappedErr, storage.ErrOutOfOrderSample):
+					numOutOfOrder++
+					level.Debug(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
+				case errors.Is(unwrappedErr, storage.ErrTooOldSample):
+					numTooOld++
+					level.Debug(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
+				case errors.Is(unwrappedErr, storage.ErrDuplicateSampleForTimestamp):
+					numDuplicates++
+					level.Debug(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
+				default:
+					level.Warn(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
+				}
+			} else {
+				buf := [1024]byte{}
+				seriesReturned[string(s.Metric.Bytes(buf[:]))] = s.Metric
+			}
+		}
+		if numOutOfOrder > 0 {
+			level.Warn(logger).Log("msg", "Error on ingesting out-of-order result from rule evaluation", "num_dropped", numOutOfOrder)
+		}
+		if numTooOld > 0 {
+			level.Warn(logger).Log("msg", "Error on ingesting too old result from rule evaluation", "num_dropped", numTooOld)
+		}
+		if numDuplicates > 0 {
+			level.Warn(logger).Log("msg", "Error on ingesting results from rule evaluation with different value but same timestamp", "num_dropped", numDuplicates)
+		}
+
+		for metric, lset := range g.seriesInPreviousEval[i] {
+			if _, ok := seriesReturned[metric]; !ok {
+				// Series no longer exposed, mark it stale.
+				mtx.Lock()
+				_, err = concurrencyApp.Append(0, lset, timestamp.FromTime(ts.Add(-ruleQueryOffset)), math.Float64frombits(value.StaleNaN))
+				mtx.Unlock()
+				unwrappedErr := errors.Unwrap(err)
+				if unwrappedErr == nil {
+					unwrappedErr = err
+				}
+				switch {
+				case unwrappedErr == nil:
+				case errors.Is(unwrappedErr, storage.ErrOutOfOrderSample),
+					errors.Is(unwrappedErr, storage.ErrTooOldSample),
+					errors.Is(unwrappedErr, storage.ErrDuplicateSampleForTimestamp):
+					// Do not count these in logging, as this is expected if series
+					// is exposed from a different rule.
+				default:
+					level.Warn(logger).Log("msg", "Adding stale sample failed", "sample", lset.String(), "err", err)
+				}
+			}
+		}
+	}
+
+	sequentiallyRules := make([]Rule, 0, len(g.rules))
+	for i, rule := range g.rules {
+		select {
+		case <-g.done:
+			return sequentiallyRules
+		default:
+		}
+
+		if ctrl := g.concurrencyController; ctrl.Allow(ctx, g, rule) {
+			wg.Add(1)
+
+			go concurrencyEval(i, rule, func() {
+				wg.Done()
+				ctrl.Done(ctx)
+			})
+			sequentiallyRules = append(sequentiallyRules, nil) // placeholder for the series
+		} else {
+			sequentiallyRules = append(sequentiallyRules, rule)
+		}
+	}
+
+	wg.Wait()
+
+	if err := concurrencyApp.Commit(); err != nil {
+		groupKey := GroupKey(g.File(), g.Name())
+		for i := range g.rules {
+			if ctrl := g.concurrencyController; ctrl.Allow(ctx, g, g.rules[i]) {
+				g.rules[i].SetHealth(HealthBad)
+				g.rules[i].SetLastError(err)
+				g.metrics.EvalFailures.WithLabelValues(groupKey).Inc()
+				ctrl.Done(ctx)
+			}
+		}
+
+		level.Warn(g.logger).Log(
+			"msg", "Rule sample committing failed",
+			"group_key", groupKey,
+			"err", err,
+		)
+
+		return sequentiallyRules
+	}
+
+	for i, series := range seriesInPreviousEval {
+		if series == nil {
+			continue
+		}
+
+		g.seriesInPreviousEval[i] = series
+	}
+
+	return sequentiallyRules
+}
+
+func (g *Group) sequentiallyEval(
+	ctx context.Context,
+	ts time.Time,
+	samplesTotal atomic.Float64,
+	sequentiallyRules []Rule,
+) {
+	ruleQueryOffset := g.QueryOffset()
+	eval := func(i int, rule Rule, cleanup func()) {
+		if cleanup != nil {
+			defer cleanup()
+		}
+
+		logger := log.WithPrefix(g.logger, "name", rule.Name(), "index", i)
+		ctx, sp := otel.Tracer("").Start(ctx, "rule")
+		sp.SetAttributes(attribute.String("name", rule.Name()))
+		defer func(t time.Time) {
+			sp.End()
+
+			since := time.Since(t)
+			g.metrics.EvalDuration.Observe(since.Seconds())
+			rule.SetEvaluationDuration(since)
+			rule.SetEvaluationTimestamp(t)
+		}(time.Now())
+
+		if sp.SpanContext().IsSampled() && sp.SpanContext().HasTraceID() {
+			logger = log.WithPrefix(logger, "trace_id", sp.SpanContext().TraceID())
+		}
+
+		g.metrics.EvalTotal.WithLabelValues(GroupKey(g.File(), g.Name())).Inc()
+
+		vector, err := rule.Eval(ctx, ruleQueryOffset, ts, g.opts.QueryFunc, g.opts.ExternalURL, g.Limit())
+		if err != nil {
+			rule.SetHealth(HealthBad)
+			rule.SetLastError(err)
+			sp.SetStatus(codes.Error, err.Error())
+			g.metrics.EvalFailures.WithLabelValues(GroupKey(g.File(), g.Name())).Inc()
+
+			// Canceled queries are intentional termination of queries. This normally
+			// happens on shutdown and thus we skip logging of any errors here.
+			var eqc promql.ErrQueryCanceled
+			if !errors.As(err, &eqc) {
+				level.Warn(logger).Log("msg", "Evaluating rule failed", "rule", rule, "err", err)
+			}
+			return
+		}
+		rule.SetHealth(HealthGood)
+		rule.SetLastError(nil)
+		samplesTotal.Add(float64(len(vector)))
+
+		if ar, ok := rule.(*AlertingRule); ok {
+			ar.sendAlerts(ctx, ts, g.opts.ResendDelay, g.interval, g.opts.NotifyFunc)
+		}
+		var (
+			numOutOfOrder = 0
+			numTooOld     = 0
+			numDuplicates = 0
+		)
+
+		app := g.opts.Appendable.Appender(ctx)
+		seriesReturned := make(map[string]labels.Labels, len(g.seriesInPreviousEval[i]))
+		defer func() {
+			if err := app.Commit(); err != nil {
+				rule.SetHealth(HealthBad)
+				rule.SetLastError(err)
+				sp.SetStatus(codes.Error, err.Error())
+				g.metrics.EvalFailures.WithLabelValues(GroupKey(g.File(), g.Name())).Inc()
+
+				level.Warn(logger).Log("msg", "Rule sample appending failed", "err", err)
+				return
+			}
+			g.seriesInPreviousEval[i] = seriesReturned
+		}()
+
+		for _, s := range vector {
+			if s.H != nil {
+				_, err = app.AppendHistogram(0, s.Metric, s.T, nil, s.H)
+			} else {
+				_, err = app.Append(0, s.Metric, s.T, s.F)
+			}
+
+			if err != nil {
+				rule.SetHealth(HealthBad)
+				rule.SetLastError(err)
+				sp.SetStatus(codes.Error, err.Error())
+				unwrappedErr := errors.Unwrap(err)
+				if unwrappedErr == nil {
+					unwrappedErr = err
+				}
+				switch {
+				case errors.Is(unwrappedErr, storage.ErrOutOfOrderSample):
+					numOutOfOrder++
+					level.Debug(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
+				case errors.Is(unwrappedErr, storage.ErrTooOldSample):
+					numTooOld++
+					level.Debug(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
+				case errors.Is(unwrappedErr, storage.ErrDuplicateSampleForTimestamp):
+					numDuplicates++
+					level.Debug(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
+				default:
+					level.Warn(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
+				}
+			} else {
+				buf := [1024]byte{}
+				seriesReturned[string(s.Metric.Bytes(buf[:]))] = s.Metric
+			}
+		}
+		if numOutOfOrder > 0 {
+			level.Warn(logger).Log(
+				"msg", "Error on ingesting out-of-order result from rule evaluation",
+				"num_dropped", numOutOfOrder,
+			)
+		}
+		if numTooOld > 0 {
+			level.Warn(logger).Log(
+				"msg", "Error on ingesting too old result from rule evaluation",
+				"num_dropped", numTooOld,
+			)
+		}
+		if numDuplicates > 0 {
+			level.Warn(logger).Log(
+				"msg", "Error on ingesting results from rule evaluation with different value but same timestamp",
+				"num_dropped", numDuplicates,
+			)
+		}
+
+		for metric, lset := range g.seriesInPreviousEval[i] {
+			if _, ok := seriesReturned[metric]; !ok {
+				// Series no longer exposed, mark it stale.
+				_, err = app.Append(
+					0,
+					lset,
+					timestamp.FromTime(ts.Add(-ruleQueryOffset)),
+					math.Float64frombits(value.StaleNaN),
+				)
+				unwrappedErr := errors.Unwrap(err)
+				if unwrappedErr == nil {
+					unwrappedErr = err
+				}
+				switch {
+				case unwrappedErr == nil:
+				case errors.Is(unwrappedErr, storage.ErrOutOfOrderSample),
+					errors.Is(unwrappedErr, storage.ErrTooOldSample),
+					errors.Is(unwrappedErr, storage.ErrDuplicateSampleForTimestamp):
+					// Do not count these in logging, as this is expected if series
+					// is exposed from a different rule.
+				default:
+					level.Warn(logger).Log("msg", "Adding stale sample failed", "sample", lset.String(), "err", err)
+				}
+			}
+		}
+	}
+
+	for i, rule := range sequentiallyRules {
+		select {
+		case <-g.done:
+			return
+		default:
+		}
+
+		if rule == nil {
+			continue
+		}
+
+		eval(i, rule, nil)
+	}
 }
