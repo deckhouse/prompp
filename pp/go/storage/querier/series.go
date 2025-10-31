@@ -1,6 +1,8 @@
 package querier
 
 import (
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/pp/go/util"
 	"math"
 	"runtime"
 
@@ -12,6 +14,23 @@ import (
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/util/annotations"
 )
+
+var (
+	chunkIteratorRequestedCount prometheus.Counter
+	chunkIteratorCreatedCount   prometheus.Counter
+)
+
+func init() {
+	factory := util.NewUnconflictRegisterer(prometheus.DefaultRegisterer)
+	chunkIteratorRequestedCount = factory.NewCounter(prometheus.CounterOpts{
+		Name: "prompp_chunk_iterator_requested_count",
+		Help: "Number of chunk iterator requests.",
+	})
+	chunkIteratorCreatedCount = factory.NewCounter(prometheus.CounterOpts{
+		Name: "prompp_chunk_iterator_created_count",
+		Help: "Number of created chunk iterators.",
+	})
+}
 
 // ChunkIterator iterates over the samples of a time series, that can only get the next value with limit.
 type ChunkIterator struct {
@@ -32,6 +51,7 @@ func NewChunkIterator(serializedData *cppbridge.DataStorageSerializedData, chunk
 		maxt:            maxt,
 	}
 
+	chunkIteratorCreatedCount.Inc()
 	runtime.SetFinalizer(it, func(it *ChunkIterator) {
 		it.chunkIterator.Destroy()
 	})
@@ -160,6 +180,7 @@ func (s *Series) Labels() labels.Labels {
 }
 
 func (s *Series) Iterator(it chunkenc.Iterator) chunkenc.Iterator {
+	chunkIteratorRequestedCount.Inc()
 	chunkIterator, ok := it.(*ChunkIterator)
 	if !ok {
 		return NewChunkIterator(
