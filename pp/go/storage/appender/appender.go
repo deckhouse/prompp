@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync/atomic"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -143,9 +144,9 @@ func (a Appender[TTask, TShard, TGoroutineShard, THead]) Append(
 	incomingData *IncomingData,
 	state *cppbridge.StateV2,
 	commitToWal bool,
-) ([][]*cppbridge.InnerSeries, cppbridge.RelabelerStats, error) {
+) (cppbridge.RelabelerStats, error) {
 	if err := a.resolveState(state); err != nil {
-		return nil, cppbridge.RelabelerStats{}, err
+		return cppbridge.RelabelerStats{}, err
 	}
 
 	numberOfShards := a.head.NumberOfShards()
@@ -159,10 +160,14 @@ func (a Appender[TTask, TShard, TGoroutineShard, THead]) Append(
 		shardedRelabeledSeries,
 	)
 	if err != nil {
-		return nil, stats, fmt.Errorf("failed input relabeling stage: %w", err)
+		return stats, fmt.Errorf("failed input relabeling stage: %w", err)
 	}
 
+	shardedInnerSeries.Transpose()
+
 	if !shardedRelabeledSeries.IsEmpty() {
+		shardedRelabeledSeries.Transpose()
+
 		shardedStateUpdates := NewShardedStateUpdates(numberOfShards)
 		if err = a.appendRelabelerSeriesStage(
 			ctx,
@@ -170,15 +175,16 @@ func (a Appender[TTask, TShard, TGoroutineShard, THead]) Append(
 			shardedRelabeledSeries,
 			shardedStateUpdates,
 		); err != nil {
-			return nil, stats, fmt.Errorf("failed append relabeler series stage: %w", err)
+			return stats, fmt.Errorf("failed append relabeler series stage: %w", err)
 		}
 
+		shardedStateUpdates.Transpose()
 		if err = a.updateRelabelerStateStage(
 			ctx,
 			state,
 			shardedStateUpdates,
 		); err != nil {
-			return nil, stats, fmt.Errorf("failed update relabeler stage: %w", err)
+			return stats, fmt.Errorf("failed update relabeler stage: %w", err)
 		}
 	}
 
@@ -195,7 +201,7 @@ func (a Appender[TTask, TShard, TGoroutineShard, THead]) Append(
 		}
 	}
 
-	return shardedInnerSeries.Data(), stats, nil
+	return stats, nil
 }
 
 // inputRelabelingStage first stage - relabeling.
@@ -217,7 +223,7 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) inputRelabelingStage(
 				shardID     = shard.ShardID()
 				ok          bool
 				shardedData = incomingData.ShardedData()
-				innerSeries = shardedInnerSeries.DataBySourceShard(shardID)
+				innerSeries = shardedInnerSeries.DataByShard(shardID)
 			)
 
 			if err := shard.LSSWithRLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
@@ -297,8 +303,11 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) appendRelabelerSeriesS
 		func(shard TGoroutineShard) error {
 			shardID := shard.ShardID()
 
-			relabeledSeries, ok := shardedRelabeledSeries.DataBySourceShard(shardID)
-			if !ok {
+			relabeledSeries := shardedRelabeledSeries.DataByShard(shardID)
+			hasData := slices.ContainsFunc(relabeledSeries, func(s *cppbridge.RelabeledSeries) bool {
+				return s.Size() > 0
+			})
+			if !hasData {
 				return nil
 			}
 
@@ -335,9 +344,12 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) updateRelabelerStateSt
 ) error {
 	numberOfShards := a.head.NumberOfShards()
 	for shardID := range numberOfShards {
-		updates, ok := shardedStateUpdates.DataBySourceShard(shardID)
-		if !ok {
-			continue
+		updates := shardedStateUpdates.DataByShard(shardID)
+		hasData := slices.ContainsFunc(updates, func(s *cppbridge.RelabelerStateUpdate) bool {
+			return !s.IsEmpty()
+		})
+		if !hasData {
+			return nil
 		}
 
 		if err := state.CacheByShard(shardID).Update(ctx, updates); err != nil {

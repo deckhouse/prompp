@@ -6,101 +6,74 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
+type ShardedData[DataType any] struct {
+	series         []DataType
+	numberOfShards uint16
+}
+
+func NewShardedData[DataType any](numberOfShards uint16) ShardedData[DataType] {
+	return ShardedData[DataType]{
+		series:         make([]DataType, numberOfShards*numberOfShards),
+		numberOfShards: numberOfShards,
+	}
+}
+
+func (sd *ShardedData[DataType]) DataByShard(shardID uint16) []DataType {
+	return sd.series[shardID*sd.numberOfShards : (shardID+1)*sd.numberOfShards]
+}
+
+func (sd *ShardedData[DataType]) Transpose() {
+	for i := uint16(0); i < sd.numberOfShards; i++ {
+		for j := i + 1; j < sd.numberOfShards; j++ {
+			sd.series[i*sd.numberOfShards+j], sd.series[j*sd.numberOfShards+i] = sd.series[j*sd.numberOfShards+i], sd.series[i*sd.numberOfShards+j]
+		}
+	}
+}
+
 //
 // ShardedInnerSeries
 //
 
-// ShardedInnerSeries conteiner for InnerSeries for each shard.
 type ShardedInnerSeries struct {
-	// id slice - shard id, data[shard_id] - amount of data = x2 numberOfShards
-	data [][]*cppbridge.InnerSeries
+	ShardedData[*cppbridge.InnerSeries]
 }
 
-// NewShardedInnerSeries init new ShardedInnerSeries.
 func NewShardedInnerSeries(numberOfShards uint16) *ShardedInnerSeries {
-	// id slice - shard id
-	data := make([][]*cppbridge.InnerSeries, numberOfShards)
-	for i := range data {
-		// amount of data = x2 numberOfShards
-		data[i] = cppbridge.NewShardsInnerSeries(numberOfShards)
+	series := &ShardedInnerSeries{
+		NewShardedData[*cppbridge.InnerSeries](numberOfShards),
+	}
+	for i := range series.series {
+		series.series[i] = cppbridge.NewInnerSeries()
 	}
 
-	return &ShardedInnerSeries{
-		data: data,
-	}
-}
-
-// Data return slice of elemets for each shard.
-func (sis *ShardedInnerSeries) Data() [][]*cppbridge.InnerSeries {
-	return sis.data
-}
-
-// DataByShard return slice with the results per shard.
-func (sis *ShardedInnerSeries) DataByShard(shardID uint16) []*cppbridge.InnerSeries {
-	return sis.data[shardID]
-}
-
-// DataBySourceShard return slice with the results per source shard.
-func (sis *ShardedInnerSeries) DataBySourceShard(sourceShardID uint16) []*cppbridge.InnerSeries {
-	data := make([]*cppbridge.InnerSeries, len(sis.data))
-	for i, iss := range sis.data {
-		data[i] = iss[sourceShardID]
-	}
-
-	return data
+	return series
 }
 
 //
 // ShardedRelabeledSeries
 //
 
-// ShardedRelabeledSeries conteiner for RelabeledSeries for each shard.
 type ShardedRelabeledSeries struct {
-	// id slice - shard id, data[shard_id] id slice - source shard id
-	// data[shard_id][source_shard_id] - amount of data = numberOfShards
-	data [][]*cppbridge.RelabeledSeries
+	ShardedData[*cppbridge.RelabeledSeries]
 }
 
 // NewShardedRelabeledSeries init new ShardedRelabeledSeries.
 func NewShardedRelabeledSeries(numberOfShards uint16) *ShardedRelabeledSeries {
-	// id slice - shard id
-	data := make([][]*cppbridge.RelabeledSeries, numberOfShards)
-	for i := range data {
-		// data[shard_id] id slice - source shard id
-		// data[shard_id][source_shard_id] - amount of data = numberOfShards
-		data[i] = cppbridge.NewShardsRelabeledSeries(numberOfShards)
+	series := &ShardedRelabeledSeries{
+		NewShardedData[*cppbridge.RelabeledSeries](numberOfShards),
 	}
-	return &ShardedRelabeledSeries{
-		data: data,
-	}
-}
-
-// DataByShard return slice with the results per shard.
-func (srs *ShardedRelabeledSeries) DataByShard(shardID uint16) []*cppbridge.RelabeledSeries {
-	return srs.data[shardID]
-}
-
-// DataBySourceShard return slice with the results per source shard.
-func (srs *ShardedRelabeledSeries) DataBySourceShard(sourceShardID uint16) ([]*cppbridge.RelabeledSeries, bool) {
-	ok := false
-	data := make([]*cppbridge.RelabeledSeries, len(srs.data))
-	for i, rss := range srs.data {
-		data[i] = rss[sourceShardID]
-		if data[i].Size() != 0 {
-			ok = true
-		}
+	for i := range series.series {
+		series.series[i] = cppbridge.NewRelabeledSeries()
 	}
 
-	return data, ok
+	return series
 }
 
-// IsEmpty return false if there are no elements.
-func (srs *ShardedRelabeledSeries) IsEmpty() bool {
-	for _, rss := range srs.data {
-		for _, rs := range rss {
-			if rs.Size() != 0 {
-				return false
-			}
+// IsEmpty return true if all elements are empty
+func (sd *ShardedRelabeledSeries) IsEmpty() bool {
+	for i := range sd.series {
+		if sd.series[i].Size() != 0 {
+			return false
 		}
 	}
 
@@ -111,44 +84,20 @@ func (srs *ShardedRelabeledSeries) IsEmpty() bool {
 // ShardedStateUpdates
 //
 
-// ShardedStateUpdates conteiner for RelabelerStateUpdate for each shard.
 type ShardedStateUpdates struct {
-	// id slice - shard id, data[shard_id] id slice - source shard id
-	// data[shard_id][source_shard_id] - amount of data = numberOfShards
-	data [][]*cppbridge.RelabelerStateUpdate
+	ShardedData[*cppbridge.RelabelerStateUpdate]
 }
 
 // NewShardedStateUpdates init new ShardedStateUpdates.
 func NewShardedStateUpdates(numberOfShards uint16) *ShardedStateUpdates {
-	// id slice - shard id
-	data := make([][]*cppbridge.RelabelerStateUpdate, numberOfShards)
-	for i := range data {
-		// data[shard_id] id slice - source shard id
-		// data[shard_id][source_shard_id] - amount of data = numberOfShards
-		data[i] = cppbridge.NewShardsRelabelerStateUpdate(numberOfShards)
+	series := &ShardedStateUpdates{
+		NewShardedData[*cppbridge.RelabelerStateUpdate](numberOfShards),
 	}
-	return &ShardedStateUpdates{
-		data: data,
-	}
-}
-
-// DataByShard return slice with the results per shard.
-func (sru *ShardedStateUpdates) DataByShard(shardID uint16) []*cppbridge.RelabelerStateUpdate {
-	return sru.data[shardID]
-}
-
-// DataBySourceShard return slice with the results per source shard.
-func (sru *ShardedStateUpdates) DataBySourceShard(sourceShardID uint16) ([]*cppbridge.RelabelerStateUpdate, bool) {
-	ok := false
-	data := make([]*cppbridge.RelabelerStateUpdate, len(sru.data))
-	for i, rsu := range sru.data {
-		data[i] = rsu[sourceShardID]
-		if !data[i].IsEmpty() {
-			ok = true
-		}
+	for i := range series.series {
+		series.series[i] = cppbridge.NewRelabelerStateUpdate()
 	}
 
-	return data, ok
+	return series
 }
 
 //

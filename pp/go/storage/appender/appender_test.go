@@ -140,7 +140,7 @@ func (s *AppenderSuite) TestDropInvalidSeries() {
 	state := s.createState([]*cppbridge.RelabelConfig{})
 
 	// Act
-	_, stats, err := s.appender.Append(
+	stats, err := s.appender.Append(
 		context.Background(),
 		storagetest.NewIncomingData(&s.Suite, []model.TimeSeries{
 			{
@@ -162,7 +162,7 @@ func (s *AppenderSuite) TestAppendMultipleSamplesInOneSeries() {
 	state := s.createState([]*cppbridge.RelabelConfig{})
 
 	// Act
-	_, stats, err := s.appender.Append(
+	stats, err := s.appender.Append(
 		context.Background(),
 		storagetest.NewIncomingData(&s.Suite, []model.TimeSeries{
 			{
@@ -210,7 +210,7 @@ func (s *AppenderSuite) TestSeriesPerShardTransfer() {
 	}})
 
 	// Act
-	_, stats, err := s.appender.Append(
+	stats, err := s.appender.Append(
 		context.Background(),
 		storagetest.NewIncomingData(&s.Suite, []model.TimeSeries{
 			{
@@ -257,7 +257,7 @@ func (s *AppenderSuite) TestTrackStaleness() {
 	state.EnableTrackStaleness()
 
 	// Act
-	_, stats, err := s.appender.Append(
+	stats, err := s.appender.Append(
 		context.Background(),
 		storagetest.NewIncomingData(&s.Suite, []model.TimeSeries{
 			{
@@ -304,7 +304,7 @@ func (s *AppenderSuite) TestTrackStalenessWithoutHonorTimestamps() {
 	state.SetDefTimestamp(DefaultTimestamp)
 
 	// Act
-	_, stats, err := s.appender.Append(
+	stats, err := s.appender.Append(
 		context.Background(),
 		storagetest.NewIncomingData(&s.Suite, []model.TimeSeries{
 			{
@@ -347,7 +347,7 @@ func (s *AppenderSuite) TestWithoutCommitToWal() {
 	state := s.createState([]*cppbridge.RelabelConfig{})
 
 	// Act
-	_, _, err := s.appender.Append(
+	_, err := s.appender.Append(
 		context.Background(),
 		storagetest.NewIncomingData(&s.Suite, []model.TimeSeries{
 			{
@@ -369,7 +369,7 @@ func (s *AppenderSuite) TestWithCommitToWal() {
 	state := s.createState([]*cppbridge.RelabelConfig{})
 
 	// Act
-	_, _, err := s.appender.Append(
+	_, err := s.appender.Append(
 		context.Background(),
 		storagetest.NewIncomingData(&s.Suite, []model.TimeSeries{
 			{
@@ -391,7 +391,7 @@ func (s *AppenderSuite) TestWithCommitToWalByLimitExhausted() {
 	state := s.createState([]*cppbridge.RelabelConfig{})
 
 	// Act
-	_, _, err := s.appender.Append(
+	_, err := s.appender.Append(
 		context.Background(),
 		storagetest.NewIncomingData(&s.Suite, []model.TimeSeries{
 			{

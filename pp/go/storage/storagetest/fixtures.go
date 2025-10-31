@@ -71,7 +71,7 @@ func MustAppendTimeSeries(s *suite.Suite, head *storage.Head, timeSeries []TimeS
 	state.SetStatelessRelabeler(statelessRelabeler)
 
 	for i := range timeSeries {
-		_, _, err = headAppender.Append(
+		_, err = headAppender.Append(
 			context.Background(),
 			NewIncomingData(s, timeSeries[i].toModelTimeSeries()),
 			state,
