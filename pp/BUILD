@@ -162,6 +162,25 @@ cc_test(
 )
 
 cc_library(
+    name = "metrics",
+    hdrs = glob(["metrics/**/*.h"]),
+    linkstatic = True,
+    deps = [
+        ":prometheus",
+        ":primitives",
+    ],
+)
+
+cc_test(
+    name = "metrics_test",
+    srcs = glob(["metrics/**/*_tests.cpp"]),
+    deps = [
+        ":metrics",
+        "@gtest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "entrypoint",
     srcs = glob(
         include = ["entrypoint/**/*.cpp"],
@@ -178,6 +197,7 @@ cc_library(
     deps = [
         ":bare_bones",
         ":head",
+        ":metrics",
         ":primitives",
         ":wal",
     ] + select({
