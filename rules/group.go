@@ -1012,15 +1012,13 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time) float64 {
 
 		seriesInPreviousEval[i] = make(map[string]labels.Labels, len(g.seriesInPreviousEval[i]))
 		buf := [1024]byte{}
+		mtx.Lock()
+		defer mtx.Unlock()
 		for _, s := range vector {
 			if s.H != nil {
-				mtx.Lock()
 				_, err = concurrencyApp.AppendHistogram(0, s.Metric, s.T, nil, s.H)
-				mtx.Unlock()
 			} else {
-				mtx.Lock()
 				_, err = concurrencyApp.Append(0, s.Metric, s.T, s.F)
-				mtx.Unlock()
 			}
 
 			if err != nil {
@@ -1072,14 +1070,12 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time) float64 {
 		for metric, lset := range g.seriesInPreviousEval[i] {
 			if _, ok := seriesInPreviousEval[i][metric]; !ok {
 				// Series no longer exposed, mark it stale.
-				mtx.Lock()
 				_, err = concurrencyApp.Append(
 					0,
 					lset,
 					timestamp.FromTime(ts.Add(-ruleQueryOffset)),
 					math.Float64frombits(value.StaleNaN),
 				)
-				mtx.Unlock()
 				unwrappedErr := errors.Unwrap(err)
 				if unwrappedErr == nil {
 					unwrappedErr = err
