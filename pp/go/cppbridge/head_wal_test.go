@@ -1,6 +1,7 @@
 package cppbridge_test
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/gobuffalo/packr/v2/file/resolver/encoding/hex"
@@ -61,6 +62,7 @@ func (s *HeadWalSuite) TestHeadWalEncoder_EncodeAndFinalize() {
 	expectedSamples := innerSeries[0].Size()
 	samples, err := encoder.Encode(innerSeries)
 	s.Require().NoError(err)
+	runtime.KeepAlive(shardedInnerSeries)
 
 	s.NotNil(samples)
 	s.Equal(expectedSamples, uint64(samples))
