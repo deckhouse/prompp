@@ -249,6 +249,14 @@ cc_library(
 )
 
 cc_library(
+    name = "benchmark",
+    deps = [
+        "@google_benchmark//:benchmark_main",
+        "//:profiling",
+    ],
+)
+
+cc_library(
     name = "integration_tests_headers",
     hdrs = glob(["integration_tests/*.h"]),
     deps = [
