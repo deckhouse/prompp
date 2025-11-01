@@ -303,14 +303,7 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) appendRelabelerSeriesS
 			shardID := shard.ShardID()
 
 			relabeledSeries := shardedRelabeledSeries.DataByShard(shardID)
-			hasData := false
-			for i := range relabeledSeries {
-				if relabeledSeries[i].Size() > 0 {
-					hasData = true
-					break
-				}
-			}
-			if !hasData {
+			if cppbridge.RelabeledSeriesIsEmpty(relabeledSeries) {
 				return nil
 			}
 
@@ -348,15 +341,8 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) updateRelabelerStateSt
 	numberOfShards := a.head.NumberOfShards()
 	for shardID := range numberOfShards {
 		updates := shardedStateUpdates.DataByShard(shardID)
-		hasData := false
-		for i := range updates {
-			if !updates[i].IsEmpty() {
-				hasData = true
-				break
-			}
-		}
-		if !hasData {
-			return nil
+		if cppbridge.RelabelerStateUpdateIsEmpty(updates) {
+			continue
 		}
 
 		if err := state.CacheByShard(shardID).Update(ctx, updates); err != nil {

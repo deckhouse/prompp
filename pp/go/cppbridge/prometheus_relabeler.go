@@ -422,9 +422,19 @@ type RelabeledSeries struct {
 	trackStaleNans roaringBitset
 }
 
-// Size - number of series.
-func (rss *RelabeledSeries) Size() uint64 {
-	return rss.size
+// IsEmpty - true if empty
+func (rss *RelabeledSeries) IsEmpty() bool {
+	return rss.size == 0
+}
+
+func RelabeledSeriesIsEmpty(series []RelabeledSeries) bool {
+	for i := range series {
+		if !series[i].IsEmpty() {
+			return false
+		}
+	}
+
+	return true
 }
 
 type ShardedSeriesData[DataType any] struct {
@@ -497,7 +507,7 @@ func NewShardedRelabeledSeries(numberOfShards uint16) *ShardedRelabeledSeries {
 // IsEmpty return true if all elements are empty
 func (sd *ShardedRelabeledSeries) IsEmpty() bool {
 	for i := range sd.series {
-		if sd.series[i].Size() != 0 {
+		if sd.series[i].IsEmpty() {
 			return false
 		}
 	}
@@ -541,6 +551,16 @@ type RelabelerStateUpdate []incomingAndRelabeledLsID
 // IsEmpty returns true if the length of slice is zero.
 func (rsu *RelabelerStateUpdate) IsEmpty() bool {
 	return len(*rsu) == 0
+}
+
+func RelabelerStateUpdateIsEmpty(states []RelabelerStateUpdate) bool {
+	for i := range states {
+		if !states[i].IsEmpty() {
+			return false
+		}
+	}
+
+	return true
 }
 
 // MetricLimits limits on label set and samples.
