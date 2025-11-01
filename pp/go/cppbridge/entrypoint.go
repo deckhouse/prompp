@@ -28,6 +28,12 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
+type (
+	CppStdVector       = [C.Sizeof_StdVector]byte
+	CppBareBonesVector = [C.Sizeof_BareBonesVector]byte
+	CppRoaringBitset   = [C.Sizeof_RoaringBitset]byte
+)
+
 var (
 
 	// per_goroutine_relabeler input_relabeling

@@ -372,23 +372,6 @@ func (sr *StatelessRelabeler) ResetTo(relabelingCfgs []*RelabelConfig) error {
 // ShardsInnerSeries
 //
 
-// stdVector implementation cpp std::vector, for allocate 24-byte, used in cpp.
-//
-//nolint:unused // for cpp-bridge, used in cpp.
-type stdVector struct {
-	start        uintptr
-	finish       uintptr
-	endOfStorage uintptr
-}
-
-type bareBonesVector struct {
-	memory   uintptr
-	capacity uint32
-	size     uint32
-}
-
-type roaringBitset [40]byte
-
 // InnerSeries - go wrapper for C-InnerSeries.
 //
 //	size - number of timeseries processed;
@@ -396,9 +379,9 @@ type roaringBitset [40]byte
 type InnerSeries struct {
 	size uint64
 	//nolint:unused // for cpp-bridge, used in cpp
-	data bareBonesVector
+	data CppBareBonesVector
 	//nolint:unused // for cpp-bridge, used in cpp
-	trackStaleNans roaringBitset
+	trackStaleNans CppRoaringBitset
 }
 
 // Size - number of Timeseries.
@@ -417,9 +400,9 @@ func (iss *InnerSeries) Size() uint64 {
 type RelabeledSeries struct {
 	size uint64
 	//nolint:unused // for cpp-bridge, used in cpp
-	data stdVector
+	data CppStdVector
 	//nolint:unused // for cpp-bridge, used in cpp
-	trackStaleNans roaringBitset
+	trackStaleNans CppRoaringBitset
 }
 
 // IsEmpty - true if empty
