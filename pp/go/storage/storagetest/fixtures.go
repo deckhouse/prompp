@@ -126,13 +126,13 @@ func GetSamplesFromSerializedData(serializedData *cppbridge.DataStorageSerialize
 		}
 
 		iterator := cppbridge.NewDataStorageSerializedDataIterator(serializedData, chunkRef)
-		nextResult := cppbridge.SerializedDataIteratorNextResult{}
+		iterationResult := cppbridge.NewSerializedDataIteratorIterationResult()
 		for {
-			iterator.Next(&nextResult)
-			if !nextResult.HasValue {
+			iterator.Next(&iterationResult)
+			if !iterationResult.HasValue {
 				break
 			}
-			result[seriesID] = append(result[seriesID], cppbridge.Sample{Timestamp: nextResult.Timestamp, Value: nextResult.Value})
+			result[seriesID] = append(result[seriesID], cppbridge.Sample{Timestamp: iterationResult.Timestamp, Value: iterationResult.Value})
 		}
 	}
 
@@ -141,24 +141,31 @@ func GetSamplesFromSerializedData(serializedData *cppbridge.DataStorageSerialize
 
 // TimeSeriesFromSeriesSet converting seriesset to slice timeseries.
 func TimeSeriesFromSeriesSet(seriesSet promstorage.SeriesSet, groupSamples bool) []TimeSeries {
+	var chunkIterator chunkenc.Iterator
 	timeSeries := make([]TimeSeries, 0)
 	for seriesSet.Next() {
 		series := seriesSet.At()
-		chunkIterator := series.Iterator(nil)
-		var samples []cppbridge.Sample
-		for chunkIterator.Next() != chunkenc.ValNone {
-			ts, v := chunkIterator.At()
-			samples = append(samples, cppbridge.Sample{Timestamp: ts, Value: v})
-		}
+		timeSeries = append(timeSeries, TimeSeriesFromSeries(series, chunkIterator, groupSamples)...)
+	}
 
-		if groupSamples {
-			timeSeries = append(timeSeries, TimeSeries{Labels: series.Labels(), Samples: samples})
-			continue
-		}
+	return timeSeries
+}
 
-		for i := 0; i < len(samples); i++ {
-			timeSeries = append(timeSeries, TimeSeries{Labels: series.Labels(), Samples: []cppbridge.Sample{samples[i]}})
-		}
+func TimeSeriesFromSeries(series promstorage.Series, chunkIterator chunkenc.Iterator, groupSamples bool) (timeSeries []TimeSeries) {
+	chunkIterator = series.Iterator(chunkIterator)
+	var samples []cppbridge.Sample
+	for chunkIterator.Next() != chunkenc.ValNone {
+		ts, v := chunkIterator.At()
+		samples = append(samples, cppbridge.Sample{Timestamp: ts, Value: v})
+	}
+
+	if groupSamples {
+		timeSeries = append(timeSeries, TimeSeries{Labels: series.Labels(), Samples: samples})
+		return timeSeries
+	}
+
+	for i := 0; i < len(samples); i++ {
+		timeSeries = append(timeSeries, TimeSeries{Labels: series.Labels(), Samples: []cppbridge.Sample{samples[i]}})
 	}
 
 	return timeSeries
