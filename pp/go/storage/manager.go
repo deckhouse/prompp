@@ -513,32 +513,28 @@ func uploadOrBuildHead(
 		return builder.Build(generation, numberOfShards)
 	}
 
-	h := loader.Load(headRecords[0], generation)
-	if h.Corrupted() {
+	h, err := loader.Load(headRecords[0], generation)
+	if err != nil {
+		if headRecords[0].Status() == catalog.StatusNew || headRecords[0].Status() == catalog.StatusActive {
+			if _, setStatusErr := hcatalog.SetStatus(headRecords[0].ID(), catalog.StatusRotated); setStatusErr != nil {
+				logger.Warnf("failed to set rotated status for head {%s}: %s", headRecords[0].ID(), setStatusErr)
+			}
+		}
+
+		_ = h.Close()
+
+		if errors.Is(err, ErrInvalidEncoderVersion) {
+			logger.Warnf("[Head Manager] upload non continuable head {%s}, building new...", headRecords[0].ID())
+			return builder.Build(generation, numberOfShards)
+		}
+
 		if !headRecords[0].Corrupted() {
 			if _, setCorruptedErr := hcatalog.SetCorrupted(headRecords[0].ID()); setCorruptedErr != nil {
 				logger.Errorf("failed to set corrupted state, head {%s}: %v", headRecords[0].ID(), setCorruptedErr)
 			}
 		}
+
 		logger.Warnf("[Head Manager] upload corrupted head {%s}, building new...", headRecords[0].ID())
-
-		if _, err := hcatalog.SetStatus(headRecords[0].ID(), catalog.StatusRotated); err != nil {
-			logger.Warnf("failed to set rotated status for head {%s}: %s", headRecords[0].ID(), err)
-		}
-
-		_ = h.Close()
-
-		return builder.Build(generation, numberOfShards)
-	}
-
-	if !h.Writable() {
-		if headRecords[0].Status() == catalog.StatusNew || headRecords[0].Status() == catalog.StatusActive {
-			if _, err := hcatalog.SetStatus(headRecords[0].ID(), catalog.StatusRotated); err != nil {
-				logger.Warnf("failed to set rotated status for head {%s}: %s", headRecords[0].ID(), err)
-			}
-		}
-
-		_ = h.Close()
 		return builder.Build(generation, numberOfShards)
 	}
 

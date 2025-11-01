@@ -245,7 +245,8 @@ type Loader[
 	THead Head[TTask, TShard, TGoShard],
 ] interface {
 	// Load [Head] from [Wal] by head ID.
-	Load(headRecord *catalog.Record, generation uint64) THead
+	Load(headRecord *catalog.Record, generation uint64) (THead, error)
+	LoadReadOnly(headRecord *catalog.Record, generation uint64) (THead, error)
 }
 
 //

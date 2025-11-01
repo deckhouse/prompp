@@ -45,8 +45,6 @@ func (s *MergerSuite) createHead(
 
 	return head.NewHead(
 		"test-head-id",
-		false,
-		true,
 		shards,
 		shard.NewPerGoroutineShard[*storage.Wal],
 		nil,
