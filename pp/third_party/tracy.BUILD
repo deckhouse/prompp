@@ -15,6 +15,8 @@ cmake(
         "-DTRACY_ENABLE=ON",
         "-DTRACY_VERBOSE=ON",
         "-DTRACY_NO_EXIT=ON",
+        "-DTRACY_NO_VSYNC_CAPTURE=ON",
+        "-DTRACY_LIBUNWIND_BACKTRACE=ON",
     ],
     copts = [
         "-Wno-error"
