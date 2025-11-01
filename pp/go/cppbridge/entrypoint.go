@@ -3570,3 +3570,80 @@ func prometheusRemapStaleNansState(staleNansState, lsIdsMapping uintptr) {
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
+
+func prometheusMetricsIteratorCtor() uintptr {
+	var res struct {
+		iterator uintptr
+	}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_metrics_iterator_ctor,
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.iterator
+}
+
+func prometheusMetricsIteratorDtor(iterator uintptr) {
+	args := struct {
+		iterator uintptr
+	}{iterator}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_metrics_iterator_dtor,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func prometheusMetricsIteratorSerialize(iterator uintptr) []byte {
+	args := struct {
+		iterator uintptr
+	}{iterator}
+
+	var res struct {
+		data []byte
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_metrics_iterator_serialize,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.data
+}
+
+func prometheusMetricsPageForTestCtor(labels Labels, counterName string, counterValue uint64) uintptr {
+	args := struct {
+		labels       Labels
+		counterName  string
+		counterValue uint64
+	}{labels, counterName, counterValue}
+
+	var res struct {
+		page uintptr
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_metrics_page_for_test_ctor,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.page
+}
+
+func prometheusMetricsPageForTestDetach(page uintptr) {
+	args := struct {
+		page uintptr
+	}{page}
+
+	fastcgo.UnsafeCall1(
+		C.prompp_metrics_page_for_test_detach,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}

@@ -1,0 +1,62 @@
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
+ * @brief Create metrics iterator
+ *
+ * @param res {
+ *   iterator uintptr // Pointer to constructed iterator
+ * }
+ */
+void prompp_metrics_iterator_ctor(void* res);
+
+/**
+ * @brief Destroy metrics iterator
+ *
+ * @param args {
+ *   iterator uintptr // Pointer to constructed iterator
+ * }
+ */
+void prompp_metrics_iterator_dtor(void* args);
+
+/**
+ * @brief Serialize metric into protobuf and advance iterator to next metric
+ *
+ * @param args {
+ *   iterator uintptr // Pointer to constructed iterator
+ * }
+ *
+ * @param res {
+ *   buffer []bytes // serialized data
+ * }
+ */
+void prompp_metrics_iterator_serialize(void* args, void* res);
+
+/**
+ * @brief Create metrics page for test
+ *
+ * @param args {
+ *   labels []cppbridge.Label  // metric page label set
+ *   counterName string        // label name for uint64 counter
+ *   counterValue uint64       // value for for uint64 counter
+ * }
+ *
+ * @param res {
+ *   page uintptr // Pointer to constructed page
+ * }
+ */
+void prompp_metrics_page_for_test_ctor(void* args, void* res);
+
+/**
+ * @brief Detach metrics page from storage
+ *
+ * @param args {
+ *   page uintptr // Pointer to constructed page
+ * }
+ */
+void prompp_metrics_page_for_test_detach(void* args);
+
+#ifdef __cplusplus
+}
+#endif
