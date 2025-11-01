@@ -255,6 +255,28 @@ cc_binary(
 )
 
 cc_library(
+    name = "profiling",
+    hdrs = glob(["profiling/**/*.h"]),
+    deps = [
+    ] + select({
+         "//bazel/toolchain:with_profiling": ["@tracy//:tracy"],
+         "//conditions:default": ["@tracy//:tracy_headers"],
+    }),
+    defines = select({
+        "//bazel/toolchain:with_profiling": ["PROMPP_PROFILING_ENABLE"],
+        "//conditions:default": [],
+    }),
+)
+
+cc_library(
+    name = "benchmark",
+    deps = [
+        "@google_benchmark//:benchmark_main",
+        "//:profiling",
+    ],
+)
+
+cc_library(
     name = "integration_tests_headers",
     hdrs = glob(["integration_tests/*.h"]),
     deps = [

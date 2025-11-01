@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "primitives/snug_composites.h"
+#include "profiling/profiling.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
 
@@ -50,6 +51,7 @@ std::vector<double> build_ls_id_hashset_times;
 std::vector<double> build_reverse_index_times;
 
 void BM_CopyAllStepsWithTiming(benchmark::State& state) {
+  ZoneScoped;
   using std::chrono::nanoseconds;
   using std::chrono::steady_clock;
 
