@@ -3,3 +3,7 @@ build --noreuse_sandbox_directories
 build --fission=yes
 build --flag_alias=march=//bazel/toolchain:march
 build --flag_alias=asan=//bazel/toolchain:asan
+
+# Profiling specific flags
+build --flag_alias=profiling=//bazel/toolchain:profiling
+build --flag_alias=profiling_opts=//bazel/toolchain:profiling_opts
