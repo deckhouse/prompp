@@ -1133,14 +1133,16 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time) float64 {
 			"group_key", groupKey,
 			"err", err,
 		)
-	} else {
-		for i, series := range seriesInPreviousEval {
-			if series == nil {
-				continue
-			}
 
-			g.seriesInPreviousEval[i] = series
+		return samplesTotal.Add(g.sequentiallyEval(ctx, ts, sequentiallyRules))
+	}
+
+	for i, series := range seriesInPreviousEval {
+		if series == nil {
+			continue
 		}
+
+		g.seriesInPreviousEval[i] = series
 	}
 
 	return samplesTotal.Add(g.sequentiallyEval(ctx, ts, sequentiallyRules))
