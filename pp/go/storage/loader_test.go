@@ -103,7 +103,7 @@ func (s *HeadLoadSuite) createHead(unloadDataStorageInterval time.Duration) (*st
 	).Build(0, numberOfShards)
 }
 
-func (s *HeadLoadSuite) createNonWritableHead() (*storage.Head, error) {
+func (s *HeadLoadSuite) loadNonWritableHead() (*storage.Head, error) {
 	rec, err := s.catalog.Create(1)
 	require.NoError(s.T(), err)
 	headDir := filepath.Join(s.dataDir, rec.Dir())
@@ -116,7 +116,6 @@ func (s *HeadLoadSuite) createNonWritableHead() (*storage.Head, error) {
 	require.NoError(s.T(), err)
 	require.NoError(s.T(), shardFile.Close())
 
-	require.NoError(s.T(), err)
 	loader := storage.NewLoader(s.dataDir, maxSegmentSize, prometheus.DefaultRegisterer, unloadDataStorageInterval)
 	return loader.Load(rec, 0)
 }
@@ -417,7 +416,10 @@ func (s *HeadLoadSuite) TestErrorDataUnloading() {
 }
 
 func (s *HeadLoadSuite) TestInvalidEncoderVersion() {
-	head, err := s.createNonWritableHead()
+	// Arrange
+	// Act
+	head, err := s.loadNonWritableHead()
+	// Assert
 	require.ErrorIs(s.T(), err, storage.ErrInvalidEncoderVersion)
 	require.NoError(s.T(), head.Close())
 }
