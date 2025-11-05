@@ -9,8 +9,7 @@
 		"dockerfile": "../../Dockerfile.ci",
 		"args": {
 			"BAZEL_ARCH": "arm64",
-			"GO_ARCH": "arm64",
-			"GO_VERSION": "1.25.0"
+			"GO_ARCH": "arm64"
 		}
 	},
 	"mounts": [
