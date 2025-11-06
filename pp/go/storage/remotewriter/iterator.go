@@ -201,7 +201,6 @@ func (i *Iterator) Next(ctx context.Context) error {
 	}
 
 	startTime := i.clock.Now()
-	var deadlineReached bool
 	var delay time.Duration
 	numberOfShards := i.outputSharder.NumberOfShards()
 	i.metrics.numShards.Set(float64(numberOfShards))
@@ -214,7 +213,6 @@ readLoop:
 		case <-ctx.Done():
 			return i.wrapError(ctx.Err())
 		case <-deadline:
-			deadlineReached = true
 			break readLoop
 		case <-i.clock.After(delay):
 		}
