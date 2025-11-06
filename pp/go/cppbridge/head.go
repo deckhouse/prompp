@@ -355,28 +355,38 @@ func (sd *DataStorageSerializedData) Next() (uint32, uint32) {
 	return seriesDataSerializedDataNext(sd.serializedData)
 }
 
+type DataStorageSerializedDataIteratorControlBlock struct {
+	decoderVariant   uint64
+	Timestamp        int64
+	Value            float64
+	remainingSamples uint8
+}
+
 type DataStorageSerializedDataIterator struct {
-	iterator uintptr
+	DataStorageSerializedDataIteratorControlBlock
+	cppInternalData [unsafe.Sizeof(CppSerializedDataIterator{}) - unsafe.Sizeof(DataStorageSerializedDataIteratorControlBlock{})]byte
 }
 
 func NewDataStorageSerializedDataIterator(serializedData *DataStorageSerializedData, chunkRef uint32) DataStorageSerializedDataIterator {
-	return DataStorageSerializedDataIterator{iterator: seriesDataSerializedDataIteratorCtor(serializedData.serializedData, chunkRef)}
+	it := DataStorageSerializedDataIterator{}
+	seriesDataSerializedDataIteratorCtor(&it, serializedData.serializedData, chunkRef)
+	return it
 }
 
-func (it DataStorageSerializedDataIterator) Next(result *SerializedDataIteratorIterationResult) {
-	seriesDataSerializedDataIteratorNext(it.iterator, result)
+func (it *DataStorageSerializedDataIterator) Next() {
+	seriesDataSerializedDataIteratorNext(it)
 }
 
-func (it DataStorageSerializedDataIterator) Seek(timestamp int64, result *SerializedDataIteratorIterationResult) {
-	seriesDataSerializedDataIteratorSeek(it.iterator, timestamp, result)
+func (it *DataStorageSerializedDataIterator) Seek(timestamp int64) {
+	seriesDataSerializedDataIteratorSeek(it, timestamp)
 }
 
-func (it DataStorageSerializedDataIterator) Reset(serializedData *DataStorageSerializedData, chunkRef uint32) {
-	seriesDataSerializedDataIteratorReset(serializedData.serializedData, it.iterator, chunkRef)
+func (it *DataStorageSerializedDataIterator) Reset(serializedData *DataStorageSerializedData, chunkRef uint32) {
+	seriesDataSerializedDataIteratorReset(it, serializedData.serializedData, chunkRef)
 }
 
-func (it DataStorageSerializedDataIterator) Destroy() {
-	seriesDataSerializedDataIteratorDtor(it.iterator)
+func (it *DataStorageSerializedDataIterator) HasData() bool {
+	return it.remainingSamples != 0
 }
 
 // UnloadedDataLoader is Go wrapper around series_data::Loader.

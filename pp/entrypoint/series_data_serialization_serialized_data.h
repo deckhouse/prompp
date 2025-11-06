@@ -24,11 +24,8 @@ void prompp_series_data_serialization_serialized_data_next(void* args, void* res
  *     chunk_ref uint32 // inner chunk id.
  * }
  *
- * @param res {
- *     iterator uintptr // pointer to constructed decode iterator.
- * }
  */
-void prompp_series_data_serialization_serialized_data_iterator_ctor(void* args, void* res);
+void prompp_series_data_serialization_serialized_data_iterator_ctor(void* args);
 
 /**
  * @brief Advance decode iterator.
@@ -37,13 +34,8 @@ void prompp_series_data_serialization_serialized_data_iterator_ctor(void* args, 
  *     iterator uintptr // pointer to decode iterator
  * }
  *
- * @param res {
- *     has_data bool    // is iterator has more data to decode.
- *     timestamp int64 // sample timestamp
- *     value float64   // sample value
- * }
  */
-void prompp_series_data_serialization_serialized_data_iterator_next(void* args, void* res);
+void prompp_series_data_serialization_serialized_data_iterator_next(void* args);
 
 /**
  * @brief Advance decode iterator until referenced sample is gte targetTimestamp.
@@ -53,13 +45,8 @@ void prompp_series_data_serialization_serialized_data_iterator_next(void* args, 
  *     targetTimestamp int64 // target timestamp
  * }
  *
- * @param res {
- *     hasData bool    // is iterator has more data to decode.
- *     timestamp int64 // sample timestamp
- *     value float64   // sample value
- * }
  */
-void prompp_series_data_serialization_serialized_data_iterator_seek(void* args, void* res);
+void prompp_series_data_serialization_serialized_data_iterator_seek(void* args);
 
 /**
  * @brief Reset a decode iterator for corresponding chunk_ref.
@@ -72,16 +59,6 @@ void prompp_series_data_serialization_serialized_data_iterator_seek(void* args, 
  *
  */
 void prompp_series_data_serialization_serialized_data_iterator_reset(void* args);
-
-/**
- * @brief Destroy decode iterator.
- *
- * @param args {
- *     iterator uintptr // pointer to decode iterator
- * }
- *
- */
-void prompp_series_data_serialization_serialized_data_iterator_dtor(void* args);
 
 /**
  * @brief Destroy serialized data object.

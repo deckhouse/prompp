@@ -1,5 +1,6 @@
 #include "go_constants.h"
 
+#include "head/serialization.h"
 #include "prometheus/relabeler.h"
 
 namespace {
@@ -9,5 +10,7 @@ static_assert(sizeof(BareBones::Vector<char>) == Sizeof_BareBonesVector);
 static_assert(sizeof(roaring::Roaring) == Sizeof_RoaringBitset);
 
 static_assert(sizeof(PromPP::Prometheus::Relabel::InnerSeries) == Sizeof_InnerSeries);
+
+static_assert(sizeof(entrypoint::head::SerializedDataIterator) == Sizeof_SerializedDataIterator);
 
 }  // namespace
