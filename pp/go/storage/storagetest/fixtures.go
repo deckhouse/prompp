@@ -101,26 +101,6 @@ func MustAppendTimeSeriesToLSSAndDataStorage(lss *shard.LSS, ds *shard.DataStora
 // SamplesMap samples map with series ID as key.
 type SamplesMap map[uint32][]cppbridge.Sample
 
-// GetSamplesFromSerializedChunks returns sample from serialized chunks.
-func GetSamplesFromSerializedChunks(chunks *cppbridge.HeadDataStorageSerializedChunks) SamplesMap {
-	result := make(SamplesMap)
-
-	deserializer := cppbridge.NewHeadDataStorageDeserializer(chunks)
-
-	n := chunks.NumberOfChunks()
-	for i := 0; i < n; i++ {
-		metadata := chunks.Metadata(i)
-		seriesId := metadata.SeriesID()
-		iterator := deserializer.CreateDecodeIterator(metadata)
-		for iterator.Next() {
-			ts, value := iterator.Sample()
-			result[seriesId] = append(result[seriesId], cppbridge.Sample{Timestamp: ts, Value: value})
-		}
-	}
-
-	return result
-}
-
 func GetSamplesFromSerializedData(serializedData *cppbridge.DataStorageSerializedData) SamplesMap {
 	result := make(SamplesMap)
 
