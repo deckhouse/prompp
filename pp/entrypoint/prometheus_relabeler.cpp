@@ -80,9 +80,8 @@ extern "C" void prompp_prometheus_inner_series_ctor(void* args) {
     SliceView<InnerSeries> inner_series;
   };
 
-  for (auto& series : static_cast<Arguments*>(args)->inner_series) {
-    std::construct_at(&series);
-  }
+  auto& inner_series = static_cast<Arguments*>(args)->inner_series;
+  std::uninitialized_default_construct_n(inner_series.begin(), inner_series.size());
 }
 
 extern "C" void prompp_prometheus_inner_series_dtor(void* args) {
@@ -90,9 +89,8 @@ extern "C" void prompp_prometheus_inner_series_dtor(void* args) {
     SliceView<InnerSeries> inner_series;
   };
 
-  for (auto& series : static_cast<Arguments*>(args)->inner_series) {
-    std::destroy_at(&series);
-  }
+  auto& inner_series = static_cast<Arguments*>(args)->inner_series;
+  std::destroy_n(inner_series.begin(), inner_series.size());
 }
 
 //
