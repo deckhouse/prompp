@@ -50,10 +50,10 @@ func NewHead[TShard Shard, TGShard Shard](
 	}
 
 	runtime.SetFinalizer(h, func(h *Head[TShard, TGShard]) {
-		logger.Infof("[Head] %s destroyed", h.String())
+		logger.Debugf("[Head] %s destroyed", h.String())
 	})
 
-	logger.Infof("[Head] %s created", h.String())
+	logger.Debugf("[Head] %s created", h.String())
 
 	return h
 }

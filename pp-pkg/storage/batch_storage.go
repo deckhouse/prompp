@@ -62,7 +62,7 @@ func (bs *BatchStorage) AppendTimeSeries(
 	}
 
 	tdata := data.TimeSeries()
-	_, stats, err = appender.New(bs.transactionHead, services.CFViaRange).Append(
+	stats, err = appender.New(bs.transactionHead, services.CFViaRange).Append(
 		ctx,
 		&appender.IncomingData{Hashdex: hx, Data: data},
 		state,

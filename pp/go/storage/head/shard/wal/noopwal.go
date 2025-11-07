@@ -38,6 +38,6 @@ func (NoopWal) Sync() error {
 }
 
 // Write implementation of [NoopWal], do nothing.
-func (NoopWal) Write([]*cppbridge.InnerSeries) (bool, error) {
+func (NoopWal) Write([]cppbridge.InnerSeries) (bool, error) {
 	return false, nil
 }
