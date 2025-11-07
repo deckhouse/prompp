@@ -8,14 +8,14 @@ import (
 
 // DataStorage samles storage with labels IDs.
 type DataStorage struct {
-	dataStorage *cppbridge.HeadDataStorage
+	dataStorage *cppbridge.DataStorage
 	encoder     *cppbridge.HeadEncoder
 	locker      sync.RWMutex
 }
 
 // NewDataStorage int new [DataStorage].
 func NewDataStorage() *DataStorage {
-	dataStorage := cppbridge.NewHeadDataStorage()
+	dataStorage := cppbridge.NewDataStorage()
 	return &DataStorage{
 		dataStorage: dataStorage,
 		encoder:     cppbridge.NewHeadEncoderWithDataStorage(dataStorage),
@@ -73,7 +73,7 @@ func (ds *DataStorage) MergeOutOfOrderChunks() {
 	ds.locker.Unlock()
 }
 
-func (ds *DataStorage) Query(query cppbridge.HeadDataStorageQuery) cppbridge.DataStorageQueryResult {
+func (ds *DataStorage) Query(query cppbridge.DataStorageQuery) cppbridge.DataStorageQueryResult {
 	ds.locker.RLock()
 	result := ds.dataStorage.Query(query)
 	ds.locker.RUnlock()
@@ -94,13 +94,13 @@ func (ds *DataStorage) QueryStatus(status *cppbridge.HeadStatus) {
 	ds.locker.RUnlock()
 }
 
-// Raw returns raw [cppbridge.HeadDataStorage].
-func (ds *DataStorage) Raw() *cppbridge.HeadDataStorage {
+// Raw returns raw [cppbridge.DataStorage].
+func (ds *DataStorage) Raw() *cppbridge.DataStorage {
 	return ds.dataStorage
 }
 
-// WithLock calls fn on raw [cppbridge.HeadDataStorage] with write lock.
-func (ds *DataStorage) WithLock(fn func(ds *cppbridge.HeadDataStorage) error) error {
+// WithLock calls fn on raw [cppbridge.DataStorage] with write lock.
+func (ds *DataStorage) WithLock(fn func(ds *cppbridge.DataStorage) error) error {
 	ds.locker.Lock()
 	err := fn(ds.dataStorage)
 	ds.locker.Unlock()
@@ -108,8 +108,8 @@ func (ds *DataStorage) WithLock(fn func(ds *cppbridge.HeadDataStorage) error) er
 	return err
 }
 
-// WithRLock calls fn on raw [cppbridge.HeadDataStorage] with read lock.
-func (ds *DataStorage) WithRLock(fn func(ds *cppbridge.HeadDataStorage) error) error {
+// WithRLock calls fn on raw [cppbridge.DataStorage] with read lock.
+func (ds *DataStorage) WithRLock(fn func(ds *cppbridge.DataStorage) error) error {
 	ds.locker.RLock()
 	err := fn(ds.dataStorage)
 	ds.locker.RUnlock()

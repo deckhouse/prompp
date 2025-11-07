@@ -204,7 +204,7 @@ func (s *HeadLoadSuite) TestLoadWithDisabledDataUnloading() {
 	// Act
 	loadedHead := s.mustLoadHead(0)
 
-	queryResult := s.shards(loadedHead)[0].DataStorage().Query(cppbridge.HeadDataStorageQuery{
+	queryResult := s.shards(loadedHead)[0].DataStorage().Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: 0,
 		EndTimestampMs:   2,
 		LabelSetIDs:      []uint32{0},
@@ -256,7 +256,7 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 		},
 	})
 
-	queryResult := s.shards(loadedHead)[0].DataStorage().Query(cppbridge.HeadDataStorageQuery{
+	queryResult := s.shards(loadedHead)[0].DataStorage().Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: 0,
 		EndTimestampMs:   4,
 		LabelSetIDs:      []uint32{0},

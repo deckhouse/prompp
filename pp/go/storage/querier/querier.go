@@ -315,7 +315,7 @@ func queryDataStorage[
 			}
 
 			var result cppbridge.DataStorageQueryResult
-			result = s.DataStorage().Query(cppbridge.HeadDataStorageQuery{
+			result = s.DataStorage().Query(cppbridge.DataStorageQuery{
 				StartTimestampMs: mint,
 				EndTimestampMs:   maxt,
 				LabelSetIDs:      lssQueryResult.IDs(),

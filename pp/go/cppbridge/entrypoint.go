@@ -1850,10 +1850,10 @@ type DataStorageQueryResult struct {
 	SerializedData *DataStorageSerializedData
 }
 
-func seriesDataDataStorageQueryV2(dataStorage uintptr, query HeadDataStorageQuery, serializedData *DataStorageSerializedData) (querier uintptr, status uint8) {
+func seriesDataDataStorageQueryV2(dataStorage uintptr, query DataStorageQuery, serializedData *DataStorageSerializedData) (querier uintptr, status uint8) {
 	args := struct {
 		dataStorage uintptr
-		query       HeadDataStorageQuery
+		query       DataStorageQuery
 	}{dataStorage, query}
 
 	var res = struct {
@@ -1890,6 +1890,27 @@ func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32
 	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_series_data_data_storage_instant_query,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res
+}
+
+func seriesDataDataStorageInstantQueryV2(dataStorage uintptr, labelSetIDs []uint32, timestamp int64, series []InstantSeries, labelSetStructSize uint8) DataStorageQueryResult {
+	args := struct {
+		dataStorage       uintptr
+		labelSetIDs       []uint32
+		timestamp         int64
+		labelSetStrucSize uint8
+		series            []InstantSeries
+	}{dataStorage, labelSetIDs, timestamp, labelSetStructSize, series}
+
+	var res DataStorageQueryResult
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_series_data_data_storage_instant_query_v2,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)

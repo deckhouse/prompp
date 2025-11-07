@@ -13,7 +13,7 @@ import (
 type HeadSuite struct {
 	suite.Suite
 	lss         *cppbridge.LabelSetStorage
-	dataStorage *cppbridge.HeadDataStorage
+	dataStorage *cppbridge.DataStorage
 	encoder     *cppbridge.HeadEncoder
 }
 
@@ -23,7 +23,7 @@ func TestHeadSuite(t *testing.T) {
 
 func (s *HeadSuite) SetupTest() {
 	s.lss = cppbridge.NewQueryableLssStorage()
-	s.dataStorage = cppbridge.NewHeadDataStorage()
+	s.dataStorage = cppbridge.NewDataStorage()
 	s.encoder = cppbridge.NewHeadEncoderWithDataStorage(s.dataStorage)
 }
 
@@ -118,7 +118,7 @@ func (s *HeadSuite) TestSerializedChunkRecoder() {
 	s.encoder.Encode(1, 4, 2.0)
 
 	timeInterval := cppbridge.TimeInterval{MinT: 0, MaxT: 4}
-	result := s.dataStorage.Query(cppbridge.HeadDataStorageQuery{
+	result := s.dataStorage.Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: timeInterval.MinT,
 		EndTimestampMs:   timeInterval.MaxT,
 		LabelSetIDs:      []uint32{0, 1}},
@@ -156,7 +156,7 @@ func (s *HeadSuite) TestSerializedChunkRecoder() {
 
 func (s *HeadSuite) TestTimeInterval() {
 	// Arrange
-	dataStorage := cppbridge.NewHeadDataStorage()
+	dataStorage := cppbridge.NewDataStorage()
 	encoder := cppbridge.NewHeadEncoderWithDataStorage(dataStorage)
 	encoder.Encode(0, 1, 1.0)
 	encoder.Encode(0, 2, 1.0)
@@ -177,7 +177,7 @@ func (s *HeadSuite) TestTimeInterval() {
 
 func (s *HeadSuite) TestInstantQuery() {
 	// Arrange
-	dataStorage := cppbridge.NewHeadDataStorage()
+	dataStorage := cppbridge.NewDataStorage()
 	encoder := cppbridge.NewHeadEncoderWithDataStorage(dataStorage)
 	var series = []struct {
 		SeriesID uint32

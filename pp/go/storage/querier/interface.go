@@ -48,11 +48,11 @@ type DataStorage interface {
 
 	// Query returns serialized chunks from data storage.
 	Query(
-		query cppbridge.HeadDataStorageQuery,
+		query cppbridge.DataStorageQuery,
 	) cppbridge.DataStorageQueryResult
 
-	// WithRLock calls fn on raw [cppbridge.HeadDataStorage] with read lock.
-	WithRLock(fn func(ds *cppbridge.HeadDataStorage) error) error
+	// WithRLock calls fn on raw [cppbridge.DataStorage] with read lock.
+	WithRLock(fn func(ds *cppbridge.DataStorage) error) error
 }
 
 //
