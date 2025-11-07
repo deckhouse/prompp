@@ -150,7 +150,6 @@ void prompp_series_data_data_storage_instant_query(void* args, void* res);
  *        dataStorage uintptr      // pointer to constructed data storage
  *        labelSetIDs []uint32     // series ids
  *        timestamp   int64        // timestamp
- *        labelSetStructSize uint8 // size of label set struct
  *        samples     []struct {   // pre-allocated samples slice
  *                Timestamp int64
  *                Value     float64

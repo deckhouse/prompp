@@ -7,6 +7,7 @@
 #include "series_data/querier/querier.h"
 #include "series_data/serialization/serialized_data.h"
 #include "series_data/serialization/serializer.h"
+#include "entrypoint/go_constants.h"
 
 namespace entrypoint::series_data {
 
@@ -47,8 +48,14 @@ class InstantQuerierWithArgumentsWrapper {
   const Timestamp timestamp_;
 };
 
+struct SampleWithGoLabels : public ::series_data::encoder::Sample {
+  private:
+    char go_labels_[Sizeof_GoLabels];
+};
+
+
 using InstantQuerierWithArgumentsWrapperEntrypoint = InstantQuerierWithArgumentsWrapper<PromPP::Primitives::Go::SliceView<PromPP::Primitives::LabelSetID>,
-                                                                                        PromPP::Primitives::Go::SliceView<::series_data::encoder::Sample>>;
+                                                                                        PromPP::Primitives::Go::SliceView<SampleWithGoLabels>>;
 
 class RangeQuerierWithArgumentsWrapper {
   using DataStorage = ::series_data::DataStorage;
