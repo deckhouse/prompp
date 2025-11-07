@@ -59,12 +59,12 @@ func NewHead[TShard Shard, TGShard Shard](
 }
 
 // AcquireQuery implementation of the working [Head], no blocking.
-func (h *Head[TShard, TGShard]) AcquireQuery(ctx context.Context) (func(), error) {
+func (*Head[TShard, TGShard]) AcquireQuery(ctx context.Context) (func(), error) {
 	return noopRelease, nil
 }
 
 // CreateTask create a task for operations on the [Head] shards.
-func (h *Head[TShard, TGShard]) CreateTask(taskName string, shardFn func(shard TGShard) error) *task.Generic[TGShard] {
+func (*Head[TShard, TGShard]) CreateTask(taskName string, shardFn func(shard TGShard) error) *task.Generic[TGShard] {
 	return task.NewTransactionGeneric(shardFn)
 }
 
