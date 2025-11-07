@@ -248,6 +248,76 @@ func (s *AppenderSuite) TestSeriesPerShardTransfer() {
 	}, data.shards)
 }
 
+func (s *AppenderSuite) TestShardedRelabeledSeriesFullNotEmpty() {
+	// Arrange
+	state := s.createState([]*cppbridge.RelabelConfig{{
+		TargetLabel: "label_for_drop",
+		Action:      cppbridge.Replace,
+		Separator:   ";",
+		Replacement: "keep1",
+	}})
+
+	// Act
+	stats, err := s.appender.Append(
+		context.Background(),
+		storagetest.NewIncomingData(&s.Suite, []model.TimeSeries{
+			{
+				LabelSet:  model.NewLabelSetBuilder().Set("__name__", "metric1").Build(),
+				Timestamp: 1,
+				Value:     1.1,
+			},
+			{
+				LabelSet:  model.NewLabelSetBuilder().Set("__name__", "metric2").Build(),
+				Timestamp: 1,
+				Value:     1.1,
+			},
+			{
+				LabelSet:  model.NewLabelSetBuilder().Set("__name__", "metric4").Build(),
+				Timestamp: 1,
+				Value:     1.1,
+			},
+			{
+				LabelSet:  model.NewLabelSetBuilder().Set("__name__", "metric6").Build(),
+				Timestamp: 1,
+				Value:     1.1,
+			},
+		}),
+		state,
+		false)
+
+	// Assert
+	s.NoError(err)
+	s.Equal(cppbridge.RelabelerStats{SamplesAdded: 4, SeriesAdded: 4, SeriesDrop: 0}, stats)
+
+	data := s.getHeadData([]uint32{0, 1, 2, 3})
+	s.Equal([]storageData{
+		{
+			labels: []cppbridge.Labels{
+				{{Name: "__name__", Value: "metric1"}, {Name: "label_for_drop", Value: "keep1"}},
+				{{Name: "__name__", Value: "metric6"}, {Name: "label_for_drop", Value: "keep1"}},
+				cppbridge.Labels(nil),
+				cppbridge.Labels(nil),
+			},
+			samples: storagetest.SamplesMap{
+				0: []cppbridge.Sample{{Timestamp: 1, Value: 1.1}},
+				1: []cppbridge.Sample{{Timestamp: 1, Value: 1.1}},
+			},
+		},
+		{
+			labels: []cppbridge.Labels{
+				{{Name: "__name__", Value: "metric4"}, {Name: "label_for_drop", Value: "keep1"}},
+				{{Name: "__name__", Value: "metric2"}, {Name: "label_for_drop", Value: "keep1"}},
+				cppbridge.Labels(nil),
+				cppbridge.Labels(nil),
+			},
+			samples: storagetest.SamplesMap{
+				0: []cppbridge.Sample{{Timestamp: 1, Value: 1.1}},
+				1: []cppbridge.Sample{{Timestamp: 1, Value: 1.1}},
+			},
+		},
+	}, data.shards)
+}
+
 func (s *AppenderSuite) TestTrackStaleness() {
 	// Arrange
 	state := s.createState([]*cppbridge.RelabelConfig{})
