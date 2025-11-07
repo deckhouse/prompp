@@ -105,6 +105,7 @@ func (s *UploadOrBuildHeadSuite) TestUploadOrBuildHeadCorrupted() {
 	require.NoError(s.T(), builtHead.Close())
 
 	require.Len(s.T(), headRecords, 2)
+	require.True(s.T(), headRecords[0].Corrupted())
 }
 
 func (s *UploadOrBuildHeadSuite) fixWalEncoderVersion(headDir string, numberOfShards uint16, encoderVersion uint8) {
@@ -136,4 +137,5 @@ func (s *UploadOrBuildHeadSuite) TestUploadOrBuildHeadOutdatedEncoderVersion() {
 	require.NoError(s.T(), builtHead.Close())
 
 	require.Len(s.T(), headRecords, 2)
+	require.False(s.T(), headRecords[0].Corrupted())
 }
