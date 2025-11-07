@@ -507,7 +507,6 @@ func (g *Group) Eval(ctx context.Context, ts time.Time) {
 	default:
 	}
 
-	g.metrics.GroupSamples.WithLabelValues(GroupKey(g.File(), g.Name())).Set(samplesTotal)
 	cleanupErr := g.cleanupStaleSeries(ctx, ts, bs)
 	if cleanupErr != nil {
 		level.Warn(g.logger).Log("msg", "Stale sample appending for previous configuration failed", "err", cleanupErr)
@@ -517,6 +516,8 @@ func (g *Group) Eval(ctx context.Context, ts time.Time) {
 		level.Error(g.logger).Log("msg", "Failed to commit batch appender", "err", commitErr)
 		return
 	}
+
+	g.metrics.GroupSamples.WithLabelValues(GroupKey(g.File(), g.Name())).Set(samplesTotal)
 
 	if len(g.staleSeries) != 0 && cleanupErr == nil {
 		g.staleSeries = nil
