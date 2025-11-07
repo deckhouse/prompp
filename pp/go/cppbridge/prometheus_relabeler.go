@@ -490,7 +490,7 @@ func NewShardedRelabeledSeries(numberOfShards uint16) *ShardedRelabeledSeries {
 // IsEmpty return true if all elements are empty
 func (sd *ShardedRelabeledSeries) IsEmpty() bool {
 	for i := range sd.series {
-		if sd.series[i].IsEmpty() {
+		if !sd.series[i].IsEmpty() {
 			return false
 		}
 	}
