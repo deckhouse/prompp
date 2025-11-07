@@ -17,7 +17,6 @@ package cppbridge
 // #include "entrypoint.h"
 import "C" //nolint:gocritic // because otherwise it won't work
 import (
-	"math"
 	"runtime"
 	"time"
 	"unsafe" //nolint:gocritic // because otherwise it won't work
@@ -1964,25 +1963,11 @@ func seriesDataSerializedDataIteratorCtor(iterator *DataStorageSerializedDataIte
 	)
 }
 
-type SerializedDataIteratorIterationResult struct {
-	Timestamp int64
-	Value     float64
-	HasValue  bool
-}
-
-func NewSerializedDataIteratorIterationResult() SerializedDataIteratorIterationResult {
-	return SerializedDataIteratorIterationResult{Timestamp: math.MinInt64}
-}
-
 func seriesDataSerializedDataIteratorNext(iterator *DataStorageSerializedDataIterator) {
-	args := struct {
-		iterator uintptr
-	}{uintptr(unsafe.Pointer(iterator))}
-
 	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_series_data_serialization_serialized_data_iterator_next,
-		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(iterator)),
 	)
 }
 

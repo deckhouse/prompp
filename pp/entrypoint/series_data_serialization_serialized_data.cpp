@@ -26,14 +26,10 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_ctor(v
   new (in->iterator) entrypoint::head::SerializedDataIterator(in->serialized_data->iterator(in->chunk_ref));
 }
 
-extern "C" void prompp_series_data_serialization_serialized_data_iterator_next(void* args) {
+extern "C" void prompp_series_data_serialization_serialized_data_iterator_next(void* iterator) {
   using series_data::decoder::DecodeIteratorSentinel;
 
-  struct Arguments {
-    entrypoint::head::SerializedDataIterator* iterator;
-  };
-
-  ++(*static_cast<Arguments*>(args)->iterator);
+  ++(*static_cast<entrypoint::head::SerializedDataIterator*>(iterator));
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_iterator_seek(void* args) {
