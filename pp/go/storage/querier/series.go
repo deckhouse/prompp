@@ -243,9 +243,8 @@ type InstantSeriesSet struct {
 	labelSetSnapshot            *cppbridge.LabelSetSnapshot
 	valueNotFoundTimestampValue int64
 	samples                     []cppbridge.Sample
-
-	index         int
-	currentSeries *InstantSeries
+	nextSampleIndex             int
+	series                      []InstantSeries
 }
 
 // NewInstantSeriesSet init new [InstantSeriesSet].
@@ -260,13 +259,13 @@ func NewInstantSeriesSet(
 		labelSetSnapshot:            labelSetSnapshot,
 		valueNotFoundTimestampValue: valueNotFoundTimestampValue,
 		samples:                     samples,
-		index:                       -1,
+		series:                      make([]InstantSeries, 0, len(samples)),
 	}
 }
 
 // At returns full series. Returned series should be iterable even after Next is called.
 func (ss *InstantSeriesSet) At() storage.Series {
-	return ss.currentSeries
+	return &ss.series[len(ss.series)-1]
 }
 
 // Err the error that iteration as failed with.
@@ -277,26 +276,27 @@ func (*InstantSeriesSet) Err() error {
 // Next return true if exist there is a next series and false otherwise.
 func (ss *InstantSeriesSet) Next() bool {
 	for {
-		if ss.index+1 >= ss.lssQueryResult.Len() {
+		if ss.nextSampleIndex >= ss.lssQueryResult.Len() {
 			return false
 		}
 
-		ss.index++
-		if ss.samples[ss.index].Timestamp != ss.valueNotFoundTimestampValue {
+		if ss.samples[ss.nextSampleIndex].Timestamp != ss.valueNotFoundTimestampValue {
 			break
 		}
+		ss.nextSampleIndex++
 	}
 
-	lsID, lsLength := ss.lssQueryResult.GetByIndex(ss.index)
-	ss.currentSeries = &InstantSeries{
+	lsID, lsLength := ss.lssQueryResult.GetByIndex(ss.nextSampleIndex)
+	ss.series = append(ss.series, InstantSeries{
 		labelSet: labels.NewLabelsWithLSS(
 			ss.labelSetSnapshot,
 			lsID,
 			lsLength,
 		),
-		sample: ss.samples[ss.index],
-	}
+		sample: &ss.samples[ss.nextSampleIndex],
+	})
 
+	ss.nextSampleIndex++
 	return true
 }
 
@@ -312,7 +312,7 @@ func (*InstantSeriesSet) Warnings() annotations.Annotations {
 // InstantSeries is a instant stream of data points belonging to a metric.
 type InstantSeries struct {
 	labelSet labels.Labels
-	sample   cppbridge.Sample
+	sample   *cppbridge.Sample
 }
 
 // Iterator is storage.Series interface implementation.

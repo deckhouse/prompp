@@ -1,8 +1,8 @@
 package cppbridge
 
 import (
-	"github.com/golang/protobuf/proto"
 	dto "github.com/prometheus/client_model/go"
+	"google.golang.org/protobuf/proto"
 )
 
 func CppMetrics(f func(metric *dto.Metric) bool) {
