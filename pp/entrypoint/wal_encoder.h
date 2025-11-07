@@ -55,7 +55,7 @@ void prompp_wal_encoder_add(void* args, void* res);
  * @brief Add inner series to current segment
  *
  * @param args {
- *     incoming_inner_series []*InnerSeries // go slice with incoming InnerSeries;
+ *     incoming_inner_series []InnerSeries // go slice with incoming InnerSeries;
  *     encoder               uintptr        // pointer to constructed encoder;
  * }
  * @param res {
@@ -197,7 +197,7 @@ void prompp_wal_encoder_lightweight_add(void* args, void* res);
  * @brief Add inner series to current segment
  *
  * @param args {
- *     incomingInnerSeries []*InnerSeries // go slice with incoming InnerSeries;
+ *     incomingInnerSeries []InnerSeries // go slice with incoming InnerSeries;
  *     encoderLightweight  uintptr        // pointer to constructed encoder;
  * }
  * @param res {

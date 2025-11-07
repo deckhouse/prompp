@@ -59,14 +59,14 @@ class GenericEncoder {
     write_stats(stats);
   }
 
-  template <class Stats, class InnerSeriesSlice>
-  inline __attribute__((always_inline)) void add_inner_series(InnerSeriesSlice& incoming_inner_series, Stats* stats) {
-    std::ranges::for_each(incoming_inner_series, [&](const Prometheus::Relabel::InnerSeries* inner_series) {
-      if (inner_series == nullptr || inner_series->size() == 0) {
+  template <class Stats, template <class> class InnerSeriesContainer>
+  inline __attribute__((always_inline)) void add_inner_series(InnerSeriesContainer<Prometheus::Relabel::InnerSeries>& incoming_inner_series, Stats* stats) {
+    std::ranges::for_each(incoming_inner_series, [&](const Prometheus::Relabel::InnerSeries& inner_series) {
+      if (inner_series.size() == 0) {
         return;
       }
 
-      std::ranges::for_each(inner_series->data(),
+      std::ranges::for_each(inner_series.data(),
                             [&](const Prometheus::Relabel::InnerSerie& inner_serie) { encoder_.add_sample_on_ls_id(inner_serie.ls_id, inner_serie.sample); });
     });
 
