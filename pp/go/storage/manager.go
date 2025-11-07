@@ -174,7 +174,7 @@ func NewManager(
 	builder := NewBuilder(hcatalog, o.DataDir, o.MaxSegmentSize, r, unloadDataStorageInterval)
 	loader := NewLoader(o.DataDir, o.MaxSegmentSize, r, unloadDataStorageInterval)
 	cfg := NewConfig(o.NumberOfShards)
-	h, err := uploadOrBuildHead(clock, hcatalog, builder, loader, o.BlockDuration, cfg.NumberOfShards())
+	h, err := UploadOrBuildHead(clock, hcatalog, builder, loader, o.BlockDuration, cfg.NumberOfShards())
 	if err != nil {
 		return nil, err
 	}
@@ -475,11 +475,11 @@ func (tn *TriggerNotifier) Notify() {
 // uploadOrBuildHead
 //
 
-// uploadOrBuildHead uploads or builds a new head.
+// UploadOrBuildHead uploads or builds a new head.
 //
 //revive:disable-next-line:function-length // long but readable.
 //revive:disable-next-line:cyclomatic // long but readable.
-func uploadOrBuildHead(
+func UploadOrBuildHead(
 	clock clockwork.Clock,
 	hcatalog *catalog.Catalog,
 	builder *Builder,
@@ -523,9 +523,9 @@ func uploadOrBuildHead(
 
 		_ = h.Close()
 
-		if errors.Is(err, ErrInvalidEncoderVersion) {
+		if errors.Is(err, cppbridge.ErrInvalidEncoderVersion) {
 			logger.Warnf("[Head Manager] upload non continuable head {%s}, building new...", headRecords[0].ID())
-			return builder.Build(generation, numberOfShards)
+			return builder.Build(generation+1, numberOfShards)
 		}
 
 		if !headRecords[0].Corrupted() {
@@ -535,13 +535,13 @@ func uploadOrBuildHead(
 		}
 
 		logger.Warnf("[Head Manager] upload corrupted head {%s}, building new...", headRecords[0].ID())
-		return builder.Build(generation, numberOfShards)
+		return builder.Build(generation+1, numberOfShards)
 	}
 
 	if _, err := hcatalog.SetStatus(headRecords[0].ID(), catalog.StatusActive); err != nil {
 		logger.Warnf("failed to set active status for head {%s}: %s", headRecords[0].ID(), err)
 
-		return builder.Build(generation, numberOfShards)
+		return builder.Build(generation+1, numberOfShards)
 	}
 
 	return h, nil

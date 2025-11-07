@@ -88,15 +88,13 @@ func TestHeadWalDecoder_DecodeToDataStorage(t *testing.T) {
 
 func TestHeadWalDecoder_InvalidEncoderVersion(t *testing.T) {
 	// Arrange
-	var actualEncoderVersion = cppbridge.EncodersVersion()
-	decoder := cppbridge.NewHeadWalDecoder(cppbridge.NewQueryableLssStorage(), actualEncoderVersion-1)
+	decoder := cppbridge.NewHeadWalDecoder(cppbridge.NewQueryableLssStorage(), cppbridge.EncodersVersion()-1)
 
 	// Act
-
 	_, err := decoder.CreateEncoder()
 
 	// Assert
-	require.Error(t, err)
+	require.ErrorIs(t, err, cppbridge.ErrInvalidEncoderVersion)
 }
 
 func TestHeadWalDecoder_ValidEncoderVersion(t *testing.T) {

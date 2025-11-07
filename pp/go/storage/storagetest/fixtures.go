@@ -2,8 +2,13 @@ package storagetest
 
 import (
 	"context"
+	"github.com/jonboulle/clockwork"
+	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"math"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -162,4 +167,35 @@ func TimeSeriesFromSeriesSet(seriesSet promstorage.SeriesSet, groupSamples bool)
 	}
 
 	return timeSeries
+}
+
+const (
+	NumberOfShards            uint16        = 2
+	MaxSegmentSize            uint32        = 1024
+	UnloadDataStorageInterval time.Duration = 100
+)
+
+func CreateCatalog(clock clockwork.Clock, logFilePath string, idGenerator catalog.IDGenerator) (*catalog.Catalog, error) {
+	l, err := catalog.NewFileLogV2(logFilePath)
+	if err != nil {
+		return nil, err
+	}
+
+	ctlg, err := catalog.New(
+		clock,
+		l,
+		idGenerator,
+		catalog.DefaultMaxLogFileSize,
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return ctlg, nil
+}
+
+func CreateDataDirectory(dir string) (string, error) {
+	dataDir := filepath.Join(dir, "data")
+	return dataDir, os.MkdirAll(dataDir, os.ModeDir)
 }

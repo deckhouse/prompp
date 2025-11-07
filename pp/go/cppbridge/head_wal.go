@@ -1,6 +1,8 @@
 package cppbridge
 
 import (
+	"errors"
+	"fmt"
 	"hash/crc32"
 	"io"
 	"runtime"
@@ -136,11 +138,15 @@ func (d *HeadWalDecoder) DecodeToDataStorage(segment []byte, headEncoder *HeadEn
 	return createTimestamp, encodeTimestamp, err
 }
 
+// ErrInvalidEncoderVersion migration error.
+var ErrInvalidEncoderVersion = errors.New("invalid encoder version")
+
 // CreateEncoder creates a new [HeadWalEncoder] from the decoder.
 func (d *HeadWalDecoder) CreateEncoder() (*HeadWalEncoder, error) {
 	encoder, err := headWalDecoderCreateEncoder(d.decoder)
+	// the only error for now is: invalid encoder version
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %s", ErrInvalidEncoderVersion, err)
 	}
 
 	e := &HeadWalEncoder{

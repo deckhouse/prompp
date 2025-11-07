@@ -82,15 +82,15 @@ func (l *Loader) load(
 
 	shards := make([]*shard.Shard, numberOfShards)
 	numberOfSegmentsRead := optional.Optional[uint32]{}
-	var errs error
+	errs := make([]error, numberOfShards)
 	for shardID, res := range shardLoadResults {
 		shards[shardID] = res.shard
-		errs = errors.Join(errs, res.err)
+		errs[shardID] = res.err
 
 		if numberOfSegmentsRead.IsNil() {
 			numberOfSegmentsRead.Set(res.numberOfSegments)
 		} else if numberOfSegmentsRead.Value() != res.numberOfSegments {
-			errs = errors.Join(errs, fmt.Errorf("corrupted shard %d: segment count mismatch, expected: %d, got: %d", shardID, numberOfSegmentsRead.Value(), res.numberOfSegments))
+			errs = append(errs, fmt.Errorf("corrupted shard %d: segment count mismatch, expected: %d, got: %d", shardID, numberOfSegmentsRead.Value(), res.numberOfSegments))
 			// calculating maximum number of segments (critical for remote write).
 			if numberOfSegmentsRead.Value() < res.numberOfSegments {
 				numberOfSegmentsRead.Set(res.numberOfSegments)
@@ -133,16 +133,48 @@ func (l *Loader) load(
 	)
 
 	if err := services.MergeOutOfOrderChunksWithHead(h); err != nil {
-		errs = errors.Join(errs, err)
+		errs = append(errs, err)
 	}
-
-	logger.Debugf("[Loader] loaded head: %s, corrupted: %t", headRecord.ID(), errs != nil && !errors.Is(errs, ErrInvalidEncoderVersion))
 
 	if readOnly || errs != nil {
 		h.SetReadOnly()
 	}
 
-	return h, errs
+	// we must ensure that if one cppbridge.ErrInvalidEncoderVersion happened, they are all the same type,
+	// otherwise it is corruption error.
+	err := EnsureSameErrorTypes(errs, cppbridge.ErrInvalidEncoderVersion)
+
+	logger.Debugf("[Loader] loaded head: %s, corrupted: %t", headRecord.ID(), err != nil && !errors.Is(err, cppbridge.ErrInvalidEncoderVersion))
+
+	return h, err
+}
+
+// EnsureSameErrorTypes checks if err contains targetErr - we ensure that all errors in chain would be targetErr,
+// otherwise return all errors in chain except targetErr
+func EnsureSameErrorTypes(errs []error, targetErr error) error {
+	if len(errs) == 0 {
+		return nil
+	}
+
+	var nonTargetErrs error
+	var targetErrs error
+	for _, err := range errs {
+		if err == nil {
+			continue
+		}
+
+		if errors.Is(err, targetErr) {
+			targetErrs = errors.Join(targetErrs, err)
+		} else {
+			nonTargetErrs = errors.Join(nonTargetErrs, err)
+		}
+	}
+
+	if nonTargetErrs != nil {
+		return nonTargetErrs
+	}
+
+	return errors.Join(targetErrs, nonTargetErrs)
 }
 
 // Load [Head] from [Wal] by head ID.
@@ -160,6 +192,7 @@ func (l *Loader) Load(
 
 // LoadReadOnly [Head] from [Wal] by head ID. Head is read only, and there is corrupted wal in each shard,
 // so any append will fail.
+// Cannot return ErrInvalidEncoderVersion.
 // CAUTION: Always returns head, even if err != nil.
 //
 //revive:disable-next-line:cognitive-complexity // function is not complicated
@@ -285,7 +318,7 @@ func (l *ShardDataLoader) Load(readOnly bool) error {
 
 	encoder, err := decoder.CreateEncoder()
 	if err != nil {
-		return errors.Join(ErrInvalidEncoderVersion, fmt.Errorf("create encoder from decoder: %w", err))
+		return err
 	}
 
 	return l.createShardWal(shardWalFileName, encoder)
