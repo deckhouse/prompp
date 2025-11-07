@@ -30,6 +30,10 @@ func NewChunkIterator(serializedData *cppbridge.DataStorageSerializedData, chunk
 		maxt:           maxt,
 	}
 
+	if it.chunkIterator.Timestamp < mint {
+		it.chunkIterator.Seek(mint)
+	}
+
 	return it
 }
 
@@ -39,6 +43,10 @@ func (it *ChunkIterator) Reset(serializedData *cppbridge.DataStorageSerializedDa
 	it.maxt = maxt
 	it.isInitialized = false
 	it.chunkIterator.Reset(serializedData, chunkRef)
+
+	if it.chunkIterator.Timestamp < mint {
+		it.chunkIterator.Seek(mint)
+	}
 }
 
 // At returns the current timestamp/value pair if the value is a float.
@@ -92,15 +100,7 @@ func (it *ChunkIterator) Next() chunkenc.ValueType {
 		return chunkenc.ValNone
 	}
 
-	ts := it.AtT()
-	if ts < it.mint {
-		if it.Seek(it.mint) == chunkenc.ValNone {
-			return chunkenc.ValNone
-		}
-		ts = it.AtT()
-	}
-
-	if ts > it.maxt {
+	if it.AtT() > it.maxt {
 		return chunkenc.ValNone
 	}
 

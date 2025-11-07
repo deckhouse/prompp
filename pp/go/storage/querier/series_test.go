@@ -459,3 +459,29 @@ func (s *SeriesSetTestSuite) TestSeriesResetIterator() {
 	s.Equal(cppbridge.Sample{Timestamp: 12, Value: 2}, s.nextSample(iterator))
 	s.Equal(chunkenc.ValNone, iterator.Next())
 }
+
+func (s *SeriesSetTestSuite) TestSeriesResetIteratorWithMinTimestamp() {
+	// Arrange
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
+
+	var start int64 = 12
+	var end int64 = 50
+	seriesSet := s.query(s.lss, s.ds, start, end, model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	})
+
+	s.True(seriesSet.Next())
+	iterator := seriesSet.At().Iterator(nil)
+	s.Equal(chunkenc.ValFloat, iterator.Next())
+
+	s.True(seriesSet.Next())
+
+	// Act
+	iterator = seriesSet.At().Iterator(iterator)
+
+	// Assert
+	s.Equal(cppbridge.Sample{Timestamp: 12, Value: 2}, s.nextSample(iterator))
+	s.Equal(chunkenc.ValNone, iterator.Next())
+}
