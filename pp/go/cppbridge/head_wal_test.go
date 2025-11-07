@@ -1,6 +1,7 @@
 package cppbridge_test
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/gobuffalo/packr/v2/file/resolver/encoding/hex"
@@ -27,7 +28,7 @@ func TestHeadWalSuite(t *testing.T) {
 func (s *HeadWalSuite) TestHeadWalEncoder_Encode() {
 	encoder := cppbridge.NewHeadWalEncoder(0, 1, cppbridge.NewQueryableLssStorage())
 
-	samples, err := encoder.Encode([]*cppbridge.InnerSeries{})
+	samples, err := encoder.Encode([]cppbridge.InnerSeries{})
 	s.Require().NoError(err)
 
 	s.Empty(samples)
@@ -50,14 +51,18 @@ func (s *HeadWalSuite) TestHeadWalEncoder_EncodeAndFinalize() {
 	lss := cppbridge.NewQueryableLssStorage()
 	decoder := cppbridge.NewHeadWalDecoder(lss, kTestBufferVersion)
 	encoder := cppbridge.NewHeadWalEncoder(0, 1, lss)
-	innerSeries := cppbridge.NewInnerSeries()
-	err := decoder.Decode(segment, innerSeries)
+
+	shardedInnerSeries := cppbridge.NewShardedInnerSeries(1)
+	innerSeries := shardedInnerSeries.DataByShard(0)
+
+	err := decoder.Decode(segment, &innerSeries[0])
 	s.Require().NoError(err)
 	s.NotNil(innerSeries)
 
-	expectedSamples := innerSeries.Size()
-	samples, err := encoder.Encode([]*cppbridge.InnerSeries{innerSeries})
+	expectedSamples := innerSeries[0].Size()
+	samples, err := encoder.Encode(innerSeries)
 	s.Require().NoError(err)
+	runtime.KeepAlive(shardedInnerSeries)
 
 	s.NotNil(samples)
 	s.Equal(expectedSamples, uint64(samples))

@@ -3,9 +3,10 @@ package distributor
 import (
 	"context"
 	"errors"
+	"sync"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
-	"sync"
 )
 
 // OutputRelabelingPromise - promise for processing output data.
@@ -85,26 +86,6 @@ func (p *OutputRelabelingPromise) AddOutputInnerSeries(
 	if cap(p.dgOutputInnerSeries[groupID][shardID]) == len(p.dgOutputInnerSeries[groupID][shardID]) {
 		p.shardDone--
 	}
-
-	if p.shardDone == 0 {
-		close(p.done)
-	}
-	p.mx.Unlock()
-}
-
-// AddOutputRelabeledSeries - add to promise relabeled series.
-func (p *OutputRelabelingPromise) AddOutputRelabeledSeries(
-	groupID int,
-	shardID uint16,
-	relabeledSeries *cppbridge.RelabeledSeries,
-) {
-	p.mx.Lock()
-	if relabeledSeries.Size() == 0 {
-		relabeledSeries = nil
-	}
-
-	p.dgOutputRelabeledSeries[groupID][shardID] = relabeledSeries
-	p.shardDone--
 
 	if p.shardDone == 0 {
 		close(p.done)

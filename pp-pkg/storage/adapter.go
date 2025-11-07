@@ -92,7 +92,7 @@ func (ar *Adapter) AppendHashdex(
 	}()
 
 	return ar.proxy.With(ctx, func(h *pp_storage.Head) error {
-		_, _, err := appender.New(h, services.CFViaRange).Append(
+		_, err := appender.New(h, services.CFViaRange).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hashdex},
 			state,
@@ -116,7 +116,7 @@ func (ar *Adapter) AppendScraperHashdex(
 	}()
 
 	_ = ar.proxy.With(ctx, func(h *pp_storage.Head) error {
-		_, stats, err = appender.New(h, services.CFViaRange).Append(
+		stats, err = appender.New(h, services.CFViaRange).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hashdex},
 			state,
@@ -152,7 +152,7 @@ func (ar *Adapter) AppendSnappyProtobuf(
 	}()
 
 	return ar.proxy.With(ctx, func(h *pp_storage.Head) error {
-		_, _, err := appender.New(h, services.CFViaRange).Append(
+		_, err := appender.New(h, services.CFViaRange).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hx},
 			state,
@@ -187,7 +187,7 @@ func (ar *Adapter) AppendTimeSeries(
 	}()
 
 	_ = ar.proxy.With(ctx, func(h *pp_storage.Head) error {
-		_, stats, err = appender.New(h, services.CFViaRange).Append(
+		stats, err = appender.New(h, services.CFViaRange).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hx, Data: data},
 			state,

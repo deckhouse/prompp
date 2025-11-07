@@ -41,8 +41,8 @@ void prompp_head_wal_encoder_dtor(void* args);
  * @brief Add inner series to current segment
  *
  * @param args {
- *     incomingInnerSeries []*InnerSeries // go slice with inner series;
- *     encoder  uintptr        // pointer to constructed encoder;
+ *     incomingInnerSeries []InnerSeries // go slice with inner series;
+ *     encoder  uintptr                  // pointer to constructed encoder;
  * }
  * @param res {
  *     error               []byte         // error string if thrown

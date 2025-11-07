@@ -5,7 +5,6 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/relabeler"
 )
 
@@ -18,93 +17,6 @@ func NewDistributor(destinationGroups relabeler.DestinationGroups) *Distributor 
 	return &Distributor{
 		destinationGroups: destinationGroups,
 	}
-}
-
-func (d *Distributor) Send(ctx context.Context, head relabeler.Head, shardedData [][]*cppbridge.InnerSeries) error {
-	if d.Len() == 0 {
-		return nil
-	}
-
-	_ = d.ParallelRange(func(_ int, dg *relabeler.DestinationGroup) error {
-		dg.RotateLock()
-		return nil
-	})
-
-	defer d.ParallelRange(func(_ int, dg *relabeler.DestinationGroup) error {
-		dg.RotateUnlock()
-		return nil
-	})
-
-	outputPromise := NewOutputRelabelingPromise(&d.destinationGroups, head.NumberOfShards())
-
-	tDOutputRelabeling := head.CreateTask(
-		relabeler.LSSOutputRelabeling,
-		func(shard relabeler.Shard) error {
-			shard.LSSLock()
-			defer shard.LSSUnlock()
-
-			return d.ParallelRange(func(destinationGroupID int, destinationGroup *relabeler.DestinationGroup) error {
-				outputInnerSeries := cppbridge.NewShardsInnerSeries(1 << destinationGroup.ShardsNumberPower())
-				relabeledSeries := cppbridge.NewRelabeledSeries()
-				if relabelingErr := destinationGroup.OutputRelabeling(
-					ctx,
-					shard.LSS().Raw(),
-					shardedData[shard.ShardID()],
-					outputInnerSeries,
-					relabeledSeries,
-					shard.ShardID(),
-				); relabelingErr != nil {
-					outputPromise.AddError(
-						destinationGroupID,
-						uint16(1<<destinationGroup.ShardsNumberPower()),
-						relabelingErr,
-					)
-
-					return nil
-				}
-
-				for sid, innerSeries := range outputInnerSeries {
-					outputPromise.AddOutputInnerSeries(destinationGroupID, uint16(sid), innerSeries)
-				}
-				outputPromise.AddOutputRelabeledSeries(destinationGroupID, shard.ShardID(), relabeledSeries)
-				return nil
-			})
-		},
-		relabeler.ForLSSTask,
-	)
-	head.Enqueue(tDOutputRelabeling)
-	if err := tDOutputRelabeling.Wait(); err != nil {
-		return err
-	}
-
-	return d.ParallelRange(
-		func(destinationGroupID int, destinationGroup *relabeler.DestinationGroup) error {
-			destinationGroup.EncodersLock()
-			defer destinationGroup.EncodersUnlock()
-
-			outputStateUpdates := destinationGroup.OutputStateUpdates()
-			if _, appendErr := destinationGroup.AppendOpenHead(
-				ctx,
-				outputPromise.OutputInnerSeries(destinationGroupID),
-				outputPromise.OutputRelabeledSeries(destinationGroupID),
-				outputStateUpdates,
-			); appendErr != nil {
-				return appendErr
-			}
-
-			for shardID, outputStateUpdate := range outputStateUpdates {
-				updateErr := destinationGroup.UpdateRelabelerState(
-					ctx,
-					uint16(shardID),
-					outputStateUpdate,
-				)
-				if updateErr != nil {
-					return updateErr
-				}
-			}
-			return nil
-		},
-	)
 }
 
 func (d *Distributor) DestinationGroups() relabeler.DestinationGroups {

@@ -31,17 +31,17 @@ extern "C" void prompp_series_data_encoder_encode(void* args) {
 extern "C" void prompp_series_data_encoder_encode_inner_series_slice(void* args) {
   struct Arguments {
     entrypoint::head::SeriesDataEncoderWrapperPtr encoder_wrapper;
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> inner_series_slice;
+    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries> inner_series_slice;
   };
 
   auto* in = static_cast<Arguments*>(args);
 
-  std::ranges::for_each(in->inner_series_slice, [&](const PromPP::Prometheus::Relabel::InnerSeries* inner_series) {
-    if (inner_series == nullptr || inner_series->size() == 0) {
+  std::ranges::for_each(in->inner_series_slice, [&](const PromPP::Prometheus::Relabel::InnerSeries& inner_series) {
+    if (inner_series.size() == 0) {
       return;
     }
 
-    std::ranges::for_each(inner_series->data(), [&](const PromPP::Prometheus::Relabel::InnerSerie& inner_serie) {
+    std::ranges::for_each(inner_series.data(), [&](const PromPP::Prometheus::Relabel::InnerSerie& inner_serie) {
       in->encoder_wrapper->encoder.encode(inner_serie.ls_id, inner_serie.sample.timestamp(), inner_serie.sample.value());
     });
   });

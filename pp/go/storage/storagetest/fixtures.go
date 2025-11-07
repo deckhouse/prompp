@@ -2,8 +2,9 @@ package storagetest
 
 import (
 	"context"
-	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"math"
+
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -70,17 +71,21 @@ func MustAppendTimeSeries(s *suite.Suite, head *storage.Head, timeSeries []TimeS
 	state.SetStatelessRelabeler(statelessRelabeler)
 
 	for i := range timeSeries {
-		tsd := timeSeriesDataSlice{timeSeries: timeSeries[i].toModelTimeSeries()}
-		hx, err := (cppbridge.HashdexFactory{}).GoModel(tsd.TimeSeries(), cppbridge.DefaultWALHashdexLimits())
-		s.Require().NoError(err)
-
-		_, _, err = headAppender.Append(
+		_, err = headAppender.Append(
 			context.Background(),
-			&appender.IncomingData{Hashdex: hx, Data: &tsd},
+			NewIncomingData(s, timeSeries[i].toModelTimeSeries()),
 			state,
 			true)
 		s.NoError(err)
 	}
+}
+
+func NewIncomingData(s *suite.Suite, timeSeries []model.TimeSeries) *appender.IncomingData {
+	tsd := timeSeriesDataSlice{timeSeries: timeSeries}
+	hx, err := (cppbridge.HashdexFactory{}).GoModel(tsd.TimeSeries(), cppbridge.DefaultWALHashdexLimits())
+	s.Require().NoError(err)
+
+	return &appender.IncomingData{Hashdex: hx, Data: &tsd}
 }
 
 func MustAppendTimeSeriesToLSSAndDataStorage(lss *shard.LSS, ds *shard.DataStorage, timeSeries ...TimeSeries) {

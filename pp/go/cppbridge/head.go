@@ -167,7 +167,7 @@ func (e *HeadEncoder) Encode(seriesID uint32, timestamp int64, value float64) {
 }
 
 // EncodeInnerSeriesSlice - encodes InnerSeries slice produced by relabeler.
-func (e *HeadEncoder) EncodeInnerSeriesSlice(innerSeriesSlice []*InnerSeries) {
+func (e *HeadEncoder) EncodeInnerSeriesSlice(innerSeriesSlice []InnerSeries) {
 	seriesDataEncoderEncodeInnerSeriesSlice(e.encoder, innerSeriesSlice)
 }
 
