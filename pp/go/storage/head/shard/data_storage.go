@@ -33,7 +33,7 @@ func (ds *DataStorage) AllocatedMemory() uint64 {
 }
 
 // AppendInnerSeriesSlice add InnerSeries to storage.
-func (ds *DataStorage) AppendInnerSeriesSlice(innerSeriesSlice []*cppbridge.InnerSeries) {
+func (ds *DataStorage) AppendInnerSeriesSlice(innerSeriesSlice []cppbridge.InnerSeries) {
 	ds.locker.Lock()
 	ds.encoder.EncodeInnerSeriesSlice(innerSeriesSlice)
 	ds.locker.Unlock()

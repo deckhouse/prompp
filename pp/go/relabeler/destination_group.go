@@ -246,8 +246,8 @@ func (dg *DestinationGroup) ObserveEncodersMemory() {
 func (dg *DestinationGroup) OutputRelabeling(
 	ctx context.Context,
 	inputLss *cppbridge.LabelSetStorage,
-	data []*cppbridge.InnerSeries,
-	encodersInnerSeries []*cppbridge.InnerSeries,
+	data []cppbridge.InnerSeries,
+	encodersInnerSeries []cppbridge.InnerSeries,
 	relabeledSeries *cppbridge.RelabeledSeries,
 	shardID uint16,
 ) error {
@@ -258,21 +258,6 @@ func (dg *DestinationGroup) OutputRelabeling(
 		encodersInnerSeries,
 		relabeledSeries,
 	)
-}
-
-// OutputStateUpdates - make container for output state updates.
-func (dg *DestinationGroup) OutputStateUpdates() [][]*cppbridge.RelabelerStateUpdate {
-	// encodersStateUpdates[mainShardID[encoderShardID]]
-	encodersStateUpdates := make([][]*cppbridge.RelabelerStateUpdate, len(dg.outputRelabelers))
-	for i := range encodersStateUpdates {
-		encodersStateUpdates[i] = make([]*cppbridge.RelabelerStateUpdate, 1<<dg.managerKeeper.ShardsNumberPower())
-		for j := range encodersStateUpdates[i] {
-			// set current DestinationGroup(lss) generation
-			encodersStateUpdates[i][j] = cppbridge.NewRelabelerStateUpdate()
-		}
-	}
-
-	return encodersStateUpdates
 }
 
 // ResetTo reset to changed attributes.
