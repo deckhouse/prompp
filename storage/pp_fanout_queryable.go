@@ -1,0 +1,60 @@
+package storage
+
+import tsdb_errors "github.com/prometheus/prometheus/tsdb/errors"
+
+//
+// fanoutQueryable
+//
+
+// fanoutQueryable handles queries against a storage.
+type fanoutQueryable struct {
+	primary     Queryable
+	secondaries []Queryable
+}
+
+// NewFanoutQueryable init new [fanoutQueryable] as [Queryable].
+func NewFanoutQueryable(primary Queryable, secondaries ...Queryable) Queryable {
+	sq := make([]Queryable, 0, len(secondaries))
+	for _, q := range secondaries {
+		if f, ok := q.(*fanout); ok {
+			sq = append(sq, f.primary)
+			for _, s := range f.secondaries {
+				sq = append(sq, s)
+			}
+
+			continue
+		}
+
+		sq = append(sq, q)
+	}
+
+	return &fanoutQueryable{
+		primary:     primary,
+		secondaries: sq,
+	}
+}
+
+// Querier calls f() with the given parameters. Returns a merged [Querier].
+func (fq *fanoutQueryable) Querier(mint, maxt int64) (Querier, error) {
+	primary, err := fq.primary.Querier(mint, maxt)
+	if err != nil {
+		return nil, err
+	}
+
+	secondaries := make([]Querier, 0, len(fq.secondaries))
+	for _, q := range fq.secondaries {
+		querier, err := q.Querier(mint, maxt)
+		if err != nil {
+			// Close already open Queriers, append potential errors to returned error.
+			errs := tsdb_errors.NewMulti(err, primary.Close())
+			for _, q := range secondaries {
+				errs.Add(q.Close())
+			}
+			return nil, errs.Err()
+		}
+		if _, ok := querier.(noopQuerier); !ok {
+			secondaries = append(secondaries, querier)
+		}
+	}
+	return NewMergeQuerier([]Querier{primary}, secondaries, ChainedSeriesMerge), nil
+}

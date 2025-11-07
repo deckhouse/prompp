@@ -111,7 +111,10 @@ type ManagerOptions struct {
 	Appendable  storage.Appendable
 	Queryable   storage.Queryable
 
-	BatchAppendable storage.BatchAppendable
+	Engine          promql.QueryEngine
+	FanoutQueryable storage.Queryable
+	EngineQueryCtor func(engine promql.QueryEngine, q storage.Queryable) QueryFunc
+	Batcher         storage.Batcher
 
 	Logger                    log.Logger
 	Registerer                prometheus.Registerer

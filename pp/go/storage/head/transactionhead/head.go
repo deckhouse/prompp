@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"runtime"
-	"sync"
 
 	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
@@ -30,12 +29,12 @@ type Shard interface {
 // Head
 //
 
+// Head stores and manages shard, handles reads and writes of time series data for transaction operations.
+// Append method are goroutine-unsafe.
 type Head[TShard Shard, TGShard Shard] struct {
-	id           string
-	shard        TShard
-	gshard       TGShard
-	gshardLocker sync.Mutex
-	// TODO gshard pool? concurency ring buffer
+	id     string
+	shard  TShard
+	gshard TGShard
 }
 
 // NewHead init new [Head].
@@ -45,10 +44,9 @@ func NewHead[TShard Shard, TGShard Shard](
 	gshard TGShard,
 ) *Head[TShard, TGShard] {
 	h := &Head[TShard, TGShard]{
-		id:           id,
-		shard:        shard,
-		gshard:       gshard,
-		gshardLocker: sync.Mutex{},
+		id:     id,
+		shard:  shard,
+		gshard: gshard,
 	}
 
 	runtime.SetFinalizer(h, func(h *Head[TShard, TGShard]) {
@@ -70,22 +68,18 @@ func (h *Head[TShard, TGShard]) CreateTask(taskName string, shardFn func(shard T
 	return task.NewTransactionGeneric(shardFn)
 }
 
-// Enqueue the task to be executed on shards [Head].
+// Enqueue the task to be executed on shards [Head]. Method are goroutine-unsafe.
 func (h *Head[TShard, TGShard]) Enqueue(t *task.Generic[TGShard]) {
 	t.SetShardsNumber(1)
 
-	h.gshardLocker.Lock()
 	t.ExecuteOnShard(h.gshard)
-	h.gshardLocker.Unlock()
 }
 
-// EnqueueOnShard the task to be executed on head on specific shard.
+// EnqueueOnShard the task to be executed on head on specific shard. Method are goroutine-unsafe.
 func (h *Head[TShard, TGShard]) EnqueueOnShard(t *task.Generic[TGShard], _ uint16) {
 	t.SetShardsNumber(1)
 
-	h.gshardLocker.Lock()
 	t.ExecuteOnShard(h.gshard)
-	h.gshardLocker.Unlock()
 }
 
 // Generation returns current generation of [Head].

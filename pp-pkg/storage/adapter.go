@@ -205,13 +205,15 @@ func (ar *Adapter) Appender(ctx context.Context) storage.Appender {
 	return newTimeSeriesAppender(ctx, ar, ar.transparentState)
 }
 
-// BatchAppender creates a new [storage.BatchAppender] for appending time series data to [TransactionHead].
-func (ar *Adapter) BatchAppender(ctx context.Context) storage.BatchAppender {
-	return NewBatchAppender(
+// BatchStorage creates a new [storage.BatchStorage] for appending time series data to [TransactionHead]
+// and reading appended series data.
+func (ar *Adapter) BatchStorage(ctx context.Context) storage.BatchStorage {
+	return NewBatchStorage(
 		ar.hashdexFactory,
 		ar.hashdexLimits,
 		ar.builder.BuildTransactionHead(),
 		ar.transparentState,
+		ar,
 	)
 }
 
@@ -292,6 +294,7 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 			continue
 		}
 
+		// TODO lock
 		timeInterval := headTimeInterval(head)
 		if !timeInterval.IsInvalid() && mint > timeInterval.MaxT {
 			continue

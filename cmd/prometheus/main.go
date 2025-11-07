@@ -957,9 +957,14 @@ func main() {
 
 		ruleQueryOffset := time.Duration(cfgFile.GlobalConfig.RuleQueryOffset)
 		ruleManager = rules.NewManager(&rules.ManagerOptions{
-			Appendable:             adapter, // PP_CHANGES.md: rebuild on cpp
-			Queryable:              adapter, // PP_CHANGES.md: rebuild on cpp
-			BatchAppendable:        adapter, // PP_CHANGES.md: rebuild on cpp
+			Appendable: adapter, // PP_CHANGES.md: rebuild on cpp
+			Queryable:  adapter, // PP_CHANGES.md: rebuild on cpp
+
+			Engine:          queryEngine,           // PP_CHANGES.md: rebuild on cpp
+			FanoutQueryable: fanoutStorage,         // PP_CHANGES.md: rebuild on cpp
+			EngineQueryCtor: rules.EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
+			Batcher:         adapter,               // PP_CHANGES.md: rebuild on cpp
+
 			QueryFunc:              rules.EngineQueryFunc(queryEngine, fanoutStorage),
 			NotifyFunc:             rules.SendAlerts(notifierManager, cfg.web.ExternalURL.String()),
 			Context:                ctxRule,
