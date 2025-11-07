@@ -38,6 +38,8 @@ void prompp_dump_memory_profile(void* args, void* res);
 #define Sizeof_BareBonesVector 16
 #define Sizeof_RoaringBitset 40
 #define Sizeof_InnerSeries (Sizeof_SizeT + Sizeof_BareBonesVector + Sizeof_RoaringBitset)
+
+#define Sizeof_SerializedDataIterator 192
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -1584,60 +1586,6 @@ void prompp_series_data_data_storage_loader_dtor(void* args);
 extern "C" {
 #endif
 
-void prompp_series_data_decode_iterator_next(void* args, void* res);
-void prompp_series_data_decode_iterator_sample(void* args, void* res);
-void prompp_series_data_decode_iterator_dtor(void* args);
-
-#ifdef __cplusplus
-}  // extern "C"
-#endif
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/**
- * @brief series data Deserializer constructor.
- *
- * @param args {
- *     serializedChunks []byte // serialized chunks data.
- * }
- *
- * @param res {
- *     deserializer uintptr // pointer to constructed deserializer.
- * }
- */
-void prompp_series_data_deserializer_ctor(void* args, void* res);
-
-/**
- * @brief creates decode iterator for chunk.
- *
- * @param args {
- *     deserializer  uintptr // deserializer.
-       chunkMetadata []byte  // chunk metadata.
- * }
- *
- * @param res {
- *     decodeIterator uintptr // pointer to constructed encoder
- * }
- */
-void prompp_series_data_deserializer_create_decode_iterator(void* args, void* res);
-
-/**
- * @brief series data Deserializer destructor.
- *
- * @param args {
- *     deserializer uintptr // pointer to constructed deserializer
- * }
- */
-void prompp_series_data_deserializer_dtor(void* args);
-
-#ifdef __cplusplus
-}  // extern "C"
-#endif
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /**
  * @brief series data Encoder constructor.
  *
@@ -1720,11 +1668,8 @@ void prompp_series_data_serialization_serialized_data_next(void* args, void* res
  *     chunk_ref uint32 // inner chunk id.
  * }
  *
- * @param res {
- *     iterator uintptr // pointer to constructed decode iterator.
- * }
  */
-void prompp_series_data_serialization_serialized_data_iterator_ctor(void* args, void* res);
+void prompp_series_data_serialization_serialized_data_iterator_ctor(void* args);
 
 /**
  * @brief Advance decode iterator.
@@ -1733,13 +1678,8 @@ void prompp_series_data_serialization_serialized_data_iterator_ctor(void* args, 
  *     iterator uintptr // pointer to decode iterator
  * }
  *
- * @param res {
- *     has_data bool    // is iterator has more data to decode.
- *     timestamp int64 // sample timestamp
- *     value float64   // sample value
- * }
  */
-void prompp_series_data_serialization_serialized_data_iterator_next(void* args, void* res);
+void prompp_series_data_serialization_serialized_data_iterator_next(void* args);
 
 /**
  * @brief Advance decode iterator until referenced sample is gte targetTimestamp.
@@ -1749,13 +1689,8 @@ void prompp_series_data_serialization_serialized_data_iterator_next(void* args, 
  *     targetTimestamp int64 // target timestamp
  * }
  *
- * @param res {
- *     hasData bool    // is iterator has more data to decode.
- *     timestamp int64 // sample timestamp
- *     value float64   // sample value
- * }
  */
-void prompp_series_data_serialization_serialized_data_iterator_seek(void* args, void* res);
+void prompp_series_data_serialization_serialized_data_iterator_seek(void* args);
 
 /**
  * @brief Reset a decode iterator for corresponding chunk_ref.
@@ -1768,16 +1703,6 @@ void prompp_series_data_serialization_serialized_data_iterator_seek(void* args, 
  *
  */
 void prompp_series_data_serialization_serialized_data_iterator_reset(void* args);
-
-/**
- * @brief Destroy decode iterator.
- *
- * @param args {
- *     iterator uintptr // pointer to decode iterator
- * }
- *
- */
-void prompp_series_data_serialization_serialized_data_iterator_dtor(void* args);
 
 /**
  * @brief Destroy serialized data object.

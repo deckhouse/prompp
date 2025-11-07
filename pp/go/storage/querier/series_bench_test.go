@@ -86,8 +86,8 @@ func BenchmarkSeriesSetOpt(b *testing.B) {
 		seriesSets = append(seriesSets, queryOpt(b, lss, ds, start, end, matcher))
 	}
 
+	b.ReportAllocs()
 	b.ResetTimer()
-	//b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		iterateSeriesSet(seriesSets[i])
 	}
@@ -137,17 +137,15 @@ func BenchmarkInstantSeriesSet(b *testing.B) {
 	timestamps := []int64{0, 1, 2}
 	valueNotFoundTimestampValue := timestamps[0] - 1
 	prepareInstantData(lss, ds, timestamps, size)
-	b.ResetTimer()
-	b.ReportAllocs()
-	var samplesSet [][]cppbridge.Sample
+
+	seriesSets := make([]*querier.InstantSeriesSet, 0, b.N)
 	for i := 0; i < b.N; i++ {
-		seriesSet := instantQuery(b, lss, ds, timestamps[1], valueNotFoundTimestampValue, matcher)
-		samples := make([]cppbridge.Sample, 0, size)
-		b.StartTimer()
-		iterateSeriesSet(seriesSet)
-		b.StopTimer()
-		samplesSet = append(samplesSet, samples)
+		seriesSets = append(seriesSets, instantQuery(b, lss, ds, timestamps[1], valueNotFoundTimestampValue, matcher))
 	}
 
-	runtime.KeepAlive(samplesSet)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		iterateSeriesSet(seriesSets[i])
+	}
 }
