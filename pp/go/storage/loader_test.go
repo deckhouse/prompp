@@ -406,7 +406,15 @@ func (s *HeadLoadSuite) TestInvalidEncoderVersion() {
 	require.NoError(s.T(), head.Close())
 }
 
-func (s *HeadLoadSuite) TestEnsureSameErrorTypesNoErrors() {
+type EnsureSameErrorTypesTestSuite struct {
+	suite.Suite
+}
+
+func TestEnsureSameErrorTypesTestSuite(t *testing.T) {
+	suite.Run(t, new(EnsureSameErrorTypesTestSuite))
+}
+
+func (s *EnsureSameErrorTypesTestSuite) TestEnsureSameErrorTypesNoErrors() {
 	// Arrange
 	targetErr := errors.New("target error")
 	var errs []error
@@ -418,7 +426,7 @@ func (s *HeadLoadSuite) TestEnsureSameErrorTypesNoErrors() {
 	require.Nil(s.T(), err)
 }
 
-func (s *HeadLoadSuite) TestEnsureSameErrorTypesSingleNonTargetError() {
+func (s *EnsureSameErrorTypesTestSuite) TestEnsureSameErrorTypesSingleNonTargetError() {
 	// Arrange
 	targetErr := errors.New("target error")
 	anotherErr := errors.New("another error")
@@ -433,7 +441,7 @@ func (s *HeadLoadSuite) TestEnsureSameErrorTypesSingleNonTargetError() {
 	require.NotErrorIs(s.T(), err, targetErr)
 }
 
-func (s *HeadLoadSuite) TestEnsureSameErrorTypesAllErrorsOfTargetType() {
+func (s *EnsureSameErrorTypesTestSuite) TestEnsureSameErrorTypesAllErrorsOfTargetType() {
 	// Arrange
 	targetErr := errors.New("target error")
 	errs := []error{fmt.Errorf("err1: %w", targetErr), fmt.Errorf("err2: %w", targetErr)}
@@ -446,7 +454,7 @@ func (s *HeadLoadSuite) TestEnsureSameErrorTypesAllErrorsOfTargetType() {
 	require.ErrorIs(s.T(), err, targetErr)
 }
 
-func (s *HeadLoadSuite) TestEnsureSameErrorTypesNotAllErrorsOfTargetType() {
+func (s *EnsureSameErrorTypesTestSuite) TestEnsureSameErrorTypesNotAllErrorsOfTargetType() {
 	// Arrange
 	targetErr := errors.New("target error")
 	anotherErr := errors.New("another error")

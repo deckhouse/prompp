@@ -174,7 +174,7 @@ func EnsureSameErrorTypes(errs []error, targetErr error) error {
 		return nonTargetErrs
 	}
 
-	return errors.Join(targetErrs, nonTargetErrs)
+	return targetErrs
 }
 
 // Load [Head] from [Wal] by head ID.
