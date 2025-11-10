@@ -67,8 +67,10 @@ func newTimeSeriesAppender(
 		ctx:      ctx,
 		appender: appender,
 		state:    state,
-		batch:    &timeSeriesBatch{timeSeries: make([]model.TimeSeries, 0, 10)},
-		lsb:      model.NewLabelSetBuilderSize(10),
+		//revive:disable-next-line:add-constant // there are usually 10 rules on average.
+		batch: &timeSeriesBatch{timeSeries: make([]model.TimeSeries, 0, 10)},
+		//revive:disable-next-line:add-constant // there are usually 10 labels on average.
+		lsb: model.NewLabelSetBuilderSize(10),
 	}
 }
 

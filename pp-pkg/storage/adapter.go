@@ -207,7 +207,7 @@ func (ar *Adapter) Appender(ctx context.Context) storage.Appender {
 
 // BatchStorage creates a new [storage.BatchStorage] for appending time series data to [TransactionHead]
 // and reading appended series data.
-func (ar *Adapter) BatchStorage(ctx context.Context) storage.BatchStorage {
+func (ar *Adapter) BatchStorage() storage.BatchStorage {
 	return NewBatchStorage(
 		ar.hashdexFactory,
 		ar.hashdexLimits,

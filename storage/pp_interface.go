@@ -11,7 +11,7 @@ import (
 // Batcher provides [BatchStorage] for transaction append and read operations.
 type Batcher interface {
 	// BatchStorage creates a new [BatchStorage] for transaction append and read operations.
-	BatchStorage(ctx context.Context) BatchStorage
+	BatchStorage() BatchStorage
 }
 
 //

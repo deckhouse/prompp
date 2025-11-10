@@ -246,7 +246,7 @@ func (g *Group) run(ctx context.Context) {
 			select {
 			case <-g.managerDone:
 			case <-time.After(2 * g.interval):
-				bs := g.opts.Batcher.BatchStorage(ctx)
+				bs := g.opts.Batcher.BatchStorage()
 
 				if err := g.cleanupStaleSeries(ctx, now, bs); err != nil {
 					level.Error(g.logger).Log("msg", "Failed to cleanup stale series", "err", err)
@@ -492,7 +492,7 @@ func (g *Group) CopyState(from *Group) {
 func (g *Group) Eval(ctx context.Context, ts time.Time) {
 	var (
 		samplesTotal float64
-		bs           = g.opts.Batcher.BatchStorage(ctx)
+		bs           = g.opts.Batcher.BatchStorage()
 	)
 
 	if g.concurrencyController.IsConcurrent() {
