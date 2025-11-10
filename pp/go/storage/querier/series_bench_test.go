@@ -2,6 +2,8 @@ package querier_test
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -11,8 +13,6 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/stretchr/testify/require"
-	"runtime"
-	"testing"
 )
 
 func iterateSeriesSet(seriesSet storage.SeriesSet) {
@@ -80,19 +80,17 @@ func BenchmarkSeriesSetOpt(b *testing.B) {
 	lss := shard.NewLSS()
 	ds := shard.NewDataStorage()
 	prepareData(lss, ds, size)
-	b.ResetTimer()
-	b.ReportAllocs()
-	var samplesSet [][]cppbridge.Sample
+
+	seriesSets := make([]*querier.SeriesSet, 0, b.N)
 	for i := 0; i < b.N; i++ {
-		seriesSet := queryOpt(b, lss, ds, start, end, matcher)
-		samples := make([]cppbridge.Sample, 0, size)
-		b.StartTimer()
-		iterateSeriesSet(seriesSet)
-		b.StopTimer()
-		samplesSet = append(samplesSet, samples)
+		seriesSets = append(seriesSets, queryOpt(b, lss, ds, start, end, matcher))
 	}
 
-	runtime.KeepAlive(samplesSet)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		iterateSeriesSet(seriesSets[i])
+	}
 }
 
 func prepareData(lss *shard.LSS, ds *shard.DataStorage, size int) {
@@ -139,17 +137,15 @@ func BenchmarkInstantSeriesSet(b *testing.B) {
 	timestamps := []int64{0, 1, 2}
 	valueNotFoundTimestampValue := timestamps[0] - 1
 	prepareInstantData(lss, ds, timestamps, size)
-	b.ResetTimer()
-	b.ReportAllocs()
-	var samplesSet [][]cppbridge.Sample
+
+	seriesSets := make([]*querier.InstantSeriesSet, 0, b.N)
 	for i := 0; i < b.N; i++ {
-		seriesSet := instantQuery(b, lss, ds, timestamps[1], valueNotFoundTimestampValue, matcher)
-		samples := make([]cppbridge.Sample, 0, size)
-		b.StartTimer()
-		iterateSeriesSet(seriesSet)
-		b.StopTimer()
-		samplesSet = append(samplesSet, samples)
+		seriesSets = append(seriesSets, instantQuery(b, lss, ds, timestamps[1], valueNotFoundTimestampValue, matcher))
 	}
 
-	runtime.KeepAlive(samplesSet)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		iterateSeriesSet(seriesSets[i])
+	}
 }
