@@ -2,20 +2,20 @@ package storagetest
 
 import (
 	"context"
-	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"math"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
-
+	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/appender"
+	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	promstorage "github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/stretchr/testify/suite"
