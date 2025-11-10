@@ -220,7 +220,7 @@ func (s *SeriesSet) Next() bool {
 	s.series = append(s.series, NewSeries(
 		s.mint,
 		s.maxt,
-		labels.NewLabelsWithLSS(s.labelSetSnapshot, seriesID, lsLength),
+		cppbridge.NewLabelsWithLSS(s.labelSetSnapshot, seriesID, lsLength),
 		s.serializedData,
 		chunkRef,
 	))
@@ -295,7 +295,7 @@ func (ss *InstantSeriesSet) Next() bool {
 
 	lsID, lsLength := ss.lssQueryResult.GetByIndex(ss.nextSampleIndex)
 	ss.series = append(ss.series, InstantSeries{
-		labelSet: labels.NewLabelsWithLSS(
+		labelSet: cppbridge.NewLabelsWithLSS(
 			ss.labelSetSnapshot,
 			lsID,
 			lsLength,

@@ -61,7 +61,7 @@ func (ss *InstantSeriesSet) Next() bool {
 	}
 
 	lsID, lsLength := ss.lssQueryResult.GetByIndex(ss.nextSeriesIndex)
-	ss.series[ss.nextSeriesIndex].LabelSet = labels.NewLabelsWithLSS(
+	ss.series[ss.nextSeriesIndex].LabelSet = NewLabelsWithLSS(
 		ss.labelSetSnapshot,
 		lsID,
 		lsLength,

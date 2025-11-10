@@ -1,21 +1,21 @@
 //go:build !stringlabels && !dedupelabels && !cpplabels
 
-package labels
+package cppbridge
 
 import (
 	"strings"
 
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/model/labels"
 )
 
 // NewLabelsWithLSS init LabelsCpp with LabelSetSnapshot and ls id.
-func NewLabelsWithLSS(lss *cppbridge.LabelSetSnapshot, id uint32, length uint16) Labels {
+func NewLabelsWithLSS(lss *LabelSetSnapshot, id uint32, length uint16) labels.Labels {
 	if lss == nil {
-		return EmptyLabels()
+		return labels.EmptyLabels()
 	}
 
-	builder := NewScratchBuilder(int(length))
-	_ = lss.RangeLabelSet(id, func(l cppbridge.Label) error {
+	builder := labels.NewScratchBuilder(int(length))
+	_ = lss.RangeLabelSet(id, func(l Label) error {
 		// copy string from cpp memory
 		builder.Add(strings.Clone(l.Name), strings.Clone(l.Value))
 

@@ -34,6 +34,10 @@ type (
 	CppRoaringBitset   = [C.Sizeof_RoaringBitset]byte
 )
 
+const (
+	GoLabelsSize = C.Sizeof_GoLabels
+)
+
 var (
 
 	// per_goroutine_relabeler input_relabeling

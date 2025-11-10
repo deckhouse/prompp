@@ -92,7 +92,7 @@ func (css *ChunkSeriesSet) Next() bool {
 	}
 
 	css.chunkSeries = &ChunkSeries{
-		labelSet:      labels.NewLabelsWithLSS(css.labelSetSnapshot, lsID, lsLength),
+		labelSet:      cppbridge.NewLabelsWithLSS(css.labelSetSnapshot, lsID, lsLength),
 		recodedChunks: recodedChunks,
 	}
 
