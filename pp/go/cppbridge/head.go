@@ -167,7 +167,7 @@ func (e *HeadEncoder) Encode(seriesID uint32, timestamp int64, value float64) {
 }
 
 // EncodeInnerSeriesSlice - encodes InnerSeries slice produced by relabeler.
-func (e *HeadEncoder) EncodeInnerSeriesSlice(innerSeriesSlice []*InnerSeries) {
+func (e *HeadEncoder) EncodeInnerSeriesSlice(innerSeriesSlice []InnerSeries) {
 	seriesDataEncoderEncodeInnerSeriesSlice(e.encoder, innerSeriesSlice)
 }
 
@@ -363,8 +363,12 @@ func NewDataStorageSerializedDataIterator(serializedData *DataStorageSerializedD
 	return DataStorageSerializedDataIterator{iterator: seriesDataSerializedDataIteratorCtor(serializedData.serializedData, chunkRef)}
 }
 
-func (it DataStorageSerializedDataIterator) Next(result *SerializedDataIteratorNextResult) {
+func (it DataStorageSerializedDataIterator) Next(result *SerializedDataIteratorIterationResult) {
 	seriesDataSerializedDataIteratorNext(it.iterator, result)
+}
+
+func (it DataStorageSerializedDataIterator) Seek(timestamp int64, result *SerializedDataIteratorIterationResult) {
+	seriesDataSerializedDataIteratorSeek(it.iterator, timestamp, result)
 }
 
 func (it DataStorageSerializedDataIterator) Reset(serializedData *DataStorageSerializedData, chunkRef uint32) {

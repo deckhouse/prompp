@@ -6,6 +6,6 @@ cc_binary(
     malloc = "@jemalloc",
     deps = [
         "//:series_index",
-        "@google_benchmark//:benchmark_main",
+        "//:benchmark",
     ],
 )

@@ -226,7 +226,7 @@ func (mock *SegmentWriterMock[TSegment]) WriteCalls() []struct {
 //
 //		// make and configure a mocked wal.Encoder
 //		mockedEncoder := &EncoderMock{
-//			EncodeFunc: func(innerSeriesSlice []*cppbridge.InnerSeries) (uint32, error) {
+//			EncodeFunc: func(innerSeriesSlice []cppbridge.InnerSeries) (uint32, error) {
 //				panic("mock out the Encode method")
 //			},
 //			FinalizeFunc: func() (TSegment, error) {
@@ -240,7 +240,7 @@ func (mock *SegmentWriterMock[TSegment]) WriteCalls() []struct {
 //	}
 type EncoderMock[TSegment wal.EncodedSegment] struct {
 	// EncodeFunc mocks the Encode method.
-	EncodeFunc func(innerSeriesSlice []*cppbridge.InnerSeries) (uint32, error)
+	EncodeFunc func(innerSeriesSlice []cppbridge.InnerSeries) (uint32, error)
 
 	// FinalizeFunc mocks the Finalize method.
 	FinalizeFunc func() (TSegment, error)
@@ -250,7 +250,7 @@ type EncoderMock[TSegment wal.EncodedSegment] struct {
 		// Encode holds details about calls to the Encode method.
 		Encode []struct {
 			// InnerSeriesSlice is the innerSeriesSlice argument value.
-			InnerSeriesSlice []*cppbridge.InnerSeries
+			InnerSeriesSlice []cppbridge.InnerSeries
 		}
 		// Finalize holds details about calls to the Finalize method.
 		Finalize []struct {
@@ -261,12 +261,12 @@ type EncoderMock[TSegment wal.EncodedSegment] struct {
 }
 
 // Encode calls EncodeFunc.
-func (mock *EncoderMock[TSegment]) Encode(innerSeriesSlice []*cppbridge.InnerSeries) (uint32, error) {
+func (mock *EncoderMock[TSegment]) Encode(innerSeriesSlice []cppbridge.InnerSeries) (uint32, error) {
 	if mock.EncodeFunc == nil {
 		panic("EncoderMock.EncodeFunc: method is nil but Encoder.Encode was just called")
 	}
 	callInfo := struct {
-		InnerSeriesSlice []*cppbridge.InnerSeries
+		InnerSeriesSlice []cppbridge.InnerSeries
 	}{
 		InnerSeriesSlice: innerSeriesSlice,
 	}
@@ -281,10 +281,10 @@ func (mock *EncoderMock[TSegment]) Encode(innerSeriesSlice []*cppbridge.InnerSer
 //
 //	len(mockedEncoder.EncodeCalls())
 func (mock *EncoderMock[TSegment]) EncodeCalls() []struct {
-	InnerSeriesSlice []*cppbridge.InnerSeries
+	InnerSeriesSlice []cppbridge.InnerSeries
 } {
 	var calls []struct {
-		InnerSeriesSlice []*cppbridge.InnerSeries
+		InnerSeriesSlice []cppbridge.InnerSeries
 	}
 	mock.lockEncode.RLock()
 	calls = mock.calls.Encode

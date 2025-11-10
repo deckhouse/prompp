@@ -70,7 +70,7 @@ extern "C" void prompp_head_wal_encoder_dtor(void* args) {
 
 extern "C" void prompp_head_wal_encoder_add_inner_series(void* args, void* res) {
   struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> incoming_inner_series;
+    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries> incoming_inner_series;
     EncoderPtr encoder;
   };
 

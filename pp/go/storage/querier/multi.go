@@ -59,7 +59,8 @@ func (q *MultiQuerier) LabelNames(
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	if len(q.queriers) == 1 {
-		return q.queriers[0].LabelNames(ctx, hints, matchers...)
+		labelNames, anns, err := q.queriers[0].LabelNames(ctx, hints, matchers...)
+		return DeduplicateAndSortStringSlices(labelNames), anns, err
 	}
 
 	labelNamesResults := make([][]string, len(q.queriers))
@@ -96,7 +97,8 @@ func (q *MultiQuerier) LabelValues(
 	matchers ...*labels.Matcher,
 ) ([]string, annotations.Annotations, error) {
 	if len(q.queriers) == 1 {
-		return q.queriers[0].LabelValues(ctx, name, hints, matchers...)
+		labelValues, anns, err := q.queriers[0].LabelValues(ctx, name, hints, matchers...)
+		return DeduplicateAndSortStringSlices(labelValues), anns, err
 	}
 
 	labelValuesResults := make([][]string, len(q.queriers))
@@ -120,6 +122,7 @@ func (q *MultiQuerier) LabelValues(
 	wg.Wait()
 
 	labelValues := DeduplicateAndSortStringSlices(labelValuesResults...)
+
 	return labelValues, nil, errors.Join(errs...)
 }
 

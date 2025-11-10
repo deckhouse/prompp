@@ -4,6 +4,7 @@
 #include <ranges>
 
 #include "bare_bones/stream_v_byte.h"
+#include "profiling/profiling.h"
 
 namespace {
 
@@ -23,6 +24,7 @@ uint32_t values_count() {
 
 template <template <class, size_t> class Sequence>
 void BenchmarkSequencePushBack(benchmark::State& state) {
+  ZoneScoped;
   const auto kValuesCount = values_count();
 
   for ([[maybe_unused]] auto _ : state) {
@@ -43,6 +45,7 @@ void BenchmarkSequencePushBack(benchmark::State& state) {
 
 template <template <class, size_t> class Sequence>
 void BenchmarkSequenceDecode(benchmark::State& state) {
+  ZoneScoped;
   const auto kValuesCount = values_count();
 
   Sequence<BareBones::StreamVByte::Codec0124, 8> sequence;

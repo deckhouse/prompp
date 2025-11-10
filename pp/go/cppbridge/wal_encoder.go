@@ -198,7 +198,7 @@ func (e *WALEncoder) Add(ctx context.Context, shardedData ShardedData) (SegmentS
 }
 
 // AddInnerSeries - add to encode incoming data(relabeling and cached) through C++ encoder.
-func (e *WALEncoder) AddInnerSeries(ctx context.Context, innerSeries []*InnerSeries) (SegmentStats, error) {
+func (e *WALEncoder) AddInnerSeries(ctx context.Context, innerSeries []InnerSeries) (SegmentStats, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -331,7 +331,7 @@ func (e *WALEncoderLightweight) Add(ctx context.Context, shardedData ShardedData
 }
 
 // AddInnerSeries - add to encode incoming data(relabeling and cached) through C++ encoder.
-func (e *WALEncoderLightweight) AddInnerSeries(ctx context.Context, innerSeries []*InnerSeries) (SegmentStats, error) {
+func (e *WALEncoderLightweight) AddInnerSeries(ctx context.Context, innerSeries []InnerSeries) (SegmentStats, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}

@@ -8,6 +8,7 @@
 
 #include "bare_bones/preprocess.h"
 #include "primitives/go_slice.h"
+#include "profiling/profiling.h"
 #include "series_data/encoder.h"
 #include "series_data/querier/query.h"
 #include "series_data/serialization/serialized_data.h"
@@ -64,6 +65,7 @@ series_data::querier::QueriedChunkList generate_query(uint32_t size) {
 }
 
 void BenchmarkWalSerializer(benchmark::State& state) {
+  ZoneScoped;
   const auto& samples = get_samples_for_benchmark();
   const double percent = static_cast<double>(state.range(0)) / 100.0;
   const auto [min, max] = std::ranges::minmax_element(samples, [](auto a, auto b) { return a.timestamp < b.timestamp; });
@@ -102,6 +104,7 @@ void BenchmarkWalSerializer(benchmark::State& state) {
 }
 
 void BenchmarkWalConstantSerializer(benchmark::State& state) {
+  ZoneScoped;
   const auto& samples = get_samples_for_benchmark();
   const double percent = static_cast<double>(state.range(0)) / 100.0;
   const auto [min, max] = std::ranges::minmax_element(samples, [](auto a, auto b) { return a.timestamp < b.timestamp; });
@@ -140,6 +143,7 @@ void BenchmarkWalConstantSerializer(benchmark::State& state) {
 }
 
 void BenchmarkWalSerializedData(benchmark::State& state) {
+  ZoneScoped;
   const auto& samples = get_samples_for_benchmark();
   const double percent = static_cast<double>(state.range(0)) / 100.0;
   const auto [min, max] = std::ranges::minmax_element(samples, [](auto a, auto b) { return a.timestamp < b.timestamp; });
@@ -170,6 +174,7 @@ void BenchmarkWalSerializedData(benchmark::State& state) {
 }
 
 void BenchmarkWalConstantSerializedData(benchmark::State& state) {
+  ZoneScoped;
   const auto& samples = get_samples_for_benchmark();
   const double percent = static_cast<double>(state.range(0)) / 100.0;
   const auto [min, max] = std::ranges::minmax_element(samples, [](auto a, auto b) { return a.timestamp < b.timestamp; });

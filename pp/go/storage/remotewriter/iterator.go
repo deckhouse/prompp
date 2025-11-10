@@ -201,7 +201,6 @@ func (i *Iterator) Next(ctx context.Context) error {
 	}
 
 	startTime := i.clock.Now()
-	var deadlineReached bool
 	var delay time.Duration
 	numberOfShards := i.outputSharder.NumberOfShards()
 	i.metrics.numShards.Set(float64(numberOfShards))
@@ -214,7 +213,6 @@ readLoop:
 		case <-ctx.Done():
 			return i.wrapError(ctx.Err())
 		case <-deadline:
-			deadlineReached = true
 			break readLoop
 		case <-i.clock.After(delay):
 		}
@@ -262,14 +260,11 @@ readLoop:
 
 	i.metrics.addSeriesTotal.Add(float64(b.AddSeriesCount()))
 
-	var desiredNumberOfShards float64
-	if deadlineReached {
-		desiredNumberOfShards = math.Ceil(
-			float64(b.NumberOfSamples()) / float64(b.MaxNumberOfSamplesPerShard()) * float64(numberOfShards),
-		)
-	} else {
-		desiredNumberOfShards = math.Ceil(float64(i.scrapeInterval) / float64(readDuration) * float64(numberOfShards))
-	}
+	// Ideal number of shards is when batch contains all samples from scrape interval
+	// so we can predict number of samples per scrape interval as
+	// scrapeInterval / readDuration * numberOfSamplesInBatch
+	// next step is to divide it by max samples per shard to get desired number of shards.
+	desiredNumberOfShards := float64(i.scrapeInterval) / float64(readDuration) * float64(b.NumberOfSamples()) / float64(b.MaxNumberOfSamplesPerShard())
 
 	bestNumberOfShards := i.outputSharder.BestNumberOfShards(
 		float64(b.NumberOfSamples()) / float64(b.MaxNumberOfSamplesPerShard()),
