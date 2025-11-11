@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"os"
 	"path/filepath"
 	"time"
@@ -97,7 +98,7 @@ func (cmd *cmdWALPPToBlock) Do(
 		level.Debug(logger).Log("msg", "load head", "id", headRecord.ID(), "dir", headRecord.Dir())
 		var h *storage.Head
 		h, err = loader.LoadReadOnly(headRecord, 0)
-		if err != nil && !errors.Is(err, storage.ErrInvalidEncoderVersion) {
+		if err != nil && !errors.Is(err, cppbridge.ErrInvalidEncoderVersion) {
 			level.Warn(logger).Log("msg", "corrupted head", "id", headRecord.ID(), "dir", headRecord.Dir())
 		}
 
