@@ -1,6 +1,7 @@
 package shard
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -58,6 +59,20 @@ func (ds *DataStorage) InstantQuery(
 	ds.locker.RUnlock()
 
 	return samples, res
+}
+
+// InstantQueryV2 make instant query to data storage and fills samples in instant series.
+func (ds *DataStorage) InstantQueryV2(
+	targetTimestamp int64,
+	ids []uint32,
+	instantSeries any,
+) cppbridge.DataStorageQueryResult {
+	ds.locker.RLock()
+	res := ds.dataStorage.InstantQueryV2(targetTimestamp, ids, instantSeries)
+	fmt.Println("instant query v2 done")
+	ds.locker.RUnlock()
+
+	return res
 }
 
 func (ds *DataStorage) Encode(seriesID uint32, timestamp int64, value float64) {

@@ -1,7 +1,6 @@
 package cppbridge
 
 import (
-	"github.com/prometheus/prometheus/model/labels"
 	"runtime"
 )
 
@@ -120,14 +119,10 @@ func (ds *DataStorage) InstantQuery(targetTimestamp, defaultTimestamp int64, lab
 	return samples, seriesDataDataStorageInstantQuery(ds.dataStorage, labelSetIDs, targetTimestamp, samples)
 }
 
-func (ds *DataStorage) InstantQueryV2(targetTimestamp, defaultTimestamp int64, labelSetIDs []uint32) ([]InstantSeries, DataStorageQueryResult) {
-	series := make([]InstantSeries, len(labelSetIDs))
-	if defaultTimestamp != 0 {
-		for index := range series {
-			series[index].Timestamp = defaultTimestamp
-		}
-	}
-	return series, seriesDataDataStorageInstantQueryV2(ds.dataStorage, labelSetIDs, targetTimestamp, series, labels.LabelsStructSize)
+// InstantQueryV2 .
+// this is Deprecated: InstantQueryV2 .
+func (ds *DataStorage) InstantQueryV2(targetTimestamp int64, labelSetIDs []uint32, instantSeries any) DataStorageQueryResult {
+	return seriesDataDataStorageInstantQueryV2(ds.dataStorage, labelSetIDs, targetTimestamp, instantSeries)
 }
 
 func (ds *DataStorage) QueryFinal(queriers []uintptr) {

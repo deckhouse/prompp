@@ -1,8 +1,10 @@
-package cppbridge
+package querier
 
 import (
+	"fmt"
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/util/annotations"
@@ -14,31 +16,31 @@ import (
 
 // InstantSeriesSet contains a instatnt set of series, allows to iterate over sorted, populated series.
 type InstantSeriesSet struct {
-	lssQueryResult              *LSSQueryResult
-	labelSetSnapshot            *LabelSetSnapshot
+	lssQueryResult              *cppbridge.LSSQueryResult
+	labelSetSnapshot            *cppbridge.LabelSetSnapshot
 	valueNotFoundTimestampValue int64
 	nextSeriesIndex             int
-	series                      []InstantSeries
+	instantSeries               []InstantSeries
 }
 
 // NewInstantSeriesSet init new [InstantSeriesSet].
 func NewInstantSeriesSet(
-	lssQueryResult *LSSQueryResult,
-	labelSetSnapshot *LabelSetSnapshot,
+	lssQueryResult *cppbridge.LSSQueryResult,
+	labelSetSnapshot *cppbridge.LabelSetSnapshot,
 	valueNotFoundTimestampValue int64,
-	samples []InstantSeries,
+	instantSeries []InstantSeries,
 ) *InstantSeriesSet {
 	return &InstantSeriesSet{
 		lssQueryResult:              lssQueryResult,
 		labelSetSnapshot:            labelSetSnapshot,
 		valueNotFoundTimestampValue: valueNotFoundTimestampValue,
-		series:                      make([]InstantSeries, 0, len(samples)),
+		instantSeries:               instantSeries,
 	}
 }
 
 // At returns full series. Returned series should be iterable even after Next is called.
 func (ss *InstantSeriesSet) At() storage.Series {
-	return &ss.series[ss.nextSeriesIndex-1]
+	return &ss.instantSeries[ss.nextSeriesIndex-1]
 }
 
 // Err the error that iteration as failed with.
@@ -48,20 +50,23 @@ func (*InstantSeriesSet) Err() error {
 
 // Next return true if exist there is a next series and false otherwise.
 func (ss *InstantSeriesSet) Next() bool {
+	fmt.Println("next", ss.nextSeriesIndex, ss.instantSeries)
 	for {
-		if ss.nextSeriesIndex >= len(ss.series) {
+		if ss.nextSeriesIndex >= len(ss.instantSeries) {
 			return false
 		}
 
-		if ss.series[ss.nextSeriesIndex].Timestamp != ss.valueNotFoundTimestampValue {
+		if ss.instantSeries[ss.nextSeriesIndex].Timestamp != ss.valueNotFoundTimestampValue {
 			break
 		}
 
 		ss.nextSeriesIndex++
 	}
 
+	fmt.Println("next after slip", ss.nextSeriesIndex)
+
 	lsID, lsLength := ss.lssQueryResult.GetByIndex(ss.nextSeriesIndex)
-	ss.series[ss.nextSeriesIndex].LabelSet = NewLabelsWithLSS(
+	ss.instantSeries[ss.nextSeriesIndex].LabelSet = labels.NewLabelsWithLSS(
 		ss.labelSetSnapshot,
 		lsID,
 		lsLength,

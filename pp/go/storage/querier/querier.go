@@ -4,13 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
-	"time"
-
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/annotations"
+	"sort"
+	"time"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
@@ -144,7 +143,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	matchers ...*labels.Matcher,
 ) storage.SeriesSet {
 	if q.mint == q.maxt {
-		return q.selectInstant(ctx, sortSeries, hints, matchers...)
+		return q.selectInstantV2(ctx, sortSeries, hints, matchers...)
 	}
 	return q.selectRange(ctx, sortSeries, hints, matchers...)
 }
@@ -191,6 +190,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	}
 
 	numberOfShards := q.head.NumberOfShards()
+	fmt.Println("number of shards", numberOfShards)
 	seriesSets := make([]storage.SeriesSet, numberOfShards)
 	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead](q.head)
 	tDataStorageQuery := q.head.CreateTask(
@@ -199,7 +199,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 			shardID := s.ShardID()
 			lssQueryResult := lssQueryResults[shardID]
 			if lssQueryResult == nil {
-				seriesSets[shardID] = &SeriesSet{}
+				seriesSets[shardID] = &InstantSeriesSet{}
 				return nil
 			}
 
@@ -208,11 +208,17 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 				loadAndQueryWaiter.Add(s, result.Querier)
 			}
 
+			instantSeries := make([]InstantSeries, len(samples))
+			for i := range instantSeries {
+				instantSeries[i].Timestamp = samples[i].Timestamp
+				instantSeries[i].Value = samples[i].Value
+			}
+
 			seriesSets[shardID] = NewInstantSeriesSet(
 				lssQueryResult,
 				snapshots[shardID],
 				valueNotFoundTimestampValue,
-				samples,
+				instantSeries,
 			)
 
 			return nil
@@ -221,7 +227,94 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	q.head.Enqueue(tDataStorageQuery)
 	_ = tDataStorageQuery.Wait()
 
-	if err := loadAndQueryWaiter.Wait(); err != nil {
+	if err = loadAndQueryWaiter.Wait(); err != nil {
+		SendUnrecoverableError(err)
+		return storage.ErrSeriesSet(err)
+	}
+
+	return storage.NewMergeSeriesSet(seriesSets, storage.ChainedSeriesMerge)
+}
+
+// selectInstantV2 returns a instant set of series that matches the given label matchers.
+//
+//revive:disable-next-line:function-length long but readable.
+func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstantV2(
+	ctx context.Context,
+	_ bool,
+	_ *storage.SelectHints,
+	matchers ...*labels.Matcher,
+) storage.SeriesSet {
+	start := time.Now()
+
+	release, err := q.head.AcquireQuery(ctx)
+	if err != nil {
+		if errors.Is(err, locker.ErrSemaphoreClosed) {
+			return &SeriesSet{}
+		}
+
+		logger.Warnf("[QUERIER]: select instant failed on the capture of the read lock query: %s", err)
+		return storage.ErrSeriesSet(err)
+	}
+	defer release()
+
+	defer func() {
+		if q.metrics != nil {
+			q.metrics.SelectDuration.With(
+				prometheus.Labels{"query_type": "instant"},
+			).Observe(float64(time.Since(start).Microseconds()))
+		}
+	}()
+
+	lssQueryResults, snapshots, err := queryLss(lssQueryInstantQuerySelector, q.head, matchers)
+	if err != nil {
+		logger.Warnf("[QUERIER]: failed to instant: %s", err)
+		return storage.ErrSeriesSet(err)
+	}
+
+	valueNotFoundTimestampValue := DefaultInstantQueryValueNotFoundTimestampValue
+	if q.mint <= valueNotFoundTimestampValue {
+		valueNotFoundTimestampValue = q.mint - 1
+	}
+
+	numberOfShards := q.head.NumberOfShards()
+	fmt.Println("number of shards", numberOfShards)
+	seriesSets := make([]storage.SeriesSet, numberOfShards)
+	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead](q.head)
+	tDataStorageQuery := q.head.CreateTask(
+		dsQueryInstantQuerier,
+		func(s TShard) error {
+			shardID := s.ShardID()
+			lssQueryResult := lssQueryResults[shardID]
+			if lssQueryResult == nil {
+				seriesSets[shardID] = &InstantSeriesSet{}
+				return nil
+			}
+
+			instantSeries := make([]InstantSeries, lssQueryResult.Len())
+			for i := range instantSeries {
+				instantSeries[i].Timestamp = valueNotFoundTimestampValue
+			}
+
+			fmt.Println("instant series before instant query v2", instantSeries)
+			result := s.DataStorage().InstantQueryV2(q.maxt, lssQueryResult.IDs(), instantSeries)
+			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {
+				loadAndQueryWaiter.Add(s, result.Querier)
+			}
+			fmt.Println("instant series after instant query v2", instantSeries)
+			seriesSets[shardID] = NewInstantSeriesSet(
+				lssQueryResult,
+				snapshots[shardID],
+				valueNotFoundTimestampValue,
+				instantSeries,
+			)
+
+			return nil
+		},
+	)
+	q.head.Enqueue(tDataStorageQuery)
+	_ = tDataStorageQuery.Wait()
+
+	if err = loadAndQueryWaiter.Wait(); err != nil {
 		SendUnrecoverableError(err)
 		return storage.ErrSeriesSet(err)
 	}
@@ -527,7 +620,13 @@ func queryLss[
 	if err := errors.Join(errs...); err != nil {
 		return nil, nil, err
 	}
-
+	for i := range lssQueryResults {
+		fmt.Println("lss query result", i)
+		if lssQueryResults[i] != nil {
+			fmt.Println(lssQueryResults[i].IDs())
+		}
+		fmt.Println(lssQueryResults[i])
+	}
 	return lssQueryResults, snapshots, nil
 }
 

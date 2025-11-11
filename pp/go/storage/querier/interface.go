@@ -46,6 +46,12 @@ type DataStorage interface {
 		ids []uint32,
 	) ([]cppbridge.Sample, cppbridge.DataStorageQueryResult)
 
+	InstantQueryV2(
+		maxt int64,
+		ids []uint32,
+		instantSeries any,
+	) cppbridge.DataStorageQueryResult
+
 	// Query returns serialized chunks from data storage.
 	Query(
 		query cppbridge.DataStorageQuery,

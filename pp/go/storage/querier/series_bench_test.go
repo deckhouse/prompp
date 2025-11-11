@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"runtime"
 	"testing"
+	"unsafe"
 )
 
 func iterateSeriesSet(seriesSet storage.SeriesSet) {
@@ -62,9 +63,15 @@ func instantQuery(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, targetTim
 		return &querier.InstantSeriesSet{}
 	}
 
-	samples, dsQueryResult := ds.InstantQuery(targetTimestamp, valueNotFoundTimestampValue, lssQueryResult.IDs())
+	instantSeries := make([]querier.InstantSeries, lssQueryResult.Len())
+	for i := range instantSeries {
+		instantSeries[i].Timestamp = valueNotFoundTimestampValue
+	}
+
+	dsQueryResult := ds.InstantQueryV2(targetTimestamp, lssQueryResult.IDs(), uintptr(unsafe.Pointer(&instantSeries)))
 	require.Equal(t, cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
-	return querier.NewInstantSeriesSet(lssQueryResult, snapshot, valueNotFoundTimestampValue, samples)
+
+	return querier.NewInstantSeriesSet(lssQueryResult, snapshot, valueNotFoundTimestampValue, instantSeries)
 }
 
 func BenchmarkSeriesSetOpt(b *testing.B) {

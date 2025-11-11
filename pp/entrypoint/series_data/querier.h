@@ -53,8 +53,9 @@ struct SampleWithGoLabels : public ::series_data::encoder::Sample {
     char go_labels_[Sizeof_GoLabels];
 };
 
-
 using InstantQuerierWithArgumentsWrapperEntrypoint = InstantQuerierWithArgumentsWrapper<PromPP::Primitives::Go::SliceView<PromPP::Primitives::LabelSetID>,
+                                                                                        PromPP::Primitives::Go::SliceView<::series_data::encoder::Sample>>;
+using InstantQuerierWithArgumentsWrapperEntrypointV2 = InstantQuerierWithArgumentsWrapper<PromPP::Primitives::Go::SliceView<PromPP::Primitives::LabelSetID>,
                                                                                         PromPP::Primitives::Go::SliceView<SampleWithGoLabels>>;
 
 class RangeQuerierWithArgumentsWrapper {
@@ -133,11 +134,12 @@ class RangeQuerierWithArgumentsWrapperV2 {
 
 enum class QuerierType : uint8_t { kInstantQuerier = 0, kRangeQuerier, kRangeQuerierV2 };
 
-using QuerierVariant = std::variant<InstantQuerierWithArgumentsWrapperEntrypoint, RangeQuerierWithArgumentsWrapper, RangeQuerierWithArgumentsWrapperV2>;
+using QuerierVariant = std::variant<InstantQuerierWithArgumentsWrapperEntrypoint, RangeQuerierWithArgumentsWrapper, RangeQuerierWithArgumentsWrapperV2, InstantQuerierWithArgumentsWrapperEntrypointV2>;
 using QuerierVariantPtr = std::unique_ptr<QuerierVariant>;
 
 }  // namespace entrypoint::series_data
 
 static_assert(entrypoint::series_data::QuerierInterface<entrypoint::series_data::InstantQuerierWithArgumentsWrapperEntrypoint>);
+static_assert(entrypoint::series_data::QuerierInterface<entrypoint::series_data::InstantQuerierWithArgumentsWrapperEntrypointV2>);
 static_assert(entrypoint::series_data::QuerierInterface<entrypoint::series_data::RangeQuerierWithArgumentsWrapper>);
 static_assert(entrypoint::series_data::QuerierInterface<entrypoint::series_data::RangeQuerierWithArgumentsWrapperV2>);
