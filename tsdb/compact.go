@@ -495,7 +495,7 @@ func (c *LeveledCompactor) CompactWithBlockPopulator(dest string, dirs []string,
 				)
 
 				// mark as corrupted for skipping
-				meta.Compaction.Hints = append(meta.Compaction.Hints, CompactionHintCorrupted)
+				meta.Compaction.addHint(CompactionHintCorrupted)
 				if _, err := writeMetaFile(c.logger, d, meta); err != nil {
 					return nil, fmt.Errorf("write meta file: %w", err)
 				}

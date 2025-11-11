@@ -29,6 +29,7 @@ import (
 	"github.com/go-kit/log"
 	prom_testutil "github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
@@ -861,4 +862,103 @@ func populateSeries(lbls []map[string]string, mint, maxt int64) []storage.Series
 		series = append(series, storage.NewListSeries(labels.FromMap(lbl), samples))
 	}
 	return series
+}
+
+type BlockMetaCompactionSuite struct {
+	suite.Suite
+}
+
+func TestBlockMetaCompactionSuite(t *testing.T) {
+	suite.Run(t, new(BlockMetaCompactionSuite))
+}
+
+func (s *BlockMetaCompactionSuite) TestContainsEmpty() {
+	bm := BlockMetaCompaction{}
+
+	s.False(bm.containsHint("test"))
+}
+
+func (s *BlockMetaCompactionSuite) TestContains() {
+	bm := BlockMetaCompaction{Hints: []string{"test"}}
+
+	s.True(bm.containsHint("test"))
+}
+
+func (s *BlockMetaCompactionSuite) TestNotContains() {
+	bm := BlockMetaCompaction{Hints: []string{"test1"}}
+
+	s.False(bm.containsHint("test"))
+}
+
+func (s *BlockMetaCompactionSuite) TestAddEmpty() {
+	bm := BlockMetaCompaction{}
+	bm.addHint("test")
+
+	s.Require().Len(bm.Hints, 1)
+	s.Equal("test", bm.Hints[0])
+}
+
+func (s *BlockMetaCompactionSuite) TestAdd() {
+	bm := BlockMetaCompaction{Hints: []string{"test1"}}
+	bm.addHint("test")
+
+	s.Require().Len(bm.Hints, 2)
+	s.Equal("test", bm.Hints[1])
+}
+
+func (s *BlockMetaCompactionSuite) TestAddExist() {
+	bm := BlockMetaCompaction{Hints: []string{"test"}}
+	bm.addHint("test")
+
+	s.Require().Len(bm.Hints, 1)
+	s.Equal("test", bm.Hints[0])
+}
+
+func (s *BlockMetaCompactionSuite) TestDelEmpty() {
+	bm := BlockMetaCompaction{}
+	bm.deleteHint("test")
+
+	s.Require().Empty(bm.Hints)
+}
+
+func (s *BlockMetaCompactionSuite) TestDel() {
+	bm := BlockMetaCompaction{Hints: []string{"test"}}
+	bm.deleteHint("test")
+
+	s.Require().Empty(bm.Hints)
+}
+
+func (s *BlockMetaCompactionSuite) TestDelMany() {
+	bm := BlockMetaCompaction{Hints: []string{"test", "test", "test"}}
+	bm.deleteHint("test")
+
+	s.Require().Empty(bm.Hints)
+}
+
+func (s *BlockMetaCompactionSuite) TestDelStart() {
+	bm := BlockMetaCompaction{Hints: []string{"test", "test1", "test2"}}
+	bm.deleteHint("test")
+
+	s.Equal([]string{"test1", "test2"}, bm.Hints)
+}
+
+func (s *BlockMetaCompactionSuite) TestDelMiddle() {
+	bm := BlockMetaCompaction{Hints: []string{"test1", "test", "test2"}}
+	bm.deleteHint("test")
+
+	s.Equal([]string{"test1", "test2"}, bm.Hints)
+}
+
+func (s *BlockMetaCompactionSuite) TestDelEnd() {
+	bm := BlockMetaCompaction{Hints: []string{"test1", "test2", "test"}}
+	bm.deleteHint("test")
+
+	s.Equal([]string{"test1", "test2"}, bm.Hints)
+}
+
+func (s *BlockMetaCompactionSuite) TestDelMany_2() {
+	bm := BlockMetaCompaction{Hints: []string{"test", "test", "test1", "test", "test2", "test", "test"}}
+	bm.deleteHint("test")
+
+	s.Equal([]string{"test1", "test2"}, bm.Hints)
 }
