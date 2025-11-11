@@ -241,7 +241,7 @@ func (bw *blockWriters) writeRestOfRecodedChunks() error {
 	return nil
 }
 
-func (bw *blockWriters) writeIndexAndMoveTmpDirToDir() ([]WrittenBlock, error) {
+func (bw *blockWriters) writeIndexCloseAndMoveTmpDirToDir() ([]WrittenBlock, error) {
 	writtenBlocks := make([]WrittenBlock, 0, len(bw.writers))
 	for i := range bw.writers {
 		if bw.writers[i].isEmpty() {
@@ -254,6 +254,10 @@ func (bw *blockWriters) writeIndexAndMoveTmpDirToDir() ([]WrittenBlock, error) {
 		}
 
 		if err := bw.writers[i].writeIndex(); err != nil {
+			return nil, err
+		}
+
+		if err := bw.writers[i].Close(); err != nil {
 			return nil, err
 		}
 
@@ -301,15 +305,11 @@ func (w *Writer) Write(shard relabeler.Shard) ([]WrittenBlock, error) {
 		return nil, err
 	}
 
-	defer func() {
-		writers.close()
-	}()
-
 	if err = w.recodeAndWriteChunks(shard, writers); err != nil {
 		return nil, err
 	}
 
-	return writers.writeIndexAndMoveTmpDirToDir()
+	return writers.writeIndexCloseAndMoveTmpDirToDir()
 }
 
 func (w *Writer) createWriters(shard relabeler.Shard) (blockWriters, error) {
