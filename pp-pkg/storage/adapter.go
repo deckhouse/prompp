@@ -294,7 +294,6 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 			continue
 		}
 
-		// TODO lock
 		timeInterval := headTimeInterval(head)
 		if !timeInterval.IsInvalid() && mint > timeInterval.MaxT {
 			continue
@@ -315,6 +314,7 @@ func (*Adapter) StartTime() (int64, error) {
 	return math.MaxInt64, nil
 }
 
+// headTimeInterval returns [cppbridge.TimeInterval] from [pp_storage.Head].
 func headTimeInterval(head *pp_storage.Head) cppbridge.TimeInterval {
 	timeInterval := cppbridge.NewInvalidTimeInterval()
 	for shard := range head.RangeShards() {
