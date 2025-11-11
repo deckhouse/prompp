@@ -248,6 +248,12 @@ func (c *LeveledCompactor) Plan(dir string) ([]string, error) {
 
 		dms = append(dms, dirMeta{dir, meta})
 	}
+	// PP_CHANGES.md: rebuild on cpp start
+	// skipping corrupted block may lead to dms is empty
+	if len(dms) == 0 {
+		return nil, nil
+	}
+	// PP_CHANGES.md: rebuild on cpp end
 	return c.plan(dms)
 }
 
@@ -495,7 +501,7 @@ func (c *LeveledCompactor) CompactWithBlockPopulator(dest string, dirs []string,
 				)
 
 				// mark as corrupted for skipping
-				meta.Compaction.Hints = append(meta.Compaction.Hints, CompactionHintCorrupted)
+				meta.Compaction.addHint(CompactionHintCorrupted)
 				if _, err := writeMetaFile(c.logger, d, meta); err != nil {
 					return nil, fmt.Errorf("write meta file: %w", err)
 				}
