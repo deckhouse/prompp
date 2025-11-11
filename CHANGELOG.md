@@ -20,6 +20,13 @@
 ### Other
 1. **Tracy Wrapper for Benchmarking.** Introduced a wrapper around Tracy to enhance benchmarking and provide more detailed insights into code bottlenecks.
 
+## v0.6.3
+
+### Fixes
+1. **Historical Block Save Race Condition.** Fixed a race condition when saving a historical block that could cause the compactor to start reading the block before `fsync` was called on its files after writing.
+2. **Compactor Scheduling Error.** Fixed an incorrect compactor scheduling bug that could lead to a slice bounds out-of-range error and service crash.
+3. **Corrupted Block Marker Logic.** Improved handling of the corrupted hint. The marker can now be removed if the block is successfully read during the update of the available blocks list.
+
 ## v0.6.2
 
 ### Fixes
