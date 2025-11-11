@@ -228,13 +228,12 @@ func (bm *BlockMetaCompaction) FromOutOfOrder() bool {
 }
 
 func (bm *BlockMetaCompaction) addHint(hint string) {
-	for i := range bm.Hints {
-		if bm.Hints[i] == hint {
-			return
-		}
+	if bm.containsHint(hint) {
+		return
 	}
 
 	bm.Hints = append(bm.Hints, hint)
+	slices.Sort(bm.Hints)
 }
 
 func (bm *BlockMetaCompaction) containsHint(hint string) bool {
@@ -249,11 +248,16 @@ func (bm *BlockMetaCompaction) containsHint(hint string) bool {
 
 func (bm *BlockMetaCompaction) deleteHint(hint string) {
 	oldlen := len(bm.Hints)
+	if oldlen == 0 {
+		return
+	}
+
 	for i := len(bm.Hints) - 1; i >= 0; i-- {
 		if bm.Hints[i] == hint {
 			bm.Hints = append(bm.Hints[:i], bm.Hints[i+1:]...)
 		}
 	}
+
 	clear(bm.Hints[len(bm.Hints):oldlen])
 }
 

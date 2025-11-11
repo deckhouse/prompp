@@ -903,7 +903,7 @@ func (s *BlockMetaCompactionSuite) TestAdd() {
 	bm.addHint("test")
 
 	s.Require().Len(bm.Hints, 2)
-	s.Equal("test", bm.Hints[1])
+	s.Equal("test", bm.Hints[0])
 }
 
 func (s *BlockMetaCompactionSuite) TestAddExist() {
