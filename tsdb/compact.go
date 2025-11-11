@@ -248,6 +248,12 @@ func (c *LeveledCompactor) Plan(dir string) ([]string, error) {
 
 		dms = append(dms, dirMeta{dir, meta})
 	}
+	// PP_CHANGES.md: rebuild on cpp start
+	// skipping corrupted block may lead to dms is empty
+	if len(dms) == 0 {
+		return nil, nil
+	}
+	// PP_CHANGES.md: rebuild on cpp end
 	return c.plan(dms)
 }
 
