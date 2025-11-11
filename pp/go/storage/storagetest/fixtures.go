@@ -2,7 +2,10 @@ package storagetest
 
 import (
 	"context"
+	"fmt"
+	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"math"
+	"unsafe"
 
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 
@@ -174,4 +177,44 @@ func TimeSeriesFromSeries(series promstorage.Series, chunkIterator chunkenc.Iter
 	}
 
 	return timeSeries
+}
+
+func IterateSeriesSet(seriesSet promstorage.SeriesSet, iterator chunkenc.Iterator) chunkenc.Iterator {
+	var series promstorage.Series
+	for seriesSet.Next() {
+		series = seriesSet.At()
+		iterator = series.Iterator(iterator)
+		for iterator.Next() != chunkenc.ValNone {
+			ts, v := iterator.At()
+			_, _ = ts, v
+		}
+	}
+	return iterator
+}
+
+func InstantQuery(lss *shard.LSS, ds *shard.DataStorage, targetTimestamp, valueNotFoundTimestampValue int64, matchers ...model.LabelMatcher) (*querier.InstantSeriesSet, error) {
+	selector, snapshot, err := lss.QuerySelector(0, matchers)
+	if err != nil {
+		return nil, err
+	}
+	if selector == 0 || snapshot == nil {
+		return &querier.InstantSeriesSet{}, nil
+	}
+
+	lssQueryResult := snapshot.Query(selector)
+	if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
+		return &querier.InstantSeriesSet{}, nil
+	}
+
+	instantSeries := make([]querier.InstantSeries, lssQueryResult.Len())
+	for i := range instantSeries {
+		instantSeries[i].Timestamp = valueNotFoundTimestampValue
+	}
+
+	dsQueryResult := ds.InstantQueryV2(targetTimestamp, lssQueryResult.IDs(), uintptr(unsafe.Pointer(unsafe.SliceData(instantSeries))))
+	if dsQueryResult.Status != cppbridge.DataStorageQueryStatusSuccess {
+		return nil, fmt.Errorf("invalid data storage query result status")
+	}
+
+	return querier.NewInstantSeriesSet(lssQueryResult, snapshot, valueNotFoundTimestampValue, instantSeries), nil
 }

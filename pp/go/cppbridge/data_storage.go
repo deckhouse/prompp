@@ -121,8 +121,8 @@ func (ds *DataStorage) InstantQuery(targetTimestamp, defaultTimestamp int64, lab
 
 // InstantQueryV2 .
 // this is Deprecated: InstantQueryV2 .
-func (ds *DataStorage) InstantQueryV2(targetTimestamp int64, labelSetIDs []uint32, instantSeries any) DataStorageQueryResult {
-	return seriesDataDataStorageInstantQueryV2(ds.dataStorage, labelSetIDs, targetTimestamp, instantSeries)
+func (ds *DataStorage) InstantQueryV2(targetTimestamp int64, labelSetIDs []uint32, samples uintptr) DataStorageQueryResult {
+	return seriesDataDataStorageInstantQueryV2(ds.dataStorage, labelSetIDs, targetTimestamp, samples)
 }
 
 func (ds *DataStorage) QueryFinal(queriers []uintptr) {

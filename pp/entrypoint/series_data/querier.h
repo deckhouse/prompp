@@ -56,7 +56,7 @@ struct SampleWithGoLabels : public ::series_data::encoder::Sample {
 using InstantQuerierWithArgumentsWrapperEntrypoint = InstantQuerierWithArgumentsWrapper<PromPP::Primitives::Go::SliceView<PromPP::Primitives::LabelSetID>,
                                                                                         PromPP::Primitives::Go::SliceView<::series_data::encoder::Sample>>;
 using InstantQuerierWithArgumentsWrapperEntrypointV2 = InstantQuerierWithArgumentsWrapper<PromPP::Primitives::Go::SliceView<PromPP::Primitives::LabelSetID>,
-                                                                                        PromPP::Primitives::Go::SliceView<SampleWithGoLabels>>;
+                                                                                        std::span<entrypoint::series_data::SampleWithGoLabels>>;
 
 class RangeQuerierWithArgumentsWrapper {
   using DataStorage = ::series_data::DataStorage;

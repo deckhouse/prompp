@@ -17,7 +17,6 @@ package cppbridge
 // #include "entrypoint.h"
 import "C" //nolint:gocritic // because otherwise it won't work
 import (
-	"fmt"
 	"math"
 	"runtime"
 	"time"
@@ -1908,14 +1907,13 @@ func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32
 	return res
 }
 
-func seriesDataDataStorageInstantQueryV2(dataStorage uintptr, labelSetIDs []uint32, timestamp int64, samples any) DataStorageQueryResult {
+func seriesDataDataStorageInstantQueryV2(dataStorage uintptr, labelSetIDs []uint32, timestamp int64, samples uintptr) DataStorageQueryResult {
 	args := struct {
 		dataStorage uintptr
 		labelSetIDs []uint32
 		timestamp   int64
 		samples     uintptr
-	}{dataStorage, labelSetIDs, timestamp, uintptr(unsafe.Pointer(&samples))}
-	fmt.Println("samples", samples)
+	}{dataStorage, labelSetIDs, timestamp, samples}
 	var res DataStorageQueryResult
 
 	testGC()
@@ -1924,8 +1922,6 @@ func seriesDataDataStorageInstantQueryV2(dataStorage uintptr, labelSetIDs []uint
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-
-	fmt.Println("samples after", samples)
 
 	return res
 }

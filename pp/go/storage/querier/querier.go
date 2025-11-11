@@ -10,6 +10,7 @@ import (
 	"github.com/prometheus/prometheus/util/annotations"
 	"sort"
 	"time"
+	"unsafe"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
@@ -277,7 +278,6 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstantV2(
 	}
 
 	numberOfShards := q.head.NumberOfShards()
-	fmt.Println("number of shards", numberOfShards)
 	seriesSets := make([]storage.SeriesSet, numberOfShards)
 	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead](q.head)
 	tDataStorageQuery := q.head.CreateTask(
@@ -295,12 +295,11 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstantV2(
 				instantSeries[i].Timestamp = valueNotFoundTimestampValue
 			}
 
-			fmt.Println("instant series before instant query v2", instantSeries)
-			result := s.DataStorage().InstantQueryV2(q.maxt, lssQueryResult.IDs(), instantSeries)
+			result := s.DataStorage().InstantQueryV2(q.maxt, lssQueryResult.IDs(), uintptr(unsafe.Pointer(unsafe.SliceData(instantSeries))))
 			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {
 				loadAndQueryWaiter.Add(s, result.Querier)
 			}
-			fmt.Println("instant series after instant query v2", instantSeries)
+
 			seriesSets[shardID] = NewInstantSeriesSet(
 				lssQueryResult,
 				snapshots[shardID],
@@ -620,13 +619,7 @@ func queryLss[
 	if err := errors.Join(errs...); err != nil {
 		return nil, nil, err
 	}
-	for i := range lssQueryResults {
-		fmt.Println("lss query result", i)
-		if lssQueryResults[i] != nil {
-			fmt.Println(lssQueryResults[i].IDs())
-		}
-		fmt.Println(lssQueryResults[i])
-	}
+
 	return lssQueryResults, snapshots, nil
 }
 

@@ -1,7 +1,6 @@
 package querier
 
 import (
-	"fmt"
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -50,7 +49,6 @@ func (*InstantSeriesSet) Err() error {
 
 // Next return true if exist there is a next series and false otherwise.
 func (ss *InstantSeriesSet) Next() bool {
-	fmt.Println("next", ss.nextSeriesIndex, ss.instantSeries)
 	for {
 		if ss.nextSeriesIndex >= len(ss.instantSeries) {
 			return false
@@ -62,8 +60,6 @@ func (ss *InstantSeriesSet) Next() bool {
 
 		ss.nextSeriesIndex++
 	}
-
-	fmt.Println("next after slip", ss.nextSeriesIndex)
 
 	lsID, lsLength := ss.lssQueryResult.GetByIndex(ss.nextSeriesIndex)
 	ss.instantSeries[ss.nextSeriesIndex].LabelSet = labels.NewLabelsWithLSS(
