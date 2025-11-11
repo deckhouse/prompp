@@ -102,9 +102,8 @@ extern "C" void prompp_prometheus_relabeled_series_ctor(void* args) {
     SliceView<RelabeledSeries> relabeled_series;
   };
 
-  for (auto& series : static_cast<Arguments*>(args)->relabeled_series) {
-    std::construct_at(&series);
-  }
+  auto& relabeled_series = static_cast<Arguments*>(args)->relabeled_series;
+  std::uninitialized_default_construct_n(relabeled_series.begin(), relabeled_series.size());
 }
 
 extern "C" void prompp_prometheus_relabeled_series_dtor(void* args) {
@@ -112,9 +111,8 @@ extern "C" void prompp_prometheus_relabeled_series_dtor(void* args) {
     SliceView<RelabeledSeries> relabeled_series;
   };
 
-  for (auto& series : static_cast<Arguments*>(args)->relabeled_series) {
-    std::destroy_at(&series);
-  }
+  auto& relabeled_series = static_cast<Arguments*>(args)->relabeled_series;
+  std::destroy_n(relabeled_series.begin(), relabeled_series.size());
 }
 
 //
@@ -126,9 +124,8 @@ extern "C" void prompp_prometheus_relabeler_state_update_ctor(void* args) {
     SliceView<RelabelerStateUpdate> relabeler_state_update;
   };
 
-  for (auto& series : static_cast<Arguments*>(args)->relabeler_state_update) {
-    std::construct_at(&series);
-  }
+  auto& relabeler_state_update = static_cast<Arguments*>(args)->relabeler_state_update;
+  std::uninitialized_default_construct_n(relabeler_state_update.begin(), relabeler_state_update.size());
 }
 
 extern "C" void prompp_prometheus_relabeler_state_update_dtor(void* args) {
@@ -136,9 +133,8 @@ extern "C" void prompp_prometheus_relabeler_state_update_dtor(void* args) {
     SliceView<RelabelerStateUpdate> relabeler_state_update;
   };
 
-  for (auto& series : static_cast<Arguments*>(args)->relabeler_state_update) {
-    std::destroy_at(&series);
-  }
+  auto& relabeler_state_update = static_cast<Arguments*>(args)->relabeler_state_update;
+  std::destroy_n(relabeler_state_update.begin(), relabeler_state_update.size());
 }
 
 //

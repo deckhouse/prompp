@@ -122,6 +122,7 @@ func (q *MultiQuerier) LabelValues(
 	wg.Wait()
 
 	labelValues := DeduplicateAndSortStringSlices(labelValuesResults...)
+
 	return labelValues, nil, errors.Join(errs...)
 }
 
