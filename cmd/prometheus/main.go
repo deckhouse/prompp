@@ -35,10 +35,6 @@ import (
 	"syscall"
 	"time"
 
-	pphandler "github.com/prometheus/prometheus/pp-pkg/handler"
-	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor"
-	pptsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"
-
 	"github.com/KimMachineGun/automemlimit/memlimit"
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/alecthomas/units"
@@ -61,15 +57,19 @@ import (
 	"k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
 
-	"github.com/prometheus/prometheus/pp-pkg/receiver"               // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp-pkg/remote"                 // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp-pkg/scrape"                 // PP_CHANGES.md: rebuild on cpp
-	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage" // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/relabeler/appender"      // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/relabeler/head"          // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"  // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/relabeler/head/ready"    // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/relabeler/remotewriter"  // PP_CHANGES.md: rebuild on cpp
+	pphandler "github.com/prometheus/prometheus/pp-pkg/handler"             // PP_CHANGES.md: rebuild on cpp
+	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor" // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/receiver"                      // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/remote"                        // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/scrape"                        // PP_CHANGES.md: rebuild on cpp
+	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage"        // PP_CHANGES.md: rebuild on cpp
+	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"              // PP_CHANGES.md: rebuild on cpp
+	pptsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"                   // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/relabeler/appender"             // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/relabeler/head"                 // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"         // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/relabeler/head/ready"           // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/relabeler/remotewriter"         // PP_CHANGES.md: rebuild on cpp
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
@@ -1969,6 +1969,10 @@ type tsdbOptions struct {
 }
 
 func (opts tsdbOptions) ToTSDBOptions() tsdb.Options {
+	var newCompactorFunc tsdb.NewCompactorFunc
+	if pp_pkg_tsdb.BlockCompactionDisabled {
+		newCompactorFunc = pp_pkg_tsdb.CreateNonBlockCompactor
+	}
 	return tsdb.Options{
 		WALSegmentSize:                 int(opts.WALSegmentSize),
 		MaxBlockChunkSegmentSize:       int64(opts.MaxBlockChunkSegmentSize),
@@ -1989,6 +1993,8 @@ func (opts tsdbOptions) ToTSDBOptions() tsdb.Options {
 		OutOfOrderTimeWindow:           opts.OutOfOrderTimeWindow,
 		EnableDelayedCompaction:        opts.EnableDelayedCompaction,
 		EnableOverlappingCompaction:    opts.EnableOverlappingCompaction,
+		ReloadBlocksExternalTrigger:    opts.ReloadBlocksExternalTrigger,
+		NewCompactorFunc:               newCompactorFunc,
 	}
 }
 
@@ -2151,6 +2157,10 @@ func readPromPPFeatures(logger log.Logger) {
 		case "unload_data_storage":
 			appender.UnloadDataStorage = true
 			_ = level.Info(logger).Log("msg", "[FEATURE] Data storage unloading is enabled.")
+
+		case "disable_block_compaction":
+			pp_pkg_tsdb.BlockCompactionDisabled = true
+			_ = level.Info(logger).Log("msg", "[FEATURE] Prometheus compaction disabled.")
 		}
 	}
 }
