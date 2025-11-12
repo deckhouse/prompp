@@ -31,7 +31,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/util/stats"
@@ -39,6 +38,7 @@ import (
 	"github.com/prometheus/prometheus/web/mock"
 
 	"github.com/go-kit/log"
+	"github.com/jonboulle/clockwork"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/client_golang/prometheus"
 	config_util "github.com/prometheus/common/config"
