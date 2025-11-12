@@ -11,10 +11,59 @@ namespace series_data::serialization {
 struct SerializedData {
   using Memory = BareBones::Memory<BareBones::MemoryControlBlockWithItemCount, unsigned char>;
 
+  ~SerializedData() {
+    uint32_t timestamp_offset{kNoTimestampOffset};
+    for (auto& chunk : chunks) {
+      destroy_chunk_data(chunk, timestamp_offset);
+    }
+  }
+
   BareBones::Vector<chunk::SerializedChunk> chunks;
   Memory bytes_buffer;
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept { return chunks.allocated_memory() + bytes_buffer.allocated_memory(); }
+
+ private:
+  static constexpr uint32_t kNoTimestampOffset = std::numeric_limits<uint32_t>::max();
+
+  PROMPP_ALWAYS_INLINE void destroy_chunk_data(const chunk::SerializedChunk& chunk, uint32_t& timestamp_offset) noexcept {
+    using enum EncodingType;
+
+    switch (chunk.encoding_state.encoding_type) {
+      case kUint32Constant:
+      case kFloat32Constant:
+      case kDoubleConstant:
+      case kTwoDoubleConstant: {
+        destroy_timestamp_stream_if_needed(chunk, timestamp_offset);
+        break;
+      }
+
+      case kAscInteger:
+      case kAscIntegerThenValuesGorilla:
+      case kValuesGorilla: {
+        destroy_timestamp_stream_if_needed(chunk, timestamp_offset);
+        std::destroy_at(reinterpret_cast<const SerializedCompactBitSequence*>(bytes_buffer + chunk.values_offset));
+        break;
+      }
+
+      case kGorilla: {
+        std::destroy_at(reinterpret_cast<const SerializedCompactBitSequence*>(bytes_buffer + chunk.values_offset));
+        break;
+      }
+
+      default: {
+        assert(chunk.encoding_state.encoding_type != kUnknown);
+        break;
+      };
+    }
+  }
+
+  PROMPP_ALWAYS_INLINE void destroy_timestamp_stream_if_needed(const chunk::SerializedChunk& chunk, uint32_t& timestamp_offset) {
+    if (timestamp_offset == kNoTimestampOffset || chunk.timestamps_offset > timestamp_offset) [[unlikely]] {
+      timestamp_offset = chunk.timestamps_offset;
+      std::destroy_at(reinterpret_cast<const SerializedCompactBitSequence*>(bytes_buffer + chunk.timestamps_offset));
+    }
+  }
 };
 
 class DataSerializer {
@@ -192,11 +241,10 @@ class DataSerializer {
 
   template <class CompactBitSequence>
   static void write_compact_bit_sequence(const CompactBitSequence& bit_sequence, SerializedData::Memory& buffer) noexcept {
-    const auto bytes_count = bit_sequence.size_in_bytes();
     uint32_t& data_size = buffer.control_block().items_count;
-    buffer.grow_to_fit_at_least(data_size + bytes_count);
-    std::memcpy(buffer + data_size, bit_sequence.raw_bytes(), bytes_count);
-    data_size += bytes_count;
+    buffer.grow_to_fit_at_least(data_size + sizeof(SerializedCompactBitSequence));
+    std::construct_at(reinterpret_cast<SerializedCompactBitSequence*>(buffer + data_size), bit_sequence);
+    data_size += sizeof(SerializedCompactBitSequence);
   }
 
   const DataStorage& storage_;

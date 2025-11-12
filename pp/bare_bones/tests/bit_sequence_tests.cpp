@@ -13,7 +13,7 @@ using BareBones::CompactBitSequence;
 
 constexpr size_t NUM_VALUES = 1000;
 
-constexpr std::array kAllocationSizesTable = {AllocationSize{0U}, AllocationSize{32U}};
+constexpr std::array kAllocationSizesTable = {AllocationSize{0U}, AllocationSize{32U}, AllocationSize{64U}};
 
 std::array<uint64_t, NUM_VALUES> generate_uint64_vector() {
   std::array<uint64_t, NUM_VALUES> data;
@@ -337,7 +337,7 @@ TEST_F(CompactBitSequenceFixture, TrimUint32) {
   // Act
   stream_.push_back_bits_u32(32, 0b10101010101010101010101010101010);
   stream_.trim_lower_bytes(2);
-  auto bytes = stream_.bytes<uint16_t>().data();
+  const auto bytes = stream_.bytes<uint16_t>().data();
 
   // Assert
   ASSERT_EQ(16U, stream_.size_in_bits());
@@ -352,7 +352,7 @@ TEST_F(CompactBitSequenceFixture, TrimUint32_2) {
   stream_.push_back_bits_u32(32, 0b10101010101010101010101010101010);
 
   stream_.trim_lower_bytes(4);
-  auto bytes = stream_.bytes<uint16_t>().data();
+  const auto bytes = stream_.bytes<uint16_t>().data();
 
   // Assert
   ASSERT_EQ(1U, stream_.size_in_bits());
@@ -367,7 +367,7 @@ TEST_F(CompactBitSequenceFixture, TrimUint32_3) {
   stream_.push_back_bits_u32(32, 0b10101010101010101010101010101010);
 
   stream_.trim_lower_bytes(3);
-  auto bytes = stream_.bytes<uint16_t>().data();
+  const auto bytes = stream_.bytes<uint16_t>().data();
 
   // Assert
   ASSERT_EQ(9U, stream_.size_in_bits());
@@ -380,7 +380,7 @@ TEST_F(CompactBitSequenceFixture, TrimUint64) {
   // Act
   stream_.push_back_u64(0b1010101010101010101010101010101010101010101010101010101010101010);
   stream_.trim_lower_bytes(5);
-  auto bytes = stream_.bytes<uint32_t>().data();
+  const auto bytes = stream_.bytes<uint32_t>().data();
 
   // Assert
   ASSERT_EQ(24U, stream_.size_in_bits());
@@ -394,11 +394,65 @@ TEST_F(CompactBitSequenceFixture, TrimUint64_2) {
   stream_.push_back_single_zero_bit();
   stream_.push_back_u64(0b1010101010101010101010101010101010101010101010101010101010101010);
   stream_.trim_lower_bytes(8);
-  auto bytes = stream_.bytes<uint64_t>().data();
+  const auto bytes = stream_.bytes<uint64_t>().data();
 
   // Assert
   ASSERT_EQ(1U, stream_.size_in_bits());
   EXPECT_EQ(0b1ULL, bytes[0]);
+}
+
+TEST_F(CompactBitSequenceFixture, ShrinkToFit) {
+  // Arrange
+  static constexpr auto kValue = std::numeric_limits<uint64_t>::max();
+
+  stream_.push_back_u64(kValue);
+  const auto allocated_memory = stream_.allocated_memory();
+
+  // Act
+  stream_.shrink_to_fit();
+
+  // Assert
+  EXPECT_LT(stream_.allocated_memory(), allocated_memory);
+  ASSERT_EQ(sizeof(kValue), stream_.size_in_bytes());
+  EXPECT_EQ(kValue, *stream_.bytes<uint64_t>().data());
+}
+
+TEST_F(CompactBitSequenceFixture, ShrinkToFitOnNonUniqueMemory) {
+  // Arrange
+  static constexpr auto kValue = std::numeric_limits<uint64_t>::max();
+
+  stream_.push_back_u64(kValue);
+  const auto memory = stream_.shared_memory();
+  const auto allocated_memory = stream_.allocated_memory();
+
+  // Act
+  stream_.shrink_to_fit();
+
+  // Assert
+  EXPECT_LT(stream_.allocated_memory(), allocated_memory);
+  ASSERT_EQ(sizeof(kValue), stream_.size_in_bytes());
+  EXPECT_EQ(kValue, *stream_.bytes<uint64_t>().data());
+  ASSERT_EQ(BareBones::Bit::to_bits(sizeof(kValue)), memory.constructed_item_count());
+  EXPECT_EQ(kValue, *reinterpret_cast<uint64_t*>(memory.get()));
+}
+
+TEST_F(CompactBitSequenceFixture, ReallocOnNonUniqueMemory) {
+  // Arrange
+  static constexpr auto kValue = std::numeric_limits<uint64_t>::max();
+
+  stream_.push_back_u64(kValue);
+  stream_.push_back_u64(kValue);
+  stream_.push_back_u64(kValue);
+  const auto memory = stream_.shared_memory();
+
+  // Act
+  stream_.push_back_u64(kValue);
+
+  // Assert
+  EXPECT_NE(stream_.raw_bytes(), memory.get());
+  EXPECT_TRUE(std::ranges::equal(std::vector{kValue, kValue, kValue, kValue}, stream_.bytes<uint64_t>()));
+  ASSERT_EQ(BareBones::Bit::to_bits(sizeof(kValue) * 3), memory.constructed_item_count());
+  EXPECT_TRUE(std::ranges::equal(std::vector{kValue, kValue, kValue}, std::span(reinterpret_cast<uint64_t*>(memory.get()), 3)));
 }
 
 template <class T>

@@ -218,6 +218,9 @@ class SharedPtr {
     non_atomic_reallocate(size);
     set_constructed_item_count(constructed_item_count);
   }
+  PROMPP_ALWAYS_INLINE SharedPtr(const SharedPtr& other, uint32_t size) : SharedPtr(size, other.constructed_item_count()) {
+    std::memcpy(data_, other.data_, size * sizeof(T));
+  }
   PROMPP_ALWAYS_INLINE SharedPtr(const SharedPtr& other) noexcept : data_(other.data_) { inc_ref_counter(); }
   SharedPtr(SharedPtr&& other) noexcept : data_(std::exchange(other.data_, nullptr)) {}
 
@@ -289,9 +292,35 @@ class SharedPtr {
     }
   }
 
+  PROMPP_ALWAYS_INLINE void inc_constructed_item_count(ItemCounter count = 1) noexcept {
+    if (auto block = control_block(); block != nullptr) [[likely]] {
+      block->constructed_item_count += count;
+    }
+  }
+
+  PROMPP_ALWAYS_INLINE void dec_constructed_item_count(ItemCounter count = 1) noexcept {
+    if (auto block = control_block(); block != nullptr) [[likely]] {
+      block->constructed_item_count -= count;
+    }
+  }
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE T* get() const noexcept { return data_; }
 
   PROMPP_ALWAYS_INLINE void swap(SharedPtr& other) noexcept { std::swap(data_, other.data_); }
+
+  PROMPP_ALWAYS_INLINE void clear() noexcept {
+    dec_ref_counter();
+    data_ = nullptr;
+  }
+
+  PROMPP_ALWAYS_INLINE void reset(const T* data, uint32_t size, uint32_t new_size, ItemCounter constructed_item_count) noexcept {
+    dec_ref_counter();
+    data_ = nullptr;
+
+    non_atomic_reallocate(new_size);
+    set_constructed_item_count(constructed_item_count);
+    std::memcpy(data_, data, size * sizeof(T));
+  }
 
  private:
   T* data_{nullptr};
@@ -318,11 +347,7 @@ class SharedPtr {
     data_ = nullptr;
   }
 
-  PROMPP_ALWAYS_INLINE void destroy_constructed_items() noexcept {
-    for (T *it = reinterpret_cast<T*>(data_), *end = it + control_block()->constructed_item_count; it != end; ++it) {
-      std::destroy_at(it);
-    }
-  }
+  PROMPP_ALWAYS_INLINE void destroy_constructed_items() noexcept { std::destroy_n(reinterpret_cast<T*>(data_), control_block()->constructed_item_count); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE ControlBlock* control_block() noexcept { return static_cast<ControlBlock*>(raw_memory()); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const ControlBlock* control_block() const noexcept { return static_cast<ControlBlock*>(raw_memory()); }
