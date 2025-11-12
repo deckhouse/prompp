@@ -8,8 +8,6 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
-
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
