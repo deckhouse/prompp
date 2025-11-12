@@ -538,7 +538,7 @@ func UploadOrBuildHead(
 		return builder.Build(generation+1, numberOfShards)
 	}
 
-	if _, err := hcatalog.SetStatus(headRecords[0].ID(), catalog.StatusActive); err != nil {
+	if _, err = hcatalog.SetStatus(headRecords[0].ID(), catalog.StatusActive); err != nil {
 		logger.Warnf("failed to set active status for head {%s}: %s", headRecords[0].ID(), err)
 
 		return builder.Build(generation+1, numberOfShards)

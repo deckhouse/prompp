@@ -19,10 +19,16 @@ import (
 	"time"
 )
 
+var (
+	defaultSortCatalogRecordsFunc = func(lhs, rhs *catalog.Record) bool {
+		return lhs.CreatedAt() < rhs.CreatedAt()
+	}
+)
+
 type UploadOrBuildHeadSuite struct {
 	suite.Suite
 	dataDir         string
-	clock           clockwork.Clock
+	clock           *clockwork.FakeClock
 	headIdGenerator catalog.IDGenerator
 	catalog         *catalog.Catalog
 	builder         *storage.Builder
@@ -74,7 +80,7 @@ func (s *UploadOrBuildHeadSuite) TestUploadOrBuildHeadSuccess() {
 
 	// Act
 	loadedHead, err := storage.UploadOrBuildHead(s.clock, s.catalog, s.builder, s.loader, block.DefaultBlockDuration, storagetest.NumberOfShards)
-	headRecords := s.catalog.List(nil, nil)
+	headRecords := s.catalog.List(nil, defaultSortCatalogRecordsFunc)
 
 	// Assert
 	require.NoError(s.T(), err)
@@ -93,10 +99,11 @@ func (s *UploadOrBuildHeadSuite) TestUploadOrBuildHeadCorrupted() {
 	require.NoError(s.T(), createdHead.Close())
 	createdHeadDir := filepath.Join(s.dataDir, createdHead.ID())
 	require.NoError(s.T(), os.RemoveAll(createdHeadDir))
+	s.clock.Advance(time.Hour)
 
 	// Act
 	builtHead, err := storage.UploadOrBuildHead(s.clock, s.catalog, s.builder, s.loader, block.DefaultBlockDuration, storagetest.NumberOfShards)
-	headRecords := s.catalog.List(nil, nil)
+	headRecords := s.catalog.List(nil, defaultSortCatalogRecordsFunc)
 
 	// Assert
 	require.Nil(s.T(), err)
@@ -125,10 +132,11 @@ func (s *UploadOrBuildHeadSuite) TestUploadOrBuildHeadOutdatedEncoderVersion() {
 	require.NoError(s.T(), createdHead.Close())
 	createdHeadDir := filepath.Join(s.dataDir, createdHead.ID())
 	s.fixWalEncoderVersion(createdHeadDir, storagetest.NumberOfShards, cppbridge.EncodersVersion()-1)
+	s.clock.Advance(time.Hour)
 
 	// Act
 	builtHead, err := storage.UploadOrBuildHead(s.clock, s.catalog, s.builder, s.loader, block.DefaultBlockDuration, storagetest.NumberOfShards)
-	headRecords := s.catalog.List(nil, nil)
+	headRecords := s.catalog.List(nil, defaultSortCatalogRecordsFunc)
 
 	// Assert
 	require.Nil(s.T(), err)
