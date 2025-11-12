@@ -179,7 +179,7 @@ class CompactBitSequenceBase {
   using SharedPtr = BareBones::SharedPtr<uint8_t, SharedPtrControlBlock, DefaultReallocator>;
 
   CompactBitSequenceBase() = default;
-  CompactBitSequenceBase(const CompactBitSequenceBase& other)
+  PROMPP_ALWAYS_INLINE CompactBitSequenceBase(const CompactBitSequenceBase& other)
       : memory_(other.memory_, other.stream_allocated_memory()), size_in_bits_(other.size_in_bits_), allocation_size_index_(other.allocation_size_index_) {}
   PROMPP_ALWAYS_INLINE CompactBitSequenceBase(CompactBitSequenceBase&& other) noexcept
       : memory_(std::move(other.memory_)), size_in_bits_(other.size_in_bits_), allocation_size_index_(std::exchange(other.allocation_size_index_, 0)) {
@@ -189,7 +189,13 @@ class CompactBitSequenceBase {
   CompactBitSequenceBase& operator=(const CompactBitSequenceBase& other) {
     if (this != &other) [[likely]] {
       const auto size = other.stream_allocated_memory();
-      memory_.reset(other.memory_.get(), size, size, other.memory_.constructed_item_count());
+      if (memory_.non_atomic_is_unique()) [[likely]] {
+        memory_.non_atomic_reallocate(size);
+        std::memcpy(memory_.get(), other.memory_.get(), size);
+      } else {
+        memory_.reset(other.memory_.get(), size, size, other.memory_.constructed_item_count());
+      }
+
       size_in_bits_ = other.size_in_bits_;
       allocation_size_index_ = other.allocation_size_index_;
     }
@@ -274,7 +280,7 @@ class CompactBitSequenceBase {
   uint32_t size_in_bits_{};
   uint8_t allocation_size_index_{};
 
-  void reserve_enough_memory_if_needed() noexcept {
+  PROMPP_ALWAYS_INLINE void reserve_enough_memory_if_needed() noexcept {
     assert(!is_read_only());
 
     const auto old_size = kAllocationSizesTable[allocation_size_index_];
@@ -293,7 +299,7 @@ class CompactBitSequenceBase {
     }
   }
 
-  void reserve_enough_memory_if_needed(uint32_t needed_size) noexcept {
+  PROMPP_ALWAYS_INLINE void reserve_enough_memory_if_needed(uint32_t needed_size) noexcept {
     assert(!is_read_only());
 
     needed_size += size_in_bits() + kReservedSizeBits;
@@ -302,7 +308,7 @@ class CompactBitSequenceBase {
       ++new_allocation_size_index;
     }
 
-    if (new_allocation_size_index > allocation_size_index_) {
+    if (new_allocation_size_index > allocation_size_index_) [[unlikely]] {
       const auto old_size = kAllocationSizesTable[allocation_size_index_];
       allocation_size_index_ = new_allocation_size_index;
       assert(new_allocation_size_index < std::size(kAllocationSizesTable));

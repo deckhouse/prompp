@@ -229,7 +229,6 @@ class SharedPtrControlBlockWithItemCount {
 };
 static_assert(SharedPtrControlBlockInterface<SharedPtrControlBlockWithItemCount>);
 
-#pragma pack(push, 1)
 class SharedPtrControlBlock {
  public:
   using RefCounter = uint32_t;
@@ -246,7 +245,6 @@ class SharedPtrControlBlock {
  private:
   RefCounter ref_count_{1};
 };
-#pragma pack(pop)
 
 static_assert(SharedPtrControlBlockInterface<SharedPtrControlBlock>);
 
@@ -266,7 +264,7 @@ class SharedPtr {
     std::memcpy(data_, other.data_, size * sizeof(T));
   }
   PROMPP_ALWAYS_INLINE SharedPtr(const SharedPtr& other) noexcept : data_(other.data_) { inc_ref_counter(); }
-  SharedPtr(SharedPtr&& other) noexcept : data_(std::exchange(other.data_, nullptr)) {}
+  PROMPP_ALWAYS_INLINE SharedPtr(SharedPtr&& other) noexcept : data_(std::exchange(other.data_, nullptr)) {}
 
   PROMPP_ALWAYS_INLINE ~SharedPtr() { dec_ref_counter(); }
 
@@ -297,10 +295,8 @@ class SharedPtr {
     auto control_block = static_cast<ControlBlock*>(Reallocator::reallocate(raw_memory(), kControlBlockSize + size * sizeof(T)));
     PRAGMA_DIAGNOSTIC(pop)
 
-    if (data_ == nullptr) [[likely]] {
+    if (data_ == nullptr) {
       std::construct_at(control_block);
-    } else {
-      control_block->ref_count() = 1;
     }
 
     data_ = reinterpret_cast<T*>(control_block + 1);
@@ -351,7 +347,10 @@ class SharedPtr {
 
     non_atomic_reallocate(new_size);
     set_constructed_item_count(constructed_item_count);
+    PRAGMA_DIAGNOSTIC(push)
+    PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
     std::memcpy(data_, data, size * sizeof(T));
+    PRAGMA_DIAGNOSTIC(pop)
   }
 
  private:
@@ -427,12 +426,7 @@ class SharedMemory : public GenericMemory<SharedMemory<T, Reallocator>, uint32_t
     if (data_.non_atomic_is_unique()) [[likely]] {
       data_.non_atomic_reallocate(new_size);
     } else {
-      SharedPtr new_data(new_size, constructed_item_count());
-      PRAGMA_DIAGNOSTIC(push)
-      PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
-      std::memcpy(new_data.get(), data_.get(), size_ * sizeof(T));
-      PRAGMA_DIAGNOSTIC(pop)
-      swap(data_, new_data);
+      data_.reset(data_.get(), size_, new_size, constructed_item_count());
     }
 
     size_ = new_size;
