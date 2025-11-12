@@ -13,6 +13,7 @@ using BareBones::MemoryControlBlock;
 using BareBones::MemoryControlBlockWithItemCount;
 using BareBones::SharedMemory;
 using BareBones::SharedPtr;
+using BareBones::SharedPtrControlBlockWithItemCount;
 
 struct GetAllocationSizeCase {
   uint32_t needed_size;
@@ -181,7 +182,7 @@ TEST_F(MemoryWithItemCountFixture, CopyOperator) {
 class SharedPtrFixture : public ::testing::Test {
  protected:
   template <class T>
-  using SharedPtr = BareBones::SharedPtr<T, DefaultReallocator>;
+  using SharedPtr = BareBones::SharedPtr<T, SharedPtrControlBlockWithItemCount, DefaultReallocator>;
 };
 
 TEST_F(SharedPtrFixture, Empty) {

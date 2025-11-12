@@ -176,18 +176,21 @@ template <std::array kAllocationSizesTable, uint32_t kReservedSizeBits>
   requires std::is_same_v<typename decltype(kAllocationSizesTable)::value_type, AllocationSize>
 class CompactBitSequenceBase {
  public:
-  using Ptr = SharedPtr<uint8_t, DefaultReallocator>;
+  using SharedPtr = BareBones::SharedPtr<uint8_t, SharedPtrControlBlock, DefaultReallocator>;
 
   CompactBitSequenceBase() = default;
   CompactBitSequenceBase(const CompactBitSequenceBase& other)
-      : memory_(other.memory_, other.stream_allocated_memory()), allocation_size_index_(other.allocation_size_index_) {}
+      : memory_(other.memory_, other.stream_allocated_memory()), size_in_bits_(other.size_in_bits_), allocation_size_index_(other.allocation_size_index_) {}
   PROMPP_ALWAYS_INLINE CompactBitSequenceBase(CompactBitSequenceBase&& other) noexcept
-      : memory_(std::move(other.memory_)), allocation_size_index_(std::exchange(other.allocation_size_index_, 0)) {}
+      : memory_(std::move(other.memory_)), size_in_bits_(other.size_in_bits_), allocation_size_index_(std::exchange(other.allocation_size_index_, 0)) {
+    other.size_in_bits_ = 0;
+  }
 
   CompactBitSequenceBase& operator=(const CompactBitSequenceBase& other) {
     if (this != &other) [[likely]] {
       const auto size = other.stream_allocated_memory();
       memory_.reset(other.memory_.get(), size, size, other.memory_.constructed_item_count());
+      size_in_bits_ = other.size_in_bits_;
       allocation_size_index_ = other.allocation_size_index_;
     }
 
@@ -197,6 +200,8 @@ class CompactBitSequenceBase {
   CompactBitSequenceBase& operator=(CompactBitSequenceBase&& other) noexcept {
     if (this != &other) [[likely]] {
       memory_ = std::move(other.memory_);
+      size_in_bits_ = other.size_in_bits_;
+      other.size_in_bits_ = 0;
       allocation_size_index_ = std::exchange(other.allocation_size_index_, 0);
     }
 
@@ -204,11 +209,12 @@ class CompactBitSequenceBase {
   }
 
   PROMPP_ALWAYS_INLINE bool operator==(const CompactBitSequenceBase& other) const noexcept {
-    return memory_.constructed_item_count() == other.memory_.constructed_item_count() && memcmp(memory_.get(), other.memory_.get(), size_in_bytes()) == 0;
+    return size_in_bits_ == other.size_in_bits_ && memcmp(memory_.get(), other.memory_.get(), size_in_bytes()) == 0;
   }
 
   PROMPP_ALWAYS_INLINE void clear() noexcept {
     memory_.clear();
+    size_in_bits_ = 0;
     allocation_size_index_ = 0;
   }
 
@@ -219,10 +225,10 @@ class CompactBitSequenceBase {
     return kReservedBytesForReader;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size_in_bits() const noexcept { return memory_.constructed_item_count(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size_in_bits() const noexcept { return size_in_bits_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size_in_bytes() const noexcept { return Bit::to_ceil_bytes(size_in_bits()); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept {
-    return stream_allocated_memory() + (memory_.get() != nullptr ? Ptr::kControlBlockSize : 0);
+    return stream_allocated_memory() + (memory_.get() != nullptr ? SharedPtr::kControlBlockSize : 0);
   }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint8_t allocation_size_index() const noexcept { return allocation_size_index_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_read_only() const noexcept { return allocation_size_index_ == kNoAllocationIndex; }
@@ -234,7 +240,7 @@ class CompactBitSequenceBase {
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const uint8_t> bytes() const noexcept { return bytes<uint8_t>(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const uint8_t* raw_bytes() const noexcept { return memory_.get(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint8_t* raw_bytes() noexcept { return memory_.get(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE Ptr shared_memory() const noexcept { return memory_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE SharedPtr shared_memory() const noexcept { return memory_; }
 
   PROMPP_ALWAYS_INLINE void shrink_to_fit() noexcept {
     if (memory_.non_atomic_is_unique()) [[likely]] {
@@ -254,16 +260,18 @@ class CompactBitSequenceBase {
 
     if (memory_.non_atomic_is_unique()) [[likely]] {
       memset(memory_.get(), '\0', stream_allocated_memory());
-      memory_.set_constructed_item_count(0);
     } else {
       memory_.clear();
     }
+
+    size_in_bits_ = 0;
   }
 
  protected:
   static constexpr uint32_t kNoAllocationIndex = std::numeric_limits<uint8_t>::max();
 
-  SharedPtr<uint8_t, DefaultReallocator> memory_;
+  SharedPtr memory_;
+  uint32_t size_in_bits_{};
   uint8_t allocation_size_index_{};
 
   void reserve_enough_memory_if_needed() noexcept {
@@ -330,6 +338,7 @@ class PROMPP_ATTRIBUTE_PACKED CompactBitSequence : public CompactBitSequenceBase
  public:
   using Base = CompactBitSequenceBase<kAllocationSizesTable, Bit::to_bits(sizeof(uint64_t) + 1)>;
   using Base::size_in_bits;
+  using Base::size_in_bits_;
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE BitSequenceReader reader() const noexcept { return {Base::memory_.get(), size_in_bits()}; };
 
@@ -338,28 +347,28 @@ class PROMPP_ATTRIBUTE_PACKED CompactBitSequence : public CompactBitSequenceBase
     const size_t new_size_in_bytes = Base::size_in_bytes() - bytes_count;
     memmove(Base::memory_.get(), Base::memory_.get() + bytes_count, new_size_in_bytes);
     memset(Base::memory_.get() + new_size_in_bytes, '\0', bytes_count);
-    Base::memory_.dec_constructed_item_count(Bit::to_bits(bytes_count));
+    size_in_bits_ -= Bit::to_bits(bytes_count);
   }
 
   PROMPP_ALWAYS_INLINE void push_back_single_zero_bit() noexcept {
     reserve_enough_memory_if_needed();
-    Base::memory_.inc_constructed_item_count();
+    ++size_in_bits_;
   }
   PROMPP_ALWAYS_INLINE void push_back_single_zero_bit(uint32_t count) noexcept {
     reserve_enough_memory_if_needed(count);
-    Base::memory_.inc_constructed_item_count(count);
+    size_in_bits_ += count;
   }
   PROMPP_ALWAYS_INLINE void push_back_single_one_bit() noexcept {
     reserve_enough_memory_if_needed();
     *Base::template unfilled_memory<uint32_t>() |= 0b1u << unfilled_bits_in_byte();
-    Base::memory_.inc_constructed_item_count();
+    ++size_in_bits_;
   }
   PROMPP_ALWAYS_INLINE void push_back_bits_u32(uint32_t size, uint32_t data) noexcept {
     assert(size <= Bit::to_bits(sizeof(uint32_t)));
 
     reserve_enough_memory_if_needed();
     *Base::template unfilled_memory<uint64_t>() |= static_cast<uint64_t>(data) << unfilled_bits_in_byte();
-    Base::memory_.inc_constructed_item_count(size);
+    size_in_bits_ += size;
   }
   PROMPP_ALWAYS_INLINE void push_back_u64(uint64_t data) noexcept { push_back_bits_u64(64, data); }
   PROMPP_ALWAYS_INLINE void push_back_bits_u64(uint32_t size, uint64_t data) noexcept {
@@ -371,7 +380,7 @@ class PROMPP_ATTRIBUTE_PACKED CompactBitSequence : public CompactBitSequenceBase
     *reinterpret_cast<uint64_t*>(memory) |= data << unfilled_bits_in_byte();
     *reinterpret_cast<uint64_t*>(memory + 1) |= data >> (8 - unfilled_bits_in_byte());
 
-    Base::memory_.inc_constructed_item_count(size);
+    size_in_bits_ += size;
   }
   PROMPP_ALWAYS_INLINE void push_back_d64_svbyte_0468(double val) noexcept {
     // for double skip trail z instead of lead z
@@ -411,7 +420,7 @@ class PROMPP_ATTRIBUTE_PACKED CompactBitSequence : public CompactBitSequenceBase
 
     if (unfilled_bits_in_byte() == 0) [[unlikely]] {
       std::memcpy(Base::memory_.get() + Base::size_in_bytes(), bytes, count);
-      Base::memory_.inc_constructed_item_count(bit_count);
+      size_in_bits_ += bit_count;
     } else {
       for (; count >= sizeof(uint64_t); count -= sizeof(uint64_t), bytes += sizeof(uint64_t)) {
         push_back_u64(*reinterpret_cast<const uint64_t*>(bytes));

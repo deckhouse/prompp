@@ -423,6 +423,7 @@ TEST_F(CompactBitSequenceFixture, ShrinkToFitOnNonUniqueMemory) {
 
   stream_.push_back_u64(kValue);
   const auto memory = stream_.shared_memory();
+  const auto memory_size = stream_.size_in_bits();
   const auto allocated_memory = stream_.allocated_memory();
 
   // Act
@@ -432,7 +433,7 @@ TEST_F(CompactBitSequenceFixture, ShrinkToFitOnNonUniqueMemory) {
   EXPECT_LT(stream_.allocated_memory(), allocated_memory);
   ASSERT_EQ(sizeof(kValue), stream_.size_in_bytes());
   EXPECT_EQ(kValue, *stream_.bytes<uint64_t>().data());
-  ASSERT_EQ(BareBones::Bit::to_bits(sizeof(kValue)), memory.constructed_item_count());
+  ASSERT_EQ(BareBones::Bit::to_bits(sizeof(kValue)), memory_size);
   EXPECT_EQ(kValue, *reinterpret_cast<uint64_t*>(memory.get()));
 }
 
@@ -444,6 +445,7 @@ TEST_F(CompactBitSequenceFixture, ReallocOnNonUniqueMemory) {
   stream_.push_back_u64(kValue);
   stream_.push_back_u64(kValue);
   const auto memory = stream_.shared_memory();
+  const auto memory_size = stream_.size_in_bits();
 
   // Act
   stream_.push_back_u64(kValue);
@@ -451,7 +453,7 @@ TEST_F(CompactBitSequenceFixture, ReallocOnNonUniqueMemory) {
   // Assert
   EXPECT_NE(stream_.raw_bytes(), memory.get());
   EXPECT_TRUE(std::ranges::equal(std::vector{kValue, kValue, kValue, kValue}, stream_.bytes<uint64_t>()));
-  ASSERT_EQ(BareBones::Bit::to_bits(sizeof(kValue) * 3), memory.constructed_item_count());
+  ASSERT_EQ(BareBones::Bit::to_bits(sizeof(kValue) * 3), memory_size);
   EXPECT_TRUE(std::ranges::equal(std::vector{kValue, kValue, kValue}, std::span(reinterpret_cast<uint64_t*>(memory.get()), 3)));
 }
 

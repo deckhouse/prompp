@@ -419,11 +419,13 @@ class SharedSpan {
 
   template <class Item>
     requires std::is_trivially_destructible_v<Item>
-  explicit SharedSpan(const SharedVector<Item, Reallocator>& vector) : data_(reinterpret_cast<const SharedPtr<T, Reallocator>&>(vector.shared_ptr())) {}
+  explicit SharedSpan(const SharedVector<Item, Reallocator>& vector)
+      : data_(reinterpret_cast<const SharedPtr<T, SharedPtrControlBlockWithItemCount, Reallocator>&>(vector.shared_ptr())) {}
 
   template <class Item>
     requires std::is_trivially_destructible_v<Item>
-  explicit SharedSpan(const SharedMemory<Item, Reallocator>& memory) : data_(reinterpret_cast<const SharedPtr<T, Reallocator>&>(memory.ptr())) {}
+  explicit SharedSpan(const SharedMemory<Item, Reallocator>& memory)
+      : data_(reinterpret_cast<const SharedPtr<T, SharedPtrControlBlockWithItemCount, Reallocator>&>(memory.ptr())) {}
 
   SharedSpan(const SharedSpan&) = default;
   SharedSpan(SharedSpan&& other) noexcept : data_(std::move(other.data_)) {}
@@ -452,7 +454,7 @@ class SharedSpan {
   [[nodiscard]] PROMPP_ALWAYS_INLINE const T* end() const noexcept { return begin() + size(); }
 
  private:
-  SharedPtr<T, Reallocator> data_;
+  SharedPtr<T, SharedPtrControlBlockWithItemCount, Reallocator> data_;
 };
 
 template <class T>

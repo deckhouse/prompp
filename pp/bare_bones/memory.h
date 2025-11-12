@@ -197,24 +197,68 @@ struct DefaultReallocator {
   PROMPP_ALWAYS_INLINE static void free(void* memory) { return std::free(memory); }
 };
 
-template <class T, ReallocatorInterface Reallocator>
-class SharedPtr {
+template <class ControlBlock>
+concept SharedPtrControlBlockInterface = requires(ControlBlock control_block, const ControlBlock const_control_block) {
+  requires std::integral<typename ControlBlock::RefCounter>;
+  requires std::integral<typename ControlBlock::ItemCounter>;
+
+  { control_block.ref_count() } -> std::same_as<typename ControlBlock::RefCounter&>;
+  { const_control_block.ref_count() } -> std::same_as<typename ControlBlock::RefCounter>;
+  { control_block.atomic_ref_count() } -> std::same_as<typename ControlBlock::AtomicRefCounter>;
+
+  { control_block.constructed_item_count() } -> std::same_as<typename ControlBlock::ItemCounter>;
+  { control_block.set_constructed_item_count(typename ControlBlock::ItemCounter()) };
+};
+
+class SharedPtrControlBlockWithItemCount {
  public:
   using RefCounter = uint32_t;
   using ItemCounter = uint32_t;
   using AtomicRefCounter = std::atomic_ref<RefCounter>;
 
-  struct ControlBlock {
-    RefCounter ref_count{1};
-    ItemCounter constructed_item_count{};
+  [[nodiscard]] PROMPP_ALWAYS_INLINE ItemCounter constructed_item_count() const noexcept { return constructed_item_count_; }
+  PROMPP_ALWAYS_INLINE void set_constructed_item_count(ItemCounter count) noexcept { constructed_item_count_ = count; }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE AtomicRefCounter atomic_ref_count() noexcept { return AtomicRefCounter(ref_count); }
-  };
+  [[nodiscard]] PROMPP_ALWAYS_INLINE RefCounter& ref_count() noexcept { return ref_count_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE RefCounter ref_count() const noexcept { return ref_count_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE AtomicRefCounter atomic_ref_count() noexcept { return AtomicRefCounter(ref_count_); }
+
+ private:
+  RefCounter ref_count_{1};
+  ItemCounter constructed_item_count_{};
+};
+static_assert(SharedPtrControlBlockInterface<SharedPtrControlBlockWithItemCount>);
+
+#pragma pack(push, 1)
+class SharedPtrControlBlock {
+ public:
+  using RefCounter = uint32_t;
+  using ItemCounter = uint32_t;
+  using AtomicRefCounter = std::atomic_ref<RefCounter>;
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static ItemCounter constructed_item_count() noexcept { return 0; }
+  PROMPP_ALWAYS_INLINE static void set_constructed_item_count(ItemCounter) noexcept {}
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE RefCounter& ref_count() noexcept { return ref_count_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE RefCounter ref_count() const noexcept { return ref_count_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE AtomicRefCounter atomic_ref_count() noexcept { return AtomicRefCounter(ref_count_); }
+
+ private:
+  RefCounter ref_count_{1};
+};
+#pragma pack(pop)
+
+static_assert(SharedPtrControlBlockInterface<SharedPtrControlBlock>);
+
+template <class T, SharedPtrControlBlockInterface ControlBlockType, ReallocatorInterface Reallocator>
+class SharedPtr {
+ public:
+  using ControlBlock = ControlBlockType;
 
   static constexpr uint32_t kControlBlockSize = sizeof(ControlBlock);
 
   SharedPtr() = default;
-  explicit PROMPP_ALWAYS_INLINE SharedPtr(uint32_t size, ItemCounter constructed_item_count = 0) : data_(nullptr) {
+  explicit PROMPP_ALWAYS_INLINE SharedPtr(uint32_t size, ControlBlock::ItemCounter constructed_item_count = 0) : data_(nullptr) {
     non_atomic_reallocate(size);
     set_constructed_item_count(constructed_item_count);
   }
@@ -256,15 +300,15 @@ class SharedPtr {
     if (data_ == nullptr) [[likely]] {
       std::construct_at(control_block);
     } else {
-      control_block->ref_count = 1;
+      control_block->ref_count() = 1;
     }
 
     data_ = reinterpret_cast<T*>(control_block + 1);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE RefCounter non_atomic_ref_count() const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE ControlBlock::RefCounter non_atomic_ref_count() const noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
-      return block->ref_count;
+      return block->ref_count();
     }
 
     return 0;
@@ -272,35 +316,23 @@ class SharedPtr {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool non_atomic_is_unique() const noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
-      return block->ref_count == 1;
+      return block->ref_count() == 1;
     }
 
     return true;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE ItemCounter constructed_item_count() const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE ControlBlock::ItemCounter constructed_item_count() const noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
-      return block->constructed_item_count;
+      return block->constructed_item_count();
     }
 
     return 0;
   }
 
-  PROMPP_ALWAYS_INLINE void set_constructed_item_count(ItemCounter count) noexcept {
+  PROMPP_ALWAYS_INLINE void set_constructed_item_count(ControlBlock::ItemCounter count) noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
-      block->constructed_item_count = count;
-    }
-  }
-
-  PROMPP_ALWAYS_INLINE void inc_constructed_item_count(ItemCounter count = 1) noexcept {
-    if (auto block = control_block(); block != nullptr) [[likely]] {
-      block->constructed_item_count += count;
-    }
-  }
-
-  PROMPP_ALWAYS_INLINE void dec_constructed_item_count(ItemCounter count = 1) noexcept {
-    if (auto block = control_block(); block != nullptr) [[likely]] {
-      block->constructed_item_count -= count;
+      block->set_constructed_item_count(count);
     }
   }
 
@@ -313,7 +345,7 @@ class SharedPtr {
     data_ = nullptr;
   }
 
-  PROMPP_ALWAYS_INLINE void reset(const T* data, uint32_t size, uint32_t new_size, ItemCounter constructed_item_count) noexcept {
+  PROMPP_ALWAYS_INLINE void reset(const T* data, uint32_t size, uint32_t new_size, ControlBlock::ItemCounter constructed_item_count) noexcept {
     dec_ref_counter();
     data_ = nullptr;
 
@@ -333,7 +365,7 @@ class SharedPtr {
 
   PROMPP_ALWAYS_INLINE void dec_ref_counter() noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
-      if (block->ref_count == 1) [[likely]] {
+      if (block->ref_count() == 1) [[likely]] {
         destroy();
       } else {
         --block->atomic_ref_count();
@@ -347,7 +379,7 @@ class SharedPtr {
     data_ = nullptr;
   }
 
-  PROMPP_ALWAYS_INLINE void destroy_constructed_items() noexcept { std::destroy_n(reinterpret_cast<T*>(data_), control_block()->constructed_item_count); }
+  PROMPP_ALWAYS_INLINE void destroy_constructed_items() noexcept { std::destroy_n(reinterpret_cast<T*>(data_), control_block()->constructed_item_count()); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE ControlBlock* control_block() noexcept { return static_cast<ControlBlock*>(raw_memory()); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const ControlBlock* control_block() const noexcept { return static_cast<ControlBlock*>(raw_memory()); }
@@ -359,7 +391,7 @@ template <class T, ReallocatorInterface Reallocator>
 class SharedMemory : public GenericMemory<SharedMemory<T, Reallocator>, uint32_t, T> {
  public:
   using SizeType = uint32_t;
-  using SharedPtr = BareBones::SharedPtr<T, Reallocator>;
+  using SharedPtr = BareBones::SharedPtr<T, SharedPtrControlBlockWithItemCount, Reallocator>;
 
   SharedMemory() = default;
   SharedMemory(const SharedMemory&) = default;
@@ -375,8 +407,8 @@ class SharedMemory : public GenericMemory<SharedMemory<T, Reallocator>, uint32_t
     return *this;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE typename SharedPtr::ItemCounter constructed_item_count() const noexcept { return data_.constructed_item_count(); }
-  PROMPP_ALWAYS_INLINE void set_constructed_item_count(typename SharedPtr::ItemCounter count) noexcept { data_.set_constructed_item_count(count); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE SharedPtr::ControlBlock::ItemCounter constructed_item_count() const noexcept { return data_.constructed_item_count(); }
+  PROMPP_ALWAYS_INLINE void set_constructed_item_count(SharedPtr::ControlBlock::ItemCounter count) noexcept { data_.set_constructed_item_count(count); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
     return size_ * sizeof(T) + (data_.get() != nullptr ? sizeof(SharedPtr::kControlBlockSize) : 0);

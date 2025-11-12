@@ -20,12 +20,12 @@ namespace series_data {
 struct SerializedCompactBitSequence {
   template <class CompactBitSequence>
   PROMPP_ALWAYS_INLINE explicit SerializedCompactBitSequence(const CompactBitSequence& bit_sequence)
-      : ptr(bit_sequence.shared_memory()), size_in_bits(ptr.constructed_item_count()) {}
+      : ptr(bit_sequence.shared_memory()), size_in_bits(bit_sequence.size_in_bits()) {}
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const uint8_t> buffer() const noexcept { return {ptr.get(), BareBones::Bit::to_ceil_bytes(size_in_bits)}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE BareBones::BitSequenceReader reader() const noexcept { return {ptr.get(), size_in_bits}; }
 
-  BareBones::SharedPtr<uint8_t, BareBones::DefaultReallocator> ptr;
+  encoder::CompactBitSequence::SharedPtr ptr;
   uint32_t size_in_bits;
 };
 

@@ -7,12 +7,10 @@
 #include <random>
 
 #include "bare_bones/preprocess.h"
-#include "primitives/go_slice.h"
 #include "profiling/profiling.h"
 #include "series_data/encoder.h"
 #include "series_data/querier/query.h"
 #include "series_data/serialization/serialized_data.h"
-#include "series_data/serialization/serializer.h"
 
 namespace {
 

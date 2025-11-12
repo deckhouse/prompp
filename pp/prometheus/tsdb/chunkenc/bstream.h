@@ -27,24 +27,24 @@ class BStream : public BareBones::CompactBitSequenceBase<kAllocationSizesTable, 
   void write_bits(uint64_t value, uint8_t nbits) noexcept {
     reserve_enough_memory_if_needed(nbits);
     chunkenc::write_bits(Base::template unfilled_memory<uint8_t>(), value, nbits, rest_of_bits_in_byte());
-    Base::memory_.inc_constructed_item_count(nbits);
+    size_in_bits_ += nbits;
   }
 
   PROMPP_ALWAYS_INLINE void write_byte(uint8_t byt) noexcept {
     reserve_enough_memory_if_needed();
     chunkenc::write_byte(Base::template unfilled_memory<uint8_t>(), byt, unfilled_bits_in_byte(), rest_of_bits_in_byte());
-    Base::memory_.inc_constructed_item_count(BareBones::Bit::kByteBits);
+    size_in_bits_ += BareBones::Bit::kByteBits;
   }
 
   PROMPP_ALWAYS_INLINE void write_zero_bit() noexcept {
     reserve_enough_memory_if_needed();
-    Base::memory_.inc_constructed_item_count();
+    ++size_in_bits_;
   }
 
   PROMPP_ALWAYS_INLINE void write_single_bit() noexcept {
     reserve_enough_memory_if_needed();
     chunkenc::write_single_bit(Base::template unfilled_memory<uint8_t>(), rest_of_bits_in_byte());
-    Base::memory_.inc_constructed_item_count();
+    ++size_in_bits_;
   }
 
  private:
@@ -54,6 +54,7 @@ class BStream : public BareBones::CompactBitSequenceBase<kAllocationSizesTable, 
 
   using Base::reserve_enough_memory_if_needed;
   using Base::size_in_bits;
+  using Base::size_in_bits_;
   using Base::unfilled_bits_in_byte;
   using Base::unfilled_memory;
 
@@ -68,19 +69,21 @@ class FixedSizeBStream : public BareBones::CompactBitSequenceBase<kAllocationSiz
 
   void write_bits(uint64_t value, uint8_t nbits) noexcept {
     chunkenc::write_bits(Base::template unfilled_memory<uint8_t>(), value, nbits, rest_of_bits_in_byte());
-    Base::memory_.inc_constructed_item_count(nbits);
+    size_in_bits_ += nbits;
   }
 
   PROMPP_ALWAYS_INLINE void write_byte(uint8_t byt) noexcept {
     chunkenc::write_byte(Base::template unfilled_memory<uint8_t>(), byt, unfilled_bits_in_byte(), rest_of_bits_in_byte());
-    Base::memory_.inc_constructed_item_count(BareBones::Bit::kByteBits);
+    size_in_bits_ += BareBones::Bit::kByteBits;
   }
 
-  PROMPP_ALWAYS_INLINE void write_zero_bit() noexcept { Base::memory_.inc_constructed_item_count(); }
+  PROMPP_ALWAYS_INLINE void write_zero_bit() noexcept {
+    ++size_in_bits_;
+  }
 
   PROMPP_ALWAYS_INLINE void write_single_bit() noexcept {
     chunkenc::write_single_bit(Base::template unfilled_memory<uint8_t>(), rest_of_bits_in_byte());
-    Base::memory_.inc_constructed_item_count();
+    ++size_in_bits_;
   }
 
  private:
@@ -90,6 +93,7 @@ class FixedSizeBStream : public BareBones::CompactBitSequenceBase<kAllocationSiz
 
   using Base::reserve_enough_memory_if_needed;
   using Base::size_in_bits;
+  using Base::size_in_bits_;
   using Base::unfilled_bits_in_byte;
   using Base::unfilled_memory;
 
