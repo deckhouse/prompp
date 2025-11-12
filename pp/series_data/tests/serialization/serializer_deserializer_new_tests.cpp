@@ -6,7 +6,6 @@
 #include "series_data/encoder/bit_sequence.h"
 #include "series_data/serialization/deserializer.h"
 #include "series_data/serialization/serialized_data.h"
-#include "series_data/serialization/serializer.h"
 
 namespace {
 

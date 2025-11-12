@@ -3,7 +3,7 @@
 #include "chunk_recoder.h"
 #include "series_data/encoder.h"
 #include "series_data/serialization/deserializer.h"
-#include "series_data/serialization/serializer.h"
+#include "series_data/serialization/serialized_data.h"
 
 namespace {
 
@@ -14,7 +14,7 @@ using PromPP::Primitives::LabelSetID;
 using PromPP::Primitives::TimeInterval;
 using series_data::DataStorage;
 using series_data::Encoder;
-using series_data::serialization::Serializer;
+using series_data::serialization::DataSerializer;
 using std::operator""s;
 
 class ChunkRecoderFixture : public ::testing::Test {
@@ -407,11 +407,9 @@ TEST_F(ChunkRecoderFixture, RecodeSerializedChunks) {
   encoder.encode(4, 3, 2.0);
   encoder.encode(4, 4, 2.0);
 
-  Serializer serializer{storage_};
-  BareBones::ShrinkedToFitOStringStream stream;
-  serializer.serialize(stream);
-
-  ChunkRecoder recoder(series_data::chunk::SerializedChunkIterator{stream.span<const uint8_t>()}, {.min = 0, .max = 4});
+  DataSerializer serializer{storage_};
+  const auto serialized_data = serializer.serialize();
+  ChunkRecoder recoder(series_data::chunk::SerializedChunkIterator{serialized_data.bytes_buffer, serialized_data.chunks}, {.min = 0, .max = 4});
 
   // Act
   const auto info1 = recode(recoder);

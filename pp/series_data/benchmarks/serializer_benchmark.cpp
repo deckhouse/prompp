@@ -64,84 +64,6 @@ series_data::querier::QueriedChunkList generate_query(uint32_t size) {
   return chunk_list;
 }
 
-void BenchmarkWalSerializer(benchmark::State& state) {
-  ZoneScoped;
-  const auto& samples = get_samples_for_benchmark();
-  const double percent = static_cast<double>(state.range(0)) / 100.0;
-  const auto [min, max] = std::ranges::minmax_element(samples, [](auto a, auto b) { return a.timestamp < b.timestamp; });
-  const auto min_ts = min->timestamp;
-  const auto max_ts = max->timestamp;
-  const auto delta_ts = max_ts - min_ts;
-
-  series_data::DataStorage storage;
-  series_data::Encoder encoder{storage};
-
-  for (const auto& sample : samples) {
-    if (sample.timestamp <= min_ts + static_cast<int64_t>(static_cast<double>(delta_ts) * percent)) {
-      encoder.encode(sample.series_id, sample.timestamp, sample.value);
-    }
-  }
-
-  const series_data::querier::QueriedChunkList chunk_list = generate_query(storage.open_chunks.size());
-
-  for ([[maybe_unused]] auto _ : state) {
-    series_data::serialization::Serializer serializer_{storage};
-    PromPP::Primitives::Go::Slice<char> slice;
-    PromPP::Primitives::Go::BytesStream stream{&slice};
-
-    serializer_.serialize(chunk_list, stream);
-  }
-
-  {
-    series_data::serialization::Serializer serializer_{storage};
-    PromPP::Primitives::Go::Slice<char> slice;
-    PromPP::Primitives::Go::BytesStream stream{&slice};
-
-    serializer_.serialize(chunk_list, stream);
-    state.counters["Stream Size"] =
-        benchmark::Counter(static_cast<double>(slice.allocated_memory()), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
-  }
-}
-
-void BenchmarkWalConstantSerializer(benchmark::State& state) {
-  ZoneScoped;
-  const auto& samples = get_samples_for_benchmark();
-  const double percent = static_cast<double>(state.range(0)) / 100.0;
-  const auto [min, max] = std::ranges::minmax_element(samples, [](auto a, auto b) { return a.timestamp < b.timestamp; });
-  const auto min_ts = min->timestamp;
-  const auto max_ts = max->timestamp;
-  const auto delta_ts = max_ts - min_ts;
-
-  series_data::DataStorage storage;
-  series_data::Encoder encoder{storage};
-
-  for (const auto& sample : samples) {
-    if (sample.timestamp <= min_ts + static_cast<int64_t>(static_cast<double>(delta_ts) * percent)) {
-      encoder.encode(sample.series_id, sample.timestamp, sample.series_id);
-    }
-  }
-
-  const series_data::querier::QueriedChunkList chunk_list = generate_query(storage.open_chunks.size());
-
-  for ([[maybe_unused]] auto _ : state) {
-    series_data::serialization::Serializer serializer_{storage};
-    PromPP::Primitives::Go::Slice<char> slice;
-    PromPP::Primitives::Go::BytesStream stream{&slice};
-
-    serializer_.serialize(chunk_list, stream);
-  }
-
-  {
-    series_data::serialization::Serializer serializer_{storage};
-    PromPP::Primitives::Go::Slice<char> slice;
-    PromPP::Primitives::Go::BytesStream stream{&slice};
-
-    serializer_.serialize(chunk_list, stream);
-    state.counters["Stream Size"] =
-        benchmark::Counter(static_cast<double>(slice.allocated_memory()), benchmark::Counter::kDefaults, benchmark::Counter::OneK::kIs1024);
-  }
-}
-
 void BenchmarkWalSerializedData(benchmark::State& state) {
   ZoneScoped;
   const auto& samples = get_samples_for_benchmark();
@@ -204,9 +126,7 @@ void BenchmarkWalConstantSerializedData(benchmark::State& state) {
   }
 }
 
-BENCHMARK(BenchmarkWalSerializer)->Arg(25)->Arg(50)->Arg(75)->Arg(100);
 BENCHMARK(BenchmarkWalSerializedData)->Arg(25)->Arg(50)->Arg(75)->Arg(100);
-BENCHMARK(BenchmarkWalConstantSerializer)->Arg(25)->Arg(50)->Arg(75)->Arg(100);
 BENCHMARK(BenchmarkWalConstantSerializedData)->Arg(25)->Arg(50)->Arg(75)->Arg(100);
 
 }  // namespace
