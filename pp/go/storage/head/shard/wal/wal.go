@@ -44,7 +44,7 @@ type SegmentWriter[TSegment EncodedSegment] interface {
 // Encoder the minimum required Encoder implementation for a [Wal].
 type Encoder[TSegment EncodedSegment] interface {
 	// Encode encodes the inner series into a segment.
-	Encode(innerSeriesSlice []*cppbridge.InnerSeries) (uint32, error)
+	Encode(innerSeriesSlice []cppbridge.InnerSeries) (uint32, error)
 
 	// Finalize finalizes the encoder and returns the encoded segment.
 	Finalize() (TSegment, error)
@@ -211,7 +211,7 @@ func (w *Wal[TSegment, TWriter]) Sync() error {
 }
 
 // Write the incoming inner series to wal encoder.
-func (w *Wal[TSegment, TWriter]) Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error) {
+func (w *Wal[TSegment, TWriter]) Write(innerSeriesSlice []cppbridge.InnerSeries) (bool, error) {
 	if w.corrupted {
 		return false, ErrWalIsCorrupted
 	}

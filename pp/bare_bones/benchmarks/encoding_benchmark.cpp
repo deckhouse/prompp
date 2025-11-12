@@ -3,6 +3,7 @@
 #include <fstream>
 
 #include "bare_bones/encoding.h"
+#include "profiling/profiling.h"
 
 namespace {
 
@@ -27,6 +28,7 @@ const BareBones::Vector<uint32_t>& values() {
 
 template <template <class, size_t> class Sequence>
 void EncodingSequencePushBack(benchmark::State& state) {
+  ZoneScoped;
   const auto& kValues = values();
   using EncodingSequence = BareBones::EncodedSequence<DeltaRLE<Sequence<Codec0124, 8>>>;
 
@@ -48,6 +50,7 @@ void EncodingSequencePushBack(benchmark::State& state) {
 
 template <template <class, size_t> class Sequence>
 void EncodingSequenceDecode(benchmark::State& state) {
+  ZoneScoped;
   const auto& kValues = values();
   using EncodingSequence = BareBones::EncodedSequence<DeltaRLE<Sequence<Codec0124, 8>>>;
 

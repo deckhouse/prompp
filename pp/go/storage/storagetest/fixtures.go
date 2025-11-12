@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -92,17 +94,21 @@ func MustAppendTimeSeries(s *suite.Suite, head *storage.Head, timeSeries []TimeS
 	state.SetStatelessRelabeler(statelessRelabeler)
 
 	for i := range timeSeries {
-		tsd := timeSeriesDataSlice{timeSeries: timeSeries[i].toModelTimeSeries()}
-		hx, err := (cppbridge.HashdexFactory{}).GoModel(tsd.TimeSeries(), cppbridge.DefaultWALHashdexLimits())
-		s.Require().NoError(err)
-
-		_, _, err = headAppender.Append(
+		_, err = headAppender.Append(
 			context.Background(),
-			&appender.IncomingData{Hashdex: hx, Data: &tsd},
+			NewIncomingData(s, timeSeries[i].toModelTimeSeries()),
 			state,
 			true)
 		s.NoError(err)
 	}
+}
+
+func NewIncomingData(s *suite.Suite, timeSeries []model.TimeSeries) *appender.IncomingData {
+	tsd := timeSeriesDataSlice{timeSeries: timeSeries}
+	hx, err := (cppbridge.HashdexFactory{}).GoModel(tsd.TimeSeries(), cppbridge.DefaultWALHashdexLimits())
+	s.Require().NoError(err)
+
+	return &appender.IncomingData{Hashdex: hx, Data: &tsd}
 }
 
 func MustAppendTimeSeriesToLSSAndDataStorage(lss *shard.LSS, ds *shard.DataStorage, timeSeries ...TimeSeries) {
@@ -118,26 +124,6 @@ func MustAppendTimeSeriesToLSSAndDataStorage(lss *shard.LSS, ds *shard.DataStora
 // SamplesMap samples map with series ID as key.
 type SamplesMap map[uint32][]cppbridge.Sample
 
-// GetSamplesFromSerializedChunks returns sample from serialized chunks.
-func GetSamplesFromSerializedChunks(chunks *cppbridge.HeadDataStorageSerializedChunks) SamplesMap {
-	result := make(SamplesMap)
-
-	deserializer := cppbridge.NewHeadDataStorageDeserializer(chunks)
-
-	n := chunks.NumberOfChunks()
-	for i := 0; i < n; i++ {
-		metadata := chunks.Metadata(i)
-		seriesId := metadata.SeriesID()
-		iterator := deserializer.CreateDecodeIterator(metadata)
-		for iterator.Next() {
-			ts, value := iterator.Sample()
-			result[seriesId] = append(result[seriesId], cppbridge.Sample{Timestamp: ts, Value: value})
-		}
-	}
-
-	return result
-}
-
 func GetSamplesFromSerializedData(serializedData *cppbridge.DataStorageSerializedData) SamplesMap {
 	result := make(SamplesMap)
 
@@ -148,13 +134,13 @@ func GetSamplesFromSerializedData(serializedData *cppbridge.DataStorageSerialize
 		}
 
 		iterator := cppbridge.NewDataStorageSerializedDataIterator(serializedData, chunkRef)
-		nextResult := cppbridge.SerializedDataIteratorNextResult{}
 		for {
-			iterator.Next(&nextResult)
-			if !nextResult.HasValue {
+			if !iterator.HasData() {
 				break
 			}
-			result[seriesID] = append(result[seriesID], cppbridge.Sample{Timestamp: nextResult.Timestamp, Value: nextResult.Value})
+
+			result[seriesID] = append(result[seriesID], cppbridge.Sample{Timestamp: iterator.Timestamp, Value: iterator.Value})
+			iterator.Next()
 		}
 	}
 
@@ -163,24 +149,31 @@ func GetSamplesFromSerializedData(serializedData *cppbridge.DataStorageSerialize
 
 // TimeSeriesFromSeriesSet converting seriesset to slice timeseries.
 func TimeSeriesFromSeriesSet(seriesSet promstorage.SeriesSet, groupSamples bool) []TimeSeries {
+	var chunkIterator chunkenc.Iterator
 	timeSeries := make([]TimeSeries, 0)
 	for seriesSet.Next() {
 		series := seriesSet.At()
-		chunkIterator := series.Iterator(nil)
-		var samples []cppbridge.Sample
-		for chunkIterator.Next() != chunkenc.ValNone {
-			ts, v := chunkIterator.At()
-			samples = append(samples, cppbridge.Sample{Timestamp: ts, Value: v})
-		}
+		timeSeries = append(timeSeries, TimeSeriesFromSeries(series, chunkIterator, groupSamples)...)
+	}
 
-		if groupSamples {
-			timeSeries = append(timeSeries, TimeSeries{Labels: series.Labels(), Samples: samples})
-			continue
-		}
+	return timeSeries
+}
 
-		for i := 0; i < len(samples); i++ {
-			timeSeries = append(timeSeries, TimeSeries{Labels: series.Labels(), Samples: []cppbridge.Sample{samples[i]}})
-		}
+func TimeSeriesFromSeries(series promstorage.Series, chunkIterator chunkenc.Iterator, groupSamples bool) (timeSeries []TimeSeries) {
+	chunkIterator = series.Iterator(chunkIterator)
+	var samples []cppbridge.Sample
+	for chunkIterator.Next() != chunkenc.ValNone {
+		ts, v := chunkIterator.At()
+		samples = append(samples, cppbridge.Sample{Timestamp: ts, Value: v})
+	}
+
+	if groupSamples {
+		timeSeries = append(timeSeries, TimeSeries{Labels: series.Labels(), Samples: samples})
+		return timeSeries
+	}
+
+	for i := 0; i < len(samples); i++ {
+		timeSeries = append(timeSeries, TimeSeries{Labels: series.Labels(), Samples: []cppbridge.Sample{samples[i]}})
 	}
 
 	return timeSeries

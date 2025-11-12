@@ -959,6 +959,7 @@ func main() {
 
 		queryEngine = promql.NewEngine(opts)
 
+		ruleQueryOffset := time.Duration(cfgFile.GlobalConfig.RuleQueryOffset)
 		ruleManager = rules.NewManager(&rules.ManagerOptions{
 			Appendable:             adapter, // PP_CHANGES.md: rebuild on cpp
 			Queryable:              adapter, // PP_CHANGES.md: rebuild on cpp
@@ -974,7 +975,7 @@ func main() {
 			MaxConcurrentEvals:     cfg.maxConcurrentEvals,
 			ConcurrentEvalsEnabled: cfg.enableConcurrentRuleEval,
 			DefaultRuleQueryOffset: func() time.Duration {
-				return time.Duration(cfgFile.GlobalConfig.RuleQueryOffset)
+				return ruleQueryOffset
 			},
 		})
 	}

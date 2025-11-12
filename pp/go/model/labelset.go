@@ -454,6 +454,13 @@ func NewLabelSetBuilder() *LabelSetBuilder {
 	}
 }
 
+// NewLabelSetBuilderSize is a constructor with container size.
+func NewLabelSetBuilderSize(size int) *LabelSetBuilder {
+	return &LabelSetBuilder{
+		pairs: make(map[string]string, size),
+	}
+}
+
 // Build label set
 func (builder *LabelSetBuilder) Build() LabelSet {
 	return LabelSetFromMap(builder.pairs)

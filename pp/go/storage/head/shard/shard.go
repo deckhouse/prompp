@@ -29,7 +29,7 @@ type Wal interface {
 	Sync() error
 
 	// Write append the incoming inner series to wal encoder.
-	Write(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error)
+	Write(innerSeriesSlice []cppbridge.InnerSeries) (bool, error)
 }
 
 //
@@ -68,7 +68,7 @@ func NewShard(
 }
 
 // AppendInnerSeriesSlice add InnerSeries to [DataStorage].
-func (s *Shard) AppendInnerSeriesSlice(innerSeriesSlice []*cppbridge.InnerSeries) {
+func (s *Shard) AppendInnerSeriesSlice(innerSeriesSlice []cppbridge.InnerSeries) {
 	s.dataStorage.AppendInnerSeriesSlice(innerSeriesSlice)
 }
 
@@ -202,7 +202,7 @@ func (s *Shard) WalSync() error {
 }
 
 // WalWrite append the incoming inner series to wal encoder.
-func (s *Shard) WalWrite(innerSeriesSlice []*cppbridge.InnerSeries) (bool, error) {
+func (s *Shard) WalWrite(innerSeriesSlice []cppbridge.InnerSeries) (bool, error) {
 	return s.wal.Write(innerSeriesSlice)
 }
 

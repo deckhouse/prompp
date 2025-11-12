@@ -84,7 +84,10 @@ func NewHead[TShard Shard, TGoroutineShard Shard](
 	taskChs := make([]chan *task.Generic[TGoroutineShard], numberOfShards)
 	concurrency := calculateHeadConcurrency(numberOfShards) // current head workers concurrency
 	for shardID := range numberOfShards {
-		taskChs[shardID] = make(chan *task.Generic[TGoroutineShard], 4*concurrency) // x4 for back pressure
+		// append and query can create 2 tasks per request, so minimal length of channel is
+		// cap(querySemaphore)*2+cap(appendSemaphore)*2 = 2*concurrency*2+2*concurrency*2 = 8*concurrency
+		// add extra slots to channel for safety = x9 for back pressure
+		taskChs[shardID] = make(chan *task.Generic[TGoroutineShard], 9*concurrency)
 	}
 
 	factory := util.NewUnconflictRegisterer(registerer)

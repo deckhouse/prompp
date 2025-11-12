@@ -3,6 +3,7 @@
 #include <numeric>
 
 #include "performance_tests/dummy_wal.h"
+#include "profiling/profiling.h"
 #include "series_index/reverse_index.h"
 #include "wal/wal.h"
 
@@ -56,6 +57,7 @@ BareBones::Vector<Label> get_labels() {
 }
 
 void BenchmarkGenerateReverseIndex(benchmark::State& state) {
+  ZoneScoped;
   static const auto& labels = get_labels();
   static size_t allocated_memory = 0;
 

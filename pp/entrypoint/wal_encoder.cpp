@@ -69,7 +69,7 @@ extern "C" void prompp_wal_encoder_add(void* args, void* res) {
 
 extern "C" void prompp_wal_encoder_add_inner_series(void* args, void* res) {
   struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> incoming_inner_series;
+    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries> incoming_inner_series;
     PromPP::WAL::Encoder* encoder;
   };
   struct Result {
@@ -281,7 +281,7 @@ extern "C" void prompp_wal_encoder_lightweight_add(void* args, void* res) {
  * @brief Add inner series to current segment
  *
  * @param args {
- *     incomingInnerSeries []*InnerSeries // go slice with incoming InnerSeries;
+ *     incomingInnerSeries []InnerSeries // go slice with incoming InnerSeries;
  *     encoderLightweight  uintptr        // pointer to constructed encoder;
  * }
  * @param res {
@@ -296,7 +296,7 @@ extern "C" void prompp_wal_encoder_lightweight_add(void* args, void* res) {
  */
 extern "C" void prompp_wal_encoder_lightweight_add_inner_series(void* args, void* res) {
   struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> incoming_inner_series;
+    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries> incoming_inner_series;
     PromPP::WAL::EncoderLightweight* encoder;
   };
   struct Result {

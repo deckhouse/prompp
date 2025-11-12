@@ -21,9 +21,8 @@ class SerializedDataGo {
 };
 
 using SerializedDataPtr = std::unique_ptr<SerializedDataGo>;
-using SerializedDataIteratorPtr = std::unique_ptr<series_data::serialization::SerializedDataView::SeriesIterator>;
+using SerializedDataIterator = series_data::serialization::SerializedDataView::SeriesIterator;
 
 static_assert(sizeof(SerializedDataPtr) == sizeof(void*));
-static_assert(sizeof(SerializedDataIteratorPtr) == sizeof(void*));
 
 }  // namespace entrypoint::head

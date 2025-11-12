@@ -3,6 +3,8 @@
 
 #include <benchmark/benchmark.h>
 
+#include "profiling/profiling.h"
+
 #include "bare_bones/preprocess.h"
 #include "primitives/sample.h"
 #include "series_data/encoder.h"
@@ -36,6 +38,7 @@ const BareBones::Vector<sample_with_lsid>& get_samples_for_benchmark() {
 }
 
 void BenchmarkSeriesDataEncoder(benchmark::State& state) {
+  ZoneScoped;
   const auto& samples = get_samples_for_benchmark();
 
   series_data::DataStorage storage;

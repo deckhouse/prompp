@@ -466,6 +466,9 @@ type RuleConcurrencyController interface {
 
 	// Done releases a concurrent evaluation slot.
 	Done(ctx context.Context)
+
+	// IsConcurrent returns true if the controller is a concurrent controller, false if it is a sequential controller.
+	IsConcurrent() bool
 }
 
 // concurrentRuleEvalController holds a weighted semaphore which controls the concurrent evaluation of rules.
@@ -479,13 +482,13 @@ func newRuleConcurrencyController(maxConcurrency int64) RuleConcurrencyControlle
 	}
 }
 
-func (c *concurrentRuleEvalController) Allow(_ context.Context, _ *Group, rule Rule) bool {
+func (c *concurrentRuleEvalController) Allow(ctx context.Context, _ *Group, rule Rule) bool {
 	// To allow a rule to be executed concurrently, we need 3 conditions:
 	// 1. The rule must not have any rules that depend on it.
 	// 2. The rule itself must not depend on any other rules.
 	// 3. If 1 & 2 are true, then and only then we should try to acquire the concurrency slot.
-	if rule.NoDependentRules() && rule.NoDependencyRules() {
-		return c.sema.TryAcquire(1)
+	if rule.NoDependencyRules() {
+		return c.sema.Acquire(ctx, 1) == nil
 	}
 
 	return false
@@ -493,6 +496,11 @@ func (c *concurrentRuleEvalController) Allow(_ context.Context, _ *Group, rule R
 
 func (c *concurrentRuleEvalController) Done(_ context.Context) {
 	c.sema.Release(1)
+}
+
+// IsConcurrent returns true if the controller is a concurrent controller, false if it is a sequential controller.
+func (*concurrentRuleEvalController) IsConcurrent() bool {
+	return true
 }
 
 // sequentialRuleEvalController is a RuleConcurrencyController that runs every rule sequentially.
@@ -503,3 +511,8 @@ func (c sequentialRuleEvalController) Allow(_ context.Context, _ *Group, _ Rule)
 }
 
 func (c sequentialRuleEvalController) Done(_ context.Context) {}
+
+// IsConcurrent returns false if the controller is a sequential controller, true if it is a concurrent controller.
+func (c sequentialRuleEvalController) IsConcurrent() bool {
+	return false
+}
