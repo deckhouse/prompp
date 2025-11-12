@@ -77,9 +77,7 @@ class FixedSizeBStream : public BareBones::CompactBitSequenceBase<kAllocationSiz
     size_in_bits_ += BareBones::Bit::kByteBits;
   }
 
-  PROMPP_ALWAYS_INLINE void write_zero_bit() noexcept {
-    ++size_in_bits_;
-  }
+  PROMPP_ALWAYS_INLINE void write_zero_bit() noexcept { ++size_in_bits_; }
 
   PROMPP_ALWAYS_INLINE void write_single_bit() noexcept {
     chunkenc::write_single_bit(Base::template unfilled_memory<uint8_t>(), rest_of_bits_in_byte());
