@@ -52,9 +52,12 @@ func (fq *fanoutQueryable) Querier(mint, maxt int64) (Querier, error) {
 			}
 			return nil, errs.Err()
 		}
-		if _, ok := querier.(noopQuerier); !ok {
-			secondaries = append(secondaries, querier)
+		if _, ok := querier.(noopQuerier); ok {
+			continue
 		}
+
+		secondaries = append(secondaries, querier)
 	}
+
 	return NewMergeQuerier([]Querier{primary}, secondaries, ChainedSeriesMerge), nil
 }

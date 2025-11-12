@@ -54,7 +54,7 @@ type TimeSeriesAppender struct {
 	appender AppenderTimeSeries
 	state    *cppbridge.StateV2
 	batch    *timeSeriesBatch
-	lsb      *model.LabelSetBuilder
+	lsb      *model.LabelSetSimpleBuilder
 }
 
 // newTimeSeriesAppender init new [TimeSeriesAppender].
@@ -70,7 +70,7 @@ func newTimeSeriesAppender(
 		//revive:disable-next-line:add-constant // there are usually 10 rules on average.
 		batch: &timeSeriesBatch{timeSeries: make([]model.TimeSeries, 0, 10)},
 		//revive:disable-next-line:add-constant // there are usually 10 labels on average.
-		lsb: model.NewLabelSetBuilderSize(10),
+		lsb: model.NewLabelSetSimpleBuilderSize(10),
 	}
 }
 

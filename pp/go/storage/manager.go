@@ -133,7 +133,7 @@ type Manager struct {
 	cfg             *Config
 	rotatorMediator *mediator.Mediator
 	mergerMediator  *mediator.Mediator
-	isRunning       bool
+	isRunning       uint32
 }
 
 // NewManager init new [Manager].
@@ -274,7 +274,7 @@ func (m *Manager) initServices(
 	m.g.Add(
 		func() error {
 			readyNotifier.NotifyReady()
-			m.isRunning = true
+			atomic.AddUint32(&m.isRunning, 1)
 			<-m.closer.Signal()
 
 			return nil
@@ -393,7 +393,7 @@ func (m *Manager) initServices(
 }
 
 func (m *Manager) close() {
-	if !m.isRunning {
+	if atomic.LoadUint32(&m.isRunning) == 0 {
 		m.closer.Done()
 	}
 

@@ -75,6 +75,10 @@ func (bs *BatchStorage) AppendTimeSeries(
 
 // Commit adds aggregated series from [pp_storage.TransactionHead] to the [Head].
 func (bs *BatchStorage) Commit(ctx context.Context) error {
+	if len(bs.batch.timeSeries) == 0 {
+		return nil
+	}
+
 	_, err := bs.adapter.AppendTimeSeries(ctx, bs.batch, bs.state, false)
 	return err
 }
