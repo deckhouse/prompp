@@ -3,7 +3,6 @@ package storagetest
 import (
 	"context"
 	"fmt"
-	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"math"
 	"os"
 	"path/filepath"
@@ -19,6 +18,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
+	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	promstorage "github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/stretchr/testify/suite"

@@ -2,7 +2,6 @@ package querier_test
 
 import (
 	"fmt"
-	"github.com/prometheus/prometheus/storage"
 	"testing"
 
 	"github.com/prometheus/prometheus/model/labels"
@@ -11,6 +10,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
+	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/stretchr/testify/require"
 )
