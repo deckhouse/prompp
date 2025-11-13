@@ -48,26 +48,14 @@ func (ds *DataStorage) DecodeSegment(decoder *cppbridge.HeadWalDecoder, data []b
 	return decoder.DecodeToDataStorage(data, ds.encoder)
 }
 
-// InstantQuery make instant query to data storage and returns samples.
+// InstantQuery make instant query to data storage and fills samples in instant series.
 func (ds *DataStorage) InstantQuery(
-	targetTimestamp, notFoundValueTimestampValue int64,
-	seriesIDs []uint32,
-) ([]cppbridge.Sample, cppbridge.DataStorageQueryResult) {
-	ds.locker.RLock()
-	samples, res := ds.dataStorage.InstantQuery(targetTimestamp, notFoundValueTimestampValue, seriesIDs)
-	ds.locker.RUnlock()
-
-	return samples, res
-}
-
-// InstantQueryV2 make instant query to data storage and fills samples in instant series.
-func (ds *DataStorage) InstantQueryV2(
 	targetTimestamp int64,
 	ids []uint32,
 	samples uintptr,
 ) cppbridge.DataStorageQueryResult {
 	ds.locker.RLock()
-	res := ds.dataStorage.InstantQueryV2(targetTimestamp, ids, samples)
+	res := ds.dataStorage.InstantQuery(targetTimestamp, ids, samples)
 	ds.locker.RUnlock()
 	return res
 }

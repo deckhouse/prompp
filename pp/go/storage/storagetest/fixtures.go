@@ -191,7 +191,7 @@ func InstantQuery(lss *shard.LSS, ds *shard.DataStorage, targetTimestamp, valueN
 		instantSeries[i].Timestamp = valueNotFoundTimestampValue
 	}
 
-	dsQueryResult := ds.InstantQueryV2(targetTimestamp, lssQueryResult.IDs(), uintptr(unsafe.Pointer(unsafe.SliceData(instantSeries))))
+	dsQueryResult := ds.InstantQuery(targetTimestamp, lssQueryResult.IDs(), uintptr(unsafe.Pointer(unsafe.SliceData(instantSeries))))
 	if dsQueryResult.Status != cppbridge.DataStorageQueryStatusSuccess {
 		return nil, fmt.Errorf("invalid data storage query result status")
 	}

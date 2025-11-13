@@ -177,43 +177,6 @@ extern "C" void prompp_series_data_data_storage_instant_query(void* args, void* 
   using entrypoint::series_data::InstantQuerierWithArgumentsWrapperEntrypoint;
   using PromPP::Primitives::Timestamp;
   using series_data::InstantQuerier;
-  using series_data::encoder::Sample;
-
-  struct Arguments {
-    DataStoragePtr data_storage;
-    SliceView<LabelSetID> label_set_ids;
-    Timestamp timestamp;
-    SliceView<Sample> samples;
-  };
-
-  using Result = struct {
-    QuerierVariantPtr querier;
-    QueryStatus status;
-  };
-
-  const auto in = static_cast<Arguments*>(args);
-
-  InstantQuerierWithArgumentsWrapperEntrypoint instant_querier(*in->data_storage, in->label_set_ids, in->timestamp, in->samples);
-  instant_querier.query();
-
-  for (auto it = in->samples.begin(); it != in->samples.end(); it++) {
-    std::cout << it->timestamp << " " << it->value << std::endl;
-  }
-
-  if (instant_querier.need_loading()) {
-    new (res) Result{
-        .querier = std::make_unique<QuerierVariant>(std::in_place_type<InstantQuerierWithArgumentsWrapperEntrypoint>, std::move(instant_querier)),
-        .status = QueryStatus::kNeedDataLoad,
-    };
-  } else {
-    new (res) Result{.querier = nullptr, .status = QueryStatus::kSuccess};
-  }
-}
-
-extern "C" void prompp_series_data_data_storage_instant_query_v2(void* args, void* res) {
-  using entrypoint::series_data::InstantQuerierWithArgumentsWrapperEntrypointV2;
-  using PromPP::Primitives::Timestamp;
-  using series_data::InstantQuerier;
 
   struct Arguments {
     DataStoragePtr data_storage;
@@ -230,12 +193,12 @@ extern "C" void prompp_series_data_data_storage_instant_query_v2(void* args, voi
   const auto in = static_cast<Arguments*>(args);
 
   auto samples = std::span<entrypoint::series_data::SampleWithGoLabels>(in->samples, in->label_set_ids.size());
-  InstantQuerierWithArgumentsWrapperEntrypointV2 instant_querier(*in->data_storage, in->label_set_ids, in->timestamp, samples);
+  InstantQuerierWithArgumentsWrapperEntrypoint instant_querier(*in->data_storage, in->label_set_ids, in->timestamp, samples);
   instant_querier.query();
 
   if (instant_querier.need_loading()) {
     new (res) Result{
-        .querier = std::make_unique<QuerierVariant>(std::in_place_type<InstantQuerierWithArgumentsWrapperEntrypointV2>, std::move(instant_querier)),
+        .querier = std::make_unique<QuerierVariant>(std::in_place_type<InstantQuerierWithArgumentsWrapperEntrypoint>, std::move(instant_querier)),
         .status = QueryStatus::kNeedDataLoad,
     };
   } else {

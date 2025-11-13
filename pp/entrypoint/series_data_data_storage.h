@@ -126,41 +126,20 @@ void prompp_series_data_data_storage_query(void* args, void* res);
 void prompp_series_data_data_storage_query_v2(void* args, void* res);
 
 /**
- * @brief return samples at given timestamp for label sets.
- *
- * @param args {
- *        dataStorage uintptr    // pointer to constructed data storage
- *        labelSetIDs []uint32   // series ids
- *        timestamp   int64      // timestamp
- *        samples     []struct { // pre-allocated samples slice
- *                timestamp int64
- *                value     float64
- *        }
- * @param res {
- *     InstantQuerier uintptr // pointer to constructed Querier if data loading is needed
- *     Status uint8           // status of a query (0 - Success, 1 - Data loading is needed)
- * }
- */
-void prompp_series_data_data_storage_instant_query(void* args, void* res);
-
-/**
  * @brief return instant series at given timestamp for label sets.
  *
  * @param args {
  *        dataStorage uintptr      // pointer to constructed data storage
  *        labelSetIDs []uint32     // series ids
  *        timestamp   int64        // timestamp
- *        samples     []struct {   // pre-allocated samples slice
- *                Timestamp int64
- *                Value     float64
-                  LabelSet labels.Labels
- *        }
+ *        samples     uintptr      // pointer to samples data
+ * }
  * @param res {
  *     InstantQuerier uintptr // pointer to constructed Querier if data loading is needed
  *     Status uint8           // status of a query (0 - Success, 1 - Data loading is needed)
  * }
  */
-void prompp_series_data_data_storage_instant_query_v2(void* args, void* res);
+void prompp_series_data_data_storage_instant_query(void* args, void* res);
 
 /**
  * @brief finishes all Queriers after data load.

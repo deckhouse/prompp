@@ -1,7 +1,9 @@
 package cppbridge_test
 
 import (
+	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"testing"
+	"unsafe"
 
 	"github.com/stretchr/testify/require"
 
@@ -200,16 +202,19 @@ func (s *HeadSuite) TestInstantQuery() {
 	seriesIDs := []uint32{0, 1, 2, 3}
 	targetTimestamp := int64(5)
 	defaultTimestamp := int64(-1)
+	instantSeries := make([]querier.InstantSeries, len(seriesIDs))
+	for i := range instantSeries {
+		instantSeries[i].Timestamp = defaultTimestamp
+	}
 	// Act
 
-	samples, result := dataStorage.InstantQuery(targetTimestamp, defaultTimestamp, seriesIDs)
+	result := dataStorage.InstantQuery(targetTimestamp, seriesIDs, uintptr(unsafe.Pointer(unsafe.SliceData(instantSeries))))
 
 	// Assert
 	require.Equal(s.T(), cppbridge.DataStorageQueryStatusSuccess, result.Status)
-	require.Len(s.T(), samples, 4)
 
-	s.Equal(defaultTimestamp, samples[0].Timestamp)
-	s.Equal(series[2].Sample, samples[1])
-	s.Equal(series[5].Sample, samples[2])
-	s.Equal(series[6].Sample, samples[3])
+	s.Equal(defaultTimestamp, instantSeries[0].Timestamp)
+	s.Equal(series[2].Sample, cppbridge.Sample{Timestamp: instantSeries[1].Timestamp, Value: instantSeries[1].Value})
+	s.Equal(series[5].Sample, cppbridge.Sample{Timestamp: instantSeries[2].Timestamp, Value: instantSeries[2].Value})
+	s.Equal(series[6].Sample, cppbridge.Sample{Timestamp: instantSeries[3].Timestamp, Value: instantSeries[3].Value})
 }

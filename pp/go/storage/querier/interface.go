@@ -40,13 +40,8 @@ type Task interface {
 
 // DataStorage the minimum required [DataStorage] implementation.
 type DataStorage interface {
-	// InstantQuery returns samples for instant query from data storage.
+	// InstantQuery fills samples for instant query from data storage.
 	InstantQuery(
-		maxt, valueNotFoundTimestampValue int64,
-		ids []uint32,
-	) ([]cppbridge.Sample, cppbridge.DataStorageQueryResult)
-
-	InstantQueryV2(
 		maxt int64,
 		ids []uint32,
 		samples uintptr,

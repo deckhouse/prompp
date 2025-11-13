@@ -109,20 +109,10 @@ func (ds *DataStorage) Query(query DataStorageQuery) DataStorageQueryResult {
 	}
 }
 
-func (ds *DataStorage) InstantQuery(targetTimestamp, defaultTimestamp int64, labelSetIDs []uint32) ([]Sample, DataStorageQueryResult) {
-	samples := make([]Sample, len(labelSetIDs))
-	if defaultTimestamp != 0 {
-		for index := range samples {
-			samples[index].Timestamp = defaultTimestamp
-		}
-	}
-	return samples, seriesDataDataStorageInstantQuery(ds.dataStorage, labelSetIDs, targetTimestamp, samples)
-}
-
-// InstantQueryV2 .
-// this is Deprecated: InstantQueryV2 .
-func (ds *DataStorage) InstantQueryV2(targetTimestamp int64, labelSetIDs []uint32, samples uintptr) DataStorageQueryResult {
-	return seriesDataDataStorageInstantQueryV2(ds.dataStorage, labelSetIDs, targetTimestamp, samples)
+// InstantQuery .
+// Deprecated: InstantQuery .
+func (ds *DataStorage) InstantQuery(targetTimestamp int64, labelSetIDs []uint32, samples uintptr) DataStorageQueryResult {
+	return seriesDataDataStorageInstantQuery(ds.dataStorage, labelSetIDs, targetTimestamp, samples)
 }
 
 func (ds *DataStorage) QueryFinal(queriers []uintptr) {

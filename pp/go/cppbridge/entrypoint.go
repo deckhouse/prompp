@@ -1887,27 +1887,7 @@ func seriesDataDataStorageQueryV2(dataStorage uintptr, query DataStorageQuery, s
 	return res.Querier, res.Status
 }
 
-func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32, timestamp int64, samples []Sample) DataStorageQueryResult {
-	args := struct {
-		dataStorage uintptr
-		labelSetIDs []uint32
-		timestamp   int64
-		samples     []Sample
-	}{dataStorage, labelSetIDs, timestamp, samples}
-
-	var res DataStorageQueryResult
-
-	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_series_data_data_storage_instant_query,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res
-}
-
-func seriesDataDataStorageInstantQueryV2(dataStorage uintptr, labelSetIDs []uint32, timestamp int64, samples uintptr) DataStorageQueryResult {
+func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32, timestamp int64, samples uintptr) DataStorageQueryResult {
 	args := struct {
 		dataStorage uintptr
 		labelSetIDs []uint32
@@ -1918,7 +1898,7 @@ func seriesDataDataStorageInstantQueryV2(dataStorage uintptr, labelSetIDs []uint
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_series_data_data_storage_instant_query_v2,
+		C.prompp_series_data_data_storage_instant_query,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
