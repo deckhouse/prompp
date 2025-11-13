@@ -90,3 +90,26 @@ func TestHeadWalDecoder_DecodeToDataStorage(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, cppbridge.TimeInterval{MinT: 1660828401000, MaxT: 1660828410000}, dataStorage.TimeInterval(false))
 }
+
+func TestHeadWalDecoder_InvalidEncoderVersion(t *testing.T) {
+	// Arrange
+	decoder := cppbridge.NewHeadWalDecoder(cppbridge.NewQueryableLssStorage(), cppbridge.EncodersVersion()-1)
+
+	// Act
+	_, err := decoder.CreateEncoder()
+
+	// Assert
+	require.ErrorIs(t, err, cppbridge.ErrInvalidEncoderVersion)
+}
+
+func TestHeadWalDecoder_ValidEncoderVersion(t *testing.T) {
+	// Arrange
+	var actualEncoderVersion = cppbridge.EncodersVersion()
+	decoder := cppbridge.NewHeadWalDecoder(cppbridge.NewQueryableLssStorage(), actualEncoderVersion)
+
+	// Act
+	_, err := decoder.CreateEncoder()
+
+	// Assert
+	require.NoError(t, err)
+}

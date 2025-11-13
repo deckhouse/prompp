@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"os"
 	"path/filepath"
 	"time"
@@ -90,12 +92,13 @@ func (cmd *cmdWALPPToBlock) Do(
 	loader := storage.NewLoader(workingDir, 0, registerer, time.Duration(0))
 
 	for _, headRecord := range headRecords {
-		if err := ctx.Err(); err != nil {
+		if err = ctx.Err(); err != nil {
 			return err
 		}
 		level.Debug(logger).Log("msg", "load head", "id", headRecord.ID(), "dir", headRecord.Dir())
-		h, corrupted := loader.Load(headRecord, 0)
-		if corrupted {
+		var h *storage.Head
+		h, err = loader.LoadReadOnly(headRecord, 0)
+		if err != nil && !errors.Is(err, cppbridge.ErrInvalidEncoderVersion) {
 			level.Warn(logger).Log("msg", "corrupted head", "id", headRecord.ID(), "dir", headRecord.Dir())
 		}
 
