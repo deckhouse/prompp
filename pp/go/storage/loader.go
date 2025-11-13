@@ -2,6 +2,7 @@ package storage
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -24,6 +25,8 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/prometheus/pp/go/util/optional"
 )
+
+var ErrNonContinuableHead = errors.New("head is not continuable")
 
 // Loader loads [Head] or [shard.Shard] from [Wal].
 type Loader struct {
@@ -48,15 +51,11 @@ func NewLoader(
 	}
 }
 
-// Load [Head] from [Wal] by head ID.
-//
-//revive:disable-next-line:cognitive-complexity // function is not complicated
-//revive:disable-next-line:function-length // long but readable.
-//revive:disable-next-line:cyclomatic // but readable
-func (l *Loader) Load(
+func (l *Loader) load(
 	headRecord *catalog.Record,
 	generation uint64,
-) (_ *Head, corrupted bool) {
+	readOnly bool,
+) (*Head, error) {
 	headID := headRecord.ID()
 	headDir := filepath.Join(l.dataDir, headID)
 	numberOfShards := headRecord.NumberOfShards()
@@ -75,6 +74,7 @@ func (l *Loader) Load(
 				swn,
 				l.registerer,
 				l.unloadDataStorageInterval,
+				readOnly,
 			)
 		}(shardID)
 	}
@@ -82,16 +82,15 @@ func (l *Loader) Load(
 
 	shards := make([]*shard.Shard, numberOfShards)
 	numberOfSegmentsRead := optional.Optional[uint32]{}
+	errs := make([]error, numberOfShards)
 	for shardID, res := range shardLoadResults {
 		shards[shardID] = res.shard
-		if res.corrupted {
-			corrupted = true
-		}
+		errs[shardID] = res.err
 
 		if numberOfSegmentsRead.IsNil() {
 			numberOfSegmentsRead.Set(res.numberOfSegments)
 		} else if numberOfSegmentsRead.Value() != res.numberOfSegments {
-			corrupted = true
+			errs = append(errs, fmt.Errorf("corrupted shard %d: segment count mismatch, expected: %d, got: %d", shardID, numberOfSegmentsRead.Value(), res.numberOfSegments))
 			// calculating maximum number of segments (critical for remote write).
 			if numberOfSegmentsRead.Value() < res.numberOfSegments {
 				numberOfSegmentsRead.Set(res.numberOfSegments)
@@ -106,7 +105,6 @@ func (l *Loader) Load(
 			headRecord.SetLastAppendedSegmentID(numberOfSegmentsRead.Value() - 1)
 		}
 	case isNumberOfSegmentsMismatched(headRecord, numberOfSegmentsRead.Value()):
-		corrupted = true
 		// numberOfSegments here is actual number of segments.
 		if numberOfSegmentsRead.Value() > 0 {
 			headRecord.SetLastAppendedSegmentID(numberOfSegmentsRead.Value() - 1)
@@ -135,12 +133,76 @@ func (l *Loader) Load(
 	)
 
 	if err := services.MergeOutOfOrderChunksWithHead(h); err != nil {
-		corrupted = true
+		errs = append(errs, err)
 	}
 
-	logger.Debugf("[Loader] loaded head: %s, corrupted: %t", headRecord.ID(), corrupted)
+	if readOnly || errs != nil {
+		h.SetReadOnly()
+	}
 
-	return h, corrupted
+	// we must ensure that if one cppbridge.ErrInvalidEncoderVersion happened, they are all the same type,
+	// otherwise it is corruption error.
+	err := EnsureSameErrorTypes(errs, cppbridge.ErrInvalidEncoderVersion)
+
+	logger.Debugf("[Loader] loaded head: %s, corrupted: %t", headRecord.ID(), err != nil && !errors.Is(err, cppbridge.ErrInvalidEncoderVersion))
+
+	return h, err
+}
+
+// EnsureSameErrorTypes checks if err contains targetErr - we ensure that all errors in chain would be targetErr,
+// otherwise return all errors in chain except targetErr
+func EnsureSameErrorTypes(errs []error, targetErr error) error {
+	if len(errs) == 0 {
+		return nil
+	}
+
+	var nonTargetErrs error
+	var targetErrs error
+	for _, err := range errs {
+		if err == nil {
+			continue
+		}
+
+		if errors.Is(err, targetErr) {
+			targetErrs = errors.Join(targetErrs, err)
+		} else {
+			nonTargetErrs = errors.Join(nonTargetErrs, err)
+		}
+	}
+
+	if nonTargetErrs != nil {
+		return nonTargetErrs
+	}
+
+	return targetErrs
+}
+
+// Load [Head] from [Wal] by head ID.
+// CAUTION: Always returns head, even if err != nil.
+//
+//revive:disable-next-line:cognitive-complexity // function is not complicated
+//revive:disable-next-line:function-length // long but readable.
+//revive:disable-next-line:cyclomatic // but readable
+func (l *Loader) Load(
+	headRecord *catalog.Record,
+	generation uint64,
+) (*Head, error) {
+	return l.load(headRecord, generation, false)
+}
+
+// LoadReadOnly [Head] from [Wal] by head ID. Head is read only, and there is corrupted wal in each shard,
+// so any append will fail.
+// Cannot return ErrInvalidEncoderVersion.
+// CAUTION: Always returns head, even if err != nil.
+//
+//revive:disable-next-line:cognitive-complexity // function is not complicated
+//revive:disable-next-line:function-length // long but readable.
+//revive:disable-next-line:cyclomatic // but readable
+func (l *Loader) LoadReadOnly(
+	headRecord *catalog.Record,
+	generation uint64,
+) (*Head, error) {
+	return l.load(headRecord, generation, true)
 }
 
 func (*Loader) loadShard(
@@ -150,12 +212,13 @@ func (*Loader) loadShard(
 	notifier *writer.SegmentWriteNotifier,
 	registerer prometheus.Registerer,
 	unloadDataStorageInterval time.Duration,
+	readOnly bool,
 ) ShardLoadResult {
 	shardDataLoader := NewShardDataLoader(shardID, dir, maxSegmentSize, notifier, registerer, unloadDataStorageInterval)
-	err := shardDataLoader.Load()
+	err := shardDataLoader.Load(readOnly)
 	return ShardLoadResult{
-		corrupted:        err != nil,
 		numberOfSegments: shardDataLoader.shardData.numberOfSegments,
+		err:              err,
 		shard: shard.NewShard(
 			shardDataLoader.shardData.lss,
 			shardDataLoader.shardData.dataStorage,
@@ -171,7 +234,7 @@ func (*Loader) loadShard(
 type ShardLoadResult struct {
 	shard            *shard.Shard
 	numberOfSegments uint32
-	corrupted        bool
+	err              error
 }
 
 // ShardData data for creating a shard.
@@ -215,7 +278,7 @@ func NewShardDataLoader(
 }
 
 // Load loads shard data from a file and creates a shard.
-func (l *ShardDataLoader) Load() error {
+func (l *ShardDataLoader) Load(readOnly bool) error {
 	l.shardData = ShardData{
 		lss:         shard.NewLSS(),
 		dataStorage: shard.NewDataStorage(),
@@ -249,7 +312,16 @@ func (l *ShardDataLoader) Load() error {
 		return err
 	}
 
-	return l.createShardWal(shardWalFileName, decoder)
+	if readOnly {
+		return nil
+	}
+
+	encoder, err := decoder.CreateEncoder()
+	if err != nil {
+		return err
+	}
+
+	return l.createShardWal(shardWalFileName, encoder)
 }
 
 // loadWalFile loads and decode wal file.
@@ -286,7 +358,7 @@ func (l *ShardDataLoader) loadWalFile(
 }
 
 // createShardWal creates a wal for a shard.
-func (l *ShardDataLoader) createShardWal(fileName string, walDecoder *cppbridge.HeadWalDecoder) error {
+func (l *ShardDataLoader) createShardWal(fileName string, walEncoder *cppbridge.HeadWalEncoder) error {
 	//revive:disable-next-line:add-constant // file permissions simple readable as octa-number
 	shardWalFile, err := util.OpenFileAppender(fileName, 0o666)
 	if err != nil {
@@ -305,7 +377,7 @@ func (l *ShardDataLoader) createShardWal(fileName string, walDecoder *cppbridge.
 	}
 
 	l.notifier.Set(l.shardID, l.shardData.numberOfSegments)
-	l.shardData.wal = wal.NewWal(walDecoder.CreateEncoder(), sw, l.maxSegmentSize, l.shardID, l.registerer)
+	l.shardData.wal = wal.NewWal(walEncoder, sw, l.maxSegmentSize, l.shardID, l.registerer)
 
 	return nil
 }
