@@ -64,15 +64,11 @@ func (w *Writer[TShard]) Write(sd TShard) (writtenBlocks []WrittenBlock, err err
 			return err
 		}
 
-		defer func() {
-			writers.close()
-		}()
-
 		if err = w.recodeAndWriteChunks(sd, writers); err != nil {
 			return err
 		}
 
-		writtenBlocks, err = writers.writeIndexAndMoveTmpDirToDir()
+		writtenBlocks, err = writers.writeIndexCloseAndMoveTmpDirToDir()
 
 		return nil
 	})

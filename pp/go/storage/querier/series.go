@@ -2,7 +2,6 @@ package querier
 
 import (
 	"math"
-	"runtime"
 
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
@@ -15,26 +14,25 @@ import (
 
 // ChunkIterator iterates over the samples of a time series, that can only get the next value with limit.
 type ChunkIterator struct {
-	serializedData  *cppbridge.DataStorageSerializedData
-	chunkIterator   cppbridge.DataStorageSerializedDataIterator
-	iterationResult cppbridge.SerializedDataIteratorIterationResult
-	mint            int64
-	maxt            int64
+	serializedData *cppbridge.DataStorageSerializedData
+	chunkIterator  cppbridge.DataStorageSerializedDataIterator
+	mint           int64
+	maxt           int64
+	isInitialized  bool
 }
 
 // NewChunkIterator init new [ChunkIterator].
 func NewChunkIterator(serializedData *cppbridge.DataStorageSerializedData, chunkRef uint32, mint, maxt int64) *ChunkIterator {
 	it := &ChunkIterator{
-		serializedData:  serializedData,
-		chunkIterator:   cppbridge.NewDataStorageSerializedDataIterator(serializedData, chunkRef),
-		iterationResult: cppbridge.NewSerializedDataIteratorIterationResult(),
-		mint:            mint,
-		maxt:            maxt,
+		serializedData: serializedData,
+		chunkIterator:  cppbridge.NewDataStorageSerializedDataIterator(serializedData, chunkRef),
+		mint:           mint,
+		maxt:           maxt,
 	}
 
-	runtime.SetFinalizer(it, func(it *ChunkIterator) {
-		it.chunkIterator.Destroy()
-	})
+	if it.chunkIterator.Timestamp < mint {
+		it.chunkIterator.Seek(mint)
+	}
 
 	return it
 }
@@ -43,15 +41,19 @@ func (it *ChunkIterator) Reset(serializedData *cppbridge.DataStorageSerializedDa
 	it.serializedData = serializedData
 	it.mint = mint
 	it.maxt = maxt
+	it.isInitialized = false
 	it.chunkIterator.Reset(serializedData, chunkRef)
-	it.iterationResult = cppbridge.NewSerializedDataIteratorIterationResult()
+
+	if it.chunkIterator.Timestamp < mint {
+		it.chunkIterator.Seek(mint)
+	}
 }
 
 // At returns the current timestamp/value pair if the value is a float.
 //
 //nolint:gocritic // unnamedResult not need
 func (it *ChunkIterator) At() (int64, float64) {
-	return it.iterationResult.Timestamp, it.iterationResult.Value
+	return it.chunkIterator.Timestamp, it.chunkIterator.Value
 }
 
 // AtFloatHistogram returns the current timestamp/value pair if the value is a histogram with floating-point counts.
@@ -66,7 +68,7 @@ func (it *ChunkIterator) AtHistogram(h *histogram.Histogram) (int64, *histogram.
 
 // AtT returns the current timestamp.
 func (it *ChunkIterator) AtT() int64 {
-	return it.iterationResult.Timestamp
+	return it.chunkIterator.Timestamp
 }
 
 // Err returns the current error.
@@ -75,11 +77,22 @@ func (it *ChunkIterator) Err() error {
 }
 
 func (it *ChunkIterator) next() chunkenc.ValueType {
-	it.chunkIterator.Next(&it.iterationResult)
-	if it.iterationResult.HasValue {
+	if !it.isInitialized {
+		if !it.chunkIterator.HasData() {
+			return chunkenc.ValNone
+		}
+
+		it.isInitialized = true
+		return chunkenc.ValFloat
+	} else {
+		it.chunkIterator.Next()
+
+		if !it.chunkIterator.HasData() {
+			return chunkenc.ValNone
+		}
+
 		return chunkenc.ValFloat
 	}
-	return chunkenc.ValNone
 }
 
 // Next advances the iterator by one and returns the type of the value.
@@ -88,32 +101,11 @@ func (it *ChunkIterator) Next() chunkenc.ValueType {
 		return chunkenc.ValNone
 	}
 
-	ts := it.AtT()
-	if ts < it.mint {
-		if it.Seek(it.mint) == chunkenc.ValNone {
-			return chunkenc.ValNone
-		}
-		ts = it.AtT()
-	}
-
-	if ts > it.maxt {
+	if it.AtT() > it.maxt {
 		return chunkenc.ValNone
 	}
 
 	return chunkenc.ValFloat
-}
-
-func (it *ChunkIterator) seek(t int64) chunkenc.ValueType {
-	ts := it.AtT()
-	// check if iterator is not initialized or is not reached t.
-	if ts == math.MinInt64 || ts < t {
-		it.chunkIterator.Seek(t, &it.iterationResult)
-	}
-
-	if it.iterationResult.HasValue {
-		return chunkenc.ValFloat
-	}
-	return chunkenc.ValNone
 }
 
 // Seek advances the iterator forward to the first sample with a timestamp equal or greater than t.
@@ -124,8 +116,10 @@ func (it *ChunkIterator) Seek(t int64) chunkenc.ValueType {
 	}
 
 	ts := it.AtT()
-	if ts == math.MinInt64 || ts < t {
-		if it.seek(t) == chunkenc.ValNone {
+	if !it.isInitialized || ts < t {
+		it.chunkIterator.Seek(t)
+		it.isInitialized = true
+		if !it.chunkIterator.HasData() {
 			return chunkenc.ValNone
 		}
 		ts = it.AtT()

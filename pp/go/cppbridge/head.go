@@ -235,28 +235,38 @@ func (sd *DataStorageSerializedData) Next() (uint32, uint32) {
 	return seriesDataSerializedDataNext(sd.serializedData)
 }
 
+type DataStorageSerializedDataIteratorControlBlock struct {
+	decoderVariant   uint64
+	Timestamp        int64
+	Value            float64
+	remainingSamples uint8
+}
+
 type DataStorageSerializedDataIterator struct {
-	iterator uintptr
+	DataStorageSerializedDataIteratorControlBlock
+	cppInternalData [unsafe.Sizeof(CppSerializedDataIterator{}) - unsafe.Sizeof(DataStorageSerializedDataIteratorControlBlock{})]byte
 }
 
 func NewDataStorageSerializedDataIterator(serializedData *DataStorageSerializedData, chunkRef uint32) DataStorageSerializedDataIterator {
-	return DataStorageSerializedDataIterator{iterator: seriesDataSerializedDataIteratorCtor(serializedData.serializedData, chunkRef)}
+	it := DataStorageSerializedDataIterator{}
+	seriesDataSerializedDataIteratorCtor(&it, serializedData.serializedData, chunkRef)
+	return it
 }
 
-func (it DataStorageSerializedDataIterator) Next(result *SerializedDataIteratorIterationResult) {
-	seriesDataSerializedDataIteratorNext(it.iterator, result)
+func (it *DataStorageSerializedDataIterator) Next() {
+	seriesDataSerializedDataIteratorNext(it)
 }
 
-func (it DataStorageSerializedDataIterator) Seek(timestamp int64, result *SerializedDataIteratorIterationResult) {
-	seriesDataSerializedDataIteratorSeek(it.iterator, timestamp, result)
+func (it *DataStorageSerializedDataIterator) Seek(timestamp int64) {
+	seriesDataSerializedDataIteratorSeek(it, timestamp)
 }
 
-func (it DataStorageSerializedDataIterator) Reset(serializedData *DataStorageSerializedData, chunkRef uint32) {
-	seriesDataSerializedDataIteratorReset(serializedData.serializedData, it.iterator, chunkRef)
+func (it *DataStorageSerializedDataIterator) Reset(serializedData *DataStorageSerializedData, chunkRef uint32) {
+	seriesDataSerializedDataIteratorReset(it, serializedData.serializedData, chunkRef)
 }
 
-func (it DataStorageSerializedDataIterator) Destroy() {
-	seriesDataSerializedDataIteratorDtor(it.iterator)
+func (it *DataStorageSerializedDataIterator) HasData() bool {
+	return it.remainingSamples != 0
 }
 
 // UnloadedDataLoader is Go wrapper around series_data::Loader.
@@ -310,56 +320,4 @@ func (ds *DataStorage) CreateRevertableLoader(lss *LabelSetStorage, lsIdBatchSiz
 	})
 
 	return result
-}
-
-type HeadDataStorageDeserializer struct {
-	deserializer     uintptr
-	serializedChunks *HeadDataStorageSerializedChunks
-}
-
-func NewHeadDataStorageDeserializer(serializedChunks *HeadDataStorageSerializedChunks) *HeadDataStorageDeserializer {
-	d := &HeadDataStorageDeserializer{
-		deserializer:     seriesDataDeserializerCtor(serializedChunks.Data()),
-		serializedChunks: serializedChunks,
-	}
-	runtime.SetFinalizer(d, func(d *HeadDataStorageDeserializer) {
-		seriesDataDeserializerDtor(d.deserializer)
-	})
-	return d
-}
-
-func (d *HeadDataStorageDeserializer) CreateDecodeIterator(chunkMetadata HeadDataStorageSerializedChunkMetadata) *HeadDataStorageDecodeIterator {
-	decodeIterator := &HeadDataStorageDecodeIterator{
-		decodeIterator: seriesDataDeserializerCreateDecodeIterator(d.deserializer, chunkMetadata[:]),
-	}
-
-	runtime.SetFinalizer(decodeIterator, func(decodeIterator *HeadDataStorageDecodeIterator) {
-		seriesDataDecodeIteratorDtor(decodeIterator.decodeIterator)
-	})
-
-	return decodeIterator
-}
-
-type HeadDataStorageDecodeIterator struct {
-	decodeIterator uintptr
-	started        bool
-	finished       bool
-}
-
-func (i *HeadDataStorageDecodeIterator) Next() bool {
-	if !i.started {
-		i.started = true
-		return true
-	}
-
-	if i.finished {
-		return false
-	}
-
-	i.finished = !seriesDataDecodeIteratorNext(i.decodeIterator)
-	return !i.finished
-}
-
-func (i *HeadDataStorageDecodeIterator) Sample() (int64, float64) {
-	return seriesDataDecodeIteratorSample(i.decodeIterator)
 }
