@@ -1,13 +1,13 @@
 #pragma once
 
 #include "bare_bones/bitset.h"
+#include "entrypoint/go_constants.h"
 #include "primitives/go_slice.h"
 #include "primitives/primitives.h"
 #include "series_data/querier/instant_querier.h"
 #include "series_data/querier/querier.h"
 #include "series_data/serialization/serialized_data.h"
 #include "series_data/serialization/serializer.h"
-#include "entrypoint/go_constants.h"
 
 namespace entrypoint::series_data {
 
@@ -49,8 +49,8 @@ class InstantQuerierWithArgumentsWrapper {
 };
 
 struct SampleWithGoLabels : public ::series_data::encoder::Sample {
-  private:
-    char go_labels_[Sizeof_GoLabels];
+ private:
+  char go_labels_[Sizeof_GoLabels];
 };
 
 using InstantQuerierWithArgumentsWrapperEntrypoint = InstantQuerierWithArgumentsWrapper<PromPP::Primitives::Go::SliceView<PromPP::Primitives::LabelSetID>,
