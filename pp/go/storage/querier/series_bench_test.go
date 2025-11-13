@@ -50,23 +50,6 @@ func queryOpt(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, start, end in
 	return querier.NewSeriesSet(start, end, lssQueryResult, snapshot, dsQueryResult.SerializedData)
 }
 
-//func instantQuery(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, targetTimestamp, valueNotFoundTimestampValue int64, matchers ...model.LabelMatcher) *querier.InstantSeriesSet {
-//	selector, snapshot, err := lss.QuerySelector(0, matchers)
-//	require.NoError(t, err)
-//	if selector == 0 || snapshot == nil {
-//		return &querier.InstantSeriesSet{}
-//	}
-//
-//	lssQueryResult := snapshot.Query(selector)
-//	if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
-//		return &querier.InstantSeriesSet{}
-//	}
-//
-//	samples, dsQueryResult := ds.InstantQuery(targetTimestamp, valueNotFoundTimestampValue, lssQueryResult.IDs())
-//	require.Equal(t, cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
-//	return querier.NewInstantSeriesSet(lssQueryResult, snapshot, valueNotFoundTimestampValue, samples)
-//}
-
 func BenchmarkSeriesSetOpt(b *testing.B) {
 	size := 500000
 	matcher := model.LabelMatcher{
@@ -106,46 +89,3 @@ func prepareData(lss *shard.LSS, ds *shard.DataStorage, size int) {
 	}
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(lss, ds, timeSeries...)
 }
-
-//func prepareInstantData(lss *shard.LSS, ds *shard.DataStorage, timeStamps []int64, size int) {
-//	timeSeries := make([]storagetest.TimeSeries, 0, size)
-//	for _, ts := range timeStamps {
-//		for i := 0; i < size; i++ {
-//			label := fmt.Sprintf("index_%d", i)
-//			timeSeries = append(timeSeries, storagetest.TimeSeries{
-//				Labels: labels.FromStrings("__name__", "metric", "job", label, "container", "", "id", "/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod37ce076d8d523c8b0c8c0b6191d927f6.slice/cri-containerd-bdd69edcd2fb187baa3381810051e8cc7b8a0d0368e168040f93adb3260582b2.scope", "image", "registry.k8s.io/pause:3.8", "name", "bdd69edcd2fb187baa3381810051e8cc7b8a0d0368e168040f93adb3260582b2", "namespace", "kube-system", "pod", "kube-scheduler-m1.k8s.lan"),
-//				Samples: []cppbridge.Sample{
-//					{Timestamp: ts, Value: float64(i)},
-//				},
-//			})
-//		}
-//
-//	}
-//	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(lss, ds, timeSeries...)
-//}
-//
-//func BenchmarkInstantSeriesSet(b *testing.B) {
-//	size := 500000
-//	matcher := model.LabelMatcher{
-//		Name:        "__name__",
-//		Value:       "metric",
-//		MatcherType: model.MatcherTypeExactMatch,
-//	}
-//
-//	lss := shard.NewLSS()
-//	ds := shard.NewDataStorage()
-//	timestamps := []int64{0, 1, 2}
-//	valueNotFoundTimestampValue := timestamps[0] - 1
-//	prepareInstantData(lss, ds, timestamps, size)
-//
-//	seriesSets := make([]*querier.InstantSeriesSet, 0, b.N)
-//	for i := 0; i < b.N; i++ {
-//		seriesSets = append(seriesSets, instantQuery(b, lss, ds, timestamps[1], valueNotFoundTimestampValue, matcher))
-//	}
-//
-//	b.ReportAllocs()
-//	b.ResetTimer()
-//	for i := 0; i < b.N; i++ {
-//		iterateSeriesSet(seriesSets[i])
-//	}
-//}
