@@ -42,8 +42,8 @@ func NewFanoutQueryable(primary Queryable, secondaries ...Queryable) Queryable {
 // Querier calls f() with the given parameters. Returns a merged [Querier].
 func (fq *fanoutQueryable) Querier(mint, maxt int64) (Querier, error) {
 	primaries := make([]Querier, 0, len(fq.primaries))
-	for _, q := range fq.primaries {
-		querier, err := q.Querier(mint, maxt)
+	for _, qe := range fq.primaries {
+		querier, err := qe.Querier(mint, maxt)
 		if err != nil {
 			// Close already open Queriers, append potential errors to returned error.
 			errs := tsdb_errors.NewMulti(err)
@@ -60,8 +60,8 @@ func (fq *fanoutQueryable) Querier(mint, maxt int64) (Querier, error) {
 	}
 
 	secondaries := make([]Querier, 0, len(fq.secondaries))
-	for _, q := range fq.secondaries {
-		querier, err := q.Querier(mint, maxt)
+	for _, qe := range fq.secondaries {
+		querier, err := qe.Querier(mint, maxt)
 		if err != nil {
 			// Close already open Queriers, append potential errors to returned error.
 			errs := tsdb_errors.NewMulti(err)
