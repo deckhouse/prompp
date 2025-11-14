@@ -1,6 +1,8 @@
 package storage
 
-import tsdb_errors "github.com/prometheus/prometheus/tsdb/errors"
+import (
+	tsdb_errors "github.com/prometheus/prometheus/tsdb/errors"
+)
 
 //
 // fanoutQueryable
@@ -8,16 +10,19 @@ import tsdb_errors "github.com/prometheus/prometheus/tsdb/errors"
 
 // fanoutQueryable handles queries against a storage.
 type fanoutQueryable struct {
-	primary     Queryable
+	primaries   []Queryable
 	secondaries []Queryable
 }
 
 // NewFanoutQueryable init new [fanoutQueryable] as [Queryable].
 func NewFanoutQueryable(primary Queryable, secondaries ...Queryable) Queryable {
+	primaries := make([]Queryable, 0, 2)
+	primaries = append(primaries, primary)
+
 	sq := make([]Queryable, 0, len(secondaries))
 	for _, q := range secondaries {
 		if f, ok := q.(*fanout); ok {
-			sq = append(sq, f.primary)
+			primaries = append(primaries, f.primary)
 			for _, s := range f.secondaries {
 				sq = append(sq, s)
 			}
@@ -29,16 +34,29 @@ func NewFanoutQueryable(primary Queryable, secondaries ...Queryable) Queryable {
 	}
 
 	return &fanoutQueryable{
-		primary:     primary,
+		primaries:   primaries,
 		secondaries: sq,
 	}
 }
 
 // Querier calls f() with the given parameters. Returns a merged [Querier].
 func (fq *fanoutQueryable) Querier(mint, maxt int64) (Querier, error) {
-	primary, err := fq.primary.Querier(mint, maxt)
-	if err != nil {
-		return nil, err
+	primaries := make([]Querier, 0, len(fq.primaries))
+	for _, q := range fq.primaries {
+		querier, err := q.Querier(mint, maxt)
+		if err != nil {
+			// Close already open Queriers, append potential errors to returned error.
+			errs := tsdb_errors.NewMulti(err)
+			for _, q := range primaries {
+				errs.Add(q.Close())
+			}
+			return nil, errs.Err()
+		}
+		if _, ok := querier.(noopQuerier); ok {
+			continue
+		}
+
+		primaries = append(primaries, querier)
 	}
 
 	secondaries := make([]Querier, 0, len(fq.secondaries))
@@ -46,7 +64,10 @@ func (fq *fanoutQueryable) Querier(mint, maxt int64) (Querier, error) {
 		querier, err := q.Querier(mint, maxt)
 		if err != nil {
 			// Close already open Queriers, append potential errors to returned error.
-			errs := tsdb_errors.NewMulti(err, primary.Close())
+			errs := tsdb_errors.NewMulti(err)
+			for _, q := range primaries {
+				errs.Add(q.Close())
+			}
 			for _, q := range secondaries {
 				errs.Add(q.Close())
 			}
@@ -59,5 +80,5 @@ func (fq *fanoutQueryable) Querier(mint, maxt int64) (Querier, error) {
 		secondaries = append(secondaries, querier)
 	}
 
-	return NewMergeQuerier([]Querier{primary}, secondaries, ChainedSeriesMerge), nil
+	return NewMergeQuerierConcurrent(primaries, secondaries, ChainedSeriesMerge), nil
 }

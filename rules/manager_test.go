@@ -780,13 +780,11 @@ func TestDeletedRuleMarkedStale(t *testing.T) {
 		rules:                []Rule{},
 		seriesInPreviousEval: []map[string]labels.Labels{},
 		opts: &ManagerOptions{
-			FanoutQueryable:           fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
-			EngineQueryCtor:           EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
-			Batcher:                   adapter,         // PP_CHANGES.md: rebuild on cpp
-			RuleConcurrencyController: sequentialRuleEvalController{},
+			FanoutQueryable: fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
+			EngineQueryCtor: EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
+			Batcher:         adapter,         // PP_CHANGES.md: rebuild on cpp
 		},
-		concurrencyController: sequentialRuleEvalController{},
-		metrics:               NewGroupMetrics(nil),
+		metrics: NewGroupMetrics(nil),
 	}
 	newGroup.CopyState(oldGroup)
 
@@ -2140,8 +2138,10 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 		// Configure concurrency settings.
 		opts.ConcurrentEvalsEnabled = true
 		opts.MaxConcurrentEvals = 2
-		opts.RuleConcurrencyController = nil
+		// opts.RuleConcurrencyController = nil
 		ruleManager := NewManager(opts)
+		opts.ConcurrencyExecuter.Run()
+		defer opts.ConcurrencyExecuter.Stop()
 
 		groups, errs := ruleManager.LoadGroups(time.Second, labels.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple.yaml"}...)
 		require.Empty(t, errs)
@@ -2154,7 +2154,7 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 			group.Eval(ctx, start)
 
 			// Max inflight can be 1 synchronous eval and up to MaxConcurrentEvals concurrent evals.
-			require.EqualValues(t, opts.MaxConcurrentEvals, maxInflight.Load())
+			require.EqualValues(t, opts.MaxConcurrentEvals+1, maxInflight.Load())
 			// Some rules should execute concurrently so should complete quicker.
 			require.Less(t, time.Since(start).Seconds(), (time.Duration(ruleCount) * artificialDelay).Seconds())
 			// Each rule produces one vector.
@@ -2190,8 +2190,9 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 		// Configure concurrency settings.
 		opts.ConcurrentEvalsEnabled = true
 		opts.MaxConcurrentEvals = 2
-		opts.RuleConcurrencyController = nil
 		ruleManager := NewManager(opts)
+		opts.ConcurrencyExecuter.Run()
+		defer opts.ConcurrencyExecuter.Stop()
 
 		groups, errs := ruleManager.LoadGroups(time.Second, labels.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple_independent.yaml"}...)
 		require.Empty(t, errs)
@@ -2204,7 +2205,7 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 			group.Eval(ctx, start)
 
 			// Max inflight can be 1 synchronous eval and up to MaxConcurrentEvals concurrent evals.
-			require.EqualValues(t, opts.MaxConcurrentEvals, maxInflight.Load())
+			require.EqualValues(t, opts.MaxConcurrentEvals+1, maxInflight.Load())
 			// Some rules should execute concurrently so should complete quicker.
 			require.Less(t, time.Since(start).Seconds(), (time.Duration(ruleCount) * artificialDelay).Seconds())
 			// Each rule produces one vector.
@@ -2240,8 +2241,9 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 		// Configure concurrency settings.
 		opts.ConcurrentEvalsEnabled = true
 		opts.MaxConcurrentEvals = int64(ruleCount) * 2
-		opts.RuleConcurrencyController = nil
 		ruleManager := NewManager(opts)
+		opts.ConcurrencyExecuter.Run()
+		defer opts.ConcurrencyExecuter.Stop()
 
 		groups, errs := ruleManager.LoadGroups(time.Second, labels.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple_independent.yaml"}...)
 		require.Empty(t, errs)
@@ -2255,7 +2257,7 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 			group.Eval(ctx, start)
 
 			// Max inflight can be up to MaxConcurrentEvals concurrent evals, since there is sufficient concurrency to run all rules at once.
-			require.LessOrEqual(t, int64(maxInflight.Load()), opts.MaxConcurrentEvals)
+			require.LessOrEqual(t, int64(maxInflight.Load())+1, opts.MaxConcurrentEvals)
 			// Some rules should execute concurrently so should complete quicker.
 			require.Less(t, time.Since(start).Seconds(), (time.Duration(ruleCount) * artificialDelay).Seconds())
 			// Each rule produces one vector.

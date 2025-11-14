@@ -26,7 +26,6 @@ import (
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
-	"golang.org/x/sync/semaphore"
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/rulefmt"
@@ -117,17 +116,18 @@ type ManagerOptions struct {
 	EngineQueryCtor func(engine promql.QueryEngine, q storage.Queryable) QueryFunc // PP_CHANGES.md: rebuild on cpp
 	Batcher         storage.Batcher                                                // PP_CHANGES.md: rebuild on cpp
 
-	Logger                    log.Logger
-	Registerer                prometheus.Registerer
-	OutageTolerance           time.Duration
-	ForGracePeriod            time.Duration
-	ResendDelay               time.Duration
-	GroupLoader               GroupLoader
-	DefaultRuleQueryOffset    func() time.Duration
-	MaxConcurrentEvals        int64
-	ConcurrentEvalsEnabled    bool
-	RuleConcurrencyController RuleConcurrencyController
-	RuleDependencyController  RuleDependencyController
+	Logger                   log.Logger
+	Registerer               prometheus.Registerer
+	OutageTolerance          time.Duration
+	ForGracePeriod           time.Duration
+	ResendDelay              time.Duration
+	GroupLoader              GroupLoader
+	DefaultRuleQueryOffset   func() time.Duration
+	MaxConcurrentEvals       int64
+	ConcurrentEvalsEnabled   bool
+	ConcurrencyExecuter      ConcurrencyExecuter
+	RuleDependencyController RuleDependencyController
+	// RuleConcurrencyController RuleConcurrencyController
 
 	Metrics *Metrics
 }
@@ -143,12 +143,16 @@ func NewManager(o *ManagerOptions) *Manager {
 		o.GroupLoader = FileLoader{}
 	}
 
-	if o.RuleConcurrencyController == nil {
-		if o.ConcurrentEvalsEnabled {
-			o.RuleConcurrencyController = newRuleConcurrencyController(o.MaxConcurrentEvals)
-		} else {
-			o.RuleConcurrencyController = sequentialRuleEvalController{}
-		}
+	// if o.RuleConcurrencyController == nil {
+	// 	if o.ConcurrentEvalsEnabled {
+	// 		o.RuleConcurrencyController = newRuleConcurrencyController(o.MaxConcurrentEvals)
+	// 	} else {
+	// 		o.RuleConcurrencyController = sequentialRuleEvalController{}
+	// 	}
+	// }
+
+	if o.ConcurrentEvalsEnabled && o.ConcurrencyExecuter == nil {
+		o.ConcurrencyExecuter = NewConcurrentRuleEvalExecuter(int(o.MaxConcurrentEvals))
 	}
 
 	if o.RuleDependencyController == nil {
@@ -169,6 +173,9 @@ func NewManager(o *ManagerOptions) *Manager {
 // Run starts processing of the rule manager. It is blocking.
 func (m *Manager) Run() {
 	level.Info(m.logger).Log("msg", "Starting rule manager...")
+	if m.opts.ConcurrencyExecuter != nil {
+		m.opts.ConcurrencyExecuter.Run()
+	}
 	m.start()
 	<-m.done
 }
@@ -191,6 +198,10 @@ func (m *Manager) Stop() {
 	// Shut down the groups waiting multiple evaluation intervals to write
 	// staleness markers.
 	close(m.done)
+
+	if m.opts.ConcurrencyExecuter != nil {
+		m.opts.ConcurrencyExecuter.Stop()
+	}
 
 	level.Info(m.logger).Log("msg", "Rule manager stopped")
 }
@@ -460,64 +471,65 @@ func (c ruleDependencyController) AnalyseRules(rules []Rule) {
 	}
 }
 
-// RuleConcurrencyController controls concurrency for rules that are safe to be evaluated concurrently.
-// Its purpose is to bound the amount of concurrency in rule evaluations to avoid overwhelming the Prometheus
-// server with additional query load. Concurrency is controlled globally, not on a per-group basis.
-type RuleConcurrencyController interface {
-	// Allow determines if the given rule is allowed to be evaluated concurrently.
-	// If Allow() returns true, then Done() must be called to release the acquired slot and corresponding cleanup is done.
-	// It is important that both *Group and Rule are not retained and only be used for the duration of the call.
-	Allow(ctx context.Context, group *Group, rule Rule) bool
+// the old mechanism is not used.
+// // RuleConcurrencyController controls concurrency for rules that are safe to be evaluated concurrently.
+// // Its purpose is to bound the amount of concurrency in rule evaluations to avoid overwhelming the Prometheus
+// // server with additional query load. Concurrency is controlled globally, not on a per-group basis.
+// type RuleConcurrencyController interface {
+// 	// Allow determines if the given rule is allowed to be evaluated concurrently.
+// 	// If Allow() returns true, then Done() must be called to release the acquired slot and corresponding cleanup is done.
+// 	// It is important that both *Group and Rule are not retained and only be used for the duration of the call.
+// 	Allow(ctx context.Context, group *Group, rule Rule) bool
 
-	// Done releases a concurrent evaluation slot.
-	Done(ctx context.Context)
+// 	// Done releases a concurrent evaluation slot.
+// 	Done(ctx context.Context)
 
-	// IsConcurrent returns true if the controller is a concurrent controller, false if it is a sequential controller.
-	IsConcurrent() bool
-}
+// 	// IsConcurrent returns true if the controller is a concurrent controller, false if it is a sequential controller.
+// 	IsConcurrent() bool
+// }
 
-// concurrentRuleEvalController holds a weighted semaphore which controls the concurrent evaluation of rules.
-type concurrentRuleEvalController struct {
-	sema *semaphore.Weighted
-}
+// // concurrentRuleEvalController holds a weighted semaphore which controls the concurrent evaluation of rules.
+// type concurrentRuleEvalController struct {
+// 	sema *semaphore.Weighted
+// }
 
-func newRuleConcurrencyController(maxConcurrency int64) RuleConcurrencyController {
-	return &concurrentRuleEvalController{
-		sema: semaphore.NewWeighted(maxConcurrency),
-	}
-}
+// func newRuleConcurrencyController(maxConcurrency int64) RuleConcurrencyController {
+// 	return &concurrentRuleEvalController{
+// 		sema: semaphore.NewWeighted(maxConcurrency),
+// 	}
+// }
 
-func (c *concurrentRuleEvalController) Allow(ctx context.Context, _ *Group, rule Rule) bool {
-	// To allow a rule to be executed concurrently, we need 3 conditions:
-	// 1. The rule must not have any rules that depend on it.
-	// 2. The rule itself must not depend on any other rules.
-	// 3. If 1 & 2 are true, then and only then we should try to acquire the concurrency slot.
-	if rule.NoDependencyRules() {
-		return c.sema.Acquire(ctx, 1) == nil
-	}
+// func (c *concurrentRuleEvalController) Allow(ctx context.Context, _ *Group, rule Rule) bool {
+// 	// To allow a rule to be executed concurrently, we need 3 conditions:
+// 	// 1. The rule must not have any rules that depend on it.
+// 	// 2. The rule itself must not depend on any other rules.
+// 	// 3. If 1 & 2 are true, then and only then we should try to acquire the concurrency slot.
+// 	if rule.NoDependencyRules() {
+// 		return c.sema.Acquire(ctx, 1) == nil
+// 	}
 
-	return false
-}
+// 	return false
+// }
 
-func (c *concurrentRuleEvalController) Done(_ context.Context) {
-	c.sema.Release(1)
-}
+// func (c *concurrentRuleEvalController) Done(_ context.Context) {
+// 	c.sema.Release(1)
+// }
 
-// IsConcurrent returns true if the controller is a concurrent controller, false if it is a sequential controller.
-func (*concurrentRuleEvalController) IsConcurrent() bool {
-	return true
-}
+// // IsConcurrent returns true if the controller is a concurrent controller, false if it is a sequential controller.
+// func (*concurrentRuleEvalController) IsConcurrent() bool {
+// 	return true
+// }
 
-// sequentialRuleEvalController is a RuleConcurrencyController that runs every rule sequentially.
-type sequentialRuleEvalController struct{}
+// // sequentialRuleEvalController is a RuleConcurrencyController that runs every rule sequentially.
+// type sequentialRuleEvalController struct{}
 
-func (c sequentialRuleEvalController) Allow(_ context.Context, _ *Group, _ Rule) bool {
-	return false
-}
+// func (c sequentialRuleEvalController) Allow(_ context.Context, _ *Group, _ Rule) bool {
+// 	return false
+// }
 
-func (c sequentialRuleEvalController) Done(_ context.Context) {}
+// func (c sequentialRuleEvalController) Done(_ context.Context) {}
 
-// IsConcurrent returns false if the controller is a sequential controller, true if it is a concurrent controller.
-func (c sequentialRuleEvalController) IsConcurrent() bool {
-	return false
-}
+// // IsConcurrent returns false if the controller is a sequential controller, true if it is a concurrent controller.
+// func (c sequentialRuleEvalController) IsConcurrent() bool {
+// 	return false
+// }
