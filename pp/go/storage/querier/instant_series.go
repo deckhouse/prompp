@@ -13,7 +13,16 @@ import (
 // InstantSeriesSet
 //
 
-// InstantSeriesSet contains a instatnt set of series, allows to iterate over sorted, populated series.
+// NewInstantSeriesSlice creates InstantSeries slice and sets default timestamp to each series.
+func NewInstantSeriesSlice(size int, defaultTimestamp int64) []InstantSeries {
+	seriesSlice := make([]InstantSeries, size)
+	for i := range seriesSlice {
+		seriesSlice[i].Timestamp = defaultTimestamp
+	}
+	return seriesSlice
+}
+
+// InstantSeriesSet contains a instant set of series, allows to iterate over sorted, populated series.
 type InstantSeriesSet struct {
 	lssQueryResult              *cppbridge.LSSQueryResult
 	labelSetSnapshot            *cppbridge.LabelSetSnapshot

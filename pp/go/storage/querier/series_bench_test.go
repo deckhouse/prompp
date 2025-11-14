@@ -64,6 +64,7 @@ func BenchmarkSeriesSetOpt(b *testing.B) {
 	ds := shard.NewDataStorage()
 	prepareData(lss, ds, size)
 
+	b.StopTimer()
 	seriesSets := make([]*querier.SeriesSet, 0, b.N)
 	for i := 0; i < b.N; i++ {
 		seriesSets = append(seriesSets, queryOpt(b, lss, ds, start, end, matcher))

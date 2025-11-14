@@ -6,6 +6,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
+	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/stretchr/testify/require"
@@ -42,14 +43,20 @@ func BenchmarkInstantSeriesSet(b *testing.B) {
 	timestamps := []int64{0, 1, 2}
 	valueNotFoundTimestampValue := timestamps[0] - 1
 	prepareInstantData(lss, ds, timestamps, size)
-	b.ResetTimer()
-	b.ReportAllocs()
-	var iterator chunkenc.Iterator
+
+	b.StopTimer()
+	seriesSets := make([]*querier.InstantSeriesSet, 0, b.N)
 	for i := 0; i < b.N; i++ {
 		seriesSet, err := storagetest.InstantQuery(lss, ds, timestamps[1], valueNotFoundTimestampValue, matcher)
 		require.NoError(b, err)
-		b.StartTimer()
-		iterator = storagetest.IterateSeriesSet(seriesSet, iterator)
-		b.StopTimer()
+		seriesSets = append(seriesSets, seriesSet)
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	b.StartTimer()
+	var iterator chunkenc.Iterator
+	for i := 0; i < b.N; i++ {
+		iterator = storagetest.IterateSeriesSet(seriesSets[i], iterator)
 	}
 }

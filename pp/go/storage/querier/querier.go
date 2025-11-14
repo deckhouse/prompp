@@ -203,10 +203,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 				return nil
 			}
 
-			instantSeries := make([]InstantSeries, lssQueryResult.Len())
-			for i := range instantSeries {
-				instantSeries[i].Timestamp = valueNotFoundTimestampValue
-			}
+			instantSeries := NewInstantSeriesSlice(lssQueryResult.Len(), valueNotFoundTimestampValue)
 
 			result := s.DataStorage().InstantQuery(q.maxt, lssQueryResult.IDs(), uintptr(unsafe.Pointer(unsafe.SliceData(instantSeries))))
 			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {

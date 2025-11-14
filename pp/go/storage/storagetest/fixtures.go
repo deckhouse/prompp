@@ -190,10 +190,7 @@ func InstantQuery(lss *shard.LSS, ds *shard.DataStorage, targetTimestamp, valueN
 		return &querier.InstantSeriesSet{}, nil
 	}
 
-	instantSeries := make([]querier.InstantSeries, lssQueryResult.Len())
-	for i := range instantSeries {
-		instantSeries[i].Timestamp = valueNotFoundTimestampValue
-	}
+	instantSeries := querier.NewInstantSeriesSlice(lssQueryResult.Len(), valueNotFoundTimestampValue)
 
 	dsQueryResult := ds.InstantQuery(targetTimestamp, lssQueryResult.IDs(), uintptr(unsafe.Pointer(unsafe.SliceData(instantSeries))))
 	if dsQueryResult.Status != cppbridge.DataStorageQueryStatusSuccess {
