@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.6.4
+
+### Features
+1. **Disable Block Compaction Flag.** Added a feature flag `disable_block_compaction` to disable the block compactor. This flag optimizes operation when integrating with Thanos.
+
 ## v0.6.3
 
 ### Fixes
