@@ -958,7 +958,7 @@ func main() {
 
 		ruleQueryOffset := time.Duration(cfgFile.GlobalConfig.RuleQueryOffset)
 		ruleManager = rules.NewManager(&rules.ManagerOptions{
-			Queryable:       fanoutStorage,         // PP_CHANGES.md: rebuild on cpp
+			Queryable:       adapter,               // PP_CHANGES.md: rebuild on cpp
 			Engine:          queryEngine,           // PP_CHANGES.md: rebuild on cpp
 			FanoutQueryable: fanoutStorage,         // PP_CHANGES.md: rebuild on cpp
 			EngineQueryCtor: rules.EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
