@@ -447,6 +447,7 @@ TEST_F(ChunkRecoderFixture, RecodeWithLsIdBatchSize) {
   auto recoder = create_recoder({0, 1, 2, 3}, 1, {.min = 0, .max = 4});
 
   // Act
+  // NOLINTNEXTLINE(clang-analyzer-core.NullDereference)
   const auto info1 = recode(recoder);
   const auto next_batch_result1 = recoder.chunk_iterator().next_batch();
   const auto next_batch_result2 = recoder.chunk_iterator().next_batch();

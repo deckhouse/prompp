@@ -196,6 +196,56 @@ class CompactBitSequenceFixture : public testing::Test {
   CompactBitSequence<kAllocationSizesTable> stream_;
 };
 
+TEST_F(CompactBitSequenceFixture, CopyConstructor) {
+  // Arrange
+  stream_.push_back_single_one_bit();
+
+  // Act
+  const auto stream2 = stream_;
+
+  // Assert
+  EXPECT_EQ(1U, stream_.size_in_bits());
+  EXPECT_EQ(1U, stream2.size_in_bits());
+  EXPECT_NE(stream_.raw_bytes(), stream2.raw_bytes());
+  EXPECT_EQ(0b1U, stream_.bytes()[0]);
+  EXPECT_EQ(0b1U, stream2.bytes()[0]);
+}
+
+TEST_F(CompactBitSequenceFixture, CopyOperator) {
+  // Arrange
+  stream_.push_back_single_one_bit();
+  decltype(stream_) stream2;
+  stream2.push_back_single_zero_bit();
+
+  // Act
+  stream2 = stream_;
+
+  // Assert
+  EXPECT_EQ(1U, stream_.size_in_bits());
+  EXPECT_EQ(1U, stream2.size_in_bits());
+  EXPECT_NE(stream_.raw_bytes(), stream2.raw_bytes());
+  EXPECT_EQ(0b1U, stream2.bytes()[0]);
+}
+
+TEST_F(CompactBitSequenceFixture, CopyOperatorOnNonUniqueMemory) {
+  // Arrange
+  stream_.push_back_single_one_bit();
+  decltype(stream_) stream2;
+  stream2.push_back_single_zero_bit();
+  const auto memory = stream2.shared_memory();
+
+  // Act
+  stream2 = stream_;
+
+  // Assert
+  EXPECT_EQ(1U, stream_.size_in_bits());
+  EXPECT_EQ(1U, stream2.size_in_bits());
+  EXPECT_NE(stream_.raw_bytes(), stream2.raw_bytes());
+  EXPECT_NE(stream2.raw_bytes(), memory.get());
+  EXPECT_EQ(0b1U, stream2.bytes()[0]);
+  EXPECT_EQ(0b0U, memory.get()[0]);
+}
+
 TEST_F(CompactBitSequenceFixture, MoveConstructor) {
   // Arrange
   stream_.push_back_single_one_bit();
@@ -228,6 +278,29 @@ TEST_F(CompactBitSequenceFixture, MoveOperator) {
   EXPECT_EQ(1U, stream2.size_in_bits());
   ASSERT_FALSE(stream2.bytes().empty());
   EXPECT_EQ(0b1U, stream2.bytes()[0]);
+}
+
+TEST_F(CompactBitSequenceFixture, MoveOperatorOnNonUniqueMemory) {
+  // Arrange
+  stream_.push_back_single_one_bit();
+  const auto memory = stream_.shared_memory();
+  decltype(stream_) stream2;
+  stream2.push_back_single_zero_bit();
+  const auto memory2 = stream2.shared_memory();
+
+  // Act
+  stream2 = std::move(stream_);
+
+  // Assert
+  EXPECT_EQ(0U, stream_.size_in_bits());
+  ASSERT_TRUE(stream_.bytes().empty());
+
+  EXPECT_EQ(1U, stream2.size_in_bits());
+  ASSERT_FALSE(stream2.bytes().empty());
+  EXPECT_EQ(0b1U, stream2.bytes()[0]);
+
+  EXPECT_EQ(stream2.raw_bytes(), memory.get());
+  EXPECT_EQ(0b0U, memory2.get()[0]);
 }
 
 TEST_F(CompactBitSequenceFixture, PushOnebit) {
@@ -451,10 +524,13 @@ TEST_F(CompactBitSequenceFixture, ReallocOnNonUniqueMemory) {
   stream_.push_back_u64(kValue);
 
   // Assert
-  EXPECT_NE(stream_.raw_bytes(), memory.get());
-  EXPECT_TRUE(std::ranges::equal(std::vector{kValue, kValue, kValue, kValue}, stream_.bytes<uint64_t>()));
   ASSERT_EQ(BareBones::Bit::to_bits(sizeof(kValue) * 3), memory_size);
+
+  // NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
+  EXPECT_NE(stream_.raw_bytes(), memory.get());
+  // NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
   EXPECT_TRUE(std::ranges::equal(std::vector{kValue, kValue, kValue}, std::span(reinterpret_cast<uint64_t*>(memory.get()), 3)));
+  EXPECT_TRUE(std::ranges::equal(std::vector{kValue, kValue, kValue, kValue}, stream_.bytes<uint64_t>()));
 }
 
 template <class T>

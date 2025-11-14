@@ -180,21 +180,21 @@ class CompactBitSequenceBase {
 
   CompactBitSequenceBase() = default;
   PROMPP_ALWAYS_INLINE CompactBitSequenceBase(const CompactBitSequenceBase& other)
-      : memory_(other.memory_, other.stream_allocated_memory()), size_in_bits_(other.size_in_bits_), allocation_size_index_(other.allocation_size_index_) {}
+      : memory_(other.stream_allocated_memory(), 0), size_in_bits_(other.size_in_bits_), allocation_size_index_(other.allocation_size_index_) {
+    std::memcpy(memory_.get(), other.memory_.get(), other.stream_allocated_memory());
+  }
   PROMPP_ALWAYS_INLINE CompactBitSequenceBase(CompactBitSequenceBase&& other) noexcept
-      : memory_(std::move(other.memory_)), size_in_bits_(other.size_in_bits_), allocation_size_index_(std::exchange(other.allocation_size_index_, 0)) {
+      : memory_(std::move(other.memory_)),
+        size_in_bits_(std::exchange(other.size_in_bits_, 0)),
+        allocation_size_index_(std::exchange(other.allocation_size_index_, 0)) {
     other.size_in_bits_ = 0;
   }
 
-  CompactBitSequenceBase& operator=(const CompactBitSequenceBase& other) {
+  PROMPP_ALWAYS_INLINE CompactBitSequenceBase& operator=(const CompactBitSequenceBase& other) {
     if (this != &other) [[likely]] {
       const auto size = other.stream_allocated_memory();
-      if (memory_.non_atomic_is_unique()) [[likely]] {
-        memory_.non_atomic_reallocate(size);
-        std::memcpy(memory_.get(), other.memory_.get(), size);
-      } else {
-        memory_.reset(other.memory_.get(), size, size, other.memory_.constructed_item_count());
-      }
+      memory_.reallocate(0, size);
+      std::memcpy(memory_.get(), other.memory_.get(), size);
 
       size_in_bits_ = other.size_in_bits_;
       allocation_size_index_ = other.allocation_size_index_;
@@ -203,11 +203,10 @@ class CompactBitSequenceBase {
     return *this;
   }
 
-  CompactBitSequenceBase& operator=(CompactBitSequenceBase&& other) noexcept {
+  PROMPP_ALWAYS_INLINE CompactBitSequenceBase& operator=(CompactBitSequenceBase&& other) noexcept {
     if (this != &other) [[likely]] {
       memory_ = std::move(other.memory_);
-      size_in_bits_ = other.size_in_bits_;
-      other.size_in_bits_ = 0;
+      size_in_bits_ = std::exchange(other.size_in_bits_, 0);
       allocation_size_index_ = std::exchange(other.allocation_size_index_, 0);
     }
 
@@ -215,7 +214,7 @@ class CompactBitSequenceBase {
   }
 
   PROMPP_ALWAYS_INLINE bool operator==(const CompactBitSequenceBase& other) const noexcept {
-    return size_in_bits_ == other.size_in_bits_ && memcmp(memory_.get(), other.memory_.get(), size_in_bytes()) == 0;
+    return size_in_bits_ == other.size_in_bits_ && std::memcmp(memory_.get(), other.memory_.get(), size_in_bytes()) == 0;
   }
 
   PROMPP_ALWAYS_INLINE void clear() noexcept {
@@ -249,13 +248,8 @@ class CompactBitSequenceBase {
   [[nodiscard]] PROMPP_ALWAYS_INLINE SharedPtr shared_memory() const noexcept { return memory_; }
 
   PROMPP_ALWAYS_INLINE void shrink_to_fit() noexcept {
-    if (memory_.non_atomic_is_unique()) [[likely]] {
-      memory_.non_atomic_reallocate(size_in_bytes() + Bit::to_bytes(kReservedSizeBits));
-    } else {
-      const auto size = Bit::to_bytes(size_in_bits()) + Bit::to_bytes(kReservedSizeBits);
-      memory_.reset(memory_.get(), size, size, memory_.constructed_item_count());
-    }
-
+    const auto size = Bit::to_bytes(size_in_bits()) + Bit::to_bytes(kReservedSizeBits);
+    memory_.reallocate(size, size);
     allocation_size_index_ = kNoAllocationIndex;
   }
 
@@ -286,16 +280,7 @@ class CompactBitSequenceBase {
     const auto old_size = kAllocationSizesTable[allocation_size_index_];
     if (size_in_bits() + kReservedSizeBits > old_size.bits) [[unlikely]] {
       ++allocation_size_index_;
-      assert(allocation_size_index_ < std::size(kAllocationSizesTable));
-
-      const auto new_size = kAllocationSizesTable[allocation_size_index_].bytes();
-      const auto old_size_bytes = old_size.bytes();
-      if (memory_.non_atomic_is_unique()) [[likely]] {
-        memory_.non_atomic_reallocate(new_size);
-      } else {
-        memory_.reset(memory_.get(), old_size_bytes, new_size, memory_.constructed_item_count());
-      }
-      std::memset(memory_.get() + old_size_bytes, 0, new_size - old_size_bytes);
+      reallocate(old_size.bytes());
     }
   }
 
@@ -311,17 +296,16 @@ class CompactBitSequenceBase {
     if (new_allocation_size_index > allocation_size_index_) [[unlikely]] {
       const auto old_size = kAllocationSizesTable[allocation_size_index_];
       allocation_size_index_ = new_allocation_size_index;
-      assert(new_allocation_size_index < std::size(kAllocationSizesTable));
-
-      const auto new_size = kAllocationSizesTable[allocation_size_index_].bytes();
-      const auto old_size_bytes = old_size.bytes();
-      if (memory_.non_atomic_is_unique()) [[likely]] {
-        memory_.non_atomic_reallocate(new_size);
-      } else {
-        memory_.reset(memory_.get(), size_in_bytes(), new_size, memory_.constructed_item_count());
-      }
-      std::memset(memory_.get() + old_size_bytes, 0, new_size - old_size_bytes);
+      reallocate(old_size.bytes());
     }
+  }
+
+  PROMPP_ALWAYS_INLINE void reallocate(const uint32_t old_size_bytes) {
+    assert(allocation_size_index_ < std::size(kAllocationSizesTable));
+
+    const auto new_size = kAllocationSizesTable[allocation_size_index_].bytes();
+    memory_.reallocate(old_size_bytes, new_size);
+    std::memset(memory_.get() + old_size_bytes, 0, new_size - old_size_bytes);
   }
 
   template <class T>

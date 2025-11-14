@@ -264,6 +264,7 @@ extern "C" void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, v
 
   const auto in = static_cast<const Arguments*>(args);
   const auto out = static_cast<Result*>(res);
+  // NOLINTNEXTLINE(clang-analyzer-core.NullDereference)
   std::visit(
       [out](auto& chunk_recoder) PROMPP_LAMBDA_INLINE {
         chunk_recoder.recode_next_chunk(*out);
