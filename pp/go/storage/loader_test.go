@@ -1,6 +1,8 @@
 package storage_test
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,16 +17,12 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
+	"github.com/prometheus/prometheus/pp/go/util"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-)
-
-const (
-	numberOfShards uint16 = 2
-
-	maxSegmentSize uint32 = 1024
-
-	unloadDataStorageInterval time.Duration = 100
 )
 
 type idGeneratorStub struct {
@@ -58,31 +56,19 @@ func TestHeadLoadSuite(t *testing.T) {
 }
 
 func (s *HeadLoadSuite) SetupTest() {
-	s.dataDir = s.createDataDirectory()
+	dataDir, err := storagetest.CreateDataDirectory(s.T().TempDir())
+	require.NoError(s.T(), err)
+	s.dataDir = dataDir
 
 	s.clock = clockwork.NewFakeClockAt(time.Now())
 	s.headIdGenerator = newIdGeneratorStub()
 	s.createCatalog()
 }
 
-func (s *HeadLoadSuite) createDataDirectory() string {
-	dataDir := filepath.Join(s.T().TempDir(), "data")
-	s.Require().NoError(os.MkdirAll(dataDir, os.ModeDir))
-	return dataDir
-}
-
 func (s *HeadLoadSuite) createCatalog() {
-	l, err := catalog.NewFileLogV2(filepath.Join(s.dataDir, "catalog.log"))
-	s.Require().NoError(err)
-
-	s.catalog, err = catalog.New(
-		s.clock,
-		l,
-		s.headIdGenerator,
-		catalog.DefaultMaxLogFileSize,
-		nil,
-	)
-	s.Require().NoError(err)
+	ctlg, err := storagetest.CreateCatalog(s.clock, filepath.Join(s.dataDir, "catalog.log"), s.headIdGenerator)
+	require.NoError(s.T(), err)
+	s.catalog = ctlg
 }
 
 func (s *HeadLoadSuite) headDir() string {
@@ -93,10 +79,27 @@ func (s *HeadLoadSuite) createHead(unloadDataStorageInterval time.Duration) (*st
 	return storage.NewBuilder(
 		s.catalog,
 		s.dataDir,
-		maxSegmentSize,
+		storagetest.MaxSegmentSize,
 		prometheus.DefaultRegisterer,
 		unloadDataStorageInterval,
-	).Build(0, numberOfShards)
+	).Build(0, storagetest.NumberOfShards)
+}
+
+func (s *HeadLoadSuite) loadNonWritableHead() (*storage.Head, error) {
+	rec, err := s.catalog.Create(1)
+	require.NoError(s.T(), err)
+	headDir := filepath.Join(s.dataDir, rec.Dir())
+	require.NoError(s.T(), os.Mkdir(headDir, 0o777))
+	shardFilePath := storage.GetShardWalFilename(headDir, 0)
+	shardFile, err := util.CreateFileAppender(shardFilePath, 0o666)
+	require.NoError(s.T(), err)
+
+	_, err = writer.WriteHeader(shardFile, wal.FileFormatVersion, cppbridge.EncodersVersion()-1)
+	require.NoError(s.T(), err)
+	require.NoError(s.T(), shardFile.Close())
+
+	loader := storage.NewLoader(s.dataDir, storagetest.MaxSegmentSize, prometheus.DefaultRegisterer, storagetest.UnloadDataStorageInterval)
+	return loader.Load(rec, 0)
 }
 
 func (s *HeadLoadSuite) mustCreateHead(unloadDataStorageInterval time.Duration) *storage.Head {
@@ -108,16 +111,16 @@ func (s *HeadLoadSuite) mustCreateHead(unloadDataStorageInterval time.Duration) 
 	return h
 }
 
-func (s *HeadLoadSuite) loadHead(unloadDataStorageInterval time.Duration) (*storage.Head, bool) {
+func (s *HeadLoadSuite) loadHead(unloadDataStorageInterval time.Duration) (*storage.Head, error) {
 	record, err := s.catalog.Get(s.headIdGenerator.last())
 	s.Require().NoError(err)
 
-	return storage.NewLoader(s.dataDir, maxSegmentSize, prometheus.DefaultRegisterer, unloadDataStorageInterval).Load(record, 0)
+	return storage.NewLoader(s.dataDir, storagetest.MaxSegmentSize, prometheus.DefaultRegisterer, unloadDataStorageInterval).Load(record, 0)
 }
 
 func (s *HeadLoadSuite) mustLoadHead(unloadDataStorageInterval time.Duration) *storage.Head {
-	loadedHead, corrupted := s.loadHead(unloadDataStorageInterval)
-	s.False(corrupted)
+	loadedHead, err := s.loadHead(unloadDataStorageInterval)
+	require.NoError(s.T(), err)
 
 	return loadedHead
 }
@@ -160,10 +163,10 @@ func (s *HeadLoadSuite) TestErrorOpenShardFileInOneShard() {
 	s.Require().NoError(os.Remove(storage.GetShardWalFilename(s.headDir(), 0)))
 
 	// Act
-	head, corrupted := s.loadHead(0)
+	head, err := s.loadHead(0)
 
 	// Assert
-	s.True(corrupted)
+	s.Error(err)
 	s.Nil(s.shards(head)[0].UnloadedDataStorage())
 	s.Require().NoError(head.Close())
 }
@@ -177,10 +180,10 @@ func (s *HeadLoadSuite) TestErrorOpenShardFileInAllShards() {
 	s.Require().NoError(os.Remove(storage.GetShardWalFilename(s.headDir(), 1)))
 
 	// Act
-	head, corrupted := s.loadHead(0)
+	head, err := s.loadHead(0)
 
 	// Assert
-	s.True(corrupted)
+	s.Error(err)
 	s.Nil(s.shards(head)[0].UnloadedDataStorage())
 	s.Nil(s.shards(head)[1].UnloadedDataStorage())
 	s.Require().NoError(head.Close())
@@ -307,7 +310,7 @@ func (s *HeadLoadSuite) TestLoadWithEnabledDataUnloading() {
 	s.Require().NoError(sourceHead.Close())
 
 	// Act
-	loadedHead := s.mustLoadHead(unloadDataStorageInterval)
+	loadedHead := s.mustLoadHead(storagetest.UnloadDataStorageInterval)
 
 	// Assert
 	s.Require().NotNil(s.shards(loadedHead)[0].UnloadedDataStorage())
@@ -319,7 +322,7 @@ func (s *HeadLoadSuite) TestLoadWithEnabledDataUnloading() {
 
 func (s *HeadLoadSuite) TestLoadWithDataUnloading() {
 	// Arrange
-	sourceHead := s.mustCreateHead(unloadDataStorageInterval)
+	sourceHead := s.mustCreateHead(storagetest.UnloadDataStorageInterval)
 	s.appendTimeSeries(sourceHead, []storagetest.TimeSeries{
 		{
 			Labels: labels.FromStrings("__name__", "wal_metric"),
@@ -345,7 +348,7 @@ func (s *HeadLoadSuite) TestLoadWithDataUnloading() {
 	s.Require().NoError(sourceHead.Close())
 
 	// Act
-	loadedHead := s.mustLoadHead(unloadDataStorageInterval)
+	loadedHead := s.mustLoadHead(storagetest.UnloadDataStorageInterval)
 
 	// Assert
 	s.NotNil(s.shards(loadedHead)[0].UnloadedDataStorage())
@@ -357,7 +360,7 @@ func (s *HeadLoadSuite) TestLoadWithDataUnloading() {
 
 func (s *HeadLoadSuite) TestErrorDataUnloading() {
 	// Arrange
-	sourceHead := s.mustCreateHead(unloadDataStorageInterval)
+	sourceHead := s.mustCreateHead(storagetest.UnloadDataStorageInterval)
 	s.appendTimeSeries(sourceHead, []storagetest.TimeSeries{
 		{
 			Labels: labels.FromStrings("__name__", "wal_metric"),
@@ -385,11 +388,83 @@ func (s *HeadLoadSuite) TestErrorDataUnloading() {
 	// Act
 	s.lockFileForCreation(storage.GetUnloadedDataStorageFilename(s.headDir(), 0))
 	s.lockFileForCreation(storage.GetUnloadedDataStorageFilename(s.headDir(), 1))
-	loadedHead, corrupted := s.loadHead(unloadDataStorageInterval)
+	loadedHead, err := s.loadHead(storagetest.UnloadDataStorageInterval)
 
 	// Assert
-	s.True(corrupted)
+	s.Error(err)
 	s.NotNil(s.shards(loadedHead)[0].UnloadedDataStorage())
 	s.NotNil(s.shards(loadedHead)[1].UnloadedDataStorage())
 	s.Require().NoError(loadedHead.Close())
+}
+
+func (s *HeadLoadSuite) TestInvalidEncoderVersion() {
+	// Arrange
+	// Act
+	head, err := s.loadNonWritableHead()
+	// Assert
+	require.ErrorIs(s.T(), err, cppbridge.ErrInvalidEncoderVersion)
+	require.NoError(s.T(), head.Close())
+}
+
+type EnsureSameErrorTypesTestSuite struct {
+	suite.Suite
+}
+
+func TestEnsureSameErrorTypesTestSuite(t *testing.T) {
+	suite.Run(t, new(EnsureSameErrorTypesTestSuite))
+}
+
+func (s *EnsureSameErrorTypesTestSuite) TestEnsureSameErrorTypesNoErrors() {
+	// Arrange
+	targetErr := errors.New("target error")
+	var errs []error
+
+	// Act
+	err := storage.EnsureSameErrorTypes(errs, targetErr)
+
+	// Assert
+	require.Nil(s.T(), err)
+}
+
+func (s *EnsureSameErrorTypesTestSuite) TestEnsureSameErrorTypesSingleNonTargetError() {
+	// Arrange
+	targetErr := errors.New("target error")
+	anotherErr := errors.New("another error")
+	errs := []error{anotherErr}
+
+	// Act
+	err := storage.EnsureSameErrorTypes(errs, targetErr)
+
+	// Assert
+	require.NotNil(s.T(), err)
+	require.ErrorIs(s.T(), err, anotherErr)
+	require.NotErrorIs(s.T(), err, targetErr)
+}
+
+func (s *EnsureSameErrorTypesTestSuite) TestEnsureSameErrorTypesAllErrorsOfTargetType() {
+	// Arrange
+	targetErr := errors.New("target error")
+	errs := []error{fmt.Errorf("err1: %w", targetErr), fmt.Errorf("err2: %w", targetErr)}
+
+	// Act
+	err := storage.EnsureSameErrorTypes(errs, targetErr)
+
+	// Assert
+	require.NotNil(s.T(), err)
+	require.ErrorIs(s.T(), err, targetErr)
+}
+
+func (s *EnsureSameErrorTypesTestSuite) TestEnsureSameErrorTypesNotAllErrorsOfTargetType() {
+	// Arrange
+	targetErr := errors.New("target error")
+	anotherErr := errors.New("another error")
+	errs := []error{fmt.Errorf("err1: %w", targetErr), fmt.Errorf("err2: %w", anotherErr)}
+
+	// Act
+	resultErr := storage.EnsureSameErrorTypes(errs, targetErr)
+
+	// Assert
+	require.NotNil(s.T(), resultErr)
+	require.ErrorIs(s.T(), resultErr, anotherErr)
+	require.NotErrorIs(s.T(), resultErr, targetErr)
 }
