@@ -31,31 +31,39 @@ class SerializerDeserializerTrait {
   DataSerializer serializer_{storage_};
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static SampleList decode_current_chunk(SerializedDataView& data, uint32_t series_id) {
-    SampleList result;
-
     EXPECT_EQ(series_id, data.next_series().first);
 
+    SampleList result;
     std::ranges::copy(data.create_current_series_iterator(), DecodeIteratorSentinel{}, std::back_insert_iterator(result));
-
     return result;
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static SampleList decode_chunk_by_id(const SerializedDataView& data, uint32_t series_chunk_id) {
     SampleList result;
-
     std::ranges::copy(data.create_series_iterator(series_chunk_id), DecodeIteratorSentinel{}, std::back_insert_iterator(result));
-
     return result;
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE SerializedData serialize(const QueriedChunkList& queried_chunks) noexcept {
+    auto data = serializer_.serialize(queried_chunks);
+    storage_.reset();
+    return data;
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE SerializedData serialize() noexcept {
+    auto data = serializer_.serialize();
+    storage_.reset();
+    return data;
   }
 };
 
-class SerializerDeserializerFixtureNew : public SerializerDeserializerTrait, public testing::Test {};
+class SerializerDeserializerFixture : public SerializerDeserializerTrait, public testing::Test {};
 
-TEST_F(SerializerDeserializerFixtureNew, EmptyChunksList) {
+TEST_F(SerializerDeserializerFixture, EmptyChunksList) {
   // Arrange
 
   // Act
-  const SerializedData serialized = serializer_.serialize({});
+  const auto serialized = serialize({});
   const SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -63,7 +71,7 @@ TEST_F(SerializerDeserializerFixtureNew, EmptyChunksList) {
   ASSERT_EQ(series_data::encoder::CompactBitSequence::reserved_bytes_for_reader().size(), serialized_view.get_buffer_view().size());
 }
 
-TEST_F(SerializerDeserializerFixtureNew, TwoUint32ConstantChunkWithCommonTimestampStream) {
+TEST_F(SerializerDeserializerFixture, TwoUint32ConstantChunkWithCommonTimestampStream) {
   // Arrange
   encoder_.encode(0, 1, 1.0);
   encoder_.encode(1, 1, 1.0);
@@ -75,7 +83,7 @@ TEST_F(SerializerDeserializerFixtureNew, TwoUint32ConstantChunkWithCommonTimesta
   encoder_.encode(1, 3, 1.0);
 
   // Act
-  const SerializedData serialized = serializer_.serialize({QueriedChunk{0}, QueriedChunk{1}});
+  const auto serialized = serialize({QueriedChunk{0}, QueriedChunk{1}});
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -100,7 +108,7 @@ TEST_F(SerializerDeserializerFixtureNew, TwoUint32ConstantChunkWithCommonTimesta
       decode_current_chunk(serialized_view, 1)));
 }
 
-TEST_F(SerializerDeserializerFixtureNew, TwoUint32ConstantFinalizedChunkWithCommonTimestampStream) {
+TEST_F(SerializerDeserializerFixture, TwoUint32ConstantFinalizedChunkWithCommonTimestampStream) {
   // Arrange
   encoder_.encode(0, 1, 1.0);
   encoder_.encode(1, 1, 1.0);
@@ -117,7 +125,7 @@ TEST_F(SerializerDeserializerFixtureNew, TwoUint32ConstantFinalizedChunkWithComm
   encoder_.encode(1, 4, 1.0);
 
   // Act
-  const SerializedData serialized = serializer_.serialize();
+  const auto serialized = serialize();
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -147,7 +155,7 @@ TEST_F(SerializerDeserializerFixtureNew, TwoUint32ConstantFinalizedChunkWithComm
       decode_current_chunk(serialized_view, 1)));
 }
 
-TEST_F(SerializerDeserializerFixtureNew, ThreeUint32ConstantChunkWithCommonAndUniqueTimestampStream) {
+TEST_F(SerializerDeserializerFixture, ThreeUint32ConstantChunkWithCommonAndUniqueTimestampStream) {
   // Arrange
   encoder_.encode(0, 1, 1.0);
   encoder_.encode(1, 1, 1.0);
@@ -163,7 +171,7 @@ TEST_F(SerializerDeserializerFixtureNew, ThreeUint32ConstantChunkWithCommonAndUn
   encoder_.encode(2, 3, 2.0);
 
   // Act
-  const SerializedData serialized = serializer_.serialize({QueriedChunk{0}, QueriedChunk{1}, QueriedChunk{2}});
+  const auto serialized = serialize({QueriedChunk{0}, QueriedChunk{1}, QueriedChunk{2}});
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -195,7 +203,7 @@ TEST_F(SerializerDeserializerFixtureNew, ThreeUint32ConstantChunkWithCommonAndUn
       decode_current_chunk(serialized_view, 2)));
 }
 
-TEST_F(SerializerDeserializerFixtureNew, AllChunkTypes) {
+TEST_F(SerializerDeserializerFixture, AllChunkTypes) {
   // Arrange
   encoder_.encode(0, 100, 1.0);
 
@@ -229,7 +237,7 @@ TEST_F(SerializerDeserializerFixtureNew, AllChunkTypes) {
   encoder_.encode(8, 123, 4.1);
 
   // Act
-  SerializedData serialized = serializer_.serialize();
+  const auto serialized = serialize();
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -310,7 +318,7 @@ TEST_F(SerializerDeserializerFixtureNew, AllChunkTypes) {
       decode_current_chunk(serialized_view, 20)));
 }
 
-TEST_F(SerializerDeserializerFixtureNew, FinalizedAllChunkTypes) {
+TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypes) {
   // Arrange
   encoder_.encode(0, 100, 1.0);
   ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
@@ -354,7 +362,7 @@ TEST_F(SerializerDeserializerFixtureNew, FinalizedAllChunkTypes) {
   ChunkFinalizer::finalize(storage_, 8, storage_.open_chunks[8]);
 
   // Act
-  SerializedData serialized = serializer_.serialize();
+  const auto serialized = serialize();
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -435,14 +443,14 @@ TEST_F(SerializerDeserializerFixtureNew, FinalizedAllChunkTypes) {
       decode_current_chunk(serialized_view, 20)));
 }
 
-TEST_F(SerializerDeserializerFixtureNew, ChunkWithFinalizedTimestampStream) {
+TEST_F(SerializerDeserializerFixture, ChunkWithFinalizedTimestampStream) {
   // Arrange
   encoder_.encode(0, 100, 1.0);
   encoder_.encode(1, 100, 1.0);
   ChunkFinalizer::finalize(storage_, 0, storage_.open_chunks[0]);
 
   // Act
-  const SerializedData serialized = serializer_.serialize({QueriedChunk{1}});
+  const auto serialized = serialize({QueriedChunk{1}});
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -453,7 +461,7 @@ TEST_F(SerializerDeserializerFixtureNew, ChunkWithFinalizedTimestampStream) {
       decode_current_chunk(serialized_view, 1)));
 }
 
-TEST_F(SerializerDeserializerFixtureNew, MultipleChunksOnOneSeriesId) {
+TEST_F(SerializerDeserializerFixture, MultipleChunksOnOneSeriesId) {
   // Arrange
   encoder_.encode(0, 100, 1.0);
   encoder_.encode(0, 101, 1.0);
@@ -464,7 +472,7 @@ TEST_F(SerializerDeserializerFixtureNew, MultipleChunksOnOneSeriesId) {
   encoder_.encode(0, 105, 1.0);
 
   // Act
-  const SerializedData serialized = serializer_.serialize();
+  const auto serialized = serialize();
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -480,7 +488,7 @@ TEST_F(SerializerDeserializerFixtureNew, MultipleChunksOnOneSeriesId) {
       decode_current_chunk(serialized_view, 0)));
 }
 
-TEST_F(SerializerDeserializerFixtureNew, QueryFinalizedOnly) {
+TEST_F(SerializerDeserializerFixture, QueryFinalizedOnly) {
   // Arrange
   encoder_.encode(0, 100, 1.0);
   encoder_.encode(0, 101, 1.0);
@@ -491,7 +499,7 @@ TEST_F(SerializerDeserializerFixtureNew, QueryFinalizedOnly) {
   encoder_.encode(0, 105, 1.0);
 
   // Act
-  const SerializedData serialized = serializer_.serialize({QueriedChunk{0, 0}});
+  const auto serialized = serialize({QueriedChunk{0, 0}});
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -504,7 +512,7 @@ TEST_F(SerializerDeserializerFixtureNew, QueryFinalizedOnly) {
       decode_current_chunk(serialized_view, 0)));
 }
 
-TEST_F(SerializerDeserializerFixtureNew, MultipleChunksOnOneSeriesIdWithSeveralFinalized) {
+TEST_F(SerializerDeserializerFixture, MultipleChunksOnOneSeriesIdWithSeveralFinalized) {
   // Arrange
   encoder_.encode(0, 100, 1.0);
   encoder_.encode(0, 101, 2.0);
@@ -519,7 +527,7 @@ TEST_F(SerializerDeserializerFixtureNew, MultipleChunksOnOneSeriesIdWithSeveralF
   encoder_.encode(0, 108, 9.0);
 
   // Act
-  const SerializedData serialized = serializer_.serialize();
+  const auto serialized = serialize();
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -535,7 +543,7 @@ TEST_F(SerializerDeserializerFixtureNew, MultipleChunksOnOneSeriesIdWithSeveralF
                                  decode_current_chunk(serialized_view, 0)));
 }
 
-TEST_F(SerializerDeserializerFixtureNew, CreateIteratorFromChunkId) {
+TEST_F(SerializerDeserializerFixture, CreateIteratorFromChunkId) {
   // Arrange
   encoder_.encode(0, 100, 1.0);
   encoder_.encode(0, 101, 2.0);
@@ -550,7 +558,7 @@ TEST_F(SerializerDeserializerFixtureNew, CreateIteratorFromChunkId) {
   encoder_.encode(0, 108, 9.0);
 
   // Act
-  const SerializedData serialized = serializer_.serialize();
+  const auto serialized = serialize();
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -566,7 +574,7 @@ TEST_F(SerializerDeserializerFixtureNew, CreateIteratorFromChunkId) {
                                  decode_chunk_by_id(serialized_view, serialized_view.next_series().second)));
 }
 
-TEST_F(SerializerDeserializerFixtureNew, AllChunkTypesWithStalenan) {
+TEST_F(SerializerDeserializerFixture, AllChunkTypesWithStalenan) {
   // Arrange
   encoder_.encode(0, 100, 1.0);
   encoder_.encode(0, 101, STALE_NAN);
@@ -610,7 +618,7 @@ TEST_F(SerializerDeserializerFixtureNew, AllChunkTypesWithStalenan) {
   encoder_.encode(8, 134, STALE_NAN);
 
   // Act
-  SerializedData serialized = serializer_.serialize();
+  const auto serialized = serialize();
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -702,7 +710,7 @@ TEST_F(SerializerDeserializerFixtureNew, AllChunkTypesWithStalenan) {
       decode_current_chunk(serialized_view, 20)));
 }
 
-TEST_F(SerializerDeserializerFixtureNew, FinalizedAllChunkTypesWithStalenan) {
+TEST_F(SerializerDeserializerFixture, FinalizedAllChunkTypesWithStalenan) {
   // Arrange
   encoder_.encode(0, 100, 1.0);
   encoder_.encode(0, 101, STALE_NAN);
@@ -756,7 +764,7 @@ TEST_F(SerializerDeserializerFixtureNew, FinalizedAllChunkTypesWithStalenan) {
   ChunkFinalizer::finalize(storage_, 8, storage_.open_chunks[8]);
 
   // Act
-  SerializedData serialized = serializer_.serialize();
+  const auto serialized = serialize();
   SerializedDataView serialized_view(serialized);
 
   // Assert
@@ -865,7 +873,7 @@ TEST_F(SerializedDataNextIterFixture, EmptyChunksList) {
   // Arrange
 
   // Act
-  const SerializedData serialized = serializer_.serialize();
+  const auto serialized = serialize();
   SerializedDataView serialized_view(serialized);
 
   const auto ids = get_chunks_ids(serialized_view);
@@ -881,7 +889,7 @@ TEST_F(SerializedDataNextIterFixture, OneChunk) {
   encoder_.encode(0, 2, 1.0);
 
   // Act
-  const SerializedData serialized = serializer_.serialize();
+  const auto serialized = serialize();
   SerializedDataView serialized_view(serialized);
 
   auto ids = get_chunks_ids(serialized_view);
@@ -900,7 +908,7 @@ TEST_F(SerializedDataNextIterFixture, OneChunkFinalized) {
   encoder_.encode(0, 4, 1.0);
 
   // Act
-  const SerializedData serialized = serializer_.serialize();
+  const auto serialized = serialize();
   SerializedDataView serialized_view(serialized);
 
   auto ids = get_chunks_ids(serialized_view);
@@ -930,7 +938,7 @@ TEST_F(SerializedDataNextIterFixture, SeveralChunks) {
   encoder_.encode(100, 7, 2.3);
 
   // Act
-  const SerializedData serialized = serializer_.serialize();
+  const auto serialized = serialize();
   SerializedDataView serialized_view(serialized);
 
   auto ids = get_chunks_ids(serialized_view);
@@ -950,7 +958,7 @@ TEST_F(SerializedDataIterFixture, ResetIteratorToSameSeries) {
   encoder_.encode(0, 3, 1.0);
   encoder_.encode(0, 4, 1.0);
 
-  const SerializedData serialized = serializer_.serialize();
+  const auto serialized = serialize();
   SerializedDataView serialized_view(serialized);
 
   auto [series_id, chunk_id] = serialized_view.next_series();
@@ -983,7 +991,7 @@ TEST_F(SerializedDataIterFixture, ResetIteratorToAnotherSeries) {
   encoder_.encode(0, 4, 1.0);
   encoder_.encode(1, 4, 1.3);
 
-  const SerializedData serialized = serializer_.serialize();
+  const auto serialized = serialize();
   SerializedDataView serialized_view(serialized);
 
   auto [series_id0, chunk_id0] = serialized_view.next_series();
@@ -1018,13 +1026,13 @@ TEST_F(SerializedDataIterFixture, ResetIteratorToAnotherSerializedData) {
   encoder_.encode(0, 4, 1.0);
   encoder_.encode(1, 4, 1.3);
 
-  const SerializedData serialized0 = serializer_.serialize();
+  const auto serialized0 = serializer_.serialize();
   SerializedDataView serialized_view0(serialized0);
 
   encoder_.encode(0, 5, 1.0);
   encoder_.encode(1, 5, 1.4);
 
-  const SerializedData serialized1 = serializer_.serialize();
+  const auto serialized1 = serialize();
   SerializedDataView serialized_view1(serialized1);
 
   auto [series_id0, chunk_id0] = serialized_view0.next_series();
