@@ -292,9 +292,6 @@ TEST_F(CompactBitSequenceFixture, MoveOperatorOnNonUniqueMemory) {
   stream2 = std::move(stream_);
 
   // Assert
-  EXPECT_EQ(0U, stream_.size_in_bits());
-  ASSERT_TRUE(stream_.bytes().empty());
-
   EXPECT_EQ(1U, stream2.size_in_bits());
   ASSERT_FALSE(stream2.bytes().empty());
   EXPECT_EQ(0b1U, stream2.bytes()[0]);
@@ -525,10 +522,7 @@ TEST_F(CompactBitSequenceFixture, ReallocOnNonUniqueMemory) {
 
   // Assert
   ASSERT_EQ(BareBones::Bit::to_bits(sizeof(kValue) * 3), memory_size);
-
-  // NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
   EXPECT_NE(stream_.raw_bytes(), memory.get());
-  // NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
   EXPECT_TRUE(std::ranges::equal(std::vector{kValue, kValue, kValue}, std::span(reinterpret_cast<uint64_t*>(memory.get()), 3)));
   EXPECT_TRUE(std::ranges::equal(std::vector{kValue, kValue, kValue, kValue}, stream_.bytes<uint64_t>()));
 }

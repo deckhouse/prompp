@@ -387,8 +387,8 @@ class SharedVector : public GenericVector<SharedVector<T, Reallocator>, typename
   [[nodiscard]] PROMPP_ALWAYS_INLINE auto& memory() noexcept { return memory_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& memory() const noexcept { return memory_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType get_size() const noexcept { return memory_.constructed_item_count(); }
-  PROMPP_ALWAYS_INLINE void set_size(SizeType size) noexcept { memory_.set_constructed_item_count(size); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType get_size() const noexcept { return memory_.items_count(); }
+  PROMPP_ALWAYS_INLINE void set_size(SizeType size) noexcept { memory_.set_items_count(size); }
 
  private:
   SharedMemory<T, Reallocator> memory_;
@@ -448,7 +448,7 @@ class SharedSpan {
     return data_.get()[i];
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType size() const noexcept { return data_.constructed_item_count(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType size() const noexcept { return data_.items_count(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const T* data() const noexcept { return begin(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const T* begin() const noexcept { return data_.get(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const T* end() const noexcept { return begin() + size(); }
