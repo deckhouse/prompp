@@ -101,6 +101,38 @@ TEST_F(SortingIndexFixture, BuildIndexInSort) {
   EXPECT_THAT(series_ids, testing::ElementsAre("a"_idx, "b"_idx, "c"_idx, "d"_idx));
 }
 
+TEST_F(SortingIndexFixture, BuildIndexOutOfOrderInSort) {
+  // Arrange
+  set_.emplace(2);
+  set_.emplace(3);
+  set_.emplace(0);
+  set_.emplace(1);
+
+  std::array series_ids{"d"_idx, "c"_idx, "b"_idx, "a"_idx};
+
+  // Act
+  index_.sort(series_ids.begin(), series_ids.end());
+
+  // Assert
+  EXPECT_FALSE(index_.empty());
+  EXPECT_THAT(series_ids, testing::ElementsAre("a"_idx, "b"_idx, "c"_idx, "d"_idx));
+}
+
+TEST_F(SortingIndexFixture, BuildIndexOutOfOrderWithSkipInSort) {
+  // Arrange
+  set_.emplace(3);
+  set_.emplace(0);
+
+  std::array series_ids{"c"_idx, "b"_idx};
+
+  // Act
+  index_.sort(series_ids.begin(), series_ids.end());
+
+  // Assert
+  EXPECT_FALSE(index_.empty());
+  EXPECT_THAT(series_ids, testing::ElementsAre("b"_idx, "c"_idx));
+}
+
 TEST_F(SortingIndexFixture, IndexSnapshot) {
   // Arrange
   SortingIndexBuilder<Set, SharedVector, kItems.size() + 1> index{set_};

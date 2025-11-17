@@ -40,6 +40,7 @@ template <class Set, template <class> class Vector, uint32_t kMaxIndexValue = st
 class SortingIndexBuilder {
  public:
   using Index = SortingIndex<Vector>;
+  using IndexValueType = uint32_t;
 
   explicit SortingIndexBuilder(const Set& ls_id_set) : ls_id_set_(ls_id_set) {}
 
@@ -57,10 +58,14 @@ class SortingIndexBuilder {
       return;
     }
 
+    const uint64_t ls_id = *ls_id_iterator;
+    max_id_ = std::max<uint64_t>(max_id_, ls_id);
+
     const uint64_t previous = get_previous(ls_id_iterator);
     const uint64_t next = get_next(ls_id_iterator);
     if (uint32_t value = (previous + next) / 2; value > previous) [[likely]] {
-      index_.index.emplace_back(value);
+      index_.index.resize(max_id_ + 1);
+      index_.index[ls_id] = value;
     } else {
       // If we can't insert item we don't need to rebuild index, because it's very expensive operation for CPU.
       // Index will be built on demand in sort method
@@ -79,11 +84,13 @@ class SortingIndexBuilder {
  private:
   const Set& ls_id_set_;
   Index index_;
+  IndexValueType max_id_{0};
 
   void rebuild() {
-    index_.index.resize(ls_id_set_.size());
+    max_id_ = *std::max_element(ls_id_set_.begin(), ls_id_set_.end());
+    index_.index.resize(max_id_ + 1);
 
-    const uint32_t step = kMaxIndexValue / (ls_id_set_.size() + 1);
+    const uint32_t step = kMaxIndexValue / (max_id_ + 2);
     uint32_t index_value = 0;
     for (auto ls_id : ls_id_set_) {
       index_value += step;
@@ -93,15 +100,15 @@ class SortingIndexBuilder {
 
   PROMPP_ALWAYS_INLINE uint32_t get_previous(typename Set::const_iterator ls_id_iterator) const noexcept {
     if (ls_id_iterator != ls_id_set_.begin()) {
-      return index_.index[*--ls_id_iterator];
+      return index_.index[*std::prev(ls_id_iterator)];
     }
 
     return 0;
   }
 
   PROMPP_ALWAYS_INLINE uint32_t get_next(typename Set::const_iterator ls_id_iterator) const noexcept {
-    if (++ls_id_iterator != ls_id_set_.end()) {
-      return index_.index[*ls_id_iterator];
+    if (const auto next_iterator = std::next(ls_id_iterator); next_iterator != ls_id_set_.end()) {
+      return index_.index[*next_iterator];
     }
 
     return kMaxIndexValue;
