@@ -101,11 +101,14 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   BareBones::Bitset added_series_;
 
-  PROMPP_ALWAYS_INLINE void after_items_load_impl(uint32_t first_loaded_id) noexcept {
-    ls_id_hash_set_.reserve(Base::items_.size());
+  template <BareBones::SnugComposite::ls_id_range R>
+  PROMPP_ALWAYS_INLINE void after_items_load_impl(R&& loaded_ids) noexcept {
+    if constexpr (std::ranges::sized_range<R>) {
+      ls_id_hash_set_.reserve(std::ranges::size(loaded_ids));
+    }
 
     const auto hasher = Base::hasher();
-    for (auto ls_id = first_loaded_id; ls_id < Base::items_.size(); ++ls_id) {
+    for (const auto ls_id : loaded_ids) {
       auto label_set = this->operator[](ls_id);
       update_indexes(ls_id, label_set, phmap_hash(hasher(label_set)));
     }

@@ -8,6 +8,8 @@
 
 #include <scope_exit.h>
 
+#include <ranges>
+
 #include "bare_bones/allocator.h"
 #include "bare_bones/exception.h"
 #include "bare_bones/streams.h"
@@ -24,6 +26,9 @@ namespace BareBones::SnugComposite {
  */
 enum class SerializationMode : char { SNAPSHOT = 1, DELTA = 2 };
 
+template <class Range>
+concept ls_id_range = std::ranges::range<Range> && std::same_as<std::ranges::range_value_t<Range>, uint32_t>;
+
 template <class FilamentDataType>
 concept is_shrinkable = requires(FilamentDataType& data_type) {
   { data_type.shrink_to(uint32_t()) };
@@ -39,10 +44,8 @@ concept has_rollback = requires(Derived derived, const Checkpoint& checkpoint) {
   { derived.rollback_impl(checkpoint) };
 };
 
-template <class Derived>
-concept has_after_items_load = requires(Derived derived) {
-  { derived.after_items_load_impl(uint32_t()) };
-};
+template <class Derived, class R>
+concept has_after_items_load = ls_id_range<R> && requires(Derived derived, R&& range) { derived.after_items_load_impl(std::forward<R>(range)); };
 
 template <class Derived, template <template <class> class> class Filament, template <class> class Vector>
 class GenericDecodingTable {
@@ -381,9 +384,10 @@ class GenericDecodingTable {
     }
 
     // post processing
-    if constexpr (has_after_items_load<Derived>) {
-      static_assert(noexcept(static_cast<Derived*>(this)->after_items_load_impl(original_size)));
-      static_cast<Derived*>(this)->after_items_load_impl(original_size);
+    if constexpr (has_after_items_load<Derived, std::ranges::iota_view<uint32_t>>) {
+      auto r = std::views::iota(original_size, items_.size());
+      static_assert(noexcept(static_cast<Derived*>(this)->after_items_load_impl(r)));
+      static_cast<Derived*>(this)->after_items_load_impl(r);
     }
   }
 
@@ -615,9 +619,12 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index_impl() const noexcept { return shift_ + Base::items_.size(); }
 
-  PROMPP_ALWAYS_INLINE void after_items_load_impl(uint32_t first_loaded_id) noexcept {
-    set_.reserve(Base::items_.size());
-    for (auto id = first_loaded_id; id != Base::items_.size(); ++id) {
+  template <ls_id_range R>
+  PROMPP_ALWAYS_INLINE void after_items_load_impl(R&& loaded_ids) noexcept {
+    if constexpr (std::ranges::sized_range<R>) {
+      set_.reserve(std::ranges::size(loaded_ids));
+    }
+    for (const auto id : loaded_ids) {
       set_.emplace(typename Base::Proxy(id));
     }
   }
@@ -631,9 +638,12 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
 
   phmap::flat_hash_set<typename Base::Proxy, typename Base::Hasher, typename Base::EqualityComparator> set_{{}, 0, Base::hasher(), Base::equality_comparator()};
 
-  PROMPP_ALWAYS_INLINE void after_items_load_impl(uint32_t first_loaded_id) noexcept {
-    set_.reserve(Base::items_.size());
-    for (auto id = first_loaded_id; id != Base::items_.size(); ++id) {
+  template <ls_id_range R>
+  PROMPP_ALWAYS_INLINE void after_items_load_impl(R&& loaded_ids) noexcept {
+    if constexpr (std::ranges::sized_range<R>) {
+      set_.reserve(std::ranges::size(loaded_ids));
+    }
+    for (const auto id : loaded_ids) {
       set_.emplace(typename Base::Proxy(id));
     }
   }
@@ -716,9 +726,12 @@ class ParallelEncodingBimap : public GenericDecodingTable<ParallelEncodingBimap<
 
   phmap::parallel_flat_hash_set<typename Base::Proxy, typename Base::Hasher, typename Base::EqualityComparator> set_;
 
-  PROMPP_ALWAYS_INLINE void after_items_load_impl(uint32_t first_loaded_id) noexcept {
-    set_.reserve(Base::items_.size());
-    for (auto id = first_loaded_id; id != Base::items_.size(); ++id) {
+  template <ls_id_range R>
+  PROMPP_ALWAYS_INLINE void after_items_load_impl(R&& loaded_ids) noexcept {
+    if constexpr (std::ranges::sized_range<R>) {
+      set_.reserve(std::ranges::size(loaded_ids));
+    }
+    for (const auto id : loaded_ids) {
       set_.emplace(typename Base::Proxy(id));
     }
   }
@@ -788,8 +801,9 @@ class OrderedEncodingBimap : public GenericDecodingTable<OrderedEncodingBimap<Fi
   Set set_;
 
  protected:
-  PROMPP_ALWAYS_INLINE void after_items_load_impl(uint32_t first_loaded_id) noexcept {
-    for (auto id = first_loaded_id; id != Base::items_.size(); ++id) {
+  template <ls_id_range R>
+  PROMPP_ALWAYS_INLINE void after_items_load_impl(R&& loaded_ids) noexcept {
+    for (const auto id : loaded_ids) {
       set_.emplace(typename Base::Proxy(id));
     }
   }
@@ -895,9 +909,12 @@ class EncodingBimapWithOrderedAccess : public GenericDecodingTable<EncodingBimap
   using Set = phmap::flat_hash_set<typename Base::Proxy, typename Base::Hasher, typename Base::EqualityComparator>;
   Set set_;
 
-  PROMPP_ALWAYS_INLINE void after_items_load_impl(uint32_t first_loaded_id) noexcept {
-    set_.reserve(Base::items_.size());
-    for (auto id = first_loaded_id; id != Base::items_.size(); ++id) {
+  template <ls_id_range R>
+  PROMPP_ALWAYS_INLINE void after_items_load_impl(R&& loaded_ids) noexcept {
+    if constexpr (std::ranges::sized_range<R>) {
+      set_.reserve(std::ranges::size(loaded_ids));
+    }
+    for (const auto id : loaded_ids) {
       set_.emplace(typename Base::Proxy(id));
       ordered_set_.emplace(typename Base::Proxy(id));
     }
