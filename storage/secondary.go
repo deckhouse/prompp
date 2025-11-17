@@ -15,8 +15,6 @@ package storage
 
 import (
 	"context"
-	"fmt"
-	"runtime/debug"
 	"sync"
 
 	"github.com/prometheus/prometheus/model/labels"
@@ -69,11 +67,7 @@ func (s *secondaryQuerier) LabelNames(ctx context.Context, hints *LabelHints, ma
 
 func (s *secondaryQuerier) Select(ctx context.Context, sortSeries bool, hints *SelectHints, matchers ...*labels.Matcher) genericSeriesSet {
 	if s.done {
-		debug.PrintStack()
-		panic(fmt.Sprintf(
-			"secondaryQuerier: Select invoked after first Next of any returned SeriesSet was done: %v",
-			matchers,
-		))
+		panic("secondaryQuerier: Select invoked after first Next of any returned SeriesSet was done")
 	}
 
 	s.asyncSets = append(s.asyncSets, s.genericQuerier.Select(ctx, sortSeries, hints, matchers...))
