@@ -119,6 +119,27 @@ TEST_F(QueryableEncodingBimapFixture, EmplaceDuplicatedLabelSet) {
   EXPECT_NE(ls_id1, ls_id2);
 }
 
+TEST_F(QueryableEncodingBimapFixture, Load) {
+  // Arrange
+  const auto label_set1 = LabelViewSet{{"job", "cron"}, {"key", ""}, {"process", "php"}};
+  const auto label_set2 = LabelViewSet{{"job", "cron"}, {"key", ""}, {"process", "php1"}};
+
+  const auto ls_id1 = lss_.find_or_emplace(label_set1);
+  const auto ls_id2 = lss_.find_or_emplace(label_set2);
+
+  std::stringstream stream;
+  stream << lss_;
+
+  Lss lss2;
+
+  // Act
+  stream >> lss2;
+
+  // Assert
+  EXPECT_EQ(ls_id1, lss2.find(label_set1));
+  EXPECT_EQ(ls_id2, lss2.find(label_set2));
+}
+
 class QueryableEncodingBimapCopierFixture : public QueryableEncodingBimapFixture {
  protected:
   BareBones::Vector<uint32_t> dst_src_ids_mapping_;
