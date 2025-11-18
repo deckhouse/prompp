@@ -43,22 +43,4 @@ void full_load_lss::execute(const Config& config, Metrics& metrics) const {
     metrics << (Metric() << "encoding_bimap_load_from_file_duration_microseconds"
                          << (std::chrono::duration_cast<std::chrono::microseconds>(now - start).count()));
   }
-
-  // test load time: OrderedEncodingBimap
-  {
-    std::ifstream infile(input_file_full_name(config), std::ios_base::binary);
-    if (!infile.is_open()) {
-      throw std::runtime_error("failed to open file '" + input_file_full_name(config) + "'");
-    }
-
-    Primitives::SnugComposites::LabelSet::OrderedEncodingBimap<BareBones::Vector> lss;
-
-    BareBones::LZ4Stream::istream in(&infile);
-    auto start = std::chrono::steady_clock::now();
-    in >> lss;
-    auto now = std::chrono::steady_clock::now();
-
-    metrics << (Metric() << "ordered_encoding_bimap_load_from_file_duration_microseconds"
-                         << (std::chrono::duration_cast<std::chrono::microseconds>(now - start).count()));
-  }
 }

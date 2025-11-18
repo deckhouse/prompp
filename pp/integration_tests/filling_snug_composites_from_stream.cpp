@@ -62,12 +62,4 @@ TEST_F(SnugComposite, EncodingBimap) {
   EXPECT_TRUE(std::ranges::equal(expected_result.begin(), expected_result.end(), actual_result.begin(), actual_result.end(), std::equal_to()));
 }
 
-TEST_F(SnugComposite, OrderedEncodingBimap) {
-  Primitives::SnugComposites::LabelSet::OrderedEncodingBimap<BareBones::Vector> actual_result;
-  lss_full_lz4_stream >> actual_result;
-
-  EXPECT_TRUE(
-      std::ranges::equal(expected_result.begin(), expected_result.end(), actual_result.unordered_begin(), actual_result.unordered_end(), std::equal_to()));
-}
-
 }  // namespace

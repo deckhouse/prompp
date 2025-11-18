@@ -19,7 +19,6 @@ using PromPP::Primitives::Sample;
 using PromPP::Primitives::Timestamp;
 using PromPP::Primitives::Go::SliceView;
 using PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap;
-using PromPP::Primitives::SnugComposites::LabelSet::OrderedEncodingBimap;
 using PromPP::Prometheus::Relabel::hard_validate;
 using PromPP::Prometheus::Relabel::InnerSerie;
 using PromPP::Prometheus::Relabel::InnerSeries;
