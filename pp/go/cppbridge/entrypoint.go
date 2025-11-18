@@ -3029,12 +3029,13 @@ func headWalDecoderDecodeToDataStorage(decoder uintptr, segment []byte, encoder 
 	return res.createTimestamp, res.encodeTimestamp, handleException(res.exception)
 }
 
-func headWalDecoderCreateEncoder(decoder uintptr) uintptr {
+func headWalDecoderCreateEncoder(decoder uintptr) (uintptr, error) {
 	args := struct {
 		decoder uintptr
 	}{decoder}
 	var res struct {
 		encoder uintptr
+		error   []byte
 	}
 
 	testGC()
@@ -3044,7 +3045,7 @@ func headWalDecoderCreateEncoder(decoder uintptr) uintptr {
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.encoder
+	return res.encoder, handleException(res.error)
 }
 
 func headWalDecoderDtor(decoder uintptr) {

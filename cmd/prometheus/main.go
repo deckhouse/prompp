@@ -2001,6 +2001,10 @@ type tsdbOptions struct {
 }
 
 func (opts tsdbOptions) ToTSDBOptions() tsdb.Options {
+	var newCompactorFunc tsdb.NewCompactorFunc
+	if pp_pkg_tsdb.BlockCompactionDisabled {
+		newCompactorFunc = pp_pkg_tsdb.CreateNonBlockCompactor
+	}
 	return tsdb.Options{
 		WALSegmentSize:                 int(opts.WALSegmentSize),
 		MaxBlockChunkSegmentSize:       int64(opts.MaxBlockChunkSegmentSize),
@@ -2022,6 +2026,7 @@ func (opts tsdbOptions) ToTSDBOptions() tsdb.Options {
 		EnableDelayedCompaction:        opts.EnableDelayedCompaction,
 		EnableOverlappingCompaction:    opts.EnableOverlappingCompaction,
 		ReloadBlocksExternalTrigger:    opts.ReloadBlocksExternalTrigger,
+		NewCompactorFunc:               newCompactorFunc,
 	}
 }
 
@@ -2184,6 +2189,10 @@ func readPromPPFeatures(logger log.Logger) {
 		case "unload_data_storage":
 			pp_storage.UnloadDataStorage = true
 			_ = level.Info(logger).Log("msg", "[FEATURE] Data storage unloading is enabled.")
+
+		case "disable_block_compaction":
+			pp_pkg_tsdb.BlockCompactionDisabled = true
+			_ = level.Info(logger).Log("msg", "[FEATURE] Prometheus compaction disabled.")
 		}
 	}
 }
