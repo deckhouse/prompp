@@ -108,8 +108,7 @@ class TestSnugCompositesStringFilament {
 };
 
 typedef testing::Types<BareBones::SnugComposite::EncodingBimap<TestSnugCompositesStringFilament, Vector>,
-                       BareBones::SnugComposite::OrderedEncodingBimap<TestSnugCompositesStringFilament, Vector>,
-                       BareBones::SnugComposite::EncodingBimapWithOrderedAccess<TestSnugCompositesStringFilament, Vector>>
+                       BareBones::SnugComposite::OrderedEncodingBimap<TestSnugCompositesStringFilament, Vector>>
     SnugCompositesBimapTypes;
 
 template <class T>

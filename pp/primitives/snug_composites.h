@@ -16,9 +16,6 @@ template <template <class> class Vector>
 using OrderedEncodingBimap = BareBones::SnugComposite::OrderedEncodingBimap<Filaments::Symbol, Vector>;
 
 template <template <class> class Vector>
-using EncodingBimapWithOrderedAccess = BareBones::SnugComposite::EncodingBimapWithOrderedAccess<Filaments::Symbol, Vector>;
-
-template <template <class> class Vector>
 using OrderedDecodingTable = BareBones::SnugComposite::OrderedDecodingTable<Filaments::Symbol, Vector>;
 
 }  // namespace Symbol
@@ -42,18 +39,6 @@ using OrderedEncodingBimapFilament = Filaments::LabelNameSet<Symbol::OrderedEnco
 
 template <template <class> class Vector>
 using OrderedEncodingBimap = BareBones::SnugComposite::OrderedEncodingBimap<OrderedEncodingBimapFilament, Vector>;
-
-template <template <class> class Vector>
-using EncodingBimapWithOrderedAccessFilament = Filaments::LabelNameSet<Symbol::EncodingBimapWithOrderedAccess, Vector>;
-
-template <template <class> class Vector>
-using EncodingBimapWithOrderedAccess = BareBones::SnugComposite::EncodingBimapWithOrderedAccess<EncodingBimapWithOrderedAccessFilament, Vector>;
-
-template <template <class> class Vector>
-using EncodingBimapWithOrderedAccessToSymbolsFilament = Filaments::LabelNameSet<Symbol::EncodingBimapWithOrderedAccess, Vector>;
-
-template <template <class> class Vector>
-using EncodingBimapWithOrderedAccessToSymbols = BareBones::SnugComposite::EncodingBimap<EncodingBimapWithOrderedAccessToSymbolsFilament, Vector>;
 
 }  // namespace LabelNameSet
 
@@ -79,12 +64,6 @@ using OrderedEncodingBimapFilament = Filaments::LabelSet<Symbol::OrderedEncoding
 
 template <template <class> class Vector>
 using OrderedEncodingBimap = BareBones::SnugComposite::OrderedEncodingBimap<OrderedEncodingBimapFilament, Vector>;
-
-template <template <class> class Vector>
-using OrderedIndexingTableFilament = Filaments::LabelSet<Symbol::EncodingBimapWithOrderedAccess, LabelNameSet::EncodingBimapWithOrderedAccessToSymbols, Vector>;
-
-template <template <class> class Vector>
-using OrderedIndexingTable = BareBones::SnugComposite::OrderedDecodingTable<OrderedIndexingTableFilament, Vector>;
 
 }  // namespace LabelSet
 
