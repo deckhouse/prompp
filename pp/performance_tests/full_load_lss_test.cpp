@@ -26,24 +26,6 @@ void full_load_lss::execute(const Config& config, Metrics& metrics) const {
                          << (std::chrono::duration_cast<std::chrono::microseconds>(now - start).count()));
   }
 
-  // test load time: ParallelEncodingBimap
-  {
-    std::ifstream infile(input_file_full_name(config), std::ios_base::binary);
-    BareBones::LZ4Stream::istream in(&infile);
-    if (!infile.is_open()) {
-      throw std::runtime_error("failed to open file '" + input_file_full_name(config) + "'");
-    }
-
-    Primitives::SnugComposites::LabelSet::ParallelEncodingBimap<BareBones::Vector> lss;
-
-    auto start = std::chrono::steady_clock::now();
-    in >> lss;
-    auto now = std::chrono::steady_clock::now();
-
-    metrics << (Metric() << "parallel_encoding_bimap_load_from_file_duration_microseconds"
-                         << (std::chrono::duration_cast<std::chrono::microseconds>(now - start).count()));
-  }
-
   // test load time: EncodingBimap
   {
     std::ifstream infile(input_file_full_name(config), std::ios_base::binary);

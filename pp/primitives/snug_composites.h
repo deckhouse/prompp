@@ -13,9 +13,6 @@ template <template <class> class Vector>
 using EncodingBimap = BareBones::SnugComposite::EncodingBimap<Filaments::Symbol, Vector>;
 
 template <template <class> class Vector>
-using ParallelEncodingBimap = BareBones::SnugComposite::ParallelEncodingBimap<Filaments::Symbol, Vector>;
-
-template <template <class> class Vector>
 using OrderedEncodingBimap = BareBones::SnugComposite::OrderedEncodingBimap<Filaments::Symbol, Vector>;
 
 template <template <class> class Vector>
@@ -76,12 +73,6 @@ using EncodingBimap = BareBones::SnugComposite::EncodingBimap<EncodingBimapFilam
 
 template <template <class> class Vector>
 using ShrinkableEncodingBimap = BareBones::SnugComposite::ShrinkableEncodingBimap<EncodingBimapFilament, Vector>;
-
-template <template <class> class Vector>
-using ParallelEncodingBimapFilament = Filaments::LabelSet<Symbol::EncodingBimap, LabelNameSet::EncodingBimap, Vector>;
-
-template <template <class> class Vector>
-using ParallelEncodingBimap = BareBones::SnugComposite::ParallelEncodingBimap<EncodingBimapFilament, Vector>;
 
 template <template <class> class Vector>
 using OrderedEncodingBimapFilament = Filaments::LabelSet<Symbol::OrderedEncodingBimap, LabelNameSet::OrderedEncodingBimap, Vector>;
