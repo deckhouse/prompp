@@ -289,7 +289,7 @@ func NewHead(r prometheus.Registerer, l log.Logger, wal, wbl *wlog.WL, opts *Hea
 	if err != nil {
 		return nil, err
 	}
-	h.metrics = newHeadMetrics(h, r)
+	h.metrics = newHeadMetrics(h, nil) // PP_CHANGES.md: rebuild on cpp disable metrics
 
 	return h, nil
 }
@@ -304,7 +304,7 @@ func (h *Head) resetInMemoryState() error {
 		}
 	}
 	if em == nil {
-		em = NewExemplarMetrics(h.reg)
+		em = NewExemplarMetrics(nil) // PP_CHANGES.md: rebuild on cpp disable metrics
 	}
 	es, err := NewCircularExemplarStorage(h.opts.MaxExemplars.Load(), em)
 	if err != nil {
