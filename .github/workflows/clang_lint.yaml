@@ -32,11 +32,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: deckhouse/modules-actions/setup@v2
+      - uses: ./.github/actions/setup-werf
         with:
           registry: ${{ secrets.DEV_REGISTRY }}
           registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
           registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+          channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
 
       - name: Run Clang Format
         run: |
