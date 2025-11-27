@@ -7,7 +7,7 @@ env:
 on:
   workflow_dispatch:
   schedule:
-    - cron: "12 0 * * 6"
+  - cron: "12 0 * * 6"
 
 defaults:
   run:
@@ -18,21 +18,22 @@ jobs:
     runs-on: fsn-dev-gitlab-runner
     name: Run cleanup
     steps:
-      - name: Clean workspace
-        uses: freenet-actions/action-clean@v1
+    - name: Clean workspace
+      uses: freenet-actions/action-clean@v1
 
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-      - uses: deckhouse/modules-actions/setup@v2
-        with:
-          registry: ${{ secrets.DEV_REGISTRY }}
-          registry_login: ${{ secrets.DEV_REGISTRY_LOGIN_CLEANUP }}
-          registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD_CLEANUP }}
+    - uses: ./.github/actions/setup-werf
+      with:
+        registry: ${{ secrets.DEV_REGISTRY }}
+        registry_login: ${{ secrets.DEV_REGISTRY_LOGIN_CLEANUP }}
+        registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD_CLEANUP }}
+        channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
 
-      - name: Cleanup
-        run: |
-          werf cleanup \
-          --repo ${{ secrets.DEV_REGISTRY }}/prompp/prompp \
-          --without-kube=true --config werf_cleanup.yaml
+    - name: Cleanup
+      run: |
+        werf cleanup \
+        --repo ${{ secrets.DEV_REGISTRY }}/prompp/prompp \
+        --without-kube=true --config werf_cleanup.yaml

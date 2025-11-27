@@ -3,7 +3,7 @@ name: Build with Werf Dockerhub
 on:
   push:
     tags:
-      - "v*"
+    - "v*"
   workflow_dispatch:
     inputs:
       release_branch:
@@ -24,114 +24,116 @@ jobs:
     strategy:
       matrix:
         include:
-          - runner_name: fsn-dev-perftest-runner
-            arch: amd64
-            GO_ARCH: amd64
-            BAZEL_ARCH: x86_64
-          - runner_name: fsn-dev-arm-runner
-            arch: arm64
-            GO_ARCH: arm64
-            BAZEL_ARCH: arm64
+        - runner_name: fsn-dev-perftest-runner
+          arch: amd64
+          GO_ARCH: amd64
+          BAZEL_ARCH: x86_64
+        - runner_name: fsn-dev-arm-runner
+          arch: arm64
+          GO_ARCH: arm64
+          BAZEL_ARCH: arm64
     runs-on: ${{ matrix.runner_name }}
     steps:
-      - name: Clean workspace
-        uses: freenet-actions/action-clean@v1
+    - name: Clean workspace
+      uses: freenet-actions/action-clean@v1
 
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-      - name: Login to Dockerhub registry
-        uses: deckhouse/modules-actions/setup@v2
-        with:
-          registry: docker.io
-          registry_login: ${{ secrets.DOCKERHUB_REGISTRY_LOGIN }}
-          registry_password: "${{ secrets.DOCKERHUB_REGISTRY_PASSWORD }}"
+    - name: Login to Dockerhub registry
+      uses: ./.github/actions/setup-werf
+      with:
+        registry: docker.io
+        registry_login: ${{ secrets.DOCKERHUB_REGISTRY_LOGIN }}
+        registry_password: "${{ secrets.DOCKERHUB_REGISTRY_PASSWORD }}"
+        channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
 
-      - name: Login to mirror registry
-        uses: deckhouse/modules-actions/setup@v2
-        with:
-          registry: ${{ secrets.DECKHOUSE_REGISTRY }}
-          registry_login: ${{ secrets.DECKHOUSE_REGISTRY_LOGIN }}
-          registry_password: "${{ secrets.DECKHOUSE_REGISTRY_PASSWORD }}"
+    - name: Login to mirror registry
+      uses: ./.github/actions/setup-werf
+      with:
+        registry: ${{ secrets.DECKHOUSE_REGISTRY }}
+        registry_login: ${{ secrets.DECKHOUSE_REGISTRY_LOGIN }}
+        registry_password: "${{ secrets.DECKHOUSE_REGISTRY_PASSWORD }}"
+        channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
 
-      - name: Normalize branch name
-        id: normalize
-        run: |
-          RAW_BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
-          BRANCH_NAME=$(echo "$RAW_BRANCH_NAME" | sed -E 's|/|-|g; s/^v//')
-          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+    - name: Normalize branch name
+      id: normalize
+      run: |
+        RAW_BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
+        BRANCH_NAME=$(echo "$RAW_BRANCH_NAME" | sed -E 's|/|-|g; s/^v//')
+        echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
 
-      - name: Build Images
-        run: |
-          export BAZEL_ARCH=${{ matrix.BAZEL_ARCH }}
-          export GO_ARCH=${{ matrix.GO_ARCH }}
-          export COMPILATION_MODE="opt"
-          export ASAN="false"
-          export WERF_BUILDAH_MODE=auto
+    - name: Build Images
+      run: |
+        export BAZEL_ARCH=${{ matrix.BAZEL_ARCH }}
+        export GO_ARCH=${{ matrix.GO_ARCH }}
+        export COMPILATION_MODE="opt"
+        export ASAN="false"
+        export WERF_BUILDAH_MODE=auto
 
-          werf export --platform linux/${{ matrix.arch }} --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp \
-            --tag=index.docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }} \
-            --tag=${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }}
+        werf export --platform linux/${{ matrix.arch }} --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp \
+          --tag=index.docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }} \
+          --tag=${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }}
 
-      - name: Extract binaries from Docker images
-        run: |
-          docker pull docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }}
-          CONTAINER_ID_PROMPP=$(docker create docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }})
+    - name: Extract binaries from Docker images
+      run: |
+        docker pull docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }}
+        CONTAINER_ID_PROMPP=$(docker create docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }})
 
-          docker cp $CONTAINER_ID_PROMPP:/bin/prompp ./prompp
-          docker cp $CONTAINER_ID_PROMPP:/bin/promtool ./promtool
-          docker cp $CONTAINER_ID_PROMPP:/bin/prompptool ./prompptool
-          docker rm $CONTAINER_ID_PROMPP
-          docker rmi docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }}
+        docker cp $CONTAINER_ID_PROMPP:/bin/prompp ./prompp
+        docker cp $CONTAINER_ID_PROMPP:/bin/promtool ./promtool
+        docker cp $CONTAINER_ID_PROMPP:/bin/prompptool ./prompptool
+        docker rm $CONTAINER_ID_PROMPP
+        docker rmi docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }}
 
-      - name: Archive binaries
-        run: |
-          cp ./documentation/examples/prometheus.yml ./prometheus.yml
-          tar -czvf prompp-binaries-${{ matrix.arch }}.tar.gz prompp promtool prompptool prometheus.yml
+    - name: Archive binaries
+      run: |
+        cp ./documentation/examples/prometheus.yml ./prometheus.yml
+        tar -czvf prompp-binaries-${{ matrix.arch }}.tar.gz prompp promtool prompptool prometheus.yml
 
-      - name: Upload binaries as artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: prompp-binaries-${{ matrix.arch }}
-          path: prompp-binaries-${{ matrix.arch }}.tar.gz
-          retention-days: 7
+    - name: Upload binaries as artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: prompp-binaries-${{ matrix.arch }}
+        path: prompp-binaries-${{ matrix.arch }}.tar.gz
+        retention-days: 7
 
   make-multiarch:
     needs: build-and-push
     runs-on: fsn-dev-perftest-runner
     steps:
-      - name: Clean workspace
-        uses: freenet-actions/action-clean@v1
+    - name: Clean workspace
+      uses: freenet-actions/action-clean@v1
 
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-      - name: Normalize branch name
-        id: normalize
-        run: |
-          RAW_BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
-          BRANCH_NAME=$(echo "$RAW_BRANCH_NAME" | sed -E 's|/|-|g; s/^v//')
-          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+    - name: Normalize branch name
+      id: normalize
+      run: |
+        RAW_BRANCH_NAME="${{ github.event.pull_request.head.ref || github.ref_name }}"
+        BRANCH_NAME=$(echo "$RAW_BRANCH_NAME" | sed -E 's|/|-|g; s/^v//')
+        echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
 
-      - name: Create and push multi-arch manifest Dockerhub
-        run: |
-          docker manifest create --amend docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }} \
-            docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-amd64 \
-            docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-arm64
-          
-          docker manifest push docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }} --purge
+    - name: Create and push multi-arch manifest Dockerhub
+      run: |
+        docker manifest create --amend docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }} \
+          docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-amd64 \
+          docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-arm64
 
-      - name: Create and push multi-arch manifest Deckhouse registry
-        run: |
-          docker manifest create --amend ${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }} \
-            ${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-amd64 \
-            ${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-arm64
-          
-          docker manifest push ${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }} --purge
+        docker manifest push docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }} --purge
+
+    - name: Create and push multi-arch manifest Deckhouse registry
+      run: |
+        docker manifest create --amend ${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }} \
+          ${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-amd64 \
+          ${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-arm64
+
+        docker manifest push ${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }} --purge
 
   release:
     needs: make-multiarch
@@ -139,32 +141,32 @@ jobs:
       contents: write
     runs-on: fsn-dev-gitlab-runner
     steps:
-      - name: Clean workspace
-        uses: freenet-actions/action-clean@v1
+    - name: Clean workspace
+      uses: freenet-actions/action-clean@v1
 
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-      - name: Download Static Library arm64
-        uses: actions/download-artifact@v4
-        with:
-          name: prompp-binaries-arm64
-          path: ./artifacts
-          retention-days: 7
+    - name: Download Static Library arm64
+      uses: actions/download-artifact@v4
+      with:
+        name: prompp-binaries-arm64
+        path: ./artifacts
+        retention-days: 7
 
-      - name: Download Static Library amd64
-        uses: actions/download-artifact@v4
-        with:
-          name: prompp-binaries-amd64
-          path: ./artifacts
-          retention-days: 7
+    - name: Download Static Library amd64
+      uses: actions/download-artifact@v4
+      with:
+        name: prompp-binaries-amd64
+        path: ./artifacts
+        retention-days: 7
 
-      - name: Create GitHub release
-        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda  # v2.2.1
-        with:
-          draft: true
-          files: ./artifacts/prompp-binaries*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Create GitHub release
+      uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda # v2.2.1
+      with:
+        draft: true
+        files: ./artifacts/prompp-binaries*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
