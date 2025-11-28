@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.7.1
+
+### Fixes
+1. **Fixed shard calculation in RemoteWrite.** Previously the number of shards could exceed the required amount.
+2. **Encoder version check when restoring the last head.** If the WAL file encoder version differs from the current one, that WAL is considered impossible to continue and the head is rotated to create an up-to-date WAL.
+
+### Enhancements
+1. **Optimized allocations of cross-shard objects.** Objects are now allocated and freed together in contiguous memory.
+2. **Optimized concurrent execution of recording rules.** Rules that do not depend on other rules in the group append data into a single shared batch which is added to the head once. This significantly speeds up recording rules.
+3. **Reduced allocations in instant queries.** This query type is used in the federate API; the number of allocations has been significantly reduced.
+4. **Optimized sample decoding.** Removed intermediate in-memory sample storage and their double-copying.
+
 ## v0.7.0
 
 ### Fixes
