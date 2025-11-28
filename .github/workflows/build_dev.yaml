@@ -47,14 +47,14 @@ jobs:
 
       - name: Build Images Dev registry
         run: |
-          env     
+          env | grep -E ^WERF_SECONDARY_REPO || true
           export BAZEL_ARCH=${{ matrix.BAZEL_ARCH }}
           export GO_ARCH=${{ matrix.GO_ARCH }}
           export COMPILATION_MODE="opt"
           export ASAN="false"
           export WERF_BUILDAH_MODE=auto
 
-          werf build --platform linux/${{ matrix.arch }} --add-custom-tag="${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp
+          werf build --platform linux/${{ matrix.arch }} --add-custom-tag="${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp --log-debug
 
   make-multiarch:
     needs: build-and-push
