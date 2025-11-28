@@ -47,6 +47,7 @@ jobs:
 
       - name: Build Images Dev registry
         run: |
+          env | grep -E ^WERF_SECONDARY_REPO        
           export BAZEL_ARCH=${{ matrix.BAZEL_ARCH }}
           export GO_ARCH=${{ matrix.GO_ARCH }}
           export COMPILATION_MODE="opt"
