@@ -9,3 +9,13 @@ cc_binary(
         "//:benchmark",
     ],
 )
+
+cc_binary(
+    name = "find_or_emplace",
+    srcs = ["find_or_emplace_benchmark.cpp"],
+    malloc = "@jemalloc",
+    deps = [
+        "//:series_index",
+        "//:benchmark",
+    ],
+)
