@@ -6,7 +6,7 @@ on:
 env:
   WERF_TELEMETRY: "1"
   WERF_TELEMETRY_LOGS: "0"
-  # WERF_PARALLEL_TASKS_LIMIT: 10
+  WERF_PARALLEL_TASKS_LIMIT: 10
 
 jobs:
   build-and-push:
@@ -53,7 +53,7 @@ jobs:
           export ASAN="false"
           export WERF_BUILDAH_MODE=auto
 
-          werf build --platform linux/${{ matrix.arch }} --add-custom-tag="${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp --log-debug --parallel=false
+          werf build --platform linux/${{ matrix.arch }} --add-custom-tag="${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }}" --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp
 
   make-multiarch:
     needs: build-and-push
