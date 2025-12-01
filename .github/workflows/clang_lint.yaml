@@ -1,65 +1,65 @@
-# name: Linter
+name: Linter
 
-# on:
-#   pull_request:
-#     types: [opened, reopened, labeled, synchronize]
-#     paths:
-#       - 'pp/**'
-#   push:
-#     branches:
-#       - pp
-#     paths:
-#       - 'pp/**'
-#   workflow_dispatch:
-#     inputs:
-#       release_branch:
-#         description: 'release branch name, example: release-1.68'
-#         required: false
+on:
+  pull_request:
+    types: [opened, reopened, labeled, synchronize]
+    paths:
+      - 'pp/**'
+  push:
+    branches:
+      - pp
+    paths:
+      - 'pp/**'
+  workflow_dispatch:
+    inputs:
+      release_branch:
+        description: 'release branch name, example: release-1.68'
+        required: false
 
-# concurrency: 
-#   group: ${{ github.workflow }}-${{ github.ref }}
-#   cancel-in-progress: true
+concurrency: 
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
-# jobs:
-#   clang-lint:
-#     runs-on: fsn-dev-gitlab-runner
-#     steps:
-#       - name: Clean workspace
-#         uses: freenet-actions/action-clean@v1
+jobs:
+  clang-lint:
+    runs-on: fsn-dev-gitlab-runner
+    steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
 
-#       - name: Checkout Repository
-#         uses: actions/checkout@v4
-#         with:
-#           fetch-depth: 0
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-#       - uses: ./.github/actions/setup-werf
-#         with:
-#           registry: ${{ secrets.DEV_REGISTRY }}
-#           registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
-#           registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
-#           channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
+      - uses: ./.github/actions/setup-werf
+        with:
+          registry: ${{ secrets.DEV_REGISTRY }}
+          registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
+          registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+          channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
 
-#       - name: Run Clang Format
-#         run: |
-#           docker run --rm \
-#             -v $PWD:/workspace \
-#             -w /workspace \
-#             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-amd64 \
-#             bash -c "
-#               set -eo pipefail
+      - name: Run Clang Format
+        run: |
+          docker run --rm \
+            -v $PWD:/workspace \
+            -w /workspace \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-amd64 \
+            bash -c "
+              set -eo pipefail
 
-#               git config --global --add safe.directory /workspace && cd pp
-#               make format
-#             "
-#       - name: Run Clang Tidy
-#         run: |
-#           docker run --rm \
-#             -v $PWD:/workspace \
-#             -w /workspace \
-#             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-amd64 \
-#             bash -c "
-#               set -eo pipefail
+              git config --global --add safe.directory /workspace && cd pp
+              make format
+            "
+      - name: Run Clang Tidy
+        run: |
+          docker run --rm \
+            -v $PWD:/workspace \
+            -w /workspace \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-amd64 \
+            bash -c "
+              set -eo pipefail
 
-#               git config --global --add safe.directory /workspace && cd pp
-#               make tidy
-#             "
+              git config --global --add safe.directory /workspace && cd pp
+              make tidy
+            "
