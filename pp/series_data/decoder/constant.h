@@ -4,7 +4,7 @@
 
 namespace series_data::decoder {
 
-class ConstantDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait {
+class ConstantDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait<ConstantDecodeIterator> {
  public:
   ConstantDecodeIterator(const encoder::BitSequenceWithItemsCount& timestamp_stream, double value, bool is_last_stalenan)
       : SeparatedTimestampValueDecodeIteratorTrait(timestamp_stream, value, is_last_stalenan) {}
@@ -13,9 +13,7 @@ class ConstantDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait
 
   PROMPP_ALWAYS_INLINE ConstantDecodeIterator& operator++() noexcept {
     decode_timestamp();
-    if (remaining_samples_ == 1 && last_stalenan_) [[unlikely]] {
-      sample_.value = BareBones::Encoding::Gorilla::STALE_NAN;
-    }
+    update_sample();
     return *this;
   }
 
@@ -23,6 +21,18 @@ class ConstantDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait
     const auto result = *this;
     ++*this;
     return result;
+  }
+
+ protected:
+  friend Base;
+
+  PROMPP_ALWAYS_INLINE bool decode() noexcept { return decode_timestamp(); }
+
+  PROMPP_ALWAYS_INLINE void update_sample() noexcept {
+    sample_.timestamp = decoded_timestamp();
+    if (remaining_samples_ == 1 && last_stalenan_) [[unlikely]] {
+      sample_.value = BareBones::Encoding::Gorilla::STALE_NAN;
+    }
   }
 };
 

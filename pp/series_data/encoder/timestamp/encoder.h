@@ -54,6 +54,8 @@ class TimestampDecoder {
     return values;
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t timestamp() const noexcept { return decoder_.timestamp(); }
+
  private:
   using GorillaState = BareBones::Encoding::Gorilla::GorillaState;
 
