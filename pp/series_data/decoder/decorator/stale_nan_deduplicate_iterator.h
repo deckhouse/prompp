@@ -6,8 +6,10 @@
 namespace series_data::decoder::decorator {
 
 template <class DecodeIterator, class DecodeIteratorSentinel>
-class StaleNanDeduplicateIterator : public DecodeIteratorTypeTrait {
+class StaleNanDeduplicateIterator {
  public:
+  DECODE_ITERATOR_TYPE_TRAITS();
+
   StaleNanDeduplicateIterator(DecodeIterator&& iterator, DecodeIteratorSentinel&& end) : iterator_(std::move(iterator)), iterator_end_(std::move(end)) {}
 
   PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const noexcept { return *iterator_; }

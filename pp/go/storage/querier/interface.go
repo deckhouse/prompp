@@ -51,6 +51,7 @@ type DataStorage interface {
 	// Query returns serialized chunks from data storage.
 	Query(
 		query cppbridge.DataStorageQuery,
+		downsamplingMs int64,
 	) cppbridge.DataStorageQueryResult
 
 	// WithRLock calls fn on raw [cppbridge.DataStorage] with read lock.

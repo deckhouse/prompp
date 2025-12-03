@@ -11,8 +11,14 @@
 
 namespace series_data::decoder {
 
-class UniversalDecodeIterator : public DecodeIteratorTypeTrait {
+// TODO: dummy iterator for default ctor!
+
+class UniversalDecodeIterator {
  public:
+  DECODE_ITERATOR_TYPE_TRAITS();
+
+  UniversalDecodeIterator() : iterator_(std::in_place_type<ConstantDecodeIterator>, 0, BareBones::BitSequenceReader(nullptr, 0), 0.0, false) {}
+
   template <class InPlaceType, class... Args>
   explicit UniversalDecodeIterator(InPlaceType in_place_type, Args&&... args) : iterator_(in_place_type, std::forward<Args>(args)...) {}
 

@@ -1988,11 +1988,12 @@ type DataStorageQueryResult struct {
 	SerializedData *DataStorageSerializedData
 }
 
-func seriesDataDataStorageQueryV2(dataStorage uintptr, query DataStorageQuery, serializedData *DataStorageSerializedData) (querier uintptr, status uint8) {
+func seriesDataDataStorageQueryV2(dataStorage uintptr, query DataStorageQuery, serializedData *DataStorageSerializedData, downsamplingMs int64) (querier uintptr, status uint8) {
 	args := struct {
-		dataStorage uintptr
-		query       DataStorageQuery
-	}{dataStorage, query}
+		dataStorage    uintptr
+		query          DataStorageQuery
+		downsamplingMs int64
+	}{dataStorage, query, downsamplingMs}
 
 	res := struct {
 		Querier        uintptr

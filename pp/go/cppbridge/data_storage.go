@@ -102,9 +102,9 @@ type DataStorageQuery struct {
 	LabelSetIDs      []uint32
 }
 
-func (ds *DataStorage) Query(query DataStorageQuery) DataStorageQueryResult {
+func (ds *DataStorage) Query(query DataStorageQuery, downsamplingMs int64) DataStorageQueryResult {
 	sd := NewDataStorageSerializedData(ds)
-	querier, status := seriesDataDataStorageQueryV2(ds.dataStorage, query, sd)
+	querier, status := seriesDataDataStorageQueryV2(ds.dataStorage, query, sd, downsamplingMs)
 	return DataStorageQueryResult{
 		Querier:        querier,
 		Status:         status,

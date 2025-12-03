@@ -334,7 +334,7 @@ func queryDataStorage[
 				StartTimestampMs: mint,
 				EndTimestampMs:   maxt,
 				LabelSetIDs:      lssQueryResult.IDs(),
-			})
+			}, cppbridge.NoDownsampling)
 			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {
 				loadAndQueryWaiter.Add(s, result.Querier)
 			}

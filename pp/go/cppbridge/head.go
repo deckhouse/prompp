@@ -10,6 +10,8 @@ const (
 	NormalNaN uint64 = 0x7ff8000000000001
 
 	StaleNaN uint64 = 0x7ff0000000000002
+
+	NoDownsampling = 0
 )
 
 func IsStaleNaN(v float64) bool {
@@ -247,7 +249,6 @@ func (sd *DataStorageSerializedData) Next() (uint32, uint32) {
 }
 
 type DataStorageSerializedDataIteratorControlBlock struct {
-	decoderVariant   uint64
 	Timestamp        int64
 	Value            float64
 	remainingSamples uint8

@@ -9,14 +9,12 @@ namespace series_data::decoder {
 
 class DecodeIteratorSentinel {};
 
-class DecodeIteratorTypeTrait {
- public:
-  using iterator_category = std::forward_iterator_tag;
-  using value_type = encoder::Sample;
-  using difference_type = ptrdiff_t;
-  using pointer = encoder::Sample*;
-  using reference = encoder::Sample&;
-};
+#define DECODE_ITERATOR_TYPE_TRAITS()                  \
+  using iterator_category = std::forward_iterator_tag; \
+  using value_type = encoder::Sample;                  \
+  using difference_type = ptrdiff_t;                   \
+  using pointer = encoder::Sample*;                    \
+  using reference = encoder::Sample&
 
 enum class SeekResult : uint8_t {
   kUpdateSample = 0,
@@ -32,8 +30,10 @@ concept Seekable = requires(Iterator iterator, const Iterator const_iterator) {
 };
 
 template <class Derived, std::unsigned_integral SampleCountType>
-class DecodeIteratorTrait : public DecodeIteratorTypeTrait {
+class DecodeIteratorTrait {
  public:
+  DECODE_ITERATOR_TYPE_TRAITS();
+
   explicit DecodeIteratorTrait(SampleCountType count) : remaining_samples_{count} {}
   explicit DecodeIteratorTrait(double value, SampleCountType count) : sample_{.value = value}, remaining_samples_{count} {}
   explicit DecodeIteratorTrait(double value, SampleCountType count, bool last_stalenan)
