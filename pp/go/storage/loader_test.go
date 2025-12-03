@@ -213,7 +213,7 @@ func (s *HeadLoadSuite) TestLoadWithDisabledDataUnloading() {
 			EndTimestampMs:   2,
 			LabelSetIDs:      []uint32{0},
 		},
-		0, 0,
+		0,
 	)
 	err := loadedHead.Close()
 
@@ -268,7 +268,7 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 			EndTimestampMs:   4,
 			LabelSetIDs:      []uint32{0},
 		},
-		0, 0,
+		0,
 	)
 
 	err := loadedHead.Close()

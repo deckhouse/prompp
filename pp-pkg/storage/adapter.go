@@ -27,14 +27,13 @@ var _ storage.Storage = (*Adapter)(nil)
 
 // Adapter for implementing the [Queryable] interface and append data.
 type Adapter struct {
-	proxy                   *pp_storage.Proxy
-	haTracker               *hatracker.HighAvailabilityTracker
-	hashdexFactory          cppbridge.HashdexFactory
-	hashdexLimits           cppbridge.WALHashdexLimits
-	transparentState        *cppbridge.StateV2
-	mergeOutOfOrderChunks   func()
-	longtermIntervalMs      int64
-	longtermLookbackDeltaMs int64
+	proxy                 *pp_storage.Proxy
+	haTracker             *hatracker.HighAvailabilityTracker
+	hashdexFactory        cppbridge.HashdexFactory
+	hashdexLimits         cppbridge.WALHashdexLimits
+	transparentState      *cppbridge.StateV2
+	mergeOutOfOrderChunks func()
+	longtermIntervalMs    int64
 
 	// stat
 	activeQuerierMetrics  *querier.Metrics
@@ -55,7 +54,6 @@ func NewAdapter(
 		proxy,
 		mergeOutOfOrderChunks,
 		0,
-		0,
 		querier.QueryableAppenderSource,
 		querier.QueryableStorageSource,
 		registerer,
@@ -67,7 +65,7 @@ func NewLongtermAdapter(
 	clock clockwork.Clock,
 	proxy *pp_storage.Proxy,
 	mergeOutOfOrderChunks func(),
-	longtermIntervalMs, longtermLookbackDeltaMs int64,
+	longtermIntervalMs int64,
 	registerer prometheus.Registerer,
 ) *Adapter {
 	return newAdapter(
@@ -75,7 +73,6 @@ func NewLongtermAdapter(
 		proxy,
 		mergeOutOfOrderChunks,
 		longtermIntervalMs,
-		longtermLookbackDeltaMs,
 		querier.QueryableLongtermAppenderSource,
 		querier.QueryableLongtermStorageSource,
 		registerer,
@@ -87,22 +84,21 @@ func newAdapter(
 	clock clockwork.Clock,
 	proxy *pp_storage.Proxy,
 	mergeOutOfOrderChunks func(),
-	longtermIntervalMs, longtermLookbackDeltaMs int64,
+	longtermIntervalMs int64,
 	activeSource, storageSource string,
 	registerer prometheus.Registerer,
 ) *Adapter {
 	factory := util.NewUnconflictRegisterer(registerer)
 	return &Adapter{
-		proxy:                   proxy,
-		haTracker:               hatracker.NewHighAvailabilityTracker(clock, registerer),
-		hashdexFactory:          cppbridge.HashdexFactory{},
-		hashdexLimits:           cppbridge.DefaultWALHashdexLimits(),
-		transparentState:        cppbridge.NewTransitionStateV2(),
-		mergeOutOfOrderChunks:   mergeOutOfOrderChunks,
-		longtermIntervalMs:      longtermIntervalMs,
-		longtermLookbackDeltaMs: longtermLookbackDeltaMs,
-		activeQuerierMetrics:    querier.NewMetrics(registerer, activeSource),
-		storageQuerierMetrics:   querier.NewMetrics(registerer, storageSource),
+		proxy:                 proxy,
+		haTracker:             hatracker.NewHighAvailabilityTracker(clock, registerer),
+		hashdexFactory:        cppbridge.HashdexFactory{},
+		hashdexLimits:         cppbridge.DefaultWALHashdexLimits(),
+		transparentState:      cppbridge.NewTransitionStateV2(),
+		mergeOutOfOrderChunks: mergeOutOfOrderChunks,
+		longtermIntervalMs:    longtermIntervalMs,
+		activeQuerierMetrics:  querier.NewMetrics(registerer, activeSource),
+		storageQuerierMetrics: querier.NewMetrics(registerer, storageSource),
 		appendDuration: factory.NewHistogram(
 			prometheus.HistogramOpts{
 				Name: "prompp_adapter_append_duration",
@@ -270,7 +266,6 @@ func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) 
 			mint,
 			maxt,
 			ar.longtermIntervalMs,
-			ar.longtermLookbackDeltaMs,
 			nil,
 		),
 	)
@@ -288,7 +283,6 @@ func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) 
 				mint,
 				maxt,
 				ar.longtermIntervalMs,
-				ar.longtermLookbackDeltaMs,
 				nil,
 			),
 		)
@@ -316,7 +310,6 @@ func (ar *Adapter) HeadQuerier(mint, maxt int64) (storage.Querier, error) {
 		mint,
 		maxt,
 		ar.longtermIntervalMs,
-		ar.longtermLookbackDeltaMs,
 		nil,
 		ar.activeQuerierMetrics,
 	), nil
@@ -350,7 +343,6 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 			mint,
 			maxt,
 			ar.longtermIntervalMs,
-			ar.longtermLookbackDeltaMs,
 			nil,
 			ar.activeQuerierMetrics,
 		),
@@ -369,7 +361,6 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 				mint,
 				maxt,
 				ar.longtermIntervalMs,
-				ar.longtermLookbackDeltaMs,
 				nil,
 				ar.storageQuerierMetrics,
 			),

@@ -1010,7 +1010,6 @@ func main() {
 				hManager.Proxy(),
 				hManager.MergeOutOfOrderChunks,
 				time.Duration(cfg.longtermInterval).Milliseconds(),
-				time.Duration(cfg.longtermLookbackDelta).Milliseconds(),
 				prometheus.DefaultRegisterer,
 			),
 			longtermLocalStorage,

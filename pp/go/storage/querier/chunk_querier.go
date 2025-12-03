@@ -33,13 +33,12 @@ type ChunkQuerier[
 	TShard Shard[TDataStorage, TLSS],
 	THead Head[TTask, TDataStorage, TLSS, TShard],
 ] struct {
-	head                    THead
-	deduplicatorCtor        deduplicatorCtor
-	mint                    int64
-	maxt                    int64
-	longtermIntervalMs      int64
-	longtermLookbackDeltaMs int64
-	closer                  func() error
+	head               THead
+	deduplicatorCtor   deduplicatorCtor
+	mint               int64
+	maxt               int64
+	longtermIntervalMs int64
+	closer             func() error
 }
 
 // NewChunkQuerier init new [ChunkQuerier].
@@ -52,17 +51,16 @@ func NewChunkQuerier[
 ](
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
-	mint, maxt, longtermIntervalMs, longtermLookbackDeltaMs int64,
+	mint, maxt, longtermIntervalMs int64,
 	closer func() error,
 ) *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead] {
 	return &ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]{
-		head:                    head,
-		deduplicatorCtor:        deduplicatorCtor,
-		mint:                    mint,
-		maxt:                    maxt,
-		longtermIntervalMs:      longtermIntervalMs,
-		longtermLookbackDeltaMs: longtermLookbackDeltaMs,
-		closer:                  closer,
+		head:               head,
+		deduplicatorCtor:   deduplicatorCtor,
+		mint:               mint,
+		maxt:               maxt,
+		longtermIntervalMs: longtermIntervalMs,
+		closer:             closer,
 	}
 }
 
@@ -154,7 +152,6 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 		q.mint,
 		q.maxt,
 		q.longtermIntervalMs,
-		q.longtermLookbackDeltaMs,
 	)
 	chunkSeriesSets := make([]storage.ChunkSeriesSet, q.head.NumberOfShards())
 	for shardID, serializedData := range shardedSerializedData {

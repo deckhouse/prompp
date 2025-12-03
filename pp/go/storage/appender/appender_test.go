@@ -125,7 +125,7 @@ func (s *AppenderSuite) getHeadData(labelSetIDs []uint32) headStorageData {
 				EndTimestampMs:   math.MaxInt64,
 				LabelSetIDs:      labelSetIDs,
 			},
-			0, 0,
+			0,
 		)
 		data.dsResult = append(data.dsResult, dsResult)
 
