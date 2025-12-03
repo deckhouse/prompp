@@ -123,7 +123,7 @@ func (s *AppenderSuite) getHeadData(labelSetIDs []uint32) headStorageData {
 			StartTimestampMs: 0,
 			EndTimestampMs:   math.MaxInt64,
 			LabelSetIDs:      labelSetIDs,
-		})
+		}, cppbridge.NoDownsampling)
 		data.dsResult = append(data.dsResult, dsResult)
 
 		data.shards = append(data.shards, storageData{

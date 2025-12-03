@@ -98,8 +98,11 @@ class RangeQuerierWithArgumentsWrapperV2 {
   using BytesStream = PromPP::Primitives::Go::BytesStream;
 
  public:
-  RangeQuerierWithArgumentsWrapperV2(DataStorage& storage, const Query& query, head::SerializedDataPtr* serialized_data)
-      : querier_(storage), query_(&query), serialized_data_(serialized_data) {}
+  RangeQuerierWithArgumentsWrapperV2(DataStorage& storage,
+                                     const Query& query,
+                                     head::SerializedDataPtr* serialized_data,
+                                     PromPP::Primitives::Timestamp downsampling_ms)
+      : querier_(storage), query_(&query), serialized_data_(serialized_data), downsampling_ms_(downsampling_ms) {}
 
   void query() noexcept {
     querier_.query(*query_);
@@ -118,9 +121,10 @@ class RangeQuerierWithArgumentsWrapperV2 {
   ::series_data::querier::Querier querier_;
   const Query* query_;
   head::SerializedDataPtr* serialized_data_;
+  PromPP::Primitives::Timestamp downsampling_ms_;
 
   PROMPP_ALWAYS_INLINE void serialize_chunks() const noexcept {
-    std::construct_at(serialized_data_, std::make_unique<head::SerializedDataGo>(querier_.get_storage(), querier_.chunks()));
+    std::construct_at(serialized_data_, std::make_unique<head::SerializedDataGo>(querier_.get_storage(), querier_.chunks(), downsampling_ms_));
   }
 };
 

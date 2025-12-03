@@ -5,23 +5,32 @@
 
 namespace series_data::decoder::decorator {
 
-template <class DecodeIterator, class DecodeIteratorSentinel>
-class IntervalDecodeIterator : public DecodeIteratorTypeTrait {
+template <class DecodeIterator>
+class IntervalDecodeIterator {
  public:
   using Timestamp = PromPP::Primitives::Timestamp;
 
-  IntervalDecodeIterator(DecodeIterator&& iterator, DecodeIteratorSentinel&& end, Timestamp interval)
-      : iterator_(std::move(iterator)), iterator_end_(std::move(end)), interval_(std::max(interval, kMinInterval)) {
-    advance_to_next_sample();
+  DECODE_ITERATOR_TYPE_TRAITS();
+
+  explicit IntervalDecodeIterator(Timestamp interval) : IntervalDecodeIterator(DecodeIterator{}, interval) {}
+  IntervalDecodeIterator(DecodeIterator&& iterator, Timestamp interval) : iterator_(std::move(iterator)), interval_(std::max(interval, kNoDownsampling)) {
+    advance_to_next_sample<false>();
+  }
+
+  PROMPP_ALWAYS_INLINE IntervalDecodeIterator& operator=(DecodeIterator&& iterator) noexcept {
+    iterator_ = std::move(iterator);
+    timestamp_ = kInvalidTimestamp;
+    advance_to_next_sample<false>();
+    return *this;
   }
 
   PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const noexcept { return iterator_.operator*(); }
   PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const noexcept { return iterator_.operator->(); }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return iterator_ == iterator_end_ && !has_value_; }
+  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return iterator_ == DecodeIteratorSentinel{} && !has_value_; }
 
   PROMPP_ALWAYS_INLINE IntervalDecodeIterator& operator++() noexcept {
-    advance_to_next_sample();
+    advance_to_next_sample<true>();
     return *this;
   }
 
@@ -32,12 +41,12 @@ class IntervalDecodeIterator : public DecodeIteratorTypeTrait {
   }
 
  private:
-  static constexpr Timestamp kMinInterval = 1;
+  static constexpr Timestamp kInvalidTimestamp = std::numeric_limits<Timestamp>::min();
+  static constexpr Timestamp kNoDownsampling = 0;
 
   DecodeIterator iterator_;
-  [[no_unique_address]] DecodeIteratorSentinel iterator_end_;
   Timestamp interval_;
-  Timestamp timestamp_{std::numeric_limits<Timestamp>::min()};
+  Timestamp timestamp_{kInvalidTimestamp};
   bool has_value_{};
 
   PROMPP_ALWAYS_INLINE static Timestamp round_up_to_step(Timestamp timestamp, Timestamp step) noexcept {
@@ -45,7 +54,19 @@ class IntervalDecodeIterator : public DecodeIteratorTypeTrait {
     return result - result % step;
   }
 
+  template <bool MoveIterator>
   PROMPP_ALWAYS_INLINE void advance_to_next_sample() noexcept {
+    if (interval_ == kNoDownsampling) {
+      if constexpr (MoveIterator) {
+        ++iterator_;
+      }
+      return;
+    }
+
+    advance_to_last_sample_in_interval();
+  }
+
+  PROMPP_ALWAYS_INLINE void advance_to_last_sample_in_interval() noexcept {
     has_value_ = false;
 
     iterator_.seek([this](Timestamp timestamp) noexcept {

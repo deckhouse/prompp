@@ -211,7 +211,7 @@ func (s *HeadLoadSuite) TestLoadWithDisabledDataUnloading() {
 		StartTimestampMs: 0,
 		EndTimestampMs:   2,
 		LabelSetIDs:      []uint32{0},
-	})
+	}, cppbridge.NoDownsampling)
 	err := loadedHead.Close()
 
 	// Assert
@@ -263,7 +263,7 @@ func (s *HeadLoadSuite) TestAppendAfterLoad() {
 		StartTimestampMs: 0,
 		EndTimestampMs:   4,
 		LabelSetIDs:      []uint32{0},
-	})
+	}, cppbridge.NoDownsampling)
 
 	err := loadedHead.Close()
 

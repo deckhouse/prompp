@@ -121,8 +121,8 @@ func (s *HeadSuite) TestSerializedChunkRecoder() {
 	result := s.dataStorage.Query(cppbridge.HeadDataStorageQuery{
 		StartTimestampMs: timeInterval.MinT,
 		EndTimestampMs:   timeInterval.MaxT,
-		LabelSetIDs:      []uint32{0, 1}},
-	)
+		LabelSetIDs:      []uint32{0, 1},
+	}, cppbridge.NoDownsampling)
 	recoder := cppbridge.NewSerializedChunkRecoder(result.SerializedData, timeInterval)
 
 	// Act

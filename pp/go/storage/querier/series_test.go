@@ -87,7 +87,7 @@ func (s *SeriesSetTestSuite) query(lss *shard.LSS, ds *shard.DataStorage, start,
 		StartTimestampMs: start,
 		EndTimestampMs:   end,
 		LabelSetIDs:      lssQueryResult.IDs(),
-	})
+	}, cppbridge.NoDownsampling)
 
 	require.Equal(s.T(), cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
 	return querier.NewSeriesSet(start, end, lssQueryResult, snapshot, dsQueryResult.SerializedData)

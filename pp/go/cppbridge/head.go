@@ -10,6 +10,8 @@ const (
 	NormalNaN uint64 = 0x7ff8000000000001
 
 	StaleNaN uint64 = 0x7ff0000000000002
+
+	NoDownsampling = 0
 )
 
 func IsStaleNaN(v float64) bool {
@@ -314,9 +316,9 @@ func (i HeadDataStorageSerializedChunkIndex) Chunks(r *HeadDataStorageSerialized
 	return res
 }
 
-func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) DataStorageQueryResult {
+func (ds *HeadDataStorage) Query(query HeadDataStorageQuery, downsamplingMs int64) DataStorageQueryResult {
 	sd := NewDataStorageSerializedData()
-	querier, status := seriesDataDataStorageQueryV2(ds.dataStorage, query, sd)
+	querier, status := seriesDataDataStorageQueryV2(ds.dataStorage, query, sd, downsamplingMs)
 	return DataStorageQueryResult{
 		Querier:        querier,
 		Status:         status,
@@ -356,7 +358,6 @@ func (sd *DataStorageSerializedData) Next() (uint32, uint32) {
 }
 
 type DataStorageSerializedDataIteratorControlBlock struct {
-	decoderVariant   uint64
 	Timestamp        int64
 	Value            float64
 	remainingSamples uint8

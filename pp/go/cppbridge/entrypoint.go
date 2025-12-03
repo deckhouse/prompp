@@ -1856,11 +1856,12 @@ type DataStorageQueryResult struct {
 	SerializedData *DataStorageSerializedData
 }
 
-func seriesDataDataStorageQueryV2(dataStorage uintptr, query HeadDataStorageQuery, serializedData *DataStorageSerializedData) (querier uintptr, status uint8) {
+func seriesDataDataStorageQueryV2(dataStorage uintptr, query HeadDataStorageQuery, serializedData *DataStorageSerializedData, downsamplingMs int64) (querier uintptr, status uint8) {
 	args := struct {
-		dataStorage uintptr
-		query       HeadDataStorageQuery
-	}{dataStorage, query}
+		dataStorage    uintptr
+		query          HeadDataStorageQuery
+		downsamplingMs int64
+	}{dataStorage, query, downsamplingMs}
 
 	var res = struct {
 		Querier        uintptr

@@ -41,8 +41,7 @@ TEST_P(IntervalDecodeIteratorFixture, Test) {
 
   // Act
   Decoder::create_decode_iterator<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0], [&actual_samples]<typename Iterator>(Iterator&& begin, auto&&) {
-    std::ranges::copy(IntervalDecodeIterator(UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)}, DecodeIteratorSentinel{},
-                                             GetParam().interval),
+    std::ranges::copy(IntervalDecodeIterator(UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)}, GetParam().interval),
                       DecodeIteratorSentinel{}, std::back_inserter(actual_samples));
   });
 
@@ -146,6 +145,19 @@ INSTANTIATE_TEST_SUITE_P(StaleNan,
                                                                         Sample{.timestamp = 200, .value = STALE_NAN},
                                                                         Sample{.timestamp = 300, .value = STALE_NAN},
                                                                         Sample{.timestamp = 400, .value = 1.0},
+                                                                    }}));
+INSTANTIATE_TEST_SUITE_P(NoDownsampling,
+                         IntervalDecodeIteratorFixture,
+                         testing::Values(IntervalDecodeIteratorCase{.samples{
+                                                                        Sample{.timestamp = 98, .value = 1.0},
+                                                                        Sample{.timestamp = 99, .value = STALE_NAN},
+                                                                        Sample{.timestamp = 100, .value = 1.0},
+                                                                    },
+                                                                    .interval = 0,
+                                                                    .expected{
+                                                                        Sample{.timestamp = 98, .value = 1.0},
+                                                                        Sample{.timestamp = 99, .value = STALE_NAN},
+                                                                        Sample{.timestamp = 100, .value = 1.0},
                                                                     }}));
 
 }  // namespace

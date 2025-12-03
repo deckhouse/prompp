@@ -44,7 +44,7 @@ func queryOpt(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, start, end in
 		StartTimestampMs: start,
 		EndTimestampMs:   end,
 		LabelSetIDs:      lssQueryResult.IDs(),
-	})
+	}, cppbridge.NoDownsampling)
 
 	require.Equal(t, cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
 	return querier.NewSeriesSet(start, end, lssQueryResult, snapshot, dsQueryResult.SerializedData)

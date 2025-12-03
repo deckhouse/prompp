@@ -39,7 +39,7 @@ void prompp_dump_memory_profile(void* args, void* res);
 #define Sizeof_RoaringBitset 40
 #define Sizeof_InnerSeries (Sizeof_SizeT + Sizeof_BareBonesVector + Sizeof_RoaringBitset)
 
-#define Sizeof_SerializedDataIterator 192
+#define Sizeof_SerializedDataIterator 208
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -1349,12 +1349,13 @@ void prompp_series_data_data_storage_query(void* args, void* res);
  * @param args {
  *     dataStorage    uintptr          // pointer to constructed data storage
  *     query          DataStorageQuery // query
+ *     downsamplingMs int64            // downsampling interval in milliseconds (0 - downsampling is disabled)
  * }
  *
  * @param res {
- *     Querier uintptr        // pointer to constructed Querier if data loading is needed.
+ *     querier uintptr        // pointer to constructed Querier if data loading is needed.
  *                            // If constructed (!= 0) it must be destroyed by calling prompp_series_data_data_storage_query_final.
- *     Status  uint8          // status of a query (0 - Success, 1 - Data loading is needed)
+ *     status  uint8          // status of a query (0 - Success, 1 - Data loading is needed)
  *     serializedData uintptr // pointer to serialized data
  * }
  */
