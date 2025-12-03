@@ -314,7 +314,7 @@ func (i HeadDataStorageSerializedChunkIndex) Chunks(r *HeadDataStorageSerialized
 	return res
 }
 
-func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) DataStorageQueryResult {
+func (ds *HeadDataStorage) Query(query HeadDataStorageQuery, downsamplingMs, lookbackMs int64) DataStorageQueryResult {
 	sd := NewDataStorageSerializedData()
 	querier, status := seriesDataDataStorageQueryV2(ds.dataStorage, query, sd)
 	return DataStorageQueryResult{

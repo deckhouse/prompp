@@ -119,11 +119,14 @@ func (s *AppenderSuite) getHeadData(labelSetIDs []uint32) headStorageData {
 		lssResult := sh.LSS().Target().GetLabelSets(labelSetIDs)
 		data.lssResult = append(data.lssResult, lssResult)
 
-		dsResult := sh.DataStorage().Query(cppbridge.HeadDataStorageQuery{
-			StartTimestampMs: 0,
-			EndTimestampMs:   math.MaxInt64,
-			LabelSetIDs:      labelSetIDs,
-		})
+		dsResult := sh.DataStorage().Query(
+			cppbridge.HeadDataStorageQuery{
+				StartTimestampMs: 0,
+				EndTimestampMs:   math.MaxInt64,
+				LabelSetIDs:      labelSetIDs,
+			},
+			0, 0,
+		)
 		data.dsResult = append(data.dsResult, dsResult)
 
 		data.shards = append(data.shards, storageData{

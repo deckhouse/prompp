@@ -245,6 +245,10 @@ type Options struct {
 	Version               *PrometheusVersion
 	Flags                 map[string]string
 
+	// longterm
+	LongtermStorage     storage.Storage
+	LongtermQueryEngine *promql.Engine
+
 	ListenAddresses            []string
 	CORSOrigin                 *regexp.Regexp
 	ReadTimeout                time.Duration
@@ -334,6 +338,8 @@ func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler { // P
 		app,
 		h.exemplarStorage,
 		adapter,
+		h.options.LongtermStorage,
+		h.options.LongtermQueryEngine,
 		factorySPr,
 		factoryTr,
 		factoryAr,

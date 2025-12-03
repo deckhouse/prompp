@@ -49,12 +49,14 @@ type Querier[
 	TShard Shard[TDataStorage, TLSS],
 	THead Head[TTask, TDataStorage, TLSS, TShard],
 ] struct {
-	mint             int64
-	maxt             int64
-	head             THead
-	deduplicatorCtor deduplicatorCtor
-	closer           func() error
-	metrics          *Metrics
+	mint                    int64
+	maxt                    int64
+	longtermIntervalMs      int64
+	longtermLookbackDeltaMs int64
+	head                    THead
+	deduplicatorCtor        deduplicatorCtor
+	closer                  func() error
+	metrics                 *Metrics
 }
 
 // NewQuerier init new [Querier].
@@ -67,17 +69,19 @@ func NewQuerier[
 ](
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
-	mint, maxt int64,
+	mint, maxt, longtermIntervalMs, longtermLookbackDeltaMs int64,
 	closer func() error,
 	metrics *Metrics,
 ) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
 	return &Querier[TTask, TDataStorage, TLSS, TShard, THead]{
-		mint:             mint,
-		maxt:             maxt,
-		head:             head,
-		deduplicatorCtor: deduplicatorCtor,
-		closer:           closer,
-		metrics:          metrics,
+		mint:                    mint,
+		maxt:                    maxt,
+		longtermIntervalMs:      longtermIntervalMs,
+		longtermLookbackDeltaMs: longtermLookbackDeltaMs,
+		head:                    head,
+		deduplicatorCtor:        deduplicatorCtor,
+		closer:                  closer,
+		metrics:                 metrics,
 	}
 }
 
@@ -263,7 +267,15 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		return storage.ErrSeriesSet(err)
 	}
 
-	shardedSerializedData := queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, q.mint, q.maxt)
+	shardedSerializedData := queryDataStorage(
+		dsQueryRangeQuerier,
+		q.head,
+		lssQueryResults,
+		q.mint,
+		q.maxt,
+		q.longtermIntervalMs,
+		q.longtermLookbackDeltaMs,
+	)
 	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
 	for shardID, serializedData := range shardedSerializedData {
 		if serializedData != nil {
@@ -301,7 +313,7 @@ func queryDataStorage[
 	taskName string,
 	head THead,
 	lssQueryResults []*cppbridge.LSSQueryResult,
-	mint, maxt int64,
+	mint, maxt, longtermIntervalMs, longtermLookbackDeltaMs int64,
 ) []*cppbridge.DataStorageSerializedData {
 	shardedSerializedData := make([]*cppbridge.DataStorageSerializedData, head.NumberOfShards())
 	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead](head)
@@ -315,11 +327,15 @@ func queryDataStorage[
 			}
 
 			var result cppbridge.DataStorageQueryResult
-			result = s.DataStorage().Query(cppbridge.HeadDataStorageQuery{
-				StartTimestampMs: mint,
-				EndTimestampMs:   maxt,
-				LabelSetIDs:      lssQueryResult.IDs(),
-			})
+			result = s.DataStorage().Query(
+				cppbridge.HeadDataStorageQuery{
+					StartTimestampMs: mint,
+					EndTimestampMs:   maxt,
+					LabelSetIDs:      lssQueryResult.IDs(),
+				},
+				longtermIntervalMs,
+				longtermLookbackDeltaMs,
+			)
 			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {
 				loadAndQueryWaiter.Add(s, result.Querier)
 			}

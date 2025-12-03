@@ -35,6 +35,7 @@ type Persistener[
 	clock               clockwork.Clock
 	tsdbRetentionPeriod time.Duration
 	retentionPeriod     time.Duration
+	longtermIntervalMs  int64
 	// stat
 	events                  prometheus.Counter
 	headPersistenceDuration prometheus.Histogram
@@ -53,6 +54,7 @@ func NewPersistener[
 	clock clockwork.Clock,
 	tsdbRetentionPeriod time.Duration,
 	retentionPeriod time.Duration,
+	longtermIntervalMs int64,
 	registerer prometheus.Registerer,
 ) *Persistener[TTask, TShard, TGoShard, THeadBlockWriter, THead] {
 	factory := util.NewUnconflictRegisterer(registerer)
@@ -63,6 +65,7 @@ func NewPersistener[
 		clock:               clock,
 		tsdbRetentionPeriod: tsdbRetentionPeriod,
 		retentionPeriod:     retentionPeriod,
+		longtermIntervalMs:  longtermIntervalMs,
 		events: factory.NewCounter(
 			prometheus.CounterOpts{
 				Name:        "prompp_head_event_count",
@@ -230,6 +233,7 @@ func NewPersistenerService[
 	mediator Mediator,
 	tsdbRetentionPeriod time.Duration,
 	retentionPeriod time.Duration,
+	longtermIntervalMs int64,
 	registerer prometheus.Registerer,
 ) *PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TProxyHead, TLoader] {
 	return &PersistenerService[TTask, TShard, TGoShard, THeadBlockWriter, THead, TProxyHead, TLoader]{
@@ -240,6 +244,7 @@ func NewPersistenerService[
 			clock,
 			tsdbRetentionPeriod,
 			retentionPeriod,
+			longtermIntervalMs,
 			registerer,
 		),
 		proxy:               proxy,

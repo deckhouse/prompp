@@ -118,10 +118,13 @@ func (s *HeadSuite) TestSerializedChunkRecoder() {
 	s.encoder.Encode(1, 4, 2.0)
 
 	timeInterval := cppbridge.TimeInterval{MinT: 0, MaxT: 4}
-	result := s.dataStorage.Query(cppbridge.HeadDataStorageQuery{
-		StartTimestampMs: timeInterval.MinT,
-		EndTimestampMs:   timeInterval.MaxT,
-		LabelSetIDs:      []uint32{0, 1}},
+	result := s.dataStorage.Query(
+		cppbridge.HeadDataStorageQuery{
+			StartTimestampMs: timeInterval.MinT,
+			EndTimestampMs:   timeInterval.MaxT,
+			LabelSetIDs:      []uint32{0, 1},
+		},
+		0, 0,
 	)
 	recoder := cppbridge.NewSerializedChunkRecoder(result.SerializedData, timeInterval)
 
@@ -179,7 +182,7 @@ func (s *HeadSuite) TestInstantQuery() {
 	// Arrange
 	dataStorage := cppbridge.NewHeadDataStorage()
 	encoder := cppbridge.NewHeadEncoderWithDataStorage(dataStorage)
-	var series = []struct {
+	series := []struct {
 		SeriesID uint32
 		cppbridge.Sample
 	}{

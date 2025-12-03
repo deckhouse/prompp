@@ -40,11 +40,14 @@ func queryOpt(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, start, end in
 		return &querier.SeriesSet{}
 	}
 
-	dsQueryResult := ds.Query(cppbridge.HeadDataStorageQuery{
-		StartTimestampMs: start,
-		EndTimestampMs:   end,
-		LabelSetIDs:      lssQueryResult.IDs(),
-	})
+	dsQueryResult := ds.Query(
+		cppbridge.HeadDataStorageQuery{
+			StartTimestampMs: start,
+			EndTimestampMs:   end,
+			LabelSetIDs:      lssQueryResult.IDs(),
+		},
+		0, 0,
+	)
 
 	require.Equal(t, cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
 	return querier.NewSeriesSet(start, end, lssQueryResult, snapshot, dsQueryResult.SerializedData)
@@ -76,7 +79,7 @@ func BenchmarkSeriesSetOpt(b *testing.B) {
 	}
 
 	var start int64 = 0
-	var end = int64(size)
+	end := int64(size)
 	lss := shard.NewLSS()
 	ds := shard.NewDataStorage()
 	prepareData(lss, ds, size)
@@ -119,7 +122,6 @@ func prepareInstantData(lss *shard.LSS, ds *shard.DataStorage, timeStamps []int6
 				},
 			})
 		}
-
 	}
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(lss, ds, timeSeries...)
 }

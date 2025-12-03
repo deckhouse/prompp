@@ -114,7 +114,7 @@ func (s *PersistenerSuite) SetupTest() {
 		*shard.PerGoroutineShard,
 		*mock.HeadBlockWriterMock[*shard.Shard],
 		*storage.Head,
-	](s.catalog, s.blockWriter, s.writeNotifier, s.clock, tsdbRetentionPeriod, retentionPeriod, nil)
+	](s.catalog, s.blockWriter, s.writeNotifier, s.clock, tsdbRetentionPeriod, retentionPeriod, 0, nil)
 }
 
 func TestPersistenerSuite(t *testing.T) {
@@ -329,6 +329,7 @@ func (s *PersistenerServiceSuite) SetupTest() {
 		nil,
 		tsdbRetentionPeriod,
 		retentionPeriod,
+		0,
 		nil,
 	)
 }

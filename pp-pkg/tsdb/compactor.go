@@ -2,6 +2,7 @@ package tsdb
 
 import (
 	"context"
+
 	"github.com/go-kit/log"
 	"github.com/oklog/ulid"
 	"github.com/prometheus/client_golang/prometheus"
