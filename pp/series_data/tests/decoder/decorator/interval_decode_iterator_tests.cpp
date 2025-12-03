@@ -1,35 +1,55 @@
 #include <gtest/gtest.h>
 
+#include "series_data/decoder.h"
 #include "series_data/decoder/decorator/interval_decode_iterator.h"
+#include "series_data/decoder/universal_decode_iterator.h"
+#include "series_data/encoder.h"
 
 namespace {
 
 using BareBones::Encoding::Gorilla::STALE_NAN;
+using series_data::DataStorage;
+using series_data::Decoder;
+using series_data::Encoder;
+using series_data::chunk::DataChunk;
+using series_data::decoder::DecodeIteratorSentinel;
+using series_data::decoder::UniversalDecodeIterator;
 using series_data::decoder::decorator::IntervalDecodeIterator;
 using series_data::encoder::Sample;
 
 struct IntervalDecodeIteratorCase {
   std::vector<Sample> samples;
   PromPP::Primitives::Timestamp interval;
-  PromPP::Primitives::Timestamp lookback{1000};
   std::vector<Sample> expected{};
 };
 
-class IntervalDecodeIteratorFixture : public ::testing::TestWithParam<IntervalDecodeIteratorCase> {};
+class IntervalDecodeIteratorFixture : public ::testing::TestWithParam<IntervalDecodeIteratorCase> {
+ protected:
+  DataStorage storage_;
+
+  void SetUp() override {
+    Encoder encoder(storage_);
+    for (const auto& sample : GetParam().samples) {
+      encoder.encode(0, sample.timestamp, sample.value);
+    }
+  }
+};
 
 TEST_P(IntervalDecodeIteratorFixture, Test) {
   // Arrange
   std::vector<Sample> actual_samples;
 
   // Act
-  std::ranges::copy(IntervalDecodeIterator(GetParam().samples.begin(), GetParam().samples.end(), GetParam().interval, GetParam().lookback),
-                    GetParam().samples.end(), std::back_inserter(actual_samples));
+  Decoder::create_decode_iterator<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0], [&actual_samples]<typename Iterator>(Iterator&& begin, auto&&) {
+    std::ranges::copy(IntervalDecodeIterator(UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)}, DecodeIteratorSentinel{},
+                                             GetParam().interval),
+                      DecodeIteratorSentinel{}, std::back_inserter(actual_samples));
+  });
 
   // Assert
   EXPECT_EQ(GetParam().expected, actual_samples);
 }
 
-INSTANTIATE_TEST_SUITE_P(Empty, IntervalDecodeIteratorFixture, testing::Values(IntervalDecodeIteratorCase{}));
 INSTANTIATE_TEST_SUITE_P(
     OneSample,
     IntervalDecodeIteratorFixture,
@@ -85,81 +105,24 @@ INSTANTIATE_TEST_SUITE_P(ManySamples,
                                                                     .expected{
                                                                         Sample{.timestamp = 180, .value = 1.0},
                                                                         Sample{.timestamp = 275, .value = 1.0},
-                                                                        Sample{.timestamp = 275, .value = 1.0},
-                                                                        Sample{.timestamp = 275, .value = 1.0},
                                                                         Sample{.timestamp = 503, .value = 1.0},
                                                                         Sample{.timestamp = 604, .value = 1.0},
                                                                     }}));
-INSTANTIATE_TEST_SUITE_P(UseMinInterval,
-                         IntervalDecodeIteratorFixture,
-                         testing::Values(IntervalDecodeIteratorCase{.samples{
-                                                                        Sample{.timestamp = 0, .value = 1.0},
-                                                                        Sample{.timestamp = 1, .value = 1.0},
-                                                                        Sample{.timestamp = 2, .value = 1.0},
-                                                                    },
-                                                                    .interval = 0,
-                                                                    .expected{
-                                                                        Sample{.timestamp = 0, .value = 1.0},
-                                                                        Sample{.timestamp = 1, .value = 1.0},
-                                                                        Sample{.timestamp = 2, .value = 1.0},
-                                                                    }}));
-INSTANTIATE_TEST_SUITE_P(LookbackDelta,
-                         IntervalDecodeIteratorFixture,
-                         testing::Values(IntervalDecodeIteratorCase{.samples{
-                                                                        Sample{.timestamp = 180, .value = 1.0},
-                                                                        Sample{.timestamp = 275, .value = 1.0},
-                                                                        Sample{.timestamp = 503, .value = 1.0},
-                                                                        Sample{.timestamp = 603, .value = 1.0},
-                                                                    },
-                                                                    .interval = 100,
-                                                                    .lookback = 125,
-                                                                    .expected{
-                                                                        Sample{.timestamp = 180, .value = 1.0},
-                                                                        Sample{.timestamp = 275, .value = 1.0},
-                                                                        Sample{.timestamp = 275, .value = 1.0},
-                                                                        Sample{.timestamp = 503, .value = 1.0},
-                                                                        Sample{.timestamp = 603, .value = 1.0},
-                                                                    }},
-                                         IntervalDecodeIteratorCase{.samples{
-                                                                        Sample{.timestamp = 180, .value = 1.0},
-                                                                        Sample{.timestamp = 275, .value = 1.0},
-                                                                        Sample{.timestamp = 503, .value = 1.0},
-                                                                        Sample{.timestamp = 603, .value = 1.0},
-                                                                    },
-                                                                    .interval = 100,
-                                                                    .lookback = 124,
-                                                                    .expected{
-                                                                        Sample{.timestamp = 180, .value = 1.0},
-                                                                        Sample{.timestamp = 275, .value = 1.0},
-                                                                        Sample{.timestamp = 503, .value = 1.0},
-                                                                        Sample{.timestamp = 603, .value = 1.0},
-                                                                    }},
-                                         IntervalDecodeIteratorCase{.samples{
-                                                                        Sample{.timestamp = 1, .value = 1.0},
-                                                                    },
-                                                                    .interval = 101,
-                                                                    .lookback = 100,
-                                                                    .expected{
-                                                                        Sample{.timestamp = 1, .value = 1.0},
-                                                                    }}));
-INSTANTIATE_TEST_SUITE_P(NoSamples,
-                         IntervalDecodeIteratorFixture,
-                         testing::Values(IntervalDecodeIteratorCase{.samples{Sample{.timestamp = 1, .value = 1.0}}, .interval = 100, .lookback = 98},
-                                         IntervalDecodeIteratorCase{.samples{
-                                                                        Sample{.timestamp = 1, .value = 1.0},
-                                                                        Sample{.timestamp = 2, .value = 1.0},
-                                                                        Sample{.timestamp = 3, .value = 1.0},
-                                                                    },
-                                                                    .interval = 100,
-                                                                    .lookback = 96}));
 INSTANTIATE_TEST_SUITE_P(StaleNan,
                          IntervalDecodeIteratorFixture,
-                         testing::Values(IntervalDecodeIteratorCase{.samples{Sample{.timestamp = 100, .value = STALE_NAN}}, .interval = 100},
+                         testing::Values(IntervalDecodeIteratorCase{.samples{Sample{.timestamp = 100, .value = STALE_NAN}},
+                                                                    .interval = 100,
+                                                                    .expected{
+                                                                        Sample{.timestamp = 100, .value = STALE_NAN},
+                                                                    }},
                                          IntervalDecodeIteratorCase{.samples{
                                                                         Sample{.timestamp = 99, .value = 1.0},
                                                                         Sample{.timestamp = 100, .value = STALE_NAN},
                                                                     },
-                                                                    .interval = 100},
+                                                                    .interval = 100,
+                                                                    .expected{
+                                                                        Sample{.timestamp = 100, .value = STALE_NAN},
+                                                                    }},
                                          IntervalDecodeIteratorCase{.samples{
                                                                         Sample{.timestamp = 98, .value = 1.0},
                                                                         Sample{.timestamp = 99, .value = STALE_NAN},
@@ -171,12 +134,17 @@ INSTANTIATE_TEST_SUITE_P(StaleNan,
                                                                     }},
                                          IntervalDecodeIteratorCase{.samples{
                                                                         Sample{.timestamp = 100, .value = STALE_NAN},
+                                                                        Sample{.timestamp = 101, .value = 1.0},
                                                                         Sample{.timestamp = 200, .value = STALE_NAN},
+                                                                        Sample{.timestamp = 201, .value = 1.0},
                                                                         Sample{.timestamp = 300, .value = STALE_NAN},
                                                                         Sample{.timestamp = 400, .value = 1.0},
                                                                     },
                                                                     .interval = 100,
                                                                     .expected{
+                                                                        Sample{.timestamp = 100, .value = STALE_NAN},
+                                                                        Sample{.timestamp = 200, .value = STALE_NAN},
+                                                                        Sample{.timestamp = 300, .value = STALE_NAN},
                                                                         Sample{.timestamp = 400, .value = 1.0},
                                                                     }}));
 

@@ -18,7 +18,20 @@ class DecodeIteratorTypeTrait {
   using reference = encoder::Sample&;
 };
 
-template <std::unsigned_integral SampleCountType>
+enum class SeekResult : uint8_t {
+  kUpdateSample = 0,
+  kNext,
+  kStop,
+};
+
+template <class Iterator>
+concept Seekable = requires(Iterator iterator, const Iterator const_iterator) {
+  { const_iterator.decoded_timestamp() } -> std::same_as<PromPP::Primitives::Timestamp>;
+  { iterator.update_sample() };
+  { iterator.decode() };
+};
+
+template <class Derived, std::unsigned_integral SampleCountType>
 class DecodeIteratorTrait : public DecodeIteratorTypeTrait {
  public:
   explicit DecodeIteratorTrait(SampleCountType count) : remaining_samples_{count} {}
@@ -32,18 +45,40 @@ class DecodeIteratorTrait : public DecodeIteratorTypeTrait {
   PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return remaining_samples_ == 0; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE SampleCountType remaining_samples() const noexcept { return remaining_samples_; }
 
+  template <class SeekHandler>
+    requires Seekable<Derived>
+  PROMPP_ALWAYS_INLINE void seek(SeekHandler&& handler) {
+    if (remaining_samples_ == 0) [[unlikely]] {
+      return;
+    }
+
+    do {
+      if (const SeekResult result = handler(derived()->decoded_timestamp()); result == SeekResult::kUpdateSample) [[likely]] {
+        derived()->update_sample();
+      } else if (result == SeekResult::kStop) {
+        break;
+      }
+    } while (derived()->decode());
+  }
+
  protected:
   encoder::Sample sample_;
   SampleCountType remaining_samples_{};
   bool last_stalenan_{false};
+
+ private:
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Derived* derived() noexcept { return static_cast<Derived*>(this); }
 };
 
-class SeparatedTimestampValueDecodeIteratorTrait : public DecodeIteratorTrait<uint8_t> {
+template <class Derived>
+class SeparatedTimestampValueDecodeIteratorTrait : public DecodeIteratorTrait<Derived, uint8_t> {
  public:
+  using Base = DecodeIteratorTrait<Derived, uint8_t>;
+
   SeparatedTimestampValueDecodeIteratorTrait(uint8_t samples_count, const BareBones::BitSequenceReader& timestamp_reader, double value, bool last_stalenan)
-      : DecodeIteratorTrait(value, samples_count, last_stalenan), timestamp_decoder_(timestamp_reader) {
-    if (remaining_samples_ > 0) {
-      sample_.timestamp = timestamp_decoder_.decode();
+      : Base(value, samples_count, last_stalenan), timestamp_decoder_(timestamp_reader) {
+    if (Base::remaining_samples_ > 0) [[likely]] {
+      Base::sample_.timestamp = timestamp_decoder_.decode();
     }
   }
 
@@ -59,17 +94,21 @@ class SeparatedTimestampValueDecodeIteratorTrait : public DecodeIteratorTrait<ui
   SeparatedTimestampValueDecodeIteratorTrait(const BitSequenceWithItemsCount& timestamp_stream, double value, bool last_stalenan)
       : SeparatedTimestampValueDecodeIteratorTrait(timestamp_stream.count(), timestamp_stream.reader(), value, last_stalenan) {}
 
+ protected:
+  friend class DecodeIteratorTrait<Derived, uint8_t>;
+
+  encoder::timestamp::TimestampDecoder timestamp_decoder_;
+
   PROMPP_ALWAYS_INLINE bool decode_timestamp() noexcept {
-    if (--remaining_samples_ > 0) {
-      sample_.timestamp = timestamp_decoder_.decode();
+    if (--Base::remaining_samples_ > 0) [[likely]] {
+      std::ignore = timestamp_decoder_.decode();
       return true;
     }
 
     return false;
   }
 
- protected:
-  encoder::timestamp::TimestampDecoder timestamp_decoder_;
+  [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::Timestamp decoded_timestamp() const noexcept { return timestamp_decoder_.timestamp(); }
 };
 
 }  // namespace series_data::decoder

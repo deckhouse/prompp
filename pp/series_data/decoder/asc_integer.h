@@ -5,7 +5,7 @@
 
 namespace series_data::decoder {
 
-class AscIntegerDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait {
+class AscIntegerDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait<AscIntegerDecodeIterator> {
  public:
   using Decoder = encoder::ZigZagTimestampDecoder;
 
@@ -17,14 +17,15 @@ class AscIntegerDecodeIterator : public SeparatedTimestampValueDecodeIteratorTra
                            const BareBones::BitSequenceReader& values_reader,
                            bool is_last_stalenan)
       : SeparatedTimestampValueDecodeIteratorTrait(samples_count, timestamp_reader, 0.0, is_last_stalenan), reader_(values_reader) {
-    if (remaining_samples_ > 0) {
+    if (remaining_samples_ > 0) [[likely]] {
       decode_value();
+      update_sample_value();
     }
   }
 
   PROMPP_ALWAYS_INLINE AscIntegerDecodeIterator& operator++() noexcept {
-    if (decode_timestamp()) {
-      decode_value();
+    if (decode()) [[likely]] {
+      update_sample();
     }
     return *this;
   }
@@ -36,13 +37,38 @@ class AscIntegerDecodeIterator : public SeparatedTimestampValueDecodeIteratorTra
   }
 
  private:
+  friend Base;
+
   using GorillaState = BareBones::Encoding::Gorilla::GorillaState;
 
   Decoder decoder_;
   BareBones::BitSequenceReader reader_;
   GorillaState gorilla_state_{GorillaState::kFirstPoint};
+  encoder::ValueType value_type_{encoder::ValueType::kValue};
 
-  PROMPP_ALWAYS_INLINE void decode_value() noexcept { decoder_.decode(reader_, gorilla_state_, sample_.value); }
+  PROMPP_ALWAYS_INLINE bool decode() noexcept {
+    if (decode_timestamp()) [[likely]] {
+      decode_value();
+      return true;
+    }
+
+    return false;
+  }
+
+  PROMPP_ALWAYS_INLINE void decode_value() noexcept { value_type_ = decoder_.decode(reader_, gorilla_state_); }
+
+  PROMPP_ALWAYS_INLINE void update_sample() noexcept {
+    sample_.timestamp = decoded_timestamp();
+    update_sample_value();
+  }
+
+  PROMPP_ALWAYS_INLINE void update_sample_value() noexcept {
+    if (value_type_ == encoder::ValueType::kStaleNan) [[unlikely]] {
+      sample_.value = BareBones::Encoding::Gorilla::STALE_NAN;
+    } else {
+      sample_.value = static_cast<double>(decoder_.timestamp());
+    }
+  }
 };
 
 }  // namespace series_data::decoder

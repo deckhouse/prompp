@@ -5,7 +5,7 @@
 
 namespace series_data::decoder {
 
-class ValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait {
+class ValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait<ValuesGorillaDecodeIterator> {
  public:
   using Decoder = BareBones::Encoding::Gorilla::ValuesDecoder;
 
@@ -17,14 +17,15 @@ class ValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIterator
                               const BareBones::BitSequenceReader& values_reader,
                               bool is_last_stalenan)
       : SeparatedTimestampValueDecodeIteratorTrait(samples_count, timestamp_reader, 0.0, is_last_stalenan), reader_(values_reader) {
-    if (remaining_samples_ > 0) {
+    if (remaining_samples_ > 0) [[likely]] {
       decode_value<true>();
+      sample_.value = decoder_.value();
     }
   }
 
   PROMPP_ALWAYS_INLINE ValuesGorillaDecodeIterator& operator++() noexcept {
-    if (decode_timestamp()) {
-      decode_value<false>();
+    if (decode()) [[likely]] {
+      update_sample();
     }
     return *this;
   }
@@ -36,23 +37,37 @@ class ValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIterator
   }
 
   template <bool first>
-  PROMPP_ALWAYS_INLINE static double decode_value(Decoder& decoder, BareBones::BitSequenceReader& reader) noexcept {
+  PROMPP_ALWAYS_INLINE static void decode_value(Decoder& decoder, BareBones::BitSequenceReader& reader) noexcept {
     if constexpr (first) {
       decoder.decode_first(reader);
     } else {
       decoder.decode(reader);
     }
-
-    return decoder.value();
   }
 
  private:
+  friend Base;
+
   BareBones::BitSequenceReader reader_;
   Decoder decoder_;
 
+  PROMPP_ALWAYS_INLINE bool decode() noexcept {
+    if (decode_timestamp()) [[likely]] {
+      decode_value<false>();
+      return true;
+    }
+
+    return false;
+  }
+
+  PROMPP_ALWAYS_INLINE void update_sample() noexcept {
+    sample_.timestamp = decoded_timestamp();
+    sample_.value = decoder_.value();
+  }
+
   template <bool first>
   PROMPP_ALWAYS_INLINE void decode_value() noexcept {
-    sample_.value = decode_value<first>(decoder_, reader_);
+    decode_value<first>(decoder_, reader_);
   }
 };
 
