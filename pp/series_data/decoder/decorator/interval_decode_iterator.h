@@ -13,13 +13,14 @@ class IntervalDecodeIterator {
   DECODE_ITERATOR_TYPE_TRAITS();
 
   explicit IntervalDecodeIterator(Timestamp interval) : IntervalDecodeIterator(DecodeIterator{}, interval) {}
-  IntervalDecodeIterator(DecodeIterator&& iterator, Timestamp interval) : iterator_(std::move(iterator)), interval_(std::max(interval, kNoDownsampling)) {
+  IntervalDecodeIterator(DecodeIterator&& iterator, Timestamp interval) : iterator_(std::move(iterator)), interval_(interval) {
     advance_to_next_sample<false>();
   }
 
   PROMPP_ALWAYS_INLINE IntervalDecodeIterator& operator=(DecodeIterator&& iterator) noexcept {
     iterator_ = std::move(iterator);
     timestamp_ = kInvalidTimestamp;
+    has_value_ = true;
     advance_to_next_sample<false>();
     return *this;
   }
@@ -27,7 +28,7 @@ class IntervalDecodeIterator {
   PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const noexcept { return iterator_.operator*(); }
   PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const noexcept { return iterator_.operator->(); }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return iterator_ == DecodeIteratorSentinel{} && !has_value_; }
+  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return !has_value_; }
 
   PROMPP_ALWAYS_INLINE IntervalDecodeIterator& operator++() noexcept {
     advance_to_next_sample<true>();
@@ -44,10 +45,10 @@ class IntervalDecodeIterator {
   static constexpr Timestamp kInvalidTimestamp = std::numeric_limits<Timestamp>::min();
   static constexpr Timestamp kNoDownsampling = 0;
 
+  bool has_value_{true};
   DecodeIterator iterator_;
   Timestamp interval_;
   Timestamp timestamp_{kInvalidTimestamp};
-  bool has_value_{};
 
   PROMPP_ALWAYS_INLINE static Timestamp round_up_to_step(Timestamp timestamp, Timestamp step) noexcept {
     const auto result = timestamp + step - 1;
@@ -58,7 +59,7 @@ class IntervalDecodeIterator {
   PROMPP_ALWAYS_INLINE void advance_to_next_sample() noexcept {
     if (interval_ == kNoDownsampling) {
       if constexpr (MoveIterator) {
-        ++iterator_;
+        has_value_ = ++iterator_ != DecodeIteratorSentinel{};
       }
       return;
     }

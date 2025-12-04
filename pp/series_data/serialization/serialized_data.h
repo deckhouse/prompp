@@ -313,12 +313,12 @@ class SerializedDataView {
 
   template <AssignableFromUniversaleDecodeIterator DecodeIterator = decoder::UniversalDecodeIterator>
   [[nodiscard]] SeriesIterator<DecodeIterator> create_current_series_iterator(DecodeIterator&& decode_iterator = DecodeIterator{}) const noexcept {
-    return {std::move(decode_iterator), get_buffer_view(), get_chunks_view(), series_first_chunk_id_};
+    return {std::forward<DecodeIterator>(decode_iterator), get_buffer_view(), get_chunks_view(), series_first_chunk_id_};
   }
   template <AssignableFromUniversaleDecodeIterator DecodeIterator = decoder::UniversalDecodeIterator>
   [[nodiscard]] SeriesIterator<DecodeIterator> create_series_iterator(uint32_t series_first_chunk_id,
                                                                       DecodeIterator&& decode_iterator = DecodeIterator{}) const noexcept {
-    return {std::move(decode_iterator), get_buffer_view(), get_chunks_view(), series_first_chunk_id};
+    return {std::forward<DecodeIterator>(decode_iterator), get_buffer_view(), get_chunks_view(), series_first_chunk_id};
   }
 
  private:

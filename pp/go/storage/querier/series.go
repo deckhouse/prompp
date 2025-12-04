@@ -30,7 +30,7 @@ func NewChunkIterator(serializedData *cppbridge.DataStorageSerializedData, chunk
 		maxt:           maxt,
 	}
 
-	if it.chunkIterator.Timestamp < mint {
+	if it.chunkIterator.Timestamp() < mint {
 		it.chunkIterator.Seek(mint)
 	}
 
@@ -44,7 +44,7 @@ func (it *ChunkIterator) Reset(serializedData *cppbridge.DataStorageSerializedDa
 	it.isInitialized = false
 	it.chunkIterator.Reset(serializedData, chunkRef)
 
-	if it.chunkIterator.Timestamp < mint {
+	if it.chunkIterator.Timestamp() < mint {
 		it.chunkIterator.Seek(mint)
 	}
 }
@@ -53,7 +53,7 @@ func (it *ChunkIterator) Reset(serializedData *cppbridge.DataStorageSerializedDa
 //
 //nolint:gocritic // unnamedResult not need
 func (it *ChunkIterator) At() (int64, float64) {
-	return it.chunkIterator.Timestamp, it.chunkIterator.Value
+	return it.chunkIterator.Timestamp(), it.chunkIterator.Value()
 }
 
 // AtFloatHistogram returns the current timestamp/value pair if the value is a histogram with floating-point counts.
@@ -68,7 +68,7 @@ func (it *ChunkIterator) AtHistogram(h *histogram.Histogram) (int64, *histogram.
 
 // AtT returns the current timestamp.
 func (it *ChunkIterator) AtT() int64 {
-	return it.chunkIterator.Timestamp
+	return it.chunkIterator.Timestamp()
 }
 
 // Err returns the current error.
