@@ -71,7 +71,7 @@ func (s *SeriesSetTestSuite) SetupTest() {
 	}
 }
 
-func (s *SeriesSetTestSuite) query(lss *shard.LSS, ds *shard.DataStorage, start, end int64, matchers ...model.LabelMatcher) *querier.SeriesSet {
+func (s *SeriesSetTestSuite) query(lss *shard.LSS, ds *shard.DataStorage, start, end, downsamplingMs int64, matchers ...model.LabelMatcher) *querier.SeriesSet {
 	selector, snapshot, err := lss.QuerySelector(0, matchers)
 	require.NoError(s.T(), err)
 	if selector == 0 || snapshot == nil {
@@ -87,7 +87,7 @@ func (s *SeriesSetTestSuite) query(lss *shard.LSS, ds *shard.DataStorage, start,
 		StartTimestampMs: start,
 		EndTimestampMs:   end,
 		LabelSetIDs:      lssQueryResult.IDs(),
-	}, cppbridge.NoDownsampling)
+	}, downsamplingMs)
 
 	require.Equal(s.T(), cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
 	return querier.NewSeriesSet(start, end, lssQueryResult, snapshot, dsQueryResult.SerializedData)
@@ -118,7 +118,7 @@ func (s *SeriesSetTestSuite) TestQueryAllValues() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
 
 	// Act
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -139,7 +139,7 @@ func (s *SeriesSetTestSuite) TestQueryNoValues() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
 
 	// Act
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -160,7 +160,7 @@ func (s *SeriesSetTestSuite) TestQuerySingleSeries() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
 
 	// Act
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -181,7 +181,7 @@ func (s *SeriesSetTestSuite) TestQuerySingleSample() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
 
 	// Act
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -202,7 +202,7 @@ func (s *SeriesSetTestSuite) TestQueryCutByUpperLimit() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
 
 	// Act
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -223,7 +223,7 @@ func (s *SeriesSetTestSuite) TestQueryCutByLowerLimit() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
 
 	// Act
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -253,7 +253,7 @@ func (s *SeriesSetTestSuite) TestQueryLargeChunks() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, timeSeries...)
 
 	// Act
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -272,7 +272,7 @@ func (s *SeriesSetTestSuite) TestQueryEmptyStorage() {
 
 	expected := []storagetest.TimeSeries{}
 	// Act
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -327,8 +327,8 @@ func (s *SeriesSetTestSuite) TestQueryMergedSeriesSets() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(anotherLss, anotherDs, timeSeries2...)
 	expected := append(timeSeries1, timeSeries2...)
 	// Act
-	seriesSet1 := s.query(s.lss, s.ds, start, end, matcher)
-	seriesSet2 := s.query(anotherLss, anotherDs, start, end, matcher)
+	seriesSet1 := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, matcher)
+	seriesSet2 := s.query(anotherLss, anotherDs, start, end, cppbridge.NoDownsampling, matcher)
 
 	// Assert
 	require.Equal(
@@ -352,7 +352,7 @@ func (s *SeriesSetTestSuite) TestSeriesSeek() {
 
 	expected := s.timeSeries[:4]
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries[:4]...)
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, matcher)
 	require.True(s.T(), seriesSet.Next())
 	series := seriesSet.At()
 	require.Equal(s.T(), expected[0].Labels, series.Labels())
@@ -389,7 +389,7 @@ func (s *SeriesSetTestSuite) TestSeriesSeekOutOfRange() {
 	var end int64 = 1000
 
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries[:4]...)
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, matcher)
 	require.True(s.T(), seriesSet.Next())
 	series := seriesSet.At()
 	var iterator chunkenc.Iterator
@@ -416,7 +416,7 @@ func (s *SeriesSetTestSuite) TestSeriesParallelRead() {
 	expected := s.timeSeries
 
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
-	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, matcher)
 	seriesSlice := make([]storage.Series, 0, 2)
 	require.True(s.T(), seriesSet.Next())
 	seriesSlice = append(seriesSlice, seriesSet.At())
@@ -439,7 +439,7 @@ func (s *SeriesSetTestSuite) TestSeriesResetIterator() {
 
 	var start int64 = 0
 	var end int64 = 50
-	seriesSet := s.query(s.lss, s.ds, start, end, model.LabelMatcher{
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, model.LabelMatcher{
 		Name:        "__name__",
 		Value:       "metric",
 		MatcherType: model.MatcherTypeExactMatch,
@@ -466,7 +466,7 @@ func (s *SeriesSetTestSuite) TestSeriesResetIteratorWithMinTimestamp() {
 
 	var start int64 = 12
 	var end int64 = 50
-	seriesSet := s.query(s.lss, s.ds, start, end, model.LabelMatcher{
+	seriesSet := s.query(s.lss, s.ds, start, end, cppbridge.NoDownsampling, model.LabelMatcher{
 		Name:        "__name__",
 		Value:       "metric",
 		MatcherType: model.MatcherTypeExactMatch,
@@ -484,4 +484,43 @@ func (s *SeriesSetTestSuite) TestSeriesResetIteratorWithMinTimestamp() {
 	// Assert
 	s.Equal(cppbridge.Sample{Timestamp: 12, Value: 2}, s.nextSample(iterator))
 	s.Equal(chunkenc.ValNone, iterator.Next())
+}
+
+func (s *SeriesSetTestSuite) TestDownsampling() {
+	// Arrange
+	const Downsampling = 100
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 123, Value: 1.0},
+				{Timestamp: 152, Value: 1.0},
+				{Timestamp: 180, Value: 1.0},
+				{Timestamp: 215, Value: 1.0},
+				{Timestamp: 242, Value: 1.0},
+				{Timestamp: 275, Value: 1.0},
+				{Timestamp: 303, Value: 1.0},
+			},
+		},
+	}...)
+
+	// Act
+	seriesSet := s.query(s.lss, s.ds, 0, 400, Downsampling, model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	})
+
+	// Assert
+	//fmt.Println(storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
+	require.Equal(s.T(), []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 180, Value: 1.0},
+				{Timestamp: 275, Value: 1.0},
+				{Timestamp: 303, Value: 1.0},
+			},
+		},
+	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
 }
