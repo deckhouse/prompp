@@ -33,6 +33,7 @@ type Adapter struct {
 	hashdexLimits         cppbridge.WALHashdexLimits
 	transparentState      *cppbridge.StateV2
 	mergeOutOfOrderChunks func()
+	longtermIntervalMs    int64
 
 	// stat
 	activeQuerierMetrics  *querier.Metrics
@@ -41,11 +42,50 @@ type Adapter struct {
 	samplesAppended       prometheus.Counter
 }
 
-// NewAdapter init new [Adapter].
+// NewAdapter init new main [Adapter].
 func NewAdapter(
 	clock clockwork.Clock,
 	proxy *pp_storage.Proxy,
 	mergeOutOfOrderChunks func(),
+	registerer prometheus.Registerer,
+) *Adapter {
+	return newAdapter(
+		clock,
+		proxy,
+		mergeOutOfOrderChunks,
+		0,
+		querier.QueryableAppenderSource,
+		querier.QueryableStorageSource,
+		registerer,
+	)
+}
+
+// NewLongtermAdapter init new longterm [Adapter].
+func NewLongtermAdapter(
+	clock clockwork.Clock,
+	proxy *pp_storage.Proxy,
+	mergeOutOfOrderChunks func(),
+	longtermIntervalMs int64,
+	registerer prometheus.Registerer,
+) *Adapter {
+	return newAdapter(
+		clock,
+		proxy,
+		mergeOutOfOrderChunks,
+		longtermIntervalMs,
+		querier.QueryableLongtermAppenderSource,
+		querier.QueryableLongtermStorageSource,
+		registerer,
+	)
+}
+
+// newAdapter init new [Adapter].
+func newAdapter(
+	clock clockwork.Clock,
+	proxy *pp_storage.Proxy,
+	mergeOutOfOrderChunks func(),
+	longtermIntervalMs int64,
+	activeSource, storageSource string,
 	registerer prometheus.Registerer,
 ) *Adapter {
 	factory := util.NewUnconflictRegisterer(registerer)
@@ -56,8 +96,9 @@ func NewAdapter(
 		hashdexLimits:         cppbridge.DefaultWALHashdexLimits(),
 		transparentState:      cppbridge.NewTransitionStateV2(),
 		mergeOutOfOrderChunks: mergeOutOfOrderChunks,
-		activeQuerierMetrics:  querier.NewMetrics(registerer, querier.QueryableAppenderSource),
-		storageQuerierMetrics: querier.NewMetrics(registerer, querier.QueryableStorageSource),
+		longtermIntervalMs:    longtermIntervalMs,
+		activeQuerierMetrics:  querier.NewMetrics(registerer, activeSource),
+		storageQuerierMetrics: querier.NewMetrics(registerer, storageSource),
 		appendDuration: factory.NewHistogram(
 			prometheus.HistogramOpts{
 				Name: "prompp_adapter_append_duration",
@@ -219,7 +260,14 @@ func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) 
 	ahead := ar.proxy.Get()
 	queriers = append(
 		queriers,
-		querier.NewChunkQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil),
+		querier.NewChunkQuerier(
+			ahead,
+			querier.NewNoOpShardedDeduplicator,
+			mint,
+			maxt,
+			ar.longtermIntervalMs,
+			nil,
+		),
 	)
 
 	for _, head := range ar.proxy.Heads() {
@@ -229,7 +277,14 @@ func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) 
 
 		queriers = append(
 			queriers,
-			querier.NewChunkQuerier(head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil),
+			querier.NewChunkQuerier(
+				head,
+				querier.NewNoOpShardedDeduplicator,
+				mint,
+				maxt,
+				ar.longtermIntervalMs,
+				nil,
+			),
 		)
 	}
 
@@ -254,6 +309,7 @@ func (ar *Adapter) HeadQuerier(mint, maxt int64) (storage.Querier, error) {
 		querier.NewNoOpShardedDeduplicator,
 		mint,
 		maxt,
+		ar.longtermIntervalMs,
 		nil,
 		ar.activeQuerierMetrics,
 	), nil
@@ -281,7 +337,15 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 	ahead := ar.proxy.Get()
 	queriers = append(
 		queriers,
-		querier.NewQuerier(ahead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.activeQuerierMetrics),
+		querier.NewQuerier(
+			ahead,
+			querier.NewNoOpShardedDeduplicator,
+			mint,
+			maxt,
+			ar.longtermIntervalMs,
+			nil,
+			ar.activeQuerierMetrics,
+		),
 	)
 
 	for _, head := range ar.proxy.Heads() {
@@ -291,7 +355,15 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 
 		queriers = append(
 			queriers,
-			querier.NewQuerier(head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.storageQuerierMetrics),
+			querier.NewQuerier(
+				head,
+				querier.NewNoOpShardedDeduplicator,
+				mint,
+				maxt,
+				ar.longtermIntervalMs,
+				nil,
+				ar.storageQuerierMetrics,
+			),
 		)
 	}
 

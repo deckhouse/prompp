@@ -8,8 +8,15 @@ import (
 const (
 	// QueryableAppenderSource metrics source for Appender.
 	QueryableAppenderSource = "queryable_appender"
+
 	// QueryableStorageSource metrics source for Storage.
 	QueryableStorageSource = "queryable_storage"
+
+	// QueryableLongtermAppenderSource metrics source for longterm Appender.
+	QueryableLongtermAppenderSource = "queryable_longterm_appender"
+
+	// QueryableLongtermStorageSource metrics source for longterm Storage.
+	QueryableLongtermStorageSource = "queryable_longterm_storage"
 )
 
 // Metrics for [Querier].

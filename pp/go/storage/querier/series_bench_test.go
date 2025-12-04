@@ -76,7 +76,7 @@ func BenchmarkSeriesSetOpt(b *testing.B) {
 	}
 
 	var start int64 = 0
-	var end = int64(size)
+	end := int64(size)
 	lss := shard.NewLSS()
 	ds := shard.NewDataStorage()
 	prepareData(lss, ds, size)
@@ -119,7 +119,6 @@ func prepareInstantData(lss *shard.LSS, ds *shard.DataStorage, timeStamps []int6
 				},
 			})
 		}
-
 	}
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(lss, ds, timeSeries...)
 }

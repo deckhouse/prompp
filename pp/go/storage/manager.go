@@ -73,6 +73,7 @@ type Options struct {
 	CommitInterval      time.Duration
 	MaxRetentionPeriod  time.Duration
 	HeadRetentionPeriod time.Duration
+	LongtermIntervalMs  int64
 	KeeperCapacity      int
 	DataDir             string
 	MaxSegmentSize      uint32
@@ -294,6 +295,7 @@ func (m *Manager) initServices(
 				persistenerMediator,
 				o.MaxRetentionPeriod,
 				o.HeadRetentionPeriod,
+				o.LongtermIntervalMs,
 				r,
 			).Execute()
 
@@ -452,6 +454,11 @@ type TriggerNotifier struct {
 // NewTriggerNotifier init new [TriggerNotifier].
 func NewTriggerNotifier() *TriggerNotifier {
 	return &TriggerNotifier{c: make(chan struct{}, 1)}
+}
+
+// NewTriggerNotifier init new noop [TriggerNotifier].
+func NewNoopTriggerNotifier() *TriggerNotifier {
+	return &TriggerNotifier{}
 }
 
 // Chan returns channel with notifications.
