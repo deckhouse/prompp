@@ -317,6 +317,44 @@ TEST_F(SharedPtrFixture, ReallocateToSmallerSize) {
   EXPECT_EQ("123456", ptr.get()[0]);
 }
 
+TEST_F(SharedPtrFixture, ReallocateWithCopiesToSmallerSize) {
+  // Arrange
+  SharedPtr<std::string_view> ptr(2, 0);
+  std::construct_at(&ptr.get()[0], "123456");
+  std::construct_at(&ptr.get()[1], "654321");
+  ptr.set_items_count(2);
+
+  SharedPtr<std::string_view> ptr1 = ptr;
+  SharedPtr<std::string_view> ptr2 = ptr;
+
+  // Act
+  ptr.reallocate(2, 1);
+
+  // Assert
+  EXPECT_EQ("123456", ptr.get()[0]);
+}
+
+TEST_F(SharedPtrFixture, ReallocateWithCopiesToBiggerSize) {
+  // Arrange
+  SharedPtr<std::string_view> ptr(2, 0);
+  std::construct_at(&ptr.get()[0], "123456");
+  std::construct_at(&ptr.get()[1], "654321");
+  ptr.set_items_count(2);
+
+  SharedPtr<std::string_view> ptr1 = ptr;
+  SharedPtr<std::string_view> ptr2 = ptr;
+
+  // Act
+  ptr.reallocate(2, 3);
+  std::construct_at(&ptr.get()[2], "000000");
+
+  // Assert
+  EXPECT_EQ("123456", ptr.get()[0]);
+  EXPECT_EQ("654321", ptr.get()[1]);
+  EXPECT_EQ("000000", ptr.get()[2]);
+  EXPECT_EQ(2, ptr.items_count());
+}
+
 class SharedMemoryFixture : public ::testing::Test {
  protected:
   SharedMemory<uint8_t, DefaultReallocator> memory_;
