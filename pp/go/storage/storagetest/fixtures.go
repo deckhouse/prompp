@@ -123,7 +123,7 @@ func GetSamplesFromSerializedData(serializedData *cppbridge.DataStorageSerialize
 				break
 			}
 
-			result[seriesID] = append(result[seriesID], cppbridge.Sample{Timestamp: iterator.Timestamp, Value: iterator.Value})
+			result[seriesID] = append(result[seriesID], cppbridge.Sample{Timestamp: iterator.Timestamp(), Value: iterator.Value()})
 			iterator.Next()
 		}
 	}

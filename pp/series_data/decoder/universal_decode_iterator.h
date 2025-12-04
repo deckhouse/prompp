@@ -11,8 +11,6 @@
 
 namespace series_data::decoder {
 
-// TODO: dummy iterator for default ctor!
-
 class UniversalDecodeIterator {
  public:
   DECODE_ITERATOR_TYPE_TRAITS();

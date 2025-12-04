@@ -249,9 +249,9 @@ func (sd *DataStorageSerializedData) Next() (uint32, uint32) {
 }
 
 type DataStorageSerializedDataIteratorControlBlock struct {
-	Timestamp        int64
-	Value            float64
-	remainingSamples uint8
+	hasValue bool
+	timestamp int64
+	value     float64
 }
 
 type DataStorageSerializedDataIterator struct {
@@ -278,7 +278,15 @@ func (it *DataStorageSerializedDataIterator) Reset(serializedData *DataStorageSe
 }
 
 func (it *DataStorageSerializedDataIterator) HasData() bool {
-	return it.remainingSamples != 0
+	return it.hasValue
+}
+
+func (it *DataStorageSerializedDataIterator) Timestamp() int64 {
+	return it.timestamp
+}
+
+func (it *DataStorageSerializedDataIterator) Value() float64 {
+	return it.value
 }
 
 // UnloadedDataLoader is Go wrapper around series_data::Loader.
