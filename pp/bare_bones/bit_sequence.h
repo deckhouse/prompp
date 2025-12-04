@@ -328,7 +328,6 @@ class PROMPP_ATTRIBUTE_PACKED CompactBitSequence : public CompactBitSequenceBase
  public:
   using Base = CompactBitSequenceBase<kAllocationSizesTable, Bit::to_bits(sizeof(uint64_t) + 1)>;
   using Base::size_in_bits;
-  using Base::size_in_bits_;
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE BitSequenceReader reader() const noexcept { return {Base::memory_.get(), size_in_bits()}; };
 
@@ -427,6 +426,9 @@ class PROMPP_ATTRIBUTE_PACKED CompactBitSequence : public CompactBitSequenceBase
   }
 
   PROMPP_ALWAYS_INLINE void push_back_bytes(std::span<const uint8_t> bytes) noexcept { push_back_bytes(bytes.data(), Bit::to_bits(bytes.size())); }
+
+ protected:
+  using Base::size_in_bits_;
 
  private:
   using Base::reserve_enough_memory_if_needed;
