@@ -19,8 +19,7 @@ class DownsamplingDecodeIterator {
 
   PROMPP_ALWAYS_INLINE DownsamplingDecodeIterator& operator=(DecodeIterator&& iterator) noexcept {
     iterator_ = std::move(iterator);
-    timestamp_ = kInvalidTimestamp;
-    has_value_ = true;
+    timestamp_ = {};
     advance_to_next_sample<false>();
     return *this;
   }
@@ -28,7 +27,7 @@ class DownsamplingDecodeIterator {
   PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const noexcept { return iterator_.operator*(); }
   PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const noexcept { return iterator_.operator->(); }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return !has_value_; }
+  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return timestamp_ == kInvalidTimestamp; }
 
   PROMPP_ALWAYS_INLINE DownsamplingDecodeIterator& operator++() noexcept {
     advance_to_next_sample<true>();
@@ -45,10 +44,9 @@ class DownsamplingDecodeIterator {
   static constexpr Timestamp kInvalidTimestamp = std::numeric_limits<Timestamp>::min();
   static constexpr Timestamp kNoDownsampling = 0;
 
-  bool has_value_{true};
+  Timestamp timestamp_{};
   DecodeIterator iterator_;
   Timestamp interval_;
-  Timestamp timestamp_{kInvalidTimestamp};
 
   PROMPP_ALWAYS_INLINE static Timestamp round_up_to_step(Timestamp timestamp, Timestamp step) noexcept {
     const auto result = timestamp + step - 1;
@@ -59,7 +57,9 @@ class DownsamplingDecodeIterator {
   PROMPP_ALWAYS_INLINE void advance_to_next_sample() noexcept {
     if (interval_ == kNoDownsampling) {
       if constexpr (MoveIterator) {
-        has_value_ = ++iterator_ != DecodeIteratorSentinel{};
+        if (++iterator_ == DecodeIteratorSentinel{}) [[unlikely]] {
+          timestamp_ = kInvalidTimestamp;
+        }
       }
       return;
     }
@@ -68,18 +68,17 @@ class DownsamplingDecodeIterator {
   }
 
   PROMPP_ALWAYS_INLINE void advance_to_last_sample_in_interval() noexcept {
-    has_value_ = false;
+    timestamp_ = kInvalidTimestamp;
 
     iterator_.seek([this](Timestamp timestamp) noexcept {
       if (timestamp > timestamp_) {
-        if (has_value_) [[likely]] {
+        if (timestamp_ != kInvalidTimestamp) [[likely]] {
           return SeekResult::kStop;
         }
 
         timestamp_ = round_up_to_step(timestamp, interval_);
       }
 
-      has_value_ = true;
       return SeekResult::kUpdateSample;
     });
   }
