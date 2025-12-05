@@ -39,7 +39,7 @@ void prompp_dump_memory_profile(void* args, void* res);
 #define Sizeof_RoaringBitset 40
 #define Sizeof_InnerSeries (Sizeof_SizeT + Sizeof_BareBonesVector + Sizeof_RoaringBitset)
 
-#define Sizeof_SerializedDataIterator 208
+#define Sizeof_SerializedDataIterator 200
 #ifdef __cplusplus
 extern "C" {
 #endif
