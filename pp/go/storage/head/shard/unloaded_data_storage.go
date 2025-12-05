@@ -138,8 +138,11 @@ func (s *UnloadedDataStorage) ForEachSnapshot(f func(snapshot []byte, isLast boo
 	for index, header := range s.snapshots {
 		snapshot = snapshot[:header.SnapshotSize]
 		size, err := reader.ReadAt(snapshot, offset)
-		if size != int(header.SnapshotSize) {
+		if err != nil {
 			return err
+		}
+		if size != int(header.SnapshotSize) {
+			return fmt.Errorf("invalid size of the read data: %d, expected: %d", size, header.SnapshotSize)
 		}
 		offset += int64(size)
 
