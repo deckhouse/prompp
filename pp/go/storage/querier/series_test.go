@@ -512,7 +512,6 @@ func (s *SeriesSetTestSuite) TestDownsampling() {
 	})
 
 	// Assert
-	//fmt.Println(storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
 	require.Equal(s.T(), []storagetest.TimeSeries{
 		{
 			Labels: labels.FromStrings("__name__", "metric", "job", "test"),

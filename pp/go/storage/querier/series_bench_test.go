@@ -28,7 +28,7 @@ func iterateSeriesSet(seriesSet storage.SeriesSet) {
 	}
 }
 
-func queryOpt(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, start, end int64, matchers ...model.LabelMatcher) *querier.SeriesSet {
+func queryOpt(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, start, end, downsamplingMs int64, matchers ...model.LabelMatcher) *querier.SeriesSet {
 	selector, snapshot, err := lss.QuerySelector(0, matchers)
 	require.NoError(t, err)
 	if selector == 0 || snapshot == nil {
@@ -44,7 +44,7 @@ func queryOpt(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, start, end in
 		StartTimestampMs: start,
 		EndTimestampMs:   end,
 		LabelSetIDs:      lssQueryResult.IDs(),
-	}, cppbridge.NoDownsampling)
+	}, downsamplingMs)
 
 	require.Equal(t, cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
 	return querier.NewSeriesSet(start, end, lssQueryResult, snapshot, dsQueryResult.SerializedData)
@@ -67,7 +67,7 @@ func BenchmarkSeriesSetOpt(b *testing.B) {
 	b.StopTimer()
 	seriesSets := make([]*querier.SeriesSet, 0, b.N)
 	for i := 0; i < b.N; i++ {
-		seriesSets = append(seriesSets, queryOpt(b, lss, ds, start, end, matcher))
+		seriesSets = append(seriesSets, queryOpt(b, lss, ds, start, end, cppbridge.NoDownsampling, matcher))
 	}
 
 	b.ReportAllocs()
