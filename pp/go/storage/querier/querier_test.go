@@ -114,7 +114,7 @@ func (s *QuerierSuite) TestRangeQuery() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, 0, nil, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, cppbridge.NoDownsampling, nil, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
@@ -142,7 +142,7 @@ func (s *QuerierSuite) TestRangeQueryWithoutMatching() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, 0, nil, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 2, cppbridge.NoDownsampling, nil, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "unknown_metric")
 
@@ -195,7 +195,7 @@ func (s *QuerierSuite) TestRangeQueryWithDataStorageLoading() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 3, 0, nil, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 3, cppbridge.NoDownsampling, nil, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
@@ -233,7 +233,7 @@ func (s *QuerierSuite) TestInstantQuery() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, 0, nil, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, cppbridge.NoDownsampling, nil, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
@@ -286,7 +286,7 @@ func (s *QuerierSuite) TestInstantQueryWithDataStorageLoading() {
 		*shard.LSS,
 		*shard.PerGoroutineShard,
 		*storage.Head,
-	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, 0, nil, nil)
+	](s.head, querier.NewNoOpShardedDeduplicator, 0, 0, cppbridge.NoDownsampling, nil, nil)
 	defer func() { _ = q.Close() }()
 	matcher, _ := labels.NewMatcher(labels.MatchEqual, "__name__", "metric")
 
@@ -330,7 +330,7 @@ func (s *QuerierSuite) TestLabelNames() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, 0, nil, nil)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, cppbridge.NoDownsampling, nil, nil)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric0")
 	s.Require().NoError(err)
@@ -363,7 +363,7 @@ func (s *QuerierSuite) TestLabelNamesWithLimit() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, 0, nil, nil)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, cppbridge.NoDownsampling, nil, nil)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric0")
 	s.Require().NoError(err)
@@ -396,7 +396,7 @@ func (s *QuerierSuite) TestLabelNamesNoMatches() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, 0, nil, nil)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, cppbridge.NoDownsampling, nil, nil)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric3")
 	s.Require().NoError(err)
@@ -429,7 +429,7 @@ func (s *QuerierSuite) TestLabelValues() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, 0, nil, nil)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, cppbridge.NoDownsampling, nil, nil)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchRegexp, "__name__", "metric.*")
 	s.Require().NoError(err)
@@ -462,7 +462,7 @@ func (s *QuerierSuite) TestLabelValuesNoMatches() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, 0, nil, nil)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, cppbridge.NoDownsampling, nil, nil)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchEqual, "__name__", "metric2")
 	s.Require().NoError(err)
@@ -495,7 +495,7 @@ func (s *QuerierSuite) TestLabelValuesNoMatchesOnName() {
 	}
 	s.appendTimeSeries(timeSeries)
 
-	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, 0, nil, nil)
+	q := querier.NewQuerier(s.head, querier.NewNoOpShardedDeduplicator, 0, 2, cppbridge.NoDownsampling, nil, nil)
 	defer func() { _ = q.Close() }()
 	matcher, err := labels.NewMatcher(labels.MatchRegexp, "__name__", "metric.*")
 	s.Require().NoError(err)
