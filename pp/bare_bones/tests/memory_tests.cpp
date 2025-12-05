@@ -319,6 +319,7 @@ TEST_F(SharedPtrFixture, ReallocateToSmallerSize) {
 
 TEST_F(SharedPtrFixture, ReallocateWithCopiesToSmallerSize) {
   // Arrange
+  // NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
   SharedPtr<std::string_view> ptr(2, 0);
   std::construct_at(&ptr.get()[0], "123456");
   std::construct_at(&ptr.get()[1], "654321");
