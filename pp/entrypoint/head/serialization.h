@@ -1,11 +1,11 @@
 #pragma once
 
-#include "series_data/decoder/decorator/interval_decode_iterator.h"
+#include "series_data/decoder/decorator/downsampling_decode_iterator.h"
 #include "series_data/serialization/serialized_data.h"
 
 namespace entrypoint::head {
 
-using DecodeIterator = series_data::decoder::decorator::IntervalDecodeIterator<series_data::decoder::UniversalDecodeIterator>;
+using DecodeIterator = series_data::decoder::decorator::DownsamplingDecodeIterator<series_data::decoder::UniversalDecodeIterator>;
 using SerializedDataIterator = series_data::serialization::SerializedDataView::SeriesIterator<DecodeIterator>;
 
 class SerializedDataGo {

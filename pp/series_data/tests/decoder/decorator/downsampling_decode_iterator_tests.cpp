@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "series_data/decoder.h"
-#include "series_data/decoder/decorator/interval_decode_iterator.h"
+#include "series_data/decoder/decorator/downsampling_decode_iterator.h"
 #include "series_data/decoder/universal_decode_iterator.h"
 #include "series_data/encoder.h"
 
@@ -14,7 +14,7 @@ using series_data::Encoder;
 using series_data::chunk::DataChunk;
 using series_data::decoder::DecodeIteratorSentinel;
 using series_data::decoder::UniversalDecodeIterator;
-using series_data::decoder::decorator::IntervalDecodeIterator;
+using series_data::decoder::decorator::DownsamplingDecodeIterator;
 using series_data::encoder::Sample;
 
 struct IntervalDecodeIteratorCase {
@@ -23,7 +23,7 @@ struct IntervalDecodeIteratorCase {
   std::vector<Sample> expected{};
 };
 
-class IntervalDecodeIteratorFixture : public ::testing::TestWithParam<IntervalDecodeIteratorCase> {
+class DownsamplingDecodeIteratorFixture : public ::testing::TestWithParam<IntervalDecodeIteratorCase> {
  protected:
   DataStorage storage_;
 
@@ -35,13 +35,13 @@ class IntervalDecodeIteratorFixture : public ::testing::TestWithParam<IntervalDe
   }
 };
 
-TEST_P(IntervalDecodeIteratorFixture, Test) {
+TEST_P(DownsamplingDecodeIteratorFixture, Test) {
   // Arrange
   std::vector<Sample> actual_samples;
 
   // Act
   Decoder::create_decode_iterator<DataChunk::Type::kOpen>(storage_, storage_.open_chunks[0], [&actual_samples]<typename Iterator>(Iterator&& begin, auto&&) {
-    std::ranges::copy(IntervalDecodeIterator(UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)}, GetParam().interval),
+    std::ranges::copy(DownsamplingDecodeIterator(UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)}, GetParam().interval),
                       DecodeIteratorSentinel{}, std::back_inserter(actual_samples));
   });
 
@@ -51,12 +51,12 @@ TEST_P(IntervalDecodeIteratorFixture, Test) {
 
 INSTANTIATE_TEST_SUITE_P(
     OneSample,
-    IntervalDecodeIteratorFixture,
+    DownsamplingDecodeIteratorFixture,
     testing::Values(
         IntervalDecodeIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}}, .interval = 100, .expected{Sample{.timestamp = 100, .value = 1.0}}},
         IntervalDecodeIteratorCase{.samples{Sample{.timestamp = 300, .value = 1.0}}, .interval = 400, .expected{Sample{.timestamp = 300, .value = 1.0}}}));
 INSTANTIATE_TEST_SUITE_P(ManySamples,
-                         IntervalDecodeIteratorFixture,
+                         DownsamplingDecodeIteratorFixture,
                          testing::Values(IntervalDecodeIteratorCase{.samples{
                                                                         Sample{.timestamp = 100, .value = 1.0},
                                                                         Sample{.timestamp = 200, .value = 1.0},
@@ -108,7 +108,7 @@ INSTANTIATE_TEST_SUITE_P(ManySamples,
                                                                         Sample{.timestamp = 604, .value = 1.0},
                                                                     }}));
 INSTANTIATE_TEST_SUITE_P(StaleNan,
-                         IntervalDecodeIteratorFixture,
+                         DownsamplingDecodeIteratorFixture,
                          testing::Values(IntervalDecodeIteratorCase{.samples{Sample{.timestamp = 100, .value = STALE_NAN}},
                                                                     .interval = 100,
                                                                     .expected{
@@ -147,7 +147,7 @@ INSTANTIATE_TEST_SUITE_P(StaleNan,
                                                                         Sample{.timestamp = 400, .value = 1.0},
                                                                     }}));
 INSTANTIATE_TEST_SUITE_P(NoDownsampling,
-                         IntervalDecodeIteratorFixture,
+                         DownsamplingDecodeIteratorFixture,
                          testing::Values(IntervalDecodeIteratorCase{.samples{
                                                                         Sample{.timestamp = 98, .value = 1.0},
                                                                         Sample{.timestamp = 99, .value = STALE_NAN},

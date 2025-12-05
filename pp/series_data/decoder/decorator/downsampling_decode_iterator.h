@@ -6,18 +6,18 @@
 namespace series_data::decoder::decorator {
 
 template <class DecodeIterator>
-class IntervalDecodeIterator {
+class DownsamplingDecodeIterator {
  public:
   using Timestamp = PromPP::Primitives::Timestamp;
 
   DECODE_ITERATOR_TYPE_TRAITS();
 
-  explicit IntervalDecodeIterator(Timestamp interval) : IntervalDecodeIterator(DecodeIterator{}, interval) {}
-  IntervalDecodeIterator(DecodeIterator&& iterator, Timestamp interval) : iterator_(std::move(iterator)), interval_(interval) {
+  explicit DownsamplingDecodeIterator(Timestamp interval) : DownsamplingDecodeIterator(DecodeIterator{}, interval) {}
+  DownsamplingDecodeIterator(DecodeIterator&& iterator, Timestamp interval) : iterator_(std::move(iterator)), interval_(interval) {
     advance_to_next_sample<false>();
   }
 
-  PROMPP_ALWAYS_INLINE IntervalDecodeIterator& operator=(DecodeIterator&& iterator) noexcept {
+  PROMPP_ALWAYS_INLINE DownsamplingDecodeIterator& operator=(DecodeIterator&& iterator) noexcept {
     iterator_ = std::move(iterator);
     timestamp_ = kInvalidTimestamp;
     has_value_ = true;
@@ -30,12 +30,12 @@ class IntervalDecodeIterator {
 
   PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return !has_value_; }
 
-  PROMPP_ALWAYS_INLINE IntervalDecodeIterator& operator++() noexcept {
+  PROMPP_ALWAYS_INLINE DownsamplingDecodeIterator& operator++() noexcept {
     advance_to_next_sample<true>();
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE IntervalDecodeIterator operator++(int) noexcept {
+  PROMPP_ALWAYS_INLINE DownsamplingDecodeIterator operator++(int) noexcept {
     const auto result = *this;
     ++*this;
     return result;
