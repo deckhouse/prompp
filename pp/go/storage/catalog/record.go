@@ -123,12 +123,12 @@ func (r *Record) Corrupted() bool {
 
 // CreatedAt returns the timestamp when the [Record]([Head]) was created.
 func (r *Record) CreatedAt() int64 {
-	return r.createdAt
+	return atomic.LoadInt64(&r.createdAt)
 }
 
 // DeletedAt returns the timestamp when the [Record]([Head]) was deleted.
 func (r *Record) DeletedAt() int64 {
-	return r.deletedAt
+	return atomic.LoadInt64(&r.deletedAt)
 }
 
 // Dir returns dir of [Head].
@@ -188,7 +188,7 @@ func (r *Record) Status() Status {
 
 // UpdatedAt returns the timestamp when the [Record]([Head]) was updated.
 func (r *Record) UpdatedAt() int64 {
-	return r.updatedAt
+	return atomic.LoadInt64(&r.updatedAt)
 }
 
 // createRecordCopy create a copy of the [Record].
@@ -199,9 +199,9 @@ func createRecordCopy(r *Record) *Record {
 
 // applyRecordChanges apply changes to current [Record].
 func applyRecordChanges(r, changed *Record) {
-	r.createdAt = changed.createdAt
-	r.updatedAt = changed.updatedAt
-	r.deletedAt = changed.deletedAt
+	atomic.StoreInt64(&r.createdAt, changed.createdAt)
+	atomic.StoreInt64(&r.updatedAt, changed.updatedAt)
+	atomic.StoreInt64(&r.deletedAt, changed.deletedAt)
 	r.corrupted = changed.corrupted
 	r.status = changed.status
 	r.numberOfShards = changed.numberOfShards
