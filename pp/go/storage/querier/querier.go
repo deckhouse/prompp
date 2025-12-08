@@ -345,7 +345,7 @@ func queryDataStorage[
 
 	if err := loadAndQueryWaiter.Wait(); err != nil {
 		SendUnrecoverableError(err)
-		return nil
+		return make([]*cppbridge.DataStorageSerializedData, head.NumberOfShards())
 	}
 
 	return shardedSerializedData

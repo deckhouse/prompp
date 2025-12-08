@@ -1863,7 +1863,7 @@ func seriesDataDataStorageQueryV2(dataStorage uintptr, query HeadDataStorageQuer
 		downsamplingMs int64
 	}{dataStorage, query, downsamplingMs}
 
-	var res = struct {
+	res := struct {
 		Querier        uintptr
 		Status         uint8
 		SerializedData *uintptr
