@@ -251,9 +251,7 @@ class DataSerializer {
 };
 
 template <class DecodeIterator>
-concept AssignableFromUniversaleDecodeIterator = requires(DecodeIterator iterator) {
-  { iterator = decoder::UniversalDecodeIterator{} };
-};
+concept AssignableFromUniversaleDecodeIterator = std::assignable_from<DecodeIterator&, decoder::UniversalDecodeIterator>;
 
 class SerializedDataView {
  public:
