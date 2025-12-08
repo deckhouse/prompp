@@ -9,6 +9,11 @@ class ValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIterator
  public:
   using Decoder = BareBones::Encoding::Gorilla::ValuesDecoder;
 
+  enum class SampleType : uint8_t {
+    kFirst = 0,
+    kOther,
+  };
+
   ValuesGorillaDecodeIterator(const encoder::BitSequenceWithItemsCount& timestamp_stream, const BareBones::BitSequenceReader& reader, bool is_last_stalenan)
       : ValuesGorillaDecodeIterator(timestamp_stream.count(), timestamp_stream.reader(), reader, is_last_stalenan) {}
   ValuesGorillaDecodeIterator(uint8_t samples_count,
@@ -17,7 +22,7 @@ class ValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIterator
                               bool is_last_stalenan)
       : SeparatedTimestampValueDecodeIteratorTrait(samples_count, timestamp_reader, 0.0, is_last_stalenan), reader_(values_reader) {
     if (remaining_samples_ > 0) [[likely]] {
-      decode_value<true>();
+      decode_value<SampleType::kFirst>();
       sample_.value = decoder_.value();
     }
   }
@@ -35,9 +40,9 @@ class ValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIterator
     return result;
   }
 
-  template <bool first>
+  template <SampleType Type>
   PROMPP_ALWAYS_INLINE static void decode_value(Decoder& decoder, BareBones::BitSequenceReader& reader) noexcept {
-    if constexpr (first) {
+    if constexpr (Type == SampleType::kFirst) {
       decoder.decode_first(reader);
     } else {
       decoder.decode(reader);
@@ -52,7 +57,7 @@ class ValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIterator
 
   PROMPP_ALWAYS_INLINE bool decode() noexcept {
     if (decode_timestamp()) [[likely]] {
-      decode_value<false>();
+      decode_value<SampleType::kOther>();
       return true;
     }
 
@@ -64,9 +69,9 @@ class ValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIterator
     sample_.value = decoder_.value();
   }
 
-  template <bool first>
+  template <SampleType Type>
   PROMPP_ALWAYS_INLINE void decode_value() noexcept {
-    decode_value<first>(decoder_, reader_);
+    decode_value<Type>(decoder_, reader_);
   }
 };
 

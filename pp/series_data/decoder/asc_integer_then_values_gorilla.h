@@ -91,13 +91,13 @@ class AscIntegerThenValuesGorillaDecodeIterator : public SeparatedTimestampValue
         switch_to_values_gorilla();
       }
     } else {
-      ValuesGorillaDecodeIterator::decode_value<false>(values_gorilla_.decoder, reader_);
+      ValuesGorillaDecodeIterator::decode_value<ValuesGorillaDecodeIterator::SampleType::kOther>(values_gorilla_.decoder, reader_);
     }
   }
 
   PROMPP_ALWAYS_INLINE void switch_to_values_gorilla() noexcept {
     std::construct_at(&values_gorilla_);
-    ValuesGorillaDecodeIterator::decode_value<true>(values_gorilla_.decoder, reader_);
+    ValuesGorillaDecodeIterator::decode_value<ValuesGorillaDecodeIterator::SampleType::kFirst>(values_gorilla_.decoder, reader_);
   }
 };
 
