@@ -5,12 +5,18 @@
 ### Fixes
 1. **Fixed shard calculation in RemoteWrite.** Previously the number of shards could exceed the required amount.
 2. **Encoder version check when restoring the last head.** If the WAL file encoder version differs from the current one, that WAL is considered impossible to continue and the head is rotated to create an up-to-date WAL.
+3. **Fixed data race causing service crashes.** A mutex was added to linearize tasks when loading evicted series into memory across multiple shards, preventing race conditions.
+4. **Skipped empty labels in OTLP Protobuf message processing.** Empty labels are now ignored during processing.
+5. **Fixed shard count change application.** On-the-fly shard count changes now trigger forced rotation immediately, instead of waiting for the next scheduled rotation.
+6. **Renamed TSDB state metrics.** Metrics have been renamed to align with standard vanilla Prometheus metrics.
 
 ### Enhancements
 1. **Optimized allocations of cross-shard objects.** Objects are now allocated and freed together in contiguous memory.
 2. **Optimized concurrent execution of recording rules.** Rules that do not depend on other rules in the group append data into a single shared batch which is added to the head once. This significantly speeds up recording rules.
-3. **Reduced allocations in instant queries.** This query type is used in the federate API; the number of allocations has been significantly reduced.
-4. **Optimized sample decoding.** Removed intermediate in-memory sample storage and their double-copying.
+3. **Reduced allocations in instant queries.** The number of allocations in instant queries, commonly used in the federate API, has been significantly reduced.
+4. **Optimized sample decoding.** Removed intermediate in-memory sample storage and double-copying during decoding.
+5. **Removed unused code.** This reduces the final binary size.
+6. **Minor optimizations.** Various small improvements have been made to enhance overall performance.
 
 ## v0.7.0
 
