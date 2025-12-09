@@ -23,12 +23,13 @@
 namespace BareBones {
 
 struct AllocationSize {
-  uint32_t bits;
+  uint32_t bits{};
 
+  constexpr AllocationSize() = default;
   explicit constexpr AllocationSize(uint32_t size_in_bytes) : bits(Bit::to_bits(size_in_bytes)) {}
 
-  PROMPP_ALWAYS_INLINE friend bool operator>(AllocationSize a, uint32_t b) noexcept { return a.bits > b; }
-  PROMPP_ALWAYS_INLINE friend bool operator>(uint32_t a, AllocationSize b) noexcept { return a > b.bits; }
+  PROMPP_ALWAYS_INLINE friend constexpr bool operator>(AllocationSize a, uint32_t b) noexcept { return a.bits > b; }
+  PROMPP_ALWAYS_INLINE friend constexpr bool operator>(uint32_t a, AllocationSize b) noexcept { return a > b.bits; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE constexpr uint32_t bytes() const noexcept { return Bit::to_bytes(bits); }
 };
@@ -176,6 +177,9 @@ template <std::array kAllocationSizesTable, uint32_t kReservedSizeBits>
   requires std::is_same_v<typename decltype(kAllocationSizesTable)::value_type, AllocationSize>
 class CompactBitSequenceBase {
  public:
+  static_assert(std::size(kAllocationSizesTable) > 0);
+  static_assert(kAllocationSizesTable[0].bytes() == 0);
+
   using SharedPtr = BareBones::SharedPtr<uint8_t, SharedPtrControlBlock, DefaultReallocator>;
 
   CompactBitSequenceBase() = default;
@@ -322,7 +326,16 @@ class CompactBitSequenceBase {
 
 #pragma pack(pop)
 
-template <std::array kAllocationSizesTable>
+template <size_t size>
+consteval std::array<AllocationSize, size> prepare_allocation_sizes_table(const std::array<AllocationSize, size>& table) {
+  std::array<AllocationSize, size> new_table;
+  for (size_t i = 1; i < size; ++i) {
+    new_table[i] = AllocationSize(table[i].bytes() - sizeof(SharedPtrControlBlock));
+  }
+  return new_table;
+}
+
+template <const std::array kAllocationSizesTable>
   requires std::is_same_v<typename decltype(kAllocationSizesTable)::value_type, AllocationSize>
 class PROMPP_ATTRIBUTE_PACKED CompactBitSequence : public CompactBitSequenceBase<kAllocationSizesTable, Bit::to_bits(sizeof(uint64_t) + 1)> {
  public:
