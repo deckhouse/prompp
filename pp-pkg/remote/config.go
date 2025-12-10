@@ -31,7 +31,8 @@ func ApplyConfig(remoteWriter *remotewriter.RemoteWriter, tsdbRetention model.Du
 			if rwc.QueueConfig.SampleAgeLimit == 0 {
 				rwc.QueueConfig.SampleAgeLimit = remotewriter.DefaultSampleAgeLimit
 			}
-			if rwc.QueueConfig.SampleAgeLimit > tsdbRetention {
+			// In agent mode tsdbRetention is unset and equal to 0, so we don't modify SampleAgeLimit.
+			if tsdbRetention > 0 && rwc.QueueConfig.SampleAgeLimit > tsdbRetention {
 				rwc.QueueConfig.SampleAgeLimit = tsdbRetention
 			}
 
