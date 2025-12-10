@@ -389,6 +389,8 @@ TEST_F(V2Test, CheckpointTest) {
   decoding_table_.load(ss);
 
   // Assert
+  EXPECT_EQ(ss.str().size(), checkpoint.save_size());
+
   EXPECT_EQ(decoding_table_.size(), 4);
 
   EXPECT_EQ(decoding_table_[id0], arr[0]);

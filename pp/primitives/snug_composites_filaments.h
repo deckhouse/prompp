@@ -6,13 +6,14 @@
 #include "bare_bones/iterator.h"
 #include "bare_bones/memory.h"
 #include "bare_bones/snug_composite.h"
+#include "bare_bones/snug_composite_v2.h"
 #include "bare_bones/stream_v_byte.h"
 #include "hash.h"
 
 namespace PromPP::Primitives::SnugComposites::Filaments {
 
 template <template <class> class Vector>
-struct Symbol {
+class Symbol {
   uint32_t pos_;
   uint32_t length_;
 
@@ -211,7 +212,7 @@ struct Symbol {
         out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
       }
 
-      uint32_t save_size(const storage_type&, uint32_t, uint32_t id_count, checkpoint_type const* from = nullptr) const {
+      uint32_t save_size(const storage_type&, uint32_t id_count, checkpoint_type const* from = nullptr) const {
         uint32_t res = 0;
 
         // version
@@ -243,20 +244,25 @@ struct Symbol {
 
     static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
 
+    storage_type() noexcept = default;
+    template <class AnotherStorageType>
+      requires kIsReadOnly
+    explicit storage_type(const AnotherStorageType& other) : data{other.data}, items{other.items} {}
+
     Vector<char> data;
     Vector<item_type> items;
 
     [[nodiscard]] uint32_t size() const noexcept { return items.size(); }
     [[nodiscard]] size_t remainder_size() const noexcept {
       constexpr size_t max_ui32 = std::numeric_limits<uint32_t>::max();
-      assert(this->size() <= max_ui32);
-      return max_ui32 - this->size();
+      assert(items.size() <= max_ui32);
+      return max_ui32 - items.size();
     }
 
-    template <template <class> class OtherVector>
-    void reserve(const typename Symbol<OtherVector>::storage_type& other) noexcept {
-      items.reserve(other.items_.size());
-      data.reserve(other.data_.size());
+    template <class AnotherStorageType>
+    void reserve(const AnotherStorageType& other) noexcept {
+      items.reserve(other.items.size());
+      data.reserve(other.data.size());
     }
 
     [[nodiscard]] composite_type composite(uint32_t id) const noexcept {
@@ -307,14 +313,14 @@ struct Symbol {
         in.read(reinterpret_cast<char*>(&first_to_load_i), sizeof(first_to_load_i));
       }
 
-      if (first_to_load_i != this->size()) {
+      if (first_to_load_i != data.size()) {
         if (mode == BareBones::SnugComposite::SerializationMode::SNAPSHOT) {
           throw BareBones::Exception(0x4c0ca0586da6da3f, "Attempt to load snapshot into non-empty data vector");
-        } else if (first_to_load_i < this->size()) {
-          throw BareBones::Exception(0x55cb9b02c23f7bbc, "Attempt to load segment over existing data");
+        } else if (first_to_load_i < data.size()) {
+          throw BareBones::Exception(0x55cb9b02c23f7bbd, "Attempt to load segment over existing data");
         } else {
-          throw BareBones::Exception(0x55cb9b02c23f7bbc, "Attempt to load incomplete data from segment, data vector length (%u) is less than segment size (%d)",
-                                     this->size(), first_to_load_i);
+          throw BareBones::Exception(0x55cb9b02c23f7bbd, "Attempt to load incomplete data from segment, data vector length (%u) is less than segment size (%d)",
+                                     data.size(), first_to_load_i);
         }
       }
 
@@ -323,7 +329,7 @@ struct Symbol {
       in.read(reinterpret_cast<char*>(&size_to_load), sizeof(size_to_load));
 
       // read data
-      data.resize(size() + size_to_load);
+      data.resize(data.size() + size_to_load);
       in.read(data.begin() + first_to_load_i, size_to_load);
 
       // read items
@@ -373,6 +379,10 @@ struct Symbol {
 
 template <template <class> class Vector>
 struct BareBones::IsTriviallyReallocatable<BareBones::SnugComposite::DecodingTable<PromPP::Primitives::SnugComposites::Filaments::Symbol, Vector>>
+    : std::true_type {};
+
+template <template <class> class Vector>
+struct BareBones::IsTriviallyReallocatable<BareBones::SnugComposite::V2::DecodingTable<PromPP::Primitives::SnugComposites::Filaments::Symbol, Vector>>
     : std::true_type {};
 
 namespace PromPP::Primitives::SnugComposites::Filaments {

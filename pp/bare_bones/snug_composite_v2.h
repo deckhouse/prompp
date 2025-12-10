@@ -212,9 +212,9 @@ class GenericDecodingTable {
 
       // data
       if (from != nullptr) {
-        res += storage_checkpoint_.save_size(&storage_ptr_, &from->storage_checkpoint_);
+        res += storage_checkpoint_.save_size(*storage_ptr_, size_to_save, &from->storage_checkpoint_);
       } else {
-        res += storage_checkpoint_.save_size(&storage_ptr_);
+        res += storage_checkpoint_.save_size(*storage_ptr_, size_to_save);
       }
 
       return res;
@@ -371,6 +371,74 @@ class GenericDecodingTable {
     return in;
   }
 
+  template <class InnerIteratorType>
+  class IteratorSentinel {
+    InnerIteratorType i_;
+
+   public:
+    inline __attribute__((always_inline)) explicit IteratorSentinel(InnerIteratorType i = InnerIteratorType()) noexcept : i_(i) {}
+
+    inline __attribute__((always_inline)) const InnerIteratorType& inner_iterator() const noexcept { return i_; }
+  };
+
+  template <class InnerIteratorType>
+  class ItemIDIterator {
+    const GenericDecodingTable* decoding_table_;
+    InnerIteratorType i_;
+
+   public:
+    using iterator_category = std::input_iterator_tag;
+    using value_type = typename Filament<Vector>::composite_type;
+    using difference_type = std::ptrdiff_t;
+
+    inline __attribute__((always_inline)) explicit ItemIDIterator(const GenericDecodingTable* decoding_table = nullptr,
+                                                                  InnerIteratorType i = InnerIteratorType()) noexcept
+        : decoding_table_(decoding_table), i_(i) {}
+    inline __attribute__((always_inline)) ItemIDIterator& operator++() {
+      ++i_;
+      return *this;
+    }
+
+    inline __attribute__((always_inline)) ItemIDIterator operator++(int) noexcept {
+      ItemIDIterator retval = *this;
+      ++(*this);
+      return retval;
+    }
+
+    inline __attribute__((always_inline)) bool operator==(const ItemIDIterator& other) const noexcept { return i_ == other.i_; }
+
+    template <class InnerIteratorSentinelType>
+    inline __attribute__((always_inline)) bool operator==(const IteratorSentinel<InnerIteratorSentinelType>& other) const noexcept {
+      return i_ == other.inner_iterator();
+    }
+
+    inline __attribute__((always_inline)) value_type operator*() const noexcept { return (*decoding_table_)[*i_]; }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t id() const noexcept { return *i_; }
+  };
+
+  template <class InnerIteratorType, class InnerIteratorSentinelType>
+  class Resolver {
+    using inner_iterator_type = InnerIteratorType;
+    using inner_iterator_sentinel_type = InnerIteratorSentinelType;
+
+    const GenericDecodingTable* decoding_table_;
+    inner_iterator_type begin_;
+    inner_iterator_sentinel_type end_;
+
+   public:
+    using value_type = typename Filament<Vector>::composite_type;
+
+    inline __attribute__((always_inline)) explicit Resolver(const GenericDecodingTable* decoding_table = nullptr,
+                                                            inner_iterator_type begin = inner_iterator_type(),
+                                                            inner_iterator_sentinel_type end = inner_iterator_sentinel_type()) noexcept
+        : decoding_table_(decoding_table), begin_(begin), end_(end) {}
+
+    inline __attribute__((always_inline)) auto begin() const noexcept { return ItemIDIterator<inner_iterator_type>(decoding_table_, begin_); }
+    inline __attribute__((always_inline)) auto end() const noexcept { return IteratorSentinel<inner_iterator_sentinel_type>(end_); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return end_ - begin_; }
+  };
+
   PROMPP_ALWAYS_INLINE auto begin() const noexcept { return storage_.begin(); }
   PROMPP_ALWAYS_INLINE auto end() const noexcept { return storage_.end(); }
 
@@ -432,7 +500,7 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
     return {};
   }
 
-  PROMPP_ALWAYS_INLINE auto checkpoint() const noexcept { return checkpoint_type(*this, next_item_index_impl()); }
+  PROMPP_ALWAYS_INLINE auto checkpoint() const noexcept { return checkpoint_type(*this, next_item_index_impl(), size()); }
 
   void shrink_to_checkpoint_size(const checkpoint_type& checkpoint) {
     if (checkpoint.next_item_index() != next_item_index_impl()) {
@@ -556,7 +624,7 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
   {
     assert(s.size() <= Base::size());
 
-    for (uint32_t i = s.size(); i != Base::items_.size(); ++i) {
+    for (uint32_t i = s.size(); i != Base::size(); ++i) {
       set_.erase(typename Base::Proxy(i));
     }
   }
