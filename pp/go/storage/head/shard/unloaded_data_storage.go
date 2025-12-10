@@ -45,6 +45,7 @@ type AppendFile interface {
 	Reader() (StorageReader, error)
 	Sync() error
 	IsEmpty() bool
+	Remove() error
 }
 
 // UnloadedDataSnapshotHeader stubs for recording snapshots.
@@ -173,7 +174,7 @@ func (s *UnloadedDataStorage) validateFormatVersion(reader StorageReader) (offse
 // Close closes the storage.
 func (s *UnloadedDataStorage) Close() (err error) {
 	if s.storage != nil {
-		err = s.storage.Close()
+		err = errors.Join(s.storage.Close(), s.storage.Remove())
 		s.storage = nil
 	}
 
