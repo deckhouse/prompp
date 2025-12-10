@@ -3,6 +3,8 @@
 #include <scope_exit.h>
 
 #include "bare_bones/exception.h"
+#include "bare_bones/iterator.h"
+#include "bare_bones/memory.h"
 #include "bare_bones/snug_composite.h"
 #include "bare_bones/stream_v_byte.h"
 #include "hash.h"
@@ -10,7 +12,7 @@
 namespace PromPP::Primitives::SnugComposites::Filaments {
 
 template <template <class> class Vector>
-class Symbol {
+struct Symbol {
   uint32_t pos_;
   uint32_t length_;
 
@@ -167,6 +169,204 @@ class Symbol {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t length() const noexcept { return length_; }
+
+  struct storage_type {
+    struct item_type {
+      uint32_t pos;
+      uint32_t length;
+    };
+
+    struct checkpoint_type {
+      uint32_t data_size;
+      uint32_t items_size;
+
+      using SerializationMode = BareBones::SnugComposite::SerializationMode;
+
+      template <BareBones::OutputStream S>
+      void save(S& out, const storage_type& storage, uint32_t id_offset, uint32_t id_count, checkpoint_type const* from = nullptr) const {
+        // write a version
+        out.put(1);
+
+        // write mode
+        SerializationMode mode = (from != nullptr) ? SerializationMode::DELTA : SerializationMode::SNAPSHOT;
+        out.put(static_cast<char>(mode));
+
+        // write pos of the first seq in the portion if we are writing delta
+        uint32_t first_to_save = 0;
+        if (from != nullptr) {
+          first_to_save = from->data_size;
+          out.write(reinterpret_cast<const char*>(&first_to_save), sizeof(first_to_save));
+        }
+
+        // write size
+        uint32_t size_to_save = data_size - first_to_save;
+        out.write(reinterpret_cast<char*>(&size_to_save), sizeof(size_to_save));
+
+        // write data
+        if (size_to_save > 0) {
+          out.write(&storage.data[first_to_save], size_to_save);
+        }
+
+        // write items
+        out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
+      }
+
+      uint32_t save_size(const storage_type&, uint32_t, uint32_t id_count, checkpoint_type const* from = nullptr) const {
+        uint32_t res = 0;
+
+        // version
+        ++res;
+
+        // mode
+        ++res;
+
+        // pos of first seq in the portion, if we are writing delta
+        uint32_t first_to_save = 0;
+        if (from != nullptr) {
+          first_to_save = from->data_size;
+          res += sizeof(uint32_t);  // first index
+        }
+
+        // size
+        const uint32_t size_to_save = data_size - first_to_save;
+        res += sizeof(uint32_t);
+
+        // data
+        res += size_to_save;
+
+        // items
+        res += sizeof(item_type) * id_count;
+
+        return res;
+      }
+    };
+
+    static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
+
+    Vector<char> data;
+    Vector<item_type> items;
+
+    [[nodiscard]] uint32_t size() const noexcept { return items.size(); }
+    [[nodiscard]] size_t remainder_size() const noexcept {
+      constexpr size_t max_ui32 = std::numeric_limits<uint32_t>::max();
+      assert(this->size() <= max_ui32);
+      return max_ui32 - this->size();
+    }
+
+    template <template <class> class OtherVector>
+    void reserve(const typename Symbol<OtherVector>::storage_type& other) noexcept {
+      items.reserve(other.items_.size());
+      data.reserve(other.data_.size());
+    }
+
+    [[nodiscard]] composite_type composite(uint32_t id) const noexcept {
+      const auto item = items[id];
+      return std::string_view(data.data() + item.pos, item.length);
+    }
+
+    void validate(uint32_t id) const {
+      if (const auto item = items[id]; item.pos + item.length > data.size()) {
+        throw BareBones::Exception(0x75555f55ebe357a3, "Symbol validation error: length is out of data vector range");
+      }
+    }
+
+    [[nodiscard]] uint32_t allocated_memory() const noexcept { return BareBones::mem::allocated_memory(data) + BareBones::mem::allocated_memory(items); }
+
+    [[nodiscard]] uint32_t next_item_index() const noexcept { return static_cast<uint32_t>(items.size()); }
+
+    [[nodiscard]] uint32_t emplace_back(composite_type str) noexcept {
+      const uint32_t id = items.size();
+      items.emplace_back(data.size(), str.length());
+      data.push_back(str.begin(), str.end());
+      return id;
+    }
+
+    [[nodiscard]] checkpoint_type checkpoint() const noexcept { return {data.size(), items.size()}; }
+    void rollback(const checkpoint_type& checkpoint) noexcept {
+      assert(checkpoint.data_size <= data.size());
+      assert(checkpoint.items_size <= items.size());
+      data.resize(checkpoint.data_size);
+      items.resize(checkpoint.items_size);
+    }
+
+    template <class InputStream>
+    auto load(InputStream& in, uint32_t items_size) {
+      // read version
+      const uint8_t version = in.get();
+      if (version != 1) {
+        throw BareBones::Exception(0x67c010edbd64e272,
+                                   "Invalid stream data version (%d) for loading into data vector (Symbol::data_type), only version 1 is supported", version);
+      }
+
+      // read mode
+      const auto mode = static_cast<BareBones::SnugComposite::SerializationMode>(in.get());
+
+      // read pos of the first symbol in the portion if we are reading wal
+      uint32_t first_to_load_i = 0;
+      if (mode == BareBones::SnugComposite::SerializationMode::DELTA) {
+        in.read(reinterpret_cast<char*>(&first_to_load_i), sizeof(first_to_load_i));
+      }
+
+      if (first_to_load_i != this->size()) {
+        if (mode == BareBones::SnugComposite::SerializationMode::SNAPSHOT) {
+          throw BareBones::Exception(0x4c0ca0586da6da3f, "Attempt to load snapshot into non-empty data vector");
+        } else if (first_to_load_i < this->size()) {
+          throw BareBones::Exception(0x55cb9b02c23f7bbc, "Attempt to load segment over existing data");
+        } else {
+          throw BareBones::Exception(0x55cb9b02c23f7bbc, "Attempt to load incomplete data from segment, data vector length (%u) is less than segment size (%d)",
+                                     this->size(), first_to_load_i);
+        }
+      }
+
+      // read size
+      uint32_t size_to_load;
+      in.read(reinterpret_cast<char*>(&size_to_load), sizeof(size_to_load));
+
+      // read data
+      data.resize(size() + size_to_load);
+      in.read(data.begin() + first_to_load_i, size_to_load);
+
+      // read items
+      const auto original_size = items.size();
+      items.resize(original_size + items_size);
+      in.read(reinterpret_cast<char*>(&items[original_size]), sizeof(item_type) * items_size);
+
+      return std::views::iota(original_size, items.size());
+    }
+
+    class iterator_type {
+     public:
+      using iterator_category = std::input_iterator_tag;
+      using value_type = composite_type;
+      using difference_type = std::ptrdiff_t;
+
+      iterator_type() = default;
+      explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : id_{id}, storage_ptr_(&storage) {}
+
+      iterator_type& operator++() noexcept {
+        ++id_;
+        return *this;
+      }
+
+      iterator_type operator++(int) noexcept {
+        iterator_type retval = *this;
+        ++(*this);
+        return retval;
+      }
+
+      bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_ && storage_ptr_ == other.storage_ptr_; }
+      bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == storage_ptr_->items.size(); }
+
+      value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
+
+     private:
+      uint32_t id_{0};
+      const storage_type* storage_ptr_;
+    };
+
+    auto begin() const noexcept { return iterator_type{*this, 0}; }
+    auto end() const noexcept { return iterator_type{*this, items.size()}; }
+  };
 };
 
 }  // namespace PromPP::Primitives::SnugComposites::Filaments
@@ -642,9 +842,9 @@ class LabelSet {
    public:
     using SymbolIdsCodec = BareBones::StreamVByte::Codec1234;
 
-    symbols_tables_type symbols_tables;
+    symbols_tables_type symbols_tables;  // lns -> symbols
     symbols_ids_sequences_type symbols_ids_sequences;
-    LabelNameSetsTableType<Vector> label_name_sets_table;
+    LabelNameSetsTableType<Vector> label_name_sets_table;  // lns -> lable name set -> symbols
     uint32_t next_item_index_{};
     uint32_t shrinked_size_{};
     data_type() noexcept = default;

@@ -5,6 +5,8 @@
 #include "primitives/label_set.h"
 #include "primitives/snug_composites_filaments.h"
 
+#include "bare_bones/snug_composite_v2.h"
+
 namespace {
 
 using BareBones::Vector;
@@ -331,6 +333,70 @@ TEST_F(ShrinkableEncodingBimapLabelSetFixture, CheckSaveSize) {
 
   // Assert
   EXPECT_EQ(ss.str().length(), save_size);
+}
+
+template <template <class> class Vector>
+using DecodingTableV2 = BareBones::SnugComposite::V2::DecodingTable<PromPP::Primitives::SnugComposites::Filaments::Symbol, Vector>;
+
+template <template <class> class Vector>
+using EncodingBimapV2 = BareBones::SnugComposite::V2::EncodingBimap<PromPP::Primitives::SnugComposites::Filaments::Symbol, Vector>;
+
+class V2Test : public testing::Test {
+ protected:
+  EncodingBimapV2<Vector> encoding_table_;
+  DecodingTableV2<Vector> decoding_table_;
+};
+
+TEST_F(V2Test, Test) {
+  // Arrange
+  const std::array<std::string, 4> arr = {"aboba", "lol", "kek", "cheburek"};
+
+  // Act
+  const auto id0 = encoding_table_.find_or_emplace(arr[0]);
+  const auto id1 = encoding_table_.find_or_emplace(arr[1]);
+  const auto id2 = encoding_table_.find_or_emplace(arr[2]);
+  const auto id3 = encoding_table_.find_or_emplace(arr[3]);
+
+  // Assert
+  EXPECT_EQ(encoding_table_.size(), 4);
+
+  EXPECT_EQ(encoding_table_[id0], arr[0]);
+  EXPECT_EQ(encoding_table_[id1], arr[1]);
+  EXPECT_EQ(encoding_table_[id2], arr[2]);
+  EXPECT_EQ(encoding_table_[id3], arr[3]);
+
+  EXPECT_EQ(encoding_table_.find(arr[0]), id0);
+  EXPECT_EQ(encoding_table_.find(arr[1]), id1);
+  EXPECT_EQ(encoding_table_.find(arr[2]), id2);
+  EXPECT_EQ(encoding_table_.find(arr[3]), id3);
+
+  EXPECT_TRUE(std::ranges::equal(arr, encoding_table_));
+}
+
+TEST_F(V2Test, CheckpointTest) {
+  // Arrange
+  const std::array<std::string, 4> arr = {"aboba", "lol", "kek", "cheburek"};
+
+  // Act
+  const auto id0 = encoding_table_.find_or_emplace(arr[0]);
+  const auto id1 = encoding_table_.find_or_emplace(arr[1]);
+  const auto id2 = encoding_table_.find_or_emplace(arr[2]);
+  const auto id3 = encoding_table_.find_or_emplace(arr[3]);
+
+  const auto checkpoint = encoding_table_.checkpoint();
+  std::stringstream ss;
+  checkpoint.save(ss);
+  decoding_table_.load(ss);
+
+  // Assert
+  EXPECT_EQ(decoding_table_.size(), 4);
+
+  EXPECT_EQ(decoding_table_[id0], arr[0]);
+  EXPECT_EQ(decoding_table_[id1], arr[1]);
+  EXPECT_EQ(decoding_table_[id2], arr[2]);
+  EXPECT_EQ(decoding_table_[id3], arr[3]);
+
+  EXPECT_TRUE(std::ranges::equal(arr, decoding_table_));
 }
 
 }  // namespace

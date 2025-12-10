@@ -9,6 +9,10 @@
 
 namespace BareBones::iterator {
 
+// std-compatible universal sentinel
+using IteratorSentinelType = std::default_sentinel_t;
+inline constexpr IteratorSentinelType kSentinel = {};
+
 template <class Operation>
 class OperationIterator {
  public:

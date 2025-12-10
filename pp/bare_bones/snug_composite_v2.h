@@ -20,8 +20,8 @@ namespace BareBones::SnugComposite::V2 {
 
 /**
  * Serialization mode used to annotate encoded data and how to apply it on container.
- * We use Delta for save difference between two states of container. It doesn't matter
- * how first state was made (from snapshot or other delta). Snapshot may be explain
+ * We use Delta to save the difference between two states of container. It doesn't matter
+ * how the first state was made (from snapshot or other delta). Snapshot may be explained
  * as delta from init (zero) state.
  */
 enum class SerializationMode : char { SNAPSHOT = 1, DELTA = 2 };
@@ -56,7 +56,7 @@ class GenericDecodingTable {
 
  public:
   using storage_type = Filament<Vector>::storage_type;
-  using value_type = typename storage_type::composite_type;
+  using value_type = Filament<Vector>::composite_type;
 
   static constexpr bool kIsReadOnly = IsSharedSpan<Vector<uint8_t>>::value;
 
@@ -131,24 +131,20 @@ class GenericDecodingTable {
     const GenericDecodingTable* decoding_table_;
   };
 
-  template <class DecodingTable>
   class Checkpoint {
-    const DecodingTable* decoding_table_;
+    const storage_type* storage_ptr_;
     uint32_t next_item_index_;
     uint32_t size_;
-    typename storage_type::checkpoint_type data_checkpoint_;
+    typename storage_type::checkpoint_type storage_checkpoint_;
 
    public:
-    explicit PROMPP_ALWAYS_INLINE Checkpoint(const DecodingTable& decoding_table, uint32_t next_item_index) noexcept
-        : decoding_table_(&decoding_table),
-          next_item_index_(next_item_index),
-          size_(decoding_table.size()),
-          data_checkpoint_(decoding_table.data().checkpoint()) {}
+    explicit PROMPP_ALWAYS_INLINE Checkpoint(const storage_type& storage, uint32_t next_item_index, uint32_t size) noexcept
+        : storage_ptr_(&storage), next_item_index_(next_item_index), size_(size), storage_checkpoint_(storage.checkpoint()) {}
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return size_; }
     [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return next_item_index_; }
 
-    const typename storage_type::checkpoint_type& data_checkpoint() const noexcept { return data_checkpoint_; }
+    const typename storage_type::checkpoint_type& storage_checkpoint() const noexcept { return storage_checkpoint_; }
 
     template <OutputStream S>
     void save(S& out, const Checkpoint* from = nullptr) const {
@@ -156,20 +152,21 @@ class GenericDecodingTable {
       auto sg1 = std::experimental::scope_exit([&]() { out.exceptions(original_exceptions); });
       out.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 
-      // write version
+      // write a version
       out.put(2);
 
       // write mode
       SerializationMode mode = (from != nullptr) ? SerializationMode::DELTA : SerializationMode::SNAPSHOT;
       out.put(static_cast<char>(mode));
 
-      // write index of first item in the portion
+      // write index of the first item in the portion
       uint32_t first_to_save_i = 0;
       if (from != nullptr) {
         first_to_save_i = from->next_item_index_;
         out.write(reinterpret_cast<const char*>(&from->next_item_index_), sizeof(from->next_item_index_));
       }
-      const uint32_t first_item_index_in_decoding_table = decoding_table_->next_item_index() - decoding_table_->items().size();
+      const uint32_t first_item_index_in_decoding_table = next_item_index_ - size_;
+      const uint32_t id_offset = first_to_save_i - first_item_index_in_decoding_table;
       assert(first_to_save_i >= first_item_index_in_decoding_table);
 
       // write size
@@ -180,15 +177,11 @@ class GenericDecodingTable {
         return;
       }
 
-      // write items
-      out.write(reinterpret_cast<const char*>(&decoding_table_->items()[first_to_save_i - first_item_index_in_decoding_table]),
-                sizeof(Filament<Vector>) * size_to_save);
-
       // write data
       if (from != nullptr) {
-        data_checkpoint_.save(out, decoding_table_->data(), &from->data_checkpoint_);
+        storage_checkpoint_.save(out, *storage_ptr_, id_offset, size_to_save, &from->storage_checkpoint_);
       } else {
-        data_checkpoint_.save(out, decoding_table_->data());
+        storage_checkpoint_.save(out, *storage_ptr_, id_offset, size_to_save);
       }
     }
 
@@ -202,7 +195,7 @@ class GenericDecodingTable {
       // version is written and read by methods put() and get() and they write and read 1 byte
       size_t res = 1 + sizeof(SerializationMode);
 
-      // index of first item in the portion
+      // index of the first item in the portion
       uint32_t first_to_save_i = 0;
       if (from != nullptr) {
         first_to_save_i = from->next_item_index_;
@@ -217,22 +210,19 @@ class GenericDecodingTable {
       if (!size_to_save)
         return res;
 
-      // items
-      res += sizeof(Filament<Vector>) * size_to_save;
-
       // data
       if (from != nullptr) {
-        res += data_checkpoint_.save_size(decoding_table_->data(), &from->data_checkpoint_);
+        res += storage_checkpoint_.save_size(&storage_ptr_, &from->storage_checkpoint_);
       } else {
-        res += data_checkpoint_.save_size(decoding_table_->data());
+        res += storage_checkpoint_.save_size(&storage_ptr_);
       }
 
       return res;
     }
 
     /**
-     * ATTENTION! This class persists only pointers to checkpoint. It's a user resposability
-     * to prevent using delta out of checkpoints scope!
+     * ATTENTION! This class persists only pointers to checkpoint. It's a user responsibility
+     * to prevent using delta out of checkpoint scope!
      */
     class Delta {
       Checkpoint const* from_;
@@ -262,7 +252,7 @@ class GenericDecodingTable {
   storage_type storage_;
 
  public:
-  using checkpoint_type = Checkpoint<GenericDecodingTable>;
+  using checkpoint_type = Checkpoint;
   using delta_type = typename checkpoint_type::Delta;
 
   GenericDecodingTable() noexcept = default;
@@ -284,7 +274,7 @@ class GenericDecodingTable {
 
   template <class DerivedOther, template <template <class> class> class FilamentOther, template <class> class VectorOther>
   PROMPP_ALWAYS_INLINE void reserve(const GenericDecodingTable<DerivedOther, FilamentOther, VectorOther>& other) {
-    storage_.reserve(other.items_.size());
+    storage_.reserve(other.storage_);
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept {
@@ -295,18 +285,18 @@ class GenericDecodingTable {
     }
   }
 
-  PROMPP_ALWAYS_INLINE auto checkpoint() const noexcept { return checkpoint_type(*this, storage_.size()); }
+  PROMPP_ALWAYS_INLINE auto checkpoint() const noexcept { return checkpoint_type(storage_, next_item_index(), size()); }
 
-  PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& s) noexcept
+  PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& checkpoint) noexcept
     requires(!kIsReadOnly)
   {
     if constexpr (has_rollback<Derived, checkpoint_type>) {
-      static_cast<Derived*>(this)->rollback_impl(s);
+      static_cast<Derived*>(this)->rollback_impl(checkpoint);
     }
 
     if constexpr (!kIsReadOnly) {
-      assert(s.size() <= storage_.size());
-      storage_.rollback(s.data_checkpoint());
+      assert(checkpoint.size() <= storage_.size());
+      storage_.rollback(checkpoint.storage_checkpoint());
     }
   }
 
@@ -315,7 +305,7 @@ class GenericDecodingTable {
     // read version
     const uint8_t version = in.get();
 
-    // return successfully if stream is empty
+    // return successfully if the stream is empty
     if (in.eof()) {
       return;
     }
@@ -349,9 +339,18 @@ class GenericDecodingTable {
       }
     }
 
+    // read size
+    uint32_t size_to_load;
+    in.read(reinterpret_cast<char*>(&size_to_load), sizeof(size_to_load));
+
+    // read is completed if there are no items
+    if (!size_to_load) {
+      return;
+    }
+
     auto storage_checkpoint = storage_.checkpoint();
     auto sg2 = std::experimental::scope_fail([&]() { storage_.rollback(storage_checkpoint); });
-    const auto loaded_range = storage_.load(in);
+    const auto loaded_range = storage_.load(in, size_to_load);
 
     // post-processing
     if constexpr (has_after_items_load<Derived, decltype(loaded_range)>) {
@@ -518,7 +517,7 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
   template <class Class>
   PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(const Class& c, size_t hashval) noexcept {
     return *set_.lazy_emplace_with_hash(c, phmap::phmap_mix<sizeof(size_t)>()(hashval), [&](const auto& ctor) {
-      const uint32_t id = Base::storage_.emplace_back(Base::data_, c);
+      const uint32_t id = Base::storage_.emplace_back(c);
       ctor(id);
     });
   }
@@ -530,7 +529,7 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
     }
 
     return *set_.lazy_emplace(c, [&](const auto& ctor) {
-      uint32_t new_id = Base::storage_.emplace_back(Base::data_, c, std::forward<Args>(args)...);
+      uint32_t new_id = Base::storage_.emplace_back(c, std::forward<Args>(args)...);
       ctor(new_id);
       cache[id] = new_id;
     });
