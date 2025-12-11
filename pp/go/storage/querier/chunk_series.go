@@ -21,6 +21,7 @@ type ChunkSeriesSet struct {
 
 	index            int
 	lastRecodedChunk *cppbridge.RecodedChunk
+	builder          labels.ScratchBuilder
 	chunkSeries      *ChunkSeries
 
 	recoderIsExhausted bool
@@ -72,17 +73,14 @@ func (css *ChunkSeriesSet) Next() bool {
 		css.lastRecodedChunk = nil
 	}
 
-	var (
-		lsID     uint32
-		lsLength uint16
-	)
+	var lsID uint32
 
 	for {
 		if css.index >= css.lssQueryResult.Len() {
 			return false
 		}
 
-		lsID, lsLength = css.lssQueryResult.GetByIndex(css.index)
+		lsID, _ = css.lssQueryResult.GetByIndex(css.index)
 
 		if lsID == seriesID {
 			break
@@ -90,9 +88,9 @@ func (css *ChunkSeriesSet) Next() bool {
 
 		css.index++
 	}
-
+	css.builder.Reset()
 	css.chunkSeries = &ChunkSeries{
-		labelSet:      labels.NewLabelsWithLSS(css.labelSetSnapshot, lsID, lsLength),
+		labelSet:      labels.NewLabelsWithLSS(css.labelSetSnapshot, lsID, css.builder),
 		recodedChunks: recodedChunks,
 	}
 
