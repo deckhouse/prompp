@@ -1,5 +1,8 @@
 run:
   timeout: 15m
+  build-tags:
+    - static
+    - stringlabels
 
 output:
   sort-results: true
