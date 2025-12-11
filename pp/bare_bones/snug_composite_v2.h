@@ -55,8 +55,9 @@ class GenericDecodingTable {
   friend class GenericDecodingTable;
 
  public:
-  using storage_type = Filament<Vector>::storage_type;
-  using value_type = Filament<Vector>::composite_type;
+  using filament_type = Filament<Vector>;
+  using storage_type = filament_type::storage_type;
+  using value_type = storage_type::composite_type;
 
   static constexpr bool kIsReadOnly = IsSharedSpan<Vector<uint8_t>>::value;
 
@@ -268,9 +269,11 @@ class GenericDecodingTable {
 
   PROMPP_ALWAYS_INLINE value_type operator[](uint32_t id) const noexcept { return storage_.composite(id); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_.size(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_.count(); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return mem::allocated_memory(storage_); }
+
+  PROMPP_ALWAYS_INLINE const storage_type& data() const noexcept { return storage_; }
 
   template <class DerivedOther, template <template <class> class> class FilamentOther, template <class> class VectorOther>
   PROMPP_ALWAYS_INLINE void reserve(const GenericDecodingTable<DerivedOther, FilamentOther, VectorOther>& other) {
@@ -295,7 +298,7 @@ class GenericDecodingTable {
     }
 
     if constexpr (!kIsReadOnly) {
-      assert(checkpoint.size() <= storage_.size());
+      assert(checkpoint.size() <= size());
       storage_.rollback(checkpoint.storage_checkpoint());
     }
   }
@@ -330,12 +333,12 @@ class GenericDecodingTable {
     if (first_to_load_i != next_item_index()) {
       if (mode == SerializationMode::SNAPSHOT) {
         throw BareBones::Exception(0x7bcd6011e39bbabc, "Attempt to load snapshot into non-empty DecodingTable");
-      } else if (first_to_load_i < storage_.size()) {
+      } else if (first_to_load_i < size()) {
         throw BareBones::Exception(0x3387739a7b4f574a, "Attempt to load segment over existing DecodingTable data");
       } else {
         throw BareBones::Exception(0x4ece66e098927bc6,
-                                   "Attempt to load incomplete data from segment, DecodingTable data vector length (%u) is less than segment size(%d)",
-                                   storage_.size(), first_to_load_i);
+                                   "Attempt to load incomplete data from segment, DecodingTable data vector length (%u) is less than segment size(%d)", size(),
+                                   first_to_load_i);
       }
     }
 
