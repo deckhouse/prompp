@@ -174,7 +174,10 @@ func (s *UnloadedDataStorage) validateFormatVersion(reader StorageReader) (offse
 // Close closes the storage.
 func (s *UnloadedDataStorage) Close() (err error) {
 	if s.storage != nil {
-		err = errors.Join(s.storage.Close(), s.storage.Remove())
+		err = s.storage.Close()
+		if rErr := s.storage.Remove(); err != nil && !errors.Is(rErr, os.ErrNotExist) {
+			err = errors.Join(err, rErr)
+		}
 		s.storage = nil
 	}
 
