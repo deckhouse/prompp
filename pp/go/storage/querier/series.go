@@ -208,7 +208,7 @@ func (s *SeriesSet) Next() bool {
 	s.series = append(s.series, NewSeries(
 		s.mint,
 		s.maxt,
-		labels.NewLabelsWithLSS(s.labelSetSnapshot, seriesID, s.builder),
+		labels.NewLabelsWithLSS(s.labelSetSnapshot, seriesID, &s.builder),
 		s.serializedData,
 		chunkRef,
 	))
@@ -288,7 +288,7 @@ func (ss *InstantSeriesSet) Next() bool {
 		labelSet: labels.NewLabelsWithLSS(
 			ss.labelSetSnapshot,
 			lsID,
-			ss.builder,
+			&ss.builder,
 		),
 		sample: &ss.samples[ss.nextSampleIndex],
 	})

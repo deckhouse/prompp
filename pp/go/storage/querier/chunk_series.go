@@ -90,7 +90,7 @@ func (css *ChunkSeriesSet) Next() bool {
 	}
 	css.builder.Reset()
 	css.chunkSeries = &ChunkSeries{
-		labelSet:      labels.NewLabelsWithLSS(css.labelSetSnapshot, lsID, css.builder),
+		labelSet:      labels.NewLabelsWithLSS(css.labelSetSnapshot, lsID, &css.builder),
 		recodedChunks: recodedChunks,
 	}
 
