@@ -12,6 +12,11 @@ run:
 
   # include test files or not, default is true
   tests: true
+
+  build-tags:
+    - static
+    - stringlabels
+
 # output configuration options
 output:
   # print lines of code with issue, default is true

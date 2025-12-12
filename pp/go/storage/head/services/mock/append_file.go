@@ -26,6 +26,9 @@ import (
 //			ReaderFunc: func() (shard.StorageReader, error) {
 //				panic("mock out the Reader method")
 //			},
+//			RemoveFunc: func() error {
+//				panic("mock out the Remove method")
+//			},
 //			SyncFunc: func() error {
 //				panic("mock out the Sync method")
 //			},
@@ -51,6 +54,9 @@ type AppendFileMock struct {
 	// ReaderFunc mocks the Reader method.
 	ReaderFunc func() (shard.StorageReader, error)
 
+	// RemoveFunc mocks the Remove method.
+	RemoveFunc func() error
+
 	// SyncFunc mocks the Sync method.
 	SyncFunc func() error
 
@@ -71,6 +77,9 @@ type AppendFileMock struct {
 		// Reader holds details about calls to the Reader method.
 		Reader []struct {
 		}
+		// Remove holds details about calls to the Remove method.
+		Remove []struct {
+		}
 		// Sync holds details about calls to the Sync method.
 		Sync []struct {
 		}
@@ -84,6 +93,7 @@ type AppendFileMock struct {
 	lockIsEmpty sync.RWMutex
 	lockOpen    sync.RWMutex
 	lockReader  sync.RWMutex
+	lockRemove  sync.RWMutex
 	lockSync    sync.RWMutex
 	lockWrite   sync.RWMutex
 }
@@ -193,6 +203,33 @@ func (mock *AppendFileMock) ReaderCalls() []struct {
 	mock.lockReader.RLock()
 	calls = mock.calls.Reader
 	mock.lockReader.RUnlock()
+	return calls
+}
+
+// Remove calls RemoveFunc.
+func (mock *AppendFileMock) Remove() error {
+	if mock.RemoveFunc == nil {
+		panic("AppendFileMock.RemoveFunc: method is nil but AppendFile.Remove was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockRemove.Lock()
+	mock.calls.Remove = append(mock.calls.Remove, callInfo)
+	mock.lockRemove.Unlock()
+	return mock.RemoveFunc()
+}
+
+// RemoveCalls gets all the calls that were made to Remove.
+// Check the length with:
+//
+//	len(mockedAppendFile.RemoveCalls())
+func (mock *AppendFileMock) RemoveCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockRemove.RLock()
+	calls = mock.calls.Remove
+	mock.lockRemove.RUnlock()
 	return calls
 }
 
