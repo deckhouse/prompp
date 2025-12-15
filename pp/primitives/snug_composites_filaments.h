@@ -887,7 +887,8 @@ class LabelNameSet {
         symbols_ids_sequences.reserve(symbols_ids_sequences.size() + size);
       }
 
-      for (auto it = label_name_set.begin(), end = label_name_set.end(); it != end; ++it) {
+      const auto end = label_name_set.end();
+      for (auto it = label_name_set.begin(); it != end; ++it) {
         symbols_ids_sequences.push_back(find_or_emplace_label_name(it, std::forward<Cache>(cache)));
         if constexpr (!BareBones::concepts::has_size<OtherLabelNameSet>) {
           ++size;
