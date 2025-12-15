@@ -374,73 +374,6 @@ class GenericDecodingTable {
     return in;
   }
 
-  template <class InnerIteratorType>
-  class IteratorSentinel {
-    InnerIteratorType i_;
-
-   public:
-    PROMPP_ALWAYS_INLINE explicit IteratorSentinel(InnerIteratorType i = InnerIteratorType()) noexcept : i_(i) {}
-
-    PROMPP_ALWAYS_INLINE const InnerIteratorType& inner_iterator() const noexcept { return i_; }
-  };
-
-  template <class InnerIteratorType>
-  class ItemIDIterator {
-    const GenericDecodingTable* decoding_table_;
-    InnerIteratorType i_;
-
-   public:
-    using iterator_category = std::input_iterator_tag;
-    using value_type = typename Filament<Vector>::composite_type;
-    using difference_type = std::ptrdiff_t;
-
-    PROMPP_ALWAYS_INLINE explicit ItemIDIterator(const GenericDecodingTable* decoding_table = nullptr, InnerIteratorType i = InnerIteratorType()) noexcept
-        : decoding_table_(decoding_table), i_(i) {}
-    PROMPP_ALWAYS_INLINE ItemIDIterator& operator++() {
-      ++i_;
-      return *this;
-    }
-
-    PROMPP_ALWAYS_INLINE ItemIDIterator operator++(int) noexcept {
-      ItemIDIterator retval = *this;
-      ++(*this);
-      return retval;
-    }
-
-    PROMPP_ALWAYS_INLINE bool operator==(const ItemIDIterator& other) const noexcept { return i_ == other.i_; }
-
-    template <class InnerIteratorSentinelType>
-    PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel<InnerIteratorSentinelType>& other) const noexcept {
-      return i_ == other.inner_iterator();
-    }
-
-    PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return (*decoding_table_)[*i_]; }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t id() const noexcept { return *i_; }
-  };
-
-  template <class InnerIteratorType, class InnerIteratorSentinelType>
-  class Resolver {
-    using inner_iterator_type = InnerIteratorType;
-    using inner_iterator_sentinel_type = InnerIteratorSentinelType;
-
-    const GenericDecodingTable* decoding_table_;
-    inner_iterator_type begin_;
-    inner_iterator_sentinel_type end_;
-
-   public:
-    using value_type = typename Filament<Vector>::composite_type;
-
-    PROMPP_ALWAYS_INLINE explicit Resolver(const GenericDecodingTable* decoding_table = nullptr,
-                                           inner_iterator_type begin = inner_iterator_type(),
-                                           inner_iterator_sentinel_type end = inner_iterator_sentinel_type()) noexcept
-        : decoding_table_(decoding_table), begin_(begin), end_(end) {}
-
-    PROMPP_ALWAYS_INLINE auto begin() const noexcept { return ItemIDIterator<inner_iterator_type>(decoding_table_, begin_); }
-    PROMPP_ALWAYS_INLINE auto end() const noexcept { return IteratorSentinel<inner_iterator_sentinel_type>(end_); }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return end_ - begin_; }
-  };
-
   PROMPP_ALWAYS_INLINE auto begin() const noexcept { return storage_.begin(); }
   PROMPP_ALWAYS_INLINE auto end() const noexcept { return storage_.end(); }
 
@@ -460,8 +393,6 @@ template <template <template <class> class> class Filament, template <class> cla
 class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEncodingBimap<Filament, Vector>, Filament, Vector> {
  public:
   using Base = GenericDecodingTable<ShrinkableEncodingBimap, Filament, Vector>;
-  // using typename Base::checkpoint_type;
-  // using delta_type = typename checkpoint_type::Delta;
   using checkpoint_type = typename Base::checkpoint_type;
   using value_type = typename Base::value_type;
 
@@ -504,8 +435,6 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
     }
     return {};
   }
-
-  // PROMPP_ALWAYS_INLINE auto checkpoint() const noexcept { return checkpoint_type(*this, next_item_index_impl(), size()); }
 
   void shrink_to_checkpoint_size(const checkpoint_type& checkpoint) {
     if (checkpoint.next_item_index() != next_item_index_impl()) {

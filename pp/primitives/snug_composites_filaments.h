@@ -172,6 +172,8 @@ class Symbol {
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t length() const noexcept { return length_; }
 
   struct storage_type {
+    static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
+
     using composite_type = std::string_view;
     struct item_type {
       uint32_t pos;
@@ -242,8 +244,6 @@ class Symbol {
         return res;
       }
     };
-
-    static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
 
     storage_type() noexcept = default;
     template <class AnotherStorageType>
@@ -666,33 +666,76 @@ class LabelNameSet {
 
  public:
   struct storage_type {
+    static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
+
     using symbols_table_type = SymbolsTableType<Vector>;
     using symbols_ids_sequences_type = Vector<uint32_t>;
-
-    class composite_type : public symbols_table_type::template Resolver<typename symbols_ids_sequences_type::const_iterator,
-                                                                        typename symbols_ids_sequences_type::const_iterator> {
-      using Base = typename symbols_table_type::template Resolver<typename symbols_ids_sequences_type::const_iterator,
-                                                                  typename symbols_ids_sequences_type::const_iterator>;
-
-     public:
-      using Base::Base;
-
-      template <class T>
-      PROMPP_ALWAYS_INLINE bool operator==(const T& b) const noexcept {
-        return std::ranges::equal(Base::begin(), Base::end(), b.begin(), b.end());
-      }
-
-      template <class T>
-      PROMPP_ALWAYS_INLINE bool operator<(const T& b) const noexcept {
-        return std::ranges::lexicographical_compare(Base::begin(), Base::end(), b.begin(), b.end());
-      }
-
-      PROMPP_ALWAYS_INLINE friend size_t hash_value(const composite_type& lns) noexcept { return hash::hash_of_string_list(lns); }
-    };
 
     struct item_type {
       uint32_t pos;
       uint32_t size;
+    };
+
+    class composite_type {
+     public:
+      class iterator_type {
+       public:
+        using iterator_category = std::input_iterator_tag;
+        using value_type = typename symbols_table_type::value_type;
+        using difference_type = std::ptrdiff_t;
+
+        iterator_type() = default;
+        explicit iterator_type(const symbols_table_type* symbols_table_ptr, symbols_ids_sequences_type::const_iterator it) noexcept
+            : symbols_table_ptr_{symbols_table_ptr}, symbols_ids_it_{it} {}
+
+        iterator_type& operator++() noexcept {
+          ++symbols_ids_it_;
+          return *this;
+        }
+
+        iterator_type operator++(int) noexcept {
+          iterator_type retval = *this;
+          ++(*this);
+          return retval;
+        }
+        bool operator==(const iterator_type& other) const noexcept {
+          return symbols_table_ptr_ == other.symbols_table_ptr_ && symbols_ids_it_ == other.symbols_ids_it_;
+        }
+
+        value_type operator*() const noexcept { return symbols_table_ptr_->operator[](*symbols_ids_it_); }
+
+        [[nodiscard]] uint32_t id() const noexcept { return *symbols_ids_it_; }
+
+       private:
+        const symbols_table_type* symbols_table_ptr_;
+        symbols_ids_sequences_type::const_iterator symbols_ids_it_;
+      };
+      using value_type = iterator_type::value_type;
+
+      composite_type() = default;
+      explicit composite_type(const symbols_table_type* symbols_table_ptr, symbols_ids_sequences_type::const_iterator symbols_ids_it, uint32_t size)
+          : symbols_table_ptr_{symbols_table_ptr}, symbols_ids_it_{symbols_ids_it}, size_{size} {}
+
+      auto begin() const noexcept { return iterator_type{symbols_table_ptr_, symbols_ids_it_}; }
+      auto end() const noexcept { return iterator_type{symbols_table_ptr_, symbols_ids_it_ + size()}; }
+      [[nodiscard]] size_t size() const noexcept { return size_; }
+
+      template <class T>
+      bool operator==(const T& other) const noexcept {
+        return std::ranges::equal(begin(), end(), other.begin(), other.end());
+      }
+
+      template <class T>
+      bool operator<(const T& other) const noexcept {
+        return std::ranges::lexicographical_compare(begin(), end(), other.begin(), other.end());
+      }
+
+      friend size_t hash_value(const composite_type& lns) noexcept { return hash::hash_of_string_list(lns); }
+
+     private:
+      const symbols_table_type* symbols_table_ptr_;
+      symbols_ids_sequences_type::const_iterator symbols_ids_it_;
+      uint32_t size_{};
     };
 
     struct checkpoint_type {
@@ -774,8 +817,6 @@ class LabelNameSet {
       }
     };
 
-    static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
-
     storage_type() noexcept = default;
     template <class AnotherStorageType>
       requires kIsReadOnly
@@ -792,7 +833,7 @@ class LabelNameSet {
       constexpr size_t max_ui32 = std::numeric_limits<uint32_t>::max();
       assert(symbols_ids_sequences.size() <= max_ui32);
 
-      size_t remainder_for_symbols = max_ui32 - symbols_ids_sequences.size();
+      const size_t remainder_for_symbols = max_ui32 - symbols_ids_sequences.size();
       return std::min(symbols_table.remainder_size(), remainder_for_symbols);
     }
 
@@ -806,17 +847,17 @@ class LabelNameSet {
     [[nodiscard]] composite_type composite(uint32_t id) const noexcept {
       const auto item = items[id];
       const auto begin = symbols_ids_sequences.begin() + item.pos;
-      return composite_type(&symbols_table, begin, begin + item.size);
+      return composite_type(&symbols_table, begin, item.size);
     }
 
     void validate(uint32_t id) const {
-      const auto item = items[id];
+      const auto [pos, size] = items[id];
 
-      if (item.pos + item.size > symbols_ids_sequences.size()) {
+      if (pos + size > symbols_ids_sequences.size()) {
         throw BareBones::Exception(0x45e8bdc1455fd8e4, "LabelSetNames data validation error: expected LabelSetNames length is out of data vector range");
       }
 
-      for (auto i = symbols_ids_sequences.begin() + item.pos; i != symbols_ids_sequences.begin() + item.pos + item.size; ++i) {
+      for (auto i = symbols_ids_sequences.begin() + pos; i != symbols_ids_sequences.begin() + pos + size; ++i) {
         if (*i >= symbols_table.size()) {
           throw BareBones::Exception(0x218410dde097cc6b,
                                      "LabelSetNames data validation error: expected LabelSetNames length is out of data symbols table range");
@@ -951,7 +992,7 @@ class LabelNameSet {
 
    private:
     template <class LabelNameIterator, class Cache>
-    PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_label_name(const LabelNameIterator& label_name, Cache&& cache) {
+    uint32_t find_or_emplace_label_name(const LabelNameIterator& label_name, Cache&& cache) {
       if constexpr (use_find_or_emplace_with_cache<Cache, LabelNameIterator, symbols_table_type, decltype(*label_name)>) {
         symbols_table.find_or_emplace_with_cache(*label_name, label_name.id(), cache.names);
       }
@@ -1525,6 +1566,7 @@ class LabelSet {
  public:
   struct storage_type {
     static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
+
     using SymbolIdsCodec = BareBones::StreamVByte::Codec1234;
     using symbols_tables_type = std::conditional_t<kIsReadOnly, BareBones::Vector<SymbolsTableType<Vector>>, Vector<std::unique_ptr<SymbolsTableType<Vector>>>>;
     using symbols_ids_sequences_type = Vector<uint8_t>;
@@ -1839,41 +1881,40 @@ class LabelSet {
     }
 
     [[nodiscard]] composite_type composite(uint32_t id) const noexcept {
-      const auto item = items[id];
+      const auto [lns_id, pos] = items[id];
 
-      auto lns = label_name_sets_table[item.lns_id];
-      auto [values_begin, values_end] =
-          BareBones::StreamVByte::decoder<typename storage_type::SymbolIdsCodec>(symbols_ids_sequences.begin() + item.pos - shrinked_size, lns.size());
+      auto lns = label_name_sets_table[lns_id];
+      auto [values_begin, values_end] = BareBones::StreamVByte::decoder<SymbolIdsCodec>(symbols_ids_sequences.begin() + pos - shrinked_size, lns.size());
 
-      return composite_type(this, std::move(lns), std::move(values_begin), std::move(values_end), item.lns_id);
+      return composite_type(this, std::move(lns), std::move(values_begin), std::move(values_end), lns_id);
     }
 
     void validate(uint32_t id) const {
-      const auto item = items[id];
+      const auto [lns_id, pos] = items[id];
 
-      if (item.lns_id >= label_name_sets_table.size()) {
+      if (lns_id >= label_name_sets_table.size()) {
         throw BareBones::Exception(0x48dd6c9d357d3a7e,
                                    "LabelSets data validation error: expected LabelSets length is out of label name sets table vector range");
       }
 
-      const auto& lns = label_name_sets_table[item.lns_id];
+      const auto& lns = label_name_sets_table[lns_id];
 
       // check that streamvbyte keys are in range
       auto keys_size = BareBones::StreamVByte::keys_size(lns.size());
-      if (item.pos - shrinked_size + keys_size > symbols_ids_sequences.size()) {
+      if (pos - shrinked_size + keys_size > symbols_ids_sequences.size()) {
         throw BareBones::Exception(0x22f5a82dd120e0e7, "LabelSets data validation error: expected LabelSets keys length is out of data symbols vector range");
       }
 
       // check that streamvbyte data is in range
       const uint32_t data_size =
-          BareBones::StreamVByte::decode_data_size<BareBones::StreamVByte::Codec1234>(lns.size(), symbols_ids_sequences.begin() + item.pos - shrinked_size);
-      if (item.pos - shrinked_size + keys_size + data_size > symbols_ids_sequences.size()) {
+          BareBones::StreamVByte::decode_data_size<BareBones::StreamVByte::Codec1234>(lns.size(), symbols_ids_sequences.begin() + pos - shrinked_size);
+      if (pos - shrinked_size + keys_size + data_size > symbols_ids_sequences.size()) {
         throw BareBones::Exception(0xd02e54dac8e1d328, "LabelSets data validation error: expected LabelSets values length is out of data symbols vector range");
       }
 
       // check that all symbols are in range
       auto [values_begin, values_end] =
-          BareBones::StreamVByte::decoder<BareBones::StreamVByte::Codec1234>(symbols_ids_sequences.begin() + item.pos - shrinked_size, lns.size());
+          BareBones::StreamVByte::decoder<BareBones::StreamVByte::Codec1234>(symbols_ids_sequences.begin() + pos - shrinked_size, lns.size());
       for (auto i = lns.begin(); i != lns.end(); ++i) {
         if (*values_begin++ >= symbols_tables[i.id()]->size()) {
           throw BareBones::Exception(0x0f0c520ad6285f15,
@@ -1893,8 +1934,8 @@ class LabelSet {
     [[nodiscard]] uint32_t emplace_back(const OtherLabelSet& label_set, Cache&& cache = {}) noexcept {
       const uint32_t id = items.size();
 
-      uint32_t lns_id = find_or_emplace_label_names_set(label_set, std::forward<Cache>(cache));
-      uint32_t pos = symbols_ids_sequences.size() + shrinked_size;
+      const uint32_t lns_id = find_or_emplace_label_names_set(label_set, std::forward<Cache>(cache));
+      const uint32_t pos = symbols_ids_sequences.size() + shrinked_size;
       // resize, if there are new symbols (in lns table)
       symbols_tables.reserve(label_name_sets_table.data().symbols_table.size());
       for (auto i = symbols_tables.size(); i < label_name_sets_table.data().symbols_table.size(); ++i) {
@@ -1918,9 +1959,10 @@ class LabelSet {
     }
 
     void shrink() noexcept {
+      shrinked_size += symbols_ids_sequences.size();
+
       items.resize(0);
       items.shrink_to_fit();
-      shrinked_size += symbols_ids_sequences.size();
       symbols_ids_sequences.resize(0);
       symbols_ids_sequences.shrink_to_fit();
     }
@@ -2086,7 +2128,7 @@ class LabelSet {
 
    private:
     template <class LabelSet, class Cache>
-    PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_label_names_set(LabelSet& label_set, Cache&& cache) {
+    uint32_t find_or_emplace_label_names_set(LabelSet& label_set, Cache&& cache) {
       if constexpr (use_find_or_emplace_with_cache<Cache, LabelSet, decltype(label_name_sets_table), decltype(label_set.names())>) {
         return label_name_sets_table.find_or_emplace_with_cache(label_set.names(), label_set.id(), cache.name_sets, cache);
       }
@@ -2095,7 +2137,7 @@ class LabelSet {
     }
 
     template <class LabelIterator, class Cache>
-    PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_symbol(uint32_t lns_id, const LabelIterator& label, Cache&& cache) {
+    uint32_t find_or_emplace_symbol(uint32_t lns_id, const LabelIterator& label, Cache&& cache) {
       if constexpr (use_find_or_emplace_with_cache<Cache, LabelIterator, decltype(*symbols_tables[0]), decltype((*label).second)>) {
         const auto name_id = label.name_id();
         return symbols_tables[lns_id]->find_or_emplace_with_cache((*label).second, label.value_id(), cache.values[name_id]);
