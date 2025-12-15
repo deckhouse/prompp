@@ -379,9 +379,9 @@ class GenericDecodingTable {
     InnerIteratorType i_;
 
    public:
-    inline __attribute__((always_inline)) explicit IteratorSentinel(InnerIteratorType i = InnerIteratorType()) noexcept : i_(i) {}
+    PROMPP_ALWAYS_INLINE explicit IteratorSentinel(InnerIteratorType i = InnerIteratorType()) noexcept : i_(i) {}
 
-    inline __attribute__((always_inline)) const InnerIteratorType& inner_iterator() const noexcept { return i_; }
+    PROMPP_ALWAYS_INLINE const InnerIteratorType& inner_iterator() const noexcept { return i_; }
   };
 
   template <class InnerIteratorType>
@@ -394,28 +394,27 @@ class GenericDecodingTable {
     using value_type = typename Filament<Vector>::composite_type;
     using difference_type = std::ptrdiff_t;
 
-    inline __attribute__((always_inline)) explicit ItemIDIterator(const GenericDecodingTable* decoding_table = nullptr,
-                                                                  InnerIteratorType i = InnerIteratorType()) noexcept
+    PROMPP_ALWAYS_INLINE explicit ItemIDIterator(const GenericDecodingTable* decoding_table = nullptr, InnerIteratorType i = InnerIteratorType()) noexcept
         : decoding_table_(decoding_table), i_(i) {}
-    inline __attribute__((always_inline)) ItemIDIterator& operator++() {
+    PROMPP_ALWAYS_INLINE ItemIDIterator& operator++() {
       ++i_;
       return *this;
     }
 
-    inline __attribute__((always_inline)) ItemIDIterator operator++(int) noexcept {
+    PROMPP_ALWAYS_INLINE ItemIDIterator operator++(int) noexcept {
       ItemIDIterator retval = *this;
       ++(*this);
       return retval;
     }
 
-    inline __attribute__((always_inline)) bool operator==(const ItemIDIterator& other) const noexcept { return i_ == other.i_; }
+    PROMPP_ALWAYS_INLINE bool operator==(const ItemIDIterator& other) const noexcept { return i_ == other.i_; }
 
     template <class InnerIteratorSentinelType>
-    inline __attribute__((always_inline)) bool operator==(const IteratorSentinel<InnerIteratorSentinelType>& other) const noexcept {
+    PROMPP_ALWAYS_INLINE bool operator==(const IteratorSentinel<InnerIteratorSentinelType>& other) const noexcept {
       return i_ == other.inner_iterator();
     }
 
-    inline __attribute__((always_inline)) value_type operator*() const noexcept { return (*decoding_table_)[*i_]; }
+    PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return (*decoding_table_)[*i_]; }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t id() const noexcept { return *i_; }
   };
@@ -432,20 +431,20 @@ class GenericDecodingTable {
    public:
     using value_type = typename Filament<Vector>::composite_type;
 
-    inline __attribute__((always_inline)) explicit Resolver(const GenericDecodingTable* decoding_table = nullptr,
-                                                            inner_iterator_type begin = inner_iterator_type(),
-                                                            inner_iterator_sentinel_type end = inner_iterator_sentinel_type()) noexcept
+    PROMPP_ALWAYS_INLINE explicit Resolver(const GenericDecodingTable* decoding_table = nullptr,
+                                           inner_iterator_type begin = inner_iterator_type(),
+                                           inner_iterator_sentinel_type end = inner_iterator_sentinel_type()) noexcept
         : decoding_table_(decoding_table), begin_(begin), end_(end) {}
 
-    inline __attribute__((always_inline)) auto begin() const noexcept { return ItemIDIterator<inner_iterator_type>(decoding_table_, begin_); }
-    inline __attribute__((always_inline)) auto end() const noexcept { return IteratorSentinel<inner_iterator_sentinel_type>(end_); }
+    PROMPP_ALWAYS_INLINE auto begin() const noexcept { return ItemIDIterator<inner_iterator_type>(decoding_table_, begin_); }
+    PROMPP_ALWAYS_INLINE auto end() const noexcept { return IteratorSentinel<inner_iterator_sentinel_type>(end_); }
     [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return end_ - begin_; }
   };
 
   PROMPP_ALWAYS_INLINE auto begin() const noexcept { return storage_.begin(); }
   PROMPP_ALWAYS_INLINE auto end() const noexcept { return storage_.end(); }
 
-  PROMPP_ALWAYS_INLINE auto remainder_size() const noexcept { return this->storage_.remainder_size(); }
+  PROMPP_ALWAYS_INLINE auto remainder_size() const noexcept { return storage_.remainder_size(); }
 };
 
 template <template <template <class> class> class Filament, template <class> class Vector>
@@ -461,12 +460,15 @@ template <template <template <class> class> class Filament, template <class> cla
 class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEncodingBimap<Filament, Vector>, Filament, Vector> {
  public:
   using Base = GenericDecodingTable<ShrinkableEncodingBimap, Filament, Vector>;
-  using checkpoint_type = typename Base::template Checkpoint<ShrinkableEncodingBimap>;
-  using delta_type = typename checkpoint_type::Delta;
+  // using typename Base::checkpoint_type;
+  // using delta_type = typename checkpoint_type::Delta;
+  using checkpoint_type = typename Base::checkpoint_type;
   using value_type = typename Base::value_type;
 
+  using Base::checkpoint;
   using Base::load;
   using Base::next_item_index;
+  using Base::remainder_size;
   using Base::size;
 
   friend class GenericDecodingTable<ShrinkableEncodingBimap, Filament, Vector>;
@@ -503,7 +505,7 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
     return {};
   }
 
-  PROMPP_ALWAYS_INLINE auto checkpoint() const noexcept { return checkpoint_type(*this, next_item_index_impl(), size()); }
+  // PROMPP_ALWAYS_INLINE auto checkpoint() const noexcept { return checkpoint_type(*this, next_item_index_impl(), size()); }
 
   void shrink_to_checkpoint_size(const checkpoint_type& checkpoint) {
     if (checkpoint.next_item_index() != next_item_index_impl()) {
@@ -539,7 +541,7 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
       Allocator<typename Base::Proxy, uint32_t>{set_allocated_memory_}};
   uint32_t shift_{0};
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index_impl() const noexcept { return shift_ + Base::size(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index_impl() const noexcept { return shift_ + Base::storage_.next_item_index(); }
 
   template <ls_id_range R>
   PROMPP_ALWAYS_INLINE void after_items_load_impl(R&& loaded_ids) noexcept {
