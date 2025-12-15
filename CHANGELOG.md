@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.7.2
+
+### Fixes
+1. **Bound remote_write `max_sample_age` to retention.** The remote write configuration parameter `max_sample_age` is now constrained by `storage.tsdb.retention.time`. Previously, when not explicitly set, it defaulted to 30 days. That could lead to WAL files accumulating on disk if the remote target was unavailable.
+2. **Remove temporary files for unloaded series.** Temporary files created when unloading series from memory are now removed. These files are never read again after being closed but can be large; removing them reduces disk usage.
+
+### Enhancements
+1. **Minor optimizations.** Various small performance and maintenance improvements.
+
 ## v0.7.1
 
 ### Fixes
