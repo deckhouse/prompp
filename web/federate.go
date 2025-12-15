@@ -181,7 +181,9 @@ Loop:
 
 		nameSeen := false
 		globalUsed := map[string]struct{}{}
-		protMetric := &dto.Metric{}
+		protMetric := &dto.Metric{
+			Label: make([]*dto.LabelPair, 0, s.Metric.Len()+len(externalLabels)),
+		}
 
 		err := s.Metric.Validate(func(l labels.Label) error {
 			if l.Value == "" {
