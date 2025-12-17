@@ -9,8 +9,8 @@ namespace metrics {
 struct GlobalMetrics final : MetricsPage<GlobalMetrics> {
   using MetricsPage::MetricsPage;
 
-  Counter data_storage_allocations{PromPP::Primitives::LabelViewSet{}, "data_storage_allocations"};
-  Counter lss_allocations{PromPP::Primitives::LabelViewSet{}, "lss_allocations"};
+  Counter data_storage_allocations{PromPP::Primitives::LabelViewSet{}, "prompp_data_storage_allocations"};
+  Counter lss_allocations{PromPP::Primitives::LabelViewSet{}, "prompp_lss_allocations"};
 };
 
 PROMPP_ALWAYS_INLINE GlobalMetrics* global_metrics() {
