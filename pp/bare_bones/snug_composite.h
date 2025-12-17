@@ -29,9 +29,9 @@ enum class SerializationMode : char { SNAPSHOT = 1, DELTA = 2 };
 template <class Range>
 concept ls_id_range = std::ranges::range<Range> && std::same_as<std::ranges::range_value_t<Range>, uint32_t>;
 
-template <class FilamentDataType>
-concept is_shrinkable = requires(FilamentDataType& data_type) {
-  { data_type.shrink_to(uint32_t()) };
+template <class FilamentStorageType>
+concept is_shrinkable = requires(FilamentStorageType& storage) {
+  { storage.shrink() };
 };
 
 template <class Derived>
@@ -49,7 +49,7 @@ concept has_after_items_load = ls_id_range<R> && requires(Derived derived, R&& r
 
 template <class Derived, template <template <class> class> class Filament, template <class> class Vector>
 class GenericDecodingTable {
-  static_assert(!std::is_integral_v<typename Filament<Vector>::composite_type>, "Filament::composite_type can't be an integral type");
+  static_assert(!std::is_integral_v<typename Filament<Vector>::storage_type::composite_type>, "Filament::composite_type can't be an integral type");
 
   template <class AnyDerived, template <template <class> class> class AnyFilament, template <class> class AnyVector>
   friend class GenericDecodingTable;
