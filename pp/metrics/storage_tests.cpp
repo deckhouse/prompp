@@ -21,14 +21,14 @@ class MetricsStorageIteratorFixture : public testing::Test {
   struct Metrics1 final : MetricsPage<Metrics1> {
     using MetricsPage::MetricsPage;
 
-    Counter<> counter{"counter", 64};
+    Counter counter{LabelViewSet{}, "counter", 64};
   };
 
   struct Metrics2 final : MetricsPage<Metrics2> {
     using MetricsPage::MetricsPage;
 
-    Counter<> counter1{"counter1", 64};
-    Counter<> counter2{"counter2", 64};
+    Counter counter1{LabelViewSet{}, "counter1", 64};
+    Counter counter2{LabelViewSet{}, "counter2", 64};
   };
 };
 
@@ -45,8 +45,8 @@ TEST_F(MetricsStorageIteratorFixture, EmptyStorage) {
 
 TEST_F(MetricsStorageIteratorFixture, TwoPages) {
   // Arrange
-  const auto page1 = CreateMetricsPage<Metrics1>(storage_, LabelViewSet{{"page", "1"}});
-  const auto page2 = CreateMetricsPage<Metrics2>(storage_, LabelViewSet{{"page", "2"}});
+  const auto page1 = CreateMetricsPage<Metrics1>(storage_);
+  const auto page2 = CreateMetricsPage<Metrics2>(storage_);
 
   std::vector<Storage::Iterator::Item> items;
 

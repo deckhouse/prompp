@@ -3473,23 +3473,23 @@ func prometheusMetricsIteratorDtor(iterator uintptr) {
 	)
 }
 
-func prometheusMetricsIteratorSerialize(iterator uintptr) []byte {
+func prometheusMetricsIteratorNext(iterator uintptr) *CppMetric {
 	args := struct {
 		iterator uintptr
 	}{iterator}
 
 	var res struct {
-		data []byte
+		metric *CppMetric
 	}
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_metrics_iterator_serialize,
+		C.prompp_metrics_iterator_next,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.data
+	return res.metric
 }
 
 func prometheusMetricsPageForTestCtor(labels Labels, counterName string, counterValue uint64) uintptr {

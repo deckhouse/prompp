@@ -1,6 +1,5 @@
 #pragma once
 
-#include "label_set.h"
 #include "metric.h"
 
 namespace metrics {
@@ -46,9 +45,7 @@ class MetricsPageControlBlock {
     [[nodiscard]] const Metric* metric() const { return reinterpret_cast<const Metric*>(reinterpret_cast<const uint8_t*>(metrics_page_) + offset_); }
   };
 
-  template <class LabelSet>
-  explicit MetricsPageControlBlock(LabelSet&& label_set, uint32_t page_object_size)
-      : labels_(std::forward<LabelSet>(label_set)), page_object_size_(page_object_size) {}
+  explicit MetricsPageControlBlock(uint32_t page_object_size) : page_object_size_(page_object_size) {}
 
   MetricsPageControlBlock() = delete;
   MetricsPageControlBlock(const MetricsPageControlBlock&) = delete;
@@ -57,7 +54,6 @@ class MetricsPageControlBlock {
   MetricsPageControlBlock& operator=(const MetricsPageControlBlock&) = delete;
   MetricsPageControlBlock& operator=(MetricsPageControlBlock&&) noexcept = delete;
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const LabelSet& labels() const noexcept { return labels_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE MetricsPageControlBlock* next_metrics_page() const noexcept { return next_metrics_page_; }
   PROMPP_ALWAYS_INLINE void set_next_metrics_page(MetricsPageControlBlock* next_metrics_page) noexcept { next_metrics_page_ = next_metrics_page; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t page_object_size() const noexcept { return page_object_size_; }
@@ -68,7 +64,6 @@ class MetricsPageControlBlock {
   [[nodiscard]] PROMPP_ALWAYS_INLINE IteratorSentinel static end() noexcept { return {}; }
 
  private:
-  LabelSet labels_;
   MetricsPageControlBlock* next_metrics_page_{};
   uint32_t ref_count_{1};
   const uint32_t page_object_size_;
@@ -81,12 +76,10 @@ class MetricsPage : public MetricsPageControlBlock {
 
   using MetricsPageControlBlock::MetricsPageControlBlock;
 
-  template <class LabelSet>
-  explicit MetricsPage(LabelSet&& label_set) : MetricsPageControlBlock(std::forward<LabelSet>(label_set), sizeof(Derived)) {
+  explicit MetricsPage() : MetricsPageControlBlock(sizeof(Derived)) {
     static_assert(sizeof(Derived) >= sizeof(MetricsPageControlBlock) + sizeof(Metric), "Metrics page must contain at least one metric");
   }
 
-  MetricsPage() = delete;
   MetricsPage(const MetricsPage&) = delete;
   MetricsPage(MetricsPage&&) noexcept = delete;
 

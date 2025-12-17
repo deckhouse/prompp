@@ -506,10 +506,10 @@ void prompp_metrics_iterator_dtor(void* args);
  * }
  *
  * @param res {
- *   buffer []bytes // serialized data
+ *   metric *cppbridge.CppMetric // Pointer to go metric
  * }
  */
-void prompp_metrics_iterator_serialize(void* args, void* res);
+void prompp_metrics_iterator_next(void* args, void* res);
 
 /**
  * @brief Create metrics page for test

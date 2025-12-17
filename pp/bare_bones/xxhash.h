@@ -50,4 +50,15 @@ class XXHash3 {
   uint64_t hash_{};
 };
 
+class XXHash {
+ public:
+  PROMPP_ALWAYS_INLINE XXHash() { XXH64_reset(&state_, 0); }
+
+  PROMPP_ALWAYS_INLINE void extend(std::string_view data) noexcept { XXH64_update(&state_, data.data(), data.length()); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint64_t digest() const noexcept { return XXH64_digest(&state_); }
+
+ private:
+  XXH64_state_t state_;
+};
+
 }  // namespace BareBones

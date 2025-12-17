@@ -75,16 +75,16 @@ PROMPP_ALWAYS_INLINE Storage& storage() {
   return storage;
 }
 
-template <class MetricsPageType, class LabelSet, class... Args>
-PROMPP_ALWAYS_INLINE MetricsPageType* CreateMetricsPage(Storage& s, LabelSet&& label_set, Args&&... args) {
-  auto* page = new MetricsPageType(std::forward<LabelSet>(label_set), std::forward<Args>(args)...);
+template <class MetricsPageType, class... Args>
+PROMPP_ALWAYS_INLINE MetricsPageType* CreateMetricsPage(Storage& s, Args&&... args) {
+  auto* page = new MetricsPageType(std::forward<Args>(args)...);
   s.add(page);
   return page;
 }
 
-template <class MetricsPageType, class LabelSet, class... Args>
-PROMPP_ALWAYS_INLINE MetricsPageType* CreateMetricsPage(LabelSet&& label_set, Args&&... args) {
-  return CreateMetricsPage<MetricsPageType>(storage(), std::forward<LabelSet>(label_set), std::forward<Args>(args)...);
+template <class MetricsPageType, class... Args>
+PROMPP_ALWAYS_INLINE MetricsPageType* CreateMetricsPage(Args&&... args) {
+  return CreateMetricsPage<MetricsPageType>(storage(), std::forward<Args>(args)...);
 }
 
 }  // namespace metrics
