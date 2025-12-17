@@ -11,20 +11,19 @@ class Metric {
 
   Metric() = delete;
   template <class LabelSet>
-  Metric(const LabelSet& labels, std::string_view name, PromPP::Primitives::Go::dto::Counter* counter)
+  Metric(const LabelSet& labels, std::string_view name, PromPP::Primitives::Go::dto::Counter* counter, size_t object_size)
       : labels_(labels, PromPP::Primitives::NoSortLabels{}),
         label_pairs_(create_label_pairs()),
         descriptor_(PromPP::Primitives::Go::String(name), label_pairs_),
-        metric_(PromPP::Primitives::Go::SliceView(descriptor_.const_label_pairs), counter) {}
+        metric_(PromPP::Primitives::Go::SliceView(descriptor_.const_label_pairs), counter),
+        object_size_(object_size) {}
   Metric(const Metric&) = delete;
   Metric(Metric&&) noexcept = delete;
   Metric& operator=(const Metric&) = delete;
   Metric& operator=(Metric&&) noexcept = delete;
-  virtual ~Metric() = default;
 
-  [[nodiscard]] virtual size_t object_size() const noexcept = 0;
-
-  [[nodiscard]] const PromPP::Primitives::Go::Metric* go_metric() const noexcept { return &go_metric_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t object_size() const noexcept { return object_size_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const PromPP::Primitives::Go::Metric* go_metric() const noexcept { return &go_metric_; }
 
  private:
   PromPP::Primitives::BasicLabelSet<Label> labels_;
@@ -32,6 +31,7 @@ class Metric {
   PromPP::Primitives::Go::dto::MetricDescriptor descriptor_;
   PromPP::Primitives::Go::dto::Metric metric_;
   PromPP::Primitives::Go::Metric go_metric_{.descriptor = &descriptor_, .metric = &metric_};
+  const size_t object_size_{};
 
   PromPP::Primitives::Go::dto::LabelPairsList create_label_pairs() {
     PromPP::Primitives::Go::dto::LabelPairsList list;
