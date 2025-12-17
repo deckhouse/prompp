@@ -71,6 +71,9 @@ jobs:
           export ASAN="false"
           export WERF_BUILDAH_MODE=auto
 
+          export WERF_DEBUG=1
+          export WERF_DEBUG_DOCKER_REGISTRY_API=1
+
           werf export --platform linux/${{ matrix.arch }} --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp \
             --tag=index.docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }} \
             --tag=${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }}
