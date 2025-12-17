@@ -273,7 +273,7 @@ class GenericDecodingTable {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return mem::allocated_memory(storage_); }
 
-  PROMPP_ALWAYS_INLINE const storage_type& data() const noexcept { return storage_; }
+  PROMPP_ALWAYS_INLINE storage_type::view_type data_view() const noexcept { return storage_.view(); }
 
   template <class DerivedOther, template <template <class> class> class FilamentOther, template <class> class VectorOther>
   PROMPP_ALWAYS_INLINE void reserve(const GenericDecodingTable<DerivedOther, FilamentOther, VectorOther>& other) {
@@ -374,8 +374,8 @@ class GenericDecodingTable {
     return in;
   }
 
-  PROMPP_ALWAYS_INLINE auto begin() const noexcept { return storage_.begin(); }
-  PROMPP_ALWAYS_INLINE auto end() const noexcept { return storage_.end(); }
+  PROMPP_ALWAYS_INLINE auto begin() const noexcept { return storage_.view().begin(); }
+  PROMPP_ALWAYS_INLINE auto end() const noexcept { return storage_.view().end(); }
 
   PROMPP_ALWAYS_INLINE auto remainder_size() const noexcept { return storage_.remainder_size(); }
 };

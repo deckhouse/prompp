@@ -37,13 +37,13 @@ template <template <class> class Vector>
 using DecodingTableFilament = Filaments::LabelSet<Symbol::DecodingTable, LabelNameSet::DecodingTable, Vector>;
 
 template <template <class> class Vector>
-using DecodingTable = BareBones::SnugComposite::DecodingTable<DecodingTableFilament, Vector>;
+using DecodingTable = BareBones::SnugComposite::V2::DecodingTable<DecodingTableFilament, Vector>;
 
 template <template <class> class Vector>
 using EncodingBimapFilament = Filaments::LabelSet<Symbol::EncodingBimap, LabelNameSet::EncodingBimap, Vector>;
 
 template <template <class> class Vector>
-using EncodingBimap = BareBones::SnugComposite::EncodingBimap<EncodingBimapFilament, Vector>;
+using EncodingBimap = BareBones::SnugComposite::V2::EncodingBimap<EncodingBimapFilament, Vector>;
 
 template <template <class> class Vector>
 using ShrinkableEncodingBimap = BareBones::SnugComposite::ShrinkableEncodingBimap<EncodingBimapFilament, Vector>;

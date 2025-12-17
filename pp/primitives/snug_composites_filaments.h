@@ -245,6 +245,50 @@ class Symbol {
       }
     };
 
+    struct symbols_view {
+      const storage_type* storage_ptr;
+
+      class iterator_type {
+       public:
+        using iterator_category = std::input_iterator_tag;
+        using value_type = composite_type;
+        using difference_type = std::ptrdiff_t;
+
+        iterator_type() = default;
+        explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : id_{id}, storage_ptr_(&storage) {}
+
+        iterator_type& operator++() noexcept {
+          ++id_;
+          return *this;
+        }
+
+        iterator_type operator++(int) noexcept {
+          iterator_type retval = *this;
+          ++(*this);
+          return retval;
+        }
+
+        bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_ && storage_ptr_ == other.storage_ptr_; }
+        bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == storage_ptr_->items.size(); }
+
+        value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
+
+        [[nodiscard]] uint32_t id() const noexcept { return id_; }
+
+       private:
+        uint32_t id_{0};
+        const storage_type* storage_ptr_;
+      };
+
+      auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
+      auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
+
+      [[nodiscard]] size_t size() const noexcept { return storage_ptr->count(); }
+      [[nodiscard]] uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
+    };
+
+    using view_type = symbols_view;
+
     storage_type() noexcept = default;
     template <class AnotherStorageType>
       requires kIsReadOnly
@@ -342,38 +386,7 @@ class Symbol {
       return std::views::iota(original_size, items.size());
     }
 
-    class iterator_type {
-     public:
-      using iterator_category = std::input_iterator_tag;
-      using value_type = composite_type;
-      using difference_type = std::ptrdiff_t;
-
-      iterator_type() = default;
-      explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : id_{id}, storage_ptr_(&storage) {}
-
-      iterator_type& operator++() noexcept {
-        ++id_;
-        return *this;
-      }
-
-      iterator_type operator++(int) noexcept {
-        iterator_type retval = *this;
-        ++(*this);
-        return retval;
-      }
-
-      bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_ && storage_ptr_ == other.storage_ptr_; }
-      bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == storage_ptr_->items.size(); }
-
-      value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
-
-     private:
-      uint32_t id_{0};
-      const storage_type* storage_ptr_;
-    };
-
-    auto begin() const noexcept { return iterator_type{*this, 0}; }
-    auto end() const noexcept { return iterator_type{*this, items.size()}; }
+    view_type view() const noexcept { return {.storage_ptr = this}; }
   };
 };
 
@@ -817,6 +830,52 @@ class LabelNameSet {
       }
     };
 
+    struct label_name_set_view {
+      using symbols_view_type = symbols_table_type::storage_type::view_type;
+      const storage_type* storage_ptr;
+
+      class iterator_type {
+       public:
+        using iterator_category = std::input_iterator_tag;
+        using value_type = composite_type;
+        using difference_type = std::ptrdiff_t;
+
+        iterator_type() = default;
+        explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : id_{id}, storage_ptr_(&storage) {}
+
+        iterator_type& operator++() noexcept {
+          ++id_;
+          return *this;
+        }
+
+        iterator_type operator++(int) noexcept {
+          iterator_type retval = *this;
+          ++(*this);
+          return retval;
+        }
+        bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_ && storage_ptr_ == other.storage_ptr_; }
+        bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == storage_ptr_->items.size(); }
+
+        value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
+
+        [[nodiscard]] uint32_t id() const noexcept { return id_; }
+
+       private:
+        uint32_t id_{0};
+        const storage_type* storage_ptr_;
+      };
+
+      auto begin() const noexcept { return iterator_type{storage_ptr, 0}; }
+      auto end() const noexcept { return iterator_type{storage_ptr, storage_ptr->items.size()}; }
+
+      [[nodiscard]] size_t size() const noexcept { return storage_ptr->count(); }
+      [[nodiscard]] uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
+
+      symbols_view_type symbols() const noexcept { return storage_ptr->symbols_table.data_view(); }
+    };
+
+    using view_type = label_name_set_view;
+
     storage_type() noexcept = default;
     template <class AnotherStorageType>
       requires kIsReadOnly
@@ -960,36 +1019,7 @@ class LabelNameSet {
       return std::views::iota(items_original_size, items.size());
     }
 
-    class iterator_type {
-     public:
-      using iterator_category = std::input_iterator_tag;
-      using value_type = composite_type;
-      using difference_type = std::ptrdiff_t;
-
-      iterator_type() = default;
-      explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : id_{id}, storage_ptr_(&storage) {}
-
-      iterator_type& operator++() noexcept {
-        ++id_;
-        return *this;
-      }
-
-      iterator_type operator++(int) noexcept {
-        iterator_type retval = *this;
-        ++(*this);
-        return retval;
-      }
-      bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_ && storage_ptr_ == other.storage_ptr_; }
-      bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == storage_ptr_->items.size(); }
-
-      value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
-
-     private:
-      uint32_t id_{0};
-      const storage_type* storage_ptr_;
-    };
-    auto begin() const noexcept { return iterator_type{*this, 0}; }
-    auto end() const noexcept { return iterator_type{*this, items.size()}; }
+    view_type view() const noexcept { return {.storage_ptr = this}; }
 
    private:
     template <class LabelNameIterator, class Cache>
@@ -1568,14 +1598,18 @@ class LabelSet {
   struct storage_type {
     static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
 
-    using SymbolIdsCodec = BareBones::StreamVByte::Codec1234;
-    using symbols_tables_type = std::conditional_t<kIsReadOnly, BareBones::Vector<SymbolsTableType<Vector>>, Vector<std::unique_ptr<SymbolsTableType<Vector>>>>;
+    using label_values_symbols_table_type = SymbolsTableType<Vector>;
+    using label_name_sets_table_type = LabelNameSetsTableType<Vector>;
+
+    using symbols_tables_type =
+        std::conditional_t<kIsReadOnly, BareBones::Vector<label_values_symbols_table_type>, Vector<std::unique_ptr<label_values_symbols_table_type>>>;
+
+    using symbol_ids_codec_type = BareBones::StreamVByte::Codec1234;
     using symbols_ids_sequences_type = Vector<uint8_t>;
 
     class composite_type {
       using label_name_set_type = typename LabelNameSetsTableType<Vector>::value_type;
-      using values_iterator_type =
-          BareBones::StreamVByte::DecodeIterator<typename data_type::SymbolIdsCodec, typename symbols_ids_sequences_type::const_iterator>;
+      using values_iterator_type = BareBones::StreamVByte::DecodeIterator<symbol_ids_codec_type, typename symbols_ids_sequences_type::const_iterator>;
       using values_iterator_sentinel_type = BareBones::StreamVByte::DecodeIteratorSentinel;
 
       label_name_set_type label_name_set_;
@@ -1831,6 +1865,128 @@ class LabelSet {
       }
     };
 
+    struct label_sets_values_view {
+      using keys_view_type = label_name_sets_table_type::view_type::symbols_view;
+      using values_view_type = label_values_symbols_table_type::view_type;
+      const storage_type* storage_ptr;
+
+      class iterator_type {
+       public:
+        using iterator_category = std::input_iterator_tag;
+        using value_type = label_values_symbols_table_type::composite_type;
+        using difference_type = std::ptrdiff_t;
+
+        iterator_type() = default;
+        explicit iterator_type(const symbols_tables_type& symbols_tables,
+                               const keys_view_type::iterator_type& key_it,
+                               const keys_view_type::iterator_type& key_it_end) noexcept
+            : symbols_tables_ptr_{&symbols_tables}, key_it_{key_it}, key_it_end_(key_it_end) {}
+
+        iterator_type& operator++() noexcept {
+          ++value_it_;
+          if (value_it_ == value_it_end_) {
+            ++key_it_;
+            get_values_range();
+          }
+          return *this;
+        }
+
+        iterator_type operator++(int) noexcept {
+          iterator_type retval = *this;
+          ++(*this);
+          return retval;
+        }
+
+        bool operator==(const iterator_type& other) const = default;
+        bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return key_it_ == key_it_end_ && value_it_ == value_it_end_; }
+
+        value_type operator*() const noexcept { return *value_it_; }
+
+        [[nodiscard]] uint32_t key_id() const noexcept { return key_it_->id(); }
+        [[nodiscard]] uint32_t value_id() const noexcept { return value_it_->id(); }
+
+       private:
+        void get_values_range() noexcept {
+          while (key_it_ != key_it_end_) {
+            if constexpr (BareBones::concepts::is_dereferenceable<typename symbols_tables_type::value_type>) {
+              const auto values_view = (*(*symbols_tables_ptr_)[key_it_.id()]).view();
+              value_it_ = values_view.begin();
+              value_it_end_ = values_view.end();
+            } else {
+              const auto values_view = (*symbols_tables_ptr_)[key_it_.id()].view();
+              value_it_ = values_view.begin();
+              value_it_end_ = values_view.end();
+            }
+
+            if (value_it_ != value_it_end_)
+              return;
+
+            ++key_it_;
+          }
+        }
+
+        const symbols_tables_type* symbols_tables_ptr_;
+
+        const keys_view_type::iterator_type key_it_;
+        const keys_view_type::iterator_type key_it_end_;
+
+        const values_view_type::iterator_type value_it_;
+        const values_view_type::iterator_type value_it_end_;
+      };
+
+      auto begin() const noexcept { return iterator_type{storage_ptr, 0}; }
+      auto end() const noexcept { return iterator_type{storage_ptr, storage_ptr->items.size()}; }
+    };
+
+    struct label_set_view {
+      using keys_view_type = label_name_sets_table_type::view_type::symbols_view;
+      using values_view_type = label_sets_values_view;
+      const storage_type* storage_ptr;
+
+      class iterator_type {
+       public:
+        using iterator_category = std::input_iterator_tag;
+        using value_type = composite_type;
+        using difference_type = std::ptrdiff_t;
+
+        iterator_type() = default;
+        explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : id_{id}, storage_ptr_(&storage) {}
+
+        iterator_type& operator++() noexcept {
+          ++id_;
+          return *this;
+        }
+
+        iterator_type operator++(int) noexcept {
+          iterator_type retval = *this;
+          ++(*this);
+          return retval;
+        }
+
+        bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_ && storage_ptr_ == other.storage_ptr_; }
+        bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == storage_ptr_->items.size(); }
+
+        value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
+
+        [[nodiscard]] uint32_t id() const noexcept { return id_; }
+
+       private:
+        uint32_t id_{0};
+        const storage_type* storage_ptr_;
+      };
+
+      auto begin() const noexcept { return iterator_type{storage_ptr, 0}; }
+      auto end() const noexcept { return iterator_type{storage_ptr, storage_ptr->items.size()}; }
+
+      [[nodiscard]] size_t size() const noexcept { return storage_ptr->count(); }
+      [[nodiscard]] uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
+
+      keys_view_type labels_keys() const noexcept { return storage_ptr->label_name_sets_table.data_view().symbols(); }
+      values_view_type labels_values() const noexcept { return label_sets_values_view{.storage_ptr = storage_ptr}; }
+    };
+
+    using view_type = label_set_view;
+
     storage_type() noexcept = default;
     template <class AnotherStorageType>
       requires kIsReadOnly
@@ -1850,7 +2006,7 @@ class LabelSet {
 
     symbols_tables_type symbols_tables;
     symbols_ids_sequences_type symbols_ids_sequences;
-    LabelNameSetsTableType<Vector> label_name_sets_table;
+    label_name_sets_table_type label_name_sets_table;
     uint32_t next_item_index_{};
     uint32_t shrinked_size{};
     Vector<item_type> items;
@@ -1885,7 +2041,7 @@ class LabelSet {
       const auto [lns_id, pos] = items[id];
 
       auto lns = label_name_sets_table[lns_id];
-      auto [values_begin, values_end] = BareBones::StreamVByte::decoder<SymbolIdsCodec>(symbols_ids_sequences.begin() + pos - shrinked_size, lns.size());
+      auto [values_begin, values_end] = BareBones::StreamVByte::decoder<symbol_ids_codec_type>(symbols_ids_sequences.begin() + pos - shrinked_size, lns.size());
 
       return composite_type(this, std::move(lns), std::move(values_begin), std::move(values_end), lns_id);
     }
@@ -1937,16 +2093,18 @@ class LabelSet {
 
       const uint32_t lns_id = find_or_emplace_label_names_set(label_set, std::forward<Cache>(cache));
       const uint32_t pos = symbols_ids_sequences.size() + shrinked_size;
-      // resize, if there are new symbols (in lns table)
-      symbols_tables.reserve(label_name_sets_table.data().symbols_table.size());
-      for (auto i = symbols_tables.size(); i < label_name_sets_table.data().symbols_table.size(); ++i) {
+      // resize if there are new symbols (in lns table)
+      symbols_tables.reserve(label_name_sets_table.data_view().symbols().size());  // label_name_sets_table.view().symbols().size()
+      // label_name_sets_table.view() -> label_names_view;
+      // label_names_view.symbols() -> symbols_view;
+      for (auto i = symbols_tables.size(); i < label_name_sets_table.data_view().symbols().size(); ++i) {
         symbols_tables.emplace_back(std::make_unique<SymbolsTableType<Vector>>());
       }
 
       auto lns = label_name_sets_table[lns_id];
       auto lns_i = lns.begin();
       auto size_before = symbols_ids_sequences.size();
-      auto i = BareBones::StreamVByte::back_inserter<typename storage_type::SymbolIdsCodec>(symbols_ids_sequences, lns.size());
+      auto i = BareBones::StreamVByte::back_inserter<symbol_ids_codec_type>(symbols_ids_sequences, lns.size());
       for (auto it = label_set.begin(); it != label_set.end(); ++it) {
         *i++ = find_or_emplace_symbol(lns_i.id(), it, std::forward<Cache>(cache));
         ++lns_i;
@@ -2030,7 +2188,7 @@ class LabelSet {
       // read data
       auto sg1 = std::experimental::scope_fail([original_size = symbols_ids_sequences.size(), this] { symbols_ids_sequences.resize(original_size); });
 
-      symbols_ids_sequences.reserve_and_write(size_to_load + sizeof(SymbolIdsCodec::value_type), [&in, size_to_load](uint8_t* buffer, uint32_t) {
+      symbols_ids_sequences.reserve_and_write(size_to_load + sizeof(symbol_ids_codec_type::value_type), [&in, size_to_load](uint8_t* buffer, uint32_t) {
         in.read(reinterpret_cast<char*>(buffer), size_to_load * sizeof(symbols_ids_sequences[first_to_load_i]));
         return size_to_load;
       });
@@ -2095,37 +2253,6 @@ class LabelSet {
 
       return std::views::iota(items_original_size, items.size());
     }
-
-    class iterator_type {
-     public:
-      using iterator_category = std::input_iterator_tag;
-      using value_type = composite_type;
-      using difference_type = std::ptrdiff_t;
-
-      iterator_type() = default;
-      explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : id_{id}, storage_ptr_(&storage) {}
-
-      iterator_type& operator++() noexcept {
-        ++id_;
-        return *this;
-      }
-
-      iterator_type operator++(int) noexcept {
-        iterator_type retval = *this;
-        ++(*this);
-        return retval;
-      }
-      bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_ && storage_ptr_ == other.storage_ptr_; }
-      bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == storage_ptr_->items.size(); }
-
-      value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
-
-     private:
-      uint32_t id_{0};
-      const storage_type* storage_ptr_;
-    };
-    auto begin() const noexcept { return iterator_type{*this, 0}; }
-    auto end() const noexcept { return iterator_type{*this, items.size()}; }
 
    private:
     template <class LabelSet, class Cache>
