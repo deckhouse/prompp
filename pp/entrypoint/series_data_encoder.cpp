@@ -1,7 +1,8 @@
 #include "series_data_encoder.h"
 
 #include "head/series_data.h"
-#include "primitives/primitives.h"
+#include "metrics/calculator.h"
+#include "metrics/global_metrics.h"
 #include "prometheus/relabeler.h"
 #include "series_data/data_storage.h"
 
@@ -25,6 +26,7 @@ extern "C" void prompp_series_data_encoder_encode(void* args) {
   };
 
   const auto* in = static_cast<Arguments*>(args);
+  metrics::MemoryAllocationsCalculator _(metrics::global_metrics()->data_storage_allocations);
   in->encoder_wrapper->encoder.encode(in->series_id, in->timestamp, in->value);
 }
 
@@ -36,6 +38,7 @@ extern "C" void prompp_series_data_encoder_encode_inner_series_slice(void* args)
 
   auto* in = static_cast<Arguments*>(args);
 
+  metrics::MemoryAllocationsCalculator _(metrics::global_metrics()->data_storage_allocations);
   std::ranges::for_each(in->inner_series_slice, [&](const PromPP::Prometheus::Relabel::InnerSeries& inner_series) {
     if (inner_series.size() == 0) {
       return;
@@ -52,6 +55,7 @@ extern "C" void prompp_series_data_encoder_merge_out_of_order_chunks(void* args)
     entrypoint::head::SeriesDataEncoderWrapperPtr encoder_wrapper;
   };
 
+  metrics::MemoryAllocationsCalculator _(metrics::global_metrics()->data_storage_allocations);
   entrypoint::head::OutdatedChunkMerger{static_cast<Arguments*>(args)->encoder_wrapper->encoder}.merge();
 }
 

@@ -5,6 +5,7 @@
 
 namespace metrics {
 
+#if 0
 class Serializer {
  public:
   enum Tag : int {
@@ -38,5 +39,6 @@ class Serializer {
     }
   }
 };
+#endif
 
 }  // namespace metrics

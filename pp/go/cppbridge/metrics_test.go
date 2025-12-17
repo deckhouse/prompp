@@ -1,9 +1,9 @@
 package cppbridge
 
 import (
+	"reflect"
 	"testing"
 
-	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -15,33 +15,13 @@ func TestCppMetricsSuite(t *testing.T) {
 	suite.Run(t, new(CppMetricsSuite))
 }
 
-type cppMetric struct {
-	labels  Labels
-	counter *dto.Counter
-}
-
-func newCppMetric(metric *dto.Metric) cppMetric {
-	m := cppMetric{labels: make(Labels, 0, cap(metric.Label)), counter: metric.Counter}
-	for _, l := range metric.Label {
-		m.labels = append(m.labels, Label{Name: *l.Name, Value: *l.Value})
-	}
-
-	return m
-}
-
-func (s *CppMetricsSuite) getMetrics() []cppMetric {
-	metrics := []cppMetric(nil)
+func (s *CppMetricsSuite) getMetrics() []*CppMetric {
+	metrics := []*CppMetric(nil)
 	for metric := range CppMetrics {
-		metrics = append(metrics, newCppMetric(metric))
+		metrics = append(metrics, metric)
 	}
 
 	return metrics
-}
-
-func (s *CppMetricsSuite) assertCounter(metric cppMetric, expectedLabels Labels, expectedValue float64) {
-	s.Require().NotNil(metric.counter)
-	s.Equal(expectedValue, *metric.counter.Value)
-	s.Equal(expectedLabels, metric.labels)
 }
 
 func (s *CppMetricsSuite) TestNoMetricPages() {
@@ -66,10 +46,9 @@ func (s *CppMetricsSuite) TestOneMetricsPage() {
 
 	// Assert
 	s.Require().Len(metrics, 1)
-	s.assertCounter(metrics[0], Labels{
-		Label{Name: "__name__", Value: "counter"},
-		Label{Name: "metrics_page", Value: "for_test"},
-	}, float64(counterValue))
+	s.Equal("counter", reflect.ValueOf(metrics[0].descriptor).Elem().FieldByName("fqName").String())
+	s.Equal(metrics[0].metric.Counter.GetValue(), float64(counterValue))
+	s.Equal(Labels{Label{Name: "metrics_page", Value: "for_test"}}, metrics[0].Labels())
 }
 
 func (s *CppMetricsSuite) TestTwoMetricPages() {
@@ -89,12 +68,12 @@ func (s *CppMetricsSuite) TestTwoMetricPages() {
 
 	// Assert
 	s.Require().Len(metrics, 2)
-	s.assertCounter(metrics[0], Labels{
-		Label{Name: "__name__", Value: "counter2"},
-		Label{Name: "metrics_page2", Value: "for_test"},
-	}, float64(counterValue2))
-	s.assertCounter(metrics[1], Labels{
-		Label{Name: "__name__", Value: "counter1"},
-		Label{Name: "metrics_page1", Value: "for_test"},
-	}, float64(counterValue1))
+
+	s.Equal("counter2", reflect.ValueOf(metrics[0].descriptor).Elem().FieldByName("fqName").String())
+	s.Equal(metrics[0].metric.Counter.GetValue(), float64(counterValue2))
+	s.Equal(Labels{Label{Name: "metrics_page2", Value: "for_test"}}, metrics[0].Labels())
+
+	s.Equal("counter1", reflect.ValueOf(metrics[1].descriptor).Elem().FieldByName("fqName").String())
+	s.Equal(metrics[1].metric.Counter.GetValue(), float64(counterValue1))
+	s.Equal(Labels{Label{Name: "metrics_page1", Value: "for_test"}}, metrics[1].Labels())
 }

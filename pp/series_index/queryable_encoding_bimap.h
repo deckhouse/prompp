@@ -5,6 +5,7 @@
 #include "bare_bones/allocator.h"
 #include "bare_bones/preprocess.h"
 #include "bare_bones/snug_composite.h"
+#include "metrics/global_metrics.h"
 #include "queried_series.h"
 #include "reverse_index.h"
 #include "sorting_index.h"
@@ -40,6 +41,12 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
            sorting_index_.allocated_memory() + Base::allocated_memory();
   }
 
+  template <BareBones::InputStream S>
+  void load(S& in) {
+    metrics::MemoryAllocationsCalculator _(metrics::global_metrics()->lss_allocations);
+    Base::load(in);
+  }
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& added_series() const noexcept { return added_series_; }
 
   template <class LabelSet>
@@ -49,6 +56,8 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   template <class LabelSet>
   PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(const LabelSet& label_set, size_t hash) noexcept {
+    metrics::MemoryAllocationsCalculator _(metrics::global_metrics()->lss_allocations);
+
     hash = phmap_hash(hash);
     const auto ls_id = *ls_id_hash_set_.lazy_emplace_with_hash(label_set, hash, [&](const auto& ctor) {
       auto new_ls_id = Base::items_.size();

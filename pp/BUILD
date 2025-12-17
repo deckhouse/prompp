@@ -299,6 +299,7 @@ cc_library(
     hdrs = glob(["series_index/**/*.h"]),
     deps = [
         ":bare_bones_headers",
+        ":metrics",
         ":prometheus",
         ":wal",
         "@cedar",

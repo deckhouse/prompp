@@ -2,6 +2,7 @@
 
 #include <memory>
 
+#include "memory.h"
 #include "preprocess.h"
 
 namespace BareBones {
@@ -22,12 +23,13 @@ class Allocator {
   constexpr bool operator==(const Allocator& other) const noexcept { return &allocated_memory_ == &other.allocated_memory_; };
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE constexpr T* allocate(std::size_t n) {
-    allocated_memory_ += static_cast<CounterType>(n * sizeof(T));
-    return std::allocator<T>{}.allocate(n);
+    auto r = static_cast<T*>(DefaultReallocator::allocate(n * sizeof(T)));
+    std::uninitialized_default_construct_n(r, n);
+    return r;
   }
   PROMPP_ALWAYS_INLINE void deallocate(T* p, std::size_t n) {
-    std::allocator<T>{}.deallocate(p, n);
-    allocated_memory_ -= static_cast<CounterType>(n * sizeof(T));
+    std::destroy_n(p, n);
+    DefaultReallocator::free(p);
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE CounterType allocated_memory() const noexcept { return allocated_memory_; }

@@ -38,6 +38,9 @@ void BenchmarkFindOrEmplaceWithEmplace(benchmark::State& state) {
       lss2.find_or_emplace(label_set);
     }
   }
+
+  state.counters["Items"] = benchmark::Counter(lss.size());
+  state.counters["Time/item"] = benchmark::Counter(lss.size(), benchmark::Counter::kIsRate | benchmark::Counter::kInvert);
 }
 
 void BenchmarkFindOrEmplaceWithFind(benchmark::State& state) {
@@ -49,6 +52,9 @@ void BenchmarkFindOrEmplaceWithFind(benchmark::State& state) {
       lss.find_or_emplace(label_set);
     }
   }
+
+  state.counters["Items"] = benchmark::Counter(lss.size());
+  state.counters["Time/item"] = benchmark::Counter(lss.size(), benchmark::Counter::kIsRate | benchmark::Counter::kInvert);
 }
 
 double min_value(const std::vector<double>& v) noexcept {

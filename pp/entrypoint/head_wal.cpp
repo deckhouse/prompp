@@ -6,6 +6,7 @@
 #include "hashdex.hpp"
 #include "head/lss.h"
 #include "head/series_data.h"
+#include "metrics/global_metrics.h"
 #include "primitives/go_slice.h"
 #include "wal/decoder.h"
 #include "wal/encoder.h"
@@ -186,8 +187,12 @@ extern "C" void prompp_head_wal_decoder_decode_to_data_storage(void* args, void*
   const auto out = new (res) Result();
 
   try {
-    in->decoder->decode(in->segment, [in](PromPP::Primitives::LabelSetID ls_id, PromPP::Primitives::Timestamp timestamp, double value)
-                                         PROMPP_LAMBDA_INLINE { in->encoder_wrapper->encoder.encode(ls_id, timestamp, value); });
+    metrics::MemoryAllocationsManualCalculator calculator(metrics::global_metrics()->data_storage_allocations);
+    in->decoder->decode(in->segment,
+                        [in, &calculator](PromPP::Primitives::LabelSetID ls_id, PromPP::Primitives::Timestamp timestamp, double value) PROMPP_LAMBDA_INLINE {
+                          calculator.start();
+                          in->encoder_wrapper->encoder.encode(ls_id, timestamp, value);
+                        });
     out->create_timestamp = in->decoder->decoder().created_at_tsns();
     out->encode_timestamp = in->decoder->decoder().encoded_at_tsns();
   } catch (...) {
