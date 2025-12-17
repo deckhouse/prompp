@@ -453,8 +453,8 @@ struct LabelNameSet {
         const storage_type* storage_ptr_;
       };
 
-      auto begin() const noexcept { return iterator_type{storage_ptr, 0}; }
-      auto end() const noexcept { return iterator_type{storage_ptr, storage_ptr->items.size()}; }
+      auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
+      auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
 
       [[nodiscard]] size_t size() const noexcept { return storage_ptr->count(); }
       [[nodiscard]] uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
@@ -656,7 +656,7 @@ struct LabelSet {
                                                    uint32_t id = 0) noexcept
           : label_name_set_(label_name_set), data_(data), values_begin_(values_begin), values_end_(values_end), id_(id) {}
 
-      using value_type = std::pair<typename label_name_set_type::value_type, typename Symbol<Vector>::composite_type>;
+      using value_type = std::pair<typename label_name_set_type::value_type, typename Symbol<Vector>::storage_type::composite_type>;
 
       PROMPP_ALWAYS_INLINE const label_name_set_type& names() const noexcept { return label_name_set_; }
 
@@ -969,7 +969,7 @@ struct LabelSet {
     };
 
     struct label_set_view {
-      using keys_view_type = label_name_sets_table_type::view_type::symbols_view;
+      using keys_view_type = label_name_sets_table_type::filament_type::storage_type::view_type::symbols_view_type;
       using values_view_type = label_sets_values_view;
       const storage_type* storage_ptr;
 
@@ -1005,8 +1005,8 @@ struct LabelSet {
         const storage_type* storage_ptr_;
       };
 
-      auto begin() const noexcept { return iterator_type{storage_ptr, 0}; }
-      auto end() const noexcept { return iterator_type{storage_ptr, storage_ptr->items.size()}; }
+      auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
+      auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
 
       [[nodiscard]] size_t size() const noexcept { return storage_ptr->count(); }
       [[nodiscard]] uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
@@ -1281,6 +1281,8 @@ struct LabelSet {
 
       return std::views::iota(items_original_size, items.size());
     }
+
+    view_type view() const noexcept { return {.storage_ptr = this}; }
 
    private:
     template <class LabelSet, class Cache>
