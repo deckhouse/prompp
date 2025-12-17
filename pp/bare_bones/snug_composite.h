@@ -22,7 +22,7 @@ namespace BareBones::SnugComposite {
  * Serialization mode used to annotate encoded data and how to apply it on container.
  * We use Delta to save the difference between two states of container. It doesn't matter
  * how the first state was made (from snapshot or other delta). Snapshot may be explained
- * as delta from init (zero) state.
+ * as a delta from the init (zero) state.
  */
 enum class SerializationMode : char { SNAPSHOT = 1, DELTA = 2 };
 
@@ -154,7 +154,7 @@ class GenericDecodingTable {
       out.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 
       // write a version
-      out.put(2);
+      out.put(1);
 
       // write mode
       SerializationMode mode = (from != nullptr) ? SerializationMode::DELTA : SerializationMode::SNAPSHOT;
@@ -314,8 +314,8 @@ class GenericDecodingTable {
     }
 
     // check version
-    if (version != 2) {
-      throw BareBones::Exception(0x343b7bcc6814f2d5, "Invalid EncodingSequence version %d got from input stream, only version 2 is supported", version);
+    if (version != 1) {
+      throw BareBones::Exception(0x343b7bcc6814f2d5, "Invalid EncodingSequence version %d got from input stream, only version 1 is supported", version);
     }
 
     auto original_exceptions = in.exceptions();

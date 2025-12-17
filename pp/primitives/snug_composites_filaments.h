@@ -30,6 +30,9 @@ struct Symbol {
 
       template <BareBones::OutputStream S>
       void save(S& out, const storage_type& storage, uint32_t id_offset, uint32_t id_count, checkpoint_type const* from = nullptr) const {
+        // write items
+        out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
+
         // write a version
         out.put(1);
 
@@ -52,13 +55,13 @@ struct Symbol {
         if (size_to_save > 0) {
           out.write(&storage.data[first_to_save], size_to_save);
         }
-
-        // write items
-        out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
       }
 
       uint32_t save_size(const storage_type&, uint32_t id_count, checkpoint_type const* from = nullptr) const {
         uint32_t res = 0;
+
+        // items
+        res += sizeof(item_type) * id_count;
 
         // version
         ++res;
@@ -79,9 +82,6 @@ struct Symbol {
 
         // data
         res += size_to_save;
-
-        // items
-        res += sizeof(item_type) * id_count;
 
         return res;
       }
@@ -185,6 +185,11 @@ struct Symbol {
 
     template <class InputStream>
     auto load(InputStream& in, uint32_t items_size) {
+      // read items
+      const auto original_size = items.size();
+      items.resize(original_size + items_size);
+      in.read(reinterpret_cast<char*>(&items[original_size]), sizeof(item_type) * items_size);
+
       // read version
       const uint8_t version = in.get();
       if (version != 1) {
@@ -219,11 +224,6 @@ struct Symbol {
       // read data
       data.resize(data.size() + size_to_load);
       in.read(data.begin() + first_to_load_i, size_to_load);
-
-      // read items
-      const auto original_size = items.size();
-      items.resize(original_size + items_size);
-      in.read(reinterpret_cast<char*>(&items[original_size]), sizeof(item_type) * items_size);
 
       return std::views::iota(original_size, items.size());
     }
@@ -348,6 +348,9 @@ struct LabelNameSet {
 
       template <BareBones::OutputStream S>
       void save(S& out, const storage_type& storage, uint32_t id_offset, uint32_t id_count, checkpoint_type const* from = nullptr) const {
+        // write items
+        out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
+
         // write a version
         out.put(1);
 
@@ -376,13 +379,13 @@ struct LabelNameSet {
         } else {
           symbols_table_checkpoint.save(out);
         }
-
-        // write items
-        out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
       }
 
       uint32_t save_size(const storage_type& storage, uint32_t id_count, checkpoint_type const* from = nullptr) const {
         uint32_t res = 0;
+
+        // items
+        res += sizeof(item_type) * id_count;
 
         // version
         ++res;
@@ -410,9 +413,6 @@ struct LabelNameSet {
         } else {
           res += symbols_table_checkpoint.save_size();
         }
-
-        // items
-        res += sizeof(item_type) * id_count;
 
         return res;
       }
@@ -559,6 +559,11 @@ struct LabelNameSet {
 
     template <class InputStream>
     auto load(InputStream& in, uint32_t items_size) {
+      // read items
+      const auto items_original_size = items.size();
+      items.resize(items_original_size + items_size);
+      in.read(reinterpret_cast<char*>(&items[items_original_size]), sizeof(item_type) * items_size);
+
       // read version
       const uint8_t version = in.get();
       if (version != 1) {
@@ -598,11 +603,6 @@ struct LabelNameSet {
 
       // read symbols table
       symbols_table.load(in);
-
-      // read items
-      const auto items_original_size = items.size();
-      items.resize(items_original_size + items_size);
-      in.read(reinterpret_cast<char*>(&items[items_original_size]), sizeof(item_type) * items_size);
 
       return std::views::iota(items_original_size, items.size());
     }
@@ -754,6 +754,9 @@ struct LabelSet {
 
       template <BareBones::OutputStream S>
       void save(S& out, const storage_type& storage, uint32_t id_offset, uint32_t id_count, checkpoint_type const* from = nullptr) const {
+        // write items
+        out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
+
         // write version
         out.put(1);
 
@@ -825,13 +828,13 @@ struct LabelSet {
             symbols_tables_checkpoints_[i].save(out);
           }
         }
-
-        // write items
-        out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
       }
 
       uint32_t save_size(const storage_type& storage, uint32_t id_count, checkpoint_type const* from = nullptr) const {
         uint32_t res = 0;
+
+        // items
+        res += sizeof(item_type) * id_count;
 
         // version
         ++res;
@@ -887,9 +890,6 @@ struct LabelSet {
             res += symbols_tables_checkpoints_[i].save_size();
           }
         }
-
-        // items
-        res += sizeof(item_type) * id_count;
 
         return res;
       }
@@ -1124,9 +1124,7 @@ struct LabelSet {
       const uint32_t lns_id = find_or_emplace_label_names_set(label_set, std::forward<Cache>(cache));
       const uint32_t pos = symbols_ids_sequences.size() + shrinked_size;
       // resize if there are new symbols (in lns table)
-      symbols_tables.reserve(label_name_sets_table.data_view().symbols().size());  // label_name_sets_table.view().symbols().size()
-      // label_name_sets_table.view() -> label_names_view;
-      // label_names_view.symbols() -> symbols_view;
+      symbols_tables.reserve(label_name_sets_table.data_view().symbols().size());
       for (auto i = symbols_tables.size(); i < label_name_sets_table.data_view().symbols().size(); ++i) {
         symbols_tables.emplace_back(std::make_unique<SymbolsTableType<Vector>>());
       }
@@ -1184,6 +1182,11 @@ struct LabelSet {
 
     template <class InputStream>
     auto load(InputStream& in, uint32_t items_size) {
+      // read items
+      const auto items_original_size = items.size();
+      items.resize(items_original_size + items_size);
+      in.read(reinterpret_cast<char*>(&items[items_original_size]), sizeof(item_type) * items_size);
+
       // read version
       const uint8_t version = in.get();
       if (version != 1) {
@@ -1275,11 +1278,6 @@ struct LabelSet {
           symbols_tables_checkpoints.emplace_back(id, symbols_tables[id]->checkpoint());
         symbols_tables[id]->load(in);
       }
-
-      // read items
-      const auto items_original_size = items.size();
-      items.resize(items_original_size + items_size);
-      in.read(reinterpret_cast<char*>(&items[items_original_size]), sizeof(item_type) * items_size);
 
       return std::views::iota(items_original_size, items.size());
     }
