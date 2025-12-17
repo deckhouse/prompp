@@ -249,6 +249,8 @@ using ShrinkableEncodingBimap = BareBones::SnugComposite::ShrinkableEncodingBima
 class EncodingBimapFixture : public testing::Test {
  protected:
   EncodingBimap table_;
+
+  static constexpr auto kInvalidId = std::numeric_limits<uint32_t>::max();
 };
 
 TEST_F(EncodingBimapFixture, Empty) {
@@ -340,6 +342,7 @@ TEST_F(EncodingBimapFixture, FindNonExistingValue) {
 
   // Assert
   EXPECT_FALSE(found_id.has_value());
+  EXPECT_EQ(kInvalidId, table_.find(value).value_or(kInvalidId));
 }
 
 TEST_F(EncodingBimapFixture, FindWithHash) {
@@ -598,8 +601,8 @@ TEST_F(ShrinkableEncodingBimapFixture, SerializeDeserializeDeltaAfterShrink) {
   snapshot_stream >> table2;
   table2.shrink_to_checkpoint_size(table2.checkpoint());
 
-  table_.find_or_emplace("test3"s);
-  table_.find_or_emplace("test4"s);
+  const auto test3_id = table_.find_or_emplace("test3"s);
+  const auto test4_id = table_.find_or_emplace("test4"s);
   const auto final_checkpoint = table_.checkpoint();
   const auto delta = final_checkpoint - initial_checkpoint;
 
@@ -611,10 +614,10 @@ TEST_F(ShrinkableEncodingBimapFixture, SerializeDeserializeDeltaAfterShrink) {
   // Assert
   EXPECT_EQ(2U, table2.size());
 
-  EXPECT_EQ("test3"s, table2[2]);
-  EXPECT_EQ("test4"s, table2[3]);
   EXPECT_EQ(kInvalidId, table2.find("test1"s).value_or(kInvalidId));
   EXPECT_EQ(kInvalidId, table2.find("test2"s).value_or(kInvalidId));
+  EXPECT_EQ(test3_id, table2.find("test3"s).value_or(kInvalidId));
+  EXPECT_EQ(test4_id, table2.find("test4"s).value_or(kInvalidId));
 }
 
 }  // namespace
