@@ -133,10 +133,11 @@ struct TestStringFilament {
     storage_type() noexcept = default;
     template <class AnotherStorageType>
       requires kIsReadOnly
-    explicit storage_type(const AnotherStorageType& other) : data{other.data}, items{other.items} {}
+    explicit storage_type(const AnotherStorageType& other) : data{other.data}, items{other.items}, shrinked_size{other.shrinked_size} {}
 
     Vector<char> data;
     Vector<item_type> items;
+    uint32_t shrinked_size{};
 
     [[nodiscard]] uint32_t count() const noexcept { return items.size(); }
 
@@ -158,7 +159,8 @@ struct TestStringFilament {
     }
 
     void validate(uint32_t id) const {
-      if (const auto item = items[id]; item.pos + item.length > data.size()) {
+      const auto item = items[id];
+      if (item.pos + item.length > data.size()) {
         throw BareBones::Exception(0x75555f55ebe357a3, "TestStringFilament validation error: length is out of data vector range");
       }
     }
@@ -169,7 +171,8 @@ struct TestStringFilament {
 
     [[nodiscard]] uint32_t emplace_back(composite_type str) noexcept {
       const uint32_t id = items.size();
-      items.emplace_back(data.size(), str.length());
+      const uint32_t pos = data.size();
+      items.emplace_back(pos, str.length());
       data.push_back(str.begin(), str.end());
       return id;
     }
@@ -206,14 +209,15 @@ struct TestStringFilament {
         in.read(reinterpret_cast<char*>(&first_to_load_i), sizeof(first_to_load_i));
       }
 
-      if (first_to_load_i != data.size()) {
+      const uint32_t next_item_index = data.size();
+      if (first_to_load_i != next_item_index) {
         if (mode == BareBones::SnugComposite::SerializationMode::SNAPSHOT) {
           throw BareBones::Exception(0x4c0ca0586da6da3f, "Attempt to load snapshot into non-empty data vector");
-        } else if (first_to_load_i < data.size()) {
+        } else if (first_to_load_i < next_item_index) {
           throw BareBones::Exception(0x55cb9b02c23f7bbd, "Attempt to load segment over existing data");
         } else {
           throw BareBones::Exception(0x55cb9b02c23f7bbd, "Attempt to load incomplete data from segment, data vector length (%u) is less than segment size (%d)",
-                                     data.size(), first_to_load_i);
+                                     next_item_index, first_to_load_i);
         }
       }
 
@@ -230,8 +234,8 @@ struct TestStringFilament {
 
     [[nodiscard]] view_type view() const noexcept { return {.storage_ptr = this}; }
 
-    void shrink() {
-      data.clear();
+    void shrink() noexcept {
+      shrinked_size += items.size();
       items.clear();
     }
   };
@@ -531,16 +535,22 @@ TEST_F(ShrinkableEncodingBimapFixture, EmplaceAfterShrink) {
   EXPECT_EQ(0U, id_before);
   EXPECT_EQ(1U, id_after);
   EXPECT_EQ(1U, table_.size());
+
+  EXPECT_EQ("test1"s, table_[id_after]);
 }
 
 TEST_F(ShrinkableEncodingBimapFixture, ShrinkToOutdatedCheckpointThrows) {
   // Arrange
   table_.find_or_emplace("test1"s);
+
   const auto checkpoint = table_.checkpoint();
   table_.shrink_to_checkpoint_size(checkpoint);
+
   table_.find_or_emplace("test2"s);
 
-  // Act & Assert
+  // Act
+
+  // Assert
   EXPECT_THROW(table_.shrink_to_checkpoint_size(checkpoint), BareBones::Exception);
 }
 
@@ -561,10 +571,11 @@ TEST_F(ShrinkableEncodingBimapFixture, SerializeDeserializeSnapshot) {
   // Arrange
   table_.find_or_emplace("test1"s);
   table_.find_or_emplace("test2"s);
+  const auto checkpoint = table_.checkpoint();
   std::stringstream stream;
 
   // Act
-  stream << table_.checkpoint();
+  stream << checkpoint;
   ShrinkableEncodingBimap table2;
   stream >> table2;
 
@@ -576,24 +587,34 @@ TEST_F(ShrinkableEncodingBimapFixture, SerializeDeserializeSnapshot) {
 
 TEST_F(ShrinkableEncodingBimapFixture, SerializeDeserializeDeltaAfterShrink) {
   // Arrange
+  ShrinkableEncodingBimap table2;
+  std::stringstream snapshot_stream;
+
   table_.find_or_emplace("test1"s);
   table_.find_or_emplace("test2"s);
-  const auto checkpoint = table_.checkpoint();
-  std::stringstream snapshot_stream;
-  snapshot_stream << checkpoint;
-  ShrinkableEncodingBimap table2;
+  const auto initial_checkpoint = table_.checkpoint();
+
+  snapshot_stream << initial_checkpoint;
   snapshot_stream >> table2;
   table2.shrink_to_checkpoint_size(table2.checkpoint());
+
   table_.find_or_emplace("test3"s);
-  std::stringstream delta_stream;
+  table_.find_or_emplace("test4"s);
+  const auto final_checkpoint = table_.checkpoint();
+  const auto delta = final_checkpoint - initial_checkpoint;
 
   // Act
-  delta_stream << (table_.checkpoint() - checkpoint);
+  std::stringstream delta_stream;
+  delta_stream << delta;
   delta_stream >> table2;
 
   // Assert
-  EXPECT_EQ(3U, table2.size());
+  EXPECT_EQ(2U, table2.size());
+
   EXPECT_EQ("test3"s, table2[2]);
+  EXPECT_EQ("test4"s, table2[3]);
+  EXPECT_EQ(kInvalidId, table2.find("test1"s).value_or(kInvalidId));
+  EXPECT_EQ(kInvalidId, table2.find("test2"s).value_or(kInvalidId));
 }
 
 }  // namespace
