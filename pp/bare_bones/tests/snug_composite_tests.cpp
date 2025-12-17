@@ -141,7 +141,7 @@ TYPED_TEST(SnugComposite, should_return_same_id_for_same_data_with_hash) {
   this->fill_table_with_random_values(outcomes);
 
   std::string v = "12";
-  auto hash_val = BareBones::XXHash::hash(v);
+  auto hash_val = BareBones::XXHash3::hash(v);
   auto id = outcomes.find_or_emplace(v, hash_val);
 
   EXPECT_EQ(id, outcomes.find_or_emplace(v, hash_val));
@@ -151,7 +151,7 @@ TYPED_TEST(SnugComposite, should_return_same_id_for_same_data_with_hash) {
   EXPECT_EQ(outcomes.find_or_emplace(v, hash_val), outcomes.find(v));
 
   v = "21";
-  hash_val = BareBones::XXHash::hash(v);
+  hash_val = BareBones::XXHash3::hash(v);
   id = outcomes.find_or_emplace(v);
 
   EXPECT_EQ(id, outcomes.find_or_emplace(v, hash_val));
