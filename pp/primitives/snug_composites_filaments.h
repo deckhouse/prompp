@@ -127,6 +127,8 @@ struct Symbol {
 
       [[nodiscard]] size_t size() const noexcept { return storage_ptr->count(); }
       [[nodiscard]] uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
+
+      [[nodiscard]] composite_type operator[](uint32_t id) const noexcept { return storage_ptr->composite(id); }
     };
 
     using view_type = symbols_view;
@@ -977,6 +979,28 @@ struct LabelSet {
         return iterator_type{storage_ptr->symbols_tables, storage_ptr->label_name_sets_table.data_view().symbols().end(),
                              storage_ptr->label_name_sets_table.data_view().symbols().end()};
       }
+
+      [[nodiscard]] size_t size() const noexcept {
+        size_t total_size = 0;
+        const auto keys_view = storage_ptr->label_name_sets_table.data_view().symbols();
+        for (auto key_it = keys_view.begin(); key_it != keys_view.end(); ++key_it) {
+          const uint32_t key_id = key_it.id();
+          if constexpr (BareBones::concepts::is_dereferenceable<typename symbols_tables_type::value_type>) {
+            total_size += (*storage_ptr->symbols_tables[key_id]).data_view().size();
+          } else {
+            total_size += storage_ptr->symbols_tables[key_id].data_view().size();
+          }
+        }
+        return total_size;
+      }
+
+      [[nodiscard]] iterator_type::value_type get_by_id(uint32_t name_id, uint32_t value_id) const noexcept {
+        if constexpr (BareBones::concepts::is_dereferenceable<typename symbols_tables_type::value_type>) {
+          return (*storage_ptr->symbols_tables[name_id])[value_id];
+        } else {
+          return storage_ptr->symbols_tables[name_id][value_id];
+        }
+      }
     };
 
     struct label_set_view {
@@ -1024,6 +1048,20 @@ struct LabelSet {
 
       keys_view_type labels_keys() const noexcept { return storage_ptr->label_name_sets_table.data_view().symbols(); }
       values_view_type labels_values() const noexcept { return label_sets_values_view{.storage_ptr = storage_ptr}; }
+
+      // Get symbol by name_id and optional value_id
+      // If value_id == std::numeric_limits<uint32_t>::max(), returns name symbol
+      // Otherwise returns value symbol for the given name_id and value_id
+      [[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view get_symbol(uint32_t name_id,
+                                                                     uint32_t value_id = std::numeric_limits<uint32_t>::max()) const noexcept {
+        if (value_id == std::numeric_limits<uint32_t>::max()) {
+          // Return name symbol
+          return labels_keys()[name_id];
+        } else {
+          // Return value symbol
+          return labels_values().get_by_id(name_id, value_id);
+        }
+      }
     };
 
     using view_type = label_set_view;

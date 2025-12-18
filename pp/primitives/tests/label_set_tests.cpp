@@ -105,6 +105,7 @@ TEST_F(LabelSetEncodingBimapTest, CreateViewFromEncodingBimap) {
   // Assert
   EXPECT_EQ(3U, view.size());
   EXPECT_EQ(3U, view.labels_keys().size());
+  EXPECT_EQ(6U, view.labels_values().size());
   EXPECT_TRUE(std::ranges::equal(view.labels_keys(), std::initializer_list{"job", "pod", "run"}));
   EXPECT_TRUE(std::ranges::equal(view.labels_values(), std::initializer_list{"1", "2", "3", "a", "b", "first"}));
 }
@@ -114,6 +115,7 @@ TEST_F(LabelSetEncodingBimapTest, EncodingBimapViewCheckId) {
   const LabelViewSet label_set1 = {{"job", "1"}};
   const LabelViewSet label_set2 = {{"job", "2"}, {"pod", "a"}};
   const LabelViewSet label_set3 = {{"job", "3"}, {"run", "first"}, {"pod", "b"}};
+
   const auto id1 = encoding_table_.find_or_emplace(label_set1);
   const auto id2 = encoding_table_.find_or_emplace(label_set2);
   const auto id3 = encoding_table_.find_or_emplace(label_set3);
