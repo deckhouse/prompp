@@ -548,12 +548,66 @@ class SymbolDeltaCheckpointTest : public testing::Test {
 
 TEST_F(SymbolDeltaCheckpointTest, DeltaCheckpointSaveSize) {
   // Arrange
+  BareBones::ShrinkedToFitOStringStream ss;
+
   encoding_table_.find_or_emplace("first"sv);
   const auto base_checkpoint = encoding_table_.checkpoint();
   encoding_table_.find_or_emplace("second"sv);
+
   const auto checkpoint = encoding_table_.checkpoint();
   const auto delta = checkpoint - base_checkpoint;
+
+  // Act
+  ss << delta;
+  const auto save_size = delta.save_size();
+
+  // Assert
+  EXPECT_EQ(ss.view().size(), save_size);
+}
+
+class LabelNameSetDeltaCheckpointTest : public testing::Test {
+ protected:
+  PromPP::Primitives::SnugComposites::LabelNameSet::EncodingBimap<Vector> encoding_table_;
+};
+
+TEST_F(LabelNameSetDeltaCheckpointTest, DeltaCheckpointSaveSize) {
+  // Arrange
   BareBones::ShrinkedToFitOStringStream ss;
+
+  const LabelViewSet label_set1 = {{"name1", "value1"}};
+  const LabelViewSet label_set2 = {{"name2", "value2"}, {"name3", "value3"}};
+
+  encoding_table_.find_or_emplace(label_set1.names());
+  const auto base_checkpoint = encoding_table_.checkpoint();
+  encoding_table_.find_or_emplace(label_set2.names());
+  const auto checkpoint = encoding_table_.checkpoint();
+  const auto delta = checkpoint - base_checkpoint;
+
+  // Act
+  ss << delta;
+  const auto save_size = delta.save_size();
+
+  // Assert
+  EXPECT_EQ(ss.view().size(), save_size);
+}
+
+class LabelSetDeltaCheckpointTest : public testing::Test {
+ protected:
+  PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<Vector> encoding_table_;
+};
+
+TEST_F(LabelSetDeltaCheckpointTest, DeltaCheckpointSaveSize) {
+  // Arrange
+  BareBones::ShrinkedToFitOStringStream ss;
+  const LabelViewSet label_set1 = {{"name1", "value1"}};
+  const LabelViewSet label_set2 = {{"name2", "value2"}, {"name3", "value3"}};
+
+  encoding_table_.find_or_emplace(label_set1);
+  const auto base_checkpoint = encoding_table_.checkpoint();
+  encoding_table_.find_or_emplace(label_set2);
+
+  const auto checkpoint = encoding_table_.checkpoint();
+  const auto delta = checkpoint - base_checkpoint;
 
   // Act
   ss << delta;
