@@ -28,6 +28,16 @@ struct LabelPair {
 
 using LabelPairsList = std::vector<LabelPair>;
 
+struct Gauge {
+  explicit Gauge(double* counter) : value(counter) {}
+
+  MessageState state{};
+  CacheSize size_cache{};
+  UnknownFields unknown_fields{};
+
+  double* value{};
+};
+
 struct Counter {
   explicit Counter(double* counter) : value(counter) {}
 
@@ -41,14 +51,15 @@ struct Counter {
 };
 
 struct Metric {
-  Metric(const SliceView<const LabelPair*>& label_set, Counter* counter_ptr) : labels(label_set), counter(counter_ptr) {}
+  PROMPP_ALWAYS_INLINE Metric(const SliceView<const LabelPair*>& label_set, Gauge* gauge_ptr) : labels(label_set), gauge(gauge_ptr) {}
+  PROMPP_ALWAYS_INLINE Metric(const SliceView<const LabelPair*>& label_set, Counter* counter_ptr) : labels(label_set), counter(counter_ptr) {}
 
   MessageState state{};
   CacheSize size_cache{};
   UnknownFields unknown_fields{};
 
   SliceView<const LabelPair*> labels{};
-  void* gauge{};
+  Gauge* gauge{};
   Counter* counter{};
   void* summary{};
   void* untyped{};

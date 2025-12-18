@@ -45,10 +45,14 @@ func (s *CppMetricsSuite) TestOneMetricsPage() {
 	metrics := s.getMetrics()
 
 	// Assert
-	s.Require().Len(metrics, 1)
+	s.Require().Len(metrics, 2)
 	s.Equal("counter", reflect.ValueOf(metrics[0].descriptor).Elem().FieldByName("fqName").String())
 	s.Equal(metrics[0].metric.Counter.GetValue(), float64(counterValue))
 	s.Equal(Labels{Label{Name: "metrics_page", Value: "for_test"}}, metrics[0].Labels())
+
+	s.Equal("counter", reflect.ValueOf(metrics[1].descriptor).Elem().FieldByName("fqName").String())
+	s.Equal(metrics[1].metric.Gauge.GetValue(), float64(counterValue))
+	s.Equal(Labels{Label{Name: "metrics_page", Value: "for_test"}}, metrics[1].Labels())
 }
 
 func (s *CppMetricsSuite) TestTwoMetricPages() {
@@ -67,13 +71,21 @@ func (s *CppMetricsSuite) TestTwoMetricPages() {
 	metrics := s.getMetrics()
 
 	// Assert
-	s.Require().Len(metrics, 2)
+	s.Require().Len(metrics, 4)
 
 	s.Equal("counter2", reflect.ValueOf(metrics[0].descriptor).Elem().FieldByName("fqName").String())
 	s.Equal(metrics[0].metric.Counter.GetValue(), float64(counterValue2))
 	s.Equal(Labels{Label{Name: "metrics_page2", Value: "for_test"}}, metrics[0].Labels())
 
-	s.Equal("counter1", reflect.ValueOf(metrics[1].descriptor).Elem().FieldByName("fqName").String())
-	s.Equal(metrics[1].metric.Counter.GetValue(), float64(counterValue1))
-	s.Equal(Labels{Label{Name: "metrics_page1", Value: "for_test"}}, metrics[1].Labels())
+	s.Equal("counter2", reflect.ValueOf(metrics[1].descriptor).Elem().FieldByName("fqName").String())
+	s.Equal(metrics[1].metric.Gauge.GetValue(), float64(counterValue2))
+	s.Equal(Labels{Label{Name: "metrics_page2", Value: "for_test"}}, metrics[1].Labels())
+
+	s.Equal("counter1", reflect.ValueOf(metrics[2].descriptor).Elem().FieldByName("fqName").String())
+	s.Equal(metrics[2].metric.Counter.GetValue(), float64(counterValue1))
+	s.Equal(Labels{Label{Name: "metrics_page1", Value: "for_test"}}, metrics[2].Labels())
+
+	s.Equal("counter1", reflect.ValueOf(metrics[3].descriptor).Elem().FieldByName("fqName").String())
+	s.Equal(metrics[3].metric.Gauge.GetValue(), float64(counterValue1))
+	s.Equal(Labels{Label{Name: "metrics_page1", Value: "for_test"}}, metrics[3].Labels())
 }

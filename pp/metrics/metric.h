@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bare_bones/concepts.h"
 #include "primitives/go_metric.h"
 #include "primitives/label_set.h"
 
@@ -10,12 +11,13 @@ class Metric {
   using Label = std::pair<PromPP::Primitives::Go::String, PromPP::Primitives::Go::String>;
 
   Metric() = delete;
-  template <class LabelSet>
-  Metric(const LabelSet& labels, std::string_view name, PromPP::Primitives::Go::dto::Counter* counter, size_t object_size)
+  template <class LabelSet, class DtoMetricObject>
+    requires std::same_as<DtoMetricObject, PromPP::Primitives::Go::dto::Gauge> || std::same_as<DtoMetricObject, PromPP::Primitives::Go::dto::Counter>
+  Metric(const LabelSet& labels, std::string_view name, DtoMetricObject* object, size_t object_size)
       : labels_(labels, PromPP::Primitives::NoSortLabels{}),
         label_pairs_(create_label_pairs()),
         descriptor_(PromPP::Primitives::Go::String(name), label_pairs_),
-        metric_(PromPP::Primitives::Go::SliceView(descriptor_.const_label_pairs), counter),
+        metric_(PromPP::Primitives::Go::SliceView(descriptor_.const_label_pairs), object),
         object_size_(object_size) {}
   Metric(const Metric&) = delete;
   Metric(Metric&&) noexcept = delete;
@@ -43,6 +45,37 @@ class Metric {
 
     return list;
   }
+};
+
+class Counter final : public Metric {
+ public:
+  using Metric::Metric;
+
+  template <class LabelSet, BareBones::concepts::arithmetic ValueType = double>
+  explicit Counter(LabelSet&& labels, std::string_view name, ValueType value = {})
+      : Metric(std::forward<LabelSet>(labels), name, &counter_, sizeof(*this)), value_(value) {}
+
+  PROMPP_ALWAYS_INLINE void inc(BareBones::concepts::arithmetic auto count) noexcept { value_ += count; }
+
+ protected:
+  double value_{};
+  PromPP::Primitives::Go::dto::Counter counter_{&value_};
+};
+
+class Gauge final : public Metric {
+ public:
+  using Metric::Metric;
+
+  template <class LabelSet, BareBones::concepts::arithmetic ValueType = double>
+  explicit Gauge(LabelSet&& labels, std::string_view name, ValueType value = {})
+      : Metric(std::forward<LabelSet>(labels), name, &gauge_, sizeof(*this)), value_(value) {}
+
+  PROMPP_ALWAYS_INLINE void inc(BareBones::concepts::arithmetic auto count) noexcept { value_ += count; }
+  PROMPP_ALWAYS_INLINE void dec(BareBones::concepts::arithmetic auto count) noexcept { value_ -= count; }
+
+ protected:
+  double value_{};
+  PromPP::Primitives::Go::dto::Gauge gauge_{&value_};
 };
 
 }  // namespace metrics

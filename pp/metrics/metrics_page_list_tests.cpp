@@ -2,7 +2,6 @@
 
 #include <gtest/gtest.h>
 
-#include "counter.h"
 #include "metrics_page_list.h"
 
 namespace {

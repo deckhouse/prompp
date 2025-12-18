@@ -1,6 +1,5 @@
 #include "metrics.h"
 
-#include "metrics/counter.h"
 #include "metrics/storage.h"
 #include "primitives/go_model.h"
 #include "primitives/go_slice.h"
@@ -38,9 +37,11 @@ struct MetricsPageForTest final : metrics::MetricsPage<MetricsPageForTest> {
   using MetricsPage::MetricsPage;
 
   MetricsPageForTest(const SliceView<Label>& labels, const String& counter_name, uint64_t counter_value)
-      : emplace_count(labels, static_cast<std::string_view>(counter_name), counter_value) {}
+      : emplace_count(labels, static_cast<std::string_view>(counter_name), counter_value),
+        emplace_gauge(labels, static_cast<std::string_view>(counter_name), counter_value) {}
 
   metrics::Counter emplace_count;
+  metrics::Gauge emplace_gauge;
 };
 
 extern "C" void prompp_metrics_page_for_test_ctor(void* args, void* res) {

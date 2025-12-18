@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 
-#include "counter.h"
 #include "storage.h"
 
 namespace {
