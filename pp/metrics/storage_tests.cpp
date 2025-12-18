@@ -34,7 +34,7 @@ class MetricsStorageIteratorFixture : public testing::Test {
 
 TEST_F(MetricsStorageIteratorFixture, EmptyStorage) {
   // Arrange
-  std::vector<Storage::Iterator::Item> items;
+  std::vector<Storage::Iterator::value_type> items;
 
   // Act
   std::ranges::copy(storage_, std::back_inserter(items));
@@ -48,17 +48,17 @@ TEST_F(MetricsStorageIteratorFixture, TwoPages) {
   const auto page1 = CreateMetricsPage<Metrics1>(storage_);
   const auto page2 = CreateMetricsPage<Metrics2>(storage_);
 
-  std::vector<Storage::Iterator::Item> items;
+  std::vector<Storage::Iterator::value_type> items;
 
   // Act
   std::ranges::copy(storage_, std::back_inserter(items));
 
   // Assert
   EXPECT_TRUE(std::ranges::equal(
-      std::vector<Storage::Iterator::Item>{
-          {.page = page2, .metric = &page2->counter1},
-          {.page = page2, .metric = &page2->counter2},
-          {.page = page1, .metric = &page1->counter},
+      std::vector<Storage::Iterator::value_type>{
+          &page2->counter1,
+          &page2->counter2,
+          &page1->counter,
       },
       items));
 }

@@ -32,6 +32,7 @@ type (
 	CppBareBonesVector        = [C.Sizeof_BareBonesVector]byte
 	CppRoaringBitset          = [C.Sizeof_RoaringBitset]byte
 	CppSerializedDataIterator = [C.Sizeof_SerializedDataIterator]byte
+	CppMetricsIterator        = [C.Sizeof_MetricsIterator]byte
 )
 
 var (
@@ -3447,36 +3448,22 @@ func prometheusRemapStaleNansState(staleNansState, lsIdsMapping uintptr) {
 	)
 }
 
-func prometheusMetricsIteratorCtor() uintptr {
-	var res struct {
-		iterator uintptr
-	}
+func prometheusMetricsIteratorCtor() CppMetricsIterator {
+	var iterator CppMetricsIterator
 
 	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_metrics_iterator_ctor,
-		uintptr(unsafe.Pointer(&res)),
+		uintptr(unsafe.Pointer(&iterator)),
 	)
 
-	return res.iterator
+	return iterator
 }
 
-func prometheusMetricsIteratorDtor(iterator uintptr) {
+func prometheusMetricsIteratorNext(iterator *CppMetricsIterator) *CppMetric {
 	args := struct {
 		iterator uintptr
-	}{iterator}
-
-	testGC()
-	fastcgo.UnsafeCall1(
-		C.prompp_metrics_iterator_dtor,
-		uintptr(unsafe.Pointer(&args)),
-	)
-}
-
-func prometheusMetricsIteratorNext(iterator uintptr) *CppMetric {
-	args := struct {
-		iterator uintptr
-	}{iterator}
+	}{uintptr(unsafe.Pointer(iterator))}
 
 	var res struct {
 		metric *CppMetric

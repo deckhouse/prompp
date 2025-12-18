@@ -32,10 +32,9 @@ func (m *CppMetric) Labels() Labels {
 
 func CppMetrics(f func(metric *CppMetric) bool) {
 	iterator := prometheusMetricsIteratorCtor()
-	defer func() { prometheusMetricsIteratorDtor(iterator) }()
 
 	for {
-		metric := prometheusMetricsIteratorNext(iterator)
+		metric := prometheusMetricsIteratorNext(&iterator)
 		if metric == nil || !f(metric) {
 			break
 		}
@@ -48,10 +47,7 @@ func NewCppMetricsCollector(reg prometheus.Registerer) {
 	_ = reg.Register(&CppMetricsCollector{})
 }
 
-func (c *CppMetricsCollector) Describe(ch chan<- *prometheus.Desc) {
-	for metric := range CppMetrics {
-		ch <- metric.descriptor
-	}
+func (c *CppMetricsCollector) Describe(chan<- *prometheus.Desc) {
 }
 
 func (c *CppMetricsCollector) Collect(ch chan<- prometheus.Metric) {

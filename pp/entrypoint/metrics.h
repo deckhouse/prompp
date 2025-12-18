@@ -3,28 +3,17 @@ extern "C" {
 #endif
 
 /**
- * @brief Create metrics iterator
+ * @brief Initialize metrics iterator
  *
- * @param res {
- *   iterator uintptr // Pointer to constructed iterator
- * }
+ * @param args *MetricIterator
  */
-void prompp_metrics_iterator_ctor(void* res);
-
-/**
- * @brief Destroy metrics iterator
- *
- * @param args {
- *   iterator uintptr // Pointer to constructed iterator
- * }
- */
-void prompp_metrics_iterator_dtor(void* args);
+void prompp_metrics_iterator_ctor(void* args);
 
 /**
  * @brief Serialize metric into protobuf and advance iterator to next metric
  *
  * @param args {
- *   iterator uintptr // Pointer to constructed iterator
+ *   iterator *MetricIterator // Pointer to constructed iterator
  * }
  *
  * @param res {

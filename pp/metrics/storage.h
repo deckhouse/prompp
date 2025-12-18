@@ -10,35 +10,20 @@ class Storage {
 
   class Iterator {
    public:
-    struct Item {
-      const MetricsPageControlBlock* page{};
-      const Metric* metric{};
-
-      bool operator==(const Item&) const noexcept = default;
-    };
-
     using iterator_category = std::forward_iterator_tag;
-    using value_type = Item;
+    using value_type = const Metric*;
     using difference_type = ptrdiff_t;
     using pointer = value_type;
     using reference = value_type;
 
-    explicit Iterator(const MetricsPageList& storage) : page_iterator_(storage.begin()), metric_iterator_(*page_iterator_) {
-      if (metric_iterator_ != MetricsPageControlBlock::end()) {
-        fill_item();
-      }
-    }
+    explicit Iterator(const MetricsPageList& storage) : page_iterator_(storage.begin()), metric_iterator_(*page_iterator_) {}
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE const value_type& operator*() const noexcept { return item_; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE const value_type* operator->() const noexcept { return &item_; }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return metric_iterator_.operator*(); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator->() const noexcept { return metric_iterator_.operator->(); }
 
     PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
-      if (++metric_iterator_ != MetricsPageControlBlock::end()) {
-        fill_item();
-      } else {
-        if (metric_iterator_ = MetricsPageControlBlock::Iterator(*++page_iterator_); metric_iterator_ != MetricsPageControlBlock::end()) {
-          fill_item();
-        }
+      if (++metric_iterator_ == MetricsPageControlBlock::end()) [[likely]] {
+        metric_iterator_ = MetricsPageControlBlock::Iterator(*++page_iterator_);
       }
 
       return *this;
@@ -55,9 +40,6 @@ class Storage {
    private:
     MetricsPageList::Iterator page_iterator_;
     MetricsPageControlBlock::Iterator metric_iterator_;
-    Item item_;
-
-    void fill_item() { item_ = {.page = *page_iterator_, .metric = *metric_iterator_}; }
   };
 
   PROMPP_ALWAYS_INLINE void add(MetricsPageControlBlock* page) { page_list_.add(page); }
