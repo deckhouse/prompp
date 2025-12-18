@@ -389,7 +389,7 @@ class DecodingTable : public GenericDecodingTable<DecodingTable<Filament, Vector
 };
 
 template <template <template <class> class> class Filament, template <class> class Vector>
-  requires is_shrinkable<typename Filament<Vector>::data_type>
+  requires is_shrinkable<typename Filament<Vector>::storage_type>
 class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEncodingBimap<Filament, Vector>, Filament, Vector> {
  public:
   using Base = GenericDecodingTable<ShrinkableEncodingBimap, Filament, Vector>;

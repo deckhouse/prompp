@@ -533,4 +533,181 @@ TEST_F(SymbolDeltaCheckpointTest, DeltaCheckpointSaveSize) {
   EXPECT_EQ(ss.view().size(), save_size);
 }
 
+class ShrinkableEncodingBimapLabelSetFixture : public testing::Test {
+ protected:
+  PromPP::Primitives::SnugComposites::LabelSet::ShrinkableEncodingBimap<Vector> encoding_table_;
+  PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<Vector> decoding_table_;
+  std::array<LabelViewSet, 6> ls_;
+
+  void SetUp() override {
+    ls_[0] = {{"1", "1"}, {"2", "2"}};
+    ls_[1] = {{"3", "3"}};
+    ls_[2] = {{"4", "4"}};
+    ls_[3] = {{"5", "5"}};
+    ls_[4] = {{"6", "6"}};
+    ls_[5] = {{"7", "7"}};
+  }
+
+  auto create_and_load_checkpoint(const typename PromPP::Primitives::SnugComposites::LabelSet::ShrinkableEncodingBimap<Vector>::checkpoint_type* from) {
+    auto checkpoint = encoding_table_.checkpoint();
+    std::stringstream ss;
+    checkpoint.save(ss, from);
+    decoding_table_.load(ss);
+    return checkpoint;
+  }
+
+  void check_decoding_table() const {
+    ASSERT_EQ(3U, decoding_table_.size());
+    {
+      auto composite = decoding_table_[0];
+      ASSERT_EQ(2U, composite.size());
+      auto it = composite.begin();
+      EXPECT_EQ((std::pair<std::string_view, std::string_view>("1", "1")), *it++);
+      EXPECT_EQ((std::pair<std::string_view, std::string_view>("2", "2")), *it);
+    }
+    {
+      auto composite = decoding_table_[1];
+      ASSERT_EQ(1U, composite.size());
+      EXPECT_EQ((std::pair<std::string_view, std::string_view>("3", "3")), *composite.begin());
+    }
+    {
+      auto composite = decoding_table_[2];
+      ASSERT_EQ(1U, composite.size());
+      EXPECT_EQ((std::pair<std::string_view, std::string_view>("4", "4")), *composite.begin());
+    }
+  }
+};
+
+TEST_F(ShrinkableEncodingBimapLabelSetFixture, ShrinkAndLoad) {
+  // Arrange
+
+  // Act
+  {
+    encoding_table_.find_or_emplace(ls_[0]);
+    encoding_table_.find_or_emplace(ls_[1]);
+    const auto checkpoint = create_and_load_checkpoint(nullptr);
+    encoding_table_.shrink_to_checkpoint_size(checkpoint);
+  }
+  {
+    const auto empty_checkpoint = encoding_table_.checkpoint();
+    encoding_table_.find_or_emplace(ls_[2]);
+    const auto checkpoint = create_and_load_checkpoint(&empty_checkpoint);
+    encoding_table_.shrink_to_checkpoint_size(checkpoint);
+  }
+
+  // Assert
+  check_decoding_table();
+}
+
+TEST_F(ShrinkableEncodingBimapLabelSetFixture, LoadWithoutShrink) {
+  // Arrange
+
+  // Act
+  {
+    encoding_table_.find_or_emplace(ls_[0]);
+    encoding_table_.find_or_emplace(ls_[1]);
+    create_and_load_checkpoint(nullptr);
+  }
+  {
+    const auto empty_checkpoint = encoding_table_.checkpoint();
+    encoding_table_.find_or_emplace(ls_[2]);
+    create_and_load_checkpoint(&empty_checkpoint);
+  }
+
+  // Assert
+  check_decoding_table();
+}
+
+TEST_F(ShrinkableEncodingBimapLabelSetFixture, LoadFromNonShrinkableTable) {
+  // Arrange
+  PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<Vector> lss;
+  std::stringstream stream;
+
+  // Act
+  lss.find_or_emplace(LabelViewSet{{"process", "php"}});
+  lss.find_or_emplace(LabelViewSet{{"process", "nodejs"}});
+  lss.find_or_emplace(LabelViewSet{{"process", "python"}});
+  const auto checkpoint = lss.checkpoint();
+  stream << checkpoint;
+  stream >> encoding_table_;
+  encoding_table_.shrink_to_checkpoint_size(encoding_table_.checkpoint());
+
+  const auto nginx_id = lss.find_or_emplace(LabelViewSet{{"process", "nginx"}});
+  const auto apache_id = lss.find_or_emplace(LabelViewSet{{"process", "apache"}});
+  stream << lss.checkpoint() - checkpoint;
+  stream >> encoding_table_;
+
+  // Assert
+  EXPECT_FALSE(encoding_table_.find(LabelViewSet{{"process", "php"}}).has_value());
+  EXPECT_EQ(nginx_id, encoding_table_.find(LabelViewSet{{"process", "nginx"}}).value());
+  EXPECT_EQ(apache_id, encoding_table_.find(LabelViewSet{{"process", "apache"}}).value());
+}
+
+TEST_F(ShrinkableEncodingBimapLabelSetFixture, EmptyCheckpointWithShrink) {
+  // Arrange
+
+  // Act
+  {
+    encoding_table_.find_or_emplace(ls_[0]);
+    encoding_table_.find_or_emplace(ls_[1]);
+    encoding_table_.find_or_emplace(ls_[2]);
+    const auto checkpoint = create_and_load_checkpoint(nullptr);
+    encoding_table_.shrink_to_checkpoint_size(checkpoint);
+  }
+  {
+    const auto empty_checkpoint = encoding_table_.checkpoint();
+    create_and_load_checkpoint(&empty_checkpoint);
+  }
+
+  // Assert
+  check_decoding_table();
+}
+
+TEST_F(ShrinkableEncodingBimapLabelSetFixture, EmptyCheckpointWithoutShrink) {
+  // Arrange
+
+  // Act
+  {
+    encoding_table_.find_or_emplace(ls_[0]);
+    encoding_table_.find_or_emplace(ls_[1]);
+    encoding_table_.find_or_emplace(ls_[2]);
+    create_and_load_checkpoint(nullptr);
+  }
+  {
+    const auto empty_checkpoint = encoding_table_.checkpoint();
+    create_and_load_checkpoint(&empty_checkpoint);
+  }
+
+  // Assert
+  check_decoding_table();
+}
+
+TEST_F(ShrinkableEncodingBimapLabelSetFixture, CheckSaveSize) {
+  // Arrange
+  encoding_table_.find_or_emplace(ls_[0]);
+  encoding_table_.find_or_emplace(ls_[1]);
+
+  auto checkpoint = encoding_table_.checkpoint();
+
+  encoding_table_.shrink_to_checkpoint_size(checkpoint);
+
+  encoding_table_.find_or_emplace(ls_[1]);
+  encoding_table_.find_or_emplace(ls_[2]);
+  encoding_table_.find_or_emplace(ls_[3]);
+  encoding_table_.find_or_emplace(ls_[4]);
+  encoding_table_.find_or_emplace(ls_[5]);
+
+  auto checkpoint2 = encoding_table_.checkpoint();
+
+  auto delta = checkpoint2 - checkpoint;
+  BareBones::ShrinkedToFitOStringStream ss;
+  ss << delta;
+
+  // Act
+  const auto save_size = delta.save_size();
+
+  // Assert
+  EXPECT_EQ(ss.view().size(), save_size);
+}
+
 }  // namespace
