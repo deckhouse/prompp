@@ -544,6 +544,7 @@ TEST_F(LabelSetDecodingTableTest, IterateOverDecodingTable) {
 class SymbolDeltaCheckpointTest : public testing::Test {
  protected:
   PromPP::Primitives::SnugComposites::Symbol::EncodingBimap<Vector> encoding_table_;
+  PromPP::Primitives::SnugComposites::Symbol::DecodingTable<Vector> decoding_table_;
 };
 
 TEST_F(SymbolDeltaCheckpointTest, DeltaCheckpointSaveSize) {
@@ -565,9 +566,35 @@ TEST_F(SymbolDeltaCheckpointTest, DeltaCheckpointSaveSize) {
   EXPECT_EQ(ss.view().size(), save_size);
 }
 
+TEST_F(SymbolDeltaCheckpointTest, LoadFromBaseCheckpointAndDelta) {
+  // Arrange
+  std::stringstream ss;
+  const std::string symbol1 = "first";
+  const std::string symbol2 = "second";
+
+  const auto id1 = encoding_table_.find_or_emplace(symbol1);
+  const auto base_checkpoint = encoding_table_.checkpoint();
+  const auto id2 = encoding_table_.find_or_emplace(symbol2);
+  const auto checkpoint = encoding_table_.checkpoint();
+  const auto delta = checkpoint - base_checkpoint;
+
+  base_checkpoint.save(ss);
+  ss << delta;
+
+  // Act
+  decoding_table_.load(ss);
+  decoding_table_.load(ss);
+
+  // Assert
+  EXPECT_EQ(2U, decoding_table_.size());
+  EXPECT_EQ(symbol1, decoding_table_[id1]);
+  EXPECT_EQ(symbol2, decoding_table_[id2]);
+}
+
 class LabelNameSetDeltaCheckpointTest : public testing::Test {
  protected:
   PromPP::Primitives::SnugComposites::LabelNameSet::EncodingBimap<Vector> encoding_table_;
+  PromPP::Primitives::SnugComposites::LabelNameSet::DecodingTable<Vector> decoding_table_;
 };
 
 TEST_F(LabelNameSetDeltaCheckpointTest, DeltaCheckpointSaveSize) {
@@ -591,9 +618,34 @@ TEST_F(LabelNameSetDeltaCheckpointTest, DeltaCheckpointSaveSize) {
   EXPECT_EQ(ss.view().size(), save_size);
 }
 
+TEST_F(LabelNameSetDeltaCheckpointTest, LoadFromBaseCheckpointAndDelta) {
+  // Arrange
+  std::stringstream ss;
+  const LabelViewSet label_set1 = {{"name1", "value1"}};
+  const LabelViewSet label_set2 = {{"name2", "value2"}, {"name3", "value3"}};
+  const auto id1 = encoding_table_.find_or_emplace(label_set1.names());
+  const auto base_checkpoint = encoding_table_.checkpoint();
+  const auto id2 = encoding_table_.find_or_emplace(label_set2.names());
+  const auto checkpoint = encoding_table_.checkpoint();
+  const auto delta = checkpoint - base_checkpoint;
+
+  base_checkpoint.save(ss);
+  ss << delta;
+
+  // Act
+  decoding_table_.load(ss);
+  decoding_table_.load(ss);
+
+  // Assert
+  EXPECT_EQ(2U, decoding_table_.size());
+  EXPECT_TRUE(std::ranges::equal(label_set1.names(), decoding_table_[id1]));
+  EXPECT_TRUE(std::ranges::equal(label_set2.names(), decoding_table_[id2]));
+}
+
 class LabelSetDeltaCheckpointTest : public testing::Test {
  protected:
   PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<Vector> encoding_table_;
+  PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<Vector> decoding_table_;
 };
 
 TEST_F(LabelSetDeltaCheckpointTest, DeltaCheckpointSaveSize) {
@@ -615,6 +667,32 @@ TEST_F(LabelSetDeltaCheckpointTest, DeltaCheckpointSaveSize) {
 
   // Assert
   EXPECT_EQ(ss.view().size(), save_size);
+}
+
+TEST_F(LabelSetDeltaCheckpointTest, LoadFromBaseCheckpointAndDelta) {
+  // Arrange
+  std::stringstream ss;
+  const LabelViewSet label_set1 = {{"name1", "value1"}};
+  const LabelViewSet label_set2 = {{"name2", "value2"}, {"name3", "value3"}};
+
+  const auto id1 = encoding_table_.find_or_emplace(label_set1);
+  const auto base_checkpoint = encoding_table_.checkpoint();
+  const auto id2 = encoding_table_.find_or_emplace(label_set2);
+  const auto checkpoint = encoding_table_.checkpoint();
+  const auto delta = checkpoint - base_checkpoint;
+
+  base_checkpoint.save(ss);
+  ss << delta;
+
+  // Act
+  std::stringstream read_stream(ss.str());
+  decoding_table_.load(read_stream);
+  decoding_table_.load(read_stream);
+
+  // Assert
+  EXPECT_EQ(2U, decoding_table_.size());
+  EXPECT_TRUE(std::ranges::equal(label_set1, decoding_table_[id1]));
+  EXPECT_TRUE(std::ranges::equal(label_set2, decoding_table_[id2]));
 }
 
 class ShrinkableEncodingBimapLabelSetFixture : public testing::Test {
