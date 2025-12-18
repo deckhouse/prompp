@@ -36,14 +36,15 @@ class SymbolsWriter {
     symbol_ids_.reserve(get_symbols_count() + 1);
     symbol_ids_.emplace_back(kEmptySymbol);
 
-    auto& names = lss_.data().label_name_sets_table.data().symbols_table;
-    for (uint32_t name_id = 0; name_id < names.size(); ++name_id) {
-      symbol_ids_.emplace_back(name_id);
+    const auto names = lss_.data_view().labels_keys();
+    const auto values = lss_.data_view().labels_values();
 
-      auto& values = *lss_.data().symbols_tables[name_id];
-      for (uint32_t value_id = 0; value_id < values.size(); ++value_id) {
-        symbol_ids_.emplace_back(name_id, value_id);
-      }
+    for (auto it = names.begin(), e = names.end(); it != e; ++it) {
+      symbol_ids_.emplace_back(it.id());
+    }
+
+    for (auto it = values.begin(), e = values.end(); it != e; ++it) {
+      symbol_ids_.emplace_back(it.key_id(), it.value_id());
     }
 
     std::ranges::sort(symbol_ids_, [this](SymbolLssId a, SymbolLssId b) PROMPP_LAMBDA_INLINE { return get_symbol(a) < get_symbol(b); });
@@ -65,13 +66,7 @@ class SymbolsWriter {
   }
 
   [[nodiscard]] uint32_t get_symbols_count() const noexcept {
-    auto& names = lss_.data().label_name_sets_table.data().symbols_table;
-    uint32_t count = names.size();
-    for (uint32_t name_id = 0; name_id < names.size(); ++name_id) {
-      count += lss_.data().symbols_tables[name_id]->size();
-    }
-
-    return count;
+    return lss_.data_view().labels_keys().size() + lss_.data_view().labels_values().size();
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static uint32_t serialized_string_length(const std::string_view& str) noexcept {
@@ -79,14 +74,16 @@ class SymbolsWriter {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view get_symbol(SymbolLssId symbol_id) const noexcept {
-    if (symbol_id.is_empty()) {
-      [[unlikely]];
+    if (symbol_id.is_empty()) [[unlikely]] {
       return {};
-    } else if (symbol_id.is_name()) {
-      return lss_.data().label_name_sets_table.data().symbols_table[symbol_id.name_id];
     }
 
-    return lss_.data().symbols_tables[symbol_id.name_id]->operator[](symbol_id.value_id);
+    const auto view = lss_.data_view();
+    if (symbol_id.is_name()) {
+      return view.labels_keys()[symbol_id.name_id];
+    }
+
+    return view.labels_values().get_by_id(symbol_id.name_id, symbol_id.value_id);
   }
 
   void write_symbols() noexcept {

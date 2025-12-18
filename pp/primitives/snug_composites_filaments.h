@@ -170,7 +170,7 @@ struct Symbol {
 
     [[nodiscard]] uint32_t next_item_index() const noexcept { return static_cast<uint32_t>(items.size()); }
 
-    [[nodiscard]] uint32_t emplace_back(composite_type str) noexcept {
+    uint32_t emplace_back(composite_type str) noexcept {
       const uint32_t id = items.size();
       items.emplace_back(data.size(), str.length());
       data.push_back(str.begin(), str.end());
@@ -522,7 +522,7 @@ struct LabelNameSet {
     [[nodiscard]] uint32_t next_item_index() const noexcept { return static_cast<uint32_t>(items.size()); }
 
     template <class OtherLabelNameSet, class Cache = NoCache>
-    [[nodiscard]] uint32_t emplace_back(const OtherLabelNameSet& label_name_set, Cache&& cache = {}) noexcept {
+    uint32_t emplace_back(const OtherLabelNameSet& label_name_set, Cache&& cache = {}) noexcept {
       const uint32_t id = items.size();
 
       uint32_t pos = symbols_ids_sequences.size();
@@ -1167,7 +1167,7 @@ struct LabelSet {
     [[nodiscard]] uint32_t next_item_index() const noexcept { return static_cast<uint32_t>(items.size()); }
 
     template <class OtherLabelSet, class Cache = NoCache>
-    [[nodiscard]] uint32_t emplace_back(const OtherLabelSet& label_set, Cache&& cache = {}) noexcept {
+    uint32_t emplace_back(const OtherLabelSet& label_set, Cache&& cache = {}) noexcept {
       const uint32_t id = items.size();
 
       const uint32_t lns_id = find_or_emplace_label_names_set(label_set, std::forward<Cache>(cache));

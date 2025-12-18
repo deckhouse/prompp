@@ -41,10 +41,10 @@ class LabelValuesQuerier {
 
   template <class Trie, class ValueHandler, class Filter>
   void enumerate_label_values(uint32_t name_id, const Trie& trie, ValueHandler&& value_handler, Filter&& filter) const {
-    auto& values_table = *index_.data().symbols_tables[name_id];
+    const auto values = index_.data_view().labels_values();
     for (auto it = trie.make_enumerative_iterator(); it.is_valid(); it.next()) {
       if (filter(it.value())) {
-        value_handler(values_table[it.value()]);
+        value_handler(values.get_by_id(name_id, it.value()));
       }
     }
   }

@@ -36,11 +36,11 @@ class LabelNamesQuerier {
 
   template <class NameHandler, class Filter>
   void enumerate_label_names(NameHandler&& name_handler, Filter&& filter) const {
-    auto& names_table = index_.data().label_name_sets_table.data().symbols_table;
+    const auto names = index_.data_view().labels_keys();
     auto& names_trie = index_.trie_index().names_trie();
     for (auto it = names_trie.make_enumerative_iterator(); it.is_valid(); it.next()) {
       if (filter(it.value())) {
-        name_handler(names_table[it.value()]);
+        name_handler(names[it.value()]);
       }
     }
   }
