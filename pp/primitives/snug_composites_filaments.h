@@ -896,21 +896,24 @@ struct LabelSet {
     };
 
     struct label_sets_values_view {
-      using keys_view_type = label_name_sets_table_type::view_type::symbols_view;
-      using values_view_type = label_values_symbols_table_type::view_type;
+      using keys_view_type = label_name_sets_table_type::filament_type::storage_type::view_type::symbols_view_type;
+      using values_view_type = label_values_symbols_table_type::filament_type::storage_type::view_type;
+
       const storage_type* storage_ptr;
 
       class iterator_type {
        public:
         using iterator_category = std::input_iterator_tag;
-        using value_type = label_values_symbols_table_type::composite_type;
+        using value_type = label_values_symbols_table_type::value_type;
         using difference_type = std::ptrdiff_t;
 
         iterator_type() = default;
         explicit iterator_type(const symbols_tables_type& symbols_tables,
                                const keys_view_type::iterator_type& key_it,
                                const keys_view_type::iterator_type& key_it_end) noexcept
-            : symbols_tables_ptr_{&symbols_tables}, key_it_{key_it}, key_it_end_(key_it_end) {}
+            : symbols_tables_ptr_{&symbols_tables}, key_it_{key_it}, key_it_end_(key_it_end) {
+          get_values_range();
+        }
 
         iterator_type& operator++() noexcept {
           ++value_it_;
@@ -932,18 +935,20 @@ struct LabelSet {
 
         value_type operator*() const noexcept { return *value_it_; }
 
-        [[nodiscard]] uint32_t key_id() const noexcept { return key_it_->id(); }
-        [[nodiscard]] uint32_t value_id() const noexcept { return value_it_->id(); }
+        [[nodiscard]] uint32_t key_id() const noexcept { return key_it_.id(); }
+        [[nodiscard]] uint32_t value_id() const noexcept { return value_it_.id(); }
 
        private:
         void get_values_range() noexcept {
+          value_it_ = {};
+          value_it_end_ = {};
           while (key_it_ != key_it_end_) {
             if constexpr (BareBones::concepts::is_dereferenceable<typename symbols_tables_type::value_type>) {
-              const auto values_view = (*(*symbols_tables_ptr_)[key_it_.id()]).view();
+              const auto values_view = (*(*symbols_tables_ptr_)[key_it_.id()]).data_view();
               value_it_ = values_view.begin();
               value_it_end_ = values_view.end();
             } else {
-              const auto values_view = (*symbols_tables_ptr_)[key_it_.id()].view();
+              const auto values_view = (*symbols_tables_ptr_)[key_it_.id()].data_view();
               value_it_ = values_view.begin();
               value_it_end_ = values_view.end();
             }
@@ -957,15 +962,21 @@ struct LabelSet {
 
         const symbols_tables_type* symbols_tables_ptr_;
 
-        const keys_view_type::iterator_type key_it_;
-        const keys_view_type::iterator_type key_it_end_;
+        keys_view_type::iterator_type key_it_;
+        keys_view_type::iterator_type key_it_end_;
 
-        const values_view_type::iterator_type value_it_;
-        const values_view_type::iterator_type value_it_end_;
+        values_view_type::iterator_type value_it_;
+        values_view_type::iterator_type value_it_end_;
       };
 
-      auto begin() const noexcept { return iterator_type{storage_ptr, 0}; }
-      auto end() const noexcept { return iterator_type{storage_ptr, storage_ptr->items.size()}; }
+      auto begin() const noexcept {
+        return iterator_type{storage_ptr->symbols_tables, storage_ptr->label_name_sets_table.data_view().symbols().begin(),
+                             storage_ptr->label_name_sets_table.data_view().symbols().end()};
+      }
+      auto end() const noexcept {
+        return iterator_type{storage_ptr->symbols_tables, storage_ptr->label_name_sets_table.data_view().symbols().end(),
+                             storage_ptr->label_name_sets_table.data_view().symbols().end()};
+      }
     };
 
     struct label_set_view {
