@@ -52,7 +52,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     hash = phmap_hash(hash);
     const auto ls_id = *ls_id_hash_set_.lazy_emplace_with_hash(label_set, hash, [&](const auto& ctor) {
       auto new_ls_id = Base::storage_.emplace_back(label_set);
-      const auto composite_label_set = Base::storage_.composite(new_ls_id);
+      const auto composite_label_set = Base::operator[](new_ls_id);
       ctor(typename Base::Proxy(new_ls_id));
       update_indexes(new_ls_id, composite_label_set);
       return new_ls_id;
@@ -159,19 +159,19 @@ class QueryableEncodingBimapCopier {
     using Item = ItemType;
     using ItemList = BareBones::Vector<ItemType>;
 
-    template <class SymbolsTables>
-    void reserve(uint32_t name_sets_count, uint32_t names_count, const SymbolsTables& symbols_tables) {
-      resize_and_fill_ids_list(name_sets, name_sets_count);
+    void reserve(const auto source_view) {
+      const auto names_count = source_view.keys().size();
+
+      resize_and_fill_ids_list(name_sets, source_view.label_name_sets().size());
       resize_and_fill_ids_list(names, names_count);
 
       values.resize(names_count);
 
-      for (auto [value_cache, symbol_table] : std::ranges::views::zip(values, symbols_tables)) {
-        if constexpr (BareBones::concepts::is_dereferenceable<decltype(symbol_table)>) {
-          resize_and_fill_ids_list(value_cache, symbol_table->size());
-        } else {
-          resize_and_fill_ids_list(value_cache, symbol_table.size());
-        }
+      uint32_t v_id = 0;
+      for (auto it = source_view.keys().begin(), e = source_view.keys().end(); it != e; ++it, ++v_id) {
+        auto& value_cache = values[v_id];
+
+        resize_and_fill_ids_list(value_cache, source_view.values(it.id()).size());
       }
     }
 
@@ -194,7 +194,7 @@ class QueryableEncodingBimapCopier {
     old_new_ids_.reserve(source_.size());
 
     Cache<uint32_t> cache;
-    cache.reserve(source_.storage_.label_name_sets_table.size(), source_.data_view().labels_keys().size(), source_.storage_.symbols_tables);
+    cache.reserve(source_.data_view());
 
     destination_.reserve(source_);
 
@@ -221,7 +221,7 @@ class QueryableEncodingBimapCopier {
 
   void build_reverse_index() {
     const auto size = destination_.size();
-    const auto names_view = destination_.data_view().labels_keys();
+    const auto names_view = destination_.data_view().keys();
     destination_.reverse_index_.reserve(names_view.size());
 
     for (uint32_t ls_id = 0; ls_id < size; ++ls_id) {
@@ -244,17 +244,19 @@ class QueryableEncodingBimapCopier {
   }
 
   void build_trie_index() {
-    const auto names_view = destination_.data_view().labels_keys();
+    const auto view = destination_.data_view();
+    const auto names_view = destination_.data_view().keys();
     destination_.trie_index_.reserve(names_view.size());
 
     for (auto name_it = names_view.begin(); name_it != names_view.end(); ++name_it) {
       const uint32_t name_id = name_it.id();
       destination_.trie_index_.insert_name(*name_it, name_id);
-      if constexpr (BareBones::concepts::is_dereferenceable<decltype(destination_.storage_.symbols_tables[name_id])>) {
-        destination_.trie_index_.insert_values(name_id, (*destination_.storage_.symbols_tables[name_id]).data_view());
-      } else {
-        destination_.trie_index_.insert_values(name_id, destination_.storage_.symbols_tables[name_id].data_view());
-      }
+      destination_.trie_index_.insert_values(name_id, view.values(name_id));
+      // if constexpr (BareBones::concepts::is_dereferenceable<decltype(destination_.storage_.symbols_tables[name_id])>) {
+      //   destination_.trie_index_.insert_values(name_id, (*destination_.storage_.symbols_tables[name_id]).data_view());
+      // } else {
+      //   destination_.trie_index_.insert_values(name_id, destination_.storage_.symbols_tables[name_id].data_view());
+      // }
     }
   }
 

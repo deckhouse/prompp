@@ -104,6 +104,7 @@ TEST_F(LabelSetEncodingBimapTest, CreateViewFromEncodingBimap) {
 
   // Assert
   EXPECT_EQ(3U, view.size());
+  EXPECT_EQ(3U, view.label_name_sets().size());
   EXPECT_EQ(3U, view.keys().size());
   EXPECT_EQ(6U, view.values().size());
   EXPECT_TRUE(std::ranges::equal(view.keys(), std::initializer_list{"job", "pod", "run"}));

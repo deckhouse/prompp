@@ -36,8 +36,8 @@ class SymbolsWriter {
     symbol_ids_.reserve(get_symbols_count() + 1);
     symbol_ids_.emplace_back(kEmptySymbol);
 
-    const auto names = lss_.data_view().labels_keys();
-    const auto values = lss_.data_view().labels_values();
+    const auto names = lss_.data_view().keys();
+    const auto values = lss_.data_view().values();
 
     for (auto it = names.begin(), e = names.end(); it != e; ++it) {
       symbol_ids_.emplace_back(it.id());
@@ -65,9 +65,7 @@ class SymbolsWriter {
     }
   }
 
-  [[nodiscard]] uint32_t get_symbols_count() const noexcept {
-    return lss_.data_view().labels_keys().size() + lss_.data_view().labels_values().size();
-  }
+  [[nodiscard]] uint32_t get_symbols_count() const noexcept { return lss_.data_view().keys().size() + lss_.data_view().values().size(); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static uint32_t serialized_string_length(const std::string_view& str) noexcept {
     return BareBones::Encoding::VarInt::length(str.length()) + str.length();
@@ -80,10 +78,10 @@ class SymbolsWriter {
 
     const auto view = lss_.data_view();
     if (symbol_id.is_name()) {
-      return view.labels_keys()[symbol_id.name_id];
+      return view.key_symbol(symbol_id.name_id);
     }
 
-    return view.labels_values().get_by_id(symbol_id.name_id, symbol_id.value_id);
+    return view.value_symbol(symbol_id.name_id, symbol_id.value_id);
   }
 
   void write_symbols() noexcept {

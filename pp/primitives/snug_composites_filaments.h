@@ -1032,15 +1032,19 @@ struct LabelSet {
         const storage_type* storage_ptr_;
       };
 
-      auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
-      auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
+      [[nodiscard]] auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
+      [[nodiscard]] auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
 
       [[nodiscard]] size_t size() const noexcept { return storage_ptr->count(); }
       [[nodiscard]] uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
 
-      keys_view_type keys() const noexcept { return storage_ptr->label_name_sets_table.data_view().symbols(); }
-      values_view_type values() const noexcept { return label_sets_values_view{.storage_ptr = storage_ptr}; }
-      values_view_type::values_view_type values(uint32_t key_id) const noexcept {
+      [[nodiscard]] label_name_sets_table_type::storage_type::view_type label_name_sets() const noexcept {
+        return storage_ptr->label_name_sets_table.data_view();
+      }
+
+      [[nodiscard]] keys_view_type keys() const noexcept { return storage_ptr->label_name_sets_table.data_view().symbols(); }
+      [[nodiscard]] values_view_type values() const noexcept { return label_sets_values_view{.storage_ptr = storage_ptr}; }
+      [[nodiscard]] values_view_type::values_view_type values(uint32_t key_id) const noexcept {
         if constexpr (BareBones::concepts::is_dereferenceable<typename symbols_tables_type::value_type>) {
           return (*storage_ptr->symbols_tables[key_id]).data_view();
         } else {
