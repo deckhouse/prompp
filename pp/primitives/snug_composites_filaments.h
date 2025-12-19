@@ -122,10 +122,10 @@ struct Symbol {
         const storage_type* storage_ptr_;
       };
 
-      auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
-      auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
+      [[nodiscard]] auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
+      [[nodiscard]] auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
 
-      [[nodiscard]] size_t size() const noexcept { return storage_ptr->count(); }
+      [[nodiscard]] uint32_t size() const noexcept { return storage_ptr->count(); }
       [[nodiscard]] uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
 
       [[nodiscard]] composite_type operator[](uint32_t id) const noexcept { return storage_ptr->composite(id); }
@@ -143,8 +143,8 @@ struct Symbol {
 
     [[nodiscard]] uint32_t count() const noexcept { return items.size(); }
 
-    [[nodiscard]] size_t remainder_size() const noexcept {
-      constexpr size_t max_ui32 = std::numeric_limits<uint32_t>::max();
+    [[nodiscard]] uint32_t remainder_size() const noexcept {
+      constexpr uint32_t max_ui32 = std::numeric_limits<uint32_t>::max();
       assert(data.size() <= max_ui32);
       return max_ui32 - data.size();
     }
@@ -321,7 +321,8 @@ struct LabelNameSet {
 
       auto begin() const noexcept { return iterator_type{symbols_table_ptr_, symbols_ids_it_}; }
       auto end() const noexcept { return iterator_type{symbols_table_ptr_, symbols_ids_it_ + size()}; }
-      [[nodiscard]] size_t size() const noexcept { return size_; }
+
+      [[nodiscard]] uint32_t size() const noexcept { return size_; }
 
       template <class T>
       bool operator==(const T& other) const noexcept {
@@ -455,13 +456,13 @@ struct LabelNameSet {
         const storage_type* storage_ptr_;
       };
 
-      auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
-      auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
+      [[nodiscard]] auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
+      [[nodiscard]] auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
 
-      [[nodiscard]] size_t size() const noexcept { return storage_ptr->count(); }
+      [[nodiscard]] uint32_t size() const noexcept { return storage_ptr->count(); }
       [[nodiscard]] uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
 
-      symbols_view_type symbols() const noexcept { return storage_ptr->symbols_table.data_view(); }
+      [[nodiscard]] symbols_view_type symbols() const noexcept { return storage_ptr->symbols_table.data_view(); }
     };
 
     using view_type = label_name_set_view;
@@ -478,11 +479,11 @@ struct LabelNameSet {
 
     [[nodiscard]] uint32_t count() const noexcept { return items.size(); }
 
-    [[nodiscard]] size_t remainder_size() const noexcept {
-      constexpr size_t max_ui32 = std::numeric_limits<uint32_t>::max();
+    [[nodiscard]] uint32_t remainder_size() const noexcept {
+      constexpr uint32_t max_ui32 = std::numeric_limits<uint32_t>::max();
       assert(symbols_ids_sequences.size() <= max_ui32);
 
-      const size_t remainder_for_symbols = max_ui32 - symbols_ids_sequences.size();
+      const uint32_t remainder_for_symbols = max_ui32 - symbols_ids_sequences.size();
       return std::min(symbols_table.remainder_size(), remainder_for_symbols);
     }
 
@@ -1035,7 +1036,7 @@ struct LabelSet {
       [[nodiscard]] auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
       [[nodiscard]] auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
 
-      [[nodiscard]] size_t size() const noexcept { return storage_ptr->count(); }
+      [[nodiscard]] uint32_t size() const noexcept { return storage_ptr->count(); }
       [[nodiscard]] uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
 
       [[nodiscard]] label_name_sets_table_type::storage_type::view_type label_name_sets() const noexcept {
@@ -1086,16 +1087,16 @@ struct LabelSet {
 
     [[nodiscard]] uint32_t count() const noexcept { return items.size(); }
 
-    [[nodiscard]] size_t remainder_size() const noexcept {
-      constexpr size_t max_ui32 = std::numeric_limits<uint32_t>::max();
+    [[nodiscard]] uint32_t remainder_size() const noexcept {
+      constexpr uint32_t max_ui32 = std::numeric_limits<uint32_t>::max();
 
       assert(symbols_ids_sequences.size() <= max_ui32);
 
-      size_t remainder_for_label_sets_table = label_name_sets_table.remainder_size();
-      size_t remainder_for_symbols_ids_sequences = max_ui32 - symbols_ids_sequences.size();
-      size_t remainder_for_symbol_table = std::numeric_limits<uint32_t>::max();
+      uint32_t remainder_for_label_sets_table = label_name_sets_table.remainder_size();
+      uint32_t remainder_for_symbols_ids_sequences = max_ui32 - symbols_ids_sequences.size();
+      uint32_t remainder_for_symbol_table = std::numeric_limits<uint32_t>::max();
       for (const auto& table : symbols_tables) {
-        if (const size_t n = table->remainder_size(); n < remainder_for_symbol_table) {
+        if (const uint32_t n = table->remainder_size(); n < remainder_for_symbol_table) {
           remainder_for_symbol_table = n;
         }
       }

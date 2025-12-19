@@ -27,8 +27,8 @@ void save_lss_to_wal::execute(const Config& config, Metrics& metrics) const {
         auto now = std::chrono::steady_clock::now();
         log() << "Processed: " << dummy_wal.cnt()
               << " Time per sample: " << (std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count() / dummy_wal.cnt()) << " ns" << std::endl;
-        log() << "Number of label name symbols: " << lss.data().label_name_sets_table.data().symbols_table.size() << std::endl;
-        log() << "Number of label name sets: " << lss.data().label_name_sets_table.size() << std::endl;
+        log() << "Number of label name symbols: " << lss.data_view().keys().size() << std::endl;
+        log() << "Number of label name sets: " << lss.data_view().label_name_sets().size() << std::endl;
         log() << "Number of label sets: " << lss.size() << std::endl;
         log() << std::endl;
       }

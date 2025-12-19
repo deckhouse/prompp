@@ -77,7 +77,6 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   using Base::reserve;
   PROMPP_ALWAYS_INLINE void reserve(uint32_t count) {
-    Base::items_.reserve(count);
     ls_id_hash_set_.reserve(count);
     added_series_.reserve(count);
   }
