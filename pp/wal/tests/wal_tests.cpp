@@ -242,7 +242,9 @@ class WalEncoderDecoderFixture : public testing::Test {
 
   static std::vector<DecodedSample> collect_samples_from_buffer(const WALEncoder::Buffer& buffer) {
     std::vector<DecodedSample> samples;
-    buffer.for_each([&](uint32_t ls_id, Timestamp timestamp, double value) { samples.emplace_back(DecodedSample{ls_id, timestamp, value}); });
+    buffer.for_each([&](uint32_t ls_id, Timestamp timestamp, double value) {
+      samples.emplace_back(DecodedSample{.ls_id = ls_id, .timestamp = timestamp, .value = value});
+    });
     return samples;
   }
 
