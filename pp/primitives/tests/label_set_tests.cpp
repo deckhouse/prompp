@@ -104,10 +104,10 @@ TEST_F(LabelSetEncodingBimapTest, CreateViewFromEncodingBimap) {
 
   // Assert
   EXPECT_EQ(3U, view.size());
-  EXPECT_EQ(3U, view.labels_keys().size());
-  EXPECT_EQ(6U, view.labels_values().size());
-  EXPECT_TRUE(std::ranges::equal(view.labels_keys(), std::initializer_list{"job", "pod", "run"}));
-  EXPECT_TRUE(std::ranges::equal(view.labels_values(), std::initializer_list{"1", "2", "3", "a", "b", "first"}));
+  EXPECT_EQ(3U, view.keys().size());
+  EXPECT_EQ(6U, view.values().size());
+  EXPECT_TRUE(std::ranges::equal(view.keys(), std::initializer_list{"job", "pod", "run"}));
+  EXPECT_TRUE(std::ranges::equal(view.values(), std::initializer_list{"1", "2", "3", "a", "b", "first"}));
 }
 
 TEST_F(LabelSetEncodingBimapTest, EncodingBimapViewCheckId) {
@@ -142,21 +142,139 @@ TEST_F(LabelSetEncodingBimapTest, EncodingBimapViewCheckKeyId) {
   encoding_table_.find_or_emplace(label_set2);
   encoding_table_.find_or_emplace(label_set3);
 
+  // Act
   const auto view = encoding_table_.data_view();
+  auto k_it = view.keys().begin();
 
-  auto k_it = view.labels_keys().begin();
+  const auto job_id = (k_it++).id();
+  const auto pod_id = (k_it++).id();
+  const auto run_id = (k_it++).id();
+
+  // Assert
+  std::vector<uint32_t> view_value_symbols_ids;
+  for (auto it = view.values().begin(), e = view.values().end(); it != e; ++it) {
+    view_value_symbols_ids.push_back(it.key_id());
+  }
+
+  EXPECT_TRUE(std::ranges::equal(view_value_symbols_ids, std::initializer_list{job_id, job_id, job_id, pod_id, pod_id, run_id}));
+}
+
+TEST_F(LabelSetEncodingBimapTest, ViewValuesForKeyId) {
+  // Arrange
+  const LabelViewSet label_set1 = {{"job", "1"}};
+  const LabelViewSet label_set2 = {{"job", "2"}, {"pod", "a"}};
+  const LabelViewSet label_set3 = {{"job", "3"}, {"run", "first"}, {"pod", "b"}};
+
+  encoding_table_.find_or_emplace(label_set1);
+  encoding_table_.find_or_emplace(label_set2);
+  encoding_table_.find_or_emplace(label_set3);
+
+  const auto view = encoding_table_.data_view();
+  auto k_it = view.keys().begin();
   const auto job_id = (k_it++).id();
   const auto pod_id = (k_it++).id();
   const auto run_id = (k_it++).id();
 
   // Act
-  std::vector<uint32_t> view_value_symbols_ids;
-  for (auto it = view.labels_values().begin(), e = view.labels_values().end(); it != e; ++it) {
-    view_value_symbols_ids.push_back(it.key_id());
-  }
+  const auto job_values = view.values(job_id);
+  const auto pod_values = view.values(pod_id);
+  const auto run_values = view.values(run_id);
 
   // Assert
-  EXPECT_TRUE(std::ranges::equal(view_value_symbols_ids, std::initializer_list{job_id, job_id, job_id, pod_id, pod_id, run_id}));
+  EXPECT_EQ(3U, job_values.size());
+  EXPECT_TRUE(std::ranges::equal(job_values, std::initializer_list{"1", "2", "3"}));
+
+  EXPECT_EQ(2U, pod_values.size());
+  EXPECT_TRUE(std::ranges::equal(pod_values, std::initializer_list{"a", "b"}));
+
+  EXPECT_EQ(1U, run_values.size());
+  EXPECT_TRUE(std::ranges::equal(run_values, std::initializer_list{"first"}));
+}
+
+TEST_F(LabelSetEncodingBimapTest, ViewKeySymbol) {
+  // Arrange
+  const LabelViewSet label_set1 = {{"job", "1"}};
+  const LabelViewSet label_set2 = {{"job", "2"}, {"pod", "a"}};
+  const LabelViewSet label_set3 = {{"job", "3"}, {"run", "first"}, {"pod", "b"}};
+
+  encoding_table_.find_or_emplace(label_set1);
+  encoding_table_.find_or_emplace(label_set2);
+  encoding_table_.find_or_emplace(label_set3);
+
+  // Act
+  const auto view = encoding_table_.data_view();
+  auto k_it = view.keys().begin();
+
+  const auto job_id = (k_it++).id();
+  const auto pod_id = (k_it++).id();
+  const auto run_id = (k_it++).id();
+
+  // Assert
+  EXPECT_EQ("job"sv, view.key_symbol(job_id));
+  EXPECT_EQ("pod"sv, view.key_symbol(pod_id));
+  EXPECT_EQ("run"sv, view.key_symbol(run_id));
+}
+
+TEST_F(LabelSetEncodingBimapTest, ViewValueSymbol) {
+  // Arrange
+  const LabelViewSet label_set1 = {{"job", "1"}};
+  const LabelViewSet label_set2 = {{"job", "2"}, {"pod", "a"}};
+  const LabelViewSet label_set3 = {{"job", "3"}, {"run", "first"}, {"pod", "b"}};
+
+  encoding_table_.find_or_emplace(label_set1);
+  encoding_table_.find_or_emplace(label_set2);
+  encoding_table_.find_or_emplace(label_set3);
+
+  // Act
+  const auto view = encoding_table_.data_view();
+  auto v_it = view.values().begin();
+
+  // Assert
+  EXPECT_EQ("1"sv, view.value_symbol(v_it.key_id(), v_it.value_id()));
+  ++v_it;
+  EXPECT_EQ("2"sv, view.value_symbol(v_it.key_id(), v_it.value_id()));
+  ++v_it;
+  EXPECT_EQ("3"sv, view.value_symbol(v_it.key_id(), v_it.value_id()));
+  ++v_it;
+  EXPECT_EQ("a"sv, view.value_symbol(v_it.key_id(), v_it.value_id()));
+  ++v_it;
+  EXPECT_EQ("b"sv, view.value_symbol(v_it.key_id(), v_it.value_id()));
+  ++v_it;
+  EXPECT_EQ("first"sv, view.value_symbol(v_it.key_id(), v_it.value_id()));
+}
+
+TEST_F(LabelSetEncodingBimapTest, ViewNextItemIndex) {
+  // Arrange
+  const LabelViewSet label_set1 = {{"job", "1"}};
+  const LabelViewSet label_set2 = {{"job", "2"}, {"pod", "a"}};
+
+  encoding_table_.find_or_emplace(label_set1);
+  encoding_table_.find_or_emplace(label_set2);
+
+  // Act
+  const auto view = encoding_table_.data_view();
+
+  // Assert
+  EXPECT_EQ(2U, view.next_item_index());
+  EXPECT_EQ(2U, view.size());
+}
+
+TEST_F(LabelSetEncodingBimapTest, ViewNextItemIndexAfterEmplace) {
+  // Arrange
+  const LabelViewSet label_set1 = {{"job", "1"}};
+  const LabelViewSet label_set2 = {{"job", "2"}, {"pod", "a"}};
+
+  encoding_table_.find_or_emplace(label_set1);
+  const auto view1 = encoding_table_.data_view();
+  EXPECT_EQ(1U, view1.next_item_index());
+
+  // Act
+  encoding_table_.find_or_emplace(label_set2);
+  const auto view2 = encoding_table_.data_view();
+
+  // Assert
+  EXPECT_EQ(2U, view2.next_item_index());
+  EXPECT_EQ(2U, view2.size());
 }
 
 class LabelSetDecodingTableTest : public testing::Test {

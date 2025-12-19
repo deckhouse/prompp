@@ -101,6 +101,23 @@ TEST_F(LabelNameSetEncodingBimapTest, CreateViewFromEncodingBimap) {
   encoding_table_.find_or_emplace(label_set3.names());
 
   // Act
+  const auto view = encoding_table_.data_view();
+
+  // Assert
+  EXPECT_EQ(encoding_table_.size(), view.size());
+  EXPECT_TRUE(std::ranges::equal(encoding_table_, view));
+}
+
+TEST_F(LabelNameSetEncodingBimapTest, CreateViewSymbolsFromEncodingBimap) {
+  // Arrange
+  const LabelViewSet label_set1 = {{"a", "1"}};
+  const LabelViewSet label_set2 = {{"b", "2"}, {"c", "3"}};
+  const LabelViewSet label_set3 = {{"d", "4"}, {"e", "5"}, {"f", "6"}};
+  encoding_table_.find_or_emplace(label_set1.names());
+  encoding_table_.find_or_emplace(label_set2.names());
+  encoding_table_.find_or_emplace(label_set3.names());
+
+  // Act
   const auto symbols = encoding_table_.data_view().symbols();
 
   // Assert

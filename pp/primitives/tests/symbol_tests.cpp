@@ -131,6 +131,21 @@ TEST_F(SymbolEncodingBimapTest, EncodingBimapViewIteratorId) {
   EXPECT_TRUE(std::ranges::equal(view_ids, std::initializer_list{id1, id2, id3, id4}));
 }
 
+TEST_F(SymbolEncodingBimapTest, ViewIndexOperator) {
+  // Arrange
+  const auto id1 = encoding_table_.find_or_emplace("lol"s);
+  const auto id2 = encoding_table_.find_or_emplace("kek"s);
+  const auto id3 = encoding_table_.find_or_emplace("pod"s);
+
+  // Act
+  const auto view = encoding_table_.data_view();
+
+  // Assert
+  EXPECT_EQ("lol"sv, view[id1]);
+  EXPECT_EQ("kek"sv, view[id2]);
+  EXPECT_EQ("pod"sv, view[id3]);
+}
+
 class SymbolDecodingTableTest : public testing::Test {
  protected:
   PromPP::Primitives::SnugComposites::Symbol::EncodingBimap<Vector> encoding_table_;
