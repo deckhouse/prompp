@@ -5,6 +5,7 @@
 #include "bare_bones/exception.h"
 #include "bare_bones/iterator.h"
 #include "bare_bones/memory.h"
+#include "bare_bones/preprocess.h"
 #include "bare_bones/snug_composite.h"
 #include "bare_bones/stream_v_byte.h"
 #include "hash.h"
@@ -122,13 +123,13 @@ struct Symbol {
         const storage_type* storage_ptr_;
       };
 
-      [[nodiscard]] auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
-      [[nodiscard]] auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
 
-      [[nodiscard]] uint32_t size() const noexcept { return storage_ptr->count(); }
-      [[nodiscard]] uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_ptr->count(); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
 
-      [[nodiscard]] composite_type operator[](uint32_t id) const noexcept { return storage_ptr->composite(id); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE composite_type operator[](uint32_t id) const noexcept { return storage_ptr->composite(id); }
     };
 
     using view_type = symbols_view;
@@ -141,21 +142,21 @@ struct Symbol {
     Vector<char> data;
     Vector<item_type> items;
 
-    [[nodiscard]] uint32_t count() const noexcept { return items.size(); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return static_cast<uint32_t>(items.size()); }
 
-    [[nodiscard]] uint32_t remainder_size() const noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t remainder_size() const noexcept {
       constexpr uint32_t max_ui32 = std::numeric_limits<uint32_t>::max();
       assert(data.size() <= max_ui32);
-      return max_ui32 - data.size();
+      return max_ui32 - static_cast<uint32_t>(data.size());
     }
 
     template <class AnotherStorageType>
-    void reserve(const AnotherStorageType& other) noexcept {
+    PROMPP_ALWAYS_INLINE void reserve(const AnotherStorageType& other) noexcept {
       items.reserve(other.items.size());
       data.reserve(other.data.size());
     }
 
-    [[nodiscard]] composite_type composite(uint32_t id) const noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE composite_type composite(uint32_t id) const noexcept {
       const auto item = items[id];
       return std::string_view(data.data() + item.pos, item.length);
     }
@@ -166,19 +167,23 @@ struct Symbol {
       }
     }
 
-    [[nodiscard]] uint32_t allocated_memory() const noexcept { return BareBones::mem::allocated_memory(data) + BareBones::mem::allocated_memory(items); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept {
+      return BareBones::mem::allocated_memory(data) + BareBones::mem::allocated_memory(items);
+    }
 
-    [[nodiscard]] uint32_t next_item_index() const noexcept { return static_cast<uint32_t>(items.size()); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return static_cast<uint32_t>(items.size()); }
 
-    uint32_t emplace_back(composite_type str) noexcept {
-      const uint32_t id = items.size();
-      items.emplace_back(data.size(), str.length());
+    PROMPP_ALWAYS_INLINE uint32_t emplace_back(composite_type str) noexcept {
+      const uint32_t id = static_cast<uint32_t>(items.size());
+      items.emplace_back(static_cast<uint32_t>(data.size()), static_cast<uint32_t>(str.length()));
       data.push_back(str.begin(), str.end());
       return id;
     }
 
-    [[nodiscard]] checkpoint_type checkpoint() const noexcept { return {data.size(), items.size()}; }
-    void rollback(const checkpoint_type& checkpoint) noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE checkpoint_type checkpoint() const noexcept {
+      return {static_cast<uint32_t>(data.size()), static_cast<uint32_t>(items.size())};
+    }
+    PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& checkpoint) noexcept {
       assert(checkpoint.data_size <= data.size());
       assert(checkpoint.items_size <= items.size());
       data.resize(checkpoint.data_size);
@@ -230,7 +235,7 @@ struct Symbol {
       return std::views::iota(original_size, items.size());
     }
 
-    view_type view() const noexcept { return {.storage_ptr = this}; }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE view_type view() const noexcept { return {.storage_ptr = this}; }
   };
 };
 
@@ -291,23 +296,23 @@ struct LabelNameSet {
         explicit iterator_type(const symbols_table_type* symbols_table_ptr, symbols_ids_sequences_type::const_iterator it) noexcept
             : symbols_table_ptr_{symbols_table_ptr}, symbols_ids_it_{it} {}
 
-        iterator_type& operator++() noexcept {
+        PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
           ++symbols_ids_it_;
           return *this;
         }
 
-        iterator_type operator++(int) noexcept {
+        PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
           iterator_type retval = *this;
           ++(*this);
           return retval;
         }
-        bool operator==(const iterator_type& other) const noexcept {
+        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept {
           return symbols_table_ptr_ == other.symbols_table_ptr_ && symbols_ids_it_ == other.symbols_ids_it_;
         }
 
-        value_type operator*() const noexcept { return symbols_table_ptr_->operator[](*symbols_ids_it_); }
+        [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return symbols_table_ptr_->operator[](*symbols_ids_it_); }
 
-        [[nodiscard]] uint32_t id() const noexcept { return *symbols_ids_it_; }
+        [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t id() const noexcept { return *symbols_ids_it_; }
 
        private:
         const symbols_table_type* symbols_table_ptr_;
@@ -319,18 +324,18 @@ struct LabelNameSet {
       explicit composite_type(const symbols_table_type* symbols_table_ptr, symbols_ids_sequences_type::const_iterator symbols_ids_it, uint32_t size)
           : symbols_table_ptr_{symbols_table_ptr}, symbols_ids_it_{symbols_ids_it}, size_{size} {}
 
-      auto begin() const noexcept { return iterator_type{symbols_table_ptr_, symbols_ids_it_}; }
-      auto end() const noexcept { return iterator_type{symbols_table_ptr_, symbols_ids_it_ + size()}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{symbols_table_ptr_, symbols_ids_it_}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{symbols_table_ptr_, symbols_ids_it_ + size()}; }
 
-      [[nodiscard]] uint32_t size() const noexcept { return size_; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return size_; }
 
       template <class T>
-      bool operator==(const T& other) const noexcept {
+      PROMPP_ALWAYS_INLINE bool operator==(const T& other) const noexcept {
         return std::ranges::equal(begin(), end(), other.begin(), other.end());
       }
 
       template <class T>
-      bool operator<(const T& other) const noexcept {
+      PROMPP_ALWAYS_INLINE bool operator<(const T& other) const noexcept {
         return std::ranges::lexicographical_compare(begin(), end(), other.begin(), other.end());
       }
 
@@ -434,35 +439,35 @@ struct LabelNameSet {
         iterator_type() = default;
         explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : id_{id}, storage_ptr_(&storage) {}
 
-        iterator_type& operator++() noexcept {
+        PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
           ++id_;
           return *this;
         }
 
-        iterator_type operator++(int) noexcept {
+        PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
           iterator_type retval = *this;
           ++(*this);
           return retval;
         }
-        bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_ && storage_ptr_ == other.storage_ptr_; }
-        bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == storage_ptr_->items.size(); }
+        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_ && storage_ptr_ == other.storage_ptr_; }
+        PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == storage_ptr_->items.size(); }
 
-        value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
+        [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
 
-        [[nodiscard]] uint32_t id() const noexcept { return id_; }
+        [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t id() const noexcept { return id_; }
 
        private:
         uint32_t id_{0};
         const storage_type* storage_ptr_;
       };
 
-      [[nodiscard]] auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
-      [[nodiscard]] auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
 
-      [[nodiscard]] uint32_t size() const noexcept { return storage_ptr->count(); }
-      [[nodiscard]] uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_ptr->count(); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
 
-      [[nodiscard]] symbols_view_type symbols() const noexcept { return storage_ptr->symbols_table.data_view(); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE symbols_view_type symbols() const noexcept { return storage_ptr->symbols_table.data_view(); }
     };
 
     using view_type = label_name_set_view;
@@ -477,24 +482,24 @@ struct LabelNameSet {
     symbols_ids_sequences_type symbols_ids_sequences;
     Vector<item_type> items;
 
-    [[nodiscard]] uint32_t count() const noexcept { return items.size(); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return static_cast<uint32_t>(items.size()); }
 
-    [[nodiscard]] uint32_t remainder_size() const noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t remainder_size() const noexcept {
       constexpr uint32_t max_ui32 = std::numeric_limits<uint32_t>::max();
       assert(symbols_ids_sequences.size() <= max_ui32);
 
-      const uint32_t remainder_for_symbols = max_ui32 - symbols_ids_sequences.size();
+      const uint32_t remainder_for_symbols = max_ui32 - static_cast<uint32_t>(symbols_ids_sequences.size());
       return std::min(symbols_table.remainder_size(), remainder_for_symbols);
     }
 
     template <class AnotherStorageType>
-    void reserve(const AnotherStorageType& other) noexcept {
+    PROMPP_ALWAYS_INLINE void reserve(const AnotherStorageType& other) noexcept {
       symbols_table.reserve(other.symbols_table);
       symbols_ids_sequences.reserve(other.symbols_ids_sequences.size());
       items.reserve(other.items.size());
     }
 
-    [[nodiscard]] composite_type composite(uint32_t id) const noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE composite_type composite(uint32_t id) const noexcept {
       const auto item = items[id];
       const auto begin = symbols_ids_sequences.begin() + item.pos;
       return composite_type(&symbols_table, begin, item.size);
@@ -515,18 +520,18 @@ struct LabelNameSet {
       }
     }
 
-    [[nodiscard]] uint32_t allocated_memory() const noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept {
       return BareBones::mem::allocated_memory(symbols_table) + BareBones::mem::allocated_memory(symbols_ids_sequences) +
              BareBones::mem::allocated_memory(items);
     }
 
-    [[nodiscard]] uint32_t next_item_index() const noexcept { return static_cast<uint32_t>(items.size()); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return static_cast<uint32_t>(items.size()); }
 
     template <class OtherLabelNameSet, class Cache = NoCache>
-    uint32_t emplace_back(const OtherLabelNameSet& label_name_set, Cache&& cache = {}) noexcept {
-      const uint32_t id = items.size();
+    PROMPP_ALWAYS_INLINE uint32_t emplace_back(const OtherLabelNameSet& label_name_set, Cache&& cache = {}) noexcept {
+      const uint32_t id = static_cast<uint32_t>(items.size());
 
-      uint32_t pos = symbols_ids_sequences.size();
+      uint32_t pos = static_cast<uint32_t>(symbols_ids_sequences.size());
       uint32_t size = 0;
 
       if constexpr (BareBones::concepts::has_size<OtherLabelNameSet>) {
@@ -534,7 +539,7 @@ struct LabelNameSet {
       }
 
       if constexpr (BareBones::concepts::has_size<OtherLabelNameSet>) {
-        symbols_ids_sequences.reserve(symbols_ids_sequences.size() + size);
+        symbols_ids_sequences.reserve(static_cast<size_t>(symbols_ids_sequences.size()) + size);
       }
 
       const auto end = label_name_set.end();
@@ -550,8 +555,10 @@ struct LabelNameSet {
       return id;
     }
 
-    [[nodiscard]] checkpoint_type checkpoint() const noexcept { return {symbols_ids_sequences.size(), symbols_table.checkpoint(), items.size()}; }
-    void rollback(const checkpoint_type& checkpoint) noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE checkpoint_type checkpoint() const noexcept {
+      return {static_cast<uint32_t>(symbols_ids_sequences.size()), symbols_table.checkpoint(), static_cast<uint32_t>(items.size())};
+    }
+    PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& checkpoint) noexcept {
       assert(checkpoint.symbols_ids_size <= symbols_ids_sequences.size());
       assert(checkpoint.items_size <= items.size());
 
@@ -610,11 +617,11 @@ struct LabelNameSet {
       return std::views::iota(items_original_size, items.size());
     }
 
-    view_type view() const noexcept { return {.storage_ptr = this}; }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE view_type view() const noexcept { return {.storage_ptr = this}; }
 
    private:
     template <class LabelNameIterator, class Cache>
-    uint32_t find_or_emplace_label_name(const LabelNameIterator& label_name, Cache&& cache) {
+    PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_label_name(const LabelNameIterator& label_name, Cache&& cache) {
       if constexpr (use_find_or_emplace_with_cache<Cache, LabelNameIterator, symbols_table_type, decltype(*label_name)>) {
         symbols_table.find_or_emplace_with_cache(*label_name, label_name.id(), cache.names);
       }
@@ -701,7 +708,7 @@ struct LabelSet {
           return lnsi_ == other.lnsi_ && vi_ == other.vi_;
         }
 
-        PROMPP_ALWAYS_INLINE value_type operator*() const noexcept {
+        [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept {
           if constexpr (BareBones::concepts::is_dereferenceable<decltype(data_->symbols_tables[lnsi_.id()])>) {
             const auto& smbl_tbl = *data_->symbols_tables[lnsi_.id()];
             return make_pair(*lnsi_, smbl_tbl[*vi_]);
@@ -719,11 +726,11 @@ struct LabelSet {
       using iterator = Iterator<decltype(label_name_set_.begin()), decltype(values_begin_)>;
       using end_iterator = Iterator<decltype(label_name_set_.end()), decltype(values_end_)>;
 
-      PROMPP_ALWAYS_INLINE auto begin() const noexcept {
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept {
         return Iterator<decltype(label_name_set_.begin()), decltype(values_begin_)>(data_, label_name_set_.begin(), values_begin_);
       }
 
-      PROMPP_ALWAYS_INLINE auto end() const noexcept {
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept {
         return Iterator<decltype(label_name_set_.end()), decltype(values_end_)>(data_, label_name_set_.end(), values_end_);
       }
 
@@ -918,7 +925,7 @@ struct LabelSet {
           get_values_range();
         }
 
-        iterator_type& operator++() noexcept {
+        PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
           ++value_it_;
           if (value_it_ == value_it_end_) {
             ++key_it_;
@@ -927,19 +934,21 @@ struct LabelSet {
           return *this;
         }
 
-        iterator_type operator++(int) noexcept {
+        PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
           iterator_type retval = *this;
           ++(*this);
           return retval;
         }
 
-        bool operator==(const iterator_type& other) const = default;
-        bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return key_it_ == key_it_end_ && value_it_ == value_it_end_; }
+        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const = default;
+        PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept {
+          return key_it_ == key_it_end_ && value_it_ == value_it_end_;
+        }
 
-        value_type operator*() const noexcept { return *value_it_; }
+        [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return *value_it_; }
 
-        [[nodiscard]] uint32_t key_id() const noexcept { return key_it_.id(); }
-        [[nodiscard]] uint32_t value_id() const noexcept { return value_it_.id(); }
+        [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t key_id() const noexcept { return key_it_.id(); }
+        [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t value_id() const noexcept { return value_it_.id(); }
 
        private:
         void get_values_range() noexcept {
@@ -972,16 +981,16 @@ struct LabelSet {
         values_view_type::iterator_type value_it_end_;
       };
 
-      auto begin() const noexcept {
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept {
         return iterator_type{storage_ptr->symbols_tables, storage_ptr->label_name_sets_table.data_view().symbols().begin(),
                              storage_ptr->label_name_sets_table.data_view().symbols().end()};
       }
-      auto end() const noexcept {
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept {
         return iterator_type{storage_ptr->symbols_tables, storage_ptr->label_name_sets_table.data_view().symbols().end(),
                              storage_ptr->label_name_sets_table.data_view().symbols().end()};
       }
 
-      [[nodiscard]] size_t size() const noexcept {
+      [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept {
         size_t total_size = 0;
         const auto keys_view = storage_ptr->label_name_sets_table.data_view().symbols();
         for (auto key_it = keys_view.begin(); key_it != keys_view.end(); ++key_it) {
@@ -1033,19 +1042,19 @@ struct LabelSet {
         const storage_type* storage_ptr_;
       };
 
-      [[nodiscard]] auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
-      [[nodiscard]] auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
 
-      [[nodiscard]] uint32_t size() const noexcept { return storage_ptr->count(); }
-      [[nodiscard]] uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_ptr->count(); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
 
-      [[nodiscard]] label_name_sets_table_type::storage_type::view_type label_name_sets() const noexcept {
+      [[nodiscard]] PROMPP_ALWAYS_INLINE label_name_sets_table_type::storage_type::view_type label_name_sets() const noexcept {
         return storage_ptr->label_name_sets_table.data_view();
       }
 
-      [[nodiscard]] keys_view_type keys() const noexcept { return storage_ptr->label_name_sets_table.data_view().symbols(); }
-      [[nodiscard]] values_view_type values() const noexcept { return label_sets_values_view{.storage_ptr = storage_ptr}; }
-      [[nodiscard]] values_view_type::values_view_type values(uint32_t key_id) const noexcept {
+      [[nodiscard]] PROMPP_ALWAYS_INLINE keys_view_type keys() const noexcept { return storage_ptr->label_name_sets_table.data_view().symbols(); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE values_view_type values() const noexcept { return label_sets_values_view{.storage_ptr = storage_ptr}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE values_view_type::values_view_type values(uint32_t key_id) const noexcept {
         if constexpr (BareBones::concepts::is_dereferenceable<typename symbols_tables_type::value_type>) {
           return (*storage_ptr->symbols_tables[key_id]).data_view();
         } else {
@@ -1053,8 +1062,8 @@ struct LabelSet {
         }
       }
 
-      [[nodiscard]] values_view_type::iterator_type::value_type key_symbol(uint32_t key_id) const noexcept { return keys()[key_id]; }
-      [[nodiscard]] values_view_type::iterator_type::value_type value_symbol(uint32_t key_id, uint32_t value_id) const noexcept {
+      [[nodiscard]] PROMPP_ALWAYS_INLINE values_view_type::iterator_type::value_type key_symbol(uint32_t key_id) const noexcept { return keys()[key_id]; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE values_view_type::iterator_type::value_type value_symbol(uint32_t key_id, uint32_t value_id) const noexcept {
         return values(key_id)[value_id];
       }
     };
@@ -1085,15 +1094,15 @@ struct LabelSet {
     uint32_t shrinked_size{};
     Vector<item_type> items;
 
-    [[nodiscard]] uint32_t count() const noexcept { return items.size(); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return static_cast<uint32_t>(items.size()); }
 
-    [[nodiscard]] uint32_t remainder_size() const noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t remainder_size() const noexcept {
       constexpr uint32_t max_ui32 = std::numeric_limits<uint32_t>::max();
 
       assert(symbols_ids_sequences.size() <= max_ui32);
 
       uint32_t remainder_for_label_sets_table = label_name_sets_table.remainder_size();
-      uint32_t remainder_for_symbols_ids_sequences = max_ui32 - symbols_ids_sequences.size();
+      uint32_t remainder_for_symbols_ids_sequences = max_ui32 - static_cast<uint32_t>(symbols_ids_sequences.size());
       uint32_t remainder_for_symbol_table = std::numeric_limits<uint32_t>::max();
       for (const auto& table : symbols_tables) {
         if (const uint32_t n = table->remainder_size(); n < remainder_for_symbol_table) {
@@ -1104,14 +1113,14 @@ struct LabelSet {
     }
 
     template <class AnotherStorageType>
-    void reserve(const AnotherStorageType& other) noexcept {
+    PROMPP_ALWAYS_INLINE void reserve(const AnotherStorageType& other) noexcept {
       symbols_ids_sequences.reserve(other.symbols_ids_sequences.size());
       symbols_tables.reserve(other.symbols_tables.size());
       label_name_sets_table.reserve(other.label_name_sets_table);
       items.reserve(other.items.size());
     }
 
-    [[nodiscard]] composite_type composite(uint32_t id) const noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE composite_type composite(uint32_t id) const noexcept {
       const auto [lns_id, pos] = items[id];
 
       auto lns = label_name_sets_table[lns_id];
@@ -1154,15 +1163,15 @@ struct LabelSet {
       }
     }
 
-    [[nodiscard]] uint32_t allocated_memory() const noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept {
       return BareBones::mem::allocated_memory(symbols_tables) + BareBones::mem::allocated_memory(symbols_ids_sequences) +
              BareBones::mem::allocated_memory(label_name_sets_table) + BareBones::mem::allocated_memory(items);
     }
 
-    [[nodiscard]] uint32_t next_item_index() const noexcept { return static_cast<uint32_t>(items.size()); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return static_cast<uint32_t>(items.size()); }
 
     template <class OtherLabelSet, class Cache = NoCache>
-    uint32_t emplace_back(const OtherLabelSet& label_set, Cache&& cache = {}) noexcept {
+    PROMPP_ALWAYS_INLINE uint32_t emplace_back(const OtherLabelSet& label_set, Cache&& cache = {}) noexcept {
       const uint32_t id = items.size();
 
       const uint32_t lns_id = find_or_emplace_label_names_set(label_set, std::forward<Cache>(cache));
@@ -1198,8 +1207,9 @@ struct LabelSet {
       symbols_ids_sequences.shrink_to_fit();
     }
 
-    [[nodiscard]] checkpoint_type checkpoint() const noexcept {
-      auto checkpoint = checkpoint_type{next_item_index_, symbols_ids_sequences.size(), items.size(), label_name_sets_table.checkpoint(), {}};
+    [[nodiscard]] PROMPP_ALWAYS_INLINE checkpoint_type checkpoint() const noexcept {
+      auto checkpoint = checkpoint_type{
+          next_item_index_, static_cast<uint32_t>(symbols_ids_sequences.size()), static_cast<uint32_t>(items.size()), label_name_sets_table.checkpoint(), {}};
       checkpoint.symbols_tables_checkpoints_.reserve_and_write(symbols_tables.size(), [this](auto memory, uint32_t size) {
         for (auto& symbol_table : this->symbols_tables) {
           std::construct_at(memory++, symbol_table->checkpoint());
@@ -1209,7 +1219,7 @@ struct LabelSet {
       return checkpoint;
     }
 
-    void rollback(const checkpoint_type& checkpoint) noexcept {
+    PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& checkpoint) noexcept {
       assert(checkpoint.size_ <= symbols_ids_sequences.size());
       symbols_ids_sequences.resize(checkpoint.size_);
 
@@ -1326,11 +1336,11 @@ struct LabelSet {
       return std::views::iota(items_original_size, items.size());
     }
 
-    view_type view() const noexcept { return {.storage_ptr = this}; }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE view_type view() const noexcept { return {.storage_ptr = this}; }
 
    private:
     template <class LabelSet, class Cache>
-    uint32_t find_or_emplace_label_names_set(LabelSet& label_set, Cache&& cache) {
+    PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_label_names_set(LabelSet& label_set, Cache&& cache) {
       if constexpr (use_find_or_emplace_with_cache<Cache, LabelSet, decltype(label_name_sets_table), decltype(label_set.names())>) {
         return label_name_sets_table.find_or_emplace_with_cache(label_set.names(), label_set.id(), cache.name_sets, cache);
       }
@@ -1339,7 +1349,7 @@ struct LabelSet {
     }
 
     template <class LabelIterator, class Cache>
-    uint32_t find_or_emplace_symbol(uint32_t lns_id, const LabelIterator& label, Cache&& cache) {
+    PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_symbol(uint32_t lns_id, const LabelIterator& label, Cache&& cache) {
       if constexpr (use_find_or_emplace_with_cache<Cache, LabelIterator, decltype(*symbols_tables[0]), decltype((*label).second)>) {
         const auto name_id = label.name_id();
         return symbols_tables[lns_id]->find_or_emplace_with_cache((*label).second, label.value_id(), cache.values[name_id]);
