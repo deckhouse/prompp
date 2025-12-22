@@ -66,8 +66,8 @@ func NewMetricsUpdater[
 			[]string{"head_id", "allocator", "shard_id"},
 		),
 		series: factory.NewGauge(prometheus.GaugeOpts{
-			Name: "prompp_head_series",
-			Help: "Total number of series in the heads block.",
+			Name: "prometheus_tsdb_head_series",
+			Help: "Total number of series in the head block.",
 		}),
 		walSize: factory.NewGaugeVec(
 			prometheus.GaugeOpts{

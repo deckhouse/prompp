@@ -39,6 +39,7 @@ type Adapter struct {
 	activeQuerierMetrics  *querier.Metrics
 	storageQuerierMetrics *querier.Metrics
 	appendDuration        prometheus.Histogram
+	samplesAppended       prometheus.Counter
 }
 
 // NewAdapter init new [Adapter].
@@ -70,6 +71,11 @@ func NewAdapter(
 				},
 			},
 		),
+		samplesAppended: factory.NewCounter(prometheus.CounterOpts{
+			Name:        "prometheus_tsdb_head_samples_appended_total",
+			Help:        "Total number of appended samples.",
+			ConstLabels: prometheus.Labels{"type": "float"},
+		}),
 	}
 }
 
@@ -84,18 +90,20 @@ func (ar *Adapter) AppendHashdex(
 		return nil
 	}
 
-	start := time.Now()
-	defer func() {
+	var floatsAppended float64
+	defer func(start time.Time) {
 		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
-	}()
+		ar.samplesAppended.Add(floatsAppended)
+	}(time.Now())
 
 	return ar.proxy.With(ctx, func(h *pp_storage.Head) error {
-		_, err := appender.New(h, services.CFViaRange).Append(
+		stats, err := appender.New(h, services.CFViaRange).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hashdex},
 			state,
 			commitToWal,
 		)
+		floatsAppended = float64(stats.SamplesAdded)
 
 		return err
 	})
@@ -108,10 +116,10 @@ func (ar *Adapter) AppendScraperHashdex(
 	state *cppbridge.StateV2,
 	commitToWal bool,
 ) (stats cppbridge.RelabelerStats, err error) {
-	start := time.Now()
-	defer func() {
+	defer func(start time.Time) {
 		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
-	}()
+		ar.samplesAppended.Add(float64(stats.SamplesAdded))
+	}(time.Now())
 
 	_ = ar.proxy.With(ctx, func(h *pp_storage.Head) error {
 		stats, err = appender.New(h, services.CFViaRange).Append(
@@ -144,18 +152,20 @@ func (ar *Adapter) AppendSnappyProtobuf(
 		return nil
 	}
 
-	start := time.Now()
-	defer func() {
+	var floatsAppended float64
+	defer func(start time.Time) {
 		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
-	}()
+		ar.samplesAppended.Add(floatsAppended)
+	}(time.Now())
 
 	return ar.proxy.With(ctx, func(h *pp_storage.Head) error {
-		_, err := appender.New(h, services.CFViaRange).Append(
+		stats, err := appender.New(h, services.CFViaRange).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hx},
 			state,
 			commitToWal,
 		)
+		floatsAppended = float64(stats.SamplesAdded)
 
 		return err
 	})
@@ -179,10 +189,10 @@ func (ar *Adapter) AppendTimeSeries(
 		return stats, nil
 	}
 
-	start := time.Now()
-	defer func() {
+	defer func(start time.Time) {
 		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
-	}()
+		ar.samplesAppended.Add(float64(stats.SamplesAdded))
+	}(time.Now())
 
 	_ = ar.proxy.With(ctx, func(h *pp_storage.Head) error {
 		stats, err = appender.New(h, services.CFViaRange).Append(

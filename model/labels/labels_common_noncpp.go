@@ -10,12 +10,11 @@ import (
 )
 
 // NewLabelsWithLSS init LabelsCpp with LabelSetSnapshot and ls id.
-func NewLabelsWithLSS(lss *cppbridge.LabelSetSnapshot, id uint32, length uint16) Labels {
+func NewLabelsWithLSS(lss *cppbridge.LabelSetSnapshot, id uint32, builder *ScratchBuilder) Labels {
 	if lss == nil {
 		return EmptyLabels()
 	}
 
-	builder := NewScratchBuilder(int(length))
 	_ = lss.RangeLabelSet(id, false, func(l cppbridge.Label) error {
 		// copy string from cpp memory
 		builder.Add(strings.Clone(l.Name), strings.Clone(l.Value))

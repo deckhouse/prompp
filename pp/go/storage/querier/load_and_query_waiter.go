@@ -1,6 +1,8 @@
 package querier
 
 import (
+	"sync"
+
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
 )
@@ -20,6 +22,7 @@ type LoadAndQueryWaiter[
 ] struct {
 	waiter task.Waiter[shard.Task]
 	head   THead
+	locker sync.Mutex
 }
 
 // NewLoadAndQueryWaiter creates a new [LoadAndQueryWaiter].
@@ -31,12 +34,14 @@ func NewLoadAndQueryWaiter[
 	THead Head[TTask, TDataStorage, TLSS, TShard],
 ](head THead) LoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead] {
 	return LoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead]{
-		head: head,
+		head:   head,
+		locker: sync.Mutex{},
 	}
 }
 
 // Add adds a querier to the load and query series data task.
 func (l *LoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead]) Add(s TShard, querier uintptr) {
+	l.locker.Lock()
 	l.waiter.Add(s.LoadAndQuerySeriesDataTask().Add(querier, func() shard.Task {
 		t := l.head.CreateTask(dsLoadAndQuerySeriesData, func(s TShard) error {
 			return s.LoadAndQuerySeriesData()
@@ -44,6 +49,7 @@ func (l *LoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead]) Add(s TSh
 		l.head.EnqueueOnShard(t, s.ShardID())
 		return t
 	}))
+	l.locker.Unlock()
 }
 
 // Wait waits for the load and query series data task to complete.

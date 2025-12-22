@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/go-faker/faker/v4"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -109,17 +110,26 @@ func prepareData(lss *shard.LSS, ds *shard.DataStorage, size int) {
 
 func prepareInstantData(lss *shard.LSS, ds *shard.DataStorage, timeStamps []int64, size int) {
 	timeSeries := make([]storagetest.TimeSeries, 0, size)
-	for _, ts := range timeStamps {
-		for i := 0; i < size; i++ {
-			label := fmt.Sprintf("index_%d", i)
-			timeSeries = append(timeSeries, storagetest.TimeSeries{
-				Labels: labels.FromStrings("__name__", "metric", "job", label, "container", "", "id", "/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod37ce076d8d523c8b0c8c0b6191d927f6.slice/cri-containerd-bdd69edcd2fb187baa3381810051e8cc7b8a0d0368e168040f93adb3260582b2.scope", "image", "registry.k8s.io/pause:3.8", "name", "bdd69edcd2fb187baa3381810051e8cc7b8a0d0368e168040f93adb3260582b2", "namespace", "kube-system", "pod", "kube-scheduler-m1.k8s.lan"),
-				Samples: []cppbridge.Sample{
-					{Timestamp: ts, Value: float64(i)},
-				},
-			})
+	for range size {
+		name := faker.UUIDDigit() + faker.UUIDDigit()
+		ls := labels.FromStrings(
+			"__name__", "metric",
+			"job", fmt.Sprintf("index_%s", faker.UUIDDigit()),
+			"container", faker.Word(),
+			"id", fmt.Sprintf("/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod%s.slice/cri-containerd-%s.scope", faker.UUIDDigit(), name),
+			"image", fmt.Sprintf("registry.k8s.io/%s:3.8", faker.Word()),
+			"name", name,
+			"namespace", "kube-system",
+			"pod", fmt.Sprintf("kube-scheduler-%s", faker.UUIDDigit()),
+		)
+		samples := make([]cppbridge.Sample, 0, len(timeStamps))
+		for _, ts := range timeStamps {
+			samples = append(samples, cppbridge.Sample{Timestamp: ts, Value: faker.Latitude()})
 		}
-
+		timeSeries = append(timeSeries, storagetest.TimeSeries{
+			Labels:  ls,
+			Samples: samples,
+		})
 	}
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(lss, ds, timeSeries...)
 }
@@ -139,13 +149,13 @@ func BenchmarkInstantSeriesSet(b *testing.B) {
 	prepareInstantData(lss, ds, timestamps, size)
 
 	seriesSets := make([]*querier.InstantSeriesSet, 0, b.N)
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		seriesSets = append(seriesSets, instantQuery(b, lss, ds, timestamps[1], valueNotFoundTimestampValue, matcher))
 	}
 
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		iterateSeriesSet(seriesSets[i])
 	}
 }

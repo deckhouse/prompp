@@ -118,6 +118,11 @@ func (q *AppendFileStorage) Close() error {
 	return nil
 }
 
+// Remove removes the file.
+func (q *AppendFileStorage) Remove() error {
+	return os.Remove(q.fileName)
+}
+
 // IsEmpty returns true if file is empty.
 func (q *AppendFileStorage) IsEmpty() bool {
 	if q.file != nil {

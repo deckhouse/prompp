@@ -45,6 +45,7 @@ type AppendFile interface {
 	Reader() (StorageReader, error)
 	Sync() error
 	IsEmpty() bool
+	Remove() error
 }
 
 // UnloadedDataSnapshotHeader stubs for recording snapshots.
@@ -138,8 +139,11 @@ func (s *UnloadedDataStorage) ForEachSnapshot(f func(snapshot []byte, isLast boo
 	for index, header := range s.snapshots {
 		snapshot = snapshot[:header.SnapshotSize]
 		size, err := reader.ReadAt(snapshot, offset)
-		if size != int(header.SnapshotSize) {
+		if err != nil {
 			return err
+		}
+		if size != int(header.SnapshotSize) {
+			return fmt.Errorf("invalid size of the read data: %d, expected: %d", size, header.SnapshotSize)
 		}
 		offset += int64(size)
 
@@ -171,6 +175,9 @@ func (*UnloadedDataStorage) validateFormatVersion(reader StorageReader) (offset 
 func (s *UnloadedDataStorage) Close() (err error) {
 	if s.storage != nil {
 		err = s.storage.Close()
+		if rErr := s.storage.Remove(); err != nil && !errors.Is(rErr, os.ErrNotExist) {
+			err = errors.Join(err, rErr)
+		}
 		s.storage = nil
 	}
 

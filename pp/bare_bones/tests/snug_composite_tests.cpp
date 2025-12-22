@@ -107,11 +107,7 @@ class TestSnugCompositesStringFilament {
   }
 };
 
-typedef testing::Types<BareBones::SnugComposite::EncodingBimap<TestSnugCompositesStringFilament, Vector>,
-                       BareBones::SnugComposite::ParallelEncodingBimap<TestSnugCompositesStringFilament, Vector>,
-                       BareBones::SnugComposite::OrderedEncodingBimap<TestSnugCompositesStringFilament, Vector>,
-                       BareBones::SnugComposite::EncodingBimapWithOrderedAccess<TestSnugCompositesStringFilament, Vector>>
-    SnugCompositesBimapTypes;
+typedef testing::Types<BareBones::SnugComposite::EncodingBimap<TestSnugCompositesStringFilament, Vector>> SnugCompositesBimapTypes;
 
 template <class T>
 struct SnugComposite : public testing::Test {
@@ -141,30 +137,28 @@ TYPED_TEST(SnugComposite, should_return_same_id_for_same_data) {
 }
 
 TYPED_TEST(SnugComposite, should_return_same_id_for_same_data_with_hash) {
-  if constexpr (!std::is_same_v<TypeParam, BareBones::SnugComposite::OrderedEncodingBimap<TestSnugCompositesStringFilament, Vector>>) {
-    TypeParam outcomes;
-    this->fill_table_with_random_values(outcomes);
+  TypeParam outcomes;
+  this->fill_table_with_random_values(outcomes);
 
-    std::string v = "12";
-    auto hash_val = BareBones::XXHash::hash(v);
-    auto id = outcomes.find_or_emplace(v, hash_val);
+  std::string v = "12";
+  auto hash_val = BareBones::XXHash::hash(v);
+  auto id = outcomes.find_or_emplace(v, hash_val);
 
-    EXPECT_EQ(id, outcomes.find_or_emplace(v, hash_val));
-    EXPECT_EQ(id, outcomes.find_or_emplace(v));
+  EXPECT_EQ(id, outcomes.find_or_emplace(v, hash_val));
+  EXPECT_EQ(id, outcomes.find_or_emplace(v));
 
-    EXPECT_EQ(outcomes.find_or_emplace(v, hash_val), outcomes.find(v, hash_val));
-    EXPECT_EQ(outcomes.find_or_emplace(v, hash_val), outcomes.find(v));
+  EXPECT_EQ(outcomes.find_or_emplace(v, hash_val), outcomes.find(v, hash_val));
+  EXPECT_EQ(outcomes.find_or_emplace(v, hash_val), outcomes.find(v));
 
-    v = "21";
-    hash_val = BareBones::XXHash::hash(v);
-    id = outcomes.find_or_emplace(v);
+  v = "21";
+  hash_val = BareBones::XXHash::hash(v);
+  id = outcomes.find_or_emplace(v);
 
-    EXPECT_EQ(id, outcomes.find_or_emplace(v, hash_val));
-    EXPECT_EQ(id, outcomes.find_or_emplace(v));
+  EXPECT_EQ(id, outcomes.find_or_emplace(v, hash_val));
+  EXPECT_EQ(id, outcomes.find_or_emplace(v));
 
-    EXPECT_EQ(outcomes.find_or_emplace(v), outcomes.find(v));
-    EXPECT_EQ(outcomes.find_or_emplace(v), outcomes.find(v, hash_val));
-  }
+  EXPECT_EQ(outcomes.find_or_emplace(v), outcomes.find(v));
+  EXPECT_EQ(outcomes.find_or_emplace(v), outcomes.find(v, hash_val));
 }
 
 TYPED_TEST(SnugComposite, should_return_different_id_for_different_data) {
@@ -183,29 +177,27 @@ TYPED_TEST(SnugComposite, should_return_different_id_for_different_data) {
 }
 
 TYPED_TEST(SnugComposite, should_return_different_id_for_different_data_with_hash) {
-  if constexpr (!std::is_same_v<TypeParam, BareBones::SnugComposite::OrderedEncodingBimap<TestSnugCompositesStringFilament, Vector>>) {
-    TypeParam outcomes;
-    this->fill_table_with_random_values(outcomes);
+  TypeParam outcomes;
+  this->fill_table_with_random_values(outcomes);
 
-    std::string v = "12";
-    size_t hash_val = std::hash<std::string>()(v);
-    auto id = outcomes.find_or_emplace(v, hash_val);
+  std::string v = "12";
+  size_t hash_val = std::hash<std::string>()(v);
+  auto id = outcomes.find_or_emplace(v, hash_val);
 
-    v = "21";
-    hash_val = std::hash<std::string>()(v);
+  v = "21";
+  hash_val = std::hash<std::string>()(v);
 
-    EXPECT_NE(id, outcomes.find_or_emplace(v, hash_val));
-    EXPECT_NE(id, outcomes.find_or_emplace(v));
+  EXPECT_NE(id, outcomes.find_or_emplace(v, hash_val));
+  EXPECT_NE(id, outcomes.find_or_emplace(v));
 
-    v = "13";
-    id = outcomes.find_or_emplace(v);
+  v = "13";
+  id = outcomes.find_or_emplace(v);
 
-    v = "31";
-    hash_val = std::hash<std::string>()(v);
+  v = "31";
+  hash_val = std::hash<std::string>()(v);
 
-    EXPECT_NE(id, outcomes.find_or_emplace(v, hash_val));
-    EXPECT_NE(id, outcomes.find_or_emplace(v));
-  }
+  EXPECT_NE(id, outcomes.find_or_emplace(v, hash_val));
+  EXPECT_NE(id, outcomes.find_or_emplace(v));
 }
 
 TYPED_TEST(SnugComposite, should_assign_new_ids_after_rollback) {

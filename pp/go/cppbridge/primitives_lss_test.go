@@ -32,14 +32,6 @@ func (s *LSSSuite) TestLSS() {
 	s.Require().NotEqual(0, cp)
 }
 
-func (s *LSSSuite) TestOrderedLSS() {
-	lss := cppbridge.NewOrderedLssStorage()
-
-	s.Equal(uint64(0), lss.AllocatedMemory())
-	cp := lss.Pointer()
-	s.Require().NotEqual(0, cp)
-}
-
 func (s *LSSSuite) TestQueryableLSS() {
 	lss := cppbridge.NewQueryableLssStorage()
 

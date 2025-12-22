@@ -326,6 +326,15 @@ func (c *PPConverter) addGaugeNumberDataPoints(
 			model.MetricNameLabel,
 			name,
 		)
+		if err := validateOnEmptyLabel(labels); err != nil {
+			level.Warn(c.logger).Log(
+				"msg", "Gauge DataPoints contains an invalid labelset, is dropped",
+				"labels", labels,
+				"err", err,
+			)
+
+			continue
+		}
 
 		var v float64
 		switch pt.ValueType() {
@@ -357,6 +366,15 @@ func (c *PPConverter) addSumNumberDataPoints(
 			model.MetricNameLabel,
 			name,
 		)
+		if err := validateOnEmptyLabel(lbls); err != nil {
+			level.Warn(c.logger).Log(
+				"msg", "Sum DataPoints contains an invalid labelset, is dropped",
+				"labels", lbls,
+				"err", err,
+			)
+
+			continue
+		}
 
 		var v float64
 		switch pt.ValueType() {
@@ -382,6 +400,15 @@ func (c *PPConverter) addHistogramDataPoints(
 		pt := dataPoints.At(x)
 		timestamp := convertTimeStamp(pt.Timestamp())
 		baseLabels := c.createAttributes(resource, pt.Attributes(), nil, false)
+		if err := validateOnEmptyLabel(baseLabels); err != nil {
+			level.Warn(c.logger).Log(
+				"msg", "Histogram DataPoints contains an invalid labelset, is dropped",
+				"labels", baseLabels,
+				"err", err,
+			)
+
+			continue
+		}
 
 		// If the sum is unset, it indicates the _sum metric point should be
 		// omitted
@@ -455,6 +482,15 @@ func (c *PPConverter) addSummaryDataPoints(
 		pt := dataPoints.At(x)
 		timestamp := convertTimeStamp(pt.Timestamp())
 		baseLabels := c.createAttributes(resource, pt.Attributes(), nil, false)
+		if err := validateOnEmptyLabel(baseLabels); err != nil {
+			level.Warn(c.logger).Log(
+				"msg", "Summary DataPoints contains an invalid labelset, is dropped",
+				"labels", baseLabels,
+				"err", err,
+			)
+
+			continue
+		}
 
 		// treat sum as a sample in an individual TimeSeries
 		sum := pt.Sum()
@@ -518,8 +554,17 @@ func (c *PPConverter) addResourceTargetInfo(
 	}
 
 	labels := c.createAttributes(resource, attributes, identifyingAttrs, false, model.MetricNameLabel, targetMetricName)
-	haveIdentifier := false
+	if err := validateOnEmptyLabel(labels); err != nil {
+		level.Warn(c.logger).Log(
+			"msg", "target_info contains an invalid labelset, is dropped",
+			"labels", labels,
+			"err", err,
+		)
 
+		return
+	}
+
+	haveIdentifier := false
 	labels.Range(func(name, _ string) bool {
 		if name == model.JobLabel || name == model.InstanceLabel {
 			haveIdentifier = true
@@ -740,4 +785,14 @@ func createLabels(name string, baseLabels ppmodel.LabelSet, extras ...string) pp
 	builder.Set(model.MetricNameLabel, name)
 
 	return builder.Build()
+}
+
+func validateOnEmptyLabel(labels ppmodel.LabelSet) error {
+	for lname, lvalue := range labels.Range {
+		if lname == "" || lvalue == "" {
+			return errors.New("labelset contains a label with an empty name or value")
+		}
+	}
+
+	return nil
 }

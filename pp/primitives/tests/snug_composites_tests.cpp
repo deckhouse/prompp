@@ -62,13 +62,6 @@ using LabelSet = GenericLabelSet<Vector>;
 
 struct SnugComposites : public testing::Test {};
 
-TEST(SnugComposites, OrderedDecodingTableWithSymbolsHandlesZeroStringAsFirstElementCorrectly) {
-  PromPP::Primitives::SnugComposites::Symbol::OrderedDecodingTable<Vector> t;
-
-  EXPECT_EQ(t.emplace_back(""), 0);
-  EXPECT_EQ(t[0], "");
-}
-
 TEST(SnugComposites, SnapshotRollbackSymbolEncodingBimap) {
   PromPP::Primitives::SnugComposites::Symbol::EncodingBimap<Vector> encoding_bimap;
 

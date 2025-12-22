@@ -1044,7 +1044,7 @@ func main() {
 			reloader: webHandler.ApplyConfig,
 		}, { // PP_CHANGES.md: rebuild on cpp end
 			name:     "remote_writer",
-			reloader: remote.ApplyConfig(remoteWriter),
+			reloader: remote.ApplyConfig(remoteWriter, cfg.tsdb.RetentionDuration),
 		}, { // PP_CHANGES.md: rebuild on cpp end
 			name: "query_engine",
 			reloader: func(cfg *config.Config) error {
