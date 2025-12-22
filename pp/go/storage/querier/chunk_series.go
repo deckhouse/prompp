@@ -73,14 +73,17 @@ func (css *ChunkSeriesSet) Next() bool {
 		css.lastRecodedChunk = nil
 	}
 
-	var lsID uint32
+	var (
+		lsID     uint32
+		lsLength uint16
+	)
 
 	for {
 		if css.index >= css.lssQueryResult.Len() {
 			return false
 		}
 
-		lsID, _ = css.lssQueryResult.GetByIndex(css.index)
+		lsID, lsLength = css.lssQueryResult.GetByIndex(css.index)
 
 		if lsID == seriesID {
 			break
@@ -90,7 +93,7 @@ func (css *ChunkSeriesSet) Next() bool {
 	}
 	css.builder.Reset()
 	css.chunkSeries = &ChunkSeries{
-		labelSet:      labels.NewLabelsWithLSS(css.labelSetSnapshot, lsID, &css.builder),
+		labelSet:      labels.NewLabelsWithLSS(css.labelSetSnapshot, &css.builder, lsID, lsLength),
 		recodedChunks: recodedChunks,
 	}
 

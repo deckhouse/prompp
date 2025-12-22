@@ -647,7 +647,7 @@ func (s *LabelsSuite) TestLenDropMetricName() {
 
 	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsid := lss.FindOrEmplace(lsIn)
-	ls := labels.NewLabelsWithLSS(lss.Snapshot(), lsid, 0)
+	ls := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsid, 0)
 
 	s.Equal(lsIn.Len()-1, ls.DropMetricName().Len())
 }
@@ -661,7 +661,7 @@ func (s *LabelsSuite) TestLenDropMetricName_2() {
 
 	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsid := lss.FindOrEmplace(lsIn)
-	ls := labels.NewLabelsWithLSS(lss.Snapshot(), lsid, uint16(lsIn.Len()))
+	ls := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsid, uint16(lsIn.Len()))
 
 	s.Equal(lsIn.Len()-1, ls.DropMetricName().Len())
 }
@@ -674,7 +674,7 @@ func (s *LabelsSuite) TestLenDropMetricName_3() {
 
 	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsid := lss.FindOrEmplace(lsIn)
-	ls := labels.NewLabelsWithLSS(lss.Snapshot(), lsid, uint16(lsIn.Len()))
+	ls := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsid, uint16(lsIn.Len()))
 
 	s.Equal(lsIn.Len(), ls.DropMetricName().Len())
 }
@@ -1047,7 +1047,7 @@ func (s *LabelsSuite) TestLen() {
 
 	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsid := lss.FindOrEmplace(lsIn)
-	ls := labels.NewLabelsWithLSS(lss.Snapshot(), lsid, 0)
+	ls := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsid, 0)
 
 	s.Equal(lsIn.Len(), ls.Len())
 }
@@ -1061,7 +1061,7 @@ func (s *LabelsSuite) TestLen_2() {
 
 	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsid := lss.FindOrEmplace(lsIn)
-	ls := labels.NewLabelsWithLSS(lss.Snapshot(), lsid, uint16(lsIn.Len()))
+	ls := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsid, uint16(lsIn.Len()))
 
 	s.Equal(lsIn.Len(), ls.Len())
 }
@@ -1239,7 +1239,7 @@ func (s *LabelsSuite) TestIsZeroFalseLSS() {
 		"lol":      "kek",
 		"che":      "bureck",
 	}))
-	lsA := labels.NewLabelsWithLSS(lss.Snapshot(), lsid, 3)
+	lsA := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsid, 3)
 
 	s.False(lsA.IsZero())
 }

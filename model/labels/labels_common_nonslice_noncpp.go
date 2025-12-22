@@ -9,7 +9,7 @@ import (
 )
 
 // NewLabelsWithLSS init LabelsCpp with LabelSetSnapshot and ls id.
-func NewLabelsWithLSS(lss *cppbridge.LabelSetSnapshot, id uint32, builder *ScratchBuilder) Labels {
+func NewLabelsWithLSS(lss *cppbridge.LabelSetSnapshot, builder *ScratchBuilder, id uint32, _ uint16) Labels {
 	if lss == nil {
 		return EmptyLabels()
 	}

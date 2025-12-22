@@ -98,7 +98,7 @@ func (s *HelpFuncSuite) TestEqualOneLSS() {
 		"lol":      "kek",
 		"che":      "bureck",
 	}))
-	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsid, 0)
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsid, 0)
 
 	s.True(labels.Equal(lsA, lsB))
 	s.True(labels.Equal(lsB, lsA))
@@ -116,7 +116,7 @@ func (s *HelpFuncSuite) TestEqualOneLSSDropMetricName() {
 		"lol": "kek",
 		"che": "bureck",
 	}))
-	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsid, 0)
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsid, 0)
 
 	s.True(labels.Equal(lsA.DropMetricName(), lsB))
 	s.True(labels.Equal(lsB, lsA.DropMetricName()))
@@ -131,7 +131,7 @@ func (s *HelpFuncSuite) TestEqualTwoLSS() {
 		"zimya":    "reck",
 	})
 	lsidA := lssA.FindOrEmplace(lsInA)
-	lsA := labels.NewLabelsWithLSS(lssA.Snapshot(), lsidA, uint16(lsInA.Len()))
+	lsA := labels.NewLabelsWithLSS(lssA.Snapshot(), nil, lsidA, uint16(lsInA.Len()))
 
 	lssB := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 	lsInB := model.LabelSetFromMap(map[string]string{
@@ -141,7 +141,7 @@ func (s *HelpFuncSuite) TestEqualTwoLSS() {
 		"zimya":    "reck",
 	})
 	lsidB := lssB.FindOrEmplace(lsInB)
-	lsB := labels.NewLabelsWithLSS(lssB.Snapshot(), lsidB, uint16(lsInB.Len()))
+	lsB := labels.NewLabelsWithLSS(lssB.Snapshot(), nil, lsidB, uint16(lsInB.Len()))
 
 	s.True(labels.Equal(lsA, lsB))
 	s.True(labels.Equal(lsB, lsA))
@@ -195,7 +195,7 @@ func (s *HelpFuncSuite) TestNotEqualOnLenAnyLSS() {
 		"che":      "bureck",
 		"imya":     "reck",
 	}))
-	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsidB, 0)
 
 	s.False(labels.Equal(lsA, lsB))
 }
@@ -214,7 +214,7 @@ func (s *HelpFuncSuite) TestNotEqualOnLenAnyLSSDropMetricName() {
 		"che":      "bureck",
 		"imya":     "reck",
 	}))
-	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsidB, 0)
 
 	s.False(labels.Equal(lsA.DropMetricName(), lsB))
 }
@@ -263,7 +263,7 @@ func (s *HelpFuncSuite) TestNotEqualOnLabelAnyLSS() {
 		"lol":      "kek",
 		"imya":     "reck",
 	}))
-	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsidB, 0)
 
 	s.False(labels.Equal(lsA, lsB))
 }
@@ -280,7 +280,7 @@ func (s *HelpFuncSuite) TestNotEqualOnLabelAnyLSSDropMetricName() {
 		"lol":  "kek",
 		"imya": "reck",
 	}))
-	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsidB, 0)
 
 	s.False(labels.Equal(lsA.DropMetricName(), lsB))
 }
@@ -373,7 +373,7 @@ func (s *HelpFuncSuite) TestCompareAnyLSS() {
 		"lol":      "kek",
 		"che":      "bureck",
 	}))
-	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsidB, 0)
 
 	s.Equal(0, labels.Compare(lsA, lsB))
 }
@@ -390,7 +390,7 @@ func (s *HelpFuncSuite) TestCompareAnyLSSDropMetricName() {
 		"lol": "kek",
 		"che": "bureck",
 	}))
-	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsidB, 0)
 
 	s.Equal(0, labels.Compare(lsA.DropMetricName(), lsB))
 }
@@ -478,7 +478,7 @@ func (s *HelpFuncSuite) TestCompareAnyLSSNameLength() {
 		"lol":      "kek",
 		"che":      "bureck",
 	}))
-	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsidB, 0)
 
 	s.Equal(1, labels.Compare(lsA, lsB))
 	s.Equal(-1, labels.Compare(lsB, lsA))
@@ -496,7 +496,7 @@ func (s *HelpFuncSuite) TestCompareAnyLSSNameLengthDropMetricName() {
 		"lol":      "kek",
 		"che":      "bureck",
 	}))
-	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsidB, 0)
 
 	s.Equal(1, labels.Compare(lsA, lsB.DropMetricName()))
 	s.Equal(-1, labels.Compare(lsB.DropMetricName(), lsA))
@@ -548,7 +548,7 @@ func (s *HelpFuncSuite) TestCompareALSSNameString() {
 		"lok":      "kek",
 		"che":      "bureck",
 	}))
-	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 3)
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsidB, 3)
 
 	s.Equal(1, labels.Compare(lsA, lsB))
 	s.Equal(-1, labels.Compare(lsB, lsA))
@@ -566,7 +566,7 @@ func (s *HelpFuncSuite) TestCompareALSSNameStringDropMetricName() {
 		"lok":      "kek",
 		"che":      "bureck",
 	}))
-	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 3)
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsidB, 3)
 
 	s.Equal(1, labels.Compare(lsA, lsB.DropMetricName()))
 	s.Equal(-1, labels.Compare(lsB.DropMetricName(), lsA))
@@ -618,7 +618,7 @@ func (s *HelpFuncSuite) TestCompareLSSValueLength() {
 		"lol":      "kek",
 		"che":      "bureck",
 	}))
-	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsidB, 0)
 
 	s.Equal(1, labels.Compare(lsA, lsB))
 	s.Equal(-1, labels.Compare(lsB, lsA))
@@ -636,7 +636,7 @@ func (s *HelpFuncSuite) TestCompareLSSValueLengthDropMetricName() {
 		"lol":      "kek",
 		"che":      "bureck",
 	}))
-	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsidB, 0)
 
 	s.Equal(1, labels.Compare(lsA, lsB.DropMetricName()))
 	s.Equal(-1, labels.Compare(lsB.DropMetricName(), lsA))
@@ -688,7 +688,7 @@ func (s *HelpFuncSuite) TestCompareLSSValueString() {
 		"lol":      "kak",
 		"che":      "bureck",
 	}))
-	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsidB, 0)
 
 	s.Equal(1, labels.Compare(lsA, lsB))
 	s.Equal(-1, labels.Compare(lsB, lsA))
@@ -706,7 +706,7 @@ func (s *HelpFuncSuite) TestCompareLSSValueStringDropMetricName() {
 		"lol":      "kak",
 		"che":      "bureck",
 	}))
-	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsidB, 0)
 
 	s.Equal(1, labels.Compare(lsA, lsB.DropMetricName()))
 	s.Equal(-1, labels.Compare(lsB.DropMetricName(), lsA))
@@ -725,7 +725,7 @@ func (s *HelpFuncSuite) TestCompareOnLabelAnyLSS() {
 		"lol":      "kek",
 		"che":      "bureck",
 	}))
-	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsidB, 0)
 
 	s.Equal(1, labels.Compare(lsA, lsB))
 	s.Equal(-1, labels.Compare(lsB, lsA))
@@ -743,7 +743,7 @@ func (s *HelpFuncSuite) TestCompareOnLabelAnyLSSDropMetricName() {
 		"lol":      "kek",
 		"che":      "bureck",
 	}))
-	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), lsidB, 0)
+	lsB := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsidB, 0)
 
 	s.Equal(1, labels.Compare(lsA, lsB.DropMetricName()))
 	s.Equal(-1, labels.Compare(lsB.DropMetricName(), lsA))

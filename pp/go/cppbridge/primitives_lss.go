@@ -19,9 +19,6 @@ func lssTypeToString(lssType uint32) string {
 	case lssEncodingBimap:
 		return "encoding_bimap"
 
-	case lssOrderedEncodingBimap:
-		return "ordered_encoding_bimap"
-
 	case lssQueryableEncodingBimap:
 		return "queryable_encoding_bimap"
 

@@ -33,11 +33,7 @@ func EmptyLabels() Labels {
 }
 
 // NewLabelsCppWithLSS init LabelsCpp with LabelSetStorage and ls id.
-func NewLabelsWithLSS(
-	lss *cppbridge.LabelSetSnapshot,
-	id uint32,
-	length uint16,
-) Labels {
+func NewLabelsWithLSS(lss *cppbridge.LabelSetSnapshot, _ *ScratchBuilder, id uint32, length uint16) Labels {
 	return Labels{
 		snapshot: lss,
 		id:       id,
@@ -765,7 +761,7 @@ func (s *storage) findOrEmplaceFromBuilder(b *Builder) Labels {
 
 	s.rotateLock.RUnlock()
 
-	return NewLabelsWithLSS(snapshot, lsID, length)
+	return NewLabelsWithLSS(snapshot, nil, lsID, length)
 }
 
 // findByHash label set by hash in cache.
@@ -798,6 +794,7 @@ func (s *storage) findByHash(
 
 	return NewLabelsWithLSS(
 		snapshot,
+		nil,
 		lsID,
 		length,
 	), true

@@ -94,8 +94,11 @@ func (l *LSS) FindByHash(
 		return labels.EmptyLabels(), false
 	}
 
+	// TODO: Maybe reuse builder?
+	builder := labels.NewScratchBuilder(int(length))
 	return labels.NewLabelsWithLSS(
 		snapshot,
+		&builder,
 		lsID,
 		length,
 	), true
@@ -126,8 +129,11 @@ func (l *LSS) FindFromBuilder(
 		l.lsCache.Store(hash, newlsID, length)
 	}
 
+	// TODO: Maybe reuse builder?
+	builder := labels.NewScratchBuilder(int(length))
 	return labels.NewLabelsWithLSS(
 		newSnapshot,
+		&builder,
 		newlsID,
 		length,
 	), true
