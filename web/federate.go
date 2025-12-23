@@ -50,6 +50,8 @@ var (
 	})
 )
 
+var FederationSplitFamiliesPageSize = 0
+
 func registerFederationMetrics(r prometheus.Registerer) {
 	r.MustRegister(federationWarnings, federationErrors)
 }
@@ -191,14 +193,16 @@ Loop:
 				// This is also important to protect against nameless metrics.
 				return nil
 			}
-			const MaxMetricsPerWrite = 1000
 			if l.Name == labels.MetricName {
 				nameSeen = true
-				if l.Value == lastMetricName && // We already have the name in the current MetricFamily, and we ignore nameless metrics.
-					(protMetricFam == nil || len(protMetricFam.Metric) <= MaxMetricsPerWrite) && // PP_CHANGES.md: split big families
+				isSameMetric := l.Value == lastMetricName && // We already have the name in the current MetricFamily, and we ignore nameless metrics.
 					lastWasHistogram == isHistogram && // The sample type matches (float vs histogram).
 					// If it was a histogram, the histogram type (counter vs gauge) also matches.
-					(!isHistogram || lastHistogramWasGauge == (s.H.CounterResetHint == histogram.GaugeType)) {
+					(!isHistogram || lastHistogramWasGauge == (s.H.CounterResetHint == histogram.GaugeType))
+				isFamiliyPageFull := FederationSplitFamiliesPageSize > 0 &&
+					protMetricFam != nil &&
+					len(protMetricFam.Metric) >= FederationSplitFamiliesPageSize
+				if isSameMetric && !isFamiliyPageFull {
 					return nil
 				}
 
