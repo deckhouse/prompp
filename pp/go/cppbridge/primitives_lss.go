@@ -119,6 +119,7 @@ func (lss *LabelSetStorage) FindFromBuilder(
 	sortedAdd []Label,
 	sortedDel []string,
 	snapshot *LabelSetSnapshot,
+	hash uint64,
 	lsID uint32,
 ) (uint32, uint16, bool) {
 	var snapshotPointer uintptr
@@ -131,6 +132,7 @@ func (lss *LabelSetStorage) FindFromBuilder(
 		snapshotPointer,
 		sortedAdd,
 		sortedDel,
+		hash,
 		lsID,
 	)
 	runtime.KeepAlive(lss)

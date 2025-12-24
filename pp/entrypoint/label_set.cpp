@@ -593,13 +593,16 @@ extern "C" void prompp_label_set_from_builder_hash(void* args, void* res) {
   };
   struct Result {
     uint64_t hash;
+    bool empty;
   };
 
   auto in = static_cast<Arguments*>(args);
   static const entrypoint::head::ReadonlyLss::value_type empty_label_set;
   const auto& label_set = in->readonly_lss ? std::get<entrypoint::head::ReadonlyLss>(*in->readonly_lss)[in->ls_id] : empty_label_set;
+  const auto& builder = LabelSetBuilder{label_set, in->sorted_add, in->sorted_del};
 
-  new (res) Result{.hash = hash_value(LabelSetBuilder{label_set, in->sorted_add, in->sorted_del})};
+  // TODO hash_value with begin, end
+  new (res) Result{.hash = hash_value(builder), .empty = builder.begin() == builder.end()};
 }
 
 extern "C" void prompp_label_set_equal_with_builder(void* args, void* res) {

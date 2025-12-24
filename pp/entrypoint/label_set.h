@@ -243,6 +243,7 @@ void prompp_label_set_compare(void* args, void* res);
  *
  * @param res {
  *     hash         uint64   // hash sum
+ *     empty        bool     // empty labelset in builder
  * }
  */
 void prompp_label_set_from_builder_hash(void* args, void* res);

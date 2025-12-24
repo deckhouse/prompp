@@ -355,10 +355,12 @@ func (s *QueryableLSSSuite) TestFindFromBuilder() {
 	// Act
 	expectedLSID := s.lss.FindOrEmplace(mls).LabelSetID
 	labelSetSnapshot := s.lss.CreateLabelSetSnapshot(&testSnapshotSource{})
+	hash, _ := cppbridge.LabelSetFromBuilderHash(nil, nil, labelSetSnapshot, expectedLSID)
 	actualLSID, length, find := s.lss.FindFromBuilder(
 		nil,
 		nil,
 		labelSetSnapshot,
+		hash,
 		expectedLSID,
 	)
 
@@ -377,10 +379,12 @@ func (s *QueryableLSSSuite) TestFindFromBuilderAnother() {
 
 	// Act
 	expectedLSID := s.lss.FindOrEmplace(mls).LabelSetID
+	hash, _ := cppbridge.LabelSetFromBuilderHash(nil, nil, labelSetSnapshot, expectedLSID)
 	actualLSID, length, find := s.lss.FindFromBuilder(
 		nil,
 		nil,
 		labelSetSnapshot,
+		hash,
 		lsid,
 	)
 
@@ -395,17 +399,25 @@ func (s *QueryableLSSSuite) TestFindFromBuilderFromBuilderWithExistingLabelSet()
 	labelSetSnapshot := s.lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	// Act
+	lsid := uint32(0)
+	sortedAdd := []cppbridge.Label{{Name: "che", Value: "bureck"}}
+	hash, _ := cppbridge.LabelSetFromBuilderHash(sortedAdd, nil, labelSetSnapshot, lsid)
 	lsIDAdd, lengthAdd, findAdd := s.lss.FindFromBuilder(
-		[]cppbridge.Label{{Name: "che", Value: "bureck"}},
+		sortedAdd,
 		nil,
 		labelSetSnapshot,
-		0,
+		hash,
+		lsid,
 	)
+	lsid = uint32(1)
+	sortedDel := []string{"che"}
+	hash, _ = cppbridge.LabelSetFromBuilderHash(nil, sortedDel, labelSetSnapshot, lsid)
 	lsIDDel, lengthDel, findDel := s.lss.FindFromBuilder(
 		nil,
 		[]string{"che"},
 		labelSetSnapshot,
-		1,
+		hash,
+		lsid,
 	)
 
 	// Assert
@@ -427,12 +439,14 @@ func (s *QueryableLSSSuite) TestFindFromBuilderNot() {
 	lss := cppbridge.NewQueryableLssStorage()
 	lsid := lss.FindOrEmplace(mls).LabelSetID
 	labelSetSnapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
+	hash, _ := cppbridge.LabelSetFromBuilderHash(nil, nil, labelSetSnapshot, lsid)
 
 	// Act
 	_, _, find := s.lss.FindFromBuilder(
 		nil,
 		nil,
 		labelSetSnapshot,
+		hash,
 		lsid,
 	)
 

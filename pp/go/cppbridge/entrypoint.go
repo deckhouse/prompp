@@ -1308,6 +1308,7 @@ func primitivesLSSFindOrEmplaceFromBuilder(
 	bitsetPtr uintptr,
 	sortedAdd []Label,
 	sortedDel []string,
+	hash uint64,
 	lsID uint32,
 ) (uintptr, uint64, uint32, bool) {
 	args := struct {
@@ -1316,8 +1317,9 @@ func primitivesLSSFindOrEmplaceFromBuilder(
 		bitsetPtr   uintptr
 		sortedAdd   []Label
 		sortedDel   []string
+		hash        uint64
 		lsID        uint32
-	}{lssPtr, snapshotPtr, bitsetPtr, sortedAdd, sortedDel, lsID}
+	}{lssPtr, snapshotPtr, bitsetPtr, sortedAdd, sortedDel, hash, lsID}
 	var res struct {
 		snapshotPtr      uintptr
 		labelSetID       uint32
@@ -1340,6 +1342,7 @@ func primitivesLSSFindFromBuilder(
 	snapshotPtr uintptr,
 	sortedAdd []Label,
 	sortedDel []string,
+	hash uint64,
 	lsID uint32,
 ) (uint64, uint32, bool) {
 	args := struct {
@@ -1347,8 +1350,9 @@ func primitivesLSSFindFromBuilder(
 		snapshotPtr uintptr
 		sortedAdd   []Label
 		sortedDel   []string
+		hash        uint64
 		lsID        uint32
-	}{lss, snapshotPtr, sortedAdd, sortedDel, lsID}
+	}{lss, snapshotPtr, sortedAdd, sortedDel, hash, lsID}
 	var res struct {
 		length     uint64
 		labelSetID uint32
@@ -3401,7 +3405,7 @@ func ppLabelSetFromBuilderHash(
 	sortedAdd []Label,
 	sortedDel []string,
 	lsID uint32,
-) uint64 {
+) (uint64, bool) {
 	args := struct {
 		snapshotPtr uintptr
 		sortedAdd   []Label
@@ -3409,7 +3413,8 @@ func ppLabelSetFromBuilderHash(
 		lsID        uint32
 	}{snapshotPtr, sortedAdd, sortedDel, lsID}
 	var res struct {
-		hash uint64
+		hash  uint64
+		empty bool
 	}
 
 	fastcgo.UnsafeCall2(
@@ -3418,7 +3423,7 @@ func ppLabelSetFromBuilderHash(
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.hash
+	return res.hash, res.empty
 }
 
 func labelSetEqualWithBuilder(

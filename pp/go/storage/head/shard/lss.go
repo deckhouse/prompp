@@ -94,11 +94,12 @@ func (l *LSS) FindByHash(
 		return labels.EmptyLabels(), false
 	}
 
-	// TODO: Maybe reuse builder?
-	builder := labels.NewScratchBuilder(int(length))
+	// TODO: Maybe reuse builder? or build tag?
+	// builder := labels.NewScratchBuilder(int(length))
 	return labels.NewLabelsWithLSS(
 		snapshot,
-		&builder,
+		// &builder,
+		nil,
 		lsID,
 		length,
 	), true
@@ -116,7 +117,7 @@ func (l *LSS) FindFromBuilder(
 	skipCache bool,
 ) (labels.Labels, bool) {
 	l.locker.RLock()
-	newlsID, length, find := l.target.LSS().FindFromBuilder(sortedAdd, sortedDel, snapshot, lsID)
+	newlsID, length, find := l.target.LSS().FindFromBuilder(sortedAdd, sortedDel, snapshot, hash, lsID)
 	if !find {
 		l.locker.RUnlock()
 		return labels.EmptyLabels(), false
@@ -129,11 +130,12 @@ func (l *LSS) FindFromBuilder(
 		l.lsCache.Store(hash, newlsID, length)
 	}
 
-	// TODO: Maybe reuse builder?
-	builder := labels.NewScratchBuilder(int(length))
+	// TODO: Maybe reuse builder? or build tag?
+	// builder := labels.NewScratchBuilder(int(length))
 	return labels.NewLabelsWithLSS(
 		newSnapshot,
-		&builder,
+		// &builder,
+		nil,
 		newlsID,
 		length,
 	), true

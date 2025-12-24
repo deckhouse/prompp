@@ -619,6 +619,7 @@ void prompp_label_set_compare(void* args, void* res);
  *
  * @param res {
  *     hash         uint64   // hash sum
+ *     empty        bool     // empty labelset in builder
  * }
  */
 void prompp_label_set_from_builder_hash(void* args, void* res);
@@ -791,6 +792,7 @@ void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
  *     bitset                uintptr  // pointer to constructed bitset;
  *     sorted_add            []Label  // slice of sorted by name labels
  *     sorted_del            []string // slice of sorted label names
+ *     hash                  uint64   // hash for the lebelset
  *     ls_id                 uint32   // series id
  * }
  *
@@ -811,6 +813,7 @@ void prompp_primitives_lss_find_or_emplace_from_builder(void* args, void* res);
  *     readonly_lss uintptr  // pointer to constructed lss;
  *     sorted_add   []Label  // slice of sorted by name labels
  *     sorted_del   []string // slice of sorted label names
+ *     hash         uint64   // hash for the lebelset
  *     ls_id        uint32   // series id
  * }
  *

@@ -442,6 +442,7 @@ func (lws *LSSWithSnapshot) FindOrEmplaceFromBuilder(
 	sortedAdd []Label,
 	sortedDel []string,
 	otherSnapshot *LabelSetSnapshot,
+	hash uint64,
 	lsID uint32,
 ) (uint32, uint16) {
 	var snapshotPointer uintptr
@@ -455,8 +456,11 @@ func (lws *LSSWithSnapshot) FindOrEmplaceFromBuilder(
 		lws.bitsetPointer,
 		sortedAdd,
 		sortedDel,
+		hash,
 		lsID,
 	)
+	runtime.KeepAlive(sortedAdd)
+	runtime.KeepAlive(sortedDel)
 	runtime.KeepAlive(otherSnapshot)
 	runtime.KeepAlive(lws)
 

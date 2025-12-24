@@ -60,18 +60,20 @@ func LabelSetFromBuilderHash(
 	sortedDel []string,
 	snapshot *LabelSetSnapshot,
 	lsID uint32,
-) uint64 {
+) (uint64, bool) {
 	var snapshotPointer uintptr
 	if snapshot != nil {
 		snapshotPointer = snapshot.pointer
 	}
 
-	hash := ppLabelSetFromBuilderHash(
+	hash, empty := ppLabelSetFromBuilderHash(
 		snapshotPointer,
 		sortedAdd,
 		sortedDel,
 		lsID,
 	)
+	runtime.KeepAlive(sortedAdd)
+	runtime.KeepAlive(sortedDel)
 	runtime.KeepAlive(snapshot)
-	return hash
+	return hash, empty
 }

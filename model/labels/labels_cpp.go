@@ -596,8 +596,8 @@ type Adapter interface {
 // noopAdapter implementation [Adapter] without operation.
 type noopAdapter struct{}
 
-// newNoopReceiver init new *noopReceiver.
-func newNoopReceiver() *Adapter {
+// newNoopAdapter init new [*noopAdapter].
+func newNoopAdapter() *Adapter {
 	var nr Adapter = &noopAdapter{}
 	return &nr
 }
@@ -705,7 +705,7 @@ func newStorage() *storage {
 			},
 		),
 	}
-	s.adapter.Store(newNoopReceiver())
+	s.adapter.Store(newNoopAdapter())
 
 	return s
 }
@@ -723,18 +723,21 @@ func (s *storage) Run(ctx context.Context) {
 // FindOrEmplaceLabelSet find ls from bulder in current lsses or store to working LSS and return Labels.
 func (s *storage) findOrEmplaceFromBuilder(b *Builder) Labels {
 	sortedAdd := *((*[]cppbridge.Label)(unsafe.Pointer(&b.add)))
-	hash := cppbridge.LabelSetFromBuilderHash(sortedAdd, b.del, b.base.snapshot, b.base.id)
-	receiver := *s.adapter.Load()
+	hash, empty := cppbridge.LabelSetFromBuilderHash(sortedAdd, b.del, b.base.snapshot, b.base.id)
+	if empty {
+		return EmptyLabels()
+	}
 
-	if ls, find := receiver.FindByHash(sortedAdd, b.del, b.base.snapshot, hash, b.base.id); find {
+	adapter := *s.adapter.Load()
+	if ls, find := adapter.FindByHash(sortedAdd, b.del, b.base.snapshot, hash, b.base.id); find {
 		return ls
 	}
 
-	if ls, find := s.findByHash(hash, sortedAdd, b.del, b.base.snapshot, b.base.id); find {
+	if ls, find := s.findByHash(sortedAdd, b.del, b.base.snapshot, hash, b.base.id); find {
 		return ls
 	}
 
-	if ls, find := receiver.FindFromBuilder(
+	if ls, find := adapter.FindFromBuilder(
 		sortedAdd,
 		b.del,
 		b.base.snapshot,
@@ -752,6 +755,7 @@ func (s *storage) findOrEmplaceFromBuilder(b *Builder) Labels {
 		sortedAdd,
 		b.del,
 		b.base.snapshot,
+		hash,
 		b.base.id,
 	)
 	s.writeLock.Unlock()
@@ -766,10 +770,10 @@ func (s *storage) findOrEmplaceFromBuilder(b *Builder) Labels {
 
 // findByHash label set by hash in cache.
 func (s *storage) findByHash(
-	hash uint64,
 	builderSortedAdd []cppbridge.Label,
 	builderSortedDel []string,
 	builderSnapshot *cppbridge.LabelSetSnapshot,
+	hash uint64,
 	builderLSID uint32,
 ) (Labels, bool) {
 	s.rotateLock.RLock()

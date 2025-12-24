@@ -83,6 +83,7 @@ void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
  *     bitset                uintptr  // pointer to constructed bitset;
  *     sorted_add            []Label  // slice of sorted by name labels
  *     sorted_del            []string // slice of sorted label names
+ *     hash                  uint64   // hash for the lebelset
  *     ls_id                 uint32   // series id
  * }
  *
@@ -103,6 +104,7 @@ void prompp_primitives_lss_find_or_emplace_from_builder(void* args, void* res);
  *     readonly_lss uintptr  // pointer to constructed lss;
  *     sorted_add   []Label  // slice of sorted by name labels
  *     sorted_del   []string // slice of sorted label names
+ *     hash         uint64   // hash for the lebelset
  *     ls_id        uint32   // series id
  * }
  *

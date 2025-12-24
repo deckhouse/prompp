@@ -64,6 +64,17 @@ PROMPP_ALWAYS_INLINE FindOrEmplaceResult find_or_emplace(auto& lss, const auto& 
   }
 }
 
+template <class Lss>
+PROMPP_ALWAYS_INLINE FindOrEmplaceResult find_or_emplace(auto& lss, const auto& label_set, const uint64_t hash) {
+  if constexpr (Lss::kIsReadOnly) {
+    throw BareBones::Exception(0x1b877a0ab46a69a6, "lss is readonly");
+  } else {
+    const entrypoint::head::ReallocationsDetector reallocation_detector(lss);
+    const auto ls_id = lss.find_or_emplace(label_set, hash);
+    return {.ls_id = ls_id, .lss_has_reallocations = reallocation_detector.has_reallocations()};
+  }
+}
+
 extern "C" void prompp_primitives_lss_find_or_emplace(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
@@ -110,6 +121,7 @@ extern "C" void prompp_primitives_lss_find_or_emplace_from_builder(void* args, v
     BitsetPtr bitset;
     SliceView<PromPP::Primitives::Go::Label> sorted_add;
     SliceView<PromPP::Primitives::Go::String> sorted_del;
+    uint64_t hash;
     uint32_t ls_id;
   };
 
@@ -128,7 +140,7 @@ extern "C" void prompp_primitives_lss_find_or_emplace_from_builder(void* args, v
         static const entrypoint::head::ReadonlyLss::value_type empty_label_set;
         const auto& label_set = in->readonly_lss ? std::get<entrypoint::head::ReadonlyLss>(*in->readonly_lss)[in->ls_id] : empty_label_set;
 
-        const auto result = find_or_emplace<Lss>(lss, LabelSetBuilder{label_set, in->sorted_add, in->sorted_del});
+        const auto result = find_or_emplace<Lss>(lss, LabelSetBuilder{label_set, in->sorted_add, in->sorted_del}, in->hash);
         if (in->bitset != nullptr) [[likely]] {
           if (result.ls_id >= in->bitset->size()) [[unlikely]] {
             in->bitset->resize(result.ls_id + 1);
@@ -156,6 +168,7 @@ extern "C" void prompp_primitives_lss_find_from_builder(void* args, void* res) {
     LssVariantPtr readonly_lss;
     SliceView<PromPP::Primitives::Go::Label> sorted_add;
     SliceView<PromPP::Primitives::Go::String> sorted_del;
+    uint64_t hash;
     uint32_t ls_id;
   };
   struct Result {
@@ -169,7 +182,7 @@ extern "C" void prompp_primitives_lss_find_from_builder(void* args, void* res) {
   static const entrypoint::head::ReadonlyLss::value_type empty_label_set;
   const auto& label_set = in->readonly_lss ? std::get<entrypoint::head::ReadonlyLss>(*in->readonly_lss)[in->ls_id] : empty_label_set;
 
-  std::optional<uint32_t> ls_id = lss.find(LabelSetBuilder{label_set, in->sorted_add, in->sorted_del});
+  std::optional<uint32_t> ls_id = lss.find(LabelSetBuilder{label_set, in->sorted_add, in->sorted_del}, in->hash);
 
   if (ls_id.has_value()) {
     new (res) Result{.length = lss[ls_id.value()].size(), .ls_id = ls_id.value(), .has = ls_id.has_value()};

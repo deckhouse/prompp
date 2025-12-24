@@ -9,7 +9,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4 v4.3.0
 	github.com/Code-Hex/go-generics-cache v1.5.1
 	github.com/KimMachineGun/automemlimit v0.7.4
-	github.com/RoaringBitmap/roaring/v2 v2.10.0
+	github.com/RoaringBitmap/roaring/v2 v2.14.4
 	github.com/alecthomas/kingpin/v2 v2.4.0
 	github.com/alecthomas/units v0.0.0-20240626203959-61d1e3462e30
 	github.com/aws/aws-sdk-go v1.55.5
@@ -65,7 +65,7 @@ require (
 	github.com/prometheus/exporter-toolkit v0.12.0
 	github.com/scaleway/scaleway-sdk-go v1.0.0-beta.30
 	github.com/shurcooL/httpfs v0.0.0-20230704072500-f1e31cf0ba5c
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/vultr/govultr/v2 v2.17.2
 	go.opentelemetry.io/collector/pdata v1.14.1
 	go.opentelemetry.io/collector/semconv v0.108.1
@@ -130,7 +130,7 @@ require (
 	github.com/ashanbrown/forbidigo v1.6.0 // indirect
 	github.com/ashanbrown/makezero v1.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/bits-and-blooms/bitset v1.12.0 // indirect
+	github.com/bits-and-blooms/bitset v1.24.2 // indirect
 	github.com/bkielbasa/cyclop v1.2.3 // indirect
 	github.com/blizzy78/varnamelen v0.8.0 // indirect
 	github.com/bombsimon/wsl/v4 v4.5.0 // indirect

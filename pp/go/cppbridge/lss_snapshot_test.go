@@ -1,6 +1,7 @@
 package cppbridge_test
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -341,7 +342,7 @@ func (s *LabelSetSnapshotSuite) TestLabelSetFromBuilderHash() {
 
 		// Act
 		hashExpected := snapshot.LabelSetHash(lsid, false)
-		hashActual := cppbridge.LabelSetFromBuilderHash(
+		hashActual, empty := cppbridge.LabelSetFromBuilderHash(
 			nil,
 			nil,
 			snapshot,
@@ -349,6 +350,7 @@ func (s *LabelSetSnapshotSuite) TestLabelSetFromBuilderHash() {
 		)
 
 		// Assert
+		s.False(empty)
 		s.Equal(hashExpected, hashActual)
 	}
 }
@@ -363,7 +365,7 @@ func (s *LabelSetSnapshotSuite) TestLabelSetFromBuilderHashDel() {
 
 		// Act
 		hashExpected := snapshot.LabelSetHash(s.lsids[i], false)
-		hashActual := cppbridge.LabelSetFromBuilderHash(
+		hashActual, empty := cppbridge.LabelSetFromBuilderHash(
 			nil,
 			[]string{"test"},
 			snapshot,
@@ -371,6 +373,7 @@ func (s *LabelSetSnapshotSuite) TestLabelSetFromBuilderHashDel() {
 		)
 
 		// Assert
+		s.False(empty)
 		s.Equal(hashExpected, hashActual)
 	}
 }
@@ -385,7 +388,7 @@ func (s *LabelSetSnapshotSuite) TestLabelSetFromBuilderHashAdd() {
 
 		// Act
 		hashExpected := snapshot.LabelSetHash(lsid, false)
-		hashActual := cppbridge.LabelSetFromBuilderHash(
+		hashActual, empty := cppbridge.LabelSetFromBuilderHash(
 			[]cppbridge.Label{{Name: "test", Value: s.T().Name()}},
 			nil,
 			snapshot,
@@ -393,6 +396,7 @@ func (s *LabelSetSnapshotSuite) TestLabelSetFromBuilderHashAdd() {
 		)
 
 		// Assert
+		s.False(empty)
 		s.Equal(hashExpected, hashActual)
 	}
 }
@@ -533,20 +537,29 @@ func (s *LSSWithSnapshotSuite) TestFindOrEmplaceFromBuilderWithExistingLabelSet(
 	for _, lss := range s.lsses {
 		// Arrange
 		labelSetSnapshot := lss.Snapshot()
+		sortedAdd := []cppbridge.Label{{Name: "che", Value: "bureck"}}
+		lsidAdd := uint32(0)
+		hashAdd, _ := cppbridge.LabelSetFromBuilderHash(sortedAdd, nil, labelSetSnapshot, lsidAdd)
+
+		sortedDel := []string{"che"}
+		lsidDel := uint32(1)
+		hashDel, _ := cppbridge.LabelSetFromBuilderHash(nil, sortedDel, labelSetSnapshot, lsidDel)
 
 		// Act
 		existingLsIdWithAdd, lengthWithAdd := lss.FindOrEmplaceFromBuilder(
-			[]cppbridge.Label{{Name: "che", Value: "bureck"}},
+			sortedAdd,
 			nil,
 			labelSetSnapshot,
-			0,
+			hashAdd,
+			lsidAdd,
 		)
 
 		existingLsIdWithDel, lengthWithDel := lss.FindOrEmplaceFromBuilder(
 			nil,
-			[]string{"che"},
+			sortedDel,
 			labelSetSnapshot,
-			1,
+			hashDel,
+			lsidDel,
 		)
 
 		// Assert
@@ -560,15 +573,19 @@ func (s *LSSWithSnapshotSuite) TestFindOrEmplaceFromBuilderWithExistingLabelSet(
 func (s *LSSWithSnapshotSuite) TestFindOrEmplaceFromBuilderWithNewLabelSet() {
 	for _, lss := range s.lsses {
 		// Arrange
+		lsid := uint32(0)
 		labelSetSnapshot := lss.Snapshot()
+		sortedAdd := []cppbridge.Label{{Name: "new_lol", Value: "new_kek"}}
+		hash, _ := cppbridge.LabelSetFromBuilderHash(sortedAdd, nil, labelSetSnapshot, lsid)
 
 		// Act
 		_, expectedLsId, _ := lss.Stats()
 		existingLsId, length := lss.FindOrEmplaceFromBuilder(
-			[]cppbridge.Label{{Name: "new_lol", Value: "new_kek"}},
+			sortedAdd,
 			nil,
 			labelSetSnapshot,
-			0,
+			hash,
+			lsid,
 		)
 
 		// Assert
@@ -583,13 +600,16 @@ func (s *LSSWithSnapshotSuite) TestFindOrEmplaceFromBuilderWithNewLabelSetAnothe
 		lssAnother := cppbridge.NewLSSWithSnapshot(cppbridge.NewQueryableLssStorage())
 		lsid := lssAnother.FindOrEmplace(model.LabelSetFromMap(map[string]string{"lol": "kek"}))
 		labelSetSnapshot := lssAnother.Snapshot()
+		sortedAdd := []cppbridge.Label{{Name: "new_lol", Value: "new_kek"}}
+		hash, _ := cppbridge.LabelSetFromBuilderHash(sortedAdd, nil, labelSetSnapshot, lsid)
 
 		// Act
 		_, expectedLsId, _ := lss.Stats()
 		existingLsId, length := lss.FindOrEmplaceFromBuilder(
-			[]cppbridge.Label{{Name: "new_lol", Value: "new_kek"}},
+			sortedAdd,
 			nil,
 			labelSetSnapshot,
+			hash,
 			lsid,
 		)
 
@@ -603,29 +623,39 @@ func (s *LSSWithSnapshotSuite) TestStats() {
 	for _, lss := range s.lsses {
 		// Arrange
 		labelSetSnapshot := lss.Snapshot()
+		lsid := uint32(0)
 
 		// Act
+		sortedAdd := []cppbridge.Label{{Name: "new_lol_0", Value: "new_kek_0"}}
+		hash, _ := cppbridge.LabelSetFromBuilderHash(sortedAdd, nil, labelSetSnapshot, lsid)
 		_, bitsetSizeBegin := lss.StatsWithReset()
 		_, _ = lss.FindOrEmplaceFromBuilder(
-			[]cppbridge.Label{{Name: "new_lol_0", Value: "new_kek_0"}},
+			sortedAdd,
 			nil,
 			labelSetSnapshot,
-			0,
+			hash,
+			lsid,
 		)
 		_, bitsetSizeSingle := lss.StatsWithReset()
 
+		sortedAdd = []cppbridge.Label{{Name: "new_lol_1", Value: "new_kek_1"}}
+		hash, _ = cppbridge.LabelSetFromBuilderHash(sortedAdd, nil, labelSetSnapshot, lsid)
 		_, _ = lss.FindOrEmplaceFromBuilder(
-			[]cppbridge.Label{{Name: "new_lol_1", Value: "new_kek_1"}},
+			sortedAdd,
 			nil,
 			labelSetSnapshot,
-			0,
+			hash,
+			lsid,
 		)
 
+		sortedAdd = []cppbridge.Label{{Name: "new_lol_0", Value: "new_kek_0"}}
+		hash, _ = cppbridge.LabelSetFromBuilderHash(sortedAdd, nil, labelSetSnapshot, lsid)
 		_, _ = lss.FindOrEmplaceFromBuilder(
-			[]cppbridge.Label{{Name: "new_lol_0", Value: "new_kek_0"}},
+			sortedAdd,
 			nil,
 			labelSetSnapshot,
-			0,
+			hash,
+			lsid,
 		)
 		_, bitsetSizeDouble := lss.StatsWithReset()
 
@@ -649,7 +679,7 @@ func (s *LabelSetSnapshotSuite) TestLabelSetFromBuilderHash2() {
 
 		// Act
 		hashExpected := snapshot.LabelSetHash(lsid, false)
-		hashActual := cppbridge.LabelSetFromBuilderHash(
+		hashActual, empty := cppbridge.LabelSetFromBuilderHash(
 			nil,
 			nil,
 			snapshot,
@@ -657,6 +687,107 @@ func (s *LabelSetSnapshotSuite) TestLabelSetFromBuilderHash2() {
 		)
 
 		// Assert
+		s.False(empty)
 		s.Equal(hashExpected, hashActual)
+	}
+}
+
+func (s *LabelSetSnapshotSuite) TestLabelSetFromBuilderHashEmpty() {
+	sortedDel := make([]string, 0, s.mls.Len())
+	for lname := range s.mls.Range {
+		sortedDel = append(sortedDel, lname)
+	}
+
+	for i, lss := range s.lsses {
+		// Arrange
+		lsid := s.lsids[i]
+		snapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
+
+		// Act
+		hashActual, empty := cppbridge.LabelSetFromBuilderHash(
+			nil,
+			sortedDel,
+			snapshot,
+			lsid,
+		)
+
+		// Assert
+		s.Empty(hashActual)
+		s.True(empty)
+	}
+}
+
+func BenchmarkLabels_FindOrEmplaceFromBuilder(b *testing.B) {
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewLssStorage())
+	labelSet := model.LabelSetFromMap(map[string]string{
+		"__aaa__":  "11111",
+		"__name__": "ubername",
+		"lol":      "kek",
+		"che":      "bureck",
+		"zimya":    "reck",
+	})
+	lsid := lss.FindOrEmplace(labelSet)
+	labelSetSnapshot := lss.Snapshot()
+	locker := sync.RWMutex{}
+	hash, _ := cppbridge.LabelSetFromBuilderHash(nil, nil, lss.Snapshot(), lsid)
+
+	for i := 0; i < b.N; i++ {
+		locker.RLock()
+		_, _ = lss.FindOrEmplaceFromBuilder(
+			nil,
+			nil,
+			labelSetSnapshot,
+			hash,
+			lsid,
+		)
+		locker.RUnlock()
+	}
+}
+
+func BenchmarkLabels_LoadFromCache(b *testing.B) {
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewLssStorage())
+	labelSet := model.LabelSetFromMap(map[string]string{
+		"__aaa__":  "11111",
+		"__name__": "ubername",
+		"lol":      "kek",
+		"che":      "bureck",
+		"zimya":    "reck",
+	})
+	lsid := lss.FindOrEmplace(labelSet)
+	hash, _ := cppbridge.LabelSetFromBuilderHash(nil, nil, lss.Snapshot(), lsid)
+	lsCache := model.NewCacheWithBitset()
+	lsCache.Store(hash, lsid, 5)
+
+	for i := 0; i < b.N; i++ {
+		lsID, _, _ := lsCache.Load(hash)
+
+		labelSetSnapshot := lss.Snapshot()
+
+		_ = labelSetSnapshot.LabelSetEqualWithBuilder(
+			nil,
+			nil,
+			labelSetSnapshot,
+			lsid,
+			lsID,
+		)
+	}
+}
+
+func BenchmarkLabels_LoadFromCache2(b *testing.B) {
+	lss := cppbridge.NewLSSWithSnapshot(cppbridge.NewLssStorage())
+	labelSet := model.LabelSetFromMap(map[string]string{
+		"__aaa__":  "11111",
+		"__name__": "ubername",
+		"lol":      "kek",
+		"che":      "bureck",
+		"zimya":    "reck",
+	})
+	lsid := lss.FindOrEmplace(labelSet)
+	hash, _ := cppbridge.LabelSetFromBuilderHash(nil, nil, lss.Snapshot(), lsid)
+	lsCache := model.NewCacheWithBitset()
+	lsCache.Store(hash, lsid, 5)
+
+	for i := 0; i < b.N; i++ {
+		lsCache.Store(hash, lsid, 5)
 	}
 }
