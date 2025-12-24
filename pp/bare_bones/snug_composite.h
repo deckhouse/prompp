@@ -47,7 +47,7 @@ concept has_rollback = requires(Derived derived, const Checkpoint& checkpoint) {
 template <class Derived, class R>
 concept has_after_items_load = ls_id_range<R> && requires(Derived derived, R&& range) { derived.after_items_load_impl(std::forward<R>(range)); };
 
-template <class Derived, template <template <class> class> class Filament, template <class> class Vector, uint8_t Version = 2>
+template <class Derived, template <template <class> class> class Filament, template <class> class Vector, uint8_t Version = 1>
 class GenericDecodingTable {
   static_assert(!std::is_integral_v<typename Filament<Vector>::storage_type::composite_type>, "Filament::composite_type can't be an integral type");
 
