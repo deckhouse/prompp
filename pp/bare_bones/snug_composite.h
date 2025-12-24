@@ -47,11 +47,11 @@ concept has_rollback = requires(Derived derived, const Checkpoint& checkpoint) {
 template <class Derived, class R>
 concept has_after_items_load = ls_id_range<R> && requires(Derived derived, R&& range) { derived.after_items_load_impl(std::forward<R>(range)); };
 
-template <class Derived, template <template <class> class> class Filament, template <class> class Vector>
+template <class Derived, template <template <class> class> class Filament, template <class> class Vector, uint8_t Version = 2>
 class GenericDecodingTable {
   static_assert(!std::is_integral_v<typename Filament<Vector>::storage_type::composite_type>, "Filament::composite_type can't be an integral type");
 
-  template <class AnyDerived, template <template <class> class> class AnyFilament, template <class> class AnyVector>
+  template <class AnyDerived, template <template <class> class> class AnyFilament, template <class> class AnyVector, uint8_t OtherVersion>
   friend class GenericDecodingTable;
 
  public:
@@ -154,7 +154,7 @@ class GenericDecodingTable {
       out.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 
       // write a version
-      out.put(1);
+      out.put(Version);
 
       // write mode
       SerializationMode mode = (from != nullptr) ? SerializationMode::DELTA : SerializationMode::SNAPSHOT;
@@ -180,9 +180,9 @@ class GenericDecodingTable {
 
       // write data
       if (from != nullptr) {
-        storage_checkpoint_.save(out, *storage_ptr_, id_offset, size_to_save, &from->storage_checkpoint_);
+        storage_checkpoint_.save(out, *storage_ptr_, id_offset, size_to_save, Version, &from->storage_checkpoint_);
       } else {
-        storage_checkpoint_.save(out, *storage_ptr_, id_offset, size_to_save);
+        storage_checkpoint_.save(out, *storage_ptr_, id_offset, size_to_save, Version);
       }
     }
 
@@ -314,8 +314,8 @@ class GenericDecodingTable {
     }
 
     // check version
-    if (version != 1) {
-      throw BareBones::Exception(0x343b7bcc6814f2d5, "Invalid EncodingSequence version %d got from input stream, only version 1 is supported", version);
+    if (version != 1 && version != 2) {
+      throw BareBones::Exception(0x343b7bcc6814f2d5, "Invalid EncodingSequence version %d got from input stream, only versions 1 and 2 are supported", version);
     }
 
     auto original_exceptions = in.exceptions();
@@ -353,7 +353,7 @@ class GenericDecodingTable {
 
     auto storage_checkpoint = storage_.checkpoint();
     auto sg2 = std::experimental::scope_fail([&]() { storage_.rollback(storage_checkpoint); });
-    const auto loaded_range = storage_.load(in, size_to_load);
+    const auto loaded_range = storage_.load(in, size_to_load, version);
 
     // post-processing
     if constexpr (has_after_items_load<Derived, decltype(loaded_range)>) {
