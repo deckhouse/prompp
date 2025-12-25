@@ -374,4 +374,73 @@ TEST_F(LabelSetDeltaCheckpointTest, LoadFromBaseCheckpointAndDelta) {
   EXPECT_TRUE(std::ranges::equal(label_set2, decoding_table_[id2]));
 }
 
+class LabelSetVersionMigrationTest : public testing::Test {
+ protected:
+  using EncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<Vector>;
+  using DecodingTable = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<Vector>;
+};
+
+TEST_F(LabelSetVersionMigrationTest, Version1To2Migration) {
+  // Arrange
+  const LabelViewSet label_set1 = {{"name1", "value1"}};
+  const LabelViewSet label_set2 = {{"name2", "value2"}};
+
+  EncodingBimap encoding_table_v1(1);
+  const auto id1 = encoding_table_v1.find_or_emplace(label_set1);
+  const auto base_checkpoint_v1 = encoding_table_v1.checkpoint();
+
+  const auto id2 = encoding_table_v1.find_or_emplace(label_set2);
+  const auto checkpoint_v1 = encoding_table_v1.checkpoint();
+  const auto delta_v1 = checkpoint_v1 - base_checkpoint_v1;
+  std::stringstream ss;
+  base_checkpoint_v1.save(ss);
+  ss << delta_v1;
+
+  // Act
+  DecodingTable decoding_table_v2(2);
+
+  decoding_table_v2.load(ss);
+  decoding_table_v2.load(ss);
+
+  // Assert: Check all data and version
+  EXPECT_EQ(1U, encoding_table_v1.version());
+  EXPECT_EQ(2U, decoding_table_v2.version());
+
+  EXPECT_EQ(2U, decoding_table_v2.size());
+  EXPECT_TRUE(std::ranges::equal(label_set1, decoding_table_v2[id1]));
+  EXPECT_TRUE(std::ranges::equal(label_set2, decoding_table_v2[id2]));
+}
+
+TEST_F(LabelSetVersionMigrationTest, Version2To1Migration) {
+  // Arrange
+  const LabelViewSet label_set1 = {{"name1", "value1"}};
+  const LabelViewSet label_set2 = {{"name2", "value2"}};
+
+  EncodingBimap encoding_table_v2(2);
+  const auto id1 = encoding_table_v2.find_or_emplace(label_set1);
+  const auto base_checkpoint_v2 = encoding_table_v2.checkpoint();
+
+  const auto id2 = encoding_table_v2.find_or_emplace(label_set2);
+  const auto checkpoint_v2 = encoding_table_v2.checkpoint();
+  const auto delta_v2 = checkpoint_v2 - base_checkpoint_v2;
+
+  std::stringstream ss;
+  base_checkpoint_v2.save(ss);
+  ss << delta_v2;
+
+  // Act
+  DecodingTable decoding_table_v1(1);
+
+  decoding_table_v1.load(ss);
+  decoding_table_v1.load(ss);
+
+  // Assert
+  EXPECT_EQ(2U, encoding_table_v2.version());
+  EXPECT_EQ(1U, decoding_table_v1.version());
+
+  EXPECT_EQ(2U, decoding_table_v1.size());
+  EXPECT_TRUE(std::ranges::equal(label_set1, decoding_table_v1[id1]));
+  EXPECT_TRUE(std::ranges::equal(label_set2, decoding_table_v1[id2]));
+}
+
 }  // namespace
