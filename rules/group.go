@@ -123,11 +123,6 @@ func NewGroup(o GroupOptions) *Group {
 		evalIterationFunc = DefaultEvalIterationFunc
 	}
 
-	// concurrencyController := o.Opts.RuleConcurrencyController
-	// if concurrencyController == nil {
-	// 	concurrencyController = sequentialRuleEvalController{}
-	// }
-
 	return &Group{
 		name:                 o.Name,
 		file:                 o.File,
