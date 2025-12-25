@@ -97,7 +97,28 @@ void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
 void prompp_primitives_lss_find_or_emplace_from_builder(void* args, void* res);
 
 /**
- * @brief insert label set into lss
+ * @brief find labelset from builder in lss with bitset, return length ls, lsid and bool ok
+ *
+ * @param args {
+ *     lss          uintptr  // pointer to constructed lss;
+ *     readonly_lss uintptr  // pointer to constructed lss;
+ *     bitset       uintptr  // pointer to constructed bitset;
+ *     sorted_add   []Label  // slice of sorted by name labels
+ *     sorted_del   []string // slice of sorted label names
+ *     hash         uint64   // hash for the lebelset
+ *     ls_id        uint32   // series id
+ * }
+ *
+ * @param res {
+ *     length       uint64   // length of label set
+ *     ls_id        uint32   // inserted (or found) label set id
+ *     has          bool     // is the label set found
+ * }
+ */
+void prompp_primitives_lss_find_from_builder_with_bitset(void* args, void* res);
+
+/**
+ * @brief find labelset from builder in lss, return length ls, lsid and bool ok
  *
  * @param args {
  *     lss          uintptr  // pointer to constructed lss;

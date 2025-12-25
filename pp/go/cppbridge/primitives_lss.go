@@ -112,7 +112,7 @@ func (lss *LabelSetStorage) FindOrEmplaceBuilder(labelSet CppLabelSetBuilder) Fi
 	return res
 }
 
-// FindFromBuilder label set from builder in lss, return length ls, lsid and bool ok.
+// FindFromBuilder find labelset from builder in lss, return length ls, lsid and bool ok.
 //
 //nolint:gocritic // unnamedResult // lsID, length, ok
 func (lss *LabelSetStorage) FindFromBuilder(
@@ -127,7 +127,7 @@ func (lss *LabelSetStorage) FindFromBuilder(
 		snapshotPointer = snapshot.pointer
 	}
 
-	length, lsID, ok := primitivesLSSFindFromBuilder(
+	length, newlsID, ok := primitivesLSSFindFromBuilder(
 		lss.pointer,
 		snapshotPointer,
 		sortedAdd,
@@ -135,13 +135,17 @@ func (lss *LabelSetStorage) FindFromBuilder(
 		hash,
 		lsID,
 	)
-	runtime.KeepAlive(lss)
+
+	runtime.KeepAlive(sortedAdd)
+	runtime.KeepAlive(sortedDel)
 	runtime.KeepAlive(snapshot)
+	runtime.KeepAlive(lss)
+
 	if !ok {
 		return 0, 0, false
 	}
 
-	return lsID, uint16(length), true // #nosec G115 // no overflow
+	return newlsID, uint16(length), true // #nosec G115 // no overflow
 }
 
 // QuerySelector returns a created selector that matches the given label matchers.

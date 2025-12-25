@@ -142,10 +142,11 @@ extern "C" void prompp_primitives_lss_find_or_emplace_from_builder(void* args, v
 
         const auto result = find_or_emplace<Lss>(lss, LabelSetBuilder{label_set, in->sorted_add, in->sorted_del}, in->hash);
         if (in->bitset != nullptr) [[likely]] {
-          if (result.ls_id >= in->bitset->size()) [[unlikely]] {
+          if (result.ls_id >= in->bitset->size()) [[likely]] {
             in->bitset->resize(result.ls_id + 1);
+          } else [[unlikely]] {
+            in->bitset->set(result.ls_id);
           }
-          in->bitset->set(result.ls_id);
         }
 
         out->ls_id = result.ls_id;
@@ -157,6 +158,49 @@ extern "C" void prompp_primitives_lss_find_or_emplace_from_builder(void* args, v
   if (out->lss_has_reallocations) [[unlikely]] {
     out->lss_ro_ptr = entrypoint::head::create_readonly_lss(*in->lss);
   }
+}
+
+extern "C" void prompp_primitives_lss_find_from_builder_with_bitset(void* args, void* res) {
+  using PromPP::Primitives::Go::LabelSetBuilder;
+  using PromPP::Primitives::Go::SliceView;
+
+  struct Arguments {
+    LssVariantPtr lss;
+    LssVariantPtr readonly_lss;
+    BitsetPtr bitset;
+    SliceView<PromPP::Primitives::Go::Label> sorted_add;
+    SliceView<PromPP::Primitives::Go::String> sorted_del;
+    uint64_t hash;
+    uint32_t ls_id;
+  };
+  struct Result {
+    size_t length;
+    uint32_t ls_id;
+    bool has{false};
+  };
+
+  auto in = static_cast<Arguments*>(args);
+
+  std::visit(
+      [in, res]<typename Lss>(Lss& lss) {
+        if constexpr (!std::same_as<Lss, entrypoint::head::ReadonlyLss>) {
+          static const entrypoint::head::ReadonlyLss::value_type empty_label_set;
+          const auto& label_set = in->readonly_lss ? std::get<entrypoint::head::ReadonlyLss>(*in->readonly_lss)[in->ls_id] : empty_label_set;
+
+          std::optional<uint32_t> ls_id = lss.find(LabelSetBuilder{label_set, in->sorted_add, in->sorted_del}, in->hash);
+
+          if (ls_id.has_value()) {
+            if (in->bitset != nullptr) [[likely]] {
+              in->bitset->set_atomic(ls_id.value());
+            }
+
+            new (res) Result{.length = lss[ls_id.value()].size(), .ls_id = ls_id.value(), .has = ls_id.has_value()};
+          }
+
+          return;
+        }
+      },
+      *in->lss);
 }
 
 extern "C" void prompp_primitives_lss_find_from_builder(void* args, void* res) {

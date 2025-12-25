@@ -15,7 +15,6 @@ import (
 	"go.uber.org/atomic"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
@@ -631,19 +630,15 @@ func (*noopAdapter) FindByHash(
 
 // storage for label set.
 type storage struct {
-	workingLSS       *cppbridge.LSSWithSnapshot
-	adapter          atomic.Pointer[Adapter]
-	lsCache          *model.CacheWithBitset
-	writeLock        sync.Mutex
-	rotateLock       sync.RWMutex
-	baseCtx          context.Context
-	generation       uint64
-	memoryInUse      *prometheus.GaugeVec
-	lssSize          *prometheus.GaugeVec
-	lssBitsetCount   *prometheus.GaugeVec
-	cacheSize        *prometheus.GaugeVec
-	cacheBitsetCount *prometheus.GaugeVec
-	cacheCollisions  prometheus.Counter
+	workingLSS     *cppbridge.LSSWithSnapshot
+	adapter        atomic.Pointer[Adapter]
+	writeLock      sync.RWMutex
+	rotateLock     sync.RWMutex
+	baseCtx        context.Context
+	generation     uint64
+	memoryInUse    *prometheus.GaugeVec
+	lssSize        *prometheus.GaugeVec
+	lssBitsetCount *prometheus.GaugeVec
 }
 
 // newStorage init new storage.
@@ -653,8 +648,7 @@ func newStorage() *storage {
 	constLabels := prometheus.Labels{"allocator": "labels"}
 	s := &storage{
 		workingLSS: cppbridge.NewLSSWithSnapshot(cppbridge.NewLssStorage()),
-		lsCache:    model.NewCacheWithBitset(),
-		writeLock:  sync.Mutex{},
+		writeLock:  sync.RWMutex{},
 		rotateLock: sync.RWMutex{},
 		baseCtx:    context.Background(),
 		memoryInUse: factory.NewGaugeVec(
@@ -680,29 +674,6 @@ func newStorage() *storage {
 				ConstLabels: constLabels,
 			},
 			[]string{"generation"},
-		),
-		cacheSize: factory.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name:        "prompp_labels_cache_size",
-				Help:        "Current size of cache.",
-				ConstLabels: constLabels,
-			},
-			[]string{"generation"},
-		),
-		cacheBitsetCount: factory.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name:        "prompp_labels_cache_bitset_count",
-				Help:        "Current count of emplace to cache bitset.",
-				ConstLabels: constLabels,
-			},
-			[]string{"generation"},
-		),
-		cacheCollisions: factory.NewCounter(
-			prometheus.CounterOpts{
-				Name:        "prompp_labels_cache_collisions_count",
-				Help:        "Current count of collisions in cache.",
-				ConstLabels: constLabels,
-			},
 		),
 	}
 	s.adapter.Store(newNoopAdapter())
@@ -733,7 +704,7 @@ func (s *storage) findOrEmplaceFromBuilder(b *Builder) Labels {
 		return ls
 	}
 
-	if ls, find := s.findByHash(sortedAdd, b.del, b.base.snapshot, hash, b.base.id); find {
+	if ls, find := s.findFromBuilder(sortedAdd, b.del, b.base.snapshot, hash, b.base.id); find {
 		return ls
 	}
 
@@ -760,7 +731,6 @@ func (s *storage) findOrEmplaceFromBuilder(b *Builder) Labels {
 	)
 	s.writeLock.Unlock()
 
-	s.lsCache.Store(hash, lsID, length)
 	snapshot := s.workingLSS.Snapshot()
 
 	s.rotateLock.RUnlock()
@@ -768,8 +738,8 @@ func (s *storage) findOrEmplaceFromBuilder(b *Builder) Labels {
 	return NewLabelsWithLSS(snapshot, nil, lsID, length)
 }
 
-// findByHash label set by hash in cache.
-func (s *storage) findByHash(
+// findFromBuilder find labelset from builder in lss, return length ls, lsid and bool ok.
+func (s *storage) findFromBuilder(
 	builderSortedAdd []cppbridge.Label,
 	builderSortedDel []string,
 	builderSnapshot *cppbridge.LabelSetSnapshot,
@@ -779,25 +749,22 @@ func (s *storage) findByHash(
 	s.rotateLock.RLock()
 	defer s.rotateLock.RUnlock()
 
-	lsID, length, ok := s.lsCache.Load(hash)
-	if !ok {
-		return EmptyLabels(), false
-	}
+	s.writeLock.RLock()
+	defer s.writeLock.RUnlock()
 
-	snapshot := s.workingLSS.Snapshot()
-	if ok := snapshot.LabelSetEqualWithBuilder(
+	lsID, length, find := s.workingLSS.FindFromBuilder(
 		builderSortedAdd,
 		builderSortedDel,
 		builderSnapshot,
+		hash,
 		builderLSID,
-		lsID,
-	); !ok {
-		s.cacheCollisions.Inc()
+	)
+	if !find {
 		return EmptyLabels(), false
 	}
 
 	return NewLabelsWithLSS(
-		snapshot,
+		s.workingLSS.Snapshot(),
 		nil,
 		lsID,
 		length,
@@ -809,19 +776,6 @@ func (s *storage) observeAndClean(ctx context.Context) {
 	metricsTimer := time.NewTimer(metricsDuration)
 	rotateTimer := time.NewTimer(rotateDuration)
 
-	// limitReached check
-	limitReached := func(lssSize, cacheSize uint64, lssBitsetCount, cacheBitsetCount uint32) bool {
-		if uint64(lssBitsetCount) > lssSize/2 {
-			return false
-		}
-
-		if uint64(cacheBitsetCount) > cacheSize/2 {
-			return false
-		}
-
-		return true
-	}
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -831,14 +785,10 @@ func (s *storage) observeAndClean(ctx context.Context) {
 			am, lssSize, lssBitsetCount := s.workingLSS.Stats()
 			s.writeLock.Unlock()
 
-			cacheSize, cacheBitsetCount := s.lsCache.Stats()
-
 			ls := prometheus.Labels{"generation": strconv.FormatUint(s.generation, 10)}
 			s.memoryInUse.With(ls).Set(float64(am))
 			s.lssSize.With(ls).Set(float64(lssSize))
 			s.lssBitsetCount.With(ls).Set(float64(lssBitsetCount))
-			s.cacheSize.With(ls).Set(float64(cacheSize))
-			s.cacheBitsetCount.With(ls).Set(float64(cacheBitsetCount))
 
 			metricsTimer.Reset(metricsDuration)
 
@@ -847,20 +797,15 @@ func (s *storage) observeAndClean(ctx context.Context) {
 			lssSize, lssBitsetCount := s.workingLSS.StatsWithReset()
 			s.writeLock.Unlock()
 
-			cacheSize, cacheBitsetCount := s.lsCache.StatsWithClearBitset()
-
-			if limitReached(lssSize, cacheSize, lssBitsetCount, cacheBitsetCount) {
+			if uint64(lssBitsetCount) <= lssSize/2 {
 				ls := prometheus.Labels{"generation": strconv.FormatUint(s.generation, 10)}
 				s.memoryInUse.Delete(ls)
 				s.lssSize.Delete(ls)
 				s.lssBitsetCount.Delete(ls)
-				s.cacheSize.Delete(ls)
-				s.cacheBitsetCount.Delete(ls)
 
 				s.rotateLock.Lock()
 				s.workingLSS.Outdate()
 				s.workingLSS = cppbridge.NewLSSWithSnapshot(cppbridge.NewLssStorage())
-				s.lsCache = model.NewCacheWithBitset()
 				s.generation++
 				s.rotateLock.Unlock()
 

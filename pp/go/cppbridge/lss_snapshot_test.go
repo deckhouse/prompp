@@ -619,6 +619,89 @@ func (s *LSSWithSnapshotSuite) TestFindOrEmplaceFromBuilderWithNewLabelSetAnothe
 	}
 }
 
+func (s *LSSWithSnapshotSuite) TestFindFromBuilder() {
+	for _, lss := range s.lsses {
+		// Arrange
+		lsid := uint32(0)
+		labelSetSnapshot := lss.Snapshot()
+		hash, _ := cppbridge.LabelSetFromBuilderHash(nil, nil, labelSetSnapshot, lsid)
+
+		// Act
+		lss.FindOrEmplaceFromBuilder(
+			nil,
+			nil,
+			labelSetSnapshot,
+			hash,
+			lsid,
+		)
+		existingLsId, length, find := lss.FindFromBuilder(
+			nil,
+			nil,
+			labelSetSnapshot,
+			hash,
+			lsid,
+		)
+
+		// Assert
+		s.True(find)
+		s.Equal(uint16(1), length)
+		s.Equal(lsid, existingLsId)
+	}
+}
+
+func (s *LSSWithSnapshotSuite) TestFindFromBuilderFalse() {
+	for _, lss := range s.lsses {
+		// Arrange
+		lsid := uint32(0)
+		labelSetSnapshot := lss.Snapshot()
+		sortedAdd := []cppbridge.Label{{Name: "new_lol", Value: "new_kek"}}
+		hash, _ := cppbridge.LabelSetFromBuilderHash(sortedAdd, nil, labelSetSnapshot, lsid)
+
+		// Act
+		_, _, find := lss.FindFromBuilder(
+			sortedAdd,
+			nil,
+			labelSetSnapshot,
+			hash,
+			lsid,
+		)
+
+		// Assert
+		s.False(find)
+	}
+}
+
+func (s *LSSWithSnapshotSuite) TestFindFromBuilderWithAdd() {
+	for _, lss := range s.lsses {
+		// Arrange
+		lsid := uint32(0)
+		labelSetSnapshot := lss.Snapshot()
+		sortedAdd := []cppbridge.Label{{Name: "che", Value: "bureck"}}
+		hash, _ := cppbridge.LabelSetFromBuilderHash(sortedAdd, nil, labelSetSnapshot, lsid)
+
+		// Act
+		lss.FindOrEmplaceFromBuilder(
+			sortedAdd,
+			nil,
+			labelSetSnapshot,
+			hash,
+			lsid,
+		)
+		existingLsId, length, find := lss.FindFromBuilder(
+			sortedAdd,
+			nil,
+			labelSetSnapshot,
+			hash,
+			lsid,
+		)
+
+		// Assert
+		s.True(find)
+		s.Equal(uint16(2), length)
+		s.Equal(lsid+1, existingLsId)
+	}
+}
+
 func (s *LSSWithSnapshotSuite) TestStats() {
 	for _, lss := range s.lsses {
 		// Arrange
@@ -637,6 +720,14 @@ func (s *LSSWithSnapshotSuite) TestStats() {
 			lsid,
 		)
 		_, bitsetSizeSingle := lss.StatsWithReset()
+		_, _, findSingle := lss.FindFromBuilder(
+			sortedAdd,
+			nil,
+			labelSetSnapshot,
+			hash,
+			lsid,
+		)
+		_, bitsetSizeSingleFind := lss.StatsWithReset()
 
 		sortedAdd = []cppbridge.Label{{Name: "new_lol_1", Value: "new_kek_1"}}
 		hash, _ = cppbridge.LabelSetFromBuilderHash(sortedAdd, nil, labelSetSnapshot, lsid)
@@ -663,8 +754,10 @@ func (s *LSSWithSnapshotSuite) TestStats() {
 
 		// Assert
 		s.Equal(uint32(0), bitsetSizeBegin)
-		s.Equal(uint32(1), bitsetSizeSingle)
-		s.Equal(uint32(2), bitsetSizeDouble)
+		s.Equal(uint32(0), bitsetSizeSingle)
+		s.True(findSingle)
+		s.Equal(uint32(1), bitsetSizeSingleFind)
+		s.Equal(uint32(1), bitsetSizeDouble)
 		s.Equal(uint32(0), bitsetSizeEnd)
 	}
 }

@@ -1336,6 +1336,45 @@ func primitivesLSSFindOrEmplaceFromBuilder(
 	return res.snapshotPtr, res.length, res.labelSetID, res.hasReallocations
 }
 
+// primitivesLSSFindFromBuilderWithBitset find labelset from builder in lss with bitset,
+// return length ls, lsid and bool ok.
+//
+//nolint:gocritic // unnamedResult not need
+func primitivesLSSFindFromBuilderWithBitset(
+	lss uintptr,
+	snapshotPtr uintptr,
+	bitsetPtr uintptr,
+	sortedAdd []Label,
+	sortedDel []string,
+	hash uint64,
+	lsID uint32,
+) (uint64, uint32, bool) {
+	args := struct {
+		lss         uintptr
+		snapshotPtr uintptr
+		bitsetPtr   uintptr
+		sortedAdd   []Label
+		sortedDel   []string
+		hash        uint64
+		lsID        uint32
+	}{lss, snapshotPtr, bitsetPtr, sortedAdd, sortedDel, hash, lsID}
+	var res struct {
+		length     uint64
+		labelSetID uint32
+		has        bool
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_lss_find_from_builder_with_bitset,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.length, res.labelSetID, res.has
+}
+
+// primitivesLSSFindFromBuilder find labelset from builder in lss, return length ls, lsid and bool ok.
+//
 //nolint:gocritic // unnamedResult not need
 func primitivesLSSFindFromBuilder(
 	lss uintptr,

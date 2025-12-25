@@ -423,6 +423,43 @@ func NewLSSWithSnapshotWithoutBitset(lss *LabelSetStorage) *LSSWithSnapshot {
 	return lws
 }
 
+// FindFromBuilder find labelset from builder in lss, return length ls, lsid and bool ok.
+//
+//nolint:gocritic // unnamedResult not need
+func (lws *LSSWithSnapshot) FindFromBuilder(
+	sortedAdd []Label,
+	sortedDel []string,
+	otherSnapshot *LabelSetSnapshot,
+	hash uint64,
+	lsID uint32,
+) (uint32, uint16, bool) {
+	var snapshotPointer uintptr
+	if otherSnapshot != nil {
+		snapshotPointer = otherSnapshot.pointer
+	}
+
+	length, newlsID, ok := primitivesLSSFindFromBuilderWithBitset(
+		lws.lss.pointer,
+		snapshotPointer,
+		lws.bitsetPointer,
+		sortedAdd,
+		sortedDel,
+		hash,
+		lsID,
+	)
+
+	runtime.KeepAlive(sortedAdd)
+	runtime.KeepAlive(sortedDel)
+	runtime.KeepAlive(otherSnapshot)
+	runtime.KeepAlive(lws)
+
+	if !ok {
+		return 0, 0, false
+	}
+
+	return newlsID, uint16(length), true // #nosec G115 // no overflow
+}
+
 // FindOrEmplace find in lss LabelSet or emplace and return ls id.
 func (lws *LSSWithSnapshot) FindOrEmplace(labelSet model.LabelSet) uint32 {
 	res := lws.lss.FindOrEmplace(labelSet)
