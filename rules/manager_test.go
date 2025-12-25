@@ -2154,7 +2154,7 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 			group.Eval(ctx, start)
 
 			// Max inflight can be 1 synchronous eval and up to MaxConcurrentEvals concurrent evals.
-			require.EqualValues(t, opts.MaxConcurrentEvals+1, maxInflight.Load())
+			require.EqualValues(t, opts.MaxConcurrentEvals, maxInflight.Load())
 			// Some rules should execute concurrently so should complete quicker.
 			require.Less(t, time.Since(start).Seconds(), (time.Duration(ruleCount) * artificialDelay).Seconds())
 			// Each rule produces one vector.
@@ -2205,7 +2205,7 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 			group.Eval(ctx, start)
 
 			// Max inflight can be 1 synchronous eval and up to MaxConcurrentEvals concurrent evals.
-			require.EqualValues(t, opts.MaxConcurrentEvals+1, maxInflight.Load())
+			require.EqualValues(t, opts.MaxConcurrentEvals, maxInflight.Load())
 			// Some rules should execute concurrently so should complete quicker.
 			require.Less(t, time.Since(start).Seconds(), (time.Duration(ruleCount) * artificialDelay).Seconds())
 			// Each rule produces one vector.

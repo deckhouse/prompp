@@ -58,6 +58,11 @@ func (*BufferReaderAtWriterCloser) Close() error {
 	return nil
 }
 
+// Remove implementation [AppendFile].
+func (*BufferReaderAtWriterCloser) Remove() error {
+	return nil
+}
+
 type UnloadedDataStorageSuite struct {
 	suite.Suite
 	storageBuffer *BufferReaderAtWriterCloser

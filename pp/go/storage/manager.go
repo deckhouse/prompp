@@ -215,11 +215,7 @@ func (m *Manager) ApplyConfig(cfg *config.Config) error {
 	logger.Infof("reconfiguration start")
 	defer logger.Infof("reconfiguration completed")
 
-	if m.proxy.Get().NumberOfShards() == cfg.PPNumberOfShards() {
-		return nil
-	}
-
-	if m.cfg.SetNumberOfShards(cfg.PPNumberOfShards()) {
+	if m.cfg.SetNumberOfShards(cfg.PPNumberOfShards()) || m.proxy.Get().NumberOfShards() != m.cfg.NumberOfShards() {
 		m.rotatorMediator.Trigger()
 	}
 

@@ -145,8 +145,7 @@ func NewGroup(o GroupOptions) *Group {
 		logger:               log.With(o.Opts.Logger, "file", o.File, "group", o.Name),
 		metrics:              metrics,
 		evalIterationFunc:    evalIterationFunc,
-		// concurrencyController: concurrencyController,
-		concurrencyExecuter: o.Opts.ConcurrencyExecuter,
+		concurrencyExecuter:  o.Opts.ConcurrencyExecuter,
 	}
 }
 

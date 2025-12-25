@@ -9,7 +9,6 @@ import (
 
 const (
 	lssEncodingBimap uint32 = iota
-	lssOrderedEncodingBimap
 	lssQueryableEncodingBimap
 )
 
@@ -37,11 +36,6 @@ type LabelSetStorage struct {
 // NewLssStorage init new LabelSetStorage based on EncodingBimap.
 func NewLssStorage() *LabelSetStorage {
 	return newLabelSetStorage(lssEncodingBimap)
-}
-
-// NewOrderedLssStorage init new LabelSetStorage based on OrderedEncodingBimap.
-func NewOrderedLssStorage() *LabelSetStorage {
-	return newLabelSetStorage(lssOrderedEncodingBimap)
 }
 
 // NewQueryableLssStorage init new LabelSetStorage based on QueryableEncodingBimap.

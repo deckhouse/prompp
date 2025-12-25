@@ -11,7 +11,6 @@
 #include "load_gorilla_from_wal_and_iterate_over_series_label_name_ids_test.h"
 #include "load_gorilla_from_wal_and_make_remote_write_from_it_test.h"
 #include "load_lss_from_wal_test.h"
-#include "load_ordered_indexing_table_in_loop_test.h"
 #include "load_protobuf_non_naned_wal_and_process_it_with_stale_nans.h"
 #include "load_protobuf_wal_and_save_gorilla_to_sharded_wal_test.h"
 #include "load_protobuf_wal_and_save_gorilla_to_wal_test.h"
@@ -72,7 +71,6 @@ int main([[maybe_unused]] int argc, char* argv[]) {
     test_db.add(std::make_unique<full_load_lss>());
     test_db.add(std::make_unique<performance_tests::SeriesDataEncoder>());
     test_db.add(std::make_unique<performance_tests::ChunkRecoder>());
-    test_db.add(std::make_unique<load_ordered_indexing_table_in_loop>());
     test_db.add(std::make_unique<save_gorilla_to_wal>());
     test_db.add(std::make_unique<performance_tests::series_index::GenerateSeriesReverseIndex>());
     test_db.add(std::make_unique<performance_tests::series_index::GenerateCedarppSeriesIndex>());

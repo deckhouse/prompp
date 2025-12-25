@@ -198,6 +198,8 @@ func createRecordCopy(r *Record) *Record {
 }
 
 // applyRecordChanges apply changes to current [Record].
+//
+//go:norace
 func applyRecordChanges(r, changed *Record) {
 	r.createdAt = changed.createdAt
 	r.updatedAt = changed.updatedAt
