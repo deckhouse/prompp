@@ -29,7 +29,7 @@ struct TestStringFilament {
       using SerializationMode = BareBones::SnugComposite::SerializationMode;
 
       template <BareBones::OutputStream S>
-      void save(S& out, const storage_type& storage, uint32_t id_offset, uint32_t id_count, checkpoint_type const* from = nullptr) const {
+      void save(S& out, const storage_type& storage, uint32_t id_offset, uint32_t id_count, uint8_t, checkpoint_type const* from = nullptr) const {
         // write items
         out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
 
@@ -186,7 +186,7 @@ struct TestStringFilament {
     }
 
     template <class InputStream>
-    auto load(InputStream& in, uint32_t items_size) {
+    auto load(InputStream& in, uint32_t items_size, uint8_t) {
       // read items
       const auto original_size = items.size();
       items.resize(original_size + items_size);

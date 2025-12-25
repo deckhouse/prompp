@@ -673,8 +673,8 @@ struct LabelSet {
     using label_values_symbols_table_type = SymbolsTableType<Vector>;
     using label_name_sets_table_type = LabelNameSetsTableType<Vector>;
 
-    using symbols_tables_type =
-        std::conditional_t<kIsReadOnly, BareBones::Vector<label_values_symbols_table_type>, Vector<std::unique_ptr<label_values_symbols_table_type>>>;
+    using symbols_tables_type = std::
+        conditional_t<kIsReadOnly, BareBones::Vector<label_values_symbols_table_type>, BareBones::Vector<std::unique_ptr<label_values_symbols_table_type>>>;
 
     using symbol_ids_codec_type = BareBones::StreamVByte::Codec1234;
     using symbols_ids_sequences_type = Vector<uint8_t>;
