@@ -129,7 +129,4 @@ type Head[
 
 	// NumberOfShards returns current number of shards in to [Head].
 	NumberOfShards() uint16
-
-	// IsReadOnly returns true if the [Head] has switched to read-only.
-	IsReadOnly() bool
 }

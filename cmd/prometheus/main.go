@@ -63,6 +63,7 @@ import (
 	"github.com/prometheus/prometheus/pp-pkg/remote"                        // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/scrape"                        // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage"        // PP_CHANGES.md: rebuild on cpp
+	pp_pkg_remote "github.com/prometheus/prometheus/pp-pkg/storage/remote"  // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"              // PP_CHANGES.md: rebuild on cpp
 
 	pp_storage "github.com/prometheus/prometheus/pp/go/storage"    // PP_CHANGES.md: rebuild on cpp
@@ -972,6 +973,7 @@ func main() {
 	adapter := pp_pkg_storage.NewAdapter(
 		clock,
 		hManager.Proxy(),
+		hManager.Builder(),
 		hManager.MergeOutOfOrderChunks,
 		prometheus.DefaultRegisterer,
 	)
@@ -983,7 +985,7 @@ func main() {
 		scraper      = &readyScrapeManager{}
 
 		// PP_CHANGES.md: rebuild on cpp start
-		remoteRead = pp_pkg_storage.NewRemoteRead(
+		remoteRead = pp_pkg_remote.NewRemoteRead(
 			log.With(logger, "component", "remote"),
 			localStorage.StartTime,
 		)
@@ -1150,9 +1152,12 @@ func main() {
 
 		ruleQueryOffset := time.Duration(cfgFile.GlobalConfig.RuleQueryOffset)
 		ruleManager = rules.NewManager(&rules.ManagerOptions{
-			Appendable:             adapter, // PP_CHANGES.md: rebuild on cpp
-			Queryable:              adapter, // PP_CHANGES.md: rebuild on cpp
-			QueryFunc:              rules.EngineQueryFunc(queryEngine, fanoutStorage),
+			Queryable:       adapter,               // PP_CHANGES.md: rebuild on cpp
+			Engine:          queryEngine,           // PP_CHANGES.md: rebuild on cpp
+			FanoutQueryable: fanoutStorage,         // PP_CHANGES.md: rebuild on cpp
+			EngineQueryCtor: rules.EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
+			Batcher:         adapter,               // PP_CHANGES.md: rebuild on cpp
+
 			NotifyFunc:             rules.SendAlerts(notifierManager, cfg.web.ExternalURL.String()),
 			Context:                ctxRule,
 			ExternalURL:            cfg.web.ExternalURL,
@@ -1268,7 +1273,7 @@ func main() {
 			reloader: webHandler.ApplyConfig,
 		}, { // PP_CHANGES.md: rebuild on cpp end
 			name:     "remote_writer",
-			reloader: remote.ApplyConfig(remoteWriter),
+			reloader: remote.ApplyConfig(remoteWriter, cfg.tsdb.RetentionDuration),
 		}, { // PP_CHANGES.md: rebuild on cpp end
 			name: "query_engine",
 			reloader: func(cfg *config.Config) error {
@@ -2512,6 +2517,27 @@ func readPromPPFeatures(logger log.Logger) {
 		case "disable_block_compaction":
 			pp_pkg_tsdb.BlockCompactionDisabled = true
 			_ = level.Info(logger).Log("msg", "[FEATURE] Prometheus compaction disabled.")
+
+		case "federation_split_families":
+			fvalue := strings.TrimSpace(fvalue)
+			if fvalue == "" {
+				level.Error(logger).Log(
+					"msg", "[FEATURE] The federation_split_families should be setted with number.",
+				)
+				continue
+			}
+			v, err := strconv.Atoi(fvalue)
+			if err != nil {
+				level.Error(logger).Log(
+					"msg", "[FEATURE] Error parsing federation_split_families value",
+					"err", err)
+				continue
+			}
+			_ = level.Info(logger).Log(
+				"msg", "[FEATURE] Split federation families with pages.",
+				"pages", v,
+			)
+			web.FederationSplitFamiliesPageSize = v
 		}
 	}
 }

@@ -54,8 +54,8 @@ func NewGeneric[TShard Shard](
 	return t
 }
 
-// NewReadOnlyGeneric init new GenericTask for read only head.
-func NewReadOnlyGeneric[TShard Shard](shardFn func(shard TShard) error) *Generic[TShard] {
+// NewTransactionGeneric init new [Generic] for transaction head.
+func NewTransactionGeneric[TShard Shard](shardFn func(shard TShard) error) *Generic[TShard] {
 	t := &Generic[TShard]{
 		shardFn: shardFn,
 		wg:      sync.WaitGroup{},
