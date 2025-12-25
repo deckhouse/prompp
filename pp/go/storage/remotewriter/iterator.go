@@ -10,10 +10,9 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/jonboulle/clockwork"
-
-	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/storage/remote"
 
+	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
 )
@@ -148,6 +147,14 @@ func (m *Message) IsObsoleted(minTimestamp int64) bool {
 	return m.MaxTimestamp < minTimestamp
 }
 
+func (m *Message) NumberOfSamples() uint64 {
+	samples := uint64(0)
+	for i := range m.Shards {
+		samples += m.Shards[i].SampleCount
+	}
+	return samples
+}
+
 // newIterator creates a new [Iterator].
 func newIterator(
 	clock clockwork.Clock,
@@ -195,9 +202,9 @@ func (i *Iterator) wrapError(err error) error {
 //revive:disable-next-line:function-length // long but readable
 //revive:disable-next-line:cyclomatic // long but readable
 //revive:disable-next-line:cognitive-complexity // long but readable
-func (i *Iterator) Next(ctx context.Context) error {
+func (i *Iterator) Next(ctx context.Context) (*Message, error) {
 	if i.endOfBlockReached {
-		return i.wrapError(nil)
+		return nil, i.wrapError(nil)
 	}
 
 	startTime := i.clock.Now()
@@ -211,7 +218,7 @@ readLoop:
 	for {
 		select {
 		case <-ctx.Done():
-			return i.wrapError(ctx.Err())
+			return nil, i.wrapError(ctx.Err())
 		case <-deadline:
 			break readLoop
 		case <-i.clock.After(delay):
@@ -255,7 +262,7 @@ readLoop:
 	i.metrics.droppedSeriesTotal.Add(float64(b.DroppedSeriesCount()))
 
 	if b.IsEmpty() {
-		return i.wrapError(nil)
+		return nil, i.wrapError(nil)
 	}
 
 	i.metrics.addSeriesTotal.Add(float64(b.AddSeriesCount()))
@@ -278,15 +285,17 @@ readLoop:
 
 	msg, err := i.encode(b.Data(), uint16(bestNumberOfShards)) // #nosec G115 // no overflow
 	if err != nil {
-		return i.wrapError(err)
+		return nil, i.wrapError(err)
 	}
 
-	numberOfSamples := b.NumberOfSamples()
+	return msg, nil
+}
 
-	b = nil
+func (i *Iterator) SendMessage(msg *Message, ctx context.Context) error {
+	i.metrics.samplesTotal.Add(float64(msg.NumberOfSamples()))
 
 	sendIteration := 0
-	err = backoff.Retry(func() error {
+	err := backoff.Retry(func() error {
 		defer func() { sendIteration++ }()
 		if msg.IsObsoleted(i.minTimestamp()) {
 			for _, messageShard := range msg.Shards {
@@ -297,8 +306,6 @@ readLoop:
 			}
 			return nil
 		}
-
-		i.metrics.samplesTotal.Add(float64(numberOfSamples))
 
 		wg := &sync.WaitGroup{}
 		for _, shrd := range msg.Shards {
@@ -315,7 +322,7 @@ readLoop:
 					logger.Errorf("failed to send protobuf: %v", writeErr)
 				}
 
-				shrd.Delivered = !errors.Is(writeErr, remote.RecoverableError{})
+				shrd.Delivered = !errors.As(writeErr, &remote.RecoverableError{})
 			}(shrd)
 		}
 		wg.Wait()
