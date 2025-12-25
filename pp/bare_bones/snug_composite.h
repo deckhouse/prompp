@@ -47,11 +47,11 @@ concept has_rollback = requires(Derived derived, const Checkpoint& checkpoint) {
 template <class Derived, class R>
 concept has_after_items_load = ls_id_range<R> && requires(Derived derived, R&& range) { derived.after_items_load_impl(std::forward<R>(range)); };
 
-template <class Derived, template <template <class> class> class Filament, template <class> class Vector, uint8_t Version = 1>
+template <class Derived, template <template <class> class> class Filament, template <class> class Vector>
 class GenericDecodingTable {
   static_assert(!std::is_integral_v<typename Filament<Vector>::storage_type::composite_type>, "Filament::composite_type can't be an integral type");
 
-  template <class AnyDerived, template <template <class> class> class AnyFilament, template <class> class AnyVector, uint8_t OtherVersion>
+  template <class AnyDerived, template <template <class> class> class AnyFilament, template <class> class AnyVector>
   friend class GenericDecodingTable;
 
  public:
@@ -137,10 +137,11 @@ class GenericDecodingTable {
     uint32_t next_item_index_;
     uint32_t size_;
     typename storage_type::checkpoint_type storage_checkpoint_;
+    uint8_t table_version_;
 
    public:
-    explicit PROMPP_ALWAYS_INLINE Checkpoint(const storage_type& storage, uint32_t next_item_index, uint32_t size) noexcept
-        : storage_ptr_(&storage), next_item_index_(next_item_index), size_(size), storage_checkpoint_(storage.checkpoint()) {}
+    explicit PROMPP_ALWAYS_INLINE Checkpoint(const storage_type& storage, uint32_t next_item_index, uint32_t size, uint8_t table_version) noexcept
+        : storage_ptr_(&storage), next_item_index_(next_item_index), size_(size), storage_checkpoint_(storage.checkpoint()), table_version_(table_version) {}
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return size_; }
     [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return next_item_index_; }
@@ -154,7 +155,7 @@ class GenericDecodingTable {
       out.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 
       // write a version
-      out.put(Version);
+      out.put(table_version_);
 
       // write mode
       SerializationMode mode = (from != nullptr) ? SerializationMode::DELTA : SerializationMode::SNAPSHOT;
@@ -180,9 +181,9 @@ class GenericDecodingTable {
 
       // write data
       if (from != nullptr) {
-        storage_checkpoint_.save(out, *storage_ptr_, id_offset, size_to_save, Version, &from->storage_checkpoint_);
+        storage_checkpoint_.save(out, *storage_ptr_, id_offset, size_to_save, table_version_, &from->storage_checkpoint_);
       } else {
-        storage_checkpoint_.save(out, *storage_ptr_, id_offset, size_to_save, Version);
+        storage_checkpoint_.save(out, *storage_ptr_, id_offset, size_to_save, table_version_);
       }
     }
 
@@ -251,20 +252,24 @@ class GenericDecodingTable {
   [[nodiscard]] PROMPP_ALWAYS_INLINE LessComparator less_comparator() const noexcept { return LessComparator(this); }
 
   storage_type storage_;
+  uint8_t version_{1};
 
  public:
   using checkpoint_type = Checkpoint;
   using delta_type = typename checkpoint_type::Delta;
 
   GenericDecodingTable() noexcept = default;
-  GenericDecodingTable(const GenericDecodingTable& other) = delete;
+  explicit GenericDecodingTable(uint8_t version) noexcept : version_(version) {};
 
   template <class AnotherDerived, template <template <class> class> class AnotherFilament, template <class> class AnotherVector>
     requires kIsReadOnly
-  explicit GenericDecodingTable(const GenericDecodingTable<AnotherDerived, AnotherFilament, AnotherVector>& other) : storage_(other.storage_) {}
+  explicit GenericDecodingTable(const GenericDecodingTable<AnotherDerived, AnotherFilament, AnotherVector>& other)
+      : storage_(other.storage_), version_(other.version_) {}
+
+  GenericDecodingTable(const GenericDecodingTable& other) = delete;
+  GenericDecodingTable& operator=(const GenericDecodingTable& other) = delete;
 
   GenericDecodingTable(GenericDecodingTable&& other) noexcept = delete;
-  GenericDecodingTable& operator=(const GenericDecodingTable& other) = delete;
   GenericDecodingTable& operator=(GenericDecodingTable&& other) noexcept = delete;
 
   PROMPP_ALWAYS_INLINE value_type operator[](uint32_t id) const noexcept { return storage_.composite(id); }
@@ -288,7 +293,7 @@ class GenericDecodingTable {
     }
   }
 
-  PROMPP_ALWAYS_INLINE auto checkpoint() const noexcept { return checkpoint_type(storage_, next_item_index(), size()); }
+  PROMPP_ALWAYS_INLINE auto checkpoint() const noexcept { return checkpoint_type(storage_, next_item_index(), size(), version_); }
 
   PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& checkpoint) noexcept
     requires(!kIsReadOnly)
@@ -378,6 +383,8 @@ class GenericDecodingTable {
   PROMPP_ALWAYS_INLINE auto end() const noexcept { return storage_.view().end(); }
 
   PROMPP_ALWAYS_INLINE auto remainder_size() const noexcept { return storage_.remainder_size(); }
+
+  PROMPP_ALWAYS_INLINE auto version() const noexcept { return version_; }
 };
 
 template <template <template <class> class> class Filament, template <class> class Vector>
