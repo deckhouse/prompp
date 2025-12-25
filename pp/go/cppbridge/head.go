@@ -3,6 +3,7 @@ package cppbridge
 import (
 	"math"
 	"runtime"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -32,6 +33,13 @@ type TimeInterval struct {
 
 func NewInvalidTimeInterval() TimeInterval {
 	return TimeInterval{
+		MinT: math.MaxInt64,
+		MaxT: math.MinInt64,
+	}
+}
+
+func newInvalidTimeIntervalPtr() *TimeInterval {
+	return &TimeInterval{
 		MinT: math.MaxInt64,
 		MaxT: math.MinInt64,
 	}

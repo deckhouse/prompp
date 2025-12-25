@@ -69,7 +69,7 @@ class SeriesIdSequenceSnapshot {
     using difference_type = std::ptrdiff_t;
 
     Iterator(const SharedMemory<uint8_t>::SharedPtr& memory, const DeltaRLE::Encoder& encoder)
-        : iterator_(DeltaRLE::DataSequence::decode_iterator(memory.get(), memory.constructed_item_count()), DeltaRLE::DataSequence::end(), &encoder),
+        : iterator_(DeltaRLE::DataSequence::decode_iterator(memory.get(), memory.items_count()), DeltaRLE::DataSequence::end(), &encoder),
           count_(encoder.count()) {}
 
     PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {

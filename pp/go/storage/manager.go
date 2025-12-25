@@ -127,12 +127,13 @@ func (c *Config) SetNumberOfShards(numberOfShards uint16) bool {
 type Manager struct {
 	g               run.Group
 	closer          *util.Closer
+	builder         *Builder
 	proxy           *Proxy
 	cgogc           *cppbridge.CGOGC
 	cfg             *Config
 	rotatorMediator *mediator.Mediator
 	mergerMediator  *mediator.Mediator
-	isRunning       bool
+	isRunning       uint32
 }
 
 // NewManager init new [Manager].
@@ -189,11 +190,12 @@ func NewManager(
 	)
 
 	m := &Manager{
-		g:      run.Group{},
-		closer: util.NewCloser(),
-		proxy:  NewProxy(container.NewWeighted(h, container.DefaultBackPressure), hKeeper, services.CFSViaRange),
-		cgogc:  cppbridge.NewCGOGC(r),
-		cfg:    cfg,
+		g:       run.Group{},
+		closer:  util.NewCloser(),
+		builder: builder,
+		proxy:   NewProxy(container.NewWeighted(h, container.DefaultBackPressure), hKeeper, services.CFSViaRange),
+		cgogc:   cppbridge.NewCGOGC(r),
+		cfg:     cfg,
 		rotatorMediator: mediator.NewMediator(
 			mediator.NewRotateTimerWithSeed(clock, o.BlockDuration, o.Seed),
 		),
@@ -213,15 +215,16 @@ func (m *Manager) ApplyConfig(cfg *config.Config) error {
 	logger.Infof("reconfiguration start")
 	defer logger.Infof("reconfiguration completed")
 
-	if m.proxy.Get().NumberOfShards() == cfg.PPNumberOfShards() {
-		return nil
-	}
-
-	if m.cfg.SetNumberOfShards(cfg.PPNumberOfShards()) {
+	if m.cfg.SetNumberOfShards(cfg.PPNumberOfShards()) || m.proxy.Get().NumberOfShards() != m.cfg.NumberOfShards() {
 		m.rotatorMediator.Trigger()
 	}
 
 	return nil
+}
+
+// Builder returns builder for [Head].
+func (m *Manager) Builder() *Builder {
+	return m.builder
 }
 
 // MergeOutOfOrderChunks send signal to merge chunks with out of order data chunks.
@@ -267,7 +270,7 @@ func (m *Manager) initServices(
 	m.g.Add(
 		func() error {
 			readyNotifier.NotifyReady()
-			m.isRunning = true
+			atomic.AddUint32(&m.isRunning, 1)
 			<-m.closer.Signal()
 
 			return nil
@@ -386,7 +389,7 @@ func (m *Manager) initServices(
 }
 
 func (m *Manager) close() {
-	if !m.isRunning {
+	if atomic.LoadUint32(&m.isRunning) == 0 {
 		m.closer.Done()
 	}
 

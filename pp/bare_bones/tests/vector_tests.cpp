@@ -85,7 +85,7 @@ TEST(BareBonesVector, InitializerListConstructor) {
   // Arrange
 
   // Act
-  Vector<std::string> vector{"123", "456", "789"};
+  Vector<std::string_view> vector{"123", "456", "789"};
 
   // Assert
   EXPECT_EQ(3U, vector.size());

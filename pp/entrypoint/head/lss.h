@@ -16,12 +16,9 @@ using LsIdsSlicePtr = std::unique_ptr<LsIdsSlice>;
 
 enum class LssType : uint32_t {
   kEncodingBimap = 0,
-  kOrderedEncodingBimap,
   kQueryableEncodingBimap,
   kReadonlyLss,
 };
-
-using OrderedEncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::OrderedEncodingBimap<BareBones::Vector>;
 
 namespace lss_memory {
 
@@ -96,7 +93,7 @@ class ReallocationsDetector {
   }
 };
 
-using LssVariant = std::variant<EncodingBimap, OrderedEncodingBimap, QueryableEncodingBimap, ReadonlyLss>;
+using LssVariant = std::variant<EncodingBimap, QueryableEncodingBimap, ReadonlyLss>;
 using LssVariantPtr = std::unique_ptr<LssVariant>;
 
 static_assert(sizeof(LssVariantPtr) == sizeof(void*));
@@ -105,10 +102,6 @@ inline LssVariantPtr create_lss(LssType type) {
   switch (type) {
     case LssType::kEncodingBimap: {
       return std::make_unique<LssVariant>(std::in_place_index<static_cast<int>(LssType::kEncodingBimap)>);
-    }
-
-    case LssType::kOrderedEncodingBimap: {
-      return std::make_unique<LssVariant>(std::in_place_index<static_cast<int>(LssType::kOrderedEncodingBimap)>);
     }
 
     case LssType::kQueryableEncodingBimap: {

@@ -1866,7 +1866,7 @@ func seriesDataDataStorageQueryV2(dataStorage uintptr, query DataStorageQuery, s
 		query       DataStorageQuery
 	}{dataStorage, query}
 
-	var res = struct {
+	res := struct {
 		Querier        uintptr
 		Status         uint8
 		SerializedData *uintptr

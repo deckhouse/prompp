@@ -28,6 +28,7 @@ var _ storage.Storage = (*Adapter)(nil)
 // Adapter for implementing the [Queryable] interface and append data.
 type Adapter struct {
 	proxy                 *pp_storage.Proxy
+	builder               *pp_storage.Builder
 	haTracker             *hatracker.HighAvailabilityTracker
 	hashdexFactory        cppbridge.HashdexFactory
 	hashdexLimits         cppbridge.WALHashdexLimits
@@ -38,18 +39,21 @@ type Adapter struct {
 	activeQuerierMetrics  *querier.Metrics
 	storageQuerierMetrics *querier.Metrics
 	appendDuration        prometheus.Histogram
+	samplesAppended       prometheus.Counter
 }
 
 // NewAdapter init new [Adapter].
 func NewAdapter(
 	clock clockwork.Clock,
 	proxy *pp_storage.Proxy,
+	builder *pp_storage.Builder,
 	mergeOutOfOrderChunks func(),
 	registerer prometheus.Registerer,
 ) *Adapter {
 	factory := util.NewUnconflictRegisterer(registerer)
 	return &Adapter{
 		proxy:                 proxy,
+		builder:               builder,
 		haTracker:             hatracker.NewHighAvailabilityTracker(clock, registerer),
 		hashdexFactory:        cppbridge.HashdexFactory{},
 		hashdexLimits:         cppbridge.DefaultWALHashdexLimits(),
@@ -69,6 +73,11 @@ func NewAdapter(
 				},
 			},
 		),
+		samplesAppended: factory.NewCounter(prometheus.CounterOpts{
+			Name:        "prometheus_tsdb_head_samples_appended_total",
+			Help:        "Total number of appended samples.",
+			ConstLabels: prometheus.Labels{"type": "float"},
+		}),
 	}
 }
 
@@ -83,18 +92,20 @@ func (ar *Adapter) AppendHashdex(
 		return nil
 	}
 
-	start := time.Now()
-	defer func() {
+	var floatsAppended float64
+	defer func(start time.Time) {
 		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
-	}()
+		ar.samplesAppended.Add(floatsAppended)
+	}(time.Now())
 
 	return ar.proxy.With(ctx, func(h *pp_storage.Head) error {
-		_, err := appender.New(h, services.CFViaRange).Append(
+		stats, err := appender.New(h, services.CFViaRange).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hashdex},
 			state,
 			commitToWal,
 		)
+		floatsAppended = float64(stats.SamplesAdded)
 
 		return err
 	})
@@ -107,10 +118,10 @@ func (ar *Adapter) AppendScraperHashdex(
 	state *cppbridge.StateV2,
 	commitToWal bool,
 ) (stats cppbridge.RelabelerStats, err error) {
-	start := time.Now()
-	defer func() {
+	defer func(start time.Time) {
 		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
-	}()
+		ar.samplesAppended.Add(float64(stats.SamplesAdded))
+	}(time.Now())
 
 	_ = ar.proxy.With(ctx, func(h *pp_storage.Head) error {
 		stats, err = appender.New(h, services.CFViaRange).Append(
@@ -143,18 +154,20 @@ func (ar *Adapter) AppendSnappyProtobuf(
 		return nil
 	}
 
-	start := time.Now()
-	defer func() {
+	var floatsAppended float64
+	defer func(start time.Time) {
 		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
-	}()
+		ar.samplesAppended.Add(floatsAppended)
+	}(time.Now())
 
 	return ar.proxy.With(ctx, func(h *pp_storage.Head) error {
-		_, err := appender.New(h, services.CFViaRange).Append(
+		stats, err := appender.New(h, services.CFViaRange).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hx},
 			state,
 			commitToWal,
 		)
+		floatsAppended = float64(stats.SamplesAdded)
 
 		return err
 	})
@@ -178,10 +191,10 @@ func (ar *Adapter) AppendTimeSeries(
 		return stats, nil
 	}
 
-	start := time.Now()
-	defer func() {
+	defer func(start time.Time) {
 		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
-	}()
+		ar.samplesAppended.Add(float64(stats.SamplesAdded))
+	}(time.Now())
 
 	_ = ar.proxy.With(ctx, func(h *pp_storage.Head) error {
 		stats, err = appender.New(h, services.CFViaRange).Append(
@@ -200,6 +213,18 @@ func (ar *Adapter) AppendTimeSeries(
 // Appender create a new [storage.Appender] for [Head].
 func (ar *Adapter) Appender(ctx context.Context) storage.Appender {
 	return newTimeSeriesAppender(ctx, ar, ar.transparentState)
+}
+
+// BatchStorage creates a new [storage.BatchStorage] for appending time series data to [TransactionHead]
+// and reading appended series data.
+func (ar *Adapter) BatchStorage() storage.BatchStorage {
+	return NewBatchStorage(
+		ar.hashdexFactory,
+		ar.hashdexLimits,
+		ar.builder.BuildTransactionHead(),
+		ar.transparentState,
+		ar,
+	)
 }
 
 // ChunkQuerier provides querying access over time series data of a fixed time range.
@@ -279,6 +304,11 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 			continue
 		}
 
+		timeInterval := headTimeInterval(head)
+		if !timeInterval.IsInvalid() && mint > timeInterval.MaxT {
+			continue
+		}
+
 		queriers = append(
 			queriers,
 			querier.NewQuerier(head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.storageQuerierMetrics),
@@ -292,4 +322,16 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 // Implements the [storage.Storage] interface.
 func (*Adapter) StartTime() (int64, error) {
 	return math.MaxInt64, nil
+}
+
+// headTimeInterval returns [cppbridge.TimeInterval] from [pp_storage.Head].
+func headTimeInterval(head *pp_storage.Head) cppbridge.TimeInterval {
+	timeInterval := cppbridge.NewInvalidTimeInterval()
+	for shard := range head.RangeShards() {
+		interval := shard.TimeInterval(false)
+		timeInterval.MinT = min(interval.MinT, timeInterval.MinT)
+		timeInterval.MaxT = max(interval.MaxT, timeInterval.MaxT)
+	}
+
+	return timeInterval
 }

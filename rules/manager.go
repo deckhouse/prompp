@@ -105,11 +105,14 @@ type NotifyFunc func(ctx context.Context, expr string, alerts ...*Alert)
 // ManagerOptions bundles options for the Manager.
 type ManagerOptions struct {
 	ExternalURL *url.URL
-	QueryFunc   QueryFunc
 	NotifyFunc  NotifyFunc
 	Context     context.Context
-	Appendable  storage.Appendable
 	Queryable   storage.Queryable
+
+	Engine          promql.QueryEngine                                             // PP_CHANGES.md: rebuild on cpp
+	FanoutQueryable storage.Queryable                                              // PP_CHANGES.md: rebuild on cpp
+	EngineQueryCtor func(engine promql.QueryEngine, q storage.Queryable) QueryFunc // PP_CHANGES.md: rebuild on cpp
+	Batcher         storage.Batcher                                                // PP_CHANGES.md: rebuild on cpp
 
 	Logger                    log.Logger
 	Registerer                prometheus.Registerer

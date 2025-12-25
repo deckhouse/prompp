@@ -29,6 +29,7 @@ type InstantSeriesSet struct {
 	valueNotFoundTimestampValue int64
 	nextSeriesIndex             int
 	instantSeries               []InstantSeries
+	builder                     labels.ScratchBuilder
 }
 
 // NewInstantSeriesSet init new [InstantSeriesSet].
@@ -70,11 +71,12 @@ func (ss *InstantSeriesSet) Next() bool {
 		ss.nextSeriesIndex++
 	}
 
-	lsID, lsLength := ss.lssQueryResult.GetByIndex(ss.nextSeriesIndex)
+	lsID, _ := ss.lssQueryResult.GetByIndex(ss.nextSeriesIndex)
+	ss.builder.Reset()
 	ss.instantSeries[ss.nextSeriesIndex].LabelSet = labels.NewLabelsWithLSS(
 		ss.labelSetSnapshot,
 		lsID,
-		lsLength,
+		&ss.builder,
 	)
 
 	ss.nextSeriesIndex++
