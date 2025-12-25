@@ -324,7 +324,7 @@ func (i *Iterator) SendMessage(msg *Message, ctx context.Context) error {
 			}
 
 			if err := sendSemaphore.Acquire(ctx, 1); err != nil {
-				return err
+				break
 			}
 
 			go func(shrd *MessageShard) {
