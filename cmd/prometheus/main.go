@@ -2186,6 +2186,27 @@ func readPromPPFeatures(logger log.Logger) {
 		case "disable_block_compaction":
 			pp_pkg_tsdb.BlockCompactionDisabled = true
 			_ = level.Info(logger).Log("msg", "[FEATURE] Prometheus compaction disabled.")
+
+		case "federation_split_families":
+			fvalue := strings.TrimSpace(fvalue)
+			if fvalue == "" {
+				level.Error(logger).Log(
+					"msg", "[FEATURE] The federation_split_families should be setted with number.",
+				)
+				continue
+			}
+			v, err := strconv.Atoi(fvalue)
+			if err != nil {
+				level.Error(logger).Log(
+					"msg", "[FEATURE] Error parsing federation_split_families value",
+					"err", err)
+				continue
+			}
+			_ = level.Info(logger).Log(
+				"msg", "[FEATURE] Split federation families with pages.",
+				"pages", v,
+			)
+			web.FederationSplitFamiliesPageSize = v
 		}
 	}
 }
