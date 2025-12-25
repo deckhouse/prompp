@@ -352,6 +352,17 @@ func NewDestination(cfg DestinationConfig) *Destination {
 					},
 				},
 			),
+			generateBatchDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
+				Namespace:                       namespace,
+				Subsystem:                       subsystem,
+				Name:                            "generate_batch_duration_seconds",
+				Help:                            "Duration of generate batch calls.",
+				Buckets:                         append(prometheus.DefBuckets, 25, 60, 120, 300),
+				ConstLabels:                     constLabels,
+				NativeHistogramBucketFactor:     1.1,
+				NativeHistogramMaxBucketNumber:  100,
+				NativeHistogramMinResetDuration: 1 * time.Hour,
+			}),
 		},
 	}
 }
@@ -395,6 +406,7 @@ func (d *Destination) RegisterMetrics(registerer prometheus.Registerer) {
 	registerer.MustRegister(d.metrics.maxSamplesPerSend)
 	registerer.MustRegister(d.metrics.unexpectedEOFCount)
 	registerer.MustRegister(d.metrics.segmentSizeInBytes)
+	registerer.MustRegister(d.metrics.generateBatchDuration)
 }
 
 // UnregisterMetrics unregisters the metrics for the [Destination].
@@ -436,6 +448,7 @@ func (d *Destination) UnregisterMetrics(registerer prometheus.Registerer) {
 	registerer.Unregister(d.metrics.maxSamplesPerSend)
 	registerer.Unregister(d.metrics.unexpectedEOFCount)
 	registerer.Unregister(d.metrics.segmentSizeInBytes)
+	registerer.Unregister(d.metrics.generateBatchDuration)
 }
 
 // remoteWriteConfigsAreEqual compares two remote write configs.
@@ -514,4 +527,5 @@ type DestinationMetrics struct {
 	maxSamplesPerSend      prometheus.Gauge
 	unexpectedEOFCount     prometheus.Counter
 	segmentSizeInBytes     prometheus.Histogram
+	generateBatchDuration  prometheus.Histogram
 }

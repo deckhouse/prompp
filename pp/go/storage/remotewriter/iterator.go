@@ -214,6 +214,8 @@ func (i *Iterator) Next(ctx context.Context) (*Message, error) {
 	b := newBatch(numberOfShards, i.queueConfig.MaxSamplesPerSend)
 	deadline := i.clock.After(i.scrapeInterval)
 
+	batchGenerationTime := 0.0
+
 readLoop:
 	for {
 		select {
@@ -224,7 +226,10 @@ readLoop:
 		case <-i.clock.After(delay):
 		}
 
+		now := i.clock.Now()
 		decodedSegments, err := i.dataSource.Read(ctx, i.targetSegmentID, i.minTimestamp())
+		batchGenerationTime += i.clock.Since(now).Seconds()
+
 		if err != nil {
 			if errors.Is(err, ErrEndOfBlock) {
 				i.endOfBlockReached = true
@@ -252,7 +257,8 @@ readLoop:
 		delay = 0
 	}
 
-	readDuration := i.clock.Since(startTime)
+	generateStartTime := i.clock.Now()
+	readDuration := generateStartTime.Sub(startTime)
 
 	if b.HasDroppedSamples() {
 		i.metrics.droppedSamplesTotal.WithLabelValues(reasonTooOld).Add(float64(b.OutdatedSamplesCount()))
@@ -287,6 +293,8 @@ readLoop:
 		return nil, i.wrapError(err)
 	}
 
+	batchGenerationTime += i.clock.Since(generateStartTime).Seconds()
+	i.metrics.generateBatchDuration.Observe(batchGenerationTime)
 	return msg, nil
 }
 
@@ -309,6 +317,7 @@ func (i *Iterator) SendMessage(msg *Message, ctx context.Context) error {
 		}
 
 		sendSemaphore := semaphore.NewWeighted(int64(sendersCount))
+		startTime := i.clock.Now()
 		for _, shrd := range msg.Shards {
 			if shrd.Delivered {
 				continue
@@ -320,9 +329,7 @@ func (i *Iterator) SendMessage(msg *Message, ctx context.Context) error {
 
 			go func(shrd *MessageShard) {
 				defer sendSemaphore.Release(1)
-				begin := i.clock.Now()
 				writeErr := i.protobufWriter.Write(ctx, shrd.Protobuf)
-				i.metrics.sentBatchDuration.Observe(i.clock.Since(begin).Seconds())
 				if writeErr != nil {
 					logger.Errorf("failed to send protobuf: %v", writeErr)
 				}
@@ -331,6 +338,7 @@ func (i *Iterator) SendMessage(msg *Message, ctx context.Context) error {
 			}(shrd)
 		}
 		_ = sendSemaphore.Acquire(ctx, int64(sendersCount))
+		i.metrics.sentBatchDuration.Observe(i.clock.Since(startTime).Seconds())
 
 		var failedSamplesTotal uint64
 		var sentBytesTotal uint64
