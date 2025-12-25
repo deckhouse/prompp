@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/prometheus/storage/remote"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -294,6 +294,8 @@ readLoop:
 func (i *Iterator) SendMessage(msg *Message, ctx context.Context) error {
 	i.metrics.samplesTotal.Add(float64(msg.NumberOfSamples()))
 
+	sendersCount := i.outputSharder.max
+
 	sendIteration := 0
 	err := backoff.Retry(func() error {
 		defer func() { sendIteration++ }()
@@ -307,14 +309,18 @@ func (i *Iterator) SendMessage(msg *Message, ctx context.Context) error {
 			return nil
 		}
 
-		wg := &sync.WaitGroup{}
+		sendSemaphore := semaphore.NewWeighted(int64(sendersCount))
 		for _, shrd := range msg.Shards {
 			if shrd.Delivered {
 				continue
 			}
-			wg.Add(1)
+
+			if err := sendSemaphore.Acquire(ctx, 1); err != nil {
+				return err
+			}
+
 			go func(shrd *MessageShard) {
-				defer wg.Done()
+				defer sendSemaphore.Release(1)
 				begin := i.clock.Now()
 				writeErr := i.protobufWriter.Write(ctx, shrd.Protobuf)
 				i.metrics.sentBatchDuration.Observe(i.clock.Since(begin).Seconds())
@@ -325,7 +331,7 @@ func (i *Iterator) SendMessage(msg *Message, ctx context.Context) error {
 				shrd.Delivered = !errors.As(writeErr, &remote.RecoverableError{})
 			}(shrd)
 		}
-		wg.Wait()
+		_ = sendSemaphore.Acquire(ctx, int64(sendersCount))
 
 		var failedSamplesTotal uint64
 		var sentBytesTotal uint64
