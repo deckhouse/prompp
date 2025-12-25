@@ -3,6 +3,7 @@ package cppbridge
 import (
 	"math"
 	"runtime"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -37,6 +38,13 @@ func NewInvalidTimeInterval() TimeInterval {
 	}
 }
 
+func newInvalidTimeIntervalPtr() *TimeInterval {
+	return &TimeInterval{
+		MinT: math.MaxInt64,
+		MaxT: math.MinInt64,
+	}
+}
+
 func (t *TimeInterval) IsInvalid() bool {
 	return t.MinT == math.MaxInt64 && t.MaxT == math.MinInt64
 }
@@ -50,7 +58,7 @@ type Sample struct {
 type HeadDataStorage struct {
 	dataStorage       uintptr
 	gcDestroyDetector *uint64
-	timeInterval      TimeInterval
+	timeInterval      atomic.Pointer[TimeInterval]
 }
 
 // NewHeadDataStorage - constructor.
@@ -58,8 +66,9 @@ func NewHeadDataStorage() *HeadDataStorage {
 	ds := &HeadDataStorage{
 		dataStorage:       seriesDataDataStorageCtor(),
 		gcDestroyDetector: &gcDestroyDetector,
-		timeInterval:      NewInvalidTimeInterval(),
+		timeInterval:      atomic.Pointer[TimeInterval]{},
 	}
+	ds.timeInterval.Store(newInvalidTimeIntervalPtr())
 
 	runtime.SetFinalizer(ds, func(ds *HeadDataStorage) {
 		seriesDataDataStorageDtor(ds.dataStorage)
@@ -71,16 +80,17 @@ func NewHeadDataStorage() *HeadDataStorage {
 // Reset - resets data storage.
 func (ds *HeadDataStorage) Reset() {
 	seriesDataDataStorageReset(ds.dataStorage)
-	ds.timeInterval = NewInvalidTimeInterval()
+	ds.timeInterval.Store(newInvalidTimeIntervalPtr())
 }
 
 func (ds *HeadDataStorage) TimeInterval(invalidateCache bool) TimeInterval {
-	if invalidateCache || ds.timeInterval.IsInvalid() {
-		ds.timeInterval = seriesDataDataStorageTimeInterval(ds.dataStorage)
+	if invalidateCache || ds.timeInterval.Load().IsInvalid() {
+		timeInterval := seriesDataDataStorageTimeInterval(ds.dataStorage)
+		ds.timeInterval.Store(&timeInterval)
 		runtime.KeepAlive(ds)
 	}
 
-	return ds.timeInterval
+	return *ds.timeInterval.Load()
 }
 
 func (ds *HeadDataStorage) GetQueriedSeriesBitset() []byte {

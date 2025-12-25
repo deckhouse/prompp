@@ -1319,22 +1319,6 @@ void prompp_series_data_data_storage_queried_series_set_bitset(void* args, void*
 void prompp_series_data_data_storage_allocated_memory(void* args, void* res);
 
 /**
- * @brief Queries data storage and serializes result.
- *
- * @param args {
- *     dataStorage    uintptr          // pointer to constructed data storage
- *     query          DataStorageQuery // query
- *     serializedData *[]byte          // pointer to slice for serialized data
- * }
- *
- * @param res {
- *     Querier uintptr // pointer to constructed Querier if data loading is needed
- *     Status  uint8   // status of a query (0 - Success, 1 - Data loading is needed)
- * }
- */
-void prompp_series_data_data_storage_query(void* args, void* res);
-
-/**
  * @brief Queries data storage and serializes result (new serialization model).
  *
  * @param args {

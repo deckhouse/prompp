@@ -565,13 +565,15 @@ type RelabelerOptions struct {
 
 // StaleNansState wrap pointer to source state for stale nans .
 type StaleNansState struct {
-	state uintptr
+	state             uintptr
+	gcDestroyDetector *uint64
 }
 
 // NewStaleNansState init new SourceStaleNansState.
 func NewStaleNansState() *StaleNansState {
 	s := &StaleNansState{
-		state: prometheusRelabelStaleNansStateCtor(),
+		state:             prometheusRelabelStaleNansStateCtor(),
+		gcDestroyDetector: &gcDestroyDetector,
 	}
 	runtime.SetFinalizer(s, func(s *StaleNansState) {
 		prometheusRelabelStaleNansStateDtor(s.state)
@@ -1248,6 +1250,11 @@ func (s *StateV2) Reconfigure(
 	numberOfShards uint16,
 	staleNansIdsMappings []*IdsMapping,
 ) {
+	// the transition state does not require caches and staleNaNs
+	if s.IsTransition() {
+		return
+	}
+
 	if s.status&inited == inited && generationHead == s.generationHead {
 		return
 	}
