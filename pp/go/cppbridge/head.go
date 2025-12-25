@@ -3,7 +3,6 @@ package cppbridge
 import (
 	"math"
 	"runtime"
-	"sync/atomic"
 	"unsafe"
 )
 
