@@ -12,7 +12,6 @@
 #include "series_data/querier.h"
 #include "series_data/querier/instant_querier.h"
 #include "series_data/querier/querier.h"
-#include "series_data/serialization/serializer.h"
 #include "series_data/unloading/loader.h"
 #include "series_data/unloading/unloader.h"
 #include "series_index/querier/selector_querier.h"
@@ -112,37 +111,6 @@ extern "C" void prompp_series_data_data_storage_queried_series_set_bitset(void* 
   new (res) Result{.result = result};
 }
 
-extern "C" void prompp_series_data_data_storage_query(void* args, void* res) {
-  using Query = series_data::querier::Query<Slice<LabelSetID>>;
-  using entrypoint::series_data::RangeQuerierWithArgumentsWrapper;
-  using series_data::querier::Querier;
-
-  struct Arguments {
-    DataStoragePtr data_storage;
-    Query query;
-    Slice<char>* serialized_chunks;
-  };
-
-  struct Result {
-    QuerierVariantPtr querier{};
-    QueryStatus status;
-  };
-
-  const auto in = static_cast<Arguments*>(args);
-
-  RangeQuerierWithArgumentsWrapper querier(*in->data_storage, in->query, in->serialized_chunks);
-  querier.query();
-
-  if (querier.need_loading()) {
-    new (res) Result{
-        .querier = std::make_unique<QuerierVariant>(std::in_place_index<1>, std::move(querier)),
-        .status = QueryStatus::kNeedDataLoad,
-    };
-  } else {
-    new (res) Result{.status = QueryStatus::kSuccess};
-  }
-}
-
 extern "C" void prompp_series_data_data_storage_query_v2(void* args, void* res) {
   using Query = series_data::querier::Query<Slice<LabelSetID>>;
   using entrypoint::series_data::RangeQuerierWithArgumentsWrapperV2;
@@ -166,7 +134,7 @@ extern "C" void prompp_series_data_data_storage_query_v2(void* args, void* res) 
   querier.query();
 
   if (querier.need_loading()) {
-    out->querier = std::make_unique<QuerierVariant>(std::in_place_index<2>, std::move(querier));
+    out->querier = std::make_unique<QuerierVariant>(std::in_place_index<1>, std::move(querier));
     out->status = QueryStatus::kNeedDataLoad;
   } else {
     out->status = QueryStatus::kSuccess;
@@ -296,6 +264,7 @@ extern "C" void prompp_series_data_chunk_recoder_recode_next_chunk(void* args, v
 
   const auto in = static_cast<const Arguments*>(args);
   const auto out = static_cast<Result*>(res);
+  // NOLINTNEXTLINE(clang-analyzer-core.NullDereference)
   std::visit(
       [out](auto& chunk_recoder) PROMPP_LAMBDA_INLINE {
         chunk_recoder.recode_next_chunk(*out);

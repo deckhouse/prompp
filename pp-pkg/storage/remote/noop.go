@@ -1,4 +1,4 @@
-package storage
+package remote
 
 import (
 	"context"

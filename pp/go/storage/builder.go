@@ -15,6 +15,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
+	"github.com/prometheus/prometheus/pp/go/storage/head/transactionhead"
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
@@ -97,6 +98,30 @@ func (b *Builder) Build(generation uint64, numberOfShards uint16) (*Head, error)
 		generation,
 		b.registerer,
 	), nil
+}
+
+// BuildTransactionHead new [TransactionHead] - [transactionhead.Head]
+// with [shard.Shard] with [wal.NoopWal] which is written to disk.
+func (b *Builder) BuildTransactionHead() *TransactionHead {
+	sd := shard.NewShard(
+		shard.NewLSS(),
+		shard.NewDataStorage(),
+		nil,
+		nil,
+		wal.NewNoopWal(),
+		0,
+	)
+
+	th := transactionhead.NewHead(
+		catalog.DefaultIDGenerator{}.Generate().String(),
+		sd,
+		shard.NewPerGoroutineShard[*wal.NoopWal](sd, 1),
+	)
+
+	b.events.With(prometheus.Labels{"type": "created_transaction_head"}).Inc()
+	logger.Debugf("[Builder] builded head: %s", th.String())
+
+	return th
 }
 
 // createShardOnDisk create [shard.Shard] with [wal.Wal] which is written to disk.

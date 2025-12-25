@@ -2,7 +2,6 @@ package catalog
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"time"
@@ -126,15 +125,16 @@ func (gc *GC) Iterate() {
 func (gc *GC) Run(ctx context.Context) error {
 	defer close(gc.stopped)
 
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-gc.readyNotifiable.ReadyChan():
-		case <-gc.stop:
-			return errors.New("stopped")
-		}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-gc.stop:
+		return nil
+	case <-gc.readyNotifiable.ReadyChan():
+		// run GC
+	}
 
+	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -143,7 +143,7 @@ func (gc *GC) Run(ctx context.Context) error {
 		case <-gc.removedHeadNotifier.Chan():
 			gc.Iterate()
 		case <-gc.stop:
-			return errors.New("stopped")
+			return nil
 		}
 	}
 }
