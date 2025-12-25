@@ -273,9 +273,8 @@ readLoop:
 	// next step is to divide it by max samples per shard to get desired number of shards.
 	desiredNumberOfShards := float64(i.scrapeInterval) / float64(readDuration) * float64(b.NumberOfSamples()) / float64(b.MaxNumberOfSamplesPerShard())
 
-	bestNumberOfShards := i.outputSharder.BestNumberOfShards(
-		float64(b.NumberOfSamples()) / float64(b.MaxNumberOfSamplesPerShard()),
-	)
+	numberOfMessages := math.Ceil(float64(b.NumberOfSamples()) / float64(b.MaxNumberOfSamplesPerShard()))
+	bestNumberOfShards := i.outputSharder.BestNumberOfShards(numberOfMessages)
 
 	i.outputSharder.Apply(desiredNumberOfShards)
 	i.metrics.desiredNumShards.Set(desiredNumberOfShards)
@@ -283,7 +282,7 @@ readLoop:
 
 	i.writeCaches()
 
-	msg, err := i.encode(b.Data(), uint16(bestNumberOfShards)) // #nosec G115 // no overflow
+	msg, err := i.encode(b.Data(), int(numberOfMessages)) // #nosec G115 // no overflow
 	if err != nil {
 		return nil, i.wrapError(err)
 	}
@@ -394,7 +393,7 @@ func (i *Iterator) writeCaches() {
 	i.dataSource.WriteCaches()
 }
 
-func (i *Iterator) encode(segments []*DecodedSegment, numberOfShards uint16) (*Message, error) {
+func (i *Iterator) encode(segments []*DecodedSegment, numberOfMessages int) (*Message, error) {
 	var maxTimestamp int64
 	batchToEncode := make([]*cppbridge.DecodedRefSamples, 0, len(segments))
 	for _, segment := range segments {
@@ -406,7 +405,7 @@ func (i *Iterator) encode(segments []*DecodedSegment, numberOfShards uint16) (*M
 	}
 
 	protobufEncoder := cppbridge.NewWALProtobufEncoder(i.dataSource.LSSes())
-	protobufs, err := protobufEncoder.Encode(batchToEncode, numberOfShards)
+	protobufs, err := protobufEncoder.Encode(batchToEncode, numberOfMessages)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode protobuf: %w", err)
 	}

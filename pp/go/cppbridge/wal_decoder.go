@@ -448,17 +448,17 @@ func NewWALProtobufEncoder(outputLsses []*LabelSetStorage) *WALProtobufEncoder {
 // Encode batch slice ShardRefSamples to snapped protobufs on shards.
 func (e *WALProtobufEncoder) Encode(
 	batch []*DecodedRefSamples,
-	numberOfShards uint16,
+	numberOfMessages int,
 ) ([]*SnappyProtobufEncodedData, error) {
-	buffers := make([][]byte, numberOfShards)
-	stats := make([]protobufEncoderStats, numberOfShards)
+	buffers := make([][]byte, numberOfMessages)
+	stats := make([]protobufEncoderStats, numberOfMessages)
 	exception := walProtobufEncoderEncode(batch, buffers, stats, e.encoder)
 	runtime.KeepAlive(e)
 	if len(exception) != 0 {
 		return nil, handleException(exception)
 	}
 
-	outSlices := make([]*SnappyProtobufEncodedData, numberOfShards)
+	outSlices := make([]*SnappyProtobufEncodedData, numberOfMessages)
 	for i := range buffers {
 		outSlices[i] = NewSnappyProtobufEncodedData(stats[i], buffers[i])
 	}
