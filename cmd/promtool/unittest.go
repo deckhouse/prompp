@@ -212,13 +212,16 @@ func (tg *testGroup) test(evalInterval time.Duration, groupOrderMap map[string]i
 	}()
 	suite.SubqueryInterval = evalInterval
 
+	fanoutStorage := storage.NewFanout(log.NewNopLogger(), suite.Adapter(), suite.LocalStorage())
 	// Load the rule files.
 	opts := &rules.ManagerOptions{
-		QueryFunc:  rules.EngineQueryFunc(suite.QueryEngine(), suite.Storage()),
-		Appendable: suite.Storage(),
-		Context:    context.Background(),
-		NotifyFunc: func(ctx context.Context, expr string, alerts ...*rules.Alert) {},
-		Logger:     log.NewNopLogger(),
+		Engine:          suite.QueryEngine(),   // PP_CHANGES.md: rebuild on cpp
+		FanoutQueryable: fanoutStorage,         // PP_CHANGES.md: rebuild on cpp
+		EngineQueryCtor: rules.EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
+		Batcher:         suite.Adapter(),       // PP_CHANGES.md: rebuild on cpp
+		Context:         context.Background(),
+		NotifyFunc:      func(ctx context.Context, expr string, alerts ...*rules.Alert) {},
+		Logger:          log.NewNopLogger(),
 	}
 	m := rules.NewManager(opts)
 	groupsMap, ers := m.LoadGroups(time.Duration(tg.Interval), tg.ExternalLabels, tg.ExternalURL, nil, ruleFiles...)

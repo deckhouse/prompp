@@ -51,6 +51,7 @@ type Group struct {
 	limit                int
 	rules                []Rule
 	seriesInPreviousEval []map[string]labels.Labels // One per Rule.
+	seriesInCurrentEval  []map[string]labels.Labels // One per Rule.
 	staleSeries          []labels.Labels
 	opts                 *ManagerOptions
 	mtx                  sync.Mutex
@@ -134,6 +135,7 @@ func NewGroup(o GroupOptions) *Group {
 		shouldRestore:         o.ShouldRestore,
 		opts:                  o.Opts,
 		seriesInPreviousEval:  make([]map[string]labels.Labels, len(o.Rules)),
+		seriesInCurrentEval:   make([]map[string]labels.Labels, len(o.Rules)),
 		done:                  make(chan struct{}),
 		managerDone:           o.done,
 		terminated:            make(chan struct{}),
@@ -244,7 +246,19 @@ func (g *Group) run(ctx context.Context) {
 			select {
 			case <-g.managerDone:
 			case <-time.After(2 * g.interval):
-				g.cleanupStaleSeries(ctx, now)
+				bs := g.opts.Batcher.BatchStorage()
+
+				if err := g.cleanupStaleSeries(ctx, now, bs); err != nil {
+					level.Error(g.logger).Log("msg", "Failed to cleanup stale series", "err", err)
+					return
+				}
+
+				if err := bs.Commit(ctx); err != nil {
+					level.Error(g.logger).Log("msg", "Failed to commit batch storage", "err", err)
+					return
+				}
+
+				g.staleSeries = nil
 			}
 		}(time.Now())
 	}()
@@ -476,12 +490,15 @@ func (g *Group) CopyState(from *Group) {
 // Eval runs a single evaluation cycle in which all rules are evaluated sequentially.
 // Rules can be evaluated concurrently if the `concurrent-rule-eval` feature flag is enabled.
 func (g *Group) Eval(ctx context.Context, ts time.Time) {
-	var samplesTotal float64
+	var (
+		samplesTotal float64
+		bs           = g.opts.Batcher.BatchStorage()
+	)
 
 	if g.concurrencyController.IsConcurrent() {
-		samplesTotal = g.concurrencyEval(ctx, ts)
+		samplesTotal = g.concurrencyEval(ctx, ts, bs)
 	} else {
-		samplesTotal = g.sequentiallyEval(ctx, ts, g.rules)
+		samplesTotal = g.sequentiallyEval(ctx, ts, g.rules, bs)
 	}
 
 	select {
@@ -490,8 +507,30 @@ func (g *Group) Eval(ctx context.Context, ts time.Time) {
 	default:
 	}
 
+	cleanupErr := g.cleanupStaleSeries(ctx, ts, bs)
+	if cleanupErr != nil {
+		level.Warn(g.logger).Log("msg", "Stale sample appending for previous configuration failed", "err", cleanupErr)
+	}
+
+	if commitErr := bs.Commit(ctx); commitErr != nil {
+		level.Error(g.logger).Log("msg", "Failed to commit batch appender", "err", commitErr)
+		return
+	}
+
 	g.metrics.GroupSamples.WithLabelValues(GroupKey(g.File(), g.Name())).Set(samplesTotal)
-	g.cleanupStaleSeries(ctx, ts)
+
+	if len(g.staleSeries) != 0 && cleanupErr == nil {
+		g.staleSeries = nil
+	}
+
+	for i, series := range g.seriesInCurrentEval {
+		if series == nil {
+			continue
+		}
+
+		g.seriesInPreviousEval[i] = series
+		g.seriesInCurrentEval[i] = nil
+	}
 }
 
 func (g *Group) QueryOffset() time.Duration {
@@ -506,11 +545,12 @@ func (g *Group) QueryOffset() time.Duration {
 	return time.Duration(0)
 }
 
-func (g *Group) cleanupStaleSeries(ctx context.Context, ts time.Time) {
+func (g *Group) cleanupStaleSeries(ctx context.Context, ts time.Time, bs storage.BatchStorage) error {
 	if len(g.staleSeries) == 0 {
-		return
+		return nil
 	}
-	app := g.opts.Appendable.Appender(ctx)
+
+	app := bs.Appender(ctx)
 	queryOffset := g.QueryOffset()
 	for _, s := range g.staleSeries {
 		// Rule that produced series no longer configured, mark it stale.
@@ -530,11 +570,8 @@ func (g *Group) cleanupStaleSeries(ctx context.Context, ts time.Time) {
 			level.Warn(g.logger).Log("msg", "Adding stale sample for previous configuration failed", "sample", s, "err", err)
 		}
 	}
-	if err := app.Commit(); err != nil {
-		level.Warn(g.logger).Log("msg", "Stale sample appending for previous configuration failed", "err", err)
-	} else {
-		g.staleSeries = nil
-	}
+
+	return app.Commit()
 }
 
 // RestoreForState restores the 'for' state of the alerts
@@ -949,12 +986,13 @@ func buildDependencyMap(rules []Rule) dependencyMap {
 }
 
 // concurrencyEval evaluates the rules concurrently.
-func (g *Group) concurrencyEval(ctx context.Context, ts time.Time) float64 {
+func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, bs storage.BatchStorage) float64 {
 	var (
 		samplesTotal   atomic.Float64
 		wg             sync.WaitGroup
 		mtx            sync.Mutex
-		concurrencyApp = g.opts.Appendable.Appender(ctx)
+		concurrencyApp = bs.Appender(ctx)
+		queryFunc      = g.opts.EngineQueryCtor(g.opts.Engine, g.opts.FanoutQueryable)
 	)
 
 	ruleQueryOffset := g.QueryOffset()
@@ -982,7 +1020,7 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time) float64 {
 
 		g.metrics.EvalTotal.WithLabelValues(GroupKey(g.File(), g.Name())).Inc()
 
-		vector, err := rule.Eval(ctx, ruleQueryOffset, ts, g.opts.QueryFunc, g.opts.ExternalURL, g.Limit())
+		vector, err := rule.Eval(ctx, ruleQueryOffset, ts, queryFunc, g.opts.ExternalURL, g.Limit())
 		if err != nil {
 			rule.SetHealth(HealthBad)
 			rule.SetLastError(err)
@@ -1004,11 +1042,6 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time) float64 {
 		if ar, ok := rule.(*AlertingRule); ok {
 			ar.sendAlerts(ctx, ts, g.opts.ResendDelay, g.interval, g.opts.NotifyFunc)
 		}
-		var (
-			numOutOfOrder = 0
-			numTooOld     = 0
-			numDuplicates = 0
-		)
 
 		seriesInPreviousEval[i] = make(map[string]labels.Labels, len(g.seriesInPreviousEval[i]))
 		buf := [1024]byte{}
@@ -1025,46 +1058,17 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time) float64 {
 				rule.SetHealth(HealthBad)
 				rule.SetLastError(err)
 				sp.SetStatus(codes.Error, err.Error())
-				unwrappedErr := errors.Unwrap(err)
-				if unwrappedErr == nil {
-					unwrappedErr = err
-				}
-				switch {
-				case errors.Is(unwrappedErr, storage.ErrOutOfOrderSample):
-					numOutOfOrder++
-					level.Debug(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
-				case errors.Is(unwrappedErr, storage.ErrTooOldSample):
-					numTooOld++
-					level.Debug(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
-				case errors.Is(unwrappedErr, storage.ErrDuplicateSampleForTimestamp):
-					numDuplicates++
-					level.Debug(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
-				default:
-					level.Warn(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
-				}
+				level.Warn(logger).Log(
+					"msg", "Rule evaluation result discarded",
+					"rule", rule.Name(),
+					"err", err,
+					"sample", s,
+				)
 
 				continue
 			}
 
 			seriesInPreviousEval[i][string(s.Metric.Bytes(buf[:]))] = s.Metric
-		}
-		if numOutOfOrder > 0 {
-			level.Warn(logger).Log(
-				"msg", "Error on ingesting out-of-order result from rule evaluation",
-				"num_dropped", numOutOfOrder,
-			)
-		}
-		if numTooOld > 0 {
-			level.Warn(logger).Log(
-				"msg", "Error on ingesting too old result from rule evaluation",
-				"num_dropped", numTooOld,
-			)
-		}
-		if numDuplicates > 0 {
-			level.Warn(logger).Log(
-				"msg", "Error on ingesting results from rule evaluation with different value but same timestamp",
-				"num_dropped", numDuplicates,
-			)
 		}
 
 		for metric, lset := range g.seriesInPreviousEval[i] {
@@ -1134,7 +1138,7 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time) float64 {
 			"err", err,
 		)
 
-		return samplesTotal.Add(g.sequentiallyEval(ctx, ts, sequentiallyRules))
+		return samplesTotal.Add(g.sequentiallyEval(ctx, ts, sequentiallyRules, bs))
 	}
 
 	for i, series := range seriesInPreviousEval {
@@ -1142,10 +1146,10 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time) float64 {
 			continue
 		}
 
-		g.seriesInPreviousEval[i] = series
+		g.seriesInCurrentEval[i] = series
 	}
 
-	return samplesTotal.Add(g.sequentiallyEval(ctx, ts, sequentiallyRules))
+	return samplesTotal.Add(g.sequentiallyEval(ctx, ts, sequentiallyRules, bs))
 }
 
 // sequentiallyEval evaluates the rules sequentially.
@@ -1153,12 +1157,19 @@ func (g *Group) sequentiallyEval(
 	ctx context.Context,
 	ts time.Time,
 	sequentiallyRules []Rule,
+	bs storage.BatchStorage,
 ) float64 {
 	if len(sequentiallyRules) == 0 {
 		return 0
 	}
 
-	var samplesTotal float64
+	var (
+		samplesTotal float64
+		queryFunc    = g.opts.EngineQueryCtor(
+			g.opts.Engine,
+			storage.NewFanoutQueryable(bs, g.opts.FanoutQueryable),
+		)
+	)
 
 	ruleQueryOffset := g.QueryOffset()
 	eval := func(i int, rule Rule, cleanup func()) {
@@ -1184,7 +1195,7 @@ func (g *Group) sequentiallyEval(
 
 		g.metrics.EvalTotal.WithLabelValues(GroupKey(g.File(), g.Name())).Inc()
 
-		vector, err := rule.Eval(ctx, ruleQueryOffset, ts, g.opts.QueryFunc, g.opts.ExternalURL, g.Limit())
+		vector, err := rule.Eval(ctx, ruleQueryOffset, ts, queryFunc, g.opts.ExternalURL, g.Limit())
 		if err != nil {
 			rule.SetHealth(HealthBad)
 			rule.SetLastError(err)
@@ -1206,13 +1217,8 @@ func (g *Group) sequentiallyEval(
 		if ar, ok := rule.(*AlertingRule); ok {
 			ar.sendAlerts(ctx, ts, g.opts.ResendDelay, g.interval, g.opts.NotifyFunc)
 		}
-		var (
-			numOutOfOrder = 0
-			numTooOld     = 0
-			numDuplicates = 0
-		)
 
-		app := g.opts.Appendable.Appender(ctx)
+		app := bs.Appender(ctx)
 		seriesReturned := make(map[string]labels.Labels, len(g.seriesInPreviousEval[i]))
 		defer func() {
 			if err := app.Commit(); err != nil {
@@ -1224,7 +1230,8 @@ func (g *Group) sequentiallyEval(
 				level.Warn(logger).Log("msg", "Rule sample appending failed", "err", err)
 				return
 			}
-			g.seriesInPreviousEval[i] = seriesReturned
+
+			g.seriesInCurrentEval[i] = seriesReturned
 		}()
 
 		buf := [1024]byte{}
@@ -1239,46 +1246,17 @@ func (g *Group) sequentiallyEval(
 				rule.SetHealth(HealthBad)
 				rule.SetLastError(err)
 				sp.SetStatus(codes.Error, err.Error())
-				unwrappedErr := errors.Unwrap(err)
-				if unwrappedErr == nil {
-					unwrappedErr = err
-				}
-				switch {
-				case errors.Is(unwrappedErr, storage.ErrOutOfOrderSample):
-					numOutOfOrder++
-					level.Debug(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
-				case errors.Is(unwrappedErr, storage.ErrTooOldSample):
-					numTooOld++
-					level.Debug(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
-				case errors.Is(unwrappedErr, storage.ErrDuplicateSampleForTimestamp):
-					numDuplicates++
-					level.Debug(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
-				default:
-					level.Warn(logger).Log("msg", "Rule evaluation result discarded", "err", err, "sample", s)
-				}
+				level.Warn(logger).Log(
+					"msg", "Rule evaluation result discarded",
+					"rule", rule.Name(),
+					"err", err,
+					"sample", s,
+				)
 
 				continue
 			}
 
 			seriesReturned[string(s.Metric.Bytes(buf[:]))] = s.Metric
-		}
-		if numOutOfOrder > 0 {
-			level.Warn(logger).Log(
-				"msg", "Error on ingesting out-of-order result from rule evaluation",
-				"num_dropped", numOutOfOrder,
-			)
-		}
-		if numTooOld > 0 {
-			level.Warn(logger).Log(
-				"msg", "Error on ingesting too old result from rule evaluation",
-				"num_dropped", numTooOld,
-			)
-		}
-		if numDuplicates > 0 {
-			level.Warn(logger).Log(
-				"msg", "Error on ingesting results from rule evaluation with different value but same timestamp",
-				"num_dropped", numDuplicates,
-			)
 		}
 
 		for metric, lset := range g.seriesInPreviousEval[i] {

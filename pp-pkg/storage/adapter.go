@@ -28,6 +28,7 @@ var _ storage.Storage = (*Adapter)(nil)
 // Adapter for implementing the [Queryable] interface and append data.
 type Adapter struct {
 	proxy                 *pp_storage.Proxy
+	builder               *pp_storage.Builder
 	haTracker             *hatracker.HighAvailabilityTracker
 	hashdexFactory        cppbridge.HashdexFactory
 	hashdexLimits         cppbridge.WALHashdexLimits
@@ -45,12 +46,14 @@ type Adapter struct {
 func NewAdapter(
 	clock clockwork.Clock,
 	proxy *pp_storage.Proxy,
+	builder *pp_storage.Builder,
 	mergeOutOfOrderChunks func(),
 	registerer prometheus.Registerer,
 ) *Adapter {
 	factory := util.NewUnconflictRegisterer(registerer)
 	return &Adapter{
 		proxy:                 proxy,
+		builder:               builder,
 		haTracker:             hatracker.NewHighAvailabilityTracker(clock, registerer),
 		hashdexFactory:        cppbridge.HashdexFactory{},
 		hashdexLimits:         cppbridge.DefaultWALHashdexLimits(),
@@ -212,6 +215,18 @@ func (ar *Adapter) Appender(ctx context.Context) storage.Appender {
 	return newTimeSeriesAppender(ctx, ar, ar.transparentState)
 }
 
+// BatchStorage creates a new [storage.BatchStorage] for appending time series data to [TransactionHead]
+// and reading appended series data.
+func (ar *Adapter) BatchStorage() storage.BatchStorage {
+	return NewBatchStorage(
+		ar.hashdexFactory,
+		ar.hashdexLimits,
+		ar.builder.BuildTransactionHead(),
+		ar.transparentState,
+		ar,
+	)
+}
+
 // ChunkQuerier provides querying access over time series data of a fixed time range.
 // Returns new Chunk Querier that merges results of given primary and secondary chunk queriers.
 func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
@@ -289,6 +304,11 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 			continue
 		}
 
+		timeInterval := headTimeInterval(head)
+		if !timeInterval.IsInvalid() && mint > timeInterval.MaxT {
+			continue
+		}
+
 		queriers = append(
 			queriers,
 			querier.NewQuerier(head, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, ar.storageQuerierMetrics),
@@ -302,4 +322,16 @@ func (ar *Adapter) Querier(mint, maxt int64) (storage.Querier, error) {
 // Implements the [storage.Storage] interface.
 func (*Adapter) StartTime() (int64, error) {
 	return math.MaxInt64, nil
+}
+
+// headTimeInterval returns [cppbridge.TimeInterval] from [pp_storage.Head].
+func headTimeInterval(head *pp_storage.Head) cppbridge.TimeInterval {
+	timeInterval := cppbridge.NewInvalidTimeInterval()
+	for shard := range head.RangeShards() {
+		interval := shard.TimeInterval(false)
+		timeInterval.MinT = min(interval.MinT, timeInterval.MinT)
+		timeInterval.MaxT = max(interval.MaxT, timeInterval.MaxT)
+	}
+
+	return timeInterval
 }

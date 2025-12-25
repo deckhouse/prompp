@@ -53,6 +53,7 @@ class BStream : public BareBones::CompactBitSequenceBase<kAllocationSizesTable, 
   static constexpr auto kByteBits = BareBones::Bit::kByteBits;
 
   using Base::reserve_enough_memory_if_needed;
+  using Base::size_in_bits;
   using Base::size_in_bits_;
   using Base::unfilled_bits_in_byte;
   using Base::unfilled_memory;
@@ -89,6 +90,7 @@ class FixedSizeBStream : public BareBones::CompactBitSequenceBase<kAllocationSiz
   static constexpr auto kByteBits = BareBones::Bit::kByteBits;
 
   using Base::reserve_enough_memory_if_needed;
+  using Base::size_in_bits;
   using Base::size_in_bits_;
   using Base::unfilled_bits_in_byte;
   using Base::unfilled_memory;

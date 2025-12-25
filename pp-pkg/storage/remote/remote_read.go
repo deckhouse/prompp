@@ -1,4 +1,4 @@
-package storage
+package remote
 
 import (
 	"crypto/md5" // #nosec G501 // cryptographic strength is not required
