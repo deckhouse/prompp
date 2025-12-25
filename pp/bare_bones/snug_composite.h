@@ -311,7 +311,7 @@ class GenericDecodingTable {
   template <InputStream S>
   void load(S& in) {
     // read version
-    const uint8_t version = in.get();
+    version_ = in.get();
 
     // return successfully if the stream is empty
     if (in.eof()) {
@@ -319,7 +319,7 @@ class GenericDecodingTable {
     }
 
     // check version
-    if (version != 1 && version != 2) {
+    if (version_ != 1 && version_ != 2) {
       throw BareBones::Exception(0x343b7bcc6814f2d5, "Invalid EncodingSequence version %d got from input stream, only versions 1 and 2 are supported", version);
     }
 
@@ -358,7 +358,7 @@ class GenericDecodingTable {
 
     auto storage_checkpoint = storage_.checkpoint();
     auto sg2 = std::experimental::scope_fail([&]() { storage_.rollback(storage_checkpoint); });
-    const auto loaded_range = storage_.load(in, size_to_load, version);
+    const auto loaded_range = storage_.load(in, size_to_load, version_);
 
     // post-processing
     if constexpr (has_after_items_load<Derived, decltype(loaded_range)>) {
