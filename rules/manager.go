@@ -139,14 +139,6 @@ func NewManager(o *ManagerOptions) *Manager {
 		o.GroupLoader = FileLoader{}
 	}
 
-	// if o.RuleConcurrencyController == nil {
-	// 	if o.ConcurrentEvalsEnabled {
-	// 		o.RuleConcurrencyController = newRuleConcurrencyController(o.MaxConcurrentEvals)
-	// 	} else {
-	// 		o.RuleConcurrencyController = sequentialRuleEvalController{}
-	// 	}
-	// }
-
 	if o.ConcurrentEvalsEnabled && o.ConcurrencyExecuter == nil {
 		o.ConcurrencyExecuter = NewConcurrentRuleEvalExecuter(int(o.MaxConcurrentEvals))
 	}
