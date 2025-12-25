@@ -1,6 +1,8 @@
 package task
 
-import "errors"
+import (
+	"errors"
+)
 
 //
 // Task

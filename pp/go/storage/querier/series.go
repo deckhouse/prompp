@@ -6,7 +6,6 @@ import (
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/util/annotations"
@@ -176,6 +175,7 @@ type SeriesSet struct {
 
 	lastIndexFromLSSQueryResult int
 	series                      []Series
+	builder                     labels.ScratchBuilder
 }
 
 func NewSeriesSet(
@@ -204,17 +204,11 @@ func (s *SeriesSet) Next() bool {
 		return false
 	}
 
-	var lsLength uint16
-	lsLength, s.lastIndexFromLSSQueryResult = s.lssQueryResult.LengthBySeriesID(seriesID, s.lastIndexFromLSSQueryResult)
-	if s.lastIndexFromLSSQueryResult < 0 {
-		logger.Errorf("not found label set for series id: %d", seriesID)
-		return false
-	}
-
+	s.builder.Reset()
 	s.series = append(s.series, NewSeries(
 		s.mint,
 		s.maxt,
-		labels.NewLabelsWithLSS(s.labelSetSnapshot, seriesID, lsLength),
+		labels.NewLabelsWithLSS(s.labelSetSnapshot, seriesID, &s.builder),
 		s.serializedData,
 		chunkRef,
 	))
@@ -245,6 +239,7 @@ type InstantSeriesSet struct {
 	valueNotFoundTimestampValue int64
 	samples                     []cppbridge.Sample
 	nextSampleIndex             int
+	builder                     labels.ScratchBuilder
 	series                      []InstantSeries
 }
 
@@ -287,12 +282,13 @@ func (ss *InstantSeriesSet) Next() bool {
 		ss.nextSampleIndex++
 	}
 
-	lsID, lsLength := ss.lssQueryResult.GetByIndex(ss.nextSampleIndex)
+	lsID, _ := ss.lssQueryResult.GetByIndex(ss.nextSampleIndex)
+	ss.builder.Reset()
 	ss.series = append(ss.series, InstantSeries{
 		labelSet: labels.NewLabelsWithLSS(
 			ss.labelSetSnapshot,
 			lsID,
-			lsLength,
+			&ss.builder,
 		),
 		sample: &ss.samples[ss.nextSampleIndex],
 	})

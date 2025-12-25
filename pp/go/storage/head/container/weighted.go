@@ -65,7 +65,7 @@ func (c *Weighted[T, THead]) Replace(ctx context.Context, newHead THead) error {
 		(*unsafe.Pointer)(unsafe.Pointer(&c.head)), // #nosec G103 // it's meant to be that way
 		unsafe.Pointer(newHead),                    // #nosec G103 // it's meant to be that way
 	)
-	c.wlocker = locker.NewWeighted(c.backPressure * newHead.Concurrency())
+	c.wlocker.Resize(c.backPressure * newHead.Concurrency())
 
 	unlock()
 
