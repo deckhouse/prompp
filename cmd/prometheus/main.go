@@ -964,9 +964,6 @@ func main() {
 			EngineQueryCtor: rules.EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
 			Batcher:         adapter,               // PP_CHANGES.md: rebuild on cpp
 
-			// Appendable: adapter,       // PP_CHANGES.md: rebuild on cpp
-			// QueryFunc:              rules.EngineQueryFunc(queryEngine, fanoutStorage),
-
 			NotifyFunc:             rules.SendAlerts(notifierManager, cfg.web.ExternalURL.String()),
 			Context:                ctxRule,
 			ExternalURL:            cfg.web.ExternalURL,

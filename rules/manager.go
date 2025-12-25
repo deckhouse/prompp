@@ -109,9 +109,6 @@ type ManagerOptions struct {
 	Context     context.Context
 	Queryable   storage.Queryable
 
-	// QueryFunc  QueryFunc          // PP_CHANGES.md: rebuild on cpp
-	// Appendable storage.Appendable // PP_CHANGES.md: rebuild on cpp
-
 	Engine          promql.QueryEngine                                             // PP_CHANGES.md: rebuild on cpp
 	FanoutQueryable storage.Queryable                                              // PP_CHANGES.md: rebuild on cpp
 	EngineQueryCtor func(engine promql.QueryEngine, q storage.Queryable) QueryFunc // PP_CHANGES.md: rebuild on cpp
