@@ -6,7 +6,7 @@
 
 namespace series_data::encoder {
 
-static inline constexpr std::array kAllocationSizesTable = {
+static inline constexpr auto kAllocationSizesTable = prepare_allocation_sizes_table(std::array{
     BareBones::AllocationSize(0),    BareBones::AllocationSize(32),   BareBones::AllocationSize(64),   BareBones::AllocationSize(96),
     BareBones::AllocationSize(128),  BareBones::AllocationSize(192),  BareBones::AllocationSize(256),  BareBones::AllocationSize(384),
     BareBones::AllocationSize(512),  BareBones::AllocationSize(640),  BareBones::AllocationSize(768),  BareBones::AllocationSize(1024),
@@ -15,7 +15,7 @@ static inline constexpr std::array kAllocationSizesTable = {
     BareBones::AllocationSize(2560), BareBones::AllocationSize(3076), BareBones::AllocationSize(3584), BareBones::AllocationSize(4096),
     BareBones::AllocationSize(4608), BareBones::AllocationSize(5120), BareBones::AllocationSize(5632), BareBones::AllocationSize(6144),
     BareBones::AllocationSize(6656), BareBones::AllocationSize(7168), BareBones::AllocationSize(7680), BareBones::AllocationSize(8192),
-};
+});
 
 using CompactBitSequence = BareBones::CompactBitSequence<kAllocationSizesTable>;
 

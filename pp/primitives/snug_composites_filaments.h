@@ -463,7 +463,8 @@ class LabelSet {
   static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
 
  public:
-  using symbols_tables_type = std::conditional_t<kIsReadOnly, BareBones::Vector<SymbolsTableType<Vector>>, Vector<std::unique_ptr<SymbolsTableType<Vector>>>>;
+  using symbols_tables_type =
+      std::conditional_t<kIsReadOnly, BareBones::Vector<SymbolsTableType<Vector>>, BareBones::Vector<std::unique_ptr<SymbolsTableType<Vector>>>>;
 
   using symbols_ids_sequences_type = Vector<uint8_t>;
 

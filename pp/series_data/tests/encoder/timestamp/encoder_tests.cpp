@@ -16,8 +16,8 @@ TEST_F(TimestampEncoderFixture, OneStateForTwoSeries) {
   // Arrange
 
   // Act
-  auto state_id1 = encoder_.encode(State::kInvalidId, 101);
-  auto state_id2 = encoder_.encode(State::kInvalidId, 101);
+  const auto state_id1 = encoder_.encode(State::kInvalidId, 101);
+  const auto state_id2 = encoder_.encode(State::kInvalidId, 101);
 
   // Assert
   EXPECT_EQ(0U, state_id1);
@@ -30,8 +30,8 @@ TEST_F(TimestampEncoderFixture, TransitionToNewStateWithSavingPreviousState) {
   encoder_.encode(State::kInvalidId, 101);
 
   // Act
-  auto first_state_id = encoder_.encode(State::kInvalidId, 101);
-  auto state_id = encoder_.encode(first_state_id, 102);
+  const auto first_state_id = encoder_.encode(State::kInvalidId, 101);
+  const auto state_id = encoder_.encode(first_state_id, 102);
 
   // Assert
   EXPECT_EQ(0U, first_state_id);
@@ -44,8 +44,8 @@ TEST_F(TimestampEncoderFixture, TransitionToNewStateWithErasingPreviousState) {
   // Arrange
 
   // Act
-  auto first_state_id = encoder_.encode(State::kInvalidId, 101);
-  auto state_id = encoder_.encode(first_state_id, 102);
+  const auto first_state_id = encoder_.encode(State::kInvalidId, 101);
+  const auto state_id = encoder_.encode(first_state_id, 102);
 
   // Assert
   EXPECT_EQ(0U, first_state_id);
