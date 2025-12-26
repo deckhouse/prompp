@@ -67,8 +67,13 @@ struct Metric {
   void* timestamp{};
 };
 
+struct CompiledLabels {
+  SliceView<String> names{};
+  void* labelConstraints{};
+};
+
 struct MetricDescriptor {
-  MetricDescriptor(String name, const LabelPairsList& labels) : fq_name(name) {
+  MetricDescriptor(String name, const LabelPairsList& labels, const CompiledLabels* variable_labels_ptr) : fq_name(name), variable_labels(variable_labels_ptr) {
     set_const_labels(labels);
 
     id = calculate_id();
@@ -78,7 +83,7 @@ struct MetricDescriptor {
   String fq_name;
   String help{};
   Slice<const LabelPair*> const_label_pairs{};
-  void* variable_labels{};
+  const CompiledLabels* variable_labels{};
   uint64_t id{};
   uint64_t dim_hash{};
   Error error{};

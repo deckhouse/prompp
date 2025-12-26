@@ -16,7 +16,7 @@ class Metric {
   Metric(const LabelSet& labels, std::string_view name, DtoMetricObject* object, size_t object_size)
       : labels_(labels, PromPP::Primitives::NoSortLabels{}),
         label_pairs_(create_label_pairs()),
-        descriptor_(PromPP::Primitives::Go::String(name), label_pairs_),
+        descriptor_(PromPP::Primitives::Go::String(name), label_pairs_, &variable_labels_),
         metric_(PromPP::Primitives::Go::SliceView(descriptor_.const_label_pairs), object),
         object_size_(object_size) {}
   Metric(const Metric&) = delete;
@@ -30,6 +30,7 @@ class Metric {
  private:
   PromPP::Primitives::BasicLabelSet<Label> labels_;
   PromPP::Primitives::Go::dto::LabelPairsList label_pairs_;
+  PromPP::Primitives::Go::dto::CompiledLabels variable_labels_;
   PromPP::Primitives::Go::dto::MetricDescriptor descriptor_;
   PromPP::Primitives::Go::dto::Metric metric_;
   PromPP::Primitives::Go::Metric go_metric_{.descriptor = &descriptor_, .metric = &metric_};
