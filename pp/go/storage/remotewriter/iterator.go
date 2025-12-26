@@ -214,8 +214,6 @@ func (i *Iterator) Next(ctx context.Context) (*Message, error) {
 	b := newBatch(numberOfShards, i.queueConfig.MaxSamplesPerSend)
 	deadline := i.clock.After(i.scrapeInterval)
 
-	batchGenerationTime := 0.0
-
 readLoop:
 	for {
 		select {
@@ -226,9 +224,9 @@ readLoop:
 		case <-i.clock.After(delay):
 		}
 
-		now := i.clock.Now()
+		readStartTime := i.clock.Now()
 		decodedSegments, err := i.dataSource.Read(ctx, i.targetSegmentID, i.minTimestamp())
-		batchGenerationTime += i.clock.Since(now).Seconds()
+		i.metrics.readSegmentDuration.Observe(i.clock.Since(readStartTime).Seconds())
 
 		if err != nil {
 			if errors.Is(err, ErrEndOfBlock) {
@@ -271,6 +269,7 @@ readLoop:
 		return nil, i.wrapError(nil)
 	}
 
+	i.metrics.generateBatchDuration.Observe(readDuration.Seconds())
 	i.metrics.addSeriesTotal.Add(float64(b.AddSeriesCount()))
 
 	// Ideal number of shards is when batch contains all samples from scrape interval
@@ -288,13 +287,13 @@ readLoop:
 
 	i.writeCaches()
 
+	encodeStartTime := i.clock.Now()
 	msg, err := i.encode(b.Data(), int(numberOfMessages)) // #nosec G115 // no overflow
 	if err != nil {
 		return nil, i.wrapError(err)
 	}
+	i.metrics.encodeBatchDuration.Observe(i.clock.Since(encodeStartTime).Seconds())
 
-	batchGenerationTime += i.clock.Since(generateStartTime).Seconds()
-	i.metrics.generateBatchDuration.Observe(batchGenerationTime)
 	return msg, nil
 }
 
@@ -329,10 +328,13 @@ func (i *Iterator) SendMessage(msg *Message, ctx context.Context) error {
 
 			go func(shrd *MessageShard) {
 				defer sendSemaphore.Release(1)
+
+				sendStartTime := i.clock.Now()
 				writeErr := i.protobufWriter.Write(ctx, shrd.Protobuf)
 				if writeErr != nil {
 					logger.Errorf("failed to send protobuf: %v", writeErr)
 				}
+				i.metrics.sentMessageDuration.Observe(time.Since(sendStartTime).Seconds())
 
 				shrd.Delivered = !errors.As(writeErr, &remote.RecoverableError{})
 			}(shrd)

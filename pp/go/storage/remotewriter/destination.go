@@ -226,8 +226,19 @@ func NewDestination(cfg DestinationConfig) *Destination {
 				Namespace:                       namespace,
 				Subsystem:                       subsystem,
 				Name:                            "sent_batch_duration_seconds",
-				Help:                            "Duration of send calls to the remote storage.",
-				Buckets:                         append(prometheus.DefBuckets, 25, 60, 120, 300),
+				Help:                            "Duration of send batch to the remote storage.",
+				Buckets:                         []float64{0},
+				ConstLabels:                     constLabels,
+				NativeHistogramBucketFactor:     1.1,
+				NativeHistogramMaxBucketNumber:  100,
+				NativeHistogramMinResetDuration: 1 * time.Hour,
+			}),
+			sentMessageDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
+				Namespace:                       namespace,
+				Subsystem:                       subsystem,
+				Name:                            "sent_message_duration_seconds",
+				Help:                            "Duration of send one message from batch to the remote storage.",
+				Buckets:                         []float64{0},
 				ConstLabels:                     constLabels,
 				NativeHistogramBucketFactor:     1.1,
 				NativeHistogramMaxBucketNumber:  100,
@@ -357,7 +368,29 @@ func NewDestination(cfg DestinationConfig) *Destination {
 				Subsystem:                       subsystem,
 				Name:                            "generate_batch_duration_seconds",
 				Help:                            "Duration of generate batch calls.",
-				Buckets:                         append(prometheus.DefBuckets, 25, 60, 120, 300),
+				Buckets:                         []float64{0},
+				ConstLabels:                     constLabels,
+				NativeHistogramBucketFactor:     1.1,
+				NativeHistogramMaxBucketNumber:  100,
+				NativeHistogramMinResetDuration: 1 * time.Hour,
+			}),
+			readSegmentDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
+				Namespace:                       namespace,
+				Subsystem:                       subsystem,
+				Name:                            "read_segment_duration_seconds",
+				Help:                            "Duration of read wal segment.",
+				Buckets:                         []float64{0},
+				ConstLabels:                     constLabels,
+				NativeHistogramBucketFactor:     1.1,
+				NativeHistogramMaxBucketNumber:  100,
+				NativeHistogramMinResetDuration: 1 * time.Hour,
+			}),
+			encodeBatchDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
+				Namespace:                       namespace,
+				Subsystem:                       subsystem,
+				Name:                            "encode_batch_duration_seconds",
+				Help:                            "Duration of encode batch.",
+				Buckets:                         []float64{0},
 				ConstLabels:                     constLabels,
 				NativeHistogramBucketFactor:     1.1,
 				NativeHistogramMaxBucketNumber:  100,
@@ -391,6 +424,7 @@ func (d *Destination) RegisterMetrics(registerer prometheus.Registerer) {
 	registerer.MustRegister(d.metrics.droppedHistogramsTotal)
 	registerer.MustRegister(d.metrics.enqueueRetriesTotal)
 	registerer.MustRegister(d.metrics.sentBatchDuration)
+	registerer.MustRegister(d.metrics.sentMessageDuration)
 	registerer.MustRegister(d.metrics.highestSentTimestamp)
 	registerer.MustRegister(d.metrics.pendingSamples)
 	registerer.MustRegister(d.metrics.pendingExemplars)
@@ -407,6 +441,8 @@ func (d *Destination) RegisterMetrics(registerer prometheus.Registerer) {
 	registerer.MustRegister(d.metrics.unexpectedEOFCount)
 	registerer.MustRegister(d.metrics.segmentSizeInBytes)
 	registerer.MustRegister(d.metrics.generateBatchDuration)
+	registerer.MustRegister(d.metrics.readSegmentDuration)
+	registerer.MustRegister(d.metrics.encodeBatchDuration)
 }
 
 // UnregisterMetrics unregisters the metrics for the [Destination].
@@ -433,6 +469,7 @@ func (d *Destination) UnregisterMetrics(registerer prometheus.Registerer) {
 	registerer.Unregister(d.metrics.droppedHistogramsTotal)
 	registerer.Unregister(d.metrics.enqueueRetriesTotal)
 	registerer.Unregister(d.metrics.sentBatchDuration)
+	registerer.Unregister(d.metrics.sentMessageDuration)
 	registerer.Unregister(d.metrics.highestSentTimestamp)
 	registerer.Unregister(d.metrics.pendingSamples)
 	registerer.Unregister(d.metrics.pendingExemplars)
@@ -449,6 +486,8 @@ func (d *Destination) UnregisterMetrics(registerer prometheus.Registerer) {
 	registerer.Unregister(d.metrics.unexpectedEOFCount)
 	registerer.Unregister(d.metrics.segmentSizeInBytes)
 	registerer.Unregister(d.metrics.generateBatchDuration)
+	registerer.Unregister(d.metrics.readSegmentDuration)
+	registerer.Unregister(d.metrics.encodeBatchDuration)
 }
 
 // remoteWriteConfigsAreEqual compares two remote write configs.
@@ -512,6 +551,7 @@ type DestinationMetrics struct {
 	droppedHistogramsTotal *prometheus.CounterVec
 	enqueueRetriesTotal    prometheus.Counter
 	sentBatchDuration      prometheus.Histogram
+	sentMessageDuration    prometheus.Histogram
 	highestSentTimestamp   *maxTimestamp
 	pendingSamples         prometheus.Gauge
 	pendingExemplars       prometheus.Gauge
@@ -528,4 +568,6 @@ type DestinationMetrics struct {
 	unexpectedEOFCount     prometheus.Counter
 	segmentSizeInBytes     prometheus.Histogram
 	generateBatchDuration  prometheus.Histogram
+	readSegmentDuration    prometheus.Histogram
+	encodeBatchDuration    prometheus.Histogram
 }
