@@ -1010,6 +1010,7 @@ func main() {
 			pp_pkg_storage.NewLongtermAdapter(
 				clock,
 				hManager.Proxy(),
+				hManager.Builder(),
 				hManager.MergeOutOfOrderChunks,
 				time.Duration(cfg.longtermInterval).Milliseconds(),
 				prometheus.DefaultRegisterer,

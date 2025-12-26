@@ -54,6 +54,7 @@ func NewAdapter(
 	return newAdapter(
 		clock,
 		proxy,
+		builder,
 		mergeOutOfOrderChunks,
 		0,
 		querier.QueryableAppenderSource,
@@ -66,6 +67,7 @@ func NewAdapter(
 func NewLongtermAdapter(
 	clock clockwork.Clock,
 	proxy *pp_storage.Proxy,
+	builder *pp_storage.Builder,
 	mergeOutOfOrderChunks func(),
 	longtermIntervalMs int64,
 	registerer prometheus.Registerer,
@@ -73,6 +75,7 @@ func NewLongtermAdapter(
 	return newAdapter(
 		clock,
 		proxy,
+		builder,
 		mergeOutOfOrderChunks,
 		longtermIntervalMs,
 		querier.QueryableLongtermAppenderSource,
@@ -85,6 +88,7 @@ func NewLongtermAdapter(
 func newAdapter(
 	clock clockwork.Clock,
 	proxy *pp_storage.Proxy,
+	builder *pp_storage.Builder,
 	mergeOutOfOrderChunks func(),
 	longtermIntervalMs int64,
 	activeSource, storageSource string,
