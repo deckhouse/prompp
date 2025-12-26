@@ -71,12 +71,13 @@ func (ss *InstantSeriesSet) Next() bool {
 		ss.nextSeriesIndex++
 	}
 
-	lsID, _ := ss.lssQueryResult.GetByIndex(ss.nextSeriesIndex)
+	lsID, lsLength := ss.lssQueryResult.GetByIndex(ss.nextSeriesIndex)
 	ss.builder.Reset()
 	ss.instantSeries[ss.nextSeriesIndex].LabelSet = labels.NewLabelsWithLSS(
 		ss.labelSetSnapshot,
-		lsID,
 		&ss.builder,
+		lsID,
+		lsLength,
 	)
 
 	ss.nextSeriesIndex++
