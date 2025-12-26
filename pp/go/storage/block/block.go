@@ -47,42 +47,44 @@ func (c *Chunk) Bytes() []byte {
 
 // ChunkIterator represents a chunk iterator, it is used to iterate over the chunks.
 type ChunkIterator struct {
-	r  *cppbridge.ChunkRecoder
-	rc *cppbridge.RecodedChunk
+	r           *cppbridge.ChunkRecoder
+	hasMoreData bool
 }
 
 // NewChunkIterator init new [ChunkIterator].
 func NewChunkIterator(
 	lss *cppbridge.LabelSetStorage,
 	lsIdBatchSize uint32,
-	ds *cppbridge.HeadDataStorage,
+	ds *cppbridge.DataStorage,
 	minT, maxT int64,
 ) ChunkIterator {
 	return ChunkIterator{
-		r: cppbridge.NewChunkRecoder(lss, lsIdBatchSize, ds, cppbridge.TimeInterval{MinT: minT, MaxT: maxT}),
+		r:           cppbridge.NewChunkRecoder(lss, lsIdBatchSize, ds, cppbridge.TimeInterval{MinT: minT, MaxT: maxT}),
+		hasMoreData: true,
 	}
 }
 
-// Next advances the iterator by one, if possible.
-func (i *ChunkIterator) Next() bool {
-	if i.rc != nil && !i.rc.HasMoreData {
-		return false
+// RangeBatch iterates over all chunks available in batch, calling fn for each chunk.
+func (i *ChunkIterator) RangeBatch(fn func(Chunk) bool) {
+	if !i.hasMoreData {
+		return
 	}
-
 	rc := i.r.RecodeNextChunk()
-	i.rc = &rc
-	return rc.SeriesId != math.MaxUint32
+	for rc.SeriesId != math.MaxUint32 {
+		if !fn(Chunk{rc: &rc}) {
+			return
+		}
+		if !rc.HasMoreData {
+			return
+		}
+		rc = i.r.RecodeNextChunk()
+	}
 }
 
 // NextBatch advances the iterator by one batch, if if there is more data.
 func (i *ChunkIterator) NextBatch() bool {
-	i.rc.HasMoreData = i.r.NextBatch()
-	return i.rc.HasMoreData
-}
-
-// At returns the current chunk.
-func (i *ChunkIterator) At() Chunk {
-	return Chunk{rc: i.rc}
+	i.hasMoreData = i.r.NextBatch()
+	return i.hasMoreData
 }
 
 //
