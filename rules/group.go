@@ -55,10 +55,10 @@ type Group struct {
 	staleSeries          []labels.Labels
 	opts                 *ManagerOptions
 	mtx                  sync.Mutex
-	labelsMtx            sync.RWMutex // PP_CHANGES.md: rebuild on cpp
-	evaluationTime       time.Duration
-	lastEvaluation       time.Time // Wall-clock time of most recent evaluation.
-	lastEvalTimestamp    time.Time // Time slot used for most recent evaluation.
+	// labelsMtx            sync.RWMutex // PP_CHANGES.md: rebuild on cpp
+	evaluationTime    time.Duration
+	lastEvaluation    time.Time // Wall-clock time of most recent evaluation.
+	lastEvalTimestamp time.Time // Time slot used for most recent evaluation.
 
 	shouldRestore bool
 
@@ -229,8 +229,8 @@ func (g *Group) run(ctx context.Context) {
 	tick := time.NewTicker(g.interval)
 	defer tick.Stop()
 
-	renewTimer := time.NewTimer(g.interval * 3) // PP_CHANGES.md: rebuild on cpp
-	defer renewTimer.Stop()                     // PP_CHANGES.md: rebuild on cpp
+	// renewTimer := time.NewTimer(g.interval * 3) // PP_CHANGES.md: rebuild on cpp
+	// defer renewTimer.Stop()                     // PP_CHANGES.md: rebuild on cpp
 
 	defer func() {
 		if !g.markStale {
@@ -244,6 +244,7 @@ func (g *Group) run(ctx context.Context) {
 			}
 			// That can be garbage collected at this point.
 			g.seriesInPreviousEval = nil
+			g.seriesInCurrentEval = nil
 			// Wait for 2 intervals to give the opportunity to renamed rules
 			// to insert new series in the tsdb. At this point if there is a
 			// renamed rule, it should already be started.
@@ -303,8 +304,6 @@ func (g *Group) run(ctx context.Context) {
 			case <-g.done:
 				return
 			case <-tick.C:
-				// g.renewLabelsSnapshot() // PP_CHANGES.md: rebuild on cpp
-
 				missed := (time.Since(evalTimestamp) / g.interval) - 1
 				if missed > 0 {
 					g.metrics.IterationsMissed.WithLabelValues(GroupKey(g.file, g.name)).Add(float64(missed))
@@ -314,9 +313,11 @@ func (g *Group) run(ctx context.Context) {
 
 				g.evalIterationFunc(ctx, g, evalTimestamp)
 
-			case <-renewTimer.C: // PP_CHANGES.md: rebuild on cpp
-				g.renewLabelsSnapshot()
-				renewTimer.Reset(g.interval * 2)
+				g.renewLabelsSnapshot() // PP_CHANGES.md: rebuild on cpp
+
+				// case <-renewTimer.C: // PP_CHANGES.md: rebuild on cpp
+				// 	g.renewLabelsSnapshot()
+				// 	renewTimer.Reset(g.interval * 2)
 			}
 		}
 	}
@@ -533,6 +534,7 @@ func (g *Group) Eval(ctx context.Context, ts time.Time) {
 		g.staleSeries = nil
 	}
 
+	// g.labelsMtx.RLock() // PP_CHANGES.md: rebuild on cpp
 	for i, series := range g.seriesInCurrentEval {
 		if series == nil {
 			continue
@@ -541,6 +543,7 @@ func (g *Group) Eval(ctx context.Context, ts time.Time) {
 		g.seriesInPreviousEval[i] = series
 		g.seriesInCurrentEval[i] = nil
 	}
+	// g.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
 }
 
 func (g *Group) QueryOffset() time.Duration {
@@ -562,8 +565,8 @@ func (g *Group) cleanupStaleSeries(ctx context.Context, ts time.Time, bs storage
 
 	app := bs.Appender(ctx)
 	queryOffset := g.QueryOffset()
-	g.labelsMtx.RLock()         // PP_CHANGES.md: rebuild on cpp
-	defer g.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
+	// g.labelsMtx.RLock()         // PP_CHANGES.md: rebuild on cpp
+	// defer g.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
 	for _, s := range g.staleSeries {
 		// Rule that produced series no longer configured, mark it stale.
 		_, err := app.Append(0, s, timestamp.FromTime(ts.Add(-queryOffset)), math.Float64frombits(value.StaleNaN))
@@ -753,7 +756,7 @@ func (g *Group) renewLabelsSnapshot() { // PP_CHANGES.md: rebuild on cpp
 		r.RenewLabelsSnapshot()
 	}
 
-	g.labelsMtx.Lock()
+	// g.labelsMtx.Lock()
 	for i := range g.staleSeries {
 		g.staleSeries[i].RenewSnapshot()
 	}
@@ -763,7 +766,14 @@ func (g *Group) renewLabelsSnapshot() { // PP_CHANGES.md: rebuild on cpp
 			l.RenewSnapshot()
 		}
 	}
-	g.labelsMtx.Unlock()
+
+	for _, s := range g.seriesInCurrentEval {
+		for _, l := range s {
+			l.RenewSnapshot()
+		}
+	}
+
+	// g.labelsMtx.Unlock()
 }
 
 // GroupKey group names need not be unique across filenames.
@@ -1102,6 +1112,7 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, bs storage.Ba
 			seriesInPreviousEval[i][string(s.Metric.Bytes(buf[:]))] = s.Metric
 		}
 
+		// g.labelsMtx.RLock() // PP_CHANGES.md: rebuild on cpp
 		for metric, lset := range g.seriesInPreviousEval[i] {
 			if _, ok := seriesInPreviousEval[i][metric]; !ok {
 				// Series no longer exposed, mark it stale.
@@ -1127,6 +1138,7 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, bs storage.Ba
 				}
 			}
 		}
+		// g.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
 	}
 
 	sequentiallyRules := make([]Rule, len(g.rules))
@@ -1172,6 +1184,7 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, bs storage.Ba
 		return samplesTotal.Add(g.sequentiallyEval(ctx, ts, sequentiallyRules, bs))
 	}
 
+	// g.labelsMtx.RLock() // PP_CHANGES.md: rebuild on cpp
 	for i, series := range seriesInPreviousEval {
 		if series == nil {
 			continue
@@ -1179,6 +1192,7 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, bs storage.Ba
 
 		g.seriesInCurrentEval[i] = series
 	}
+	// g.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
 
 	return samplesTotal.Add(g.sequentiallyEval(ctx, ts, sequentiallyRules, bs))
 }
@@ -1262,7 +1276,9 @@ func (g *Group) sequentiallyEval(
 				return
 			}
 
+			// g.labelsMtx.RLock() // PP_CHANGES.md: rebuild on cpp
 			g.seriesInCurrentEval[i] = seriesReturned
+			// g.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
 		}()
 
 		buf := [1024]byte{}
@@ -1290,6 +1306,7 @@ func (g *Group) sequentiallyEval(
 			seriesReturned[string(s.Metric.Bytes(buf[:]))] = s.Metric
 		}
 
+		// g.labelsMtx.RLock() // PP_CHANGES.md: rebuild on cpp
 		for metric, lset := range g.seriesInPreviousEval[i] {
 			if _, ok := seriesReturned[metric]; !ok {
 				// Series no longer exposed, mark it stale.
@@ -1315,6 +1332,7 @@ func (g *Group) sequentiallyEval(
 				}
 			}
 		}
+		// g.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
 	}
 
 	for i, rule := range sequentiallyRules {

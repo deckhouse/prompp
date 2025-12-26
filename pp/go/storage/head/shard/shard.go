@@ -78,6 +78,8 @@ func (s *Shard) Close() error {
 		s.lss.Stop()
 	}
 
+	s.lss.Outdate()
+
 	err := s.wal.Close()
 
 	if s.unloadedDataStorage != nil {

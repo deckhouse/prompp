@@ -80,6 +80,7 @@ func (bs *BatchStorage) Commit(ctx context.Context) error {
 	}
 
 	_, err := bs.adapter.AppendTimeSeries(ctx, bs.batch, bs.state, false)
+	_ = bs.transactionHead.Close()
 	return err
 }
 
