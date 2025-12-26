@@ -6,16 +6,16 @@ import (
 	"fmt"
 	"sort"
 	"time"
+	"unsafe"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/storage"
-	"github.com/prometheus/prometheus/util/annotations"
-
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/util/locker"
+	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/annotations"
 )
 
 const (
@@ -201,11 +201,13 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 			shardID := s.ShardID()
 			lssQueryResult := lssQueryResults[shardID]
 			if lssQueryResult == nil {
-				seriesSets[shardID] = &SeriesSet{}
+				seriesSets[shardID] = &InstantSeriesSet{}
 				return nil
 			}
 
-			samples, result := s.DataStorage().InstantQuery(q.maxt, valueNotFoundTimestampValue, lssQueryResult.IDs())
+			instantSeries := NewInstantSeriesSlice(lssQueryResult.Len(), valueNotFoundTimestampValue)
+
+			result := s.DataStorage().InstantQuery(q.maxt, lssQueryResult.IDs(), uintptr(unsafe.Pointer(unsafe.SliceData(instantSeries))))
 			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {
 				loadAndQueryWaiter.Add(s, result.Querier)
 			}
@@ -214,7 +216,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 				lssQueryResult,
 				snapshots[shardID],
 				valueNotFoundTimestampValue,
-				samples,
+				instantSeries,
 			)
 
 			return nil
@@ -223,7 +225,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 	q.head.Enqueue(tDataStorageQuery)
 	_ = tDataStorageQuery.Wait()
 
-	if err := loadAndQueryWaiter.Wait(); err != nil {
+	if err = loadAndQueryWaiter.Wait(); err != nil {
 		SendUnrecoverableError(err)
 		return storage.ErrSeriesSet(err)
 	}
@@ -325,7 +327,7 @@ func queryDataStorage[
 
 			var result cppbridge.DataStorageQueryResult
 			result = s.DataStorage().Query(
-				cppbridge.HeadDataStorageQuery{
+				cppbridge.DataStorageQuery{
 					StartTimestampMs: mint,
 					EndTimestampMs:   maxt,
 					LabelSetIDs:      lssQueryResult.IDs(),

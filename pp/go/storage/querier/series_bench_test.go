@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/go-faker/faker/v4"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -41,7 +40,7 @@ func queryOpt(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, start, end, d
 		return &querier.SeriesSet{}
 	}
 
-	dsQueryResult := ds.Query(cppbridge.HeadDataStorageQuery{
+	dsQueryResult := ds.Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: start,
 		EndTimestampMs:   end,
 		LabelSetIDs:      lssQueryResult.IDs(),
@@ -49,23 +48,6 @@ func queryOpt(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, start, end, d
 
 	require.Equal(t, cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
 	return querier.NewSeriesSet(start, end, lssQueryResult, snapshot, dsQueryResult.SerializedData)
-}
-
-func instantQuery(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, targetTimestamp, valueNotFoundTimestampValue int64, matchers ...model.LabelMatcher) *querier.InstantSeriesSet {
-	selector, snapshot, err := lss.QuerySelector(0, matchers)
-	require.NoError(t, err)
-	if selector == 0 || snapshot == nil {
-		return &querier.InstantSeriesSet{}
-	}
-
-	lssQueryResult := snapshot.Query(selector)
-	if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
-		return &querier.InstantSeriesSet{}
-	}
-
-	samples, dsQueryResult := ds.InstantQuery(targetTimestamp, valueNotFoundTimestampValue, lssQueryResult.IDs())
-	require.Equal(t, cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
-	return querier.NewInstantSeriesSet(lssQueryResult, snapshot, valueNotFoundTimestampValue, samples)
 }
 
 func BenchmarkSeriesSetOpt(b *testing.B) {
@@ -82,6 +64,7 @@ func BenchmarkSeriesSetOpt(b *testing.B) {
 	ds := shard.NewDataStorage()
 	prepareData(lss, ds, size)
 
+	b.StopTimer()
 	seriesSets := make([]*querier.SeriesSet, 0, b.N)
 	for i := 0; i < b.N; i++ {
 		seriesSets = append(seriesSets, queryOpt(b, lss, ds, start, end, cppbridge.NoDownsampling, matcher))
@@ -106,56 +89,4 @@ func prepareData(lss *shard.LSS, ds *shard.DataStorage, size int) {
 		})
 	}
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(lss, ds, timeSeries...)
-}
-
-func prepareInstantData(lss *shard.LSS, ds *shard.DataStorage, timeStamps []int64, size int) {
-	timeSeries := make([]storagetest.TimeSeries, 0, size)
-	for range size {
-		name := faker.UUIDDigit() + faker.UUIDDigit()
-		ls := labels.FromStrings(
-			"__name__", "metric",
-			"job", fmt.Sprintf("index_%s", faker.UUIDDigit()),
-			"container", faker.Word(),
-			"id", fmt.Sprintf("/kubepods.slice/kubepods-burstable.slice/kubepods-burstable-pod%s.slice/cri-containerd-%s.scope", faker.UUIDDigit(), name),
-			"image", fmt.Sprintf("registry.k8s.io/%s:3.8", faker.Word()),
-			"name", name,
-			"namespace", "kube-system",
-			"pod", fmt.Sprintf("kube-scheduler-%s", faker.UUIDDigit()),
-		)
-		samples := make([]cppbridge.Sample, 0, len(timeStamps))
-		for _, ts := range timeStamps {
-			samples = append(samples, cppbridge.Sample{Timestamp: ts, Value: faker.Latitude()})
-		}
-		timeSeries = append(timeSeries, storagetest.TimeSeries{
-			Labels:  ls,
-			Samples: samples,
-		})
-	}
-	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(lss, ds, timeSeries...)
-}
-
-func BenchmarkInstantSeriesSet(b *testing.B) {
-	size := 500000
-	matcher := model.LabelMatcher{
-		Name:        "__name__",
-		Value:       "metric",
-		MatcherType: model.MatcherTypeExactMatch,
-	}
-
-	lss := shard.NewLSS()
-	ds := shard.NewDataStorage()
-	timestamps := []int64{0, 1, 2}
-	valueNotFoundTimestampValue := timestamps[0] - 1
-	prepareInstantData(lss, ds, timestamps, size)
-
-	seriesSets := make([]*querier.InstantSeriesSet, 0, b.N)
-	for range b.N {
-		seriesSets = append(seriesSets, instantQuery(b, lss, ds, timestamps[1], valueNotFoundTimestampValue, matcher))
-	}
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := range b.N {
-		iterateSeriesSet(seriesSets[i])
-	}
 }

@@ -40,17 +40,18 @@ type Task interface {
 
 // DataStorage the minimum required [DataStorage] implementation.
 type DataStorage interface {
-	// InstantQuery returns samples for instant query from data storage.
+	// InstantQuery fills samples for instant query from data storage.
 	InstantQuery(
-		maxt, valueNotFoundTimestampValue int64,
+		maxt int64,
 		ids []uint32,
-	) ([]cppbridge.Sample, cppbridge.DataStorageQueryResult)
+		samples uintptr,
+	) cppbridge.DataStorageQueryResult
 
 	// Query returns serialized chunks from data storage.
-	Query(query cppbridge.HeadDataStorageQuery, downsamplingMs int64) cppbridge.DataStorageQueryResult
+	Query(query cppbridge.DataStorageQuery, downsamplingMs int64) cppbridge.DataStorageQueryResult
 
-	// WithRLock calls fn on raw [cppbridge.HeadDataStorage] with read lock.
-	WithRLock(fn func(ds *cppbridge.HeadDataStorage) error) error
+	// WithRLock calls fn on raw [cppbridge.DataStorage] with read lock.
+	WithRLock(fn func(ds *cppbridge.DataStorage) error) error
 }
 
 //

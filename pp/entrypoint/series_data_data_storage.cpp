@@ -146,13 +146,12 @@ extern "C" void prompp_series_data_data_storage_instant_query(void* args, void* 
   using entrypoint::series_data::InstantQuerierWithArgumentsWrapperEntrypoint;
   using PromPP::Primitives::Timestamp;
   using series_data::InstantQuerier;
-  using series_data::encoder::Sample;
 
   struct Arguments {
     DataStoragePtr data_storage;
     SliceView<LabelSetID> label_set_ids;
     Timestamp timestamp;
-    SliceView<Sample> samples;
+    entrypoint::series_data::SampleWithGoLabels* samples;
   };
 
   using Result = struct {
@@ -162,7 +161,8 @@ extern "C" void prompp_series_data_data_storage_instant_query(void* args, void* 
 
   const auto in = static_cast<Arguments*>(args);
 
-  InstantQuerierWithArgumentsWrapperEntrypoint instant_querier(*in->data_storage, in->label_set_ids, in->timestamp, in->samples);
+  auto samples = std::span<entrypoint::series_data::SampleWithGoLabels>(in->samples, in->label_set_ids.size());
+  InstantQuerierWithArgumentsWrapperEntrypoint instant_querier(*in->data_storage, in->label_set_ids, in->timestamp, samples);
   instant_querier.query();
 
   if (instant_querier.need_loading()) {

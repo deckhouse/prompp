@@ -241,9 +241,7 @@ func (recoder *chunkRecoder) recode(
 	blockMeta *tsdb.BlockMeta,
 	writeSeries func(seriesID uint32, chunksMetadata []ChunkMetadata) error,
 ) (err error) {
-	for recoder.chunkIterator.Next() {
-		chunk := recoder.chunkIterator.At()
-
+	for chunk := range recoder.chunkIterator.RangeBatch {
 		var chunkMetadata ChunkMetadata
 		if chunkMetadata, err = chunkWriter.Write(chunk); err != nil {
 			return fmt.Errorf("failed to write chunk: %w", err)
