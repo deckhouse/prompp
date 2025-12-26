@@ -38,6 +38,7 @@ void prompp_dump_memory_profile(void* args, void* res);
 #define Sizeof_BareBonesVector 16
 #define Sizeof_RoaringBitset 40
 #define Sizeof_InnerSeries (Sizeof_SizeT + Sizeof_BareBonesVector + Sizeof_RoaringBitset)
+#define Sizeof_GoLabels 16
 
 #define Sizeof_SerializedDataIterator 192
 #ifdef __cplusplus
@@ -1345,16 +1346,14 @@ void prompp_series_data_data_storage_allocated_memory(void* args, void* res);
 void prompp_series_data_data_storage_query_v2(void* args, void* res);
 
 /**
- * @brief return samples at given timestamp for label sets.
+ * @brief return instant series at given timestamp for label sets.
  *
  * @param args {
- *        dataStorage uintptr    // pointer to constructed data storage
- *        labelSetIDs []uint32   // series ids
- *        timestamp   int64      // timestamp
- *        samples     []struct { // pre-allocated samples slice
- *                timestamp int64
- *                value     float64
- *        }
+ *        dataStorage uintptr      // pointer to constructed data storage
+ *        labelSetIDs []uint32     // series ids
+ *        timestamp   int64        // timestamp
+ *        samples     uintptr      // pointer to samples data
+ * }
  * @param res {
  *     InstantQuerier uintptr // pointer to constructed Querier if data loading is needed
  *     Status uint8           // status of a query (0 - Success, 1 - Data loading is needed)
