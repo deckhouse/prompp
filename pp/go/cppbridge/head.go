@@ -3,7 +3,6 @@ package cppbridge
 import (
 	"math"
 	"runtime"
-	"sync/atomic"
 	"unsafe"
 )
 
@@ -54,103 +53,14 @@ type Sample struct {
 	Value     float64
 }
 
-// HeadDataStorage is Go wrapper around series_data::Data_storage.
-type HeadDataStorage struct {
-	dataStorage  uintptr
-	timeInterval atomic.Pointer[TimeInterval]
-}
-
-// NewHeadDataStorage - constructor.
-func NewHeadDataStorage() *HeadDataStorage {
-	ds := &HeadDataStorage{
-		dataStorage:  seriesDataDataStorageCtor(),
-		timeInterval: atomic.Pointer[TimeInterval]{},
-	}
-	ds.timeInterval.Store(newInvalidTimeIntervalPtr())
-
-	runtime.SetFinalizer(ds, func(ds *HeadDataStorage) {
-		seriesDataDataStorageDtor(ds.dataStorage)
-	})
-
-	return ds
-}
-
-// Reset - resets data storage.
-func (ds *HeadDataStorage) Reset() {
-	seriesDataDataStorageReset(ds.dataStorage)
-	ds.timeInterval.Store(newInvalidTimeIntervalPtr())
-}
-
-func (ds *HeadDataStorage) TimeInterval(invalidateCache bool) TimeInterval {
-	if invalidateCache || ds.timeInterval.Load().IsInvalid() {
-		timeInterval := seriesDataDataStorageTimeInterval(ds.dataStorage)
-		ds.timeInterval.Store(&timeInterval)
-		runtime.KeepAlive(ds)
-	}
-
-	return *ds.timeInterval.Load()
-}
-
-func (ds *HeadDataStorage) GetQueriedSeriesBitset() []byte {
-	size := seriesDataDataStorageQueriedSeriesBitsetSize(ds.dataStorage)
-	bitset := seriesDataDataStorageQueriedSeriesBitset(ds.dataStorage, make([]byte, 0, size))
-	runtime.KeepAlive(ds)
-	return bitset
-}
-
-func (ds *HeadDataStorage) SetQueriedSeriesBitset(bitset []byte) bool {
-	result := seriesDataDataStorageQueriedSeriesSetBitset(ds.dataStorage, bitset)
-	runtime.KeepAlive(ds)
-	return result
-}
-
-func (ds *HeadDataStorage) Pointer() uintptr {
-	return ds.dataStorage
-}
-
-func (ds *HeadDataStorage) AllocatedMemory() uint64 {
-	res := seriesDataDataStorageAllocatedMemory(ds.dataStorage)
-	runtime.KeepAlive(ds)
-	return res
-}
-
-type UnusedSeriesDataUnloader struct {
-	unloader uintptr
-	ds       *HeadDataStorage
-}
-
-func (u *UnusedSeriesDataUnloader) CreateSnapshot() []byte {
-	snapshot := seriesDataUnusedSeriesDataUnloaderCreateSnapshot(u.unloader)
-	runtime.KeepAlive(u)
-	return snapshot
-}
-
-func (u *UnusedSeriesDataUnloader) Unload() {
-	seriesDataUnusedSeriesDataUnloaderUnload(u.unloader)
-	runtime.KeepAlive(u)
-}
-
-func (ds *HeadDataStorage) CreateUnusedSeriesDataUnloader() *UnusedSeriesDataUnloader {
-	unloader := &UnusedSeriesDataUnloader{
-		unloader: seriesDataUnusedSeriesDataUnloaderCtor(ds.dataStorage),
-		ds:       ds,
-	}
-
-	runtime.SetFinalizer(unloader, func(u *UnusedSeriesDataUnloader) {
-		seriesDataUnusedSeriesDataUnloaderDtor(u.unloader)
-	})
-
-	return unloader
-}
-
 // HeadEncoder is Go wrapper around series_data::Encoder.
 type HeadEncoder struct {
 	encoder     uintptr
-	dataStorage *HeadDataStorage
+	dataStorage *DataStorage
 }
 
 // NewHeadEncoderWithDataStorage - constructor.
-func NewHeadEncoderWithDataStorage(dataStorage *HeadDataStorage) *HeadEncoder {
+func NewHeadEncoderWithDataStorage(dataStorage *DataStorage) *HeadEncoder {
 	encoder := &HeadEncoder{
 		encoder:     seriesDataEncoderCtor(dataStorage.dataStorage),
 		dataStorage: dataStorage,
@@ -165,7 +75,7 @@ func NewHeadEncoderWithDataStorage(dataStorage *HeadDataStorage) *HeadEncoder {
 
 // NewHeadEncoder - constructor.
 func NewHeadEncoder() *HeadEncoder {
-	return NewHeadEncoderWithDataStorage(NewHeadDataStorage())
+	return NewHeadEncoderWithDataStorage(NewDataStorage())
 }
 
 // Encode - encodes single triplet.
@@ -203,11 +113,11 @@ type ChunkRecoder struct {
 	recodedChunk RecodedChunk
 
 	lss            *LabelSetStorage
-	dataStorage    *HeadDataStorage
+	dataStorage    *DataStorage
 	serializedData *DataStorageSerializedData
 }
 
-func NewChunkRecoder(lss *LabelSetStorage, lsIdBatchSize uint32, dataStorage *HeadDataStorage, timeInterval TimeInterval) *ChunkRecoder {
+func NewChunkRecoder(lss *LabelSetStorage, lsIdBatchSize uint32, dataStorage *DataStorage, timeInterval TimeInterval) *ChunkRecoder {
 	return initializeChunkRecoder(lss, dataStorage, nil, seriesDataChunkRecoderCtor(lss.Pointer(), lsIdBatchSize, dataStorage.dataStorage, timeInterval))
 }
 
@@ -217,7 +127,7 @@ func NewSerializedChunkRecoder(serializedData *DataStorageSerializedData, timeIn
 
 func initializeChunkRecoder(
 	lss *LabelSetStorage,
-	dataStorage *HeadDataStorage,
+	dataStorage *DataStorage,
 	serializedData *DataStorageSerializedData,
 	recoder uintptr,
 ) *ChunkRecoder {
@@ -244,12 +154,6 @@ func (recoder *ChunkRecoder) NextBatch() bool {
 	result := seriesDataChunkRecoderNextBatch(recoder.recoder)
 	runtime.KeepAlive(recoder)
 	return result
-}
-
-type HeadDataStorageQuery struct {
-	StartTimestampMs int64
-	EndTimestampMs   int64
-	LabelSetIDs      []uint32
 }
 
 func getSeriesIDFromBytes(data []byte) uint32 {
@@ -322,31 +226,6 @@ func (i HeadDataStorageSerializedChunkIndex) Chunks(r *HeadDataStorageSerialized
 	return res
 }
 
-func (ds *HeadDataStorage) Query(query HeadDataStorageQuery) DataStorageQueryResult {
-	sd := NewDataStorageSerializedData()
-	querier, status := seriesDataDataStorageQueryV2(ds.dataStorage, query, sd)
-	return DataStorageQueryResult{
-		Querier:        querier,
-		Status:         status,
-		SerializedData: sd,
-	}
-}
-
-func (ds *HeadDataStorage) InstantQuery(targetTimestamp, defaultTimestamp int64, labelSetIDs []uint32) ([]Sample, DataStorageQueryResult) {
-	samples := make([]Sample, len(labelSetIDs))
-	if defaultTimestamp != 0 {
-		for index := range samples {
-			samples[index].Timestamp = defaultTimestamp
-		}
-	}
-	return samples, seriesDataDataStorageInstantQuery(ds.dataStorage, labelSetIDs, targetTimestamp, samples)
-}
-
-func (ds *HeadDataStorage) QueryFinal(queriers []uintptr) {
-	seriesDataDataStorageQueryFinal(queriers)
-	runtime.KeepAlive(queriers)
-}
-
 type DataStorageSerializedData struct {
 	serializedData uintptr
 }
@@ -400,7 +279,7 @@ func (it *DataStorageSerializedDataIterator) HasData() bool {
 // UnloadedDataLoader is Go wrapper around series_data::Loader.
 type UnloadedDataLoader struct {
 	loader uintptr
-	ds     *HeadDataStorage
+	ds     *DataStorage
 }
 
 func (loader *UnloadedDataLoader) Load(snapshot []byte, isLast bool) {
@@ -408,7 +287,7 @@ func (loader *UnloadedDataLoader) Load(snapshot []byte, isLast bool) {
 	runtime.KeepAlive(loader)
 }
 
-func (ds *HeadDataStorage) CreateLoader(queriers []uintptr) *UnloadedDataLoader {
+func (ds *DataStorage) CreateLoader(queriers []uintptr) *UnloadedDataLoader {
 	result := &UnloadedDataLoader{
 		loader: seriesDataUnloadedDataLoaderCtor(ds.dataStorage, queriers),
 		ds:     ds,
@@ -434,7 +313,7 @@ func (loader *UnloadedDataRevertableLoader) NextBatch() bool {
 	return result
 }
 
-func (ds *HeadDataStorage) CreateRevertableLoader(lss *LabelSetStorage, lsIdBatchSize uint32) *UnloadedDataRevertableLoader {
+func (ds *DataStorage) CreateRevertableLoader(lss *LabelSetStorage, lsIdBatchSize uint32) *UnloadedDataRevertableLoader {
 	result := &UnloadedDataRevertableLoader{
 		UnloadedDataLoader: UnloadedDataLoader{
 			loader: seriesDataUnloadedDataRevertableLoaderCtor(lss.pointer, lsIdBatchSize, ds.dataStorage),
