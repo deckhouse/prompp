@@ -48,6 +48,6 @@ func (s *HeadStatus) FromLSS(lss *LabelSetStorage, limit int) {
 }
 
 // FromDataStorage get head status from data storage.
-func (s *HeadStatus) FromDataStorage(dataStorage *HeadDataStorage) {
+func (s *HeadStatus) FromDataStorage(dataStorage *DataStorage) {
 	getHeadStatusDataStorage(dataStorage.dataStorage, s)
 }

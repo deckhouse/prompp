@@ -65,7 +65,7 @@ func QueryHeadStatus[
 		tDataStorageHeadStatus := head.CreateTask(
 			dsHeadStatus,
 			func(shard TShard) error {
-				return shard.DataStorage().WithRLock(func(ds *cppbridge.HeadDataStorage) error {
+				return shard.DataStorage().WithRLock(func(ds *cppbridge.DataStorage) error {
 					shardStatuses[shard.ShardID()].FromDataStorage(ds)
 
 					return nil
