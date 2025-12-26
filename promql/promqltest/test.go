@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"io/fs"
 	"math"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -27,6 +29,7 @@ import (
 	"time"
 
 	"github.com/grafana/regexp"
+	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/common/model"
 	"github.com/stretchr/testify/require"
 
@@ -34,6 +37,9 @@ import (
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/timestamp"
+	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage"
+	pp_storage "github.com/prometheus/prometheus/pp/go/storage"
+	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/promql/parser/posrange"
@@ -41,6 +47,7 @@ import (
 	"github.com/prometheus/prometheus/util/almost"
 	"github.com/prometheus/prometheus/util/teststorage"
 	"github.com/prometheus/prometheus/util/testutil"
+	"github.com/prometheus/prometheus/web/mock"
 )
 
 var (
@@ -1315,6 +1322,10 @@ type LazyLoader struct {
 	context     context.Context
 	cancelCtx   context.CancelFunc
 
+	fileLog  *catalog.FileLog
+	hManager *pp_storage.Manager
+	adapter  *pp_pkg_storage.Adapter
+
 	opts LazyLoaderOpts
 }
 
@@ -1369,14 +1380,54 @@ func (ll *LazyLoader) clear() error {
 			return fmt.Errorf("closing test storage: %w", err)
 		}
 	}
+
+	if ll.adapter != nil {
+		if err := ll.adapter.Close(); err != nil {
+			return fmt.Errorf("closing test adapter: %w", err)
+		}
+	}
+	if ll.hManager != nil {
+		if err := ll.hManager.Shutdown(context.Background()); err != nil {
+			return fmt.Errorf("closing test hManager: %w", err)
+		}
+	}
+	if ll.fileLog != nil {
+		if err := ll.fileLog.Close(); err != nil {
+			return fmt.Errorf("closing test fileLog: %w", err)
+		}
+	}
+
 	if ll.cancelCtx != nil {
 		ll.cancelCtx()
 	}
 	var err error
-	ll.storage, err = teststorage.NewWithError()
+	dir, err := os.MkdirTemp("", "test_storage")
+	if err != nil {
+		return fmt.Errorf("opening test directory: %w", err)
+	}
+
+	ll.storage, err = teststorage.NewWithDir(dir)
 	if err != nil {
 		return err
 	}
+
+	ll.fileLog, err = makeFileLog(dir)
+	if err != nil {
+		return err
+	}
+
+	clock := clockwork.NewRealClock()
+	headCatalog, err := makeCatalog(clock, ll.fileLog)
+	if err != nil {
+		return errors.Join(err, ll.fileLog.Close())
+	}
+
+	ll.hManager, err = makeManager(clock, dir, headCatalog)
+	if err != nil {
+		return errors.Join(err, ll.fileLog.Close())
+	}
+
+	ll.adapter = makeAdapter(clock, ll.hManager)
 
 	opts := promql.EngineOpts{
 		Logger:                   nil,
@@ -1396,7 +1447,7 @@ func (ll *LazyLoader) clear() error {
 
 // appendTill appends the defined time series to the storage till the given timestamp (in milliseconds).
 func (ll *LazyLoader) appendTill(ts int64) error {
-	app := ll.storage.Appender(ll.Context())
+	app := ll.adapter.Appender(ll.Context())
 	for h, smpls := range ll.loadCmd.defs {
 		m := ll.loadCmd.metrics[h]
 		for i, s := range smpls {
@@ -1431,7 +1482,7 @@ func (ll *LazyLoader) QueryEngine() *promql.Engine {
 // Note: only the samples till the max timestamp used
 // in `WithSamplesTill` can be queried.
 func (ll *LazyLoader) Queryable() storage.Queryable {
-	return ll.storage
+	return ll.adapter
 }
 
 // Context returns the LazyLoader's context.
@@ -1441,6 +1492,11 @@ func (ll *LazyLoader) Context() context.Context {
 
 // Storage returns the LazyLoader's storage.
 func (ll *LazyLoader) Storage() storage.Storage {
+	return ll.adapter
+}
+
+// LocalStorage returns the LazyLoader's local storage.
+func (ll *LazyLoader) LocalStorage() storage.Storage {
 	return ll.storage
 }
 
@@ -1448,10 +1504,22 @@ func (ll *LazyLoader) Storage() storage.Storage {
 func (ll *LazyLoader) Close() error {
 	ll.cancelCtx()
 	err := ll.queryEngine.Close()
-	if sErr := ll.storage.Close(); sErr != nil {
-		return errors.Join(sErr, err)
-	}
-	return err
+	sErr := ll.storage.Close()
+	aErr := ll.adapter.Close()
+	hErr := ll.hManager.Shutdown(context.Background())
+	fErr := ll.fileLog.Close()
+
+	return errors.Join(err, sErr, aErr, hErr, fErr)
+}
+
+// Adapter returns the LazyLoader's adapter.
+func (ll *LazyLoader) Adapter() *pp_pkg_storage.Adapter {
+	return ll.adapter
+}
+
+// HManager returns the LazyLoader's Manager.
+func (ll *LazyLoader) HManager() *pp_storage.Manager {
+	return ll.hManager
 }
 
 func makeInt64Pointer(val int64) *int64 {
@@ -1466,4 +1534,67 @@ func timeMilliseconds(t time.Time) int64 {
 
 func durationMilliseconds(d time.Duration) int64 {
 	return int64(d / (time.Millisecond / time.Nanosecond))
+}
+
+func makeFileLog(dbDir string) (*catalog.FileLog, error) {
+	fileLog, err := catalog.NewFileLogV2(filepath.Join(dbDir, "head.log"))
+	if err != nil {
+		return nil, fmt.Errorf("create catalog file log: %w", err)
+	}
+
+	return fileLog, nil
+}
+
+func makeCatalog(clock clockwork.Clock, fileLog *catalog.FileLog) (*catalog.Catalog, error) {
+	headCatalog, err := catalog.New(clock, fileLog, catalog.DefaultIDGenerator{}, int(4*1<<20), nil)
+	if err != nil {
+		return nil, fmt.Errorf("create catalog: %w", err)
+	}
+
+	return headCatalog, nil
+}
+
+func makeManager(
+	clock clockwork.Clock,
+	dbDir string,
+	headCatalog *catalog.Catalog,
+) (*pp_storage.Manager, error) {
+	hManager, err := pp_storage.NewManager(
+		&pp_storage.Options{
+			Seed:                0,
+			BlockDuration:       2 * time.Hour,
+			CommitInterval:      5 * time.Second,
+			MaxRetentionPeriod:  24 * time.Hour,
+			HeadRetentionPeriod: 4 * time.Hour,
+			KeeperCapacity:      2,
+			DataDir:             dbDir,
+			MaxSegmentSize:      100e3,
+			NumberOfShards:      2,
+		},
+		clock,
+		headCatalog,
+		pp_storage.NewTriggerNotifier(),
+		pp_storage.NewTriggerNotifier(),
+		&mock.ReadyNotifierMock{NotifyReadyFunc: func() {}},
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create a head manager: %w", err)
+	}
+
+	go func() {
+		_ = hManager.Run()
+	}()
+
+	return hManager, nil
+}
+
+func makeAdapter(clock clockwork.Clock, hManager *pp_storage.Manager) *pp_pkg_storage.Adapter {
+	return pp_pkg_storage.NewAdapter(
+		clock,
+		hManager.Proxy(),
+		hManager.Builder(),
+		hManager.MergeOutOfOrderChunks,
+		nil,
+	)
 }

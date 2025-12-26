@@ -25,9 +25,6 @@ concept SubtractSemigroup = requires(T t1, T t2, T t3) {
 template <class T>
 struct IsTriviallyReallocatable : std::is_trivially_copyable<T> {};
 
-template <>
-struct IsTriviallyReallocatable<std::string> : std::true_type {};
-
 template <class T1, class T2>
 struct IsTriviallyReallocatable<std::pair<T1, T2>> : std::conjunction<IsTriviallyReallocatable<T1>, IsTriviallyReallocatable<T2>> {};
 

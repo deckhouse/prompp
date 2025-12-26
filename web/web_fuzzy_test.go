@@ -105,6 +105,7 @@ func startService(ctx context.Context, t TestingT) net.Listener {
 	adapter := pp_pkg_storage.NewAdapter(
 		clock,
 		hManager.Proxy(),
+		hManager.Builder(),
 		hManager.MergeOutOfOrderChunks,
 		prometheus.DefaultRegisterer,
 	)

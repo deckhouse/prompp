@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/suite"
@@ -20,6 +21,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
+	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	promstorage "github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 )
@@ -180,6 +182,43 @@ func TimeSeriesFromSeries(series promstorage.Series, chunkIterator chunkenc.Iter
 	}
 
 	return timeSeries
+}
+
+func IterateSeriesSet(seriesSet promstorage.SeriesSet, iterator chunkenc.Iterator) chunkenc.Iterator {
+	var series promstorage.Series
+	for seriesSet.Next() {
+		series = seriesSet.At()
+		iterator = series.Iterator(iterator)
+		for iterator.Next() != chunkenc.ValNone {
+			ts, v := iterator.At()
+			_, _ = ts, v
+		}
+	}
+	return iterator
+}
+
+func InstantQuery(lss *shard.LSS, ds *shard.DataStorage, targetTimestamp, valueNotFoundTimestampValue int64, matchers ...model.LabelMatcher) (*querier.InstantSeriesSet, error) {
+	selector, snapshot, err := lss.QuerySelector(0, matchers)
+	if err != nil {
+		return nil, err
+	}
+	if selector == 0 || snapshot == nil {
+		return &querier.InstantSeriesSet{}, nil
+	}
+
+	lssQueryResult := snapshot.Query(selector)
+	if lssQueryResult.Status() == cppbridge.LSSQueryStatusNoMatch {
+		return &querier.InstantSeriesSet{}, nil
+	}
+
+	instantSeries := querier.NewInstantSeriesSlice(lssQueryResult.Len(), valueNotFoundTimestampValue)
+
+	dsQueryResult := ds.InstantQuery(targetTimestamp, lssQueryResult.IDs(), uintptr(unsafe.Pointer(unsafe.SliceData(instantSeries))))
+	if dsQueryResult.Status != cppbridge.DataStorageQueryStatusSuccess {
+		return nil, fmt.Errorf("invalid data storage query result status")
+	}
+
+	return querier.NewInstantSeriesSet(lssQueryResult, snapshot, valueNotFoundTimestampValue, instantSeries), nil
 }
 
 const (

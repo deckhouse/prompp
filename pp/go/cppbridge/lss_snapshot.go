@@ -194,7 +194,12 @@ func (lsst *LabelSetSnapshot) Query(selector uintptr) *LSSQueryResult {
 // that were added source lss.
 func (lsst *LabelSetSnapshot) CopyAddedSeries(bitsetSeries *BitsetSeries, destination *LabelSetStorage) *IdsMapping {
 	idsMapping := &IdsMapping{
-		pointer: primitivesReadonlyLSSCopyAddedSeries(lsst.pointer, bitsetSeries.pointer, destination.pointer),
+		pointer: primitivesReadonlyLSSCopyAddedSeries(
+			lsst.pointer,
+			bitsetSeries.pointer,
+			destination.pointer,
+		),
+		gcDestroyDetector: &gcDestroyDetector,
 	}
 	runtime.SetFinalizer(idsMapping, func(idsMapping *IdsMapping) {
 		primitivesFreeLsIdsMapping(idsMapping.pointer)
@@ -213,10 +218,10 @@ func (lsst *LabelSetSnapshot) CopyAddedSeries(bitsetSeries *BitsetSeries, destin
 
 // IdsMapping wrapper for c-pointer to ls ids mapping.
 type IdsMapping struct {
-	pointer uintptr
+	pointer           uintptr
+	gcDestroyDetector *uint64
 }
 
-// IsEmpty return true if ids mapping is empty.
 func (m *IdsMapping) IsEmpty() bool {
 	return m.pointer == uintptr(0)
 }

@@ -17,7 +17,6 @@ build:
         all:
             - netgo
             - builtinassets
-            - static
             - osusergo
             # - stringlabels
             - cpplabels

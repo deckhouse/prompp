@@ -34,6 +34,10 @@ type (
 	CppSerializedDataIterator = [C.Sizeof_SerializedDataIterator]byte
 )
 
+const (
+	GoLabelsSize = C.Sizeof_GoLabels
+)
+
 var (
 
 	// per_goroutine_relabeler input_relabeling
@@ -1984,10 +1988,10 @@ type DataStorageQueryResult struct {
 	SerializedData *DataStorageSerializedData
 }
 
-func seriesDataDataStorageQueryV2(dataStorage uintptr, query HeadDataStorageQuery, serializedData *DataStorageSerializedData) (querier uintptr, status uint8) {
+func seriesDataDataStorageQueryV2(dataStorage uintptr, query DataStorageQuery, serializedData *DataStorageSerializedData) (querier uintptr, status uint8) {
 	args := struct {
 		dataStorage uintptr
-		query       HeadDataStorageQuery
+		query       DataStorageQuery
 	}{dataStorage, query}
 
 	res := struct {
@@ -2011,14 +2015,13 @@ func seriesDataDataStorageQueryV2(dataStorage uintptr, query HeadDataStorageQuer
 	return res.Querier, res.Status
 }
 
-func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32, timestamp int64, samples []Sample) DataStorageQueryResult {
+func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32, timestamp int64, samples uintptr) DataStorageQueryResult {
 	args := struct {
 		dataStorage uintptr
 		labelSetIDs []uint32
 		timestamp   int64
-		samples     []Sample
+		samples     uintptr
 	}{dataStorage, labelSetIDs, timestamp, samples}
-
 	var res DataStorageQueryResult
 
 	testGC()
