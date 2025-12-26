@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bare_bones/bitset.h"
+#include "entrypoint/go_constants.h"
 #include "primitives/go_slice.h"
 #include "primitives/primitives.h"
 #include "series_data/querier/instant_querier.h"
@@ -46,8 +47,13 @@ class InstantQuerierWithArgumentsWrapper {
   const Timestamp timestamp_;
 };
 
+struct SampleWithGoLabels : public ::series_data::encoder::Sample {
+ private:
+  char go_labels_[Sizeof_GoLabels];
+};
+
 using InstantQuerierWithArgumentsWrapperEntrypoint = InstantQuerierWithArgumentsWrapper<PromPP::Primitives::Go::SliceView<PromPP::Primitives::LabelSetID>,
-                                                                                        PromPP::Primitives::Go::SliceView<::series_data::encoder::Sample>>;
+                                                                                        std::span<entrypoint::series_data::SampleWithGoLabels>>;
 
 class RangeQuerierWithArgumentsWrapperV2 {
   using DataStorage = ::series_data::DataStorage;
