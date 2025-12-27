@@ -17,7 +17,7 @@ TEST_F(MetricDescriptorFixture, TestWithEmptyLabels) {
   constexpr LabelPairsList labels;
 
   // Act
-  const MetricDescriptor descriptor(String("metric_name"), labels);
+  const MetricDescriptor descriptor(String("metric_name"), labels, nullptr);
 
   // Assert
   EXPECT_EQ(10848170393603132573ULL, descriptor.id);
@@ -33,7 +33,7 @@ TEST_F(MetricDescriptorFixture, TestWithLabels) {
   const LabelPairsList labels{LabelPair{&name2, &value2}, LabelPair{&name1, &value1}};
 
   // Act
-  const MetricDescriptor descriptor(String("metric_name"), labels);
+  const MetricDescriptor descriptor(String("metric_name"), labels, nullptr);
 
   // Assert
   EXPECT_EQ(9433770049495071547ULL, descriptor.id);
