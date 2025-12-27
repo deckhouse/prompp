@@ -1,11 +1,9 @@
 #include <gtest/gtest.h>
 
-#include "counter.h"
 #include "metrics_page.h"
 
 namespace {
 
-using metrics::AtomicCounter;
 using metrics::Counter;
 using metrics::Metric;
 using metrics::MetricsPage;
@@ -21,10 +19,10 @@ TEST_F(MetricsPageFixture, TestIterator) {
   struct Metrics : MetricsPage<Metrics> {
     using MetricsPage::MetricsPage;
 
-    Counter<uint16_t> uint16_counter{"uint16_counter", 16};
-    Counter<uint32_t> uint32_counter{"uint32_counter", 32};
-    AtomicCounter<uint64_t> atomic_counter{"atomic_uint64_counter", 64};
-  } const metrics(LabelViewSet{{"job", "test"}});
+    Counter uint16_counter{LabelViewSet{}, "uint16_counter", 16};
+    Counter uint32_counter{LabelViewSet{}, "uint32_counter", 32};
+    Counter atomic_counter{LabelViewSet{}, "atomic_uint64_counter", 64};
+  } const metrics;
 
   MetricsVector metric_pointers;
 

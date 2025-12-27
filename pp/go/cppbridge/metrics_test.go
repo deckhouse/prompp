@@ -3,7 +3,6 @@ package cppbridge
 import (
 	"testing"
 
-	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -15,33 +14,13 @@ func TestCppMetricsSuite(t *testing.T) {
 	suite.Run(t, new(CppMetricsSuite))
 }
 
-type cppMetric struct {
-	labels  Labels
-	counter *dto.Counter
-}
-
-func newCppMetric(metric *dto.Metric) cppMetric {
-	m := cppMetric{labels: make(Labels, 0, cap(metric.Label)), counter: metric.Counter}
-	for _, l := range metric.Label {
-		m.labels = append(m.labels, Label{Name: *l.Name, Value: *l.Value})
-	}
-
-	return m
-}
-
-func (s *CppMetricsSuite) getMetrics() []cppMetric {
-	metrics := []cppMetric(nil)
+func (s *CppMetricsSuite) getMetrics() []*CppMetric {
+	metrics := []*CppMetric(nil)
 	for metric := range CppMetrics {
-		metrics = append(metrics, newCppMetric(metric))
+		metrics = append(metrics, metric)
 	}
 
 	return metrics
-}
-
-func (s *CppMetricsSuite) assertCounter(metric cppMetric, expectedLabels Labels, expectedValue float64) {
-	s.Require().NotNil(metric.counter)
-	s.Equal(expectedValue, *metric.counter.Value)
-	s.Equal(expectedLabels, metric.labels)
 }
 
 func (s *CppMetricsSuite) TestNoMetricPages() {
@@ -65,11 +44,12 @@ func (s *CppMetricsSuite) TestOneMetricsPage() {
 	metrics := s.getMetrics()
 
 	// Assert
-	s.Require().Len(metrics, 1)
-	s.assertCounter(metrics[0], Labels{
-		Label{Name: "__name__", Value: "counter"},
-		Label{Name: "metrics_page", Value: "for_test"},
-	}, float64(counterValue))
+	s.Require().Len(metrics, 2)
+	s.Equal(`Desc{fqName: "counter", help: "", constLabels: {metrics_page="for_test"}, variableLabels: {}}`, metrics[0].descriptor.String())
+	s.Equal(metrics[0].metric.Counter.GetValue(), float64(counterValue))
+
+	s.Equal(`Desc{fqName: "counter", help: "", constLabels: {metrics_page="for_test"}, variableLabels: {}}`, metrics[0].descriptor.String())
+	s.Equal(metrics[1].metric.Gauge.GetValue(), float64(counterValue))
 }
 
 func (s *CppMetricsSuite) TestTwoMetricPages() {
@@ -88,13 +68,17 @@ func (s *CppMetricsSuite) TestTwoMetricPages() {
 	metrics := s.getMetrics()
 
 	// Assert
-	s.Require().Len(metrics, 2)
-	s.assertCounter(metrics[0], Labels{
-		Label{Name: "__name__", Value: "counter2"},
-		Label{Name: "metrics_page2", Value: "for_test"},
-	}, float64(counterValue2))
-	s.assertCounter(metrics[1], Labels{
-		Label{Name: "__name__", Value: "counter1"},
-		Label{Name: "metrics_page1", Value: "for_test"},
-	}, float64(counterValue1))
+	s.Require().Len(metrics, 4)
+
+	s.Equal(`Desc{fqName: "counter2", help: "", constLabels: {metrics_page2="for_test"}, variableLabels: {}}`, metrics[0].descriptor.String())
+	s.Equal(metrics[0].metric.Counter.GetValue(), float64(counterValue2))
+
+	s.Equal(`Desc{fqName: "counter2", help: "", constLabels: {metrics_page2="for_test"}, variableLabels: {}}`, metrics[1].descriptor.String())
+	s.Equal(metrics[1].metric.Gauge.GetValue(), float64(counterValue2))
+
+	s.Equal(`Desc{fqName: "counter1", help: "", constLabels: {metrics_page1="for_test"}, variableLabels: {}}`, metrics[2].descriptor.String())
+	s.Equal(metrics[2].metric.Counter.GetValue(), float64(counterValue1))
+
+	s.Equal(`Desc{fqName: "counter1", help: "", constLabels: {metrics_page1="for_test"}, variableLabels: {}}`, metrics[3].descriptor.String())
+	s.Equal(metrics[3].metric.Gauge.GetValue(), float64(counterValue1))
 }
