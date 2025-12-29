@@ -393,7 +393,7 @@ extern "C" void prompp_label_set_hash(void* args, void* res) {
 template <class Filter>
 class CalculateHashIterator {
  public:
-  explicit CalculateHashIterator(BareBones::XXHash* hash, Filter&& filter, bool drop_metric_name)
+  explicit CalculateHashIterator(BareBones::XXHash3* hash, Filter&& filter, bool drop_metric_name)
       : hash_(hash), filter_(filter), drop_metric_name_(drop_metric_name) {}
 
   using iterator_category = std::forward_iterator_tag;
@@ -412,7 +412,7 @@ class CalculateHashIterator {
   CalculateHashIterator& operator=(const PromPP::Primitives::Go::String&) noexcept { return *this; }
 
  private:
-  BareBones::XXHash* hash_;
+  BareBones::XXHash3* hash_;
   [[no_unique_address]] Filter filter_;
   bool drop_metric_name_;
 };
@@ -443,7 +443,7 @@ extern "C" void prompp_label_set_hash_for_labels(void* args, void* res) {
 
   auto in = static_cast<Arguments*>(args);
 
-  BareBones::XXHash hash;
+  BareBones::XXHash3 hash;
   std::visit(
       [in, &hash](auto& lss) {
         auto in_label_set = lss[in->series_id];
@@ -478,7 +478,7 @@ extern "C" void prompp_label_set_hash_without_labels(void* args, void* res) {
 
   auto in = static_cast<Arguments*>(args);
 
-  BareBones::XXHash hash;
+  BareBones::XXHash3 hash;
   std::visit(
       [in, &hash](auto& lss) {
         auto in_label_set = lss[in->series_id];

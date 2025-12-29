@@ -47,6 +47,13 @@ func NewInvalidTimeInterval() TimeInterval {
 	}
 }
 
+func newInvalidTimeIntervalPtr() *TimeInterval {
+	return &TimeInterval{
+		MinT: math.MaxInt64,
+		MaxT: math.MinInt64,
+	}
+}
+
 // IsInvalid returns true if the time interval is invalid.
 func (t *TimeInterval) IsInvalid() bool {
 	return t.MinT == math.MaxInt64 && t.MaxT == math.MinInt64

@@ -15,7 +15,7 @@ size_t hash_of_label_set(const LabelSet& label_set) noexcept {
 
 template <class Iterator, class IteratorSentinel>
 size_t hash_of_label_set(Iterator begin, IteratorSentinel end) noexcept {
-  BareBones::XXHash hash;
+  BareBones::XXHash3 hash;
   for (; begin != end; ++begin) {
     const auto& [label_name, label_value] = *begin;
     hash.extend(static_cast<std::string_view>(label_name), static_cast<std::string_view>(label_value));
@@ -26,7 +26,7 @@ size_t hash_of_label_set(Iterator begin, IteratorSentinel end) noexcept {
 
 template <class LabelSet>
 size_t hash_of_label_set(const LabelSet& label_set, bool drop_metric_name) noexcept {
-  BareBones::XXHash hash;
+  BareBones::XXHash3 hash;
   for (const auto& [label_name, label_value] : label_set) {
     if (drop_metric_name && label_name == "__name__") [[unlikely]] {
       continue;
