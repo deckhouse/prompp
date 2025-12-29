@@ -1154,7 +1154,7 @@ func walOutputDecoderDecode(
 //
 
 // walProtobufEncoderCtor - wrapper for constructor C-ProtobufEncoder.
-func walProtobufEncoderCtor(outputLsses []uintptr) uintptr {
+func walProtobufEncoderOldCtor(outputLsses []uintptr) uintptr {
 	args := struct {
 		outputLsses []uintptr
 	}{outputLsses}
@@ -1164,7 +1164,7 @@ func walProtobufEncoderCtor(outputLsses []uintptr) uintptr {
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_wal_protobuf_encoder_ctor,
+		C.prompp_wal_protobuf_encoder_old_ctor,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
@@ -1173,20 +1173,20 @@ func walProtobufEncoderCtor(outputLsses []uintptr) uintptr {
 }
 
 // walProtobufEncoderDtor - wrapper for destructor C-ProtobufEncoder.
-func walProtobufEncoderDtor(decoder uintptr) {
+func walProtobufEncoderOldDtor(decoder uintptr) {
 	args := struct {
 		decoder uintptr
 	}{decoder}
 
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_wal_protobuf_encoder_dtor,
+		C.prompp_wal_protobuf_encoder_old_dtor,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
 
 // walProtobufEncoderEncode encode batch slice ShardRefSamples to snapped protobufs on shards.
-func walProtobufEncoderEncode(
+func walProtobufEncoderOldEncode(
 	batch []*DecodedRefSamples,
 	outSlices [][]byte,
 	stats []protobufEncoderStats,
@@ -1204,7 +1204,7 @@ func walProtobufEncoderEncode(
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_wal_protobuf_encoder_encode,
+		C.prompp_wal_protobuf_encoder_old_encode,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)

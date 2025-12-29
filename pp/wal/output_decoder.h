@@ -1,7 +1,6 @@
 #pragma once
 
 #include <algorithm>
-#include <ranges>
 #include <vector>
 
 #include "snappy-sinksource.h"
@@ -331,7 +330,7 @@ struct ProtobufEncoderStats {
 
 // ProtobufEncoder encoder for snapped protobuf from refSamples.
 template <class EncodingBimap>
-class ProtobufEncoder {
+class ProtobufEncoderOld {
   Primitives::BasicTimeseries<typename EncodingBimap::value_type*, BareBones::Vector<Primitives::Sample>> timeseries_;
   std::string protobuffer_;
   std::vector<EncodingBimap*> output_lsses_;
@@ -442,7 +441,7 @@ class ProtobufEncoder {
 
  public:
   // ProtobufEncoder constructor.
-  PROMPP_ALWAYS_INLINE explicit ProtobufEncoder(std::vector<EncodingBimap*>&& output_lsses) noexcept
+  PROMPP_ALWAYS_INLINE explicit ProtobufEncoderOld(std::vector<EncodingBimap*>&& output_lsses) noexcept
       : output_lsses_{std::move(output_lsses)}, lss_number_of_shards_{output_lsses_.size()} {
     shards_ref_samples_.resize(lss_number_of_shards_);
     max_size_shards_ref_samples_.resize(lss_number_of_shards_);

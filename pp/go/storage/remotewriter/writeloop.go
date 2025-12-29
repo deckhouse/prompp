@@ -122,7 +122,7 @@ func (wl *writeLoop) run(ctx context.Context) {
 
 // write writes data from iterator to the remote write storage.
 func (*writeLoop) write(ctx context.Context, iterator *Iterator) error {
-	msgChannel := make(chan *Message)
+	msgChannel := make(chan *MessageOld)
 	defer close(msgChannel)
 
 	go func() {

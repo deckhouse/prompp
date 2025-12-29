@@ -115,8 +115,8 @@ type Iterator struct {
 	endOfBlockReached bool
 }
 
-// MessageShard is a shard of a message for sending to the remote storage.
-type MessageShard struct {
+// MessageShardOld is a shard of a message for sending to the remote storage.
+type MessageShardOld struct {
 	Protobuf      *cppbridge.SnappyProtobufEncodedData
 	Size          uint64
 	SampleCount   uint64
@@ -125,14 +125,14 @@ type MessageShard struct {
 	PostProcessed bool
 }
 
-// Message is a message for sending to the remote storage.
-type Message struct {
+// MessageOld is a message for sending to the remote storage.
+type MessageOld struct {
 	MaxTimestamp int64
-	Shards       []*MessageShard
+	Shards       []*MessageShardOld
 }
 
 // HasDataToDeliver checks if the message has data to deliver.
-func (m *Message) HasDataToDeliver() bool {
+func (m *MessageOld) HasDataToDeliver() bool {
 	for _, shrd := range m.Shards {
 		if !shrd.Delivered {
 			return true
@@ -143,11 +143,11 @@ func (m *Message) HasDataToDeliver() bool {
 }
 
 // IsObsoleted checks if the message is obsoleted.
-func (m *Message) IsObsoleted(minTimestamp int64) bool {
+func (m *MessageOld) IsObsoleted(minTimestamp int64) bool {
 	return m.MaxTimestamp < minTimestamp
 }
 
-func (m *Message) NumberOfSamples() uint64 {
+func (m *MessageOld) NumberOfSamples() uint64 {
 	samples := uint64(0)
 	for i := range m.Shards {
 		samples += m.Shards[i].SampleCount
@@ -202,7 +202,7 @@ func (i *Iterator) wrapError(err error) error {
 //revive:disable-next-line:function-length // long but readable
 //revive:disable-next-line:cyclomatic // long but readable
 //revive:disable-next-line:cognitive-complexity // long but readable
-func (i *Iterator) Next(ctx context.Context) (*Message, error) {
+func (i *Iterator) Next(ctx context.Context) (*MessageOld, error) {
 	if i.endOfBlockReached {
 		return nil, i.wrapError(nil)
 	}
@@ -288,7 +288,7 @@ readLoop:
 	i.writeCaches()
 
 	encodeStartTime := i.clock.Now()
-	msg, err := i.encode(b.Data(), int(numberOfMessages)) // #nosec G115 // no overflow
+	msg, err := i.encodeOld(b.Data(), int(numberOfMessages)) // #nosec G115 // no overflow
 	if err != nil {
 		return nil, i.wrapError(err)
 	}
@@ -297,7 +297,7 @@ readLoop:
 	return msg, nil
 }
 
-func (i *Iterator) SendMessage(msg *Message, ctx context.Context) error {
+func (i *Iterator) SendMessage(msg *MessageOld, ctx context.Context) error {
 	i.metrics.samplesTotal.Add(float64(msg.NumberOfSamples()))
 
 	sendersCount := i.outputSharder.max
@@ -326,7 +326,7 @@ func (i *Iterator) SendMessage(msg *Message, ctx context.Context) error {
 				break
 			}
 
-			go func(shrd *MessageShard) {
+			go func(shrd *MessageShardOld) {
 				defer sendSemaphore.Release(1)
 
 				sendStartTime := i.clock.Now()
@@ -403,7 +403,13 @@ func (i *Iterator) writeCaches() {
 	i.dataSource.WriteCaches()
 }
 
-func (i *Iterator) encode(segments []*DecodedSegment, numberOfMessages int) (*Message, error) {
+func (i *Iterator) encode() (*MessageOld, error) {
+	const encodersCount = 2
+
+	return nil, nil
+}
+
+func (i *Iterator) encodeOld(segments []*DecodedSegment, numberOfMessages int) (*MessageOld, error) {
 	var maxTimestamp int64
 	batchToEncode := make([]*cppbridge.DecodedRefSamples, 0, len(segments))
 	for _, segment := range segments {
@@ -414,12 +420,12 @@ func (i *Iterator) encode(segments []*DecodedSegment, numberOfMessages int) (*Me
 		batchToEncode = append(batchToEncode, segment.Samples)
 	}
 
-	protobufEncoder := cppbridge.NewWALProtobufEncoder(i.dataSource.LSSes())
+	protobufEncoder := cppbridge.NewWALProtobufEncoderOld(i.dataSource.LSSes())
 	protobufs, err := protobufEncoder.Encode(batchToEncode, numberOfMessages)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode protobuf: %w", err)
 	}
-	shards := make([]*MessageShard, 0, len(protobufs))
+	shards := make([]*MessageShardOld, 0, len(protobufs))
 	for _, protobuf := range protobufs {
 		proto := protobuf
 		var size uint64
@@ -427,7 +433,7 @@ func (i *Iterator) encode(segments []*DecodedSegment, numberOfMessages int) (*Me
 			size = uint64(len(buf))
 			return nil
 		})
-		shards = append(shards, &MessageShard{
+		shards = append(shards, &MessageShardOld{
 			Protobuf:     protobuf,
 			Size:         size,
 			SampleCount:  protobuf.SamplesCount(),
@@ -435,7 +441,7 @@ func (i *Iterator) encode(segments []*DecodedSegment, numberOfMessages int) (*Me
 			Delivered:    false,
 		})
 	}
-	return &Message{
+	return &MessageOld{
 		MaxTimestamp: maxTimestamp,
 		Shards:       shards,
 	}, nil

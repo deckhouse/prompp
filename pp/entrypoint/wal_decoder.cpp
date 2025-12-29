@@ -327,17 +327,17 @@ extern "C" void prompp_wal_output_decoder_decode(void* args, void* res) {
 // ProtobufEncoder
 //
 
-using ProtobufEncoder = PromPP::WAL::ProtobufEncoder<entrypoint::head::EncodingBimap>;
-using ProtobufEncoderPtr = std::unique_ptr<ProtobufEncoder>;
+using ProtobufEncoderOld = PromPP::WAL::ProtobufEncoderOld<entrypoint::head::EncodingBimap>;
+using ProtobufEncoderOldPtr = std::unique_ptr<ProtobufEncoderOld>;
 
-static_assert(sizeof(ProtobufEncoderPtr) == sizeof(void*));
+static_assert(sizeof(ProtobufEncoderOldPtr) == sizeof(void*));
 
-extern "C" void prompp_wal_protobuf_encoder_ctor(void* args, void* res) {
+extern "C" void prompp_wal_protobuf_encoder_old_ctor(void* args, void* res) {
   struct Arguments {
     PromPP::Primitives::Go::SliceView<LssVariantPtr> output_lsses;
   };
   using Result = struct {
-    ProtobufEncoderPtr encoder;
+    ProtobufEncoderOldPtr encoder;
   };
 
   auto* in = static_cast<Arguments*>(args);
@@ -348,23 +348,23 @@ extern "C" void prompp_wal_protobuf_encoder_ctor(void* args, void* res) {
     output_lsses.push_back(&std::get<entrypoint::head::EncodingBimap>(*output_lss));
   }
 
-  new (res) Result{.encoder = std::make_unique<ProtobufEncoder>(std::move(output_lsses))};
+  new (res) Result{.encoder = std::make_unique<ProtobufEncoderOld>(std::move(output_lsses))};
 }
 
-extern "C" void prompp_wal_protobuf_encoder_dtor(void* args) {
+extern "C" void prompp_wal_protobuf_encoder_old_dtor(void* args) {
   struct Arguments {
-    ProtobufEncoderPtr encoder;
+    ProtobufEncoderOldPtr encoder;
   };
 
   static_cast<Arguments*>(args)->~Arguments();
 }
 
-extern "C" void prompp_wal_protobuf_encoder_encode(void* args, void* res) {
+extern "C" void prompp_wal_protobuf_encoder_old_encode(void* args, void* res) {
   struct Arguments {
     PromPP::Primitives::Go::SliceView<PromPP::WAL::ShardRefSample*> batch;
     PromPP::Primitives::Go::Slice<PromPP::Primitives::Go::Slice<char>> out_slices;
     PromPP::Primitives::Go::Slice<PromPP::WAL::ProtobufEncoderStats> stats;
-    ProtobufEncoderPtr encoder;
+    ProtobufEncoderOldPtr encoder;
   };
 
   using Result = struct {

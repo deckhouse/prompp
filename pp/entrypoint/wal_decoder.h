@@ -215,7 +215,7 @@ void prompp_wal_output_decoder_decode(void* args, void* res);
  *     encoder             uintptr           // pointer to constructed Protobuf Encoder
  * }
  */
-void prompp_wal_protobuf_encoder_ctor(void* args, void* res);
+void prompp_wal_protobuf_encoder_old_ctor(void* args, void* res);
 
 /**
  * @brief Destroy Protobuf Encoder
@@ -224,7 +224,7 @@ void prompp_wal_protobuf_encoder_ctor(void* args, void* res);
  *     encoder             uintptr           // pointer to constructed Protobuf Encoder
  * }
  */
-void prompp_wal_protobuf_encoder_dtor(void* args);
+void prompp_wal_protobuf_encoder_old_dtor(void* args);
 
 /**
  * @brief encode batch slice ShardRefSamples to snapped protobufs on shards.
@@ -239,7 +239,7 @@ void prompp_wal_protobuf_encoder_dtor(void* args);
  *     error               []byte            // error string if thrown
  * }
  */
-void prompp_wal_protobuf_encoder_encode(void* args, void* res);
+void prompp_wal_protobuf_encoder_old_encode(void* args, void* res);
 
 #ifdef __cplusplus
 }  // extern "C"

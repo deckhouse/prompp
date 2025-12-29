@@ -54,7 +54,7 @@ using PromPP::Prometheus::Relabel::rAction;
 using PromPP::Prometheus::Relabel::StatelessRelabeler;
 using PromPP::WAL::Encoder;
 using PromPP::WAL::OutputDecoder;
-using PromPP::WAL::ProtobufEncoder;
+using PromPP::WAL::ProtobufEncoderOld;
 using PromPP::WAL::ProtobufEncoderStats;
 using PromPP::WAL::RefSample;
 using PromPP::WAL::ShardRefSample;
@@ -370,12 +370,12 @@ TEST_F(TestWALOutputDecoder, ProcessSegmentWithLabelDrop) {
 }
 
 //
-// ProtobufEncoder
+// ProtobufEncoderOld
 //
 
-struct TestProtobufEncoder : public testing::Test {};
+struct TestProtobufEncoderOld : public testing::Test {};
 
-TEST_F(TestProtobufEncoder, Encode) {
+TEST_F(TestProtobufEncoderOld, Encode) {
   // Arrange
   EncodingBimap<BareBones::Vector> output_lss0;
   EncodingBimap<BareBones::Vector> output_lss1;
@@ -396,7 +396,7 @@ TEST_F(TestProtobufEncoder, Encode) {
   SliceView<ShardRefSample*> batch;
   batch.reset_to(vector_batch.data(), vector_batch.size(), vector_batch.size());
 
-  ProtobufEncoder penc(std::move(std::vector{&output_lss0, &output_lss1}));
+  ProtobufEncoderOld penc(std::move(std::vector{&output_lss0, &output_lss1}));
   Slice<Slice<char>> out_slices;
   out_slices.resize(2);
   Slice<ProtobufEncoderStats> stats;
