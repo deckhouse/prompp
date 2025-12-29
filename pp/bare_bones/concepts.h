@@ -71,4 +71,7 @@ concept SteadyClockInterface = requires(Clock& clock) {
   { clock.now() };
 };
 
+template <class T>
+concept arithmetic = std::integral<T> || std::floating_point<T>;
+
 }  // namespace BareBones::concepts

@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 
-#include "counter.h"
 #include "storage.h"
 
 namespace {
@@ -21,20 +20,20 @@ class MetricsStorageIteratorFixture : public testing::Test {
   struct Metrics1 final : MetricsPage<Metrics1> {
     using MetricsPage::MetricsPage;
 
-    Counter<> counter{"counter", 64};
+    Counter counter{LabelViewSet{}, "counter", 64};
   };
 
   struct Metrics2 final : MetricsPage<Metrics2> {
     using MetricsPage::MetricsPage;
 
-    Counter<> counter1{"counter1", 64};
-    Counter<> counter2{"counter2", 64};
+    Counter counter1{LabelViewSet{}, "counter1", 64};
+    Counter counter2{LabelViewSet{}, "counter2", 64};
   };
 };
 
 TEST_F(MetricsStorageIteratorFixture, EmptyStorage) {
   // Arrange
-  std::vector<Storage::Iterator::Item> items;
+  std::vector<Storage::Iterator::value_type> items;
 
   // Act
   std::ranges::copy(storage_, std::back_inserter(items));
@@ -45,20 +44,20 @@ TEST_F(MetricsStorageIteratorFixture, EmptyStorage) {
 
 TEST_F(MetricsStorageIteratorFixture, TwoPages) {
   // Arrange
-  const auto page1 = CreateMetricsPage<Metrics1>(storage_, LabelViewSet{{"page", "1"}});
-  const auto page2 = CreateMetricsPage<Metrics2>(storage_, LabelViewSet{{"page", "2"}});
+  const auto page1 = CreateMetricsPage<Metrics1>(storage_);
+  const auto page2 = CreateMetricsPage<Metrics2>(storage_);
 
-  std::vector<Storage::Iterator::Item> items;
+  std::vector<Storage::Iterator::value_type> items;
 
   // Act
   std::ranges::copy(storage_, std::back_inserter(items));
 
   // Assert
   EXPECT_TRUE(std::ranges::equal(
-      std::vector<Storage::Iterator::Item>{
-          {.page = page2, .metric = &page2->counter1},
-          {.page = page2, .metric = &page2->counter2},
-          {.page = page1, .metric = &page1->counter},
+      std::vector<Storage::Iterator::value_type>{
+          &page2->counter1,
+          &page2->counter2,
+          &page1->counter,
       },
       items));
 }

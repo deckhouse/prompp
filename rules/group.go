@@ -75,8 +75,11 @@ type Group struct {
 	// defaults to DefaultEvalIterationFunc.
 	evalIterationFunc GroupEvalIterationFunc
 
-	// concurrencyController controls the rules evaluation concurrency.
-	concurrencyController RuleConcurrencyController
+	// // concurrencyController controls the rules evaluation concurrency.
+	// concurrencyController RuleConcurrencyController
+
+	// concurrencyExecuter controls the rules evaluation concurrency.
+	concurrencyExecuter ConcurrencyExecuter
 }
 
 // GroupEvalIterationFunc is used to implement and extend rule group
@@ -121,29 +124,24 @@ func NewGroup(o GroupOptions) *Group {
 		evalIterationFunc = DefaultEvalIterationFunc
 	}
 
-	concurrencyController := o.Opts.RuleConcurrencyController
-	if concurrencyController == nil {
-		concurrencyController = sequentialRuleEvalController{}
-	}
-
 	return &Group{
-		name:                  o.Name,
-		file:                  o.File,
-		interval:              o.Interval,
-		queryOffset:           o.QueryOffset,
-		limit:                 o.Limit,
-		rules:                 o.Rules,
-		shouldRestore:         o.ShouldRestore,
-		opts:                  o.Opts,
-		seriesInPreviousEval:  make([]map[string]labels.Labels, len(o.Rules)),
-		seriesInCurrentEval:   make([]map[string]labels.Labels, len(o.Rules)),
-		done:                  make(chan struct{}),
-		managerDone:           o.done,
-		terminated:            make(chan struct{}),
-		logger:                log.With(o.Opts.Logger, "file", o.File, "group", o.Name),
-		metrics:               metrics,
-		evalIterationFunc:     evalIterationFunc,
-		concurrencyController: concurrencyController,
+		name:                 o.Name,
+		file:                 o.File,
+		interval:             o.Interval,
+		queryOffset:          o.QueryOffset,
+		limit:                o.Limit,
+		rules:                o.Rules,
+		shouldRestore:        o.ShouldRestore,
+		opts:                 o.Opts,
+		seriesInPreviousEval: make([]map[string]labels.Labels, len(o.Rules)),
+		seriesInCurrentEval:  make([]map[string]labels.Labels, len(o.Rules)),
+		done:                 make(chan struct{}),
+		managerDone:          o.done,
+		terminated:           make(chan struct{}),
+		logger:               log.With(o.Opts.Logger, "file", o.File, "group", o.Name),
+		metrics:              metrics,
+		evalIterationFunc:    evalIterationFunc,
+		concurrencyExecuter:  o.Opts.ConcurrencyExecuter,
 	}
 }
 
@@ -506,7 +504,7 @@ func (g *Group) Eval(ctx context.Context, ts time.Time) {
 		bs           = g.opts.Batcher.BatchStorage()
 	)
 
-	if g.concurrencyController.IsConcurrent() {
+	if g.opts.ConcurrencyExecuter != nil {
 		samplesTotal = g.concurrencyEval(ctx, ts, bs)
 	} else {
 		samplesTotal = g.sequentiallyEval(ctx, ts, g.rules, bs)
@@ -1149,17 +1147,14 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, bs storage.Ba
 		default:
 		}
 
-		if ctrl := g.concurrencyController; ctrl.Allow(ctx, g, rule) {
-			wg.Add(1)
-
-			go concurrencyEval(i, rule, func() {
-				wg.Done()
-				ctrl.Done(ctx)
-			})
-			sequentiallyRules[i] = nil // placeholder for the series
-		} else {
+		if !rule.NoDependencyRules() {
 			sequentiallyRules[i] = rule
+			continue
 		}
+
+		wg.Add(1)
+		g.concurrencyExecuter.Execute(func() { concurrencyEval(i, g.rules[i], func() { wg.Done() }) })
+		sequentiallyRules[i] = nil // placeholder for the series
 	}
 
 	wg.Wait()
@@ -1167,11 +1162,10 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, bs storage.Ba
 	if err := concurrencyApp.Commit(); err != nil {
 		groupKey := GroupKey(g.File(), g.Name())
 		for i := range g.rules {
-			if ctrl := g.concurrencyController; ctrl.Allow(ctx, g, g.rules[i]) {
+			if g.rules[i].NoDependencyRules() {
 				g.rules[i].SetHealth(HealthBad)
 				g.rules[i].SetLastError(err)
 				g.metrics.EvalFailures.WithLabelValues(groupKey).Inc()
-				ctrl.Done(ctx)
 			}
 		}
 

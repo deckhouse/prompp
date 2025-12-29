@@ -144,13 +144,35 @@ func createClient(config DestinationConfig) (client remote.WriteClient, err erro
 
 // write writes data from iterator to the remote write storage.
 func (*writeLoop) write(ctx context.Context, iterator *Iterator) error {
+	msgChannel := make(chan *Message)
+	defer close(msgChannel)
+
+	go func() {
+		for msg := range msgChannel {
+			if err := iterator.SendMessage(msg, ctx); err != nil {
+				logger.Errorf("send message: %v", err)
+			}
+		}
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			err := iterator.Next(ctx)
-			if err != nil {
+			if msg, err := iterator.Next(ctx); err == nil {
+				if msg == nil {
+					continue
+				}
+
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+
+				case msgChannel <- msg:
+				}
+
+			} else {
 				if errors.Is(err, ErrEndOfBlock) {
 					return nil
 				}
