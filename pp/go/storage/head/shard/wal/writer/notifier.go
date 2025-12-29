@@ -8,7 +8,8 @@ import (
 // SegmentWriteNotifier notifies that the segment has been written.
 type SegmentWriteNotifier struct {
 	locker                   sync.Mutex
-	shards                   []uint32
+	written                  []uint32
+	synced                   []uint32
 	setLastAppendedSegmentID func(segmentID uint32)
 }
 
@@ -18,28 +19,32 @@ func NewSegmentWriteNotifier(
 	setLastAppendedSegmentID func(segmentID uint32),
 ) *SegmentWriteNotifier {
 	return &SegmentWriteNotifier{
-		shards:                   make([]uint32, numberOfShards),
+		written:                  make([]uint32, numberOfShards),
+		synced:                   make([]uint32, numberOfShards),
 		setLastAppendedSegmentID: setLastAppendedSegmentID,
 	}
 }
 
-// NotifySegmentIsWritten notify that the segment has been written for shard.
-func (swn *SegmentWriteNotifier) NotifySegmentIsWritten() {
+// NotifySegmentIsWritten notify that the segment has been flushed for shard.
+func (swn *SegmentWriteNotifier) NotifySegmentIsWritten(shardID uint16) {
 	swn.locker.Lock()
 	defer swn.locker.Unlock()
-	minNumberOfSegments := slices.Min(swn.shards)
+	swn.synced[shardID] = swn.written[shardID]
+	minNumberOfSegments := slices.Min(swn.synced)
 	if minNumberOfSegments > 0 {
 		swn.setLastAppendedSegmentID(minNumberOfSegments - 1)
 	}
 }
 
+// NotifySegmentWrite notify that the segment is being written for shard.
 func (swn *SegmentWriteNotifier) NotifySegmentWrite(shardID uint16) {
 	swn.locker.Lock()
 	defer swn.locker.Unlock()
-	swn.shards[shardID]++
+	swn.written[shardID]++
 }
 
 // Set for shard number of segments.
 func (swn *SegmentWriteNotifier) Set(shardID uint16, numberOfSegments uint32) {
-	swn.shards[shardID] = numberOfSegments
+	swn.written[shardID] = numberOfSegments
+	swn.synced[shardID] = numberOfSegments
 }
