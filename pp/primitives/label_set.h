@@ -6,6 +6,9 @@
 #include "primitives.h"
 
 namespace PromPP::Primitives {
+
+struct NoSortLabels {};
+
 template <class LabelType, template <class> class Container = BareBones::Vector>
 class BasicLabelSet {
  public:
@@ -30,7 +33,16 @@ class BasicLabelSet {
       }
       labels_.emplace_back(label);
     }
-  };
+  }
+
+  template <class LabelSet>
+  explicit BasicLabelSet(const LabelSet& other, const NoSortLabels&) {
+    labels_.reserve(other.size());
+
+    for (const auto& label : other) {
+      append(static_cast<std::string_view>(label.first), static_cast<std::string_view>(label.second));
+    }
+  }
 
   BasicLabelSet(const BasicLabelSet&) = default;
   BasicLabelSet(BasicLabelSet&&) noexcept = default;

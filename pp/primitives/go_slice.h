@@ -12,52 +12,6 @@
 #include "bare_bones/vector.h"
 
 namespace PromPP::Primitives::Go {
-template <class T>
-class SliceView {
-  T* data_;
-  size_t len_;
-  size_t cap_;
-
- public:
-  using iterator_category = std::contiguous_iterator_tag;
-  using value_type = const T;
-  using iterator = T*;
-  using const_iterator = const T*;
-
-  PROMPP_ALWAYS_INLINE explicit SliceView() = default;
-
-  PROMPP_ALWAYS_INLINE void reset_to(T* data, size_t len, size_t cap) {
-    data_ = data;
-    len_ = len;
-    cap_ = cap;
-  }
-
-  PROMPP_ALWAYS_INLINE void reset_to(std::span<T> buffer) { reset_to(buffer.data(), buffer.size(), buffer.size()); }
-
-  PROMPP_ALWAYS_INLINE const T* data() const noexcept { return data_; }
-  PROMPP_ALWAYS_INLINE T* data() noexcept { return data_; }
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return !len_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return len_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t capacity() const noexcept { return cap_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const T> span() const noexcept { return {data_, len_}; }
-
-  PROMPP_ALWAYS_INLINE const_iterator begin() const noexcept { return data_; }
-  const_iterator end() const noexcept { return data_ + len_; }
-
-  PROMPP_ALWAYS_INLINE iterator begin() noexcept { return data_; }
-  PROMPP_ALWAYS_INLINE iterator end() noexcept { return data_ + len_; }
-
-  PROMPP_ALWAYS_INLINE const T& operator[](uint32_t i) const {
-    assert(i < len_);
-    return data_[i];
-  }
-
-  PROMPP_ALWAYS_INLINE T& operator[](uint32_t i) {
-    assert(i < len_);
-    return data_[i];
-  }
-};  // class SliceView
 
 class String {
   const char* data_;
@@ -140,6 +94,55 @@ struct SliceControlBlock {
 
 template <class T>
 using Slice = BareBones::MemoryBasedVector<SliceControlBlock, T>;
+
+template <class T>
+class SliceView {
+  T* data_;
+  size_t len_;
+  size_t cap_;
+
+ public:
+  using iterator_category = std::contiguous_iterator_tag;
+  using value_type = const T;
+  using iterator = T*;
+  using const_iterator = const T*;
+
+  PROMPP_ALWAYS_INLINE SliceView() = default;
+
+  PROMPP_ALWAYS_INLINE explicit SliceView(Slice<T>& slice) : data_(slice.data()), len_(slice.size()), cap_(slice.capacity()) {}
+
+  PROMPP_ALWAYS_INLINE void reset_to(T* data, size_t len, size_t cap) {
+    data_ = data;
+    len_ = len;
+    cap_ = cap;
+  }
+
+  PROMPP_ALWAYS_INLINE void reset_to(std::span<T> buffer) { reset_to(buffer.data(), buffer.size(), buffer.size()); }
+
+  PROMPP_ALWAYS_INLINE const T* data() const noexcept { return data_; }
+  PROMPP_ALWAYS_INLINE T* data() noexcept { return data_; }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return !len_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return len_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t capacity() const noexcept { return cap_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const T> span() const noexcept { return {data_, len_}; }
+
+  PROMPP_ALWAYS_INLINE const_iterator begin() const noexcept { return data_; }
+  const_iterator end() const noexcept { return data_ + len_; }
+
+  PROMPP_ALWAYS_INLINE iterator begin() noexcept { return data_; }
+  PROMPP_ALWAYS_INLINE iterator end() noexcept { return data_ + len_; }
+
+  PROMPP_ALWAYS_INLINE const T& operator[](uint32_t i) const {
+    assert(i < len_);
+    return data_[i];
+  }
+
+  PROMPP_ALWAYS_INLINE T& operator[](uint32_t i) {
+    assert(i < len_);
+    return data_[i];
+  }
+};
 
 class BytesStream : public std::ostream {
  public:

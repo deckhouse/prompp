@@ -6,3 +6,5 @@
 #define Sizeof_GoLabels 16
 
 #define Sizeof_SerializedDataIterator 200
+
+#define Sizeof_MetricsIterator 24

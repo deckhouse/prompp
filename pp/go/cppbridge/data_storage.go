@@ -2,13 +2,14 @@ package cppbridge
 
 import (
 	"runtime"
+	"sync/atomic"
 )
 
 // DataStorage is Go wrapper around series_data::Data_storage.
 type DataStorage struct {
 	dataStorage       uintptr
 	gcDestroyDetector *uint64
-	timeInterval      TimeInterval
+	timeInterval      atomic.Pointer[TimeInterval]
 }
 
 // NewDataStorage - constructor.
@@ -16,8 +17,9 @@ func NewDataStorage() *DataStorage {
 	ds := &DataStorage{
 		dataStorage:       seriesDataDataStorageCtor(),
 		gcDestroyDetector: &gcDestroyDetector,
-		timeInterval:      NewInvalidTimeInterval(),
+		timeInterval:      atomic.Pointer[TimeInterval]{},
 	}
+	ds.timeInterval.Store(newInvalidTimeIntervalPtr())
 
 	runtime.SetFinalizer(ds, func(ds *DataStorage) {
 		seriesDataDataStorageDtor(ds.dataStorage)
@@ -29,16 +31,17 @@ func NewDataStorage() *DataStorage {
 // Reset - resets data storage.
 func (ds *DataStorage) Reset() {
 	seriesDataDataStorageReset(ds.dataStorage)
-	ds.timeInterval = NewInvalidTimeInterval()
+	ds.timeInterval.Store(newInvalidTimeIntervalPtr())
 }
 
 func (ds *DataStorage) TimeInterval(invalidateCache bool) TimeInterval {
-	if invalidateCache || ds.timeInterval.IsInvalid() {
-		ds.timeInterval = seriesDataDataStorageTimeInterval(ds.dataStorage)
+	if invalidateCache || ds.timeInterval.Load().IsInvalid() {
+		timeInterval := seriesDataDataStorageTimeInterval(ds.dataStorage)
+		ds.timeInterval.Store(&timeInterval)
 		runtime.KeepAlive(ds)
 	}
 
-	return ds.timeInterval
+	return *ds.timeInterval.Load()
 }
 
 func (ds *DataStorage) GetQueriedSeriesBitset() []byte {

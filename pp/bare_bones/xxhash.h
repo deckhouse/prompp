@@ -12,7 +12,7 @@ PRAGMA_DIAGNOSTIC(pop)
 
 namespace BareBones {
 
-class XXHash {
+class XXHash3 {
  public:
   template <class Number>
     requires std::is_arithmetic_v<Number>
@@ -30,15 +30,15 @@ class XXHash {
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint64_t hash() const noexcept { return hash_; }
   [[nodiscard]] explicit PROMPP_ALWAYS_INLINE operator uint64_t() const noexcept { return hash_; }
 
-  auto operator<=>(const XXHash& other) const noexcept = default;
+  auto operator<=>(const XXHash3& other) const noexcept = default;
 
-  XXHash& operator=(uint64_t hash) noexcept {
+  XXHash3& operator=(uint64_t hash) noexcept {
     hash_ = hash;
     return *this;
   }
 
   PROMPP_ALWAYS_INLINE static uint64_t hash(const char* data, size_t size) noexcept {
-    XXHash hasher;
+    XXHash3 hasher;
     hasher.extend(data, size);
     return hasher.hash();
   }
@@ -48,6 +48,17 @@ class XXHash {
 
  private:
   uint64_t hash_{};
+};
+
+class XXHash {
+ public:
+  PROMPP_ALWAYS_INLINE XXHash() { XXH64_reset(&state_, 0); }
+
+  PROMPP_ALWAYS_INLINE void extend(std::string_view data) noexcept { XXH64_update(&state_, data.data(), data.length()); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint64_t digest() const noexcept { return XXH64_digest(&state_); }
+
+ private:
+  XXH64_state_t state_;
 };
 
 }  // namespace BareBones
