@@ -107,203 +107,6 @@ LabelSetForTest generate_label_set() {
   return lst;
 };
 
-struct SeriesSample {
-  Sample sample;
-  LabelSetID ls_id;
-
-  bool operator==(const SeriesSample&) const noexcept = default;
-};
-
-struct WalBufferAddCase {
-  std::vector<SeriesSample> samples;
-  std::vector<SeriesSample> expected_samples;
-  uint32_t samples_count;
-  uint32_t series_count;
-  Timestamp earliest_sample;
-  Timestamp latest_sample;
-};
-
-class WalBufferAddFixture : public testing::TestWithParam<WalBufferAddCase> {
- protected:
-  PromPP::WAL::BasicEncoder<PromPP::Primitives::SnugComposites::Symbol::EncodingBimap<BareBones::Vector>>::Buffer buffer_;
-
-  void add() {
-    for (auto& series_sample : GetParam().samples) {
-      buffer_.add(series_sample.ls_id, series_sample.sample);
-    }
-  }
-
-  [[nodiscard]] std::vector<SeriesSample> get() const noexcept {
-    std::vector<SeriesSample> samples;
-    buffer_.for_each([&samples](LabelSetID ls_id, Timestamp timestamp, Sample::value_type value) {
-      samples.emplace_back(SeriesSample{.sample = {timestamp, value}, .ls_id = ls_id});
-    });
-    return samples;
-  }
-};
-
-TEST_P(WalBufferAddFixture, TestAdd) {
-  // Arrange
-
-  // Act
-  add();
-
-  // Assert
-  EXPECT_EQ(GetParam().samples_count, buffer_.samples_count());
-  EXPECT_EQ(GetParam().series_count, buffer_.series_count());
-  EXPECT_EQ(GetParam().earliest_sample, buffer_.earliest_sample());
-  EXPECT_EQ(GetParam().latest_sample, buffer_.latest_sample());
-  EXPECT_EQ(GetParam().expected_samples, get());
-}
-
-TEST_F(WalBufferAddFixture, TestFillFirstSampleAddedAtTsNs) {
-  // Arrange
-  auto start = buffer_.first_sample_added_at_ts_ns();
-
-  // Act
-  buffer_.add(0, Sample{101, 1.0});
-  auto filled = buffer_.first_sample_added_at_ts_ns();
-  buffer_.add(0, Sample{102, 1.0});
-
-  // Assert
-  EXPECT_EQ(0, start);
-  EXPECT_EQ(filled, buffer_.first_sample_added_at_ts_ns());
-  EXPECT_NE(0, filled);
-}
-
-TEST_F(WalBufferAddFixture, Clear) {
-  // Arrange
-  buffer_.add(0, Sample{101, 1.0});
-
-  // Act
-  buffer_.clear();
-
-  // Assert
-  EXPECT_EQ(0U, buffer_.samples_count());
-  EXPECT_EQ(0U, buffer_.series_count());
-  EXPECT_EQ(std::numeric_limits<Timestamp>::max(), buffer_.earliest_sample());
-  EXPECT_EQ(0, buffer_.latest_sample());
-  EXPECT_EQ(0, buffer_.first_sample_added_at_ts_ns());
-  EXPECT_EQ(std::vector<SeriesSample>{}, get());
-}
-
-INSTANTIATE_TEST_SUITE_P(OneSample,
-                         WalBufferAddFixture,
-                         testing::Values(WalBufferAddCase{
-                             .samples = {{.sample = {101, 1.0}, .ls_id = 0}},
-                             .expected_samples = {{.sample = {101, 1.0}, .ls_id = 0}},
-                             .samples_count = 1,
-                             .series_count = 1,
-                             .earliest_sample = 101,
-                             .latest_sample = 101,
-                         }));
-
-INSTANTIATE_TEST_SUITE_P(
-    ManySamplesForOneSerie,
-    WalBufferAddFixture,
-    testing::Values(
-        WalBufferAddCase{
-            .samples = {{.sample = {101, 1.0}, .ls_id = 0}, {.sample = {102, 1.0}, .ls_id = 0}},
-            .expected_samples = {{.sample = {101, 1.0}, .ls_id = 0}, {.sample = {102, 1.0}, .ls_id = 0}},
-            .samples_count = 2,
-            .series_count = 1,
-            .earliest_sample = 101,
-            .latest_sample = 102,
-        },
-        WalBufferAddCase{
-            .samples = {{.sample = {101, 1.0}, .ls_id = 0}, {.sample = {102, 1.0}, .ls_id = 0}, {.sample = {103, 1.0}, .ls_id = 0}},
-            .expected_samples = {{.sample = {101, 1.0}, .ls_id = 0}, {.sample = {102, 1.0}, .ls_id = 0}, {.sample = {103, 1.0}, .ls_id = 0}},
-            .samples_count = 3,
-            .series_count = 1,
-            .earliest_sample = 101,
-            .latest_sample = 103,
-        }));
-
-INSTANTIATE_TEST_SUITE_P(
-    SortSamplesByTimestamp,
-    WalBufferAddFixture,
-    testing::Values(
-        WalBufferAddCase{
-            .samples = {{.sample = {102, 1.0}, .ls_id = 0}, {.sample = {101, 1.0}, .ls_id = 0}},
-            .expected_samples = {{.sample = {101, 1.0}, .ls_id = 0}, {.sample = {102, 1.0}, .ls_id = 0}},
-            .samples_count = 2,
-            .series_count = 1,
-            .earliest_sample = 101,
-            .latest_sample = 102,
-        },
-        WalBufferAddCase{
-            .samples = {{.sample = {101, 1.0}, .ls_id = 0}, {.sample = {102, 1.0}, .ls_id = 0}, {.sample = {100, 1.0}, .ls_id = 0}},
-            .expected_samples = {{.sample = {100, 1.0}, .ls_id = 0}, {.sample = {101, 1.0}, .ls_id = 0}, {.sample = {102, 1.0}, .ls_id = 0}},
-            .samples_count = 3,
-            .series_count = 1,
-            .earliest_sample = 100,
-            .latest_sample = 102,
-        }));
-
-INSTANTIATE_TEST_SUITE_P(
-    TwoSeries,
-    WalBufferAddFixture,
-    testing::Values(
-        WalBufferAddCase{
-            .samples = {{.sample = {101, 1.0}, .ls_id = 1}, {.sample = {101, 1.0}, .ls_id = 0}},
-            .expected_samples = {{.sample = {101, 1.0}, .ls_id = 0}, {.sample = {101, 1.0}, .ls_id = 1}},
-            .samples_count = 2,
-            .series_count = 2,
-            .earliest_sample = 101,
-            .latest_sample = 101,
-        },
-        WalBufferAddCase{
-            .samples = {{.sample = {101, 1.0}, .ls_id = 1000}, {.sample = {101, 1.0}, .ls_id = 0}, {.sample = {102, 1.0}, .ls_id = 0}},
-            .expected_samples = {{.sample = {101, 1.0}, .ls_id = 0}, {.sample = {102, 1.0}, .ls_id = 0}, {.sample = {101, 1.0}, .ls_id = 1000}},
-            .samples_count = 3,
-            .series_count = 2,
-            .earliest_sample = 101,
-            .latest_sample = 102,
-        },
-        WalBufferAddCase{
-            .samples = {{.sample = {101, 1.0}, .ls_id = 1000},
-                        {.sample = {102, 1.0}, .ls_id = 1000},
-                        {.sample = {101, 1.0}, .ls_id = 0},
-                        {.sample = {102, 1.0}, .ls_id = 0}},
-            .expected_samples = {{.sample = {101, 1.0}, .ls_id = 0},
-                                 {.sample = {102, 1.0}, .ls_id = 0},
-                                 {.sample = {101, 1.0}, .ls_id = 1000},
-                                 {.sample = {102, 1.0}, .ls_id = 1000}},
-            .samples_count = 4,
-            .series_count = 2,
-            .earliest_sample = 101,
-            .latest_sample = 102,
-        }));
-
-INSTANTIATE_TEST_SUITE_P(
-    DontSkipNonUniqueSamples,
-    WalBufferAddFixture,
-    testing::Values(
-        WalBufferAddCase{
-            .samples = {{.sample = {101, 1.0}, .ls_id = 0}, {.sample = {101, 2.0}, .ls_id = 0}},
-            .expected_samples = {{.sample = {101, 1.0}, .ls_id = 0}, {.sample = {101, 2.0}, .ls_id = 0}},
-            .samples_count = 2,
-            .series_count = 1,
-            .earliest_sample = 101,
-            .latest_sample = 101,
-        },
-        WalBufferAddCase{
-            .samples = {{.sample = {101, 1.0}, .ls_id = 0}, {.sample = {102, 1.0}, .ls_id = 0}, {.sample = {101, 2.0}, .ls_id = 0}},
-            .expected_samples = {{.sample = {101, 1.0}, .ls_id = 0}, {.sample = {101, 2.0}, .ls_id = 0}, {.sample = {102, 1.0}, .ls_id = 0}},
-            .samples_count = 3,
-            .series_count = 1,
-            .earliest_sample = 101,
-            .latest_sample = 102,
-        },
-        WalBufferAddCase{
-            .samples = {{.sample = {101, 1.0}, .ls_id = 0}, {.sample = {102, 1.0}, .ls_id = 0}, {.sample = {102, 2.0}, .ls_id = 0}},
-            .expected_samples = {{.sample = {101, 1.0}, .ls_id = 0}, {.sample = {102, 1.0}, .ls_id = 0}, {.sample = {102, 2.0}, .ls_id = 0}},
-            .samples_count = 3,
-            .series_count = 1,
-            .earliest_sample = 101,
-            .latest_sample = 102,
-        }));
-
 class WalFixture : public testing::Test {};
 
 TEST_F(WalFixture, BasicEncoderBasicDecoder) {
@@ -315,7 +118,7 @@ TEST_F(WalFixture, BasicEncoderBasicDecoder) {
 
   writer.add(etalons_timeseries);
 
-  EXPECT_EQ(writer.buffer().latest_sample(), (*(etalons_samples.end() - 1)).timestamp());
+  EXPECT_EQ(writer.segment_samples().latest_sample(), (*(etalons_samples.end() - 1)).timestamp());
 
   // check writer label_set
   auto outcomes_writer = writer.label_sets().items()[0].composite(etalons_timeseries.data());
@@ -330,8 +133,8 @@ TEST_F(WalFixture, BasicEncoderBasicDecoder) {
   }
 
   EXPECT_EQ(writer.samples(), 0);
-  auto writer_earliest_sample = writer.buffer().earliest_sample();
-  auto writer_latest_sample = writer.buffer().latest_sample();
+  auto writer_earliest_sample = writer.segment_samples().earliest_sample();
+  auto writer_latest_sample = writer.segment_samples().latest_sample();
 
   PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector> encoding_bimap;
   PromPP::WAL::BasicDecoder<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector>> reader{encoding_bimap,
@@ -427,7 +230,7 @@ TEST_F(WalFixture, BasicEncoderMany) {
 
   size_t ind = 0;
 
-  encoder.buffer().for_each([&](auto ls_id, auto timestamp, double v) {
+  encoder.segment_samples().for_each([&](auto ls_id, auto timestamp, double v) {
     EXPECT_TRUE(ind < std::size(expected_items));
     EXPECT_EQ(expected_items[ind].ls_id, ls_id);
     EXPECT_EQ(expected_items[ind].sample.timestamp(), timestamp);

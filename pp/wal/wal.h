@@ -19,9 +19,9 @@
 #include "bare_bones/vector.h"
 
 #include "primitives/primitives.h"
-#include "primitives/sample.h"
 #include "primitives/snug_composites.h"
 #include "primitives/timeseries.h"
+#include "segment_samples_storage.h"
 
 #include <roaring/roaring.hh>
 
@@ -103,76 +103,7 @@ using GorillaDecoder =
 using NullGorillaDecoder =
     BareBones::Encoding::Gorilla::StreamDecoder<BareBones::Encoding::Gorilla::ZigZagTimestampNullDecoder<>, BareBones::Encoding::Gorilla::ValuesNullDecoder>;
 
-#pragma pack(push, 1)
-class CompactSamplesList {
- public:
-  using SamplesVector = BareBones::Vector<Primitives::Sample>;
-
-  ~CompactSamplesList() {
-    if (type_ == Type::kPlural) {
-      sample_.plural.~SamplesVector();
-    }
-  }
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_single() const noexcept { return type_ == Type::kSingle; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_plural() const noexcept { return type_ == Type::kPlural; }
-
-  void add(const Primitives::Sample& sample) {
-    if (type_ == Type::kNone) [[likely]] {
-      type_ = Type::kSingle;
-      sample_.single = sample;
-    } else if (type_ == Type::kSingle) {
-      type_ = Type::kPlural;
-
-      if (const auto sample_copy = sample_.single; sample.timestamp() >= sample_copy.timestamp()) [[likely]] {
-        new (&sample_.plural) SamplesVector({sample_copy, sample});
-      } else {
-        new (&sample_.plural) SamplesVector({sample, sample_copy});
-      }
-    } else {
-      if (auto& plural = sample_.plural; plural.back().timestamp() <= sample.timestamp()) [[likely]] {
-        plural.emplace_back(sample);
-      } else {
-        const auto it = std::ranges::lower_bound(
-            plural, sample, [](const Primitives::Sample& a, const Primitives::Sample& b) PROMPP_LAMBDA_INLINE { return a.timestamp() <= b.timestamp(); });
-        plural.insert(it, sample);
-      }
-    }
-  }
-
-  [[nodiscard]] PROMPP_LAMBDA_INLINE const Primitives::Sample& sample() const noexcept {
-    assert(type_ == Type::kSingle);
-    return sample_.single;
-  }
-
-  [[nodiscard]] PROMPP_LAMBDA_INLINE const SamplesVector& samples() const noexcept {
-    assert(type_ == Type::kPlural);
-    return sample_.plural;
-  }
-
- private:
-  enum class Type : uint8_t {
-    kNone = 0,
-    kSingle,
-    kPlural,
-  };
-
-  union SampleUnion {
-    SampleUnion() {}
-    ~SampleUnion() {}
-
-    std::array<Primitives::Sample, 0> none{};
-    Primitives::Sample single;
-    SamplesVector plural;
-  } sample_;
-  Type type_{Type::kNone};
-};
-#pragma pack(pop)
-
 }  // namespace PromPP::WAL
-
-template <>
-struct BareBones::IsTriviallyReallocatable<PromPP::WAL::CompactSamplesList> : std::true_type {};
 
 namespace PromPP::WAL {
 
@@ -180,63 +111,6 @@ template <class LabelSetsTable = Primitives::SnugComposites::LabelSet::EncodingB
 class BasicEncoder {
  public:
   using checkpoint_type = typename std::remove_reference_t<LabelSetsTable>::checkpoint_type;
-
-  class Buffer {
-    BareBones::SparseVector<CompactSamplesList, BareBones::Vector> series_;
-    Primitives::Timestamp earliest_sample_ = std::numeric_limits<Primitives::Timestamp>::max();
-    Primitives::Timestamp latest_sample_ = 0;
-    int64_t first_sample_added_at_tsns_ = 0;
-    uint32_t samples_count_ = 0;
-
-   public:
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t samples_count() const noexcept { return samples_count_; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t series_count() const noexcept { return series_.items_count(); }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Timestamp earliest_sample() const noexcept { return earliest_sample_; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Timestamp latest_sample() const noexcept { return latest_sample_; }
-    [[nodiscard]] PROMPP_ALWAYS_INLINE int64_t first_sample_added_at_ts_ns() const noexcept { return first_sample_added_at_tsns_; }
-
-    PROMPP_ALWAYS_INLINE void clear() noexcept {
-      series_.clear();
-
-      samples_count_ = 0;
-
-      earliest_sample_ = std::numeric_limits<Primitives::Timestamp>::max();
-      latest_sample_ = 0;
-      first_sample_added_at_tsns_ = 0;
-    }
-
-    template <class T>
-    PROMPP_ALWAYS_INLINE void add(Primitives::LabelSetID ls_id, const T& smpl) {
-      if (first_sample_added_at_tsns_ == 0) [[unlikely]] {
-        const auto now = std::chrono::system_clock::now();
-        first_sample_added_at_tsns_ = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
-      }
-
-      earliest_sample_ = std::min(smpl.timestamp(), earliest_sample_);
-      latest_sample_ = std::max(smpl.timestamp(), latest_sample_);
-      ++samples_count_;
-
-      if (ls_id >= series_.size()) [[unlikely]] {
-        series_.resize(ls_id + 1 + 512);
-      }
-
-      series_[ls_id].add(smpl);
-    }
-
-    template <class Callback>
-      requires std::is_invocable_v<Callback, Primitives::LabelSetID, Primitives::Timestamp, Primitives::Sample::value_type>
-    void for_each(Callback&& func) const {
-      for (const auto& [ls_id, sample] : series_) {
-        if (sample.is_single()) [[likely]] {
-          func(ls_id, sample.sample().timestamp(), sample.sample().value());
-        } else if (sample.is_plural()) [[likely]] {
-          for (const auto& [timestamp, value] : sample.samples()) {
-            func(ls_id, timestamp, value);
-          }
-        }
-      }
-    }
-  };
 
   template <Bitset BitsetType = roaring::Roaring>
   struct StaleNaNsState {
@@ -258,7 +132,7 @@ class BasicEncoder {
  private:
   LabelSetsTable label_sets_;
   checkpoint_type label_sets_checkpoint_;
-  Buffer buffer_;
+  SegmentSamplesStorage segment_samples_;
   BareBones::Vector<GorillaEncoder> gorilla_;
   BareBones::LZ4Stream::ostream lz4stream_{nullptr};
 
@@ -284,26 +158,26 @@ class BasicEncoder {
 
     BareBones::CRC32 ls_id_crc, ts_crc, v_crc;
 
-    bool ts_delta_rle_is_worth_trying = buffer_.series_count() * 0.1 > (buffer_.samples_count() - buffer_.series_count());
+    bool ts_delta_rle_is_worth_trying = segment_samples_.series_count() * 0.1 > (segment_samples_.samples_count() - segment_samples_.series_count());
 
-    ts_base_ = std::min(ts_base_, buffer_.earliest_sample());
+    ts_base_ = std::min(ts_base_, segment_samples_.earliest_sample());
 
     // delta_rle requires delta to fit in int32
-    if (buffer_.latest_sample() - ts_base_ > std::numeric_limits<int32_t>::max()) {
+    if (segment_samples_.latest_sample() - ts_base_ > std::numeric_limits<int32_t>::max()) {
       ts_delta_rle_is_worth_trying = false;
     }
 
     // gorilla requires delta to fit in int64
-    if (buffer_.latest_sample() > std::numeric_limits<int64_t>::max() - ts_base_) {
+    if (segment_samples_.latest_sample() > std::numeric_limits<int64_t>::max() - ts_base_) {
       throw BareBones::Exception(0x546e143d302c4860, "The latest segment's sample timestamp (%zd) is greater than max_int64 for timestamp(%zd)",
-                                 buffer_.latest_sample(), (std::numeric_limits<int64_t>::max() - ts_base_));
+                                 segment_samples_.latest_sample(), (std::numeric_limits<int64_t>::max() - ts_base_));
     }
 
     gorilla_.resize(label_sets_.next_item_index());
 
     const auto label_sets_checkpoint = label_sets_checkpoint_;
     if (ts_delta_rle_is_worth_trying) {
-      buffer_.for_each([&](Primitives::LabelSetID ls_id, Primitives::Timestamp ts, Primitives::Sample::value_type v) {
+      segment_samples_.for_each([&](Primitives::LabelSetID ls_id, Primitives::Timestamp ts, Primitives::Sample::value_type v) {
         gorilla_[ls_id].encode(ts - ts_base_, v, gorilla_ts_bitseq, gorilla_v_bitseq);
 
         ls_id_delta_rle_seq.push_back(ls_id);
@@ -314,7 +188,7 @@ class BasicEncoder {
         v_crc << v;
       });
     } else {
-      buffer_.for_each([&](Primitives::LabelSetID ls_id, Primitives::Timestamp ts, Primitives::Sample::value_type v) {
+      segment_samples_.for_each([&](Primitives::LabelSetID ls_id, Primitives::Timestamp ts, Primitives::Sample::value_type v) {
         gorilla_[ls_id].encode(ts - ts_base_, v, gorilla_ts_bitseq, gorilla_v_bitseq);
 
         ls_id_delta_rle_seq.push_back(ls_id);
@@ -331,7 +205,7 @@ class BasicEncoder {
     lz4stream_.set_stream(&stream);
 
     // write open-close timestamps
-    const int64_t created_at_tsns = buffer_.first_sample_added_at_ts_ns();
+    const int64_t created_at_tsns = segment_samples_.first_sample_added_at_ts_ns();
     const auto now = std::chrono::system_clock::now();
     const int64_t encoded_at_tsns = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count();
     lz4stream_.write(reinterpret_cast<const char*>(&created_at_tsns), sizeof(created_at_tsns));
@@ -374,8 +248,8 @@ class BasicEncoder {
     lz4stream_ << std::flush;
     lz4stream_.set_stream(nullptr);
 
-    samples_ += buffer_.samples_count();
-    buffer_.clear();
+    samples_ += segment_samples_.samples_count();
+    segment_samples_.clear();
     ++next_encoded_segment_;
   }
 
@@ -424,7 +298,7 @@ class BasicEncoder {
 
   inline __attribute__((always_inline)) const LabelSetsTable& label_sets() const { return label_sets_; }
 
-  inline __attribute__((always_inline)) const Buffer& buffer() const { return buffer_; }
+  inline __attribute__((always_inline)) const SegmentSamplesStorage& segment_samples() const { return segment_samples_; }
 
   inline __attribute__((always_inline)) uint16_t shard_id() const noexcept { return shard_id_; }
 
@@ -451,33 +325,33 @@ class BasicEncoder {
   inline __attribute__((always_inline)) size_t allocated_memory() const noexcept { return label_sets_.allocated_memory() + gorilla_.allocated_memory(); }
 
   template <typename T>
-  inline __attribute__((always_inline)) Primitives::LabelSetID add(const T& tmsr) {
+  PROMPP_ALWAYS_INLINE Primitives::LabelSetID add(const T& tmsr) {
     Primitives::LabelSetID ls_id = label_sets_.find_or_emplace(tmsr.label_set());
 
     for (const auto& smpl : tmsr.samples()) {
-      buffer_.add(ls_id, smpl);
+      segment_samples_.add(ls_id, smpl);
     }
     return ls_id;
   }
 
   template <typename T>
-  inline __attribute__((always_inline)) Primitives::LabelSetID add(const T& tmsr, size_t hashval) {
+  PROMPP_ALWAYS_INLINE Primitives::LabelSetID add(const T& tmsr, size_t hashval) {
     Primitives::LabelSetID ls_id = label_sets_.find_or_emplace(tmsr.label_set(), hashval);
     for (const auto& smpl : tmsr.samples()) {
-      buffer_.add(ls_id, smpl);
+      segment_samples_.add(ls_id, smpl);
     }
     return ls_id;
   }
 
   template <typename Sample>
   PROMPP_ALWAYS_INLINE void add_sample_on_ls_id(uint32_t ls_id, const Sample& sample) {
-    buffer_.add(ls_id, sample);
+    segment_samples_.add(ls_id, sample);
   }
 
   template <typename Samples>
   PROMPP_ALWAYS_INLINE void add_samples_on_ls_id(uint32_t ls_id, const Samples& samples) {
     for (const auto& smpl : samples) {
-      buffer_.add(ls_id, smpl);
+      segment_samples_.add(ls_id, smpl);
     }
   }
 
@@ -556,7 +430,7 @@ class BasicEncoder {
       const Primitives::Sample smpl{stale_nan_timestamp, BareBones::Encoding::Gorilla::STALE_NAN};
 
       for (const auto& item : diff) {
-        buffer_.add(item, smpl);
+        segment_samples_.add(item, smpl);
       }
 
       // drop old, store new..
