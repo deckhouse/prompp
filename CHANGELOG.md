@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.7.3
+
+### Enhancements
+1. **Improved Metrics Collection from C++ Components.** The mechanism for retrieving metrics from C++ code has been refined. This enhancement enables quick addition of metrics to the TSDB core, providing up-to-date information for further optimizations.
+2. **High-Cardinality Metric Splitting in Federation API.** Added the ability to split high-cardinality metrics when returning them via the federation API. The protocol accumulates all metrics with the same name in memory before writing them to the output buffer, which could cause significant memory spikes. The feature flag `federation_split_families` now allows limiting the number of accumulated metrics. This slightly increases the page size but reduces memory spikes. Recommended value is 10,000.
+3. **Optimized Allocations During Head Conversion and Historical Block Operations.** Allocations have been optimized during head-to-historical block conversion and when working with historical blocks. These are minor optimizations in performance-critical code paths.
+4. **Refactored RemoteWrite Metrics Delivery.** The mechanism for sending metrics via the RemoteWrite protocol has been redesigned. The main change is the parallelization of data preparation and transmission, allowing metrics to be sent 100% of the time, which is critical for high data throughput. Additionally, message size calculation for large data streams has been corrected. Previously, messages could grow up to 30K samples despite the `max_samples_per_send` configuration parameter. This behavior has been fixed.
+
 ## v0.7.2
 
 ### Fixes
