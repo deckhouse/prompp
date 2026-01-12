@@ -76,6 +76,7 @@ type Options struct {
 	LongtermIntervalMs  int64
 	KeeperCapacity      int
 	DataDir             string
+	LongtermDataDir     string
 	MaxSegmentSize      uint32
 	NumberOfShards      uint16
 }
@@ -293,7 +294,9 @@ func (m *Manager) initServices(
 				hcatalog,
 				block.NewWriter[*shard.Shard](
 					o.DataDir,
+					o.LongtermDataDir,
 					block.DefaultChunkSegmentSize,
+					o.LongtermIntervalMs,
 					o.BlockDuration,
 					r,
 				),
@@ -302,7 +305,6 @@ func (m *Manager) initServices(
 				persistenerMediator,
 				o.MaxRetentionPeriod,
 				o.HeadRetentionPeriod,
-				o.LongtermIntervalMs,
 				r,
 			).Execute()
 

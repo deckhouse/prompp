@@ -938,14 +938,16 @@ func main() {
 	_ = longtermReloadBlocksTriggerNotifier
 	hManager, err := pp_storage.NewManager(
 		&pp_storage.Options{
-			Seed:                cfgFile.GlobalConfig.ExternalLabels.Hash(),
-			BlockDuration:       time.Duration(cfg.tsdb.MinBlockDuration),
+			Seed: cfgFile.GlobalConfig.ExternalLabels.Hash(),
+			// BlockDuration:       time.Duration(cfg.tsdb.MinBlockDuration),
+			BlockDuration:       15 * time.Minute,
 			CommitInterval:      time.Duration(cfg.WalCommitInterval),
 			MaxRetentionPeriod:  time.Duration(cfg.tsdb.RetentionDuration),
 			HeadRetentionPeriod: time.Duration(cfg.HeadRetentionTimeout),
 			LongtermIntervalMs:  time.Duration(cfg.longtermInterval).Milliseconds(),
 			KeeperCapacity:      2,
 			DataDir:             localStoragePath,
+			LongtermDataDir:     cfg.longtermStoragePath,
 			MaxSegmentSize:      cfg.WalMaxSamplesPerSegment,
 			NumberOfShards:      receiverConfig.NumberOfShards,
 		},
