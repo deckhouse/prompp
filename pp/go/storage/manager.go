@@ -386,6 +386,8 @@ func (m *Manager) initServices(
 			metricsUpdaterCancel()
 		},
 	)
+
+	cppbridge.NewCppMetricsCollector(r)
 }
 
 func (m *Manager) close() {

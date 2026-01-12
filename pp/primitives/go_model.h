@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <string_view>
 
 #include "primitives/go_slice.h"
@@ -351,6 +352,8 @@ void read_timeseries(const TimeSeries& go_time_series, Timeseries& time_series) 
   read_label_set(go_time_series.label_set, time_series.label_set());
   read_samples(go_time_series, time_series.samples());
 }
+
+using Error = std::array<void*, 2>;
 
 }  // namespace PromPP::Primitives::Go
 

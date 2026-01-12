@@ -305,7 +305,7 @@ TEST_F(EncodingBimapFixture, FindOrEmplaceDifferentValues) {
 TEST_F(EncodingBimapFixture, FindOrEmplaceWithHash) {
   // Arrange
   const std::string value = "test"s;
-  const auto hash_val = BareBones::XXHash::hash(value);
+  const auto hash_val = BareBones::XXHash3::hash(value);
 
   // Act
   const auto id1 = table_.find_or_emplace(value, hash_val);
@@ -348,7 +348,7 @@ TEST_F(EncodingBimapFixture, FindNonExistingValue) {
 TEST_F(EncodingBimapFixture, FindWithHash) {
   // Arrange
   const std::string value = "test"s;
-  const auto hash_val = BareBones::XXHash::hash(value);
+  const auto hash_val = BareBones::XXHash3::hash(value);
   const auto id = table_.find_or_emplace(value, hash_val);
 
   // Act

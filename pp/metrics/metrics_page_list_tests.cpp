@@ -2,12 +2,10 @@
 
 #include <gtest/gtest.h>
 
-#include "counter.h"
 #include "metrics_page_list.h"
 
 namespace {
 
-using metrics::AtomicCounter;
 using metrics::Counter;
 using metrics::Metric;
 using metrics::MetricsPage;
@@ -22,7 +20,7 @@ class MetricsPageListFixture : public ::testing::Test {
   struct Metrics final : MetricsPage<Metrics> {
     using MetricsPage::MetricsPage;
 
-    Counter<uint16_t> uint64_counter{"uint16_counter", 16};
+    Counter uint64_counter{LabelViewSet{}, "uint16_counter", 16};
   };
 
   MetricsPageList metrics_page_list_;
@@ -47,7 +45,7 @@ TEST_F(MetricsPageListFixture, TestIteratorInEmptyList) {
 
 TEST_F(MetricsPageListFixture, TestIteratorWithUsedPages) {
   // Arrange
-  MetricsPagesVector metrics_pages{new Metrics(LabelViewSet{{"job", "test"}}), new Metrics(LabelViewSet{{"job2", "test2"}})};
+  MetricsPagesVector metrics_pages{new Metrics(), new Metrics()};
   add_metrics_pages(metrics_pages);
 
   MetricsPagesVector actual;
@@ -62,8 +60,7 @@ TEST_F(MetricsPageListFixture, TestIteratorWithUsedPages) {
 
 TEST_F(MetricsPageListFixture, TestIteratorWithUnusedPages) {
   // Arrange
-  const MetricsPagesVector metrics_pages{new Metrics(LabelViewSet{{"job", "test"}}), new Metrics(LabelViewSet{{"job2", "test2"}}),
-                                         new Metrics(LabelViewSet{{"job3", "test3"}}), new Metrics(LabelViewSet{{"job4", "test4"}})};
+  const MetricsPagesVector metrics_pages{new Metrics(), new Metrics(), new Metrics(), new Metrics()};
   metrics_pages[0]->detach();
   metrics_pages[1]->detach();
   metrics_pages[3]->detach();
@@ -82,8 +79,7 @@ TEST_F(MetricsPageListFixture, TestIteratorWithUnusedPages) {
 class MetricsPageListRemoveUnusedPagesFixture : public MetricsPageListFixture {
  protected:
   MetricsPagesVector fill_4_metric_pages() {
-    MetricsPagesVector pages{new Metrics(LabelViewSet{{"job", "test"}}), new Metrics(LabelViewSet{{"job2", "test2"}}),
-                             new Metrics(LabelViewSet{{"job3", "test3"}}), new Metrics(LabelViewSet{{"job4", "test4"}})};
+    MetricsPagesVector pages{new Metrics(), new Metrics(), new Metrics(), new Metrics()};
     add_metrics_pages(pages);
     return pages;
   }
@@ -100,7 +96,7 @@ TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveInEmptyList) {
 
 TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveWithoutUnusedPages) {
   // Arrange
-  MetricsPagesVector metrics_pages{new Metrics(LabelViewSet{{"job", "test"}}), new Metrics(LabelViewSet{{"job2", "test2"}})};
+  MetricsPagesVector metrics_pages{new Metrics(), new Metrics()};
   add_metrics_pages(metrics_pages);
 
   MetricsPagesVector actual;
@@ -117,7 +113,7 @@ TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveWithoutUnusedPages) {
 
 TEST_F(MetricsPageListRemoveUnusedPagesFixture, TestRemoveFirstMetricsPageInOnePageList) {
   // Arrange
-  const auto metric = new Metrics(LabelViewSet{{"job", "test"}});
+  const auto metric = new Metrics();
   metrics_page_list_.add(metric);
   metric->detach();
 
@@ -230,7 +226,7 @@ TEST_F(MetricsPageListThreadSafetyFixture, DISABLED_TestAdd) {
   static constexpr auto kWaitThreadCreationDuration = std::chrono::milliseconds(1000);
 
   MetricsPagesVector pages(kThreadsCount * kThreadTasks);
-  std::ranges::generate(pages, [] { return new Metrics(LabelViewSet{{"job", "test"}}); });
+  std::ranges::generate(pages, [] { return new Metrics(); });
 
   std::vector<std::jthread> threads_list;
   threads_list.reserve(kThreadsCount);
