@@ -121,43 +121,38 @@ func (wl *writeLoop) run(ctx context.Context) {
 }
 
 // write writes data from iterator to the remote write storage.
-func (*writeLoop) write(ctx context.Context, iterator *Iterator) error {
+func (*writeLoop) write(ctx context.Context, iterator *Iterator) (err error) {
 	msgChannel := make(chan *Message)
-	defer close(msgChannel)
 
 	go func() {
-		for msg := range msgChannel {
-			if err := iterator.SendMessage(msg, ctx); err != nil {
-				logger.Errorf("send message: %v", err)
+		defer close(msgChannel)
+
+		for {
+			msg, err := iterator.Next(ctx)
+			if errors.Is(err, ErrEndOfBlock) {
+				return
+			}
+			if err != nil {
+				logger.Errorf("iteration failed: %v", err)
+			}
+			if msg != nil {
+				select {
+				case <-ctx.Done():
+					err = ctx.Err()
+					return
+
+				case msgChannel <- msg:
+				}
 			}
 		}
 	}()
 
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			if msg, err := iterator.Next(ctx); err == nil {
-				if msg == nil {
-					continue
-				}
-
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-
-				case msgChannel <- msg:
-				}
-
-			} else {
-				if errors.Is(err, ErrEndOfBlock) {
-					return nil
-				}
-				logger.Errorf("iteration failed: %v", err)
-			}
+	for msg := range msgChannel {
+		if err := iterator.SendMessage(msg, ctx); err != nil {
+			logger.Errorf("send message: %v", err)
 		}
 	}
+	return err
 }
 
 // nextIterator returns next iterator.
