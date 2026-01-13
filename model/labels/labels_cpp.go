@@ -215,27 +215,29 @@ func (ls Labels) IsEmpty() bool {
 // IsZero returns true if ls lss referece is nil.
 // Implements yaml.IsZeroer - if we don't have this then 'omitempty' fields are always omitted.
 func (ls Labels) IsZero() bool {
+	if ls.length != 0 {
+		return false
+	}
+
 	if ls.snapshot == nil {
 		return true
 	}
 
-	if ls.length == 0 {
-		ls.length = uint16(ls.snapshot.LabelSetLength(ls.id, ls.dropMetricName))
-	}
-
+	ls.length = uint16(ls.snapshot.LabelSetLength(ls.id, ls.dropMetricName))
 	return ls.length == 0
 }
 
 // Len returns the number of labels.
-func (ls Labels) Len() int {
+func (ls *Labels) Len() int {
+	if ls.length != 0 {
+		return int(ls.length)
+	}
+
 	if ls.snapshot == nil {
 		return 0
 	}
 
-	if ls.length == 0 {
-		ls.length = uint16(ls.snapshot.LabelSetLength(ls.id, ls.dropMetricName))
-	}
-
+	ls.length = uint16(ls.snapshot.LabelSetLength(ls.id, ls.dropMetricName))
 	return int(ls.length)
 }
 

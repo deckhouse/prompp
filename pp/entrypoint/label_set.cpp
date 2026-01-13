@@ -518,8 +518,10 @@ extern "C" void prompp_label_set_equal(void* args, void* res) {
 
           auto it_a = ls_a.begin();
           auto it_b = ls_b.begin();
+          const auto it_a_end = ls_a.end();
+          const auto it_b_end = ls_b.end();
 
-          while (it_a != ls_a.end() && it_b != ls_b.end()) {
+          while (it_a != it_a_end && it_b != it_b_end) {
             if (in->drop_metric_name_a && (*it_a).first == PromPP::Prometheus::kMetricLabelName) [[unlikely]] {
               ++it_a;
             }
@@ -536,7 +538,7 @@ extern "C" void prompp_label_set_equal(void* args, void* res) {
             ++it_b;
           }
 
-          if (it_a != ls_a.end() || it_b != ls_b.end()) [[unlikely]] {
+          if (it_a != it_a_end || it_b != it_b_end) [[unlikely]] {
             out->is_equal = false;
             return;
           }
