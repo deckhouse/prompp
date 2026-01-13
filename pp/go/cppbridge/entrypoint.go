@@ -2289,13 +2289,14 @@ func seriesDataEncoderDtor(encoder uintptr) {
 	)
 }
 
-func seriesDataChunkRecoderCtor(lss uintptr, lsIdBatchSize uint32, dataStorage uintptr, timeInterval TimeInterval) uintptr {
+func seriesDataChunkRecoderCtor(lss uintptr, lsIdBatchSize uint32, dataStorage uintptr, timeInterval TimeInterval, downsamplingMs int64) uintptr {
 	args := struct {
 		lss           uintptr
 		lsIdBatchSize uint32
 		dataStorage   uintptr
 		TimeInterval
-	}{lss, lsIdBatchSize, dataStorage, timeInterval}
+		downsamplingMs int64
+	}{lss, lsIdBatchSize, dataStorage, timeInterval, downsamplingMs}
 	var res struct {
 		chunkRecoder uintptr
 	}
