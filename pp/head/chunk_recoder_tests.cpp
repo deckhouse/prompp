@@ -495,6 +495,7 @@ TEST_F(ChunkRecoderFixture, RecodeWithDownsampling) {
   auto recoder = create_recoder({0, 1}, 2, {.min = 0, .max = 300}, 100);
 
   // Act
+  // NOLINTNEXTLINE(clang-analyzer-core.NullDereference)
   const auto info1 = recode(recoder);
   const auto info2 = recode(recoder);
 
