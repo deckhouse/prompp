@@ -97,7 +97,7 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 			maxT = timeInterval.MaxT
 		}
 
-		writer, err := w.createWriter(w.dataDir, sd, lss, minT, maxT)
+		writer, err := w.createWriter(w.dataDir, sd, lss, minT, maxT, cppbridge.NoDownsampling)
 		if err != nil {
 			writers.close()
 			return blockWriters{}, err
@@ -109,7 +109,7 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 			continue
 		}
 
-		longtermWriter, err := w.createWriter(w.longtermDataDir, sd, lss, minT, maxT)
+		longtermWriter, err := w.createWriter(w.longtermDataDir, sd, lss, minT, maxT, w.longtermIntervalMs)
 		if err != nil {
 			writers.close()
 			return blockWriters{}, err
@@ -125,11 +125,11 @@ func (w *Writer[TShard]) createWriter(
 	dataDir string,
 	sd TShard,
 	lss *cppbridge.LabelSetStorage,
-	minT, maxT int64,
+	minT, maxT, downsamplingMs int64,
 ) (blockWriter, error) {
 	var chunkIterator ChunkIterator
 	_ = sd.DataStorage().WithRLock(func(ds *cppbridge.DataStorage) error {
-		chunkIterator = NewChunkIterator(lss, LsIdBatchSize, ds, minT, maxT)
+		chunkIterator = NewChunkIterator(lss, LsIdBatchSize, ds, minT, maxT, downsamplingMs)
 		return nil
 	})
 

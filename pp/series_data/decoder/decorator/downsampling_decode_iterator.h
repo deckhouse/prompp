@@ -5,6 +5,8 @@
 
 namespace series_data::decoder::decorator {
 
+static constexpr PromPP::Primitives::Timestamp kNoDownsampling = 0;
+
 template <class DecodeIterator>
 class DownsamplingDecodeIterator {
  public:
@@ -47,7 +49,6 @@ class DownsamplingDecodeIterator {
 
  private:
   static constexpr Timestamp kInvalidTimestamp = std::numeric_limits<Timestamp>::min();
-  static constexpr Timestamp kNoDownsampling = 0;
 
   Timestamp timestamp_{};
   DecodeIterator iterator_;

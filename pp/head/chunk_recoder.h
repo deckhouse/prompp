@@ -7,6 +7,7 @@
 #include "prometheus/tsdb/chunkenc/xor.h"
 #include "series_data/concepts.h"
 #include "series_data/decoder.h"
+#include "series_data/decoder/decorator/downsampling_decode_iterator.h"
 #include "series_data/encoder/bit_sequence.h"
 
 namespace head {
@@ -113,8 +114,8 @@ class ChunkRecoderIterator {
 template <class ChunkIterator>
 class ChunkRecoder {
  public:
-  explicit ChunkRecoder(ChunkIterator&& iterator, const PromPP::Primitives::TimeInterval& time_interval)
-      : iterator_(std::move(iterator)), time_interval_{time_interval} {}
+  explicit ChunkRecoder(ChunkIterator&& iterator, const PromPP::Primitives::TimeInterval& time_interval, PromPP::Primitives::Timestamp downsampling_ms)
+      : iterator_(std::move(iterator)), time_interval_{time_interval}, downsampling_ms_{downsampling_ms} {}
 
   PROMPP_ALWAYS_INLINE ChunkIterator& chunk_iterator() noexcept { return iterator_; }
 
@@ -153,6 +154,7 @@ class ChunkRecoder {
   ChunkIterator iterator_;
   PromPP::Prometheus::tsdb::chunkenc::FixedSizeBStream<series_data::encoder::kAllocationSizesTable> stream_{kMaxStreamSize};
   const PromPP::Primitives::TimeInterval time_interval_;
+  const PromPP::Primitives::Timestamp downsampling_ms_;
 
   PROMPP_ALWAYS_INLINE static void reset_info(ChunkInfoInterface auto& info) noexcept {
     info.interval.reset(0, 0);
@@ -168,8 +170,10 @@ class ChunkRecoder {
   void recode_chunk(ChunkInfoInterface auto& info) {
     Encoder encoder;
     series_data::Decoder::create_decode_iterator(*iterator_, [&]<typename Iterator>(Iterator&& begin, auto&& end) {
-      for (; begin != end; ++begin) {
-        const auto& sample = *begin;
+      series_data::decoder::decorator::DownsamplingDecodeIterator<Iterator> it(std::move(begin), downsampling_ms_);
+
+      for (; it != end; ++it) {
+        const auto& sample = *it;
         if (sample.timestamp > time_interval_.max) [[unlikely]] {
           return;
         }

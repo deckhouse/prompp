@@ -151,10 +151,11 @@ void prompp_series_data_data_storage_dtor(void* args);
  *     lss uintptr            // pointer to constructed label sets
  *     lsIdBatchSize uint32   // size of ls batch for recoding
  *     dataStorage   uintptr  // pointer to constructed data storage
- *     time_interval struct { closed interval [min, max]
+ *     timeInterval struct {  // closed interval [min, max]
  *        min int64
  *        max int64
  *     }
+ *     downsamplingMs int64   // downsampling interval in milliseconds (0 - downsampling is disabled)
  * }
  * @param res {
  *     chunk_recoder uintptr // pointer to chunk recoder

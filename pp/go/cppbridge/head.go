@@ -119,8 +119,19 @@ type ChunkRecoder struct {
 	serializedData *DataStorageSerializedData
 }
 
-func NewChunkRecoder(lss *LabelSetStorage, lsIdBatchSize uint32, dataStorage *DataStorage, timeInterval TimeInterval) *ChunkRecoder {
-	return initializeChunkRecoder(lss, dataStorage, nil, seriesDataChunkRecoderCtor(lss.Pointer(), lsIdBatchSize, dataStorage.dataStorage, timeInterval))
+func NewChunkRecoder(
+	lss *LabelSetStorage,
+	lsIdBatchSize uint32,
+	dataStorage *DataStorage,
+	timeInterval TimeInterval,
+	downsamplingMs int64,
+) *ChunkRecoder {
+	return initializeChunkRecoder(
+		lss,
+		dataStorage,
+		nil,
+		seriesDataChunkRecoderCtor(lss.Pointer(), lsIdBatchSize, dataStorage.dataStorage, timeInterval, downsamplingMs),
+	)
 }
 
 func NewSerializedChunkRecoder(serializedData *DataStorageSerializedData, timeInterval TimeInterval) *ChunkRecoder {

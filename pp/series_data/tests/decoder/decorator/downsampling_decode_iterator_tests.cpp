@@ -17,13 +17,13 @@ using series_data::decoder::UniversalDecodeIterator;
 using series_data::decoder::decorator::DownsamplingDecodeIterator;
 using series_data::encoder::Sample;
 
-struct IntervalDecodeIteratorCase {
+struct DownsamplingDecodeIteratorCase {
   std::vector<Sample> samples;
   PromPP::Primitives::Timestamp interval;
   std::vector<Sample> expected{};
 };
 
-class DownsamplingDecodeIteratorFixture : public ::testing::TestWithParam<IntervalDecodeIteratorCase> {
+class DownsamplingDecodeIteratorFixture : public ::testing::TestWithParam<DownsamplingDecodeIteratorCase> {
  protected:
   DataStorage storage_;
 
@@ -70,111 +70,111 @@ INSTANTIATE_TEST_SUITE_P(
     OneSample,
     DownsamplingDecodeIteratorFixture,
     testing::Values(
-        IntervalDecodeIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}}, .interval = 100, .expected{Sample{.timestamp = 100, .value = 1.0}}},
-        IntervalDecodeIteratorCase{.samples{Sample{.timestamp = 300, .value = 1.0}}, .interval = 400, .expected{Sample{.timestamp = 300, .value = 1.0}}}));
+        DownsamplingDecodeIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}}, .interval = 100, .expected{Sample{.timestamp = 100, .value = 1.0}}},
+        DownsamplingDecodeIteratorCase{.samples{Sample{.timestamp = 300, .value = 1.0}}, .interval = 400, .expected{Sample{.timestamp = 300, .value = 1.0}}}));
 INSTANTIATE_TEST_SUITE_P(ManySamples,
                          DownsamplingDecodeIteratorFixture,
-                         testing::Values(IntervalDecodeIteratorCase{.samples{
-                                                                        Sample{.timestamp = 100, .value = 1.0},
-                                                                        Sample{.timestamp = 200, .value = 1.0},
-                                                                        Sample{.timestamp = 300, .value = 1.0},
-                                                                    },
-                                                                    .interval = 100,
-                                                                    .expected{
-                                                                        Sample{.timestamp = 100, .value = 1.0},
-                                                                        Sample{.timestamp = 200, .value = 1.0},
-                                                                        Sample{.timestamp = 300, .value = 1.0},
-                                                                    }},
-                                         IntervalDecodeIteratorCase{.samples{
-                                                                        Sample{.timestamp = 100, .value = 1.0},
-                                                                        Sample{.timestamp = 150, .value = 1.0},
-                                                                        Sample{.timestamp = 200, .value = 1.0},
-                                                                    },
-                                                                    .interval = 100,
-                                                                    .expected{
-                                                                        Sample{.timestamp = 100, .value = 1.0},
-                                                                        Sample{.timestamp = 200, .value = 1.0},
-                                                                    }},
-                                         IntervalDecodeIteratorCase{.samples{
-                                                                        Sample{.timestamp = 123, .value = 1.0},
-                                                                        Sample{.timestamp = 152, .value = 1.0},
-                                                                        Sample{.timestamp = 180, .value = 1.0},
-                                                                        Sample{.timestamp = 215, .value = 1.0},
-                                                                        Sample{.timestamp = 242, .value = 1.0},
-                                                                        Sample{.timestamp = 275, .value = 1.0},
-                                                                        Sample{.timestamp = 303, .value = 1.0},
-                                                                    },
-                                                                    .interval = 100,
-                                                                    .expected{
-                                                                        Sample{.timestamp = 180, .value = 1.0},
-                                                                        Sample{.timestamp = 275, .value = 1.0},
-                                                                        Sample{.timestamp = 303, .value = 1.0},
-                                                                    }},
-                                         IntervalDecodeIteratorCase{.samples{
-                                                                        Sample{.timestamp = 180, .value = 1.0},
-                                                                        Sample{.timestamp = 275, .value = 1.0},
-                                                                        Sample{.timestamp = 503, .value = 1.0},
-                                                                        Sample{.timestamp = 603, .value = 1.0},
-                                                                        Sample{.timestamp = 604, .value = 1.0},
-                                                                    },
-                                                                    .interval = 100,
-                                                                    .expected{
-                                                                        Sample{.timestamp = 180, .value = 1.0},
-                                                                        Sample{.timestamp = 275, .value = 1.0},
-                                                                        Sample{.timestamp = 503, .value = 1.0},
-                                                                        Sample{.timestamp = 604, .value = 1.0},
-                                                                    }}));
+                         testing::Values(DownsamplingDecodeIteratorCase{.samples{
+                                                                            Sample{.timestamp = 100, .value = 1.0},
+                                                                            Sample{.timestamp = 200, .value = 1.0},
+                                                                            Sample{.timestamp = 300, .value = 1.0},
+                                                                        },
+                                                                        .interval = 100,
+                                                                        .expected{
+                                                                            Sample{.timestamp = 100, .value = 1.0},
+                                                                            Sample{.timestamp = 200, .value = 1.0},
+                                                                            Sample{.timestamp = 300, .value = 1.0},
+                                                                        }},
+                                         DownsamplingDecodeIteratorCase{.samples{
+                                                                            Sample{.timestamp = 100, .value = 1.0},
+                                                                            Sample{.timestamp = 150, .value = 1.0},
+                                                                            Sample{.timestamp = 200, .value = 1.0},
+                                                                        },
+                                                                        .interval = 100,
+                                                                        .expected{
+                                                                            Sample{.timestamp = 100, .value = 1.0},
+                                                                            Sample{.timestamp = 200, .value = 1.0},
+                                                                        }},
+                                         DownsamplingDecodeIteratorCase{.samples{
+                                                                            Sample{.timestamp = 123, .value = 1.0},
+                                                                            Sample{.timestamp = 152, .value = 1.0},
+                                                                            Sample{.timestamp = 180, .value = 1.0},
+                                                                            Sample{.timestamp = 215, .value = 1.0},
+                                                                            Sample{.timestamp = 242, .value = 1.0},
+                                                                            Sample{.timestamp = 275, .value = 1.0},
+                                                                            Sample{.timestamp = 303, .value = 1.0},
+                                                                        },
+                                                                        .interval = 100,
+                                                                        .expected{
+                                                                            Sample{.timestamp = 180, .value = 1.0},
+                                                                            Sample{.timestamp = 275, .value = 1.0},
+                                                                            Sample{.timestamp = 303, .value = 1.0},
+                                                                        }},
+                                         DownsamplingDecodeIteratorCase{.samples{
+                                                                            Sample{.timestamp = 180, .value = 1.0},
+                                                                            Sample{.timestamp = 275, .value = 1.0},
+                                                                            Sample{.timestamp = 503, .value = 1.0},
+                                                                            Sample{.timestamp = 603, .value = 1.0},
+                                                                            Sample{.timestamp = 604, .value = 1.0},
+                                                                        },
+                                                                        .interval = 100,
+                                                                        .expected{
+                                                                            Sample{.timestamp = 180, .value = 1.0},
+                                                                            Sample{.timestamp = 275, .value = 1.0},
+                                                                            Sample{.timestamp = 503, .value = 1.0},
+                                                                            Sample{.timestamp = 604, .value = 1.0},
+                                                                        }}));
 INSTANTIATE_TEST_SUITE_P(StaleNan,
                          DownsamplingDecodeIteratorFixture,
-                         testing::Values(IntervalDecodeIteratorCase{.samples{Sample{.timestamp = 100, .value = STALE_NAN}},
-                                                                    .interval = 100,
-                                                                    .expected{
-                                                                        Sample{.timestamp = 100, .value = STALE_NAN},
-                                                                    }},
-                                         IntervalDecodeIteratorCase{.samples{
-                                                                        Sample{.timestamp = 99, .value = 1.0},
-                                                                        Sample{.timestamp = 100, .value = STALE_NAN},
-                                                                    },
-                                                                    .interval = 100,
-                                                                    .expected{
-                                                                        Sample{.timestamp = 100, .value = STALE_NAN},
-                                                                    }},
-                                         IntervalDecodeIteratorCase{.samples{
-                                                                        Sample{.timestamp = 98, .value = 1.0},
-                                                                        Sample{.timestamp = 99, .value = STALE_NAN},
-                                                                        Sample{.timestamp = 100, .value = 1.0},
-                                                                    },
-                                                                    .interval = 100,
-                                                                    .expected{
-                                                                        Sample{.timestamp = 100, .value = 1.0},
-                                                                    }},
-                                         IntervalDecodeIteratorCase{.samples{
-                                                                        Sample{.timestamp = 100, .value = STALE_NAN},
-                                                                        Sample{.timestamp = 101, .value = 1.0},
-                                                                        Sample{.timestamp = 200, .value = STALE_NAN},
-                                                                        Sample{.timestamp = 201, .value = 1.0},
-                                                                        Sample{.timestamp = 300, .value = STALE_NAN},
-                                                                        Sample{.timestamp = 400, .value = 1.0},
-                                                                    },
-                                                                    .interval = 100,
-                                                                    .expected{
-                                                                        Sample{.timestamp = 100, .value = STALE_NAN},
-                                                                        Sample{.timestamp = 200, .value = STALE_NAN},
-                                                                        Sample{.timestamp = 300, .value = STALE_NAN},
-                                                                        Sample{.timestamp = 400, .value = 1.0},
-                                                                    }}));
+                         testing::Values(DownsamplingDecodeIteratorCase{.samples{Sample{.timestamp = 100, .value = STALE_NAN}},
+                                                                        .interval = 100,
+                                                                        .expected{
+                                                                            Sample{.timestamp = 100, .value = STALE_NAN},
+                                                                        }},
+                                         DownsamplingDecodeIteratorCase{.samples{
+                                                                            Sample{.timestamp = 99, .value = 1.0},
+                                                                            Sample{.timestamp = 100, .value = STALE_NAN},
+                                                                        },
+                                                                        .interval = 100,
+                                                                        .expected{
+                                                                            Sample{.timestamp = 100, .value = STALE_NAN},
+                                                                        }},
+                                         DownsamplingDecodeIteratorCase{.samples{
+                                                                            Sample{.timestamp = 98, .value = 1.0},
+                                                                            Sample{.timestamp = 99, .value = STALE_NAN},
+                                                                            Sample{.timestamp = 100, .value = 1.0},
+                                                                        },
+                                                                        .interval = 100,
+                                                                        .expected{
+                                                                            Sample{.timestamp = 100, .value = 1.0},
+                                                                        }},
+                                         DownsamplingDecodeIteratorCase{.samples{
+                                                                            Sample{.timestamp = 100, .value = STALE_NAN},
+                                                                            Sample{.timestamp = 101, .value = 1.0},
+                                                                            Sample{.timestamp = 200, .value = STALE_NAN},
+                                                                            Sample{.timestamp = 201, .value = 1.0},
+                                                                            Sample{.timestamp = 300, .value = STALE_NAN},
+                                                                            Sample{.timestamp = 400, .value = 1.0},
+                                                                        },
+                                                                        .interval = 100,
+                                                                        .expected{
+                                                                            Sample{.timestamp = 100, .value = STALE_NAN},
+                                                                            Sample{.timestamp = 200, .value = STALE_NAN},
+                                                                            Sample{.timestamp = 300, .value = STALE_NAN},
+                                                                            Sample{.timestamp = 400, .value = 1.0},
+                                                                        }}));
 INSTANTIATE_TEST_SUITE_P(NoDownsampling,
                          DownsamplingDecodeIteratorFixture,
-                         testing::Values(IntervalDecodeIteratorCase{.samples{
-                                                                        Sample{.timestamp = 98, .value = 1.0},
-                                                                        Sample{.timestamp = 99, .value = STALE_NAN},
-                                                                        Sample{.timestamp = 100, .value = 1.0},
-                                                                    },
-                                                                    .interval = 0,
-                                                                    .expected{
-                                                                        Sample{.timestamp = 98, .value = 1.0},
-                                                                        Sample{.timestamp = 99, .value = STALE_NAN},
-                                                                        Sample{.timestamp = 100, .value = 1.0},
-                                                                    }}));
+                         testing::Values(DownsamplingDecodeIteratorCase{.samples{
+                                                                            Sample{.timestamp = 98, .value = 1.0},
+                                                                            Sample{.timestamp = 99, .value = STALE_NAN},
+                                                                            Sample{.timestamp = 100, .value = 1.0},
+                                                                        },
+                                                                        .interval = 0,
+                                                                        .expected{
+                                                                            Sample{.timestamp = 98, .value = 1.0},
+                                                                            Sample{.timestamp = 99, .value = STALE_NAN},
+                                                                            Sample{.timestamp = 100, .value = 1.0},
+                                                                        }}));
 
 }  // namespace
