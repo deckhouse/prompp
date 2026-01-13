@@ -26,7 +26,7 @@ func (s *BufferedSuite) TestWriteFlushSync() {
 	sfile := s.openfile(actual)
 
 	swn := &SegmentIsWrittenNotifierMock{
-		NotifySegmentIsWrittenFunc: func() {},
+		NotifySegmentIsWrittenFunc: func(uint16) {},
 		NotifySegmentWriteFunc:     func(uint16) {},
 	}
 
@@ -62,7 +62,7 @@ func (s *BufferedSuite) TestDoubleWriteAndFlush() {
 
 	numberOfSegments := 0
 	swn := &SegmentIsWrittenNotifierMock{
-		NotifySegmentIsWrittenFunc: func() {},
+		NotifySegmentIsWrittenFunc: func(uint16) {},
 		NotifySegmentWriteFunc:     func(uint16) { numberOfSegments++ },
 	}
 
@@ -111,7 +111,7 @@ func (s *BufferedSuite) TestBuffered() {
 	sfile := s.openfile(actual)
 
 	swn := &SegmentIsWrittenNotifierMock{
-		NotifySegmentIsWrittenFunc: func() {},
+		NotifySegmentIsWrittenFunc: func(uint16) {},
 		NotifySegmentWriteFunc:     func(uint16) {},
 	}
 
@@ -154,7 +154,7 @@ func (s *BufferedSuite) TestStatError() {
 	sfile.StatFunc = func() (os.FileInfo, error) { return nil, errors.New("some error") }
 
 	swn := &SegmentIsWrittenNotifierMock{
-		NotifySegmentIsWrittenFunc: func() {},
+		NotifySegmentIsWrittenFunc: func(uint16) {},
 		NotifySegmentWriteFunc:     func(uint16) {},
 	}
 
@@ -170,7 +170,7 @@ func (s *BufferedSuite) TestSyncError() {
 	sfile.SyncFunc = func() error { return errors.New("some error") }
 
 	swn := &SegmentIsWrittenNotifierMock{
-		NotifySegmentIsWrittenFunc: func() {},
+		NotifySegmentIsWrittenFunc: func(uint16) {},
 		NotifySegmentWriteFunc:     func(uint16) {},
 	}
 
@@ -201,7 +201,7 @@ func (s *BufferedSuite) TestWriteToBufferWithError() {
 	sfile := s.openfile(actual)
 
 	swn := &SegmentIsWrittenNotifierMock{
-		NotifySegmentIsWrittenFunc: func() {},
+		NotifySegmentIsWrittenFunc: func(uint16) {},
 		NotifySegmentWriteFunc:     func(uint16) {},
 	}
 
@@ -256,7 +256,7 @@ func (s *BufferedSuite) TestFlushWithError() {
 	sfile := s.openfile(actual)
 
 	swn := &SegmentIsWrittenNotifierMock{
-		NotifySegmentIsWrittenFunc: func() {},
+		NotifySegmentIsWrittenFunc: func(uint16) {},
 		NotifySegmentWriteFunc:     func(uint16) {},
 	}
 
