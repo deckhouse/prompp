@@ -215,20 +215,20 @@ func (ls Labels) IsEmpty() bool {
 // IsZero returns true if ls lss referece is nil.
 // Implements yaml.IsZeroer - if we don't have this then 'omitempty' fields are always omitted.
 func (ls Labels) IsZero() bool {
-	if ls.snapshot != nil {
-		if ls.length == 0 {
-			ls.length = uint16(ls.snapshot.LabelSetLength(ls.id, ls.dropMetricName))
-		}
-
-		return ls.length == 0
+	if ls.snapshot == nil {
+		return true
 	}
 
-	return ls.snapshot == nil
+	if ls.length == 0 {
+		ls.length = uint16(ls.snapshot.LabelSetLength(ls.id, ls.dropMetricName))
+	}
+
+	return ls.length == 0
 }
 
 // Len returns the number of labels.
 func (ls Labels) Len() int {
-	if ls.IsZero() {
+	if ls.snapshot == nil {
 		return 0
 	}
 
@@ -525,11 +525,13 @@ func (t *SymbolTable) Len() int { return 0 }
 
 // Equal returns whether the two label sets are equal.
 func Equal(a, b Labels) bool {
-	if a.IsEmpty() && b.IsEmpty() {
+	aLen, bLen := a.Len(), b.Len()
+
+	if aLen == 0 && bLen == 0 {
 		return true
 	}
 
-	if a.Len() != b.Len() {
+	if aLen != bLen {
 		return false
 	}
 
@@ -543,7 +545,7 @@ func Equal(a, b Labels) bool {
 // Compare compares the two label sets.
 // The result will be 0 if a==b, <0 if a < b, and >0 if a > b.
 func Compare(a, b Labels) int {
-	if a.IsEmpty() && b.IsEmpty() {
+	if a.Len() == 0 && b.Len() == 0 {
 		return 0
 	}
 

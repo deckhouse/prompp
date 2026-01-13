@@ -635,7 +635,8 @@ func (s *LabelsSuite) TestIsEmptyTrueDropMetricName() {
 	lsA := labels.FromStrings("__name__", "ubername")
 
 	s.False(lsA.IsEmpty())
-	s.True(lsA.DropMetricName().IsEmpty())
+	lsDMN := lsA.DropMetricName()
+	s.True(lsDMN.IsEmpty())
 }
 
 func (s *LabelsSuite) TestLenDropMetricName() {
@@ -649,7 +650,8 @@ func (s *LabelsSuite) TestLenDropMetricName() {
 	lsid := lss.FindOrEmplace(lsIn)
 	ls := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsid, 0)
 
-	s.Equal(lsIn.Len()-1, ls.DropMetricName().Len())
+	lsDMN := ls.DropMetricName()
+	s.Equal(lsIn.Len()-1, lsDMN.Len())
 }
 
 func (s *LabelsSuite) TestLenDropMetricName_2() {
@@ -663,7 +665,8 @@ func (s *LabelsSuite) TestLenDropMetricName_2() {
 	lsid := lss.FindOrEmplace(lsIn)
 	ls := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsid, uint16(lsIn.Len()))
 
-	s.Equal(lsIn.Len()-1, ls.DropMetricName().Len())
+	lsDMN := ls.DropMetricName()
+	s.Equal(lsIn.Len()-1, lsDMN.Len())
 }
 
 func (s *LabelsSuite) TestLenDropMetricName_3() {
@@ -676,13 +679,15 @@ func (s *LabelsSuite) TestLenDropMetricName_3() {
 	lsid := lss.FindOrEmplace(lsIn)
 	ls := labels.NewLabelsWithLSS(lss.Snapshot(), nil, lsid, uint16(lsIn.Len()))
 
-	s.Equal(lsIn.Len(), ls.DropMetricName().Len())
+	lsDMN := ls.DropMetricName()
+	s.Equal(lsIn.Len(), lsDMN.Len())
 }
 
 func (s *LabelsSuite) TestLenEmptyDropMetricName() {
 	lsA := labels.EmptyLabels()
 
-	s.Equal(0, lsA.DropMetricName().Len())
+	lsDMN := lsA.DropMetricName()
+	s.Equal(0, lsDMN.Len())
 }
 
 func (s *LabelsSuite) TestMatchLabelsTrueDropMetricName() {
@@ -864,7 +869,8 @@ func (s *LabelsSuite) TestIsZeroDropMetricName() {
 		"__name__", "ubername",
 	)
 
-	s.True(lsA.DropMetricName().IsZero())
+	lsDMN := lsA.DropMetricName()
+	s.True(lsDMN.IsZero())
 }
 
 func (s *LabelsSuite) TestGet() {
