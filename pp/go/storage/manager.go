@@ -145,7 +145,7 @@ func NewManager(
 	o *Options,
 	clock clockwork.Clock,
 	hcatalog *catalog.Catalog,
-	reloadBlocksNotifier *TriggerNotifier,
+	reloadBlocksNotifier *MultiTriggerNotifier,
 	removedHeadNotifier *TriggerNotifier,
 	readyNotifier ready.Notifier,
 	r prometheus.Registerer,
@@ -261,7 +261,7 @@ func (m *Manager) initServices(
 	hcatalog *catalog.Catalog,
 	builder *Builder,
 	loader *Loader,
-	reloadBlocksTriggerNotifier *TriggerNotifier,
+	reloadBlocksTriggerNotifier *MultiTriggerNotifier,
 	readyNotifier ready.Notifier,
 	clock clockwork.Clock,
 	r prometheus.Registerer,
@@ -482,6 +482,39 @@ func (tn *TriggerNotifier) Notify() {
 	select {
 	case tn.c <- struct{}{}:
 	default:
+	}
+}
+
+//
+// MultiTriggerNotifier
+//
+
+// MultiTriggerNotifier to receive notifications about new events to all notifiers.
+type MultiTriggerNotifier struct {
+	ns []*TriggerNotifier
+}
+
+// NewMultiTriggerNotifier init new [MultiTriggerNotifier].
+func NewMultiTriggerNotifier(ns ...*TriggerNotifier) *MultiTriggerNotifier {
+	mtn := &MultiTriggerNotifier{
+		ns: make([]*TriggerNotifier, 0, len(ns)),
+	}
+
+	for _, n := range ns {
+		if n == nil || n.c == nil {
+			continue
+		}
+
+		mtn.ns = append(mtn.ns, n)
+	}
+
+	return mtn
+}
+
+// Notify sends a notify that the writing is completed to all notifiers.
+func (mtn *MultiTriggerNotifier) Notify() {
+	for _, n := range mtn.ns {
+		n.Notify()
 	}
 }
 

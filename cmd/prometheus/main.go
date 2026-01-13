@@ -589,6 +589,14 @@ func main() {
 
 	serverOnlyFlag(
 		a,
+		"storage.longterm.allow-overlapping-compaction",
+		"Allow compaction of overlapping blocks. If set to false, "+
+			"TSDB stops vertical compaction and leaves overlapping blocks there. "+
+			"The use case is to let another component handle the compaction of overlapping blocks.",
+	).Default("true").Hidden().BoolVar(&cfg.longtermTSBD.EnableOverlappingCompaction)
+
+	serverOnlyFlag(
+		a,
 		"longterm.interval",
 		"Downsampling interval for longterm storage. Units Supported: y, w, d, h, m, s, ms.",
 	).Default("5m").SetValue(&cfg.longtermInterval)
@@ -935,7 +943,6 @@ func main() {
 
 	removedHeadTriggerNotifier := pp_storage.NewTriggerNotifier()
 	hManagerReadyNotifier := ready.NewNotifiableNotifier()
-	_ = longtermReloadBlocksTriggerNotifier
 	hManager, err := pp_storage.NewManager(
 		&pp_storage.Options{
 			Seed:                cfgFile.GlobalConfig.ExternalLabels.Hash(),
@@ -952,7 +959,7 @@ func main() {
 		},
 		clock,
 		headCatalog,
-		reloadBlocksTriggerNotifier,
+		pp_storage.NewMultiTriggerNotifier(reloadBlocksTriggerNotifier, longtermReloadBlocksTriggerNotifier),
 		removedHeadTriggerNotifier,
 		hManagerReadyNotifier,
 		prometheus.DefaultRegisterer,
@@ -1673,7 +1680,7 @@ func main() {
 						return fmt.Errorf("opening longterm storage failed: %w", err)
 					}
 
-					switch fsType := prom_runtime.Statfs(localStoragePath); fsType {
+					switch fsType := prom_runtime.Statfs(cfg.longtermStoragePath); fsType {
 					case "NFS_SUPER_MAGIC":
 						level.Warn(logger).Log(
 							"fs_type", fsType,

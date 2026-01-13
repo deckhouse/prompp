@@ -4338,7 +4338,7 @@ func makeManager(
 		},
 		clock,
 		headCatalog,
-		pp_storage.NewTriggerNotifier(),
+		pp_storage.NewMultiTriggerNotifier(pp_storage.NewTriggerNotifier()),
 		pp_storage.NewTriggerNotifier(),
 		&mock.ReadyNotifierMock{NotifyReadyFunc: func() {}},
 		prometheus.DefaultRegisterer,
