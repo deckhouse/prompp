@@ -1,14 +1,14 @@
 package writer
 
 import (
-	"slices"
-	"sync"
+	"math"
+	"sync/atomic"
 )
 
 // SegmentWriteNotifier notifies that the segment has been written.
 type SegmentWriteNotifier struct {
-	locker                   sync.Mutex
-	shards                   []uint32
+	writtenSegments          []uint32
+	syncedSegments           []uint32
 	setLastAppendedSegmentID func(segmentID uint32)
 }
 
@@ -17,29 +17,48 @@ func NewSegmentWriteNotifier(
 	numberOfShards uint16,
 	setLastAppendedSegmentID func(segmentID uint32),
 ) *SegmentWriteNotifier {
+	if numberOfShards == 0 {
+		panic("numberOfShards must be greater than 0")
+	}
 	return &SegmentWriteNotifier{
-		shards:                   make([]uint32, numberOfShards),
+		writtenSegments:          make([]uint32, numberOfShards),
+		syncedSegments:           make([]uint32, numberOfShards),
 		setLastAppendedSegmentID: setLastAppendedSegmentID,
 	}
 }
 
-// NotifySegmentIsWritten notify that the segment has been written for shard.
-func (swn *SegmentWriteNotifier) NotifySegmentIsWritten() {
-	swn.locker.Lock()
-	defer swn.locker.Unlock()
-	minNumberOfSegments := slices.Min(swn.shards)
+// NotifySegmentIsWritten notify that the segment has been flushed for shard.
+//
+// This method is thread-safe between different shards.
+// For the same shard, it is a caller responsibility to ensure thread-safety.
+// Also it is not thread-safe with [NotifySegmentWrite] for the same shard.
+//
+// The callback may be called several times with the same segmentID.
+func (swn *SegmentWriteNotifier) NotifySegmentIsWritten(shardID uint16) {
+	atomic.StoreUint32(&swn.syncedSegments[shardID], swn.writtenSegments[shardID])
+	var minNumberOfSegments uint32 = math.MaxUint32
+	for i := range swn.syncedSegments {
+		x := atomic.LoadUint32(&swn.syncedSegments[i])
+		if x < minNumberOfSegments {
+			minNumberOfSegments = x
+		}
+	}
 	if minNumberOfSegments > 0 {
 		swn.setLastAppendedSegmentID(minNumberOfSegments - 1)
 	}
 }
 
+// NotifySegmentWrite notify that the segment is being written for shard.
+//
+// This method is thread-safe between different shards.
+// For the same shard, it is a caller responsibility to ensure thread-safety.
+// Also it is not thread-safe with [NotifySegmentIsWritten] for the same shard.
 func (swn *SegmentWriteNotifier) NotifySegmentWrite(shardID uint16) {
-	swn.locker.Lock()
-	defer swn.locker.Unlock()
-	swn.shards[shardID]++
+	swn.writtenSegments[shardID]++
 }
 
 // Set for shard number of segments.
 func (swn *SegmentWriteNotifier) Set(shardID uint16, numberOfSegments uint32) {
-	swn.shards[shardID] = numberOfSegments
+	swn.writtenSegments[shardID] = numberOfSegments
+	swn.syncedSegments[shardID] = numberOfSegments
 }
