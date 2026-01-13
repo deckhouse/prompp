@@ -111,7 +111,7 @@ class SegmentSamplesStorage {
     ++samples_count_;
 
     if (ls_id >= series_.size()) [[unlikely]] {
-      series_.resize(ls_id + 1 + 512);
+      series_.resize(ls_id + 1 + kSeriesReserveSize);
     }
 
     series_[ls_id].add(smpl);
@@ -132,6 +132,8 @@ class SegmentSamplesStorage {
   }
 
  private:
+  static constexpr auto kSeriesReserveSize = 512U;
+
   BareBones::SparseVector<CompactSamplesList, BareBones::Vector> series_;
   Primitives::Timestamp earliest_sample_{std::numeric_limits<Primitives::Timestamp>::max()};
   Primitives::Timestamp latest_sample_{};
@@ -140,3 +142,6 @@ class SegmentSamplesStorage {
 };
 
 }  // namespace PromPP::WAL
+
+template <>
+struct BareBones::IsTriviallyReallocatable<PromPP::WAL::SegmentSamplesStorage> : std::true_type {};

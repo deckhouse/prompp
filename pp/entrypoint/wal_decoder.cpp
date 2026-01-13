@@ -204,6 +204,28 @@ using OutputDecoderPtr = std::unique_ptr<OutputDecoder>;
 
 static_assert(sizeof(OutputDecoderPtr) == sizeof(void*));
 
+using SegmentSamplesStorageList = PromPP::Primitives::Go::Slice<PromPP::WAL::SegmentSamplesStorage>;
+
+extern "C" void prompp_wal_segment_sample_storage_list_ctor(void* args, void* res) {
+  struct Arguments {
+    uint64_t count;
+  };
+  using Result = struct {
+    SegmentSamplesStorageList storage_list;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  new (&static_cast<Result*>(res)->storage_list) SegmentSamplesStorageList(in->count);
+}
+
+extern "C" void prompp_wal_segment_sample_storage_list_dtor(void* args) {
+  struct Arguments {
+    SegmentSamplesStorageList storage_list;
+  };
+
+  static_cast<Arguments*>(args)->~Arguments();
+}
+
 extern "C" void prompp_wal_output_decoder_ctor(void* args, void* res) {
   struct Arguments {
     PromPP::Primitives::Go::SliceView<std::pair<PromPP::Primitives::Go::String, PromPP::Primitives::Go::String>> external_labels;
@@ -277,6 +299,7 @@ extern "C" void prompp_wal_output_decoder_decode(void* args, void* res) {
   struct Arguments {
     PromPP::Primitives::Go::SliceView<char> segment;
     OutputDecoderPtr decoder;
+    PromPP::WAL::SegmentSamplesStorage* samples_storage;
     int64_t lower_limit_timestamp;
   };
 
@@ -316,6 +339,7 @@ extern "C" void prompp_wal_output_decoder_decode(void* args, void* res) {
       }
 
       out->ref_samples.emplace_back(ls_id, ts, v);
+      in->samples_storage->add(ls_id, PromPP::Primitives::Sample(ts, v));
     });
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);

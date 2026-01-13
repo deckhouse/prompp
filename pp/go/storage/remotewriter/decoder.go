@@ -60,8 +60,8 @@ func NewDecoder(
 }
 
 // Decode and relabeling series in segments from a file [Wal].
-func (d *Decoder) Decode(segment []byte, minTimestamp int64) (*DecodedSegment, error) {
-	samples, stats, err := d.outputDecoder.Decode(segment, minTimestamp)
+func (d *Decoder) Decode(segment []byte, minTimestamp int64, samplesStorage *cppbridge.CppSegmentSamplesStorage) (*DecodedSegment, error) {
+	samples, stats, err := d.outputDecoder.Decode(segment, minTimestamp, samplesStorage)
 	if err != nil {
 		return nil, err
 	}

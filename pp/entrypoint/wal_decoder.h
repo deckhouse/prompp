@@ -122,6 +122,28 @@ void prompp_wal_decoder_decode_dry(void* args, void* res);
  */
 void prompp_wal_decoder_restore_from_stream(void* args, void* res);
 
+/**
+ * @brief Construct a segment samples storage list
+ *
+ * @param args {
+ *     count  uint64 // storages count
+ * }
+ *
+ * @param res {
+ *     storageList []SegmentSamplesStorageList // constructed storage list
+ * }
+ */
+void prompp_wal_segment_sample_storage_list_ctor(void* args, void* res);
+
+/**
+ * @brief Destroy segment samples storage list
+ *
+ * @param args {
+ *     storageList []SegmentSamplesStorageList
+ * }
+ */
+void prompp_wal_segment_sample_storage_list_dtor(void* args);
+
 //
 // OutputDecoder
 //
@@ -183,9 +205,10 @@ void prompp_wal_output_decoder_load_from(void* args, void* res);
  * @brief decode segment to slice RefSample.
  *
  * @param args {
- *     segment               []byte      // segment content
- *     decoder               uintptr     // pointer to constructed output decoder
- *     lower_limit_timestamp int64       // lower limit timestamp
+ *     segment               []byte                 // segment content
+ *     decoder               uintptr                // pointer to constructed output decoder
+ *     samplesStorage        *SegmentSamplesStorage // pointer to constructed SegmentSamplesStorage
+ *     lower_limit_timestamp int64                  // lower limit timestamp
  * }
  *
  * @param res {

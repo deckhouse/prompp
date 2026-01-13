@@ -53,10 +53,13 @@ using PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap;
 using PromPP::Prometheus::Relabel::rAction;
 using PromPP::Prometheus::Relabel::StatelessRelabeler;
 using PromPP::WAL::Encoder;
+using PromPP::WAL::GoMessage;
 using PromPP::WAL::OutputDecoder;
+using PromPP::WAL::ProtobufEncoder;
 using PromPP::WAL::ProtobufEncoderOld;
 using PromPP::WAL::ProtobufEncoderStats;
 using PromPP::WAL::RefSample;
+using PromPP::WAL::SegmentSamplesStorage;
 using PromPP::WAL::ShardRefSample;
 
 using std::operator""sv;
@@ -424,6 +427,54 @@ TEST_F(TestProtobufEncoderOld, Encode) {
                                  std::span(reinterpret_cast<int8_t*>(proto2.data()), proto2.size())));
   EXPECT_EQ(10, stats[1].max_timestamp);
   EXPECT_EQ(1, stats[1].samples_count);
+}
+
+class ProtobufEncoderFixture : public testing::Test {
+ protected:
+  ProtobufEncoder<EncodingBimap<BareBones::Vector>> encoder_;
+};
+
+TEST_F(ProtobufEncoderFixture, Test) {
+  // Arrange
+  std::vector<EncodingBimap<BareBones::Vector>> lss_list(2);
+  lss_list[0].find_or_emplace(LabelViewSet{{"__name__", "value1"}, {"job", "abc"}});
+  lss_list[0].find_or_emplace(LabelViewSet{{"__name__", "value2"}, {"job", "abc"}});
+  lss_list[1].find_or_emplace(LabelViewSet{{"__name__", "value3"}, {"job", "abc3"}});
+
+  const auto lss_getter = [&lss_list](uint32_t id) -> const EncodingBimap<BareBones::Vector>& { return lss_list[id]; };
+
+  std::vector<SegmentSamplesStorage> storages_list(2);
+  storages_list[0].add(0, Sample(10, 1.0));
+  storages_list[0].add(0, Sample(9, 2));
+  storages_list[0].add(1, Sample(10, 1));
+  storages_list[1].add(0, Sample(10, 1));
+
+  std::vector<GoMessage> messages(2);
+  std::string proto;
+
+  // Act
+  encoder_.encode(std::span(storages_list.data(), storages_list.size()), lss_getter, 0, 2, messages[0]);
+  encoder_.encode(std::span(storages_list.data(), storages_list.size()), lss_getter, 1, 2, messages[1]);
+
+  // Assert
+  EXPECT_EQ(3U, messages[0].samples_count);
+  EXPECT_EQ(10, messages[0].max_timestamp);
+  EXPECT_TRUE(snappy::Uncompress(messages[0].buffer.data(), messages[0].buffer.size(), &proto));
+  EXPECT_TRUE(std::ranges::equal(
+      std::array{0x0A, 0x3A, 0x0A, 0x12, 0x0A, 0x08, 0x5F, 0x5F, 0x6E, 0x61, 0x6D, 0x65, 0x5F, 0x5F, 0x12, 0x06, 0x76, 0x61, 0x6C, 0x75, 0x65, 0x31,
+                 0x0A, 0x0A, 0x0A, 0x03, 0x6A, 0x6F, 0x62, 0x12, 0x03, 0x61, 0x62, 0x63, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                 0x40, 0x10, 0x09, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x3F, 0x10, 0x0A, 0x0A, 0x2E, 0x0A, 0x12, 0x0A, 0x08,
+                 0x5F, 0x5F, 0x6E, 0x61, 0x6D, 0x65, 0x5F, 0x5F, 0x12, 0x06, 0x76, 0x61, 0x6C, 0x75, 0x65, 0x33, 0x0A, 0x0B, 0x0A, 0x03, 0x6A, 0x6F,
+                 0x62, 0x12, 0x04, 0x61, 0x62, 0x63, 0x33, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x3F, 0x10, 0x0A},
+      std::span(reinterpret_cast<uint8_t*>(proto.data()), proto.size())));
+
+  EXPECT_EQ(1U, messages[1].samples_count);
+  EXPECT_EQ(10, messages[1].max_timestamp);
+  EXPECT_TRUE(snappy::Uncompress(messages[1].buffer.data(), messages[1].buffer.size(), &proto));
+  EXPECT_TRUE(std::ranges::equal(
+      std::array{0x0A, 0x2D, 0x0A, 0x12, 0x0A, 0x08, 0x5F, 0x5F, 0x6E, 0x61, 0x6D, 0x65, 0x5F, 0x5F, 0x12, 0x06, 0x76, 0x61, 0x6C, 0x75, 0x65, 0x32, 0x0A, 0x0A,
+                 0x0A, 0x03, 0x6A, 0x6F, 0x62, 0x12, 0x03, 0x61, 0x62, 0x63, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x3F, 0x10, 0x0A},
+      std::span(reinterpret_cast<uint8_t*>(proto.data()), proto.size())));
 }
 
 }  // namespace

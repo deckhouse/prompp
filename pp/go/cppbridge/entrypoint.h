@@ -43,6 +43,9 @@ void prompp_dump_memory_profile(void* args, void* res);
 #define Sizeof_SerializedDataIterator 192
 
 #define Sizeof_MetricsIterator 24
+
+#define Sizeof_SegmentSamplesStorage 80
+#define Sizeof_RemoteWriteMessageEncoder 56
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -1230,6 +1233,72 @@ extern "C" {
 #endif
 
 /**
+ * @brief create message list
+ *
+ * @param args {
+ *     messagesCount uint64
+ * }
+ *
+ * @param res {
+ *     message_list []Message
+ * }
+ */
+void prompp_remote_write_message_list_ctor(void* args, void* res);
+
+/**
+ * @brief destroy message list
+ *
+ * @param args {
+ *     message_list []Message
+ * }
+ */
+void prompp_remote_write_message_list_dtor(void* args);
+
+/**
+ * @brief create message encoders list
+ *
+ * @param args {
+ *     encodersCount uint64
+ * }
+ *
+ * @param res {
+ *     encoders []MessageEncoder
+ * }
+ */
+void prompp_remote_write_message_encoders_ctor(void* args, void* res);
+
+/**
+ * @brief destroy message encoders list
+ *
+ * @param args {
+ *     encoders []MessageEncoder
+ * }
+ */
+void prompp_remote_write_message_encoders_dtor(void* args);
+
+/**
+ * @brief encode remote write message
+ *
+ * @param args {
+ *     messageEncoder *MessageEncoder
+ *     lss_list       []uintptr
+ *     storageList    []SegmentSamplesStorageList
+ *     messageIndex   uint64
+ *     messagesCount  uint64
+ *     message        *Message
+ * }
+ *
+ */
+void prompp_remote_write_encode_message(void* args);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
  * @brief Construct a new series data DataStorage
  *
  * @param res {
@@ -1813,6 +1882,28 @@ void prompp_wal_decoder_decode_dry(void* args, void* res);
  */
 void prompp_wal_decoder_restore_from_stream(void* args, void* res);
 
+/**
+ * @brief Construct a segment samples storage list
+ *
+ * @param args {
+ *     count  uint64 // storages count
+ * }
+ *
+ * @param res {
+ *     storageList []SegmentSamplesStorageList // constructed storage list
+ * }
+ */
+void prompp_wal_segment_sample_storage_list_ctor(void* args, void* res);
+
+/**
+ * @brief Destroy segment samples storage list
+ *
+ * @param args {
+ *     storageList []SegmentSamplesStorageList
+ * }
+ */
+void prompp_wal_segment_sample_storage_list_dtor(void* args);
+
 //
 // OutputDecoder
 //
@@ -1874,9 +1965,10 @@ void prompp_wal_output_decoder_load_from(void* args, void* res);
  * @brief decode segment to slice RefSample.
  *
  * @param args {
- *     segment               []byte      // segment content
- *     decoder               uintptr     // pointer to constructed output decoder
- *     lower_limit_timestamp int64       // lower limit timestamp
+ *     segment               []byte                 // segment content
+ *     decoder               uintptr                // pointer to constructed output decoder
+ *     samplesStorage        *SegmentSamplesStorage // pointer to constructed SegmentSamplesStorage
+ *     lower_limit_timestamp int64                  // lower limit timestamp
  * }
  *
  * @param res {

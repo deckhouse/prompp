@@ -172,7 +172,7 @@ func (s *shard) Close() error {
 	return errors.Join(s.walReader.Close(), s.decoderStateFile.Close())
 }
 
-func (s *shard) Read(ctx context.Context, targetSegmentID uint32, minTimestamp int64) (*DecodedSegment, error) {
+func (s *shard) Read(ctx context.Context, targetSegmentID uint32, minTimestamp int64, samplesStorage *cppbridge.CppSegmentSamplesStorage) (*DecodedSegment, error) {
 	if s.corrupted {
 		return nil, ErrShardIsCorrupted
 	}
@@ -195,7 +195,7 @@ func (s *shard) Read(ctx context.Context, targetSegmentID uint32, minTimestamp i
 
 		s.segmentSize.Observe(float64(segment.Length()))
 
-		decodedSegment, err := s.decoder.Decode(segment.Bytes(), minTimestamp)
+		decodedSegment, err := s.decoder.Decode(segment.Bytes(), minTimestamp, samplesStorage)
 		if err != nil {
 			s.corrupted = true
 			logger.Errorf("remotewritedebug shard %s/%d is corrupted by decode: %v", s.headID, s.shardID, err)
@@ -434,7 +434,7 @@ type readShardResult struct {
 	err     error
 }
 
-func (ds *dataSource) Read(ctx context.Context, segmentID uint32, minTimestamp int64) ([]*DecodedSegment, error) {
+func (ds *dataSource) Read(ctx context.Context, segmentID uint32, minTimestamp int64, segmentSamplesStorages *cppbridge.SegmentSamplesStorageList) ([]*DecodedSegment, error) {
 	if ds.completed {
 		return nil, ErrEndOfBlock
 	}
@@ -461,7 +461,7 @@ func (ds *dataSource) Read(ctx context.Context, segmentID uint32, minTimestamp i
 		wg.Add(1)
 		go func(shardID int) {
 			defer wg.Done()
-			segment, err := ds.shards[shardID].Read(ctx, segmentID, minTimestamp)
+			segment, err := ds.shards[shardID].Read(ctx, segmentID, minTimestamp, segmentSamplesStorages.Get(uint64(shardID)))
 			if err != nil {
 				err = NewShardError(shardID, true, err)
 			}

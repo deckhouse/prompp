@@ -14,6 +14,7 @@
 #include "primitives/snug_composites.h"
 #include "prometheus/remote_write.h"
 #include "prometheus/stateless_relabeler.h"
+#include "segment_samples_storage.h"
 #include "wal.h"
 
 namespace PromPP::WAL {
@@ -326,6 +327,70 @@ class GoSliceSink : public snappy::Sink {
 struct ProtobufEncoderStats {
   int64_t max_timestamp{};
   size_t samples_count{};
+
+  PROMPP_ALWAYS_INLINE bool operator==(const ProtobufEncoderStats& other) const noexcept = default;
+};
+
+struct GoMessage {
+  Primitives::Go::Slice<char> buffer;
+  uint64_t samples_count{};
+  Primitives::Timestamp max_timestamp{};
+  bool delivered{};
+  bool post_processed{};
+};
+
+template <class EncodingBimap>
+class ProtobufEncoder {
+ public:
+  template <class LssGetter>
+  void encode(std::span<SegmentSamplesStorage> batch, LssGetter lss_getter, size_t message_index, size_t messages_count, GoMessage& message) {
+    protobuf_.clear();
+
+    uint32_t shard_id = 0;
+    protozero::pbf_writer pb_writer(protobuf_);
+    for (const auto& storage : batch) {
+      const auto& lss = lss_getter(shard_id);
+
+      uint32_t last_ls_id = Primitives::kInvalidLabelSetID;
+      typename EncodingBimap::value_type last_ls;
+      storage.for_each([&, this](Primitives::LabelSetID ls_id, Primitives::Timestamp timestamp, double value) {
+        if ((static_cast<size_t>(ls_id) % messages_count) != message_index) {
+          return;
+        }
+
+        ++message.samples_count;
+
+        if (last_ls_id != ls_id) {
+          if (!timeseries_.samples().empty()) {
+            Prometheus::RemoteWrite::write_timeseries(pb_writer, timeseries_);
+          }
+
+          last_ls = lss[ls_id];
+          timeseries_.set_label_set(&last_ls);
+          timeseries_.samples().clear();
+          last_ls_id = ls_id;
+        }
+
+        timeseries_.samples().emplace_back(timestamp, value);
+        message.max_timestamp = std::max(message.max_timestamp, timestamp);
+      });
+
+      if (!timeseries_.samples().empty()) {
+        Prometheus::RemoteWrite::write_timeseries(pb_writer, timeseries_);
+      }
+
+      timeseries_.samples().clear();
+      ++shard_id;
+    }
+
+    GoSliceSink writer(message.buffer);
+    snappy::ByteArraySource reader(protobuf_.c_str(), protobuf_.size());
+    snappy::Compress(&reader, &writer);
+  }
+
+ private:
+  Primitives::BasicTimeseries<typename EncodingBimap::value_type*, BareBones::Vector<Primitives::Sample>> timeseries_;
+  std::string protobuf_;
 };
 
 // ProtobufEncoder encoder for snapped protobuf from refSamples.
@@ -488,3 +553,9 @@ class ProtobufEncoderOld {
 };
 
 }  // namespace PromPP::WAL
+
+template <>
+struct BareBones::IsTriviallyReallocatable<PromPP::WAL::GoMessage> : std::true_type {};
+
+template <class EncodingBimap>
+struct BareBones::IsTriviallyReallocatable<PromPP::WAL::ProtobufEncoder<EncodingBimap>> : std::true_type {};

@@ -287,6 +287,25 @@ func (s OutputDecoderStats) DroppedSeriesCount() uint32 {
 	return s.droppedSeriesCount
 }
 
+type SegmentSamplesStorageList struct {
+	storages []CppSegmentSamplesStorage
+}
+
+func (s *SegmentSamplesStorageList) Get(segmentID uint64) *CppSegmentSamplesStorage {
+	return &s.storages[segmentID]
+}
+
+func NewSegmentSamplesStorage(count uint64) *SegmentSamplesStorageList {
+	storages := &SegmentSamplesStorageList{
+		storages: walSegmentSampleStorageListCtor(count),
+	}
+	runtime.SetFinalizer(storages, func(s *SegmentSamplesStorageList) {
+		walSegmentSampleStorageListDtor(s.storages)
+	})
+
+	return storages
+}
+
 //
 // WALOutputDecoder
 //
@@ -335,8 +354,9 @@ func NewWALOutputDecoder(
 func (d *WALOutputDecoder) Decode(
 	segment []byte,
 	lowerLimitTimestamp int64,
+	samplesStorage *CppSegmentSamplesStorage,
 ) (*DecodedRefSamples, OutputDecoderStats, error) {
-	stats, refSamples, exception := walOutputDecoderDecode(segment, d.decoder, lowerLimitTimestamp)
+	stats, refSamples, exception := walOutputDecoderDecode(segment, d.decoder, samplesStorage, lowerLimitTimestamp)
 	return newDecodedRefSamples(refSamples, d.shardID), stats, handleException(exception)
 }
 
