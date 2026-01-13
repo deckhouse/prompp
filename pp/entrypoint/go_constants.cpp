@@ -1,6 +1,5 @@
 #include "go_constants.h"
 
-#include "head/lss.h"
 #include "head/serialization.h"
 #include "metrics/storage.h"
 #include "prometheus/relabeler.h"
@@ -20,6 +19,6 @@ static_assert(sizeof(entrypoint::head::SerializedDataIterator) == Sizeof_Seriali
 static_assert(sizeof(metrics::Storage::Iterator) == Sizeof_MetricsIterator);
 
 static_assert(sizeof(PromPP::WAL::SegmentSamplesStorage) == Sizeof_SegmentSamplesStorage);
-static_assert(sizeof(PromPP::WAL::ProtobufEncoder<entrypoint::head::EncodingBimap>) == Sizeof_RemoteWriteMessageEncoder);
+static_assert(sizeof(PromPP::WAL::ProtobufEncoder) == Sizeof_RemoteWriteMessageEncoder);
 
 }  // namespace

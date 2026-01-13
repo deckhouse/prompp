@@ -45,7 +45,7 @@ void prompp_dump_memory_profile(void* args, void* res);
 #define Sizeof_MetricsIterator 24
 
 #define Sizeof_SegmentSamplesStorage 80
-#define Sizeof_RemoteWriteMessageEncoder 56
+#define Sizeof_RemoteWriteMessageEncoder 32
 #ifdef __cplusplus
 extern "C" {
 #endif

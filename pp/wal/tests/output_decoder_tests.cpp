@@ -373,7 +373,7 @@ TEST_F(TestWALOutputDecoder, ProcessSegmentWithLabelDrop) {
 
 class ProtobufEncoderFixture : public testing::Test {
  protected:
-  ProtobufEncoder<EncodingBimap<BareBones::Vector>> encoder_;
+  ProtobufEncoder encoder_;
 };
 
 TEST_F(ProtobufEncoderFixture, Test) {

@@ -119,13 +119,19 @@ class SegmentSamplesStorage {
 
   template <class Callback>
     requires std::is_invocable_v<Callback, Primitives::LabelSetID, Primitives::Timestamp, Primitives::Sample::value_type>
+  PROMPP_ALWAYS_INLINE void for_each(Callback&& func) const {
+    for_each([&](Primitives::LabelSetID ls_id, const Primitives::Sample& sample) PROMPP_LAMBDA_INLINE { func(ls_id, sample.timestamp(), sample.value()); });
+  }
+
+  template <class Callback>
+    requires std::is_invocable_v<Callback, Primitives::LabelSetID, Primitives::Sample>
   void for_each(Callback&& func) const {
     for (const auto& [ls_id, sample] : series_) {
       if (sample.is_single()) [[likely]] {
-        func(ls_id, sample.sample().timestamp(), sample.sample().value());
+        func(ls_id, sample.sample());
       } else if (sample.is_plural()) [[likely]] {
-        for (const auto& [timestamp, value] : sample.samples()) {
-          func(ls_id, timestamp, value);
+        for (const auto& s : sample.samples()) {
+          func(ls_id, s);
         }
       }
     }

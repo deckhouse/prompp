@@ -22,7 +22,7 @@ extern "C" void prompp_remote_write_message_list_dtor(void* args) {
   static_cast<Arguments*>(args)->~Arguments();
 }
 
-using MessageEncoder = PromPP::WAL::ProtobufEncoder<entrypoint::head::EncodingBimap>;
+using MessageEncoder = PromPP::WAL::ProtobufEncoder;
 
 extern "C" void prompp_remote_write_message_encoders_ctor(void* args, void* res) {
   struct Arguments {
