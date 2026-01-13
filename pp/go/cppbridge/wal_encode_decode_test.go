@@ -588,7 +588,8 @@ func (s *EncoderDecoderSuite) TestEncodeWALOutputDecode() {
 	segByte := s.transferringData(gos)
 
 	s.T().Log("decoding to RefSamples")
-	refSamples, stats, err := dec.Decode(segByte, 0)
+	sampleStorages := cppbridge.NewSegmentSamplesStorage(1)
+	refSamples, stats, err := dec.Decode(segByte, 0, sampleStorages.Get(0))
 	s.Require().NoError(err)
 
 	s.Equal(expectedWr.Timeseries[0].Samples[0].Timestamp, stats.MaxTimestamp())
@@ -663,7 +664,8 @@ func (s *EncoderDecoderSuite) TestEncodeWALOutputDecodeWithLimit() {
 
 	s.T().Log("decoding to RefSamples")
 
-	refSamples, stats, err := dec.Decode(segByte, time.Now().UnixMilli()+1)
+	sampleStorages := cppbridge.NewSegmentSamplesStorage(1)
+	refSamples, stats, err := dec.Decode(segByte, time.Now().UnixMilli()+1, sampleStorages.Get(0))
 	s.Require().NoError(err)
 
 	count := 0
@@ -758,7 +760,8 @@ func (s *EncoderDecoderSuite) TestEncodeWALOutputDecodeDroppedSeries() {
 
 	s.T().Log("decoding to RefSamples")
 
-	refSamples, stats, err := dec.Decode(segByte, time.Now().UnixMilli()+1)
+	sampleStorages := cppbridge.NewSegmentSamplesStorage(1)
+	refSamples, stats, err := dec.Decode(segByte, time.Now().UnixMilli()+1, sampleStorages.Get(0))
 	s.Require().NoError(err)
 
 	count := 0

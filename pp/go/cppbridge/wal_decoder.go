@@ -357,6 +357,7 @@ func (d *WALOutputDecoder) Decode(
 	samplesStorage *CppSegmentSamplesStorage,
 ) (*DecodedRefSamples, OutputDecoderStats, error) {
 	stats, refSamples, exception := walOutputDecoderDecode(segment, d.decoder, samplesStorage, lowerLimitTimestamp)
+	runtime.KeepAlive(samplesStorage)
 	return newDecodedRefSamples(refSamples, d.shardID), stats, handleException(exception)
 }
 
@@ -437,53 +438,6 @@ func (s *DecodedRefSamples) Range(f func(id uint32, t int64, v float64) bool) {
 
 func (s *DecodedRefSamples) Size() int {
 	return len(s.refSamples)
-}
-
-//
-// WALProtobufEncoder
-//
-
-// WALProtobufEncoderOld - go wrapper for C-WALProtobufEncoder.
-//
-//	decoder - pointer to a C++ decoder initiated in C++ memory;
-type WALProtobufEncoderOld struct {
-	encoder uintptr
-}
-
-// NewWALProtobufEncoder init new WALProtobufEncoder.
-func NewWALProtobufEncoderOld(outputLsses []*LabelSetStorage) *WALProtobufEncoderOld {
-	outputLssesPtr := make([]uintptr, 0, len(outputLsses))
-	for _, outputLss := range outputLsses {
-		outputLssesPtr = append(outputLssesPtr, outputLss.Pointer())
-	}
-	d := &WALProtobufEncoderOld{
-		encoder: walProtobufEncoderOldCtor(outputLssesPtr),
-	}
-	runtime.SetFinalizer(d, func(d *WALProtobufEncoderOld) {
-		walProtobufEncoderOldDtor(d.encoder)
-	})
-	return d
-}
-
-// Encode batch slice ShardRefSamples to snapped protobufs on shards.
-func (e *WALProtobufEncoderOld) Encode(
-	batch []*DecodedRefSamples,
-	numberOfMessages int,
-) ([]*SnappyProtobufEncodedData, error) {
-	buffers := make([][]byte, numberOfMessages)
-	stats := make([]protobufEncoderStats, numberOfMessages)
-	exception := walProtobufEncoderOldEncode(batch, buffers, stats, e.encoder)
-	runtime.KeepAlive(e)
-	if len(exception) != 0 {
-		return nil, handleException(exception)
-	}
-
-	outSlices := make([]*SnappyProtobufEncodedData, numberOfMessages)
-	for i := range buffers {
-		outSlices[i] = NewSnappyProtobufEncodedData(stats[i], buffers[i])
-	}
-
-	return outSlices, nil
 }
 
 //

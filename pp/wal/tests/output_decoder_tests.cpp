@@ -56,7 +56,6 @@ using PromPP::WAL::Encoder;
 using PromPP::WAL::GoMessage;
 using PromPP::WAL::OutputDecoder;
 using PromPP::WAL::ProtobufEncoder;
-using PromPP::WAL::ProtobufEncoderOld;
 using PromPP::WAL::ProtobufEncoderStats;
 using PromPP::WAL::RefSample;
 using PromPP::WAL::SegmentSamplesStorage;
@@ -370,63 +369,6 @@ TEST_F(TestWALOutputDecoder, ProcessSegmentWithLabelDrop) {
 
   // Assert
   EXPECT_EQ((std::vector<RefSample>{{.id = 0, .t = 11, .v = 1}, {.id = 0, .t = 11, .v = 2}}), actual_samples);
-}
-
-//
-// ProtobufEncoderOld
-//
-
-struct TestProtobufEncoderOld : public testing::Test {};
-
-TEST_F(TestProtobufEncoderOld, Encode) {
-  // Arrange
-  EncodingBimap<BareBones::Vector> output_lss0;
-  EncodingBimap<BareBones::Vector> output_lss1;
-
-  std::vector<RefSample> ref_samples0{{.id = output_lss0.find_or_emplace(LabelViewSet{{"__name__", "value1"}, {"job", "abc"}}), .t = 10, .v = 1},
-                                      {.id = output_lss0.find_or_emplace(LabelViewSet{{"__name__", "value1"}, {"job", "abc"}}), .t = 9, .v = 2},
-                                      {.id = output_lss0.find_or_emplace(LabelViewSet{{"__name__", "value2"}, {"job", "abc"}}), .t = 10, .v = 1}};
-  ShardRefSample srs0;
-  srs0.ref_samples.reset_to(ref_samples0.data(), ref_samples0.size(), ref_samples0.size());
-  srs0.shard_id = 0;
-
-  std::vector<RefSample> ref_samples1{{.id = output_lss1.find_or_emplace(LabelViewSet{{"__name__", "value3"}, {"job", "abc3"}}), .t = 10, .v = 1}};
-  ShardRefSample srs1;
-  srs1.ref_samples.reset_to(ref_samples1.data(), ref_samples1.size(), ref_samples1.size());
-  srs1.shard_id = 1;
-
-  std::vector vector_batch{&srs0, &srs1};
-  SliceView<ShardRefSample*> batch;
-  batch.reset_to(vector_batch.data(), vector_batch.size(), vector_batch.size());
-
-  ProtobufEncoderOld penc(std::move(std::vector{&output_lss0, &output_lss1}));
-  Slice<Slice<char>> out_slices;
-  out_slices.resize(2);
-  Slice<ProtobufEncoderStats> stats;
-  stats.resize(2);
-
-  // Act
-  penc.encode(batch, out_slices, stats);
-
-  // Assert
-  std::string proto1;
-  EXPECT_TRUE(snappy::Uncompress(out_slices[0].data(), out_slices[0].size(), &proto1));
-  EXPECT_TRUE(std::ranges::equal(
-      std::array{10,  58, 10,  18, 10, 8,   95,  95, 110, 97, 109, 101, 95, 95, 18,  6,  118, 97,  108, 117, 101, 49, 10,  10,  10,  3,   106,
-                 111, 98, 18,  3,  97, 98,  99,  18, 11,  9,  0,   0,   0,  0,  0,   0,  0,   64,  16,  9,   18,  11, 9,   0,   0,   0,   0,
-                 0,   0,  -16, 63, 16, 10,  10,  46, 10,  18, 10,  8,   95, 95, 110, 97, 109, 101, 95,  95,  18,  6,  118, 97,  108, 117, 101,
-                 51,  10, 11,  10, 3,  106, 111, 98, 18,  4,  97,  98,  99, 51, 18,  11, 9,   0,   0,   0,   0,   0,  0,   -16, 63,  16,  10},
-      std::span(reinterpret_cast<int8_t*>(proto1.data()), proto1.size())));
-  EXPECT_EQ(10, stats[0].max_timestamp);
-  EXPECT_EQ(3, stats[0].samples_count);
-
-  std::string proto2;
-  EXPECT_TRUE(snappy::Uncompress(out_slices[1].data(), out_slices[1].size(), &proto2));
-  EXPECT_TRUE(std::ranges::equal(std::array{10, 45, 10,  18,  10, 8,  95, 95, 110, 97, 109, 101, 95, 95, 18, 6, 118, 97, 108, 117, 101, 50, 10, 10,
-                                            10, 3,  106, 111, 98, 18, 3,  97, 98,  99, 18,  11,  9,  0,  0,  0, 0,   0,  0,   -16, 63,  16, 10},
-                                 std::span(reinterpret_cast<int8_t*>(proto2.data()), proto2.size())));
-  EXPECT_EQ(10, stats[1].max_timestamp);
-  EXPECT_EQ(1, stats[1].samples_count);
 }
 
 class ProtobufEncoderFixture : public testing::Test {

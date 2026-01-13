@@ -453,44 +453,6 @@ func (i *Iterator) encode(batch *batch, numberOfMessages int) *cppbridge.RWMessa
 	return messages
 }
 
-func (i *Iterator) encodeOld(segments []*DecodedSegment, numberOfMessages int) (*MessageOld, error) {
-	var maxTimestamp int64
-	batchToEncode := make([]*cppbridge.DecodedRefSamples, 0, len(segments))
-	for _, segment := range segments {
-		if maxTimestamp < segment.MaxTimestamp {
-			maxTimestamp = segment.MaxTimestamp
-		}
-
-		batchToEncode = append(batchToEncode, segment.Samples)
-	}
-
-	protobufEncoder := cppbridge.NewWALProtobufEncoderOld(i.dataSource.LSSes())
-	protobufs, err := protobufEncoder.Encode(batchToEncode, numberOfMessages)
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode protobuf: %w", err)
-	}
-	shards := make([]*MessageShardOld, 0, len(protobufs))
-	for _, protobuf := range protobufs {
-		proto := protobuf
-		var size uint64
-		_ = proto.Do(func(buf []byte) error {
-			size = uint64(len(buf))
-			return nil
-		})
-		shards = append(shards, &MessageShardOld{
-			Protobuf:     protobuf,
-			Size:         size,
-			SampleCount:  protobuf.SamplesCount(),
-			MaxTimestamp: protobuf.MaxTimestamp(),
-			Delivered:    false,
-		})
-	}
-	return &MessageOld{
-		MaxTimestamp: maxTimestamp,
-		Shards:       shards,
-	}, nil
-}
-
 func (i *Iterator) tryAck(_ context.Context) error {
 	if i.targetSegmentID == 0 && i.targetSegmentIsPartiallyRead {
 		return nil

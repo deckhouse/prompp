@@ -218,6 +218,18 @@ extern "C" void prompp_wal_segment_sample_storage_list_ctor(void* args, void* re
   new (&static_cast<Result*>(res)->storage_list) SegmentSamplesStorageList(in->count);
 }
 
+extern "C" void prompp_wal_segment_sample_storage_add(void* args) {
+  struct Arguments {
+    PromPP::WAL::SegmentSamplesStorage* samples_storage;
+    PromPP::Primitives::LabelSetID ls_id;
+    PromPP::Primitives::Timestamp timestamp;
+    double value;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  in->samples_storage->add(in->ls_id, PromPP::Primitives::Sample(in->timestamp, in->value));
+}
+
 extern "C" void prompp_wal_segment_sample_storage_list_dtor(void* args) {
   struct Arguments {
     SegmentSamplesStorageList storage_list;
@@ -341,65 +353,6 @@ extern "C" void prompp_wal_output_decoder_decode(void* args, void* res) {
       out->ref_samples.emplace_back(ls_id, ts, v);
       in->samples_storage->add(ls_id, PromPP::Primitives::Sample(ts, v));
     });
-  } catch (...) {
-    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
-    entrypoint::handle_current_exception(err_stream);
-  }
-}
-
-//
-// ProtobufEncoder
-//
-
-using ProtobufEncoderOld = PromPP::WAL::ProtobufEncoderOld<entrypoint::head::EncodingBimap>;
-using ProtobufEncoderOldPtr = std::unique_ptr<ProtobufEncoderOld>;
-
-static_assert(sizeof(ProtobufEncoderOldPtr) == sizeof(void*));
-
-extern "C" void prompp_wal_protobuf_encoder_old_ctor(void* args, void* res) {
-  struct Arguments {
-    PromPP::Primitives::Go::SliceView<LssVariantPtr> output_lsses;
-  };
-  using Result = struct {
-    ProtobufEncoderOldPtr encoder;
-  };
-
-  auto* in = static_cast<Arguments*>(args);
-
-  std::vector<entrypoint::head::EncodingBimap*> output_lsses;
-  output_lsses.reserve(in->output_lsses.size());
-  for (const auto& output_lss : in->output_lsses) {
-    output_lsses.push_back(&std::get<entrypoint::head::EncodingBimap>(*output_lss));
-  }
-
-  new (res) Result{.encoder = std::make_unique<ProtobufEncoderOld>(std::move(output_lsses))};
-}
-
-extern "C" void prompp_wal_protobuf_encoder_old_dtor(void* args) {
-  struct Arguments {
-    ProtobufEncoderOldPtr encoder;
-  };
-
-  static_cast<Arguments*>(args)->~Arguments();
-}
-
-extern "C" void prompp_wal_protobuf_encoder_old_encode(void* args, void* res) {
-  struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::WAL::ShardRefSample*> batch;
-    PromPP::Primitives::Go::Slice<PromPP::Primitives::Go::Slice<char>> out_slices;
-    PromPP::Primitives::Go::Slice<PromPP::WAL::ProtobufEncoderStats> stats;
-    ProtobufEncoderOldPtr encoder;
-  };
-
-  using Result = struct {
-    PromPP::Primitives::Go::Slice<char> error;
-  };
-
-  const auto in = static_cast<Arguments*>(args);
-  const auto out = new (res) Result();
-
-  try {
-    in->encoder->encode(in->batch, in->out_slices, in->stats);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
     entrypoint::handle_current_exception(err_stream);

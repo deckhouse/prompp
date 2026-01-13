@@ -1059,6 +1059,26 @@ func walSegmentSampleStorageListCtor(count uint64) []CppSegmentSamplesStorage {
 	return res.storages
 }
 
+func walSegmentSampleStorageAdd(
+	samplesStorage *CppSegmentSamplesStorage,
+	labelSetId uint32,
+	timestamp int64,
+	value float64,
+) {
+	args := struct {
+		samplesStorage *CppSegmentSamplesStorage
+		labelSetId     uint32
+		timestamp      int64
+		value          float64
+	}{samplesStorage, labelSetId, timestamp, value}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_wal_segment_sample_storage_add,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
 func walSegmentSampleStorageListDtor(storages []CppSegmentSamplesStorage) {
 	args := struct {
 		storages []CppSegmentSamplesStorage
@@ -1186,65 +1206,6 @@ func walOutputDecoderDecode(
 //
 // ProtobufEncoder
 //
-
-// walProtobufEncoderCtor - wrapper for constructor C-ProtobufEncoder.
-func walProtobufEncoderOldCtor(outputLsses []uintptr) uintptr {
-	args := struct {
-		outputLsses []uintptr
-	}{outputLsses}
-	var res struct {
-		decoder uintptr
-	}
-
-	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_wal_protobuf_encoder_old_ctor,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.decoder
-}
-
-// walProtobufEncoderDtor - wrapper for destructor C-ProtobufEncoder.
-func walProtobufEncoderOldDtor(decoder uintptr) {
-	args := struct {
-		decoder uintptr
-	}{decoder}
-
-	testGC()
-	fastcgo.UnsafeCall1(
-		C.prompp_wal_protobuf_encoder_old_dtor,
-		uintptr(unsafe.Pointer(&args)),
-	)
-}
-
-// walProtobufEncoderEncode encode batch slice ShardRefSamples to snapped protobufs on shards.
-func walProtobufEncoderOldEncode(
-	batch []*DecodedRefSamples,
-	outSlices [][]byte,
-	stats []protobufEncoderStats,
-	encoder uintptr,
-) []byte {
-	args := struct {
-		batch     []*DecodedRefSamples
-		outSlices [][]byte
-		stats     []protobufEncoderStats
-		encoder   uintptr
-	}{batch, outSlices, stats, encoder}
-	var res struct {
-		error []byte
-	}
-
-	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_wal_protobuf_encoder_old_encode,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.error
-}
 
 func walRemoteWriteCreateMessages(messagesCount uint64) []RWMessage {
 	args := struct {
