@@ -5,15 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/jonboulle/clockwork"
+	"github.com/prometheus/prometheus/storage/remote"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/prometheus/prometheus/config"
-	"github.com/prometheus/prometheus/storage/remote"
-
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
 )
@@ -148,6 +147,14 @@ func (m *Message) IsObsoleted(minTimestamp int64) bool {
 	return m.MaxTimestamp < minTimestamp
 }
 
+func (m *Message) NumberOfSamples() uint64 {
+	samples := uint64(0)
+	for i := range m.Shards {
+		samples += m.Shards[i].SampleCount
+	}
+	return samples
+}
+
 // newIterator creates a new [Iterator].
 func newIterator(
 	clock clockwork.Clock,
@@ -195,13 +202,12 @@ func (i *Iterator) wrapError(err error) error {
 //revive:disable-next-line:function-length // long but readable
 //revive:disable-next-line:cyclomatic // long but readable
 //revive:disable-next-line:cognitive-complexity // long but readable
-func (i *Iterator) Next(ctx context.Context) error {
+func (i *Iterator) Next(ctx context.Context) (*Message, error) {
 	if i.endOfBlockReached {
-		return i.wrapError(nil)
+		return nil, i.wrapError(nil)
 	}
 
 	startTime := i.clock.Now()
-	var deadlineReached bool
 	var delay time.Duration
 	numberOfShards := i.outputSharder.NumberOfShards()
 	i.metrics.numShards.Set(float64(numberOfShards))
@@ -212,14 +218,16 @@ readLoop:
 	for {
 		select {
 		case <-ctx.Done():
-			return i.wrapError(ctx.Err())
+			return nil, i.wrapError(ctx.Err())
 		case <-deadline:
-			deadlineReached = true
 			break readLoop
 		case <-i.clock.After(delay):
 		}
 
+		readStartTime := i.clock.Now()
 		decodedSegments, err := i.dataSource.Read(ctx, i.targetSegmentID, i.minTimestamp())
+		i.metrics.readSegmentDuration.Observe(i.clock.Since(readStartTime).Seconds())
+
 		if err != nil {
 			if errors.Is(err, ErrEndOfBlock) {
 				i.endOfBlockReached = true
@@ -247,7 +255,8 @@ readLoop:
 		delay = 0
 	}
 
-	readDuration := i.clock.Since(startTime)
+	generateStartTime := i.clock.Now()
+	readDuration := generateStartTime.Sub(startTime)
 
 	if b.HasDroppedSamples() {
 		i.metrics.droppedSamplesTotal.WithLabelValues(reasonTooOld).Add(float64(b.OutdatedSamplesCount()))
@@ -257,23 +266,20 @@ readLoop:
 	i.metrics.droppedSeriesTotal.Add(float64(b.DroppedSeriesCount()))
 
 	if b.IsEmpty() {
-		return i.wrapError(nil)
+		return nil, i.wrapError(nil)
 	}
 
+	i.metrics.generateBatchDuration.Observe(readDuration.Seconds())
 	i.metrics.addSeriesTotal.Add(float64(b.AddSeriesCount()))
 
-	var desiredNumberOfShards float64
-	if deadlineReached {
-		desiredNumberOfShards = math.Ceil(
-			float64(b.NumberOfSamples()) / float64(b.MaxNumberOfSamplesPerShard()) * float64(numberOfShards),
-		)
-	} else {
-		desiredNumberOfShards = math.Ceil(float64(i.scrapeInterval) / float64(readDuration) * float64(numberOfShards))
-	}
+	// Ideal number of shards is when batch contains all samples from scrape interval
+	// so we can predict number of samples per scrape interval as
+	// scrapeInterval / readDuration * numberOfSamplesInBatch
+	// next step is to divide it by max samples per shard to get desired number of shards.
+	desiredNumberOfShards := float64(i.scrapeInterval) / float64(readDuration) * float64(b.NumberOfSamples()) / float64(b.MaxNumberOfSamplesPerShard())
 
-	bestNumberOfShards := i.outputSharder.BestNumberOfShards(
-		float64(b.NumberOfSamples()) / float64(b.MaxNumberOfSamplesPerShard()),
-	)
+	numberOfMessages := math.Ceil(float64(b.NumberOfSamples()) / float64(b.MaxNumberOfSamplesPerShard()))
+	bestNumberOfShards := i.outputSharder.BestNumberOfShards(numberOfMessages)
 
 	i.outputSharder.Apply(desiredNumberOfShards)
 	i.metrics.desiredNumShards.Set(desiredNumberOfShards)
@@ -281,17 +287,23 @@ readLoop:
 
 	i.writeCaches()
 
-	msg, err := i.encode(b.Data(), uint16(bestNumberOfShards)) // #nosec G115 // no overflow
+	encodeStartTime := i.clock.Now()
+	msg, err := i.encode(b.Data(), int(numberOfMessages)) // #nosec G115 // no overflow
 	if err != nil {
-		return i.wrapError(err)
+		return nil, i.wrapError(err)
 	}
+	i.metrics.encodeBatchDuration.Observe(i.clock.Since(encodeStartTime).Seconds())
 
-	numberOfSamples := b.NumberOfSamples()
+	return msg, nil
+}
 
-	b = nil
+func (i *Iterator) SendMessage(msg *Message, ctx context.Context) error {
+	i.metrics.samplesTotal.Add(float64(msg.NumberOfSamples()))
+
+	sendersCount := i.outputSharder.max
 
 	sendIteration := 0
-	err = backoff.Retry(func() error {
+	err := backoff.Retry(func() error {
 		defer func() { sendIteration++ }()
 		if msg.IsObsoleted(i.minTimestamp()) {
 			for _, messageShard := range msg.Shards {
@@ -303,27 +315,32 @@ readLoop:
 			return nil
 		}
 
-		i.metrics.samplesTotal.Add(float64(numberOfSamples))
-
-		wg := &sync.WaitGroup{}
+		sendSemaphore := semaphore.NewWeighted(int64(sendersCount))
+		startTime := i.clock.Now()
 		for _, shrd := range msg.Shards {
 			if shrd.Delivered {
 				continue
 			}
-			wg.Add(1)
+
+			if err := sendSemaphore.Acquire(ctx, 1); err != nil {
+				break
+			}
+
 			go func(shrd *MessageShard) {
-				defer wg.Done()
-				begin := i.clock.Now()
+				defer sendSemaphore.Release(1)
+
+				sendStartTime := i.clock.Now()
 				writeErr := i.protobufWriter.Write(ctx, shrd.Protobuf)
-				i.metrics.sentBatchDuration.Observe(i.clock.Since(begin).Seconds())
 				if writeErr != nil {
 					logger.Errorf("failed to send protobuf: %v", writeErr)
 				}
+				i.metrics.sentMessageDuration.Observe(time.Since(sendStartTime).Seconds())
 
-				shrd.Delivered = !errors.Is(writeErr, remote.RecoverableError{})
+				shrd.Delivered = !errors.As(writeErr, &remote.RecoverableError{})
 			}(shrd)
 		}
-		wg.Wait()
+		_ = sendSemaphore.Acquire(ctx, int64(sendersCount))
+		i.metrics.sentBatchDuration.Observe(i.clock.Since(startTime).Seconds())
 
 		var failedSamplesTotal uint64
 		var sentBytesTotal uint64
@@ -386,7 +403,7 @@ func (i *Iterator) writeCaches() {
 	i.dataSource.WriteCaches()
 }
 
-func (i *Iterator) encode(segments []*DecodedSegment, numberOfShards uint16) (*Message, error) {
+func (i *Iterator) encode(segments []*DecodedSegment, numberOfMessages int) (*Message, error) {
 	var maxTimestamp int64
 	batchToEncode := make([]*cppbridge.DecodedRefSamples, 0, len(segments))
 	for _, segment := range segments {
@@ -398,7 +415,7 @@ func (i *Iterator) encode(segments []*DecodedSegment, numberOfShards uint16) (*M
 	}
 
 	protobufEncoder := cppbridge.NewWALProtobufEncoder(i.dataSource.LSSes())
-	protobufs, err := protobufEncoder.Encode(batchToEncode, numberOfShards)
+	protobufs, err := protobufEncoder.Encode(batchToEncode, numberOfMessages)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode protobuf: %w", err)
 	}

@@ -19,12 +19,11 @@ using PromPP::Primitives::Sample;
 using PromPP::Primitives::Timestamp;
 using PromPP::Primitives::Go::SliceView;
 using PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap;
-using PromPP::Primitives::SnugComposites::LabelSet::OrderedEncodingBimap;
 using PromPP::Prometheus::Relabel::hard_validate;
 using PromPP::Prometheus::Relabel::InnerSerie;
 using PromPP::Prometheus::Relabel::InnerSeries;
 using PromPP::Prometheus::Relabel::MetricLimits;
-using PromPP::Prometheus::Relabel::PerGoroutineRelabeler;
+using PromPP::Prometheus::Relabel::RelabeledSeries;
 using PromPP::Prometheus::Relabel::RelabelerStateUpdate;
 using PromPP::Prometheus::Relabel::relabelStatus;
 using PromPP::Prometheus::Relabel::StaleNaNsState;
@@ -143,13 +142,12 @@ struct Stats {
 
 class PerGoroutineRelabelerFixture : public testing::Test {
  protected:
+  using PerGoroutineRelabeler = PromPP::Prometheus::Relabel::PerGoroutineRelabeler<std::vector>;
+
   static constexpr uint16_t kNumberOfShards = 2;
 
-  std::vector<std::unique_ptr<InnerSeries>> vector_shards_inner_series_;
-  SliceView<InnerSeries*> shards_inner_series_{};
-
-  std::vector<std::unique_ptr<PromPP::Prometheus::Relabel::RelabeledSeries>> vector_relabeled_results_;
-  SliceView<PromPP::Prometheus::Relabel::RelabeledSeries*> relabeled_results_{};
+  std::vector<InnerSeries> shards_inner_series_;
+  std::vector<RelabeledSeries> relabeled_results_;
 
   std::vector<GoLabel> vector_target_labels_{};
   PromPP::Prometheus::Relabel::RelabelerOptions o_;
@@ -173,22 +171,14 @@ class PerGoroutineRelabelerFixture : public testing::Test {
   }
 
   void SetUp() final {
-    vector_shards_inner_series_.emplace_back(std::make_unique<InnerSeries>());
-    vector_shards_inner_series_.emplace_back(std::make_unique<InnerSeries>());
-    shards_inner_series_.reset_to(reinterpret_cast<InnerSeries**>(vector_shards_inner_series_.data()), vector_shards_inner_series_.size(),
-                                  vector_shards_inner_series_.size());
-
-    vector_relabeled_results_.emplace_back(std::make_unique<PromPP::Prometheus::Relabel::RelabeledSeries>());
-    vector_relabeled_results_.emplace_back(std::make_unique<PromPP::Prometheus::Relabel::RelabeledSeries>());
-    relabeled_results_.reset_to(reinterpret_cast<PromPP::Prometheus::Relabel::RelabeledSeries**>(vector_relabeled_results_.data()),
-                                vector_shards_inner_series_.size(), vector_shards_inner_series_.size());
-
+    shards_inner_series_.resize(kNumberOfShards);
+    relabeled_results_.resize(kNumberOfShards);
     o_.target_labels.reset_to(vector_target_labels_.data(), vector_target_labels_.size(), vector_target_labels_.size());
   }
 
   void TearDown() final {
-    vector_shards_inner_series_.clear();
-    vector_relabeled_results_.clear();
+    shards_inner_series_.clear();
+    relabeled_results_.clear();
   }
 };
 
@@ -203,10 +193,10 @@ TEST_F(PerGoroutineRelabelerFixture, KeepOnNotFoundInCache) {
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
 
   // Assert
-  EXPECT_EQ(relabeled_results_[0]->size(), 0);
-  EXPECT_EQ(relabeled_results_[1]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[0]->size(), 0);
-  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 0}}, shards_inner_series_[1]->data()));
+  EXPECT_EQ(relabeled_results_[0].size(), 0);
+  EXPECT_EQ(relabeled_results_[1].size(), 0);
+  EXPECT_EQ(shards_inner_series_[0].size(), 0);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 0}}, shards_inner_series_[1].data()));
   EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
 }
 
@@ -222,10 +212,10 @@ TEST_F(PerGoroutineRelabelerFixture, InnerSeriesAlreadyAdded) {
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
 
   // Assert
-  EXPECT_EQ(relabeled_results_[0]->size(), 0);
-  EXPECT_EQ(relabeled_results_[1]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[0]->size(), 0);
-  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 0}}, shards_inner_series_[1]->data()));
+  EXPECT_EQ(relabeled_results_[0].size(), 0);
+  EXPECT_EQ(relabeled_results_[1].size(), 0);
+  EXPECT_EQ(shards_inner_series_[0].size(), 0);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 0}}, shards_inner_series_[1].data()));
   EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
 }
 
@@ -238,14 +228,14 @@ TEST_F(PerGoroutineRelabelerFixture, KeepOnFoundInCache) {
 
   // Act
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
-  shards_inner_series_[1]->clear();
+  shards_inner_series_[1].clear();
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
 
   // Assert
-  EXPECT_EQ(relabeled_results_[0]->size(), 0);
-  EXPECT_EQ(relabeled_results_[1]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[0]->size(), 0);
-  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 0}}, shards_inner_series_[1]->data()));
+  EXPECT_EQ(relabeled_results_[0].size(), 0);
+  EXPECT_EQ(relabeled_results_[1].size(), 0);
+  EXPECT_EQ(shards_inner_series_[0].size(), 0);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 0}}, shards_inner_series_[1].data()));
   EXPECT_EQ((Stats{.samples_added = 2, .series_added = 1}), stats_);
 }
 
@@ -260,10 +250,10 @@ TEST_F(PerGoroutineRelabelerFixture, KeepNotEqual) {
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
 
   // Assert
-  EXPECT_EQ(relabeled_results_[0]->size(), 0);
-  EXPECT_EQ(relabeled_results_[1]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[0]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 0);
+  EXPECT_EQ(relabeled_results_[0].size(), 0);
+  EXPECT_EQ(relabeled_results_[1].size(), 0);
+  EXPECT_EQ(shards_inner_series_[0].size(), 0);
+  EXPECT_EQ(shards_inner_series_[1].size(), 0);
   EXPECT_EQ(Stats{.series_drop = 1}, stats_);
 }
 
@@ -281,10 +271,10 @@ TEST_F(PerGoroutineRelabelerFixture, KeepEqualThenNotEqual) {
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
 
   // Assert
-  EXPECT_EQ(relabeled_results_[0]->size(), 0);
-  EXPECT_EQ(relabeled_results_[1]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[0]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 0);
+  EXPECT_EQ(relabeled_results_[0].size(), 0);
+  EXPECT_EQ(relabeled_results_[1].size(), 0);
+  EXPECT_EQ(shards_inner_series_[0].size(), 0);
+  EXPECT_EQ(shards_inner_series_[1].size(), 0);
   EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1, .series_drop = 1}), stats_);
 }
 
@@ -299,13 +289,13 @@ TEST_F(PerGoroutineRelabelerFixture, ReplaceToNewLS2) {
 
   // Act
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
-  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
+  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], update_data);
 
   // Assert
-  EXPECT_EQ(relabeled_results_[0]->size(), 0);
-  EXPECT_EQ(relabeled_results_[1]->size(), 1);
-  EXPECT_EQ(shards_inner_series_[0]->size(), 0);
-  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 1}}, shards_inner_series_[1]->data()));
+  EXPECT_EQ(relabeled_results_[0].size(), 0);
+  EXPECT_EQ(relabeled_results_[1].size(), 1);
+  EXPECT_EQ(shards_inner_series_[0].size(), 0);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 1}}, shards_inner_series_[1].data()));
   EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
   ASSERT_EQ(1U, update_data.size());
   EXPECT_EQ((LabelViewSet{{"__name__", "booom"}, {"jab", "baj"}, {"job", "baj"}, {"replaced", "o"}}), lss_[update_data[0].relabeled_ls_id]);
@@ -321,14 +311,14 @@ TEST_F(PerGoroutineRelabelerFixture, ReplaceToNewLS3) {
 
   // Act
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
-  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[0], relabeled_results_[0], &update_data);
-  cache_.update(&update_data, 1);
+  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[0], relabeled_results_[0], update_data);
+  cache_.update(update_data, 1);
 
   // Assert
-  EXPECT_EQ(relabeled_results_[0]->size(), 1);
-  EXPECT_EQ(relabeled_results_[1]->size(), 0);
-  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 1}}, shards_inner_series_[0]->data()));
-  EXPECT_EQ(shards_inner_series_[1]->size(), 0);
+  EXPECT_EQ(relabeled_results_[0].size(), 1);
+  EXPECT_EQ(relabeled_results_[1].size(), 0);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 1}}, shards_inner_series_[0].data()));
+  EXPECT_EQ(shards_inner_series_[1].size(), 0);
   EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
   EXPECT_EQ(update_data.size(), 1);
   EXPECT_EQ((LabelViewSet{{"__name__", "booom"}, {"jab", "baj"}, {"job", "baj"}, {"replaced", "blabla"}}), lss_[update_data[0].relabeled_ls_id]);
@@ -345,7 +335,7 @@ TEST_F(PerGoroutineRelabelerFixture, InputRelabelingWithStalenans_Default) {
 
   // Act
   relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, 1000);
-  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
+  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], update_data);
   PerGoroutineRelabeler::track_stale_nans(shards_inner_series_, state, 1000);
 
   // Act
@@ -355,9 +345,9 @@ TEST_F(PerGoroutineRelabelerFixture, InputRelabelingWithStalenans_Default) {
   PerGoroutineRelabeler::track_stale_nans(shards_inner_series_, state, 2000);
 
   // Assert
-  EXPECT_EQ(shards_inner_series_[0]->size(), 1);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 0);
-  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(2000, kStaleNan), .ls_id = 0}}, shards_inner_series_[0]->data()));
+  EXPECT_EQ(shards_inner_series_[0].size(), 1);
+  EXPECT_EQ(shards_inner_series_[1].size(), 0);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(2000, kStaleNan), .ls_id = 0}}, shards_inner_series_[0].data()));
   EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
   EXPECT_EQ(update_data.size(), 0);
 }
@@ -374,7 +364,7 @@ TEST_F(PerGoroutineRelabelerFixture, InputRelabelingWithStalenans_DefaultHonorTi
 
   // Act
   relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, 1000);
-  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
+  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], update_data);
   PerGoroutineRelabeler::track_stale_nans(shards_inner_series_, state, 1000);
 
   reset();
@@ -382,9 +372,9 @@ TEST_F(PerGoroutineRelabelerFixture, InputRelabelingWithStalenans_DefaultHonorTi
   PerGoroutineRelabeler::track_stale_nans(shards_inner_series_, state, 2000);
 
   // Assert
-  EXPECT_EQ(shards_inner_series_[0]->size(), 1);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 0);
-  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(2000, kStaleNan), .ls_id = 0}}, shards_inner_series_[0]->data()));
+  EXPECT_EQ(shards_inner_series_[0].size(), 1);
+  EXPECT_EQ(shards_inner_series_[1].size(), 0);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(2000, kStaleNan), .ls_id = 0}}, shards_inner_series_[0].data()));
   EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
   EXPECT_EQ(update_data.size(), 0);
 }
@@ -400,7 +390,7 @@ TEST_F(PerGoroutineRelabelerFixture, InputRelabelingWithStalenans_WithMetricTime
 
   // Act
   relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, 1000);
-  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
+  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], update_data);
   PerGoroutineRelabeler::track_stale_nans(shards_inner_series_, state, 1000);
 
   reset();
@@ -408,9 +398,9 @@ TEST_F(PerGoroutineRelabelerFixture, InputRelabelingWithStalenans_WithMetricTime
   PerGoroutineRelabeler::track_stale_nans(shards_inner_series_, state, 2000);
 
   // Assert
-  EXPECT_EQ(shards_inner_series_[0]->size(), 1);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 0);
-  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(2000, kStaleNan), .ls_id = 0}}, shards_inner_series_[0]->data()));
+  EXPECT_EQ(shards_inner_series_[0].size(), 1);
+  EXPECT_EQ(shards_inner_series_[1].size(), 0);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(2000, kStaleNan), .ls_id = 0}}, shards_inner_series_[0].data()));
   EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
   EXPECT_EQ(update_data.size(), 0);
 }
@@ -427,18 +417,18 @@ TEST_F(PerGoroutineRelabelerFixture, InputRelabelingWithStalenans_HonorTimestamp
 
   // Act
   relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, 1000);
-  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
+  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], update_data);
   PerGoroutineRelabeler::track_stale_nans(shards_inner_series_, state, 1000);
 
   relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, HashdexTest{}, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, 2000);
   PerGoroutineRelabeler::track_stale_nans(shards_inner_series_, state, 2000);
 
   // Assert
-  EXPECT_EQ(relabeled_results_[0]->size(), 0);
-  EXPECT_EQ(relabeled_results_[1]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[0]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 1);
-  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1500, 0.1), .ls_id = 0}}, shards_inner_series_[1]->data()));
+  EXPECT_EQ(relabeled_results_[0].size(), 0);
+  EXPECT_EQ(relabeled_results_[1].size(), 0);
+  EXPECT_EQ(shards_inner_series_[0].size(), 0);
+  EXPECT_EQ(shards_inner_series_[1].size(), 1);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1500, 0.1), .ls_id = 0}}, shards_inner_series_[1].data()));
   EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
   EXPECT_EQ(update_data.size(), 0);
 }
@@ -456,7 +446,7 @@ TEST_F(PerGoroutineRelabelerFixture, InputRelabelingWithStalenans_HonorTimestamp
 
   // Act
   relabeler.input_relabeling_with_stalenans(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_, 1000);
-  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
+  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], update_data);
   PerGoroutineRelabeler::track_stale_nans(shards_inner_series_, state, 1000);
 
   reset();
@@ -464,9 +454,9 @@ TEST_F(PerGoroutineRelabelerFixture, InputRelabelingWithStalenans_HonorTimestamp
   PerGoroutineRelabeler::track_stale_nans(shards_inner_series_, state, 2000);
 
   // Assert
-  EXPECT_EQ(shards_inner_series_[0]->size(), 1);
-  EXPECT_EQ(shards_inner_series_[1]->size(), 0);
-  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(2000, kStaleNan), .ls_id = 0}}, shards_inner_series_[0]->data()));
+  EXPECT_EQ(shards_inner_series_[0].size(), 1);
+  EXPECT_EQ(shards_inner_series_[1].size(), 0);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(2000, kStaleNan), .ls_id = 0}}, shards_inner_series_[0].data()));
   EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
   EXPECT_EQ(update_data.size(), 0);
 }
@@ -482,14 +472,14 @@ TEST_F(PerGoroutineRelabelerFixture, TargetLabels_HappyPath) {
 
   // Act
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
-  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], &update_data);
-  cache_.update(&update_data, 1);
+  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[1], relabeled_results_[1], update_data);
+  cache_.update(update_data, 1);
 
   // Assert
-  EXPECT_EQ(relabeled_results_[0]->size(), 0);
-  EXPECT_EQ(relabeled_results_[1]->size(), 1);
-  EXPECT_EQ(shards_inner_series_[0]->size(), 0);
-  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 1}}, shards_inner_series_[1]->data()));
+  EXPECT_EQ(relabeled_results_[0].size(), 0);
+  EXPECT_EQ(relabeled_results_[1].size(), 1);
+  EXPECT_EQ(shards_inner_series_[0].size(), 0);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 1}}, shards_inner_series_[1].data()));
   EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
   EXPECT_EQ(update_data.size(), 1);
   EXPECT_EQ((LabelViewSet{{"__name__", "booom"}, {"a_name", "target_a_value"}, {"jab", "baj"}, {"job", "abc"}, {"z_name", "target_z_value"}}),
@@ -507,14 +497,14 @@ TEST_F(PerGoroutineRelabelerFixture, TargetLabels_ExportedLabel) {
 
   // Act
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
-  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[0], relabeled_results_[0], &update_data);
-  cache_.update(&update_data, 1);
+  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[0], relabeled_results_[0], update_data);
+  cache_.update(update_data, 1);
 
   // Assert
-  EXPECT_EQ(relabeled_results_[0]->size(), 1);
-  EXPECT_EQ(relabeled_results_[1]->size(), 0);
-  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 1}}, shards_inner_series_[0]->data()));
-  EXPECT_EQ(shards_inner_series_[1]->size(), 0);
+  EXPECT_EQ(relabeled_results_[0].size(), 1);
+  EXPECT_EQ(relabeled_results_[1].size(), 0);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 1}}, shards_inner_series_[0].data()));
+  EXPECT_EQ(shards_inner_series_[1].size(), 0);
   EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
   EXPECT_EQ(update_data.size(), 1);
   EXPECT_EQ((LabelViewSet{{"__name__", "booom"}, {"exported_jab", "baj"}, {"jab", "target_a_value"}, {"job", "abc"}, {"z_name", "target_z_value"}}),
@@ -533,14 +523,14 @@ TEST_F(PerGoroutineRelabelerFixture, TargetLabels_ExportedLabel_Honor) {
 
   // Act
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
-  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[0], relabeled_results_[0], &update_data);
-  cache_.update(&update_data, 1);
+  PerGoroutineRelabeler::append_relabeler_series(lss_, shards_inner_series_[0], relabeled_results_[0], update_data);
+  cache_.update(update_data, 1);
 
   // Assert
-  EXPECT_EQ(relabeled_results_[0]->size(), 1);
-  EXPECT_EQ(relabeled_results_[1]->size(), 0);
-  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 1}}, shards_inner_series_[0]->data()));
-  EXPECT_EQ(shards_inner_series_[1]->size(), 0);
+  EXPECT_EQ(relabeled_results_[0].size(), 1);
+  EXPECT_EQ(relabeled_results_[1].size(), 0);
+  EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, 0.1), .ls_id = 1}}, shards_inner_series_[0].data()));
+  EXPECT_EQ(shards_inner_series_[1].size(), 0);
   EXPECT_EQ((Stats{.samples_added = 1, .series_added = 1}), stats_);
   EXPECT_EQ(update_data.size(), 1);
   EXPECT_EQ((LabelViewSet{{"__name__", "booom"}, {"jab", "baj"}, {"job", "abc"}, {"z_name", "target_z_value"}}), lss_[update_data[0].relabeled_ls_id]);
@@ -563,11 +553,11 @@ TEST_F(PerGoroutineRelabelerFixture, SampleLimitExceeded) {
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
 
   // Assert
-  EXPECT_EQ(relabeled_results_[0]->size(), 0);
-  EXPECT_EQ(relabeled_results_[1]->size(), 0);
-  EXPECT_EQ(shards_inner_series_[0]->size(), 0);
+  EXPECT_EQ(relabeled_results_[0].size(), 0);
+  EXPECT_EQ(relabeled_results_[1].size(), 0);
+  EXPECT_EQ(shards_inner_series_[0].size(), 0);
   EXPECT_TRUE(std::ranges::equal(std::vector<InnerSerie>{{.sample = Sample(1000, kStaleNan), .ls_id = 0}, {.sample = Sample(2000, 0.1), .ls_id = 0}},
-                                 shards_inner_series_[1]->data()));
+                                 shards_inner_series_[1].data()));
   EXPECT_EQ((Stats{.samples_added = 2, .series_added = 1}), stats_);
 }
 
@@ -578,14 +568,12 @@ class TargetLabelsFixture : public testing::Test {
   std::vector<GoLabel> vector_target_labels_;
 
   PromPP::Prometheus::Relabel::RelabelerOptions o_;
-  std::vector<RelabelConfig*> rcts_;
   std::vector<GoLabel> vector_external_labels_;
   SliceView<GoLabel> external_labels_{};
 
   LabelsBuilder builder_;
 
-  StatelessRelabeler stateless_relabeler_{rcts_};
-  PerGoroutineRelabeler relabeler_{kNumberOfShards, 1};
+  PromPP::Prometheus::Relabel::PerGoroutineRelabeler<std::vector> relabeler_{kNumberOfShards, 1};
 
   void SetUp() final {
     o_.target_labels.reset_to(vector_target_labels_.data(), vector_target_labels_.size(), vector_target_labels_.size());

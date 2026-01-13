@@ -64,15 +64,11 @@ func (w *Writer[TShard]) Write(sd TShard) (writtenBlocks []WrittenBlock, err err
 			return err
 		}
 
-		defer func() {
-			writers.close()
-		}()
-
 		if err = w.recodeAndWriteChunks(sd, writers); err != nil {
 			return err
 		}
 
-		writtenBlocks, err = writers.writeIndexAndMoveTmpDirToDir()
+		writtenBlocks, err = writers.writeIndexCloseAndMoveTmpDirToDir()
 
 		return nil
 	})
@@ -97,7 +93,7 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 		}
 
 		var chunkIterator ChunkIterator
-		_ = sd.DataStorage().WithRLock(func(*cppbridge.HeadDataStorage) error {
+		_ = sd.DataStorage().WithRLock(func(*cppbridge.DataStorage) error {
 			chunkIterator = NewChunkIterator(sd.LSS().Target(), LsIdBatchSize, sd.DataStorage().Raw(), minT, maxT)
 			return nil
 		})
@@ -122,7 +118,7 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 // recodeAndWriteChunks recodes and writes chunks for the shard.
 func (*Writer[TShard]) recodeAndWriteChunks(sd TShard, writers blockWriters) error {
 	var loader *cppbridge.UnloadedDataRevertableLoader
-	_ = sd.DataStorage().WithRLock(func(*cppbridge.HeadDataStorage) error {
+	_ = sd.DataStorage().WithRLock(func(*cppbridge.DataStorage) error {
 		loader = sd.DataStorage().CreateRevertableLoader(sd.LSS().Target(), LsIdBatchSize)
 		return nil
 	})
@@ -146,7 +142,7 @@ func (*Writer[TShard]) recodeAndWriteChunks(sd TShard, writers blockWriters) err
 	for {
 		var hasMoreData bool
 		var err error
-		_ = sd.DataStorage().WithLock(func(*cppbridge.HeadDataStorage) error {
+		_ = sd.DataStorage().WithLock(func(*cppbridge.DataStorage) error {
 			hasMoreData, err = loadData()
 			return nil
 		})
@@ -159,7 +155,7 @@ func (*Writer[TShard]) recodeAndWriteChunks(sd TShard, writers blockWriters) err
 			return err
 		}
 
-		if err = sd.DataStorage().WithRLock(func(*cppbridge.HeadDataStorage) error {
+		if err = sd.DataStorage().WithRLock(func(*cppbridge.DataStorage) error {
 			return writers.recodeAndWriteChunksBatch()
 		}); err != nil {
 			return err

@@ -10,7 +10,7 @@ import (
 
 type HeadStatusSuite struct {
 	suite.Suite
-	dataStorage *cppbridge.HeadDataStorage
+	dataStorage *cppbridge.DataStorage
 	encoder     *cppbridge.HeadEncoder
 	lssStorage  *cppbridge.LabelSetStorage
 	limit       int
@@ -21,7 +21,7 @@ func TestHeadStatusSuite(t *testing.T) {
 }
 
 func (s *HeadStatusSuite) SetupTest() {
-	s.dataStorage = cppbridge.NewHeadDataStorage()
+	s.dataStorage = cppbridge.NewDataStorage()
 	s.encoder = cppbridge.NewHeadEncoderWithDataStorage(s.dataStorage)
 	s.lssStorage = cppbridge.NewQueryableLssStorage()
 	s.limit = 10

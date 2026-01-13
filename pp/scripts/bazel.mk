@@ -4,6 +4,8 @@ compilation_mode?=opt## Bazel compilation mode opt or dbg
 asan?=false## Build with address sanitizer
 use_docker?=true## Use bazel in docker
 bazel_verbose?=false## More verbose output
+profiling?=false## Enable profiling for targets
+profiling_opts?=## Comma-separated profiling options : on_demand, instrumental or no_sampling, no_callstack, callstack_depth (max 62)
 
 # Bazel workspace directory relative to this file
 bazel_workspace_root := $(abspath $(dir $(abspath $(lastword $(MAKEFILE_LIST))))..)
@@ -21,6 +23,9 @@ ifeq ($(asan),true)
 endif
 ifeq ($(bazel_verbose),true)
 	bazel_flags += --subcommands --verbose_failures --sandbox_debug
+endif
+ifeq ($(profiling),true)
+	bazel_flags += --profiling --profiling_opts=$(profiling_opts)
 endif
 
 # bazel_in_root is a shortcut to run command in project root

@@ -100,10 +100,11 @@ func (s *MergerSuite) TestHappyPath() {
 	queriedSeriesFS := make([][2]*mock.StorageFileMock, shardsCount)
 	for shardID := range shardsCount {
 		unloadedFS[shardID] = &mock.AppendFileMock{
-			CloseFunc: func() error { return nil },
-			OpenFunc:  func() error { return nil },
-			SyncFunc:  func() error { return nil },
-			WriteFunc: func([]byte) (int, error) { return 0, nil },
+			CloseFunc:  func() error { return nil },
+			RemoveFunc: func() error { return nil },
+			OpenFunc:   func() error { return nil },
+			SyncFunc:   func() error { return nil },
+			WriteFunc:  func([]byte) (int, error) { return 0, nil },
 		}
 
 		queriedSeriesFS[shardID] = [2]*mock.StorageFileMock{

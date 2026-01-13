@@ -127,12 +127,13 @@ func (c *Config) SetNumberOfShards(numberOfShards uint16) bool {
 type Manager struct {
 	g               run.Group
 	closer          *util.Closer
+	builder         *Builder
 	proxy           *Proxy
 	cgogc           *cppbridge.CGOGC
 	cfg             *Config
 	rotatorMediator *mediator.Mediator
 	mergerMediator  *mediator.Mediator
-	isRunning       bool
+	isRunning       uint32
 }
 
 // NewManager init new [Manager].
@@ -174,7 +175,7 @@ func NewManager(
 	builder := NewBuilder(hcatalog, o.DataDir, o.MaxSegmentSize, r, unloadDataStorageInterval)
 	loader := NewLoader(o.DataDir, o.MaxSegmentSize, r, unloadDataStorageInterval)
 	cfg := NewConfig(o.NumberOfShards)
-	h, err := uploadOrBuildHead(clock, hcatalog, builder, loader, o.BlockDuration, cfg.NumberOfShards())
+	h, err := UploadOrBuildHead(clock, hcatalog, builder, loader, o.BlockDuration, cfg.NumberOfShards())
 	if err != nil {
 		return nil, err
 	}
@@ -189,11 +190,12 @@ func NewManager(
 	)
 
 	m := &Manager{
-		g:      run.Group{},
-		closer: util.NewCloser(),
-		proxy:  NewProxy(container.NewWeighted(h, container.DefaultBackPressure), hKeeper, services.CFSViaRange),
-		cgogc:  cppbridge.NewCGOGC(r),
-		cfg:    cfg,
+		g:       run.Group{},
+		closer:  util.NewCloser(),
+		builder: builder,
+		proxy:   NewProxy(container.NewWeighted(h, container.DefaultBackPressure), hKeeper, services.CFSViaRange),
+		cgogc:   cppbridge.NewCGOGC(r),
+		cfg:     cfg,
 		rotatorMediator: mediator.NewMediator(
 			mediator.NewRotateTimerWithSeed(clock, o.BlockDuration, o.Seed),
 		),
@@ -213,15 +215,16 @@ func (m *Manager) ApplyConfig(cfg *config.Config) error {
 	logger.Infof("reconfiguration start")
 	defer logger.Infof("reconfiguration completed")
 
-	if m.proxy.Get().NumberOfShards() == cfg.PPNumberOfShards() {
-		return nil
-	}
-
-	if m.cfg.SetNumberOfShards(cfg.PPNumberOfShards()) {
+	if m.cfg.SetNumberOfShards(cfg.PPNumberOfShards()) || m.proxy.Get().NumberOfShards() != m.cfg.NumberOfShards() {
 		m.rotatorMediator.Trigger()
 	}
 
 	return nil
+}
+
+// Builder returns builder for [Head].
+func (m *Manager) Builder() *Builder {
+	return m.builder
 }
 
 // MergeOutOfOrderChunks send signal to merge chunks with out of order data chunks.
@@ -267,7 +270,7 @@ func (m *Manager) initServices(
 	m.g.Add(
 		func() error {
 			readyNotifier.NotifyReady()
-			m.isRunning = true
+			atomic.AddUint32(&m.isRunning, 1)
 			<-m.closer.Signal()
 
 			return nil
@@ -383,10 +386,12 @@ func (m *Manager) initServices(
 			metricsUpdaterCancel()
 		},
 	)
+
+	cppbridge.NewCppMetricsCollector(r)
 }
 
 func (m *Manager) close() {
-	if !m.isRunning {
+	if atomic.LoadUint32(&m.isRunning) == 0 {
 		m.closer.Done()
 	}
 
@@ -475,11 +480,11 @@ func (tn *TriggerNotifier) Notify() {
 // uploadOrBuildHead
 //
 
-// uploadOrBuildHead uploads or builds a new head.
+// UploadOrBuildHead uploads or builds a new head.
 //
 //revive:disable-next-line:function-length // long but readable.
 //revive:disable-next-line:cyclomatic // long but readable.
-func uploadOrBuildHead(
+func UploadOrBuildHead(
 	clock clockwork.Clock,
 	hcatalog *catalog.Catalog,
 	builder *Builder,
@@ -513,28 +518,35 @@ func uploadOrBuildHead(
 		return builder.Build(generation, numberOfShards)
 	}
 
-	h, corrupted := loader.Load(headRecords[0], generation)
-	if corrupted {
+	h, err := loader.Load(headRecords[0], generation)
+	if err != nil {
+		if headRecords[0].Status() == catalog.StatusNew || headRecords[0].Status() == catalog.StatusActive {
+			if _, setStatusErr := hcatalog.SetStatus(headRecords[0].ID(), catalog.StatusRotated); setStatusErr != nil {
+				logger.Warnf("failed to set rotated status for head {%s}: %s", headRecords[0].ID(), setStatusErr)
+			}
+		}
+
+		_ = h.Close()
+
+		if errors.Is(err, cppbridge.ErrInvalidEncoderVersion) {
+			logger.Warnf("[Head Manager] upload non continuable head {%s}, building new...", headRecords[0].ID())
+			return builder.Build(generation+1, numberOfShards)
+		}
+
 		if !headRecords[0].Corrupted() {
 			if _, setCorruptedErr := hcatalog.SetCorrupted(headRecords[0].ID()); setCorruptedErr != nil {
 				logger.Errorf("failed to set corrupted state, head {%s}: %v", headRecords[0].ID(), setCorruptedErr)
 			}
 		}
+
 		logger.Warnf("[Head Manager] upload corrupted head {%s}, building new...", headRecords[0].ID())
-
-		if _, err := hcatalog.SetStatus(headRecords[0].ID(), catalog.StatusRotated); err != nil {
-			logger.Warnf("failed to set rotated status for head {%s}: %s", headRecords[0].ID(), err)
-		}
-
-		_ = h.Close()
-
-		return builder.Build(generation, numberOfShards)
+		return builder.Build(generation+1, numberOfShards)
 	}
 
-	if _, err := hcatalog.SetStatus(headRecords[0].ID(), catalog.StatusActive); err != nil {
+	if _, err = hcatalog.SetStatus(headRecords[0].ID(), catalog.StatusActive); err != nil {
 		logger.Warnf("failed to set active status for head {%s}: %s", headRecords[0].ID(), err)
 
-		return builder.Build(generation, numberOfShards)
+		return builder.Build(generation+1, numberOfShards)
 	}
 
 	return h, nil

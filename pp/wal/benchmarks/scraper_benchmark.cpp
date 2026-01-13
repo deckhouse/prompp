@@ -3,6 +3,7 @@
 #include <benchmark/benchmark.h>
 
 #include "primitives/timeseries.h"
+#include "profiling/profiling.h"
 #include "wal/hashdex/scraper/scraper.h"
 
 namespace {
@@ -11,6 +12,7 @@ using PromPP::WAL::hashdex::scraper::PrometheusParser;
 using PromPP::WAL::hashdex::scraper::PrometheusScraper;
 
 void BenchmarkParser(benchmark::State& state) {
+  ZoneScoped;
   constexpr auto get_file_name = [] -> std::string {
     if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
       return context->operator[]("scraper_file");
@@ -33,6 +35,7 @@ void BenchmarkParser(benchmark::State& state) {
 }
 
 void BenchmarkScraperParse(benchmark::State& state) {
+  ZoneScoped;
   constexpr auto get_file_name = [] -> std::string {
     if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
       return context->operator[]("scraper_file");
@@ -62,6 +65,7 @@ void BenchmarkScraperParse(benchmark::State& state) {
 }
 
 void BenchmarkScraperRead(benchmark::State& state) {
+  ZoneScoped;
   constexpr auto get_file_name = [] -> std::string {
     if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
       return context->operator[]("scraper_file");

@@ -1,6 +1,8 @@
 package querier_test
 
 import (
+	"testing"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -11,7 +13,6 @@ import (
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"testing"
 )
 
 type SeriesSetTestSuite struct {
@@ -70,9 +71,9 @@ func (s *SeriesSetTestSuite) SetupTest() {
 	}
 }
 
-func query(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, start, end int64, matchers ...model.LabelMatcher) *querier.SeriesSet {
+func (s *SeriesSetTestSuite) query(lss *shard.LSS, ds *shard.DataStorage, start, end int64, matchers ...model.LabelMatcher) *querier.SeriesSet {
 	selector, snapshot, err := lss.QuerySelector(0, matchers)
-	require.NoError(t, err)
+	require.NoError(s.T(), err)
 	if selector == 0 || snapshot == nil {
 		return &querier.SeriesSet{}
 	}
@@ -82,14 +83,23 @@ func query(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, start, end int64
 		return &querier.SeriesSet{}
 	}
 
-	dsQueryResult := ds.Query(cppbridge.HeadDataStorageQuery{
+	dsQueryResult := ds.Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: start,
 		EndTimestampMs:   end,
 		LabelSetIDs:      lssQueryResult.IDs(),
 	})
 
-	require.Equal(t, cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
+	require.Equal(s.T(), cppbridge.DataStorageQueryStatusSuccess, dsQueryResult.Status)
 	return querier.NewSeriesSet(start, end, lssQueryResult, snapshot, dsQueryResult.SerializedData)
+}
+
+func (s *SeriesSetTestSuite) nextSample(iterator chunkenc.Iterator) cppbridge.Sample {
+	s.Equal(chunkenc.ValFloat, iterator.Next())
+	ts, v := iterator.At()
+	return cppbridge.Sample{
+		Timestamp: ts,
+		Value:     v,
+	}
 }
 
 func (s *SeriesSetTestSuite) TestQueryAllValues() {
@@ -108,7 +118,7 @@ func (s *SeriesSetTestSuite) TestQueryAllValues() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
 
 	// Act
-	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -129,7 +139,7 @@ func (s *SeriesSetTestSuite) TestQueryNoValues() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
 
 	// Act
-	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -150,7 +160,7 @@ func (s *SeriesSetTestSuite) TestQuerySingleSeries() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
 
 	// Act
-	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -171,7 +181,7 @@ func (s *SeriesSetTestSuite) TestQuerySingleSample() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
 
 	// Act
-	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -192,7 +202,7 @@ func (s *SeriesSetTestSuite) TestQueryCutByUpperLimit() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
 
 	// Act
-	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -213,7 +223,7 @@ func (s *SeriesSetTestSuite) TestQueryCutByLowerLimit() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
 
 	// Act
-	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -243,7 +253,7 @@ func (s *SeriesSetTestSuite) TestQueryLargeChunks() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, timeSeries...)
 
 	// Act
-	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -262,7 +272,7 @@ func (s *SeriesSetTestSuite) TestQueryEmptyStorage() {
 
 	expected := []storagetest.TimeSeries{}
 	// Act
-	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
 
 	// Assert
 	require.Equal(s.T(), expected, storagetest.TimeSeriesFromSeriesSet(seriesSet, false))
@@ -317,8 +327,8 @@ func (s *SeriesSetTestSuite) TestQueryMergedSeriesSets() {
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(anotherLss, anotherDs, timeSeries2...)
 	expected := append(timeSeries1, timeSeries2...)
 	// Act
-	seriesSet1 := query(s.T(), s.lss, s.ds, start, end, matcher)
-	seriesSet2 := query(s.T(), anotherLss, anotherDs, start, end, matcher)
+	seriesSet1 := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSet2 := s.query(anotherLss, anotherDs, start, end, matcher)
 
 	// Assert
 	require.Equal(
@@ -342,7 +352,7 @@ func (s *SeriesSetTestSuite) TestSeriesSeek() {
 
 	expected := s.timeSeries[:4]
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries[:4]...)
-	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
 	require.True(s.T(), seriesSet.Next())
 	series := seriesSet.At()
 	require.Equal(s.T(), expected[0].Labels, series.Labels())
@@ -379,7 +389,7 @@ func (s *SeriesSetTestSuite) TestSeriesSeekOutOfRange() {
 	var end int64 = 1000
 
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries[:4]...)
-	seriesSet := query(s.T(), s.lss, s.ds, start, end, matcher)
+	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
 	require.True(s.T(), seriesSet.Next())
 	series := seriesSet.At()
 	var iterator chunkenc.Iterator
@@ -390,4 +400,88 @@ func (s *SeriesSetTestSuite) TestSeriesSeekOutOfRange() {
 
 	// Assert
 	require.Equal(s.T(), chunkenc.ValNone, result)
+}
+
+func (s *SeriesSetTestSuite) TestSeriesParallelRead() {
+	// Arrange
+	matcher := model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	}
+
+	var start int64 = 0
+	var end int64 = 50
+
+	expected := s.timeSeries
+
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
+	seriesSet := s.query(s.lss, s.ds, start, end, matcher)
+	seriesSlice := make([]storage.Series, 0, 2)
+	require.True(s.T(), seriesSet.Next())
+	seriesSlice = append(seriesSlice, seriesSet.At())
+	require.True(s.T(), seriesSet.Next())
+	seriesSlice = append(seriesSlice, seriesSet.At())
+	require.False(s.T(), seriesSet.Next())
+	var chunkIterator chunkenc.Iterator
+
+	// Act
+	timeSeriesFromSeries1 := storagetest.TimeSeriesFromSeries(seriesSlice[0], chunkIterator, false)
+	timeSeriesFromSeries2 := storagetest.TimeSeriesFromSeries(seriesSlice[1], chunkIterator, false)
+
+	// Assert
+	require.Equal(s.T(), expected, append(timeSeriesFromSeries1, timeSeriesFromSeries2...))
+}
+
+func (s *SeriesSetTestSuite) TestSeriesResetIterator() {
+	// Arrange
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
+
+	var start int64 = 0
+	var end int64 = 50
+	seriesSet := s.query(s.lss, s.ds, start, end, model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	})
+
+	s.True(seriesSet.Next())
+	iterator := seriesSet.At().Iterator(nil)
+	s.Equal(chunkenc.ValFloat, iterator.Next())
+
+	s.True(seriesSet.Next())
+
+	// Act
+	iterator = seriesSet.At().Iterator(iterator)
+
+	// Assert
+	s.Equal(cppbridge.Sample{Timestamp: 11, Value: 1}, s.nextSample(iterator))
+	s.Equal(cppbridge.Sample{Timestamp: 12, Value: 2}, s.nextSample(iterator))
+	s.Equal(chunkenc.ValNone, iterator.Next())
+}
+
+func (s *SeriesSetTestSuite) TestSeriesResetIteratorWithMinTimestamp() {
+	// Arrange
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, s.timeSeries...)
+
+	var start int64 = 12
+	var end int64 = 50
+	seriesSet := s.query(s.lss, s.ds, start, end, model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	})
+
+	s.True(seriesSet.Next())
+	iterator := seriesSet.At().Iterator(nil)
+	s.Equal(chunkenc.ValFloat, iterator.Next())
+
+	s.True(seriesSet.Next())
+
+	// Act
+	iterator = seriesSet.At().Iterator(iterator)
+
+	// Assert
+	s.Equal(cppbridge.Sample{Timestamp: 12, Value: 2}, s.nextSample(iterator))
+	s.Equal(chunkenc.ValNone, iterator.Next())
 }

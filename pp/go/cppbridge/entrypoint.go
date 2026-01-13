@@ -17,7 +17,6 @@ package cppbridge
 // #include "entrypoint.h"
 import "C" //nolint:gocritic // because otherwise it won't work
 import (
-	"math"
 	"runtime"
 	"time"
 	"unsafe" //nolint:gocritic // because otherwise it won't work
@@ -26,6 +25,18 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge/fastcgo"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/util"
+)
+
+type (
+	CppStdVector              = [C.Sizeof_StdVector]byte
+	CppBareBonesVector        = [C.Sizeof_BareBonesVector]byte
+	CppRoaringBitset          = [C.Sizeof_RoaringBitset]byte
+	CppSerializedDataIterator = [C.Sizeof_SerializedDataIterator]byte
+	CppMetricsIterator        = [C.Sizeof_MetricsIterator]byte
+)
+
+const (
+	GoLabelsSize = C.Sizeof_GoLabels
 )
 
 var (
@@ -597,9 +608,9 @@ func walEncoderAdd(encoder, hashdex uintptr) (stats WALEncoderStats, exception [
 	return res.WALEncoderStats, res.exception
 }
 
-func walEncoderAddInnerSeries(encoder uintptr, innerSeries []*InnerSeries) (stats WALEncoderStats, exception []byte) {
+func walEncoderAddInnerSeries(encoder uintptr, innerSeries []InnerSeries) (stats WALEncoderStats, exception []byte) {
 	args := struct {
-		innerSeries []*InnerSeries
+		innerSeries []InnerSeries
 		encoder     uintptr
 	}{innerSeries, encoder}
 	var res struct {
@@ -774,10 +785,10 @@ func walEncoderLightweightAdd(encoder, hashdex uintptr) (stats WALEncoderStats, 
 // walEncoderLightweightAddInnerSeries - add inner series to current segment.
 func walEncoderLightweightAddInnerSeries(
 	encoder uintptr,
-	innerSeries []*InnerSeries,
+	innerSeries []InnerSeries,
 ) (stats WALEncoderStats, exception []byte) {
 	args := struct {
-		innerSeries []*InnerSeries
+		innerSeries []InnerSeries
 		encoder     uintptr
 	}{innerSeries, encoder}
 	var res struct {
@@ -1564,9 +1575,9 @@ func prometheusStatelessRelabelerResetTo(statelessRelabeler uintptr, cfgs []*Rel
 //
 
 // prometheusInnerSeriesCtor - wrapper for constructor C-InnerSeries(vector).
-func prometheusInnerSeriesCtor(innerSeries *InnerSeries) {
+func prometheusInnerSeriesCtor(innerSeries []InnerSeries) {
 	args := struct {
-		innerSeries *InnerSeries
+		innerSeries []InnerSeries
 	}{innerSeries}
 
 	testGC()
@@ -1577,9 +1588,9 @@ func prometheusInnerSeriesCtor(innerSeries *InnerSeries) {
 }
 
 // prometheusInnerSeriesDtor - wrapper for destructor C-InnerSeries(vector).
-func prometheusInnerSeriesDtor(innerSeries *InnerSeries) {
+func prometheusInnerSeriesDtor(innerSeries []InnerSeries) {
 	args := struct {
-		innerSeries *InnerSeries
+		innerSeries []InnerSeries
 	}{innerSeries}
 
 	testGC()
@@ -1594,9 +1605,9 @@ func prometheusInnerSeriesDtor(innerSeries *InnerSeries) {
 //
 
 // prometheusRelabeledSeriesCtor - wrapper for constructor C-RelabeledSeries(vector).
-func prometheusRelabeledSeriesCtor(relabeledSeries *RelabeledSeries) {
+func prometheusRelabeledSeriesCtor(relabeledSeries []RelabeledSeries) {
 	args := struct {
-		relabeledSeries *RelabeledSeries
+		relabeledSeries []RelabeledSeries
 	}{relabeledSeries}
 
 	testGC()
@@ -1607,9 +1618,9 @@ func prometheusRelabeledSeriesCtor(relabeledSeries *RelabeledSeries) {
 }
 
 // prometheusRelabeledSeriesDtor - wrapper for destructor C-RelabeledSeries(vector).
-func prometheusRelabeledSeriesDtor(relabeledSeries *RelabeledSeries) {
+func prometheusRelabeledSeriesDtor(relabeledSeries []RelabeledSeries) {
 	args := struct {
-		relabeledSeries *RelabeledSeries
+		relabeledSeries []RelabeledSeries
 	}{relabeledSeries}
 
 	testGC()
@@ -1624,9 +1635,9 @@ func prometheusRelabeledSeriesDtor(relabeledSeries *RelabeledSeries) {
 //
 
 // prometheusRelabelerStateUpdateCtor - wrapper for constructor C-RelabelerStateUpdate(vector), filling in c++.
-func prometheusRelabelerStateUpdateCtor(relabelerStateUpdate *RelabelerStateUpdate) {
+func prometheusRelabelerStateUpdateCtor(relabelerStateUpdate []RelabelerStateUpdate) {
 	args := struct {
-		relabelerStateUpdate *RelabelerStateUpdate
+		relabelerStateUpdate []RelabelerStateUpdate
 	}{relabelerStateUpdate}
 
 	testGC()
@@ -1637,9 +1648,9 @@ func prometheusRelabelerStateUpdateCtor(relabelerStateUpdate *RelabelerStateUpda
 }
 
 // prometheusRelabelerStateUpdateDtor - wrapper for destructor C-RelabelerStateUpdate(vector).
-func prometheusRelabelerStateUpdateDtor(relabelerStateUpdate *RelabelerStateUpdate) {
+func prometheusRelabelerStateUpdateDtor(relabelerStateUpdate []RelabelerStateUpdate) {
 	args := struct {
-		relabelerStateUpdate *RelabelerStateUpdate
+		relabelerStateUpdate []RelabelerStateUpdate
 	}{relabelerStateUpdate}
 
 	testGC()
@@ -1754,13 +1765,13 @@ func prometheusPerShardSingleRelabelerUpdateRelabelerState(
 // prometheusPerShardRelabelerOutputRelabeling - wrapper for relabeling output series(fourth stage).
 func prometheusPerShardRelabelerOutputRelabeling(
 	perShardRelabeler, lss, cache uintptr,
-	incomingInnerSeries, encodersInnerSeries []*InnerSeries,
+	incomingInnerSeries, encodersInnerSeries []InnerSeries,
 	relabeledSeries *RelabeledSeries,
 ) []byte {
 	args := struct {
 		relabeledSeries     *RelabeledSeries
-		incomingInnerSeries []*InnerSeries
-		encodersInnerSeries []*InnerSeries
+		incomingInnerSeries []InnerSeries
+		encodersInnerSeries []InnerSeries
 		perShardRelabeler   uintptr
 		lss                 uintptr
 		cache               uintptr
@@ -1850,13 +1861,13 @@ type DataStorageQueryResult struct {
 	SerializedData *DataStorageSerializedData
 }
 
-func seriesDataDataStorageQueryV2(dataStorage uintptr, query HeadDataStorageQuery, serializedData *DataStorageSerializedData) (querier uintptr, status uint8) {
+func seriesDataDataStorageQueryV2(dataStorage uintptr, query DataStorageQuery, serializedData *DataStorageSerializedData) (querier uintptr, status uint8) {
 	args := struct {
 		dataStorage uintptr
-		query       HeadDataStorageQuery
+		query       DataStorageQuery
 	}{dataStorage, query}
 
-	var res = struct {
+	res := struct {
 		Querier        uintptr
 		Status         uint8
 		SerializedData *uintptr
@@ -1877,14 +1888,13 @@ func seriesDataDataStorageQueryV2(dataStorage uintptr, query HeadDataStorageQuer
 	return res.Querier, res.Status
 }
 
-func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32, timestamp int64, samples []Sample) DataStorageQueryResult {
+func seriesDataDataStorageInstantQuery(dataStorage uintptr, labelSetIDs []uint32, timestamp int64, samples uintptr) DataStorageQueryResult {
 	args := struct {
 		dataStorage uintptr
 		labelSetIDs []uint32
 		timestamp   int64
-		samples     []Sample
+		samples     uintptr
 	}{dataStorage, labelSetIDs, timestamp, samples}
-
 	var res DataStorageQueryResult
 
 	testGC()
@@ -1943,84 +1953,51 @@ func seriesDataSerializedDataNext(serializedData uintptr) (uint32, uint32) {
 	return res.seriesID, res.chunkRef
 }
 
-func seriesDataSerializedDataIteratorCtor(serializedData uintptr, chunkRef uint32) uintptr {
+func seriesDataSerializedDataIteratorCtor(iterator *DataStorageSerializedDataIterator, serializedData uintptr, chunkRef uint32) {
 	args := struct {
+		iterator       uintptr
 		serializedData uintptr
 		chunkRef       uint32
-	}{serializedData, chunkRef}
-	res := struct {
-		iterator uintptr
-	}{}
+	}{uintptr(unsafe.Pointer(iterator)), serializedData, chunkRef}
 
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_series_data_serialization_serialized_data_iterator_ctor,
 		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
 	)
-
-	return res.iterator
 }
 
-type SerializedDataIteratorNextResult struct {
-	Timestamp int64
-	Value     float64
-	HasValue  bool
-}
-
-func NewSerializedDataIteratorNextResult() SerializedDataIteratorNextResult {
-	return SerializedDataIteratorNextResult{Timestamp: math.MinInt64}
-}
-
-func seriesDataSerializedDataIteratorNext(iterator uintptr, res *SerializedDataIteratorNextResult) {
-	args := struct {
-		iterator uintptr
-	}{iterator}
-
+func seriesDataSerializedDataIteratorNext(iterator *DataStorageSerializedDataIterator) {
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_series_data_serialization_serialized_data_iterator_next,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(res)),
+		uintptr(unsafe.Pointer(iterator)),
 	)
 }
 
-func seriesDataSerializedDataIteratorSeek(iterator uintptr, targetTimestamp int64, res *SerializedDataIteratorNextResult) {
+func seriesDataSerializedDataIteratorSeek(iterator *DataStorageSerializedDataIterator, targetTimestamp int64) {
 	args := struct {
 		iterator        uintptr
 		targetTimestamp int64
-	}{iterator, targetTimestamp}
+	}{uintptr(unsafe.Pointer(iterator)), targetTimestamp}
 
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_series_data_serialization_serialized_data_iterator_seek,
 		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(res)),
 	)
 }
 
-func seriesDataSerializedDataIteratorReset(serializedData uintptr, iterator uintptr, chunkRef uint32) {
+func seriesDataSerializedDataIteratorReset(iterator *DataStorageSerializedDataIterator, serializedData uintptr, chunkRef uint32) {
 	args := struct {
-		serializedData uintptr
 		iterator       uintptr
+		serializedData uintptr
 		chunkRef       uint32
-	}{serializedData, iterator, chunkRef}
+	}{uintptr(unsafe.Pointer(iterator)), serializedData, chunkRef}
 
 	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_series_data_serialization_serialized_data_iterator_reset,
-		uintptr(unsafe.Pointer(&args)),
-	)
-}
-
-func seriesDataSerializedDataIteratorDtor(iterator uintptr) {
-	args := struct {
-		iterator uintptr
-	}{iterator}
-
-	testGC()
-	fastcgo.UnsafeCall1(
-		C.prompp_series_data_serialization_serialized_data_iterator_dtor,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
@@ -2143,10 +2120,10 @@ func seriesDataEncoderEncode(encoder uintptr, seriesID uint32, timestamp int64, 
 	)
 }
 
-func seriesDataEncoderEncodeInnerSeriesSlice(encoder uintptr, innerSeriesSlice []*InnerSeries) {
+func seriesDataEncoderEncodeInnerSeriesSlice(encoder uintptr, innerSeriesSlice []InnerSeries) {
 	args := struct {
 		encoder          uintptr
-		innerSeriesSlice []*InnerSeries
+		innerSeriesSlice []InnerSeries
 	}{encoder, innerSeriesSlice}
 	start := time.Now().UnixNano()
 	testGC()
@@ -2180,104 +2157,6 @@ func seriesDataEncoderDtor(encoder uintptr) {
 	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_series_data_encoder_dtor,
-		uintptr(unsafe.Pointer(&args)),
-	)
-}
-
-func seriesDataDeserializerCtor(serializedChunks []byte) uintptr {
-	args := struct {
-		serializedChunks []byte
-	}{serializedChunks}
-	var res struct {
-		deserializer uintptr
-	}
-
-	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_series_data_deserializer_ctor,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.deserializer
-}
-
-func seriesDataDeserializerCreateDecodeIterator(deserializer uintptr, chunkMetadata []byte) uintptr {
-	args := struct {
-		deserializer  uintptr
-		chunkMetadata []byte
-	}{deserializer, chunkMetadata}
-	var res struct {
-		decodeIterator uintptr
-	}
-
-	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_series_data_deserializer_create_decode_iterator,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.decodeIterator
-}
-
-func seriesDataDecodeIteratorNext(decodeIterator uintptr) bool {
-	args := struct {
-		decodeIterator uintptr
-	}{decodeIterator}
-	var res struct {
-		hasValue bool
-	}
-
-	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_series_data_decode_iterator_next,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.hasValue
-}
-
-func seriesDataDecodeIteratorSample(decodeIterator uintptr) (int64, float64) {
-	args := struct {
-		decodeIterator uintptr
-	}{decodeIterator}
-	var res struct {
-		timestamp int64
-		value     float64
-	}
-
-	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_series_data_decode_iterator_sample,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.timestamp, res.value
-}
-
-func seriesDataDecodeIteratorDtor(decodeIterator uintptr) {
-	args := struct {
-		decodeIterator uintptr
-	}{decodeIterator}
-
-	testGC()
-	fastcgo.UnsafeCall1(
-		C.prompp_series_data_decode_iterator_dtor,
-		uintptr(unsafe.Pointer(&args)),
-	)
-}
-
-func seriesDataDeserializerDtor(deserializer uintptr) {
-	args := struct {
-		deserializer uintptr
-	}{deserializer}
-
-	testGC()
-	fastcgo.UnsafeCall1(
-		C.prompp_series_data_deserializer_dtor,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
@@ -2903,11 +2782,11 @@ func prometheusCacheAllocatedMemory(cache uintptr) uint64 {
 
 // prometheusCacheUpdate add to cache relabled data(third stage).
 func prometheusCacheUpdate(
-	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
+	shardsRelabelerStateUpdate []RelabelerStateUpdate,
 	cache uintptr,
 ) []byte {
 	args := struct {
-		relabelerStateUpdates []*RelabelerStateUpdate
+		relabelerStateUpdates []RelabelerStateUpdate
 		cache                 uintptr
 	}{shardsRelabelerStateUpdate, cache}
 	var res struct {
@@ -2947,9 +2826,9 @@ func headWalEncoderCtor(shardID uint16, logShards uint8, lss uintptr) uintptr {
 	return res.encoder
 }
 
-func headWalEncoderAddInnerSeries(encoder uintptr, innerSeries []*InnerSeries) (samples uint32, err error) {
+func headWalEncoderAddInnerSeries(encoder uintptr, innerSeries []InnerSeries) (samples uint32, err error) {
 	args := struct {
-		innerSeries []*InnerSeries
+		innerSeries []InnerSeries
 		encoder     uintptr
 	}{innerSeries, encoder}
 	var res struct {
@@ -3069,12 +2948,13 @@ func headWalDecoderDecodeToDataStorage(decoder uintptr, segment []byte, encoder 
 	return res.createTimestamp, res.encodeTimestamp, handleException(res.exception)
 }
 
-func headWalDecoderCreateEncoder(decoder uintptr) uintptr {
+func headWalDecoderCreateEncoder(decoder uintptr) (uintptr, error) {
 	args := struct {
 		decoder uintptr
 	}{decoder}
 	var res struct {
 		encoder uintptr
+		error   []byte
 	}
 
 	testGC()
@@ -3084,7 +2964,7 @@ func headWalDecoderCreateEncoder(decoder uintptr) uintptr {
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.encoder
+	return res.encoder, handleException(res.error)
 }
 
 func headWalDecoderDtor(decoder uintptr) {
@@ -3272,12 +3152,12 @@ func prometheusPerGoroutineRelabelerDtor(perGoroutineRelabeler uintptr) {
 func prometheusPerGoroutineRelabelerInputRelabeling(
 	perGoroutineRelabeler, statelessRelabeler, inputLss, targetLss, cache, hashdex uintptr,
 	options RelabelerOptions,
-	shardsInnerSeries []*InnerSeries,
-	shardsRelabeledSeries []*RelabeledSeries,
+	shardsInnerSeries []InnerSeries,
+	shardsRelabeledSeries []RelabeledSeries,
 ) (stats RelabelerStats, exception []byte, targetLssHasReallocations bool) {
 	args := struct {
-		shardsInnerSeries     []*InnerSeries
-		shardsRelabeledSeries []*RelabeledSeries
+		shardsInnerSeries     []InnerSeries
+		shardsRelabeledSeries []RelabeledSeries
 		options               RelabelerOptions
 		perGoroutineRelabeler uintptr
 		statelessRelabeler    uintptr
@@ -3319,10 +3199,10 @@ func prometheusPerGoroutineRelabelerInputRelabeling(
 func prometheusPerGoroutineRelabelerInputRelabelingFromCache(
 	perGoroutineRelabeler, inputLss, targetLss, cache, hashdex uintptr,
 	options RelabelerOptions,
-	shardsInnerSeries []*InnerSeries,
+	shardsInnerSeries []InnerSeries,
 ) (stats RelabelerStats, exception []byte, ok bool) {
 	args := struct {
-		shardsInnerSeries     []*InnerSeries
+		shardsInnerSeries     []InnerSeries
 		options               RelabelerOptions
 		perGoroutineRelabeler uintptr
 		hashdex               uintptr
@@ -3354,12 +3234,12 @@ func prometheusPerGoroutineRelabelerInputRelabelingWithStalenans(
 	perGoroutineRelabeler, statelessRelabeler, inputLss, targetLss, cache, hashdex uintptr,
 	defTimestamp int64,
 	options RelabelerOptions,
-	shardsInnerSeries []*InnerSeries,
-	shardsRelabeledSeries []*RelabeledSeries,
+	shardsInnerSeries []InnerSeries,
+	shardsRelabeledSeries []RelabeledSeries,
 ) (stats RelabelerStats, exception []byte, targetLssHasReallocations bool) {
 	args := struct {
-		shardsInnerSeries     []*InnerSeries
-		shardsRelabeledSeries []*RelabeledSeries
+		shardsInnerSeries     []InnerSeries
+		shardsRelabeledSeries []RelabeledSeries
 		options               RelabelerOptions
 		perGoroutineRelabeler uintptr
 		statelessRelabeler    uintptr
@@ -3404,10 +3284,10 @@ func prometheusPerGoroutineRelabelerInputRelabelingWithStalenansFromCache(
 	perGoroutineRelabeler, inputLss, targetLss, cache, hashdex uintptr,
 	defTimestamp int64,
 	options RelabelerOptions,
-	shardsInnerSeries []*InnerSeries,
+	shardsInnerSeries []InnerSeries,
 ) (stats RelabelerStats, exception []byte, targetLssHasReallocations bool) {
 	args := struct {
-		shardsInnerSeries     []*InnerSeries
+		shardsInnerSeries     []InnerSeries
 		options               RelabelerOptions
 		perGoroutineRelabeler uintptr
 		hashdex               uintptr
@@ -3447,10 +3327,10 @@ func prometheusPerGoroutineRelabelerInputRelabelingWithStalenansFromCache(
 // transparent relabeling incoming hashdex(first stage).
 func prometheusPerGoroutineRelabelerInputTransitionRelabeling(
 	perGoroutineRelabeler, targetLss, hashdex uintptr,
-	shardsInnerSeries []*InnerSeries,
+	shardsInnerSeries []InnerSeries,
 ) (stats RelabelerStats, exception []byte, targetLssHasReallocations bool) {
 	args := struct {
-		shardsInnerSeries     []*InnerSeries
+		shardsInnerSeries     []InnerSeries
 		perGoroutineRelabeler uintptr
 		hashdex               uintptr
 		targetLss             uintptr
@@ -3482,10 +3362,10 @@ func prometheusPerGoroutineRelabelerInputTransitionRelabeling(
 // incoming hashdex(first stage) from cache.
 func prometheusPerGoroutineRelabelerInputRelabelingOnlyRead(
 	perGoroutineRelabeler, targetLss, hashdex uintptr,
-	shardsInnerSeries []*InnerSeries,
+	shardsInnerSeries []InnerSeries,
 ) (stats RelabelerStats, exception []byte, ok bool) {
 	args := struct {
-		shardsInnerSeries     []*InnerSeries
+		shardsInnerSeries     []InnerSeries
 		perGoroutineRelabeler uintptr
 		hashdex               uintptr
 		targetLss             uintptr
@@ -3512,14 +3392,14 @@ func prometheusPerGoroutineRelabelerInputRelabelingOnlyRead(
 // add to result and add to cache update(second stage).
 func prometheusPerGoroutineRelabelerAppendRelabelerSeries(
 	perGoroutineRelabeler, targetLss uintptr,
-	shardsInnerSeries []*InnerSeries,
-	shardsRelabeledSeries []*RelabeledSeries,
-	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
+	shardsInnerSeries []InnerSeries,
+	shardsRelabeledSeries []RelabeledSeries,
+	shardsRelabelerStateUpdate []RelabelerStateUpdate,
 ) (exception []byte, targetLssHasReallocations bool) {
 	args := struct {
-		shardsInnerSeries          []*InnerSeries
-		shardsRelabeledSeries      []*RelabeledSeries
-		shardsRelabelerStateUpdate []*RelabelerStateUpdate
+		shardsInnerSeries          []InnerSeries
+		shardsRelabeledSeries      []RelabeledSeries
+		shardsRelabelerStateUpdate []RelabelerStateUpdate
 		perGoroutineRelabeler      uintptr
 		targetLss                  uintptr
 	}{shardsInnerSeries, shardsRelabeledSeries, shardsRelabelerStateUpdate, perGoroutineRelabeler, targetLss}
@@ -3541,12 +3421,12 @@ func prometheusPerGoroutineRelabelerAppendRelabelerSeries(
 }
 
 func prometheusPerGoroutineRelabelerTrackStaleNans(
-	innerSeries []*InnerSeries,
+	innerSeries []InnerSeries,
 	staleNansState uintptr,
 	defaultTimestamp int64,
 ) {
 	args := struct {
-		innerSeries      []*InnerSeries
+		innerSeries      []InnerSeries
 		staleNansState   uintptr
 		defaultTimestamp int64
 	}{innerSeries, staleNansState, defaultTimestamp}
@@ -3567,6 +3447,69 @@ func prometheusRemapStaleNansState(staleNansState, lsIdsMapping uintptr) {
 	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_remap_stale_nans_state,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func prometheusMetricsIteratorCtor() CppMetricsIterator {
+	var iterator CppMetricsIterator
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_metrics_iterator_ctor,
+		uintptr(unsafe.Pointer(&iterator)),
+	)
+
+	return iterator
+}
+
+func prometheusMetricsIteratorNext(iterator *CppMetricsIterator) *CppMetric {
+	args := struct {
+		iterator uintptr
+	}{uintptr(unsafe.Pointer(iterator))}
+
+	var res struct {
+		metric *CppMetric
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_metrics_iterator_next,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.metric
+}
+
+func prometheusMetricsPageForTestCtor(labels Labels, counterName string, counterValue uint64) uintptr {
+	args := struct {
+		labels       Labels
+		counterName  string
+		counterValue uint64
+	}{labels, counterName, counterValue}
+
+	var res struct {
+		page uintptr
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_metrics_page_for_test_ctor,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.page
+}
+
+func prometheusMetricsPageForTestDetach(page uintptr) {
+	args := struct {
+		page uintptr
+	}{page}
+
+	fastcgo.UnsafeCall1(
+		C.prompp_metrics_page_for_test_detach,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }

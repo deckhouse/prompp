@@ -811,6 +811,7 @@ class BasicDecoder {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_empty() const noexcept { return last_processed_segment_ == std::numeric_limits<uint32_t>::max(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_valid() const noexcept { return encoder_version_ != BasicEncoderVersion::kUnknown; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE BasicEncoderVersion encoder_version() const noexcept { return encoder_version_; }
 
   PROMPP_ALWAYS_INLINE void set_encoder_version(BasicEncoderVersion version) noexcept {
     assert(is_empty());

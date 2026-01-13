@@ -1,6 +1,7 @@
 package cppbridge_test
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/gobuffalo/packr/v2/file/resolver/encoding/hex"
@@ -27,7 +28,7 @@ func TestHeadWalSuite(t *testing.T) {
 func (s *HeadWalSuite) TestHeadWalEncoder_Encode() {
 	encoder := cppbridge.NewHeadWalEncoder(0, 1, cppbridge.NewQueryableLssStorage())
 
-	samples, err := encoder.Encode([]*cppbridge.InnerSeries{})
+	samples, err := encoder.Encode([]cppbridge.InnerSeries{})
 	s.Require().NoError(err)
 
 	s.Empty(samples)
@@ -50,14 +51,18 @@ func (s *HeadWalSuite) TestHeadWalEncoder_EncodeAndFinalize() {
 	lss := cppbridge.NewQueryableLssStorage()
 	decoder := cppbridge.NewHeadWalDecoder(lss, kTestBufferVersion)
 	encoder := cppbridge.NewHeadWalEncoder(0, 1, lss)
-	innerSeries := cppbridge.NewInnerSeries()
-	err := decoder.Decode(segment, innerSeries)
+
+	shardedInnerSeries := cppbridge.NewShardedInnerSeries(1)
+	innerSeries := shardedInnerSeries.DataByShard(0)
+
+	err := decoder.Decode(segment, &innerSeries[0])
 	s.Require().NoError(err)
 	s.NotNil(innerSeries)
 
-	expectedSamples := innerSeries.Size()
-	samples, err := encoder.Encode([]*cppbridge.InnerSeries{innerSeries})
+	expectedSamples := innerSeries[0].Size()
+	samples, err := encoder.Encode(innerSeries)
 	s.Require().NoError(err)
+	runtime.KeepAlive(shardedInnerSeries)
 
 	s.NotNil(samples)
 	s.Equal(expectedSamples, uint64(samples))
@@ -73,7 +78,7 @@ func TestHeadWalDecoder_DecodeToDataStorage(t *testing.T) {
 	// Arrange
 	const kTestBufferVersion = 3
 
-	dataStorage := cppbridge.NewHeadDataStorage()
+	dataStorage := cppbridge.NewDataStorage()
 	encoder := cppbridge.NewHeadEncoderWithDataStorage(dataStorage)
 	decoder := cppbridge.NewHeadWalDecoder(cppbridge.NewQueryableLssStorage(), kTestBufferVersion)
 	segment, _ := hex.DecodeString(hexSegment)
@@ -84,4 +89,27 @@ func TestHeadWalDecoder_DecodeToDataStorage(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	require.Equal(t, cppbridge.TimeInterval{MinT: 1660828401000, MaxT: 1660828410000}, dataStorage.TimeInterval(false))
+}
+
+func TestHeadWalDecoder_InvalidEncoderVersion(t *testing.T) {
+	// Arrange
+	decoder := cppbridge.NewHeadWalDecoder(cppbridge.NewQueryableLssStorage(), cppbridge.EncodersVersion()-1)
+
+	// Act
+	_, err := decoder.CreateEncoder()
+
+	// Assert
+	require.ErrorIs(t, err, cppbridge.ErrInvalidEncoderVersion)
+}
+
+func TestHeadWalDecoder_ValidEncoderVersion(t *testing.T) {
+	// Arrange
+	var actualEncoderVersion = cppbridge.EncodersVersion()
+	decoder := cppbridge.NewHeadWalDecoder(cppbridge.NewQueryableLssStorage(), actualEncoderVersion)
+
+	// Act
+	_, err := decoder.CreateEncoder()
+
+	// Assert
+	require.NoError(t, err)
 }

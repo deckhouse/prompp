@@ -343,7 +343,7 @@ class Scraper {
 
   void append_labels_hash() noexcept {
     const auto& tokenizer = parser_.tokenizer();
-    BareBones::XXHash hash;
+    BareBones::XXHash3 hash;
     for (const auto& label : labels_) {
       hash.extend(label.name.view(tokenizer.buffer()), label.value.view(tokenizer.buffer()));
     }

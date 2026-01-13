@@ -1,5 +1,40 @@
 # Changelog
 
+## v0.7.3
+
+### Enhancements
+1. **Improved Metrics Collection from C++ Components.** The mechanism for retrieving metrics from C++ code has been refined. This enhancement enables quick addition of metrics to the TSDB core, providing up-to-date information for further optimizations.
+2. **High-Cardinality Metric Splitting in Federation API.** Added the ability to split high-cardinality metrics when returning them via the federation API. The protocol accumulates all metrics with the same name in memory before writing them to the output buffer, which could cause significant memory spikes. The feature flag `federation_split_families` now allows limiting the number of accumulated metrics. This slightly increases the page size but reduces memory spikes. Recommended value is 10,000.
+3. **Optimized Allocations During Head Conversion and Historical Block Operations.** Allocations have been optimized during head-to-historical block conversion and when working with historical blocks. These are minor optimizations in performance-critical code paths.
+4. **Refactored RemoteWrite Metrics Delivery.** The mechanism for sending metrics via the RemoteWrite protocol has been redesigned. The main change is the parallelization of data preparation and transmission, allowing metrics to be sent 100% of the time, which is critical for high data throughput. Additionally, message size calculation for large data streams has been corrected. Previously, messages could grow up to 30K samples despite the `max_samples_per_send` configuration parameter. This behavior has been fixed.
+
+## v0.7.2
+
+### Fixes
+1. **Bound remote_write `max_sample_age` to retention.** The remote write configuration parameter `max_sample_age` is now constrained by `storage.tsdb.retention.time`. Previously, when not explicitly set, it defaulted to 30 days. That could lead to WAL files accumulating on disk if the remote target was unavailable.
+2. **Remove temporary files for unloaded series.** Temporary files created when unloading series from memory are now removed. These files are never read again after being closed but can be large; removing them reduces disk usage.
+
+### Enhancements
+1. **Minor optimizations.** Various small performance and maintenance improvements.
+
+## v0.7.1
+
+### Fixes
+1. **Fixed shard calculation in RemoteWrite.** Previously the number of shards could exceed the required amount.
+2. **Encoder version check when restoring the last head.** If the WAL file encoder version differs from the current one, that WAL is considered impossible to continue and the head is rotated to create an up-to-date WAL.
+3. **Fixed data race causing service crashes.** A mutex was added to linearize tasks when loading evicted series into memory across multiple shards, preventing race conditions.
+4. **Skipped empty labels in OTLP Protobuf message processing.** Empty labels are now ignored during processing.
+5. **Fixed shard count change application.** On-the-fly shard count changes now trigger forced rotation immediately, instead of waiting for the next scheduled rotation.
+6. **Renamed TSDB state metrics.** Metrics have been renamed to align with standard vanilla Prometheus metrics.
+
+### Enhancements
+1. **Optimized allocations of cross-shard objects.** Objects are now allocated and freed together in contiguous memory.
+2. **Optimized concurrent execution of recording rules.** Rules that do not depend on other rules in the group append data into a single shared batch which is added to the head once. This significantly speeds up recording rules.
+3. **Reduced allocations in instant queries.** The number of allocations in instant queries, commonly used in the federate API, has been significantly reduced.
+4. **Optimized sample decoding.** Removed intermediate in-memory sample storage and double-copying during decoding.
+5. **Removed unused code.** This reduces the final binary size.
+6. **Minor optimizations.** Various small improvements have been made to enhance overall performance.
+
 ## v0.7.0
 
 ### Fixes
@@ -10,10 +45,27 @@
 1. **Background Series Copy During Rotation.** Copying series data from the old head to the new one during rotation is now performed in the background, eliminating long blocking of the active head.
 2. **Gradual Head Conversion to Historical Blocks.** Introduced a mechanism for gradual conversion of heads to historical blocks. Previously, all unconverted blocks were loaded into memory and converted at startup, which could lead to high resource consumption. Now, a limit is set on the number of loaded heads. New heads will evict older ones, which will only be loaded when newer heads are successfully converted and unloaded from memory.
 3. **New Sample Serialization Model.** A new model for sample serialization in queries has been implemented. This allows markup code to execute outside the active head lock, moving execution to the data reading phase. In the future, we plan to eliminate data copying during queries by using shared memory instead.
+4. **C++ to Go Metrics Transfer.** Added a mechanism for transferring metrics from C++ code to Go, enabling precise metric collection without locking the active head.
 
 ### Enhancements
 1. **Task Execution Refactoring.** A major refactoring has been conducted to rebuild the concurrency model for task execution in hot data. The new model provides more control over operations and more extension points.
 2. **Optimized Relabeling Allocations.** Relabeling allocations have been optimized to improve performance and reduce memory usage.
+3. **Seek Method Optimization.** The `Seek` method of the sample iterator has been moved to C++, significantly improving its performance. This is especially noticeable in the execution time of rules.
+
+### Other
+1. **Tracy Wrapper for Benchmarking.** Introduced a wrapper around Tracy to enhance benchmarking and provide more detailed insights into code bottlenecks.
+
+## v0.6.4
+
+### Features
+1. **Disable Block Compaction Flag.** Added a feature flag `disable_block_compaction` to disable the block compactor. This flag optimizes operation when integrating with Thanos.
+
+## v0.6.3
+
+### Fixes
+1. **Historical Block Save Race Condition.** Fixed a race condition when saving a historical block that could cause the compactor to start reading the block before `fsync` was called on its files after writing.
+2. **Compactor Scheduling Error.** Fixed an incorrect compactor scheduling bug that could lead to a slice bounds out-of-range error and service crash.
+3. **Corrupted Block Marker Logic.** Improved handling of the corrupted hint. The marker can now be removed if the block is successfully read during the update of the available blocks list.
 
 ## v0.6.2
 

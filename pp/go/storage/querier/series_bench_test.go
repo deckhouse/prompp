@@ -2,6 +2,8 @@ package querier_test
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -11,14 +13,13 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/stretchr/testify/require"
-	"runtime"
-	"testing"
 )
 
 func iterateSeriesSet(seriesSet storage.SeriesSet) {
 	var iterator chunkenc.Iterator
+	var series storage.Series
 	for seriesSet.Next() {
-		series := seriesSet.At()
+		series = seriesSet.At()
 		iterator = series.Iterator(iterator)
 		for iterator.Next() != chunkenc.ValNone {
 			ts, v := iterator.At()
@@ -39,7 +40,7 @@ func queryOpt(t testing.TB, lss *shard.LSS, ds *shard.DataStorage, start, end in
 		return &querier.SeriesSet{}
 	}
 
-	dsQueryResult := ds.Query(cppbridge.HeadDataStorageQuery{
+	dsQueryResult := ds.Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: start,
 		EndTimestampMs:   end,
 		LabelSetIDs:      lssQueryResult.IDs(),
@@ -62,19 +63,18 @@ func BenchmarkSeriesSetOpt(b *testing.B) {
 	lss := shard.NewLSS()
 	ds := shard.NewDataStorage()
 	prepareData(lss, ds, size)
-	b.ResetTimer()
-	b.ReportAllocs()
-	var samplesSet [][]cppbridge.Sample
+
+	b.StopTimer()
+	seriesSets := make([]*querier.SeriesSet, 0, b.N)
 	for i := 0; i < b.N; i++ {
-		seriesSet := queryOpt(b, lss, ds, start, end, matcher)
-		samples := make([]cppbridge.Sample, 0, size)
-		b.StartTimer()
-		iterateSeriesSet(seriesSet)
-		b.StopTimer()
-		samplesSet = append(samplesSet, samples)
+		seriesSets = append(seriesSets, queryOpt(b, lss, ds, start, end, matcher))
 	}
 
-	runtime.KeepAlive(samplesSet)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		iterateSeriesSet(seriesSets[i])
+	}
 }
 
 func prepareData(lss *shard.LSS, ds *shard.DataStorage, size int) {

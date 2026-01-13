@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <string_view>
 
 #include "primitives/go_slice.h"
@@ -21,8 +22,15 @@ struct LabelView {
 };
 
 struct Label {
-  String name;
-  String value;
+  union {
+    String name;
+    String first;
+  };
+
+  union {
+    String value;
+    String second;
+  };
 };
 
 struct LabelSet {
@@ -51,7 +59,7 @@ struct LabelSet {
 
    protected:
     const LabelSet* label_set_;
-    PromPP::Primitives::Go::SliceView<LabelView>::const_iterator iterator_;
+    SliceView<LabelView>::const_iterator iterator_;
   };
 
   class Iterator : public PairsIterator<Iterator> {
@@ -178,11 +186,11 @@ class LabelSetBuilder {
 
     template <class Iterator>
     PROMPP_ALWAYS_INLINE void set_label(Iterator& iterator) {
-      const auto [name, value] = *iterator;
+      const auto& label = *iterator;
 
-      if (const auto name_view = static_cast<std::string_view>(name); !is_deleted(name_view)) {
+      if (const auto name_view = static_cast<std::string_view>(label.first); !is_deleted(name_view)) {
         label_.first = name_view;
-        label_.second = static_cast<std::string_view>(value);
+        label_.second = static_cast<std::string_view>(label.second);
       }
 
       ++iterator;
@@ -344,6 +352,8 @@ void read_timeseries(const TimeSeries& go_time_series, Timeseries& time_series) 
   read_label_set(go_time_series.label_set, time_series.label_set());
   read_samples(go_time_series, time_series.samples());
 }
+
+using Error = std::array<void*, 2>;
 
 }  // namespace PromPP::Primitives::Go
 

@@ -73,6 +73,28 @@ func (s *PPConverterSuite) TestHappyPath() {
 	}
 }
 
+func (s *PPConverterSuite) TestEmptyLabelsName() {
+	payload := createExportRequestWithEmptyLabels(true)
+
+	ppconverter := handler.NewPPConverter(log.NewNopLogger(), payload.Metrics().MetricCount())
+	s.Require().NoError(ppconverter.FromMetrics(payload.Metrics()))
+
+	actual := ppconverter.TimeSeries().TimeSeries()
+
+	s.Require().Len(actual, 0)
+}
+
+func (s *PPConverterSuite) TestEmptyLabelsValue() {
+	payload := createExportRequestWithEmptyLabels(false)
+
+	ppconverter := handler.NewPPConverter(log.NewNopLogger(), payload.Metrics().MetricCount())
+	s.Require().NoError(ppconverter.FromMetrics(payload.Metrics()))
+
+	actual := ppconverter.TimeSeries().TimeSeries()
+
+	s.Require().Len(actual, 0)
+}
+
 func createExportRequest(
 	resourceAttributeCount,
 	histogramCount,
@@ -128,6 +150,70 @@ func createExportRequest(
 		point.SetDoubleValue(1.23)
 		generateAttributes(point.Attributes(), "series", labelsPerMetric)
 		generateExemplars(point.Exemplars(), exemplarsPerSeries, ts)
+	}
+
+	return request
+}
+
+func createExportRequestWithEmptyLabels(emptyName bool) pmetricotlp.ExportRequest {
+	request := pmetricotlp.NewExportRequest()
+
+	rm := request.Metrics().ResourceMetrics().AppendEmpty()
+	generateAttributes(rm.Resource().Attributes(), "resource", 1)
+
+	metrics := rm.ScopeMetrics().AppendEmpty().Metrics()
+	ts := pcommon.NewTimestampFromTime(time.Now())
+
+	// histogram
+	m := metrics.AppendEmpty()
+	m.SetEmptyHistogram()
+	m.SetName("histogram-0")
+	m.Histogram().SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
+	h := m.Histogram().DataPoints().AppendEmpty()
+	h.SetTimestamp(ts)
+	// Set 50 samples, 10 each with values 0.5, 1, 2, 4, and 8
+	h.SetCount(50)
+	h.SetSum(155)
+	h.BucketCounts().FromRaw([]uint64{10, 10, 10, 10, 10, 0})
+	// Bucket boundaries include the upper limit (ie. each sample is on the upper limit of its bucket)
+	h.ExplicitBounds().FromRaw([]float64{.5, 1, 2, 4, 8, 16})
+	generateAttributes(h.Attributes(), "series", 1)
+	generateExemplars(h.Exemplars(), 1, ts)
+	if emptyName {
+		h.Attributes().PutStr("", "empty-value-1")
+	} else {
+		h.Attributes().PutStr("empty-name-1", "")
+	}
+
+	// sum
+	m = metrics.AppendEmpty()
+	m.SetEmptySum()
+	m.SetName("sum-0")
+	m.Sum().SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
+	point := m.Sum().DataPoints().AppendEmpty()
+	point.SetTimestamp(ts)
+	point.SetDoubleValue(1.23)
+	generateAttributes(point.Attributes(), "series", 1)
+	generateExemplars(point.Exemplars(), 1, ts)
+	if emptyName {
+		point.Attributes().PutStr("", "empty-value-1")
+	} else {
+		point.Attributes().PutStr("empty-name-1", "")
+	}
+
+	// gauge
+	m = metrics.AppendEmpty()
+	m.SetEmptyGauge()
+	m.SetName("gauge-0")
+	point = m.Gauge().DataPoints().AppendEmpty()
+	point.SetTimestamp(ts)
+	point.SetDoubleValue(1.23)
+	generateAttributes(point.Attributes(), "series", 1)
+	generateExemplars(point.Exemplars(), 1, ts)
+	if emptyName {
+		point.Attributes().PutStr("", "empty-value-1")
+	} else {
+		point.Attributes().PutStr("empty-name-1", "")
 	}
 
 	return request

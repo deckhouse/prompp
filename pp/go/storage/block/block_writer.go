@@ -201,8 +201,8 @@ func (bw *blockWriters) writeRestOfRecodedChunks() error {
 	return nil
 }
 
-// writeIndexAndMoveTmpDirToDir writes the index and moves the temporary directory to the directory.
-func (bw *blockWriters) writeIndexAndMoveTmpDirToDir() ([]WrittenBlock, error) {
+// writeIndexCloseAndMoveTmpDirToDir writes the index and moves the temporary directory to the directory.
+func (bw *blockWriters) writeIndexCloseAndMoveTmpDirToDir() ([]WrittenBlock, error) {
 	writtenBlocks := make([]WrittenBlock, 0, len(*bw))
 	for i := range *bw {
 		if (*bw)[i].isEmpty() {
@@ -217,6 +217,8 @@ func (bw *blockWriters) writeIndexAndMoveTmpDirToDir() ([]WrittenBlock, error) {
 		if err := (*bw)[i].writeIndex(); err != nil {
 			return nil, err
 		}
+
+		_ = (*bw)[i].close()
 
 		if err := (*bw)[i].moveTmpDirToDir(); err != nil {
 			return nil, err
@@ -239,9 +241,7 @@ func (recoder *chunkRecoder) recode(
 	blockMeta *tsdb.BlockMeta,
 	writeSeries func(seriesID uint32, chunksMetadata []ChunkMetadata) error,
 ) (err error) {
-	for recoder.chunkIterator.Next() {
-		chunk := recoder.chunkIterator.At()
-
+	for chunk := range recoder.chunkIterator.RangeBatch {
 		var chunkMetadata ChunkMetadata
 		if chunkMetadata, err = chunkWriter.Write(chunk); err != nil {
 			return fmt.Errorf("failed to write chunk: %w", err)

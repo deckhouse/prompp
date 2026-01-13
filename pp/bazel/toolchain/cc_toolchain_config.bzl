@@ -75,6 +75,28 @@ def _impl(ctx):
         ),
     ]
 
+    profiling_enabled = ctx.attr.with_profiling[BuildSettingInfo].value
+    profiling_opts = ctx.attr.profiling_opts[BuildSettingInfo].value
+    profiling_flags = []
+
+    if profiling_enabled:
+        opts = [s.strip() for s in profiling_opts.split(",") if s.strip()]
+
+        for opt in opts:
+            if opt == "instrumental" or opt == "no_sampling":
+                profiling_flags.append("-DTRACY_NO_SAMPLING")
+            elif opt == "no_callstack":
+                profiling_flags.append("-DTRACY_NO_CALLSTACK")
+            elif opt.startswith("callstack_depth="):
+                depth = opt.split("=")[1]
+                profiling_flags.append("-DPROMPP_PROFILING_CALLSTACK=" + str(depth))
+            elif opt == "on_demand":
+                profiling_flags.append("-DTRACY_ON_DEMAND")
+
+    profiling_flag_groups = []
+    if profiling_flags:
+        profiling_flag_groups.append(flag_group(flags = profiling_flags))
+
     features = [
         feature(
             name = "dbg",
@@ -220,6 +242,32 @@ def _impl(ctx):
                 ),
             ],
         ),
+        feature(
+            name = "profiling",
+            enabled = ctx.attr.with_profiling[BuildSettingInfo].value,
+            flag_sets = [
+                flag_set(
+                    actions = cpp_compile_actions,
+                    flag_groups = [
+                        flag_group(
+                            flags = [
+                                "-fno-omit-frame-pointer",
+                            ],
+                        ),
+                    ],
+                ),
+            ],
+        ),
+        feature(
+            name = "profiling_opts",
+            enabled = profiling_enabled,
+            flag_sets = [
+                flag_set(
+                    actions = cpp_compile_actions,
+                    flag_groups = profiling_flag_groups,
+                ),
+            ],
+        ),
     ]
     return cc_common.create_cc_toolchain_config_info(
         ctx = ctx,
@@ -242,6 +290,8 @@ cc_toolchain_config = rule(
         "builtin_include_directories": attr.string_list(),
         "march": attr.label(),
         "with_asan": attr.label(),
+        "with_profiling": attr.label(),
+        "profiling_opts": attr.label(),
     },
     provides = [CcToolchainConfigInfo],
 )

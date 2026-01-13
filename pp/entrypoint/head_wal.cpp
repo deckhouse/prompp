@@ -43,13 +43,21 @@ extern "C" void prompp_head_wal_encoder_ctor_from_decoder(void* args, void* res)
 
   struct Result {
     EncoderPtr encoder;
+    PromPP::Primitives::Go::Slice<char> error;
   };
 
   const auto& generic_decoder = static_cast<Arguments*>(args)->decoder;
+  const auto out = new (res) Result();
+
+  if (generic_decoder->decoder().encoder_version() != PromPP::WAL::Writer::version) {
+    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
+    err_stream << "invalid encoder version" << std::endl;
+    return;
+  }
+
   const auto& decoder = generic_decoder->decoder();
-  new (res) Result{.encoder = std::make_unique<Encoder>(decoder.sample_decoder().gorilla(), generic_decoder->label_set(), decoder.shard_id(),
-                                                        decoder.pow_two_of_total_shards(), decoder.last_processed_segment() + 1,
-                                                        decoder.sample_decoder().timestamp_base)};
+  out->encoder = std::make_unique<Encoder>(decoder.sample_decoder().gorilla(), generic_decoder->label_set(), decoder.shard_id(),
+                                           decoder.pow_two_of_total_shards(), decoder.last_processed_segment() + 1, decoder.sample_decoder().timestamp_base);
 }
 
 extern "C" void prompp_head_wal_encoder_dtor(void* args) {
@@ -62,7 +70,7 @@ extern "C" void prompp_head_wal_encoder_dtor(void* args) {
 
 extern "C" void prompp_head_wal_encoder_add_inner_series(void* args, void* res) {
   struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> incoming_inner_series;
+    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries> incoming_inner_series;
     EncoderPtr encoder;
   };
 

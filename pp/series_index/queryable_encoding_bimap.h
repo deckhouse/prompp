@@ -50,14 +50,14 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   template <class LabelSet>
   PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(const LabelSet& label_set, size_t hash) noexcept {
     hash = phmap_hash(hash);
-    if (auto it = ls_id_hash_set_.find(label_set, hash); it != ls_id_hash_set_.end()) {
-      mark_series_as_added(*it);
-      return *it;
-    }
+    const auto ls_id = *ls_id_hash_set_.lazy_emplace_with_hash(label_set, hash, [&](const auto& ctor) {
+      auto new_ls_id = Base::items_.size();
+      ctor(typename Base::Proxy(new_ls_id));
+      auto composite_label_set = Base::items_.emplace_back(Base::data_, label_set).composite(Base::data());
+      update_indexes(new_ls_id, composite_label_set);
+      return new_ls_id;
+    });
 
-    auto ls_id = Base::items_.size();
-    auto composite_label_set = Base::items_.emplace_back(Base::data_, label_set).composite(Base::data());
-    update_indexes(ls_id, composite_label_set, hash);
     mark_series_as_added(ls_id);
     return ls_id;
   }
@@ -107,12 +107,12 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     const auto hasher = Base::hasher();
     for (auto ls_id = first_loaded_id; ls_id < Base::items_.size(); ++ls_id) {
       auto label_set = this->operator[](ls_id);
-      update_indexes(ls_id, label_set, phmap_hash(hasher(label_set)));
+      ls_id_hash_set_.emplace_with_hash(phmap_hash(hasher(label_set)), typename Base::Proxy(ls_id));
+      update_indexes(ls_id, label_set);
     }
   }
 
-  void update_indexes(uint32_t ls_id, const LabelSet& label_set, size_t label_set_phmap_hash) {
-    ls_id_hash_set_.emplace_with_hash(label_set_phmap_hash, typename Base::Proxy(ls_id));
+  void update_indexes(uint32_t ls_id, const LabelSet& label_set) {
     auto ls_id_set_iterator = ls_id_set_.emplace(ls_id).first;
 
     for (auto label = label_set.begin(); label != label_set.end(); ++label) {
