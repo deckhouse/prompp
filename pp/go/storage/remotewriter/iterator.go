@@ -121,46 +121,6 @@ type Iterator struct {
 	endOfBlockReached bool
 }
 
-// MessageShardOld is a shard of a message for sending to the remote storage.
-type MessageShardOld struct {
-	Protobuf      *cppbridge.SnappyProtobufEncodedData
-	Size          uint64
-	SampleCount   uint64
-	MaxTimestamp  int64
-	Delivered     bool
-	PostProcessed bool
-}
-
-// MessageOld is a message for sending to the remote storage.
-type MessageOld struct {
-	MaxTimestamp int64
-	Shards       []*MessageShardOld
-}
-
-// HasDataToDeliver checks if the message has data to deliver.
-func (m *MessageOld) HasDataToDeliver() bool {
-	for _, shrd := range m.Shards {
-		if !shrd.Delivered {
-			return true
-		}
-	}
-
-	return false
-}
-
-// IsObsoleted checks if the message is obsoleted.
-func (m *MessageOld) IsObsoleted(minTimestamp int64) bool {
-	return m.MaxTimestamp < minTimestamp
-}
-
-func (m *MessageOld) NumberOfSamples() uint64 {
-	samples := uint64(0)
-	for i := range m.Shards {
-		samples += m.Shards[i].SampleCount
-	}
-	return samples
-}
-
 // newIterator creates a new [Iterator].
 func newIterator(
 	clock clockwork.Clock,
