@@ -206,7 +206,7 @@ static_assert(sizeof(OutputDecoderPtr) == sizeof(void*));
 
 using SegmentSamplesStorageList = PromPP::Primitives::Go::Slice<PromPP::WAL::SegmentSamplesStorage>;
 
-extern "C" void prompp_wal_segment_sample_storage_list_ctor(void* args, void* res) {
+extern "C" void prompp_wal_segment_samples_storage_list_ctor(void* args, void* res) {
   struct Arguments {
     uint64_t count;
   };
@@ -218,7 +218,7 @@ extern "C" void prompp_wal_segment_sample_storage_list_ctor(void* args, void* re
   new (&static_cast<Result*>(res)->storage_list) SegmentSamplesStorageList(in->count);
 }
 
-extern "C" void prompp_wal_segment_sample_storage_add(void* args) {
+extern "C" void prompp_wal_segment_samples_storage_add(void* args) {
   struct Arguments {
     PromPP::WAL::SegmentSamplesStorage* samples_storage;
     PromPP::Primitives::LabelSetID ls_id;
@@ -230,7 +230,7 @@ extern "C" void prompp_wal_segment_sample_storage_add(void* args) {
   in->samples_storage->add(in->ls_id, PromPP::Primitives::Sample(in->timestamp, in->value));
 }
 
-extern "C" void prompp_wal_segment_sample_storage_list_dtor(void* args) {
+extern "C" void prompp_wal_segment_samples_storage_list_dtor(void* args) {
   struct Arguments {
     SegmentSamplesStorageList storage_list;
   };

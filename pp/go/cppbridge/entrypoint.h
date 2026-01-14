@@ -1893,7 +1893,7 @@ void prompp_wal_decoder_restore_from_stream(void* args, void* res);
  *     storageList []SegmentSamplesStorageList // constructed storage list
  * }
  */
-void prompp_wal_segment_sample_storage_list_ctor(void* args, void* res);
+void prompp_wal_segment_samples_storage_list_ctor(void* args, void* res);
 
 /**
  * @brief Add sample to sample storage list
@@ -1905,7 +1905,7 @@ void prompp_wal_segment_sample_storage_list_ctor(void* args, void* res);
  *     value          float64   // sample value
  * }
  */
-void prompp_wal_segment_sample_storage_add(void* args);
+void prompp_wal_segment_samples_storage_add(void* args);
 
 /**
  * @brief Destroy segment samples storage list
@@ -1914,7 +1914,7 @@ void prompp_wal_segment_sample_storage_add(void* args);
  *     storageList []SegmentSamplesStorageList
  * }
  */
-void prompp_wal_segment_sample_storage_list_dtor(void* args);
+void prompp_wal_segment_samples_storage_list_dtor(void* args);
 
 //
 // OutputDecoder

@@ -297,10 +297,10 @@ func (s *SegmentSamplesStorageList) Get(segmentID uint64) *CppSegmentSamplesStor
 
 func NewSegmentSamplesStorage(count uint64) *SegmentSamplesStorageList {
 	storages := &SegmentSamplesStorageList{
-		storages: walSegmentSampleStorageListCtor(count),
+		storages: walSegmentSamplesStorageListCtor(count),
 	}
 	runtime.SetFinalizer(storages, func(s *SegmentSamplesStorageList) {
-		walSegmentSampleStorageListDtor(s.storages)
+		walSegmentSamplesStorageListDtor(s.storages)
 	})
 
 	return storages

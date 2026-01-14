@@ -25,9 +25,9 @@ func (s *MessageEncodersSuite) TestEncode() {
 	encoders := NewMessageEncoders(1, []*LabelSetStorage{lss})
 	sampleStorages := NewSegmentSamplesStorage(1)
 
-	walSegmentSampleStorageAdd(sampleStorages.Get(0), 0, 1000, 1.1)
-	walSegmentSampleStorageAdd(sampleStorages.Get(0), 0, 2000, 1.1)
-	walSegmentSampleStorageAdd(sampleStorages.Get(0), 0, 3000, 1.1)
+	walSegmentSamplesStorageAdd(sampleStorages.Get(0), 0, 1000, 1.1)
+	walSegmentSamplesStorageAdd(sampleStorages.Get(0), 0, 2000, 1.1)
+	walSegmentSamplesStorageAdd(sampleStorages.Get(0), 0, 3000, 1.1)
 
 	// Act
 	encoders.Encode(
