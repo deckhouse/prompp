@@ -289,16 +289,16 @@ func (i *Iterator) SendMessage(msg *cppbridge.RWMessageList, ctx context.Context
 				break
 			}
 
-			go func(shrd *cppbridge.RWMessage) {
+			go func(msg *cppbridge.RWMessage) {
 				defer sendSemaphore.Release(1)
 				sendStartTime := i.clock.Now()
-				writeErr := i.protobufWriter.Write(ctx, shrd.Buffer)
+				writeErr := i.protobufWriter.Write(ctx, msg.Buffer)
 				if writeErr != nil {
 					logger.Errorf("failed to send protobuf: %v", writeErr)
 				}
 				i.metrics.sentMessageDuration.Observe(time.Since(sendStartTime).Seconds())
 
-				shrd.Delivered = !errors.As(writeErr, &remote.RecoverableError{})
+				msg.Delivered = !errors.As(writeErr, &remote.RecoverableError{})
 			}(&msg.Messages[index])
 		}
 		_ = sendSemaphore.Acquire(ctx, int64(sendersCount))
@@ -404,12 +404,7 @@ func (i *Iterator) encode(batch *batch, numberOfMessages int) *cppbridge.RWMessa
 	}
 	wg.Wait()
 
-	for index := range messages.Messages {
-		if messages.Messages[index].MaxTimestamp > messages.MaxTimestamp {
-			messages.MaxTimestamp = messages.Messages[index].MaxTimestamp
-		}
-	}
-
+	messages.UpdateStats()
 	return messages
 }
 

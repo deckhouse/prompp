@@ -48,6 +48,14 @@ func (m *RWMessageList) NumberOfSamples() uint64 {
 	return samples
 }
 
+func (m *RWMessageList) UpdateStats() {
+	for index := range m.Messages {
+		if m.Messages[index].MaxTimestamp > m.MaxTimestamp {
+			m.MaxTimestamp = m.Messages[index].MaxTimestamp
+		}
+	}
+}
+
 type MessageEncoders struct {
 	encoders    []CppRemoteWriteMessageEncoder
 	lssPointers []uintptr
