@@ -354,7 +354,7 @@ class ProtobufEncoder {
       protozero::basic_pbf_writer pb_timeseries(protobuf_);
 
       uint32_t last_ls_id = Primitives::kInvalidLabelSetID;
-      storage.for_each([&, this](Primitives::LabelSetID ls_id, const Primitives::Sample& sample) {
+      storage.for_each([&](Primitives::LabelSetID ls_id, const Primitives::Sample& sample) {
         if ((static_cast<size_t>(ls_id) % messages_count) != message_index) {
           return;
         }
