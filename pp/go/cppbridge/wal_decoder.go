@@ -5,7 +5,6 @@ import (
 	"hash/crc32"
 	"io"
 	"runtime"
-	"unsafe"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/prometheus/prometheus/pp/go/frames"
@@ -260,6 +259,7 @@ type OutputDecoderStats struct {
 	droppedSampleCount  uint32
 	addSeriesCount      uint32
 	droppedSeriesCount  uint32
+	sampleCount         uint32
 }
 
 // MaxTimestamp return max timestamp in decoded segment.
@@ -285,6 +285,11 @@ func (s OutputDecoderStats) AddSeriesCount() uint32 {
 // DroppedSeriesCount return count dropped series.
 func (s OutputDecoderStats) DroppedSeriesCount() uint32 {
 	return s.droppedSeriesCount
+}
+
+// SampleCount return count of samples added to storage.
+func (s OutputDecoderStats) SampleCount() uint32 {
+	return s.sampleCount
 }
 
 type SegmentSamplesStorageList struct {
@@ -355,10 +360,10 @@ func (d *WALOutputDecoder) Decode(
 	segment []byte,
 	lowerLimitTimestamp int64,
 	samplesStorage *CppSegmentSamplesStorage,
-) (*DecodedRefSamples, OutputDecoderStats, error) {
-	stats, refSamples, exception := walOutputDecoderDecode(segment, d.decoder, samplesStorage, lowerLimitTimestamp)
+) (OutputDecoderStats, error) {
+	stats, exception := walOutputDecoderDecode(segment, d.decoder, samplesStorage, lowerLimitTimestamp)
 	runtime.KeepAlive(samplesStorage)
-	return newDecodedRefSamples(refSamples, d.shardID), stats, handleException(exception)
+	return stats, handleException(exception)
 }
 
 // LoadFrom load from dump(slice byte) output decoder state(output_lss and cache).
@@ -394,50 +399,6 @@ type RefSample struct {
 	ID uint32
 	T  int64
 	V  float64
-}
-
-//
-// DecodedRefSamples
-//
-
-// DecodedRefSamples go wrapper for slice c-type RefSample.
-type DecodedRefSamples struct {
-	refSamples []RefSample
-	shardID    uint16
-}
-
-// newDecodedRefSamples init new DecodedRefSamples.
-func newDecodedRefSamples(refSamples []RefSample, shardID uint16) *DecodedRefSamples {
-	drs := &DecodedRefSamples{
-		refSamples: refSamples,
-		shardID:    shardID,
-	}
-	runtime.SetFinalizer(drs, func(drs *DecodedRefSamples) {
-		freeBytes(*(*[]byte)(unsafe.Pointer(&drs.refSamples)))
-	})
-	return drs
-}
-
-// NewGoDecodedRefSamples init new DecodedRefSamples, for test.
-func NewGoDecodedRefSamples(refSamples []RefSample, shardID uint16) *DecodedRefSamples {
-	return &DecodedRefSamples{
-		refSamples: refSamples,
-		shardID:    shardID,
-	}
-}
-
-// Range calls f sequentially for each RefSample present in the DecodedRefSamples.
-// If f returns false, range stops the iteration.
-func (s *DecodedRefSamples) Range(f func(id uint32, t int64, v float64) bool) {
-	for i := range s.refSamples {
-		if !f(s.refSamples[i].ID, s.refSamples[i].T, s.refSamples[i].V) {
-			return
-		}
-	}
-}
-
-func (s *DecodedRefSamples) Size() int {
-	return len(s.refSamples)
 }
 
 //

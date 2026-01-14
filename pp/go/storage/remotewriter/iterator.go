@@ -503,8 +503,7 @@ func newBatch(numberOfHeadShards, numberOfShards, maxNumberOfSamplesPerShard int
 
 func (b *batch) add(segments []*DecodedSegment) {
 	for _, segment := range segments {
-		b.segments = append(b.segments, segment)
-		b.numberOfSamples += segment.Samples.Size()
+		b.numberOfSamples += int(segment.SampleCount)
 		b.outdatedSamplesCount += segment.OutdatedSamplesCount
 		b.droppedSamplesCount += segment.DroppedSamplesCount
 		b.addSeriesCount += segment.AddSeriesCount

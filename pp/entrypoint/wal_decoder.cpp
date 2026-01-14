@@ -321,7 +321,7 @@ extern "C" void prompp_wal_output_decoder_decode(void* args, void* res) {
     uint32_t dropped_sample_count{};
     uint32_t add_series_count{};
     uint32_t dropped_series_count{};
-    PromPP::Primitives::Go::Slice<PromPP::WAL::RefSample> ref_samples;
+    uint32_t sample_count{};
     PromPP::Primitives::Go::Slice<char> error;
   };
 
@@ -346,13 +346,10 @@ extern "C" void prompp_wal_output_decoder_decode(void* args, void* res) {
         return;
       }
 
-      if (out->max_timestamp < ts) {
-        out->max_timestamp = ts;
-      }
-
-      out->ref_samples.emplace_back(ls_id, ts, v);
+      out->max_timestamp = std::max(out->max_timestamp, ts);
       in->samples_storage->add(ls_id, PromPP::Primitives::Sample(ts, v));
     });
+    out->sample_count = in->samples_storage->samples_count();
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
     entrypoint::handle_current_exception(err_stream);

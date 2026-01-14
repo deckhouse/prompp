@@ -1180,7 +1180,7 @@ func walOutputDecoderDecode(
 	decoder uintptr,
 	samplesStorage *CppSegmentSamplesStorage,
 	lowerLimitTimestamp int64,
-) (stats OutputDecoderStats, dump []RefSample, err []byte) {
+) (stats OutputDecoderStats, err []byte) {
 	args := struct {
 		segment             []byte
 		decoder             uintptr
@@ -1189,8 +1189,7 @@ func walOutputDecoderDecode(
 	}{segment, decoder, uintptr(unsafe.Pointer(samplesStorage)), lowerLimitTimestamp}
 	var res struct {
 		OutputDecoderStats
-		refSamples []RefSample
-		error      []byte
+		error []byte
 	}
 
 	testGC()
@@ -1200,7 +1199,7 @@ func walOutputDecoderDecode(
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.OutputDecoderStats, res.refSamples, res.error
+	return res.OutputDecoderStats, res.error
 }
 
 //

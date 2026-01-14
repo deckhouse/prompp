@@ -589,21 +589,14 @@ func (s *EncoderDecoderSuite) TestEncodeWALOutputDecode() {
 
 	s.T().Log("decoding to RefSamples")
 	sampleStorages := cppbridge.NewSegmentSamplesStorage(1)
-	refSamples, stats, err := dec.Decode(segByte, 0, sampleStorages.Get(0))
+	stats, err := dec.Decode(segByte, 0, sampleStorages.Get(0))
 	s.Require().NoError(err)
 
 	s.Equal(expectedWr.Timeseries[0].Samples[0].Timestamp, stats.MaxTimestamp())
 	s.Equal(uint32(0), stats.OutdatedSampleCount())
 	s.Equal(uint32(1), stats.AddSeriesCount())
 	s.Equal(uint32(0), stats.DroppedSampleCount())
-	refSamples.Range(func(id uint32, t int64, v float64) bool {
-		if !s.Less(int(id), len(expectedWr.Timeseries)) {
-			return false
-		}
-		s.Equal(expectedWr.Timeseries[id].Samples[0].Timestamp, t)
-		s.Equal(expectedWr.Timeseries[id].Samples[0].Value, v)
-		return true
-	})
+	s.Equal(uint32(1), stats.SampleCount())
 }
 
 func (s *EncoderDecoderSuite) TestEncodeWALOutputDecodeWithLimit() {
@@ -665,23 +658,14 @@ func (s *EncoderDecoderSuite) TestEncodeWALOutputDecodeWithLimit() {
 	s.T().Log("decoding to RefSamples")
 
 	sampleStorages := cppbridge.NewSegmentSamplesStorage(1)
-	refSamples, stats, err := dec.Decode(segByte, time.Now().UnixMilli()+1, sampleStorages.Get(0))
+	stats, err := dec.Decode(segByte, time.Now().UnixMilli()+1, sampleStorages.Get(0))
 	s.Require().NoError(err)
 
-	count := 0
 	s.Equal(int64(0), stats.MaxTimestamp())
 	s.Equal(uint32(1), stats.OutdatedSampleCount())
 	s.Equal(uint32(1), stats.AddSeriesCount())
 	s.Equal(uint32(0), stats.DroppedSampleCount())
-	refSamples.Range(func(id uint32, t int64, v float64) bool {
-		if !s.Less(int(id), len(expectedWr.Timeseries)) {
-			return false
-		}
-		count++
-		return true
-	})
-
-	s.Equal(0, count)
+	s.Equal(uint32(0), stats.SampleCount())
 }
 
 func (s *EncoderDecoderSuite) TestEncodeWALOutputDecodeDroppedSeries() {
@@ -761,22 +745,13 @@ func (s *EncoderDecoderSuite) TestEncodeWALOutputDecodeDroppedSeries() {
 	s.T().Log("decoding to RefSamples")
 
 	sampleStorages := cppbridge.NewSegmentSamplesStorage(1)
-	refSamples, stats, err := dec.Decode(segByte, time.Now().UnixMilli()+1, sampleStorages.Get(0))
+	stats, err := dec.Decode(segByte, time.Now().UnixMilli()+1, sampleStorages.Get(0))
 	s.Require().NoError(err)
 
-	count := 0
 	s.Equal(int64(0), stats.MaxTimestamp())
 	s.Equal(uint32(1), stats.OutdatedSampleCount())
 	s.Equal(uint32(1), stats.DroppedSampleCount())
 	s.Equal(uint32(1), stats.AddSeriesCount())
 	s.Equal(uint32(1), stats.DroppedSeriesCount())
-	refSamples.Range(func(id uint32, t int64, v float64) bool {
-		if !s.Less(int(id), len(expectedWr.Timeseries)) {
-			return false
-		}
-		count++
-		return true
-	})
-
-	s.Equal(0, count)
+	s.Equal(uint32(0), stats.SampleCount())
 }

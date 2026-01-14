@@ -15,12 +15,12 @@ import (
 // DecodedSegment the segment decoded from the file [Wal].
 type DecodedSegment struct {
 	ID                   uint32
-	Samples              *cppbridge.DecodedRefSamples
 	MaxTimestamp         int64
 	OutdatedSamplesCount uint32
 	DroppedSamplesCount  uint32
 	AddSeriesCount       uint32
 	DroppedSeriesCount   uint32
+	SampleCount          uint32
 }
 
 // Decoder decodes and relabeling series in segments from a file [Wal].
@@ -61,17 +61,17 @@ func NewDecoder(
 
 // Decode and relabeling series in segments from a file [Wal].
 func (d *Decoder) Decode(segment []byte, minTimestamp int64, samplesStorage *cppbridge.CppSegmentSamplesStorage) (*DecodedSegment, error) {
-	samples, stats, err := d.outputDecoder.Decode(segment, minTimestamp, samplesStorage)
+	stats, err := d.outputDecoder.Decode(segment, minTimestamp, samplesStorage)
 	if err != nil {
 		return nil, err
 	}
 	return &DecodedSegment{
-		Samples:              samples,
 		MaxTimestamp:         stats.MaxTimestamp(),
 		OutdatedSamplesCount: stats.OutdatedSampleCount(),
 		DroppedSamplesCount:  stats.DroppedSampleCount(),
 		AddSeriesCount:       stats.AddSeriesCount(),
 		DroppedSeriesCount:   stats.DroppedSeriesCount(),
+		SampleCount:          stats.SampleCount(),
 	}, nil
 }
 
