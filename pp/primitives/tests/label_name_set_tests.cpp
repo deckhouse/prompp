@@ -135,16 +135,18 @@ TEST_F(LabelNameSetEncodingBimapTest, EncodingBimapViewIteratorId) {
   const auto id2 = encoding_table_.find_or_emplace(label_set2.names());
   const auto id3 = encoding_table_.find_or_emplace(label_set3.names());
 
-  // Act
   const auto view = encoding_table_.data_view();
 
+  // Act
+  auto view_it = view.begin();
+
+  const auto view_id1 = (view_it++).id();
+  const auto view_id2 = (view_it++).id();
+  const auto view_id3 = (view_it++).id();
+
   // Assert
-  std::vector<uint32_t> view_ids;
-  view_ids.reserve(view.size());
-  for (auto it = view.begin(), e = view.end(); it != e; ++it) {
-    view_ids.push_back(it.id());
-  }
-  EXPECT_TRUE(std::ranges::equal(view_ids, std::initializer_list{id1, id2, id3}));
+  EXPECT_EQ(view_it, view.end());
+  EXPECT_TRUE(std::ranges::equal(std::initializer_list{view_id1, view_id2, view_id3}, std::initializer_list{id1, id2, id3}));
 }
 
 class LabelNameSetDecodingTableTest : public testing::Test {

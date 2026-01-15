@@ -121,16 +121,20 @@ TEST_F(LabelSetEncodingBimapTest, EncodingBimapViewCheckId) {
   const auto id2 = encoding_table_.find_or_emplace(label_set2);
   const auto id3 = encoding_table_.find_or_emplace(label_set3);
 
-  // Act
   const auto view = encoding_table_.data_view();
 
+  // Act
+  auto view_it = view.begin();
+
+  const auto view_id1 = (view_it++).id();
+  const auto view_id2 = (view_it++).id();
+  const auto view_id3 = (view_it++).id();
+
   // Assert
-  std::vector<uint32_t> view_ids;
-  view_ids.reserve(view.size());
-  for (auto it = view.begin(), e = view.end(); it != e; ++it) {
-    view_ids.push_back(it.id());
-  }
-  EXPECT_TRUE(std::ranges::equal(view_ids, std::initializer_list{id1, id2, id3}));
+  EXPECT_EQ(view_it, view.end());
+  EXPECT_EQ(view_id1, id1);
+  EXPECT_EQ(view_id2, id2);
+  EXPECT_EQ(view_id3, id3);
 }
 
 TEST_F(LabelSetEncodingBimapTest, EncodingBimapViewCheckKeyId) {
@@ -151,13 +155,20 @@ TEST_F(LabelSetEncodingBimapTest, EncodingBimapViewCheckKeyId) {
   const auto pod_id = (k_it++).id();
   const auto run_id = (k_it++).id();
 
-  // Assert
-  std::vector<uint32_t> view_value_symbols_ids;
-  for (auto it = view.values().begin(), e = view.values().end(); it != e; ++it) {
-    view_value_symbols_ids.push_back(it.key_id());
-  }
+  auto v_it = view.values().begin();
 
-  EXPECT_TRUE(std::ranges::equal(view_value_symbols_ids, std::initializer_list{job_id, job_id, job_id, pod_id, pod_id, run_id}));
+  const auto k1_id = (v_it++).key_id();
+  const auto k2_id = (v_it++).key_id();
+  const auto k3_id = (v_it++).key_id();
+  const auto k4_id = (v_it++).key_id();
+  const auto k5_id = (v_it++).key_id();
+  const auto k6_id = (v_it++).key_id();
+
+  // Assert
+  EXPECT_EQ(k_it, view.keys().end());
+  EXPECT_EQ(v_it, view.values().end());
+  EXPECT_TRUE(std::ranges::equal(std::initializer_list{k1_id, k2_id, k3_id, k4_id, k5_id, k6_id},
+                                 std::initializer_list{job_id, job_id, job_id, pod_id, pod_id, run_id}));
 }
 
 TEST_F(LabelSetEncodingBimapTest, ViewValuesForKeyId) {
