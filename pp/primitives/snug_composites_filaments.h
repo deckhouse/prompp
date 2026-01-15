@@ -4,7 +4,6 @@
 
 #include "bare_bones/exception.h"
 #include "bare_bones/iterator.h"
-#include "bare_bones/memory.h"
 #include "bare_bones/preprocess.h"
 #include "bare_bones/snug_composite.h"
 #include "bare_bones/stream_v_byte.h"
