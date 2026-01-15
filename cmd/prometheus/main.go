@@ -61,6 +61,7 @@ import (
 	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor" // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_logger "github.com/prometheus/prometheus/pp-pkg/logger"          // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/remote"                        // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/rules"                         // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/scrape"                        // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage"        // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_remote "github.com/prometheus/prometheus/pp-pkg/storage/remote"  // PP_CHANGES.md: rebuild on cpp
@@ -87,7 +88,6 @@ import (
 	_ "github.com/prometheus/prometheus/plugins" // Register plugins.
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
-	"github.com/prometheus/prometheus/rules"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tracing"
 	"github.com/prometheus/prometheus/tsdb"
@@ -961,7 +961,7 @@ func main() {
 		queryEngine = promql.NewEngine(opts)
 
 		ruleQueryOffset := time.Duration(cfgFile.GlobalConfig.RuleQueryOffset)
-		ruleManager = rules.NewManager(&rules.ManagerOptions{
+		ruleManager, err = rules.NewManager(&rules.ManagerOptions{
 			Queryable:       adapter,               // PP_CHANGES.md: rebuild on cpp
 			Engine:          queryEngine,           // PP_CHANGES.md: rebuild on cpp
 			FanoutQueryable: fanoutStorage,         // PP_CHANGES.md: rebuild on cpp
@@ -982,6 +982,10 @@ func main() {
 				return ruleQueryOffset
 			},
 		})
+		if err != nil {
+			level.Error(logger).Log("msg", "failed to create a rule manager", "err", err)
+			os.Exit(1)
+		}
 	}
 
 	scraper.Set(scrapeManager)

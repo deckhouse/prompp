@@ -25,8 +25,8 @@ import (
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/timestamp"
+	"github.com/prometheus/prometheus/pp-pkg/rules" // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/rules"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb"
 	tsdb_errors "github.com/prometheus/prometheus/tsdb/errors"
@@ -60,11 +60,13 @@ type ruleImporterConfig struct {
 // written to disk in blocks.
 func newRuleImporter(logger log.Logger, config ruleImporterConfig, apiClient queryRangeAPI) *ruleImporter {
 	level.Info(logger).Log("backfiller", "new rule importer", "start", config.start.Format(time.RFC822), "end", config.end.Format(time.RFC822))
+	ruleManager, _ := rules.NewManager(&rules.ManagerOptions{})
+	// TODO handle error
 	return &ruleImporter{
 		logger:      logger,
 		config:      config,
 		apiClient:   apiClient,
-		ruleManager: rules.NewManager(&rules.ManagerOptions{}),
+		ruleManager: ruleManager,
 	}
 }
 

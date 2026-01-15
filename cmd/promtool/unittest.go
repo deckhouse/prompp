@@ -36,11 +36,11 @@ import (
 
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp-pkg/rules" // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/promql/promqltest"
-	"github.com/prometheus/prometheus/rules"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/junitxml"
 )
@@ -224,7 +224,10 @@ func (tg *testGroup) test(evalInterval time.Duration, groupOrderMap map[string]i
 		NotifyFunc:      func(ctx context.Context, expr string, alerts ...*rules.Alert) {},
 		Logger:          log.NewNopLogger(),
 	}
-	m := rules.NewManager(opts)
+	m, err := rules.NewManager(opts)
+	if err != nil {
+		return []error{err}
+	}
 	groupsMap, ers := m.LoadGroups(time.Duration(tg.Interval), tg.ExternalLabels, tg.ExternalURL, nil, ruleFiles...)
 	if ers != nil {
 		return ers
