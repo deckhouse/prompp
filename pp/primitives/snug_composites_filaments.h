@@ -35,10 +35,16 @@ struct Symbol {
         if (table_version == 1) {
           // write items
           out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
-        }
 
-        // write a version
-        out.put(1);
+          // write a version
+          out.put(1);
+        } else {  // table_version == 2
+          // write a version
+          out.put(1);
+
+          // write items
+          out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
+        }
 
         // write mode
         SerializationMode mode = (from != nullptr) ? SerializationMode::DELTA : SerializationMode::SNAPSHOT;
@@ -58,11 +64,6 @@ struct Symbol {
         // write data
         if (size_to_save > 0) {
           out.write(&storage.data[first_to_save], size_to_save);
-        }
-
-        if (table_version == 2) {
-          // write items
-          out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
         }
       }
 
@@ -214,6 +215,12 @@ struct Symbol {
                                    "Invalid stream data version (%d) for loading into data vector (Symbol::data_type), only version 1 is supported", version);
       }
 
+      if (table_version == 2) {
+        // read items
+        items.resize(original_size + items_size);
+        in.read(reinterpret_cast<char*>(&items[original_size]), sizeof(item_type) * items_size);
+      }
+
       // read mode
       const auto mode = static_cast<BareBones::SnugComposite::SerializationMode>(in.get());
 
@@ -241,12 +248,6 @@ struct Symbol {
       // read data
       data.resize(data.size() + size_to_load);
       in.read(data.begin() + first_to_load_i, size_to_load);
-
-      if (table_version == 2) {
-        // read items
-        items.resize(original_size + items_size);
-        in.read(reinterpret_cast<char*>(&items[original_size]), sizeof(item_type) * items_size);
-      }
 
       return std::views::iota(original_size, items.size());
     }
@@ -376,10 +377,16 @@ struct LabelNameSet {
         if (table_version == 1) {
           // write items
           out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
-        }
 
-        // write a version
-        out.put(1);
+          // write a version
+          out.put(1);
+        } else {  // table_version == 2
+          // write a version
+          out.put(1);
+
+          // write items
+          out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
+        }
 
         // write mode
         SerializationMode mode = (from != nullptr) ? SerializationMode::DELTA : SerializationMode::SNAPSHOT;
@@ -405,11 +412,6 @@ struct LabelNameSet {
           symbols_table_checkpoint.save(out, &from->symbols_table_checkpoint);
         } else {
           symbols_table_checkpoint.save(out);
-        }
-
-        if (table_version == 2) {
-          // write items
-          out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
         }
       }
 
@@ -607,6 +609,12 @@ struct LabelNameSet {
                                    "Invalid stream data version (%d) for loading into LabelSetNames::data_type vector, only version 1 is supported", version);
       }
 
+      if (table_version == 2) {
+        // read items
+        items.resize(items_original_size + items_size);
+        in.read(reinterpret_cast<char*>(&items[items_original_size]), sizeof(item_type) * items_size);
+      }
+
       // read mode
       const auto mode = static_cast<BareBones::SnugComposite::SerializationMode>(in.get());
 
@@ -640,12 +648,6 @@ struct LabelNameSet {
       // read symbols table
       symbols_table.load(in);
 
-      if (table_version == 2) {
-        // read items
-        items.resize(items_original_size + items_size);
-        in.read(reinterpret_cast<char*>(&items[items_original_size]), sizeof(item_type) * items_size);
-      }
-
       return std::views::iota(items_original_size, items.size());
     }
 
@@ -664,8 +666,10 @@ struct LabelNameSet {
 };
 
 template <template <template <class> class> class SymbolsTableType,
-          template <template <class> class> class LabelNameSetsTableType,
-          template <class> class Vector>
+          template <template <class> class>
+          class LabelNameSetsTableType,
+          template <class>
+          class Vector>
 struct LabelSet {
   struct storage_type {
     static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
@@ -800,10 +804,16 @@ struct LabelSet {
         if (table_version == 1) {
           // write items
           out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
-        }
 
-        // write version
-        out.put(1);
+          // write a version
+          out.put(1);
+        } else {  // table_version == 2
+          // write a version
+          out.put(1);
+
+          // write items
+          out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
+        }
 
         // write mode
         SerializationMode mode = (from != nullptr) ? SerializationMode::DELTA : SerializationMode::SNAPSHOT;
@@ -872,11 +882,6 @@ struct LabelSet {
             // write symbols table
             symbols_tables_checkpoints_[i].save(out);
           }
-        }
-
-        if (table_version == 2) {
-          // write items
-          out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
         }
       }
 
@@ -1290,6 +1295,12 @@ struct LabelSet {
                                    version);
       }
 
+      if (table_version == 2) {
+        // read items
+        items.resize(items_original_size + items_size);
+        in.read(reinterpret_cast<char*>(&items[items_original_size]), sizeof(item_type) * items_size);
+      }
+
       // read mode
       const auto mode = static_cast<BareBones::SnugComposite::SerializationMode>(in.get());
 
@@ -1373,12 +1384,6 @@ struct LabelSet {
         if (mode == BareBones::SnugComposite::SerializationMode::DELTA && id < original_symbols_tables_size)
           symbols_tables_checkpoints.emplace_back(id, symbols_tables[id]->checkpoint());
         symbols_tables[id]->load(in);
-      }
-
-      if (table_version == 2) {
-        // read items
-        items.resize(items_original_size + items_size);
-        in.read(reinterpret_cast<char*>(&items[items_original_size]), sizeof(item_type) * items_size);
       }
 
       return std::views::iota(items_original_size, items.size());
