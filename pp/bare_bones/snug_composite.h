@@ -259,7 +259,7 @@ class GenericDecodingTable {
   using delta_type = typename checkpoint_type::Delta;
 
   GenericDecodingTable() noexcept = default;
-  explicit GenericDecodingTable(uint8_t version) noexcept : version_(version) {};
+  explicit GenericDecodingTable(uint8_t version) noexcept : version_(version){};
 
   template <class AnotherDerived, template <template <class> class> class AnotherFilament, template <class> class AnotherVector>
     requires kIsReadOnly
@@ -348,11 +348,11 @@ class GenericDecodingTable {
     }
 
     // read size
-    uint32_t size_to_load;
+    uint32_t size_to_load = 0;
     in.read(reinterpret_cast<char*>(&size_to_load), sizeof(size_to_load));
 
     // read is completed if there are no items
-    if (!size_to_load) {
+    if (size_to_load == 0) {
       return;
     }
 

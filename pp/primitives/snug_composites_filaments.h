@@ -241,7 +241,7 @@ struct Symbol {
       }
 
       // read size
-      uint32_t size_to_load;
+      uint32_t size_to_load = 0;
       in.read(reinterpret_cast<char*>(&size_to_load), sizeof(size_to_load));
 
       // read data
@@ -635,7 +635,7 @@ struct LabelNameSet {
       }
 
       // read size
-      uint32_t size_to_load;
+      uint32_t size_to_load = 0;
       in.read(reinterpret_cast<char*>(&size_to_load), sizeof(size_to_load));
 
       // read data
@@ -1321,7 +1321,7 @@ struct LabelSet {
       }
 
       // read size
-      uint32_t size_to_load;
+      uint32_t size_to_load = 0;
       in.read(reinterpret_cast<char*>(&size_to_load), sizeof(size_to_load));
 
       // read data
