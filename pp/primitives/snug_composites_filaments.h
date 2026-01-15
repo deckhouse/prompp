@@ -1339,7 +1339,7 @@ struct LabelSet {
       label_name_sets_table.load(in);
 
       // read number of tables
-      uint32_t number_of_symbols_tables_to_load;
+      uint32_t number_of_symbols_tables_to_load = 0;
       in.read(reinterpret_cast<char*>(&number_of_symbols_tables_to_load), sizeof(number_of_symbols_tables_to_load));
 
       // read tables
