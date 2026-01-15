@@ -55,10 +55,9 @@ type Group struct {
 	staleSeries          []labels.Labels
 	opts                 *ManagerOptions
 	mtx                  sync.Mutex
-	// labelsMtx            sync.RWMutex // PP_CHANGES.md: rebuild on cpp
-	evaluationTime    time.Duration
-	lastEvaluation    time.Time // Wall-clock time of most recent evaluation.
-	lastEvalTimestamp time.Time // Time slot used for most recent evaluation.
+	evaluationTime       time.Duration
+	lastEvaluation       time.Time // Wall-clock time of most recent evaluation.
+	lastEvalTimestamp    time.Time // Time slot used for most recent evaluation.
 
 	shouldRestore bool
 
@@ -532,7 +531,6 @@ func (g *Group) Eval(ctx context.Context, ts time.Time) {
 		g.staleSeries = nil
 	}
 
-	// g.labelsMtx.RLock() // PP_CHANGES.md: rebuild on cpp
 	for i, series := range g.seriesInCurrentEval {
 		if series == nil {
 			continue
@@ -541,7 +539,6 @@ func (g *Group) Eval(ctx context.Context, ts time.Time) {
 		g.seriesInPreviousEval[i] = series
 		g.seriesInCurrentEval[i] = nil
 	}
-	// g.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
 }
 
 func (g *Group) QueryOffset() time.Duration {
@@ -563,8 +560,6 @@ func (g *Group) cleanupStaleSeries(ctx context.Context, ts time.Time, bs storage
 
 	app := bs.Appender(ctx)
 	queryOffset := g.QueryOffset()
-	// g.labelsMtx.RLock()         // PP_CHANGES.md: rebuild on cpp
-	// defer g.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
 	for _, s := range g.staleSeries {
 		// Rule that produced series no longer configured, mark it stale.
 		_, err := app.Append(0, s, timestamp.FromTime(ts.Add(-queryOffset)), math.Float64frombits(value.StaleNaN))
@@ -1110,7 +1105,6 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, bs storage.Ba
 			seriesInPreviousEval[i][string(s.Metric.Bytes(buf[:]))] = s.Metric
 		}
 
-		// g.labelsMtx.RLock() // PP_CHANGES.md: rebuild on cpp
 		for metric, lset := range g.seriesInPreviousEval[i] {
 			if _, ok := seriesInPreviousEval[i][metric]; !ok {
 				// Series no longer exposed, mark it stale.
@@ -1136,7 +1130,6 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, bs storage.Ba
 				}
 			}
 		}
-		// g.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
 	}
 
 	sequentiallyRules := make([]Rule, len(g.rules))
@@ -1178,7 +1171,6 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, bs storage.Ba
 		return samplesTotal.Add(g.sequentiallyEval(ctx, ts, sequentiallyRules, bs))
 	}
 
-	// g.labelsMtx.RLock() // PP_CHANGES.md: rebuild on cpp
 	for i, series := range seriesInPreviousEval {
 		if series == nil {
 			continue
@@ -1186,7 +1178,6 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, bs storage.Ba
 
 		g.seriesInCurrentEval[i] = series
 	}
-	// g.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
 
 	return samplesTotal.Add(g.sequentiallyEval(ctx, ts, sequentiallyRules, bs))
 }
@@ -1270,9 +1261,7 @@ func (g *Group) sequentiallyEval(
 				return
 			}
 
-			// g.labelsMtx.RLock() // PP_CHANGES.md: rebuild on cpp
 			g.seriesInCurrentEval[i] = seriesReturned
-			// g.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
 		}()
 
 		buf := [1024]byte{}
@@ -1300,7 +1289,6 @@ func (g *Group) sequentiallyEval(
 			seriesReturned[string(s.Metric.Bytes(buf[:]))] = s.Metric
 		}
 
-		// g.labelsMtx.RLock() // PP_CHANGES.md: rebuild on cpp
 		for metric, lset := range g.seriesInPreviousEval[i] {
 			if _, ok := seriesReturned[metric]; !ok {
 				// Series no longer exposed, mark it stale.
@@ -1326,7 +1314,6 @@ func (g *Group) sequentiallyEval(
 				}
 			}
 		}
-		// g.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
 	}
 
 	for i, rule := range sequentiallyRules {

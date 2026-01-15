@@ -252,7 +252,6 @@ func (g *Group) run(ctx context.Context) {
 					level.Error(g.logger).Log("msg", "Failed to commit batch storage", "err", err)
 					return
 				}
-
 			}
 		}(time.Now())
 	}()
@@ -274,6 +273,8 @@ func (g *Group) run(ctx context.Context) {
 			}
 			evalTimestamp = evalTimestamp.Add((missed + 1) * g.interval)
 			g.evalIterationFunc(ctx, g, evalTimestamp)
+
+			g.renewLabelsSnapshot() // PP_CHANGES.md: rebuild on cpp
 		}
 
 		restoreStartTime := time.Now()
@@ -551,7 +552,8 @@ func (g *Group) RestoreForState(ts time.Time) {
 				"stage", "Select",
 				"err", err,
 			)
-			// Even if we failed to query the `ALERT_FOR_STATE` series, we currently have no way to retry the restore process.
+			// Even if we failed to query the `ALERT_FOR_STATE` series,
+			// we currently have no way to retry the restore process.
 			// So the best we can do is mark the rule as restored and let it eventually fire.
 			alertRule.SetRestored(true)
 			continue
@@ -573,7 +575,7 @@ func (g *Group) RestoreForState(ts time.Time) {
 		alertRule.ForEachActiveAlert(func(a *Alert) {
 			var s storage.Series
 
-			s, ok := seriesByLabels[a.Labels.String()]
+			s, ok := seriesByLabels[a.Labels().String()] // PP_CHANGES.md: rebuild on cpp
 			if !ok {
 				return
 			}
@@ -629,7 +631,7 @@ func (g *Group) RestoreForState(ts time.Time) {
 			a.ActiveAt = restoredActiveAt
 			level.Debug(g.logger).Log("msg", "'for' state restored",
 				labels.AlertName, alertRule.Name(), "restored_time", a.ActiveAt.Format(time.RFC850),
-				"labels", a.Labels.String())
+				"labels", a.Labels().String()) // PP_CHANGES.md: rebuild on cpp
 		})
 
 		alertRule.SetRestored(true)
@@ -654,7 +656,8 @@ func (g *Group) Equals(ng *Group) bool {
 		return false
 	}
 
-	if ((g.queryOffset == nil) != (ng.queryOffset == nil)) || (g.queryOffset != nil && ng.queryOffset != nil && *g.queryOffset != *ng.queryOffset) {
+	if ((g.queryOffset == nil) != (ng.queryOffset == nil)) ||
+		(g.queryOffset != nil && ng.queryOffset != nil && *g.queryOffset != *ng.queryOffset) {
 		return false
 	}
 
@@ -669,6 +672,13 @@ func (g *Group) Equals(ng *Group) bool {
 	}
 
 	return true
+}
+
+// renewLabelsSnapshot renew labels and annotations snapshots.
+func (g *Group) renewLabelsSnapshot() { // PP_CHANGES.md: rebuild on cpp
+	for _, r := range g.rules {
+		r.RenewLabelsSnapshot()
+	}
 }
 
 // GroupKey group names need not be unique across filenames.
@@ -884,7 +894,7 @@ func buildDependencyMap(rules []Rule) dependencyMap {
 		name := rule.Name()
 		outputs[name] = append(outputs[name], rule)
 
-		parser.Inspect(rule.Query(), func(node parser.Node, path []parser.Node) error {
+		parser.Inspect(rule.Query(), func(node parser.Node, _ []parser.Node) error {
 			if n, ok := node.(*parser.VectorSelector); ok {
 				// A wildcard metric expression means we cannot reliably determine if this rule depends on any other,
 				// which means we cannot safely run any rules concurrently.
@@ -922,12 +932,12 @@ func buildDependencyMap(rules []Rule) dependencyMap {
 }
 
 // concurrencyEval evaluates the rules concurrently.
-func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, bs storage.BatchStorage) float64 {
+func (g *Group) concurrencyEval(baseCtx context.Context, ts time.Time, bs storage.BatchStorage) float64 {
 	var (
 		samplesTotal   atomic.Float64
 		wg             sync.WaitGroup
 		mtx            sync.Mutex
-		concurrencyApp = bs.Appender(ctx)
+		concurrencyApp = bs.Appender(baseCtx)
 		queryFunc      = g.opts.EngineQueryCtor(g.opts.Engine, g.opts.FanoutQueryable)
 	)
 
@@ -939,7 +949,7 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, bs storage.Ba
 		}
 
 		logger := log.WithPrefix(g.logger, "name", rule.Name(), "index", i)
-		ctx, sp := otel.Tracer("").Start(ctx, "rule")
+		ctx, sp := otel.Tracer("").Start(baseCtx, "rule")
 		sp.SetAttributes(attribute.String("name", rule.Name()))
 		defer func(t time.Time) {
 			sp.End()
@@ -1040,15 +1050,15 @@ func (g *Group) concurrencyEval(ctx context.Context, ts time.Time, bs storage.Ba
 			"err", err,
 		)
 
-		return samplesTotal.Add(g.sequentiallyEval(ctx, ts, sequentiallyRules, bs))
+		return samplesTotal.Add(g.sequentiallyEval(baseCtx, ts, sequentiallyRules, bs))
 	}
 
-	return samplesTotal.Add(g.sequentiallyEval(ctx, ts, sequentiallyRules, bs))
+	return samplesTotal.Add(g.sequentiallyEval(baseCtx, ts, sequentiallyRules, bs))
 }
 
 // sequentiallyEval evaluates the rules sequentially.
 func (g *Group) sequentiallyEval(
-	ctx context.Context,
+	baseCtx context.Context,
 	ts time.Time,
 	sequentiallyRules []Rule,
 	bs storage.BatchStorage,
@@ -1073,7 +1083,7 @@ func (g *Group) sequentiallyEval(
 		}
 
 		logger := log.WithPrefix(g.logger, "name", rule.Name(), "index", i)
-		ctx, sp := otel.Tracer("").Start(ctx, "rule")
+		ctx, sp := otel.Tracer("").Start(baseCtx, "rule")
 		sp.SetAttributes(attribute.String("name", rule.Name()))
 		defer func(t time.Time) {
 			sp.End()
@@ -1115,13 +1125,13 @@ func (g *Group) sequentiallyEval(
 
 		app := bs.Appender(ctx)
 		defer func() {
-			if err := app.Commit(); err != nil {
+			if errCommit := app.Commit(); errCommit != nil {
 				rule.SetHealth(HealthBad)
-				rule.SetLastError(err)
-				sp.SetStatus(codes.Error, err.Error())
+				rule.SetLastError(errCommit)
+				sp.SetStatus(codes.Error, errCommit.Error())
 				g.metrics.EvalFailures.WithLabelValues(GroupKey(g.File(), g.Name())).Inc()
 
-				level.Warn(logger).Log("msg", "Rule sample appending failed", "err", err)
+				level.Warn(logger).Log("msg", "Rule sample appending failed", "err", errCommit)
 				return
 			}
 		}()

@@ -584,10 +584,7 @@ void prompp_label_set_hash_without_labels(void* args, void* res);
  *     ls_id_b            uint32                  // series id b;
  *     drop_metric_name_a bool                    // drop metric_name a;
  *     drop_metric_name_b bool                    // drop metric_name b;
- * }
- *
- * @param res {
- *     is_equal      bool                         // is equal?
+ *     is_equal           bool                    // is equal?
  * }
  */
 void prompp_label_set_equal(void* args);

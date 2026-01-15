@@ -28,6 +28,7 @@ import (
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/notifier"
+	"github.com/prometheus/prometheus/pp/go/cppbridge" // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/promql/promqltest"
@@ -83,7 +84,7 @@ func TestAlertingRuleState(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		rule := NewAlertingRule(test.name, nil, 0, 0, labels.EmptyLabels(), labels.EmptyLabels(), labels.EmptyLabels(), "", true, nil)
+		rule := NewAlertingRule(test.name, nil, 0, 0, labels.EmptyLabels(), labels.EmptyLabels(), cppbridge.EmptyLabels(), "", true, nil) // PP_CHANGES.md: rebuild on cpp
 		rule.active = test.active
 		got := rule.State()
 		require.Equal(t, test.want, got, "test case %d unexpected AlertState, want:%d got:%d", i, test.want, got)
@@ -122,7 +123,7 @@ func TestAlertingRuleTemplateWithHistogram(t *testing.T) {
 		time.Minute,
 		0,
 		labels.FromStrings("histogram", "{{ $value }}"),
-		labels.EmptyLabels(), labels.EmptyLabels(), "", true, nil,
+		labels.EmptyLabels(), cppbridge.EmptyLabels(), "", true, nil, // PP_CHANGES.md: rebuild on cpp
 	)
 
 	evalTime := time.Now()
@@ -170,7 +171,7 @@ func TestAlertingRuleLabelsUpdate(t *testing.T) {
 		// If an alert is going back and forth between two label values it will never fire.
 		// Instead, you should write two alerts with constant labels.
 		labels.FromStrings("severity", "{{ if lt $value 80.0 }}critical{{ else }}warning{{ end }}"),
-		labels.EmptyLabels(), labels.EmptyLabels(), "", true, nil,
+		labels.EmptyLabels(), cppbridge.EmptyLabels(), "", true, nil, // PP_CHANGES.md: rebuild on cpp
 	)
 
 	results := []promql.Vector{
@@ -274,7 +275,7 @@ func TestAlertingRuleExternalLabelsInTemplate(t *testing.T) {
 		0,
 		labels.FromStrings("templated_label", "There are {{ len $externalLabels }} external Labels, of which foo is {{ $externalLabels.foo }}."),
 		labels.EmptyLabels(),
-		labels.EmptyLabels(),
+		cppbridge.EmptyLabels(), // PP_CHANGES.md: rebuild on cpp
 		"",
 		true, log.NewNopLogger(),
 	)
@@ -285,7 +286,7 @@ func TestAlertingRuleExternalLabelsInTemplate(t *testing.T) {
 		0,
 		labels.FromStrings("templated_label", "There are {{ len $externalLabels }} external Labels, of which foo is {{ $externalLabels.foo }}."),
 		labels.EmptyLabels(),
-		labels.FromStrings("foo", "bar", "dings", "bums"),
+		cppbridge.FromStrings("foo", "bar", "dings", "bums"), // PP_CHANGES.md: rebuild on cpp
 		"",
 		true, log.NewNopLogger(),
 	)
@@ -369,7 +370,7 @@ func TestAlertingRuleExternalURLInTemplate(t *testing.T) {
 		0,
 		labels.FromStrings("templated_label", "The external URL is {{ $externalURL }}."),
 		labels.EmptyLabels(),
-		labels.EmptyLabels(),
+		cppbridge.EmptyLabels(), // PP_CHANGES.md: rebuild on cpp
 		"",
 		true, log.NewNopLogger(),
 	)
@@ -380,7 +381,7 @@ func TestAlertingRuleExternalURLInTemplate(t *testing.T) {
 		0,
 		labels.FromStrings("templated_label", "The external URL is {{ $externalURL }}."),
 		labels.EmptyLabels(),
-		labels.EmptyLabels(),
+		cppbridge.EmptyLabels(), // PP_CHANGES.md: rebuild on cpp
 		"http://localhost:1234",
 		true, log.NewNopLogger(),
 	)
@@ -464,7 +465,7 @@ func TestAlertingRuleEmptyLabelFromTemplate(t *testing.T) {
 		0,
 		labels.FromStrings("empty_label", ""),
 		labels.EmptyLabels(),
-		labels.EmptyLabels(),
+		cppbridge.EmptyLabels(), // PP_CHANGES.md: rebuild on cpp
 		"",
 		true, log.NewNopLogger(),
 	)
@@ -525,7 +526,7 @@ instance: {{ $v.Labels.instance }}, value: {{ printf "%.0f" $v.Value }};
 {{- end -}}
 {{- end -}}
 `),
-		labels.EmptyLabels(),
+		cppbridge.EmptyLabels(), // PP_CHANGES.md: rebuild on cpp
 		"",
 		true, log.NewNopLogger(),
 	)
@@ -564,7 +565,7 @@ instance: {{ $v.Labels.instance }}, value: {{ printf "%.0f" $v.Value }};
 
 func BenchmarkAlertingRuleAtomicField(b *testing.B) {
 	b.ReportAllocs()
-	rule := NewAlertingRule("bench", nil, 0, 0, labels.EmptyLabels(), labels.EmptyLabels(), labels.EmptyLabels(), "", true, nil)
+	rule := NewAlertingRule("bench", nil, 0, 0, labels.EmptyLabels(), labels.EmptyLabels(), cppbridge.EmptyLabels(), "", true, nil) // PP_CHANGES.md: rebuild on cpp
 	done := make(chan struct{})
 	go func() {
 		for i := 0; i < b.N; i++ {
@@ -605,7 +606,7 @@ func TestAlertingRuleDuplicate(t *testing.T) {
 		0,
 		labels.FromStrings("test", "test"),
 		labels.EmptyLabels(),
-		labels.EmptyLabels(),
+		cppbridge.EmptyLabels(), // PP_CHANGES.md: rebuild on cpp
 		"",
 		true, log.NewNopLogger(),
 	)
@@ -649,7 +650,7 @@ func TestAlertingRuleLimit(t *testing.T) {
 		0,
 		labels.FromStrings("test", "test"),
 		labels.EmptyLabels(),
-		labels.EmptyLabels(),
+		cppbridge.EmptyLabels(), // PP_CHANGES.md: rebuild on cpp
 		"",
 		true, log.NewNopLogger(),
 	)
@@ -721,7 +722,7 @@ func TestQueryForStateSeries(t *testing.T) {
 			time.Minute,
 			0,
 			labels.FromStrings("severity", "critical"),
-			labels.EmptyLabels(), labels.EmptyLabels(), "", true, nil,
+			labels.EmptyLabels(), cppbridge.EmptyLabels(), "", true, nil, // PP_CHANGES.md: rebuild on cpp
 		)
 
 		sample := rule.forStateSample(nil, time.Time{}, 0)
@@ -753,13 +754,14 @@ func TestSendAlertsDontAffectActiveAlerts(t *testing.T) {
 		time.Minute,
 		0,
 		labels.FromStrings("severity", "critical"),
-		labels.EmptyLabels(), labels.EmptyLabels(), "", true, nil,
+		labels.EmptyLabels(), cppbridge.EmptyLabels(), "", true, nil, // PP_CHANGES.md: rebuild on cpp
 	)
 
 	// Set an active alert.
 	lbls := labels.FromStrings("a1", "1")
 	h := lbls.Hash()
-	al := &Alert{State: StateFiring, Labels: lbls, ActiveAt: time.Now()}
+	// PP_CHANGES.md: rebuild on cpp
+	al := &Alert{State: StateFiring, labels: lbls, ActiveAt: time.Now(), annotations: labels.EmptyLabels()}
 	rule.active[h] = al
 
 	expr, err := parser.ParseExpr("foo")
@@ -793,7 +795,7 @@ func TestSendAlertsDontAffectActiveAlerts(t *testing.T) {
 
 	// The relabel rule changes a1=1 to a1=bug.
 	// But the labels with the AlertingRule should not be changed.
-	testutil.RequireEqual(t, labels.FromStrings("a1", "1"), rule.active[h].Labels)
+	testutil.RequireEqual(t, labels.FromStrings("a1", "1"), rule.active[h].Labels()) // PP_CHANGES.md: rebuild on cpp
 }
 
 func TestKeepFiringFor(t *testing.T) {
@@ -812,7 +814,7 @@ func TestKeepFiringFor(t *testing.T) {
 		time.Minute,
 		time.Minute,
 		labels.EmptyLabels(),
-		labels.EmptyLabels(), labels.EmptyLabels(), "", true, nil,
+		labels.EmptyLabels(), cppbridge.EmptyLabels(), "", true, nil, // PP_CHANGES.md: rebuild on cpp
 	)
 
 	results := []promql.Vector{
@@ -923,7 +925,7 @@ func TestPendingAndKeepFiringFor(t *testing.T) {
 		time.Minute,
 		time.Minute,
 		labels.EmptyLabels(),
-		labels.EmptyLabels(), labels.EmptyLabels(), "", true, nil,
+		labels.EmptyLabels(), cppbridge.EmptyLabels(), "", true, nil, // PP_CHANGES.md: rebuild on cpp
 	)
 
 	result := promql.Sample{
@@ -984,7 +986,7 @@ func TestAlertingEvalWithOrigin(t *testing.T) {
 		time.Minute,
 		lbs,
 		labels.EmptyLabels(),
-		labels.EmptyLabels(),
+		cppbridge.EmptyLabels(), // PP_CHANGES.md: rebuild on cpp
 		"",
 		true, log.NewNopLogger(),
 	)
@@ -1006,7 +1008,7 @@ func TestAlertingRule_SetNoDependentRules(t *testing.T) {
 		0,
 		labels.FromStrings("test", "test"),
 		labels.EmptyLabels(),
-		labels.EmptyLabels(),
+		cppbridge.EmptyLabels(), // PP_CHANGES.md: rebuild on cpp
 		"",
 		true, log.NewNopLogger(),
 	)
@@ -1027,7 +1029,7 @@ func TestAlertingRule_SetNoDependencyRules(t *testing.T) {
 		0,
 		labels.FromStrings("test", "test"),
 		labels.EmptyLabels(),
-		labels.EmptyLabels(),
+		cppbridge.EmptyLabels(), // PP_CHANGES.md: rebuild on cpp
 		"",
 		true, log.NewNopLogger(),
 	)
@@ -1047,7 +1049,7 @@ func TestAlertingRule_ActiveAlertsCount(t *testing.T) {
 		time.Minute,
 		0,
 		labels.FromStrings("severity", "critical"),
-		labels.EmptyLabels(), labels.EmptyLabels(), "", true, nil,
+		labels.EmptyLabels(), cppbridge.EmptyLabels(), "", true, nil, // PP_CHANGES.md: rebuild on cpp
 	)
 
 	require.Equal(t, 0, rule.ActiveAlertsCount())
@@ -1055,7 +1057,7 @@ func TestAlertingRule_ActiveAlertsCount(t *testing.T) {
 	// Set an active alert.
 	lbls := labels.FromStrings("a1", "1")
 	h := lbls.Hash()
-	al := &Alert{State: StateFiring, Labels: lbls, ActiveAt: time.Now()}
+	al := &Alert{State: StateFiring, labels: lbls, ActiveAt: time.Now()}
 	rule.active[h] = al
 
 	require.Equal(t, 1, rule.ActiveAlertsCount())

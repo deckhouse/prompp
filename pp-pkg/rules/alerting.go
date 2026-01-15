@@ -30,6 +30,7 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"github.com/prometheus/prometheus/model/timestamp"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/storage"
@@ -76,8 +77,9 @@ func (s AlertState) String() string {
 type Alert struct {
 	State AlertState
 
-	Labels      labels.Labels
-	Annotations labels.Labels
+	labels      labels.Labels
+	annotations labels.Labels
+	labelsMtx   sync.RWMutex // PP_CHANGES.md: rebuild on cpp
 
 	// The value at the last evaluation of the alerting expression.
 	Value float64
@@ -91,6 +93,56 @@ type Alert struct {
 	KeepFiringSince time.Time
 }
 
+// NewAlert init new *Alert .
+func NewAlert(
+	ls, annotations labels.Labels,
+	activeAt, firedAt, resolvedAt, validUntil time.Time,
+) *Alert { // PP_CHANGES.md: rebuild on cpp
+	return &Alert{
+		labels:      ls,
+		annotations: annotations,
+		ActiveAt:    activeAt,
+		FiredAt:     firedAt,
+		ResolvedAt:  resolvedAt,
+		ValidUntil:  validUntil,
+	}
+}
+
+// Annotations return alert annotations.
+func (a *Alert) Annotations() labels.Labels { // PP_CHANGES.md: rebuild on cpp
+	a.labelsMtx.RLock()
+	defer a.labelsMtx.RUnlock()
+
+	return a.annotations
+}
+
+// Labels return alert labels.
+func (a *Alert) Labels() labels.Labels { // PP_CHANGES.md: rebuild on cpp
+	a.labelsMtx.RLock()
+	defer a.labelsMtx.RUnlock()
+
+	return a.labels
+}
+
+// Copy make new copy Alert.
+func (a *Alert) Copy() *Alert { // PP_CHANGES.md: rebuild on cpp
+	a.labelsMtx.RLock()
+	defer a.labelsMtx.RUnlock()
+
+	return &Alert{
+		State:           a.State,
+		labels:          a.labels.Copy(),
+		annotations:     a.annotations.Copy(),
+		Value:           a.Value,
+		ActiveAt:        a.ActiveAt,
+		FiredAt:         a.FiredAt,
+		ResolvedAt:      a.ResolvedAt,
+		LastSentAt:      a.LastSentAt,
+		ValidUntil:      a.ValidUntil,
+		KeepFiringSince: a.KeepFiringSince,
+	}
+}
+
 func (a *Alert) needsSending(ts time.Time, resendDelay time.Duration) bool {
 	if a.State == StatePending {
 		return false
@@ -102,6 +154,14 @@ func (a *Alert) needsSending(ts time.Time, resendDelay time.Duration) bool {
 	}
 
 	return a.LastSentAt.Add(resendDelay).Before(ts)
+}
+
+// renewLabelsSnapshot renew labels and annotations snapshots.
+func (a *Alert) renewLabelsSnapshot() { // PP_CHANGES.md: rebuild on cpp
+	a.labelsMtx.Lock()
+	a.labels.RenewSnapshot()
+	a.annotations.RenewSnapshot()
+	a.labelsMtx.Unlock()
 }
 
 // An AlertingRule generates alerts from its vector expression.
@@ -120,6 +180,7 @@ type AlertingRule struct {
 	labels labels.Labels
 	// Non-identifying key/value pairs.
 	annotations labels.Labels
+	labelsMtx   sync.RWMutex // PP_CHANGES.md: rebuild on cpp
 	// External labels from the global config.
 	externalLabels map[string]string
 	// The external URL from the --web.external-url flag.
@@ -150,7 +211,7 @@ type AlertingRule struct {
 // NewAlertingRule constructs a new AlertingRule.
 func NewAlertingRule(
 	name string, vec parser.Expr, hold, keepFiringFor time.Duration,
-	labels, annotations, externalLabels labels.Labels, externalURL string,
+	ls, annotations labels.Labels, externalLabels cppbridge.Labels, externalURL string, // PP_CHANGES.md: on cpp
 	restored bool, logger log.Logger,
 ) *AlertingRule {
 	el := externalLabels.Map()
@@ -160,7 +221,7 @@ func NewAlertingRule(
 		vector:              vec,
 		holdDuration:        hold,
 		keepFiringFor:       keepFiringFor,
-		labels:              labels,
+		labels:              ls,
 		annotations:         annotations,
 		externalLabels:      el,
 		externalURL:         externalURL,
@@ -219,18 +280,26 @@ func (r *AlertingRule) KeepFiringFor() time.Duration {
 
 // Labels returns the labels of the alerting rule.
 func (r *AlertingRule) Labels() labels.Labels {
+	r.labelsMtx.RLock()         // PP_CHANGES.md: rebuild on cpp
+	defer r.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
+
 	return r.labels
 }
 
 // Annotations returns the annotations of the alerting rule.
 func (r *AlertingRule) Annotations() labels.Labels {
+	r.labelsMtx.RLock()         // PP_CHANGES.md: rebuild on cpp
+	defer r.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
+
 	return r.annotations
 }
 
 func (r *AlertingRule) sample(alert *Alert, ts time.Time) promql.Sample {
+	r.labelsMtx.RLock()
 	lb := labels.NewBuilder(r.labels)
+	r.labelsMtx.RUnlock()
 
-	alert.Labels.Range(func(l labels.Label) {
+	alert.Labels().Range(func(l labels.Label) { // PP_CHANGES.md: rebuild on cpp
 		lb.Set(l.Name, l.Value)
 	})
 
@@ -246,13 +315,16 @@ func (r *AlertingRule) sample(alert *Alert, ts time.Time) promql.Sample {
 	return s
 }
 
-// forStateSample returns a promql.Sample with the rule labels, `ALERTS_FOR_STATE` as the metric name and the rule name as the `alertname` label.
+// forStateSample returns a promql.Sample with the rule labels,
+// `ALERTS_FOR_STATE` as the metric name and the rule name as the `alertname` label.
 // Optionally, if an alert is provided it'll copy the labels of the alert into the sample labels.
 func (r *AlertingRule) forStateSample(alert *Alert, ts time.Time, v float64) promql.Sample {
+	r.labelsMtx.RLock() // PP_CHANGES.md: rebuild on cpp
 	lb := labels.NewBuilder(r.labels)
+	r.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
 
 	if alert != nil {
-		alert.Labels.Range(func(l labels.Label) {
+		alert.Labels().Range(func(l labels.Label) { // PP_CHANGES.md: rebuild on cpp
 			lb.Set(l.Name, l.Value)
 		})
 	}
@@ -388,6 +460,9 @@ func (r *AlertingRule) Eval(ctx context.Context, queryOffset time.Duration, ts t
 
 		lb.Reset(smpl.Metric)
 		lb.Del(labels.MetricName)
+
+		r.labelsMtx.RLock() // PP_CHANGES.md: rebuild on cpp
+
 		r.labels.Range(func(l labels.Label) {
 			lb.Set(l.Name, expand(l.Value))
 		})
@@ -400,6 +475,9 @@ func (r *AlertingRule) Eval(ctx context.Context, queryOffset time.Duration, ts t
 		annotations := sb.Labels()
 
 		lbs := lb.Labels()
+
+		r.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
+
 		h := lbs.Hash()
 		resultFPs[h] = struct{}{}
 
@@ -408,8 +486,8 @@ func (r *AlertingRule) Eval(ctx context.Context, queryOffset time.Duration, ts t
 		}
 
 		alerts[h] = &Alert{
-			Labels:      lbs,
-			Annotations: annotations,
+			labels:      lbs,         // PP_CHANGES.md: rebuild on cpp
+			annotations: annotations, // PP_CHANGES.md: rebuild on cpp
 			ActiveAt:    ts,
 			State:       StatePending,
 			Value:       smpl.F,
@@ -424,7 +502,7 @@ func (r *AlertingRule) Eval(ctx context.Context, queryOffset time.Duration, ts t
 		// Update the last value and annotations if so, create a new alert entry otherwise.
 		if alert, ok := r.active[h]; ok && alert.State != StateInactive {
 			alert.Value = a.Value
-			alert.Annotations = a.Annotations
+			alert.annotations = a.Annotations() // PP_CHANGES.md: rebuild on cpp
 			continue
 		}
 
@@ -483,8 +561,11 @@ func (r *AlertingRule) Eval(ctx context.Context, queryOffset time.Duration, ts t
 		}
 
 		if r.restored.Load() {
-			vec = append(vec, r.sample(a, ts.Add(-queryOffset)))
-			vec = append(vec, r.forStateSample(a, ts.Add(-queryOffset), float64(a.ActiveAt.Unix())))
+			vec = append(
+				vec,
+				r.sample(a, ts.Add(-queryOffset)),
+				r.forStateSample(a, ts.Add(-queryOffset), float64(a.ActiveAt.Unix())),
+			)
 		}
 	}
 
@@ -531,8 +612,7 @@ func (r *AlertingRule) currentAlerts() []*Alert {
 	alerts := make([]*Alert, 0, len(r.active))
 
 	for _, a := range r.active {
-		anew := *a
-		alerts = append(alerts, &anew)
+		alerts = append(alerts, a.Copy()) // PP_CHANGES.md: rebuild on cpp
 	}
 	return alerts
 }
@@ -568,16 +648,18 @@ func (r *AlertingRule) sendAlerts(ctx context.Context, ts time.Time, resendDelay
 				delta = interval
 			}
 			alert.ValidUntil = ts.Add(4 * delta)
-			anew := *alert
+			anew := alert.Copy() // PP_CHANGES.md: rebuild on cpp
 			// The notifier re-uses the labels slice, hence make a copy.
-			anew.Labels = alert.Labels.Copy()
-			alerts = append(alerts, &anew)
+			alerts = append(alerts, anew) // PP_CHANGES.md: rebuild on cpp
 		}
 	})
 	notifyFunc(ctx, r.vector.String(), alerts...)
 }
 
 func (r *AlertingRule) String() string {
+	r.labelsMtx.RLock()         // PP_CHANGES.md: rebuild on cpp
+	defer r.labelsMtx.RUnlock() // PP_CHANGES.md: rebuild on cpp
+
 	ar := rulefmt.Rule{
 		Alert:         r.name,
 		Expr:          r.vector.String(),
@@ -593,4 +675,18 @@ func (r *AlertingRule) String() string {
 	}
 
 	return string(byt)
+}
+
+// RenewLabelsSnapshot renew labels and annotations snapshots.
+func (r *AlertingRule) RenewLabelsSnapshot() { // PP_CHANGES.md: rebuild on cpp
+	r.labelsMtx.Lock()
+	r.labels.RenewSnapshot()
+	r.annotations.RenewSnapshot()
+	r.labelsMtx.Unlock()
+
+	r.activeMtx.Lock()
+	for _, a := range r.active {
+		a.renewLabelsSnapshot()
+	}
+	r.activeMtx.Unlock()
 }
