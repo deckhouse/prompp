@@ -455,8 +455,8 @@ void prompp_label_set_bytes(void* args, void* res);
  *
  * @param args {
  *     lss              uintptr   // pointer to constructed lss;
- *     ls_id            uint32    // series id
  *     names            []string  // names slice
+ *     ls_id            uint32    // series id
  *     drop_metric_name bool      // flag drop metric_name;
  * }
  *
@@ -471,8 +471,8 @@ void prompp_label_set_bytes_with_labels(void* args, void* res);
  *
  * @param args {
  *     lss              uintptr   // pointer to constructed lss;
- *     ls_id            uint32    // series id
  *     names            []string  // names slice
+ *     ls_id            uint32    // series id
  *     drop_metric_name bool      // flag drop metric_name;
  * }
  *
@@ -590,7 +590,7 @@ void prompp_label_set_hash_without_labels(void* args, void* res);
  *     is_equal      bool                         // is equal?
  * }
  */
-void prompp_label_set_equal(void* args, void* res);
+void prompp_label_set_equal(void* args);
 
 /**
  * @brief Compare compares the two label sets.

@@ -3295,18 +3295,15 @@ func labelSetEqual(
 		labelSetIDB     uint32
 		dropMetricNameA bool
 		dropMetricNameB bool
-	}{lssA, lssB, labelSetIDA, labelSetIDB, dropMetricNameA, dropMetricNameB}
-	var res struct {
-		isEqual bool
-	}
+		isEqual         bool
+	}{lssA, lssB, labelSetIDA, labelSetIDB, dropMetricNameA, dropMetricNameB, false}
 
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_label_set_equal,
 		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.isEqual
+	return args.isEqual
 }
 
 func labelSetCompare(
@@ -3383,10 +3380,10 @@ func labelSetBytes(lss uintptr, labelSetID uint32, bytes []byte, dropMetricName 
 func labelSetBytesWithFilteredNames(
 	cFunction unsafe.Pointer,
 	lss uintptr,
-	labelSetID uint32,
 	bytes []byte,
-	dropMetricName bool,
 	names []string,
+	labelSetID uint32,
+	dropMetricName bool,
 ) []byte {
 	result := struct {
 		bytes []byte
@@ -3394,10 +3391,10 @@ func labelSetBytesWithFilteredNames(
 
 	args := struct {
 		lss            uintptr
-		labelSetID     uint32
 		names          []string
+		labelSetID     uint32
 		dropMetricName bool
-	}{lss, labelSetID, names, dropMetricName}
+	}{lss, names, labelSetID, dropMetricName}
 
 	testGC()
 	fastcgo.UnsafeCall2(
@@ -3411,35 +3408,35 @@ func labelSetBytesWithFilteredNames(
 
 func labelSetBytesWithLabels(
 	lss uintptr,
-	labelSetID uint32,
 	bytes []byte,
-	dropMetricName bool,
 	names []string,
+	labelSetID uint32,
+	dropMetricName bool,
 ) []byte {
 	return labelSetBytesWithFilteredNames(
 		C.prompp_label_set_bytes_with_labels,
 		lss,
-		labelSetID,
 		bytes,
-		dropMetricName,
 		names,
+		labelSetID,
+		dropMetricName,
 	)
 }
 
 func labelSetBytesWithoutLabels(
 	lss uintptr,
-	labelSetID uint32,
 	bytes []byte,
-	dropMetricName bool,
 	names []string,
+	labelSetID uint32,
+	dropMetricName bool,
 ) []byte {
 	return labelSetBytesWithFilteredNames(
 		C.prompp_label_set_bytes_without_labels,
 		lss,
-		labelSetID,
 		bytes,
-		dropMetricName,
 		names,
+		labelSetID,
+		dropMetricName,
 	)
 }
 

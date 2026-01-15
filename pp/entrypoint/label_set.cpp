@@ -234,8 +234,8 @@ extern "C" void prompp_label_set_bytes(void* args, void* res) {
 extern "C" void prompp_label_set_bytes_with_labels(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
-    uint32_t series_id;
     SliceView<PromPP::Primitives::Go::String> names;
+    uint32_t series_id;
     bool drop_metric_name;
   };
   struct Result {
@@ -257,8 +257,8 @@ extern "C" void prompp_label_set_bytes_with_labels(void* args, void* res) {
 extern "C" void prompp_label_set_bytes_without_labels(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
-    uint32_t series_id;
     SliceView<PromPP::Primitives::Go::String> names;
+    uint32_t series_id;
     bool drop_metric_name;
   };
   struct Result {
@@ -494,7 +494,7 @@ extern "C" void prompp_label_set_hash_without_labels(void* args, void* res) {
   new (res) Result{.hash = hash.hash()};
 }
 
-extern "C" void prompp_label_set_equal(void* args, void* res) {
+extern "C" void prompp_label_set_equal(void* args) {
   struct Arguments {
     LssVariantPtr lss_a;
     LssVariantPtr lss_b;
@@ -502,16 +502,13 @@ extern "C" void prompp_label_set_equal(void* args, void* res) {
     uint32_t series_id_b;
     bool drop_metric_name_a;
     bool drop_metric_name_b;
-  };
-  struct Result {
     bool is_equal;
   };
 
   auto in = static_cast<Arguments*>(args);
-  auto out = new (res) Result();
 
   std::visit(
-      [in, out](auto& lss_a, auto& lss_b) {
+      [in](auto& lss_a, auto& lss_b) {
         if (in->drop_metric_name_a || in->drop_metric_name_b) {
           const auto& ls_a = lss_a[in->series_id_a];
           const auto& ls_b = lss_b[in->series_id_b];
@@ -531,7 +528,7 @@ extern "C" void prompp_label_set_equal(void* args, void* res) {
             }
 
             if (*it_a != *it_b) {
-              out->is_equal = false;
+              in->is_equal = false;
               return;
             }
             ++it_a;
@@ -539,15 +536,15 @@ extern "C" void prompp_label_set_equal(void* args, void* res) {
           }
 
           if (it_a != it_a_end || it_b != it_b_end) [[unlikely]] {
-            out->is_equal = false;
+            in->is_equal = false;
             return;
           }
 
-          out->is_equal = true;
+          in->is_equal = true;
           return;
         }
 
-        out->is_equal = lss_a[in->series_id_a] == lss_b[in->series_id_b];
+        in->is_equal = lss_a[in->series_id_a] == lss_b[in->series_id_b];
       },
       *in->lss_a, *in->lss_b);
 }

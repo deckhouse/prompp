@@ -69,7 +69,7 @@ func FromStrings(ss ...string) Labels {
 // It uses an byte invalid character as a separator and so should not be used for printing.
 func (ls Labels) Bytes(buf []byte) []byte {
 	buf = buf[:0]
-	if ls.IsZero() || ls.Len() == 0 {
+	if ls.IsZero() {
 		return append(buf, labelSep)
 	}
 
@@ -80,7 +80,7 @@ func (ls Labels) Bytes(buf []byte) []byte {
 // 'names' have to be sorted in ascending order.
 func (ls Labels) BytesWithLabels(buf []byte, names ...string) []byte {
 	buf = buf[:0]
-	if ls.IsZero() || len(names) == 0 || ls.Len() == 0 {
+	if ls.IsZero() || len(names) == 0 {
 		return append(buf, labelSep)
 	}
 
@@ -91,7 +91,7 @@ func (ls Labels) BytesWithLabels(buf []byte, names ...string) []byte {
 // 'names' have to be sorted in ascending order.
 func (ls Labels) BytesWithoutLabels(buf []byte, names ...string) []byte {
 	buf = buf[:0]
-	if ls.IsZero() || ls.Len() == 0 {
+	if ls.IsZero() {
 		return append(buf, labelSep)
 	}
 
@@ -112,7 +112,7 @@ func (ls *Labels) CopyFrom(b Labels) {
 
 // DropMetricName returns Labels with "__name__" removed.
 func (ls Labels) DropMetricName() Labels {
-	if ls.IsZero() || ls.Len() == 0 {
+	if ls.IsZero() {
 		return ls
 	}
 
@@ -129,7 +129,7 @@ func (ls Labels) Get(name string) string {
 		return "" // Prometheus does not store blank label names.
 	}
 
-	if ls.IsZero() || ls.Len() == 0 {
+	if ls.IsZero() {
 		return ""
 	}
 
@@ -146,7 +146,7 @@ func (ls Labels) Has(name string) bool {
 		return false // Prometheus does not store blank label names.
 	}
 
-	if ls.IsZero() || ls.Len() == 0 {
+	if ls.IsZero() {
 		return false
 	}
 
@@ -160,7 +160,7 @@ func (ls Labels) Has(name string) bool {
 // HasDuplicateLabelNames returns whether ls has duplicate label names.
 // It assumes that the labelset is sorted.
 func (ls Labels) HasDuplicateLabelNames() (string, bool) {
-	if ls.IsZero() || ls.Len() == 0 {
+	if ls.IsZero() {
 		return "", false
 	}
 
@@ -170,7 +170,7 @@ func (ls Labels) HasDuplicateLabelNames() (string, bool) {
 // Hash returns a hash value for the label set.
 // Note: the result is not guaranteed to be consistent across different runs of Prometheus.
 func (ls Labels) Hash() uint64 {
-	if ls.IsZero() || ls.Len() == 0 {
+	if ls.IsZero() {
 		return 0
 	}
 
@@ -180,7 +180,7 @@ func (ls Labels) Hash() uint64 {
 // HashForLabels returns a hash value for the labels matching the provided names.
 // 'names' have to be sorted in ascending order.
 func (ls Labels) HashForLabels(b []byte, names ...string) (uint64, []byte) {
-	if ls.IsZero() || ls.Len() == 0 {
+	if ls.IsZero() {
 		return 0, b[:0]
 	}
 
@@ -228,7 +228,7 @@ func (ls Labels) IsZero() bool {
 }
 
 // Len returns the number of labels.
-func (ls *Labels) Len() int {
+func (ls Labels) Len() int {
 	if ls.length != 0 {
 		return int(ls.length)
 	}
@@ -751,10 +751,7 @@ func (s *storage) findFromBuilder(
 	builderLSID uint32,
 ) (Labels, bool) {
 	s.rotateLock.RLock()
-	defer s.rotateLock.RUnlock()
-
 	s.writeLock.RLock()
-	defer s.writeLock.RUnlock()
 
 	lsID, length, find := s.workingLSS.FindFromBuilder(
 		builderSortedAdd,
@@ -764,11 +761,19 @@ func (s *storage) findFromBuilder(
 		builderLSID,
 	)
 	if !find {
+		s.writeLock.RUnlock()
+		s.rotateLock.RUnlock()
 		return EmptyLabels(), false
 	}
 
+	s.writeLock.RUnlock()
+
+	snapshot := s.workingLSS.Snapshot()
+
+	s.rotateLock.RUnlock()
+
 	return NewLabelsWithLSS(
-		s.workingLSS.Snapshot(),
+		snapshot,
 		nil,
 		lsID,
 		length,

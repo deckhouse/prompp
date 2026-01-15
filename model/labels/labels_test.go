@@ -999,17 +999,61 @@ func TestMarshaling(t *testing.T) {
 	require.True(t, Equal(f.ALabels, gotFY.ALabels)) // PP_CHANGES.md: rebuild on cpp
 }
 
-func BenchmarkLabels_Equals2(b *testing.B) {
+func BenchmarkLabels_Equals_Singe(b *testing.B) {
 	x := FromStringsForBenchmark("__name__", "kube_pod_container_status_last_terminated_exitcode", "cluster", "prod-af-north-0", " container", "prometheus", "instance", "kube-state-metrics-0:kube-state-metrics:ksm", "job", "kube-state-metrics/kube-state-metrics", " namespace", "observability-prometheus", "pod", "observability-prometheus-0", "uid", "d3ec90b2-4975-4607-b45d-b9ad64bb417e")
-	// y := FromStringsForBenchmark("__name__", "kube_pod_container_status_last_terminated_exitcode", "cluster", "prod-af-north-0", " container", "prometheus", "instance", "kube-state-metrics-0:kube-state-metrics:ksm", "job", "kube-state-metrics/kube-state-metrics", " namespace", "observability-prometheus", "pod", "observability-prometheus-0", "uid", "deadbeef-0000-1111-2222-b9ad64bb417e")
+	y := FromStringsForBenchmark("__name__", "kube_pod_container_status_last_terminated_exitcode", "cluster", "prod-af-north-0", " container", "prometheus", "instance", "kube-state-metrics-0:kube-state-metrics:ksm", "job", "kube-state-metrics/kube-state-metrics", " namespace", "observability-prometheus", "pod", "observability-prometheus-0", "uid", "deadbeef-0000-1111-2222-b9ad64bb417e")
 
 	var v string
+	buf := make([]byte, 1024)
 
 	for i := 0; i < b.N; i++ {
-		// _ = Equal(x, y)
-		x.Range(func(l Label) {
-			v = l.Value
-		})
+		_ = Equal(x, y)
+
+		// x.Range(func(l Label) {
+		// 	v = l.Value
+		// })
+
+		// _ = x.Validate(func(l Label) error {
+		// 	v = l.Value
+
+		// 	return nil
+		// })
+
+		// x.DropMetricName()
+
+		// buf = x.BytesWithoutLabels(buf, "aaa", "bbb")
+
+		// x.Len()
+	}
+
+	_ = v
+	_ = buf
+}
+
+func BenchmarkLabels_Builders(b *testing.B) {
+	x := FromStringsForBenchmark("__name__", "kube_pod_container_status_last_terminated_exitcode", "cluster", "prod-af-north-0", " container", "prometheus", "instance", "kube-state-metrics-0:kube-state-metrics:ksm", "job", "kube-state-metrics/kube-state-metrics", " namespace", "observability-prometheus", "pod", "observability-prometheus-0", "uid", "d3ec90b2-4975-4607-b45d-b9ad64bb417e")
+	br := NewBuilder(x)
+
+	var v Labels
+
+	for i := 0; i < b.N; i++ {
+		br.Reset(x)
+		br.Set("aaa", "aaa")
+		v = br.Labels()
+	}
+
+	_ = v
+}
+
+func BenchmarkLabels_SBuilders(b *testing.B) {
+	br := NewScratchBuilder(1)
+
+	var v Labels
+
+	for i := 0; i < b.N; i++ {
+		br.Reset()
+		br.Add("aaa", "aaa")
+		v = br.Labels()
 	}
 
 	_ = v

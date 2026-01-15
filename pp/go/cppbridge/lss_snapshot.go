@@ -91,7 +91,7 @@ func (lsst *LabelSetSnapshot) LabelSetBytesWithLabels(
 	dropMetricName bool,
 	names []string,
 ) []byte {
-	bytes = labelSetBytesWithLabels(lsst.pointer, lsID, bytes, dropMetricName, names)
+	bytes = labelSetBytesWithLabels(lsst.pointer, bytes, names, lsID, dropMetricName)
 	runtime.KeepAlive(lsst)
 	return bytes
 }
@@ -104,7 +104,7 @@ func (lsst *LabelSetSnapshot) LabelSetBytesWithoutLabels(
 	dropMetricName bool,
 	names []string,
 ) []byte {
-	bytes = labelSetBytesWithoutLabels(lsst.pointer, lsID, bytes, dropMetricName, names)
+	bytes = labelSetBytesWithoutLabels(lsst.pointer, bytes, names, lsID, dropMetricName)
 	runtime.KeepAlive(lsst)
 	return bytes
 }
