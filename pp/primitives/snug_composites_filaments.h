@@ -322,9 +322,7 @@ struct LabelNameSet {
           ++(*this);
           return retval;
         }
-        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept {
-          return symbols_table_ptr_ == other.symbols_table_ptr_ && symbols_ids_it_ == other.symbols_ids_it_;
-        }
+        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return symbols_ids_it_ == other.symbols_ids_it_; }
 
         [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return symbols_table_ptr_->operator[](*symbols_ids_it_); }
 
