@@ -460,7 +460,7 @@ struct LabelNameSet {
         using difference_type = std::ptrdiff_t;
 
         iterator_type() = default;
-        explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : id_{id}, storage_ptr_(&storage) {}
+        explicit iterator_type(const storage_type* storage_ptr, uint32_t id) noexcept : storage_ptr_(storage_ptr), id_{id} {}
 
         PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
           ++id_;
@@ -472,7 +472,7 @@ struct LabelNameSet {
           ++(*this);
           return retval;
         }
-        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_ && storage_ptr_ == other.storage_ptr_; }
+        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_; }
         PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == storage_ptr_->items.size(); }
 
         [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
@@ -480,12 +480,12 @@ struct LabelNameSet {
         [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t id() const noexcept { return id_; }
 
        private:
-        uint32_t id_{0};
         const storage_type* storage_ptr_;
+        uint32_t id_{0};
       };
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{storage_ptr, 0}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{storage_ptr, storage_ptr->items.size()}; }
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_ptr->count(); }
       [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
