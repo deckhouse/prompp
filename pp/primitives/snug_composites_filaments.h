@@ -364,9 +364,9 @@ struct LabelNameSet {
     };
 
     struct checkpoint_type {
-      uint32_t symbols_ids_size;
       symbols_table_type::checkpoint_type symbols_table_checkpoint;
       uint32_t items_size;
+      uint32_t symbols_ids_size;
 
       using SerializationMode = BareBones::SnugComposite::SerializationMode;
 
@@ -581,7 +581,7 @@ struct LabelNameSet {
     }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE checkpoint_type checkpoint() const noexcept {
-      return {static_cast<uint32_t>(symbols_ids_sequences.size()), symbols_table.checkpoint(), static_cast<uint32_t>(items.size())};
+      return {symbols_table.checkpoint(), static_cast<uint32_t>(items.size()), static_cast<uint32_t>(symbols_ids_sequences.size())};
     }
     PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& checkpoint) noexcept {
       assert(checkpoint.symbols_ids_size <= symbols_ids_sequences.size());
@@ -791,11 +791,11 @@ struct LabelSet {
       using SerializationMode = BareBones::SnugComposite::SerializationMode;
       using symbols_checkpoints_type = Vector<typename label_values_symbols_table_type::checkpoint_type>;
 
+      label_name_sets_table_type::checkpoint_type label_name_sets_table_checkpoint_;
+      symbols_checkpoints_type symbols_tables_checkpoints_;
       uint32_t next_item_index_;
       uint32_t size_;
       uint32_t items_size;
-      label_name_sets_table_type::checkpoint_type label_name_sets_table_checkpoint_;
-      symbols_checkpoints_type symbols_tables_checkpoints_;
 
       template <BareBones::OutputStream S>
       void save(S& out, const storage_type& storage, uint32_t id_offset, uint32_t id_count, uint8_t table_version, checkpoint_type const* from = nullptr)
@@ -1253,7 +1253,7 @@ struct LabelSet {
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE checkpoint_type checkpoint() const noexcept {
       auto checkpoint = checkpoint_type{
-          next_item_index_, static_cast<uint32_t>(symbols_ids_sequences.size()), static_cast<uint32_t>(items.size()), label_name_sets_table.checkpoint(), {}};
+          label_name_sets_table.checkpoint(), {}, next_item_index_, static_cast<uint32_t>(symbols_ids_sequences.size()), static_cast<uint32_t>(items.size())};
       checkpoint.symbols_tables_checkpoints_.reserve_and_write(symbols_tables.size(), [this](auto memory, uint32_t size) {
         for (auto& symbol_table : this->symbols_tables) {
           std::construct_at(memory++, symbol_table->checkpoint());
