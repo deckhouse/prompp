@@ -441,12 +441,11 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) resolveState(state *cp
 		return errNilState
 	}
 
-	staleNansIdsMappings := make([]*cppbridge.IdsMapping, 0, a.head.NumberOfShards())
-	for shard := range a.head.RangeShards() {
-		staleNansIdsMappings = append(staleNansIdsMappings, shard.DstSrcLsIdsMapping())
-	}
-
-	state.Reconfigure(a.head.Generation(), a.head.NumberOfShards(), staleNansIdsMappings)
+	state.Reconfigure(a.head.Generation(), a.head.NumberOfShards(), func(maps []*cppbridge.IdsMapping) {
+		for shard := range a.head.RangeShards() {
+			maps[shard.ShardID()] = shard.DstSrcLsIdsMapping()
+		}
+	})
 
 	return nil
 }
