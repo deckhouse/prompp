@@ -180,14 +180,12 @@ func (h *Head[TShard, TGorutineShard]) CreateTask(
 	taskName string,
 	shardFn func(shard TGorutineShard) error,
 ) *task.Generic[TGorutineShard] {
-	ls := prometheus.Labels{"type_task": taskName}
-
 	return task.NewGeneric(
 		shardFn,
-		h.tasksCreated.With(ls),
-		h.tasksDone.With(ls),
-		h.tasksLive.With(ls),
-		h.tasksExecute.With(ls),
+		h.tasksCreated.WithLabelValues(taskName),
+		h.tasksDone.WithLabelValues(taskName),
+		h.tasksLive.WithLabelValues(taskName),
+		h.tasksExecute.WithLabelValues(taskName),
 	)
 }
 
