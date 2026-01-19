@@ -734,20 +734,18 @@ struct LabelSet {
         [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept {
           if constexpr (BareBones::concepts::is_dereferenceable<typename symbols_tables_type::value_type>) {
             const auto& symbols_table = *(*symbols_tables_ptr_)[names_it_.id()];
-            return make_pair(*names_it_, symbols_table[*values_it_]);
+            return {*names_it_, symbols_table[*values_it_]};
           } else {
             const auto& symbols_table = (*symbols_tables_ptr_)[names_it_.id()];
-            return make_pair(*names_it_, symbols_table[*values_it_]);
+            return {*names_it_, symbols_table[*values_it_]};
           }
         }
 
         [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t name_id() const noexcept { return names_it_.id(); }
-
         [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t value_id() const noexcept { return *values_it_; }
       };
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type(symbols_tables_ptr_, label_name_set_.begin(), values_begin_); }
-
       [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type(symbols_tables_ptr_, label_name_set_.end(), values_iterator_type()); }
 
       template <class T>
