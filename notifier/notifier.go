@@ -40,6 +40,7 @@ import (
 	"github.com/prometheus/prometheus/discovery/targetgroup"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
 const (
@@ -102,6 +103,15 @@ func (a *Alert) ResolvedAt(ts time.Time) bool {
 	return !a.EndsAt.After(ts)
 }
 
+// Equal asserts that two Alert are equal.
+func (a *Alert) Equal(other *Alert) bool {
+	return a.GeneratorURL == other.GeneratorURL &&
+		a.EndsAt.Equal(other.EndsAt) &&
+		a.StartsAt.Equal(other.StartsAt) &&
+		labels.Equal(a.Annotations, other.Annotations) &&
+		labels.Equal(a.Labels, other.Labels)
+}
+
 // Manager is responsible for dispatching alert notifications to an
 // alert manager service.
 type Manager struct {
@@ -124,7 +134,7 @@ type Manager struct {
 type Options struct {
 	QueueCapacity   int
 	DrainOnShutdown bool
-	ExternalLabels  labels.Labels
+	ExternalLabels  cppbridge.Labels // PP_CHANGES.md: rebuild on cpp
 	RelabelConfigs  []*relabel.Config
 	// Used for sending HTTP requests to the Alertmanager.
 	Do func(ctx context.Context, client *http.Client, req *http.Request) (*http.Response, error)
@@ -450,13 +460,13 @@ func (n *Manager) Send(alerts ...*Alert) {
 	n.setMore()
 }
 
-func relabelAlerts(relabelConfigs []*relabel.Config, externalLabels labels.Labels, alerts []*Alert) []*Alert {
+func relabelAlerts(relabelConfigs []*relabel.Config, externalLabels cppbridge.Labels, alerts []*Alert) []*Alert { // PP_CHANGES.md: rebuild on cpp
 	lb := labels.NewBuilder(labels.EmptyLabels())
 	var relabeledAlerts []*Alert
 
 	for _, a := range alerts {
 		lb.Reset(a.Labels)
-		externalLabels.Range(func(l labels.Label) {
+		externalLabels.Range(func(l cppbridge.Label) { // PP_CHANGES.md: rebuild on cpp
 			if a.Labels.Get(l.Name) == "" {
 				lb.Set(l.Name, l.Value)
 			}
@@ -557,7 +567,7 @@ func (n *Manager) sendAll(alerts ...*Alert) bool {
 		}
 
 		if len(ams.cfg.AlertRelabelConfigs) > 0 {
-			amAlerts = relabelAlerts(ams.cfg.AlertRelabelConfigs, labels.Labels{}, alerts)
+			amAlerts = relabelAlerts(ams.cfg.AlertRelabelConfigs, cppbridge.Labels{}, alerts) // PP_CHANGES.md: rebuild on cpp
 			if len(amAlerts) == 0 {
 				ams.mtx.RUnlock()
 				continue

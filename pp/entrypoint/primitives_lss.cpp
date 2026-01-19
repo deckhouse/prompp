@@ -15,6 +15,9 @@ using entrypoint::head::LssType;
 using entrypoint::head::LssVariantPtr;
 using entrypoint::head::QueryableEncodingBimap;
 
+using Bitset = BareBones::Bitset;
+using BitsetPtr = std::unique_ptr<Bitset>;
+
 extern "C" void prompp_primitives_lss_ctor(void* args, void* res) {
   struct Arguments {
     LssType lss_type;
@@ -61,6 +64,17 @@ PROMPP_ALWAYS_INLINE FindOrEmplaceResult find_or_emplace(auto& lss, const auto& 
   }
 }
 
+template <class Lss>
+PROMPP_ALWAYS_INLINE FindOrEmplaceResult find_or_emplace(auto& lss, const auto& label_set, const uint64_t hash) {
+  if constexpr (Lss::kIsReadOnly) {
+    throw BareBones::Exception(0x1b877a0ab46a69a6, "lss is readonly");
+  } else {
+    const entrypoint::head::ReallocationsDetector reallocation_detector(lss);
+    const auto ls_id = lss.find_or_emplace(label_set, hash);
+    return {.ls_id = ls_id, .lss_has_reallocations = reallocation_detector.has_reallocations()};
+  }
+}
+
 extern "C" void prompp_primitives_lss_find_or_emplace(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
@@ -86,6 +100,7 @@ extern "C" void prompp_primitives_lss_find_or_emplace_builder(void* args, void* 
   };
 
   const auto in = static_cast<Arguments*>(args);
+
   new (res) FindOrEmplaceResult(std::visit(
       [&builder = in->builder]<typename Lss>(Lss& lss) {
         static const entrypoint::head::ReadonlyLss::value_type empty_label_set;
@@ -94,6 +109,128 @@ extern "C" void prompp_primitives_lss_find_or_emplace_builder(void* args, void* 
         return find_or_emplace<Lss>(lss, LabelSetBuilder{label_set, builder.sorted_add, builder.sorted_del});
       },
       *in->lss));
+}
+
+extern "C" void prompp_primitives_lss_find_or_emplace_from_builder(void* args, void* res) {
+  using PromPP::Primitives::Go::LabelSetBuilder;
+  using PromPP::Primitives::Go::SliceView;
+
+  struct Arguments {
+    LssVariantPtr lss;
+    LssVariantPtr readonly_lss;
+    BitsetPtr bitset;
+    SliceView<PromPP::Primitives::Go::Label> sorted_add;
+    SliceView<PromPP::Primitives::Go::String> sorted_del;
+    uint64_t hash;
+    uint32_t ls_id;
+  };
+
+  struct Result {
+    LssVariantPtr lss_ro_ptr;
+    uint32_t ls_id;
+    size_t length;
+    bool lss_has_reallocations;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  auto out = new (res) Result();
+
+  std::visit(
+      [in, out]<typename Lss>(Lss& lss) {
+        static const entrypoint::head::ReadonlyLss::value_type empty_label_set;
+        const auto& label_set = in->readonly_lss ? std::get<entrypoint::head::ReadonlyLss>(*in->readonly_lss)[in->ls_id] : empty_label_set;
+
+        const auto result = find_or_emplace<Lss>(lss, LabelSetBuilder{label_set, in->sorted_add, in->sorted_del}, in->hash);
+        if (in->bitset != nullptr) [[likely]] {
+          if (result.ls_id >= in->bitset->size()) [[likely]] {
+            in->bitset->resize(result.ls_id + 1);
+          } else [[unlikely]] {
+            in->bitset->set(result.ls_id);
+          }
+        }
+
+        out->ls_id = result.ls_id;
+        out->length = lss[out->ls_id].size();
+        out->lss_has_reallocations = result.lss_has_reallocations;
+      },
+      *in->lss);
+
+  if (out->lss_has_reallocations) [[unlikely]] {
+    out->lss_ro_ptr = entrypoint::head::create_readonly_lss(*in->lss);
+  }
+}
+
+extern "C" void prompp_primitives_lss_find_from_builder_with_bitset(void* args, void* res) {
+  using PromPP::Primitives::Go::LabelSetBuilder;
+  using PromPP::Primitives::Go::SliceView;
+
+  struct Arguments {
+    LssVariantPtr lss;
+    LssVariantPtr readonly_lss;
+    BitsetPtr bitset;
+    SliceView<PromPP::Primitives::Go::Label> sorted_add;
+    SliceView<PromPP::Primitives::Go::String> sorted_del;
+    uint64_t hash;
+    uint32_t ls_id;
+  };
+  struct Result {
+    size_t length;
+    uint32_t ls_id;
+    bool has{false};
+  };
+
+  auto in = static_cast<Arguments*>(args);
+
+  std::visit(
+      [in, res]<typename Lss>(Lss& lss) {
+        if constexpr (!std::same_as<Lss, entrypoint::head::ReadonlyLss>) {
+          static const entrypoint::head::ReadonlyLss::value_type empty_label_set;
+          const auto& label_set = in->readonly_lss ? std::get<entrypoint::head::ReadonlyLss>(*in->readonly_lss)[in->ls_id] : empty_label_set;
+
+          std::optional<uint32_t> ls_id = lss.find(LabelSetBuilder{label_set, in->sorted_add, in->sorted_del}, in->hash);
+
+          if (ls_id.has_value()) {
+            if (in->bitset != nullptr) [[likely]] {
+              in->bitset->set_atomic(ls_id.value());
+            }
+
+            new (res) Result{.length = lss[ls_id.value()].size(), .ls_id = ls_id.value(), .has = ls_id.has_value()};
+          }
+
+          return;
+        }
+      },
+      *in->lss);
+}
+
+extern "C" void prompp_primitives_lss_find_from_builder(void* args, void* res) {
+  using PromPP::Primitives::Go::LabelSetBuilder;
+  using PromPP::Primitives::Go::SliceView;
+
+  struct Arguments {
+    LssVariantPtr lss;
+    LssVariantPtr readonly_lss;
+    SliceView<PromPP::Primitives::Go::Label> sorted_add;
+    SliceView<PromPP::Primitives::Go::String> sorted_del;
+    uint64_t hash;
+    uint32_t ls_id;
+  };
+  struct Result {
+    size_t length;
+    uint32_t ls_id;
+    bool has{false};
+  };
+
+  auto in = static_cast<Arguments*>(args);
+  auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
+  static const entrypoint::head::ReadonlyLss::value_type empty_label_set;
+  const auto& label_set = in->readonly_lss ? std::get<entrypoint::head::ReadonlyLss>(*in->readonly_lss)[in->ls_id] : empty_label_set;
+
+  std::optional<uint32_t> ls_id = lss.find(LabelSetBuilder{label_set, in->sorted_add, in->sorted_del}, in->hash);
+
+  if (ls_id.has_value()) {
+    new (res) Result{.length = lss[ls_id.value()].size(), .ls_id = ls_id.value(), .has = ls_id.has_value()};
+  }
 }
 
 struct LssQueryResult {
@@ -285,10 +422,68 @@ extern "C" void prompp_primitives_readonly_lss_copy_added_series(uint64_t source
   copier.copy_added_series_and_build_indexes();
 }
 
+//
+// Bitset
+//
+
+extern "C" void prompp_primitives_bitset_ctor(void* res) {
+  struct Result {
+    BitsetPtr bitset;
+  };
+
+  new (res) Result{.bitset = std::make_unique<Bitset>()};
+}
+
+extern "C" void prompp_primitives_bitset_dtor(void* args) {
+  struct Arguments {
+    BitsetPtr bitset;
+  };
+
+  static_cast<Arguments*>(args)->~Arguments();
+}
+
 void prompp_primitives_free_ls_ids_mapping(void* args) {
   struct Arguments {
     LsIdsSlicePtr ls_ids_mapping;
   };
 
   static_cast<Arguments*>(args)->~Arguments();
+}
+
+extern "C" void prompp_primitives_lss_with_snapshot_stats(void* args, void* res) {
+  using PromPP::Primitives::Go::LabelSetBuilder;
+  using PromPP::Primitives::Go::SliceView;
+
+  struct Arguments {
+    LssVariantPtr lss;
+    BitsetPtr bitset;
+    bool reset;
+  };
+
+  struct Result {
+    uint64_t allocated_memory;
+    size_t lss_size;
+    uint32_t bitset_count{0};
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  auto out = new (res) Result();
+
+  std::visit(
+      [in, out]<typename Lss>(Lss& lss) {
+        out->lss_size = lss.size();
+
+        if (!in->reset) [[unlikely]] {
+          out->allocated_memory = lss.allocated_memory();
+        }
+      },
+      *in->lss);
+
+  if (in->bitset != nullptr) [[likely]] {
+    out->bitset_count = in->bitset->popcount();
+
+    if (in->reset) [[unlikely]] {
+      in->bitset->reset_all();
+    }
+  }
 }

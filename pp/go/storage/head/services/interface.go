@@ -189,6 +189,9 @@ type Shard interface {
 	// LSSAllocatedMemory return size of allocated memory for labelset storages.
 	LSSAllocatedMemory() uint64
 
+	// LSSCacheStats returns current bitset count and cache size.
+	LSSCacheStats() (uint64, uint32)
+
 	// MergeOutOfOrderChunks merge chunks with out of order data chunks in [DataStorage].
 	MergeOutOfOrderChunks()
 

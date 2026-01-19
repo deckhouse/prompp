@@ -8,6 +8,7 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp-pkg/model"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/hatracker"
@@ -260,6 +261,46 @@ func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) 
 func (ar *Adapter) Close() error {
 	ar.haTracker.Destroy()
 	return nil
+}
+
+// FindByHash label set by hash in cache.
+func (ar *Adapter) FindByHash(
+	builderSortedAdd []cppbridge.Label,
+	builderSortedDel []string,
+	builderSnapshot *cppbridge.LabelSetSnapshot,
+	hash uint64,
+	builderLSID uint32,
+) (labels.Labels, bool) {
+	return querier.FindByHash(
+		ar.proxy.Get(),
+		builderSortedAdd,
+		builderSortedDel,
+		builderSnapshot,
+		hash,
+		builderLSID,
+	)
+}
+
+// FindFromBuilder label set from builder in lss, if not found return EmptyLabels.
+//
+//revive:disable-next-line:flag-parameter this is not a flag, but a parameter
+func (ar *Adapter) FindFromBuilder(
+	builderSortedAdd []cppbridge.Label,
+	builderSortedDel []string,
+	builderSnapshot *cppbridge.LabelSetSnapshot,
+	hash uint64,
+	builderLSID uint32,
+	skipCache bool,
+) (labels.Labels, bool) {
+	return querier.FindFromBuilder(
+		ar.proxy.Get(),
+		builderSortedAdd,
+		builderSortedDel,
+		builderSnapshot,
+		hash,
+		builderLSID,
+		skipCache,
+	)
 }
 
 // HeadQuerier returns [storage.Querier] from active head.

@@ -346,13 +346,15 @@ func (p *MemPostings) Add(id storage.SeriesRef, lset labels.Labels) {
 }
 
 func (p *MemPostings) addFor(id storage.SeriesRef, l labels.Label) {
-	nm, ok := p.m[l.Name]
+	lName := strings.Clone(l.Name)   // PP_CHANGES.md: rebuild on cpp
+	lValue := strings.Clone(l.Value) // PP_CHANGES.md: rebuild on cpp
+	nm, ok := p.m[lName]             // PP_CHANGES.md: rebuild on cpp
 	if !ok {
 		nm = map[string][]storage.SeriesRef{}
-		p.m[l.Name] = nm
+		p.m[lName] = nm // PP_CHANGES.md: rebuild on cpp
 	}
-	list := append(nm[l.Value], id)
-	nm[l.Value] = list
+	list := append(nm[lValue], id)
+	nm[lValue] = list
 
 	if !p.ordered {
 		return

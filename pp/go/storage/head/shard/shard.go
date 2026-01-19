@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
@@ -73,6 +74,12 @@ func (s *Shard) AppendInnerSeriesSlice(innerSeriesSlice []cppbridge.InnerSeries)
 
 // Close closes the wal segmentWriter.
 func (s *Shard) Close() error {
+	if s.lss != nil {
+		s.lss.Stop()
+	}
+
+	s.lss.Outdate()
+
 	err := s.wal.Close()
 
 	if s.unloadedDataStorage != nil {
@@ -104,6 +111,49 @@ func (s *Shard) LSS() *LSS {
 // LSSAllocatedMemory return size of allocated memory for labelset storages.
 func (s *Shard) LSSAllocatedMemory() uint64 {
 	return s.lss.AllocatedMemory()
+}
+
+// LSSCacheStats returns current bitset count and cache size.
+func (s *Shard) LSSCacheStats() (cacheSize uint64, cacheBitsetCount uint32) {
+	return s.lss.CacheStats()
+}
+
+// LSSFindByHash find label set by hash in cache.
+func (s *Shard) LSSFindByHash(
+	hash uint64,
+	builderSortedAdd []cppbridge.Label,
+	builderSortedDel []string,
+	builderSnapshot *cppbridge.LabelSetSnapshot,
+	builderLSID uint32,
+) (labels.Labels, bool) {
+	return s.lss.FindByHash(
+		hash,
+		builderSortedAdd,
+		builderSortedDel,
+		builderSnapshot,
+		builderLSID,
+	)
+}
+
+// LSSFindFromBuilder label set from builder in lss, return length ls, lsid and bool ok.
+//
+//revive:disable-next-line:flag-parameter this is not a flag, but a parameter
+func (s *Shard) LSSFindFromBuilder(
+	sortedAdd []cppbridge.Label,
+	sortedDel []string,
+	snapshot *cppbridge.LabelSetSnapshot,
+	hash uint64,
+	lsID uint32,
+	skipCache bool,
+) (labels.Labels, bool) {
+	return s.lss.FindFromBuilder(
+		sortedAdd,
+		sortedDel,
+		snapshot,
+		hash,
+		lsID,
+		skipCache,
+	)
 }
 
 // LSSWithLock calls fn on raws [cppbridge.LabelSetStorage] with write lock.

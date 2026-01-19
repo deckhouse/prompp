@@ -254,6 +254,15 @@ func (h *Head[TShard, TGorutineShard]) SetReadOnly() {
 	atomic.StoreUint32(&h.readOnly, 1)
 }
 
+// ShardByID returns the [Shard] by ID.
+func (h *Head[TShard, TGorutineShard]) ShardByID(shardID uint16) TShard {
+	if int(shardID) >= len(h.shards) {
+		panic(fmt.Sprintf("shardID %d is out of range", shardID))
+	}
+
+	return h.shards[shardID]
+}
+
 // String serialize as string.
 func (h *Head[TShard, TGorutineShard]) String() string {
 	return fmt.Sprintf("{id: %s, generation: %d}", h.id, h.generation)

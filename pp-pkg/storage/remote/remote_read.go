@@ -13,6 +13,7 @@ import (
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/prometheus/prometheus/util/logging"
@@ -86,7 +87,7 @@ func (s *RemoteRead) ApplyConfig(conf *config.Config) error {
 
 		externalLabels := conf.GlobalConfig.ExternalLabels
 		if !rrConf.FilterExternalLabels {
-			externalLabels = labels.EmptyLabels()
+			externalLabels = cppbridge.EmptyLabels() // PP_CHANGES.md: rebuild on cpp
 		}
 		queryables = append(queryables, remote.NewSampleAndChunkQueryableClient(
 			c,

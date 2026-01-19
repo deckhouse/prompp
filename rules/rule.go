@@ -77,4 +77,7 @@ type Rule interface {
 	// any other rule in the group. In case this function returns false there's no such guarantee, which
 	// means the rule may or may not depend on other rules.
 	NoDependencyRules() bool
+
+	// RenewLabelsSnapshot renew labels and annotations snapshots.
+	RenewLabelsSnapshot() // PP_CHANGES.md: rebuild on cpp
 }

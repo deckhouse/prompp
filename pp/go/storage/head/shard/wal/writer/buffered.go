@@ -32,14 +32,15 @@ type SegmentWriterFN[TSegment any] func(writer io.Writer, segment TSegment) (n i
 
 // Buffered writer for segments.
 type Buffered[TSegment any] struct {
-	shardID        uint16
-	segments       []TSegment
-	buffer         *bytes.Buffer
-	notifier       SegmentIsWrittenNotifier
-	swriter        SegmentWriterFN[TSegment]
-	writer         FileWriter
-	currentSize    int64
-	writeCompleted bool
+	shardID            uint16
+	segments           []TSegment
+	buffer             *bytes.Buffer
+	notifier           SegmentIsWrittenNotifier
+	swriter            SegmentWriterFN[TSegment]
+	writer             FileWriter
+	currentSize        int64
+	needToResetCounter uint32
+	writeCompleted     bool
 }
 
 // NewBuffered init new [Buffered].
@@ -56,7 +57,7 @@ func NewBuffered[TSegment any](
 
 	return &Buffered[TSegment]{
 		shardID:        shardID,
-		buffer:         bytes.NewBuffer(nil),
+		buffer:         bytes.NewBuffer(make([]byte, 0, 4096)), //revive:disable-line:add-constant // 4096 - 4KB
 		notifier:       notifier,
 		swriter:        swriter,
 		writer:         writer,
@@ -65,7 +66,7 @@ func NewBuffered[TSegment any](
 	}, nil
 }
 
-// Close closes the writer [WriteSyncCloser].
+// Close closes the writer [FileWriter].
 func (w *Buffered[TSegment]) Close() error {
 	return w.writer.Close()
 }
@@ -75,7 +76,7 @@ func (w *Buffered[TSegment]) CurrentSize() int64 {
 	return atomic.LoadInt64(&w.currentSize)
 }
 
-// Flush buffer and collected segments to [WriteSyncCloser].
+// Flush buffer and collected segments to [FileWriter].
 func (w *Buffered[TSegment]) Flush() error {
 	if !w.writeCompleted {
 		if err := w.flushBuffer(); err != nil {
@@ -105,7 +106,7 @@ func (w *Buffered[TSegment]) Flush() error {
 	return nil
 }
 
-// Sync commits the current contents of the [WriteSyncCloser] and notify [SegmentIsWrittenNotifier].
+// Sync commits the current contents of the [FileWriter] and notify [SegmentIsWrittenNotifier].
 func (w *Buffered[TSegment]) Sync() error {
 	if err := w.writer.Sync(); err != nil {
 		return fmt.Errorf("writer sync: %w", err)
@@ -122,7 +123,7 @@ func (w *Buffered[TSegment]) Write(segment TSegment) error {
 	return nil
 }
 
-// flushBuffer write the contents from buffer to [WriteSyncCloser].
+// flushBuffer write the contents from buffer to [FileWriter].
 func (w *Buffered[TSegment]) flushBuffer() error {
 	n, err := w.buffer.WriteTo(w.writer)
 	atomic.AddInt64(&w.currentSize, n)
@@ -130,10 +131,12 @@ func (w *Buffered[TSegment]) flushBuffer() error {
 		return fmt.Errorf("buffer write: %w", err)
 	}
 
+	w.resetIfNeed(n)
+
 	return nil
 }
 
-// writeToBufferAndFlush write [Segment] as slice byte to buffer and flush to [WriteSyncCloser].
+// writeToBufferAndFlush write [Segment] as slice byte to buffer and flush to [FileWriter].
 func (w *Buffered[TSegment]) writeToBufferAndFlush(segment TSegment) (encoded bool, err error) {
 	if _, err := w.swriter(w.buffer, segment); err != nil {
 		w.buffer.Reset()
@@ -148,4 +151,24 @@ func (w *Buffered[TSegment]) writeToBufferAndFlush(segment TSegment) (encoded bo
 	}
 
 	return true, nil
+}
+
+// resetIfNeed reset buffer if need.
+func (w *Buffered[TSegment]) resetIfNeed(n int64) {
+	// small buffer, no need to reset
+	if n < 1024 { //revive:disable-line:add-constant // 1024 - 1KB
+		return
+	}
+
+	if int64(w.buffer.Cap()) >= n*2 { //revive:disable-line:add-constant // n*2 - x2
+		w.needToResetCounter++
+		if w.needToResetCounter >= 3 { //revive:disable-line:add-constant // 3 - reset counter
+			w.needToResetCounter = 0
+			w.buffer = bytes.NewBuffer(make([]byte, 0, n))
+		}
+
+		return
+	}
+
+	w.needToResetCounter = 0
 }

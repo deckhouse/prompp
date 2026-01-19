@@ -488,6 +488,7 @@ type blockBaseSeriesSet struct {
 }
 
 func (b *blockBaseSeriesSet) Next() bool {
+	b.builder.SetSkipCache() // PP_CHANGES.md: rebuild on cpp
 	for b.p.Next() {
 		if err := b.index.Series(b.p.At(), &b.builder, &b.bufChks); err != nil {
 			// Postings may be stale. Skip if no underlying series exists.

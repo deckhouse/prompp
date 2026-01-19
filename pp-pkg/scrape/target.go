@@ -190,6 +190,22 @@ func (t *Target) SetDiscoveredLabels(l labels.Labels) {
 	t.discoveredLabels = l
 }
 
+// UpdateLabels update labels from other Target.
+func (t *Target) UpdateLabels(other *Target) {
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+	t.labels = other.labels
+	t.discoveredLabels = other.discoveredLabels
+}
+
+// RenewLabelsSnapshot renew labels and discoveredLabels snapshots.
+func (t *Target) RenewLabelsSnapshot() {
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+	t.labels.RenewSnapshot()
+	t.discoveredLabels.RenewSnapshot()
+}
+
 // URL returns a copy of the target's URL.
 func (t *Target) URL() *url.URL {
 	params := url.Values{}
@@ -485,6 +501,7 @@ func HashFromGroup(tg *targetgroup.Group) uint64 {
 	for i := range tg.Targets {
 		writeLabelSet(tg.Targets[i])
 	}
+	_, _ = res.WriteString(tg.Source)
 	return res.Sum64()
 }
 

@@ -31,6 +31,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/util/stats"
@@ -241,7 +242,7 @@ func (m *rulesRetrieverMock) CreateAlertingRules() {
 		0,
 		labels.Labels{},
 		labels.Labels{},
-		labels.Labels{},
+		cppbridge.Labels{},
 		"",
 		true,
 		log.NewNopLogger(),
@@ -253,7 +254,7 @@ func (m *rulesRetrieverMock) CreateAlertingRules() {
 		0,
 		labels.Labels{},
 		labels.Labels{},
-		labels.Labels{},
+		cppbridge.Labels{},
 		"",
 		true,
 		log.NewNopLogger(),
@@ -265,7 +266,7 @@ func (m *rulesRetrieverMock) CreateAlertingRules() {
 		0,
 		labels.FromStrings("name", "tm5"),
 		labels.Labels{},
-		labels.FromStrings("name", "tm5"),
+		cppbridge.FromStrings("name", "tm5"),
 		"",
 		false,
 		log.NewNopLogger(),
@@ -277,7 +278,7 @@ func (m *rulesRetrieverMock) CreateAlertingRules() {
 		0,
 		labels.FromStrings("testlabel", "rule"),
 		labels.Labels{},
-		labels.Labels{},
+		cppbridge.Labels{},
 		"",
 		true,
 		log.NewNopLogger(),
@@ -289,7 +290,7 @@ func (m *rulesRetrieverMock) CreateAlertingRules() {
 		0,
 		labels.FromStrings("templatedlabel", "{{ $externalURL }}"),
 		labels.Labels{},
-		labels.Labels{},
+		cppbridge.Labels{},
 		"",
 		true,
 		log.NewNopLogger(),

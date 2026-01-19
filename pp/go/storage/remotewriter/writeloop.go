@@ -120,6 +120,28 @@ func (wl *writeLoop) run(ctx context.Context) {
 	}
 }
 
+// createClient creates a new [remote.WriteClient].
+//
+//nolint:gocritic // hugeParam // this is a constructor for new client
+func createClient(config DestinationConfig) (client remote.WriteClient, err error) {
+	clientConfig := remote.ClientConfig{
+		URL:              config.URL,
+		Timeout:          config.RemoteTimeout,
+		HTTPClientConfig: config.HTTPClientConfig,
+		SigV4Config:      config.SigV4Config,
+		AzureADConfig:    config.AzureADConfig,
+		Headers:          config.Headers,
+		RetryOnRateLimit: true,
+	}
+
+	client, err = remote.NewWriteClient(config.Name, &clientConfig)
+	if err != nil {
+		return nil, fmt.Errorf("falied to create client: %w", err)
+	}
+
+	return client, nil
+}
+
 // write writes data from iterator to the remote write storage.
 func (*writeLoop) write(ctx context.Context, iterator *Iterator) (err error) {
 	msgChannel := make(chan *Message)
@@ -244,42 +266,20 @@ func (wl *writeLoop) nextIterator(ctx context.Context, protobufWriter ProtobufWr
 	return i, nil
 }
 
-// makeCorruptMarker set marker on head is corrupted.
-func (wl *writeLoop) makeCorruptMarker() CorruptMarker {
-	return CorruptMarkerFn(func(headID string) error {
-		_, err := wl.catalog.SetCorrupted(headID)
-		return err
-	})
-}
-
-// createClient creates a new [remote.WriteClient].
-//
-//nolint:gocritic // hugeParam // this is a constructor for new client
-func createClient(config DestinationConfig) (client remote.WriteClient, err error) {
-	clientConfig := remote.ClientConfig{
-		URL:              config.URL,
-		Timeout:          config.RemoteTimeout,
-		HTTPClientConfig: config.HTTPClientConfig,
-		SigV4Config:      config.SigV4Config,
-		AzureADConfig:    config.AzureADConfig,
-		Headers:          config.Headers,
-		RetryOnRateLimit: true,
-	}
-
-	client, err = remote.NewWriteClient(config.Name, &clientConfig)
-	if err != nil {
-		return nil, fmt.Errorf("falied to create client: %w", err)
-	}
-
-	return client, nil
-}
-
 // CorruptMarkerFn func for mark head as corrupted by ID.
 type CorruptMarkerFn func(headID string) error
 
 // MarkCorrupted mark head as corrupted by ID.
 func (fn CorruptMarkerFn) MarkCorrupted(headID string) error {
 	return fn(headID)
+}
+
+// makeCorruptMarker set marker on head is corrupted.
+func (wl *writeLoop) makeCorruptMarker() CorruptMarker {
+	return CorruptMarkerFn(func(headID string) error {
+		_, err := wl.catalog.SetCorrupted(headID)
+		return err
+	})
 }
 
 // nextHead returns next head record from catalog.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"sync"
 
 	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
@@ -32,9 +33,10 @@ type Shard interface {
 // Head stores and manages shard, handles reads and writes of time series data for transaction operations.
 // Append method are goroutine-unsafe.
 type Head[TShard Shard, TGShard Shard] struct {
-	id     string
-	shard  TShard
-	gshard TGShard
+	id        string
+	shard     TShard
+	gshard    TGShard
+	closeOnce sync.Once
 }
 
 // NewHead init new [Head].
@@ -44,12 +46,14 @@ func NewHead[TShard Shard, TGShard Shard](
 	gshard TGShard,
 ) *Head[TShard, TGShard] {
 	h := &Head[TShard, TGShard]{
-		id:     id,
-		shard:  shard,
-		gshard: gshard,
+		id:        id,
+		shard:     shard,
+		gshard:    gshard,
+		closeOnce: sync.Once{},
 	}
 
 	runtime.SetFinalizer(h, func(h *Head[TShard, TGShard]) {
+		_ = h.shard.Close()
 		logger.Debugf("[Head] %s destroyed", h.String())
 	})
 
@@ -59,12 +63,23 @@ func NewHead[TShard Shard, TGShard Shard](
 }
 
 // AcquireQuery implementation of the working [Head], no blocking.
-func (*Head[TShard, TGShard]) AcquireQuery(ctx context.Context) (func(), error) {
+func (*Head[TShard, TGShard]) AcquireQuery(_ context.Context) (func(), error) {
 	return noopRelease, nil
 }
 
+// Close closes wals, query semaphore for the inability to get query and clear metrics.
+func (h *Head[TShard, TGorutineShard]) Close() (err error) {
+	h.closeOnce.Do(func() {
+		err = h.shard.Close()
+
+		logger.Debugf("[Head] %s is closed", h.String())
+	})
+
+	return err
+}
+
 // CreateTask create a task for operations on the [Head] shards.
-func (*Head[TShard, TGShard]) CreateTask(taskName string, shardFn func(shard TGShard) error) *task.Generic[TGShard] {
+func (*Head[TShard, TGShard]) CreateTask(_ string, shardFn func(shard TGShard) error) *task.Generic[TGShard] {
 	return task.NewTransactionGeneric(shardFn)
 }
 

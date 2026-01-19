@@ -147,13 +147,14 @@ func TestSendAlerts(t *testing.T) {
 	}{
 		{
 			in: []*rules.Alert{
-				{
-					Labels:      labels.FromStrings("l1", "v1"),
-					Annotations: labels.FromStrings("a2", "v2"),
-					ActiveAt:    time.Unix(1, 0),
-					FiredAt:     time.Unix(2, 0),
-					ValidUntil:  time.Unix(3, 0),
-				},
+				rules.NewAlert(
+					labels.FromStrings("l1", "v1"),
+					labels.FromStrings("a2", "v2"),
+					time.Unix(1, 0),
+					time.Unix(2, 0),
+					time.Time{},
+					time.Unix(3, 0),
+				),
 			},
 			exp: []*notifier.Alert{
 				{
@@ -167,13 +168,14 @@ func TestSendAlerts(t *testing.T) {
 		},
 		{
 			in: []*rules.Alert{
-				{
-					Labels:      labels.FromStrings("l1", "v1"),
-					Annotations: labels.FromStrings("a2", "v2"),
-					ActiveAt:    time.Unix(1, 0),
-					FiredAt:     time.Unix(2, 0),
-					ResolvedAt:  time.Unix(4, 0),
-				},
+				rules.NewAlert(
+					labels.FromStrings("l1", "v1"),
+					labels.FromStrings("a2", "v2"),
+					time.Unix(1, 0),
+					time.Unix(2, 0),
+					time.Unix(4, 0),
+					time.Time{},
+				),
 			},
 			exp: []*notifier.Alert{
 				{
@@ -195,7 +197,8 @@ func TestSendAlerts(t *testing.T) {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			senderFunc := senderFunc(func(alerts ...*notifier.Alert) {
 				require.NotEmpty(t, tc.in, "sender called with 0 alert")
-				require.Equal(t, tc.exp, alerts)
+				require.True(t, tc.exp[0].Equal(alerts[0]))
+				// require.Equal(t, tc.exp, alerts)
 			})
 			rules.SendAlerts(senderFunc, "http://localhost:9090")(context.TODO(), "up", tc.in...)
 		})
@@ -496,7 +499,7 @@ func TestDocumentation(t *testing.T) {
 
 	generatedContent := strings.ReplaceAll(stdout.String(), filepath.Base(promPath), strings.TrimSuffix(filepath.Base(promPath), ".test"))
 
-	expectedContent, err := os.ReadFile(filepath.Join("..", "..", "docs", "command-line", "prometheus.md"))
+	expectedContent, err := os.ReadFile(filepath.Join("..", "..", "docs", "command-line", "prompp.md")) // PP_CHANGES.md: rebuild on cpp
 	require.NoError(t, err)
 
 	require.Equal(t, string(expectedContent), generatedContent, "Generated content does not match documentation. Hint: run `make cli-documentation`.")

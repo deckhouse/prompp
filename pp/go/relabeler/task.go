@@ -37,40 +37,11 @@ type GenericTask struct {
 	forLSS    bool
 }
 
-func NewGenericTask(
-	shardFn ShardFn,
-	created, done, live, execute prometheus.Counter,
-	forLSS bool,
-) *GenericTask {
-	t := &GenericTask{
-		shardFn:   shardFn,
-		wg:        sync.WaitGroup{},
-		createdTS: time.Now().UnixMicro(),
-		created:   created,
-		done:      done,
-		live:      live,
-		execute:   execute,
-		forLSS:    forLSS,
+// emprtyGenericTask init new empty GenericTask.
+func emprtyGenericTask() *GenericTask {
+	return &GenericTask{
+		wg: sync.WaitGroup{},
 	}
-	t.created.Inc()
-
-	return t
-}
-
-// NewReadOnlyGenericTask init new GenericTask for read only head.
-func NewReadOnlyGenericTask(shardFn ShardFn) *GenericTask {
-	t := &GenericTask{
-		shardFn: shardFn,
-		wg:      sync.WaitGroup{},
-	}
-
-	return t
-}
-
-// SetShardsNumber set shards number
-func (t *GenericTask) SetShardsNumber(number uint16) {
-	t.errs = make([]error, number)
-	t.wg.Add(int(number))
 }
 
 // ExecuteOnShard execute task on shard.
@@ -88,6 +59,30 @@ func (t *GenericTask) ExecuteOnShard(shard Shard) {
 // ForLSS indicates that the task is for operation on lss.
 func (t *GenericTask) ForLSS() bool {
 	return t.forLSS
+}
+
+// SetShardsNumber set shards number.
+func (t *GenericTask) SetShardsNumber(number uint16) {
+	if cap(t.errs) < int(number) {
+		t.errs = make([]error, number)
+	} else {
+		clear(t.errs[:cap(t.errs)])
+		t.errs = t.errs[:number]
+	}
+
+	t.wg.Add(int(number))
+}
+
+// SingleSetShardsNumber set shards number for single shard.
+func (t *GenericTask) SingleSetShardsNumber(number uint16) {
+	if cap(t.errs) < int(number) {
+		t.errs = make([]error, number)
+	} else {
+		clear(t.errs[:cap(t.errs)])
+		t.errs = t.errs[:number]
+	}
+
+	t.wg.Add(1)
 }
 
 // Wait for the task to complete on all shards.

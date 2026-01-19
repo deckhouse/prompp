@@ -253,7 +253,7 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 
 // initServices initializes services for startup.
 //
-//revive:disable-next-line:function-length // init contructor.
+//revive:disable-next-line:function-length // init constructor.
 func (m *Manager) initServices(
 	o *Options,
 	hcatalog *catalog.Catalog,
@@ -342,7 +342,7 @@ func (m *Manager) initServices(
 			return services.NewCommitter(
 				m.proxy,
 				committerMediator,
-				isNewHead(clock, hcatalog, o.CommitInterval),
+				isNewHead(clock, hcatalog, o.CommitInterval/2),
 			).Execute(committerCtx)
 		},
 		func(error) {

@@ -26,6 +26,7 @@ import (
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/annotations"
@@ -109,7 +110,7 @@ func TestNoDuplicateReadConfigs(t *testing.T) {
 
 func TestExternalLabelsQuerierAddExternalLabels(t *testing.T) {
 	tests := []struct {
-		el          labels.Labels
+		el          cppbridge.Labels
 		inMatchers  []*labels.Matcher
 		outMatchers []*labels.Matcher
 		added       []string
@@ -124,7 +125,7 @@ func TestExternalLabelsQuerierAddExternalLabels(t *testing.T) {
 			added: []string{},
 		},
 		{
-			el: labels.FromStrings("dc", "berlin-01", "region", "europe"),
+			el: cppbridge.FromStrings("dc", "berlin-01", "region", "europe"),
 			inMatchers: []*labels.Matcher{
 				labels.MustNewMatcher(labels.MatchEqual, "job", "api-server"),
 			},
@@ -136,7 +137,7 @@ func TestExternalLabelsQuerierAddExternalLabels(t *testing.T) {
 			added: []string{"dc", "region"},
 		},
 		{
-			el: labels.FromStrings("dc", "berlin-01", "region", "europe"),
+			el: cppbridge.FromStrings("dc", "berlin-01", "region", "europe"),
 			inMatchers: []*labels.Matcher{
 				labels.MustNewMatcher(labels.MatchEqual, "job", "api-server"),
 				labels.MustNewMatcher(labels.MatchEqual, "dc", "munich-02"),
@@ -251,7 +252,7 @@ func TestSampleAndChunkQueryableClient(t *testing.T) {
 		name             string
 		matchers         []*labels.Matcher
 		mint, maxt       int64
-		externalLabels   labels.Labels
+		externalLabels   cppbridge.Labels
 		requiredMatchers []*labels.Matcher
 		readRecent       bool
 		callback         startTimeCallback
@@ -287,7 +288,7 @@ func TestSampleAndChunkQueryableClient(t *testing.T) {
 				labels.MustNewMatcher(labels.MatchNotEqual, "a", "something"),
 			},
 			readRecent:     true,
-			externalLabels: labels.FromStrings("region", "europe"),
+			externalLabels: cppbridge.FromStrings("region", "europe"),
 
 			expectedQuery: &prompb.Query{
 				StartTimestampMs: 1,
@@ -310,7 +311,7 @@ func TestSampleAndChunkQueryableClient(t *testing.T) {
 				labels.MustNewMatcher(labels.MatchEqual, "region", "europe"),
 			},
 			readRecent:     true,
-			externalLabels: labels.FromStrings("region", "europe"),
+			externalLabels: cppbridge.FromStrings("region", "europe"),
 
 			expectedQuery: &prompb.Query{
 				StartTimestampMs: 1,
@@ -333,7 +334,7 @@ func TestSampleAndChunkQueryableClient(t *testing.T) {
 				labels.MustNewMatcher(labels.MatchEqual, "region", "us"),
 			},
 			readRecent:     true,
-			externalLabels: labels.FromStrings("region", "europe"),
+			externalLabels: cppbridge.FromStrings("region", "europe"),
 
 			expectedQuery: &prompb.Query{
 				StartTimestampMs: 1,

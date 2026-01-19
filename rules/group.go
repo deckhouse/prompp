@@ -226,6 +226,9 @@ func (g *Group) run(ctx context.Context) {
 	tick := time.NewTicker(g.interval)
 	defer tick.Stop()
 
+	// renewTimer := time.NewTimer(g.interval * 3) // PP_CHANGES.md: rebuild on cpp
+	// defer renewTimer.Stop()                     // PP_CHANGES.md: rebuild on cpp
+
 	defer func() {
 		if !g.markStale {
 			return
@@ -238,6 +241,7 @@ func (g *Group) run(ctx context.Context) {
 			}
 			// That can be garbage collected at this point.
 			g.seriesInPreviousEval = nil
+			g.seriesInCurrentEval = nil
 			// Wait for 2 intervals to give the opportunity to renamed rules
 			// to insert new series in the tsdb. At this point if there is a
 			// renamed rule, it should already be started.
@@ -305,6 +309,12 @@ func (g *Group) run(ctx context.Context) {
 				evalTimestamp = evalTimestamp.Add((missed + 1) * g.interval)
 
 				g.evalIterationFunc(ctx, g, evalTimestamp)
+
+				g.renewLabelsSnapshot() // PP_CHANGES.md: rebuild on cpp
+
+				// case <-renewTimer.C: // PP_CHANGES.md: rebuild on cpp
+				// 	g.renewLabelsSnapshot()
+				// 	renewTimer.Reset(g.interval * 2)
 			}
 		}
 	}
@@ -635,7 +645,7 @@ func (g *Group) RestoreForState(ts time.Time) {
 		alertRule.ForEachActiveAlert(func(a *Alert) {
 			var s storage.Series
 
-			s, ok := seriesByLabels[a.Labels.String()]
+			s, ok := seriesByLabels[a.Labels().String()] // PP_CHANGES.md: rebuild on cpp
 			if !ok {
 				return
 			}
@@ -691,7 +701,7 @@ func (g *Group) RestoreForState(ts time.Time) {
 			a.ActiveAt = restoredActiveAt
 			level.Debug(g.logger).Log("msg", "'for' state restored",
 				labels.AlertName, alertRule.Name(), "restored_time", a.ActiveAt.Format(time.RFC850),
-				"labels", a.Labels.String())
+				"labels", a.Labels().String()) // PP_CHANGES.md: rebuild on cpp
 		})
 
 		alertRule.SetRestored(true)
@@ -731,6 +741,32 @@ func (g *Group) Equals(ng *Group) bool {
 	}
 
 	return true
+}
+
+// renewLabelsSnapshot renew labels and annotations snapshots.
+func (g *Group) renewLabelsSnapshot() { // PP_CHANGES.md: rebuild on cpp
+	for _, r := range g.rules {
+		r.RenewLabelsSnapshot()
+	}
+
+	// g.labelsMtx.Lock()
+	for i := range g.staleSeries {
+		g.staleSeries[i].RenewSnapshot()
+	}
+
+	for _, s := range g.seriesInPreviousEval {
+		for _, l := range s {
+			l.RenewSnapshot()
+		}
+	}
+
+	for _, s := range g.seriesInCurrentEval {
+		for _, l := range s {
+			l.RenewSnapshot()
+		}
+	}
+
+	// g.labelsMtx.Unlock()
 }
 
 // GroupKey group names need not be unique across filenames.

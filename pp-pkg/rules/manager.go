@@ -206,7 +206,7 @@ func (m *Manager) Stop() {
 // Update the rule manager's state as the config requires. If
 // loading the new rules failed the old rule set is restored.
 // This method will no-op in case the manager is already stopped.
-func (m *Manager) Update(interval time.Duration, files []string, externalLabels labels.Labels, externalURL string, groupEvalIterationFunc GroupEvalIterationFunc) error {
+func (m *Manager) Update(interval time.Duration, files []string, externalLabels cppbridge.Labels, externalURL string, groupEvalIterationFunc GroupEvalIterationFunc) error {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
@@ -302,7 +302,11 @@ func (FileLoader) Parse(query string) (parser.Expr, error) { return parser.Parse
 
 // LoadGroups reads groups from a list of files.
 func (m *Manager) LoadGroups(
-	interval time.Duration, externalLabels labels.Labels, externalURL string, groupEvalIterationFunc GroupEvalIterationFunc, filenames ...string,
+	interval time.Duration,
+	externalLabels cppbridge.Labels,
+	externalURL string,
+	groupEvalIterationFunc GroupEvalIterationFunc,
+	filenames ...string,
 ) (map[string]*Group, []error) {
 	groups := make(map[string]*Group)
 
@@ -436,8 +440,8 @@ func SendAlerts(s Sender, externalURL string) NotifyFunc {
 		for _, alert := range alerts {
 			a := &notifier.Alert{
 				StartsAt:     alert.FiredAt,
-				Labels:       alert.Labels,
-				Annotations:  alert.Annotations,
+				Labels:       alert.Labels(),
+				Annotations:  alert.Annotations(),
 				GeneratorURL: externalURL + strutil.TableLinkForExpression(expr),
 			}
 			if !alert.ResolvedAt.IsZero() {
@@ -456,7 +460,7 @@ func SendAlerts(s Sender, externalURL string) NotifyFunc {
 
 // RuleDependencyController controls whether a set of rules have dependencies between each other.
 type RuleDependencyController interface {
-	// AnalyseRules analyses dependencies between the input rules. For each rule that it's guaranteed
+	// AnalyseRules analyzes dependencies between the input rules. For each rule that it's guaranteed
 	// not having any dependants and/or dependency, this function should call Rule.SetNoDependentRules(true)
 	// and/or Rule.SetNoDependencyRules(true).
 	AnalyseRules(rules []Rule)
@@ -465,7 +469,7 @@ type RuleDependencyController interface {
 type ruleDependencyController struct{}
 
 // AnalyseRules implements RuleDependencyController.
-func (c ruleDependencyController) AnalyseRules(rules []Rule) {
+func (ruleDependencyController) AnalyseRules(rules []Rule) {
 	depMap := buildDependencyMap(rules)
 	for _, r := range rules {
 		r.SetNoDependentRules(depMap.dependents(r) == 0)

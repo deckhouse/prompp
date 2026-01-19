@@ -30,6 +30,7 @@ import (
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/metadata"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/wlog"
 )
@@ -63,7 +64,7 @@ type WriteStorage struct {
 
 	watcherMetrics    *wlog.WatcherMetrics
 	liveReaderMetrics *wlog.LiveReaderMetrics
-	externalLabels    labels.Labels
+	externalLabels    cppbridge.Labels // PP_CHANGES.md: rebuild on cpp
 	dir               string
 	queues            map[string]*QueueManager
 	metadataInWAL     bool
@@ -142,7 +143,7 @@ func (rws *WriteStorage) ApplyConfig(conf *config.Config) error {
 
 	// Remote write queues only need to change if the remote write config or
 	// external labels change.
-	externalLabelUnchanged := labels.Equal(conf.GlobalConfig.ExternalLabels, rws.externalLabels)
+	externalLabelUnchanged := cppbridge.Equal(conf.GlobalConfig.ExternalLabels, rws.externalLabels) // PP_CHANGES.md: rebuild on cpp
 	rws.externalLabels = conf.GlobalConfig.ExternalLabels
 
 	newQueues := make(map[string]*QueueManager)

@@ -1,11 +1,10 @@
 package cppbridge_test
 
 import (
-	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"testing"
 	"unsafe"
 
-	"github.com/stretchr/testify/require"
+	"github.com/prometheus/prometheus/pp/go/storage/querier"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -123,7 +122,8 @@ func (s *HeadSuite) TestSerializedChunkRecoder() {
 	result := s.dataStorage.Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: timeInterval.MinT,
 		EndTimestampMs:   timeInterval.MaxT,
-		LabelSetIDs:      []uint32{0, 1}},
+		LabelSetIDs:      []uint32{0, 1},
+	},
 	)
 	recoder := cppbridge.NewSerializedChunkRecoder(result.SerializedData, timeInterval)
 
@@ -181,7 +181,7 @@ func (s *HeadSuite) TestInstantQuery() {
 	// Arrange
 	dataStorage := cppbridge.NewDataStorage()
 	encoder := cppbridge.NewHeadEncoderWithDataStorage(dataStorage)
-	var series = []struct {
+	series := []struct {
 		SeriesID uint32
 		cppbridge.Sample
 	}{
@@ -211,7 +211,7 @@ func (s *HeadSuite) TestInstantQuery() {
 	result := dataStorage.InstantQuery(targetTimestamp, seriesIDs, uintptr(unsafe.Pointer(unsafe.SliceData(instantSeries))))
 
 	// Assert
-	require.Equal(s.T(), cppbridge.DataStorageQueryStatusSuccess, result.Status)
+	s.Require().Equal(cppbridge.DataStorageQueryStatusSuccess, result.Status)
 
 	s.Equal(defaultTimestamp, instantSeries[0].Timestamp)
 	s.Equal(series[2].Sample, cppbridge.Sample{Timestamp: instantSeries[1].Timestamp, Value: instantSeries[1].Value})

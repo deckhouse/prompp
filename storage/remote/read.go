@@ -20,13 +20,14 @@ import (
 	"slices"
 
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/annotations"
 )
 
 type sampleAndChunkQueryableClient struct {
 	client           ReadClient
-	externalLabels   labels.Labels
+	externalLabels   cppbridge.Labels // PP_CHANGES.md: rebuild on cpp
 	requiredMatchers []*labels.Matcher
 	readRecent       bool
 	callback         startTimeCallback
@@ -35,7 +36,7 @@ type sampleAndChunkQueryableClient struct {
 // NewSampleAndChunkQueryableClient returns a storage.SampleAndChunkQueryable which queries the given client to select series sets.
 func NewSampleAndChunkQueryableClient(
 	c ReadClient,
-	externalLabels labels.Labels,
+	externalLabels cppbridge.Labels, // PP_CHANGES.md: rebuild on cpp
 	requiredMatchers []*labels.Matcher,
 	readRecent bool,
 	callback startTimeCallback,
@@ -129,7 +130,7 @@ type querier struct {
 	client     ReadClient
 
 	// Derived from configuration.
-	externalLabels   labels.Labels
+	externalLabels   cppbridge.Labels // PP_CHANGES.md: rebuild on cpp
 	requiredMatchers []*labels.Matcher
 }
 
@@ -181,8 +182,8 @@ func (q *querier) Select(ctx context.Context, sortSeries bool, hints *storage.Se
 // time series again.
 func (q querier) addExternalLabels(ms []*labels.Matcher) ([]*labels.Matcher, []string) {
 	el := make([]labels.Label, 0, q.externalLabels.Len())
-	q.externalLabels.Range(func(l labels.Label) {
-		el = append(el, l)
+	q.externalLabels.Range(func(l cppbridge.Label) { // PP_CHANGES.md: rebuild on cpp
+		el = append(el, labels.Label{Name: l.Name, Value: l.Value}) // PP_CHANGES.md: rebuild on cpp
 	})
 
 	// ms won't be sorted, so have to O(n^2) the search.

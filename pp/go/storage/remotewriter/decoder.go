@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
@@ -33,7 +32,7 @@ type Decoder struct {
 
 // NewDecoder init new [Decoder].
 func NewDecoder(
-	externalLabels labels.Labels,
+	externalLabels cppbridge.Labels,
 	relabelConfigs []*cppbridge.RelabelConfig,
 	shardID uint16,
 	encoderVersion uint8,
@@ -45,7 +44,7 @@ func NewDecoder(
 
 	lss := cppbridge.NewLssStorage()
 	outputDecoder := cppbridge.NewWALOutputDecoder(
-		LabelsToCppBridgeLabels(externalLabels),
+		externalLabels,
 		relabeler,
 		lss,
 		shardID,
@@ -88,16 +87,4 @@ func (d *Decoder) LoadFrom(reader io.Reader) error {
 // WriteTo writes output decoder state to io.Writer.
 func (d *Decoder) WriteTo(writer io.Writer) (int64, error) {
 	return d.outputDecoder.WriteTo(writer)
-}
-
-// LabelsToCppBridgeLabels converts [labels.Labels] to slice [cppbridge.Label].
-func LabelsToCppBridgeLabels(lbls labels.Labels) []cppbridge.Label {
-	result := make([]cppbridge.Label, 0, lbls.Len())
-	lbls.Range(func(l labels.Label) {
-		result = append(result, cppbridge.Label{
-			Name:  l.Name,
-			Value: l.Value,
-		})
-	})
-	return result
 }

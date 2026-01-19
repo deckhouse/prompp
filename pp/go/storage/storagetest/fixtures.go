@@ -6,10 +6,13 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 	"unsafe"
 
 	"github.com/jonboulle/clockwork"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -21,13 +24,31 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	promstorage "github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
-	"github.com/stretchr/testify/suite"
 )
 
 // TimeSeries test data.
 type TimeSeries struct {
 	Labels  labels.Labels
 	Samples []cppbridge.Sample
+}
+
+// String serialize time series to string.
+func (s *TimeSeries) String() string {
+	builder := strings.Builder{}
+
+	_, _ = builder.WriteString("timeSeries:{labels:")
+	_, _ = builder.WriteString(s.Labels.String())
+	_, _ = builder.WriteString(",samples:[")
+
+	for i := range s.Samples {
+		if i > 0 {
+			_, _ = builder.WriteString(",")
+		}
+		_, _ = builder.WriteString(fmt.Sprintf("{ts:%d, value:%f}", s.Samples[i].Timestamp, s.Samples[i].Value))
+	}
+	_, _ = builder.WriteString("]}")
+
+	return builder.String()
 }
 
 // AppendSamples add samples to time series.
@@ -229,4 +250,13 @@ func CreateCatalog(clock clockwork.Clock, logFilePath string, idGenerator catalo
 func CreateDataDirectory(dir string) (string, error) {
 	dataDir := filepath.Join(dir, "data")
 	return dataDir, os.MkdirAll(dataDir, os.ModeDir)
+}
+
+// TimeSeriesToString serialize time series to string.
+func TimeSeriesToString(timeSeries []TimeSeries) string {
+	res := make([]string, 0, len(timeSeries))
+	for i := range timeSeries {
+		res = append(res, timeSeries[i].String())
+	}
+	return strings.Join(res, ",")
 }

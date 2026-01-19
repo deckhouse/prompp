@@ -17,7 +17,7 @@ type LoadAndQueryWaiter[
 	TTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,
-	TShard Shard[TDataStorage, TLSS],
+	TShard GShard[TDataStorage, TLSS],
 	THead Head[TTask, TDataStorage, TLSS, TShard],
 ] struct {
 	waiter task.Waiter[shard.Task]
@@ -30,7 +30,7 @@ func NewLoadAndQueryWaiter[
 	TTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,
-	TShard Shard[TDataStorage, TLSS],
+	TShard GShard[TDataStorage, TLSS],
 	THead Head[TTask, TDataStorage, TLSS, TShard],
 ](head THead) LoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead] {
 	return LoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead]{

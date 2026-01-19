@@ -7,29 +7,39 @@ import (
 )
 
 const (
+	// NormalNaN represents a normal NaN as uint64.
 	NormalNaN uint64 = 0x7ff8000000000001
 
+	// StaleNaN represents a stale NaN as uint64.
 	StaleNaN uint64 = 0x7ff0000000000002
 )
 
+// IsStaleNaN returns true if the value is a stale NaN.
 func IsStaleNaN(v float64) bool {
 	return math.Float64bits(v) == StaleNaN
 }
 
 const (
-	MaxPointsInChunk            = 240
-	Uint32Size                  = 4
+	// MaxPointsInChunk the maximum number of points in a chunk.
+	MaxPointsInChunk = 240
+	// Uint32Size the size of a uint32.
+	Uint32Size = 4
+	// SerializedChunkMetadataSize the size of a serialized chunk metadata.
 	SerializedChunkMetadataSize = 13
 
-	DataStorageQueryStatusSuccess      uint8 = 0
+	// DataStorageQueryStatusSuccess the status when the query is successful.
+	DataStorageQueryStatusSuccess uint8 = 0
+	// DataStorageQueryStatusNeedDataLoad the status when the query needs data load.
 	DataStorageQueryStatusNeedDataLoad uint8 = 1
 )
 
+// TimeInterval represents a time interval.
 type TimeInterval struct {
 	MinT int64
 	MaxT int64
 }
 
+// NewInvalidTimeInterval creates a new invalid [TimeInterval].
 func NewInvalidTimeInterval() TimeInterval {
 	return TimeInterval{
 		MinT: math.MaxInt64,
@@ -44,10 +54,12 @@ func newInvalidTimeIntervalPtr() *TimeInterval {
 	}
 }
 
+// IsInvalid returns true if the time interval is invalid.
 func (t *TimeInterval) IsInvalid() bool {
 	return t.MinT == math.MaxInt64 && t.MaxT == math.MinInt64
 }
 
+// Sample represents a points in a time series.
 type Sample struct {
 	Timestamp int64
 	Value     float64
@@ -89,10 +101,12 @@ func (e *HeadEncoder) EncodeInnerSeriesSlice(innerSeriesSlice []InnerSeries) {
 	seriesDataEncoderEncodeInnerSeriesSlice(e.encoder, innerSeriesSlice)
 }
 
+// MergeOutOfOrderChunks merges out of order chunks.
 func (e *HeadEncoder) MergeOutOfOrderChunks() {
 	seriesDataEncoderMergeOutOfOrderChunks(e.encoder)
 }
 
+// RecodedChunk represents a recoded chunk.
 type RecodedChunk struct {
 	TimeInterval
 	SeriesId     uint32
@@ -102,8 +116,10 @@ type RecodedChunk struct {
 }
 
 const (
+	// InvalidSeriesId represents an invalid series ID.
 	InvalidSeriesId = math.MaxUint32
 
+	// UnlimitedLsIdBatchSize represents an unlimited LSS ID batch size.
 	UnlimitedLsIdBatchSize uint32 = math.MaxUint32
 )
 
@@ -117,14 +133,32 @@ type ChunkRecoder struct {
 	serializedData *DataStorageSerializedData
 }
 
-func NewChunkRecoder(lss *LabelSetStorage, lsIdBatchSize uint32, dataStorage *DataStorage, timeInterval TimeInterval) *ChunkRecoder {
-	return initializeChunkRecoder(lss, dataStorage, nil, seriesDataChunkRecoderCtor(lss.Pointer(), lsIdBatchSize, dataStorage.dataStorage, timeInterval))
+// NewChunkRecoder creates a new [ChunkRecoder] for non-serialized chunks.
+func NewChunkRecoder(
+	lss *LabelSetStorage,
+	lsIdBatchSize uint32,
+	dataStorage *DataStorage,
+	timeInterval TimeInterval,
+) *ChunkRecoder {
+	return initializeChunkRecoder(
+		lss,
+		dataStorage,
+		nil,
+		seriesDataChunkRecoderCtor(lss.Pointer(), lsIdBatchSize, dataStorage.dataStorage, timeInterval),
+	)
 }
 
+// NewSerializedChunkRecoder creates a new [ChunkRecoder] for serialized chunks.
 func NewSerializedChunkRecoder(serializedData *DataStorageSerializedData, timeInterval TimeInterval) *ChunkRecoder {
-	return initializeChunkRecoder(nil, nil, serializedData, seriesDataSerializedChunkRecoderCtor(serializedData, timeInterval))
+	return initializeChunkRecoder(
+		nil,
+		nil,
+		serializedData,
+		seriesDataSerializedChunkRecoderCtor(serializedData, timeInterval),
+	)
 }
 
+// initializeChunkRecoder initializes a new [ChunkRecoder].
 func initializeChunkRecoder(
 	lss *LabelSetStorage,
 	dataStorage *DataStorage,
@@ -145,60 +179,72 @@ func initializeChunkRecoder(
 	return chunkRecoder
 }
 
+// RecodeNextChunk recodes the next chunk.
 func (recoder *ChunkRecoder) RecodeNextChunk() RecodedChunk {
 	seriesDataChunkRecoderRecodeNextChunk(recoder.recoder, &recoder.recodedChunk)
 	return recoder.recodedChunk
 }
 
+// NextBatch returns true if there are more batches to recode.
 func (recoder *ChunkRecoder) NextBatch() bool {
 	result := seriesDataChunkRecoderNextBatch(recoder.recoder)
 	runtime.KeepAlive(recoder)
 	return result
 }
 
+// getSeriesIDFromBytes returns the series ID from a given byte slice.
 func getSeriesIDFromBytes(data []byte) uint32 {
 	return *(*uint32)(unsafe.Pointer(&data[0])) // #nosec G103 // it's meant to be that way
 }
 
+// HeadDataStorageSerializedChunks represents a serialized chunks.
 type HeadDataStorageSerializedChunks struct {
 	data []byte
 }
 
+// HeadDataStorageSerializedChunkMetadata represents a serialized chunk metadata.
 type HeadDataStorageSerializedChunkMetadata [SerializedChunkMetadataSize]byte
 
+// SeriesID returns the series ID for a given chunk metadata.
 func (cm HeadDataStorageSerializedChunkMetadata) SeriesID() uint32 {
-	return *(*uint32)(unsafe.Pointer(&cm[0]))
+	return *(*uint32)(unsafe.Pointer(&cm[0])) // #nosec G103 // it's meant to be that way
 }
 
+// NumberOfChunks returns the number of chunks in the serialized chunks.
 func (r *HeadDataStorageSerializedChunks) NumberOfChunks() int {
 	if len(r.data) == 0 {
 		return 0
 	}
 
-	return int(*(*int32)(unsafe.Pointer(&r.data[0])))
+	return int(*(*int32)(unsafe.Pointer(&r.data[0]))) // #nosec G103 // it's meant to be that way
 }
 
+// Len returns the number of serialized chunks.
 func (r *HeadDataStorageSerializedChunks) Len() int {
 	return len(r.data)
 }
 
+// Data returns the data of the serialized chunks.
 func (r *HeadDataStorageSerializedChunks) Data() []byte {
 	return r.data
 }
 
+// Metadata returns the metadata for a given chunk index.
 func (r *HeadDataStorageSerializedChunks) Metadata(chunkIndex int) HeadDataStorageSerializedChunkMetadata {
 	offset := Uint32Size + chunkIndex*SerializedChunkMetadataSize
 	return HeadDataStorageSerializedChunkMetadata(r.data[offset : offset+SerializedChunkMetadataSize])
 }
 
+// HeadDataStorageSerializedChunkIndex represents a serialized chunk index.
 type HeadDataStorageSerializedChunkIndex struct {
 	m map[uint32][]int
 }
 
+// MakeIndex creates a new [HeadDataStorageSerializedChunkIndex].
 func (r *HeadDataStorageSerializedChunks) MakeIndex() HeadDataStorageSerializedChunkIndex {
-	m := make(map[uint32][]int)
-	offset := Uint32Size
 	n := r.NumberOfChunks()
+	m := make(map[uint32][]int, n)
+	offset := Uint32Size
 	for i := 0; i < n; i, offset = i+1, offset+SerializedChunkMetadataSize {
 		sID := getSeriesIDFromBytes(r.data[offset : offset+4])
 		m[sID] = append(m[sID], offset)
@@ -206,15 +252,21 @@ func (r *HeadDataStorageSerializedChunks) MakeIndex() HeadDataStorageSerializedC
 	return HeadDataStorageSerializedChunkIndex{m}
 }
 
+// Has returns true if the index has a given series ID.
 func (i HeadDataStorageSerializedChunkIndex) Has(seriesID uint32) bool {
 	return len(i.m[seriesID]) > 0
 }
 
+// Len returns the number of series in the index.
 func (i HeadDataStorageSerializedChunkIndex) Len() int {
 	return len(i.m)
 }
 
-func (i HeadDataStorageSerializedChunkIndex) Chunks(r *HeadDataStorageSerializedChunks, seriesID uint32) []HeadDataStorageSerializedChunkMetadata {
+// Chunks returns the chunks for a given series ID.
+func (i HeadDataStorageSerializedChunkIndex) Chunks(
+	r *HeadDataStorageSerializedChunks,
+	seriesID uint32,
+) []HeadDataStorageSerializedChunkMetadata {
 	offsets, ok := i.m[seriesID]
 	if !ok {
 		return nil
@@ -282,11 +334,13 @@ type UnloadedDataLoader struct {
 	ds     *DataStorage
 }
 
+// Load loads the data from the snapshot.
 func (loader *UnloadedDataLoader) Load(snapshot []byte, isLast bool) {
 	seriesDataUnloadedDataLoaderLoad(loader.loader, snapshot, isLast)
 	runtime.KeepAlive(loader)
 }
 
+// CreateLoader creates a new [UnloadedDataLoader].
 func (ds *DataStorage) CreateLoader(queriers []uintptr) *UnloadedDataLoader {
 	result := &UnloadedDataLoader{
 		loader: seriesDataUnloadedDataLoaderCtor(ds.dataStorage, queriers),
@@ -307,13 +361,18 @@ type UnloadedDataRevertableLoader struct {
 	lss *LabelSetStorage
 }
 
+// NextBatch returns true if there are more batches to load.
 func (loader *UnloadedDataRevertableLoader) NextBatch() bool {
 	result := seriesDataUnloadedDataRevertableLoaderNextBatch(loader.loader)
 	runtime.KeepAlive(loader)
 	return result
 }
 
-func (ds *DataStorage) CreateRevertableLoader(lss *LabelSetStorage, lsIdBatchSize uint32) *UnloadedDataRevertableLoader {
+// CreateRevertableLoader creates a new [UnloadedDataRevertableLoader].
+func (ds *DataStorage) CreateRevertableLoader(
+	lss *LabelSetStorage,
+	lsIdBatchSize uint32,
+) *UnloadedDataRevertableLoader {
 	result := &UnloadedDataRevertableLoader{
 		UnloadedDataLoader: UnloadedDataLoader{
 			loader: seriesDataUnloadedDataRevertableLoaderCtor(lss.pointer, lsIdBatchSize, ds.dataStorage),

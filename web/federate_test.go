@@ -34,6 +34,7 @@ import (
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/textparse"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/promqltest"
 	"github.com/prometheus/prometheus/storage"
@@ -44,7 +45,7 @@ import (
 
 var scenarios = map[string]struct {
 	params         string
-	externalLabels labels.Labels
+	externalLabels cppbridge.Labels
 	code           int
 	body           string
 }{
@@ -170,7 +171,7 @@ test_metric_without_labels{instance=""} 1001 6000000
 	},
 	"external labels are added if not already present": {
 		params:         "match[]={__name__=~'.%2b'}", // '%2b' is an URL-encoded '+'.
-		externalLabels: labels.FromStrings("foo", "baz", "zone", "ie"),
+		externalLabels: cppbridge.FromStrings("foo", "baz", "zone", "ie"),
 		code:           http.StatusOK,
 		body: `# TYPE test_metric1 untyped
 test_metric1{foo="bar",instance="i",zone="ie"} 10000 6000000
@@ -187,7 +188,7 @@ test_metric_without_labels{foo="baz",instance="",zone="ie"} 1001 6000000
 		// This makes no sense as a configuration, but we should
 		// know what it does anyway.
 		params:         "match[]={__name__=~'.%2b'}", // '%2b' is an URL-encoded '+'.
-		externalLabels: labels.FromStrings("instance", "baz"),
+		externalLabels: cppbridge.FromStrings("instance", "baz"),
 		code:           http.StatusOK,
 		body: `# TYPE test_metric1 untyped
 test_metric1{foo="bar",instance="i"} 10000 6000000

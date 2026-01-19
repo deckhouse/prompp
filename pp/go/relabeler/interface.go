@@ -18,6 +18,12 @@ type LSS interface {
 	ResetSnapshot()
 	Input() *cppbridge.LabelSetStorage
 	Target() *cppbridge.LabelSetStorage
+	FindFromBuilder(
+		sortedAdd []cppbridge.Label,
+		sortedDel []string,
+		snapshot *cppbridge.LabelSetSnapshot,
+		lsID uint32,
+	) (uint32, uint16, bool)
 }
 
 // Shard interface.

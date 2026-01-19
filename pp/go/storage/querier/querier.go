@@ -46,8 +46,8 @@ type Querier[
 	TTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,
-	TShard Shard[TDataStorage, TLSS],
-	THead Head[TTask, TDataStorage, TLSS, TShard],
+	TGShard GShard[TDataStorage, TLSS],
+	THead Head[TTask, TDataStorage, TLSS, TGShard],
 ] struct {
 	mint             int64
 	maxt             int64
@@ -62,16 +62,16 @@ func NewQuerier[
 	TTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,
-	TShard Shard[TDataStorage, TLSS],
-	THead Head[TTask, TDataStorage, TLSS, TShard],
+	TGShard GShard[TDataStorage, TLSS],
+	THead Head[TTask, TDataStorage, TLSS, TGShard],
 ](
 	head THead,
 	deduplicatorCtor deduplicatorCtor,
 	mint, maxt int64,
 	closer func() error,
 	metrics *Metrics,
-) *Querier[TTask, TDataStorage, TLSS, TShard, THead] {
-	return &Querier[TTask, TDataStorage, TLSS, TShard, THead]{
+) *Querier[TTask, TDataStorage, TLSS, TGShard, THead] {
+	return &Querier[TTask, TDataStorage, TLSS, TGShard, THead]{
 		mint:             mint,
 		maxt:             maxt,
 		head:             head,
@@ -84,7 +84,7 @@ func NewQuerier[
 // Close [Querier] if need.
 //
 //revive:disable-next-line:confusing-naming // other type of querier.
-func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) Close() error {
+func (q *Querier[TTask, TDataStorage, TLSS, TGShard, THead]) Close() error {
 	if q.closer != nil {
 		return q.closer()
 	}
@@ -95,7 +95,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) Close() error {
 // LabelNames returns label values present in the head for the specific label name.
 //
 //revive:disable-next-line:confusing-naming // other type of querier.
-func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) LabelNames(
+func (q *Querier[TTask, TDataStorage, TLSS, TGShard, THead]) LabelNames(
 	ctx context.Context,
 	hints *storage.LabelHints,
 	matchers ...*labels.Matcher,
@@ -116,7 +116,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) LabelNames(
 // result set is reduced to label values of metrics matching the matchers.
 //
 //revive:disable-next-line:confusing-naming // other type of querier.
-func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
+func (q *Querier[TTask, TDataStorage, TLSS, TGShard, THead]) LabelValues(
 	ctx context.Context,
 	name string,
 	hints *storage.LabelHints,
@@ -137,7 +137,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
 // Select returns a set of series that matches the given label matchers.
 //
 //revive:disable-next-line:confusing-naming // other type of querier.
-func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
+func (q *Querier[TTask, TDataStorage, TLSS, TGShard, THead]) Select(
 	ctx context.Context,
 	sortSeries bool,
 	hints *storage.SelectHints,
@@ -152,7 +152,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 // selectInstant returns a instant set of series that matches the given label matchers.
 //
 //revive:disable-next-line:function-length long but readable.
-func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
+func (q *Querier[TTask, TDataStorage, TLSS, TGShard, THead]) selectInstant(
 	ctx context.Context,
 	_ bool,
 	_ *storage.SelectHints,
@@ -192,10 +192,10 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 
 	numberOfShards := q.head.NumberOfShards()
 	seriesSets := make([]storage.SeriesSet, numberOfShards)
-	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead](q.head)
+	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TGShard, THead](q.head)
 	tDataStorageQuery := q.head.CreateTask(
 		dsQueryInstantQuerier,
-		func(s TShard) error {
+		func(s TGShard) error {
 			shardID := s.ShardID()
 			lssQueryResult := lssQueryResults[shardID]
 			if lssQueryResult == nil {
@@ -232,7 +232,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 }
 
 // selectRange returns a range set of series that matches the given label matchers.
-func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
+func (q *Querier[TTask, TDataStorage, TLSS, TGShard, THead]) selectRange(
 	ctx context.Context,
 	_ bool,
 	_ *storage.SelectHints,
@@ -297,8 +297,8 @@ func queryDataStorage[
 	TTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,
-	TShard Shard[TDataStorage, TLSS],
-	THead Head[TTask, TDataStorage, TLSS, TShard],
+	TGShard GShard[TDataStorage, TLSS],
+	THead Head[TTask, TDataStorage, TLSS, TGShard],
 ](
 	taskName string,
 	head THead,
@@ -306,10 +306,10 @@ func queryDataStorage[
 	mint, maxt int64,
 ) []*cppbridge.DataStorageSerializedData {
 	shardedSerializedData := make([]*cppbridge.DataStorageSerializedData, head.NumberOfShards())
-	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead](head)
+	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TGShard, THead](head)
 	tDataStorageQuery := head.CreateTask(
 		taskName,
-		func(s TShard) error {
+		func(s TGShard) error {
 			shardID := s.ShardID()
 			lssQueryResult := lssQueryResults[shardID]
 			if lssQueryResult == nil {
@@ -346,8 +346,8 @@ func queryLabelNames[
 	TTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,
-	TShard Shard[TDataStorage, TLSS],
-	THead Head[TTask, TDataStorage, TLSS, TShard],
+	TGShard GShard[TDataStorage, TLSS],
+	THead Head[TTask, TDataStorage, TLSS, TGShard],
 ](
 	ctx context.Context,
 	head THead,
@@ -382,7 +382,7 @@ func queryLabelNames[
 
 	t := head.CreateTask(
 		taskName,
-		func(shard TShard) error {
+		func(shard TGShard) error {
 			return shard.LSS().QueryLabelNames(shard.ShardID(), convertedMatchers, dedup.Add)
 		},
 	)
@@ -412,8 +412,8 @@ func queryLabelValues[
 	TTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,
-	TShard Shard[TDataStorage, TLSS],
-	THead Head[TTask, TDataStorage, TLSS, TShard],
+	TGShard GShard[TDataStorage, TLSS],
+	THead Head[TTask, TDataStorage, TLSS, TGShard],
 ](
 	ctx context.Context,
 	name string,
@@ -449,7 +449,7 @@ func queryLabelValues[
 
 	t := head.CreateTask(
 		taskName,
-		func(shard TShard) error {
+		func(shard TGShard) error {
 			return shard.LSS().QueryLabelValues(shard.ShardID(), name, convertedMatchers, dedup.Add)
 		},
 	)
@@ -479,8 +479,8 @@ func queryLss[
 	TTask Task,
 	TDataStorage DataStorage,
 	TLSS LSS,
-	TShard Shard[TDataStorage, TLSS],
-	THead Head[TTask, TDataStorage, TLSS, TShard],
+	TGShard GShard[TDataStorage, TLSS],
+	THead Head[TTask, TDataStorage, TLSS, TGShard],
 ](
 	taskName string,
 	head THead,
@@ -497,7 +497,7 @@ func queryLss[
 
 	tLSSQuerySelector := head.CreateTask(
 		taskName,
-		func(shard TShard) (err error) {
+		func(shard TGShard) (err error) {
 			shardID := shard.ShardID()
 			selectors[shardID], snapshots[shardID], err = shard.LSS().QuerySelector(shardID, convertedMatchers)
 			return err

@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 )
@@ -48,6 +49,7 @@ func (u unknownRule) SetNoDependentRules(bool)             {}
 func (u unknownRule) NoDependentRules() bool               { return false }
 func (u unknownRule) SetNoDependencyRules(bool)            {}
 func (u unknownRule) NoDependencyRules() bool              { return false }
+func (u unknownRule) RenewLabelsSnapshot()                 {} // PP_CHANGES.md: rebuild on cpp
 
 func TestNewRuleDetailPanics(t *testing.T) {
 	require.PanicsWithValue(t, `unknown rule type "rules.unknownRule"`, func() {
@@ -94,7 +96,7 @@ func TestNewRuleDetail(t *testing.T) {
 			0,
 			labels.FromStrings("test", "test"),
 			labels.EmptyLabels(),
-			labels.EmptyLabels(),
+			cppbridge.EmptyLabels(), // PP_CHANGES.md: rebuild on cpp
 			"",
 			true, log.NewNopLogger(),
 		)

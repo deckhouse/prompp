@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/prometheus/prometheus/config"
-	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
 func TestStorageLifecycle(t *testing.T) {
@@ -81,7 +81,7 @@ func TestFilterExternalLabels(t *testing.T) {
 
 	conf := &config.Config{
 		GlobalConfig: config.GlobalConfig{
-			ExternalLabels: labels.FromStrings("foo", "bar"),
+			ExternalLabels: cppbridge.FromStrings("foo", "bar"), // PP_CHANGES.md: rebuild on cpp
 		},
 	}
 	require.NoError(t, s.ApplyConfig(conf))
@@ -106,7 +106,7 @@ func TestIgnoreExternalLabels(t *testing.T) {
 
 	conf := &config.Config{
 		GlobalConfig: config.GlobalConfig{
-			ExternalLabels: labels.FromStrings("foo", "bar"),
+			ExternalLabels: cppbridge.FromStrings("foo", "bar"), // PP_CHANGES.md: rebuild on cpp
 		},
 	}
 	require.NoError(t, s.ApplyConfig(conf))

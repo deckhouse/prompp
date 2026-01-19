@@ -34,9 +34,9 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/prometheus/prometheus/discovery"
-	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
 	pp_pkg_config "github.com/prometheus/prometheus/pp-pkg/config" // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/cppbridge"             // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/storage/remote/azuread"
 	"github.com/prometheus/prometheus/storage/remote/googleiam"
 )
@@ -90,8 +90,8 @@ func Load(s string, expandExternalLabels bool, logger log.Logger) (*Config, erro
 		return cfg, nil
 	}
 
-	b := labels.NewScratchBuilder(0)
-	cfg.GlobalConfig.ExternalLabels.Range(func(v labels.Label) {
+	b := cppbridge.NewScratchBuilder(cfg.GlobalConfig.ExternalLabels.Len()) // PP_CHANGES.md: rebuild on cpp
+	cfg.GlobalConfig.ExternalLabels.Range(func(v cppbridge.Label) {         // PP_CHANGES.md: rebuild on cpp
 		newV := os.Expand(v.Value, func(s string) string {
 			if s == "$" {
 				return "$"
@@ -442,7 +442,7 @@ type GlobalConfig struct {
 	// File to which scrape failures are logged.
 	ScrapeFailureLogFile string `yaml:"scrape_failure_log_file,omitempty"`
 	// The labels to add to any timeseries that this Prometheus instance scrapes.
-	ExternalLabels labels.Labels `yaml:"external_labels,omitempty"`
+	ExternalLabels cppbridge.Labels `yaml:"external_labels,omitempty"` // PP_CHANGES.md: rebuild on cpp
 	// An uncompressed response body larger than this many bytes will cause the
 	// scrape to fail. 0 means no limit.
 	BodySizeLimit units.Base2Bytes `yaml:"body_size_limit,omitempty"`
@@ -554,7 +554,7 @@ func (c *GlobalConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return err
 	}
 
-	if err := gc.ExternalLabels.Validate(func(l labels.Label) error {
+	if err := gc.ExternalLabels.Validate(func(l cppbridge.Label) error { // PP_CHANGES.md: rebuild on cpp
 		if !model.LabelName(l.Name).IsValid() {
 			return fmt.Errorf("%q is not a valid label name", l.Name)
 		}

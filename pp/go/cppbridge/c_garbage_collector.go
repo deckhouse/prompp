@@ -16,7 +16,7 @@ import (
 const (
 	defaultGCDecay       float64       = 1.0 / 3.0
 	defaultGCWarmupValue float64       = 0
-	gcDelayThreshold     time.Duration = 2 * time.Second
+	gcDelayThreshold     time.Duration = 5 * time.Second
 )
 
 // CGOGC - implement wise garbage collector for c/c++ objects.

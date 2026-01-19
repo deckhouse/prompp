@@ -45,7 +45,7 @@ func (s *LSSSuite) TestCreateSnapshotFromEncodingBimap() {
 	lss := cppbridge.NewLssStorage()
 
 	// Act
-	labelSetSnapshot := lss.CreateLabelSetSnapshot()
+	labelSetSnapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	// Assert
 	s.Require().NotNil(labelSetSnapshot.Pointer())
@@ -56,7 +56,7 @@ func (s *LSSSuite) TestCreateSnapshotFromQueryableEncodingBimap() {
 	lss := cppbridge.NewQueryableLssStorage()
 
 	// Act
-	labelSetSnapshot := lss.CreateLabelSetSnapshot()
+	labelSetSnapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	// Assert
 	s.Require().NotNil(labelSetSnapshot.Pointer())
@@ -75,7 +75,7 @@ func (s *LSSSuite) TestLabels() {
 	lsID := lss.FindOrEmplace(lsIn).LabelSetID
 
 	lsLength := 0
-	_ = lss.RangeLabelSet(lsID, func(l cppbridge.Label) error {
+	_ = lss.RangeLabelSet(lsID, false, func(l cppbridge.Label) error {
 		lv, ok := lsMap[l.Name]
 		s.Require().True(ok)
 		s.Require().Equal(lv, l.Value)
@@ -85,137 +85,6 @@ func (s *LSSSuite) TestLabels() {
 	})
 
 	s.Equal(lsIn.Len(), lsLength)
-}
-
-type bytesTestCase struct {
-	labelSet model.LabelSet
-	expected []byte
-}
-
-func (s *LSSSuite) TestBytes() {
-	testCases := []bytesTestCase{
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
-			expected: []byte("\xFEkey\xFFvalue"),
-		},
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
-			expected: []byte("\xFEkey1\xFFvalue1\xFFkey2\xFFvalue2"),
-		},
-	}
-
-	var bytes []byte
-	for _, testCase := range testCases {
-		s.testBytesImpl(testCase, &bytes)
-	}
-}
-
-func (s *LSSSuite) testBytesImpl(testCase bytesTestCase, bytes *[]byte) {
-	// Arrange
-	lss := cppbridge.NewLssStorage()
-	lss.FindOrEmplace(testCase.labelSet)
-
-	// Act
-	*bytes = cppbridge.LabelSetBytes(lss.Pointer(), 0, *bytes)
-	// TODO: public interface must work without outside keep alives
-	runtime.KeepAlive(lss)
-
-	// Assert
-	s.Equal(testCase.expected, *bytes)
-}
-
-type bytesWithFilteredNamesTestCase struct {
-	labelSet model.LabelSet
-	names    []string
-	expected []byte
-}
-
-func (s *LSSSuite) TestBytesWithLabels() {
-	testCases := []bytesWithFilteredNamesTestCase{
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
-			names:    []string{"key", "key1", "key2"},
-			expected: []byte("\xFEkey\xFFvalue"),
-		},
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
-			names:    []string{"non_existing_key"},
-			expected: []byte("\xFE"),
-		},
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
-			names:    []string{"key1", "key2"},
-			expected: []byte("\xFEkey1\xFFvalue1\xFFkey2\xFFvalue2"),
-		},
-	}
-
-	var bytes []byte
-	for _, testCase := range testCases {
-		s.testBytesWithLabelsImpl(testCase, &bytes)
-	}
-}
-
-func (s *LSSSuite) testBytesWithLabelsImpl(testCase bytesWithFilteredNamesTestCase, bytes *[]byte) {
-	// Arrange
-	lss := cppbridge.NewLssStorage()
-	lss.FindOrEmplace(testCase.labelSet)
-
-	// Act
-	*bytes = cppbridge.LabelSetBytesWithLabels(lss.Pointer(), 0, *bytes, testCase.names...)
-	// TODO: public interface must work without outside keep alives
-	runtime.KeepAlive(lss)
-
-	// Assert
-	s.Equal(testCase.expected, *bytes)
-}
-
-func (s *LSSSuite) TestBytesWithoutLabels() {
-	testCases := []bytesWithFilteredNamesTestCase{
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
-			names:    []string{"key1", "key2"},
-			expected: []byte("\xFE"),
-		},
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
-			names:    []string{"key1"},
-			expected: []byte("\xFEkey2\xFFvalue2"),
-		},
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key1", "value1").Set("key2", "value2").Build(),
-			names:    []string{"key2"},
-			expected: []byte("\xFEkey1\xFFvalue1"),
-		},
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
-			names:    []string{"key", "key1", "key2"},
-			expected: []byte("\xFE"),
-		},
-		{
-			labelSet: model.NewLabelSetBuilder().Set("key", "value").Build(),
-			names:    []string{"non_existing_key"},
-			expected: []byte("\xFEkey\xFFvalue"),
-		},
-	}
-
-	var bytes []byte
-	for _, testCase := range testCases {
-		s.testBytesWithoutLabelsImpl(testCase, &bytes)
-	}
-}
-
-func (s *LSSSuite) testBytesWithoutLabelsImpl(testCase bytesWithFilteredNamesTestCase, bytes *[]byte) {
-	// Arrange
-	lss := cppbridge.NewLssStorage()
-	lss.FindOrEmplace(testCase.labelSet)
-
-	// Act
-	*bytes = cppbridge.LabelSetBytesWithoutLabels(lss.Pointer(), 0, *bytes, testCase.names...)
-	// TODO: public interface must work without outside keep alives
-	runtime.KeepAlive(lss)
-
-	// Assert
-	s.Equal(testCase.expected, *bytes)
 }
 
 type QueryableLSSSuite struct {
@@ -256,7 +125,7 @@ func (s *QueryableLSSSuite) TestQuery() {
 		}
 		selector, status := s.lss.QuerySelector(labelMatchers)
 		s.Require().Equal(cppbridge.LSSQueryStatusMatch, status)
-		snapshot := s.lss.CreateLabelSetSnapshot()
+		snapshot := s.lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 		queryResult := snapshot.Query(selector)
 		s.Require().Equal(cppbridge.LSSQueryStatusMatch, queryResult.Status())
 		s.Require().Len(queryResult.IDs(), 3)
@@ -397,7 +266,7 @@ func (s *QueryableLSSSuite) testQueryLabelValuesImpl(testCase queryLabelValuesCa
 
 func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithExistingLabelSet() {
 	// Arrange
-	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	// Act
 	existingLsIdWithAdd := s.lss.FindOrEmplaceBuilder(cppbridge.CppLabelSetBuilder{
@@ -412,8 +281,6 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithExistingLabelSet() {
 		SortedAdd:   nil,
 		SortedDel:   []string{"che"},
 	}).LabelSetID
-
-	// TODO: public object should encapsulate keep alives
 	runtime.KeepAlive(labelSetSnapshot)
 
 	// Assert
@@ -423,7 +290,7 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithExistingLabelSet() {
 
 func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithNewLabelSet() {
 	// Arrange
-	labelSetSnapshot := s.lss.CreateLabelSetSnapshot()
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	// Act
 	expectedLsId := len(s.labelSetIDs)
@@ -433,7 +300,6 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithNewLabelSet() {
 		SortedAdd:   []cppbridge.Label{{Name: "new_lol", Value: "new_kek"}},
 		SortedDel:   nil,
 	}).LabelSetID
-	// TODO: public object should encapsulate keep alives
 	runtime.KeepAlive(labelSetSnapshot)
 
 	// Assert
@@ -463,16 +329,142 @@ func (s *QueryableLSSSuite) TestCopyAddedSeriesFromSnapshot() {
 	lssCopyOfCopy := cppbridge.NewQueryableLssStorage()
 
 	// Act
-	snapshot := s.lss.CreateLabelSetSnapshot()
+	snapshot := s.lss.CreateLabelSetSnapshot(&testSnapshotSource{})
 	bitsetSeries := s.lss.BitsetSeries()
 	snapshot.CopyAddedSeries(bitsetSeries, lssCopy)
 
-	snapshotCopy := lssCopy.CreateLabelSetSnapshot()
+	snapshotCopy := lssCopy.CreateLabelSetSnapshot(&testSnapshotSource{})
 	bitsetSeriesCopy := lssCopy.BitsetSeries()
 	snapshotCopy.CopyAddedSeries(bitsetSeriesCopy, lssCopyOfCopy)
 
 	// Assert
 	// !!!ATTENTION!!! When copying the added series, the order in which the series are added is preserved.
+	// This is necessary because it makes the ls IDs more compact,
+	// which usually end up in the lss in the same order, and consequently the wal files are smaller.
 	s.Equal(labelSetToCppBridgeLabels(s.labelSets), lssCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
 	s.Equal(emptyLabelsSets, lssCopyOfCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
+}
+
+func (s *QueryableLSSSuite) TestFindFromBuilder() {
+	// Arrange
+	mls := model.LabelSetFromMap(map[string]string{
+		"__name__": "somename",
+		"job":      "somejob",
+	})
+
+	// Act
+	expectedLSID := s.lss.FindOrEmplace(mls).LabelSetID
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot(&testSnapshotSource{})
+	hash, _ := cppbridge.LabelSetFromBuilderHash(nil, nil, labelSetSnapshot, expectedLSID)
+	actualLSID, length, find := s.lss.FindFromBuilder(
+		nil,
+		nil,
+		labelSetSnapshot,
+		hash,
+		expectedLSID,
+	)
+
+	// Assert
+	s.Require().True(find)
+	s.Equal(mls.Len(), int(length))
+	s.Equal(expectedLSID, actualLSID)
+}
+
+func (s *QueryableLSSSuite) TestFindFromBuilderAnother() {
+	// Arrange
+	mls := s.labelSets[0]
+	lss := cppbridge.NewQueryableLssStorage()
+	lsid := lss.FindOrEmplace(mls).LabelSetID
+	labelSetSnapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
+
+	// Act
+	expectedLSID := s.lss.FindOrEmplace(mls).LabelSetID
+	hash, _ := cppbridge.LabelSetFromBuilderHash(nil, nil, labelSetSnapshot, expectedLSID)
+	actualLSID, length, find := s.lss.FindFromBuilder(
+		nil,
+		nil,
+		labelSetSnapshot,
+		hash,
+		lsid,
+	)
+
+	// Assert
+	s.Require().True(find)
+	s.Equal(s.labelSets[0].Len(), int(length))
+	s.Equal(expectedLSID, actualLSID)
+}
+
+func (s *QueryableLSSSuite) TestFindFromBuilderFromBuilderWithExistingLabelSet() {
+	// Arrange
+	labelSetSnapshot := s.lss.CreateLabelSetSnapshot(&testSnapshotSource{})
+
+	// Act
+	lsid := uint32(0)
+	sortedAdd := []cppbridge.Label{{Name: "che", Value: "bureck"}}
+	hash, _ := cppbridge.LabelSetFromBuilderHash(sortedAdd, nil, labelSetSnapshot, lsid)
+	lsIDAdd, lengthAdd, findAdd := s.lss.FindFromBuilder(
+		sortedAdd,
+		nil,
+		labelSetSnapshot,
+		hash,
+		lsid,
+	)
+	lsid = uint32(1)
+	sortedDel := []string{"che"}
+	hash, _ = cppbridge.LabelSetFromBuilderHash(nil, sortedDel, labelSetSnapshot, lsid)
+	lsIDDel, lengthDel, findDel := s.lss.FindFromBuilder(
+		nil,
+		[]string{"che"},
+		labelSetSnapshot,
+		hash,
+		lsid,
+	)
+
+	// Assert
+	s.Require().True(findAdd)
+	s.Equal(s.labelSets[1].Len(), int(lengthAdd))
+	s.Equal(s.labelSetIDs[1], lsIDAdd)
+
+	s.Require().True(findDel)
+	s.Equal(s.labelSets[0].Len(), int(lengthDel))
+	s.Equal(s.labelSetIDs[0], lsIDDel)
+}
+
+func (s *QueryableLSSSuite) TestFindFromBuilderNot() {
+	// Arrange
+	mls := model.LabelSetFromMap(map[string]string{
+		"__name__": "somename",
+		"job":      "somejob1",
+	})
+	lss := cppbridge.NewQueryableLssStorage()
+	lsid := lss.FindOrEmplace(mls).LabelSetID
+	labelSetSnapshot := lss.CreateLabelSetSnapshot(&testSnapshotSource{})
+	hash, _ := cppbridge.LabelSetFromBuilderHash(nil, nil, labelSetSnapshot, lsid)
+
+	// Act
+	_, _, find := s.lss.FindFromBuilder(
+		nil,
+		nil,
+		labelSetSnapshot,
+		hash,
+		lsid,
+	)
+
+	// Assert
+	s.Require().False(find)
+}
+
+// testSnapshotSource implementation SnapshotSource.
+type testSnapshotSource struct {
+	snapshot *cppbridge.LabelSetSnapshot
+}
+
+// FastSnapshot implementation SnapshotSource.
+func (s *testSnapshotSource) FastSnapshot() *cppbridge.LabelSetSnapshot {
+	return s.snapshot
+}
+
+// IsOutdated implementation SnapshotSource.
+func (*testSnapshotSource) IsOutdated() bool {
+	return false
 }

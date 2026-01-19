@@ -19,8 +19,8 @@ import (
 
 type RelabelerSuite struct {
 	suite.Suite
+
 	baseCtx context.Context
-	options cppbridge.RelabelerOptions
 }
 
 func TestRelabelerSuite(t *testing.T) {
@@ -1645,10 +1645,10 @@ func (s *StateV2Suite) statelessRelabelerTransition(state *cppbridge.StateV2) {
 	s.Panics(func() { state.StatelessRelabeler() })
 }
 
-func (s *StateV2Suite) createIdsMapping() *cppbridge.IdsMapping {
+func (*StateV2Suite) createIdsMapping() *cppbridge.IdsMapping {
 	lss1 := cppbridge.NewQueryableLssStorage()
 	lss1.FindOrEmplace(model.NewLabelSetBuilder().Set("job", "1").Build())
-	snapshot := lss1.CreateLabelSetSnapshot()
+	snapshot := lss1.CreateLabelSetSnapshot(&testSnapshotSource{})
 
 	return snapshot.CopyAddedSeries(lss1.BitsetSeries(), cppbridge.NewQueryableLssStorage())
 }

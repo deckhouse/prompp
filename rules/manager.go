@@ -30,6 +30,7 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"github.com/prometheus/prometheus/notifier"
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/storage"
@@ -197,7 +198,7 @@ func (m *Manager) Stop() {
 // Update the rule manager's state as the config requires. If
 // loading the new rules failed the old rule set is restored.
 // This method will no-op in case the manager is already stopped.
-func (m *Manager) Update(interval time.Duration, files []string, externalLabels labels.Labels, externalURL string, groupEvalIterationFunc GroupEvalIterationFunc) error {
+func (m *Manager) Update(interval time.Duration, files []string, externalLabels cppbridge.Labels, externalURL string, groupEvalIterationFunc GroupEvalIterationFunc) error { // PP_CHANGES.md: rebuild on cpp
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
@@ -293,7 +294,7 @@ func (FileLoader) Parse(query string) (parser.Expr, error) { return parser.Parse
 
 // LoadGroups reads groups from a list of files.
 func (m *Manager) LoadGroups(
-	interval time.Duration, externalLabels labels.Labels, externalURL string, groupEvalIterationFunc GroupEvalIterationFunc, filenames ...string,
+	interval time.Duration, externalLabels cppbridge.Labels, externalURL string, groupEvalIterationFunc GroupEvalIterationFunc, filenames ...string, // PP_CHANGES.md: rebuild on cpp
 ) (map[string]*Group, []error) {
 	groups := make(map[string]*Group)
 
@@ -422,8 +423,8 @@ func SendAlerts(s Sender, externalURL string) NotifyFunc {
 		for _, alert := range alerts {
 			a := &notifier.Alert{
 				StartsAt:     alert.FiredAt,
-				Labels:       alert.Labels,
-				Annotations:  alert.Annotations,
+				Labels:       alert.Labels(),      // PP_CHANGES.md: rebuild on cpp
+				Annotations:  alert.Annotations(), // PP_CHANGES.md: rebuild on cpp
 				GeneratorURL: externalURL + strutil.TableLinkForExpression(expr),
 			}
 			if !alert.ResolvedAt.IsZero() {

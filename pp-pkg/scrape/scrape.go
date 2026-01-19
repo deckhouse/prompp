@@ -152,8 +152,14 @@ type scrapePool struct {
 	newLoop       func(scrapeLoopOptions) loop
 	metrics       *scrapeMetrics
 	noDefaultPort bool
+
+	scrapeFailureLogger    log.Logger
+	scrapeFailureLoggerMtx sync.RWMutex
 }
 
+// newScrapePool creates a new [scrapePool].
+//
+//revive:disable-next-line:function-length // init constructor.
 func newScrapePool(
 	cfg *config.ScrapeConfig,
 	adapter Adapter,
@@ -235,8 +241,8 @@ func newScrapePool(
 			targetOptions.TargetLabels = append(
 				targetOptions.TargetLabels,
 				cppbridge.Label{
-					Name:  *((*string)(unsafe.Pointer(&l.Name))),
-					Value: *((*string)(unsafe.Pointer(&l.Value))),
+					Name:  strings.Clone(l.Name),
+					Value: strings.Clone(l.Value),
 				},
 			)
 		})
@@ -296,6 +302,29 @@ func (sp *scrapePool) DroppedTargetsCount() int {
 	sp.targetMtx.Lock()
 	defer sp.targetMtx.Unlock()
 	return sp.droppedTargetsCount
+}
+
+// SetScrapeFailureLogger sets the scrape failure logger for the scrape pool.
+func (sp *scrapePool) SetScrapeFailureLogger(l log.Logger) {
+	sp.scrapeFailureLoggerMtx.Lock()
+	defer sp.scrapeFailureLoggerMtx.Unlock()
+	if l != nil {
+		l = log.With(l, "job_name", sp.config.JobName)
+	}
+	sp.scrapeFailureLogger = l
+
+	sp.targetMtx.Lock()
+	defer sp.targetMtx.Unlock()
+	for _, s := range sp.loops {
+		s.setScrapeFailureLogger(sp.scrapeFailureLogger)
+	}
+}
+
+// getScrapeFailureLogger returns the scrape failure logger for the scrape pool.
+func (sp *scrapePool) getScrapeFailureLogger() log.Logger {
+	sp.scrapeFailureLoggerMtx.RLock()
+	defer sp.scrapeFailureLoggerMtx.RUnlock()
+	return sp.scrapeFailureLogger
 }
 
 // stop terminates all scrape loops and returns after they all terminated.
@@ -450,6 +479,7 @@ func (sp *scrapePool) restartLoops(reuseCache bool) {
 			wg.Done()
 
 			newLoop.setForcedError(forcedErr)
+			newLoop.setScrapeFailureLogger(sp.getScrapeFailureLogger())
 			newLoop.run(nil)
 		}(oldLoop, newLoop)
 
@@ -487,6 +517,10 @@ func (sp *scrapePool) Sync(tgs []*targetgroup.Group) {
 			sp.metrics.targetSyncFailed.WithLabelValues(sp.config.JobName).Add(float64(len(failures)))
 			if len(failures) == 0 {
 				sp.targetsCache[tghash] = targets
+			}
+		} else {
+			for _, t := range targets {
+				t.RenewLabelsSnapshot()
 			}
 		}
 		for _, t := range targets {
@@ -583,6 +617,7 @@ func (sp *scrapePool) sync(targets []*Target) {
 			if err != nil {
 				l.setForcedError(err)
 			}
+			l.setScrapeFailureLogger(sp.scrapeFailureLogger)
 
 			sp.activeTargets[hash] = t
 			sp.loops[hash] = l
@@ -595,7 +630,8 @@ func (sp *scrapePool) sync(targets []*Target) {
 			}
 			// Need to keep the most updated labels information
 			// for displaying it in the Service Discovery web page.
-			sp.activeTargets[hash].SetDiscoveredLabels(t.DiscoveredLabels())
+			// sp.activeTargets[hash].SetDiscoveredLabels(t.DiscoveredLabels())
+			sp.activeTargets[hash].UpdateLabels(t)
 		}
 	}
 
@@ -656,6 +692,7 @@ var (
 type scraper interface {
 	scrape(ctx context.Context) (*http.Response, error)
 	readResponse(ctx context.Context, resp *http.Response, w io.Writer) (string, error)
+	// readResponse2(ctx context.Context, resp *http.Response, buf *bytes.Buffer) (string, error)
 	Report(start time.Time, dur time.Duration, err error)
 	offset(interval time.Duration, offsetSeed uint64) time.Duration
 	String() string
@@ -782,6 +819,7 @@ func (s *targetScraper) String() string {
 type loop interface {
 	run(errc chan<- error)
 	setForcedError(err error)
+	setScrapeFailureLogger(log.Logger)
 	stop()
 	getCache() *scrapeCache
 	disableEndOfRunStalenessMarkers()
@@ -791,6 +829,8 @@ type scrapeLoop struct {
 	scraper                 scraper
 	adapter                 Adapter
 	logger                  log.Logger
+	scrapeFailureLogger     log.Logger
+	scrapeFailureLoggerMtx  sync.RWMutex
 	state                   *cppbridge.StateV2
 	reportState             *cppbridge.StateV2
 	cache                   *scrapeCache
@@ -859,7 +899,7 @@ func newScrapeLoop(
 		logger = log.NewNopLogger()
 	}
 	if buffers == nil {
-		buffers = pool.New(1e3, 1e6, 2, func(sz int) interface{} { return make([]byte, 0, sz) })
+		buffers = pool.New(1e3, 1e6, 3, func(sz int) any { return make([]byte, 0, sz) })
 	}
 	if cache == nil {
 		cache = newScrapeCache(metrics)
@@ -920,6 +960,15 @@ func newScrapeLoop(
 	sl.metrics.newTarget.Inc()
 
 	return sl
+}
+
+func (sl *scrapeLoop) setScrapeFailureLogger(l log.Logger) {
+	sl.scrapeFailureLoggerMtx.Lock()
+	defer sl.scrapeFailureLoggerMtx.Unlock()
+	if ts, ok := sl.scraper.(fmt.Stringer); ok && l != nil {
+		l = log.With(l, "target", ts.String())
+	}
+	sl.scrapeFailureLogger = l
 }
 
 func (sl *scrapeLoop) run(errc chan<- error) {
@@ -1051,6 +1100,11 @@ func (sl *scrapeLoop) scrapeAndReport(last, appendTime time.Time, errc chan<- er
 		bytesRead = len(b)
 	} else {
 		level.Debug(sl.logger).Log("msg", "Scrape failed", "err", scrapeErr)
+		sl.scrapeFailureLoggerMtx.RLock()
+		if sl.scrapeFailureLogger != nil {
+			sl.scrapeFailureLogger.Log("err", scrapeErr)
+		}
+		sl.scrapeFailureLoggerMtx.RUnlock()
 		if errc != nil {
 			errc <- scrapeErr
 		}
@@ -1649,8 +1703,8 @@ func (c *scrapeCache) setHelp(metric, help []byte) {
 		e = &metaEntry{Metadata: metadata.Metadata{Type: model.MetricTypeUnknown}}
 		c.metadata[string(metric)] = e
 	}
-	if e.Help != string(help) {
-		e.Help = string(help)
+	if nhelp := string(help); e.Help != nhelp {
+		e.Help = nhelp
 	}
 	e.lastIter = c.iter
 
@@ -1719,3 +1773,51 @@ func (m *metaEntry) size() int {
 	// The attribute lastIter although part of the struct it is not metadata.
 	return len(m.Help) + len(m.Unit) + len(m.Type)
 }
+
+// func (s *targetScraper) readResponse2(ctx context.Context, resp *http.Response, buf *bytes.Buffer) (string, error) {
+// 	defer func() {
+// 		io.Copy(io.Discard, resp.Body)
+// 		resp.Body.Close()
+// 	}()
+
+// 	if resp.StatusCode != http.StatusOK {
+// 		return "", fmt.Errorf("server returned HTTP status %s", resp.Status)
+// 	}
+
+// 	if s.bodySizeLimit <= 0 {
+// 		s.bodySizeLimit = math.MaxInt64
+// 	}
+// 	if resp.Header.Get("Content-Encoding") != "gzip" {
+// 		n, err := buf.ReadFrom(io.LimitReader(resp.Body, s.bodySizeLimit))
+// 		if err != nil {
+// 			return "", err
+// 		}
+// 		if n >= s.bodySizeLimit {
+// 			s.metrics.targetScrapeExceededBodySizeLimit.Inc()
+// 			return "", errBodySizeLimit
+// 		}
+// 		return resp.Header.Get("Content-Type"), nil
+// 	}
+
+// 	breader := poolBufio.Get()
+// 	defer poolBufio.Put(breader)
+// 	breader.Reset(resp.Body)
+
+// 	gzipr := poolGzipr.Get()
+// 	defer poolGzipr.Put(gzipr)
+// 	if err := gzipr.Reset(breader); err != nil {
+// 		return "", err
+// 	}
+
+// 	n, err := buf.ReadFrom(io.LimitReader(gzipr, s.bodySizeLimit))
+
+// 	gzipr.Close()
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	if n >= s.bodySizeLimit {
+// 		s.metrics.targetScrapeExceededBodySizeLimit.Inc()
+// 		return "", errBodySizeLimit
+// 	}
+// 	return resp.Header.Get("Content-Type"), nil
+// }

@@ -18,7 +18,8 @@ build:
             - netgo
             - builtinassets
             - osusergo
-            - stringlabels
+            # - stringlabels
+            - cpplabels
         windows:
             - builtinassets
             - stringlabels

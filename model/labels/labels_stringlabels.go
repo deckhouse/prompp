@@ -505,6 +505,7 @@ func (b *Builder) Labels() Labels {
 	for ; a < len(b.add); a++ {
 		buf = appendLabelTo(buf, &b.add[a])
 	}
+
 	return Labels{data: yoloString(buf)}
 }
 
@@ -656,6 +657,7 @@ func (b *ScratchBuilder) Labels() Labels {
 		marshalLabelsToSizedBuffer(b.add, buf)
 		b.output = Labels{data: yoloString(buf)}
 	}
+
 	return b.output
 }
 

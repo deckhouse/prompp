@@ -582,6 +582,7 @@ func NewStaleNansState() *StaleNansState {
 	return s
 }
 
+// Remap remap stale nans state to new ids mapping.
 func (s *StaleNansState) Remap(mapping *IdsMapping) {
 	prometheusRemapStaleNansState(s.state, mapping.pointer)
 	runtime.KeepAlive(s)
@@ -1363,7 +1364,13 @@ func (s *StateV2) resetCaches(numberOfShards uint16) {
 }
 
 // resetStaleNansStates recreate StaleNansStates.
-func (s *StateV2) resetStaleNansStates(numberOfShards uint16, remapStaleNansState bool, staleNansIdsMappings []*IdsMapping) {
+//
+//revive:disable-next-line:flag-parameter this is a flag, but it's more convenient this way
+func (s *StateV2) resetStaleNansStates(
+	numberOfShards uint16,
+	remapStaleNansState bool,
+	staleNansIdsMappings []*IdsMapping,
+) {
 	if !s.trackStaleness {
 		return
 	}

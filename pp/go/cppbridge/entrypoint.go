@@ -1306,6 +1306,112 @@ func primitivesLSSFindOrEmplaceBuilder(lss uintptr, builder CppLabelSetBuilder) 
 	return res
 }
 
+//nolint:gocritic // unnamedResult not need
+func primitivesLSSFindOrEmplaceFromBuilder(
+	lssPtr uintptr,
+	snapshotPtr uintptr,
+	bitsetPtr uintptr,
+	sortedAdd []Label,
+	sortedDel []string,
+	hash uint64,
+	lsID uint32,
+) (uintptr, uint64, uint32, bool) {
+	args := struct {
+		lssPtr      uintptr
+		snapshotPtr uintptr
+		bitsetPtr   uintptr
+		sortedAdd   []Label
+		sortedDel   []string
+		hash        uint64
+		lsID        uint32
+	}{lssPtr, snapshotPtr, bitsetPtr, sortedAdd, sortedDel, hash, lsID}
+	var res struct {
+		snapshotPtr      uintptr
+		labelSetID       uint32
+		length           uint64
+		hasReallocations bool
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_lss_find_or_emplace_from_builder,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.snapshotPtr, res.length, res.labelSetID, res.hasReallocations
+}
+
+// primitivesLSSFindFromBuilderWithBitset find labelset from builder in lss with bitset,
+// return length ls, lsid and bool ok.
+//
+//nolint:gocritic // unnamedResult not need
+func primitivesLSSFindFromBuilderWithBitset(
+	lss uintptr,
+	snapshotPtr uintptr,
+	bitsetPtr uintptr,
+	sortedAdd []Label,
+	sortedDel []string,
+	hash uint64,
+	lsID uint32,
+) (uint64, uint32, bool) {
+	args := struct {
+		lss         uintptr
+		snapshotPtr uintptr
+		bitsetPtr   uintptr
+		sortedAdd   []Label
+		sortedDel   []string
+		hash        uint64
+		lsID        uint32
+	}{lss, snapshotPtr, bitsetPtr, sortedAdd, sortedDel, hash, lsID}
+	var res struct {
+		length     uint64
+		labelSetID uint32
+		has        bool
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_lss_find_from_builder_with_bitset,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.length, res.labelSetID, res.has
+}
+
+// primitivesLSSFindFromBuilder find labelset from builder in lss, return length ls, lsid and bool ok.
+//
+//nolint:gocritic // unnamedResult not need
+func primitivesLSSFindFromBuilder(
+	lss uintptr,
+	snapshotPtr uintptr,
+	sortedAdd []Label,
+	sortedDel []string,
+	hash uint64,
+	lsID uint32,
+) (uint64, uint32, bool) {
+	args := struct {
+		lss         uintptr
+		snapshotPtr uintptr
+		sortedAdd   []Label
+		sortedDel   []string
+		hash        uint64
+		lsID        uint32
+	}{lss, snapshotPtr, sortedAdd, sortedDel, hash, lsID}
+	var res struct {
+		length     uint64
+		labelSetID uint32
+		has        bool
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_lss_find_from_builder,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.length, res.labelSetID, res.has
+}
+
 func primitivesLSSQuerySelector(lss uintptr, matchers []model.LabelMatcher) (
 	selector uintptr,
 	status uint32,
@@ -1330,7 +1436,7 @@ func primitivesLSSQuerySelector(lss uintptr, matchers []model.LabelMatcher) (
 	return res.selector, res.status
 }
 
-func primitivesLSSQuery(lss uintptr, selector uintptr) (
+func primitivesLSSQuery(lss, selector uintptr) (
 	matches []uint32,
 	labelSetLengths []uint16,
 	status uint32,
@@ -1511,6 +1617,28 @@ func primitivesFreeLsIdsMapping(lsIdsMapping uintptr) {
 		C.prompp_primitives_free_ls_ids_mapping,
 		uintptr(unsafe.Pointer(&args)),
 	)
+}
+
+//nolint:gocritic // unnamedResult not need
+func primitivesLSSWithSnapshotStats(lss, bitset uintptr, reset bool) (uint64, uint64, uint32) {
+	args := struct {
+		lss    uintptr
+		bitset uintptr
+		reset  bool
+	}{lss, bitset, reset}
+	var res struct {
+		allocatedMemory uint64
+		lssSize         uint64
+		bitsetCount     uint32
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_lss_with_snapshot_stats,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.allocatedMemory, res.lssSize, res.bitsetCount
 }
 
 //
@@ -2983,11 +3111,12 @@ func headWalDecoderDtor(decoder uintptr) {
 // label_sets
 //
 
-func labelSetLength(lss uintptr, labelSetID uint32) uint64 {
+func labelSetLength(lss uintptr, labelSetID uint32, dropMetricName bool) uint64 {
 	args := struct {
-		lss        uintptr
-		labelSetID uint32
-	}{lss, labelSetID}
+		lss            uintptr
+		labelSetID     uint32
+		dropMetricName bool
+	}{lss, labelSetID, dropMetricName}
 	var res struct {
 		length uint64
 	}
@@ -3002,11 +3131,12 @@ func labelSetLength(lss uintptr, labelSetID uint32) uint64 {
 	return res.length
 }
 
-func labelSetSerialize(lss uintptr, labelSetID uint32) []Label {
+func labelSetSerialize(lss uintptr, labelSetID uint32, dropMetricName bool) []Label {
 	args := struct {
-		lss        uintptr
-		labelSetID uint32
-	}{lss, labelSetID}
+		lss            uintptr
+		labelSetID     uint32
+		dropMetricName bool
+	}{lss, labelSetID, dropMetricName}
 	var res struct {
 		labelSet []Label
 	}
@@ -3037,11 +3167,177 @@ func labelSetFree(labelSet []Label) {
 	)
 }
 
-func allocateSliceForLabelBytes(lss uintptr, labelSetID uint32, bytes []byte) []byte {
+func labelSetGetValue(lss uintptr, labelName string, labelSetID uint32) string {
 	args := struct {
 		lss        uintptr
+		labelName  string
 		labelSetID uint32
-	}{lss, labelSetID}
+	}{lss, labelName, labelSetID}
+	var res struct {
+		labelValue string
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_label_set_get_value,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.labelValue
+}
+
+func labelSetHasLabelName(lss uintptr, labelName string, labelSetID uint32) bool {
+	args := struct {
+		lss        uintptr
+		labelName  string
+		labelSetID uint32
+	}{lss, labelName, labelSetID}
+	var res struct {
+		isHas bool
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_label_set_has_label_name,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.isHas
+}
+
+func labelSetHasDuplicateLabelNames(lss uintptr, labelSetID uint32, dropMetricName bool) (string, bool) {
+	args := struct {
+		lss            uintptr
+		labelSetID     uint32
+		dropMetricName bool
+	}{lss, labelSetID, dropMetricName}
+	var res struct {
+		labelName string
+		isHas     bool
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_label_set_has_duplicate_label_names,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.labelName, res.isHas
+}
+
+func labelSetHash(lss uintptr, labelSetID uint32, dropMetricName bool) uint64 {
+	args := struct {
+		lss            uintptr
+		labelSetID     uint32
+		dropMetricName bool
+	}{lss, labelSetID, dropMetricName}
+	var res struct {
+		hash uint64
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_label_set_hash,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.hash
+}
+
+func labelSetHashForLabels(lss uintptr, labelNames []string, labelSetID uint32, dropMetricName bool) uint64 {
+	args := struct {
+		lss            uintptr
+		labelNames     []string
+		labelSetID     uint32
+		dropMetricName bool
+	}{lss, labelNames, labelSetID, dropMetricName}
+	var res struct {
+		hash uint64
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_label_set_hash_for_labels,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.hash
+}
+
+func labelSetHashWithoutLabels(lss uintptr, labelNames []string, labelSetID uint32) uint64 {
+	args := struct {
+		lss        uintptr
+		labelNames []string
+		labelSetID uint32
+	}{lss, labelNames, labelSetID}
+	var res struct {
+		hash uint64
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_label_set_hash_without_labels,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.hash
+}
+
+func labelSetEqual(
+	lssA, lssB uintptr,
+	labelSetIDA, labelSetIDB uint32,
+	dropMetricNameA, dropMetricNameB bool,
+) bool {
+	args := struct {
+		lssA            uintptr
+		lssB            uintptr
+		labelSetIDA     uint32
+		labelSetIDB     uint32
+		dropMetricNameA bool
+		dropMetricNameB bool
+		isEqual         bool
+	}{lssA, lssB, labelSetIDA, labelSetIDB, dropMetricNameA, dropMetricNameB, false}
+
+	fastcgo.UnsafeCall1(
+		C.prompp_label_set_equal,
+		uintptr(unsafe.Pointer(&args)),
+	)
+
+	return args.isEqual
+}
+
+func labelSetCompare(
+	lssA, lssB uintptr,
+	labelSetIDA, labelSetIDB uint32,
+	dropMetricNameA, dropMetricNameB bool,
+) int64 {
+	args := struct {
+		lssA            uintptr
+		lssB            uintptr
+		labelSetIDA     uint32
+		labelSetIDB     uint32
+		dropMetricNameA bool
+		dropMetricNameB bool
+	}{lssA, lssB, labelSetIDA, labelSetIDB, dropMetricNameA, dropMetricNameB}
+	var res struct {
+		result int64
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_label_set_compare,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.result
+}
+
+func allocateSliceForLabelBytes(lss uintptr, labelSetID uint32, bytes []byte, dropMetricName bool) []byte {
+	args := struct {
+		lss            uintptr
+		labelSetID     uint32
+		dropMetricName bool
+	}{lss, labelSetID, dropMetricName}
 	var sizeResult struct {
 		size uint32
 	}
@@ -3060,15 +3356,16 @@ func allocateSliceForLabelBytes(lss uintptr, labelSetID uint32, bytes []byte) []
 	}
 }
 
-func LabelSetBytes(lss uintptr, labelSetID uint32, bytes []byte) []byte {
+func labelSetBytes(lss uintptr, labelSetID uint32, bytes []byte, dropMetricName bool) []byte {
 	result := struct {
 		bytes []byte
-	}{allocateSliceForLabelBytes(lss, labelSetID, bytes)}
+	}{allocateSliceForLabelBytes(lss, labelSetID, bytes, dropMetricName)}
 
 	args := struct {
-		lss        uintptr
-		labelSetID uint32
-	}{lss, labelSetID}
+		lss            uintptr
+		labelSetID     uint32
+		dropMetricName bool
+	}{lss, labelSetID, dropMetricName}
 
 	testGC()
 	fastcgo.UnsafeCall2(
@@ -3080,16 +3377,24 @@ func LabelSetBytes(lss uintptr, labelSetID uint32, bytes []byte) []byte {
 	return result.bytes
 }
 
-func labelSetBytesWithFilteredNames(cFunction unsafe.Pointer, lss uintptr, labelSetID uint32, bytes []byte, names ...string) []byte {
+func labelSetBytesWithFilteredNames(
+	cFunction unsafe.Pointer,
+	lss uintptr,
+	bytes []byte,
+	names []string,
+	labelSetID uint32,
+	dropMetricName bool,
+) []byte {
 	result := struct {
 		bytes []byte
-	}{allocateSliceForLabelBytes(lss, labelSetID, bytes)}
+	}{allocateSliceForLabelBytes(lss, labelSetID, bytes, dropMetricName)}
 
 	args := struct {
-		lss        uintptr
-		labelSetID uint32
-		names      []string
-	}{lss, labelSetID, names}
+		lss            uintptr
+		names          []string
+		labelSetID     uint32
+		dropMetricName bool
+	}{lss, names, labelSetID, dropMetricName}
 
 	testGC()
 	fastcgo.UnsafeCall2(
@@ -3101,12 +3406,121 @@ func labelSetBytesWithFilteredNames(cFunction unsafe.Pointer, lss uintptr, label
 	return result.bytes
 }
 
-func LabelSetBytesWithLabels(lss uintptr, labelSetID uint32, bytes []byte, names ...string) []byte {
-	return labelSetBytesWithFilteredNames(C.prompp_label_set_bytes_with_labels, lss, labelSetID, bytes, names...)
+func labelSetBytesWithLabels(
+	lss uintptr,
+	bytes []byte,
+	names []string,
+	labelSetID uint32,
+	dropMetricName bool,
+) []byte {
+	return labelSetBytesWithFilteredNames(
+		C.prompp_label_set_bytes_with_labels,
+		lss,
+		bytes,
+		names,
+		labelSetID,
+		dropMetricName,
+	)
 }
 
-func LabelSetBytesWithoutLabels(lss uintptr, labelSetID uint32, bytes []byte, names ...string) []byte {
-	return labelSetBytesWithFilteredNames(C.prompp_label_set_bytes_without_labels, lss, labelSetID, bytes, names...)
+func labelSetBytesWithoutLabels(
+	lss uintptr,
+	bytes []byte,
+	names []string,
+	labelSetID uint32,
+	dropMetricName bool,
+) []byte {
+	return labelSetBytesWithFilteredNames(
+		C.prompp_label_set_bytes_without_labels,
+		lss,
+		bytes,
+		names,
+		labelSetID,
+		dropMetricName,
+	)
+}
+
+func ppLabelSetFromBuilderHash(
+	snapshotPtr uintptr,
+	sortedAdd []Label,
+	sortedDel []string,
+	lsID uint32,
+) (uint64, bool) {
+	args := struct {
+		snapshotPtr uintptr
+		sortedAdd   []Label
+		sortedDel   []string
+		lsID        uint32
+	}{snapshotPtr, sortedAdd, sortedDel, lsID}
+	var res struct {
+		hash  uint64
+		empty bool
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_label_set_from_builder_hash,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.hash, res.empty
+}
+
+func labelSetEqualWithBuilder(
+	snapshotPtr, builderSnapshotPtr uintptr,
+	builderSortedAdd []Label,
+	builderSortedDel []string,
+	builderLSID, lsID uint32,
+) bool {
+	args := struct {
+		snapshotPtr        uintptr
+		builderSnapshotPtr uintptr
+		builderSortedAdd   []Label
+		builderSortedDel   []string
+		builderLSID        uint32
+		lsID               uint32
+	}{snapshotPtr, builderSnapshotPtr, builderSortedAdd, builderSortedDel, builderLSID, lsID}
+	var res struct {
+		eq bool
+	}
+
+	fastcgo.UnsafeCall2(
+		C.prompp_label_set_equal_with_builder,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.eq
+}
+
+//
+// Bitset
+//
+
+// primitivesBitsetCtor wrapper for constructor C-Bitset.
+func primitivesBitsetCtor() uintptr {
+	var res struct {
+		cache uintptr
+	}
+
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_bitset_ctor,
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.cache
+}
+
+// primitivesBitsetDtor wrapper for destructor C-Bitset.
+func primitivesBitsetDtor(cache uintptr) {
+	args := struct {
+		cache uintptr
+	}{cache}
+
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_bitset_dtor,
+		uintptr(unsafe.Pointer(&args)),
+	)
 }
 
 //

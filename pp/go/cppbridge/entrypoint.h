@@ -385,8 +385,9 @@ extern "C" {
  * @brief get length label set by series id
  *
  * @param args {
- *     lss    uintptr // pointer to constructed lss;
- *     ls_id  uint32  // series id
+ *     lss              uintptr // pointer to constructed lss;
+ *     ls_id            uint32  // series id
+ *     drop_metric_name bool    // flag drop metric_name;
  * }
  *
  * @param res {
@@ -399,8 +400,9 @@ void prompp_label_set_length(void* args, void* res);
  * @brief get label set by series id
  *
  * @param args {
- *     lss       uintptr                      // pointer to constructed lss;
- *     ls_id     uint32                       // series id
+ *     lss              uintptr // pointer to constructed lss;
+ *     ls_id            uint32  // series id;
+ *     drop_metric_name bool    // flag drop metric_name;
  * }
  *
  * @param res {
@@ -422,8 +424,9 @@ void prompp_label_set_free(void* args);
  * @brief get size in bytes needed for Bytes method
  *
  * @param args {
- *     lss       uintptr   // pointer to constructed lss;
- *     ls_id     uint32    // series id
+ *     lss              uintptr   // pointer to constructed lss;
+ *     ls_id            uint32    // series id
+ *     drop_metric_name bool      // flag drop metric_name;
  * }
  *
  * @param res {
@@ -436,8 +439,9 @@ void prompp_label_set_bytes_size(void* args, void* res);
  * @brief implementation of Bytes method
  *
  * @param args {
- *     lss       uintptr   // pointer to constructed lss;
- *     ls_id     uint32    // series id
+ *     lss              uintptr   // pointer to constructed lss;
+ *     ls_id            uint32    // series id
+ *     drop_metric_name bool      // flag drop metric_name;
  * }
  *
  * @param res {
@@ -450,9 +454,10 @@ void prompp_label_set_bytes(void* args, void* res);
  * @brief implementation of BytesWithLabels method
  *
  * @param args {
- *     lss       uintptr   // pointer to constructed lss;
- *     ls_id     uint32    // series id
- *     names     []string  // names slice
+ *     lss              uintptr   // pointer to constructed lss;
+ *     names            []string  // names slice
+ *     ls_id            uint32    // series id
+ *     drop_metric_name bool      // flag drop metric_name;
  * }
  *
  * @param res {
@@ -465,9 +470,10 @@ void prompp_label_set_bytes_with_labels(void* args, void* res);
  * @brief implementation of BytesWithoutLabels method
  *
  * @param args {
- *     lss       uintptr   // pointer to constructed lss;
- *     ls_id     uint32    // series id
- *     names     []string  // names slice
+ *     lss              uintptr   // pointer to constructed lss;
+ *     names            []string  // names slice
+ *     ls_id            uint32    // series id
+ *     drop_metric_name bool      // flag drop metric_name;
  * }
  *
  * @param res {
@@ -475,6 +481,166 @@ void prompp_label_set_bytes_with_labels(void* args, void* res);
  * }
  */
 void prompp_label_set_bytes_without_labels(void* args, void* res);
+
+/**
+ * @brief get label value by label name from lss by series id
+ *
+ * @param args {
+ *     lss         uintptr                      // pointer to constructed lss;
+ *     label_name  string                       // label name
+ *     ls_id       uint32                       // series id
+ * }
+ *
+ * @param res {
+ *     label_value string                       // label value
+ * }
+ */
+void prompp_label_set_get_value(void* args, void* res);
+
+/**
+ * @brief has label name in label set from lss by series id
+ *
+ * @param args {
+ *     lss         uintptr                      // pointer to constructed lss;
+ *     label_name  string                       // label name
+ *     ls_id       uint32                       // series id
+ * }
+ *
+ * @param res {
+ *     is_has      bool                         // has?
+ * }
+ */
+void prompp_label_set_has_label_name(void* args, void* res);
+
+/**
+ * @brief returns whether ls has duplicate label names in label set from lss by series id
+ *
+ * @param args {
+ *     lss              uintptr // pointer to constructed lss;
+ *     ls_id            uint32  // series id
+ *     drop_metric_name bool    // flag drop metric_name;
+ * }
+ *
+ * @param res {
+ *     label_name       string  // label name
+ *     is_has           bool    // has?
+ * }
+ */
+void prompp_label_set_has_duplicate_label_names(void* args, void* res);
+
+/**
+ * @brief returns a hash value for the label set from lss by series id
+ *
+ * @param args {
+ *     lss              uintptr // pointer to constructed lss;
+ *     ls_id            uint32  // series id
+ *     drop_metric_name bool    // flag drop metric_name;
+ * }
+ *
+ * @param res {
+ *     hash             uint64  // hash sum
+ * }
+ */
+void prompp_label_set_hash(void* args, void* res);
+
+/**
+ * @brief returns a hash value for the labels matching the provided names for label set from lss by series id
+ *
+ * @param args {
+ *     lss              uintptr  // pointer to constructed lss;
+ *     label_names      []string // label names for filter;
+ *     ls_id            uint32   // series id;
+ *     drop_metric_name bool     // flag drop metric_name;
+ * }
+ *
+ * @param res {
+ *     hash             uint64   // hash sum
+ * }
+ */
+void prompp_label_set_hash_for_labels(void* args, void* res);
+
+/**
+ * @brief returns a hash value for all labels except those matching the provided names for label set from lss by series id
+ *
+ * @param args {
+ *     lss         uintptr                      // pointer to constructed lss;
+ *     label_names []string                     // label names for filter
+ *     ls_id       uint32                       // series id
+ * }
+ *
+ * @param res {
+ *     hash        uint64                       // hash sum
+ * }
+ */
+void prompp_label_set_hash_without_labels(void* args, void* res);
+
+/**
+ * @brief returns whether the two label sets are equal.
+ *
+ * @param args {
+ *     lss_a              uintptr                 // pointer to constructed lss a;
+ *     lss_b              uintptr                 // pointer to constructed lss b;
+ *     ls_id_a            uint32                  // series id a;
+ *     ls_id_b            uint32                  // series id b;
+ *     drop_metric_name_a bool                    // drop metric_name a;
+ *     drop_metric_name_b bool                    // drop metric_name b;
+ *     is_equal           bool                    // is equal?
+ * }
+ */
+void prompp_label_set_equal(void* args);
+
+/**
+ * @brief Compare compares the two label sets.
+ *
+ * @param args {
+ *     lss_a              uintptr                 // pointer to constructed lss a;
+ *     lss_b              uintptr                 // pointer to constructed lss b;
+ *     ls_id_a            uint32                  // series id a
+ *     ls_id_b            uint32                  // series id b
+ *     drop_metric_name_a bool                    // drop metric_name a;
+ *     drop_metric_name_b bool                    // drop metric_name b;
+ * }
+ *
+ * @param res {
+ *     result             int64                   // compare result
+ * }
+ */
+void prompp_label_set_compare(void* args, void* res);
+
+/**
+ * @brief returns a hash value for the label set from builder
+ *
+ * @param args {
+ *     readonly_lss uintptr  // pointer to constructed lss;
+ *     sorted_add   []Label  // slice of sorted by name labels
+ *     sorted_del   []string // slice of sorted label names
+ *     ls_id        uint32   // series id
+ * }
+ *
+ * @param res {
+ *     hash         uint64   // hash sum
+ *     empty        bool     // empty labelset in builder
+ * }
+ */
+void prompp_label_set_from_builder_hash(void* args, void* res);
+
+/**
+ * @brief returns whether the label set and the label set from builder are equal.
+ *
+ * @param args {
+ *     snapshot           uintptr  // pointer to constructed snapshot;
+ *     builder_snapshot   uintptr  // pointer to constructed snapshot from builder;
+ *     builder_sorted_add []Label  // slice of sorted by name labels
+ *     builder_sorted_del []string // slice of sorted label names
+ *     builder_ls_id      uint32   // series id from builder;
+ *     ls_id              uint32   // series id;
+ * }
+ *
+ * @param res {
+ *     eq                 bool     // equal;
+ * }
+ */
+void prompp_label_set_equal_with_builder(void* args, void* res);
 
 #ifdef __cplusplus
 }  // extern "C"
@@ -605,6 +771,69 @@ void prompp_primitives_lss_find_or_emplace(void* args, void* res);
  * }
  */
 void prompp_primitives_lss_find_or_emplace_builder(void* args, void* res);
+
+/**
+ * @brief insert label set from builder into lss
+ *
+ * @param args {
+ *     lss                   uintptr  // pointer to constructed lss;
+ *     readonly_lss          uintptr  // pointer to constructed read only lss;
+ *     bitset                uintptr  // pointer to constructed bitset;
+ *     sorted_add            []Label  // slice of sorted by name labels
+ *     sorted_del            []string // slice of sorted label names
+ *     hash                  uint64   // hash for the lebelset
+ *     ls_id                 uint32   // series id
+ * }
+ *
+ * @param res {
+ *     lss_ro_ptr            uintptr  // readonly copy of lss if need.
+ *     ls_id                 uint32   // inserted (or found) label set id
+ *     length                uint64   // length of label set
+ *     lss_has_reallocations bool     // true if lss has reallocations
+ * }
+ */
+void prompp_primitives_lss_find_or_emplace_from_builder(void* args, void* res);
+
+/**
+ * @brief find labelset from builder in lss with bitset, return length ls, lsid and bool ok
+ *
+ * @param args {
+ *     lss          uintptr  // pointer to constructed lss;
+ *     readonly_lss uintptr  // pointer to constructed lss;
+ *     bitset       uintptr  // pointer to constructed bitset;
+ *     sorted_add   []Label  // slice of sorted by name labels
+ *     sorted_del   []string // slice of sorted label names
+ *     hash         uint64   // hash for the lebelset
+ *     ls_id        uint32   // series id
+ * }
+ *
+ * @param res {
+ *     length       uint64   // length of label set
+ *     ls_id        uint32   // inserted (or found) label set id
+ *     has          bool     // is the label set found
+ * }
+ */
+void prompp_primitives_lss_find_from_builder_with_bitset(void* args, void* res);
+
+/**
+ * @brief find labelset from builder in lss, return length ls, lsid and bool ok
+ *
+ * @param args {
+ *     lss          uintptr  // pointer to constructed lss;
+ *     readonly_lss uintptr  // pointer to constructed lss;
+ *     sorted_add   []Label  // slice of sorted by name labels
+ *     sorted_del   []string // slice of sorted label names
+ *     hash         uint64   // hash for the lebelset
+ *     ls_id        uint32   // series id
+ * }
+ *
+ * @param res {
+ *     length       uint64   // length of label set
+ *     ls_id        uint32   // inserted (or found) label set id
+ *     has          bool     // is the label set found
+ * }
+ */
+void prompp_primitives_lss_find_from_builder(void* args, void* res);
 
 /**
  * @brief query selector from lss for label matchers
@@ -760,6 +989,41 @@ void prompp_primitives_readonly_lss_copy_added_series(uint64_t source_lss, uint6
  *
  */
 void prompp_primitives_free_ls_ids_mapping(void* args);
+
+/**
+ * @brief Construct a new Bitset.
+ *
+ * @param res {
+ *     bitset               uintptr // pointer to constructed Bitset;
+ * }
+ */
+void prompp_primitives_bitset_ctor(void* res);
+
+/**
+ * @brief Destroy Bitset.
+ *
+ * @param args {
+ *     bitset               uintptr // pointer to constructed Bitset;
+ * }
+ */
+void prompp_primitives_bitset_dtor(void* args);
+
+/**
+ * @brief return size of lss and count of emplace to bitset, clearing bitset.
+ *
+ * @param args {
+ *     lss              uintptr // pointer to constructed lss;
+ *     bitset           uintptr // pointer to constructed bitset;
+ *     reset            bool    // need reset?;
+ * }
+ *
+ * @param res {
+ *     allocated_memory uint64  // size of allocated memory for label sets;
+ *     lss_size         uint64  // size of lss;
+ *     bitset_count     uint32  // count of emplace to bitset;
+ * }
+ */
+void prompp_primitives_lss_with_snapshot_stats(void* args, void* res);
 
 #ifdef __cplusplus
 }  // extern "C"

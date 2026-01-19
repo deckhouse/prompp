@@ -284,6 +284,9 @@ func main() {
 		runtime.SetMutexProfileFraction(20)
 	}
 
+	lssctx, cancelLSS := context.WithCancel(context.Background())
+	labels.Storage.Run(lssctx)
+
 	var (
 		oldFlagRetentionDuration model.Duration
 		newFlagRetentionDuration model.Duration
@@ -790,6 +793,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	adapter := pp_pkg_storage.NewAdapter(
+		clock,
+		hManager.Proxy(),
+		hManager.Builder(),
+		hManager.MergeOutOfOrderChunks,
+		prometheus.DefaultRegisterer,
+	)
+	labels.Storage.SetAdapter(adapter)
+
 	remoteWriterReadyNotifier := ready.NewNotifiableNotifier()
 	remoteWriter := remotewriter.New(
 		dataDir,
@@ -798,15 +810,6 @@ func main() {
 		remoteWriterReadyNotifier,
 		prometheus.DefaultRegisterer,
 	)
-
-	adapter := pp_pkg_storage.NewAdapter(
-		clock,
-		hManager.Proxy(),
-		hManager.Builder(),
-		hManager.MergeOutOfOrderChunks,
-		prometheus.DefaultRegisterer,
-	)
-
 	// PP_CHANGES.md: rebuild on cpp end
 
 	var (
@@ -898,6 +901,7 @@ func main() {
 	scrapeManager, err := scrape.NewManager(
 		&cfg.scrape,
 		log.With(logger, "component", "scrape manager"),
+		func(s string) (log.Logger, error) { return logging.NewJSONFileLogger(s) },
 		adapter,
 		prometheus.DefaultRegisterer,
 	)
@@ -1581,6 +1585,8 @@ func main() {
 	if err := queryEngine.Close(); err != nil {
 		level.Warn(logger).Log("msg", "Closing query engine failed", "err", err)
 	}
+
+	cancelLSS()
 	// PP_CHANGES.md: rebuild on cpp end
 
 	level.Info(logger).Log("msg", "See you next time!")
