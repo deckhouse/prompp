@@ -29,12 +29,21 @@ struct TestStringFilament {
       using SerializationMode = BareBones::SnugComposite::SerializationMode;
 
       template <BareBones::OutputStream S>
-      void save(S& out, const storage_type& storage, uint32_t id_offset, uint32_t id_count, uint8_t, checkpoint_type const* from = nullptr) const {
-        // write items
-        out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
+      void save(S& out, const storage_type& storage, uint32_t id_offset, uint32_t id_count, uint8_t table_version, checkpoint_type const* from = nullptr)
+          const {
+        if (table_version == 1) {
+          // write items
+          out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
 
-        // write a version
-        out.put(1);
+          // write a version
+          out.put(1);
+        } else {  // table_version == 2
+          // write a version
+          out.put(1);
+
+          // write items
+          out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
+        }
 
         // write mode
         SerializationMode mode = (from != nullptr) ? SerializationMode::DELTA : SerializationMode::SNAPSHOT;
@@ -87,7 +96,7 @@ struct TestStringFilament {
       }
     };
 
-    struct view {
+    struct symbols_view {
       const storage_type* storage_ptr;
 
       class iterator_type {
@@ -97,63 +106,62 @@ struct TestStringFilament {
         using difference_type = std::ptrdiff_t;
 
         iterator_type() = default;
-        explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : id_{id}, storage_ptr_(&storage) {}
+        explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : storage_ptr_(&storage), id_{id} {}
 
-        iterator_type& operator++() noexcept {
+        PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
           ++id_;
           return *this;
         }
 
-        iterator_type operator++(int) noexcept {
+        PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
           iterator_type retval = *this;
           ++(*this);
           return retval;
         }
 
-        bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_ && storage_ptr_ == other.storage_ptr_; }
+        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_; }
 
-        value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
+        [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
 
-        [[nodiscard]] uint32_t id() const noexcept { return id_; }
+        [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t id() const noexcept { return id_; }
 
        private:
-        uint32_t id_{0};
         const storage_type* storage_ptr_;
+        uint32_t id_{0};
       };
 
-      [[nodiscard]] auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
-      [[nodiscard]] auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
 
-      [[nodiscard]] size_t size() const noexcept { return storage_ptr->count(); }
-      [[nodiscard]] uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_ptr->count(); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
     };
 
-    using view_type = view;
+    using view_type = symbols_view;
 
     storage_type() noexcept = default;
     template <class AnotherStorageType>
       requires kIsReadOnly
-    explicit storage_type(const AnotherStorageType& other) : data{other.data}, items{other.items}, shrinked_size{other.shrinked_size} {}
+    explicit storage_type(const AnotherStorageType& other) : data{other.data}, items{other.items} {}
 
     Vector<char> data;
     Vector<item_type> items;
-    uint32_t shrinked_size{};
 
-    [[nodiscard]] uint32_t count() const noexcept { return items.size(); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return static_cast<uint32_t>(items.size()); }
 
-    [[nodiscard]] size_t remainder_size() const noexcept {
-      constexpr size_t max_ui32 = std::numeric_limits<uint32_t>::max();
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t remainder_size() const noexcept {
+      constexpr uint32_t max_ui32 = std::numeric_limits<uint32_t>::max();
       assert(data.size() <= max_ui32);
-      return max_ui32 - data.size();
+      return max_ui32 - static_cast<uint32_t>(data.size());
     }
 
     template <class AnotherStorageType>
-    void reserve(const AnotherStorageType& other) noexcept {
+    PROMPP_ALWAYS_INLINE void reserve(const AnotherStorageType& other) noexcept {
       items.reserve(other.items.size());
       data.reserve(other.data.size());
     }
 
-    [[nodiscard]] composite_type composite(uint32_t id) const noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE composite_type composite(uint32_t id) const noexcept {
       const auto item = items[id];
       return std::string_view(data.data() + item.pos, item.length);
     }
@@ -165,20 +173,24 @@ struct TestStringFilament {
       }
     }
 
-    [[nodiscard]] uint32_t allocated_memory() const noexcept { return BareBones::mem::allocated_memory(data) + BareBones::mem::allocated_memory(items); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept {
+      return BareBones::mem::allocated_memory(data) + BareBones::mem::allocated_memory(items);
+    }
 
-    [[nodiscard]] uint32_t next_item_index() const noexcept { return static_cast<uint32_t>(items.size()); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return static_cast<uint32_t>(items.size()); }
 
-    [[nodiscard]] uint32_t emplace_back(composite_type str) noexcept {
-      const uint32_t id = items.size();
-      const uint32_t pos = data.size();
+    PROMPP_ALWAYS_INLINE uint32_t emplace_back(composite_type str) noexcept {
+      const auto id = static_cast<uint32_t>(items.size());
+      const auto pos = static_cast<uint32_t>(data.size());
       items.emplace_back(pos, str.length());
       data.push_back(str.begin(), str.end());
       return id;
     }
 
-    [[nodiscard]] checkpoint_type checkpoint() const noexcept { return {data.size(), items.size()}; }
-    void rollback(const checkpoint_type& checkpoint) noexcept {
+    [[nodiscard]] PROMPP_ALWAYS_INLINE checkpoint_type checkpoint() const noexcept {
+      return {static_cast<uint32_t>(data.size()), static_cast<uint32_t>(items.size())};
+    }
+    PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& checkpoint) noexcept {
       assert(checkpoint.data_size <= data.size());
       assert(checkpoint.items_size <= items.size());
       data.resize(checkpoint.data_size);
@@ -186,11 +198,13 @@ struct TestStringFilament {
     }
 
     template <class InputStream>
-    auto load(InputStream& in, uint32_t items_size, uint8_t) {
-      // read items
+    auto load(InputStream& in, uint32_t items_size, uint8_t table_version) {
       const auto original_size = items.size();
-      items.resize(original_size + items_size);
-      in.read(reinterpret_cast<char*>(&items[original_size]), sizeof(item_type) * items_size);
+      if (table_version == 1) {
+        // read items
+        items.resize(original_size + items_size);
+        in.read(reinterpret_cast<char*>(&items[original_size]), sizeof(item_type) * items_size);
+      }
 
       // read version
       const uint8_t version = in.get();
@@ -198,6 +212,12 @@ struct TestStringFilament {
         throw BareBones::Exception(
             0x67c010edbd64e272, "Invalid stream data version (%d) for loading into data vector (TestStringFilament::storage_type), only version 1 is supported",
             version);
+      }
+
+      if (table_version == 2) {
+        // read items
+        items.resize(original_size + items_size);
+        in.read(reinterpret_cast<char*>(&items[original_size]), sizeof(item_type) * items_size);
       }
 
       // read mode
@@ -209,20 +229,19 @@ struct TestStringFilament {
         in.read(reinterpret_cast<char*>(&first_to_load_i), sizeof(first_to_load_i));
       }
 
-      const uint32_t next_item_index = data.size();
-      if (first_to_load_i != next_item_index) {
+      if (first_to_load_i != data.size()) {
         if (mode == BareBones::SnugComposite::SerializationMode::SNAPSHOT) {
           throw BareBones::Exception(0x4c0ca0586da6da3f, "Attempt to load snapshot into non-empty data vector");
-        } else if (first_to_load_i < next_item_index) {
+        } else if (first_to_load_i < data.size()) {
           throw BareBones::Exception(0x55cb9b02c23f7bbd, "Attempt to load segment over existing data");
         } else {
           throw BareBones::Exception(0x55cb9b02c23f7bbd, "Attempt to load incomplete data from segment, data vector length (%u) is less than segment size (%d)",
-                                     next_item_index, first_to_load_i);
+                                     data.size(), first_to_load_i);
         }
       }
 
       // read size
-      uint32_t size_to_load;
+      uint32_t size_to_load = 0;
       in.read(reinterpret_cast<char*>(&size_to_load), sizeof(size_to_load));
 
       // read data
@@ -232,15 +251,10 @@ struct TestStringFilament {
       return std::views::iota(original_size, items.size());
     }
 
-    [[nodiscard]] view_type view() const noexcept { return {.storage_ptr = this}; }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE view_type view() const noexcept { return {.storage_ptr = this}; }
 
-    void shrink() noexcept {
-      shrinked_size += items.size();
-      items.clear();
-    }
+    void shrink() noexcept { items.clear(); }
   };
-
-  using data_type = storage_type;
 };
 
 using EncodingBimap = BareBones::SnugComposite::EncodingBimap<TestStringFilament, Vector>;

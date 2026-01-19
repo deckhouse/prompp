@@ -106,29 +106,29 @@ struct Symbol {
         using difference_type = std::ptrdiff_t;
 
         iterator_type() = default;
-        explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : id_{id}, storage_ptr_(&storage) {}
+        explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : storage_ptr_(&storage), id_{id} {}
 
-        iterator_type& operator++() noexcept {
+        PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
           ++id_;
           return *this;
         }
 
-        iterator_type operator++(int) noexcept {
+        PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
           iterator_type retval = *this;
           ++(*this);
           return retval;
         }
 
-        bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_ && storage_ptr_ == other.storage_ptr_; }
-        bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == storage_ptr_->items.size(); }
+        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_; }
+        PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == storage_ptr_->items.size(); }
 
-        value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
+        [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
 
         [[nodiscard]] uint32_t id() const noexcept { return id_; }
 
        private:
-        uint32_t id_{0};
         const storage_type* storage_ptr_;
+        uint32_t id_{0};
       };
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
@@ -695,10 +695,10 @@ struct LabelSet {
 
       using value_type = std::pair<typename label_name_set_type::value_type, typename Symbol<Vector>::storage_type::composite_type>;
 
-      PROMPP_ALWAYS_INLINE const label_name_set_type& names() const noexcept { return label_name_set_; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE const label_name_set_type& names() const noexcept { return label_name_set_; }
 
-      PROMPP_ALWAYS_INLINE auto size() const noexcept { return label_name_set_.size(); }
-      PROMPP_ALWAYS_INLINE auto id() const noexcept { return name_set_id_; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto size() const noexcept { return label_name_set_.size(); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto id() const noexcept { return name_set_id_; }
 
       class iterator_type {
         names_iterator_type names_it_;
@@ -932,7 +932,7 @@ struct LabelSet {
 
     struct label_sets_values_view {
       using keys_view_type = label_name_sets_table_type::filament_type::storage_type::view_type::symbols_view_type;
-      using values_view_type = label_values_symbols_table_type::filament_type::storage_type::view_type;
+      using values_symbols_view_type = label_values_symbols_table_type::filament_type::storage_type::view_type;
 
       const storage_type* storage_ptr;
 
@@ -1002,8 +1002,8 @@ struct LabelSet {
         keys_view_type::iterator_type key_it_;
         keys_view_type::iterator_type key_it_end_;
 
-        values_view_type::iterator_type value_it_;
-        values_view_type::iterator_type value_it_end_;
+        values_symbols_view_type::iterator_type value_it_;
+        values_symbols_view_type::iterator_type value_it_end_;
       };
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept {
@@ -1042,29 +1042,29 @@ struct LabelSet {
         using difference_type = std::ptrdiff_t;
 
         iterator_type() = default;
-        explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : id_{id}, storage_ptr_(&storage) {}
+        explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : storage_ptr_(&storage), id_{id} {}
 
-        iterator_type& operator++() noexcept {
+        PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
           ++id_;
           return *this;
         }
 
-        iterator_type operator++(int) noexcept {
+        PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
           iterator_type retval = *this;
           ++(*this);
           return retval;
         }
 
-        bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_ && storage_ptr_ == other.storage_ptr_; }
-        bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == storage_ptr_->items.size(); }
+        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_; }
+        PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == storage_ptr_->items.size(); }
 
-        value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
+        [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
 
         [[nodiscard]] uint32_t id() const noexcept { return id_; }
 
        private:
-        uint32_t id_{0};
         const storage_type* storage_ptr_;
+        uint32_t id_{0};
       };
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
@@ -1079,7 +1079,7 @@ struct LabelSet {
 
       [[nodiscard]] PROMPP_ALWAYS_INLINE keys_view_type keys() const noexcept { return storage_ptr->label_name_sets_table.data_view().symbols(); }
       [[nodiscard]] PROMPP_ALWAYS_INLINE values_view_type values() const noexcept { return label_sets_values_view{.storage_ptr = storage_ptr}; }
-      [[nodiscard]] PROMPP_ALWAYS_INLINE values_view_type::values_view_type values(uint32_t key_id) const noexcept {
+      [[nodiscard]] PROMPP_ALWAYS_INLINE values_view_type::values_symbols_view_type values(uint32_t key_id) const noexcept {
         if constexpr (BareBones::concepts::is_dereferenceable<typename symbols_tables_type::value_type>) {
           return (*storage_ptr->symbols_tables[key_id]).data_view();
         } else {
