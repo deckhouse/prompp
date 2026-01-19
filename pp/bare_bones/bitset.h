@@ -115,17 +115,21 @@ class Bitset {
 
   PROMPP_ALWAYS_INLINE void reset(std::initializer_list<uint32_t> values) noexcept { reset(values.begin(), values.end()); }
 
+  PROMPP_ALWAYS_INLINE void reset_all() noexcept {
+    if (size() != 0) {
+      const uint64_t size_in_uint64_elements = (size() + 63) >> 6;
+      assert(size_in_uint64_elements <= data_.size());
+      std::memset(data_, 0, size_in_uint64_elements << 3);
+    }
+  }
+
   PROMPP_ALWAYS_INLINE bool operator[](uint32_t v) const noexcept {
     assert(v < size());
     return (data_[v >> 6] & (1ull << (v & 0x3F))) > 0;
   }
 
   void clear() noexcept {
-    if (size() != 0) {
-      const uint64_t size_in_uint64_elements = (size() + 63) >> 6;
-      assert(size_in_uint64_elements <= data_.size());
-      std::memset(data_, 0, size_in_uint64_elements << 3);
-    }
+    reset_all();
     set_size(0);
   }
 

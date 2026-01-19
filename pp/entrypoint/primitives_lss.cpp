@@ -483,7 +483,7 @@ extern "C" void prompp_primitives_lss_with_snapshot_stats(void* args, void* res)
     out->bitset_count = in->bitset->popcount();
 
     if (in->reset) [[unlikely]] {
-      in->bitset->clear();
+      in->bitset->reset_all();
     }
   }
 }
