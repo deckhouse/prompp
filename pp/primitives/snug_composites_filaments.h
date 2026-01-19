@@ -559,9 +559,6 @@ struct LabelNameSet {
 
       if constexpr (BareBones::concepts::has_size<OtherLabelNameSet>) {
         size = label_name_set.size();
-      }
-
-      if constexpr (BareBones::concepts::has_size<OtherLabelNameSet>) {
         symbols_ids_sequences.reserve(static_cast<size_t>(symbols_ids_sequences.size()) + size);
       }
 
@@ -581,6 +578,7 @@ struct LabelNameSet {
     [[nodiscard]] PROMPP_ALWAYS_INLINE checkpoint_type checkpoint() const noexcept {
       return {symbols_table.checkpoint(), static_cast<uint32_t>(items.size()), static_cast<uint32_t>(symbols_ids_sequences.size())};
     }
+
     PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& checkpoint) noexcept {
       assert(checkpoint.symbols_ids_size <= symbols_ids_sequences.size());
       assert(checkpoint.items_size <= items.size());
@@ -681,25 +679,19 @@ struct LabelSet {
     class composite_type {
       using label_name_set_type = label_name_sets_table_type::value_type;
       using values_iterator_type = BareBones::StreamVByte::DecodeIterator<symbol_ids_codec_type, typename symbols_ids_sequences_type::const_iterator>;
-      using values_iterator_sentinel_type = BareBones::StreamVByte::DecodeIteratorSentinel;
+      using names_iterator_type = label_name_set_type::iterator_type;
 
       label_name_set_type label_name_set_;
       const symbols_tables_type* symbols_tables_ptr_;
       values_iterator_type values_begin_;
-      [[no_unique_address]] values_iterator_sentinel_type values_end_;
       uint32_t name_set_id_;
 
      public:
       PROMPP_ALWAYS_INLINE explicit composite_type(const symbols_tables_type* symbols_tables_ptr = nullptr,
                                                    label_name_set_type label_name_set = label_name_set_type(),
                                                    values_iterator_type values_begin = values_iterator_type(),
-                                                   values_iterator_sentinel_type values_end = values_iterator_sentinel_type(),
                                                    uint32_t name_set_id = 0) noexcept
-          : label_name_set_(label_name_set),
-            symbols_tables_ptr_(symbols_tables_ptr),
-            values_begin_(values_begin),
-            values_end_(values_end),
-            name_set_id_(name_set_id) {}
+          : label_name_set_(label_name_set), symbols_tables_ptr_(symbols_tables_ptr), values_begin_(values_begin), name_set_id_(name_set_id) {}
 
       using value_type = std::pair<typename label_name_set_type::value_type, typename Symbol<Vector>::storage_type::composite_type>;
 
@@ -708,10 +700,9 @@ struct LabelSet {
       PROMPP_ALWAYS_INLINE auto size() const noexcept { return label_name_set_.size(); }
       PROMPP_ALWAYS_INLINE auto id() const noexcept { return name_set_id_; }
 
-      template <class LabelNameSetIteratorType, class ValuesIteratorType>
-      class Iterator {
-        LabelNameSetIteratorType names_it_;
-        ValuesIteratorType values_it_;
+      class iterator_type {
+        names_iterator_type names_it_;
+        values_iterator_type values_it_;
         const symbols_tables_type* symbols_tables_ptr_;
 
         friend class composite_type;
@@ -721,27 +712,24 @@ struct LabelSet {
         using value_type = composite_type::value_type;
         using difference_type = std::ptrdiff_t;
 
-        PROMPP_ALWAYS_INLINE explicit Iterator(const symbols_tables_type* symbols_tables_ptr = nullptr,
-                                               LabelNameSetIteratorType names_it = LabelNameSetIteratorType(),
-                                               ValuesIteratorType values_it = ValuesIteratorType()) noexcept
+        PROMPP_ALWAYS_INLINE explicit iterator_type(const symbols_tables_type* symbols_tables_ptr = nullptr,
+                                                    names_iterator_type names_it = names_iterator_type(),
+                                                    values_iterator_type values_it = values_iterator_type()) noexcept
             : names_it_(names_it), values_it_(values_it), symbols_tables_ptr_(symbols_tables_ptr) {}
 
-        PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
+        PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
           ++names_it_;
           ++values_it_;
           return *this;
         }
 
-        PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
-          Iterator retval = *this;
+        PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
+          iterator_type retval = *this;
           ++(*this);
           return retval;
         }
 
-        template <class OtherIteratorType>
-        PROMPP_ALWAYS_INLINE bool operator==(const OtherIteratorType& other) const noexcept {
-          return names_it_ == other.names_it_ && values_it_ == other.values_it_;
-        }
+        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return values_it_ == other.values_it_; }
 
         [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept {
           if constexpr (BareBones::concepts::is_dereferenceable<typename symbols_tables_type::value_type>) {
@@ -758,16 +746,9 @@ struct LabelSet {
         [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t value_id() const noexcept { return *values_it_; }
       };
 
-      using iterator = Iterator<decltype(label_name_set_.begin()), decltype(values_begin_)>;
-      using end_iterator = Iterator<decltype(label_name_set_.end()), decltype(values_end_)>;
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type(symbols_tables_ptr_, label_name_set_.begin(), values_begin_); }
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept {
-        return Iterator<decltype(label_name_set_.begin()), decltype(values_begin_)>(symbols_tables_ptr_, label_name_set_.begin(), values_begin_);
-      }
-
-      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept {
-        return Iterator<decltype(label_name_set_.end()), decltype(values_end_)>(symbols_tables_ptr_, label_name_set_.end(), values_end_);
-      }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type(symbols_tables_ptr_, label_name_set_.end(), values_iterator_type()); }
 
       template <class T>
       PROMPP_ALWAYS_INLINE bool operator==(const T& b) const noexcept {
@@ -1168,9 +1149,9 @@ struct LabelSet {
       const auto [lns_id, pos] = items[id];
 
       auto lns = label_name_sets_table[lns_id];
-      auto [values_begin, values_end] = BareBones::StreamVByte::decoder<symbol_ids_codec_type>(symbols_ids_sequences.begin() + pos - shrinked_size, lns.size());
+      auto values_begin = BareBones::StreamVByte::decoder<symbol_ids_codec_type>(symbols_ids_sequences.begin() + pos - shrinked_size, lns.size()).first;
 
-      return composite_type(&symbols_tables, std::move(lns), std::move(values_begin), std::move(values_end), lns_id);
+      return composite_type(&symbols_tables, std::move(lns), std::move(values_begin), lns_id);
     }
 
     void validate(uint32_t id) const {
@@ -1197,8 +1178,8 @@ struct LabelSet {
       }
 
       // check that all symbols are in range
-      auto [values_begin, values_end] =
-          BareBones::StreamVByte::decoder<BareBones::StreamVByte::Codec1234>(symbols_ids_sequences.begin() + pos - shrinked_size, lns.size());
+      auto values_begin =
+          BareBones::StreamVByte::decoder<BareBones::StreamVByte::Codec1234>(symbols_ids_sequences.begin() + pos - shrinked_size, lns.size()).first;
       for (auto i = lns.begin(); i != lns.end(); ++i) {
         if (*values_begin++ >= symbols_tables[i.id()]->size()) {
           throw BareBones::Exception(0x0f0c520ad6285f15,
