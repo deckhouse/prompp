@@ -225,6 +225,8 @@ func (a Appender[TTask, TShard, TGoroutineShard, THead]) Append(
 	return stats, nil
 }
 
+var errCannotBeRelabeledFromCache = errors.New("cannot be relabeled from cache")
+
 // inputRelabelingStage first stage - relabeling.
 //
 //revive:disable-next-line:function-length long but this is first stage.
@@ -242,12 +244,13 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) inputRelabelingStage(
 			var (
 				relabeler   = shard.Relabeler()
 				shardID     = shard.ShardID()
-				ok          bool
 				shardedData = incomingData.ShardedData()
 				innerSeries = shardedInnerSeries.DataByShard(shardID)
 			)
+			defer incomingData.Destroy()
 
-			if err := shard.LSSWithRLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
+			err := shard.LSSWithRLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
+				var ok bool
 				stats[shardID], ok, rErr = relabeler.RelabelingFromCache(
 					ctx,
 					input,
@@ -256,23 +259,29 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) inputRelabelingStage(
 					shardedData,
 					innerSeries,
 				)
+				if rErr != nil {
+					return rErr
+				}
+				if !ok {
+					return errCannotBeRelabeledFromCache
+				}
 
-				return rErr
-			}); err != nil {
-				incomingData.Destroy()
-				return fmt.Errorf("shard %d: %w", shardID, err)
-			}
-
-			if ok {
-				incomingData.Destroy()
 				return nil
+			})
+			switch {
+			case err == nil:
+				return nil
+			case errors.Is(err, errCannotBeRelabeledFromCache):
+				// continue to relabel normally
+			default:
+				return fmt.Errorf("shard %d: %w", shardID, err)
 			}
 
 			var (
 				hasReallocations bool
 				rstats           = cppbridge.RelabelerStats{}
 			)
-			err := shard.LSSWithLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
+			err = shard.LSSWithLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
 				rstats, hasReallocations, rErr = relabeler.Relabeling(
 					ctx,
 					input,
@@ -289,8 +298,6 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) inputRelabelingStage(
 
 				return rErr
 			})
-
-			incomingData.Destroy()
 			if err != nil {
 				return fmt.Errorf("shard %d: %w", shardID, err)
 			}
