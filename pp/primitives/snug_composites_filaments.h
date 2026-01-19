@@ -663,10 +663,8 @@ struct LabelNameSet {
 };
 
 template <template <template <class> class> class SymbolsTableType,
-          template <template <class> class>
-          class LabelNameSetsTableType,
-          template <class>
-          class Vector>
+          template <template <class> class> class LabelNameSetsTableType,
+          template <class> class Vector>
 struct LabelSet {
   struct storage_type {
     static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
