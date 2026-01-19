@@ -102,6 +102,24 @@ type Head[
 
 	// RangeShards returns an iterator over the [Head] [Shard]s, through which the shard can be directly accessed.
 	RangeShards() func(func(TShard) bool)
+
+	// AcquireShardedInnerSeries gets a [cppbridge.ShardedInnerSeries] from the pool.
+	AcquireShardedInnerSeries() *cppbridge.ShardedInnerSeries
+
+	// ReleaseShardedInnerSeries returns a [cppbridge.ShardedInnerSeries] to the pool.
+	ReleaseShardedInnerSeries(s *cppbridge.ShardedInnerSeries)
+
+	// AcquireShardedRelabeledSeries gets a [cppbridge.ShardedRelabeledSeries] from the pool.
+	AcquireShardedRelabeledSeries() *cppbridge.ShardedRelabeledSeries
+
+	// ReleaseShardedRelabeledSeries returns a [cppbridge.ShardedRelabeledSeries] to the pool.
+	ReleaseShardedRelabeledSeries(s *cppbridge.ShardedRelabeledSeries)
+
+	// AcquireShardedStateUpdates gets a [cppbridge.ShardedStateUpdates] from the pool.
+	AcquireShardedStateUpdates() *cppbridge.ShardedStateUpdates
+
+	// ReleaseShardedStateUpdates returns a [cppbridge.ShardedStateUpdates] to the pool.
+	ReleaseShardedStateUpdates(s *cppbridge.ShardedStateUpdates)
 }
 
 //
@@ -149,8 +167,11 @@ func (a Appender[TTask, TShard, TGoroutineShard, THead]) Append(
 	}
 
 	numberOfShards := a.head.NumberOfShards()
-	shardedInnerSeries := cppbridge.NewShardedInnerSeries(numberOfShards)
-	shardedRelabeledSeries := cppbridge.NewShardedRelabeledSeries(numberOfShards)
+	shardedInnerSeries := a.head.AcquireShardedInnerSeries()
+	defer a.head.ReleaseShardedInnerSeries(shardedInnerSeries)
+	shardedRelabeledSeries := a.head.AcquireShardedRelabeledSeries()
+	defer a.head.ReleaseShardedRelabeledSeries(shardedRelabeledSeries)
+
 	stats, err := a.inputRelabelingStage(
 		ctx,
 		state,
@@ -167,7 +188,8 @@ func (a Appender[TTask, TShard, TGoroutineShard, THead]) Append(
 	if !shardedRelabeledSeries.IsEmpty() {
 		shardedRelabeledSeries.Transpose()
 
-		shardedStateUpdates := cppbridge.NewShardedStateUpdates(numberOfShards)
+		shardedStateUpdates := a.head.AcquireShardedStateUpdates()
+		defer a.head.ReleaseShardedStateUpdates(shardedStateUpdates)
 		if err = a.appendRelabelerSeriesStage(
 			ctx,
 			shardedInnerSeries,

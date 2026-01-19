@@ -1600,6 +1600,19 @@ func prometheusInnerSeriesDtor(innerSeries []InnerSeries) {
 	)
 }
 
+// prometheusInnerSeriesReset - wrapper for reset C-InnerSeries(vector).
+func prometheusInnerSeriesReset(innerSeries []InnerSeries) {
+	args := struct {
+		innerSeries []InnerSeries
+	}{innerSeries}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_prometheus_inner_series_reset,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
 //
 // RelabeledSeries
 //
@@ -1630,6 +1643,19 @@ func prometheusRelabeledSeriesDtor(relabeledSeries []RelabeledSeries) {
 	)
 }
 
+// prometheusRelabeledSeriesReset - wrapper for reset C-RelabeledSeries(vector).
+func prometheusRelabeledSeriesReset(relabeledSeries []RelabeledSeries) {
+	args := struct {
+		relabeledSeries []RelabeledSeries
+	}{relabeledSeries}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_prometheus_relabeled_series_reset,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
 //
 // RelabelerStateUpdate
 //
@@ -1656,6 +1682,19 @@ func prometheusRelabelerStateUpdateDtor(relabelerStateUpdate []RelabelerStateUpd
 	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_prometheus_relabeler_state_update_dtor,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+// prometheusRelabelerStateUpdateReset - wrapper for reset C-RelabelerStateUpdate(vector).
+func prometheusRelabelerStateUpdateReset(relabelerStateUpdate []RelabelerStateUpdate) {
+	args := struct {
+		relabelerStateUpdate []RelabelerStateUpdate
+	}{relabelerStateUpdate}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_prometheus_relabeler_state_update_reset,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
 	"github.com/prometheus/prometheus/pp/go/util"
@@ -67,6 +68,11 @@ type Head[TShard Shard, TGorutineShard Shard] struct {
 	tasksDone    *prometheus.CounterVec
 	tasksLive    *prometheus.CounterVec
 	tasksExecute *prometheus.CounterVec
+
+	// pools for reusable objects
+	shardedInnerSeriesPool     sync.Pool
+	shardedRelabeledSeriesPool sync.Pool
+	shardedStateUpdatesPool    sync.Pool
 }
 
 // NewHead init new [Head].
@@ -91,6 +97,7 @@ func NewHead[TShard Shard, TGoroutineShard Shard](
 	}
 
 	factory := util.NewUnconflictRegisterer(registerer)
+	numShards := uint16(numberOfShards) // #nosec G115 // no overflow
 	h := &Head[TShard, TGoroutineShard]{
 		id:             id,
 		generation:     generation,
@@ -125,6 +132,23 @@ func NewHead[TShard Shard, TGoroutineShard Shard](
 			Name: "prompp_head_task_execute_duration_microseconds_sum",
 			Help: "The duration of the task execution in microseconds.",
 		}, []string{"type_task"}),
+
+		// pools for reusable objects
+		shardedInnerSeriesPool: sync.Pool{
+			New: func() any {
+				return cppbridge.NewShardedInnerSeries(numShards)
+			},
+		},
+		shardedRelabeledSeriesPool: sync.Pool{
+			New: func() any {
+				return cppbridge.NewShardedRelabeledSeries(numShards)
+			},
+		},
+		shardedStateUpdatesPool: sync.Pool{
+			New: func() any {
+				return cppbridge.NewShardedStateUpdates(numShards)
+			},
+		},
 	}
 
 	h.run()
@@ -245,6 +269,39 @@ func (h *Head[TShard, TGorutineShard]) RangeShards() func(func(TShard) bool) {
 			}
 		}
 	}
+}
+
+// AcquireShardedInnerSeries gets a [cppbridge.ShardedInnerSeries] from the pool.
+func (h *Head[TShard, TGorutineShard]) AcquireShardedInnerSeries() *cppbridge.ShardedInnerSeries {
+	return h.shardedInnerSeriesPool.Get().(*cppbridge.ShardedInnerSeries)
+}
+
+// ReleaseShardedInnerSeries returns a [cppbridge.ShardedInnerSeries] to the pool after resetting it.
+func (h *Head[TShard, TGorutineShard]) ReleaseShardedInnerSeries(s *cppbridge.ShardedInnerSeries) {
+	s.Reset()
+	h.shardedInnerSeriesPool.Put(s)
+}
+
+// AcquireShardedRelabeledSeries gets a [cppbridge.ShardedRelabeledSeries] from the pool.
+func (h *Head[TShard, TGorutineShard]) AcquireShardedRelabeledSeries() *cppbridge.ShardedRelabeledSeries {
+	return h.shardedRelabeledSeriesPool.Get().(*cppbridge.ShardedRelabeledSeries)
+}
+
+// ReleaseShardedRelabeledSeries returns a [cppbridge.ShardedRelabeledSeries] to the pool after resetting it.
+func (h *Head[TShard, TGorutineShard]) ReleaseShardedRelabeledSeries(s *cppbridge.ShardedRelabeledSeries) {
+	s.Reset()
+	h.shardedRelabeledSeriesPool.Put(s)
+}
+
+// AcquireShardedStateUpdates gets a [cppbridge.ShardedStateUpdates] from the pool.
+func (h *Head[TShard, TGorutineShard]) AcquireShardedStateUpdates() *cppbridge.ShardedStateUpdates {
+	return h.shardedStateUpdatesPool.Get().(*cppbridge.ShardedStateUpdates)
+}
+
+// ReleaseShardedStateUpdates returns a [cppbridge.ShardedStateUpdates] to the pool after resetting it.
+func (h *Head[TShard, TGorutineShard]) ReleaseShardedStateUpdates(s *cppbridge.ShardedStateUpdates) {
+	s.Reset()
+	h.shardedStateUpdatesPool.Put(s)
 }
 
 // SetReadOnly sets the read-only flag for the [Head].

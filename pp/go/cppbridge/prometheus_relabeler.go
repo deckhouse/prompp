@@ -465,6 +465,11 @@ func NewShardedInnerSeries(numberOfShards uint16) *ShardedInnerSeries {
 	return series
 }
 
+// Reset clears all inner series data for reuse.
+func (s *ShardedInnerSeries) Reset() {
+	prometheusInnerSeriesReset(s.series)
+}
+
 //
 // ShardedRelabeledSeries
 //
@@ -498,6 +503,11 @@ func (sd *ShardedRelabeledSeries) IsEmpty() bool {
 	return true
 }
 
+// Reset clears all relabeled series data for reuse.
+func (sd *ShardedRelabeledSeries) Reset() {
+	prometheusRelabeledSeriesReset(sd.series)
+}
+
 //
 // ShardedStateUpdates
 //
@@ -518,6 +528,11 @@ func NewShardedStateUpdates(numberOfShards uint16) *ShardedStateUpdates {
 	})
 
 	return series
+}
+
+// Reset clears all state updates data for reuse.
+func (sd *ShardedStateUpdates) Reset() {
+	prometheusRelabelerStateUpdateReset(sd.series)
 }
 
 // incomingAndRelabeledLsID to update cache data.
