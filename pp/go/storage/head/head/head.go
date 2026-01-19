@@ -206,6 +206,7 @@ func (h *Head[TShard, TGorutineShard]) CreateTask(
 ) *task.Generic[TGorutineShard] {
 	return task.NewGeneric(
 		shardFn,
+		h.NumberOfShards(),
 		h.tasksCreated.WithLabelValues(taskName),
 		h.tasksDone.WithLabelValues(taskName),
 		h.tasksLive.WithLabelValues(taskName),

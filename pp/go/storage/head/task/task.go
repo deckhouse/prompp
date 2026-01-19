@@ -38,9 +38,11 @@ type Generic[TShard Shard] struct {
 // NewGeneric init new [Generic].
 func NewGeneric[TShard Shard](
 	shardFn func(shard TShard) error,
+	shardsNumber uint16,
 	created, done, live, execute prometheus.Counter,
 ) *Generic[TShard] {
 	t := &Generic[TShard]{
+		errs:      make([]error, shardsNumber),
 		shardFn:   shardFn,
 		wg:        sync.WaitGroup{},
 		createdTS: time.Now().UnixMicro(),
@@ -57,6 +59,7 @@ func NewGeneric[TShard Shard](
 // NewTransactionGeneric init new [Generic] for transaction head.
 func NewTransactionGeneric[TShard Shard](shardFn func(shard TShard) error) *Generic[TShard] {
 	t := &Generic[TShard]{
+		errs:    make([]error, 1),
 		shardFn: shardFn,
 		wg:      sync.WaitGroup{},
 	}
@@ -66,19 +69,13 @@ func NewTransactionGeneric[TShard Shard](shardFn func(shard TShard) error) *Gene
 
 // SetShardsNumber set shards number
 func (t *Generic[TShard]) SetShardsNumber(number uint16) {
-	t.errs = make([]error, number)
 	t.wg.Add(int(number))
 }
 
 // ExecuteOnShard execute task on shard.
 func (t *Generic[TShard]) ExecuteOnShard(shard TShard) {
 	atomic.CompareAndSwapInt64(&t.executeTS, 0, time.Now().UnixMicro())
-	if len(t.errs) == 1 {
-		t.errs[0] = t.shardFn(shard)
-	} else {
-		t.errs[shard.ShardID()] = t.shardFn(shard)
-	}
-
+	t.errs[shard.ShardID()] = t.shardFn(shard)
 	t.wg.Done()
 }
 
