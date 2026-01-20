@@ -165,8 +165,7 @@ class InnerSeries {
   PROMPP_ALWAYS_INLINE void reset() noexcept {
     data_.clear();
     size_ = 0;
-    roaring::Roaring new_tracked_stale_nans;
-    tracked_stale_nans_ = std::move(new_tracked_stale_nans);
+    tracked_stale_nans_ = roaring::Roaring{};
   }
 
   PROMPP_ALWAYS_INLINE roaring::Roaring& tracked_stale_nans() { return tracked_stale_nans_; }
@@ -214,8 +213,7 @@ class RelabeledSeries {
   PROMPP_ALWAYS_INLINE void reset() noexcept {
     data_.clear();
     size_ = 0;
-    roaring::Roaring new_tracked_stale_nans;
-    tracked_stale_nans_ = std::move(new_tracked_stale_nans);
+    tracked_stale_nans_ = roaring::Roaring{};
   }
 };
 

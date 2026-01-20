@@ -57,9 +57,7 @@ func (t *Generic[TShard]) Reset(
 	shardFn func(shard TShard) error,
 	done prometheus.Counter,
 ) {
-	for i := range t.errs {
-		t.errs[i] = nil
-	}
+	clear(t.errs)
 	t.shardFn = shardFn
 	t.done = done
 }

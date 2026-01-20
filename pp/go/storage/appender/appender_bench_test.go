@@ -88,6 +88,7 @@ func BenchmarkAppenderAppend(b *testing.B) {
 
 	state := cppbridge.NewStateV2WithoutLock()
 	state.SetStatelessRelabeler(statelessRelabeler)
+	state.EnableTrackStaleness()
 
 	ctx := context.Background()
 
@@ -111,11 +112,7 @@ func BenchmarkAppenderAppend(b *testing.B) {
 		ap := appender.New(h, func(_ *benchHead) error {
 			return nil
 		})
-
-		incomingData := &appender.IncomingData{
-			Hashdex: hashdex,
-			Data:    nil,
-		}
+		incomingData.Hashdex = hashdex
 		state.SetDefTimestamp(ts + int64(i+15000))
 		_, err := ap.Append(ctx, incomingData, state, false)
 		if err != nil {
