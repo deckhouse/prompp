@@ -395,8 +395,8 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) trackStaleNans(
 		return
 	}
 
-	for shard := range a.head.RangeShards() {
-		cppbridge.PerGoroutineRelabelerTrackStaleNans(shardInnerSeries.DataByShard(shard.ShardID()), state, shard.ShardID())
+	for i := range a.head.NumberOfShards() {
+		cppbridge.PerGoroutineRelabelerTrackStaleNans(shardInnerSeries.DataByShard(i), state, i)
 	}
 }
 
