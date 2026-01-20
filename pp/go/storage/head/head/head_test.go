@@ -63,6 +63,10 @@ func (s *HeadSuite) TestConcurrency() {
 		CloseFunc:   func() error { return nil },
 	}
 
+	ew := head.ExtraWorkers
+	head.ExtraWorkers = 0
+	defer func() { head.ExtraWorkers = ew }()
+
 	h := head.NewHead(
 		s.id,
 		[]*ShardMock{sd, sd},
@@ -249,6 +253,10 @@ func (s *HeadSuite) TestRangeQueueSize() {
 		ShardIDFunc: func() uint16 { return 1 },
 		CloseFunc:   func() error { return nil },
 	}
+
+	ew := head.ExtraWorkers
+	head.ExtraWorkers = 0
+	defer func() { head.ExtraWorkers = ew }()
 
 	h := head.NewHead(
 		s.id,
