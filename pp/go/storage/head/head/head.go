@@ -73,6 +73,7 @@ type Head[TShard Shard, TGorutineShard Shard] struct {
 	shardedInnerSeriesPool     sync.Pool
 	shardedRelabeledSeriesPool sync.Pool
 	shardedStateUpdatesPool    sync.Pool
+	taskPool                   sync.Pool
 }
 
 // NewHead init new [Head].
@@ -149,6 +150,11 @@ func NewHead[TShard Shard, TGoroutineShard Shard](
 				return cppbridge.NewShardedStateUpdates(numShards)
 			},
 		},
+		taskPool: sync.Pool{
+			New: func() any {
+				return task.NewGenericEmpty[TGoroutineShard](numShards)
+			},
+		},
 	}
 
 	h.run()
@@ -204,14 +210,20 @@ func (h *Head[TShard, TGorutineShard]) CreateTask(
 	taskName string,
 	shardFn func(shard TGorutineShard) error,
 ) *task.Generic[TGorutineShard] {
-	return task.NewGeneric(
+	t := h.taskPool.Get().(*task.Generic[TGorutineShard])
+	t.Reset(
 		shardFn,
-		h.NumberOfShards(),
 		h.tasksCreated.WithLabelValues(taskName),
 		h.tasksDone.WithLabelValues(taskName),
 		h.tasksLive.WithLabelValues(taskName),
 		h.tasksExecute.WithLabelValues(taskName),
 	)
+	return t
+}
+
+// ReleaseTask returns a task to the pool.
+func (h *Head[TShard, TGorutineShard]) ReleaseTask(t *task.Generic[TGorutineShard]) {
+	h.taskPool.Put(t)
 }
 
 // Enqueue the task to be executed on shards [Head].

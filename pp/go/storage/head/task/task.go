@@ -56,6 +56,32 @@ func NewGeneric[TShard Shard](
 	return t
 }
 
+// NewGenericEmpty init new empty [Generic] for pooling.
+func NewGenericEmpty[TShard Shard](shardsNumber uint16) *Generic[TShard] {
+	return &Generic[TShard]{
+		errs: make([]error, shardsNumber),
+		wg:   sync.WaitGroup{},
+	}
+}
+
+// Reset resets the task for reuse from pool.
+func (t *Generic[TShard]) Reset(
+	shardFn func(shard TShard) error,
+	created, done, live, execute prometheus.Counter,
+) {
+	for i := range t.errs {
+		t.errs[i] = nil
+	}
+	t.shardFn = shardFn
+	t.createdTS = time.Now().UnixMicro()
+	t.executeTS = 0
+	t.created = created
+	t.done = done
+	t.live = live
+	t.execute = execute
+	t.created.Inc()
+}
+
 // NewTransactionGeneric init new [Generic] for transaction head.
 func NewTransactionGeneric[TShard Shard](shardFn func(shard TShard) error) *Generic[TShard] {
 	t := &Generic[TShard]{

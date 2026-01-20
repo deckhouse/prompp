@@ -68,6 +68,9 @@ func (*Head[TShard, TGShard]) CreateTask(taskName string, shardFn func(shard TGS
 	return task.NewTransactionGeneric(shardFn)
 }
 
+// ReleaseTask to the pool.
+func (*Head[TShard, TGShard]) ReleaseTask(_ *task.Generic[TGShard]) {}
+
 // Enqueue the task to be executed on shards [Head]. Method are goroutine-unsafe.
 func (h *Head[TShard, TGShard]) Enqueue(t *task.Generic[TGShard]) {
 	t.SetShardsNumber(1)

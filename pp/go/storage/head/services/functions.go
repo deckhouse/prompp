@@ -82,6 +82,7 @@ func UnloadUnusedSeriesDataWithHead[
 			return shard.UnloadUnusedSeriesData()
 		},
 	)
+	defer h.ReleaseTask(t)
 	h.Enqueue(t)
 
 	return t.Wait()
@@ -105,6 +106,7 @@ func MergeOutOfOrderChunksWithHead[
 			return nil
 		},
 	)
+	defer h.ReleaseTask(t)
 	h.Enqueue(t)
 
 	return t.Wait()

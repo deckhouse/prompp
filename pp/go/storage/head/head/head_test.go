@@ -102,7 +102,7 @@ func (s *HeadSuite) TestEnqueue() {
 		atomic.AddUint32(&shardsExecuted, uint32(shard.ShardID()+1))
 		return nil
 	})
-
+	defer h.ReleaseTask(t)
 	h.Enqueue(t)
 
 	err := t.Wait()
@@ -138,7 +138,7 @@ func (s *HeadSuite) TestEnqueueOnShard() {
 		shardActual = shard.ShardID()
 		return nil
 	})
-
+	defer h.ReleaseTask(t)
 	h.EnqueueOnShard(t, expectedShard)
 
 	err := t.Wait()
@@ -151,7 +151,7 @@ func (s *HeadSuite) TestEnqueueOnShard() {
 		shardActual = shard.ShardID()
 		return nil
 	})
-
+	defer h.ReleaseTask(t)
 	h.EnqueueOnShard(t, expectedShard)
 
 	err = t.Wait()
@@ -269,6 +269,7 @@ func (s *HeadSuite) TestRangeQueueSize() {
 		<-done
 		return nil
 	})
+	defer h.ReleaseTask(t1)
 	h.Enqueue(t1)
 
 	t2 := h.CreateTask("test-task", func(_ *perGoroutineShardMock) error {
@@ -276,6 +277,7 @@ func (s *HeadSuite) TestRangeQueueSize() {
 		<-done
 		return nil
 	})
+	defer h.ReleaseTask(t2)
 	h.Enqueue(t2)
 
 	execute.Wait()
@@ -284,6 +286,7 @@ func (s *HeadSuite) TestRangeQueueSize() {
 		<-done
 		return nil
 	})
+	defer h.ReleaseTask(t3)
 	h.Enqueue(t3)
 
 	expectedShardID := 0

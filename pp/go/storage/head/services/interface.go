@@ -51,6 +51,9 @@ type Head[
 	// Enqueue the task to be executed on shards [Head].
 	Enqueue(t TTask)
 
+	// ReleaseTask to the pool.
+	ReleaseTask(t TTask)
+
 	// Generation returns current generation of [Head].
 	Generation() uint64
 

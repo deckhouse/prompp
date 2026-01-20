@@ -93,6 +93,9 @@ type Head[
 	// Enqueue the task to be executed on shards [Head].
 	Enqueue(t TTask)
 
+	// ReleaseTask returns a task to the pool.
+	ReleaseTask(t TTask)
+
 	// Generation returns current generation of [Head].
 	Generation() uint64
 
@@ -306,6 +309,7 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) inputRelabelingStage(
 			return nil
 		},
 	)
+	defer a.head.ReleaseTask(t)
 	a.head.Enqueue(t)
 
 	resStats := cppbridge.RelabelerStats{}
@@ -355,6 +359,7 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) appendRelabelerSeriesS
 			})
 		},
 	)
+	defer a.head.ReleaseTask(t)
 	a.head.Enqueue(t)
 
 	return t.Wait()
@@ -407,6 +412,7 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) appendInnerSeriesAndWr
 			return nil
 		},
 	)
+	defer a.head.ReleaseTask(tAppend)
 	a.head.Enqueue(tAppend)
 
 	var atomicLimitExhausted uint32
@@ -425,6 +431,7 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) appendInnerSeriesAndWr
 			return nil
 		},
 	)
+	defer a.head.ReleaseTask(tWalWrite)
 	a.head.Enqueue(tWalWrite)
 
 	err := tAppend.Wait()
