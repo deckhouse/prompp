@@ -8,7 +8,6 @@ import (
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
-	"github.com/prometheus/prometheus/pp/go/storage/head/task"
 )
 
 const (
@@ -400,8 +399,6 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) trackStaleNans(
 func (a *Appender[TTask, TShard, TGoroutineShard, THead]) appendInnerSeriesAndWriteToWal(
 	shardedInnerSeries *cppbridge.ShardedInnerSeries,
 ) (uint32, error) {
-	tw := task.NewTaskWaiter[TTask](2) //revive:disable-line:add-constant // 2 task for wait
-
 	tAppend := a.head.CreateTask(
 		dsAppendInnerSeries,
 		func(shard TGoroutineShard) error {
@@ -430,10 +427,10 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) appendInnerSeriesAndWr
 	)
 	a.head.Enqueue(tWalWrite)
 
-	tw.Add(tAppend)
-	tw.Add(tWalWrite)
+	err := tAppend.Wait()
+	err = errors.Join(err, tWalWrite.Wait())
 
-	return atomicLimitExhausted, tw.Wait()
+	return atomicLimitExhausted, err
 }
 
 func (a *Appender[TTask, TShard, TGoroutineShard, THead]) resolveState(state *cppbridge.StateV2) error {
