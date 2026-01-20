@@ -20,7 +20,7 @@ import (
 //go:generate moq head_moq_test.go . Shard
 
 // ExtraWorkers number of extra workers for operation on shards.
-var ExtraWorkers = 0
+var ExtraWorkers = 1
 
 // defaultNumberOfWorkers default number of workers.
 const defaultNumberOfWorkers = 2

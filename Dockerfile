@@ -21,7 +21,7 @@ RUN ln -s /bin/prometheus /bin/prompp
 
 ENV GOGC="30"
 ENV MALLOC_CONF="background_thread:true,tcache_max:4096,dirty_decay_ms:5000,muzzy_decay_ms:5000"
-ENV PROMPP_FEATURES="unload_data_storage,head_copy_series_on_rotate,head_read_concurrency=1"
+ENV PROMPP_FEATURES=""
 
 USER       nobody
 EXPOSE     9090

@@ -2115,13 +2115,6 @@ func readPromPPFeatures(logger log.Logger) {
 	for _, feature := range strings.Split(features, ",") {
 		fname, fvalue, _ := strings.Cut(feature, "=")
 		switch strings.TrimSpace(fname) {
-		case "head_copy_series_on_rotate":
-			services.CopySeriesOnRotate = true
-			level.Info(logger).Log(
-				"msg",
-				"[FEATURE] Copying active series from current head to new head during rotation is enabled.",
-			)
-
 		case "head_read_concurrency":
 			var (
 				v   = 1
@@ -2188,9 +2181,9 @@ func readPromPPFeatures(logger log.Logger) {
 			rwprocessor.AlwaysCommit = false
 			pp_pkg_handler.OTLPAlwaysCommit = false
 
-		case "unload_data_storage":
-			pp_storage.UnloadDataStorage = true
-			_ = level.Info(logger).Log("msg", "[FEATURE] Data storage unloading is enabled.")
+		case "no_unload_data_storage":
+			pp_storage.UnloadDataStorage = false
+			_ = level.Info(logger).Log("msg", "[FEATURE] Data storage unloading is disabled.")
 
 		case "disable_block_compaction":
 			pp_pkg_tsdb.BlockCompactionDisabled = true

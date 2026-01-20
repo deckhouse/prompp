@@ -165,7 +165,6 @@ func (s *RotatorSuite) TestRotate() {
 	s.addLabelSetToHead(aHead)
 
 	done := make(chan struct{})
-	services.CopySeriesOnRotate = false
 
 	s.T().Run("execute", func(t *testing.T) {
 		t.Parallel()
@@ -191,7 +190,7 @@ func (s *RotatorSuite) TestRotate() {
 		s.Equal(s.nameIDGenerator(rotatedCounter), aHead.ID())
 		s.Equal(headInformer.SetActiveStatusCalls()[0].HeadID, aHead.ID())
 		actualNumSeries := s.getNumSeriesFromHead(aHead)
-		s.Equal(uint32(0), actualNumSeries)
+		s.Equal(uint32(2), actualNumSeries)
 
 		for _, segmentWriter := range segmentWriters {
 			if !s.Len(segmentWriter.WriteCalls(), 1) {
@@ -281,7 +280,6 @@ func (s *RotatorSuite) TestCopySeriesOnRotate() {
 	expectedNumSeries := s.getNumSeriesFromHead(aHead)
 
 	done := make(chan struct{})
-	services.CopySeriesOnRotate = true
 
 	s.T().Run("execute", func(t *testing.T) {
 		t.Parallel()

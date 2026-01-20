@@ -196,6 +196,7 @@ docker:
   ENV:
     GOGC: 30
     MALLOC_CONF: "background_thread:true,tcache_max:4096,dirty_decay_ms:5000,muzzy_decay_ms:5000"
+    PROMPP_FEATURES: ""
   EXPOSE:
     - "9090"
   VOLUME:
