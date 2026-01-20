@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"sync"
 
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
 )
@@ -35,6 +37,11 @@ type Head[TShard Shard, TGShard Shard] struct {
 	id     string
 	shard  TShard
 	gshard TGShard
+
+	// pools for reusable objects
+	shardedInnerSeriesPool     sync.Pool
+	shardedRelabeledSeriesPool sync.Pool
+	shardedStateUpdatesPool    sync.Pool
 }
 
 // NewHead init new [Head].
@@ -47,6 +54,22 @@ func NewHead[TShard Shard, TGShard Shard](
 		id:     id,
 		shard:  shard,
 		gshard: gshard,
+		// pools for reusable objects
+		shardedInnerSeriesPool: sync.Pool{
+			New: func() any {
+				return cppbridge.NewShardedInnerSeries(1)
+			},
+		},
+		shardedRelabeledSeriesPool: sync.Pool{
+			New: func() any {
+				return cppbridge.NewShardedRelabeledSeries(1)
+			},
+		},
+		shardedStateUpdatesPool: sync.Pool{
+			New: func() any {
+				return cppbridge.NewShardedStateUpdates(1)
+			},
+		},
 	}
 
 	runtime.SetFinalizer(h, func(h *Head[TShard, TGShard]) {
@@ -100,6 +123,39 @@ func (h *Head[TShard, TGShard]) RangeShards() func(func(TShard) bool) {
 	return func(yield func(s TShard) bool) {
 		yield(h.shard)
 	}
+}
+
+// AcquireShardedInnerSeries gets a [cppbridge.ShardedInnerSeries] from the pool.
+func (h *Head[TShard, TGorutineShard]) AcquireShardedInnerSeries() *cppbridge.ShardedInnerSeries {
+	return h.shardedInnerSeriesPool.Get().(*cppbridge.ShardedInnerSeries)
+}
+
+// ReleaseShardedInnerSeries returns a [cppbridge.ShardedInnerSeries] to the pool after resetting it.
+func (h *Head[TShard, TGorutineShard]) ReleaseShardedInnerSeries(s *cppbridge.ShardedInnerSeries) {
+	s.Reset()
+	h.shardedInnerSeriesPool.Put(s)
+}
+
+// AcquireShardedRelabeledSeries gets a [cppbridge.ShardedRelabeledSeries] from the pool.
+func (h *Head[TShard, TGorutineShard]) AcquireShardedRelabeledSeries() *cppbridge.ShardedRelabeledSeries {
+	return h.shardedRelabeledSeriesPool.Get().(*cppbridge.ShardedRelabeledSeries)
+}
+
+// ReleaseShardedRelabeledSeries returns a [cppbridge.ShardedRelabeledSeries] to the pool after resetting it.
+func (h *Head[TShard, TGorutineShard]) ReleaseShardedRelabeledSeries(s *cppbridge.ShardedRelabeledSeries) {
+	s.Reset()
+	h.shardedRelabeledSeriesPool.Put(s)
+}
+
+// AcquireShardedStateUpdates gets a [cppbridge.ShardedStateUpdates] from the pool.
+func (h *Head[TShard, TGorutineShard]) AcquireShardedStateUpdates() *cppbridge.ShardedStateUpdates {
+	return h.shardedStateUpdatesPool.Get().(*cppbridge.ShardedStateUpdates)
+}
+
+// ReleaseShardedStateUpdates returns a [cppbridge.ShardedStateUpdates] to the pool after resetting it.
+func (h *Head[TShard, TGorutineShard]) ReleaseShardedStateUpdates(s *cppbridge.ShardedStateUpdates) {
+	s.Reset()
+	h.shardedStateUpdatesPool.Put(s)
 }
 
 // String serialize as string.
