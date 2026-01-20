@@ -58,8 +58,8 @@ func newbatchesPool() *batchesPool {
 func (p *batchesPool) get() *BatchTimeSeries {
 	batch := p.pool.Get().(*BatchTimeSeries)
 	batch.setDestroyFunc(func() {
-		p.put(batch)
 		batch.setDestroyFunc(nil)
+		p.put(batch)
 	})
 	batch.reset()
 	return batch

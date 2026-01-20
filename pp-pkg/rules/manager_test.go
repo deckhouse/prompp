@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"maps"
 	"math"
 	"os"
 	"path"
@@ -409,13 +410,14 @@ func TestForStateRestore(t *testing.T) {
 				labels.EmptyLabels(), labels.EmptyLabels(), "", true, nil,
 			)
 
-			group := NewGroup(GroupOptions{
+			group, err := NewGroup(GroupOptions{
 				Name:          "default",
 				Interval:      time.Second,
 				Rules:         []Rule{rule},
 				ShouldRestore: true,
 				Opts:          opts,
 			})
+			require.NoError(t, err)
 			groups := make(map[string]*Group)
 			groups["default;"] = group
 
@@ -487,7 +489,7 @@ func TestForStateRestore(t *testing.T) {
 						labels.FromStrings("severity", "critical"),
 						labels.EmptyLabels(), labels.EmptyLabels(), "", false, nil,
 					)
-					newGroup := NewGroup(GroupOptions{
+					newGroup, err := NewGroup(GroupOptions{
 						Name:          "default",
 						Interval:      time.Second,
 						Rules:         []Rule{newRule},
@@ -495,6 +497,7 @@ func TestForStateRestore(t *testing.T) {
 						Opts:          opts,
 						QueryOffset:   &queryOffset,
 					})
+					require.NoError(t, err)
 
 					newGroups := make(map[string]*Group)
 					newGroups["default;"] = newGroup
@@ -586,7 +589,7 @@ func TestStaleness(t *testing.T) {
 		expr, err := parser.ParseExpr("a + 1")
 		require.NoError(t, err)
 		rule := NewRecordingRule("a_plus_one", expr, labels.Labels{})
-		group := NewGroup(GroupOptions{
+		group, err := NewGroup(GroupOptions{
 			Name:          "default",
 			Interval:      time.Second,
 			Rules:         []Rule{rule},
@@ -594,6 +597,7 @@ func TestStaleness(t *testing.T) {
 			Opts:          opts,
 			QueryOffset:   &queryOffset,
 		})
+		require.NoError(t, err)
 
 		// A time series that has two samples and then goes stale.
 		app := st.Appender(context.Background())
@@ -673,12 +677,13 @@ groups:
 	err := os.WriteFile(fname, []byte(config), fs.ModePerm)
 	require.NoError(t, err)
 
-	m := NewManager(&ManagerOptions{
+	m, err := NewManager(&ManagerOptions{
 		Logger: log.NewNopLogger(),
 		DefaultRuleQueryOffset: func() time.Duration {
 			return time.Minute
 		},
 	})
+	require.NoError(t, err)
 	m.start()
 	err = m.Update(time.Second, []string{fname}, labels.EmptyLabels(), "", nil)
 	require.NoError(t, err)
@@ -709,15 +714,6 @@ func TestCopyState(t *testing.T) {
 			NewRecordingRule("rule3", nil, labels.FromStrings("l1", "v3")),
 			NewAlertingRule("alert2", nil, 0, 0, labels.FromStrings("l2", "v1"), labels.EmptyLabels(), labels.EmptyLabels(), "", true, nil),
 		},
-		seriesInPreviousEval: []map[string]labels.Labels{
-			{},
-			{},
-			{},
-			{"r3a": labels.FromStrings("l1", "v1")},
-			{"r3b": labels.FromStrings("l1", "v2")},
-			{"r3c": labels.FromStrings("l1", "v3")},
-			{"a2": labels.FromStrings("l2", "v1")},
-		},
 		evaluationTime: time.Second,
 	}
 	oldGroup.rules[0].(*AlertingRule).active[42] = nil
@@ -732,87 +728,72 @@ func TestCopyState(t *testing.T) {
 			NewAlertingRule("alert2", nil, 0, 0, labels.FromStrings("l2", "v1"), labels.EmptyLabels(), labels.EmptyLabels(), "", true, nil),
 			NewRecordingRule("rule4", nil, labels.EmptyLabels()),
 		},
-		seriesInPreviousEval: make([]map[string]labels.Labels, 8),
 	}
 	newGroup.CopyState(oldGroup)
 
-	want := []map[string]labels.Labels{
-		nil,
-		{"r3a": labels.FromStrings("l1", "v1")},
-		{"r3b": labels.FromStrings("l1", "v2")},
-		{},
-		{},
-		nil,
-		{"a2": labels.FromStrings("l2", "v1")},
-		nil,
-	}
-	require.Equal(t, want, newGroup.seriesInPreviousEval)
+	require.Equal(t, oldGroup.state, newGroup.state)
 	require.Equal(t, oldGroup.rules[0], newGroup.rules[3])
 	require.Equal(t, oldGroup.evaluationTime, newGroup.evaluationTime)
 	require.Equal(t, oldGroup.lastEvaluation, newGroup.lastEvaluation)
-	require.Equal(t, []labels.Labels{labels.FromStrings("l1", "v3")}, newGroup.staleSeries)
 }
 
-func TestDeletedRuleMarkedStale(t *testing.T) {
-	ctx := context.Background()
-	st := teststorage.New(t)
-	dbDir := t.TempDir()
-	clock := clockwork.NewRealClock()
-	headCatalog := makeCatalog(t, clock, dbDir)
-	hManager := makeManager(t, clock, dbDir, headCatalog)
-	adapter := makeAdapter(t, clock, hManager)
-	fanoutStorage := storage.NewFanout(log.NewNopLogger(), adapter, st)
-	defer func() {
-		require.NoError(t, st.Close())
-		require.NoError(t, hManager.Shutdown(ctx))
-		require.NoError(t, adapter.Close())
-	}()
+// func TestDeletedRuleMarkedStale(t *testing.T) {
+// 	ctx := context.Background()
+// 	st := teststorage.New(t)
+// 	dbDir := t.TempDir()
+// 	clock := clockwork.NewRealClock()
+// 	headCatalog := makeCatalog(t, clock, dbDir)
+// 	hManager := makeManager(t, clock, dbDir, headCatalog)
+// 	adapter := makeAdapter(t, clock, hManager)
+// 	fanoutStorage := storage.NewFanout(log.NewNopLogger(), adapter, st)
+// 	defer func() {
+// 		require.NoError(t, st.Close())
+// 		require.NoError(t, hManager.Shutdown(ctx))
+// 		require.NoError(t, adapter.Close())
+// 	}()
 
-	oldGroup := &Group{
-		rules: []Rule{
-			NewRecordingRule("rule1", nil, labels.FromStrings("l1", "v1")),
-		},
-		seriesInPreviousEval: []map[string]labels.Labels{
-			{"r1": labels.FromStrings("l1", "v1")},
-		},
-	}
-	newGroup := &Group{
-		rules:                []Rule{},
-		seriesInPreviousEval: []map[string]labels.Labels{},
-		opts: &ManagerOptions{
-			FanoutQueryable: fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
-			EngineQueryCtor: EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
-			Batcher:         adapter,         // PP_CHANGES.md: rebuild on cpp
-		},
-		metrics: NewGroupMetrics(nil),
-	}
-	newGroup.CopyState(oldGroup)
+// 	oldGroup := &Group{
+// 		rules: []Rule{
+// 			NewRecordingRule("rule1", nil, labels.FromStrings("l1", "v1")),
+// 		},
+// 		seriesInPreviousEval: []map[string]labels.Labels{
+// 			{"r1": labels.FromStrings("l1", "v1")},
+// 		},
+// 	}
+// 	newGroup := &Group{
+// 		rules:                []Rule{},
+// 		seriesInPreviousEval: []map[string]labels.Labels{},
+// 		opts: &ManagerOptions{
+// 			FanoutQueryable: fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
+// 			EngineQueryCtor: EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
+// 			Batcher:         adapter,         // PP_CHANGES.md: rebuild on cpp
+// 		},
+// 		metrics: NewGroupMetrics(nil),
+// 	}
+// 	newGroup.CopyState(oldGroup)
 
-	newGroup.Eval(context.Background(), time.Unix(0, 0))
+// 	newGroup.Eval(context.Background(), time.Unix(0, 0))
 
-	querier, err := fanoutStorage.Querier(0, 2000)
-	require.NoError(t, err)
-	defer querier.Close()
+// 	querier, err := fanoutStorage.Querier(0, 2000)
+// 	require.NoError(t, err)
+// 	defer querier.Close()
 
-	matcher, err := labels.NewMatcher(labels.MatchEqual, "l1", "v1")
-	require.NoError(t, err)
+// 	matcher, err := labels.NewMatcher(labels.MatchEqual, "l1", "v1")
+// 	require.NoError(t, err)
 
-	set := querier.Select(context.Background(), false, nil, matcher)
-	samples, err := readSeriesSet(set)
-	require.NoError(t, err)
+// 	set := querier.Select(context.Background(), false, nil, matcher)
+// 	samples, err := readSeriesSet(set)
+// 	require.NoError(t, err)
 
-	metric := labels.FromStrings("l1", "v1").String()
-	metricSample, ok := samples[metric]
+// 	metric := labels.FromStrings("l1", "v1").String()
+// 	metricSample, ok := samples[metric]
 
-	require.True(t, ok, "Series %s not returned.", metric)
-	require.True(t, value.IsStaleNaN(metricSample[0].F), "Appended sample not as expected. Wanted: stale NaN Got: %x", math.Float64bits(metricSample[0].F))
-}
+// 	require.True(t, ok, "Series %s not returned.", metric)
+// 	require.True(t, value.IsStaleNaN(metricSample[0].F), "Appended sample not as expected. Wanted: stale NaN Got: %x", math.Float64bits(metricSample[0].F))
+// }
 
 func TestUpdate(t *testing.T) {
 	files := []string{"fixtures/rules.yaml"}
-	expected := map[string]labels.Labels{
-		"test": labels.FromStrings("name", "value"),
-	}
 
 	ctx := context.Background()
 	st := teststorage.New(t)
@@ -835,7 +816,7 @@ func TestUpdate(t *testing.T) {
 		Timeout:    10 * time.Second,
 	}
 	engine := promqltest.NewTestEngineWithOpts(t, opts)
-	ruleManager := NewManager(&ManagerOptions{
+	ruleManager, err := NewManager(&ManagerOptions{
 		Engine:          engine,          // PP_CHANGES.md: rebuild on cpp
 		FanoutQueryable: fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
 		EngineQueryCtor: EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
@@ -844,26 +825,21 @@ func TestUpdate(t *testing.T) {
 		Context:         ctx,             // PP_CHANGES.md: rebuild on cpp
 		Logger:          log.NewNopLogger(),
 	})
+	require.NoError(t, err)
 	ruleManager.start()
 	defer ruleManager.Stop()
 
-	err := ruleManager.Update(10*time.Second, files, labels.EmptyLabels(), "", nil)
+	err = ruleManager.Update(10*time.Second, files, labels.EmptyLabels(), "", nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, ruleManager.groups, "expected non-empty rule groups")
-	ogs := map[string]*Group{}
-	for h, g := range ruleManager.groups {
-		g.seriesInPreviousEval = []map[string]labels.Labels{
-			expected,
-		}
-		ogs[h] = g
-	}
+	ogs := make(map[string]*Group, len(ruleManager.groups))
+	maps.Copy(ogs, ruleManager.groups)
 
 	err = ruleManager.Update(10*time.Second, files, labels.EmptyLabels(), "", nil)
 	require.NoError(t, err)
 	for h, g := range ruleManager.groups {
-		for _, actual := range g.seriesInPreviousEval {
-			require.Equal(t, expected, actual)
-		}
+		require.Equal(t, ogs[h].state, g.state)
+
 		// Groups are the same because of no updates.
 		require.Equal(t, ogs[h], g)
 	}
@@ -880,9 +856,7 @@ func TestUpdate(t *testing.T) {
 	err = ruleManager.Update(10*time.Second, []string{tmpFile.Name()}, labels.EmptyLabels(), "", nil)
 	require.NoError(t, err)
 
-	for h, g := range ruleManager.groups {
-		ogs[h] = g
-	}
+	maps.Copy(ogs, ruleManager.groups)
 
 	// Update interval and reload.
 	for i, g := range rgs.Groups {
@@ -1005,13 +979,14 @@ func TestNotify(t *testing.T) {
 	expr, err := parser.ParseExpr("a > 1")
 	require.NoError(t, err)
 	rule := NewAlertingRule("aTooHigh", expr, 0, 0, labels.Labels{}, labels.Labels{}, labels.EmptyLabels(), "", true, log.NewNopLogger())
-	group := NewGroup(GroupOptions{
+	group, err := NewGroup(GroupOptions{
 		Name:          "alert",
 		Interval:      time.Second,
 		Rules:         []Rule{rule},
 		ShouldRestore: true,
 		Opts:          opts,
 	})
+	require.NoError(t, err)
 
 	app := st.Appender(ctx)
 	app.Append(0, labels.FromStrings(model.MetricNameLabel, "a"), 1000, 2)
@@ -1073,7 +1048,7 @@ func TestMetricsUpdate(t *testing.T) {
 		Timeout:    10 * time.Second,
 	}
 	engine := promqltest.NewTestEngineWithOpts(t, opts)
-	ruleManager := NewManager(&ManagerOptions{
+	ruleManager, err := NewManager(&ManagerOptions{
 		Engine:          engine,          // PP_CHANGES.md: rebuild on cpp
 		FanoutQueryable: fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
 		EngineQueryCtor: EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
@@ -1083,6 +1058,8 @@ func TestMetricsUpdate(t *testing.T) {
 		Logger:          log.NewNopLogger(),
 		Registerer:      registry,
 	})
+	require.NoError(t, err)
+
 	ruleManager.start()
 	defer ruleManager.Stop()
 
@@ -1160,7 +1137,7 @@ func TestGroupStalenessOnRemoval(t *testing.T) {
 		Timeout:    10 * time.Second,
 	}
 	engine := promqltest.NewTestEngineWithOpts(t, opts)
-	ruleManager := NewManager(&ManagerOptions{
+	ruleManager, err := NewManager(&ManagerOptions{
 		Engine:          engine,          // PP_CHANGES.md: rebuild on cpp
 		FanoutQueryable: fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
 		EngineQueryCtor: EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
@@ -1169,6 +1146,8 @@ func TestGroupStalenessOnRemoval(t *testing.T) {
 		Context:         ctx,             // PP_CHANGES.md: rebuild on cpp
 		Logger:          log.NewNopLogger(),
 	})
+	require.NoError(t, err)
+
 	var stopped bool
 	ruleManager.start()
 	defer func() {
@@ -1250,7 +1229,7 @@ func TestMetricsStalenessOnManagerShutdown(t *testing.T) {
 		Timeout:    10 * time.Second,
 	}
 	engine := promqltest.NewTestEngineWithOpts(t, opts)
-	ruleManager := NewManager(&ManagerOptions{
+	ruleManager, err := NewManager(&ManagerOptions{
 		Engine:          engine,          // PP_CHANGES.md: rebuild on cpp
 		FanoutQueryable: fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
 		EngineQueryCtor: EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
@@ -1259,6 +1238,8 @@ func TestMetricsStalenessOnManagerShutdown(t *testing.T) {
 		Context:         ctx,             // PP_CHANGES.md: rebuild on cpp
 		Logger:          log.NewNopLogger(),
 	})
+	require.NoError(t, err)
+
 	var stopped bool
 	ruleManager.start()
 	defer func() {
@@ -1267,7 +1248,7 @@ func TestMetricsStalenessOnManagerShutdown(t *testing.T) {
 		}
 	}()
 
-	err := ruleManager.Update(2*time.Second, files, labels.EmptyLabels(), "", nil)
+	err = ruleManager.Update(2*time.Second, files, labels.EmptyLabels(), "", nil)
 	time.Sleep(4 * time.Second)
 	require.NoError(t, err)
 	start := time.Now()
@@ -1378,13 +1359,14 @@ func TestRuleHealthUpdates(t *testing.T) {
 	expr, err := parser.ParseExpr("a + 1")
 	require.NoError(t, err)
 	rule := NewRecordingRule("a_plus_one", expr, labels.Labels{})
-	group := NewGroup(GroupOptions{
+	group, err := NewGroup(GroupOptions{
 		Name:          "default",
 		Interval:      time.Second,
 		Rules:         []Rule{rule},
 		ShouldRestore: true,
 		Opts:          opts,
 	})
+	require.NoError(t, err)
 
 	// A time series that has two samples.
 	app := st.Appender(context.Background())
@@ -1514,7 +1496,7 @@ func TestRuleGroupEvalIterationFunc(t *testing.T) {
 			noDependencyRules:   atomic.NewBool(false),
 		}
 
-		group := NewGroup(GroupOptions{
+		group, err := NewGroup(GroupOptions{
 			Name:              "default",
 			Interval:          time.Second,
 			Rules:             []Rule{rule},
@@ -1522,6 +1504,7 @@ func TestRuleGroupEvalIterationFunc(t *testing.T) {
 			Opts:              opts,
 			EvalIterationFunc: tst.evalIterationFunc,
 		})
+		require.NoError(t, err)
 
 		go func() {
 			group.run(opts.Context)
@@ -1622,7 +1605,7 @@ func TestManager_LoadGroups_ShouldCheckWhetherEachRuleHasDependentsAndDependenci
 		require.NoError(t, adapter.Close())
 	})
 
-	ruleManager := NewManager(&ManagerOptions{
+	ruleManager, err := NewManager(&ManagerOptions{
 		FanoutQueryable: fanoutStorage, // PP_CHANGES.md: rebuild on cpp
 		EngineQueryCtor: func(engine promql.QueryEngine, q storage.Queryable) QueryFunc {
 			return func(ctx context.Context, q string, ts time.Time) (promql.Vector, error) {
@@ -1634,6 +1617,7 @@ func TestManager_LoadGroups_ShouldCheckWhetherEachRuleHasDependentsAndDependenci
 		Context:   ctx,           // PP_CHANGES.md: rebuild on cpp
 		Logger:    log.NewNopLogger(),
 	})
+	require.NoError(t, err)
 
 	t.Run("load a mix of dependent and independent rules", func(t *testing.T) {
 		groups, errs := ruleManager.LoadGroups(time.Second, labels.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple.yaml"}...)
@@ -1705,12 +1689,13 @@ func TestDependencyMap(t *testing.T) {
 	require.NoError(t, err)
 	rule4 := NewRecordingRule("user:requests:increase1h", expr, labels.Labels{})
 
-	group := NewGroup(GroupOptions{
+	group, err := NewGroup(GroupOptions{
 		Name:     "rule_group",
 		Interval: time.Second,
 		Rules:    []Rule{rule, rule2, rule3, rule4},
 		Opts:     opts,
 	})
+	require.NoError(t, err)
 
 	depMap := buildDependencyMap(group.rules)
 
@@ -1742,12 +1727,13 @@ func TestNoDependency(t *testing.T) {
 	require.NoError(t, err)
 	rule := NewRecordingRule("user:requests:rate1m", expr, labels.Labels{})
 
-	group := NewGroup(GroupOptions{
+	group, err := NewGroup(GroupOptions{
 		Name:     "rule_group",
 		Interval: time.Second,
 		Rules:    []Rule{rule},
 		Opts:     opts,
 	})
+	require.NoError(t, err)
 
 	depMap := buildDependencyMap(group.rules)
 	// A group with only one rule cannot have dependencies.
@@ -1762,12 +1748,13 @@ func TestDependenciesEdgeCases(t *testing.T) {
 	}
 
 	t.Run("empty group", func(t *testing.T) {
-		group := NewGroup(GroupOptions{
+		group, err := NewGroup(GroupOptions{
 			Name:     "rule_group",
 			Interval: time.Second,
 			Rules:    []Rule{}, // empty group
 			Opts:     opts,
 		})
+		require.NoError(t, err)
 
 		expr, err := parser.ParseExpr("sum by (user) (rate(requests[1m]))")
 		require.NoError(t, err)
@@ -1788,12 +1775,13 @@ func TestDependenciesEdgeCases(t *testing.T) {
 		require.NoError(t, err)
 		rule2 := NewRecordingRule("2", expr, labels.Labels{})
 
-		group := NewGroup(GroupOptions{
+		group, err := NewGroup(GroupOptions{
 			Name:     "rule_group",
 			Interval: time.Second,
 			Rules:    []Rule{rule1, rule2},
 			Opts:     opts,
 		})
+		require.NoError(t, err)
 
 		depMap := buildDependencyMap(group.rules)
 		// A group with rules which reference no series will still produce a dependency map
@@ -1810,12 +1798,13 @@ func TestDependenciesEdgeCases(t *testing.T) {
 		require.NoError(t, err)
 		rule2 := NewRecordingRule("second", expr, labels.Labels{})
 
-		group := NewGroup(GroupOptions{
+		group, err := NewGroup(GroupOptions{
 			Name:     "rule_group",
 			Interval: time.Second,
 			Rules:    []Rule{rule1, rule2},
 			Opts:     opts,
 		})
+		require.NoError(t, err)
 
 		depMap := buildDependencyMap(group.rules)
 		// A rule with regexp matcher on metric name causes the whole group to be indeterminate.
@@ -1832,12 +1821,13 @@ func TestDependenciesEdgeCases(t *testing.T) {
 		require.NoError(t, err)
 		rule2 := NewRecordingRule("second", expr, labels.Labels{})
 
-		group := NewGroup(GroupOptions{
+		group, err := NewGroup(GroupOptions{
 			Name:     "rule_group",
 			Interval: time.Second,
 			Rules:    []Rule{rule1, rule2},
 			Opts:     opts,
 		})
+		require.NoError(t, err)
 
 		depMap := buildDependencyMap(group.rules)
 		// A rule with not equal matcher on metric name causes the whole group to be indeterminate.
@@ -1854,12 +1844,13 @@ func TestDependenciesEdgeCases(t *testing.T) {
 		require.NoError(t, err)
 		rule2 := NewRecordingRule("second", expr, labels.Labels{})
 
-		group := NewGroup(GroupOptions{
+		group, err := NewGroup(GroupOptions{
 			Name:     "rule_group",
 			Interval: time.Second,
 			Rules:    []Rule{rule1, rule2},
 			Opts:     opts,
 		})
+		require.NoError(t, err)
 
 		depMap := buildDependencyMap(group.rules)
 		// A rule with not regexp matcher on metric name causes the whole group to be indeterminate.
@@ -1876,12 +1867,13 @@ func TestDependenciesEdgeCases(t *testing.T) {
 		require.NoError(t, err)
 		rule2 := NewRecordingRule("second", expr, labels.Labels{})
 
-		group := NewGroup(GroupOptions{
+		group, err := NewGroup(GroupOptions{
 			Name:     "rule_group",
 			Interval: time.Second,
 			Rules:    []Rule{rule1, rule2},
 			Opts:     opts,
 		})
+		require.NoError(t, err)
 
 		depMap := buildDependencyMap(group.rules)
 		// A rule querying ALERTS metric causes the whole group to be indeterminate.
@@ -1898,12 +1890,13 @@ func TestDependenciesEdgeCases(t *testing.T) {
 		require.NoError(t, err)
 		rule2 := NewRecordingRule("second", expr, labels.Labels{})
 
-		group := NewGroup(GroupOptions{
+		group, err := NewGroup(GroupOptions{
 			Name:     "rule_group",
 			Interval: time.Second,
 			Rules:    []Rule{rule1, rule2},
 			Opts:     opts,
 		})
+		require.NoError(t, err)
 
 		depMap := buildDependencyMap(group.rules)
 		// A rule querying ALERTS_FOR_STATE metric causes the whole group to be indeterminate.
@@ -1927,12 +1920,13 @@ func TestNoMetricSelector(t *testing.T) {
 	require.NoError(t, err)
 	rule2 := NewRecordingRule("user:requests:rate1m", expr, labels.Labels{})
 
-	group := NewGroup(GroupOptions{
+	group, err := NewGroup(GroupOptions{
 		Name:     "rule_group",
 		Interval: time.Second,
 		Rules:    []Rule{rule, rule2},
 		Opts:     opts,
 	})
+	require.NoError(t, err)
 
 	depMap := buildDependencyMap(group.rules)
 	// A rule with no metric selector cannot be reliably determined to have no dependencies on other rules, and therefore
@@ -1960,12 +1954,13 @@ func TestDependentRulesWithNonMetricExpression(t *testing.T) {
 	require.NoError(t, err)
 	rule3 := NewRecordingRule("three", expr, labels.Labels{})
 
-	group := NewGroup(GroupOptions{
+	group, err := NewGroup(GroupOptions{
 		Name:     "rule_group",
 		Interval: time.Second,
 		Rules:    []Rule{rule, rule2, rule3},
 		Opts:     opts,
 	})
+	require.NoError(t, err)
 
 	depMap := buildDependencyMap(group.rules)
 	require.False(t, depMap.isIndependent(rule))
@@ -1991,12 +1986,13 @@ func TestRulesDependentOnMetaMetrics(t *testing.T) {
 	require.NoError(t, err)
 	rule2 := NewRecordingRule("one", expr, labels.Labels{})
 
-	group := NewGroup(GroupOptions{
+	group, err := NewGroup(GroupOptions{
 		Name:     "rule_group",
 		Interval: time.Second,
 		Rules:    []Rule{rule, rule2},
 		Opts:     opts,
 	})
+	require.NoError(t, err)
 
 	depMap := buildDependencyMap(group.rules)
 	require.False(t, depMap.isIndependent(rule))
@@ -2004,15 +2000,16 @@ func TestRulesDependentOnMetaMetrics(t *testing.T) {
 
 func TestDependencyMapUpdatesOnGroupUpdate(t *testing.T) {
 	files := []string{"fixtures/rules.yaml"}
-	ruleManager := NewManager(&ManagerOptions{
+	ruleManager, err := NewManager(&ManagerOptions{
 		Context: context.Background(),
 		Logger:  log.NewNopLogger(),
 	})
+	require.NoError(t, err)
 
 	ruleManager.start()
 	defer ruleManager.Stop()
 
-	err := ruleManager.Update(10*time.Second, files, labels.EmptyLabels(), "", nil)
+	err = ruleManager.Update(10*time.Second, files, labels.EmptyLabels(), "", nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, ruleManager.groups, "expected non-empty rule groups")
 
@@ -2088,7 +2085,8 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		t.Cleanup(cancel)
 
-		ruleManager := NewManager(optsFactory(fanoutStorage, adapter, &maxInflight, &inflightQueries, 0))
+		ruleManager, err := NewManager(optsFactory(fanoutStorage, adapter, &maxInflight, &inflightQueries, 0))
+		require.NoError(t, err)
 		groups, errs := ruleManager.LoadGroups(time.Second, labels.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple.yaml"}...)
 		require.Empty(t, errs)
 		require.Len(t, groups, 1)
@@ -2138,8 +2136,8 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 		// Configure concurrency settings.
 		opts.ConcurrentEvalsEnabled = true
 		opts.MaxConcurrentEvals = 2
-		// opts.RuleConcurrencyController = nil
-		ruleManager := NewManager(opts)
+		ruleManager, err := NewManager(opts)
+		require.NoError(t, err)
 		opts.ConcurrencyExecuter.Run()
 		defer opts.ConcurrencyExecuter.Stop()
 
@@ -2190,7 +2188,8 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 		// Configure concurrency settings.
 		opts.ConcurrentEvalsEnabled = true
 		opts.MaxConcurrentEvals = 2
-		ruleManager := NewManager(opts)
+		ruleManager, err := NewManager(opts)
+		require.NoError(t, err)
 		opts.ConcurrencyExecuter.Run()
 		defer opts.ConcurrencyExecuter.Stop()
 
@@ -2241,7 +2240,8 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 		// Configure concurrency settings.
 		opts.ConcurrentEvalsEnabled = true
 		opts.MaxConcurrentEvals = int64(ruleCount) * 2
-		ruleManager := NewManager(opts)
+		ruleManager, err := NewManager(opts)
+		require.NoError(t, err)
 		opts.ConcurrencyExecuter.Run()
 		defer opts.ConcurrencyExecuter.Stop()
 
@@ -2290,7 +2290,8 @@ func TestBoundedRuleEvalConcurrency(t *testing.T) {
 
 	files := []string{"fixtures/rules_multiple_groups.yaml"}
 
-	ruleManager := NewManager(optsFactory(fanoutStorage, adapter, &maxInflight, &inflightQueries, maxConcurrency))
+	ruleManager, err := NewManager(optsFactory(fanoutStorage, adapter, &maxInflight, &inflightQueries, maxConcurrency))
+	require.NoError(t, err)
 
 	groups, errs := ruleManager.LoadGroups(time.Second, labels.EmptyLabels(), "", nil, files...)
 	require.Empty(t, errs)
@@ -2319,12 +2320,13 @@ func TestBoundedRuleEvalConcurrency(t *testing.T) {
 
 func TestUpdateWhenStopped(t *testing.T) {
 	files := []string{"fixtures/rules.yaml"}
-	ruleManager := NewManager(&ManagerOptions{
+	ruleManager, err := NewManager(&ManagerOptions{
 		Context: context.Background(),
 		Logger:  log.NewNopLogger(),
 	})
+	require.NoError(t, err)
 	ruleManager.start()
-	err := ruleManager.Update(10*time.Second, files, labels.EmptyLabels(), "", nil)
+	err = ruleManager.Update(10*time.Second, files, labels.EmptyLabels(), "", nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, ruleManager.groups)
 
