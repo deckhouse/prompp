@@ -166,7 +166,6 @@ func (a Appender[TTask, TShard, TGoroutineShard, THead]) Append(
 		return cppbridge.RelabelerStats{}, err
 	}
 
-	numberOfShards := a.head.NumberOfShards()
 	shardedInnerSeries := a.head.AcquireShardedInnerSeries()
 	defer a.head.ReleaseShardedInnerSeries(shardedInnerSeries)
 	shardedRelabeledSeries := a.head.AcquireShardedRelabeledSeries()
@@ -175,7 +174,7 @@ func (a Appender[TTask, TShard, TGoroutineShard, THead]) Append(
 	stats, err := a.inputRelabelingStage(
 		ctx,
 		state,
-		NewDestructibleIncomingData(incomingData, int(numberOfShards)),
+		incomingData,
 		shardedInnerSeries,
 		shardedRelabeledSeries,
 	)
@@ -233,11 +232,13 @@ var errCannotBeRelabeledFromCache = errors.New("cannot be relabeled from cache")
 func (a *Appender[TTask, TShard, TGoroutineShard, THead]) inputRelabelingStage(
 	ctx context.Context,
 	state *cppbridge.StateV2,
-	incomingData *DestructibleIncomingData,
+	incomingData *IncomingData,
 	shardedInnerSeries *cppbridge.ShardedInnerSeries,
 	shardedRelabeledSeries *cppbridge.ShardedRelabeledSeries,
 ) (cppbridge.RelabelerStats, error) {
 	stats := make([]cppbridge.RelabelerStats, a.head.NumberOfShards())
+	defer incomingData.Destroy()
+
 	t := a.head.CreateTask(
 		lssInputRelabeling,
 		func(shard TGoroutineShard) error {
@@ -247,7 +248,6 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) inputRelabelingStage(
 				shardedData = incomingData.ShardedData()
 				innerSeries = shardedInnerSeries.DataByShard(shardID)
 			)
-			defer incomingData.Destroy()
 
 			err := shard.LSSWithRLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
 				var ok bool
