@@ -125,14 +125,6 @@ func NewHead[TShard Shard, TGoroutineShard Shard](
 			Name: "prompp_head_task_done_count",
 			Help: "Number of done tasks.",
 		}, []string{"type_task"}),
-		tasksLive: factory.NewCounterVec(prometheus.CounterOpts{
-			Name: "prompp_head_task_live_duration_microseconds_sum",
-			Help: "The duration of the live task in microseconds.",
-		}, []string{"type_task"}),
-		tasksExecute: factory.NewCounterVec(prometheus.CounterOpts{
-			Name: "prompp_head_task_execute_duration_microseconds_sum",
-			Help: "The duration of the task execution in microseconds.",
-		}, []string{"type_task"}),
 
 		// pools for reusable objects
 		shardedInnerSeriesPool: sync.Pool{
@@ -213,11 +205,9 @@ func (h *Head[TShard, TGorutineShard]) CreateTask(
 	t := h.taskPool.Get().(*task.Generic[TGorutineShard])
 	t.Reset(
 		shardFn,
-		h.tasksCreated.WithLabelValues(taskName),
 		h.tasksDone.WithLabelValues(taskName),
-		h.tasksLive.WithLabelValues(taskName),
-		h.tasksExecute.WithLabelValues(taskName),
 	)
+	h.tasksCreated.WithLabelValues(taskName).Inc()
 	return t
 }
 
