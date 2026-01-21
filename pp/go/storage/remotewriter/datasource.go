@@ -525,6 +525,10 @@ func (ds *dataSource) LSSes() []*cppbridge.LabelSetStorage {
 	return ds.lssSlice
 }
 
+func (ds *dataSource) NumberOfLSSes() int {
+	return len(ds.lssSlice)
+}
+
 // WriteCaches writes caches to the buffer and sends the signal to write the caches.
 func (ds *dataSource) WriteCaches() {
 	ds.cacheMtx.Lock()

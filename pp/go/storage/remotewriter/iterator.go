@@ -34,6 +34,7 @@ type DataSource interface {
 		segmentSamplesStorages *cppbridge.SegmentSamplesStorageList,
 	) ([]*DecodedSegment, error)
 	LSSes() []*cppbridge.LabelSetStorage
+	NumberOfLSSes() int
 	WriteCaches()
 	Close() error
 }
@@ -177,7 +178,7 @@ func (i *Iterator) Next(ctx context.Context) (*cppbridge.RWMessageList, error) {
 	var delay time.Duration
 	numberOfShards := i.outputSharder.NumberOfShards()
 	i.metrics.numShards.Set(float64(numberOfShards))
-	b := newBatch(len(i.dataSource.LSSes()), numberOfShards, i.queueConfig.MaxSamplesPerSend)
+	b := newBatch(i.dataSource.NumberOfLSSes(), numberOfShards, i.queueConfig.MaxSamplesPerSend)
 	deadline := i.clock.After(i.scrapeInterval)
 
 readLoop:
@@ -260,7 +261,7 @@ readLoop:
 	return msg, nil
 }
 
-func (i *Iterator) SendMessage(msg *cppbridge.RWMessageList, ctx context.Context) error {
+func (i *Iterator) SendMessage(ctx context.Context, msg *cppbridge.RWMessageList) error {
 	i.metrics.samplesTotal.Add(float64(msg.NumberOfSamples()))
 
 	sendersCount := i.outputSharder.max

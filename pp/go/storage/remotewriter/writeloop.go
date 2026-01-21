@@ -148,7 +148,7 @@ func (*writeLoop) write(ctx context.Context, iterator *Iterator) (err error) {
 	}()
 
 	for msg := range msgChannel {
-		if err := iterator.SendMessage(msg, ctx); err != nil {
+		if err := iterator.SendMessage(ctx, msg); err != nil {
 			logger.Errorf("send message: %v", err)
 		}
 	}
