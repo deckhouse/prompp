@@ -32,7 +32,7 @@ wind_speed{A="2",c="3"} 12345
 # comment with escaped \n newline
 # comment with escaped \ escape character
 # HELP nohelp1
-# HELP nohelp2 
+# HELP nohelp2
 go_gc_duration_seconds{ quantile="1.0", a="b" } 8.3835e-05
 go_gc_duration_seconds { quantile="1.0", a="b" } 8.3835e-05
 go_gc_duration_seconds { quantile= "1.0", a= "b", } 8.3835e-05
@@ -93,13 +93,9 @@ func BenchmarkAppenderAppend(b *testing.B) {
 	ctx := context.Background()
 
 	// 3. Create Appender and perform initial Append
-	ap := appender.New(h, func(_ *benchHead) error {
-		return nil
-	})
-
 	ts := time.Now().UnixMilli()
 	state.SetDefTimestamp(ts)
-	_, err = ap.Append(ctx, incomingData, state, false)
+	_, err = appender.New(h, commitAndFlush).Append(ctx, incomingData, state, false)
 	if err != nil {
 		b.Fatalf("initial append failed: %v", err)
 	}
@@ -109,14 +105,16 @@ func BenchmarkAppenderAppend(b *testing.B) {
 
 	// 4. In the main benchmark loop create new Appender and Append the same Hashdex
 	for i := 0; i < b.N; i++ {
-		ap := appender.New(h, func(_ *benchHead) error {
-			return nil
-		})
 		incomingData.Hashdex = hashdex
 		state.SetDefTimestamp(ts + int64(i+15000))
-		_, err := ap.Append(ctx, incomingData, state, false)
+		_, err = appender.New(h, commitAndFlush).Append(ctx, incomingData, state, false)
 		if err != nil {
 			b.Fatalf("append failed: %v", err)
 		}
 	}
+}
+
+// services.CFViaRange
+func commitAndFlush(*benchHead) error {
+	return nil
 }

@@ -312,6 +312,11 @@ func (h *Head[TShard, TGorutineShard]) SetReadOnly() {
 	atomic.StoreUint32(&h.readOnly, 1)
 }
 
+// Shards returns the [Head] [Shard]s.
+func (h *Head[TShard, TGoroutineShard]) Shards() []TShard {
+	return h.shards
+}
+
 // String serialize as string.
 func (h *Head[TShard, TGorutineShard]) String() string {
 	return fmt.Sprintf("{id: %s, generation: %d}", h.id, h.generation)

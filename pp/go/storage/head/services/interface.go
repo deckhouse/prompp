@@ -38,6 +38,9 @@ type ActiveHeadContainer[
 type RangeHead[TShard Shard] interface {
 	// RangeShards returns an iterator over the [Head] [Shard]s, through which the shard can be directly accessed.
 	RangeShards() func(func(TShard) bool)
+
+	// Shards returns the [Head] [Shard]s.
+	Shards() []TShard
 }
 
 // Head the minimum required [Head] implementation.
@@ -62,6 +65,9 @@ type Head[
 
 	// NumberOfShards returns current number of shards in to [Head].
 	NumberOfShards() uint16
+
+	// Shards returns the [Head] [Shard]s.
+	Shards() []TShard
 
 	// RangeQueueSize returns an iterator over the [Head] task channels, to collect metrics.
 	RangeQueueSize() func(func(shardID, size int) bool)

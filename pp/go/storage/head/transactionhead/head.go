@@ -125,6 +125,11 @@ func (h *Head[TShard, TGShard]) RangeShards() func(func(TShard) bool) {
 	}
 }
 
+// Shards returns the [Head] [Shard]s.
+func (h *Head[TShard, TGoroutineShard]) Shards() []TShard {
+	return []TShard{h.shard}
+}
+
 // AcquireShardedInnerSeries gets a [cppbridge.ShardedInnerSeries] from the pool.
 func (h *Head[TShard, TGorutineShard]) AcquireShardedInnerSeries() *cppbridge.ShardedInnerSeries {
 	return h.shardedInnerSeriesPool.Get().(*cppbridge.ShardedInnerSeries)

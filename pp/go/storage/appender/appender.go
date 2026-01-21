@@ -102,8 +102,8 @@ type Head[
 	// NumberOfShards returns current number of shards in to [Head].
 	NumberOfShards() uint16
 
-	// RangeShards returns an iterator over the [Head] [Shard]s, through which the shard can be directly accessed.
-	RangeShards() func(func(TShard) bool)
+	// Shards returns the [Head] [Shard]s.
+	Shards() []TShard
 
 	// AcquireShardedInnerSeries gets a [cppbridge.ShardedInnerSeries] from the pool.
 	AcquireShardedInnerSeries() *cppbridge.ShardedInnerSeries
@@ -279,11 +279,9 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) inputRelabelingStage(
 				return fmt.Errorf("shard %d: %w", shardID, err)
 			}
 
-			var (
-				hasReallocations bool
-				rstats           = cppbridge.RelabelerStats{}
-			)
+			rstats := cppbridge.RelabelerStats{}
 			err = shard.LSSWithLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
+				var hasReallocations bool
 				rstats, hasReallocations, rErr = relabeler.Relabeling(
 					ctx,
 					input,
@@ -446,8 +444,8 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) resolveState(state *cp
 	}
 
 	state.Reconfigure(a.head.Generation(), a.head.NumberOfShards(), func(maps []*cppbridge.IdsMapping) {
-		for shard := range a.head.RangeShards() {
-			maps[shard.ShardID()] = shard.DstSrcLsIdsMapping()
+		for id, shard := range a.head.Shards() {
+			maps[id] = shard.DstSrcLsIdsMapping()
 		}
 	})
 

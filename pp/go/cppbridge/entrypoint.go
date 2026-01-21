@@ -3220,14 +3220,14 @@ func prometheusPerGoroutineRelabelerInputRelabeling(
 		exception                 []byte
 		targetLssHasReallocations bool
 	}
-	start := time.Now().UnixNano()
+	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_prometheus_per_goroutine_relabeler_input_relabeling,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-	perGoroutineRelabelerInputRelabelingSum.Add(float64(time.Now().UnixNano() - start))
+	perGoroutineRelabelerInputRelabelingSum.Add(float64(time.Since(start).Nanoseconds()))
 	perGoroutineRelabelerInputRelabelingCount.Inc()
 
 	return res.RelabelerStats, res.exception, res.targetLssHasReallocations
@@ -3254,14 +3254,14 @@ func prometheusPerGoroutineRelabelerInputRelabelingFromCache(
 		ok        bool
 		exception []byte
 	}
-	start := time.Now().UnixNano()
+	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_prometheus_per_goroutine_relabeler_input_relabeling_from_cache,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-	perGoroutineRelabelerInputRelabelingFromCacheSum.Add(float64(time.Now().UnixNano() - start))
+	perGoroutineRelabelerInputRelabelingFromCacheSum.Add(float64(time.Since(start).Nanoseconds()))
 	perGoroutineRelabelerInputRelabelingFromCacheCount.Inc()
 
 	return res.RelabelerStats, res.exception, res.ok
@@ -3304,14 +3304,14 @@ func prometheusPerGoroutineRelabelerInputRelabelingWithStalenans(
 		exception                 []byte
 		targetLssHasReallocations bool
 	}
-	start := time.Now().UnixNano()
+	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_stalenans,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-	perGoroutineRelabelerInputRelabelingWithStalenansSum.Add(float64(time.Now().UnixNano() - start))
+	perGoroutineRelabelerInputRelabelingWithStalenansSum.Add(float64(time.Since(start).Nanoseconds()))
 	perGoroutineRelabelerInputRelabelingWithStalenansCount.Inc()
 
 	return res.RelabelerStats, res.exception, res.targetLssHasReallocations
@@ -3349,14 +3349,15 @@ func prometheusPerGoroutineRelabelerInputRelabelingWithStalenansFromCache(
 		ok        bool
 		exception []byte
 	}
-	start := time.Now().UnixNano()
+	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_prometheus_per_goroutine_relabeler_input_relabeling_with_stalenans_from_cache,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-	perGoroutineRelabelerInputRelabelingWithStalenansFromCacheSum.Add(float64(time.Now().UnixNano() - start))
+
+	perGoroutineRelabelerInputRelabelingWithStalenansFromCacheSum.Add(float64(time.Since(start).Nanoseconds()))
 	perGoroutineRelabelerInputRelabelingWithStalenansFromCacheCount.Inc()
 
 	return res.RelabelerStats, res.exception, res.ok
@@ -3384,14 +3385,14 @@ func prometheusPerGoroutineRelabelerInputTransitionRelabeling(
 		exception                 []byte
 		targetLssHasReallocations bool
 	}
-	start := time.Now().UnixNano()
+	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_prometheus_per_goroutine_relabeler_input_transition_relabeling,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-	perGoroutineRelabelerInputTransitionRelabelingSum.Add(float64(time.Now().UnixNano() - start))
+	perGoroutineRelabelerInputTransitionRelabelingSum.Add(float64(time.Since(start).Nanoseconds()))
 	perGoroutineRelabelerInputTransitionRelabelingCount.Inc()
 
 	return res.RelabelerStats, res.exception, res.targetLssHasReallocations
@@ -3414,14 +3415,14 @@ func prometheusPerGoroutineRelabelerInputRelabelingOnlyRead(
 		ok        bool
 		exception []byte
 	}
-	start := time.Now().UnixNano()
+	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_prometheus_per_goroutine_relabeler_input_transition_relabeling_only_read,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-	perGoroutineRelabelerInputTransitionRelabelingOnlyReadSum.Add(float64(time.Now().UnixNano() - start))
+	perGoroutineRelabelerInputTransitionRelabelingOnlyReadSum.Add(float64(time.Since(start).Nanoseconds()))
 	perGoroutineRelabelerInputTransitionRelabelingOnlyReadCount.Inc()
 
 	return res.RelabelerStats, res.exception, res.ok
@@ -3446,14 +3447,14 @@ func prometheusPerGoroutineRelabelerAppendRelabelerSeries(
 		exception                 []byte
 		targetLssHasReallocations bool
 	}
-	start := time.Now().UnixNano()
+	start := time.Now()
 	testGC()
 	fastcgo.UnsafeCall2(
 		C.prompp_prometheus_per_goroutine_relabeler_append_relabeler_series,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
-	perGoroutineRelabelerAppendRelabelerSeriesSum.Add(float64(time.Now().UnixNano() - start))
+	perGoroutineRelabelerAppendRelabelerSeriesSum.Add(float64(time.Since(start).Nanoseconds()))
 	perGoroutineRelabelerAppendRelabelerSeriesCount.Inc()
 
 	return res.exception, res.targetLssHasReallocations
