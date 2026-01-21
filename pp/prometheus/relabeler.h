@@ -162,9 +162,10 @@ class InnerSeries {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void clear() noexcept {
+  PROMPP_ALWAYS_INLINE void reset() noexcept {
     data_.clear();
     size_ = 0;
+    tracked_stale_nans_ = roaring::Roaring{};
   }
 
   PROMPP_ALWAYS_INLINE roaring::Roaring& tracked_stale_nans() { return tracked_stale_nans_; }
@@ -208,6 +209,12 @@ class RelabeledSeries {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_stale_nan_tracked(uint32_t ls_id) const { return tracked_stale_nans_.contains(ls_id); }
+
+  PROMPP_ALWAYS_INLINE void reset() noexcept {
+    data_.clear();
+    size_ = 0;
+    tracked_stale_nans_ = roaring::Roaring{};
+  }
 };
 
 // CacheValue - value for cache map.

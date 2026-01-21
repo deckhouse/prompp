@@ -228,7 +228,7 @@ TEST_F(PerGoroutineRelabelerFixture, KeepOnFoundInCache) {
 
   // Act
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
-  shards_inner_series_[1].clear();
+  shards_inner_series_[1].reset();
   relabeler.input_relabeling(lss_, lss_, cache_, hx_, o_, stateless_relabeler, stats_, shards_inner_series_, relabeled_results_);
 
   // Assert

@@ -327,7 +327,7 @@ func (*Adapter) StartTime() (int64, error) {
 // headTimeInterval returns [cppbridge.TimeInterval] from [pp_storage.Head].
 func headTimeInterval(head *pp_storage.Head) cppbridge.TimeInterval {
 	timeInterval := cppbridge.NewInvalidTimeInterval()
-	for shard := range head.RangeShards() {
+	for _, shard := range head.Shards() {
 		interval := shard.TimeInterval(false)
 		timeInterval.MinT = min(interval.MinT, timeInterval.MinT)
 		timeInterval.MaxT = max(interval.MaxT, timeInterval.MaxT)

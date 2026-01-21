@@ -63,6 +63,10 @@ func (s *HeadSuite) TestConcurrency() {
 		CloseFunc:   func() error { return nil },
 	}
 
+	ew := head.ExtraWorkers
+	head.ExtraWorkers = 0
+	defer func() { head.ExtraWorkers = ew }()
+
 	h := head.NewHead(
 		s.id,
 		[]*ShardMock{sd, sd},
@@ -102,7 +106,7 @@ func (s *HeadSuite) TestEnqueue() {
 		atomic.AddUint32(&shardsExecuted, uint32(shard.ShardID()+1))
 		return nil
 	})
-
+	defer h.ReleaseTask(t)
 	h.Enqueue(t)
 
 	err := t.Wait()
@@ -138,7 +142,7 @@ func (s *HeadSuite) TestEnqueueOnShard() {
 		shardActual = shard.ShardID()
 		return nil
 	})
-
+	defer h.ReleaseTask(t)
 	h.EnqueueOnShard(t, expectedShard)
 
 	err := t.Wait()
@@ -151,7 +155,7 @@ func (s *HeadSuite) TestEnqueueOnShard() {
 		shardActual = shard.ShardID()
 		return nil
 	})
-
+	defer h.ReleaseTask(t)
 	h.EnqueueOnShard(t, expectedShard)
 
 	err = t.Wait()
@@ -250,6 +254,10 @@ func (s *HeadSuite) TestRangeQueueSize() {
 		CloseFunc:   func() error { return nil },
 	}
 
+	ew := head.ExtraWorkers
+	head.ExtraWorkers = 0
+	defer func() { head.ExtraWorkers = ew }()
+
 	h := head.NewHead(
 		s.id,
 		[]*ShardMock{sd0, sd1},
@@ -269,6 +277,7 @@ func (s *HeadSuite) TestRangeQueueSize() {
 		<-done
 		return nil
 	})
+	defer h.ReleaseTask(t1)
 	h.Enqueue(t1)
 
 	t2 := h.CreateTask("test-task", func(_ *perGoroutineShardMock) error {
@@ -276,6 +285,7 @@ func (s *HeadSuite) TestRangeQueueSize() {
 		<-done
 		return nil
 	})
+	defer h.ReleaseTask(t2)
 	h.Enqueue(t2)
 
 	execute.Wait()
@@ -284,6 +294,7 @@ func (s *HeadSuite) TestRangeQueueSize() {
 		<-done
 		return nil
 	})
+	defer h.ReleaseTask(t3)
 	h.Enqueue(t3)
 
 	expectedShardID := 0

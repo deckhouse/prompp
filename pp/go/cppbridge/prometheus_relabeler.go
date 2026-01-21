@@ -465,6 +465,11 @@ func NewShardedInnerSeries(numberOfShards uint16) *ShardedInnerSeries {
 	return series
 }
 
+// Reset clears all inner series data for reuse.
+func (s *ShardedInnerSeries) Reset() {
+	prometheusInnerSeriesReset(s.series)
+}
+
 //
 // ShardedRelabeledSeries
 //
@@ -498,6 +503,11 @@ func (sd *ShardedRelabeledSeries) IsEmpty() bool {
 	return true
 }
 
+// Reset clears all relabeled series data for reuse.
+func (sd *ShardedRelabeledSeries) Reset() {
+	prometheusRelabeledSeriesReset(sd.series)
+}
+
 //
 // ShardedStateUpdates
 //
@@ -518,6 +528,11 @@ func NewShardedStateUpdates(numberOfShards uint16) *ShardedStateUpdates {
 	})
 
 	return series
+}
+
+// Reset clears all state updates data for reuse.
+func (sd *ShardedStateUpdates) Reset() {
+	prometheusRelabelerStateUpdateReset(sd.series)
 }
 
 // incomingAndRelabeledLsID to update cache data.
@@ -1248,7 +1263,7 @@ func (s *StateV2) EnableTrackStaleness() {
 func (s *StateV2) Reconfigure(
 	generationHead uint64,
 	numberOfShards uint16,
-	staleNansIdsMappings []*IdsMapping,
+	staleNansIdsMappingsFiller func([]*IdsMapping),
 ) {
 	// the transition state does not require caches and staleNaNs
 	if s.IsTransition() {
@@ -1279,7 +1294,7 @@ func (s *StateV2) Reconfigure(
 	}
 
 	s.resetCaches(numberOfShards)
-	s.resetStaleNansStates(numberOfShards, remapStaleNansState, staleNansIdsMappings)
+	s.resetStaleNansStates(numberOfShards, remapStaleNansState, staleNansIdsMappingsFiller)
 	s.status |= inited
 	s.generationHead = generationHead
 
@@ -1363,7 +1378,7 @@ func (s *StateV2) resetCaches(numberOfShards uint16) {
 }
 
 // resetStaleNansStates recreate StaleNansStates.
-func (s *StateV2) resetStaleNansStates(numberOfShards uint16, remapStaleNansState bool, staleNansIdsMappings []*IdsMapping) {
+func (s *StateV2) resetStaleNansStates(numberOfShards uint16, remapStaleNansState bool, staleNansIdsMappingsFiller func([]*IdsMapping)) {
 	if !s.trackStaleness {
 		return
 	}
@@ -1381,6 +1396,10 @@ func (s *StateV2) resetStaleNansStates(numberOfShards uint16, remapStaleNansStat
 		s.staleNansStates = slices.Grow(s.staleNansStates, int(numberOfShards)-len(s.staleNansStates))[:numberOfShards]
 	}
 
+	staleNansIdsMappings := make([]*IdsMapping, numberOfShards)
+	if staleNansIdsMappingsFiller != nil {
+		staleNansIdsMappingsFiller(staleNansIdsMappings)
+	}
 	for shardID := range s.staleNansStates {
 		if remapStaleNansState && staleNansIdsMappings[shardID] != nil && !staleNansIdsMappings[shardID].IsEmpty() {
 			s.staleNansStates[shardID].Remap(staleNansIdsMappings[shardID])

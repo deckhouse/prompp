@@ -834,6 +834,15 @@ void prompp_prometheus_inner_series_ctor(void* args);
  */
 void prompp_prometheus_inner_series_dtor(void* args);
 
+/**
+ * @brief Reset slice of InnerSeries
+ *
+ * @param args {
+ *      innerSeries []InnerSeries
+ * }
+ */
+void prompp_prometheus_inner_series_reset(void* args);
+
 //
 // RelabeledSeries
 //
@@ -856,6 +865,15 @@ void prompp_prometheus_relabeled_series_ctor(void* args);
  */
 void prompp_prometheus_relabeled_series_dtor(void* args);
 
+/**
+ * @brief Reset slice of RelabeledSeries
+ *
+ * @param args {
+ *      relabeledSeries []RelabeledSeries
+ * }
+ */
+void prompp_prometheus_relabeled_series_reset(void* args);
+
 //
 // RelabelerStateUpdate
 //
@@ -877,6 +895,15 @@ void prompp_prometheus_relabeler_state_update_ctor(void* args);
  * }
  */
 void prompp_prometheus_relabeler_state_update_dtor(void* args);
+
+/**
+ * @brief Reset slice of RelabelerStateUpdate.
+ *
+ * @param args {
+ *      relabeledSeries []RelabeledSeries
+ * }
+ */
+void prompp_prometheus_relabeler_state_update_reset(void* args);
 
 //
 // PerShardRelabeler

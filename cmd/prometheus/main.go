@@ -61,18 +61,18 @@ import (
 	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor" // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_logger "github.com/prometheus/prometheus/pp-pkg/logger"          // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/remote"                        // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/rules"                         // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/scrape"                        // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage"        // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_remote "github.com/prometheus/prometheus/pp-pkg/storage/remote"  // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"              // PP_CHANGES.md: rebuild on cpp
 
-	pp_storage "github.com/prometheus/prometheus/pp/go/storage"    // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/storage/catalog"       // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/storage/head/head"     // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/storage/head/services" // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/storage/querier"       // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/storage/ready"         // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/storage/remotewriter"  // PP_CHANGES.md: rebuild on cpp
+	pp_storage "github.com/prometheus/prometheus/pp/go/storage"   // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/catalog"      // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/head/head"    // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/querier"      // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/ready"        // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/remotewriter" // PP_CHANGES.md: rebuild on cpp
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
@@ -87,7 +87,6 @@ import (
 	_ "github.com/prometheus/prometheus/plugins" // Register plugins.
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
-	"github.com/prometheus/prometheus/rules"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tracing"
 	"github.com/prometheus/prometheus/tsdb"
@@ -957,7 +956,7 @@ func main() {
 		queryEngine = promql.NewEngine(opts)
 
 		ruleQueryOffset := time.Duration(cfgFile.GlobalConfig.RuleQueryOffset)
-		ruleManager = rules.NewManager(&rules.ManagerOptions{
+		ruleManager, err = rules.NewManager(&rules.ManagerOptions{
 			Queryable:       adapter,               // PP_CHANGES.md: rebuild on cpp
 			Engine:          queryEngine,           // PP_CHANGES.md: rebuild on cpp
 			FanoutQueryable: fanoutStorage,         // PP_CHANGES.md: rebuild on cpp
@@ -978,6 +977,10 @@ func main() {
 				return ruleQueryOffset
 			},
 		})
+		if err != nil {
+			level.Error(logger).Log("msg", "failed to create a rule manager", "err", err)
+			os.Exit(1)
+		}
 	}
 
 	scraper.Set(scrapeManager)
@@ -2111,13 +2114,6 @@ func readPromPPFeatures(logger log.Logger) {
 	for _, feature := range strings.Split(features, ",") {
 		fname, fvalue, _ := strings.Cut(feature, "=")
 		switch strings.TrimSpace(fname) {
-		case "head_copy_series_on_rotate":
-			services.CopySeriesOnRotate = true
-			level.Info(logger).Log(
-				"msg",
-				"[FEATURE] Copying active series from current head to new head during rotation is enabled.",
-			)
-
 		case "head_read_concurrency":
 			var (
 				v   = 1
@@ -2184,9 +2180,9 @@ func readPromPPFeatures(logger log.Logger) {
 			rwprocessor.AlwaysCommit = false
 			pp_pkg_handler.OTLPAlwaysCommit = false
 
-		case "unload_data_storage":
-			pp_storage.UnloadDataStorage = true
-			_ = level.Info(logger).Log("msg", "[FEATURE] Data storage unloading is enabled.")
+		case "disable_unload_data_storage":
+			pp_storage.UnloadDataStorage = false
+			_ = level.Info(logger).Log("msg", "[FEATURE] Data storage unloading is disabled.")
 
 		case "disable_block_compaction":
 			pp_pkg_tsdb.BlockCompactionDisabled = true

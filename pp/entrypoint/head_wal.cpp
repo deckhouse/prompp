@@ -161,7 +161,7 @@ extern "C" void prompp_head_wal_decoder_decode(void* args, void* res) {
   const auto out = new (res) Result();
 
   try {
-    in->inner_series->clear();
+    in->inner_series->reset();
     in->decoder->decode_to_inner_series(in->segment, *in->inner_series, out);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);

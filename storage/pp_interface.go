@@ -2,6 +2,8 @@ package storage
 
 import (
 	"context"
+
+	"github.com/prometheus/prometheus/pp/go/cppbridge"
 )
 
 //
@@ -23,6 +25,9 @@ type Batcher interface {
 type BatchStorage interface {
 	// Commit adds aggregated series from [TransactionHead] to the [Head].
 	Commit(ctx context.Context) error
+
+	// Commit adds aggregated series from [pp_storage.TransactionHead] to the [Head] with [cppbridge.StateV2].
+	CommitWithState(ctx context.Context, state *cppbridge.StateV2) error
 
 	Appendable
 	Queryable

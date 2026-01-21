@@ -1,4 +1,5 @@
-#include <random>
+#include <limits>
+#include <sstream>
 
 #include <gtest/gtest.h>
 
@@ -10,345 +11,515 @@ using BareBones::Vector;
 using std::string_literals::operator""s;
 
 template <template <class> class Vector>
-class TestSnugCompositesStringFilament {
-  uint32_t pos_;
-  uint32_t len_;
+struct TestStringFilament {
+  struct storage_type {
+    static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
 
- public:
-  // NOLINTNEXTLINE
-  class data_type : public Vector<char> {
-    class Checkpoint {
-      uint32_t size_;
+    using composite_type = std::string_view;
+
+    struct item_type {
+      uint32_t pos;
+      uint32_t length;
+    };
+
+    struct checkpoint_type {
+      uint32_t data_size;
+      uint32_t items_size;
 
       using SerializationMode = BareBones::SnugComposite::SerializationMode;
 
-     public:
-      explicit Checkpoint(uint32_t size) noexcept : size_(size) {}
-
-      uint32_t size() const { return size_; }
-
       template <BareBones::OutputStream S>
-      void save(S& out, const data_type& data, Checkpoint const* from = nullptr) const {
+      void save(S& out, const storage_type& storage, uint32_t id_offset, uint32_t id_count, uint8_t table_version, checkpoint_type const* from = nullptr)
+          const {
+        if (table_version == 1) {
+          // write items
+          out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
+
+          // write a version
+          out.put(1);
+        } else {  // table_version == 2
+          // write a version
+          out.put(1);
+
+          // write items
+          out.write(reinterpret_cast<const char*>(&storage.items[id_offset]), sizeof(item_type) * id_count);
+        }
+
+        // write mode
         SerializationMode mode = (from != nullptr) ? SerializationMode::DELTA : SerializationMode::SNAPSHOT;
         out.put(static_cast<char>(mode));
+
+        // write pos of the first seq in the portion if we are writing delta
         uint32_t first_to_save = 0;
         if (from != nullptr) {
-          first_to_save = from->size_;
+          first_to_save = from->data_size;
           out.write(reinterpret_cast<const char*>(&first_to_save), sizeof(first_to_save));
         }
-        uint32_t size_to_save = size_ - first_to_save;
+
+        // write size
+        uint32_t size_to_save = data_size - first_to_save;
         out.write(reinterpret_cast<char*>(&size_to_save), sizeof(size_to_save));
-        out.write(data.begin() + first_to_save, size_to_save);
+
+        // write data
+        if (size_to_save > 0) {
+          out.write(&storage.data[first_to_save], size_to_save);
+        }
       }
 
-      uint32_t save_size(const data_type&, Checkpoint const* from = nullptr) const {
-        uint32_t res = 1;  // mode
+      uint32_t save_size(const storage_type&, uint32_t id_count, checkpoint_type const* from = nullptr) const {
+        uint32_t res = 0;
+
+        // items
+        res += sizeof(item_type) * id_count;
+
+        // version
+        ++res;
+
+        // mode
+        ++res;
+
+        // pos of first seq in the portion, if we are writing delta
         uint32_t first_to_save = 0;
         if (from != nullptr) {
-          first_to_save = from->size_;
+          first_to_save = from->data_size;
           res += sizeof(uint32_t);  // first index
         }
-        uint32_t size_to_save = size_ - first_to_save;
-        res += sizeof(uint32_t);  // length
-        res += size_to_save;      // data
+
+        // size
+        const uint32_t size_to_save = data_size - first_to_save;
+        res += sizeof(uint32_t);
+
+        // data
+        res += size_to_save;
+
         return res;
       }
     };
 
-    uint32_t shift_{};
+    struct symbols_view {
+      const storage_type* storage_ptr;
 
-   public:
-    using checkpoint_type = Checkpoint;
-    inline __attribute__((always_inline)) auto checkpoint() const noexcept { return Checkpoint(this->size()); }
-    inline __attribute__((always_inline)) void rollback(const checkpoint_type& s) noexcept {
-      assert(s.size() <= this->size());
-      this->resize(s.size());
+      class iterator_type {
+       public:
+        using iterator_category = std::input_iterator_tag;
+        using value_type = composite_type;
+        using difference_type = std::ptrdiff_t;
+
+        iterator_type() = default;
+        explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : storage_ptr_(&storage), id_{id} {}
+
+        PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
+          ++id_;
+          return *this;
+        }
+
+        PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
+          iterator_type retval = *this;
+          ++(*this);
+          return retval;
+        }
+
+        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_; }
+
+        [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
+
+        [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t id() const noexcept { return id_; }
+
+       private:
+        const storage_type* storage_ptr_;
+        uint32_t id_{0};
+      };
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items.size()}; }
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_ptr->count(); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
+    };
+
+    using view_type = symbols_view;
+
+    storage_type() noexcept = default;
+    template <class AnotherStorageType>
+      requires kIsReadOnly
+    explicit storage_type(const AnotherStorageType& other) : data{other.data}, items{other.items} {}
+
+    Vector<char> data;
+    Vector<item_type> items;
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return static_cast<uint32_t>(items.size()); }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t remainder_size() const noexcept {
+      constexpr uint32_t max_ui32 = std::numeric_limits<uint32_t>::max();
+      assert(data.size() <= max_ui32);
+      return max_ui32 - static_cast<uint32_t>(data.size());
     }
 
-    template <BareBones::InputStream S>
-    void load(S& in) {
-      BareBones::SnugComposite::SerializationMode mode = static_cast<BareBones::SnugComposite::SerializationMode>(in.get());
-      // read pos of first symbol in the portion, if we are reading wal
+    template <class AnotherStorageType>
+    PROMPP_ALWAYS_INLINE void reserve(const AnotherStorageType& other) noexcept {
+      items.reserve(other.items.size());
+      data.reserve(other.data.size());
+    }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE composite_type composite(uint32_t id) const noexcept {
+      const auto item = items[id];
+      return std::string_view(data.data() + item.pos, item.length);
+    }
+
+    void validate(uint32_t id) const {
+      const auto item = items[id];
+      if (item.pos + item.length > data.size()) {
+        throw BareBones::Exception(0x75555f55ebe357a3, "TestStringFilament validation error: length is out of data vector range");
+      }
+    }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept {
+      return BareBones::mem::allocated_memory(data) + BareBones::mem::allocated_memory(items);
+    }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return static_cast<uint32_t>(items.size()); }
+
+    PROMPP_ALWAYS_INLINE uint32_t emplace_back(composite_type str) noexcept {
+      const auto id = static_cast<uint32_t>(items.size());
+      const auto pos = static_cast<uint32_t>(data.size());
+      items.emplace_back(pos, str.length());
+      data.push_back(str.begin(), str.end());
+      return id;
+    }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE checkpoint_type checkpoint() const noexcept {
+      return {static_cast<uint32_t>(data.size()), static_cast<uint32_t>(items.size())};
+    }
+    PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& checkpoint) noexcept {
+      assert(checkpoint.data_size <= data.size());
+      assert(checkpoint.items_size <= items.size());
+      data.resize(checkpoint.data_size);
+      items.resize(checkpoint.items_size);
+    }
+
+    template <class InputStream>
+    auto load(InputStream& in, uint32_t items_size, uint8_t table_version) {
+      const auto original_size = items.size();
+      if (table_version == 1) {
+        // read items
+        items.resize(original_size + items_size);
+        in.read(reinterpret_cast<char*>(&items[original_size]), sizeof(item_type) * items_size);
+      }
+
+      // read version
+      const uint8_t version = in.get();
+      if (version != 1) {
+        throw BareBones::Exception(
+            0x67c010edbd64e272, "Invalid stream data version (%d) for loading into data vector (TestStringFilament::storage_type), only version 1 is supported",
+            version);
+      }
+
+      if (table_version == 2) {
+        // read items
+        items.resize(original_size + items_size);
+        in.read(reinterpret_cast<char*>(&items[original_size]), sizeof(item_type) * items_size);
+      }
+
+      // read mode
+      const auto mode = static_cast<BareBones::SnugComposite::SerializationMode>(in.get());
+
+      // read pos of the first symbol in the portion if we are reading wal
       uint32_t first_to_load_i = 0;
       if (mode == BareBones::SnugComposite::SerializationMode::DELTA) {
         in.read(reinterpret_cast<char*>(&first_to_load_i), sizeof(first_to_load_i));
       }
 
-      if (first_to_load_i - shift_ != this->size()) {
-        throw std::runtime_error("something went wrong");
+      if (first_to_load_i != data.size()) {
+        if (mode == BareBones::SnugComposite::SerializationMode::SNAPSHOT) {
+          throw BareBones::Exception(0x4c0ca0586da6da3f, "Attempt to load snapshot into non-empty data vector");
+        } else if (first_to_load_i < data.size()) {
+          throw BareBones::Exception(0x55cb9b02c23f7bbd, "Attempt to load segment over existing data");
+        } else {
+          throw BareBones::Exception(0x55cb9b02c23f7bbd, "Attempt to load incomplete data from segment, data vector length (%u) is less than segment size (%d)",
+                                     data.size(), first_to_load_i);
+        }
       }
 
-      uint32_t size_to_load;
+      // read size
+      uint32_t size_to_load = 0;
       in.read(reinterpret_cast<char*>(&size_to_load), sizeof(size_to_load));
 
       // read data
-      this->resize(this->size() + size_to_load);
-      in.read(this->begin() + first_to_load_i - shift_, size_to_load);
+      data.resize(data.size() + size_to_load);
+      in.read(data.begin() + first_to_load_i, size_to_load);
+
+      return std::views::iota(original_size, items.size());
     }
 
-    void shrink_to(uint32_t size) {
-      shift_ += BareBones::Vector<char>::size();
-      this->resize(size);
-    }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE view_type view() const noexcept { return {.storage_ptr = this}; }
 
-    [[nodiscard]] uint32_t shift() const noexcept { return shift_; }
+    void shrink() noexcept { items.clear(); }
   };
-
-  using composite_type = std::string_view;
-
-  TestSnugCompositesStringFilament() = default;
-  TestSnugCompositesStringFilament(data_type& data, std::string x) : pos_(data.size()), len_(x.length()) { data.push_back(x.data(), x.data() + x.length()); }
-
-  const std::string_view composite(const data_type& data) const { return std::string_view(data.begin() + pos_ - data.shift(), len_); }
-
-  void validate(const data_type& data) const {
-    if (pos_ + len_ > data.size() + data.shift())
-      throw std::runtime_error("something went wrong");
-  }
 };
 
-typedef testing::Types<BareBones::SnugComposite::EncodingBimap<TestSnugCompositesStringFilament, Vector>> SnugCompositesBimapTypes;
+using EncodingBimap = BareBones::SnugComposite::EncodingBimap<TestStringFilament, Vector>;
+using ShrinkableEncodingBimap = BareBones::SnugComposite::ShrinkableEncodingBimap<TestStringFilament, Vector>;
 
-template <class T>
-struct SnugComposite : public testing::Test {
-  using StringFilament = TestSnugCompositesStringFilament<Vector>;
+class EncodingBimapFixture : public testing::Test {
+ protected:
+  EncodingBimap table_;
 
-  static void fill_table_with_random_values(auto& table) {
-    table.find_or_emplace("10"s);
-    table.find_or_emplace("11"s);
-    table.find_or_emplace("13"s);
-  }
+  static constexpr auto kInvalidId = std::numeric_limits<uint32_t>::max();
 };
 
-TYPED_TEST_SUITE(SnugComposite, SnugCompositesBimapTypes);
-
-TYPED_TEST(SnugComposite, should_return_same_id_for_same_data) {
+TEST_F(EncodingBimapFixture, Empty) {
   // Arrange
-  TypeParam outcomes;
-  this->fill_table_with_random_values(outcomes);
-  static auto v = "12"s;
 
   // Act
-  auto id = outcomes.find_or_emplace(v);
 
   // Assert
-  ASSERT_EQ(id, outcomes.find_or_emplace(v));
-  ASSERT_EQ(outcomes.find_or_emplace(v), outcomes.find(v));
+  EXPECT_EQ(0U, table_.size());
 }
 
-TYPED_TEST(SnugComposite, should_return_same_id_for_same_data_with_hash) {
-  TypeParam outcomes;
-  this->fill_table_with_random_values(outcomes);
-
-  std::string v = "12";
-  auto hash_val = BareBones::XXHash3::hash(v);
-  auto id = outcomes.find_or_emplace(v, hash_val);
-
-  EXPECT_EQ(id, outcomes.find_or_emplace(v, hash_val));
-  EXPECT_EQ(id, outcomes.find_or_emplace(v));
-
-  EXPECT_EQ(outcomes.find_or_emplace(v, hash_val), outcomes.find(v, hash_val));
-  EXPECT_EQ(outcomes.find_or_emplace(v, hash_val), outcomes.find(v));
-
-  v = "21";
-  hash_val = BareBones::XXHash3::hash(v);
-  id = outcomes.find_or_emplace(v);
-
-  EXPECT_EQ(id, outcomes.find_or_emplace(v, hash_val));
-  EXPECT_EQ(id, outcomes.find_or_emplace(v));
-
-  EXPECT_EQ(outcomes.find_or_emplace(v), outcomes.find(v));
-  EXPECT_EQ(outcomes.find_or_emplace(v), outcomes.find(v, hash_val));
-}
-
-TYPED_TEST(SnugComposite, should_return_different_id_for_different_data) {
+TEST_F(EncodingBimapFixture, FindOrEmplaceNewValue) {
   // Arrange
-  TypeParam outcomes;
-  this->fill_table_with_random_values(outcomes);
-  static auto v1 = "12"s;
-  static auto v2 = "21"s;
+  const auto value = "test"s;
 
   // Act
-  auto id1 = outcomes.find_or_emplace(v1);
-  auto id2 = outcomes.find_or_emplace(v2);
+  const auto expected_id = table_.next_item_index();
+  const auto id = table_.find_or_emplace(value);
 
   // Assert
-  ASSERT_NE(id1, id2);
+  EXPECT_EQ(expected_id, id);
+  EXPECT_EQ(1U, table_.size());
 }
 
-TYPED_TEST(SnugComposite, should_return_different_id_for_different_data_with_hash) {
-  TypeParam outcomes;
-  this->fill_table_with_random_values(outcomes);
+TEST_F(EncodingBimapFixture, FindOrEmplaceExistingValue) {
+  // Arrange
+  const auto value = "test"s;
+  const auto id1 = table_.find_or_emplace(value);
 
-  std::string v = "12";
-  size_t hash_val = std::hash<std::string>()(v);
-  auto id = outcomes.find_or_emplace(v, hash_val);
+  // Act
+  const auto id2 = table_.find_or_emplace(value);
 
-  v = "21";
-  hash_val = std::hash<std::string>()(v);
-
-  EXPECT_NE(id, outcomes.find_or_emplace(v, hash_val));
-  EXPECT_NE(id, outcomes.find_or_emplace(v));
-
-  v = "13";
-  id = outcomes.find_or_emplace(v);
-
-  v = "31";
-  hash_val = std::hash<std::string>()(v);
-
-  EXPECT_NE(id, outcomes.find_or_emplace(v, hash_val));
-  EXPECT_NE(id, outcomes.find_or_emplace(v));
+  // Assert
+  EXPECT_EQ(id1, id2);
+  EXPECT_EQ(1U, table_.size());
 }
 
-TYPED_TEST(SnugComposite, should_assign_new_ids_after_rollback) {
-  TypeParam outcomes;
+TEST_F(EncodingBimapFixture, FindOrEmplaceDifferentValues) {
+  // Arrange
+  const std::string value1 = "test1"s;
+  const std::string value2 = "test2"s;
 
-  auto checkpoint0 = outcomes.checkpoint();
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test1")), 0);
-  ASSERT_EQ(std::ranges::distance(outcomes.begin(), outcomes.end()), 1);
+  // Act
+  const auto id1 = table_.find_or_emplace(value1);
+  const auto id2 = table_.find_or_emplace(value2);
 
-  auto checkpoint1 = outcomes.checkpoint();
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test2")), 1);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test3")), 2);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test1")), 0);
-  ASSERT_EQ(std::ranges::distance(outcomes.begin(), outcomes.end()), 3);
-
-  outcomes.rollback(checkpoint1);
-  ASSERT_EQ(std::ranges::distance(outcomes.begin(), outcomes.end()), 1);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test_new")), 1);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test2")), 2);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test3")), 3);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test1")), 0);
-  ASSERT_EQ(std::ranges::distance(outcomes.begin(), outcomes.end()), 4);
-
-  auto checkpoint2 = outcomes.checkpoint();
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test4")), 4);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test_new")), 1);
-  ASSERT_EQ(std::ranges::distance(outcomes.begin(), outcomes.end()), 5);
-
-  outcomes.rollback(checkpoint2);
-  ASSERT_EQ(std::ranges::distance(outcomes.begin(), outcomes.end()), 4);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test_more_new")), 4);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test4")), 5);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test_new")), 1);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test2")), 2);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test3")), 3);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test1")), 0);
-
-  outcomes.rollback(checkpoint1);
-  ASSERT_EQ(std::ranges::distance(outcomes.begin(), outcomes.end()), 1);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test_more_new")), 1);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test1")), 0);
-
-  outcomes.rollback(checkpoint0);
-  ASSERT_EQ(std::ranges::distance(outcomes.begin(), outcomes.end()), 0);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test_new")), 0);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test1")), 1);
+  // Assert
+  EXPECT_NE(id1, id2);
+  EXPECT_EQ(2U, table_.size());
 }
 
-TYPED_TEST(SnugComposite, should_write_the_same_wal_after_rollback) {
-  TypeParam outcomes;
+TEST_F(EncodingBimapFixture, FindOrEmplaceWithHash) {
+  // Arrange
+  const std::string value = "test"s;
+  const auto hash_val = BareBones::XXHash3::hash(value);
 
-  // checkpoint names template is checkpoint<base><variant>
-  // for example, if we have state X and checkpoint to this state checkpoint21
-  // then we change state with adding some data, then we get new checkpoint211
-  // Now if we rollback state to checkpoint2_1 and add some data we get new checkpoint212
-  //
-  // wal names template is wal<last checkpoint index>
-  // for example, wal between checkpoint212 and checkpoint21 we get wal212
+  // Act
+  const auto id1 = table_.find_or_emplace(value, hash_val);
+  const auto id2 = table_.find_or_emplace(value, hash_val);
 
-  auto checkpoint = outcomes.checkpoint();
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test1")), 0);
+  // Assert
+  EXPECT_EQ(id1, id2);
+  EXPECT_EQ(1U, table_.size());
+}
 
-  auto checkpoint1 = outcomes.checkpoint();
-  std::ostringstream wal1;
-  wal1 << (checkpoint1 - checkpoint) << std::flush;
+TEST_F(EncodingBimapFixture, FindExistingValue) {
+  // Arrange
+  table_.find_or_emplace("test1"s);
+  table_.find_or_emplace("test2"s);
+  const std::string value = "test"s;
+  const auto id = table_.find_or_emplace(value);
 
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test2")), 1);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test3")), 2);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test1")), 0);
+  // Act
+  const auto found_id = table_.find(value);
 
-  auto checkpoint11 = outcomes.checkpoint();
-  std::ostringstream wal11;
-  wal11 << (checkpoint11 - checkpoint1) << std::flush;
+  // Assert
+  ASSERT_TRUE(found_id.has_value());
+  EXPECT_EQ(id, found_id.value());
+}
 
-  outcomes.rollback(checkpoint1);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test2")), 1);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test3")), 2);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test1")), 0);
+TEST_F(EncodingBimapFixture, FindNonExistingValue) {
+  // Arrange
+  table_.find_or_emplace("test1"s);
+  table_.find_or_emplace("test2"s);
+  const std::string value = "test"s;
 
-  auto checkpoint12 = outcomes.checkpoint();
-  std::ostringstream wal12;
-  wal12 << (checkpoint12 - checkpoint1) << std::flush;
-  ASSERT_EQ(wal11.str(), wal12.str());
+  // Act
+  const auto found_id = table_.find(value);
 
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test4")), 3);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test5")), 4);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test1")), 0);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test3")), 2);
+  // Assert
+  EXPECT_FALSE(found_id.has_value());
+  EXPECT_EQ(kInvalidId, table_.find(value).value_or(kInvalidId));
+}
 
-  auto checkpoint121 = outcomes.checkpoint();
-  std::ostringstream wal121;
-  wal121 << (checkpoint121 - checkpoint12) << std::flush;
+TEST_F(EncodingBimapFixture, FindWithHash) {
+  // Arrange
+  const std::string value = "test"s;
+  const auto hash_val = BareBones::XXHash3::hash(value);
+  const auto id = table_.find_or_emplace(value, hash_val);
 
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test6")), 5);
+  // Act
+  const auto found_id = table_.find(value, hash_val);
 
-  outcomes.rollback(checkpoint12);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test4")), 3);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test5")), 4);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test1")), 0);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test3")), 2);
+  // Assert
+  ASSERT_TRUE(found_id.has_value());
+  EXPECT_EQ(id, found_id.value());
+}
 
-  auto checkpoint122 = outcomes.checkpoint();
-  std::ostringstream wal122;
-  wal122 << (checkpoint122 - checkpoint12) << std::flush;
-  ASSERT_EQ(wal121.str(), wal122.str());
+TEST_F(EncodingBimapFixture, OperatorBracket) {
+  // Arrange
+  table_.find_or_emplace("test1"s);
+  table_.find_or_emplace("test2"s);
+  const std::string value = "test"s;
+  const auto id = table_.find_or_emplace(value);
 
-  outcomes.rollback(checkpoint);
-  ASSERT_EQ(outcomes.find_or_emplace(std::string("test1")), 0);
+  // Act
+  const auto composite = table_[id];
 
-  auto checkpoint2 = outcomes.checkpoint();
-  std::ostringstream wal2;
-  wal2 << (checkpoint2 - checkpoint) << std::flush;
-  ASSERT_EQ(wal1.str(), wal2.str());
+  // Assert
+  EXPECT_EQ(value, composite);
+}
+
+TEST_F(EncodingBimapFixture, Checkpoint) {
+  // Arrange
+  table_.find_or_emplace("test1"s);
+  table_.find_or_emplace("test2"s);
+
+  // Act
+  const auto checkpoint = table_.checkpoint();
+
+  // Assert
+  EXPECT_EQ(2U, checkpoint.size());
+}
+
+TEST_F(EncodingBimapFixture, Rollback) {
+  // Arrange
+  table_.find_or_emplace("test1"s);
+  const auto checkpoint = table_.checkpoint();
+  table_.find_or_emplace("test2"s);
+
+  // Act
+  table_.rollback(checkpoint);
+
+  // Assert
+  EXPECT_EQ(1U, table_.size());
+  EXPECT_TRUE(table_.find("test1"s).has_value());
+  EXPECT_FALSE(table_.find("test2"s).has_value());
+}
+
+TEST_F(EncodingBimapFixture, RollbackToEmpty) {
+  // Arrange
+  const auto checkpoint = table_.checkpoint();
+  table_.find_or_emplace("test1"s);
+
+  // Act
+  table_.rollback(checkpoint);
+
+  // Assert
+  EXPECT_EQ(0U, table_.size());
+}
+
+TEST_F(EncodingBimapFixture, SerializeDeserializeSnapshot) {
+  // Arrange
+  table_.find_or_emplace("test1"s);
+  table_.find_or_emplace("test2"s);
+  std::stringstream stream;
+
+  // Act
+  stream << table_;
+  EncodingBimap table2;
+  stream >> table2;
+
+  // Assert
+  EXPECT_EQ(table_.size(), table2.size());
+  EXPECT_EQ("test1"s, table2[0]);
+  EXPECT_EQ("test2"s, table2[1]);
+}
+
+TEST_F(EncodingBimapFixture, SerializeDeserializeDelta) {
+  // Arrange
+  table_.find_or_emplace("test1"s);
+  const auto checkpoint1 = table_.checkpoint();
+  table_.find_or_emplace("test2"s);
+  const auto checkpoint2 = table_.checkpoint();
+  std::stringstream stream;
+
+  // Act
+  stream << (checkpoint2 - checkpoint1);
+  EncodingBimap table2;
+  table2.find_or_emplace("test1"s);
+  stream >> table2;
+
+  // Assert
+  EXPECT_EQ(2U, table2.size());
+  EXPECT_EQ("test1"s, table2[0]);
+  EXPECT_EQ("test2"s, table2[1]);
+}
+
+TEST_F(EncodingBimapFixture, DataView) {
+  // Arrange
+  table_.find_or_emplace("test1"s);
+  table_.find_or_emplace("test2"s);
+
+  // Act
+  const auto view = table_.data_view();
+
+  // Assert
+  EXPECT_EQ(2U, view.size());
+  EXPECT_EQ("test1"s, *view.begin());
+  EXPECT_EQ("test2"s, *std::next(view.begin()));
 }
 
 class ShrinkableEncodingBimapFixture : public testing::Test {
  protected:
-  using Table = BareBones::SnugComposite::ShrinkableEncodingBimap<TestSnugCompositesStringFilament, Vector>;
-
+  ShrinkableEncodingBimap table_;
   static constexpr auto kInvalidId = std::numeric_limits<uint32_t>::max();
-
-  Table table_;
 };
 
-TEST_F(ShrinkableEncodingBimapFixture, Emplace) {
+TEST_F(ShrinkableEncodingBimapFixture, Empty) {
   // Arrange
 
   // Act
-  const auto id1 = table_.find_or_emplace("1"s);
-  const auto id2 = table_.find_or_emplace("2"s);
 
   // Assert
-  EXPECT_EQ(0U, id1);
-  EXPECT_EQ(1U, id2);
+  EXPECT_EQ(0U, table_.size());
 }
 
-TEST_F(ShrinkableEncodingBimapFixture, EmplaceExisting) {
+TEST_F(ShrinkableEncodingBimapFixture, FindOrEmplace) {
   // Arrange
+  const std::string value = "test"s;
 
   // Act
-  const auto id1 = table_.find_or_emplace("1"s);
-  const auto id2 = table_.find_or_emplace("1"s);
+  const auto id = table_.find_or_emplace(value);
 
   // Assert
-  EXPECT_EQ(0U, id1);
-  EXPECT_EQ(0U, id2);
+  EXPECT_EQ(0U, id);
+  EXPECT_EQ(1U, table_.size());
+}
+
+TEST_F(ShrinkableEncodingBimapFixture, FindOrEmplaceExisting) {
+  // Arrange
+  const std::string value = "test"s;
+  const auto id1 = table_.find_or_emplace(value);
+
+  // Act
+  const auto id2 = table_.find_or_emplace(value);
+
+  // Assert
+  EXPECT_EQ(id1, id2);
+  EXPECT_EQ(1U, table_.size());
 }
 
 TEST_F(ShrinkableEncodingBimapFixture, Checkpoint) {
   // Arrange
-  table_.find_or_emplace("1"s);
+  table_.find_or_emplace("test"s);
 
   // Act
   const auto checkpoint = table_.checkpoint();
@@ -359,82 +530,108 @@ TEST_F(ShrinkableEncodingBimapFixture, Checkpoint) {
 
 TEST_F(ShrinkableEncodingBimapFixture, ShrinkToCheckpointSize) {
   // Arrange
-  table_.find_or_emplace("1"s);
+  table_.find_or_emplace("test1"s);
+  const auto checkpoint = table_.checkpoint();
 
   // Act
-  table_.shrink_to_checkpoint_size(table_.checkpoint());
+  table_.shrink_to_checkpoint_size(checkpoint);
 
   // Assert
   EXPECT_EQ(0U, table_.size());
 }
 
-TEST_F(ShrinkableEncodingBimapFixture, EmplaceAfterShrinkToCheckpointSize) {
+TEST_F(ShrinkableEncodingBimapFixture, EmplaceAfterShrink) {
   // Arrange
-  const auto id_before = table_.find_or_emplace("1"s);
+  const auto id_before = table_.find_or_emplace("test1"s);
+  table_.shrink_to_checkpoint_size(table_.checkpoint());
 
   // Act
-  table_.shrink_to_checkpoint_size(table_.checkpoint());
-  const auto id_after = table_.find_or_emplace("1"s);
+  const auto id_after = table_.find_or_emplace("test1"s);
 
   // Assert
   EXPECT_EQ(0U, id_before);
-  EXPECT_EQ(1U, table_.size());
   EXPECT_EQ(1U, id_after);
+  EXPECT_EQ(1U, table_.size());
+
+  EXPECT_EQ("test1"s, table_[id_after]);
 }
 
-TEST_F(ShrinkableEncodingBimapFixture, ShrinkToOutdatedCheckpoint) {
+TEST_F(ShrinkableEncodingBimapFixture, ShrinkToOutdatedCheckpointThrows) {
   // Arrange
-  table_.find_or_emplace("1"s);
+  table_.find_or_emplace("test1"s);
+
   const auto checkpoint = table_.checkpoint();
+  table_.shrink_to_checkpoint_size(checkpoint);
+
+  table_.find_or_emplace("test2"s);
 
   // Act
-  table_.shrink_to_checkpoint_size(checkpoint);
-  table_.find_or_emplace("2"s);
 
   // Assert
   EXPECT_THROW(table_.shrink_to_checkpoint_size(checkpoint), BareBones::Exception);
 }
 
-TEST_F(ShrinkableEncodingBimapFixture, LoadCheckpointWithoutShrink) {
+TEST_F(ShrinkableEncodingBimapFixture, OperatorBracketWithShift) {
   // Arrange
-  Table table2;
-  std::stringstream stream;
-
-  table_.find_or_emplace("0"s);
-  table_.find_or_emplace("1"s);
-  stream << table_.checkpoint();
+  table_.find_or_emplace("test1"s);
+  table_.shrink_to_checkpoint_size(table_.checkpoint());
+  const auto id = table_.find_or_emplace("test2"s);
 
   // Act
-  stream >> table2;
+  const auto composite = table_[id];
 
   // Assert
-  EXPECT_EQ(1U, table2.find("1"s).value_or(kInvalidId));
+  EXPECT_EQ("test2"s, composite);
 }
 
-TEST_F(ShrinkableEncodingBimapFixture, LoadCheckpointAfterShrink) {
+TEST_F(ShrinkableEncodingBimapFixture, SerializeDeserializeSnapshot) {
   // Arrange
-  Table table2;
+  table_.find_or_emplace("test1"s);
+  table_.find_or_emplace("test2"s);
+  const auto checkpoint = table_.checkpoint();
   std::stringstream stream;
 
   // Act
-  table_.find_or_emplace("01"s);
-  table_.find_or_emplace("11"s);
-  table_.find_or_emplace("21"s);
-  table_.find_or_emplace("31"s);
-  const auto checkpoint = table_.checkpoint();
   stream << checkpoint;
-  stream >> table2;
-  table2.shrink_to_checkpoint_size(table2.checkpoint());
-
-  table_.find_or_emplace("41"s);
-  table_.find_or_emplace("51"s);
-  stream << table_.checkpoint() - checkpoint;
+  ShrinkableEncodingBimap table2;
   stream >> table2;
 
   // Assert
-  EXPECT_EQ(kInvalidId, table2.find("01"s).value_or(kInvalidId));
-  EXPECT_EQ(4U, table2.find("41"s).value_or(kInvalidId));
-  EXPECT_EQ(5U, table2.find("51"s).value_or(kInvalidId));
+  EXPECT_EQ(table_.size(), table2.size());
+  EXPECT_EQ("test1"s, table2[0]);
+  EXPECT_EQ("test2"s, table2[1]);
+}
+
+TEST_F(ShrinkableEncodingBimapFixture, SerializeDeserializeDeltaAfterShrink) {
+  // Arrange
+  ShrinkableEncodingBimap table2;
+  std::stringstream snapshot_stream;
+
+  table_.find_or_emplace("test1"s);
+  table_.find_or_emplace("test2"s);
+  const auto initial_checkpoint = table_.checkpoint();
+
+  snapshot_stream << initial_checkpoint;
+  snapshot_stream >> table2;
+  table2.shrink_to_checkpoint_size(table2.checkpoint());
+
+  const auto test3_id = table_.find_or_emplace("test3"s);
+  const auto test4_id = table_.find_or_emplace("test4"s);
+  const auto final_checkpoint = table_.checkpoint();
+  const auto delta = final_checkpoint - initial_checkpoint;
+
+  // Act
+  std::stringstream delta_stream;
+  delta_stream << delta;
+  delta_stream >> table2;
+
+  // Assert
+  EXPECT_EQ(2U, table2.size());
+
+  EXPECT_EQ(kInvalidId, table2.find("test1"s).value_or(kInvalidId));
+  EXPECT_EQ(kInvalidId, table2.find("test2"s).value_or(kInvalidId));
+  EXPECT_EQ(test3_id, table2.find("test3"s).value_or(kInvalidId));
+  EXPECT_EQ(test4_id, table2.find("test4"s).value_or(kInvalidId));
 }
 
 }  // namespace
