@@ -285,6 +285,8 @@ class GenericDecodingTable {
     storage_.reserve(other.storage_);
   }
 
+  PROMPP_ALWAYS_INLINE void reserve(uint32_t count) { storage_.reserve(count); }
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept {
     if constexpr (has_next_item_index<Derived>) {
       return static_cast<const Derived*>(this)->next_item_index_impl();

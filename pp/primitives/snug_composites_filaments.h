@@ -162,6 +162,8 @@ struct Symbol {
       data_.reserve(other.data_.size());
     }
 
+    PROMPP_ALWAYS_INLINE void reserve(uint32_t count) noexcept { items_.reserve(count); }
+
     [[nodiscard]] PROMPP_ALWAYS_INLINE composite_type composite(uint32_t id) const noexcept {
       const auto item = items_[id];
       return std::string_view(data_.data() + item.pos, item.length);
@@ -523,6 +525,8 @@ struct LabelNameSet {
       symbols_ids_sequences_.reserve(other.symbols_ids_sequences_.size());
       items_.reserve(other.items_.size());
     }
+
+    PROMPP_ALWAYS_INLINE void reserve(uint32_t count) noexcept { items_.reserve(count); }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE composite_type composite(uint32_t id) const noexcept {
       const auto item = items_[id];
@@ -1145,6 +1149,8 @@ struct LabelSet {
       label_name_sets_table_.reserve(other.label_name_sets_table_);
       items_.reserve(other.items_.size());
     }
+
+    PROMPP_ALWAYS_INLINE void reserve(uint32_t count) noexcept { items_.reserve(count); }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE composite_type composite(uint32_t id) const noexcept {
       const auto [lns_id, pos] = items_[id];
