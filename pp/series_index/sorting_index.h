@@ -1,6 +1,10 @@
 #pragma once
 
+#include <cstdint>
+#include <limits>
+
 #include "bare_bones/preprocess.h"
+#include "bare_bones/vector.h"
 
 namespace series_index {
 

@@ -3,12 +3,12 @@
 #include <ranges>
 
 #include "bare_bones/allocator.h"
+#include "bare_bones/bitset.h"
 #include "bare_bones/preprocess.h"
 #include "bare_bones/snug_composite.h"
 #include "queried_series.h"
 #include "reverse_index.h"
 #include "sorting_index.h"
-#include "trie/cedarpp_tree.h"
 #include "trie_index.h"
 
 namespace series_index {
@@ -251,11 +251,6 @@ class QueryableEncodingBimapCopier {
       const uint32_t name_id = name_it.id();
       destination_.trie_index_.insert_name(*name_it, name_id);
       destination_.trie_index_.insert_values(name_id, view.values(name_id));
-      // if constexpr (BareBones::concepts::is_dereferenceable<decltype(destination_.storage_.symbols_tables[name_id])>) {
-      //   destination_.trie_index_.insert_values(name_id, (*destination_.storage_.symbols_tables[name_id]).data_view());
-      // } else {
-      //   destination_.trie_index_.insert_values(name_id, destination_.storage_.symbols_tables[name_id].data_view());
-      // }
     }
   }
 

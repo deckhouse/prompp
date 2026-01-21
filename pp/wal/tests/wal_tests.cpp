@@ -254,10 +254,7 @@ class WalEncoderDecoderFixture : public testing::Test {
   }
 
   static bool contains_stale_nan_sample(const std::vector<DecodedSample>& samples, uint32_t ls_id, Timestamp timestamp) {
-    const auto stale_nan = std::bit_cast<uint64_t>(BareBones::Encoding::Gorilla::STALE_NAN);
-    return std::ranges::find_if(samples, [=](const DecodedSample& s) {
-             return s.ls_id == ls_id && s.timestamp == timestamp && std::bit_cast<uint64_t>(s.value) == stale_nan;
-           }) != samples.end();
+    return contains_sample(samples, ls_id, timestamp, BareBones::Encoding::Gorilla::STALE_NAN);
   }
 };
 
