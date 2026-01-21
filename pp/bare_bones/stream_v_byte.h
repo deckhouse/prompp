@@ -5,6 +5,7 @@
 
 #include <scope_exit.h>
 
+#include "bare_bones/iterator.h"
 #include "exception.h"
 #include "streams.h"
 #include "type_traits.h"
@@ -577,7 +578,7 @@ class EncodeIterator {
   }
 };
 
-class DecodeIteratorSentinel {};
+using DecodeIteratorSentinel = BareBones::iterator::IteratorSentinelType;
 
 template <class Codec, std::random_access_iterator InnerIteratorType>
   requires std::is_same_v<typename std::iterator_traits<InnerIteratorType>::value_type, uint8_t>

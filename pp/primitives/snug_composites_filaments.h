@@ -3,6 +3,8 @@
 #include <scope_exit.h>
 
 #include "bare_bones/exception.h"
+#include "bare_bones/iterator.h"
+#include "bare_bones/preprocess.h"
 #include "bare_bones/snug_composite.h"
 #include "bare_bones/stream_v_byte.h"
 #include "hash.h"
@@ -10,53 +12,66 @@
 namespace PromPP::Primitives::SnugComposites::Filaments {
 
 template <template <class> class Vector>
-class Symbol {
-  uint32_t pos_;
-  uint32_t length_;
+struct Symbol {
+  class storage_type {
+   public:
+    static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
 
-  static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
+    using composite_type = std::string_view;
+    struct item_type {
+      uint32_t pos;
+      uint32_t length;
+    };
 
- public:
-  // NOLINTNEXTLINE(readability-identifier-naming)
-  class data_type : public Vector<char> {
-    class Checkpoint {
-      uint32_t size_;
+    struct checkpoint_type {
+      uint32_t data_size;
+      uint32_t items_size;
 
       using SerializationMode = BareBones::SnugComposite::SerializationMode;
 
-     public:
-      explicit Checkpoint(uint32_t size) noexcept : size_(size) {}
-
-      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const { return size_; }
-
       template <BareBones::OutputStream S>
-      void save(S& out, data_type const& data, Checkpoint const* from = nullptr) const {
-        // write version
-        out.put(1);
+      void save(S& out, const storage_type& storage, uint32_t id_offset, uint32_t id_count, uint8_t table_version, checkpoint_type const* from = nullptr)
+          const {
+        if (table_version == 1) {
+          // write items
+          out.write(reinterpret_cast<const char*>(&storage.items_[id_offset]), sizeof(item_type) * id_count);
+
+          // write a version
+          out.put(1);
+        } else {  // table_version == 2
+          // write a version
+          out.put(1);
+
+          // write items
+          out.write(reinterpret_cast<const char*>(&storage.items_[id_offset]), sizeof(item_type) * id_count);
+        }
 
         // write mode
         SerializationMode mode = (from != nullptr) ? SerializationMode::DELTA : SerializationMode::SNAPSHOT;
         out.put(static_cast<char>(mode));
 
-        // write pos of first seq in the portion, if we are writing delta
+        // write pos of the first seq in the portion if we are writing delta
         uint32_t first_to_save = 0;
         if (from != nullptr) {
-          first_to_save = from->size_;
+          first_to_save = from->data_size;
           out.write(reinterpret_cast<const char*>(&first_to_save), sizeof(first_to_save));
         }
 
-        // write  size
-        uint32_t size_to_save = size_ - first_to_save;
+        // write size
+        uint32_t size_to_save = data_size - first_to_save;
         out.write(reinterpret_cast<char*>(&size_to_save), sizeof(size_to_save));
 
         // write data
         if (size_to_save > 0) {
-          out.write(&data[first_to_save], size_to_save);
+          out.write(&storage.data_[first_to_save], size_to_save);
         }
       }
 
-      PROMPP_ALWAYS_INLINE uint32_t save_size(data_type const&, Checkpoint const* from = nullptr) const {
+      uint32_t save_size(const storage_type&, uint32_t id_count, checkpoint_type const* from = nullptr) const {
         uint32_t res = 0;
+
+        // items
+        res += sizeof(item_type) * id_count;
 
         // version
         ++res;
@@ -67,12 +82,12 @@ class Symbol {
         // pos of first seq in the portion, if we are writing delta
         uint32_t first_to_save = 0;
         if (from != nullptr) {
-          first_to_save = from->size_;
+          first_to_save = from->data_size;
           res += sizeof(uint32_t);  // first index
         }
 
         // size
-        const uint32_t size_to_save = size_ - first_to_save;
+        const uint32_t size_to_save = data_size - first_to_save;
         res += sizeof(uint32_t);
 
         // data
@@ -82,26 +97,116 @@ class Symbol {
       }
     };
 
-   public:
-    using checkpoint_type = Checkpoint;
+    struct symbols_view {
+      const storage_type* storage_ptr;
 
-    data_type() noexcept = default;
-    data_type(const data_type&) = delete;
-    template <class AnotherDataType>
+      class iterator_type {
+       public:
+        using iterator_category = std::input_iterator_tag;
+        using value_type = composite_type;
+        using difference_type = std::ptrdiff_t;
+
+        iterator_type() = default;
+        explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : storage_ptr_(&storage), id_{id} {}
+
+        PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
+          ++id_;
+          return *this;
+        }
+
+        PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
+          iterator_type retval = *this;
+          ++(*this);
+          return retval;
+        }
+
+        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_; }
+        PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == storage_ptr_->items_.size(); }
+
+        [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
+
+        [[nodiscard]] uint32_t id() const noexcept { return id_; }
+
+       private:
+        const storage_type* storage_ptr_;
+        uint32_t id_{0};
+      };
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items_.size()}; }
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_ptr->count(); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE composite_type operator[](uint32_t id) const noexcept { return storage_ptr->composite(id); }
+    };
+
+    using view_type = symbols_view;
+
+    storage_type() noexcept = default;
+    template <class AnotherStorageType>
       requires kIsReadOnly
-    explicit data_type(const AnotherDataType& other) : Vector<char>(other) {}
-    data_type(data_type&&) noexcept = delete;
-    data_type& operator=(const data_type&) = delete;
-    data_type& operator=(data_type&&) noexcept = delete;
+    explicit storage_type(const AnotherStorageType& other) : data_{other.data_}, items_{other.items_} {}
 
-    PROMPP_ALWAYS_INLINE auto checkpoint() const { return Checkpoint(this->size()); }
-    PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& s) noexcept {
-      assert(s.size() <= this->size());
-      this->resize(s.size());
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return static_cast<uint32_t>(items_.size()); }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t remainder_size() const noexcept {
+      constexpr uint32_t max_ui32 = std::numeric_limits<uint32_t>::max();
+      assert(data_.size() <= max_ui32);
+      return max_ui32 - static_cast<uint32_t>(data_.size());
+    }
+
+    template <class AnotherStorageType>
+    PROMPP_ALWAYS_INLINE void reserve(const AnotherStorageType& other) noexcept {
+      items_.reserve(other.items_.size());
+      data_.reserve(other.data_.size());
+    }
+
+    PROMPP_ALWAYS_INLINE void reserve(uint32_t count) noexcept { items_.reserve(count); }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE composite_type composite(uint32_t id) const noexcept {
+      const auto item = items_[id];
+      return std::string_view(data_.data() + item.pos, item.length);
+    }
+
+    void validate(uint32_t id) const {
+      if (const auto item = items_[id]; item.pos + item.length > data_.size()) {
+        throw BareBones::Exception(0x75555f55ebe357a3, "Symbol validation error: length is out of data vector range");
+      }
+    }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept {
+      return BareBones::mem::allocated_memory(data_) + BareBones::mem::allocated_memory(items_);
+    }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return static_cast<uint32_t>(items_.size()); }
+
+    PROMPP_ALWAYS_INLINE uint32_t emplace_back(composite_type str) noexcept {
+      const auto id = static_cast<uint32_t>(items_.size());
+      items_.emplace_back(static_cast<uint32_t>(data_.size()), static_cast<uint32_t>(str.length()));
+      data_.push_back(str.begin(), str.end());
+      return id;
+    }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE checkpoint_type checkpoint() const noexcept {
+      return {static_cast<uint32_t>(data_.size()), static_cast<uint32_t>(items_.size())};
+    }
+    PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& checkpoint) noexcept {
+      assert(checkpoint.data_size <= data_.size());
+      assert(checkpoint.items_size <= items_.size());
+      data_.resize(checkpoint.data_size);
+      items_.resize(checkpoint.items_size);
     }
 
     template <class InputStream>
-    void load(InputStream& in) {
+    auto load(InputStream& in, uint32_t items_size, uint8_t table_version) {
+      const auto original_size = items_.size();
+      if (table_version == 1) {
+        // read items
+        items_.resize(original_size + items_size);
+        in.read(reinterpret_cast<char*>(&items_[original_size]), sizeof(item_type) * items_size);
+      }
+
       // read version
       const uint8_t version = in.get();
       if (version != 1) {
@@ -109,64 +214,52 @@ class Symbol {
                                    "Invalid stream data version (%d) for loading into data vector (Symbol::data_type), only version 1 is supported", version);
       }
 
+      if (table_version == 2) {
+        // read items
+        items_.resize(original_size + items_size);
+        in.read(reinterpret_cast<char*>(&items_[original_size]), sizeof(item_type) * items_size);
+      }
+
       // read mode
       const auto mode = static_cast<BareBones::SnugComposite::SerializationMode>(in.get());
 
-      // read pos of first symbol in the portion, if we are reading wal
+      // read pos of the first symbol in the portion if we are reading wal
       uint32_t first_to_load_i = 0;
       if (mode == BareBones::SnugComposite::SerializationMode::DELTA) {
         in.read(reinterpret_cast<char*>(&first_to_load_i), sizeof(first_to_load_i));
       }
 
-      if (first_to_load_i != this->size()) {
+      if (first_to_load_i != data_.size()) {
         if (mode == BareBones::SnugComposite::SerializationMode::SNAPSHOT) {
           throw BareBones::Exception(0x4c0ca0586da6da3f, "Attempt to load snapshot into non-empty data vector");
-        } else if (first_to_load_i < this->size()) {
-          throw BareBones::Exception(0x55cb9b02c23f7bbc, "Attempt to load segment over existing data");
+        } else if (first_to_load_i < data_.size()) {
+          throw BareBones::Exception(0x55cb9b02c23f7bbd, "Attempt to load segment over existing data");
         } else {
-          throw BareBones::Exception(0x55cb9b02c23f7bbc, "Attempt to load incomplete data from segment, data vector length (%u) is less than segment size (%d)",
-                                     this->size(), first_to_load_i);
+          throw BareBones::Exception(0x55cb9b02c23f7bbd, "Attempt to load incomplete data from segment, data vector length (%u) is less than segment size (%d)",
+                                     data_.size(), first_to_load_i);
         }
       }
 
       // read size
-      uint32_t size_to_load;
+      uint32_t size_to_load = 0;
       in.read(reinterpret_cast<char*>(&size_to_load), sizeof(size_to_load));
 
       // read data
-      this->resize(this->size() + size_to_load);
-      in.read(this->begin() + first_to_load_i, size_to_load);
+      data_.resize(data_.size() + size_to_load);
+      in.read(data_.begin() + first_to_load_i, size_to_load);
+
+      return std::views::iota(original_size, items_.size());
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t remainder_size() const noexcept {
-      constexpr size_t max_ui32 = std::numeric_limits<uint32_t>::max();
-      assert(this->size() <= max_ui32);
-      return max_ui32 - this->size();
-    }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE view_type view() const noexcept { return {.storage_ptr = this}; }
 
-    template <class DataType>
-    PROMPP_ALWAYS_INLINE void reserve(const DataType& other) {
-      Vector<char>::reserve(other.size());
-    }
+   private:
+    template <template <class> class>
+    friend struct Symbol;
+
+    Vector<char> data_;
+    Vector<item_type> items_;
   };
-
-  using composite_type = std::string_view;
-
-  PROMPP_ALWAYS_INLINE Symbol() noexcept = default;
-
-  PROMPP_ALWAYS_INLINE Symbol(data_type& data, std::string_view str) noexcept : pos_(data.size()), length_(str.length()) {
-    data.push_back(str.begin(), str.end());
-  }
-
-  PROMPP_ALWAYS_INLINE composite_type composite(const data_type& data) const noexcept { return std::string_view(data.data() + pos_, length_); }
-
-  PROMPP_ALWAYS_INLINE void validate(const data_type& data) const {
-    if (pos_ + length_ > data.size()) {
-      throw BareBones::Exception(0x75555f55ebe357a3, "Symbol validation error: length is out of data vector range");
-    }
-  }
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t length() const noexcept { return length_; }
 };
 
 }  // namespace PromPP::Primitives::SnugComposites::Filaments
@@ -202,66 +295,136 @@ concept use_find_or_emplace_with_cache =
     !std::same_as<Cache, NoCache> && has_id_or_name_id<Iterator> && has_find_or_emplace_with_cache<Table, Item, typename std::remove_cvref_t<Cache>::ItemList>;
 
 template <template <template <class> class> class SymbolsTableType, template <class> class Vector>
-class LabelNameSet {
-  uint32_t pos_;
-  uint32_t size_;
+struct LabelNameSet {
+  class storage_type {
+   public:
+    static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
 
-  static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
+    using symbols_table_type = SymbolsTableType<Vector>;
+    using symbols_ids_sequences_type = Vector<uint32_t>;
 
- public:
-  using symbols_table_type = SymbolsTableType<Vector>;
-  using symbols_ids_sequences_type = Vector<uint32_t>;
+    struct item_type {
+      uint32_t pos;
+      uint32_t size;
+    };
 
-  // NOLINTNEXTLINE(readability-identifier-naming)
-  struct data_type {
-   private:
-    class Checkpoint {
+    class composite_type {
+     public:
+      class iterator_type {
+       public:
+        using iterator_category = std::input_iterator_tag;
+        using value_type = symbols_table_type::value_type;
+        using difference_type = std::ptrdiff_t;
+
+        iterator_type() = default;
+        explicit iterator_type(const symbols_table_type* symbols_table_ptr, symbols_ids_sequences_type::const_iterator it) noexcept
+            : symbols_table_ptr_{symbols_table_ptr}, symbols_ids_it_{it} {}
+
+        PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
+          ++symbols_ids_it_;
+          return *this;
+        }
+
+        PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
+          iterator_type retval = *this;
+          ++(*this);
+          return retval;
+        }
+        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return symbols_ids_it_ == other.symbols_ids_it_; }
+
+        [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return symbols_table_ptr_->operator[](*symbols_ids_it_); }
+
+        [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t id() const noexcept { return *symbols_ids_it_; }
+
+       private:
+        const symbols_table_type* symbols_table_ptr_;
+        symbols_ids_sequences_type::const_iterator symbols_ids_it_;
+      };
+      using value_type = iterator_type::value_type;
+
+      composite_type() = default;
+      explicit composite_type(const symbols_table_type* symbols_table_ptr, symbols_ids_sequences_type::const_iterator symbols_ids_begin, uint32_t symbols_count)
+          : symbols_table_ptr_{symbols_table_ptr}, symbols_ids_begin_{symbols_ids_begin}, symbols_count_{symbols_count} {}
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{symbols_table_ptr_, symbols_ids_begin_}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{symbols_table_ptr_, symbols_ids_begin_ + size()}; }
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return symbols_count_; }
+
+      template <class T>
+      PROMPP_ALWAYS_INLINE bool operator==(const T& other) const noexcept {
+        return std::ranges::equal(begin(), end(), other.begin(), other.end());
+      }
+
+      template <class T>
+      PROMPP_ALWAYS_INLINE bool operator<(const T& other) const noexcept {
+        return std::ranges::lexicographical_compare(begin(), end(), other.begin(), other.end());
+      }
+
+      friend size_t hash_value(const composite_type& lns) noexcept { return hash::hash_of_string_list(lns); }
+
+     private:
+      const symbols_table_type* symbols_table_ptr_;
+      symbols_ids_sequences_type::const_iterator symbols_ids_begin_;
+      uint32_t symbols_count_{};
+    };
+
+    struct checkpoint_type {
+      symbols_table_type::checkpoint_type symbols_table_checkpoint;
+      uint32_t items_size;
+      uint32_t symbols_ids_size;
+
       using SerializationMode = BareBones::SnugComposite::SerializationMode;
 
-      uint32_t size_;
-      typename symbols_table_type::checkpoint_type symbols_table_checkpoint_;
-
-     public:
-      PROMPP_ALWAYS_INLINE explicit Checkpoint(data_type const& data) noexcept
-          : size_(data.symbols_ids_sequences.size()), symbols_table_checkpoint_(data.symbols_table.checkpoint()) {}
-
-      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return size_; }
-
-      PROMPP_ALWAYS_INLINE typename symbols_table_type::checkpoint_type symbols_table() const noexcept { return symbols_table_checkpoint_; }
-
       template <BareBones::OutputStream S>
-      PROMPP_ALWAYS_INLINE void save(S& out, data_type const& data, Checkpoint const* from = nullptr) const {
-        // write version
-        out.put(1);
+      void save(S& out, const storage_type& storage, uint32_t id_offset, uint32_t id_count, uint8_t table_version, checkpoint_type const* from = nullptr)
+          const {
+        if (table_version == 1) {
+          // write items
+          out.write(reinterpret_cast<const char*>(&storage.items_[id_offset]), sizeof(item_type) * id_count);
+
+          // write a version
+          out.put(1);
+        } else {  // table_version == 2
+          // write a version
+          out.put(1);
+
+          // write items
+          out.write(reinterpret_cast<const char*>(&storage.items_[id_offset]), sizeof(item_type) * id_count);
+        }
 
         // write mode
         SerializationMode mode = (from != nullptr) ? SerializationMode::DELTA : SerializationMode::SNAPSHOT;
         out.put(static_cast<char>(mode));
 
-        // write pos of first seq in the portion, if we are writing delta
+        // write pos of the first seq in the portion if we are writing delta
         uint32_t first_to_save = 0;
         if (from != nullptr) {
-          first_to_save = from->size_;
+          first_to_save = from->symbols_ids_size;
           out.write(reinterpret_cast<const char*>(&first_to_save), sizeof(first_to_save));
         }
 
-        // write  size
-        uint32_t size_to_save = size_ - first_to_save;
+        // write size
+        uint32_t size_to_save = symbols_ids_size - first_to_save;
         out.write(reinterpret_cast<char*>(&size_to_save), sizeof(size_to_save));
 
-        // write data
-        out.write(reinterpret_cast<const char*>(&data.symbols_ids_sequences[first_to_save]), sizeof(data.symbols_ids_sequences[first_to_save]) * size_to_save);
+        // write symbols ids
+        out.write(reinterpret_cast<const char*>(&storage.symbols_ids_sequences_[first_to_save]),
+                  sizeof(storage.symbols_ids_sequences_[first_to_save]) * size_to_save);
 
         // write symbols table
         if (from != nullptr) {
-          symbols_table_checkpoint_.save(out, &from->symbols_table_checkpoint_);
+          symbols_table_checkpoint.save(out, &from->symbols_table_checkpoint);
         } else {
-          symbols_table_checkpoint_.save(out);
+          symbols_table_checkpoint.save(out);
         }
       }
 
-      PROMPP_ALWAYS_INLINE uint32_t save_size([[maybe_unused]] data_type const& data, Checkpoint const* from = nullptr) const {
+      uint32_t save_size(const storage_type& storage, uint32_t id_count, checkpoint_type const* from = nullptr) const {
         uint32_t res = 0;
+
+        // items
+        res += sizeof(item_type) * id_count;
 
         // version
         ++res;
@@ -272,52 +435,174 @@ class LabelNameSet {
         // pos of first seq in the portion, if we are writing delta
         uint32_t first_to_save = 0;
         if (from != nullptr) {
-          first_to_save = from->size_;
+          first_to_save = from->symbols_ids_size;
           res += sizeof(uint32_t);
         }
 
         // size
-        const uint32_t size_to_save = size_ - first_to_save;
+        const uint32_t size_to_save = symbols_ids_size - first_to_save;
         res += sizeof(uint32_t);
 
         // data
-        res += sizeof(data.symbols_ids_sequences[first_to_save]) * size_to_save;
+        res += sizeof(storage.symbols_ids_sequences_[first_to_save]) * size_to_save;
 
         // symbols table
         if (from != nullptr) {
-          res += symbols_table_checkpoint_.save_size(&from->symbols_table_checkpoint_);
+          res += symbols_table_checkpoint.save_size(&from->symbols_table_checkpoint);
         } else {
-          res += symbols_table_checkpoint_.save_size();
+          res += symbols_table_checkpoint.save_size();
         }
 
         return res;
       }
     };
 
-   public:
-    symbols_table_type symbols_table;
-    symbols_ids_sequences_type symbols_ids_sequences;
-    data_type() noexcept = default;
-    data_type(const data_type&) = delete;
-    template <class AnotherDataType>
+    struct label_name_set_view {
+      using symbols_view_type = symbols_table_type::storage_type::view_type;
+      const storage_type* storage_ptr;
+
+      class iterator_type {
+       public:
+        using iterator_category = std::input_iterator_tag;
+        using value_type = composite_type;
+        using difference_type = std::ptrdiff_t;
+
+        iterator_type() = default;
+        explicit iterator_type(const storage_type* storage_ptr, uint32_t id) noexcept : storage_ptr_(storage_ptr), id_{id} {}
+
+        PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
+          ++id_;
+          return *this;
+        }
+
+        PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
+          iterator_type retval = *this;
+          ++(*this);
+          return retval;
+        }
+        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_; }
+        PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == storage_ptr_->items_.size(); }
+
+        [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
+
+        [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t id() const noexcept { return id_; }
+
+       private:
+        const storage_type* storage_ptr_;
+        uint32_t id_{0};
+      };
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{storage_ptr, 0}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{storage_ptr, storage_ptr->items_.size()}; }
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_ptr->count(); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE symbols_view_type symbols() const noexcept { return storage_ptr->symbols_table_.data_view(); }
+    };
+
+    using view_type = label_name_set_view;
+
+    storage_type() noexcept = default;
+    template <class AnotherStorageType>
       requires kIsReadOnly
-    explicit data_type(const AnotherDataType& other) : symbols_table(other.symbols_table), symbols_ids_sequences(other.symbols_ids_sequences) {}
-    data_type(data_type&&) noexcept = delete;
-    data_type& operator=(const data_type&) = delete;
-    data_type& operator=(data_type&&) noexcept = delete;
+    explicit storage_type(const AnotherStorageType& other)
+        : symbols_table_{other.symbols_table_}, symbols_ids_sequences_{other.symbols_ids_sequences_}, items_{other.items_} {}
 
-    using checkpoint_type = Checkpoint;
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return static_cast<uint32_t>(items_.size()); }
 
-    PROMPP_ALWAYS_INLINE auto checkpoint() const noexcept { return Checkpoint(*this); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t remainder_size() const noexcept {
+      constexpr uint32_t max_ui32 = std::numeric_limits<uint32_t>::max();
+      assert(symbols_ids_sequences_.size() <= max_ui32);
 
-    PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& s) noexcept {
-      assert(s.size() <= symbols_ids_sequences.size());
-      symbols_ids_sequences.resize(s.size());
-      symbols_table.rollback(s.symbols_table());
+      const uint32_t remainder_for_symbols = max_ui32 - static_cast<uint32_t>(symbols_ids_sequences_.size());
+      return std::min(symbols_table_.remainder_size(), remainder_for_symbols);
+    }
+
+    template <class AnotherStorageType>
+    PROMPP_ALWAYS_INLINE void reserve(const AnotherStorageType& other) noexcept {
+      symbols_table_.reserve(other.symbols_table_);
+      symbols_ids_sequences_.reserve(other.symbols_ids_sequences_.size());
+      items_.reserve(other.items_.size());
+    }
+
+    PROMPP_ALWAYS_INLINE void reserve(uint32_t count) noexcept { items_.reserve(count); }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE composite_type composite(uint32_t id) const noexcept {
+      const auto item = items_[id];
+      const auto symbols_ids_begin = symbols_ids_sequences_.begin() + item.pos;
+      return composite_type(&symbols_table_, symbols_ids_begin, item.size);
+    }
+
+    void validate(uint32_t id) const {
+      const auto [pos, size] = items_[id];
+
+      if (pos + size > symbols_ids_sequences_.size()) {
+        throw BareBones::Exception(0x45e8bdc1455fd8e4, "LabelSetNames data validation error: expected LabelSetNames length is out of data vector range");
+      }
+
+      for (auto i = symbols_ids_sequences_.begin() + pos; i != symbols_ids_sequences_.begin() + pos + size; ++i) {
+        if (*i >= symbols_table_.size()) {
+          throw BareBones::Exception(0x218410dde097cc6b,
+                                     "LabelSetNames data validation error: expected LabelSetNames length is out of data symbols table range");
+        }
+      }
+    }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept {
+      return BareBones::mem::allocated_memory(symbols_table_) + BareBones::mem::allocated_memory(symbols_ids_sequences_) +
+             BareBones::mem::allocated_memory(items_);
+    }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return static_cast<uint32_t>(items_.size()); }
+
+    template <class OtherLabelNameSet, class Cache = NoCache>
+    PROMPP_ALWAYS_INLINE uint32_t emplace_back(const OtherLabelNameSet& label_name_set, Cache&& cache = {}) noexcept {
+      const auto id = static_cast<uint32_t>(items_.size());
+
+      auto pos = static_cast<uint32_t>(symbols_ids_sequences_.size());
+      uint32_t size = 0;
+
+      if constexpr (BareBones::concepts::has_size<OtherLabelNameSet>) {
+        size = label_name_set.size();
+        symbols_ids_sequences_.reserve(static_cast<size_t>(symbols_ids_sequences_.size()) + size);
+      }
+
+      const auto end = label_name_set.end();
+      for (auto it = label_name_set.begin(); it != end; ++it) {
+        symbols_ids_sequences_.push_back(find_or_emplace_label_name(it, std::forward<Cache>(cache)));
+        if constexpr (!BareBones::concepts::has_size<OtherLabelNameSet>) {
+          ++size;
+        }
+      }
+
+      items_.emplace_back(pos, size);
+
+      return id;
+    }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE checkpoint_type checkpoint() const noexcept {
+      return {symbols_table_.checkpoint(), static_cast<uint32_t>(items_.size()), static_cast<uint32_t>(symbols_ids_sequences_.size())};
+    }
+
+    PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& checkpoint) noexcept {
+      assert(checkpoint.symbols_ids_size <= symbols_ids_sequences_.size());
+      assert(checkpoint.items_size <= items_.size());
+
+      symbols_ids_sequences_.resize(checkpoint.symbols_ids_size);
+      symbols_table_.rollback(checkpoint.symbols_table_checkpoint);
+      items_.resize(checkpoint.items_size);
     }
 
     template <class InputStream>
-    void load(InputStream& in) {
+    auto load(InputStream& in, uint32_t items_size, uint8_t table_version) {
+      const auto items_original_size = items_.size();
+      if (table_version == 1) {
+        // read items
+        items_.resize(items_original_size + items_size);
+        in.read(reinterpret_cast<char*>(&items_[items_original_size]), sizeof(item_type) * items_size);
+      }
+
       // read version
       const uint8_t version = in.get();
       if (version != 1) {
@@ -325,188 +610,202 @@ class LabelNameSet {
                                    "Invalid stream data version (%d) for loading into LabelSetNames::data_type vector, only version 1 is supported", version);
       }
 
+      if (table_version == 2) {
+        // read items
+        items_.resize(items_original_size + items_size);
+        in.read(reinterpret_cast<char*>(&items_[items_original_size]), sizeof(item_type) * items_size);
+      }
+
       // read mode
       const auto mode = static_cast<BareBones::SnugComposite::SerializationMode>(in.get());
 
-      // read pos of first seq in the portion, if we are reading wal
+      // read pos of first seq in the portion if we are reading wal
       uint32_t first_to_load_i = 0;
       if (mode == BareBones::SnugComposite::SerializationMode::DELTA) {
         in.read(reinterpret_cast<char*>(&first_to_load_i), sizeof(first_to_load_i));
       }
-      if (first_to_load_i != symbols_ids_sequences.size()) {
+      if (first_to_load_i != symbols_ids_sequences_.size()) {
         if (mode == BareBones::SnugComposite::SerializationMode::SNAPSHOT) {
           throw BareBones::Exception(0x484607065485b4ab, "Attempt to load snapshot into non-empty LabelSetNames data vector");
-        } else if (first_to_load_i < symbols_ids_sequences.size()) {
+        } else if (first_to_load_i < symbols_ids_sequences_.size()) {
           throw BareBones::Exception(0xc042fdcb4b149d95, "Attempt to load segment over existing LabelSetNames data");
         } else {
           throw BareBones::Exception(0x79995816e0a9690b,
                                      "Attempt to load incomplete data from segment, LabelSetNames data vector length (%u) is less than segment size (%d)",
-                                     symbols_ids_sequences.size(), first_to_load_i);
+                                     symbols_ids_sequences_.size(), first_to_load_i);
         }
       }
 
       // read size
-      uint32_t size_to_load;
+      uint32_t size_to_load = 0;
       in.read(reinterpret_cast<char*>(&size_to_load), sizeof(size_to_load));
 
       // read data
-      auto original_size = symbols_ids_sequences.size();
-      auto sg1 = std::experimental::scope_fail([&]() { symbols_ids_sequences.resize(original_size); });
-      symbols_ids_sequences.resize(original_size + size_to_load);
-      in.read(reinterpret_cast<char*>(&symbols_ids_sequences[first_to_load_i]), sizeof(symbols_ids_sequences[first_to_load_i]) * size_to_load);
+      auto original_size = symbols_ids_sequences_.size();
+      auto sg1 = std::experimental::scope_fail([&]() { symbols_ids_sequences_.resize(original_size); });
+      symbols_ids_sequences_.resize(original_size + size_to_load);
+      in.read(reinterpret_cast<char*>(&symbols_ids_sequences_[first_to_load_i]), sizeof(symbols_ids_sequences_[first_to_load_i]) * size_to_load);
 
       // read symbols table
-      symbols_table.load(in);
+      symbols_table_.load(in);
+
+      return std::views::iota(items_original_size, items_.size());
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t remainder_size() const noexcept {
-      constexpr size_t max_ui32 = std::numeric_limits<uint32_t>::max();
-      assert(this->symbols_ids_sequences.size() <= max_ui32);
+    [[nodiscard]] PROMPP_ALWAYS_INLINE view_type view() const noexcept { return {.storage_ptr = this}; }
 
-      size_t remainder_for_symbols = max_ui32 - this->symbols_ids_sequences.size();
+   private:
+    template <template <template <class> class> class, template <class> class>
+    friend struct LabelNameSet;
 
-      return std::min(this->symbols_table.remainder_size(), remainder_for_symbols);
-    }
+    symbols_table_type symbols_table_;
+    symbols_ids_sequences_type symbols_ids_sequences_;
+    Vector<item_type> items_;
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
-      return symbols_table.allocated_memory() + BareBones::mem::allocated_memory(symbols_ids_sequences);
-    }
+    template <class LabelNameIterator, class Cache>
+    PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_label_name(const LabelNameIterator& label_name, Cache&& cache) {
+      if constexpr (use_find_or_emplace_with_cache<Cache, LabelNameIterator, symbols_table_type, decltype(*label_name)>) {
+        symbols_table_.find_or_emplace_with_cache(*label_name, label_name.id(), cache.names);
+      }
 
-    template <class DataType>
-    PROMPP_ALWAYS_INLINE void reserve(const DataType& other) noexcept {
-      symbols_table.reserve(other.symbols_table);
-      symbols_ids_sequences.reserve(other.symbols_ids_sequences.size());
+      return symbols_table_.find_or_emplace(*label_name);
     }
   };
-
-  PROMPP_ALWAYS_INLINE LabelNameSet() noexcept = default;
-  template <class OtherLabelNameSet, class Cache = NoCache>
-  // TODO requires is_label_name_set
-  PROMPP_ALWAYS_INLINE LabelNameSet(data_type& data, const OtherLabelNameSet& lns, Cache&& cache = {}) noexcept : pos_(data.symbols_ids_sequences.size()) {
-    if constexpr (BareBones::concepts::has_size<OtherLabelNameSet>) {
-      size_ = lns.size();
-    } else {
-      size_ = 0;
-    }
-
-    if constexpr (BareBones::concepts::has_size<OtherLabelNameSet>) {
-      data.symbols_ids_sequences.reserve(data.symbols_ids_sequences.size() + size_);
-    }
-
-    for (auto it = lns.begin(); it != lns.end(); ++it) {
-      data.symbols_ids_sequences.push_back(find_or_emplace_label_name(data, it, std::forward<Cache>(cache)));
-      if constexpr (!BareBones::concepts::has_size<OtherLabelNameSet>) {
-        ++size_;
-      }
-    }
-  }
-
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return size_; }
-
-  // NOLINTNEXTLINE(readability-identifier-naming)
-  class composite_type
-      : public symbols_table_type::template Resolver<typename symbols_ids_sequences_type::const_iterator, typename symbols_ids_sequences_type::const_iterator> {
-    using Base = typename symbols_table_type::template Resolver<typename symbols_ids_sequences_type::const_iterator,
-                                                                typename symbols_ids_sequences_type::const_iterator>;
-
-   public:
-    using Base::Base;
-
-    template <class T>
-    PROMPP_ALWAYS_INLINE bool operator==(const T& b) const noexcept {
-      return std::ranges::equal(Base::begin(), Base::end(), b.begin(), b.end());
-    }
-
-    template <class T>
-    PROMPP_ALWAYS_INLINE bool operator<(const T& b) const noexcept {
-      return std::ranges::lexicographical_compare(Base::begin(), Base::end(), b.begin(), b.end());
-    }
-
-    PROMPP_ALWAYS_INLINE friend size_t hash_value(const composite_type& lns) noexcept { return hash::hash_of_string_list(lns); }
-  };
-
-  PROMPP_ALWAYS_INLINE composite_type composite(const data_type& data) const noexcept {
-    auto begin = data.symbols_ids_sequences.begin() + pos_;
-    return composite_type(&data.symbols_table, begin, begin + size_);
-  }
-
-  PROMPP_ALWAYS_INLINE void validate(const data_type& data) const {
-    if (pos_ + size_ > data.symbols_ids_sequences.size()) {
-      throw BareBones::Exception(0x45e8bdc1455fd8e4, "LabelSetNames data validation error: expected LabelSetNames length is out of data vector range");
-    }
-
-    for (auto i = data.symbols_ids_sequences.begin() + pos_; i != data.symbols_ids_sequences.begin() + pos_ + size_; ++i) {
-      if (*i >= data.symbols_table.size()) {
-        throw BareBones::Exception(0x218410dde097cc6b, "LabelSetNames data validation error: expected LabelSetNames length is out of data symbols table range");
-      }
-    }
-  }
-
- private:
-  template <class LabelNameIterator, class Cache>
-  PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_label_name(data_type& data, const LabelNameIterator& label_name, Cache&& cache) {
-    if constexpr (use_find_or_emplace_with_cache<Cache, LabelNameIterator, decltype(data.symbols_table), decltype(*label_name)>) {
-      data.symbols_table.find_or_emplace_with_cache(*label_name, label_name.id(), cache.names);
-    }
-
-    return data.symbols_table.find_or_emplace(*label_name);
-  }
 };
 
 template <template <template <class> class> class SymbolsTableType,
           template <template <class> class> class LabelNameSetsTableType,
           template <class> class Vector>
-class LabelSet {
-  uint32_t lns_id_;
-  uint32_t pos_;
+struct LabelSet {
+  class storage_type {
+   public:
+    static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
 
-  static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
+    using label_values_symbols_table_type = SymbolsTableType<Vector>;
+    using label_name_sets_table_type = LabelNameSetsTableType<Vector>;
 
- public:
-  using symbols_tables_type =
-      std::conditional_t<kIsReadOnly, BareBones::Vector<SymbolsTableType<Vector>>, BareBones::Vector<std::unique_ptr<SymbolsTableType<Vector>>>>;
+    using symbols_tables_type = std::
+        conditional_t<kIsReadOnly, BareBones::Vector<label_values_symbols_table_type>, BareBones::Vector<std::unique_ptr<label_values_symbols_table_type>>>;
 
-  using symbols_ids_sequences_type = Vector<uint8_t>;
+    using symbol_ids_codec_type = BareBones::StreamVByte::Codec1234;
+    using symbols_ids_sequences_type = Vector<uint8_t>;
 
-  // NOLINTNEXTLINE(readability-identifier-naming)
-  struct data_type {
-   private:
-    class Checkpoint {
-      using SerializationMode = BareBones::SnugComposite::SerializationMode;
-      using symbols_checkpoints_type = Vector<typename SymbolsTableType<Vector>::checkpoint_type>;
+    class composite_type {
+      using label_name_set_type = label_name_sets_table_type::value_type;
+      using values_iterator_type = BareBones::StreamVByte::DecodeIterator<symbol_ids_codec_type, typename symbols_ids_sequences_type::const_iterator>;
+      using names_iterator_type = label_name_set_type::iterator_type;
 
-      const data_type* data_;
-      uint32_t next_item_index_;
-      uint32_t size_;
-      typename LabelNameSetsTableType<Vector>::checkpoint_type label_name_sets_table_checkpoint_;
-      symbols_checkpoints_type symbols_tables_checkpoints_;
+      label_name_set_type label_name_set_;
+      const symbols_tables_type* symbols_tables_ptr_;
+      values_iterator_type values_begin_;
+      uint32_t name_set_id_;
 
      public:
-      explicit PROMPP_ALWAYS_INLINE Checkpoint(const data_type& data) noexcept
-          : data_(&data),
-            next_item_index_(data.next_item_index_),
-            size_(data.symbols_ids_sequences.size()),
-            label_name_sets_table_checkpoint_(data.label_name_sets_table.checkpoint()) {
-        symbols_tables_checkpoints_.reserve_and_write(data.symbols_tables.size(), [&data](auto memory, uint32_t size) {
-          for (auto& symbol_table : data.symbols_tables) {
-            std::construct_at(memory++, symbol_table->checkpoint());
+      PROMPP_ALWAYS_INLINE explicit composite_type(const symbols_tables_type* symbols_tables_ptr = nullptr,
+                                                   label_name_set_type label_name_set = label_name_set_type(),
+                                                   values_iterator_type values_begin = values_iterator_type(),
+                                                   uint32_t name_set_id = 0) noexcept
+          : label_name_set_(label_name_set), symbols_tables_ptr_(symbols_tables_ptr), values_begin_(values_begin), name_set_id_(name_set_id) {}
+
+      using value_type = std::pair<typename label_name_set_type::value_type, typename Symbol<Vector>::storage_type::composite_type>;
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE const label_name_set_type& names() const noexcept { return label_name_set_; }
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto size() const noexcept { return label_name_set_.size(); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto id() const noexcept { return name_set_id_; }
+
+      class iterator_type {
+        names_iterator_type names_it_;
+        values_iterator_type values_it_;
+        const symbols_tables_type* symbols_tables_ptr_;
+
+        friend class composite_type;
+
+       public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = composite_type::value_type;
+        using difference_type = std::ptrdiff_t;
+
+        PROMPP_ALWAYS_INLINE explicit iterator_type(const symbols_tables_type* symbols_tables_ptr = nullptr,
+                                                    names_iterator_type names_it = names_iterator_type(),
+                                                    values_iterator_type values_it = values_iterator_type()) noexcept
+            : names_it_(names_it), values_it_(values_it), symbols_tables_ptr_(symbols_tables_ptr) {}
+
+        PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
+          ++names_it_;
+          ++values_it_;
+          return *this;
+        }
+
+        PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
+          iterator_type retval = *this;
+          ++(*this);
+          return retval;
+        }
+
+        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return values_it_ == other.values_it_; }
+
+        [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept {
+          if constexpr (BareBones::concepts::is_dereferenceable<typename symbols_tables_type::value_type>) {
+            const auto& symbols_table = *(*symbols_tables_ptr_)[names_it_.id()];
+            return {*names_it_, symbols_table[*values_it_]};
+          } else {
+            const auto& symbols_table = (*symbols_tables_ptr_)[names_it_.id()];
+            return {*names_it_, symbols_table[*values_it_]};
           }
-          return size;
-        });
+        }
+
+        [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t name_id() const noexcept { return names_it_.id(); }
+        [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t value_id() const noexcept { return *values_it_; }
+      };
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type(symbols_tables_ptr_, label_name_set_.begin(), values_begin_); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type(symbols_tables_ptr_, label_name_set_.end(), values_iterator_type()); }
+
+      template <class T>
+      PROMPP_ALWAYS_INLINE bool operator==(const T& b) const noexcept {
+        return std::ranges::equal(begin(), end(), b.begin(), b.end(), [](const auto& a, const auto& b) { return a == b; });
       }
 
-      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return size_; }
-
-      PROMPP_ALWAYS_INLINE typename LabelNameSetsTableType<Vector>::checkpoint_type const label_name_sets() const noexcept {
-        return label_name_sets_table_checkpoint_;
+      template <class T>
+      PROMPP_ALWAYS_INLINE bool operator<(const T& b) const noexcept {
+        return std::ranges::lexicographical_compare(begin(), end(), b.begin(), b.end(), [](const auto& a, const auto& b) { return a < b; });
       }
 
-      PROMPP_ALWAYS_INLINE Vector<typename SymbolsTableType<Vector>::checkpoint_type> symbols() const noexcept { return symbols_tables_checkpoints_; }
+      PROMPP_ALWAYS_INLINE friend size_t hash_value(const composite_type& ls) noexcept { return hash::hash_of_label_set(ls); }
+    };
+
+    struct item_type {
+      uint32_t lns_id;
+      uint32_t pos;
+    };
+
+    struct checkpoint_type {
+      using SerializationMode = BareBones::SnugComposite::SerializationMode;
+      using symbols_checkpoints_type = Vector<typename label_values_symbols_table_type::checkpoint_type>;
+
+      label_name_sets_table_type::checkpoint_type label_name_sets_table_checkpoint_;
+      symbols_checkpoints_type symbols_tables_checkpoints_;
+      uint32_t next_item_index_;
+      uint32_t size_;
+      uint32_t items_size;
 
       template <BareBones::OutputStream S>
-      PROMPP_ALWAYS_INLINE void save(S& out, data_type const& data, Checkpoint const* from = nullptr) const {
-        // write version
-        out.put(1);
+      void save(S& out, const storage_type& storage, uint32_t id_offset, uint32_t id_count, uint8_t table_version, checkpoint_type const* from = nullptr)
+          const {
+        if (table_version == 1) {
+          // write items
+          out.write(reinterpret_cast<const char*>(&storage.items_[id_offset]), sizeof(item_type) * id_count);
+
+          // write a version
+          out.put(1);
+        } else {  // table_version == 2
+          // write a version
+          out.put(1);
+
+          // write items
+          out.write(reinterpret_cast<const char*>(&storage.items_[id_offset]), sizeof(item_type) * id_count);
+        }
 
         // write mode
         SerializationMode mode = (from != nullptr) ? SerializationMode::DELTA : SerializationMode::SNAPSHOT;
@@ -518,7 +817,7 @@ class LabelSet {
           first_to_save = from->next_item_index_;
           out.write(reinterpret_cast<const char*>(&first_to_save), sizeof(first_to_save));
         }
-        const uint32_t first_item_index_in_ids_sequence = data_->next_item_index() - data_->symbols_ids_sequences.size();
+        const uint32_t first_item_index_in_ids_sequence = next_item_index_ - size_;
         assert(first_to_save >= first_item_index_in_ids_sequence);
 
         // write  size
@@ -526,8 +825,8 @@ class LabelSet {
         out.write(reinterpret_cast<char*>(&size_to_save), sizeof(size_to_save));
 
         // write data
-        out.write(reinterpret_cast<const char*>(&data.symbols_ids_sequences[first_to_save - first_item_index_in_ids_sequence]),
-                  sizeof(data.symbols_ids_sequences[0]) * size_to_save);
+        out.write(reinterpret_cast<const char*>(&storage.symbols_ids_sequences_[first_to_save - first_item_index_in_ids_sequence]),
+                  sizeof(storage.symbols_ids_sequences_[0]) * size_to_save);
 
         // write label name sets table
         if (from != nullptr) {
@@ -578,8 +877,11 @@ class LabelSet {
         }
       }
 
-      PROMPP_ALWAYS_INLINE uint32_t save_size([[maybe_unused]] data_type const& data, Checkpoint const* from = nullptr) const {
+      uint32_t save_size(const storage_type& storage, uint32_t id_count, checkpoint_type const* from = nullptr) const {
         uint32_t res = 0;
+
+        // items
+        res += sizeof(item_type) * id_count;
 
         // version
         ++res;
@@ -599,7 +901,7 @@ class LabelSet {
         res += sizeof(uint32_t);
 
         // data
-        res += sizeof(data.symbols_ids_sequences[0]) * size_to_save;
+        res += sizeof(storage.symbols_ids_sequences_[0]) * size_to_save;
 
         // label name sets table
         if (from != nullptr) {
@@ -614,7 +916,7 @@ class LabelSet {
         // symbols tables
         if (from != nullptr) {
           for (uint32_t i = 0; i < symbols_tables_checkpoints_.size(); ++i) {
-            const typename SymbolsTableType<Vector>::checkpoint_type* from_checkpoint = nullptr;
+            const typename label_values_symbols_table_type::checkpoint_type* from_checkpoint = nullptr;
             if (i < from->symbols_tables_checkpoints_.size()) {
               from_checkpoint = &from->symbols_tables_checkpoints_[i];
             }
@@ -640,76 +942,353 @@ class LabelSet {
       }
     };
 
-   public:
-    using SymbolIdsCodec = BareBones::StreamVByte::Codec1234;
+    struct label_sets_values_view {
+      using keys_view_type = label_name_sets_table_type::filament_type::storage_type::view_type::symbols_view_type;
+      using values_symbols_view_type = label_values_symbols_table_type::filament_type::storage_type::view_type;
 
-    symbols_tables_type symbols_tables;
-    symbols_ids_sequences_type symbols_ids_sequences;
-    LabelNameSetsTableType<Vector> label_name_sets_table;
-    uint32_t next_item_index_{};
-    uint32_t shrinked_size_{};
-    data_type() noexcept = default;
-    data_type(const data_type&) = delete;
+      const storage_type* storage_ptr;
 
-    template <class AnotherDataType>
+      class iterator_type {
+       public:
+        using iterator_category = std::input_iterator_tag;
+        using value_type = label_values_symbols_table_type::value_type;
+        using difference_type = std::ptrdiff_t;
+
+        iterator_type() = default;
+        explicit iterator_type(const symbols_tables_type& symbols_tables,
+                               const keys_view_type::iterator_type& key_it,
+                               const keys_view_type::iterator_type& key_it_end) noexcept
+            : symbols_tables_ptr_{&symbols_tables}, key_it_{key_it}, key_it_end_(key_it_end) {
+          get_values_range();
+        }
+
+        PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
+          ++value_it_;
+          if (value_it_ == value_it_end_) {
+            ++key_it_;
+            get_values_range();
+          }
+          return *this;
+        }
+
+        PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
+          iterator_type retval = *this;
+          ++(*this);
+          return retval;
+        }
+
+        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const = default;
+        PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept {
+          return key_it_ == key_it_end_ && value_it_ == value_it_end_;
+        }
+
+        [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return *value_it_; }
+
+        [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t key_id() const noexcept { return key_it_.id(); }
+        [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t value_id() const noexcept { return value_it_.id(); }
+
+       private:
+        void get_values_range() noexcept {
+          value_it_ = {};
+          value_it_end_ = {};
+          while (key_it_ != key_it_end_) {
+            if constexpr (BareBones::concepts::is_dereferenceable<typename symbols_tables_type::value_type>) {
+              const auto values_view = (*(*symbols_tables_ptr_)[key_it_.id()]).data_view();
+              value_it_ = values_view.begin();
+              value_it_end_ = values_view.end();
+            } else {
+              const auto values_view = (*symbols_tables_ptr_)[key_it_.id()].data_view();
+              value_it_ = values_view.begin();
+              value_it_end_ = values_view.end();
+            }
+
+            if (value_it_ != value_it_end_)
+              return;
+
+            ++key_it_;
+          }
+        }
+
+        const symbols_tables_type* symbols_tables_ptr_;
+
+        keys_view_type::iterator_type key_it_;
+        keys_view_type::iterator_type key_it_end_;
+
+        values_symbols_view_type::iterator_type value_it_;
+        values_symbols_view_type::iterator_type value_it_end_;
+      };
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept {
+        return iterator_type{storage_ptr->symbols_tables_, storage_ptr->label_name_sets_table_.data_view().symbols().begin(),
+                             storage_ptr->label_name_sets_table_.data_view().symbols().end()};
+      }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept {
+        return iterator_type{storage_ptr->symbols_tables_, storage_ptr->label_name_sets_table_.data_view().symbols().end(),
+                             storage_ptr->label_name_sets_table_.data_view().symbols().end()};
+      }
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept {
+        size_t total_size = 0;
+        const auto keys_view = storage_ptr->label_name_sets_table_.data_view().symbols();
+        for (auto key_it = keys_view.begin(); key_it != keys_view.end(); ++key_it) {
+          const uint32_t key_id = key_it.id();
+          if constexpr (BareBones::concepts::is_dereferenceable<typename symbols_tables_type::value_type>) {
+            total_size += (*storage_ptr->symbols_tables_[key_id]).data_view().size();
+          } else {
+            total_size += storage_ptr->symbols_tables_[key_id].data_view().size();
+          }
+        }
+        return total_size;
+      }
+    };
+
+    struct label_set_view {
+      using keys_view_type = label_name_sets_table_type::filament_type::storage_type::view_type::symbols_view_type;
+      using values_view_type = label_sets_values_view;
+      const storage_type* storage_ptr;
+
+      class iterator_type {
+       public:
+        using iterator_category = std::input_iterator_tag;
+        using value_type = composite_type;
+        using difference_type = std::ptrdiff_t;
+
+        iterator_type() = default;
+        explicit iterator_type(const storage_type& storage, uint32_t id) noexcept : storage_ptr_(&storage), id_{id} {}
+
+        PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
+          ++id_;
+          return *this;
+        }
+
+        PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
+          iterator_type retval = *this;
+          ++(*this);
+          return retval;
+        }
+
+        PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return id_ == other.id_; }
+        PROMPP_ALWAYS_INLINE bool operator==(BareBones::iterator::IteratorSentinelType) const noexcept { return id_ == storage_ptr_->items_.size(); }
+
+        [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return storage_ptr_->composite(id_); }
+
+        [[nodiscard]] uint32_t id() const noexcept { return id_; }
+
+       private:
+        const storage_type* storage_ptr_;
+        uint32_t id_{0};
+      };
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return iterator_type{*storage_ptr, 0}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return iterator_type{*storage_ptr, storage_ptr->items_.size()}; }
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_ptr->count(); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return storage_ptr->next_item_index(); }
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE label_name_sets_table_type::storage_type::view_type label_name_sets() const noexcept {
+        return storage_ptr->label_name_sets_table_.data_view();
+      }
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE keys_view_type keys() const noexcept { return storage_ptr->label_name_sets_table_.data_view().symbols(); }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE values_view_type values() const noexcept { return label_sets_values_view{.storage_ptr = storage_ptr}; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE values_view_type::values_symbols_view_type values(uint32_t key_id) const noexcept {
+        if constexpr (BareBones::concepts::is_dereferenceable<typename symbols_tables_type::value_type>) {
+          return (*storage_ptr->symbols_tables_[key_id]).data_view();
+        } else {
+          return storage_ptr->symbols_tables_[key_id].data_view();
+        }
+      }
+
+      [[nodiscard]] PROMPP_ALWAYS_INLINE values_view_type::iterator_type::value_type key_symbol(uint32_t key_id) const noexcept { return keys()[key_id]; }
+      [[nodiscard]] PROMPP_ALWAYS_INLINE values_view_type::iterator_type::value_type value_symbol(uint32_t key_id, uint32_t value_id) const noexcept {
+        return values(key_id)[value_id];
+      }
+    };
+
+    using view_type = label_set_view;
+
+    storage_type() noexcept = default;
+    template <class AnotherStorageType>
       requires kIsReadOnly
-    explicit data_type(const AnotherDataType& other)
-        : symbols_ids_sequences(other.symbols_ids_sequences),
-          label_name_sets_table(other.label_name_sets_table),
+    explicit storage_type(const AnotherStorageType& other)
+        : symbols_ids_sequences_(other.symbols_ids_sequences_),
+          label_name_sets_table_(other.label_name_sets_table_),
           next_item_index_(other.next_item_index_),
-          shrinked_size_(other.shrinked_size_) {
-      symbols_tables.reserve_and_write(other.symbols_tables.size(), [&other](auto memory, uint32_t size) {
-        for (auto& symbol_table : other.symbols_tables) {
+          shrinked_size_(other.shrinked_size_),
+          items_{other.items_} {
+      symbols_tables_.reserve_and_write(other.symbols_tables_.size(), [&other](auto memory, uint32_t size) {
+        for (auto& symbol_table : other.symbols_tables_) {
           std::construct_at(memory++, *symbol_table);
         }
         return size;
       });
     }
 
-    data_type(data_type&&) noexcept = delete;
-    data_type& operator=(const data_type&) = delete;
-    data_type& operator=(data_type&&) noexcept = delete;
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return static_cast<uint32_t>(items_.size()); }
 
-    using checkpoint_type = Checkpoint;
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t remainder_size() const noexcept {
+      constexpr uint32_t max_ui32 = std::numeric_limits<uint32_t>::max();
 
-    PROMPP_ALWAYS_INLINE void shrink_to(uint32_t size) {
-      assert(size <= symbols_ids_sequences.size());
+      assert(symbols_ids_sequences_.size() <= max_ui32);
 
-      shrinked_size_ += symbols_ids_sequences.size() - size;
-      symbols_ids_sequences.resize(size);
-      symbols_ids_sequences.shrink_to_fit();
-    }
-
-    PROMPP_ALWAYS_INLINE auto checkpoint() const noexcept { return Checkpoint(*this); }
-
-    PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& s) noexcept {
-      assert(s.size() <= symbols_ids_sequences.size());
-      symbols_ids_sequences.resize(s.size());
-
-      label_name_sets_table.rollback(s.label_name_sets());
-
-      auto symbols_tables_checkpoints = s.symbols();
-      assert(symbols_tables_checkpoints.size() <= symbols_tables.size());
-      for (uint32_t i = 0; i != symbols_tables_checkpoints.size(); ++i) {
-        symbols_tables[i]->rollback(symbols_tables_checkpoints[i]);
+      uint32_t remainder_for_label_sets_table = label_name_sets_table_.remainder_size();
+      uint32_t remainder_for_symbols_ids_sequences = max_ui32 - static_cast<uint32_t>(symbols_ids_sequences_.size());
+      uint32_t remainder_for_symbol_table = std::numeric_limits<uint32_t>::max();
+      for (const auto& table : symbols_tables_) {
+        if (const uint32_t n = table->remainder_size(); n < remainder_for_symbol_table) {
+          remainder_for_symbol_table = n;
+        }
       }
-      symbols_tables.resize(symbols_tables_checkpoints.size());
+      return std::min({remainder_for_label_sets_table, remainder_for_symbols_ids_sequences, remainder_for_symbol_table});
     }
 
-    template <class DataType>
-    void reserve(const DataType& other) {
-      symbols_ids_sequences.reserve(other.symbols_ids_sequences.size());
-      symbols_tables.reserve(other.symbols_tables.size());
-      label_name_sets_table.reserve(other.label_name_sets_table);
+    template <class AnotherStorageType>
+    PROMPP_ALWAYS_INLINE void reserve(const AnotherStorageType& other) noexcept {
+      symbols_ids_sequences_.reserve(other.symbols_ids_sequences_.size());
+      symbols_tables_.reserve(other.symbols_tables_.size());
+      label_name_sets_table_.reserve(other.label_name_sets_table_);
+      items_.reserve(other.items_.size());
+    }
+
+    PROMPP_ALWAYS_INLINE void reserve(uint32_t count) noexcept { items_.reserve(count); }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE composite_type composite(uint32_t id) const noexcept {
+      const auto [lns_id, pos] = items_[id];
+
+      auto lns = label_name_sets_table_[lns_id];
+      auto values_begin = BareBones::StreamVByte::decoder<symbol_ids_codec_type>(symbols_ids_sequences_.begin() + pos - shrinked_size_, lns.size()).first;
+
+      return composite_type(&symbols_tables_, std::move(lns), std::move(values_begin), lns_id);
+    }
+
+    void validate(uint32_t id) const {
+      const auto [lns_id, pos] = items_[id];
+
+      if (lns_id >= label_name_sets_table_.size()) {
+        throw BareBones::Exception(0x48dd6c9d357d3a7e,
+                                   "LabelSets data validation error: expected LabelSets length is out of label name sets table vector range");
+      }
+
+      const auto& lns = label_name_sets_table_[lns_id];
+
+      // check that streamvbyte keys are in range
+      auto keys_size = BareBones::StreamVByte::keys_size(lns.size());
+      if (pos - shrinked_size_ + keys_size > symbols_ids_sequences_.size()) {
+        throw BareBones::Exception(0x22f5a82dd120e0e7, "LabelSets data validation error: expected LabelSets keys length is out of data symbols vector range");
+      }
+
+      // check that streamvbyte data is in range
+      const uint32_t data_size =
+          BareBones::StreamVByte::decode_data_size<BareBones::StreamVByte::Codec1234>(lns.size(), symbols_ids_sequences_.begin() + pos - shrinked_size_);
+      if (pos - shrinked_size_ + keys_size + data_size > symbols_ids_sequences_.size()) {
+        throw BareBones::Exception(0xd02e54dac8e1d328, "LabelSets data validation error: expected LabelSets values length is out of data symbols vector range");
+      }
+
+      // check that all symbols are in range
+      auto values_begin =
+          BareBones::StreamVByte::decoder<BareBones::StreamVByte::Codec1234>(symbols_ids_sequences_.begin() + pos - shrinked_size_, lns.size()).first;
+      for (auto i = lns.begin(); i != lns.end(); ++i) {
+        if (*values_begin++ >= symbols_tables_[i.id()]->size()) {
+          throw BareBones::Exception(0x0f0c520ad6285f15,
+                                     "LabelSets data validation error: expected LabelSets symbols length is out of data symbols vector range");
+        }
+      }
+    }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept {
+      return BareBones::mem::allocated_memory(symbols_tables_) + BareBones::mem::allocated_memory(symbols_ids_sequences_) +
+             BareBones::mem::allocated_memory(label_name_sets_table_) + BareBones::mem::allocated_memory(items_);
+    }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return static_cast<uint32_t>(items_.size()); }
+
+    template <class OtherLabelSet, class Cache = NoCache>
+    PROMPP_ALWAYS_INLINE uint32_t emplace_back(const OtherLabelSet& label_set, Cache&& cache = {}) noexcept {
+      const uint32_t id = items_.size();
+
+      const uint32_t lns_id = find_or_emplace_label_names_set(label_set, std::forward<Cache>(cache));
+      const uint32_t pos = symbols_ids_sequences_.size() + shrinked_size_;
+      // resize if there are new symbols (in lns table)
+      symbols_tables_.reserve(label_name_sets_table_.data_view().symbols().size());
+      for (auto i = symbols_tables_.size(); i < label_name_sets_table_.data_view().symbols().size(); ++i) {
+        symbols_tables_.emplace_back(std::make_unique<label_values_symbols_table_type>());
+      }
+
+      auto lns = label_name_sets_table_[lns_id];
+      auto lns_i = lns.begin();
+      auto size_before = symbols_ids_sequences_.size();
+      auto i = BareBones::StreamVByte::back_inserter<symbol_ids_codec_type>(symbols_ids_sequences_, lns.size());
+      for (auto it = label_set.begin(); it != label_set.end(); ++it) {
+        *i++ = find_or_emplace_symbol(lns_i.id(), it, std::forward<Cache>(cache));
+        ++lns_i;
+      }
+
+      next_item_index_ += symbols_ids_sequences_.size() - size_before;
+
+      items_.emplace_back(lns_id, pos);
+
+      return id;
+    }
+
+    void shrink() noexcept {
+      shrinked_size_ += symbols_ids_sequences_.size();
+
+      items_.resize(0);
+      items_.shrink_to_fit();
+      symbols_ids_sequences_.resize(0);
+      symbols_ids_sequences_.shrink_to_fit();
+    }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE checkpoint_type checkpoint() const noexcept {
+      auto checkpoint = checkpoint_type{label_name_sets_table_.checkpoint(),
+                                        {},
+                                        next_item_index_,
+                                        static_cast<uint32_t>(symbols_ids_sequences_.size()),
+                                        static_cast<uint32_t>(items_.size())};
+      checkpoint.symbols_tables_checkpoints_.reserve_and_write(symbols_tables_.size(), [this](auto memory, uint32_t size) {
+        for (auto& symbol_table : this->symbols_tables_) {
+          std::construct_at(memory++, symbol_table->checkpoint());
+        }
+        return size;
+      });
+      return checkpoint;
+    }
+
+    PROMPP_ALWAYS_INLINE void rollback(const checkpoint_type& checkpoint) noexcept {
+      assert(checkpoint.size_ <= symbols_ids_sequences_.size());
+      symbols_ids_sequences_.resize(checkpoint.size_);
+
+      label_name_sets_table_.rollback(checkpoint.label_name_sets_table_checkpoint_);
+
+      auto symbols_tables_checkpoints = checkpoint.symbols_tables_checkpoints_;
+      assert(symbols_tables_checkpoints.size() <= symbols_tables_.size());
+      for (uint32_t i = 0; i != symbols_tables_checkpoints.size(); ++i) {
+        symbols_tables_[i]->rollback(symbols_tables_checkpoints[i]);
+      }
+      symbols_tables_.resize(symbols_tables_checkpoints.size());
+      items_.resize(checkpoint.items_size);
     }
 
     template <class InputStream>
-    void load(InputStream& in) {
+    auto load(InputStream& in, uint32_t items_size, uint8_t table_version) {
+      const auto items_original_size = items_.size();
+      if (table_version == 1) {
+        // read items
+        items_.resize(items_original_size + items_size);
+        in.read(reinterpret_cast<char*>(&items_[items_original_size]), sizeof(item_type) * items_size);
+      }
+
       // read version
       const uint8_t version = in.get();
       if (version != 1) {
         throw BareBones::Exception(0x7524f0b0ab963554, "Invalid stream data version (%d) for loading LabelSets into data vector, only version 1 is supported",
                                    version);
+      }
+
+      if (table_version == 2) {
+        // read items
+        items_.resize(items_original_size + items_size);
+        in.read(reinterpret_cast<char*>(&items_[items_original_size]), sizeof(item_type) * items_size);
       }
 
       // read mode
@@ -723,45 +1302,45 @@ class LabelSet {
       if (first_to_load_i != next_item_index_) {
         if (mode == BareBones::SnugComposite::SerializationMode::SNAPSHOT) {
           throw BareBones::Exception(0xefdd57cef4b89243, "Attempt to load snapshot into non-empty LabelSets data vector");
-        } else if (first_to_load_i < symbols_ids_sequences.size()) {
+        } else if (first_to_load_i < symbols_ids_sequences_.size()) {
           throw BareBones::Exception(0xfead3117c5a549bd, "Attempt to load segment over existing LabelSets data");
         } else {
           throw BareBones::Exception(0xbb996a8ffbcbb53b,
                                      "Attempt to load incomplete data from segment, LabelSets data vector length (%u) is less than segment size (%d)",
-                                     symbols_ids_sequences.size(), first_to_load_i);
+                                     symbols_ids_sequences_.size(), first_to_load_i);
         }
       }
 
       // read size
-      uint32_t size_to_load;
+      uint32_t size_to_load = 0;
       in.read(reinterpret_cast<char*>(&size_to_load), sizeof(size_to_load));
 
       // read data
-      auto sg1 = std::experimental::scope_fail([original_size = symbols_ids_sequences.size(), this] { symbols_ids_sequences.resize(original_size); });
+      auto sg1 = std::experimental::scope_fail([original_size = symbols_ids_sequences_.size(), this] { symbols_ids_sequences_.resize(original_size); });
 
-      symbols_ids_sequences.reserve_and_write(size_to_load + sizeof(SymbolIdsCodec::value_type), [&in, size_to_load](uint8_t* buffer, uint32_t) {
-        in.read(reinterpret_cast<char*>(buffer), size_to_load * sizeof(symbols_ids_sequences[first_to_load_i]));
+      symbols_ids_sequences_.reserve_and_write(size_to_load + sizeof(symbol_ids_codec_type::value_type), [&in, size_to_load](uint8_t* buffer, uint32_t) {
+        in.read(reinterpret_cast<char*>(buffer), size_to_load * sizeof(symbols_ids_sequences_[first_to_load_i]));
         return size_to_load;
       });
       next_item_index_ += size_to_load;
 
       // read label name sets table
-      auto label_name_sets_table_checkpoint = label_name_sets_table.checkpoint();
-      auto sg2 = std::experimental::scope_fail([&]() { label_name_sets_table.rollback(label_name_sets_table_checkpoint); });
-      label_name_sets_table.load(in);
+      auto label_name_sets_table_checkpoint = label_name_sets_table_.checkpoint();
+      auto sg2 = std::experimental::scope_fail([&]() { label_name_sets_table_.rollback(label_name_sets_table_checkpoint); });
+      label_name_sets_table_.load(in);
 
       // read number of tables
-      uint32_t number_of_symbols_tables_to_load;
+      uint32_t number_of_symbols_tables_to_load = 0;
       in.read(reinterpret_cast<char*>(&number_of_symbols_tables_to_load), sizeof(number_of_symbols_tables_to_load));
 
       // read tables
-      auto original_symbols_tables_size = symbols_tables.size();
-      BareBones::Vector<std::pair<uint32_t, typename SymbolsTableType<Vector>::checkpoint_type>> symbols_tables_checkpoints;
+      auto original_symbols_tables_size = symbols_tables_.size();
+      BareBones::Vector<std::pair<uint32_t, typename label_values_symbols_table_type::checkpoint_type>> symbols_tables_checkpoints;
       auto sg3 = std::experimental::scope_fail([&]() {
         for (const auto& [id, checkpoint] : symbols_tables_checkpoints) {
-          symbols_tables[id]->rollback(checkpoint);
+          symbols_tables_[id]->rollback(checkpoint);
         }
-        symbols_tables.resize(original_symbols_tables_size);
+        symbols_tables_.resize(original_symbols_tables_size);
       });
       for (uint32_t i = 0; i < number_of_symbols_tables_to_load; ++i) {
         // read id
@@ -774,247 +1353,64 @@ class LabelSet {
         }
 
         // resize, if needed
-        if (id >= symbols_tables.size()) [[unlikely]] {
-          if (id > symbols_tables.size()) [[unlikely]] {
-            throw BareBones::Exception(0x13fe3e1aae45bb34, "Symbol id sequence is incorrect: id (%u), size: (%u)", id, symbols_tables.size());
+        if (id >= symbols_tables_.size()) [[unlikely]] {
+          if (id > symbols_tables_.size()) [[unlikely]] {
+            throw BareBones::Exception(0x13fe3e1aae45bb34, "Symbol id sequence is incorrect: id (%u), size: (%u)", id, symbols_tables_.size());
           }
 
           const auto number_of_tables_stil_left_to_load = number_of_symbols_tables_to_load - i;
-          uint64_t size_will_be_at_least = static_cast<uint64_t>(symbols_tables.size()) + number_of_tables_stil_left_to_load;
+          uint64_t size_will_be_at_least = static_cast<uint64_t>(symbols_tables_.size()) + number_of_tables_stil_left_to_load;
           if (size_will_be_at_least >= std::numeric_limits<uint32_t>::max()) [[unlikely]] {
             throw BareBones::Exception(0x98d95ce3b05ec2b5, "Max symbol id (%lu) is greater than UINT32_MAX", size_will_be_at_least);
           }
 
-          symbols_tables.reserve(size_will_be_at_least);
+          symbols_tables_.reserve(size_will_be_at_least);
           for (uint32_t j = 0; j < number_of_tables_stil_left_to_load; ++j) {
-            symbols_tables.emplace_back(std::make_unique<SymbolsTableType<Vector>>());
+            symbols_tables_.emplace_back(std::make_unique<label_values_symbols_table_type>());
           }
-
-          // just to be 100% sure
-          assert(id < symbols_tables.size());
         }
 
         // read symbols table
         if (mode == BareBones::SnugComposite::SerializationMode::DELTA && id < original_symbols_tables_size)
-          symbols_tables_checkpoints.emplace_back(id, symbols_tables[id]->checkpoint());
-        symbols_tables[id]->load(in);
+          symbols_tables_checkpoints.emplace_back(id, symbols_tables_[id]->checkpoint());
+        symbols_tables_[id]->load(in);
       }
 
-      // just to be 100% sure
-      assert(label_name_sets_table.data().symbols_table.size() == symbols_tables.size());
+      return std::views::iota(items_original_size, items_.size());
     }
 
-    // it drains before the maximum available symbols count would be exceeded.
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t remainder_size() const noexcept {
-      constexpr size_t max_ui32 = std::numeric_limits<uint32_t>::max();
+    [[nodiscard]] PROMPP_ALWAYS_INLINE view_type view() const noexcept { return {.storage_ptr = this}; }
 
-      assert(this->symbols_ids_sequences.size() <= max_ui32);
+   private:
+    template <template <template <class> class> class, template <template <class> class> class, template <class> class>
+    friend struct LabelSet;
 
-      size_t remainder_for_label_sets_table = this->label_name_sets_table.remainder_size();
-      size_t remainder_for_symbols_ids_sequences = max_ui32 - this->symbols_ids_sequences.size();
-      size_t remainder_for_symbol_table = std::numeric_limits<uint32_t>::max();
-      for (const auto& table : this->symbols_tables) {
-        if (const size_t n = table->remainder_size(); n < remainder_for_symbol_table) {
-          remainder_for_symbol_table = n;
-        }
+    symbols_tables_type symbols_tables_;
+    symbols_ids_sequences_type symbols_ids_sequences_;
+    label_name_sets_table_type label_name_sets_table_;
+    uint32_t next_item_index_{};
+    uint32_t shrinked_size_{};
+    Vector<item_type> items_;
+
+    template <class LabelSet, class Cache>
+    PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_label_names_set(LabelSet& label_set, Cache&& cache) {
+      if constexpr (use_find_or_emplace_with_cache<Cache, LabelSet, decltype(label_name_sets_table_), decltype(label_set.names())>) {
+        return label_name_sets_table_.find_or_emplace_with_cache(label_set.names(), label_set.id(), cache.name_sets, cache);
       }
-      return std::min({remainder_for_label_sets_table, remainder_for_symbols_ids_sequences, remainder_for_symbol_table});
+
+      return label_name_sets_table_.find_or_emplace(label_set.names());
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
-      return symbols_tables.allocated_memory() + BareBones::mem::allocated_memory(symbols_ids_sequences) +
-             BareBones::mem::allocated_memory(label_name_sets_table);
-    }
+    template <class LabelIterator, class Cache>
+    PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_symbol(uint32_t lns_id, const LabelIterator& label, Cache&& cache) {
+      if constexpr (use_find_or_emplace_with_cache<Cache, LabelIterator, decltype(*symbols_tables_[0]), decltype((*label).second)>) {
+        const auto name_id = label.name_id();
+        return symbols_tables_[lns_id]->find_or_emplace_with_cache((*label).second, label.value_id(), cache.values[name_id]);
+      }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return next_item_index_; }
+      return symbols_tables_[lns_id]->find_or_emplace((*label).second);
+    }
   };
-
-  PROMPP_ALWAYS_INLINE LabelSet() noexcept = default;
-
-  // FIXME inline of this function causes 30ns lost in indexing performance
-  template <class T, class Cache = NoCache>
-  // TODO requires is_label_set
-  LabelSet(data_type& data, const T& label_set, Cache&& cache = {}) noexcept
-      : lns_id_(find_or_emplace_label_names_set(data, label_set, std::forward<Cache>(cache))), pos_(data.symbols_ids_sequences.size() + data.shrinked_size_) {
-    // resize, if there are new symbols (in lns table)
-    data.symbols_tables.reserve(data.label_name_sets_table.data().symbols_table.size());
-    for (auto i = data.symbols_tables.size(); i < data.label_name_sets_table.data().symbols_table.size(); ++i) {
-      data.symbols_tables.emplace_back(std::make_unique<SymbolsTableType<Vector>>());
-    }
-
-    auto lns = data.label_name_sets_table[lns_id_];
-    auto lns_i = lns.begin();
-    auto size_before = data.symbols_ids_sequences.size();
-    auto i = BareBones::StreamVByte::back_inserter<typename data_type::SymbolIdsCodec>(data.symbols_ids_sequences, lns.size());
-    for (auto it = label_set.begin(); it != label_set.end(); ++it) {
-      *i++ = find_or_emplace_symbol(data, lns_i.id(), it, std::forward<Cache>(cache));
-      ++lns_i;
-    }
-
-    data.next_item_index_ += data.symbols_ids_sequences.size() - size_before;
-  }
-
-  // NOLINTNEXTLINE(readability-identifier-naming)
-  class composite_type {
-    using label_name_set_type = typename LabelNameSetsTableType<Vector>::value_type;
-    using values_iterator_type =
-        BareBones::StreamVByte::DecodeIterator<typename data_type::SymbolIdsCodec, typename symbols_ids_sequences_type::const_iterator>;
-    using values_iterator_sentinel_type = BareBones::StreamVByte::DecodeIteratorSentinel;
-
-    label_name_set_type label_name_set_;
-    const data_type* data_;
-    values_iterator_type values_begin_;
-    [[no_unique_address]] values_iterator_sentinel_type values_end_;
-    uint32_t id_;
-
-   public:
-    PROMPP_ALWAYS_INLINE explicit composite_type(const data_type* data = nullptr,
-                                                 label_name_set_type label_name_set = label_name_set_type(),
-                                                 values_iterator_type values_begin = values_iterator_type(),
-                                                 values_iterator_sentinel_type values_end = values_iterator_sentinel_type(),
-                                                 uint32_t id = 0) noexcept
-        : label_name_set_(label_name_set), data_(data), values_begin_(values_begin), values_end_(values_end), id_(id) {}
-
-    using value_type = std::pair<typename label_name_set_type::value_type, typename Symbol<Vector>::composite_type>;
-
-    PROMPP_ALWAYS_INLINE const label_name_set_type& names() const noexcept { return label_name_set_; }
-
-    PROMPP_ALWAYS_INLINE auto size() const noexcept { return label_name_set_.size(); }
-    PROMPP_ALWAYS_INLINE auto id() const noexcept { return id_; }
-
-    template <class LabelNameSetIteratorType, class ValuesIteratorType>
-    class Iterator {
-      LabelNameSetIteratorType lnsi_;
-      ValuesIteratorType vi_;
-      const data_type* data_;
-
-      friend class composite_type;
-
-     public:
-      using iterator_category = std::forward_iterator_tag;
-      using value_type = composite_type::value_type;
-      using difference_type = std::ptrdiff_t;
-
-      PROMPP_ALWAYS_INLINE explicit Iterator(const data_type* data = 0,
-                                             LabelNameSetIteratorType lnsi = LabelNameSetIteratorType(),
-                                             ValuesIteratorType vi = ValuesIteratorType()) noexcept
-          : lnsi_(lnsi), vi_(vi), data_(data) {}
-
-      PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
-        ++lnsi_;
-        ++vi_;
-        return *this;
-      }
-
-      PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
-        Iterator retval = *this;
-        ++(*this);
-        return retval;
-      }
-
-      template <class OtherIteratorType>
-      PROMPP_ALWAYS_INLINE bool operator==(const OtherIteratorType& other) const noexcept {
-        return lnsi_ == other.lnsi_ && vi_ == other.vi_;
-      }
-
-      PROMPP_ALWAYS_INLINE value_type operator*() const noexcept {
-        if constexpr (BareBones::concepts::is_dereferenceable<decltype(data_->symbols_tables[lnsi_.id()])>) {
-          const auto& smbl_tbl = *data_->symbols_tables[lnsi_.id()];
-          return make_pair(*lnsi_, smbl_tbl[*vi_]);
-        } else {
-          const auto& smbl_tbl = data_->symbols_tables[lnsi_.id()];
-          return make_pair(*lnsi_, smbl_tbl[*vi_]);
-        }
-      }
-
-      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t name_id() const noexcept { return lnsi_.id(); }
-
-      [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t value_id() const noexcept { return *vi_; }
-    };
-
-    using iterator = Iterator<decltype(label_name_set_.begin()), decltype(values_begin_)>;
-    using end_iterator = Iterator<decltype(label_name_set_.end()), decltype(values_end_)>;
-
-    PROMPP_ALWAYS_INLINE auto begin() const noexcept {
-      return Iterator<decltype(label_name_set_.begin()), decltype(values_begin_)>(data_, label_name_set_.begin(), values_begin_);
-    }
-
-    PROMPP_ALWAYS_INLINE auto end() const noexcept {
-      return Iterator<decltype(label_name_set_.end()), decltype(values_end_)>(data_, label_name_set_.end(), values_end_);
-    }
-
-    template <class T>
-    PROMPP_ALWAYS_INLINE bool operator==(const T& b) const noexcept {
-      return std::ranges::equal(begin(), end(), b.begin(), b.end(), [](const auto& a, const auto& b) { return a == b; });
-    }
-
-    template <class T>
-    PROMPP_ALWAYS_INLINE bool operator<(const T& b) const noexcept {
-      return std::ranges::lexicographical_compare(begin(), end(), b.begin(), b.end(), [](const auto& a, const auto& b) { return a < b; });
-    }
-
-    PROMPP_ALWAYS_INLINE friend size_t hash_value(const composite_type& ls) noexcept { return hash::hash_of_label_set(ls); }
-  };
-
-  PROMPP_ALWAYS_INLINE composite_type composite(const data_type& data) const noexcept {
-    auto lns = data.label_name_sets_table[lns_id_];
-
-    auto [values_begin, values_end] =
-        BareBones::StreamVByte::decoder<typename data_type::SymbolIdsCodec>(data.symbols_ids_sequences.begin() + pos_ - data.shrinked_size_, lns.size());
-
-    return composite_type(&data, std::move(lns), std::move(values_begin), std::move(values_end), lns_id_);
-  }
-
-  PROMPP_ALWAYS_INLINE void validate(const data_type& data) const {
-    if (lns_id_ >= data.label_name_sets_table.size()) {
-      throw BareBones::Exception(0x48dd6c9d357d3a7e, "LabelSets data validation error: expected LabelSets length is out of label name sets table vector range");
-    }
-
-    const auto& lns = data.label_name_sets_table[lns_id_];
-
-    // check that streamvbyte keys are in range
-    auto keys_size = BareBones::StreamVByte::keys_size(lns.size());
-    if (pos_ - data.shrinked_size_ + keys_size > data.symbols_ids_sequences.size()) {
-      throw BareBones::Exception(0x22f5a82dd120e0e7, "LabelSets data validation error: expected LabelSets keys length is out of data symbols vector range");
-    }
-
-    // check that streamvbyte data is in range
-    const uint32_t data_size = BareBones::StreamVByte::decode_data_size<BareBones::StreamVByte::Codec1234>(
-        lns.size(), data.symbols_ids_sequences.begin() + pos_ - data.shrinked_size_);
-    if (pos_ - data.shrinked_size_ + keys_size + data_size > data.symbols_ids_sequences.size()) {
-      throw BareBones::Exception(0xd02e54dac8e1d328, "LabelSets data validation error: expected LabelSets values length is out of data symbols vector range");
-    }
-
-    // check that all symbols are in range
-    auto [values_begin, values_end] =
-        BareBones::StreamVByte::decoder<BareBones::StreamVByte::Codec1234>(data.symbols_ids_sequences.begin() + pos_ - data.shrinked_size_, lns.size());
-    for (auto i = lns.begin(); i != lns.end(); ++i) {
-      if (*values_begin++ >= data.symbols_tables[i.id()]->size()) {
-        throw BareBones::Exception(0x0f0c520ad6285f15,
-                                   "LabelSets data validation error: expected LabelSets symbols length is out of data symbols vector range");
-      }
-    }
-  }
-
- private:
-  template <class LabelSet, class Cache>
-  PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_label_names_set(data_type& data, LabelSet& label_set, Cache&& cache) {
-    if constexpr (use_find_or_emplace_with_cache<Cache, LabelSet, decltype(data.label_name_sets_table), decltype(label_set.names())>) {
-      return data.label_name_sets_table.find_or_emplace_with_cache(label_set.names(), label_set.id(), cache.name_sets, cache);
-    }
-
-    return data.label_name_sets_table.find_or_emplace(label_set.names());
-  }
-
-  template <class LabelIterator, class Cache>
-  PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_symbol(data_type& data, uint32_t lns_id, const LabelIterator& label, Cache&& cache) {
-    if constexpr (use_find_or_emplace_with_cache<Cache, LabelIterator, decltype(*data.symbols_tables[0]), decltype((*label).second)>) {
-      const auto name_id = label.name_id();
-      return data.symbols_tables[lns_id]->find_or_emplace_with_cache((*label).second, label.value_id(), cache.values[name_id]);
-    }
-
-    return data.symbols_tables[lns_id]->find_or_emplace((*label).second);
-  }
 };
 
 }  // namespace PromPP::Primitives::SnugComposites::Filaments
