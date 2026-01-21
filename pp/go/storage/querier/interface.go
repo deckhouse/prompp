@@ -127,6 +127,9 @@ type Head[
 	// Enqueue the task to be executed on shards [Head].
 	Enqueue(t TGenericTask)
 
+	// ReleaseTask to the pool.
+	ReleaseTask(t TGenericTask)
+
 	// EnqueueOnShard the task to be executed on head on specific shard.
 	EnqueueOnShard(t TGenericTask, shardID uint16)
 

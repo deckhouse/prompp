@@ -59,6 +59,7 @@ func QueryHeadStatus[
 			})
 		},
 	)
+	defer head.ReleaseTask(tLSSHeadStatus)
 	head.Enqueue(tLSSHeadStatus)
 
 	if limit != 0 {
@@ -72,6 +73,7 @@ func QueryHeadStatus[
 				})
 			},
 		)
+		defer head.ReleaseTask(tDataStorageHeadStatus)
 		head.Enqueue(tDataStorageHeadStatus)
 		tw.Add(tDataStorageHeadStatus)
 	}

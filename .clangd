@@ -1,0 +1,7 @@
+CompileFlags:
+  CompilationDatabase: ./pp
+
+Diagnostics:
+  ClangTidy:
+    FastCheckFilter: None
+  MissingIncludes: Strict

@@ -3,8 +3,6 @@ package task
 import (
 	"errors"
 	"sync"
-	"sync/atomic"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -24,39 +22,50 @@ type Shard interface {
 
 // Generic generic task, will be executed on each shard.
 type Generic[TShard Shard] struct {
-	errs      []error
-	shardFn   func(shard TShard) error
-	wg        sync.WaitGroup
-	createdTS int64
-	executeTS int64
-	created   prometheus.Counter
-	done      prometheus.Counter
-	live      prometheus.Counter
-	execute   prometheus.Counter
+	errs    []error
+	shardFn func(shard TShard) error
+	wg      sync.WaitGroup
+	done    prometheus.Counter
 }
 
 // NewGeneric init new [Generic].
 func NewGeneric[TShard Shard](
 	shardFn func(shard TShard) error,
-	created, done, live, execute prometheus.Counter,
+	shardsNumber uint16,
+	done prometheus.Counter,
 ) *Generic[TShard] {
 	t := &Generic[TShard]{
-		shardFn:   shardFn,
-		wg:        sync.WaitGroup{},
-		createdTS: time.Now().UnixMicro(),
-		created:   created,
-		done:      done,
-		live:      live,
-		execute:   execute,
+		errs:    make([]error, shardsNumber),
+		shardFn: shardFn,
+		wg:      sync.WaitGroup{},
+		done:    done,
 	}
-	t.created.Inc()
 
 	return t
+}
+
+// NewGenericEmpty init new empty [Generic] for pooling.
+func NewGenericEmpty[TShard Shard](shardsNumber uint16) *Generic[TShard] {
+	return &Generic[TShard]{
+		errs: make([]error, shardsNumber),
+		wg:   sync.WaitGroup{},
+	}
+}
+
+// Reset resets the task for reuse from pool.
+func (t *Generic[TShard]) Reset(
+	shardFn func(shard TShard) error,
+	done prometheus.Counter,
+) {
+	clear(t.errs)
+	t.shardFn = shardFn
+	t.done = done
 }
 
 // NewTransactionGeneric init new [Generic] for transaction head.
 func NewTransactionGeneric[TShard Shard](shardFn func(shard TShard) error) *Generic[TShard] {
 	t := &Generic[TShard]{
+		errs:    make([]error, 1),
 		shardFn: shardFn,
 		wg:      sync.WaitGroup{},
 	}
@@ -66,19 +75,12 @@ func NewTransactionGeneric[TShard Shard](shardFn func(shard TShard) error) *Gene
 
 // SetShardsNumber set shards number
 func (t *Generic[TShard]) SetShardsNumber(number uint16) {
-	t.errs = make([]error, number)
 	t.wg.Add(int(number))
 }
 
 // ExecuteOnShard execute task on shard.
 func (t *Generic[TShard]) ExecuteOnShard(shard TShard) {
-	atomic.CompareAndSwapInt64(&t.executeTS, 0, time.Now().UnixMicro())
-	if len(t.errs) == 1 {
-		t.errs[0] = t.shardFn(shard)
-	} else {
-		t.errs[shard.ShardID()] = t.shardFn(shard)
-	}
-
+	t.errs[shard.ShardID()] = t.shardFn(shard)
 	t.wg.Done()
 }
 
@@ -88,11 +90,7 @@ func (t *Generic[TShard]) Wait() error {
 	if t.done == nil {
 		return errors.Join(t.errs...)
 	}
-
-	now := time.Now().UnixMicro()
 	t.done.Inc()
-	t.execute.Add(float64(now - t.executeTS))
-	t.live.Add(float64(now - t.createdTS))
 
 	return errors.Join(t.errs...)
 }
