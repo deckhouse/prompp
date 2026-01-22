@@ -104,7 +104,6 @@ func (w *ChunkWriter) cut() error {
 	}
 	w.headerSize = int64(headerSize)
 
-	// if
 	w.segment = f
 	w.segmentNumber++
 	if w.wbuf != nil {
