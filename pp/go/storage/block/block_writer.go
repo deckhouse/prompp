@@ -238,7 +238,9 @@ func (bw *blockWriters) writeIndexCloseAndMoveTmpDirToDir() ([]WrittenBlock, err
 			return nil, err
 		}
 
-		_ = (*bw)[i].Flush()
+		if err := (*bw)[i].Flush(); err != nil {
+			return nil, err
+		}
 
 		if err := (*bw)[i].moveTmpDirToDir(); err != nil {
 			return nil, err
