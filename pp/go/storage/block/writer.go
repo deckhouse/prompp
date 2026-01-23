@@ -1,10 +1,12 @@
 package block
 
 import (
+	"errors"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/util"
 )
@@ -63,6 +65,11 @@ func (w *Writer[TShard]) Write(sd TShard) (writtenBlocks []WrittenBlock, err err
 		if err != nil {
 			return err
 		}
+		defer func() {
+			if err := writers.Close(); err != nil {
+				logger.Warnf("Failed to close block writers: %v", err)
+			}
+		}()
 
 		if err = w.recodeAndWriteChunks(sd, writers); err != nil {
 			return err
@@ -105,8 +112,7 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 			chunkIterator,
 		)
 		if err != nil {
-			writers.close()
-			return blockWriters{}, err
+			return blockWriters{}, errors.Join(err, writers.Close())
 		}
 
 		writers.append(writer)
