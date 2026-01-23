@@ -147,6 +147,13 @@ jobs:
           
           docker manifest push ${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }} --purge
 
+      - name: Log in to the GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: https://ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Create and push multi-arch manifest GHCR
         run: |
           docker manifest create --amend ghcr.io/deckhouse/prompp:${{ steps.normalize.outputs.branch_name }} \
