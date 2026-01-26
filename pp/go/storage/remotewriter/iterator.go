@@ -107,14 +107,13 @@ func (s *sharder) NumberOfShards() int {
 
 // Iterator is a iterator for sending data to the remote storage.
 type Iterator struct {
-	clock                        clockwork.Clock
-	queueConfig                  config.QueueConfig
-	dataSource                   DataSource
-	protobufWriter               ProtobufWriter
-	targetSegmentIDSetCloser     TargetSegmentIDSetCloser
-	metrics                      *DestinationMetrics
-	targetSegmentID              uint32
-	targetSegmentIsPartiallyRead bool
+	clock                    clockwork.Clock
+	queueConfig              config.QueueConfig
+	dataSource               DataSource
+	protobufWriter           ProtobufWriter
+	targetSegmentIDSetCloser TargetSegmentIDSetCloser
+	metrics                  *DestinationMetrics
+	targetSegmentID          uint32
 
 	outputSharder *sharder
 
@@ -213,7 +212,6 @@ readLoop:
 
 		b.add(decodedSegments)
 		i.targetSegmentID++
-		i.targetSegmentIsPartiallyRead = false
 
 		if b.IsFilled() {
 			break readLoop
@@ -410,16 +408,11 @@ func (i *Iterator) encode(batch *batch, numberOfMessages int) *cppbridge.RWMessa
 }
 
 func (i *Iterator) tryAck(_ context.Context) error {
-	if i.targetSegmentID == 0 && i.targetSegmentIsPartiallyRead {
+	if i.targetSegmentID == 0 {
 		return nil
 	}
 
-	targetSegmentID := i.targetSegmentID
-	if i.targetSegmentIsPartiallyRead {
-		targetSegmentID--
-	}
-
-	if err := i.targetSegmentIDSetCloser.SetTargetSegmentID(targetSegmentID); err != nil {
+	if err := i.targetSegmentIDSetCloser.SetTargetSegmentID(i.targetSegmentID); err != nil {
 		return fmt.Errorf("failed to set target segment id: %w", err)
 	}
 
