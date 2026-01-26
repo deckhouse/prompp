@@ -253,7 +253,7 @@ readLoop:
 	i.writeCaches()
 
 	encodeStartTime := i.clock.Now()
-	msg := i.encode(b, int(numberOfMessages)) // #nosec G115 // no overflow
+	msg := i.encode(b, int(numberOfMessages), i.targetSegmentID) // #nosec G115 // no overflow
 	i.metrics.encodeBatchDuration.Observe(i.clock.Since(encodeStartTime).Seconds())
 
 	return msg, nil
@@ -353,7 +353,7 @@ func (i *Iterator) SendMessage(ctx context.Context, msg *cppbridge.RWMessageList
 		return i.wrapError(err)
 	}
 
-	if err = i.tryAck(ctx); err != nil {
+	if err = i.tryAck(msg.TargetSegmentID); err != nil {
 		logger.Errorf("failed to ack segment id: %v", err)
 	}
 
@@ -364,10 +364,10 @@ func (i *Iterator) writeCaches() {
 	i.dataSource.WriteCaches()
 }
 
-func (i *Iterator) encode(batch *batch, numberOfMessages int) *cppbridge.RWMessageList {
+func (i *Iterator) encode(batch *batch, numberOfMessages int, targetSegmentID uint32) *cppbridge.RWMessageList {
 	encodersCount := batch.numberOfShards
 
-	messages := cppbridge.NewRWMessageList(uint64(numberOfMessages))
+	messages := cppbridge.NewRWMessageList(uint64(numberOfMessages), targetSegmentID)
 	encoders := cppbridge.NewMessageEncoders(uint64(encodersCount), i.dataSource.LSSes())
 	messagesPerEncoder := numberOfMessages / encodersCount
 	if messagesPerEncoder == 0 {
@@ -407,12 +407,12 @@ func (i *Iterator) encode(batch *batch, numberOfMessages int) *cppbridge.RWMessa
 	return messages
 }
 
-func (i *Iterator) tryAck(_ context.Context) error {
-	if i.targetSegmentID == 0 {
+func (i *Iterator) tryAck(targetSegmentID uint32) error {
+	if targetSegmentID == 0 {
 		return nil
 	}
 
-	if err := i.targetSegmentIDSetCloser.SetTargetSegmentID(i.targetSegmentID); err != nil {
+	if err := i.targetSegmentIDSetCloser.SetTargetSegmentID(targetSegmentID); err != nil {
 		return fmt.Errorf("failed to set target segment id: %w", err)
 	}
 

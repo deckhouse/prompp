@@ -11,13 +11,15 @@ type RWMessage struct {
 }
 
 type RWMessageList struct {
-	MaxTimestamp int64
-	Messages     []RWMessage
+	MaxTimestamp    int64
+	TargetSegmentID uint32
+	Messages        []RWMessage
 }
 
-func NewRWMessageList(messagesCount uint64) *RWMessageList {
+func NewRWMessageList(messagesCount uint64, targetSegmentID uint32) *RWMessageList {
 	list := &RWMessageList{
-		Messages: walRemoteWriteCreateMessages(messagesCount),
+		TargetSegmentID: targetSegmentID,
+		Messages:        walRemoteWriteCreateMessages(messagesCount),
 	}
 	runtime.SetFinalizer(list, func(list *RWMessageList) {
 		walRemoteWriteDestroyMessages(list.Messages)
