@@ -148,6 +148,15 @@ void prompp_wal_segment_samples_storage_list_ctor(void* args, void* res);
 void prompp_wal_segment_samples_storage_add(void* args);
 
 /**
+ * @brief Clear sample storage list
+ *
+ * @param args {
+ *     samplesStorage *SegmentSamplesStorage // pointer to constructed SegmentSamplesStorage
+ * }
+ */
+void prompp_wal_segment_samples_storage_clear(void* args);
+
+/**
  * @brief Destroy segment samples storage list
  *
  * @param args {

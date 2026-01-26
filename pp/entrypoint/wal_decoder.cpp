@@ -230,6 +230,14 @@ extern "C" void prompp_wal_segment_samples_storage_add(void* args) {
   in->samples_storage->add(in->ls_id, PromPP::Primitives::Sample(in->timestamp, in->value));
 }
 
+extern "C" void prompp_wal_segment_samples_storage_clear(void* args) {
+  struct Arguments {
+    PromPP::WAL::SegmentSamplesStorage* samples_storage;
+  };
+
+  static_cast<Arguments*>(args)->samples_storage->clear();
+}
+
 extern "C" void prompp_wal_segment_samples_storage_list_dtor(void* args) {
   struct Arguments {
     SegmentSamplesStorageList storage_list;

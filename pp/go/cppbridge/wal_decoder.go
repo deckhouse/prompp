@@ -311,6 +311,10 @@ func NewSegmentSamplesStorage(count uint64) *SegmentSamplesStorageList {
 	return storages
 }
 
+func ClearSegmentSamplesStorage(storage *CppSegmentSamplesStorage) {
+	walSegmentSamplesStorageClear(storage)
+}
+
 //
 // WALOutputDecoder
 //

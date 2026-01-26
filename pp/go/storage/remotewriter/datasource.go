@@ -208,6 +208,8 @@ func (s *shard) Read(ctx context.Context, targetSegmentID uint32, minTimestamp i
 			decodedSegment.ID = segment.ID
 			return decodedSegment, nil
 		}
+
+		cppbridge.ClearSegmentSamplesStorage(samplesStorage)
 	}
 }
 

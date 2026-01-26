@@ -1079,6 +1079,18 @@ func walSegmentSamplesStorageAdd(
 	)
 }
 
+func walSegmentSamplesStorageClear(samplesStorage *CppSegmentSamplesStorage) {
+	args := struct {
+		samplesStorage *CppSegmentSamplesStorage
+	}{samplesStorage}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_wal_segment_samples_storage_clear,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
 func walSegmentSamplesStorageListDtor(storages []CppSegmentSamplesStorage) {
 	args := struct {
 		storages []CppSegmentSamplesStorage
