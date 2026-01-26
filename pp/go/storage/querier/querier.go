@@ -222,6 +222,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 			return nil
 		},
 	)
+	defer q.head.ReleaseTask(tDataStorageQuery)
 	q.head.Enqueue(tDataStorageQuery)
 	_ = tDataStorageQuery.Wait()
 
@@ -342,6 +343,7 @@ func queryDataStorage[
 			return nil
 		},
 	)
+	defer head.ReleaseTask(tDataStorageQuery)
 	head.Enqueue(tDataStorageQuery)
 	_ = tDataStorageQuery.Wait()
 
@@ -398,6 +400,7 @@ func queryLabelNames[
 			return shard.LSS().QueryLabelNames(shard.ShardID(), convertedMatchers, dedup.Add)
 		},
 	)
+	defer head.ReleaseTask(t)
 	head.Enqueue(t)
 
 	if err := t.Wait(); err != nil {
@@ -465,6 +468,7 @@ func queryLabelValues[
 			return shard.LSS().QueryLabelValues(shard.ShardID(), name, convertedMatchers, dedup.Add)
 		},
 	)
+	defer head.ReleaseTask(t)
 	head.Enqueue(t)
 
 	if err := t.Wait(); err != nil {
@@ -515,6 +519,7 @@ func queryLss[
 			return err
 		},
 	)
+	defer head.ReleaseTask(tLSSQuerySelector)
 	head.Enqueue(tLSSQuerySelector)
 	if err := tLSSQuerySelector.Wait(); err != nil {
 		return nil, nil, err

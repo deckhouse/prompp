@@ -22,13 +22,13 @@ import (
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql"
-	"github.com/prometheus/prometheus/rules"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/web"
 	apiV1 "github.com/prometheus/prometheus/web/api/v1"
 	"github.com/prometheus/prometheus/web/mock"
 
+	"github.com/prometheus/prometheus/pp-pkg/rules" // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/scrape"
 	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage"
 

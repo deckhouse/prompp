@@ -11,9 +11,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
-// CopySeriesOnRotate copy active series from the current head to the new head during rotation.
-var CopySeriesOnRotate = false
-
 //
 // RotatorConfig
 //
@@ -135,7 +132,7 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 		return fmt.Errorf("failed to build a new head: %w", err)
 	}
 
-	if CopySeriesOnRotate && oldHead.NumberOfShards() == newHead.NumberOfShards() {
+	if oldHead.NumberOfShards() == newHead.NumberOfShards() {
 		s.headAddedSeriesCopier(oldHead, newHead)
 	}
 

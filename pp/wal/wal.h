@@ -446,7 +446,7 @@ class BasicEncoder {
 
   inline __attribute__((always_inline)) uint64_t total_bytes() const { return metadata_bytes_ + label_sets_bytes_ + ls_id_bytes_ + ts_bytes_ + v_bytes_; }
 
-  inline __attribute__((always_inline)) size_t remainder_size() const noexcept { return label_sets_.data().remainder_size(); }
+  inline __attribute__((always_inline)) size_t remainder_size() const noexcept { return label_sets_.remainder_size(); }
 
   inline __attribute__((always_inline)) size_t allocated_memory() const noexcept { return label_sets_.allocated_memory() + gorilla_.allocated_memory(); }
 

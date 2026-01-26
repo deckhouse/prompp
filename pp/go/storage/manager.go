@@ -56,7 +56,7 @@ const (
 
 var (
 	// UnloadDataStorage flags for unloading [DataStorage].
-	UnloadDataStorage = false
+	UnloadDataStorage = true
 
 	// DefaultNumberOfShards default number of shards.
 	DefaultNumberOfShards uint16 = 2

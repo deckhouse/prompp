@@ -52,13 +52,13 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/metadata"
 	"github.com/prometheus/prometheus/model/timestamp"
+	"github.com/prometheus/prometheus/pp-pkg/rules"  // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/scrape" // PP_CHANGES.md: rebuild on cpp
 	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage"
 	pp_storage "github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/promql/promqltest"
-	"github.com/prometheus/prometheus/rules"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/prometheus/prometheus/tsdb"
@@ -351,7 +351,7 @@ func (m *rulesRetrieverMock) CreateRuleGroups() {
 	r = append(r, recordingRule)
 	r = append(r, recordingRule2)
 
-	group := rules.NewGroup(rules.GroupOptions{
+	group, err := rules.NewGroup(rules.GroupOptions{
 		Name:          "grp",
 		File:          "/path/to/file",
 		Interval:      time.Second,
@@ -359,6 +359,7 @@ func (m *rulesRetrieverMock) CreateRuleGroups() {
 		ShouldRestore: false,
 		Opts:          opts,
 	})
+	require.NoError(m.testing, err)
 	m.ruleGroups = []*rules.Group{group}
 }
 

@@ -3,6 +3,7 @@ package block
 import (
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -14,7 +15,6 @@ import (
 	"github.com/prometheus/prometheus/tsdb/fileutil"
 
 	"github.com/prometheus/prometheus/pp/go/logger"
-	"github.com/prometheus/prometheus/pp/go/util"
 )
 
 const (
@@ -55,6 +55,7 @@ type blockWriter struct {
 	indexWriter     IndexWriter
 
 	chunkRecoder chunkRecoder
+	finished     bool
 }
 
 func newBlockWriter(
@@ -113,8 +114,30 @@ func (writer *blockWriter) createWriters(maxBlockChunkSegmentSize int64) error {
 	return nil
 }
 
-func (writer *blockWriter) close() error {
-	return util.CloseAll(writer.chunkWriter, writer.indexFileWriter)
+// Flush all temporary data.
+func (writer *blockWriter) Flush() (err error) {
+	if writer.chunkWriter != nil {
+		if cwErr := writer.chunkWriter.Close(); cwErr != nil {
+			err = errors.Join(err, cwErr)
+		}
+		writer.chunkWriter = nil
+	}
+	if writer.indexFileWriter != nil {
+		if iwErr := writer.indexFileWriter.Close(); iwErr != nil {
+			err = errors.Join(err, iwErr)
+		}
+		writer.indexFileWriter = nil
+	}
+	return err
+}
+
+// Close closes the block writer.
+func (writer *blockWriter) Close() error {
+	err := writer.Flush()
+	if !writer.finished {
+		err = errors.Join(err, os.RemoveAll(writer.Dir))
+	}
+	return err
 }
 
 func (writer *blockWriter) recodeAndWriteChunksBatch() error {
@@ -160,6 +183,7 @@ func (writer *blockWriter) moveTmpDirToDir() error {
 	}
 
 	writer.Dir = dir
+	writer.finished = true
 	return nil
 }
 
@@ -172,11 +196,12 @@ func (bw *blockWriters) append(writer blockWriter) {
 	*bw = append(*bw, writer)
 }
 
-// close closes the block writers.
-func (bw *blockWriters) close() {
+// Close closes the block writers.
+func (bw *blockWriters) Close() (err error) {
 	for i := range *bw {
-		_ = (*bw)[i].close()
+		err = errors.Join(err, (*bw)[i].Close())
 	}
+	return err
 }
 
 // recodeAndWriteChunksBatch recodes and writes the chunks batch.
@@ -206,11 +231,6 @@ func (bw *blockWriters) writeIndexCloseAndMoveTmpDirToDir() ([]WrittenBlock, err
 	writtenBlocks := make([]WrittenBlock, 0, len(*bw))
 	for i := range *bw {
 		if (*bw)[i].isEmpty() {
-			_ = (*bw)[i].close()
-			if err := os.RemoveAll((*bw)[i].Dir); err != nil {
-				logger.Warnf("failed remove empty block: %s", (*bw)[i].Dir)
-			}
-
 			continue
 		}
 
@@ -218,7 +238,9 @@ func (bw *blockWriters) writeIndexCloseAndMoveTmpDirToDir() ([]WrittenBlock, err
 			return nil, err
 		}
 
-		_ = (*bw)[i].close()
+		if err := (*bw)[i].Flush(); err != nil {
+			return nil, err
+		}
 
 		if err := (*bw)[i].moveTmpDirToDir(); err != nil {
 			return nil, err

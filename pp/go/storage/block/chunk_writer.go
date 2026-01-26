@@ -28,13 +28,14 @@ type ChunkMetadata struct {
 
 // ChunkWriter a writer for encoding and writing chunks.
 type ChunkWriter struct {
-	dirFile     *os.File
-	files       []*os.File
-	wbuf        *bufio.Writer
-	n           int64
-	crc32       hash.Hash
-	segmentSize int64
-	buf         [binary.MaxVarintLen32]byte
+	dirFile       *os.File
+	segment       *os.File
+	segmentNumber int
+	wbuf          *bufio.Writer
+	headerSize    int64
+	crc32         hash.Hash
+	segmentSize   int64
+	buf           [binary.MaxVarintLen32]byte
 }
 
 // NewChunkWriter init new [ChunkWriter].
@@ -56,19 +57,20 @@ func NewChunkWriter(dir string, segmentSize int64) (*ChunkWriter, error) {
 	}
 
 	return &ChunkWriter{
-		dirFile:     dirFile,
-		crc32:       crc32.New(crc32.MakeTable(crc32.Castagnoli)),
-		segmentSize: segmentSize,
+		dirFile:       dirFile,
+		segmentNumber: -1,
+		crc32:         crc32.New(crc32.MakeTable(crc32.Castagnoli)),
+		segmentSize:   segmentSize,
 	}, nil
 }
 
 // Close writes all pending data to the current tail file and closes chunk's files.
-func (w *ChunkWriter) Close() (err error) {
-	if err = w.finalizeTail(); err != nil {
-		return fmt.Errorf("failed to finalize tail on close: %w", err)
+func (w *ChunkWriter) Close() error {
+	errs := w.finalizeTail()
+	if err := w.dirFile.Close(); err != nil {
+		errs = errors.Join(errs, fmt.Errorf("close dir file: %w", err))
 	}
-
-	return w.dirFile.Close()
+	return errs
 }
 
 // Write encoding and write to buffer chunk.
@@ -80,7 +82,7 @@ func (w *ChunkWriter) Write(chunk Chunk) (meta ChunkMetadata, err error) {
 	chunkSize += crc32.Size
 
 	// check segment boundaries and cut if needed
-	if w.n == 0 || w.n+chunkSize > w.segmentSize {
+	if w.headerSize == 0 || w.headerSize+chunkSize > w.segmentSize {
 		if err = w.cut(); err != nil {
 			return meta, fmt.Errorf("failed to cut file: %w", err)
 		}
@@ -96,13 +98,14 @@ func (w *ChunkWriter) cut() error {
 		return err
 	}
 
-	f, n, err := cutSegmentFile(w.dirFile, w.seq(), chunks.MagicChunks, chunksFormatV1, w.segmentSize)
+	f, headerSize, err := cutSegmentFile(w.dirFile, w.segmentNumber, chunks.MagicChunks, chunksFormatV1, w.segmentSize)
 	if err != nil {
 		return err
 	}
-	w.n = int64(n)
+	w.headerSize = int64(headerSize)
 
-	w.files = append(w.files, f)
+	w.segment = f
+	w.segmentNumber++
 	if w.wbuf != nil {
 		w.wbuf.Reset(f)
 	} else {
@@ -114,44 +117,38 @@ func (w *ChunkWriter) cut() error {
 
 // finalizeTail writes all pending data to the current tail file,
 // truncates its size, and closes it.
-func (w *ChunkWriter) finalizeTail() error {
-	tf := w.tail()
-	if tf == nil {
+func (w *ChunkWriter) finalizeTail() (errs error) {
+	if w.segment == nil {
 		return nil
 	}
+	// Ensure the file is closed even if flushing or syncing fails.
+	defer func() {
+		if err := w.segment.Close(); err != nil {
+			errs = errors.Join(errs, fmt.Errorf("close segment file: %w", err))
+		}
+		w.segment = nil
+	}()
 
 	if err := w.wbuf.Flush(); err != nil {
-		return err
+		return fmt.Errorf("flush buffer: %w", err)
 	}
 
-	if err := tf.Sync(); err != nil {
-		return err
+	if err := w.segment.Sync(); err != nil {
+		return fmt.Errorf("sync segment file: %w", err)
 	}
 	// As the file was pre-allocated, we truncate any superfluous zero bytes.
-	off, err := tf.Seek(0, io.SeekCurrent)
+	off, err := w.segment.Seek(0, io.SeekCurrent)
 	if err != nil {
-		return err
+		return fmt.Errorf("seek segment file: %w", err)
 	}
-	if err := tf.Truncate(off); err != nil {
-		return err
+	if err := w.segment.Truncate(off); err != nil {
+		return fmt.Errorf("truncate segment file: %w", err)
 	}
-
-	return tf.Close()
-}
-
-func (w *ChunkWriter) seq() int {
-	return len(w.files) - 1
-}
-
-func (w *ChunkWriter) tail() *os.File {
-	if len(w.files) == 0 {
-		return nil
-	}
-	return w.files[len(w.files)-1]
+	return nil
 }
 
 func (w *ChunkWriter) writeChunk(chunk Chunk) (meta ChunkMetadata, err error) {
-	meta.Ref = uint64(chunks.NewBlockChunkRef(uint64(w.seq()), uint64(w.n))) // #nosec G115 // no overflow
+	meta.Ref = uint64(chunks.NewBlockChunkRef(uint64(w.segmentNumber), uint64(w.headerSize))) // #nosec G115 // no overflow
 
 	n := binary.PutUvarint(w.buf[:], uint64(len(chunk.Bytes())))
 	if err = w.writeToBuf(w.buf[:n]); err != nil {
@@ -190,7 +187,7 @@ func (w *ChunkWriter) writeChunk(chunk Chunk) (meta ChunkMetadata, err error) {
 
 func (w *ChunkWriter) writeToBuf(b []byte) error {
 	n, err := w.wbuf.Write(b)
-	w.n += int64(n)
+	w.headerSize += int64(n)
 	return err
 }
 

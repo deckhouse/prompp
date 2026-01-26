@@ -25,7 +25,7 @@ func CFViaRange[
 ](h THead) error {
 	// we hope that there will be no mistakes, positive expectations
 	var errs []error
-	for shard := range h.RangeShards() {
+	for _, shard := range h.Shards() {
 		if err := shard.WalCommit(); err != nil {
 			errs = append(errs, fmt.Errorf("commit shard id %d: %w", shard.ShardID(), err))
 		}
@@ -46,7 +46,7 @@ func CFSViaRange[
 ](h THead) error {
 	// we hope that there will be no mistakes, positive expectations
 	var errs []error
-	for shard := range h.RangeShards() {
+	for _, shard := range h.Shards() {
 		if err := shard.WalCommit(); err != nil {
 			errs = append(errs, fmt.Errorf("commit shard id %d: %w", shard.ShardID(), err))
 		}
@@ -82,6 +82,7 @@ func UnloadUnusedSeriesDataWithHead[
 			return shard.UnloadUnusedSeriesData()
 		},
 	)
+	defer h.ReleaseTask(t)
 	h.Enqueue(t)
 
 	return t.Wait()
@@ -105,6 +106,7 @@ func MergeOutOfOrderChunksWithHead[
 			return nil
 		},
 	)
+	defer h.ReleaseTask(t)
 	h.Enqueue(t)
 
 	return t.Wait()

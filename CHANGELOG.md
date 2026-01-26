@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.7.4
+
+### Fixes
+1. **Leak tmp-for-creation dirs on conversion errors.** If an error occurs during head to historical block conversion it may lead to leaking resources on disk in form of dirs with suffix tmp-for-creation. It was fix with defer housekeeping.
+
+### Enhancements
+1. **Rebuilt record rules tracking staleness.** Rule evaluation now handles staleness more robustly and optimal with C++ bitsets instead of Go maps.
+2. **Rules engine rework (recording + alerting).** Introduced a dedicated rules implementation in `pp-pkg/rules` (manager/group/origin, concurrency executor), added fixtures, and significantly expanded test coverage.
+3. **Feature flags refactoring.** Simplified and consolidated feature flag wiring across components. Most
+commonly used features setted by default, so no PROMPP_FEATURES environment needed in general setups.
+3. **Publish container image to GHCR.** CI now publishes container images to GitHub Container Registry in addition to existing publishing flow.
+
+### Performance
+1. **Append optimizations.** Reduced allocations and overhead in the ingestion/append path (pooling sharded objects and tasks, avoiding per-task maps/closures, deferring staleness mapping allocation until rotation) and added an appender benchmark to track improvements.
+
+### Other
+1. **Decoding table migration.** Migrated/refactored decoding table and related encoding/decoding primitives, with broad updates to tests (primitives/series index/WAL) and minor internal consistency cleanups.
+
 ## v0.7.3
 
 ### Enhancements

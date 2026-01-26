@@ -140,13 +140,12 @@ class StatusGetterLSS {
   }
 
   void fill_lss_statistic() noexcept {
-    auto& names = lss_.data().label_name_sets_table.data().symbols_table;
-    for (uint32_t name_id = 0; name_id < names.size(); ++name_id) {
-      auto count = lss_.data().symbols_tables[name_id]->size();
+    const auto view = lss_.data_view();
+    for (auto k_it = view.keys().begin(), k_e = view.keys().end(); k_it != k_e; ++k_it) {
+      const auto count = view.values(k_it.id()).size();
 
       label_count_ += count;
-      top_label_value_count_by_name_.add(count,
-                                         [&] PROMPP_LAMBDA_INLINE { return StringCountItem<StringType>{.name = StringType(names[name_id]), .count = count}; });
+      top_label_value_count_by_name_.add(count, [&] PROMPP_LAMBDA_INLINE { return StringCountItem<StringType>{.name = StringType(*k_it), .count = count}; });
     }
 
     top_label_value_count_by_name_.sort();
@@ -196,11 +195,9 @@ class StatusGetterLSS {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE StringType get_label_name(uint32_t name_id) const noexcept {
-    return StringType(lss_.data().label_name_sets_table.data().symbols_table[name_id]);
-  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE StringType get_label_name(uint32_t name_id) const noexcept { return StringType(lss_.data_view().key_symbol(name_id)); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE StringType get_label_value(uint32_t name_id, uint32_t value_id) const noexcept {
-    return StringType(lss_.data().symbols_tables[name_id]->operator[](value_id));
+    return StringType(lss_.data_view().value_symbol(name_id, value_id));
   }
 };
 

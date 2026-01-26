@@ -83,6 +83,12 @@ func (bs *BatchStorage) Commit(ctx context.Context) error {
 	return err
 }
 
+// CommitWithState adds aggregated series from [pp_storage.TransactionHead] to the [Head] with [cppbridge.StateV2].
+func (bs *BatchStorage) CommitWithState(ctx context.Context, state *cppbridge.StateV2) error {
+	_, err := bs.adapter.AppendTimeSeries(ctx, bs.batch, state, false)
+	return err
+}
+
 // Querier calls f() with the given parameters. Returns a [querier.Querier].
 func (bs *BatchStorage) Querier(mint, maxt int64) (storage.Querier, error) {
 	return querier.NewQuerier(

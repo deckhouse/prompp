@@ -8,7 +8,6 @@ import (
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
-	"github.com/prometheus/prometheus/pp/go/storage/head/task"
 )
 
 const (
@@ -94,14 +93,35 @@ type Head[
 	// Enqueue the task to be executed on shards [Head].
 	Enqueue(t TTask)
 
+	// ReleaseTask returns a task to the pool.
+	ReleaseTask(t TTask)
+
 	// Generation returns current generation of [Head].
 	Generation() uint64
 
 	// NumberOfShards returns current number of shards in to [Head].
 	NumberOfShards() uint16
 
-	// RangeShards returns an iterator over the [Head] [Shard]s, through which the shard can be directly accessed.
-	RangeShards() func(func(TShard) bool)
+	// Shards returns the [Head] [Shard]s.
+	Shards() []TShard
+
+	// AcquireShardedInnerSeries gets a [cppbridge.ShardedInnerSeries] from the pool.
+	AcquireShardedInnerSeries() *cppbridge.ShardedInnerSeries
+
+	// ReleaseShardedInnerSeries returns a [cppbridge.ShardedInnerSeries] to the pool.
+	ReleaseShardedInnerSeries(s *cppbridge.ShardedInnerSeries)
+
+	// AcquireShardedRelabeledSeries gets a [cppbridge.ShardedRelabeledSeries] from the pool.
+	AcquireShardedRelabeledSeries() *cppbridge.ShardedRelabeledSeries
+
+	// ReleaseShardedRelabeledSeries returns a [cppbridge.ShardedRelabeledSeries] to the pool.
+	ReleaseShardedRelabeledSeries(s *cppbridge.ShardedRelabeledSeries)
+
+	// AcquireShardedStateUpdates gets a [cppbridge.ShardedStateUpdates] from the pool.
+	AcquireShardedStateUpdates() *cppbridge.ShardedStateUpdates
+
+	// ReleaseShardedStateUpdates returns a [cppbridge.ShardedStateUpdates] to the pool.
+	ReleaseShardedStateUpdates(s *cppbridge.ShardedStateUpdates)
 }
 
 //
@@ -148,13 +168,15 @@ func (a Appender[TTask, TShard, TGoroutineShard, THead]) Append(
 		return cppbridge.RelabelerStats{}, err
 	}
 
-	numberOfShards := a.head.NumberOfShards()
-	shardedInnerSeries := cppbridge.NewShardedInnerSeries(numberOfShards)
-	shardedRelabeledSeries := cppbridge.NewShardedRelabeledSeries(numberOfShards)
+	shardedInnerSeries := a.head.AcquireShardedInnerSeries()
+	defer a.head.ReleaseShardedInnerSeries(shardedInnerSeries)
+	shardedRelabeledSeries := a.head.AcquireShardedRelabeledSeries()
+	defer a.head.ReleaseShardedRelabeledSeries(shardedRelabeledSeries)
+
 	stats, err := a.inputRelabelingStage(
 		ctx,
 		state,
-		NewDestructibleIncomingData(incomingData, int(numberOfShards)),
+		incomingData,
 		shardedInnerSeries,
 		shardedRelabeledSeries,
 	)
@@ -167,7 +189,8 @@ func (a Appender[TTask, TShard, TGoroutineShard, THead]) Append(
 	if !shardedRelabeledSeries.IsEmpty() {
 		shardedRelabeledSeries.Transpose()
 
-		shardedStateUpdates := cppbridge.NewShardedStateUpdates(numberOfShards)
+		shardedStateUpdates := a.head.AcquireShardedStateUpdates()
+		defer a.head.ReleaseShardedStateUpdates(shardedStateUpdates)
 		if err = a.appendRelabelerSeriesStage(
 			ctx,
 			shardedInnerSeries,
@@ -203,29 +226,33 @@ func (a Appender[TTask, TShard, TGoroutineShard, THead]) Append(
 	return stats, nil
 }
 
+var errCannotBeRelabeledFromCache = errors.New("cannot be relabeled from cache")
+
 // inputRelabelingStage first stage - relabeling.
 //
 //revive:disable-next-line:function-length long but this is first stage.
 func (a *Appender[TTask, TShard, TGoroutineShard, THead]) inputRelabelingStage(
 	ctx context.Context,
 	state *cppbridge.StateV2,
-	incomingData *DestructibleIncomingData,
+	incomingData *IncomingData,
 	shardedInnerSeries *cppbridge.ShardedInnerSeries,
 	shardedRelabeledSeries *cppbridge.ShardedRelabeledSeries,
 ) (cppbridge.RelabelerStats, error) {
 	stats := make([]cppbridge.RelabelerStats, a.head.NumberOfShards())
+	defer incomingData.Destroy()
+
 	t := a.head.CreateTask(
 		lssInputRelabeling,
 		func(shard TGoroutineShard) error {
 			var (
 				relabeler   = shard.Relabeler()
 				shardID     = shard.ShardID()
-				ok          bool
 				shardedData = incomingData.ShardedData()
 				innerSeries = shardedInnerSeries.DataByShard(shardID)
 			)
 
-			if err := shard.LSSWithRLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
+			err := shard.LSSWithRLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
+				var ok bool
 				stats[shardID], ok, rErr = relabeler.RelabelingFromCache(
 					ctx,
 					input,
@@ -234,23 +261,27 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) inputRelabelingStage(
 					shardedData,
 					innerSeries,
 				)
+				if rErr != nil {
+					return rErr
+				}
+				if !ok {
+					return errCannotBeRelabeledFromCache
+				}
 
-				return rErr
-			}); err != nil {
-				incomingData.Destroy()
+				return nil
+			})
+			switch {
+			case err == nil:
+				return nil
+			case errors.Is(err, errCannotBeRelabeledFromCache):
+				// continue to relabel normally
+			default:
 				return fmt.Errorf("shard %d: %w", shardID, err)
 			}
 
-			if ok {
-				incomingData.Destroy()
-				return nil
-			}
-
-			var (
-				hasReallocations bool
-				rstats           = cppbridge.RelabelerStats{}
-			)
-			err := shard.LSSWithLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
+			rstats := cppbridge.RelabelerStats{}
+			err = shard.LSSWithLock(func(target, input *cppbridge.LabelSetStorage) (rErr error) {
+				var hasReallocations bool
 				rstats, hasReallocations, rErr = relabeler.Relabeling(
 					ctx,
 					input,
@@ -267,8 +298,6 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) inputRelabelingStage(
 
 				return rErr
 			})
-
-			incomingData.Destroy()
 			if err != nil {
 				return fmt.Errorf("shard %d: %w", shardID, err)
 			}
@@ -278,6 +307,7 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) inputRelabelingStage(
 			return nil
 		},
 	)
+	defer a.head.ReleaseTask(t)
 	a.head.Enqueue(t)
 
 	resStats := cppbridge.RelabelerStats{}
@@ -327,6 +357,7 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) appendRelabelerSeriesS
 			})
 		},
 	)
+	defer a.head.ReleaseTask(t)
 	a.head.Enqueue(t)
 
 	return t.Wait()
@@ -362,8 +393,8 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) trackStaleNans(
 		return
 	}
 
-	for shard := range a.head.RangeShards() {
-		cppbridge.PerGoroutineRelabelerTrackStaleNans(shardInnerSeries.DataByShard(shard.ShardID()), state, shard.ShardID())
+	for i := range a.head.NumberOfShards() {
+		cppbridge.PerGoroutineRelabelerTrackStaleNans(shardInnerSeries.DataByShard(i), state, i)
 	}
 }
 
@@ -371,8 +402,6 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) trackStaleNans(
 func (a *Appender[TTask, TShard, TGoroutineShard, THead]) appendInnerSeriesAndWriteToWal(
 	shardedInnerSeries *cppbridge.ShardedInnerSeries,
 ) (uint32, error) {
-	tw := task.NewTaskWaiter[TTask](2) //revive:disable-line:add-constant // 2 task for wait
-
 	tAppend := a.head.CreateTask(
 		dsAppendInnerSeries,
 		func(shard TGoroutineShard) error {
@@ -381,6 +410,7 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) appendInnerSeriesAndWr
 			return nil
 		},
 	)
+	defer a.head.ReleaseTask(tAppend)
 	a.head.Enqueue(tAppend)
 
 	var atomicLimitExhausted uint32
@@ -399,12 +429,13 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) appendInnerSeriesAndWr
 			return nil
 		},
 	)
+	defer a.head.ReleaseTask(tWalWrite)
 	a.head.Enqueue(tWalWrite)
 
-	tw.Add(tAppend)
-	tw.Add(tWalWrite)
+	err := tAppend.Wait()
+	err = errors.Join(err, tWalWrite.Wait())
 
-	return atomicLimitExhausted, tw.Wait()
+	return atomicLimitExhausted, err
 }
 
 func (a *Appender[TTask, TShard, TGoroutineShard, THead]) resolveState(state *cppbridge.StateV2) error {
@@ -412,12 +443,11 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) resolveState(state *cp
 		return errNilState
 	}
 
-	staleNansIdsMappings := make([]*cppbridge.IdsMapping, 0, a.head.NumberOfShards())
-	for shard := range a.head.RangeShards() {
-		staleNansIdsMappings = append(staleNansIdsMappings, shard.DstSrcLsIdsMapping())
-	}
-
-	state.Reconfigure(a.head.Generation(), a.head.NumberOfShards(), staleNansIdsMappings)
+	state.Reconfigure(a.head.Generation(), a.head.NumberOfShards(), func(maps []*cppbridge.IdsMapping) {
+		for id, shard := range a.head.Shards() {
+			maps[id] = shard.DstSrcLsIdsMapping()
+		}
+	})
 
 	return nil
 }
