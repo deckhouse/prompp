@@ -355,9 +355,10 @@ func (i *Iterator) SendMessage(ctx context.Context, msg *cppbridge.RWMessageList
 
 	if err = i.tryAck(msg.TargetSegmentID); err != nil {
 		logger.Errorf("failed to ack segment id: %v", err)
+		return i.wrapError(nil)
 	}
 
-	return i.wrapError(nil)
+	return nil
 }
 
 func (i *Iterator) writeCaches() {
