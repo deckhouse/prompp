@@ -367,6 +367,7 @@ func (d *WALOutputDecoder) Decode(
 ) (OutputDecoderStats, error) {
 	stats, exception := walOutputDecoderDecode(segment, d.decoder, samplesStorage, lowerLimitTimestamp)
 	runtime.KeepAlive(samplesStorage)
+	runtime.KeepAlive(d)
 	return stats, handleException(exception)
 }
 

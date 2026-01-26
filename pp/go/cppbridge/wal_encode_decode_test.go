@@ -3,6 +3,7 @@ package cppbridge_test
 import (
 	"context"
 	"math/rand"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -666,6 +667,8 @@ func (s *EncoderDecoderSuite) TestEncodeWALOutputDecodeWithLimit() {
 	s.Equal(uint32(1), stats.AddSeriesCount())
 	s.Equal(uint32(0), stats.DroppedSampleCount())
 	s.Equal(uint32(0), stats.SampleCount())
+
+	runtime.KeepAlive(sampleStorages)
 }
 
 func (s *EncoderDecoderSuite) TestEncodeWALOutputDecodeDroppedSeries() {
