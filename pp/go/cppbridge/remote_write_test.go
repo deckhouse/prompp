@@ -21,7 +21,7 @@ func (s *MessageEncodersSuite) TestEncode() {
 	lss := NewLssStorage()
 	lss.FindOrEmplace(model.NewLabelSetBuilder().Set("__name__", "name1").Set("job", "doing1").Build())
 
-	messages := NewRWMessageList(1)
+	messages := NewRWMessageList(1, 0)
 	encoders := NewMessageEncoders(1, []*LabelSetStorage{lss})
 	sampleStorages := NewSegmentSamplesStorage(1)
 
