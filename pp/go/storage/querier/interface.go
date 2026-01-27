@@ -6,6 +6,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
+	"github.com/prometheus/prometheus/storage"
 )
 
 //
@@ -48,7 +49,7 @@ type DataStorage interface {
 	) cppbridge.DataStorageQueryResult
 
 	// Query returns serialized chunks from data storage.
-	Query(query cppbridge.DataStorageQuery, downsamplingMs int64) cppbridge.DataStorageQueryResult
+	Query(query cppbridge.DataStorageQuery, downsamplingMs int64, hints *storage.SelectHints) cppbridge.DataStorageQueryResult
 
 	// WithRLock calls fn on raw [cppbridge.DataStorage] with read lock.
 	WithRLock(fn func(ds *cppbridge.DataStorage) error) error

@@ -125,7 +125,7 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) LabelValues(
 func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	ctx context.Context,
 	_ bool,
-	_ *storage.SelectHints,
+	hints *storage.SelectHints,
 	matchers ...*labels.Matcher,
 ) storage.ChunkSeriesSet {
 	release, err := q.head.AcquireQuery(ctx)
@@ -152,6 +152,7 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 		q.mint,
 		q.maxt,
 		q.longtermIntervalMs,
+		hints,
 	)
 	chunkSeriesSets := make([]storage.ChunkSeriesSet, q.head.NumberOfShards())
 	for shardID, serializedData := range shardedSerializedData {

@@ -1900,12 +1900,19 @@ type DataStorageQueryResult struct {
 	SerializedData *DataStorageSerializedData
 }
 
-func seriesDataDataStorageQueryV2(dataStorage uintptr, query DataStorageQuery, serializedData *DataStorageSerializedData, downsamplingMs int64) (querier uintptr, status uint8) {
+func seriesDataDataStorageQueryV2(
+	dataStorage uintptr,
+	query DataStorageQuery,
+	serializedData *DataStorageSerializedData,
+	downsamplingMs int64,
+	selectHints unsafe.Pointer,
+) (querier uintptr, status uint8) {
 	args := struct {
 		dataStorage    uintptr
 		query          DataStorageQuery
 		downsamplingMs int64
-	}{dataStorage, query, downsamplingMs}
+		selectHints    uintptr
+	}{dataStorage, query, downsamplingMs, uintptr(selectHints)}
 
 	res := struct {
 		Querier        uintptr

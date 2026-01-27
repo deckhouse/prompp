@@ -19,6 +19,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
+	prom_storage "github.com/prometheus/prometheus/storage"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -123,7 +124,7 @@ func (s *AppenderSuite) getHeadData(labelSetIDs []uint32) headStorageData {
 			StartTimestampMs: 0,
 			EndTimestampMs:   math.MaxInt64,
 			LabelSetIDs:      labelSetIDs,
-		}, cppbridge.NoDownsampling)
+		}, cppbridge.NoDownsampling, &prom_storage.SelectHints{})
 		data.dsResult = append(data.dsResult, dsResult)
 
 		data.shards = append(data.shards, storageData{

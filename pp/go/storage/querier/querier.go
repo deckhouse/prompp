@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"sort"
 	"time"
 	"unsafe"
@@ -238,7 +239,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	ctx context.Context,
 	_ bool,
-	_ *storage.SelectHints,
+	hints *storage.SelectHints,
 	matchers ...*labels.Matcher,
 ) storage.SeriesSet {
 	start := time.Now()
@@ -275,6 +276,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		q.mint,
 		q.maxt,
 		q.longtermIntervalMs,
+		hints,
 	)
 	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
 	for shardID, serializedData := range shardedSerializedData {
@@ -314,6 +316,7 @@ func queryDataStorage[
 	head THead,
 	lssQueryResults []*cppbridge.LSSQueryResult,
 	mint, maxt, longtermIntervalMs int64,
+	hints *storage.SelectHints,
 ) []*cppbridge.DataStorageSerializedData {
 	shardedSerializedData := make([]*cppbridge.DataStorageSerializedData, head.NumberOfShards())
 	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead](head)
@@ -334,6 +337,7 @@ func queryDataStorage[
 					LabelSetIDs:      lssQueryResult.IDs(),
 				},
 				longtermIntervalMs,
+				hints,
 			)
 			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {
 				loadAndQueryWaiter.Add(s, result.Querier)
@@ -352,6 +356,7 @@ func queryDataStorage[
 		return make([]*cppbridge.DataStorageSerializedData, head.NumberOfShards())
 	}
 
+	runtime.KeepAlive(hints)
 	return shardedSerializedData
 }
 
