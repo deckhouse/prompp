@@ -47,6 +47,10 @@ class UniversalDecodeIterator {
     std::visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.seek(std::forward<SeekHandler>(handler)); }, iterator_);
   }
 
+  PROMPP_ALWAYS_INLINE void invalidate() {
+    std::visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.invalidate(); }, iterator_);
+  }
+
  private:
   using IteratorVariant = std::variant<ConstantDecodeIterator,
                                        TwoDoubleConstantDecodeIterator,

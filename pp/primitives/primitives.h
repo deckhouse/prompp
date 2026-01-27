@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <string_view>
 
 #include "bare_bones/preprocess.h"

@@ -1,9 +1,9 @@
 #include "series_data_encoder.h"
 
-#include "head/series_data.h"
 #include "primitives/primitives.h"
 #include "prometheus/relabeler.h"
 #include "series_data/data_storage.h"
+#include "series_data/series_data.h"
 
 extern "C" void prompp_series_data_encoder_ctor(void* args, void* res) {
   struct Arguments {

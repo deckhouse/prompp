@@ -26,7 +26,6 @@ class DownsamplingDecodeIterator {
 
   PROMPP_ALWAYS_INLINE DownsamplingDecodeIterator& operator=(DecodeIterator&& iterator) noexcept {
     iterator_ = std::move(iterator);
-    timestamp_ = {};
     advance_to_next_sample<SampleType::kFirst>();
     return *this;
   }
@@ -34,7 +33,7 @@ class DownsamplingDecodeIterator {
   PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const noexcept { return iterator_.operator*(); }
   PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const noexcept { return iterator_.operator->(); }
 
-  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return timestamp_ == kInvalidTimestamp; }
+  PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return (*this)->timestamp == kInvalidTimestamp; }
 
   PROMPP_ALWAYS_INLINE DownsamplingDecodeIterator& operator++() noexcept {
     advance_to_next_sample<SampleType::kOther>();
@@ -48,9 +47,6 @@ class DownsamplingDecodeIterator {
   }
 
  private:
-  static constexpr Timestamp kInvalidTimestamp = std::numeric_limits<Timestamp>::min();
-
-  Timestamp timestamp_{};
   DecodeIterator iterator_;
   Timestamp interval_;
 
@@ -63,8 +59,8 @@ class DownsamplingDecodeIterator {
   PROMPP_ALWAYS_INLINE void advance_to_next_sample() noexcept {
     if (interval_ == kNoDownsampling) {
       if constexpr (Type == SampleType::kOther) {
-        if (++iterator_ == DecodeIteratorSentinel{}) [[unlikely]] {
-          timestamp_ = kInvalidTimestamp;
+        if (++iterator_ == DecodeIteratorSentinel{}) {
+          iterator_.invalidate();
         }
       }
       return;
@@ -74,19 +70,23 @@ class DownsamplingDecodeIterator {
   }
 
   PROMPP_ALWAYS_INLINE void advance_to_last_sample_in_interval() noexcept {
-    timestamp_ = kInvalidTimestamp;
+    Timestamp sample_timestamp = kInvalidTimestamp;
 
-    iterator_.seek([this](Timestamp timestamp) noexcept {
-      if (timestamp > timestamp_) {
-        if (timestamp_ != kInvalidTimestamp) [[likely]] {
+    iterator_.seek([this, &sample_timestamp](Timestamp timestamp) noexcept {
+      if (timestamp > sample_timestamp) {
+        if (sample_timestamp != kInvalidTimestamp) [[likely]] {
           return SeekResult::kStop;
         }
 
-        timestamp_ = round_up_to_step(timestamp, interval_);
+        sample_timestamp = round_up_to_step(timestamp, interval_);
       }
 
       return SeekResult::kUpdateSample;
     });
+
+    if (sample_timestamp == kInvalidTimestamp) [[unlikely]] {
+      iterator_.invalidate();
+    }
   }
 };
 
