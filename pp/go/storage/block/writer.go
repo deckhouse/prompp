@@ -117,8 +117,7 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 
 		longtermWriter, err := w.createWriter(w.longtermDataDir, sd, lss, minT, maxT, w.longtermIntervalMs)
 		if err != nil {
-			writers.close()
-			return blockWriters{}, err
+			return blockWriters{}, errors.Join(err, writers.Close())
 		}
 
 		writers.append(longtermWriter)
