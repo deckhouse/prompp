@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"reflect"
 	"sync"
 	"time"
@@ -89,6 +90,9 @@ type Manager struct {
 	bufferBuilders *buildersPool
 	bufferBatches  *batchesPool
 
+	newScrapeFailureLogger func(string) (log.Logger, error)
+	scrapeFailureLoggers   map[string]log.Logger
+
 	triggerReload chan struct{}
 
 	reportStatelessRelabeler *cppbridge.StatelessRelabeler
@@ -100,6 +104,7 @@ type Manager struct {
 func NewManager(
 	o *Options,
 	logger log.Logger,
+	newScrapeFailureLogger func(string) (log.Logger, error),
 	adapter Adapter,
 	registerer prometheus.Registerer,
 ) (*Manager, error) {
@@ -124,12 +129,13 @@ func NewManager(
 		adapter:                  adapter,
 		opts:                     o,
 		logger:                   logger,
+		newScrapeFailureLogger:   newScrapeFailureLogger,
 		scrapeConfigs:            make(map[string]*config.ScrapeConfig),
 		scrapePools:              make(map[string]*scrapePool),
 		graceShut:                make(chan struct{}),
 		triggerReload:            make(chan struct{}, 1),
 		metrics:                  sm,
-		buffers:                  pool.New(1e3, 100e6, 2, func(sz int) interface{} { return make([]byte, 0, sz) }),
+		buffers:                  pool.New(1e3, 100e6, 3, func(sz int) any { return make([]byte, 0, sz) }),
 		bufferBuilders:           newBuildersPool(),
 		bufferBatches:            newbatchesPool(),
 		reportStatelessRelabeler: reportStatelessRelabeler,
@@ -219,6 +225,15 @@ func (m *Manager) reload() {
 				continue
 			}
 			m.scrapePools[setName] = sp
+
+			if l, ok := m.scrapeFailureLoggers[scrapeConfig.ScrapeFailureLogFile]; ok {
+				sp.SetScrapeFailureLogger(l)
+			} else {
+				level.Error(sp.logger).Log(
+					"msg", "No logger found. This is a bug in Prometheus that should be reported upstream.",
+					"scrape_pool", setName,
+				)
+			}
 		}
 
 		wg.Add(1)
@@ -277,7 +292,35 @@ func (m *Manager) ApplyConfig(cfg *config.Config) error {
 	for _, scfg := range scfgs {
 		c[scfg.JobName] = scfg
 	}
+	scrapeFailureLoggers := map[string]log.Logger{
+		"": nil, // Emptying the file name sets the scrape logger to nil.
+	}
+	for _, scfg := range scfgs {
+		c[scfg.JobName] = scfg
+		if _, ok := scrapeFailureLoggers[scfg.ScrapeFailureLogFile]; !ok {
+			// We promise to reopen the file on each reload.
+			var (
+				l   log.Logger
+				err error
+			)
+			if m.newScrapeFailureLogger != nil {
+				if l, err = m.newScrapeFailureLogger(scfg.ScrapeFailureLogFile); err != nil {
+					return err
+				}
+			}
+			scrapeFailureLoggers[scfg.ScrapeFailureLogFile] = l
+		}
+	}
 	m.scrapeConfigs = c
+
+	oldScrapeFailureLoggers := m.scrapeFailureLoggers
+	for _, s := range oldScrapeFailureLoggers {
+		if closer, ok := s.(io.Closer); ok {
+			defer closer.Close()
+		}
+	}
+
+	m.scrapeFailureLoggers = scrapeFailureLoggers
 
 	if err := m.setOffsetSeed(cfg.GlobalConfig.ExternalLabels); err != nil {
 		return err
@@ -295,6 +338,16 @@ func (m *Manager) ApplyConfig(cfg *config.Config) error {
 			if err != nil {
 				level.Error(m.logger).Log("msg", "error reloading scrape pool", "err", err, "scrape_pool", name)
 				failed = true
+			}
+			fallthrough
+		case ok:
+			if l, ok := m.scrapeFailureLoggers[cfg.ScrapeFailureLogFile]; ok {
+				sp.SetScrapeFailureLogger(l)
+			} else {
+				level.Error(sp.logger).Log(
+					"msg", "No logger found. This is a bug in Prometheus that should be reported upstream.",
+					"scrape_pool", name,
+				)
 			}
 		}
 	}
@@ -353,6 +406,7 @@ func (m *Manager) TargetsDropped() map[string][]*Target {
 	return targets
 }
 
+// TargetsDroppedCounts returns the count of dropped targets from all scrape pools.
 func (m *Manager) TargetsDroppedCounts() map[string]int {
 	m.mtxScrape.Lock()
 	defer m.mtxScrape.Unlock()

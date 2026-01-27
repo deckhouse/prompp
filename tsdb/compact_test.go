@@ -1373,8 +1373,8 @@ func TestCancelCompactions(t *testing.T) {
 // TestDeleteCompactionBlockAfterFailedReload ensures that a failed reloadBlocks immediately after a compaction
 // deletes the resulting block to avoid creatings blocks with the same time range.
 func TestDeleteCompactionBlockAfterFailedReload(t *testing.T) {
-	tests := map[string]func(*DB) int{
-		"Test Head Compaction": func(db *DB) int {
+	tests := map[string]func(*DB) (int, int){
+		"Test Head Compaction": func(db *DB) (int, int) {
 			rangeToTriggerCompaction := db.compactor.(*LeveledCompactor).ranges[0]/2*3 - 1
 			defaultLabel := labels.FromStrings("foo", "bar")
 
@@ -1388,9 +1388,9 @@ func TestDeleteCompactionBlockAfterFailedReload(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, app.Commit())
 
-			return 0
+			return 1, 1
 		},
-		"Test Block Compaction": func(db *DB) int {
+		"Test Block Compaction": func(db *DB) (int, int) {
 			blocks := []*BlockMeta{
 				{MinTime: 0, MaxTime: 100},
 				{MinTime: 100, MaxTime: 150},
@@ -1402,7 +1402,7 @@ func TestDeleteCompactionBlockAfterFailedReload(t *testing.T) {
 			require.NoError(t, db.reload())
 			require.Equal(t, len(blocks), len(db.Blocks()), "unexpected block count after a reloadBlocks")
 
-			return len(blocks)
+			return len(blocks) + 1, 2
 		},
 	}
 
@@ -1416,31 +1416,33 @@ func TestDeleteCompactionBlockAfterFailedReload(t *testing.T) {
 			}()
 			db.DisableCompactions()
 
-			expBlocks := bootStrap(db)
+			expBlocks, expCompactBlocks := bootStrap(db)
 
 			// Create a block that will trigger the reloadBlocks to fail.
 			blockPath := createBlock(t, db.Dir(), genSeries(1, 1, 200, 300))
 			lastBlockIndex := path.Join(blockPath, indexFilename)
 			actBlocks, err := blockDirs(db.Dir())
 			require.NoError(t, err)
-			require.Equal(t, expBlocks, len(actBlocks)-1)    // -1 to exclude the corrupted block.
+			require.Len(t, actBlocks, expBlocks)             // PP_CHANGES.md: rebuild on cpp
 			require.NoError(t, os.RemoveAll(lastBlockIndex)) // Corrupt the block by removing the index file.
 
 			require.Equal(t, 0.0, prom_testutil.ToFloat64(db.metrics.reloadsFailed), "initial 'failed db reloadBlocks' count metrics mismatch")
 			require.Equal(t, 0.0, prom_testutil.ToFloat64(db.compactor.(*LeveledCompactor).metrics.Ran), "initial `compactions` count metric mismatch")
 			require.Equal(t, 0.0, prom_testutil.ToFloat64(db.metrics.compactionsFailed), "initial `compactions failed` count metric mismatch")
+			require.Equal(t, 0.0, prom_testutil.ToFloat64(db.metrics.corruptedBlocks), "initial `corrupted blocks` count metric mismatch") // PP_CHANGES.md: rebuild on cpp
 
 			// Do the compaction and check the metrics.
 			// Compaction should succeed, but the reloadBlocks should fail and
 			// the new block created from the compaction should be deleted.
-			require.Error(t, db.Compact(ctx))
-			require.Equal(t, 1.0, prom_testutil.ToFloat64(db.metrics.reloadsFailed), "'failed db reloadBlocks' count metrics mismatch")
+			require.NoError(t, db.Compact(ctx))                                                                                         // PP_CHANGES.md: rebuild on cpp
+			require.Equal(t, 0.0, prom_testutil.ToFloat64(db.metrics.reloadsFailed), "'failed db reloadBlocks' count metrics mismatch") // PP_CHANGES.md: rebuild on cpp
 			require.Equal(t, 1.0, prom_testutil.ToFloat64(db.compactor.(*LeveledCompactor).metrics.Ran), "`compaction` count metric mismatch")
-			require.Equal(t, 1.0, prom_testutil.ToFloat64(db.metrics.compactionsFailed), "`compactions failed` count metric mismatch")
+			require.Equal(t, 0.0, prom_testutil.ToFloat64(db.metrics.compactionsFailed), "`compactions failed` count metric mismatch") // PP_CHANGES.md: rebuild on cpp
+			require.Equal(t, 1.0, prom_testutil.ToFloat64(db.metrics.corruptedBlocks), "`corrupted blocks` count metric mismatch")     // PP_CHANGES.md: rebuild on cpp
 
 			actBlocks, err = blockDirs(db.Dir())
 			require.NoError(t, err)
-			require.Equal(t, expBlocks, len(actBlocks)-1, "block count should be the same as before the compaction") // -1 to exclude the corrupted block.
+			require.Len(t, actBlocks, expCompactBlocks, "block count should be the same as before the compaction") // PP_CHANGES.md: rebuild on cpp
 		})
 	}
 }
