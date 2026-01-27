@@ -4,7 +4,7 @@
 
 extern "C" void prompp_series_data_serialization_serialized_data_next(void* args, void* res) {
   struct Arguments {
-    entrypoint::head::SerializedDataPtr serialized_data;
+    entrypoint::series_data::SerializedDataPtr serialized_data;
   };
 
   using Result = struct {
@@ -17,26 +17,26 @@ extern "C" void prompp_series_data_serialization_serialized_data_next(void* args
 
 extern "C" void prompp_series_data_serialization_serialized_data_iterator_ctor(void* args) {
   struct Arguments {
-    entrypoint::head::SerializedDataIterator* iterator;
-    entrypoint::head::SerializedDataPtr serialized_data;
+    entrypoint::series_data::SerializedDataIterator* iterator;
+    entrypoint::series_data::SerializedDataPtr serialized_data;
     uint32_t chunk_ref;
   };
 
   const auto in = static_cast<Arguments*>(args);
-  new (in->iterator) entrypoint::head::SerializedDataIterator(in->serialized_data->iterator(in->chunk_ref));
+  new (in->iterator) entrypoint::series_data::SerializedDataIterator(in->serialized_data->iterator(in->chunk_ref));
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_iterator_next(void* iterator) {
   using series_data::decoder::DecodeIteratorSentinel;
 
-  ++(*static_cast<entrypoint::head::SerializedDataIterator*>(iterator));
+  ++(*static_cast<entrypoint::series_data::SerializedDataIterator*>(iterator));
 }
 
 extern "C" void prompp_series_data_serialization_serialized_data_iterator_seek(void* args) {
   using series_data::decoder::DecodeIteratorSentinel;
 
   struct Arguments {
-    entrypoint::head::SerializedDataIterator* iterator;
+    entrypoint::series_data::SerializedDataIterator* iterator;
     int64_t target_timestamp;
   };
 
@@ -49,8 +49,8 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_seek(v
 
 extern "C" void prompp_series_data_serialization_serialized_data_iterator_reset(void* args) {
   struct Arguments {
-    entrypoint::head::SerializedDataIterator* iterator;
-    entrypoint::head::SerializedDataPtr serialized_data;
+    entrypoint::series_data::SerializedDataIterator* iterator;
+    entrypoint::series_data::SerializedDataPtr serialized_data;
     uint32_t chunk_ref;
   };
 
@@ -60,7 +60,7 @@ extern "C" void prompp_series_data_serialization_serialized_data_iterator_reset(
 
 extern "C" void prompp_series_data_serialization_serialized_data_dtor(void* args) {
   struct Arguments {
-    entrypoint::head::SerializedDataPtr serialized_data;
+    entrypoint::series_data::SerializedDataPtr serialized_data;
   };
 
   static_cast<Arguments*>(args)->~Arguments();

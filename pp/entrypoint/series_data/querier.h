@@ -68,7 +68,7 @@ class RangeQuerierWithArgumentsWrapperV2 {
   RangeQuerierWithArgumentsWrapperV2(DataStorage& storage,
                                      const Query& query,
                                      const GoSelectHints& select_hints,
-                                     head::SerializedDataPtr* serialized_data,
+                                     SerializedDataPtr* serialized_data,
                                      PromPP::Primitives::Timestamp downsampling_ms)
       : select_hints_(select_hints), querier_(storage), query_(&query), serialized_data_(serialized_data), downsampling_ms_(downsampling_ms) {}
 
@@ -89,12 +89,12 @@ class RangeQuerierWithArgumentsWrapperV2 {
   PromPP::Prometheus::SelectHints select_hints_;
   ::series_data::querier::Querier querier_;
   const Query* query_;
-  head::SerializedDataPtr* serialized_data_;
+  SerializedDataPtr* serialized_data_;
   PromPP::Primitives::Timestamp downsampling_ms_;
 
   PROMPP_ALWAYS_INLINE void serialize_chunks() noexcept {
     std::construct_at(serialized_data_,
-                      std::make_unique<head::SerializedDataGo>(querier_.get_storage(), querier_.chunks(), std::move(select_hints_), downsampling_ms_));
+                      std::make_unique<SerializedDataGo>(querier_.get_storage(), querier_.chunks(), std::move(select_hints_), downsampling_ms_));
   }
 };
 

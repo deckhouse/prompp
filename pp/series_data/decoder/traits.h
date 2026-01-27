@@ -7,6 +7,8 @@
 
 namespace series_data::decoder {
 
+static constexpr auto kInvalidTimestamp = std::numeric_limits<PromPP::Primitives::Timestamp>::min();
+
 class DecodeIteratorSentinel {};
 
 #define DECODE_ITERATOR_TYPE_TRAITS()                  \
@@ -59,6 +61,11 @@ class DecodeIteratorTrait {
         break;
       }
     } while (derived()->decode());
+  }
+
+  PROMPP_ALWAYS_INLINE void invalidate() noexcept {
+    remaining_samples_ = 0;
+    sample_.timestamp = kInvalidTimestamp;
   }
 
  protected:

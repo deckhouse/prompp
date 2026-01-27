@@ -126,7 +126,7 @@ extern "C" void prompp_series_data_data_storage_query_v2(void* args, void* res) 
   struct Result {
     QuerierVariantPtr querier{};
     QueryStatus status{};
-    entrypoint::head::SerializedDataPtr* serialized_data{};
+    entrypoint::series_data::SerializedDataPtr* serialized_data{};
   };
 
   const auto in = static_cast<Arguments*>(args);
@@ -238,7 +238,7 @@ extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
 
 extern "C" void prompp_series_data_serialized_chunk_recoder_ctor(void* args, void* res) {
   struct Arguments {
-    entrypoint::head::SerializedDataPtr* serialized_data;
+    entrypoint::series_data::SerializedDataPtr* serialized_data;
     PromPP::Primitives::TimeInterval time_interval;
   };
   struct Result {
