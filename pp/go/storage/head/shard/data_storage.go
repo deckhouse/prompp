@@ -2,8 +2,10 @@ package shard
 
 import (
 	"sync"
+	"unsafe"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/storage"
 )
 
 // DataStorage samles storage with labels IDs.
@@ -73,9 +75,9 @@ func (ds *DataStorage) MergeOutOfOrderChunks() {
 	ds.locker.Unlock()
 }
 
-func (ds *DataStorage) Query(query cppbridge.DataStorageQuery, downsamplingMs int64) cppbridge.DataStorageQueryResult {
+func (ds *DataStorage) Query(query cppbridge.DataStorageQuery, downsamplingMs int64, hints *storage.SelectHints) cppbridge.DataStorageQueryResult {
 	ds.locker.RLock()
-	result := ds.dataStorage.Query(query, downsamplingMs)
+	result := ds.dataStorage.Query(query, downsamplingMs, unsafe.Pointer(hints))
 	ds.locker.RUnlock()
 	return result
 }

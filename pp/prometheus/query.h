@@ -4,20 +4,54 @@
 
 namespace PromPP::Prometheus {
 
-struct ReadHints {
-  std::string func{};
-  std::vector<std::string> grouping;
-  int64_t step_ms{};
+template <class String, template <class> class Slice>
+struct GenericSelectHints {
   int64_t start_ms{};
   int64_t end_ms{};
-  int64_t range_ms{};
-  bool by{};
+  int64_t limit{};
 
-  bool operator==(const ReadHints&) const noexcept = default;
+  int64_t step_ms{};
+  String func{};
+
+  Slice<String> grouping;
+  bool by{};
+  int64_t range_ms{};
+
+  uint64_t shard_count{};
+  uint64_t shard_index{};
+
+  bool disable_trimming{};
+
+  GenericSelectHints() = default;
+
+  template <class AnyString, template <class> class AnySlice>
+    requires(!std::same_as<AnyString, String> || !std::same_as<AnySlice<AnyString>, Slice<String>>)
+  explicit GenericSelectHints(const GenericSelectHints<AnyString, AnySlice>& hints)
+      : start_ms(hints.start_ms),
+        end_ms(hints.end_ms),
+        limit(hints.limit),
+        step_ms(hints.step_ms),
+        func(static_cast<std::string_view>(hints.func)),
+        by(hints.by),
+        range_ms(hints.range_ms),
+        shard_count(hints.shard_count),
+        shard_index(hints.shard_index),
+        disable_trimming(hints.disable_trimming) {
+    if (!hints.grouping.empty()) [[unlikely]] {
+      grouping.reserve(hints.grouping.size());
+      for (const auto& group : hints.grouping) {
+        grouping.emplace_back(static_cast<std::string_view>(group));
+      }
+    }
+  }
+
+  bool operator==(const GenericSelectHints&) const noexcept = default;
 };
 
+using SelectHints = GenericSelectHints<std::string, std::vector>;
+
 struct Query {
-  ReadHints hints{};
+  SelectHints hints{};
   LabelMatchers label_matchers;
   int64_t start_timestamp_ms{};
   int64_t end_timestamp_ms{};

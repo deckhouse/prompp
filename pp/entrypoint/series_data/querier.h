@@ -54,6 +54,7 @@ struct SampleWithGoLabels : public ::series_data::encoder::Sample {
 
 using InstantQuerierWithArgumentsWrapperEntrypoint =
     InstantQuerierWithArgumentsWrapper<PromPP::Primitives::Go::SliceView<PromPP::Primitives::LabelSetID>, std::span<SampleWithGoLabels>>;
+using GoSelectHints = PromPP::Prometheus::GenericSelectHints<PromPP::Primitives::Go::String, PromPP::Primitives::Go::SliceView>;
 
 class RangeQuerierWithArgumentsWrapperV2 {
   using DataStorage = ::series_data::DataStorage;
@@ -66,9 +67,10 @@ class RangeQuerierWithArgumentsWrapperV2 {
  public:
   RangeQuerierWithArgumentsWrapperV2(DataStorage& storage,
                                      const Query& query,
+                                     const GoSelectHints& select_hints,
                                      head::SerializedDataPtr* serialized_data,
                                      PromPP::Primitives::Timestamp downsampling_ms)
-      : querier_(storage), query_(&query), serialized_data_(serialized_data), downsampling_ms_(downsampling_ms) {}
+      : select_hints_(select_hints), querier_(storage), query_(&query), serialized_data_(serialized_data), downsampling_ms_(downsampling_ms) {}
 
   void query() noexcept {
     querier_.query(*query_);
@@ -77,24 +79,30 @@ class RangeQuerierWithArgumentsWrapperV2 {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void query_finalize() const noexcept { serialize_chunks(); }
+  PROMPP_ALWAYS_INLINE void query_finalize() noexcept { serialize_chunks(); }
 
   [[nodiscard]] const BareBones::Bitset& series_to_load() const noexcept { return querier_.get_series_to_load(); }
   [[nodiscard]] bool need_loading() const noexcept { return querier_.need_loading(); }
   [[nodiscard]] DataStorage& storage() noexcept { return querier_.get_storage(); }
 
  private:
+  PromPP::Prometheus::SelectHints select_hints_;
   ::series_data::querier::Querier querier_;
   const Query* query_;
   head::SerializedDataPtr* serialized_data_;
   PromPP::Primitives::Timestamp downsampling_ms_;
 
-  PROMPP_ALWAYS_INLINE void serialize_chunks() const noexcept {
-    std::construct_at(serialized_data_, std::make_unique<head::SerializedDataGo>(querier_.get_storage(), querier_.chunks(), downsampling_ms_));
+  PROMPP_ALWAYS_INLINE void serialize_chunks() noexcept {
+    std::construct_at(serialized_data_,
+                      std::make_unique<head::SerializedDataGo>(querier_.get_storage(), querier_.chunks(), std::move(select_hints_), downsampling_ms_));
   }
 };
 
-enum class QuerierType : uint8_t { kInstantQuerier = 0, kRangeQuerier, kRangeQuerierV2 };
+enum class QuerierType : uint8_t {
+  kInstantQuerier = 0,
+  kRangeQuerier,
+  kRangeQuerierV2,
+};
 
 using QuerierVariant = std::variant<InstantQuerierWithArgumentsWrapperEntrypoint, RangeQuerierWithArgumentsWrapperV2>;
 using QuerierVariantPtr = std::unique_ptr<QuerierVariant>;

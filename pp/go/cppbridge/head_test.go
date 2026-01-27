@@ -5,6 +5,7 @@ import (
 	"unsafe"
 
 	"github.com/prometheus/prometheus/pp/go/storage/querier"
+	"github.com/prometheus/prometheus/storage"
 	"github.com/stretchr/testify/require"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -124,7 +125,7 @@ func (s *HeadSuite) TestSerializedChunkRecoder() {
 		StartTimestampMs: timeInterval.MinT,
 		EndTimestampMs:   timeInterval.MaxT,
 		LabelSetIDs:      []uint32{0, 1},
-	}, cppbridge.NoDownsampling)
+	}, cppbridge.NoDownsampling, unsafe.Pointer(&storage.SelectHints{}))
 	recoder := cppbridge.NewSerializedChunkRecoder(result.SerializedData, timeInterval)
 
 	// Act

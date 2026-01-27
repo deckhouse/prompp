@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"sort"
 	"time"
 	"unsafe"
@@ -241,7 +242,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 	ctx context.Context,
 	_ bool,
-	_ *storage.SelectHints,
+	hints *storage.SelectHints,
 	matchers ...*labels.Matcher,
 ) storage.SeriesSet {
 	start := time.Now()
@@ -278,7 +279,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 
 	shardedSerializedData := poolProvider.GetSerializedData()
 	defer poolProvider.PutSerializedData(shardedSerializedData)
-	queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt)
+	queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt, hints)
 
 	seriesSets := poolProvider.GetSeriesSet()
 	defer poolProvider.PutSeriesSet(seriesSets)
@@ -318,6 +319,7 @@ func queryDataStorage[
 	lssQueryResults []*cppbridge.LSSQueryResult,
 	shardedSerializedData []*cppbridge.DataStorageSerializedData,
 	mint, maxt int64,
+	hints *storage.SelectHints,
 ) {
 	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead](head)
 	tDataStorageQuery := head.CreateTask(
@@ -330,11 +332,15 @@ func queryDataStorage[
 			}
 
 			var result cppbridge.DataStorageQueryResult
-			result = s.DataStorage().Query(cppbridge.DataStorageQuery{
-				StartTimestampMs: mint,
-				EndTimestampMs:   maxt,
-				LabelSetIDs:      lssQueryResult.IDs(),
-			}, cppbridge.NoDownsampling)
+			result = s.DataStorage().Query(
+				cppbridge.DataStorageQuery{
+					StartTimestampMs: mint,
+					EndTimestampMs:   maxt,
+					LabelSetIDs:      lssQueryResult.IDs(),
+				},
+				cppbridge.NoDownsampling,
+				hints,
+			)
 			if result.Status == cppbridge.DataStorageQueryStatusNeedDataLoad {
 				loadAndQueryWaiter.Add(s, result.Querier)
 			}
@@ -351,6 +357,7 @@ func queryDataStorage[
 		clear(shardedSerializedData)
 		SendUnrecoverableError(err)
 	}
+	runtime.KeepAlive(hints)
 }
 
 // queryLabelValues returns label values present in the head for the specific label name.
