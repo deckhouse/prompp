@@ -24,6 +24,14 @@ class ConstantDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait
     return result;
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE double decoded_value() const noexcept {
+    if (remaining_samples_ == 1 && last_stalenan_) [[unlikely]] {
+      return BareBones::Encoding::Gorilla::STALE_NAN;
+    }
+
+    return sample_.value;
+  }
+
  protected:
   friend Base;
 
@@ -31,9 +39,7 @@ class ConstantDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait
 
   PROMPP_ALWAYS_INLINE void update_sample() noexcept {
     sample_.timestamp = decoded_timestamp();
-    if (remaining_samples_ == 1 && last_stalenan_) [[unlikely]] {
-      sample_.value = BareBones::Encoding::Gorilla::STALE_NAN;
-    }
+    sample_.value = decoded_value();
   }
 };
 

@@ -4,12 +4,16 @@
 #include "primitives/go_model.h"
 #include "primitives/go_slice.h"
 
+#include "metrics/global_metrics.h"
+
 using PromPP::Primitives::Go::Label;
 using PromPP::Primitives::Go::SliceView;
 using PromPP::Primitives::Go::String;
 
 extern "C" void prompp_metrics_iterator_ctor(void* args) {
   metrics::storage().remove_unused_pages();
+
+  metrics::global_metrics()->test_counter.inc(1);
 
   std::construct_at(static_cast<metrics::Storage::Iterator*>(args), metrics::storage().begin());
 }

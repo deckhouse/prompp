@@ -19,7 +19,7 @@ class AscIntegerThenValuesGorillaDecodeIterator : public SeparatedTimestampValue
       : SeparatedTimestampValueDecodeIteratorTrait(samples_count, timestamp_reader, 0.0, is_last_stalenan), reader_(values_reader) {
     if (remaining_samples_ > 0) [[likely]] {
       decode_value();
-      update_sample_value();
+      sample_.value = decoded_value();
     }
   }
 
@@ -34,6 +34,18 @@ class AscIntegerThenValuesGorillaDecodeIterator : public SeparatedTimestampValue
     const auto result = *this;
     ++*this;
     return result;
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE double decoded_value() const noexcept {
+    if (value_type_ == encoder::ValueType::kStaleNan) [[unlikely]] {
+      return BareBones::Encoding::Gorilla::STALE_NAN;
+    }
+
+    if (value_type_ == encoder::ValueType::kSwitchToValuesGorillaMark) [[unlikely]] {
+      return values_gorilla_.decoder.value();
+    }
+
+    return static_cast<double>(asc_integer_.decoder.timestamp());
   }
 
  private:
@@ -71,17 +83,7 @@ class AscIntegerThenValuesGorillaDecodeIterator : public SeparatedTimestampValue
 
   PROMPP_ALWAYS_INLINE void update_sample() noexcept {
     sample_.timestamp = decoded_timestamp();
-    update_sample_value();
-  }
-
-  PROMPP_ALWAYS_INLINE void update_sample_value() noexcept {
-    if (value_type_ == encoder::ValueType::kStaleNan) [[unlikely]] {
-      sample_.value = BareBones::Encoding::Gorilla::STALE_NAN;
-    } else if (value_type_ == encoder::ValueType::kSwitchToValuesGorillaMark) {
-      sample_.value = values_gorilla_.decoder.value();
-    } else {
-      sample_.value = static_cast<double>(asc_integer_.decoder.timestamp());
-    }
+    sample_.value = decoded_value();
   }
 
   PROMPP_ALWAYS_INLINE void decode_value() noexcept {

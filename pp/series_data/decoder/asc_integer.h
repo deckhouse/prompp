@@ -19,7 +19,7 @@ class AscIntegerDecodeIterator : public SeparatedTimestampValueDecodeIteratorTra
       : SeparatedTimestampValueDecodeIteratorTrait(samples_count, timestamp_reader, 0.0, is_last_stalenan), reader_(values_reader) {
     if (remaining_samples_ > 0) [[likely]] {
       decode_value();
-      update_sample_value();
+      sample_.value = decoded_value();
     }
   }
 
@@ -34,6 +34,14 @@ class AscIntegerDecodeIterator : public SeparatedTimestampValueDecodeIteratorTra
     const auto result = *this;
     ++*this;
     return result;
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE double decoded_value() const noexcept {
+    if (value_type_ == encoder::ValueType::kStaleNan) [[unlikely]] {
+      return BareBones::Encoding::Gorilla::STALE_NAN;
+    }
+
+    return static_cast<double>(decoder_.timestamp());
   }
 
  private:
@@ -59,15 +67,7 @@ class AscIntegerDecodeIterator : public SeparatedTimestampValueDecodeIteratorTra
 
   PROMPP_ALWAYS_INLINE void update_sample() noexcept {
     sample_.timestamp = decoded_timestamp();
-    update_sample_value();
-  }
-
-  PROMPP_ALWAYS_INLINE void update_sample_value() noexcept {
-    if (value_type_ == encoder::ValueType::kStaleNan) [[unlikely]] {
-      sample_.value = BareBones::Encoding::Gorilla::STALE_NAN;
-    } else {
-      sample_.value = static_cast<double>(decoder_.timestamp());
-    }
+    sample_.value = decoded_value();
   }
 };
 

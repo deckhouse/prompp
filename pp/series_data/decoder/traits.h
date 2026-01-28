@@ -27,9 +27,13 @@ enum class SeekResult : uint8_t {
 template <class Iterator>
 concept Seekable = requires(Iterator iterator, const Iterator const_iterator) {
   { const_iterator.decoded_timestamp() } -> std::same_as<PromPP::Primitives::Timestamp>;
+  { const_iterator.decoded_value() } -> std::same_as<double>;
   { iterator.update_sample() };
   { iterator.decode() };
 };
+
+template <class SeekHandler>
+concept SampleSeekHandler = std::is_invocable_v<SeekHandler, PromPP::Primitives::Timestamp, double>;
 
 template <class Derived, std::unsigned_integral SampleCountType>
 class DecodeIteratorTrait {
@@ -55,7 +59,14 @@ class DecodeIteratorTrait {
     }
 
     do {
-      if (const SeekResult result = handler(derived()->decoded_timestamp()); result == SeekResult::kUpdateSample) [[likely]] {
+      SeekResult result;
+      if constexpr (SampleSeekHandler<SeekHandler>) {
+        result = handler(derived()->decoded_timestamp(), derived()->decoded_value());
+      } else {
+        result = handler(derived()->decoded_timestamp());
+      }
+
+      if (result == SeekResult::kUpdateSample) [[likely]] {
         derived()->update_sample();
       } else if (result == SeekResult::kStop) {
         break;
