@@ -1,14 +1,13 @@
 #pragma once
 
+#include "entrypoint/series_data/decode_iterator.h"
 #include "primitives/go_slice.h"
 #include "primitives/primitives.h"
 #include "prometheus/query.h"
-#include "series_data/decoder/decorator/downsampling_decode_iterator.h"
 #include "series_data/serialization/serialized_data.h"
 
 namespace entrypoint::series_data {
 
-using DecodeIterator = ::series_data::decoder::decorator::DownsamplingDecodeIterator<::series_data::decoder::UniversalDecodeIterator>;
 using SerializedDataIterator = ::series_data::serialization::SerializedDataView::SeriesIterator<DecodeIterator>;
 
 class SerializedDataGo {
@@ -26,7 +25,12 @@ class SerializedDataGo {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE auto next() noexcept { return data_view_.next_series(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE SerializedDataIterator iterator(uint32_t chunk_id) const noexcept {
-    return data_view_.create_series_iterator<DecodeIterator>(chunk_id, DecodeIterator(downsampling_ms_));
+    if (downsampling_ms_ == ::series_data::decoder::decorator::kNoDownsampling) [[likely]] {
+      return data_view_.create_series_iterator<DecodeIterator>(chunk_id, DecodeIterator(std::in_place_type<DecodeIterator::UniversalDecodeIterator>));
+    }
+
+    return data_view_.create_series_iterator<DecodeIterator>(chunk_id,
+                                                             DecodeIterator(std::in_place_type<DecodeIterator::DownsamplingIterator>, downsampling_ms_));
   }
 
  private:
