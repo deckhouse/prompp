@@ -12,21 +12,16 @@ class DownsamplingDecodeIterator {
  public:
   using Timestamp = PromPP::Primitives::Timestamp;
 
-  enum class SampleType : uint8_t {
-    kFirst = 0,
-    kOther,
-  };
-
   DECODE_ITERATOR_TYPE_TRAITS();
 
   explicit DownsamplingDecodeIterator(Timestamp interval) : DownsamplingDecodeIterator(DecodeIterator{}, interval) {}
   DownsamplingDecodeIterator(DecodeIterator&& iterator, Timestamp interval) : iterator_(std::move(iterator)), interval_(interval) {
-    advance_to_next_sample<SampleType::kFirst>();
+    advance_to_last_sample_in_interval();
   }
 
   PROMPP_ALWAYS_INLINE DownsamplingDecodeIterator& operator=(DecodeIterator&& iterator) noexcept {
     iterator_ = std::move(iterator);
-    advance_to_next_sample<SampleType::kFirst>();
+    advance_to_last_sample_in_interval();
     return *this;
   }
 
@@ -36,7 +31,7 @@ class DownsamplingDecodeIterator {
   PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const noexcept { return (*this)->timestamp == kInvalidTimestamp; }
 
   PROMPP_ALWAYS_INLINE DownsamplingDecodeIterator& operator++() noexcept {
-    advance_to_next_sample<SampleType::kOther>();
+    advance_to_last_sample_in_interval();
     return *this;
   }
 
@@ -53,20 +48,6 @@ class DownsamplingDecodeIterator {
   PROMPP_ALWAYS_INLINE static Timestamp round_up_to_step(Timestamp timestamp, Timestamp step) noexcept {
     const auto result = timestamp + step - 1;
     return result - result % step;
-  }
-
-  template <SampleType Type>
-  PROMPP_ALWAYS_INLINE void advance_to_next_sample() noexcept {
-    if (interval_ == kNoDownsampling) {
-      if constexpr (Type == SampleType::kOther) {
-        if (++iterator_ == DecodeIteratorSentinel{}) {
-          iterator_.invalidate();
-        }
-      }
-      return;
-    }
-
-    advance_to_last_sample_in_interval();
   }
 
   PROMPP_ALWAYS_INLINE void advance_to_last_sample_in_interval() noexcept {

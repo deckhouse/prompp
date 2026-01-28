@@ -13,10 +13,10 @@ class DecodeIteratorSentinel {};
 
 #define DECODE_ITERATOR_TYPE_TRAITS()                  \
   using iterator_category = std::forward_iterator_tag; \
-  using value_type = encoder::Sample;                  \
+  using value_type = ::series_data::encoder::Sample;   \
   using difference_type = ptrdiff_t;                   \
-  using pointer = encoder::Sample*;                    \
-  using reference = encoder::Sample&
+  using pointer = value_type*;                         \
+  using reference = value_type&
 
 enum class SeekResult : uint8_t {
   kUpdateSample = 0,
