@@ -13,6 +13,15 @@ namespace series_data::decoder {
 
 class UniversalDecodeIterator {
  public:
+  enum class Type {
+    kConstant = 0,
+    kTwoDoubleConstant,
+    kAscInteger,
+    kAscIntegerThenValuesGorilla,
+    kValuesGorilla,
+    kGorilla,
+  };
+
   DECODE_ITERATOR_TYPE_TRAITS();
 
   UniversalDecodeIterator() : iterator_(std::in_place_type<ConstantDecodeIterator>, 0, BareBones::BitSequenceReader(nullptr, 0), 0.0, false) {}
@@ -50,6 +59,8 @@ class UniversalDecodeIterator {
   PROMPP_ALWAYS_INLINE void invalidate() {
     std::visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.invalidate(); }, iterator_);
   }
+
+  PROMPP_ALWAYS_INLINE Type type() const noexcept { return static_cast<Type>(iterator_.index()); }
 
  private:
   using IteratorVariant = std::variant<ConstantDecodeIterator,

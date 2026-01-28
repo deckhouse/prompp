@@ -3,6 +3,7 @@
 #include <variant>
 
 #include "series_data/decoder/decorator/downsampling_decode_iterator.h"
+#include "series_data/decoder/decorator/min_over_time.h"
 #include "series_data/decoder/universal_decode_iterator.h"
 
 namespace entrypoint::series_data {
@@ -16,8 +17,9 @@ class DecodeIterator {
  public:
   using UniversalDecodeIterator = ::series_data::decoder::UniversalDecodeIterator;
   using DownsamplingIterator = ::series_data::decoder::decorator::DownsamplingDecodeIterator<UniversalDecodeIterator>;
+  using MinOverTimeIterator = ::series_data::decoder::decorator::MinOverTimeIterator;
   using DecodeIteratorSentinel = ::series_data::decoder::DecodeIteratorSentinel;
-  using IteratorVariant = std::variant<UniversalDecodeIterator, DownsamplingIterator>;
+  using IteratorVariant = std::variant<UniversalDecodeIterator, DownsamplingIterator, MinOverTimeIterator>;
 
   DECODE_ITERATOR_TYPE_TRAITS();
 

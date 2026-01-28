@@ -49,6 +49,8 @@ class ValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIterator
     }
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE double decoded_value() const noexcept { return decoder_.value(); }
+
  private:
   friend Base;
 
@@ -66,7 +68,7 @@ class ValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIterator
 
   PROMPP_ALWAYS_INLINE void update_sample() noexcept {
     sample_.timestamp = decoded_timestamp();
-    sample_.value = decoder_.value();
+    sample_.value = decoded_value();
   }
 
   template <SampleType Type>

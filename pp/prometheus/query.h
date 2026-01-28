@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include "label_matcher.h"
 
 namespace PromPP::Prometheus {
