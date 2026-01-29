@@ -1,9 +1,11 @@
 package querier_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/model/value"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
@@ -584,6 +586,44 @@ func (s *SeriesSetTestSuite) TestMaxOverTime() {
 		Start: 100,
 		End:   200,
 		Func:  "max_over_time",
+	}
+
+	// Act
+	seriesSet := s.query(s.lss, s.ds, 0, 400, cppbridge.NoDownsampling, hints, model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	})
+
+	// Assert
+	require.Equal(s.T(), []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 200, Value: 3.0},
+			},
+		},
+	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
+}
+
+func (s *SeriesSetTestSuite) TestLastOverTime() {
+	// Arrange
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 100, Value: 1.0},
+				{Timestamp: 150, Value: 2.0},
+				{Timestamp: 200, Value: 3.0},
+				{Timestamp: 250, Value: math.Float64frombits(value.StaleNaN)},
+				{Timestamp: 300, Value: 0.0},
+			},
+		},
+	}...)
+	hints := &storage.SelectHints{
+		Start: 100,
+		End:   250,
+		Func:  "last_over_time",
 	}
 
 	// Act
