@@ -25,6 +25,8 @@ class SerializedDataGo {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE auto next() noexcept { return data_view_.next_series(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE SerializedDataIterator iterator(uint32_t chunk_id) const noexcept {
+    using PromPP::Primitives::TimeInterval;
+
     if (downsampling_ms_ != ::series_data::decoder::decorator::kNoDownsampling) [[unlikely]] {
       return data_view_.create_series_iterator<DecodeIterator>(chunk_id,
                                                                DecodeIterator(std::in_place_type<DecodeIterator::DownsamplingIterator>, downsampling_ms_));
@@ -32,8 +34,14 @@ class SerializedDataGo {
 
     if (select_hints_.func == "min_over_time") [[unlikely]] {
       return data_view_.create_series_iterator<DecodeIterator>(
-          chunk_id, DecodeIterator(std::in_place_type<DecodeIterator::MinOverTimeIterator>,
-                                   PromPP::Primitives::TimeInterval{.min = select_hints_.start_ms, .max = select_hints_.end_ms}));
+          chunk_id,
+          DecodeIterator(std::in_place_type<DecodeIterator::MinOverTimeIterator>, TimeInterval{.min = select_hints_.start_ms, .max = select_hints_.end_ms}));
+    }
+
+    if (select_hints_.func == "max_over_time") [[unlikely]] {
+      return data_view_.create_series_iterator<DecodeIterator>(
+          chunk_id,
+          DecodeIterator(std::in_place_type<DecodeIterator::MaxOverTimeIterator>, TimeInterval{.min = select_hints_.start_ms, .max = select_hints_.end_ms}));
     }
 
     return data_view_.create_series_iterator<DecodeIterator>(chunk_id, DecodeIterator(std::in_place_type<DecodeIterator::UniversalDecodeIterator>));
