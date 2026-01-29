@@ -57,6 +57,7 @@ class Counter final : public Metric {
       : Metric(std::forward<LabelSet>(labels), name, &counter_, sizeof(*this)), value_(value) {}
 
   PROMPP_ALWAYS_INLINE void inc(BareBones::concepts::arithmetic auto count) noexcept { value_ += count; }
+  PROMPP_ALWAYS_INLINE void set(double value) noexcept { value_ = value; }
 
  protected:
   double value_{};

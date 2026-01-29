@@ -60,7 +60,11 @@ class UniversalDecodeIterator {
     std::visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.invalidate(); }, iterator_);
   }
 
-  PROMPP_ALWAYS_INLINE Type type() const noexcept { return static_cast<Type>(iterator_.index()); }
+  PROMPP_ALWAYS_INLINE void set(const encoder::Sample sample) {
+    std::visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.set(sample); }, iterator_);
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Type type() const noexcept { return static_cast<Type>(iterator_.index()); }
 
  private:
   using IteratorVariant = std::variant<ConstantDecodeIterator,

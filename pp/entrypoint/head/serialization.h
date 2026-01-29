@@ -50,6 +50,12 @@ class SerializedDataGo {
           DecodeIterator(std::in_place_type<DecodeIterator::LastOverTimeIterator>, TimeInterval{.min = select_hints_.start_ms, .max = select_hints_.end_ms}));
     }
 
+    if (select_hints_.func == "sum_over_time") [[unlikely]] {
+      return data_view_.create_series_iterator<DecodeIterator>(
+          chunk_id,
+          DecodeIterator(std::in_place_type<DecodeIterator::SumOverTimeIterator>, TimeInterval{.min = select_hints_.start_ms, .max = select_hints_.end_ms}));
+    }
+
     return data_view_.create_series_iterator<DecodeIterator>(chunk_id, DecodeIterator(std::in_place_type<DecodeIterator::UniversalDecodeIterator>));
   }
 
