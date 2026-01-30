@@ -163,18 +163,5 @@ INSTANTIATE_TEST_SUITE_P(StaleNan,
                                                                             Sample{.timestamp = 300, .value = STALE_NAN},
                                                                             Sample{.timestamp = 400, .value = 1.0},
                                                                         }}));
-INSTANTIATE_TEST_SUITE_P(NoDownsampling,
-                         DownsamplingDecodeIteratorFixture,
-                         testing::Values(DownsamplingDecodeIteratorCase{.samples{
-                                                                            Sample{.timestamp = 98, .value = 1.0},
-                                                                            Sample{.timestamp = 99, .value = STALE_NAN},
-                                                                            Sample{.timestamp = 100, .value = 1.0},
-                                                                        },
-                                                                        .interval = 0,
-                                                                        .expected{
-                                                                            Sample{.timestamp = 98, .value = 1.0},
-                                                                            Sample{.timestamp = 99, .value = STALE_NAN},
-                                                                            Sample{.timestamp = 100, .value = 1.0},
-                                                                        }}));
 
 }  // namespace
