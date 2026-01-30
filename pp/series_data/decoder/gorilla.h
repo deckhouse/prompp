@@ -33,9 +33,7 @@ class GorillaDecodeIteratorGeneral : public DecodeIteratorTrait<GorillaDecodeIte
     return result;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE double decoded_value() const noexcept {
-    return decoder_.last_value();
-  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE double decoded_value() const noexcept { return decoder_.last_value(); }
 
  private:
   friend Base;
