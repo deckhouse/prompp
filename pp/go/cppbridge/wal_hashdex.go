@@ -433,6 +433,9 @@ func (h *WALGoHeadHashdex) cptr() uintptr {
 	return h.hashdex
 }
 
+func (h *WALGoHeadHashdex) RangeMetadata(func(metadata WALScraperHashdexMetadata) bool) {
+}
+
 func NewGoHeadHashdex(lss *LabelSetStorage, dataStorage *DataStorage) *WALGoHeadHashdex {
 	hashdex := &WALGoHeadHashdex{
 		hashdex:     walGoHeadHashdexCtor(),

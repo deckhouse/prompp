@@ -5,7 +5,6 @@ import (
 
 	"github.com/prometheus/prometheus/pp-pkg/model"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	pp_model "github.com/prometheus/prometheus/pp/go/model"
 	pp_storage "github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/appender"
 	"github.com/prometheus/prometheus/pp/go/storage/head/services"
@@ -20,9 +19,8 @@ type BatchStorage struct {
 	hashdexLimits   cppbridge.WALHashdexLimits
 	transactionHead *pp_storage.TransactionHead
 	state           *cppbridge.StateV2
-	// TODO tmp
-	batch   *timeSeriesBatch
-	adapter *Adapter
+	adapter         *Adapter
+	samplesAdded    uint32
 }
 
 // NewBatchStorage init new [BatchStorage].
@@ -38,7 +36,6 @@ func NewBatchStorage(
 		hashdexLimits:   hashdexLimits,
 		transactionHead: transactionHead,
 		state:           state,
-		batch:           &timeSeriesBatch{timeSeries: make([]pp_model.TimeSeries, 0, 10)},
 		adapter:         adapter,
 	}
 }
@@ -61,31 +58,33 @@ func (bs *BatchStorage) AppendTimeSeries(
 		return stats, err
 	}
 
-	tdata := data.TimeSeries()
 	stats, err = appender.New(bs.transactionHead, services.CFViaRange).Append(
 		ctx,
 		&appender.IncomingData{Hashdex: hx, Data: data},
 		state,
 		commitToWal,
 	)
-	bs.batch.timeSeries = append(bs.batch.timeSeries, tdata...)
+
+	if err == nil {
+		bs.samplesAdded += stats.SamplesAdded
+	}
 
 	return stats, err
 }
 
 // Commit adds aggregated series from [pp_storage.TransactionHead] to the [Head].
 func (bs *BatchStorage) Commit(ctx context.Context) error {
-	if len(bs.batch.timeSeries) == 0 {
+	if bs.samplesAdded == 0 {
 		return nil
 	}
 
-	_, err := bs.adapter.AppendTimeSeries(ctx, bs.batch, bs.state, false)
-	return err
+	return bs.CommitWithState(ctx, bs.state)
 }
 
 // CommitWithState adds aggregated series from [pp_storage.TransactionHead] to the [Head] with [cppbridge.StateV2].
 func (bs *BatchStorage) CommitWithState(ctx context.Context, state *cppbridge.StateV2) error {
-	_, err := bs.adapter.AppendTimeSeries(ctx, bs.batch, state, false)
+	s := bs.transactionHead.Shards()[0]
+	_, err := bs.adapter.AppendGoHeadHashdex(ctx, cppbridge.NewGoHeadHashdex(s.LSS().Target(), s.DataStorage().Raw()), state, false)
 	return err
 }
 
