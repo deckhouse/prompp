@@ -2769,6 +2769,38 @@ func walOpenMetricsScraperHashdexGetMetadata(hashdex uintptr) []WALScraperHashde
 }
 
 //
+// GoHeadHashdex
+//
+
+func walGoHeadHashdexCtor() uintptr {
+	var res struct {
+		hashdex uintptr
+	}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_wal_go_head_hashdex_ctor,
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.hashdex
+}
+
+func walGoHeadPresharding(hashdex uintptr, lss uintptr, dataStorage uintptr) {
+	args := struct {
+		hashdex     uintptr
+		lss         uintptr
+		dataStorage uintptr
+	}{hashdex, lss, dataStorage}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_wal_go_head_hashdex_presharding,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+//
 // Relabeler cache
 //
 

@@ -1,5 +1,6 @@
 #include "wal_hashdex.h"
 
+#include "entrypoint/head/data_storage.h"
 #include "exception.hpp"
 #include "hashdex.hpp"
 #include "primitives/go_slice.h"
@@ -192,4 +193,23 @@ extern "C" void prompp_wal_open_metrics_scraper_hashdex_parse(void* args, void* 
 
 extern "C" void prompp_wal_open_metrics_scraper_hashdex_get_metadata(void* args, void* res) {
   scraper_hashdex_get_metadata<OpenMetricsScraper>(args, res);
+}
+
+extern "C" void prompp_wal_go_head_hashdex_ctor(void* res) {
+  struct Result {
+    HashdexVariant* hashdex;
+  };
+
+  new (res) Result{.hashdex = new HashdexVariant{std::in_place_index<HashdexType::kGoHead>}};
+}
+
+extern "C" void prompp_wal_go_head_hashdex_presharding(void* args) {
+  struct Arguments {
+    HashdexVariant* hashdex;
+    entrypoint::head::LssVariantPtr lss;
+    entrypoint::head::DataStoragePtr data_storage;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  std::get<GoHeadHashdex>(*in->hashdex).presharding(&std::get<entrypoint::head::QueryableEncodingBimap>(*in->lss), in->data_storage.get());
 }
