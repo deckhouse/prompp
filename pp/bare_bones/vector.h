@@ -114,13 +114,11 @@ class GenericVector {
     assert(last >= first);
 
     if (first == last) {
-      return end();
+      return first;
     }
 
     if constexpr (!IsTriviallyDestructible<T>::value) {
-      for (auto i = first; i != last; ++i, ++first) {
-        first->~T();
-      }
+      std::destroy_n(first, last - first);
     }
 
     PRAGMA_DIAGNOSTIC(push)
@@ -128,7 +126,7 @@ class GenericVector {
     std::ranges::move(last, end(), first);
     PRAGMA_DIAGNOSTIC(pop)
 
-    resize(size() - (last - first));
+    derived()->set_size(size() - (last - first));
     return first;
   }
 
