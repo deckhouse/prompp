@@ -112,7 +112,7 @@ class GenericVector {
 
     PRAGMA_DIAGNOSTIC(push)
     PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
-    std::ranges::move(last, end(), first);
+    std::memmove(first, last, (end() - last) * sizeof(T));
     PRAGMA_DIAGNOSTIC(pop)
 
     derived()->set_size(size() - (last - first));
