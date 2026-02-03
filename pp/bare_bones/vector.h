@@ -60,23 +60,14 @@ class GenericVector {
           if (new_size > current_size) {
             zero_memory(memory + current_size, new_size - current_size);
           } else {
-            memory += new_size;
-            for (SizeType i = new_size; i != current_size; ++i) {
-              std::destroy_at(memory++);
-            }
+            std::destroy_n(memory + new_size, current_size - new_size);
           }
         }
       } else {
         if (new_size > current_size) {
-          memory += current_size;
-          for (SizeType i = current_size; i != new_size; ++i) {
-            std::construct_at(memory++);
-          }
+          std::uninitialized_default_construct_n(memory + current_size, new_size - current_size);
         } else {
-          memory += new_size;
-          for (SizeType i = new_size; i != current_size; ++i) {
-            std::destroy_at(memory++);
-          }
+          std::destroy_n(memory + new_size, current_size - new_size);
         }
       }
     }
@@ -99,9 +90,7 @@ class GenericVector {
       if constexpr (IsTriviallyDestructible<T>::value) {
         zero_memory(memory, current_size);
       } else {
-        for (SizeType i = 0; i != current_size; ++i) {
-          std::destroy_at(memory++);
-        }
+        std::destroy_n(memory, current_size);
       }
     }
 
@@ -326,12 +315,7 @@ class MemoryBasedVector : public GenericVector<MemoryBasedVector<MemoryControlBl
     return *this;
   }
 
-  ~MemoryBasedVector() noexcept {
-    auto memory = Base::data();
-    for (SizeType i = 0; i != get_size(); ++i) {
-      std::destroy_at(memory++);
-    }
-  }
+  ~MemoryBasedVector() noexcept { std::destroy_n(Base::data(), get_size()); }
 
  protected:
   friend class GenericVector<MemoryBasedVector, SizeType, T>;
