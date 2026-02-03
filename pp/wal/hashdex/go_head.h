@@ -2,10 +2,11 @@
 
 #include "primitives/go_model.h"
 #include "primitives/hash.h"
-#include "primitives/label_set.h"
 #include "prometheus/hashdex.h"
 #include "series_data/data_storage.h"
 #include "series_data/decoder.h"
+#include "series_data/encoder.h"
+#include "series_data/outdated_chunk_merger.h"
 
 namespace PromPP::WAL::hashdex {
 
@@ -89,7 +90,12 @@ class GoHead : public Prometheus::hashdex::Abstract {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return metrics_.size(); }
 
-  PROMPP_ALWAYS_INLINE void presharding(const Lss* lss, const series_data::DataStorage* data_storage) { metrics_.reset(lss, data_storage); }
+  PROMPP_ALWAYS_INLINE void presharding(const Lss* lss, series_data::DataStorage* data_storage) {
+    series_data::Encoder encoder(*data_storage);
+    series_data::OutdatedChunkMerger{encoder}.merge();
+
+    metrics_.reset(lss, data_storage);
+  }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE auto begin() const noexcept { return metrics_.begin(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return metrics_.end(); }
