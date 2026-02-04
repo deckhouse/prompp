@@ -56,6 +56,10 @@ class UniversalDecodeIterator {
     std::visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.seek(std::forward<SeekHandler>(handler)); }, iterator_);
   }
 
+  PROMPP_ALWAYS_INLINE void seek_to(PromPP::Primitives::Timestamp timestamp) {
+    std::visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.seek_to(timestamp); }, iterator_);
+  }
+
   PROMPP_ALWAYS_INLINE void invalidate() {
     std::visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.invalidate(); }, iterator_);
   }

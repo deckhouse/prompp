@@ -41,13 +41,11 @@ class OverTimeFuncIterator {
   UniversalDecodeIterator iterator_;
   PromPP::Primitives::TimeInterval interval_;
 
-  PROMPP_ALWAYS_INLINE void find_element() {
-    SampleHandler handler;
+  void find_element() {
+    iterator_.seek_to(interval_.min);
 
+    SampleHandler handler;
     iterator_.seek([&handler, this](PromPP::Primitives::Timestamp timestamp, double value) {
-      if (timestamp < interval_.min) {
-        return SeekResult::kNext;
-      }
       if (timestamp > interval_.max) {
         return SeekResult::kStop;
       }

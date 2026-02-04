@@ -74,6 +74,16 @@ class DecodeIteratorTrait {
     } while (derived()->decode());
   }
 
+  PROMPP_ALWAYS_INLINE void seek_to(PromPP::Primitives::Timestamp timestamp) {
+    while (derived()->decoded_timestamp() < timestamp) {
+      if (!derived()->decode()) [[unlikely]] {
+        return;
+      }
+    }
+
+    derived()->update_sample();
+  }
+
   PROMPP_ALWAYS_INLINE void invalidate() noexcept {
     remaining_samples_ = 0;
     sample_.timestamp = kInvalidTimestamp;

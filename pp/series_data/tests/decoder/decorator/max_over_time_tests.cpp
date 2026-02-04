@@ -66,11 +66,14 @@ TEST_P(MaxOverTimeFixture, TestReset) {
   EXPECT_EQ(GetParam().expected, actual_samples);
 }
 
-INSTANTIATE_TEST_SUITE_P(OneSample,
-                         MaxOverTimeFixture,
-                         testing::Values(MaxOverTimeIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}},
-                                                                 .interval{.min = 0, .max = 100},
-                                                                 .expected{Sample{.timestamp = 100, .value = 1.0}}}));
+INSTANTIATE_TEST_SUITE_P(
+    OneSample,
+    MaxOverTimeFixture,
+    testing::Values(MaxOverTimeIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}},
+                                            .interval{.min = 0, .max = 100},
+                                            .expected{Sample{.timestamp = 100, .value = 1.0}}},
+                    MaxOverTimeIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}}, .interval{.min = 0, .max = 99}, .expected{}},
+                    MaxOverTimeIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}}, .interval{.min = 101, .max = 200}, .expected{}}));
 
 INSTANTIATE_TEST_SUITE_P(
     StaleNan,

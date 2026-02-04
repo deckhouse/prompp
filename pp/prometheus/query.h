@@ -8,8 +8,7 @@ namespace PromPP::Prometheus {
 
 template <class String, template <class> class Slice>
 struct GenericSelectHints {
-  int64_t start_ms{};
-  int64_t end_ms{};
+  Primitives::TimeInterval interval{.min = 0, .max = 0};
   int64_t limit{};
 
   int64_t step_ms{};
@@ -29,8 +28,7 @@ struct GenericSelectHints {
   template <class AnyString, template <class> class AnySlice>
     requires(!std::same_as<AnyString, String> || !std::same_as<AnySlice<AnyString>, Slice<String>>)
   explicit GenericSelectHints(const GenericSelectHints<AnyString, AnySlice>& hints)
-      : start_ms(hints.start_ms),
-        end_ms(hints.end_ms),
+      : interval(hints.interval),
         limit(hints.limit),
         step_ms(hints.step_ms),
         func(static_cast<std::string_view>(hints.func)),
