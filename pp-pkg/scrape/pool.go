@@ -1,10 +1,13 @@
 package scrape
 
 import (
+	"bufio"
 	"errors"
+	"io"
 	"sync"
 	"time"
 
+	"github.com/klauspost/compress/gzip"
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/model/value"
 	"github.com/prometheus/prometheus/storage"
@@ -114,7 +117,7 @@ func newBatchTimeSeries() *BatchTimeSeries {
 	return &BatchTimeSeries{}
 }
 
-// Add add to batch timeseries, timestamp and value.
+// Add to batch timeseries, timestamp and value.
 func (batch *BatchTimeSeries) Add(builder *pp_model.LabelSetSimpleBuilder, timestamp uint64, val float64) error {
 	batch.data = append(
 		batch.data,
@@ -126,6 +129,18 @@ func (batch *BatchTimeSeries) Add(builder *pp_model.LabelSetSimpleBuilder, times
 	)
 
 	return nil
+}
+
+// AddWithLabelSet add to batch timeseries, label set, timestamp and value.
+func (batch *BatchTimeSeries) AddWithLabelSet(ls pp_model.LabelSet, timestamp uint64, val float64) {
+	batch.data = append(
+		batch.data,
+		pp_model.TimeSeries{
+			LabelSet:  ls,
+			Timestamp: timestamp,
+			Value:     val,
+		},
+	)
 }
 
 // Destroy destroy batch with destroyFunc(return to pool).
@@ -199,4 +214,50 @@ func (b *timeLimitBatch) Add(builder *pp_model.LabelSetSimpleBuilder, timestamp 
 	}
 
 	return b.Batch.Add(builder, timestamp, val)
+}
+
+//
+// noopReader
+//
+
+// noopReader implementation io.Reader.
+var nr = &noopReader{}
+
+// noopReader implementation io.Reader.
+type noopReader struct{}
+
+// Read implementation io.Reader.
+func (*noopReader) Read(_ []byte) (int, error) {
+	return 0, io.EOF
+}
+
+//
+// readers
+//
+
+// readers wrapper for bufio.Reader and gzip.Reader.
+type readers struct {
+	bReader *bufio.Reader
+	gReader *gzip.Reader
+}
+
+// reset readers.
+func (r *readers) reset() *readers {
+	r.bReader.Reset(nr)
+
+	return r
+}
+
+//
+// poolReaders
+//
+
+// poolReaders global pool *readers.
+var poolReaders = sync.Pool{
+	New: func() any {
+		return &readers{
+			bReader: bufio.NewReader(nr),
+			gReader: &gzip.Reader{},
+		}
+	},
 }

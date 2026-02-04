@@ -15,6 +15,8 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
 	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/prometheus/pp/go/util/locker"
+	"github.com/prometheus/prometheus/storage"
+	"github.com/prometheus/prometheus/util/zeropool"
 )
 
 //go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg head_test --out
@@ -70,10 +72,20 @@ type Head[TShard Shard, TGorutineShard Shard] struct {
 	tasksExecute *prometheus.CounterVec
 
 	// pools for reusable objects
+	// use in appender
 	shardedInnerSeriesPool     sync.Pool
 	shardedRelabeledSeriesPool sync.Pool
 	shardedStateUpdatesPool    sync.Pool
 	taskPool                   sync.Pool
+	statsPool                  zeropool.Pool[[]cppbridge.RelabelerStats]
+	// use in querier
+	snapshotsPool       zeropool.Pool[[]*cppbridge.LabelSetSnapshot]
+	lssQueryResultsPool zeropool.Pool[[]*cppbridge.LSSQueryResult]
+	selectorsPool       zeropool.Pool[[]uintptr]
+	seriesSetPool       zeropool.Pool[[]storage.SeriesSet]
+	chunkSeriesSetPool  zeropool.Pool[[]storage.ChunkSeriesSet]
+	serializedDataPool  zeropool.Pool[[]*cppbridge.DataStorageSerializedData]
+	errorsPool          zeropool.Pool[[]error]
 }
 
 // NewHead init new [Head].
@@ -147,6 +159,30 @@ func NewHead[TShard Shard, TGoroutineShard Shard](
 				return task.NewGenericEmpty[TGoroutineShard](numShards)
 			},
 		},
+		statsPool: zeropool.New(func() []cppbridge.RelabelerStats {
+			return make([]cppbridge.RelabelerStats, numberOfShards)
+		}),
+		snapshotsPool: zeropool.New(func() []*cppbridge.LabelSetSnapshot {
+			return make([]*cppbridge.LabelSetSnapshot, numberOfShards)
+		}),
+		lssQueryResultsPool: zeropool.New(func() []*cppbridge.LSSQueryResult {
+			return make([]*cppbridge.LSSQueryResult, numberOfShards)
+		}),
+		selectorsPool: zeropool.New(func() []uintptr {
+			return make([]uintptr, numberOfShards)
+		}),
+		seriesSetPool: zeropool.New(func() []storage.SeriesSet {
+			return make([]storage.SeriesSet, numberOfShards)
+		}),
+		chunkSeriesSetPool: zeropool.New(func() []storage.ChunkSeriesSet {
+			return make([]storage.ChunkSeriesSet, numberOfShards)
+		}),
+		serializedDataPool: zeropool.New(func() []*cppbridge.DataStorageSerializedData {
+			return make([]*cppbridge.DataStorageSerializedData, numberOfShards)
+		}),
+		errorsPool: zeropool.New(func() []error {
+			return make([]error, numberOfShards)
+		}),
 	}
 
 	h.run()
@@ -305,6 +341,94 @@ func (h *Head[TShard, TGorutineShard]) AcquireShardedStateUpdates() *cppbridge.S
 func (h *Head[TShard, TGorutineShard]) ReleaseShardedStateUpdates(s *cppbridge.ShardedStateUpdates) {
 	s.Reset()
 	h.shardedStateUpdatesPool.Put(s)
+}
+
+// AcquireRelabelerStats gets a []cppbridge.RelabelerStats from the pool.
+func (h *Head[TShard, TGorutineShard]) AcquireRelabelerStats() []cppbridge.RelabelerStats {
+	return h.statsPool.Get()
+}
+
+// ReleaseRelabelerStats returns a []cppbridge.RelabelerStats to the pool after resetting it.
+func (h *Head[TShard, TGorutineShard]) ReleaseRelabelerStats(stats []cppbridge.RelabelerStats) {
+	clear(stats)
+	h.statsPool.Put(stats)
+}
+
+// AcquireSnapshots gets a []*cppbridge.LabelSetSnapshot from the pool.
+func (h *Head[TShard, TGorutineShard]) AcquireSnapshots() []*cppbridge.LabelSetSnapshot {
+	return h.snapshotsPool.Get()
+}
+
+// ReleaseSnapshots returns a []*cppbridge.LabelSetSnapshot to the pool after resetting it.
+func (h *Head[TShard, TGorutineShard]) ReleaseSnapshots(snapshots []*cppbridge.LabelSetSnapshot) {
+	clear(snapshots)
+	h.snapshotsPool.Put(snapshots)
+}
+
+// AcquireLSSQueryResults gets a []*cppbridge.LSSQueryResult from the pool.
+func (h *Head[TShard, TGorutineShard]) AcquireLSSQueryResults() []*cppbridge.LSSQueryResult {
+	return h.lssQueryResultsPool.Get()
+}
+
+// ReleaseLSSQueryResults returns a []*cppbridge.LSSQueryResult to the pool after resetting it.
+func (h *Head[TShard, TGorutineShard]) ReleaseLSSQueryResults(results []*cppbridge.LSSQueryResult) {
+	clear(results)
+	h.lssQueryResultsPool.Put(results)
+}
+
+// AcquireSelectors gets a []uintptr from the pool.
+func (h *Head[TShard, TGorutineShard]) AcquireSelectors() []uintptr {
+	return h.selectorsPool.Get()
+}
+
+// ReleaseSelectors returns a []uintptr to the pool after resetting it.
+func (h *Head[TShard, TGorutineShard]) ReleaseSelectors(selectors []uintptr) {
+	clear(selectors)
+	h.selectorsPool.Put(selectors)
+}
+
+// AcquireSeriesSet gets a []storage.SeriesSet from the pool.
+func (h *Head[TShard, TGorutineShard]) AcquireSeriesSet() []storage.SeriesSet {
+	return h.seriesSetPool.Get()
+}
+
+// ReleaseSeriesSet returns a []storage.SeriesSet to the pool after resetting it.
+func (h *Head[TShard, TGorutineShard]) ReleaseSeriesSet(ssets []storage.SeriesSet) {
+	clear(ssets)
+	h.seriesSetPool.Put(ssets)
+}
+
+// AcquireChunkSeriesSet gets a []storage.ChunkSeriesSet from the pool.
+func (h *Head[TShard, TGorutineShard]) AcquireChunkSeriesSet() []storage.ChunkSeriesSet {
+	return h.chunkSeriesSetPool.Get()
+}
+
+// ReleaseChunkSeriesSet returns a []storage.ChunkSeriesSet to the pool after resetting it.
+func (h *Head[TShard, TGorutineShard]) ReleaseChunkSeriesSet(csets []storage.ChunkSeriesSet) {
+	clear(csets)
+	h.chunkSeriesSetPool.Put(csets)
+}
+
+// AcquireSerializedData gets a []*cppbridge.DataStorageSerializedData from the pool.
+func (h *Head[TShard, TGorutineShard]) AcquireSerializedData() []*cppbridge.DataStorageSerializedData {
+	return h.serializedDataPool.Get()
+}
+
+// ReleaseSerializedData returns a []s*cppbridge.DataStorageSerializedData to the pool after resetting it.
+func (h *Head[TShard, TGorutineShard]) ReleaseSerializedData(sd []*cppbridge.DataStorageSerializedData) {
+	clear(sd)
+	h.serializedDataPool.Put(sd)
+}
+
+// AcquireErrors gets a []error from the pool.
+func (h *Head[TShard, TGorutineShard]) AcquireErrors() []error {
+	return h.errorsPool.Get()
+}
+
+// ReleaseErrors returns a []error to the pool after resetting it.
+func (h *Head[TShard, TGorutineShard]) ReleaseErrors(errs []error) {
+	clear(errs)
+	h.errorsPool.Put(errs)
 }
 
 // SetReadOnly sets the read-only flag for the [Head].

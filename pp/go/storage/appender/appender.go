@@ -122,6 +122,12 @@ type Head[
 
 	// ReleaseShardedStateUpdates returns a [cppbridge.ShardedStateUpdates] to the pool.
 	ReleaseShardedStateUpdates(s *cppbridge.ShardedStateUpdates)
+
+	// AcquireRelabelerStats gets a []cppbridge.RelabelerStats from the pool.
+	AcquireRelabelerStats() []cppbridge.RelabelerStats
+
+	// ReleaseRelabelerStats returns a []cppbridge.RelabelerStats to the pool after resetting it.
+	ReleaseRelabelerStats(stats []cppbridge.RelabelerStats)
 }
 
 //
@@ -238,7 +244,8 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) inputRelabelingStage(
 	shardedInnerSeries *cppbridge.ShardedInnerSeries,
 	shardedRelabeledSeries *cppbridge.ShardedRelabeledSeries,
 ) (cppbridge.RelabelerStats, error) {
-	stats := make([]cppbridge.RelabelerStats, a.head.NumberOfShards())
+	stats := a.head.AcquireRelabelerStats()
+	defer a.head.ReleaseRelabelerStats(stats)
 	defer incomingData.Destroy()
 
 	t := a.head.CreateTask(

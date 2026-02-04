@@ -49,6 +49,9 @@ var AlignScrapeTimestamps = true
 // CommitToWalOnAppend switches commit strategy on append.
 var CommitToWalOnAppend = false
 
+// staleNaN is the NaN value for stale timestamps.
+var staleNaN = math.Float64frombits(value.StaleNaN)
+
 // reusableCache compares two scrape config and tells whether the cache is still
 // valid.
 func reusableCache(r, l *config.ScrapeConfig) bool {
@@ -656,6 +659,7 @@ var (
 type scraper interface {
 	scrape(ctx context.Context) (*http.Response, error)
 	readResponse(ctx context.Context, resp *http.Response, w io.Writer) (string, error)
+	readResponse2(ctx context.Context, resp *http.Response, buf *bytes.Buffer) (string, error)
 	Report(start time.Time, dur time.Duration, err error)
 	offset(interval time.Duration, offsetSeed uint64) time.Duration
 	String() string
@@ -723,6 +727,7 @@ func (s *targetScraper) scrape(ctx context.Context) (*http.Response, error) {
 	return s.client.Do(s.req.WithContext(ctx))
 }
 
+// readResponse reads the response from the [*http.Response] and writes it to the [io.Writer].
 func (s *targetScraper) readResponse(ctx context.Context, resp *http.Response, w io.Writer) (string, error) {
 	defer func() {
 		io.Copy(io.Discard, resp.Body)
@@ -1036,7 +1041,8 @@ func (sl *scrapeLoop) scrapeAndReport(last, appendTime time.Time, errc chan<- er
 		b = sl.buffers.Get(sl.lastScrapeSize).([]byte)
 		defer sl.buffers.Put(b)
 		buf = bytes.NewBuffer(b)
-		contentType, scrapeErr = sl.scraper.readResponse(scrapeCtx, resp, buf)
+		// contentType, scrapeErr = sl.scraper.readResponse(scrapeCtx, resp, buf)
+		contentType, scrapeErr = sl.scraper.readResponse2(scrapeCtx, resp, buf)
 	}
 	cancel()
 
@@ -1392,15 +1398,15 @@ func yoloBytes(s string) []byte {
 // The constants are suffixed with the invalid \xff unicode rune to avoid collisions
 // with scraped metrics in the cache.
 var (
-	scrapeHealthMetricName        = "up"
-	scrapeDurationMetricName      = "scrape_duration_seconds"
-	scrapeSamplesMetricName       = "scrape_samples_scraped"
-	samplesPostRelabelMetricName  = "scrape_samples_post_metric_relabeling"
-	scrapeSeriesAddedMetricName   = "scrape_series_added"
-	scrapeSeriesDroppedMetricName = "scrape_series_dropped"
-	scrapeTimeoutMetricName       = "scrape_timeout_seconds"
-	scrapeSampleLimitMetricName   = "scrape_sample_limit"
-	scrapeBodySizeBytesMetricName = "scrape_body_size_bytes"
+	scrapeHealthMetricName        = pp_model.LabelSetFromPairs(labels.MetricName, "up")
+	scrapeDurationMetricName      = pp_model.LabelSetFromPairs(labels.MetricName, "scrape_duration_seconds")
+	scrapeSamplesMetricName       = pp_model.LabelSetFromPairs(labels.MetricName, "scrape_samples_scraped")
+	samplesPostRelabelMetricName  = pp_model.LabelSetFromPairs(labels.MetricName, "scrape_samples_post_metric_relabeling")
+	scrapeSeriesAddedMetricName   = pp_model.LabelSetFromPairs(labels.MetricName, "scrape_series_added")
+	scrapeSeriesDroppedMetricName = pp_model.LabelSetFromPairs(labels.MetricName, "scrape_series_dropped")
+	scrapeTimeoutMetricName       = pp_model.LabelSetFromPairs(labels.MetricName, "scrape_timeout_seconds")
+	scrapeSampleLimitMetricName   = pp_model.LabelSetFromPairs(labels.MetricName, "scrape_sample_limit")
+	scrapeBodySizeBytesMetricName = pp_model.LabelSetFromPairs(labels.MetricName, "scrape_body_size_bytes")
 )
 
 func (sl *scrapeLoop) report(
@@ -1419,65 +1425,23 @@ func (sl *scrapeLoop) report(
 		health = 1
 	}
 
-	builder := sl.bufferBuilders.get()
-	defer sl.bufferBuilders.put(builder)
 	batch := sl.bufferBatches.get()
 
-	if err = sl.addReportSample(builder, batch, scrapeHealthMetricName, ts, health); err != nil {
-		return
-	}
-	if err = sl.addReportSample(builder, batch, scrapeDurationMetricName, ts, duration.Seconds()); err != nil {
-		return
-	}
-	if err = sl.addReportSample(builder, batch, scrapeSamplesMetricName, ts, float64(scraped)); err != nil {
-		return
-	}
-	if err = sl.addReportSample(
-		builder,
-		batch,
-		samplesPostRelabelMetricName,
-		ts,
-		float64(stats.SamplesAdded),
-	); err != nil {
-		return
-	}
-
-	if err = sl.addReportSample(
-		builder,
-		batch,
-		scrapeSeriesAddedMetricName,
-		ts,
-		float64(stats.SeriesAdded),
-	); err != nil {
-		return
-	}
-
-	if err = sl.addReportSample(
-		builder,
-		batch,
-		scrapeSeriesDroppedMetricName,
-		ts,
-		float64(stats.SeriesDrop),
-	); err != nil {
-		return
-	}
+	batch.AddWithLabelSet(scrapeHealthMetricName, uint64(ts), health)
+	batch.AddWithLabelSet(scrapeDurationMetricName, uint64(ts), duration.Seconds())
+	batch.AddWithLabelSet(scrapeSamplesMetricName, uint64(ts), float64(scraped))
+	batch.AddWithLabelSet(samplesPostRelabelMetricName, uint64(ts), float64(stats.SamplesAdded))
+	batch.AddWithLabelSet(scrapeSeriesAddedMetricName, uint64(ts), float64(stats.SeriesAdded))
+	batch.AddWithLabelSet(scrapeSeriesDroppedMetricName, uint64(ts), float64(stats.SeriesDrop))
 
 	if sl.reportExtraMetrics {
-		if err = sl.addReportSample(builder, batch, scrapeTimeoutMetricName, ts, sl.timeout.Seconds()); err != nil {
-			return
-		}
-		if err = sl.addReportSample(
-			builder,
-			batch,
+		batch.AddWithLabelSet(scrapeTimeoutMetricName, uint64(ts), sl.timeout.Seconds())
+		batch.AddWithLabelSet(
 			scrapeSampleLimitMetricName,
-			ts,
+			uint64(ts),
 			float64(sl.state.RelabelerOptions().MetricLimits.SampleLimit),
-		); err != nil {
-			return
-		}
-		if err = sl.addReportSample(builder, batch, scrapeBodySizeBytesMetricName, ts, float64(bytes)); err != nil {
-			return
-		}
+		)
+		batch.AddWithLabelSet(scrapeBodySizeBytesMetricName, uint64(ts), float64(bytes))
 	}
 
 	if _, err = sl.adapter.AppendTimeSeries(
@@ -1494,38 +1458,19 @@ func (sl *scrapeLoop) report(
 
 func (sl *scrapeLoop) reportStale(start time.Time) (err error) {
 	ts := timestamp.FromTime(start)
-	stale := math.Float64frombits(value.StaleNaN)
 
-	builder := sl.bufferBuilders.get()
-	defer sl.bufferBuilders.put(builder)
 	batch := sl.bufferBatches.get()
 
-	if err = sl.addReportSample(builder, batch, scrapeHealthMetricName, ts, stale); err != nil {
-		return
-	}
-	if err = sl.addReportSample(builder, batch, scrapeDurationMetricName, ts, stale); err != nil {
-		return
-	}
-	if err = sl.addReportSample(builder, batch, scrapeSamplesMetricName, ts, stale); err != nil {
-		return
-	}
-	if err = sl.addReportSample(builder, batch, samplesPostRelabelMetricName, ts, stale); err != nil {
-		return
-	}
-	if err = sl.addReportSample(builder, batch, scrapeSeriesAddedMetricName, ts, stale); err != nil {
-		return
-	}
+	batch.AddWithLabelSet(scrapeHealthMetricName, uint64(ts), staleNaN)
+	batch.AddWithLabelSet(scrapeDurationMetricName, uint64(ts), staleNaN)
+	batch.AddWithLabelSet(scrapeSamplesMetricName, uint64(ts), staleNaN)
+	batch.AddWithLabelSet(samplesPostRelabelMetricName, uint64(ts), staleNaN)
+	batch.AddWithLabelSet(scrapeSeriesAddedMetricName, uint64(ts), staleNaN)
 
 	if sl.reportExtraMetrics {
-		if err = sl.addReportSample(builder, batch, scrapeTimeoutMetricName, ts, stale); err != nil {
-			return
-		}
-		if err = sl.addReportSample(builder, batch, scrapeSampleLimitMetricName, ts, stale); err != nil {
-			return
-		}
-		if err = sl.addReportSample(builder, batch, scrapeBodySizeBytesMetricName, ts, stale); err != nil {
-			return
-		}
+		batch.AddWithLabelSet(scrapeTimeoutMetricName, uint64(ts), staleNaN)
+		batch.AddWithLabelSet(scrapeSampleLimitMetricName, uint64(ts), staleNaN)
+		batch.AddWithLabelSet(scrapeBodySizeBytesMetricName, uint64(ts), staleNaN)
 	}
 
 	if _, err = sl.adapter.AppendTimeSeries(
@@ -1538,18 +1483,6 @@ func (sl *scrapeLoop) reportStale(start time.Time) (err error) {
 	}
 
 	return
-}
-
-func (sl *scrapeLoop) addReportSample(
-	builder *pp_model.LabelSetSimpleBuilder,
-	batch *BatchTimeSeries,
-	nameValue string,
-	t int64,
-	v float64,
-) error {
-	builder.Reset()
-	builder.Add(labels.MetricName, nameValue)
-	return batch.Add(builder, uint64(t), v)
 }
 
 // scrapeCache tracks mappings of exposed metric strings to label sets and
@@ -1718,4 +1651,51 @@ type metaEntry struct {
 func (m *metaEntry) size() int {
 	// The attribute lastIter although part of the struct it is not metadata.
 	return len(m.Help) + len(m.Unit) + len(m.Type)
+}
+
+// readResponse2 reads the response from the [*http.Response] and writes it to the [*bytes.Buffer].
+func (s *targetScraper) readResponse2(ctx context.Context, resp *http.Response, buf *bytes.Buffer) (string, error) {
+	defer func() {
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("server returned HTTP status %s", resp.Status)
+	}
+
+	if s.bodySizeLimit <= 0 {
+		s.bodySizeLimit = math.MaxInt64
+	}
+	if resp.Header.Get("Content-Encoding") != "gzip" {
+		n, err := buf.ReadFrom(io.LimitReader(resp.Body, s.bodySizeLimit))
+		if err != nil {
+			return "", err
+		}
+		if n >= s.bodySizeLimit {
+			s.metrics.targetScrapeExceededBodySizeLimit.Inc()
+			return "", errBodySizeLimit
+		}
+		return resp.Header.Get("Content-Type"), nil
+	}
+
+	rs := poolReaders.Get().(*readers)
+	defer poolReaders.Put(rs.reset())
+
+	rs.bReader.Reset(resp.Body)
+	if err := rs.gReader.Reset(rs.bReader); err != nil {
+		return "", err
+	}
+
+	n, err := buf.ReadFrom(io.LimitReader(rs.gReader, s.bodySizeLimit))
+
+	rs.gReader.Close()
+	if err != nil {
+		return "", err
+	}
+	if n >= s.bodySizeLimit {
+		s.metrics.targetScrapeExceededBodySizeLimit.Inc()
+		return "", errBodySizeLimit
+	}
+	return resp.Header.Get("Content-Type"), nil
 }

@@ -30,6 +30,7 @@ type Builder struct {
 	maxSegmentSize            uint32
 	registerer                prometheus.Registerer
 	unloadDataStorageInterval time.Duration
+	theadPools                *transactionhead.HeadPool
 	// stat
 	events *prometheus.CounterVec
 }
@@ -49,6 +50,7 @@ func NewBuilder(
 		maxSegmentSize:            maxSegmentSize,
 		registerer:                registerer,
 		unloadDataStorageInterval: unloadDataStorageInterval,
+		theadPools:                transactionhead.NewHeadPool[*shard.PerGoroutineShard](),
 		events: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "prompp_head_event_count",
@@ -116,6 +118,7 @@ func (b *Builder) BuildTransactionHead() *TransactionHead {
 		catalog.DefaultIDGenerator{}.Generate().String(),
 		sd,
 		shard.NewPerGoroutineShard[*wal.NoopWal](sd, 1),
+		b.theadPools,
 	)
 
 	b.events.With(prometheus.Labels{"type": "created_transaction_head"}).Inc()

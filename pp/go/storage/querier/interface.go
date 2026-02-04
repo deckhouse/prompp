@@ -6,6 +6,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
+	"github.com/prometheus/prometheus/storage"
 )
 
 //
@@ -135,4 +136,46 @@ type Head[
 
 	// NumberOfShards returns current number of shards in to [Head].
 	NumberOfShards() uint16
+
+	// AcquireSnapshots gets a []*cppbridge.LabelSetSnapshot from the pool.
+	AcquireSnapshots() []*cppbridge.LabelSetSnapshot
+
+	// ReleaseSnapshots returns a []*cppbridge.LabelSetSnapshot to the pool after resetting it.
+	ReleaseSnapshots(snapshots []*cppbridge.LabelSetSnapshot)
+
+	// AcquireLSSQueryResults gets a []*cppbridge.LSSQueryResult from the pool.
+	AcquireLSSQueryResults() []*cppbridge.LSSQueryResult
+
+	// ReleaseLSSQueryResults returns a []*cppbridge.LSSQueryResult to the pool after resetting it.
+	ReleaseLSSQueryResults(results []*cppbridge.LSSQueryResult)
+
+	// AcquireSelectors gets a []uintptr from the pool.
+	AcquireSelectors() []uintptr
+
+	// ReleaseSelectors returns a []uintptr to the pool after resetting it.
+	ReleaseSelectors(selectors []uintptr)
+
+	// AcquireSeriesSet gets a []storage.SeriesSet from the pool.
+	AcquireSeriesSet() []storage.SeriesSet
+
+	// ReleaseSeriesSet returns a []storage.SeriesSet to the pool after resetting it.
+	ReleaseSeriesSet(ssets []storage.SeriesSet)
+
+	// AcquireChunkSeriesSet gets a []storage.ChunkSeriesSet from the pool.
+	AcquireChunkSeriesSet() []storage.ChunkSeriesSet
+
+	// ReleaseChunkSeriesSet returns a []storage.ChunkSeriesSet to the pool after resetting it.
+	ReleaseChunkSeriesSet(csets []storage.ChunkSeriesSet)
+
+	// AcquireSerializedData gets a []*cppbridge.DataStorageSerializedData from the pool.
+	AcquireSerializedData() []*cppbridge.DataStorageSerializedData
+
+	// ReleaseSerializedData returns a []s*cppbridge.DataStorageSerializedData to the pool after resetting it.
+	ReleaseSerializedData(sd []*cppbridge.DataStorageSerializedData)
+
+	// AcquireErrors gets a []error from the pool.
+	AcquireErrors() []error
+
+	// ReleaseErrors returns a []error to the pool after resetting it.
+	ReleaseErrors(errs []error)
 }

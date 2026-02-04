@@ -137,14 +137,23 @@ func (q *ChunkQuerier[TTask, TDataStorage, TLSS, TShard, THead]) Select(
 	}
 	defer release()
 
-	lssQueryResults, snapshots, err := queryLss(lssQueryChunkQuerySelector, q.head, matchers)
-	if err != nil {
+	snapshots := q.head.AcquireSnapshots()
+	defer q.head.ReleaseSnapshots(snapshots)
+	lssQueryResults := q.head.AcquireLSSQueryResults()
+	defer q.head.ReleaseLSSQueryResults(lssQueryResults)
+
+	if err = queryLss(lssQueryChunkQuerySelector, q.head, matchers, snapshots, lssQueryResults); err != nil {
 		logger.Warnf("[ChunkQuerier]: failed: %s", err)
 		return storage.ErrChunkSeriesSet(err)
 	}
 
-	shardedSerializedData := queryDataStorage(dsQueryChunkQuerier, q.head, lssQueryResults, q.mint, q.maxt)
-	chunkSeriesSets := make([]storage.ChunkSeriesSet, q.head.NumberOfShards())
+	shardedSerializedData := q.head.AcquireSerializedData()
+	defer q.head.ReleaseSerializedData(shardedSerializedData)
+
+	queryDataStorage(dsQueryChunkQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt)
+
+	chunkSeriesSets := q.head.AcquireChunkSeriesSet()
+	defer q.head.ReleaseChunkSeriesSet(chunkSeriesSets)
 	for shardID, serializedData := range shardedSerializedData {
 		if serializedData == nil {
 			chunkSeriesSets[shardID] = &EmptyChunkSeriesSet{}
