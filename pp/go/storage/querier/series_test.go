@@ -532,7 +532,7 @@ func (s *SeriesSetTestSuite) TestDownsampling() {
 	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
 }
 
-func (s *SeriesSetTestSuite) TestMinOverTime() {
+func (s *SeriesSetTestSuite) TestMinOverTimeFunc() {
 	// Arrange
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, []storagetest.TimeSeries{
 		{
@@ -569,7 +569,7 @@ func (s *SeriesSetTestSuite) TestMinOverTime() {
 	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
 }
 
-func (s *SeriesSetTestSuite) TestMaxOverTime() {
+func (s *SeriesSetTestSuite) TestMaxOverTimeFunc() {
 	// Arrange
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, []storagetest.TimeSeries{
 		{
@@ -606,7 +606,7 @@ func (s *SeriesSetTestSuite) TestMaxOverTime() {
 	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
 }
 
-func (s *SeriesSetTestSuite) TestLastOverTime() {
+func (s *SeriesSetTestSuite) TestLastOverTimeFunc() {
 	// Arrange
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, []storagetest.TimeSeries{
 		{
@@ -644,7 +644,7 @@ func (s *SeriesSetTestSuite) TestLastOverTime() {
 	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
 }
 
-func (s *SeriesSetTestSuite) TestSumOverTime() {
+func (s *SeriesSetTestSuite) TestSumOverTimeFunc() {
 	// Arrange
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, []storagetest.TimeSeries{
 		{
@@ -682,7 +682,7 @@ func (s *SeriesSetTestSuite) TestSumOverTime() {
 	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
 }
 
-func (s *SeriesSetTestSuite) TestRate() {
+func (s *SeriesSetTestSuite) TestRateFunc() {
 	// Arrange
 	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, []storagetest.TimeSeries{
 		{
@@ -719,4 +719,43 @@ func (s *SeriesSetTestSuite) TestRate() {
 			},
 		},
 	}, storagetest.TimeSeriesFromSeriesSet(seriesSet, true))
+}
+
+func (s *SeriesSetTestSuite) TestChangesFunc() {
+	// Arrange
+	storagetest.MustAppendTimeSeriesToLSSAndDataStorage(s.lss, s.ds, []storagetest.TimeSeries{
+		{
+			Labels: labels.FromStrings("__name__", "metric", "job", "test"),
+			Samples: []cppbridge.Sample{
+				{Timestamp: 100, Value: 1.0},
+				{Timestamp: 150, Value: 2.0},
+				{Timestamp: 200, Value: 3.0},
+				{Timestamp: 250, Value: math.Float64frombits(value.StaleNaN)},
+				{Timestamp: 300, Value: 0.0},
+			},
+		},
+	}...)
+	hints := &storage.SelectHints{
+		Start: 100,
+		End:   250,
+		Func:  "changes",
+	}
+
+	// Act
+	seriesSet := s.query(s.lss, s.ds, 0, 400, cppbridge.NoDownsampling, hints, model.LabelMatcher{
+		Name:        "__name__",
+		Value:       "metric",
+		MatcherType: model.MatcherTypeExactMatch,
+	})
+
+	// Assert
+	actual := storagetest.TimeSeriesFromSeriesSet(seriesSet, true)
+	s.Equal(labels.FromStrings("__name__", "metric", "job", "test"), actual[0].Labels)
+	s.Equal([]cppbridge.Sample{
+		{Timestamp: 100, Value: 1.0},
+		{Timestamp: 150, Value: 2.0},
+		{Timestamp: 200, Value: 3.0},
+	}, actual[0].Samples[:3])
+	s.Equal(int64(250), actual[0].Samples[3].Timestamp)
+	s.Equal(value.StaleNaN, math.Float64bits(actual[0].Samples[3].Value))
 }
