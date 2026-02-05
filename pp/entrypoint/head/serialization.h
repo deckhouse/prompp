@@ -30,6 +30,11 @@ class SerializedDataGo {
                                                                DecodeIterator(std::in_place_type<DecodeIterator::DownsamplingIterator>, downsampling_ms_));
     }
 
+    if (select_hints_.func == "rate") [[likely]] {
+      return data_view_.create_series_iterator<DecodeIterator>(chunk_id,
+                                                               DecodeIterator(std::in_place_type<DecodeIterator::RateIterator>, select_hints_.interval));
+    }
+
     if (select_hints_.func == "min_over_time") [[unlikely]] {
       return data_view_.create_series_iterator<DecodeIterator>(chunk_id,
                                                                DecodeIterator(std::in_place_type<DecodeIterator::MinOverTimeIterator>, select_hints_.interval));

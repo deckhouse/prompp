@@ -22,6 +22,7 @@ enum class SeekResult : uint8_t {
   kUpdateSample = 0,
   kNext,
   kStop,
+  kUpdateSampleNextAndStop,
 };
 
 template <class Iterator>
@@ -69,6 +70,10 @@ class DecodeIteratorTrait {
       if (result == SeekResult::kUpdateSample) [[likely]] {
         derived()->update_sample();
       } else if (result == SeekResult::kStop) {
+        break;
+      } else if (result == SeekResult::kUpdateSampleNextAndStop) {
+        derived()->update_sample();
+        derived()->decode();
         break;
       }
     } while (derived()->decode());
