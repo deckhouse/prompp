@@ -35,7 +35,7 @@ class SerializedDataGo {
                                                                DecodeIterator(std::in_place_type<DecodeIterator::RateIterator>, select_hints_.interval));
     }
 
-    if (select_hints_.func == "irate") [[unlikely]] {
+    if (select_hints_.func == "irate" || select_hints_.func == "idelta") [[unlikely]] {
       return data_view_.create_series_iterator<DecodeIterator>(chunk_id,
                                                                DecodeIterator(std::in_place_type<DecodeIterator::IRateIterator>, select_hints_.interval));
     }
