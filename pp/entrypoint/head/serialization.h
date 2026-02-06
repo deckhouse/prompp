@@ -70,6 +70,11 @@ class SerializedDataGo {
                                                                DecodeIterator(std::in_place_type<DecodeIterator::DeltaIterator>, select_hints_.interval));
     }
 
+    if (select_hints_.func == "resets") [[unlikely]] {
+      return data_view_.create_series_iterator<DecodeIterator>(chunk_id,
+                                                               DecodeIterator(std::in_place_type<DecodeIterator::ResetsIterator>, select_hints_.interval));
+    }
+
     return data_view_.create_series_iterator<DecodeIterator>(chunk_id, DecodeIterator(std::in_place_type<DecodeIterator::UniversalDecodeIterator>));
   }
 

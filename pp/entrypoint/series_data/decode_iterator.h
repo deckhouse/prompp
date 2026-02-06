@@ -10,6 +10,7 @@
 #include "series_data/decoder/decorator/max_over_time.h"
 #include "series_data/decoder/decorator/min_over_time.h"
 #include "series_data/decoder/decorator/rate_iterator.h"
+#include "series_data/decoder/decorator/resets_iterator.h"
 #include "series_data/decoder/decorator/sum_over_time.h"
 #include "series_data/decoder/universal_decode_iterator.h"
 
@@ -32,6 +33,7 @@ class DecodeIterator {
   using IRateIterator = ::series_data::decoder::decorator::IRateIterator;
   using ChangesIterator = ::series_data::decoder::decorator::ChangesIterator;
   using DeltaIterator = ::series_data::decoder::decorator::DeltaIterator;
+  using ResetsIterator = ::series_data::decoder::decorator::ResetsIterator;
   using DecodeIteratorSentinel = ::series_data::decoder::DecodeIteratorSentinel;
 
   using IteratorVariant = std::variant<UniversalDecodeIterator,
@@ -43,7 +45,8 @@ class DecodeIterator {
                                        RateIterator,
                                        IRateIterator,
                                        ChangesIterator,
-                                       DeltaIterator>;
+                                       DeltaIterator,
+                                       ResetsIterator>;
 
   DECODE_ITERATOR_TYPE_TRAITS();
 
