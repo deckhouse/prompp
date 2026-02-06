@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include "label_matcher.h"
+#include "primitives/primitives.h"
 
 namespace PromPP::Prometheus {
 
