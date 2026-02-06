@@ -5,6 +5,7 @@
 #include "series_data/decoder/decorator/changes_iterator.h"
 #include "series_data/decoder/decorator/delta_iterator.h"
 #include "series_data/decoder/decorator/downsampling_decode_iterator.h"
+#include "series_data/decoder/decorator/irate_iterator.h"
 #include "series_data/decoder/decorator/last_over_time.h"
 #include "series_data/decoder/decorator/max_over_time.h"
 #include "series_data/decoder/decorator/min_over_time.h"
@@ -28,6 +29,7 @@ class DecodeIterator {
   using LastOverTimeIterator = ::series_data::decoder::decorator::LastOverTimeIterator;
   using SumOverTimeIterator = ::series_data::decoder::decorator::SumOverTimeIterator;
   using RateIterator = ::series_data::decoder::decorator::RateIterator;
+  using IRateIterator = ::series_data::decoder::decorator::IRateIterator;
   using ChangesIterator = ::series_data::decoder::decorator::ChangesIterator;
   using DeltaIterator = ::series_data::decoder::decorator::DeltaIterator;
   using DecodeIteratorSentinel = ::series_data::decoder::DecodeIteratorSentinel;
@@ -39,6 +41,7 @@ class DecodeIterator {
                                        LastOverTimeIterator,
                                        SumOverTimeIterator,
                                        RateIterator,
+                                       IRateIterator,
                                        ChangesIterator,
                                        DeltaIterator>;
 
