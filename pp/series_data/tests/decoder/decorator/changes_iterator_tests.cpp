@@ -17,13 +17,13 @@ using series_data::decoder::UniversalDecodeIterator;
 using series_data::decoder::decorator::ChangesIterator;
 using series_data::encoder::Sample;
 
-struct MinOverTimeIteratorCase {
+struct ChangesIteratorCase {
   std::vector<Sample> samples;
   PromPP::Primitives::TimeInterval interval;
   std::vector<Sample> expected{};
 };
 
-class ChangesIteratorFixture : public ::testing::TestWithParam<MinOverTimeIteratorCase> {
+class ChangesIteratorFixture : public ::testing::TestWithParam<ChangesIteratorCase> {
  protected:
   DataStorage storage_;
 
@@ -69,46 +69,46 @@ TEST_P(ChangesIteratorFixture, TestReset) {
 INSTANTIATE_TEST_SUITE_P(
     OneSample,
     ChangesIteratorFixture,
-    testing::Values(MinOverTimeIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}},
-                                            .interval{.min = 0, .max = 100},
-                                            .expected{Sample{.timestamp = 100, .value = 1.0}}},
-                    MinOverTimeIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}}, .interval{.min = 0, .max = 99}, .expected{}},
-                    MinOverTimeIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}}, .interval{.min = 101, .max = 200}, .expected{}}));
+    testing::Values(ChangesIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}},
+                                        .interval{.min = 0, .max = 100},
+                                        .expected{Sample{.timestamp = 100, .value = 1.0}}},
+                    ChangesIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}}, .interval{.min = 0, .max = 99}, .expected{}},
+                    ChangesIteratorCase{.samples{Sample{.timestamp = 100, .value = 1.0}}, .interval{.min = 101, .max = 200}, .expected{}}));
 
 INSTANTIATE_TEST_SUITE_P(StaleNan,
                          ChangesIteratorFixture,
-                         testing::Values(MinOverTimeIteratorCase{.samples{
-                                                                     Sample{.timestamp = 5, .value = STALE_NAN},
-                                                                     Sample{.timestamp = 10, .value = 1.0},
-                                                                     Sample{.timestamp = 20, .value = STALE_NAN},
-                                                                     Sample{.timestamp = 30, .value = 1.0},
-                                                                 },
-                                                                 .interval{.min = 0, .max = 100},
-                                                                 .expected{Sample{.timestamp = 5, .value = STALE_NAN}, Sample{.timestamp = 10, .value = 1.0},
-                                                                           Sample{.timestamp = 20, .value = STALE_NAN}, Sample{.timestamp = 30, .value = 1.0}}},
-                                         MinOverTimeIteratorCase{.samples{Sample{.timestamp = 100, .value = STALE_NAN}},
-                                                                 .interval{.min = 0, .max = 100},
-                                                                 .expected{Sample{.timestamp = 100, .value = STALE_NAN}}}));
+                         testing::Values(ChangesIteratorCase{.samples{
+                                                                 Sample{.timestamp = 5, .value = STALE_NAN},
+                                                                 Sample{.timestamp = 10, .value = 1.0},
+                                                                 Sample{.timestamp = 20, .value = STALE_NAN},
+                                                                 Sample{.timestamp = 30, .value = 1.0},
+                                                             },
+                                                             .interval{.min = 0, .max = 100},
+                                                             .expected{Sample{.timestamp = 5, .value = STALE_NAN}, Sample{.timestamp = 10, .value = 1.0},
+                                                                       Sample{.timestamp = 20, .value = STALE_NAN}, Sample{.timestamp = 30, .value = 1.0}}},
+                                         ChangesIteratorCase{.samples{Sample{.timestamp = 100, .value = STALE_NAN}},
+                                                             .interval{.min = 0, .max = 100},
+                                                             .expected{Sample{.timestamp = 100, .value = STALE_NAN}}}));
 
 INSTANTIATE_TEST_SUITE_P(TimeInterval,
                          ChangesIteratorFixture,
-                         testing::Values(MinOverTimeIteratorCase{.samples{
-                                                                     Sample{.timestamp = 99, .value = 1.0},
-                                                                     Sample{.timestamp = 100, .value = 1.1},
-                                                                     Sample{.timestamp = 200, .value = 1.1},
-                                                                     Sample{.timestamp = 201, .value = 1.0},
-                                                                 },
-                                                                 .interval{.min = 100, .max = 200},
-                                                                 .expected{Sample{.timestamp = 100, .value = 1.1}}},
-                                         MinOverTimeIteratorCase{.samples{
-                                                                     Sample{.timestamp = 100, .value = 1.1},
-                                                                     Sample{.timestamp = 120, .value = 1.1},
-                                                                     Sample{.timestamp = 150, .value = 1.2},
-                                                                     Sample{.timestamp = 180, .value = 1.2},
-                                                                     Sample{.timestamp = 200, .value = 1.0},
-                                                                 },
-                                                                 .interval{.min = 100, .max = 200},
-                                                                 .expected{Sample{.timestamp = 100, .value = 1.1}, Sample{.timestamp = 150, .value = 1.2},
-                                                                           Sample{.timestamp = 200, .value = 1.0}}}));
+                         testing::Values(ChangesIteratorCase{.samples{
+                                                                 Sample{.timestamp = 99, .value = 1.0},
+                                                                 Sample{.timestamp = 100, .value = 1.1},
+                                                                 Sample{.timestamp = 200, .value = 1.1},
+                                                                 Sample{.timestamp = 201, .value = 1.0},
+                                                             },
+                                                             .interval{.min = 100, .max = 200},
+                                                             .expected{Sample{.timestamp = 100, .value = 1.1}}},
+                                         ChangesIteratorCase{.samples{
+                                                                 Sample{.timestamp = 100, .value = 1.1},
+                                                                 Sample{.timestamp = 120, .value = 1.1},
+                                                                 Sample{.timestamp = 150, .value = 1.2},
+                                                                 Sample{.timestamp = 180, .value = 1.2},
+                                                                 Sample{.timestamp = 200, .value = 1.0},
+                                                             },
+                                                             .interval{.min = 100, .max = 200},
+                                                             .expected{Sample{.timestamp = 100, .value = 1.1}, Sample{.timestamp = 150, .value = 1.2},
+                                                                       Sample{.timestamp = 200, .value = 1.0}}}));
 
 }  // namespace
