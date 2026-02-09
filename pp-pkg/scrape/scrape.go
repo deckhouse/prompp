@@ -1,7 +1,6 @@
 package scrape
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -19,7 +18,6 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
-	"github.com/klauspost/compress/gzip"
 	config_util "github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/common/version"
@@ -658,8 +656,7 @@ var (
 // A scraper retrieves samples and accepts a status report at the end.
 type scraper interface {
 	scrape(ctx context.Context) (*http.Response, error)
-	readResponse(ctx context.Context, resp *http.Response, w io.Writer) (string, error)
-	readResponse2(ctx context.Context, resp *http.Response, buf *bytes.Buffer) (string, error)
+	readResponse(ctx context.Context, resp *http.Response, buf *bytes.Buffer) (string, error)
 	Report(start time.Time, dur time.Duration, err error)
 	offset(interval time.Duration, offsetSeed uint64) time.Duration
 	String() string
@@ -672,9 +669,6 @@ type targetScraper struct {
 	client  *http.Client
 	req     *http.Request
 	timeout time.Duration
-
-	gzipr *gzip.Reader
-	buf   *bufio.Reader
 
 	bodySizeLimit        int64
 	acceptHeader         string
@@ -727,8 +721,8 @@ func (s *targetScraper) scrape(ctx context.Context) (*http.Response, error) {
 	return s.client.Do(s.req.WithContext(ctx))
 }
 
-// readResponse reads the response from the [*http.Response] and writes it to the [io.Writer].
-func (s *targetScraper) readResponse(ctx context.Context, resp *http.Response, w io.Writer) (string, error) {
+// readResponse reads the response from the [*http.Response] and writes it to the [*bytes.Buffer].
+func (s *targetScraper) readResponse(ctx context.Context, resp *http.Response, buf *bytes.Buffer) (string, error) {
 	defer func() {
 		io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
@@ -742,7 +736,7 @@ func (s *targetScraper) readResponse(ctx context.Context, resp *http.Response, w
 		s.bodySizeLimit = math.MaxInt64
 	}
 	if resp.Header.Get("Content-Encoding") != "gzip" {
-		n, err := io.Copy(w, io.LimitReader(resp.Body, s.bodySizeLimit))
+		n, err := buf.ReadFrom(io.LimitReader(resp.Body, s.bodySizeLimit))
 		if err != nil {
 			return "", err
 		}
@@ -753,22 +747,17 @@ func (s *targetScraper) readResponse(ctx context.Context, resp *http.Response, w
 		return resp.Header.Get("Content-Type"), nil
 	}
 
-	if s.gzipr == nil {
-		s.buf = bufio.NewReader(resp.Body)
-		var err error
-		s.gzipr, err = gzip.NewReader(s.buf)
-		if err != nil {
-			return "", err
-		}
-	} else {
-		s.buf.Reset(resp.Body)
-		if err := s.gzipr.Reset(s.buf); err != nil {
-			return "", err
-		}
-	}
-	n, err := io.Copy(w, io.LimitReader(s.gzipr, s.bodySizeLimit))
+	rs := poolReaders.Get().(*readers)
+	defer poolReaders.Put(rs.reset())
 
-	s.gzipr.Close()
+	rs.bReader.Reset(resp.Body)
+	if err := rs.gReader.Reset(rs.bReader); err != nil {
+		return "", err
+	}
+
+	n, err := buf.ReadFrom(io.LimitReader(rs.gReader, s.bodySizeLimit))
+
+	rs.gReader.Close()
 	if err != nil {
 		return "", err
 	}
@@ -1041,8 +1030,7 @@ func (sl *scrapeLoop) scrapeAndReport(last, appendTime time.Time, errc chan<- er
 		b = sl.buffers.Get(sl.lastScrapeSize).([]byte)
 		defer sl.buffers.Put(b)
 		buf = bytes.NewBuffer(b)
-		// contentType, scrapeErr = sl.scraper.readResponse(scrapeCtx, resp, buf)
-		contentType, scrapeErr = sl.scraper.readResponse2(scrapeCtx, resp, buf)
+		contentType, scrapeErr = sl.scraper.readResponse(scrapeCtx, resp, buf)
 	}
 	cancel()
 
@@ -1651,51 +1639,4 @@ type metaEntry struct {
 func (m *metaEntry) size() int {
 	// The attribute lastIter although part of the struct it is not metadata.
 	return len(m.Help) + len(m.Unit) + len(m.Type)
-}
-
-// readResponse2 reads the response from the [*http.Response] and writes it to the [*bytes.Buffer].
-func (s *targetScraper) readResponse2(ctx context.Context, resp *http.Response, buf *bytes.Buffer) (string, error) {
-	defer func() {
-		io.Copy(io.Discard, resp.Body)
-		resp.Body.Close()
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("server returned HTTP status %s", resp.Status)
-	}
-
-	if s.bodySizeLimit <= 0 {
-		s.bodySizeLimit = math.MaxInt64
-	}
-	if resp.Header.Get("Content-Encoding") != "gzip" {
-		n, err := buf.ReadFrom(io.LimitReader(resp.Body, s.bodySizeLimit))
-		if err != nil {
-			return "", err
-		}
-		if n >= s.bodySizeLimit {
-			s.metrics.targetScrapeExceededBodySizeLimit.Inc()
-			return "", errBodySizeLimit
-		}
-		return resp.Header.Get("Content-Type"), nil
-	}
-
-	rs := poolReaders.Get().(*readers)
-	defer poolReaders.Put(rs.reset())
-
-	rs.bReader.Reset(resp.Body)
-	if err := rs.gReader.Reset(rs.bReader); err != nil {
-		return "", err
-	}
-
-	n, err := buf.ReadFrom(io.LimitReader(rs.gReader, s.bodySizeLimit))
-
-	rs.gReader.Close()
-	if err != nil {
-		return "", err
-	}
-	if n >= s.bodySizeLimit {
-		s.metrics.targetScrapeExceededBodySizeLimit.Inc()
-		return "", errBodySizeLimit
-	}
-	return resp.Header.Get("Content-Type"), nil
 }
