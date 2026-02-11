@@ -177,8 +177,6 @@ struct TestStringFilament {
       return BareBones::mem::allocated_memory(data) + BareBones::mem::allocated_memory(items);
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return static_cast<uint32_t>(items.size()); }
-
     PROMPP_ALWAYS_INLINE uint32_t emplace_back(composite_type str) noexcept {
       const auto id = static_cast<uint32_t>(items.size());
       const auto pos = static_cast<uint32_t>(data.size());

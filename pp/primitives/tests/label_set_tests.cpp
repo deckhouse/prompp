@@ -255,7 +255,7 @@ TEST_F(LabelSetEncodingBimapTest, ViewValueSymbol) {
   EXPECT_EQ("first"sv, view.value_symbol(v_it.key_id(), v_it.value_id()));
 }
 
-TEST_F(LabelSetEncodingBimapTest, ViewNextItemIndex) {
+TEST_F(LabelSetEncodingBimapTest, ViewSize) {
   // Arrange
   const LabelViewSet label_set1 = {{"job", "1"}};
   const LabelViewSet label_set2 = {{"job", "2"}, {"pod", "a"}};
@@ -267,26 +267,22 @@ TEST_F(LabelSetEncodingBimapTest, ViewNextItemIndex) {
   const auto view = encoding_table_.data_view();
 
   // Assert
-  EXPECT_EQ(2U, view.next_item_index());
   EXPECT_EQ(2U, view.size());
 }
 
-TEST_F(LabelSetEncodingBimapTest, ViewNextItemIndexAfterEmplace) {
+TEST_F(LabelSetEncodingBimapTest, ViewSizeAfterEmplace) {
   // Arrange
   const LabelViewSet label_set1 = {{"job", "1"}};
   const LabelViewSet label_set2 = {{"job", "2"}, {"pod", "a"}};
 
   encoding_table_.find_or_emplace(label_set1);
   const auto view1 = encoding_table_.data_view();
-  EXPECT_EQ(1U, view1.next_item_index());
 
   // Act
   encoding_table_.find_or_emplace(label_set2);
-  const auto view2 = encoding_table_.data_view();
 
   // Assert
-  EXPECT_EQ(2U, view2.next_item_index());
-  EXPECT_EQ(2U, view2.size());
+  EXPECT_EQ(2U, view1.size());
 }
 
 class LabelSetDecodingTableTest : public testing::Test {

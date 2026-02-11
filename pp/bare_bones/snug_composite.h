@@ -291,7 +291,7 @@ class GenericDecodingTable {
     if constexpr (has_next_item_index<Derived>) {
       return static_cast<const Derived*>(this)->next_item_index_impl();
     } else {
-      return storage_.next_item_index();
+      return storage_.count();
     }
   }
 
@@ -451,7 +451,7 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
                       next_item_index_impl());
     }
 
-    shift_ += Base::size();
+    shift_ += Base::storage_.count();
     Base::storage_.shrink();
     set_.clear();
   }
@@ -479,7 +479,7 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
       Allocator<typename Base::Proxy, uint32_t>{set_allocated_memory_}};
   uint32_t shift_{0};
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index_impl() const noexcept { return shift_ + Base::storage_.next_item_index(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index_impl() const noexcept { return shift_ + Base::storage_.count(); }
 
   template <ls_id_range R>
   PROMPP_ALWAYS_INLINE void after_items_load_impl(R&& loaded_ids) noexcept {
