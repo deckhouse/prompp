@@ -251,7 +251,12 @@ struct TestStringFilament {
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE view_type view() const noexcept { return {.storage_ptr = this}; }
 
-    void shrink() noexcept { items.clear(); }
+    void drop_front(uint32_t drop_count) {
+      if (drop_count != count()) [[unlikely]] {
+        throw BareBones::Exception(0x1bf0dbff9fe3d955, "Unsupported drop for tests");
+      }
+      items.clear();
+    }
   };
 };
 

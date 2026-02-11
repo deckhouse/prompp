@@ -1221,13 +1221,21 @@ struct LabelSet {
       return id;
     }
 
-    void shrink() noexcept {
-      shrinked_size_ += symbols_ids_sequences_.size();
+    void drop_front(uint32_t drop_count) noexcept {
+      assert(drop_count <= count());
+      if (drop_count == 0) [[unlikely]] {
+        return;
+      }
+      const auto drop_seq_offset = drop_count == count() ? symbols_ids_sequences_.size() : items_[drop_count].pos - shrinked_size_;
+      shrinked_size_ += drop_seq_offset;
 
-      items_.resize(0);
-      items_.shrink_to_fit();
-      symbols_ids_sequences_.resize(0);
+      symbols_ids_sequences_.erase(symbols_ids_sequences_.begin(), symbols_ids_sequences_.begin() + drop_seq_offset);
       symbols_ids_sequences_.shrink_to_fit();
+      // reserve 3 extra bytes to avoid problems with streamvbyte
+      symbols_ids_sequences_.reserve(symbols_ids_sequences_.size() + 3);
+
+      items_.erase(items_.begin(), items_.begin() + drop_count);
+      items_.shrink_to_fit();
     }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE checkpoint_type checkpoint() const noexcept {

@@ -30,8 +30,8 @@ template <class Range>
 concept ls_id_range = std::ranges::range<Range> && std::same_as<std::ranges::range_value_t<Range>, uint32_t>;
 
 template <class FilamentStorageType>
-concept is_shrinkable = requires(FilamentStorageType& storage) {
-  { storage.shrink() };
+concept is_shrinkable = requires(FilamentStorageType& storage, uint32_t count) {
+  { storage.drop_front(count) };
 };
 
 template <class Derived>
@@ -446,14 +446,22 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
   }
 
   void shrink_to_checkpoint_size(const checkpoint_type& checkpoint) {
-    if (checkpoint.next_item_index() != next_item_index_impl()) {
-      throw Exception(0x1bf0dbff9fe3d955, "Invalid checkpoint to shrink: checkpoint next_item_index [%u], next_item_index [%u]", checkpoint.next_item_index(),
-                      next_item_index_impl());
+    if (checkpoint.next_item_index() > next_item_index_impl()) {
+      throw Exception(0x1bf0dbff9fe3d955,
+                      "Checkpoint requires more items than the current table has: checkpoint next_item_index [%u], table next_item_index [%u]",
+                      checkpoint.next_item_index(), next_item_index_impl());
     }
+    const auto keep_count = next_item_index_impl() - checkpoint.next_item_index();
+    const auto drop_count = Base::storage_.count() - keep_count;
 
-    shift_ += Base::storage_.count();
-    Base::storage_.shrink();
+    shift_ += drop_count;
+    Base::storage_.drop_front(drop_count);
+    assert(Base::storage_.count() == keep_count);
     set_.clear();
+    set_.reserve(keep_count);
+    for (uint32_t id = 0; id < keep_count; ++id) {
+      set_.emplace(typename Base::Proxy(id));
+    }
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return Base::allocated_memory() + set_allocated_memory_; }
