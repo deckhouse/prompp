@@ -1,6 +1,7 @@
 #pragma once
 
 #include <scope_exit.h>
+#include <iterator>
 
 #include "bare_bones/exception.h"
 #include "bare_bones/iterator.h"
@@ -1226,16 +1227,31 @@ struct LabelSet {
       if (drop_count == 0) [[unlikely]] {
         return;
       }
-      const auto drop_seq_offset = drop_count == count() ? symbols_ids_sequences_.size() : items_[drop_count].pos - shrinked_size_;
+
+      if (drop_count == count()) [[likely]] {
+        shrinked_size_ += symbols_ids_sequences_.size();
+
+        symbols_ids_sequences_.clear();
+        items_.clear();
+
+        symbols_ids_sequences_.shrink_to_fit();
+        items_.shrink_to_fit();
+        return;
+      }
+
+      const auto drop_seq_offset = items_[drop_count].pos - shrinked_size_;
       shrinked_size_ += drop_seq_offset;
 
-      symbols_ids_sequences_.erase(symbols_ids_sequences_.begin(), symbols_ids_sequences_.begin() + drop_seq_offset);
-      symbols_ids_sequences_.shrink_to_fit();
+      symbols_ids_sequences_type new_symbols_ids_sequences;
       // reserve 3 extra bytes to avoid problems with streamvbyte
-      symbols_ids_sequences_.reserve(symbols_ids_sequences_.size() + 3);
+      new_symbols_ids_sequences.reserve(symbols_ids_sequences_.size() - drop_seq_offset + 3);
+      std::ranges::copy(symbols_ids_sequences_.begin() + drop_seq_offset, symbols_ids_sequences_.end(), std::back_inserter(new_symbols_ids_sequences));
+      symbols_ids_sequences_ = std::move(new_symbols_ids_sequences);
 
-      items_.erase(items_.begin(), items_.begin() + drop_count);
-      items_.shrink_to_fit();
+      Vector<item_type> new_items;
+      new_items.reserve(items_.size() - drop_count);
+      std::ranges::copy(items_.begin() + drop_count, items_.end(), std::back_inserter(new_items));
+      items_ = std::move(new_items);
     }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE checkpoint_type checkpoint() const noexcept {
