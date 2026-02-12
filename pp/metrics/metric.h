@@ -48,20 +48,26 @@ class Metric {
   }
 };
 
-class Counter final : public Metric {
+template <class Type>
+  requires std::same_as<Type, double> || std::same_as<Type, std::atomic<double>>
+class GenericCounter final : public Metric {
  public:
   using Metric::Metric;
 
   template <class LabelSet, BareBones::concepts::arithmetic ValueType = double>
-  explicit Counter(LabelSet&& labels, std::string_view name, ValueType value = {})
+  explicit GenericCounter(LabelSet&& labels, std::string_view name, ValueType value = {})
       : Metric(std::forward<LabelSet>(labels), name, &counter_, sizeof(*this)), value_(value) {}
 
   PROMPP_ALWAYS_INLINE void inc(BareBones::concepts::arithmetic auto count) noexcept { value_ += count; }
+  PROMPP_ALWAYS_INLINE void inc() noexcept { inc(1.0f); }
 
  protected:
-  double value_{};
-  PromPP::Primitives::Go::dto::Counter counter_{&value_};
+  Type value_{};
+  PromPP::Primitives::Go::dto::Counter counter_{reinterpret_cast<double*>(&value_)};
 };
+
+using Counter = GenericCounter<double>;
+using AtomicCounter = GenericCounter<std::atomic<double>>;
 
 class Gauge final : public Metric {
  public:
