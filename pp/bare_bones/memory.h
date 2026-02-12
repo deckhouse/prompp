@@ -96,9 +96,9 @@ concept ReallocatorInterface = requires(Reallocator reallocator, void* memory) {
   { Reallocator::free(memory) } -> std::same_as<void>;
 };
 
-inline std::atomic<double> malloc_count;
-inline std::atomic<double> realloc_count;
-inline std::atomic<double> realloc_grow_count;
+inline std::atomic<double> malloc_count{};
+inline std::atomic<double> realloc_count{};
+inline std::atomic<double> realloc_grow_count{};
 
 struct DefaultReallocator {
   PROMPP_ALWAYS_INLINE static void* allocate(size_t size) {
@@ -110,9 +110,7 @@ struct DefaultReallocator {
     realloc_count += 1.0;
     const auto new_memory = std::realloc(memory, size);
 
-    if (new_memory == memory) [[unlikely]] {
-      realloc_grow_count += 1.0;
-    }
+    realloc_grow_count += new_memory == memory;
     return new_memory;
   }
 
