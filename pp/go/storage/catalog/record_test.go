@@ -1,6 +1,7 @@
 package catalog_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -27,18 +28,36 @@ func (s *RecordSuite) TestReferenceCounterIncDecValue() {
 	s.Require().Equal(int64(0), r.ReferenceCount())
 }
 
-func TestXxx(t *testing.T) {
+func (s *RecordSuite) TestGetShardBySegmentIDEmpty() {
 	r := catalog.NewEmptyRecord()
 
-	t.Log(r.GetShardBySegmentID(0))
-	t.Log(r.GetShardBySegmentID(3600))
+	s.Equal(uint16(math.MaxUint16), r.GetShardBySegmentID(0))
+	s.Equal(uint16(math.MaxUint16), r.GetShardBySegmentID(3600))
+}
 
-	r.SetSegmentIDByShard(0, 2)
-	t.Log(r.GetShardBySegmentID(0))
+func (s *RecordSuite) TestSetSegmentIDByShard() {
+	r := catalog.NewEmptyRecord()
 
-	r.SetSegmentIDByShard(1440, 2)
-	t.Log(r.GetShardBySegmentID(1440))
+	expectedShardID := uint16(2)
+	r.SetSegmentIDByShard(0, expectedShardID)
+	s.Equal(expectedShardID, r.GetShardBySegmentID(0))
+}
+
+func (s *RecordSuite) TestSetSegmentIDByShardResize() {
+	r := catalog.NewEmptyRecord()
+
+	expectedShardID := uint16(2)
+	r.SetSegmentIDByShard(1440, expectedShardID)
+	s.Equal(expectedShardID, r.GetShardBySegmentID(1440))
 
 	r.SetSegmentIDByShard(2047, 2)
-	t.Log(r.GetShardBySegmentID(2047))
+	s.Equal(expectedShardID, r.GetShardBySegmentID(2047))
+}
+
+func (s *RecordSuite) TestNextSegmentID() {
+	r := catalog.NewEmptyRecord()
+
+	for i := range uint32(1000) {
+		s.Require().Equal(i, r.NextSegmentID())
+	}
 }
