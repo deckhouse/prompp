@@ -450,7 +450,7 @@ func (ds *dataSource) Read(ctx context.Context, segmentID uint32, minTimestamp i
 		return nil, ErrEmptyReadResult
 	}
 
-	wg := &sync.WaitGroup{}
+	wg := sync.WaitGroup{}
 	readShardResults := make([]readShardResult, len(ds.shards))
 	for shardID := 0; shardID < len(ds.shards); shardID++ {
 		if ds.shards[shardID].corrupted {

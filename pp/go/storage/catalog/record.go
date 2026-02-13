@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"math"
 	"sync"
 	"sync/atomic"
 
@@ -28,6 +29,8 @@ const (
 	StatusActive
 )
 
+const defaultSegments = 3600 * 2 / 5
+
 //
 // Record
 //
@@ -46,11 +49,22 @@ type Record struct {
 	numberOfSegments      uint32
 	mint                  int64
 	maxt                  int64
+	// marking up through segment IDs by shards
+	nextSegmentID uint32
+	// TODO clear segmentsByShard
+	// (c *Catalog) Delete(id string) - delete record from memory(on catalog gc)
+	// (c *Catalog) SetCorrupted(id string) - clear segmentsByShard ??? catalog gc skip Delete
+	segmentsByShard []uint16
+	segmentsLock    *sync.RWMutex
 }
 
 // NewEmptyRecord init new empty [Record].
 func NewEmptyRecord() *Record {
-	return &Record{}
+	return &Record{
+		nextSegmentID:   math.MaxUint32,
+		segmentsByShard: make([]uint16, defaultSegments),
+		segmentsLock:    &sync.RWMutex{},
+	}
 }
 
 // NewRecordWithData init new [Record] with parameters.
@@ -75,6 +89,10 @@ func NewRecordWithData(
 		referenceCount:        referenceCount,
 		status:                status,
 		lastAppendedSegmentID: optional.WithRawValue(lastAppendedSegmentID),
+		// marking up through segment IDs by shards
+		nextSegmentID:   math.MaxUint32,
+		segmentsByShard: make([]uint16, defaultSegments),
+		segmentsLock:    &sync.RWMutex{},
 	}
 }
 
@@ -102,6 +120,10 @@ func NewRecordWithDataV3(
 		numberOfSegments: numberOfSegments,
 		mint:             mint,
 		maxt:             maxt,
+		// marking up through segment IDs by shards
+		nextSegmentID:   math.MaxUint32,
+		segmentsByShard: make([]uint16, defaultSegments),
+		segmentsLock:    &sync.RWMutex{},
 	}
 }
 
@@ -136,6 +158,18 @@ func (r *Record) Dir() string {
 	return r.id.String()
 }
 
+// GetShardBySegmentID returns the ID of the shard where the through segment ID is located.
+func (r *Record) GetShardBySegmentID(sid uint32) uint16 {
+	r.segmentsLock.RLock()
+	defer r.segmentsLock.RUnlock()
+
+	if len(r.segmentsByShard) > int(sid) {
+		return r.segmentsByShard[sid] - 1
+	}
+
+	return math.MaxUint16
+}
+
 // ID returns id of [Head].
 func (r *Record) ID() string {
 	return r.id.String()
@@ -154,6 +188,11 @@ func (r *Record) Maxt() int64 {
 // Mint returns min timestamp in [Head].
 func (r *Record) Mint() int64 {
 	return r.mint
+}
+
+// NextSegmentID returns the next through ID for the segment.
+func (r *Record) NextSegmentID() uint32 {
+	return atomic.AddUint32(&r.nextSegmentID, 1)
 }
 
 // NumberOfSegments returns number of segments in [Head].
@@ -179,6 +218,32 @@ func (r *Record) SetLastAppendedSegmentID(segmentID uint32) {
 // SetNumberOfSegments number of segments in [Head].
 func (r *Record) SetNumberOfSegments(numberOfSegments uint32) {
 	r.numberOfSegments = numberOfSegments
+}
+
+// SetSegmentIDByShard sets the matching of through segment ID and shard.
+func (r *Record) SetSegmentIDByShard(sid uint32, shardID uint16) {
+	r.segmentsLock.Lock()
+	defer r.segmentsLock.Unlock()
+
+	// fmt.Println(" === SetSegmentIDByShard", sid, shardID)
+
+	if len(r.segmentsByShard) > int(sid) {
+		r.segmentsByShard[sid] = shardID + 1
+		return
+	}
+
+	if cap(r.segmentsByShard) > int(sid) {
+		r.segmentsByShard = r.segmentsByShard[:sid+1]
+		r.segmentsByShard[sid] = shardID + 1
+		return
+	}
+
+	r.segmentsByShard = append(
+		r.segmentsByShard[:cap(r.segmentsByShard)],
+		make([]uint16, int(sid)-cap(r.segmentsByShard)+1)...,
+	)
+
+	r.segmentsByShard[sid] = shardID + 1
 }
 
 // Status returns current status of [Head].

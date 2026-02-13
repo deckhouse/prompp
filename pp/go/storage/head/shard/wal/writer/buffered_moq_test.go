@@ -528,3 +528,108 @@ func (mock *FileWriterMock) WriteCalls() []struct {
 	mock.lockWrite.RUnlock()
 	return calls
 }
+
+// SegmentMarkupMock is a mock implementation of writer.SegmentMarkup.
+//
+//	func TestSomethingThatUsesSegmentMarkup(t *testing.T) {
+//
+//		// make and configure a mocked writer.SegmentMarkup
+//		mockedSegmentMarkup := &SegmentMarkupMock{
+//			NextSegmentIDFunc: func() uint32 {
+//				panic("mock out the NextSegmentID method")
+//			},
+//			SetSegmentIDByShardFunc: func(sid uint32, shardID uint16)  {
+//				panic("mock out the SetSegmentIDByShard method")
+//			},
+//		}
+//
+//		// use mockedSegmentMarkup in code that requires writer.SegmentMarkup
+//		// and then make assertions.
+//
+//	}
+type SegmentMarkupMock struct {
+	// NextSegmentIDFunc mocks the NextSegmentID method.
+	NextSegmentIDFunc func() uint32
+
+	// SetSegmentIDByShardFunc mocks the SetSegmentIDByShard method.
+	SetSegmentIDByShardFunc func(sid uint32, shardID uint16)
+
+	// calls tracks calls to the methods.
+	calls struct {
+		// NextSegmentID holds details about calls to the NextSegmentID method.
+		NextSegmentID []struct {
+		}
+		// SetSegmentIDByShard holds details about calls to the SetSegmentIDByShard method.
+		SetSegmentIDByShard []struct {
+			// Sid is the sid argument value.
+			Sid uint32
+			// ShardID is the shardID argument value.
+			ShardID uint16
+		}
+	}
+	lockNextSegmentID       sync.RWMutex
+	lockSetSegmentIDByShard sync.RWMutex
+}
+
+// NextSegmentID calls NextSegmentIDFunc.
+func (mock *SegmentMarkupMock) NextSegmentID() uint32 {
+	if mock.NextSegmentIDFunc == nil {
+		panic("SegmentMarkupMock.NextSegmentIDFunc: method is nil but SegmentMarkup.NextSegmentID was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockNextSegmentID.Lock()
+	mock.calls.NextSegmentID = append(mock.calls.NextSegmentID, callInfo)
+	mock.lockNextSegmentID.Unlock()
+	return mock.NextSegmentIDFunc()
+}
+
+// NextSegmentIDCalls gets all the calls that were made to NextSegmentID.
+// Check the length with:
+//
+//	len(mockedSegmentMarkup.NextSegmentIDCalls())
+func (mock *SegmentMarkupMock) NextSegmentIDCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockNextSegmentID.RLock()
+	calls = mock.calls.NextSegmentID
+	mock.lockNextSegmentID.RUnlock()
+	return calls
+}
+
+// SetSegmentIDByShard calls SetSegmentIDByShardFunc.
+func (mock *SegmentMarkupMock) SetSegmentIDByShard(sid uint32, shardID uint16) {
+	if mock.SetSegmentIDByShardFunc == nil {
+		panic("SegmentMarkupMock.SetSegmentIDByShardFunc: method is nil but SegmentMarkup.SetSegmentIDByShard was just called")
+	}
+	callInfo := struct {
+		Sid     uint32
+		ShardID uint16
+	}{
+		Sid:     sid,
+		ShardID: shardID,
+	}
+	mock.lockSetSegmentIDByShard.Lock()
+	mock.calls.SetSegmentIDByShard = append(mock.calls.SetSegmentIDByShard, callInfo)
+	mock.lockSetSegmentIDByShard.Unlock()
+	mock.SetSegmentIDByShardFunc(sid, shardID)
+}
+
+// SetSegmentIDByShardCalls gets all the calls that were made to SetSegmentIDByShard.
+// Check the length with:
+//
+//	len(mockedSegmentMarkup.SetSegmentIDByShardCalls())
+func (mock *SegmentMarkupMock) SetSegmentIDByShardCalls() []struct {
+	Sid     uint32
+	ShardID uint16
+} {
+	var calls []struct {
+		Sid     uint32
+		ShardID uint16
+	}
+	mock.lockSetSegmentIDByShard.RLock()
+	calls = mock.calls.SetSegmentIDByShard
+	mock.lockSetSegmentIDByShard.RUnlock()
+	return calls
+}

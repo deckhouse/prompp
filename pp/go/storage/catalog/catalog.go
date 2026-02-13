@@ -134,15 +134,17 @@ func (c *Catalog) Create(numberOfShards uint16) (*Record, error) {
 
 	id := c.idGenerator.Generate()
 	now := c.clock.Now().UnixMilli()
-	r := &Record{
-		id:             id,
-		numberOfShards: numberOfShards,
-		createdAt:      now,
-		updatedAt:      now,
-		deletedAt:      0,
-		referenceCount: 0,
-		status:         StatusNew,
-	}
+	r := NewRecordWithData(
+		id,
+		numberOfShards,
+		now,
+		now,
+		0,
+		false,
+		0,
+		StatusNew,
+		nil,
+	)
 
 	if err := c.log.Write(r); err != nil {
 		return r, fmt.Errorf(logWriteErr, err)
@@ -339,6 +341,11 @@ func (c *Catalog) sync() error {
 
 			return c.compactLog()
 		}
+
+		if r.deletedAt != 0 {
+			continue
+		}
+
 		c.records[r.id.String()] = r
 	}
 }

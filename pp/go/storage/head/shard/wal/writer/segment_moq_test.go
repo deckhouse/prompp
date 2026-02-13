@@ -180,3 +180,257 @@ func (mock *EncodedSegmentMock) WriteToCalls() []struct {
 	mock.lockWriteTo.RUnlock()
 	return calls
 }
+
+// EncodedSegmentV2Mock is a mock implementation of writer.EncodedSegmentV2.
+//
+//	func TestSomethingThatUsesEncodedSegmentV2(t *testing.T) {
+//
+//		// make and configure a mocked writer.EncodedSegmentV2
+//		mockedEncodedSegmentV2 := &EncodedSegmentV2Mock{
+//			CRC32Func: func() uint32 {
+//				panic("mock out the CRC32 method")
+//			},
+//			IDFunc: func() uint32 {
+//				panic("mock out the ID method")
+//			},
+//			SamplesFunc: func() uint32 {
+//				panic("mock out the Samples method")
+//			},
+//			SetSegmentIDFunc: func(sid uint32)  {
+//				panic("mock out the SetSegmentID method")
+//			},
+//			SizeFunc: func() int64 {
+//				panic("mock out the Size method")
+//			},
+//			WriteToFunc: func(w io.Writer) (int64, error) {
+//				panic("mock out the WriteTo method")
+//			},
+//		}
+//
+//		// use mockedEncodedSegmentV2 in code that requires writer.EncodedSegmentV2
+//		// and then make assertions.
+//
+//	}
+type EncodedSegmentV2Mock struct {
+	// CRC32Func mocks the CRC32 method.
+	CRC32Func func() uint32
+
+	// IDFunc mocks the ID method.
+	IDFunc func() uint32
+
+	// SamplesFunc mocks the Samples method.
+	SamplesFunc func() uint32
+
+	// SetSegmentIDFunc mocks the SetSegmentID method.
+	SetSegmentIDFunc func(sid uint32)
+
+	// SizeFunc mocks the Size method.
+	SizeFunc func() int64
+
+	// WriteToFunc mocks the WriteTo method.
+	WriteToFunc func(w io.Writer) (int64, error)
+
+	// calls tracks calls to the methods.
+	calls struct {
+		// CRC32 holds details about calls to the CRC32 method.
+		CRC32 []struct {
+		}
+		// ID holds details about calls to the ID method.
+		ID []struct {
+		}
+		// Samples holds details about calls to the Samples method.
+		Samples []struct {
+		}
+		// SetSegmentID holds details about calls to the SetSegmentID method.
+		SetSegmentID []struct {
+			// Sid is the sid argument value.
+			Sid uint32
+		}
+		// Size holds details about calls to the Size method.
+		Size []struct {
+		}
+		// WriteTo holds details about calls to the WriteTo method.
+		WriteTo []struct {
+			// W is the w argument value.
+			W io.Writer
+		}
+	}
+	lockCRC32        sync.RWMutex
+	lockID           sync.RWMutex
+	lockSamples      sync.RWMutex
+	lockSetSegmentID sync.RWMutex
+	lockSize         sync.RWMutex
+	lockWriteTo      sync.RWMutex
+}
+
+// CRC32 calls CRC32Func.
+func (mock *EncodedSegmentV2Mock) CRC32() uint32 {
+	if mock.CRC32Func == nil {
+		panic("EncodedSegmentV2Mock.CRC32Func: method is nil but EncodedSegmentV2.CRC32 was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockCRC32.Lock()
+	mock.calls.CRC32 = append(mock.calls.CRC32, callInfo)
+	mock.lockCRC32.Unlock()
+	return mock.CRC32Func()
+}
+
+// CRC32Calls gets all the calls that were made to CRC32.
+// Check the length with:
+//
+//	len(mockedEncodedSegmentV2.CRC32Calls())
+func (mock *EncodedSegmentV2Mock) CRC32Calls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockCRC32.RLock()
+	calls = mock.calls.CRC32
+	mock.lockCRC32.RUnlock()
+	return calls
+}
+
+// ID calls IDFunc.
+func (mock *EncodedSegmentV2Mock) ID() uint32 {
+	if mock.IDFunc == nil {
+		panic("EncodedSegmentV2Mock.IDFunc: method is nil but EncodedSegmentV2.ID was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockID.Lock()
+	mock.calls.ID = append(mock.calls.ID, callInfo)
+	mock.lockID.Unlock()
+	return mock.IDFunc()
+}
+
+// IDCalls gets all the calls that were made to ID.
+// Check the length with:
+//
+//	len(mockedEncodedSegmentV2.IDCalls())
+func (mock *EncodedSegmentV2Mock) IDCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockID.RLock()
+	calls = mock.calls.ID
+	mock.lockID.RUnlock()
+	return calls
+}
+
+// Samples calls SamplesFunc.
+func (mock *EncodedSegmentV2Mock) Samples() uint32 {
+	if mock.SamplesFunc == nil {
+		panic("EncodedSegmentV2Mock.SamplesFunc: method is nil but EncodedSegmentV2.Samples was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockSamples.Lock()
+	mock.calls.Samples = append(mock.calls.Samples, callInfo)
+	mock.lockSamples.Unlock()
+	return mock.SamplesFunc()
+}
+
+// SamplesCalls gets all the calls that were made to Samples.
+// Check the length with:
+//
+//	len(mockedEncodedSegmentV2.SamplesCalls())
+func (mock *EncodedSegmentV2Mock) SamplesCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockSamples.RLock()
+	calls = mock.calls.Samples
+	mock.lockSamples.RUnlock()
+	return calls
+}
+
+// SetSegmentID calls SetSegmentIDFunc.
+func (mock *EncodedSegmentV2Mock) SetSegmentID(sid uint32) {
+	if mock.SetSegmentIDFunc == nil {
+		panic("EncodedSegmentV2Mock.SetSegmentIDFunc: method is nil but EncodedSegmentV2.SetSegmentID was just called")
+	}
+	callInfo := struct {
+		Sid uint32
+	}{
+		Sid: sid,
+	}
+	mock.lockSetSegmentID.Lock()
+	mock.calls.SetSegmentID = append(mock.calls.SetSegmentID, callInfo)
+	mock.lockSetSegmentID.Unlock()
+	mock.SetSegmentIDFunc(sid)
+}
+
+// SetSegmentIDCalls gets all the calls that were made to SetSegmentID.
+// Check the length with:
+//
+//	len(mockedEncodedSegmentV2.SetSegmentIDCalls())
+func (mock *EncodedSegmentV2Mock) SetSegmentIDCalls() []struct {
+	Sid uint32
+} {
+	var calls []struct {
+		Sid uint32
+	}
+	mock.lockSetSegmentID.RLock()
+	calls = mock.calls.SetSegmentID
+	mock.lockSetSegmentID.RUnlock()
+	return calls
+}
+
+// Size calls SizeFunc.
+func (mock *EncodedSegmentV2Mock) Size() int64 {
+	if mock.SizeFunc == nil {
+		panic("EncodedSegmentV2Mock.SizeFunc: method is nil but EncodedSegmentV2.Size was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockSize.Lock()
+	mock.calls.Size = append(mock.calls.Size, callInfo)
+	mock.lockSize.Unlock()
+	return mock.SizeFunc()
+}
+
+// SizeCalls gets all the calls that were made to Size.
+// Check the length with:
+//
+//	len(mockedEncodedSegmentV2.SizeCalls())
+func (mock *EncodedSegmentV2Mock) SizeCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockSize.RLock()
+	calls = mock.calls.Size
+	mock.lockSize.RUnlock()
+	return calls
+}
+
+// WriteTo calls WriteToFunc.
+func (mock *EncodedSegmentV2Mock) WriteTo(w io.Writer) (int64, error) {
+	if mock.WriteToFunc == nil {
+		panic("EncodedSegmentV2Mock.WriteToFunc: method is nil but EncodedSegmentV2.WriteTo was just called")
+	}
+	callInfo := struct {
+		W io.Writer
+	}{
+		W: w,
+	}
+	mock.lockWriteTo.Lock()
+	mock.calls.WriteTo = append(mock.calls.WriteTo, callInfo)
+	mock.lockWriteTo.Unlock()
+	return mock.WriteToFunc(w)
+}
+
+// WriteToCalls gets all the calls that were made to WriteTo.
+// Check the length with:
+//
+//	len(mockedEncodedSegmentV2.WriteToCalls())
+func (mock *EncodedSegmentV2Mock) WriteToCalls() []struct {
+	W io.Writer
+} {
+	var calls []struct {
+		W io.Writer
+	}
+	mock.lockWriteTo.RLock()
+	calls = mock.calls.WriteTo
+	mock.lockWriteTo.RUnlock()
+	return calls
+}

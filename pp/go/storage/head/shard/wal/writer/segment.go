@@ -7,7 +7,7 @@ import (
 )
 
 //go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg writer_test --out
-//go:generate moq segment_moq_test.go . EncodedSegment
+//go:generate moq segment_moq_test.go . EncodedSegment EncodedSegmentV2
 
 // EncodedSegment the minimum required Segment implementation for a [WriteSegment].
 type EncodedSegment interface {
@@ -53,4 +53,26 @@ func WriteSegment[TSegment EncodedSegment](writer io.Writer, segment TSegment) (
 	n += int(bytesWritten64)
 
 	return n, nil
+}
+
+// EncodedSegmentV2 the minimum required Segment implementation for a [WriteSegment], version 2.
+type EncodedSegmentV2 interface {
+	// ID returns the segment ID, filled in from the outside.
+	ID() uint32
+
+	// SetSegmentID sets the segment ID.
+	SetSegmentID(sid uint32)
+
+	// CRC32 the hash amount according to the data.
+	CRC32() uint32
+
+	// Samples returns count of samples in segment.
+	Samples() uint32
+
+	// Size returns len of bytes.
+	Size() int64
+
+	// WriteTo writes data to w until there's no more data to write or when an error occurs.
+	// The return value n is the number of bytes written. Any error encountered during the write is also returned.
+	io.WriterTo
 }

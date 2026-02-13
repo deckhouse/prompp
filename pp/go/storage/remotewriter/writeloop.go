@@ -128,30 +128,36 @@ func (*writeLoop) write(ctx context.Context, iterator *Iterator) (err error) {
 		defer close(msgChannel)
 
 		for {
-			msg, err := iterator.Next(ctx)
+			var msg *cppbridge.RWMessageList
+			msg, err = iterator.Next(ctx)
 			if errors.Is(err, ErrEndOfBlock) {
+				err = nil
 				return
 			}
 			if err != nil {
 				logger.Errorf("iteration failed: %v", err)
 			}
-			if msg != nil {
-				select {
-				case <-ctx.Done():
-					err = ctx.Err()
-					return
 
-				case msgChannel <- msg:
-				}
+			select {
+			case <-ctx.Done():
+				err = ctx.Err()
+				return
+
+			case msgChannel <- msg:
 			}
 		}
 	}()
 
 	for msg := range msgChannel {
-		if err := iterator.SendMessage(ctx, msg); err != nil {
-			logger.Errorf("send message: %v", err)
+		if msg == nil {
+			continue
+		}
+
+		if errSend := iterator.SendMessage(ctx, msg); errSend != nil {
+			logger.Errorf("send message: %v", errSend)
 		}
 	}
+
 	return err
 }
 

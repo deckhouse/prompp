@@ -80,7 +80,7 @@ func (b *Builder) Build(generation uint64, numberOfShards uint16) (*Head, error)
 	shards := make([]*shard.Shard, numberOfShards)
 	swn := writer.NewSegmentWriteNotifier(numberOfShards, headRecord.SetLastAppendedSegmentID)
 	for shardID := range numberOfShards {
-		s, err := b.createShardOnDisk(headDir, swn, shardID)
+		s, err := b.createShardOnDisk(headDir, swn, headRecord, shardID)
 		if err != nil {
 			return nil, err
 		}
@@ -130,6 +130,7 @@ func (b *Builder) BuildTransactionHead() *TransactionHead {
 func (b *Builder) createShardOnDisk(
 	headDir string,
 	swn *writer.SegmentWriteNotifier,
+	headRecord *catalog.Record,
 	shardID uint16,
 ) (*shard.Shard, error) {
 	headDir = filepath.Clean(headDir)
@@ -156,7 +157,13 @@ func (b *Builder) createShardOnDisk(
 		return nil, fmt.Errorf("failed to write header: %w", err)
 	}
 
-	sw, err := writer.NewBuffered(shardID, shardFile, writer.WriteSegment[*cppbridge.HeadEncodedSegment], swn)
+	sw, err := writer.NewBuffered(
+		shardID,
+		shardFile,
+		writer.WriteSegment[*cppbridge.HeadEncodedSegment],
+		swn,
+		headRecord,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create buffered writer shard id %d: %w", shardID, err)
 	}

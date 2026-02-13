@@ -26,3 +26,19 @@ func (s *RecordSuite) TestReferenceCounterIncDecValue() {
 	release()
 	s.Require().Equal(int64(0), r.ReferenceCount())
 }
+
+func TestXxx(t *testing.T) {
+	r := catalog.NewEmptyRecord()
+
+	t.Log(r.GetShardBySegmentID(0))
+	t.Log(r.GetShardBySegmentID(3600))
+
+	r.SetSegmentIDByShard(0, 2)
+	t.Log(r.GetShardBySegmentID(0))
+
+	r.SetSegmentIDByShard(1440, 2)
+	t.Log(r.GetShardBySegmentID(1440))
+
+	r.SetSegmentIDByShard(2047, 2)
+	t.Log(r.GetShardBySegmentID(2047))
+}

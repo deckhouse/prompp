@@ -30,8 +30,14 @@ func (s *BufferedSuite) TestWriteFlushSync() {
 		NotifySegmentWriteFunc:     func(uint16) {},
 	}
 
-	shardID := uint16(0)
-	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentMock], swn)
+	segmentID := uint32(2)
+	sm := &SegmentMarkupMock{
+		NextSegmentIDFunc:       func() uint32 { return segmentID },
+		SetSegmentIDByShardFunc: func(uint32, uint16) {},
+	}
+
+	shardID := uint16(1)
+	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentV2Mock], swn, sm)
 	s.Require().NoError(err)
 	s.Equal(int64(0), wrBuf.CurrentSize())
 
@@ -51,6 +57,10 @@ func (s *BufferedSuite) TestWriteFlushSync() {
 	s.Len(sfile.SyncCalls(), 1)
 	s.Len(swn.NotifySegmentIsWrittenCalls(), 1)
 
+	s.Require().Len(sm.SetSegmentIDByShardCalls(), 1)
+	s.Equal(segmentID, sm.SetSegmentIDByShardCalls()[0].Sid)
+	s.Equal(shardID, sm.SetSegmentIDByShardCalls()[0].ShardID)
+
 	err = wrBuf.Close()
 	s.Require().NoError(err)
 	s.Len(sfile.CloseCalls(), 1)
@@ -66,8 +76,17 @@ func (s *BufferedSuite) TestDoubleWriteAndFlush() {
 		NotifySegmentWriteFunc:     func(uint16) { numberOfSegments++ },
 	}
 
-	shardID := uint16(0)
-	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentMock], swn)
+	segmentID := uint32(2)
+	sm := &SegmentMarkupMock{
+		NextSegmentIDFunc: func() uint32 {
+			segmentID++
+			return segmentID
+		},
+		SetSegmentIDByShardFunc: func(uint32, uint16) {},
+	}
+
+	shardID := uint16(1)
+	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentV2Mock], swn, sm)
 	s.Require().NoError(err)
 	s.Equal(int64(0), wrBuf.CurrentSize())
 
@@ -101,6 +120,12 @@ func (s *BufferedSuite) TestDoubleWriteAndFlush() {
 	s.Len(swn.NotifySegmentWriteCalls(), 2)
 	s.Equal(2, numberOfSegments)
 
+	s.Require().Len(sm.SetSegmentIDByShardCalls(), 2)
+	s.Equal(segmentID-1, sm.SetSegmentIDByShardCalls()[0].Sid)
+	s.Equal(shardID, sm.SetSegmentIDByShardCalls()[0].ShardID)
+	s.Equal(segmentID, sm.SetSegmentIDByShardCalls()[1].Sid)
+	s.Equal(shardID, sm.SetSegmentIDByShardCalls()[1].ShardID)
+
 	err = wrBuf.Close()
 	s.Require().NoError(err)
 	s.Len(sfile.CloseCalls(), 1)
@@ -115,8 +140,19 @@ func (s *BufferedSuite) TestBuffered() {
 		NotifySegmentWriteFunc:     func(uint16) {},
 	}
 
-	shardID := uint16(0)
-	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentMock], swn)
+	segmentID := uint32(2)
+	segments := make([]uint32, 0, 10)
+	sm := &SegmentMarkupMock{
+		NextSegmentIDFunc: func() uint32 {
+			segmentID++
+			segments = append(segments, segmentID)
+			return segmentID
+		},
+		SetSegmentIDByShardFunc: func(uint32, uint16) {},
+	}
+
+	shardID := uint16(1)
+	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentV2Mock], swn, sm)
 	s.Require().NoError(err)
 	s.Equal(int64(0), wrBuf.CurrentSize())
 
@@ -143,6 +179,12 @@ func (s *BufferedSuite) TestBuffered() {
 	s.Len(sfile.SyncCalls(), 1)
 	s.Len(swn.NotifySegmentIsWrittenCalls(), 1)
 
+	s.Require().Len(sm.SetSegmentIDByShardCalls(), len(segments))
+	for i, sid := range segments {
+		s.Equal(sid, sm.SetSegmentIDByShardCalls()[i].Sid)
+		s.Equal(shardID, sm.SetSegmentIDByShardCalls()[i].ShardID)
+	}
+
 	err = wrBuf.Close()
 	s.Require().NoError(err)
 	s.Len(sfile.CloseCalls(), 1)
@@ -158,8 +200,15 @@ func (s *BufferedSuite) TestStatError() {
 		NotifySegmentWriteFunc:     func(uint16) {},
 	}
 
+	sm := &SegmentMarkupMock{
+		NextSegmentIDFunc: func() uint32 {
+			return 0
+		},
+		SetSegmentIDByShardFunc: func(uint32, uint16) {},
+	}
+
 	shardID := uint16(0)
-	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentMock], swn)
+	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentV2Mock], swn, sm)
 	s.Require().Error(err)
 	s.Require().Nil(wrBuf)
 }
@@ -174,8 +223,14 @@ func (s *BufferedSuite) TestSyncError() {
 		NotifySegmentWriteFunc:     func(uint16) {},
 	}
 
+	segmentID := uint32(2)
+	sm := &SegmentMarkupMock{
+		NextSegmentIDFunc:       func() uint32 { return segmentID },
+		SetSegmentIDByShardFunc: func(uint32, uint16) {},
+	}
+
 	shardID := uint16(0)
-	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentMock], swn)
+	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentV2Mock], swn, sm)
 	s.Require().NoError(err)
 	s.Equal(int64(0), wrBuf.CurrentSize())
 
@@ -194,6 +249,7 @@ func (s *BufferedSuite) TestSyncError() {
 	s.Require().Error(err)
 	s.Len(sfile.SyncCalls(), 1)
 	s.Empty(swn.NotifySegmentIsWrittenCalls())
+	s.Empty(sm.SetSegmentIDByShardCalls())
 }
 
 func (s *BufferedSuite) TestWriteToBufferWithError() {
@@ -206,7 +262,7 @@ func (s *BufferedSuite) TestWriteToBufferWithError() {
 	}
 
 	scount := 0
-	writeSegment := func(w io.Writer, segment *EncodedSegmentMock) (n int, err error) {
+	writeSegment := func(w io.Writer, segment *EncodedSegmentV2Mock) (n int, err error) {
 		if scount == 5 {
 			scount++
 			return 0, errors.New("some error")
@@ -216,8 +272,19 @@ func (s *BufferedSuite) TestWriteToBufferWithError() {
 		return writer.WriteSegment(w, segment)
 	}
 
-	shardID := uint16(0)
-	wrBuf, err := writer.NewBuffered(shardID, sfile, writeSegment, swn)
+	segmentID := uint32(2)
+	segments := make([]uint32, 0, 10)
+	sm := &SegmentMarkupMock{
+		NextSegmentIDFunc: func() uint32 {
+			segmentID++
+			segments = append(segments, segmentID)
+			return segmentID
+		},
+		SetSegmentIDByShardFunc: func(uint32, uint16) {},
+	}
+
+	shardID := uint16(1)
+	wrBuf, err := writer.NewBuffered(shardID, sfile, writeSegment, swn, sm)
 	s.Require().NoError(err)
 	s.Equal(int64(0), wrBuf.CurrentSize())
 
@@ -245,6 +312,12 @@ func (s *BufferedSuite) TestWriteToBufferWithError() {
 	s.Require().NoError(err)
 	s.Len(sfile.SyncCalls(), 1)
 	s.Len(swn.NotifySegmentIsWrittenCalls(), 1)
+
+	s.Require().Len(sm.SetSegmentIDByShardCalls(), len(segments))
+	for i, sid := range segments {
+		s.Equal(sid, sm.SetSegmentIDByShardCalls()[i].Sid)
+		s.Equal(shardID, sm.SetSegmentIDByShardCalls()[i].ShardID)
+	}
 
 	err = wrBuf.Close()
 	s.Require().NoError(err)
@@ -272,8 +345,19 @@ func (s *BufferedSuite) TestFlushWithError() {
 		return actual.Write(p)
 	}
 
-	shardID := uint16(0)
-	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentMock], swn)
+	segmentID := uint32(2)
+	segments := make([]uint32, 0, 10)
+	sm := &SegmentMarkupMock{
+		NextSegmentIDFunc: func() uint32 {
+			segmentID++
+			segments = append(segments, segmentID)
+			return segmentID
+		},
+		SetSegmentIDByShardFunc: func(uint32, uint16) {},
+	}
+
+	shardID := uint16(1)
+	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentV2Mock], swn, sm)
 	s.Require().NoError(err)
 	s.Equal(int64(0), wrBuf.CurrentSize())
 
@@ -305,6 +389,12 @@ func (s *BufferedSuite) TestFlushWithError() {
 	s.Len(sfile.SyncCalls(), 1)
 	s.Len(swn.NotifySegmentIsWrittenCalls(), 1)
 
+	s.Require().Len(sm.SetSegmentIDByShardCalls(), len(segments))
+	for i, sid := range segments {
+		s.Equal(sid, sm.SetSegmentIDByShardCalls()[i].Sid)
+		s.Equal(shardID, sm.SetSegmentIDByShardCalls()[i].ShardID)
+	}
+
 	err = wrBuf.Close()
 	s.Require().NoError(err)
 	s.Len(sfile.CloseCalls(), 1)
@@ -319,17 +409,24 @@ func (*BufferedSuite) openfile(buf *bytes.Buffer) *FileWriterMock {
 	}
 }
 
-func (s *BufferedSuite) genSegment() (segment *EncodedSegmentMock, expected []byte) {
+func (s *BufferedSuite) genSegment() (segment *EncodedSegmentV2Mock, expected []byte) {
 	segmentCrc32 := uint32(0)
 	segmentSamples := uint32(42)
 	data := []byte(faker.Paragraph())
+	var id uint32
 
-	segment = &EncodedSegmentMock{
+	segment = &EncodedSegmentV2Mock{
+		IDFunc: func() uint32 {
+			return id
+		},
 		CRC32Func: func() uint32 {
 			return segmentCrc32
 		},
 		SamplesFunc: func() uint32 {
 			return segmentSamples
+		},
+		SetSegmentIDFunc: func(sid uint32) {
+			id = sid
 		},
 		SizeFunc: func() int64 {
 			return int64(len(data))
