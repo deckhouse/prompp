@@ -87,7 +87,7 @@ func NewBuffered[TSegment SegmentToWrite](
 	}, nil
 }
 
-// Close closes the writer [WriteSyncCloser].
+// Close closes the writer [FileWriter].
 func (w *Buffered[TSegment]) Close() error {
 	return w.writer.Close()
 }
@@ -97,7 +97,7 @@ func (w *Buffered[TSegment]) CurrentSize() int64 {
 	return atomic.LoadInt64(&w.currentSize)
 }
 
-// Flush buffer and collected segments to [WriteSyncCloser].
+// Flush buffer and collected segments to [WriteSyncFileWriterCloser].
 func (w *Buffered[TSegment]) Flush() error {
 	if !w.writeCompleted {
 		if err := w.flushBuffer(); err != nil {
@@ -127,7 +127,7 @@ func (w *Buffered[TSegment]) Flush() error {
 	return nil
 }
 
-// Sync commits the current contents of the [WriteSyncCloser] and notify [SegmentIsWrittenNotifier].
+// Sync commits the current contents of the [FileWriter] and notify [SegmentIsWrittenNotifier].
 func (w *Buffered[TSegment]) Sync() error {
 	if err := w.writer.Sync(); err != nil {
 		return fmt.Errorf("writer sync: %w", err)
@@ -158,7 +158,7 @@ func (w *Buffered[TSegment]) Write(segment TSegment) error {
 	return nil
 }
 
-// flushBuffer write the contents from buffer to [WriteSyncCloser].
+// flushBuffer write the contents from buffer to [FileWriter].
 func (w *Buffered[TSegment]) flushBuffer() error {
 	n, err := w.buffer.WriteTo(w.writer)
 	atomic.AddInt64(&w.currentSize, n)

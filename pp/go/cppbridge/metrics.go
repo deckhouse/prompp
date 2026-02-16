@@ -44,6 +44,10 @@ func CppMetrics(f func(metric *CppMetric) bool) {
 type CppMetricsCollector struct{}
 
 func NewCppMetricsCollector(reg prometheus.Registerer) {
+	if reg == nil {
+		return
+	}
+
 	_ = reg.Register(&CppMetricsCollector{})
 }
 

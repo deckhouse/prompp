@@ -294,6 +294,7 @@ type dbMetrics struct {
 	blocksBytes          prometheus.Gauge
 	maxBytes             prometheus.Gauge
 	retentionDuration    prometheus.Gauge
+	corruptedBlocks      prometheus.Gauge
 }
 
 func newDBMetrics(db *DB, r prometheus.Registerer) *dbMetrics {
@@ -377,6 +378,10 @@ func newDBMetrics(db *DB, r prometheus.Registerer) *dbMetrics {
 	m.sizeRetentionCount = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "prometheus_tsdb_size_retentions_total",
 		Help: "The number of times that blocks were deleted because the maximum number of bytes was exceeded.",
+	})
+	m.corruptedBlocks = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "prometheus_tsdb_corrupted_blocks",
+		Help: "The number of corrupted blocks.",
 	})
 
 	if r != nil {
@@ -1603,6 +1608,7 @@ func (db *DB) reloadBlocks() (err error) {
 	}
 
 	// PP_CHANGES.md: rebuild on cpp start
+	db.metrics.corruptedBlocks.Set(float64(len(corrupted)))
 	for ulid, err := range corrupted {
 		// check if the block is outdated
 		// if it is, delete the block
