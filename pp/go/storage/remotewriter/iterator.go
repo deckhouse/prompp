@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -26,8 +27,14 @@ import (
 
 // DataSource is a implementation of data source.
 type DataSource interface {
-	Read(ctx context.Context, targetSegmentID uint32, minTimestamp int64) ([]*DecodedSegment, error)
+	Read(
+		ctx context.Context,
+		targetSegmentID uint32,
+		minTimestamp int64,
+		segmentSamplesStorages *cppbridge.SegmentSamplesStorageList,
+	) ([]*DecodedSegment, error)
 	LSSes() []*cppbridge.LabelSetStorage
+	NumberOfLSSes() int
 	WriteCaches()
 	Close() error
 }
@@ -48,7 +55,7 @@ type TargetSegmentIDSetCloser interface {
 
 // ProtobufWriter is a implementation of protobuf writer.
 type ProtobufWriter interface {
-	Write(ctx context.Context, data *cppbridge.SnappyProtobufEncodedData) error
+	Write(ctx context.Context, data []byte) error
 }
 
 type sharder struct {
@@ -100,59 +107,18 @@ func (s *sharder) NumberOfShards() int {
 
 // Iterator is a iterator for sending data to the remote storage.
 type Iterator struct {
-	clock                        clockwork.Clock
-	queueConfig                  config.QueueConfig
-	dataSource                   DataSource
-	protobufWriter               ProtobufWriter
-	targetSegmentIDSetCloser     TargetSegmentIDSetCloser
-	metrics                      *DestinationMetrics
-	targetSegmentID              uint32
-	targetSegmentIsPartiallyRead bool
+	clock                    clockwork.Clock
+	queueConfig              config.QueueConfig
+	dataSource               DataSource
+	protobufWriter           ProtobufWriter
+	targetSegmentIDSetCloser TargetSegmentIDSetCloser
+	metrics                  *DestinationMetrics
+	targetSegmentID          uint32
 
 	outputSharder *sharder
 
 	scrapeInterval    time.Duration
 	endOfBlockReached bool
-}
-
-// MessageShard is a shard of a message for sending to the remote storage.
-type MessageShard struct {
-	Protobuf      *cppbridge.SnappyProtobufEncodedData
-	Size          uint64
-	SampleCount   uint64
-	MaxTimestamp  int64
-	Delivered     bool
-	PostProcessed bool
-}
-
-// Message is a message for sending to the remote storage.
-type Message struct {
-	MaxTimestamp int64
-	Shards       []*MessageShard
-}
-
-// HasDataToDeliver checks if the message has data to deliver.
-func (m *Message) HasDataToDeliver() bool {
-	for _, shrd := range m.Shards {
-		if !shrd.Delivered {
-			return true
-		}
-	}
-
-	return false
-}
-
-// IsObsoleted checks if the message is obsoleted.
-func (m *Message) IsObsoleted(minTimestamp int64) bool {
-	return m.MaxTimestamp < minTimestamp
-}
-
-func (m *Message) NumberOfSamples() uint64 {
-	samples := uint64(0)
-	for i := range m.Shards {
-		samples += m.Shards[i].SampleCount
-	}
-	return samples
 }
 
 // newIterator creates a new [Iterator].
@@ -202,7 +168,7 @@ func (i *Iterator) wrapError(err error) error {
 //revive:disable-next-line:function-length // long but readable
 //revive:disable-next-line:cyclomatic // long but readable
 //revive:disable-next-line:cognitive-complexity // long but readable
-func (i *Iterator) Next(ctx context.Context) (*Message, error) {
+func (i *Iterator) Next(ctx context.Context) (*cppbridge.RWMessageList, error) {
 	if i.endOfBlockReached {
 		return nil, i.wrapError(nil)
 	}
@@ -211,7 +177,7 @@ func (i *Iterator) Next(ctx context.Context) (*Message, error) {
 	var delay time.Duration
 	numberOfShards := i.outputSharder.NumberOfShards()
 	i.metrics.numShards.Set(float64(numberOfShards))
-	b := newBatch(numberOfShards, i.queueConfig.MaxSamplesPerSend)
+	b := newBatch(i.dataSource.NumberOfLSSes(), numberOfShards, i.queueConfig.MaxSamplesPerSend)
 	deadline := i.clock.After(i.scrapeInterval)
 
 readLoop:
@@ -225,7 +191,7 @@ readLoop:
 		}
 
 		readStartTime := i.clock.Now()
-		decodedSegments, err := i.dataSource.Read(ctx, i.targetSegmentID, i.minTimestamp())
+		decodedSegments, err := i.dataSource.Read(ctx, i.targetSegmentID, i.minTimestamp(), b.segmentSampleStorages)
 		i.metrics.readSegmentDuration.Observe(i.clock.Since(readStartTime).Seconds())
 
 		if err != nil {
@@ -246,7 +212,6 @@ readLoop:
 
 		b.add(decodedSegments)
 		i.targetSegmentID++
-		i.targetSegmentIsPartiallyRead = false
 
 		if b.IsFilled() {
 			break readLoop
@@ -288,16 +253,13 @@ readLoop:
 	i.writeCaches()
 
 	encodeStartTime := i.clock.Now()
-	msg, err := i.encode(b.Data(), int(numberOfMessages)) // #nosec G115 // no overflow
-	if err != nil {
-		return nil, i.wrapError(err)
-	}
+	msg := i.encode(b, int(numberOfMessages), i.targetSegmentID) // #nosec G115 // no overflow
 	i.metrics.encodeBatchDuration.Observe(i.clock.Since(encodeStartTime).Seconds())
 
 	return msg, nil
 }
 
-func (i *Iterator) SendMessage(msg *Message, ctx context.Context) error {
+func (i *Iterator) SendMessage(ctx context.Context, msg *cppbridge.RWMessageList) error {
 	i.metrics.samplesTotal.Add(float64(msg.NumberOfSamples()))
 
 	sendersCount := i.outputSharder.max
@@ -306,7 +268,7 @@ func (i *Iterator) SendMessage(msg *Message, ctx context.Context) error {
 	err := backoff.Retry(func() error {
 		defer func() { sendIteration++ }()
 		if msg.IsObsoleted(i.minTimestamp()) {
-			for _, messageShard := range msg.Shards {
+			for _, messageShard := range msg.Messages {
 				if messageShard.Delivered {
 					continue
 				}
@@ -317,8 +279,8 @@ func (i *Iterator) SendMessage(msg *Message, ctx context.Context) error {
 
 		sendSemaphore := semaphore.NewWeighted(int64(sendersCount))
 		startTime := i.clock.Now()
-		for _, shrd := range msg.Shards {
-			if shrd.Delivered {
+		for index := range msg.Messages {
+			if msg.Messages[index].Delivered {
 				continue
 			}
 
@@ -326,18 +288,17 @@ func (i *Iterator) SendMessage(msg *Message, ctx context.Context) error {
 				break
 			}
 
-			go func(shrd *MessageShard) {
+			go func(msg *cppbridge.RWMessage) {
 				defer sendSemaphore.Release(1)
-
 				sendStartTime := i.clock.Now()
-				writeErr := i.protobufWriter.Write(ctx, shrd.Protobuf)
+				writeErr := i.protobufWriter.Write(ctx, msg.Buffer)
 				if writeErr != nil {
 					logger.Errorf("failed to send protobuf: %v", writeErr)
 				}
 				i.metrics.sentMessageDuration.Observe(time.Since(sendStartTime).Seconds())
 
-				shrd.Delivered = !errors.As(writeErr, &remote.RecoverableError{})
-			}(shrd)
+				msg.Delivered = !errors.As(writeErr, &remote.RecoverableError{})
+			}(&msg.Messages[index])
 		}
 		_ = sendSemaphore.Acquire(ctx, int64(sendersCount))
 		i.metrics.sentBatchDuration.Observe(i.clock.Since(startTime).Seconds())
@@ -346,7 +307,7 @@ func (i *Iterator) SendMessage(msg *Message, ctx context.Context) error {
 		var sentBytesTotal uint64
 		var highestSentTimestamp int64
 		var retriedSamplesTotal uint64
-		for _, shrd := range msg.Shards {
+		for _, shrd := range msg.Messages {
 			if shrd.Delivered {
 				if shrd.PostProcessed {
 					continue
@@ -354,7 +315,7 @@ func (i *Iterator) SendMessage(msg *Message, ctx context.Context) error {
 				// delivered on this iteration
 				shrd.PostProcessed = true
 				retriedSamplesTotal += shrd.SampleCount
-				sentBytesTotal += shrd.Size
+				sentBytesTotal += uint64(len(shrd.Buffer))
 				if highestSentTimestamp < shrd.MaxTimestamp {
 					highestSentTimestamp = shrd.MaxTimestamp
 				}
@@ -392,63 +353,64 @@ func (i *Iterator) SendMessage(msg *Message, ctx context.Context) error {
 		return i.wrapError(err)
 	}
 
-	if err = i.tryAck(ctx); err != nil {
+	if err = i.tryAck(msg.TargetSegmentID); err != nil {
 		logger.Errorf("failed to ack segment id: %v", err)
+		return i.wrapError(nil)
 	}
 
-	return i.wrapError(nil)
+	return nil
 }
 
 func (i *Iterator) writeCaches() {
 	i.dataSource.WriteCaches()
 }
 
-func (i *Iterator) encode(segments []*DecodedSegment, numberOfMessages int) (*Message, error) {
-	var maxTimestamp int64
-	batchToEncode := make([]*cppbridge.DecodedRefSamples, 0, len(segments))
-	for _, segment := range segments {
-		if maxTimestamp < segment.MaxTimestamp {
-			maxTimestamp = segment.MaxTimestamp
+func (i *Iterator) encode(batch *batch, numberOfMessages int, targetSegmentID uint32) *cppbridge.RWMessageList {
+	encodersCount := batch.numberOfShards
+
+	messages := cppbridge.NewRWMessageList(uint64(numberOfMessages), targetSegmentID)
+	encoders := cppbridge.NewMessageEncoders(uint64(encodersCount), i.dataSource.LSSes())
+	messagesPerEncoder := numberOfMessages / encodersCount
+	if messagesPerEncoder == 0 {
+		messagesPerEncoder = 1
+	}
+
+	wg := sync.WaitGroup{}
+	for messageIndex, encoderIndex := 0, 0; messageIndex < numberOfMessages; encoderIndex++ {
+		var encodeCount int
+		if encoderIndex+1 == encodersCount {
+			encodeCount = numberOfMessages - messageIndex
+		} else {
+			encodeCount = messagesPerEncoder
 		}
 
-		batchToEncode = append(batchToEncode, segment.Samples)
-	}
+		wg.Add(1)
+		go func(encoderIndex, messageIndex, encodeCount int) {
+			defer wg.Done()
 
-	protobufEncoder := cppbridge.NewWALProtobufEncoder(i.dataSource.LSSes())
-	protobufs, err := protobufEncoder.Encode(batchToEncode, numberOfMessages)
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode protobuf: %w", err)
+			for ; encodeCount > 0; messageIndex++ {
+				encoders.Encode(
+					encoderIndex,
+					batch.segmentSampleStorages,
+					uint64(messageIndex),
+					uint64(numberOfMessages),
+					&messages.Messages[messageIndex],
+				)
+				encodeCount--
+			}
+		}(encoderIndex, messageIndex, encodeCount)
+
+		messageIndex += encodeCount
 	}
-	shards := make([]*MessageShard, 0, len(protobufs))
-	for _, protobuf := range protobufs {
-		proto := protobuf
-		var size uint64
-		_ = proto.Do(func(buf []byte) error {
-			size = uint64(len(buf))
-			return nil
-		})
-		shards = append(shards, &MessageShard{
-			Protobuf:     protobuf,
-			Size:         size,
-			SampleCount:  protobuf.SamplesCount(),
-			MaxTimestamp: protobuf.MaxTimestamp(),
-			Delivered:    false,
-		})
-	}
-	return &Message{
-		MaxTimestamp: maxTimestamp,
-		Shards:       shards,
-	}, nil
+	wg.Wait()
+
+	messages.UpdateStats()
+	return messages
 }
 
-func (i *Iterator) tryAck(_ context.Context) error {
-	if i.targetSegmentID == 0 && i.targetSegmentIsPartiallyRead {
+func (i *Iterator) tryAck(targetSegmentID uint32) error {
+	if targetSegmentID == 0 {
 		return nil
-	}
-
-	targetSegmentID := i.targetSegmentID
-	if i.targetSegmentIsPartiallyRead {
-		targetSegmentID--
 	}
 
 	if err := i.targetSegmentIDSetCloser.SetTargetSegmentID(targetSegmentID); err != nil {
@@ -470,6 +432,7 @@ func (i *Iterator) Close() error {
 
 type batch struct {
 	segments                   []*DecodedSegment
+	segmentSampleStorages      *cppbridge.SegmentSamplesStorageList
 	numberOfShards             int
 	numberOfSamples            int
 	outdatedSamplesCount       uint32
@@ -480,17 +443,17 @@ type batch struct {
 }
 
 // newBatch creates a new [batch].
-func newBatch(numberOfShards, maxNumberOfSamplesPerShard int) *batch {
+func newBatch(numberOfHeadShards, numberOfShards, maxNumberOfSamplesPerShard int) *batch {
 	return &batch{
 		numberOfShards:             numberOfShards,
+		segmentSampleStorages:      cppbridge.NewSegmentSamplesStorage(uint64(numberOfHeadShards)),
 		maxNumberOfSamplesPerShard: maxNumberOfSamplesPerShard,
 	}
 }
 
 func (b *batch) add(segments []*DecodedSegment) {
 	for _, segment := range segments {
-		b.segments = append(b.segments, segment)
-		b.numberOfSamples += segment.Samples.Size()
+		b.numberOfSamples += int(segment.SampleCount)
 		b.outdatedSamplesCount += segment.OutdatedSamplesCount
 		b.droppedSamplesCount += segment.DroppedSamplesCount
 		b.addSeriesCount += segment.AddSeriesCount

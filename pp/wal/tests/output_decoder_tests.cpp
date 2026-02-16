@@ -13,10 +13,10 @@ struct GoLabelSet {
 
 struct GoTimeSeries {
   GoLabelSet label_set;
-  uint64_t timestamp;
-  double value;
+  uint64_t timestamp{};
+  double value{};
 
-  PROMPP_ALWAYS_INLINE GoTimeSeries() {}
+  PROMPP_ALWAYS_INLINE GoTimeSeries() = default;
   PROMPP_ALWAYS_INLINE GoTimeSeries(std::initializer_list<PromPP::Primitives::LabelView> lvs, const PromPP::Primitives::Sample& sample) {
     size_t index{0};
     for (const auto& [ln, lv] : lvs) {
@@ -41,9 +41,25 @@ struct BareBones::IsTriviallyReallocatable<GoTimeSeries> : std::true_type {};
 
 namespace {
 
-using namespace PromPP::WAL;         // NOLINT
-using namespace PromPP::Primitives;  // NOLINT
-using namespace PromPP::Prometheus;  // NOLINT
+using PromPP::Primitives::LabelSetID;
+using PromPP::Primitives::LabelViewSet;
+using PromPP::Primitives::Sample;
+using PromPP::Primitives::Timestamp;
+using PromPP::Primitives::Go::Slice;
+using PromPP::Primitives::Go::SliceView;
+using PromPP::Primitives::Go::String;
+using PromPP::Primitives::Go::TimeSeries;
+using PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap;
+using PromPP::Prometheus::Relabel::rAction;
+using PromPP::Prometheus::Relabel::StatelessRelabeler;
+using PromPP::WAL::Encoder;
+using PromPP::WAL::GoMessage;
+using PromPP::WAL::OutputDecoder;
+using PromPP::WAL::ProtobufEncoder;
+using PromPP::WAL::ProtobufEncoderStats;
+using PromPP::WAL::RefSample;
+using PromPP::WAL::SegmentSamplesStorage;
+using PromPP::WAL::ShardRefSample;
 
 using std::operator""sv;
 
@@ -67,8 +83,8 @@ struct RelabelConfigTest {
 
 struct TestWALOutputDecoder : public testing::Test {
   // external_labels
-  std::vector<std::pair<Go::String, Go::String>> vector_external_labels_;
-  Go::SliceView<std::pair<Go::String, Go::String>> external_labels_;
+  std::vector<std::pair<String, String>> vector_external_labels_;
+  SliceView<std::pair<String, String>> external_labels_;
 
   // Encoder
   EncodeStatistic stats_;
@@ -76,10 +92,10 @@ struct TestWALOutputDecoder : public testing::Test {
   // StatelessRelabeler
   std::vector<RelabelConfigTest> rcts_buf_{{.source_labels = std::vector<std::string_view>{"__name__"}, .regex = ".*", .action = 2}};  // Keep
   std::vector<RelabelConfigTest*> rcts_{&rcts_buf_[0]};
-  Relabel::StatelessRelabeler sr_{rcts_};
+  StatelessRelabeler sr_{rcts_};
 
   // Output LSS
-  SnugComposites::LabelSet::EncodingBimap<BareBones::Vector> output_lss_;
+  EncodingBimap<BareBones::Vector> output_lss_;
 
   void SetUp() final {
     // external_labels
@@ -89,11 +105,11 @@ struct TestWALOutputDecoder : public testing::Test {
   template <class SegmentStream>
   PROMPP_ALWAYS_INLINE void make_segment(const std::vector<GoTimeSeries>& gtss, SegmentStream& segment_stream, Encoder& enc) {
     // make Hashdex
-    Go::Slice<GoTimeSeries> go_time_series_slice;
+    Slice<GoTimeSeries> go_time_series_slice;
     for (const GoTimeSeries& gts : gtss) {
       go_time_series_slice.push_back(gts);
     }
-    Go::SliceView<Go::TimeSeries>* go_time_series_slice_view = reinterpret_cast<Go::SliceView<Go::TimeSeries>*>(&go_time_series_slice);
+    const auto go_time_series_slice_view = reinterpret_cast<SliceView<TimeSeries>*>(&go_time_series_slice);
     PromPP::WAL::hashdex::GoModel hx;
     hx.presharding(*go_time_series_slice_view);
 
@@ -120,7 +136,6 @@ struct TestWALOutputDecoder : public testing::Test {
 
 TEST_F(TestWALOutputDecoder, DumpEmptyData) {
   std::stringstream dump;
-  std::stringstream segment_stream;
   stateless_relabeler_reset_to({{.source_labels = std::vector<std::string_view>{"job"}, .regex = "abc", .action = 2}});  // Keep
   OutputDecoder wod(sr_, output_lss_, external_labels_);
   Encoder enc{uint16_t{0}, uint8_t{0}};
@@ -143,7 +158,7 @@ TEST_F(TestWALOutputDecoder, DumpLoadSingleData) {
 
   wod.dump_to(dump);
 
-  SnugComposites::LabelSet::EncodingBimap<BareBones::Vector> output_lss2;
+  EncodingBimap<BareBones::Vector> output_lss2;
   OutputDecoder wod2(sr_, output_lss2, external_labels_);
   wod2.load_from(dump);
 
@@ -177,7 +192,7 @@ TEST_F(TestWALOutputDecoder, DumpLoadDoubleData) {
     wod.dump_to(dump);
   }
 
-  SnugComposites::LabelSet::EncodingBimap<BareBones::Vector> output_lss2;
+  EncodingBimap<BareBones::Vector> output_lss2;
   OutputDecoder wod2(sr_, output_lss2, external_labels_);
   wod2.load_from(dump);
 
@@ -213,7 +228,7 @@ TEST_F(TestWALOutputDecoder, DumpLoadDataEmptyData) {
     wod.dump_to(dump);
   }
 
-  SnugComposites::LabelSet::EncodingBimap<BareBones::Vector> output_lss2;
+  EncodingBimap<BareBones::Vector> output_lss2;
   OutputDecoder wod2(sr_, output_lss2, external_labels_);
   wod2.load_from(dump);
 
@@ -231,12 +246,12 @@ TEST_F(TestWALOutputDecoder, ProcessSegment) {
   std::stringstream segment_stream;
   Encoder enc{uint16_t{0}, uint8_t{0}};
 
-  std::vector<std::vector<GoTimeSeries>> incoming_segments{{{{{"__name__", "value1"}, {"job", "abc"}}, {10, 1}}},  // keep
-                                                           {},                                                     // load empty data
-                                                           {
-                                                               {{{"__name__", "value1"}, {"job", "abc"}}, {11, 1}},  // keep
-                                                               {{{"__name__", "value2"}, {"job", "abc"}}, {11, 1}},  // keep
-                                                           }};
+  const std::vector<std::vector<GoTimeSeries>> incoming_segments{{{{{"__name__", "value1"}, {"job", "abc"}}, {10, 1}}},  // keep
+                                                                 {},                                                     // load empty data
+                                                                 {
+                                                                     {{{"__name__", "value1"}, {"job", "abc"}}, {11, 1}},  // keep
+                                                                     {{{"__name__", "value2"}, {"job", "abc"}}, {11, 1}},  // keep
+                                                                 }};
   std::vector<RefSample> actual_ref_samples;
   actual_ref_samples.reserve(3);
   for (const auto& segment : incoming_segments) {
@@ -246,7 +261,7 @@ TEST_F(TestWALOutputDecoder, ProcessSegment) {
     wod.process_segment([&](LabelSetID ls_id, Timestamp ts, Sample::value_type v) { actual_ref_samples.emplace_back(ls_id, ts, v); });
   }
 
-  std::vector<RefSample> expected_ref_samples{{.id = 0, .t = 10, .v = 1}, {.id = 0, .t = 11, .v = 1}, {.id = 1, .t = 11, .v = 1}};
+  const std::vector<RefSample> expected_ref_samples{{.id = 0, .t = 10, .v = 1}, {.id = 0, .t = 11, .v = 1}, {.id = 1, .t = 11, .v = 1}};
   EXPECT_EQ(expected_ref_samples, actual_ref_samples);
 }
 
@@ -256,7 +271,7 @@ TEST_F(TestWALOutputDecoder, ProcessSegmentWithDrop) {
   std::stringstream segment_stream;
   Encoder enc{uint16_t{0}, uint8_t{0}};
 
-  std::vector<std::vector<GoTimeSeries>> incoming_segments{
+  const std::vector<std::vector<GoTimeSeries>> incoming_segments{
       {{{{"__name__", "value1"}, {"job", "abc1"}}, {10, 1}}},  // drop
       {{{{"__name__", "value1"}, {"job", "abc"}}, {11, 1}}},   // keep
   };
@@ -264,9 +279,9 @@ TEST_F(TestWALOutputDecoder, ProcessSegmentWithDrop) {
   std::vector<RefSample> actual_ref_samples;
   actual_ref_samples.reserve(1);
   size_t processed{0};
-  for (size_t i = 0; i < incoming_segments.size(); ++i) {
+  for (const auto& incoming_segment : incoming_segments) {
     segment_stream.str("");
-    make_segment(incoming_segments[i], segment_stream, enc);
+    make_segment(incoming_segment, segment_stream, enc);
     segment_stream >> wod;
     wod.process_segment([&](LabelSetID ls_id, Timestamp ts, Sample::value_type v) {
       actual_ref_samples.emplace_back(ls_id, ts, v);
@@ -274,7 +289,7 @@ TEST_F(TestWALOutputDecoder, ProcessSegmentWithDrop) {
     });
   }
 
-  std::vector<RefSample> expected_ref_samples{{.id = 0, .t = 11, .v = 1}};
+  const std::vector<RefSample> expected_ref_samples{{.id = 0, .t = 11, .v = 1}};
   EXPECT_EQ(expected_ref_samples, actual_ref_samples);
   EXPECT_EQ(1, processed);
 }
@@ -304,7 +319,7 @@ TEST_F(TestWALOutputDecoder, ProcessSegmentWithDump) {
   std::vector<RefSample> expected_ref_samples{{.id = 0, .t = 10, .v = 1}, {.id = 0, .t = 11, .v = 1}, {.id = 1, .t = 11, .v = 1}};
   EXPECT_EQ(expected_ref_samples, actual_ref_samples);
 
-  SnugComposites::LabelSet::EncodingBimap<BareBones::Vector> output_lss2;
+  EncodingBimap<BareBones::Vector> output_lss2;
   OutputDecoder wod2(sr_, output_lss2, external_labels_);
   wod2.load_from(dump);
   Encoder enc2{uint16_t{0}, uint8_t{0}};
@@ -331,72 +346,11 @@ TEST_F(TestWALOutputDecoder, ProcessSegmentWithDump) {
   EXPECT_EQ(expected_ref_samples_2, actual_ref_samples);
 }
 
-//
-// ProtobufEncoder
-//
-
-struct TestProtobufEncoder : public testing::Test {};
-
-TEST_F(TestProtobufEncoder, Encode) {
-  PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector> output_lss0;
-  PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector> output_lss1;
-  std::vector output_lsses{&output_lss0, &output_lss1};
-
-  std::vector<PromPP::WAL::RefSample> ref_samples0;
-  ref_samples0.emplace_back(output_lss0.find_or_emplace(LabelViewSet{{"__name__", "value1"}, {"job", "abc"}}), 10, 1);
-  ref_samples0.emplace_back(output_lss0.find_or_emplace(LabelViewSet{{"__name__", "value1"}, {"job", "abc"}}), 9, 2);
-  ref_samples0.emplace_back(output_lss0.find_or_emplace(LabelViewSet{{"__name__", "value2"}, {"job", "abc"}}), 10, 1);
-  ShardRefSample srs0;
-  srs0.ref_samples.reset_to(ref_samples0.data(), ref_samples0.size(), ref_samples0.size());
-  srs0.shard_id = 0;
-
-  std::vector<PromPP::WAL::RefSample> ref_samples1;
-  ref_samples1.emplace_back(output_lss1.find_or_emplace(LabelViewSet{{"__name__", "value3"}, {"job", "abc3"}}), 10, 1);
-  ShardRefSample srs1;
-  srs1.ref_samples.reset_to(ref_samples1.data(), ref_samples1.size(), ref_samples1.size());
-  srs1.shard_id = 1;
-
-  std::vector<ShardRefSample*> vector_batch{&srs0, &srs1};
-  Go::SliceView<ShardRefSample*> batch;
-  batch.reset_to(vector_batch.data(), vector_batch.size(), vector_batch.size());
-
-  ProtobufEncoder penc(std::move(output_lsses));
-  Go::Slice<Go::Slice<char>> out_slices;
-  out_slices.resize(2);
-  Go::Slice<PromPP::WAL::ProtobufEncoderStats> stats;
-  stats.resize(2);
-  penc.encode(batch, out_slices, stats);
-
-  EXPECT_EQ(10, stats[0].max_timestamp);
-  EXPECT_EQ(3, stats[0].samples_count);
-
-  EXPECT_EQ(10, stats[1].max_timestamp);
-  EXPECT_EQ(1, stats[1].samples_count);
-
-  std::vector<int8_t> expected_proto1{10, 58, 10,  18, 10,  8,   95, 95, 110, 97, 109, 101, 95,  95,  18,  6,  118, 97, 108, 117, 101, 49,
-                                      10, 10, 10,  3,  106, 111, 98, 18, 3,   97, 98,  99,  18,  11,  9,   0,  0,   0,  0,   0,   0,   0,
-                                      64, 16, 9,   18, 11,  9,   0,  0,  0,   0,  0,   0,   -16, 63,  16,  10, 10,  46, 10,  18,  10,  8,
-                                      95, 95, 110, 97, 109, 101, 95, 95, 18,  6,  118, 97,  108, 117, 101, 51, 10,  11, 10,  3,   106, 111,
-                                      98, 18, 4,   97, 98,  99,  51, 18, 11,  9,  0,   0,   0,   0,   0,   0,  -16, 63, 16,  10};
-  std::vector<int8_t> expected_proto2{10, 45, 10,  18,  10, 8,  95, 95, 110, 97, 109, 101, 95, 95, 18, 6, 118, 97, 108, 117, 101, 50, 10, 10,
-                                      10, 3,  106, 111, 98, 18, 3,  97, 98,  99, 18,  11,  9,  0,  0,  0, 0,   0,  0,   -16, 63,  16, 10};
-
-  std::string proto1;
-  bool ok = snappy::Uncompress(out_slices[0].data(), out_slices[0].size(), &proto1);
-  EXPECT_TRUE(ok);
-  EXPECT_EQ(expected_proto1, std::vector<int8_t>(proto1.begin(), proto1.end()));
-
-  std::string proto2;
-  ok = snappy::Uncompress(out_slices[1].data(), out_slices[1].size(), &proto2);
-  EXPECT_TRUE(ok);
-  EXPECT_EQ(expected_proto2, std::vector<int8_t>(proto2.begin(), proto2.end()));
-}
-
 TEST_F(TestWALOutputDecoder, ProcessSegmentWithLabelDrop) {
   // Arrange
   stateless_relabeler_reset_to({
-      {.source_labels = std::vector{"job"sv}, .regex = "abc", .action = Relabel::rAction::rKeep},
-      {.regex = "resource", .action = Relabel::rAction::rLabelDrop},
+      {.source_labels = std::vector{"job"sv}, .regex = "abc", .action = rAction::rKeep},
+      {.regex = "resource", .action = rAction::rLabelDrop},
   });
   Encoder encoder{uint16_t{}, uint8_t{}};
   OutputDecoder decoder(sr_, output_lss_, external_labels_);
@@ -415,6 +369,54 @@ TEST_F(TestWALOutputDecoder, ProcessSegmentWithLabelDrop) {
 
   // Assert
   EXPECT_EQ((std::vector<RefSample>{{.id = 0, .t = 11, .v = 1}, {.id = 0, .t = 11, .v = 2}}), actual_samples);
+}
+
+class ProtobufEncoderFixture : public testing::Test {
+ protected:
+  ProtobufEncoder encoder_;
+};
+
+TEST_F(ProtobufEncoderFixture, Test) {
+  // Arrange
+  std::vector<EncodingBimap<BareBones::Vector>> lss_list(2);
+  lss_list[0].find_or_emplace(LabelViewSet{{"__name__", "value1"}, {"job", "abc"}});
+  lss_list[0].find_or_emplace(LabelViewSet{{"__name__", "value2"}, {"job", "abc"}});
+  lss_list[1].find_or_emplace(LabelViewSet{{"__name__", "value3"}, {"job", "abc3"}});
+
+  const auto lss_getter = [&lss_list](uint32_t id) -> const EncodingBimap<BareBones::Vector>& { return lss_list[id]; };
+
+  std::vector<SegmentSamplesStorage> storages_list(2);
+  storages_list[0].add(0, Sample(10, 1.0));
+  storages_list[0].add(0, Sample(9, 2));
+  storages_list[0].add(1, Sample(10, 1));
+  storages_list[1].add(0, Sample(10, 1));
+
+  std::vector<GoMessage> messages(2);
+  std::string proto;
+
+  // Act
+  encoder_.encode(std::span(storages_list.data(), storages_list.size()), lss_getter, 0, 2, messages[0]);
+  encoder_.encode(std::span(storages_list.data(), storages_list.size()), lss_getter, 1, 2, messages[1]);
+
+  // Assert
+  EXPECT_EQ(3U, messages[0].samples_count);
+  EXPECT_EQ(10, messages[0].max_timestamp);
+  EXPECT_TRUE(snappy::Uncompress(messages[0].buffer.data(), messages[0].buffer.size(), &proto));
+  EXPECT_TRUE(std::ranges::equal(
+      std::array{0x0A, 0x3A, 0x0A, 0x12, 0x0A, 0x08, 0x5F, 0x5F, 0x6E, 0x61, 0x6D, 0x65, 0x5F, 0x5F, 0x12, 0x06, 0x76, 0x61, 0x6C, 0x75, 0x65, 0x31,
+                 0x0A, 0x0A, 0x0A, 0x03, 0x6A, 0x6F, 0x62, 0x12, 0x03, 0x61, 0x62, 0x63, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                 0x40, 0x10, 0x09, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x3F, 0x10, 0x0A, 0x0A, 0x2E, 0x0A, 0x12, 0x0A, 0x08,
+                 0x5F, 0x5F, 0x6E, 0x61, 0x6D, 0x65, 0x5F, 0x5F, 0x12, 0x06, 0x76, 0x61, 0x6C, 0x75, 0x65, 0x33, 0x0A, 0x0B, 0x0A, 0x03, 0x6A, 0x6F,
+                 0x62, 0x12, 0x04, 0x61, 0x62, 0x63, 0x33, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x3F, 0x10, 0x0A},
+      std::span(reinterpret_cast<uint8_t*>(proto.data()), proto.size())));
+
+  EXPECT_EQ(1U, messages[1].samples_count);
+  EXPECT_EQ(10, messages[1].max_timestamp);
+  EXPECT_TRUE(snappy::Uncompress(messages[1].buffer.data(), messages[1].buffer.size(), &proto));
+  EXPECT_TRUE(std::ranges::equal(
+      std::array{0x0A, 0x2D, 0x0A, 0x12, 0x0A, 0x08, 0x5F, 0x5F, 0x6E, 0x61, 0x6D, 0x65, 0x5F, 0x5F, 0x12, 0x06, 0x76, 0x61, 0x6C, 0x75, 0x65, 0x32, 0x0A, 0x0A,
+                 0x0A, 0x03, 0x6A, 0x6F, 0x62, 0x12, 0x03, 0x61, 0x62, 0x63, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x3F, 0x10, 0x0A},
+      std::span(reinterpret_cast<uint8_t*>(proto.data()), proto.size())));
 }
 
 }  // namespace
