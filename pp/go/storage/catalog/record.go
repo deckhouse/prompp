@@ -29,6 +29,7 @@ const (
 	StatusActive
 )
 
+// defaultSegments default number of segments in [WAL].
 const defaultSegments = 3600 * 2 / 5
 
 //
@@ -54,6 +55,7 @@ type Record struct {
 	// TODO clear segmentsByShard
 	// (c *Catalog) Delete(id string) - delete record from memory(on catalog gc)
 	// (c *Catalog) SetCorrupted(id string) - clear segmentsByShard ??? catalog gc skip Delete
+	// reference GC if record.Corrupted() {
 	segmentsByShard []uint16
 	segmentsLock    *sync.RWMutex
 }

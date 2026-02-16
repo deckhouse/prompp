@@ -14,11 +14,19 @@ import (
 // FileInfo alias for [os.FileInfo].
 type FileInfo = os.FileInfo
 
+//
+// SegmentIsWrittenNotifier
+//
+
 // SegmentIsWrittenNotifier notify when new segment write.
 type SegmentIsWrittenNotifier interface {
 	NotifySegmentIsWritten(shardID uint16)
 	NotifySegmentWrite(shardID uint16)
 }
+
+//
+// SegmentMarkup
+//
 
 // SegmentMarkup marking up through segment IDs by shards.
 type SegmentMarkup interface {
@@ -29,6 +37,10 @@ type SegmentMarkup interface {
 	SetSegmentIDByShard(sid uint32, shardID uint16)
 }
 
+//
+// SegmentToWrite
+//
+
 // SegmentToWrite the minimum required segment implementation for writing.
 type SegmentToWrite interface {
 	// ID returns the segment ID, filled in from the outside.
@@ -38,6 +50,10 @@ type SegmentToWrite interface {
 	SetSegmentID(sid uint32)
 }
 
+//
+// FileWriter
+//
+
 // FileWriter writer implementation [os.File].
 type FileWriter interface {
 	io.WriteCloser
@@ -45,8 +61,16 @@ type FileWriter interface {
 	Stat() (FileInfo, error)
 }
 
+//
+// SegmentWriterFN
+//
+
 // SegmentWriterFN encode to slice byte and write to [io.Writer].
 type SegmentWriterFN[TSegment SegmentToWrite] func(writer io.Writer, segment TSegment) (n int, err error)
+
+//
+// Buffered
+//
 
 // Buffered writer for segments.
 type Buffered[TSegment SegmentToWrite] struct {
