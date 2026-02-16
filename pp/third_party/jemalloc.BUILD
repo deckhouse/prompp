@@ -22,14 +22,12 @@ configure_make(
     configure_in_place = True,
     configure_options = [
         "--enable-xmalloc",
+        "--with-lg-page=\"12\"",
         "--with-lg-hugepage=21",
         "--enable-prof",
         "--enable-shared=\"no\"",
         "--enable-prof-libunwind=\"1\"",
-    ] + select({
-        "@//bazel/toolchain:arm64": ["--with-lg-page=\"16\""],
-        "//conditions:default": ["--with-lg-page=\"12\""],
-    }),
+    ],
     copts = [
         "-Wno-error",
     ],
