@@ -4,8 +4,6 @@
 #include "primitives/go_model.h"
 #include "primitives/go_slice.h"
 
-#include "metrics/malloc_metrics.h"
-
 using PromPP::Primitives::Go::Label;
 using PromPP::Primitives::Go::SliceView;
 using PromPP::Primitives::Go::String;
