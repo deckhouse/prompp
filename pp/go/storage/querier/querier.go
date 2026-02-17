@@ -179,10 +179,11 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 		}
 	}()
 
-	snapshots := q.head.AcquireSnapshots()
-	defer q.head.ReleaseSnapshots(snapshots)
-	lssQueryResults := q.head.AcquireLSSQueryResults()
-	defer q.head.ReleaseLSSQueryResults(lssQueryResults)
+	poolProvider := q.head.PoolProvider()
+	snapshots := poolProvider.GetSnapshots()
+	defer poolProvider.PutSnapshots(snapshots)
+	lssQueryResults := poolProvider.GetLSSQueryResults()
+	defer poolProvider.PutLSSQueryResults(lssQueryResults)
 
 	if err = queryLss(lssQueryInstantQuerySelector, q.head, matchers, snapshots, lssQueryResults); err != nil {
 		logger.Warnf("[QUERIER]: failed to instant: %s", err)
@@ -194,8 +195,8 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 		valueNotFoundTimestampValue = q.mint - 1
 	}
 
-	seriesSets := q.head.AcquireSeriesSet()
-	defer q.head.ReleaseSeriesSet(seriesSets)
+	seriesSets := poolProvider.GetSeriesSet()
+	defer poolProvider.PutSeriesSet(seriesSets)
 	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead](q.head)
 	tDataStorageQuery := q.head.CreateTask(
 		dsQueryInstantQuerier,
@@ -224,7 +225,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 			return nil
 		},
 	)
-	defer q.head.ReleaseTask(tDataStorageQuery)
+	defer q.head.PutTask(tDataStorageQuery)
 	q.head.Enqueue(tDataStorageQuery)
 	_ = tDataStorageQuery.Wait()
 
@@ -264,22 +265,23 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		}
 	}()
 
-	snapshots := q.head.AcquireSnapshots()
-	defer q.head.ReleaseSnapshots(snapshots)
-	lssQueryResults := q.head.AcquireLSSQueryResults()
-	defer q.head.ReleaseLSSQueryResults(lssQueryResults)
+	poolProvider := q.head.PoolProvider()
+	snapshots := poolProvider.GetSnapshots()
+	defer poolProvider.PutSnapshots(snapshots)
+	lssQueryResults := poolProvider.GetLSSQueryResults()
+	defer poolProvider.PutLSSQueryResults(lssQueryResults)
 
 	if err = queryLss(lssQueryRangeQuerySelector, q.head, matchers, snapshots, lssQueryResults); err != nil {
 		logger.Warnf("[QUERIER]: failed to range: %s", err)
 		return storage.ErrSeriesSet(err)
 	}
 
-	shardedSerializedData := q.head.AcquireSerializedData()
-	defer q.head.ReleaseSerializedData(shardedSerializedData)
+	shardedSerializedData := poolProvider.GetSerializedData()
+	defer poolProvider.PutSerializedData(shardedSerializedData)
 	queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt)
 
-	seriesSets := q.head.AcquireSeriesSet()
-	defer q.head.ReleaseSeriesSet(seriesSets)
+	seriesSets := poolProvider.GetSeriesSet()
+	defer poolProvider.PutSeriesSet(seriesSets)
 	for shardID, serializedData := range shardedSerializedData {
 		if serializedData != nil {
 			seriesSets[shardID] = NewSeriesSet(q.mint, q.maxt, lssQueryResults[shardID], snapshots[shardID], serializedData)
@@ -341,7 +343,7 @@ func queryDataStorage[
 			return nil
 		},
 	)
-	defer head.ReleaseTask(tDataStorageQuery)
+	defer head.PutTask(tDataStorageQuery)
 	head.Enqueue(tDataStorageQuery)
 	_ = tDataStorageQuery.Wait()
 
@@ -396,7 +398,7 @@ func queryLabelNames[
 			return shard.LSS().QueryLabelNames(shard.ShardID(), convertedMatchers, dedup.Add)
 		},
 	)
-	defer head.ReleaseTask(t)
+	defer head.PutTask(t)
 	head.Enqueue(t)
 
 	if err := t.Wait(); err != nil {
@@ -464,7 +466,7 @@ func queryLabelValues[
 			return shard.LSS().QueryLabelValues(shard.ShardID(), name, convertedMatchers, dedup.Add)
 		},
 	)
-	defer head.ReleaseTask(t)
+	defer head.PutTask(t)
 	head.Enqueue(t)
 
 	if err := t.Wait(); err != nil {
@@ -500,8 +502,9 @@ func queryLss[
 	snapshots []*cppbridge.LabelSetSnapshot,
 	lssQueryResults []*cppbridge.LSSQueryResult,
 ) error {
-	selectors := head.AcquireSelectors()
-	defer head.ReleaseSelectors(selectors)
+	poolProvider := head.PoolProvider()
+	selectors := poolProvider.GetSelectors()
+	defer poolProvider.PutSelectors(selectors)
 	convertedMatchers := convertPrometheusMatchersToPPMatchers(matchers...)
 
 	tLSSQuerySelector := head.CreateTask(
@@ -512,14 +515,14 @@ func queryLss[
 			return err
 		},
 	)
-	defer head.ReleaseTask(tLSSQuerySelector)
+	defer head.PutTask(tLSSQuerySelector)
 	head.Enqueue(tLSSQuerySelector)
 	if err := tLSSQuerySelector.Wait(); err != nil {
 		return err
 	}
 
-	errs := head.AcquireErrors()
-	defer head.ReleaseErrors(errs)
+	errs := poolProvider.GetErrors()
+	defer poolProvider.PutErrors(errs)
 	for shardID, selector := range selectors {
 		if selector == 0 {
 			continue

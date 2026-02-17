@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/pp/go/storage/head/head"
+	"github.com/prometheus/prometheus/pp/go/storage/head/poolprovider"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
@@ -30,7 +31,7 @@ type Builder struct {
 	maxSegmentSize            uint32
 	registerer                prometheus.Registerer
 	unloadDataStorageInterval time.Duration
-	theadPools                *transactionhead.HeadPool
+	theadPools                *poolprovider.HeadPool[*shard.PerGoroutineShard]
 	// stat
 	events *prometheus.CounterVec
 }
@@ -50,7 +51,7 @@ func NewBuilder(
 		maxSegmentSize:            maxSegmentSize,
 		registerer:                registerer,
 		unloadDataStorageInterval: unloadDataStorageInterval,
-		theadPools:                transactionhead.NewHeadPool[*shard.PerGoroutineShard](),
+		theadPools:                poolprovider.NewHeadPool[*shard.PerGoroutineShard](1),
 		events: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "prompp_head_event_count",
