@@ -95,7 +95,7 @@ type Batch interface {
 func BatchWithLimit(batch Batch) Batch {
 	batch = &timeLimitBatch{
 		Batch:   batch,
-		maxTime: uint64(timestamp.FromTime(time.Now().Add(maxAheadTime))),
+		maxTime: uint64(timestamp.FromTime(time.Now().Add(maxAheadTime))), // #nosec G115 // no overflow
 	}
 
 	return batch
@@ -115,12 +115,12 @@ func newBatchTimeSeries() *BatchTimeSeries {
 }
 
 // Add add to batch timeseries, timestamp and value.
-func (batch *BatchTimeSeries) Add(builder *pp_model.LabelSetSimpleBuilder, timestamp uint64, val float64) error {
+func (batch *BatchTimeSeries) Add(builder *pp_model.LabelSetSimpleBuilder, ts uint64, val float64) error {
 	batch.data = append(
 		batch.data,
 		pp_model.TimeSeries{
 			LabelSet:  builder.Build(),
-			Timestamp: timestamp,
+			Timestamp: ts,
 			Value:     val,
 		},
 	)
@@ -172,7 +172,7 @@ type samplesLimitBatch struct {
 var _ Batch = (*samplesLimitBatch)(nil)
 
 // Add add to batch timeseries, timestamp and value.
-func (b *samplesLimitBatch) Add(builder *pp_model.LabelSetSimpleBuilder, timestamp uint64, val float64) error {
+func (b *samplesLimitBatch) Add(builder *pp_model.LabelSetSimpleBuilder, ts uint64, val float64) error {
 	if !value.IsStaleNaN(val) {
 		b.i++
 		if b.i > b.limit {
@@ -180,7 +180,7 @@ func (b *samplesLimitBatch) Add(builder *pp_model.LabelSetSimpleBuilder, timesta
 		}
 	}
 
-	return b.Batch.Add(builder, timestamp, val)
+	return b.Batch.Add(builder, ts, val)
 }
 
 // timeLimitBatch limits time on sample.
@@ -193,10 +193,10 @@ type timeLimitBatch struct {
 var _ Batch = (*timeLimitBatch)(nil)
 
 // Add add to batch timeseries, timestamp and value.
-func (b *timeLimitBatch) Add(builder *pp_model.LabelSetSimpleBuilder, timestamp uint64, val float64) error {
-	if timestamp > b.maxTime {
+func (b *timeLimitBatch) Add(builder *pp_model.LabelSetSimpleBuilder, ts uint64, val float64) error {
+	if ts > b.maxTime {
 		return storage.ErrOutOfBounds
 	}
 
-	return b.Batch.Add(builder, timestamp, val)
+	return b.Batch.Add(builder, ts, val)
 }

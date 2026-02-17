@@ -109,6 +109,7 @@ class SliceView {
 
   PROMPP_ALWAYS_INLINE SliceView() = default;
 
+  PROMPP_ALWAYS_INLINE SliceView(T* data, size_t len, size_t cap) noexcept : data_(data), len_(len), cap_(cap) {}
   PROMPP_ALWAYS_INLINE explicit SliceView(Slice<T>& slice) : data_(slice.data()), len_(slice.size()), cap_(slice.capacity()) {}
 
   PROMPP_ALWAYS_INLINE void reset_to(T* data, size_t len, size_t cap) {
