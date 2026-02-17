@@ -414,7 +414,7 @@ func (h *Head[TShard, TGorutineShard]) AcquireSerializedData() []*cppbridge.Data
 	return h.serializedDataPool.Get()
 }
 
-// ReleaseSerializedData returns a []s*cppbridge.DataStorageSerializedData to the pool after resetting it.
+// ReleaseSerializedData returns a []*cppbridge.DataStorageSerializedData to the pool after resetting it.
 func (h *Head[TShard, TGorutineShard]) ReleaseSerializedData(sd []*cppbridge.DataStorageSerializedData) {
 	clear(sd)
 	h.serializedDataPool.Put(sd)

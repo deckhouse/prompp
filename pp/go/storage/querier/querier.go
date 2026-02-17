@@ -346,6 +346,7 @@ func queryDataStorage[
 	_ = tDataStorageQuery.Wait()
 
 	if err := loadAndQueryWaiter.Wait(); err != nil {
+		clear(shardedSerializedData)
 		SendUnrecoverableError(err)
 	}
 }

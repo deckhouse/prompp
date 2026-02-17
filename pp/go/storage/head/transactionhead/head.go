@@ -295,11 +295,11 @@ func (h *Head[TShard, TGShard]) ReleaseChunkSeriesSet(csets []storage.ChunkSerie
 }
 
 // AcquireSerializedData gets a []*cppbridge.DataStorageSerializedData from the pool.
-func (h *Head[TShard, TGorutinTGShardeShard]) AcquireSerializedData() []*cppbridge.DataStorageSerializedData {
+func (h *Head[TShard, TGShard]) AcquireSerializedData() []*cppbridge.DataStorageSerializedData {
 	return h.headPool.serializedDataPool.Get()
 }
 
-// ReleaseSerializedData returns a []s*cppbridge.DataStorageSerializedData to the pool after resetting it.
+// ReleaseSerializedData returns a []*cppbridge.DataStorageSerializedData to the pool after resetting it.
 func (h *Head[TShard, TGShard]) ReleaseSerializedData(sd []*cppbridge.DataStorageSerializedData) {
 	clear(sd)
 	h.headPool.serializedDataPool.Put(sd)

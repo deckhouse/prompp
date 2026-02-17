@@ -170,7 +170,7 @@ type Head[
 	// AcquireSerializedData gets a []*cppbridge.DataStorageSerializedData from the pool.
 	AcquireSerializedData() []*cppbridge.DataStorageSerializedData
 
-	// ReleaseSerializedData returns a []s*cppbridge.DataStorageSerializedData to the pool after resetting it.
+	// ReleaseSerializedData returns a []*cppbridge.DataStorageSerializedData to the pool after resetting it.
 	ReleaseSerializedData(sd []*cppbridge.DataStorageSerializedData)
 
 	// AcquireErrors gets a []error from the pool.

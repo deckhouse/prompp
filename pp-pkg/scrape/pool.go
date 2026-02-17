@@ -227,7 +227,7 @@ var nr = &noopReader{}
 type noopReader struct{}
 
 // Read implementation io.Reader.
-func (*noopReader) Read(_ []byte) (int, error) {
+func (*noopReader) Read([]byte) (int, error) {
 	return 0, io.EOF
 }
 
@@ -244,6 +244,8 @@ type readers struct {
 // reset readers.
 func (r *readers) reset() *readers {
 	r.bReader.Reset(nr)
+	// Reset returns io.EOF, there is no point in checking the error
+	_ = r.gReader.Reset(r.bReader)
 
 	return r
 }
