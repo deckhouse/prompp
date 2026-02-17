@@ -94,4 +94,61 @@ TEST(BareBonesVector, InitializerListConstructor) {
   EXPECT_EQ("789", vector[2]);
 }
 
+class BareBonesVectorEraseFixture : public testing::Test {
+ protected:
+  Vector<std::unique_ptr<std::string_view>> vector_;
+
+  void SetUp() override {
+    vector_.emplace_back(std::make_unique<std::string_view>("1"));
+    vector_.emplace_back(std::make_unique<std::string_view>("2"));
+    vector_.emplace_back(std::make_unique<std::string_view>("3"));
+  }
+};
+
+TEST_F(BareBonesVectorEraseFixture, EraseLastItem) {
+  // Arrange
+
+  // Act
+  vector_.erase(vector_.end() - 1, vector_.end());
+
+  // Assert
+  EXPECT_EQ(2U, vector_.size());
+  EXPECT_EQ("1", *vector_[0]);
+  EXPECT_EQ("2", *vector_[1]);
+}
+
+TEST_F(BareBonesVectorEraseFixture, EraseFirstItem) {
+  // Arrange
+
+  // Act
+  vector_.erase(vector_.begin(), vector_.begin() + 1);
+
+  // Assert
+  EXPECT_EQ(2U, vector_.size());
+  EXPECT_EQ("2", *vector_[0]);
+  EXPECT_EQ("3", *vector_[1]);
+}
+
+TEST_F(BareBonesVectorEraseFixture, EraseSecondItem) {
+  // Arrange
+
+  // Act
+  vector_.erase(vector_.begin() + 1, vector_.begin() + 2);
+
+  // Assert
+  EXPECT_EQ(2U, vector_.size());
+  EXPECT_EQ("1", *vector_[0]);
+  EXPECT_EQ("3", *vector_[1]);
+}
+
+TEST_F(BareBonesVectorEraseFixture, EraseAllItems) {
+  // Arrange
+
+  // Act
+  vector_.erase(vector_.begin(), vector_.end());
+
+  // Assert
+  EXPECT_TRUE(vector_.empty());
+}
+
 }  // namespace

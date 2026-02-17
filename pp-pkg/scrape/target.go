@@ -485,6 +485,7 @@ func HashFromGroup(tg *targetgroup.Group) uint64 {
 	for i := range tg.Targets {
 		writeLabelSet(tg.Targets[i])
 	}
+	_, _ = res.WriteString(tg.Source)
 	return res.Sum64()
 }
 

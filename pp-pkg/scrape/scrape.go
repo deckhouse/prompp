@@ -153,8 +153,14 @@ type scrapePool struct {
 	newLoop       func(scrapeLoopOptions) loop
 	metrics       *scrapeMetrics
 	noDefaultPort bool
+
+	scrapeFailureLogger    log.Logger
+	scrapeFailureLoggerMtx sync.RWMutex
 }
 
+// newScrapePool creates a new [scrapePool].
+//
+//revive:disable-next-line:function-length // init constructor.
 func newScrapePool(
 	cfg *config.ScrapeConfig,
 	adapter Adapter,
@@ -297,6 +303,29 @@ func (sp *scrapePool) DroppedTargetsCount() int {
 	sp.targetMtx.Lock()
 	defer sp.targetMtx.Unlock()
 	return sp.droppedTargetsCount
+}
+
+// SetScrapeFailureLogger sets the scrape failure logger for the scrape pool.
+func (sp *scrapePool) SetScrapeFailureLogger(l log.Logger) {
+	sp.scrapeFailureLoggerMtx.Lock()
+	defer sp.scrapeFailureLoggerMtx.Unlock()
+	if l != nil {
+		l = log.With(l, "job_name", sp.config.JobName)
+	}
+	sp.scrapeFailureLogger = l
+
+	sp.targetMtx.Lock()
+	defer sp.targetMtx.Unlock()
+	for _, s := range sp.loops {
+		s.setScrapeFailureLogger(sp.scrapeFailureLogger)
+	}
+}
+
+// getScrapeFailureLogger returns the scrape failure logger for the scrape pool.
+func (sp *scrapePool) getScrapeFailureLogger() log.Logger {
+	sp.scrapeFailureLoggerMtx.RLock()
+	defer sp.scrapeFailureLoggerMtx.RUnlock()
+	return sp.scrapeFailureLogger
 }
 
 // stop terminates all scrape loops and returns after they all terminated.
@@ -451,6 +480,7 @@ func (sp *scrapePool) restartLoops(reuseCache bool) {
 			wg.Done()
 
 			newLoop.setForcedError(forcedErr)
+			newLoop.setScrapeFailureLogger(sp.getScrapeFailureLogger())
 			newLoop.run(nil)
 		}(oldLoop, newLoop)
 
@@ -584,6 +614,7 @@ func (sp *scrapePool) sync(targets []*Target) {
 			if err != nil {
 				l.setForcedError(err)
 			}
+			l.setScrapeFailureLogger(sp.scrapeFailureLogger)
 
 			sp.activeTargets[hash] = t
 			sp.loops[hash] = l
@@ -776,6 +807,7 @@ func (s *targetScraper) String() string {
 type loop interface {
 	run(errc chan<- error)
 	setForcedError(err error)
+	setScrapeFailureLogger(log.Logger)
 	stop()
 	getCache() *scrapeCache
 	disableEndOfRunStalenessMarkers()
@@ -785,6 +817,8 @@ type scrapeLoop struct {
 	scraper                 scraper
 	adapter                 Adapter
 	logger                  log.Logger
+	scrapeFailureLogger     log.Logger
+	scrapeFailureLoggerMtx  sync.RWMutex
 	state                   *cppbridge.StateV2
 	reportState             *cppbridge.StateV2
 	cache                   *scrapeCache
@@ -853,7 +887,7 @@ func newScrapeLoop(
 		logger = log.NewNopLogger()
 	}
 	if buffers == nil {
-		buffers = pool.New(1e3, 1e6, 2, func(sz int) interface{} { return make([]byte, 0, sz) })
+		buffers = pool.New(1e3, 1e6, 3, func(sz int) any { return make([]byte, 0, sz) })
 	}
 	if cache == nil {
 		cache = newScrapeCache(metrics)
@@ -914,6 +948,15 @@ func newScrapeLoop(
 	sl.metrics.newTarget.Inc()
 
 	return sl
+}
+
+func (sl *scrapeLoop) setScrapeFailureLogger(l log.Logger) {
+	sl.scrapeFailureLoggerMtx.Lock()
+	defer sl.scrapeFailureLoggerMtx.Unlock()
+	if ts, ok := sl.scraper.(fmt.Stringer); ok && l != nil {
+		l = log.With(l, "target", ts.String())
+	}
+	sl.scrapeFailureLogger = l
 }
 
 func (sl *scrapeLoop) run(errc chan<- error) {
@@ -1045,6 +1088,11 @@ func (sl *scrapeLoop) scrapeAndReport(last, appendTime time.Time, errc chan<- er
 		bytesRead = len(b)
 	} else {
 		level.Debug(sl.logger).Log("msg", "Scrape failed", "err", scrapeErr)
+		sl.scrapeFailureLoggerMtx.RLock()
+		if sl.scrapeFailureLogger != nil {
+			sl.scrapeFailureLogger.Log("err", scrapeErr)
+		}
+		sl.scrapeFailureLoggerMtx.RUnlock()
 		if errc != nil {
 			errc <- scrapeErr
 		}
@@ -1570,8 +1618,8 @@ func (c *scrapeCache) setHelp(metric, help []byte) {
 		e = &metaEntry{Metadata: metadata.Metadata{Type: model.MetricTypeUnknown}}
 		c.metadata[string(metric)] = e
 	}
-	if e.Help != string(help) {
-		e.Help = string(help)
+	if nhelp := string(help); e.Help != nhelp {
+		e.Help = nhelp
 	}
 	e.lastIter = c.iter
 

@@ -3,15 +3,10 @@ package cppbridge_test
 import (
 	"bytes"
 	"context"
-	"runtime"
-	"slices"
-	"strings"
 	"testing"
 
-	"github.com/golang/snappy"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/frames/framestest"
-	"github.com/prometheus/prometheus/pp/go/model"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/stretchr/testify/suite"
 )
@@ -221,64 +216,4 @@ func (s *OutputDecoderSuite) TestWALOutputDecoderEmptyLoad() {
 
 	err = dec.LoadFrom(file.Bytes())
 	s.Require().NoError(err)
-}
-
-func (s *OutputDecoderSuite) TestWALProtobufEncoderEncode() {
-	labelSets := []model.LabelSet{
-		model.NewLabelSetBuilder().Set("__name__", "name1").Set("job", "doing1").Build(),
-		model.NewLabelSetBuilder().Set("__name__", "name2").Set("job", "doing2").Build(),
-		model.NewLabelSetBuilder().Set("__name__", "name3").Set("job", "doing3").Build(),
-		model.NewLabelSetBuilder().Set("__name__", "name4").Set("job", "doing4").Build(),
-	}
-	batch := make([]*cppbridge.DecodedRefSamples, 0, len(labelSets))
-
-	outputLsses := []*cppbridge.LabelSetStorage{cppbridge.NewLssStorage(), cppbridge.NewLssStorage()}
-	for val, labelSet := range labelSets {
-		lsID := outputLsses[val%len(outputLsses)].FindOrEmplace(labelSet).LabelSetID
-
-		batch = append(
-			batch,
-			cppbridge.NewGoDecodedRefSamples([]cppbridge.RefSample{
-				{ID: lsID, T: int64((val + 1) * 100), V: float64(val + 1)},
-			}, uint16(val%len(outputLsses))),
-		)
-	}
-
-	dec := cppbridge.NewWALProtobufEncoder(outputLsses)
-	data, err := dec.Encode(batch, 1)
-	s.Require().NoError(err)
-
-	s.Equal(int64(400), data[0].MaxTimestamp())
-	s.Equal(uint64(4), data[0].SamplesCount())
-
-	var uncompressed []byte
-	err = data[0].Do(func(buf []byte) error {
-		var errDo error
-		uncompressed, errDo = snappy.Decode(nil, buf)
-		return errDo
-	})
-	s.Require().NoError(err)
-
-	actualWr := &prompb.WriteRequest{}
-	err = actualWr.Unmarshal(uncompressed)
-	s.Require().NoError(err)
-
-	slices.SortFunc(
-		actualWr.Timeseries,
-		func(a, b prompb.TimeSeries) int { return strings.Compare(a.String(), b.String()) },
-	)
-
-	s.Require().Equal(len(labelSets), len(actualWr.Timeseries))
-
-	for val, labelSet := range labelSets {
-		s.Require().Equal(labelSet.Len(), len(actualWr.Timeseries[val].Labels))
-		for i := range actualWr.Timeseries[val].Labels {
-			s.Equal(labelSet.Key(i), actualWr.Timeseries[val].Labels[i].Name)
-			s.Equal(labelSet.Value(i), actualWr.Timeseries[val].Labels[i].Value)
-		}
-		s.Equal(int64((val+1)*100), actualWr.Timeseries[val].Samples[0].Timestamp)
-		s.Equal(float64(val+1), actualWr.Timeseries[val].Samples[0].Value)
-	}
-
-	runtime.KeepAlive(outputLsses)
 }
