@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -51,11 +52,7 @@ type Record struct {
 	mint                  int64
 	maxt                  int64
 	// marking up through segment IDs by shards
-	nextSegmentID uint32
-	// TODO clear segmentsByShard
-	// (c *Catalog) Delete(id string) - delete record from memory(on catalog gc)
-	// (c *Catalog) SetCorrupted(id string) - clear segmentsByShard ??? catalog gc skip Delete
-	// reference GC if record.Corrupted() {
+	nextSegmentID   uint32
 	segmentsByShard []uint16
 	segmentsLock    *sync.RWMutex
 }
@@ -150,6 +147,11 @@ func (r *Record) CreatedAt() int64 {
 	return r.createdAt
 }
 
+// ClearSegmentsByShard remove the shard segment markup.
+func (r *Record) ClearSegmentsByShard() {
+	r.segmentsByShard = nil
+}
+
 // DeletedAt returns the timestamp when the [Record]([Head]) was deleted.
 func (r *Record) DeletedAt() int64 {
 	return r.deletedAt
@@ -194,6 +196,7 @@ func (r *Record) Mint() int64 {
 
 // NextSegmentID returns the next through ID for the segment.
 func (r *Record) NextSegmentID() uint32 {
+	fmt.Println(" === NextSegmentID", r.nextSegmentID+1)
 	return atomic.AddUint32(&r.nextSegmentID, 1)
 }
 
@@ -227,7 +230,7 @@ func (r *Record) SetSegmentIDByShard(sid uint32, shardID uint16) {
 	r.segmentsLock.Lock()
 	defer r.segmentsLock.Unlock()
 
-	// fmt.Println(" === SetSegmentIDByShard", sid, shardID)
+	fmt.Println(" === SetSegmentIDByShard", sid, shardID)
 
 	if len(r.segmentsByShard) > int(sid) {
 		r.segmentsByShard[sid] = shardID + 1

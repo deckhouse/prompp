@@ -17,6 +17,9 @@ import (
 const (
 	// FileFormatVersion wal file version.
 	FileFormatVersion = 1
+
+	// FileFormatVersionV2 wal file version 2.
+	FileFormatVersionV2 = 2
 )
 
 // ErrWalIsCorrupted errror when wal is corrupted.

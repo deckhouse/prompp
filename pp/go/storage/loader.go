@@ -356,7 +356,7 @@ func (l *ShardDataLoader) loadWalFile(
 	rd io.Reader,
 	queriedSeriesStorageIsEmpty bool,
 ) (*cppbridge.HeadWalDecoder, error) {
-	_, encoderVersion, _, err := reader.ReadHeader(rd)
+	walVersion, encoderVersion, _, err := reader.ReadHeader(rd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read wal header: %w", err)
 	}
@@ -372,12 +372,26 @@ func (l *ShardDataLoader) loadWalFile(
 	}
 
 	decoder := cppbridge.NewHeadWalDecoder(l.shardData.lss.Target(), encoderVersion)
-	l.shardData.numberOfSegments, err = l.loadSegments(
-		rd,
-		decoder,
-		l.shardData.dataStorage,
-		unloader,
-	)
+
+	// TODO max ID segment
+	switch walVersion {
+	case wal.FileFormatVersion:
+		l.shardData.numberOfSegments, err = l.loadSegments(
+			rd,
+			decoder,
+			l.shardData.dataStorage,
+			unloader,
+		)
+	case wal.FileFormatVersionV2:
+		l.shardData.numberOfSegments, err = l.loadSegmentsV2(
+			rd,
+			decoder,
+			l.shardData.dataStorage,
+			unloader,
+		)
+	default:
+		return decoder, fmt.Errorf("unknown wal file format: %d", walVersion)
+	}
 
 	return decoder, err
 }
@@ -443,7 +457,7 @@ func (d *dataUnloader) Unload(createTs, encodeTs time.Duration) error {
 }
 
 // loadSegments loads and decode segments from wal file.
-func (l *ShardDataLoader) loadSegments(
+func (*ShardDataLoader) loadSegments(
 	rd io.Reader,
 	walDecoder *cppbridge.HeadWalDecoder,
 	dataStorage *shard.DataStorage,
@@ -458,7 +472,40 @@ func (l *ShardDataLoader) loadSegments(
 		}
 
 		numberOfSegments++
-		l.headRecord.SetSegmentIDByShard(0, l.shardID)
+
+		if createTs != 0 && unloader != nil {
+			if err := unloader.Unload(time.Duration(createTs), time.Duration(encodeTs)); err != nil {
+				return fmt.Errorf("failed to unload data: %w", err)
+			}
+		}
+
+		return nil
+	}); err != nil {
+		logger.Debugf(err.Error())
+		return 0, err
+	}
+
+	return numberOfSegments, nil
+}
+
+func (l *ShardDataLoader) loadSegmentsV2(
+	rd io.Reader,
+	walDecoder *cppbridge.HeadWalDecoder,
+	dataStorage *shard.DataStorage,
+	unloader *dataUnloader,
+) (uint32, error) {
+	numberOfSegments := uint32(0)
+
+	if err := wal.NewSegmentWalReader(rd, reader.NewSegmentV2).ForEachSegment(func(segment *reader.SegmentV2) error {
+		createTs, encodeTs, decodeErr := dataStorage.DecodeSegment(walDecoder, segment.Bytes())
+		if decodeErr != nil {
+			return fmt.Errorf("failed to decode segment: %w", decodeErr)
+		}
+
+		numberOfSegments++
+		l.headRecord.SetSegmentIDByShard(segment.ID(), l.shardID)
+		// TODO shift NextSegmentID
+		l.headRecord.NextSegmentID()
 
 		if createTs != 0 && unloader != nil {
 			if err := unloader.Unload(time.Duration(createTs), time.Duration(encodeTs)); err != nil {

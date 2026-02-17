@@ -102,6 +102,9 @@ func (gc *GC) Iterate() {
 			return
 		}
 
+		// remove the shard segment markup, there are no more references, markup is no longer required
+		record.ClearSegmentsByShard()
+
 		if record.Corrupted() {
 			logger.Debugf("catalog gc iteration: head: %s: %s", record.ID(), "corrupted")
 			continue
