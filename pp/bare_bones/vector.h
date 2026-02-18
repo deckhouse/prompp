@@ -65,7 +65,11 @@ class GenericVector {
         }
       } else {
         if (new_size > current_size) {
-          std::uninitialized_default_construct_n(memory + current_size, new_size - current_size);
+          // Using the std::uninitialized_default_construct_n function degrades performance on series_data_encoder benchmarks
+          memory += current_size;
+          for (SizeType i = current_size; i != new_size; ++i) {
+            std::construct_at(memory++);
+          }
         } else {
           std::destroy_n(memory + new_size, current_size - new_size);
         }

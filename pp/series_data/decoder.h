@@ -89,6 +89,17 @@ class Decoder {
     });
     return result;
   }
+  template <class Callback>
+  static void decode_series(const DataStorage& storage, uint32_t ls_id, Callback&& callback) {
+    auto& finalized_chunks = storage.finalized_chunks;
+    if (const auto finalized_chunks_it = finalized_chunks.find(ls_id); finalized_chunks_it != finalized_chunks.end()) {
+      for (const auto& chunk : finalized_chunks_it->second) {
+        Decoder::decode_chunk<chunk::DataChunk::Type::kFinalized>(storage, chunk, callback);
+      }
+    }
+
+    Decoder::decode_chunk<chunk::DataChunk::Type::kOpen>(storage, storage.open_chunks[ls_id], callback);
+  }
 
   template <EncodingType encoding_type, chunk::DataChunk::Type chunk_type>
   static auto create_decode_iterator(const DataStorage& storage, const chunk::DataChunk& chunk) {
