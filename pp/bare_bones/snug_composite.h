@@ -91,7 +91,7 @@ class GenericDecodingTable {
       return phmap::Hash<Class>()(c);
     }
 
-    PROMPP_ALWAYS_INLINE size_t operator()(const Proxy& p) const noexcept { return this->operator()(decoding_table->storage_.composite(p)); }
+    PROMPP_ALWAYS_INLINE size_t operator()(const Proxy& p) const noexcept { return this->operator()(decoding_table->operator[](p)); }
   };
 
   struct EqualityComparator {
@@ -104,7 +104,7 @@ class GenericDecodingTable {
 
     template <class Class>
     PROMPP_ALWAYS_INLINE bool operator()(const Proxy& a, const Class& b) const noexcept {
-      return decoding_table->storage_.composite(a) == b;
+      return decoding_table->operator[](a) == b;
     }
   };
 
@@ -114,18 +114,18 @@ class GenericDecodingTable {
     PROMPP_ALWAYS_INLINE explicit LessComparator(const GenericDecodingTable* decoding_table) noexcept : decoding_table_(decoding_table) {}
 
     PROMPP_ALWAYS_INLINE bool operator()(const Proxy& a, const Proxy& b) const noexcept {
-      return decoding_table_->storage_.composite(a) < decoding_table_->storage_.composite(b);
+      return decoding_table_->operator[](a) < decoding_table_->operator[](b);
     }
 
     template <class Class>
     PROMPP_ALWAYS_INLINE bool operator()(const Proxy& a, const Class& b) const noexcept {
-      return decoding_table_->storage_.composite(a) < b;
+      return decoding_table_->operator[](a) < b;
     }
 
     template <class Class>
       requires(!std::is_same_v<Class, Proxy>)
     PROMPP_ALWAYS_INLINE bool operator()(const Class& a, const Proxy& b) const noexcept {
-      return a < decoding_table_->storage_.composite(b);
+      return a < decoding_table_->operator[](b);
     }
 
    private:
