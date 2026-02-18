@@ -12,7 +12,7 @@ import (
 	"github.com/prometheus/prometheus/storage"
 )
 
-// BatchStorage appender for rules, aggregates the [model.TimeSeries] batch and append to [pp_storage.TransactionHead],
+// BatchStorage appender for rules append to [pp_storage.TransactionHead],
 // on commit append from [pp_storage.TransactionHead] to [Head]. It can read as [storage.Querier] the added data.
 type BatchStorage struct {
 	hashdexFactory  cppbridge.HashdexFactory

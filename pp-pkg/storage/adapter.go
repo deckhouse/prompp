@@ -97,15 +97,16 @@ func (ar *Adapter) AppendHashdex(
 		ar.samplesAppended.Add(float64(stats.SamplesAdded))
 	}(time.Now())
 
-	_ = ar.proxy.With(ctx, func(h *pp_storage.Head) error {
-		stats, err = appender.New(h, services.CFViaRange).Append(
+	err = ar.proxy.With(ctx, func(h *pp_storage.Head) error {
+		var appendError error
+		stats, appendError = appender.New(h, services.CFViaRange).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hashdex},
 			state,
 			commitToWal,
 		)
 
-		return nil
+		return appendError
 	})
 
 	return stats, err

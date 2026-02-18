@@ -67,7 +67,7 @@ class GoHead : public Prometheus::hashdex::Abstract {
 
   class Metrics {
    public:
-    PROMPP_ALWAYS_INLINE void reset(const Lss* lss, const series_data::DataStorage* data_storage) {
+    PROMPP_ALWAYS_INLINE void reset(const Lss* lss, const series_data::DataStorage* data_storage) noexcept {
       lss_ = lss;
       data_storage_ = data_storage;
 
