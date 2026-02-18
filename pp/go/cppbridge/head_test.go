@@ -1,10 +1,10 @@
 package cppbridge_test
 
 import (
-	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"testing"
 	"unsafe"
 
+	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"github.com/stretchr/testify/require"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -38,7 +38,7 @@ func (s *HeadSuite) TestChunkRecoder() {
 	s.encoder.Encode(0, 2, 1.0)
 	s.encoder.Encode(1, 3, 2.0)
 	s.encoder.Encode(1, 4, 2.0)
-	recoder := cppbridge.NewChunkRecoder(s.lss, 2, s.dataStorage, cppbridge.TimeInterval{MinT: 0, MaxT: 4})
+	recoder := cppbridge.NewChunkRecoder(s.lss, 2, s.dataStorage, cppbridge.TimeInterval{MinT: 0, MaxT: 4}, cppbridge.NoDownsampling)
 
 	// Act
 	chunk2 := recoder.RecodeNextChunk()
@@ -78,7 +78,7 @@ func (s *HeadSuite) TestChunkRecoderWithBatchIterator() {
 	s.encoder.Encode(1, 3, 2.0)
 	s.encoder.Encode(1, 4, 2.0)
 
-	recoder := cppbridge.NewChunkRecoder(s.lss, 1, s.dataStorage, cppbridge.TimeInterval{MinT: 0, MaxT: 4})
+	recoder := cppbridge.NewChunkRecoder(s.lss, 1, s.dataStorage, cppbridge.TimeInterval{MinT: 0, MaxT: 4}, cppbridge.NoDownsampling)
 
 	// Act
 	chunk2 := recoder.RecodeNextChunk()
@@ -123,8 +123,8 @@ func (s *HeadSuite) TestSerializedChunkRecoder() {
 	result := s.dataStorage.Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: timeInterval.MinT,
 		EndTimestampMs:   timeInterval.MaxT,
-		LabelSetIDs:      []uint32{0, 1}},
-	)
+		LabelSetIDs:      []uint32{0, 1},
+	}, cppbridge.NoDownsampling)
 	recoder := cppbridge.NewSerializedChunkRecoder(result.SerializedData, timeInterval)
 
 	// Act
@@ -181,7 +181,7 @@ func (s *HeadSuite) TestInstantQuery() {
 	// Arrange
 	dataStorage := cppbridge.NewDataStorage()
 	encoder := cppbridge.NewHeadEncoderWithDataStorage(dataStorage)
-	var series = []struct {
+	series := []struct {
 		SeriesID uint32
 		cppbridge.Sample
 	}{

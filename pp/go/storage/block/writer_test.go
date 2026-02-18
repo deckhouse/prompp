@@ -35,9 +35,10 @@ const (
 
 type WriterSuite struct {
 	suite.Suite
-	dataDir     string
-	head        *storage.Head
-	blockWriter *block.Writer[*shard.Shard]
+	dataDir         string
+	longtermDataDir string
+	head            *storage.Head
+	blockWriter     *block.Writer[*shard.Shard]
 }
 
 func TestWriterSuite(t *testing.T) {
@@ -49,7 +50,9 @@ func (s *WriterSuite) SetupTest() {
 	s.head = s.mustCreateHead()
 	s.blockWriter = block.NewWriter[*shard.Shard](
 		s.dataDir,
+		s.longtermDataDir,
 		block.DefaultChunkSegmentSize,
+		cppbridge.NoDownsampling,
 		blockDuration,
 		prometheus.DefaultRegisterer,
 	)

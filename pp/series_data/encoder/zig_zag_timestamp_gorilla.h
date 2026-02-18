@@ -101,7 +101,7 @@ class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampDecoder : public BareBones::Encodin
     return ValueType::kValue;
   }
 
-  ValueType decode(BareBones::BitSequenceReader& reader, BareBones::Encoding::Gorilla::GorillaState& state, double& value) noexcept {
+  ValueType decode(BareBones::BitSequenceReader& reader, BareBones::Encoding::Gorilla::GorillaState& state) noexcept {
     using enum BareBones::Encoding::Gorilla::GorillaState;
 
     if (state == kFirstPoint) [[unlikely]] {
@@ -111,15 +111,9 @@ class PROMPP_ATTRIBUTE_PACKED ZigZagTimestampDecoder : public BareBones::Encodin
       decode_delta(reader);
       state = kOtherPoint;
     } else {
-      if (const auto type = decode_delta_of_delta_with_stale_nan(reader); type == ValueType::kStaleNan) [[unlikely]] {
-        value = BareBones::Encoding::Gorilla::STALE_NAN;
-        return ValueType::kStaleNan;
-      } else if (type == ValueType::kSwitchToValuesGorillaMark) [[unlikely]] {
-        return ValueType::kSwitchToValuesGorillaMark;
-      }
+      return decode_delta_of_delta_with_stale_nan(reader);
     }
 
-    value = static_cast<double>(timestamp());
     return ValueType::kValue;
   }
 };

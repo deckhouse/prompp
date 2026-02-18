@@ -194,8 +194,10 @@ type API struct {
 	QueryEngine       promql.QueryEngine
 	ExemplarQueryable storage.ExemplarQueryable
 
-	adapter   handler.Adapter    // PP_CHANGES.md: rebuild on cpp
-	opHandler *handler.PPHandler // PP_CHANGES.md: rebuild on cpp
+	adapter             handler.Adapter                 // PP_CHANGES.md: rebuild on cpp
+	longtermQueryable   storage.SampleAndChunkQueryable // PP_CHANGES.md: rebuild on cpp
+	longtermQueryEngine promql.QueryEngine              // PP_CHANGES.md: rebuild on cpp
+	opHandler           *handler.PPHandler              // PP_CHANGES.md: rebuild on cpp
 
 	scrapePoolsRetriever  func(context.Context) ScrapePoolsRetriever
 	targetRetriever       func(context.Context) TargetRetriever
@@ -233,6 +235,8 @@ func NewAPI(
 	eq storage.ExemplarQueryable,
 
 	adapter handler.Adapter, // PP_CHANGES.md: rebuild on cpp
+	longtermQueryable storage.SampleAndChunkQueryable, // PP_CHANGES.md: rebuild on cpp
+	longtermQE promql.QueryEngine, // PP_CHANGES.md: rebuild on cpp
 
 	spsr func(context.Context) ScrapePoolsRetriever,
 	tr func(context.Context) TargetRetriever,
@@ -265,7 +269,9 @@ func NewAPI(
 		Queryable:         q,
 		ExemplarQueryable: eq,
 
-		adapter: adapter, // PP_CHANGES.md: rebuild on cpp
+		adapter:             adapter,           // PP_CHANGES.md: rebuild on cpp
+		longtermQueryable:   longtermQueryable, // PP_CHANGES.md: rebuild on cpp
+		longtermQueryEngine: longtermQE,        // PP_CHANGES.md: rebuild on cpp
 
 		scrapePoolsRetriever:  spsr,
 		targetRetriever:       tr,
@@ -453,9 +459,24 @@ func (api *API) query(r *http.Request) (result apiFuncResult) {
 	if err != nil {
 		return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
 	}
-	qry, err := api.QueryEngine.NewInstantQuery(ctx, api.Queryable, opts, r.FormValue("query"), ts)
-	if err != nil {
-		return invalidParamError(err, "query")
+
+	var qry promql.Query
+	if isLongterm(r) {
+		qry, err = api.longtermQueryEngine.NewInstantQuery(
+			ctx,
+			api.longtermQueryable,
+			opts,
+			r.FormValue("query"),
+			ts,
+		)
+		if err != nil {
+			return invalidParamError(err, "query")
+		}
+	} else {
+		qry, err = api.QueryEngine.NewInstantQuery(ctx, api.Queryable, opts, r.FormValue("query"), ts)
+		if err != nil {
+			return invalidParamError(err, "query")
+		}
 	}
 
 	// From now on, we must only return with a finalizer in the result (to
@@ -556,10 +577,28 @@ func (api *API) queryRange(r *http.Request) (result apiFuncResult) {
 	if err != nil {
 		return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
 	}
-	qry, err := api.QueryEngine.NewRangeQuery(ctx, api.Queryable, opts, r.FormValue("query"), start, end, step)
-	if err != nil {
-		return invalidParamError(err, "query")
+
+	var qry promql.Query
+	if isLongterm(r) {
+		qry, err = api.longtermQueryEngine.NewRangeQuery(
+			ctx,
+			api.longtermQueryable,
+			opts,
+			r.FormValue("query"),
+			start,
+			end,
+			step,
+		)
+		if err != nil {
+			return invalidParamError(err, "query")
+		}
+	} else {
+		qry, err = api.QueryEngine.NewRangeQuery(ctx, api.Queryable, opts, r.FormValue("query"), start, end, step)
+		if err != nil {
+			return invalidParamError(err, "query")
+		}
 	}
+
 	// From now on, we must only return with a finalizer in the result (to
 	// be called by the caller) or call qry.Close ourselves (which is
 	// required in the case of a panic).
@@ -676,9 +715,17 @@ func (api *API) labelNames(r *http.Request) apiFuncResult {
 		Limit: toHintLimit(limit),
 	}
 
-	q, err := api.Queryable.Querier(timestamp.FromTime(start), timestamp.FromTime(end))
-	if err != nil {
-		return apiFuncResult{nil, returnAPIError(err), nil, nil}
+	var q storage.Querier
+	if isLongterm(r) {
+		q, err = api.longtermQueryable.Querier(timestamp.FromTime(start), timestamp.FromTime(end))
+		if err != nil {
+			return apiFuncResult{nil, returnAPIError(err), nil, nil}
+		}
+	} else {
+		q, err = api.Queryable.Querier(timestamp.FromTime(start), timestamp.FromTime(end))
+		if err != nil {
+			return apiFuncResult{nil, returnAPIError(err), nil, nil}
+		}
 	}
 	defer q.Close()
 
@@ -760,9 +807,17 @@ func (api *API) labelValues(r *http.Request) (result apiFuncResult) {
 		Limit: toHintLimit(limit),
 	}
 
-	q, err := api.Queryable.Querier(timestamp.FromTime(start), timestamp.FromTime(end))
-	if err != nil {
-		return apiFuncResult{nil, &apiError{errorExec, err}, nil, nil}
+	var q storage.Querier
+	if isLongterm(r) {
+		q, err = api.longtermQueryable.Querier(timestamp.FromTime(start), timestamp.FromTime(end))
+		if err != nil {
+			return apiFuncResult{nil, &apiError{errorExec, err}, nil, nil}
+		}
+	} else {
+		q, err = api.Queryable.Querier(timestamp.FromTime(start), timestamp.FromTime(end))
+		if err != nil {
+			return apiFuncResult{nil, &apiError{errorExec, err}, nil, nil}
+		}
 	}
 	// From now on, we must only return with a finalizer in the result (to
 	// be called by the caller) or call q.Close ourselves (which is required
@@ -865,9 +920,17 @@ func (api *API) series(r *http.Request) (result apiFuncResult) {
 		return invalidParamError(err, "match[]")
 	}
 
-	q, err := api.Queryable.Querier(timestamp.FromTime(start), timestamp.FromTime(end))
-	if err != nil {
-		return apiFuncResult{nil, returnAPIError(err), nil, nil}
+	var q storage.Querier
+	if isLongterm(r) {
+		q, err = api.longtermQueryable.Querier(timestamp.FromTime(start), timestamp.FromTime(end))
+		if err != nil {
+			return apiFuncResult{nil, returnAPIError(err), nil, nil}
+		}
+	} else {
+		q, err = api.Queryable.Querier(timestamp.FromTime(start), timestamp.FromTime(end))
+		if err != nil {
+			return apiFuncResult{nil, returnAPIError(err), nil, nil}
+		}
 	}
 	// From now on, we must only return with a finalizer in the result (to
 	// be called by the caller) or call q.Close ourselves (which is required
@@ -1955,4 +2018,9 @@ func toHintLimit(limit int) int {
 		return limit + 1
 	}
 	return limit
+}
+
+// isLongterm check Request on data source.
+func isLongterm(r *http.Request) bool {
+	return r.Header.Get("longterm") == "true"
 }

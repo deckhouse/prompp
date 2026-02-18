@@ -10,6 +10,8 @@ const (
 	NormalNaN uint64 = 0x7ff8000000000001
 
 	StaleNaN uint64 = 0x7ff0000000000002
+
+	NoDownsampling = 0
 )
 
 func IsStaleNaN(v float64) bool {
@@ -117,8 +119,19 @@ type ChunkRecoder struct {
 	serializedData *DataStorageSerializedData
 }
 
-func NewChunkRecoder(lss *LabelSetStorage, lsIdBatchSize uint32, dataStorage *DataStorage, timeInterval TimeInterval) *ChunkRecoder {
-	return initializeChunkRecoder(lss, dataStorage, nil, seriesDataChunkRecoderCtor(lss.Pointer(), lsIdBatchSize, dataStorage.dataStorage, timeInterval))
+func NewChunkRecoder(
+	lss *LabelSetStorage,
+	lsIdBatchSize uint32,
+	dataStorage *DataStorage,
+	timeInterval TimeInterval,
+	downsamplingMs int64,
+) *ChunkRecoder {
+	return initializeChunkRecoder(
+		lss,
+		dataStorage,
+		nil,
+		seriesDataChunkRecoderCtor(lss.Pointer(), lsIdBatchSize, dataStorage.dataStorage, timeInterval, downsamplingMs),
+	)
 }
 
 func NewSerializedChunkRecoder(serializedData *DataStorageSerializedData, timeInterval TimeInterval) *ChunkRecoder {
@@ -243,10 +256,9 @@ func (sd *DataStorageSerializedData) Next() (uint32, uint32) {
 }
 
 type DataStorageSerializedDataIteratorControlBlock struct {
-	decoderVariant   uint64
-	Timestamp        int64
-	Value            float64
-	remainingSamples uint8
+	decodedTimestamp int64
+	timestamp        int64
+	value            float64
 }
 
 type DataStorageSerializedDataIterator struct {
@@ -273,7 +285,15 @@ func (it *DataStorageSerializedDataIterator) Reset(serializedData *DataStorageSe
 }
 
 func (it *DataStorageSerializedDataIterator) HasData() bool {
-	return it.remainingSamples != 0
+	return it.decodedTimestamp != math.MinInt64
+}
+
+func (it *DataStorageSerializedDataIterator) Timestamp() int64 {
+	return it.timestamp
+}
+
+func (it *DataStorageSerializedDataIterator) Value() float64 {
+	return it.value
 }
 
 // UnloadedDataLoader is Go wrapper around series_data::Loader.

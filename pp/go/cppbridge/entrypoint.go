@@ -1989,11 +1989,12 @@ type DataStorageQueryResult struct {
 	SerializedData *DataStorageSerializedData
 }
 
-func seriesDataDataStorageQueryV2(dataStorage uintptr, query DataStorageQuery, serializedData *DataStorageSerializedData) (querier uintptr, status uint8) {
+func seriesDataDataStorageQueryV2(dataStorage uintptr, query DataStorageQuery, serializedData *DataStorageSerializedData, downsamplingMs int64) (querier uintptr, status uint8) {
 	args := struct {
-		dataStorage uintptr
-		query       DataStorageQuery
-	}{dataStorage, query}
+		dataStorage    uintptr
+		query          DataStorageQuery
+		downsamplingMs int64
+	}{dataStorage, query, downsamplingMs}
 
 	res := struct {
 		Querier        uintptr
@@ -2289,13 +2290,14 @@ func seriesDataEncoderDtor(encoder uintptr) {
 	)
 }
 
-func seriesDataChunkRecoderCtor(lss uintptr, lsIdBatchSize uint32, dataStorage uintptr, timeInterval TimeInterval) uintptr {
+func seriesDataChunkRecoderCtor(lss uintptr, lsIdBatchSize uint32, dataStorage uintptr, timeInterval TimeInterval, downsamplingMs int64) uintptr {
 	args := struct {
 		lss           uintptr
 		lsIdBatchSize uint32
 		dataStorage   uintptr
 		TimeInterval
-	}{lss, lsIdBatchSize, dataStorage, timeInterval}
+		downsamplingMs int64
+	}{lss, lsIdBatchSize, dataStorage, timeInterval, downsamplingMs}
 	var res struct {
 		chunkRecoder uintptr
 	}

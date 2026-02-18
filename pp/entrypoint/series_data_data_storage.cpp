@@ -119,6 +119,7 @@ extern "C" void prompp_series_data_data_storage_query_v2(void* args, void* res) 
   struct Arguments {
     DataStoragePtr data_storage;
     Query query;
+    PromPP::Primitives::Timestamp downsampling_ms;
   };
 
   struct Result {
@@ -130,7 +131,7 @@ extern "C" void prompp_series_data_data_storage_query_v2(void* args, void* res) 
   const auto in = static_cast<Arguments*>(args);
   const auto out = static_cast<Result*>(res);
 
-  RangeQuerierWithArgumentsWrapperV2 querier(*in->data_storage, in->query, out->serialized_data);
+  RangeQuerierWithArgumentsWrapperV2 querier(*in->data_storage, in->query, out->serialized_data, in->downsampling_ms);
   querier.query();
 
   if (querier.need_loading()) {
@@ -217,6 +218,7 @@ extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
     uint32_t ls_id_batch_size;
     DataStoragePtr data_storage;
     PromPP::Primitives::TimeInterval time_interval;
+    PromPP::Primitives::Timestamp downsampling_ms;
   };
   struct Result {
     ChunkRecoderVariantPtr chunk_recoder;
@@ -228,7 +230,8 @@ extern "C" void prompp_series_data_chunk_recoder_ctor(void* args, void* res) {
   new (res) Result{
       .chunk_recoder = std::make_unique<ChunkRecoderVariant>(
           std::in_place_type<ChunkRecoder>,
-          ChunkRecoderIterator{ls_id_set.begin(), ls_id_set.end(), in->ls_id_batch_size, in->data_storage.get(), in->time_interval}, in->time_interval),
+          ChunkRecoderIterator{ls_id_set.begin(), ls_id_set.end(), in->ls_id_batch_size, in->data_storage.get(), in->time_interval}, in->time_interval,
+          in->downsampling_ms),
   };
 }
 
@@ -246,7 +249,7 @@ extern "C" void prompp_series_data_serialized_chunk_recoder_ctor(void* args, voi
       .chunk_recoder = std::make_unique<ChunkRecoderVariant>(
           std::in_place_type<SerializedChunkRecoder>,
           series_data::chunk::SerializedChunkIterator{in->serialized_data->get()->get_buffer_view(), in->serialized_data->get()->get_chunks_view()},
-          in->time_interval),
+          in->time_interval, series_data::decoder::decorator::kNoDownsampling),
   };
 }
 

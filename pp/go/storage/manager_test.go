@@ -2,8 +2,16 @@ package storage_test
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/block"
@@ -11,19 +19,11 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
 	"github.com/prometheus/prometheus/pp/go/storage/storagetest"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
-	"os"
-	"path/filepath"
-	"testing"
-	"time"
 )
 
-var (
-	defaultSortCatalogRecordsFunc = func(lhs, rhs *catalog.Record) bool {
-		return lhs.CreatedAt() < rhs.CreatedAt()
-	}
-)
+var defaultSortCatalogRecordsFunc = func(lhs, rhs *catalog.Record) bool {
+	return lhs.CreatedAt() < rhs.CreatedAt()
+}
 
 type UploadOrBuildHeadSuite struct {
 	suite.Suite
@@ -117,7 +117,7 @@ func (s *UploadOrBuildHeadSuite) TestUploadOrBuildHeadCorrupted() {
 
 func (s *UploadOrBuildHeadSuite) fixWalEncoderVersion(headDir string, numberOfShards uint16, encoderVersion uint8) {
 	for i := uint16(0); i < numberOfShards; i++ {
-		file, err := os.OpenFile(filepath.Join(headDir, fmt.Sprintf("shard_%d.wal", i)), os.O_RDWR|os.O_TRUNC, 0666)
+		file, err := os.OpenFile(filepath.Join(headDir, fmt.Sprintf("shard_%d.wal", i)), os.O_RDWR|os.O_TRUNC, 0o666)
 		require.NoError(s.T(), err)
 		_, err = writer.WriteHeader(file, wal.FileFormatVersion, encoderVersion)
 		require.NoError(s.T(), err)

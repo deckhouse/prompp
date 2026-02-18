@@ -90,5 +90,13 @@ func (bs *BatchStorage) CommitWithState(ctx context.Context, state *cppbridge.St
 
 // Querier calls f() with the given parameters. Returns a [querier.Querier].
 func (bs *BatchStorage) Querier(mint, maxt int64) (storage.Querier, error) {
-	return querier.NewQuerier(bs.transactionHead, querier.NewNoOpShardedDeduplicator, mint, maxt, nil, nil), nil
+	return querier.NewQuerier(
+		bs.transactionHead,
+		querier.NewNoOpShardedDeduplicator,
+		mint,
+		maxt,
+		bs.adapter.longtermIntervalMs,
+		nil,
+		nil,
+	), nil
 }

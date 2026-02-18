@@ -113,6 +113,9 @@ var (
 	defaultRetentionString   = "15d"
 	defaultRetentionDuration model.Duration
 
+	defaultLongtermRetentionString   = "30d"
+	defaultLongtermRetentionDuration model.Duration
+
 	agentMode                       bool
 	agentOnlyFlags, serverOnlyFlags []string
 )
@@ -122,6 +125,11 @@ func init() {
 
 	var err error
 	defaultRetentionDuration, err = model.ParseDuration(defaultRetentionString)
+	if err != nil {
+		panic(err)
+	}
+
+	defaultLongtermRetentionDuration, err = model.ParseDuration(defaultLongtermRetentionString)
 	if err != nil {
 		panic(err)
 	}
@@ -172,6 +180,12 @@ type flagConfig struct {
 	WalMaxSamplesPerSegment uint32
 	HeadRetentionTimeout    model.Duration
 
+	// longterm
+	longtermStoragePath   string
+	longtermTSBD          tsdbOptions
+	longtermInterval      model.Duration
+	longtermLookbackDelta model.Duration
+
 	featureList   []string
 	memlimitRatio float64
 	// These options are extracted from featureList
@@ -208,6 +222,7 @@ func (c *flagConfig) setFeatureListOptions(logger log.Logger) error {
 				level.Info(logger).Log("msg", "Experimental expand-external-labels enabled")
 			case "exemplar-storage":
 				c.tsdb.EnableExemplarStorage = true
+				c.longtermTSBD.EnableExemplarStorage = true
 				level.Info(logger).Log("msg", "Experimental in-memory exemplar storage enabled")
 			case "memory-snapshot-on-shutdown":
 				c.tsdb.EnableMemorySnapshotOnShutdown = true
@@ -244,6 +259,7 @@ func (c *flagConfig) setFeatureListOptions(logger log.Logger) error {
 				level.Info(logger).Log("msg", "Experimental PromQL functions enabled.")
 			case "native-histograms":
 				c.tsdb.EnableNativeHistograms = true
+				c.longtermTSBD.EnableNativeHistograms = true
 				c.scrape.EnableNativeHistogramsIngestion = true
 				// Change relevant global variables. Hacky, but it's hard to pass a new option or default to unmarshallers.
 				config.DefaultConfig.GlobalConfig.ScrapeProtocols = config.DefaultProtoFirstScrapeProtocols
@@ -257,6 +273,7 @@ func (c *flagConfig) setFeatureListOptions(logger log.Logger) error {
 				level.Info(logger).Log("msg", "Experimental created timestamp zero ingestion enabled. Changed default scrape_protocols to prefer PrometheusProto format.", "global.scrape_protocols", fmt.Sprintf("%v", config.DefaultGlobalConfig.ScrapeProtocols))
 			case "delayed-compaction":
 				c.tsdb.EnableDelayedCompaction = true
+				c.longtermTSBD.EnableDelayedCompaction = true
 				level.Info(logger).Log("msg", "Experimental delayed compaction is enabled.")
 			case "promql-delayed-name-removal":
 				c.promqlEnableDelayedNameRemoval = true
@@ -275,6 +292,85 @@ func (c *flagConfig) setFeatureListOptions(logger log.Logger) error {
 	}
 
 	return nil
+}
+
+func (c *flagConfig) validateForLongterm(cfgFile *config.Config, logger log.Logger) error {
+	if !c.longtermActivated() {
+		// longterm is disable
+		return nil
+	}
+
+	if c.longtermInterval <= cfgFile.GlobalConfig.ScrapeInterval {
+		return fmt.Errorf(
+			"the scratch interval(%s) should be less than the longterm interval(%s)",
+			cfgFile.GlobalConfig.ScrapeInterval,
+			c.longtermInterval,
+		)
+	}
+
+	if c.longtermTSBD.WALSegmentSize != 0 &&
+		(c.longtermTSBD.WALSegmentSize < 10*1024*1024 || c.longtermTSBD.WALSegmentSize > 256*1024*1024) {
+		return errors.New("flag 'storage.longterm.wal-segment-size' must be set between 10MB and 256MB")
+	}
+
+	if c.longtermTSBD.MaxBlockChunkSegmentSize != 0 && c.longtermTSBD.MaxBlockChunkSegmentSize < 1024*1024 {
+		return errors.New("flag 'storage.longterm.max-block-chunk-segment-size' must be set over 1MB")
+	}
+
+	c.longtermTSBD.WALCompression = true
+	c.longtermTSBD.WALCompressionType = "snappy"
+
+	if c.longtermTSBD.EnableExemplarStorage {
+		if cfgFile.StorageConfig.ExemplarsConfig == nil {
+			c.longtermTSBD.MaxExemplars = config.DefaultExemplarsConfig.MaxExemplars
+		} else {
+			c.longtermTSBD.MaxExemplars = cfgFile.StorageConfig.ExemplarsConfig.MaxExemplars
+		}
+	}
+
+	if cfgFile.StorageConfig.TSDBConfig != nil {
+		c.longtermTSBD.OutOfOrderTimeWindow = cfgFile.StorageConfig.TSDBConfig.OutOfOrderTimeWindow
+	}
+
+	if c.longtermTSBD.RetentionDuration == 0 && c.longtermTSBD.MaxBytes == 0 {
+		c.longtermTSBD.RetentionDuration = defaultLongtermRetentionDuration
+		level.Info(logger).Log(
+			"msg", "No time or size longterm retention was set so using the default time retention",
+			"duration", defaultLongtermRetentionDuration,
+		)
+	}
+
+	// Check for overflows. This limits our max retention to 100y.
+	if c.longtermTSBD.RetentionDuration < 0 {
+		y, err := model.ParseDuration("100y")
+		if err != nil {
+			return err
+		}
+
+		c.longtermTSBD.RetentionDuration = y
+		level.Warn(logger).Log("msg", "Time longterm retention value is too high. Limiting to: "+y.String())
+	}
+
+	// Max block size settings.
+	if c.longtermTSBD.MaxBlockDuration == 0 {
+		maxBlockDuration, err := model.ParseDuration("31d")
+		if err != nil {
+			return err
+		}
+
+		// When the time retention is set and not too big use to define the max block duration.
+		if c.longtermTSBD.RetentionDuration != 0 && c.longtermTSBD.RetentionDuration/10 < maxBlockDuration {
+			maxBlockDuration = c.longtermTSBD.RetentionDuration / 10
+		}
+
+		c.longtermTSBD.MaxBlockDuration = maxBlockDuration
+	}
+
+	return nil
+}
+
+func (c *flagConfig) longtermActivated() bool {
+	return c.longtermStoragePath != ""
 }
 
 func main() {
@@ -446,6 +542,71 @@ func main() {
 	serverOnlyFlag(a, "storage.tsdb.samples-per-chunk", "Target number of samples per chunk.").
 		Default("120").Hidden().IntVar(&cfg.tsdb.SamplesPerChunk)
 
+	// longterm
+	serverOnlyFlag(a, "storage.longterm.path", "Base path for metrics longterm-storage.").
+		StringVar(&cfg.longtermStoragePath)
+
+	serverOnlyFlag(
+		a,
+		"storage.longterm.retention.time",
+		"How long to retain samples in longterm storage. If neither this flag nor \"storage.longterm.retention.time\""+
+			"nor \"storage.longterm.retention.size\" is set, the retention time defaults to "+
+			defaultLongtermRetentionString+". Units Supported: y, w, d, h, m, s, ms.",
+	).SetValue(&cfg.longtermTSBD.RetentionDuration)
+
+	serverOnlyFlag(
+		a,
+		"storage.longterm.corrupted-retention-duration",
+		"How long to retain corrupted blocks in longterm storage. Units Supported: y, w, d, h, m, s, ms.",
+	).Default("4d").SetValue(&cfg.longtermTSBD.CorruptedRetentionDuration)
+
+	serverOnlyFlag(
+		a,
+		"storage.longterm.retention.size",
+		"Maximum number of bytes that can be stored for blocks. "+
+			"A unit is required, supported units: B, KB, MB, GB, TB, PB, EB. Ex: \"512MB\". "+
+			"Based on powers-of-2, so 1KB is 1024B.",
+	).BytesVar(&cfg.longtermTSBD.MaxBytes)
+
+	serverOnlyFlag(
+		a,
+		"storage.longterm.no-lockfile",
+		"Do not create lockfile in data directory.",
+	).Default("false").BoolVar(&cfg.longtermTSBD.NoLockfile)
+
+	serverOnlyFlag(
+		a,
+		"storage.longterm.min-block-duration",
+		"Minimum duration of a data block before being persisted. For use in testing.",
+	).Hidden().Default("2h").SetValue(&cfg.longtermTSBD.MinBlockDuration)
+
+	serverOnlyFlag(
+		a,
+		"storage.longterm.max-block-duration",
+		"Maximum duration compacted blocks may span. For use in testing. (Defaults to 10% of the retention period.)",
+	).Hidden().PlaceHolder("<duration>").SetValue(&cfg.longtermTSBD.MaxBlockDuration)
+
+	serverOnlyFlag(
+		a,
+		"storage.longterm.allow-overlapping-compaction",
+		"Allow compaction of overlapping blocks. If set to false, "+
+			"TSDB stops vertical compaction and leaves overlapping blocks there. "+
+			"The use case is to let another component handle the compaction of overlapping blocks.",
+	).Default("true").Hidden().BoolVar(&cfg.longtermTSBD.EnableOverlappingCompaction)
+
+	serverOnlyFlag(
+		a,
+		"longterm.interval",
+		"Downsampling interval for longterm storage. Units Supported: y, w, d, h, m, s, ms.",
+	).Default("5m").SetValue(&cfg.longtermInterval)
+
+	serverOnlyFlag(
+		a,
+		"query.longterm.lookback-delta",
+		"The maximum lookback duration for retrieving metrics during expression evaluations and federation.",
+	).Default("5m").SetValue(&cfg.longtermLookbackDelta)
+
+	// agent
 	agentOnlyFlag(a, "storage.agent.path", "Base path for metrics storage.").
 		Default("data-agent/").StringVar(&cfg.agentStoragePath)
 
@@ -636,6 +797,15 @@ func main() {
 		cfg.tsdb.OutOfOrderTimeWindow = cfgFile.StorageConfig.TSDBConfig.OutOfOrderTimeWindow
 	}
 
+	// longterm
+	if err := cfg.validateForLongterm(cfgFile, logger); err != nil {
+		level.Error(logger).Log(
+			"msg", "failed validate config for longterm",
+			"err", err,
+		)
+		os.Exit(2)
+	}
+
 	// Now that the validity of the config is established, set the config
 	// success metrics accordingly, although the config isn't really loaded
 	// yet. This will happen later (including setting these metrics again),
@@ -733,6 +903,13 @@ func main() {
 	reloadBlocksTriggerNotifier := pp_storage.NewTriggerNotifier()
 	cfg.tsdb.ReloadBlocksExternalTrigger = reloadBlocksTriggerNotifier
 
+	// longterm
+	longtermReloadBlocksTriggerNotifier := pp_storage.NewNoopTriggerNotifier()
+	if cfg.longtermActivated() {
+		longtermReloadBlocksTriggerNotifier = pp_storage.NewTriggerNotifier()
+		cfg.longtermTSBD.ReloadBlocksExternalTrigger = longtermReloadBlocksTriggerNotifier
+	}
+
 	dataDir, err := filepath.Abs(localStoragePath)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to calculate local storage path abs", "err", err)
@@ -772,14 +949,16 @@ func main() {
 			CommitInterval:      time.Duration(cfg.WalCommitInterval),
 			MaxRetentionPeriod:  time.Duration(cfg.tsdb.RetentionDuration),
 			HeadRetentionPeriod: time.Duration(cfg.HeadRetentionTimeout),
+			LongtermIntervalMs:  time.Duration(cfg.longtermInterval).Milliseconds(),
 			KeeperCapacity:      2,
 			DataDir:             localStoragePath,
+			LongtermDataDir:     cfg.longtermStoragePath,
 			MaxSegmentSize:      cfg.WalMaxSamplesPerSegment,
 			NumberOfShards:      receiverConfig.NumberOfShards,
 		},
 		clock,
 		headCatalog,
-		reloadBlocksTriggerNotifier,
+		pp_storage.NewMultiTriggerNotifier(reloadBlocksTriggerNotifier, longtermReloadBlocksTriggerNotifier),
 		removedHeadTriggerNotifier,
 		hManagerReadyNotifier,
 		prometheus.DefaultRegisterer,
@@ -825,6 +1004,27 @@ func main() {
 		)
 		// PP_CHANGES.md: rebuild on cpp end
 	)
+
+	// longterm
+	var (
+		longtermLocalStorage  ReadyStorage    = noopReadyStorage{}
+		longtermFanoutStorage storage.Storage = noopReadyStorage{}
+	)
+	if cfg.longtermActivated() {
+		longtermLocalStorage = &readyStorage{stats: tsdb.NewDBStats()}
+		longtermFanoutStorage = storage.NewFanout(
+			logger,
+			pp_pkg_storage.NewLongtermAdapter(
+				clock,
+				hManager.Proxy(),
+				hManager.Builder(),
+				hManager.MergeOutOfOrderChunks,
+				time.Duration(cfg.longtermInterval).Milliseconds(),
+				prometheus.DefaultRegisterer,
+			),
+			longtermLocalStorage,
+		)
+	}
 
 	var (
 		ctxWeb, cancelWeb = context.WithCancel(context.Background())
@@ -912,6 +1112,9 @@ func main() {
 
 		queryEngine *promql.Engine
 		ruleManager *rules.Manager
+
+		// longterm
+		longtermQueryEngine *promql.Engine
 	)
 
 	if cfg.enableAutoGOMAXPROCS {
@@ -982,6 +1185,34 @@ func main() {
 			level.Error(logger).Log("msg", "failed to create a rule manager", "err", err)
 			os.Exit(1)
 		}
+
+		longtermQueryEngine = queryEngine
+		if cfg.longtermActivated() {
+			longtermQueryEngine = promql.NewEngine(
+				promql.EngineOpts{
+					Logger: log.With(logger, "component", "longterm_query_engine"),
+					Reg: prometheus.WrapRegistererWithPrefix(
+						"longterm_",
+						prometheus.DefaultRegisterer,
+					),
+					MaxSamples: cfg.queryMaxSamples,
+					Timeout:    time.Duration(cfg.queryTimeout),
+					ActiveQueryTracker: promql.NewActiveQueryTracker(
+						localStoragePath,
+						cfg.queryConcurrency,
+						log.With(logger, "component", "longterm_active_query_tracker"),
+					),
+					LookbackDelta:            time.Duration(cfg.longtermLookbackDelta),
+					NoStepSubqueryIntervalFn: noStepSubqueryInterval.Get,
+					// EnableAtModifier and EnableNegativeOffset have to be
+					// always on for regular PromQL as of Prometheus v2.33.
+					EnableAtModifier:         true,
+					EnableNegativeOffset:     true,
+					EnablePerStepStats:       cfg.enablePerStepStats,
+					EnableDelayedNameRemoval: cfg.promqlEnableDelayedNameRemoval,
+				},
+			)
+		}
 	}
 
 	scraper.Set(scrapeManager)
@@ -1000,6 +1231,10 @@ func main() {
 	cfg.web.LookbackDelta = time.Duration(cfg.lookbackDelta)
 	cfg.web.IsAgent = agentMode
 	cfg.web.AppName = modeAppName
+
+	// longterm
+	cfg.web.LongtermStorage = longtermFanoutStorage
+	cfg.web.LongtermQueryEngine = longtermQueryEngine
 
 	cfg.web.Version = &web.PrometheusVersion{
 		Version:   version.Version,
@@ -1040,7 +1275,10 @@ func main() {
 		}, { // PP_CHANGES.md: rebuild on cpp end
 			name:     "db_storage",
 			reloader: localStorage.ApplyConfig,
-		}, { // PP_CHANGES.md: rebuild on cpp start
+		}, { // PP_CHANGES.md: rebuild on cpp
+			name:     "db_longterm_storage",
+			reloader: longtermLocalStorage.ApplyConfig,
+		}, { // PP_CHANGES.md: rebuild on cpp
 			name:     "remote_read",
 			reloader: remoteRead.ApplyConfig,
 		}, { // PP_CHANGES.md: rebuild on cpp end
@@ -1136,7 +1374,10 @@ func main() {
 
 	// Start all components while we wait for TSDB to open but only load
 	// initial config and mark ourselves as ready after it completed.
-	dbOpen := make(chan struct{})
+	dbOpen := newWaiter()
+	if cfg.longtermActivated() {
+		dbOpen.inc()
+	}
 
 	// sync.Once is used to make sure we can close the channel at different execution stages(SIGTERM or when the config is loaded).
 	type closeOnce struct {
@@ -1307,11 +1548,11 @@ func main() {
 				for {
 					select {
 					case <-hup:
-						if err := reloadConfig(cfg.configFile, cfg.enableExpandExternalLabels, cfg.tsdb.EnableExemplarStorage, logger, noStepSubqueryInterval, reloaders...); err != nil {
+						if err := reloadConfig(cfg, cfg.enableExpandExternalLabels, cfg.tsdb.EnableExemplarStorage, logger, noStepSubqueryInterval, reloaders...); err != nil {
 							level.Error(logger).Log("msg", "Error reloading config", "err", err)
 						}
 					case rc := <-webHandler.Reload():
-						if err := reloadConfig(cfg.configFile, cfg.enableExpandExternalLabels, cfg.tsdb.EnableExemplarStorage, logger, noStepSubqueryInterval, reloaders...); err != nil {
+						if err := reloadConfig(cfg, cfg.enableExpandExternalLabels, cfg.tsdb.EnableExemplarStorage, logger, noStepSubqueryInterval, reloaders...); err != nil {
 							level.Error(logger).Log("msg", "Error reloading config", "err", err)
 							rc <- err
 						} else {
@@ -1335,14 +1576,14 @@ func main() {
 		g.Add(
 			func() error {
 				select {
-				case <-dbOpen:
+				case <-dbOpen.done():
 				// In case a shutdown is initiated before the dbOpen is released
 				case <-cancel:
 					reloadReady.Close()
 					return nil
 				}
 
-				if err := reloadConfig(cfg.configFile, cfg.enableExpandExternalLabels, cfg.tsdb.EnableExemplarStorage, logger, noStepSubqueryInterval, reloaders...); err != nil {
+				if err := reloadConfig(cfg, cfg.enableExpandExternalLabels, cfg.tsdb.EnableExemplarStorage, logger, noStepSubqueryInterval, reloaders...); err != nil {
 					return fmt.Errorf("error loading config from %q: %w", cfg.configFile, err)
 				}
 
@@ -1377,7 +1618,13 @@ func main() {
 					}
 				}
 
-				db, err := openDBWithMetrics(localStoragePath, logger, prometheus.DefaultRegisterer, &opts, localStorage.getStats())
+				db, err := openDBWithMetrics(
+					localStoragePath,
+					log.With(logger, "component", "tsdb"),
+					prometheus.DefaultRegisterer,
+					&opts,
+					localStorage.getStats(),
+				)
 				if err != nil {
 					return fmt.Errorf("opening storage failed: %w", err)
 				}
@@ -1405,7 +1652,7 @@ func main() {
 				startTimeMargin := int64(2 * time.Duration(cfg.tsdb.MinBlockDuration).Seconds() * 1000)
 				localStorage.Set(db, startTimeMargin)
 				// db.SetWriteNotified(remoteStorage) // PP_CHANGES.md: rebuild on cpp
-				close(dbOpen)
+				dbOpen.close()
 				<-cancel
 				return nil
 			},
@@ -1416,6 +1663,66 @@ func main() {
 				close(cancel)
 			},
 		)
+
+		// longterm
+		if cfg.longtermActivated() {
+			longtermOpts := cfg.longtermTSBD.ToTSDBOptions()
+			longtermOpts.StripeSize = 1 // PP_CHANGES.md: rebuild on cpp
+			longtermCancel := make(chan struct{})
+			g.Add(
+				func() error {
+					level.Info(logger).Log("msg", "Starting Longterm TSDB ...")
+
+					longtermDB, err := openDBWithMetrics(
+						cfg.longtermStoragePath,
+						log.With(logger, "component", "longterm_tsdb"),
+						prometheus.WrapRegistererWithPrefix("longterm_", prometheus.DefaultRegisterer),
+						&longtermOpts,
+						longtermLocalStorage.getStats(),
+					)
+					if err != nil {
+						return fmt.Errorf("opening longterm storage failed: %w", err)
+					}
+
+					switch fsType := prom_runtime.Statfs(cfg.longtermStoragePath); fsType {
+					case "NFS_SUPER_MAGIC":
+						level.Warn(logger).Log(
+							"fs_type", fsType,
+							"msg", "This filesystem is not supported and may lead to data corruption and data loss. "+
+								"Please carefully read https://prometheus.io/docs/prometheus/latest/storage/ "+
+								"to learn more about supported filesystems.",
+						)
+					default:
+						level.Info(logger).Log("fs_type", fsType)
+					}
+
+					level.Info(logger).Log("msg", "Longterm TSDB started")
+					level.Debug(logger).Log("msg", "Longterm TSDB options",
+						"MinBlockDuration", cfg.longtermTSBD.MinBlockDuration,
+						"MaxBlockDuration", cfg.longtermTSBD.MaxBlockDuration,
+						"MaxBytes", cfg.longtermTSBD.MaxBytes,
+						"NoLockfile", cfg.longtermTSBD.NoLockfile,
+						"RetentionDuration", cfg.longtermTSBD.RetentionDuration,
+						"CorruptedRetentionDuration", cfg.longtermTSBD.CorruptedRetentionDuration,
+						"WALSegmentSize", cfg.longtermTSBD.WALSegmentSize,
+						"WALCompression", cfg.longtermTSBD.WALCompression,
+					)
+
+					startTimeMargin := int64(2 * time.Duration(cfg.longtermTSBD.MinBlockDuration).Seconds() * 1000)
+					longtermLocalStorage.Set(longtermDB, startTimeMargin)
+					dbOpen.close()
+					<-longtermCancel
+
+					return nil
+				},
+				func(err error) {
+					if err := longtermFanoutStorage.Close(); err != nil {
+						level.Error(logger).Log("msg", "Error stopping longterm storage", "err", err)
+					}
+					close(longtermCancel)
+				},
+			)
+		}
 	}
 	if agentMode {
 		// WAL storage.
@@ -1460,7 +1767,7 @@ func main() {
 
 				localStorage.Set(db, 0)
 				// db.SetWriteNotified(remoteStorage) // PP_CHANGES.md: rebuild on cpp
-				close(dbOpen)
+				dbOpen.close()
 				<-cancel
 				return nil
 			},
@@ -1492,7 +1799,7 @@ func main() {
 		g.Add(
 			func() error {
 				select {
-				case <-dbOpen:
+				case <-dbOpen.done():
 				// In case a shutdown is initiated before the dbOpen is released
 				case <-cancel:
 					return nil
@@ -1586,10 +1893,16 @@ func main() {
 	level.Info(logger).Log("msg", "See you next time!")
 }
 
-func openDBWithMetrics(dir string, logger log.Logger, reg prometheus.Registerer, opts *tsdb.Options, stats *tsdb.DBStats) (*tsdb.DB, error) {
+func openDBWithMetrics(
+	dir string,
+	logger log.Logger,
+	reg prometheus.Registerer,
+	opts *tsdb.Options,
+	stats *tsdb.DBStats,
+) (*tsdb.DB, error) {
 	db, err := tsdb.Open(
 		dir,
-		log.With(logger, "component", "tsdb"),
+		logger,
 		reg,
 		opts,
 		stats,
@@ -1642,10 +1955,16 @@ type reloader struct {
 	reloader func(*config.Config) error
 }
 
-func reloadConfig(filename string, expandExternalLabels, enableExemplarStorage bool, logger log.Logger, noStepSuqueryInterval *safePromQLNoStepSubqueryInterval, rls ...reloader) (err error) {
+func reloadConfig(
+	flagCfg flagConfig,
+	expandExternalLabels, enableExemplarStorage bool,
+	logger log.Logger,
+	noStepSuqueryInterval *safePromQLNoStepSubqueryInterval,
+	rls ...reloader,
+) (err error) {
 	start := time.Now()
 	timings := []interface{}{}
-	level.Info(logger).Log("msg", "Loading configuration file", "filename", filename)
+	level.Info(logger).Log("msg", "Loading configuration file", "filename", flagCfg.configFile)
 
 	defer func() {
 		if err == nil {
@@ -1656,9 +1975,18 @@ func reloadConfig(filename string, expandExternalLabels, enableExemplarStorage b
 		}
 	}()
 
-	conf, err := config.LoadFile(filename, agentMode, expandExternalLabels, logger)
+	conf, err := config.LoadFile(flagCfg.configFile, agentMode, expandExternalLabels, logger)
 	if err != nil {
-		return fmt.Errorf("couldn't load configuration (--config.file=%q): %w", filename, err)
+		return fmt.Errorf("couldn't load configuration (--config.file=%q): %w", flagCfg.configFile, err)
+	}
+
+	// longterm
+	if flagCfg.longtermActivated() && flagCfg.longtermInterval <= conf.GlobalConfig.ScrapeInterval {
+		return fmt.Errorf(
+			"the scratch interval(%s) should be less than the longterm interval(%s)",
+			conf.GlobalConfig.ScrapeInterval,
+			flagCfg.longtermInterval,
+		)
 	}
 
 	if enableExemplarStorage {
@@ -1677,7 +2005,10 @@ func reloadConfig(filename string, expandExternalLabels, enableExemplarStorage b
 		timings = append(timings, rl.name, time.Since(rstart))
 	}
 	if failed {
-		return fmt.Errorf("one or more errors occurred while applying the new configuration (--config.file=%q)", filename)
+		return fmt.Errorf(
+			"one or more errors occurred while applying the new configuration (--config.file=%q)",
+			flagCfg.configFile,
+		)
 	}
 
 	oldGoGC := debug.SetGCPercent(conf.Runtime.GoGC)
@@ -1692,7 +2023,11 @@ func reloadConfig(filename string, expandExternalLabels, enableExemplarStorage b
 	}
 
 	noStepSuqueryInterval.Set(conf.GlobalConfig.EvaluationInterval)
-	l := []interface{}{"msg", "Completed loading of configuration file", "filename", filename, "totalDuration", time.Since(start)}
+	l := []any{
+		"msg", "Completed loading of configuration file",
+		"filename", flagCfg.configFile,
+		"totalDuration", time.Since(start),
+	}
 	level.Info(logger).Log(append(l, timings...)...)
 	return nil
 }
@@ -2212,3 +2547,191 @@ func readPromPPFeatures(logger log.Logger) {
 		}
 	}
 }
+
+//
+// waiter
+//
+
+type waiter struct {
+	ch      chan struct{}
+	waiters int
+	locker  sync.Mutex
+}
+
+func newWaiter() *waiter {
+	return &waiter{
+		ch:      make(chan struct{}),
+		waiters: 1,
+		locker:  sync.Mutex{},
+	}
+}
+
+func (w *waiter) inc() {
+	w.locker.Lock()
+	w.waiters++
+	w.locker.Unlock()
+}
+
+func (w *waiter) close() {
+	w.locker.Lock()
+	w.waiters--
+	if w.waiters == 0 {
+		close(w.ch)
+	}
+	w.locker.Unlock()
+}
+
+func (w *waiter) done() <-chan struct{} {
+	return w.ch
+}
+
+//
+// ReadyStorage
+//
+
+// ReadyStorage implements the [storage.Storage] and TSDBAdminStats interface.
+type ReadyStorage interface {
+	Appender(ctx context.Context) storage.Appender
+	ApplyConfig(conf *config.Config) error
+	ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error)
+	CleanTombstones() error
+	Close() error
+	Delete(ctx context.Context, mint, maxt int64, ms ...*labels.Matcher) error
+	ExemplarQuerier(ctx context.Context) (storage.ExemplarQuerier, error)
+	Querier(mint, maxt int64) (storage.Querier, error)
+	Set(db storage.Storage, startTimeMargin int64)
+	Snapshot(dir string, withHead bool) error
+	StartTime() (int64, error)
+	Stats(statsByLabelName string, limit int) (*tsdb.Stats, error)
+	WALReplayStatus() (tsdb.WALReplayStatus, error)
+	getStats() *tsdb.DBStats
+}
+
+//
+// noopReadyStorage
+//
+
+// errlongtermNotActivated error when longterm is not activated.
+var errlongtermNotActivated = errors.New("longterm is not activated")
+
+// noopReadyStorage not operations implements the [ReadyStorage] interface.
+type noopReadyStorage struct{}
+
+// Appender implements the Storage interface.
+func (noopReadyStorage) Appender(context.Context) storage.Appender {
+	return longtermAppender{}
+}
+
+// Appender implements the [ReadyStorage] interface.
+func (noopReadyStorage) ApplyConfig(*config.Config) error {
+	return nil
+}
+
+// ChunkQuerier implements the Storage interface.
+func (noopReadyStorage) ChunkQuerier(int64, int64) (storage.ChunkQuerier, error) {
+	return nil, errlongtermNotActivated
+}
+
+// CleanTombstones implements the api_v1.TSDBAdminStats and api_v2.TSDBAdmin interfaces.
+func (noopReadyStorage) CleanTombstones() error {
+	return nil
+}
+
+// Close implements the Storage interface.
+func (noopReadyStorage) Close() error {
+	return nil
+}
+
+// Delete implements the api_v1.TSDBAdminStats and api_v2.TSDBAdmin interfaces.
+func (noopReadyStorage) Delete(context.Context, int64, int64, ...*labels.Matcher) error {
+	return nil
+}
+
+// ExemplarQuerier implements the Storage interface.
+func (noopReadyStorage) ExemplarQuerier(context.Context) (storage.ExemplarQuerier, error) {
+	return nil, errlongtermNotActivated
+}
+
+// Querier implements the Storage interface.
+func (noopReadyStorage) Querier(int64, int64) (storage.Querier, error) {
+	return nil, errlongtermNotActivated
+}
+
+// Set implements the [ReadyStorage] interface.
+func (noopReadyStorage) Set(storage.Storage, int64) {}
+
+// Snapshot implements the api_v1.TSDBAdminStats and api_v2.TSDBAdmin interfaces.
+func (noopReadyStorage) Snapshot(dir string, withHead bool) error {
+	return errlongtermNotActivated
+}
+
+// StartTime implements the Storage interface.
+func (noopReadyStorage) StartTime() (int64, error) {
+	return math.MaxInt64, nil
+}
+
+// Stats implements the api_v1.TSDBAdminStats interface.
+func (noopReadyStorage) Stats(string, int) (*tsdb.Stats, error) {
+	return nil, errlongtermNotActivated
+}
+
+// WALReplayStatus implements the api_v1.TSDBStats interface.
+func (noopReadyStorage) WALReplayStatus() (tsdb.WALReplayStatus, error) {
+	return tsdb.WALReplayStatus{}, errlongtermNotActivated
+}
+
+// GetStats implements the [ReadyStorage] interface.
+func (noopReadyStorage) getStats() *tsdb.DBStats {
+	return tsdb.NewDBStats()
+}
+
+//
+// longtermAppender
+//
+
+// errCannotAppend when cannot append data to this appender.
+var errCannotAppend = errors.New("cannot append data to this appender")
+
+// longtermAppender the appender that data cannot be added to, implements the [storage.Appender] interface.
+type longtermAppender struct{}
+
+// Append implements the [storage.Appender] interface.
+func (longtermAppender) Append(storage.SeriesRef, labels.Labels, int64, float64) (storage.SeriesRef, error) {
+	return 0, errCannotAppend
+}
+
+// AppendExemplar implements the [storage.Appender] interface.
+func (longtermAppender) AppendExemplar(
+	storage.SeriesRef,
+	labels.Labels,
+	exemplar.Exemplar,
+) (storage.SeriesRef, error) {
+	return 0, errCannotAppend
+}
+
+// AppendHistogram implements the [storage.Appender] interface.
+func (longtermAppender) AppendHistogram(
+	storage.SeriesRef,
+	labels.Labels,
+	int64,
+	*histogram.Histogram,
+	*histogram.FloatHistogram,
+) (storage.SeriesRef, error) {
+	return 0, errCannotAppend
+}
+
+// UpdateMetadata implements the [storage.Appender] interface.
+func (longtermAppender) UpdateMetadata(storage.SeriesRef, labels.Labels, metadata.Metadata) (storage.SeriesRef, error) {
+	return 0, errCannotAppend
+}
+
+// AppendCTZeroSample implements the [storage.Appender] interface.
+func (longtermAppender) AppendCTZeroSample(storage.SeriesRef, labels.Labels, int64, int64) (storage.SeriesRef, error) {
+	return 0, errCannotAppend
+}
+
+// Commit implements the [storage.Appender] interface.
+func (longtermAppender) Commit() error { return errCannotAppend }
+
+// Rollback implements the [storage.Appender] interface.
+func (longtermAppender) Rollback() error { return errCannotAppend }

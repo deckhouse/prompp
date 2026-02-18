@@ -98,12 +98,13 @@ void prompp_series_data_data_storage_allocated_memory(void* args, void* res);
  * @param args {
  *     dataStorage    uintptr          // pointer to constructed data storage
  *     query          DataStorageQuery // query
+ *     downsamplingMs int64            // downsampling interval in milliseconds (0 - downsampling is disabled)
  * }
  *
  * @param res {
- *     Querier uintptr        // pointer to constructed Querier if data loading is needed.
+ *     querier uintptr        // pointer to constructed Querier if data loading is needed.
  *                            // If constructed (!= 0) it must be destroyed by calling prompp_series_data_data_storage_query_final.
- *     Status  uint8          // status of a query (0 - Success, 1 - Data loading is needed)
+ *     status  uint8          // status of a query (0 - Success, 1 - Data loading is needed)
  *     serializedData uintptr // pointer to serialized data
  * }
  */
@@ -150,10 +151,11 @@ void prompp_series_data_data_storage_dtor(void* args);
  *     lss uintptr            // pointer to constructed label sets
  *     lsIdBatchSize uint32   // size of ls batch for recoding
  *     dataStorage   uintptr  // pointer to constructed data storage
- *     time_interval struct { closed interval [min, max]
+ *     timeInterval struct {  // closed interval [min, max]
  *        min int64
  *        max int64
  *     }
+ *     downsamplingMs int64   // downsampling interval in milliseconds (0 - downsampling is disabled)
  * }
  * @param res {
  *     chunk_recoder uintptr // pointer to chunk recoder

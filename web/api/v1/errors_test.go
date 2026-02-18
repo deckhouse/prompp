@@ -117,7 +117,9 @@ func createPrometheusAPI(t *testing.T, q storage.SampleAndChunkQueryable) *route
 		q,
 		nil,
 		nil,
-		nil,
+		nil, // adapter
+		nil, // longtermQueryable
+		nil, // longtermQE
 		func(context.Context) ScrapePoolsRetriever { return &DummyScrapePoolsRetriever{} },
 		func(context.Context) TargetRetriever { return &DummyTargetRetriever{} },
 		func(context.Context) AlertmanagerRetriever { return &DummyAlertmanagerRetriever{} },

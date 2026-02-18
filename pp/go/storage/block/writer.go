@@ -33,23 +33,27 @@ type Shard interface {
 // Writer represents a block writer. It is used to write blocks to disk from a shard.
 type Writer[TShard Shard] struct {
 	dataDir                  string
+	longtermDataDir          string
 	maxBlockChunkSegmentSize int64
 	blockDurationMs          int64
+	longtermIntervalMs       int64
 	blockWriteDuration       *prometheus.GaugeVec
 }
 
 // NewWriter creates a new [Writer].
 func NewWriter[TShard Shard](
-	dataDir string,
-	maxBlockChunkSegmentSize int64,
+	dataDir, longtermDataDir string,
+	maxBlockChunkSegmentSize, longtermIntervalMs int64,
 	blockDuration time.Duration,
 	registerer prometheus.Registerer,
 ) *Writer[TShard] {
 	factory := util.NewUnconflictRegisterer(registerer)
 	return &Writer[TShard]{
 		dataDir:                  dataDir,
+		longtermDataDir:          longtermDataDir,
 		maxBlockChunkSegmentSize: maxBlockChunkSegmentSize,
 		blockDurationMs:          blockDuration.Milliseconds(),
+		longtermIntervalMs:       longtermIntervalMs,
 		blockWriteDuration: factory.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "prompp_block_write_duration",
 			Help: "Block write duration in milliseconds.",
@@ -89,6 +93,7 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 
 	timeInterval := sd.DataStorage().TimeInterval(false)
 
+	lss := sd.LSS().Target()
 	quantStart := (timeInterval.MinT / w.blockDurationMs) * w.blockDurationMs
 	for ; quantStart <= timeInterval.MaxT; quantStart += w.blockDurationMs {
 		minT, maxT := quantStart, quantStart+w.blockDurationMs-1
@@ -99,26 +104,46 @@ func (w *Writer[TShard]) createWriters(sd TShard) (blockWriters, error) {
 			maxT = timeInterval.MaxT
 		}
 
-		var chunkIterator ChunkIterator
-		_ = sd.DataStorage().WithRLock(func(*cppbridge.DataStorage) error {
-			chunkIterator = NewChunkIterator(sd.LSS().Target(), LsIdBatchSize, sd.DataStorage().Raw(), minT, maxT)
-			return nil
-		})
-
-		writer, err := newBlockWriter(
-			w.dataDir,
-			w.maxBlockChunkSegmentSize,
-			NewIndexWriter(sd.LSS().Target()),
-			chunkIterator,
-		)
+		writer, err := w.createWriter(w.dataDir, sd, lss, minT, maxT, cppbridge.NoDownsampling)
 		if err != nil {
 			return blockWriters{}, errors.Join(err, writers.Close())
 		}
 
 		writers.append(writer)
+
+		if w.longtermDataDir == "" {
+			continue
+		}
+
+		longtermWriter, err := w.createWriter(w.longtermDataDir, sd, lss, minT, maxT, w.longtermIntervalMs)
+		if err != nil {
+			return blockWriters{}, errors.Join(err, writers.Close())
+		}
+
+		writers.append(longtermWriter)
 	}
 
 	return writers, nil
+}
+
+func (w *Writer[TShard]) createWriter(
+	dataDir string,
+	sd TShard,
+	lss *cppbridge.LabelSetStorage,
+	minT, maxT, downsamplingMs int64,
+) (blockWriter, error) {
+	var chunkIterator ChunkIterator
+	_ = sd.DataStorage().WithRLock(func(ds *cppbridge.DataStorage) error {
+		chunkIterator = NewChunkIterator(lss, LsIdBatchSize, ds, minT, maxT, downsamplingMs)
+		return nil
+	})
+
+	return newBlockWriter(
+		dataDir,
+		w.maxBlockChunkSegmentSize,
+		NewIndexWriter(lss),
+		chunkIterator,
+	)
 }
 
 // recodeAndWriteChunks recodes and writes chunks for the shard.

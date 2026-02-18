@@ -36,12 +36,13 @@ const (
 
 type GenericPersistenceSuite struct {
 	suite.Suite
-	dataDir       string
-	clock         *clockwork.FakeClock
-	catalog       *catalog.Catalog
-	proxy         *storage.Proxy
-	blockWriter   *mock.HeadBlockWriterMock[*shard.Shard]
-	writeNotifier *mock.WriteNotifierMock
+	dataDir         string
+	longtermDataDir string
+	clock           *clockwork.FakeClock
+	catalog         *catalog.Catalog
+	proxy           *storage.Proxy
+	blockWriter     *mock.HeadBlockWriterMock[*shard.Shard]
+	writeNotifier   *mock.WriteNotifierMock
 }
 
 func (s *GenericPersistenceSuite) SetupTest() {
@@ -222,7 +223,9 @@ func (s *PersistenerSuite) TestPersistHeadSuccess() {
 	s.clock.Advance(tsdbRetentionPeriod)
 	blockWriter := block.NewWriter[*shard.Shard](
 		s.dataDir,
+		s.longtermDataDir,
 		block.DefaultChunkSegmentSize,
+		cppbridge.NoDownsampling,
 		2*time.Hour,
 		prometheus.DefaultRegisterer,
 	)
@@ -258,7 +261,9 @@ func (s *PersistenerSuite) TestPersistHeadErrorOnBlockWriterForSecondShard() {
 	s.clock.Advance(tsdbRetentionPeriod)
 	blockWriter := block.NewWriter[*shard.Shard](
 		s.dataDir,
+		s.longtermDataDir,
 		block.DefaultChunkSegmentSize,
+		cppbridge.NoDownsampling,
 		2*time.Hour,
 		prometheus.DefaultRegisterer,
 	)
