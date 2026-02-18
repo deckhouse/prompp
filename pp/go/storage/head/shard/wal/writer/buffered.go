@@ -20,7 +20,10 @@ type FileInfo = os.FileInfo
 
 // SegmentIsWrittenNotifier notify when new segment write.
 type SegmentIsWrittenNotifier interface {
+	// NotifySegmentIsWritten notify that the segment has been flushed for shard.
 	NotifySegmentIsWritten(shardID uint16)
+
+	// NotifySegmentWrite notify that the segment is being written for shard.
 	NotifySegmentWrite(shardID uint16)
 }
 
@@ -36,6 +39,15 @@ type SegmentMarkup interface {
 	// SetSegmentIDByShard sets the matching of through segment ID and shard.
 	SetSegmentIDByShard(sid uint32, shardID uint16)
 }
+
+// NoopSegmentMarkup marking up through segment IDs by shards. [SegmentMarkup] of the implementation.
+type NoopSegmentMarkup struct{}
+
+// NextSegmentID returns the next through ID for the segment. [SegmentMarkup] of the implementation.
+func (NoopSegmentMarkup) NextSegmentID() uint32 { return 0 }
+
+// SetSegmentIDByShard sets the matching of through segment ID and shard. [SegmentMarkup] of the implementation.
+func (NoopSegmentMarkup) SetSegmentIDByShard(uint32, uint16) {}
 
 //
 // SegmentToWrite

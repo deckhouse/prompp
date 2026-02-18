@@ -152,7 +152,8 @@ func (b *Builder) createShardOnDisk(
 	// logShards is 0 for single encoder
 	shardWalEncoder := cppbridge.NewHeadWalEncoder(shardID, 0, lss.Target())
 
-	_, err = writer.WriteHeader(shardFile, wal.FileFormatVersion, shardWalEncoder.Version())
+	// V2: wal.FileFormatVersionV2
+	_, err = writer.WriteHeader(shardFile, wal.FileFormatVersionV2, shardWalEncoder.Version())
 	if err != nil {
 		return nil, fmt.Errorf("failed to write header: %w", err)
 	}
@@ -160,8 +161,11 @@ func (b *Builder) createShardOnDisk(
 	sw, err := writer.NewBuffered(
 		shardID,
 		shardFile,
-		writer.WriteSegment[*cppbridge.HeadEncodedSegment],
-		swn,
+		// writer.WriteSegment[*cppbridge.HeadEncodedSegment], // V2: writer.WriteSegmentV2
+		// swn,                        // V2: NoopSegmentWriteNotifier{}
+		// writer.NoopSegmentMarkup{}, // V2: headRecord
+		writer.WriteSegmentV2[*cppbridge.HeadEncodedSegment],
+		NoopSegmentWriteNotifier{},
 		headRecord,
 	)
 	if err != nil {

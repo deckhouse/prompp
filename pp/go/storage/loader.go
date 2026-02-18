@@ -276,11 +276,44 @@ type ShardData struct {
 	maxSegmentID         uint32
 }
 
+//
+// SegmentWriteNotifier
+//
+
+// SegmentWriteNotifier notifies that the segment has been written.
+type SegmentWriteNotifier interface {
+	// NotifySegmentIsWritten notify that the segment has been flushed for shard.
+	NotifySegmentIsWritten(shardID uint16)
+
+	// NotifySegmentWrite notify that the segment is being written for shard.
+	NotifySegmentWrite(shardID uint16)
+
+	// Set for shard number of segments.
+	Set(shardID uint16, numberOfSegments uint32)
+}
+
+// NoopSegmentWriteNotifier notify when new segment write. [SegmentWriteNotifier] of the implementation.
+type NoopSegmentWriteNotifier struct{}
+
+// NotifySegmentIsWritten notify that the segment has been flushed for shard.
+// [SegmentWriteNotifier] of the implementation.
+func (NoopSegmentWriteNotifier) NotifySegmentIsWritten(uint16) {}
+
+// NotifySegmentWrite notify that the segment is being written for shard. [SegmentWriteNotifier] of the implementation.
+func (NoopSegmentWriteNotifier) NotifySegmentWrite(uint16) {}
+
+// Set for shard number of segments. [SegmentWriteNotifier] of the implementation.
+func (NoopSegmentWriteNotifier) Set(uint16, uint32) {}
+
+//
+// ShardDataLoader
+//
+
 // ShardDataLoader loads shard data from a file and creates a shard.
 type ShardDataLoader struct {
 	dir                       string
-	notifier                  *writer.SegmentWriteNotifier
-	headRecord                *catalog.Record
+	notifier                  SegmentWriteNotifier
+	segmentMarkup             writer.SegmentMarkup
 	registerer                prometheus.Registerer
 	unloadDataStorageInterval time.Duration
 	shardData                 ShardData
@@ -301,7 +334,7 @@ func NewShardDataLoader(
 	return ShardDataLoader{
 		dir:                       dir,
 		notifier:                  notifier,
-		headRecord:                headRecord,
+		segmentMarkup:             headRecord,
 		registerer:                registerer,
 		unloadDataStorageInterval: unloadDataStorageInterval,
 		maxSegmentSize:            maxSegmentSize,
@@ -382,6 +415,7 @@ func (l *ShardDataLoader) loadWalFile(
 
 	switch walVersion {
 	case wal.FileFormatVersion:
+		l.segmentMarkup = writer.NoopSegmentMarkup{}
 		l.shardData.writeSegment = writer.WriteSegment[*cppbridge.HeadEncodedSegment]
 		l.shardData.numberOfSegments, err = l.loadSegments(
 			rd,
@@ -390,6 +424,7 @@ func (l *ShardDataLoader) loadWalFile(
 			unloader,
 		)
 	case wal.FileFormatVersionV2:
+		l.notifier = NoopSegmentWriteNotifier{}
 		l.shardData.writeSegment = writer.WriteSegmentV2[*cppbridge.HeadEncodedSegment]
 		l.shardData.numberOfSegments, err = l.loadSegmentsV2(
 			rd,
@@ -420,7 +455,7 @@ func (l *ShardDataLoader) createShardWal(
 		shardWalFile,
 		l.shardData.writeSegment,
 		l.notifier,
-		l.headRecord,
+		l.segmentMarkup,
 	)
 	if err != nil {
 		_ = shardWalFile.Close()
@@ -511,7 +546,7 @@ func (l *ShardDataLoader) loadSegmentsV2(
 		}
 
 		numberOfSegments++
-		l.headRecord.SetSegmentIDByShard(segment.ID(), l.shardID)
+		l.segmentMarkup.SetSegmentIDByShard(segment.ID(), l.shardID)
 		l.shardData.maxSegmentID = segment.ID()
 
 		if createTs != 0 && unloader != nil {

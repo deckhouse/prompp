@@ -160,7 +160,7 @@ func readSegmentV2(reader io.Reader, segment *SegmentV2) (int64, error) {
 
 	if crc32Hash != crc32.ChecksumIEEE(segment.data) {
 		return int64(n), fmt.Errorf(
-			"crc32 did not match, want: %d, have: %d", crc32Hash, crc32.ChecksumIEEE(segment.data),
+			"v2: crc32 did not match, want: %d, have: %d", crc32Hash, crc32.ChecksumIEEE(segment.data),
 		)
 	}
 
