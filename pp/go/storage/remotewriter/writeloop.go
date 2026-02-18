@@ -122,7 +122,7 @@ func (wl *writeLoop) run(ctx context.Context) {
 
 // write writes data from iterator to the remote write storage.
 func (*writeLoop) write(ctx context.Context, iterator *Iterator) (err error) {
-	msgChannel := make(chan *Message)
+	msgChannel := make(chan *cppbridge.RWMessageList)
 
 	go func() {
 		defer close(msgChannel)
@@ -148,7 +148,7 @@ func (*writeLoop) write(ctx context.Context, iterator *Iterator) (err error) {
 	}()
 
 	for msg := range msgChannel {
-		if err := iterator.SendMessage(msg, ctx); err != nil {
+		if err := iterator.SendMessage(ctx, msg); err != nil {
 			logger.Errorf("send message: %v", err)
 		}
 	}
@@ -433,6 +433,6 @@ func (rpw *readyProtobufWriter) SetProtobufWriter(protobufWriter ProtobufWriter)
 }
 
 // Write writes protobuf to the remote write storage.
-func (rpw *readyProtobufWriter) Write(ctx context.Context, protobuf *cppbridge.SnappyProtobufEncodedData) error {
+func (rpw *readyProtobufWriter) Write(ctx context.Context, protobuf []byte) error {
 	return rpw.protobufWriter.Write(ctx, protobuf)
 }
