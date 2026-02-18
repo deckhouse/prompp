@@ -114,6 +114,20 @@ extern "C" void prompp_head_wal_encoder_finalize(void* args, void* res) {
   }
 }
 
+extern "C" void prompp_head_wal_encoder_max_lsid_written(void* args, void* res) {
+  struct Arguments {
+    EncoderPtr encoder;
+  };
+
+  struct Result {
+    uint32_t max_lsid;
+  };
+
+  const auto in = static_cast<Arguments*>(args);
+  auto* out = static_cast<Result*>(res);
+  out->max_lsid = in->encoder->max_lsid_written();
+}
+
 extern "C" void prompp_head_wal_decoder_ctor(void* args, void* res) {
   using entrypoint::head::LssVariantPtr;
 

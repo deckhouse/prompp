@@ -124,6 +124,8 @@ class GenericEncoder {
     Writer::DestroySourceState(result);
   }
 
+  inline __attribute__((always_inline)) uint32_t max_lsid_written() const { return encoder_.max_lsid_written(); }
+
   // finalize - finalize the encoded data in the C++ encoder to Segment.
   template <class Stats, class Output>
   inline __attribute__((always_inline)) void finalize(Stats* stats, Output& out) {

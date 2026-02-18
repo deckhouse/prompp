@@ -424,6 +424,10 @@ class BasicEncoder {
 
   inline __attribute__((always_inline)) const LabelSetsTable& label_sets() const { return label_sets_; }
 
+  inline __attribute__((always_inline)) const checkpoint_type& label_sets_checkpoint() const noexcept { return label_sets_checkpoint_; }
+
+  inline __attribute__((always_inline)) uint32_t max_lsid_written() const noexcept { return label_sets_checkpoint_.next_item_index(); }
+
   inline __attribute__((always_inline)) const Buffer& buffer() const { return buffer_; }
 
   inline __attribute__((always_inline)) uint16_t shard_id() const noexcept { return shard_id_; }
