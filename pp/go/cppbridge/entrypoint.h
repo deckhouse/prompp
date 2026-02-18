@@ -43,6 +43,9 @@ void prompp_dump_memory_profile(void* args, void* res);
 #define Sizeof_SerializedDataIterator 200
 
 #define Sizeof_MetricsIterator 24
+
+#define Sizeof_SegmentSamplesStorage 80
+#define Sizeof_RemoteWriteMessageEncoder 32
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -1257,6 +1260,72 @@ extern "C" {
 #endif
 
 /**
+ * @brief create message list
+ *
+ * @param args {
+ *     messagesCount uint64
+ * }
+ *
+ * @param res {
+ *     message_list []Message
+ * }
+ */
+void prompp_remote_write_message_list_ctor(void* args, void* res);
+
+/**
+ * @brief destroy message list
+ *
+ * @param args {
+ *     message_list []Message
+ * }
+ */
+void prompp_remote_write_message_list_dtor(void* args);
+
+/**
+ * @brief create message encoders list
+ *
+ * @param args {
+ *     encodersCount uint64
+ * }
+ *
+ * @param res {
+ *     encoders []MessageEncoder
+ * }
+ */
+void prompp_remote_write_message_encoders_ctor(void* args, void* res);
+
+/**
+ * @brief destroy message encoders list
+ *
+ * @param args {
+ *     encoders []MessageEncoder
+ * }
+ */
+void prompp_remote_write_message_encoders_dtor(void* args);
+
+/**
+ * @brief encode remote write message
+ *
+ * @param args {
+ *     messageEncoder *MessageEncoder
+ *     lss_list       []uintptr
+ *     storageList    []SegmentSamplesStorageList
+ *     messageIndex   uint64
+ *     messagesCount  uint64
+ *     message        *Message
+ * }
+ *
+ */
+void prompp_remote_write_encode_message(void* args);
+
+#ifdef __cplusplus
+}  // extern "C"
+#endif
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/**
  * @brief Construct a new series data DataStorage
  *
  * @param res {
@@ -1842,6 +1911,49 @@ void prompp_wal_decoder_decode_dry(void* args, void* res);
  */
 void prompp_wal_decoder_restore_from_stream(void* args, void* res);
 
+/**
+ * @brief Construct a segment samples storage list
+ *
+ * @param args {
+ *     count  uint64 // storages count
+ * }
+ *
+ * @param res {
+ *     storageList []SegmentSamplesStorageList // constructed storage list
+ * }
+ */
+void prompp_wal_segment_samples_storage_list_ctor(void* args, void* res);
+
+/**
+ * @brief Add sample to sample storage list
+ *
+ * @param args {
+ *     samplesStorage *SegmentSamplesStorage // pointer to constructed SegmentSamplesStorage
+ *     lsId           uint32 // label set id
+ *     int64          timestamp // sample timestamp
+ *     value          float64   // sample value
+ * }
+ */
+void prompp_wal_segment_samples_storage_add(void* args);
+
+/**
+ * @brief Clear sample storage list
+ *
+ * @param args {
+ *     samplesStorage *SegmentSamplesStorage // pointer to constructed SegmentSamplesStorage
+ * }
+ */
+void prompp_wal_segment_samples_storage_clear(void* args);
+
+/**
+ * @brief Destroy segment samples storage list
+ *
+ * @param args {
+ *     storageList []SegmentSamplesStorageList
+ * }
+ */
+void prompp_wal_segment_samples_storage_list_dtor(void* args);
+
 //
 // OutputDecoder
 //
@@ -1903,9 +2015,10 @@ void prompp_wal_output_decoder_load_from(void* args, void* res);
  * @brief decode segment to slice RefSample.
  *
  * @param args {
- *     segment               []byte      // segment content
- *     decoder               uintptr     // pointer to constructed output decoder
- *     lower_limit_timestamp int64       // lower limit timestamp
+ *     segment               []byte                 // segment content
+ *     decoder               uintptr                // pointer to constructed output decoder
+ *     samplesStorage        *SegmentSamplesStorage // pointer to constructed SegmentSamplesStorage
+ *     lower_limit_timestamp int64                  // lower limit timestamp
  * }
  *
  * @param res {
@@ -1914,52 +2027,11 @@ void prompp_wal_output_decoder_load_from(void* args, void* res);
  *     dropped_sample_count  uint32      // count of dropped samples on relabeling rules
  *     add_series_count      uint32      // count of add series on relabeling rules
  *     dropped_series_count  uint32      // count of dropped series on relabeling rules
- *     ref_samples           []RefSample // slice RefSample
+ *     sample_count         uint32       // count of samples added to samplesStorage
  *     error                 []byte      // error string if thrown
  * }
  */
 void prompp_wal_output_decoder_decode(void* args, void* res);
-
-//
-// ProtobufEncoder
-//
-
-/**
- * @brief Construct a new Protobuf Encoder
- *
- * @param args {
- *     output_lsses        uintptr           // pointer to constructed slice with output label sets;
- * }
- *
- * @param res {
- *     encoder             uintptr           // pointer to constructed Protobuf Encoder
- * }
- */
-void prompp_wal_protobuf_encoder_ctor(void* args, void* res);
-
-/**
- * @brief Destroy Protobuf Encoder
- *
- * @param args {
- *     encoder             uintptr           // pointer to constructed Protobuf Encoder
- * }
- */
-void prompp_wal_protobuf_encoder_dtor(void* args);
-
-/**
- * @brief encode batch slice ShardRefSamples to snapped protobufs on shards.
- *
- * @param args {
- *     batch               []*ShardRefSample // slice with go pointers to ShardRefSample
- *     out_slices          [][]byte          // slice RefSample
- *     encoder             uintptr           // pointer to constructed output decoder
- * }
- *
- * @param res {
- *     error               []byte            // error string if thrown
- * }
- */
-void prompp_wal_protobuf_encoder_encode(void* args, void* res);
 
 #ifdef __cplusplus
 }  // extern "C"
@@ -2396,6 +2468,26 @@ void prompp_wal_open_metrics_scraper_hashdex_parse(void* args, void* res);
  * }
  */
 void prompp_wal_open_metrics_scraper_hashdex_get_metadata(void* args, void* res);
+
+/**
+ * @brief Construct a new PromPP::WAL::hashdex::GoHead hashdex
+ *
+ * @param res {
+ *     hashdex uintptr // pointer to constructed hashdex
+ * }
+ */
+void prompp_wal_go_head_hashdex_ctor(void* res);
+
+/**
+ * @brief Fill hashdex from Go Head
+ *
+ * @param args {
+ *     hashdex  uintptr // pointer to constructed hashdex
+ *     lss uintptr      // pointer to constructed lss
+ *     dataStorage uintptr // pointer to constructed DataStorage
+ * }
+ */
+void prompp_wal_go_head_hashdex_presharding(void* args);
 
 #ifdef __cplusplus
 }  // extern "C"

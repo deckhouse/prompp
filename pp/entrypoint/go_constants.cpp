@@ -3,6 +3,8 @@
 #include "head/serialization.h"
 #include "metrics/storage.h"
 #include "prometheus/relabeler.h"
+#include "wal/output_decoder.h"
+#include "wal/segment_samples_storage.h"
 
 namespace {
 
@@ -15,5 +17,8 @@ static_assert(sizeof(PromPP::Prometheus::Relabel::InnerSeries) == Sizeof_InnerSe
 static_assert(sizeof(entrypoint::head::SerializedDataIterator) == Sizeof_SerializedDataIterator);
 
 static_assert(sizeof(metrics::Storage::Iterator) == Sizeof_MetricsIterator);
+
+static_assert(sizeof(PromPP::WAL::SegmentSamplesStorage) == Sizeof_SegmentSamplesStorage);
+static_assert(sizeof(PromPP::WAL::ProtobufEncoder) == Sizeof_RemoteWriteMessageEncoder);
 
 }  // namespace

@@ -18,7 +18,7 @@ type Adapter interface {
 		hashdex cppbridge.ShardedData,
 		state *cppbridge.StateV2,
 		commitToWal bool,
-	) error
+	) (cppbridge.RelabelerStats, error)
 
 	// AppendTimeSeries append TimeSeries data to [Head].
 	AppendTimeSeries(

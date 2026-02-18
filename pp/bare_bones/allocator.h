@@ -2,6 +2,7 @@
 
 #include <memory>
 
+#include "memory.h"
 #include "preprocess.h"
 
 namespace BareBones {
@@ -23,10 +24,15 @@ class Allocator {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE constexpr T* allocate(std::size_t n) {
     allocated_memory_ += static_cast<CounterType>(n * sizeof(T));
-    return std::allocator<T>{}.allocate(n);
+
+    auto r = static_cast<T*>(DefaultReallocator::allocate(n * sizeof(T)));
+    std::uninitialized_default_construct_n(r, n);
+    return r;
   }
   PROMPP_ALWAYS_INLINE void deallocate(T* p, std::size_t n) {
-    std::allocator<T>{}.deallocate(p, n);
+    std::destroy_n(p, n);
+    DefaultReallocator::free(p);
+
     allocated_memory_ -= static_cast<CounterType>(n * sizeof(T));
   }
 

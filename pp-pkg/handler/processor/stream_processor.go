@@ -111,7 +111,7 @@ func (p *StreamProcessor) Process(ctx context.Context, stream MetricStream) erro
 			Timestamp: hashdexContent.CreatedAt(),
 		}
 
-		if err = p.adapter.AppendHashdex(
+		if _, err = p.adapter.AppendHashdex(
 			ctx,
 			hashdexContent.ShardedData(),
 			state,

@@ -1,9 +1,11 @@
 #pragma once
 
-#include <iostream>
+#include <fstream>
 #include <span>
 
 #include <scope_exit.h>
+
+#include "exception.h"
 
 namespace BareBones {
 
