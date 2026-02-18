@@ -411,3 +411,41 @@ func (*WALOpenMetricsScraperHashdex) Replica() string {
 func (h *WALOpenMetricsScraperHashdex) cptr() uintptr {
 	return h.hashdex
 }
+
+type WALGoHeadHashdex struct {
+	hashdex     uintptr
+	lss         *LabelSetStorage
+	dataStorage *DataStorage
+}
+
+// Cluster get Cluster name.
+func (*WALGoHeadHashdex) Cluster() string {
+	return ""
+}
+
+// Replica get Replica name.
+func (*WALGoHeadHashdex) Replica() string {
+	return ""
+}
+
+// cptr pointer to underlying c++ object.
+func (h *WALGoHeadHashdex) cptr() uintptr {
+	return h.hashdex
+}
+
+func (h *WALGoHeadHashdex) RangeMetadata(func(metadata WALScraperHashdexMetadata) bool) {
+}
+
+func NewGoHeadHashdex(lss *LabelSetStorage, dataStorage *DataStorage) *WALGoHeadHashdex {
+	hashdex := &WALGoHeadHashdex{
+		hashdex:     walGoHeadHashdexCtor(),
+		lss:         lss,
+		dataStorage: dataStorage,
+	}
+	runtime.SetFinalizer(hashdex, func(hashdex *WALGoHeadHashdex) {
+		walHashdexDtor(hashdex.hashdex)
+	})
+
+	walGoHeadPresharding(hashdex.hashdex, lss.pointer, dataStorage.dataStorage)
+	return hashdex
+}

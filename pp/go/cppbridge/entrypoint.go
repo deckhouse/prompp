@@ -28,11 +28,13 @@ import (
 )
 
 type (
-	CppStdVector              = [C.Sizeof_StdVector]byte
-	CppBareBonesVector        = [C.Sizeof_BareBonesVector]byte
-	CppRoaringBitset          = [C.Sizeof_RoaringBitset]byte
-	CppSerializedDataIterator = [C.Sizeof_SerializedDataIterator]byte
-	CppMetricsIterator        = [C.Sizeof_MetricsIterator]byte
+	CppStdVector                 = [C.Sizeof_StdVector]byte
+	CppBareBonesVector           = [C.Sizeof_BareBonesVector]byte
+	CppRoaringBitset             = [C.Sizeof_RoaringBitset]byte
+	CppSerializedDataIterator    = [C.Sizeof_SerializedDataIterator]byte
+	CppMetricsIterator           = [C.Sizeof_MetricsIterator]byte
+	CppSegmentSamplesStorage     = [C.Sizeof_SegmentSamplesStorage]byte
+	CppRemoteWriteMessageEncoder = [C.Sizeof_RemoteWriteMessageEncoder]byte
 )
 
 const (
@@ -1039,6 +1041,68 @@ func walDecoderDtor(decoder uintptr) {
 	)
 }
 
+func walSegmentSamplesStorageListCtor(count uint64) []CppSegmentSamplesStorage {
+	args := struct {
+		count uint64
+	}{count}
+	var res struct {
+		storages []CppSegmentSamplesStorage
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_wal_segment_samples_storage_list_ctor,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.storages
+}
+
+func walSegmentSamplesStorageAdd(
+	samplesStorage *CppSegmentSamplesStorage,
+	labelSetId uint32,
+	timestamp int64,
+	value float64,
+) {
+	args := struct {
+		samplesStorage *CppSegmentSamplesStorage
+		labelSetId     uint32
+		timestamp      int64
+		value          float64
+	}{samplesStorage, labelSetId, timestamp, value}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_wal_segment_samples_storage_add,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func walSegmentSamplesStorageClear(samplesStorage *CppSegmentSamplesStorage) {
+	args := struct {
+		samplesStorage *CppSegmentSamplesStorage
+	}{samplesStorage}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_wal_segment_samples_storage_clear,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func walSegmentSamplesStorageListDtor(storages []CppSegmentSamplesStorage) {
+	args := struct {
+		storages []CppSegmentSamplesStorage
+	}{storages}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_wal_segment_samples_storage_list_dtor,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
 //
 // OutputDecoder
 //
@@ -1126,17 +1190,18 @@ func walOutputDecoderLoadFrom(decoder uintptr, dump []byte) []byte {
 func walOutputDecoderDecode(
 	segment []byte,
 	decoder uintptr,
+	samplesStorage *CppSegmentSamplesStorage,
 	lowerLimitTimestamp int64,
-) (stats OutputDecoderStats, dump []RefSample, err []byte) {
+) (stats OutputDecoderStats, err []byte) {
 	args := struct {
 		segment             []byte
 		decoder             uintptr
+		samplesStorage      uintptr
 		lowerLimitTimestamp int64
-	}{segment, decoder, lowerLimitTimestamp}
+	}{segment, decoder, uintptr(unsafe.Pointer(samplesStorage)), lowerLimitTimestamp}
 	var res struct {
 		OutputDecoderStats
-		refSamples []RefSample
-		error      []byte
+		error []byte
 	}
 
 	testGC()
@@ -1146,70 +1211,94 @@ func walOutputDecoderDecode(
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.OutputDecoderStats, res.refSamples, res.error
+	return res.OutputDecoderStats, res.error
 }
 
 //
 // ProtobufEncoder
 //
 
-// walProtobufEncoderCtor - wrapper for constructor C-ProtobufEncoder.
-func walProtobufEncoderCtor(outputLsses []uintptr) uintptr {
+func walRemoteWriteCreateMessages(messagesCount uint64) []RWMessage {
 	args := struct {
-		outputLsses []uintptr
-	}{outputLsses}
+		messagesCount uint64
+	}{messagesCount}
 	var res struct {
-		decoder uintptr
+		messages []RWMessage
 	}
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_wal_protobuf_encoder_ctor,
+		C.prompp_remote_write_message_list_ctor,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.decoder
+	return res.messages
 }
 
-// walProtobufEncoderDtor - wrapper for destructor C-ProtobufEncoder.
-func walProtobufEncoderDtor(decoder uintptr) {
+func walRemoteWriteDestroyMessages(messages []RWMessage) {
 	args := struct {
-		decoder uintptr
-	}{decoder}
+		messages []RWMessage
+	}{messages}
 
 	testGC()
 	fastcgo.UnsafeCall1(
-		C.prompp_wal_protobuf_encoder_dtor,
+		C.prompp_remote_write_message_list_dtor,
 		uintptr(unsafe.Pointer(&args)),
 	)
 }
 
-// walProtobufEncoderEncode encode batch slice ShardRefSamples to snapped protobufs on shards.
-func walProtobufEncoderEncode(
-	batch []*DecodedRefSamples,
-	outSlices [][]byte,
-	stats []protobufEncoderStats,
-	encoder uintptr,
-) []byte {
+func walRemoteWriteCreateMessageEncoders(encoderCount uint64) []CppRemoteWriteMessageEncoder {
 	args := struct {
-		batch     []*DecodedRefSamples
-		outSlices [][]byte
-		stats     []protobufEncoderStats
-		encoder   uintptr
-	}{batch, outSlices, stats, encoder}
+		encoderCount uint64
+	}{encoderCount}
 	var res struct {
-		error []byte
+		encoders []CppRemoteWriteMessageEncoder
 	}
 
 	testGC()
 	fastcgo.UnsafeCall2(
-		C.prompp_wal_protobuf_encoder_encode,
+		C.prompp_remote_write_message_encoders_ctor,
 		uintptr(unsafe.Pointer(&args)),
 		uintptr(unsafe.Pointer(&res)),
 	)
 
-	return res.error
+	return res.encoders
+}
+
+func walRemoteWriteDestroyMessageEncoders(encoders []CppRemoteWriteMessageEncoder) {
+	args := struct {
+		encoders []CppRemoteWriteMessageEncoder
+	}{encoders}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_remote_write_message_encoders_dtor,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
+func walRemoteWriteEncodeMessage(
+	encoder *CppRemoteWriteMessageEncoder,
+	lssList []uintptr,
+	segmentStorageList []CppSegmentSamplesStorage,
+	messageIndex, messagesCount uint64,
+	message *RWMessage,
+) {
+	args := struct {
+		encoder            uintptr
+		lssList            []uintptr
+		segmentStorageList []CppSegmentSamplesStorage
+		messageIndex       uint64
+		messagesCount      uint64
+		message            uintptr
+	}{uintptr(unsafe.Pointer(encoder)), lssList, segmentStorageList, messageIndex, messagesCount, uintptr(unsafe.Pointer(message))}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_remote_write_encode_message,
+		uintptr(unsafe.Pointer(&args)),
+	)
 }
 
 //
@@ -2766,6 +2855,38 @@ func walOpenMetricsScraperHashdexGetMetadata(hashdex uintptr) []WALScraperHashde
 	)
 
 	return res.metadata
+}
+
+//
+// GoHeadHashdex
+//
+
+func walGoHeadHashdexCtor() uintptr {
+	var res struct {
+		hashdex uintptr
+	}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_wal_go_head_hashdex_ctor,
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.hashdex
+}
+
+func walGoHeadPresharding(hashdex uintptr, lss uintptr, dataStorage uintptr) {
+	args := struct {
+		hashdex     uintptr
+		lss         uintptr
+		dataStorage uintptr
+	}{hashdex, lss, dataStorage}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_wal_go_head_hashdex_presharding,
+		uintptr(unsafe.Pointer(&args)),
+	)
 }
 
 //

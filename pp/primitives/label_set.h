@@ -92,6 +92,17 @@ class BasicLabelSet {
   }
 
   template <class LabelSet>
+  PROMPP_ALWAYS_INLINE void append_sorted(const LabelSet& label_set) {
+    assert(std::ranges::is_sorted(label_set, [](const auto& a, const auto& b) { return a.first < b.first; }));
+
+    labels_.reserve(labels_.size() + label_set.size());
+
+    for (const auto& label : label_set) {
+      append(static_cast<std::string_view>(label.first), static_cast<std::string_view>(label.second));
+    }
+  }
+
+  template <class LabelSet>
   PROMPP_ALWAYS_INLINE void add(const LabelSet& label_set) {
     labels_.reserve(labels_.size() + label_set.size());
 

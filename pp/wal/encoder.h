@@ -17,18 +17,18 @@ class GenericEncoder {
 
   template <class Stats>
   void write_stats(Stats* stats) const {
-    stats->samples = encoder_.buffer().samples_count();
+    stats->samples = encoder_.segment_samples().samples_count();
 
     if constexpr (BareBones::concepts::has_earliest_timestamp_field<Stats>) {
-      stats->earliest_timestamp = encoder_.buffer().earliest_sample();
+      stats->earliest_timestamp = encoder_.segment_samples().earliest_sample();
     }
 
     if constexpr (BareBones::concepts::has_latest_timestamp_field<Stats>) {
-      stats->latest_timestamp = encoder_.buffer().latest_sample();
+      stats->latest_timestamp = encoder_.segment_samples().latest_sample();
     }
 
     if constexpr (BareBones::concepts::has_series_field<Stats>) {
-      stats->series = encoder_.buffer().series_count();
+      stats->series = encoder_.segment_samples().series_count();
     }
 
     if constexpr (BareBones::concepts::has_remainder_size_field<Stats>) {

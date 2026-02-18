@@ -16,7 +16,7 @@ import (
 //
 //		// make and configure a mocked processor.Adapter
 //		mockedAdapter := &AdapterMock{
-//			AppendHashdexFunc: func(ctx context.Context, hashdex cppbridge.ShardedData, state *cppbridge.StateV2, commitToWal bool) error {
+//			AppendHashdexFunc: func(ctx context.Context, hashdex cppbridge.ShardedData, state *cppbridge.StateV2, commitToWal bool) (cppbridge.RelabelerStats, error) {
 //				panic("mock out the AppendHashdex method")
 //			},
 //			AppendSnappyProtobufFunc: func(ctx context.Context, compressedData pp_pkg_model.ProtobufData, state *cppbridge.StateV2, commitToWal bool) error {
@@ -36,7 +36,7 @@ import (
 //	}
 type AdapterMock struct {
 	// AppendHashdexFunc mocks the AppendHashdex method.
-	AppendHashdexFunc func(ctx context.Context, hashdex cppbridge.ShardedData, state *cppbridge.StateV2, commitToWal bool) error
+	AppendHashdexFunc func(ctx context.Context, hashdex cppbridge.ShardedData, state *cppbridge.StateV2, commitToWal bool) (cppbridge.RelabelerStats, error)
 
 	// AppendSnappyProtobufFunc mocks the AppendSnappyProtobuf method.
 	AppendSnappyProtobufFunc func(ctx context.Context, compressedData pp_pkg_model.ProtobufData, state *cppbridge.StateV2, commitToWal bool) error
@@ -93,7 +93,7 @@ type AdapterMock struct {
 }
 
 // AppendHashdex calls AppendHashdexFunc.
-func (mock *AdapterMock) AppendHashdex(ctx context.Context, hashdex cppbridge.ShardedData, state *cppbridge.StateV2, commitToWal bool) error {
+func (mock *AdapterMock) AppendHashdex(ctx context.Context, hashdex cppbridge.ShardedData, state *cppbridge.StateV2, commitToWal bool) (cppbridge.RelabelerStats, error) {
 	if mock.AppendHashdexFunc == nil {
 		panic("AdapterMock.AppendHashdexFunc: method is nil but Adapter.AppendHashdex was just called")
 	}

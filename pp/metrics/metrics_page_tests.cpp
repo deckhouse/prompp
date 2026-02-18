@@ -4,6 +4,7 @@
 
 namespace {
 
+using metrics::AtomicCounter;
 using metrics::Counter;
 using metrics::Metric;
 using metrics::MetricsPage;
@@ -21,7 +22,7 @@ TEST_F(MetricsPageFixture, TestIterator) {
 
     Counter uint16_counter{LabelViewSet{}, "uint16_counter", 16};
     Counter uint32_counter{LabelViewSet{}, "uint32_counter", 32};
-    Counter atomic_counter{LabelViewSet{}, "atomic_uint64_counter", 64};
+    AtomicCounter atomic_counter{LabelViewSet{}, "atomic_uint64_counter", 64};
   } const metrics;
 
   MetricsVector metric_pointers;
