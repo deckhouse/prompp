@@ -89,6 +89,7 @@ func (l *Loader) loadHead(
 	for shardID, res := range shardLoadResults {
 		shards[shardID] = res.shard
 		errs[shardID] = res.err
+		headRecord.SetLastSegmentID(res.maxSegmentID)
 
 		if numberOfSegmentsRead.IsNil() {
 			numberOfSegmentsRead.Set(res.numberOfSegments)
@@ -107,6 +108,7 @@ func (l *Loader) loadHead(
 		}
 	}
 
+	// TODO check this on v2
 	switch {
 	case headRecord.Status() == catalog.StatusActive:
 		// numberOfSegments here is actual number of segments.
@@ -239,8 +241,6 @@ func (*Loader) loadShard(
 	)
 	err := shardDataLoader.Load(readOnly)
 	return ShardLoadResult{
-		numberOfSegments: shardDataLoader.shardData.numberOfSegments,
-		err:              err,
 		shard: shard.NewShard(
 			shardDataLoader.shardData.lss,
 			shardDataLoader.shardData.dataStorage,
@@ -249,6 +249,9 @@ func (*Loader) loadShard(
 			shardDataLoader.shardData.wal,
 			shardID,
 		),
+		numberOfSegments: shardDataLoader.shardData.numberOfSegments,
+		maxSegmentID:     shardDataLoader.shardData.maxSegmentID,
+		err:              err,
 	}
 }
 
@@ -256,7 +259,9 @@ func (*Loader) loadShard(
 type ShardLoadResult struct {
 	shard            *shard.Shard
 	numberOfSegments uint32
-	err              error
+	// maximum through ID of a segment read from WAL
+	maxSegmentID uint32
+	err          error
 }
 
 // ShardData data for creating a shard.
@@ -266,7 +271,9 @@ type ShardData struct {
 	wal                  *Wal
 	unloadedDataStorage  *shard.UnloadedDataStorage
 	queriedSeriesStorage *shard.QueriedSeriesStorage
+	writeSegment         func(io.Writer, *cppbridge.HeadEncodedSegment) (int, error)
 	numberOfSegments     uint32
+	maxSegmentID         uint32
 }
 
 // ShardDataLoader loads shard data from a file and creates a shard.
@@ -373,9 +380,9 @@ func (l *ShardDataLoader) loadWalFile(
 
 	decoder := cppbridge.NewHeadWalDecoder(l.shardData.lss.Target(), encoderVersion)
 
-	// TODO max ID segment
 	switch walVersion {
 	case wal.FileFormatVersion:
+		l.shardData.writeSegment = writer.WriteSegment[*cppbridge.HeadEncodedSegment]
 		l.shardData.numberOfSegments, err = l.loadSegments(
 			rd,
 			decoder,
@@ -383,6 +390,7 @@ func (l *ShardDataLoader) loadWalFile(
 			unloader,
 		)
 	case wal.FileFormatVersionV2:
+		l.shardData.writeSegment = writer.WriteSegmentV2[*cppbridge.HeadEncodedSegment]
 		l.shardData.numberOfSegments, err = l.loadSegmentsV2(
 			rd,
 			decoder,
@@ -410,7 +418,7 @@ func (l *ShardDataLoader) createShardWal(
 	sw, err := writer.NewBuffered(
 		l.shardID,
 		shardWalFile,
-		writer.WriteSegment[*cppbridge.HeadEncodedSegment],
+		l.shardData.writeSegment,
 		l.notifier,
 		l.headRecord,
 	)
@@ -504,8 +512,7 @@ func (l *ShardDataLoader) loadSegmentsV2(
 
 		numberOfSegments++
 		l.headRecord.SetSegmentIDByShard(segment.ID(), l.shardID)
-		// TODO shift NextSegmentID
-		l.headRecord.NextSegmentID()
+		l.shardData.maxSegmentID = segment.ID()
 
 		if createTs != 0 && unloader != nil {
 			if err := unloader.Unload(time.Duration(createTs), time.Duration(encodeTs)); err != nil {

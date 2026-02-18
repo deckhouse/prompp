@@ -223,6 +223,11 @@ func (s *shard) Read(
 			return decodedSegment, nil
 		}
 
+		if segment.ID() > targetSegmentID {
+			decodedSegment.ID = segment.ID()
+			//
+		}
+
 		cppbridge.ClearSegmentSamplesStorage(samplesStorage)
 	}
 }

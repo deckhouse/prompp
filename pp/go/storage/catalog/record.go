@@ -52,7 +52,7 @@ type Record struct {
 	mint                  int64
 	maxt                  int64
 	// marking up through segment IDs by shards
-	nextSegmentID   uint32
+	lastSegmentID   uint32
 	segmentsByShard []uint16
 	segmentsLock    *sync.RWMutex
 }
@@ -60,7 +60,7 @@ type Record struct {
 // NewEmptyRecord init new empty [Record].
 func NewEmptyRecord() *Record {
 	return &Record{
-		nextSegmentID:   math.MaxUint32,
+		lastSegmentID:   math.MaxUint32,
 		segmentsByShard: make([]uint16, defaultSegments),
 		segmentsLock:    &sync.RWMutex{},
 	}
@@ -89,7 +89,7 @@ func NewRecordWithData(
 		status:                status,
 		lastAppendedSegmentID: optional.WithRawValue(lastAppendedSegmentID),
 		// marking up through segment IDs by shards
-		nextSegmentID:   math.MaxUint32,
+		lastSegmentID:   math.MaxUint32,
 		segmentsByShard: make([]uint16, defaultSegments),
 		segmentsLock:    &sync.RWMutex{},
 	}
@@ -120,7 +120,7 @@ func NewRecordWithDataV3(
 		mint:             mint,
 		maxt:             maxt,
 		// marking up through segment IDs by shards
-		nextSegmentID:   math.MaxUint32,
+		lastSegmentID:   math.MaxUint32,
 		segmentsByShard: make([]uint16, defaultSegments),
 		segmentsLock:    &sync.RWMutex{},
 	}
@@ -196,8 +196,8 @@ func (r *Record) Mint() int64 {
 
 // NextSegmentID returns the next through ID for the segment.
 func (r *Record) NextSegmentID() uint32 {
-	fmt.Println(" === NextSegmentID", r.nextSegmentID+1)
-	return atomic.AddUint32(&r.nextSegmentID, 1)
+	fmt.Println(" === NextSegmentID", r.lastSegmentID+1)
+	return atomic.AddUint32(&r.lastSegmentID, 1)
 }
 
 // NumberOfSegments returns number of segments in [Head].
@@ -223,6 +223,15 @@ func (r *Record) SetLastAppendedSegmentID(segmentID uint32) {
 // SetNumberOfSegments number of segments in [Head].
 func (r *Record) SetNumberOfSegments(numberOfSegments uint32) {
 	r.numberOfSegments = numberOfSegments
+}
+
+// SetLastSegmentID set last through ID for the segment, if sid more current.
+func (r *Record) SetLastSegmentID(sid uint32) {
+	if r.lastSegmentID != math.MaxUint32 && r.lastSegmentID >= sid {
+		return
+	}
+
+	r.lastSegmentID = sid
 }
 
 // SetSegmentIDByShard sets the matching of through segment ID and shard.
