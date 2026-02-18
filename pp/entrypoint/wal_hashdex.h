@@ -176,6 +176,26 @@ void prompp_wal_open_metrics_scraper_hashdex_parse(void* args, void* res);
  */
 void prompp_wal_open_metrics_scraper_hashdex_get_metadata(void* args, void* res);
 
+/**
+ * @brief Construct a new PromPP::WAL::hashdex::GoHead hashdex
+ *
+ * @param res {
+ *     hashdex uintptr // pointer to constructed hashdex
+ * }
+ */
+void prompp_wal_go_head_hashdex_ctor(void* res);
+
+/**
+ * @brief Fill hashdex from Go Head
+ *
+ * @param args {
+ *     hashdex  uintptr // pointer to constructed hashdex
+ *     lss uintptr      // pointer to constructed lss
+ *     dataStorage uintptr // pointer to constructed DataStorage
+ * }
+ */
+void prompp_wal_go_head_hashdex_presharding(void* args);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

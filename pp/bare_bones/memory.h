@@ -90,6 +90,20 @@ class GenericMemory {
   PROMPP_ALWAYS_INLINE const Derived* derived() const noexcept { return static_cast<const Derived*>(this); }
 };
 
+template <class Reallocator>
+concept ReallocatorInterface = requires(Reallocator reallocator, void* memory) {
+  { Reallocator::reallocate(memory, size_t()) } -> std::same_as<void*>;
+  { Reallocator::free(memory) } -> std::same_as<void>;
+};
+
+struct DefaultReallocator {
+  PROMPP_ALWAYS_INLINE static void* allocate(size_t size) { return std::malloc(size); }
+
+  PROMPP_ALWAYS_INLINE static void* reallocate(void* memory, size_t size) { return std::realloc(memory, size); }
+
+  PROMPP_ALWAYS_INLINE static void free(void* memory) { return std::free(memory); }
+};
+
 template <template <class> class ControlBlock, class T>
 concept MemoryControlBlockInterface = requires(ControlBlock<T> control_block) {
   typename ControlBlock<T>::SizeType;
@@ -124,7 +138,7 @@ class Memory : public GenericMemory<Memory<ControlBlock, T>, typename ControlBlo
   PROMPP_ALWAYS_INLINE Memory() noexcept = default;
   PROMPP_ALWAYS_INLINE Memory(const Memory& o) noexcept { copy(o); }
   PROMPP_ALWAYS_INLINE Memory(Memory&& o) noexcept : control_block_(std::exchange(o.control_block_, {})) {};
-  PROMPP_ALWAYS_INLINE ~Memory() noexcept { std::free(control_block_.data); }
+  PROMPP_ALWAYS_INLINE ~Memory() noexcept { DefaultReallocator::free(control_block_.data); }
 
   PROMPP_ALWAYS_INLINE Memory& operator=(const Memory& o) noexcept {
     if (this != &o) [[likely]] {
@@ -136,7 +150,7 @@ class Memory : public GenericMemory<Memory<ControlBlock, T>, typename ControlBlo
 
   PROMPP_ALWAYS_INLINE Memory& operator=(Memory&& o) noexcept {
     if (this != &o) [[likely]] {
-      std::free(control_block_.data);
+      DefaultReallocator::free(control_block_.data);
       control_block_ = std::exchange(o.control_block_, {});
     }
 
@@ -157,7 +171,7 @@ class Memory : public GenericMemory<Memory<ControlBlock, T>, typename ControlBlo
   PROMPP_ALWAYS_INLINE void resize(SizeType new_size) noexcept {
     PRAGMA_DIAGNOSTIC(push)
     PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
-    control_block_.data = static_cast<T*>(std::realloc(control_block_.data, new_size * sizeof(T)));
+    control_block_.data = static_cast<T*>(DefaultReallocator::reallocate(control_block_.data, new_size * sizeof(T)));
     PRAGMA_DIAGNOSTIC(pop)
 
     if (control_block_.data == nullptr && new_size > 0) [[unlikely]] {
@@ -184,17 +198,6 @@ class Memory : public GenericMemory<Memory<ControlBlock, T>, typename ControlBlo
     std::memcpy(control_block_.data, o.control_block_.data, control_block_.data_size * sizeof(T));
     PRAGMA_DIAGNOSTIC(pop)
   }
-};
-
-template <class Reallocator>
-concept ReallocatorInterface = requires(Reallocator reallocator, void* memory) {
-  { Reallocator::reallocate(memory, size_t()) } -> std::same_as<void*>;
-  { Reallocator::free(memory) } -> std::same_as<void>;
-};
-
-struct DefaultReallocator {
-  PROMPP_ALWAYS_INLINE static void* reallocate(void* memory, size_t size) { return std::realloc(memory, size); }
-  PROMPP_ALWAYS_INLINE static void free(void* memory) { return std::free(memory); }
 };
 
 template <class ControlBlock>
