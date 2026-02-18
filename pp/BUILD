@@ -117,6 +117,7 @@ cc_library(
         ":bare_bones",
         ":primitives",
         ":prometheus",
+        ":series_data",
         "@fastfloat",
         "@roaring",
         "@simdutf",

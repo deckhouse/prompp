@@ -38,8 +38,8 @@ func (s *RefillProcessorSuite) TestProcess() {
 
 	blockStorage := block.NewStorage(tmpDir, buffers)
 	ar := &AdapterMock{
-		AppendHashdexFunc: func(context.Context, cppbridge.ShardedData, *cppbridge.StateV2, bool) error {
-			return nil
+		AppendHashdexFunc: func(context.Context, cppbridge.ShardedData, *cppbridge.StateV2, bool) (cppbridge.RelabelerStats, error) {
+			return cppbridge.RelabelerStats{}, nil
 		},
 		MergeOutOfOrderChunksFunc: func() {},
 	}
@@ -115,8 +115,8 @@ func (s *RefillProcessorSuite) TestProcessWithError() {
 
 	blockStorage := block.NewStorage(tmpDir, buffers)
 	ar := &AdapterMock{
-		AppendHashdexFunc: func(context.Context, cppbridge.ShardedData, *cppbridge.StateV2, bool) error {
-			return nil
+		AppendHashdexFunc: func(context.Context, cppbridge.ShardedData, *cppbridge.StateV2, bool) (cppbridge.RelabelerStats, error) {
+			return cppbridge.RelabelerStats{}, nil
 		},
 		MergeOutOfOrderChunksFunc: func() {},
 	}
