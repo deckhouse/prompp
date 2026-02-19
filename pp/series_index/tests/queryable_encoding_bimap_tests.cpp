@@ -9,6 +9,7 @@
 namespace {
 
 using PromPP::Primitives::LabelViewSet;
+using series_index::invert_copy_mapping;
 using series_index::QueryableEncodingBimap;
 using series_index::QueryableEncodingBimapCopier;
 using series_index::SeriesReverseIndex;
@@ -282,6 +283,121 @@ TEST_F(QueryableEncodingBimapCopierFixture, CopyOfCopy) {
   EXPECT_TRUE(lss_copy_of_copy.trie_index().names_trie().lookup("server"));
 
   EXPECT_TRUE(dst_src_ids_mapping_.empty());
+}
+
+TEST_F(QueryableEncodingBimapCopierFixture, CopyMappingSizeIsMaxLsid) {
+  // Arrange
+  lss_.find_or_emplace(LabelViewSet{{"job", "a"}});
+  lss_.find_or_emplace(LabelViewSet{{"job", "b"}});
+  lss_.find_or_emplace(LabelViewSet{{"job", "c"}});
+  lss_.find_or_emplace(LabelViewSet{{"job", "d"}});
+  lss_.find_or_emplace(LabelViewSet{{"job", "e"}});
+  lss_.build_deferred_indexes();
+
+  const uint32_t max_lsid = lss_.next_item_index();
+  Lss lss_copy;
+  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
+  copier.copy_added_series_and_build_indexes();
+
+  BareBones::Vector<uint32_t> old_to_new;
+
+  // Act
+  invert_copy_mapping(dst_src_ids_mapping_, max_lsid, old_to_new);
+
+  // Assert
+  EXPECT_EQ(max_lsid, old_to_new.size());
+  EXPECT_EQ(0U, old_to_new[dst_src_ids_mapping_[0]]);
+  EXPECT_EQ(1U, old_to_new[dst_src_ids_mapping_[1]]);
+  EXPECT_EQ(2U, old_to_new[dst_src_ids_mapping_[2]]);
+  EXPECT_EQ(3U, old_to_new[dst_src_ids_mapping_[3]]);
+  EXPECT_EQ(4U, old_to_new[dst_src_ids_mapping_[4]]);
+}
+
+TEST_F(QueryableEncodingBimapCopierFixture, ShrinkAndResolveViaMapping) {
+  // Arrange
+  const auto ls1 = LabelViewSet{{"job", "a"}};
+  const auto ls2 = LabelViewSet{{"job", "b"}};
+  const auto ls3 = LabelViewSet{{"job", "c"}};
+  lss_.find_or_emplace(ls1);
+  lss_.find_or_emplace(ls2);
+  lss_.find_or_emplace(ls3);
+  lss_.build_deferred_indexes();
+
+  const auto checkpoint = lss_.checkpoint();
+  const uint32_t max_lsid = checkpoint.next_item_index();
+  Lss lss_copy;
+  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
+  copier.copy_added_series_and_build_indexes();
+
+  BareBones::Vector<uint32_t> old_to_new;
+  invert_copy_mapping(dst_src_ids_mapping_, max_lsid, old_to_new);
+
+  // Act
+  lss_.finalize_copy_and_shrink(checkpoint, lss_copy, old_to_new, lss_.added_series());
+
+  // Assert
+  EXPECT_EQ(ls1, lss_[0]);
+  EXPECT_EQ(ls2, lss_[1]);
+  EXPECT_EQ(ls3, lss_[2]);
+}
+
+TEST_F(QueryableEncodingBimapCopierFixture, IndicesNotClearedOnShrink) {
+  // Arrange
+  const auto ls1 = LabelViewSet{{"job", "a"}};
+  const auto ls2 = LabelViewSet{{"job", "b"}};
+  lss_.find_or_emplace(ls1);
+  lss_.find_or_emplace(ls2);
+  lss_.build_deferred_indexes();
+
+  const auto checkpoint = lss_.checkpoint();
+  Lss lss_copy;
+  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
+  copier.copy_added_series_and_build_indexes();
+
+  BareBones::Vector<uint32_t> old_to_new;
+  invert_copy_mapping(dst_src_ids_mapping_, checkpoint.next_item_index(), old_to_new);
+
+  // Act
+  lss_.finalize_copy_and_shrink(checkpoint, lss_copy, old_to_new, lss_.added_series());
+
+  // Assert
+  EXPECT_TRUE(lss_.trie_index().names_trie().lookup("job"));
+  ASSERT_NE(nullptr, lss_.trie_index().values_trie(*lss_.trie_index().names_trie().lookup("job")));
+  EXPECT_EQ(ls1, lss_[0]);
+  EXPECT_EQ(ls2, lss_[1]);
+}
+
+TEST_F(QueryableEncodingBimapCopierFixture, TouchedSeriesUnmappedByCopyFilledByFinalize) {
+  // Arrange
+  const auto ls1 = LabelViewSet{{"job", "a"}};
+  const auto ls2 = LabelViewSet{{"job", "b"}};
+  const auto ls3 = LabelViewSet{{"job", "c"}};
+  lss_.find_or_emplace(ls1);
+  lss_.find_or_emplace(ls2);
+  lss_.find_or_emplace(ls3);
+  lss_.build_deferred_indexes();
+
+  const auto checkpoint = lss_.checkpoint();
+  const uint32_t max_lsid = checkpoint.next_item_index();
+  Lss lss_copy;
+  const BareBones::Vector ids_for_copy{0U, 2U};
+  Copier copier(lss_, lss_.sorting_index(), ids_for_copy, lss_copy, dst_src_ids_mapping_);
+  copier.copy_added_series_and_build_indexes();
+
+  BareBones::Vector<uint32_t> old_to_new;
+  invert_copy_mapping(dst_src_ids_mapping_, max_lsid, old_to_new);
+
+  BareBones::Bitset touched;
+  touched.resize(max_lsid);
+  touched.set(1);
+
+  // Act
+  lss_.finalize_copy_and_shrink(checkpoint, lss_copy, old_to_new, touched);
+
+  // Assert
+  EXPECT_EQ(ls1, lss_[0]);
+  EXPECT_EQ(ls2, lss_[1]);
+  EXPECT_EQ(ls3, lss_[2]);
 }
 
 }  // namespace

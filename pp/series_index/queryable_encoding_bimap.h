@@ -1,12 +1,12 @@
 #pragma once
 
+#include <cassert>
 #include <ranges>
 
 #include "bare_bones/allocator.h"
 #include "bare_bones/bitset.h"
 #include "bare_bones/preprocess.h"
 #include "bare_bones/snug_composite.h"
-#include "queried_series.h"
 #include "reverse_index.h"
 #include "sorting_index.h"
 #include "trie_index.h"
@@ -14,6 +14,7 @@
 namespace series_index {
 
 template <template <template <class> class> class Filament, template <class> class Vector, class Trie>
+  requires BareBones::SnugComposite::is_shrinkable<typename Filament<Vector>::storage_type>
 class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDecodingTable<QueryableEncodingBimap<Filament, Vector, Trie>, Filament, Vector> {
  public:
   using Base = BareBones::SnugComposite::GenericDecodingTable<QueryableEncodingBimap, Filament, Vector>;
@@ -24,6 +25,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   using SortingIndexBuilder = series_index::SortingIndexBuilder<LsIdSet, Vector>;
   using TrieIndex = series_index::TrieIndex<Trie>;
   using TrieIndexIterator = typename TrieIndex::Iterator;
+  using checkpoint_type = typename Base::checkpoint_type;
 
   friend class BareBones::SnugComposite::GenericDecodingTable<QueryableEncodingBimap, Filament, Vector>;
 
@@ -42,6 +44,59 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& added_series() const noexcept { return added_series_; }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE typename Base::value_type operator[](uint32_t id) const noexcept {
+    if (id >= shift_) [[likely]] {
+      return Base::operator[](id - shift_);
+    }
+
+    // Falls here only if we are in post-shrink state
+    assert(shift_ > 0 && "id < shift_ but no post-shrink state");
+    assert(post_shrink_mapping_ptr_ != nullptr);
+    assert(post_shrink_snapshot_copy_ptr_ != nullptr);
+
+    // User can  only ask for previously `marked_as_added` series
+    // So it's either in `*this` table or in the `post_shrink_snapshot_copy_ptr_`
+    const auto new_id = (*post_shrink_mapping_ptr_)[id];
+    assert(new_id != Base::kInvalidId && "new_id is invalid");
+    return (*post_shrink_snapshot_copy_ptr_)[new_id];
+  }
+
+  void shrink_to_checkpoint_size(const checkpoint_type& checkpoint) {
+    if (checkpoint.next_item_index() > next_item_index_impl()) {
+      throw BareBones::Exception(0x1bf0dbff9fe3d955,
+                                 "Checkpoint requires more items than the current table has: checkpoint next_item_index [%u], table next_item_index [%u]",
+                                 checkpoint.next_item_index(), next_item_index_impl());
+    }
+    const auto keep_count = next_item_index_impl() - checkpoint.next_item_index();
+    const auto drop_count = Base::storage_.count() - keep_count;
+
+    shift_ += drop_count;
+    Base::storage_.drop_front(drop_count);
+    assert(Base::storage_.count() == keep_count);
+
+    added_series_.clear();
+  }
+
+  void finalize_copy_and_shrink(const checkpoint_type& checkpoint,
+                                QueryableEncodingBimap& copy,
+                                BareBones::Vector<uint32_t>& old_to_new_mapping,
+                                const BareBones::Bitset& touched_series) {
+    const uint32_t max_lsid = checkpoint.next_item_index();
+    assert(old_to_new_mapping.size() >= max_lsid);
+
+    for (uint32_t old_id = 0; old_id < max_lsid; ++old_id) {
+      if (old_id < touched_series.size() && touched_series[old_id] && old_to_new_mapping[old_id] == Base::kInvalidId) [[unlikely]] {
+        const auto label_set = (*this)[old_id];
+        const auto new_id = copy.find_or_emplace(label_set);
+        old_to_new_mapping[old_id] = new_id;
+      }
+    }
+
+    shrink_to_checkpoint_size(checkpoint);
+    post_shrink_mapping_ptr_ = &old_to_new_mapping;
+    post_shrink_snapshot_copy_ptr_ = &copy;
+  }
+
   template <class LabelSet>
   PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(const LabelSet& label_set) noexcept {
     return find_or_emplace(label_set, Base::hasher()(label_set));
@@ -50,16 +105,17 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   template <class LabelSet>
   PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(const LabelSet& label_set, size_t hash) noexcept {
     hash = phmap_hash(hash);
-    const auto ls_id = *ls_id_hash_set_.lazy_emplace_with_hash(label_set, hash, [&](const auto& ctor) {
-      auto new_ls_id = Base::storage_.emplace_back(label_set);
-      const auto composite_label_set = Base::operator[](new_ls_id);
-      ctor(typename Base::Proxy(new_ls_id));
-      update_indexes(new_ls_id, composite_label_set);
-      return new_ls_id;
+    const auto storage_id = *ls_id_hash_set_.lazy_emplace_with_hash(label_set, hash, [&](const auto& ctor) {
+      auto new_storage_id = Base::storage_.emplace_back(label_set);
+      const auto composite_label_set = Base::operator[](new_storage_id);
+      ctor(typename Base::Proxy(new_storage_id));
+      update_indexes(shift_ + new_storage_id, composite_label_set);
+      return new_storage_id;
     });
 
-    mark_series_as_added(ls_id);
-    return ls_id;
+    const auto logical_id = shift_ + storage_id;
+    mark_series_as_added(logical_id);
+    return logical_id;
   }
 
   template <class Class>
@@ -70,7 +126,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   template <class Class>
   PROMPP_ALWAYS_INLINE std::optional<uint32_t> find(const Class& c, size_t hashval) const noexcept {
     if (auto i = ls_id_hash_set_.find(c, phmap_hash(hashval)); i != ls_id_hash_set_.end()) {
-      return *i;
+      return shift_ + static_cast<uint32_t>(*i);
     }
     return {};
   }
@@ -141,6 +197,12 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   PROMPP_ALWAYS_INLINE static bool is_valid_label(std::string_view value) noexcept { return !value.empty(); }
 
   PROMPP_ALWAYS_INLINE static size_t phmap_hash(size_t hash) noexcept { return phmap::phmap_mix<sizeof(size_t)>()(hash); }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index_impl() const noexcept { return shift_ + Base::storage_.count(); }
+
+  uint32_t shift_{0};
+  const BareBones::Vector<uint32_t>* post_shrink_mapping_ptr_{nullptr};
+  const QueryableEncodingBimap* post_shrink_snapshot_copy_ptr_{nullptr};
 };
 
 template <class DecodingTable, class SortingIndex, class SeriesIds, class QueryableEncodingBimap, class LsIdVector>
@@ -276,5 +338,20 @@ class QueryableEncodingBimapCopier {
   QueryableEncodingBimap& destination_;
   LsIdVector& dst_src_ids_mapping_;
 };
+
+template <class NewToOldContainer>
+inline void invert_copy_mapping(const NewToOldContainer& new_to_old, uint32_t max_lsid, BareBones::Vector<uint32_t>& old_to_new_out) {
+  old_to_new_out.clear();
+  old_to_new_out.resize(max_lsid);
+
+  std::fill(old_to_new_out.begin(), old_to_new_out.end(), BareBones::SnugComposite::kInvalidLsId);
+
+  for (size_t new_id = 0; new_id < new_to_old.size(); ++new_id) {
+    const uint32_t old_id = static_cast<uint32_t>(new_to_old[new_id]);
+    if (old_id < max_lsid) [[likely]] {
+      old_to_new_out[old_id] = static_cast<uint32_t>(new_id);
+    }
+  }
+}
 
 }  // namespace series_index

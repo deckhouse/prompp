@@ -8,6 +8,7 @@
 
 #include <scope_exit.h>
 
+#include <limits>
 #include <ranges>
 
 #include "bare_bones/allocator.h"
@@ -47,6 +48,8 @@ concept has_rollback = requires(Derived derived, const Checkpoint& checkpoint) {
 template <class Derived, class R>
 concept has_after_items_load = ls_id_range<R> && requires(Derived derived, R&& range) { derived.after_items_load_impl(std::forward<R>(range)); };
 
+constexpr uint32_t kInvalidLsId = std::numeric_limits<uint32_t>::max();
+
 template <class Derived, template <template <class> class> class Filament, template <class> class Vector>
 class GenericDecodingTable {
   static_assert(!std::is_integral_v<typename Filament<Vector>::storage_type::composite_type>, "Filament::composite_type can't be an integral type");
@@ -61,7 +64,7 @@ class GenericDecodingTable {
 
   static constexpr bool kIsReadOnly = IsSharedSpan<Vector<uint8_t>>::value;
 
-  static constexpr auto kInvalidId = std::numeric_limits<uint32_t>::max();
+  static constexpr auto kInvalidId = kInvalidLsId;
 
  protected:
   class Proxy {
