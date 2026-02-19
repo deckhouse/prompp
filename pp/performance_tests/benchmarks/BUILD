@@ -20,3 +20,13 @@ cc_binary(
         "//:benchmark",
     ],
 )
+
+cc_binary(
+    name = "resolve_lss",
+    srcs = ["queryable_encoding_bimap_resolve_benchmark.cpp"],
+    malloc = "@jemalloc",
+    deps = [
+        "//:performance_tests_headers",
+        "//:benchmark",
+    ],
+)
