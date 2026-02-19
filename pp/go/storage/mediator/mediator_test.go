@@ -1,9 +1,7 @@
 package mediator_test
 
 import (
-	"context"
 	"github.com/stretchr/testify/require"
-	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -55,50 +53,35 @@ func (s *MediatorSuite) TestC() {
 }
 
 func (s *MediatorSuite) TestClose() {
-	chTimer := make(chan time.Time, 1)
-	stopCounter := 0
+	synctest.Test(s.T(), func(t *testing.T) {
+		chTimer := make(chan time.Time, 1)
+		stopCounter := 0
 
-	timer := &TimerMock{
-		ChanFunc: func() <-chan time.Time {
-			return chTimer
-		},
-		ResetFunc: func() {},
-		StopFunc:  func() { stopCounter++ },
-	}
-
-	m := mediator.NewMediator(timer)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	counter := 0
-	done := make(chan struct{})
-	start := sync.WaitGroup{}
-	start.Add(1)
-	go func() {
-		start.Done()
-
-		for range m.C() {
-			counter++
-			break
+		timer := &TimerMock{
+			ChanFunc: func() <-chan time.Time {
+				return chTimer
+			},
+			ResetFunc: func() {},
+			StopFunc:  func() { stopCounter++ },
 		}
 
-		close(done)
-	}()
+		m := mediator.NewMediator(timer)
 
-	start.Wait()
-	s.T().Log("mediator close")
-	m.Close()
+		counter := 0
+		go func() {
+			_, ok := <-m.C()
+			if ok {
+				counter++
+			}
 
-	select {
-	case <-done:
-	case <-ctx.Done():
-		m.Trigger()
-	}
-	cancel()
+		}()
 
-	<-done
-
-	s.Equal(0, counter)
-	s.Equal(1, stopCounter)
+		synctest.Wait()
+		m.Close()
+		synctest.Wait()
+		require.Equal(t, 0, counter)
+		require.Equal(t, 1, stopCounter)
+	})
 }
 
 func (s *MediatorSuite) TestTrigger() {
@@ -132,86 +115,61 @@ func (s *MediatorSuite) TestTrigger() {
 }
 
 func (s *MediatorSuite) TestTriggerWithResetTimer() {
-	chTimer := make(chan time.Time, 1)
+	synctest.Test(s.T(), func(t *testing.T) {
+		chTimer := make(chan time.Time, 1)
 
-	timer := &TimerMock{
-		ChanFunc: func() <-chan time.Time {
-			return chTimer
-		},
-		ResetFunc: func() {},
-		StopFunc:  func() {},
-	}
-
-	m := mediator.NewMediator(timer)
-	defer m.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	counter := 0
-	done := make(chan struct{})
-	start := sync.WaitGroup{}
-	start.Add(1)
-	go func() {
-		start.Done()
-		select {
-		case <-m.C():
-			counter++
-			close(done)
-		case <-ctx.Done():
+		timer := &TimerMock{
+			ChanFunc: func() <-chan time.Time {
+				return chTimer
+			},
+			ResetFunc: func() {},
+			StopFunc:  func() {},
 		}
-	}()
 
-	start.Wait()
-	s.T().Log("trigger with reset timer")
-	m.TriggerWithResetTimer()
+		m := mediator.NewMediator(timer)
+		defer m.Close()
 
-	select {
-	case <-done:
-	case <-ctx.Done():
-	}
-	cancel()
+		counter := 0
+		go func() {
+			<-m.C()
+			counter++
+		}()
 
-	s.Equal(1, counter)
-	s.Len(timer.ResetCalls(), 1)
+		synctest.Wait()
+		m.TriggerWithResetTimer()
+		synctest.Wait()
+
+		require.Equal(t, 1, counter)
+		require.Len(t, timer.ResetCalls(), 1)
+	})
 }
 
 func (s *MediatorSuite) TestTriggerSkip() {
-	chTimer := make(chan time.Time, 1)
+	synctest.Test(s.T(), func(t *testing.T) {
+		chTimer := make(chan time.Time, 1)
 
-	timer := &TimerMock{
-		ChanFunc: func() <-chan time.Time {
-			return chTimer
-		},
-		ResetFunc: func() {},
-		StopFunc:  func() {},
-	}
-
-	m := mediator.NewMediator(timer)
-	defer m.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	counter := 0
-	done := make(chan struct{})
-	start := sync.WaitGroup{}
-	start.Add(1)
-	go func() {
-		start.Wait()
-		select {
-		case <-m.C():
-			counter++
-			close(done)
-		case <-ctx.Done():
+		timer := &TimerMock{
+			ChanFunc: func() <-chan time.Time {
+				return chTimer
+			},
+			ResetFunc: func() {},
+			StopFunc:  func() {},
 		}
-	}()
 
-	s.T().Log("trigger")
-	m.Trigger()
-	start.Done()
+		m := mediator.NewMediator(timer)
+		defer m.Close()
 
-	select {
-	case <-done:
-	case <-ctx.Done():
-	}
-	cancel()
+		m.Trigger()
 
-	s.Equal(0, counter)
+		counter := 0
+
+		go func() {
+			<-m.C()
+			counter++
+		}()
+
+		synctest.Wait()
+
+		require.Equal(t, 0, counter)
+	})
 }
