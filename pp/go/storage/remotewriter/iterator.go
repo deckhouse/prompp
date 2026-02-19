@@ -368,8 +368,8 @@ func (i *Iterator) writeCaches() {
 func (i *Iterator) encode(batch *batch, numberOfMessages int, targetSegmentID uint32) *cppbridge.RWMessageList {
 	encodersCount := batch.numberOfShards
 
-	messages := cppbridge.NewRWMessageList(uint64(numberOfMessages), targetSegmentID)
-	encoders := cppbridge.NewMessageEncoders(uint64(encodersCount), i.dataSource.LSSes())
+	messages := cppbridge.NewRWMessageList(uint64(numberOfMessages), targetSegmentID)     // #nosec G115 // no overflow
+	encoders := cppbridge.NewMessageEncoders(uint64(encodersCount), i.dataSource.LSSes()) // #nosec G115 // no overflow
 	messagesPerEncoder := numberOfMessages / encodersCount
 	if messagesPerEncoder == 0 {
 		messagesPerEncoder = 1
@@ -392,8 +392,8 @@ func (i *Iterator) encode(batch *batch, numberOfMessages int, targetSegmentID ui
 				encoders.Encode(
 					encoderIndex,
 					batch.segmentSampleStorages,
-					uint64(messageIndex),
-					uint64(numberOfMessages),
+					uint64(messageIndex),     // #nosec G115 // no overflow
+					uint64(numberOfMessages), // #nosec G115 // no overflow
 					&messages.Messages[messageIndex],
 				)
 				encodeCount--
@@ -445,8 +445,10 @@ type batch struct {
 // newBatch creates a new [batch].
 func newBatch(numberOfHeadShards, numberOfShards, maxNumberOfSamplesPerShard int) *batch {
 	return &batch{
-		numberOfShards:             numberOfShards,
-		segmentSampleStorages:      cppbridge.NewSegmentSamplesStorage(uint64(numberOfHeadShards)),
+		numberOfShards: numberOfShards,
+		segmentSampleStorages: cppbridge.NewSegmentSamplesStorage(
+			uint64(numberOfHeadShards), // #nosec G115 // no overflow
+		),
 		maxNumberOfSamplesPerShard: maxNumberOfSamplesPerShard,
 	}
 }

@@ -84,17 +84,6 @@ func (src *segmentReadyChecker) SegmentIsReady(segmentID uint32) (shards []uint1
 	src.shards = src.shards[:0]
 	src.shards = append(src.shards, sourceShard)
 
-	fmt.Println(
-		" ===== SegmentIsReady",
-		"segmentID:", segmentID,
-		"sourceShard:", sourceShard,
-		"ready:", ready,
-		"outOfRange:", outOfRange,
-		"readyV1:", readyV1,
-		"readyV2:", readyV2,
-		"src.shards:", src.shards,
-	)
-
 	return src.shards, ready, outOfRange
 }
 
@@ -120,7 +109,6 @@ type dataSource struct {
 	corruptMarker       CorruptMarker
 	closed              bool
 	completed           bool
-	corrupted           bool
 	headReleaseFunc     func()
 
 	lssSlice []*cppbridge.LabelSetStorage
@@ -287,6 +275,7 @@ type readShardResult struct {
 	err     error
 }
 
+// Read checks the segmentID for readiness and reads the [DecodedSegment] from the shards.
 func (ds *dataSource) Read(
 	ctx context.Context,
 	segmentID uint32,
@@ -297,7 +286,9 @@ func (ds *dataSource) Read(
 		return nil, ErrEndOfBlock
 	}
 
-	shards, segmentIsReady, segmentIsOutOfRange := ds.segmentReadyChecker.SegmentIsReady(segmentID)
+	// shardIDs are needed for V2 to read only recorded segments,
+	// otherwise there will be an attempt to read the sync data
+	shardIDs, segmentIsReady, segmentIsOutOfRange := ds.segmentReadyChecker.SegmentIsReady(segmentID)
 	if !segmentIsReady {
 		if segmentIsOutOfRange {
 			return nil, ErrEndOfBlock
@@ -306,14 +297,57 @@ func (ds *dataSource) Read(
 		return nil, ErrEmptyReadResult
 	}
 
-	wg := sync.WaitGroup{}
-	readShardResults := make([]readShardResult, len(shards))
-	for i, shardID := range shards {
-		if ds.shards[shardID].corrupted {
-			readShardResults[i] = readShardResult{
+	readShardResults := ds.readFromShards(ctx, shardIDs, minTimestamp, segmentSamplesStorages, segmentID)
+	segments := make([]*DecodedSegment, 0, len(shardIDs))
+	errs := make([]error, 0, len(shardIDs))
+	for _, result := range readShardResults {
+		if result.segment != nil {
+			segments = append(segments, result.segment)
+		}
+		if result.err != nil && !errors.Is(result.err, context.Canceled) {
+			errs = append(errs, result.err)
+		}
+	}
+
+	return segments, ds.handleReadErrors(errs)
+}
+
+// readFromShards parallel reading of [DecodedSegment] from shards.
+func (ds *dataSource) readFromShards(
+	ctx context.Context,
+	shardIDs []uint16,
+	minTimestamp int64,
+	segmentSamplesStorages *cppbridge.SegmentSamplesStorageList,
+	targetSegmentID uint32,
+) []readShardResult {
+	readShardResults := make([]readShardResult, len(shardIDs))
+	if len(shardIDs) == 1 {
+		if ds.shards[shardIDs[0]].corrupted {
+			readShardResults[0] = readShardResult{
 				segment: nil,
-				err:     NewShardError(shardID, false, ErrShardIsCorrupted),
+				err:     NewShardError(shardIDs[0], false, ErrShardIsCorrupted),
 			}
+			return readShardResults
+		}
+
+		segment, err := ds.shards[shardIDs[0]].Read(
+			ctx,
+			targetSegmentID,
+			minTimestamp,
+			segmentSamplesStorages.Get(uint64(shardIDs[0])),
+		)
+		if err != nil {
+			err = NewShardError(shardIDs[0], true, err)
+		}
+		readShardResults[0] = readShardResult{segment: segment, err: err}
+
+		return readShardResults
+	}
+
+	wg := sync.WaitGroup{}
+	for i, shardID := range shardIDs {
+		if ds.shards[shardID].corrupted {
+			readShardResults[i] = readShardResult{segment: nil, err: NewShardError(shardID, false, ErrShardIsCorrupted)}
 			continue
 		}
 		wg.Add(1)
@@ -321,9 +355,9 @@ func (ds *dataSource) Read(
 			defer wg.Done()
 			segment, err := ds.shards[shardID].Read(
 				ctx,
-				segmentID,
+				targetSegmentID,
 				minTimestamp,
-				segmentSamplesStorages.Get(uint64(shardID)), // #nosec G115 // no overflow
+				segmentSamplesStorages.Get(uint64(shardID)),
 			)
 			if err != nil {
 				err = NewShardError(shardID, true, err)
@@ -333,18 +367,7 @@ func (ds *dataSource) Read(
 	}
 	wg.Wait()
 
-	segments := make([]*DecodedSegment, 0, len(ds.shards))
-	errs := make([]error, 0, len(ds.shards))
-	for _, result := range readShardResults {
-		if result.segment != nil {
-			segments = append(segments, result.segment)
-		}
-		if result.err != nil {
-			errs = append(errs, result.err)
-		}
-	}
-
-	return segments, ds.handleReadErrors(errs)
+	return readShardResults
 }
 
 func (ds *dataSource) handleReadErrors(errs []error) error {
@@ -353,7 +376,6 @@ func (ds *dataSource) handleReadErrors(errs []error) error {
 	}
 
 	if len(errs) == len(ds.shards) {
-		ds.corrupted = true
 		if ds.corruptMarker != nil {
 			if err := ds.corruptMarker.MarkCorrupted(ds.ID); err != nil {
 				return fmt.Errorf("failed to mark head corrupted: %w", err)
@@ -364,7 +386,6 @@ func (ds *dataSource) handleReadErrors(errs []error) error {
 		return ErrEndOfBlock
 	}
 
-	ds.corrupted = true
 	if ds.corruptMarker != nil {
 		if err := ds.corruptMarker.MarkCorrupted(ds.ID); err != nil {
 			return fmt.Errorf("failed to mark head corrupted: %w", err)
@@ -372,13 +393,37 @@ func (ds *dataSource) handleReadErrors(errs []error) error {
 		ds.corruptMarker = nil
 	}
 
+	ds.printErrorIfNeed(errs)
+
+	return ds.checkFullCorrupted()
+}
+
+// printErrorIfNeed logs errors if necessary.
+func (ds *dataSource) printErrorIfNeed(errs []error) {
 	for _, err := range errs {
-		var shardErr ShardError
-		if errors.As(err, &shardErr) {
-			if shardErr.processable {
-				logger.Errorf("shard %s/%d is corrupted", ds.ID, shardErr.ShardID())
-			}
+		if errors.Is(err, context.Canceled) {
+			continue
 		}
+
+		var shardErr ShardError
+		if errors.As(err, &shardErr) && shardErr.processable {
+			logger.Errorf("shard %s/%d is corrupted: %s", ds.ID, shardErr.ShardID(), shardErr.Error())
+		}
+	}
+}
+
+// checkFullCorrupted checks if all the shards are corrupted, if all the shards are corrupted,
+// there is no point in continuing to read the shards, we return an error.
+func (ds *dataSource) checkFullCorrupted() error {
+	corruptedShards := 0
+	for _, s := range ds.shards {
+		if s.corrupted {
+			corruptedShards++
+		}
+	}
+
+	if corruptedShards == len(ds.shards) {
+		return ErrEndOfBlock
 	}
 
 	return nil

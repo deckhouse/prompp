@@ -1,7 +1,6 @@
 package catalog
 
 import (
-	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -196,7 +195,6 @@ func (r *Record) Mint() int64 {
 
 // NextSegmentID returns the next through ID for the segment.
 func (r *Record) NextSegmentID() uint32 {
-	fmt.Println(" === NextSegmentID", r.lastSegmentID+1)
 	return atomic.AddUint32(&r.lastSegmentID, 1)
 }
 
@@ -238,8 +236,6 @@ func (r *Record) SetLastSegmentID(sid uint32) {
 func (r *Record) SetSegmentIDByShard(sid uint32, shardID uint16) {
 	r.segmentsLock.Lock()
 	defer r.segmentsLock.Unlock()
-
-	fmt.Println(" === SetSegmentIDByShard", sid, shardID)
 
 	if len(r.segmentsByShard) > int(sid) {
 		r.segmentsByShard[sid] = shardID + 1

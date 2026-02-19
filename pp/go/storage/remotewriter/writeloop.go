@@ -141,10 +141,18 @@ func (*writeLoop) write(ctx context.Context, iterator *Iterator) (err error) {
 
 			select {
 			case <-ctx.Done():
+				// fast exit if ctx done
 				err = ctx.Err()
 				return
 
-			case msgChannel <- msg:
+			default:
+				select {
+				case <-ctx.Done():
+					err = ctx.Err()
+					return
+
+				case msgChannel <- msg:
+				}
 			}
 		}
 	}()

@@ -85,6 +85,7 @@ type shard struct {
 	corrupted          bool
 	lastReadSegmentID  optional.Optional[uint32]
 	walReader          ShardWalReader
+	segment            Segment
 	decoder            *Decoder
 	unclaimedSegment   *DecodedSegment
 	decoderStateFile   io.WriteCloser
@@ -133,35 +134,61 @@ func newShard(
 		return nil, errors.Join(fmt.Errorf("failed to open decoder state file: %w", err), wr.Close())
 	}
 
+	if !resetDecoderState {
+		if err = decoder.LoadFrom(decoderStateFile); err != nil {
+			return nil, errors.Join(
+				fmt.Errorf("failed to restore from cache: %w", err), wr.Close(), decoderStateFile.Close(),
+			)
+		}
+	} else {
+		if err = decoderStateFile.Truncate(0); err != nil {
+			return nil, errors.Join(
+				fmt.Errorf("failed to truncate decoder state file: %w", err), wr.Close(), decoderStateFile.Close(),
+			)
+		}
+	}
+
+	segment, err := wr.EmptySegment()
+	if err != nil {
+		_ = wr.Close() // it doesn't make sense for us to process this erro
+		logger.Errorf("shard %s/%d is corrupted by init: %v", headID, shardID, err)
+		// return the corrupted shard that won't be read
+		return &shard{
+			headID:             headID,
+			shardID:            shardID,
+			corrupted:          true,
+			decoder:            decoder,
+			decoderStateFile:   decoderStateFile,
+			unexpectedEOFCount: unexpectedEOFCount,
+			segmentSize:        segmentSize,
+		}, nil
+	}
+
 	// create new shard
-	s := &shard{
+	return &shard{
 		headID:             headID,
 		shardID:            shardID,
 		walReader:          wr,
+		segment:            segment,
 		decoder:            decoder,
 		decoderStateFile:   decoderStateFile,
 		unexpectedEOFCount: unexpectedEOFCount,
 		segmentSize:        segmentSize,
-	}
-
-	if !resetDecoderState {
-		if err = decoder.LoadFrom(decoderStateFile); err != nil {
-			return nil, errors.Join(fmt.Errorf("failed to restore from cache: %w", err), s.Close())
-		}
-	} else {
-		if err = decoderStateFile.Truncate(0); err != nil {
-			return nil, errors.Join(fmt.Errorf("failed to truncate decoder state file: %w", err), s.Close())
-		}
-	}
-
-	return s, nil
+	}, nil
 }
 
 // Close closes internal shard resources - [ShardWalReader] and decoderStateFile, rendering it unusable for I/O.
-func (s *shard) Close() error {
-	return errors.Join(s.walReader.Close(), s.decoderStateFile.Close())
+func (s *shard) Close() (err error) {
+	// a corrupted shard has no open walReader
+	if s.walReader != nil {
+		err = errors.Join(err, s.walReader.Close())
+	}
+
+	return errors.Join(err, s.decoderStateFile.Close())
 }
 
+// Read [Segment] from WAL and decode to [DecodedSegment].
+// Discards segments with a lower ID than the targetSegmentID and returns them only if they are equal.
 func (s *shard) Read(
 	ctx context.Context,
 	targetSegmentID uint32,
@@ -172,6 +199,7 @@ func (s *shard) Read(
 		return nil, ErrShardIsCorrupted
 	}
 
+	// if the reader has read a segment whose ID is greater than the required ID, we will defer it until it is requested
 	if s.unclaimedSegment != nil && s.unclaimedSegment.ID == targetSegmentID {
 		decodedSegment := s.unclaimedSegment
 		s.unclaimedSegment = nil
@@ -182,34 +210,27 @@ func (s *shard) Read(
 		return nil, nil
 	}
 
-	// TODO move to ctor [shard]
-	segment, err := s.walReader.EmptySegment()
-	if err != nil {
-		return nil, errors.Join(err, ErrShardIsCorrupted)
-	}
-
 	for {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
 
-		segment.Reset()
-		if err := s.walReader.Read(segment); err != nil {
+		s.segment.Reset()
+		if err := s.walReader.Read(s.segment); err != nil {
 			s.corrupted = true
 			logger.Errorf("remotewritedebug shard %s/%d is corrupted by read: %v", s.headID, s.shardID, err)
 			return nil, errors.Join(err, ErrShardIsCorrupted)
 		}
+		s.segmentSize.Observe(float64(s.segment.Length()))
 
-		s.segmentSize.Observe(float64(segment.Length()))
-
-		decodedSegment, err := s.decoder.Decode(segment.Bytes(), minTimestamp, samplesStorage)
+		decodedSegment, err := s.decoder.Decode(s.segment.Bytes(), minTimestamp, samplesStorage)
 		if err != nil {
 			s.corrupted = true
 			logger.Errorf("remotewritedebug shard %s/%d is corrupted by decode: %v", s.headID, s.shardID, err)
 			return nil, errors.Join(err, ErrShardIsCorrupted)
 		}
 
-		decodedSegment.ID = segment.ID()
+		decodedSegment.ID = s.segment.ID()
 		s.lastReadSegmentID.Set(decodedSegment.ID)
 
 		if decodedSegment.ID == targetSegmentID {
