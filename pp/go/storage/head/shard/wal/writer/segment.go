@@ -94,7 +94,7 @@ func WriteSegmentV2[TSegment EncodedSegmentV2](writer io.Writer, segment TSegmen
 	size = binary.PutUvarint(buf[:], uint64(segment.ID()))
 	bytesWritten, err = writer.Write(buf[:size])
 	if err != nil {
-		return n, fmt.Errorf("failed to write segment id: %w", err)
+		return n, fmt.Errorf("v2: failed to write segment id: %w", err)
 	}
 	n += bytesWritten
 
@@ -102,28 +102,28 @@ func WriteSegmentV2[TSegment EncodedSegmentV2](writer io.Writer, segment TSegmen
 	size = binary.PutUvarint(buf[:], segmentSize)
 	bytesWritten, err = writer.Write(buf[:size])
 	if err != nil {
-		return n, fmt.Errorf("failed to write segment size: %w", err)
+		return n, fmt.Errorf("v2: failed to write segment size: %w", err)
 	}
 	n += bytesWritten
 
 	size = binary.PutUvarint(buf[:], uint64(segment.CRC32()))
 	bytesWritten, err = writer.Write(buf[:size])
 	if err != nil {
-		return n, fmt.Errorf("failed to write segment crc32 hash: %w", err)
+		return n, fmt.Errorf("v2: failed to write segment crc32 hash: %w", err)
 	}
 	n += bytesWritten
 
 	size = binary.PutUvarint(buf[:], uint64(segment.Samples()))
 	bytesWritten, err = writer.Write(buf[:size])
 	if err != nil {
-		return n, fmt.Errorf("failed to write segment sample count: %w", err)
+		return n, fmt.Errorf("v2: failed to write segment sample count: %w", err)
 	}
 	n += bytesWritten
 
 	var bytesWritten64 int64
 	bytesWritten64, err = segment.WriteTo(writer)
 	if err != nil {
-		return n, fmt.Errorf("failed to write segment data: %w", err)
+		return n, fmt.Errorf("v2: failed to write segment data: %w", err)
 	}
 	n += int(bytesWritten64)
 

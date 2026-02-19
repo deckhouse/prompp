@@ -130,31 +130,31 @@ func readSegmentV2(reader io.Reader, segment *SegmentV2) (int64, error) {
 
 	idU64, err := binary.ReadUvarint(br)
 	if err != nil {
-		return int64(br.n), fmt.Errorf("failed to read segment id: %w", err)
+		return int64(br.n), fmt.Errorf("v2: failed to read segment id: %w", err)
 	}
 	segment.id = uint32(idU64) // #nosec G115 // no overflow
 
 	size, err := binary.ReadUvarint(br)
 	if err != nil {
-		return int64(br.n), fmt.Errorf("failed to read segment size: %w", err)
+		return int64(br.n), fmt.Errorf("v2: failed to read segment size: %w", err)
 	}
 
 	crc32HashU64, err := binary.ReadUvarint(br)
 	if err != nil {
-		return int64(br.n), fmt.Errorf("failed to read segment crc32 hash: %w", err)
+		return int64(br.n), fmt.Errorf("v2: failed to read segment crc32 hash: %w", err)
 	}
 	crc32Hash := uint32(crc32HashU64) // #nosec G115 // no overflow
 
 	sampleCountU64, err := binary.ReadUvarint(br)
 	if err != nil {
-		return int64(br.n), fmt.Errorf("failed to read segment sample count: %w", err)
+		return int64(br.n), fmt.Errorf("v2: failed to read segment sample count: %w", err)
 	}
 	segment.sampleCount = uint32(sampleCountU64) // #nosec G115 // no overflow
 
 	segment.resize(int(size)) // #nosec G115 // no overflow
 	n, err := io.ReadFull(reader, segment.data)
 	if err != nil {
-		return int64(br.n), fmt.Errorf("failed to read segment data: %w", err)
+		return int64(br.n), fmt.Errorf("v2: failed to read segment data: %w", err)
 	}
 	n += br.n
 
