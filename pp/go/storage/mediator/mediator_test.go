@@ -2,6 +2,7 @@ package mediator_test
 
 import (
 	"context"
+	"github.com/stretchr/testify/require"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -101,46 +102,33 @@ func (s *MediatorSuite) TestClose() {
 }
 
 func (s *MediatorSuite) TestTrigger() {
-	chTimer := make(chan time.Time, 1)
+	synctest.Test(s.T(), func(t *testing.T) {
+		chTimer := make(chan time.Time, 1)
 
-	timer := &TimerMock{
-		ChanFunc: func() <-chan time.Time {
-			return chTimer
-		},
-		ResetFunc: func() {},
-		StopFunc:  func() {},
-	}
-
-	m := mediator.NewMediator(timer)
-	defer m.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	counter := 0
-	done := make(chan struct{})
-	start := sync.WaitGroup{}
-	start.Add(1)
-	go func() {
-		start.Done()
-		select {
-		case <-m.C():
-			counter++
-			close(done)
-		case <-ctx.Done():
+		timer := &TimerMock{
+			ChanFunc: func() <-chan time.Time {
+				return chTimer
+			},
+			ResetFunc: func() {},
+			StopFunc:  func() {},
 		}
-	}()
 
-	start.Wait()
-	s.T().Log("trigger")
-	m.Trigger()
+		m := mediator.NewMediator(timer)
+		defer m.Close()
 
-	select {
-	case <-done:
-	case <-ctx.Done():
-	}
-	cancel()
+		counter := 0
+		go func() {
+			<-m.C()
+			counter++
+		}()
 
-	s.Equal(1, counter)
-	s.Empty(timer.ResetCalls())
+		synctest.Wait()
+		m.Trigger()
+		synctest.Wait()
+
+		require.Equal(t, 1, counter)
+		require.Empty(t, timer.ResetCalls())
+	})
 }
 
 func (s *MediatorSuite) TestTriggerWithResetTimer() {
