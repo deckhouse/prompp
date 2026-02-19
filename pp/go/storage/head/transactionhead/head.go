@@ -4,10 +4,9 @@ import (
 	"context"
 	"fmt"
 	"runtime"
-	"sync"
 
-	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
+	"github.com/prometheus/prometheus/pp/go/storage/head/poolprovider"
 	"github.com/prometheus/prometheus/pp/go/storage/head/task"
 )
 
@@ -37,11 +36,8 @@ type Head[TShard Shard, TGShard Shard] struct {
 	id     string
 	shard  TShard
 	gshard TGShard
-
 	// pools for reusable objects
-	shardedInnerSeriesPool     sync.Pool
-	shardedRelabeledSeriesPool sync.Pool
-	shardedStateUpdatesPool    sync.Pool
+	headPool *poolprovider.HeadPool[TGShard]
 }
 
 // NewHead init new [Head].
@@ -49,27 +45,13 @@ func NewHead[TShard Shard, TGShard Shard](
 	id string,
 	shard TShard,
 	gshard TGShard,
+	headPool *poolprovider.HeadPool[TGShard],
 ) *Head[TShard, TGShard] {
 	h := &Head[TShard, TGShard]{
-		id:     id,
-		shard:  shard,
-		gshard: gshard,
-		// pools for reusable objects
-		shardedInnerSeriesPool: sync.Pool{
-			New: func() any {
-				return cppbridge.NewShardedInnerSeries(1)
-			},
-		},
-		shardedRelabeledSeriesPool: sync.Pool{
-			New: func() any {
-				return cppbridge.NewShardedRelabeledSeries(1)
-			},
-		},
-		shardedStateUpdatesPool: sync.Pool{
-			New: func() any {
-				return cppbridge.NewShardedStateUpdates(1)
-			},
-		},
+		id:       id,
+		shard:    shard,
+		gshard:   gshard,
+		headPool: headPool,
 	}
 
 	runtime.SetFinalizer(h, func(h *Head[TShard, TGShard]) {
@@ -86,13 +68,16 @@ func (*Head[TShard, TGShard]) AcquireQuery(ctx context.Context) (func(), error) 
 	return noopRelease, nil
 }
 
-// CreateTask create a task for operations on the [Head] shards.
-func (*Head[TShard, TGShard]) CreateTask(taskName string, shardFn func(shard TGShard) error) *task.Generic[TGShard] {
-	return task.NewTransactionGeneric(shardFn)
-}
+// CreateTask creates a [task.Generic] for operations on the [Head] shards.
+func (h *Head[TShard, TGShard]) CreateTask(_ string, shardFn func(shard TGShard) error) *task.Generic[TGShard] {
+	t := h.headPool.GetTask()
+	t.Reset(
+		shardFn,
+		nil,
+	)
 
-// ReleaseTask to the pool.
-func (*Head[TShard, TGShard]) ReleaseTask(_ *task.Generic[TGShard]) {}
+	return t
+}
 
 // Enqueue the task to be executed on shards [Head]. Method are goroutine-unsafe.
 func (h *Head[TShard, TGShard]) Enqueue(t *task.Generic[TGShard]) {
@@ -118,6 +103,16 @@ func (*Head[TShard, TGShard]) NumberOfShards() uint16 {
 	return 1
 }
 
+// PoolProvider returns the [poolprovider.HeadPool] for the [Head].
+func (h *Head[TShard, TGShard]) PoolProvider() *poolprovider.HeadPool[TGShard] {
+	return h.headPool
+}
+
+// PutTask adds [task.Generic] to the pool.
+func (h *Head[TShard, TGShard]) PutTask(t *task.Generic[TGShard]) {
+	h.headPool.PutTask(t)
+}
+
 // RangeShards returns an iterator over the [Head] [Shard]s, through which the shard can be directly accessed.
 func (h *Head[TShard, TGShard]) RangeShards() func(func(TShard) bool) {
 	return func(yield func(s TShard) bool) {
@@ -126,41 +121,8 @@ func (h *Head[TShard, TGShard]) RangeShards() func(func(TShard) bool) {
 }
 
 // Shards returns the [Head] [Shard]s.
-func (h *Head[TShard, TGoroutineShard]) Shards() []TShard {
+func (h *Head[TShard, TGShard]) Shards() []TShard {
 	return []TShard{h.shard}
-}
-
-// AcquireShardedInnerSeries gets a [cppbridge.ShardedInnerSeries] from the pool.
-func (h *Head[TShard, TGorutineShard]) AcquireShardedInnerSeries() *cppbridge.ShardedInnerSeries {
-	return h.shardedInnerSeriesPool.Get().(*cppbridge.ShardedInnerSeries)
-}
-
-// ReleaseShardedInnerSeries returns a [cppbridge.ShardedInnerSeries] to the pool after resetting it.
-func (h *Head[TShard, TGorutineShard]) ReleaseShardedInnerSeries(s *cppbridge.ShardedInnerSeries) {
-	s.Reset()
-	h.shardedInnerSeriesPool.Put(s)
-}
-
-// AcquireShardedRelabeledSeries gets a [cppbridge.ShardedRelabeledSeries] from the pool.
-func (h *Head[TShard, TGorutineShard]) AcquireShardedRelabeledSeries() *cppbridge.ShardedRelabeledSeries {
-	return h.shardedRelabeledSeriesPool.Get().(*cppbridge.ShardedRelabeledSeries)
-}
-
-// ReleaseShardedRelabeledSeries returns a [cppbridge.ShardedRelabeledSeries] to the pool after resetting it.
-func (h *Head[TShard, TGorutineShard]) ReleaseShardedRelabeledSeries(s *cppbridge.ShardedRelabeledSeries) {
-	s.Reset()
-	h.shardedRelabeledSeriesPool.Put(s)
-}
-
-// AcquireShardedStateUpdates gets a [cppbridge.ShardedStateUpdates] from the pool.
-func (h *Head[TShard, TGorutineShard]) AcquireShardedStateUpdates() *cppbridge.ShardedStateUpdates {
-	return h.shardedStateUpdatesPool.Get().(*cppbridge.ShardedStateUpdates)
-}
-
-// ReleaseShardedStateUpdates returns a [cppbridge.ShardedStateUpdates] to the pool after resetting it.
-func (h *Head[TShard, TGorutineShard]) ReleaseShardedStateUpdates(s *cppbridge.ShardedStateUpdates) {
-	s.Reset()
-	h.shardedStateUpdatesPool.Put(s)
 }
 
 // String serialize as string.

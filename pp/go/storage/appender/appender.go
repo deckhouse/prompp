@@ -8,6 +8,7 @@ import (
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
+	"github.com/prometheus/prometheus/pp/go/storage/head/poolprovider"
 )
 
 const (
@@ -85,16 +86,13 @@ type GoroutineShard interface {
 type Head[
 	TTask Task,
 	TShard Shard,
-	TGoroutineShard GoroutineShard,
+	TGShard GoroutineShard,
 ] interface {
 	// CreateTask create a task for operations on the [Head] shards.
-	CreateTask(taskName string, shardFn func(shard TGoroutineShard) error) TTask
+	CreateTask(taskName string, shardFn func(shard TGShard) error) TTask
 
 	// Enqueue the task to be executed on shards [Head].
 	Enqueue(t TTask)
-
-	// ReleaseTask returns a task to the pool.
-	ReleaseTask(t TTask)
 
 	// Generation returns current generation of [Head].
 	Generation() uint64
@@ -102,26 +100,14 @@ type Head[
 	// NumberOfShards returns current number of shards in to [Head].
 	NumberOfShards() uint16
 
+	// PoolProvider returns the [poolprovider.HeadPool] for the [Head].
+	PoolProvider() *poolprovider.HeadPool[TGShard]
+
+	// PutTask adds [TTask] to the pool.
+	PutTask(t TTask)
+
 	// Shards returns the [Head] [Shard]s.
 	Shards() []TShard
-
-	// AcquireShardedInnerSeries gets a [cppbridge.ShardedInnerSeries] from the pool.
-	AcquireShardedInnerSeries() *cppbridge.ShardedInnerSeries
-
-	// ReleaseShardedInnerSeries returns a [cppbridge.ShardedInnerSeries] to the pool.
-	ReleaseShardedInnerSeries(s *cppbridge.ShardedInnerSeries)
-
-	// AcquireShardedRelabeledSeries gets a [cppbridge.ShardedRelabeledSeries] from the pool.
-	AcquireShardedRelabeledSeries() *cppbridge.ShardedRelabeledSeries
-
-	// ReleaseShardedRelabeledSeries returns a [cppbridge.ShardedRelabeledSeries] to the pool.
-	ReleaseShardedRelabeledSeries(s *cppbridge.ShardedRelabeledSeries)
-
-	// AcquireShardedStateUpdates gets a [cppbridge.ShardedStateUpdates] from the pool.
-	AcquireShardedStateUpdates() *cppbridge.ShardedStateUpdates
-
-	// ReleaseShardedStateUpdates returns a [cppbridge.ShardedStateUpdates] to the pool.
-	ReleaseShardedStateUpdates(s *cppbridge.ShardedStateUpdates)
 }
 
 //
@@ -132,10 +118,11 @@ type Head[
 type Appender[
 	TTask Task,
 	TShard Shard,
-	TGoroutineShard GoroutineShard,
-	THead Head[TTask, TShard, TGoroutineShard],
+	TGShard GoroutineShard,
+	THead Head[TTask, TShard, TGShard],
 ] struct {
 	head           THead
+	poolProvider   *poolprovider.HeadPool[TGShard]
 	commitAndFlush func(h THead) error
 }
 
@@ -143,14 +130,15 @@ type Appender[
 func New[
 	TTask Task,
 	TShard Shard,
-	TGoroutineShard GoroutineShard,
-	THead Head[TTask, TShard, TGoroutineShard],
+	TGShard GoroutineShard,
+	THead Head[TTask, TShard, TGShard],
 ](
 	head THead,
 	commitAndFlush func(h THead) error,
-) Appender[TTask, TShard, TGoroutineShard, THead] {
-	return Appender[TTask, TShard, TGoroutineShard, THead]{
+) Appender[TTask, TShard, TGShard, THead] {
+	return Appender[TTask, TShard, TGShard, THead]{
 		head:           head,
+		poolProvider:   head.PoolProvider(),
 		commitAndFlush: commitAndFlush,
 	}
 }
@@ -158,7 +146,7 @@ func New[
 // Append incoming data to [Head].
 //
 //revive:disable-next-line:flag-parameter this is a flag, but it's more convenient this way
-func (a Appender[TTask, TShard, TGoroutineShard, THead]) Append(
+func (a Appender[TTask, TShard, TGShard, THead]) Append(
 	ctx context.Context,
 	incomingData *IncomingData,
 	state *cppbridge.StateV2,
@@ -168,10 +156,10 @@ func (a Appender[TTask, TShard, TGoroutineShard, THead]) Append(
 		return cppbridge.RelabelerStats{}, err
 	}
 
-	shardedInnerSeries := a.head.AcquireShardedInnerSeries()
-	defer a.head.ReleaseShardedInnerSeries(shardedInnerSeries)
-	shardedRelabeledSeries := a.head.AcquireShardedRelabeledSeries()
-	defer a.head.ReleaseShardedRelabeledSeries(shardedRelabeledSeries)
+	shardedInnerSeries := a.poolProvider.GetShardedInnerSeries()
+	defer a.poolProvider.PutShardedInnerSeries(shardedInnerSeries)
+	shardedRelabeledSeries := a.poolProvider.GetShardedRelabeledSeries()
+	defer a.poolProvider.PutShardedRelabeledSeries(shardedRelabeledSeries)
 
 	stats, err := a.inputRelabelingStage(
 		ctx,
@@ -189,8 +177,8 @@ func (a Appender[TTask, TShard, TGoroutineShard, THead]) Append(
 	if !shardedRelabeledSeries.IsEmpty() {
 		shardedRelabeledSeries.Transpose()
 
-		shardedStateUpdates := a.head.AcquireShardedStateUpdates()
-		defer a.head.ReleaseShardedStateUpdates(shardedStateUpdates)
+		shardedStateUpdates := a.poolProvider.GetShardedStateUpdates()
+		defer a.poolProvider.PutShardedStateUpdates(shardedStateUpdates)
 		if err = a.appendRelabelerSeriesStage(
 			ctx,
 			shardedInnerSeries,
@@ -231,19 +219,20 @@ var errCannotBeRelabeledFromCache = errors.New("cannot be relabeled from cache")
 // inputRelabelingStage first stage - relabeling.
 //
 //revive:disable-next-line:function-length long but this is first stage.
-func (a *Appender[TTask, TShard, TGoroutineShard, THead]) inputRelabelingStage(
+func (a *Appender[TTask, TShard, TGShard, THead]) inputRelabelingStage(
 	ctx context.Context,
 	state *cppbridge.StateV2,
 	incomingData *IncomingData,
 	shardedInnerSeries *cppbridge.ShardedInnerSeries,
 	shardedRelabeledSeries *cppbridge.ShardedRelabeledSeries,
 ) (cppbridge.RelabelerStats, error) {
-	stats := make([]cppbridge.RelabelerStats, a.head.NumberOfShards())
+	stats := a.poolProvider.GetRelabelerStats()
+	defer a.poolProvider.PutRelabelerStats(stats)
 	defer incomingData.Destroy()
 
 	t := a.head.CreateTask(
 		lssInputRelabeling,
-		func(shard TGoroutineShard) error {
+		func(shard TGShard) error {
 			var (
 				relabeler   = shard.Relabeler()
 				shardID     = shard.ShardID()
@@ -307,7 +296,7 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) inputRelabelingStage(
 			return nil
 		},
 	)
-	defer a.head.ReleaseTask(t)
+	defer a.head.PutTask(t)
 	a.head.Enqueue(t)
 
 	resStats := cppbridge.RelabelerStats{}
@@ -321,7 +310,7 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) inputRelabelingStage(
 }
 
 // appendRelabelerSeriesStage second stage - append to lss relabeling ls.
-func (a *Appender[TTask, TShard, TGoroutineShard, THead]) appendRelabelerSeriesStage(
+func (a *Appender[TTask, TShard, TGShard, THead]) appendRelabelerSeriesStage(
 	ctx context.Context,
 	shardedInnerSeries *cppbridge.ShardedInnerSeries,
 	shardedRelabeledSeries *cppbridge.ShardedRelabeledSeries,
@@ -329,7 +318,7 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) appendRelabelerSeriesS
 ) error {
 	t := a.head.CreateTask(
 		lssAppendRelabelerSeries,
-		func(shard TGoroutineShard) error {
+		func(shard TGShard) error {
 			shardID := shard.ShardID()
 
 			relabeledSeries := shardedRelabeledSeries.DataByShard(shardID)
@@ -357,14 +346,14 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) appendRelabelerSeriesS
 			})
 		},
 	)
-	defer a.head.ReleaseTask(t)
+	defer a.head.PutTask(t)
 	a.head.Enqueue(t)
 
 	return t.Wait()
 }
 
 // updateRelabelerStateStage third stage - update state cache.
-func (a *Appender[TTask, TShard, TGoroutineShard, THead]) updateRelabelerStateStage(
+func (a *Appender[TTask, TShard, TGShard, THead]) updateRelabelerStateStage(
 	ctx context.Context,
 	state *cppbridge.StateV2,
 	shardedStateUpdates *cppbridge.ShardedStateUpdates,
@@ -385,7 +374,7 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) updateRelabelerStateSt
 }
 
 // trackStaleNans add stale nans samples if needed
-func (a *Appender[TTask, TShard, TGoroutineShard, THead]) trackStaleNans(
+func (a *Appender[TTask, TShard, TGShard, THead]) trackStaleNans(
 	shardInnerSeries *cppbridge.ShardedInnerSeries,
 	state *cppbridge.StateV2,
 ) {
@@ -399,24 +388,24 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) trackStaleNans(
 }
 
 // appendInnerSeriesAndWriteToWal append [cppbridge.InnerSeries] to [Shard]'s to [DataStorage] and write to [Wal].
-func (a *Appender[TTask, TShard, TGoroutineShard, THead]) appendInnerSeriesAndWriteToWal(
+func (a *Appender[TTask, TShard, TGShard, THead]) appendInnerSeriesAndWriteToWal(
 	shardedInnerSeries *cppbridge.ShardedInnerSeries,
 ) (uint32, error) {
 	tAppend := a.head.CreateTask(
 		dsAppendInnerSeries,
-		func(shard TGoroutineShard) error {
+		func(shard TGShard) error {
 			shard.AppendInnerSeriesSlice(shardedInnerSeries.DataByShard(shard.ShardID()))
 
 			return nil
 		},
 	)
-	defer a.head.ReleaseTask(tAppend)
+	defer a.head.PutTask(tAppend)
 	a.head.Enqueue(tAppend)
 
 	var atomicLimitExhausted uint32
 	tWalWrite := a.head.CreateTask(
 		walWrite,
-		func(shard TGoroutineShard) error {
+		func(shard TGShard) error {
 			limitExhausted, errWrite := shard.WalWrite(shardedInnerSeries.DataByShard(shard.ShardID()))
 			if errWrite != nil {
 				return fmt.Errorf("shard %d: %w", shard.ShardID(), errWrite)
@@ -429,7 +418,7 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) appendInnerSeriesAndWr
 			return nil
 		},
 	)
-	defer a.head.ReleaseTask(tWalWrite)
+	defer a.head.PutTask(tWalWrite)
 	a.head.Enqueue(tWalWrite)
 
 	err := tAppend.Wait()
@@ -438,7 +427,7 @@ func (a *Appender[TTask, TShard, TGoroutineShard, THead]) appendInnerSeriesAndWr
 	return atomicLimitExhausted, err
 }
 
-func (a *Appender[TTask, TShard, TGoroutineShard, THead]) resolveState(state *cppbridge.StateV2) error {
+func (a *Appender[TTask, TShard, TGShard, THead]) resolveState(state *cppbridge.StateV2) error {
 	if state == nil {
 		return errNilState
 	}
