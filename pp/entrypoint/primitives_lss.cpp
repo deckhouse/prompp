@@ -1,11 +1,14 @@
 #include "primitives_lss.h"
 
+#include "bare_bones/bitset.h"
+#include "bare_bones/vector.h"
 #include "bare_bones/xxhash.h"
 #include "hashdex.hpp"
 #include "head/lss.h"
 #include "primitives/go_slice.h"
 #include "series_index/querier/label_names_querier.h"
 #include "series_index/querier/label_values_querier.h"
+#include "series_index/queryable_encoding_bimap.h"
 
 using GoLabelMatchers = PromPP::Primitives::Go::SliceView<PromPP::Prometheus::LabelMatcherTrait<PromPP::Primitives::Go::String>>;
 using GoSliceOfString = PromPP::Primitives::Go::Slice<PromPP::Primitives::Go::String>;
@@ -283,6 +286,43 @@ extern "C" void prompp_primitives_readonly_lss_copy_added_series(uint64_t source
 
   series_index::QueryableEncodingBimapCopier copier(src, src.sorting_index(), src_bitset, dst, **dst_src_ids_mapping);
   copier.copy_added_series_and_build_indexes();
+}
+
+extern "C" void prompp_primitives_lss_invert_copy_mapping(void* args) {
+  struct Arguments {
+    LsIdsSlicePtr new_to_old;
+    LsIdsSlicePtr old_to_new_out;
+    uint32_t max_lsid;
+  };
+  const auto* in = static_cast<const Arguments*>(args);
+  series_index::invert_copy_mapping(*in->new_to_old, in->max_lsid, *in->old_to_new_out);
+}
+
+extern "C" void prompp_primitives_lss_fill_touched_series_mapping(void* args) {
+  struct Arguments {
+    LssVariantPtr current_lss;
+    LssVariantPtr copy_lss;
+    const QueryableEncodingBimap::checkpoint_type* checkpoint;
+    LsIdsSlicePtr old_to_new_mapping;
+    BitsetPtr touched_series;
+  };
+  const auto* in = static_cast<const Arguments*>(args);
+  auto& current = std::get<QueryableEncodingBimap>(*in->current_lss);
+  auto& copy = std::get<QueryableEncodingBimap>(*in->copy_lss);
+  current.fill_touched_series_mapping(*in->checkpoint, copy, *in->old_to_new_mapping, *in->touched_series);
+}
+
+extern "C" void prompp_primitives_lss_finalize_copy_and_shrink(void* args) {
+  struct Arguments {
+    LssVariantPtr current_lss;
+    LssVariantPtr lss_snapshot;
+    const QueryableEncodingBimap::checkpoint_type* checkpoint;
+    LsIdsSlicePtr old_to_new_mapping;
+  };
+  const auto* in = static_cast<const Arguments*>(args);
+  auto& current = std::get<QueryableEncodingBimap>(*in->current_lss);
+  auto& snapshot = std::get<entrypoint::head::ReadonlyLss>(*in->lss_snapshot);
+  current.finalize_copy_and_shrink(*in->checkpoint, snapshot, *in->old_to_new_mapping);
 }
 
 void prompp_primitives_free_ls_ids_mapping(void* args) {

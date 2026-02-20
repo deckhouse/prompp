@@ -220,6 +220,42 @@ void prompp_primitives_lss_bitset_dtor(void* args);
 void prompp_primitives_readonly_lss_copy_added_series(uint64_t source_lss, uint64_t source_bitset, uint64_t destination_lss, uint64_t ids_mapping);
 
 /**
+ * @brief Build old_id -> new_id mapping from copier new_to_old output.
+ *
+ * @param args {
+ *     new_to_old     uintptr  // ls id `new -> old` mapping
+ *     old_to_new_out uintptr  // ls id `old -> new` mapping to fill
+ *     max_lsid       uint32_t  // max ls id
+ * }
+ */
+void prompp_primitives_lss_invert_copy_mapping(void* args);
+
+/**
+ * @brief Fill old_to_new_mapping for addded series that are not yet mapped (add missing series to copy).
+ *
+ * @param args {
+ *     current_lss        uintptr  // pointer to source queryable lss;
+ *     copy_lss           uintptr  // pointer to destination queryable lss;
+ *     checkpoint         uintptr  // pointer to lss checkpoint
+ *     old_to_new_mapping uintptr  // pointer to ls id `old -> new` mapping
+ *     added_series       uintptr  // pointer to source bitset of added series
+ * }
+ */
+void prompp_primitives_lss_fill_added_series_mapping(void* args);
+
+/**
+ * @brief Shrink current lss to checkpoint and set post-shrink mapping and copy pointers.
+ *
+ * @param args {
+ *     current_lss        uintptr  // pointer to source queryable lss;
+ *     copy_lss_snapshot  uintptr  // pointer to destination readonly lss;
+ *     checkpoint         uintptr  // pointer to lss checkpoint
+ *     old_to_new_mapping uintptr  // pointer to ls id `old -> new` mapping
+ * }
+ */
+void prompp_primitives_lss_finalize_copy_and_shrink(void* args);
+
+/**
  * @brief destroy ls ids mapping
  *
  * @param args {
