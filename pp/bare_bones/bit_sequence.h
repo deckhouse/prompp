@@ -252,7 +252,7 @@ class CompactBitSequenceBase {
   [[nodiscard]] PROMPP_ALWAYS_INLINE SharedPtr shared_memory() const noexcept { return memory_; }
 
   PROMPP_ALWAYS_INLINE void shrink_to_fit() noexcept {
-    const auto size = Bit::to_bytes(size_in_bits()) + Bit::to_bytes(kReservedSizeBits);
+    const auto size = Bit::to_ceil_bytes(size_in_bits() + kReservedSizeBits);
     memory_.reallocate(size, size);
     allocation_size_index_ = kNoAllocationIndex;
   }
