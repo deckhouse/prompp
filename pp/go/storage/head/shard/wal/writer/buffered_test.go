@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer/mock"
 )
 
 type BufferedSuite struct {
@@ -37,7 +38,7 @@ func (s *BufferedSuite) TestWriteFlushSync() {
 	}
 
 	shardID := uint16(1)
-	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentV2Mock], swn, sm)
+	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*mock.EncodedSegmentV2Mock], swn, sm)
 	s.Require().NoError(err)
 	s.Equal(int64(0), wrBuf.CurrentSize())
 
@@ -86,7 +87,7 @@ func (s *BufferedSuite) TestDoubleWriteAndFlush() {
 	}
 
 	shardID := uint16(1)
-	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentV2Mock], swn, sm)
+	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*mock.EncodedSegmentV2Mock], swn, sm)
 	s.Require().NoError(err)
 	s.Equal(int64(0), wrBuf.CurrentSize())
 
@@ -152,7 +153,7 @@ func (s *BufferedSuite) TestBuffered() {
 	}
 
 	shardID := uint16(1)
-	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentV2Mock], swn, sm)
+	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*mock.EncodedSegmentV2Mock], swn, sm)
 	s.Require().NoError(err)
 	s.Equal(int64(0), wrBuf.CurrentSize())
 
@@ -208,7 +209,7 @@ func (s *BufferedSuite) TestStatError() {
 	}
 
 	shardID := uint16(0)
-	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentV2Mock], swn, sm)
+	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*mock.EncodedSegmentV2Mock], swn, sm)
 	s.Require().Error(err)
 	s.Require().Nil(wrBuf)
 }
@@ -230,7 +231,7 @@ func (s *BufferedSuite) TestSyncError() {
 	}
 
 	shardID := uint16(0)
-	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentV2Mock], swn, sm)
+	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*mock.EncodedSegmentV2Mock], swn, sm)
 	s.Require().NoError(err)
 	s.Equal(int64(0), wrBuf.CurrentSize())
 
@@ -262,7 +263,7 @@ func (s *BufferedSuite) TestWriteToBufferWithError() {
 	}
 
 	scount := 0
-	writeSegment := func(w io.Writer, segment *EncodedSegmentV2Mock) (n int, err error) {
+	writeSegment := func(w io.Writer, segment *mock.EncodedSegmentV2Mock) (n int, err error) {
 		if scount == 5 {
 			scount++
 			return 0, errors.New("some error")
@@ -357,7 +358,7 @@ func (s *BufferedSuite) TestFlushWithError() {
 	}
 
 	shardID := uint16(1)
-	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*EncodedSegmentV2Mock], swn, sm)
+	wrBuf, err := writer.NewBuffered(shardID, sfile, writer.WriteSegment[*mock.EncodedSegmentV2Mock], swn, sm)
 	s.Require().NoError(err)
 	s.Equal(int64(0), wrBuf.CurrentSize())
 
@@ -409,13 +410,13 @@ func (*BufferedSuite) openfile(buf *bytes.Buffer) *FileWriterMock {
 	}
 }
 
-func (s *BufferedSuite) genSegment() (segment *EncodedSegmentV2Mock, expected []byte) {
+func (s *BufferedSuite) genSegment() (segment *mock.EncodedSegmentV2Mock, expected []byte) {
 	segmentCrc32 := uint32(0)
 	segmentSamples := uint32(42)
 	data := []byte(faker.Paragraph())
 	var id uint32
 
-	segment = &EncodedSegmentV2Mock{
+	segment = &mock.EncodedSegmentV2Mock{
 		IDFunc: func() uint32 {
 			return id
 		},

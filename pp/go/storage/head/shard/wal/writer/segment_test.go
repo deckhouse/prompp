@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer/mock"
 )
 
 func TestWriteSegment(t *testing.T) {
@@ -17,7 +18,7 @@ func TestWriteSegment(t *testing.T) {
 	segmentCrc32 := uint32(0)
 	segmentSamples := uint32(42)
 
-	segment := &EncodedSegmentMock{
+	segment := &mock.EncodedSegmentMock{
 		CRC32Func: func() uint32 {
 			return segmentCrc32
 		},
@@ -51,7 +52,7 @@ func TestWriteSegmentV2(t *testing.T) {
 	segmentCrc32 := uint32(0)
 	segmentSamples := uint32(42)
 
-	segment := &EncodedSegmentV2Mock{
+	segment := &mock.EncodedSegmentV2Mock{
 		CRC32Func: func() uint32 {
 			return segmentCrc32
 		},
