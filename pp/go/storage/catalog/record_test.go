@@ -54,10 +54,40 @@ func (s *RecordSuite) TestSetSegmentIDByShardResize() {
 	s.Equal(expectedShardID, r.GetShardBySegmentID(2047))
 }
 
+func (s *RecordSuite) TestClearSegmentsByShard() {
+	r := catalog.NewEmptyRecord()
+
+	expectedShardID := uint16(2)
+	r.SetSegmentIDByShard(1440, expectedShardID)
+	s.Equal(expectedShardID, r.GetShardBySegmentID(1440))
+
+	r.ClearSegmentsByShard()
+	s.Equal(uint16(math.MaxUint16), r.GetShardBySegmentID(1440))
+}
+
 func (s *RecordSuite) TestNextSegmentID() {
 	r := catalog.NewEmptyRecord()
 
 	for i := range uint32(1000) {
 		s.Require().Equal(i, r.NextSegmentID())
 	}
+}
+
+func (s *RecordSuite) TestSetLastSegmentID() {
+	r := catalog.NewEmptyRecord()
+	sid := uint32(42)
+
+	r.SetLastSegmentID(sid)
+
+	s.Require().Equal(sid+1, r.NextSegmentID())
+}
+
+func (s *RecordSuite) TestSetLastSegmentIDLess() {
+	r := catalog.NewEmptyRecord()
+	sid := uint32(42)
+
+	r.SetLastSegmentID(sid)
+	r.SetLastSegmentID(sid - 1)
+
+	s.Require().Equal(sid+1, r.NextSegmentID())
 }

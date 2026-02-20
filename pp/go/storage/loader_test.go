@@ -405,6 +405,42 @@ func (s *HeadLoadSuite) TestInvalidEncoderVersion() {
 	s.Require().NoError(head.Close())
 }
 
+func (s *HeadLoadSuite) TestLoadWalV2() {
+	rec, err := s.catalog.Create(1)
+	s.Require().NoError(err)
+	headDir := filepath.Join(s.dataDir, rec.Dir())
+	s.Require().NoError(os.Mkdir(headDir, 0o777))
+	shardFilePath := storage.GetShardWalFilename(headDir, 0)
+	shardFile, err := util.CreateFileAppender(shardFilePath, 0o666)
+	s.Require().NoError(err)
+
+	shardWalEncoder := cppbridge.NewHeadWalEncoder(0, 0, cppbridge.NewQueryableLssStorage())
+
+	_, err = writer.WriteHeader(shardFile, wal.FileFormatVersionV2, shardWalEncoder.Version())
+	s.Require().NoError(err)
+
+	encodedSegment, err := shardWalEncoder.Finalize()
+	s.Require().NoError(err)
+
+	encodedSegment.SetSegmentID(rec.NextSegmentID())
+	_, err = writer.WriteSegmentV2(shardFile, encodedSegment)
+	s.Require().NoError(err)
+
+	s.Require().NoError(shardFile.Close())
+
+	s.Require().NotEqual(uint16(0), rec.GetShardBySegmentID(encodedSegment.ID()))
+
+	h, err := storage.NewLoader(
+		s.dataDir,
+		storagetest.MaxSegmentSize,
+		prometheus.DefaultRegisterer,
+		storagetest.UnloadDataStorageInterval,
+	).Load(rec, 0)
+	s.Require().NoError(err)
+	s.Require().NoError(h.Close())
+	s.Require().Equal(uint16(0), rec.GetShardBySegmentID(encodedSegment.ID()))
+}
+
 type EnsureSameErrorTypesTestSuite struct {
 	suite.Suite
 }
