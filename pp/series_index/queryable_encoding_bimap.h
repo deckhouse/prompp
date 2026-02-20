@@ -49,16 +49,36 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
       return Base::operator[](id - shift_);
     }
 
-    // Falls here only if we are in post-shrink state
     assert(shift_ > 0 && "id < shift_ but no post-shrink state");
-    assert(post_shrink_mapping_ptr_ != nullptr);
-    assert(post_shrink_snapshot_copy_ptr_ != nullptr);
+    assert(post_shrink_mapping_ptr_ != nullptr && post_shrink_snapshot_copy_ptr_ != nullptr);
 
-    // User can  only ask for previously `marked_as_added` series
-    // So it's either in `*this` table or in the `post_shrink_snapshot_copy_ptr_`
     const auto new_id = (*post_shrink_mapping_ptr_)[id];
     assert(new_id != Base::kInvalidId && "new_id is invalid");
     return (*post_shrink_snapshot_copy_ptr_)[new_id];
+  }
+
+  void fill_touched_series_mapping(const checkpoint_type& checkpoint,
+                                   QueryableEncodingBimap& copy,
+                                   BareBones::Vector<uint32_t>& old_to_new_mapping,
+                                   const BareBones::Bitset& touched_series) {
+    const uint32_t max_lsid = checkpoint.next_item_index();
+    assert(old_to_new_mapping.size() >= max_lsid);
+
+    for (uint32_t old_id = 0; old_id < max_lsid; ++old_id) {
+      if (old_id < touched_series.size() && touched_series[old_id] && old_to_new_mapping[old_id] == Base::kInvalidId) [[unlikely]] {
+        const auto label_set = (*this)[old_id];
+        const auto new_id = copy.find_or_emplace(label_set);
+        old_to_new_mapping[old_id] = new_id;
+      }
+    }
+  }
+
+  void finalize_copy_and_shrink(const checkpoint_type& checkpoint, QueryableEncodingBimap& copy, BareBones::Vector<uint32_t>& old_to_new_mapping) {
+    assert(old_to_new_mapping.size() >= checkpoint.next_item_index());
+
+    shrink_to_checkpoint_size(checkpoint);
+    post_shrink_mapping_ptr_ = &old_to_new_mapping;
+    post_shrink_snapshot_copy_ptr_ = &copy;
   }
 
   void shrink_to_checkpoint_size(const checkpoint_type& checkpoint) {
@@ -75,26 +95,6 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     assert(Base::storage_.count() == keep_count);
 
     added_series_.clear();
-  }
-
-  void finalize_copy_and_shrink(const checkpoint_type& checkpoint,
-                                QueryableEncodingBimap& copy,
-                                BareBones::Vector<uint32_t>& old_to_new_mapping,
-                                const BareBones::Bitset& touched_series) {
-    const uint32_t max_lsid = checkpoint.next_item_index();
-    assert(old_to_new_mapping.size() >= max_lsid);
-
-    for (uint32_t old_id = 0; old_id < max_lsid; ++old_id) {
-      if (old_id < touched_series.size() && touched_series[old_id] && old_to_new_mapping[old_id] == Base::kInvalidId) [[unlikely]] {
-        const auto label_set = (*this)[old_id];
-        const auto new_id = copy.find_or_emplace(label_set);
-        old_to_new_mapping[old_id] = new_id;
-      }
-    }
-
-    shrink_to_checkpoint_size(checkpoint);
-    post_shrink_mapping_ptr_ = &old_to_new_mapping;
-    post_shrink_snapshot_copy_ptr_ = &copy;
   }
 
   template <class LabelSet>

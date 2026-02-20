@@ -333,7 +333,8 @@ TEST_F(QueryableEncodingBimapCopierFixture, ShrinkAndResolveViaMapping) {
   invert_copy_mapping(dst_src_ids_mapping_, max_lsid, old_to_new);
 
   // Act
-  lss_.finalize_copy_and_shrink(checkpoint, lss_copy, old_to_new, lss_.added_series());
+  lss_.fill_touched_series_mapping(checkpoint, lss_copy, old_to_new, lss_.added_series());
+  lss_.finalize_copy_and_shrink(checkpoint, lss_copy, old_to_new);
 
   // Assert
   EXPECT_EQ(ls1, lss_[0]);
@@ -358,7 +359,8 @@ TEST_F(QueryableEncodingBimapCopierFixture, IndicesNotClearedOnShrink) {
   invert_copy_mapping(dst_src_ids_mapping_, checkpoint.next_item_index(), old_to_new);
 
   // Act
-  lss_.finalize_copy_and_shrink(checkpoint, lss_copy, old_to_new, lss_.added_series());
+  lss_.fill_touched_series_mapping(checkpoint, lss_copy, old_to_new, lss_.added_series());
+  lss_.finalize_copy_and_shrink(checkpoint, lss_copy, old_to_new);
 
   // Assert
   EXPECT_TRUE(lss_.trie_index().names_trie().lookup("job"));
@@ -392,7 +394,8 @@ TEST_F(QueryableEncodingBimapCopierFixture, TouchedSeriesUnmappedByCopyFilledByF
   touched.set(1);
 
   // Act
-  lss_.finalize_copy_and_shrink(checkpoint, lss_copy, old_to_new, touched);
+  lss_.fill_touched_series_mapping(checkpoint, lss_copy, old_to_new, touched);
+  lss_.finalize_copy_and_shrink(checkpoint, lss_copy, old_to_new);
 
   // Assert
   EXPECT_EQ(ls1, lss_[0]);
