@@ -7,10 +7,36 @@
 #include "preprocess.h"
 #include "type_traits.h"
 
+#if JEMALLOC_AVAILABLE
+#include <jemalloc/jemalloc.h>
+#endif
+
 namespace BareBones {
 
+template <class Reallocator>
+concept ReallocatorInterface = requires(Reallocator reallocator, void* memory) {
+  { Reallocator::reallocate(memory, size_t()) } -> std::same_as<void*>;
+  { Reallocator::free(memory) } -> std::same_as<void>;
+};
+
+struct DefaultReallocator {
+  PROMPP_ALWAYS_INLINE static size_t allocation_size(size_t needed_size) noexcept {
+#if JEMALLOC_AVAILABLE
+    return nallocx(needed_size, 0);
+#else
+    return needed_size;
+#endif
+  }
+
+  PROMPP_ALWAYS_INLINE static void* allocate(size_t size) { return std::malloc(size); }
+
+  PROMPP_ALWAYS_INLINE static void* reallocate(void* memory, size_t size) { return std::realloc(memory, size); }
+
+  PROMPP_ALWAYS_INLINE static void free(void* memory) { return std::free(memory); }
+};
+
 template <class DataType, class SizeType>
-class AllocationSizeCalculator {
+class PreAllocationSizeCalculator {
  public:
   static constexpr size_t kMinAllocationSize = 32;
 
@@ -82,26 +108,12 @@ class GenericMemory {
       // In unit tests or in build with asan we allocate only needed_size bytes. It helps us to debug memory access errors
       return needed_size;
     } else {
-      return AllocationSizeCalculator<T, SizeType>::calculate(needed_size);
+      return DefaultReallocator::allocation_size(PreAllocationSizeCalculator<T, SizeType>::calculate(needed_size) * sizeof(T)) / sizeof(T);
     }
   }
 
   PROMPP_ALWAYS_INLINE Derived* derived() noexcept { return static_cast<Derived*>(this); }
   PROMPP_ALWAYS_INLINE const Derived* derived() const noexcept { return static_cast<const Derived*>(this); }
-};
-
-template <class Reallocator>
-concept ReallocatorInterface = requires(Reallocator reallocator, void* memory) {
-  { Reallocator::reallocate(memory, size_t()) } -> std::same_as<void*>;
-  { Reallocator::free(memory) } -> std::same_as<void>;
-};
-
-struct DefaultReallocator {
-  PROMPP_ALWAYS_INLINE static void* allocate(size_t size) { return std::malloc(size); }
-
-  PROMPP_ALWAYS_INLINE static void* reallocate(void* memory, size_t size) { return std::realloc(memory, size); }
-
-  PROMPP_ALWAYS_INLINE static void free(void* memory) { return std::free(memory); }
 };
 
 template <template <class> class ControlBlock, class T>

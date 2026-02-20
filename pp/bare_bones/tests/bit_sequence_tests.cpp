@@ -513,7 +513,6 @@ TEST_F(CompactBitSequenceFixture, ReallocOnNonUniqueMemory) {
 
   stream_.push_back_u64(kValue);
   stream_.push_back_u64(kValue);
-  stream_.push_back_u64(kValue);
   const auto memory = stream_.shared_memory();
   const auto memory_size = stream_.size_in_bits();
 
@@ -521,10 +520,10 @@ TEST_F(CompactBitSequenceFixture, ReallocOnNonUniqueMemory) {
   stream_.push_back_u64(kValue);
 
   // Assert
-  ASSERT_EQ(BareBones::Bit::to_bits(sizeof(kValue) * 3), memory_size);
+  ASSERT_EQ(BareBones::Bit::to_bits(sizeof(kValue) * 2), memory_size);
   EXPECT_NE(stream_.raw_bytes(), memory.get());
-  EXPECT_TRUE(std::ranges::equal(std::vector{kValue, kValue, kValue}, std::span(reinterpret_cast<uint64_t*>(memory.get()), 3)));
-  EXPECT_TRUE(std::ranges::equal(std::vector{kValue, kValue, kValue, kValue}, stream_.bytes<uint64_t>()));
+  EXPECT_TRUE(std::ranges::equal(std::vector{kValue, kValue}, std::span(reinterpret_cast<uint64_t*>(memory.get()), 2)));
+  EXPECT_TRUE(std::ranges::equal(std::vector{kValue, kValue, kValue}, stream_.bytes<uint64_t>()));
 }
 
 template <class T>

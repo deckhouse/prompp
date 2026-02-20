@@ -1,8 +1,5 @@
 #include "common.h"
-
-#if __has_include(<jemalloc/jemalloc.h>)
-#define JEMALLOC_AVAILABLE 1
-#endif
+#include "bare_bones/preprocess.h"
 
 #if JEMALLOC_AVAILABLE
 #include <jemalloc/jemalloc.h>

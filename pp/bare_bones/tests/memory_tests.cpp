@@ -6,11 +6,11 @@
 
 namespace {
 
-using BareBones::AllocationSizeCalculator;
 using BareBones::DefaultReallocator;
 using BareBones::Memory;
 using BareBones::MemoryControlBlock;
 using BareBones::MemoryControlBlockWithItemCount;
+using BareBones::PreAllocationSizeCalculator;
 using BareBones::SharedMemory;
 using BareBones::SharedPtr;
 using BareBones::SharedPtrControlBlockWithItemCount;
@@ -22,7 +22,7 @@ struct GetAllocationSizeCase {
 
 class AllocationSizeCalculatorFixture : public testing::TestWithParam<GetAllocationSizeCase> {
  protected:
-  using Calculator = AllocationSizeCalculator<char, uint32_t>;
+  using Calculator = PreAllocationSizeCalculator<char, uint32_t>;
 };
 
 TEST_P(AllocationSizeCalculatorFixture, TestCalculate) {
@@ -38,11 +38,11 @@ TEST_P(AllocationSizeCalculatorFixture, TestCalculate) {
 INSTANTIATE_TEST_SUITE_P(
     UpTo50PercentAlignedToMinAllocationSize,
     AllocationSizeCalculatorFixture,
-    testing::Values(GetAllocationSizeCase{.needed_size = 0, .expected_size = AllocationSizeCalculator<char, uint32_t>::kMinAllocationSize},
-                    GetAllocationSizeCase{.needed_size = static_cast<uint32_t>(AllocationSizeCalculator<char, uint32_t>::kMinAllocationSize * 0.66),
-                                          .expected_size = AllocationSizeCalculator<char, uint32_t>::kMinAllocationSize},
-                    GetAllocationSizeCase{.needed_size = static_cast<uint32_t>(AllocationSizeCalculator<char, uint32_t>::kMinAllocationSize * 0.66) + 1,
-                                          .expected_size = AllocationSizeCalculator<char, uint32_t>::kMinAllocationSize * 2},
+    testing::Values(GetAllocationSizeCase{.needed_size = 0, .expected_size = PreAllocationSizeCalculator<char, uint32_t>::kMinAllocationSize},
+                    GetAllocationSizeCase{.needed_size = static_cast<uint32_t>(PreAllocationSizeCalculator<char, uint32_t>::kMinAllocationSize * 0.66),
+                                          .expected_size = PreAllocationSizeCalculator<char, uint32_t>::kMinAllocationSize},
+                    GetAllocationSizeCase{.needed_size = static_cast<uint32_t>(PreAllocationSizeCalculator<char, uint32_t>::kMinAllocationSize * 0.66) + 1,
+                                          .expected_size = PreAllocationSizeCalculator<char, uint32_t>::kMinAllocationSize * 2},
                     GetAllocationSizeCase{.needed_size = 170, .expected_size = 256},
                     GetAllocationSizeCase{.needed_size = 171, .expected_size = 512}));
 
