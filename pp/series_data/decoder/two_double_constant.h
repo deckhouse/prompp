@@ -7,7 +7,8 @@ namespace series_data::decoder {
 
 class TwoDoubleConstantDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait {
  public:
-  TwoDoubleConstantDecodeIterator(const encoder::BitSequenceWithItemsCount& timestamp_stream,
+  template <class BitSequenceWithItemsCount>
+  TwoDoubleConstantDecodeIterator(const BitSequenceWithItemsCount& timestamp_stream,
                                   const encoder::value::TwoDoubleConstantEncoder& encoder,
                                   bool is_last_stalenan)
       : SeparatedTimestampValueDecodeIteratorTrait(timestamp_stream, encoder.value1(), is_last_stalenan),

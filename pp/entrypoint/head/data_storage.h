@@ -4,7 +4,8 @@
 
 namespace entrypoint::head {
 
-using DataStoragePtr = std::unique_ptr<series_data::DataStorage>;
+using DataStorage = series_data::DataStorage<>;
+using DataStoragePtr = std::unique_ptr<DataStorage>;
 
 static_assert(sizeof(DataStoragePtr) == sizeof(void*));
 

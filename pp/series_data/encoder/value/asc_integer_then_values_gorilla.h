@@ -5,9 +5,12 @@
 
 namespace series_data::encoder::value {
 
-class PROMPP_ATTRIBUTE_PACKED AscIntegerThenValuesGorillaEncoder : public ValuesGorillaEncoder {
+template <BareBones::ReallocatorInterface Reallocator>
+class PROMPP_ATTRIBUTE_PACKED AscIntegerThenValuesGorillaEncoder : public ValuesGorillaEncoder<Reallocator> {
  public:
-  explicit AscIntegerThenValuesGorillaEncoder(AscIntegerEncoder&& asc_integer_encoder, double value)
+  using ValuesGorillaEncoder = series_data::encoder::value::ValuesGorillaEncoder<Reallocator>;
+
+  explicit AscIntegerThenValuesGorillaEncoder(AscIntegerEncoder<Reallocator>&& asc_integer_encoder, double value)
       : ValuesGorillaEncoder(switch_to_values_gorilla(std::move(asc_integer_encoder)), value) {}
 
   using ValuesGorillaEncoder::allocated_memory;
@@ -18,9 +21,9 @@ class PROMPP_ATTRIBUTE_PACKED AscIntegerThenValuesGorillaEncoder : public Values
   using ValuesGorillaEncoder::stream;
 
  private:
-  PROMPP_ALWAYS_INLINE static CompactBitSequence switch_to_values_gorilla(AscIntegerEncoder&& asc_integer_encoder) {
+  PROMPP_ALWAYS_INLINE static CompactBitSequence<Reallocator> switch_to_values_gorilla(AscIntegerEncoder<Reallocator>&& asc_integer_encoder) {
     auto stream = std::move(asc_integer_encoder).release_stream();
-    AscIntegerEncoder::Encoder::write_switch_to_values_gorilla_mark(stream);
+    AscIntegerEncoder<Reallocator>::Encoder::write_switch_to_values_gorilla_mark(stream);
     return stream;
   }
 };

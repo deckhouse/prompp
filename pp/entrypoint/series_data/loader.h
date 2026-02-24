@@ -9,7 +9,7 @@ namespace entrypoint::series_data {
 
 class RevertableLoader {
  public:
-  RevertableLoader(::series_data::DataStorage& storage,
+  RevertableLoader(head::DataStorage& storage,
                    head::QueryableEncodingBimap::LsIdSetIterator ls_id_begin,
                    head::QueryableEncodingBimap::LsIdSetIterator ls_id_end,
                    uint32_t ls_id_batch_size)
@@ -33,8 +33,8 @@ class RevertableLoader {
   PROMPP_ALWAYS_INLINE void revert() { reverter_.revert(); }
 
  private:
-  ::series_data::unloading::Loader loader_;
-  ::series_data::unloading::LoadReverter reverter_;
+  ::series_data::unloading::Loader<head::DataStorage> loader_;
+  ::series_data::unloading::LoadReverter<head::DataStorage> reverter_;
   BareBones::iterator::BatchIterator<head::QueryableEncodingBimap::LsIdSetIterator, head::QueryableEncodingBimap::LsIdSetIterator> iterator_;
   [[no_unique_address]] head::QueryableEncodingBimap::LsIdSetIterator end_iterator_;
 

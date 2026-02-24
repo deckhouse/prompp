@@ -16,7 +16,7 @@ concept QuerierInterface = requires(Querier querier) {
   { querier.query_finalize() };
   { querier.series_to_load() } -> std::same_as<const BareBones::Bitset&>;
   { querier.need_loading() } -> std::same_as<bool>;
-  { querier.storage() } -> std::same_as<::series_data::DataStorage&>;
+  { querier.storage() } -> std::same_as<head::DataStorage&>;
 };
 
 enum class QueryStatus : uint8_t {
@@ -27,7 +27,7 @@ enum class QueryStatus : uint8_t {
 template <typename LsIDStorage, typename SampleStorage>
 class InstantQuerierWithArgumentsWrapper {
   using Timestamp = PromPP::Primitives::Timestamp;
-  using DataStorage = ::series_data::DataStorage;
+  using DataStorage = head::DataStorage;
 
  public:
   InstantQuerierWithArgumentsWrapper(DataStorage& storage, const LsIDStorage& label_set_ids, const Timestamp& timestamp, SampleStorage& samples)
@@ -41,7 +41,7 @@ class InstantQuerierWithArgumentsWrapper {
   [[nodiscard]] DataStorage& storage() noexcept { return instant_querier_.get_storage(); }
 
  private:
-  ::series_data::InstantQuerier instant_querier_;
+  ::series_data::InstantQuerier<head::DataStorage> instant_querier_;
   SampleStorage samples_;
   const LsIDStorage label_set_ids_;
   const Timestamp timestamp_;
@@ -56,7 +56,7 @@ using InstantQuerierWithArgumentsWrapperEntrypoint = InstantQuerierWithArguments
                                                                                         std::span<entrypoint::series_data::SampleWithGoLabels>>;
 
 class RangeQuerierWithArgumentsWrapperV2 {
-  using DataStorage = ::series_data::DataStorage;
+  using DataStorage = head::DataStorage;
   using LabelSetID = PromPP::Primitives::LabelSetID;
   template <class T>
   using Slice = PromPP::Primitives::Go::Slice<T>;
@@ -81,7 +81,7 @@ class RangeQuerierWithArgumentsWrapperV2 {
   [[nodiscard]] DataStorage& storage() noexcept { return querier_.get_storage(); }
 
  private:
-  ::series_data::querier::Querier querier_;
+  ::series_data::querier::Querier<head::DataStorage> querier_;
   const Query* query_;
   head::SerializedDataPtr* serialized_data_;
 

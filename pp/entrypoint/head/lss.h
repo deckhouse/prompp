@@ -25,6 +25,8 @@ namespace lss_memory {
 thread_local inline bool has_reallocations{};
 
 struct Reallocator {
+  PROMPP_ALWAYS_INLINE static size_t allocation_size(size_t needed_size) noexcept { return BareBones::DefaultReallocator::allocation_size(needed_size); }
+
   PROMPP_ALWAYS_INLINE static void* reallocate(void* memory, size_t size) {
     const auto result = std::realloc(memory, size);
     if (result != memory) {
@@ -34,6 +36,8 @@ struct Reallocator {
   }
   PROMPP_ALWAYS_INLINE static void free(void* memory) { return std::free(memory); }
 };
+
+static_assert(BareBones::ReallocatorInterface<Reallocator>);
 
 }  // namespace lss_memory
 

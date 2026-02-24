@@ -12,7 +12,7 @@ using head::kUnlimitedLsIdBatchSize;
 using PromPP::Primitives::kInvalidLabelSetID;
 using PromPP::Primitives::LabelSetID;
 using PromPP::Primitives::TimeInterval;
-using series_data::DataStorage;
+using DataStorage = series_data::DataStorage<>;
 using series_data::Encoder;
 using series_data::serialization::DataSerializer;
 using std::operator""s;
@@ -20,7 +20,7 @@ using std::operator""s;
 class ChunkRecoderFixture : public ::testing::Test {
  protected:
   using LsIdSet = std::vector<LabelSetID>;
-  using ChunkIterator = head::ChunkRecoderIterator<LsIdSet::const_iterator, LsIdSet::const_iterator>;
+  using ChunkIterator = head::ChunkRecoderIterator<LsIdSet::const_iterator, LsIdSet::const_iterator, DataStorage>;
   using ChunkRecoder = head::ChunkRecoder<ChunkIterator>;
 
   struct RecodeInfo {
@@ -156,7 +156,7 @@ TEST_F(ChunkRecoderFixture, ReverseOrderOfChunks) {
 
 TEST_F(ChunkRecoderFixture, ChunkWithFinalizedTimestampStream) {
   // Arrange
-  Encoder<2> encoder{storage_};
+  Encoder<DataStorage, 2> encoder{storage_};
   encoder.encode(0, 1, 1.0);
   encoder.encode(1, 1, 1.0);
   encoder.encode(0, 2, 1.0);
@@ -265,7 +265,7 @@ TEST_F(ChunkRecoderFixture, PartialReencodingByTimeInterval) {
 
 TEST_F(ChunkRecoderFixture, EmptyFinalizedChunk) {
   // Arrange
-  Encoder<2> encoder{storage_};
+  Encoder<DataStorage, 2> encoder{storage_};
   encoder.encode(0, 1, 1.0);
   encoder.encode(0, 2, 1.0);
   encoder.encode(0, 5, 1.0);
@@ -281,7 +281,7 @@ TEST_F(ChunkRecoderFixture, EmptyFinalizedChunk) {
 
 TEST_F(ChunkRecoderFixture, EmptyFinalizedChunkNonEmptyOpenedChunk) {
   // Arrange
-  Encoder<2> encoder{storage_};
+  Encoder<DataStorage, 2> encoder{storage_};
   encoder.encode(0, 1, 1.0);
   encoder.encode(0, 2, 1.0);
   encoder.encode(0, 5, 1.0);

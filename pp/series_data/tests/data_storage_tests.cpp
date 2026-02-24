@@ -25,11 +25,11 @@ struct DataStorageIteratorCase {
 };
 
 constexpr uint32_t kDefaultSeriesId = 0;
-const DataChunk kOpenChunk = DataChunk(0, 1, EncodingState{EncodingType::kGorilla, false});
+const DataChunk kOpenChunk = DataChunk(0, 1, EncodingState{.encoding_type = EncodingType::kGorilla, .has_last_stalenan = false});
 
 class DataStorageIteratorTrait : public testing::TestWithParam<DataStorageIteratorCase> {
  protected:
-  DataStorage data_storage_;
+  DataStorage<> data_storage_;
 
   void SetUp() override {
     std::ranges::copy(GetParam().open_chunks, std::back_inserter(data_storage_.open_chunks));

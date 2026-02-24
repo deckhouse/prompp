@@ -14,21 +14,26 @@
 #include "series_data/outdated_chunk_merger.h"
 
 namespace series_data::unloading {
+
+template <BareBones::ReallocatorInterface Reallocator>
 struct PROMPP_ATTRIBUTE_PACKED SeriesToLoadInfo {
   uint8_t chunk_id = 0;
-  encoder::CompactBitSequence buffer{};
+  encoder::CompactBitSequence<Reallocator> buffer{};
 
   void reset() noexcept {
     chunk_id = 0;
     buffer.rewind();
   }
 };
+
 }  // namespace series_data::unloading
 
-template <>
-struct BareBones::IsTriviallyReallocatable<series_data::unloading::SeriesToLoadInfo> : std::true_type {};
+template <BareBones::ReallocatorInterface Reallocator>
+struct BareBones::IsTriviallyReallocatable<series_data::unloading::SeriesToLoadInfo<Reallocator>> : std::true_type {};
 
 namespace series_data::unloading {
+
+template <class DataStorage>
 class Loader {
  public:
   class UnorderedVector {
@@ -117,7 +122,7 @@ class Loader {
     }
 
    private:
-    BareBones::Vector<SeriesToLoadInfo> series_to_load_infos_{};
+    BareBones::Vector<SeriesToLoadInfo<typename DataStorage::Reallocator>> series_to_load_infos_{};
     phmap::flat_hash_map<uint32_t, uint32_t> ls_id_to_offset_{};
   };
 
@@ -154,7 +159,7 @@ class Loader {
     process_ls_id_data(bitset_it, length_it, id_it, bitseqs_ptr);
   }
 
-  template <EncoderInterface Encoder = Encoder<>>
+  template <EncoderInterface Encoder = Encoder<DataStorage>>
   void load_finalize() {
     for (const auto& [ls_id, info] : ls_id_to_infos_) {
       if (info.buffer.size_in_bits() != 0) {
@@ -208,8 +213,8 @@ class Loader {
     }
   }
 
-  void load_chunk_id(uint32_t ls_id, SeriesToLoadInfo& info) const {
-    const auto& chunk_data = std::ranges::next(DataStorage::SeriesChunkIterator{&storage_, ls_id}, info.chunk_id, DataStorage::SeriesChunks::end());
+  void load_chunk_id(uint32_t ls_id, SeriesToLoadInfo<typename DataStorage::Reallocator>& info) const {
+    const auto& chunk_data = std::ranges::next(typename DataStorage::SeriesChunkIterator{&storage_, ls_id}, info.chunk_id, DataStorage::SeriesChunks::end());
 
     auto& chunk_bit_sequence = get_chunk_stream(storage_, chunk_data->chunk(), chunk_data->is_open());
 
@@ -225,4 +230,5 @@ class Loader {
 
   UnorderedVector ls_id_to_infos_{};
 };
+
 }  // namespace series_data::unloading

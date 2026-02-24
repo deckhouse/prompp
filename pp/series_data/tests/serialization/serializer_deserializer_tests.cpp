@@ -10,9 +10,9 @@
 namespace {
 
 using BareBones::Encoding::Gorilla::STALE_NAN;
-using series_data::ChunkFinalizer;
-using series_data::DataStorage;
-using series_data::Encoder;
+using DataStorage = series_data::DataStorage<>;
+using ChunkFinalizer = series_data::ChunkFinalizer<DataStorage>;
+using Encoder = series_data::Encoder<DataStorage>;
 using series_data::EncodingType;
 using series_data::chunk::DataChunk;
 using series_data::decoder::DecodeIteratorSentinel;
@@ -20,14 +20,14 @@ using series_data::encoder::Sample;
 using series_data::encoder::SampleList;
 using series_data::querier::QueriedChunk;
 using series_data::querier::QueriedChunkList;
-using series_data::serialization::DataSerializer;
-using series_data::serialization::SerializedData;
-using series_data::serialization::SerializedDataView;
+using DataSerializer = series_data::serialization::DataSerializer<DataStorage>;
+using SerializedData = series_data::serialization::SerializedData<DataStorage::Reallocator>;
+using SerializedDataView = series_data::serialization::SerializedDataView<DataStorage::Reallocator>;
 
 class SerializerDeserializerTrait {
  protected:
   DataStorage storage_;
-  Encoder<> encoder_{storage_};
+  Encoder encoder_{storage_};
   DataSerializer serializer_{storage_};
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static SampleList decode_current_chunk(SerializedDataView& data, uint32_t series_id) {
@@ -68,7 +68,7 @@ TEST_F(SerializerDeserializerFixture, EmptyChunksList) {
 
   // Assert
   ASSERT_EQ(0U, serialized_view.get_chunks_view().size());
-  ASSERT_EQ(series_data::encoder::CompactBitSequence::reserved_bytes_for_reader().size(), serialized_view.get_buffer_view().size());
+  ASSERT_EQ(DataStorage::CompactBitSequence::reserved_bytes_for_reader().size(), serialized_view.get_buffer_view().size());
 }
 
 TEST_F(SerializerDeserializerFixture, TwoUint32ConstantChunkWithCommonTimestampStream) {

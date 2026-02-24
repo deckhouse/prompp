@@ -8,19 +8,21 @@
 
 namespace {
 
-using series_data::ChunkFinalizer;
-using series_data::Decoder;
+using DataStorage = series_data::DataStorage<>;
+using ChunkFinalizer = series_data::ChunkFinalizer<DataStorage>;
+using Decoder = series_data::Decoder<DataStorage>;
+using Encoder = series_data::Encoder<DataStorage>;
 using series_data::chunk::DataChunk;
 using series_data::encoder::SampleList;
-using series_data::unloading::Loader;
+using Loader = series_data::unloading::Loader<DataStorage>;
 using series_data::unloading::SeriesToLoadInfo;
-using series_data::unloading::Unloader;
+using Unloader = series_data::unloading::Unloader<DataStorage>;
 using std::operator""s;
 
 class LoaderUnloaderTrait {
  protected:
-  series_data::DataStorage storage_;
-  series_data::Encoder<> encoder_{storage_};
+  DataStorage storage_;
+  Encoder encoder_{storage_};
   Unloader unloader_{storage_};
   BareBones::ShrinkedToFitOStringStream stream1_;
   BareBones::ShrinkedToFitOStringStream stream2_;

@@ -10,11 +10,14 @@
 #include <ranges>
 
 namespace series_data {
+
+template <class DataStorage>
 class InstantQuerier {
   using Timestamp = PromPP::Primitives::Timestamp;
   using LabelSetID = PromPP::Primitives::LabelSetID;
   using Sample = encoder::Sample;
   using ChunkType = chunk::DataChunk::Type;
+  using Decoder = series_data::Decoder<DataStorage>;
 
  public:
   explicit InstantQuerier(DataStorage& storage) : storage_(storage) {}
@@ -65,7 +68,7 @@ class InstantQuerier {
   }
 
   void check_inside_series(Sample& sample, LabelSetID ls_id, const Timestamp& timestamp) noexcept {
-    for (const auto& chunk_data : DataStorage::SeriesChunks(&storage_, ls_id)) {
+    for (const auto& chunk_data : typename DataStorage::SeriesChunks(&storage_, ls_id)) {
       if (Decoder::get_chunk_time_interval(chunk_data).contains(timestamp)) {
         Decoder::create_decode_iterator(chunk_data, [&](auto&& begin, auto&& end) PROMPP_LAMBDA_INLINE {
           for (auto sample_it = begin; sample_it != end && sample_it->timestamp <= timestamp; ++sample_it) {
@@ -78,4 +81,4 @@ class InstantQuerier {
 };
 }  // namespace series_data
 
-static_assert(series_data::LoadableQuerierInterface<series_data::InstantQuerier>);
+static_assert(series_data::LoadableQuerierInterface<series_data::InstantQuerier<series_data::DataStorage<>>, series_data::DataStorage<>>);

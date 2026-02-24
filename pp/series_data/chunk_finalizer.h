@@ -5,6 +5,7 @@
 
 namespace series_data {
 
+template <class DataStorage>
 class ChunkFinalizer {
  public:
   enum class FinalizeTimestampStateMode : uint8_t {
@@ -14,7 +15,7 @@ class ChunkFinalizer {
 
   PROMPP_ALWAYS_INLINE static void finalize(DataStorage& storage, uint32_t ls_id, chunk::DataChunk& chunk) {
     if (chunk.encoding_state.encoding_type == EncodingType::kGorilla) [[unlikely]] {
-      finalize(storage, ls_id, chunk, encoder::timestamp::State::kInvalidId);
+      finalize(storage, ls_id, chunk, encoder::timestamp::kInvalidStateId);
     } else {
       finalize_timestamp_and_chunk_separately<FinalizeTimestampStateMode::kFinalize>(storage, ls_id, chunk);
     }
@@ -53,7 +54,7 @@ class ChunkFinalizer {
 
   PROMPP_ALWAYS_INLINE static bool finalize_if_timestamp_finalized(DataStorage& storage, uint32_t ls_id, chunk::DataChunk& chunk) {
     if (const auto finalized_timestamp_stream_id = storage.timestamp_encoder.process_finalized(chunk.timestamp_encoder_state_id);
-        finalized_timestamp_stream_id != encoder::timestamp::State::kInvalidId) [[unlikely]] {
+        finalized_timestamp_stream_id != encoder::timestamp::kInvalidStateId) [[unlikely]] {
       ++storage.finalized_timestamp_streams[finalized_timestamp_stream_id].reference_count;
       finalize(storage, ls_id, chunk, finalized_timestamp_stream_id);
       return true;
@@ -66,12 +67,12 @@ class ChunkFinalizer {
   PROMPP_ALWAYS_INLINE static void emplace_finalized_chunk(DataStorage& storage, uint32_t ls_id, const chunk::DataChunk& chunk) {
     storage.finalized_chunks.try_emplace(ls_id, storage.finalized_chunks_map_allocated_memory)
         .first->second.emplace(chunk, [&storage](const chunk::DataChunk& chunk) PROMPP_LAMBDA_INLINE {
-          return Decoder::get_chunk_first_timestamp<chunk::DataChunk::Type::kFinalized>(storage, chunk);
+          return Decoder<DataStorage>::template get_chunk_first_timestamp<chunk::DataChunk::Type::kFinalized>(storage, chunk);
         });
   }
 
   template <FinalizeTimestampStateMode mode>
-  PROMPP_ALWAYS_INLINE static encoder::timestamp::State::Id finalize_timestamp(DataStorage& storage, chunk::DataChunk& chunk) {
+  PROMPP_ALWAYS_INLINE static encoder::timestamp::StateId finalize_timestamp(DataStorage& storage, chunk::DataChunk& chunk) {
     auto& finalized_stream = storage.finalized_timestamp_streams.emplace_back();
     const auto finalized_stream_id = storage.finalized_timestamp_streams.index_of(finalized_stream);
 

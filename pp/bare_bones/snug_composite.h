@@ -471,12 +471,11 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
 
  private:
   uint32_t set_allocated_memory_{};
-  phmap::flat_hash_set<typename Base::Proxy, typename Base::Hasher, typename Base::EqualityComparator, Allocator<typename Base::Proxy, uint32_t>> set_{
-      {},
-      0,
-      Base::hasher(),
-      Base::equality_comparator(),
-      Allocator<typename Base::Proxy, uint32_t>{set_allocated_memory_}};
+  phmap::flat_hash_set<typename Base::Proxy,
+                       typename Base::Hasher,
+                       typename Base::EqualityComparator,
+                       Allocator<typename Base::Proxy, DefaultReallocator, uint32_t>>
+      set_{{}, 0, Base::hasher(), Base::equality_comparator(), Allocator<typename Base::Proxy, DefaultReallocator, uint32_t>{set_allocated_memory_}};
   uint32_t shift_{0};
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index_impl() const noexcept { return shift_ + Base::storage_.next_item_index(); }

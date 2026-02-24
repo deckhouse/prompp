@@ -13,7 +13,13 @@
 
 namespace series_data {
 
+template <BareBones::ReallocatorInterface ReallocatorType = BareBones::DefaultReallocator>
 struct DataStorage {
+  using Reallocator = ReallocatorType;
+  using BitSequenceWithItemsCount = encoder::BitSequenceWithItemsCount<Reallocator>;
+  using CompactBitSequence = encoder::CompactBitSequence<Reallocator>;
+  using OutdatedChunk = chunk::OutdatedChunk<Reallocator>;
+
   class SeriesChunkIterator {
    public:
     class Data {
@@ -165,33 +171,36 @@ struct DataStorage {
     const DataStorage* storage_;
   };
 
-  BareBones::Vector<chunk::DataChunk> open_chunks;
-  encoder::timestamp::Encoder timestamp_encoder;
+  BareBones::Vector<chunk::DataChunk, Reallocator> open_chunks;
+  encoder::timestamp::Encoder<Reallocator> timestamp_encoder;
 
-  BareBones::VectorWithHoles<encoder::EncoderVariant> variant_encoders;
-  BareBones::VectorWithHoles<encoder::GorillaEncoder> gorilla_encoders;
+  BareBones::VectorWithHoles<encoder::EncoderVariant<Reallocator>, Reallocator> variant_encoders;
+  BareBones::VectorWithHoles<encoder::GorillaEncoder<Reallocator>, Reallocator> gorilla_encoders;
 
   size_t outdated_chunks_map_allocated_memory{};
   phmap::
-      flat_hash_map<uint32_t, chunk::OutdatedChunk, std::hash<uint32_t>, std::equal_to<>, BareBones::Allocator<std::pair<const uint32_t, chunk::OutdatedChunk>>>
-          outdated_chunks{{}, {}, BareBones::Allocator<std::pair<const uint32_t, chunk::OutdatedChunk>>{outdated_chunks_map_allocated_memory}};
+      flat_hash_map<uint32_t, OutdatedChunk, std::hash<uint32_t>, std::equal_to<>, BareBones::Allocator<std::pair<const uint32_t, OutdatedChunk>, Reallocator>>
+          outdated_chunks{{}, {}, BareBones::Allocator<std::pair<const uint32_t, OutdatedChunk>, Reallocator>{outdated_chunks_map_allocated_memory}};
 
-  BareBones::VectorWithHoles<encoder::RefCountableBitSequenceWithItemsCount> finalized_timestamp_streams;
-  BareBones::VectorWithHoles<encoder::CompactBitSequence> finalized_data_streams;
+  BareBones::VectorWithHoles<encoder::RefCountableBitSequenceWithItemsCount<Reallocator>, Reallocator> finalized_timestamp_streams;
+  BareBones::VectorWithHoles<encoder::CompactBitSequence<Reallocator>, Reallocator> finalized_data_streams;
   size_t finalized_chunks_map_allocated_memory{};
   phmap::flat_hash_map<uint32_t,
                        chunk::FinalizedChunkList,
                        std::hash<uint32_t>,
                        std::equal_to<>,
-                       BareBones::Allocator<std::pair<const uint32_t, std::forward_list<chunk::DataChunk>>>>
-      finalized_chunks{{}, {}, BareBones::Allocator<std::pair<const uint32_t, std::forward_list<chunk::DataChunk>>>{finalized_chunks_map_allocated_memory}};
+                       BareBones::Allocator<std::pair<const uint32_t, std::forward_list<chunk::DataChunk>>, Reallocator>>
+      finalized_chunks{
+          {},
+          {},
+          BareBones::Allocator<std::pair<const uint32_t, std::forward_list<chunk::DataChunk>>, Reallocator>{finalized_chunks_map_allocated_memory}};
 
   uint32_t outdated_samples_count{};
   uint32_t outdated_chunks_count{};
   uint32_t merged_samples_count{};
 
-  BareBones::Bitset unloaded_series_bitmap{};
-  BareBones::Bitset queried_series_bitmap{};
+  BareBones::GenericBitset<Reallocator> unloaded_series_bitmap{};
+  BareBones::GenericBitset<Reallocator> queried_series_bitmap{};
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesChunks chunks(uint32_t ls_id) const noexcept { return SeriesChunks{this, ls_id}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE Chunks chunks() const noexcept { return Chunks{this}; }
@@ -218,7 +227,7 @@ struct DataStorage {
   }
 
   template <chunk::DataChunk::Type chunk_type>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const encoder::BitSequenceWithItemsCount& get_timestamp_stream(uint32_t stream_id) const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const BitSequenceWithItemsCount& get_timestamp_stream(uint32_t stream_id) const noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       if (const auto& state = timestamp_encoder.get_state(stream_id); !state.is_finalized()) [[likely]] {
         return timestamp_encoder.get_stream(stream_id);
@@ -231,7 +240,7 @@ struct DataStorage {
   }
 
   template <chunk::DataChunk::Type chunk_type>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const encoder::CompactBitSequence& get_asc_integer_stream(uint32_t stream_id) const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactBitSequence& get_asc_integer_stream(uint32_t stream_id) const noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return variant_encoders[stream_id].asc_integer.stream();
     } else {
@@ -240,7 +249,7 @@ struct DataStorage {
   }
 
   template <chunk::DataChunk::Type chunk_type>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE encoder::CompactBitSequence& get_asc_integer_stream(uint32_t stream_id) noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence& get_asc_integer_stream(uint32_t stream_id) noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return variant_encoders[stream_id].asc_integer.stream();
     } else {
@@ -249,7 +258,7 @@ struct DataStorage {
   }
 
   template <chunk::DataChunk::Type chunk_type>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const encoder::CompactBitSequence& get_values_gorilla_stream(uint32_t stream_id) const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactBitSequence& get_values_gorilla_stream(uint32_t stream_id) const noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return variant_encoders[stream_id].values_gorilla.stream();
     } else {
@@ -258,7 +267,7 @@ struct DataStorage {
   }
 
   template <chunk::DataChunk::Type chunk_type>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE encoder::CompactBitSequence& get_values_gorilla_stream(uint32_t stream_id) noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence& get_values_gorilla_stream(uint32_t stream_id) noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return variant_encoders[stream_id].values_gorilla.stream();
     } else {
@@ -267,7 +276,7 @@ struct DataStorage {
   }
 
   template <chunk::DataChunk::Type chunk_type>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const encoder::CompactBitSequence& get_asc_integer_then_values_gorilla_stream(uint32_t stream_id) const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactBitSequence& get_asc_integer_then_values_gorilla_stream(uint32_t stream_id) const noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return variant_encoders[stream_id].asc_integer_then_values_gorilla.stream();
     } else {
@@ -276,7 +285,7 @@ struct DataStorage {
   }
 
   template <chunk::DataChunk::Type chunk_type>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE encoder::CompactBitSequence& get_asc_integer_then_values_gorilla_stream(uint32_t stream_id) noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence& get_asc_integer_then_values_gorilla_stream(uint32_t stream_id) noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return variant_encoders[stream_id].asc_integer_then_values_gorilla.stream();
     } else {
@@ -285,7 +294,7 @@ struct DataStorage {
   }
 
   template <chunk::DataChunk::Type chunk_type>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const encoder::CompactBitSequence& get_gorilla_encoder_stream(uint32_t stream_id) const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactBitSequence& get_gorilla_encoder_stream(uint32_t stream_id) const noexcept {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return gorilla_encoders[stream_id].stream().stream;
     } else {

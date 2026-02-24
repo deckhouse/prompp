@@ -15,6 +15,7 @@ namespace BareBones {
 
 template <class Reallocator>
 concept ReallocatorInterface = requires(Reallocator reallocator, void* memory) {
+  { Reallocator::allocation_size(size_t()) } -> std::same_as<size_t>;
   { Reallocator::reallocate(memory, size_t()) } -> std::same_as<void*>;
   { Reallocator::free(memory) } -> std::same_as<void>;
 };
@@ -34,6 +35,8 @@ struct DefaultReallocator {
 
   PROMPP_ALWAYS_INLINE static void free(void* memory) { return std::free(memory); }
 };
+
+static_assert(ReallocatorInterface<DefaultReallocator>);
 
 template <class DataType, class SizeType>
 class PreAllocationSizeCalculator {
@@ -63,7 +66,7 @@ class PreAllocationSizeCalculator {
   }
 };
 
-template <class Derived, class SizeType, class T>
+template <class Derived, class SizeType, class T, ReallocatorInterface Reallocator = DefaultReallocator>
 class GenericMemory {
  public:
   static_assert(IsTriviallyReallocatable<T>::value, "type parameter of this class should be trivially reallocatable");
@@ -108,7 +111,7 @@ class GenericMemory {
       // In unit tests or in build with asan we allocate only needed_size bytes. It helps us to debug memory access errors
       return needed_size;
     } else {
-      return DefaultReallocator::allocation_size(PreAllocationSizeCalculator<T, SizeType>::calculate(needed_size) * sizeof(T)) / sizeof(T);
+      return Reallocator::allocation_size(PreAllocationSizeCalculator<T, SizeType>::calculate(needed_size) * sizeof(T)) / sizeof(T);
     }
   }
 
@@ -141,16 +144,16 @@ struct MemoryControlBlockWithItemCount {
   SizeType items_count{};
 };
 
-template <template <class> class ControlBlock, class T>
+template <template <class> class ControlBlock, class T, ReallocatorInterface Reallocator = DefaultReallocator>
   requires MemoryControlBlockInterface<ControlBlock, T>
-class Memory : public GenericMemory<Memory<ControlBlock, T>, typename ControlBlock<T>::SizeType, T> {
+class Memory : public GenericMemory<Memory<ControlBlock, T, Reallocator>, typename ControlBlock<T>::SizeType, T, Reallocator> {
  public:
   using SizeType = typename ControlBlock<T>::SizeType;
 
   PROMPP_ALWAYS_INLINE Memory() noexcept = default;
   PROMPP_ALWAYS_INLINE Memory(const Memory& o) noexcept { copy(o); }
   PROMPP_ALWAYS_INLINE Memory(Memory&& o) noexcept : control_block_(std::exchange(o.control_block_, {})) {};
-  PROMPP_ALWAYS_INLINE ~Memory() noexcept { DefaultReallocator::free(control_block_.data); }
+  PROMPP_ALWAYS_INLINE ~Memory() noexcept { Reallocator::free(control_block_.data); }
 
   PROMPP_ALWAYS_INLINE Memory& operator=(const Memory& o) noexcept {
     if (this != &o) [[likely]] {
@@ -162,7 +165,7 @@ class Memory : public GenericMemory<Memory<ControlBlock, T>, typename ControlBlo
 
   PROMPP_ALWAYS_INLINE Memory& operator=(Memory&& o) noexcept {
     if (this != &o) [[likely]] {
-      DefaultReallocator::free(control_block_.data);
+      Reallocator::free(control_block_.data);
       control_block_ = std::exchange(o.control_block_, {});
     }
 
@@ -174,7 +177,7 @@ class Memory : public GenericMemory<Memory<ControlBlock, T>, typename ControlBlo
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return control_block_.data_size * sizeof(T); }
 
  protected:
-  friend class GenericMemory<Memory, SizeType, T>;
+  friend class GenericMemory<Memory, SizeType, T, Reallocator>;
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType get_size() const noexcept { return control_block_.data_size; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE T* data() noexcept { return control_block_.data; }
@@ -183,7 +186,7 @@ class Memory : public GenericMemory<Memory<ControlBlock, T>, typename ControlBlo
   PROMPP_ALWAYS_INLINE void resize(SizeType new_size) noexcept {
     PRAGMA_DIAGNOSTIC(push)
     PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
-    control_block_.data = static_cast<T*>(DefaultReallocator::reallocate(control_block_.data, new_size * sizeof(T)));
+    control_block_.data = static_cast<T*>(Reallocator::reallocate(control_block_.data, new_size * sizeof(T)));
     PRAGMA_DIAGNOSTIC(pop)
 
     if (control_block_.data == nullptr && new_size > 0) [[unlikely]] {

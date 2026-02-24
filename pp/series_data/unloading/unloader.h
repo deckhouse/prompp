@@ -10,6 +10,8 @@
 #include "series_data/encoder/bit_sequence.h"
 
 namespace series_data::unloading {
+
+template <class DataStorage>
 class Unloader {
  public:
   explicit Unloader(DataStorage& storage) : storage_(storage) {}
@@ -107,7 +109,7 @@ class Unloader {
     }
 
     if (sequences.total_bitseqs_size) {
-      const auto& reserved_bytes = encoder::CompactBitSequence::reserved_bytes_for_reader();
+      const auto& reserved_bytes = DataStorage::CompactBitSequence::reserved_bytes_for_reader();
       stream.write(reserved_bytes.data(), reserved_bytes.size());
     }
   }
@@ -135,7 +137,7 @@ class Unloader {
     reserved_stream_size += chunk_id_sequence.data().get_write_size();
     reserved_stream_size += chunk_length_sequence.data().get_write_size();
     if (total_bitseqs_size) {
-      reserved_stream_size += total_bitseqs_size + encoder::CompactBitSequence::reserved_bytes_for_reader().size();
+      reserved_stream_size += total_bitseqs_size + DataStorage::CompactBitSequence::reserved_bytes_for_reader().size();
     }
     return reserved_stream_size;
   }

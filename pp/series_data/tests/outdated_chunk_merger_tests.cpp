@@ -8,8 +8,8 @@ namespace {
 
 using BareBones::BitSequenceReader;
 using BareBones::Encoding::Gorilla::STALE_NAN;
-using series_data::DataStorage;
-using series_data::Decoder;
+using DataStorage = series_data::DataStorage<>;
+using Decoder = series_data::Decoder<DataStorage>;
 using series_data::Encoder;
 using series_data::OutdatedChunkMerger;
 using series_data::chunk::DataChunk;
@@ -31,7 +31,7 @@ class OutdatedChunkMergerTrait {
   using ExpectedListOfSampleList = BareBones::Vector<ExpectedSampleList>;
 
   DataStorage storage_;
-  Encoder<kSamplesPerChunkValue> encoder_{storage_};
+  Encoder<DataStorage, kSamplesPerChunkValue> encoder_{storage_};
   OutdatedChunkMerger<decltype(encoder_)> merger_{encoder_};
 
   [[nodiscard]] const DataChunk& get_open_chunk(uint32_t ls_id) { return storage_.open_chunks[ls_id]; }

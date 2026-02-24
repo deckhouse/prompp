@@ -5,6 +5,8 @@
 #include "series_data/data_storage.h"
 
 namespace series_data::unloading {
+
+template <class DataStorage>
 class LoadReverter {
  public:
   explicit LoadReverter(DataStorage& storage) : storage_(storage) {}
@@ -57,7 +59,7 @@ class LoadReverter {
       return;
     }
 
-    encoder::CompactBitSequence seq;
+    typename DataStorage::CompactBitSequence seq;
     seq.push_back_bytes(chunk_bit_sequence.raw_bytes() + BareBones::Bit::to_ceil_bytes(chunk_bit_sequence.size_in_bits() - meta.source_size_in_bits),
                         meta.source_size_in_bits);
     chunk_bit_sequence = std::move(seq);
@@ -68,4 +70,5 @@ class LoadReverter {
   BareBones::Vector<LsIdSizeChunkId> source_sizes_;
   DataStorage& storage_;
 };
+
 }  // namespace series_data::unloading
