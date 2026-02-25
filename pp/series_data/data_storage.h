@@ -171,36 +171,61 @@ struct DataStorage {
     const DataStorage* storage_;
   };
 
-  BareBones::Vector<chunk::DataChunk, Reallocator> open_chunks;
-  encoder::timestamp::Encoder<Reallocator> timestamp_encoder;
+  union {
+    BareBones::Vector<chunk::DataChunk, Reallocator> open_chunks{};
+  };
 
-  BareBones::VectorWithHoles<encoder::EncoderVariant<Reallocator>, Reallocator> variant_encoders;
-  BareBones::VectorWithHoles<encoder::GorillaEncoder<Reallocator>, Reallocator> gorilla_encoders;
+  union {
+    encoder::timestamp::Encoder<Reallocator> timestamp_encoder{};
+  };
+
+  union {
+    BareBones::VectorWithHoles<encoder::EncoderVariant<Reallocator>, Reallocator> variant_encoders{};
+  };
+  union {
+    BareBones::VectorWithHoles<encoder::GorillaEncoder<Reallocator>, Reallocator> gorilla_encoders{};
+  };
 
   size_t outdated_chunks_map_allocated_memory{};
-  phmap::
-      flat_hash_map<uint32_t, OutdatedChunk, std::hash<uint32_t>, std::equal_to<>, BareBones::Allocator<std::pair<const uint32_t, OutdatedChunk>, Reallocator>>
-          outdated_chunks{{}, {}, BareBones::Allocator<std::pair<const uint32_t, OutdatedChunk>, Reallocator>{outdated_chunks_map_allocated_memory}};
+  union {
+    phmap::flat_hash_map<uint32_t,
+                         OutdatedChunk,
+                         std::hash<uint32_t>,
+                         std::equal_to<>,
+                         BareBones::Allocator<std::pair<const uint32_t, OutdatedChunk>, Reallocator>>
+        outdated_chunks{{}, {}, BareBones::Allocator<std::pair<const uint32_t, OutdatedChunk>, Reallocator>{outdated_chunks_map_allocated_memory}};
+  };
 
-  BareBones::VectorWithHoles<encoder::RefCountableBitSequenceWithItemsCount<Reallocator>, Reallocator> finalized_timestamp_streams;
-  BareBones::VectorWithHoles<encoder::CompactBitSequence<Reallocator>, Reallocator> finalized_data_streams;
+  union {
+    BareBones::VectorWithHoles<encoder::RefCountableBitSequenceWithItemsCount<Reallocator>, Reallocator> finalized_timestamp_streams{};
+  };
+  union {
+    BareBones::VectorWithHoles<encoder::CompactBitSequence<Reallocator>, Reallocator> finalized_data_streams{};
+  };
   size_t finalized_chunks_map_allocated_memory{};
-  phmap::flat_hash_map<uint32_t,
-                       chunk::FinalizedChunkList,
-                       std::hash<uint32_t>,
-                       std::equal_to<>,
-                       BareBones::Allocator<std::pair<const uint32_t, std::forward_list<chunk::DataChunk>>, Reallocator>>
-      finalized_chunks{
-          {},
-          {},
-          BareBones::Allocator<std::pair<const uint32_t, std::forward_list<chunk::DataChunk>>, Reallocator>{finalized_chunks_map_allocated_memory}};
+  union {
+    phmap::flat_hash_map<uint32_t,
+                         chunk::FinalizedChunkList,
+                         std::hash<uint32_t>,
+                         std::equal_to<>,
+                         BareBones::Allocator<std::pair<const uint32_t, std::forward_list<chunk::DataChunk>>, Reallocator>>
+        finalized_chunks{
+            {},
+            {},
+            BareBones::Allocator<std::pair<const uint32_t, std::forward_list<chunk::DataChunk>>, Reallocator>{finalized_chunks_map_allocated_memory}};
+  };
 
   uint32_t outdated_samples_count{};
   uint32_t outdated_chunks_count{};
   uint32_t merged_samples_count{};
+  BareBones::ArenaIndex arena_index{BareBones::kInvalidArenaIndex};
 
-  BareBones::GenericBitset<Reallocator> unloaded_series_bitmap{};
-  BareBones::GenericBitset<Reallocator> queried_series_bitmap{};
+  union {
+    BareBones::GenericBitset<Reallocator> unloaded_series_bitmap{};
+  };
+  union {
+    BareBones::GenericBitset<Reallocator> queried_series_bitmap{};
+  };
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE SeriesChunks chunks(uint32_t ls_id) const noexcept { return SeriesChunks{this, ls_id}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE Chunks chunks() const noexcept { return Chunks{this}; }
@@ -305,20 +330,24 @@ struct DataStorage {
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
     using enum EncodingType;
 
-    const size_t outdated_chunks_allocated_memory =
-        BareBones::accumulate(outdated_chunks, 0, [](auto& local, const auto& p) { return local + p.second.allocated_memory(); });
+    if constexpr (BareBones::ArenaAllocatorInterface<Reallocator>) {
+      return Reallocator::arena_allocated_memory(arena_index);
+    } else {
+      const size_t outdated_chunks_allocated_memory =
+          BareBones::accumulate(outdated_chunks, 0, [](auto& local, const auto& p) { return local + p.second.allocated_memory(); });
 
-    size_t encoders_memory = variant_encoders.allocated_memory() + gorilla_encoders.allocated_memory();
+      size_t encoders_memory = variant_encoders.allocated_memory() + gorilla_encoders.allocated_memory();
 
-    for (const auto& chunk : open_chunks) {
-      if (is_variant_encoder(chunk.encoding_state.encoding_type)) {
-        encoders_memory += variant_encoders[chunk.encoder.external_index].allocated_memory(chunk.encoding_state.encoding_type);
+      for (const auto& chunk : open_chunks) {
+        if (is_variant_encoder(chunk.encoding_state.encoding_type)) {
+          encoders_memory += variant_encoders[chunk.encoder.external_index].allocated_memory(chunk.encoding_state.encoding_type);
+        }
       }
-    }
 
-    return open_chunks.allocated_memory() + encoders_memory + timestamp_encoder.allocated_memory() + finalized_timestamp_streams.allocated_memory() +
-           finalized_data_streams.allocated_memory() + finalized_chunks_map_allocated_memory + outdated_chunks_map_allocated_memory +
-           outdated_chunks_allocated_memory + unloaded_series_bitmap.allocated_memory() + queried_series_bitmap.allocated_memory();
+      return open_chunks.allocated_memory() + encoders_memory + timestamp_encoder.allocated_memory() + finalized_timestamp_streams.allocated_memory() +
+             finalized_data_streams.allocated_memory() + finalized_chunks_map_allocated_memory + outdated_chunks_map_allocated_memory +
+             outdated_chunks_allocated_memory + unloaded_series_bitmap.allocated_memory() + queried_series_bitmap.allocated_memory();
+    }
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory(EncodingType encoding_type) const noexcept {
@@ -345,9 +374,36 @@ struct DataStorage {
     return 0;
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE auto thread_arena_guard() const noexcept
+    requires(BareBones::ArenaAllocatorInterface<Reallocator>)
+  {
+    return Reallocator::thread_arena_guard(arena_index);
+  }
+
+  DataStorage() noexcept {
+    if constexpr (BareBones::ArenaAllocatorInterface<Reallocator>) {
+      arena_index = Reallocator::create_arena();
+    }
+  }
+
   ~DataStorage() {
-    for (const auto& chunk : open_chunks) {
-      destroy_open_chunk_encoder(chunk);
+    if constexpr (BareBones::ArenaAllocatorInterface<Reallocator>) {
+      Reallocator::destroy_arena(arena_index);
+    } else {
+      for (const auto& chunk : open_chunks) {
+        destroy_open_chunk_encoder(chunk);
+      }
+
+      std::destroy_at(&open_chunks);
+      std::destroy_at(&timestamp_encoder);
+      std::destroy_at(&variant_encoders);
+      std::destroy_at(&gorilla_encoders);
+      std::destroy_at(&outdated_chunks);
+      std::destroy_at(&finalized_timestamp_streams);
+      std::destroy_at(&finalized_data_streams);
+      std::destroy_at(&finalized_chunks);
+      std::destroy_at(&unloaded_series_bitmap);
+      std::destroy_at(&queried_series_bitmap);
     }
   }
 

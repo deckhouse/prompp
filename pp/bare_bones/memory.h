@@ -4,39 +4,10 @@
 #include <cstring>
 #include <limits>
 
-#include "preprocess.h"
+#include "allocator.h"
 #include "type_traits.h"
 
-#if JEMALLOC_AVAILABLE
-#include <jemalloc/jemalloc.h>
-#endif
-
 namespace BareBones {
-
-template <class Reallocator>
-concept ReallocatorInterface = requires(Reallocator reallocator, void* memory) {
-  { Reallocator::allocation_size(size_t()) } -> std::same_as<size_t>;
-  { Reallocator::reallocate(memory, size_t()) } -> std::same_as<void*>;
-  { Reallocator::free(memory) } -> std::same_as<void>;
-};
-
-struct DefaultReallocator {
-  PROMPP_ALWAYS_INLINE static size_t allocation_size(size_t needed_size) noexcept {
-#if JEMALLOC_AVAILABLE
-    return nallocx(needed_size, 0);
-#else
-    return needed_size;
-#endif
-  }
-
-  PROMPP_ALWAYS_INLINE static void* allocate(size_t size) { return std::malloc(size); }
-
-  PROMPP_ALWAYS_INLINE static void* reallocate(void* memory, size_t size) { return std::realloc(memory, size); }
-
-  PROMPP_ALWAYS_INLINE static void free(void* memory) { return std::free(memory); }
-};
-
-static_assert(ReallocatorInterface<DefaultReallocator>);
 
 template <class DataType, class SizeType>
 class PreAllocationSizeCalculator {
