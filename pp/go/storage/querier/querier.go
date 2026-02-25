@@ -179,8 +179,13 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 		}
 	}()
 
-	lssQueryResults, snapshots, err := queryLss(lssQueryInstantQuerySelector, q.head, matchers)
-	if err != nil {
+	poolProvider := q.head.PoolProvider()
+	snapshots := poolProvider.GetSnapshots()
+	defer poolProvider.PutSnapshots(snapshots)
+	lssQueryResults := poolProvider.GetLSSQueryResults()
+	defer poolProvider.PutLSSQueryResults(lssQueryResults)
+
+	if err = queryLss(lssQueryInstantQuerySelector, q.head, matchers, snapshots, lssQueryResults); err != nil {
 		logger.Warnf("[QUERIER]: failed to instant: %s", err)
 		return storage.ErrSeriesSet(err)
 	}
@@ -190,8 +195,8 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 		valueNotFoundTimestampValue = q.mint - 1
 	}
 
-	numberOfShards := q.head.NumberOfShards()
-	seriesSets := make([]storage.SeriesSet, numberOfShards)
+	seriesSets := poolProvider.GetSeriesSet()
+	defer poolProvider.PutSeriesSet(seriesSets)
 	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead](q.head)
 	tDataStorageQuery := q.head.CreateTask(
 		dsQueryInstantQuerier,
@@ -220,7 +225,7 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectInstant(
 			return nil
 		},
 	)
-	defer q.head.ReleaseTask(tDataStorageQuery)
+	defer q.head.PutTask(tDataStorageQuery)
 	q.head.Enqueue(tDataStorageQuery)
 	_ = tDataStorageQuery.Wait()
 
@@ -260,14 +265,23 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 		}
 	}()
 
-	lssQueryResults, snapshots, err := queryLss(lssQueryRangeQuerySelector, q.head, matchers)
-	if err != nil {
+	poolProvider := q.head.PoolProvider()
+	snapshots := poolProvider.GetSnapshots()
+	defer poolProvider.PutSnapshots(snapshots)
+	lssQueryResults := poolProvider.GetLSSQueryResults()
+	defer poolProvider.PutLSSQueryResults(lssQueryResults)
+
+	if err = queryLss(lssQueryRangeQuerySelector, q.head, matchers, snapshots, lssQueryResults); err != nil {
 		logger.Warnf("[QUERIER]: failed to range: %s", err)
 		return storage.ErrSeriesSet(err)
 	}
 
-	shardedSerializedData := queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, q.mint, q.maxt)
-	seriesSets := make([]storage.SeriesSet, q.head.NumberOfShards())
+	shardedSerializedData := poolProvider.GetSerializedData()
+	defer poolProvider.PutSerializedData(shardedSerializedData)
+	queryDataStorage(dsQueryRangeQuerier, q.head, lssQueryResults, shardedSerializedData, q.mint, q.maxt)
+
+	seriesSets := poolProvider.GetSeriesSet()
+	defer poolProvider.PutSeriesSet(seriesSets)
 	for shardID, serializedData := range shardedSerializedData {
 		if serializedData != nil {
 			seriesSets[shardID] = NewSeriesSet(q.mint, q.maxt, lssQueryResults[shardID], snapshots[shardID], serializedData)
@@ -281,19 +295,17 @@ func (q *Querier[TTask, TDataStorage, TLSS, TShard, THead]) selectRange(
 
 // convertPrometheusMatchersToPPMatchers converts prometheus matchers to pp matchers.
 func convertPrometheusMatchersToPPMatchers(matchers ...*labels.Matcher) []model.LabelMatcher {
-	promppMatchers := make([]model.LabelMatcher, 0, len(matchers))
-	for _, matcher := range matchers {
-		promppMatchers = append(promppMatchers, model.LabelMatcher{
-			Name:        matcher.Name,
-			Value:       matcher.Value,
-			MatcherType: uint8(matcher.Type), // #nosec G115 // no overflow
-		})
+	promppMatchers := make([]model.LabelMatcher, len(matchers))
+	for i := range matchers {
+		promppMatchers[i].Name = matchers[i].Name
+		promppMatchers[i].Value = matchers[i].Value
+		promppMatchers[i].MatcherType = uint8(matchers[i].Type) // #nosec G115 // no overflow
 	}
 
 	return promppMatchers
 }
 
-// queryDataStorageV2 returns serialized chunks from data storage for each shard.
+// queryDataStorage returns serialized chunks from data storage for each shard.
 func queryDataStorage[
 	TTask Task,
 	TDataStorage DataStorage,
@@ -304,9 +316,9 @@ func queryDataStorage[
 	taskName string,
 	head THead,
 	lssQueryResults []*cppbridge.LSSQueryResult,
+	shardedSerializedData []*cppbridge.DataStorageSerializedData,
 	mint, maxt int64,
-) []*cppbridge.DataStorageSerializedData {
-	shardedSerializedData := make([]*cppbridge.DataStorageSerializedData, head.NumberOfShards())
+) {
 	loadAndQueryWaiter := NewLoadAndQueryWaiter[TTask, TDataStorage, TLSS, TShard, THead](head)
 	tDataStorageQuery := head.CreateTask(
 		taskName,
@@ -331,16 +343,14 @@ func queryDataStorage[
 			return nil
 		},
 	)
-	defer head.ReleaseTask(tDataStorageQuery)
+	defer head.PutTask(tDataStorageQuery)
 	head.Enqueue(tDataStorageQuery)
 	_ = tDataStorageQuery.Wait()
 
 	if err := loadAndQueryWaiter.Wait(); err != nil {
+		clear(shardedSerializedData)
 		SendUnrecoverableError(err)
-		return make([]*cppbridge.DataStorageSerializedData, head.NumberOfShards())
 	}
-
-	return shardedSerializedData
 }
 
 // queryLabelValues returns label values present in the head for the specific label name.
@@ -388,7 +398,7 @@ func queryLabelNames[
 			return shard.LSS().QueryLabelNames(shard.ShardID(), convertedMatchers, dedup.Add)
 		},
 	)
-	defer head.ReleaseTask(t)
+	defer head.PutTask(t)
 	head.Enqueue(t)
 
 	if err := t.Wait(); err != nil {
@@ -456,7 +466,7 @@ func queryLabelValues[
 			return shard.LSS().QueryLabelValues(shard.ShardID(), name, convertedMatchers, dedup.Add)
 		},
 	)
-	defer head.ReleaseTask(t)
+	defer head.PutTask(t)
 	head.Enqueue(t)
 
 	if err := t.Wait(); err != nil {
@@ -475,7 +485,7 @@ func queryLabelValues[
 	return lvs, anns, nil
 }
 
-// lssQuery returns query results and snapshots.
+// queryLss returns query results and snapshots.
 //
 //revive:disable-next-line:cyclomatic but readable.
 //revive:disable-next-line:function-length long but readable.
@@ -489,14 +499,12 @@ func queryLss[
 	taskName string,
 	head THead,
 	matchers []*labels.Matcher,
-) (
-	[]*cppbridge.LSSQueryResult,
-	[]*cppbridge.LabelSetSnapshot,
-	error,
-) {
-	numberOfShards := head.NumberOfShards()
-	selectors := make([]uintptr, numberOfShards)
-	snapshots := make([]*cppbridge.LabelSetSnapshot, numberOfShards)
+	snapshots []*cppbridge.LabelSetSnapshot,
+	lssQueryResults []*cppbridge.LSSQueryResult,
+) error {
+	poolProvider := head.PoolProvider()
+	selectors := poolProvider.GetSelectors()
+	defer poolProvider.PutSelectors(selectors)
 	convertedMatchers := convertPrometheusMatchersToPPMatchers(matchers...)
 
 	tLSSQuerySelector := head.CreateTask(
@@ -507,14 +515,14 @@ func queryLss[
 			return err
 		},
 	)
-	defer head.ReleaseTask(tLSSQuerySelector)
+	defer head.PutTask(tLSSQuerySelector)
 	head.Enqueue(tLSSQuerySelector)
 	if err := tLSSQuerySelector.Wait(); err != nil {
-		return nil, nil, err
+		return err
 	}
 
-	lssQueryResults := make([]*cppbridge.LSSQueryResult, numberOfShards)
-	errs := make([]error, numberOfShards)
+	errs := poolProvider.GetErrors()
+	defer poolProvider.PutErrors(errs)
 	for shardID, selector := range selectors {
 		if selector == 0 {
 			continue
@@ -532,10 +540,10 @@ func queryLss[
 		}
 	}
 	if err := errors.Join(errs...); err != nil {
-		return nil, nil, err
+		return err
 	}
 
-	return lssQueryResults, snapshots, nil
+	return nil
 }
 
 // UnrecoverableErrorChan channel singal for [UnrecoverableError].

@@ -32,7 +32,7 @@ LabelViewSet make_ls_with_empty_label_value() {
 class SymbolsWriterFixture : public testing::TestWithParam<SymbolsWriterCase> {
  protected:
   using QueryableEncodingBimap = series_index::
-      QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, series_index::trie::CedarTrie>;
+      QueryableEncodingBimap<BareBones::Vector>;
 
   std::ostringstream stream_;
   StreamWriter<decltype(stream_)> stream_writer_{&stream_};

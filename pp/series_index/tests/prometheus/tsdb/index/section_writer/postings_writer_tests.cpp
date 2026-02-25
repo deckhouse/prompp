@@ -33,7 +33,7 @@ struct PostingsWriterCase {
 class PostingsWriterFixture : public testing::TestWithParam<PostingsWriterCase> {
  protected:
   using QueryableEncodingBimap = series_index::
-      QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, series_index::trie::CedarTrie>;
+      QueryableEncodingBimap<BareBones::Vector>;
 
   std::ostringstream stream_;
   StreamWriter<decltype(stream_)> stream_writer_{&stream_};

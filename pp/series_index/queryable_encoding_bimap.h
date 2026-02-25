@@ -7,28 +7,35 @@
 #include "bare_bones/bitset.h"
 #include "bare_bones/preprocess.h"
 #include "bare_bones/snug_composite.h"
+#include "primitives/snug_composites.h"
+#include "queried_series.h"
 #include "reverse_index.h"
+#include "series_index/trie/cedarpp_tree.h"
 #include "sorting_index.h"
 #include "trie_index.h"
 
 namespace series_index {
 
-template <template <template <class> class> class Filament, template <class> class Vector, class Trie>
-  requires BareBones::SnugComposite::is_shrinkable<typename Filament<Vector>::storage_type>
-class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDecodingTable<QueryableEncodingBimap<Filament, Vector, Trie>, Filament, Vector> {
+template <template <class> class Vector>
+class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDecodingTable<QueryableEncodingBimap<Vector>,
+                                                                                           PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament,
+                                                                                           Vector> {
  public:
-  using Base = BareBones::SnugComposite::GenericDecodingTable<QueryableEncodingBimap, Filament, Vector>;
+  using Base = BareBones::SnugComposite::
+      GenericDecodingTable<QueryableEncodingBimap<Vector>, PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, Vector>;
   using LsIdSet = phmap::btree_set<typename Base::Proxy, typename Base::LessComparator, BareBones::Allocator<typename Base::Proxy>>;
   using HashSet =
       phmap::flat_hash_set<typename Base::Proxy, typename Base::Hasher, typename Base::EqualityComparator, BareBones::Allocator<typename Base::Proxy>>;
   using LsIdSetIterator = typename LsIdSet::const_iterator;
   using SortingIndexBuilder = series_index::SortingIndexBuilder<LsIdSet, Vector>;
-  using TrieIndex = series_index::TrieIndex<Trie>;
+  using TrieIndex = series_index::TrieIndex<trie::CedarTrie>;
   using TrieIndexIterator = typename TrieIndex::Iterator;
   using checkpoint_type = typename Base::checkpoint_type;
 
-  friend class BareBones::SnugComposite::GenericDecodingTable<QueryableEncodingBimap, Filament, Vector>;
+  friend class BareBones::SnugComposite::
+      GenericDecodingTable<QueryableEncodingBimap<Vector>, PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, Vector>;
 
+ public:
   [[nodiscard]] PROMPP_ALWAYS_INLINE const TrieIndex& trie_index() const noexcept { return trie_index_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesReverseIndex& reverse_index() const noexcept { return reverse_index_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const LsIdSet& ls_id_set() const noexcept { return ls_id_set_; }
@@ -140,9 +147,12 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
  private:
   using LabelSet = typename Base::value_type;
+  using Trie = trie::CedarTrie;
 
   template <class DecodingTable, class SortingIndex, class SeriesIds, class QueryableEncodingBimap, class LsIdVector>
   friend class QueryableEncodingBimapCopier;
+
+  [[nodiscard]] auto& storage() noexcept { return this->storage_; }
 
   TrieIndex trie_index_;
   SeriesReverseIndex reverse_index_;
@@ -266,7 +276,7 @@ class QueryableEncodingBimapCopier {
     for (const auto ls_id : ls_id_range_) {
       old_new_ids_.emplace_back(ls_id, destination_.next_item_index());
       dst_src_ids_mapping_.emplace_back(ls_id);
-      destination_.storage_.emplace_back(source_[ls_id], cache);
+      destination_.storage().emplace_back(source_[ls_id], cache);
     }
 
     const auto cmp = sorting_index_.get_comparator();

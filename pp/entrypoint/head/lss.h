@@ -7,7 +7,6 @@
 #include "primitives/primitives.h"
 #include "primitives/snug_composites.h"
 #include "series_index/queryable_encoding_bimap.h"
-#include "series_index/trie/cedarpp_tree.h"
 
 namespace entrypoint::head {
 
@@ -53,9 +52,7 @@ template <class T>
 using SharedVector = BareBones::SharedVector<T, BareBones::DefaultReallocator>;
 
 using EncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<SharedVectorWithChangesDetection>;
-using QueryableEncodingBimap = series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament,
-                                                                    SharedVectorWithChangesDetection,
-                                                                    series_index::trie::CedarTrie>;
+using QueryableEncodingBimap = series_index::QueryableEncodingBimap<SharedVectorWithChangesDetection>;
 
 class ReadonlyLss : public PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpanWithChangesDetection> {
  public:

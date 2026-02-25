@@ -4,7 +4,6 @@
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
 #include "series_index/queryable_encoding_bimap.h"
-#include "series_index/trie/cedarpp_tree.h"
 
 namespace {
 
@@ -13,15 +12,13 @@ using series_index::invert_copy_mapping;
 using series_index::QueryableEncodingBimap;
 using series_index::QueryableEncodingBimapCopier;
 using series_index::SeriesReverseIndex;
-using series_index::trie::CedarMatchesList;
-using series_index::trie::CedarTrie;
 
 template <class DecodingTable, class SortingIndex, class SeriesIds, class QueryableEncodingBimap, class LsIdVector>
 using Copier = QueryableEncodingBimapCopier<DecodingTable, SortingIndex, SeriesIds, QueryableEncodingBimap, LsIdVector>;
 
 class QueryableEncodingBimapFixture : public testing::Test {
  protected:
-  using Lss = QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, CedarTrie>;
+  using Lss = QueryableEncodingBimap<BareBones::Vector>;
 
   Lss lss_;
 };

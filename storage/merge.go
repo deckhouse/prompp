@@ -372,7 +372,7 @@ func newGenericMergeSeriesSet(sets []genericSeriesSet, mergeFunc genericSeriesMe
 
 	// We are pre-advancing sets, so we can introspect the label of the
 	// series under the cursor.
-	var h genericSeriesSetHeap
+	h := make(genericSeriesSetHeap, 0, len(sets))
 	for _, set := range sets {
 		if set == nil {
 			continue
