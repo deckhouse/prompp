@@ -2,7 +2,10 @@
 
 #include <variant>
 
+#include "head/data_storage.h"
+#include "head/lss.h"
 #include "wal/hashdex/basic_decoder.h"
+#include "wal/hashdex/go_head.h"
 #include "wal/hashdex/go_model.h"
 #include "wal/hashdex/protobuf.h"
 #include "wal/hashdex/scraper/scraper.h"
@@ -16,10 +19,14 @@ enum HashdexType : uint8_t {
   kDecoder,
   kPrometheusScraper,
   kOpenMetricsScraper,
+  kGoHead,
 };
+
+using GoHeadHashdex = PromPP::WAL::hashdex::GoHead<entrypoint::head::QueryableEncodingBimap, entrypoint::head::DataStorage>;
 
 using HashdexVariant = std::variant<PromPP::WAL::hashdex::Protobuf,
                                     PromPP::WAL::hashdex::GoModel,
                                     PromPP::WAL::hashdex::BasicDecoder,
                                     PromPP::WAL::hashdex::scraper::PrometheusScraper,
-                                    PromPP::WAL::hashdex::scraper::OpenMetricsScraper>;
+                                    PromPP::WAL::hashdex::scraper::OpenMetricsScraper,
+                                    GoHeadHashdex>;

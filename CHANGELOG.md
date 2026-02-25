@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.7.5
+
+### Fixes
+1. **Platform-specific jemalloc page size for ARM64.** On ARM64 systems (e.g. Raspberry Pi 5) the kernel page size can be 16KB or 64KB, while jemalloc was hardcoded to 4KB. This caused an immediate crash with "Unsupported system page size". The build now sets the appropriate lg-page for ARM64 (64KB) and keeps 4KB for x86_64.
+2. **Vector erase bug.** Fixed a bug in `BareBones::Vector::erase` that could cause incorrect behavior in optimized builds; the implementation now uses `destroy_n` / `uninitialized_default_construct_n` instead of manual loops.
+
+### Enhancements
+1. **WALGoHeadHashdex.** `WALGoHeadHashdex` has been introduced to optimize the addition of data from rules stored in the transaction head, avoiding unnecessary copying and allocation.
+2. **C++ malloc metrics.** Added metrics for memory allocations from C++ code (atomic counters and optimized calculation), enabling better observability of allocator behavior.
+3. **Remote write parallel encoding.** Refactored remote write message encoding: encoding from a batch to a protobuf message is now parallelized, which speeds up the encoder.
+4. **Go 1.25.7.** Updated Go from 1.25.5 to 1.25.7; the release includes security fixes for crypto/tls, crypto/x509, and the go command, plus compiler fixes.
+
+### Performance
+1. **More pools.** Head and related code now use a pool provider for reusable objects, which has reduced the number of allocations.
+
+### Other
+1. **CI: workflow_dispatch and golang lint image.** Added manual trigger (`workflow_dispatch`) to the CI image build workflow and corrected the golang lint image tag (gcc-tools-x86_64 → gcc-tools-amd64) to match the built image.
+
 ## v0.7.4
 
 ### Fixes
