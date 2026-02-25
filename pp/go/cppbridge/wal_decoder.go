@@ -327,7 +327,7 @@ type WALOutputDecoder struct {
 	decoder        uintptr
 	relabeler      *StatelessRelabeler
 	outputLss      *LabelSetStorage
-	shardID        uint16
+	shardID        uint16 // TODO: remove this, it's not used in the decoder
 }
 
 // NewWALOutputDecoder init new WALOutputDecoder.
