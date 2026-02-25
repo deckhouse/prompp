@@ -9,9 +9,9 @@
 namespace {
 
 using series_data::Decoder;
+using series_data::Encoder;
 using series_data::chunk::DataChunk;
 using series_data::unloading::Unloader;
-using series_data::Encoder;
 using DataStorage = series_data::DataStorage<>;
 using std::operator""sv;
 
