@@ -87,28 +87,29 @@ func (ar *Adapter) AppendHashdex(
 	hashdex cppbridge.ShardedData,
 	state *cppbridge.StateV2,
 	commitToWal bool,
-) error {
+) (stats cppbridge.RelabelerStats, err error) {
 	if ar.haTracker.IsDrop(hashdex.Cluster(), hashdex.Replica()) {
-		return nil
+		return cppbridge.RelabelerStats{}, nil
 	}
 
-	var floatsAppended float64
 	defer func(start time.Time) {
 		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
-		ar.samplesAppended.Add(floatsAppended)
+		ar.samplesAppended.Add(float64(stats.SamplesAdded))
 	}(time.Now())
 
-	return ar.proxy.With(ctx, func(h *pp_storage.Head) error {
-		stats, err := appender.New(h, services.CFViaRange).Append(
+	err = ar.proxy.With(ctx, func(h *pp_storage.Head) error {
+		var appendError error
+		stats, appendError = appender.New(h, services.CFViaRange).Append(
 			ctx,
 			&appender.IncomingData{Hashdex: hashdex},
 			state,
 			commitToWal,
 		)
-		floatsAppended = float64(stats.SamplesAdded)
 
-		return err
+		return appendError
 	})
+
+	return stats, err
 }
 
 // AppendScraperHashdex append ScraperHashdex data to [Head].
@@ -118,23 +119,17 @@ func (ar *Adapter) AppendScraperHashdex(
 	state *cppbridge.StateV2,
 	commitToWal bool,
 ) (stats cppbridge.RelabelerStats, err error) {
-	defer func(start time.Time) {
-		ar.appendDuration.Observe(float64(time.Since(start).Microseconds()))
-		ar.samplesAppended.Add(float64(stats.SamplesAdded))
-	}(time.Now())
+	return ar.AppendHashdex(ctx, hashdex, state, commitToWal)
+}
 
-	_ = ar.proxy.With(ctx, func(h *pp_storage.Head) error {
-		stats, err = appender.New(h, services.CFViaRange).Append(
-			ctx,
-			&appender.IncomingData{Hashdex: hashdex},
-			state,
-			commitToWal,
-		)
-
-		return nil
-	})
-
-	return stats, err
+// AppendGoHeadHashdex append GoHeadHashdex data to [Head].
+func (ar *Adapter) AppendGoHeadHashdex(
+	ctx context.Context,
+	hashdex *cppbridge.WALGoHeadHashdex,
+	state *cppbridge.StateV2,
+	commitToWal bool,
+) (stats cppbridge.RelabelerStats, err error) {
+	return ar.AppendHashdex(ctx, hashdex, state, commitToWal)
 }
 
 // AppendSnappyProtobuf append compressed via snappy Protobuf data to [Head].

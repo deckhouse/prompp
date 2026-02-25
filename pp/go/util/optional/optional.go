@@ -20,6 +20,7 @@ func (o *Optional[T]) RawValue() *T {
 	return nil
 }
 
+//go:norace
 func (o *Optional[T]) Set(value T) {
 	o.isSet = true
 	o.value = value

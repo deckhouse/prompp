@@ -126,7 +126,7 @@ func (p *RefillProcessor) Process(ctx context.Context, refill Refill) error {
 		decodedSamples += hashdexContent.Samples()
 		p.decodedSampleCount.With(prometheus.Labels{"processor_type": "refill"}).Add(float64(hashdexContent.Samples()))
 
-		if err = p.adapter.AppendHashdex(ctx, hashdexContent.ShardedData(), state, true); err != nil {
+		if _, err = p.adapter.AppendHashdex(ctx, hashdexContent.ShardedData(), state, true); err != nil {
 			p.criticalErrorCount.With(prometheus.Labels{"error": err.Error(), "processor_type": "refill"}).Inc()
 			return fmt.Errorf("failed to append decoded segment: %w", err)
 		}

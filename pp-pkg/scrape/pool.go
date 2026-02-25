@@ -1,10 +1,13 @@
 package scrape
 
 import (
+	"bufio"
 	"errors"
+	"io"
 	"sync"
 	"time"
 
+	"github.com/klauspost/compress/gzip"
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/model/value"
 	"github.com/prometheus/prometheus/storage"
@@ -95,7 +98,7 @@ type Batch interface {
 func BatchWithLimit(batch Batch) Batch {
 	batch = &timeLimitBatch{
 		Batch:   batch,
-		maxTime: uint64(timestamp.FromTime(time.Now().Add(maxAheadTime))),
+		maxTime: uint64(timestamp.FromTime(time.Now().Add(maxAheadTime))), // #nosec G115 // no overflow
 	}
 
 	return batch
@@ -115,17 +118,29 @@ func newBatchTimeSeries() *BatchTimeSeries {
 }
 
 // Add add to batch timeseries, timestamp and value.
-func (batch *BatchTimeSeries) Add(builder *pp_model.LabelSetSimpleBuilder, timestamp uint64, val float64) error {
+func (batch *BatchTimeSeries) Add(builder *pp_model.LabelSetSimpleBuilder, ts uint64, val float64) error {
 	batch.data = append(
 		batch.data,
 		pp_model.TimeSeries{
 			LabelSet:  builder.Build(),
-			Timestamp: timestamp,
+			Timestamp: ts,
 			Value:     val,
 		},
 	)
 
 	return nil
+}
+
+// AddWithLabelSet add to batch timeseries, label set, timestamp and value.
+func (batch *BatchTimeSeries) AddWithLabelSet(ls pp_model.LabelSet, ts uint64, val float64) {
+	batch.data = append(
+		batch.data,
+		pp_model.TimeSeries{
+			LabelSet:  ls,
+			Timestamp: ts,
+			Value:     val,
+		},
+	)
 }
 
 // Destroy destroy batch with destroyFunc(return to pool).
@@ -172,7 +187,7 @@ type samplesLimitBatch struct {
 var _ Batch = (*samplesLimitBatch)(nil)
 
 // Add add to batch timeseries, timestamp and value.
-func (b *samplesLimitBatch) Add(builder *pp_model.LabelSetSimpleBuilder, timestamp uint64, val float64) error {
+func (b *samplesLimitBatch) Add(builder *pp_model.LabelSetSimpleBuilder, ts uint64, val float64) error {
 	if !value.IsStaleNaN(val) {
 		b.i++
 		if b.i > b.limit {
@@ -180,7 +195,7 @@ func (b *samplesLimitBatch) Add(builder *pp_model.LabelSetSimpleBuilder, timesta
 		}
 	}
 
-	return b.Batch.Add(builder, timestamp, val)
+	return b.Batch.Add(builder, ts, val)
 }
 
 // timeLimitBatch limits time on sample.
@@ -193,10 +208,58 @@ type timeLimitBatch struct {
 var _ Batch = (*timeLimitBatch)(nil)
 
 // Add add to batch timeseries, timestamp and value.
-func (b *timeLimitBatch) Add(builder *pp_model.LabelSetSimpleBuilder, timestamp uint64, val float64) error {
-	if timestamp > b.maxTime {
+func (b *timeLimitBatch) Add(builder *pp_model.LabelSetSimpleBuilder, ts uint64, val float64) error {
+	if ts > b.maxTime {
 		return storage.ErrOutOfBounds
 	}
 
-	return b.Batch.Add(builder, timestamp, val)
+	return b.Batch.Add(builder, ts, val)
+}
+
+//
+// noopReader
+//
+
+// noopReader implementation io.Reader.
+var nr = &noopReader{}
+
+// noopReader implementation io.Reader.
+type noopReader struct{}
+
+// Read implementation io.Reader.
+func (*noopReader) Read([]byte) (int, error) {
+	return 0, io.EOF
+}
+
+//
+// readers
+//
+
+// readers wrapper for bufio.Reader and gzip.Reader.
+type readers struct {
+	bReader *bufio.Reader
+	gReader *gzip.Reader
+}
+
+// reset readers.
+func (r *readers) reset() *readers {
+	r.bReader.Reset(nr)
+	// Reset returns io.EOF, there is no point in checking the error
+	_ = r.gReader.Reset(r.bReader)
+
+	return r
+}
+
+//
+// poolReaders
+//
+
+// poolReaders global pool *readers.
+var poolReaders = sync.Pool{
+	New: func() any {
+		return &readers{
+			bReader: bufio.NewReader(nr),
+			gReader: &gzip.Reader{},
+		}
+	},
 }
