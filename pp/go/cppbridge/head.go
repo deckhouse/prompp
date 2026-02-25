@@ -228,10 +228,13 @@ func (i HeadDataStorageSerializedChunkIndex) Chunks(r *HeadDataStorageSerialized
 
 type DataStorageSerializedData struct {
 	serializedData uintptr
+	ds             *DataStorage
 }
 
-func NewDataStorageSerializedData() *DataStorageSerializedData {
-	sd := &DataStorageSerializedData{}
+func NewDataStorageSerializedData(ds *DataStorage) *DataStorageSerializedData {
+	sd := &DataStorageSerializedData{
+		ds: ds,
+	}
 	runtime.SetFinalizer(sd, func(sd *DataStorageSerializedData) {
 		seriesDataSerializedDataDtor(sd.serializedData)
 	})

@@ -25,6 +25,8 @@ extern "C" void prompp_series_data_encoder_encode(void* args) {
   };
 
   const auto* in = static_cast<Arguments*>(args);
+  const auto arena_guard = in->encoder_wrapper->encoder.storage().thread_arena_guard();
+
   in->encoder_wrapper->encoder.encode(in->series_id, in->timestamp, in->value);
 }
 
@@ -35,6 +37,7 @@ extern "C" void prompp_series_data_encoder_encode_inner_series_slice(void* args)
   };
 
   auto* in = static_cast<Arguments*>(args);
+  const auto arena_guard = in->encoder_wrapper->encoder.storage().thread_arena_guard();
 
   std::ranges::for_each(in->inner_series_slice, [&](const PromPP::Prometheus::Relabel::InnerSeries& inner_series) {
     if (inner_series.size() == 0) {
@@ -52,7 +55,10 @@ extern "C" void prompp_series_data_encoder_merge_out_of_order_chunks(void* args)
     entrypoint::head::SeriesDataEncoderWrapperPtr encoder_wrapper;
   };
 
-  entrypoint::head::OutdatedChunkMerger{static_cast<Arguments*>(args)->encoder_wrapper->encoder}.merge();
+  auto& encoder = static_cast<Arguments*>(args)->encoder_wrapper->encoder;
+  const auto arena_guard = encoder.storage().thread_arena_guard();
+
+  entrypoint::head::OutdatedChunkMerger{encoder}.merge();
 }
 
 extern "C" void prompp_series_data_encoder_dtor(void* args) {

@@ -103,6 +103,9 @@ extern "C" void prompp_series_data_data_storage_queried_series_set_bitset(void* 
 
   const auto in = static_cast<Arguments*>(args);
   std::ispanstream stream(in->queried_series.span());
+
+  const auto arena_guard = in->data_storage->thread_arena_guard();
+
   const auto result = in->data_storage->queried_series_bitmap.read_from(stream);
   if (!result) {
     in->data_storage->queried_series_bitmap.reset(0);
@@ -159,7 +162,7 @@ extern "C" void prompp_series_data_data_storage_instant_query(void* args, void* 
 
   const auto in = static_cast<Arguments*>(args);
 
-  auto samples = std::span<entrypoint::series_data::SampleWithGoLabels>(in->samples, in->label_set_ids.size());
+  auto samples = std::span(in->samples, in->label_set_ids.size());
   InstantQuerierWithArgumentsWrapperEntrypoint instant_querier(*in->data_storage, in->label_set_ids, in->timestamp, samples);
   instant_querier.query();
 
@@ -346,7 +349,10 @@ extern "C" void prompp_series_data_data_storage_unloader_unload(void* args) {
     UnloaderPtr unloader;
   };
 
-  static_cast<Arguments*>(args)->unloader->unloader.unload();
+  auto& unloader = static_cast<const Arguments*>(args)->unloader->unloader;
+  const auto arena_guard = unloader.storage().thread_arena_guard();
+
+  unloader.unload();
 }
 
 extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* res) {
@@ -405,6 +411,8 @@ extern "C" void prompp_series_data_data_storage_loader_load_next(void* args) {
 
   std::visit(
       [in](auto& loader) {
+        const auto arena_guard = loader.storage().thread_arena_guard();
+
         loader.load_next(in->buffer.span());
 
         if (in->is_final) {
@@ -422,9 +430,11 @@ extern "C" void prompp_series_data_data_storage_revertable_loader_next_batch(voi
     bool has_more_data;
   };
 
-  auto& recoder = std::get<RevertableLoader>(*static_cast<const Arguments*>(args)->loader);
-  recoder.revert();
-  new (res) Result{.has_more_data = recoder.next_batch()};
+  auto& loader = std::get<RevertableLoader>(*static_cast<const Arguments*>(args)->loader);
+  const auto arena_guard = loader.storage().thread_arena_guard();
+
+  loader.revert();
+  new (res) Result{.has_more_data = loader.next_batch()};
 }
 
 extern "C" void prompp_series_data_data_storage_loader_dtor(void* args) {

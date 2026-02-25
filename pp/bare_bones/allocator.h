@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+#include <limits>
 #include <memory>
 
 #include "preprocess.h"

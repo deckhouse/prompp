@@ -179,6 +179,8 @@ class Loader {
 
   [[nodiscard]] bool empty() const noexcept { return ls_id_to_infos_.empty(); }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE DataStorage& storage() noexcept { return storage_; }
+
  private:
   void process_ls_id_data(BareBones::Bitset::Iterator bitset_it,
                           EncodingChunkLengthSequence::Iterator length_it,
