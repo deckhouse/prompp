@@ -11,7 +11,7 @@ namespace {
 using PromPP::Prometheus::LabelMatchers;
 
 using QueryableEncodingBimap =
-    series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, series_index::trie::CedarTrie>;
+    series_index::QueryableEncodingBimap<BareBones::Vector>;
 using Querier = series_index::querier::Querier<BareBones::Vector>;
 
 std::string_view get_lss_file() {

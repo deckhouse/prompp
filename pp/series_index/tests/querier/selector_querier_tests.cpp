@@ -36,7 +36,7 @@ struct SelectorQuerierTestCase {
 class SelectorQuerierFixture : public testing::TestWithParam<SelectorQuerierTestCase> {
  protected:
   using QueryableEncodingBimap =
-      series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, CedarTrie>;
+      series_index::QueryableEncodingBimap<BareBones::Vector>;
 
   QueryableEncodingBimap index_;
   SelectorQuerier<QueryableEncodingBimap::TrieIndex, Selector<>, MatchIdResolver> selector_querier_{index_.trie_index(), {}};

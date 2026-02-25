@@ -11,7 +11,7 @@
 namespace {
 
 using QueryableEncodingBimap =
-    series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, series_index::trie::CedarTrie>;
+    series_index::QueryableEncodingBimap<BareBones::Vector>;
 using head::StatusGetterLSS;
 using PromPP::Primitives::LabelViewSet;
 using series_data::DataStorage;
