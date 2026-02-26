@@ -5,7 +5,8 @@
 
 namespace entrypoint::head {
 
-using DataStorage = series_data::DataStorage<BareBones::jemalloc::ArenaReallocator>;
+struct DataStorageTag {};
+using DataStorage = series_data::DataStorage<BareBones::jemalloc::ArenaReallocator<DataStorageTag>>;
 using DataStoragePtr = std::unique_ptr<DataStorage>;
 
 static_assert(sizeof(DataStoragePtr) == sizeof(void*));

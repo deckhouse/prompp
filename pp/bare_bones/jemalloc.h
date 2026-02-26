@@ -20,10 +20,12 @@ PROMPP_ALWAYS_INLINE void refresh_stats() noexcept {
 #endif
 }
 
-#if JEMALLOC_AVAILABLE || 1
-thread_local inline ArenaIndex thread_arena_index{kInvalidArenaIndex};
+#if JEMALLOC_AVAILABLE
 
+template <class Object>
 struct ArenaReallocator {
+  thread_local static ArenaIndex thread_arena_index;
+
   PROMPP_ALWAYS_INLINE static size_t allocation_size(size_t needed_size) noexcept {
     return nallocx(needed_size, MALLOCX_ARENA(thread_arena_index) | MALLOCX_TCACHE_NONE);
   }
@@ -83,8 +85,11 @@ struct ArenaReallocator {
   }
 };
 
-static_assert(ReallocatorInterface<ArenaReallocator>);
-static_assert(ArenaAllocatorInterface<ArenaReallocator>);
+template <class Object>
+thread_local ArenaIndex ArenaReallocator<Object>::thread_arena_index{kInvalidArenaIndex};
+
+static_assert(ReallocatorInterface<ArenaReallocator<int>>);
+static_assert(ArenaAllocatorInterface<ArenaReallocator<int>>);
 
 #endif
 
