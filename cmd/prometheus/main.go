@@ -2209,6 +2209,23 @@ func readPromPPFeatures(logger log.Logger) {
 				"pages", v,
 			)
 			web.FederationSplitFamiliesPageSize = v
+
+		case "default_sample_age_limit":
+			fvalue = strings.TrimSpace(fvalue)
+			defaultSampleAgeLimit, err := model.ParseDuration(fvalue)
+			if err != nil {
+				level.Error(logger).Log(
+					"msg", "[FEATURE] Error parsing default_sample_age_limit value",
+					"err", err)
+				continue
+			}
+
+			_ = level.Info(logger).Log(
+				"msg", "[FEATURE] default_sample_age_limit is set.",
+				"limit", fvalue,
+			)
+
+			remotewriter.DefaultSampleAgeLimit = defaultSampleAgeLimit
 		}
 	}
 }
