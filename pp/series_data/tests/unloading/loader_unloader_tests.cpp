@@ -8,8 +8,8 @@
 
 namespace {
 
-using series_data::DataStorage;
 using series_data::ChunkFinalizer;
+using series_data::DataStorage;
 using series_data::Decoder;
 using series_data::Encoder;
 using series_data::chunk::DataChunk;
