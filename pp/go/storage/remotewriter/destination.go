@@ -2,16 +2,15 @@ package remotewriter
 
 import (
 	"bytes"
-	"github.com/prometheus/common/model"
 	"hash/crc32"
 	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"gopkg.in/yaml.v2"
-
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/model/labels"
+	"gopkg.in/yaml.v2"
 )
 
 // String constants for instrumentation.
