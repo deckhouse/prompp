@@ -67,11 +67,10 @@ struct SerializedData {
   }
 };
 
-template <class DataStorage>
 class DataSerializer {
  public:
-  using SerializedData = serialization::SerializedData<typename DataStorage::Reallocator>;
-  using SerializedCompactBitSequence = series_data::SerializedCompactBitSequence<typename DataStorage::Reallocator>;
+  using SerializedData = series_data::serialization::SerializedData<DataStorage::Reallocator>;
+  using SerializedCompactBitSequence = series_data::SerializedCompactBitSequence<DataStorage::Reallocator>;
 
   explicit DataSerializer(const DataStorage& storage) : storage_(storage) {}
 
@@ -120,7 +119,7 @@ class DataSerializer {
 
   template <class ChunkList>
   PROMPP_ALWAYS_INLINE static uint32_t get_chunk_count(const ChunkList& chunks) noexcept {
-    if constexpr (std::is_same_v<ChunkList, typename DataStorage::Chunks>) {
+    if constexpr (std::is_same_v<ChunkList, DataStorage::Chunks>) {
       return chunks.non_empty_chunk_count();
     } else {
       return chunks.size();
@@ -173,25 +172,25 @@ class DataSerializer {
 
       case kAscInteger: {
         serialized_chunk.set_offset(data_size);
-        write_compact_bit_sequence(storage_.template get_asc_integer_stream<chunk_type>(chunk.encoder.external_index), buffer);
+        write_compact_bit_sequence(storage_.get_asc_integer_stream<chunk_type>(chunk.encoder.external_index), buffer);
         break;
       }
 
       case kAscIntegerThenValuesGorilla: {
         serialized_chunk.set_offset(data_size);
-        write_compact_bit_sequence(storage_.template get_asc_integer_then_values_gorilla_stream<chunk_type>(chunk.encoder.external_index), buffer);
+        write_compact_bit_sequence(storage_.get_asc_integer_then_values_gorilla_stream<chunk_type>(chunk.encoder.external_index), buffer);
         break;
       }
 
       case kValuesGorilla: {
         serialized_chunk.set_offset(data_size);
-        write_compact_bit_sequence(storage_.template get_values_gorilla_stream<chunk_type>(chunk.encoder.external_index), buffer);
+        write_compact_bit_sequence(storage_.get_values_gorilla_stream<chunk_type>(chunk.encoder.external_index), buffer);
         break;
       }
 
       case kGorilla: {
         serialized_chunk.set_offset(data_size);
-        write_compact_bit_sequence(storage_.template get_gorilla_encoder_stream<chunk_type>(chunk.encoder.external_index), buffer);
+        write_compact_bit_sequence(storage_.get_gorilla_encoder_stream<chunk_type>(chunk.encoder.external_index), buffer);
         break;
       }
 
@@ -228,7 +227,7 @@ class DataSerializer {
       if (const auto it = timestamp_streams_data.stream_offsets.find(timestamp_stream_id); it == timestamp_streams_data.stream_offsets.end()) [[unlikely]] {
         timestamp_streams_data.stream_offsets.emplace(timestamp_stream_id, data_size);
         serialized_chunk.timestamps_offset = data_size;
-        write_compact_bit_sequence(storage.template get_timestamp_stream<chunk_type>(timestamp_stream_id).stream, buffer);
+        write_compact_bit_sequence(storage.get_timestamp_stream<chunk_type>(timestamp_stream_id).stream, buffer);
       } else {
         serialized_chunk.timestamps_offset = it->second;
       }
@@ -237,7 +236,7 @@ class DataSerializer {
           it == timestamp_streams_data.finalized_stream_offsets.end()) [[unlikely]] {
         timestamp_streams_data.finalized_stream_offsets.emplace(timestamp_stream_id, data_size);
         serialized_chunk.timestamps_offset = data_size;
-        write_compact_bit_sequence(storage.template get_timestamp_stream<chunk_type>(timestamp_stream_id).stream, buffer);
+        write_compact_bit_sequence(storage.get_timestamp_stream<chunk_type>(timestamp_stream_id).stream, buffer);
       } else {
         serialized_chunk.timestamps_offset = it->second;
       }
@@ -275,7 +274,7 @@ class SerializedDataView {
           series_id_(chunk_iter_->label_set_id),
           buffer_(buffer),
           chunks_(chunks) {
-      create_decode_iterator(buffer_, *chunk_iter_, [&]<typename Iterator>(Iterator&& begin, auto&&) {
+      Decoder::create_decode_iterator(buffer_, *chunk_iter_, [&]<typename Iterator>(Iterator&& begin, auto&&) {
         decode_iter_ = decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
       });
     }
@@ -288,7 +287,7 @@ class SerializedDataView {
       if (decode_iter_ == decoder::DecodeIteratorSentinel{}) [[unlikely]] {
         if (std::next(chunk_iter_) != chunks_.end() && series_id_ == std::next(chunk_iter_)->label_set_id) {
           ++chunk_iter_;
-          create_decode_iterator(buffer_, *chunk_iter_, [&]<typename Iterator>(Iterator&& begin, auto&&) {
+          Decoder::create_decode_iterator(buffer_, *chunk_iter_, [&]<typename Iterator>(Iterator&& begin, auto&&) {
             decode_iter_ = decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
           });
         }
@@ -313,7 +312,7 @@ class SerializedDataView {
 
       chunk_iter_ = chunks_.begin() + chunk_id;
       series_id_ = chunk_iter_->label_set_id;
-      create_decode_iterator(buffer_, *chunk_iter_, [&]<typename Iterator>(Iterator&& begin, auto&&) {
+      Decoder::create_decode_iterator(buffer_, *chunk_iter_, [&]<typename Iterator>(Iterator&& begin, auto&&) {
         decode_iter_ = decoder::UniversalDecodeIterator{std::in_place_type<Iterator>, std::forward<Iterator>(begin)};
       });
     }

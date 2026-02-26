@@ -11,7 +11,6 @@
 
 namespace series_data::unloading {
 
-template <class DataStorage>
 class Unloader {
  public:
   explicit Unloader(DataStorage& storage) : storage_(storage) {}

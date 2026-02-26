@@ -8,10 +8,10 @@ namespace {
 using BareBones::Encoding::Gorilla::STALE_NAN;
 using PromPP::Primitives::LabelSetID;
 using PromPP::Primitives::Timestamp;
-using DataStorage = series_data::DataStorage<>;
-using ChunkFinalizer = series_data::ChunkFinalizer<DataStorage>;
-using Encoder = series_data::Encoder<DataStorage>;
-using InstantQuerier = series_data::InstantQuerier<DataStorage>;
+using series_data::ChunkFinalizer;
+using series_data::DataStorage;
+using series_data::Encoder;
+using series_data::InstantQuerier;
 using series_data::chunk::DataChunk;
 using series_data::encoder::Sample;
 
@@ -29,7 +29,7 @@ struct InstantQuerierCase {
 class InstantQuerierOpenChunkFixture : public testing::TestWithParam<InstantQuerierCase> {
  protected:
   DataStorage storage_;
-  Encoder encoder_{storage_};
+  Encoder<> encoder_{storage_};
   Sample default_sample_ = {.timestamp = -1, .value = STALE_NAN};
   std::vector<Sample> samples_{default_sample_};
 };
@@ -244,7 +244,7 @@ class InstantQuerierLoaderUnloaderTestFixture : public testing::Test {
   static double get_value(uint32_t ls_id, int64_t timestamp) noexcept { return 10 * ls_id + timestamp; }
 
   DataStorage storage_;
-  Encoder encoder_{storage_};
+  Encoder<> encoder_{storage_};
   InstantQuerier instant_querier_{storage_};
   const Sample default_sample_{.timestamp = -1, .value = STALE_NAN};
   std::vector<Sample> samples_{3, default_sample_};

@@ -30,7 +30,7 @@ extern "C" void prompp_get_head_status_data_storage(void* args, void* res) {
   const auto in = static_cast<const Arguments*>(args);
   auto* status = static_cast<Status*>(res);
 
-  status->min_max_timestamp = series_data::Decoder<entrypoint::head::DataStorage>::get_time_interval(*in->data_storage);
+  status->min_max_timestamp = series_data::Decoder::get_time_interval(*in->data_storage);
   status->chunk_count = in->data_storage->chunks().non_empty_chunk_count();
 }
 

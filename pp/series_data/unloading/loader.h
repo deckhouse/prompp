@@ -33,7 +33,6 @@ struct BareBones::IsTriviallyReallocatable<series_data::unloading::SeriesToLoadI
 
 namespace series_data::unloading {
 
-template <class DataStorage>
 class Loader {
  public:
   class UnorderedVector {
@@ -56,7 +55,7 @@ class Loader {
 
     template <class MapIterator, class Vector>
     class Iterator {
-      using RefType = typename Vector::value_type&;
+      using RefType = Vector::value_type&;
       using PairType = std::pair<uint32_t, RefType>;
 
      public:
@@ -122,7 +121,7 @@ class Loader {
     }
 
    private:
-    BareBones::Vector<SeriesToLoadInfo<typename DataStorage::Reallocator>> series_to_load_infos_{};
+    BareBones::Vector<SeriesToLoadInfo<DataStorage::Reallocator>> series_to_load_infos_{};
     phmap::flat_hash_map<uint32_t, uint32_t> ls_id_to_offset_{};
   };
 
@@ -159,7 +158,7 @@ class Loader {
     process_ls_id_data(bitset_it, length_it, id_it, bitseqs_ptr);
   }
 
-  template <EncoderInterface Encoder = Encoder<DataStorage>>
+  template <EncoderInterface Encoder = Encoder<>>
   void load_finalize() {
     for (const auto& [ls_id, info] : ls_id_to_infos_) {
       if (info.buffer.size_in_bits() != 0) {
@@ -215,8 +214,8 @@ class Loader {
     }
   }
 
-  void load_chunk_id(uint32_t ls_id, SeriesToLoadInfo<typename DataStorage::Reallocator>& info) const {
-    const auto& chunk_data = std::ranges::next(typename DataStorage::SeriesChunkIterator{&storage_, ls_id}, info.chunk_id, DataStorage::SeriesChunks::end());
+  void load_chunk_id(uint32_t ls_id, SeriesToLoadInfo<DataStorage::Reallocator>& info) const {
+    const auto& chunk_data = std::ranges::next(DataStorage::SeriesChunkIterator{&storage_, ls_id}, info.chunk_id, DataStorage::SeriesChunks::end());
 
     auto& chunk_bit_sequence = get_chunk_stream(storage_, chunk_data->chunk(), chunk_data->is_open());
 

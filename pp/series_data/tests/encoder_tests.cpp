@@ -7,14 +7,14 @@ namespace {
 
 using BareBones::BitSequenceReader;
 using BareBones::Encoding::Gorilla::STALE_NAN;
-using DataStorage = series_data::DataStorage<>;
-using Decoder = series_data::Decoder<DataStorage>;
+using series_data::DataStorage;
+using series_data::Decoder;
 using series_data::Encoder;
 using series_data::EncodingType;
 using series_data::chunk::DataChunk;
 using series_data::chunk::FinalizedChunkList;
-using OutdatedChunk = series_data::chunk::OutdatedChunk<DataStorage::Reallocator>;
-using BitSequenceWithItemsCount = series_data::encoder::BitSequenceWithItemsCount<DataStorage::Reallocator>;
+using OutdatedChunk = DataStorage::OutdatedChunk;
+using BitSequenceWithItemsCount = DataStorage::BitSequenceWithItemsCount;
 using series_data::encoder::GorillaEncoder;
 using series_data::encoder::SampleList;
 using series_data::encoder::timestamp::TimestampDecoder;
@@ -28,7 +28,7 @@ class EncoderTestTrait {
   using ListOfSampleList = BareBones::Vector<SampleList>;
 
   DataStorage storage_;
-  Encoder<DataStorage, kSamplesPerChunk> encoder_{storage_};
+  Encoder<kSamplesPerChunk> encoder_{storage_};
 
   [[nodiscard]] const DataChunk& chunk(uint32_t ls_id) const noexcept { return storage_.open_chunks[ls_id]; }
   [[nodiscard]] const FinalizedChunkList* finalized_chunks(uint32_t ls_id) const noexcept {

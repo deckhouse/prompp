@@ -8,11 +8,8 @@
 
 namespace series_data::querier {
 
-template <class DataStorage>
 class Querier {
  public:
-  using Decoder = series_data::Decoder<DataStorage>;
-
   explicit Querier(DataStorage& storage) : storage_(storage) {}
 
   template <typename Query>
@@ -57,7 +54,7 @@ class Querier {
       uint32_t finalized_chunk_index = 0;
       const auto& finalized_chunks = it->second;
       for (auto chunk_it = finalized_chunks.begin(); chunk_it != finalized_chunks.end(); ++chunk_it, ++finalized_chunk_index) {
-        const auto chunk_start_timestamp_ms = Decoder::template get_chunk_first_timestamp<ChunkType::kFinalized>(storage_, *chunk_it);
+        const auto chunk_start_timestamp_ms = Decoder::get_chunk_first_timestamp<ChunkType::kFinalized>(storage_, *chunk_it);
         if (chunk_start_timestamp_ms > time_interval.max) {
           return;
         }
@@ -73,7 +70,7 @@ class Querier {
   void query_opened_chunks(PromPP::Primitives::LabelSetID ls_id, const PromPP::Primitives::TimeInterval& time_interval) noexcept {
     if (storage_.open_chunks.size() > ls_id) {
       if (const auto& open_chunk = storage_.open_chunks[ls_id]; !open_chunk.is_empty()) {
-        const auto chunk_start_timestamp_ms = Decoder::template get_chunk_first_timestamp<ChunkType::kOpen>(storage_, open_chunk);
+        const auto chunk_start_timestamp_ms = Decoder::get_chunk_first_timestamp<ChunkType::kOpen>(storage_, open_chunk);
         if (chunk_start_timestamp_ms > time_interval.max) {
           return;
         }
@@ -88,4 +85,4 @@ class Querier {
 
 }  // namespace series_data::querier
 
-static_assert(series_data::LoadableQuerierInterface<series_data::querier::Querier<series_data::DataStorage<>>, series_data::DataStorage<>>);
+static_assert(series_data::LoadableQuerierInterface<series_data::querier::Querier>);

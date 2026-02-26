@@ -24,7 +24,7 @@ using PromPP::Primitives::LabelSetID;
 using PromPP::Primitives::Go::BytesStream;
 using PromPP::Primitives::Go::Slice;
 using PromPP::Primitives::Go::SliceView;
-using ChunkRecoderIterator = head::ChunkRecoderIterator<QueryableEncodingBimap::LsIdSetIterator, QueryableEncodingBimap::LsIdSetIterator, DataStorage>;
+using ChunkRecoderIterator = head::ChunkRecoderIterator<QueryableEncodingBimap::LsIdSetIterator, QueryableEncodingBimap::LsIdSetIterator>;
 using ChunkRecoder = head::ChunkRecoder<ChunkRecoderIterator>;
 
 using SerializedChunkRecoder = head::ChunkRecoder<series_data::chunk::SerializedChunkIterator>;
@@ -34,7 +34,7 @@ using ChunkRecoderVariantPtr = std::unique_ptr<ChunkRecoderVariant>;
 
 using entrypoint::series_data::RevertableLoader;
 
-using LoaderVariant = std::variant<series_data::unloading::Loader<DataStorage>, RevertableLoader>;
+using LoaderVariant = std::variant<series_data::unloading::Loader, RevertableLoader>;
 using LoaderVariantPtr = std::unique_ptr<LoaderVariant>;
 static_assert(sizeof(LoaderVariantPtr) == sizeof(void*));
 
@@ -66,7 +66,7 @@ extern "C" void prompp_series_data_data_storage_time_interval(void* args, void* 
     PromPP::Primitives::TimeInterval interval;
   };
 
-  new (res) Result{.interval = series_data::Decoder<DataStorage>::get_time_interval(*static_cast<Arguments*>(args)->data_storage)};
+  new (res) Result{.interval = series_data::Decoder::get_time_interval(*static_cast<Arguments*>(args)->data_storage)};
 }
 
 extern "C" void prompp_series_data_data_storage_queried_series_bitset_size(void* args, void* res) {
@@ -299,7 +299,7 @@ extern "C" void prompp_series_data_chunk_recoder_dtor(void* args) {
 struct Unloader {
   explicit Unloader(DataStorage& storage) : unloader(storage) {}
 
-  series_data::unloading::Unloader<DataStorage> unloader;
+  series_data::unloading::Unloader unloader;
   Slice<char> snapshot;
 };
 
@@ -368,8 +368,8 @@ extern "C" void prompp_series_data_data_storage_loader_ctor(void* args, void* re
   };
 
   const auto in = static_cast<Arguments*>(args);
-  const auto out = new (res) Result{.loader = std::make_unique<LoaderVariant>(std::in_place_type<Loader<DataStorage>>, *in->data_storage)};
-  auto& loader = std::get<Loader<DataStorage>>(*out->loader);
+  const auto out = new (res) Result{.loader = std::make_unique<LoaderVariant>(std::in_place_type<Loader>, *in->data_storage)};
+  auto& loader = std::get<Loader>(*out->loader);
 
   for (const auto& rest : in->queriers) {
     std::visit(

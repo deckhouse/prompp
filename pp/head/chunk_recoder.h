@@ -18,28 +18,24 @@ concept ChunkInfoInterface = requires(ChunkInfo& info) {
   { info.samples_count } -> std::same_as<uint8_t&>;
 };
 
-template <class ChunkRecoderIterator>
-concept has_data_storage = requires { typename ChunkRecoderIterator::DataStorageType; };
-
 constexpr auto kUnlimitedLsIdBatchSize = std::numeric_limits<uint8_t>::max();
 
-template <class LsIdSetIterator, class LsIdSetIteratorSentinel, class DataStorage>
+template <class LsIdSetIterator, class LsIdSetIteratorSentinel>
 class ChunkRecoderIterator {
  public:
   using iterator_category = std::forward_iterator_tag;
-  using value_type = DataStorage::SeriesChunkIterator::Data;
+  using value_type = series_data::DataStorage::SeriesChunkIterator::Data;
   using difference_type = ptrdiff_t;
   using pointer = value_type*;
   using reference = value_type&;
 
   using LabelSetID = PromPP::Primitives::LabelSetID;
   using IteratorSentinel = series_data::IteratorSentinel;
-  using DataStorageType = DataStorage;
 
   ChunkRecoderIterator(LsIdSetIterator&& ls_id_iterator_,
                        LsIdSetIteratorSentinel&& ls_id_end_iterator,
                        uint32_t ls_id_batch_size,
-                       const DataStorage* data_storage,
+                       const series_data::DataStorage* data_storage,
                        const PromPP::Primitives::TimeInterval time_interval)
       : time_interval_(time_interval),
         ls_id_iterator_(std::forward<LsIdSetIterator>(ls_id_iterator_), ls_id_batch_size),
@@ -53,7 +49,7 @@ class ChunkRecoderIterator {
     ls_id_iterator_.next_batch();
 
     if (*this != IteratorSentinel{}) {
-      chunk_iterator_ = typename DataStorage::SeriesChunkIterator{chunk_iterator_->storage(), static_cast<LabelSetID>(*ls_id_iterator_)};
+      chunk_iterator_ = series_data::DataStorage::SeriesChunkIterator{chunk_iterator_->storage(), static_cast<LabelSetID>(*ls_id_iterator_)};
       advance_to_non_empty_chunk();
       return *this != IteratorSentinel{};
     }
@@ -82,12 +78,12 @@ class ChunkRecoderIterator {
   const PromPP::Primitives::TimeInterval time_interval_;
   BareBones::iterator::BatchIterator<LsIdSetIterator, LsIdSetIteratorSentinel> ls_id_iterator_;
   [[no_unique_address]] LsIdSetIteratorSentinel ls_id_end_iterator_;
-  DataStorage::SeriesChunkIterator chunk_iterator_;
+  series_data::DataStorage::SeriesChunkIterator chunk_iterator_;
 
   PROMPP_ALWAYS_INLINE void advance_iterator() noexcept {
     if (++chunk_iterator_ == IteratorSentinel{}) {
       if (++ls_id_iterator_ != ls_id_end_iterator_) {
-        chunk_iterator_ = typename DataStorage::SeriesChunkIterator{chunk_iterator_->storage(), static_cast<LabelSetID>(*ls_id_iterator_)};
+        chunk_iterator_ = series_data::DataStorage::SeriesChunkIterator{chunk_iterator_->storage(), static_cast<LabelSetID>(*ls_id_iterator_)};
       }
     }
   }
@@ -99,8 +95,8 @@ class ChunkRecoderIterator {
       }
 
       return !time_interval_.intersect({
-          .min = series_data::Decoder<DataStorage>::get_chunk_first_timestamp(**this),
-          .max = series_data::Decoder<DataStorage>::get_chunk_last_timestamp(**this),
+          .min = series_data::Decoder::get_chunk_first_timestamp(**this),
+          .max = series_data::Decoder::get_chunk_last_timestamp(**this),
       });
     };
 
@@ -171,7 +167,7 @@ class ChunkRecoder {
 
   void recode_chunk(ChunkInfoInterface auto& info) {
     Encoder encoder;
-    const auto recode = [&]<typename Iterator>(Iterator&& begin, auto&& end) {
+    series_data::Decoder::create_decode_iterator(*iterator_, [&]<typename Iterator>(Iterator&& begin, auto&& end) {
       for (; begin != end; ++begin) {
         const auto& sample = *begin;
         if (sample.timestamp > time_interval_.max) [[unlikely]] {
@@ -194,14 +190,7 @@ class ChunkRecoder {
 
         ++info.samples_count;
       }
-    };
-
-    // TODO: implement better solution
-    if constexpr (has_data_storage<ChunkIterator>) {
-      series_data::Decoder<typename ChunkIterator::DataStorageType>::create_decode_iterator(*iterator_, recode);
-    } else {
-      series_data::create_decode_iterator(*iterator_, recode);
-    }
+    });
 
     if (info.samples_count > 0) [[likely]] {
       info.interval.max = encoder.last_timestamp();

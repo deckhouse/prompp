@@ -6,20 +6,20 @@
 
 namespace {
 
-using DataStorage = series_data::DataStorage<>;
-using ChunkFinalizer = series_data::ChunkFinalizer<DataStorage>;
-using Decoder = series_data::Decoder<DataStorage>;
-using Encoder = series_data::Encoder<DataStorage>;
+using series_data::ChunkFinalizer;
+using series_data::DataStorage;
+using series_data::Decoder;
+using series_data::Encoder;
 using series_data::chunk::DataChunk;
 using series_data::encoder::SampleList;
-using Loader = series_data::unloading::Loader<DataStorage>;
-using LoadReverter = series_data::unloading::LoadReverter<DataStorage>;
-using Unloader = series_data::unloading::Unloader<DataStorage>;
+using series_data::unloading::Loader;
+using series_data::unloading::LoadReverter;
+using series_data::unloading::Unloader;
 
 class ReverterTestFixture : public testing::Test {
  protected:
   DataStorage storage_;
-  Encoder encoder_{storage_};
+  Encoder<> encoder_{storage_};
   Unloader unloader_{storage_};
   LoadReverter reverter_{storage_};
   BareBones::ShrinkedToFitOStringStream stream_;

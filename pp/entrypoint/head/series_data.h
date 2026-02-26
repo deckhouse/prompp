@@ -6,7 +6,7 @@
 
 namespace entrypoint::head {
 
-using Encoder = series_data::Encoder<DataStorage>;
+using Encoder = series_data::Encoder<>;
 using OutdatedChunkMerger = series_data::OutdatedChunkMerger<Encoder>;
 
 struct SeriesDataEncoderWrapper {

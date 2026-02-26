@@ -2,6 +2,7 @@
 
 #include "bare_bones/algorithm.h"
 #include "bare_bones/bitset.h"
+#include "bare_bones/jemalloc.h"
 #include "bare_bones/preprocess.h"
 #include "chunk/data_chunk.h"
 #include "chunk/finalized_chunk.h"
@@ -13,9 +14,13 @@
 
 namespace series_data {
 
-template <BareBones::ReallocatorInterface ReallocatorType = BareBones::DefaultReallocator>
 struct DataStorage {
-  using Reallocator = ReallocatorType;
+#if JEMALLOC_AVAILABLE
+  struct DataStorageAllocatorTag {};
+  using Reallocator = BareBones::jemalloc::ArenaReallocator<DataStorageAllocatorTag>;
+#else
+  using Reallocator = BareBones::DefaultReallocator;
+#endif
   using BitSequenceWithItemsCount = encoder::BitSequenceWithItemsCount<Reallocator>;
   using CompactBitSequence = encoder::CompactBitSequence<Reallocator>;
   using OutdatedChunk = chunk::OutdatedChunk<Reallocator>;
@@ -327,28 +332,7 @@ struct DataStorage {
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
-    using enum EncodingType;
-
-    if constexpr (BareBones::ArenaAllocatorInterface<Reallocator>) {
-      return Reallocator::arena_allocated_memory(arena_index);
-    } else {
-      const size_t outdated_chunks_allocated_memory =
-          BareBones::accumulate(outdated_chunks, 0, [](auto& local, const auto& p) { return local + p.second.allocated_memory(); });
-
-      size_t encoders_memory = variant_encoders.allocated_memory() + gorilla_encoders.allocated_memory();
-
-      for (const auto& chunk : open_chunks) {
-        if (is_variant_encoder(chunk.encoding_state.encoding_type)) {
-          encoders_memory += variant_encoders[chunk.encoder.external_index].allocated_memory(chunk.encoding_state.encoding_type);
-        }
-      }
-
-      return open_chunks.allocated_memory() + encoders_memory + timestamp_encoder.allocated_memory() + finalized_timestamp_streams.allocated_memory() +
-             finalized_data_streams.allocated_memory() + finalized_chunks_map_allocated_memory + outdated_chunks_map_allocated_memory +
-             outdated_chunks_allocated_memory + unloaded_series_bitmap.allocated_memory() + queried_series_bitmap.allocated_memory();
-    }
-  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return allocated_memory_impl<Reallocator>(); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory(EncodingType encoding_type) const noexcept {
     if (is_variant_encoder(encoding_type)) {
@@ -374,38 +358,9 @@ struct DataStorage {
     return 0;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto thread_arena_guard() const noexcept
-    requires(BareBones::ArenaAllocatorInterface<Reallocator>)
-  {
-    return Reallocator::thread_arena_guard(arena_index);
-  }
+  DataStorage() noexcept { constructor_impl<Reallocator>(); }
 
-  DataStorage() noexcept {
-    if constexpr (BareBones::ArenaAllocatorInterface<Reallocator>) {
-      arena_index = Reallocator::create_arena();
-    }
-  }
-
-  ~DataStorage() {
-    if constexpr (BareBones::ArenaAllocatorInterface<Reallocator>) {
-      Reallocator::destroy_arena(arena_index);
-    } else {
-      for (const auto& chunk : open_chunks) {
-        destroy_open_chunk_encoder(chunk);
-      }
-
-      std::destroy_at(&open_chunks);
-      std::destroy_at(&timestamp_encoder);
-      std::destroy_at(&variant_encoders);
-      std::destroy_at(&gorilla_encoders);
-      std::destroy_at(&outdated_chunks);
-      std::destroy_at(&finalized_timestamp_streams);
-      std::destroy_at(&finalized_data_streams);
-      std::destroy_at(&finalized_chunks);
-      std::destroy_at(&unloaded_series_bitmap);
-      std::destroy_at(&queried_series_bitmap);
-    }
-  }
+  ~DataStorage() { destructor_impl<Reallocator>(); }
 
   void reset() noexcept {
     std::destroy_at(this);
@@ -455,6 +410,69 @@ struct DataStorage {
       variant_encoders[chunk.encoder.external_index].destroy(chunk.encoding_state.encoding_type);
     }
   }
+
+  template <BareBones::ReallocatorInterface Reallocator>
+  PROMPP_ALWAYS_INLINE void constructor_impl() noexcept {
+    if constexpr (BareBones::ArenaAllocatorInterface<Reallocator>) {
+      arena_index = Reallocator::create_arena();
+    }
+  }
+
+  template <BareBones::ReallocatorInterface Reallocator>
+  PROMPP_ALWAYS_INLINE void destructor_impl() noexcept {
+    if constexpr (BareBones::ArenaAllocatorInterface<Reallocator>) {
+      Reallocator::destroy_arena(arena_index);
+    } else {
+      for (const auto& chunk : open_chunks) {
+        destroy_open_chunk_encoder(chunk);
+      }
+
+      std::destroy_at(&open_chunks);
+      std::destroy_at(&timestamp_encoder);
+      std::destroy_at(&variant_encoders);
+      std::destroy_at(&gorilla_encoders);
+      std::destroy_at(&outdated_chunks);
+      std::destroy_at(&finalized_timestamp_streams);
+      std::destroy_at(&finalized_data_streams);
+      std::destroy_at(&finalized_chunks);
+      std::destroy_at(&unloaded_series_bitmap);
+      std::destroy_at(&queried_series_bitmap);
+    }
+  }
+
+  template <BareBones::ReallocatorInterface Reallocator>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory_impl() const noexcept {
+    using enum EncodingType;
+
+    if constexpr (BareBones::ArenaAllocatorInterface<Reallocator>) {
+      return Reallocator::arena_allocated_memory(arena_index);
+    } else {
+      const size_t outdated_chunks_allocated_memory =
+          BareBones::accumulate(outdated_chunks, 0, [](auto& local, const auto& p) { return local + p.second.allocated_memory(); });
+
+      size_t encoders_memory = variant_encoders.allocated_memory() + gorilla_encoders.allocated_memory();
+
+      for (const auto& chunk : open_chunks) {
+        if (is_variant_encoder(chunk.encoding_state.encoding_type)) {
+          encoders_memory += variant_encoders[chunk.encoder.external_index].allocated_memory(chunk.encoding_state.encoding_type);
+        }
+      }
+
+      return open_chunks.allocated_memory() + encoders_memory + timestamp_encoder.allocated_memory() + finalized_timestamp_streams.allocated_memory() +
+             finalized_data_streams.allocated_memory() + finalized_chunks_map_allocated_memory + outdated_chunks_map_allocated_memory +
+             outdated_chunks_allocated_memory + unloaded_series_bitmap.allocated_memory() + queried_series_bitmap.allocated_memory();
+    }
+  }
+
+  template <BareBones::ReallocatorInterface Reallocator>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE auto thread_arena_guard_impl() const noexcept {
+    if constexpr (BareBones::ArenaAllocatorInterface<Reallocator>) {
+      return Reallocator::thread_arena_guard(arena_index);
+    }
+  }
+
+ public:
+  [[nodiscard]] PROMPP_ALWAYS_INLINE auto thread_arena_guard() const noexcept { return thread_arena_guard_impl<Reallocator>(); }
 };
 
 }  // namespace series_data

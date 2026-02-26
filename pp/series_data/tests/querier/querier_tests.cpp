@@ -6,13 +6,13 @@
 
 namespace {
 
-using DataStorage = series_data::DataStorage<>;
-using ChunkFinalizer = series_data::ChunkFinalizer<DataStorage>;
+using series_data::DataStorage;
+using series_data::ChunkFinalizer;
 using series_data::Encoder;
 using series_data::chunk::DataChunk;
 using series_data::querier::QueriedChunk;
 using series_data::querier::QueriedChunkList;
-using Querier = series_data::querier::Querier<DataStorage>;
+using series_data::querier::Querier;
 using Query = series_data::querier::Query<BareBones::Vector<PromPP::Primitives::LabelSetID>>;
 
 struct QuerierCase {
@@ -23,7 +23,7 @@ struct QuerierCase {
 class QuerierFixture : public testing::TestWithParam<QuerierCase> {
  protected:
   DataStorage storage_;
-  Encoder<DataStorage> encoder_{storage_};
+  Encoder<> encoder_{storage_};
   Querier querier_{storage_};
 
   void fill_storage() {
@@ -138,7 +138,7 @@ class QuerierLoaderUnloaderTestFixture : public ::testing::Test {
   static double get_value(uint32_t ls_id, int64_t timestamp) noexcept { return 10 * ls_id + timestamp; }
 
   DataStorage storage_;
-  Encoder<DataStorage> encoder_{storage_};
+  Encoder<> encoder_{storage_};
   Querier querier_{storage_};
 };
 

@@ -35,8 +35,8 @@ class RevertableLoader {
   [[nodiscard]] PROMPP_ALWAYS_INLINE head::DataStorage& storage() noexcept { return loader_.storage(); }
 
  private:
-  ::series_data::unloading::Loader<head::DataStorage> loader_;
-  ::series_data::unloading::LoadReverter<head::DataStorage> reverter_;
+  ::series_data::unloading::Loader loader_;
+  ::series_data::unloading::LoadReverter reverter_;
   BareBones::iterator::BatchIterator<head::QueryableEncodingBimap::LsIdSetIterator, head::QueryableEncodingBimap::LsIdSetIterator> iterator_;
   [[no_unique_address]] head::QueryableEncodingBimap::LsIdSetIterator end_iterator_;
 

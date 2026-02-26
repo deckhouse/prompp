@@ -41,7 +41,7 @@ class InstantQuerierWithArgumentsWrapper {
   [[nodiscard]] DataStorage& storage() noexcept { return instant_querier_.get_storage(); }
 
  private:
-  ::series_data::InstantQuerier<head::DataStorage> instant_querier_;
+  ::series_data::InstantQuerier instant_querier_;
   SampleStorage samples_;
   const LsIDStorage label_set_ids_;
   const Timestamp timestamp_;
@@ -52,8 +52,8 @@ struct SampleWithGoLabels : public ::series_data::encoder::Sample {
   char go_labels_[Sizeof_GoLabels];
 };
 
-using InstantQuerierWithArgumentsWrapperEntrypoint = InstantQuerierWithArgumentsWrapper<PromPP::Primitives::Go::SliceView<PromPP::Primitives::LabelSetID>,
-                                                                                        std::span<entrypoint::series_data::SampleWithGoLabels>>;
+using InstantQuerierWithArgumentsWrapperEntrypoint =
+    InstantQuerierWithArgumentsWrapper<PromPP::Primitives::Go::SliceView<PromPP::Primitives::LabelSetID>, std::span<SampleWithGoLabels>>;
 
 class RangeQuerierWithArgumentsWrapperV2 {
   using DataStorage = head::DataStorage;
@@ -81,7 +81,7 @@ class RangeQuerierWithArgumentsWrapperV2 {
   [[nodiscard]] DataStorage& storage() noexcept { return querier_.get_storage(); }
 
  private:
-  ::series_data::querier::Querier<head::DataStorage> querier_;
+  ::series_data::querier::Querier querier_;
   const Query* query_;
   head::SerializedDataPtr* serialized_data_;
 

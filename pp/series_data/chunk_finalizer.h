@@ -5,7 +5,6 @@
 
 namespace series_data {
 
-template <class DataStorage>
 class ChunkFinalizer {
  public:
   enum class FinalizeTimestampStateMode : uint8_t {
@@ -67,7 +66,7 @@ class ChunkFinalizer {
   PROMPP_ALWAYS_INLINE static void emplace_finalized_chunk(DataStorage& storage, uint32_t ls_id, const chunk::DataChunk& chunk) {
     storage.finalized_chunks.try_emplace(ls_id, storage.finalized_chunks_map_allocated_memory)
         .first->second.emplace(chunk, [&storage](const chunk::DataChunk& chunk) PROMPP_LAMBDA_INLINE {
-          return Decoder<DataStorage>::template get_chunk_first_timestamp<chunk::DataChunk::Type::kFinalized>(storage, chunk);
+          return Decoder::get_chunk_first_timestamp<chunk::DataChunk::Type::kFinalized>(storage, chunk);
         });
   }
 

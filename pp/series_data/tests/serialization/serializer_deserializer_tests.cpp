@@ -10,9 +10,9 @@
 namespace {
 
 using BareBones::Encoding::Gorilla::STALE_NAN;
-using DataStorage = series_data::DataStorage<>;
-using ChunkFinalizer = series_data::ChunkFinalizer<DataStorage>;
-using Encoder = series_data::Encoder<DataStorage>;
+using series_data::ChunkFinalizer;
+using series_data::DataStorage;
+using Encoder = series_data::Encoder<>;
 using series_data::EncodingType;
 using series_data::chunk::DataChunk;
 using series_data::decoder::DecodeIteratorSentinel;
@@ -20,7 +20,7 @@ using series_data::encoder::Sample;
 using series_data::encoder::SampleList;
 using series_data::querier::QueriedChunk;
 using series_data::querier::QueriedChunkList;
-using DataSerializer = series_data::serialization::DataSerializer<DataStorage>;
+using DataSerializer = series_data::serialization::DataSerializer;
 using SerializedData = series_data::serialization::SerializedData<DataStorage::Reallocator>;
 using SerializedDataView = series_data::serialization::SerializedDataView<DataStorage::Reallocator>;
 

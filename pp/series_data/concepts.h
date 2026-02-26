@@ -7,21 +7,17 @@ namespace series_data {
 inline constexpr uint8_t kSamplesPerChunkDefault = 240;
 
 template <class EncoderType>
-concept EncoderInterface = requires(EncoderType& encoder, chunk::DataChunk& chunk, const chunk::DataChunk& const_chunk) {
-  typename EncoderType::DataStorageType;
-
-  { encoder.storage() } -> std::same_as<typename EncoderType::DataStorageType&>;
+concept EncoderInterface = requires(EncoderType& encoder, EncoderType& const_encoder, chunk::DataChunk& chunk, const chunk::DataChunk& const_chunk) {
+  { encoder.storage() } -> std::same_as<DataStorage&>;
   { encoder.encode(uint32_t(), int64_t(), double(), chunk) };
 };
 
 struct FakeEncoder {
-  using DataStorageType = DataStorage<>;
-
   FakeEncoder() = delete;
   FakeEncoder(const FakeEncoder&) = delete;
   FakeEncoder(FakeEncoder&&) noexcept = delete;
 
-  static DataStorageType& storage() noexcept {
+  static DataStorage& storage() noexcept {
     static DataStorage s;
     return s;
   }
@@ -35,7 +31,7 @@ concept OutdatedSampleEncoderInterface = requires(OutdatedSampleEncoder& outdate
   { outdated_sample_encoder.encode(encoder, uint32_t{}, int64_t{}, double{}) };
 };
 
-template <typename QuerierType, class DataStorage>
+template <typename QuerierType>
 concept LoadableQuerierInterface = requires(QuerierType obj, DataStorage& storage) {
   { QuerierType(storage) };
   { obj.need_loading() } -> std::same_as<bool>;

@@ -12,7 +12,7 @@ using PromPP::Primitives::LabelViewSet;
 using PromPP::Primitives::Sample;
 using PromPP::Primitives::TimeseriesSemiview;
 using PromPP::WAL::hashdex::GoHead;
-using DataStorage = series_data::DataStorage<>;
+using series_data::DataStorage;
 using series_data::Encoder;
 
 struct HashdexItem {
@@ -26,10 +26,10 @@ class GoHeadFixture : public ::testing::Test {
  protected:
   using Lss = PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector>;
 
-  GoHead<Lss, DataStorage> hashdex_;
+  GoHead<Lss> hashdex_;
   Lss lss_;
   DataStorage data_storage_;
-  Encoder<DataStorage> encoder_{data_storage_};
+  Encoder<> encoder_{data_storage_};
 };
 
 TEST_F(GoHeadFixture, Test) {
@@ -45,7 +45,7 @@ TEST_F(GoHeadFixture, Test) {
 
   // Act
   hashdex_.presharding(&lss_, &data_storage_);
-  std::ranges::for_each(hashdex_.metrics(), [&actual](const GoHead<Lss, DataStorage>::Iterator& it) {
+  std::ranges::for_each(hashdex_.metrics(), [&actual](const GoHead<Lss>::Iterator& it) {
     auto& item = actual.emplace_back();
     item.hash = it.hash();
     it.read(item.timeseries);
