@@ -8,7 +8,6 @@
 
 namespace series_data::serialization {
 
-template <BareBones::ReallocatorInterface Reallocator>
 struct SerializedData {
   using Memory = BareBones::Memory<BareBones::MemoryControlBlockWithItemCount, unsigned char>;
 
@@ -43,12 +42,12 @@ struct SerializedData {
       case kAscIntegerThenValuesGorilla:
       case kValuesGorilla: {
         destroy_timestamp_stream_if_needed(chunk, timestamp_offset);
-        std::destroy_at(reinterpret_cast<const SerializedCompactBitSequence<Reallocator>*>(bytes_buffer + chunk.values_offset));
+        std::destroy_at(reinterpret_cast<const SerializedCompactBitSequence*>(bytes_buffer + chunk.values_offset));
         break;
       }
 
       case kGorilla: {
-        std::destroy_at(reinterpret_cast<const SerializedCompactBitSequence<Reallocator>*>(bytes_buffer + chunk.values_offset));
+        std::destroy_at(reinterpret_cast<const SerializedCompactBitSequence*>(bytes_buffer + chunk.values_offset));
         break;
       }
 
@@ -62,16 +61,13 @@ struct SerializedData {
   PROMPP_ALWAYS_INLINE void destroy_timestamp_stream_if_needed(const chunk::SerializedChunk& chunk, uint32_t& timestamp_offset) {
     if (timestamp_offset == kNoTimestampOffset || chunk.timestamps_offset > timestamp_offset) [[unlikely]] {
       timestamp_offset = chunk.timestamps_offset;
-      std::destroy_at(reinterpret_cast<const SerializedCompactBitSequence<Reallocator>*>(bytes_buffer + chunk.timestamps_offset));
+      std::destroy_at(reinterpret_cast<const SerializedCompactBitSequence*>(bytes_buffer + chunk.timestamps_offset));
     }
   }
 };
 
 class DataSerializer {
  public:
-  using SerializedData = series_data::serialization::SerializedData<DataStorage::Reallocator>;
-  using SerializedCompactBitSequence = series_data::SerializedCompactBitSequence<DataStorage::Reallocator>;
-
   explicit DataSerializer(const DataStorage& storage) : storage_(storage) {}
 
   SerializedData serialize(const querier::QueriedChunkList& queried_chunks) noexcept { return serialize_internal(queried_chunks); }
@@ -254,7 +250,6 @@ class DataSerializer {
   const DataStorage& storage_;
 };
 
-template <BareBones::ReallocatorInterface Reallocator>
 class SerializedDataView {
  public:
   using series_id_inner_chunk_id_t = std::pair<uint32_t, uint32_t>;
@@ -326,7 +321,7 @@ class SerializedDataView {
     chunk::SerializedChunkSpan chunks_;
   };
 
-  explicit SerializedDataView(const SerializedData<Reallocator>& serialized_data) : data_(serialized_data) {}
+  explicit SerializedDataView(const SerializedData& serialized_data) : data_(serialized_data) {}
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE chunk::SerializedChunkSpan get_chunks_view() const noexcept { return {data_.chunks.data(), data_.chunks.size()}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const unsigned char> get_buffer_view() const noexcept {
@@ -365,7 +360,7 @@ class SerializedDataView {
   }
 
  private:
-  const SerializedData<Reallocator>& data_;
+  const SerializedData& data_;
   uint32_t series_first_chunk_id_{kNoMoreSeries};
 };
 }  // namespace series_data::serialization

@@ -468,6 +468,11 @@ struct DataStorage {
   [[nodiscard]] PROMPP_ALWAYS_INLINE auto thread_arena_guard_impl() const noexcept {
     if constexpr (BareBones::ArenaAllocatorInterface<Reallocator>) {
       return Reallocator::thread_arena_guard(arena_index);
+    } else {
+      struct NoGuard {
+        ~NoGuard() = default;
+      };
+      return NoGuard{};
     }
   }
 

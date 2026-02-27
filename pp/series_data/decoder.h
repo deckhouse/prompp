@@ -17,7 +17,6 @@ namespace series_data {
 
 #pragma pack(push, 1)
 
-template <BareBones::ReallocatorInterface Reallocator>
 struct SerializedCompactBitSequence {
   template <class CompactBitSequence>
   PROMPP_ALWAYS_INLINE explicit SerializedCompactBitSequence(const CompactBitSequence& bit_sequence)
@@ -26,7 +25,7 @@ struct SerializedCompactBitSequence {
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const uint8_t> buffer() const noexcept { return {ptr.get(), BareBones::Bit::to_ceil_bytes(size_in_bits)}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE BareBones::BitSequenceReader reader() const noexcept { return {ptr.get(), size_in_bits}; }
 
-  encoder::CompactBitSequence<Reallocator>::SharedPtr ptr;
+  encoder::CompactBitSequence<DataStorage::Reallocator>::SharedPtr ptr;
   uint32_t size_in_bits;
 };
 
@@ -210,7 +209,6 @@ class Decoder {
     using enum EncodingType;
     using decoder::DecodeIteratorSentinel;
     using encoder::BitSequenceWithItemsCount;
-    using SerializedCompactBitSequence = SerializedCompactBitSequence<BareBones::DefaultReallocator>;
 
     switch (chunk.encoding_state.encoding_type) {
       case kUint32Constant: {

@@ -20,9 +20,9 @@ using series_data::encoder::Sample;
 using series_data::encoder::SampleList;
 using series_data::querier::QueriedChunk;
 using series_data::querier::QueriedChunkList;
-using DataSerializer = series_data::serialization::DataSerializer;
-using SerializedData = series_data::serialization::SerializedData<DataStorage::Reallocator>;
-using SerializedDataView = series_data::serialization::SerializedDataView<DataStorage::Reallocator>;
+using series_data::serialization::DataSerializer;
+using series_data::serialization::SerializedData;
+using series_data::serialization::SerializedDataView;
 
 class SerializerDeserializerTrait {
  protected:

@@ -17,12 +17,12 @@ class SerializedDataGo {
   [[nodiscard]] PROMPP_ALWAYS_INLINE auto iterator(uint32_t chunk_id) const noexcept { return data_view_.create_series_iterator(chunk_id); }
 
  private:
-  series_data::serialization::SerializedData<DataStorage::Reallocator> data_;
-  series_data::serialization::SerializedDataView<DataStorage::Reallocator> data_view_{data_};
+  series_data::serialization::SerializedData data_;
+  series_data::serialization::SerializedDataView data_view_{data_};
 };
 
 using SerializedDataPtr = std::unique_ptr<SerializedDataGo>;
-using SerializedDataIterator = series_data::serialization::SerializedDataView<DataStorage::Reallocator>::SeriesIterator;
+using SerializedDataIterator = series_data::serialization::SerializedDataView::SeriesIterator;
 
 static_assert(sizeof(SerializedDataPtr) == sizeof(void*));
 
