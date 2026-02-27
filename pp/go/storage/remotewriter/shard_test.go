@@ -15,10 +15,18 @@ import (
 
 type ShardSuite struct {
 	suite.Suite
+
+	unexpectedEOFCount prometheus.Counter
+	segmentSize        prometheus.Histogram
 }
 
 func TestShardSuite(t *testing.T) {
 	suite.Run(t, new(ShardSuite))
+}
+
+func (s *ShardSuite) SetupTest() {
+	s.unexpectedEOFCount = prometheus.NewCounter(prometheus.CounterOpts{})
+	s.segmentSize = prometheus.NewHistogram(prometheus.HistogramOpts{})
 }
 
 func (s *ShardSuite) TestRead() {
@@ -39,8 +47,8 @@ func (s *ShardSuite) TestRead() {
 		true,
 		labels.EmptyLabels(),
 		[]*cppbridge.RelabelConfig{},
-		prometheus.NewCounter(prometheus.CounterOpts{}),
-		prometheus.NewHistogram(prometheus.HistogramOpts{}),
+		s.unexpectedEOFCount,
+		s.segmentSize,
 	)
 	s.Require().NoError(err)
 	defer func() { s.Require().NoError(shard.Close()) }()
@@ -77,8 +85,8 @@ func (s *ShardSuite) TestSkipSegments() {
 		true,
 		labels.EmptyLabels(),
 		[]*cppbridge.RelabelConfig{},
-		prometheus.NewCounter(prometheus.CounterOpts{}),
-		prometheus.NewHistogram(prometheus.HistogramOpts{}),
+		s.unexpectedEOFCount,
+		s.segmentSize,
 	)
 	s.Require().NoError(err)
 	defer func() { s.Require().NoError(shard.Close()) }()

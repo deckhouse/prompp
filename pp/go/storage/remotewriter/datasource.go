@@ -12,7 +12,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
@@ -99,6 +98,16 @@ type shardCache struct {
 }
 
 //
+// readShardResult
+//
+
+// readShardResult is a result of reading a shard.
+type readShardResult struct {
+	segment *DecodedSegment
+	err     error
+}
+
+//
 // dataSource
 //
 
@@ -108,7 +117,6 @@ type dataSource struct {
 	segmentReadyChecker SegmentReadyChecker
 	corruptMarker       CorruptMarker
 	closed              bool
-	completed           bool
 	headReleaseFunc     func()
 
 	lssSlice []*cppbridge.LabelSetStorage
@@ -183,44 +191,6 @@ func newDataSource(dataDir string,
 	return b, nil
 }
 
-func createShard(
-	headID string,
-	shardID uint16,
-	shardFileName, decoderStateFileName string,
-	resetDecoderState bool,
-	externalLabels labels.Labels,
-	relabelConfigs []*cppbridge.RelabelConfig,
-	unexpectedEOFCount prometheus.Counter,
-	segmentSize prometheus.Histogram,
-) (*shard, error) {
-	s, err := newShard(
-		headID,
-		shardID,
-		shardFileName,
-		decoderStateFileName,
-		resetDecoderState,
-		externalLabels,
-		relabelConfigs,
-		unexpectedEOFCount,
-		segmentSize,
-	)
-	if err != nil {
-		logger.Errorf("failed to create shard: %v", err)
-		return newShard(
-			headID,
-			shardID,
-			shardFileName,
-			decoderStateFileName,
-			true,
-			externalLabels,
-			relabelConfigs,
-			unexpectedEOFCount,
-			segmentSize,
-		)
-	}
-	return s, nil
-}
-
 func convertRelabelConfigs(relabelConfigs ...*relabel.Config) ([]*cppbridge.RelabelConfig, error) {
 	convertedConfigs := make([]*cppbridge.RelabelConfig, 0, len(relabelConfigs))
 	for _, relabelConfig := range relabelConfigs {
@@ -266,15 +236,6 @@ func (ds *dataSource) Close() error {
 	return err
 }
 
-func (ds *dataSource) IsCompleted() bool {
-	return ds.completed
-}
-
-type readShardResult struct {
-	segment *DecodedSegment
-	err     error
-}
-
 // Read checks the segmentID for readiness and reads the [DecodedSegment] from the shards.
 func (ds *dataSource) Read(
 	ctx context.Context,
@@ -282,10 +243,6 @@ func (ds *dataSource) Read(
 	minTimestamp int64,
 	segmentSamplesStorages *cppbridge.SegmentSamplesStorageList,
 ) ([]*DecodedSegment, error) {
-	if ds.completed {
-		return nil, ErrEndOfBlock
-	}
-
 	// shardIDs are needed for V2 to read only recorded segments,
 	// otherwise there will be an attempt to read the sync data
 	shardIDs, segmentIsReady, segmentIsOutOfRange := ds.segmentReadyChecker.SegmentIsReady(segmentID)

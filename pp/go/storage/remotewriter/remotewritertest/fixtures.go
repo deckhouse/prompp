@@ -27,6 +27,7 @@ func (NoopSegmentWriteNotifier) NotifySegmentWrite(uint16) {}
 // Set for shard number of segments. [SegmentWriteNotifier] of the implementation.
 func (NoopSegmentWriteNotifier) Set(uint16, uint32) {}
 
+// MakeRecord makes a new [catalog.Record] with the specified number of shards.
 func MakeRecord(numberOfShards uint16) *catalog.Record {
 	now := time.Now().UnixMilli()
 	rec := catalog.NewRecordWithData(

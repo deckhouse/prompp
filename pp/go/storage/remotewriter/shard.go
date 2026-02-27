@@ -93,6 +93,46 @@ type shard struct {
 	segmentSize        prometheus.Histogram
 }
 
+// createShard creates a new [shard].
+// If an error occurs during initialization, try to create a decoder with a reset state.
+func createShard(
+	headID string,
+	shardID uint16,
+	shardFileName, decoderStateFileName string,
+	resetDecoderState bool,
+	externalLabels labels.Labels,
+	relabelConfigs []*cppbridge.RelabelConfig,
+	unexpectedEOFCount prometheus.Counter,
+	segmentSize prometheus.Histogram,
+) (*shard, error) {
+	s, err := newShard(
+		headID,
+		shardID,
+		shardFileName,
+		decoderStateFileName,
+		resetDecoderState,
+		externalLabels,
+		relabelConfigs,
+		unexpectedEOFCount,
+		segmentSize,
+	)
+	if err != nil {
+		logger.Errorf("failed to create shard: %v", err)
+		return newShard(
+			headID,
+			shardID,
+			shardFileName,
+			decoderStateFileName,
+			true,
+			externalLabels,
+			relabelConfigs,
+			unexpectedEOFCount,
+			segmentSize,
+		)
+	}
+	return s, nil
+}
+
 // newShard init new [shard].
 //
 //revive:disable-next-line:flag-parameter this is a flag, but it's more convenient this way
