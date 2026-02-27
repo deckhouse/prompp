@@ -10,7 +10,7 @@
 
 namespace BareBones::jemalloc {
 
-static const auto kPageSize = sysconf(_SC_PAGESIZE);
+inline const auto kPageSize = sysconf(_SC_PAGESIZE);
 
 PROMPP_ALWAYS_INLINE void refresh_stats() noexcept {
 #if JEMALLOC_AVAILABLE
