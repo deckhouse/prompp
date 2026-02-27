@@ -198,7 +198,7 @@ struct DataStorage {
                          std::hash<uint32_t>,
                          std::equal_to<>,
                          BareBones::Allocator<std::pair<const uint32_t, OutdatedChunk>, Reallocator>>
-        outdated_chunks{{}, {}, BareBones::Allocator<std::pair<const uint32_t, OutdatedChunk>, Reallocator>{outdated_chunks_map_allocated_memory}};
+        outdated_chunks;
   };
 
   union {
@@ -214,10 +214,7 @@ struct DataStorage {
                          std::hash<uint32_t>,
                          std::equal_to<>,
                          BareBones::Allocator<std::pair<const uint32_t, std::forward_list<chunk::DataChunk>>, Reallocator>>
-        finalized_chunks{
-            {},
-            {},
-            BareBones::Allocator<std::pair<const uint32_t, std::forward_list<chunk::DataChunk>>, Reallocator>{finalized_chunks_map_allocated_memory}};
+        finalized_chunks;
   };
 
   uint32_t outdated_samples_count{};
@@ -358,7 +355,14 @@ struct DataStorage {
     return 0;
   }
 
-  DataStorage() noexcept { constructor_impl<Reallocator>(); }
+  DataStorage() noexcept
+      : outdated_chunks{{}, {}, BareBones::Allocator<std::pair<const uint32_t, OutdatedChunk>, Reallocator>{outdated_chunks_map_allocated_memory}},
+        finalized_chunks{
+            {},
+            {},
+            BareBones::Allocator<std::pair<const uint32_t, std::forward_list<chunk::DataChunk>>, Reallocator>{finalized_chunks_map_allocated_memory}} {
+    constructor_impl<Reallocator>();
+  }
 
   ~DataStorage() { destructor_impl<Reallocator>(); }
 
