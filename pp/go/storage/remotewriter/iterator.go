@@ -452,6 +452,12 @@ func newBatch(numberOfHeadShards, numberOfShards, maxNumberOfSamplesPerShard int
 }
 
 func (b *batch) add(segments []*DecodedSegment) {
+	if len(segments) == 0 {
+		return
+	}
+
+	// the segment returns sampleCount from SamplesStorage and resets the value
+	b.numberOfSamples = 0
 	for _, segment := range segments {
 		b.numberOfSamples += int(segment.SampleCount)
 		b.outdatedSamplesCount += segment.OutdatedSamplesCount
