@@ -7,10 +7,11 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage/remotewriter/remotewritertest"
-	"github.com/stretchr/testify/suite"
 )
 
 type ShardSuite struct {

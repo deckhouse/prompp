@@ -5,30 +5,30 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stretchr/testify/suite"
-
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage/remotewriter/remotewritertest"
+	"github.com/stretchr/testify/suite"
 )
 
-type DataSourceSuite struct {
+type DataSourceActiveSuite struct {
 	suite.Suite
 
 	unexpectedEOFCount prometheus.Counter
 	segmentSize        prometheus.Histogram
 }
 
-func TestDataSourceSuite(t *testing.T) {
-	suite.Run(t, new(DataSourceSuite))
+func TestDataSourceActiveSuite(t *testing.T) {
+	suite.Run(t, new(DataSourceActiveSuite))
 }
 
-func (s *DataSourceSuite) SetupTest() {
+func (s *DataSourceActiveSuite) SetupTest() {
 	s.unexpectedEOFCount = prometheus.NewCounter(prometheus.CounterOpts{})
 	s.segmentSize = prometheus.NewHistogram(prometheus.HistogramOpts{})
 }
 
-func (s *DataSourceSuite) TestRead() {
+func (s *DataSourceActiveSuite) TestNext() {
 	dataDir := s.T().TempDir()
 	numberOfShards := uint16(1)
 	numberOfSegments := uint32(10)
@@ -45,11 +45,13 @@ func (s *DataSourceSuite) TestRead() {
 	rec := remotewritertest.MakeRecord(numberOfShards)
 	rec.SetLastAppendedSegmentID(numberOfSegments - 1)
 	corruptMarker := CorruptMarkerFn(func(string) error { return nil })
-	dataSource, err := newDataSource(
+	clock := clockwork.NewRealClock()
+	dataSource, err := newDataSourceActive(
 		dataDir,
-		numberOfShards,
 		DestinationConfig{},
+		numberOfShards,
 		discardCache,
+		clock,
 		newSegmentReadyChecker(rec),
 		corruptMarker,
 		rec,
@@ -59,9 +61,12 @@ func (s *DataSourceSuite) TestRead() {
 	s.Require().NoError(err)
 	defer func() { s.Require().NoError(dataSource.Close()) }()
 
+	err = dataSource.Init(baseCtx, 0)
+	s.Require().NoError(err)
+
 	segmentSampleStorages := cppbridge.NewSegmentSamplesStorage(uint64(numberOfShards))
 	for sid := range numberOfSegments {
-		segments, readErr := dataSource.Read(baseCtx, sid, 0, segmentSampleStorages)
+		segments, readErr := dataSource.Next(baseCtx, 0, segmentSampleStorages)
 		s.Require().NoError(readErr)
 
 		s.Require().Len(segments, 1)
@@ -73,11 +78,12 @@ func (s *DataSourceSuite) TestRead() {
 		s.Require().Equal(uint32(0), segments[0].OutdatedSamplesCount)
 	}
 
-	_, err = dataSource.Read(baseCtx, numberOfSegments, 0, segmentSampleStorages)
+	segments, err := dataSource.Next(baseCtx, 0, segmentSampleStorages)
 	s.Require().ErrorIs(err, ErrEmptyReadResult)
+	s.Require().Empty(segments)
 }
 
-func (s *DataSourceSuite) TestRestoreRead() {
+func (s *DataSourceActiveSuite) TestRestoreRead() {
 	dataDir := s.T().TempDir()
 	numberOfShards := uint16(1)
 	numberOfSegments := uint32(10)
@@ -94,11 +100,13 @@ func (s *DataSourceSuite) TestRestoreRead() {
 	rec := remotewritertest.MakeRecord(numberOfShards)
 	rec.SetLastAppendedSegmentID(numberOfSegments - 1)
 	corruptMarker := CorruptMarkerFn(func(string) error { return nil })
-	dataSource, err := newDataSource(
+	clock := clockwork.NewRealClock()
+	dataSource, err := newDataSourceActive(
 		dataDir,
-		numberOfShards,
 		DestinationConfig{},
+		numberOfShards,
 		discardCache,
+		clock,
 		newSegmentReadyChecker(rec),
 		corruptMarker,
 		rec,
@@ -108,9 +116,12 @@ func (s *DataSourceSuite) TestRestoreRead() {
 	s.Require().NoError(err)
 	defer func() { s.Require().NoError(dataSource.Close()) }()
 
+	err = dataSource.Init(baseCtx, numberOfSegments-1)
+	s.Require().NoError(err)
+
 	segmentSampleStorages := cppbridge.NewSegmentSamplesStorage(uint64(numberOfShards))
 
-	segments, readErr := dataSource.Read(baseCtx, numberOfSegments-1, 0, segmentSampleStorages)
+	segments, readErr := dataSource.Next(baseCtx, 0, segmentSampleStorages)
 	s.Require().NoError(readErr)
 
 	s.Require().Len(segments, 1)
@@ -121,11 +132,12 @@ func (s *DataSourceSuite) TestRestoreRead() {
 	s.Require().Equal(uint32(0), segments[0].DroppedSeriesCount)
 	s.Require().Equal(uint32(0), segments[0].OutdatedSamplesCount)
 
-	_, err = dataSource.Read(baseCtx, numberOfSegments, 0, segmentSampleStorages)
+	segments, err = dataSource.Next(baseCtx, 0, segmentSampleStorages)
 	s.Require().ErrorIs(err, ErrEmptyReadResult)
+	s.Require().Empty(segments)
 }
 
-func (s *DataSourceSuite) TestSkipByMinTime() {
+func (s *DataSourceActiveSuite) TestSkipByMinTime() {
 	dataDir := s.T().TempDir()
 	numberOfShards := uint16(1)
 	numberOfSegments := uint32(10)
@@ -142,11 +154,13 @@ func (s *DataSourceSuite) TestSkipByMinTime() {
 	rec := remotewritertest.MakeRecord(numberOfShards)
 	rec.SetLastAppendedSegmentID(numberOfSegments - 1)
 	corruptMarker := CorruptMarkerFn(func(string) error { return nil })
-	dataSource, err := newDataSource(
+	clock := clockwork.NewRealClock()
+	dataSource, err := newDataSourceActive(
 		dataDir,
-		numberOfShards,
 		DestinationConfig{},
+		numberOfShards,
 		discardCache,
+		clock,
 		newSegmentReadyChecker(rec),
 		corruptMarker,
 		rec,
@@ -156,10 +170,14 @@ func (s *DataSourceSuite) TestSkipByMinTime() {
 	s.Require().NoError(err)
 	defer func() { s.Require().NoError(dataSource.Close()) }()
 
+	err = dataSource.Init(baseCtx, 0)
+	s.Require().NoError(err)
+
 	minTimestamp := int64(numberOfSegments)
+
 	segmentSampleStorages := cppbridge.NewSegmentSamplesStorage(uint64(numberOfShards))
 	for sid := range numberOfSegments {
-		segments, readErr := dataSource.Read(baseCtx, sid, minTimestamp, segmentSampleStorages)
+		segments, readErr := dataSource.Next(baseCtx, minTimestamp, segmentSampleStorages)
 		s.Require().NoError(readErr)
 
 		s.Require().Len(segments, 1)
@@ -171,6 +189,7 @@ func (s *DataSourceSuite) TestSkipByMinTime() {
 		s.Require().Equal(uint32(1), segments[0].OutdatedSamplesCount)
 	}
 
-	_, err = dataSource.Read(baseCtx, numberOfSegments, 0, segmentSampleStorages)
+	segments, err := dataSource.Next(baseCtx, 0, segmentSampleStorages)
 	s.Require().ErrorIs(err, ErrEmptyReadResult)
+	s.Require().Empty(segments)
 }

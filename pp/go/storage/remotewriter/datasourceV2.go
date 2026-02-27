@@ -171,7 +171,7 @@ func (ds *dataSourceActive) Init(ctx context.Context, targetSegmentID uint32) er
 		uint64(len(ds.shards)), // #nosec G115 // no overflow
 	)
 	var delay time.Duration
-	for ; ds.nextSegmentID < targetSegmentID; ds.nextSegmentID++ {
+	for ds.nextSegmentID < targetSegmentID {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -218,6 +218,7 @@ func (ds *dataSourceActive) Next(
 	for _, result := range readShardResults {
 		if result.segment != nil {
 			segments = append(segments, result.segment)
+			ds.nextSegmentID = max(ds.nextSegmentID, result.segment.ID+1)
 		}
 		if result.err != nil && !errors.Is(result.err, context.Canceled) {
 			errs = append(errs, result.err)
@@ -431,3 +432,10 @@ func (ds *dataSourceActive) writeBufferedCaches() {
 		ds.cacheMtx.Unlock()
 	}
 }
+
+//
+// dataSourceRotated
+//
+
+// dataSourceRotated a data source of the rotated head shards for sending data through the RemoteWriter.
+type dataSourceRotated struct{}
