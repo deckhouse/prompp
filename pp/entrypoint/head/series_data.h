@@ -12,7 +12,7 @@ using OutdatedChunkMerger = series_data::OutdatedChunkMerger<Encoder>;
 struct SeriesDataEncoderWrapper {
   Encoder encoder;
 
-  explicit SeriesDataEncoderWrapper(DataStorage& data_storage) : encoder{data_storage} {}
+  explicit SeriesDataEncoderWrapper(series_data::DataStorage& data_storage) : encoder{data_storage} {}
 };
 
 using SeriesDataEncoderWrapperPtr = std::unique_ptr<SeriesDataEncoderWrapper>;

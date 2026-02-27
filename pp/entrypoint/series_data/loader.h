@@ -9,7 +9,7 @@ namespace entrypoint::series_data {
 
 class RevertableLoader {
  public:
-  RevertableLoader(head::DataStorage& storage,
+  RevertableLoader(::series_data::DataStorage& storage,
                    head::QueryableEncodingBimap::LsIdSetIterator ls_id_begin,
                    head::QueryableEncodingBimap::LsIdSetIterator ls_id_end,
                    uint32_t ls_id_batch_size)
@@ -32,7 +32,7 @@ class RevertableLoader {
 
   PROMPP_ALWAYS_INLINE void revert() { reverter_.revert(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE head::DataStorage& storage() noexcept { return loader_.storage(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE ::series_data::DataStorage& storage() noexcept { return loader_.storage(); }
 
  private:
   ::series_data::unloading::Loader loader_;

@@ -2,7 +2,6 @@
 
 #include <variant>
 
-#include "head/data_storage.h"
 #include "head/lss.h"
 #include "wal/hashdex/basic_decoder.h"
 #include "wal/hashdex/go_head.h"

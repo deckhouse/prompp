@@ -7,7 +7,7 @@ namespace entrypoint::head {
 
 class SerializedDataGo {
  public:
-  explicit SerializedDataGo(const DataStorage& storage, const series_data::querier::QueriedChunkList& queried_chunks)
+  explicit SerializedDataGo(const series_data::DataStorage& storage, const series_data::querier::QueriedChunkList& queried_chunks)
       : data_{series_data::serialization::DataSerializer{storage}.serialize(queried_chunks)} {}
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE auto get_buffer_view() const noexcept { return data_view_.get_buffer_view(); }

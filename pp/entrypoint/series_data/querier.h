@@ -16,7 +16,7 @@ concept QuerierInterface = requires(Querier querier) {
   { querier.query_finalize() };
   { querier.series_to_load() } -> std::same_as<const BareBones::Bitset&>;
   { querier.need_loading() } -> std::same_as<bool>;
-  { querier.storage() } -> std::same_as<head::DataStorage&>;
+  { querier.storage() } -> std::same_as<::series_data::DataStorage&>;
 };
 
 enum class QueryStatus : uint8_t {
@@ -27,7 +27,7 @@ enum class QueryStatus : uint8_t {
 template <typename LsIDStorage, typename SampleStorage>
 class InstantQuerierWithArgumentsWrapper {
   using Timestamp = PromPP::Primitives::Timestamp;
-  using DataStorage = head::DataStorage;
+  using DataStorage = ::series_data::DataStorage;
 
  public:
   InstantQuerierWithArgumentsWrapper(DataStorage& storage, const LsIDStorage& label_set_ids, const Timestamp& timestamp, SampleStorage& samples)
@@ -56,7 +56,7 @@ using InstantQuerierWithArgumentsWrapperEntrypoint =
     InstantQuerierWithArgumentsWrapper<PromPP::Primitives::Go::SliceView<PromPP::Primitives::LabelSetID>, std::span<SampleWithGoLabels>>;
 
 class RangeQuerierWithArgumentsWrapperV2 {
-  using DataStorage = head::DataStorage;
+  using DataStorage = ::series_data::DataStorage;
   using LabelSetID = PromPP::Primitives::LabelSetID;
   template <class T>
   using Slice = PromPP::Primitives::Go::Slice<T>;

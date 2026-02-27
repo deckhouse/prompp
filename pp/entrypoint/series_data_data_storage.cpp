@@ -16,7 +16,6 @@
 #include "series_data/unloading/unloader.h"
 #include "series_index/querier/selector_querier.h"
 
-using entrypoint::head::DataStorage;
 using entrypoint::head::DataStoragePtr;
 using entrypoint::head::QueryableEncodingBimap;
 using entrypoint::series_data::QueryStatus;
@@ -24,6 +23,7 @@ using PromPP::Primitives::LabelSetID;
 using PromPP::Primitives::Go::BytesStream;
 using PromPP::Primitives::Go::Slice;
 using PromPP::Primitives::Go::SliceView;
+using series_data::DataStorage;
 using ChunkRecoderIterator = head::ChunkRecoderIterator<QueryableEncodingBimap::LsIdSetIterator, QueryableEncodingBimap::LsIdSetIterator>;
 using ChunkRecoder = head::ChunkRecoder<ChunkRecoderIterator>;
 
