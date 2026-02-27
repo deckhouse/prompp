@@ -10,7 +10,6 @@
 #include <ranges>
 
 namespace series_data {
-
 class InstantQuerier {
   using Timestamp = PromPP::Primitives::Timestamp;
   using LabelSetID = PromPP::Primitives::LabelSetID;

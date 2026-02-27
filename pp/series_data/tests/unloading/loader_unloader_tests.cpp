@@ -9,9 +9,7 @@
 namespace {
 
 using series_data::ChunkFinalizer;
-using series_data::DataStorage;
 using series_data::Decoder;
-using series_data::Encoder;
 using series_data::chunk::DataChunk;
 using series_data::encoder::SampleList;
 using series_data::unloading::Loader;
@@ -21,8 +19,8 @@ using std::operator""s;
 
 class LoaderUnloaderTrait {
  protected:
-  DataStorage storage_;
-  Encoder<> encoder_{storage_};
+  series_data::DataStorage storage_;
+  series_data::Encoder<> encoder_{storage_};
   Unloader unloader_{storage_};
   BareBones::ShrinkedToFitOStringStream stream1_;
   BareBones::ShrinkedToFitOStringStream stream2_;

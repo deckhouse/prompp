@@ -8,9 +8,7 @@
 
 namespace {
 
-using series_data::DataStorage;
 using series_data::Decoder;
-using series_data::Encoder;
 using series_data::chunk::DataChunk;
 using series_data::unloading::Unloader;
 using std::operator""sv;
@@ -19,8 +17,8 @@ class UnloaderFixture : public ::testing::Test {
  protected:
   static constexpr auto kEmptySnapshot = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"sv;
 
-  DataStorage storage_;
-  Encoder<> encoder_{storage_};
+  series_data::DataStorage storage_;
+  series_data::Encoder<> encoder_{storage_};
   Unloader unloader_{storage_};
   BareBones::ShrinkedToFitOStringStream stream_;
 };

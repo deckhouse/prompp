@@ -25,7 +25,7 @@ struct DataStorageIteratorCase {
 };
 
 constexpr uint32_t kDefaultSeriesId = 0;
-const DataChunk kOpenChunk = DataChunk(0, 1, EncodingState{.encoding_type = EncodingType::kGorilla, .has_last_stalenan = false});
+const DataChunk kOpenChunk = DataChunk(0, 1, EncodingState{EncodingType::kGorilla, false});
 
 class DataStorageIteratorTrait : public testing::TestWithParam<DataStorageIteratorCase> {
  protected:

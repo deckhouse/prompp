@@ -12,7 +12,7 @@ namespace {
 using BareBones::Encoding::Gorilla::STALE_NAN;
 using series_data::ChunkFinalizer;
 using series_data::DataStorage;
-using Encoder = series_data::Encoder<>;
+using series_data::Encoder;
 using series_data::EncodingType;
 using series_data::chunk::DataChunk;
 using series_data::decoder::DecodeIteratorSentinel;
@@ -27,7 +27,7 @@ using series_data::serialization::SerializedDataView;
 class SerializerDeserializerTrait {
  protected:
   DataStorage storage_;
-  Encoder encoder_{storage_};
+  Encoder<> encoder_{storage_};
   DataSerializer serializer_{storage_};
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static SampleList decode_current_chunk(SerializedDataView& data, uint32_t series_id) {

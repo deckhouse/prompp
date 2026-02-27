@@ -15,10 +15,9 @@
 
 namespace series_data::unloading {
 
-template <BareBones::ReallocatorInterface Reallocator>
 struct PROMPP_ATTRIBUTE_PACKED SeriesToLoadInfo {
   uint8_t chunk_id = 0;
-  encoder::CompactBitSequence<Reallocator> buffer{};
+  encoder::CompactBitSequence<DataStorage::Reallocator> buffer{};
 
   void reset() noexcept {
     chunk_id = 0;
@@ -28,8 +27,8 @@ struct PROMPP_ATTRIBUTE_PACKED SeriesToLoadInfo {
 
 }  // namespace series_data::unloading
 
-template <BareBones::ReallocatorInterface Reallocator>
-struct BareBones::IsTriviallyReallocatable<series_data::unloading::SeriesToLoadInfo<Reallocator>> : std::true_type {};
+template <>
+struct BareBones::IsTriviallyReallocatable<series_data::unloading::SeriesToLoadInfo> : std::true_type {};
 
 namespace series_data::unloading {
 
@@ -121,7 +120,7 @@ class Loader {
     }
 
    private:
-    BareBones::Vector<SeriesToLoadInfo<DataStorage::Reallocator>> series_to_load_infos_{};
+    BareBones::Vector<SeriesToLoadInfo> series_to_load_infos_{};
     phmap::flat_hash_map<uint32_t, uint32_t> ls_id_to_offset_{};
   };
 
@@ -214,7 +213,7 @@ class Loader {
     }
   }
 
-  void load_chunk_id(uint32_t ls_id, SeriesToLoadInfo<DataStorage::Reallocator>& info) const {
+  void load_chunk_id(uint32_t ls_id, SeriesToLoadInfo& info) const {
     const auto& chunk_data = std::ranges::next(DataStorage::SeriesChunkIterator{&storage_, ls_id}, info.chunk_id, DataStorage::SeriesChunks::end());
 
     auto& chunk_bit_sequence = get_chunk_stream(storage_, chunk_data->chunk(), chunk_data->is_open());
