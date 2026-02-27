@@ -1,6 +1,5 @@
 #pragma once
 
-#include "data_storage.h"
 #include "series_data/serialization/serialized_data.h"
 
 namespace entrypoint::head {
