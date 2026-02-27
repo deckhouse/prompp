@@ -49,11 +49,9 @@ struct ArenaReallocator {
   PROMPP_ALWAYS_INLINE static size_t arena_allocated_memory(ArenaIndex arena_index) noexcept {
     refresh_stats();
 
-    std::array<char, 64> command;
     size_t pages{};
     size_t size_len = sizeof(pages);
-    snprintf(command.data(), command.size(), "stats.arenas.%u.pactive", arena_index);
-    mallctl(command.data(), &pages, &size_len, NULL, 0);
+    mallctl(create_command("stats.arenas.%u.pactive", arena_index).data(), &pages, &size_len, nullptr, 0);
 
     return pages * kPageSize;
   }
@@ -66,9 +64,7 @@ struct ArenaReallocator {
   }
 
   PROMPP_ALWAYS_INLINE static void destroy_arena(uint32_t arena_index) noexcept {
-    std::array<char, 64> command;
-    snprintf(command.data(), command.size(), "arena.%u.destroy", arena_index);
-    mallctl(command.data(), NULL, NULL, NULL, 0);
+    mallctl(create_command("arena.%u.destroy", arena_index).data(), nullptr, nullptr, nullptr, 0);
   }
 
   PROMPP_ALWAYS_INLINE static auto thread_arena_guard(ArenaIndex arena_index) noexcept {
@@ -82,6 +78,13 @@ struct ArenaReallocator {
     };
 
     return Guard(arena_index);
+  }
+
+ private:
+  PROMPP_ALWAYS_INLINE static auto create_command(const char* command, ArenaIndex arena_index) noexcept {
+    std::array<char, 64> buffer;
+    snprintf(buffer.data(), buffer.size(), command, arena_index);
+    return buffer;
   }
 };
 
