@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	promqlext "github.com/prometheus/prometheus/promql/ext"
 	"io"
 	"math"
 	"reflect"
@@ -1711,7 +1712,7 @@ func (ev *evaluator) eval(ctx context.Context, expr parser.Expr) (parser.Value, 
 		// should keep the metric name.  For all the other range
 		// vector functions, the only change needed is to drop the
 		// metric name in the output.
-		dropName := e.Func.Name != "last_over_time"
+		dropName := e.Func.Name != "last_over_time" && e.Func.Name != promqlext.OpSmoothie
 
 		for i, s := range selVS.Series {
 			if err := contextDone(ctx, "expression evaluation"); err != nil {
