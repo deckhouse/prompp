@@ -280,6 +280,8 @@ class GenericDecodingTable {
 
   PROMPP_ALWAYS_INLINE storage_type::view_type data_view() const noexcept { return storage_.view(); }
 
+  [[nodiscard]] auto symbol_table_reader() const noexcept { return storage_.reader(); }
+
   template <class DerivedOther, template <template <class> class> class FilamentOther, template <class> class VectorOther>
   PROMPP_ALWAYS_INLINE void reserve(const GenericDecodingTable<DerivedOther, FilamentOther, VectorOther>& other) {
     storage_.reserve(other.storage_);
