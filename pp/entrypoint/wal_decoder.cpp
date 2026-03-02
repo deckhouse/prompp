@@ -340,6 +340,7 @@ extern "C" void prompp_wal_output_decoder_decode(void* args, void* res) {
     std::ispanstream{static_cast<std::string_view>(in->segment)} >> *in->decoder;
     out->add_series_count = in->decoder->add_series_count();
     out->dropped_series_count = in->decoder->dropped_series_count();
+    uint32_t prev_sample_count = in->samples_storage->samples_count();
     in->decoder->process_segment([in, out](PromPP::Primitives::LabelSetID ls_id, PromPP::Primitives::Timestamp ts, PromPP::Primitives::Sample::value_type v,
                                            bool is_dropped) PROMPP_LAMBDA_INLINE {
       if (is_dropped) {
@@ -357,7 +358,7 @@ extern "C" void prompp_wal_output_decoder_decode(void* args, void* res) {
       out->max_timestamp = std::max(out->max_timestamp, ts);
       in->samples_storage->add(ls_id, PromPP::Primitives::Sample(ts, v));
     });
-    out->sample_count = in->samples_storage->samples_count();
+    out->sample_count = in->samples_storage->samples_count() - prev_sample_count;
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
     entrypoint::handle_current_exception(err_stream);
