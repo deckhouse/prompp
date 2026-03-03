@@ -106,6 +106,11 @@ class GenericDecodingTable {
     PROMPP_ALWAYS_INLINE bool operator()(const Proxy& a, const Class& b) const noexcept {
       return decoding_table->storage_.composite(a) == b;
     }
+
+    template <class Class>
+    PROMPP_ALWAYS_INLINE bool operator()(const Class& a, const Proxy& b) const noexcept {
+      return decoding_table->storage_.composite(b) == a;
+    }
   };
 
   struct LessComparator {
@@ -498,15 +503,35 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
 
   friend class GenericDecodingTable<EncodingBimap, Filament, Vector>;
 
-  phmap::flat_hash_set<typename Base::Proxy, typename Base::Hasher, typename Base::EqualityComparator> set_{{}, 0, Base::hasher(), Base::equality_comparator()};
+  struct Hasher {
+    using is_transparent = void;
+
+    template <class Any>
+    static size_t operator()(const Any&) noexcept {
+      assert(false);
+      return {};
+    }
+  };
+
+  struct EqualityComparator {
+    using is_transparent = void;
+
+    template <class Any1, class Any2>
+    static bool operator()(const Any1, const Any2) noexcept {
+      assert(false);
+      return false;
+    }
+  };
+
+  phmap::flat_hash_set<typename Base::Proxy, Hasher, EqualityComparator> set_{{}, 0, Hasher{}, EqualityComparator{}};
 
   template <ls_id_range R>
   PROMPP_ALWAYS_INLINE void after_items_load_impl(R&& loaded_ids) noexcept {
     if constexpr (std::ranges::sized_range<R>) {
-      set_.reserve(std::ranges::size(loaded_ids));
+      set_.reserve(std::ranges::size(loaded_ids), Base::hasher());
     }
     for (const auto id : loaded_ids) {
-      set_.emplace(typename Base::Proxy(id));
+      set_.emplace_with_hash_and_equal(Base::hasher(), Base::equality_comparator(), typename Base::Proxy(id));
     }
   }
 
@@ -520,7 +545,7 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
 
   template <class Class>
   PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(const Class& c) noexcept {
-    return *set_.lazy_emplace(c, [&](const auto& ctor) {
+    return *set_.lazy_emplace(c, Base::hasher(), Base::equality_comparator(), [&](const auto& ctor) {
       const uint32_t id = Base::storage_.emplace_back(c);
       ctor(id);
     });
@@ -528,7 +553,7 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
 
   template <class Class>
   PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(const Class& c, size_t hashval) noexcept {
-    return *set_.lazy_emplace_with_hash(c, phmap::phmap_mix<sizeof(size_t)>()(hashval), [&](const auto& ctor) {
+    return *set_.lazy_emplace_with_hash(c, phmap::phmap_mix<sizeof(size_t)>()(hashval), Base::hasher(), Base::equality_comparator(), [&](const auto& ctor) {
       const uint32_t id = Base::storage_.emplace_back(c);
       ctor(id);
     });
@@ -540,7 +565,7 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
       return value;
     }
 
-    return *set_.lazy_emplace(c, [&](const auto& ctor) {
+    return *set_.lazy_emplace(c, Base::hasher(), Base::equality_comparator(), [&](const auto& ctor) {
       uint32_t new_id = Base::storage_.emplace_back(c, std::forward<Args>(args)...);
       ctor(new_id);
       cache[id] = new_id;
@@ -549,7 +574,7 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
 
   template <class Class>
   PROMPP_ALWAYS_INLINE std::optional<uint32_t> find(const Class& c) const noexcept {
-    if (auto i = set_.find(c); i != set_.end()) {
+    if (auto i = set_.find(c, Base::hasher(), Base::equality_comparator()); i != set_.end()) {
       return *i;
     }
     return {};
@@ -557,7 +582,7 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
 
   template <class Class>
   PROMPP_ALWAYS_INLINE std::optional<uint32_t> find(const Class& c, size_t hashval) const noexcept {
-    if (auto i = set_.find(c, phmap::phmap_mix<sizeof(size_t)>()(hashval)); i != set_.end()) {
+    if (auto i = set_.find(c, phmap::phmap_mix<sizeof(size_t)>()(hashval), Base::equality_comparator()); i != set_.end()) {
       return *i;
     }
     return {};
@@ -569,7 +594,7 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
     assert(s.size() <= Base::size());
 
     for (uint32_t i = s.size(); i != Base::size(); ++i) {
-      set_.erase(typename Base::Proxy(i));
+      set_.erase(typename Base::Proxy(i), Base::hasher(), Base::equality_comparator());
     }
   }
 
@@ -579,3 +604,6 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
 };
 
 }  // namespace BareBones::SnugComposite
+
+template <template <template <class> class> class Filament, template <class> class Vector>
+struct BareBones::IsTriviallyReallocatable<BareBones::SnugComposite::EncodingBimap<Filament, Vector>> : std::true_type {};
