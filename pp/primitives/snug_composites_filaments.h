@@ -414,9 +414,9 @@ struct LabelNameSet {
 
         // write symbols table
         if (from != nullptr) {
-          symbols_table_checkpoint.save(out, &from->symbols_table_checkpoint);
+          storage.symbols_table_.save(out, symbols_table_checkpoint, &from->symbols_table_checkpoint);
         } else {
-          symbols_table_checkpoint.save(out);
+          storage.symbols_table_.save(out, symbols_table_checkpoint);
         }
       }
 
@@ -448,9 +448,9 @@ struct LabelNameSet {
 
         // symbols table
         if (from != nullptr) {
-          res += symbols_table_checkpoint.save_size(&from->symbols_table_checkpoint);
+          res += storage.symbols_table_.save_size(symbols_table_checkpoint, &from->symbols_table_checkpoint);
         } else {
-          res += symbols_table_checkpoint.save_size();
+          res += storage.symbols_table_.save_size(symbols_table_checkpoint);
         }
 
         return res;
@@ -829,9 +829,9 @@ struct LabelSet {
 
         // write label name sets table
         if (from != nullptr) {
-          label_name_sets_table_checkpoint_.save(out, &from->label_name_sets_table_checkpoint_);
+          storage.label_name_sets_table_.save(out, label_name_sets_table_checkpoint_, &from->label_name_sets_table_checkpoint_);
         } else {
-          label_name_sets_table_checkpoint_.save(out);
+          storage.label_name_sets_table_.save(out, label_name_sets_table_checkpoint_);
         }
 
         // count tables, we have to write
@@ -856,7 +856,7 @@ struct LabelSet {
               // write id
               out.write(reinterpret_cast<char*>(&i), sizeof(i));
               // write symbols table
-              to_checkpoint.save(out);
+              storage.symbols_tables_[i].save(out, to_checkpoint);
               continue;
             }
             auto from_checkpoint = from->symbols_tables_checkpoints_[i];
@@ -866,12 +866,12 @@ struct LabelSet {
             // write id
             out.write(reinterpret_cast<char*>(&i), sizeof(i));
             // write symbols table
-            to_checkpoint.save(out, &from_checkpoint);
+            storage.symbols_tables_[i].save(out, to_checkpoint, &from_checkpoint);
           }
         } else {
           for (uint32_t i = 0; i < symbols_tables_checkpoints_.size(); ++i) {
             // write symbols table
-            symbols_tables_checkpoints_[i].save(out);
+            storage.symbols_tables_[i].save(out, symbols_tables_checkpoints_[i]);
           }
         }
       }
@@ -904,9 +904,9 @@ struct LabelSet {
 
         // label name sets table
         if (from != nullptr) {
-          res += label_name_sets_table_checkpoint_.save_size(&from->label_name_sets_table_checkpoint_);
+          res += storage.label_name_sets_table_.save_size(label_name_sets_table_checkpoint_, &from->label_name_sets_table_checkpoint_);
         } else {
-          res += label_name_sets_table_checkpoint_.save_size();
+          res += storage.label_name_sets_table_.save_size(label_name_sets_table_checkpoint_);
         }
 
         // number of symbols tables
@@ -928,12 +928,12 @@ struct LabelSet {
             // write id
             res += sizeof(i);
             // write symbols table
-            res += to_checkpoint.save_size(from_checkpoint);
+            res += storage.symbols_tables_[i].save_size(to_checkpoint, from_checkpoint);
           }
         } else {
           for (uint32_t i = 0; i < symbols_tables_checkpoints_.size(); ++i) {
             // write symbols table
-            res += symbols_tables_checkpoints_[i].save_size();
+            res += storage.symbols_tables_[i].save_size(symbols_tables_checkpoints_[i]);
           }
         }
 

@@ -138,7 +138,6 @@ class GenericDecodingTable {
   };
 
   class Checkpoint {
-    const storage_type* storage_ptr_;
     uint32_t next_item_index_;
     uint32_t size_;
     typename storage_type::checkpoint_type storage_checkpoint_;
@@ -146,7 +145,7 @@ class GenericDecodingTable {
 
    public:
     explicit PROMPP_ALWAYS_INLINE Checkpoint(const storage_type& storage, uint32_t next_item_index, uint32_t size, uint8_t table_version) noexcept
-        : storage_ptr_(&storage), next_item_index_(next_item_index), size_(size), storage_checkpoint_(storage.checkpoint()), table_version_(table_version) {}
+        : next_item_index_(next_item_index), size_(size), storage_checkpoint_(storage.checkpoint()), table_version_(table_version) {}
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE size_t size() const noexcept { return size_; }
     [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index() const noexcept { return next_item_index_; }
@@ -154,7 +153,7 @@ class GenericDecodingTable {
     const typename storage_type::checkpoint_type& storage_checkpoint() const noexcept { return storage_checkpoint_; }
 
     template <OutputStream S>
-    void save(S& out, const Checkpoint* from = nullptr) const {
+    void save(S& out, const storage_type& storage, const Checkpoint* from = nullptr) const {
       auto original_exceptions = out.exceptions();
       auto sg1 = std::experimental::scope_exit([&]() { out.exceptions(original_exceptions); });
       out.exceptions(std::ifstream::failbit | std::ifstream::badbit);
@@ -186,19 +185,13 @@ class GenericDecodingTable {
 
       // write data
       if (from != nullptr) {
-        storage_checkpoint_.save(out, *storage_ptr_, id_offset, size_to_save, table_version_, &from->storage_checkpoint_);
+        storage_checkpoint_.save(out, storage, id_offset, size_to_save, table_version_, &from->storage_checkpoint_);
       } else {
-        storage_checkpoint_.save(out, *storage_ptr_, id_offset, size_to_save, table_version_);
+        storage_checkpoint_.save(out, storage, id_offset, size_to_save, table_version_);
       }
     }
 
-    template <OutputStream S>
-    friend S& operator<<(S& out, const Checkpoint& cp) {
-      cp.save(out);
-      return out;
-    }
-
-    size_t save_size(const Checkpoint* from = nullptr) const noexcept {
+    size_t save_size(const storage_type& storage, const Checkpoint* from = nullptr) const noexcept {
       // version is written and read by methods put() and get() and they write and read 1 byte
       size_t res = 1 + sizeof(SerializationMode);
 
@@ -219,9 +212,9 @@ class GenericDecodingTable {
 
       // data
       if (from != nullptr) {
-        res += storage_checkpoint_.save_size(*storage_ptr_, size_to_save, &from->storage_checkpoint_);
+        res += storage_checkpoint_.save_size(storage, size_to_save, &from->storage_checkpoint_);
       } else {
-        res += storage_checkpoint_.save_size(*storage_ptr_, size_to_save);
+        res += storage_checkpoint_.save_size(storage, size_to_save);
       }
 
       return res;
@@ -241,12 +234,11 @@ class GenericDecodingTable {
       [[nodiscard]] bool empty() const noexcept { return from_->size() >= to_->size(); }
 
       template <OutputStream S>
-      friend S& operator<<(S& out, Delta dt) {
-        dt.to_->save(out, dt.from_);
-        return out;
+      void save(S& out, const storage_type& storage) const {
+        to_->save(out, storage, from_);
       }
 
-      [[nodiscard]] size_t save_size() const noexcept { return to_->save_size(from_); }
+      [[nodiscard]] size_t save_size(const storage_type& storage) const noexcept { return to_->save_size(storage, from_); }
     };
 
     Delta operator-(const Checkpoint& from) const noexcept { return Delta(from, *this); }
@@ -315,6 +307,22 @@ class GenericDecodingTable {
     }
   }
 
+  PROMPP_ALWAYS_INLINE size_t save_size(const checkpoint_type& checkpoint, const checkpoint_type* from = nullptr) const noexcept {
+    return checkpoint.save_size(storage_, from);
+  }
+
+  PROMPP_ALWAYS_INLINE size_t save_size(const delta_type& delta) const noexcept { return delta.save_size(storage_); }
+
+  template <OutputStream S>
+  PROMPP_ALWAYS_INLINE void save(S& out, const checkpoint_type& checkpoint, const checkpoint_type* from = nullptr) const noexcept {
+    checkpoint.save(out, storage_, from);
+  }
+
+  template <OutputStream S>
+  PROMPP_ALWAYS_INLINE void save(S& out, const delta_type& delta) const noexcept {
+    delta.save(out, storage_);
+  }
+
   template <InputStream S>
   void load(S& in) {
     // read version
@@ -376,7 +384,7 @@ class GenericDecodingTable {
 
   template <OutputStream S>
   friend S& operator<<(S& out, GenericDecodingTable& decoding_table) {
-    out << decoding_table.checkpoint();
+    decoding_table.checkpoint().save(out, decoding_table.storage_);
     return out;
   }
 
@@ -414,6 +422,8 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
   using Base::load;
   using Base::next_item_index;
   using Base::remainder_size;
+  using Base::save;
+  using Base::save_size;
   using Base::size;
 
   friend class GenericDecodingTable<ShrinkableEncodingBimap, Filament, Vector>;

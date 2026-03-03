@@ -223,7 +223,7 @@ class OutputDecoder : private BaseOutputDecoder {
     }
 
     // write dump type lss and write delta checkpoints
-    out << delta_cp;
+    output_lss_.save(out, delta_cp);
     dumped_checkpoint_ = std::move(current_cp);
 
     // write dump type cache and write delta caches
