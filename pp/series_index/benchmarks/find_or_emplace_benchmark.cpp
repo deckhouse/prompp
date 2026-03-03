@@ -7,8 +7,7 @@
 
 namespace {
 
-using QueryableEncodingBimap =
-    series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, series_index::trie::CedarTrie>;
+using QueryableEncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector>;
 
 std::string_view get_lss_file() {
   if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {
