@@ -8,7 +8,7 @@
 #include "bare_bones/snug_composite.h"
 #include "bare_bones/stream_v_byte.h"
 #include "hash.h"
-#include "primitives/symbol_table_reader.h"
+#include "primitives/symbol_table_view.h"
 
 namespace PromPP::Primitives::SnugComposites::Filaments {
 
@@ -20,6 +20,8 @@ struct Symbol {
 
     using composite_type = std::string_view;
     using item_type = PromPP::Primitives::SnugComposites::SymbolItemType;
+
+    using read_view_type = PromPP::Primitives::SnugComposites::SymbolTableView;
 
     struct checkpoint_type {
       uint32_t data_size;
@@ -144,7 +146,7 @@ struct Symbol {
     storage_type() noexcept = default;
     template <class AnotherStorageType>
       requires kIsReadOnly
-    explicit storage_type(const AnotherStorageType& other) : data_{other.data_}, items_{other.items_} {}
+    explicit storage_type(const AnotherStorageType& other) : read_view_{other.data_.data(), other.items_.data()}, data_{other.data_}, items_{other.items_} {}
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t count() const noexcept { return static_cast<uint32_t>(items_.size()); }
 
@@ -158,16 +160,25 @@ struct Symbol {
     PROMPP_ALWAYS_INLINE void reserve(const AnotherStorageType& other) noexcept {
       items_.reserve(other.items_.size());
       data_.reserve(other.data_.size());
+      sync_read_view();
     }
-
-    PROMPP_ALWAYS_INLINE void reserve(uint32_t count) noexcept { items_.reserve(count); }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE composite_type composite(uint32_t id) const noexcept {
       const auto item = items_[id];
       return std::string_view(data_.data() + item.pos, item.length);
     }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Primitives::SnugComposites::SymbolTableReader reader() const noexcept { return {data_.data(), items_.data()}; }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE const read_view_type& read_view() const noexcept { return read_view_; }
+
+    PROMPP_ALWAYS_INLINE void sync_read_view() noexcept {
+      read_view_.data = data_.data();
+      read_view_.items = items_.data();
+    }
+
+    PROMPP_ALWAYS_INLINE void reserve(uint32_t count) noexcept {
+      items_.reserve(count);
+      sync_read_view();
+    }
 
     void validate(uint32_t id) const {
       if (const auto item = items_[id]; item.pos + item.length > data_.size()) {
@@ -185,6 +196,7 @@ struct Symbol {
       const auto id = static_cast<uint32_t>(items_.size());
       items_.emplace_back(static_cast<uint32_t>(data_.size()), static_cast<uint32_t>(str.length()));
       data_.push_back(str.begin(), str.end());
+      sync_read_view();
       return id;
     }
 
@@ -196,6 +208,7 @@ struct Symbol {
       assert(checkpoint.items_size <= items_.size());
       data_.resize(checkpoint.data_size);
       items_.resize(checkpoint.items_size);
+      sync_read_view();
     }
 
     template <class InputStream>
@@ -248,6 +261,7 @@ struct Symbol {
       data_.resize(data_.size() + size_to_load);
       in.read(data_.begin() + first_to_load_i, size_to_load);
 
+      sync_read_view();
       return std::views::iota(original_size, items_.size());
     }
 
@@ -257,6 +271,7 @@ struct Symbol {
     template <template <class> class>
     friend struct Symbol;
 
+    read_view_type read_view_{};
     Vector<char> data_;
     Vector<item_type> items_;
   };
@@ -304,8 +319,8 @@ struct LabelNameSetComposite {
     using difference_type = std::ptrdiff_t;
 
     iterator_type() = default;
-    iterator_type(const uint32_t* ids_current, const uint32_t* ids_end, const PromPP::Primitives::SnugComposites::SymbolTableReader* reader) noexcept
-        : ids_current_{ids_current}, ids_end_{ids_end}, reader_{reader} {}
+    iterator_type(const uint32_t* ids_current, const uint32_t* ids_end, const PromPP::Primitives::SnugComposites::SymbolTableView* symbol_table_view) noexcept
+        : ids_current_{ids_current}, ids_end_{ids_end}, symbol_table_view_{symbol_table_view} {}
 
     PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
       ++ids_current_;
@@ -320,22 +335,22 @@ struct LabelNameSetComposite {
 
     PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return ids_current_ == other.ids_current_; }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return (*reader_)[*ids_current_]; }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return (*symbol_table_view_)[*ids_current_]; }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t id() const noexcept { return *ids_current_; }
 
    private:
     const uint32_t* ids_current_ = nullptr;
     const uint32_t* ids_end_ = nullptr;
-    const PromPP::Primitives::SnugComposites::SymbolTableReader* reader_ = nullptr;
+    const PromPP::Primitives::SnugComposites::SymbolTableView* symbol_table_view_ = nullptr;
   };
 
   LabelNameSetComposite() = default;
-  LabelNameSetComposite(const uint32_t* ids_begin, uint32_t size, PromPP::Primitives::SnugComposites::SymbolTableReader reader) noexcept
-      : ids_begin_{ids_begin}, size_{size}, reader_{reader} {}
+  LabelNameSetComposite(const uint32_t* ids_begin, uint32_t size, const PromPP::Primitives::SnugComposites::SymbolTableView* symbol_table_view) noexcept
+      : ids_begin_{ids_begin}, size_{size}, symbol_table_view_{symbol_table_view} {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE iterator_type begin() const noexcept { return iterator_type{ids_begin_, ids_begin_ + size_, &reader_}; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE iterator_type end() const noexcept { return iterator_type{ids_begin_ + size_, ids_begin_ + size_, &reader_}; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE iterator_type begin() const noexcept { return iterator_type{ids_begin_, ids_begin_ + size_, symbol_table_view_}; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE iterator_type end() const noexcept { return iterator_type{ids_begin_ + size_, ids_begin_ + size_, symbol_table_view_}; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return size_; }
 
@@ -354,7 +369,7 @@ struct LabelNameSetComposite {
  private:
   const uint32_t* ids_begin_ = nullptr;
   uint32_t size_ = 0;
-  PromPP::Primitives::SnugComposites::SymbolTableReader reader_{};
+  const PromPP::Primitives::SnugComposites::SymbolTableView* symbol_table_view_ = nullptr;
 };
 
 template <template <template <class> class> class SymbolsTableType, template <class> class Vector>
@@ -534,7 +549,7 @@ struct LabelNameSet {
     [[nodiscard]] PROMPP_ALWAYS_INLINE composite_type composite(uint32_t id) const noexcept {
       const auto item = items_[id];
       const uint32_t* ids_begin = symbols_ids_sequences_.data() + item.pos;
-      return composite_type(ids_begin, item.size, symbols_table_.symbol_table_reader());
+      return composite_type(ids_begin, item.size, &symbols_table_.symbol_table_read_view());
     }
 
     void validate(uint32_t id) const {
@@ -676,6 +691,100 @@ struct LabelNameSet {
   };
 };
 
+/** Layout-based composite view for LabelSet when kIsReadOnly: uses (base, stride) to resolve value symbols via SymbolTableView layout. */
+struct LabelSetCompositeView {
+  using value_type = std::pair<std::string_view, std::string_view>;
+  using SymbolTableView = PromPP::Primitives::SnugComposites::SymbolTableView;
+  using LabelNameSetComposite = Filaments::LabelNameSetComposite;
+  using symbol_ids_codec_type = BareBones::StreamVByte::Codec1234;
+  using values_iterator_type = BareBones::StreamVByte::DecodeIterator<symbol_ids_codec_type, const uint8_t*>;
+
+  class iterator_type {
+   public:
+    using iterator_category = std::forward_iterator_tag;
+    using value_type = LabelSetCompositeView::value_type;
+    using difference_type = std::ptrdiff_t;
+
+    PROMPP_ALWAYS_INLINE iterator_type() = default;
+    PROMPP_ALWAYS_INLINE iterator_type(const void* symbols_tables_base,
+                                       size_t stride,
+                                       LabelNameSetComposite::iterator_type names_it,
+                                       values_iterator_type values_it) noexcept
+        : symbols_tables_base_(symbols_tables_base), stride_(stride), names_it_(names_it), values_it_(values_it) {}
+
+    PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
+      ++names_it_;
+      ++values_it_;
+      return *this;
+    }
+
+    PROMPP_ALWAYS_INLINE iterator_type operator++(int) noexcept {
+      iterator_type retval = *this;
+      ++(*this);
+      return retval;
+    }
+
+    PROMPP_ALWAYS_INLINE bool operator==(const iterator_type& other) const noexcept { return values_it_ == other.values_it_; }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept {
+      const auto* layout = reinterpret_cast<const SymbolTableView*>(static_cast<const char*>(symbols_tables_base_) + names_it_.id() * stride_);
+      return {*names_it_, (*layout)[*values_it_]};
+    }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t name_id() const noexcept { return names_it_.id(); }
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t value_id() const noexcept { return *values_it_; }
+
+   private:
+    const void* symbols_tables_base_ = nullptr;
+    size_t stride_ = 0;
+    LabelNameSetComposite::iterator_type names_it_{};
+    values_iterator_type values_it_{};
+  };
+
+  LabelSetCompositeView() = default;
+  PROMPP_ALWAYS_INLINE LabelSetCompositeView(const void* symbols_tables_base,
+                                             size_t stride,
+                                             LabelNameSetComposite label_name_set,
+                                             const uint8_t* values_stream_begin,
+                                             uint32_t name_set_id) noexcept
+      : symbols_tables_base_{symbols_tables_base},
+        stride_{stride},
+        label_name_set_{std::move(label_name_set)},
+        values_stream_begin_{values_stream_begin},
+        name_set_id_{name_set_id} {}
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const LabelNameSetComposite& names() const noexcept { return label_name_set_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return label_name_set_.size(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t id() const noexcept { return name_set_id_; }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE iterator_type begin() const noexcept {
+    auto values = BareBones::StreamVByte::decoder<symbol_ids_codec_type>(values_stream_begin_, label_name_set_.size());
+    return iterator_type(symbols_tables_base_, stride_, label_name_set_.begin(), values.first);
+  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE iterator_type end() const noexcept {
+    return iterator_type(symbols_tables_base_, stride_, label_name_set_.end(), values_iterator_type());
+  }
+
+  template <class T>
+  PROMPP_ALWAYS_INLINE bool operator==(const T& b) const noexcept {
+    return std::ranges::equal(begin(), end(), b.begin(), b.end(), [](const auto& a, const auto& b) { return a == b; });
+  }
+
+  template <class T>
+  PROMPP_ALWAYS_INLINE bool operator<(const T& b) const noexcept {
+    return std::ranges::lexicographical_compare(begin(), end(), b.begin(), b.end(), [](const auto& a, const auto& b) { return a < b; });
+  }
+
+  PROMPP_ALWAYS_INLINE friend size_t hash_value(const LabelSetCompositeView& ls) noexcept { return hash::hash_of_label_set(ls); }
+
+ private:
+  const void* symbols_tables_base_ = nullptr;
+  size_t stride_ = 0;
+  LabelNameSetComposite label_name_set_{};
+  const uint8_t* values_stream_begin_ = nullptr;
+  uint32_t name_set_id_ = 0;
+};
+
 template <template <template <class> class> class SymbolsTableType,
           template <template <class> class> class LabelNameSetsTableType,
           template <class> class Vector>
@@ -693,7 +802,7 @@ struct LabelSet {
     using symbol_ids_codec_type = BareBones::StreamVByte::Codec1234;
     using symbols_ids_sequences_type = Vector<uint8_t>;
 
-    class composite_type {
+    class CompositeWithTablesPtr {
       using label_name_set_type = label_name_sets_table_type::value_type;
       using values_iterator_type = BareBones::StreamVByte::DecodeIterator<symbol_ids_codec_type, typename symbols_ids_sequences_type::const_iterator>;
       using names_iterator_type = label_name_set_type::iterator_type;
@@ -704,10 +813,10 @@ struct LabelSet {
       uint32_t name_set_id_;
 
      public:
-      PROMPP_ALWAYS_INLINE explicit composite_type(const symbols_tables_type* symbols_tables_ptr = nullptr,
-                                                   label_name_set_type label_name_set = label_name_set_type(),
-                                                   values_iterator_type values_begin = values_iterator_type(),
-                                                   uint32_t name_set_id = 0) noexcept
+      PROMPP_ALWAYS_INLINE explicit CompositeWithTablesPtr(const symbols_tables_type* symbols_tables_ptr = nullptr,
+                                                           label_name_set_type label_name_set = label_name_set_type(),
+                                                           values_iterator_type values_begin = values_iterator_type(),
+                                                           uint32_t name_set_id = 0) noexcept
           : label_name_set_(label_name_set), symbols_tables_ptr_(symbols_tables_ptr), values_begin_(values_begin), name_set_id_(name_set_id) {}
 
       using value_type = std::pair<typename label_name_set_type::value_type, typename Symbol<Vector>::storage_type::composite_type>;
@@ -722,11 +831,11 @@ struct LabelSet {
         values_iterator_type values_it_;
         const symbols_tables_type* symbols_tables_ptr_;
 
-        friend class composite_type;
+        friend class CompositeWithTablesPtr;
 
        public:
         using iterator_category = std::forward_iterator_tag;
-        using value_type = composite_type::value_type;
+        using value_type = CompositeWithTablesPtr::value_type;
         using difference_type = std::ptrdiff_t;
 
         PROMPP_ALWAYS_INLINE explicit iterator_type(const symbols_tables_type* symbols_tables_ptr = nullptr,
@@ -775,8 +884,10 @@ struct LabelSet {
         return std::ranges::lexicographical_compare(begin(), end(), b.begin(), b.end(), [](const auto& a, const auto& b) { return a < b; });
       }
 
-      PROMPP_ALWAYS_INLINE friend size_t hash_value(const composite_type& ls) noexcept { return hash::hash_of_label_set(ls); }
+      PROMPP_ALWAYS_INLINE friend size_t hash_value(const CompositeWithTablesPtr& ls) noexcept { return hash::hash_of_label_set(ls); }
     };
+
+    using composite_type = std::conditional_t<kIsReadOnly, LabelSetCompositeView, CompositeWithTablesPtr>;
 
     struct item_type {
       uint32_t lns_id;
@@ -1159,9 +1270,13 @@ struct LabelSet {
       const auto [lns_id, pos] = items_[id];
 
       auto lns = label_name_sets_table_[lns_id];
-      auto values_begin = BareBones::StreamVByte::decoder<symbol_ids_codec_type>(symbols_ids_sequences_.begin() + pos - shrinked_size_, lns.size()).first;
-
-      return composite_type(&symbols_tables_, std::move(lns), std::move(values_begin), lns_id);
+      if constexpr (kIsReadOnly) {
+        const uint8_t* values_stream_begin = symbols_ids_sequences_.data() + (pos - shrinked_size_);
+        return LabelSetCompositeView(&symbols_tables_[0], sizeof(symbols_tables_[0]), lns, values_stream_begin, lns_id);
+      } else {
+        auto values_begin = BareBones::StreamVByte::decoder<symbol_ids_codec_type>(symbols_ids_sequences_.begin() + pos - shrinked_size_, lns.size()).first;
+        return CompositeWithTablesPtr(&symbols_tables_, lns, std::move(values_begin), lns_id);
+      }
     }
 
     void validate(uint32_t id) const {
@@ -1429,7 +1544,10 @@ using composite_type = Filaments::LabelNameSetComposite;
 }
 
 namespace LabelSet {
-struct CompositeView;
-}
+
+using CompositeView = Filaments::LabelSetCompositeView;
+using composite_type = Filaments::LabelSetCompositeView;
+
+}  // namespace LabelSet
 
 }  // namespace PromPP::Primitives::SnugComposites

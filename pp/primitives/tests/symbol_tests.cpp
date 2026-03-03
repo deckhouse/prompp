@@ -193,6 +193,25 @@ TEST_F(SymbolDecodingTableTest, IterateOverDecodingTable) {
   EXPECT_TRUE(std::ranges::equal(decoding_table_, std::initializer_list{"a"s, "b"s}));
 }
 
+TEST_F(SymbolDecodingTableTest, SymbolTableReadViewMatchesOperatorBracketAfterLoad) {
+  // Arrange
+  encoding_table_.find_or_emplace("a"sv);
+  encoding_table_.find_or_emplace("bb"sv);
+  encoding_table_.find_or_emplace("ccc"sv);
+  const auto checkpoint = encoding_table_.checkpoint();
+  std::stringstream ss;
+  checkpoint.save(ss);
+  decoding_table_.load(ss);
+
+  // Act
+  const auto& symbol_read_view = decoding_table_.symbol_table_read_view();
+
+  // Assert
+  EXPECT_EQ(decoding_table_[0], symbol_read_view[0]);
+  EXPECT_EQ(decoding_table_[1], symbol_read_view[1]);
+  EXPECT_EQ(decoding_table_[2], symbol_read_view[2]);
+}
+
 TEST_F(SymbolDecodingTableTest, CheckpointSaveSizeMatchesActualSize) {
   // Arrange
   encoding_table_.find_or_emplace("test"sv);

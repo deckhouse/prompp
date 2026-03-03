@@ -301,4 +301,20 @@ TEST_F(SharedDataFixture, UseCopyLabelSetAfterFreeSourceLabelSet) {
   EXPECT_TRUE(std::ranges::equal(label_set, decoding_table[0]));
 }
 
+TEST_F(SharedDataFixture, LabelSetCompositeViewHashMatchesOriginalLabelSet) {
+  // Arrange
+  LabelSetEncodingBimap encoding_bimap;
+  const LabelViewSet label_set{{"k1", "v1"}, {"k2", "v2"}};
+  encoding_bimap.find_or_emplace(label_set);
+
+  // Act
+  const LabelSetDecodingTable decoding_table(encoding_bimap);
+  const auto composite = decoding_table[0];
+  const auto original_hash = PromPP::Primitives::hash::hash_of_label_set(label_set);
+  const auto composite_hash = hash_value(composite);
+
+  // Assert
+  EXPECT_EQ(original_hash, composite_hash);
+}
+
 }  // namespace

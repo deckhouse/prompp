@@ -12,7 +12,7 @@ struct SymbolItemType {
   uint32_t length;
 };
 
-struct SymbolTableReader {
+struct SymbolTableView {
   const char* data = nullptr;
   const SymbolItemType* items = nullptr;
 
