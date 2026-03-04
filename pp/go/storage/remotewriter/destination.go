@@ -8,10 +8,9 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
-	"gopkg.in/yaml.v2"
-
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/model/labels"
+	"gopkg.in/yaml.v2"
 )
 
 // String constants for instrumentation.
@@ -23,7 +22,9 @@ const (
 
 	reasonTooOld        = "too_old"
 	reasonDroppedSeries = "dropped_series"
+)
 
+var (
 	DefaultSampleAgeLimit = model.Duration(time.Hour * 24 * 30)
 )
 

@@ -19,7 +19,7 @@ RUN wget -qO "/usr/local/bin/bazel" https://github.com/bazelbuild/bazel/releases
 ARG GO_VERSION=1.25.7
 ARG GO_ARCH
 RUN cd /tmp && curl -LOs https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz && tar -C /usr/local -xzf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
-ENV PATH="$PATH:/usr/local/go/bin"
+ENV PATH="$PATH:/usr/local/go/bin:/root/go/bin"
 ENV GOBIN="/usr/local/go/bin"
 RUN go install github.com/jstemmer/go-junit-report/v2@latest
 RUN go install github.com/prometheus/promu@latest
