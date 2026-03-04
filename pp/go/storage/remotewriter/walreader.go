@@ -142,7 +142,10 @@ type SegmentV1 struct {
 
 // EmptySegmentV1 init new empty [SegmentV1].
 func EmptySegmentV1() *SegmentV1 {
-	return &SegmentV1{}
+	return &SegmentV1{
+		id:      math.MaxUint32,
+		Segment: *reader.NewSegment(),
+	}
 }
 
 // ID returns [SegmentV1] ID.
@@ -158,9 +161,7 @@ func (s *SegmentV1) ReadBody(r io.Reader) (int64, error) {
 
 // ReadID reads [SegmentV1] ID from r [io.Reader]. The return value n is the number of bytes read.
 // Any error encountered during the read is also returned. Implementation [Segment].
-func (s *SegmentV1) ReadID(r io.Reader) (int64, error) {
-	return 0, nil
-}
+func (*SegmentV1) ReadID(io.Reader) (int64, error) { return 0, nil }
 
 // Reset [SegmentV1] data.
 func (s *SegmentV1) Reset() {
@@ -184,7 +185,7 @@ type SegmentV2 struct {
 
 // EmptySegmentV2 init new empty [SegmentV2].
 func EmptySegmentV2() *SegmentV2 {
-	return &SegmentV2{}
+	return &SegmentV2{SegmentV2: *reader.NewSegmentV2()}
 }
 
 // SetSegmentID sets the segment ID value, implementation [Segment].

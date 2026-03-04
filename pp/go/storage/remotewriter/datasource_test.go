@@ -34,7 +34,7 @@ func (s *DataSourceSuite) TestRead() {
 	numberOfSegments := uint32(10)
 	baseCtx := s.T().Context()
 
-	err := remotewritertest.WriteToShardWalFileV1(
+	err := remotewritertest.WriteToShardWalFileV1Single(
 		baseCtx,
 		filepath.Join(dataDir, fmt.Sprintf("shard_%d.wal", 0)),
 		uint64(numberOfSegments),
@@ -83,7 +83,7 @@ func (s *DataSourceSuite) TestRestoreRead() {
 	numberOfSegments := uint32(10)
 	baseCtx := s.T().Context()
 
-	err := remotewritertest.WriteToShardWalFileV1(
+	err := remotewritertest.WriteToShardWalFileV1Single(
 		baseCtx,
 		filepath.Join(dataDir, fmt.Sprintf("shard_%d.wal", 0)),
 		uint64(numberOfSegments),
@@ -131,7 +131,7 @@ func (s *DataSourceSuite) TestSkipByMinTime() {
 	numberOfSegments := uint32(10)
 	baseCtx := s.T().Context()
 
-	err := remotewritertest.WriteToShardWalFileV1(
+	err := remotewritertest.WriteToShardWalFileV1Single(
 		baseCtx,
 		filepath.Join(dataDir, fmt.Sprintf("shard_%d.wal", 0)),
 		uint64(numberOfSegments),

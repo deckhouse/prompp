@@ -253,6 +253,21 @@ func (s *shard) Read(
 		return nil, nil
 	}
 
+	return s.readUntil(ctx, targetSegmentID, minTimestamp, samplesStorage)
+}
+
+// WriteTo writes output decoder state to io.Writer.
+func (s *shard) WriteTo(w io.Writer) (int64, error) {
+	return s.decoder.WriteTo(w)
+}
+
+// readUntil reads [DecodedSegment] from wal until the target segment ID is reached.
+func (s *shard) readUntil(
+	ctx context.Context,
+	targetSegmentID uint32,
+	minTimestamp int64,
+	samplesStorage *cppbridge.CppSegmentSamplesStorage,
+) (*DecodedSegment, error) {
 	for {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
@@ -287,11 +302,6 @@ func (s *shard) Read(
 
 		cppbridge.ClearSegmentSamplesStorage(samplesStorage)
 	}
-}
-
-// WriteTo writes output decoder state to io.Writer.
-func (s *shard) WriteTo(w io.Writer) (int64, error) {
-	return s.decoder.WriteTo(w)
 }
 
 //
@@ -507,13 +517,13 @@ func (s *shardRotated) SegmentID() (uint32, error) {
 
 	if errors.Is(err, io.EOF) {
 		s.completed = true
-		return 0, ErrEndOfBlock // no more segments in the wal file
+		return math.MaxUint32, ErrEndOfBlock // no more segments in the wal file
 	}
 
 	s.corrupted = true
 
 	logger.Errorf("remotewrite shard: %s/%d is corrupted by read ID: %v", s.headID, s.shardID, err)
-	return 0, errors.Join(err, ErrShardIsCorrupted)
+	return math.MaxUint32, errors.Join(err, ErrShardIsCorrupted)
 }
 
 // SkipSegment it reads and skips the [Segment] from the wal.

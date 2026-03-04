@@ -824,6 +824,7 @@ func handleReadErrors(
 	if len(errs) == numberOfShards {
 		markCorrupted()
 
+		fmt.Println("AAAAAA", errs)
 		return ErrEndOfBlock
 	}
 

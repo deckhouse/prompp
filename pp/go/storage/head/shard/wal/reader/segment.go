@@ -98,7 +98,7 @@ type SegmentV2 struct {
 
 // NewSegmentV2 init new [SegmentV2].
 func NewSegmentV2() *SegmentV2 {
-	return &SegmentV2{}
+	return &SegmentV2{id: math.MaxUint32}
 }
 
 // ID returns [SegmentV2] ID.
