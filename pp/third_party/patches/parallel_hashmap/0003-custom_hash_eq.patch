@@ -393,7 +393,7 @@
 +        PolicyTraits::construct(&alloc_ref(), slots_ + i,
 +                                std::forward<Args>(args)...);
 +
-+        assert(PolicyTraits::apply(FindElementWithHash{*this, hash, eq_obj}, *iterator_at(i)) ==
++        assert(PolicyTraits::apply(FindElementWithHash<HashObj, EqObj>{*this, hash, eq_obj}, *iterator_at(i)) ==
 +               iterator_at(i) &&
 +               "constructed value does not match the lookup key");
 +    }
