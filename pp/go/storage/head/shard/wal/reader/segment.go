@@ -32,7 +32,38 @@ func (s *Segment) Length() int {
 // ReadFrom reads [Segment] data from r [io.Reader]. The return value n is the number of bytes read.
 // Any error encountered during the read is also returned.
 func (s *Segment) ReadFrom(r io.Reader) (int64, error) {
-	return readSegment(r, s)
+	br := NewByteReader(r)
+	size, err := binary.ReadUvarint(br)
+	if err != nil {
+		return int64(br.n), fmt.Errorf("failed to read segment size: %w", err)
+	}
+
+	crc32HashU64, err := binary.ReadUvarint(br)
+	if err != nil {
+		return int64(br.n), fmt.Errorf("failed to read segment crc32 hash: %w", err)
+	}
+	crc32Hash := uint32(crc32HashU64) // #nosec G115 // no overflow
+
+	sampleCountU64, err := binary.ReadUvarint(br)
+	if err != nil {
+		return int64(br.n), fmt.Errorf("failed to read segment sample count: %w", err)
+	}
+	s.sampleCount = uint32(sampleCountU64) // #nosec G115 // no overflow
+
+	s.resize(int(size)) // #nosec G115 // no overflow
+	n, err := io.ReadFull(r, s.data)
+	if err != nil {
+		return int64(br.n), fmt.Errorf("failed to read segment data: %w", err)
+	}
+	n += br.n
+
+	if crc32Hash != crc32.ChecksumIEEE(s.data) {
+		return int64(n), fmt.Errorf(
+			"crc32 did not match, want: %d, have: %d", crc32Hash, crc32.ChecksumIEEE(s.data),
+		)
+	}
+
+	return int64(n), nil
 }
 
 // Reset [Segment] data.
@@ -55,42 +86,6 @@ func (s *Segment) resize(size int) {
 	}
 }
 
-// readSegment read and decode [Segment] from [io.Reader] and returns.
-func readSegment(reader io.Reader, segment *Segment) (int64, error) {
-	br := NewByteReader(reader)
-	size, err := binary.ReadUvarint(br)
-	if err != nil {
-		return int64(br.n), fmt.Errorf("failed to read segment size: %w", err)
-	}
-
-	crc32HashU64, err := binary.ReadUvarint(br)
-	if err != nil {
-		return int64(br.n), fmt.Errorf("failed to read segment crc32 hash: %w", err)
-	}
-	crc32Hash := uint32(crc32HashU64) // #nosec G115 // no overflow
-
-	sampleCountU64, err := binary.ReadUvarint(br)
-	if err != nil {
-		return int64(br.n), fmt.Errorf("failed to read segment sample count: %w", err)
-	}
-	segment.sampleCount = uint32(sampleCountU64) // #nosec G115 // no overflow
-
-	segment.resize(int(size)) // #nosec G115 // no overflow
-	n, err := io.ReadFull(reader, segment.data)
-	if err != nil {
-		return int64(br.n), fmt.Errorf("failed to read segment data: %w", err)
-	}
-	n += br.n
-
-	if crc32Hash != crc32.ChecksumIEEE(segment.data) {
-		return int64(n), fmt.Errorf(
-			"crc32 did not match, want: %d, have: %d", crc32Hash, crc32.ChecksumIEEE(segment.data),
-		)
-	}
-
-	return int64(n), nil
-}
-
 //
 // SegmentV2
 //
@@ -111,10 +106,28 @@ func (s *SegmentV2) ID() uint32 {
 	return s.id
 }
 
+// ReadBody reads [SegmentV2] body from r [io.Reader]. The return value n is the number of bytes read.
+// Any error encountered during the read is also returned.
+func (s *SegmentV2) ReadBody(r io.Reader) (int64, error) {
+	return s.readSegmentBody(NewByteReader(r))
+}
+
 // ReadFrom reads [SegmentV2] data from r [io.Reader]. The return value n is the number of bytes read.
 // Any error encountered during the read is also returned.
 func (s *SegmentV2) ReadFrom(r io.Reader) (int64, error) {
-	return readSegmentV2(r, s)
+	br := NewByteReader(r)
+
+	if n, err := s.readSegmentID(br); err != nil {
+		return n, err
+	}
+
+	return s.readSegmentBody(br)
+}
+
+// ReadID reads [SegmentV2] ID from r [io.Reader]. The return value n is the number of bytes read.
+// Any error encountered during the read is also returned.
+func (s *SegmentV2) ReadID(r io.Reader) (int64, error) {
+	return s.readSegmentID(NewByteReader(r))
 }
 
 // Reset [SegmentV2] data.
@@ -124,16 +137,21 @@ func (s *SegmentV2) Reset() {
 	s.id = math.MaxUint32
 }
 
-// readSegmentV2 read and decode [SegmentV2] from [io.Reader] and returns.
-func readSegmentV2(reader io.Reader, segment *SegmentV2) (int64, error) {
-	br := NewByteReader(reader)
-
+// readSegmentID read and decode segment id from [ByteReader] and set to [SegmentV2].
+// The return value n is the number of bytes read. Any error encountered during the read is also returned.
+func (s *SegmentV2) readSegmentID(br *ByteReader) (int64, error) {
 	idU64, err := binary.ReadUvarint(br)
 	if err != nil {
 		return int64(br.n), fmt.Errorf("v2: failed to read segment id: %w", err)
 	}
-	segment.id = uint32(idU64) // #nosec G115 // no overflow
+	s.id = uint32(idU64) // #nosec G115 // no overflow
 
+	return int64(br.n), nil
+}
+
+// readSegmentBody read and decode segment body from [ByteReader] and set to [SegmentV2].
+// The return value n is the number of bytes read. Any error encountered during the read is also returned.
+func (s *SegmentV2) readSegmentBody(br *ByteReader) (int64, error) {
 	size, err := binary.ReadUvarint(br)
 	if err != nil {
 		return int64(br.n), fmt.Errorf("v2: failed to read segment size: %w", err)
@@ -149,18 +167,18 @@ func readSegmentV2(reader io.Reader, segment *SegmentV2) (int64, error) {
 	if err != nil {
 		return int64(br.n), fmt.Errorf("v2: failed to read segment sample count: %w", err)
 	}
-	segment.sampleCount = uint32(sampleCountU64) // #nosec G115 // no overflow
+	s.sampleCount = uint32(sampleCountU64) // #nosec G115 // no overflow
 
-	segment.resize(int(size)) // #nosec G115 // no overflow
-	n, err := io.ReadFull(reader, segment.data)
+	s.resize(int(size)) // #nosec G115 // no overflow
+	n, err := io.ReadFull(br, s.data)
 	if err != nil {
 		return int64(br.n), fmt.Errorf("v2: failed to read segment data: %w", err)
 	}
 	n += br.n
 
-	if crc32Hash != crc32.ChecksumIEEE(segment.data) {
+	if crc32Hash != crc32.ChecksumIEEE(s.data) {
 		return int64(n), fmt.Errorf(
-			"v2: crc32 did not match, want: %d, have: %d", crc32Hash, crc32.ChecksumIEEE(segment.data),
+			"v2: crc32 did not match, want: %d, have: %d", crc32Hash, crc32.ChecksumIEEE(s.data),
 		)
 	}
 

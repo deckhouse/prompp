@@ -14,6 +14,9 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
+// defaultMaxSegmentSize default max segment size for test.
+const defaultMaxSegmentSize = uint32(100)
+
 // NoopSegmentWriteNotifier notify when new segment write. [SegmentWriteNotifier] of the implementation.
 type NoopSegmentWriteNotifier struct{}
 
@@ -78,6 +81,9 @@ func WriteToShardWalFileV1(
 		return fmt.Errorf("failed to create buffered writer: %w", err)
 	}
 
+	wl := wal.NewWal(shardWalEncoder, sw, defaultMaxSegmentSize, shardID, nil)
+	defer wl.Close()
+
 	state := cppbridge.NewTransitionStateV2WithoutLock()
 	relabeler := cppbridge.NewPerGoroutineRelabeler(1, shardID)
 	hLimits := cppbridge.DefaultWALHashdexLimits()
@@ -112,27 +118,22 @@ func WriteToShardWalFileV1(
 			return err
 		}
 
-		if _, err = shardWalEncoder.Encode(innerSeries); err != nil {
-			return fmt.Errorf("failed to encode: %w", err)
+		if _, err = wl.Write(innerSeries); err != nil {
+			return fmt.Errorf("failed to write: %w", err)
 		}
 
-		segment, err := shardWalEncoder.Finalize()
-		if err != nil {
-			return fmt.Errorf("failed to finalize: %w", err)
+		if err = wl.Commit(); err != nil {
+			return fmt.Errorf("failed to commit: %w", err)
 		}
 
-		if err = sw.Write(segment); err != nil {
-			return fmt.Errorf("failed to write segment: %w", err)
-		}
-
-		if err = sw.Flush(); err != nil {
+		if err = wl.Flush(); err != nil {
 			return fmt.Errorf("failed to flush: %w", err)
 		}
 
-		if err = sw.Sync(); err != nil {
+		if err = wl.Sync(); err != nil {
 			return fmt.Errorf("failed to sync: %w", err)
 		}
 	}
 
-	return sw.Close()
+	return nil
 }

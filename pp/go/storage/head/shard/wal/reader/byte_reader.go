@@ -5,7 +5,7 @@ import "io"
 // ByteReader reads from the reader 1 byte at a time.
 type ByteReader struct {
 	r   io.Reader
-	buf []byte
+	buf [1]byte
 	n   int
 }
 
@@ -13,13 +13,18 @@ type ByteReader struct {
 func NewByteReader(r io.Reader) *ByteReader {
 	return &ByteReader{
 		r:   r,
-		buf: make([]byte, 1),
+		buf: [1]byte{},
 	}
+}
+
+// Read reads from the reader into p.
+func (r *ByteReader) Read(p []byte) (int, error) {
+	return r.r.Read(p)
 }
 
 // ReadByte reads from the reader 1 byte.
 func (r *ByteReader) ReadByte() (byte, error) {
-	n, err := io.ReadFull(r.r, r.buf)
+	n, err := io.ReadFull(r.r, r.buf[:])
 	if err != nil {
 		return 0, err
 	}

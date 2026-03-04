@@ -15,8 +15,7 @@ import (
 type DataSourceActiveSuite struct {
 	suite.Suite
 
-	unexpectedEOFCount prometheus.Counter
-	segmentSize        prometheus.Histogram
+	segmentSize prometheus.Histogram
 }
 
 func TestDataSourceActiveSuite(t *testing.T) {
@@ -24,7 +23,6 @@ func TestDataSourceActiveSuite(t *testing.T) {
 }
 
 func (s *DataSourceActiveSuite) SetupTest() {
-	s.unexpectedEOFCount = prometheus.NewCounter(prometheus.CounterOpts{})
 	s.segmentSize = prometheus.NewHistogram(prometheus.HistogramOpts{})
 }
 
@@ -55,7 +53,6 @@ func (s *DataSourceActiveSuite) TestNext() {
 		newSegmentReadyChecker(rec),
 		corruptMarker,
 		rec,
-		s.unexpectedEOFCount,
 		s.segmentSize,
 	)
 	s.Require().NoError(err)
@@ -110,7 +107,6 @@ func (s *DataSourceActiveSuite) TestRestoreRead() {
 		newSegmentReadyChecker(rec),
 		corruptMarker,
 		rec,
-		s.unexpectedEOFCount,
 		s.segmentSize,
 	)
 	s.Require().NoError(err)
@@ -164,7 +160,6 @@ func (s *DataSourceActiveSuite) TestSkipByMinTime() {
 		newSegmentReadyChecker(rec),
 		corruptMarker,
 		rec,
-		s.unexpectedEOFCount,
 		s.segmentSize,
 	)
 	s.Require().NoError(err)
@@ -192,4 +187,22 @@ func (s *DataSourceActiveSuite) TestSkipByMinTime() {
 	segments, err := dataSource.Next(baseCtx, 0, segmentSampleStorages)
 	s.Require().ErrorIs(err, ErrEmptyReadResult)
 	s.Require().Empty(segments)
+}
+
+//
+//
+//
+
+type DataSourceRotatedSuite struct {
+	suite.Suite
+}
+
+func TestDataSourceRotatedSuite(t *testing.T) {
+	suite.Run(t, new(DataSourceRotatedSuite))
+}
+
+func (s *DataSourceRotatedSuite) TestHappyPath() {
+	ds := &dataSourceRotated{}
+	_ = ds
+	s.T().Log("TODO: implement")
 }

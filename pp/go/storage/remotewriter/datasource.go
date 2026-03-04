@@ -172,7 +172,6 @@ func newDataSource(dataDir string,
 			discardCache,
 			config.ExternalLabels,
 			convertedRelabelConfigs,
-			b.unexpectedEOFCount,
 			b.segmentSize,
 		)
 		if err != nil {
@@ -282,7 +281,7 @@ func (ds *dataSource) readFromShards(
 		if ds.shards[shardIDs[0]].corrupted {
 			readShardResults[0] = readShardResult{
 				segment: nil,
-				err:     NewShardError(shardIDs[0], false, ErrShardIsCorrupted),
+				err:     NewShardError(ds.ID, shardIDs[0], false, ErrShardIsCorrupted),
 			}
 			return readShardResults
 		}
@@ -294,7 +293,7 @@ func (ds *dataSource) readFromShards(
 			segmentSamplesStorages.Get(uint64(shardIDs[0])),
 		)
 		if err != nil {
-			err = NewShardError(shardIDs[0], true, err)
+			err = NewShardError(ds.ID, shardIDs[0], true, err)
 		}
 		readShardResults[0] = readShardResult{segment: segment, err: err}
 
@@ -304,7 +303,10 @@ func (ds *dataSource) readFromShards(
 	wg := sync.WaitGroup{}
 	for i, shardID := range shardIDs {
 		if ds.shards[shardID].corrupted {
-			readShardResults[i] = readShardResult{segment: nil, err: NewShardError(shardID, false, ErrShardIsCorrupted)}
+			readShardResults[i] = readShardResult{
+				segment: nil,
+				err:     NewShardError(ds.ID, shardID, false, ErrShardIsCorrupted),
+			}
 			continue
 		}
 		wg.Add(1)
@@ -317,7 +319,7 @@ func (ds *dataSource) readFromShards(
 				segmentSamplesStorages.Get(uint64(shardID)),
 			)
 			if err != nil {
-				err = NewShardError(shardID, true, err)
+				err = NewShardError(ds.ID, shardID, true, err)
 			}
 			readShardResults[id] = readShardResult{segment: segment, err: err}
 		}(i, shardID)

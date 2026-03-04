@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -20,23 +21,30 @@ import (
 
 // ShardError error reading the shard.
 type ShardError struct {
+	err         error
+	headID      string
 	shardID     uint16
 	processable bool
-	err         error
 }
 
 // NewShardError init new [ShardError].
-func NewShardError(shardID uint16, processable bool, err error) ShardError {
+func NewShardError(headID string, shardID uint16, processable bool, err error) ShardError {
 	return ShardError{
+		err:         err,
+		headID:      headID,
 		shardID:     shardID,
 		processable: processable,
-		err:         err,
 	}
 }
 
 // Error returns error as string, implementation error.
 func (e ShardError) Error() string {
 	return e.err.Error()
+}
+
+// HeadID returns head ID.
+func (e ShardError) HeadID() string {
+	return e.headID
 }
 
 // ShardID returns shard ID.
@@ -80,17 +88,16 @@ func (NoOpShardWalReader) Read() (segment Segment, err error) { return segment, 
 //
 
 type shard struct {
-	headID             string
-	shardID            uint16
-	corrupted          bool
-	lastReadSegmentID  optional.Optional[uint32]
-	walReader          ShardWalReader
-	segment            Segment
-	decoder            *Decoder
-	unclaimedSegment   *DecodedSegment
-	decoderStateFile   io.WriteCloser
-	unexpectedEOFCount prometheus.Counter
-	segmentSize        prometheus.Histogram
+	headID            string
+	shardID           uint16
+	corrupted         bool
+	lastReadSegmentID optional.Optional[uint32]
+	walReader         ShardWalReader
+	segment           Segment
+	decoder           *Decoder
+	unclaimedSegment  *DecodedSegment
+	decoderStateFile  io.WriteCloser
+	segmentSize       prometheus.Histogram
 }
 
 // createShard creates a new [shard].
@@ -102,7 +109,6 @@ func createShard(
 	resetDecoderState bool,
 	externalLabels labels.Labels,
 	relabelConfigs []*cppbridge.RelabelConfig,
-	unexpectedEOFCount prometheus.Counter,
 	segmentSize prometheus.Histogram,
 ) (*shard, error) {
 	s, err := newShard(
@@ -113,7 +119,6 @@ func createShard(
 		resetDecoderState,
 		externalLabels,
 		relabelConfigs,
-		unexpectedEOFCount,
 		segmentSize,
 	)
 	if err != nil {
@@ -126,7 +131,6 @@ func createShard(
 			true,
 			externalLabels,
 			relabelConfigs,
-			unexpectedEOFCount,
 			segmentSize,
 		)
 	}
@@ -135,7 +139,9 @@ func createShard(
 
 // newShard init new [shard].
 //
-//revive:disable-next-line:flag-parameter this is a flag, but it's more convenient this way
+//nolint:dupl // this is constructor.
+//revive:disable-next-line:function-length // this is constructor.
+//revive:disable-next-line:flag-parameter // this is a flag, but it's more convenient this way
 func newShard(
 	headID string,
 	shardID uint16,
@@ -143,7 +149,6 @@ func newShard(
 	resetDecoderState bool,
 	externalLabels labels.Labels,
 	relabelConfigs []*cppbridge.RelabelConfig,
-	unexpectedEOFCount prometheus.Counter,
 	segmentSize prometheus.Histogram,
 ) (*shard, error) {
 	wr, encoderVersion, err := newWalReader(shardFileName)
@@ -194,26 +199,24 @@ func newShard(
 		logger.Errorf("shard %s/%d is corrupted by init: %v", headID, shardID, err)
 		// return the corrupted shard that won't be read
 		return &shard{
-			headID:             headID,
-			shardID:            shardID,
-			corrupted:          true,
-			decoder:            decoder,
-			decoderStateFile:   decoderStateFile,
-			unexpectedEOFCount: unexpectedEOFCount,
-			segmentSize:        segmentSize,
+			headID:           headID,
+			shardID:          shardID,
+			corrupted:        true,
+			decoder:          decoder,
+			decoderStateFile: decoderStateFile,
+			segmentSize:      segmentSize,
 		}, nil
 	}
 
 	// create new shard
 	return &shard{
-		headID:             headID,
-		shardID:            shardID,
-		walReader:          wr,
-		segment:            segment,
-		decoder:            decoder,
-		decoderStateFile:   decoderStateFile,
-		unexpectedEOFCount: unexpectedEOFCount,
-		segmentSize:        segmentSize,
+		headID:           headID,
+		shardID:          shardID,
+		walReader:        wr,
+		segment:          segment,
+		decoder:          decoder,
+		decoderStateFile: decoderStateFile,
+		segmentSize:      segmentSize,
 	}, nil
 }
 
@@ -286,6 +289,266 @@ func (s *shard) Read(
 	}
 }
 
-func (s *shard) SetCorrupted() {
+// WriteTo writes output decoder state to io.Writer.
+func (s *shard) WriteTo(w io.Writer) (int64, error) {
+	return s.decoder.WriteTo(w)
+}
+
+//
+// ShardRotatedWalReader
+//
+
+// ShardRotatedWalReader a shard rotated wall reader.
+type ShardRotatedWalReader interface {
+	// Close wal file.
+	Close() error
+
+	// EmptySegment creates an empty segment of the required version.
+	EmptySegment() (Segment, error)
+
+	// ReadSegmentBody reads [Segment] body from wal.
+	// It may return a non-nil error if some error condition is known, such as EOF.
+	ReadSegmentBody(s Segment) error
+
+	// ReadSegmentID reads [Segment] ID from wal.
+	// It may return a non-nil error if some error condition is known, such as EOF.
+	ReadSegmentID(s Segment) error
+}
+
+//
+// shardRotated
+//
+
+type shardRotated struct {
+	headID           string
+	shardID          uint16
+	corrupted        bool
+	completed        bool
+	walReader        ShardRotatedWalReader
+	segment          Segment
+	decoder          *Decoder
+	decoderStateFile io.WriteCloser
+	segmentSize      prometheus.Histogram
+}
+
+// createShardRotated creates a new [shardRotated].
+// If an error occurs during initialization, try to create a decoder with a reset state.
+func createShardRotated(
+	headID string,
+	shardID uint16,
+	shardFileName, decoderStateFileName string,
+	resetDecoderState bool,
+	externalLabels labels.Labels,
+	relabelConfigs []*cppbridge.RelabelConfig,
+	segmentSize prometheus.Histogram,
+) (*shardRotated, error) {
+	s, err := newShardRotated(
+		headID,
+		shardID,
+		shardFileName,
+		decoderStateFileName,
+		resetDecoderState,
+		externalLabels,
+		relabelConfigs,
+		segmentSize,
+	)
+	if err != nil {
+		logger.Errorf("failed to create shardRotated: %v", err)
+		return newShardRotated(
+			headID,
+			shardID,
+			shardFileName,
+			decoderStateFileName,
+			true,
+			externalLabels,
+			relabelConfigs,
+			segmentSize,
+		)
+	}
+	return s, nil
+}
+
+// newShardRotated init new [shardRotated].
+//
+//nolint:dupl // this is constructor.
+//revive:disable-next-line:function-length // this is constructor.
+//revive:disable-next-line:flag-parameter this is a flag, but it's more convenient this way
+func newShardRotated(
+	headID string,
+	shardID uint16,
+	shardFileName, decoderStateFileName string,
+	resetDecoderState bool,
+	externalLabels labels.Labels,
+	relabelConfigs []*cppbridge.RelabelConfig,
+	segmentSize prometheus.Histogram,
+) (*shardRotated, error) {
+	wr, encoderVersion, err := newWalReader(shardFileName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create wal file reader: %w", err)
+	}
+
+	decoder, err := NewDecoder(
+		externalLabels,
+		relabelConfigs,
+		shardID,
+		encoderVersion,
+	)
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("failed to create decoder: %w", err), wr.Close())
+	}
+
+	decoderStateFileFlags := os.O_CREATE | os.O_RDWR
+	if resetDecoderState {
+		decoderStateFileFlags |= os.O_TRUNC
+	}
+	decoderStateFile, err := os.OpenFile( // #nosec G304 // it's meant to be that way
+		decoderStateFileName,
+		decoderStateFileFlags,
+		0o600, //revive:disable-line:add-constant // file permissions simple readable as octa-number
+	)
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("failed to open decoder state file: %w", err), wr.Close())
+	}
+
+	if !resetDecoderState {
+		if err = decoder.LoadFrom(decoderStateFile); err != nil {
+			return nil, errors.Join(
+				fmt.Errorf("failed to restore from cache: %w", err), wr.Close(), decoderStateFile.Close(),
+			)
+		}
+	} else {
+		if err = decoderStateFile.Truncate(0); err != nil {
+			return nil, errors.Join(
+				fmt.Errorf("failed to truncate decoder state file: %w", err), wr.Close(), decoderStateFile.Close(),
+			)
+		}
+	}
+
+	segment, err := wr.EmptySegment()
+	if err != nil {
+		_ = wr.Close() // it doesn't make sense for us to process this erro
+		logger.Errorf("shard %s/%d is corrupted by init: %v", headID, shardID, err)
+		// return the corrupted shard that won't be read
+		return &shardRotated{
+			headID:           headID,
+			shardID:          shardID,
+			corrupted:        true,
+			decoder:          decoder,
+			decoderStateFile: decoderStateFile,
+			segmentSize:      segmentSize,
+		}, nil
+	}
+
+	// create new shard
+	return &shardRotated{
+		headID:           headID,
+		shardID:          shardID,
+		walReader:        wr,
+		segment:          segment,
+		decoder:          decoder,
+		decoderStateFile: decoderStateFile,
+		segmentSize:      segmentSize,
+	}, nil
+}
+
+// Close closes internal shard resources - [ShardWalReader] and decoderStateFile, rendering it unusable for I/O.
+func (s *shardRotated) Close() (err error) {
+	// a corrupted shard has no open walReader
+	if s.walReader != nil {
+		err = errors.Join(err, s.walReader.Close())
+	}
+
+	return errors.Join(err, s.decoderStateFile.Close())
+}
+
+// ReadSegment reads [DecodedSegment] from wal.
+func (s *shardRotated) ReadSegment(
+	minTimestamp int64,
+	samplesStorage *cppbridge.CppSegmentSamplesStorage,
+) (*DecodedSegment, error) {
+	if s.corrupted {
+		return nil, ErrShardIsCorrupted
+	}
+
+	if s.completed {
+		return nil, ErrEndOfBlock // no more segments in the wal file
+	}
+
+	defer s.segment.Reset()
+	if err := s.walReader.ReadSegmentBody(s.segment); err != nil {
+		s.corrupted = true
+		logger.Errorf("remotewrite shard: %s/%d is corrupted by read body: %v", s.headID, s.shardID, err)
+		return nil, errors.Join(err, ErrShardIsCorrupted)
+	}
+	s.segmentSize.Observe(float64(s.segment.Length()))
+
+	decodedSegment, err := s.decoder.Decode(s.segment.Bytes(), minTimestamp, samplesStorage)
+	if err != nil {
+		s.corrupted = true
+		logger.Errorf("remotewrite shard: %s/%d is corrupted by decode: %v", s.headID, s.shardID, err)
+		return nil, errors.Join(err, ErrShardIsCorrupted)
+	}
+	decodedSegment.ID = s.segment.ID()
+
+	return decodedSegment, nil
+}
+
+// SegmentID returns the ID of the [Segment] that can be read from wal.
+// It may return a non-nil error if some error condition is known, such as EOF.
+func (s *shardRotated) SegmentID() (uint32, error) {
+	if s.segment.ID() != math.MaxUint32 {
+		return s.segment.ID(), nil
+	}
+
+	err := s.walReader.ReadSegmentID(s.segment)
+	if err == nil {
+		return s.segment.ID(), nil
+	}
+
+	if errors.Is(err, io.EOF) {
+		s.completed = true
+		return 0, ErrEndOfBlock // no more segments in the wal file
+	}
+
 	s.corrupted = true
+
+	logger.Errorf("remotewrite shard: %s/%d is corrupted by read ID: %v", s.headID, s.shardID, err)
+	return 0, errors.Join(err, ErrShardIsCorrupted)
+}
+
+// SkipSegment it reads and skips the [Segment] from the wal.
+func (s *shardRotated) SkipSegment(
+	minTimestamp int64,
+	samplesStorage *cppbridge.CppSegmentSamplesStorage,
+) error {
+	if s.corrupted {
+		return ErrShardIsCorrupted
+	}
+
+	if s.completed {
+		return ErrEndOfBlock // no more segments in the wal file
+	}
+
+	defer s.segment.Reset()
+	if err := s.walReader.ReadSegmentBody(s.segment); err != nil {
+		s.corrupted = true
+		logger.Errorf("remotewrite shard: %s/%d is corrupted by read body: %v", s.headID, s.shardID, err)
+		return errors.Join(err, ErrShardIsCorrupted)
+	}
+	s.segmentSize.Observe(float64(s.segment.Length()))
+
+	if _, err := s.decoder.Decode(s.segment.Bytes(), minTimestamp, samplesStorage); err != nil {
+		s.corrupted = true
+		logger.Errorf("remotewrite shard: %s/%d is corrupted by decode: %v", s.headID, s.shardID, err)
+		return errors.Join(err, ErrShardIsCorrupted)
+	}
+
+	cppbridge.ClearSegmentSamplesStorage(samplesStorage)
+
+	return nil
+}
+
+// WriteTo writes output decoder state to io.Writer.
+func (s *shardRotated) WriteTo(w io.Writer) (int64, error) {
+	return s.decoder.WriteTo(w)
 }
