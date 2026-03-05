@@ -3,11 +3,13 @@ package storage
 import (
 	"context"
 	"math"
+	"sync/atomic"
 	"time"
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/pp-pkg/model"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/hatracker"
@@ -31,7 +33,7 @@ type Adapter struct {
 	builder               *pp_storage.Builder
 	haTracker             *hatracker.HighAvailabilityTracker
 	hashdexFactory        cppbridge.HashdexFactory
-	hashdexLimits         cppbridge.WALHashdexLimits
+	hashdexLimits         atomic.Value // stores cppbridge.WALHashdexLimits
 	transparentState      *cppbridge.StateV2
 	mergeOutOfOrderChunks func()
 
@@ -51,12 +53,11 @@ func NewAdapter(
 	registerer prometheus.Registerer,
 ) *Adapter {
 	factory := util.NewUnconflictRegisterer(registerer)
-	return &Adapter{
+	ar := &Adapter{
 		proxy:                 proxy,
 		builder:               builder,
 		haTracker:             hatracker.NewHighAvailabilityTracker(clock, registerer),
 		hashdexFactory:        cppbridge.HashdexFactory{},
-		hashdexLimits:         cppbridge.DefaultWALHashdexLimits(),
 		transparentState:      cppbridge.NewTransitionStateV2(),
 		mergeOutOfOrderChunks: mergeOutOfOrderChunks,
 		activeQuerierMetrics:  querier.NewMetrics(registerer, querier.QueryableAppenderSource),
@@ -79,6 +80,8 @@ func NewAdapter(
 			ConstLabels: prometheus.Labels{"type": "float"},
 		}),
 	}
+	ar.hashdexLimits.Store(cppbridge.DefaultWALHashdexLimits())
+	return ar
 }
 
 // AppendHashdex append incoming [cppbridge.HashdexContent] to [Head].
@@ -139,7 +142,7 @@ func (ar *Adapter) AppendSnappyProtobuf(
 	state *cppbridge.StateV2,
 	commitToWal bool,
 ) error {
-	hx, err := cppbridge.NewWALSnappyProtobufHashdex(compressedData.Bytes(), ar.hashdexLimits)
+	hx, err := cppbridge.NewWALSnappyProtobufHashdex(compressedData.Bytes(), ar.hashdexLimits.Load().(cppbridge.WALHashdexLimits))
 	compressedData.Destroy()
 	if err != nil {
 		return err
@@ -175,7 +178,7 @@ func (ar *Adapter) AppendTimeSeries(
 	state *cppbridge.StateV2,
 	commitToWal bool,
 ) (stats cppbridge.RelabelerStats, err error) {
-	hx, err := ar.hashdexFactory.GoModel(data.TimeSeries(), ar.hashdexLimits)
+	hx, err := ar.hashdexFactory.GoModel(data.TimeSeries(), ar.hashdexLimits.Load().(cppbridge.WALHashdexLimits))
 	if err != nil {
 		data.Destroy()
 		return stats, err
@@ -215,7 +218,7 @@ func (ar *Adapter) Appender(ctx context.Context) storage.Appender {
 func (ar *Adapter) BatchStorage() storage.BatchStorage {
 	return NewBatchStorage(
 		ar.hashdexFactory,
-		ar.hashdexLimits,
+		ar.hashdexLimits.Load().(cppbridge.WALHashdexLimits),
 		ar.builder.BuildTransactionHead(),
 		ar.transparentState,
 		ar,
@@ -248,6 +251,18 @@ func (ar *Adapter) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) 
 		queriers,
 		storage.NewConcatenatingChunkSeriesMerger(),
 	), nil
+}
+
+// ApplyConfig updates hashdex limits from the global config.
+// Label limit fields follow the same 0 = no limit semantics as scrape config.
+func (ar *Adapter) ApplyConfig(cfg *config.Config) error {
+	limits := cppbridge.WALHashdexLimits{
+		MaxLabelNamesPerTimeseries: uint32(cfg.GlobalConfig.LabelLimit),
+		MaxLabelNameLength:         uint32(cfg.GlobalConfig.LabelNameLengthLimit),
+		MaxLabelValueLength:        uint32(cfg.GlobalConfig.LabelValueLengthLimit),
+	}
+	ar.hashdexLimits.Store(limits)
+	return nil
 }
 
 // Close closes the storage and all its underlying resources.
