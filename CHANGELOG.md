@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.7.6
+
+### Fixes
+1. **Sample count in WAL batch segments.** Fixed incorrect sample counting when adding segments to a batch: the segment now properly returns `sampleCount` from `SamplesStorage` and resets the counter, preventing miscounted ingestion metrics.
+
+### Features
+1. **DefaultSampleAgeLimit feature flag.** Added a feature flag to control the default sample age limit, allowing operators to enable or disable the age-based sample filtering without changing global configuration.
+
+### Enhancements
+1. **Label limits applied at adapter level.** The adapter now reads label limits from the global configuration via a new `ApplyConfig` method and stores them atomically, ensuring label limits are enforced consistently without restarts. Configuration errors now cause an immediate exit to prevent silent misconfigurations.
+
 ## v0.7.5
 
 ### Fixes
