@@ -3,6 +3,11 @@ package promql_test
 import (
 	"context"
 	"fmt"
+	"math"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/model/value"
@@ -11,11 +16,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"math"
-	"strings"
-	"testing"
-	"time"
 )
+
+// OP_FUNCTIONS
 
 type BaseSuite struct {
 	suite.Suite
@@ -26,11 +29,10 @@ type BaseSuite struct {
 
 func (s *BaseSuite) SetupSuite() {
 	opts := promql.EngineOpts{
-		Logger:     nil,
-		Reg:        nil,
-		MaxSamples: 10000,
-		Timeout:    10 * time.Second,
-		// По умолчанию этот интервал равен 5m
+		Logger:        nil,
+		Reg:           nil,
+		MaxSamples:    10000,
+		Timeout:       10 * time.Second,
 		LookbackDelta: 59 * time.Second,
 	}
 	s.engine = promql.NewEngine(opts)
@@ -44,10 +46,6 @@ func (s *BaseSuite) TearDownTest() {
 	_ = s.storage.Close()
 }
 
-// Добавляет в s.storage записи из строк в формате
-//
-// timestamp(minutes)  value  labels
-// 12                  42.678 __name__=foo,server=carrot
 func (s *BaseSuite) fillStorageByStrings(records ...string) {
 	a := s.storage.Appender(context.Background())
 	var (
@@ -144,7 +142,7 @@ func (s *DefinedSuite) TestMultiple() {
 		"op_defined(foo[10m])",
 		s.time("2m"),
 		s.time("6m"),
-		time.Duration(time.Minute),
+		time.Minute,
 	)
 	s.Require().NoError(err)
 
@@ -260,7 +258,7 @@ func (s *ReplaceNaNSuite) TestMultiple() {
 		"op_replace_nan(foo[10m], 17)",
 		s.time("2m"),
 		s.time("6m"),
-		time.Duration(time.Minute),
+		time.Minute,
 	)
 	s.Require().NoError(err)
 
@@ -333,7 +331,7 @@ func TestSmoothie(t *testing.T) {
 		"op_smoothie(should_be_kept[5m])",
 		timestamp.Time(0),
 		timestamp.Time(10*minute),
-		time.Duration(time.Minute),
+		time.Minute,
 	)
 	require.NoError(t, err)
 
@@ -343,16 +341,16 @@ func TestSmoothie(t *testing.T) {
 	require.Len(t, m, 1)
 	assert.Equal(t, ls, m[0].Metric)
 	assert.Len(t, m[0].Floats, 5)
-	assert.EqualValues(t, m[0].Floats[0].T, 0)
-	assert.EqualValues(t, m[0].Floats[0].F, 0)
-	assert.EqualValues(t, m[0].Floats[1].T, 1*minute)
-	assert.EqualValues(t, m[0].Floats[1].F, 0.5)
-	assert.EqualValues(t, m[0].Floats[2].T, 2*minute)
-	assert.EqualValues(t, m[0].Floats[2].F, 1)
-	assert.EqualValues(t, m[0].Floats[3].T, 3*minute)
-	assert.EqualValues(t, m[0].Floats[3].F, 1.5)
-	assert.EqualValues(t, m[0].Floats[4].T, 4*minute)
-	assert.EqualValues(t, m[0].Floats[4].F, 2)
+	assert.EqualValues(t, 0, m[0].Floats[0].T)
+	assert.EqualValues(t, 0, m[0].Floats[0].F)
+	assert.EqualValues(t, 1*minute, m[0].Floats[1].T)
+	assert.EqualValues(t, 0.5, m[0].Floats[1].F)
+	assert.EqualValues(t, 2*minute, m[0].Floats[2].T)
+	assert.EqualValues(t, 1, m[0].Floats[2].F)
+	assert.EqualValues(t, 3*minute, m[0].Floats[3].T)
+	assert.EqualValues(t, 1.5, m[0].Floats[3].F)
+	assert.EqualValues(t, 4*minute, m[0].Floats[4].T)
+	assert.EqualValues(t, 2, m[0].Floats[4].F)
 }
 
 func TestSmoothieBackwardCompatibility(t *testing.T) {
@@ -472,7 +470,7 @@ func (s *ZeroIfNoneSuite) TestMultiple() {
 		"op_zero_if_none(foo[10m])",
 		s.time("2m"),
 		s.time("6m"),
-		time.Duration(time.Minute),
+		time.Minute,
 	)
 	s.Require().NoError(err)
 

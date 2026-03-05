@@ -1,24 +1,23 @@
 package promql_test
 
-// OP_FUNCTIONS
-
 import (
+	"testing"
+	"time"
+
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/promql/promqltest"
 	"github.com/prometheus/prometheus/util/teststorage"
+
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
+
+// OP_FUNCTIONS
 
 func TestExtractOptTop(t *testing.T) {
 	query := "sum without (l)(rate(a_X[1m])) / sum without (l)(rate(b_X[1m]))"
-	_ = query
 	opTopQuery := "op_top(5, max by(database, user) (op_zero_if_none(postgresql__connections__max_transaction_age{instance=\"pg\", conf=\"cfg\"}[1m])))"
-	_ = opTopQuery
 	invalidOpTopQuery := "op_top(5, max by(database, user) (op_top(postgresql__connections__max_transaction_age{instance=\"pg\", conf=\"cfg\"}[1m])))"
-	_ = opTopQuery
 
 	stor := teststorage.New(t)
 	defer stor.Close()
@@ -46,6 +45,6 @@ func TestExtractOptTop(t *testing.T) {
 	require.NoError(t, err)
 	q.Close()
 
-	q, err = engine.NewRangeQuery(t.Context(), stor, nil, invalidOpTopQuery, time.Now(), time.Now().Add(time.Minute), time.Second*10)
+	_, err = engine.NewRangeQuery(t.Context(), stor, nil, invalidOpTopQuery, time.Now(), time.Now().Add(time.Minute), time.Second*10)
 	require.Error(t, err)
 }

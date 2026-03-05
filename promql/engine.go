@@ -488,7 +488,7 @@ func (ng *Engine) NewInstantQuery(ctx context.Context, q storage.Queryable, opts
 	*pExpr = PreprocessExpr(expr, ts, ts)
 	*pExpr, qry.resultModifier, err = ExtractOptTop(*pExpr, ts.UnixMilli(), ts.UnixMilli(), 0)
 	if err != nil {
-		return nil, fmt.Errorf("failed to extract op function: %v", err)
+		return nil, fmt.Errorf("failed to extract op function: %w", err)
 	}
 
 	return qry, nil
@@ -516,7 +516,7 @@ func (ng *Engine) NewRangeQuery(ctx context.Context, q storage.Queryable, opts Q
 	*pExpr = PreprocessExpr(expr, start, end)
 	*pExpr, qry.resultModifier, err = ExtractOptTop(*pExpr, start.UnixMilli(), end.UnixMilli(), interval.Milliseconds())
 	if err != nil {
-		return nil, fmt.Errorf("failed to extract op function: %v", err)
+		return nil, fmt.Errorf("failed to extract op function: %w", err)
 	}
 	return qry, nil
 }

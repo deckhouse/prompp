@@ -1,18 +1,19 @@
 package promql
 
 import (
+	"math"
+	"time"
+
 	"github.com/prometheus/prometheus/model/value"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/util/annotations"
-	"math"
-	"time"
 )
 
 const (
 	opDefined = "op_defined"
 )
 
-// RegisterOPDefined registers promql `op_defined` function
+// RegisterOPDefined registers promql `op_defined` function.
 func RegisterOPDefined() {
 	parser.Functions[opDefined] = &parser.Function{
 		Name:       opDefined,
@@ -24,7 +25,7 @@ func RegisterOPDefined() {
 
 // === op_defined(Matrix parser.ValueTypeMatrix) Vector ===
 // `op_defined` is a window function that replaces vector component value with 0
-// (if value is outdated e.q older than ActualInterval + 1 minute) or 1 otherwise
+// (if value is outdated e.q older than ActualInterval + 1 minute) or 1 otherwise.
 func funcOPDefined(vals []parser.Value, args parser.Expressions, enh *EvalNodeHelper) (Vector, annotations.Annotations) {
 	vec := vals[0].(Matrix)
 	for _, el := range vec {
@@ -44,7 +45,7 @@ const (
 	opReplaceNaN = "op_replace_nan"
 )
 
-// RegisterOPReplaceNaN registers promql `op_replace_nan` function
+// RegisterOPReplaceNaN registers promql `op_replace_nan` function.
 func RegisterOPReplaceNaN() {
 	parser.Functions[opReplaceNaN] = &parser.Function{
 		Name:       opReplaceNaN,
@@ -57,7 +58,7 @@ func RegisterOPReplaceNaN() {
 
 // === op_replace_nan(Matrix parser.ValueTypeMatrix, Value parser.ValueTypeScalar, Ms parser.ValueTypeScalar) Vector ===
 // `op_replace_nan` is a window function that replaces vector component value with the second parameter `Value`
-// if value is outdated (older than ActualInterval + 1 minute), third parameter is used to cut off values before now-`Ms` (milliseconds)
+// if value is outdated (older than ActualInterval + 1 minute), third parameter is used to cut off values before now-`Ms` (milliseconds).
 func funcOPReplaceNaN(vals []parser.Value, args parser.Expressions, enh *EvalNodeHelper) (Vector, annotations.Annotations) {
 	vec := vals[0].(Matrix)
 	val := vals[1].(Vector)[0].F
@@ -86,7 +87,7 @@ const (
 	OpSmoothie = "op_smoothie"
 )
 
-// RegisterOPSmoothie registers promql `op_smoothie` function
+// RegisterOPSmoothie registers promql `op_smoothie` function.
 func RegisterOPSmoothie() {
 	parser.Functions[OpSmoothie] = &parser.Function{
 		Name:       OpSmoothie,
@@ -97,7 +98,7 @@ func RegisterOPSmoothie() {
 }
 
 // === op_smoothie(Matrix parser.ValueTypeMatrix) Vector ===
-// `op_smoothie` is a window function that replaces vector component value with the average one over the interval
+// `op_smoothie` is a window function that replaces vector component value with the average one over the interval.
 func funcOPSmoothie(vals []parser.Value, args parser.Expressions, enh *EvalNodeHelper) (Vector, annotations.Annotations) {
 	return opAggrOverTime(vals, enh, func(values []FPoint) float64 {
 		var mean, count, c float64
@@ -152,23 +153,11 @@ func opAggrOverTime(vals []parser.Value, enh *EvalNodeHelper, aggrFn func([]FPoi
 	})
 }
 
-//
-//func kahanSumInc(inc, sum, c float64) (newSum, newC float64) {
-//	t := sum + inc
-//	// Using Neumaier improvement, swap if next term larger than sum.
-//	if math.Abs(sum) >= math.Abs(inc) {
-//		c += (sum - t) + inc
-//	} else {
-//		c += (inc - t) + sum
-//	}
-//	return t, c
-//}
-
 const (
 	opZeroIfNone = "op_zero_if_none"
 )
 
-// RegisterOPZeroIfNone registers promql `op_zero_if_none` function
+// RegisterOPZeroIfNone registers promql `op_zero_if_none` function.
 func RegisterOPZeroIfNone() {
 	parser.Functions[opZeroIfNone] = &parser.Function{
 		Name:       opZeroIfNone,
@@ -180,7 +169,7 @@ func RegisterOPZeroIfNone() {
 }
 
 // === op_zero_if_none(Matrix parser.ValueTypeMatrix, Ms parser.ValueTypeScalar) Vector ===
-// `op_zero_if_none` is a window function that replaces vector component value with 0 if empty
+// `op_zero_if_none` is a window function that replaces vector component value with 0 if empty.
 func funcOPZeroIfNone(vals []parser.Value, args parser.Expressions, enh *EvalNodeHelper) (Vector, annotations.Annotations) {
 	vec := vals[0].(Matrix)
 	var ms int64 = math.MinInt64
@@ -204,19 +193,15 @@ func funcOPZeroIfNone(vals []parser.Value, args parser.Expressions, enh *EvalNod
 	return enh.Out, nil
 }
 
-// ActualInterval период, в течении которого считается, что серия ещё не потеряна
-//
-// Агенты снимают данные каждую минуту, поэтому по умолчанию минута.
+// ActualInterval period in which series is not lost.
 const ActualInterval = int64(time.Minute / time.Millisecond)
 
-// Выбрать последнюю точку из серии
-//
-// Применяется для упрощения кода обработки даннхы в оконных функциях
+// takeLast select last point in series.
 func takeLast(series Series) FPoint {
 	return series.Floats[len(series.Floats)-1]
 }
 
-// Проверка точки на отсутствие в контексте текущего среза
+// isNone check absence in current slice.
 func isNone(p FPoint, enh *EvalNodeHelper) bool {
 	return enh.Ts-p.T > ActualInterval
 }

@@ -3,12 +3,13 @@ package promql
 import (
 	"errors"
 	"fmt"
-	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/promql/parser"
 	"math"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/promql/parser"
 )
 
 func init() {
@@ -39,7 +40,7 @@ func parseAggExpr(node parser.Node) *parser.AggregateExpr {
 func ExtractOptTop(expr parser.Expr, start, end, step int64) (parser.Expr, func(matrix Matrix) Matrix, error) {
 	// return values
 	var (
-		opTopResultModifier func(matrix Matrix) Matrix = nil
+		opTopResultModifier func(matrix Matrix) Matrix
 		internalQuery       parser.Expr
 		err                 error
 	)
@@ -147,7 +148,7 @@ func calculatePointsRequired(start, stop, step int64) int {
 //		[start+step=30] 4 ind=3 <- at timestamp = 30
 //		[stop=40]       5 ind=3
 //
-// so (30-0)/10 = 3
+// so (30-0)/10 = 3.
 func calculatePointInd(start, step, timestamp int64) int {
 	if step == 0 {
 		return 0
@@ -163,7 +164,6 @@ func markedAsOtherSeries(ls labels.Labels) bool {
 		}
 	})
 	return marked
-
 }
 
 type weightFuncKind string
@@ -242,6 +242,7 @@ func (m memberData) Len() int {
 func (m memberData) Less(i, j int) bool {
 	return m.members[i].weight < m.members[j].weight
 }
+
 func (m memberData) Swap(i, j int) {
 	m.members[i], m.members[j] = m.members[j], m.members[i]
 }
@@ -276,7 +277,7 @@ func OPTop(params *OPTopQueryParams, initial Matrix, start, stop, step int64) Ma
 		})
 	}
 	// 3. recalculate the limit to avoid out of bounds panic
-	var limit = params.limit
+	limit := params.limit
 	if limit <= 0 || len(m.members) < limit {
 		// limit <= 0 : [invalid limit, limit hasn't been set, limit equal to zero] but request already made
 		// len(m.members) < limit : we've received less time series than limit was set
@@ -303,7 +304,7 @@ func OPTop(params *OPTopQueryParams, initial Matrix, start, stop, step int64) Ma
 	// 8. append (if required) "~other" series using indices left
 	if otherSeriesRequired {
 		auxiliaryIndices := m.members[limit:]
-		var otherSamplesCount = calculatePointsRequired(start, stop, step)
+		otherSamplesCount := calculatePointsRequired(start, stop, step)
 		// prepare otherSamples and otherLabels collection
 		var (
 			otherSamples   = make([]FPoint, otherSamplesCount)

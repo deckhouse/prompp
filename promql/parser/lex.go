@@ -69,7 +69,8 @@ func (i ItemType) IsAggregatorWithParam() bool {
 }
 
 // OP_FUNCTIONS
-// IsOPTop is an ad-hoc checker function to pass any number of arguments to OkTop
+
+// IsOPTop is an ad-hoc checker function to pass any number of arguments to IsOPTop.
 func (i ItemType) IsOPTop() bool {
 	return i == OP_TOP
 }

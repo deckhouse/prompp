@@ -3,21 +3,18 @@
 //line promql/parser/generated_parser.y:15
 package parser
 
-import __yyfmt__ "fmt"
-
-//line promql/parser/generated_parser.y:15
-
 import (
+	__yyfmt__ "fmt"
 	"math"
 	"strconv"
 	"time"
+
+	"github.com/prometheus/common/model" //line promql/parser/generated_parser.y:15
 
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/value"
 	"github.com/prometheus/prometheus/promql/parser/posrange"
-
-	"github.com/prometheus/common/model"
 )
 
 //line promql/parser/generated_parser.y:32
