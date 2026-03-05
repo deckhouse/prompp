@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	promqlext "github.com/prometheus/prometheus/promql/ext"
 	"math"
 	"math/bits"
 	"net"
@@ -2234,11 +2233,6 @@ func readPromPPFeatures(logger log.Logger) {
 			)
 
 			remotewriter.DefaultSampleAgeLimit = defaultSampleAgeLimit
-		case "enable_op_functions":
-			promqlext.RegisterOPDefined()
-			promqlext.RegisterOPZeroIfNone()
-			promqlext.RegisterOPReplaceNaN()
-			promqlext.RegisterOPSmoothie()
 		}
 	}
 }
