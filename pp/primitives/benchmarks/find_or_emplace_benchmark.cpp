@@ -2,8 +2,6 @@
 
 #include "primitives/snug_composites.h"
 #include "profiling/profiling.h"
-#include "series_index/queryable_encoding_bimap.h"
-#include "series_index/trie/cedarpp_tree.h"
 
 namespace {
 
