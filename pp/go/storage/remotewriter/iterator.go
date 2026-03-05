@@ -21,22 +21,52 @@ import (
 //go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg mock --out
 //go:generate moq mock/protobuf_writer.go . ProtobufWriter
 
+// TODO DELETE
+// //
+// // DataSource
+// //
+
+// // DataSource is a implementation of data source.
+// type DataSource interface {
+// 	Read(
+// 		ctx context.Context,
+// 		targetSegmentID uint32,
+// 		minTimestamp int64,
+// 		segmentSamplesStorages *cppbridge.SegmentSamplesStorageList,
+// 	) ([]*DecodedSegment, error)
+// 	LSSes() []*cppbridge.LabelSetStorage
+// 	NumberOfLSSes() int
+// 	WriteCaches()
+// 	Close() error
+// }
+
 //
-// DataSource
+// DataSourceV2
 //
 
-// DataSource is a implementation of data source.
-type DataSource interface {
-	Read(
+// DataSourceV2 a data source of the head shards for sending data through the RemoteWriter..
+type DataSourceV2 interface {
+	// Close write caches and closes the data source and releases the resources.
+	Close() error
+
+	// Init it initializes the data source by reading segments from shards until the required number is reached.
+	Init(ctx context.Context, targetSegmentID uint32) error
+
+	// LSSes returns the label set storages of the shards.
+	LSSes() []*cppbridge.LabelSetStorage
+
+	// Next checks the segmentID for readiness and reads the [DecodedSegment] from the shards.
+	Next(
 		ctx context.Context,
-		targetSegmentID uint32,
 		minTimestamp int64,
 		segmentSamplesStorages *cppbridge.SegmentSamplesStorageList,
 	) ([]*DecodedSegment, error)
-	LSSes() []*cppbridge.LabelSetStorage
+
+	// NumberOfLSSes returns the number of label set storages.
 	NumberOfLSSes() int
+
+	// WriteCaches writes caches to the buffer and sends the signal to write the caches.
 	WriteCaches()
-	Close() error
 }
 
 //
@@ -109,7 +139,7 @@ func (s *sharder) NumberOfShards() int {
 type Iterator struct {
 	clock                    clockwork.Clock
 	queueConfig              config.QueueConfig
-	dataSource               DataSource
+	dataSource               DataSourceV2
 	protobufWriter           ProtobufWriter
 	targetSegmentIDSetCloser TargetSegmentIDSetCloser
 	metrics                  *DestinationMetrics
@@ -125,7 +155,7 @@ type Iterator struct {
 func newIterator(
 	clock clockwork.Clock,
 	queueConfig config.QueueConfig,
-	dataSource DataSource,
+	dataSource DataSourceV2,
 	targetSegmentIDSetCloser TargetSegmentIDSetCloser,
 	targetSegmentID uint32,
 	readTimeout time.Duration,
@@ -191,7 +221,7 @@ readLoop:
 		}
 
 		readStartTime := i.clock.Now()
-		decodedSegments, err := i.dataSource.Read(ctx, i.targetSegmentID, i.minTimestamp(), b.segmentSampleStorages)
+		decodedSegments, err := i.dataSource.Next(ctx, i.minTimestamp(), b.segmentSampleStorages)
 		i.metrics.readSegmentDuration.Observe(i.clock.Since(readStartTime).Seconds())
 
 		if err != nil {

@@ -19,35 +19,6 @@ import (
 )
 
 //
-// DataSourceV2
-//
-
-// DataSourceV2 a data source of the head shards for sending data through the RemoteWriter..
-type DataSourceV2 interface {
-	// Close write caches and closes the data source and releases the resources.
-	Close() error
-
-	// Init it initializes the data source by reading segments from shards until the required number is reached.
-	Init(ctx context.Context, targetSegmentID uint32)
-
-	// LSSes returns the label set storages of the shards.
-	LSSes() []*cppbridge.LabelSetStorage
-
-	// Next checks the segmentID for readiness and reads the [DecodedSegment] from the shards.
-	Next(
-		ctx context.Context,
-		minTimestamp int64,
-		segmentSamplesStorages *cppbridge.SegmentSamplesStorageList,
-	) ([]*DecodedSegment, error)
-
-	// NumberOfLSSes returns the number of label set storages.
-	NumberOfLSSes() int
-
-	// WriteCaches writes caches to the buffer and sends the signal to write the caches.
-	WriteCaches()
-}
-
-//
 // dataSourceActive
 //
 
@@ -824,7 +795,6 @@ func handleReadErrors(
 	if len(errs) == numberOfShards {
 		markCorrupted()
 
-		fmt.Println("AAAAAA", errs)
 		return ErrEndOfBlock
 	}
 
