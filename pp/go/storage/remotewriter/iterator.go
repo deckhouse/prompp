@@ -21,25 +21,6 @@ import (
 //go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg mock --out
 //go:generate moq mock/protobuf_writer.go . ProtobufWriter
 
-// TODO DELETE
-// //
-// // DataSource
-// //
-
-// // DataSource is a implementation of data source.
-// type DataSource interface {
-// 	Read(
-// 		ctx context.Context,
-// 		targetSegmentID uint32,
-// 		minTimestamp int64,
-// 		segmentSamplesStorages *cppbridge.SegmentSamplesStorageList,
-// 	) ([]*DecodedSegment, error)
-// 	LSSes() []*cppbridge.LabelSetStorage
-// 	NumberOfLSSes() int
-// 	WriteCaches()
-// 	Close() error
-// }
-
 //
 // DataSourceV2
 //
