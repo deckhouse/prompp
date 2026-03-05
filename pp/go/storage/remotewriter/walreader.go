@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/reader"
 	"github.com/prometheus/prometheus/pp/go/util"
@@ -143,7 +142,7 @@ type SegmentV1 struct {
 // EmptySegmentV1 init new empty [SegmentV1].
 func EmptySegmentV1() *SegmentV1 {
 	return &SegmentV1{
-		id:      math.MaxUint32,
+		id:      reader.UnknownSegmentID,
 		Segment: *reader.NewSegment(),
 	}
 }
@@ -165,7 +164,7 @@ func (*SegmentV1) ReadID(io.Reader) (int64, error) { return 0, nil }
 
 // Reset [SegmentV1] data.
 func (s *SegmentV1) Reset() {
-	s.id = math.MaxUint32
+	s.id = reader.UnknownSegmentID
 	s.Segment.Reset()
 }
 

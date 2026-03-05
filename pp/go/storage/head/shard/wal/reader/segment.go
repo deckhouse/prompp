@@ -90,6 +90,9 @@ func (s *Segment) resize(size int) {
 // SegmentV2
 //
 
+// UnknownSegmentID is the unknown ID of a segment.
+const UnknownSegmentID = uint32(math.MaxUint32)
+
 // SegmentV2 encoded segment from wal.
 type SegmentV2 struct {
 	Segment
@@ -98,7 +101,7 @@ type SegmentV2 struct {
 
 // NewSegmentV2 init new [SegmentV2].
 func NewSegmentV2() *SegmentV2 {
-	return &SegmentV2{id: math.MaxUint32}
+	return &SegmentV2{id: UnknownSegmentID}
 }
 
 // ID returns [SegmentV2] ID.
@@ -134,7 +137,7 @@ func (s *SegmentV2) ReadID(r io.Reader) (int64, error) {
 func (s *SegmentV2) Reset() {
 	s.data = s.data[:0]
 	s.sampleCount = 0
-	s.id = math.MaxUint32
+	s.id = UnknownSegmentID
 }
 
 // readSegmentID read and decode segment id from [ByteReader] and set to [SegmentV2].

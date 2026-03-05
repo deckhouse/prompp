@@ -5,13 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"os"
 
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/reader"
 	"github.com/prometheus/prometheus/pp/go/util/optional"
 )
 
@@ -506,7 +507,7 @@ func (s *shardRotated) ReadSegment(
 // SegmentID returns the ID of the [Segment] that can be read from wal.
 // It may return a non-nil error if some error condition is known, such as EOF.
 func (s *shardRotated) SegmentID() (uint32, error) {
-	if s.segment.ID() != math.MaxUint32 {
+	if s.segment.ID() != reader.UnknownSegmentID {
 		return s.segment.ID(), nil
 	}
 
@@ -517,13 +518,13 @@ func (s *shardRotated) SegmentID() (uint32, error) {
 
 	if errors.Is(err, io.EOF) {
 		s.completed = true
-		return math.MaxUint32, ErrEndOfBlock // no more segments in the wal file
+		return reader.UnknownSegmentID, ErrEndOfBlock // no more segments in the wal file
 	}
 
 	s.corrupted = true
 
 	logger.Errorf("remotewrite shard: %s/%d is corrupted by read ID: %v", s.headID, s.shardID, err)
-	return math.MaxUint32, errors.Join(err, ErrShardIsCorrupted)
+	return reader.UnknownSegmentID, errors.Join(err, ErrShardIsCorrupted)
 }
 
 // SkipSegment it reads and skips the [Segment] from the wal.

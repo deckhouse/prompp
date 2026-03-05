@@ -642,6 +642,95 @@ func (*dataSourceRotated) selectShards(nextSegments []segmentByShard, minSegment
 }
 
 //
+// CorruptMarker
+//
+
+// CorruptMarker mark head as corrupted by ID.
+type CorruptMarker interface {
+	// MarkCorrupted mark head as corrupted by ID.
+	MarkCorrupted(headID string) error
+}
+
+//
+// SegmentReadyChecker
+//
+
+// SegmentReadyChecker is a segment ready checker.
+type SegmentReadyChecker interface {
+	// SegmentIsReady checks if the segment is ready.
+	SegmentIsReady(segmentID uint32) (shards []uint16, ready, outOfRange bool)
+}
+
+//
+// segmentReadyChecker
+//
+
+type segmentReadyChecker struct {
+	headRecord *catalog.Record
+	shards     []uint16
+}
+
+func newSegmentReadyChecker(headRecord *catalog.Record) *segmentReadyChecker {
+	return &segmentReadyChecker{
+		headRecord: headRecord,
+		shards:     make([]uint16, 0, headRecord.NumberOfShards()),
+	}
+}
+
+func (src *segmentReadyChecker) SegmentIsReady(segmentID uint32) (shards []uint16, ready, outOfRange bool) {
+	sourceShard := src.headRecord.GetShardBySegmentID(segmentID)
+
+	readyV1 := src.headRecord.LastAppendedSegmentID() != nil && *src.headRecord.LastAppendedSegmentID() >= segmentID
+	readyV2 := sourceShard != math.MaxUint16
+	ready = readyV1 || readyV2
+
+	outOfRange = (src.headRecord.Status() != catalog.StatusNew &&
+		src.headRecord.Status() != catalog.StatusActive) &&
+		!ready
+
+	if !ready {
+		return nil, ready, outOfRange
+	}
+
+	if readyV1 {
+		// on v1 fill once and reuse
+		if len(src.shards) == 0 {
+			for i := uint16(0); i < src.headRecord.NumberOfShards(); i++ {
+				src.shards = append(src.shards, i)
+			}
+		}
+
+		return src.shards, ready, outOfRange
+	}
+
+	src.shards = src.shards[:0]
+	src.shards = append(src.shards, sourceShard)
+
+	return src.shards, ready, outOfRange
+}
+
+//
+// shardCache
+//
+
+type shardCache struct {
+	shardID uint16
+	cache   *bytes.Buffer
+	written bool
+	writer  io.Writer
+}
+
+//
+// readShardResult
+//
+
+// readShardResult is a result of reading a shard.
+type readShardResult struct {
+	segment *DecodedSegment
+	err     error
+}
+
+//
 // segmentByShard
 //
 

@@ -3,7 +3,6 @@ package remotewriter
 import (
 	"fmt"
 	"io"
-	"math"
 	"path/filepath"
 	"testing"
 
@@ -12,6 +11,7 @@ import (
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/reader"
 	"github.com/prometheus/prometheus/pp/go/storage/remotewriter/remotewritertest"
 )
 
@@ -25,7 +25,7 @@ func TestShardSuite(t *testing.T) {
 	suite.Run(t, new(ShardSuite))
 }
 
-func (s *ShardSuite) SetupTest() {
+func (s *ShardSuite) SetupSuite() {
 	s.segmentSize = prometheus.NewHistogram(prometheus.HistogramOpts{})
 }
 
@@ -223,7 +223,7 @@ func TestShardRotatedSuite(t *testing.T) {
 	suite.Run(t, new(ShardRotatedSuite))
 }
 
-func (s *ShardRotatedSuite) SetupTest() {
+func (s *ShardRotatedSuite) SetupSuite() {
 	s.segmentSize = prometheus.NewHistogram(prometheus.HistogramOpts{})
 }
 
@@ -341,7 +341,7 @@ func (s *ShardRotatedSuite) TestReadV2() {
 	segmentID, err := shard.SegmentID()
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrEndOfBlock)
-	s.Require().Equal(uint32(math.MaxUint32), segmentID)
+	s.Require().Equal(reader.UnknownSegmentID, segmentID)
 
 	segment, err := shard.ReadSegment(0, segmentSampleStorages.Get(uint64(shardID)))
 	s.Require().Error(err)
@@ -469,7 +469,7 @@ func (s *ShardRotatedSuite) TestSkipSegmentsV2() {
 	segmentID, err = shard.SegmentID()
 	s.Require().Error(err)
 	s.Require().ErrorIs(err, ErrEndOfBlock)
-	s.Require().Equal(uint32(math.MaxUint32), segmentID)
+	s.Require().Equal(reader.UnknownSegmentID, segmentID)
 
 	segment, err = shard.ReadSegment(0, segmentSampleStorages.Get(uint64(shardID)))
 	s.Require().Error(err)

@@ -9,6 +9,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/reader"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer/mock"
 	"github.com/prometheus/prometheus/pp/go/util"
@@ -57,7 +58,7 @@ func (s *WalReaderSuite) TestReadWalV1() {
 	s.Require().NoError(err)
 	_, ok := segment.(*SegmentV1)
 	s.Require().True(ok)
-	s.Require().Equal(uint32(0), segment.ID())
+	s.Require().Equal(reader.UnknownSegmentID, segment.ID())
 	s.Require().Equal(uint32(0), segment.Samples())
 
 	err = walReader.Read(segment)
@@ -104,7 +105,7 @@ func (s *WalReaderSuite) TestReadWalV2() {
 	s.Require().NoError(err)
 	_, ok := segment.(*SegmentV2)
 	s.Require().True(ok)
-	s.Require().Equal(uint32(0), segment.ID())
+	s.Require().Equal(reader.UnknownSegmentID, segment.ID())
 	s.Require().Equal(uint32(0), segment.Samples())
 
 	err = walReader.Read(segment)
@@ -188,7 +189,7 @@ func (s *WalReaderSuite) TestReadIDAndBodyV1() {
 	s.Require().NoError(err)
 	_, ok := segment.(*SegmentV1)
 	s.Require().True(ok)
-	s.Require().Equal(uint32(0), segment.ID())
+	s.Require().Equal(reader.UnknownSegmentID, segment.ID())
 	s.Require().Equal(uint32(0), segment.Samples())
 
 	err = walReader.ReadSegmentID(segment)
@@ -238,7 +239,7 @@ func (s *WalReaderSuite) TestReadIDAndBodyV2() {
 	s.Require().NoError(err)
 	_, ok := segment.(*SegmentV2)
 	s.Require().True(ok)
-	s.Require().Equal(uint32(0), segment.ID())
+	s.Require().Equal(reader.UnknownSegmentID, segment.ID())
 	s.Require().Equal(uint32(0), segment.Samples())
 
 	err = walReader.ReadSegmentID(segment)
