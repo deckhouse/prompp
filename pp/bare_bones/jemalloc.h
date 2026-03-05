@@ -6,11 +6,11 @@
 
 #if JEMALLOC_AVAILABLE
 #include <jemalloc/jemalloc.h>
+
+#include <unistd.h>
 #endif
 
 namespace BareBones::jemalloc {
-
-inline const auto kPageSize = sysconf(_SC_PAGESIZE);
 
 PROMPP_ALWAYS_INLINE void refresh_stats() noexcept {
 #if JEMALLOC_AVAILABLE
@@ -21,6 +21,8 @@ PROMPP_ALWAYS_INLINE void refresh_stats() noexcept {
 }
 
 #if JEMALLOC_AVAILABLE
+
+inline const auto kPageSize = sysconf(_SC_PAGESIZE);
 
 template <class Object>
 struct ArenaReallocator {
