@@ -44,12 +44,12 @@ upgrade-npm-deps:
 .PHONY: ui-bump-version
 ui-bump-version:
 	version=$$(sed s/2/0/ < VERSION) && ./scripts/ui_release.sh --bump-version "$${version}"
-	cd web/ui && npm install
+	cd web/ui && npm install --legacy-peer-deps
 	git add "./web/ui/package-lock.json" "./**/package.json"
 
 .PHONY: ui-install
 ui-install:
-	cd $(UI_PATH) && npm install
+	cd $(UI_PATH) && npm install --legacy-peer-deps
 
 .PHONY: ui-build
 ui-build:
