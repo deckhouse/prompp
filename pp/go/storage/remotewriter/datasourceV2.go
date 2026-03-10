@@ -84,7 +84,7 @@ func newDataSourceActive(
 
 		ds.caches.append(s.decoderStateFile, shardID)
 		ds.shards = append(ds.shards, s)
-		ds.lsses = append(ds.lsses, s.decoder.lss)
+		ds.lsses = append(ds.lsses, s.LSS())
 	}
 
 	return ds, nil
@@ -350,7 +350,7 @@ func newDataSourceRotated(
 		}
 
 		ds.shards = append(ds.shards, s)
-		ds.lsses = append(ds.lsses, s.decoder.lss)
+		ds.lsses = append(ds.lsses, s.LSS())
 		ds.caches.append(s.decoderStateFile, shardID)
 	}
 
@@ -851,6 +851,7 @@ func (c *caches[TWT]) writeCaches(wts []TWT) {
 		}
 
 		sc.cache.Reset()
+		// TODO if shard is corrupted, skip writing the cache
 		if _, err := wts[shardID].WriteTo(sc.cache); err != nil {
 			logger.Errorf("failed to get output decoder cache: %v", err)
 			continue

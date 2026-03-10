@@ -152,8 +152,9 @@ func newShard(
 	relabelConfigs []*cppbridge.RelabelConfig,
 	segmentSize prometheus.Histogram,
 ) (*shard, error) {
-	wr, encoderVersion, err := newWalReader(shardFileName)
+	wr, err := newWalReader(shardFileName)
 	if err != nil {
+		// TODO: return corrupted shard
 		return nil, fmt.Errorf("failed to create wal file reader: %w", err)
 	}
 
@@ -161,7 +162,7 @@ func newShard(
 		externalLabels,
 		relabelConfigs,
 		shardID,
-		encoderVersion,
+		wr.EncoderVersion(),
 	)
 	if err != nil {
 		return nil, errors.Join(fmt.Errorf("failed to create decoder: %w", err), wr.Close())
@@ -228,7 +229,21 @@ func (s *shard) Close() (err error) {
 		err = errors.Join(err, s.walReader.Close())
 	}
 
-	return errors.Join(err, s.decoderStateFile.Close())
+	// a corrupted shard has no open decoderStateFile
+	if s.decoderStateFile != nil {
+		err = errors.Join(err, s.decoderStateFile.Close())
+	}
+
+	return err
+}
+
+// LSS returns the [cppbridge.LabelSetStorage] of the [shard].
+func (s *shard) LSS() *cppbridge.LabelSetStorage {
+	if s.decoder == nil {
+		return cppbridge.NewLssStorage()
+	}
+
+	return s.decoder.lss
 }
 
 // Read [Segment] from WAL and decode to [DecodedSegment].
@@ -259,6 +274,10 @@ func (s *shard) Read(
 
 // WriteTo writes output decoder state to io.Writer.
 func (s *shard) WriteTo(w io.Writer) (int64, error) {
+	if s.corrupted {
+		return 0, ErrShardIsCorrupted
+	}
+
 	return s.decoder.WriteTo(w)
 }
 
@@ -316,6 +335,9 @@ type ShardRotatedWalReader interface {
 
 	// EmptySegment creates an empty segment of the required version.
 	EmptySegment() (Segment, error)
+
+	// IsEOF returns true if the rotated wal file is at the end.
+	IsEOF() bool
 
 	// ReadSegmentBody reads [Segment] body from wal.
 	// It may return a non-nil error if some error condition is known, such as EOF.
@@ -393,16 +415,17 @@ func newShardRotated(
 	relabelConfigs []*cppbridge.RelabelConfig,
 	segmentSize prometheus.Histogram,
 ) (*shardRotated, error) {
-	wr, encoderVersion, err := newWalReader(shardFileName)
+	wr, err := newWalReaderRotated(shardFileName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create wal file reader: %w", err)
+		// TODO: return corrupted shard
+		return nil, fmt.Errorf("failed to create wal file rotated reader: %w", err)
 	}
 
 	decoder, err := NewDecoder(
 		externalLabels,
 		relabelConfigs,
 		shardID,
-		encoderVersion,
+		wr.EncoderVersion(),
 	)
 	if err != nil {
 		return nil, errors.Join(fmt.Errorf("failed to create decoder: %w", err), wr.Close())
@@ -469,7 +492,21 @@ func (s *shardRotated) Close() (err error) {
 		err = errors.Join(err, s.walReader.Close())
 	}
 
-	return errors.Join(err, s.decoderStateFile.Close())
+	// a corrupted shard has no open decoderStateFile
+	if s.decoderStateFile != nil {
+		err = errors.Join(err, s.decoderStateFile.Close())
+	}
+
+	return err
+}
+
+// LSS returns the [cppbridge.LabelSetStorage] of the [shardRotated].
+func (s *shardRotated) LSS() *cppbridge.LabelSetStorage {
+	if s.decoder == nil {
+		return cppbridge.NewLssStorage()
+	}
+
+	return s.decoder.lss
 }
 
 // ReadSegment reads [DecodedSegment] from wal.
@@ -509,6 +546,11 @@ func (s *shardRotated) ReadSegment(
 func (s *shardRotated) SegmentID() (uint32, error) {
 	if s.segment.ID() != reader.UnknownSegmentID {
 		return s.segment.ID(), nil
+	}
+
+	if s.walReader.IsEOF() {
+		s.completed = true
+		return reader.UnknownSegmentID, ErrEndOfBlock // no more segments in the wal file
 	}
 
 	err := s.walReader.ReadSegmentID(s.segment)

@@ -3,6 +3,7 @@ package remotewriter
 import (
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -278,14 +279,14 @@ func (s *ShardRotatedSuite) TestReadV1() {
 	}
 
 	segmentID, err := shard.SegmentID()
-	s.Require().NoError(err)
-	s.Require().Equal(numberOfSegments/2, segmentID)
+	s.Require().Error(err)
+	s.Require().ErrorIs(err, ErrEndOfBlock)
+	s.Require().Equal(reader.UnknownSegmentID, segmentID)
 
 	segment, err := shard.ReadSegment(0, segmentSampleStorages.Get(uint64(shardID)))
 	s.Require().Error(err)
+	s.Require().ErrorIs(err, ErrEndOfBlock)
 	s.Require().Nil(segment)
-	s.Require().ErrorIs(err, io.EOF)
-	s.Require().ErrorIs(err, ErrShardIsCorrupted)
 }
 
 func (s *ShardRotatedSuite) TestReadV2() {
@@ -403,14 +404,14 @@ func (s *ShardRotatedSuite) TestSkipSegmentsV1() {
 	s.Require().Equal(int64(numberOfSegments-2), segment.MaxTimestamp)
 
 	segmentID, err = shard.SegmentID()
-	s.Require().NoError(err)
-	s.Require().Equal(numberOfSegments/2, segmentID)
+	s.Require().Error(err)
+	s.Require().ErrorIs(err, ErrEndOfBlock)
+	s.Require().Equal(reader.UnknownSegmentID, segmentID)
 
 	segment, err = shard.ReadSegment(0, segmentSampleStorages.Get(uint64(shardID)))
 	s.Require().Error(err)
+	s.Require().ErrorIs(err, ErrEndOfBlock)
 	s.Require().Nil(segment)
-	s.Require().ErrorIs(err, io.EOF)
-	s.Require().ErrorIs(err, ErrShardIsCorrupted)
 }
 
 func (s *ShardRotatedSuite) TestSkipSegmentsV2() {
@@ -475,4 +476,69 @@ func (s *ShardRotatedSuite) TestSkipSegmentsV2() {
 	s.Require().Error(err)
 	s.Require().Nil(segment)
 	s.Require().ErrorIs(err, ErrEndOfBlock)
+}
+
+func (s *ShardRotatedSuite) TestV1FileNotExists() {
+	shardID := uint16(0)
+	dataDir := s.T().TempDir()
+	shardFilePaths := []string{
+		filepath.Join(dataDir, "shard_0.wal"),
+		filepath.Join(dataDir, "shard_1.wal"),
+	}
+	decoderStateFileName := filepath.Join(dataDir, fmt.Sprintf("shard_%d.state", shardID))
+	numberOfSegments := uint32(10)
+
+	err := remotewritertest.WriteToShardWalFileV1Multi(s.T().Context(), shardFilePaths, uint64(numberOfSegments))
+	s.Require().NoError(err)
+
+	s.Require().NoError(os.Remove(shardFilePaths[0]))
+
+	shard, err := newShardRotated(
+		s.T().Name(),
+		shardID,
+		shardFilePaths[0],
+		decoderStateFileName,
+		true,
+		labels.EmptyLabels(),
+		[]*cppbridge.RelabelConfig{},
+		s.segmentSize,
+	)
+	s.T().Log(shard)
+	s.Require().Nil(shard)
+	s.Require().NoError(err)
+	defer func() { s.Require().NoError(shard.Close()) }()
+
+	segmentSampleStorages := cppbridge.NewSegmentSamplesStorage(1)
+
+	for sid := range numberOfSegments {
+		if sid%2 != uint32(shardID) {
+			continue
+		}
+
+		expSegmentID := sid / 2
+		segmentID, idErr := shard.SegmentID()
+		s.Require().NoError(idErr)
+		s.Require().Equal(expSegmentID, segmentID)
+
+		segmentID, idErr = shard.SegmentID()
+		s.Require().NoError(idErr)
+		s.Require().Equal(expSegmentID, segmentID)
+
+		segment, readErr := shard.ReadSegment(0, segmentSampleStorages.Get(uint64(shardID)))
+		s.Require().NoError(readErr)
+
+		s.Require().Equal(expSegmentID, segment.ID)
+		s.Require().Equal(uint32(1), segment.SampleCount)
+		s.Require().Equal(int64(sid), segment.MaxTimestamp)
+	}
+
+	segmentID, err := shard.SegmentID()
+	s.Require().Error(err)
+	s.Require().ErrorIs(err, ErrEndOfBlock)
+	s.Require().Equal(reader.UnknownSegmentID, segmentID)
+
+	segment, err := shard.ReadSegment(0, segmentSampleStorages.Get(uint64(shardID)))
+	s.Require().Error(err)
+	s.Require().ErrorIs(err, ErrEndOfBlock)
+	s.Require().Nil(segment)
 }

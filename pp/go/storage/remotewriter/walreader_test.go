@@ -49,9 +49,9 @@ func (s *WalReaderSuite) TestReadWalV1() {
 	s.Require().NoError(err)
 	s.Require().NoError(shardFile.Close())
 
-	walReader, encoderVersion, err := newWalReader(shardFilePath)
+	walReader, err := newWalReader(shardFilePath)
 	s.Require().NoError(err)
-	s.Require().Equal(cppbridge.EncodersVersion(), encoderVersion)
+	s.Require().Equal(cppbridge.EncodersVersion(), walReader.EncoderVersion())
 	s.Require().Equal(uint8(wal.FileFormatVersion), walReader.fileFormatVersion)
 
 	segment, err := walReader.EmptySegment()
@@ -96,9 +96,9 @@ func (s *WalReaderSuite) TestReadWalV2() {
 	s.Require().NoError(err)
 	s.Require().NoError(shardFile.Close())
 
-	walReader, encoderVersion, err := newWalReader(shardFilePath)
+	walReader, err := newWalReader(shardFilePath)
 	s.Require().NoError(err)
-	s.Require().Equal(cppbridge.EncodersVersion(), encoderVersion)
+	s.Require().Equal(cppbridge.EncodersVersion(), walReader.EncoderVersion())
 	s.Require().Equal(uint8(wal.FileFormatVersionV2), walReader.fileFormatVersion)
 
 	segment, err := walReader.EmptySegment()
@@ -145,9 +145,9 @@ func (s *WalReaderSuite) TestReadWalErrorVersion() {
 	s.Require().NoError(err)
 	s.Require().NoError(shardFile.Close())
 
-	walReader, encoderVersion, err := newWalReader(shardFilePath)
+	walReader, err := newWalReader(shardFilePath)
 	s.Require().NoError(err)
-	s.Require().Equal(cppbridge.EncodersVersion(), encoderVersion)
+	s.Require().Equal(cppbridge.EncodersVersion(), walReader.EncoderVersion())
 	s.Require().Equal(unknownVersion, walReader.fileFormatVersion)
 
 	segment, err := walReader.EmptySegment()
@@ -180,9 +180,9 @@ func (s *WalReaderSuite) TestReadIDAndBodyV1() {
 	s.Require().NoError(err)
 	s.Require().NoError(shardFile.Close())
 
-	walReader, encoderVersion, err := newWalReader(shardFilePath)
+	walReader, err := newWalReaderRotated(shardFilePath)
 	s.Require().NoError(err)
-	s.Require().Equal(cppbridge.EncodersVersion(), encoderVersion)
+	s.Require().Equal(cppbridge.EncodersVersion(), walReader.EncoderVersion())
 	s.Require().Equal(uint8(wal.FileFormatVersion), walReader.fileFormatVersion)
 
 	segment, err := walReader.EmptySegment()
@@ -192,15 +192,19 @@ func (s *WalReaderSuite) TestReadIDAndBodyV1() {
 	s.Require().Equal(reader.UnknownSegmentID, segment.ID())
 	s.Require().Equal(uint32(0), segment.Samples())
 
+	s.Require().False(walReader.IsEOF())
 	err = walReader.ReadSegmentID(segment)
 	s.Require().NoError(err)
 	s.Require().Equal(uint32(0), segment.ID())
 
+	s.Require().False(walReader.IsEOF())
 	err = walReader.ReadSegmentBody(segment)
 	s.Require().NoError(err)
 	s.Require().Equal(data, segment.Bytes())
 	s.Require().Equal(expectedSamples, segment.Samples())
 	s.Require().Equal(len(data), segment.Length())
+
+	s.Require().True(walReader.IsEOF())
 }
 
 func (s *WalReaderSuite) TestReadIDAndBodyV2() {
@@ -230,9 +234,9 @@ func (s *WalReaderSuite) TestReadIDAndBodyV2() {
 	s.Require().NoError(err)
 	s.Require().NoError(shardFile.Close())
 
-	walReader, encoderVersion, err := newWalReader(shardFilePath)
+	walReader, err := newWalReaderRotated(shardFilePath)
 	s.Require().NoError(err)
-	s.Require().Equal(cppbridge.EncodersVersion(), encoderVersion)
+	s.Require().Equal(cppbridge.EncodersVersion(), walReader.EncoderVersion())
 	s.Require().Equal(uint8(wal.FileFormatVersionV2), walReader.fileFormatVersion)
 
 	segment, err := walReader.EmptySegment()
@@ -242,13 +246,17 @@ func (s *WalReaderSuite) TestReadIDAndBodyV2() {
 	s.Require().Equal(reader.UnknownSegmentID, segment.ID())
 	s.Require().Equal(uint32(0), segment.Samples())
 
+	s.Require().False(walReader.IsEOF())
 	err = walReader.ReadSegmentID(segment)
 	s.Require().NoError(err)
 	s.Require().Equal(expectedID, segment.ID())
 
+	s.Require().False(walReader.IsEOF())
 	err = walReader.ReadSegmentBody(segment)
 	s.Require().NoError(err)
 	s.Require().Equal(data, segment.Bytes())
 	s.Require().Equal(expectedSamples, segment.Samples())
 	s.Require().Equal(len(data), segment.Length())
+
+	s.Require().True(walReader.IsEOF())
 }

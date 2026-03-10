@@ -1,6 +1,7 @@
 package remotewriter
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -391,6 +392,80 @@ func (s *DataSourceActiveSuite) TestSkipByMinTimeV2() {
 
 	segments, err := dataSource.Next(baseCtx, 0, segmentSampleStorages)
 	s.Require().ErrorIs(err, ErrEmptyReadResult)
+	s.Require().Empty(segments)
+}
+
+func (s *DataSourceActiveSuite) TestNextWithCorruptedHeadV1() {
+	dataDir := s.T().TempDir()
+	numberOfSegments := uint32(10)
+	shardFilePaths := []string{
+		filepath.Join(dataDir, "shard_0.wal"),
+		filepath.Join(dataDir, "shard_1.wal"),
+	}
+	numberOfShards := uint16(len(shardFilePaths)) // #nosec G115 // no overflow
+	baseCtx := s.T().Context()
+
+	err := remotewritertest.WriteToShardWalFileV1Multi(
+		baseCtx,
+		shardFilePaths,
+		uint64(numberOfSegments),
+	)
+	s.Require().NoError(err)
+
+	// s.Require().NoError(os.Remove(shardFilePaths[0]))
+	info, err := os.Stat(shardFilePaths[0])
+	s.Require().NoError(err)
+	s.Require().NoError(os.Truncate(shardFilePaths[0], info.Size()/2))
+
+	discardCache := true
+	rec := remotewritertest.MakeRecord(numberOfShards)
+	rec.SetLastAppendedSegmentID(numberOfSegments/2 - 1)
+	corruptMarker := CorruptMarkerFn(func(string) error { return nil })
+	clock := clockwork.NewRealClock()
+	dataSource, err := newDataSourceActive(
+		dataDir,
+		DestinationConfig{},
+		numberOfShards,
+		discardCache,
+		clock,
+		newSegmentReadyChecker(rec),
+		corruptMarker,
+		rec,
+		s.segmentSize,
+	)
+	s.Require().NoError(err)
+	defer func() { s.Require().NoError(dataSource.Close()) }()
+
+	err = dataSource.Init(baseCtx, 0)
+	s.Require().NoError(err)
+
+	segmentSampleStorages := cppbridge.NewSegmentSamplesStorage(uint64(numberOfShards))
+	for sid := range numberOfSegments / 2 {
+		segments, readErr := dataSource.Next(baseCtx, 0, segmentSampleStorages)
+		s.Require().NoError(readErr)
+
+		if len(segments) != 2 {
+			s.T().Log(sid, segments[0].ID, dataSource.shards[0], dataSource.shards[1])
+		}
+
+		s.Require().Len(segments, 2)
+		s.Require().Equal(sid, segments[0].ID)
+		s.Require().Equal(sid, segments[1].ID)
+		s.Require().Equal(int64(sid*2), segments[0].MaxTimestamp)
+		s.Require().Equal(int64(sid*2+1), segments[1].MaxTimestamp)
+		s.Require().Equal(uint32(1), segments[0].SampleCount)
+		s.Require().Equal(uint32(0), segments[0].DroppedSamplesCount)
+		s.Require().Equal(uint32(0), segments[0].DroppedSeriesCount)
+		s.Require().Equal(uint32(0), segments[0].OutdatedSamplesCount)
+	}
+
+	segments, err := dataSource.Next(baseCtx, 0, segmentSampleStorages)
+	s.Require().ErrorIs(err, ErrEmptyReadResult)
+	s.Require().Empty(segments)
+
+	rec.SetStatus(catalog.StatusRotated)
+	segments, err = dataSource.Next(baseCtx, 0, segmentSampleStorages)
+	s.Require().ErrorIs(err, ErrEndOfBlock)
 	s.Require().Empty(segments)
 }
 

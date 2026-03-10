@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/reader"
 	"github.com/prometheus/prometheus/pp/go/util"
@@ -13,29 +14,60 @@ import (
 //go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg mock --out
 //go:generate moq mock/segment.go . Segment
 
+// walReader buffered reader [Segment]s from wal.
 type walReader struct {
 	file              *util.FileReader
 	reader            io.Reader
-	nextSegmentID     uint32
-	fileFormatVersion uint8
+	fsize             int64  // file wal size
+	nextSegmentID     uint32 // next segment ID to read
+	fileFormatVersion uint8  // file format version
+	encoderVersion    uint8  // encoder version used to encode the wal file, required to initialize the decoder
 }
 
-func newWalReader(fileName string) (*walReader, uint8, error) {
+// newWalReader creates a new [walReader].
+// It returns the [walReader] and an error if any.
+func newWalReader(fileName string) (*walReader, error) {
 	file, err := util.OpenFileReader(fileName)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to read wal file: %w", err)
+		return nil, fmt.Errorf("failed to read wal file: %w", err)
 	}
 
-	fileFormatVersion, encoderVersion, _, err := reader.ReadHeader(file)
+	fileFormatVersion, encoderVersion, n, err := reader.ReadHeader(file)
 	if err != nil {
-		return nil, 0, errors.Join(fmt.Errorf("failed to read header: %w", err), file.Close())
+		return nil, errors.Join(fmt.Errorf("failed to read header: %w", err), file.Close())
 	}
 
-	return &walReader{
+	wr := &walReader{
 		file:              file,
 		reader:            bufio.NewReaderSize(file, 4096), //revive:disable-line:add-constant // 4kb
 		fileFormatVersion: fileFormatVersion,
-	}, encoderVersion, nil
+		encoderVersion:    encoderVersion,
+	}
+	wr.fsize -= int64(n)
+
+	return wr, nil
+}
+
+// newWalReaderRotated creates a new rotated [walReader].
+// It returns the [walReader] and an error if any.
+func newWalReaderRotated(fileName string) (*walReader, error) {
+	info, err := os.Stat(fileName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat wal file: %w", err)
+	}
+
+	fsize := info.Size()
+	if fsize == 0 {
+		return nil, fmt.Errorf("wal file is empty")
+	}
+
+	wr, err := newWalReader(fileName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create wal file rotated reader: %w", err)
+	}
+	wr.fsize += fsize
+
+	return wr, nil
 }
 
 // Close wal file.
@@ -55,6 +87,16 @@ func (r *walReader) EmptySegment() (Segment, error) {
 	}
 }
 
+// EncoderVersion returns the encoder version.
+func (r *walReader) EncoderVersion() uint8 {
+	return r.encoderVersion
+}
+
+// IsEOF returns true if the wal file is at the end.
+func (r *walReader) IsEOF() bool {
+	return r.fsize <= 0
+}
+
 // Read reads up data into s [Segment] from wal.
 // It may return a non-nil error if some error condition is known, such as EOF.
 func (r *walReader) Read(s Segment) error {
@@ -71,7 +113,9 @@ func (r *walReader) Read(s Segment) error {
 // ReadSegmentBody reads [Segment] body from wal.
 // It may return a non-nil error if some error condition is known, such as EOF.
 func (r *walReader) ReadSegmentBody(s Segment) error {
-	if _, err := s.ReadBody(r.reader); err != nil {
+	n, err := s.ReadBody(r.reader)
+	r.fsize -= n
+	if err != nil {
 		return fmt.Errorf("failed to read segment body: %w", err)
 	}
 
@@ -83,7 +127,9 @@ func (r *walReader) ReadSegmentBody(s Segment) error {
 // ReadSegmentID reads [Segment] ID from wal.
 // It may return a non-nil error if some error condition is known, such as EOF.
 func (r *walReader) ReadSegmentID(s Segment) error {
-	if _, err := s.ReadID(r.reader); err != nil {
+	n, err := s.ReadID(r.reader)
+	r.fsize -= n
+	if err != nil {
 		return fmt.Errorf("failed to read segment id: %w", err)
 	}
 
