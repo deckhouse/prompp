@@ -851,7 +851,6 @@ func (c *caches[TWT]) writeCaches(wts []TWT) {
 		}
 
 		sc.cache.Reset()
-		// TODO if shard is corrupted, skip writing the cache
 		if _, err := wts[shardID].WriteTo(sc.cache); err != nil {
 			logger.Errorf("failed to get output decoder cache: %v", err)
 			continue

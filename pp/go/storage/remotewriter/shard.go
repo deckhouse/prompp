@@ -138,6 +138,20 @@ func createShard(
 	return s, nil
 }
 
+// newCorruptedShard creates a new corrupted [shard].
+func newCorruptedShard(
+	headID string,
+	shardID uint16,
+	segmentSize prometheus.Histogram,
+) *shard {
+	return &shard{
+		headID:      headID,
+		shardID:     shardID,
+		corrupted:   true,
+		segmentSize: segmentSize,
+	}
+}
+
 // newShard init new [shard].
 //
 //nolint:dupl // this is constructor.
@@ -154,8 +168,16 @@ func newShard(
 ) (*shard, error) {
 	wr, err := newWalReader(shardFileName)
 	if err != nil {
-		// TODO: return corrupted shard
+		// the shard can be restored
 		return nil, fmt.Errorf("failed to create wal file reader: %w", err)
+	}
+
+	segment, err := wr.EmptySegment()
+	if err != nil {
+		_ = wr.Close() // it doesn't make sense for us to process this erro
+		logger.Errorf("shard %s/%d is corrupted by init segment: %v", headID, shardID, err)
+		// return the corrupted shard that won't be read
+		return newCorruptedShard(headID, shardID, segmentSize), nil
 	}
 
 	decoder, err := NewDecoder(
@@ -195,21 +217,6 @@ func newShard(
 		}
 	}
 
-	segment, err := wr.EmptySegment()
-	if err != nil {
-		_ = wr.Close() // it doesn't make sense for us to process this erro
-		logger.Errorf("shard %s/%d is corrupted by init: %v", headID, shardID, err)
-		// return the corrupted shard that won't be read
-		return &shard{
-			headID:           headID,
-			shardID:          shardID,
-			corrupted:        true,
-			decoder:          decoder,
-			decoderStateFile: decoderStateFile,
-			segmentSize:      segmentSize,
-		}, nil
-	}
-
 	// create new shard
 	return &shard{
 		headID:           headID,
@@ -235,6 +242,11 @@ func (s *shard) Close() (err error) {
 	}
 
 	return err
+}
+
+// IsCorrupted returns true if the shard is corrupted.
+func (s *shard) IsCorrupted() bool {
+	return s.corrupted
 }
 
 // LSS returns the [cppbridge.LabelSetStorage] of the [shard].
@@ -275,7 +287,7 @@ func (s *shard) Read(
 // WriteTo writes output decoder state to io.Writer.
 func (s *shard) WriteTo(w io.Writer) (int64, error) {
 	if s.corrupted {
-		return 0, ErrShardIsCorrupted
+		return 0, nil // corrupted shard doesn't write to cache
 	}
 
 	return s.decoder.WriteTo(w)
@@ -401,6 +413,20 @@ func createShardRotated(
 	return s, nil
 }
 
+// newCorruptedShardRotated creates a new corrupted [shardRotated].
+func newCorruptedShardRotated(
+	headID string,
+	shardID uint16,
+	segmentSize prometheus.Histogram,
+) *shardRotated {
+	return &shardRotated{
+		headID:      headID,
+		shardID:     shardID,
+		corrupted:   true,
+		segmentSize: segmentSize,
+	}
+}
+
 // newShardRotated init new [shardRotated].
 //
 //nolint:dupl // this is constructor.
@@ -417,8 +443,17 @@ func newShardRotated(
 ) (*shardRotated, error) {
 	wr, err := newWalReaderRotated(shardFileName)
 	if err != nil {
-		// TODO: return corrupted shard
-		return nil, fmt.Errorf("failed to create wal file rotated reader: %w", err)
+		logger.Errorf("shard %s/%d is corrupted by create wal file rotated reader: %v", headID, shardID, err)
+		// return the corrupted shard that won't be read
+		return newCorruptedShardRotated(headID, shardID, segmentSize), nil
+	}
+
+	segment, err := wr.EmptySegment()
+	if err != nil {
+		_ = wr.Close() // it doesn't make sense for us to process this error
+		logger.Errorf("shard %s/%d is corrupted by init segment: %v", headID, shardID, err)
+		// return the corrupted shard that won't be read
+		return newCorruptedShardRotated(headID, shardID, segmentSize), nil
 	}
 
 	decoder, err := NewDecoder(
@@ -458,21 +493,6 @@ func newShardRotated(
 		}
 	}
 
-	segment, err := wr.EmptySegment()
-	if err != nil {
-		_ = wr.Close() // it doesn't make sense for us to process this erro
-		logger.Errorf("shard %s/%d is corrupted by init: %v", headID, shardID, err)
-		// return the corrupted shard that won't be read
-		return &shardRotated{
-			headID:           headID,
-			shardID:          shardID,
-			corrupted:        true,
-			decoder:          decoder,
-			decoderStateFile: decoderStateFile,
-			segmentSize:      segmentSize,
-		}, nil
-	}
-
 	// create new shard
 	return &shardRotated{
 		headID:           headID,
@@ -498,6 +518,11 @@ func (s *shardRotated) Close() (err error) {
 	}
 
 	return err
+}
+
+// IsCorrupted returns true if the shard is corrupted.
+func (s *shardRotated) IsCorrupted() bool {
+	return s.corrupted
 }
 
 // LSS returns the [cppbridge.LabelSetStorage] of the [shardRotated].
@@ -544,6 +569,10 @@ func (s *shardRotated) ReadSegment(
 // SegmentID returns the ID of the [Segment] that can be read from wal.
 // It may return a non-nil error if some error condition is known, such as EOF.
 func (s *shardRotated) SegmentID() (uint32, error) {
+	if s.corrupted {
+		return reader.UnknownSegmentID, ErrShardIsCorrupted
+	}
+
 	if s.segment.ID() != reader.UnknownSegmentID {
 		return s.segment.ID(), nil
 	}
@@ -603,5 +632,9 @@ func (s *shardRotated) SkipSegment(
 
 // WriteTo writes output decoder state to io.Writer.
 func (s *shardRotated) WriteTo(w io.Writer) (int64, error) {
+	if s.corrupted {
+		return 0, nil // corrupted shard doesn't write to cache
+	}
+
 	return s.decoder.WriteTo(w)
 }
