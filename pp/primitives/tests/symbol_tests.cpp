@@ -200,7 +200,7 @@ TEST_F(SymbolDecodingTableTest, SymbolTableReadViewMatchesOperatorBracketAfterLo
   encoding_table_.find_or_emplace("ccc"sv);
   const auto checkpoint = encoding_table_.checkpoint();
   std::stringstream ss;
-  checkpoint.save(ss);
+  encoding_table_.save(ss, checkpoint);
   decoding_table_.load(ss);
 
   // Act

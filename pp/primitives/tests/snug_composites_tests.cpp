@@ -9,19 +9,22 @@
 
 namespace {
 
-static_assert(std::same_as<PromPP::Primitives::SnugComposites::Symbol::composite_type,
-                           PromPP::Primitives::SnugComposites::Symbol::DecodingTable<BareBones::Vector>::value_type>);
-static_assert(std::same_as<PromPP::Primitives::SnugComposites::Symbol::composite_type,
-                           PromPP::Primitives::SnugComposites::Symbol::EncodingBimap<BareBones::Vector>::value_type>);
+template <class T>
+using SharedSpan = BareBones::SharedSpan<T, BareBones::DefaultReallocator>;
+
 static_assert(std::same_as<PromPP::Primitives::SnugComposites::Symbol::DecodingTable<BareBones::Vector>::value_type,
                            PromPP::Primitives::SnugComposites::Symbol::EncodingBimap<BareBones::Vector>::value_type>);
-
-static_assert(std::same_as<PromPP::Primitives::SnugComposites::LabelNameSet::composite_type,
-                           PromPP::Primitives::SnugComposites::LabelNameSet::DecodingTable<BareBones::Vector>::value_type>);
-static_assert(std::same_as<PromPP::Primitives::SnugComposites::LabelNameSet::composite_type,
-                           PromPP::Primitives::SnugComposites::LabelNameSet::EncodingBimap<BareBones::Vector>::value_type>);
 static_assert(std::same_as<PromPP::Primitives::SnugComposites::LabelNameSet::DecodingTable<BareBones::Vector>::value_type,
                            PromPP::Primitives::SnugComposites::LabelNameSet::EncodingBimap<BareBones::Vector>::value_type>);
+static_assert(std::same_as<PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<BareBones::Vector>::value_type,
+                           PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector>::value_type>);
+
+static_assert(std::same_as<PromPP::Primitives::SnugComposites::Symbol::DecodingTable<BareBones::Vector>::value_type,
+                           PromPP::Primitives::SnugComposites::Symbol::DecodingTable<SharedSpan>::value_type>);
+static_assert(std::same_as<PromPP::Primitives::SnugComposites::LabelNameSet::DecodingTable<BareBones::Vector>::value_type,
+                           PromPP::Primitives::SnugComposites::LabelNameSet::DecodingTable<SharedSpan>::value_type>);
+static_assert(std::same_as<PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<BareBones::Vector>::value_type,
+                           PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpan>::value_type>);
 
 using BareBones::Vector;
 using PromPP::Primitives::LabelViewSet;
@@ -301,7 +304,7 @@ TEST_F(SharedDataFixture, UseCopyLabelSetAfterFreeSourceLabelSet) {
   EXPECT_TRUE(std::ranges::equal(label_set, decoding_table[0]));
 }
 
-TEST_F(SharedDataFixture, LabelSetCompositeViewHashMatchesOriginalLabelSet) {
+TEST_F(SharedDataFixture, LabelSetCompositeHashMatchesOriginalLabelSet) {
   // Arrange
   LabelSetEncodingBimap encoding_bimap;
   const LabelViewSet label_set{{"k1", "v1"}, {"k2", "v2"}};
