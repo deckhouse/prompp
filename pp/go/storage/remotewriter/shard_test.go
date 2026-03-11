@@ -221,8 +221,8 @@ func (s *ShardSuite) TestV1FileNotExists() {
 		[]*cppbridge.RelabelConfig{},
 		s.segmentSize,
 	)
-	s.Require().Nil(shard)
 	s.Require().Error(err)
+	s.Require().Nil(shard)
 }
 
 func (s *ShardSuite) TestV2FileNotExists() {

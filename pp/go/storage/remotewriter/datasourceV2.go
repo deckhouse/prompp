@@ -156,20 +156,15 @@ func (ds *dataSourceActive) Next(
 	minTimestamp int64,
 	segmentSamplesStorages *cppbridge.SegmentSamplesStorageList,
 ) ([]*DecodedSegment, error) {
-	// shardIDs are needed for V2 to read only recorded segments,
-	// otherwise there will be an attempt to read the sync data
-	shardIDs, segmentIsReady, segmentIsOutOfRange := ds.segmentReadyChecker.SegmentIsReady(ds.nextSegmentID)
-	if !segmentIsReady {
-		if segmentIsOutOfRange {
-			return nil, ErrEndOfBlock
-		}
-
-		return nil, ErrEmptyReadResult
+	shardIDs, err := ds.segmentIsReady(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	readShardResults := ds.readFromShards(ctx, shardIDs, minTimestamp, segmentSamplesStorages, ds.nextSegmentID)
 	segments := make([]*DecodedSegment, 0, len(shardIDs))
 	errs := make([]error, 0, len(shardIDs))
+
 	for _, result := range readShardResults {
 		if result.segment != nil {
 			segments = append(segments, result.segment)
@@ -287,6 +282,42 @@ func (ds *dataSourceActive) readFromShards(
 	wg.Wait()
 
 	return readShardResults
+}
+
+// segmentIsReady checks if the segment is ready and returns the shard IDs in which the segment is located,
+func (ds *dataSourceActive) segmentIsReady(ctx context.Context) ([]uint16, error) {
+	for {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+
+		// shardIDs are needed for V2 to read only recorded segments,
+		// otherwise there will be an attempt to read the sync data
+		shardIDs, segmentIsReady, segmentIsOutOfRange := ds.segmentReadyChecker.SegmentIsReady(ds.nextSegmentID)
+		if !segmentIsReady {
+			if segmentIsOutOfRange {
+				return nil, ErrEndOfBlock
+			}
+
+			return nil, ErrEmptyReadResult
+		}
+
+		for i := len(shardIDs) - 1; i >= 0; i-- {
+			if ds.shards[shardIDs[i]].corrupted {
+				shardIDs = append(shardIDs[:i], shardIDs[i+1:]...)
+			}
+		}
+
+		if len(shardIDs) != 0 {
+			return shardIDs, nil
+		}
+
+		if err := ds.checkFullCorrupted(); err != nil {
+			return nil, err
+		}
+
+		ds.nextSegmentID++
+	}
 }
 
 //
@@ -692,12 +723,10 @@ func (src *segmentReadyChecker) SegmentIsReady(segmentID uint32) (shards []uint1
 		return nil, ready, outOfRange
 	}
 
-	if readyV1 {
-		// on v1 fill once and reuse
-		if len(src.shards) == 0 {
-			for i := uint16(0); i < src.headRecord.NumberOfShards(); i++ {
-				src.shards = append(src.shards, i)
-			}
+	if readyV1 && !readyV2 {
+		src.shards = src.shards[:0]
+		for i := uint16(0); i < src.headRecord.NumberOfShards(); i++ {
+			src.shards = append(src.shards, i)
 		}
 
 		return src.shards, ready, outOfRange
