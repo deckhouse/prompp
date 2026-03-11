@@ -105,7 +105,7 @@ shell:
     - export GOPROXY="https://proxy.golang.org/" CGO_ENABLED=1 GOOS=linux GOARCH={{ env "GO_ARCH" }}
     - cd /src/web/ui
     - mkdir static
-    - npm install
+    - npm install --legacy-peer-deps
     - npm run build
     - cd /src
     - scripts/compress_assets.sh
