@@ -166,7 +166,7 @@ TEST_F(SymbolDecodingTableTest, LoadFromCheckpoint) {
 
   // Act
   std::stringstream ss;
-  checkpoint.save(ss);
+  encoding_table_.save(ss, checkpoint);
   decoding_table_.load(ss);
 
   // Assert
@@ -185,7 +185,7 @@ TEST_F(SymbolDecodingTableTest, IterateOverDecodingTable) {
 
   // Act
   std::stringstream ss;
-  checkpoint.save(ss);
+  encoding_table_.save(ss, checkpoint);
   decoding_table_.load(ss);
 
   // Assert
@@ -219,8 +219,8 @@ TEST_F(SymbolDecodingTableTest, CheckpointSaveSizeMatchesActualSize) {
   BareBones::ShrinkedToFitOStringStream ss;
 
   // Act
-  checkpoint.save(ss);
-  const auto save_size = checkpoint.save_size();
+  encoding_table_.save(ss, checkpoint);
+  const auto save_size = encoding_table_.save_size(checkpoint);
 
   // Assert
   EXPECT_EQ(ss.view().size(), save_size);
@@ -244,8 +244,8 @@ TEST_F(SymbolDeltaCheckpointTest, DeltaCheckpointSaveSize) {
   const auto delta = checkpoint - base_checkpoint;
 
   // Act
-  ss << delta;
-  const auto save_size = delta.save_size();
+  encoding_table_.save(ss, delta);
+  const auto save_size = encoding_table_.save_size(delta);
 
   // Assert
   EXPECT_EQ(ss.view().size(), save_size);
@@ -263,8 +263,8 @@ TEST_F(SymbolDeltaCheckpointTest, LoadFromBaseCheckpointAndDelta) {
   const auto checkpoint = encoding_table_.checkpoint();
   const auto delta = checkpoint - base_checkpoint;
 
-  base_checkpoint.save(ss);
-  ss << delta;
+  encoding_table_.save(ss, base_checkpoint);
+  encoding_table_.save(ss, delta);
 
   // Act
   decoding_table_.load(ss);
