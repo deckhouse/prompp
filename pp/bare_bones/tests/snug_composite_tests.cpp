@@ -452,7 +452,7 @@ TEST_F(EncodingBimapFixture, SerializeDeserializeDelta) {
   std::stringstream stream;
 
   // Act
-  stream << (checkpoint2 - checkpoint1);
+  table_.save(stream, checkpoint2 - checkpoint1);
   EncodingBimap table2;
   table2.find_or_emplace("test1"s);
   stream >> table2;
@@ -592,7 +592,7 @@ TEST_F(ShrinkableEncodingBimapFixture, SerializeDeserializeSnapshot) {
   std::stringstream stream;
 
   // Act
-  stream << checkpoint;
+  table_.save(stream, checkpoint);
   ShrinkableEncodingBimap table2;
   stream >> table2;
 
@@ -611,7 +611,7 @@ TEST_F(ShrinkableEncodingBimapFixture, SerializeDeserializeDeltaAfterShrink) {
   table_.find_or_emplace("test2"s);
   const auto initial_checkpoint = table_.checkpoint();
 
-  snapshot_stream << initial_checkpoint;
+  table_.save(snapshot_stream, initial_checkpoint);
   snapshot_stream >> table2;
   table2.shrink_to_checkpoint_size(table2.checkpoint());
 
@@ -622,7 +622,7 @@ TEST_F(ShrinkableEncodingBimapFixture, SerializeDeserializeDeltaAfterShrink) {
 
   // Act
   std::stringstream delta_stream;
-  delta_stream << delta;
+  table_.save(delta_stream, delta);
   delta_stream >> table2;
 
   // Assert

@@ -68,6 +68,13 @@ func (i ItemType) IsAggregatorWithParam() bool {
 	return i == TOPK || i == BOTTOMK || i == COUNT_VALUES || i == QUANTILE || i == LIMITK || i == LIMIT_RATIO
 }
 
+// OP_FUNCTIONS
+
+// IsOPTop is an ad-hoc checker function to pass any number of arguments to IsOPTop.
+func (i ItemType) IsOPTop() bool {
+	return i == OP_TOP
+}
+
 // IsKeyword returns true if the Item corresponds to a keyword.
 // Returns false otherwise.
 func (i ItemType) IsKeyword() bool { return i > keywordsStart && i < keywordsEnd }
@@ -116,6 +123,7 @@ var key = map[string]ItemType{
 	"stdvar":       STDVAR,
 	"topk":         TOPK,
 	"bottomk":      BOTTOMK,
+	"op_top":       OP_TOP, // OP_FUNCTIONS
 	"count_values": COUNT_VALUES,
 	"quantile":     QUANTILE,
 	"limitk":       LIMITK,
