@@ -414,9 +414,9 @@ struct LabelNameSet {
 
         // write symbols table
         if (from != nullptr) {
-          symbols_table_checkpoint.save(out, &from->symbols_table_checkpoint);
+          storage.symbols_table_.save(out, symbols_table_checkpoint, &from->symbols_table_checkpoint);
         } else {
-          symbols_table_checkpoint.save(out);
+          storage.symbols_table_.save(out, symbols_table_checkpoint);
         }
       }
 
@@ -448,9 +448,9 @@ struct LabelNameSet {
 
         // symbols table
         if (from != nullptr) {
-          res += symbols_table_checkpoint.save_size(&from->symbols_table_checkpoint);
+          res += storage.symbols_table_.save_size(symbols_table_checkpoint, &from->symbols_table_checkpoint);
         } else {
-          res += symbols_table_checkpoint.save_size();
+          res += storage.symbols_table_.save_size(symbols_table_checkpoint);
         }
 
         return res;
@@ -684,8 +684,7 @@ struct LabelSet {
     using label_values_symbols_table_type = SymbolsTableType<Vector>;
     using label_name_sets_table_type = LabelNameSetsTableType<Vector>;
 
-    using symbols_tables_type = std::
-        conditional_t<kIsReadOnly, BareBones::Vector<label_values_symbols_table_type>, BareBones::Vector<std::unique_ptr<label_values_symbols_table_type>>>;
+    using symbols_tables_type = BareBones::Vector<label_values_symbols_table_type>;
 
     using symbol_ids_codec_type = BareBones::StreamVByte::Codec1234;
     using symbols_ids_sequences_type = Vector<uint8_t>;
@@ -830,9 +829,9 @@ struct LabelSet {
 
         // write label name sets table
         if (from != nullptr) {
-          label_name_sets_table_checkpoint_.save(out, &from->label_name_sets_table_checkpoint_);
+          storage.label_name_sets_table_.save(out, label_name_sets_table_checkpoint_, &from->label_name_sets_table_checkpoint_);
         } else {
-          label_name_sets_table_checkpoint_.save(out);
+          storage.label_name_sets_table_.save(out, label_name_sets_table_checkpoint_);
         }
 
         // count tables, we have to write
@@ -857,7 +856,7 @@ struct LabelSet {
               // write id
               out.write(reinterpret_cast<char*>(&i), sizeof(i));
               // write symbols table
-              to_checkpoint.save(out);
+              storage.symbols_tables_[i].save(out, to_checkpoint);
               continue;
             }
             auto from_checkpoint = from->symbols_tables_checkpoints_[i];
@@ -867,12 +866,12 @@ struct LabelSet {
             // write id
             out.write(reinterpret_cast<char*>(&i), sizeof(i));
             // write symbols table
-            to_checkpoint.save(out, &from_checkpoint);
+            storage.symbols_tables_[i].save(out, to_checkpoint, &from_checkpoint);
           }
         } else {
           for (uint32_t i = 0; i < symbols_tables_checkpoints_.size(); ++i) {
             // write symbols table
-            symbols_tables_checkpoints_[i].save(out);
+            storage.symbols_tables_[i].save(out, symbols_tables_checkpoints_[i]);
           }
         }
       }
@@ -905,9 +904,9 @@ struct LabelSet {
 
         // label name sets table
         if (from != nullptr) {
-          res += label_name_sets_table_checkpoint_.save_size(&from->label_name_sets_table_checkpoint_);
+          res += storage.label_name_sets_table_.save_size(label_name_sets_table_checkpoint_, &from->label_name_sets_table_checkpoint_);
         } else {
-          res += label_name_sets_table_checkpoint_.save_size();
+          res += storage.label_name_sets_table_.save_size(label_name_sets_table_checkpoint_);
         }
 
         // number of symbols tables
@@ -929,12 +928,12 @@ struct LabelSet {
             // write id
             res += sizeof(i);
             // write symbols table
-            res += to_checkpoint.save_size(from_checkpoint);
+            res += storage.symbols_tables_[i].save_size(to_checkpoint, from_checkpoint);
           }
         } else {
           for (uint32_t i = 0; i < symbols_tables_checkpoints_.size(); ++i) {
             // write symbols table
-            res += symbols_tables_checkpoints_[i].save_size();
+            res += storage.symbols_tables_[i].save_size(symbols_tables_checkpoints_[i]);
           }
         }
 
@@ -1118,7 +1117,7 @@ struct LabelSet {
           items_{other.items_} {
       symbols_tables_.reserve_and_write(other.symbols_tables_.size(), [&other](auto memory, uint32_t size) {
         for (auto& symbol_table : other.symbols_tables_) {
-          std::construct_at(memory++, *symbol_table);
+          std::construct_at(memory++, symbol_table);
         }
         return size;
       });
@@ -1135,7 +1134,7 @@ struct LabelSet {
       uint32_t remainder_for_symbols_ids_sequences = max_ui32 - static_cast<uint32_t>(symbols_ids_sequences_.size());
       uint32_t remainder_for_symbol_table = std::numeric_limits<uint32_t>::max();
       for (const auto& table : symbols_tables_) {
-        if (const uint32_t n = table->remainder_size(); n < remainder_for_symbol_table) {
+        if (const uint32_t n = table.remainder_size(); n < remainder_for_symbol_table) {
           remainder_for_symbol_table = n;
         }
       }
@@ -1208,11 +1207,7 @@ struct LabelSet {
 
       const uint32_t lns_id = find_or_emplace_label_names_set(label_set, std::forward<Cache>(cache));
       const uint32_t pos = symbols_ids_sequences_.size() + shrinked_size_;
-      // resize if there are new symbols (in lns table)
-      symbols_tables_.reserve(label_name_sets_table_.data_view().symbols().size());
-      for (auto i = symbols_tables_.size(); i < label_name_sets_table_.data_view().symbols().size(); ++i) {
-        symbols_tables_.emplace_back(std::make_unique<label_values_symbols_table_type>());
-      }
+      symbols_tables_.resize(label_name_sets_table_.data_view().symbols().size());
 
       auto lns = label_name_sets_table_[lns_id];
       auto lns_i = lns.begin();
@@ -1247,7 +1242,7 @@ struct LabelSet {
                                         static_cast<uint32_t>(items_.size())};
       checkpoint.symbols_tables_checkpoints_.reserve_and_write(symbols_tables_.size(), [this](auto memory, uint32_t size) {
         for (auto& symbol_table : this->symbols_tables_) {
-          std::construct_at(memory++, symbol_table->checkpoint());
+          std::construct_at(memory++, symbol_table.checkpoint());
         }
         return size;
       });
@@ -1263,7 +1258,7 @@ struct LabelSet {
       auto symbols_tables_checkpoints = checkpoint.symbols_tables_checkpoints_;
       assert(symbols_tables_checkpoints.size() <= symbols_tables_.size());
       for (uint32_t i = 0; i != symbols_tables_checkpoints.size(); ++i) {
-        symbols_tables_[i]->rollback(symbols_tables_checkpoints[i]);
+        symbols_tables_[i].rollback(symbols_tables_checkpoints[i]);
       }
       symbols_tables_.resize(symbols_tables_checkpoints.size());
       items_.resize(checkpoint.items_size);
@@ -1338,7 +1333,7 @@ struct LabelSet {
       BareBones::Vector<std::pair<uint32_t, typename label_values_symbols_table_type::checkpoint_type>> symbols_tables_checkpoints;
       auto sg3 = std::experimental::scope_fail([&]() {
         for (const auto& [id, checkpoint] : symbols_tables_checkpoints) {
-          symbols_tables_[id]->rollback(checkpoint);
+          symbols_tables_[id].rollback(checkpoint);
         }
         symbols_tables_.resize(original_symbols_tables_size);
       });
@@ -1364,16 +1359,13 @@ struct LabelSet {
             throw BareBones::Exception(0x98d95ce3b05ec2b5, "Max symbol id (%lu) is greater than UINT32_MAX", size_will_be_at_least);
           }
 
-          symbols_tables_.reserve(size_will_be_at_least);
-          for (uint32_t j = 0; j < number_of_tables_stil_left_to_load; ++j) {
-            symbols_tables_.emplace_back(std::make_unique<label_values_symbols_table_type>());
-          }
+          symbols_tables_.resize(size_will_be_at_least);
         }
 
         // read symbols table
         if (mode == BareBones::SnugComposite::SerializationMode::DELTA && id < original_symbols_tables_size)
-          symbols_tables_checkpoints.emplace_back(id, symbols_tables_[id]->checkpoint());
-        symbols_tables_[id]->load(in);
+          symbols_tables_checkpoints.emplace_back(id, symbols_tables_[id].checkpoint());
+        symbols_tables_[id].load(in);
       }
 
       return std::views::iota(items_original_size, items_.size());
@@ -1403,12 +1395,12 @@ struct LabelSet {
 
     template <class LabelIterator, class Cache>
     PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_symbol(uint32_t lns_id, const LabelIterator& label, Cache&& cache) {
-      if constexpr (use_find_or_emplace_with_cache<Cache, LabelIterator, decltype(*symbols_tables_[0]), decltype((*label).second)>) {
+      if constexpr (use_find_or_emplace_with_cache<Cache, LabelIterator, decltype(symbols_tables_[0]), decltype((*label).second)>) {
         const auto name_id = label.name_id();
-        return symbols_tables_[lns_id]->find_or_emplace_with_cache((*label).second, label.value_id(), cache.values[name_id]);
+        return symbols_tables_[lns_id].find_or_emplace_with_cache((*label).second, label.value_id(), cache.values[name_id]);
       }
 
-      return symbols_tables_[lns_id]->find_or_emplace((*label).second);
+      return symbols_tables_[lns_id].find_or_emplace((*label).second);
     }
   };
 };

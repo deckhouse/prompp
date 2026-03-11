@@ -36,9 +36,9 @@ void save_lss_to_wal::execute(const Config& config, Metrics& metrics) const {
 
     auto new_checkpoint = lss.checkpoint();
     auto delta = new_checkpoint - checkpoint;
-    if (delta.save_size() > 1024 * 1024) {
-      log() << "WAL size: " << delta.save_size() << std::endl;
-      out << delta;
+    if (lss.save_size(delta) > 1024 * 1024) {
+      log() << "WAL size: " << lss.save_size(delta) << std::endl;
+      lss.save(out, delta);
       checkpoint = new_checkpoint;
     }
   }
@@ -46,8 +46,8 @@ void save_lss_to_wal::execute(const Config& config, Metrics& metrics) const {
   auto new_checkpoint = lss.checkpoint();
   auto delta = new_checkpoint - checkpoint;
   if (!delta.empty()) {
-    log() << "WAL size: " << delta.save_size() << std::endl;
-    out << delta;
+    log() << "WAL size: " << lss.save_size(delta) << std::endl;
+    lss.save(out, delta);
   }
 
   auto now = std::chrono::steady_clock::now();
