@@ -13,6 +13,7 @@ import (
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
@@ -256,7 +257,6 @@ func (ds *dataSourceActive) readFromShards(
 			err = NewShardError(ds.headID, shardIDs[0], true, err)
 		}
 		readShardResults[0] = readShardResult{segment: segment, err: err}
-
 		return readShardResults
 	}
 
@@ -906,4 +906,33 @@ func printErrorIfNeed(errs []error) {
 			logger.Errorf("shard %s/%d is corrupted: %s", shardErr.headID, shardErr.ShardID(), shardErr.Error())
 		}
 	}
+}
+
+// convertRelabelConfigs converts the relabel configs to the cppbridge.RelabelConfig's.
+func convertRelabelConfigs(relabelConfigs ...*relabel.Config) ([]*cppbridge.RelabelConfig, error) {
+	convertedConfigs := make([]*cppbridge.RelabelConfig, 0, len(relabelConfigs))
+	for _, relabelConfig := range relabelConfigs {
+		var sourceLabels []string
+		for _, label := range relabelConfig.SourceLabels {
+			sourceLabels = append(sourceLabels, string(label))
+		}
+
+		convertedConfig := &cppbridge.RelabelConfig{
+			SourceLabels: sourceLabels,
+			Separator:    relabelConfig.Separator,
+			Regex:        relabelConfig.Regex.String(),
+			Modulus:      relabelConfig.Modulus,
+			TargetLabel:  relabelConfig.TargetLabel,
+			Replacement:  relabelConfig.Replacement,
+			Action:       cppbridge.ActionNameToValueMap[string(relabelConfig.Action)],
+		}
+
+		if err := convertedConfig.Validate(); err != nil {
+			return nil, fmt.Errorf("failed to validate config: %w", err)
+		}
+
+		convertedConfigs = append(convertedConfigs, convertedConfig)
+	}
+
+	return convertedConfigs, nil
 }

@@ -7,10 +7,12 @@ import (
 
 	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/storage/catalog"
+	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
 	"github.com/prometheus/prometheus/pp/go/storage/remotewriter/remotewritertest"
-	"github.com/stretchr/testify/suite"
 )
 
 type DataSourceActiveSuite struct {
@@ -395,6 +397,76 @@ func (s *DataSourceActiveSuite) TestSkipByMinTimeV2() {
 	s.Require().Empty(segments)
 }
 
+func (s *DataSourceActiveSuite) TestV1FileNotExistsWIP() {
+	dataDir := s.T().TempDir()
+	numberOfSegments := uint32(10)
+	shardFilePaths := []string{
+		filepath.Join(dataDir, "shard_0.wal"),
+		filepath.Join(dataDir, "shard_1.wal"),
+	}
+	numberOfShards := uint16(len(shardFilePaths)) // #nosec G115 // no overflow
+	baseCtx := s.T().Context()
+
+	err := remotewritertest.WriteToShardWalFileV1Multi(
+		baseCtx,
+		shardFilePaths,
+		uint64(numberOfSegments),
+	)
+	s.Require().NoError(err)
+
+	s.Require().NoError(os.Remove(shardFilePaths[0]))
+
+	discardCache := true
+	rec := remotewritertest.MakeRecord(numberOfShards)
+	rec.SetLastAppendedSegmentID(numberOfSegments/2 - 1)
+	corruptMarker := CorruptMarkerFn(func(string) error { return nil })
+	clock := clockwork.NewRealClock()
+	dataSource, err := newDataSourceActive(
+		dataDir,
+		DestinationConfig{},
+		numberOfShards,
+		discardCache,
+		clock,
+		newSegmentReadyChecker(rec),
+		corruptMarker,
+		rec,
+		s.segmentSize,
+	)
+	s.Require().NoError(err)
+	defer func() { s.Require().NoError(dataSource.Close()) }()
+
+	err = dataSource.Init(baseCtx, 0)
+	s.Require().NoError(err)
+
+	segmentSampleStorages := cppbridge.NewSegmentSamplesStorage(uint64(numberOfShards))
+	for sid := range numberOfSegments / 2 {
+		segments, readErr := dataSource.Next(baseCtx, 0, segmentSampleStorages)
+		s.Require().NoError(readErr)
+
+		if len(segments) != 2 {
+			s.T().Log(sid, segments[0].ID, dataSource.shards[0], dataSource.shards[1])
+		}
+
+		s.Require().Len(segments, 1)
+		s.Require().Equal(sid, segments[0].ID)
+		s.Require().Equal(int64(sid*2), segments[0].MaxTimestamp)
+		s.Require().Equal(int64(sid*2+1), segments[1].MaxTimestamp)
+		s.Require().Equal(uint32(1), segments[0].SampleCount)
+		s.Require().Equal(uint32(0), segments[0].DroppedSamplesCount)
+		s.Require().Equal(uint32(0), segments[0].DroppedSeriesCount)
+		s.Require().Equal(uint32(0), segments[0].OutdatedSamplesCount)
+	}
+
+	segments, err := dataSource.Next(baseCtx, 0, segmentSampleStorages)
+	s.Require().ErrorIs(err, ErrEmptyReadResult)
+	s.Require().Empty(segments)
+
+	rec.SetStatus(catalog.StatusRotated)
+	segments, err = dataSource.Next(baseCtx, 0, segmentSampleStorages)
+	s.Require().ErrorIs(err, ErrEndOfBlock)
+	s.Require().Empty(segments)
+}
+
 func (s *DataSourceActiveSuite) TestNextWithCorruptedHeadV1() {
 	dataDir := s.T().TempDir()
 	numberOfSegments := uint32(10)
@@ -448,9 +520,8 @@ func (s *DataSourceActiveSuite) TestNextWithCorruptedHeadV1() {
 			s.T().Log(sid, segments[0].ID, dataSource.shards[0], dataSource.shards[1])
 		}
 
-		s.Require().Len(segments, 2)
+		s.Require().Len(segments, 1)
 		s.Require().Equal(sid, segments[0].ID)
-		s.Require().Equal(sid, segments[1].ID)
 		s.Require().Equal(int64(sid*2), segments[0].MaxTimestamp)
 		s.Require().Equal(int64(sid*2+1), segments[1].MaxTimestamp)
 		s.Require().Equal(uint32(1), segments[0].SampleCount)
@@ -835,6 +906,294 @@ func (s *DataSourceRotatedSuite) TestSkipByMinTimeV2() {
 	}
 
 	segments, err := dataSource.Next(baseCtx, 0, segmentSampleStorages)
+	s.Require().ErrorIs(err, ErrEndOfBlock)
+	s.Require().Empty(segments)
+}
+
+func (s *DataSourceRotatedSuite) TestFileNotExistsV1() {
+	dataDir := s.T().TempDir()
+	numberOfSegments := uint32(10)
+	shardFilePaths := []string{
+		filepath.Join(dataDir, "shard_0.wal"),
+		filepath.Join(dataDir, "shard_1.wal"),
+	}
+	numberOfShards := uint16(len(shardFilePaths)) // #nosec G115 // no overflow
+	baseCtx := s.T().Context()
+
+	err := remotewritertest.WriteToShardWalFileV1Multi(
+		baseCtx,
+		shardFilePaths,
+		uint64(numberOfSegments),
+	)
+	s.Require().NoError(err)
+
+	s.Require().NoError(os.Remove(shardFilePaths[0]))
+
+	discardCache := true
+	rec := remotewritertest.MakeRecord(numberOfShards)
+	rec.SetLastAppendedSegmentID(numberOfSegments/2 - 1)
+	corruptMarker := CorruptMarkerFn(func(string) error { return nil })
+	clock := clockwork.NewRealClock()
+	dataSource, err := newDataSourceRotated(
+		dataDir,
+		DestinationConfig{},
+		numberOfShards,
+		discardCache,
+		clock,
+		corruptMarker,
+		rec,
+		s.segmentSize,
+	)
+	s.Require().NoError(err)
+	defer func() { s.Require().NoError(dataSource.Close()) }()
+
+	err = dataSource.Init(baseCtx, 0)
+	s.Require().NoError(err)
+
+	segmentSampleStorages := cppbridge.NewSegmentSamplesStorage(uint64(numberOfShards))
+	for sid := range numberOfSegments / 2 {
+		segments, readErr := dataSource.Next(baseCtx, 0, segmentSampleStorages)
+		s.Require().NoError(readErr)
+
+		s.Require().Len(segments, 1)
+		s.Require().Equal(sid, segments[0].ID)
+		s.Require().Equal(int64(sid*2+1), segments[0].MaxTimestamp)
+		s.Require().Equal(uint32(1), segments[0].SampleCount)
+		s.Require().Equal(uint32(0), segments[0].DroppedSamplesCount)
+		s.Require().Equal(uint32(0), segments[0].DroppedSeriesCount)
+		s.Require().Equal(uint32(0), segments[0].OutdatedSamplesCount)
+	}
+
+	segments, err := dataSource.Next(baseCtx, 0, segmentSampleStorages)
+	s.Require().ErrorIs(err, ErrEndOfBlock)
+	s.Require().Empty(segments)
+
+	rec.SetStatus(catalog.StatusRotated)
+	segments, err = dataSource.Next(baseCtx, 0, segmentSampleStorages)
+	s.Require().ErrorIs(err, ErrEndOfBlock)
+	s.Require().Empty(segments)
+}
+
+func (s *DataSourceRotatedSuite) TestFileNotExistsV2() {
+	dataDir := s.T().TempDir()
+	numberOfSegments := uint32(10)
+	shardFilePaths := []string{
+		filepath.Join(dataDir, "shard_0.wal"),
+		filepath.Join(dataDir, "shard_1.wal"),
+	}
+	numberOfShards := uint16(len(shardFilePaths)) // #nosec G115 // no overflow
+	baseCtx := s.T().Context()
+	rec := remotewritertest.MakeRecord(numberOfShards)
+
+	err := remotewritertest.WriteToShardWalFileV2Multi(
+		baseCtx,
+		shardFilePaths,
+		uint64(numberOfSegments),
+		rec,
+	)
+	s.Require().NoError(err)
+
+	s.Require().NoError(os.Remove(shardFilePaths[0]))
+
+	discardCache := true
+	rec.SetLastAppendedSegmentID(numberOfSegments/2 - 1)
+	corruptMarker := CorruptMarkerFn(func(string) error { return nil })
+	clock := clockwork.NewRealClock()
+	dataSource, err := newDataSourceRotated(
+		dataDir,
+		DestinationConfig{},
+		numberOfShards,
+		discardCache,
+		clock,
+		corruptMarker,
+		rec,
+		s.segmentSize,
+	)
+	s.Require().NoError(err)
+	defer func() { s.Require().NoError(dataSource.Close()) }()
+
+	err = dataSource.Init(baseCtx, 0)
+	s.Require().NoError(err)
+
+	segmentSampleStorages := cppbridge.NewSegmentSamplesStorage(uint64(numberOfShards))
+	for sid := range numberOfSegments {
+		if sid%2 == 0 {
+			// skip removed shards segments
+			continue
+		}
+
+		segments, readErr := dataSource.Next(baseCtx, 0, segmentSampleStorages)
+		s.Require().NoError(readErr)
+
+		s.Require().Len(segments, 1)
+		s.Require().Equal(sid, segments[0].ID)
+		s.Require().Equal(int64(sid), segments[0].MaxTimestamp)
+		s.Require().Equal(uint32(1), segments[0].SampleCount)
+		s.Require().Equal(uint32(0), segments[0].DroppedSamplesCount)
+		s.Require().Equal(uint32(0), segments[0].DroppedSeriesCount)
+		s.Require().Equal(uint32(0), segments[0].OutdatedSamplesCount)
+	}
+
+	segments, err := dataSource.Next(baseCtx, 0, segmentSampleStorages)
+	s.Require().ErrorIs(err, ErrEndOfBlock)
+	s.Require().Empty(segments)
+
+	rec.SetStatus(catalog.StatusRotated)
+	segments, err = dataSource.Next(baseCtx, 0, segmentSampleStorages)
+	s.Require().ErrorIs(err, ErrEndOfBlock)
+	s.Require().Empty(segments)
+}
+
+func (s *DataSourceRotatedSuite) TestUnknownFormatVersionV1() {
+	dataDir := s.T().TempDir()
+	numberOfSegments := uint32(10)
+	shardFilePaths := []string{
+		filepath.Join(dataDir, "shard_0.wal"),
+		filepath.Join(dataDir, "shard_1.wal"),
+	}
+	numberOfShards := uint16(len(shardFilePaths)) // #nosec G115 // no overflow
+	baseCtx := s.T().Context()
+
+	err := remotewritertest.WriteToShardWalFileV1Multi(
+		baseCtx,
+		shardFilePaths,
+		uint64(numberOfSegments),
+	)
+	s.Require().NoError(err)
+
+	s.Require().NoError(os.Remove(shardFilePaths[0]))
+
+	shardFile, err := os.OpenFile( // #nosec G304 // it's meant to be that way
+		shardFilePaths[0],
+		os.O_CREATE|os.O_RDWR,
+		0o600, //revive:disable-line:add-constant // file permissions simple readable as octa-number
+	)
+	s.Require().NoError(err)
+
+	_, err = writer.WriteHeader(shardFile, 42, cppbridge.EncodersVersion())
+	s.Require().NoError(err)
+
+	discardCache := true
+	rec := remotewritertest.MakeRecord(numberOfShards)
+	rec.SetLastAppendedSegmentID(numberOfSegments/2 - 1)
+	corruptMarker := CorruptMarkerFn(func(string) error { return nil })
+	clock := clockwork.NewRealClock()
+	dataSource, err := newDataSourceRotated(
+		dataDir,
+		DestinationConfig{},
+		numberOfShards,
+		discardCache,
+		clock,
+		corruptMarker,
+		rec,
+		s.segmentSize,
+	)
+	s.Require().NoError(err)
+	defer func() { s.Require().NoError(dataSource.Close()) }()
+
+	err = dataSource.Init(baseCtx, 0)
+	s.Require().NoError(err)
+
+	segmentSampleStorages := cppbridge.NewSegmentSamplesStorage(uint64(numberOfShards))
+	for sid := range numberOfSegments / 2 {
+		segments, readErr := dataSource.Next(baseCtx, 0, segmentSampleStorages)
+		s.Require().NoError(readErr)
+
+		s.Require().Len(segments, 1)
+		s.Require().Equal(sid, segments[0].ID)
+		s.Require().Equal(int64(sid*2+1), segments[0].MaxTimestamp)
+		s.Require().Equal(uint32(1), segments[0].SampleCount)
+		s.Require().Equal(uint32(0), segments[0].DroppedSamplesCount)
+		s.Require().Equal(uint32(0), segments[0].DroppedSeriesCount)
+		s.Require().Equal(uint32(0), segments[0].OutdatedSamplesCount)
+	}
+
+	segments, err := dataSource.Next(baseCtx, 0, segmentSampleStorages)
+	s.Require().ErrorIs(err, ErrEndOfBlock)
+	s.Require().Empty(segments)
+
+	rec.SetStatus(catalog.StatusRotated)
+	segments, err = dataSource.Next(baseCtx, 0, segmentSampleStorages)
+	s.Require().ErrorIs(err, ErrEndOfBlock)
+	s.Require().Empty(segments)
+}
+
+func (s *DataSourceRotatedSuite) TestUnknownFormatVersionV2() {
+	dataDir := s.T().TempDir()
+	numberOfSegments := uint32(10)
+	shardFilePaths := []string{
+		filepath.Join(dataDir, "shard_0.wal"),
+		filepath.Join(dataDir, "shard_1.wal"),
+	}
+	numberOfShards := uint16(len(shardFilePaths)) // #nosec G115 // no overflow
+	baseCtx := s.T().Context()
+	rec := remotewritertest.MakeRecord(numberOfShards)
+
+	err := remotewritertest.WriteToShardWalFileV2Multi(
+		baseCtx,
+		shardFilePaths,
+		uint64(numberOfSegments),
+		rec,
+	)
+	s.Require().NoError(err)
+
+	s.Require().NoError(os.Remove(shardFilePaths[0]))
+
+	shardFile, err := os.OpenFile( // #nosec G304 // it's meant to be that way
+		shardFilePaths[0],
+		os.O_CREATE|os.O_RDWR,
+		0o600, //revive:disable-line:add-constant // file permissions simple readable as octa-number
+	)
+	s.Require().NoError(err)
+
+	_, err = writer.WriteHeader(shardFile, 42, cppbridge.EncodersVersion())
+	s.Require().NoError(err)
+
+	discardCache := true
+	rec.SetLastAppendedSegmentID(numberOfSegments/2 - 1)
+	corruptMarker := CorruptMarkerFn(func(string) error { return nil })
+	clock := clockwork.NewRealClock()
+	dataSource, err := newDataSourceRotated(
+		dataDir,
+		DestinationConfig{},
+		numberOfShards,
+		discardCache,
+		clock,
+		corruptMarker,
+		rec,
+		s.segmentSize,
+	)
+	s.Require().NoError(err)
+	defer func() { s.Require().NoError(dataSource.Close()) }()
+
+	err = dataSource.Init(baseCtx, 0)
+	s.Require().NoError(err)
+
+	segmentSampleStorages := cppbridge.NewSegmentSamplesStorage(uint64(numberOfShards))
+	for sid := range numberOfSegments {
+		if sid%2 == 0 {
+			// skip removed shards segments
+			continue
+		}
+
+		segments, readErr := dataSource.Next(baseCtx, 0, segmentSampleStorages)
+		s.Require().NoError(readErr)
+
+		s.Require().Len(segments, 1)
+		s.Require().Equal(sid, segments[0].ID)
+		s.Require().Equal(int64(sid), segments[0].MaxTimestamp)
+		s.Require().Equal(uint32(1), segments[0].SampleCount)
+		s.Require().Equal(uint32(0), segments[0].DroppedSamplesCount)
+		s.Require().Equal(uint32(0), segments[0].DroppedSeriesCount)
+		s.Require().Equal(uint32(0), segments[0].OutdatedSamplesCount)
+	}
+
+	segments, err := dataSource.Next(baseCtx, 0, segmentSampleStorages)
+	s.Require().ErrorIs(err, ErrEndOfBlock)
+	s.Require().Empty(segments)
+
+	rec.SetStatus(catalog.StatusRotated)
+	segments, err = dataSource.Next(baseCtx, 0, segmentSampleStorages)
 	s.Require().ErrorIs(err, ErrEndOfBlock)
 	s.Require().Empty(segments)
 }
