@@ -170,11 +170,6 @@ struct Symbol {
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE const read_view_type& read_view() const noexcept { return read_view_; }
 
-    PROMPP_ALWAYS_INLINE void sync_read_view() noexcept {
-      read_view_.data = data_.data();
-      read_view_.items = items_.data();
-    }
-
     PROMPP_ALWAYS_INLINE void reserve(uint32_t count) noexcept {
       items_.reserve(count);
       sync_read_view();
@@ -268,6 +263,11 @@ struct Symbol {
     [[nodiscard]] PROMPP_ALWAYS_INLINE view_type view() const noexcept { return {.storage_ptr = this}; }
 
    private:
+    PROMPP_ALWAYS_INLINE void sync_read_view() noexcept {
+      read_view_.data = data_.data();
+      read_view_.items = items_.data();
+    }
+
     template <template <class> class>
     friend struct Symbol;
 
