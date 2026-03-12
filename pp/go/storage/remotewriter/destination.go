@@ -76,346 +76,9 @@ func (d *Destination) ResetConfig(cfg DestinationConfig) {
 //revive:disable-next-line:function-length // this is a constructor
 //nolint:gocritic // hugeParam // this is a constructor
 func NewDestination(cfg DestinationConfig) *Destination {
-	constLabels := prometheus.Labels{
-		remoteName: cfg.Name,
-		endpoint:   cfg.URL.Redacted(),
-	}
-
 	return &Destination{
-		config: cfg,
-		metrics: &DestinationMetrics{
-			samplesTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "samples_total",
-				Help:        "Total number of samples sent to remote storage.",
-				ConstLabels: constLabels,
-			}),
-			exemplarsTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "exemplars_total",
-				Help:        "Total number of exemplars sent to remote storage.",
-				ConstLabels: constLabels,
-			}),
-			histogramsTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "histograms_total",
-				Help:        "Total number of histograms sent to remote storage.",
-				ConstLabels: constLabels,
-			}),
-			metadataTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "metadata_total",
-				Help:        "Total number of metadata entries sent to remote storage.",
-				ConstLabels: constLabels,
-			}),
-			failedSamplesTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "samples_failed_total",
-				Help:        "Total number of samples which failed on send to remote storage, non-recoverable errors.",
-				ConstLabels: constLabels,
-			}),
-			failedExemplarsTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace: namespace,
-				Subsystem: subsystem,
-				Name:      "exemplars_failed_total",
-				//revive:disable-next-line:line-length-limit // this is a description of the metric
-				Help:        "Total number of exemplars which failed on send to remote storage, non-recoverable errors.",
-				ConstLabels: constLabels,
-			}),
-			failedHistogramsTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace: namespace,
-				Subsystem: subsystem,
-				Name:      "histograms_failed_total",
-				//revive:disable-next-line:line-length-limit // this is a description of the metric
-				Help:        "Total number of histograms which failed on send to remote storage, non-recoverable errors.",
-				ConstLabels: constLabels,
-			}),
-			failedMetadataTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace: namespace,
-				Subsystem: subsystem,
-				Name:      "metadata_failed_total",
-				//revive:disable-next-line:line-length-limit // this is a description of the metric
-				Help:        "Total number of metadata entries which failed on send to remote storage, non-recoverable errors.",
-				ConstLabels: constLabels,
-			}),
-			retriedSamplesTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace: namespace,
-				Subsystem: subsystem,
-				Name:      "samples_retried_total",
-				//revive:disable-next-line:line-length-limit // this is a description of the metric
-				Help:        "Total number of samples which failed on send to remote storage but were retried because the send error was recoverable.",
-				ConstLabels: constLabels,
-			}),
-			retriedExemplarsTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace: namespace,
-				Subsystem: subsystem,
-				Name:      "exemplars_retried_total",
-				//revive:disable-next-line:line-length-limit // this is a description of the metric
-				Help:        "Total number of exemplars which failed on send to remote storage but were retried because the send error was recoverable.",
-				ConstLabels: constLabels,
-			}),
-			retriedHistogramsTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace: namespace,
-				Subsystem: subsystem,
-				Name:      "histograms_retried_total",
-				//revive:disable-next-line:line-length-limit // this is a description of the metric
-				Help:        "Total number of histograms which failed on send to remote storage but were retried because the send error was recoverable.",
-				ConstLabels: constLabels,
-			}),
-			retriedMetadataTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace: namespace,
-				Subsystem: subsystem,
-				Name:      "metadata_retried_total",
-				//revive:disable-next-line:line-length-limit // this is a description of the metric
-				Help:        "Total number of metadata entries which failed on send to remote storage but were retried because the send error was recoverable.",
-				ConstLabels: constLabels,
-			}),
-			droppedSamplesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-				Namespace: namespace,
-				Subsystem: subsystem,
-				Name:      "samples_dropped_total",
-				//revive:disable-next-line:line-length-limit // this is a description of the metric
-				Help:        "Total number of samples which were dropped after being read from the WAL before being sent via remote write, either via relabelling, due to being too old or unintentionally because of an unknown reference ID.",
-				ConstLabels: constLabels,
-			}, []string{"reason"}),
-			addSeriesTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace: namespace,
-				Subsystem: subsystem,
-				Name:      "series_added_total",
-				//revive:disable-next-line:line-length-limit // this is a description of the metric
-				Help:        "Total number of series which were add after being read from the WAL before being sent via remote write, either via relabelling.",
-				ConstLabels: constLabels,
-			}),
-			droppedSeriesTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace: namespace,
-				Subsystem: subsystem,
-				Name:      "series_dropped_total",
-				//revive:disable-next-line:line-length-limit // this is a description of the metric
-				Help:        "Total number of series which were dropped after being read from the WAL before being sent via remote write, either via relabelling.",
-				ConstLabels: constLabels,
-			}),
-			droppedExemplarsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-				Namespace: namespace,
-				Subsystem: subsystem,
-				Name:      "exemplars_dropped_total",
-				//revive:disable-next-line:line-length-limit // this is a description of the metric
-				Help:        "Total number of exemplars which were dropped after being read from the WAL before being sent via remote write, either via relabelling, due to being too old or unintentionally because of an unknown reference ID.",
-				ConstLabels: constLabels,
-			}, []string{"reason"}),
-			droppedHistogramsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
-				Namespace: namespace,
-				Subsystem: subsystem,
-				Name:      "histograms_dropped_total",
-				//revive:disable-next-line:line-length-limit // this is a description of the metric
-				Help:        "Total number of histograms which were dropped after being read from the WAL before being sent via remote write, either via relabelling, due to being too old or unintentionally because of an unknown reference ID.",
-				ConstLabels: constLabels,
-			}, []string{"reason"}),
-			enqueueRetriesTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "enqueue_retries_total",
-				Help:        "Total number of times enqueue has failed because a shards queue was full.",
-				ConstLabels: constLabels,
-			}),
-			sentBatchDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
-				Namespace:                       namespace,
-				Subsystem:                       subsystem,
-				Name:                            "sent_batch_duration_seconds",
-				Help:                            "Duration of send batch to the remote storage.",
-				Buckets:                         append(prometheus.DefBuckets, 25, 60, 120, 300),
-				ConstLabels:                     constLabels,
-				NativeHistogramBucketFactor:     1.1,
-				NativeHistogramMaxBucketNumber:  100,
-				NativeHistogramMinResetDuration: 1 * time.Hour,
-			}),
-			sentMessageDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
-				Namespace:                       namespace,
-				Subsystem:                       subsystem,
-				Name:                            "sent_message_duration_seconds",
-				Help:                            "Duration of send one message from batch to the remote storage.",
-				Buckets:                         append(prometheus.DefBuckets, 25, 60, 120, 300),
-				ConstLabels:                     constLabels,
-				NativeHistogramBucketFactor:     1.1,
-				NativeHistogramMaxBucketNumber:  100,
-				NativeHistogramMinResetDuration: 1 * time.Hour,
-			}),
-			highestSentTimestamp: &maxTimestamp{
-				Gauge: prometheus.NewGauge(prometheus.GaugeOpts{
-					Namespace: namespace,
-					Subsystem: subsystem,
-					Name:      "queue_highest_sent_timestamp_seconds",
-					//revive:disable-next-line:line-length-limit // this is a description of the metric
-					Help:        "Timestamp from a WAL sample, the highest timestamp successfully sent by this queue, in seconds since epoch.",
-					ConstLabels: constLabels,
-				}),
-			},
-			pendingSamples: prometheus.NewGauge(prometheus.GaugeOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "samples_pending",
-				Help:        "The number of samples pending in the queues shards to be sent to the remote storage.",
-				ConstLabels: constLabels,
-			}),
-			pendingExemplars: prometheus.NewGauge(prometheus.GaugeOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "exemplars_pending",
-				Help:        "The number of exemplars pending in the queues shards to be sent to the remote storage.",
-				ConstLabels: constLabels,
-			}),
-			pendingHistograms: prometheus.NewGauge(prometheus.GaugeOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "histograms_pending",
-				Help:        "The number of histograms pending in the queues shards to be sent to the remote storage.",
-				ConstLabels: constLabels,
-			}),
-			shardCapacity: prometheus.NewGauge(prometheus.GaugeOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "shard_capacity",
-				Help:        "The capacity of each shard of the queue used for parallel sending to the remote storage.",
-				ConstLabels: constLabels,
-			}),
-			numShards: prometheus.NewGauge(prometheus.GaugeOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "shards",
-				Help:        "The number of shards used for parallel sending to the remote storage.",
-				ConstLabels: constLabels,
-			}),
-			maxNumShards: prometheus.NewGauge(prometheus.GaugeOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "shards_max",
-				Help:        "The maximum number of shards that the queue is allowed to run.",
-				ConstLabels: constLabels,
-			}),
-			minNumShards: prometheus.NewGauge(prometheus.GaugeOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "shards_min",
-				Help:        "The minimum number of shards that the queue is allowed to run.",
-				ConstLabels: constLabels,
-			}),
-			desiredNumShards: prometheus.NewGauge(prometheus.GaugeOpts{
-				Namespace: namespace,
-				Subsystem: subsystem,
-				Name:      "shards_desired",
-				//revive:disable-next-line:line-length-limit // this is a description of the metric
-				Help:        "The number of shards that the queues shard calculation wants to run based on the rate of samples in vs. samples out.",
-				ConstLabels: constLabels,
-			}),
-			bestNumShards: prometheus.NewGauge(prometheus.GaugeOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "shards_best",
-				Help:        "The number of shards that are calculated from the actual number of accumulated segments.",
-				ConstLabels: constLabels,
-			}),
-			sentBytesTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace: namespace,
-				Subsystem: subsystem,
-				Name:      "bytes_total",
-				//revive:disable-next-line:line-length-limit // this is a description of the metric
-				Help:        "The total number of bytes of data (not metadata) sent by the queue after compression. Note that when exemplars over remote write is enabled the exemplars included in a remote write request count towards this metric.",
-				ConstLabels: constLabels,
-			}),
-			metadataBytesTotal: prometheus.NewCounter(prometheus.CounterOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "metadata_bytes_total",
-				Help:        "The total number of bytes of metadata sent by the queue after compression.",
-				ConstLabels: constLabels,
-			}),
-			maxSamplesPerSend: prometheus.NewGauge(prometheus.GaugeOpts{
-				Namespace: namespace,
-				Subsystem: subsystem,
-				Name:      "max_samples_per_send",
-				//revive:disable-next-line:line-length-limit // this is a description of the metric
-				Help:        "The maximum number of samples to be sent, in a single request, to the remote storage. Note that, when sending of exemplars over remote write is enabled, exemplars count towards this limt.",
-				ConstLabels: constLabels,
-			}),
-			unexpectedEOFCount: prometheus.NewCounter(
-				prometheus.CounterOpts{
-					Namespace:   namespace,
-					Subsystem:   subsystem,
-					Name:        "unexpected_eof_count",
-					Help:        "Number of eof occurred during reading active head wal",
-					ConstLabels: constLabels,
-				},
-			),
-			segmentSizeInBytes: prometheus.NewHistogram(
-				prometheus.HistogramOpts{
-					Namespace:   namespace,
-					Subsystem:   subsystem,
-					Name:        "segment_size_bytes",
-					Help:        "Size of segment.",
-					ConstLabels: constLabels,
-					Buckets: []float64{
-						1 << 10, 1 << 11, 1 << 12, 1 << 13, 1 << 14, 1 << 15,
-						1 << 16, 1 << 17, 1 << 18, 1 << 19, 1 << 20,
-					},
-				},
-			),
-			generateBatchDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
-				Namespace:                       namespace,
-				Subsystem:                       subsystem,
-				Name:                            "generate_batch_duration_seconds",
-				Help:                            "Duration of generate batch calls.",
-				Buckets:                         []float64{0},
-				ConstLabels:                     constLabels,
-				NativeHistogramBucketFactor:     1.1,
-				NativeHistogramMaxBucketNumber:  100,
-				NativeHistogramMinResetDuration: 1 * time.Hour,
-			}),
-			readSegmentDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
-				Namespace:                       namespace,
-				Subsystem:                       subsystem,
-				Name:                            "read_segment_duration_seconds",
-				Help:                            "Duration of read wal segment.",
-				Buckets:                         []float64{0},
-				ConstLabels:                     constLabels,
-				NativeHistogramBucketFactor:     1.1,
-				NativeHistogramMaxBucketNumber:  100,
-				NativeHistogramMinResetDuration: 1 * time.Hour,
-			}),
-			encodeBatchDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
-				Namespace:                       namespace,
-				Subsystem:                       subsystem,
-				Name:                            "encode_batch_duration_seconds",
-				Help:                            "Duration of encode batch.",
-				Buckets:                         []float64{0},
-				ConstLabels:                     constLabels,
-				NativeHistogramBucketFactor:     1.1,
-				NativeHistogramMaxBucketNumber:  100,
-				NativeHistogramMinResetDuration: 1 * time.Hour,
-			}),
-			numberOfMsg: prometheus.NewHistogram(prometheus.HistogramOpts{
-				Namespace: namespace,
-				Subsystem: subsystem,
-				Name:      "number_of_msg",
-				Help:      "Number of messages.",
-				Buckets: []float64{
-					10, 20, 30, 40, 50, 60, 70, 80, 90, 100,
-					110, 120, 130, 140, 150, 160, 170, 180, 190, 200,
-				},
-				ConstLabels: constLabels,
-			}),
-			numberOfsamples: prometheus.NewHistogram(prometheus.HistogramOpts{
-				Namespace:   namespace,
-				Subsystem:   subsystem,
-				Name:        "number_of_samples",
-				Help:        "Number of samples.",
-				Buckets:     []float64{100, 500, 1000, 1250, 1500, 1750, 2000, 2250, 2500},
-				ConstLabels: constLabels,
-			}),
-		},
+		config:  cfg,
+		metrics: newDestinationMetrics(cfg.Name, cfg.URL.Redacted()),
 	}
 }
 
@@ -595,4 +258,346 @@ type DestinationMetrics struct {
 	encodeBatchDuration    prometheus.Histogram
 	numberOfMsg            prometheus.Histogram
 	numberOfsamples        prometheus.Histogram
+}
+
+// newDestinationMetrics creates a new [DestinationMetrics].
+func newDestinationMetrics(name, endpoint string) *DestinationMetrics {
+	constLabels := prometheus.Labels{
+		remoteName: name,
+		endpoint:   endpoint,
+	}
+
+	return &DestinationMetrics{
+		samplesTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace:   namespace,
+			Subsystem:   subsystem,
+			Name:        "samples_total",
+			Help:        "Total number of samples sent to remote storage.",
+			ConstLabels: constLabels,
+		}),
+		exemplarsTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace:   namespace,
+			Subsystem:   subsystem,
+			Name:        "exemplars_total",
+			Help:        "Total number of exemplars sent to remote storage.",
+			ConstLabels: constLabels,
+		}),
+		histogramsTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace:   namespace,
+			Subsystem:   subsystem,
+			Name:        "histograms_total",
+			Help:        "Total number of histograms sent to remote storage.",
+			ConstLabels: constLabels,
+		}),
+		metadataTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace:   namespace,
+			Subsystem:   subsystem,
+			Name:        "metadata_total",
+			Help:        "Total number of metadata entries sent to remote storage.",
+			ConstLabels: constLabels,
+		}),
+		failedSamplesTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace:   namespace,
+			Subsystem:   subsystem,
+			Name:        "samples_failed_total",
+			Help:        "Total number of samples which failed on send to remote storage, non-recoverable errors.",
+			ConstLabels: constLabels,
+		}),
+		failedExemplarsTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "exemplars_failed_total",
+			//revive:disable-next-line:line-length-limit // this is a description of the metric
+			Help:        "Total number of exemplars which failed on send to remote storage, non-recoverable errors.",
+			ConstLabels: constLabels,
+		}),
+		failedHistogramsTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "histograms_failed_total",
+			//revive:disable-next-line:line-length-limit // this is a description of the metric
+			Help:        "Total number of histograms which failed on send to remote storage, non-recoverable errors.",
+			ConstLabels: constLabels,
+		}),
+		failedMetadataTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "metadata_failed_total",
+			//revive:disable-next-line:line-length-limit // this is a description of the metric
+			Help:        "Total number of metadata entries which failed on send to remote storage, non-recoverable errors.",
+			ConstLabels: constLabels,
+		}),
+		retriedSamplesTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "samples_retried_total",
+			//revive:disable-next-line:line-length-limit // this is a description of the metric
+			Help:        "Total number of samples which failed on send to remote storage but were retried because the send error was recoverable.",
+			ConstLabels: constLabels,
+		}),
+		retriedExemplarsTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "exemplars_retried_total",
+			//revive:disable-next-line:line-length-limit // this is a description of the metric
+			Help:        "Total number of exemplars which failed on send to remote storage but were retried because the send error was recoverable.",
+			ConstLabels: constLabels,
+		}),
+		retriedHistogramsTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "histograms_retried_total",
+			//revive:disable-next-line:line-length-limit // this is a description of the metric
+			Help:        "Total number of histograms which failed on send to remote storage but were retried because the send error was recoverable.",
+			ConstLabels: constLabels,
+		}),
+		retriedMetadataTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "metadata_retried_total",
+			//revive:disable-next-line:line-length-limit // this is a description of the metric
+			Help:        "Total number of metadata entries which failed on send to remote storage but were retried because the send error was recoverable.",
+			ConstLabels: constLabels,
+		}),
+		droppedSamplesTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "samples_dropped_total",
+			//revive:disable-next-line:line-length-limit // this is a description of the metric
+			Help:        "Total number of samples which were dropped after being read from the WAL before being sent via remote write, either via relabelling, due to being too old or unintentionally because of an unknown reference ID.",
+			ConstLabels: constLabels,
+		}, []string{"reason"}),
+		addSeriesTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "series_added_total",
+			//revive:disable-next-line:line-length-limit // this is a description of the metric
+			Help:        "Total number of series which were add after being read from the WAL before being sent via remote write, either via relabelling.",
+			ConstLabels: constLabels,
+		}),
+		droppedSeriesTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "series_dropped_total",
+			//revive:disable-next-line:line-length-limit // this is a description of the metric
+			Help:        "Total number of series which were dropped after being read from the WAL before being sent via remote write, either via relabelling.",
+			ConstLabels: constLabels,
+		}),
+		droppedExemplarsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "exemplars_dropped_total",
+			//revive:disable-next-line:line-length-limit // this is a description of the metric
+			Help:        "Total number of exemplars which were dropped after being read from the WAL before being sent via remote write, either via relabelling, due to being too old or unintentionally because of an unknown reference ID.",
+			ConstLabels: constLabels,
+		}, []string{"reason"}),
+		droppedHistogramsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "histograms_dropped_total",
+			//revive:disable-next-line:line-length-limit // this is a description of the metric
+			Help:        "Total number of histograms which were dropped after being read from the WAL before being sent via remote write, either via relabelling, due to being too old or unintentionally because of an unknown reference ID.",
+			ConstLabels: constLabels,
+		}, []string{"reason"}),
+		enqueueRetriesTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace:   namespace,
+			Subsystem:   subsystem,
+			Name:        "enqueue_retries_total",
+			Help:        "Total number of times enqueue has failed because a shards queue was full.",
+			ConstLabels: constLabels,
+		}),
+		sentBatchDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Namespace:                       namespace,
+			Subsystem:                       subsystem,
+			Name:                            "sent_batch_duration_seconds",
+			Help:                            "Duration of send batch to the remote storage.",
+			Buckets:                         append(prometheus.DefBuckets, 25, 60, 120, 300),
+			ConstLabels:                     constLabels,
+			NativeHistogramBucketFactor:     1.1,
+			NativeHistogramMaxBucketNumber:  100,
+			NativeHistogramMinResetDuration: 1 * time.Hour,
+		}),
+		sentMessageDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Namespace:                       namespace,
+			Subsystem:                       subsystem,
+			Name:                            "sent_message_duration_seconds",
+			Help:                            "Duration of send one message from batch to the remote storage.",
+			Buckets:                         append(prometheus.DefBuckets, 25, 60, 120, 300),
+			ConstLabels:                     constLabels,
+			NativeHistogramBucketFactor:     1.1,
+			NativeHistogramMaxBucketNumber:  100,
+			NativeHistogramMinResetDuration: 1 * time.Hour,
+		}),
+		highestSentTimestamp: &maxTimestamp{
+			Gauge: prometheus.NewGauge(prometheus.GaugeOpts{
+				Namespace: namespace,
+				Subsystem: subsystem,
+				Name:      "queue_highest_sent_timestamp_seconds",
+				//revive:disable-next-line:line-length-limit // this is a description of the metric
+				Help:        "Timestamp from a WAL sample, the highest timestamp successfully sent by this queue, in seconds since epoch.",
+				ConstLabels: constLabels,
+			}),
+		},
+		pendingSamples: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace:   namespace,
+			Subsystem:   subsystem,
+			Name:        "samples_pending",
+			Help:        "The number of samples pending in the queues shards to be sent to the remote storage.",
+			ConstLabels: constLabels,
+		}),
+		pendingExemplars: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace:   namespace,
+			Subsystem:   subsystem,
+			Name:        "exemplars_pending",
+			Help:        "The number of exemplars pending in the queues shards to be sent to the remote storage.",
+			ConstLabels: constLabels,
+		}),
+		pendingHistograms: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace:   namespace,
+			Subsystem:   subsystem,
+			Name:        "histograms_pending",
+			Help:        "The number of histograms pending in the queues shards to be sent to the remote storage.",
+			ConstLabels: constLabels,
+		}),
+		shardCapacity: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace:   namespace,
+			Subsystem:   subsystem,
+			Name:        "shard_capacity",
+			Help:        "The capacity of each shard of the queue used for parallel sending to the remote storage.",
+			ConstLabels: constLabels,
+		}),
+		numShards: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace:   namespace,
+			Subsystem:   subsystem,
+			Name:        "shards",
+			Help:        "The number of shards used for parallel sending to the remote storage.",
+			ConstLabels: constLabels,
+		}),
+		maxNumShards: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace:   namespace,
+			Subsystem:   subsystem,
+			Name:        "shards_max",
+			Help:        "The maximum number of shards that the queue is allowed to run.",
+			ConstLabels: constLabels,
+		}),
+		minNumShards: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace:   namespace,
+			Subsystem:   subsystem,
+			Name:        "shards_min",
+			Help:        "The minimum number of shards that the queue is allowed to run.",
+			ConstLabels: constLabels,
+		}),
+		desiredNumShards: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "shards_desired",
+			//revive:disable-next-line:line-length-limit // this is a description of the metric
+			Help:        "The number of shards that the queues shard calculation wants to run based on the rate of samples in vs. samples out.",
+			ConstLabels: constLabels,
+		}),
+		bestNumShards: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace:   namespace,
+			Subsystem:   subsystem,
+			Name:        "shards_best",
+			Help:        "The number of shards that are calculated from the actual number of accumulated segments.",
+			ConstLabels: constLabels,
+		}),
+		sentBytesTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "bytes_total",
+			//revive:disable-next-line:line-length-limit // this is a description of the metric
+			Help:        "The total number of bytes of data (not metadata) sent by the queue after compression. Note that when exemplars over remote write is enabled the exemplars included in a remote write request count towards this metric.",
+			ConstLabels: constLabels,
+		}),
+		metadataBytesTotal: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace:   namespace,
+			Subsystem:   subsystem,
+			Name:        "metadata_bytes_total",
+			Help:        "The total number of bytes of metadata sent by the queue after compression.",
+			ConstLabels: constLabels,
+		}),
+		maxSamplesPerSend: prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "max_samples_per_send",
+			//revive:disable-next-line:line-length-limit // this is a description of the metric
+			Help:        "The maximum number of samples to be sent, in a single request, to the remote storage. Note that, when sending of exemplars over remote write is enabled, exemplars count towards this limt.",
+			ConstLabels: constLabels,
+		}),
+		unexpectedEOFCount: prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Namespace:   namespace,
+				Subsystem:   subsystem,
+				Name:        "unexpected_eof_count",
+				Help:        "Number of eof occurred during reading active head wal",
+				ConstLabels: constLabels,
+			},
+		),
+		segmentSizeInBytes: prometheus.NewHistogram(
+			prometheus.HistogramOpts{
+				Namespace:   namespace,
+				Subsystem:   subsystem,
+				Name:        "segment_size_bytes",
+				Help:        "Size of segment.",
+				ConstLabels: constLabels,
+				Buckets: []float64{
+					1 << 10, 1 << 11, 1 << 12, 1 << 13, 1 << 14, 1 << 15,
+					1 << 16, 1 << 17, 1 << 18, 1 << 19, 1 << 20,
+				},
+			},
+		),
+		generateBatchDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Namespace:                       namespace,
+			Subsystem:                       subsystem,
+			Name:                            "generate_batch_duration_seconds",
+			Help:                            "Duration of generate batch calls.",
+			Buckets:                         []float64{0},
+			ConstLabels:                     constLabels,
+			NativeHistogramBucketFactor:     1.1,
+			NativeHistogramMaxBucketNumber:  100,
+			NativeHistogramMinResetDuration: 1 * time.Hour,
+		}),
+		readSegmentDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Namespace:                       namespace,
+			Subsystem:                       subsystem,
+			Name:                            "read_segment_duration_seconds",
+			Help:                            "Duration of read wal segment.",
+			Buckets:                         []float64{0},
+			ConstLabels:                     constLabels,
+			NativeHistogramBucketFactor:     1.1,
+			NativeHistogramMaxBucketNumber:  100,
+			NativeHistogramMinResetDuration: 1 * time.Hour,
+		}),
+		encodeBatchDuration: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Namespace:                       namespace,
+			Subsystem:                       subsystem,
+			Name:                            "encode_batch_duration_seconds",
+			Help:                            "Duration of encode batch.",
+			Buckets:                         []float64{0},
+			ConstLabels:                     constLabels,
+			NativeHistogramBucketFactor:     1.1,
+			NativeHistogramMaxBucketNumber:  100,
+			NativeHistogramMinResetDuration: 1 * time.Hour,
+		}),
+		numberOfMsg: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "number_of_msg",
+			Help:      "Number of messages.",
+			Buckets: []float64{
+				10, 20, 30, 40, 50, 60, 70, 80, 90, 100,
+				110, 120, 130, 140, 150, 160, 170, 180, 190, 200,
+			},
+			ConstLabels: constLabels,
+		}),
+		numberOfsamples: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Namespace:   namespace,
+			Subsystem:   subsystem,
+			Name:        "number_of_samples",
+			Help:        "Number of samples.",
+			Buckets:     []float64{100, 500, 1000, 1250, 1500, 1750, 2000, 2250, 2500},
+			ConstLabels: constLabels,
+		}),
+	}
 }

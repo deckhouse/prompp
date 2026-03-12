@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal"
 	"github.com/prometheus/prometheus/pp/go/storage/head/shard/wal/writer"
 	"github.com/prometheus/prometheus/pp/go/util"
+	"github.com/prometheus/prometheus/prompb"
 )
 
 // defaultMaxSegmentSize default max segment size for test.
@@ -189,7 +190,7 @@ func walWriteSingle(
 func WriteToShardWalFileV1Multi(
 	ctx context.Context,
 	shardFilePaths []string,
-	numberOfSegments uint64,
+	tss *TimeSeries,
 ) error {
 	lsses := make([]*shard.LSS, len(shardFilePaths))
 	wls := make(
@@ -226,14 +227,14 @@ func WriteToShardWalFileV1Multi(
 		defer wls[i].Close()
 	}
 
-	return walWriteMulti(ctx, lsses, wls, numberOfSegments)
+	return walWriteMulti(ctx, lsses, wls, tss)
 }
 
 // WriteToShardWalFileV2Multi write to shard wal file v2 the specified number of segments.
 func WriteToShardWalFileV2Multi(
 	ctx context.Context,
 	shardFilePaths []string,
-	numberOfSegments uint64,
+	tss *TimeSeries,
 	headRecord *catalog.Record,
 ) error {
 	lsses := make([]*shard.LSS, len(shardFilePaths))
@@ -272,7 +273,7 @@ func WriteToShardWalFileV2Multi(
 		defer wls[i].Close()
 	}
 
-	return walWriteMulti(ctx, lsses, wls, numberOfSegments)
+	return walWriteMulti(ctx, lsses, wls, tss)
 }
 
 // walWriteMulti write to shard wal files the specified number of segments.
@@ -280,7 +281,7 @@ func walWriteMulti(
 	ctx context.Context,
 	lsses []*shard.LSS,
 	wls []*wal.Wal[*cppbridge.HeadEncodedSegment, *writer.Buffered[*cppbridge.HeadEncodedSegment]],
-	numberOfSegments uint64,
+	tss *TimeSeries,
 ) error {
 	hLimits := cppbridge.DefaultWALHashdexLimits()
 	numberOfShards := uint64(len(wls))
@@ -292,14 +293,8 @@ func walWriteMulti(
 		states[i] = cppbridge.NewTransitionStateV2WithoutLock()
 	}
 
-	for i := range numberOfSegments {
-		hx, err := (cppbridge.HashdexFactory{}).GoModel([]model.TimeSeries{
-			{
-				LabelSet:  model.LabelSetFromPairs("__name__", "test"),
-				Timestamp: i,
-				Value:     float64(i),
-			},
-		}, hLimits)
+	for i := range tss.data {
+		hx, err := (cppbridge.HashdexFactory{}).GoModel(tss.data[i], hLimits)
 		if err != nil {
 			return fmt.Errorf("failed to create hashdex: %w", err)
 		}
@@ -307,7 +302,7 @@ func walWriteMulti(
 		innerSeries := cppbridge.NewShardedInnerSeries(1).DataByShard(0)
 		shardsRelabeledSeries := cppbridge.NewShardedRelabeledSeries(1).DataByShard(0)
 
-		shardID := i % numberOfShards
+		shardID := uint64(i) % numberOfShards // #nosec G115 // no overflow
 
 		if err = lsses[shardID].WithLock(func(target, input *cppbridge.LabelSetStorage) error {
 			_, _, rErr := relabelers[shardID].Relabeling(
@@ -342,4 +337,69 @@ func walWriteMulti(
 	}
 
 	return nil
+}
+
+//
+// TimeSeries
+//
+
+// TimeSeries represents a collection of time series.
+type TimeSeries struct {
+	data [][]model.TimeSeries
+}
+
+// NewTimeSeries creates a new [TimeSeries].
+func NewTimeSeries(n uint64) *TimeSeries {
+	return &TimeSeries{
+		data: make([][]model.TimeSeries, 0, n),
+	}
+}
+
+// GenerateTimeSeries generates a new [TimeSeries] with the specified number of time series.
+func GenerateTimeSeries(startTimestamp int64, n uint64) *TimeSeries {
+	tss := NewTimeSeries(n)
+	for i := range n {
+		tss.Add(model.TimeSeries{
+			LabelSet:  model.LabelSetFromPairs("__name__", fmt.Sprintf("test_%d", i)),
+			Timestamp: uint64(startTimestamp) + i, // #nosec G115 // no overflow
+			Value:     float64(i),
+		})
+	}
+
+	return tss
+}
+
+// Add adds the specified time series to the [TimeSeries].
+func (tss *TimeSeries) Add(ts ...model.TimeSeries) {
+	tss.data = append(tss.data, ts)
+}
+
+// ToWriteRequest converts the [TimeSeries] to a [prompb.WriteRequest].
+func (tss *TimeSeries) ToWriteRequest() *prompb.WriteRequest {
+	wr := &prompb.WriteRequest{}
+	for _, mtss := range tss.data {
+		for _, ts := range mtss {
+			labels := make([]prompb.Label, 0, ts.LabelSet.Len())
+			ts.LabelSet.Range(func(lname string, lvalue string) bool {
+				labels = append(labels, prompb.Label{
+					Name:  lname,
+					Value: lvalue,
+				})
+
+				return true
+			})
+
+			wr.Timeseries = append(wr.Timeseries, prompb.TimeSeries{
+				Labels: labels,
+				Samples: []prompb.Sample{
+					{
+						Timestamp: int64(ts.Timestamp), // #nosec G115 // no overflow
+						Value:     ts.Value,
+					},
+				},
+			})
+		}
+	}
+
+	return wr
 }

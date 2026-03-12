@@ -20,6 +20,7 @@ import (
 
 //go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg mock --out
 //go:generate moq mock/protobuf_writer.go . ProtobufWriter
+//go:generate moq mock/target_segment_id_set_closer.go . TargetSegmentIDSetCloser
 
 //
 // DataSourceV2
@@ -252,7 +253,8 @@ readLoop:
 	// so we can predict number of samples per scrape interval as
 	// scrapeInterval / readDuration * numberOfSamplesInBatch
 	// next step is to divide it by max samples per shard to get desired number of shards.
-	desiredNumberOfShards := float64(i.scrapeInterval) / float64(readDuration) * float64(b.NumberOfSamples()) / float64(b.MaxNumberOfSamplesPerShard())
+	desiredNumberOfShards := float64(i.scrapeInterval) / float64(readDuration) *
+		float64(b.NumberOfSamples()) / float64(b.MaxNumberOfSamplesPerShard())
 
 	numberOfMessages := math.Ceil(float64(b.NumberOfSamples()) / float64(b.MaxNumberOfSamplesPerShard()))
 	bestNumberOfShards := i.outputSharder.BestNumberOfShards(numberOfMessages)
@@ -270,6 +272,7 @@ readLoop:
 	return msg, nil
 }
 
+// SendMessage sends the message to the remote storage.
 func (i *Iterator) SendMessage(ctx context.Context, msg *cppbridge.RWMessageList) error {
 	i.metrics.samplesTotal.Add(float64(msg.NumberOfSamples()))
 	i.metrics.numberOfMsg.Observe(float64(len(msg.Messages)))
@@ -445,8 +448,8 @@ func (i *Iterator) Close() error {
 	return errors.Join(i.dataSource.Close(), i.targetSegmentIDSetCloser.Close())
 }
 
+// batch is a accumulate samples from decoded segments.
 type batch struct {
-	segments                   []*DecodedSegment
 	segmentSampleStorages      *cppbridge.SegmentSamplesStorageList
 	numberOfShards             int
 	numberOfSamples            int
@@ -468,6 +471,7 @@ func newBatch(numberOfHeadShards, numberOfShards, maxNumberOfSamplesPerShard int
 	}
 }
 
+// add adds the samples stats to the batch.
 func (b *batch) add(segments []*DecodedSegment) {
 	for _, segment := range segments {
 		b.numberOfSamples += int(segment.SampleCount)
@@ -478,22 +482,27 @@ func (b *batch) add(segments []*DecodedSegment) {
 	}
 }
 
+// IsFilled checks if the batch is filled.
 func (b *batch) IsFilled() bool {
 	return b.numberOfSamples > b.numberOfShards*b.maxNumberOfSamplesPerShard
 }
 
+// IsEmpty checks if the batch is empty.
 func (b *batch) IsEmpty() bool {
 	return b.numberOfSamples == 0
 }
 
+// HasDroppedSamples checks if the batch has dropped samples.
 func (b *batch) HasDroppedSamples() bool {
 	return b.droppedSamplesCount > 0 || b.outdatedSamplesCount > 0
 }
 
+// OutdatedSamplesCount number of outdated samples.
 func (b *batch) OutdatedSamplesCount() uint32 {
 	return b.outdatedSamplesCount
 }
 
+// DroppedSamplesCount number of dropped samples.
 func (b *batch) DroppedSamplesCount() uint32 {
 	return b.droppedSamplesCount
 }
@@ -508,18 +517,17 @@ func (b *batch) DroppedSeriesCount() uint32 {
 	return b.droppedSeriesCount
 }
 
+// NumberOfSamples the total number of samples.
 func (b *batch) NumberOfSamples() int {
 	return b.numberOfSamples
 }
 
+// MaxNumberOfSamplesPerShard the maximum number of samples per shard.
 func (b *batch) MaxNumberOfSamplesPerShard() int {
 	return b.maxNumberOfSamplesPerShard
 }
 
+// NumberOfShards the number of shards.
 func (b *batch) NumberOfShards() int {
 	return b.numberOfShards
-}
-
-func (b *batch) Data() []*DecodedSegment {
-	return b.segments
 }

@@ -40,11 +40,12 @@ func (s *ShardSuite) TestReadV1() {
 	}
 	decoderStateFileName := filepath.Join(dataDir, fmt.Sprintf("shard_%d.state", shardID))
 	numberOfSegments := uint32(10)
+	startTimestamp := int64(0)
 
 	err := remotewritertest.WriteToShardWalFileV1Multi(
 		s.T().Context(),
 		shardFilePaths,
-		uint64(numberOfSegments),
+		remotewritertest.GenerateTimeSeries(startTimestamp, uint64(numberOfSegments)),
 	)
 	s.Require().NoError(err)
 
@@ -92,8 +93,14 @@ func (s *ShardSuite) TestReadV2() {
 	decoderStateFileName := filepath.Join(dataDir, fmt.Sprintf("shard_%d.state", shardID))
 	numberOfSegments := uint32(10)
 	rec := remotewritertest.MakeRecord(1)
+	startTimestamp := int64(0)
 
-	err := remotewritertest.WriteToShardWalFileV2Multi(s.T().Context(), shardFilePaths, uint64(numberOfSegments), rec)
+	err := remotewritertest.WriteToShardWalFileV2Multi(
+		s.T().Context(),
+		shardFilePaths,
+		remotewritertest.GenerateTimeSeries(startTimestamp, uint64(numberOfSegments)),
+		rec,
+	)
 	s.Require().NoError(err)
 
 	shard, err := newShard(
@@ -138,8 +145,13 @@ func (s *ShardSuite) TestSkipSegmentsV1() {
 	}
 	decoderStateFileName := filepath.Join(dataDir, fmt.Sprintf("shard_%d.state", shardID))
 	numberOfSegments := uint32(10)
+	startTimestamp := int64(0)
 
-	err := remotewritertest.WriteToShardWalFileV1Multi(s.T().Context(), shardFilePaths, uint64(numberOfSegments))
+	err := remotewritertest.WriteToShardWalFileV1Multi(
+		s.T().Context(),
+		shardFilePaths,
+		remotewritertest.GenerateTimeSeries(startTimestamp, uint64(numberOfSegments)),
+	)
 	s.Require().NoError(err)
 
 	shard, err := newShard(
@@ -177,8 +189,14 @@ func (s *ShardSuite) TestSkipSegmentsV2() {
 	decoderStateFileName := filepath.Join(dataDir, fmt.Sprintf("shard_%d.state", shardID))
 	numberOfSegments := uint32(10)
 	rec := remotewritertest.MakeRecord(1)
+	startTimestamp := int64(0)
 
-	err := remotewritertest.WriteToShardWalFileV2Multi(s.T().Context(), shardFilePaths, uint64(numberOfSegments), rec)
+	err := remotewritertest.WriteToShardWalFileV2Multi(
+		s.T().Context(),
+		shardFilePaths,
+		remotewritertest.GenerateTimeSeries(startTimestamp, uint64(numberOfSegments)),
+		rec,
+	)
 	s.Require().NoError(err)
 
 	shard, err := newShard(
@@ -271,8 +289,13 @@ func (s *ShardRotatedSuite) TestReadV1() {
 	}
 	decoderStateFileName := filepath.Join(dataDir, fmt.Sprintf("shard_%d.state", shardID))
 	numberOfSegments := uint32(10)
+	startTimestamp := int64(0)
 
-	err := remotewritertest.WriteToShardWalFileV1Multi(s.T().Context(), shardFilePaths, uint64(numberOfSegments))
+	err := remotewritertest.WriteToShardWalFileV1Multi(
+		s.T().Context(),
+		shardFilePaths,
+		remotewritertest.GenerateTimeSeries(startTimestamp, uint64(numberOfSegments)),
+	)
 	s.Require().NoError(err)
 
 	shard, err := newShardRotated(
@@ -332,9 +355,15 @@ func (s *ShardRotatedSuite) TestReadV2() {
 	}
 	decoderStateFileName := filepath.Join(dataDir, fmt.Sprintf("shard_%d.state", shardID))
 	numberOfSegments := uint32(10)
+	startTimestamp := int64(0)
 	rec := remotewritertest.MakeRecord(1)
 
-	err := remotewritertest.WriteToShardWalFileV2Multi(s.T().Context(), shardFilePaths, uint64(numberOfSegments), rec)
+	err := remotewritertest.WriteToShardWalFileV2Multi(
+		s.T().Context(),
+		shardFilePaths,
+		remotewritertest.GenerateTimeSeries(startTimestamp, uint64(numberOfSegments)),
+		rec,
+	)
 	s.Require().NoError(err)
 
 	shard, err := newShardRotated(
@@ -393,8 +422,13 @@ func (s *ShardRotatedSuite) TestSkipSegmentsV1() {
 	}
 	decoderStateFileName := filepath.Join(dataDir, fmt.Sprintf("shard_%d.state", shardID))
 	numberOfSegments := uint32(10)
+	startTimestamp := int64(0)
 
-	err := remotewritertest.WriteToShardWalFileV1Multi(s.T().Context(), shardFilePaths, uint64(numberOfSegments))
+	err := remotewritertest.WriteToShardWalFileV1Multi(
+		s.T().Context(),
+		shardFilePaths,
+		remotewritertest.GenerateTimeSeries(startTimestamp, uint64(numberOfSegments)),
+	)
 	s.Require().NoError(err)
 
 	shard, err := newShardRotated(
@@ -458,8 +492,14 @@ func (s *ShardRotatedSuite) TestSkipSegmentsV2() {
 	decoderStateFileName := filepath.Join(dataDir, fmt.Sprintf("shard_%d.state", shardID))
 	numberOfSegments := uint32(10)
 	rec := remotewritertest.MakeRecord(1)
+	startTimestamp := int64(0)
 
-	err := remotewritertest.WriteToShardWalFileV2Multi(s.T().Context(), shardFilePaths, uint64(numberOfSegments), rec)
+	err := remotewritertest.WriteToShardWalFileV2Multi(
+		s.T().Context(),
+		shardFilePaths,
+		remotewritertest.GenerateTimeSeries(startTimestamp, uint64(numberOfSegments)),
+		rec,
+	)
 	s.Require().NoError(err)
 
 	shard, err := newShardRotated(
@@ -598,8 +638,13 @@ func (s *ShardRotatedSuite) TestV1CorruptedSegmentTruncate() {
 	}
 	decoderStateFileName := filepath.Join(dataDir, fmt.Sprintf("shard_%d.state", shardID))
 	numberOfSegments := uint32(2)
+	startTimestamp := int64(0)
 
-	err := remotewritertest.WriteToShardWalFileV1Multi(s.T().Context(), shardFilePaths, uint64(numberOfSegments))
+	err := remotewritertest.WriteToShardWalFileV1Multi(
+		s.T().Context(),
+		shardFilePaths,
+		remotewritertest.GenerateTimeSeries(startTimestamp, uint64(numberOfSegments)),
+	)
 	s.Require().NoError(err)
 
 	s.Require().NoError(os.Truncate(shardFilePaths[0], 11))
@@ -640,8 +685,14 @@ func (s *ShardRotatedSuite) TestV2CorruptedSegmentTruncate() {
 	decoderStateFileName := filepath.Join(dataDir, fmt.Sprintf("shard_%d.state", shardID))
 	numberOfSegments := uint32(2)
 	rec := remotewritertest.MakeRecord(1)
+	startTimestamp := int64(0)
 
-	err := remotewritertest.WriteToShardWalFileV2Multi(s.T().Context(), shardFilePaths, uint64(numberOfSegments), rec)
+	err := remotewritertest.WriteToShardWalFileV2Multi(
+		s.T().Context(),
+		shardFilePaths,
+		remotewritertest.GenerateTimeSeries(startTimestamp, uint64(numberOfSegments)),
+		rec,
+	)
 	s.Require().NoError(err)
 
 	s.Require().NoError(os.Truncate(shardFilePaths[0], 11))
@@ -681,8 +732,13 @@ func (s *ShardRotatedSuite) TestV1CorruptedSegmentChangeSegmentByte() {
 	}
 	decoderStateFileName := filepath.Join(dataDir, fmt.Sprintf("shard_%d.state", shardID))
 	numberOfSegments := uint32(2)
+	startTimestamp := int64(0)
 
-	err := remotewritertest.WriteToShardWalFileV1Multi(s.T().Context(), shardFilePaths, uint64(numberOfSegments))
+	err := remotewritertest.WriteToShardWalFileV1Multi(
+		s.T().Context(),
+		shardFilePaths,
+		remotewritertest.GenerateTimeSeries(startTimestamp, uint64(numberOfSegments)),
+	)
 	s.Require().NoError(err)
 
 	s.Require().NoError(s.corruptSegment(shardFilePaths[0]))
@@ -722,8 +778,14 @@ func (s *ShardRotatedSuite) TestV2CorruptedSegmentChangeSegmentByte() {
 	decoderStateFileName := filepath.Join(dataDir, fmt.Sprintf("shard_%d.state", shardID))
 	numberOfSegments := uint32(2)
 	rec := remotewritertest.MakeRecord(1)
+	startTimestamp := int64(0)
 
-	err := remotewritertest.WriteToShardWalFileV2Multi(s.T().Context(), shardFilePaths, uint64(numberOfSegments), rec)
+	err := remotewritertest.WriteToShardWalFileV2Multi(
+		s.T().Context(),
+		shardFilePaths,
+		remotewritertest.GenerateTimeSeries(startTimestamp, uint64(numberOfSegments)),
+		rec,
+	)
 	s.Require().NoError(err)
 
 	s.Require().NoError(s.corruptSegment(shardFilePaths[0]))

@@ -312,6 +312,8 @@ func (ds *dataSourceActive) segmentIsReady(ctx context.Context) ([]uint16, error
 			return shardIDs, nil
 		}
 
+		// skip corrupted shard, if all the shards are corrupted,
+		// there is no point in continuing to read the shards, we return an error
 		if err := ds.checkFullCorrupted(); err != nil {
 			return nil, err
 		}
@@ -696,11 +698,13 @@ type SegmentReadyChecker interface {
 // segmentReadyChecker
 //
 
+// segmentReadyChecker is a segment ready checker.
 type segmentReadyChecker struct {
 	headRecord *catalog.Record
 	shards     []uint16
 }
 
+// newSegmentReadyChecker creates a new [segmentReadyChecker].
 func newSegmentReadyChecker(headRecord *catalog.Record) *segmentReadyChecker {
 	return &segmentReadyChecker{
 		headRecord: headRecord,
@@ -708,6 +712,8 @@ func newSegmentReadyChecker(headRecord *catalog.Record) *segmentReadyChecker {
 	}
 }
 
+// SegmentIsReady checks if the segment is ready and returns the shard IDs in which the segment is located,
+// if the segment is not ready, it returns an error.
 func (src *segmentReadyChecker) SegmentIsReady(segmentID uint32) (shards []uint16, ready, outOfRange bool) {
 	sourceShard := src.headRecord.GetShardBySegmentID(segmentID)
 

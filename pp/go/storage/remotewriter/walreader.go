@@ -11,9 +11,6 @@ import (
 	"github.com/prometheus/prometheus/pp/go/util"
 )
 
-//go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg mock --out
-//go:generate moq mock/segment.go . Segment
-
 // walReader buffered reader [Segment]s from wal.
 type walReader struct {
 	file              *util.FileReader
