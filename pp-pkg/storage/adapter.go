@@ -115,16 +115,6 @@ func (ar *Adapter) AppendHashdex(
 	return stats, err
 }
 
-// AppendScraperHashdex append ScraperHashdex data to [Head].
-func (ar *Adapter) AppendScraperHashdex(
-	ctx context.Context,
-	hashdex cppbridge.ShardedData,
-	state *cppbridge.StateV2,
-	commitToWal bool,
-) (stats cppbridge.RelabelerStats, err error) {
-	return ar.AppendHashdex(ctx, hashdex, state, commitToWal)
-}
-
 // AppendGoHeadHashdex append GoHeadHashdex data to [Head].
 func (ar *Adapter) AppendGoHeadHashdex(
 	ctx context.Context,
