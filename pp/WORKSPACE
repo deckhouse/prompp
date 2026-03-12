@@ -57,7 +57,7 @@ http_archive(
 
 git_repository(
     name = "bazel_clang_tidy",
-    commit = "11541864afa832ff6721e479c44794e9c9497ae8",
+    commit = "c4d35e0d0b838309358e57a2efed831780f85cd0",
     remote = "https://github.com/erenon/bazel_clang_tidy.git",
     shallow_since = "1696427391 +0200",
 )
