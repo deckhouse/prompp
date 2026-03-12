@@ -1370,7 +1370,7 @@ func (sl *scrapeLoop) appendCpp(
 	}
 
 	sl.state.SetDefTimestamp(timestamp.FromTime(ts))
-	stats, err = sl.adapter.AppendScraperHashdex(
+	stats, err = sl.adapter.AppendHashdex(
 		sl.appenderCtx,
 		hashdex,
 		sl.state,
