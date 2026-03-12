@@ -445,6 +445,20 @@ func (p *parser) newAggregateExpr(op Item, modifier, args Node) (ret *AggregateE
 		return
 	}
 
+	// OP_FUNCTIONS
+	if ret.Op.IsOPTop() {
+		ret.Expr = arguments[len(arguments)-1]
+		ret.Param = &NumberLiteral{Val: 0}
+		if len(arguments) > 1 {
+			ret.Param = arguments[0]
+			ret.Grouping = make([]string, len(arguments)-2)
+			for i, argument := range arguments[1 : len(arguments)-1] {
+				ret.Grouping[i] = argument.String()
+			}
+		}
+		return ret
+	}
+
 	desiredArgs := 1
 	if ret.Op.IsAggregatorWithParam() {
 		if !EnableExperimentalFunctions && (ret.Op == LIMITK || ret.Op == LIMIT_RATIO) {

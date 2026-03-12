@@ -35,8 +35,8 @@ type Adapter interface {
 		commitToWal bool,
 	) (cppbridge.RelabelerStats, error)
 
-	// AppendScraperHashdex append ScraperHashdex data to [Head].
-	AppendScraperHashdex(
+	// AppendHashdex append hashdex data to [Head].
+	AppendHashdex(
 		ctx context.Context,
 		hashdex cppbridge.ShardedData,
 		state *cppbridge.StateV2,

@@ -305,7 +305,7 @@ TEST_F(LabelSetDecodingTableTest, LoadFromCheckpoint) {
 
   // Act
   std::stringstream ss;
-  checkpoint.save(ss);
+  encoding_table_.save(ss, checkpoint);
   decoding_table_.load(ss);
 
   // Assert
@@ -324,7 +324,7 @@ TEST_F(LabelSetDecodingTableTest, IterateOverDecodingTable) {
 
   // Act
   std::stringstream ss;
-  checkpoint.save(ss);
+  encoding_table_.save(ss, checkpoint);
   decoding_table_.load(ss);
 
   // Assert
@@ -352,8 +352,8 @@ TEST_F(LabelSetDeltaCheckpointTest, DeltaCheckpointSaveSize) {
   const auto delta = checkpoint - base_checkpoint;
 
   // Act
-  ss << delta;
-  const auto save_size = delta.save_size();
+  encoding_table_.save(ss, delta);
+  const auto save_size = encoding_table_.save_size(delta);
 
   // Assert
   EXPECT_EQ(ss.view().size(), save_size);
@@ -371,8 +371,8 @@ TEST_F(LabelSetDeltaCheckpointTest, LoadFromBaseCheckpointAndDelta) {
   const auto checkpoint = encoding_table_.checkpoint();
   const auto delta = checkpoint - base_checkpoint;
 
-  base_checkpoint.save(ss);
-  ss << delta;
+  encoding_table_.save(ss, base_checkpoint);
+  encoding_table_.save(ss, delta);
 
   // Act
   std::stringstream read_stream(ss.str());
@@ -404,8 +404,8 @@ TEST_F(LabelSetVersionMigrationTest, Version1To2Migration) {
   const auto checkpoint_v1 = encoding_table_v1.checkpoint();
   const auto delta_v1 = checkpoint_v1 - base_checkpoint_v1;
   std::stringstream ss;
-  base_checkpoint_v1.save(ss);
-  ss << delta_v1;
+  encoding_table_v1.save(ss, base_checkpoint_v1);
+  encoding_table_v1.save(ss, delta_v1);
 
   // Act
   DecodingTable decoding_table_v2(2);
@@ -436,8 +436,8 @@ TEST_F(LabelSetVersionMigrationTest, Version2To1Migration) {
   const auto delta_v2 = checkpoint_v2 - base_checkpoint_v2;
 
   std::stringstream ss;
-  base_checkpoint_v2.save(ss);
-  ss << delta_v2;
+  encoding_table_v2.save(ss, base_checkpoint_v2);
+  encoding_table_v2.save(ss, delta_v2);
 
   // Act
   DecodingTable decoding_table_v1(1);
