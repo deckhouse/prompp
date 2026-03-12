@@ -36,7 +36,7 @@ require (
 	github.com/google/pprof v0.0.0-20241210010833-40e02aabc2ad
 	github.com/google/uuid v1.6.0
 	github.com/gophercloud/gophercloud v1.14.0
-	github.com/grafana/regexp v0.0.0-20240518133315-a468a5bfb3bc
+	github.com/grafana/regexp v0.0.0-20250905093917-f7b3be9d1853
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0
 	github.com/hashicorp/consul/api v1.29.4
 	github.com/hashicorp/nomad/api v0.0.0-20240717122358-3d93bd3778f3
