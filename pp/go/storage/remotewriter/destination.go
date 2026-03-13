@@ -261,10 +261,10 @@ type DestinationMetrics struct {
 }
 
 // newDestinationMetrics creates a new [DestinationMetrics].
-func newDestinationMetrics(name, endpoint string) *DestinationMetrics {
+func newDestinationMetrics(name, ep string) *DestinationMetrics {
 	constLabels := prometheus.Labels{
 		remoteName: name,
-		endpoint:   endpoint,
+		endpoint:   ep,
 	}
 
 	return &DestinationMetrics{

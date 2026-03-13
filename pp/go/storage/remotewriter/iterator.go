@@ -265,9 +265,7 @@ readLoop:
 
 	i.writeCaches()
 
-	encodeStartTime := i.clock.Now()
 	msg := i.encode(b, int(numberOfMessages), i.targetSegmentID) // #nosec G115 // no overflow
-	i.metrics.encodeBatchDuration.Observe(i.clock.Since(encodeStartTime).Seconds())
 
 	return msg, nil
 }
@@ -384,6 +382,10 @@ func (i *Iterator) writeCaches() {
 }
 
 func (i *Iterator) encode(batch *batch, numberOfMessages int, targetSegmentID uint32) *cppbridge.RWMessageList {
+	defer func(encodeStartTime time.Time) {
+		i.metrics.encodeBatchDuration.Observe(i.clock.Since(encodeStartTime).Seconds())
+	}(i.clock.Now())
+
 	encodersCount := batch.numberOfShards
 
 	messages := cppbridge.NewRWMessageList(uint64(numberOfMessages), targetSegmentID)     // #nosec G115 // no overflow
