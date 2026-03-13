@@ -52,7 +52,7 @@ void prompp_remote_write_message_encoders_dtor(void* args);
  * @param args {
  *     messageEncoder *MessageEncoder
  *     lss_list       []uintptr
- *     storageList    []SegmentSamplesStorageList
+ *     storages       *SegmentSamplesStorageList
  *     messageIndex   uint64
  *     messagesCount  uint64
  *     message        *Message

@@ -1276,24 +1276,26 @@ func walRemoteWriteDestroyMessageEncoders(encoders []CppRemoteWriteMessageEncode
 func walRemoteWriteEncodeMessage(
 	encoder *CppRemoteWriteMessageEncoder,
 	lssList []uintptr,
-	segmentStorageList []CppSegmentSamplesStorage,
+	storages *SegmentSamplesStorageList,
 	messageIndex, messagesCount uint64,
 	message *RWMessage,
 ) {
 	args := struct {
-		encoder            uintptr
-		lssList            []uintptr
-		segmentStorageList []CppSegmentSamplesStorage
-		messageIndex       uint64
-		messagesCount      uint64
-		message            uintptr
-	}{uintptr(unsafe.Pointer(encoder)), lssList, segmentStorageList, messageIndex, messagesCount, uintptr(unsafe.Pointer(message))}
+		encoder       uintptr
+		lssList       []uintptr
+		storages      uintptr
+		messageIndex  uint64
+		messagesCount uint64
+		message       uintptr
+	}{uintptr(unsafe.Pointer(encoder)), lssList, uintptr(unsafe.Pointer(storages)), messageIndex, messagesCount, uintptr(unsafe.Pointer(message))}
 
 	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_remote_write_encode_message,
 		uintptr(unsafe.Pointer(&args)),
 	)
+
+	runtime.KeepAlive(storages)
 }
 
 //

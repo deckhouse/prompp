@@ -49,18 +49,19 @@ extern "C" void prompp_remote_write_encode_message(void* args) {
   struct Arguments {
     MessageEncoder* encoder;
     PromPP::Primitives::Go::SliceView<entrypoint::head::LssVariantPtr> lss_list;
-    PromPP::Primitives::Go::SliceView<PromPP::WAL::SegmentSamplesStorage> samples_storages_list;
+    PromPP::WAL::SegmentSamplesStorageList* storages;
     uint64_t message_index;
     uint64_t messages_count;
     PromPP::WAL::GoMessage* message;
   };
 
   const auto in = static_cast<Arguments*>(args);
+  const auto& storages_slice = in->storages->storages();
 
   const auto lss_getter = [in](uint32_t shard_id) -> const entrypoint::head::EncodingBimap& {
     return std::get<entrypoint::head::EncodingBimap>(*in->lss_list[shard_id]);
   };
 
-  in->encoder->encode(std::span(in->samples_storages_list.data(), in->samples_storages_list.size()), lss_getter, in->message_index, in->messages_count,
+  in->encoder->encode(std::span(storages_slice.data(), storages_slice.size()), lss_getter, in->message_index, in->messages_count,
                       *in->message);
 }

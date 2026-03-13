@@ -85,5 +85,5 @@ func (e *MessageEncoders) Encode(
 	messageIndex, messagesCount uint64,
 	message *RWMessage,
 ) {
-	walRemoteWriteEncodeMessage(&e.encoders[encoderIndex], e.lssPointers, batch.storages, messageIndex, messagesCount, message)
+	walRemoteWriteEncodeMessage(&e.encoders[encoderIndex], e.lssPointers, batch, messageIndex, messagesCount, message)
 }

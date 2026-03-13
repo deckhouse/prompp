@@ -427,7 +427,7 @@ struct GoMessage {
 class ProtobufEncoder {
  public:
   template <class LssGetter>
-  void encode(std::span<SegmentSamplesStorage> batch, LssGetter lss_getter, size_t message_index, size_t messages_count, GoMessage& message) {
+  void encode(std::span<const SegmentSamplesStorage> batch, LssGetter lss_getter, size_t message_index, size_t messages_count, GoMessage& message) {
     protobuf_.clear();
 
     uint32_t shard_id = 0;
