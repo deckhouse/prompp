@@ -3,6 +3,7 @@ package remotewritertest
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"time"
 
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
@@ -335,6 +336,9 @@ func walWriteMulti(
 			return fmt.Errorf("failed to sync: %w", err)
 		}
 	}
+
+	runtime.KeepAlive(lsses)
+	runtime.KeepAlive(wls)
 
 	return nil
 }
