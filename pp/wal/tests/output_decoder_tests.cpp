@@ -59,6 +59,7 @@ using PromPP::WAL::ProtobufEncoder;
 using PromPP::WAL::ProtobufEncoderStats;
 using PromPP::WAL::RefSample;
 using PromPP::WAL::SegmentSamplesStorage;
+using PromPP::WAL::SegmentSamplesStorageList;
 using PromPP::WAL::ShardRefSample;
 
 using std::operator""sv;
@@ -369,6 +370,291 @@ TEST_F(TestWALOutputDecoder, ProcessSegmentWithLabelDrop) {
 
   // Assert
   EXPECT_EQ((std::vector<RefSample>{{.id = 0, .t = 11, .v = 1}, {.id = 0, .t = 11, .v = 2}}), actual_samples);
+}
+
+class SegmentSamplesStorageListIteratorFixture : public ::testing::Test {};
+
+TEST_F(SegmentSamplesStorageListIteratorFixture, EmptyListBeginEqualsEnd) {
+  // Arrange
+  const SegmentSamplesStorageList list(0);
+
+  // Act
+  const auto it = list.begin();
+
+  // Assert
+  EXPECT_EQ(it, list.end());
+}
+
+TEST_F(SegmentSamplesStorageListIteratorFixture, SingleStorageEmptyBeginEqualsEnd) {
+  // Arrange
+  const SegmentSamplesStorageList list(1);
+
+  // Act
+  const auto it = list.begin();
+
+  // Assert
+  EXPECT_EQ(it, list.end());
+}
+
+TEST_F(SegmentSamplesStorageListIteratorFixture, SingleStorageOneSeriesOneSample) {
+  // Arrange
+  SegmentSamplesStorageList list(1);
+  list.storages()[0].add(0, Sample(100, 1.0));
+
+  // Act
+  const auto it = list.begin();
+
+  // Assert
+  ASSERT_NE(it, list.end());
+  EXPECT_EQ(0U, (*it).first);
+  EXPECT_TRUE((*it).second.is_single());
+  EXPECT_EQ(100, (*it).second.sample().timestamp());
+  EXPECT_DOUBLE_EQ(1.0, (*it).second.sample().value());
+  EXPECT_EQ(std::next(it), list.end());
+}
+
+TEST_F(SegmentSamplesStorageListIteratorFixture, SingleStorageTwoSeries) {
+  // Arrange
+  SegmentSamplesStorageList list(1);
+  list.storages()[0].add(0, Sample(10, 1.0));
+  list.storages()[0].add(1, Sample(20, 2.0));
+
+  // Act
+  auto it = list.begin();
+
+  // Assert
+  ASSERT_NE(it, list.end());
+  EXPECT_EQ(0U, (*it).first);
+  EXPECT_TRUE((*it).second.is_single());
+  EXPECT_EQ(10, (*it).second.sample().timestamp());
+  ++it;
+  ASSERT_NE(it, list.end());
+  EXPECT_EQ(1U, (*it).first);
+  EXPECT_TRUE((*it).second.is_single());
+  EXPECT_EQ(20, (*it).second.sample().timestamp());
+  EXPECT_EQ(std::next(it), list.end());
+}
+
+TEST_F(SegmentSamplesStorageListIteratorFixture, TwoStoragesOneSeriesEach) {
+  // Arrange
+  SegmentSamplesStorageList list(2);
+  list.storages()[0].add(0, Sample(100, 1.0));
+  list.storages()[1].add(0, Sample(200, 2.0));
+
+  // Act
+  auto it = list.begin();
+
+  // Assert
+  ASSERT_NE(it, list.end());
+  EXPECT_EQ(0U, (*it).first);
+  EXPECT_EQ(100, (*it).second.sample().timestamp());
+  ++it;
+  ASSERT_NE(it, list.end());
+  EXPECT_EQ(0U, (*it).first);
+  EXPECT_EQ(200, (*it).second.sample().timestamp());
+  EXPECT_EQ(std::next(it), list.end());
+}
+
+TEST_F(SegmentSamplesStorageListIteratorFixture, PostfixIncrementReturnsOldValue) {
+  // Arrange
+  SegmentSamplesStorageList list(1);
+  list.storages()[0].add(0, Sample(1, 1.0));
+  list.storages()[0].add(1, Sample(2, 2.0));
+  auto it = list.begin();
+
+  // Act
+  const auto prev = it++;
+
+  // Assert
+  EXPECT_EQ(0U, (*prev).first);
+  EXPECT_EQ(1U, (*it).first);
+}
+
+TEST_F(SegmentSamplesStorageListIteratorFixture, SecondStorageEmpty) {
+  // Arrange
+  SegmentSamplesStorageList list(2);
+  list.storages()[0].add(0, Sample(100, 1.0));
+
+  // Act
+  const auto it = list.begin();
+
+  // Assert
+  ASSERT_NE(it, list.end());
+  EXPECT_EQ(0U, (*it).first);
+  EXPECT_EQ(100, (*it).second.sample().timestamp());
+  EXPECT_EQ(std::next(it), list.end());
+}
+
+TEST_F(SegmentSamplesStorageListIteratorFixture, PluralSamplesInSeries) {
+  // Arrange
+  SegmentSamplesStorageList list(1);
+  list.storages()[0].add(0, Sample(10, 1.0));
+  list.storages()[0].add(0, Sample(20, 2.0));
+
+  // Act
+  const auto it = list.begin();
+
+  // Assert
+  ASSERT_NE(it, list.end());
+  EXPECT_EQ(0U, (*it).first);
+  EXPECT_TRUE((*it).second.is_plural());
+  EXPECT_EQ(2U, (*it).second.samples().size());
+  EXPECT_EQ(10, (*it).second.samples()[0].timestamp());
+  EXPECT_EQ(20, (*it).second.samples()[1].timestamp());
+  EXPECT_EQ(std::next(it), list.end());
+}
+
+class SegmentSamplesStorageListSplitMessagesFixture : public ::testing::Test {
+ protected:
+  RefSample first_sample_at_boundary(const SegmentSamplesStorageList::Iterator& it) {
+    const auto& [id, list] = *it;
+    if (list.is_single()) {
+      return RefSample{.id = id, .t = list.sample().timestamp(), .v = list.sample().value()};
+    }
+    const auto& s = list.samples()[0];
+    return RefSample{.id = id, .t = s.timestamp(), .v = s.value()};
+  }
+};
+
+TEST_F(SegmentSamplesStorageListSplitMessagesFixture, EmptyListNoBoundaries) {
+  // Arrange
+  SegmentSamplesStorageList list(0);
+
+  // Act
+  list.split_messages(1);
+
+  // Assert
+  EXPECT_TRUE(list.message_boundaries().empty());
+}
+
+TEST_F(SegmentSamplesStorageListSplitMessagesFixture, ZeroSamplesCountNoBoundaries) {
+  // Arrange
+  SegmentSamplesStorageList list(1);
+  list.storages()[0].add(0, Sample(100, 1.0));
+
+  // Act
+  list.split_messages(0);
+
+  // Assert
+  EXPECT_TRUE(list.message_boundaries().empty());
+}
+
+TEST_F(SegmentSamplesStorageListSplitMessagesFixture, SingleStorageEmptyNoBoundaries) {
+  // Arrange
+  SegmentSamplesStorageList list(1);
+
+  // Act
+  list.split_messages(1);
+
+  // Assert
+  EXPECT_TRUE(list.message_boundaries().empty());
+}
+
+TEST_F(SegmentSamplesStorageListSplitMessagesFixture, SingleSeriesOneSampleOneBoundaryAtFirstSample) {
+  // Arrange
+  SegmentSamplesStorageList list(1);
+  list.storages()[0].add(0, Sample(100, 1.0));
+
+  // Act
+  list.split_messages(1);
+
+  // Assert
+  ASSERT_EQ(1U, list.message_boundaries().size());
+  EXPECT_EQ((RefSample{.id = 0, .t = 100, .v = 1.0}), first_sample_at_boundary(list.message_boundaries()[0]));
+}
+
+TEST_F(SegmentSamplesStorageListSplitMessagesFixture, TwoSeriesOneSampleEachSplitByOneTwoBoundaries) {
+  // Arrange
+  SegmentSamplesStorageList list(1);
+  list.storages()[0].add(0, Sample(10, 1.0));
+  list.storages()[0].add(1, Sample(20, 2.0));
+
+  // Act
+  list.split_messages(1);
+
+  // Assert
+  ASSERT_EQ(2U, list.message_boundaries().size());
+  EXPECT_EQ((RefSample{.id = 0, .t = 10, .v = 1.0}), first_sample_at_boundary(list.message_boundaries()[0]));
+  EXPECT_EQ((RefSample{.id = 1, .t = 20, .v = 2.0}), first_sample_at_boundary(list.message_boundaries()[1]));
+}
+
+TEST_F(SegmentSamplesStorageListSplitMessagesFixture, OneSeriesTwoSamplesOneBoundaryFirstSample) {
+  // Arrange
+  SegmentSamplesStorageList list(1);
+  list.storages()[0].add(0, Sample(10, 1.0));
+  list.storages()[0].add(0, Sample(20, 2.0));
+
+  // Act
+  list.split_messages(2);
+
+  // Assert
+  ASSERT_EQ(1U, list.message_boundaries().size());
+  EXPECT_EQ((RefSample{.id = 0, .t = 10, .v = 1.0}), first_sample_at_boundary(list.message_boundaries()[0]));
+}
+
+TEST_F(SegmentSamplesStorageListSplitMessagesFixture, ThreeSeriesOneSampleEachSplitByOneThreeBoundaries) {
+  // Arrange
+  SegmentSamplesStorageList list(1);
+  list.storages()[0].add(0, Sample(100, 1.0));
+  list.storages()[0].add(1, Sample(200, 2.0));
+  list.storages()[0].add(2, Sample(300, 3.0));
+
+  // Act
+  list.split_messages(1);
+
+  // Assert
+  ASSERT_EQ(3U, list.message_boundaries().size());
+  EXPECT_EQ((RefSample{.id = 0, .t = 100, .v = 1.0}), first_sample_at_boundary(list.message_boundaries()[0]));
+  EXPECT_EQ((RefSample{.id = 1, .t = 200, .v = 2.0}), first_sample_at_boundary(list.message_boundaries()[1]));
+  EXPECT_EQ((RefSample{.id = 2, .t = 300, .v = 3.0}), first_sample_at_boundary(list.message_boundaries()[2]));
+}
+
+TEST_F(SegmentSamplesStorageListSplitMessagesFixture, ThreeSeriesOneSampleEachSplitByTwoTwoBoundaries) {
+  // Arrange
+  SegmentSamplesStorageList list(1);
+  list.storages()[0].add(0, Sample(100, 1.0));
+  list.storages()[0].add(1, Sample(200, 2.0));
+  list.storages()[0].add(2, Sample(300, 3.0));
+
+  // Act
+  list.split_messages(2);
+
+  // Assert
+  ASSERT_EQ(2U, list.message_boundaries().size());
+  EXPECT_EQ((RefSample{.id = 0, .t = 100, .v = 1.0}), first_sample_at_boundary(list.message_boundaries()[0]));
+  EXPECT_EQ((RefSample{.id = 2, .t = 300, .v = 3.0}), first_sample_at_boundary(list.message_boundaries()[1]));
+}
+
+TEST_F(SegmentSamplesStorageListSplitMessagesFixture, PluralSamplesInSeriesFirstBoundaryAtFirstSampleOfSeries) {
+  // Arrange
+  SegmentSamplesStorageList list(1);
+  list.storages()[0].add(0, Sample(10, 1.0));
+  list.storages()[0].add(0, Sample(20, 2.0));
+  list.storages()[0].add(1, Sample(30, 3.0));
+
+  // Act
+  list.split_messages(3);
+
+  // Assert
+  ASSERT_EQ(1U, list.message_boundaries().size());
+  EXPECT_EQ((RefSample{.id = 0, .t = 10, .v = 1.0}), first_sample_at_boundary(list.message_boundaries()[0]));
+}
+
+TEST_F(SegmentSamplesStorageListSplitMessagesFixture, PluralSamplesInSeriesSecondBoundaryAtFourSampleOfSeries) {
+  // Arrange
+  SegmentSamplesStorageList list(1);
+  list.storages()[0].add(0, Sample(10, 1.0));
+  list.storages()[0].add(1, Sample(20, 1.0));
+  list.storages()[0].add(1, Sample(20, 2.0));
+  list.storages()[0].add(2, Sample(30, 3.0));
+
+  // Act
+  list.split_messages(2);
+
+  // Assert
+  ASSERT_EQ(2U, list.message_boundaries().size());
+  EXPECT_EQ((RefSample{.id = 0, .t = 10, .v = 1.0}), first_sample_at_boundary(list.message_boundaries()[0]));
+  EXPECT_EQ((RefSample{.id = 2, .t = 30, .v = 3.0}), first_sample_at_boundary(list.message_boundaries()[1]));
 }
 
 class ProtobufEncoderFixture : public testing::Test {

@@ -312,6 +312,91 @@ class OutputDecoder : private BaseOutputDecoder {
   }
 };
 
+class SegmentSamplesStorageList {
+ public:
+  explicit SegmentSamplesStorageList(uint64_t count) : storages_(count) {}
+
+  class Iterator {
+   public:
+    using value_type = SegmentSamplesStorage::Iterator::value_type;
+    using reference = value_type;
+    using pointer = void;
+    using difference_type = std::ptrdiff_t;
+    using iterator_category = std::forward_iterator_tag;
+
+    explicit Iterator(const SegmentSamplesStorage* begin, const SegmentSamplesStorage* end) : storage_(begin), storage_end_(end) { advance(); }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return *it_; }
+
+    PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
+      if (++it_ == SegmentSamplesStorage::end()) {
+        ++storage_;
+        advance();
+      }
+
+      return *this;
+    }
+    PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
+      const auto tmp = *this;
+      ++*this;
+      return tmp;
+    }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE bool operator==(const BareBones::iterator::IteratorSentinelType&) const noexcept {
+      return storage_ == storage_end_ && it_ == SegmentSamplesStorage::end();
+    }
+
+   private:
+    const SegmentSamplesStorage* storage_{};
+    const SegmentSamplesStorage* storage_end_{};
+    SegmentSamplesStorage::Iterator it_{};
+
+    PROMPP_ALWAYS_INLINE void advance() noexcept {
+      for (; storage_ != storage_end_; ++storage_) {
+        if (!storage_->empty()) {
+          it_ = storage_->begin();
+          break;
+        }
+      }
+    }
+  };
+
+  void split_messages(uint32_t samples_count) {
+    message_boundaries_.clear();
+    if (samples_count == 0 || storages_.empty()) [[unlikely]] {
+      return;
+    }
+
+    uint32_t message_samples_count = 0;
+    for (auto it = begin(); it != end(); ++it) {
+      if (message_samples_count == 0) [[unlikely]] {
+        message_boundaries_.emplace_back(it);
+      }
+
+      if (message_samples_count += samples_in_series(it); message_samples_count >= samples_count) [[unlikely]] {
+        message_samples_count = 0;
+      }
+    }
+  }
+
+  [[nodiscard]] Iterator begin() const noexcept { return Iterator(storages_.begin(), storages_.end()); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static BareBones::iterator::IteratorSentinelType end() noexcept { return {}; }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Go::Slice<SegmentSamplesStorage>& storages() noexcept { return storages_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const Primitives::Go::Slice<SegmentSamplesStorage>& storages() const noexcept { return storages_; }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Vector<Iterator>& message_boundaries() const noexcept { return message_boundaries_; }
+
+ private:
+  Primitives::Go::Slice<SegmentSamplesStorage> storages_;
+  BareBones::Vector<Iterator> message_boundaries_;
+
+  PROMPP_ALWAYS_INLINE static uint32_t samples_in_series(const Iterator& it) noexcept {
+    const auto& list = (*it).second;
+    return list.is_single() ? 1 : list.samples().size();
+  }
+};
+
 class GoSliceSink : public snappy::Sink {
   Primitives::Go::Slice<char>& out_;
 

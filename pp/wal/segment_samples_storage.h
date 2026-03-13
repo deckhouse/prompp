@@ -141,12 +141,14 @@ class SegmentSamplesStorage {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() const noexcept { return series_.begin(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE auto end() const noexcept { return series_.end(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return SparseVector::end(); }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return series_.empty(); }
 
  private:
   static constexpr auto kSeriesReserveSize = 512U;
 
-  BareBones::SparseVector<CompactSamplesList, BareBones::Vector> series_;
+  SparseVector series_;
   Primitives::Timestamp earliest_sample_{std::numeric_limits<Primitives::Timestamp>::max()};
   Primitives::Timestamp latest_sample_{};
   int64_t first_sample_added_at_tsns_{};

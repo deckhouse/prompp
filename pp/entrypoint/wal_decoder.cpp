@@ -3,7 +3,6 @@
 #include "exception.hpp"
 #include "hashdex.hpp"
 #include "head/lss.h"
-#include "head/segment_samples_storage_list.h"
 #include "primitives/go_slice.h"
 #include "primitives/go_slice_protozero.h"
 #include "wal/decoder.h"
@@ -206,7 +205,7 @@ static_assert(sizeof(OutputDecoderPtr) == sizeof(void*));
 extern "C" void prompp_wal_segment_samples_storage_list_ctor(void* args) {
   struct Arguments {
     uint64_t count;
-    entrypoint::head::SegmentSamplesStorageList* storage_list;
+    PromPP::WAL::SegmentSamplesStorageList* storage_list;
   };
 
   const auto in = static_cast<Arguments*>(args);
@@ -235,7 +234,7 @@ extern "C" void prompp_wal_segment_samples_storage_clear(void* args) {
 
 extern "C" void prompp_wal_segment_samples_storage_list_dtor(void* args) {
   struct Arguments {
-    entrypoint::head::SegmentSamplesStorageList* storage_list;
+    PromPP::WAL::SegmentSamplesStorageList* storage_list;
   };
 
   std::destroy_at(static_cast<Arguments*>(args)->storage_list);
