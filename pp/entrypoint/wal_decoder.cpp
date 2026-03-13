@@ -1,10 +1,9 @@
 #include "wal_decoder.h"
 
-#include <cstdint>
-
 #include "exception.hpp"
 #include "hashdex.hpp"
 #include "head/lss.h"
+#include "head/segment_samples_storage_list.h"
 #include "primitives/go_slice.h"
 #include "primitives/go_slice_protozero.h"
 #include "wal/decoder.h"
@@ -204,18 +203,14 @@ using OutputDecoderPtr = std::unique_ptr<OutputDecoder>;
 
 static_assert(sizeof(OutputDecoderPtr) == sizeof(void*));
 
-using SegmentSamplesStorageList = PromPP::Primitives::Go::Slice<PromPP::WAL::SegmentSamplesStorage>;
-
-extern "C" void prompp_wal_segment_samples_storage_list_ctor(void* args, void* res) {
+extern "C" void prompp_wal_segment_samples_storage_list_ctor(void* args) {
   struct Arguments {
     uint64_t count;
-  };
-  using Result = struct {
-    SegmentSamplesStorageList storage_list;
+    entrypoint::head::SegmentSamplesStorageList* storage_list;
   };
 
   const auto in = static_cast<Arguments*>(args);
-  new (&static_cast<Result*>(res)->storage_list) SegmentSamplesStorageList(in->count);
+  std::construct_at(in->storage_list, in->count);
 }
 
 extern "C" void prompp_wal_segment_samples_storage_add(void* args) {
@@ -240,10 +235,10 @@ extern "C" void prompp_wal_segment_samples_storage_clear(void* args) {
 
 extern "C" void prompp_wal_segment_samples_storage_list_dtor(void* args) {
   struct Arguments {
-    SegmentSamplesStorageList storage_list;
+    entrypoint::head::SegmentSamplesStorageList* storage_list;
   };
 
-  static_cast<Arguments*>(args)->~Arguments();
+  std::destroy_at(static_cast<Arguments*>(args)->storage_list);
 }
 
 extern "C" void prompp_wal_output_decoder_ctor(void* args, void* res) {

@@ -11,3 +11,4 @@
 
 #define Sizeof_SegmentSamplesStorage 80
 #define Sizeof_RemoteWriteMessageEncoder 32
+#define Sizeof_SegmentSamplesStorageList 40

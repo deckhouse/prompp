@@ -292,8 +292,10 @@ func (s OutputDecoderStats) SampleCount() uint32 {
 	return s.sampleCount
 }
 
+// SegmentSamplesStorageList mirrors entrypoint::head::SegmentSamplesStorageList
 type SegmentSamplesStorageList struct {
-	storages []CppSegmentSamplesStorage
+	storages          []CppSegmentSamplesStorage
+	messageBoundaries CppBareBonesVector
 }
 
 func (s *SegmentSamplesStorageList) Get(segmentID uint64) *CppSegmentSamplesStorage {
@@ -301,14 +303,13 @@ func (s *SegmentSamplesStorageList) Get(segmentID uint64) *CppSegmentSamplesStor
 }
 
 func NewSegmentSamplesStorage(count uint64) *SegmentSamplesStorageList {
-	storages := &SegmentSamplesStorageList{
-		storages: walSegmentSamplesStorageListCtor(count),
-	}
-	runtime.SetFinalizer(storages, func(s *SegmentSamplesStorageList) {
-		walSegmentSamplesStorageListDtor(s.storages)
+	s := &SegmentSamplesStorageList{}
+	walSegmentSamplesStorageListCtor(count, s)
+	runtime.SetFinalizer(s, func(s *SegmentSamplesStorageList) {
+		walSegmentSamplesStorageListDtor(s)
 	})
 
-	return storages
+	return s
 }
 
 func ClearSegmentSamplesStorage(storage *CppSegmentSamplesStorage) {

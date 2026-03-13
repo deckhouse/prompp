@@ -1041,22 +1041,17 @@ func walDecoderDtor(decoder uintptr) {
 	)
 }
 
-func walSegmentSamplesStorageListCtor(count uint64) []CppSegmentSamplesStorage {
+func walSegmentSamplesStorageListCtor(count uint64, storages *SegmentSamplesStorageList) {
 	args := struct {
-		count uint64
-	}{count}
-	var res struct {
-		storages []CppSegmentSamplesStorage
-	}
+		count    uint64
+		storages uintptr
+	}{count, uintptr(unsafe.Pointer(storages))}
 
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_wal_segment_samples_storage_list_ctor,
 		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
 	)
-
-	return res.storages
 }
 
 func walSegmentSamplesStorageAdd(
@@ -1091,10 +1086,10 @@ func walSegmentSamplesStorageClear(samplesStorage *CppSegmentSamplesStorage) {
 	)
 }
 
-func walSegmentSamplesStorageListDtor(storages []CppSegmentSamplesStorage) {
+func walSegmentSamplesStorageListDtor(s *SegmentSamplesStorageList) {
 	args := struct {
-		storages []CppSegmentSamplesStorage
-	}{storages}
+		storages uintptr
+	}{uintptr(unsafe.Pointer(s))}
 
 	testGC()
 	fastcgo.UnsafeCall1(

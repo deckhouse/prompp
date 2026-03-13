@@ -126,14 +126,12 @@ void prompp_wal_decoder_restore_from_stream(void* args, void* res);
  * @brief Construct a segment samples storage list
  *
  * @param args {
- *     count  uint64 // storages count
+ *     count       uint64 // storages count
+ *     storageList *SegmentSamplesStorageList
  * }
  *
- * @param res {
- *     storageList []SegmentSamplesStorageList // constructed storage list
- * }
  */
-void prompp_wal_segment_samples_storage_list_ctor(void* args, void* res);
+void prompp_wal_segment_samples_storage_list_ctor(void* args);
 
 /**
  * @brief Add sample to sample storage list
@@ -160,7 +158,7 @@ void prompp_wal_segment_samples_storage_clear(void* args);
  * @brief Destroy segment samples storage list
  *
  * @param args {
- *     storageList []SegmentSamplesStorageList
+ *     storageList *SegmentSamplesStorageList
  * }
  */
 void prompp_wal_segment_samples_storage_list_dtor(void* args);
