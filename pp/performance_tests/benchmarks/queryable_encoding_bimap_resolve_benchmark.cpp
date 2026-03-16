@@ -10,8 +10,7 @@
 #include "series_index/trie/cedarpp_tree.h"
 
 namespace {
-using Lss =
-    series_index::QueryableEncodingBimap<PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, BareBones::Vector, series_index::trie::CedarTrie>;
+using Lss = series_index::QueryableEncodingBimap<BareBones::Vector>;
 
 using LssCopier =
     series_index::QueryableEncodingBimapCopier<Lss, typename Lss::SortingIndexBuilder::Index, BareBones::Bitset, Lss, BareBones::Vector<uint32_t>>;
