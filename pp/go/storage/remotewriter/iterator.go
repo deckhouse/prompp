@@ -253,7 +253,7 @@ readLoop:
 	i.writeCaches()
 
 	encodeStartTime := i.clock.Now()
-	msg := i.encode(b, int(numberOfMessages), i.targetSegmentID) // #nosec G115 // no overflow
+	msg := i.encode(b, i.targetSegmentID)
 	i.metrics.encodeBatchDuration.Observe(i.clock.Since(encodeStartTime).Seconds())
 
 	return msg, nil
@@ -365,21 +365,23 @@ func (i *Iterator) writeCaches() {
 	i.dataSource.WriteCaches()
 }
 
-func (i *Iterator) encode(batch *batch, numberOfMessages int, targetSegmentID uint32) *cppbridge.RWMessageList {
+func (i *Iterator) encode(batch *batch, targetSegmentID uint32) *cppbridge.RWMessageList {
 	encodersCount := batch.numberOfShards
 
-	messages := cppbridge.NewRWMessageList(uint64(numberOfMessages), targetSegmentID)
+	messagesCount := int(batch.segmentSampleStorages.SplitMessages(uint32(batch.maxNumberOfSamplesPerShard)))
+
+	messages := cppbridge.NewRWMessageList(uint64(messagesCount), targetSegmentID)
 	encoders := cppbridge.NewMessageEncoders(uint64(encodersCount), i.dataSource.LSSes())
-	messagesPerEncoder := numberOfMessages / encodersCount
+	messagesPerEncoder := messagesCount / encodersCount
 	if messagesPerEncoder == 0 {
 		messagesPerEncoder = 1
 	}
 
 	wg := sync.WaitGroup{}
-	for messageIndex, encoderIndex := 0, 0; messageIndex < numberOfMessages; encoderIndex++ {
+	for messageIndex, encoderIndex := 0, 0; messageIndex < messagesCount; encoderIndex++ {
 		var encodeCount int
 		if encoderIndex+1 == encodersCount {
-			encodeCount = numberOfMessages - messageIndex
+			encodeCount = messagesCount - messageIndex
 		} else {
 			encodeCount = messagesPerEncoder
 		}
@@ -388,16 +390,13 @@ func (i *Iterator) encode(batch *batch, numberOfMessages int, targetSegmentID ui
 		go func(encoderIndex, messageIndex, encodeCount int) {
 			defer wg.Done()
 
-			for ; encodeCount > 0; messageIndex++ {
-				encoders.Encode(
-					encoderIndex,
-					batch.segmentSampleStorages,
-					uint64(messageIndex),
-					uint64(numberOfMessages),
-					&messages.Messages[messageIndex],
-				)
-				encodeCount--
-			}
+			encoders.Encode(
+				encoderIndex,
+				batch.segmentSampleStorages,
+				uint64(messageIndex),
+				uint64(encodeCount),
+				messages.Messages,
+			)
 		}(encoderIndex, messageIndex, encodeCount)
 
 		messageIndex += encodeCount

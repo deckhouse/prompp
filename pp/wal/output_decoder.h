@@ -363,6 +363,11 @@ class SegmentSamplesStorageList {
     }
   };
 
+  struct MessageBoundary {
+    Iterator iterator;
+    uint32_t samples_count;
+  };
+
   uint32_t split_messages(uint32_t samples_count) {
     message_boundaries_.clear();
     if (samples_count == 0 || storages_.empty()) [[unlikely]] {
@@ -376,8 +381,13 @@ class SegmentSamplesStorageList {
       }
 
       if (message_samples_count += samples_in_series(it); message_samples_count >= samples_count) [[unlikely]] {
+        message_boundaries_.back().samples_count = message_samples_count;
         message_samples_count = 0;
       }
+    }
+
+    if (message_samples_count > 0) [[likely]] {
+      message_boundaries_.back().samples_count = message_samples_count;
     }
 
     return message_boundaries_.size();
@@ -389,11 +399,11 @@ class SegmentSamplesStorageList {
   [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Go::Slice<SegmentSamplesStorage>& storages() noexcept { return storages_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const Primitives::Go::Slice<SegmentSamplesStorage>& storages() const noexcept { return storages_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Vector<Iterator>& message_boundaries() const noexcept { return message_boundaries_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Vector<MessageBoundary>& message_boundaries() const noexcept { return message_boundaries_; }
 
  private:
   Primitives::Go::Slice<SegmentSamplesStorage> storages_;
-  BareBones::Vector<Iterator> message_boundaries_;
+  BareBones::Vector<MessageBoundary> message_boundaries_;
 
   PROMPP_ALWAYS_INLINE static uint32_t samples_in_series(const Iterator& it) noexcept {
     const auto& list = (*it).second;
@@ -431,47 +441,74 @@ struct GoMessage {
 class ProtobufEncoder {
  public:
   template <class LssGetter>
-  void encode(const SegmentSamplesStorageList& batch, LssGetter lss_getter, size_t message_index, size_t messages_count, GoMessage& message) {
-    protobuf_.clear();
+  void encode(const SegmentSamplesStorageList& batch, const LssGetter& lss_getter, size_t message_index, size_t messages_count, std::span<GoMessage> messages) {
+    const auto& boundaries = batch.message_boundaries();
+    assert(message_index + messages_count <= boundaries.size());
+    assert(message_index + messages_count <= messages.size());
 
-    uint32_t shard_id = 0;
-    protozero::pbf_writer pb_writer(protobuf_);
+    for (const auto last_index = message_index + messages_count; message_index < last_index; ++message_index) {
+      protobuf_.clear();
 
-    for (const auto& storage : batch.storages()) {
-      const auto& lss = lss_getter(shard_id);
-
-      protozero::basic_pbf_writer pb_timeseries(protobuf_);
-
-      uint32_t last_ls_id = Primitives::kInvalidLabelSetID;
-      storage.for_each([&](Primitives::LabelSetID ls_id, const Primitives::Sample& sample) {
-        if ((static_cast<size_t>(ls_id) % messages_count) != message_index) {
-          return;
-        }
-
-        ++message.samples_count;
-
-        if (last_ls_id != ls_id) [[likely]] {
-          std::destroy_at(&pb_timeseries);
-          std::construct_at(&pb_timeseries, pb_writer, kTimeseriesTag);
-
-          Prometheus::RemoteWrite::write_label_set(pb_timeseries, lss[ls_id]);
-          last_ls_id = ls_id;
-        }
-
-        Prometheus::RemoteWrite::write_sample(pb_timeseries, sample);
-        message.max_timestamp = std::max(message.max_timestamp, sample.timestamp());
-      });
-
-      ++shard_id;
+      auto& message = messages[message_index];
+      create_protobuf_message(boundaries[message_index], lss_getter, message);
+      snappy_compress(message.buffer);
     }
-
-    snappy_compress(message.buffer);
   }
 
  private:
   static constexpr int kTimeseriesTag = 1;
 
   std::string protobuf_;
+
+  template <class LssGetter>
+  PROMPP_ALWAYS_INLINE void create_protobuf_message(const SegmentSamplesStorageList::MessageBoundary& boundary,
+                                                    const LssGetter& lss_getter,
+                                                    GoMessage& message) {
+    message.samples_count = 0;
+    message.max_timestamp = 0;
+
+    protozero::pbf_writer pb_writer(protobuf_);
+    protozero::basic_pbf_writer pb_timeseries(protobuf_);
+    uint32_t last_ls_id = Primitives::kInvalidLabelSetID;
+    uint32_t storage_index = std::numeric_limits<uint32_t>::max();
+    const std::remove_reference_t<decltype(lss_getter(0))>* lss = nullptr;
+
+    for (auto it = boundary.iterator; it != SegmentSamplesStorageList::end(); ++it) {
+      const auto [ls_id, samples_list] = *it;
+      if (storage_index != it.storage_index()) [[unlikely]] {
+        storage_index = it.storage_index();
+        last_ls_id = Primitives::kInvalidLabelSetID;
+        lss = &lss_getter(storage_index);
+      }
+
+      const auto emit_sample = [&](const Primitives::Sample& sample) PROMPP_LAMBDA_INLINE {
+        ++message.samples_count;
+
+        Prometheus::RemoteWrite::write_sample(pb_timeseries, sample);
+        message.max_timestamp = std::max(message.max_timestamp, sample.timestamp());
+      };
+
+      if (last_ls_id != ls_id) [[likely]] {
+        std::destroy_at(&pb_timeseries);
+        std::construct_at(&pb_timeseries, pb_writer, kTimeseriesTag);
+
+        Prometheus::RemoteWrite::write_label_set(pb_timeseries, lss->operator[](ls_id));
+        last_ls_id = ls_id;
+      }
+
+      if (samples_list.is_single()) [[likely]] {
+        emit_sample(samples_list.sample());
+      } else {
+        for (const auto& sample : samples_list.samples()) {
+          emit_sample(sample);
+        }
+      }
+
+      if (message.samples_count == boundary.samples_count) [[unlikely]] {
+        break;
+      }
+    }
+  }
 
   PROMPP_ALWAYS_INLINE void snappy_compress(Primitives::Go::Slice<char>& output) const {
     GoSliceSink writer(output);

@@ -316,6 +316,12 @@ func ClearSegmentSamplesStorage(storage *CppSegmentSamplesStorage) {
 	walSegmentSamplesStorageClear(storage)
 }
 
+// SplitMessages splits the storage list into messages by samples per message.
+// Returns the number of messages to encode.
+func (s *SegmentSamplesStorageList) SplitMessages(samplesPerMessage uint32) uint32 {
+	return walSegmentSamplesStorageListSplitMessages(s, samplesPerMessage)
+}
+
 //
 // WALOutputDecoder
 //

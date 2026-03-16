@@ -52,7 +52,7 @@ extern "C" void prompp_remote_write_encode_message(void* args) {
     PromPP::WAL::SegmentSamplesStorageList* storages;
     uint64_t message_index;
     uint64_t messages_count;
-    PromPP::WAL::GoMessage* message;
+    PromPP::Primitives::Go::SliceView<PromPP::WAL::GoMessage> messages;
   };
 
   const auto in = static_cast<Arguments*>(args);
@@ -61,5 +61,5 @@ extern "C" void prompp_remote_write_encode_message(void* args) {
     return std::get<entrypoint::head::EncodingBimap>(*in->lss_list[shard_id]);
   };
 
-  in->encoder->encode(*in->storages, lss_getter, in->message_index, in->messages_count, *in->message);
+  in->encoder->encode(*in->storages, lss_getter, in->message_index, in->messages_count, in->messages);
 }

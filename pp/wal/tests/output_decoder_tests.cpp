@@ -506,13 +506,22 @@ TEST_F(SegmentSamplesStorageListIteratorFixture, PluralSamplesInSeries) {
 
 class SegmentSamplesStorageListSplitMessagesFixture : public ::testing::Test {
  protected:
-  RefSample first_sample_at_boundary(const SegmentSamplesStorageList::Iterator& it) {
-    const auto& [id, list] = *it;
+  struct MessageBoundary {
+    uint32_t samples_count;
+    uint32_t id;
+    int64_t t;
+    double v;
+
+    PROMPP_ALWAYS_INLINE bool operator==(const MessageBoundary& boundary) const noexcept = default;
+  };
+
+  MessageBoundary boundary(const SegmentSamplesStorageList::MessageBoundary& boundary) {
+    const auto& [id, list] = *boundary.iterator;
     if (list.is_single()) {
-      return RefSample{.id = id, .t = list.sample().timestamp(), .v = list.sample().value()};
+      return MessageBoundary{.samples_count = boundary.samples_count, .id = id, .t = list.sample().timestamp(), .v = list.sample().value()};
     }
     const auto& s = list.samples()[0];
-    return RefSample{.id = id, .t = s.timestamp(), .v = s.value()};
+    return MessageBoundary{.samples_count = boundary.samples_count, .id = id, .t = s.timestamp(), .v = s.value()};
   }
 };
 
@@ -560,7 +569,7 @@ TEST_F(SegmentSamplesStorageListSplitMessagesFixture, SingleSeriesOneSampleOneBo
 
   // Assert
   ASSERT_EQ(1U, list.message_boundaries().size());
-  EXPECT_EQ((RefSample{.id = 0, .t = 100, .v = 1.0}), first_sample_at_boundary(list.message_boundaries()[0]));
+  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 0, .t = 100, .v = 1.0}), boundary(list.message_boundaries()[0]));
 }
 
 TEST_F(SegmentSamplesStorageListSplitMessagesFixture, TwoSeriesOneSampleEachSplitByOneTwoBoundaries) {
@@ -574,8 +583,8 @@ TEST_F(SegmentSamplesStorageListSplitMessagesFixture, TwoSeriesOneSampleEachSpli
 
   // Assert
   ASSERT_EQ(2U, list.message_boundaries().size());
-  EXPECT_EQ((RefSample{.id = 0, .t = 10, .v = 1.0}), first_sample_at_boundary(list.message_boundaries()[0]));
-  EXPECT_EQ((RefSample{.id = 1, .t = 20, .v = 2.0}), first_sample_at_boundary(list.message_boundaries()[1]));
+  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 0, .t = 10, .v = 1.0}), boundary(list.message_boundaries()[0]));
+  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 1, .t = 20, .v = 2.0}), boundary(list.message_boundaries()[1]));
 }
 
 TEST_F(SegmentSamplesStorageListSplitMessagesFixture, OneSeriesTwoSamplesOneBoundaryFirstSample) {
@@ -589,7 +598,7 @@ TEST_F(SegmentSamplesStorageListSplitMessagesFixture, OneSeriesTwoSamplesOneBoun
 
   // Assert
   ASSERT_EQ(1U, list.message_boundaries().size());
-  EXPECT_EQ((RefSample{.id = 0, .t = 10, .v = 1.0}), first_sample_at_boundary(list.message_boundaries()[0]));
+  EXPECT_EQ((MessageBoundary{.samples_count = 2, .id = 0, .t = 10, .v = 1.0}), boundary(list.message_boundaries()[0]));
 }
 
 TEST_F(SegmentSamplesStorageListSplitMessagesFixture, ThreeSeriesOneSampleEachSplitByOneThreeBoundaries) {
@@ -604,9 +613,9 @@ TEST_F(SegmentSamplesStorageListSplitMessagesFixture, ThreeSeriesOneSampleEachSp
 
   // Assert
   ASSERT_EQ(3U, list.message_boundaries().size());
-  EXPECT_EQ((RefSample{.id = 0, .t = 100, .v = 1.0}), first_sample_at_boundary(list.message_boundaries()[0]));
-  EXPECT_EQ((RefSample{.id = 1, .t = 200, .v = 2.0}), first_sample_at_boundary(list.message_boundaries()[1]));
-  EXPECT_EQ((RefSample{.id = 2, .t = 300, .v = 3.0}), first_sample_at_boundary(list.message_boundaries()[2]));
+  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 0, .t = 100, .v = 1.0}), boundary(list.message_boundaries()[0]));
+  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 1, .t = 200, .v = 2.0}), boundary(list.message_boundaries()[1]));
+  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 2, .t = 300, .v = 3.0}), boundary(list.message_boundaries()[2]));
 }
 
 TEST_F(SegmentSamplesStorageListSplitMessagesFixture, ThreeSeriesOneSampleEachSplitByTwoTwoBoundaries) {
@@ -621,8 +630,8 @@ TEST_F(SegmentSamplesStorageListSplitMessagesFixture, ThreeSeriesOneSampleEachSp
 
   // Assert
   ASSERT_EQ(2U, list.message_boundaries().size());
-  EXPECT_EQ((RefSample{.id = 0, .t = 100, .v = 1.0}), first_sample_at_boundary(list.message_boundaries()[0]));
-  EXPECT_EQ((RefSample{.id = 2, .t = 300, .v = 3.0}), first_sample_at_boundary(list.message_boundaries()[1]));
+  EXPECT_EQ((MessageBoundary{.samples_count = 2, .id = 0, .t = 100, .v = 1.0}), boundary(list.message_boundaries()[0]));
+  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 2, .t = 300, .v = 3.0}), boundary(list.message_boundaries()[1]));
 }
 
 TEST_F(SegmentSamplesStorageListSplitMessagesFixture, PluralSamplesInSeriesFirstBoundaryAtFirstSampleOfSeries) {
@@ -637,7 +646,7 @@ TEST_F(SegmentSamplesStorageListSplitMessagesFixture, PluralSamplesInSeriesFirst
 
   // Assert
   ASSERT_EQ(1U, list.message_boundaries().size());
-  EXPECT_EQ((RefSample{.id = 0, .t = 10, .v = 1.0}), first_sample_at_boundary(list.message_boundaries()[0]));
+  EXPECT_EQ((MessageBoundary{.samples_count = 3, .id = 0, .t = 10, .v = 1.0}), boundary(list.message_boundaries()[0]));
 }
 
 TEST_F(SegmentSamplesStorageListSplitMessagesFixture, PluralSamplesInSeriesSecondBoundaryAtFourSampleOfSeries) {
@@ -653,8 +662,8 @@ TEST_F(SegmentSamplesStorageListSplitMessagesFixture, PluralSamplesInSeriesSecon
 
   // Assert
   ASSERT_EQ(2U, list.message_boundaries().size());
-  EXPECT_EQ((RefSample{.id = 0, .t = 10, .v = 1.0}), first_sample_at_boundary(list.message_boundaries()[0]));
-  EXPECT_EQ((RefSample{.id = 2, .t = 30, .v = 3.0}), first_sample_at_boundary(list.message_boundaries()[1]));
+  EXPECT_EQ((MessageBoundary{.samples_count = 3, .id = 0, .t = 10, .v = 1.0}), boundary(list.message_boundaries()[0]));
+  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 2, .t = 30, .v = 3.0}), boundary(list.message_boundaries()[1]));
 }
 
 class ProtobufEncoderFixture : public testing::Test {
@@ -677,12 +686,55 @@ TEST_F(ProtobufEncoderFixture, Test) {
   storages_list.storages()[0].add(1, Sample(10, 1));
   storages_list.storages()[1].add(0, Sample(10, 1));
 
+  storages_list.split_messages(3);
+
   std::vector<GoMessage> messages(2);
   std::string proto;
 
   // Act
-  encoder_.encode(storages_list, lss_getter, 0, 2, messages[0]);
-  encoder_.encode(storages_list, lss_getter, 1, 2, messages[1]);
+  encoder_.encode(storages_list, lss_getter, 0, 2, messages);
+
+  // Assert
+  EXPECT_EQ(3U, messages[0].samples_count);
+  EXPECT_EQ(10, messages[0].max_timestamp);
+  EXPECT_TRUE(snappy::Uncompress(messages[0].buffer.data(), messages[0].buffer.size(), &proto));
+  EXPECT_TRUE(std::ranges::equal(
+      std::array{0x0A, 0x3A, 0x0A, 0x12, 0x0A, 0x08, 0x5F, 0x5F, 0x6E, 0x61, 0x6D, 0x65, 0x5F, 0x5F, 0x12, 0x06, 0x76, 0x61, 0x6C, 0x75, 0x65, 0x31,
+                 0x0A, 0x0A, 0x0A, 0x03, 0x6A, 0x6F, 0x62, 0x12, 0x03, 0x61, 0x62, 0x63, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                 0x40, 0x10, 0x09, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x3F, 0x10, 0x0A, 0x0A, 0x2D, 0x0A, 0x12, 0x0A, 0x08,
+                 0x5F, 0x5F, 0x6E, 0x61, 0x6D, 0x65, 0x5F, 0x5F, 0x12, 0x06, 0x76, 0x61, 0x6C, 0x75, 0x65, 0x32, 0x0A, 0x0A, 0x0A, 0x03, 0x6A, 0x6F,
+                 0x62, 0x12, 0x03, 0x61, 0x62, 0x63, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x3F, 0x10, 0x0A},
+      std::span(reinterpret_cast<uint8_t*>(proto.data()), proto.size())));
+
+  EXPECT_EQ(1U, messages[1].samples_count);
+  EXPECT_EQ(10, messages[1].max_timestamp);
+  EXPECT_TRUE(snappy::Uncompress(messages[1].buffer.data(), messages[1].buffer.size(), &proto));
+  EXPECT_TRUE(std::ranges::equal(std::array{0x0A, 0x2E, 0x0A, 0x12, 0x0A, 0x08, 0x5F, 0x5F, 0x6E, 0x61, 0x6D, 0x65, 0x5F, 0x5F, 0x12, 0x06,
+                                            0x76, 0x61, 0x6C, 0x75, 0x65, 0x33, 0x0A, 0x0B, 0x0A, 0x03, 0x6A, 0x6F, 0x62, 0x12, 0x04, 0x61,
+                                            0x62, 0x63, 0x33, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x3F, 0x10, 0x0A},
+                                 std::span(reinterpret_cast<uint8_t*>(proto.data()), proto.size())));
+}
+
+TEST_F(ProtobufEncoderFixture, SingleMessage_EncodesAllSamples) {
+  // Arrange
+  std::vector<EncodingBimap<BareBones::Vector>> lss_list(2);
+  lss_list[0].find_or_emplace(LabelViewSet{{"__name__", "value1"}, {"job", "abc"}});
+  lss_list[1].find_or_emplace(LabelViewSet{{"__name__", "value3"}, {"job", "abc3"}});
+
+  const auto lss_getter = [&lss_list](uint32_t id) -> const EncodingBimap<BareBones::Vector>& { return lss_list[id]; };
+
+  SegmentSamplesStorageList storages_list(2);
+  storages_list.storages()[0].add(0, Sample(10, 1.0));
+  storages_list.storages()[0].add(0, Sample(9, 2));
+  storages_list.storages()[1].add(0, Sample(10, 1));
+
+  storages_list.split_messages(10);
+
+  std::vector<GoMessage> messages(1);
+  std::string proto;
+
+  // Act
+  encoder_.encode(storages_list, lss_getter, 0, 1, messages);
 
   // Assert
   EXPECT_EQ(3U, messages[0].samples_count);
@@ -695,14 +747,130 @@ TEST_F(ProtobufEncoderFixture, Test) {
                  0x5F, 0x5F, 0x6E, 0x61, 0x6D, 0x65, 0x5F, 0x5F, 0x12, 0x06, 0x76, 0x61, 0x6C, 0x75, 0x65, 0x33, 0x0A, 0x0B, 0x0A, 0x03, 0x6A, 0x6F,
                  0x62, 0x12, 0x04, 0x61, 0x62, 0x63, 0x33, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x3F, 0x10, 0x0A},
       std::span(reinterpret_cast<uint8_t*>(proto.data()), proto.size())));
+}
 
+TEST_F(ProtobufEncoderFixture, EncodeSubrange_SecondMessageOnly) {
+  // Arrange
+  std::vector<EncodingBimap<BareBones::Vector>> lss_list(2);
+  lss_list[0].find_or_emplace(LabelViewSet{{"__name__", "value1"}, {"job", "abc"}});
+  lss_list[0].find_or_emplace(LabelViewSet{{"__name__", "value2"}, {"job", "abc"}});
+  lss_list[1].find_or_emplace(LabelViewSet{{"__name__", "value3"}, {"job", "abc3"}});
+
+  const auto lss_getter = [&lss_list](uint32_t id) -> const EncodingBimap<BareBones::Vector>& { return lss_list[id]; };
+
+  SegmentSamplesStorageList storages_list(2);
+  storages_list.storages()[0].add(0, Sample(10, 1.0));
+  storages_list.storages()[0].add(0, Sample(9, 2));
+  storages_list.storages()[0].add(1, Sample(10, 1));
+  storages_list.storages()[1].add(0, Sample(10, 1));
+
+  storages_list.split_messages(3);
+
+  std::vector<GoMessage> messages(2);
+  std::string proto;
+
+  // Act
+  encoder_.encode(storages_list, lss_getter, 1, 1, messages);
+
+  // Assert
   EXPECT_EQ(1U, messages[1].samples_count);
   EXPECT_EQ(10, messages[1].max_timestamp);
   EXPECT_TRUE(snappy::Uncompress(messages[1].buffer.data(), messages[1].buffer.size(), &proto));
-  EXPECT_TRUE(std::ranges::equal(
-      std::array{0x0A, 0x2D, 0x0A, 0x12, 0x0A, 0x08, 0x5F, 0x5F, 0x6E, 0x61, 0x6D, 0x65, 0x5F, 0x5F, 0x12, 0x06, 0x76, 0x61, 0x6C, 0x75, 0x65, 0x32, 0x0A, 0x0A,
-                 0x0A, 0x03, 0x6A, 0x6F, 0x62, 0x12, 0x03, 0x61, 0x62, 0x63, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x3F, 0x10, 0x0A},
-      std::span(reinterpret_cast<uint8_t*>(proto.data()), proto.size())));
+  EXPECT_TRUE(std::ranges::equal(std::array{0x0A, 0x2E, 0x0A, 0x12, 0x0A, 0x08, 0x5F, 0x5F, 0x6E, 0x61, 0x6D, 0x65, 0x5F, 0x5F, 0x12, 0x06,
+                                            0x76, 0x61, 0x6C, 0x75, 0x65, 0x33, 0x0A, 0x0B, 0x0A, 0x03, 0x6A, 0x6F, 0x62, 0x12, 0x04, 0x61,
+                                            0x62, 0x63, 0x33, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x3F, 0x10, 0x0A},
+                                 std::span(reinterpret_cast<uint8_t*>(proto.data()), proto.size())));
+}
+
+TEST_F(ProtobufEncoderFixture, ThreeMessages_TwoSamplesPerMessage) {
+  // Arrange
+  std::vector<EncodingBimap<BareBones::Vector>> lss_list(2);
+  lss_list[0].find_or_emplace(LabelViewSet{{"__name__", "m1"}, {"job", "a"}});
+  lss_list[0].find_or_emplace(LabelViewSet{{"__name__", "m2"}, {"job", "a"}});
+  lss_list[1].find_or_emplace(LabelViewSet{{"__name__", "m3"}, {"job", "b"}});
+
+  const auto lss_getter = [&lss_list](uint32_t id) -> const EncodingBimap<BareBones::Vector>& { return lss_list[id]; };
+
+  SegmentSamplesStorageList storages_list(2);
+  storages_list.storages()[0].add(0, Sample(100, 1.0));
+  storages_list.storages()[0].add(0, Sample(101, 2.0));
+  storages_list.storages()[0].add(1, Sample(102, 3.0));
+  storages_list.storages()[0].add(1, Sample(103, 4.0));
+  storages_list.storages()[1].add(0, Sample(104, 5.0));
+  storages_list.storages()[1].add(0, Sample(105, 6.0));
+
+  storages_list.split_messages(2);
+
+  std::vector<GoMessage> messages(3);
+  std::string proto;
+
+  // Act
+  encoder_.encode(storages_list, lss_getter, 0, 3, messages);
+
+  // Assert
+  EXPECT_EQ(2U, messages[0].samples_count);
+  EXPECT_EQ(101, messages[0].max_timestamp);
+  EXPECT_TRUE(snappy::Uncompress(messages[0].buffer.data(), messages[0].buffer.size(), &proto));
+  EXPECT_TRUE(std::ranges::equal(std::array{0x0A, 0x34, 0x0A, 0x0E, 0x0A, 0x08, 0x5F, 0x5F, 0x6E, 0x61, 0x6D, 0x65, 0x5F, 0x5F, 0x12, 0x02, 0x6D, 0x31,
+                                            0x0A, 0x08, 0x0A, 0x03, 0x6A, 0x6F, 0x62, 0x12, 0x01, 0x61, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                            0x00, 0xF0, 0x3F, 0x10, 0x64, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x10, 0x65},
+                                 std::span(reinterpret_cast<uint8_t*>(proto.data()), proto.size())));
+
+  EXPECT_EQ(2U, messages[1].samples_count);
+  EXPECT_EQ(103, messages[1].max_timestamp);
+  EXPECT_TRUE(snappy::Uncompress(messages[1].buffer.data(), messages[1].buffer.size(), &proto));
+  EXPECT_TRUE(std::ranges::equal(std::array{0x0A, 0x34, 0x0A, 0x0E, 0x0A, 0x08, 0x5F, 0x5F, 0x6E, 0x61, 0x6D, 0x65, 0x5F, 0x5F, 0x12, 0x02, 0x6D, 0x32,
+                                            0x0A, 0x08, 0x0A, 0x03, 0x6A, 0x6F, 0x62, 0x12, 0x01, 0x61, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                            0x00, 0x08, 0x40, 0x10, 0x66, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x40, 0x10, 0x67},
+                                 std::span(reinterpret_cast<uint8_t*>(proto.data()), proto.size())));
+
+  EXPECT_EQ(2U, messages[2].samples_count);
+  EXPECT_EQ(105, messages[2].max_timestamp);
+  EXPECT_TRUE(snappy::Uncompress(messages[2].buffer.data(), messages[2].buffer.size(), &proto));
+  EXPECT_TRUE(std::ranges::equal(std::array{0x0A, 0x34, 0x0A, 0x0E, 0x0A, 0x08, 0x5F, 0x5F, 0x6E, 0x61, 0x6D, 0x65, 0x5F, 0x5F, 0x12, 0x02, 0x6D, 0x33,
+                                            0x0A, 0x08, 0x0A, 0x03, 0x6A, 0x6F, 0x62, 0x12, 0x01, 0x62, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                            0x00, 0x14, 0x40, 0x10, 0x68, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x18, 0x40, 0x10, 0x69},
+                                 std::span(reinterpret_cast<uint8_t*>(proto.data()), proto.size())));
+}
+
+TEST_F(ProtobufEncoderFixture, SingleShard_TwoMessages) {
+  // Arrange
+  std::vector<EncodingBimap<BareBones::Vector>> lss_list(1);
+  lss_list[0].find_or_emplace(LabelViewSet{{"__name__", "a"}, {"job", "x"}});
+  lss_list[0].find_or_emplace(LabelViewSet{{"__name__", "b"}, {"job", "x"}});
+
+  const auto lss_getter = [&lss_list](uint32_t id) -> const EncodingBimap<BareBones::Vector>& { return lss_list[id]; };
+
+  SegmentSamplesStorageList storages_list(1);
+  storages_list.storages()[0].add(0, Sample(1, 1.0));
+  storages_list.storages()[0].add(0, Sample(2, 2.0));
+  storages_list.storages()[0].add(1, Sample(3, 3.0));
+  storages_list.storages()[0].add(1, Sample(4, 4.0));
+
+  storages_list.split_messages(2);
+
+  std::vector<GoMessage> messages(2);
+  std::string proto;
+
+  // Act
+  encoder_.encode(storages_list, lss_getter, 0, 2, messages);
+
+  // Assert
+  EXPECT_EQ(2U, messages[0].samples_count);
+  EXPECT_EQ(2, messages[0].max_timestamp);
+  EXPECT_TRUE(snappy::Uncompress(messages[0].buffer.data(), messages[0].buffer.size(), &proto));
+  EXPECT_TRUE(std::ranges::equal(std::array{0x0A, 0x33, 0x0A, 0x0D, 0x0A, 0x08, 0x5F, 0x5F, 0x6E, 0x61, 0x6D, 0x65, 0x5F, 0x5F, 0x12, 0x01, 0x61, 0x0A,
+                                            0x08, 0x0A, 0x03, 0x6A, 0x6F, 0x62, 0x12, 0x01, 0x78, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                            0xF0, 0x3F, 0x10, 0x01, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x10, 0x02},
+                                 std::span(reinterpret_cast<uint8_t*>(proto.data()), proto.size())));
+
+  EXPECT_EQ(2U, messages[1].samples_count);
+  EXPECT_EQ(4, messages[1].max_timestamp);
+  EXPECT_TRUE(snappy::Uncompress(messages[1].buffer.data(), messages[1].buffer.size(), &proto));
+  EXPECT_TRUE(std::ranges::equal(std::array{0x0A, 0x33, 0x0A, 0x0D, 0x0A, 0x08, 0x5F, 0x5F, 0x6E, 0x61, 0x6D, 0x65, 0x5F, 0x5F, 0x12, 0x01, 0x62, 0x0A,
+                                            0x08, 0x0A, 0x03, 0x6A, 0x6F, 0x62, 0x12, 0x01, 0x78, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                            0x08, 0x40, 0x10, 0x03, 0x12, 0x0B, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x40, 0x10, 0x04},
+                                 std::span(reinterpret_cast<uint8_t*>(proto.data()), proto.size())));
 }
 
 }  // namespace

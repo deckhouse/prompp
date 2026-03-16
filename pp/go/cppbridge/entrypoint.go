@@ -1098,6 +1098,23 @@ func walSegmentSamplesStorageListDtor(s *SegmentSamplesStorageList) {
 	)
 }
 
+func walSegmentSamplesStorageListSplitMessages(s *SegmentSamplesStorageList, samplesPerMessage uint32) uint32 {
+	args := struct {
+		storageList       uintptr
+		samplesPerMessage uint32
+	}{uintptr(unsafe.Pointer(s)), samplesPerMessage}
+	var res struct {
+		messagesCount uint32
+	}
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_wal_segment_samples_storage_list_split_messages,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+	return res.messagesCount
+}
+
 //
 // OutputDecoder
 //
@@ -1278,7 +1295,7 @@ func walRemoteWriteEncodeMessage(
 	lssList []uintptr,
 	storages *SegmentSamplesStorageList,
 	messageIndex, messagesCount uint64,
-	message *RWMessage,
+	messages []RWMessage,
 ) {
 	args := struct {
 		encoder       uintptr
@@ -1286,8 +1303,8 @@ func walRemoteWriteEncodeMessage(
 		storages      uintptr
 		messageIndex  uint64
 		messagesCount uint64
-		message       uintptr
-	}{uintptr(unsafe.Pointer(encoder)), lssList, uintptr(unsafe.Pointer(storages)), messageIndex, messagesCount, uintptr(unsafe.Pointer(message))}
+		messages      []RWMessage
+	}{uintptr(unsafe.Pointer(encoder)), lssList, uintptr(unsafe.Pointer(storages)), messageIndex, messagesCount, messages}
 
 	testGC()
 	fastcgo.UnsafeCall1(
@@ -1296,6 +1313,7 @@ func walRemoteWriteEncodeMessage(
 	)
 
 	runtime.KeepAlive(storages)
+	runtime.KeepAlive(messages)
 }
 
 //

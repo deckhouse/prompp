@@ -29,13 +29,15 @@ func (s *MessageEncodersSuite) TestEncode() {
 	walSegmentSamplesStorageAdd(sampleStorages.Get(0), 0, 2000, 1.1)
 	walSegmentSamplesStorageAdd(sampleStorages.Get(0), 0, 3000, 1.1)
 
+	sampleStorages.SplitMessages(3)
+
 	// Act
 	encoders.Encode(
 		0,
 		sampleStorages,
 		0,
 		1,
-		&messages.Messages[0],
+		messages.Messages,
 	)
 
 	// Assert
