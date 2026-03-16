@@ -117,12 +117,7 @@ class GenericDecodingTable {
 
     template <class Class>
     PROMPP_ALWAYS_INLINE bool operator()(const Class& a, const Proxy& b) const noexcept {
-      return decoding_table->storage_.composite(b) == a;
-    }
-
-    template <class Class>
-    PROMPP_ALWAYS_INLINE bool operator()(const Class& a, const Proxy& b) const noexcept {
-      return decoding_table->storage_.composite(b) == a;
+      return decoding_table->operator[](b) == a;
     }
   };
 
