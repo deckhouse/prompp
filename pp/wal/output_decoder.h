@@ -324,13 +324,15 @@ class SegmentSamplesStorageList {
     using difference_type = std::ptrdiff_t;
     using iterator_category = std::forward_iterator_tag;
 
-    explicit Iterator(const SegmentSamplesStorage* begin, const SegmentSamplesStorage* end) : storage_(begin), storage_end_(end) { advance(); }
+    explicit Iterator(const Primitives::Go::Slice<SegmentSamplesStorage>& storages) : storages_(&storages) { advance(); }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return *it_; }
 
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t storage_index() const noexcept { return storage_index_; }
+
     PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
       if (++it_ == SegmentSamplesStorage::end()) {
-        ++storage_;
+        ++storage_index_;
         advance();
       }
 
@@ -343,28 +345,28 @@ class SegmentSamplesStorageList {
     }
 
     [[nodiscard]] PROMPP_ALWAYS_INLINE bool operator==(const BareBones::iterator::IteratorSentinelType&) const noexcept {
-      return storage_ == storage_end_ && it_ == SegmentSamplesStorage::end();
+      return storage_index_ == storages_->size() && it_ == SegmentSamplesStorage::end();
     }
 
    private:
-    const SegmentSamplesStorage* storage_{};
-    const SegmentSamplesStorage* storage_end_{};
+    const Primitives::Go::Slice<SegmentSamplesStorage>* storages_;
     SegmentSamplesStorage::Iterator it_{};
+    uint32_t storage_index_{};
 
     PROMPP_ALWAYS_INLINE void advance() noexcept {
-      for (; storage_ != storage_end_; ++storage_) {
-        if (!storage_->empty()) {
-          it_ = storage_->begin();
+      for (; storage_index_ != storages_->size(); ++storage_index_) {
+        if (const auto& storage = storages_->operator[](storage_index_); !storage.empty()) {
+          it_ = storage.begin();
           break;
         }
       }
     }
   };
 
-  void split_messages(uint32_t samples_count) {
+  uint32_t split_messages(uint32_t samples_count) {
     message_boundaries_.clear();
     if (samples_count == 0 || storages_.empty()) [[unlikely]] {
-      return;
+      return 0;
     }
 
     uint32_t message_samples_count = 0;
@@ -377,9 +379,11 @@ class SegmentSamplesStorageList {
         message_samples_count = 0;
       }
     }
+
+    return message_boundaries_.size();
   }
 
-  [[nodiscard]] Iterator begin() const noexcept { return Iterator(storages_.begin(), storages_.end()); }
+  [[nodiscard]] Iterator begin() const noexcept { return Iterator(storages_); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE static BareBones::iterator::IteratorSentinelType end() noexcept { return {}; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Go::Slice<SegmentSamplesStorage>& storages() noexcept { return storages_; }
