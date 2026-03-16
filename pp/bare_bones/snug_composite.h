@@ -50,6 +50,11 @@ concept has_after_items_load = ls_id_range<R> && requires(Derived derived, R&& r
 
 constexpr uint32_t kInvalidLsId = std::numeric_limits<uint32_t>::max();
 
+template <class Storage>
+concept has_symbol_read_view = requires(const Storage& s) {
+  { s.read_view() };
+};
+
 template <class Derived, template <template <class> class> class Filament, template <class> class Vector>
 class GenericDecodingTable {
   static_assert(!std::is_integral_v<typename Filament<Vector>::storage_type::composite_type>, "Filament::composite_type can't be an integral type");
@@ -108,6 +113,11 @@ class GenericDecodingTable {
     template <class Class>
     PROMPP_ALWAYS_INLINE bool operator()(const Proxy& a, const Class& b) const noexcept {
       return decoding_table->operator[](a) == b;
+    }
+
+    template <class Class>
+    PROMPP_ALWAYS_INLINE bool operator()(const Class& a, const Proxy& b) const noexcept {
+      return decoding_table->storage_.composite(b) == a;
     }
 
     template <class Class>
@@ -279,6 +289,12 @@ class GenericDecodingTable {
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return mem::allocated_memory(storage_); }
 
   PROMPP_ALWAYS_INLINE storage_type::view_type data_view() const noexcept { return storage_.view(); }
+
+  [[nodiscard]] decltype(auto) symbol_table_read_view() const noexcept
+    requires has_symbol_read_view<storage_type>
+  {
+    return storage_.read_view();
+  }
 
   template <class DerivedOther, template <template <class> class> class FilamentOther, template <class> class VectorOther>
   PROMPP_ALWAYS_INLINE void reserve(const GenericDecodingTable<DerivedOther, FilamentOther, VectorOther>& other) {
