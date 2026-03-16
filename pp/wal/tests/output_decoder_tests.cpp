@@ -671,18 +671,18 @@ TEST_F(ProtobufEncoderFixture, Test) {
 
   const auto lss_getter = [&lss_list](uint32_t id) -> const EncodingBimap<BareBones::Vector>& { return lss_list[id]; };
 
-  std::vector<SegmentSamplesStorage> storages_list(2);
-  storages_list[0].add(0, Sample(10, 1.0));
-  storages_list[0].add(0, Sample(9, 2));
-  storages_list[0].add(1, Sample(10, 1));
-  storages_list[1].add(0, Sample(10, 1));
+  SegmentSamplesStorageList storages_list(2);
+  storages_list.storages()[0].add(0, Sample(10, 1.0));
+  storages_list.storages()[0].add(0, Sample(9, 2));
+  storages_list.storages()[0].add(1, Sample(10, 1));
+  storages_list.storages()[1].add(0, Sample(10, 1));
 
   std::vector<GoMessage> messages(2);
   std::string proto;
 
   // Act
-  encoder_.encode(std::span(storages_list.data(), storages_list.size()), lss_getter, 0, 2, messages[0]);
-  encoder_.encode(std::span(storages_list.data(), storages_list.size()), lss_getter, 1, 2, messages[1]);
+  encoder_.encode(storages_list, lss_getter, 0, 2, messages[0]);
+  encoder_.encode(storages_list, lss_getter, 1, 2, messages[1]);
 
   // Assert
   EXPECT_EQ(3U, messages[0].samples_count);

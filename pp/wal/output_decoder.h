@@ -431,13 +431,13 @@ struct GoMessage {
 class ProtobufEncoder {
  public:
   template <class LssGetter>
-  void encode(std::span<const SegmentSamplesStorage> batch, LssGetter lss_getter, size_t message_index, size_t messages_count, GoMessage& message) {
+  void encode(const SegmentSamplesStorageList& batch, LssGetter lss_getter, size_t message_index, size_t messages_count, GoMessage& message) {
     protobuf_.clear();
 
     uint32_t shard_id = 0;
     protozero::pbf_writer pb_writer(protobuf_);
 
-    for (const auto& storage : batch) {
+    for (const auto& storage : batch.storages()) {
       const auto& lss = lss_getter(shard_id);
 
       protozero::basic_pbf_writer pb_timeseries(protobuf_);

@@ -56,12 +56,10 @@ extern "C" void prompp_remote_write_encode_message(void* args) {
   };
 
   const auto in = static_cast<Arguments*>(args);
-  const auto& storages_slice = in->storages->storages();
 
   const auto lss_getter = [in](uint32_t shard_id) -> const entrypoint::head::EncodingBimap& {
     return std::get<entrypoint::head::EncodingBimap>(*in->lss_list[shard_id]);
   };
 
-  in->encoder->encode(std::span(storages_slice.data(), storages_slice.size()), lss_getter, in->message_index, in->messages_count,
-                      *in->message);
+  in->encoder->encode(*in->storages, lss_getter, in->message_index, in->messages_count, *in->message);
 }
