@@ -1,19 +1,6 @@
 #include "head/lss.h"
 #include "wal/output_decoder.h"
 
-extern "C" void prompp_remote_write_message_list_ctor(void* args, void* res) {
-  struct Arguments {
-    uint64_t messages_count;
-  };
-
-  using Result = struct {
-    PromPP::Primitives::Go::Slice<PromPP::WAL::GoMessage> message_list;
-  };
-
-  const auto out = static_cast<Result*>(res);
-  new (&out->message_list) PromPP::Primitives::Go::Slice<PromPP::WAL::GoMessage>(static_cast<Arguments*>(args)->messages_count);
-}
-
 extern "C" void prompp_remote_write_message_list_dtor(void* args) {
   struct Arguments {
     PromPP::Primitives::Go::Slice<PromPP::WAL::GoMessage> message_list;
@@ -49,7 +36,6 @@ extern "C" void prompp_remote_write_encode_message(void* args) {
   struct Arguments {
     MessageEncoder* encoder;
     PromPP::Primitives::Go::SliceView<entrypoint::head::LssVariantPtr> lss_list;
-    PromPP::WAL::SegmentSamplesStorageList* storages;
     uint64_t message_index;
     uint64_t messages_count;
     PromPP::Primitives::Go::SliceView<PromPP::WAL::GoMessage> messages;
@@ -61,5 +47,5 @@ extern "C" void prompp_remote_write_encode_message(void* args) {
     return std::get<entrypoint::head::EncodingBimap>(*in->lss_list[shard_id]);
   };
 
-  in->encoder->encode(*in->storages, lss_getter, in->message_index, in->messages_count, in->messages);
+  in->encoder->encode(lss_getter, in->message_index, in->messages_count, in->messages);
 }

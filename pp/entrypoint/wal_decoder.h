@@ -169,12 +169,10 @@ void prompp_wal_segment_samples_storage_list_dtor(void* args);
  * @param args {
  *     storageList        *SegmentSamplesStorageList
  *     samplesPerMessage  uint32
- * }
- * @param res {
- *     messagesCount uint32
+ *     messages           []GoMessage
  * }
  */
-void prompp_wal_segment_samples_storage_list_split_messages(void* args, void* res);
+void prompp_wal_segment_samples_storage_list_split_messages(void* args);
 
 //
 // OutputDecoder

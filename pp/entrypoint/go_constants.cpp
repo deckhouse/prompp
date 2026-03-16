@@ -20,6 +20,6 @@ static_assert(sizeof(metrics::Storage::Iterator) == Sizeof_MetricsIterator);
 
 static_assert(sizeof(PromPP::WAL::SegmentSamplesStorage) == Sizeof_SegmentSamplesStorage);
 static_assert(sizeof(PromPP::WAL::ProtobufEncoder) == Sizeof_RemoteWriteMessageEncoder);
-static_assert(sizeof(PromPP::WAL::SegmentSamplesStorageList) == Sizeof_SegmentSamplesStorageList);
+static_assert(sizeof(PromPP::WAL::SegmentSamplesStorageList::Iterator) == Sizeof_SegmentSamplesStorageListIterator);
 
 }  // namespace

@@ -10,6 +10,7 @@
 
 #include "bare_bones/preprocess.h"
 #include "bare_bones/serializer.h"
+#include "primitives/go_slice.h"
 #include "primitives/labels_builder.h"
 #include "primitives/snug_composites.h"
 #include "prometheus/remote_write.h"
@@ -363,53 +364,58 @@ class SegmentSamplesStorageList {
     }
   };
 
-  struct MessageBoundary {
-    Iterator iterator;
-    uint32_t samples_count;
-  };
-
-  uint32_t split_messages(uint32_t samples_count) {
-    message_boundaries_.clear();
-    if (samples_count == 0 || storages_.empty()) [[unlikely]] {
-      return 0;
-    }
-
-    uint32_t message_samples_count = 0;
-    for (auto it = begin(); it != end(); ++it) {
-      if (message_samples_count == 0) [[unlikely]] {
-        message_boundaries_.emplace_back(it);
-      }
-
-      if (message_samples_count += samples_in_series(it); message_samples_count >= samples_count) [[unlikely]] {
-        message_boundaries_.back().samples_count = message_samples_count;
-        message_samples_count = 0;
-      }
-    }
-
-    if (message_samples_count > 0) [[likely]] {
-      message_boundaries_.back().samples_count = message_samples_count;
-    }
-
-    return message_boundaries_.size();
-  }
-
   [[nodiscard]] Iterator begin() const noexcept { return Iterator(storages_); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE static BareBones::iterator::IteratorSentinelType end() noexcept { return {}; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Go::Slice<SegmentSamplesStorage>& storages() noexcept { return storages_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const Primitives::Go::Slice<SegmentSamplesStorage>& storages() const noexcept { return storages_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Vector<MessageBoundary>& message_boundaries() const noexcept { return message_boundaries_; }
-
  private:
   Primitives::Go::Slice<SegmentSamplesStorage> storages_;
-  BareBones::Vector<MessageBoundary> message_boundaries_;
-
-  PROMPP_ALWAYS_INLINE static uint32_t samples_in_series(const Iterator& it) noexcept {
-    const auto& list = (*it).second;
-    return list.is_single() ? 1 : list.samples().size();
-  }
 };
+
+struct GoMessage {
+  explicit GoMessage(const SegmentSamplesStorageList::Iterator& it) : samples_iterator(it) {}
+
+  SegmentSamplesStorageList::Iterator samples_iterator;
+  Primitives::Go::Slice<char> buffer;
+  Primitives::Timestamp max_timestamp{};
+  uint32_t samples_count{};
+  bool delivered{};
+  bool post_processed{};
+};
+
+}  // namespace PromPP::WAL
+
+template <>
+struct BareBones::IsTriviallyReallocatable<PromPP::WAL::GoMessage> : std::true_type {};
+
+namespace PromPP::WAL {
+
+inline void split_messages(const SegmentSamplesStorageList& storages, uint32_t samples_count, Primitives::Go::Slice<GoMessage>& messages) {
+  static const auto samples_in_series = [](const SegmentSamplesStorageList::Iterator& it) PROMPP_LAMBDA_INLINE {
+    const auto& list = (*it).second;
+    return list.is_single() ? 1U : list.samples().size();
+  };
+
+  if (samples_count == 0 || storages.storages().empty()) [[unlikely]] {
+    return;
+  }
+
+  uint32_t message_samples_count = 0;
+  for (auto it = storages.begin(); it != storages.end(); ++it) {
+    if (message_samples_count == 0) [[unlikely]] {
+      messages.emplace_back(it);
+    }
+    if (message_samples_count += samples_in_series(it); message_samples_count >= samples_count) [[unlikely]] {
+      messages.back().samples_count = message_samples_count;
+      message_samples_count = 0;
+    }
+  }
+  if (message_samples_count > 0) [[likely]] {
+    messages.back().samples_count = message_samples_count;
+  }
+}
 
 class GoSliceSink : public snappy::Sink {
   Primitives::Go::Slice<char>& out_;
@@ -430,27 +436,17 @@ struct ProtobufEncoderStats {
   PROMPP_ALWAYS_INLINE bool operator==(const ProtobufEncoderStats& other) const noexcept = default;
 };
 
-struct GoMessage {
-  Primitives::Go::Slice<char> buffer;
-  uint64_t samples_count{};
-  Primitives::Timestamp max_timestamp{};
-  bool delivered{};
-  bool post_processed{};
-};
-
 class ProtobufEncoder {
  public:
   template <class LssGetter>
-  void encode(const SegmentSamplesStorageList& batch, const LssGetter& lss_getter, size_t message_index, size_t messages_count, std::span<GoMessage> messages) {
-    const auto& boundaries = batch.message_boundaries();
-    assert(message_index + messages_count <= boundaries.size());
+  void encode(const LssGetter& lss_getter, size_t message_index, size_t messages_count, std::span<GoMessage> messages) {
     assert(message_index + messages_count <= messages.size());
 
     for (const auto last_index = message_index + messages_count; message_index < last_index; ++message_index) {
       protobuf_.clear();
 
       auto& message = messages[message_index];
-      create_protobuf_message(boundaries[message_index], lss_getter, message);
+      create_protobuf_message(lss_getter, message);
       snappy_compress(message.buffer);
     }
   }
@@ -461,10 +457,7 @@ class ProtobufEncoder {
   std::string protobuf_;
 
   template <class LssGetter>
-  PROMPP_ALWAYS_INLINE void create_protobuf_message(const SegmentSamplesStorageList::MessageBoundary& boundary,
-                                                    const LssGetter& lss_getter,
-                                                    GoMessage& message) {
-    message.samples_count = 0;
+  PROMPP_ALWAYS_INLINE void create_protobuf_message(const LssGetter& lss_getter, GoMessage& message) {
     message.max_timestamp = 0;
 
     protozero::pbf_writer pb_writer(protobuf_);
@@ -472,8 +465,9 @@ class ProtobufEncoder {
     uint32_t last_ls_id = Primitives::kInvalidLabelSetID;
     uint32_t storage_index = std::numeric_limits<uint32_t>::max();
     const std::remove_reference_t<decltype(lss_getter(0))>* lss = nullptr;
+    uint32_t samples_count{};
 
-    for (auto it = boundary.iterator; it != SegmentSamplesStorageList::end(); ++it) {
+    for (auto it = message.samples_iterator; it != SegmentSamplesStorageList::end(); ++it) {
       const auto [ls_id, samples_list] = *it;
       if (storage_index != it.storage_index()) [[unlikely]] {
         storage_index = it.storage_index();
@@ -482,7 +476,7 @@ class ProtobufEncoder {
       }
 
       const auto emit_sample = [&](const Primitives::Sample& sample) PROMPP_LAMBDA_INLINE {
-        ++message.samples_count;
+        ++samples_count;
 
         Prometheus::RemoteWrite::write_sample(pb_timeseries, sample);
         message.max_timestamp = std::max(message.max_timestamp, sample.timestamp());
@@ -504,7 +498,7 @@ class ProtobufEncoder {
         }
       }
 
-      if (message.samples_count == boundary.samples_count) [[unlikely]] {
+      if (message.samples_count == samples_count) [[unlikely]] {
         break;
       }
     }
@@ -518,9 +512,6 @@ class ProtobufEncoder {
 };
 
 }  // namespace PromPP::WAL
-
-template <>
-struct BareBones::IsTriviallyReallocatable<PromPP::WAL::GoMessage> : std::true_type {};
 
 template <>
 struct BareBones::IsTriviallyReallocatable<PromPP::WAL::ProtobufEncoder> : std::true_type {};

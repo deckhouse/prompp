@@ -292,10 +292,9 @@ func (s OutputDecoderStats) SampleCount() uint32 {
 	return s.sampleCount
 }
 
-// SegmentSamplesStorageList mirrors entrypoint::head::SegmentSamplesStorageList
+// SegmentSamplesStorageList mirrors PromPP::WAL::SegmentSamplesStorageList
 type SegmentSamplesStorageList struct {
-	storages          []CppSegmentSamplesStorage
-	messageBoundaries CppBareBonesVector
+	storages []CppSegmentSamplesStorage
 }
 
 func (s *SegmentSamplesStorageList) Get(segmentID uint64) *CppSegmentSamplesStorage {
@@ -317,9 +316,8 @@ func ClearSegmentSamplesStorage(storage *CppSegmentSamplesStorage) {
 }
 
 // SplitMessages splits the storage list into messages by samples per message.
-// Returns the number of messages to encode.
-func (s *SegmentSamplesStorageList) SplitMessages(samplesPerMessage uint32) uint32 {
-	return walSegmentSamplesStorageListSplitMessages(s, samplesPerMessage)
+func (s *SegmentSamplesStorageList) SplitMessages(samplesPerMessage, targetSegmentID uint32) *RWMessageList {
+	return NewRWMessageList(targetSegmentID, walSegmentSamplesStorageListSplitMessages(s, samplesPerMessage))
 }
 
 //

@@ -3,11 +3,12 @@ package cppbridge
 import "runtime"
 
 type RWMessage struct {
-	Buffer        []byte
-	SampleCount   uint64
-	MaxTimestamp  int64
-	Delivered     bool
-	PostProcessed bool
+	samplesIterator CppSegmentSamplesStorageListIterator
+	Buffer          []byte
+	MaxTimestamp    int64
+	SampleCount     uint32
+	Delivered       bool
+	PostProcessed   bool
 }
 
 type RWMessageList struct {
@@ -16,10 +17,10 @@ type RWMessageList struct {
 	Messages        []RWMessage
 }
 
-func NewRWMessageList(messagesCount uint64, targetSegmentID uint32) *RWMessageList {
+func NewRWMessageList(targetSegmentID uint32, messages []RWMessage) *RWMessageList {
 	list := &RWMessageList{
 		TargetSegmentID: targetSegmentID,
-		Messages:        walRemoteWriteCreateMessages(messagesCount),
+		Messages:        messages,
 	}
 	runtime.SetFinalizer(list, func(list *RWMessageList) {
 		walRemoteWriteDestroyMessages(list.Messages)
@@ -45,7 +46,7 @@ func (m *RWMessageList) IsObsoleted(minTimestamp int64) bool {
 func (m *RWMessageList) NumberOfSamples() uint64 {
 	samples := uint64(0)
 	for i := range m.Messages {
-		samples += m.Messages[i].SampleCount
+		samples += uint64(m.Messages[i].SampleCount)
 	}
 	return samples
 }
@@ -81,9 +82,8 @@ func NewMessageEncoders(encodersCount uint64, lssList []*LabelSetStorage) *Messa
 
 func (e *MessageEncoders) Encode(
 	encoderIndex int,
-	batch *SegmentSamplesStorageList,
 	messageIndex, messagesCount uint64,
 	messages []RWMessage,
 ) {
-	walRemoteWriteEncodeMessage(&e.encoders[encoderIndex], e.lssPointers, batch, messageIndex, messagesCount, messages)
+	walRemoteWriteEncodeMessage(&e.encoders[encoderIndex], e.lssPointers, messageIndex, messagesCount, messages)
 }

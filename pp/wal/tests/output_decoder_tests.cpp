@@ -61,6 +61,7 @@ using PromPP::WAL::RefSample;
 using PromPP::WAL::SegmentSamplesStorage;
 using PromPP::WAL::SegmentSamplesStorageList;
 using PromPP::WAL::ShardRefSample;
+using PromPP::WAL::split_messages;
 
 using std::operator""sv;
 
@@ -515,25 +516,27 @@ class SegmentSamplesStorageListSplitMessagesFixture : public ::testing::Test {
     PROMPP_ALWAYS_INLINE bool operator==(const MessageBoundary& boundary) const noexcept = default;
   };
 
-  MessageBoundary boundary(const SegmentSamplesStorageList::MessageBoundary& boundary) {
-    const auto& [id, list] = *boundary.iterator;
+  Slice<GoMessage> messages_;
+
+  static MessageBoundary boundary(const GoMessage& b) {
+    const auto& [id, list] = *b.samples_iterator;
     if (list.is_single()) {
-      return MessageBoundary{.samples_count = boundary.samples_count, .id = id, .t = list.sample().timestamp(), .v = list.sample().value()};
+      return MessageBoundary{.samples_count = b.samples_count, .id = id, .t = list.sample().timestamp(), .v = list.sample().value()};
     }
     const auto& s = list.samples()[0];
-    return MessageBoundary{.samples_count = boundary.samples_count, .id = id, .t = s.timestamp(), .v = s.value()};
+    return MessageBoundary{.samples_count = b.samples_count, .id = id, .t = s.timestamp(), .v = s.value()};
   }
 };
 
 TEST_F(SegmentSamplesStorageListSplitMessagesFixture, EmptyListNoBoundaries) {
   // Arrange
-  SegmentSamplesStorageList list(0);
+  const SegmentSamplesStorageList list(0);
 
   // Act
-  list.split_messages(1);
+  split_messages(list, 1, messages_);
 
   // Assert
-  EXPECT_TRUE(list.message_boundaries().empty());
+  EXPECT_TRUE(messages_.empty());
 }
 
 TEST_F(SegmentSamplesStorageListSplitMessagesFixture, ZeroSamplesCountNoBoundaries) {
@@ -542,21 +545,21 @@ TEST_F(SegmentSamplesStorageListSplitMessagesFixture, ZeroSamplesCountNoBoundari
   list.storages()[0].add(0, Sample(100, 1.0));
 
   // Act
-  list.split_messages(0);
+  split_messages(list, 0, messages_);
 
   // Assert
-  EXPECT_TRUE(list.message_boundaries().empty());
+  EXPECT_TRUE(messages_.empty());
 }
 
 TEST_F(SegmentSamplesStorageListSplitMessagesFixture, SingleStorageEmptyNoBoundaries) {
   // Arrange
-  SegmentSamplesStorageList list(1);
+  const SegmentSamplesStorageList list(1);
 
   // Act
-  list.split_messages(1);
+  split_messages(list, 1, messages_);
 
   // Assert
-  EXPECT_TRUE(list.message_boundaries().empty());
+  EXPECT_TRUE(messages_.empty());
 }
 
 TEST_F(SegmentSamplesStorageListSplitMessagesFixture, SingleSeriesOneSampleOneBoundaryAtFirstSample) {
@@ -565,11 +568,11 @@ TEST_F(SegmentSamplesStorageListSplitMessagesFixture, SingleSeriesOneSampleOneBo
   list.storages()[0].add(0, Sample(100, 1.0));
 
   // Act
-  list.split_messages(1);
+  split_messages(list, 1, messages_);
 
   // Assert
-  ASSERT_EQ(1U, list.message_boundaries().size());
-  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 0, .t = 100, .v = 1.0}), boundary(list.message_boundaries()[0]));
+  ASSERT_EQ(1U, messages_.size());
+  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 0, .t = 100, .v = 1.0}), boundary(messages_[0]));
 }
 
 TEST_F(SegmentSamplesStorageListSplitMessagesFixture, TwoSeriesOneSampleEachSplitByOneTwoBoundaries) {
@@ -579,12 +582,12 @@ TEST_F(SegmentSamplesStorageListSplitMessagesFixture, TwoSeriesOneSampleEachSpli
   list.storages()[0].add(1, Sample(20, 2.0));
 
   // Act
-  list.split_messages(1);
+  split_messages(list, 1, messages_);
 
   // Assert
-  ASSERT_EQ(2U, list.message_boundaries().size());
-  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 0, .t = 10, .v = 1.0}), boundary(list.message_boundaries()[0]));
-  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 1, .t = 20, .v = 2.0}), boundary(list.message_boundaries()[1]));
+  ASSERT_EQ(2U, messages_.size());
+  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 0, .t = 10, .v = 1.0}), boundary(messages_[0]));
+  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 1, .t = 20, .v = 2.0}), boundary(messages_[1]));
 }
 
 TEST_F(SegmentSamplesStorageListSplitMessagesFixture, OneSeriesTwoSamplesOneBoundaryFirstSample) {
@@ -594,11 +597,11 @@ TEST_F(SegmentSamplesStorageListSplitMessagesFixture, OneSeriesTwoSamplesOneBoun
   list.storages()[0].add(0, Sample(20, 2.0));
 
   // Act
-  list.split_messages(2);
+  split_messages(list, 2, messages_);
 
   // Assert
-  ASSERT_EQ(1U, list.message_boundaries().size());
-  EXPECT_EQ((MessageBoundary{.samples_count = 2, .id = 0, .t = 10, .v = 1.0}), boundary(list.message_boundaries()[0]));
+  ASSERT_EQ(1U, messages_.size());
+  EXPECT_EQ((MessageBoundary{.samples_count = 2, .id = 0, .t = 10, .v = 1.0}), boundary(messages_[0]));
 }
 
 TEST_F(SegmentSamplesStorageListSplitMessagesFixture, ThreeSeriesOneSampleEachSplitByOneThreeBoundaries) {
@@ -609,13 +612,13 @@ TEST_F(SegmentSamplesStorageListSplitMessagesFixture, ThreeSeriesOneSampleEachSp
   list.storages()[0].add(2, Sample(300, 3.0));
 
   // Act
-  list.split_messages(1);
+  split_messages(list, 1, messages_);
 
   // Assert
-  ASSERT_EQ(3U, list.message_boundaries().size());
-  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 0, .t = 100, .v = 1.0}), boundary(list.message_boundaries()[0]));
-  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 1, .t = 200, .v = 2.0}), boundary(list.message_boundaries()[1]));
-  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 2, .t = 300, .v = 3.0}), boundary(list.message_boundaries()[2]));
+  ASSERT_EQ(3U, messages_.size());
+  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 0, .t = 100, .v = 1.0}), boundary(messages_[0]));
+  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 1, .t = 200, .v = 2.0}), boundary(messages_[1]));
+  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 2, .t = 300, .v = 3.0}), boundary(messages_[2]));
 }
 
 TEST_F(SegmentSamplesStorageListSplitMessagesFixture, ThreeSeriesOneSampleEachSplitByTwoTwoBoundaries) {
@@ -626,12 +629,12 @@ TEST_F(SegmentSamplesStorageListSplitMessagesFixture, ThreeSeriesOneSampleEachSp
   list.storages()[0].add(2, Sample(300, 3.0));
 
   // Act
-  list.split_messages(2);
+  split_messages(list, 2, messages_);
 
   // Assert
-  ASSERT_EQ(2U, list.message_boundaries().size());
-  EXPECT_EQ((MessageBoundary{.samples_count = 2, .id = 0, .t = 100, .v = 1.0}), boundary(list.message_boundaries()[0]));
-  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 2, .t = 300, .v = 3.0}), boundary(list.message_boundaries()[1]));
+  ASSERT_EQ(2U, messages_.size());
+  EXPECT_EQ((MessageBoundary{.samples_count = 2, .id = 0, .t = 100, .v = 1.0}), boundary(messages_[0]));
+  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 2, .t = 300, .v = 3.0}), boundary(messages_[1]));
 }
 
 TEST_F(SegmentSamplesStorageListSplitMessagesFixture, PluralSamplesInSeriesFirstBoundaryAtFirstSampleOfSeries) {
@@ -642,11 +645,11 @@ TEST_F(SegmentSamplesStorageListSplitMessagesFixture, PluralSamplesInSeriesFirst
   list.storages()[0].add(1, Sample(30, 3.0));
 
   // Act
-  list.split_messages(3);
+  split_messages(list, 3, messages_);
 
   // Assert
-  ASSERT_EQ(1U, list.message_boundaries().size());
-  EXPECT_EQ((MessageBoundary{.samples_count = 3, .id = 0, .t = 10, .v = 1.0}), boundary(list.message_boundaries()[0]));
+  ASSERT_EQ(1U, messages_.size());
+  EXPECT_EQ((MessageBoundary{.samples_count = 3, .id = 0, .t = 10, .v = 1.0}), boundary(messages_[0]));
 }
 
 TEST_F(SegmentSamplesStorageListSplitMessagesFixture, PluralSamplesInSeriesSecondBoundaryAtFourSampleOfSeries) {
@@ -658,12 +661,12 @@ TEST_F(SegmentSamplesStorageListSplitMessagesFixture, PluralSamplesInSeriesSecon
   list.storages()[0].add(2, Sample(30, 3.0));
 
   // Act
-  list.split_messages(2);
+  split_messages(list, 2, messages_);
 
   // Assert
-  ASSERT_EQ(2U, list.message_boundaries().size());
-  EXPECT_EQ((MessageBoundary{.samples_count = 3, .id = 0, .t = 10, .v = 1.0}), boundary(list.message_boundaries()[0]));
-  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 2, .t = 30, .v = 3.0}), boundary(list.message_boundaries()[1]));
+  ASSERT_EQ(2U, messages_.size());
+  EXPECT_EQ((MessageBoundary{.samples_count = 3, .id = 0, .t = 10, .v = 1.0}), boundary(messages_[0]));
+  EXPECT_EQ((MessageBoundary{.samples_count = 1, .id = 2, .t = 30, .v = 3.0}), boundary(messages_[1]));
 }
 
 class ProtobufEncoderFixture : public testing::Test {
@@ -686,13 +689,13 @@ TEST_F(ProtobufEncoderFixture, Test) {
   storages_list.storages()[0].add(1, Sample(10, 1));
   storages_list.storages()[1].add(0, Sample(10, 1));
 
-  storages_list.split_messages(3);
+  Slice<GoMessage> messages;
+  split_messages(storages_list, 3, messages);
 
-  std::vector<GoMessage> messages(2);
   std::string proto;
 
   // Act
-  encoder_.encode(storages_list, lss_getter, 0, 2, messages);
+  encoder_.encode(lss_getter, 0, 2, messages);
 
   // Assert
   EXPECT_EQ(3U, messages[0].samples_count);
@@ -728,13 +731,13 @@ TEST_F(ProtobufEncoderFixture, SingleMessage_EncodesAllSamples) {
   storages_list.storages()[0].add(0, Sample(9, 2));
   storages_list.storages()[1].add(0, Sample(10, 1));
 
-  storages_list.split_messages(10);
+  Slice<GoMessage> messages;
+  split_messages(storages_list, 10, messages);
 
-  std::vector<GoMessage> messages(1);
   std::string proto;
 
   // Act
-  encoder_.encode(storages_list, lss_getter, 0, 1, messages);
+  encoder_.encode(lss_getter, 0, 1, messages);
 
   // Assert
   EXPECT_EQ(3U, messages[0].samples_count);
@@ -764,13 +767,12 @@ TEST_F(ProtobufEncoderFixture, EncodeSubrange_SecondMessageOnly) {
   storages_list.storages()[0].add(1, Sample(10, 1));
   storages_list.storages()[1].add(0, Sample(10, 1));
 
-  storages_list.split_messages(3);
-
-  std::vector<GoMessage> messages(2);
+  Slice<GoMessage> messages;
+  split_messages(storages_list, 3, messages);
   std::string proto;
 
   // Act
-  encoder_.encode(storages_list, lss_getter, 1, 1, messages);
+  encoder_.encode(lss_getter, 1, 1, messages);
 
   // Assert
   EXPECT_EQ(1U, messages[1].samples_count);
@@ -799,13 +801,13 @@ TEST_F(ProtobufEncoderFixture, ThreeMessages_TwoSamplesPerMessage) {
   storages_list.storages()[1].add(0, Sample(104, 5.0));
   storages_list.storages()[1].add(0, Sample(105, 6.0));
 
-  storages_list.split_messages(2);
+  Slice<GoMessage> messages;
+  split_messages(storages_list, 2, messages);
 
-  std::vector<GoMessage> messages(3);
   std::string proto;
 
   // Act
-  encoder_.encode(storages_list, lss_getter, 0, 3, messages);
+  encoder_.encode(lss_getter, 0, 3, messages);
 
   // Assert
   EXPECT_EQ(2U, messages[0].samples_count);
@@ -847,13 +849,13 @@ TEST_F(ProtobufEncoderFixture, SingleShard_TwoMessages) {
   storages_list.storages()[0].add(1, Sample(3, 3.0));
   storages_list.storages()[0].add(1, Sample(4, 4.0));
 
-  storages_list.split_messages(2);
+  Slice<GoMessage> messages;
+  split_messages(storages_list, 2, messages);
 
-  std::vector<GoMessage> messages(2);
   std::string proto;
 
   // Act
-  encoder_.encode(storages_list, lss_getter, 0, 2, messages);
+  encoder_.encode(lss_getter, 0, 2, messages);
 
   // Assert
   EXPECT_EQ(2U, messages[0].samples_count);
