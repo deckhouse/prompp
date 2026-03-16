@@ -2,13 +2,10 @@
 
 #include "primitives/snug_composites.h"
 #include "profiling/profiling.h"
-#include "series_index/queryable_encoding_bimap.h"
-#include "series_index/trie/cedarpp_tree.h"
 
 namespace {
 
-using QueryableEncodingBimap =
-    series_index::QueryableEncodingBimap<BareBones::Vector>;
+using QueryableEncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector>;
 
 std::string_view get_lss_file() {
   if (auto& context = benchmark::internal::GetGlobalContext(); context != nullptr) {

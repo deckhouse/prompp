@@ -29,7 +29,7 @@ class ShrinkableEncodingBimapLabelSetFixture : public testing::Test {
   auto create_and_load_checkpoint(const typename PromPP::Primitives::SnugComposites::LabelSet::ShrinkableEncodingBimap<Vector>::checkpoint_type* from) {
     auto checkpoint = encoding_table_.checkpoint();
     std::stringstream ss;
-    checkpoint.save(ss, from);
+    encoding_table_.save(ss, checkpoint, from);
     decoding_table_.load(ss);
     return checkpoint;
   }
@@ -95,13 +95,13 @@ TEST_F(ShrinkableEncodingBimapLabelSetFixture, LoadFromNonShrinkableTable) {
   non_shrinkable_encoding_bimap.find_or_emplace(LabelViewSet{{"process", "nodejs"}});
   non_shrinkable_encoding_bimap.find_or_emplace(LabelViewSet{{"process", "python"}});
   const auto checkpoint = non_shrinkable_encoding_bimap.checkpoint();
-  stream << checkpoint;
+  non_shrinkable_encoding_bimap.save(stream, non_shrinkable_encoding_bimap.checkpoint());
   stream >> encoding_table_;
   encoding_table_.shrink_to_checkpoint_size(encoding_table_.checkpoint());
 
   const auto nginx_id = non_shrinkable_encoding_bimap.find_or_emplace(LabelViewSet{{"process", "nginx"}});
   const auto apache_id = non_shrinkable_encoding_bimap.find_or_emplace(LabelViewSet{{"process", "apache"}});
-  stream << non_shrinkable_encoding_bimap.checkpoint() - checkpoint;
+  non_shrinkable_encoding_bimap.save(stream, non_shrinkable_encoding_bimap.checkpoint() - checkpoint);
   stream >> encoding_table_;
 
   // Assert
@@ -168,10 +168,10 @@ TEST_F(ShrinkableEncodingBimapLabelSetFixture, CheckSaveSize) {
 
   auto delta = checkpoint2 - checkpoint;
   BareBones::ShrinkedToFitOStringStream ss;
-  ss << delta;
+  encoding_table_.save(ss, delta);
 
   // Act
-  const auto save_size = delta.save_size();
+  const auto save_size = encoding_table_.save_size(delta);
 
   // Assert
   EXPECT_EQ(ss.view().size(), save_size);
@@ -244,12 +244,12 @@ TEST_F(ShrinkableEncodingBimapLabelSetFixture, FullCheckpointChainSaveAndLoadAll
   encoding_table_.find_or_emplace(ls_[0]);
   encoding_table_.find_or_emplace(ls_[1]);
   const auto checkpoint1 = encoding_table_.checkpoint();
-  snapshot_stream << checkpoint1;
+  encoding_table_.save(snapshot_stream, checkpoint1);
 
   encoding_table_.find_or_emplace(ls_[2]);
   encoding_table_.find_or_emplace(ls_[3]);
   const auto checkpoint2 = encoding_table_.checkpoint();
-  delta1_stream << (checkpoint2 - checkpoint1);
+  encoding_table_.save(delta1_stream, checkpoint2 - checkpoint1);
 
   encoding_table_.shrink_to_checkpoint_size(checkpoint2);
   const auto checkpoint_after_shrink = encoding_table_.checkpoint();
@@ -257,7 +257,7 @@ TEST_F(ShrinkableEncodingBimapLabelSetFixture, FullCheckpointChainSaveAndLoadAll
   encoding_table_.find_or_emplace(ls_[4]);
   encoding_table_.find_or_emplace(ls_[5]);
   const auto checkpoint3 = encoding_table_.checkpoint();
-  delta2_stream << (checkpoint3 - checkpoint_after_shrink);
+  encoding_table_.save(delta2_stream, checkpoint3 - checkpoint_after_shrink);
 
   // Act
   PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<Vector> loaded_table;
@@ -279,12 +279,12 @@ TEST_F(ShrinkableEncodingBimapLabelSetFixture, FullCheckpointChainWithPartialShr
   encoding_table_.find_or_emplace(ls_[0]);
   encoding_table_.find_or_emplace(ls_[1]);
   const auto checkpoint1 = encoding_table_.checkpoint();
-  snapshot_stream << checkpoint1;
+  encoding_table_.save(snapshot_stream, checkpoint1);
 
   encoding_table_.find_or_emplace(ls_[2]);
   encoding_table_.find_or_emplace(ls_[3]);
   const auto checkpoint2 = encoding_table_.checkpoint();
-  delta1_stream << (checkpoint2 - checkpoint1);
+  encoding_table_.save(delta1_stream, checkpoint2 - checkpoint1);
 
   encoding_table_.shrink_to_checkpoint_size(checkpoint1);
   const auto checkpoint_after_shrink = encoding_table_.checkpoint();
@@ -292,7 +292,7 @@ TEST_F(ShrinkableEncodingBimapLabelSetFixture, FullCheckpointChainWithPartialShr
   encoding_table_.find_or_emplace(ls_[4]);
   encoding_table_.find_or_emplace(ls_[5]);
   const auto checkpoint3 = encoding_table_.checkpoint();
-  delta2_stream << (checkpoint3 - checkpoint_after_shrink);
+  encoding_table_.save(delta2_stream, checkpoint3 - checkpoint_after_shrink);
 
   // Act
   PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<Vector> loaded_table;

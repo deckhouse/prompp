@@ -214,8 +214,8 @@ class BasicEncoder {
 
     // write new label sets
     label_sets_checkpoint_ = label_sets_.checkpoint();
-    label_sets_bytes_ += label_sets_checkpoint_.save_size(&label_sets_checkpoint);
-    lz4stream_ << (label_sets_checkpoint_ - label_sets_checkpoint);
+    label_sets_bytes_ += label_sets_.save_size(label_sets_checkpoint_, &label_sets_checkpoint);
+    label_sets_.save(lz4stream_, label_sets_checkpoint_ - label_sets_checkpoint);
     if constexpr (shrink_lss) {
       label_sets_.shrink_to_checkpoint_size(label_sets_checkpoint_);
     }

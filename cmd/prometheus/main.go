@@ -805,6 +805,10 @@ func main() {
 		hManager.MergeOutOfOrderChunks,
 		prometheus.DefaultRegisterer,
 	)
+	if err := adapter.ApplyConfig(cfgFile); err != nil {
+		level.Error(logger).Log("msg", "failed to apply config to adapter", "err", err)
+		os.Exit(1)
+	}
 
 	// PP_CHANGES.md: rebuild on cpp end
 
@@ -1037,6 +1041,9 @@ func main() {
 		{ // PP_CHANGES.md: rebuild on cpp start
 			name:     "head_manager",
 			reloader: hManager.ApplyConfig,
+		}, { // PP_CHANGES.md: rebuild on cpp start
+			name:     "adapter",
+			reloader: adapter.ApplyConfig,
 		}, { // PP_CHANGES.md: rebuild on cpp end
 			name:     "db_storage",
 			reloader: localStorage.ApplyConfig,
@@ -2209,6 +2216,23 @@ func readPromPPFeatures(logger log.Logger) {
 				"pages", v,
 			)
 			web.FederationSplitFamiliesPageSize = v
+
+		case "default_sample_age_limit":
+			fvalue = strings.TrimSpace(fvalue)
+			defaultSampleAgeLimit, err := model.ParseDuration(fvalue)
+			if err != nil {
+				level.Error(logger).Log(
+					"msg", "[FEATURE] Error parsing default_sample_age_limit value",
+					"err", err)
+				continue
+			}
+
+			_ = level.Info(logger).Log(
+				"msg", "[FEATURE] default_sample_age_limit is set.",
+				"limit", fvalue,
+			)
+
+			remotewriter.DefaultSampleAgeLimit = defaultSampleAgeLimit
 		}
 	}
 }
