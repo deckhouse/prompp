@@ -493,9 +493,7 @@ TEST_F(QueryableEncodingBimapShrinkFixture, IndexWriteContextDeduplicatesSymbols
   // Act
   const auto ctx = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{lss_};
   std::vector<std::string> symbols;
-  ctx.for_each_symbol([&](uint32_t /*symbol_ref*/, std::string_view s) {
-    symbols.emplace_back(s);
-  });
+  ctx.for_each_symbol([&](uint32_t /*symbol_ref*/, std::string_view s) { symbols.emplace_back(s); });
 
   // Assert
   EXPECT_THAT(symbols, testing::ElementsAre("", "a", "b", "c", "job"));

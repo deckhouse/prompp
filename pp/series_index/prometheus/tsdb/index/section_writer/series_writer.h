@@ -1,8 +1,8 @@
 #pragma once
 
 #include "bare_bones/preprocess.h"
-#include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "prometheus/tsdb/index/stream_writer.h"
+#include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "series_index/prometheus/tsdb/index/types.h"
 
 namespace series_index::prometheus::tsdb::index::section_writer {
@@ -85,7 +85,6 @@ class SeriesWriter {
 
     writer.align_to(PromPP::Prometheus::tsdb::index::kSeriesAlignment);
   }
-
 };
 
 }  // namespace series_index::prometheus::tsdb::index::section_writer

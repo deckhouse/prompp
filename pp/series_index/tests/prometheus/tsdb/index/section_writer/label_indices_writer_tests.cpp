@@ -14,9 +14,9 @@ namespace {
 
 using PromPP::Primitives::LabelViewSet;
 using PromPP::Prometheus::tsdb::index::StreamWriter;
+using series_index::invert_copy_mapping;
 using series_index::QueryableEncodingBimapCopier;
 using series_index::SeriesReverseIndex;
-using series_index::invert_copy_mapping;
 using series_index::prometheus::tsdb::index::section_writer::LabelIndicesWriter;
 using series_index::prometheus::tsdb::index::section_writer::SymbolsWriter;
 using std::operator""sv;

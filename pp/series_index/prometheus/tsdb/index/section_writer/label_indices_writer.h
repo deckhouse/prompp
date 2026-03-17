@@ -1,7 +1,7 @@
 #pragma once
 
-#include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "prometheus/tsdb/index/stream_writer.h"
+#include "series_index/prometheus/tsdb/index/index_write_context.h"
 
 namespace series_index::prometheus::tsdb::index::section_writer {
 

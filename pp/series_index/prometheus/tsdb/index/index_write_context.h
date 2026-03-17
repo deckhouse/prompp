@@ -121,17 +121,17 @@ class IndexWriteContext {
 
   [[nodiscard]] size_t estimate_symbol_ids_count() const {
     const auto view = lss_.data_view();
-    return view.keys().size() + view.values().size();
+    return 1 + view.keys().size() + view.values().size();
   }
 
   [[nodiscard]] uint32_t symbol_source_for_series(uint32_t ls_id) const noexcept { return lss_.symbol_source_for_series(ls_id); }
 
   [[nodiscard]] SymbolReference symbol_ref_for_name(uint32_t source, uint32_t name_id) const noexcept {
-    return symbol_ref_for_id(ExportSymbolId{source, name_id, Lss::kKeyOnlyValueId});
+    return symbol_ref_for_id(ExportSymbolId{static_cast<uint8_t>(source), name_id, Lss::kKeyOnlyValueId});
   }
 
   [[nodiscard]] SymbolReference symbol_ref_for_value(uint32_t source, uint32_t name_id, uint32_t value_id) const noexcept {
-    return symbol_ref_for_id(ExportSymbolId{source, name_id, value_id});
+    return symbol_ref_for_id(ExportSymbolId{static_cast<uint8_t>(source), name_id, value_id});
   }
 
   [[nodiscard]] std::string_view resolve_symbol(ExportSymbolId id) const noexcept { return lss_.resolve_symbol_by_source(id.source, id.name_id, id.value_id); }

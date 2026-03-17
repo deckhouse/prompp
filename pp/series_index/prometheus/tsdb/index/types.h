@@ -22,8 +22,7 @@ struct SymbolLssIdWithSource {
   uint32_t value_id{kNoId};
 
   constexpr SymbolLssIdWithSource() = default;
-  constexpr SymbolLssIdWithSource(uint32_t _source, uint32_t _name_id, uint32_t _value_id)
-      : source(_source), name_id(_name_id), value_id(_value_id) {}
+  constexpr SymbolLssIdWithSource(uint32_t _source, uint32_t _name_id, uint32_t _value_id) : source(_source), name_id(_name_id), value_id(_value_id) {}
 
   bool operator==(const SymbolLssIdWithSource&) const noexcept = default;
 

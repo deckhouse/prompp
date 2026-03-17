@@ -15,8 +15,7 @@
 #include "series_index/trie/cedarpp_tree.h"
 
 namespace {
-using Lss =
-    series_index::QueryableEncodingBimap<BareBones::Vector>;
+using Lss = series_index::QueryableEncodingBimap<BareBones::Vector>;
 
 template <class DecodingTable, class SortingIndex, class SeriesIds, class QueryableEncodingBimap, class LsIdVector>
 using LssCopier = series_index::QueryableEncodingBimapCopier<DecodingTable, SortingIndex, SeriesIds, QueryableEncodingBimap, LsIdVector>;

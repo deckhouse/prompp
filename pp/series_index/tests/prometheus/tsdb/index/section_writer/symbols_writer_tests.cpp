@@ -11,9 +11,9 @@ namespace {
 
 using PromPP::Primitives::LabelViewSet;
 using PromPP::Prometheus::tsdb::index::StreamWriter;
+using series_index::invert_copy_mapping;
 using series_index::QueryableEncodingBimapCopier;
 using series_index::SeriesReverseIndex;
-using series_index::invert_copy_mapping;
 using series_index::prometheus::tsdb::index::section_writer::SymbolsWriter;
 using std::operator""sv;
 
@@ -36,8 +36,7 @@ LabelViewSet make_ls_with_empty_label_value() {
 
 class SymbolsWriterFixture : public testing::TestWithParam<SymbolsWriterCase> {
  protected:
-  using QueryableEncodingBimap = series_index::
-      QueryableEncodingBimap<BareBones::Vector>;
+  using QueryableEncodingBimap = series_index::QueryableEncodingBimap<BareBones::Vector>;
 
   std::ostringstream stream_;
   StreamWriter<decltype(stream_)> stream_writer_{&stream_};

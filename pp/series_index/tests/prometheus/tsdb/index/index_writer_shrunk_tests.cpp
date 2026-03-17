@@ -15,8 +15,8 @@
 namespace {
 
 using PromPP::Primitives::LabelViewSet;
-using series_index::QueryableEncodingBimapCopier;
 using series_index::invert_copy_mapping;
+using series_index::QueryableEncodingBimapCopier;
 using series_index::prometheus::tsdb::index::ChunkMetadata;
 using series_index::prometheus::tsdb::index::IndexWriter;
 

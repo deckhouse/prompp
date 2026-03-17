@@ -10,8 +10,7 @@
 
 namespace {
 
-using QueryableEncodingBimap =
-    series_index::QueryableEncodingBimap<BareBones::Vector>;
+using QueryableEncodingBimap = series_index::QueryableEncodingBimap<BareBones::Vector>;
 using head::StatusGetterLSS;
 using PromPP::Primitives::LabelViewSet;
 using series_data::DataStorage;

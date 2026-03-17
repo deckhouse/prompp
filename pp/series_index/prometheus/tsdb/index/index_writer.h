@@ -1,11 +1,11 @@
 #pragma once
 
-#include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "prometheus/tsdb/index/toc_writer.h"
 #include "section_writer/label_indices_writer.h"
 #include "section_writer/postings_writer.h"
 #include "section_writer/series_writer.h"
 #include "section_writer/symbols_writer.h"
+#include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "types.h"
 
 namespace series_index::prometheus::tsdb::index {

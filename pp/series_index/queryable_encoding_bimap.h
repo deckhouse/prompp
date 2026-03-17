@@ -39,12 +39,12 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   using PostShrinkResolveFn = std::function<typename Base::value_type(uint32_t)>;
   using SnapshotSymbolResolveFn = std::function<std::string_view(uint32_t name_id, uint32_t value_id)>;
-  using SnapshotEnumerateSymbolIdsFn = std::function<void(const std::function<void(uint32_t name_id, uint32_t value_id)>&)>;
+  using SnapshotForEachSymbolIdFn = std::function<void(const std::function<void(uint32_t name_id, uint32_t value_id)>&)>;
 
   struct PostShrinkSnapshotAccess {
     PostShrinkResolveFn composite_resolve;
     SnapshotSymbolResolveFn symbol_resolve;
-    SnapshotEnumerateSymbolIdsFn enumerate_symbol_ids;
+    SnapshotForEachSymbolIdFn for_each_symbol_id;
   };
 
   static constexpr uint32_t kPendingShrinkBoundaryNotSet = std::numeric_limits<uint32_t>::max();
@@ -55,7 +55,6 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   friend class BareBones::SnugComposite::
       GenericDecodingTable<QueryableEncodingBimap<Vector>, PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, Vector>;
 
- public:
   [[nodiscard]] PROMPP_ALWAYS_INLINE const TrieIndex& trie_index() const noexcept { return trie_index_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesReverseIndex& reverse_index() const noexcept { return reverse_index_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const LsIdSet& ls_id_set() const noexcept { return ls_id_set_; }
@@ -72,20 +71,10 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE typename Base::value_type operator[](uint32_t id) const noexcept {
     if (is_shrunk()) [[unlikely]] {
-      if (id >= shift_) [[likely]] {
-        return Base::operator[](id - shift_);
-      }
-      assert(!post_shrink_mapping_.empty() && post_shrink_snapshot_access_.composite_resolve);
-      const auto new_id = post_shrink_mapping_[id];
-      if (new_id == Base::kInvalidId) [[unlikely]] {
-        return empty_composite();
-      }
-      return post_shrink_snapshot_access_.composite_resolve(new_id);
+      return resolve_shrunk_series(id);
     }
-    if (is_fixed()) [[unlikely]] {
-      if (id < pending_shrink_boundary_ && (id >= added_series_.size() || !added_series_[id])) {
-        return empty_composite();
-      }
+    if (is_hidden_in_fixed_state(id)) [[unlikely]] {
+      return empty_composite();
     }
     return Base::operator[](id);
   }
@@ -121,7 +110,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     PostShrinkSnapshotAccess access;
     access.composite_resolve = [&snapshot](uint32_t id) { return snapshot[id]; };
     access.symbol_resolve = [&snapshot](uint32_t name_id, uint32_t value_id) { return resolve_snapshot_symbol(snapshot, name_id, value_id); };
-    access.enumerate_symbol_ids = [&snapshot](const auto& callback) { enumerate_snapshot_symbol_ids(snapshot, callback); };
+    access.for_each_symbol_id = [&snapshot](const auto& callback) { enumerate_snapshot_symbol_ids(snapshot, callback); };
     return access;
   }
 
@@ -132,16 +121,14 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   template <class Callback>
   void for_each_snapshot_symbol_id(Callback&& callback) const {
-    if (!is_shrunk() || !post_shrink_snapshot_access_.enumerate_symbol_ids) {
+    if (!is_shrunk() || !post_shrink_snapshot_access_.for_each_symbol_id) {
       return;
     }
-    post_shrink_snapshot_access_.enumerate_symbol_ids(std::forward<Callback>(callback));
+    post_shrink_snapshot_access_.for_each_symbol_id(std::forward<Callback>(callback));
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_shrunk_for_export() const noexcept { return is_shrunk(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t symbol_source_for_series(uint32_t ls_id) const noexcept {
-    return symbol_source_for_series_impl(ls_id);
-  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t symbol_source_for_series(uint32_t ls_id) const noexcept { return symbol_source_for_series_impl(ls_id); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view resolve_symbol_by_source(uint32_t source, uint32_t name_id, uint32_t value_id) const noexcept {
     if (name_id == kKeyOnlyValueId && value_id == kKeyOnlyValueId) {
       return {};
@@ -205,18 +192,10 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     }
     const auto logical_id = shift_ + static_cast<uint32_t>(*i);
     if (is_shrunk()) [[unlikely]] {
-      if (logical_id >= shift_) [[likely]] {
-        return logical_id;
-      }
-      if (!post_shrink_mapping_.empty() && post_shrink_mapping_[logical_id] != Base::kInvalidId) {
-        return logical_id;
-      }
-      return {};
+      return is_visible_in_shrunk_state(logical_id) ? std::optional<uint32_t>{logical_id} : std::optional<uint32_t>{};
     }
-    if (is_fixed()) [[unlikely]] {
-      if (logical_id < pending_shrink_boundary_ && (logical_id >= added_series_.size() || !added_series_[logical_id])) {
-        return {};
-      }
+    if (is_hidden_in_fixed_state(logical_id)) [[unlikely]] {
+      return {};
     }
     return logical_id;
   }
@@ -297,6 +276,29 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_shrunk() const noexcept { return shift_ > 0; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_fixed() const noexcept { return shift_ == 0 && pending_shrink_boundary_ != kPendingShrinkBoundaryNotSet; }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_hidden_in_fixed_state(uint32_t ls_id) const noexcept {
+    return is_fixed() && ls_id < pending_shrink_boundary_ && (ls_id >= added_series_.size() || !added_series_[ls_id]);
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_visible_in_shrunk_state(uint32_t ls_id) const noexcept {
+    if (ls_id >= shift_) [[likely]] {
+      return true;
+    }
+    return !post_shrink_mapping_.empty() && post_shrink_mapping_[ls_id] != Base::kInvalidId;
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE typename Base::value_type resolve_shrunk_series(uint32_t ls_id) const noexcept {
+    if (ls_id >= shift_) [[likely]] {
+      return Base::operator[](ls_id - shift_);
+    }
+    assert(!post_shrink_mapping_.empty() && post_shrink_snapshot_access_.composite_resolve);
+    const auto mapped_id = post_shrink_mapping_[ls_id];
+    if (mapped_id == Base::kInvalidId) [[unlikely]] {
+      return empty_composite();
+    }
+    return post_shrink_snapshot_access_.composite_resolve(mapped_id);
+  }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t symbol_source_for_series_impl(uint32_t ls_id) const noexcept {
     if (!is_shrunk()) [[likely]] {
