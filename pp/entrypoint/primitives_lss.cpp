@@ -334,15 +334,15 @@ extern "C" void prompp_primitives_lss_finalize_copy_and_shrink(void* args) {
   const auto* in = static_cast<const Arguments*>(args);
   auto& current = std::get<QueryableEncodingBimap>(*in->current_lss);
   auto& snapshot = std::get<entrypoint::head::ReadonlyLss>(*in->lss_snapshot);
-  const uint32_t boundary = in->checkpoint->next_item_index();
-  current.finalize_copy_and_shrink(
-      boundary, [&snapshot](uint32_t id) { return snapshot[id]; },
-      [&snapshot](uint32_t name_id, uint32_t value_id) {
-        const auto& view = snapshot.data_view();
-        return value_id == series_index::prometheus::tsdb::index::SymbolLssIdWithSource::kNoId ? view.key_symbol(name_id)
-                                                                                               : view.value_symbol(name_id, value_id);
-      },
-      *in->old_to_new_mapping);
+  const uint32_t shrink_boundary = in->checkpoint->next_item_index();
+  QueryableEncodingBimap::PostShrinkResolveFn composite_resolve = [&snapshot](uint32_t id) { return snapshot[id]; };
+  QueryableEncodingBimap::SnapshotSymbolResolveFn symbol_resolve = [&snapshot](uint32_t name_id, uint32_t value_id) {
+    using SymbolLssIdWithSource = series_index::prometheus::tsdb::index::SymbolLssIdWithSource;
+
+    const auto& view = snapshot.data_view();
+    return value_id == SymbolLssIdWithSource::kNoId ? view.key_symbol(name_id) : view.value_symbol(name_id, value_id);
+  };
+  current.finalize_copy_and_shrink(shrink_boundary, composite_resolve, symbol_resolve, *in->old_to_new_mapping);
 }
 
 void prompp_primitives_free_ls_ids_mapping(void* args) {
