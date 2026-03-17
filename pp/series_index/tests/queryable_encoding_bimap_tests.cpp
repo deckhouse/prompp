@@ -399,24 +399,31 @@ TEST_F(QueryableEncodingBimapShrinkFixture, TouchedSeriesFilledByFinalize) {
   EXPECT_EQ(ls3_, lss_[2]);
 }
 
-TEST_F(QueryableEncodingBimapCopierFixture, FixedStateUnmarkedSeriesEmpty) {
-  // Arrange
-  const auto ls1 = LabelViewSet{{"job", "a"}};
-  const auto ls2 = LabelViewSet{{"job", "b"}};
-  const auto ls3 = LabelViewSet{{"job", "c"}};
-  lss_.find_or_emplace(ls1);
-  lss_.find_or_emplace(ls2);
+class QueryableEncodingBimapFixedStateFixture : public QueryableEncodingBimapCopierFixture {
+ protected:
+  LabelViewSet ls1_{{"job", "a"}};
+  LabelViewSet ls2_{{"job", "b"}};
+  LabelViewSet ls3_{{"job", "c"}};
 
-  // Act
-  lss_.set_pending_shrink_boundary(3);
-  const auto id3 = lss_.find_or_emplace(ls3);
+  void SetUp() override {
+    QueryableEncodingBimapCopierFixture::SetUp();
+    lss_.find_or_emplace(ls1_);
+    lss_.find_or_emplace(ls2_);
+    lss_.set_pending_shrink_boundary(3);
+    lss_.find_or_emplace(ls3_);
+  }
+};
 
+TEST_F(QueryableEncodingBimapFixedStateFixture, FindReturnsEmptyForUnmarkedSeries) {
   // Assert
-  EXPECT_EQ(2U, id3);
-  EXPECT_TRUE(std::ranges::equal(ls1, lss_[0]));
-  EXPECT_TRUE(std::ranges::equal(ls2, lss_[1]));
+  EXPECT_FALSE(lss_.find(ls3_));
+}
+
+TEST_F(QueryableEncodingBimapFixedStateFixture, OperatorBracketReturnsEmptyForUnmarkedSeries) {
+  // Assert
+  EXPECT_TRUE(std::ranges::equal(ls1_, lss_[0]));
+  EXPECT_TRUE(std::ranges::equal(ls2_, lss_[1]));
   EXPECT_EQ(0U, lss_[2].size());
-  EXPECT_FALSE(lss_.find(ls3));
 }
 
 class QueryableEncodingBimapShrinkTwoSeriesFixture : public QueryableEncodingBimapCopierFixture {
@@ -433,23 +440,19 @@ class QueryableEncodingBimapShrinkTwoSeriesFixture : public QueryableEncodingBim
     lss_.build_deferred_indexes();
   }
 
-  void RunFinalizeShrinkWithSnapshotCallback(const BareBones::Vector<uint32_t>& ids_for_copy, const BareBones::Bitset& touched) {
+  void RunFinalizeShrinkWithSnapshot(const BareBones::Vector<uint32_t>& ids_for_copy, const BareBones::Bitset& touched) {
     const uint32_t shrink_boundary = lss_.next_item_index();
     Copier copier(lss_, lss_.sorting_index(), ids_for_copy, lss_copy_, dst_src_ids_mapping_);
     copier.copy_added_series_and_build_indexes();
     invert_copy_mapping(dst_src_ids_mapping_, shrink_boundary, old_to_new_);
     lss_.fill_touched_series_mapping(shrink_boundary, lss_copy_, old_to_new_, touched);
-    Lss::SnapshotSymbolResolveFn symbol_resolve = [this](uint32_t name_id, uint32_t value_id) -> std::string_view {
-      const auto& view = lss_copy_.data_view();
-      return value_id == Lss::kKeyOnlyValueId ? view.key_symbol(name_id) : view.value_symbol(name_id, value_id);
-    };
-    lss_.finalize_copy_and_shrink(shrink_boundary, [this](uint32_t id) { return lss_copy_[id]; }, symbol_resolve, old_to_new_);
+    lss_.finalize_copy_and_shrink(shrink_boundary, lss_copy_, old_to_new_);
   }
 };
 
-TEST_F(QueryableEncodingBimapShrinkTwoSeriesFixture, FinalizeShrinkWithCallback) {
+TEST_F(QueryableEncodingBimapShrinkTwoSeriesFixture, FinalizeShrinkWithSnapshot) {
   // Act
-  RunFinalizeShrinkWithSnapshotCallback(BareBones::Vector<uint32_t>{0U, 1U}, lss_.added_series());
+  RunFinalizeShrinkWithSnapshot(BareBones::Vector<uint32_t>{0U, 1U}, lss_.added_series());
 
   // Assert
   EXPECT_TRUE(std::ranges::equal(ls1_, lss_[0]));
@@ -468,11 +471,63 @@ TEST_F(QueryableEncodingBimapShrinkTwoSeriesFixture, ShrinkUnmappedIdReturnsEmpt
   touched.set(0);
 
   // Act
-  RunFinalizeShrinkWithSnapshotCallback(BareBones::Vector<uint32_t>{0U}, touched);
+  RunFinalizeShrinkWithSnapshot(BareBones::Vector<uint32_t>{0U}, touched);
 
   // Assert
   EXPECT_EQ(0U, lss_[1].size());
   EXPECT_EQ(ls1_, lss_[0]);
+}
+
+TEST_F(QueryableEncodingBimapShrinkFixture, IndexWriteContextDeduplicatesSymbolsWhenShrunkAllFromSnapshot) {
+  // Arrange
+  const uint32_t shrink_boundary = lss_.next_item_index();
+  Lss lss_copy;
+  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
+  copier.copy_added_series_and_build_indexes();
+  BareBones::Vector<uint32_t> old_to_new;
+  invert_copy_mapping(dst_src_ids_mapping_, shrink_boundary, old_to_new);
+  lss_.fill_touched_series_mapping(shrink_boundary, lss_copy, old_to_new, lss_.added_series());
+  lss_.finalize_copy_and_shrink(shrink_boundary, lss_copy, old_to_new);
+
+  // Act
+  const auto ctx = lss_.make_index_write_context();
+  std::vector<std::string> symbols;
+  ctx.for_each_symbol([&](uint32_t /*symbol_ref*/, std::string_view s) {
+    symbols.emplace_back(s);
+  });
+
+  // Assert
+  EXPECT_THAT(symbols, testing::ElementsAre("", "a", "b", "c", "job"));
+}
+
+TEST_F(QueryableEncodingBimapShrinkFixture, IndexWriteContextResolvesSeriesRefsWhenShrunkAllFromSnapshot) {
+  // Arrange
+  const uint32_t shrink_boundary = lss_.next_item_index();
+  Lss lss_copy;
+  Copier copier(lss_, lss_.sorting_index(), lss_.added_series(), lss_copy, dst_src_ids_mapping_);
+  copier.copy_added_series_and_build_indexes();
+  BareBones::Vector<uint32_t> old_to_new;
+  invert_copy_mapping(dst_src_ids_mapping_, shrink_boundary, old_to_new);
+  lss_.fill_touched_series_mapping(shrink_boundary, lss_copy, old_to_new, lss_.added_series());
+  lss_.finalize_copy_and_shrink(shrink_boundary, lss_copy, old_to_new);
+  const auto ctx = lss_.make_index_write_context();
+
+  // Act
+  const auto labels0 = lss_[0];
+  const auto labels1 = lss_[1];
+  const auto labels2 = lss_[2];
+  const auto name_ref0 = ctx.symbol_ref_for_name_for_series(0, labels0.begin().name_id());
+  const auto name_ref1 = ctx.symbol_ref_for_name_for_series(1, labels1.begin().name_id());
+  const auto name_ref2 = ctx.symbol_ref_for_name_for_series(2, labels2.begin().name_id());
+  const auto value_ref0 = ctx.symbol_ref_for_value_for_series(0, labels0.begin().name_id(), labels0.begin().value_id());
+  const auto value_ref1 = ctx.symbol_ref_for_value_for_series(1, labels1.begin().name_id(), labels1.begin().value_id());
+  const auto value_ref2 = ctx.symbol_ref_for_value_for_series(2, labels2.begin().name_id(), labels2.begin().value_id());
+
+  // Assert
+  EXPECT_EQ(name_ref0, name_ref1);
+  EXPECT_EQ(name_ref1, name_ref2);
+  EXPECT_NE(value_ref0, value_ref1);
+  EXPECT_NE(value_ref1, value_ref2);
 }
 
 }  // namespace

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include "prometheus/tsdb/index/toc_writer.h"
 #include "section_writer/label_indices_writer.h"
 #include "section_writer/postings_writer.h"
@@ -15,8 +17,9 @@ class IndexWriter {
   using SeriesWriter = section_writer::SeriesWriter<QueryableEncodingBimap, Stream>;
   using PostingsWriter = section_writer::PostingsWriter<QueryableEncodingBimap, Stream>;
   using LabelIndicesWriter = section_writer::LabelIndicesWriter<QueryableEncodingBimap, Stream>;
+  using IndexWriteContext = typename QueryableEncodingBimap::IndexWriteContext;
 
-  explicit IndexWriter(const QueryableEncodingBimap& lss) : lss_(lss), series_writer_(lss_, symbol_references_, series_references_) {}
+  explicit IndexWriter(const QueryableEncodingBimap& lss) : lss_(lss) {}
 
   PROMPP_ALWAYS_INLINE void write_header(Stream& stream) {
     writer_.writer().set_stream(&stream);
@@ -29,7 +32,9 @@ class IndexWriter {
     writer_.writer().set_stream(&stream);
 
     toc_.symbols = writer_.position();
-    section_writer::SymbolsWriter{lss_, symbol_references_, writer_}.write();
+    index_write_context_.emplace(lss_.make_index_write_context());
+    label_indices_writer_.set_index_write_context(&*index_write_context_);
+    section_writer::SymbolsWriter<QueryableEncodingBimap, Stream>{*index_write_context_, writer_}.write();
   }
 
   template <class ChunkMetadataContainer>
@@ -39,7 +44,8 @@ class IndexWriter {
     if (toc_.series == 0) [[unlikely]] {
       toc_.series = writer_.position();
     }
-    series_writer_.write(ls_id, chunks, writer_);
+    assert(index_write_context_.has_value());
+    section_writer::SeriesWriter<QueryableEncodingBimap, Stream>{lss_, *index_write_context_, series_references_}.write(ls_id, chunks, writer_);
   }
 
   PROMPP_ALWAYS_INLINE void write_label_indices(Stream& stream) {
@@ -94,13 +100,12 @@ class IndexWriter {
  private:
   const QueryableEncodingBimap& lss_;
 
-  SymbolReferencesMap symbol_references_;
   SeriesReferencesMap series_references_;
+  std::optional<IndexWriteContext> index_write_context_;
 
   StreamWriter writer_;
 
-  SeriesWriter series_writer_;
-  LabelIndicesWriter label_indices_writer_{lss_, symbol_references_, writer_};
+  LabelIndicesWriter label_indices_writer_{lss_, writer_};
   PostingsWriter postings_writer_{lss_, series_references_, writer_};
 
   PromPP::Prometheus::tsdb::index::Toc toc_;

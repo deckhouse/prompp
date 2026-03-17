@@ -2,11 +2,8 @@
 
 #include "bare_bones/bitset.h"
 #include "bare_bones/vector.h"
-#include "bare_bones/xxhash.h"
-#include "hashdex.hpp"
 #include "head/lss.h"
 #include "primitives/go_slice.h"
-#include "series_index/prometheus/tsdb/index/types.h"
 #include "series_index/querier/label_names_querier.h"
 #include "series_index/querier/label_values_querier.h"
 #include "series_index/queryable_encoding_bimap.h"
@@ -335,14 +332,7 @@ extern "C" void prompp_primitives_lss_finalize_copy_and_shrink(void* args) {
   auto& current = std::get<QueryableEncodingBimap>(*in->current_lss);
   auto& snapshot = std::get<entrypoint::head::ReadonlyLss>(*in->lss_snapshot);
   const uint32_t shrink_boundary = in->checkpoint->next_item_index();
-  QueryableEncodingBimap::PostShrinkResolveFn composite_resolve = [&snapshot](uint32_t id) { return snapshot[id]; };
-  QueryableEncodingBimap::SnapshotSymbolResolveFn symbol_resolve = [&snapshot](uint32_t name_id, uint32_t value_id) {
-    using SymbolLssIdWithSource = series_index::prometheus::tsdb::index::SymbolLssIdWithSource;
-
-    const auto& view = snapshot.data_view();
-    return value_id == SymbolLssIdWithSource::kNoId ? view.key_symbol(name_id) : view.value_symbol(name_id, value_id);
-  };
-  current.finalize_copy_and_shrink(shrink_boundary, composite_resolve, symbol_resolve, *in->old_to_new_mapping);
+  current.finalize_copy_and_shrink(shrink_boundary, snapshot, *in->old_to_new_mapping);
 }
 
 void prompp_primitives_free_ls_ids_mapping(void* args) {

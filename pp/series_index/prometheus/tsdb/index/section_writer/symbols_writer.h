@@ -2,7 +2,6 @@
 
 #include "bare_bones/preprocess.h"
 #include "prometheus/tsdb/index/stream_writer.h"
-#include "series_index/prometheus/tsdb/index/types.h"
 
 namespace series_index::prometheus::tsdb::index::section_writer {
 
@@ -11,56 +10,33 @@ class SymbolsWriter {
  public:
   using StreamWriter = PromPP::Prometheus::tsdb::index::StreamWriter<Stream>;
   using NoCrc32 = PromPP::Prometheus::tsdb::index::NoCrc32Tag;
+  using IndexWriteContext = typename Lss::IndexWriteContext;
 
-  SymbolsWriter(const Lss& lss, SymbolReferencesMap& symbol_references, StreamWriter& writer)
-      : lss_(lss), symbol_references_(symbol_references), writer_(writer) {}
+  SymbolsWriter(const IndexWriteContext& index_write_context, StreamWriter& writer) : index_write_context_(index_write_context), writer_(writer) {}
 
   void write() {
-    generate_symbol_id_list();
-    deduplicate_and_generate_references();
+    calculate_serialized_size();
     write_symbols();
   }
 
  private:
-  const Lss& lss_;
-  SymbolReferencesMap& symbol_references_;
+  const IndexWriteContext& index_write_context_;
   StreamWriter& writer_;
 
-  std::vector<SymbolLssIdWithSource> symbol_ids_;
   uint32_t serialized_unique_symbols_length_ = 0;
   uint32_t unique_symbols_count_ = 0;
-
-  void generate_symbol_id_list() {
-    symbol_ids_.clear();
-    symbol_ids_.emplace_back();
-
-    lss_.enumerate_symbol_ids([this](uint32_t source, uint32_t name_id, uint32_t value_id) { symbol_ids_.emplace_back(source, name_id, value_id); });
-
-    std::ranges::sort(symbol_ids_,
-                      [this](const SymbolLssIdWithSource& a, const SymbolLssIdWithSource& b) PROMPP_LAMBDA_INLINE { return get_symbol(a) < get_symbol(b); });
-  }
-
-  void deduplicate_and_generate_references() {
-    uint32_t symbol_index = 0;
-    for (auto it = symbol_ids_.begin(); it != symbol_ids_.end(); ++symbol_index, ++unique_symbols_count_) {
-      symbol_references_.try_emplace(*it, symbol_index);
-
-      auto symbol = get_symbol(*it);
-      serialized_unique_symbols_length_ += serialized_string_length(symbol);
-
-      while (++it != symbol_ids_.end() && symbol == get_symbol(*it)) {
-        symbol_references_.try_emplace(*it, symbol_index);
-        it->mark_as_duplicated();
-      }
-    }
-  }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE static uint32_t serialized_string_length(const std::string_view& str) noexcept {
     return BareBones::Encoding::VarInt::length(str.length()) + str.length();
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view get_symbol(SymbolLssIdWithSource symbol_id) const noexcept {
-    return lss_.resolve_symbol(symbol_id.source, symbol_id.name_id, symbol_id.value_id);
+  void calculate_serialized_size() {
+    serialized_unique_symbols_length_ = 0;
+    unique_symbols_count_ = 0;
+    index_write_context_.for_each_symbol([this](uint32_t, std::string_view symbol) {
+      serialized_unique_symbols_length_ += serialized_string_length(symbol);
+      ++unique_symbols_count_;
+    });
   }
 
   void write_symbols() noexcept {
@@ -69,13 +45,10 @@ class SymbolsWriter {
       writer_.template write_uint32<NoCrc32>(payload_size);
       writer_.write_uint32(unique_symbols_count_);
 
-      for (const auto& symbol_id : symbol_ids_) {
-        if (!symbol_id.is_duplicated()) {
-          auto symbol = get_symbol(symbol_id);
-          writer_.write_varint(static_cast<uint64_t>(symbol.length()));
-          writer_.write(symbol);
-        }
-      }
+      index_write_context_.for_each_symbol([this](uint32_t, std::string_view symbol) {
+        writer_.write_varint(static_cast<uint64_t>(symbol.length()));
+        writer_.write(symbol);
+      });
     });
   }
 };
