@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bare_bones/preprocess.h"
+#include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "prometheus/tsdb/index/stream_writer.h"
 #include "series_index/prometheus/tsdb/index/types.h"
 
@@ -12,7 +13,7 @@ class SeriesWriter {
   using StreamWriter = PromPP::Prometheus::tsdb::index::StreamWriter<Stream>;
   using StringWriter = PromPP::Prometheus::tsdb::index::StringWriter;
   using NoCrc32 = PromPP::Prometheus::tsdb::index::NoCrc32Tag;
-  using IndexWriteContext = typename Lss::IndexWriteContext;
+  using IndexWriteContext = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>;
 
   SeriesWriter(const Lss& lss, const IndexWriteContext& index_write_context, SeriesReferencesMap& series_references)
       : lss_(lss), index_write_context_(index_write_context), series_references_(series_references) {}

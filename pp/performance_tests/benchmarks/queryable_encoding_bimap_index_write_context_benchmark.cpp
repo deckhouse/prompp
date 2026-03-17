@@ -7,6 +7,7 @@
 
 #include "bare_bones/vector.h"
 #include "profiling/profiling.h"
+#include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "series_index/queryable_encoding_bimap.h"
 
 namespace {
@@ -85,7 +86,7 @@ void BM_IndexWriteContextNoShrink(benchmark::State& state) {
   ZoneScoped;
   const auto lss = get_lss_no_shrink();
   for ([[maybe_unused]] auto _ : state) {
-    auto context = lss->make_index_write_context();
+    auto context = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{*lss};
     benchmark::DoNotOptimize(context);
   }
   state.SetItemsProcessed(static_cast<int64_t>(lss->next_item_index()) * state.iterations());
@@ -95,7 +96,7 @@ void BM_IndexWriteContextAfterShrink(benchmark::State& state) {
   ZoneScoped;
   const auto lss = get_lss_after_shrink();
   for ([[maybe_unused]] auto _ : state) {
-    auto context = lss->make_index_write_context();
+    auto context = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{*lss};
     benchmark::DoNotOptimize(context);
   }
   state.SetItemsProcessed(static_cast<int64_t>(lss->next_item_index()) * state.iterations());

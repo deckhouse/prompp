@@ -3,6 +3,7 @@
 
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
+#include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "series_index/queryable_encoding_bimap.h"
 
 namespace {
@@ -490,7 +491,7 @@ TEST_F(QueryableEncodingBimapShrinkFixture, IndexWriteContextDeduplicatesSymbols
   lss_.finalize_copy_and_shrink(shrink_boundary, lss_copy, old_to_new);
 
   // Act
-  const auto ctx = lss_.make_index_write_context();
+  const auto ctx = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{lss_};
   std::vector<std::string> symbols;
   ctx.for_each_symbol([&](uint32_t /*symbol_ref*/, std::string_view s) {
     symbols.emplace_back(s);
@@ -510,7 +511,7 @@ TEST_F(QueryableEncodingBimapShrinkFixture, IndexWriteContextResolvesSeriesRefsW
   invert_copy_mapping(dst_src_ids_mapping_, shrink_boundary, old_to_new);
   lss_.fill_touched_series_mapping(shrink_boundary, lss_copy, old_to_new, lss_.added_series());
   lss_.finalize_copy_and_shrink(shrink_boundary, lss_copy, old_to_new);
-  const auto ctx = lss_.make_index_write_context();
+  const auto ctx = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{lss_};
 
   // Act
   const auto labels0 = lss_[0];

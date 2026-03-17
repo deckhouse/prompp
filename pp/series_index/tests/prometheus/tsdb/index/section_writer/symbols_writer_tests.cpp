@@ -2,6 +2,7 @@
 
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
+#include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "series_index/prometheus/tsdb/index/section_writer/symbols_writer.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
@@ -51,7 +52,7 @@ class SymbolsWriterFixture : public testing::TestWithParam<SymbolsWriterCase> {
 
 TEST_P(SymbolsWriterFixture, Test) {
   // Arrange
-  const auto index_write_context = lss_.make_index_write_context();
+  const auto index_write_context = series_index::prometheus::tsdb::index::IndexWriteContext<QueryableEncodingBimap>{lss_};
 
   // Act
   SymbolsWriter<QueryableEncodingBimap, decltype(stream_)> symbols_writer{index_write_context, stream_writer_};
@@ -122,7 +123,7 @@ TEST_F(SymbolsWriterShrunkLssFixture, WriteWhenLssShrunkAllFromSnapshot) {
   lss_.finalize_copy_and_shrink(shrink_boundary, lss_copy, old_to_new);
 
   // Act
-  const auto index_write_context = lss_.make_index_write_context();
+  const auto index_write_context = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{lss_};
   SymbolsWriter<Lss, decltype(stream_)> writer(index_write_context, stream_writer_);
   writer.write();
 

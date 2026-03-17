@@ -1,12 +1,12 @@
 #pragma once
 
-#include <optional>
-
+#include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "prometheus/tsdb/index/toc_writer.h"
 #include "section_writer/label_indices_writer.h"
 #include "section_writer/postings_writer.h"
 #include "section_writer/series_writer.h"
 #include "section_writer/symbols_writer.h"
+#include "types.h"
 
 namespace series_index::prometheus::tsdb::index {
 
@@ -17,7 +17,7 @@ class IndexWriter {
   using SeriesWriter = section_writer::SeriesWriter<QueryableEncodingBimap, Stream>;
   using PostingsWriter = section_writer::PostingsWriter<QueryableEncodingBimap, Stream>;
   using LabelIndicesWriter = section_writer::LabelIndicesWriter<QueryableEncodingBimap, Stream>;
-  using IndexWriteContext = typename QueryableEncodingBimap::IndexWriteContext;
+  using ExportContext = series_index::prometheus::tsdb::index::IndexWriteContext<QueryableEncodingBimap>;
 
   explicit IndexWriter(const QueryableEncodingBimap& lss) : lss_(lss) {}
 
@@ -32,9 +32,9 @@ class IndexWriter {
     writer_.writer().set_stream(&stream);
 
     toc_.symbols = writer_.position();
-    index_write_context_.emplace(lss_.make_index_write_context());
-    label_indices_writer_.set_index_write_context(&*index_write_context_);
-    section_writer::SymbolsWriter<QueryableEncodingBimap, Stream>{*index_write_context_, writer_}.write();
+    index_write_context_.rebuild();
+    label_indices_writer_.set_index_write_context(&index_write_context_);
+    section_writer::SymbolsWriter<QueryableEncodingBimap, Stream>{index_write_context_, writer_}.write();
   }
 
   template <class ChunkMetadataContainer>
@@ -44,8 +44,7 @@ class IndexWriter {
     if (toc_.series == 0) [[unlikely]] {
       toc_.series = writer_.position();
     }
-    assert(index_write_context_.has_value());
-    section_writer::SeriesWriter<QueryableEncodingBimap, Stream>{lss_, *index_write_context_, series_references_}.write(ls_id, chunks, writer_);
+    section_writer::SeriesWriter<QueryableEncodingBimap, Stream>{lss_, index_write_context_, series_references_}.write(ls_id, chunks, writer_);
   }
 
   PROMPP_ALWAYS_INLINE void write_label_indices(Stream& stream) {
@@ -101,7 +100,7 @@ class IndexWriter {
   const QueryableEncodingBimap& lss_;
 
   SeriesReferencesMap series_references_;
-  std::optional<IndexWriteContext> index_write_context_;
+  ExportContext index_write_context_{lss_};
 
   StreamWriter writer_;
 

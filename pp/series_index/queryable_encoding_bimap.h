@@ -5,15 +5,15 @@
 #include <limits>
 #include <ranges>
 #include <span>
-#include <vector>
+#include <utility>
 
 #include "bare_bones/allocator.h"
 #include "bare_bones/bitset.h"
 #include "bare_bones/preprocess.h"
 #include "bare_bones/snug_composite.h"
+#include "bare_bones/vector.h"
 #include "parallel_hashmap/phmap.h"
 #include "primitives/snug_composites.h"
-#include "prometheus/tsdb/index/types.h"
 #include "reverse_index.h"
 #include "series_index/trie/cedarpp_tree.h"
 #include "sorting_index.h"
@@ -37,8 +37,6 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   using TrieIndexIterator = typename TrieIndex::Iterator;
   using checkpoint_type = typename Base::checkpoint_type;
 
-  using SymbolReference = PromPP::Prometheus::tsdb::index::SymbolReference;
-
   using PostShrinkResolveFn = std::function<typename Base::value_type(uint32_t)>;
   using SnapshotSymbolResolveFn = std::function<std::string_view(uint32_t name_id, uint32_t value_id)>;
   using SnapshotEnumerateSymbolIdsFn = std::function<void(const std::function<void(uint32_t name_id, uint32_t value_id)>&)>;
@@ -49,132 +47,10 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     SnapshotEnumerateSymbolIdsFn enumerate_symbol_ids;
   };
 
-  class IndexWriteContext {
-   public:
-    struct ExportSymbolId {
-      uint32_t source{kSymbolSourceCurrent};
-      uint32_t name_id{kKeyOnlyValueId};
-      uint32_t value_id{kKeyOnlyValueId};
-
-      bool operator==(const ExportSymbolId&) const noexcept = default;
-    };
-
-    struct ExportSymbolIdHasher {
-      [[nodiscard]] size_t operator()(const ExportSymbolId& id) const noexcept {
-        size_t hash = phmap::phmap_mix<sizeof(size_t)>()(static_cast<size_t>(id.source));
-        hash = phmap::phmap_mix<sizeof(size_t)>()(hash + static_cast<size_t>(id.name_id));
-        hash = phmap::phmap_mix<sizeof(size_t)>()(hash + static_cast<size_t>(id.value_id));
-        return hash;
-      }
-    };
-
-    using SymbolReferencesMap = phmap::flat_hash_map<ExportSymbolId, SymbolReference, ExportSymbolIdHasher>;
-
-    explicit IndexWriteContext(const QueryableEncodingBimap& lss) : lss_(lss) { rebuild(); }
-
-    template <class Callback>
-    void for_each_symbol(Callback&& callback) const {
-      for (uint32_t symbol_ref = 0; symbol_ref < symbols_.size(); ++symbol_ref) {
-        callback(symbol_ref, symbols_[symbol_ref]);
-      }
-    }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t symbol_source_for_series(uint32_t ls_id) const noexcept { return lss_.symbol_source_for_series_impl(ls_id); }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE SymbolReference symbol_ref_for_name(uint32_t source, uint32_t name_id) const noexcept {
-      return symbol_ref_for_id(ExportSymbolId{source, name_id, kKeyOnlyValueId});
-    }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE SymbolReference symbol_ref_for_value(uint32_t source, uint32_t name_id, uint32_t value_id) const noexcept {
-      return symbol_ref_for_id(ExportSymbolId{source, name_id, value_id});
-    }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE SymbolReference symbol_ref_for_name_for_series(uint32_t ls_id, uint32_t name_id) const noexcept {
-      return symbol_ref_for_name(symbol_source_for_series(ls_id), name_id);
-    }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE SymbolReference symbol_ref_for_value_for_series(uint32_t ls_id, uint32_t name_id, uint32_t value_id) const noexcept {
-      return symbol_ref_for_value(symbol_source_for_series(ls_id), name_id, value_id);
-    }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE SymbolReference symbol_ref_for_label_index_value(uint32_t name_id, uint32_t value_id) const noexcept {
-      const auto current_it = symbol_refs_.find(ExportSymbolId{kSymbolSourceCurrent, name_id, value_id});
-      if (current_it != symbol_refs_.end()) [[likely]] {
-        return current_it->second;
-      }
-
-      const auto snapshot_it = symbol_refs_.find(ExportSymbolId{kSymbolSourceSnapshot, name_id, value_id});
-      assert(snapshot_it != symbol_refs_.end());
-      return snapshot_it->second;
-    }
-
-   private:
-    const QueryableEncodingBimap& lss_;
-    std::vector<std::string_view> symbols_;
-    SymbolReferencesMap symbol_refs_;
-
-    void rebuild() {
-      symbols_.clear();
-      symbol_refs_.clear();
-
-      std::vector<ExportSymbolId> symbol_ids;
-      symbol_ids.emplace_back();
-
-      if (!lss_.is_shrunk()) [[likely]] {
-        const auto view = lss_.data_view();
-        for (auto it = view.keys().begin(), e = view.keys().end(); it != e; ++it) {
-          symbol_ids.emplace_back(kSymbolSourceCurrent, it.id(), kKeyOnlyValueId);
-        }
-        for (auto it = view.values().begin(), e = view.values().end(); it != e; ++it) {
-          symbol_ids.emplace_back(kSymbolSourceCurrent, it.key_id(), it.value_id());
-        }
-      } else {
-        for (uint32_t ls_id = 0; ls_id < lss_.next_item_index(); ++ls_id) {
-          if (lss_.symbol_source_for_series_impl(ls_id) != kSymbolSourceCurrent) {
-            continue;
-          }
-          const auto labels = lss_[ls_id];
-          for (auto label = labels.begin(); label != labels.end(); ++label) {
-            symbol_ids.emplace_back(kSymbolSourceCurrent, label.name_id(), kKeyOnlyValueId);
-            symbol_ids.emplace_back(kSymbolSourceCurrent, label.name_id(), label.value_id());
-          }
-        }
-      }
-
-      if (lss_.is_shrunk() && lss_.post_shrink_snapshot_access_.enumerate_symbol_ids) {
-        lss_.post_shrink_snapshot_access_.enumerate_symbol_ids([&](uint32_t name_id, uint32_t value_id) {
-          symbol_ids.emplace_back(kSymbolSourceSnapshot, name_id, kKeyOnlyValueId);
-          symbol_ids.emplace_back(kSymbolSourceSnapshot, name_id, value_id);
-        });
-      }
-
-      std::ranges::sort(symbol_ids, [this](const auto& lhs, const auto& rhs) { return resolve_symbol(lhs) < resolve_symbol(rhs); });
-
-      uint32_t symbol_ref = 0;
-      for (auto it = symbol_ids.begin(); it != symbol_ids.end(); ++symbol_ref) {
-        symbol_refs_.try_emplace(*it, symbol_ref);
-        const auto symbol = resolve_symbol(*it);
-        symbols_.emplace_back(symbol);
-
-        while (++it != symbol_ids.end() && symbol == resolve_symbol(*it)) {
-          symbol_refs_.try_emplace(*it, symbol_ref);
-        }
-      }
-    }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view resolve_symbol(ExportSymbolId id) const noexcept {
-      return lss_.resolve_symbol_for_export(id.source, id.name_id, id.value_id);
-    }
-
-    [[nodiscard]] PROMPP_ALWAYS_INLINE SymbolReference symbol_ref_for_id(ExportSymbolId id) const noexcept {
-      const auto it = symbol_refs_.find(id);
-      assert(it != symbol_refs_.end());
-      return it->second;
-    }
-  };
-
   static constexpr uint32_t kPendingShrinkBoundaryNotSet = std::numeric_limits<uint32_t>::max();
   static constexpr uint32_t kKeyOnlyValueId = std::numeric_limits<uint32_t>::max();
+  static constexpr uint32_t kSymbolSourceCurrent = 0;
+  static constexpr uint32_t kSymbolSourceSnapshot = 1;
 
   friend class BareBones::SnugComposite::
       GenericDecodingTable<QueryableEncodingBimap<Vector>, PromPP::Primitives::SnugComposites::LabelSet::EncodingBimapFilament, Vector>;
@@ -231,8 +107,6 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE IndexWriteContext make_index_write_context() const { return IndexWriteContext{*this}; }
-
   void finalize_copy_and_shrink(uint32_t shrink_boundary, PostShrinkSnapshotAccess snapshot_access, BareBones::Vector<uint32_t>& old_to_new_mapping) {
     assert(snapshot_access.composite_resolve && snapshot_access.symbol_resolve);
     assert(shrink_boundary <= next_item_index_impl() && old_to_new_mapping.size() >= next_item_index_impl());
@@ -244,24 +118,42 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   template <class Snapshot>
   [[nodiscard]] static PostShrinkSnapshotAccess make_post_shrink_snapshot_access(const Snapshot& snapshot) {
-    return PostShrinkSnapshotAccess{.composite_resolve = [&snapshot](uint32_t id) { return snapshot[id]; },
-                                    .symbol_resolve =
-                                        [&snapshot](uint32_t name_id, uint32_t value_id) {
-                                          const auto view = snapshot.data_view();
-                                          return value_id == kKeyOnlyValueId ? view.key_symbol(name_id) : view.value_symbol(name_id, value_id);
-                                        },
-                                    .enumerate_symbol_ids =
-                                        [&snapshot](const std::function<void(uint32_t name_id, uint32_t value_id)>& callback) {
-                                          const auto view = snapshot.data_view();
-                                          for (auto it = view.values().begin(), e = view.values().end(); it != e; ++it) {
-                                            callback(it.key_id(), it.value_id());
-                                          }
-                                        }};
+    PostShrinkSnapshotAccess access;
+    access.composite_resolve = [&snapshot](uint32_t id) { return snapshot[id]; };
+    access.symbol_resolve = [&snapshot](uint32_t name_id, uint32_t value_id) { return resolve_snapshot_symbol(snapshot, name_id, value_id); };
+    access.enumerate_symbol_ids = [&snapshot](const auto& callback) { enumerate_snapshot_symbol_ids(snapshot, callback); };
+    return access;
   }
 
   template <class Snapshot>
   void finalize_copy_and_shrink(uint32_t shrink_boundary, const Snapshot& snapshot, BareBones::Vector<uint32_t>& old_to_new_mapping) {
     finalize_copy_and_shrink(shrink_boundary, make_post_shrink_snapshot_access(snapshot), old_to_new_mapping);
+  }
+
+  template <class Callback>
+  void for_each_snapshot_symbol_id(Callback&& callback) const {
+    if (!is_shrunk() || !post_shrink_snapshot_access_.enumerate_symbol_ids) {
+      return;
+    }
+    post_shrink_snapshot_access_.enumerate_symbol_ids(std::forward<Callback>(callback));
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_shrunk_for_export() const noexcept { return is_shrunk(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t symbol_source_for_series(uint32_t ls_id) const noexcept {
+    return symbol_source_for_series_impl(ls_id);
+  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view resolve_symbol_by_source(uint32_t source, uint32_t name_id, uint32_t value_id) const noexcept {
+    if (name_id == kKeyOnlyValueId && value_id == kKeyOnlyValueId) {
+      return {};
+    }
+    if (source == kSymbolSourceCurrent) [[likely]] {
+      const auto view = this->data_view();
+      return value_id == kKeyOnlyValueId ? view.key_symbol(name_id) : view.value_symbol(name_id, value_id);
+    }
+    if (post_shrink_snapshot_access_.symbol_resolve) {
+      return post_shrink_snapshot_access_.symbol_resolve(name_id, value_id);
+    }
+    return {};
   }
 
   void shrink_to_boundary(uint32_t shrink_boundary) {
@@ -406,27 +298,25 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_shrunk() const noexcept { return shift_ > 0; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_fixed() const noexcept { return shift_ == 0 && pending_shrink_boundary_ != kPendingShrinkBoundaryNotSet; }
 
-  static constexpr uint32_t kSymbolSourceCurrent = 0;
-  static constexpr uint32_t kSymbolSourceSnapshot = 1;
-
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t symbol_source_for_series_impl(uint32_t ls_id) const noexcept {
     if (!is_shrunk()) [[likely]] {
       return kSymbolSourceCurrent;
     }
     return ls_id < shift_ ? kSymbolSourceSnapshot : kSymbolSourceCurrent;
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view resolve_symbol_for_export(uint32_t source, uint32_t name_id, uint32_t value_id) const noexcept {
-    if (name_id == kKeyOnlyValueId && value_id == kKeyOnlyValueId) {
-      return {};
+
+  template <class Snapshot, class Callback>
+  static void enumerate_snapshot_symbol_ids(const Snapshot& snapshot, Callback&& callback) {
+    const auto view = snapshot.data_view();
+    for (auto it = view.values().begin(), e = view.values().end(); it != e; ++it) {
+      callback(it.key_id(), it.value_id());
     }
-    if (source == kSymbolSourceCurrent) [[likely]] {
-      const auto view = this->data_view();
-      return value_id == kKeyOnlyValueId ? view.key_symbol(name_id) : view.value_symbol(name_id, value_id);
-    }
-    if (post_shrink_snapshot_access_.symbol_resolve) {
-      return post_shrink_snapshot_access_.symbol_resolve(name_id, value_id);
-    }
-    return {};
+  }
+
+  template <class Snapshot>
+  [[nodiscard]] static std::string_view resolve_snapshot_symbol(const Snapshot& snapshot, uint32_t name_id, uint32_t value_id) {
+    const auto view = snapshot.data_view();
+    return value_id == kKeyOnlyValueId ? view.key_symbol(name_id) : view.value_symbol(name_id, value_id);
   }
 
   uint32_t shift_{0};

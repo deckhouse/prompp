@@ -1,5 +1,6 @@
 #pragma once
 
+#include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "prometheus/tsdb/index/stream_writer.h"
 
 namespace series_index::prometheus::tsdb::index::section_writer {
@@ -10,7 +11,7 @@ class LabelIndicesWriter {
   using StreamWriter = PromPP::Prometheus::tsdb::index::StreamWriter<Stream>;
   using StringWriter = PromPP::Prometheus::tsdb::index::StringWriter;
   using NoCrc32 = PromPP::Prometheus::tsdb::index::NoCrc32Tag;
-  using IndexWriteContext = typename Lss::IndexWriteContext;
+  using IndexWriteContext = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>;
 
   LabelIndicesWriter(const Lss& lss, StreamWriter& writer) : lss_(lss), writer_(writer) {}
 

@@ -4,6 +4,7 @@
 
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
+#include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "series_index/prometheus/tsdb/index/section_writer/label_indices_writer.h"
 #include "series_index/prometheus/tsdb/index/section_writer/symbols_writer.h"
 #include "series_index/queryable_encoding_bimap.h"
@@ -44,7 +45,7 @@ class LabelIndicesWriterFixture : public testing::TestWithParam<LabelIndicesWrit
   std::ostringstream stream_;
   StreamWriter<decltype(stream_)> stream_writer_{&stream_};
   QueryableEncodingBimap lss_;
-  std::optional<QueryableEncodingBimap::IndexWriteContext> index_write_context_;
+  std::optional<series_index::prometheus::tsdb::index::IndexWriteContext<QueryableEncodingBimap>> index_write_context_;
   LabelIndicesWriter<QueryableEncodingBimap, decltype(stream_)> label_indices_writer{lss_, stream_writer_};
 
   void SetUp() final {
@@ -54,7 +55,7 @@ class LabelIndicesWriterFixture : public testing::TestWithParam<LabelIndicesWrit
 
     std::ostringstream stream;
     StreamWriter<decltype(stream_)> stream_writer{&stream};
-    index_write_context_.emplace(lss_.make_index_write_context());
+    index_write_context_.emplace(lss_);
     label_indices_writer.set_index_write_context(&*index_write_context_);
     SymbolsWriter<QueryableEncodingBimap, decltype(stream_)>{*index_write_context_, stream_writer}.write();
   }
@@ -139,7 +140,7 @@ TEST_F(LabelIndicesWriterShrunkLssFixture, WriteWhenLssShrunkAllFromSnapshot) {
   invert_copy_mapping(dst_src_ids_mapping, shrink_boundary, old_to_new);
   lss_.fill_touched_series_mapping(shrink_boundary, lss_copy, old_to_new, lss_.added_series());
   lss_.finalize_copy_and_shrink(shrink_boundary, lss_copy, old_to_new);
-  const auto index_write_context = lss_.make_index_write_context();
+  const auto index_write_context = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{lss_};
 
   std::ostringstream symbols_stream;
   StreamWriter<decltype(symbols_stream)> symbols_stream_writer{&symbols_stream};

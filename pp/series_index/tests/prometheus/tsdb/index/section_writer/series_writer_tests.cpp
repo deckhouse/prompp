@@ -3,6 +3,7 @@
 
 #include "primitives/label_set.h"
 #include "primitives/snug_composites.h"
+#include "series_index/prometheus/tsdb/index/index_write_context.h"
 #include "series_index/prometheus/tsdb/index/section_writer/series_writer.h"
 #include "series_index/prometheus/tsdb/index/section_writer/symbols_writer.h"
 #include "series_index/queryable_encoding_bimap.h"
@@ -32,7 +33,7 @@ class SeriesWriterFixture : public testing::Test {
   StreamWriter stream_writer_{&stream_};
   QueryableEncodingBimap lss_;
   SeriesReferencesMap series_references_;
-  std::optional<QueryableEncodingBimap::IndexWriteContext> index_write_context_;
+  std::optional<series_index::prometheus::tsdb::index::IndexWriteContext<QueryableEncodingBimap>> index_write_context_;
 
   void fill_lss_and_symbols(const LabelViewSetList& label_sets) {
     for (auto& label_set : label_sets) {
@@ -41,7 +42,7 @@ class SeriesWriterFixture : public testing::Test {
 
     std::ostringstream stream;
     StreamWriter stream_writer{&stream};
-    index_write_context_.emplace(lss_.make_index_write_context());
+    index_write_context_.emplace(lss_);
     SymbolsWriter<QueryableEncodingBimap, Stream>{*index_write_context_, stream_writer}.write();
   }
 };
