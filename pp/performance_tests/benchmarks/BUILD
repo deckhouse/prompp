@@ -30,3 +30,13 @@ cc_binary(
         "//:benchmark",
     ],
 )
+
+cc_binary(
+    name = "index_write_context_lss",
+    srcs = ["queryable_encoding_bimap_index_write_context_benchmark.cpp"],
+    malloc = "@jemalloc",
+    deps = [
+        "//:performance_tests_headers",
+        "//:benchmark",
+    ],
+)
