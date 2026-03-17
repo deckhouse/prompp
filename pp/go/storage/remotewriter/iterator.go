@@ -361,7 +361,7 @@ func (i *Iterator) SendMessage(ctx context.Context, msg *cppbridge.RWMessageList
 				}
 				// delivered on this iteration
 				shrd.PostProcessed = true
-				retriedSamplesTotal += shrd.SampleCount
+				retriedSamplesTotal += uint64(shrd.SampleCount)
 				sentBytesTotal += uint64(len(shrd.Buffer))
 				if highestSentTimestamp < shrd.MaxTimestamp {
 					highestSentTimestamp = shrd.MaxTimestamp
@@ -369,8 +369,8 @@ func (i *Iterator) SendMessage(ctx context.Context, msg *cppbridge.RWMessageList
 				continue
 			}
 			// delivery failed bool
-			retriedSamplesTotal += shrd.SampleCount
-			failedSamplesTotal += shrd.SampleCount
+			retriedSamplesTotal += uint64(shrd.SampleCount)
+			failedSamplesTotal += uint64(shrd.SampleCount)
 		}
 
 		i.metrics.failedSamplesTotal.Add(float64(failedSamplesTotal))
@@ -410,6 +410,41 @@ func (i *Iterator) SendMessage(ctx context.Context, msg *cppbridge.RWMessageList
 
 func (i *Iterator) writeCaches() {
 	i.dataSource.WriteCaches()
+}
+
+func (i *Iterator) encode(batch *batch, targetSegmentID uint32) *cppbridge.RWMessageList {
+	encodersCount := batch.numberOfShards
+
+	messages := batch.segmentSampleStorages.SplitMessages(uint32(batch.maxNumberOfSamplesPerShard), targetSegmentID)
+	encoders := cppbridge.NewMessageEncoders(uint64(encodersCount), i.dataSource.LSSes())
+	messagesCount := len(messages.Messages)
+	messagesPerEncoder := messagesCount / encodersCount
+	if messagesPerEncoder == 0 {
+		messagesPerEncoder = 1
+	}
+
+	wg := sync.WaitGroup{}
+	for messageIndex, encoderIndex := 0, 0; messageIndex < messagesCount; encoderIndex++ {
+		var encodeCount int
+		if encoderIndex+1 == encodersCount {
+			encodeCount = messagesCount - messageIndex
+		} else {
+			encodeCount = messagesPerEncoder
+		}
+
+		wg.Add(1)
+		go func(encoderIndex, messageIndex, encodeCount int) {
+			defer wg.Done()
+
+			encoders.Encode(encoderIndex, uint64(messageIndex), uint64(encodeCount), messages.Messages)
+		}(encoderIndex, messageIndex, encodeCount)
+
+		messageIndex += encodeCount
+	}
+	wg.Wait()
+
+	messages.UpdateStats()
+	return messages
 }
 
 func (i *Iterator) tryAck(targetSegmentID uint32) error {

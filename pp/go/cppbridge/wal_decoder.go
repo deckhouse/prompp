@@ -292,6 +292,7 @@ func (s OutputDecoderStats) SampleCount() uint32 {
 	return s.sampleCount
 }
 
+// SegmentSamplesStorageList mirrors PromPP::WAL::SegmentSamplesStorageList
 type SegmentSamplesStorageList struct {
 	storages []CppSegmentSamplesStorage
 }
@@ -301,18 +302,22 @@ func (s *SegmentSamplesStorageList) Get(segmentID uint64) *CppSegmentSamplesStor
 }
 
 func NewSegmentSamplesStorage(count uint64) *SegmentSamplesStorageList {
-	storages := &SegmentSamplesStorageList{
-		storages: walSegmentSamplesStorageListCtor(count),
-	}
-	runtime.SetFinalizer(storages, func(s *SegmentSamplesStorageList) {
-		walSegmentSamplesStorageListDtor(s.storages)
+	s := &SegmentSamplesStorageList{}
+	walSegmentSamplesStorageListCtor(count, s)
+	runtime.SetFinalizer(s, func(s *SegmentSamplesStorageList) {
+		walSegmentSamplesStorageListDtor(s)
 	})
 
-	return storages
+	return s
 }
 
 func ClearSegmentSamplesStorage(storage *CppSegmentSamplesStorage) {
 	walSegmentSamplesStorageClear(storage)
+}
+
+// SplitMessages splits the storage list into messages by samples per message.
+func (s *SegmentSamplesStorageList) SplitMessages(samplesPerMessage, targetSegmentID uint32) *RWMessageList {
+	return NewRWMessageList(targetSegmentID, walSegmentSamplesStorageListSplitMessages(s, samplesPerMessage))
 }
 
 //

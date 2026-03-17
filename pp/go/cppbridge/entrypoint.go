@@ -28,13 +28,14 @@ import (
 )
 
 type (
-	CppStdVector                 = [C.Sizeof_StdVector]byte
-	CppBareBonesVector           = [C.Sizeof_BareBonesVector]byte
-	CppRoaringBitset             = [C.Sizeof_RoaringBitset]byte
-	CppSerializedDataIterator    = [C.Sizeof_SerializedDataIterator]byte
-	CppMetricsIterator           = [C.Sizeof_MetricsIterator]byte
-	CppSegmentSamplesStorage     = [C.Sizeof_SegmentSamplesStorage]byte
-	CppRemoteWriteMessageEncoder = [C.Sizeof_RemoteWriteMessageEncoder]byte
+	CppStdVector                         = [C.Sizeof_StdVector]byte
+	CppBareBonesVector                   = [C.Sizeof_BareBonesVector]byte
+	CppRoaringBitset                     = [C.Sizeof_RoaringBitset]byte
+	CppSerializedDataIterator            = [C.Sizeof_SerializedDataIterator]byte
+	CppMetricsIterator                   = [C.Sizeof_MetricsIterator]byte
+	CppSegmentSamplesStorage             = [C.Sizeof_SegmentSamplesStorage]byte
+	CppRemoteWriteMessageEncoder         = [C.Sizeof_RemoteWriteMessageEncoder]byte
+	CppSegmentSamplesStorageListIterator = [C.Sizeof_SegmentSamplesStorageListIterator]byte
 )
 
 const (
@@ -1041,22 +1042,17 @@ func walDecoderDtor(decoder uintptr) {
 	)
 }
 
-func walSegmentSamplesStorageListCtor(count uint64) []CppSegmentSamplesStorage {
+func walSegmentSamplesStorageListCtor(count uint64, storages *SegmentSamplesStorageList) {
 	args := struct {
-		count uint64
-	}{count}
-	var res struct {
-		storages []CppSegmentSamplesStorage
-	}
+		count    uint64
+		storages uintptr
+	}{count, uintptr(unsafe.Pointer(storages))}
 
 	testGC()
-	fastcgo.UnsafeCall2(
+	fastcgo.UnsafeCall1(
 		C.prompp_wal_segment_samples_storage_list_ctor,
 		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
 	)
-
-	return res.storages
 }
 
 func walSegmentSamplesStorageAdd(
@@ -1091,16 +1087,36 @@ func walSegmentSamplesStorageClear(samplesStorage *CppSegmentSamplesStorage) {
 	)
 }
 
-func walSegmentSamplesStorageListDtor(storages []CppSegmentSamplesStorage) {
+func walSegmentSamplesStorageListDtor(s *SegmentSamplesStorageList) {
 	args := struct {
-		storages []CppSegmentSamplesStorage
-	}{storages}
+		storages uintptr
+	}{uintptr(unsafe.Pointer(s))}
 
 	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_wal_segment_samples_storage_list_dtor,
 		uintptr(unsafe.Pointer(&args)),
 	)
+}
+
+func walSegmentSamplesStorageListSplitMessages(
+	s *SegmentSamplesStorageList,
+	samplesPerMessage uint32,
+) []RWMessage {
+	args := struct {
+		storageList       uintptr
+		samplesPerMessage uint32
+		messages          []RWMessage
+	}{uintptr(unsafe.Pointer(s)), samplesPerMessage, nil}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_wal_segment_samples_storage_list_split_messages,
+		uintptr(unsafe.Pointer(&args)),
+	)
+	runtime.KeepAlive(s)
+
+	return args.messages
 }
 
 //
@@ -1218,24 +1234,6 @@ func walOutputDecoderDecode(
 // ProtobufEncoder
 //
 
-func walRemoteWriteCreateMessages(messagesCount uint64) []RWMessage {
-	args := struct {
-		messagesCount uint64
-	}{messagesCount}
-	var res struct {
-		messages []RWMessage
-	}
-
-	testGC()
-	fastcgo.UnsafeCall2(
-		C.prompp_remote_write_message_list_ctor,
-		uintptr(unsafe.Pointer(&args)),
-		uintptr(unsafe.Pointer(&res)),
-	)
-
-	return res.messages
-}
-
 func walRemoteWriteDestroyMessages(messages []RWMessage) {
 	args := struct {
 		messages []RWMessage
@@ -1281,24 +1279,24 @@ func walRemoteWriteDestroyMessageEncoders(encoders []CppRemoteWriteMessageEncode
 func walRemoteWriteEncodeMessage(
 	encoder *CppRemoteWriteMessageEncoder,
 	lssList []uintptr,
-	segmentStorageList []CppSegmentSamplesStorage,
 	messageIndex, messagesCount uint64,
-	message *RWMessage,
+	messages []RWMessage,
 ) {
 	args := struct {
-		encoder            uintptr
-		lssList            []uintptr
-		segmentStorageList []CppSegmentSamplesStorage
-		messageIndex       uint64
-		messagesCount      uint64
-		message            uintptr
-	}{uintptr(unsafe.Pointer(encoder)), lssList, segmentStorageList, messageIndex, messagesCount, uintptr(unsafe.Pointer(message))}
+		encoder       uintptr
+		lssList       []uintptr
+		messageIndex  uint64
+		messagesCount uint64
+		messages      []RWMessage
+	}{uintptr(unsafe.Pointer(encoder)), lssList, messageIndex, messagesCount, messages}
 
 	testGC()
 	fastcgo.UnsafeCall1(
 		C.prompp_remote_write_encode_message,
 		uintptr(unsafe.Pointer(&args)),
 	)
+
+	runtime.KeepAlive(messages)
 }
 
 //
