@@ -24,9 +24,7 @@ const (
 	reasonDroppedSeries = "dropped_series"
 )
 
-var (
-	DefaultSampleAgeLimit = model.Duration(time.Hour * 24 * 30)
-)
+var DefaultSampleAgeLimit = model.Duration(time.Hour * 24 * 30)
 
 // DestinationConfig is a remote write destination config.
 type DestinationConfig struct {
@@ -369,7 +367,7 @@ func NewDestination(cfg DestinationConfig) *Destination {
 				Subsystem:                       subsystem,
 				Name:                            "generate_batch_duration_seconds",
 				Help:                            "Duration of generate batch calls.",
-				Buckets:                         []float64{0},
+				Buckets:                         []float64{5, 10, 15, 30, 60},
 				ConstLabels:                     constLabels,
 				NativeHistogramBucketFactor:     1.1,
 				NativeHistogramMaxBucketNumber:  100,
@@ -380,7 +378,7 @@ func NewDestination(cfg DestinationConfig) *Destination {
 				Subsystem:                       subsystem,
 				Name:                            "read_segment_duration_seconds",
 				Help:                            "Duration of read wal segment.",
-				Buckets:                         []float64{0},
+				Buckets:                         []float64{.005, .01, .025, .05, .1, .25, .5, 1},
 				ConstLabels:                     constLabels,
 				NativeHistogramBucketFactor:     1.1,
 				NativeHistogramMaxBucketNumber:  100,
@@ -391,7 +389,7 @@ func NewDestination(cfg DestinationConfig) *Destination {
 				Subsystem:                       subsystem,
 				Name:                            "encode_batch_duration_seconds",
 				Help:                            "Duration of encode batch.",
-				Buckets:                         []float64{0},
+				Buckets:                         []float64{.005, .01, .025, .05, .1, .25, .5, 1},
 				ConstLabels:                     constLabels,
 				NativeHistogramBucketFactor:     1.1,
 				NativeHistogramMaxBucketNumber:  100,

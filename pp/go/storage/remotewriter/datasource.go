@@ -494,6 +494,7 @@ func (ds *dataSource) handleReadErrors(errs []error) error {
 	if len(errs) == len(ds.shards) {
 		ds.corrupted = true
 		if ds.corruptMarker != nil {
+			logger.Warnf("head %s is corrupted by read errors: %v", ds.ID, errs)
 			if err := ds.corruptMarker.MarkCorrupted(ds.ID); err != nil {
 				return fmt.Errorf("failed to mark head corrupted: %w", err)
 			}
@@ -505,6 +506,7 @@ func (ds *dataSource) handleReadErrors(errs []error) error {
 
 	ds.corrupted = true
 	if ds.corruptMarker != nil {
+		logger.Warnf("head %s is corrupted by read errors: %v", ds.ID, errs)
 		if err := ds.corruptMarker.MarkCorrupted(ds.ID); err != nil {
 			return fmt.Errorf("failed to mark head corrupted: %w", err)
 		}

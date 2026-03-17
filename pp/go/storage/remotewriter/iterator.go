@@ -168,7 +168,7 @@ func (i *Iterator) wrapError(err error) error {
 //revive:disable-next-line:function-length // long but readable
 //revive:disable-next-line:cyclomatic // long but readable
 //revive:disable-next-line:cognitive-complexity // long but readable
-func (i *Iterator) Next(ctx context.Context) (*cppbridge.RWMessageList, error) {
+func (i *Iterator) Next(ctx context.Context) (*batch, error) {
 	if i.endOfBlockReached {
 		return nil, i.wrapError(nil)
 	}
@@ -252,13 +252,60 @@ readLoop:
 
 	i.writeCaches()
 
-	encodeStartTime := i.clock.Now()
-	msg := i.encode(b, int(numberOfMessages), i.targetSegmentID) // #nosec G115 // no overflow
-	i.metrics.encodeBatchDuration.Observe(i.clock.Since(encodeStartTime).Seconds())
-
-	return msg, nil
+	b.numberOfMessages = int(numberOfMessages) // #nosec G115 // no overflow
+	b.targetSegmentID = i.targetSegmentID
+	return b, nil
 }
 
+// Encode encodes the batch into a message list and records encode duration metric.
+// It is intended to be called from the encode stage of the write pipeline.
+func (i *Iterator) EncodeBatch(b *batch) *cppbridge.RWMessageList {
+	defer func(encodeStartTime time.Time) {
+		i.metrics.encodeBatchDuration.Observe(i.clock.Since(encodeStartTime).Seconds())
+	}(i.clock.Now())
+
+	messages := cppbridge.NewRWMessageList(uint64(b.numberOfMessages), b.targetSegmentID)
+	encoders := cppbridge.NewMessageEncoders(uint64(b.numberOfShards), i.dataSource.LSSes())
+	messagesPerEncoder := b.numberOfMessages / b.numberOfShards
+	if messagesPerEncoder == 0 {
+		messagesPerEncoder = 1
+	}
+
+	wg := sync.WaitGroup{}
+	for messageIndex, encoderIndex := 0, 0; messageIndex < b.numberOfMessages; encoderIndex++ {
+		var encodeCount int
+		if encoderIndex+1 == b.numberOfShards {
+			encodeCount = b.numberOfMessages - messageIndex
+		} else {
+			encodeCount = messagesPerEncoder
+		}
+
+		wg.Add(1)
+		go func(encoderIndex, messageIndex, encodeCount int) {
+			defer wg.Done()
+
+			for ; encodeCount > 0; messageIndex++ {
+				encoders.Encode(
+					encoderIndex,
+					b.segmentSampleStorages,
+					uint64(messageIndex),
+					uint64(b.numberOfMessages),
+					&messages.Messages[messageIndex],
+				)
+				encodeCount--
+			}
+		}(encoderIndex, messageIndex, encodeCount)
+
+		messageIndex += encodeCount
+	}
+	wg.Wait()
+
+	messages.UpdateStats()
+	return messages
+}
+
+// SendMessage sends the message to the remote storage.
+// It is intended to be called from the send stage of the write pipeline.
 func (i *Iterator) SendMessage(ctx context.Context, msg *cppbridge.RWMessageList) error {
 	i.metrics.samplesTotal.Add(float64(msg.NumberOfSamples()))
 
@@ -365,49 +412,6 @@ func (i *Iterator) writeCaches() {
 	i.dataSource.WriteCaches()
 }
 
-func (i *Iterator) encode(batch *batch, numberOfMessages int, targetSegmentID uint32) *cppbridge.RWMessageList {
-	encodersCount := batch.numberOfShards
-
-	messages := cppbridge.NewRWMessageList(uint64(numberOfMessages), targetSegmentID)
-	encoders := cppbridge.NewMessageEncoders(uint64(encodersCount), i.dataSource.LSSes())
-	messagesPerEncoder := numberOfMessages / encodersCount
-	if messagesPerEncoder == 0 {
-		messagesPerEncoder = 1
-	}
-
-	wg := sync.WaitGroup{}
-	for messageIndex, encoderIndex := 0, 0; messageIndex < numberOfMessages; encoderIndex++ {
-		var encodeCount int
-		if encoderIndex+1 == encodersCount {
-			encodeCount = numberOfMessages - messageIndex
-		} else {
-			encodeCount = messagesPerEncoder
-		}
-
-		wg.Add(1)
-		go func(encoderIndex, messageIndex, encodeCount int) {
-			defer wg.Done()
-
-			for ; encodeCount > 0; messageIndex++ {
-				encoders.Encode(
-					encoderIndex,
-					batch.segmentSampleStorages,
-					uint64(messageIndex),
-					uint64(numberOfMessages),
-					&messages.Messages[messageIndex],
-				)
-				encodeCount--
-			}
-		}(encoderIndex, messageIndex, encodeCount)
-
-		messageIndex += encodeCount
-	}
-	wg.Wait()
-
-	messages.UpdateStats()
-	return messages
-}
-
 func (i *Iterator) tryAck(targetSegmentID uint32) error {
 	if targetSegmentID == 0 {
 		return nil
@@ -440,6 +444,8 @@ type batch struct {
 	addSeriesCount             uint32
 	droppedSeriesCount         uint32
 	maxNumberOfSamplesPerShard int
+	numberOfMessages           int
+	targetSegmentID            uint32
 }
 
 // newBatch creates a new [batch].
