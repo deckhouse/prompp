@@ -21,7 +21,6 @@ ARG GO_ARCH
 RUN cd /tmp && curl -LOs https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz && tar -C /usr/local -xzf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
 ENV GOPATH="/opt/go"
 ENV PATH="$PATH:/usr/local/go/bin:/opt/go/bin"
-ENV GOBIN="/usr/local/go/bin"
 RUN go install github.com/jstemmer/go-junit-report/v2@latest
 RUN go install github.com/prometheus/promu@latest
 # goyacc for generating promql/parser (make test, make build)
