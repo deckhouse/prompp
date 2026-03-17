@@ -465,7 +465,7 @@ class ProtobufEncoder {
     uint32_t last_ls_id = Primitives::kInvalidLabelSetID;
     uint32_t storage_index = std::numeric_limits<uint32_t>::max();
     const std::remove_reference_t<decltype(lss_getter(0))>* lss = nullptr;
-    uint32_t samples_count{};
+    uint32_t processed_samples_count{};
 
     for (auto it = message.samples_iterator; it != SegmentSamplesStorageList::end(); ++it) {
       const auto [ls_id, samples_list] = *it;
@@ -475,30 +475,31 @@ class ProtobufEncoder {
         lss = &lss_getter(storage_index);
       }
 
-      const auto emit_sample = [&](const Primitives::Sample& sample) PROMPP_LAMBDA_INLINE {
-        ++samples_count;
-
+      const auto write_sample = [&](const Primitives::Sample& sample) PROMPP_LAMBDA_INLINE {
         Prometheus::RemoteWrite::write_sample(pb_timeseries, sample);
+
         message.max_timestamp = std::max(message.max_timestamp, sample.timestamp());
+        ++processed_samples_count;
       };
 
       if (last_ls_id != ls_id) [[likely]] {
         std::destroy_at(&pb_timeseries);
         std::construct_at(&pb_timeseries, pb_writer, kTimeseriesTag);
 
+        // NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage)
         Prometheus::RemoteWrite::write_label_set(pb_timeseries, lss->operator[](ls_id));
         last_ls_id = ls_id;
       }
 
       if (samples_list.is_single()) [[likely]] {
-        emit_sample(samples_list.sample());
+        write_sample(samples_list.sample());
       } else {
         for (const auto& sample : samples_list.samples()) {
-          emit_sample(sample);
+          write_sample(sample);
         }
       }
 
-      if (message.samples_count == samples_count) [[unlikely]] {
+      if (message.samples_count == processed_samples_count) [[unlikely]] {
         break;
       }
     }
