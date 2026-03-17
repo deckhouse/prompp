@@ -63,12 +63,14 @@ class LabelIndicesWriter {
       writer_.write_uint32(values_count);
 
       for (auto value_it = values_trie.make_enumerative_iterator(); value_it.is_valid(); value_it.next()) {
-        writer_.write_uint32(get_symbol_reference(SymbolLssId(name_id, value_it.value())));
+        writer_.write_uint32(
+            get_symbol_reference(SymbolLssIdWithSource{SymbolLssIdWithSource::kSourceCurrent, name_id, value_it.value()}));
       }
     });
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Prometheus::tsdb::index::SymbolReference get_symbol_reference(SymbolLssId symbol_id) const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Prometheus::tsdb::index::SymbolReference get_symbol_reference(
+      SymbolLssIdWithSource symbol_id) const noexcept {
     auto reference_it = symbol_references_.find(symbol_id);
     assert(reference_it != symbol_references_.end());
     return reference_it->second;

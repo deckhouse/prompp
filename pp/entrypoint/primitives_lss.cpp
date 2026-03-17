@@ -6,6 +6,7 @@
 #include "hashdex.hpp"
 #include "head/lss.h"
 #include "primitives/go_slice.h"
+#include "series_index/prometheus/tsdb/index/types.h"
 #include "series_index/querier/label_names_querier.h"
 #include "series_index/querier/label_values_querier.h"
 #include "series_index/queryable_encoding_bimap.h"
@@ -309,7 +310,18 @@ extern "C" void prompp_primitives_lss_fill_touched_series_mapping(void* args) {
   const auto* in = static_cast<const Arguments*>(args);
   auto& current = std::get<QueryableEncodingBimap>(*in->current_lss);
   auto& copy = std::get<QueryableEncodingBimap>(*in->copy_lss);
-  current.fill_touched_series_mapping(*in->checkpoint, copy, *in->old_to_new_mapping, *in->touched_series);
+  const uint32_t boundary = in->checkpoint->next_item_index();
+  current.fill_touched_series_mapping(boundary, copy, *in->old_to_new_mapping, *in->touched_series);
+}
+
+extern "C" void prompp_primitives_lss_set_pending_shrink_boundary(void* args) {
+  struct Arguments {
+    LssVariantPtr lss;
+    uint32_t shrink_boundary;
+  };
+  const auto* in = static_cast<const Arguments*>(args);
+  auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
+  lss.set_pending_shrink_boundary(in->shrink_boundary);
 }
 
 extern "C" void prompp_primitives_lss_finalize_copy_and_shrink(void* args) {
@@ -322,7 +334,15 @@ extern "C" void prompp_primitives_lss_finalize_copy_and_shrink(void* args) {
   const auto* in = static_cast<const Arguments*>(args);
   auto& current = std::get<QueryableEncodingBimap>(*in->current_lss);
   auto& snapshot = std::get<entrypoint::head::ReadonlyLss>(*in->lss_snapshot);
-  current.finalize_copy_and_shrink(*in->checkpoint, snapshot, *in->old_to_new_mapping);
+  const uint32_t boundary = in->checkpoint->next_item_index();
+  current.finalize_copy_and_shrink(
+      boundary, [&snapshot](uint32_t id) { return snapshot[id]; },
+      [&snapshot](uint32_t name_id, uint32_t value_id) {
+        const auto& view = snapshot.data_view();
+        return value_id == series_index::prometheus::tsdb::index::SymbolLssIdWithSource::kNoId ? view.key_symbol(name_id)
+                                                                                               : view.value_symbol(name_id, value_id);
+      },
+      *in->old_to_new_mapping);
 }
 
 void prompp_primitives_free_ls_ids_mapping(void* args) {

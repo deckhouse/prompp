@@ -244,6 +244,16 @@ void prompp_primitives_lss_invert_copy_mapping(void* args);
 void prompp_primitives_lss_fill_added_series_mapping(void* args);
 
 /**
+ * @brief set pending shrink boundary on LSS (switch to "fixed" state before snapshot and copy).
+ *
+ * @param args {
+ *     lss                 uintptr  // pointer to source queryable lss;
+ *     shrink_boundary      uint32  // boundary
+ * }
+ */
+void prompp_primitives_lss_set_pending_shrink_boundary(void* args);
+
+/**
  * @brief Shrink current lss to checkpoint and set post-shrink mapping and copy pointers.
  *
  * @param args {

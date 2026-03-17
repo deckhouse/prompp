@@ -40,9 +40,11 @@ class SeriesWriter {
     const auto& labels = lss_[ls_id];
     series_writer_.write_varint<NoCrc32>(static_cast<uint64_t>(labels.size()));
 
+    const uint32_t source = lss_.symbol_source_for_series(ls_id);
     for (auto it = labels.begin(); it != labels.end(); ++it) {
-      series_writer_.write_varint<NoCrc32>(static_cast<uint64_t>(get_symbol_reference(SymbolLssId{it.name_id()})));
-      series_writer_.write_varint<NoCrc32>(static_cast<uint64_t>(get_symbol_reference(SymbolLssId{it.name_id(), it.value_id()})));
+      series_writer_.write_varint<NoCrc32>(static_cast<uint64_t>(get_symbol_reference(SymbolLssIdWithSource{source, it.name_id(), SymbolLssIdWithSource::kNoId})));
+      series_writer_.write_varint<NoCrc32>(
+          static_cast<uint64_t>(get_symbol_reference(SymbolLssIdWithSource{source, it.name_id(), it.value_id()})));
     }
   }
 
@@ -84,7 +86,7 @@ class SeriesWriter {
     writer.align_to(PromPP::Prometheus::tsdb::index::kSeriesAlignment);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Prometheus::tsdb::index::SymbolReference get_symbol_reference(SymbolLssId symbol_id) const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE PromPP::Prometheus::tsdb::index::SymbolReference get_symbol_reference(SymbolLssIdWithSource symbol_id) const noexcept {
     const auto reference_it = symbol_references_.find(symbol_id);
     assert(reference_it != symbol_references_.end());
     return reference_it->second;

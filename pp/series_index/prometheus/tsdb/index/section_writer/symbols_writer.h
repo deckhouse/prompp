@@ -22,32 +22,22 @@ class SymbolsWriter {
   }
 
  private:
-  static constexpr SymbolLssId kEmptySymbol{};
-
   const Lss& lss_;
   SymbolReferencesMap& symbol_references_;
   StreamWriter& writer_;
 
-  std::vector<SymbolLssId> symbol_ids_;
+  std::vector<SymbolLssIdWithSource> symbol_ids_;
   uint32_t serialized_unique_symbols_length_ = 0;
   uint32_t unique_symbols_count_ = 0;
 
   void generate_symbol_id_list() {
-    symbol_ids_.reserve(get_symbols_count() + 1);
-    symbol_ids_.emplace_back(kEmptySymbol);
+    symbol_ids_.clear();
+    symbol_ids_.emplace_back();
 
-    const auto names = lss_.data_view().keys();
-    const auto values = lss_.data_view().values();
+    lss_.enumerate_symbol_ids([this](uint32_t source, uint32_t name_id, uint32_t value_id) { symbol_ids_.emplace_back(source, name_id, value_id); });
 
-    for (auto it = names.begin(), e = names.end(); it != e; ++it) {
-      symbol_ids_.emplace_back(it.id());
-    }
-
-    for (auto it = values.begin(), e = values.end(); it != e; ++it) {
-      symbol_ids_.emplace_back(it.key_id(), it.value_id());
-    }
-
-    std::ranges::sort(symbol_ids_, [this](SymbolLssId a, SymbolLssId b) PROMPP_LAMBDA_INLINE { return get_symbol(a) < get_symbol(b); });
+    std::ranges::sort(symbol_ids_,
+                      [this](const SymbolLssIdWithSource& a, const SymbolLssIdWithSource& b) PROMPP_LAMBDA_INLINE { return get_symbol(a) < get_symbol(b); });
   }
 
   void deduplicate_and_generate_references() {
@@ -65,23 +55,12 @@ class SymbolsWriter {
     }
   }
 
-  [[nodiscard]] uint32_t get_symbols_count() const noexcept { return lss_.data_view().keys().size() + lss_.data_view().values().size(); }
-
   [[nodiscard]] PROMPP_ALWAYS_INLINE static uint32_t serialized_string_length(const std::string_view& str) noexcept {
     return BareBones::Encoding::VarInt::length(str.length()) + str.length();
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view get_symbol(SymbolLssId symbol_id) const noexcept {
-    if (symbol_id.is_empty()) [[unlikely]] {
-      return {};
-    }
-
-    const auto view = lss_.data_view();
-    if (symbol_id.is_name()) {
-      return view.key_symbol(symbol_id.name_id);
-    }
-
-    return view.value_symbol(symbol_id.name_id, symbol_id.value_id);
+  [[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view get_symbol(SymbolLssIdWithSource symbol_id) const noexcept {
+    return lss_.resolve_symbol(symbol_id.source, symbol_id.name_id, symbol_id.value_id);
   }
 
   void write_symbols() noexcept {
@@ -90,7 +69,7 @@ class SymbolsWriter {
       writer_.template write_uint32<NoCrc32>(payload_size);
       writer_.write_uint32(unique_symbols_count_);
 
-      for (auto symbol_id : symbol_ids_) {
+      for (const auto& symbol_id : symbol_ids_) {
         if (!symbol_id.is_duplicated()) {
           auto symbol = get_symbol(symbol_id);
           writer_.write_varint(static_cast<uint64_t>(symbol.length()));

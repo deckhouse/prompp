@@ -4,10 +4,8 @@
 #include <memory>
 
 #include "bare_bones/vector.h"
-#include "primitives/snug_composites.h"
 #include "profiling/profiling.h"
 #include "series_index/queryable_encoding_bimap.h"
-#include "series_index/trie/cedarpp_tree.h"
 
 namespace {
 using Lss = series_index::QueryableEncodingBimap<BareBones::Vector>;
@@ -67,20 +65,20 @@ std::shared_ptr<Lss> get_lss_after_shrink() {
     for (uint32_t i = 0; i < copy_count; ++i) {
       lss.find_or_emplace((*source)[i]);
     }
-    const auto checkpoint = lss.checkpoint();
     for (uint32_t i = copy_count; i < total; ++i) {
       lss.find_or_emplace((*source)[i]);
     }
     lss.build_deferred_indexes();
 
+    const uint32_t shrink_boundary = copy_count;
     s->copy = std::make_unique<Lss>();
     BareBones::Vector<uint32_t> dst_src_ids_mapping;
     LssCopier copier(lss, lss.sorting_index(), lss.added_series(), *s->copy, dst_src_ids_mapping);
     copier.copy_added_series_and_build_indexes();
 
     series_index::invert_copy_mapping(dst_src_ids_mapping, copy_count, s->old_to_new);
-    lss.fill_touched_series_mapping(checkpoint, *s->copy, s->old_to_new, source->added_series());
-    lss.finalize_copy_and_shrink(checkpoint, *s->copy, s->old_to_new);
+    lss.fill_touched_series_mapping(shrink_boundary, *s->copy, s->old_to_new, source->added_series());
+    lss.finalize_copy_and_shrink(shrink_boundary, *s->copy, s->old_to_new);
     return s;
   }();
   return state->lss;
