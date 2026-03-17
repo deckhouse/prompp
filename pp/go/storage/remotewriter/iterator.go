@@ -256,7 +256,7 @@ readLoop:
 	return b, nil
 }
 
-// Encode encodes the batch into a message list and records encode duration metric.
+// EncodeBatch encodes the batch into a message list and records encode duration metric.
 // It is intended to be called from the encode stage of the write pipeline.
 func (i *Iterator) EncodeBatch(b *batch) *cppbridge.RWMessageList {
 	defer func(encodeStartTime time.Time) {
