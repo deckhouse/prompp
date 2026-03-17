@@ -252,7 +252,6 @@ readLoop:
 
 	i.writeCaches()
 
-	b.numberOfMessages = int(numberOfMessages) // #nosec G115 // no overflow
 	b.targetSegmentID = i.targetSegmentID
 	return b, nil
 }
@@ -264,18 +263,21 @@ func (i *Iterator) EncodeBatch(b *batch) *cppbridge.RWMessageList {
 		i.metrics.encodeBatchDuration.Observe(i.clock.Since(encodeStartTime).Seconds())
 	}(i.clock.Now())
 
-	messages := cppbridge.NewRWMessageList(uint64(b.numberOfMessages), b.targetSegmentID)
-	encoders := cppbridge.NewMessageEncoders(uint64(b.numberOfShards), i.dataSource.LSSes())
-	messagesPerEncoder := b.numberOfMessages / b.numberOfShards
+	encodersCount := b.numberOfShards
+	messages := b.segmentSampleStorages.SplitMessages(uint32(b.maxNumberOfSamplesPerShard), b.targetSegmentID)
+	encoders := cppbridge.NewMessageEncoders(uint64(encodersCount), i.dataSource.LSSes())
+
+	messagesCount := len(messages.Messages)
+	messagesPerEncoder := messagesCount / encodersCount
 	if messagesPerEncoder == 0 {
 		messagesPerEncoder = 1
 	}
 
 	wg := sync.WaitGroup{}
-	for messageIndex, encoderIndex := 0, 0; messageIndex < b.numberOfMessages; encoderIndex++ {
+	for messageIndex, encoderIndex := 0, 0; messageIndex < messagesCount; encoderIndex++ {
 		var encodeCount int
-		if encoderIndex+1 == b.numberOfShards {
-			encodeCount = b.numberOfMessages - messageIndex
+		if encoderIndex+1 == encodersCount {
+			encodeCount = messagesCount - messageIndex
 		} else {
 			encodeCount = messagesPerEncoder
 		}
@@ -284,16 +286,7 @@ func (i *Iterator) EncodeBatch(b *batch) *cppbridge.RWMessageList {
 		go func(encoderIndex, messageIndex, encodeCount int) {
 			defer wg.Done()
 
-			for ; encodeCount > 0; messageIndex++ {
-				encoders.Encode(
-					encoderIndex,
-					b.segmentSampleStorages,
-					uint64(messageIndex),
-					uint64(b.numberOfMessages),
-					&messages.Messages[messageIndex],
-				)
-				encodeCount--
-			}
+			encoders.Encode(encoderIndex, uint64(messageIndex), uint64(encodeCount), messages.Messages)
 		}(encoderIndex, messageIndex, encodeCount)
 
 		messageIndex += encodeCount
@@ -412,41 +405,6 @@ func (i *Iterator) writeCaches() {
 	i.dataSource.WriteCaches()
 }
 
-func (i *Iterator) encode(batch *batch, targetSegmentID uint32) *cppbridge.RWMessageList {
-	encodersCount := batch.numberOfShards
-
-	messages := batch.segmentSampleStorages.SplitMessages(uint32(batch.maxNumberOfSamplesPerShard), targetSegmentID)
-	encoders := cppbridge.NewMessageEncoders(uint64(encodersCount), i.dataSource.LSSes())
-	messagesCount := len(messages.Messages)
-	messagesPerEncoder := messagesCount / encodersCount
-	if messagesPerEncoder == 0 {
-		messagesPerEncoder = 1
-	}
-
-	wg := sync.WaitGroup{}
-	for messageIndex, encoderIndex := 0, 0; messageIndex < messagesCount; encoderIndex++ {
-		var encodeCount int
-		if encoderIndex+1 == encodersCount {
-			encodeCount = messagesCount - messageIndex
-		} else {
-			encodeCount = messagesPerEncoder
-		}
-
-		wg.Add(1)
-		go func(encoderIndex, messageIndex, encodeCount int) {
-			defer wg.Done()
-
-			encoders.Encode(encoderIndex, uint64(messageIndex), uint64(encodeCount), messages.Messages)
-		}(encoderIndex, messageIndex, encodeCount)
-
-		messageIndex += encodeCount
-	}
-	wg.Wait()
-
-	messages.UpdateStats()
-	return messages
-}
-
 func (i *Iterator) tryAck(targetSegmentID uint32) error {
 	if targetSegmentID == 0 {
 		return nil
@@ -474,12 +432,11 @@ type batch struct {
 	segmentSampleStorages      *cppbridge.SegmentSamplesStorageList
 	numberOfShards             int
 	numberOfSamples            int
+	maxNumberOfSamplesPerShard int
 	outdatedSamplesCount       uint32
 	droppedSamplesCount        uint32
 	addSeriesCount             uint32
 	droppedSeriesCount         uint32
-	maxNumberOfSamplesPerShard int
-	numberOfMessages           int
 	targetSegmentID            uint32
 }
 
