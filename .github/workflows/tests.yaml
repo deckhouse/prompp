@@ -204,9 +204,8 @@ jobs:
               go install github.com/afunix/gocov/gocov@latest
               go install github.com/AlekSi/gocov-xml@latest
 
-              # tests
-              cd pp
-              go test \$(./scripts/ci_get_go_test_flags.sh) -v -cover -count=1 -coverprofile=coverage.txt -covermode=atomic ./go/... 2>&1 | tee report.txt
+              # tests (script is in pp/scripts; make test runs from workspace root)
+              make test GO_ONLY=1 "args=\$(./pp/scripts/ci_get_go_test_flags.sh) -v -cover -count=1 -coverprofile=coverage.txt -covermode=atomic" 2>&1 | tee report.txt
 
               # reports
               cat report.txt | go-junit-report > report.xml
@@ -219,15 +218,62 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: go-unit-tests-${{ env.ARCH }}-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
-          path: pp/report.xml
+          path: report.xml
           retention-days: 7
 
       - name: Upload Coverage Report
         uses: actions/upload-artifact@v4
         with:
           name: go-coverage-report-${{ env.ARCH }}-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
-          path: pp/coverage.xml
+          path: coverage.xml
           retention-days: 7
+
+  go-tests-gcdouble:
+    needs: build-go-bindings
+    strategy:
+      matrix:
+        runner_name: [fsn-dev-perftest-runner, fsn-dev-arm-runner]
+        include:
+          - runner_name: fsn-dev-perftest-runner
+            arch: amd64
+          - runner_name: fsn-dev-arm-runner
+            arch: arm64
+    runs-on: ${{ matrix.runner_name }}
+    steps:
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: deckhouse/modules-actions/setup@v2
+        with:
+          registry: ${{ secrets.DEV_REGISTRY }}
+          registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
+          registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+
+      - name: Download Static Library
+        uses: actions/download-artifact@v4
+        with:
+          name: go-cppbridge-${{ matrix.arch }}-opt-true
+          path: pp/go/cppbridge/
+
+      - name: Run PP tests with ASAN and double GC
+        run: |
+          docker run --rm \
+            -v $PWD:/workspace \
+            -w /workspace \
+            -e OPT=opt \
+            -e SANITIZERS=with_sanitizers \
+            -e CGO_CFLAGS="-Wno-error -I/usr/include" \
+            -e CGO_LDFLAGS="-L/usr/lib/" \
+            -e CGO_ENABLED="1" \
+            -e GOPATH="${{ github.workspace }}/.cache" \
+            -e GOBIN="/usr/local/go/bin" \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} \
+            bash -c 'make test-pp-gcdouble "args=\$(./pp/scripts/ci_get_go_test_flags.sh)"'
 
   build_dev:
     needs: go-tests
