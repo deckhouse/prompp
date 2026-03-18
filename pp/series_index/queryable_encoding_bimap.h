@@ -186,18 +186,11 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   template <class Class>
   PROMPP_ALWAYS_INLINE std::optional<uint32_t> find(const Class& c, size_t hashval) const noexcept {
-    auto i = ls_id_hash_set_.find(c, phmap_hash(hashval));
-    if (i == ls_id_hash_set_.end()) [[unlikely]] {
-      return {};
+    uint32_t logical_id = Base::kInvalidId;
+    if (!find_logical_id(c, hashval, logical_id)) [[unlikely]] {
+      return std::optional<uint32_t>{};
     }
-    const auto logical_id = shift_ + static_cast<uint32_t>(*i);
-    if (is_shrunk()) [[unlikely]] {
-      return is_visible_in_shrunk_state(logical_id) ? std::optional<uint32_t>{logical_id} : std::optional<uint32_t>{};
-    }
-    if (is_hidden_in_fixed_state(logical_id)) [[unlikely]] {
-      return {};
-    }
-    return logical_id;
+    return std::optional<uint32_t>{logical_id};
   }
 
   using Base::reserve;
@@ -286,6 +279,27 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
       return true;
     }
     return !post_shrink_mapping_.empty() && post_shrink_mapping_[ls_id] != Base::kInvalidId;
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_visible_for_find(uint32_t logical_id) const noexcept {
+    if (is_shrunk()) [[unlikely]] {
+      return is_visible_in_shrunk_state(logical_id);
+    }
+    return !is_hidden_in_fixed_state(logical_id);
+  }
+
+  template <class Class>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool find_logical_id(const Class& c, size_t hashval, uint32_t& out_logical_id) const noexcept {
+    auto i = ls_id_hash_set_.find(c, phmap_hash(hashval));
+    if (i == ls_id_hash_set_.end()) [[unlikely]] {
+      return false;
+    }
+    const uint32_t logical_id = shift_ + static_cast<uint32_t>(*i);
+    if (!is_visible_for_find(logical_id)) [[unlikely]] {
+      return false;
+    }
+    out_logical_id = logical_id;
+    return true;
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE typename Base::value_type resolve_shrunk_series(uint32_t ls_id) const noexcept {

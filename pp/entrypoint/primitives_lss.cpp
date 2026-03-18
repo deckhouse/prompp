@@ -3,6 +3,7 @@
 #include "bare_bones/bitset.h"
 #include "bare_bones/vector.h"
 #include "head/lss.h"
+#include "primitives/go_model.h"
 #include "primitives/go_slice.h"
 #include "series_index/querier/label_names_querier.h"
 #include "series_index/querier/label_values_querier.h"
