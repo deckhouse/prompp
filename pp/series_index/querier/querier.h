@@ -16,7 +16,7 @@ class ValueMatchResolver {
  public:
   explicit ValueMatchResolver(const LabelReverseIndex& index) : index_(&index) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence& operator()(uint32_t id) const noexcept { return *index_->get(id); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence& operator()(uint32_t id) const noexcept { return index_->get_existing(id); }
 
  private:
   const LabelReverseIndex* index_;
@@ -26,7 +26,7 @@ class MatchResolver {
  public:
   explicit MatchResolver(const SeriesReverseIndex& index) : index_(&index) {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence& resolve_name(uint32_t id) const noexcept { return *index_->get(id); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence& resolve_name(uint32_t id) const noexcept { return index_->get_existing(id); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE ValueMatchResolver value_resolver(uint32_t id) const noexcept { return ValueMatchResolver(index_->labels_by_name()[id]); }
 
  private:

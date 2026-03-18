@@ -119,6 +119,9 @@ def _impl(ctx):
                                 "-Wextra",
                                 "-Werror",
                                 "-march=" + ctx.attr.march[BuildSettingInfo].value,
+
+                                # GOST compile flags
+                                "-Wnull-dereference",
                             ],
                         ),
                     ],

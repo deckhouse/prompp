@@ -27,14 +27,14 @@ class TrieIndex {
 
      private:
       const TrieIndex* index_;
-      mutable typename Trie::EnumerativeIterator names_iterator_;
-      mutable typename Trie::EnumerativeIterator values_iterator_;
+      mutable Trie::EnumerativeIterator names_iterator_;
+      mutable Trie::EnumerativeIterator values_iterator_;
 
       friend class TrieIndex;
 
       explicit Data(const TrieIndex* index) : index_(index), names_iterator_(index_->names_trie().make_enumerative_iterator()) {
         if (names_iterator_.is_valid()) {
-          values_iterator_ = index_->values_trie(names_iterator_.value())->make_enumerative_iterator();
+          values_iterator_ = index_->existing_values_trie(names_iterator_.value()).make_enumerative_iterator();
         }
       }
 
@@ -46,7 +46,7 @@ class TrieIndex {
         }
 
         if (++names_iterator_; names_iterator_.is_valid()) {
-          values_iterator_ = index_->values_trie(names_iterator_.value())->make_enumerative_iterator();
+          values_iterator_ = index_->existing_values_trie(names_iterator_.value()).make_enumerative_iterator();
         }
       }
 
@@ -90,6 +90,7 @@ class TrieIndex {
   [[nodiscard]] PROMPP_ALWAYS_INLINE const Trie* values_trie(size_t index) const noexcept {
     return values_trie_exists(index) ? values_trie_list_[index].get() : nullptr;
   }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const Trie& existing_values_trie(size_t index) const noexcept { return *values_trie_list_[index]; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool values_trie_exists(size_t index) const noexcept { return index < values_trie_list_.size(); }
 
