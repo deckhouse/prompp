@@ -121,6 +121,7 @@ def _impl(ctx):
                                 "-march=" + ctx.attr.march[BuildSettingInfo].value,
 
                                 # GOST compile flags
+                                "-Wdiv-by-zero",
                                 "-Wnull-dereference",
                             ],
                         ),
