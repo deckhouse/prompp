@@ -81,14 +81,14 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   void set_pending_shrink_boundary(uint32_t boundary) noexcept { pending_shrink_boundary_ = boundary; }
 
-  void fill_touched_series_mapping(uint32_t shrink_boundary,
-                                   QueryableEncodingBimap& copy,
-                                   BareBones::Vector<uint32_t>& old_to_new_mapping,
-                                   const BareBones::Bitset& touched_series) {
+  void fill_added_series_mapping(uint32_t shrink_boundary,
+                                 QueryableEncodingBimap& copy,
+                                 BareBones::Vector<uint32_t>& old_to_new_mapping,
+                                 const BareBones::Bitset& added_series) {
     assert(shrink_boundary <= next_item_index_impl() && old_to_new_mapping.size() >= shrink_boundary);
 
     for (uint32_t old_id = 0; old_id < shrink_boundary; ++old_id) {
-      if (old_id < touched_series.size() && touched_series[old_id] && old_to_new_mapping[old_id] == Base::kInvalidId) [[unlikely]] {
+      if (old_id < added_series.size() && added_series[old_id] && old_to_new_mapping[old_id] == Base::kInvalidId) [[unlikely]] {
         const auto label_set = (*this)[old_id];
         const auto new_id = copy.find_or_emplace(label_set);
         old_to_new_mapping[old_id] = new_id;
