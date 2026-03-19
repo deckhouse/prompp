@@ -1,0 +1,45 @@
+--- absl/strings/charconv.cc
++++ absl/strings/charconv.cc
+@@ -549,11 +549,14 @@
+     absl::strings_internal::BigUnsigned<84> rhs =
+         absl::strings_internal::BigUnsigned<84>::FiveToTheNth(-exact_exponent);
+     rhs.MultiplyBy(guess_mantissa);
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Warray-bounds="
+     if (exact_exponent > guess_exponent) {
+       lhs.ShiftLeft(exact_exponent - guess_exponent);
+     } else {
+       rhs.ShiftLeft(guess_exponent - exact_exponent);
+     }
++#pragma GCC diagnostic pop
+     comparison = Compare(lhs, rhs);
+   }
+   if (comparison < 0) {
+
+--- absl/strings/cord.cc
++++ absl/strings/cord.cc
+@@ -408,7 +408,10 @@
+     if (tree->IsFlat() && tree->flat()->Capacity() >= length &&
+         tree->refcount.IsOne()) {
+       // Copy in place if the existing FLAT node is reusable.
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Warray-bounds="
+       memmove(tree->flat()->Data(), data, length);
++#pragma GCC diagnostic pop
+       tree->length = length;
+       VerifyTree(tree);
+       return *this;
+
+--- absl/strings/internal/cord_rep_btree.h
++++ absl/strings/internal/cord_rep_btree.h
+@@ -692,7 +692,10 @@
+   uint8_t* dst = &tree->tag;
+   const uint8_t* src = &tag;
+   const ptrdiff_t offset = src - reinterpret_cast<const uint8_t*>(this);
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Warray-bounds="
+   memcpy(dst, src, sizeof(CordRepBtree) - static_cast<size_t>(offset));
++#pragma GCC diagnostic pop
+   return tree;
+   // # LINT.ThenChange()
+ }

@@ -122,6 +122,7 @@ def _impl(ctx):
 
                                 # GOST compile flags
                                 "-Wdiv-by-zero",
+                                "-Warray-bounds=2",
                                 "-Wnull-dereference",
                             ],
                         ),

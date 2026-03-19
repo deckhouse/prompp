@@ -5,7 +5,7 @@
      "//absl:gcc_compiler": ABSL_GCC_FLAGS,
      "//conditions:default": ABSL_GCC_FLAGS,
 -})
-+}) + ["-Wno-maybe-uninitialized", "-Wno-array-bounds"]
++}) + ["-Wno-maybe-uninitialized"]
  
  ABSL_TEST_COPTS = select({
      "//absl:msvc_compiler": ABSL_MSVC_TEST_FLAGS,
@@ -14,7 +14,7 @@
      "//absl:gcc_compiler": ABSL_GCC_TEST_FLAGS,
      "//conditions:default": ABSL_GCC_TEST_FLAGS,
 -})
-+}) + ["-Wno-maybe-uninitialized", "-Wno-error-array-bounds"]
++}) + ["-Wno-maybe-uninitialized"]
  
  ABSL_DEFAULT_LINKOPTS = select({
      "//absl:msvc_compiler": ABSL_MSVC_LINKOPTS,
