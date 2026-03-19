@@ -1101,13 +1101,13 @@ func walSegmentSamplesStorageListDtor(s *SegmentSamplesStorageList) {
 
 func walSegmentSamplesStorageListSplitMessages(
 	s *SegmentSamplesStorageList,
-	samplesPerMessage uint32,
+	messageSamplesThreshold uint32,
 ) []RWMessage {
 	args := struct {
-		storageList       uintptr
-		samplesPerMessage uint32
-		messages          []RWMessage
-	}{uintptr(unsafe.Pointer(s)), samplesPerMessage, nil}
+		storageList             uintptr
+		messageSamplesThreshold uint32
+		messages                []RWMessage
+	}{uintptr(unsafe.Pointer(s)), messageSamplesThreshold, nil}
 
 	testGC()
 	fastcgo.UnsafeCall1(
