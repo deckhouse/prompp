@@ -297,19 +297,19 @@ extern "C" void prompp_primitives_lss_invert_copy_mapping(void* args) {
   series_index::invert_copy_mapping(*in->new_to_old, in->max_lsid, *in->old_to_new_out);
 }
 
-extern "C" void prompp_primitives_lss_fill_touched_series_mapping(void* args) {
+extern "C" void prompp_primitives_lss_fill_added_series_mapping(void* args) {
   struct Arguments {
     LssVariantPtr current_lss;
     LssVariantPtr copy_lss;
     const QueryableEncodingBimap::checkpoint_type* checkpoint;
     LsIdsSlicePtr old_to_new_mapping;
-    BitsetPtr touched_series;
+    BitsetPtr added_series;
   };
   const auto* in = static_cast<const Arguments*>(args);
   auto& current = std::get<QueryableEncodingBimap>(*in->current_lss);
   auto& copy = std::get<QueryableEncodingBimap>(*in->copy_lss);
   const uint32_t boundary = in->checkpoint->next_item_index();
-  current.fill_touched_series_mapping(boundary, copy, *in->old_to_new_mapping, *in->touched_series);
+  current.fill_added_series_mapping(boundary, copy, *in->old_to_new_mapping, *in->added_series);
 }
 
 extern "C" void prompp_primitives_lss_set_pending_shrink_boundary(void* args) {

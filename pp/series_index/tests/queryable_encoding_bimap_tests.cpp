@@ -338,7 +338,7 @@ TEST_F(QueryableEncodingBimapShrinkFixture, ShrinkResolveViaMapping) {
   invert_copy_mapping(dst_src_ids_mapping_, max_lsid, old_to_new);
 
   // Act
-  lss_.fill_touched_series_mapping(shrink_boundary, lss_copy, old_to_new, lss_.added_series());
+  lss_.fill_added_series_mapping(shrink_boundary, lss_copy, old_to_new, lss_.added_series());
   lss_.finalize_copy_and_shrink(shrink_boundary, lss_copy, old_to_new);
 
   // Assert
@@ -364,7 +364,7 @@ TEST_F(QueryableEncodingBimapCopierFixture, IndicesKeptAfterShrink) {
   invert_copy_mapping(dst_src_ids_mapping_, shrink_boundary, old_to_new);
 
   // Act
-  lss_.fill_touched_series_mapping(shrink_boundary, lss_copy, old_to_new, lss_.added_series());
+  lss_.fill_added_series_mapping(shrink_boundary, lss_copy, old_to_new, lss_.added_series());
   lss_.finalize_copy_and_shrink(shrink_boundary, lss_copy, old_to_new);
 
   // Assert
@@ -391,7 +391,7 @@ TEST_F(QueryableEncodingBimapShrinkFixture, TouchedSeriesFilledByFinalize) {
   touched.set(1);
 
   // Act
-  lss_.fill_touched_series_mapping(shrink_boundary, lss_copy, old_to_new, touched);
+  lss_.fill_added_series_mapping(shrink_boundary, lss_copy, old_to_new, touched);
   lss_.finalize_copy_and_shrink(shrink_boundary, lss_copy, old_to_new);
 
   // Assert
@@ -446,7 +446,7 @@ class QueryableEncodingBimapShrinkTwoSeriesFixture : public QueryableEncodingBim
     Copier copier(lss_, lss_.sorting_index(), ids_for_copy, lss_copy_, dst_src_ids_mapping_);
     copier.copy_added_series_and_build_indexes();
     invert_copy_mapping(dst_src_ids_mapping_, shrink_boundary, old_to_new_);
-    lss_.fill_touched_series_mapping(shrink_boundary, lss_copy_, old_to_new_, touched);
+    lss_.fill_added_series_mapping(shrink_boundary, lss_copy_, old_to_new_, touched);
     lss_.finalize_copy_and_shrink(shrink_boundary, lss_copy_, old_to_new_);
   }
 };
@@ -487,7 +487,7 @@ TEST_F(QueryableEncodingBimapShrinkFixture, IndexWriteContextDeduplicatesSymbols
   copier.copy_added_series_and_build_indexes();
   BareBones::Vector<uint32_t> old_to_new;
   invert_copy_mapping(dst_src_ids_mapping_, shrink_boundary, old_to_new);
-  lss_.fill_touched_series_mapping(shrink_boundary, lss_copy, old_to_new, lss_.added_series());
+  lss_.fill_added_series_mapping(shrink_boundary, lss_copy, old_to_new, lss_.added_series());
   lss_.finalize_copy_and_shrink(shrink_boundary, lss_copy, old_to_new);
 
   // Act
@@ -507,7 +507,7 @@ TEST_F(QueryableEncodingBimapShrinkFixture, IndexWriteContextResolvesSeriesRefsW
   copier.copy_added_series_and_build_indexes();
   BareBones::Vector<uint32_t> old_to_new;
   invert_copy_mapping(dst_src_ids_mapping_, shrink_boundary, old_to_new);
-  lss_.fill_touched_series_mapping(shrink_boundary, lss_copy, old_to_new, lss_.added_series());
+  lss_.fill_added_series_mapping(shrink_boundary, lss_copy, old_to_new, lss_.added_series());
   lss_.finalize_copy_and_shrink(shrink_boundary, lss_copy, old_to_new);
   const auto ctx = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{lss_};
 

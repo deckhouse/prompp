@@ -138,7 +138,7 @@ TEST_F(LabelIndicesWriterShrunkLssFixture, WriteWhenLssShrunkAllFromSnapshot) {
   copier.copy_added_series_and_build_indexes();
   BareBones::Vector<uint32_t> old_to_new;
   invert_copy_mapping(dst_src_ids_mapping, shrink_boundary, old_to_new);
-  lss_.fill_touched_series_mapping(shrink_boundary, lss_copy, old_to_new, lss_.added_series());
+  lss_.fill_added_series_mapping(shrink_boundary, lss_copy, old_to_new, lss_.added_series());
   lss_.finalize_copy_and_shrink(shrink_boundary, lss_copy, old_to_new);
   const auto index_write_context = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{lss_};
 
