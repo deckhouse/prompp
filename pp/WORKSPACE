@@ -118,6 +118,7 @@ http_archive(
     patches = [
         "//third_party/patches/roaring:0001-disable-test-dependencies.patch",
         "//third_party/patches/roaring:0002-svacer_fixes.patch",
+        "//third_party/patches/roaring:0003-werror_fixes.patch",
     ],
     patch_cmds = [
         "cp cpp/* include/roaring"

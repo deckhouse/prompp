@@ -1,0 +1,25 @@
+--- a/include/roaring/portability.h
++++ b/include/roaring/portability.h
+@@ -221,8 +221,8 @@
+ #ifndef CROARING_INTRINSICS
+ #define CROARING_INTRINSICS 1
+ #define roaring_unreachable __builtin_unreachable()
+-static inline int roaring_trailing_zeroes(unsigned long long input_num) { return __builtin_ctzll(input_num); }
+-static inline int roaring_leading_zeroes(unsigned long long input_num) { return __builtin_clzll(input_num); }
++inline int roaring_trailing_zeroes(unsigned long long input_num) { return __builtin_ctzll(input_num); }
++inline int roaring_leading_zeroes(unsigned long long input_num) { return __builtin_clzll(input_num); }
+ #endif
+ 
+ #if CROARING_REGULAR_VISUAL_STUDIO
+
+--- a/src/containers/bitset.c
++++ b/src/containers/bitset.c
+@@ -194,7 +194,7 @@
+ 
+     if (hic == NULL) {
+         // Both hic and loc can't be NULL, so bc is never NULL here
+-        if (bc->cardinality == 0) {
++        if (bc && bc->cardinality == 0) {
+             bitset_container_free(bc);
+ 	}
+         return;
