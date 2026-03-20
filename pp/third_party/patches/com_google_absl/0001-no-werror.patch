@@ -5,7 +5,7 @@
      "//absl:gcc_compiler": ABSL_GCC_FLAGS,
      "//conditions:default": ABSL_GCC_FLAGS,
 -})
-+}) + ["-Wno-maybe-uninitialized"]
++}) + ["-Wno-maybe-uninitialized", "-Wno-ignored-attributes"]
  
  ABSL_TEST_COPTS = select({
      "//absl:msvc_compiler": ABSL_MSVC_TEST_FLAGS,
@@ -14,7 +14,7 @@
      "//absl:gcc_compiler": ABSL_GCC_TEST_FLAGS,
      "//conditions:default": ABSL_GCC_TEST_FLAGS,
 -})
-+}) + ["-Wno-maybe-uninitialized"]
++}) + ["-Wno-maybe-uninitialized", "-Wno-ignored-attributes"]
  
  ABSL_DEFAULT_LINKOPTS = select({
      "//absl:msvc_compiler": ABSL_MSVC_LINKOPTS,
