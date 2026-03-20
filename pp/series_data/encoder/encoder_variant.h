@@ -10,12 +10,13 @@
 
 namespace series_data::encoder {
 
+template <BareBones::ReallocatorInterface Reallocator>
 union PROMPP_ATTRIBUTE_PACKED EncoderVariant {
   value::DoubleConstantEncoder double_constant{0};
   value::TwoDoubleConstantEncoder two_double_constant;
-  value::AscIntegerEncoder asc_integer;
-  value::AscIntegerThenValuesGorillaEncoder asc_integer_then_values_gorilla;
-  value::ValuesGorillaEncoder values_gorilla;
+  value::AscIntegerEncoder<Reallocator> asc_integer;
+  value::AscIntegerThenValuesGorillaEncoder<Reallocator> asc_integer_then_values_gorilla;
+  value::ValuesGorillaEncoder<Reallocator> values_gorilla;
 
   PROMPP_ALWAYS_INLINE void destroy(EncodingType encoding_type) {
     switch (encoding_type) {

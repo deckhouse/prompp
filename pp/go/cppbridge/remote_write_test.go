@@ -21,7 +21,6 @@ func (s *MessageEncodersSuite) TestEncode() {
 	lss := NewLssStorage()
 	lss.FindOrEmplace(model.NewLabelSetBuilder().Set("__name__", "name1").Set("job", "doing1").Build())
 
-	messages := NewRWMessageList(1, 0)
 	encoders := NewMessageEncoders(1, []*LabelSetStorage{lss})
 	sampleStorages := NewSegmentSamplesStorage(1)
 
@@ -29,18 +28,14 @@ func (s *MessageEncodersSuite) TestEncode() {
 	walSegmentSamplesStorageAdd(sampleStorages.Get(0), 0, 2000, 1.1)
 	walSegmentSamplesStorageAdd(sampleStorages.Get(0), 0, 3000, 1.1)
 
+	messages := sampleStorages.SplitMessages(3, 0)
+
 	// Act
-	encoders.Encode(
-		0,
-		sampleStorages,
-		0,
-		1,
-		&messages.Messages[0],
-	)
+	encoders.Encode(0, 0, 1, messages.Messages)
 
 	// Assert
 	s.Equal(int64(3000), messages.Messages[0].MaxTimestamp)
-	s.Equal(uint64(3), messages.Messages[0].SampleCount)
+	s.Equal(uint32(3), messages.Messages[0].SampleCount)
 	s.Equal([]byte{
 		0x4e, 0x3c, 0x0a, 0x4c, 0x0a, 0x11, 0x0a, 0x08, 0x5f, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x5f, 0x5f,
 		0x12, 0x05, 0x01, 0x08, 0x50, 0x31, 0x0a, 0x0d, 0x0a, 0x03, 0x6a, 0x6f, 0x62, 0x12, 0x06, 0x64,

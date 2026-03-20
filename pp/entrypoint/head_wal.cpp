@@ -186,6 +186,8 @@ extern "C" void prompp_head_wal_decoder_decode_to_data_storage(void* args, void*
   const auto out = new (res) Result();
 
   try {
+    const auto arena_guard = in->encoder_wrapper->encoder.storage().thread_arena_guard();
+
     in->decoder->decode(in->segment, [in](PromPP::Primitives::LabelSetID ls_id, PromPP::Primitives::Timestamp timestamp, double value)
                                          PROMPP_LAMBDA_INLINE { in->encoder_wrapper->encoder.encode(ls_id, timestamp, value); });
     out->create_timestamp = in->decoder->decoder().created_at_tsns();

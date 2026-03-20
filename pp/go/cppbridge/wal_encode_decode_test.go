@@ -598,6 +598,8 @@ func (s *EncoderDecoderSuite) TestEncodeWALOutputDecode() {
 	s.Equal(uint32(1), stats.AddSeriesCount())
 	s.Equal(uint32(0), stats.DroppedSampleCount())
 	s.Equal(uint32(1), stats.SampleCount())
+
+	runtime.KeepAlive(sampleStorages)
 }
 
 func (s *EncoderDecoderSuite) TestEncodeWALOutputDecodeWithLimit() {
@@ -757,4 +759,6 @@ func (s *EncoderDecoderSuite) TestEncodeWALOutputDecodeDroppedSeries() {
 	s.Equal(uint32(1), stats.AddSeriesCount())
 	s.Equal(uint32(1), stats.DroppedSeriesCount())
 	s.Equal(uint32(0), stats.SampleCount())
+
+	runtime.KeepAlive(sampleStorages)
 }
