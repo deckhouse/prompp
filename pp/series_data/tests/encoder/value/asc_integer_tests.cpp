@@ -11,7 +11,7 @@
 namespace {
 
 using BareBones::Encoding::Gorilla::STALE_NAN;
-using series_data::encoder::value::AscIntegerEncoder;
+using AscIntegerEncoder = series_data::encoder::value::AscIntegerEncoder<BareBones::DefaultReallocator>;
 
 struct CanBeEncodedCase {
   double value1;

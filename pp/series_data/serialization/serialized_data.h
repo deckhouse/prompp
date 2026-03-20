@@ -86,7 +86,7 @@ class DataSerializer {
 
   template <class ChunkList>
   SerializedData serialize_internal(const ChunkList& chunks) noexcept {
-    const auto& kReservedBytesForReader = encoder::CompactBitSequence::reserved_bytes_for_reader();
+    const auto& kReservedBytesForReader = DataStorage::CompactBitSequence::reserved_bytes_for_reader();
 
     SerializedData serialized_data;
     serialized_data.chunks.reserve(get_chunk_count(chunks));
@@ -215,7 +215,7 @@ class DataSerializer {
   template <chunk::DataChunk::Type chunk_type>
   static void fill_timestamp_stream_offset(const DataStorage& storage,
                                            TimestampStreamsData& timestamp_streams_data,
-                                           encoder::timestamp::State::Id timestamp_stream_id,
+                                           encoder::timestamp::StateId timestamp_stream_id,
                                            chunk::SerializedChunk& serialized_chunk,
                                            SerializedData::Memory& buffer) noexcept {
     uint32_t data_size = buffer.control_block().items_count;

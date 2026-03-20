@@ -243,12 +243,12 @@ extern "C" void prompp_wal_segment_samples_storage_list_dtor(void* args) {
 extern "C" void prompp_wal_segment_samples_storage_list_split_messages(void* args) {
   struct Arguments {
     PromPP::WAL::SegmentSamplesStorageList* storage_list;
-    uint32_t samples_per_message;
+    uint32_t message_samples_threshold;
     PromPP::Primitives::Go::Slice<PromPP::WAL::GoMessage> messages;
   };
 
   const auto in = static_cast<Arguments*>(args);
-  PromPP::WAL::split_messages(*in->storage_list, in->samples_per_message, in->messages);
+  PromPP::WAL::split_messages(*in->storage_list, in->message_samples_threshold, in->messages);
 }
 
 extern "C" void prompp_wal_output_decoder_ctor(void* args, void* res) {

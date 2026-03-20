@@ -8,7 +8,11 @@
 
 namespace series_data::encoder::value {
 
+template <BareBones::ReallocatorInterface Reallocator>
 class PROMPP_ATTRIBUTE_PACKED ValuesGorillaEncoder {
+ private:
+  using CompactBitSequence = series_data::encoder::CompactBitSequence<Reallocator>;
+
  public:
   PROMPP_ALWAYS_INLINE explicit ValuesGorillaEncoder(double value, uint32_t count) { values_encoder_.encode_first(value, count, stream_); }
   PROMPP_ALWAYS_INLINE ValuesGorillaEncoder(const ConstantValue& v1, const ConstantValue& v2, const ConstantValue& v3) {
@@ -68,5 +72,5 @@ class PROMPP_ATTRIBUTE_PACKED ValuesGorillaEncoder {
 
 }  // namespace series_data::encoder::value
 
-template <>
-struct BareBones::IsTriviallyReallocatable<series_data::encoder::value::ValuesGorillaEncoder> : std::true_type {};
+template <BareBones::ReallocatorInterface Reallocator>
+struct BareBones::IsTriviallyReallocatable<series_data::encoder::value::ValuesGorillaEncoder<Reallocator>> : std::true_type {};

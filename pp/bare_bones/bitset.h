@@ -21,7 +21,8 @@
 
 namespace BareBones {
 
-class Bitset {
+template <ReallocatorInterface Reallocator = DefaultReallocator>
+class GenericBitset {
   /**
    * Why??? Why another bitset??? Why no std::bitset?
    *
@@ -31,7 +32,7 @@ class Bitset {
    * - roaring bitmap is not that quick if you can afford to hold the whole
    *   bitset in memory (including unset parts), which is the case
    */
-  using Memory = BareBones::Memory<MemoryControlBlockWithItemCount, uint64_t>;
+  using Memory = BareBones::Memory<MemoryControlBlockWithItemCount, uint64_t, Reallocator>;
   Memory data_;
 
  public:
@@ -253,10 +254,12 @@ class Bitset {
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t memory_size_in_bytes() const noexcept { return memory_size_in_bytes(size()); }
 };
 
-template <>
-struct IsTriviallyReallocatable<Bitset> : std::true_type {};
+using Bitset = GenericBitset<DefaultReallocator>;
 
-template <>
-struct IsZeroInitializable<Bitset> : std::true_type {};
+template <ReallocatorInterface Reallocator>
+struct IsTriviallyReallocatable<GenericBitset<Reallocator>> : std::true_type {};
+
+template <ReallocatorInterface Reallocator>
+struct IsZeroInitializable<GenericBitset<Reallocator>> : std::true_type {};
 
 }  // namespace BareBones

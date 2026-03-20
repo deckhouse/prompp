@@ -37,11 +37,11 @@ void prompp_remote_write_message_encoders_dtor(void* args);
  * @brief encode remote write message
  *
  * @param args {
- *     messageEncoder *MessageEncoder
+ *     encoder        *MessageEncoder
  *     lss_list       []uintptr
  *     messageIndex   uint64
  *     messagesCount  uint64
- *     message        *Message
+ *     messages       []Message
  * }
  *
  */

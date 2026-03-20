@@ -9,7 +9,8 @@ class ValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIterator
  public:
   using Decoder = BareBones::Encoding::Gorilla::ValuesDecoder;
 
-  ValuesGorillaDecodeIterator(const encoder::BitSequenceWithItemsCount& timestamp_stream, const BareBones::BitSequenceReader& reader, bool is_last_stalenan)
+  template <class BitSequenceWithItemsCount>
+  ValuesGorillaDecodeIterator(const BitSequenceWithItemsCount& timestamp_stream, const BareBones::BitSequenceReader& reader, bool is_last_stalenan)
       : ValuesGorillaDecodeIterator(timestamp_stream.count(), timestamp_stream.reader(), reader, is_last_stalenan) {}
   ValuesGorillaDecodeIterator(uint8_t samples_count,
                               const BareBones::BitSequenceReader& timestamp_reader,

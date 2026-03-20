@@ -8,7 +8,11 @@
 
 namespace series_data::encoder::value {
 
+template <BareBones::ReallocatorInterface Reallocator>
 class PROMPP_ATTRIBUTE_PACKED AscIntegerEncoder {
+ private:
+  using CompactBitSequence = series_data::encoder::CompactBitSequence<Reallocator>;
+
  public:
   using EncoderDeltaType = int32_t;
   using Encoder = ZigZagTimestampEncoder<EncoderDeltaType>;
@@ -108,5 +112,5 @@ class PROMPP_ATTRIBUTE_PACKED AscIntegerEncoder {
 
 }  // namespace series_data::encoder::value
 
-template <>
-struct BareBones::IsTriviallyReallocatable<series_data::encoder::value::AscIntegerEncoder> : std::true_type {};
+template <BareBones::ReallocatorInterface Reallocator>
+struct BareBones::IsTriviallyReallocatable<series_data::encoder::value::AscIntegerEncoder<Reallocator>> : std::true_type {};

@@ -316,8 +316,8 @@ func ClearSegmentSamplesStorage(storage *CppSegmentSamplesStorage) {
 }
 
 // SplitMessages splits the storage list into messages by samples per message.
-func (s *SegmentSamplesStorageList) SplitMessages(samplesPerMessage, targetSegmentID uint32) *RWMessageList {
-	return NewRWMessageList(targetSegmentID, walSegmentSamplesStorageListSplitMessages(s, samplesPerMessage))
+func (s *SegmentSamplesStorageList) SplitMessages(messageSamplesThreshold, targetSegmentID uint32) *RWMessageList {
+	return NewRWMessageList(targetSegmentID, walSegmentSamplesStorageListSplitMessages(s, messageSamplesThreshold))
 }
 
 //

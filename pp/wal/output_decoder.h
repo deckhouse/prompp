@@ -486,6 +486,8 @@ class ProtobufEncoder {
         std::destroy_at(&pb_timeseries);
         std::construct_at(&pb_timeseries, pb_writer, kTimeseriesTag);
 
+        // clang-tidy give false-positive warning on this line because lss always set in the storage_index != it.storage_index() branch
+        // before the first use.
         // NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage)
         Prometheus::RemoteWrite::write_label_set(pb_timeseries, lss->operator[](ls_id));
         last_ls_id = ls_id;
