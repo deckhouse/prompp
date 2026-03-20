@@ -1,12 +1,7 @@
 #include "common.h"
+#include "bare_bones/jemalloc.h"
 
-#if __has_include(<jemalloc/jemalloc.h>)
-#define JEMALLOC_AVAILABLE 1
-#endif
-
-#if JEMALLOC_AVAILABLE
-#include <jemalloc/jemalloc.h>
-#else
+#if !JEMALLOC_AVAILABLE
 #include <malloc.h>
 #endif
 
@@ -35,9 +30,8 @@ extern "C" void prompp_mem_info(void* res) {
   const auto out = static_cast<Result*>(res);
 
 #if JEMALLOC_AVAILABLE
-  uint64_t epoch = 1;
-  size_t sz = sizeof(epoch);
-  mallctl("epoch", &epoch, &sz, &epoch, sz);
+  BareBones::jemalloc::refresh_stats();
+
   size_t size;
   size_t size_len = sizeof(size);
   mallctl("stats.active", &size, &size_len, NULL, 0);

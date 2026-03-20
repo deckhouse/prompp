@@ -7,7 +7,8 @@ namespace series_data::decoder {
 
 class AscIntegerThenValuesGorillaDecodeIterator : public SeparatedTimestampValueDecodeIteratorTrait {
  public:
-  AscIntegerThenValuesGorillaDecodeIterator(const encoder::BitSequenceWithItemsCount& timestamp_stream,
+  template <class BitSequenceWithItemsCount>
+  AscIntegerThenValuesGorillaDecodeIterator(const BitSequenceWithItemsCount& timestamp_stream,
                                             const BareBones::BitSequenceReader& reader,
                                             bool is_last_stalenan)
       : AscIntegerThenValuesGorillaDecodeIterator(timestamp_stream.count(), timestamp_stream.reader(), reader, is_last_stalenan) {}
