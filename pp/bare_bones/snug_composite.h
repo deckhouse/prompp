@@ -8,8 +8,11 @@
 
 #include <scope_exit.h>
 
+#include <concepts>
+#include <cstdint>
 #include <limits>
 #include <ranges>
+#include <string_view>
 
 #include "bare_bones/allocator.h"
 #include "bare_bones/exception.h"
@@ -50,9 +53,25 @@ concept has_after_items_load = ls_id_range<R> && requires(Derived derived, R&& r
 
 constexpr uint32_t kInvalidLsId = std::numeric_limits<uint32_t>::max();
 
+// Symbol table view type, independent from any specific storage type
+struct SymbolTableView {
+  struct Item {
+    uint32_t pos;
+    uint32_t length;
+  };
+
+  const char* data = nullptr;
+  const Item* items = nullptr;
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view operator[](uint32_t id) const noexcept {
+    const auto& it = items[id];
+    return std::string_view(data + it.pos, it.length);
+  }
+};
+
 template <class Storage>
 concept has_symbol_read_view = requires(const Storage& s) {
-  { s.read_view() };
+  { s.read_view() } -> std::same_as<const SymbolTableView&>;
 };
 
 template <class Derived, template <template <class> class> class Filament, template <class> class Vector>

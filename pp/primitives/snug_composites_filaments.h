@@ -9,7 +9,6 @@
 #include "bare_bones/snug_composite.h"
 #include "bare_bones/stream_v_byte.h"
 #include "hash.h"
-#include "primitives/symbol_table_view.h"
 
 namespace PromPP::Primitives::SnugComposites::Filaments {
 
@@ -20,9 +19,9 @@ struct Symbol {
     static constexpr bool kIsReadOnly = BareBones::IsSharedSpan<Vector<uint8_t>>::value;
 
     using composite_type = std::string_view;
-    using item_type = PromPP::Primitives::SnugComposites::SymbolItemType;
+    using item_type = BareBones::SnugComposite::SymbolTableView::Item;
 
-    using read_view_type = PromPP::Primitives::SnugComposites::SymbolTableView;
+    using read_view_type = BareBones::SnugComposite::SymbolTableView;
 
     struct checkpoint_type {
       uint32_t data_size;
@@ -269,6 +268,8 @@ struct Symbol {
     template <template <class> class>
     friend struct Symbol;
 
+    // read_view_ must remain the first data member: LabelSetComposite
+    // reinterprets storage bytes as SymbolTableView by offset.
     read_view_type read_view_{};
     Vector<char> data_;
     Vector<item_type> items_;
@@ -317,8 +318,8 @@ struct LabelNameSetComposite {
     using difference_type = std::ptrdiff_t;
 
     iterator_type() = default;
-    iterator_type(const uint32_t* ids_current, const uint32_t* ids_end, const PromPP::Primitives::SnugComposites::SymbolTableView* symbol_table_view) noexcept
-        : ids_current_{ids_current}, ids_end_{ids_end}, symbol_table_view_{symbol_table_view} {}
+    iterator_type(const uint32_t* ids_current, const BareBones::SnugComposite::SymbolTableView* symbol_table_view) noexcept
+        : ids_current_{ids_current}, symbol_table_view_{symbol_table_view} {}
 
     PROMPP_ALWAYS_INLINE iterator_type& operator++() noexcept {
       ++ids_current_;
@@ -339,16 +340,15 @@ struct LabelNameSetComposite {
 
    private:
     const uint32_t* ids_current_ = nullptr;
-    const uint32_t* ids_end_ = nullptr;
-    const PromPP::Primitives::SnugComposites::SymbolTableView* symbol_table_view_ = nullptr;
+    const BareBones::SnugComposite::SymbolTableView* symbol_table_view_ = nullptr;
   };
 
   LabelNameSetComposite() = default;
-  LabelNameSetComposite(const uint32_t* ids_begin, uint32_t size, const PromPP::Primitives::SnugComposites::SymbolTableView* symbol_table_view) noexcept
+  LabelNameSetComposite(const uint32_t* ids_begin, uint32_t size, const BareBones::SnugComposite::SymbolTableView* symbol_table_view) noexcept
       : ids_begin_{ids_begin}, size_{size}, symbol_table_view_{symbol_table_view} {}
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE iterator_type begin() const noexcept { return iterator_type{ids_begin_, ids_begin_ + size_, symbol_table_view_}; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE iterator_type end() const noexcept { return iterator_type{ids_begin_ + size_, ids_begin_ + size_, symbol_table_view_}; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE iterator_type begin() const noexcept { return iterator_type{ids_begin_, symbol_table_view_}; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE iterator_type end() const noexcept { return iterator_type{ids_begin_ + size_, symbol_table_view_}; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return size_; }
 
@@ -367,7 +367,7 @@ struct LabelNameSetComposite {
  private:
   const uint32_t* ids_begin_ = nullptr;
   uint32_t size_ = 0;
-  const PromPP::Primitives::SnugComposites::SymbolTableView* symbol_table_view_ = nullptr;
+  const BareBones::SnugComposite::SymbolTableView* symbol_table_view_ = nullptr;
 };
 
 template <template <template <class> class> class SymbolsTableType, template <class> class Vector>
@@ -688,7 +688,7 @@ struct LabelNameSet {
 
 struct LabelSetComposite {
   using value_type = std::pair<std::string_view, std::string_view>;
-  using SymbolTableView = PromPP::Primitives::SnugComposites::SymbolTableView;
+  using SymbolTableView = BareBones::SnugComposite::SymbolTableView;
   using LabelNameSetComposite = Filaments::LabelNameSetComposite;
   using symbol_ids_codec_type = BareBones::StreamVByte::Codec1234;
   using values_iterator_type = BareBones::StreamVByte::DecodeIterator<symbol_ids_codec_type, const uint8_t*>;
