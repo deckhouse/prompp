@@ -165,14 +165,26 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(const LabelSet& label_set, size_t hash) noexcept {
     hash = phmap_hash(hash);
     const auto storage_id = *ls_id_hash_set_.lazy_emplace_with_hash(label_set, hash, [&](const auto& ctor) {
-      auto new_storage_id = Base::storage_.emplace_back(label_set);
+      const auto new_storage_id = Base::storage_.emplace_back(label_set);
       const auto composite_label_set = Base::operator[](new_storage_id);
       ctor(typename Base::Proxy(new_storage_id));
       update_indexes(shift_ + new_storage_id, composite_label_set);
       return new_storage_id;
     });
 
-    const auto logical_id = shift_ + storage_id;
+    auto logical_id = shift_ + storage_id;
+
+    if (!is_visible_for_find(logical_id)) {
+      auto it = ls_id_hash_set_.find(label_set, hash);
+      assert(it != ls_id_hash_set_.end());
+      ls_id_hash_set_.erase(it);
+      const auto new_storage_id = Base::storage_.emplace_back(label_set);
+      const auto composite_label_set = Base::operator[](new_storage_id);
+      ls_id_hash_set_.emplace_with_hash(hash, typename Base::Proxy(new_storage_id));
+      update_indexes(shift_ + new_storage_id, composite_label_set);
+      logical_id = shift_ + new_storage_id;
+    }
+
     if (pending_shrink_boundary_ == kPendingShrinkBoundaryNotSet) {
       mark_series_as_added(logical_id);
     }

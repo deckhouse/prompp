@@ -402,6 +402,7 @@ TEST_F(QueryableEncodingBimapShrinkFixture, TouchedSeriesFilledByFinalize) {
 
 class QueryableEncodingBimapFixedStateFixture : public QueryableEncodingBimapCopierFixture {
  protected:
+  static constexpr uint32_t kPendingShrinkBoundary = 3;
   LabelViewSet ls1_{{"job", "a"}};
   LabelViewSet ls2_{{"job", "b"}};
   LabelViewSet ls3_{{"job", "c"}};
@@ -410,21 +411,66 @@ class QueryableEncodingBimapFixedStateFixture : public QueryableEncodingBimapCop
     QueryableEncodingBimapCopierFixture::SetUp();
     lss_.find_or_emplace(ls1_);
     lss_.find_or_emplace(ls2_);
-    lss_.set_pending_shrink_boundary(3);
+    lss_.set_pending_shrink_boundary(kPendingShrinkBoundary);
     lss_.find_or_emplace(ls3_);
   }
 };
 
-TEST_F(QueryableEncodingBimapFixedStateFixture, FindReturnsEmptyForUnmarkedSeries) {
+class QueryableEncodingBimapFixedStateWithoutLs3Fixture : public QueryableEncodingBimapCopierFixture {
+ protected:
+  static constexpr uint32_t kPendingShrinkBoundary = 3;
+  LabelViewSet ls1_{{"job", "a"}};
+  LabelViewSet ls2_{{"job", "b"}};
+  LabelViewSet ls3_{{"job", "c"}};
+
+  void SetUp() override {
+    QueryableEncodingBimapCopierFixture::SetUp();
+    lss_.find_or_emplace(ls1_);
+    lss_.find_or_emplace(ls2_);
+    lss_.set_pending_shrink_boundary(kPendingShrinkBoundary);
+  }
+};
+
+TEST_F(QueryableEncodingBimapFixedStateFixture, FindMatchesFindOrEmplaceForSeriesEmplacedInFixedState) {
+  // Arrange
+
+  // Act
+  const auto from_find = lss_.find(ls3_);
+
   // Assert
-  EXPECT_FALSE(lss_.find(ls3_));
+  ASSERT_TRUE(from_find.has_value());
+  EXPECT_GE(*from_find, kPendingShrinkBoundary);
+  EXPECT_EQ(lss_.find_or_emplace(ls3_), *from_find);
+  EXPECT_TRUE(std::ranges::equal(ls3_, lss_[*from_find]));
 }
 
-TEST_F(QueryableEncodingBimapFixedStateFixture, OperatorBracketReturnsEmptyForUnmarkedSeries) {
+TEST_F(QueryableEncodingBimapFixedStateFixture, OperatorBracketHidesBelowBoundaryOrphanAndResolvesVisibleId) {
+  // Arrange
+
+  // Act
+  const auto id = lss_.find(ls3_);
+
   // Assert
+  ASSERT_TRUE(id.has_value());
+  EXPECT_GE(*id, kPendingShrinkBoundary);
   EXPECT_TRUE(std::ranges::equal(ls1_, lss_[0]));
   EXPECT_TRUE(std::ranges::equal(ls2_, lss_[1]));
   EXPECT_EQ(0U, lss_[2].size());
+  EXPECT_TRUE(std::ranges::equal(ls3_, lss_[*id]));
+}
+
+TEST_F(QueryableEncodingBimapFixedStateWithoutLs3Fixture, FindOrEmplaceInFixedReturnsIdAtLeastBoundaryAndFindMatches) {
+  // Arrange
+
+  // Act
+  const auto id = lss_.find_or_emplace(ls3_);
+
+  // Assert
+  EXPECT_GE(id, kPendingShrinkBoundary);
+  const auto from_find = lss_.find(ls3_);
+  ASSERT_TRUE(from_find.has_value());
+  EXPECT_EQ(id, *from_find);
+  EXPECT_TRUE(std::ranges::equal(ls3_, lss_[id]));
 }
 
 class QueryableEncodingBimapShrinkTwoSeriesFixture : public QueryableEncodingBimapCopierFixture {
@@ -452,6 +498,8 @@ class QueryableEncodingBimapShrinkTwoSeriesFixture : public QueryableEncodingBim
 };
 
 TEST_F(QueryableEncodingBimapShrinkTwoSeriesFixture, FinalizeShrinkWithSnapshot) {
+  // Arrange
+
   // Act
   RunFinalizeShrinkWithSnapshot(BareBones::Vector<uint32_t>{0U, 1U}, lss_.added_series());
 
@@ -461,7 +509,12 @@ TEST_F(QueryableEncodingBimapShrinkTwoSeriesFixture, FinalizeShrinkWithSnapshot)
 }
 
 TEST_F(QueryableEncodingBimapCopierFixture, EmptyCompositeSizeZero) {
+  // Arrange
   typename Lss::Base::value_type empty;
+
+  // Act
+
+  // Assert
   EXPECT_EQ(0U, empty.size());
 }
 

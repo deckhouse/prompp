@@ -141,12 +141,6 @@ TEST_F(LabelIndicesWriterShrunkLssFixture, WriteWhenLssShrunkAllFromSnapshot) {
   lss_.fill_added_series_mapping(shrink_boundary, lss_copy, old_to_new, lss_.added_series());
   lss_.finalize_copy_and_shrink(shrink_boundary, lss_copy, old_to_new);
   const auto index_write_context = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{lss_};
-
-  std::ostringstream symbols_stream;
-  StreamWriter<decltype(symbols_stream)> symbols_stream_writer{&symbols_stream};
-  SymbolsWriter<Lss, decltype(symbols_stream)> symbols_writer{index_write_context, symbols_stream_writer};
-  symbols_writer.write();
-
   LabelIndicesWriter<Lss, decltype(stream_)> label_indices_writer{lss_, stream_writer_};
   label_indices_writer.set_index_write_context(&index_write_context);
 

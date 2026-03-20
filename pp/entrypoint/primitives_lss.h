@@ -231,7 +231,7 @@ void prompp_primitives_readonly_lss_copy_added_series(uint64_t source_lss, uint6
 void prompp_primitives_lss_invert_copy_mapping(void* args);
 
 /**
- * @brief Fill old_to_new_mapping for addded series that are not yet mapped (add missing series to copy).
+ * @brief Fill old_to_new_mapping for added series that are not yet mapped.
  *
  * @param args {
  *     current_lss        uintptr  // pointer to source queryable lss;
