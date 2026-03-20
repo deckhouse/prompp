@@ -3,19 +3,6 @@ extern "C" {
 #endif
 
 /**
- * @brief create message list
- *
- * @param args {
- *     messagesCount uint64
- * }
- *
- * @param res {
- *     message_list []Message
- * }
- */
-void prompp_remote_write_message_list_ctor(void* args, void* res);
-
-/**
  * @brief destroy message list
  *
  * @param args {
@@ -50,12 +37,11 @@ void prompp_remote_write_message_encoders_dtor(void* args);
  * @brief encode remote write message
  *
  * @param args {
- *     messageEncoder *MessageEncoder
+ *     encoder        *MessageEncoder
  *     lss_list       []uintptr
- *     storageList    []SegmentSamplesStorageList
  *     messageIndex   uint64
  *     messagesCount  uint64
- *     message        *Message
+ *     messages       []Message
  * }
  *
  */
