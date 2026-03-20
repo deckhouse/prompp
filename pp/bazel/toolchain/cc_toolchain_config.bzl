@@ -114,16 +114,33 @@ def _impl(ctx):
                         flag_group(
                             flags = [
                                 # Common compile flags here
-                                "-fPIC",
                                 "-Wall",
                                 "-Wextra",
                                 "-Werror",
                                 "-march=" + ctx.attr.march[BuildSettingInfo].value,
 
                                 # GOST compile flags
+                                "-D_FORTIFY_SOURCE=2",
+
                                 "-Wdiv-by-zero",
                                 "-Warray-bounds=2",
                                 "-Wnull-dereference",
+                                "-Wclobbered",
+                                "-Wshift-count-negative",
+                                "-Wshift-count-overflow",
+
+                                "-fwrapv",
+                                "-fwrapv-pointer",
+
+                                "-fno-builtin",
+                                "-fno-strict-aliasing",
+                                "-fno-delete-null-pointer-checks",
+                                "-ftrivial-auto-var-init=zero",
+                                "-fstack-protector-strong",
+
+                                "-fPIC",
+                                "-fpic",
+                                "-fPIE",
                             ],
                         ),
                     ],
