@@ -8,7 +8,10 @@
 
 #include <scope_exit.h>
 
+#include <concepts>
+#include <cstdint>
 #include <ranges>
+#include <string_view>
 
 #include "bare_bones/allocator.h"
 #include "bare_bones/exception.h"
@@ -46,6 +49,27 @@ concept has_rollback = requires(Derived derived, const Checkpoint& checkpoint) {
 
 template <class Derived, class R>
 concept has_after_items_load = ls_id_range<R> && requires(Derived derived, R&& range) { derived.after_items_load_impl(std::forward<R>(range)); };
+
+// Symbol table view type, independent from any specific storage type
+struct SymbolTableView {
+  struct Item {
+    uint32_t pos;
+    uint32_t length;
+  };
+
+  const char* data = nullptr;
+  const Item* items = nullptr;
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view operator[](uint32_t id) const noexcept {
+    const auto& it = items[id];
+    return std::string_view(data + it.pos, it.length);
+  }
+};
+
+template <class Storage>
+concept has_symbol_read_view = requires(const Storage& s) {
+  { s.read_view() } -> std::same_as<const SymbolTableView&>;
+};
 
 template <class Derived, template <template <class> class> class Filament, template <class> class Vector>
 class GenericDecodingTable {
@@ -277,6 +301,12 @@ class GenericDecodingTable {
 
   PROMPP_ALWAYS_INLINE storage_type::view_type data_view() const noexcept { return storage_.view(); }
 
+  [[nodiscard]] decltype(auto) symbol_table_read_view() const noexcept
+    requires has_symbol_read_view<storage_type>
+  {
+    return storage_.read_view();
+  }
+
   template <class DerivedOther, template <template <class> class> class FilamentOther, template <class> class VectorOther>
   PROMPP_ALWAYS_INLINE void reserve(const GenericDecodingTable<DerivedOther, FilamentOther, VectorOther>& other) {
     storage_.reserve(other.storage_);
@@ -486,12 +516,11 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
 
  private:
   uint32_t set_allocated_memory_{};
-  phmap::flat_hash_set<typename Base::Proxy, typename Base::Hasher, typename Base::EqualityComparator, Allocator<typename Base::Proxy, uint32_t>> set_{
-      {},
-      0,
-      Base::hasher(),
-      Base::equality_comparator(),
-      Allocator<typename Base::Proxy, uint32_t>{set_allocated_memory_}};
+  phmap::flat_hash_set<typename Base::Proxy,
+                       typename Base::Hasher,
+                       typename Base::EqualityComparator,
+                       Allocator<typename Base::Proxy, DefaultReallocator, uint32_t>>
+      set_{{}, 0, Base::hasher(), Base::equality_comparator(), Allocator<typename Base::Proxy, DefaultReallocator, uint32_t>{set_allocated_memory_}};
   uint32_t shift_{0};
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index_impl() const noexcept { return shift_ + Base::storage_.next_item_index(); }

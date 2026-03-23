@@ -10,8 +10,9 @@ class GorillaDecodeIteratorGeneral : public DecodeIteratorTrait<SampleCountType>
   using Base = DecodeIteratorTrait<SampleCountType>;
 
  public:
-  explicit GorillaDecodeIteratorGeneral(const encoder::CompactBitSequence& stream, bool is_last_stalenan)
-      : GorillaDecodeIteratorGeneral(encoder::BitSequenceWithItemsCount::count(stream), encoder::BitSequenceWithItemsCount::reader(stream), is_last_stalenan) {}
+  template <class CompactBitSequence>
+  explicit GorillaDecodeIteratorGeneral(const CompactBitSequence& stream, bool is_last_stalenan)
+      : GorillaDecodeIteratorGeneral(encoder::bit_sequence_items_count(stream.raw_bytes()), encoder::bit_sequence_reader(stream.bytes()), is_last_stalenan) {}
   GorillaDecodeIteratorGeneral(SampleCountType samples_count, const BareBones::BitSequenceReader& reader, bool is_last_stalenan)
       : Base(0.0, samples_count, is_last_stalenan), reader_(reader) {
     decode();

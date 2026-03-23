@@ -9,7 +9,7 @@
 namespace {
 
 using BareBones::Encoding::Gorilla::STALE_NAN;
-using series_data::encoder::GorillaEncoder;
+using GorillaEncoder = series_data::encoder::GorillaEncoder<BareBones::DefaultReallocator>;
 
 struct IsActualCase {
   BareBones::Vector<double> values;

@@ -50,8 +50,8 @@ class SparseVector {
   class IteratorSentinel {};
 
   class Iterator {
-    const SparseVector* vec_;
-    Bitset::const_iterator i_;
+    const SparseVector* vec_{};
+    Bitset::const_iterator i_{};
 
    public:
     using iterator_category = std::input_iterator_tag;
@@ -61,7 +61,7 @@ class SparseVector {
     PROMPP_ALWAYS_INLINE Iterator() noexcept = default;
     PROMPP_ALWAYS_INLINE explicit Iterator(const SparseVector* vec) noexcept : vec_(vec), i_(vec_->element_exists_.begin()) {}
 
-    PROMPP_ALWAYS_INLINE auto operator*() noexcept { return std::pair<uint32_t, const T&>(*i_, vec_->data_[vec_->element_positions_[*i_]]); }
+    PROMPP_ALWAYS_INLINE auto operator*() const noexcept { return std::pair<uint32_t, const T&>(*i_, vec_->data_[vec_->element_positions_[*i_]]); }
     PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
       ++i_;
       return *this;
@@ -78,7 +78,7 @@ class SparseVector {
   using const_iterator = Iterator;
 
   PROMPP_ALWAYS_INLINE auto begin() const noexcept { return Iterator(this); }
-  PROMPP_ALWAYS_INLINE auto end() const noexcept { return IteratorSentinel(); }
+  PROMPP_ALWAYS_INLINE static auto end() noexcept { return IteratorSentinel(); }
 };
 
 template <class T, template <class> class Container>
