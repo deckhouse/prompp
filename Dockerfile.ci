@@ -6,11 +6,11 @@ RUN DEBIAN_FRONTEND=noninteractive && apt-get update && apt-get install -y gpg w
     update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100 && \
     update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100 && \
     update-alternatives --install /usr/bin/gcov gcov /usr/bin/gcov-14 100 && \
-    echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-19 main" | tee /etc/apt/sources.list.d/archive_uri-http_apt_llvm_org_jammy_-jammy.list && \
+    echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-21 main" | tee /etc/apt/sources.list.d/archive_uri-http_apt_llvm_org_jammy_-jammy.list && \
     wget -qO - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - && \
-    apt-get update && apt-get install -y clang-format-19 clang-tidy-19 && \
-    ln -s /usr/lib/llvm-19/bin/clang-tidy /usr/bin/clang-tidy && \
-    ln -s /usr/lib/llvm-19/bin/clang-format /usr/bin/clang-format
+    apt-get update && apt-get install -y clang-format-21 clang-tidy-21 && \
+    ln -s /usr/lib/llvm-21/bin/clang-tidy /usr/bin/clang-tidy && \
+    ln -s /usr/lib/llvm-21/bin/clang-format /usr/bin/clang-format
 
 # Bazel
 ARG BAZEL_VERSION=7.4.1
