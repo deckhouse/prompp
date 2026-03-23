@@ -1,8 +1,11 @@
 FROM ubuntu:24.04
 
 # Base + g++ + git for perf_tests
-RUN DEBIAN_FRONTEND=noninteractive && apt-get update && apt-get install -y gpg wget gcc g++ libunwind-dev jq bash nodejs npm bzip2 \
+RUN DEBIAN_FRONTEND=noninteractive && apt-get update && apt-get install -y gpg wget gcc-14 g++-14 libunwind-14-dev jq bash nodejs npm bzip2 \
     git autoconf make iproute2 jq curl ca-certificates libtool pkg-config cmake lcov && \
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100 && \
+    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100 && \
+    update-alternatives --install /usr/bin/gcov gcov /usr/bin/gcov-14 100 && \
     echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-19 main" | tee /etc/apt/sources.list.d/archive_uri-http_apt_llvm_org_jammy_-jammy.list && \
     wget -qO - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - && \
     apt-get update && apt-get install -y clang-format-19 clang-tidy-19 && \

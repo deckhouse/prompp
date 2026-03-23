@@ -1,17 +1,45 @@
 --- a/md5.hh
 +++ b/md5.hh
-@@ -36,6 +36,10 @@
+@@ -36,6 +36,11 @@
   *     Copyright 2022 Quasis - The MIT License
   */
  
 +#pragma once
 +
 +#include <bit>
++#include <type_traits>
 +
  namespace crypto {
  
      template<unsigned state_bits = 128>
-@@ -180,7 +184,7 @@ namespace crypto {
+@@ -154,22 +159,22 @@ namespace crypto {
+         }
+ 
+         template<typename input_type> constexpr MD5&
+-        update(const input_type *input, size_type count) noexcept requires (__is_trivially_copyable(input_type)) {
++        update(const input_type *input, size_type count) noexcept requires (std::is_trivially_copyable_v<input_type>) {
+             return update(reinterpret_cast<const uint8_type*>(input), sizeof(input_type) * count);
+         }
+ 
+         template<typename input_type, auto count> constexpr MD5&
+-        update(const input_type (&input)[count]) noexcept requires (__is_trivially_copyable(input_type)) {
++        update(const input_type (&input)[count]) noexcept requires (std::is_trivially_copyable_v<input_type>) {
+             return update(reinterpret_cast<const uint8_type*>(input), sizeof(input_type) * count);
+         }
+ 
+         template<typename input_type> constexpr MD5&
+-        update(const input_type *begin, const input_type *end) noexcept requires (__is_trivially_copyable(input_type)) {
++        update(const input_type *begin, const input_type *end) noexcept requires (std::is_trivially_copyable_v<input_type>) {
+             return update(reinterpret_cast<const uint8_type*>(begin), sizeof(input_type) * (end - begin));
+         }
+ 
+         template<typename input_type> constexpr MD5&
+-        update(const input_type &input) noexcept requires (__is_trivially_copyable(input_type)) {
++        update(const input_type &input) noexcept requires (std::is_trivially_copyable_v<input_type>) {
+             return update(reinterpret_cast<const uint8_type*>(&input), sizeof(input_type));
+         }
+ 
+@@ -180,7 +185,7 @@ namespace crypto {
  
          template<typename input_type> constexpr MD5&
          update(const size_type count, input_type &&input) noexcept {
@@ -20,7 +48,7 @@
          }
  
          constexpr output_type
-@@ -207,7 +211,7 @@ namespace crypto {
+@@ -207,7 +212,7 @@ namespace crypto {
  
          static constexpr uint32_type
          rotl(uint32_type value, int count) noexcept {
@@ -29,7 +57,7 @@
          }
  
          static constexpr word_type
-@@ -323,35 +327,3 @@ namespace crypto {
+@@ -323,35 +328,3 @@ namespace crypto {
          return MD5<state_bits>().update(static_cast<input_type&&>(input)...).digest();
      }
  }
