@@ -64,7 +64,7 @@ type MessageEncoders struct {
 	lssPointers []uintptr
 }
 
-func NewMessageEncoders(encodersCount uint64, lssList []*LabelSetStorage) *MessageEncoders {
+func NewMessageEncoders(encodersCount uint64, lssList []*LabelSetSnapshot) *MessageEncoders {
 	encoders := &MessageEncoders{
 		encoders:    walRemoteWriteCreateMessageEncoders(encodersCount),
 		lssPointers: make([]uintptr, 0, len(lssList)),

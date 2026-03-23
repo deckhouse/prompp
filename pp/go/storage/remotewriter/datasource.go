@@ -272,8 +272,6 @@ type dataSource struct {
 	corrupted           bool
 	headReleaseFunc     func()
 
-	lssSlice []*cppbridge.LabelSetStorage
-
 	cacheMtx             sync.Mutex
 	caches               []*shardCache
 	cacheWriteSignal     chan struct{}
@@ -332,7 +330,6 @@ func newDataSource(dataDir string,
 			return nil, errors.Join(fmt.Errorf("failed to create shard: %w", err), b.Close())
 		}
 		b.shards = append(b.shards, s)
-		b.lssSlice = append(b.lssSlice, s.decoder.lss)
 		b.caches = append(b.caches, &shardCache{
 			shardID: shardID,
 			cache:   bytes.NewBuffer(nil),
@@ -525,12 +522,19 @@ func (ds *dataSource) handleReadErrors(errs []error) error {
 	return nil
 }
 
-func (ds *dataSource) LSSes() []*cppbridge.LabelSetStorage {
-	return ds.lssSlice
+// LSSSnapshots returns the snapshots of the label set storages,
+// it's used to create message encoders, creating from shard decoder lss snapshots.
+func (ds *dataSource) LSSSnapshots() []*cppbridge.LabelSetSnapshot {
+	snapshots := make([]*cppbridge.LabelSetSnapshot, len(ds.shards))
+	for shardID := range ds.shards {
+		snapshots[shardID] = ds.shards[shardID].decoder.lss.CreateLabelSetSnapshot()
+	}
+
+	return snapshots
 }
 
 func (ds *dataSource) NumberOfLSSes() int {
-	return len(ds.lssSlice)
+	return len(ds.shards) // each shard has its own lss
 }
 
 // WriteCaches writes caches to the buffer and sends the signal to write the caches.

@@ -33,7 +33,7 @@ type DataSource interface {
 		minTimestamp int64,
 		segmentSamplesStorages *cppbridge.SegmentSamplesStorageList,
 	) ([]*DecodedSegment, error)
-	LSSes() []*cppbridge.LabelSetStorage
+	LSSSnapshots() []*cppbridge.LabelSetSnapshot
 	NumberOfLSSes() int
 	WriteCaches()
 	Close() error
@@ -252,6 +252,7 @@ readLoop:
 
 	i.writeCaches()
 
+	b.snapshots = i.dataSource.LSSSnapshots()
 	b.targetSegmentID = i.targetSegmentID
 	return b, nil
 }
@@ -265,7 +266,7 @@ func (i *Iterator) EncodeBatch(b *batch) *cppbridge.RWMessageList {
 
 	encodersCount := b.numberOfShards
 	messages := b.segmentSampleStorages.SplitMessages(uint32(b.maxNumberOfSamplesPerShard), b.targetSegmentID)
-	encoders := cppbridge.NewMessageEncoders(uint64(encodersCount), i.dataSource.LSSes())
+	encoders := cppbridge.NewMessageEncoders(uint64(encodersCount), b.snapshots)
 
 	messagesCount := len(messages.Messages)
 	messagesPerEncoder := messagesCount / encodersCount
@@ -429,6 +430,7 @@ func (i *Iterator) Close() error {
 
 type batch struct {
 	segments                   []*DecodedSegment
+	snapshots                  []*cppbridge.LabelSetSnapshot
 	segmentSampleStorages      *cppbridge.SegmentSamplesStorageList
 	numberOfShards             int
 	numberOfSamples            int

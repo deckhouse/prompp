@@ -136,12 +136,19 @@ func (*writeLoop) write(ctx context.Context, it *Iterator) (err error) {
 		for {
 			var b *batch
 			b, err = it.Next(ctx)
-			if errors.Is(err, ErrEndOfBlock) {
+			switch {
+			case errors.Is(err, ErrEndOfBlock):
 				err = nil
 				return
-			}
-			if err != nil {
+			case ctx.Err() != nil:
+				err = ctx.Err()
+				return
+			case err != nil:
 				logger.Errorf("next batch failed: %v", err)
+			}
+
+			if b == nil {
+				continue
 			}
 
 			select {
@@ -167,7 +174,7 @@ func (*writeLoop) write(ctx context.Context, it *Iterator) (err error) {
 		defer close(msgCh)
 
 		for b := range batchCh {
-			if b == nil {
+			if ctx.Err() != nil {
 				continue
 			}
 
@@ -183,7 +190,7 @@ func (*writeLoop) write(ctx context.Context, it *Iterator) (err error) {
 
 	// Stage 3: send messages
 	for msg := range msgCh {
-		if msg == nil {
+		if ctx.Err() != nil {
 			continue
 		}
 
