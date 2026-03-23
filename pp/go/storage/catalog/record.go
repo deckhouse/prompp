@@ -4,6 +4,7 @@ import (
 	"math"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/prometheus/prometheus/pp/go/util/optional"
@@ -29,8 +30,9 @@ const (
 	StatusActive
 )
 
-// defaultSegments default number of segments in [WAL].
-const defaultSegments = 3600 * 2 / 5
+// defaultSegmentsCapacity is the minimum number of segments for one shard when
+// segments are created only on the 5s flush timeout (2 hours / 5s).
+const defaultSegmentsCapacity = int(2 * time.Hour / (5 * time.Second))
 
 //
 // Record
@@ -60,7 +62,7 @@ type Record struct {
 func NewEmptyRecord() *Record {
 	return &Record{
 		lastSegmentID:   math.MaxUint32,
-		segmentsByShard: make([]uint16, defaultSegments),
+		segmentsByShard: make([]uint16, defaultSegmentsCapacity),
 		segmentsLock:    &sync.RWMutex{},
 	}
 }
@@ -89,7 +91,7 @@ func NewRecordWithData(
 		lastAppendedSegmentID: optional.WithRawValue(lastAppendedSegmentID),
 		// marking up through segment IDs by shards
 		lastSegmentID:   math.MaxUint32,
-		segmentsByShard: make([]uint16, defaultSegments),
+		segmentsByShard: make([]uint16, defaultSegmentsCapacity),
 		segmentsLock:    &sync.RWMutex{},
 	}
 }
@@ -120,7 +122,7 @@ func NewRecordWithDataV3(
 		maxt:             maxt,
 		// marking up through segment IDs by shards
 		lastSegmentID:   math.MaxUint32,
-		segmentsByShard: make([]uint16, defaultSegments),
+		segmentsByShard: make([]uint16, defaultSegmentsCapacity),
 		segmentsLock:    &sync.RWMutex{},
 	}
 }
