@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"runtime"
 	"sync"
 	"time"
 
@@ -294,6 +295,7 @@ func (i *Iterator) EncodeBatch(b *batch) *cppbridge.RWMessageList {
 	}
 	wg.Wait()
 
+	runtime.KeepAlive(b)
 	messages.UpdateStats()
 	return messages
 }

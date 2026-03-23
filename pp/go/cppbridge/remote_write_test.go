@@ -21,7 +21,8 @@ func (s *MessageEncodersSuite) TestEncode() {
 	lss := NewLssStorage()
 	lss.FindOrEmplace(model.NewLabelSetBuilder().Set("__name__", "name1").Set("job", "doing1").Build())
 
-	encoders := NewMessageEncoders(1, []*LabelSetSnapshot{lss.CreateLabelSetSnapshot()})
+	snapshot := lss.CreateLabelSetSnapshot()
+	encoders := NewMessageEncoders(1, []*LabelSetSnapshot{snapshot})
 	sampleStorages := NewSegmentSamplesStorage(1)
 
 	walSegmentSamplesStorageAdd(sampleStorages.Get(0), 0, 1000, 1.1)
@@ -48,4 +49,5 @@ func (s *MessageEncodersSuite) TestEncode() {
 	runtime.KeepAlive(messages)
 	runtime.KeepAlive(encoders)
 	runtime.KeepAlive(sampleStorages)
+	runtime.KeepAlive(snapshot)
 }
