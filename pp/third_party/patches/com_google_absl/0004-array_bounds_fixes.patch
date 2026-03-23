@@ -1,6 +1,21 @@
 --- absl/strings/charconv.cc
 +++ absl/strings/charconv.cc
-@@ -549,11 +549,14 @@
+@@ -536,11 +536,14 @@
+     absl::strings_internal::BigUnsigned<84> rhs(guess_mantissa);
+     // There are powers of 2 on both sides of the inequality; reduce this to
+     // a single bit-shift.
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Warray-bounds="
+     if (exact_exponent > guess_exponent) {
+       lhs.ShiftLeft(exact_exponent - guess_exponent);
+     } else {
+       rhs.ShiftLeft(guess_exponent - exact_exponent);
+     }
++#pragma GCC diagnostic pop
+     comparison = Compare(lhs, rhs);
+   } else {
+     // Move the power of 5 to the other side of the equation, giving us:
+@@ -549,11 +552,14 @@
      absl::strings_internal::BigUnsigned<84> rhs =
          absl::strings_internal::BigUnsigned<84>::FiveToTheNth(-exact_exponent);
      rhs.MultiplyBy(guess_mantissa);
