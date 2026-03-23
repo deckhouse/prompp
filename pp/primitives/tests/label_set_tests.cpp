@@ -332,6 +332,24 @@ TEST_F(LabelSetDecodingTableTest, IterateOverDecodingTable) {
   EXPECT_TRUE(std::ranges::equal(decoding_table_, std::initializer_list{label_set1, label_set2}, [](const auto& a, const auto& b) { return a == b; }));
 }
 
+TEST_F(LabelSetDecodingTableTest, CompositeHashMatchesOriginalLabelSet) {
+  // Arrange
+  const LabelViewSet label_set{{"k1", "v1"}, {"k2", "v2"}};
+  encoding_table_.find_or_emplace(label_set);
+  const auto checkpoint = encoding_table_.checkpoint();
+  std::stringstream ss;
+  encoding_table_.save(ss, checkpoint);
+  decoding_table_.load(ss);
+
+  // Act
+  const auto composite = decoding_table_[0];
+  const auto original_hash = PromPP::Primitives::hash::hash_of_label_set(label_set);
+  const auto composite_hash = hash_value(composite);
+
+  // Assert
+  EXPECT_EQ(original_hash, composite_hash);
+}
+
 class LabelSetDeltaCheckpointTest : public testing::Test {
  protected:
   PromPP::Primitives::SnugComposites::LabelSet::EncodingBimap<Vector> encoding_table_;
