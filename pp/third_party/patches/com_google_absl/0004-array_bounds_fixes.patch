@@ -75,6 +75,20 @@
        VerifyTree(tree);
        return *this;
 
+--- absl/strings/internal/cord_internal.h
++++ absl/strings/internal/cord_internal.h
+@@ -636,7 +636,10 @@
+ 
+   void copy_max_inline_to(char* dst) const {
+     assert(!is_tree());
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Warray-bounds="
+     memcpy(dst, rep_.SanitizerSafeCopy().as_chars(), kMaxInline);
++#pragma GCC diagnostic pop
+   }
+ 
+   // Initialize this instance to holding the tree value `rep`,
+
 --- absl/strings/internal/cord_rep_btree.h
 +++ absl/strings/internal/cord_rep_btree.h
 @@ -692,7 +692,10 @@
