@@ -1297,6 +1297,7 @@ func walRemoteWriteEncodeMessage(
 	)
 
 	runtime.KeepAlive(messages)
+	runtime.KeepAlive(encoder)
 }
 
 //
