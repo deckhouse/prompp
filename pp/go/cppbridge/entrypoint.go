@@ -3033,6 +3033,25 @@ func headWalEncoderFinalize(encoder uintptr) (samples uint32, segment []byte, er
 	return res.samples, res.segment, handleException(res.exception)
 }
 
+// headWalEncoderMaxLSIDWritten - return max LSID written to WAL.
+func headWalEncoderMaxLSIDWritten(encoder uintptr) uint32 {
+	args := struct {
+		encoder uintptr
+	}{encoder}
+	var res struct {
+		maxLSIDWritten uint32
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_head_wal_encoder_max_lsid_written,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.maxLSIDWritten
+}
+
 func headWalEncoderDtor(encoder uintptr) {
 	args := struct {
 		encoder uintptr

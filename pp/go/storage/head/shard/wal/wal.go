@@ -48,6 +48,9 @@ type Encoder[TSegment EncodedSegment] interface {
 
 	// Finalize finalizes the encoder and returns the encoded segment.
 	Finalize() (TSegment, error)
+
+	// MaxLSIDWritten returns max LSID written to WAL.
+	MaxLSIDWritten() uint32
 }
 
 // EncodedSegment the minimum required Segment implementation for a [Wal].

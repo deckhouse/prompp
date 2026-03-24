@@ -40,6 +40,7 @@ func (s *HeadWalSuite) TestHeadWalEncoder_Finalize() {
 	segmentData, err := encoder.Finalize()
 	s.Require().NoError(err)
 
+	s.Equal(uint32(0), encoder.MaxLSIDWritten())
 	s.NotNil(segmentData)
 	s.Empty(segmentData.Samples())
 }
@@ -70,6 +71,7 @@ func (s *HeadWalSuite) TestHeadWalEncoder_EncodeAndFinalize() {
 	segmentData, err := encoder.Finalize()
 	s.Require().NoError(err)
 
+	s.Equal(uint32(1), encoder.MaxLSIDWritten())
 	s.NotNil(segmentData)
 	s.Equal(expectedSamples, uint64(segmentData.Samples()))
 }
@@ -104,7 +106,7 @@ func TestHeadWalDecoder_InvalidEncoderVersion(t *testing.T) {
 
 func TestHeadWalDecoder_ValidEncoderVersion(t *testing.T) {
 	// Arrange
-	var actualEncoderVersion = cppbridge.EncodersVersion()
+	actualEncoderVersion := cppbridge.EncodersVersion()
 	decoder := cppbridge.NewHeadWalDecoder(cppbridge.NewQueryableLssStorage(), actualEncoderVersion)
 
 	// Act

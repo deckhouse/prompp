@@ -232,6 +232,9 @@ func (mock *SegmentWriterMock[TSegment]) WriteCalls() []struct {
 //			FinalizeFunc: func() (TSegment, error) {
 //				panic("mock out the Finalize method")
 //			},
+//			MaxLSIDWrittenFunc: func() uint32 {
+//				panic("mock out the MaxLSIDWritten method")
+//			},
 //		}
 //
 //		// use mockedEncoder in code that requires wal.Encoder
@@ -245,6 +248,9 @@ type EncoderMock[TSegment wal.EncodedSegment] struct {
 	// FinalizeFunc mocks the Finalize method.
 	FinalizeFunc func() (TSegment, error)
 
+	// MaxLSIDWrittenFunc mocks the MaxLSIDWritten method.
+	MaxLSIDWrittenFunc func() uint32
+
 	// calls tracks calls to the methods.
 	calls struct {
 		// Encode holds details about calls to the Encode method.
@@ -255,9 +261,13 @@ type EncoderMock[TSegment wal.EncodedSegment] struct {
 		// Finalize holds details about calls to the Finalize method.
 		Finalize []struct {
 		}
+		// MaxLSIDWritten holds details about calls to the MaxLSIDWritten method.
+		MaxLSIDWritten []struct {
+		}
 	}
-	lockEncode   sync.RWMutex
-	lockFinalize sync.RWMutex
+	lockEncode         sync.RWMutex
+	lockFinalize       sync.RWMutex
+	lockMaxLSIDWritten sync.RWMutex
 }
 
 // Encode calls EncodeFunc.
@@ -316,6 +326,33 @@ func (mock *EncoderMock[TSegment]) FinalizeCalls() []struct {
 	mock.lockFinalize.RLock()
 	calls = mock.calls.Finalize
 	mock.lockFinalize.RUnlock()
+	return calls
+}
+
+// MaxLSIDWritten calls MaxLSIDWrittenFunc.
+func (mock *EncoderMock[TSegment]) MaxLSIDWritten() uint32 {
+	if mock.MaxLSIDWrittenFunc == nil {
+		panic("EncoderMock.MaxLSIDWrittenFunc: method is nil but Encoder.MaxLSIDWritten was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockMaxLSIDWritten.Lock()
+	mock.calls.MaxLSIDWritten = append(mock.calls.MaxLSIDWritten, callInfo)
+	mock.lockMaxLSIDWritten.Unlock()
+	return mock.MaxLSIDWrittenFunc()
+}
+
+// MaxLSIDWrittenCalls gets all the calls that were made to MaxLSIDWritten.
+// Check the length with:
+//
+//	len(mockedEncoder.MaxLSIDWrittenCalls())
+func (mock *EncoderMock[TSegment]) MaxLSIDWrittenCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockMaxLSIDWritten.RLock()
+	calls = mock.calls.MaxLSIDWritten
+	mock.lockMaxLSIDWritten.RUnlock()
 	return calls
 }
 
