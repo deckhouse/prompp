@@ -5,7 +5,7 @@ Checks: >
   performance-*,-performance-avoid-endl,
   bugprone-*,-bugprone-easily-swappable-parameters,-bugprone-unchecked-optional-access,
 WarningsAsErrors: '*'
-HeaderFilterRegex: '^(bare_bones|entrypoint|head|performance_tests|primitives|prometheus|series_data|series_index|wal)/.*'
+HeaderFilterRegex: '^(bare_bones|entrypoint|head|metrics|performance_tests|primitives|prometheus|series_data|series_index|wal)/.*'
 ExtraArgs:
   - '-Wno-deprecated-declarations'
 FormatStyle: file
