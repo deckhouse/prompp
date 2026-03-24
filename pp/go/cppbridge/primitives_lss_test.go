@@ -62,31 +62,6 @@ func (s *LSSSuite) TestCreateSnapshotFromQueryableEncodingBimap() {
 	s.Require().NotNil(labelSetSnapshot.Pointer())
 }
 
-func (s *LSSSuite) TestLabels() {
-	lsMap := map[string]string{
-		"__name__": "ubername",
-		"lol":      "kek",
-		"che":      "bureck",
-	}
-
-	lsIn := model.LabelSetFromMap(lsMap)
-
-	lss := cppbridge.NewQueryableLssStorage()
-	lsID := lss.FindOrEmplace(lsIn).LabelSetID
-
-	lsLength := 0
-	_ = lss.RangeLabelSet(lsID, func(l cppbridge.Label) error {
-		lv, ok := lsMap[l.Name]
-		s.Require().True(ok)
-		s.Require().Equal(lv, l.Value)
-		lsLength++
-
-		return nil
-	})
-
-	s.Equal(lsIn.Len(), lsLength)
-}
-
 type bytesTestCase struct {
 	labelSet model.LabelSet
 	expected []byte
@@ -401,13 +376,13 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithExistingLabelSet() {
 
 	// Act
 	existingLsIdWithAdd := s.lss.FindOrEmplaceBuilder(cppbridge.CppLabelSetBuilder{
-		ReadonlyLss: labelSetSnapshot.Pointer(),
+		SnapshotPtr: labelSetSnapshot.Pointer(),
 		LsId:        0,
 		SortedAdd:   []cppbridge.Label{{Name: "che", Value: "bureck"}},
 		SortedDel:   nil,
 	}).LabelSetID
 	existingLsIdWithDel := s.lss.FindOrEmplaceBuilder(cppbridge.CppLabelSetBuilder{
-		ReadonlyLss: labelSetSnapshot.Pointer(),
+		SnapshotPtr: labelSetSnapshot.Pointer(),
 		LsId:        1,
 		SortedAdd:   nil,
 		SortedDel:   []string{"che"},
@@ -428,7 +403,7 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithNewLabelSet() {
 	// Act
 	expectedLsId := len(s.labelSetIDs)
 	existingLsId := s.lss.FindOrEmplaceBuilder(cppbridge.CppLabelSetBuilder{
-		ReadonlyLss: labelSetSnapshot.Pointer(),
+		SnapshotPtr: labelSetSnapshot.Pointer(),
 		LsId:        0,
 		SortedAdd:   []cppbridge.Label{{Name: "new_lol", Value: "new_kek"}},
 		SortedDel:   nil,
@@ -446,7 +421,7 @@ func (s *QueryableLSSSuite) TestFindOrEmplaceBuilderWithoutReadonlyLss() {
 	// Act
 	expectedLsId := len(s.labelSetIDs)
 	existingLsId := s.lss.FindOrEmplaceBuilder(cppbridge.CppLabelSetBuilder{
-		ReadonlyLss: uintptr(0),
+		SnapshotPtr: uintptr(0),
 		LsId:        0,
 		SortedAdd:   []cppbridge.Label{{Name: "new_lol", Value: "new_kek"}},
 		SortedDel:   nil,

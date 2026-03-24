@@ -403,7 +403,7 @@ void prompp_label_set_length(void* args, void* res);
  * @brief get label set by series id
  *
  * @param args {
- *     lss       uintptr                      // pointer to constructed lss;
+ *     snapshot  uintptr                      // pointer to constructed snapshot;
  *     ls_id     uint32                       // series id
  * }
  *
@@ -411,7 +411,7 @@ void prompp_label_set_length(void* args, void* res);
  *     label_set []struct{key, value String}  // label sets
  * }
  */
-void prompp_label_set_serialize(void* args, void* res);
+void prompp_label_set_serialize_from_snapshot(void* args, void* res);
 
 /**
  * @brief free label set returned by prompp_label_set_serialize
@@ -596,7 +596,7 @@ void prompp_primitives_lss_find_or_emplace(void* args, void* res);
  * @param args {
  *     lss uintptr                    // pointer to constructed lss;
  *     builder struct {
- *        readonly_lss uintptr        // pointer to constructed lss;
+ *        snapshot     uintptr        // pointer to constructed snapshot lss;
  *        ls_id        uint32         // series id
  *        sorted_add   []model.Label  // slice of sorted by name labels
  *        sorted_del   []string       // slice of sorted label names
@@ -639,7 +639,7 @@ void prompp_primitives_lss_query_selector(void* args, void* res);
  *     status            uint32   // query status
  * }
  */
-void prompp_primitives_lss_query(void* args, void* res);
+void prompp_primitives_snapshot_query(void* args, void* res);
 
 /**
  * @brief free label set matches returned by prompp_primitives_lss_query
@@ -714,10 +714,19 @@ void prompp_primitives_lss_query_label_values(void* args, void* res);
  * }
  *
  * @param res {
- *     lss_copy          uintptr  // readonly copy of lss
+ *     snapshot          uintptr  // snapshot of lss
  * }
  */
-void prompp_create_readonly_lss(void* args, void* res);
+void prompp_create_snapshot_lss(void* args, void* res);
+
+/**
+ * @brief Destroy Primitives snapshot LSS.
+ *
+ * @param args {
+ *     snapshot uintptr // pointer of snapshot;
+ * }
+ */
+void prompp_primitives_snapshot_dtor(void* args);
 
 /**
  * @brief returns a copy of the bitset of added series from the lss.
@@ -745,7 +754,7 @@ void prompp_primitives_lss_bitset_dtor(void* args);
 /**
  * @brief Copy the label sets from the source lss to the destination lss that were added source lss.
  *
- * @param source_lss pointer to source label sets;
+ * @param source_snapshot pointer to source snapshot;
  * @param source_bitset pointer to source bitset;
  * @param destination_lss pointer to destination label sets;
  * @param ids_mapping pointer to uintptr
@@ -753,7 +762,7 @@ void prompp_primitives_lss_bitset_dtor(void* args);
  * @attention This binding used as a CGO call!!!
  *
  */
-void prompp_primitives_readonly_lss_copy_added_series(uint64_t source_lss, uint64_t source_bitset, uint64_t destination_lss, uint64_t ids_mapping);
+void prompp_primitives_snapshot_lss_copy_added_series(uint64_t source_snapshot, uint64_t source_bitset, uint64_t destination_lss, uint64_t ids_mapping);
 
 /**
  * @brief destroy ls ids mapping
