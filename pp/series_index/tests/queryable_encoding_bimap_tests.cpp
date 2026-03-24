@@ -33,7 +33,7 @@ TEST_F(QueryableEncodingBimapFixture, EmplaceLabelSet) {
 
   // Assert
   const auto name_id = lss_.trie_index().names_trie().lookup("job");
-  EXPECT_TRUE(name_id);
+  ASSERT_TRUE(name_id);
   EXPECT_NE(nullptr, lss_.reverse_index().get(*name_id));
 
   const auto values_trie = lss_.trie_index().values_trie(*name_id);
@@ -75,7 +75,7 @@ TEST_F(QueryableEncodingBimapFixture, EmplaceLabelSetWithInvalidLabel) {
   // Assert
   {
     auto name_id = lss_.trie_index().names_trie().lookup("job");
-    EXPECT_TRUE(name_id);
+    ASSERT_TRUE(name_id);
     EXPECT_NE(nullptr, lss_.reverse_index().get(*name_id));
 
     auto values_trie = lss_.trie_index().values_trie(*name_id);
@@ -95,7 +95,7 @@ TEST_F(QueryableEncodingBimapFixture, EmplaceLabelSetWithInvalidLabel) {
 
   {
     auto name_id = lss_.trie_index().names_trie().lookup("process");
-    EXPECT_TRUE(name_id);
+    ASSERT_TRUE(name_id);
     EXPECT_NE(nullptr, lss_.reverse_index().get(*name_id));
 
     auto values_trie = lss_.trie_index().values_trie(*name_id);

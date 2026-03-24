@@ -3,6 +3,7 @@ Checks: >
   clang-analyzer-*,-clang-analyzer-optin.core.EnumCastOutOfRange,
   google-*,-google-readability-todo,-google-readability-braces-around-statements,-google-readability-avoid-underscore-in-googletest-name,
   performance-*,-performance-avoid-endl,
+  bugprone-*,-bugprone-easily-swappable-parameters,-bugprone-unchecked-optional-access,
 WarningsAsErrors: '*'
 HeaderFilterRegex: '^(bare_bones|entrypoint|head|performance_tests|primitives|prometheus|series_data|series_index|wal)/.*'
 ExtraArgs:
