@@ -10,6 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
 	"github.com/prometheus/prometheus/pp/go/util"
+	"github.com/prometheus/prometheus/pp/go/util/locker"
 )
 
 //go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg wal_test --out
@@ -70,6 +71,7 @@ type Wal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]] struct {
 	encoder        Encoder[TSegment] // *cppbridge.HeadWalEncoder
 	segmentWriter  TWriter
 	locker         sync.Mutex
+	lssLocker      locker.RLockable
 	maxSegmentSize uint32
 	corrupted      bool
 	limitExhausted bool
@@ -83,6 +85,7 @@ type Wal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]] struct {
 func NewWal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]](
 	encoder Encoder[TSegment],
 	segmentWriter TWriter,
+	lssLocker locker.RLockable,
 	maxSegmentSize uint32,
 	shardID uint16,
 	registerer prometheus.Registerer,
@@ -93,6 +96,7 @@ func NewWal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]](
 		encoder:        encoder,
 		segmentWriter:  segmentWriter,
 		locker:         sync.Mutex{},
+		lssLocker:      lssLocker,
 		maxSegmentSize: maxSegmentSize,
 		samplesPerSegment: factory.NewCounter(prometheus.CounterOpts{
 			Name:        "prompp_shard_wal_samples_per_segment_sum",
@@ -118,6 +122,7 @@ func NewCorruptedWal[
 ]() *Wal[TSegment, TWriter] {
 	return &Wal[TSegment, TWriter]{
 		locker:    sync.Mutex{},
+		lssLocker: locker.NoopLocker{},
 		corrupted: true,
 	}
 }
@@ -154,10 +159,13 @@ func (w *Wal[TSegment, TWriter]) Commit() error {
 	w.locker.Lock()
 	defer w.locker.Unlock()
 
+	w.lssLocker.RLock()
 	segment, err := w.encoder.Finalize()
+	w.lssLocker.RUnlock()
 	if err != nil {
 		return fmt.Errorf("failed to finalize segment: %w", err)
 	}
+
 	w.samplesPerSegment.Add(float64(segment.Samples()))
 	w.segments.Inc()
 	w.limitExhausted = false
