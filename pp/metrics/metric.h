@@ -60,7 +60,6 @@ class GenericCounter final : public Metric {
 
   PROMPP_ALWAYS_INLINE void inc(BareBones::concepts::arithmetic auto count) noexcept { value_ += count; }
   PROMPP_ALWAYS_INLINE void inc() noexcept { inc(1.0f); }
-  PROMPP_ALWAYS_INLINE void set(double value) noexcept { value_ = value; }
 
  protected:
   Type value_{};
