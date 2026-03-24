@@ -15,8 +15,10 @@ type LSS struct {
 	target             *cppbridge.LabelSetStorage
 	snapshot           *cppbridge.LabelSetSnapshot
 	dstSrcLsIdsMapping *cppbridge.IdsMapping
-	locker             sync.RWMutex
-	once               sync.Once
+	// oldToNewLsIdsMapping *cppbridge.IdsMapping
+	// mappedSnapshot     *cppbridge.LabelSetSnapshot
+	locker sync.RWMutex
+	once   sync.Once
 }
 
 // NewLSS init new [LSS].
@@ -130,6 +132,13 @@ func (l *LSS) QueryStatus(status *cppbridge.HeadStatus, limit int) {
 func (l *LSS) ResetSnapshot() {
 	l.snapshot = nil
 	l.once = sync.Once{}
+}
+
+// SetPendingShrinkBoundary sets pending shrink boundary on LSS (switch to "fixed" state before snapshot and copy).
+// Attention: works only with QueryableEncodingBimap type of LSS.
+// Note: it does not require blocking, because the shrink occurs in the same goroutine.
+func (l *LSS) SetPendingShrinkBoundary(shrinkBoundary uint32) {
+	l.target.SetPendingShrinkBoundary(shrinkBoundary)
 }
 
 // Target returns main [LSS].

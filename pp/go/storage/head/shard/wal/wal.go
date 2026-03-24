@@ -157,6 +157,7 @@ func (w *Wal[TSegment, TWriter]) Commit() error {
 	w.locker.Lock()
 	defer w.locker.Unlock()
 
+	// TODO lock/unlock LSS
 	segment, err := w.encoder.Finalize()
 	if err != nil {
 		return fmt.Errorf("failed to finalize segment: %w", err)
@@ -191,6 +192,18 @@ func (w *Wal[TSegment, TWriter]) Flush() error {
 	defer w.locker.Unlock()
 
 	return w.segmentWriter.Flush()
+}
+
+// MaxLSIDWritten returns max LSID written to WAL.
+func (w *Wal[TSegment, TWriter]) MaxLSIDWritten() uint32 {
+	if w.corrupted {
+		return 0
+	}
+
+	w.locker.Lock()
+	defer w.locker.Unlock()
+
+	return w.encoder.MaxLSIDWritten()
 }
 
 // Sync commits the current contents of the [SegmentWriter].

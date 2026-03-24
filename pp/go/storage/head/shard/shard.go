@@ -24,6 +24,9 @@ type Wal interface {
 	// Flush flush all contetnt into wal.
 	Flush() error
 
+	// MaxLSIDWritten returns max LSID written to WAL.
+	MaxLSIDWritten() uint32
+
 	// Sync commits the current contents of the [Wal].
 	Sync() error
 
@@ -264,5 +267,7 @@ func (s *PerGoroutineShard) Relabeler() *cppbridge.PerGoroutineRelabeler {
 
 // CopyAddedSeries copy the label sets from the source lss to the destination lss that were added source lss.
 func CopyAddedSeries(source, destination *Shard) {
+	// shrinBoundary := source.wal.MaxLSIDWritten()
+
 	source.lss.CopyAddedSeriesTo(destination.lss)
 }

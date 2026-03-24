@@ -162,6 +162,13 @@ func (lss *LabelSetStorage) RangeLabelSet(lsID uint32, do func(l Label) error) e
 	return nil
 }
 
+// SetPendingShrinkBoundary sets pending shrink boundary on LSS (switch to "fixed" state before snapshot and copy).
+// Attention: works only with QueryableEncodingBimap type of LSS.
+func (lss *LabelSetStorage) SetPendingShrinkBoundary(shrinkBoundary uint32) {
+	primitivesLSSSetPendingShrinkBoundary(lss.pointer, shrinkBoundary)
+	runtime.KeepAlive(lss)
+}
+
 //
 // LSSQueryLabelNamesResult
 //

@@ -1602,6 +1602,22 @@ func primitivesFreeLsIdsMapping(lsIdsMapping uintptr) {
 	)
 }
 
+// primitivesLSSSetPendingShrinkBoundary sets pending shrink boundary
+// on LSS (switch to "fixed" state before snapshot and copy).
+// Attention: works only with QueryableEncodingBimap type of LSS.
+func primitivesLSSSetPendingShrinkBoundary(lss uintptr, shrinkBoundary uint32) {
+	args := struct {
+		lss            uintptr
+		shrinkBoundary uint32
+	}{lss, shrinkBoundary}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_lss_set_pending_shrink_boundary,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
 //
 // StatelessRelabeler
 //
