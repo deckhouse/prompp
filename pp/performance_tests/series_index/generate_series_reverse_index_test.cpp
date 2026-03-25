@@ -35,8 +35,8 @@ void GenerateSeriesReverseIndex::execute([[maybe_unused]] const Config& config, 
   }
 
   if (previous_label_id != std::numeric_limits<uint32_t>::max()) {
-    metrics << (Metric() << "series_reverse_index_add_allocated_memory_kb" << series_reverse_index.allocated_memory() / 1024);
-    metrics << (Metric() << "series_reverse_index_add_nanoseconds" << (add_index_time.count() / (previous_label_id + 1)));
+    metrics << (Metric() << "series_reverse_index_add_allocated_memory_kb" << static_cast<double>(series_reverse_index.allocated_memory()) / 1024.0);
+    metrics << (Metric() << "series_reverse_index_add_nanoseconds" << static_cast<double>(add_index_time.count()) / (previous_label_id + 1));
   }
 }
 

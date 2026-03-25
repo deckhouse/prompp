@@ -25,7 +25,7 @@ const uint64_t STEP_TS = 10000;
 const double START_VALUE = 1000;
 const double STEP_VALUE = 10.5;
 
-using samples_sequence_type = std::array<std::pair<uint64_t, double>, NUM_SAMPLES>;
+using samples_sequence_type = std::array<std::pair<int64_t, double>, NUM_SAMPLES>;
 
 samples_sequence_type generate_consistent_samples() {
   samples_sequence_type samples;
@@ -33,7 +33,7 @@ samples_sequence_type generate_consistent_samples() {
   for (size_t i = 0; i < NUM_SAMPLES; ++i) {
     samples[i] = {
         START_TS + (STEP_TS * i),
-        START_VALUE + (STEP_VALUE * i),
+        START_VALUE + (STEP_VALUE * static_cast<double>(i)),
     };
   }
 
@@ -47,12 +47,12 @@ samples_sequence_type generate_samples_with_negative_delta_values() {
     if (i % 2 == 0) {
       samples[i] = {
           START_TS + (STEP_TS * i),
-          START_VALUE - (STEP_VALUE * i),
+          START_VALUE - (STEP_VALUE * static_cast<double>(i)),
       };
     } else {
       samples[i] = {
           START_TS + (STEP_TS * i),
-          START_VALUE + (STEP_VALUE * i),
+          START_VALUE + (STEP_VALUE * static_cast<double>(i)),
       };
     }
   }
@@ -67,12 +67,12 @@ samples_sequence_type generate_samples_with_negative_delta_timestamp() {
     if (i % 2 == 0) {
       samples[i] = {
           START_TS - (STEP_TS * i),
-          START_VALUE + (STEP_VALUE * i),
+          START_VALUE + (STEP_VALUE * static_cast<double>(i)),
       };
     } else {
       samples[i] = {
           START_TS + (STEP_TS * i),
-          START_VALUE + (STEP_VALUE * i),
+          START_VALUE + (STEP_VALUE * static_cast<double>(i)),
       };
     }
   }
@@ -87,12 +87,12 @@ samples_sequence_type generate_samples_with_negative_delta() {
     if (i % 2 == 0) {
       samples[i] = {
           START_TS - (STEP_TS * i),
-          START_VALUE - (STEP_VALUE * i),
+          START_VALUE - (STEP_VALUE * static_cast<double>(i)),
       };
     } else {
       samples[i] = {
           START_TS + (STEP_TS * i),
-          START_VALUE + (STEP_VALUE * i),
+          START_VALUE + (STEP_VALUE * static_cast<double>(i)),
       };
     }
   }
@@ -117,7 +117,7 @@ samples_sequence_type generate_samples_with_nan() {
     } else {
       samples[i] = {
           START_TS + (STEP_TS * i),
-          START_VALUE + (STEP_VALUE * i),
+          START_VALUE + (STEP_VALUE * static_cast<double>(i)),
       };
     }
   }

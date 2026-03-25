@@ -116,6 +116,7 @@ class GenericVector {
 
     PRAGMA_DIAGNOSTIC(push)
     PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
+    // NOLINTNEXTLINE(clang-diagnostic-nontrivial-memcall)
     std::memmove(first, last, (end() - last) * sizeof(T));
     PRAGMA_DIAGNOSTIC(pop)
 
@@ -154,6 +155,7 @@ class GenericVector {
 
     PRAGMA_DIAGNOSTIC(push)
     PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
+    // NOLINTNEXTLINE(clang-diagnostic-nontrivial-memcall)
     std::memmove(memory + idx + 1, memory + idx, (size() - idx) * sizeof(T));
     PRAGMA_DIAGNOSTIC(pop)
 

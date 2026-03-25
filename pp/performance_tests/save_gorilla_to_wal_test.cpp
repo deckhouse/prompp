@@ -10,7 +10,8 @@
 using namespace PromPP;  // NOLINT
 
 static void ppp(const char* str, uint64_t size, uint64_t cnt) {
-  log() << "Estimated " << str << " size: " << size << " (" << (size >> 20) << "M), " << static_cast<double>(size) * 8 / cnt << " bits per sample" << std::endl;
+  log() << "Estimated " << str << " size: " << size << " (" << (size >> 20) << "M), " << static_cast<double>(size) * 8.0 / static_cast<double>(cnt)
+        << " bits per sample" << std::endl;
 }
 
 void save_gorilla_to_wal::execute(const Config& config, Metrics& metrics) const {
@@ -52,11 +53,14 @@ void save_gorilla_to_wal::execute(const Config& config, Metrics& metrics) const 
   log() << "Writed segments: " << segments << std::endl;
   auto now = std::chrono::steady_clock::now();
 
-  metrics << (Metric() << "wal_label_sets_compression_bits_per_sample" << static_cast<double>(wal.label_sets_bytes()) * 8 / wal.samples());
-  metrics << (Metric() << "wal_label_set_ids_compression_bits_per_sample" << static_cast<double>(wal.ls_id_bytes()) * 8 / wal.samples());
-  metrics << (Metric() << "wal_timestamps_compression_bits_per_sample" << static_cast<double>(wal.timestamps_bytes()) * 8 / wal.samples());
-  metrics << (Metric() << "wal_total_compression_bits_per_sample" << static_cast<double>(wal.total_bytes()) * 8 / wal.samples());
-  metrics << (Metric() << "wal_values_compression_bits_per_sample" << static_cast<double>(wal.timestamps_bytes()) * 8 / wal.samples());
+  metrics << (Metric() << "wal_label_sets_compression_bits_per_sample"
+                       << static_cast<double>(wal.label_sets_bytes()) * 8.0 / static_cast<double>(wal.samples()));
+  metrics << (Metric() << "wal_label_set_ids_compression_bits_per_sample" << static_cast<double>(wal.ls_id_bytes()) * 8.0 / static_cast<double>(wal.samples()));
+  metrics << (Metric() << "wal_timestamps_compression_bits_per_sample"
+                       << static_cast<double>(wal.timestamps_bytes()) * 8.0 / static_cast<double>(wal.samples()));
+  metrics << (Metric() << "wal_total_compression_bits_per_sample" << static_cast<double>(wal.total_bytes()) * 8.0 / static_cast<double>(wal.samples()));
+  metrics << (Metric() << "wal_values_compression_bits_per_sample" << static_cast<double>(wal.timestamps_bytes()) * 8.0 / static_cast<double>(wal.samples()));
   metrics << (Metric() << "wal_add_sample_avg_duration_nanoseconds"
-                       << (std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count() / dummy_wal.cnt()));
+                       << static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count()) /
+                              static_cast<double>(dummy_wal.cnt()));
 }
