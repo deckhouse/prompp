@@ -2,8 +2,8 @@
 
 #include <variant>
 
+#include "prometheus/promql/function_names_hash.h"
 #include "prometheus/query.h"
-#include "promql_function_names_hash.h"
 #include "series_data/decoder/decorator/changes_iterator.h"
 #include "series_data/decoder/decorator/delta_iterator.h"
 #include "series_data/decoder/decorator/downsampling_decode_iterator.h"
@@ -97,7 +97,7 @@ class DecodeIterator {
 };
 
 constexpr uint32_t promql_function_name_hash(std::string_view str) {
-  return PromqlFunctionNamesHash::hash(str.data(), str.length());
+  return PromPP::Prometheus::promql::FunctionNamesHash::hash(str.data(), str.length());
 }
 
 PROMPP_ALWAYS_INLINE DecodeIterator create_decode_iterator(const PromPP::Prometheus::SelectHints& select_hints, PromPP::Primitives::Timestamp downsampling_ms) {

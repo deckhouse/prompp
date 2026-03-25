@@ -1,6 +1,9 @@
-/* C++ code produced by gperf version 3.3 */
-/* Command-line: gperf -L C++ promql_function_names.gperf  */
+/* C++ code produced by gperf version 3.1 */
+/* Command-line: gperf -L C++ function_names.gperf  */
 /* Computed positions: -k'2-4,$' */
+#pragma once
+
+#include <cstddef>
 
 #if !((' ' == 32) && ('!' == 33) && ('"' == 34) && ('#' == 35) && ('%' == 37) && ('&' == 38) && ('\'' == 39) && ('(' == 40) && (')' == 41) && ('*' == 42) && \
       ('+' == 43) && (',' == 44) && ('-' == 45) && ('.' == 46) && ('/' == 47) && ('0' == 48) && ('1' == 49) && ('2' == 50) && ('3' == 51) && ('4' == 52) &&  \
@@ -16,29 +19,30 @@
 #error "gperf generated tables don't work with this execution character set. Please report a bug to <bug-gperf@gnu.org>."
 #endif
 
-#define TOTAL_KEYWORDS 77
+#define TOTAL_KEYWORDS 81
 #define MIN_WORD_LENGTH 2
 #define MAX_WORD_LENGTH 18
 #define MIN_HASH_VALUE 2
-#define MAX_HASH_VALUE 218
-/* maximum key range = 217, duplicates = 0 */
+#define MAX_HASH_VALUE 198
+/* maximum key range = 197, duplicates = 0 */
 
-class PromqlFunctionNamesHash {
+namespace PromPP::Prometheus::promql {
+class FunctionNamesHash {
  public:
-  static constexpr inline unsigned int hash(const char* str, size_t len);
+  static constexpr unsigned int hash(const char* str, size_t len);
 };
 
-constexpr inline unsigned int PromqlFunctionNamesHash::hash(const char* str, size_t len) {
+constexpr inline unsigned int FunctionNamesHash::hash(const char* str, size_t len) {
   constexpr static unsigned char asso_values[] = {
-      219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219,
-      219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 0,   0,   0,   219, 219, 219, 219, 219, 219, 219,
-      219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219,
-      219, 219, 219, 219, 219, 219, 219, 219, 20,  219, 25,  30,  60,  20,  15,  75,  100, 5,   5,   219, 10,  45,  45,  0,   0,   0,   20,  0,   0,
-      0,   30,  40,  219, 40,  30,  219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219,
-      219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219,
-      219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219,
-      219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219,
-      219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219, 219};
+      199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199,
+      199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 5,   5,   0,   199, 199, 199, 199, 199, 199, 199,
+      199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199,
+      199, 199, 199, 199, 199, 199, 199, 199, 0,   199, 25,  45,  60,  20,  15,  75,  90,  5,   5,   199, 5,   45,  45,  0,   0,   60,  20,  0,   0,
+      0,   30,  55,  199, 45,  10,  10,  199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199,
+      199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199,
+      199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199,
+      199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199,
+      199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199, 199};
   unsigned int hval = len;
 
   switch (hval) {
@@ -50,7 +54,7 @@ constexpr inline unsigned int PromqlFunctionNamesHash::hash(const char* str, siz
 #elif (defined __GNUC__ && __GNUC__ >= 7) || (defined __clang__ && __clang_major__ >= 10)
       __attribute__((__fallthrough__));
 #endif
-    /*FALLTHROUGH*/
+      /*FALLTHROUGH*/
     case 3:
       hval += asso_values[static_cast<unsigned char>(str[2])];
 #if (defined __cplusplus && (__cplusplus >= 201703L || (__cplusplus >= 201103L && defined __clang__ && __clang_major__ + (__clang_minor__ >= 9) > 3))) || \
@@ -59,10 +63,12 @@ constexpr inline unsigned int PromqlFunctionNamesHash::hash(const char* str, siz
 #elif (defined __GNUC__ && __GNUC__ >= 7) || (defined __clang__ && __clang_major__ >= 10)
       __attribute__((__fallthrough__));
 #endif
-    /*FALLTHROUGH*/
+      /*FALLTHROUGH*/
     case 2:
       hval += asso_values[static_cast<unsigned char>(str[1])];
       break;
   }
   return hval + asso_values[static_cast<unsigned char>(str[len - 1])];
 }
+
+}  // namespace PromPP::Prometheus::promql
