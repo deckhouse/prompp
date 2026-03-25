@@ -32,6 +32,11 @@ func (NoopWal) Flush() error {
 	return nil
 }
 
+// MaxLSIDWritten implementation of [NoopWal], do nothing.
+func (NoopWal) MaxLSIDWritten() uint32 {
+	return 0
+}
+
 // Sync implementation of [NoopWal], do nothing.
 func (NoopWal) Sync() error {
 	return nil
