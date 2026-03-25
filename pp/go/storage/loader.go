@@ -108,31 +108,7 @@ func (l *Loader) loadHead(
 		}
 	}
 
-	// TODO check this on v2
-	switch {
-	case headRecord.Status() == catalog.StatusActive:
-		// numberOfSegments here is actual number of segments.
-		if numberOfSegmentsRead.Value() > 0 {
-			headRecord.SetLastAppendedSegmentID(numberOfSegmentsRead.Value() - 1)
-		}
-	case isNumberOfSegmentsMismatched(headRecord, numberOfSegmentsRead.Value()):
-		// numberOfSegments here is actual number of segments.
-		if numberOfSegmentsRead.Value() > 0 {
-			headRecord.SetLastAppendedSegmentID(numberOfSegmentsRead.Value() - 1)
-		}
-
-		lastAppendedSegmentID := uint32(0)
-		if headRecord.LastAppendedSegmentID() != nil {
-			lastAppendedSegmentID = *headRecord.LastAppendedSegmentID()
-		}
-
-		logger.Errorf(
-			"head: %s number of segments mismatched: last appended=%d, number of segments read=%d",
-			headRecord.ID(),
-			lastAppendedSegmentID,
-			numberOfSegmentsRead.Value(),
-		)
-	}
+	setLastAppendedSegmentID(headRecord, numberOfSegmentsRead, checkWalVersion(shardLoadResults))
 
 	h := head.NewHead(
 		headID,
@@ -252,6 +228,7 @@ func (*Loader) loadShard(
 		numberOfSegments: shardDataLoader.shardData.numberOfSegments,
 		maxSegmentID:     shardDataLoader.shardData.maxSegmentID,
 		err:              err,
+		walVersion:       shardDataLoader.shardData.walVersion,
 	}
 }
 
@@ -262,6 +239,7 @@ type ShardLoadResult struct {
 	// maximum through ID of a segment read from WAL
 	maxSegmentID uint32
 	err          error
+	walVersion   uint8
 }
 
 // ShardData data for creating a shard.
@@ -274,6 +252,7 @@ type ShardData struct {
 	writeSegment         func(io.Writer, *cppbridge.HeadEncodedSegment) (int, error)
 	numberOfSegments     uint32
 	maxSegmentID         uint32
+	walVersion           uint8
 }
 
 //
@@ -417,6 +396,7 @@ func (l *ShardDataLoader) loadWalFile(
 	case wal.FileFormatVersion:
 		l.segmentMarkup = writer.NoopSegmentMarkup{}
 		l.shardData.writeSegment = writer.WriteSegment[*cppbridge.HeadEncodedSegment]
+		l.shardData.walVersion = walVersion
 		l.shardData.numberOfSegments, err = l.loadSegments(
 			rd,
 			decoder,
@@ -426,6 +406,7 @@ func (l *ShardDataLoader) loadWalFile(
 	case wal.FileFormatVersionV2:
 		l.notifier = NoopSegmentWriteNotifier{}
 		l.shardData.writeSegment = writer.WriteSegmentV2[*cppbridge.HeadEncodedSegment]
+		l.shardData.walVersion = walVersion
 		l.shardData.numberOfSegments, err = l.loadSegmentsV2(
 			rd,
 			decoder,
@@ -605,4 +586,61 @@ func isNumberOfSegmentsMismatched(record *catalog.Record, loadedSegments uint32)
 	}
 
 	return *record.LastAppendedSegmentID()+1 != loadedSegments
+}
+
+// checkWalVersion checks wal version of all shards.
+func checkWalVersion(shardLoadResults []ShardLoadResult) uint8 {
+	walVersion := uint8(0)
+
+	for i := range shardLoadResults {
+		// wal version is the same
+		if walVersion != 0 && walVersion == shardLoadResults[i].walVersion {
+			continue
+		}
+
+		// wal version is not set
+		if walVersion == 0 {
+			walVersion = shardLoadResults[i].walVersion
+			continue
+		}
+
+		// wal version is different, unlikely
+		logger.Warnf("wal version mismatch: %d != %d", walVersion, shardLoadResults[i].walVersion)
+		walVersion = shardLoadResults[i].walVersion
+	}
+
+	return walVersion
+}
+
+// setLastAppendedSegmentID sets last appended segment id to record.
+func setLastAppendedSegmentID(rec *catalog.Record, numberOfSegmentsRead optional.Optional[uint32], walVersion uint8) {
+	if walVersion != wal.FileFormatVersion {
+		return
+	}
+
+	// wal format v1
+	switch {
+	case rec.Status() == catalog.StatusActive:
+		// numberOfSegments here is actual number of segments.
+		if numberOfSegmentsRead.Value() > 0 {
+			rec.SetLastAppendedSegmentID(numberOfSegmentsRead.Value() - 1)
+		}
+	case isNumberOfSegmentsMismatched(rec, numberOfSegmentsRead.Value()):
+		// numberOfSegments here is actual number of segments.
+		if numberOfSegmentsRead.Value() > 0 {
+			rec.SetLastAppendedSegmentID(numberOfSegmentsRead.Value() - 1)
+		}
+
+		lastAppendedSegmentID := uint32(0)
+		if rec.LastAppendedSegmentID() != nil {
+			lastAppendedSegmentID = *rec.LastAppendedSegmentID()
+		}
+
+		logger.Errorf(
+			"head: %s number of segments mismatched: last appended=%d, number of segments read=%d",
+			rec.ID(),
+			lastAppendedSegmentID,
+			numberOfSegmentsRead.Value(),
+		)
+	}
 }

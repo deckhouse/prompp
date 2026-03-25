@@ -66,15 +66,6 @@ type ShardWalReader interface {
 	Read(s Segment) error
 }
 
-// NoOpShardWalReader a shard wall reader, do nothing.
-type NoOpShardWalReader struct{}
-
-// Close implementation [ShardWalReader], do nothing.
-func (NoOpShardWalReader) Close() error { return nil }
-
-// Read implementation [ShardWalReader], do nothing.
-func (NoOpShardWalReader) Read() (segment Segment, err error) { return segment, io.EOF }
-
 //
 // shard
 //

@@ -136,5 +136,5 @@ func EmptySegmentV2() *SegmentV2 {
 	return &SegmentV2{}
 }
 
-// SetSegmentID sets the segment ID value, implementation [SegmentV1].
+// SetSegmentID sets the segment ID value, implementation [Segment].
 func (*SegmentV2) SetSegmentID(uint32) {}
