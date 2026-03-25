@@ -119,7 +119,7 @@ class SelectorQuerier {
       return QuerierStatus::kNoMatch;
     }
 
-    if (auto value = index_.values_trie(label_name_id)->lookup(static_cast<std::string_view>(label_matcher.value)); value) {
+    if (auto value = index_.existing_values_trie(label_name_id).lookup(static_cast<std::string_view>(label_matcher.value)); value) {
       matcher.matches.emplace_back(match_resolver_.value_resolver(label_name_id)(*value));
       matcher.status = MatchStatus::kPartialMatch;
       return QuerierStatus::kMatch;

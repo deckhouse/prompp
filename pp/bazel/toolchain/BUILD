@@ -14,6 +14,11 @@ config_setting(
 )
 
 bool_flag(
+    name = "clang_tidy",
+    build_setting_default = 0,
+)
+
+bool_flag(
     name = "asan",
     build_setting_default = 0,
 )
@@ -115,6 +120,7 @@ cc_toolchain_config(
         "/usr/lib/linux",
     ],
     march = ":march",
+    clang_tidy = ":clang_tidy",
     with_asan = ":asan",
     with_profiling = ":profiling",
     profiling_opts = ":profiling_opts",
@@ -128,6 +134,7 @@ cc_toolchain_config(
         "/usr/lib/linux",
     ],
     march = ":march",
+    clang_tidy = ":clang_tidy",
     with_asan = ":asan",
     with_profiling = ":profiling",
     profiling_opts = ":profiling_opts",

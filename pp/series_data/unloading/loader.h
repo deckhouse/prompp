@@ -214,9 +214,7 @@ class Loader {
   }
 
   void load_chunk_id(uint32_t ls_id, SeriesToLoadInfo& info) const {
-    const auto& chunk_data = std::ranges::next(DataStorage::SeriesChunkIterator{&storage_, ls_id}, info.chunk_id, DataStorage::SeriesChunks::end());
-
-    auto& chunk_bit_sequence = get_chunk_stream(storage_, chunk_data->chunk(), chunk_data->is_open());
+    auto& chunk_bit_sequence = get_chunk_stream(storage_, ls_id, info.chunk_id);
 
     info.buffer.push_back_bytes(chunk_bit_sequence.raw_bytes(), chunk_bit_sequence.size_in_bits());
 
