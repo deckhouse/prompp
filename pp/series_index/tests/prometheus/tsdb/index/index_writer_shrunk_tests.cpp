@@ -55,8 +55,8 @@ class IndexWriterShrunkFixture : public testing::Test {
     copier.copy_added_series_and_build_indexes();
 
     invert_copy_mapping(dst_src_ids_mapping, shrink_boundary, old_to_new_);
-    shrunk_lss_.fill_added_series_mapping(shrink_boundary, *snapshot_copy_, old_to_new_, shrunk_lss_.added_series());
-    shrunk_lss_.finalize_copy_and_shrink(shrink_boundary, *snapshot_copy_, old_to_new_);
+    shrunk_lss_.set_pending_shrink_boundary(shrink_boundary);
+    shrunk_lss_.finalize_copy_and_shrink(*snapshot_copy_, old_to_new_);
   }
 
   static std::string write_index(const Lss& lss) {

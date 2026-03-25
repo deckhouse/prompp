@@ -291,25 +291,10 @@ extern "C" void prompp_primitives_lss_invert_copy_mapping(void* args) {
   struct Arguments {
     LsIdsSlicePtr new_to_old;
     LsIdsSlicePtr old_to_new_out;
-    uint32_t max_lsid;
+    uint32_t shrink_boundary;
   };
   const auto* in = static_cast<const Arguments*>(args);
-  series_index::invert_copy_mapping(*in->new_to_old, in->max_lsid, *in->old_to_new_out);
-}
-
-extern "C" void prompp_primitives_lss_fill_added_series_mapping(void* args) {
-  struct Arguments {
-    LssVariantPtr current_lss;
-    LssVariantPtr copy_lss;
-    const QueryableEncodingBimap::checkpoint_type* checkpoint;
-    LsIdsSlicePtr old_to_new_mapping;
-    BitsetPtr added_series;
-  };
-  const auto* in = static_cast<const Arguments*>(args);
-  auto& current = std::get<QueryableEncodingBimap>(*in->current_lss);
-  auto& copy = std::get<QueryableEncodingBimap>(*in->copy_lss);
-  const uint32_t boundary = in->checkpoint->next_item_index();
-  current.fill_added_series_mapping(boundary, copy, *in->old_to_new_mapping, *in->added_series);
+  series_index::invert_copy_mapping(*in->new_to_old, in->shrink_boundary, *in->old_to_new_out);
 }
 
 extern "C" void prompp_primitives_lss_set_pending_shrink_boundary(void* args) {
@@ -324,16 +309,14 @@ extern "C" void prompp_primitives_lss_set_pending_shrink_boundary(void* args) {
 
 extern "C" void prompp_primitives_lss_finalize_copy_and_shrink(void* args) {
   struct Arguments {
-    LssVariantPtr current_lss;
-    LssVariantPtr lss_snapshot;
-    const QueryableEncodingBimap::checkpoint_type* checkpoint;
+    LssVariantPtr lss;
+    LssVariantPtr resolve_snapshot;
     LsIdsSlicePtr old_to_new_mapping;
   };
   const auto* in = static_cast<const Arguments*>(args);
-  auto& current = std::get<QueryableEncodingBimap>(*in->current_lss);
-  auto& snapshot = std::get<entrypoint::head::ReadonlyLss>(*in->lss_snapshot);
-  const uint32_t shrink_boundary = in->checkpoint->next_item_index();
-  current.finalize_copy_and_shrink(shrink_boundary, snapshot, *in->old_to_new_mapping);
+  auto& lss = std::get<QueryableEncodingBimap>(*in->lss);
+  auto& resolve_snapshot = std::get<entrypoint::head::ReadonlyLss>(*in->resolve_snapshot);
+  lss.finalize_copy_and_shrink(resolve_snapshot, *in->old_to_new_mapping);
 }
 
 void prompp_primitives_free_ls_ids_mapping(void* args) {
