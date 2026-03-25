@@ -46,19 +46,27 @@ jobs:
           password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
           logout: false
 
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "image_tag=gcc-tools-${{ matrix.arch }}-pr${{ github.event.number }}" >> $GITHUB_OUTPUT
+          else
+            echo "image_tag=gcc-tools-${{ matrix.arch }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Remove Previous Build Image
         run: |
-          docker rmi -f ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} || true
+          docker rmi -f ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:${{ steps.tag.outputs.image_tag }} || true
 
-      - name: Build and Push Docker Image
+      - name: Build Docker Image
         run: |
           docker build -f Dockerfile.ci \
-            -t ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} \
+            -t ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:${{ steps.tag.outputs.image_tag }} \
             --build-arg BAZEL_ARCH=${{ matrix.BAZEL_ARCH }} \
             --build-arg GO_ARCH=${{ matrix.GO_ARCH }} \
           .
 
       - name: Push Docker Image
-        if: (github.ref == 'refs/heads/pp' && github.event_name == 'push') || github.event_name == 'workflow_dispatch'
         run: |
-          docker push ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }}
+          docker push ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:${{ steps.tag.outputs.image_tag }}
