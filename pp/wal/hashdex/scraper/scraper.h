@@ -308,8 +308,8 @@ class Scraper {
   void encode_metric_data(const uint32_t metric_offset) noexcept {
     metric_buffer_.add_metric(metric_offset);
 
-    sort_and_filter_labels();
-    append_labels_hash();
+    const auto base_buffer = parser_.tokenizer().buffer();
+    sort_and_filter_labels(base_buffer);
 
     metric_buffer_.bytes_enlarge(encoding::metric_maximum_encoding_size(labels_.size()));
 
@@ -317,36 +317,33 @@ class Scraper {
         encoding::LayoutMarker::make(marked_sample_.has_ts, labels_.size(), encoding::SampleCodec::value_type(marked_sample_.sample.value()));
     metric_buffer_.add_layout_and_count(layout, labels_.size());
 
-    encode_labels(metric_offset);
+    append_labels_hash_and_encode(metric_offset, base_buffer);
     metric_buffer_.add_sample(layout, marked_sample_.sample);
   }
 
-  void encode_labels(const uint32_t offset) noexcept {
-    for (auto label : labels_) {
-      if (!label.name.is_reserved_name()) [[likely]] {
-        label.name.offset -= offset;
-      }
-      label.value.offset -= offset;
-
-      metric_buffer_.add_label(label);
-    }
-  }
-
-  void sort_and_filter_labels() noexcept {
+  void sort_and_filter_labels(std::string_view base_buffer) noexcept {
     const auto it = std::remove_if(labels_.begin(), labels_.end(), [](const MarkedLabel& label) PROMPP_LAMBDA_INLINE { return label.value.is_empty(); });
     labels_.erase(it, labels_.end());
 
-    std::sort(labels_.begin(), labels_.end(), [buffer = parser_.tokenizer().buffer()](const MarkedLabel& a, const MarkedLabel& b) PROMPP_LAMBDA_INLINE {
-      return a.name.view(buffer) < b.name.view(buffer);
-    });
+    const auto compare = [buffer = base_buffer](const MarkedLabel& a, const MarkedLabel& b)
+                             PROMPP_LAMBDA_INLINE { return a.name.view(buffer) < b.name.view(buffer); };
+
+    std::sort(labels_.begin(), labels_.end(), compare);
   }
 
-  void append_labels_hash() noexcept {
-    const auto& tokenizer = parser_.tokenizer();
+  void append_labels_hash_and_encode(uint32_t metric_offset, std::string_view base_buffer) noexcept {
     BareBones::XXHash3 hash;
-    for (const auto& label : labels_) {
-      hash.extend(label.name.view(tokenizer.buffer()), label.value.view(tokenizer.buffer()));
+    for (const auto& source_label : labels_) {
+      hash.extend(source_label.name.view(base_buffer), source_label.value.view(base_buffer));
+
+      MarkedLabel encoded_label = source_label;
+      if (!encoded_label.name.is_reserved_name()) [[likely]] {
+        encoded_label.name.offset -= metric_offset;
+      }
+      encoded_label.value.offset -= metric_offset;
+      metric_buffer_.add_label(encoded_label);
     }
+
     metric_buffer_.add_hash(hash.hash());
   }
 

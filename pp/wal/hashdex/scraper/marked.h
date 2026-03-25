@@ -206,7 +206,7 @@ class MetadataMarkupBuffer : public MarkupBuffer<Metadata> {
 
   PROMPP_ALWAYS_INLINE void initialize(size_t reserve_bytes) noexcept {
     this->buffer_.clear();
-    const size_t items_buffer_reserve = reserve_bytes / sizeof(MarkedMetric);
+    const size_t items_buffer_reserve = reserve_bytes / sizeof(typename Base::MarkedT);
     this->buffer_.reserve(items_buffer_reserve);
   }
 
