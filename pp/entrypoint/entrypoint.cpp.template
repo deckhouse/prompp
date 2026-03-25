@@ -86,14 +86,16 @@ static void initialize();
 #define DEFINE_ALLOCATOR_SYMBOL(return_type, name, args, parameters)
 #endif
 
+// NOLINTBEGIN(bugprone-macro-parentheses)
 #define OVERRIDE_ALLOCATOR_SYMBOL(return_type, name, args, parameters) \
   return_type initialize_and_ ## name args; \
-  static return_type (*name ## _func) (args) = initialize_and_ ## name; \
+  static return_type (*name ## _func) args = initialize_and_ ## name; \
   return_type initialize_and_ ## name args { \
     initialize(); \
     return name ## _func parameters; \
   } \
   DEFINE_ALLOCATOR_SYMBOL(return_type, name, args, parameters)
+// NOLINTEND(bugprone-macro-parentheses)
 
 OVERRIDE_ALLOCATOR_SYMBOL(void*, malloc, (size_t size), (size));
 OVERRIDE_ALLOCATOR_SYMBOL(void*, realloc, (void* ptr, size_t size), (ptr, size));
