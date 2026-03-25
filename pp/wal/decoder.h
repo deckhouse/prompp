@@ -103,9 +103,7 @@ class GenericDecoder {
     decoder_.process_segment([&last_ls_id, &samples, &container](uint32_t ls_id, int64_t ts, double v) PROMPP_LAMBDA_INLINE {
       if (ls_id != last_ls_id) {
         if (!samples.empty()) {
-          for (const PromPP::Primitives::Sample& sample : samples) {
-            container.emplace_back(sample, last_ls_id);
-          }
+          container.emplace_back(samples, last_ls_id, false);
         }
         samples.clear();
         last_ls_id = ls_id;
@@ -114,9 +112,7 @@ class GenericDecoder {
     });
 
     if (!samples.empty()) {
-      for (const PromPP::Primitives::Sample& sample : samples) {
-        container.emplace_back(sample, last_ls_id);
-      }
+      container.emplace_back(samples, last_ls_id, false);
     }
   }
 

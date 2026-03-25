@@ -36,10 +36,10 @@ import (
 
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
+	"github.com/prometheus/prometheus/pp-pkg/rules" // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/promql/promqltest"
-	"github.com/prometheus/prometheus/rules"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/util/junitxml"
 )
@@ -212,15 +212,21 @@ func (tg *testGroup) test(evalInterval time.Duration, groupOrderMap map[string]i
 	}()
 	suite.SubqueryInterval = evalInterval
 
+	fanoutStorage := storage.NewFanout(log.NewNopLogger(), suite.Adapter(), suite.LocalStorage())
 	// Load the rule files.
 	opts := &rules.ManagerOptions{
-		QueryFunc:  rules.EngineQueryFunc(suite.QueryEngine(), suite.Storage()),
-		Appendable: suite.Storage(),
-		Context:    context.Background(),
-		NotifyFunc: func(ctx context.Context, expr string, alerts ...*rules.Alert) {},
-		Logger:     log.NewNopLogger(),
+		Engine:          suite.QueryEngine(),   // PP_CHANGES.md: rebuild on cpp
+		FanoutQueryable: fanoutStorage,         // PP_CHANGES.md: rebuild on cpp
+		EngineQueryCtor: rules.EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
+		Batcher:         suite.Adapter(),       // PP_CHANGES.md: rebuild on cpp
+		Context:         context.Background(),
+		NotifyFunc:      func(ctx context.Context, expr string, alerts ...*rules.Alert) {},
+		Logger:          log.NewNopLogger(),
 	}
-	m := rules.NewManager(opts)
+	m, err := rules.NewManager(opts)
+	if err != nil {
+		return []error{err}
+	}
 	groupsMap, ers := m.LoadGroups(time.Duration(tg.Interval), tg.ExternalLabels, tg.ExternalURL, nil, ruleFiles...)
 	if ers != nil {
 		return ers

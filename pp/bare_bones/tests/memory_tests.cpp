@@ -6,12 +6,14 @@
 
 namespace {
 
-using BareBones::AllocationSizeCalculator;
 using BareBones::DefaultReallocator;
 using BareBones::Memory;
 using BareBones::MemoryControlBlock;
+using BareBones::MemoryControlBlockWithItemCount;
+using BareBones::PreAllocationSizeCalculator;
 using BareBones::SharedMemory;
 using BareBones::SharedPtr;
+using BareBones::SharedPtrControlBlockWithItemCount;
 
 struct GetAllocationSizeCase {
   uint32_t needed_size;
@@ -20,7 +22,7 @@ struct GetAllocationSizeCase {
 
 class AllocationSizeCalculatorFixture : public testing::TestWithParam<GetAllocationSizeCase> {
  protected:
-  using Calculator = AllocationSizeCalculator<char, uint32_t>;
+  using Calculator = PreAllocationSizeCalculator<char, uint32_t>;
 };
 
 TEST_P(AllocationSizeCalculatorFixture, TestCalculate) {
@@ -36,11 +38,11 @@ TEST_P(AllocationSizeCalculatorFixture, TestCalculate) {
 INSTANTIATE_TEST_SUITE_P(
     UpTo50PercentAlignedToMinAllocationSize,
     AllocationSizeCalculatorFixture,
-    testing::Values(GetAllocationSizeCase{.needed_size = 0, .expected_size = AllocationSizeCalculator<char, uint32_t>::kMinAllocationSize},
-                    GetAllocationSizeCase{.needed_size = static_cast<uint32_t>(AllocationSizeCalculator<char, uint32_t>::kMinAllocationSize * 0.66),
-                                          .expected_size = AllocationSizeCalculator<char, uint32_t>::kMinAllocationSize},
-                    GetAllocationSizeCase{.needed_size = static_cast<uint32_t>(AllocationSizeCalculator<char, uint32_t>::kMinAllocationSize * 0.66) + 1,
-                                          .expected_size = AllocationSizeCalculator<char, uint32_t>::kMinAllocationSize * 2},
+    testing::Values(GetAllocationSizeCase{.needed_size = 0, .expected_size = PreAllocationSizeCalculator<char, uint32_t>::kMinAllocationSize},
+                    GetAllocationSizeCase{.needed_size = static_cast<uint32_t>(PreAllocationSizeCalculator<char, uint32_t>::kMinAllocationSize * 0.66),
+                                          .expected_size = PreAllocationSizeCalculator<char, uint32_t>::kMinAllocationSize},
+                    GetAllocationSizeCase{.needed_size = static_cast<uint32_t>(PreAllocationSizeCalculator<char, uint32_t>::kMinAllocationSize * 0.66) + 1,
+                                          .expected_size = PreAllocationSizeCalculator<char, uint32_t>::kMinAllocationSize * 2},
                     GetAllocationSizeCase{.needed_size = 170, .expected_size = 256},
                     GetAllocationSizeCase{.needed_size = 171, .expected_size = 512}));
 
@@ -136,10 +138,51 @@ TEST_F(MemoryFixture, MoveOperator) {
   EXPECT_EQ(memory_size, memory2.size());
 }
 
+class MemoryWithItemCountFixture : public ::testing::Test {
+ protected:
+  Memory<MemoryControlBlockWithItemCount, uint8_t> memory_;
+};
+
+TEST_F(MemoryWithItemCountFixture, CopyConstructor) {
+  // Arrange
+  memory_.resize_to_fit_at_least(1);
+  std::iota(memory_.begin(), memory_.end(), uint8_t{});
+  memory_.control_block().items_count = 100;
+
+  // Act
+  const auto memory2 = memory_;
+
+  // Assert
+  EXPECT_NE(memory2, memory_);
+  ASSERT_EQ(memory_.size(), memory2.size());
+  ASSERT_EQ(memory_.control_block().data_size, memory2.control_block().data_size);
+  ASSERT_EQ(memory_.control_block().items_count, memory2.control_block().items_count);
+  EXPECT_TRUE(std::ranges::equal(memory2, memory_));
+}
+
+TEST_F(MemoryWithItemCountFixture, CopyOperator) {
+  // Arrange
+  memory_.resize_to_fit_at_least(1);
+  std::iota(memory_.begin(), memory_.end(), uint8_t{});
+  memory_.control_block().items_count = 100;
+
+  // Act
+  decltype(memory_) memory2;
+  memory2.resize_to_fit_at_least(1);
+  memory2 = memory_;
+
+  // Assert
+  EXPECT_NE(memory2, memory_);
+  ASSERT_EQ(memory_.size(), memory2.size());
+  ASSERT_EQ(memory_.control_block().data_size, memory2.control_block().data_size);
+  ASSERT_EQ(memory_.control_block().items_count, memory2.control_block().items_count);
+  EXPECT_TRUE(std::ranges::equal(memory2, memory_));
+}
+
 class SharedPtrFixture : public ::testing::Test {
  protected:
   template <class T>
-  using SharedPtr = BareBones::SharedPtr<T, DefaultReallocator>;
+  using SharedPtr = BareBones::SharedPtr<T, SharedPtrControlBlockWithItemCount, DefaultReallocator>;
 };
 
 TEST_F(SharedPtrFixture, Empty) {
@@ -158,7 +201,7 @@ TEST_F(SharedPtrFixture, ConstructorWithSize) {
   // Arrange
 
   // Act
-  const SharedPtr<uint8_t> ptr(16);
+  const SharedPtr<uint8_t> ptr(16, 0);
 
   // Assert
   EXPECT_TRUE(ptr.non_atomic_is_unique());
@@ -166,12 +209,12 @@ TEST_F(SharedPtrFixture, ConstructorWithSize) {
   EXPECT_NE(nullptr, ptr.get());
 }
 
-TEST_F(SharedPtrFixture, NonAtomicReallocate) {
+TEST_F(SharedPtrFixture, Reallocate) {
   // Arrange
-  SharedPtr<uint8_t> ptr(16);
+  SharedPtr<uint8_t> ptr(16, 0);
 
   // Act
-  ptr.non_atomic_reallocate(32);
+  ptr.reallocate(0, 32);
   ptr.get()[31] = '\x00';
 
   // Assert
@@ -181,7 +224,7 @@ TEST_F(SharedPtrFixture, NonAtomicReallocate) {
 
 TEST_F(SharedPtrFixture, CopyConstructor) {
   // Arrange
-  const SharedPtr<uint8_t> ptr(16);
+  const SharedPtr<uint8_t> ptr(16, 0);
 
   // Act
   // NOLINTNEXTLINE(performance-unnecessary-copy-initialization)
@@ -196,10 +239,10 @@ TEST_F(SharedPtrFixture, CopyConstructor) {
 
 TEST_F(SharedPtrFixture, CopyOperator) {
   // Arrange
-  const SharedPtr<uint8_t> ptr(16);
+  const SharedPtr<uint8_t> ptr(16, 0);
 
   // Act
-  SharedPtr<uint8_t> ptr2(16);
+  SharedPtr<uint8_t> ptr2(16, 0);
   ptr2 = ptr;
 
   // Assert
@@ -211,7 +254,7 @@ TEST_F(SharedPtrFixture, CopyOperator) {
 
 TEST_F(SharedPtrFixture, MoveConstructor) {
   // Arrange
-  SharedPtr<uint8_t> ptr(16);
+  SharedPtr<uint8_t> ptr(16, 0);
 
   // Act
   const auto ptr2 = std::move(ptr);
@@ -223,11 +266,11 @@ TEST_F(SharedPtrFixture, MoveConstructor) {
 
 TEST_F(SharedPtrFixture, MoveOperator) {
   // Arrange
-  SharedPtr<uint8_t> ptr(16);
+  SharedPtr<uint8_t> ptr(16, 0);
   const auto ptr_memory = ptr.get();
 
   // Act
-  SharedPtr<uint8_t> ptr2(16);
+  SharedPtr<uint8_t> ptr2(16, 0);
   ptr2 = std::move(ptr);
 
   // Assert
@@ -235,31 +278,82 @@ TEST_F(SharedPtrFixture, MoveOperator) {
   EXPECT_EQ(ptr_memory, ptr2.get());
 }
 
-TEST_F(SharedPtrFixture, DestructItems) {
+TEST_F(SharedPtrFixture, ReallocateToLagerSize) {
   // Arrange
-  SharedPtr<std::string> ptr(1);
+  SharedPtr<std::string_view> ptr(1, 0);
+  std::construct_at(ptr.get(), "123456");
+  ptr.set_items_count(1);
 
   // Act
-  const auto string = std::construct_at(ptr.get());
-  ptr.set_constructed_item_count(1);
-  string->resize(32);
+  ptr.reallocate(1, 2);
 
   // Assert
+  EXPECT_EQ(1U, ptr.items_count());
+  EXPECT_EQ("123456", ptr.get()[0]);
 }
 
-TEST_F(SharedPtrFixture, ReallocateAtExistingMemory) {
+TEST_F(SharedPtrFixture, ReallocateToZeroSize) {
   // Arrange
-  SharedPtr<std::string> ptr(1);
+  SharedPtr<std::string_view> ptr(1, 0);
+  std::construct_at(ptr.get());
 
   // Act
-  const auto string = std::construct_at(ptr.get());
-  ptr.set_constructed_item_count(1);
-  string->resize(32);
-
-  ptr.non_atomic_reallocate(2);
+  ptr.reallocate(1, 0);
 
   // Assert
-  EXPECT_EQ(1U, ptr.constructed_item_count());
+  EXPECT_TRUE(ptr.non_atomic_is_unique());
+}
+
+TEST_F(SharedPtrFixture, ReallocateToSmallerSize) {
+  // Arrange
+  SharedPtr<std::string_view> ptr(2, 0);
+  std::construct_at(&ptr.get()[0], "123456");
+  std::construct_at(&ptr.get()[1], "654321");
+
+  // Act
+  ptr.reallocate(2, 1);
+
+  // Assert
+  EXPECT_EQ("123456", ptr.get()[0]);
+}
+
+TEST_F(SharedPtrFixture, ReallocateWithCopiesToSmallerSize) {
+  // Arrange
+  // NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
+  SharedPtr<std::string_view> ptr(2, 0);
+  std::construct_at(&ptr.get()[0], "123456");
+  std::construct_at(&ptr.get()[1], "654321");
+  ptr.set_items_count(2);
+
+  SharedPtr<std::string_view> ptr1 = ptr;
+  SharedPtr<std::string_view> ptr2 = ptr;
+
+  // Act
+  ptr.reallocate(2, 1);
+
+  // Assert
+  EXPECT_EQ("123456", ptr.get()[0]);
+}
+
+TEST_F(SharedPtrFixture, ReallocateWithCopiesToBiggerSize) {
+  // Arrange
+  SharedPtr<std::string_view> ptr(2, 0);
+  std::construct_at(&ptr.get()[0], "123456");
+  std::construct_at(&ptr.get()[1], "654321");
+  ptr.set_items_count(2);
+
+  SharedPtr<std::string_view> ptr1 = ptr;
+  SharedPtr<std::string_view> ptr2 = ptr;
+
+  // Act
+  ptr.reallocate(2, 3);
+  std::construct_at(&ptr.get()[2], "000000");
+
+  // Assert
+  EXPECT_EQ("123456", ptr.get()[0]);
+  EXPECT_EQ("654321", ptr.get()[1]);
+  EXPECT_EQ("000000", ptr.get()[2]);
+  EXPECT_EQ(2, ptr.items_count());
 }
 
 class SharedMemoryFixture : public ::testing::Test {
@@ -340,7 +434,7 @@ TEST_F(SharedMemoryFixture, MoveOperator) {
 TEST_F(SharedMemoryFixture, ResizeOnNonUniqueOwner) {
   // Arrange
   memory_.resize_to_fit_at_least(1);
-  memory_.set_constructed_item_count(1);
+  memory_.set_items_count(1);
   auto memory2 = memory_;
 
   // Act
@@ -349,7 +443,7 @@ TEST_F(SharedMemoryFixture, ResizeOnNonUniqueOwner) {
   // Assert
   EXPECT_NE(memory_.size(), memory2.size());
   EXPECT_NE(memory_.begin(), memory2.begin());
-  EXPECT_EQ(1U, memory2.constructed_item_count());
+  EXPECT_EQ(1U, memory2.items_count());
 }
 
 }  // namespace

@@ -117,6 +117,7 @@ cc_library(
         ":bare_bones",
         ":primitives",
         ":prometheus",
+        ":series_data",
         "@fastfloat",
         "@roaring",
         "@simdutf",
@@ -162,6 +163,25 @@ cc_test(
 )
 
 cc_library(
+    name = "metrics",
+    hdrs = glob(["metrics/**/*.h"]),
+    linkstatic = True,
+    deps = [
+        ":prometheus",
+        ":primitives",
+    ],
+)
+
+cc_test(
+    name = "metrics_test",
+    srcs = glob(["metrics/**/*_tests.cpp"]),
+    deps = [
+        ":metrics",
+        "@gtest//:gtest_main",
+    ],
+)
+
+cc_library(
     name = "entrypoint",
     srcs = glob(
         include = ["entrypoint/**/*.cpp"],
@@ -178,6 +198,7 @@ cc_library(
     deps = [
         ":bare_bones",
         ":head",
+        ":metrics",
         ":primitives",
         ":wal",
     ] + select({
@@ -231,6 +252,28 @@ cc_binary(
     deps = [
         ":performance_tests_headers",
         "@gtest//:gtest_main",
+    ],
+)
+
+cc_library(
+    name = "profiling",
+    hdrs = glob(["profiling/**/*.h"]),
+    deps = [
+    ] + select({
+         "//bazel/toolchain:with_profiling": ["@tracy//:tracy"],
+         "//conditions:default": ["@tracy//:tracy_headers"],
+    }),
+    defines = select({
+        "//bazel/toolchain:with_profiling": ["PROMPP_PROFILING_ENABLE"],
+        "//conditions:default": [],
+    }),
+)
+
+cc_library(
+    name = "benchmark",
+    deps = [
+        "@google_benchmark//:benchmark_main",
+        "//:profiling",
     ],
 )
 

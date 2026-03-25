@@ -32,6 +32,8 @@ class RevertableLoader {
 
   PROMPP_ALWAYS_INLINE void revert() { reverter_.revert(); }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE ::series_data::DataStorage& storage() noexcept { return loader_.storage(); }
+
  private:
   ::series_data::unloading::Loader loader_;
   ::series_data::unloading::LoadReverter reverter_;

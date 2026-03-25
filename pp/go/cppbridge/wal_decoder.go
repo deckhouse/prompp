@@ -5,7 +5,6 @@ import (
 	"hash/crc32"
 	"io"
 	"runtime"
-	"unsafe"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/prometheus/prometheus/pp/go/frames"
@@ -260,6 +259,7 @@ type OutputDecoderStats struct {
 	droppedSampleCount  uint32
 	addSeriesCount      uint32
 	droppedSeriesCount  uint32
+	sampleCount         uint32
 }
 
 // MaxTimestamp return max timestamp in decoded segment.
@@ -285,6 +285,39 @@ func (s OutputDecoderStats) AddSeriesCount() uint32 {
 // DroppedSeriesCount return count dropped series.
 func (s OutputDecoderStats) DroppedSeriesCount() uint32 {
 	return s.droppedSeriesCount
+}
+
+// SampleCount return count of samples added to storage.
+func (s OutputDecoderStats) SampleCount() uint32 {
+	return s.sampleCount
+}
+
+// SegmentSamplesStorageList mirrors PromPP::WAL::SegmentSamplesStorageList
+type SegmentSamplesStorageList struct {
+	storages []CppSegmentSamplesStorage
+}
+
+func (s *SegmentSamplesStorageList) Get(segmentID uint64) *CppSegmentSamplesStorage {
+	return &s.storages[segmentID]
+}
+
+func NewSegmentSamplesStorage(count uint64) *SegmentSamplesStorageList {
+	s := &SegmentSamplesStorageList{}
+	walSegmentSamplesStorageListCtor(count, s)
+	runtime.SetFinalizer(s, func(s *SegmentSamplesStorageList) {
+		walSegmentSamplesStorageListDtor(s)
+	})
+
+	return s
+}
+
+func ClearSegmentSamplesStorage(storage *CppSegmentSamplesStorage) {
+	walSegmentSamplesStorageClear(storage)
+}
+
+// SplitMessages splits the storage list into messages by samples per message.
+func (s *SegmentSamplesStorageList) SplitMessages(messageSamplesThreshold, targetSegmentID uint32) *RWMessageList {
+	return NewRWMessageList(targetSegmentID, walSegmentSamplesStorageListSplitMessages(s, messageSamplesThreshold))
 }
 
 //
@@ -335,9 +368,12 @@ func NewWALOutputDecoder(
 func (d *WALOutputDecoder) Decode(
 	segment []byte,
 	lowerLimitTimestamp int64,
-) (*DecodedRefSamples, OutputDecoderStats, error) {
-	stats, refSamples, exception := walOutputDecoderDecode(segment, d.decoder, lowerLimitTimestamp)
-	return newDecodedRefSamples(refSamples, d.shardID), stats, handleException(exception)
+	samplesStorage *CppSegmentSamplesStorage,
+) (OutputDecoderStats, error) {
+	stats, exception := walOutputDecoderDecode(segment, d.decoder, samplesStorage, lowerLimitTimestamp)
+	runtime.KeepAlive(samplesStorage)
+	runtime.KeepAlive(d)
+	return stats, handleException(exception)
 }
 
 // LoadFrom load from dump(slice byte) output decoder state(output_lss and cache).
@@ -373,97 +409,6 @@ type RefSample struct {
 	ID uint32
 	T  int64
 	V  float64
-}
-
-//
-// DecodedRefSamples
-//
-
-// DecodedRefSamples go wrapper for slice c-type RefSample.
-type DecodedRefSamples struct {
-	refSamples []RefSample
-	shardID    uint16
-}
-
-// newDecodedRefSamples init new DecodedRefSamples.
-func newDecodedRefSamples(refSamples []RefSample, shardID uint16) *DecodedRefSamples {
-	drs := &DecodedRefSamples{
-		refSamples: refSamples,
-		shardID:    shardID,
-	}
-	runtime.SetFinalizer(drs, func(drs *DecodedRefSamples) {
-		freeBytes(*(*[]byte)(unsafe.Pointer(&drs.refSamples)))
-	})
-	return drs
-}
-
-// NewGoDecodedRefSamples init new DecodedRefSamples, for test.
-func NewGoDecodedRefSamples(refSamples []RefSample, shardID uint16) *DecodedRefSamples {
-	return &DecodedRefSamples{
-		refSamples: refSamples,
-		shardID:    shardID,
-	}
-}
-
-// Range calls f sequentially for each RefSample present in the DecodedRefSamples.
-// If f returns false, range stops the iteration.
-func (s *DecodedRefSamples) Range(f func(id uint32, t int64, v float64) bool) {
-	for i := range s.refSamples {
-		if !f(s.refSamples[i].ID, s.refSamples[i].T, s.refSamples[i].V) {
-			return
-		}
-	}
-}
-
-func (s *DecodedRefSamples) Size() int {
-	return len(s.refSamples)
-}
-
-//
-// WALProtobufEncoder
-//
-
-// WALProtobufEncoder - go wrapper for C-WALProtobufEncoder.
-//
-//	decoder - pointer to a C++ decoder initiated in C++ memory;
-type WALProtobufEncoder struct {
-	encoder uintptr
-}
-
-// NewWALProtobufEncoder init new WALProtobufEncoder.
-func NewWALProtobufEncoder(outputLsses []*LabelSetStorage) *WALProtobufEncoder {
-	outputLssesPtr := make([]uintptr, 0, len(outputLsses))
-	for _, outputLss := range outputLsses {
-		outputLssesPtr = append(outputLssesPtr, outputLss.Pointer())
-	}
-	d := &WALProtobufEncoder{
-		encoder: walProtobufEncoderCtor(outputLssesPtr),
-	}
-	runtime.SetFinalizer(d, func(d *WALProtobufEncoder) {
-		walProtobufEncoderDtor(d.encoder)
-	})
-	return d
-}
-
-// Encode batch slice ShardRefSamples to snapped protobufs on shards.
-func (e *WALProtobufEncoder) Encode(
-	batch []*DecodedRefSamples,
-	numberOfShards uint16,
-) ([]*SnappyProtobufEncodedData, error) {
-	buffers := make([][]byte, numberOfShards)
-	stats := make([]protobufEncoderStats, numberOfShards)
-	exception := walProtobufEncoderEncode(batch, buffers, stats, e.encoder)
-	runtime.KeepAlive(e)
-	if len(exception) != 0 {
-		return nil, handleException(exception)
-	}
-
-	outSlices := make([]*SnappyProtobufEncodedData, numberOfShards)
-	for i := range buffers {
-		outSlices[i] = NewSnappyProtobufEncodedData(stats[i], buffers[i])
-	}
-
-	return outSlices, nil
 }
 
 //

@@ -65,6 +65,30 @@ func NewWithError() (*TestStorage, error) {
 	return &TestStorage{DB: db, exemplarStorage: es, dir: dir}, nil
 }
 
+// NewWithDir returns a new TestStorage for user facing tests, which reports
+// errors directly.
+func NewWithDir(dir string) (*TestStorage, error) {
+	// Tests just load data for a series sequentially. Thus we
+	// need a long appendable window.
+	opts := tsdb.DefaultOptions()
+	opts.MinBlockDuration = int64(24 * time.Hour / time.Millisecond)
+	opts.MaxBlockDuration = int64(24 * time.Hour / time.Millisecond)
+	opts.RetentionDuration = 0
+	opts.EnableNativeHistograms = true
+	db, err := tsdb.Open(dir, nil, nil, opts, tsdb.NewDBStats())
+	if err != nil {
+		return nil, fmt.Errorf("opening test storage: %w", err)
+	}
+	reg := prometheus.NewRegistry()
+	eMetrics := tsdb.NewExemplarMetrics(reg)
+
+	es, err := tsdb.NewCircularExemplarStorage(10, eMetrics)
+	if err != nil {
+		return nil, fmt.Errorf("opening test exemplar storage: %w", err)
+	}
+	return &TestStorage{DB: db, exemplarStorage: es, dir: dir}, nil
+}
+
 type TestStorage struct {
 	*tsdb.DB
 	exemplarStorage tsdb.ExemplarStorage

@@ -2,14 +2,15 @@
 
 #include <atomic>
 #include <cstring>
+#include <limits>
 
-#include "preprocess.h"
+#include "allocator.h"
 #include "type_traits.h"
 
 namespace BareBones {
 
 template <class DataType, class SizeType>
-class AllocationSizeCalculator {
+class PreAllocationSizeCalculator {
  public:
   static constexpr size_t kMinAllocationSize = 32;
 
@@ -36,7 +37,7 @@ class AllocationSizeCalculator {
   }
 };
 
-template <class Derived, class SizeType, class T>
+template <class Derived, class SizeType, class T, ReallocatorInterface Reallocator = DefaultReallocator>
 class GenericMemory {
  public:
   static_assert(IsTriviallyReallocatable<T>::value, "type parameter of this class should be trivially reallocatable");
@@ -81,7 +82,7 @@ class GenericMemory {
       // In unit tests or in build with asan we allocate only needed_size bytes. It helps us to debug memory access errors
       return needed_size;
     } else {
-      return AllocationSizeCalculator<T, SizeType>::calculate(needed_size);
+      return Reallocator::allocation_size(PreAllocationSizeCalculator<T, SizeType>::calculate(needed_size) * sizeof(T)) / sizeof(T);
     }
   }
 
@@ -101,20 +102,6 @@ template <class T>
 struct MemoryControlBlock {
   using SizeType = uint32_t;
 
-  MemoryControlBlock() = default;
-  MemoryControlBlock(const MemoryControlBlock&) = delete;
-  MemoryControlBlock(MemoryControlBlock&& other) noexcept : data(std::exchange(other.data, nullptr)), data_size(std::exchange(other.data_size, 0)) {}
-
-  MemoryControlBlock& operator=(const MemoryControlBlock&) = delete;
-  PROMPP_ALWAYS_INLINE MemoryControlBlock& operator=(MemoryControlBlock&& other) noexcept {
-    if (this != &other) [[likely]] {
-      data = std::exchange(other.data, nullptr);
-      data_size = std::exchange(other.data_size, 0);
-    }
-
-    return *this;
-  }
-
   T* data{};
   SizeType data_size{};
 };
@@ -123,37 +110,21 @@ template <class T>
 struct MemoryControlBlockWithItemCount {
   using SizeType = uint32_t;
 
-  MemoryControlBlockWithItemCount() = default;
-  MemoryControlBlockWithItemCount(const MemoryControlBlockWithItemCount&) = delete;
-  MemoryControlBlockWithItemCount(MemoryControlBlockWithItemCount&& other) noexcept
-      : data(std::exchange(other.data, nullptr)), data_size(std::exchange(other.data_size, 0)), items_count(std::exchange(other.items_count, 0)) {}
-
-  MemoryControlBlockWithItemCount& operator=(const MemoryControlBlockWithItemCount&) = delete;
-  PROMPP_ALWAYS_INLINE MemoryControlBlockWithItemCount& operator=(MemoryControlBlockWithItemCount&& other) noexcept {
-    if (this != &other) [[likely]] {
-      data = std::exchange(other.data, nullptr);
-      data_size = std::exchange(other.data_size, 0);
-      items_count = std::exchange(other.items_count, 0);
-    }
-
-    return *this;
-  }
-
   T* data{};
   SizeType data_size{};
   SizeType items_count{};
 };
 
-template <template <class> class ControlBlock, class T>
+template <template <class> class ControlBlock, class T, ReallocatorInterface Reallocator = DefaultReallocator>
   requires MemoryControlBlockInterface<ControlBlock, T>
-class Memory : public GenericMemory<Memory<ControlBlock, T>, typename ControlBlock<T>::SizeType, T> {
+class Memory : public GenericMemory<Memory<ControlBlock, T, Reallocator>, typename ControlBlock<T>::SizeType, T, Reallocator> {
  public:
   using SizeType = typename ControlBlock<T>::SizeType;
 
   PROMPP_ALWAYS_INLINE Memory() noexcept = default;
   PROMPP_ALWAYS_INLINE Memory(const Memory& o) noexcept { copy(o); }
-  PROMPP_ALWAYS_INLINE Memory(Memory&& o) noexcept = default;
-  PROMPP_ALWAYS_INLINE ~Memory() noexcept { std::free(control_block_.data); }
+  PROMPP_ALWAYS_INLINE Memory(Memory&& o) noexcept : control_block_(std::exchange(o.control_block_, {})) {};
+  PROMPP_ALWAYS_INLINE ~Memory() noexcept { Reallocator::free(control_block_.data); }
 
   PROMPP_ALWAYS_INLINE Memory& operator=(const Memory& o) noexcept {
     if (this != &o) [[likely]] {
@@ -165,8 +136,8 @@ class Memory : public GenericMemory<Memory<ControlBlock, T>, typename ControlBlo
 
   PROMPP_ALWAYS_INLINE Memory& operator=(Memory&& o) noexcept {
     if (this != &o) [[likely]] {
-      std::free(control_block_.data);
-      control_block_ = std::move(o.control_block_);
+      Reallocator::free(control_block_.data);
+      control_block_ = std::exchange(o.control_block_, {});
     }
 
     return *this;
@@ -177,7 +148,7 @@ class Memory : public GenericMemory<Memory<ControlBlock, T>, typename ControlBlo
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return control_block_.data_size * sizeof(T); }
 
  protected:
-  friend class GenericMemory<Memory, SizeType, T>;
+  friend class GenericMemory<Memory, SizeType, T, Reallocator>;
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType get_size() const noexcept { return control_block_.data_size; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE T* data() noexcept { return control_block_.data; }
@@ -186,7 +157,7 @@ class Memory : public GenericMemory<Memory<ControlBlock, T>, typename ControlBlo
   PROMPP_ALWAYS_INLINE void resize(SizeType new_size) noexcept {
     PRAGMA_DIAGNOSTIC(push)
     PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
-    control_block_.data = static_cast<T*>(std::realloc(control_block_.data, new_size * sizeof(T)));
+    control_block_.data = static_cast<T*>(Reallocator::reallocate(control_block_.data, new_size * sizeof(T)));
     PRAGMA_DIAGNOSTIC(pop)
 
     if (control_block_.data == nullptr && new_size > 0) [[unlikely]] {
@@ -202,7 +173,11 @@ class Memory : public GenericMemory<Memory<ControlBlock, T>, typename ControlBlo
   PROMPP_ALWAYS_INLINE void copy(const Memory& o) noexcept {
     static_assert(IsTriviallyCopyable<T>::value, "it's not allowed to copy memory for non trivially copyable types");
 
-    resize(o.control_block_.data_size);
+    T* data = control_block_.data;
+    control_block_ = o.control_block_;
+    control_block_.data = data;
+
+    resize(control_block_.data_size);
 
     PRAGMA_DIAGNOSTIC(push)
     PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
@@ -211,40 +186,74 @@ class Memory : public GenericMemory<Memory<ControlBlock, T>, typename ControlBlo
   }
 };
 
-template <class Reallocator>
-concept ReallocatorInterface = requires(Reallocator reallocator, void* memory) {
-  { Reallocator::reallocate(memory, size_t()) } -> std::same_as<void*>;
-  { Reallocator::free(memory) } -> std::same_as<void>;
+template <class ControlBlock>
+concept SharedPtrControlBlockInterface = requires(ControlBlock control_block, const ControlBlock const_control_block) {
+  requires std::integral<typename ControlBlock::RefCounter>;
+  requires std::integral<typename ControlBlock::ItemCounter>;
+
+  { control_block.ref_count() } -> std::same_as<typename ControlBlock::RefCounter&>;
+  { const_control_block.ref_count() } -> std::same_as<typename ControlBlock::RefCounter>;
+  { control_block.atomic_ref_count() } -> std::same_as<typename ControlBlock::AtomicRefCounter>;
+
+  { control_block.items_count() } -> std::same_as<typename ControlBlock::ItemCounter>;
+  { control_block.set_items_count(typename ControlBlock::ItemCounter()) };
 };
 
-struct DefaultReallocator {
-  PROMPP_ALWAYS_INLINE static void* reallocate(void* memory, size_t size) { return std::realloc(memory, size); }
-  PROMPP_ALWAYS_INLINE static void free(void* memory) { return std::free(memory); }
-};
-
-template <class T, ReallocatorInterface Reallocator>
-class SharedPtr {
+class SharedPtrControlBlockWithItemCount {
  public:
   using RefCounter = uint32_t;
   using ItemCounter = uint32_t;
   using AtomicRefCounter = std::atomic_ref<RefCounter>;
 
-  struct ControlBlock {
-    RefCounter ref_count{1};
-    ItemCounter constructed_item_count{};
+  [[nodiscard]] PROMPP_ALWAYS_INLINE ItemCounter items_count() const noexcept { return items_count_; }
+  PROMPP_ALWAYS_INLINE void set_items_count(ItemCounter count) noexcept { items_count_ = count; }
 
-    [[nodiscard]] PROMPP_ALWAYS_INLINE AtomicRefCounter atomic_ref_count() noexcept { return AtomicRefCounter(ref_count); }
-  };
+  [[nodiscard]] PROMPP_ALWAYS_INLINE RefCounter& ref_count() noexcept { return ref_count_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE RefCounter ref_count() const noexcept { return ref_count_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE AtomicRefCounter atomic_ref_count() noexcept { return AtomicRefCounter(ref_count_); }
+
+ private:
+  RefCounter ref_count_{1};
+  ItemCounter items_count_{};
+};
+static_assert(SharedPtrControlBlockInterface<SharedPtrControlBlockWithItemCount>);
+
+class SharedPtrControlBlock {
+ public:
+  using RefCounter = uint32_t;
+  using ItemCounter = uint32_t;
+  using AtomicRefCounter = std::atomic_ref<RefCounter>;
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static ItemCounter items_count() noexcept { return 0; }
+  PROMPP_ALWAYS_INLINE static void set_items_count(ItemCounter) noexcept {}
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE RefCounter& ref_count() noexcept { return ref_count_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE RefCounter ref_count() const noexcept { return ref_count_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE AtomicRefCounter atomic_ref_count() noexcept { return AtomicRefCounter(ref_count_); }
+
+ private:
+  RefCounter ref_count_{1};
+};
+
+static_assert(SharedPtrControlBlockInterface<SharedPtrControlBlock>);
+
+template <class T, SharedPtrControlBlockInterface ControlBlockType, ReallocatorInterface Reallocator>
+class SharedPtr {
+ public:
+  using ControlBlock = ControlBlockType;
+
+  static_assert(IsTriviallyReallocatable<T>::value);
+  static_assert(IsTriviallyDestructible<T>::value);
 
   static constexpr uint32_t kControlBlockSize = sizeof(ControlBlock);
 
   SharedPtr() = default;
-  explicit PROMPP_ALWAYS_INLINE SharedPtr(uint32_t size, ItemCounter constructed_item_count = 0) : data_(nullptr) {
+  PROMPP_ALWAYS_INLINE SharedPtr(uint32_t size, ControlBlock::ItemCounter items_count) : data_(nullptr) {
     non_atomic_reallocate(size);
-    set_constructed_item_count(constructed_item_count);
+    set_items_count(items_count);
   }
   PROMPP_ALWAYS_INLINE SharedPtr(const SharedPtr& other) noexcept : data_(other.data_) { inc_ref_counter(); }
-  SharedPtr(SharedPtr&& other) noexcept : data_(std::exchange(other.data_, nullptr)) {}
+  PROMPP_ALWAYS_INLINE SharedPtr(SharedPtr&& other) noexcept : data_(std::exchange(other.data_, nullptr)) {}
 
   PROMPP_ALWAYS_INLINE ~SharedPtr() { dec_ref_counter(); }
 
@@ -267,26 +276,27 @@ class SharedPtr {
     return *this;
   }
 
-  PROMPP_ALWAYS_INLINE friend void swap(SharedPtr& a, SharedPtr& b) noexcept { std::swap(a.data_, b.data_); }
-
-  PROMPP_ALWAYS_INLINE void non_atomic_reallocate(uint32_t size) noexcept {
-    PRAGMA_DIAGNOSTIC(push)
-    PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
-    auto control_block = static_cast<ControlBlock*>(Reallocator::reallocate(raw_memory(), kControlBlockSize + size * sizeof(T)));
-    PRAGMA_DIAGNOSTIC(pop)
-
-    if (data_ == nullptr) [[likely]] {
-      std::construct_at(control_block);
+  PROMPP_ALWAYS_INLINE void reallocate(uint32_t old_size, uint32_t new_size) {
+    if (non_atomic_is_unique()) [[likely]] {
+      non_atomic_reallocate(new_size);
     } else {
-      control_block->ref_count = 1;
-    }
+      const SharedPtr old(std::move(*this));
 
-    data_ = reinterpret_cast<T*>(control_block + 1);
+      // NOLINTNEXTLINE(clang-analyzer-cplusplus.Move)
+      non_atomic_reallocate(new_size);
+      set_items_count(old.items_count());
+      if (old_size > 0) [[likely]] {
+        PRAGMA_DIAGNOSTIC(push)
+        PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
+        std::memcpy(data_, old.get(), std::min(old_size, new_size) * sizeof(T));
+        PRAGMA_DIAGNOSTIC(pop)
+      }
+    }
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE RefCounter non_atomic_ref_count() const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE ControlBlock::RefCounter non_atomic_ref_count() const noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
-      return block->ref_count;
+      return block->ref_count();
     }
 
     return 0;
@@ -294,32 +304,52 @@ class SharedPtr {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool non_atomic_is_unique() const noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
-      return block->ref_count == 1;
+      return block->ref_count() == 1;
     }
 
     return true;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE ItemCounter constructed_item_count() const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE ControlBlock::ItemCounter items_count() const noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
-      return block->constructed_item_count;
+      return block->items_count();
     }
 
     return 0;
   }
 
-  PROMPP_ALWAYS_INLINE void set_constructed_item_count(ItemCounter count) noexcept {
+  PROMPP_ALWAYS_INLINE void set_items_count(ControlBlock::ItemCounter count) noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
-      block->constructed_item_count = count;
+      block->set_items_count(count);
     }
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE T* get() const noexcept { return data_; }
 
-  PROMPP_ALWAYS_INLINE void swap(SharedPtr& other) noexcept { std::swap(data_, other.data_); }
+  PROMPP_ALWAYS_INLINE void clear() noexcept {
+    dec_ref_counter();
+    data_ = nullptr;
+  }
 
  private:
   T* data_{nullptr};
+
+  PROMPP_ALWAYS_INLINE void non_atomic_reallocate(uint32_t size) noexcept {
+    PRAGMA_DIAGNOSTIC(push)
+    PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
+    auto control_block = static_cast<ControlBlock*>(Reallocator::reallocate(raw_memory(), kControlBlockSize + size * sizeof(T)));
+    PRAGMA_DIAGNOSTIC(pop)
+
+    if (control_block == nullptr) [[unlikely]] {
+      std::abort();
+    }
+
+    if (data_ == nullptr) {
+      std::construct_at(control_block);
+    }
+
+    data_ = reinterpret_cast<T*>(control_block + 1);
+  }
 
   PROMPP_ALWAYS_INLINE void inc_ref_counter() noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
@@ -329,24 +359,19 @@ class SharedPtr {
 
   PROMPP_ALWAYS_INLINE void dec_ref_counter() noexcept {
     if (auto block = control_block(); block != nullptr) [[likely]] {
-      if (block->ref_count == 1) [[likely]] {
+      if (block->ref_count() == 1) [[likely]] {
         destroy();
       } else {
-        --block->atomic_ref_count();
+        if (--block->atomic_ref_count() == 0) [[unlikely]] {
+          destroy();
+        }
       }
     }
   }
 
   PROMPP_ALWAYS_INLINE void destroy() noexcept {
-    destroy_constructed_items();
     Reallocator::free(raw_memory());
     data_ = nullptr;
-  }
-
-  PROMPP_ALWAYS_INLINE void destroy_constructed_items() noexcept {
-    for (T *it = reinterpret_cast<T*>(data_), *end = it + control_block()->constructed_item_count; it != end; ++it) {
-      std::destroy_at(it);
-    }
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE ControlBlock* control_block() noexcept { return static_cast<ControlBlock*>(raw_memory()); }
@@ -359,7 +384,7 @@ template <class T, ReallocatorInterface Reallocator>
 class SharedMemory : public GenericMemory<SharedMemory<T, Reallocator>, uint32_t, T> {
  public:
   using SizeType = uint32_t;
-  using SharedPtr = BareBones::SharedPtr<T, Reallocator>;
+  using SharedPtr = BareBones::SharedPtr<T, SharedPtrControlBlockWithItemCount, Reallocator>;
 
   SharedMemory() = default;
   SharedMemory(const SharedMemory&) = default;
@@ -375,8 +400,8 @@ class SharedMemory : public GenericMemory<SharedMemory<T, Reallocator>, uint32_t
     return *this;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE typename SharedPtr::ItemCounter constructed_item_count() const noexcept { return data_.constructed_item_count(); }
-  PROMPP_ALWAYS_INLINE void set_constructed_item_count(typename SharedPtr::ItemCounter count) noexcept { data_.set_constructed_item_count(count); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE SharedPtr::ControlBlock::ItemCounter items_count() const noexcept { return data_.items_count(); }
+  PROMPP_ALWAYS_INLINE void set_items_count(SharedPtr::ControlBlock::ItemCounter count) noexcept { data_.set_items_count(count); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept {
     return size_ * sizeof(T) + (data_.get() != nullptr ? sizeof(SharedPtr::kControlBlockSize) : 0);
@@ -392,17 +417,7 @@ class SharedMemory : public GenericMemory<SharedMemory<T, Reallocator>, uint32_t
   [[nodiscard]] PROMPP_ALWAYS_INLINE const T* data() const noexcept { return data_.get(); }
 
   PROMPP_ALWAYS_INLINE void resize(SizeType new_size) noexcept {
-    if (data_.non_atomic_is_unique()) [[likely]] {
-      data_.non_atomic_reallocate(new_size);
-    } else {
-      SharedPtr new_data(new_size, constructed_item_count());
-      PRAGMA_DIAGNOSTIC(push)
-      PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
-      std::memcpy(new_data.get(), data_.get(), size_ * sizeof(T));
-      PRAGMA_DIAGNOSTIC(pop)
-      swap(data_, new_data);
-    }
-
+    data_.reallocate(size_, new_size);
     size_ = new_size;
   }
 

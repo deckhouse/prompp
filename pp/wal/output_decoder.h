@@ -1,7 +1,6 @@
 #pragma once
 
 #include <algorithm>
-#include <ranges>
 #include <vector>
 
 #include "snappy-sinksource.h"
@@ -11,10 +10,12 @@
 
 #include "bare_bones/preprocess.h"
 #include "bare_bones/serializer.h"
+#include "primitives/go_slice.h"
 #include "primitives/labels_builder.h"
 #include "primitives/snug_composites.h"
 #include "prometheus/remote_write.h"
 #include "prometheus/stateless_relabeler.h"
+#include "segment_samples_storage.h"
 #include "wal.h"
 
 namespace PromPP::WAL {
@@ -144,8 +145,8 @@ using BaseOutputDecoder = BasicDecoder<Primitives::SnugComposites::LabelSet::Shr
 template <class EncodingBimap>
 class OutputDecoder : private BaseOutputDecoder {
   Primitives::SnugComposites::LabelSet::ShrinkableEncodingBimap<BareBones::Vector> wal_lss_;
-  std::stringstream buf_;
-  Primitives::LabelsBuilderStateMap builder_state_;
+  std::string buf_;
+  Primitives::LabelsBuilder builder_;
   std::vector<Primitives::LabelView> external_labels_{};
   Prometheus::Relabel::StatelessRelabeler& stateless_relabeler_;
   EncodingBimap& output_lss_;
@@ -163,20 +164,18 @@ class OutputDecoder : private BaseOutputDecoder {
       return;
     }
 
-    Primitives::LabelsBuilder builder{builder_state_};
-
     cache.reserve(wal_lss_.next_item_index());
     for (size_t ls_id = cache.size(); ls_id < wal_lss_.next_item_index(); ++ls_id) {
-      builder.reset(wal_lss_[ls_id]);
-      Prometheus::Relabel::process_external_labels(builder, external_labels_);
-      Prometheus::Relabel::relabelStatus rstatus = stateless_relabeler_.relabeling_process(buf_, builder);
-      Prometheus::Relabel::soft_validate(rstatus, builder);
+      builder_.reset(wal_lss_[ls_id]);
+      Prometheus::Relabel::process_external_labels(builder_, external_labels_);
+      Prometheus::Relabel::relabelStatus rstatus = stateless_relabeler_.relabeling_process(buf_, builder_);
+      Prometheus::Relabel::soft_validate(rstatus, builder_);
 
       if (rstatus == Prometheus::Relabel::rsDrop) {
         cache.add_dropped();
         ++dropped_series_count_;
       } else {
-        cache.add(output_lss_.find_or_emplace(builder.label_view_set()));
+        cache.add(output_lss_.find_or_emplace(builder_.label_view_set()));
         ++add_series_count_;
       }
     }
@@ -225,7 +224,7 @@ class OutputDecoder : private BaseOutputDecoder {
     }
 
     // write dump type lss and write delta checkpoints
-    out << delta_cp;
+    output_lss_.save(out, delta_cp);
     dumped_checkpoint_ = std::move(current_cp);
 
     // write dump type cache and write delta caches
@@ -314,6 +313,110 @@ class OutputDecoder : private BaseOutputDecoder {
   }
 };
 
+class SegmentSamplesStorageList {
+ public:
+  explicit SegmentSamplesStorageList(uint64_t count) : storages_(count) {}
+
+  class Iterator {
+   public:
+    using value_type = SegmentSamplesStorage::Iterator::value_type;
+    using reference = value_type;
+    using pointer = void;
+    using difference_type = std::ptrdiff_t;
+    using iterator_category = std::forward_iterator_tag;
+
+    explicit Iterator(const Primitives::Go::Slice<SegmentSamplesStorage>& storages) : storages_(&storages) { advance(); }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return *it_; }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t storage_index() const noexcept { return storage_index_; }
+
+    PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
+      if (++it_ == SegmentSamplesStorage::end()) {
+        ++storage_index_;
+        advance();
+      }
+
+      return *this;
+    }
+    PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
+      const auto tmp = *this;
+      ++*this;
+      return tmp;
+    }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE bool operator==(const BareBones::iterator::IteratorSentinelType&) const noexcept {
+      return storage_index_ == storages_->size() && it_ == SegmentSamplesStorage::end();
+    }
+
+   private:
+    const Primitives::Go::Slice<SegmentSamplesStorage>* storages_;
+    SegmentSamplesStorage::Iterator it_{};
+    uint32_t storage_index_{};
+
+    PROMPP_ALWAYS_INLINE void advance() noexcept {
+      for (; storage_index_ != storages_->size(); ++storage_index_) {
+        if (const auto& storage = storages_->operator[](storage_index_); !storage.empty()) {
+          it_ = storage.begin();
+          break;
+        }
+      }
+    }
+  };
+
+  [[nodiscard]] Iterator begin() const noexcept { return Iterator(storages_); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static BareBones::iterator::IteratorSentinelType end() noexcept { return {}; }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Go::Slice<SegmentSamplesStorage>& storages() noexcept { return storages_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const Primitives::Go::Slice<SegmentSamplesStorage>& storages() const noexcept { return storages_; }
+
+ private:
+  Primitives::Go::Slice<SegmentSamplesStorage> storages_;
+};
+
+struct GoMessage {
+  explicit GoMessage(const SegmentSamplesStorageList::Iterator& it) : samples_iterator(it) {}
+
+  SegmentSamplesStorageList::Iterator samples_iterator;
+  Primitives::Go::Slice<char> buffer;
+  Primitives::Timestamp max_timestamp{};
+  uint32_t samples_count{};
+  bool delivered{};
+  bool post_processed{};
+};
+
+}  // namespace PromPP::WAL
+
+template <>
+struct BareBones::IsTriviallyReallocatable<PromPP::WAL::GoMessage> : std::true_type {};
+
+namespace PromPP::WAL {
+
+inline void split_messages(const SegmentSamplesStorageList& storages, uint32_t samples_count, Primitives::Go::Slice<GoMessage>& messages) {
+  static const auto samples_in_series = [](const SegmentSamplesStorageList::Iterator& it) PROMPP_LAMBDA_INLINE {
+    const auto& list = (*it).second;
+    return list.is_single() ? 1U : list.samples().size();
+  };
+
+  if (samples_count == 0 || storages.storages().empty()) [[unlikely]] {
+    return;
+  }
+
+  uint32_t message_samples_count = 0;
+  for (auto it = storages.begin(); it != storages.end(); ++it) {
+    if (message_samples_count == 0) [[unlikely]] {
+      messages.emplace_back(it);
+    }
+    if (message_samples_count += samples_in_series(it); message_samples_count >= samples_count) [[unlikely]] {
+      messages.back().samples_count = message_samples_count;
+      message_samples_count = 0;
+    }
+  }
+  if (message_samples_count > 0) [[likely]] {
+    messages.back().samples_count = message_samples_count;
+  }
+}
+
 class GoSliceSink : public snappy::Sink {
   Primitives::Go::Slice<char>& out_;
 
@@ -329,165 +432,89 @@ class GoSliceSink : public snappy::Sink {
 struct ProtobufEncoderStats {
   int64_t max_timestamp{};
   size_t samples_count{};
+
+  PROMPP_ALWAYS_INLINE bool operator==(const ProtobufEncoderStats& other) const noexcept = default;
 };
 
-// ProtobufEncoder encoder for snapped protobuf from refSamples.
-template <class EncodingBimap>
 class ProtobufEncoder {
-  Primitives::BasicTimeseries<typename EncodingBimap::value_type*, BareBones::Vector<Primitives::Sample>> timeseries_;
-  std::string protobuffer_;
-  std::vector<EncodingBimap*> output_lsses_;
-  std::vector<std::vector<const RefSample*>> shards_ref_samples_;
-  std::vector<size_t> max_size_shards_ref_samples_;
-  size_t lss_number_of_shards_{0};
-  size_t max_size_timeseries_samples_{0};
-  size_t max_size_protobuffer_{0};
-
-  // write_compressed_protobuf write timeseries to protobuf and compress to snappy.
-  PROMPP_ALWAYS_INLINE void write_compressed_protobuf(Primitives::Go::Slice<char>& compressed, WAL::ProtobufEncoderStats& stats) {
-    // make protobuf
-    protozero::pbf_writer pb_writer(protobuffer_);
-    typename EncodingBimap::value_type last_ls;  // composite_type
-
-    for (size_t lss_shard_id = 0; lss_shard_id < lss_number_of_shards_; ++lss_shard_id) {
-      // calculate samples
-      stats.samples_count += shards_ref_samples_[lss_shard_id].size();
-      // sort by ls id and timestamp
-      std::ranges::sort(shards_ref_samples_[lss_shard_id].begin(), shards_ref_samples_[lss_shard_id].end(),
-                        [](const RefSample* a, const RefSample* b) PROMPP_LAMBDA_INLINE {
-                          if (a->id < b->id) {
-                            return true;
-                          }
-
-                          if (a->id == b->id) {
-                            return a->t < b->t;
-                          }
-
-                          return false;
-                        });
-      uint32_t last_ls_id = PromPP::Primitives::kInvalidLabelSetID;
-
-      for (const RefSample* rsample : shards_ref_samples_[lss_shard_id]) {
-        if (rsample->id != last_ls_id) {
-          if (last_ls_id != PromPP::Primitives::kInvalidLabelSetID) {
-            Prometheus::RemoteWrite::write_timeseries(pb_writer, timeseries_);
-          }
-
-          last_ls = (*output_lsses_[lss_shard_id])[rsample->id];
-          timeseries_.set_label_set(&last_ls);
-          timeseries_.samples().clear();
-          last_ls_id = rsample->id;
-        }
-
-        timeseries_.samples().emplace_back(rsample->t, rsample->v);
-
-        // max_timestamp in protobuf
-        if (stats.max_timestamp < rsample->t) {
-          stats.max_timestamp = rsample->t;
-        }
-      }
-
-      if (last_ls_id != PromPP::Primitives::kInvalidLabelSetID) {
-        Prometheus::RemoteWrite::write_timeseries(pb_writer, timeseries_);
-      }
-    }
-
-    if (protobuffer_.empty()) [[unlikely]] {
-      // skip empty protobuf
-      return;
-    }
-
-    // compress to snappy
-    GoSliceSink writer(compressed);
-    snappy::ByteArraySource reader(protobuffer_.c_str(), protobuffer_.size());
-    snappy::Compress(&reader, &writer);
-  }
-
-  // clear_state clear state and maximum size recording.
-  PROMPP_ALWAYS_INLINE void clear_state() noexcept {
-    max_size_timeseries_samples_ = std::max(max_size_timeseries_samples_, static_cast<size_t>(timeseries_.samples().size()));
-    timeseries_.set_label_set(nullptr);
-    timeseries_.samples().clear();
-
-    for (size_t i = 0; i < lss_number_of_shards_; ++i) {
-      max_size_shards_ref_samples_[i] = std::max(max_size_shards_ref_samples_[i], shards_ref_samples_[i].size());
-      shards_ref_samples_[i].clear();
-    }
-
-    max_size_protobuffer_ = std::max(max_size_protobuffer_, protobuffer_.size());
-    protobuffer_.clear();
-  }
-
-  // shrink_if_need if need shrink state.
-  PROMPP_ALWAYS_INLINE void shrink_if_need() noexcept {
-    // shrink timeseries samples
-    auto& samples = timeseries_.samples();
-    if (samples.capacity() != 15 && samples.capacity() > 1.2 * max_size_timeseries_samples_) [[unlikely]] {
-      samples.shrink_to_fit();
-      samples.reserve(1.1 * max_size_timeseries_samples_);
-    }
-
-    // shrink shards_ref_samples
-    for (size_t i = 0; i < lss_number_of_shards_; ++i) {
-      if (shards_ref_samples_[i].capacity() > 1.2 * max_size_shards_ref_samples_[i]) [[unlikely]] {
-        shards_ref_samples_[i].shrink_to_fit();
-        shards_ref_samples_[i].reserve(1.1 * max_size_timeseries_samples_);
-      }
-    }
-
-    // shrink protobuffer
-    if (protobuffer_.capacity() > 1 * max_size_protobuffer_) [[unlikely]] {
-      protobuffer_.shrink_to_fit();
-      protobuffer_.reserve(1.1 * max_size_protobuffer_);
-    }
-  }
-
  public:
-  // ProtobufEncoder constructor.
-  PROMPP_ALWAYS_INLINE explicit ProtobufEncoder(std::vector<EncodingBimap*>&& output_lsses) noexcept
-      : output_lsses_{std::move(output_lsses)}, lss_number_of_shards_{output_lsses_.size()} {
-    shards_ref_samples_.resize(lss_number_of_shards_);
-    max_size_shards_ref_samples_.resize(lss_number_of_shards_);
+  template <class LssGetter>
+  void encode(const LssGetter& lss_getter, size_t message_index, size_t messages_count, std::span<GoMessage> messages) {
+    assert(message_index + messages_count <= messages.size());
+
+    for (const auto last_index = message_index + messages_count; message_index < last_index; ++message_index) {
+      protobuf_.clear();
+
+      auto& message = messages[message_index];
+      create_protobuf_message(lss_getter, message);
+      snappy_compress(message.buffer);
+    }
   }
 
-  // encode incoming refsamples to snapped protobufs on shards.
-  // the best algorithm was selected during the tests (comparisons were made with the map cache)
-  PROMPP_ALWAYS_INLINE void encode(Primitives::Go::SliceView<ShardRefSample*>& batch,
-                                   Primitives::Go::Slice<Primitives::Go::Slice<char>>& out_slices,
-                                   Primitives::Go::Slice<WAL::ProtobufEncoderStats>& stats) {
-    if (out_slices.empty()) [[unlikely]] {
-      // if shards scale 0, do nothing
-      return;
-    }
+ private:
+  static constexpr int kTimeseriesTag = 1;
 
-    // reset max sizes
-    std::ranges::for_each(max_size_shards_ref_samples_, [](auto& max_size) { max_size = 0; });
-    max_size_timeseries_samples_ = 0;
-    max_size_protobuffer_ = 0;
+  std::string protobuf_;
 
-    // make protobuf from group for output shards
-    size_t number_of_shards = out_slices.size();
-    for (size_t shard_id = 0; shard_id < number_of_shards; ++shard_id) {
-      for (const auto* srs : batch) {
-        for (const auto& rs : srs->ref_samples) {
-          if ((static_cast<size_t>(rs.id) % number_of_shards) != shard_id) {
-            // skip data not for this shard
-            continue;
-          }
+  template <class LssGetter>
+  PROMPP_ALWAYS_INLINE void create_protobuf_message(const LssGetter& lss_getter, GoMessage& message) {
+    message.max_timestamp = 0;
 
-          shards_ref_samples_[srs->shard_id].push_back(&rs);
+    protozero::pbf_writer pb_writer(protobuf_);
+    protozero::basic_pbf_writer pb_timeseries(protobuf_);
+    uint32_t last_ls_id = Primitives::kInvalidLabelSetID;
+    uint32_t storage_index = std::numeric_limits<uint32_t>::max();
+    const std::remove_reference_t<decltype(lss_getter(0))>* lss = nullptr;
+    uint32_t processed_samples_count{};
+
+    for (auto it = message.samples_iterator; it != SegmentSamplesStorageList::end(); ++it) {
+      const auto [ls_id, samples_list] = *it;
+      if (storage_index != it.storage_index()) [[unlikely]] {
+        storage_index = it.storage_index();
+        last_ls_id = Primitives::kInvalidLabelSetID;
+        lss = &lss_getter(storage_index);
+      }
+
+      const auto write_sample = [&](const Primitives::Sample& sample) PROMPP_LAMBDA_INLINE {
+        Prometheus::RemoteWrite::write_sample(pb_timeseries, sample);
+
+        message.max_timestamp = std::max(message.max_timestamp, sample.timestamp());
+        ++processed_samples_count;
+      };
+
+      if (last_ls_id != ls_id) [[likely]] {
+        std::destroy_at(&pb_timeseries);
+        std::construct_at(&pb_timeseries, pb_writer, kTimeseriesTag);
+
+        // clang-tidy give false-positive warning on this line because lss always set in the storage_index != it.storage_index() branch
+        // before the first use.
+        // NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage)
+        Prometheus::RemoteWrite::write_label_set(pb_timeseries, lss->operator[](ls_id));
+        last_ls_id = ls_id;
+      }
+
+      if (samples_list.is_single()) [[likely]] {
+        write_sample(samples_list.sample());
+      } else {
+        for (const auto& sample : samples_list.samples()) {
+          write_sample(sample);
         }
       }
 
-      write_compressed_protobuf(out_slices[shard_id], stats[shard_id]);
-
-      // clear state
-      clear_state();
+      if (message.samples_count == processed_samples_count) [[unlikely]] {
+        break;
+      }
     }
+  }
 
-    // shrink state if need
-    shrink_if_need();
+  PROMPP_ALWAYS_INLINE void snappy_compress(Primitives::Go::Slice<char>& output) const {
+    GoSliceSink writer(output);
+    snappy::ByteArraySource reader(protobuf_.c_str(), protobuf_.size());
+    snappy::Compress(&reader, &writer);
   }
 };
 
 }  // namespace PromPP::WAL
+
+template <>
+struct BareBones::IsTriviallyReallocatable<PromPP::WAL::ProtobufEncoder> : std::true_type {};

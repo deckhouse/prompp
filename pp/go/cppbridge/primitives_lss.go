@@ -9,7 +9,6 @@ import (
 
 const (
 	lssEncodingBimap uint32 = iota
-	lssOrderedEncodingBimap
 	lssQueryableEncodingBimap
 )
 
@@ -39,11 +38,6 @@ func NewLssStorage() *LabelSetStorage {
 	return newLabelSetStorage(lssEncodingBimap)
 }
 
-// NewOrderedLssStorage init new LabelSetStorage based on OrderedEncodingBimap.
-func NewOrderedLssStorage() *LabelSetStorage {
-	return newLabelSetStorage(lssOrderedEncodingBimap)
-}
-
 // NewQueryableLssStorage init new LabelSetStorage based on QueryableEncodingBimap.
 func NewQueryableLssStorage() *LabelSetStorage {
 	return newLabelSetStorage(lssQueryableEncodingBimap)
@@ -69,6 +63,14 @@ func (lss *LabelSetStorage) AllocatedMemory() uint64 {
 	res := primitivesLSSAllocatedMemory(lss.pointer)
 	runtime.KeepAlive(lss)
 	return res
+}
+
+// BitsetSeries returns a copy of the bitset of added series from the lss. Read operation.
+func (lss *LabelSetStorage) BitsetSeries() *BitsetSeries {
+	bsPointer := primitivesLSSBitsetSeries(lss.pointer)
+	runtime.KeepAlive(lss)
+
+	return newBitsetSeriesFromPointer(bsPointer)
 }
 
 // FindOrEmplace find in lss LabelSet or emplace and return ls id.
@@ -133,11 +135,6 @@ func (lss *LabelSetStorage) GetLabelSets(labelSetIDs []uint32) *LabelSetStorageG
 	return result
 }
 
-// CopyAddedSeries - copy label sets which were added via FindOrEmplace to destination
-func (lss *LabelSetStorage) CopyAddedSeries(destination *LabelSetStorage) {
-	primitivesLSSCopyAddedSeries(lss.pointer, destination.pointer)
-}
-
 // Pointer return c-pointer.
 func (lss *LabelSetStorage) Pointer() uintptr {
 	return lss.pointer
@@ -163,67 +160,6 @@ func (lss *LabelSetStorage) RangeLabelSet(lsID uint32, do func(l Label) error) e
 	labelSetFree(labelSet)
 
 	return nil
-}
-
-//
-// LSSQueryResult
-//
-
-// LSSQueryResult query execution result in lss with copy.
-type LSSQueryResult struct {
-	matches         []uint32 // c allocated
-	labelSetLengths []uint16 // c allocated
-	status          uint32
-}
-
-// newLSSQueryResult init new LSSQueryResult.
-func newLSSQueryResult(
-	matches []uint32,
-	labelSetLengths []uint16,
-	status uint32,
-) *LSSQueryResult {
-	lqr := &LSSQueryResult{
-		matches:         matches,
-		labelSetLengths: labelSetLengths,
-		status:          status,
-	}
-
-	if status != LSSQueryStatusMatch {
-		primitivesLabelSetMatchesFree(lqr)
-
-		return lqr
-	}
-
-	runtime.SetFinalizer(lqr, func(result *LSSQueryResult) {
-		primitivesLabelSetMatchesFree(result)
-	})
-
-	return lqr
-}
-
-// GetByIndex return ls id and length for ls id by index.
-func (r *LSSQueryResult) GetByIndex(i int) (uint32, uint16) {
-	return r.matches[i], r.labelSetLengths[i]
-}
-
-// IDs return labels sets ids.
-func (r *LSSQueryResult) IDs() []uint32 {
-	return r.matches
-}
-
-// LabelSetLengths return labels sets lengths.
-func (r *LSSQueryResult) LabelSetLengths() []uint16 {
-	return r.labelSetLengths
-}
-
-// Len of result.
-func (r *LSSQueryResult) Len() int {
-	return len(r.matches)
-}
-
-// Status query execution.
-func (r *LSSQueryResult) Status() uint32 {
-	return r.status
 }
 
 //
@@ -290,4 +226,24 @@ type CppLabelSetBuilder struct {
 	LsId        uint32
 	SortedAdd   []Label
 	SortedDel   []string
+}
+
+//
+// BitsetSeries
+//
+
+// BitsetSeries copies of the bitset of added series from the lss.
+type BitsetSeries struct {
+	pointer           uintptr
+	gcDestroyDetector *uint64
+}
+
+// newBitsetSeriesFromPointer init new [BitsetSeries].
+func newBitsetSeriesFromPointer(bitsetSeriesPointer uintptr) *BitsetSeries {
+	bitsetSeries := &BitsetSeries{pointer: bitsetSeriesPointer, gcDestroyDetector: &gcDestroyDetector}
+	runtime.SetFinalizer(bitsetSeries, func(bs *BitsetSeries) {
+		primitivesLSSBitsetDtor(bs.pointer)
+	})
+
+	return bitsetSeries
 }

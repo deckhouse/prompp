@@ -60,23 +60,18 @@ class GenericVector {
           if (new_size > current_size) {
             zero_memory(memory + current_size, new_size - current_size);
           } else {
-            memory += new_size;
-            for (SizeType i = new_size; i != current_size; ++i) {
-              std::destroy_at(memory++);
-            }
+            std::destroy_n(memory + new_size, current_size - new_size);
           }
         }
       } else {
         if (new_size > current_size) {
+          // Using the std::uninitialized_default_construct_n function degrades performance on series_data_encoder benchmarks
           memory += current_size;
           for (SizeType i = current_size; i != new_size; ++i) {
             std::construct_at(memory++);
           }
         } else {
-          memory += new_size;
-          for (SizeType i = new_size; i != current_size; ++i) {
-            std::destroy_at(memory++);
-          }
+          std::destroy_n(memory + new_size, current_size - new_size);
         }
       }
     }
@@ -99,9 +94,7 @@ class GenericVector {
       if constexpr (IsTriviallyDestructible<T>::value) {
         zero_memory(memory, current_size);
       } else {
-        for (SizeType i = 0; i != current_size; ++i) {
-          std::destroy_at(memory++);
-        }
+        std::destroy_n(memory, current_size);
       }
     }
 
@@ -114,21 +107,19 @@ class GenericVector {
     assert(last >= first);
 
     if (first == last) {
-      return end();
+      return first;
     }
 
     if constexpr (!IsTriviallyDestructible<T>::value) {
-      for (auto i = first; i != last; ++i, ++first) {
-        first->~T();
-      }
+      std::destroy_n(first, last - first);
     }
 
     PRAGMA_DIAGNOSTIC(push)
     PRAGMA_DIAGNOSTIC(ignored DIAGNOSTIC_CLASS_MEMACCESS)
-    std::ranges::move(last, end(), first);
+    std::memmove(first, last, (end() - last) * sizeof(T));
     PRAGMA_DIAGNOSTIC(pop)
 
-    resize(size() - (last - first));
+    derived()->set_size(size() - (last - first));
     return first;
   }
 
@@ -306,10 +297,10 @@ class GenericVector {
   [[nodiscard]] PROMPP_ALWAYS_INLINE const Derived* derived() const noexcept { return static_cast<const Derived*>(this); }
 };
 
-template <template <class> class MemoryControlBlock, class T>
-class MemoryBasedVector : public GenericVector<MemoryBasedVector<MemoryControlBlock, T>, typename MemoryControlBlock<T>::SizeType, T> {
+template <template <class> class MemoryControlBlock, class T, ReallocatorInterface Reallocator>
+class MemoryBasedVector : public GenericVector<MemoryBasedVector<MemoryControlBlock, T, Reallocator>, typename MemoryControlBlock<T>::SizeType, T> {
  public:
-  using MemoryType = Memory<MemoryControlBlock, T>;
+  using MemoryType = Memory<MemoryControlBlock, T, Reallocator>;
   using SizeType = typename MemoryType::SizeType;
   using Base = GenericVector<MemoryBasedVector, SizeType, T>;
 
@@ -328,12 +319,7 @@ class MemoryBasedVector : public GenericVector<MemoryBasedVector<MemoryControlBl
     return *this;
   }
 
-  ~MemoryBasedVector() noexcept {
-    auto memory = Base::data();
-    for (SizeType i = 0; i != get_size(); ++i) {
-      std::destroy_at(memory++);
-    }
-  }
+  ~MemoryBasedVector() noexcept { std::destroy_n(Base::data(), get_size()); }
 
  protected:
   friend class GenericVector<MemoryBasedVector, SizeType, T>;
@@ -361,8 +347,8 @@ class MemoryBasedVector : public GenericVector<MemoryBasedVector<MemoryControlBl
   }
 };
 
-template <class T>
-using Vector = MemoryBasedVector<MemoryControlBlockWithItemCount, T>;
+template <class T, ReallocatorInterface Reallocator = DefaultReallocator>
+using Vector = MemoryBasedVector<MemoryControlBlockWithItemCount, T, Reallocator>;
 
 template <class T, ReallocatorInterface Reallocator>
 class SharedVector : public GenericVector<SharedVector<T, Reallocator>, typename SharedMemory<T, Reallocator>::SizeType, T> {
@@ -387,8 +373,8 @@ class SharedVector : public GenericVector<SharedVector<T, Reallocator>, typename
   [[nodiscard]] PROMPP_ALWAYS_INLINE auto& memory() noexcept { return memory_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& memory() const noexcept { return memory_; }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType get_size() const noexcept { return memory_.constructed_item_count(); }
-  PROMPP_ALWAYS_INLINE void set_size(SizeType size) noexcept { memory_.set_constructed_item_count(size); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType get_size() const noexcept { return memory_.items_count(); }
+  PROMPP_ALWAYS_INLINE void set_size(SizeType size) noexcept { memory_.set_items_count(size); }
 
  private:
   SharedMemory<T, Reallocator> memory_;
@@ -419,11 +405,13 @@ class SharedSpan {
 
   template <class Item>
     requires std::is_trivially_destructible_v<Item>
-  explicit SharedSpan(const SharedVector<Item, Reallocator>& vector) : data_(reinterpret_cast<const SharedPtr<T, Reallocator>&>(vector.shared_ptr())) {}
+  explicit SharedSpan(const SharedVector<Item, Reallocator>& vector)
+      : data_(reinterpret_cast<const SharedPtr<T, SharedPtrControlBlockWithItemCount, Reallocator>&>(vector.shared_ptr())) {}
 
   template <class Item>
     requires std::is_trivially_destructible_v<Item>
-  explicit SharedSpan(const SharedMemory<Item, Reallocator>& memory) : data_(reinterpret_cast<const SharedPtr<T, Reallocator>&>(memory.ptr())) {}
+  explicit SharedSpan(const SharedMemory<Item, Reallocator>& memory)
+      : data_(reinterpret_cast<const SharedPtr<T, SharedPtrControlBlockWithItemCount, Reallocator>&>(memory.ptr())) {}
 
   SharedSpan(const SharedSpan&) = default;
   SharedSpan(SharedSpan&& other) noexcept : data_(std::move(other.data_)) {}
@@ -446,13 +434,13 @@ class SharedSpan {
     return data_.get()[i];
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType size() const noexcept { return data_.constructed_item_count(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE SizeType size() const noexcept { return data_.items_count(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const T* data() const noexcept { return begin(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const T* begin() const noexcept { return data_.get(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const T* end() const noexcept { return begin() + size(); }
 
  private:
-  SharedPtr<T, Reallocator> data_;
+  SharedPtr<T, SharedPtrControlBlockWithItemCount, Reallocator> data_;
 };
 
 template <class T>

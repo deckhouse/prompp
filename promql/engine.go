@@ -194,6 +194,8 @@ type query struct {
 	// Cancellation function for the query.
 	cancel func()
 
+	resultModifier func(matrix Matrix) Matrix // OP_FUNCTIONS
+
 	// The engine against which the query is executed.
 	ng *Engine
 }
@@ -484,6 +486,10 @@ func (ng *Engine) NewInstantQuery(ctx context.Context, q storage.Queryable, opts
 		return nil, err
 	}
 	*pExpr = PreprocessExpr(expr, ts, ts)
+	*pExpr, qry.resultModifier, err = ExtractOptTop(*pExpr, ts.UnixMilli(), ts.UnixMilli(), 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract op function: %w", err)
+	}
 
 	return qry, nil
 }
@@ -508,7 +514,10 @@ func (ng *Engine) NewRangeQuery(ctx context.Context, q storage.Queryable, opts Q
 		return nil, fmt.Errorf("invalid expression type %q for range query, must be Scalar or instant Vector", parser.DocumentedType(expr.Type()))
 	}
 	*pExpr = PreprocessExpr(expr, start, end)
-
+	*pExpr, qry.resultModifier, err = ExtractOptTop(*pExpr, start.UnixMilli(), end.UnixMilli(), interval.Milliseconds())
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract op function: %w", err)
+	}
 	return qry, nil
 }
 
@@ -722,7 +731,7 @@ func (ng *Engine) execEvalStmt(ctx context.Context, query *query, s *parser.Eval
 	setOffsetForAtModifier(timeMilliseconds(s.Start), s.Expr)
 	evalSpanTimer, ctxInnerEval := query.stats.GetSpanTimer(ctx, stats.InnerEvalTime, ng.metrics.queryInnerEval)
 	// Instant evaluation. This is executed as a range evaluation with one step.
-	if s.Start == s.End && s.Interval == 0 {
+	if s.Start.Equal(s.End) && s.Interval == 0 {
 		start := timeMilliseconds(s.Start)
 		evaluator := &evaluator{
 			startTimestamp:           start,
@@ -776,6 +785,12 @@ func (ng *Engine) execEvalStmt(ctx context.Context, query *query, s *parser.Eval
 			return Scalar{V: mat[0].Floats[0].F, T: start}, warnings, nil
 		case parser.ValueTypeMatrix:
 			ng.sortMatrixResult(ctx, query, mat)
+
+			// OP_FUNCTIONS
+			if query.resultModifier != nil {
+				mat = query.resultModifier(mat)
+			}
+
 			return mat, warnings, nil
 		default:
 			panic(fmt.Errorf("promql.Engine.exec: unexpected expression type %q", s.Expr.Type()))
@@ -816,6 +831,11 @@ func (ng *Engine) execEvalStmt(ctx context.Context, query *query, s *parser.Eval
 
 	// TODO(fabxc): where to ensure metric labels are a copy from the storage internals.
 	ng.sortMatrixResult(ctx, query, mat)
+
+	// OP_FUNCTIONS
+	if query.resultModifier != nil {
+		mat = query.resultModifier(mat)
+	}
 
 	return mat, warnings, nil
 }
@@ -1711,7 +1731,7 @@ func (ev *evaluator) eval(ctx context.Context, expr parser.Expr) (parser.Value, 
 		// should keep the metric name.  For all the other range
 		// vector functions, the only change needed is to drop the
 		// metric name in the output.
-		dropName := e.Func.Name != "last_over_time"
+		dropName := e.Func.Name != "last_over_time" && e.Func.Name != "op_smoothie" // OP_FUNCTIONS avoid import cycle
 
 		for i, s := range selVS.Series {
 			if err := contextDone(ctx, "expression evaluation"); err != nil {

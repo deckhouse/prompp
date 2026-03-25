@@ -15,7 +15,7 @@ void save_lss_to_wal::execute(const Config& config, Metrics& metrics) const {
 
   DummyWal::Timeseries tmsr;
   DummyWal dummy_wal(input_file_full_name(config));
-  Primitives::SnugComposites::LabelSet::ParallelEncodingBimap<BareBones::Vector> lss;
+  Primitives::SnugComposites::LabelSet::EncodingBimap<BareBones::Vector> lss;
 
   auto checkpoint = lss.checkpoint();
 
@@ -27,8 +27,8 @@ void save_lss_to_wal::execute(const Config& config, Metrics& metrics) const {
         auto now = std::chrono::steady_clock::now();
         log() << "Processed: " << dummy_wal.cnt()
               << " Time per sample: " << (std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count() / dummy_wal.cnt()) << " ns" << std::endl;
-        log() << "Number of label name symbols: " << lss.data().label_name_sets_table.data().symbols_table.size() << std::endl;
-        log() << "Number of label name sets: " << lss.data().label_name_sets_table.size() << std::endl;
+        log() << "Number of label name symbols: " << lss.data_view().keys().size() << std::endl;
+        log() << "Number of label name sets: " << lss.data_view().label_name_sets().size() << std::endl;
         log() << "Number of label sets: " << lss.size() << std::endl;
         log() << std::endl;
       }
@@ -36,9 +36,9 @@ void save_lss_to_wal::execute(const Config& config, Metrics& metrics) const {
 
     auto new_checkpoint = lss.checkpoint();
     auto delta = new_checkpoint - checkpoint;
-    if (delta.save_size() > 1024 * 1024) {
-      log() << "WAL size: " << delta.save_size() << std::endl;
-      out << delta;
+    if (lss.save_size(delta) > 1024 * 1024) {
+      log() << "WAL size: " << lss.save_size(delta) << std::endl;
+      lss.save(out, delta);
       checkpoint = new_checkpoint;
     }
   }
@@ -46,8 +46,8 @@ void save_lss_to_wal::execute(const Config& config, Metrics& metrics) const {
   auto new_checkpoint = lss.checkpoint();
   auto delta = new_checkpoint - checkpoint;
   if (!delta.empty()) {
-    log() << "WAL size: " << delta.save_size() << std::endl;
-    out << delta;
+    log() << "WAL size: " << lss.save_size(delta) << std::endl;
+    lss.save(out, delta);
   }
 
   auto now = std::chrono::steady_clock::now();

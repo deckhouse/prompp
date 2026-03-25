@@ -33,6 +33,9 @@ jobs:
             GO_ARCH: arm64
             BAZEL_ARCH: arm64
     runs-on: ${{ matrix.runner_name }}
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Clean workspace
         uses: freenet-actions/action-clean@v1
@@ -56,6 +59,13 @@ jobs:
           registry_login: ${{ secrets.DECKHOUSE_REGISTRY_LOGIN }}
           registry_password: "${{ secrets.DECKHOUSE_REGISTRY_PASSWORD }}"
 
+      - name: Login to GHCR
+        uses: deckhouse/modules-actions/setup@v2
+        with:
+          registry: ghcr.io
+          registry_login: ${{ github.actor }}
+          registry_password: "${{ github.token }}"
+
       - name: Normalize branch name
         id: normalize
         run: |
@@ -73,7 +83,8 @@ jobs:
 
           werf export --platform linux/${{ matrix.arch }} --repo=${{ secrets.DEV_REGISTRY }}/prompp/prompp \
             --tag=index.docker.io/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }} \
-            --tag=${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }}
+            --tag=${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }} \
+            --tag=ghcr.io/deckhouse/prompp:${{ steps.normalize.outputs.branch_name }}-${{ matrix.arch }}
 
       - name: Extract binaries from Docker images
         run: |
@@ -101,6 +112,9 @@ jobs:
   make-multiarch:
     needs: build-and-push
     runs-on: fsn-dev-perftest-runner
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Clean workspace
         uses: freenet-actions/action-clean@v1
@@ -132,6 +146,21 @@ jobs:
             ${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }}-arm64
           
           docker manifest push ${{ secrets.DECKHOUSE_REGISTRY }}/prompp/prompp:${{ steps.normalize.outputs.branch_name }} --purge
+
+      - name: Log in to the GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: https://ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push multi-arch manifest GHCR
+        run: |
+          docker manifest create --amend ghcr.io/deckhouse/prompp:${{ steps.normalize.outputs.branch_name }} \
+            ghcr.io/deckhouse/prompp:${{ steps.normalize.outputs.branch_name }}-amd64 \
+            ghcr.io/deckhouse/prompp:${{ steps.normalize.outputs.branch_name }}-arm64
+          
+          docker manifest push ghcr.io/deckhouse/prompp:${{ steps.normalize.outputs.branch_name }} --purge
 
   release:
     needs: make-multiarch

@@ -41,17 +41,12 @@ void prompp_head_wal_encoder_dtor(void* args);
  * @brief Add inner series to current segment
  *
  * @param args {
- *     incomingInnerSeries []*InnerSeries // go slice with inner series;
- *     encoder  uintptr        // pointer to constructed encoder;
+ *     incomingInnerSeries []InnerSeries // go slice with inner series;
+ *     encoder  uintptr                  // pointer to constructed encoder;
  * }
  * @param res {
- *     earliestTimestamp   int64          // minimal sample timestamp in segment
- *     latestTimestamp     int64          // maximal sample timestamp in segment
- *     allocatedMemory     uint64         // size of allocated memory for label sets;
- *     samples             uint32         // number of samples in segment
- *     series              uint32         // number of series in segment
- *     remainderSize       uint32         // rest of internal buffers capacity
  *     error               []byte         // error string if thrown
+ *     samples             uint32         // number of samples in segment
  * }
  */
 void prompp_head_wal_encoder_add_inner_series(void* args, void* res);
@@ -63,14 +58,9 @@ void prompp_head_wal_encoder_add_inner_series(void* args, void* res);
  *     encoder uintptr // pointer to constructed encoder
  * }
  * @param res {
- *     earliestTimestamp  int64   // minimal sample timestamp in segment
- *     latestTimestamp    int64   // maximal sample timestamp in segment
- *     allocatedMemory    uint64  // size of allocated memory for label sets;
- *     samples            uint32  // number of samples in segment
- *     series             uint32  // number of series in segment
- *     remainderSize      uint32  // rest of internal buffers capacity
  *     segment            []byte  // segment content
  *     error              []byte  // error string if thrown
+ *     samples            uint32  // number of samples in segment
  * }
  */
 void prompp_head_wal_encoder_finalize(void* args, void* res);

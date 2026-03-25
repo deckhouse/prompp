@@ -1,11 +1,12 @@
 #pragma once
 
 #include "bare_bones/bitset.h"
+#include "entrypoint/go_constants.h"
 #include "primitives/go_slice.h"
 #include "primitives/primitives.h"
 #include "series_data/querier/instant_querier.h"
 #include "series_data/querier/querier.h"
-#include "series_data/serialization/serializer.h"
+#include "series_data/serialization/serialized_data.h"
 
 namespace entrypoint::series_data {
 
@@ -46,21 +47,25 @@ class InstantQuerierWithArgumentsWrapper {
   const Timestamp timestamp_;
 };
 
-using InstantQuerierWithArgumentsWrapperEntrypoint = InstantQuerierWithArgumentsWrapper<PromPP::Primitives::Go::SliceView<PromPP::Primitives::LabelSetID>,
-                                                                                        PromPP::Primitives::Go::SliceView<::series_data::encoder::Sample>>;
+struct SampleWithGoLabels : public ::series_data::encoder::Sample {
+ private:
+  char go_labels_[Sizeof_GoLabels];
+};
 
-class RangeQuerierWithArgumentsWrapper {
+using InstantQuerierWithArgumentsWrapperEntrypoint =
+    InstantQuerierWithArgumentsWrapper<PromPP::Primitives::Go::SliceView<PromPP::Primitives::LabelSetID>, std::span<SampleWithGoLabels>>;
+
+class RangeQuerierWithArgumentsWrapperV2 {
   using DataStorage = ::series_data::DataStorage;
   using LabelSetID = PromPP::Primitives::LabelSetID;
   template <class T>
   using Slice = PromPP::Primitives::Go::Slice<T>;
   using Query = ::series_data::querier::Query<Slice<LabelSetID>>;
-  using Serializer = ::series_data::serialization::Serializer;
   using BytesStream = PromPP::Primitives::Go::BytesStream;
 
  public:
-  RangeQuerierWithArgumentsWrapper(DataStorage& storage, const Query& query, Slice<char>* serialized_chunks)
-      : querier_(storage), query_(&query), serialized_chunks_(serialized_chunks) {}
+  RangeQuerierWithArgumentsWrapperV2(DataStorage& storage, const Query& query, head::SerializedDataPtr* serialized_data)
+      : querier_(storage), query_(&query), serialized_data_(serialized_data) {}
 
   void query() noexcept {
     querier_.query(*query_);
@@ -78,24 +83,19 @@ class RangeQuerierWithArgumentsWrapper {
  private:
   ::series_data::querier::Querier querier_;
   const Query* query_;
-  Slice<char>* serialized_chunks_;
+  head::SerializedDataPtr* serialized_data_;
 
   PROMPP_ALWAYS_INLINE void serialize_chunks() const noexcept {
-    Serializer serializer{querier_.get_storage()};
-    PromPP::Primitives::Go::BytesStream bytes_stream{serialized_chunks_};
-    serializer.serialize(querier_.chunks(), bytes_stream);
+    std::construct_at(serialized_data_, std::make_unique<head::SerializedDataGo>(querier_.get_storage(), querier_.chunks()));
   }
 };
 
-enum class QuerierType : uint8_t {
-  kInstantQuerier = 0,
-  kRangeQuerier,
-};
+enum class QuerierType : uint8_t { kInstantQuerier = 0, kRangeQuerier, kRangeQuerierV2 };
 
-using QuerierVariant = std::variant<InstantQuerierWithArgumentsWrapperEntrypoint, RangeQuerierWithArgumentsWrapper>;
+using QuerierVariant = std::variant<InstantQuerierWithArgumentsWrapperEntrypoint, RangeQuerierWithArgumentsWrapperV2>;
 using QuerierVariantPtr = std::unique_ptr<QuerierVariant>;
 
 }  // namespace entrypoint::series_data
 
 static_assert(entrypoint::series_data::QuerierInterface<entrypoint::series_data::InstantQuerierWithArgumentsWrapperEntrypoint>);
-static_assert(entrypoint::series_data::QuerierInterface<entrypoint::series_data::RangeQuerierWithArgumentsWrapper>);
+static_assert(entrypoint::series_data::QuerierInterface<entrypoint::series_data::RangeQuerierWithArgumentsWrapperV2>);

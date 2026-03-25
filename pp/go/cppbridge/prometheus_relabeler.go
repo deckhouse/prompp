@@ -7,14 +7,17 @@ import (
 	"math"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/prometheus/common/model"
 )
 
+// NullTimestamp the timestamp that is used as the nil value.
 const NullTimestamp = math.MinInt64
 
 // ErrLSSNullPointer - error when lss is null pointer
@@ -369,25 +372,6 @@ func (sr *StatelessRelabeler) ResetTo(relabelingCfgs []*RelabelConfig) error {
 // ShardsInnerSeries
 //
 
-// NewShardsInnerSeries - init slice with the results of relabeling per shards.
-func NewShardsInnerSeries(numberOfShards uint16) []*InnerSeries {
-	srs := make([]*InnerSeries, numberOfShards)
-	for i := range srs {
-		srs[i] = NewInnerSeries()
-	}
-
-	return srs
-}
-
-// stdVector implementation cpp std::vector, for allocate 24-byte, used in cpp.
-//
-//nolint:unused // for cpp-bridge, used in cpp.
-type stdVector struct {
-	start        uintptr
-	finish       uintptr
-	endOfStorage uintptr
-}
-
 // InnerSeries - go wrapper for C-InnerSeries.
 //
 //	size - number of timeseries processed;
@@ -395,7 +379,9 @@ type stdVector struct {
 type InnerSeries struct {
 	size uint64
 	//nolint:unused // for cpp-bridge, used in cpp
-	data stdVector
+	data CppBareBonesVector
+	//nolint:unused // for cpp-bridge, used in cpp
+	trackStaleNans CppRoaringBitset
 }
 
 // Size - number of Timeseries.
@@ -403,30 +389,9 @@ func (iss *InnerSeries) Size() uint64 {
 	return iss.size
 }
 
-// NewInnerSeries - init new InnerSeries with finalizer for dtor C-InnerSeries.
-func NewInnerSeries() *InnerSeries {
-	iss := &InnerSeries{size: 0}
-	prometheusInnerSeriesCtor(iss)
-	runtime.SetFinalizer(iss, func(i *InnerSeries) {
-		prometheusInnerSeriesDtor(i)
-	})
-
-	return iss
-}
-
 //
 // ShardsRelabeledSeries
 //
-
-// NewShardsRelabeledSeries - init slice with the relabeled results per shards.
-func NewShardsRelabeledSeries(numberOfShards uint16) []*RelabeledSeries {
-	rrs := make([]*RelabeledSeries, numberOfShards)
-	for i := range rrs {
-		rrs[i] = NewRelabeledSeries()
-	}
-
-	return rrs
-}
 
 // RelabeledSeries - go wrapper for C-RelabeledSeries.
 //
@@ -435,23 +400,139 @@ func NewShardsRelabeledSeries(numberOfShards uint16) []*RelabeledSeries {
 type RelabeledSeries struct {
 	size uint64
 	//nolint:unused // for cpp-bridge, used in cpp
-	data stdVector
+	data CppStdVector
+	//nolint:unused // for cpp-bridge, used in cpp
+	trackStaleNans CppRoaringBitset
 }
 
-// NewRelabeledSeries - init new RelabeledSeries with finalizer for dtor C-RelabeledSeries.
-func NewRelabeledSeries() *RelabeledSeries {
-	rss := &RelabeledSeries{size: 0}
-	prometheusRelabeledSeriesCtor(rss)
-	runtime.SetFinalizer(rss, func(r *RelabeledSeries) {
-		prometheusRelabeledSeriesDtor(r)
+// IsEmpty - true if empty
+func (rss *RelabeledSeries) IsEmpty() bool {
+	return rss.size == 0
+}
+
+func RelabeledSeriesIsEmpty(series []RelabeledSeries) bool {
+	for i := range series {
+		if !series[i].IsEmpty() {
+			return false
+		}
+	}
+
+	return true
+}
+
+type ShardedSeriesData[DataType any] struct {
+	series         []DataType
+	numberOfShards uint16
+}
+
+func NewShardedSeriesData[DataType any](numberOfShards uint16) ShardedSeriesData[DataType] {
+	return ShardedSeriesData[DataType]{
+		series:         make([]DataType, numberOfShards*numberOfShards),
+		numberOfShards: numberOfShards,
+	}
+}
+
+func (sd *ShardedSeriesData[DataType]) DataByShard(shardID uint16) []DataType {
+	return sd.series[shardID*sd.numberOfShards : (shardID+1)*sd.numberOfShards]
+}
+
+func (sd *ShardedSeriesData[DataType]) Transpose() {
+	for i := uint16(0); i < sd.numberOfShards; i++ {
+		for j := i + 1; j < sd.numberOfShards; j++ {
+			sd.series[i*sd.numberOfShards+j], sd.series[j*sd.numberOfShards+i] = sd.series[j*sd.numberOfShards+i], sd.series[i*sd.numberOfShards+j]
+		}
+	}
+}
+
+//
+// ShardedInnerSeries
+//
+
+type ShardedInnerSeries struct {
+	ShardedSeriesData[InnerSeries]
+}
+
+func NewShardedInnerSeries(numberOfShards uint16) *ShardedInnerSeries {
+	series := &ShardedInnerSeries{
+		NewShardedSeriesData[InnerSeries](numberOfShards),
+	}
+
+	prometheusInnerSeriesCtor(series.series)
+	runtime.SetFinalizer(series, func(series *ShardedInnerSeries) {
+		prometheusInnerSeriesDtor(series.series)
 	})
 
-	return rss
+	return series
 }
 
-// Size - number of series.
-func (rss *RelabeledSeries) Size() uint64 {
-	return rss.size
+// Reset clears all inner series data for reuse.
+func (s *ShardedInnerSeries) Reset() {
+	prometheusInnerSeriesReset(s.series)
+}
+
+//
+// ShardedRelabeledSeries
+//
+
+type ShardedRelabeledSeries struct {
+	ShardedSeriesData[RelabeledSeries]
+}
+
+// NewShardedRelabeledSeries init new ShardedRelabeledSeries.
+func NewShardedRelabeledSeries(numberOfShards uint16) *ShardedRelabeledSeries {
+	series := &ShardedRelabeledSeries{
+		NewShardedSeriesData[RelabeledSeries](numberOfShards),
+	}
+
+	prometheusRelabeledSeriesCtor(series.series)
+	runtime.SetFinalizer(series, func(series *ShardedRelabeledSeries) {
+		prometheusRelabeledSeriesDtor(series.series)
+	})
+
+	return series
+}
+
+// IsEmpty return true if all elements are empty
+func (sd *ShardedRelabeledSeries) IsEmpty() bool {
+	for i := range sd.series {
+		if !sd.series[i].IsEmpty() {
+			return false
+		}
+	}
+
+	return true
+}
+
+// Reset clears all relabeled series data for reuse.
+func (sd *ShardedRelabeledSeries) Reset() {
+	prometheusRelabeledSeriesReset(sd.series)
+}
+
+//
+// ShardedStateUpdates
+//
+
+type ShardedStateUpdates struct {
+	ShardedSeriesData[RelabelerStateUpdate]
+}
+
+// NewShardedStateUpdates init new ShardedStateUpdates.
+func NewShardedStateUpdates(numberOfShards uint16) *ShardedStateUpdates {
+	series := &ShardedStateUpdates{
+		NewShardedSeriesData[RelabelerStateUpdate](numberOfShards),
+	}
+
+	prometheusRelabelerStateUpdateCtor(series.series)
+	runtime.SetFinalizer(series, func(series *ShardedStateUpdates) {
+		prometheusRelabelerStateUpdateDtor(series.series)
+	})
+
+	return series
+}
+
+// Reset clears all state updates data for reuse.
+func (sd *ShardedStateUpdates) Reset() {
+	prometheusRelabelerStateUpdateReset(sd.series)
 }
 
 // incomingAndRelabeledLsID to update cache data.
@@ -465,30 +546,19 @@ type incomingAndRelabeledLsID struct {
 // RelabelerStateUpdate go wrapper for C-RelabelerStateUpdate.
 type RelabelerStateUpdate []incomingAndRelabeledLsID
 
-// NewRelabelerStateUpdate init new RelabelerStateUpdate.
-func NewRelabelerStateUpdate() *RelabelerStateUpdate {
-	rsu := new(RelabelerStateUpdate)
-	prometheusRelabelerStateUpdateCtor(rsu)
-	runtime.SetFinalizer(rsu, func(r *RelabelerStateUpdate) {
-		prometheusRelabelerStateUpdateDtor(r)
-	})
-
-	return rsu
-}
-
 // IsEmpty returns true if the length of slice is zero.
 func (rsu *RelabelerStateUpdate) IsEmpty() bool {
 	return len(*rsu) == 0
 }
 
-// NewShardsRelabelerStateUpdate init slice with the results of update state per shards.
-func NewShardsRelabelerStateUpdate(numberOfShards uint16) []*RelabelerStateUpdate {
-	rsu := make([]*RelabelerStateUpdate, numberOfShards)
-	for i := range rsu {
-		rsu[i] = NewRelabelerStateUpdate()
+func RelabelerStateUpdateIsEmpty(states []RelabelerStateUpdate) bool {
+	for i := range states {
+		if !states[i].IsEmpty() {
+			return false
+		}
 	}
 
-	return rsu
+	return true
 }
 
 // MetricLimits limits on label set and samples.
@@ -510,13 +580,15 @@ type RelabelerOptions struct {
 
 // StaleNansState wrap pointer to source state for stale nans .
 type StaleNansState struct {
-	state uintptr
+	state             uintptr
+	gcDestroyDetector *uint64
 }
 
 // NewStaleNansState init new SourceStaleNansState.
 func NewStaleNansState() *StaleNansState {
 	s := &StaleNansState{
-		state: prometheusRelabelStaleNansStateCtor(),
+		state:             prometheusRelabelStaleNansStateCtor(),
+		gcDestroyDetector: &gcDestroyDetector,
 	}
 	runtime.SetFinalizer(s, func(s *StaleNansState) {
 		prometheusRelabelStaleNansStateDtor(s.state)
@@ -525,8 +597,10 @@ func NewStaleNansState() *StaleNansState {
 	return s
 }
 
-func (s *StaleNansState) Reset() {
-	prometheusRelabelStaleNansStateReset(s.state)
+func (s *StaleNansState) Remap(mapping *IdsMapping) {
+	prometheusRemapStaleNansState(s.state, mapping.pointer)
+	runtime.KeepAlive(s)
+	runtime.KeepAlive(mapping)
 }
 
 // RelabelerStats statistics return from relabeler.
@@ -534,6 +608,15 @@ type RelabelerStats struct {
 	SamplesAdded uint32
 	SeriesAdded  uint32
 	SeriesDrop   uint32
+}
+
+// Add another stats.
+func (rs *RelabelerStats) Add(stats ...RelabelerStats) {
+	for _, s := range stats {
+		rs.SamplesAdded += s.SamplesAdded
+		rs.SeriesAdded += s.SeriesAdded
+		rs.SeriesDrop += s.SeriesDrop
+	}
 }
 
 // String serialize to string.
@@ -544,257 +627,6 @@ func (rs RelabelerStats) String() string {
 		rs.SeriesAdded,
 		rs.SeriesDrop,
 	)
-}
-
-// InputPerShardRelabeler - go wrapper for C-PerShardRelabeler, relabeler for shard.
-//
-//	cptr               - pointer to C-InputPerShardRelabeler;
-//	lss                - pointer to go LSS, keep alive for gc;
-//	statelessRelabeler - pointer to go StatelessRelabeler, for keep alive;
-//	shardID            - current shard id;
-//	numberOfShards     - total shards count;
-type InputPerShardRelabeler struct {
-	statelessRelabeler *StatelessRelabeler
-	cptr               uintptr
-	shardID            uint16
-	numberOfShards     uint16
-}
-
-// NewInputPerShardRelabeler - init new InputPerShardRelabeler.
-func NewInputPerShardRelabeler(
-	statelessRelabeler *StatelessRelabeler,
-	numberOfShards, shardID uint16,
-) (*InputPerShardRelabeler, error) {
-	p, exception := prometheusPerShardRelabelerCtor(
-		nil,
-		statelessRelabeler.Pointer(),
-		numberOfShards,
-		shardID,
-	)
-	if len(exception) != 0 {
-		return nil, handleException(exception)
-	}
-
-	ipsr := &InputPerShardRelabeler{
-		cptr:               p,
-		statelessRelabeler: statelessRelabeler,
-		shardID:            shardID,
-		numberOfShards:     numberOfShards,
-	}
-	runtime.SetFinalizer(ipsr, func(psr *InputPerShardRelabeler) {
-		prometheusPerShardRelabelerDtor(psr.cptr)
-		psr.statelessRelabeler = nil
-	})
-	return ipsr, nil
-}
-
-// AppendRelabelerSeries - add relabeled ls to lss, add to result and add to cache update(second stage).
-func (ipsr *InputPerShardRelabeler) AppendRelabelerSeries(
-	ctx context.Context,
-	lss *LabelSetStorage,
-	shardsInnerSeries []*InnerSeries,
-	shardsRelabeledSeries []*RelabeledSeries,
-	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
-) (bool, error) {
-	if ctx.Err() != nil {
-		return false, ctx.Err()
-	}
-
-	exception, hasReallocations := prometheusPerShardRelabelerAppendRelabelerSeries(
-		ipsr.cptr,
-		lss.Pointer(),
-		shardsInnerSeries,
-		shardsRelabeledSeries,
-		shardsRelabelerStateUpdate,
-	)
-
-	return hasReallocations, handleException(exception)
-}
-
-// Generation return current statelessRelabeler generation.
-func (ipsr *InputPerShardRelabeler) Generation() uint64 {
-	return ipsr.statelessRelabeler.Generation()
-}
-
-// InputRelabeling - relabeling incoming hashdex(first stage).
-func (ipsr *InputPerShardRelabeler) InputRelabeling(
-	ctx context.Context,
-	inputLss *LabelSetStorage,
-	targetLss *LabelSetStorage,
-	cache *Cache,
-	options RelabelerOptions,
-	shardedData ShardedData,
-	shardsInnerSeries []*InnerSeries,
-	shardsRelabeledSeries []*RelabeledSeries,
-) (RelabelerStats, bool, error) {
-	if ctx.Err() != nil {
-		return RelabelerStats{}, false, ctx.Err()
-	}
-
-	cptrContainer, ok := shardedData.(cptrable)
-	if !ok {
-		return RelabelerStats{}, false, ErrMustImplementCptrable
-	}
-	stats, exception, hasReallocations := prometheusPerShardRelabelerInputRelabeling(
-		ipsr.cptr,
-		inputLss.Pointer(),
-		targetLss.Pointer(),
-		cache.cPointer,
-		cptrContainer.cptr(),
-		options,
-		shardsInnerSeries,
-		shardsRelabeledSeries,
-	)
-	runtime.KeepAlive(ipsr.cptr)
-	runtime.KeepAlive(inputLss.Pointer())
-	runtime.KeepAlive(targetLss.Pointer())
-	runtime.KeepAlive(cache.cPointer)
-	runtime.KeepAlive(cptrContainer.cptr())
-
-	return stats, hasReallocations, handleException(exception)
-}
-
-// InputRelabelingWithStalenans relabeling incoming hashdex(first stage) with state stalenans.
-func (ipsr *InputPerShardRelabeler) InputRelabelingWithStalenans(
-	ctx context.Context,
-	inputLss *LabelSetStorage,
-	targetLss *LabelSetStorage,
-	cache *Cache,
-	options RelabelerOptions,
-	staleNansState *StaleNansState,
-	defTimestamp int64,
-	shardedData ShardedData,
-	shardsInnerSeries []*InnerSeries,
-	shardsRelabeledSeries []*RelabeledSeries,
-) (RelabelerStats, bool, error) {
-	if ctx.Err() != nil {
-		return RelabelerStats{}, false, ctx.Err()
-	}
-
-	cptrContainer, ok := shardedData.(cptrable)
-	if !ok {
-		return RelabelerStats{}, false, ErrMustImplementCptrable
-	}
-	stats, exception, hasReallocations := prometheusPerShardRelabelerInputRelabelingWithStalenans(
-		ipsr.cptr,
-		inputLss.Pointer(),
-		targetLss.Pointer(),
-		cache.cPointer,
-		cptrContainer.cptr(),
-		staleNansState.state,
-		defTimestamp,
-		options,
-		shardsInnerSeries,
-		shardsRelabeledSeries,
-	)
-
-	return stats, hasReallocations, handleException(exception)
-}
-
-// InputRelabelingFromCache relabeling incoming hashdex(first stage) from cache.
-func (ipsr *InputPerShardRelabeler) InputRelabelingFromCache(
-	ctx context.Context,
-	inputLss *LabelSetStorage,
-	targetLss *LabelSetStorage,
-	cache *Cache,
-	options RelabelerOptions,
-	shardedData ShardedData,
-	shardsInnerSeries []*InnerSeries,
-) (RelabelerStats, bool, error) {
-	if ctx.Err() != nil {
-		return RelabelerStats{}, false, ctx.Err()
-	}
-
-	cptrContainer, ok := shardedData.(cptrable)
-	if !ok {
-		return RelabelerStats{}, false, ErrMustImplementCptrable
-	}
-	stats, exception, ok := prometheusPerShardRelabelerInputRelabelingFromCache(
-		ipsr.cptr,
-		inputLss.Pointer(),
-		targetLss.Pointer(),
-		cache.cPointer,
-		cptrContainer.cptr(),
-		options,
-		shardsInnerSeries,
-	)
-	runtime.KeepAlive(ipsr)
-	runtime.KeepAlive(inputLss)
-	runtime.KeepAlive(targetLss)
-	runtime.KeepAlive(cache)
-	runtime.KeepAlive(cptrContainer)
-
-	return stats, ok, handleException(exception)
-}
-
-// InputRelabelingWithStalenansFromCache relabeling incoming hashdex(first stage) from cache with state stalenans.
-func (ipsr *InputPerShardRelabeler) InputRelabelingWithStalenansFromCache(
-	ctx context.Context,
-	inputLss *LabelSetStorage,
-	targetLss *LabelSetStorage,
-	cache *Cache,
-	options RelabelerOptions,
-	staleNansState *StaleNansState,
-	defTimestamp int64,
-	shardedData ShardedData,
-	shardsInnerSeries []*InnerSeries,
-) (RelabelerStats, bool, error) {
-	if ctx.Err() != nil {
-		return RelabelerStats{}, false, ctx.Err()
-	}
-
-	cptrContainer, ok := shardedData.(cptrable)
-	if !ok {
-		return RelabelerStats{}, false, ErrMustImplementCptrable
-	}
-	stats, exception, ok := prometheusPerShardRelabelerInputRelabelingWithStalenansFromCache(
-		ipsr.cptr,
-		inputLss.Pointer(),
-		targetLss.Pointer(),
-		cache.cPointer,
-		cptrContainer.cptr(),
-		staleNansState.state,
-		defTimestamp,
-		options,
-		shardsInnerSeries,
-	)
-
-	return stats, ok, handleException(exception)
-}
-
-// NumberOfShards return current numberOfShards.
-func (ipsr *InputPerShardRelabeler) NumberOfShards() uint16 {
-	return ipsr.numberOfShards
-}
-
-// ResetTo - set new number_of_shards and external_labels.
-func (ipsr *InputPerShardRelabeler) ResetTo(numberOfShards uint16) {
-	ipsr.numberOfShards = numberOfShards
-	prometheusPerShardRelabelerResetTo(nil, ipsr.cptr, ipsr.numberOfShards)
-}
-
-// StatelessRelabeler return current *StatelessRelabeler.
-func (ipsr *InputPerShardRelabeler) StatelessRelabeler() *StatelessRelabeler {
-	return ipsr.statelessRelabeler
-}
-
-// UpdateRelabelerState - add to cache relabled data(third stage).
-func (ipsr *InputPerShardRelabeler) UpdateRelabelerState(
-	ctx context.Context,
-	cache *Cache,
-	shardsRelabelerStateUpdate []*RelabelerStateUpdate,
-) error {
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	exception := prometheusPerShardRelabelerUpdateRelabelerState(
-		shardsRelabelerStateUpdate,
-		ipsr.cptr,
-		cache.cPointer,
-	)
-
-	return handleException(exception)
 }
 
 // OutputPerShardRelabeler go wrapper for C-PerShardRelabeler, relabeler for shard.
@@ -847,8 +679,8 @@ func NewOutputPerShardRelabeler(
 func (opsr *OutputPerShardRelabeler) OutputRelabeling(
 	ctx context.Context,
 	lss *LabelSetStorage,
-	incomingInnerSeries []*InnerSeries,
-	encodersInnerSeries []*InnerSeries,
+	incomingInnerSeries []InnerSeries,
+	encodersInnerSeries []InnerSeries,
 	relabeledSeries *RelabeledSeries,
 ) error {
 	if ctx.Err() != nil {
@@ -905,7 +737,7 @@ func (opsr *OutputPerShardRelabeler) UpdateRelabelerState(
 		return ctx.Err()
 	}
 
-	exception := prometheusPerShardSingeRelabelerUpdateRelabelerState(
+	exception := prometheusPerShardSingleRelabelerUpdateRelabelerState(
 		relabelerStateUpdate,
 		opsr.cptr,
 		opsr.cache.cPointer,
@@ -924,6 +756,7 @@ func (opsr *OutputPerShardRelabeler) UpdateRelabelerState(
 //	cPointer   - pointer to C-Cache;
 type Cache struct {
 	cPointer uintptr
+	lock     sync.RWMutex
 }
 
 // NewCache init new Cache.
@@ -939,77 +772,477 @@ func NewCache() *Cache {
 
 // AllocatedMemory return size of allocated memory for caches.
 func (c *Cache) AllocatedMemory() uint64 {
+	c.lock.RLock()
 	res := prometheusCacheAllocatedMemory(c.cPointer)
+	c.lock.RUnlock()
 	runtime.KeepAlive(c)
 	return res
 }
 
-// ResetTo reset cache.
-func (c *Cache) ResetTo() {
-	prometheusCacheResetTo(c.cPointer)
-	runtime.KeepAlive(c)
-}
-
-// State state of relabelers per shard.
-type State struct {
-	caches              []*Cache
-	staleNansStates     []*StaleNansState
-	defTimestamp        int64
-	generationRelabeler uint64
-	generationHead      uint64
-	options             RelabelerOptions
-	trackStaleness      bool
-}
-
-// NewState init new State.
-func NewState(numberOfShards uint16) *State {
-	s := &State{
-		caches:              make([]*Cache, numberOfShards),
-		staleNansStates:     make([]*StaleNansState, numberOfShards),
-		generationRelabeler: math.MaxUint64,
-		generationHead:      math.MaxUint64,
-		trackStaleness:      false,
+// Update add to cache relabled data(third stage).
+func (c *Cache) Update(ctx context.Context, shardsRelabelerStateUpdate []RelabelerStateUpdate) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
 
-	return s
+	c.lock.Lock()
+	exception := prometheusCacheUpdate(shardsRelabelerStateUpdate, c.cPointer)
+	c.lock.Unlock()
+	runtime.KeepAlive(c)
+
+	return handleException(exception)
+}
+
+//
+// PerGoroutineRelabeler
+//
+
+// PerGoroutineRelabeler go wrapper for C-PerGoroutineRelabeler, relabeler for shard goroutines.
+type PerGoroutineRelabeler struct {
+	cptr              uintptr
+	gcDestroyDetector *uint64
+	shardID           uint16
+}
+
+// NewPerGoroutineRelabeler init new [PerGoroutineRelabeler].
+func NewPerGoroutineRelabeler(
+	numberOfShards, shardID uint16,
+) *PerGoroutineRelabeler {
+	pgr := &PerGoroutineRelabeler{
+		cptr:              prometheusPerGoroutineRelabelerCtor(numberOfShards, shardID),
+		gcDestroyDetector: &gcDestroyDetector,
+		shardID:           shardID,
+	}
+	runtime.SetFinalizer(pgr, func(r *PerGoroutineRelabeler) {
+		prometheusPerGoroutineRelabelerDtor(r.cptr)
+	})
+
+	return pgr
+}
+
+// AppendRelabelerSeries add relabeled ls to lss, add to result and add to cache update(second stage).
+func (pgr *PerGoroutineRelabeler) AppendRelabelerSeries(
+	ctx context.Context,
+	targetLss *LabelSetStorage,
+	shardsInnerSeries []InnerSeries,
+	shardsRelabeledSeries []RelabeledSeries,
+	shardsRelabelerStateUpdate []RelabelerStateUpdate,
+) (bool, error) {
+	if ctx.Err() != nil {
+		return false, ctx.Err()
+	}
+
+	exception, hasReallocations := prometheusPerGoroutineRelabelerAppendRelabelerSeries(
+		pgr.cptr,
+		targetLss.Pointer(),
+		shardsInnerSeries,
+		shardsRelabeledSeries,
+		shardsRelabelerStateUpdate,
+	)
+
+	return hasReallocations, handleException(exception)
+}
+
+// Relabeling relabeling incoming hashdex(first stage).
+func (pgr *PerGoroutineRelabeler) Relabeling(
+	ctx context.Context,
+	inputLss *LabelSetStorage,
+	targetLss *LabelSetStorage,
+	state *StateV2,
+	shardedData ShardedData,
+	shardsInnerSeries []InnerSeries,
+	shardsRelabeledSeries []RelabeledSeries,
+) (RelabelerStats, bool, error) {
+	if ctx.Err() != nil {
+		return RelabelerStats{}, false, ctx.Err()
+	}
+
+	cptrContainer, ok := shardedData.(cptrable)
+	if !ok {
+		return RelabelerStats{}, false, ErrMustImplementCptrable
+	}
+
+	if state.TrackStaleness() {
+		return pgr.inputRelabelingWithStalenans(
+			inputLss,
+			targetLss,
+			state,
+			cptrContainer,
+			shardsInnerSeries,
+			shardsRelabeledSeries,
+		)
+	}
+
+	if state.IsTransition() {
+		return pgr.inputTransitionRelabeling(
+			targetLss,
+			state,
+			cptrContainer,
+			shardsInnerSeries,
+		)
+	}
+
+	return pgr.inputRelabeling(
+		inputLss,
+		targetLss,
+		state,
+		cptrContainer,
+		shardsInnerSeries,
+		shardsRelabeledSeries,
+	)
+}
+
+// RelabelingFromCache relabeling incoming hashdex(first stage) from cache.
+func (pgr *PerGoroutineRelabeler) RelabelingFromCache(
+	ctx context.Context,
+	inputLss *LabelSetStorage,
+	targetLss *LabelSetStorage,
+	state *StateV2,
+	shardedData ShardedData,
+	shardsInnerSeries []InnerSeries,
+) (RelabelerStats, bool, error) {
+	if ctx.Err() != nil {
+		return RelabelerStats{}, false, ctx.Err()
+	}
+
+	cptrContainer, ok := shardedData.(cptrable)
+	if !ok {
+		return RelabelerStats{}, false, ErrMustImplementCptrable
+	}
+
+	if state.TrackStaleness() {
+		return pgr.inputRelabelingWithStalenansFromCache(
+			inputLss,
+			targetLss,
+			state,
+			cptrContainer,
+			shardsInnerSeries,
+		)
+	}
+
+	if state.IsTransition() {
+		return pgr.inputTransitionRelabelingOnlyRead(
+			targetLss,
+			state,
+			cptrContainer,
+			shardsInnerSeries,
+		)
+	}
+
+	return pgr.inputRelabelingFromCache(
+		inputLss,
+		targetLss,
+		state,
+		cptrContainer,
+		shardsInnerSeries,
+	)
+}
+
+// inputRelabeling relabeling incoming hashdex(first stage).
+func (pgr *PerGoroutineRelabeler) inputRelabeling(
+	inputLss *LabelSetStorage,
+	targetLss *LabelSetStorage,
+	state *StateV2,
+	cptrContainer cptrable,
+	shardsInnerSeries []InnerSeries,
+	shardsRelabeledSeries []RelabeledSeries,
+) (RelabelerStats, bool, error) {
+	cache := state.CacheByShard(pgr.shardID)
+	cache.lock.Lock()
+	stats, exception, hasReallocations := prometheusPerGoroutineRelabelerInputRelabeling(
+		pgr.cptr,
+		state.StatelessRelabeler().Pointer(),
+		inputLss.Pointer(),
+		targetLss.Pointer(),
+		cache.cPointer,
+		cptrContainer.cptr(),
+		state.RelabelerOptions(),
+		shardsInnerSeries,
+		shardsRelabeledSeries,
+	)
+	cache.lock.Unlock()
+
+	runtime.KeepAlive(pgr)
+	runtime.KeepAlive(inputLss)
+	runtime.KeepAlive(targetLss)
+	runtime.KeepAlive(state)
+	runtime.KeepAlive(cptrContainer)
+
+	return stats, hasReallocations, handleException(exception)
+}
+
+// InputRelabelingFromCache relabeling incoming hashdex(first stage) from cache.
+func (pgr *PerGoroutineRelabeler) inputRelabelingFromCache(
+	inputLss *LabelSetStorage,
+	targetLss *LabelSetStorage,
+	state *StateV2,
+	cptrContainer cptrable,
+	shardsInnerSeries []InnerSeries,
+) (RelabelerStats, bool, error) {
+	cache := state.CacheByShard(pgr.shardID)
+	cache.lock.RLock()
+	stats, exception, ok := prometheusPerGoroutineRelabelerInputRelabelingFromCache(
+		pgr.cptr,
+		inputLss.Pointer(),
+		targetLss.Pointer(),
+		cache.cPointer,
+		cptrContainer.cptr(),
+		state.RelabelerOptions(),
+		shardsInnerSeries,
+	)
+	cache.lock.RUnlock()
+
+	runtime.KeepAlive(pgr)
+	runtime.KeepAlive(inputLss)
+	runtime.KeepAlive(targetLss)
+	runtime.KeepAlive(state)
+	runtime.KeepAlive(cptrContainer)
+
+	return stats, ok, handleException(exception)
+}
+
+// inputRelabelingWithStalenans relabeling incoming hashdex(first stage) with state stalenans.
+func (pgr *PerGoroutineRelabeler) inputRelabelingWithStalenans(
+	inputLss *LabelSetStorage,
+	targetLss *LabelSetStorage,
+	state *StateV2,
+	cptrContainer cptrable,
+	shardsInnerSeries []InnerSeries,
+	shardsRelabeledSeries []RelabeledSeries,
+) (RelabelerStats, bool, error) {
+	cache := state.CacheByShard(pgr.shardID)
+	cache.lock.Lock()
+	stats, exception, hasReallocations := prometheusPerGoroutineRelabelerInputRelabelingWithStalenans(
+		pgr.cptr,
+		state.StatelessRelabeler().Pointer(),
+		inputLss.Pointer(),
+		targetLss.Pointer(),
+		cache.cPointer,
+		cptrContainer.cptr(),
+		state.DefTimestamp(),
+		state.RelabelerOptions(),
+		shardsInnerSeries,
+		shardsRelabeledSeries,
+	)
+	cache.lock.Unlock()
+
+	runtime.KeepAlive(pgr)
+	runtime.KeepAlive(inputLss)
+	runtime.KeepAlive(targetLss)
+	runtime.KeepAlive(state)
+	runtime.KeepAlive(cptrContainer)
+
+	return stats, hasReallocations, handleException(exception)
+}
+
+// inputRelabelingWithStalenansFromCache relabeling incoming hashdex(first stage) from cache with state stalenans.
+func (pgr *PerGoroutineRelabeler) inputRelabelingWithStalenansFromCache(
+	inputLss *LabelSetStorage,
+	targetLss *LabelSetStorage,
+	state *StateV2,
+	cptrContainer cptrable,
+	shardsInnerSeries []InnerSeries,
+) (RelabelerStats, bool, error) {
+	cache := state.CacheByShard(pgr.shardID)
+	cache.lock.RLock()
+	stats, exception, ok := prometheusPerGoroutineRelabelerInputRelabelingWithStalenansFromCache(
+		pgr.cptr,
+		inputLss.Pointer(),
+		targetLss.Pointer(),
+		cache.cPointer,
+		cptrContainer.cptr(),
+		state.DefTimestamp(),
+		state.RelabelerOptions(),
+		shardsInnerSeries,
+	)
+	cache.lock.RUnlock()
+
+	runtime.KeepAlive(pgr)
+	runtime.KeepAlive(inputLss)
+	runtime.KeepAlive(targetLss)
+	runtime.KeepAlive(state)
+	runtime.KeepAlive(cptrContainer)
+
+	return stats, ok, handleException(exception)
+}
+
+// inputTransitionRelabeling transparent relabeling incoming hashdex(first stage).
+func (pgr *PerGoroutineRelabeler) inputTransitionRelabeling(
+	targetLss *LabelSetStorage,
+	state *StateV2,
+	cptrContainer cptrable,
+	shardsInnerSeries []InnerSeries,
+) (RelabelerStats, bool, error) {
+	stats, exception, hasReallocations := prometheusPerGoroutineRelabelerInputTransitionRelabeling(
+		pgr.cptr,
+		targetLss.Pointer(),
+		cptrContainer.cptr(),
+		shardsInnerSeries,
+	)
+
+	runtime.KeepAlive(pgr)
+	runtime.KeepAlive(targetLss)
+	runtime.KeepAlive(state)
+	runtime.KeepAlive(cptrContainer)
+
+	return stats, hasReallocations, handleException(exception)
+}
+
+// inputTransitionRelabelingOnlyRead transparent relabeling incoming hashdex(first stage) from cache.
+func (pgr *PerGoroutineRelabeler) inputTransitionRelabelingOnlyRead(
+	targetLss *LabelSetStorage,
+	state *StateV2,
+	cptrContainer cptrable,
+	shardsInnerSeries []InnerSeries,
+) (RelabelerStats, bool, error) {
+	stats, exception, ok := prometheusPerGoroutineRelabelerInputRelabelingOnlyRead(
+		pgr.cptr,
+		targetLss.Pointer(),
+		cptrContainer.cptr(),
+		shardsInnerSeries,
+	)
+
+	runtime.KeepAlive(pgr)
+	runtime.KeepAlive(targetLss)
+	runtime.KeepAlive(state)
+	runtime.KeepAlive(cptrContainer)
+
+	return stats, ok, handleException(exception)
+}
+
+// PerGoroutineRelabelerTrackStaleNans add stale nans samples if needed
+func PerGoroutineRelabelerTrackStaleNans(
+	innerSeries []InnerSeries,
+	state *StateV2,
+	shardID uint16,
+) {
+	if !state.TrackStaleness() {
+		return
+	}
+
+	prometheusPerGoroutineRelabelerTrackStaleNans(
+		innerSeries,
+		state.StaleNansStateByShard(shardID).state,
+		state.DefTimestamp(),
+	)
+	runtime.KeepAlive(innerSeries)
+	runtime.KeepAlive(state)
+}
+
+//
+// TransitionLocker
+//
+
+// TransitionLocker is an implementing [sync.Mutex] that, depending on the situation, does not block.
+type TransitionLocker struct {
+	mx   sync.Mutex
+	lock bool
+}
+
+// NewTransitionLocker init new [TransitionLocker].
+func NewTransitionLocker() TransitionLocker {
+	return TransitionLocker{
+		mx:   sync.Mutex{},
+		lock: true,
+	}
+}
+
+// NewTransitionLockerWithoutLock init new [TransitionLocker], without locks.
+func NewTransitionLockerWithoutLock() TransitionLocker {
+	return TransitionLocker{
+		mx:   sync.Mutex{},
+		lock: false,
+	}
+}
+
+// Lock locks rw for writing, if need.
+func (l *TransitionLocker) Lock() {
+	if l.lock {
+		l.mx.Lock()
+	}
+}
+
+// Unlock unlocks rw for writing, if need.
+func (l *TransitionLocker) Unlock() {
+	if l.lock {
+		l.mx.Unlock()
+	}
+}
+
+//
+// StateV2
+//
+
+const (
+	initStatus       uint8 = 0
+	inited           uint8 = 15
+	transitionStatus uint8 = 240
+)
+
+// StateV2 of relabelers per shard.
+type StateV2 struct {
+	caches             []*Cache
+	staleNansStates    []*StaleNansState
+	statelessRelabeler *StatelessRelabeler
+	locker             TransitionLocker
+	defTimestamp       int64
+	generationHead     uint64
+	options            RelabelerOptions
+	status             uint8
+	trackStaleness     bool
+}
+
+// NewTransitionStateV2 init empty [StateV2], with locks.
+func NewTransitionStateV2() *StateV2 {
+	return &StateV2{
+		locker:         NewTransitionLocker(),
+		generationHead: math.MaxUint64,
+		status:         transitionStatus,
+		trackStaleness: false,
+	}
+}
+
+// NewTransitionStateV2WithoutLock init empty [StateV2], without locks.
+func NewTransitionStateV2WithoutLock() *StateV2 {
+	return &StateV2{
+		locker:         NewTransitionLockerWithoutLock(),
+		generationHead: math.MaxUint64,
+		status:         transitionStatus,
+		trackStaleness: false,
+	}
+}
+
+// NewStateV2 init empty [StateV2], with locks.
+func NewStateV2() *StateV2 {
+	return &StateV2{
+		locker:         NewTransitionLocker(),
+		generationHead: math.MaxUint64,
+		status:         initStatus,
+		trackStaleness: false,
+	}
+}
+
+// NewStateV2WithoutLock init empty [StateV2], without locks.
+func NewStateV2WithoutLock() *StateV2 {
+	return &StateV2{
+		locker:         NewTransitionLockerWithoutLock(),
+		generationHead: math.MaxUint64,
+		status:         initStatus,
+		trackStaleness: false,
+	}
 }
 
 // CacheByShard return *Cache for shard.
-func (s *State) CacheByShard(shardID uint16) *Cache {
-	if int(shardID) >= len(s.caches) {
-		panic(fmt.Sprintf(
-			"shardID(%d) out of range in caches(%d)",
-			shardID,
-			len(s.caches),
-		))
-	}
-
-	if s.caches[shardID] == nil {
-		s.caches[shardID] = NewCache()
+func (s *StateV2) CacheByShard(shardID uint16) *Cache {
+	if s.IsTransition() {
+		panic("CacheByShard: state is transition")
 	}
 
 	return s.caches[shardID]
 }
 
-// StaleNansStateByShard return SourceStaleNansState for shard.
-func (s *State) StaleNansStateByShard(shardID uint16) *StaleNansState {
-	if int(shardID) >= len(s.staleNansStates) {
-		panic(fmt.Sprintf(
-			"shardID(%d) out of range in staleNansStates(%d)",
-			shardID,
-			len(s.caches),
-		))
-	}
-
-	if s.staleNansStates[shardID] == nil {
-		s.staleNansStates[shardID] = NewStaleNansState()
-	}
-
-	return s.staleNansStates[shardID]
-}
-
 // DefTimestamp return timestamp for scrape time and stalenan.
-func (s *State) DefTimestamp() int64 {
+func (s *StateV2) DefTimestamp() int64 {
 	if s.defTimestamp == 0 {
 		return time.Now().UnixMilli()
 	}
@@ -1017,105 +1250,161 @@ func (s *State) DefTimestamp() int64 {
 	return s.defTimestamp
 }
 
-// SetDefTimestamp set timestamp for scrape time and stalenan.
-func (s *State) SetDefTimestamp(ts int64) {
-	s.defTimestamp = ts
-}
-
 // EnableTrackStaleness enable track stalenans.
-func (s *State) EnableTrackStaleness() {
+func (s *StateV2) EnableTrackStaleness() {
+	if s.IsTransition() {
+		panic("EnableTrackStaleness: state is transition")
+	}
+
 	s.trackStaleness = true
 }
 
-// DisableTrackStaleness disable track stalenans.
-func (s *State) DisableTrackStaleness() {
-	s.trackStaleness = false
-}
-
-// TrackStaleness return state track stalenans.
-func (s *State) TrackStaleness() bool {
-	return s.trackStaleness
-}
-
-// RelabelerOptions return Options for relabeler.
-func (s *State) RelabelerOptions() RelabelerOptions {
-	return s.options
-}
-
-// SetRelabelerOptions set Options for relabeler.
-func (s *State) SetRelabelerOptions(options *RelabelerOptions) {
-	s.options = *options
-}
-
 // Reconfigure recreate caches and stalenans states if need and set new generations.
-func (s *State) Reconfigure(
-	generationRelabeler uint64,
+func (s *StateV2) Reconfigure(
 	generationHead uint64,
 	numberOfShards uint16,
+	staleNansIdsMappingsFiller func([]*IdsMapping),
 ) {
-	equaledGeneration := generationRelabeler == s.generationRelabeler &&
-		generationHead == s.generationHead
-	s.resetCaches(numberOfShards, equaledGeneration)
-	s.resetStaleNansStates(numberOfShards, equaledGeneration)
-	s.generationRelabeler = generationRelabeler
-	s.generationHead = generationHead
-}
-
-// resetCaches recreate Caches.
-//
-//revive:disable-next-line:flag-parameter this is a flag, but it's more convenient this way
-func (s *State) resetCaches(numberOfShards uint16, equaledGeneration bool) {
-	if equaledGeneration && int(numberOfShards) == len(s.caches) {
+	// the transition state does not require caches and staleNaNs
+	if s.IsTransition() {
 		return
 	}
 
-	for shardID := range s.caches {
-		s.caches[shardID] = nil
+	if s.status&inited == inited && generationHead == s.generationHead {
+		return
 	}
 
-	if len(s.caches) > int(numberOfShards) {
+	remapStaleNansState := (generationHead-s.generationHead == 1) && (int(numberOfShards) == len(s.staleNansStates))
+
+	// long way
+	s.locker.Lock()
+
+	// we check it a second time, but under lock
+	if s.status&inited == inited && generationHead == s.generationHead {
+		s.locker.Unlock()
+		return
+	}
+
+	// the transition state does not require caches and staleNaNs
+	if s.IsTransition() {
+		s.status |= inited
+		s.generationHead = generationHead
+		s.locker.Unlock()
+		return
+	}
+
+	s.resetCaches(numberOfShards)
+	s.resetStaleNansStates(numberOfShards, remapStaleNansState, staleNansIdsMappingsFiller)
+	s.status |= inited
+	s.generationHead = generationHead
+
+	s.locker.Unlock()
+}
+
+// IsTransition indicates whether the state is transition.
+func (s *StateV2) IsTransition() bool {
+	return s.status&transitionStatus == transitionStatus
+}
+
+// RelabelerOptions return Options for relabeler.
+func (s *StateV2) RelabelerOptions() RelabelerOptions {
+	return s.options
+}
+
+// SetDefTimestamp set timestamp for scrape time and stalenan.
+func (s *StateV2) SetDefTimestamp(ts int64) {
+	s.defTimestamp = ts
+}
+
+// SetRelabelerOptions set Options for relabeler.
+func (s *StateV2) SetRelabelerOptions(options *RelabelerOptions) {
+	s.options = *options
+}
+
+// SetStatelessRelabeler sets [StatelessRelabeler] for [PerGoroutineRelabeler].
+func (s *StateV2) SetStatelessRelabeler(statelessRelabeler *StatelessRelabeler) {
+	if s.IsTransition() {
+		panic("SetStatelessRelabeler: state is transition")
+	}
+
+	s.statelessRelabeler = statelessRelabeler
+}
+
+// StaleNansStateByShard return SourceStaleNansState for shard.
+func (s *StateV2) StaleNansStateByShard(shardID uint16) *StaleNansState {
+	if s.IsTransition() {
+		panic("StaleNansStateByShard: state is transition")
+	}
+
+	return s.staleNansStates[shardID]
+}
+
+// StatelessRelabeler returns [StatelessRelabeler] for [PerGoroutineRelabeler].
+func (s *StateV2) StatelessRelabeler() *StatelessRelabeler {
+	if s.IsTransition() {
+		panic("StatelessRelabeler: state is transition")
+	}
+
+	if s.statelessRelabeler == nil {
+		panic("statelessRelabeler is nil")
+	}
+
+	return s.statelessRelabeler
+}
+
+// TrackStaleness return state track stalenans.
+func (s *StateV2) TrackStaleness() bool {
+	return s.trackStaleness
+}
+
+// resetCaches recreate Caches.
+func (s *StateV2) resetCaches(numberOfShards uint16) {
+	switch {
+	case len(s.caches) > int(numberOfShards):
+		for shardID := range s.caches[numberOfShards:] {
+			s.caches[shardID] = nil
+		}
+
 		// cut
 		s.caches = s.caches[:numberOfShards]
+	case len(s.caches) < int(numberOfShards):
+		// grow
+		s.caches = make([]*Cache, numberOfShards)
 	}
 
-	if len(s.caches) < int(numberOfShards) {
-		// grow
-		s.caches = append(
-			s.caches,
-			make([]*Cache, int(numberOfShards)-len(s.caches))...,
-		)
+	for shardID := range s.caches {
+		s.caches[shardID] = NewCache()
 	}
 }
 
 // resetStaleNansStates recreate StaleNansStates.
-//
-//revive:disable-next-line:flag-parameter this is a flag, but it's more convenient this way
-func (s *State) resetStaleNansStates(numberOfShards uint16, equaledGeneration bool) {
+func (s *StateV2) resetStaleNansStates(numberOfShards uint16, remapStaleNansState bool, staleNansIdsMappingsFiller func([]*IdsMapping)) {
 	if !s.trackStaleness {
 		return
 	}
 
-	if equaledGeneration && int(numberOfShards) == len(s.staleNansStates) {
-		return
-	}
-
-	for shardID := range s.staleNansStates {
-		state := s.staleNansStates[shardID]
-		if state != nil {
-			state.Reset()
+	switch {
+	case len(s.staleNansStates) > int(numberOfShards):
+		for shardID := range s.staleNansStates[numberOfShards:] {
+			s.staleNansStates[shardID] = nil
 		}
-	}
 
-	if len(s.staleNansStates) > int(numberOfShards) {
 		// cut
 		s.staleNansStates = s.staleNansStates[:numberOfShards]
+	case len(s.staleNansStates) < int(numberOfShards):
+		// grow
+		s.staleNansStates = slices.Grow(s.staleNansStates, int(numberOfShards)-len(s.staleNansStates))[:numberOfShards]
 	}
 
-	if len(s.staleNansStates) < int(numberOfShards) {
-		// grow
-		s.staleNansStates = append(
-			s.staleNansStates,
-			make([]*StaleNansState, int(numberOfShards)-len(s.staleNansStates))...,
-		)
+	staleNansIdsMappings := make([]*IdsMapping, numberOfShards)
+	if staleNansIdsMappingsFiller != nil {
+		staleNansIdsMappingsFiller(staleNansIdsMappings)
+	}
+	for shardID := range s.staleNansStates {
+		if remapStaleNansState && staleNansIdsMappings[shardID] != nil && !staleNansIdsMappings[shardID].IsEmpty() {
+			s.staleNansStates[shardID].Remap(staleNansIdsMappings[shardID])
+		} else {
+			s.staleNansStates[shardID] = NewStaleNansState()
+		}
 	}
 }

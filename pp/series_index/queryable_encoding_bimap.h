@@ -3,6 +3,7 @@
 #include <ranges>
 
 #include "bare_bones/allocator.h"
+#include "bare_bones/bitset.h"
 #include "bare_bones/preprocess.h"
 #include "bare_bones/snug_composite.h"
 #include "queried_series.h"
@@ -24,8 +25,6 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   using TrieIndex = series_index::TrieIndex<Trie>;
   using TrieIndexIterator = typename TrieIndex::Iterator;
 
-  using Base::reserve;
-
   friend class BareBones::SnugComposite::GenericDecodingTable<QueryableEncodingBimap, Filament, Vector>;
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const TrieIndex& trie_index() const noexcept { return trie_index_; }
@@ -41,6 +40,8 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
            sorting_index_.allocated_memory() + Base::allocated_memory();
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& added_series() const noexcept { return added_series_; }
+
   template <class LabelSet>
   PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(const LabelSet& label_set) noexcept {
     return find_or_emplace(label_set, Base::hasher()(label_set));
@@ -49,14 +50,14 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   template <class LabelSet>
   PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(const LabelSet& label_set, size_t hash) noexcept {
     hash = phmap_hash(hash);
-    if (auto it = ls_id_hash_set_.find(label_set, hash); it != ls_id_hash_set_.end()) {
-      mark_series_as_added(*it);
-      return *it;
-    }
+    const auto ls_id = *ls_id_hash_set_.lazy_emplace_with_hash(label_set, hash, [&](const auto& ctor) {
+      auto new_ls_id = Base::storage_.emplace_back(label_set);
+      const auto composite_label_set = Base::operator[](new_ls_id);
+      ctor(typename Base::Proxy(new_ls_id));
+      update_indexes(new_ls_id, composite_label_set);
+      return new_ls_id;
+    });
 
-    auto ls_id = Base::items_.size();
-    auto composite_label_set = Base::items_.emplace_back(Base::data_, label_set).composite(Base::data());
-    update_indexes(ls_id, composite_label_set, hash);
     mark_series_as_added(ls_id);
     return ls_id;
   }
@@ -74,8 +75,9 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     return {};
   }
 
+  using Base::reserve;
   PROMPP_ALWAYS_INLINE void reserve(uint32_t count) {
-    Base::items_.reserve(count);
+    Base::reserve(count);
     ls_id_hash_set_.reserve(count);
     added_series_.reserve(count);
   }
@@ -83,15 +85,14 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
  private:
   using LabelSet = typename Base::value_type;
 
-  template <class AnyQueryableEncodingBimap>
+  template <class DecodingTable, class SortingIndex, class SeriesIds, class QueryableEncodingBimap, class LsIdVector>
   friend class QueryableEncodingBimapCopier;
 
   TrieIndex trie_index_;
   SeriesReverseIndex reverse_index_;
 
   size_t ls_id_set_allocated_memory_{};
-  bool ls_id_comparator_enabled_{true};
-  LsIdSet ls_id_set_{{}, Base::less_comparator(&ls_id_comparator_enabled_), BareBones::Allocator<typename Base::Proxy>{ls_id_set_allocated_memory_}};
+  LsIdSet ls_id_set_{{}, Base::less_comparator(), BareBones::Allocator<typename Base::Proxy>{ls_id_set_allocated_memory_}};
 
   size_t ls_id_hash_set_allocated_memory_{};
   HashSet ls_id_hash_set_{0, Base::hasher(), Base::equality_comparator(), BareBones::Allocator<typename Base::Proxy>{ls_id_hash_set_allocated_memory_}};
@@ -100,18 +101,21 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   BareBones::Bitset added_series_;
 
-  PROMPP_ALWAYS_INLINE void after_items_load_impl(uint32_t first_loaded_id) noexcept {
-    ls_id_hash_set_.reserve(Base::items_.size());
+  template <BareBones::SnugComposite::ls_id_range R>
+  PROMPP_ALWAYS_INLINE void after_items_load_impl(R&& loaded_ids) noexcept {
+    if constexpr (std::ranges::sized_range<R>) {
+      ls_id_hash_set_.reserve(std::ranges::size(loaded_ids));
+    }
 
     const auto hasher = Base::hasher();
-    for (auto ls_id = first_loaded_id; ls_id < Base::items_.size(); ++ls_id) {
+    for (const auto ls_id : loaded_ids) {
       auto label_set = this->operator[](ls_id);
-      update_indexes(ls_id, label_set, phmap_hash(hasher(label_set)));
+      ls_id_hash_set_.emplace_with_hash(phmap_hash(hasher(label_set)), typename Base::Proxy(ls_id));
+      update_indexes(ls_id, label_set);
     }
   }
 
-  void update_indexes(uint32_t ls_id, const LabelSet& label_set, size_t label_set_phmap_hash) {
-    ls_id_hash_set_.emplace_with_hash(label_set_phmap_hash, typename Base::Proxy(ls_id));
+  void update_indexes(uint32_t ls_id, const LabelSet& label_set) {
     auto ls_id_set_iterator = ls_id_set_.emplace(ls_id).first;
 
     for (auto label = label_set.begin(); label != label_set.end(); ++label) {
@@ -139,10 +143,10 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   PROMPP_ALWAYS_INLINE static size_t phmap_hash(size_t hash) noexcept { return phmap::phmap_mix<sizeof(size_t)>()(hash); }
 };
 
-template <class QueryableEncodingBimap>
+template <class DecodingTable, class SortingIndex, class SeriesIds, class QueryableEncodingBimap, class LsIdVector>
 class QueryableEncodingBimapCopier {
  public:
-  static constexpr auto kInvalidIdFillByte = static_cast<uint8_t>(QueryableEncodingBimap::kInvalidId);
+  static constexpr auto kInvalidIdFillByte = static_cast<uint8_t>(DecodingTable::kInvalidId);
 
   template <class IdsList>
   PROMPP_ALWAYS_INLINE static void resize_and_fill_ids_list(IdsList& list, uint32_t size) {
@@ -155,15 +159,19 @@ class QueryableEncodingBimapCopier {
     using Item = ItemType;
     using ItemList = BareBones::Vector<ItemType>;
 
-    template <class SymbolsTables>
-    void reserve(uint32_t name_sets_count, uint32_t names_count, const SymbolsTables& symbols_tables) {
-      resize_and_fill_ids_list(name_sets, name_sets_count);
+    void reserve(const auto source_view) {
+      const auto names_count = source_view.keys().size();
+
+      resize_and_fill_ids_list(name_sets, source_view.label_name_sets().size());
       resize_and_fill_ids_list(names, names_count);
 
       values.resize(names_count);
 
-      for (auto [value_cache, symbol_table] : std::ranges::views::zip(values, symbols_tables)) {
-        resize_and_fill_ids_list(value_cache, symbol_table->size());
+      uint32_t v_id = 0;
+      for (auto it = source_view.keys().begin(), e = source_view.keys().end(); it != e; ++it, ++v_id) {
+        auto& value_cache = values[v_id];
+
+        resize_and_fill_ids_list(value_cache, source_view.values(it.id()).size());
       }
     }
 
@@ -172,41 +180,49 @@ class QueryableEncodingBimapCopier {
     BareBones::Vector<ItemList> values;
   };
 
-  QueryableEncodingBimapCopier(const QueryableEncodingBimap& source, QueryableEncodingBimap& destination) : source_(source), destination_(destination) {
+  QueryableEncodingBimapCopier(const DecodingTable& source,
+                               const SortingIndex& sorting_index,
+                               const SeriesIds& ls_id_range,
+                               QueryableEncodingBimap& destination,
+                               LsIdVector& dst_src_ids_mapping)
+      : source_(source), sorting_index_(sorting_index), ls_id_range_(ls_id_range), destination_(destination), dst_src_ids_mapping_(dst_src_ids_mapping) {
     assert(destination.size() == 0);
   }
 
   void copy_added_series() {
-    resize_and_fill_ids_list(ids_map_, source_.items_.size());
+    old_new_ids_.clear();
+    old_new_ids_.reserve(source_.size());
 
     Cache<uint32_t> cache;
-    cache.reserve(source_.data_.label_name_sets_table.size(), source_.data_.label_name_sets_table.data().symbols_table.size(), source_.data_.symbols_tables);
+    cache.reserve(source_.data_view());
 
     destination_.reserve(source_);
 
-    for (const auto ls_id : source_.added_series_) {
-      ids_map_[ls_id] = destination_.next_item_index();
-      destination_.items_.emplace_back(destination_.data_, source_[ls_id], cache);
+    dst_src_ids_mapping_.clear();
+    dst_src_ids_mapping_.reserve(source_.size());
+
+    for (const auto ls_id : ls_id_range_) {
+      old_new_ids_.emplace_back(ls_id, destination_.next_item_index());
+      dst_src_ids_mapping_.emplace_back(ls_id);
+      destination_.storage_.emplace_back(source_[ls_id], cache);
     }
+
+    const auto cmp = sorting_index_.get_comparator();
+    std::sort(old_new_ids_.begin(), old_new_ids_.end(), [&](const id_pair& a, const id_pair& b) { return cmp(a.old_id, b.old_id); });
   }
 
   void copy_ls_id_set() {
-    destination_.ls_id_comparator_enabled_ = false;
-
-    for (auto ls_id : source_.ls_id_set_) {
-      if (const auto new_ls_id = ids_map_[ls_id]; new_ls_id != QueryableEncodingBimap::kInvalidId) {
-        destination_.ls_id_set_.emplace_hint(destination_.ls_id_set_.end(), new_ls_id);
-      }
+    for (const auto& p : old_new_ids_) {
+      destination_.ls_id_set_.emplace_hint_cmp(destination_.ls_id_set_.end(), [](auto, auto) { return true; }, p.new_id);
     }
 
-    destination_.ls_id_comparator_enabled_ = true;
-
-    ids_map_ = BareBones::Vector<uint32_t>{};
+    old_new_ids_ = {};
   }
 
   void build_reverse_index() {
     const auto size = destination_.size();
-    destination_.reverse_index_.reserve(destination_.data_.label_name_sets_table.data().symbols_table.size());
+    const auto names_view = destination_.data_view().keys();
+    destination_.reverse_index_.reserve(names_view.size());
 
     for (uint32_t ls_id = 0; ls_id < size; ++ls_id) {
       auto label_set = destination_[ls_id];
@@ -228,12 +244,14 @@ class QueryableEncodingBimapCopier {
   }
 
   void build_trie_index() {
-    const auto& names = destination_.data_.label_name_sets_table.data().symbols_table;
-    destination_.trie_index_.reserve(names.size());
+    const auto view = destination_.data_view();
+    const auto names_view = destination_.data_view().keys();
+    destination_.trie_index_.reserve(names_view.size());
 
-    for (uint32_t name_id = 0; name_id < names.size(); ++name_id) {
-      destination_.trie_index_.insert_name(names[name_id], name_id);
-      destination_.trie_index_.insert_values(name_id, *destination_.data_.symbols_tables[name_id]);
+    for (auto name_it = names_view.begin(); name_it != names_view.end(); ++name_it) {
+      const uint32_t name_id = name_it.id();
+      destination_.trie_index_.insert_name(*name_it, name_id);
+      destination_.trie_index_.insert_values(name_id, view.values(name_id));
     }
   }
 
@@ -246,9 +264,17 @@ class QueryableEncodingBimapCopier {
   }
 
  private:
-  const QueryableEncodingBimap& source_;
+  struct id_pair {
+    uint32_t old_id;
+    uint32_t new_id;
+  };
+
+  BareBones::Vector<id_pair> old_new_ids_;
+  const DecodingTable& source_;
+  const SortingIndex& sorting_index_;
+  const SeriesIds& ls_id_range_;
   QueryableEncodingBimap& destination_;
-  BareBones::Vector<uint32_t> ids_map_;
+  LsIdVector& dst_src_ids_mapping_;
 };
 
 }  // namespace series_index

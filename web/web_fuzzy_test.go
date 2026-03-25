@@ -14,26 +14,26 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-kit/log"
+	"github.com/jonboulle/clockwork"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/pp-pkg/config"
-	"github.com/prometheus/prometheus/pp-pkg/receiver"
-	"github.com/prometheus/prometheus/pp-pkg/scrape"
-	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage"
-	relabeler_config "github.com/prometheus/prometheus/pp/go/relabeler/config"
-	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"
 	"github.com/prometheus/prometheus/promql"
-	"github.com/prometheus/prometheus/rules"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb"
 	"github.com/prometheus/prometheus/web"
 	apiV1 "github.com/prometheus/prometheus/web/api/v1"
 	"github.com/prometheus/prometheus/web/mock"
 
-	"github.com/go-kit/log"
-	"github.com/jonboulle/clockwork"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/prometheus/prometheus/pp-pkg/rules" // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/scrape"
+	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage"
+
+	pp_storage "github.com/prometheus/prometheus/pp/go/storage"
+	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 )
 
 func FuzzWeb(f *testing.F) {
@@ -101,15 +101,23 @@ func startService(ctx context.Context, t TestingT) net.Listener {
 	logger := log.NewLogfmtLogger(os.Stderr)
 	clock := clockwork.NewRealClock()
 	headCatalog := makeCatalog(t, clock, dbDir)
-	receiver := makeReceiver(ctx, t, logger, dbDir, headCatalog)
+	hManager := makeManager(t, clock, dbDir, headCatalog)
+	adapter := pp_pkg_storage.NewAdapter(
+		clock,
+		hManager.Proxy(),
+		hManager.Builder(),
+		hManager.MergeOutOfOrderChunks,
+		prometheus.DefaultRegisterer,
+	)
+
 	adminStats := makeTSDBAdminStats(t)
 	listener, err := net.Listen("tcp", ":0")
 	require.NoError(t, err, "Listen on random port")
 
-	fanoutStorage := storage.NewFanout(logger, pp_pkg_storage.NewQueryableStorage(receiver))
+	fanoutStorage := storage.NewFanout(logger, adapter)
 
 	opts := makeOptions(t, adminStats, fanoutStorage, dbDir, listener.Addr().String())
-	webHandler := web.New(logger, opts, receiver)
+	webHandler := web.New(logger, opts, adapter)
 	webHandler.SetReady(true)
 
 	go func() {
@@ -134,38 +142,36 @@ func makeCatalog(t TestingT, clock clockwork.Clock, dbDir string) *catalog.Catal
 	return headCatalog
 }
 
-func makeReceiver(ctx context.Context, t TestingT, logger log.Logger, dbDir string, headCatalog *catalog.Catalog) *receiver.Receiver {
+func makeManager(
+	t TestingT,
+	clock clockwork.Clock,
+	dbDir string,
+	headCatalog *catalog.Catalog,
+) *pp_storage.Manager {
 	t.Helper()
 
-	transparent := &relabeler_config.InputRelabelerConfig{
-		Name: "transparent_relabeler",
-	}
-	receiver, err := receiver.NewReceiver(
-		ctx,
-		log.With(logger, "component", "receiver"),
-		nil,
-		&config.RemoteWriteReceiverConfig{
-			NumberOfShards: 2,
-			Configs:        []*relabeler_config.InputRelabelerConfig{transparent},
+	hManager, err := pp_storage.NewManager(
+		&pp_storage.Options{
+			Seed:                0,
+			BlockDuration:       2 * time.Hour,
+			CommitInterval:      5 * time.Second,
+			MaxRetentionPeriod:  24 * time.Hour,
+			HeadRetentionPeriod: 4 * time.Hour,
+			KeeperCapacity:      2,
+			DataDir:             dbDir,
+			MaxSegmentSize:      100e3,
+			NumberOfShards:      2,
 		},
-		dbDir,
-		nil,
-		dbDir,
-		receiver.RotationInfo{
-			BlockDuration: 2 * time.Hour,
-			Seed:          0,
-		},
+		clock,
 		headCatalog,
-		receiver.NewReloadBlocksTriggerNotifier(),
+		pp_storage.NewTriggerNotifier(),
+		pp_storage.NewTriggerNotifier(),
 		&mock.ReadyNotifierMock{NotifyReadyFunc: func() {}},
-		5*time.Second,
-		24*time.Hour,
-		4*time.Hour,
-		90*time.Second,
-		100e3,
+		prometheus.DefaultRegisterer,
 	)
-	require.NoError(t, err, "create a receiver")
-	return receiver
+	require.NoError(t, err, "create a head manager")
+
+	return hManager
 }
 
 func makeTSDBAdminStats(t TestingT) apiV1.TSDBAdminStats {

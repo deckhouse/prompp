@@ -11,6 +11,8 @@ namespace series_data {
 template <EncoderInterface Encoder>
 class OutdatedChunkMerger {
  public:
+  using OutdatedChunk = DataStorage::OutdatedChunk;
+
   explicit OutdatedChunkMerger(Encoder& encoder) : encoder_(encoder) {}
 
   void merge() {
@@ -34,7 +36,7 @@ class OutdatedChunkMerger {
     }
   }
 
-  void merge(uint32_t ls_id, const chunk::OutdatedChunk& chunk) {
+  void merge(uint32_t ls_id, const OutdatedChunk& chunk) {
     auto decoded_samples = decode_samples(chunk);
 
     SamplesSpan samples{decoded_samples.begin(), decoded_samples.end()};
@@ -67,7 +69,6 @@ class OutdatedChunkMerger {
     [[nodiscard]] PROMPP_ALWAYS_INLINE EncodeIterator& operator*() noexcept { return *this; }
     [[nodiscard]] PROMPP_ALWAYS_INLINE EncodeIterator& operator=(const encoder::Sample& sample) noexcept {
       encoder_->encode(ls_id_, sample.timestamp, sample.value, *chunk_);
-      --encoder_->storage().samples_count;
       return *this;
     }
     [[nodiscard]] PROMPP_ALWAYS_INLINE EncodeIterator& operator++() noexcept { return *this; }
@@ -126,7 +127,7 @@ class OutdatedChunkMerger {
 
   Encoder& encoder_;
 
-  [[nodiscard]] static SampleList decode_samples(const chunk::OutdatedChunk& chunk) {
+  [[nodiscard]] static SampleList decode_samples(const OutdatedChunk& chunk) {
     SampleList samples = Decoder::decode_outdated_chunk(chunk);
     std::ranges::stable_sort(samples);
     return samples;

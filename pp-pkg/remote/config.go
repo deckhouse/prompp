@@ -7,11 +7,12 @@ import (
 
 	"gopkg.in/yaml.v2"
 
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/config"
-	"github.com/prometheus/prometheus/pp/go/relabeler/remotewriter"
+	"github.com/prometheus/prometheus/pp/go/storage/remotewriter"
 )
 
-func ApplyConfig(remoteWriter *remotewriter.RemoteWriter) func(promConfig *config.Config) error {
+func ApplyConfig(remoteWriter *remotewriter.RemoteWriter, tsdbRetention model.Duration) func(promConfig *config.Config) error {
 	return func(promConfig *config.Config) error {
 		destinationConfigs := make([]remotewriter.DestinationConfig, 0, len(promConfig.RemoteWriteConfigs))
 		for _, rwc := range promConfig.RemoteWriteConfigs {
@@ -29,6 +30,10 @@ func ApplyConfig(remoteWriter *remotewriter.RemoteWriter) func(promConfig *confi
 
 			if rwc.QueueConfig.SampleAgeLimit == 0 {
 				rwc.QueueConfig.SampleAgeLimit = remotewriter.DefaultSampleAgeLimit
+			}
+			// In agent mode tsdbRetention is unset and equal to 0, so we don't modify SampleAgeLimit.
+			if tsdbRetention > 0 && rwc.QueueConfig.SampleAgeLimit > tsdbRetention {
+				rwc.QueueConfig.SampleAgeLimit = tsdbRetention
 			}
 
 			destinationConfigs = append(destinationConfigs, remotewriter.DestinationConfig{

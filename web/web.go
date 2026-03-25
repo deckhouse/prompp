@@ -53,9 +53,9 @@ import (
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/notifier"
 	"github.com/prometheus/prometheus/pp-pkg/handler" // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/rules"   // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/scrape"  // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/promql"
-	"github.com/prometheus/prometheus/rules"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/template"
 	"github.com/prometheus/prometheus/util/httputil"
@@ -225,7 +225,7 @@ func (h *Handler) ApplyConfig(conf *config.Config) error {
 
 	h.config = conf
 
-	return nil
+	return h.apiV1.ApplyConfig(conf) // PP_CHANGES.md: rebuild on cpp
 }
 
 // Options for the web Handler.
@@ -273,7 +273,7 @@ type Options struct {
 }
 
 // New initializes a new web Handler.
-func New(logger log.Logger, o *Options, receiver handler.Receiver) *Handler { // PP_CHANGES.md: rebuild on cpp
+func New(logger log.Logger, o *Options, adapter handler.Adapter) *Handler { // PP_CHANGES.md: rebuild on cpp
 	if logger == nil {
 		logger = log.NewNopLogger()
 	}
@@ -328,11 +328,15 @@ func New(logger log.Logger, o *Options, receiver handler.Receiver) *Handler { //
 	}
 
 	// PP_CHANGES.md: rebuild on cpp start
-	var queryable storage.Queryable
-	if receiver != nil {
-		queryable = receiver.HeadQueryable()
-	}
-	h.apiV1 = api_v1.NewAPI(h.queryEngine, h.storage, app, h.exemplarStorage, queryable, receiver, factorySPr, factoryTr, factoryAr,
+	h.apiV1 = api_v1.NewAPI(
+		h.queryEngine,
+		h.storage,
+		app,
+		h.exemplarStorage,
+		adapter,
+		factorySPr,
+		factoryTr,
+		factoryAr,
 		func() config.Config {
 			h.mtx.RLock()
 			defer h.mtx.RUnlock()

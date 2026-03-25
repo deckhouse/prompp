@@ -27,8 +27,8 @@ void load_gorilla_from_wal_and_process_data::execute(const Config& config, Metri
     period += time_to_process_data + (end - start);
 
     log() << "Loaded label sets: " << (wal.series() - series) << std::endl;
-    log() << "Number of label name symbols: " << wal.label_sets().data().label_name_sets_table.data().symbols_table.size() << std::endl;
-    log() << "Number of label name sets: " << wal.label_sets().data().label_name_sets_table.size() << std::endl;
+    log() << "Number of label name symbols: " << wal.label_sets().data_view().keys().size() << std::endl;
+    log() << "Number of label name sets: " << wal.label_sets().data_view().label_name_sets().size() << std::endl;
     log() << "Number of label sets: " << wal.label_sets().size() << std::endl;
     log() << "Loaded samples: " << (wal.samples() - samples) << std::endl;
     log() << "Number of samples processed: " << wal.samples() << std::endl;

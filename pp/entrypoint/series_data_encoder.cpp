@@ -25,23 +25,26 @@ extern "C" void prompp_series_data_encoder_encode(void* args) {
   };
 
   const auto* in = static_cast<Arguments*>(args);
+  const auto arena_guard = in->encoder_wrapper->encoder.storage().thread_arena_guard();
+
   in->encoder_wrapper->encoder.encode(in->series_id, in->timestamp, in->value);
 }
 
 extern "C" void prompp_series_data_encoder_encode_inner_series_slice(void* args) {
   struct Arguments {
     entrypoint::head::SeriesDataEncoderWrapperPtr encoder_wrapper;
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> inner_series_slice;
+    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries> inner_series_slice;
   };
 
   auto* in = static_cast<Arguments*>(args);
+  const auto arena_guard = in->encoder_wrapper->encoder.storage().thread_arena_guard();
 
-  std::ranges::for_each(in->inner_series_slice, [&](const PromPP::Prometheus::Relabel::InnerSeries* inner_series) {
-    if (inner_series == nullptr || inner_series->size() == 0) {
+  std::ranges::for_each(in->inner_series_slice, [&](const PromPP::Prometheus::Relabel::InnerSeries& inner_series) {
+    if (inner_series.size() == 0) {
       return;
     }
 
-    std::ranges::for_each(inner_series->data(), [&](const PromPP::Prometheus::Relabel::InnerSerie& inner_serie) {
+    std::ranges::for_each(inner_series.data(), [&](const PromPP::Prometheus::Relabel::InnerSerie& inner_serie) {
       in->encoder_wrapper->encoder.encode(inner_serie.ls_id, inner_serie.sample.timestamp(), inner_serie.sample.value());
     });
   });
@@ -52,7 +55,10 @@ extern "C" void prompp_series_data_encoder_merge_out_of_order_chunks(void* args)
     entrypoint::head::SeriesDataEncoderWrapperPtr encoder_wrapper;
   };
 
-  entrypoint::head::OutdatedChunkMerger{static_cast<Arguments*>(args)->encoder_wrapper->encoder}.merge();
+  auto& encoder = static_cast<Arguments*>(args)->encoder_wrapper->encoder;
+  const auto arena_guard = encoder.storage().thread_arena_guard();
+
+  entrypoint::head::OutdatedChunkMerger{encoder}.merge();
 }
 
 extern "C" void prompp_series_data_encoder_dtor(void* args) {

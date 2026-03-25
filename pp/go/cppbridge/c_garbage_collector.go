@@ -5,8 +5,9 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/prometheus/prometheus/pp/go/util"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/prometheus/prometheus/pp/go/util"
 )
 
 // garbage collector for objects initiated in GO but filled in C/C++,

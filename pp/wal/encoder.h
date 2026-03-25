@@ -17,15 +17,26 @@ class GenericEncoder {
 
   template <class Stats>
   void write_stats(Stats* stats) const {
-    size_t remaining_cap = std::numeric_limits<uint32_t>::max();
+    stats->samples = encoder_.segment_samples().samples_count();
 
-    stats->earliest_timestamp = encoder_.buffer().earliest_sample();
-    stats->latest_timestamp = encoder_.buffer().latest_sample();
-    stats->samples = encoder_.buffer().samples_count();
-    stats->series = encoder_.buffer().series_count();
-    stats->remainder_size = std::min(remaining_cap, encoder_.remainder_size());
+    if constexpr (BareBones::concepts::has_earliest_timestamp_field<Stats>) {
+      stats->earliest_timestamp = encoder_.segment_samples().earliest_sample();
+    }
 
-    if constexpr (BareBones::concepts::has_allocated_memory<Stats>) {
+    if constexpr (BareBones::concepts::has_latest_timestamp_field<Stats>) {
+      stats->latest_timestamp = encoder_.segment_samples().latest_sample();
+    }
+
+    if constexpr (BareBones::concepts::has_series_field<Stats>) {
+      stats->series = encoder_.segment_samples().series_count();
+    }
+
+    if constexpr (BareBones::concepts::has_remainder_size_field<Stats>) {
+      size_t remaining_cap = std::numeric_limits<uint32_t>::max();
+      stats->remainder_size = std::min(remaining_cap, encoder_.remainder_size());
+    }
+
+    if constexpr (BareBones::concepts::has_allocated_memory_field<Stats>) {
       stats->allocated_memory = encoder_.allocated_memory();
     }
   }
@@ -48,14 +59,14 @@ class GenericEncoder {
     write_stats(stats);
   }
 
-  template <class Stats, class InnerSeriesSlice>
-  inline __attribute__((always_inline)) void add_inner_series(InnerSeriesSlice& incoming_inner_series, Stats* stats) {
-    std::ranges::for_each(incoming_inner_series, [&](const Prometheus::Relabel::InnerSeries* inner_series) {
-      if (inner_series == nullptr || inner_series->size() == 0) {
+  template <class Stats, template <class> class InnerSeriesContainer>
+  inline __attribute__((always_inline)) void add_inner_series(InnerSeriesContainer<Prometheus::Relabel::InnerSeries>& incoming_inner_series, Stats* stats) {
+    std::ranges::for_each(incoming_inner_series, [&](const Prometheus::Relabel::InnerSeries& inner_series) {
+      if (inner_series.size() == 0) {
         return;
       }
 
-      std::ranges::for_each(inner_series->data(),
+      std::ranges::for_each(inner_series.data(),
                             [&](const Prometheus::Relabel::InnerSerie& inner_serie) { encoder_.add_sample_on_ls_id(inner_serie.ls_id, inner_serie.sample); });
     });
 

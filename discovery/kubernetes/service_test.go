@@ -141,6 +141,7 @@ func TestServiceDiscoveryAdd(t *testing.T) {
 						"__meta_kubernetes_service_cluster_ip":  "10.0.0.1",
 						"__meta_kubernetes_service_port_name":   "testport",
 						"__meta_kubernetes_service_port_number": "30900",
+						"__sample_limit__":                      "", // PP_CHANGES.md: override sample limit
 					},
 				},
 				Labels: model.LabelSet{
@@ -158,6 +159,7 @@ func TestServiceDiscoveryAdd(t *testing.T) {
 						"__meta_kubernetes_service_port_name":     "testport",
 						"__meta_kubernetes_service_port_number":   "31900",
 						"__meta_kubernetes_service_external_name": "FooExternalName",
+						"__sample_limit__":                        "", // PP_CHANGES.md: override sample limit
 					},
 				},
 				Labels: model.LabelSet{
@@ -176,6 +178,7 @@ func TestServiceDiscoveryAdd(t *testing.T) {
 						"__meta_kubernetes_service_port_number":     "31900",
 						"__meta_kubernetes_service_cluster_ip":      "10.0.0.1",
 						"__meta_kubernetes_service_loadbalancer_ip": "127.0.0.1",
+						"__sample_limit__":                          "", // PP_CHANGES.md: override sample limit
 					},
 				},
 				Labels: model.LabelSet{
@@ -226,6 +229,7 @@ func TestServiceDiscoveryUpdate(t *testing.T) {
 						"__meta_kubernetes_service_cluster_ip":  "10.0.0.1",
 						"__meta_kubernetes_service_port_name":   "testport0",
 						"__meta_kubernetes_service_port_number": "30900",
+						"__sample_limit__":                      "", // PP_CHANGES.md: override sample limit
 					},
 					{
 						"__meta_kubernetes_service_port_protocol": "UDP",
@@ -234,6 +238,7 @@ func TestServiceDiscoveryUpdate(t *testing.T) {
 						"__meta_kubernetes_service_cluster_ip":  "10.0.0.1",
 						"__meta_kubernetes_service_port_name":   "testport1",
 						"__meta_kubernetes_service_port_number": "30901",
+						"__sample_limit__":                      "", // PP_CHANGES.md: override sample limit
 					},
 				},
 				Labels: model.LabelSet{
@@ -273,6 +278,7 @@ func TestServiceDiscoveryNamespaces(t *testing.T) {
 						"__meta_kubernetes_service_cluster_ip":  "10.0.0.1",
 						"__meta_kubernetes_service_port_name":   "testport",
 						"__meta_kubernetes_service_port_number": "30900",
+						"__sample_limit__":                      "", // PP_CHANGES.md: override sample limit
 					},
 				},
 				Labels: model.LabelSet{
@@ -290,6 +296,7 @@ func TestServiceDiscoveryNamespaces(t *testing.T) {
 						"__meta_kubernetes_service_cluster_ip":  "10.0.0.1",
 						"__meta_kubernetes_service_port_name":   "testport",
 						"__meta_kubernetes_service_port_number": "30900",
+						"__sample_limit__":                      "", // PP_CHANGES.md: override sample limit
 					},
 				},
 				Labels: model.LabelSet{
@@ -325,6 +332,7 @@ func TestServiceDiscoveryOwnNamespace(t *testing.T) {
 						"__meta_kubernetes_service_cluster_ip":  "10.0.0.1",
 						"__meta_kubernetes_service_port_name":   "testport",
 						"__meta_kubernetes_service_port_number": "30900",
+						"__sample_limit__":                      "", // PP_CHANGES.md: override sample limit
 					},
 				},
 				Labels: model.LabelSet{
@@ -360,6 +368,7 @@ func TestServiceDiscoveryAllNamespaces(t *testing.T) {
 						"__meta_kubernetes_service_cluster_ip":  "10.0.0.1",
 						"__meta_kubernetes_service_port_name":   "testport",
 						"__meta_kubernetes_service_port_number": "30900",
+						"__sample_limit__":                      "", // PP_CHANGES.md: override sample limit
 					},
 				},
 				Labels: model.LabelSet{
@@ -377,6 +386,7 @@ func TestServiceDiscoveryAllNamespaces(t *testing.T) {
 						"__meta_kubernetes_service_cluster_ip":  "10.0.0.1",
 						"__meta_kubernetes_service_port_name":   "testport",
 						"__meta_kubernetes_service_port_number": "30900",
+						"__sample_limit__":                      "", // PP_CHANGES.md: override sample limit
 					},
 				},
 				Labels: model.LabelSet{

@@ -122,6 +122,58 @@ void prompp_wal_decoder_decode_dry(void* args, void* res);
  */
 void prompp_wal_decoder_restore_from_stream(void* args, void* res);
 
+/**
+ * @brief Construct a segment samples storage list
+ *
+ * @param args {
+ *     count       uint64 // storages count
+ *     storageList *SegmentSamplesStorageList
+ * }
+ *
+ */
+void prompp_wal_segment_samples_storage_list_ctor(void* args);
+
+/**
+ * @brief Add sample to sample storage list
+ *
+ * @param args {
+ *     samplesStorage *SegmentSamplesStorage // pointer to constructed SegmentSamplesStorage
+ *     lsId           uint32 // label set id
+ *     int64          timestamp // sample timestamp
+ *     value          float64   // sample value
+ * }
+ */
+void prompp_wal_segment_samples_storage_add(void* args);
+
+/**
+ * @brief Clear sample storage list
+ *
+ * @param args {
+ *     samplesStorage *SegmentSamplesStorage // pointer to constructed SegmentSamplesStorage
+ * }
+ */
+void prompp_wal_segment_samples_storage_clear(void* args);
+
+/**
+ * @brief Destroy segment samples storage list
+ *
+ * @param args {
+ *     storageList *SegmentSamplesStorageList
+ * }
+ */
+void prompp_wal_segment_samples_storage_list_dtor(void* args);
+
+/**
+ * @brief Split storage list into messages by samples per message
+ *
+ * @param args {
+ *     storageList                *SegmentSamplesStorageList
+ *     message_samples_threshold  uint32
+ *     messages                   []GoMessage
+ * }
+ */
+void prompp_wal_segment_samples_storage_list_split_messages(void* args);
+
 //
 // OutputDecoder
 //
@@ -183,9 +235,10 @@ void prompp_wal_output_decoder_load_from(void* args, void* res);
  * @brief decode segment to slice RefSample.
  *
  * @param args {
- *     segment               []byte      // segment content
- *     decoder               uintptr     // pointer to constructed output decoder
- *     lower_limit_timestamp int64       // lower limit timestamp
+ *     segment               []byte                 // segment content
+ *     decoder               uintptr                // pointer to constructed output decoder
+ *     samplesStorage        *SegmentSamplesStorage // pointer to constructed SegmentSamplesStorage
+ *     lower_limit_timestamp int64                  // lower limit timestamp
  * }
  *
  * @param res {
@@ -194,52 +247,11 @@ void prompp_wal_output_decoder_load_from(void* args, void* res);
  *     dropped_sample_count  uint32      // count of dropped samples on relabeling rules
  *     add_series_count      uint32      // count of add series on relabeling rules
  *     dropped_series_count  uint32      // count of dropped series on relabeling rules
- *     ref_samples           []RefSample // slice RefSample
+ *     sample_count         uint32       // count of samples added to samplesStorage
  *     error                 []byte      // error string if thrown
  * }
  */
 void prompp_wal_output_decoder_decode(void* args, void* res);
-
-//
-// ProtobufEncoder
-//
-
-/**
- * @brief Construct a new Protobuf Encoder
- *
- * @param args {
- *     output_lsses        uintptr           // pointer to constructed slice with output label sets;
- * }
- *
- * @param res {
- *     encoder             uintptr           // pointer to constructed Protobuf Encoder
- * }
- */
-void prompp_wal_protobuf_encoder_ctor(void* args, void* res);
-
-/**
- * @brief Destroy Protobuf Encoder
- *
- * @param args {
- *     encoder             uintptr           // pointer to constructed Protobuf Encoder
- * }
- */
-void prompp_wal_protobuf_encoder_dtor(void* args);
-
-/**
- * @brief encode batch slice ShardRefSamples to snapped protobufs on shards.
- *
- * @param args {
- *     batch               []*ShardRefSample // slice with go pointers to ShardRefSample
- *     out_slices          [][]byte          // slice RefSample
- *     encoder             uintptr           // pointer to constructed output decoder
- * }
- *
- * @param res {
- *     error               []byte            // error string if thrown
- * }
- */
-void prompp_wal_protobuf_encoder_encode(void* args, void* res);
 
 #ifdef __cplusplus
 }  // extern "C"

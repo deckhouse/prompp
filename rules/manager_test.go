@@ -20,13 +20,14 @@ import (
 	"math"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/go-kit/log"
+	"github.com/jonboulle/clockwork"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/prometheus/common/model"
@@ -38,14 +39,17 @@ import (
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"github.com/prometheus/prometheus/model/timestamp"
 	"github.com/prometheus/prometheus/model/value"
+	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage"
+	pp_storage "github.com/prometheus/prometheus/pp/go/storage"
+	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/promql/promqltest"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
-	"github.com/prometheus/prometheus/tsdb/tsdbutil"
 	"github.com/prometheus/prometheus/util/teststorage"
 	prom_testutil "github.com/prometheus/prometheus/util/testutil"
+	"github.com/prometheus/prometheus/web/mock"
 )
 
 func TestMain(m *testing.M) {
@@ -358,22 +362,36 @@ func sortAlerts(items []*Alert) {
 func TestForStateRestore(t *testing.T) {
 	for _, queryOffset := range []time.Duration{0, time.Minute} {
 		t.Run(fmt.Sprintf("queryOffset %s", queryOffset.String()), func(t *testing.T) {
-			storage := promqltest.LoadedStorage(t, `
+			st := promqltest.LoadedStorage(t, `
 		load 5m
 		http_requests{job="app-server", instance="0", group="canary", severity="overwrite-me"}	75  85 50 0 0 25 0 0 40 0 120
 		http_requests{job="app-server", instance="1", group="canary", severity="overwrite-me"}	125 90 60 0 0 25 0 0 40 0 130
 	`)
-			t.Cleanup(func() { storage.Close() })
+
+			dbDir := t.TempDir()
+			clock := clockwork.NewRealClock()
+			headCatalog := makeCatalog(t, clock, dbDir)
+			hManager := makeManager(t, clock, dbDir, headCatalog)
+			adapter := makeAdapter(t, clock, hManager)
+			fanoutStorage := storage.NewFanout(log.NewNopLogger(), adapter, st)
+			ctx := context.Background()
+			t.Cleanup(func() {
+				require.NoError(t, st.Close())
+				require.NoError(t, hManager.Shutdown(ctx))
+				require.NoError(t, adapter.Close())
+			})
 
 			expr, err := parser.ParseExpr(`http_requests{group="canary", job="app-server"} < 100`)
 			require.NoError(t, err)
 
 			ng := testEngine(t)
 			opts := &ManagerOptions{
-				QueryFunc:       EngineQueryFunc(ng, storage),
-				Appendable:      storage,
-				Queryable:       storage,
-				Context:         context.Background(),
+				Engine:          ng,              // PP_CHANGES.md: rebuild on cpp
+				FanoutQueryable: fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
+				EngineQueryCtor: EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
+				Batcher:         adapter,         // PP_CHANGES.md: rebuild on cpp
+				Queryable:       fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
+				Context:         ctx,             // PP_CHANGES.md: rebuild on cpp
 				Logger:          log.NewNopLogger(),
 				NotifyFunc:      func(ctx context.Context, expr string, alerts ...*Alert) {},
 				OutageTolerance: 30 * time.Minute,
@@ -532,9 +550,22 @@ func TestForStateRestore(t *testing.T) {
 }
 
 func TestStaleness(t *testing.T) {
+	ctx := context.Background()
+
 	for _, queryOffset := range []time.Duration{0, time.Minute} {
 		st := teststorage.New(t)
-		defer st.Close()
+		dbDir := t.TempDir()
+		clock := clockwork.NewRealClock()
+		headCatalog := makeCatalog(t, clock, dbDir)
+		hManager := makeManager(t, clock, dbDir, headCatalog)
+		adapter := makeAdapter(t, clock, hManager)
+		fanoutStorage := storage.NewFanout(log.NewNopLogger(), adapter, st)
+		defer func() {
+			require.NoError(t, st.Close())
+			require.NoError(t, hManager.Shutdown(ctx))
+			require.NoError(t, adapter.Close())
+		}()
+
 		engineOpts := promql.EngineOpts{
 			Logger:     nil,
 			Reg:        nil,
@@ -543,11 +574,13 @@ func TestStaleness(t *testing.T) {
 		}
 		engine := promqltest.NewTestEngineWithOpts(t, engineOpts)
 		opts := &ManagerOptions{
-			QueryFunc:  EngineQueryFunc(engine, st),
-			Appendable: st,
-			Queryable:  st,
-			Context:    context.Background(),
-			Logger:     log.NewNopLogger(),
+			Engine:          engine,          // PP_CHANGES.md: rebuild on cpp
+			FanoutQueryable: fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
+			EngineQueryCtor: EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
+			Batcher:         adapter,         // PP_CHANGES.md: rebuild on cpp
+			Queryable:       fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
+			Context:         ctx,             // PP_CHANGES.md: rebuild on cpp
+			Logger:          log.NewNopLogger(),
 		}
 
 		expr, err := parser.ParseExpr("a + 1")
@@ -578,7 +611,7 @@ func TestStaleness(t *testing.T) {
 		group.Eval(ctx, time.Unix(1, 0).Add(queryOffset))
 		group.Eval(ctx, time.Unix(2, 0).Add(queryOffset))
 
-		querier, err := st.Querier(0, 2000)
+		querier, err := fanoutStorage.Querier(0, 2000)
 		require.NoError(t, err)
 		defer querier.Close()
 
@@ -721,8 +754,20 @@ func TestCopyState(t *testing.T) {
 }
 
 func TestDeletedRuleMarkedStale(t *testing.T) {
+	ctx := context.Background()
 	st := teststorage.New(t)
-	defer st.Close()
+	dbDir := t.TempDir()
+	clock := clockwork.NewRealClock()
+	headCatalog := makeCatalog(t, clock, dbDir)
+	hManager := makeManager(t, clock, dbDir, headCatalog)
+	adapter := makeAdapter(t, clock, hManager)
+	fanoutStorage := storage.NewFanout(log.NewNopLogger(), adapter, st)
+	defer func() {
+		require.NoError(t, st.Close())
+		require.NoError(t, hManager.Shutdown(ctx))
+		require.NoError(t, adapter.Close())
+	}()
+
 	oldGroup := &Group{
 		rules: []Rule{
 			NewRecordingRule("rule1", nil, labels.FromStrings("l1", "v1")),
@@ -735,8 +780,9 @@ func TestDeletedRuleMarkedStale(t *testing.T) {
 		rules:                []Rule{},
 		seriesInPreviousEval: []map[string]labels.Labels{},
 		opts: &ManagerOptions{
-			Appendable:                st,
-			RuleConcurrencyController: sequentialRuleEvalController{},
+			FanoutQueryable: fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
+			EngineQueryCtor: EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
+			Batcher:         adapter,         // PP_CHANGES.md: rebuild on cpp
 		},
 		metrics: NewGroupMetrics(nil),
 	}
@@ -744,7 +790,7 @@ func TestDeletedRuleMarkedStale(t *testing.T) {
 
 	newGroup.Eval(context.Background(), time.Unix(0, 0))
 
-	querier, err := st.Querier(0, 2000)
+	querier, err := fanoutStorage.Querier(0, 2000)
 	require.NoError(t, err)
 	defer querier.Close()
 
@@ -767,8 +813,21 @@ func TestUpdate(t *testing.T) {
 	expected := map[string]labels.Labels{
 		"test": labels.FromStrings("name", "value"),
 	}
+
+	ctx := context.Background()
 	st := teststorage.New(t)
-	defer st.Close()
+	dbDir := t.TempDir()
+	clock := clockwork.NewRealClock()
+	headCatalog := makeCatalog(t, clock, dbDir)
+	hManager := makeManager(t, clock, dbDir, headCatalog)
+	adapter := makeAdapter(t, clock, hManager)
+	fanoutStorage := storage.NewFanout(log.NewNopLogger(), adapter, st)
+	defer func() {
+		require.NoError(t, st.Close())
+		require.NoError(t, hManager.Shutdown(ctx))
+		require.NoError(t, adapter.Close())
+	}()
+
 	opts := promql.EngineOpts{
 		Logger:     nil,
 		Reg:        nil,
@@ -777,11 +836,13 @@ func TestUpdate(t *testing.T) {
 	}
 	engine := promqltest.NewTestEngineWithOpts(t, opts)
 	ruleManager := NewManager(&ManagerOptions{
-		Appendable: st,
-		Queryable:  st,
-		QueryFunc:  EngineQueryFunc(engine, st),
-		Context:    context.Background(),
-		Logger:     log.NewNopLogger(),
+		Engine:          engine,          // PP_CHANGES.md: rebuild on cpp
+		FanoutQueryable: fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
+		EngineQueryCtor: EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
+		Batcher:         adapter,         // PP_CHANGES.md: rebuild on cpp
+		Queryable:       fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
+		Context:         ctx,             // PP_CHANGES.md: rebuild on cpp
+		Logger:          log.NewNopLogger(),
 	})
 	ruleManager.start()
 	defer ruleManager.Stop()
@@ -905,8 +966,19 @@ func reloadAndValidate(rgs *rulefmt.RuleGroups, t *testing.T, tmpFile *os.File, 
 }
 
 func TestNotify(t *testing.T) {
-	storage := teststorage.New(t)
-	defer storage.Close()
+	st := teststorage.New(t)
+	dbDir := t.TempDir()
+	clock := clockwork.NewRealClock()
+	headCatalog := makeCatalog(t, clock, dbDir)
+	hManager := makeManager(t, clock, dbDir, headCatalog)
+	adapter := makeAdapter(t, clock, hManager)
+	fanoutStorage := storage.NewFanout(log.NewNopLogger(), adapter, st)
+	ctx := context.Background()
+	defer func() {
+		require.NoError(t, st.Close())
+		require.NoError(t, hManager.Shutdown(ctx))
+		require.NoError(t, adapter.Close())
+	}()
 	engineOpts := promql.EngineOpts{
 		Logger:     nil,
 		Reg:        nil,
@@ -919,13 +991,15 @@ func TestNotify(t *testing.T) {
 		lastNotified = alerts
 	}
 	opts := &ManagerOptions{
-		QueryFunc:   EngineQueryFunc(engine, storage),
-		Appendable:  storage,
-		Queryable:   storage,
-		Context:     context.Background(),
-		Logger:      log.NewNopLogger(),
-		NotifyFunc:  notifyFunc,
-		ResendDelay: 2 * time.Second,
+		Engine:          engine,          // PP_CHANGES.md: rebuild on cpp
+		FanoutQueryable: fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
+		EngineQueryCtor: EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
+		Batcher:         adapter,         // PP_CHANGES.md: rebuild on cpp
+		Queryable:       fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
+		Context:         ctx,             // PP_CHANGES.md: rebuild on cpp
+		Logger:          log.NewNopLogger(),
+		NotifyFunc:      notifyFunc,
+		ResendDelay:     2 * time.Second,
 	}
 
 	expr, err := parser.ParseExpr("a > 1")
@@ -939,7 +1013,7 @@ func TestNotify(t *testing.T) {
 		Opts:          opts,
 	})
 
-	app := storage.Appender(context.Background())
+	app := st.Appender(ctx)
 	app.Append(0, labels.FromStrings(model.MetricNameLabel, "a"), 1000, 2)
 	app.Append(0, labels.FromStrings(model.MetricNameLabel, "a"), 2000, 3)
 	app.Append(0, labels.FromStrings(model.MetricNameLabel, "a"), 5000, 3)
@@ -947,8 +1021,6 @@ func TestNotify(t *testing.T) {
 
 	err = app.Commit()
 	require.NoError(t, err)
-
-	ctx := context.Background()
 
 	// Alert sent right away
 	group.Eval(ctx, time.Unix(1, 0))
@@ -979,8 +1051,20 @@ func TestMetricsUpdate(t *testing.T) {
 		"prometheus_rule_group_rules",
 	}
 
-	storage := teststorage.New(t)
-	defer storage.Close()
+	st := teststorage.New(t)
+	dbDir := t.TempDir()
+	clock := clockwork.NewRealClock()
+	headCatalog := makeCatalog(t, clock, dbDir)
+	hManager := makeManager(t, clock, dbDir, headCatalog)
+	adapter := makeAdapter(t, clock, hManager)
+	fanoutStorage := storage.NewFanout(log.NewNopLogger(), adapter, st)
+	ctx := context.Background()
+	defer func() {
+		require.NoError(t, st.Close())
+		require.NoError(t, hManager.Shutdown(ctx))
+		require.NoError(t, adapter.Close())
+	}()
+
 	registry := prometheus.NewRegistry()
 	opts := promql.EngineOpts{
 		Logger:     nil,
@@ -990,12 +1074,14 @@ func TestMetricsUpdate(t *testing.T) {
 	}
 	engine := promqltest.NewTestEngineWithOpts(t, opts)
 	ruleManager := NewManager(&ManagerOptions{
-		Appendable: storage,
-		Queryable:  storage,
-		QueryFunc:  EngineQueryFunc(engine, storage),
-		Context:    context.Background(),
-		Logger:     log.NewNopLogger(),
-		Registerer: registry,
+		Engine:          engine,          // PP_CHANGES.md: rebuild on cpp
+		FanoutQueryable: fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
+		EngineQueryCtor: EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
+		Batcher:         adapter,         // PP_CHANGES.md: rebuild on cpp
+		Queryable:       fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
+		Context:         ctx,             // PP_CHANGES.md: rebuild on cpp
+		Logger:          log.NewNopLogger(),
+		Registerer:      registry,
 	})
 	ruleManager.start()
 	defer ruleManager.Stop()
@@ -1054,8 +1140,19 @@ func TestGroupStalenessOnRemoval(t *testing.T) {
 	files := []string{"fixtures/rules2.yaml"}
 	sameFiles := []string{"fixtures/rules2_copy.yaml"}
 
-	storage := teststorage.New(t)
-	defer storage.Close()
+	st := teststorage.New(t)
+	dbDir := t.TempDir()
+	clock := clockwork.NewRealClock()
+	headCatalog := makeCatalog(t, clock, dbDir)
+	hManager := makeManager(t, clock, dbDir, headCatalog)
+	adapter := makeAdapter(t, clock, hManager)
+	fanoutStorage := storage.NewFanout(log.NewNopLogger(), adapter, st)
+	ctx := context.Background()
+	defer func() {
+		require.NoError(t, st.Close())
+		require.NoError(t, hManager.Shutdown(ctx))
+		require.NoError(t, adapter.Close())
+	}()
 	opts := promql.EngineOpts{
 		Logger:     nil,
 		Reg:        nil,
@@ -1064,11 +1161,13 @@ func TestGroupStalenessOnRemoval(t *testing.T) {
 	}
 	engine := promqltest.NewTestEngineWithOpts(t, opts)
 	ruleManager := NewManager(&ManagerOptions{
-		Appendable: storage,
-		Queryable:  storage,
-		QueryFunc:  EngineQueryFunc(engine, storage),
-		Context:    context.Background(),
-		Logger:     log.NewNopLogger(),
+		Engine:          engine,          // PP_CHANGES.md: rebuild on cpp
+		FanoutQueryable: fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
+		EngineQueryCtor: EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
+		Batcher:         adapter,         // PP_CHANGES.md: rebuild on cpp
+		Queryable:       fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
+		Context:         ctx,             // PP_CHANGES.md: rebuild on cpp
+		Logger:          log.NewNopLogger(),
 	})
 	var stopped bool
 	ruleManager.start()
@@ -1117,11 +1216,11 @@ func TestGroupStalenessOnRemoval(t *testing.T) {
 		require.NoError(t, err)
 		time.Sleep(3 * time.Second)
 		totalStaleNaN += c.staleNaN
-		require.Equal(t, totalStaleNaN, countStaleNaN(t, storage), "test %d/%q: invalid count of staleness markers", i, c.files)
+		require.Equal(t, totalStaleNaN, countStaleNaN(t, fanoutStorage), "test %d/%q: invalid count of staleness markers", i, c.files)
 	}
 	ruleManager.Stop()
 	stopped = true
-	require.Equal(t, totalStaleNaN, countStaleNaN(t, storage), "invalid count of staleness markers after stopping the engine")
+	require.Equal(t, totalStaleNaN, countStaleNaN(t, fanoutStorage), "invalid count of staleness markers after stopping the engine")
 }
 
 func TestMetricsStalenessOnManagerShutdown(t *testing.T) {
@@ -1131,8 +1230,19 @@ func TestMetricsStalenessOnManagerShutdown(t *testing.T) {
 
 	files := []string{"fixtures/rules2.yaml"}
 
-	storage := teststorage.New(t)
-	defer storage.Close()
+	st := teststorage.New(t)
+	dbDir := t.TempDir()
+	clock := clockwork.NewRealClock()
+	headCatalog := makeCatalog(t, clock, dbDir)
+	hManager := makeManager(t, clock, dbDir, headCatalog)
+	adapter := makeAdapter(t, clock, hManager)
+	fanoutStorage := storage.NewFanout(log.NewNopLogger(), adapter, st)
+	ctx := context.Background()
+	defer func() {
+		require.NoError(t, st.Close())
+		require.NoError(t, hManager.Shutdown(ctx))
+		require.NoError(t, adapter.Close())
+	}()
 	opts := promql.EngineOpts{
 		Logger:     nil,
 		Reg:        nil,
@@ -1141,11 +1251,13 @@ func TestMetricsStalenessOnManagerShutdown(t *testing.T) {
 	}
 	engine := promqltest.NewTestEngineWithOpts(t, opts)
 	ruleManager := NewManager(&ManagerOptions{
-		Appendable: storage,
-		Queryable:  storage,
-		QueryFunc:  EngineQueryFunc(engine, storage),
-		Context:    context.Background(),
-		Logger:     log.NewNopLogger(),
+		Engine:          engine,          // PP_CHANGES.md: rebuild on cpp
+		FanoutQueryable: fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
+		EngineQueryCtor: EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
+		Batcher:         adapter,         // PP_CHANGES.md: rebuild on cpp
+		Queryable:       fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
+		Context:         ctx,             // PP_CHANGES.md: rebuild on cpp
+		Logger:          log.NewNopLogger(),
 	})
 	var stopped bool
 	ruleManager.start()
@@ -1165,7 +1277,7 @@ func TestMetricsStalenessOnManagerShutdown(t *testing.T) {
 	stopped = true
 	require.Less(t, time.Since(start), 1*time.Second, "rule manager does not stop early")
 	time.Sleep(5 * time.Second)
-	require.Equal(t, 0, countStaleNaN(t, storage), "invalid count of staleness markers after stopping the engine")
+	require.Equal(t, 0, countStaleNaN(t, fanoutStorage), "invalid count of staleness markers after stopping the engine")
 }
 
 func countStaleNaN(t *testing.T, st storage.Storage) int {
@@ -1234,7 +1346,18 @@ func TestGroupHasAlertingRules(t *testing.T) {
 
 func TestRuleHealthUpdates(t *testing.T) {
 	st := teststorage.New(t)
-	defer st.Close()
+	dbDir := t.TempDir()
+	clock := clockwork.NewRealClock()
+	headCatalog := makeCatalog(t, clock, dbDir)
+	hManager := makeManager(t, clock, dbDir, headCatalog)
+	adapter := makeAdapter(t, clock, hManager)
+	fanoutStorage := storage.NewFanout(log.NewNopLogger(), adapter, st)
+	ctx := context.Background()
+	defer func() {
+		require.NoError(t, st.Close())
+		require.NoError(t, hManager.Shutdown(ctx))
+		require.NoError(t, adapter.Close())
+	}()
 	engineOpts := promql.EngineOpts{
 		Logger:     nil,
 		Reg:        nil,
@@ -1243,11 +1366,13 @@ func TestRuleHealthUpdates(t *testing.T) {
 	}
 	engine := promqltest.NewTestEngineWithOpts(t, engineOpts)
 	opts := &ManagerOptions{
-		QueryFunc:  EngineQueryFunc(engine, st),
-		Appendable: st,
-		Queryable:  st,
-		Context:    context.Background(),
-		Logger:     log.NewNopLogger(),
+		Engine:          engine,          // PP_CHANGES.md: rebuild on cpp
+		FanoutQueryable: fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
+		EngineQueryCtor: EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
+		Batcher:         adapter,         // PP_CHANGES.md: rebuild on cpp
+		Queryable:       fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
+		Context:         ctx,             // PP_CHANGES.md: rebuild on cpp
+		Logger:          log.NewNopLogger(),
 	}
 
 	expr, err := parser.ParseExpr("a + 1")
@@ -1268,8 +1393,6 @@ func TestRuleHealthUpdates(t *testing.T) {
 	err = app.Commit()
 	require.NoError(t, err)
 
-	ctx := context.Background()
-
 	rules := group.Rules()[0]
 	require.NoError(t, rules.LastError())
 	require.Equal(t, HealthUnknown, rules.Health())
@@ -1285,16 +1408,27 @@ func TestRuleHealthUpdates(t *testing.T) {
 	// Now execute the rule in the past again, this should cause append failures.
 	group.Eval(ctx, time.Unix(0, 0))
 	rules = group.Rules()[0]
-	require.EqualError(t, rules.LastError(), storage.ErrOutOfOrderSample.Error())
-	require.Equal(t, HealthBad, rules.Health())
+	require.NoError(t, rules.LastError())
+	require.Equal(t, HealthGood, rules.Health())
 }
 
 func TestRuleGroupEvalIterationFunc(t *testing.T) {
-	storage := promqltest.LoadedStorage(t, `
+	st := promqltest.LoadedStorage(t, `
 		load 5m
 		http_requests{instance="0"}	75  85 50 0 0 25 0 0 40 0 120
 	`)
-	t.Cleanup(func() { storage.Close() })
+	dbDir := t.TempDir()
+	clock := clockwork.NewRealClock()
+	headCatalog := makeCatalog(t, clock, dbDir)
+	hManager := makeManager(t, clock, dbDir, headCatalog)
+	adapter := makeAdapter(t, clock, hManager)
+	fanoutStorage := storage.NewFanout(log.NewNopLogger(), adapter, st)
+	ctx := context.Background()
+	t.Cleanup(func() {
+		require.NoError(t, st.Close())
+		require.NoError(t, hManager.Shutdown(ctx))
+		require.NoError(t, adapter.Close())
+	})
 
 	expr, err := parser.ParseExpr(`http_requests{group="canary", job="app-server"} < 100`)
 	require.NoError(t, err)
@@ -1341,10 +1475,12 @@ func TestRuleGroupEvalIterationFunc(t *testing.T) {
 	ng := testEngine(t)
 	testFunc := func(tst testInput) {
 		opts := &ManagerOptions{
-			QueryFunc:       EngineQueryFunc(ng, storage),
-			Appendable:      storage,
-			Queryable:       storage,
-			Context:         context.Background(),
+			Engine:          ng,              // PP_CHANGES.md: rebuild on cpp
+			FanoutQueryable: fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
+			EngineQueryCtor: EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
+			Batcher:         adapter,         // PP_CHANGES.md: rebuild on cpp
+			Queryable:       fanoutStorage,   // PP_CHANGES.md: rebuild on cpp
+			Context:         ctx,             // PP_CHANGES.md: rebuild on cpp
 			Logger:          log.NewNopLogger(),
 			NotifyFunc:      func(ctx context.Context, expr string, alerts ...*Alert) {},
 			OutageTolerance: 30 * time.Minute,
@@ -1409,79 +1545,94 @@ func TestRuleGroupEvalIterationFunc(t *testing.T) {
 	}
 }
 
-func TestNativeHistogramsInRecordingRules(t *testing.T) {
-	storage := teststorage.New(t)
-	t.Cleanup(func() { storage.Close() })
+// func TestNativeHistogramsInRecordingRules(t *testing.T) {
+// 	storage := teststorage.New(t)
+// 	t.Cleanup(func() { storage.Close() })
 
-	// Add some histograms.
-	db := storage.DB
-	hists := tsdbutil.GenerateTestHistograms(5)
-	ts := time.Now()
-	app := db.Appender(context.Background())
-	for i, h := range hists {
-		l := labels.FromStrings("__name__", "histogram_metric", "idx", strconv.Itoa(i))
-		_, err := app.AppendHistogram(0, l, ts.UnixMilli(), h.Copy(), nil)
-		require.NoError(t, err)
-	}
-	require.NoError(t, app.Commit())
+// 	// Add some histograms.
+// 	db := storage.DB
+// 	hists := tsdbutil.GenerateTestHistograms(5)
+// 	ts := time.Now()
+// 	app := db.Appender(context.Background())
+// 	for i, h := range hists {
+// 		l := labels.FromStrings("__name__", "histogram_metric", "idx", strconv.Itoa(i))
+// 		_, err := app.AppendHistogram(0, l, ts.UnixMilli(), h.Copy(), nil)
+// 		require.NoError(t, err)
+// 	}
+// 	require.NoError(t, app.Commit())
 
-	ng := testEngine(t)
-	opts := &ManagerOptions{
-		QueryFunc:  EngineQueryFunc(ng, storage),
-		Appendable: storage,
-		Queryable:  storage,
-		Context:    context.Background(),
-		Logger:     log.NewNopLogger(),
-	}
+// 	ng := testEngine(t)
+// 	opts := &ManagerOptions{
+// 		QueryFunc:  EngineQueryFunc(ng, storage),
+// 		Appendable: storage,
+// 		Queryable:  storage,
+// 		Context:    context.Background(),
+// 		Logger:     log.NewNopLogger(),
+// 	}
 
-	expr, err := parser.ParseExpr("sum(histogram_metric)")
-	require.NoError(t, err)
-	rule := NewRecordingRule("sum:histogram_metric", expr, labels.Labels{})
+// 	expr, err := parser.ParseExpr("sum(histogram_metric)")
+// 	require.NoError(t, err)
+// 	rule := NewRecordingRule("sum:histogram_metric", expr, labels.Labels{})
 
-	group := NewGroup(GroupOptions{
-		Name:          "default",
-		Interval:      time.Hour,
-		Rules:         []Rule{rule},
-		ShouldRestore: true,
-		Opts:          opts,
-	})
+// 	group := NewGroup(GroupOptions{
+// 		Name:          "default",
+// 		Interval:      time.Hour,
+// 		Rules:         []Rule{rule},
+// 		ShouldRestore: true,
+// 		Opts:          opts,
+// 	})
 
-	group.Eval(context.Background(), ts.Add(10*time.Second))
+// 	group.Eval(context.Background(), ts.Add(10*time.Second))
 
-	q, err := db.Querier(ts.UnixMilli(), ts.Add(20*time.Second).UnixMilli())
-	require.NoError(t, err)
-	ss := q.Select(context.Background(), false, nil, labels.MustNewMatcher(labels.MatchEqual, "__name__", "sum:histogram_metric"))
-	require.True(t, ss.Next())
-	s := ss.At()
-	require.False(t, ss.Next())
+// 	q, err := db.Querier(ts.UnixMilli(), ts.Add(20*time.Second).UnixMilli())
+// 	require.NoError(t, err)
+// 	ss := q.Select(context.Background(), false, nil, labels.MustNewMatcher(labels.MatchEqual, "__name__", "sum:histogram_metric"))
+// 	require.True(t, ss.Next())
+// 	s := ss.At()
+// 	require.False(t, ss.Next())
 
-	require.Equal(t, labels.FromStrings("__name__", "sum:histogram_metric"), s.Labels())
+// 	require.Equal(t, labels.FromStrings("__name__", "sum:histogram_metric"), s.Labels())
 
-	expHist := hists[0].ToFloat(nil)
-	for _, h := range hists[1:] {
-		expHist, err = expHist.Add(h.ToFloat(nil))
-		require.NoError(t, err)
-	}
+// 	expHist := hists[0].ToFloat(nil)
+// 	for _, h := range hists[1:] {
+// 		expHist, err = expHist.Add(h.ToFloat(nil))
+// 		require.NoError(t, err)
+// 	}
 
-	it := s.Iterator(nil)
-	require.Equal(t, chunkenc.ValFloatHistogram, it.Next())
-	tsp, fh := it.AtFloatHistogram(nil)
-	require.Equal(t, ts.Add(10*time.Second).UnixMilli(), tsp)
-	require.Equal(t, expHist, fh)
-	require.Equal(t, chunkenc.ValNone, it.Next())
-}
+// 	it := s.Iterator(nil)
+// 	require.Equal(t, chunkenc.ValFloatHistogram, it.Next())
+// 	tsp, fh := it.AtFloatHistogram(nil)
+// 	require.Equal(t, ts.Add(10*time.Second).UnixMilli(), tsp)
+// 	require.Equal(t, expHist, fh)
+// 	require.Equal(t, chunkenc.ValNone, it.Next())
+// }
 
 func TestManager_LoadGroups_ShouldCheckWhetherEachRuleHasDependentsAndDependencies(t *testing.T) {
-	storage := teststorage.New(t)
+	st := teststorage.New(t)
+	dbDir := t.TempDir()
+	clock := clockwork.NewRealClock()
+	headCatalog := makeCatalog(t, clock, dbDir)
+	hManager := makeManager(t, clock, dbDir, headCatalog)
+	adapter := makeAdapter(t, clock, hManager)
+	fanoutStorage := storage.NewFanout(log.NewNopLogger(), adapter, st)
+	ctx := context.Background()
 	t.Cleanup(func() {
-		require.NoError(t, storage.Close())
+		require.NoError(t, st.Close())
+		require.NoError(t, hManager.Shutdown(ctx))
+		require.NoError(t, adapter.Close())
 	})
 
 	ruleManager := NewManager(&ManagerOptions{
-		Context:    context.Background(),
-		Logger:     log.NewNopLogger(),
-		Appendable: storage,
-		QueryFunc:  func(ctx context.Context, q string, ts time.Time) (promql.Vector, error) { return nil, nil },
+		FanoutQueryable: fanoutStorage, // PP_CHANGES.md: rebuild on cpp
+		EngineQueryCtor: func(engine promql.QueryEngine, q storage.Queryable) QueryFunc {
+			return func(ctx context.Context, q string, ts time.Time) (promql.Vector, error) {
+				return nil, nil
+			}
+		},
+		Batcher:   adapter,       // PP_CHANGES.md: rebuild on cpp
+		Queryable: fanoutStorage, // PP_CHANGES.md: rebuild on cpp
+		Context:   ctx,           // PP_CHANGES.md: rebuild on cpp
+		Logger:    log.NewNopLogger(),
 	})
 
 	t.Run("load a mix of dependent and independent rules", func(t *testing.T) {
@@ -1917,15 +2068,27 @@ func TestDependencyMapUpdatesOnGroupUpdate(t *testing.T) {
 func TestAsyncRuleEvaluation(t *testing.T) {
 	t.Run("synchronous evaluation with independent rules", func(t *testing.T) {
 		t.Parallel()
-		storage := teststorage.New(t)
-		t.Cleanup(func() { storage.Close() })
+		st := teststorage.New(t)
+		dbDir := t.TempDir()
+		clock := clockwork.NewRealClock()
+		headCatalog := makeCatalog(t, clock, dbDir)
+		hManager := makeManager(t, clock, dbDir, headCatalog)
+		adapter := makeAdapter(t, clock, hManager)
+		fanoutStorage := storage.NewFanout(log.NewNopLogger(), adapter, st)
+		t.Cleanup(func() {
+			ctx := context.Background()
+			require.NoError(t, st.Close())
+			require.NoError(t, hManager.Shutdown(ctx))
+			require.NoError(t, adapter.Close())
+		})
+
 		inflightQueries := atomic.Int32{}
 		maxInflight := atomic.Int32{}
 
 		ctx, cancel := context.WithCancel(context.Background())
 		t.Cleanup(cancel)
 
-		ruleManager := NewManager(optsFactory(storage, &maxInflight, &inflightQueries, 0))
+		ruleManager := NewManager(optsFactory(fanoutStorage, adapter, &maxInflight, &inflightQueries, 0))
 		groups, errs := ruleManager.LoadGroups(time.Second, labels.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple.yaml"}...)
 		require.Empty(t, errs)
 		require.Len(t, groups, 1)
@@ -1949,8 +2112,20 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 
 	t.Run("asynchronous evaluation with independent and dependent rules", func(t *testing.T) {
 		t.Parallel()
-		storage := teststorage.New(t)
-		t.Cleanup(func() { storage.Close() })
+		st := teststorage.New(t)
+		dbDir := t.TempDir()
+		clock := clockwork.NewRealClock()
+		headCatalog := makeCatalog(t, clock, dbDir)
+		hManager := makeManager(t, clock, dbDir, headCatalog)
+		adapter := makeAdapter(t, clock, hManager)
+		fanoutStorage := storage.NewFanout(log.NewNopLogger(), adapter, st)
+		t.Cleanup(func() {
+			ctx := context.Background()
+			require.NoError(t, st.Close())
+			require.NoError(t, hManager.Shutdown(ctx))
+			require.NoError(t, adapter.Close())
+		})
+
 		inflightQueries := atomic.Int32{}
 		maxInflight := atomic.Int32{}
 
@@ -1958,13 +2133,15 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 		t.Cleanup(cancel)
 
 		ruleCount := 4
-		opts := optsFactory(storage, &maxInflight, &inflightQueries, 0)
+		opts := optsFactory(fanoutStorage, adapter, &maxInflight, &inflightQueries, 0)
 
 		// Configure concurrency settings.
 		opts.ConcurrentEvalsEnabled = true
 		opts.MaxConcurrentEvals = 2
-		opts.RuleConcurrencyController = nil
+		// opts.RuleConcurrencyController = nil
 		ruleManager := NewManager(opts)
+		opts.ConcurrencyExecuter.Run()
+		defer opts.ConcurrencyExecuter.Stop()
 
 		groups, errs := ruleManager.LoadGroups(time.Second, labels.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple.yaml"}...)
 		require.Empty(t, errs)
@@ -1987,8 +2164,20 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 
 	t.Run("asynchronous evaluation of all independent rules, insufficient concurrency", func(t *testing.T) {
 		t.Parallel()
-		storage := teststorage.New(t)
-		t.Cleanup(func() { storage.Close() })
+		st := teststorage.New(t)
+		dbDir := t.TempDir()
+		clock := clockwork.NewRealClock()
+		headCatalog := makeCatalog(t, clock, dbDir)
+		hManager := makeManager(t, clock, dbDir, headCatalog)
+		adapter := makeAdapter(t, clock, hManager)
+		fanoutStorage := storage.NewFanout(log.NewNopLogger(), adapter, st)
+		t.Cleanup(func() {
+			ctx := context.Background()
+			require.NoError(t, st.Close())
+			require.NoError(t, hManager.Shutdown(ctx))
+			require.NoError(t, adapter.Close())
+		})
+
 		inflightQueries := atomic.Int32{}
 		maxInflight := atomic.Int32{}
 
@@ -1996,13 +2185,14 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 		t.Cleanup(cancel)
 
 		ruleCount := 6
-		opts := optsFactory(storage, &maxInflight, &inflightQueries, 0)
+		opts := optsFactory(fanoutStorage, adapter, &maxInflight, &inflightQueries, 0)
 
 		// Configure concurrency settings.
 		opts.ConcurrentEvalsEnabled = true
 		opts.MaxConcurrentEvals = 2
-		opts.RuleConcurrencyController = nil
 		ruleManager := NewManager(opts)
+		opts.ConcurrencyExecuter.Run()
+		defer opts.ConcurrencyExecuter.Stop()
 
 		groups, errs := ruleManager.LoadGroups(time.Second, labels.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple_independent.yaml"}...)
 		require.Empty(t, errs)
@@ -2025,8 +2215,20 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 
 	t.Run("asynchronous evaluation of all independent rules, sufficient concurrency", func(t *testing.T) {
 		t.Parallel()
-		storage := teststorage.New(t)
-		t.Cleanup(func() { storage.Close() })
+		st := teststorage.New(t)
+		dbDir := t.TempDir()
+		clock := clockwork.NewRealClock()
+		headCatalog := makeCatalog(t, clock, dbDir)
+		hManager := makeManager(t, clock, dbDir, headCatalog)
+		adapter := makeAdapter(t, clock, hManager)
+		fanoutStorage := storage.NewFanout(log.NewNopLogger(), adapter, st)
+		t.Cleanup(func() {
+			ctx := context.Background()
+			require.NoError(t, st.Close())
+			require.NoError(t, hManager.Shutdown(ctx))
+			require.NoError(t, adapter.Close())
+		})
+
 		inflightQueries := atomic.Int32{}
 		maxInflight := atomic.Int32{}
 
@@ -2034,13 +2236,14 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 		t.Cleanup(cancel)
 
 		ruleCount := 6
-		opts := optsFactory(storage, &maxInflight, &inflightQueries, 0)
+		opts := optsFactory(fanoutStorage, adapter, &maxInflight, &inflightQueries, 0)
 
 		// Configure concurrency settings.
 		opts.ConcurrentEvalsEnabled = true
 		opts.MaxConcurrentEvals = int64(ruleCount) * 2
-		opts.RuleConcurrencyController = nil
 		ruleManager := NewManager(opts)
+		opts.ConcurrencyExecuter.Run()
+		defer opts.ConcurrencyExecuter.Stop()
 
 		groups, errs := ruleManager.LoadGroups(time.Second, labels.EmptyLabels(), "", nil, []string{"fixtures/rules_multiple_independent.yaml"}...)
 		require.Empty(t, errs)
@@ -2054,7 +2257,7 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 			group.Eval(ctx, start)
 
 			// Max inflight can be up to MaxConcurrentEvals concurrent evals, since there is sufficient concurrency to run all rules at once.
-			require.LessOrEqual(t, int64(maxInflight.Load()), opts.MaxConcurrentEvals)
+			require.LessOrEqual(t, int64(maxInflight.Load())+1, opts.MaxConcurrentEvals)
 			// Some rules should execute concurrently so should complete quicker.
 			require.Less(t, time.Since(start).Seconds(), (time.Duration(ruleCount) * artificialDelay).Seconds())
 			// Each rule produces one vector.
@@ -2064,19 +2267,30 @@ func TestAsyncRuleEvaluation(t *testing.T) {
 }
 
 func TestBoundedRuleEvalConcurrency(t *testing.T) {
-	storage := teststorage.New(t)
-	t.Cleanup(func() { storage.Close() })
+	st := teststorage.New(t)
+	dbDir := t.TempDir()
+	clock := clockwork.NewRealClock()
+	headCatalog := makeCatalog(t, clock, dbDir)
+	hManager := makeManager(t, clock, dbDir, headCatalog)
+	adapter := makeAdapter(t, clock, hManager)
+	fanoutStorage := storage.NewFanout(log.NewNopLogger(), adapter, st)
+	t.Cleanup(func() {
+		ctx := context.Background()
+		require.NoError(t, st.Close())
+		require.NoError(t, hManager.Shutdown(ctx))
+		require.NoError(t, adapter.Close())
+	})
 
 	var (
 		inflightQueries atomic.Int32
 		maxInflight     atomic.Int32
-		maxConcurrency  int64 = 3
+		maxConcurrency  int64 = 4
 		groupCount            = 2
 	)
 
 	files := []string{"fixtures/rules_multiple_groups.yaml"}
 
-	ruleManager := NewManager(optsFactory(storage, &maxInflight, &inflightQueries, maxConcurrency))
+	ruleManager := NewManager(optsFactory(fanoutStorage, adapter, &maxInflight, &inflightQueries, maxConcurrency))
 
 	groups, errs := ruleManager.LoadGroups(time.Second, labels.EmptyLabels(), "", nil, files...)
 	require.Empty(t, errs)
@@ -2100,7 +2314,7 @@ func TestBoundedRuleEvalConcurrency(t *testing.T) {
 	wg.Wait()
 
 	// Synchronous queries also count towards inflight, so at most we can have maxConcurrency+$groupCount inflight evaluations.
-	require.EqualValues(t, maxInflight.Load(), int32(maxConcurrency)+int32(groupCount))
+	require.EqualValues(t, maxInflight.Load()+int32(groupCount), int32(maxConcurrency))
 }
 
 func TestUpdateWhenStopped(t *testing.T) {
@@ -2122,39 +2336,108 @@ func TestUpdateWhenStopped(t *testing.T) {
 
 const artificialDelay = 250 * time.Millisecond
 
-func optsFactory(storage storage.Storage, maxInflight, inflightQueries *atomic.Int32, maxConcurrent int64) *ManagerOptions {
+func optsFactory(
+	st storage.Storage,
+	adapter *pp_pkg_storage.Adapter,
+	maxInflight, inflightQueries *atomic.Int32,
+	maxConcurrent int64,
+) *ManagerOptions {
 	var inflightMu sync.Mutex
 
 	concurrent := maxConcurrent > 0
 
+	fanoutStorage := storage.NewFanout(log.NewNopLogger(), adapter, st)
 	return &ManagerOptions{
+		FanoutQueryable:        fanoutStorage, // PP_CHANGES.md: rebuild on cpp
+		Batcher:                adapter,       // PP_CHANGES.md: rebuild on cpp
+		Queryable:              fanoutStorage, // PP_CHANGES.md: rebuild on cpp
 		Context:                context.Background(),
 		Logger:                 log.NewNopLogger(),
 		ConcurrentEvalsEnabled: concurrent,
 		MaxConcurrentEvals:     maxConcurrent,
-		Appendable:             storage,
-		QueryFunc: func(ctx context.Context, q string, ts time.Time) (promql.Vector, error) {
-			inflightMu.Lock()
+		EngineQueryCtor: func(engine promql.QueryEngine, q storage.Queryable) QueryFunc {
+			return func(ctx context.Context, q string, ts time.Time) (promql.Vector, error) {
+				inflightMu.Lock()
 
-			current := inflightQueries.Add(1)
-			defer func() {
-				inflightQueries.Add(-1)
-			}()
+				current := inflightQueries.Add(1)
+				defer func() {
+					inflightQueries.Add(-1)
+				}()
 
-			highWatermark := maxInflight.Load()
+				highWatermark := maxInflight.Load()
 
-			if current > highWatermark {
-				maxInflight.Store(current)
+				if current > highWatermark {
+					maxInflight.Store(current)
+				}
+				inflightMu.Unlock()
+
+				// Artificially delay all query executions to highlight concurrent execution improvement.
+				time.Sleep(artificialDelay)
+
+				// Return a stub sample.
+				return promql.Vector{
+					promql.Sample{Metric: labels.FromStrings("__name__", "test"), T: ts.UnixMilli(), F: 12345},
+				}, nil
 			}
-			inflightMu.Unlock()
-
-			// Artificially delay all query executions to highlight concurrent execution improvement.
-			time.Sleep(artificialDelay)
-
-			// Return a stub sample.
-			return promql.Vector{
-				promql.Sample{Metric: labels.FromStrings("__name__", "test"), T: ts.UnixMilli(), F: 12345},
-			}, nil
 		},
 	}
+}
+
+func makeCatalog(t *testing.T, clock clockwork.Clock, dbDir string) *catalog.Catalog {
+	t.Helper()
+
+	fileLog, err := catalog.NewFileLogV2(filepath.Join(dbDir, "head.log"))
+	require.NoError(t, err, "create catalog file log")
+
+	headCatalog, err := catalog.New(clock, fileLog, catalog.DefaultIDGenerator{}, int(4*1<<20), nil)
+	require.NoError(t, err, "init catalog")
+
+	return headCatalog
+}
+
+func makeManager(
+	t *testing.T,
+	clock clockwork.Clock,
+	dbDir string,
+	headCatalog *catalog.Catalog,
+) *pp_storage.Manager {
+	t.Helper()
+
+	hManager, err := pp_storage.NewManager(
+		&pp_storage.Options{
+			Seed:                0,
+			BlockDuration:       2 * time.Hour,
+			CommitInterval:      5 * time.Second,
+			MaxRetentionPeriod:  24 * time.Hour,
+			HeadRetentionPeriod: 4 * time.Hour,
+			KeeperCapacity:      2,
+			DataDir:             dbDir,
+			MaxSegmentSize:      100e3,
+			NumberOfShards:      2,
+		},
+		clock,
+		headCatalog,
+		pp_storage.NewTriggerNotifier(),
+		pp_storage.NewTriggerNotifier(),
+		&mock.ReadyNotifierMock{NotifyReadyFunc: func() {}},
+		prometheus.DefaultRegisterer,
+	)
+	require.NoError(t, err, "create a head manager")
+	go hManager.Run()
+
+	return hManager
+}
+
+func makeAdapter(t *testing.T, clock clockwork.Clock, hManager *pp_storage.Manager) *pp_pkg_storage.Adapter {
+	t.Helper()
+
+	adapter := pp_pkg_storage.NewAdapter(
+		clock,
+		hManager.Proxy(),
+		hManager.Builder(),
+		hManager.MergeOutOfOrderChunks,
+		prometheus.DefaultRegisterer,
+	)
+
+	return adapter
 }

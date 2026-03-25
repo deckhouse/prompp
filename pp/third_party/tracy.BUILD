@@ -15,6 +15,8 @@ cmake(
         "-DTRACY_ENABLE=ON",
         "-DTRACY_VERBOSE=ON",
         "-DTRACY_NO_EXIT=ON",
+        "-DTRACY_NO_VSYNC_CAPTURE=ON",
+        "-DTRACY_LIBUNWIND_BACKTRACE=ON",
     ],
     copts = [
         "-Wno-error"
@@ -26,10 +28,18 @@ cmake(
 )
 
 cc_library(
+    name = "tracy_headers",
+    hdrs = glob(["public/**/*.h", "public/**/*.hpp"]),
+    strip_include_prefix = "public",
+    visibility = ["//visibility:public"],
+)
+
+cc_library(
     name = "tracy",
     hdrs = glob(["public/**/*.h", "public/**/*.hpp"]),
     deps = [
-        ":tracy_client"
+        ":tracy_headers",
+        ":tracy_client",
     ],
     strip_include_prefix = "public",
     visibility = ["//visibility:public"],

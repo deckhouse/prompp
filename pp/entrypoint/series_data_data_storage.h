@@ -93,32 +93,31 @@ void prompp_series_data_data_storage_queried_series_set_bitset(void* args, void*
 void prompp_series_data_data_storage_allocated_memory(void* args, void* res);
 
 /**
- * @brief Queries data storage and serializes result.
+ * @brief Queries data storage and serializes result (new serialization model).
  *
  * @param args {
  *     dataStorage    uintptr          // pointer to constructed data storage
  *     query          DataStorageQuery // query
- *     serializedData *[]byte          // pointer to slice for serialized data
  * }
  *
  * @param res {
- *     Querier uintptr // pointer to constructed Querier if data loading is needed
- *     Status  uint8   // status of a query (0 - Success, 1 - Data loading is needed)
+ *     Querier uintptr        // pointer to constructed Querier if data loading is needed.
+ *                            // If constructed (!= 0) it must be destroyed by calling prompp_series_data_data_storage_query_final.
+ *     Status  uint8          // status of a query (0 - Success, 1 - Data loading is needed)
+ *     serializedData uintptr // pointer to serialized data
  * }
  */
-void prompp_series_data_data_storage_query(void* args, void* res);
+void prompp_series_data_data_storage_query_v2(void* args, void* res);
 
 /**
- * @brief return samples at given timestamp for label sets.
+ * @brief return instant series at given timestamp for label sets.
  *
  * @param args {
- *        dataStorage uintptr    // pointer to constructed data storage
- *        labelSetIDs []uint32   // series ids
- *        timestamp   int64      // timestamp
- *        samples     []struct { // pre-allocated samples slice
- *                timestamp int64
- *                value     float64
- *        }
+ *        dataStorage uintptr      // pointer to constructed data storage
+ *        labelSetIDs []uint32     // series ids
+ *        timestamp   int64        // timestamp
+ *        samples     uintptr      // pointer to samples data
+ * }
  * @param res {
  *     InstantQuerier uintptr // pointer to constructed Querier if data loading is needed
  *     Status uint8           // status of a query (0 - Success, 1 - Data loading is needed)
@@ -163,11 +162,11 @@ void prompp_series_data_data_storage_dtor(void* args);
 void prompp_series_data_chunk_recoder_ctor(void* args, void* res);
 
 /**
- * @brief Construct a new ChunkRecoder object for recode all serialized chunks
+ * @brief Construct a new ChunkRecoder object to recode all serialized chunks (new model)
  *
  * @param args {
- *     buffer []byte // SliceView to serialized chunks buffer
- *     time_interval struct { closed interval [min, max]
+ *     serializedData *uintptr // pointer to serialized data
+ *     time_interval struct { // closed interval [min, max]
  *        min int64
  *        max int64
  *     }

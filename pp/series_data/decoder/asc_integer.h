@@ -9,7 +9,8 @@ class AscIntegerDecodeIterator : public SeparatedTimestampValueDecodeIteratorTra
  public:
   using Decoder = encoder::ZigZagTimestampDecoder;
 
-  AscIntegerDecodeIterator(const encoder::BitSequenceWithItemsCount& timestamp_stream, const BareBones::BitSequenceReader& reader, bool is_last_stalenan)
+  template <class BitSequenceWithItemsCount>
+  AscIntegerDecodeIterator(const BitSequenceWithItemsCount& timestamp_stream, const BareBones::BitSequenceReader& reader, bool is_last_stalenan)
       : AscIntegerDecodeIterator(timestamp_stream.count(), timestamp_stream.reader(), reader, is_last_stalenan) {}
   AscIntegerDecodeIterator(uint8_t samples_count,
                            const BareBones::BitSequenceReader& timestamp_reader,

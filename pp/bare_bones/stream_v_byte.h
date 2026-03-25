@@ -5,6 +5,7 @@
 
 #include <scope_exit.h>
 
+#include "bare_bones/iterator.h"
 #include "exception.h"
 #include "streams.h"
 #include "type_traits.h"
@@ -577,7 +578,7 @@ class EncodeIterator {
   }
 };
 
-class DecodeIteratorSentinel {};
+using DecodeIteratorSentinel = BareBones::iterator::IteratorSentinelType;
 
 template <class Codec, std::random_access_iterator InnerIteratorType>
   requires std::is_same_v<typename std::iterator_traits<InnerIteratorType>::value_type, uint8_t>
@@ -960,7 +961,7 @@ class CompactSequence {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept {
     if constexpr (IsSharedMemory<MemoryType<uint8_t>>::value) {
-      return buffer_.constructed_item_count();
+      return buffer_.items_count();
     } else if constexpr (kIsReadOnly) {
       return buffer_.size();
     } else {
@@ -1016,7 +1017,7 @@ class CompactSequence {
  private:
   PROMPP_ALWAYS_INLINE void set_size(uint32_t new_size) noexcept {
     if constexpr (IsSharedMemory<MemoryType<uint8_t>>::value) {
-      buffer_.set_constructed_item_count(new_size);
+      buffer_.set_items_count(new_size);
     } else {
       buffer_.control_block().items_count = new_size;
     }

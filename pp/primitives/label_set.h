@@ -6,10 +6,11 @@
 #include "primitives.h"
 
 namespace PromPP::Primitives {
+
+struct NoSortLabels {};
+
 template <class LabelType, template <class> class Container = BareBones::Vector>
 class BasicLabelSet {
-  Container<LabelType> labels_;
-
  public:
   using label_type = LabelType;
 
@@ -32,7 +33,16 @@ class BasicLabelSet {
       }
       labels_.emplace_back(label);
     }
-  };
+  }
+
+  template <class LabelSet>
+  explicit BasicLabelSet(const LabelSet& other, const NoSortLabels&) {
+    labels_.reserve(other.size());
+
+    for (const auto& label : other) {
+      append(static_cast<std::string_view>(label.first), static_cast<std::string_view>(label.second));
+    }
+  }
 
   BasicLabelSet(const BasicLabelSet&) = default;
   BasicLabelSet(BasicLabelSet&&) noexcept = default;
@@ -42,22 +52,24 @@ class BasicLabelSet {
 
   PROMPP_ALWAYS_INLINE void clear() noexcept { labels_.clear(); }
 
-  PROMPP_ALWAYS_INLINE void add(const LabelType& label) noexcept {
+  PROMPP_ALWAYS_INLINE LabelType* add(const LabelType& label) noexcept {
     // if label value empty - skip label
     if (label.second.empty()) [[unlikely]] {
-      return;
+      return nullptr;
     }
 
     if (labels_.empty() || label.first > labels_.back().first) [[likely]] {
-      labels_.emplace_back(label);
+      return &labels_.emplace_back(label);
     } else if (label.first == labels_.back().first) [[unlikely]] {
       labels_.back().second = label.second;
+      return &labels_.back();
     } else {
       auto i = std::lower_bound(labels_.begin(), labels_.end(), label.first, [](const LabelType& a, const auto& b) { return a.first < b; });
       if (i->first == label.first) [[unlikely]] {
         i->second = label.second;
+        return &*i;
       } else {
-        labels_.insert(i, label);
+        return &*labels_.insert(i, label);
       }
     }
   }
@@ -65,6 +77,28 @@ class BasicLabelSet {
   PROMPP_ALWAYS_INLINE void append(std::string_view name, std::string_view value) noexcept {
     if (!value.empty()) [[likely]] {
       labels_.emplace_back(name, value);
+    }
+  }
+
+  template <class LabelSet>
+  PROMPP_ALWAYS_INLINE void append_unsorted(const LabelSet& label_set) {
+    labels_.reserve(labels_.size() + label_set.size());
+
+    for (const auto& label : label_set) {
+      append(static_cast<std::string_view>(label.first), static_cast<std::string_view>(label.second));
+    }
+
+    sort();
+  }
+
+  template <class LabelSet>
+  PROMPP_ALWAYS_INLINE void append_sorted(const LabelSet& label_set) {
+    assert(std::ranges::is_sorted(label_set, [](const auto& a, const auto& b) { return a.first < b.first; }));
+
+    labels_.reserve(labels_.size() + label_set.size());
+
+    for (const auto& label : label_set) {
+      append(static_cast<std::string_view>(label.first), static_cast<std::string_view>(label.second));
     }
   }
 
@@ -78,14 +112,13 @@ class BasicLabelSet {
   }
 
   template <class SymbolType>
-  PROMPP_ALWAYS_INLINE const SymbolType& get(const SymbolType& label_name) noexcept {
+  PROMPP_ALWAYS_INLINE LabelType::second_type* get(const SymbolType& label_name) noexcept {
     if (auto i = std::lower_bound(labels_.begin(), labels_.end(), label_name, [](const LabelType& a, const auto& b) { return a.first < b; });
         i->first == label_name) [[likely]] {
-      return i->second;
+      return &i->second;
     }
 
-    static const SymbolType kEmptySymbol{};
-    return kEmptySymbol;
+    return nullptr;
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE auto size() const noexcept { return labels_.size(); }
@@ -101,6 +134,8 @@ class BasicLabelSet {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const_iterator end() const noexcept { return labels_.end(); }
   PROMPP_ALWAYS_INLINE iterator end() noexcept { return labels_.end(); }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const LabelType& operator[](uint32_t index) const noexcept { return labels_[index]; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t allocated_memory() const noexcept { return BareBones::mem::allocated_memory(labels_); }
 
@@ -169,6 +204,13 @@ class BasicLabelSet {
   };
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE Names names() const noexcept { return Names(*this); }
+
+ private:
+  Container<LabelType> labels_;
+
+  PROMPP_ALWAYS_INLINE void sort() noexcept {
+    std::ranges::sort(labels_, [](const auto& a, const auto& b) { return a.first < b.first; });
+  }
 };
 
 using LabelSet = BasicLabelSet<Label, std::vector>;

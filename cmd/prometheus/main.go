@@ -35,10 +35,6 @@ import (
 	"syscall"
 	"time"
 
-	pphandler "github.com/prometheus/prometheus/pp-pkg/handler"
-	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor"
-	pptsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"
-
 	"github.com/KimMachineGun/automemlimit/memlimit"
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/alecthomas/units"
@@ -61,15 +57,22 @@ import (
 	"k8s.io/klog"
 	klogv2 "k8s.io/klog/v2"
 
-	"github.com/prometheus/prometheus/pp-pkg/receiver"               // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp-pkg/remote"                 // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp-pkg/scrape"                 // PP_CHANGES.md: rebuild on cpp
-	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage" // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/relabeler/appender"      // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/relabeler/head"          // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/relabeler/head/catalog"  // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/relabeler/head/ready"    // PP_CHANGES.md: rebuild on cpp
-	"github.com/prometheus/prometheus/pp/go/relabeler/remotewriter"  // PP_CHANGES.md: rebuild on cpp
+	pp_pkg_handler "github.com/prometheus/prometheus/pp-pkg/handler"        // PP_CHANGES.md: rebuild on cpp
+	rwprocessor "github.com/prometheus/prometheus/pp-pkg/handler/processor" // PP_CHANGES.md: rebuild on cpp
+	pp_pkg_logger "github.com/prometheus/prometheus/pp-pkg/logger"          // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/remote"                        // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/rules"                         // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp-pkg/scrape"                        // PP_CHANGES.md: rebuild on cpp
+	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage"        // PP_CHANGES.md: rebuild on cpp
+	pp_pkg_remote "github.com/prometheus/prometheus/pp-pkg/storage/remote"  // PP_CHANGES.md: rebuild on cpp
+	pp_pkg_tsdb "github.com/prometheus/prometheus/pp-pkg/tsdb"              // PP_CHANGES.md: rebuild on cpp
+
+	pp_storage "github.com/prometheus/prometheus/pp/go/storage"   // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/catalog"      // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/head/head"    // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/querier"      // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/ready"        // PP_CHANGES.md: rebuild on cpp
+	"github.com/prometheus/prometheus/pp/go/storage/remotewriter" // PP_CHANGES.md: rebuild on cpp
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
@@ -84,7 +87,6 @@ import (
 	_ "github.com/prometheus/prometheus/plugins" // Register plugins.
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
-	"github.com/prometheus/prometheus/rules"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/tracing"
 	"github.com/prometheus/prometheus/tsdb"
@@ -403,6 +405,12 @@ func main() {
 	serverOnlyFlag(a, "storage.tsdb.retention.time", "How long to retain samples in storage. When this flag is set it overrides \"storage.tsdb.retention\". If neither this flag nor \"storage.tsdb.retention\" nor \"storage.tsdb.retention.size\" is set, the retention time defaults to "+defaultRetentionString+". Units Supported: y, w, d, h, m, s, ms.").
 		SetValue(&newFlagRetentionDuration)
 
+	serverOnlyFlag(
+		a,
+		"storage.tsdb.corrupted-retention-duration",
+		"How long to retain corrupted blocks in storage. Units Supported: y, w, d, h, m, s, ms.",
+	).Default("4d").SetValue(&cfg.tsdb.CorruptedRetentionDuration)
+
 	serverOnlyFlag(a, "storage.tsdb.retention.size", "Maximum number of bytes that can be stored for blocks. A unit is required, supported units: B, KB, MB, GB, TB, PB, EB. Ex: \"512MB\". Based on powers-of-2, so 1KB is 1024B.").
 		BytesVar(&cfg.tsdb.MaxBytes)
 
@@ -720,9 +728,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	reloadBlocksTriggerNotifier := receiver.NewReloadBlocksTriggerNotifier()
+	pp_pkg_logger.InitLogHandler(log.With(logger, "component", "pp"))
+
+	reloadBlocksTriggerNotifier := pp_storage.NewTriggerNotifier()
 	cfg.tsdb.ReloadBlocksExternalTrigger = reloadBlocksTriggerNotifier
-	ctxReceiver, cancelReceiver := context.WithCancel(context.Background())
 
 	dataDir, err := filepath.Abs(localStoragePath)
 	if err != nil {
@@ -742,44 +751,64 @@ func main() {
 	}
 
 	clock := clockwork.NewRealClock()
-	headCatalog, err := catalog.New(clock, fileLog, catalog.DefaultIDGenerator{}, int(catalogMaxLogFileSize), prometheus.DefaultRegisterer)
+	headCatalog, err := catalog.New(
+		clock,
+		fileLog,
+		catalog.DefaultIDGenerator{},
+		int(catalogMaxLogFileSize),
+		prometheus.DefaultRegisterer,
+	)
 	if err != nil {
 		level.Error(logger).Log("msg", "failed to create head catalog", "err", err)
 		os.Exit(1)
 	}
 
-	receiverReadyNotifier := ready.NewNotifiableNotifier()
-	// create receiver
-	receiver, err := receiver.NewReceiver(
-		ctxReceiver,
-		log.With(logger, "component", "receiver"),
-		prometheus.DefaultRegisterer,
-		receiverConfig,
-		localStoragePath,
-		cfgFile.RemoteWriteConfigs,
-		localStoragePath,
-		receiver.RotationInfo{
-			BlockDuration: time.Duration(cfg.tsdb.MinBlockDuration),
-			Seed:          cfgFile.GlobalConfig.ExternalLabels.Hash(),
+	removedHeadTriggerNotifier := pp_storage.NewTriggerNotifier()
+	hManagerReadyNotifier := ready.NewNotifiableNotifier()
+	hManager, err := pp_storage.NewManager(
+		&pp_storage.Options{
+			Seed:                cfgFile.GlobalConfig.ExternalLabels.Hash(),
+			BlockDuration:       time.Duration(cfg.tsdb.MinBlockDuration),
+			CommitInterval:      time.Duration(cfg.WalCommitInterval),
+			MaxRetentionPeriod:  time.Duration(cfg.tsdb.RetentionDuration),
+			HeadRetentionPeriod: time.Duration(cfg.HeadRetentionTimeout),
+			KeeperCapacity:      2,
+			DataDir:             localStoragePath,
+			MaxSegmentSize:      cfg.WalMaxSamplesPerSegment,
+			NumberOfShards:      receiverConfig.NumberOfShards,
 		},
+		clock,
 		headCatalog,
 		reloadBlocksTriggerNotifier,
-		receiverReadyNotifier,
-		time.Duration(cfg.WalCommitInterval),
-		time.Duration(cfg.tsdb.RetentionDuration),
-		time.Duration(cfg.HeadRetentionTimeout),
-		// x3 ScrapeInterval timeout for write block
-		time.Duration(cfgFile.GlobalConfig.ScrapeInterval*3),
-		cfg.WalMaxSamplesPerSegment,
-		appender.UnloadDataStorage,
+		removedHeadTriggerNotifier,
+		hManagerReadyNotifier,
+		prometheus.DefaultRegisterer,
 	)
 	if err != nil {
-		level.Error(logger).Log("msg", "failed to create a receiver", "err", err)
+		level.Error(logger).Log("msg", "failed to create a head manager", "err", err)
 		os.Exit(1)
 	}
 
 	remoteWriterReadyNotifier := ready.NewNotifiableNotifier()
-	remoteWriter := remotewriter.New(dataDir, headCatalog, clock, remoteWriterReadyNotifier, prometheus.DefaultRegisterer)
+	remoteWriter := remotewriter.New(
+		dataDir,
+		headCatalog,
+		clock,
+		remoteWriterReadyNotifier,
+		prometheus.DefaultRegisterer,
+	)
+
+	adapter := pp_pkg_storage.NewAdapter(
+		clock,
+		hManager.Proxy(),
+		hManager.Builder(),
+		hManager.MergeOutOfOrderChunks,
+		prometheus.DefaultRegisterer,
+	)
+	if err := adapter.ApplyConfig(cfgFile); err != nil {
+		level.Error(logger).Log("msg", "failed to apply config to adapter", "err", err)
+		os.Exit(1)
+	}
 
 	// PP_CHANGES.md: rebuild on cpp end
 
@@ -788,16 +817,13 @@ func main() {
 		scraper      = &readyScrapeManager{}
 
 		// PP_CHANGES.md: rebuild on cpp start
-		remoteRead = pp_pkg_storage.NewRemoteRead(
+		remoteRead = pp_pkg_remote.NewRemoteRead(
 			log.With(logger, "component", "remote"),
-			prometheus.DefaultRegisterer,
 			localStorage.StartTime,
-			localStoragePath,
-			time.Duration(cfg.RemoteFlushDeadline),
 		)
 		fanoutStorage = storage.NewFanout(
 			logger,
-			pp_pkg_storage.NewQueryableStorage(receiver),
+			adapter,
 			localStorage,
 			remoteRead,
 		)
@@ -875,7 +901,8 @@ func main() {
 	scrapeManager, err := scrape.NewManager(
 		&cfg.scrape,
 		log.With(logger, "component", "scrape manager"),
-		receiver,
+		func(s string) (log.Logger, error) { return logging.NewJSONFileLogger(s) },
+		adapter,
 		prometheus.DefaultRegisterer,
 	)
 	if err != nil {
@@ -933,10 +960,14 @@ func main() {
 
 		queryEngine = promql.NewEngine(opts)
 
-		ruleManager = rules.NewManager(&rules.ManagerOptions{
-			Appendable:             receiver, // PP_CHANGES.md: rebuild on cpp
-			Queryable:              receiver, // PP_CHANGES.md: rebuild on cpp
-			QueryFunc:              rules.EngineQueryFunc(queryEngine, fanoutStorage),
+		ruleQueryOffset := time.Duration(cfgFile.GlobalConfig.RuleQueryOffset)
+		ruleManager, err = rules.NewManager(&rules.ManagerOptions{
+			Queryable:       adapter,               // PP_CHANGES.md: rebuild on cpp
+			Engine:          queryEngine,           // PP_CHANGES.md: rebuild on cpp
+			FanoutQueryable: fanoutStorage,         // PP_CHANGES.md: rebuild on cpp
+			EngineQueryCtor: rules.EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
+			Batcher:         adapter,               // PP_CHANGES.md: rebuild on cpp
+
 			NotifyFunc:             rules.SendAlerts(notifierManager, cfg.web.ExternalURL.String()),
 			Context:                ctxRule,
 			ExternalURL:            cfg.web.ExternalURL,
@@ -948,9 +979,13 @@ func main() {
 			MaxConcurrentEvals:     cfg.maxConcurrentEvals,
 			ConcurrentEvalsEnabled: cfg.enableConcurrentRuleEval,
 			DefaultRuleQueryOffset: func() time.Duration {
-				return time.Duration(cfgFile.GlobalConfig.RuleQueryOffset)
+				return ruleQueryOffset
 			},
 		})
+		if err != nil {
+			level.Error(logger).Log("msg", "failed to create a rule manager", "err", err)
+			os.Exit(1)
+		}
 	}
 
 	scraper.Set(scrapeManager)
@@ -992,7 +1027,7 @@ func main() {
 	}
 
 	// Depends on cfg.web.ScrapeManager so needs to be after cfg.web.ScrapeManager = scrapeManager.
-	webHandler := web.New(log.With(logger, "component", "web"), &cfg.web, receiver) // PP_CHANGES.md: rebuild on cpp
+	webHandler := web.New(log.With(logger, "component", "web"), &cfg.web, adapter) // PP_CHANGES.md: rebuild on cpp
 
 	// Monitor outgoing connections on default transport with conntrack.
 	http.DefaultTransport.(*http.Transport).DialContext = conntrack.NewDialContextFunc(
@@ -1004,8 +1039,11 @@ func main() {
 
 	reloaders := []reloader{
 		{ // PP_CHANGES.md: rebuild on cpp start
-			name:     "receiver",
-			reloader: receiver.ApplyConfig,
+			name:     "head_manager",
+			reloader: hManager.ApplyConfig,
+		}, { // PP_CHANGES.md: rebuild on cpp start
+			name:     "adapter",
+			reloader: adapter.ApplyConfig,
 		}, { // PP_CHANGES.md: rebuild on cpp end
 			name:     "db_storage",
 			reloader: localStorage.ApplyConfig,
@@ -1017,7 +1055,7 @@ func main() {
 			reloader: webHandler.ApplyConfig,
 		}, { // PP_CHANGES.md: rebuild on cpp end
 			name:     "remote_writer",
-			reloader: remote.ApplyConfig(remoteWriter),
+			reloader: remote.ApplyConfig(remoteWriter, cfg.tsdb.RetentionDuration),
 		}, { // PP_CHANGES.md: rebuild on cpp end
 			name: "query_engine",
 			reloader: func(cfg *config.Config) error {
@@ -1141,8 +1179,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	multiNotifiable := ready.New().With(receiverReadyNotifier).With(remoteWriterReadyNotifier).Build()
-	opGC := catalog.NewGC(dataDir, headCatalog, multiNotifiable)
+	multiNotifiable := ready.NewMultiNotifiableBuilder().Add(
+		hManagerReadyNotifier,
+	).Add(
+		remoteWriterReadyNotifier,
+	).Build()
+	opGC := catalog.NewGC(
+		dataDir,
+		headCatalog,
+		clock,
+		multiNotifiable,
+		removedHeadTriggerNotifier,
+		time.Duration(cfg.tsdb.RetentionDuration),
+	)
 
 	var g run.Group
 	{
@@ -1340,7 +1389,7 @@ func main() {
 					return fmt.Errorf("opening storage failed: %w", err)
 				}
 
-				tsdb.DBSetBlocksToDelete(db, pptsdb.PPBlocksToDelete(db, dataDir, headCatalog))
+				tsdb.DBSetBlocksToDelete(db, pp_pkg_tsdb.PPBlocksToDelete(db, dataDir, headCatalog))
 				switch fsType := prom_runtime.Statfs(localStoragePath); fsType {
 				case "NFS_SUPER_MAGIC":
 					level.Warn(logger).Log("fs_type", fsType, "msg", "This filesystem is not supported and may lead to data corruption and data loss. Please carefully read https://prometheus.io/docs/prometheus/latest/storage/ to learn more about supported filesystems.")
@@ -1355,6 +1404,7 @@ func main() {
 					"MaxBytes", cfg.tsdb.MaxBytes,
 					"NoLockfile", cfg.tsdb.NoLockfile,
 					"RetentionDuration", cfg.tsdb.RetentionDuration,
+					"CorruptedRetentionDuration", cfg.tsdb.CorruptedRetentionDuration,
 					"WALSegmentSize", cfg.tsdb.WALSegmentSize,
 					"WALCompression", cfg.tsdb.WALCompression,
 				)
@@ -1389,7 +1439,7 @@ func main() {
 				db, err := agent.Open(
 					logger,
 					prometheus.DefaultRegisterer,
-					receiver, // PP_CHANGES.md: rebuild on cpp
+					adapter, // PP_CHANGES.md: rebuild on cpp
 					localStoragePath,
 					&opts,
 				)
@@ -1444,37 +1494,42 @@ func main() {
 		)
 	}
 	{ // PP_CHANGES.md: rebuild on cpp start
-		// run receiver.
+		// run head manager.
+		cancel := make(chan struct{})
 		g.Add(
 			func() error {
-				<-dbOpen
-				return receiver.Run(ctxReceiver)
+				select {
+				case <-dbOpen:
+				// In case a shutdown is initiated before the dbOpen is released
+				case <-cancel:
+					return nil
+				}
+
+				return hManager.Run()
 			},
 			func(err error) {
-				receiverCancelCtx, receiverCancelCtxCancel := context.WithCancel(ctxReceiver)
-				defer receiverCancelCtxCancel()
-
-				level.Info(logger).Log("msg", "Stopping Receiver...")
-				if err := receiver.Shutdown(receiverCancelCtx); err != nil {
-					level.Error(logger).Log("msg", "Receiver shutdown failed", "err", err)
+				level.Info(logger).Log("msg", "Stopping head manager...", "reason", err)
+				close(cancel)
+				if err := hManager.Shutdown(context.Background()); err != nil {
+					level.Error(logger).Log("msg", "Head manager shutdown failed", "err", err)
 				}
-				cancelReceiver()
+				level.Info(logger).Log("msg", "Head manager stopped.")
 			},
 		)
 	} // PP_CHANGES.md: rebuild on cpp end
 	{ // PP_CHANGES.md: rebuild on cpp start
 		g.Add(
-			func() error { return <-head.UnrecoverableErrorChan },
+			func() error {
+				return <-querier.UnrecoverableErrorChan
+			},
 			func(err error) {
-				select {
-				case head.UnrecoverableErrorChan <- nil:
-					// stop execute func if need
-				default:
-				}
+				// stop execute func if need
+				querier.SendUnrecoverableError(nil)
 
-				if errors.Is(err, head.UnrecoverableError{}) {
+				if errors.Is(err, querier.UnrecoverableError{}) {
 					level.Error(logger).Log("msg", "Received unrecoverable error", "err", err)
 				}
+				level.Info(logger).Log("msg", "Unrecoverable Error Handler stopped.")
 			},
 		)
 	} // PP_CHANGES.md: rebuild on cpp end
@@ -1526,6 +1581,10 @@ func main() {
 	}
 
 	// PP_CHANGES.md: rebuild on cpp start the engine is really no longer in use before calling this to avoid
+	if err := fileLog.Close(); err != nil {
+		level.Error(logger).Log("msg", "failed to close file log", "err", err)
+	}
+
 	if err := queryEngine.Close(); err != nil {
 		level.Warn(logger).Log("msg", "Closing query engine failed", "err", err)
 	}
@@ -1930,6 +1989,7 @@ type tsdbOptions struct {
 	WALSegmentSize                 units.Base2Bytes
 	MaxBlockChunkSegmentSize       units.Base2Bytes
 	RetentionDuration              model.Duration
+	CorruptedRetentionDuration     model.Duration
 	MaxBytes                       units.Base2Bytes
 	NoLockfile                     bool
 	WALCompression                 bool
@@ -1950,10 +2010,15 @@ type tsdbOptions struct {
 }
 
 func (opts tsdbOptions) ToTSDBOptions() tsdb.Options {
+	var newCompactorFunc tsdb.NewCompactorFunc
+	if pp_pkg_tsdb.BlockCompactionDisabled {
+		newCompactorFunc = pp_pkg_tsdb.CreateNonBlockCompactor
+	}
 	return tsdb.Options{
 		WALSegmentSize:                 int(opts.WALSegmentSize),
 		MaxBlockChunkSegmentSize:       int64(opts.MaxBlockChunkSegmentSize),
 		RetentionDuration:              int64(time.Duration(opts.RetentionDuration) / time.Millisecond),
+		CorruptedRetentionDuration:     time.Duration(opts.CorruptedRetentionDuration),
 		MaxBytes:                       int64(opts.MaxBytes),
 		NoLockfile:                     opts.NoLockfile,
 		WALCompression:                 wlog.ParseCompressionType(opts.WALCompression, opts.WALCompressionType),
@@ -1969,6 +2034,8 @@ func (opts tsdbOptions) ToTSDBOptions() tsdb.Options {
 		OutOfOrderTimeWindow:           opts.OutOfOrderTimeWindow,
 		EnableDelayedCompaction:        opts.EnableDelayedCompaction,
 		EnableOverlappingCompaction:    opts.EnableOverlappingCompaction,
+		ReloadBlocksExternalTrigger:    opts.ReloadBlocksExternalTrigger,
+		NewCompactorFunc:               newCompactorFunc,
 	}
 }
 
@@ -2055,13 +2122,6 @@ func readPromPPFeatures(logger log.Logger) {
 	for _, feature := range strings.Split(features, ",") {
 		fname, fvalue, _ := strings.Cut(feature, "=")
 		switch strings.TrimSpace(fname) {
-		case "head_copy_series_on_rotate":
-			appender.CopySeriesOnRotate = true
-			level.Info(logger).Log(
-				"msg",
-				"[FEATURE] Copying active series from current head to new head during rotation is enabled.",
-			)
-
 		case "head_read_concurrency":
 			var (
 				v   = 1
@@ -2076,7 +2136,7 @@ func readPromPPFeatures(logger log.Logger) {
 				}
 			}
 
-			head.ExtraReadConcurrency = v
+			head.ExtraWorkers = v
 			level.Info(logger).Log(
 				"msg",
 				"[FEATURE] Concurrency reading is enabled.",
@@ -2089,7 +2149,7 @@ func readPromPPFeatures(logger log.Logger) {
 			if fvalue == "" {
 				level.Error(logger).Log(
 					"msg", "[FEATURE] The default number of shards is empty, no changes.",
-					"default_number_of_shards", receiver.DefaultNumberOfShards,
+					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
 				)
 
 				continue
@@ -2100,37 +2160,79 @@ func readPromPPFeatures(logger log.Logger) {
 			case err != nil:
 				level.Error(logger).Log(
 					"msg", "[FEATURE] Error parsing head_numbehead_default_number_of_shardsr_of_shards value",
-					"default_number_of_shards", receiver.DefaultNumberOfShards,
+					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
 					"err", err,
 				)
 
 			case v > math.MaxUint16:
 				level.Error(logger).Log(
 					"msg", "[FEATURE] The default number of shards is overflow(max 65535), no changes.",
-					"default_number_of_shards", receiver.DefaultNumberOfShards,
+					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
 				)
 
 			case v < 1:
 				level.Error(logger).Log(
 					"msg", "[FEATURE] The default number of shards is incorrect(min 1), no changes.",
-					"default_number_of_shards", receiver.DefaultNumberOfShards,
+					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
 				)
 
 			default:
-				receiver.DefaultNumberOfShards = uint16(v)
+				pp_storage.DefaultNumberOfShards = uint16(v)
 				level.Info(logger).Log(
 					"msg", "[FEATURE] Changed default number of shards.",
-					"default_number_of_shards", receiver.DefaultNumberOfShards,
+					"default_number_of_shards", pp_storage.DefaultNumberOfShards,
 				)
 			}
 
 		case "disable_commits_on_remote_write":
 			rwprocessor.AlwaysCommit = false
-			pphandler.OTLPAlwaysCommit = false
+			pp_pkg_handler.OTLPAlwaysCommit = false
 
-		case "unload_data_storage":
-			appender.UnloadDataStorage = true
-			_ = level.Info(logger).Log("msg", "[FEATURE] Data storage unloading is enabled.")
+		case "disable_unload_data_storage":
+			pp_storage.UnloadDataStorage = false
+			_ = level.Info(logger).Log("msg", "[FEATURE] Data storage unloading is disabled.")
+
+		case "disable_block_compaction":
+			pp_pkg_tsdb.BlockCompactionDisabled = true
+			_ = level.Info(logger).Log("msg", "[FEATURE] Prometheus compaction disabled.")
+
+		case "federation_split_families":
+			fvalue := strings.TrimSpace(fvalue)
+			if fvalue == "" {
+				level.Error(logger).Log(
+					"msg", "[FEATURE] The federation_split_families should be setted with number.",
+				)
+				continue
+			}
+			v, err := strconv.Atoi(fvalue)
+			if err != nil {
+				level.Error(logger).Log(
+					"msg", "[FEATURE] Error parsing federation_split_families value",
+					"err", err)
+				continue
+			}
+			_ = level.Info(logger).Log(
+				"msg", "[FEATURE] Split federation families with pages.",
+				"pages", v,
+			)
+			web.FederationSplitFamiliesPageSize = v
+
+		case "default_sample_age_limit":
+			fvalue = strings.TrimSpace(fvalue)
+			defaultSampleAgeLimit, err := model.ParseDuration(fvalue)
+			if err != nil {
+				level.Error(logger).Log(
+					"msg", "[FEATURE] Error parsing default_sample_age_limit value",
+					"err", err)
+				continue
+			}
+
+			_ = level.Info(logger).Log(
+				"msg", "[FEATURE] default_sample_age_limit is set.",
+				"limit", fvalue,
+			)
+
+			remotewriter.DefaultSampleAgeLimit = defaultSampleAgeLimit
 		}
 	}
 }

@@ -22,6 +22,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"sort"
@@ -30,11 +31,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/prometheus/pp/go/storage/catalog"
 	"github.com/prometheus/prometheus/prompb"
 	"github.com/prometheus/prometheus/util/stats"
 	"github.com/prometheus/prometheus/util/testutil"
+	"github.com/prometheus/prometheus/web/mock"
 
 	"github.com/go-kit/log"
+	"github.com/jonboulle/clockwork"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/prometheus/client_golang/prometheus"
 	config_util "github.com/prometheus/common/config"
@@ -48,11 +52,13 @@ import (
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/metadata"
 	"github.com/prometheus/prometheus/model/timestamp"
+	"github.com/prometheus/prometheus/pp-pkg/rules"  // PP_CHANGES.md: rebuild on cpp
 	"github.com/prometheus/prometheus/pp-pkg/scrape" // PP_CHANGES.md: rebuild on cpp
+	pp_pkg_storage "github.com/prometheus/prometheus/pp-pkg/storage"
+	pp_storage "github.com/prometheus/prometheus/pp/go/storage"
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/promql/promqltest"
-	"github.com/prometheus/prometheus/rules"
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/storage/remote"
 	"github.com/prometheus/prometheus/tsdb"
@@ -300,8 +306,19 @@ func (m *rulesRetrieverMock) CreateAlertingRules() {
 func (m *rulesRetrieverMock) CreateRuleGroups() {
 	m.CreateAlertingRules()
 	arules := m.AlertingRules()
-	storage := teststorage.New(m.testing)
-	defer storage.Close()
+
+	st := teststorage.New(m.testing)
+	dbDir := m.testing.TempDir()
+	clock := clockwork.NewRealClock()
+	headCatalog := makeCatalog(m.testing, clock, dbDir)
+	hManager := makeManager(m.testing, clock, dbDir, headCatalog)
+	adapter := makeAdapter(m.testing, clock, hManager)
+	fanoutStorage := storage.NewFanout(log.NewNopLogger(), adapter, st)
+	defer func() {
+		require.NoError(m.testing, st.Close())
+		require.NoError(m.testing, hManager.Shutdown(context.Background()))
+		require.NoError(m.testing, adapter.Close())
+	}()
 
 	engineOpts := promql.EngineOpts{
 		Logger:     nil,
@@ -311,11 +328,14 @@ func (m *rulesRetrieverMock) CreateRuleGroups() {
 	}
 	engine := promqltest.NewTestEngineWithOpts(m.testing, engineOpts)
 	opts := &rules.ManagerOptions{
-		QueryFunc:  rules.EngineQueryFunc(engine, storage),
-		Appendable: storage,
-		Context:    context.Background(),
-		Logger:     log.NewNopLogger(),
-		NotifyFunc: func(ctx context.Context, expr string, alerts ...*rules.Alert) {},
+		Engine:          engine,                // PP_CHANGES.md: rebuild on cpp
+		FanoutQueryable: fanoutStorage,         // PP_CHANGES.md: rebuild on cpp
+		EngineQueryCtor: rules.EngineQueryFunc, // PP_CHANGES.md: rebuild on cpp
+		Batcher:         adapter,               // PP_CHANGES.md: rebuild on cpp
+		Queryable:       fanoutStorage,         // PP_CHANGES.md: rebuild on cpp
+		Context:         context.Background(),
+		Logger:          log.NewNopLogger(),
+		NotifyFunc:      func(ctx context.Context, expr string, alerts ...*rules.Alert) {},
 	}
 
 	var r []rules.Rule
@@ -331,7 +351,7 @@ func (m *rulesRetrieverMock) CreateRuleGroups() {
 	r = append(r, recordingRule)
 	r = append(r, recordingRule2)
 
-	group := rules.NewGroup(rules.GroupOptions{
+	group, err := rules.NewGroup(rules.GroupOptions{
 		Name:          "grp",
 		File:          "/path/to/file",
 		Interval:      time.Second,
@@ -339,6 +359,7 @@ func (m *rulesRetrieverMock) CreateRuleGroups() {
 		ShouldRestore: false,
 		Opts:          opts,
 	})
+	require.NoError(m.testing, err)
 	m.ruleGroups = []*rules.Group{group}
 }
 
@@ -3645,7 +3666,7 @@ func TestRespondSuccess_DefaultCodecCannotEncodeResponse(t *testing.T) {
 
 	require.Equal(t, http.StatusNotAcceptable, resp.StatusCode)
 	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
-	require.Equal(t, `{"status":"error","errorType":"not_acceptable","error":"cannot encode response as application/default-format"}`, string(body))
+	require.JSONEq(t, `{"status":"error","errorType":"not_acceptable","error":"cannot encode response as application/default-format"}`, string(body))
 }
 
 func TestRespondError(t *testing.T) {
@@ -4282,4 +4303,63 @@ func (q *fakeQuery) Cancel() {}
 
 func (q *fakeQuery) String() string {
 	return q.query
+}
+
+func makeCatalog(t *testing.T, clock clockwork.Clock, dbDir string) *catalog.Catalog {
+	t.Helper()
+
+	fileLog, err := catalog.NewFileLogV2(filepath.Join(dbDir, "head.log"))
+	require.NoError(t, err, "create catalog file log")
+
+	headCatalog, err := catalog.New(clock, fileLog, catalog.DefaultIDGenerator{}, int(4*1<<20), nil)
+	require.NoError(t, err, "init catalog")
+
+	return headCatalog
+}
+
+func makeManager(
+	t *testing.T,
+	clock clockwork.Clock,
+	dbDir string,
+	headCatalog *catalog.Catalog,
+) *pp_storage.Manager {
+	t.Helper()
+
+	hManager, err := pp_storage.NewManager(
+		&pp_storage.Options{
+			Seed:                0,
+			BlockDuration:       2 * time.Hour,
+			CommitInterval:      5 * time.Second,
+			MaxRetentionPeriod:  24 * time.Hour,
+			HeadRetentionPeriod: 4 * time.Hour,
+			KeeperCapacity:      2,
+			DataDir:             dbDir,
+			MaxSegmentSize:      100e3,
+			NumberOfShards:      2,
+		},
+		clock,
+		headCatalog,
+		pp_storage.NewTriggerNotifier(),
+		pp_storage.NewTriggerNotifier(),
+		&mock.ReadyNotifierMock{NotifyReadyFunc: func() {}},
+		prometheus.DefaultRegisterer,
+	)
+	require.NoError(t, err, "create a head manager")
+	go hManager.Run()
+
+	return hManager
+}
+
+func makeAdapter(t *testing.T, clock clockwork.Clock, hManager *pp_storage.Manager) *pp_pkg_storage.Adapter {
+	t.Helper()
+
+	adapter := pp_pkg_storage.NewAdapter(
+		clock,
+		hManager.Proxy(),
+		hManager.Builder(),
+		hManager.MergeOutOfOrderChunks,
+		prometheus.DefaultRegisterer,
+	)
+
+	return adapter
 }

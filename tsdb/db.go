@@ -108,6 +108,9 @@ type Options struct {
 	// Typically it is in milliseconds.
 	RetentionDuration int64
 
+	// CorruptedRetentionDuration is the duration of the retention for corrupted blocks.
+	CorruptedRetentionDuration time.Duration
+
 	// Maximum number of bytes in blocks to be retained.
 	// 0 or less means disabled.
 	// NOTE: For proper storage calculations need to consider
@@ -291,6 +294,7 @@ type dbMetrics struct {
 	blocksBytes          prometheus.Gauge
 	maxBytes             prometheus.Gauge
 	retentionDuration    prometheus.Gauge
+	corruptedBlocks      prometheus.Gauge
 }
 
 func newDBMetrics(db *DB, r prometheus.Registerer) *dbMetrics {
@@ -374,6 +378,10 @@ func newDBMetrics(db *DB, r prometheus.Registerer) *dbMetrics {
 	m.sizeRetentionCount = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "prometheus_tsdb_size_retentions_total",
 		Help: "The number of times that blocks were deleted because the maximum number of bytes was exceeded.",
+	})
+	m.corruptedBlocks = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "prometheus_tsdb_corrupted_blocks",
+		Help: "The number of corrupted blocks.",
 	})
 
 	if r != nil {
@@ -873,11 +881,12 @@ func open(dir string, l log.Logger, r prometheus.Registerer, opts *Options, rngs
 		}
 
 		close(db.donec) // DB is never run if it was an error, so close this channel here.
-		errs := tsdb_errors.NewMulti(returnedErr)
+		// errs := tsdb_errors.NewMulti(returnedErr) // PP_CHANGES.md: rebuild on cpp the errors are more informative
 		if err := db.Close(); err != nil {
-			errs.Add(fmt.Errorf("close DB after failed startup: %w", err))
+			// errs.Add(fmt.Errorf("close DB after failed startup: %w", err)) // PP_CHANGES.md: rebuild on cpp
+			returnedErr = errors.Join(returnedErr, fmt.Errorf("close DB after failed startup: %w", err))
 		}
-		returnedErr = errs.Err()
+		// returnedErr = errs.Err() // PP_CHANGES.md: rebuild on cpp the errors are more informative
 	}()
 
 	if db.blocksToDelete == nil {
@@ -1250,11 +1259,12 @@ func (db *DB) Compact(ctx context.Context) (returnErr error) {
 
 	lastBlockMaxt := int64(math.MinInt64)
 	defer func() {
-		errs := tsdb_errors.NewMulti(returnErr)
+		// errs := tsdb_errors.NewMulti(returnErr) // PP_CHANGES.md: rebuild on cpp
 		if err := db.head.truncateWAL(lastBlockMaxt); err != nil {
-			errs.Add(fmt.Errorf("WAL truncation in Compact defer: %w", err))
+			// errs.Add(fmt.Errorf("WAL truncation in Compact defer: %w", err)) // PP_CHANGES.md: rebuild on cpp
+			returnErr = errors.Join(returnErr, fmt.Errorf("WAL truncation in Compact defer: %w", err))
 		}
-		returnErr = errs.Err()
+		// returnErr = errs.Err() // PP_CHANGES.md: rebuild on cpp
 	}()
 
 	start := time.Now()
@@ -1597,22 +1607,31 @@ func (db *DB) reloadBlocks() (err error) {
 		}
 	}
 
-	if len(corrupted) > 0 {
-		// Corrupted but no child loaded for it.
-		// Close all new blocks to release the lock for windows.
-		for _, block := range loadable {
-			if _, open := getBlock(db.blocks, block.Meta().ULID); !open {
-				block.Close()
-			}
+	// PP_CHANGES.md: rebuild on cpp start
+	db.metrics.corruptedBlocks.Set(float64(len(corrupted)))
+	for ulid, err := range corrupted {
+		// check if the block is outdated
+		// if it is, delete the block
+		isOutdated := isOutdatedBlock(
+			ulid,
+			min(
+				time.Duration(db.opts.RetentionDuration)*time.Millisecond,
+				db.opts.CorruptedRetentionDuration,
+			),
+		)
+
+		if isOutdated {
+			deletable[ulid] = nil
 		}
-		errs := tsdb_errors.NewMulti()
-		for ulid, err := range corrupted {
-			if err != nil {
-				errs.Add(fmt.Errorf("corrupted block %s: %w", ulid.String(), err))
-			}
-		}
-		return errs.Err()
+
+		level.Warn(db.logger).Log(
+			"msg", "corrupted block",
+			"ulid", ulid.String(),
+			"err", err,
+			"isOutdated", isOutdated,
+		)
 	}
+	// PP_CHANGES.md: rebuild on cpp end
 
 	var (
 		toLoad     []*Block
@@ -1692,6 +1711,21 @@ func openBlocks(l log.Logger, dir string, loaded []*Block, chunkPool chunkenc.Po
 				continue
 			}
 		}
+
+		// PP_CHANGES.md: rebuild on cpp start
+		if meta.Compaction.containsHint(CompactionHintCorrupted) {
+			// unmark block as corrupted
+			meta.Compaction.deleteHint(CompactionHintCorrupted)
+			if _, err := writeMetaFile(l, bDir, meta); err != nil {
+				level.Error(l).Log(
+					"msg", "Failed to update meta.json for a block during reloadBlocks",
+					"dir", bDir,
+					"err", err,
+				)
+			}
+		}
+		// PP_CHANGES.md: rebuild on cpp end
+
 		blocks = append(blocks, block)
 	}
 	return blocks, corrupted, nil
@@ -2358,4 +2392,8 @@ func exponential(d, minD, maxD time.Duration) time.Duration {
 		d = maxD
 	}
 	return d
+}
+
+func isOutdatedBlock(ulid ulid.ULID, retentionDuration time.Duration) bool {
+	return ulid.Time() < uint64(time.Now().Add(-retentionDuration).UnixMilli())
 }

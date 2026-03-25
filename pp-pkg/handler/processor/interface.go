@@ -5,22 +5,27 @@ import (
 
 	"github.com/prometheus/prometheus/pp-pkg/handler/decoder"
 	"github.com/prometheus/prometheus/pp-pkg/handler/model"
+	pp_pkg_model "github.com/prometheus/prometheus/pp-pkg/model"
 	"github.com/prometheus/prometheus/pp/go/cppbridge"
-	"github.com/prometheus/prometheus/pp/go/relabeler"
 )
 
+//go:generate -command moq go run github.com/matryer/moq --rm --skip-ensure --pkg processor_test --out
+
+//go:generate moq metric_stream_moq_test.go . MetricStream
 type MetricStream interface {
 	Metadata() model.Metadata
 	Read(ctx context.Context) (*model.Segment, error)
 	Write(ctx context.Context, status model.StreamSegmentProcessingStatus) error
 }
 
+//go:generate moq refill_moq_test.go . Refill
 type Refill interface {
 	Metadata() model.Metadata
 	Read(ctx context.Context) (*model.Segment, error)
 	Write(ctx context.Context, status model.RefillProcessingStatus) error
 }
 
+//go:generate moq remote_write_moq_test.go . RemoteWrite
 type RemoteWrite interface {
 	Metadata() model.Metadata
 	Read(ctx context.Context) (*model.RemoteWriteBuffer, error)
@@ -31,10 +36,42 @@ type DecoderBuilder interface {
 	Build(metadata model.Metadata) decoder.Decoder
 }
 
-// Receiver interface.
-type Receiver interface {
-	AppendSnappyProtobuf(ctx context.Context, compressedData relabeler.ProtobufData, relabelerID string, commitToWal bool) error
-	AppendHashdex(ctx context.Context, hashdex cppbridge.ShardedData, relabelerID string, commitToWal bool) error
-	// MergeOutOfOrderChunks merge chunks with out of order data chunks.
-	MergeOutOfOrderChunks(ctx context.Context)
+// Adapter for implementing the [Queryable] interface and append data.
+//
+//go:generate moq adapter_moq_test.go . Adapter
+type Adapter interface {
+	// AppendHashdex append incoming [cppbridge.HashdexContent] to [Head].
+	AppendHashdex(
+		ctx context.Context,
+		hashdex cppbridge.ShardedData,
+		state *cppbridge.StateV2,
+		commitToWal bool,
+	) (cppbridge.RelabelerStats, error)
+
+	// AppendTimeSeries append TimeSeries data to [Head].
+	AppendTimeSeries(
+		ctx context.Context,
+		data pp_pkg_model.TimeSeriesBatch,
+		state *cppbridge.StateV2,
+		commitToWal bool,
+	) (cppbridge.RelabelerStats, error)
+
+	// AppendSnappyProtobuf append compressed via snappy Protobuf data to [Head].
+	AppendSnappyProtobuf(
+		ctx context.Context,
+		compressedData pp_pkg_model.ProtobufData,
+		state *cppbridge.StateV2,
+		commitToWal bool,
+	) error
+
+	// MergeOutOfOrderChunks send signal to merge chunks with out of order data chunks.
+	MergeOutOfOrderChunks()
+}
+
+// StatesStorage stores the [cppbridge.State]'s.
+//
+//go:generate moq states_storage_moq_test.go . StatesStorage
+type StatesStorage interface {
+	// GetStateByID returns [cppbridge.State] by state ID if exist.
+	GetStateByID(stateID string) (*cppbridge.StateV2, bool)
 }

@@ -46,11 +46,17 @@ class SeparatedTimestampValueDecodeIteratorTrait : public DecodeIteratorTrait<ui
       sample_.timestamp = timestamp_decoder_.decode();
     }
   }
-  explicit SeparatedTimestampValueDecodeIteratorTrait(const encoder::BitSequenceWithItemsCount& timestamp_stream)
+
+  template <class BitSequenceWithItemsCount>
+  explicit SeparatedTimestampValueDecodeIteratorTrait(const BitSequenceWithItemsCount& timestamp_stream)
       : SeparatedTimestampValueDecodeIteratorTrait(timestamp_stream.count(), timestamp_stream.reader(), 0.0, false) {}
-  SeparatedTimestampValueDecodeIteratorTrait(const encoder::BitSequenceWithItemsCount& timestamp_stream, double value)
+
+  template <class BitSequenceWithItemsCount>
+  SeparatedTimestampValueDecodeIteratorTrait(const BitSequenceWithItemsCount& timestamp_stream, double value)
       : SeparatedTimestampValueDecodeIteratorTrait(timestamp_stream.count(), timestamp_stream.reader(), value, false) {}
-  SeparatedTimestampValueDecodeIteratorTrait(const encoder::BitSequenceWithItemsCount& timestamp_stream, double value, bool last_stalenan)
+
+  template <class BitSequenceWithItemsCount>
+  SeparatedTimestampValueDecodeIteratorTrait(const BitSequenceWithItemsCount& timestamp_stream, double value, bool last_stalenan)
       : SeparatedTimestampValueDecodeIteratorTrait(timestamp_stream.count(), timestamp_stream.reader(), value, last_stalenan) {}
 
   PROMPP_ALWAYS_INLINE bool decode_timestamp() noexcept {

@@ -6,6 +6,17 @@ cc_binary(
     malloc = "@jemalloc",
     deps = [
         "//:performance_tests_headers",
-        "@google_benchmark//:benchmark_main",
+        "//:benchmark",
+    ],
+)
+
+cc_binary(
+    name = "copy_lss",
+    srcs = ["queryable_encoding_bimap_copy_benchmark.cpp"],
+    malloc = "@jemalloc",
+    deps = [
+        "//:performance_tests_headers",
+        "//:entrypoint",
+        "//:benchmark",
     ],
 )

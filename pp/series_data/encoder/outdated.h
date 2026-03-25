@@ -5,6 +5,7 @@
 
 namespace series_data::encoder {
 
+template <BareBones::ReallocatorInterface Reallocator>
 class PROMPP_ATTRIBUTE_PACKED OutdatedEncoder {
  public:
   PROMPP_ALWAYS_INLINE OutdatedEncoder(int64_t timestamp, double value) : count_{1} {
@@ -28,7 +29,7 @@ class PROMPP_ATTRIBUTE_PACKED OutdatedEncoder {
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return stream_.allocated_memory(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactBitSequence& stream() const noexcept { return stream_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const CompactBitSequence<Reallocator>& stream() const noexcept { return stream_; }
 
  private:
   using TimestampEncoder = BareBones::Encoding::Gorilla::ZigZagTimestampEncoder<>;
@@ -36,11 +37,11 @@ class PROMPP_ATTRIBUTE_PACKED OutdatedEncoder {
 
   TimestampEncoder timestamp_encoder_;
   ValuesEncoder values_encoder_;
-  CompactBitSequence stream_;
+  CompactBitSequence<Reallocator> stream_;
   uint32_t count_{};
 };
 
 }  // namespace series_data::encoder
 
-template <>
-struct BareBones::IsTriviallyReallocatable<series_data::encoder::OutdatedEncoder> : std::true_type {};
+template <BareBones::ReallocatorInterface Reallocator>
+struct BareBones::IsTriviallyReallocatable<series_data::encoder::OutdatedEncoder<Reallocator>> : std::true_type {};

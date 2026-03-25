@@ -1,37 +1,44 @@
 #pragma once
 
+#include <memory>
 #include <variant>
 
 #include "bare_bones/exception.h"
+#include "primitives/primitives.h"
 #include "primitives/snug_composites.h"
 #include "series_index/queryable_encoding_bimap.h"
 #include "series_index/trie/cedarpp_tree.h"
 
 namespace entrypoint::head {
 
+using LsIdsSlice = BareBones::Vector<PromPP::Primitives::LabelSetID>;
+using LsIdsSlicePtr = std::unique_ptr<LsIdsSlice>;
+
 enum class LssType : uint32_t {
   kEncodingBimap = 0,
-  kOrderedEncodingBimap,
   kQueryableEncodingBimap,
   kReadonlyLss,
 };
-
-using OrderedEncodingBimap = PromPP::Primitives::SnugComposites::LabelSet::OrderedEncodingBimap<BareBones::Vector>;
 
 namespace lss_memory {
 
 thread_local inline bool has_reallocations{};
 
 struct Reallocator {
+  PROMPP_ALWAYS_INLINE static size_t allocation_size(size_t needed_size) noexcept { return BareBones::DefaultReallocator::allocation_size(needed_size); }
+
   PROMPP_ALWAYS_INLINE static void* reallocate(void* memory, size_t size) {
-    const auto result = std::realloc(memory, size);
-    if (result != memory) {
+    const auto result = BareBones::DefaultReallocator::reallocate(memory, size);
+    if (result != memory) [[likely]] {
       has_reallocations = true;
     }
     return result;
   }
-  PROMPP_ALWAYS_INLINE static void free(void* memory) { return std::free(memory); }
+
+  PROMPP_ALWAYS_INLINE static void free(void* memory) { return BareBones::DefaultReallocator::free(memory); }
 };
+
+static_assert(BareBones::ReallocatorInterface<Reallocator>);
 
 }  // namespace lss_memory
 
@@ -91,7 +98,7 @@ class ReallocationsDetector {
   }
 };
 
-using LssVariant = std::variant<EncodingBimap, OrderedEncodingBimap, QueryableEncodingBimap, ReadonlyLss>;
+using LssVariant = std::variant<EncodingBimap, QueryableEncodingBimap, ReadonlyLss>;
 using LssVariantPtr = std::unique_ptr<LssVariant>;
 
 static_assert(sizeof(LssVariantPtr) == sizeof(void*));
@@ -100,10 +107,6 @@ inline LssVariantPtr create_lss(LssType type) {
   switch (type) {
     case LssType::kEncodingBimap: {
       return std::make_unique<LssVariant>(std::in_place_index<static_cast<int>(LssType::kEncodingBimap)>);
-    }
-
-    case LssType::kOrderedEncodingBimap: {
-      return std::make_unique<LssVariant>(std::in_place_index<static_cast<int>(LssType::kOrderedEncodingBimap)>);
     }
 
     case LssType::kQueryableEncodingBimap: {

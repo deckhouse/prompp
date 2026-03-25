@@ -55,6 +55,7 @@ class SerializedChunkIterator {
   using reference = value_type&;
 
   explicit SerializedChunkIterator(std::span<const uint8_t> buffer) : data_(buffer, get_chunks(buffer)) {}
+  explicit SerializedChunkIterator(std::span<const uint8_t> buffer, SerializedChunkSpan chunks) : data_(buffer, chunks) {}
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const Data& operator*() const noexcept { return data_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const Data* operator->() const noexcept { return &data_; }

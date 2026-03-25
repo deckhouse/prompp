@@ -1,6 +1,10 @@
 #pragma once
 
+#include <cstdint>
+#include <limits>
+
 #include "bare_bones/preprocess.h"
+#include "bare_bones/vector.h"
 
 namespace series_index {
 
@@ -27,6 +31,10 @@ struct SortingIndex {
   template <class Container>
   PROMPP_ALWAYS_INLINE void sort(Container& container) const noexcept {
     sort(container.begin(), container.end());
+  }
+
+  PROMPP_ALWAYS_INLINE auto get_comparator() const noexcept {
+    return [this](uint32_t a, uint32_t b) PROMPP_LAMBDA_INLINE { return index[a] < index[b]; };
   }
 
   Vector<uint32_t> index;

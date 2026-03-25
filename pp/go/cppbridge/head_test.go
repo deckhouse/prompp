@@ -1,7 +1,9 @@
 package cppbridge_test
 
 import (
+	"github.com/prometheus/prometheus/pp/go/storage/querier"
 	"testing"
+	"unsafe"
 
 	"github.com/stretchr/testify/require"
 
@@ -13,7 +15,7 @@ import (
 type HeadSuite struct {
 	suite.Suite
 	lss         *cppbridge.LabelSetStorage
-	dataStorage *cppbridge.HeadDataStorage
+	dataStorage *cppbridge.DataStorage
 	encoder     *cppbridge.HeadEncoder
 }
 
@@ -23,7 +25,7 @@ func TestHeadSuite(t *testing.T) {
 
 func (s *HeadSuite) SetupTest() {
 	s.lss = cppbridge.NewQueryableLssStorage()
-	s.dataStorage = cppbridge.NewHeadDataStorage()
+	s.dataStorage = cppbridge.NewDataStorage()
 	s.encoder = cppbridge.NewHeadEncoderWithDataStorage(s.dataStorage)
 }
 
@@ -118,12 +120,12 @@ func (s *HeadSuite) TestSerializedChunkRecoder() {
 	s.encoder.Encode(1, 4, 2.0)
 
 	timeInterval := cppbridge.TimeInterval{MinT: 0, MaxT: 4}
-	serializedChunks, result := s.dataStorage.Query(cppbridge.HeadDataStorageQuery{
+	result := s.dataStorage.Query(cppbridge.DataStorageQuery{
 		StartTimestampMs: timeInterval.MinT,
 		EndTimestampMs:   timeInterval.MaxT,
 		LabelSetIDs:      []uint32{0, 1}},
 	)
-	recoder := cppbridge.NewSerializedChunkRecoder(serializedChunks, timeInterval)
+	recoder := cppbridge.NewSerializedChunkRecoder(result.SerializedData, timeInterval)
 
 	// Act
 	chunk1 := recoder.RecodeNextChunk()
@@ -156,7 +158,7 @@ func (s *HeadSuite) TestSerializedChunkRecoder() {
 
 func (s *HeadSuite) TestTimeInterval() {
 	// Arrange
-	dataStorage := cppbridge.NewHeadDataStorage()
+	dataStorage := cppbridge.NewDataStorage()
 	encoder := cppbridge.NewHeadEncoderWithDataStorage(dataStorage)
 	encoder.Encode(0, 1, 1.0)
 	encoder.Encode(0, 2, 1.0)
@@ -164,15 +166,20 @@ func (s *HeadSuite) TestTimeInterval() {
 	encoder.Encode(1, 3, 1.0)
 
 	// Act
-	timeInterval := dataStorage.TimeInterval()
+	timeInterval := dataStorage.TimeInterval(false)
+	encoder.Encode(1, 4, 1.0)
+	cachedTimeInterval := dataStorage.TimeInterval(false)
+	actualTimeInterval := dataStorage.TimeInterval(true)
 
 	// Assert
 	s.Equal(cppbridge.TimeInterval{MinT: 1, MaxT: 3}, timeInterval)
+	s.Equal(cppbridge.TimeInterval{MinT: 1, MaxT: 3}, cachedTimeInterval)
+	s.Equal(cppbridge.TimeInterval{MinT: 1, MaxT: 4}, actualTimeInterval)
 }
 
 func (s *HeadSuite) TestInstantQuery() {
 	// Arrange
-	dataStorage := cppbridge.NewHeadDataStorage()
+	dataStorage := cppbridge.NewDataStorage()
 	encoder := cppbridge.NewHeadEncoderWithDataStorage(dataStorage)
 	var series = []struct {
 		SeriesID uint32
@@ -195,16 +202,19 @@ func (s *HeadSuite) TestInstantQuery() {
 	seriesIDs := []uint32{0, 1, 2, 3}
 	targetTimestamp := int64(5)
 	defaultTimestamp := int64(-1)
+	instantSeries := make([]querier.InstantSeries, len(seriesIDs))
+	for i := range instantSeries {
+		instantSeries[i].Timestamp = defaultTimestamp
+	}
 	// Act
 
-	samples, result := dataStorage.InstantQuery(targetTimestamp, defaultTimestamp, seriesIDs)
+	result := dataStorage.InstantQuery(targetTimestamp, seriesIDs, uintptr(unsafe.Pointer(unsafe.SliceData(instantSeries))))
 
 	// Assert
 	require.Equal(s.T(), cppbridge.DataStorageQueryStatusSuccess, result.Status)
-	require.Len(s.T(), samples, 4)
 
-	s.Equal(defaultTimestamp, samples[0].Timestamp)
-	s.Equal(series[2].Sample, samples[1])
-	s.Equal(series[5].Sample, samples[2])
-	s.Equal(series[6].Sample, samples[3])
+	s.Equal(defaultTimestamp, instantSeries[0].Timestamp)
+	s.Equal(series[2].Sample, cppbridge.Sample{Timestamp: instantSeries[1].Timestamp, Value: instantSeries[1].Value})
+	s.Equal(series[5].Sample, cppbridge.Sample{Timestamp: instantSeries[2].Timestamp, Value: instantSeries[2].Value})
+	s.Equal(series[6].Sample, cppbridge.Sample{Timestamp: instantSeries[3].Timestamp, Value: instantSeries[3].Value})
 }

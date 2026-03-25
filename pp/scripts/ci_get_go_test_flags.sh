@@ -3,7 +3,7 @@
 # Supported OPT env var values: dbg, opt
 # Supported SANITIZERS env var values: with_sanitizers, no_sanitizers
 # Supported FASTCGO env var values: with_fastcgo, without_fastcgo
-tags=""
+tags="stringlabels"
 
 function append_tag_if_equal() {
 	if [ "$1" = "$2" ]; then

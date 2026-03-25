@@ -43,13 +43,21 @@ extern "C" void prompp_head_wal_encoder_ctor_from_decoder(void* args, void* res)
 
   struct Result {
     EncoderPtr encoder;
+    PromPP::Primitives::Go::Slice<char> error;
   };
 
   const auto& generic_decoder = static_cast<Arguments*>(args)->decoder;
+  const auto out = new (res) Result();
+
+  if (generic_decoder->decoder().encoder_version() != PromPP::WAL::Writer::version) {
+    auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
+    err_stream << "invalid encoder version" << std::endl;
+    return;
+  }
+
   const auto& decoder = generic_decoder->decoder();
-  new (res) Result{.encoder = std::make_unique<Encoder>(decoder.sample_decoder().gorilla(), generic_decoder->label_set(), decoder.shard_id(),
-                                                        decoder.pow_two_of_total_shards(), decoder.last_processed_segment() + 1,
-                                                        decoder.sample_decoder().timestamp_base)};
+  out->encoder = std::make_unique<Encoder>(decoder.sample_decoder().gorilla(), generic_decoder->label_set(), decoder.shard_id(),
+                                           decoder.pow_two_of_total_shards(), decoder.last_processed_segment() + 1, decoder.sample_decoder().timestamp_base);
 }
 
 extern "C" void prompp_head_wal_encoder_dtor(void* args) {
@@ -62,18 +70,13 @@ extern "C" void prompp_head_wal_encoder_dtor(void* args) {
 
 extern "C" void prompp_head_wal_encoder_add_inner_series(void* args, void* res) {
   struct Arguments {
-    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries*> incoming_inner_series;
+    PromPP::Primitives::Go::SliceView<PromPP::Prometheus::Relabel::InnerSeries> incoming_inner_series;
     EncoderPtr encoder;
   };
 
   struct Result {
-    int64_t earliest_timestamp;
-    int64_t latest_timestamp;
-    size_t allocated_memory;
-    uint32_t samples;
-    uint32_t series;
-    uint32_t remainder_size;
     PromPP::Primitives::Go::Slice<char> error;
+    uint32_t samples;
   };
 
   const auto in = static_cast<Arguments*>(args);
@@ -93,14 +96,9 @@ extern "C" void prompp_head_wal_encoder_finalize(void* args, void* res) {
   };
 
   struct Result {
-    int64_t earliest_timestamp;
-    int64_t latest_timestamp;
-    size_t allocated_memory;
-    uint32_t samples;
-    uint32_t series;
-    uint32_t remainder_size;
     PromPP::Primitives::Go::Slice<char> segment;
     PromPP::Primitives::Go::Slice<char> error;
+    uint32_t samples;
   };
 
   const auto in = static_cast<Arguments*>(args);
@@ -163,7 +161,7 @@ extern "C" void prompp_head_wal_decoder_decode(void* args, void* res) {
   const auto out = new (res) Result();
 
   try {
-    in->inner_series->clear();
+    in->inner_series->reset();
     in->decoder->decode_to_inner_series(in->segment, *in->inner_series, out);
   } catch (...) {
     auto err_stream = PromPP::Primitives::Go::BytesStream(&out->error);
@@ -188,6 +186,8 @@ extern "C" void prompp_head_wal_decoder_decode_to_data_storage(void* args, void*
   const auto out = new (res) Result();
 
   try {
+    const auto arena_guard = in->encoder_wrapper->encoder.storage().thread_arena_guard();
+
     in->decoder->decode(in->segment, [in](PromPP::Primitives::LabelSetID ls_id, PromPP::Primitives::Timestamp timestamp, double value)
                                          PROMPP_LAMBDA_INLINE { in->encoder_wrapper->encoder.encode(ls_id, timestamp, value); });
     out->create_timestamp = in->decoder->decoder().created_at_tsns();

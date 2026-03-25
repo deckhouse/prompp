@@ -17,15 +17,16 @@
   },
   "devDependencies": {
     "@babel/runtime": "7.26.10",
+    "@rollup/plugin-node-resolve": "16.0.3",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.14.9",
-    "body-parser": "1.20.3",
+    "body-parser": "1.20.4",
     "bootstrap": "5.0.0",
     "cookie": "0.7.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-config-react-app": "^7.0.1",
     "eslint-plugin-prettier": "^4.2.1",
-    "express": "4.20.0",
+    "express": "^4.21.2",
     "form-data": "3.0.4",
     "http-proxy-middleware": "3.0.5",
     "jest-canvas-mock": "^2.5.2",
@@ -36,16 +37,19 @@
     "path-to-regexp": "1.9.0",
     "postcss": "8.4.31",
     "prettier": "^2.8.8",
-    "react-scripts": "^5.0.1",
-    "rollup": "2.79.2",
+    "react-scripts": "5.0.1",
+    "rollup": "2.80.0",
     "send": "0.19.0",
-    "serialize-javascript": "6.0.2",
-    "serve-static": "1.16.0",
+    "serialize-javascript": "7.0.3",
+    "serve-static": "^1.16.2",
     "ts-jest": "^29.2.2",
-    "typescript": "^4.9.5",
+    "typescript": "^5.0.0",
+    "webpack": "5.105.3",
     "webpack-dev-server": "5.2.1",
-    "webpack": "5.94.0",
     "ws": "8.17.1"
   },
-  "version": "0.55.1"
+  "version": "0.55.1",
+  "overrides": {
+    "nth-check": ">=2.0.1"
+  }
 }
