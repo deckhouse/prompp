@@ -37,7 +37,7 @@ template <chunk::DataChunk::Type ChunkType>
 }
 
 [[nodiscard]] PROMPP_ALWAYS_INLINE DataStorage::CompactBitSequence& get_chunk_stream(DataStorage& storage, uint32_t ls_id, uint8_t chunk_id) noexcept {
-  const auto& chunk_data = std::ranges::next(DataStorage::SeriesChunkIterator{&storage, ls_id}, chunk_id, DataStorage::SeriesChunks::end());
+  const auto chunk_data = std::ranges::next(DataStorage::SeriesChunkIterator{&storage, ls_id}, chunk_id, DataStorage::SeriesChunks::end());
   return get_chunk_stream(storage, chunk_data->chunk(), chunk_data->is_open());
 }
 
