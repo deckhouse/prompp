@@ -68,7 +68,7 @@ TEST_F(SerializerDeserializerFixture, EmptyChunksList) {
 
   // Assert
   ASSERT_EQ(0U, serialized_view.get_chunks_view().size());
-  ASSERT_EQ(series_data::encoder::CompactBitSequence::reserved_bytes_for_reader().size(), serialized_view.get_buffer_view().size());
+  ASSERT_EQ(DataStorage::CompactBitSequence::reserved_bytes_for_reader().size(), serialized_view.get_buffer_view().size());
 }
 
 TEST_F(SerializerDeserializerFixture, TwoUint32ConstantChunkWithCommonTimestampStream) {

@@ -103,7 +103,7 @@ type DataStorageQuery struct {
 }
 
 func (ds *DataStorage) Query(query DataStorageQuery) DataStorageQueryResult {
-	sd := NewDataStorageSerializedData()
+	sd := NewDataStorageSerializedData(ds)
 	querier, status := seriesDataDataStorageQueryV2(ds.dataStorage, query, sd)
 	return DataStorageQueryResult{
 		Querier:        querier,

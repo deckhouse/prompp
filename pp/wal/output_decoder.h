@@ -10,6 +10,7 @@
 
 #include "bare_bones/preprocess.h"
 #include "bare_bones/serializer.h"
+#include "primitives/go_slice.h"
 #include "primitives/labels_builder.h"
 #include "primitives/snug_composites.h"
 #include "prometheus/remote_write.h"
@@ -312,6 +313,110 @@ class OutputDecoder : private BaseOutputDecoder {
   }
 };
 
+class SegmentSamplesStorageList {
+ public:
+  explicit SegmentSamplesStorageList(uint64_t count) : storages_(count) {}
+
+  class Iterator {
+   public:
+    using value_type = SegmentSamplesStorage::Iterator::value_type;
+    using reference = value_type;
+    using pointer = void;
+    using difference_type = std::ptrdiff_t;
+    using iterator_category = std::forward_iterator_tag;
+
+    explicit Iterator(const Primitives::Go::Slice<SegmentSamplesStorage>& storages) : storages_(&storages) { advance(); }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator*() const noexcept { return *it_; }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t storage_index() const noexcept { return storage_index_; }
+
+    PROMPP_ALWAYS_INLINE Iterator& operator++() noexcept {
+      if (++it_ == SegmentSamplesStorage::end()) {
+        ++storage_index_;
+        advance();
+      }
+
+      return *this;
+    }
+    PROMPP_ALWAYS_INLINE Iterator operator++(int) noexcept {
+      const auto tmp = *this;
+      ++*this;
+      return tmp;
+    }
+
+    [[nodiscard]] PROMPP_ALWAYS_INLINE bool operator==(const BareBones::iterator::IteratorSentinelType&) const noexcept {
+      return storage_index_ == storages_->size() && it_ == SegmentSamplesStorage::end();
+    }
+
+   private:
+    const Primitives::Go::Slice<SegmentSamplesStorage>* storages_;
+    SegmentSamplesStorage::Iterator it_{};
+    uint32_t storage_index_{};
+
+    PROMPP_ALWAYS_INLINE void advance() noexcept {
+      for (; storage_index_ != storages_->size(); ++storage_index_) {
+        if (const auto& storage = storages_->operator[](storage_index_); !storage.empty()) {
+          it_ = storage.begin();
+          break;
+        }
+      }
+    }
+  };
+
+  [[nodiscard]] Iterator begin() const noexcept { return Iterator(storages_); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static BareBones::iterator::IteratorSentinelType end() noexcept { return {}; }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Go::Slice<SegmentSamplesStorage>& storages() noexcept { return storages_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const Primitives::Go::Slice<SegmentSamplesStorage>& storages() const noexcept { return storages_; }
+
+ private:
+  Primitives::Go::Slice<SegmentSamplesStorage> storages_;
+};
+
+struct GoMessage {
+  explicit GoMessage(const SegmentSamplesStorageList::Iterator& it) : samples_iterator(it) {}
+
+  SegmentSamplesStorageList::Iterator samples_iterator;
+  Primitives::Go::Slice<char> buffer;
+  Primitives::Timestamp max_timestamp{};
+  uint32_t samples_count{};
+  bool delivered{};
+  bool post_processed{};
+};
+
+}  // namespace PromPP::WAL
+
+template <>
+struct BareBones::IsTriviallyReallocatable<PromPP::WAL::GoMessage> : std::true_type {};
+
+namespace PromPP::WAL {
+
+inline void split_messages(const SegmentSamplesStorageList& storages, uint32_t samples_count, Primitives::Go::Slice<GoMessage>& messages) {
+  static const auto samples_in_series = [](const SegmentSamplesStorageList::Iterator& it) PROMPP_LAMBDA_INLINE {
+    const auto& list = (*it).second;
+    return list.is_single() ? 1U : list.samples().size();
+  };
+
+  if (samples_count == 0 || storages.storages().empty()) [[unlikely]] {
+    return;
+  }
+
+  uint32_t message_samples_count = 0;
+  for (auto it = storages.begin(); it != storages.end(); ++it) {
+    if (message_samples_count == 0) [[unlikely]] {
+      messages.emplace_back(it);
+    }
+    if (message_samples_count += samples_in_series(it); message_samples_count >= samples_count) [[unlikely]] {
+      messages.back().samples_count = message_samples_count;
+      message_samples_count = 0;
+    }
+  }
+  if (message_samples_count > 0) [[likely]] {
+    messages.back().samples_count = message_samples_count;
+  }
+}
+
 class GoSliceSink : public snappy::Sink {
   Primitives::Go::Slice<char>& out_;
 
@@ -331,58 +436,76 @@ struct ProtobufEncoderStats {
   PROMPP_ALWAYS_INLINE bool operator==(const ProtobufEncoderStats& other) const noexcept = default;
 };
 
-struct GoMessage {
-  Primitives::Go::Slice<char> buffer;
-  uint64_t samples_count{};
-  Primitives::Timestamp max_timestamp{};
-  bool delivered{};
-  bool post_processed{};
-};
-
 class ProtobufEncoder {
  public:
   template <class LssGetter>
-  void encode(std::span<SegmentSamplesStorage> batch, LssGetter lss_getter, size_t message_index, size_t messages_count, GoMessage& message) {
-    protobuf_.clear();
+  void encode(const LssGetter& lss_getter, size_t message_index, size_t messages_count, std::span<GoMessage> messages) {
+    assert(message_index + messages_count <= messages.size());
 
-    uint32_t shard_id = 0;
-    protozero::pbf_writer pb_writer(protobuf_);
+    for (const auto last_index = message_index + messages_count; message_index < last_index; ++message_index) {
+      protobuf_.clear();
 
-    for (const auto& storage : batch) {
-      const auto& lss = lss_getter(shard_id);
-
-      protozero::basic_pbf_writer pb_timeseries(protobuf_);
-
-      uint32_t last_ls_id = Primitives::kInvalidLabelSetID;
-      storage.for_each([&](Primitives::LabelSetID ls_id, const Primitives::Sample& sample) {
-        if ((static_cast<size_t>(ls_id) % messages_count) != message_index) {
-          return;
-        }
-
-        ++message.samples_count;
-
-        if (last_ls_id != ls_id) [[likely]] {
-          std::destroy_at(&pb_timeseries);
-          std::construct_at(&pb_timeseries, pb_writer, kTimeseriesTag);
-
-          Prometheus::RemoteWrite::write_label_set(pb_timeseries, lss[ls_id]);
-          last_ls_id = ls_id;
-        }
-
-        Prometheus::RemoteWrite::write_sample(pb_timeseries, sample);
-        message.max_timestamp = std::max(message.max_timestamp, sample.timestamp());
-      });
-
-      ++shard_id;
+      auto& message = messages[message_index];
+      create_protobuf_message(lss_getter, message);
+      snappy_compress(message.buffer);
     }
-
-    snappy_compress(message.buffer);
   }
 
  private:
   static constexpr int kTimeseriesTag = 1;
 
   std::string protobuf_;
+
+  template <class LssGetter>
+  PROMPP_ALWAYS_INLINE void create_protobuf_message(const LssGetter& lss_getter, GoMessage& message) {
+    message.max_timestamp = 0;
+
+    protozero::pbf_writer pb_writer(protobuf_);
+    protozero::basic_pbf_writer pb_timeseries(protobuf_);
+    uint32_t last_ls_id = Primitives::kInvalidLabelSetID;
+    uint32_t storage_index = std::numeric_limits<uint32_t>::max();
+    const std::remove_reference_t<decltype(lss_getter(0))>* lss = nullptr;
+    uint32_t processed_samples_count{};
+
+    for (auto it = message.samples_iterator; it != SegmentSamplesStorageList::end(); ++it) {
+      const auto [ls_id, samples_list] = *it;
+      if (storage_index != it.storage_index()) [[unlikely]] {
+        storage_index = it.storage_index();
+        last_ls_id = Primitives::kInvalidLabelSetID;
+        lss = &lss_getter(storage_index);
+      }
+
+      const auto write_sample = [&](const Primitives::Sample& sample) PROMPP_LAMBDA_INLINE {
+        Prometheus::RemoteWrite::write_sample(pb_timeseries, sample);
+
+        message.max_timestamp = std::max(message.max_timestamp, sample.timestamp());
+        ++processed_samples_count;
+      };
+
+      if (last_ls_id != ls_id) [[likely]] {
+        std::destroy_at(&pb_timeseries);
+        std::construct_at(&pb_timeseries, pb_writer, kTimeseriesTag);
+
+        // clang-tidy give false-positive warning on this line because lss always set in the storage_index != it.storage_index() branch
+        // before the first use.
+        // NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage)
+        Prometheus::RemoteWrite::write_label_set(pb_timeseries, lss->operator[](ls_id));
+        last_ls_id = ls_id;
+      }
+
+      if (samples_list.is_single()) [[likely]] {
+        write_sample(samples_list.sample());
+      } else {
+        for (const auto& sample : samples_list.samples()) {
+          write_sample(sample);
+        }
+      }
+
+      if (message.samples_count == processed_samples_count) [[unlikely]] {
+        break;
+      }
+    }
+  }
 
   PROMPP_ALWAYS_INLINE void snappy_compress(Primitives::Go::Slice<char>& output) const {
     GoSliceSink writer(output);
@@ -392,9 +515,6 @@ class ProtobufEncoder {
 };
 
 }  // namespace PromPP::WAL
-
-template <>
-struct BareBones::IsTriviallyReallocatable<PromPP::WAL::GoMessage> : std::true_type {};
 
 template <>
 struct BareBones::IsTriviallyReallocatable<PromPP::WAL::ProtobufEncoder> : std::true_type {};

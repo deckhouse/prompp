@@ -5,19 +5,20 @@
 namespace {
 
 using series_data::encoder::timestamp::Encoder;
+using series_data::encoder::timestamp::kInvalidStateId;
 using series_data::encoder::timestamp::State;
 
 class TimestampEncoderFixture : public testing::Test {
  protected:
-  Encoder encoder_;
+  Encoder<BareBones::DefaultReallocator> encoder_;
 };
 
 TEST_F(TimestampEncoderFixture, OneStateForTwoSeries) {
   // Arrange
 
   // Act
-  const auto state_id1 = encoder_.encode(State::kInvalidId, 101);
-  const auto state_id2 = encoder_.encode(State::kInvalidId, 101);
+  const auto state_id1 = encoder_.encode(kInvalidStateId, 101);
+  const auto state_id2 = encoder_.encode(kInvalidStateId, 101);
 
   // Assert
   EXPECT_EQ(0U, state_id1);
@@ -27,10 +28,10 @@ TEST_F(TimestampEncoderFixture, OneStateForTwoSeries) {
 
 TEST_F(TimestampEncoderFixture, TransitionToNewStateWithSavingPreviousState) {
   // Arrange
-  encoder_.encode(State::kInvalidId, 101);
+  encoder_.encode(kInvalidStateId, 101);
 
   // Act
-  const auto first_state_id = encoder_.encode(State::kInvalidId, 101);
+  const auto first_state_id = encoder_.encode(kInvalidStateId, 101);
   const auto state_id = encoder_.encode(first_state_id, 102);
 
   // Assert
@@ -44,14 +45,14 @@ TEST_F(TimestampEncoderFixture, TransitionToNewStateWithErasingPreviousState) {
   // Arrange
 
   // Act
-  const auto first_state_id = encoder_.encode(State::kInvalidId, 101);
+  const auto first_state_id = encoder_.encode(kInvalidStateId, 101);
   const auto state_id = encoder_.encode(first_state_id, 102);
 
   // Assert
   EXPECT_EQ(0U, first_state_id);
   EXPECT_EQ(1U, state_id);
   EXPECT_EQ(102, encoder_.get_state(state_id).timestamp());
-  EXPECT_EQ(2U, encoder_.encode(State::kInvalidId, 102));
+  EXPECT_EQ(2U, encoder_.encode(kInvalidStateId, 102));
 }
 
 TEST_F(TimestampEncoderFixture, TransitionToExistingStateWithErasingPreviousState) {
@@ -60,13 +61,13 @@ TEST_F(TimestampEncoderFixture, TransitionToExistingStateWithErasingPreviousStat
   // Act
 
   // Assert
-  EXPECT_EQ(0U, encoder_.encode(State::kInvalidId, 101));
-  EXPECT_EQ(0U, encoder_.encode(State::kInvalidId, 101));
+  EXPECT_EQ(0U, encoder_.encode(kInvalidStateId, 101));
+  EXPECT_EQ(0U, encoder_.encode(kInvalidStateId, 101));
   EXPECT_EQ(1U, encoder_.encode(0, 102));
   EXPECT_EQ(1U, encoder_.encode(0, 102));
   EXPECT_EQ(2U, encoder_.encode(1, 103));
   EXPECT_EQ(2U, encoder_.encode(1, 103));
-  EXPECT_EQ(0U, encoder_.encode(State::kInvalidId, 104));
+  EXPECT_EQ(0U, encoder_.encode(kInvalidStateId, 104));
 
   EXPECT_EQ(104, encoder_.get_state(0).timestamp());
 }
@@ -77,9 +78,9 @@ TEST_F(TimestampEncoderFixture, TransitionToExistingStateWithoutErasingPreviousS
   // Act
 
   // Assert
-  EXPECT_EQ(0U, encoder_.encode(State::kInvalidId, 101));
-  EXPECT_EQ(0U, encoder_.encode(State::kInvalidId, 101));
-  EXPECT_EQ(0U, encoder_.encode(State::kInvalidId, 101));
+  EXPECT_EQ(0U, encoder_.encode(kInvalidStateId, 101));
+  EXPECT_EQ(0U, encoder_.encode(kInvalidStateId, 101));
+  EXPECT_EQ(0U, encoder_.encode(kInvalidStateId, 101));
   EXPECT_EQ(1U, encoder_.encode(0, 102));
   EXPECT_EQ(1U, encoder_.encode(0, 102));
   EXPECT_EQ(2U, encoder_.encode(1, 103));

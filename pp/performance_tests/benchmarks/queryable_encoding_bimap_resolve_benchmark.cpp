@@ -77,8 +77,8 @@ std::shared_ptr<Lss> get_lss_after_shrink() {
     copier.copy_added_series_and_build_indexes();
 
     series_index::invert_copy_mapping(dst_src_ids_mapping, copy_count, s->old_to_new);
-    lss.fill_added_series_mapping(shrink_boundary, *s->copy, s->old_to_new, source->added_series());
-    lss.finalize_copy_and_shrink(shrink_boundary, *s->copy, s->old_to_new);
+    lss.set_pending_shrink_boundary(shrink_boundary);
+    lss.finalize_copy_and_shrink(*s->copy, s->old_to_new);
     return s;
   }();
   return state->lss;

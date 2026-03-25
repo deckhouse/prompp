@@ -83,6 +83,9 @@ namespace PromPP::WAL {
 
 class SegmentSamplesStorage {
  public:
+  using SparseVector = BareBones::SparseVector<CompactSamplesList, BareBones::Vector>;
+  using Iterator = SparseVector::Iterator;
+
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t samples_count() const noexcept { return samples_count_; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t series_count() const noexcept { return series_.items_count(); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE Primitives::Timestamp earliest_sample() const noexcept { return earliest_sample_; }
@@ -137,10 +140,15 @@ class SegmentSamplesStorage {
     }
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Iterator begin() const noexcept { return series_.begin(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE static auto end() noexcept { return SparseVector::end(); }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool empty() const noexcept { return series_.empty(); }
+
  private:
   static constexpr auto kSeriesReserveSize = 512U;
 
-  BareBones::SparseVector<CompactSamplesList, BareBones::Vector> series_;
+  SparseVector series_;
   Primitives::Timestamp earliest_sample_{std::numeric_limits<Primitives::Timestamp>::max()};
   Primitives::Timestamp latest_sample_{};
   int64_t first_sample_added_at_tsns_{};

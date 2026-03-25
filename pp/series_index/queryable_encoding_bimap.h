@@ -96,27 +96,9 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     }
   }
 
-  void finalize_copy_and_shrink(uint32_t shrink_boundary, PostShrinkSnapshotAccess snapshot_access, BareBones::Vector<uint32_t>& old_to_new_mapping) {
-    assert(snapshot_access.composite_resolve && snapshot_access.symbol_resolve);
-    assert(shrink_boundary <= next_item_index_impl() && old_to_new_mapping.size() >= next_item_index_impl());
-
-    shrink_to_boundary(shrink_boundary);
-    post_shrink_mapping_ = std::span<const uint32_t>(old_to_new_mapping.data(), old_to_new_mapping.size());
-    post_shrink_snapshot_access_ = std::move(snapshot_access);
-  }
-
   template <class Snapshot>
-  [[nodiscard]] static PostShrinkSnapshotAccess make_post_shrink_snapshot_access(const Snapshot& snapshot) {
-    PostShrinkSnapshotAccess access;
-    access.composite_resolve = [&snapshot](uint32_t id) { return snapshot[id]; };
-    access.symbol_resolve = [&snapshot](uint32_t name_id, uint32_t value_id) { return resolve_snapshot_symbol(snapshot, name_id, value_id); };
-    access.for_each_symbol_id = [&snapshot](const auto& callback) { enumerate_snapshot_symbol_ids(snapshot, callback); };
-    return access;
-  }
-
-  template <class Snapshot>
-  void finalize_copy_and_shrink(uint32_t shrink_boundary, const Snapshot& snapshot, BareBones::Vector<uint32_t>& old_to_new_mapping) {
-    finalize_copy_and_shrink(shrink_boundary, make_post_shrink_snapshot_access(snapshot), old_to_new_mapping);
+  void finalize_copy_and_shrink(const Snapshot& snapshot, BareBones::Vector<uint32_t>& old_to_new_mapping) {
+    finalize_copy_and_shrink(make_post_shrink_snapshot_access(snapshot), old_to_new_mapping);
   }
 
   template <class Callback>
@@ -233,6 +215,24 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   SortingIndexBuilder sorting_index_{ls_id_set_};
 
   BareBones::Bitset added_series_;
+
+  void finalize_copy_and_shrink(PostShrinkSnapshotAccess snapshot_access, BareBones::Vector<uint32_t>& old_to_new_mapping) {
+    assert(snapshot_access.composite_resolve && snapshot_access.symbol_resolve);
+    assert(pending_shrink_boundary_ <= next_item_index_impl() && old_to_new_mapping.size() >= next_item_index_impl());
+
+    shrink_to_boundary(pending_shrink_boundary_);
+    post_shrink_mapping_ = std::span<const uint32_t>(old_to_new_mapping.data(), old_to_new_mapping.size());
+    post_shrink_snapshot_access_ = std::move(snapshot_access);
+  }
+
+  template <class Snapshot>
+  [[nodiscard]] static PostShrinkSnapshotAccess make_post_shrink_snapshot_access(const Snapshot& snapshot) {
+    PostShrinkSnapshotAccess access;
+    access.composite_resolve = [&snapshot](uint32_t id) { return snapshot[id]; };
+    access.symbol_resolve = [&snapshot](uint32_t name_id, uint32_t value_id) { return resolve_snapshot_symbol(snapshot, name_id, value_id); };
+    access.for_each_symbol_id = [&snapshot](const auto& callback) { enumerate_snapshot_symbol_ids(snapshot, callback); };
+    return access;
+  }
 
   template <BareBones::SnugComposite::ls_id_range R>
   PROMPP_ALWAYS_INLINE void after_items_load_impl(R&& loaded_ids) noexcept {
@@ -488,7 +488,7 @@ class QueryableEncodingBimapCopier {
 };
 
 template <class NewToOldContainer>
-inline void invert_copy_mapping(const NewToOldContainer& new_to_old, uint32_t max_lsid, BareBones::Vector<uint32_t>& old_to_new_out) {
+PROMPP_ALWAYS_INLINE void invert_copy_mapping(const NewToOldContainer& new_to_old, uint32_t max_lsid, BareBones::Vector<uint32_t>& old_to_new_out) {
   old_to_new_out.clear();
   old_to_new_out.resize(max_lsid);
 

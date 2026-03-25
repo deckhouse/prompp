@@ -6,9 +6,13 @@ namespace series_data::encoder::timestamp {
 
 class TimestampEncoder {
  public:
-  static void encode_first(State::TimestampEncoder& encoder, int64_t timestamp, BitSequenceWithItemsCount& stream) { encoder.encode(timestamp, stream.stream); }
+  template <class BitSequenceWithItemsCount>
+  static void encode_first(StateEncoder& encoder, int64_t timestamp, BitSequenceWithItemsCount& stream) {
+    encoder.encode(timestamp, stream.stream);
+  }
 
-  static void encode(State::TimestampEncoder& encoder, int64_t timestamp, BitSequenceWithItemsCount& stream) {
+  template <class BitSequenceWithItemsCount>
+  static void encode(StateEncoder& encoder, int64_t timestamp, BitSequenceWithItemsCount& stream) {
     if (stream.inc_count() == 1) [[unlikely]] {
       encoder.encode_delta(timestamp, stream.stream);
     } else {
@@ -38,7 +42,7 @@ class TimestampDecoder {
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool eof() const noexcept { return reader_.eof(); }
 
   [[nodiscard]] static int64_t decode_first(BareBones::BitSequenceReader reader) noexcept {
-    State::TimestampDecoder decoder;
+    StateDecoder decoder;
     decoder.decode(reader);
     return decoder.timestamp();
   }
@@ -58,18 +62,24 @@ class TimestampDecoder {
   using GorillaState = BareBones::Encoding::Gorilla::GorillaState;
 
   BareBones::BitSequenceReader reader_;
-  State::TimestampDecoder decoder_;
+  StateDecoder decoder_;
   GorillaState gorilla_state_{GorillaState::kFirstPoint};
 };
 
+template <BareBones::ReallocatorInterface Reallocator>
 class Encoder {
+ private:
+  using StateTransitions = timestamp::StateTransitions<Reallocator>;
+  using State = timestamp::State<Reallocator>;
+  using BitSequenceWithItemsCount = encoder::BitSequenceWithItemsCount<Reallocator>;
+
  public:
-  State::Id encode(State::Id state_id, int64_t timestamp) {
+  StateId encode(StateId state_id, int64_t timestamp) {
     const auto hash = StateTransitions::hash(timestamp, state_id);
 
     if (const auto transition = state_transitions_.get(hash, timestamp, state_id); transition != nullptr) {
       const auto new_state_id = transition->state_id;
-      if (state_id != State::kInvalidId) {
+      if (state_id != kInvalidStateId) {
         decrease_reference_count(states_[state_id], state_id);
       }
 
@@ -78,7 +88,7 @@ class Encoder {
     }
 
     const auto previous_state_id = state_id;
-    if (state_id == State::kInvalidId) [[unlikely]] {
+    if (state_id == kInvalidStateId) [[unlikely]] {
       auto& state = states_.emplace_back(state_id);
       TimestampEncoder::encode_first(state.encoder, timestamp, state.stream_data.stream);
       state_id = states_.index_of(state);
@@ -104,9 +114,9 @@ class Encoder {
     return state_id;
   }
 
-  PROMPP_ALWAYS_INLINE void erase(State::Id state_id) { decrease_reference_count(states_[state_id], state_id); }
+  PROMPP_ALWAYS_INLINE void erase(StateId state_id) { decrease_reference_count(states_[state_id], state_id); }
 
-  PROMPP_ALWAYS_INLINE void finalize_or_copy(State::Id state_id, BitSequenceWithItemsCount& stream, uint32_t finalized_stream_id) {
+  PROMPP_ALWAYS_INLINE void finalize_or_copy(StateId state_id, BitSequenceWithItemsCount& stream, uint32_t finalized_stream_id) {
     if (auto& state = states_[state_id]; --state.reference_count == 0) {
       stream = state.finalize(finalized_stream_id);
 
@@ -121,40 +131,40 @@ class Encoder {
     }
   }
 
-  PROMPP_ALWAYS_INLINE void finalize(State::Id state_id, BitSequenceWithItemsCount& stream, uint32_t finalized_stream_id) {
+  PROMPP_ALWAYS_INLINE void finalize(StateId state_id, BitSequenceWithItemsCount& stream, uint32_t finalized_stream_id) {
     auto& state = states_[state_id];
     stream = state.finalize(finalized_stream_id);
     decrease_reference_count(state, state_id);
   }
 
-  PROMPP_ALWAYS_INLINE uint32_t process_finalized(State::Id state_id) {
+  PROMPP_ALWAYS_INLINE uint32_t process_finalized(StateId state_id) {
     if (auto& state = states_[state_id]; state.is_finalized()) [[unlikely]] {
       const auto result = state.stream_data.finalized_stream_id;
       decrease_reference_count(state, state_id);
       return result;
     }
 
-    return State::kInvalidId;
+    return kInvalidStateId;
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return states_.allocated_memory() + state_transitions_.allocated_memory(); }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const BitSequenceWithItemsCount& get_stream(State::Id state_id) const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const BitSequenceWithItemsCount& get_stream(StateId state_id) const noexcept {
     return states_[state_id].stream_data.stream;
   }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE State& get_state(State::Id state_id) noexcept { return states_[state_id]; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const State& get_state(State::Id state_id) const noexcept { return states_[state_id]; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE State& get_state(StateId state_id) noexcept { return states_[state_id]; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const State& get_state(StateId state_id) const noexcept { return states_[state_id]; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::VectorWithHoles<State>& get_states() const noexcept { return states_; }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_unique_state(State::Id state_id) const noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_unique_state(StateId state_id) const noexcept {
     auto& state = states_[state_id];
     return state.reference_count == 1 && state.child_count == 0;
   }
 
  private:
-  BareBones::VectorWithHoles<State> states_;
+  BareBones::VectorWithHoles<State, Reallocator> states_;
   StateTransitions state_transitions_{states_};
 
-  PROMPP_ALWAYS_INLINE void decrease_reference_count(State& state, State::Id state_id) noexcept {
+  PROMPP_ALWAYS_INLINE void decrease_reference_count(State& state, StateId state_id) noexcept {
     if (--state.reference_count == 0) {
       state_transitions_.erase(state);
       decrease_previous_state_child_count(state_id, state.previous_state_id);
@@ -167,8 +177,8 @@ class Encoder {
   }
 
   PROMPP_ALWAYS_INLINE void decrease_previous_state_child_count(uint32_t state_id, uint32_t previous_state_id) noexcept {
-    while (previous_state_id != State::kInvalidId) {
-      states_[state_id].previous_state_id = State::kInvalidId;
+    while (previous_state_id != kInvalidStateId) {
+      states_[state_id].previous_state_id = kInvalidStateId;
       auto& previous_state = states_[previous_state_id];
 
       assert(previous_state.child_count > 0);

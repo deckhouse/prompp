@@ -38,3 +38,7 @@ constexpr auto kIsBuildWithAsan = true;
 #else
 constexpr auto kIsBuildWithAsan = false;
 #endif
+
+#if __has_include(<jemalloc/jemalloc.h>)
+#define JEMALLOC_AVAILABLE 1
+#endif

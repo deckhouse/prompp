@@ -46,6 +46,7 @@ void prompp_dump_memory_profile(void* args, void* res);
 
 #define Sizeof_SegmentSamplesStorage 80
 #define Sizeof_RemoteWriteMessageEncoder 32
+#define Sizeof_SegmentSamplesStorageListIterator 56
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -1318,19 +1319,6 @@ extern "C" {
 #endif
 
 /**
- * @brief create message list
- *
- * @param args {
- *     messagesCount uint64
- * }
- *
- * @param res {
- *     message_list []Message
- * }
- */
-void prompp_remote_write_message_list_ctor(void* args, void* res);
-
-/**
  * @brief destroy message list
  *
  * @param args {
@@ -1365,12 +1353,11 @@ void prompp_remote_write_message_encoders_dtor(void* args);
  * @brief encode remote write message
  *
  * @param args {
- *     messageEncoder *MessageEncoder
+ *     encoder        *MessageEncoder
  *     lss_list       []uintptr
- *     storageList    []SegmentSamplesStorageList
  *     messageIndex   uint64
  *     messagesCount  uint64
- *     message        *Message
+ *     messages       []Message
  * }
  *
  */
@@ -1971,14 +1958,12 @@ void prompp_wal_decoder_restore_from_stream(void* args, void* res);
  * @brief Construct a segment samples storage list
  *
  * @param args {
- *     count  uint64 // storages count
+ *     count       uint64 // storages count
+ *     storageList *SegmentSamplesStorageList
  * }
  *
- * @param res {
- *     storageList []SegmentSamplesStorageList // constructed storage list
- * }
  */
-void prompp_wal_segment_samples_storage_list_ctor(void* args, void* res);
+void prompp_wal_segment_samples_storage_list_ctor(void* args);
 
 /**
  * @brief Add sample to sample storage list
@@ -2005,10 +1990,21 @@ void prompp_wal_segment_samples_storage_clear(void* args);
  * @brief Destroy segment samples storage list
  *
  * @param args {
- *     storageList []SegmentSamplesStorageList
+ *     storageList *SegmentSamplesStorageList
  * }
  */
 void prompp_wal_segment_samples_storage_list_dtor(void* args);
+
+/**
+ * @brief Split storage list into messages by samples per message
+ *
+ * @param args {
+ *     storageList                *SegmentSamplesStorageList
+ *     message_samples_threshold  uint32
+ *     messages                   []GoMessage
+ * }
+ */
+void prompp_wal_segment_samples_storage_list_split_messages(void* args);
 
 //
 // OutputDecoder
