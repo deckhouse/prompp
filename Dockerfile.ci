@@ -1,6 +1,6 @@
 FROM ubuntu:24.04
 
-# Base + g++ + git for perf_tests
+# Base + g++-14 + git for perf_tests
 RUN DEBIAN_FRONTEND=noninteractive && apt-get update && apt-get install -y gpg wget gcc-14 g++-14 libunwind-14-dev jq bash nodejs npm bzip2 \
     git autoconf make iproute2 jq curl ca-certificates libtool pkg-config cmake lcov && \
     update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100 && \
