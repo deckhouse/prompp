@@ -21,7 +21,8 @@
 
 namespace BareBones {
 
-class Bitset {
+template <ReallocatorInterface Reallocator = DefaultReallocator>
+class GenericBitset {
   /**
    * Why??? Why another bitset??? Why no std::bitset?
    *
@@ -31,7 +32,7 @@ class Bitset {
    * - roaring bitmap is not that quick if you can afford to hold the whole
    *   bitset in memory (including unset parts), which is the case
    */
-  using Memory = BareBones::Memory<MemoryControlBlockWithItemCount, uint64_t>;
+  using Memory = BareBones::Memory<MemoryControlBlockWithItemCount, uint64_t, Reallocator>;
   Memory data_;
 
  public:
@@ -132,12 +133,12 @@ class Bitset {
   class IteratorSentinel {};
 
   class Iterator {
-    const uint64_t* data_;
+    const uint64_t* data_{};
 
-    uint32_t last_block_n_;
-    uint32_t block_n_;
+    uint32_t last_block_n_{};
+    uint32_t block_n_{};
     uint64_t block_;
-    uint32_t j_;
+    uint32_t j_{64};
 
     PROMPP_ALWAYS_INLINE void next() noexcept {
       if (!block_ && block_n_ != last_block_n_) {
@@ -155,6 +156,7 @@ class Bitset {
     using value_type = uint32_t;
     using difference_type = std::ptrdiff_t;
 
+    Iterator() = default;
     PROMPP_ALWAYS_INLINE explicit Iterator(const uint64_t* data, uint32_t size, uint32_t i) noexcept
         : data_(data), last_block_n_(size ? ((size - 1) >> 6) : 0), block_n_(i >> 6), j_(i & 0x3F) {
       block_ = size ? data_[block_n_] : 0;
@@ -252,10 +254,12 @@ class Bitset {
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t memory_size_in_bytes() const noexcept { return memory_size_in_bytes(size()); }
 };
 
-template <>
-struct IsTriviallyReallocatable<Bitset> : std::true_type {};
+using Bitset = GenericBitset<DefaultReallocator>;
 
-template <>
-struct IsZeroInitializable<Bitset> : std::true_type {};
+template <ReallocatorInterface Reallocator>
+struct IsTriviallyReallocatable<GenericBitset<Reallocator>> : std::true_type {};
+
+template <ReallocatorInterface Reallocator>
+struct IsZeroInitializable<GenericBitset<Reallocator>> : std::true_type {};
 
 }  // namespace BareBones

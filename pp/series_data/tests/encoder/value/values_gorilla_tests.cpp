@@ -7,7 +7,7 @@
 namespace {
 
 using BareBones::Encoding::Gorilla::STALE_NAN;
-using series_data::encoder::value::ValuesGorillaEncoder;
+using ValuesGorillaEncoder = series_data::encoder::value::ValuesGorillaEncoder<BareBones::DefaultReallocator>;
 
 struct IsActualCase {
   BareBones::Vector<double> values;
@@ -29,10 +29,10 @@ class ValuesGorillaEncoderIsActualFixture : public testing::TestWithParam<IsActu
 
 TEST_P(ValuesGorillaEncoderIsActualFixture, Test) {
   // Arrange
-  auto encoder = encode(GetParam().values);
+  const auto encoder = encode(GetParam().values);
 
   // Act
-  auto result = encoder.is_actual(state, GetParam().value);
+  const auto result = encoder.is_actual(state, GetParam().value);
 
   // Assert
   EXPECT_EQ(GetParam().expected, result);

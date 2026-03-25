@@ -3,7 +3,6 @@
 #include "primitives/go_model.h"
 #include "primitives/hash.h"
 #include "prometheus/hashdex.h"
-#include "series_data/data_storage.h"
 #include "series_data/decoder.h"
 #include "series_data/encoder.h"
 #include "series_data/outdated_chunk_merger.h"

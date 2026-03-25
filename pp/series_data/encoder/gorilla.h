@@ -9,6 +9,7 @@
 
 namespace series_data::encoder {
 
+template <BareBones::ReallocatorInterface Reallocator>
 class PROMPP_ATTRIBUTE_PACKED GorillaEncoder {
  public:
   PROMPP_ALWAYS_INLINE GorillaEncoder(int64_t timestamp, double value) {
@@ -43,14 +44,14 @@ class PROMPP_ATTRIBUTE_PACKED GorillaEncoder {
     return encode(timestamp, value);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence finalize_stream() noexcept {
+  [[nodiscard]] PROMPP_ALWAYS_INLINE CompactBitSequence<Reallocator> finalize_stream() noexcept {
     auto stream = std::move(stream_.stream);
     stream.shrink_to_fit();
     return stream;
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return stream_.allocated_memory(); }
-  [[nodiscard]] PROMPP_ALWAYS_INLINE const BitSequenceWithItemsCount& stream() const noexcept { return stream_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const BitSequenceWithItemsCount<Reallocator>& stream() const noexcept { return stream_; }
 
  private:
   using TimestampEncoder = BareBones::Encoding::Gorilla::ZigZagTimestampEncoder<>;
@@ -58,7 +59,7 @@ class PROMPP_ATTRIBUTE_PACKED GorillaEncoder {
 
   TimestampEncoder timestamp_encoder_;
   ValuesEncoder values_encoder_;
-  BitSequenceWithItemsCount stream_;
+  BitSequenceWithItemsCount<Reallocator> stream_;
 
   PROMPP_ALWAYS_INLINE uint8_t encode(int64_t timestamp, double value) {
     const auto count = stream_.inc_count();
@@ -94,5 +95,5 @@ class PROMPP_ATTRIBUTE_PACKED GorillaEncoder {
 
 }  // namespace series_data::encoder
 
-template <>
-struct BareBones::IsTriviallyReallocatable<series_data::encoder::GorillaEncoder> : std::true_type {};
+template <BareBones::ReallocatorInterface Reallocator>
+struct BareBones::IsTriviallyReallocatable<series_data::encoder::GorillaEncoder<Reallocator>> : std::true_type {};

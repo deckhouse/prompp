@@ -11,8 +11,7 @@ namespace BareBones {
 namespace VectorWithHolesImpl {
 
 template <class T>
-concept holes_need_bitset =
-    BareBones::concepts::has_allocated_memory<T> || BareBones::concepts::dereferenceable_has_allocated_memory<T> || !IsTriviallyDestructible<T>::value;
+concept holes_need_bitset = concepts::has_allocated_memory<T> || concepts::dereferenceable_has_allocated_memory<T> || !IsTriviallyDestructible<T>::value;
 
 template <typename T, typename... Args>
 concept destroyable_with = requires(T t, Args... args) {
@@ -50,7 +49,7 @@ union ItemOrHole {
 template <class T>
 struct IsTriviallyReallocatable<VectorWithHolesImpl::ItemOrHole<T>> : std::true_type {};
 
-template <class T>
+template <class T, ReallocatorInterface Reallocator = DefaultReallocator>
 class VectorWithHoles {
  public:
   ~VectorWithHoles() {
@@ -93,13 +92,13 @@ class VectorWithHoles {
 
   PROMPP_ALWAYS_INLINE const T& at(uint32_t i) const {
     if (is_hole(i)) {
-      throw BareBones::Exception(0x8749d003112fc0c4, "VectorWithHoles::at: attempt to access a hole");
+      throw Exception(0x8749d003112fc0c4, "VectorWithHoles::at: attempt to access a hole");
     }
     return vector_[i].value;
   }
   PROMPP_ALWAYS_INLINE T& at(uint32_t i) {
     if (is_hole(i)) {
-      throw BareBones::Exception(0xa4ce63143b8d187c, "VectorWithHoles::at: attempt to access a hole");
+      throw Exception(0xa4ce63143b8d187c, "VectorWithHoles::at: attempt to access a hole");
     }
     return vector_[i].value;
   }
@@ -110,7 +109,7 @@ class VectorWithHoles {
     size_t allocated_memory = vector_.capacity() * sizeof(Item);
     if constexpr (VectorWithHolesImpl::holes_need_bitset<T>) {
       allocated_memory += holes_index_set_.allocated_memory();
-      for_each_item([&](const auto& item) { allocated_memory += BareBones::mem::allocated_memory(item); });
+      for_each_item([&](const auto& item) { allocated_memory += mem::allocated_memory(item); });
     }
 
     return allocated_memory;
@@ -121,9 +120,9 @@ class VectorWithHoles {
   struct nothing_t {};
   // The bitset was chosen as the main data structure based on series_data_encoder_benchmark
   // between Roaring::roaring and BareBones::Bitset
-  using BitsetOrEmpty = std::conditional_t<VectorWithHolesImpl::holes_need_bitset<T>, BareBones::Bitset, nothing_t>;
+  using BitsetOrEmpty = std::conditional_t<VectorWithHolesImpl::holes_need_bitset<T>, GenericBitset<Reallocator>, nothing_t>;
 
-  BareBones::Vector<Item> vector_;
+  Vector<Item, Reallocator> vector_;
   [[no_unique_address]] BitsetOrEmpty holes_index_set_;
   uint32_t next_hole_{std::numeric_limits<uint32_t>::max()};
 

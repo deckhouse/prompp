@@ -14,21 +14,24 @@
 #include "series_data/outdated_chunk_merger.h"
 
 namespace series_data::unloading {
+
 struct PROMPP_ATTRIBUTE_PACKED SeriesToLoadInfo {
   uint8_t chunk_id = 0;
-  encoder::CompactBitSequence buffer{};
+  encoder::CompactBitSequence<DataStorage::Reallocator> buffer{};
 
   void reset() noexcept {
     chunk_id = 0;
     buffer.rewind();
   }
 };
+
 }  // namespace series_data::unloading
 
 template <>
 struct BareBones::IsTriviallyReallocatable<series_data::unloading::SeriesToLoadInfo> : std::true_type {};
 
 namespace series_data::unloading {
+
 class Loader {
  public:
   class UnorderedVector {
@@ -51,7 +54,7 @@ class Loader {
 
     template <class MapIterator, class Vector>
     class Iterator {
-      using RefType = typename Vector::value_type&;
+      using RefType = Vector::value_type&;
       using PairType = std::pair<uint32_t, RefType>;
 
      public:
@@ -174,6 +177,8 @@ class Loader {
 
   [[nodiscard]] bool empty() const noexcept { return ls_id_to_infos_.empty(); }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE DataStorage& storage() noexcept { return storage_; }
+
  private:
   void process_ls_id_data(BareBones::Bitset::Iterator bitset_it,
                           EncodingChunkLengthSequence::Iterator length_it,
@@ -225,4 +230,5 @@ class Loader {
 
   UnorderedVector ls_id_to_infos_{};
 };
+
 }  // namespace series_data::unloading

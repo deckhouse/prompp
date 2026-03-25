@@ -25,7 +25,7 @@ struct SerializedCompactBitSequence {
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const uint8_t> buffer() const noexcept { return {ptr.get(), BareBones::Bit::to_ceil_bytes(size_in_bits)}; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE BareBones::BitSequenceReader reader() const noexcept { return {ptr.get(), size_in_bits}; }
 
-  encoder::CompactBitSequence::SharedPtr ptr;
+  encoder::CompactBitSequence<DataStorage::Reallocator>::SharedPtr ptr;
   uint32_t size_in_bits;
 };
 
@@ -43,8 +43,8 @@ class Decoder {
     using enum chunk::DataChunk::Type;
 
     if (chunk.encoding_state.encoding_type == EncodingType::kGorilla) [[unlikely]] {
-      return encoder::BitSequenceWithItemsCount::count(chunk_type == kOpen ? storage.get_gorilla_encoder_stream<kOpen>(chunk.encoder.external_index)
-                                                                           : storage.get_gorilla_encoder_stream<kFinalized>(chunk.encoder.external_index));
+      return DataStorage::BitSequenceWithItemsCount::count(chunk_type == kOpen ? storage.get_gorilla_encoder_stream<kOpen>(chunk.encoder.external_index)
+                                                                               : storage.get_gorilla_encoder_stream<kFinalized>(chunk.encoder.external_index));
     } else {
       return (chunk_type == kOpen ? storage.get_timestamp_stream<kOpen>(chunk.timestamp_encoder_state_id)
                                   : storage.get_timestamp_stream<kFinalized>(chunk.timestamp_encoder_state_id))
@@ -62,7 +62,7 @@ class Decoder {
     return result;
   }
 
-  static encoder::SampleList decode_outdated_chunk(const chunk::OutdatedChunk& chunk) {
+  static encoder::SampleList decode_outdated_chunk(const DataStorage::OutdatedChunk& chunk) {
     encoder::SampleList result;
     result.reserve(chunk.samples_count());
     std::ranges::copy(decoder::OutdatedDecodeIterator(chunk.samples_count(), chunk.stream().reader(), {}), decoder::DecodeIteratorSentinel{},
@@ -207,8 +207,8 @@ class Decoder {
   template <class Callback>
   static void create_decode_iterator(std::span<const uint8_t> buffer, const chunk::SerializedChunk& chunk, Callback&& callback) noexcept {
     using enum EncodingType;
+    using BitSequenceWithItemsCount = DataStorage::BitSequenceWithItemsCount;
     using decoder::DecodeIteratorSentinel;
-    using encoder::BitSequenceWithItemsCount;
 
     switch (chunk.encoding_state.encoding_type) {
       case kUint32Constant: {
@@ -459,7 +459,7 @@ class Decoder {
     if constexpr (chunk_type == chunk::DataChunk::Type::kOpen) {
       return storage.gorilla_encoders[chunk.encoder.external_index].stream().reader();
     } else {
-      return encoder::BitSequenceWithItemsCount::reader(storage.finalized_data_streams[chunk.encoder.external_index]);
+      return DataStorage::BitSequenceWithItemsCount::reader(storage.finalized_data_streams[chunk.encoder.external_index]);
     }
   }
 };
