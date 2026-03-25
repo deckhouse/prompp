@@ -1,0 +1,13 @@
+--- re2/parse.cc
++++ re2/parse.cc
+@@ -1665,6 +1665,10 @@
+ // Add a UGroup or its negation to the character class.
+ static void AddUGroup(CharClassBuilder* cc, const UGroup* g, int sign,
+                       Regexp::ParseFlags parse_flags) {
++  if (g == nullptr) [[unlikely]] {
++    return;
++  }
++
+   if (sign == +1) {
+     for (int i = 0; i < g->nr16; i++) {
+       cc->AddRangeFlags(g->r16[i].lo, g->r16[i].hi, parse_flags);
