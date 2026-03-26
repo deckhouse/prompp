@@ -396,6 +396,156 @@ TEST_F(QueryableEncodingBimapShrinkFixture, FinalizeReturnsEmptyForUnmappedSerie
   EXPECT_EQ(ls3_, lss_[2]);
 }
 
+TEST_F(QueryableEncodingBimapFixture, FixedStateHiddenLoadedSeriesCanBeReinserted) {
+  // Arrange
+  const auto ls1 = LabelViewSet{{"job", "a"}};
+  const auto ls2 = LabelViewSet{{"job", "b"}};
+  Lss source;
+  source.find_or_emplace(ls1);
+  source.find_or_emplace(ls2);
+  source.build_deferred_indexes();
+  std::stringstream stream;
+  stream << source;
+  Lss loaded;
+  stream >> loaded;
+  const uint32_t shrink_boundary = loaded.next_item_index();
+  loaded.set_pending_shrink_boundary(shrink_boundary);
+
+  // Act
+  const auto from_find_before = loaded.find(ls1);
+  const auto new_id = loaded.find_or_emplace(ls1);
+  const auto from_find_after = loaded.find(ls1);
+
+  // Assert
+  EXPECT_FALSE(from_find_before.has_value());
+  EXPECT_EQ(shrink_boundary, new_id);
+  ASSERT_TRUE(from_find_after.has_value());
+  EXPECT_EQ(new_id, *from_find_after);
+  EXPECT_EQ(0U, loaded[0].size());
+  EXPECT_EQ(ls1, loaded[new_id]);
+}
+
+class QueryableEncodingBimapFiveSeriesFixture : public QueryableEncodingBimapCopierFixture {
+ protected:
+  LabelViewSet ls1_{{"job", "a"}};
+  LabelViewSet ls2_{{"job", "b"}};
+  LabelViewSet ls3_{{"job", "c"}};
+  LabelViewSet ls4_{{"job", "d"}};
+  LabelViewSet ls5_{{"job", "e"}};
+  LabelViewSet ls6_{{"job", "f"}};
+  Lss lss_copy_;
+  BareBones::Vector<uint32_t> old_to_new_;
+
+  void SetUp() override {
+    QueryableEncodingBimapCopierFixture::SetUp();
+    lss_.find_or_emplace(ls1_);
+    lss_.find_or_emplace(ls2_);
+    lss_.find_or_emplace(ls3_);
+    lss_.find_or_emplace(ls4_);
+    lss_.find_or_emplace(ls5_);
+    lss_.build_deferred_indexes();
+  }
+
+  template <class SeriesIds>
+  void FinalizeShrink(const SeriesIds& ids_for_copy, uint32_t shrink_boundary) {
+    dst_src_ids_mapping_.clear();
+    Copier copier(lss_, lss_.sorting_index(), ids_for_copy, lss_copy_, dst_src_ids_mapping_);
+    copier.copy_added_series_and_build_indexes();
+
+    invert_copy_mapping(dst_src_ids_mapping_, lss_.next_item_index(), old_to_new_);
+    lss_.set_pending_shrink_boundary(shrink_boundary);
+    lss_.finalize_copy_and_shrink(lss_copy_, old_to_new_);
+  }
+};
+
+TEST_F(QueryableEncodingBimapFiveSeriesFixture, TypicalShrinkFindOrEmplaceAddsNewSeries) {
+  // Arrange
+  const uint32_t shrink_boundary = lss_.next_item_index();
+  FinalizeShrink(lss_.added_series(), shrink_boundary);
+
+  // Act
+  const auto new_id = lss_.find_or_emplace(ls6_);
+  const auto from_find = lss_.find(ls6_);
+
+  // Assert
+  EXPECT_EQ(shrink_boundary, new_id);
+  ASSERT_TRUE(from_find.has_value());
+  EXPECT_EQ(new_id, *from_find);
+  EXPECT_EQ(ls6_, lss_[new_id]);
+}
+
+TEST_F(QueryableEncodingBimapFiveSeriesFixture, ShrinkMiddlePartialCopyHidesUnmappedSeries) {
+  // Arrange
+  constexpr uint32_t shrink_boundary = 3U;
+  const BareBones::Vector ids_for_copy{0U, 2U};
+  FinalizeShrink(ids_for_copy, shrink_boundary);
+
+  // Act
+  const auto hidden_from_find = lss_.find(ls2_);
+
+  // Assert
+  EXPECT_EQ(ls1_, lss_[0]);
+  EXPECT_EQ(0U, lss_[1].size());
+  EXPECT_EQ(ls3_, lss_[2]);
+  EXPECT_EQ(ls4_, lss_[3]);
+  EXPECT_EQ(ls5_, lss_[4]);
+  EXPECT_FALSE(hidden_from_find.has_value());
+}
+
+TEST_F(QueryableEncodingBimapFiveSeriesFixture, ShrinkMiddlePartialCopyReinsertAllocatesNewId) {
+  // Arrange
+  constexpr uint32_t shrink_boundary = 3U;
+  constexpr uint32_t expected_new_id = 5U;
+  const BareBones::Vector ids_for_copy{0U, 2U};
+  FinalizeShrink(ids_for_copy, shrink_boundary);
+
+  // Act
+  const auto new_id = lss_.find_or_emplace(ls2_);
+  const auto from_find_after = lss_.find(ls2_);
+
+  // Assert
+  EXPECT_EQ(expected_new_id, new_id);
+  ASSERT_TRUE(from_find_after.has_value());
+  EXPECT_EQ(new_id, *from_find_after);
+  EXPECT_EQ(ls2_, lss_[new_id]);
+}
+
+TEST_F(QueryableEncodingBimapFiveSeriesFixture, ShrinkAllPartialCopyHidesUnmappedSeries) {
+  // Arrange
+  const uint32_t shrink_boundary = lss_.next_item_index();
+  const BareBones::Vector ids_for_copy{0U, 2U, 4U};
+  FinalizeShrink(ids_for_copy, shrink_boundary);
+
+  // Act
+  const auto hidden_from_find = lss_.find(ls2_);
+
+  // Assert
+  EXPECT_EQ(ls1_, lss_[0]);
+  EXPECT_EQ(0U, lss_[1].size());
+  EXPECT_EQ(ls3_, lss_[2]);
+  EXPECT_EQ(0U, lss_[3].size());
+  EXPECT_EQ(ls5_, lss_[4]);
+  EXPECT_FALSE(hidden_from_find.has_value());
+}
+
+TEST_F(QueryableEncodingBimapFiveSeriesFixture, ShrinkAllPartialCopyReinsertAllocatesNewId) {
+  // Arrange
+  const uint32_t shrink_boundary = lss_.next_item_index();
+  const uint32_t expected_new_id = shrink_boundary;
+  const BareBones::Vector ids_for_copy{0U, 2U, 4U};
+  FinalizeShrink(ids_for_copy, shrink_boundary);
+
+  // Act
+  const auto new_id = lss_.find_or_emplace(ls2_);
+  const auto from_find_after = lss_.find(ls2_);
+
+  // Assert
+  EXPECT_EQ(expected_new_id, new_id);
+  ASSERT_TRUE(from_find_after.has_value());
+  EXPECT_EQ(new_id, *from_find_after);
+  EXPECT_EQ(ls2_, lss_[new_id]);
+}
+
 class QueryableEncodingBimapFixedStateFixture : public QueryableEncodingBimapCopierFixture {
  protected:
   static constexpr uint32_t kPendingShrinkBoundary = 3;
