@@ -65,6 +65,8 @@ jobs:
           docker run --rm \
             -v $PWD:/workspace \
             -w /workspace \
+            -e CC=gcc-14 \
+            -e CXX=g++-14 \
             -e OPT=${{ matrix.OPT }} \
             -e SANITIZERS=${{ matrix.SANITIZERS }} \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }}${{ needs.build-ci-image.outputs.tag_suffix }} \
@@ -122,6 +124,8 @@ jobs:
           docker run --rm \
             -v $PWD:/workspace \
             -w /workspace \
+            -e CC=gcc-14 \
+            -e CXX=g++-14 \
             -e COMPILATION_MODE=${{ matrix.COMPILATION_MODE }} \
             -e ASAN=${{ matrix.ASAN }} \
             ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }}${{ needs.build-ci-image.outputs.tag_suffix }} \
