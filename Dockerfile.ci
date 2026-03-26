@@ -6,6 +6,7 @@ RUN DEBIAN_FRONTEND=noninteractive && apt-get update && apt-get install -y gpg w
     update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100 && \
     update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100 && \
     update-alternatives --install /usr/bin/gcov gcov /usr/bin/gcov-14 100 && \
+    rm -rf /usr/lib/gcc/*/13 && \
     echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-21 main" | tee /etc/apt/sources.list.d/archive_uri-http_apt_llvm_org_jammy_-jammy.list && \
     wget -qO - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - && \
     apt-get update && apt-get install -y clang-format-21 clang-tidy-21 && \
