@@ -1,0 +1,104 @@
+--- absl/strings/charconv.cc
++++ absl/strings/charconv.cc
+@@ -536,11 +536,14 @@
+     absl::strings_internal::BigUnsigned<84> rhs(guess_mantissa);
+     // There are powers of 2 on both sides of the inequality; reduce this to
+     // a single bit-shift.
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Warray-bounds="
+     if (exact_exponent > guess_exponent) {
+       lhs.ShiftLeft(exact_exponent - guess_exponent);
+     } else {
+       rhs.ShiftLeft(guess_exponent - exact_exponent);
+     }
++#pragma GCC diagnostic pop
+     comparison = Compare(lhs, rhs);
+   } else {
+     // Move the power of 5 to the other side of the equation, giving us:
+@@ -549,11 +552,14 @@
+     absl::strings_internal::BigUnsigned<84> rhs =
+         absl::strings_internal::BigUnsigned<84>::FiveToTheNth(-exact_exponent);
+     rhs.MultiplyBy(guess_mantissa);
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Warray-bounds="
+     if (exact_exponent > guess_exponent) {
+       lhs.ShiftLeft(exact_exponent - guess_exponent);
+     } else {
+       rhs.ShiftLeft(guess_exponent - exact_exponent);
+     }
++#pragma GCC diagnostic pop
+     comparison = Compare(lhs, rhs);
+   }
+   if (comparison < 0) {
+
+--- absl/strings/cord.cc
++++ absl/strings/cord.cc
+@@ -226,11 +226,14 @@
+   assert(tree != nullptr);
+   assert(tree->length != 0);
+   assert(!tree->IsCrc());
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Warray-bounds="
+   if (data_.is_tree()) {
+     AppendTreeToTree(tree, method);
+   } else {
+     AppendTreeToInlined(tree, method);
+   }
++#pragma GCC diagnostic pop
+ }
+ 
+ void Cord::InlineRep::PrependTreeToInlined(absl::Nonnull<CordRep*> tree,
+@@ -256,11 +259,14 @@
+   assert(tree != nullptr);
+   assert(tree->length != 0);
+   assert(!tree->IsCrc());
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Warray-bounds="
+   if (data_.is_tree()) {
+     PrependTreeToTree(tree, method);
+   } else {
+     PrependTreeToInlined(tree, method);
+   }
++#pragma GCC diagnostic pop
+ }
+ 
+ // Searches for a non-full flat node at the rightmost leaf of the tree. If a
+@@ -408,7 +414,10 @@
+     if (tree->IsFlat() && tree->flat()->Capacity() >= length &&
+         tree->refcount.IsOne()) {
+       // Copy in place if the existing FLAT node is reusable.
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Warray-bounds="
+       memmove(tree->flat()->Data(), data, length);
++#pragma GCC diagnostic pop
+       tree->length = length;
+       VerifyTree(tree);
+       return *this;
+
+--- absl/strings/internal/cord_internal.h
++++ absl/strings/internal/cord_internal.h
+@@ -636,7 +636,10 @@
+ 
+   void copy_max_inline_to(char* dst) const {
+     assert(!is_tree());
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Warray-bounds="
+     memcpy(dst, rep_.SanitizerSafeCopy().as_chars(), kMaxInline);
++#pragma GCC diagnostic pop
+   }
+ 
+   // Initialize this instance to holding the tree value `rep`,
+
+--- absl/strings/internal/cord_rep_btree.h
++++ absl/strings/internal/cord_rep_btree.h
+@@ -692,7 +692,10 @@
+   uint8_t* dst = &tree->tag;
+   const uint8_t* src = &tag;
+   const ptrdiff_t offset = src - reinterpret_cast<const uint8_t*>(this);
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Warray-bounds="
+   memcpy(dst, src, sizeof(CordRepBtree) - static_cast<size_t>(offset));
++#pragma GCC diagnostic pop
+   return tree;
+   // # LINT.ThenChange()
+ }

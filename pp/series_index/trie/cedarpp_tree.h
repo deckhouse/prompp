@@ -165,8 +165,8 @@ class CedarTrie {
   using EnumerativeIterator = CedarEnumerativeIterator;
   using Value = uint32_t;
 
-  template <class MatchesList, querier::ValueMatchResolverInterface ValueMatchResolver>
-  using MatchesList = CedarMatchesList<MatchesList, ValueMatchResolver>;
+  template <class List, querier::ValueMatchResolverInterface ValueMatchResolver>
+  using MatchesList = CedarMatchesList<List, ValueMatchResolver>;
 
   PROMPP_ALWAYS_INLINE void insert(std::string_view key, uint32_t id) noexcept {
     if (count_ <= id) {
