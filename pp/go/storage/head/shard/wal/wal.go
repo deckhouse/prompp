@@ -157,7 +157,6 @@ func (w *Wal[TSegment, TWriter]) Commit() error {
 	w.locker.Lock()
 	defer w.locker.Unlock()
 
-	// TODO lock/unlock LSS
 	segment, err := w.encoder.Finalize()
 	if err != nil {
 		return fmt.Errorf("failed to finalize segment: %w", err)

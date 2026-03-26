@@ -183,7 +183,7 @@ void prompp_primitives_lss_get_label_sets(void* args, void* res) {
 
         for (size_t i = 0; i < in->series_ids.size(); ++i) {
           const auto ls_id = in->series_ids[i];
-          if (lss.size() > ls_id) [[likely]] {
+          if (lss.next_item_index() > ls_id) [[likely]] {
             auto in_label_set = lss[ls_id];
             auto& out_label_set = out->label_sets[i];
             out_label_set.reserve(in_label_set.size());
@@ -287,14 +287,19 @@ extern "C" void prompp_primitives_readonly_lss_copy_added_series(uint64_t source
   copier.copy_added_series_and_build_indexes();
 }
 
-extern "C" void prompp_primitives_lss_invert_copy_mapping(void* args) {
+extern "C" void prompp_primitives_lss_invert_copy_mapping(void* args, void* res) {
   struct Arguments {
     LsIdsSlicePtr new_to_old;
-    LsIdsSlicePtr old_to_new_out;
     uint32_t shrink_boundary;
   };
+  struct Result {
+    LsIdsSlicePtr old_to_new_out;
+  };
+
   const auto* in = static_cast<const Arguments*>(args);
-  series_index::invert_copy_mapping(*in->new_to_old, in->shrink_boundary, *in->old_to_new_out);
+  auto out = new (res) Result{.old_to_new_out = std::make_unique<LsIdsSlice>()};
+
+  series_index::invert_copy_mapping(*in->new_to_old, in->shrink_boundary, *out->old_to_new_out);
 }
 
 extern "C" void prompp_primitives_lss_set_pending_shrink_boundary(void* args) {

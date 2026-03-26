@@ -1561,6 +1561,21 @@ func primitivesLSSBitsetSeries(lss uintptr) uintptr {
 	return res.bitset
 }
 
+// primitivesLSSFinalizeCopyAndShrink shrink current lss to checkpoint and set post-shrink mapping and copy pointers.
+func primitivesLSSFinalizeCopyAndShrink(lss, resolveSnapshot, oldToNewMapping uintptr) {
+	args := struct {
+		lss             uintptr
+		resolveSnapshot uintptr
+		oldToNewMapping uintptr
+	}{lss, resolveSnapshot, oldToNewMapping}
+
+	testGC()
+	fastcgo.UnsafeCall1(
+		C.prompp_primitives_lss_finalize_copy_and_shrink,
+		uintptr(unsafe.Pointer(&args)),
+	)
+}
+
 // primitivesLSSBitsetDtor destroy bitset of added series.
 func primitivesLSSBitsetDtor(bitset uintptr) {
 	args := struct {
@@ -1599,6 +1614,26 @@ func primitivesFreeLsIdsMapping(lsIdsMapping uintptr) {
 		C.prompp_primitives_free_ls_ids_mapping,
 		uintptr(unsafe.Pointer(&args)),
 	)
+}
+
+// primitivesLSSInvertCopyMapping builds old_id -> new_id mapping from copier new_to_old output.
+func primitivesLSSInvertCopyMapping(newToOld uintptr, shrinkBoundary uint32) uintptr {
+	args := struct {
+		newToOld       uintptr // lsIdsMapping
+		shrinkBoundary uint32
+	}{newToOld, shrinkBoundary}
+	var res struct {
+		oldToNewOut uintptr // lsIdsMapping
+	}
+
+	testGC()
+	fastcgo.UnsafeCall2(
+		C.prompp_primitives_lss_invert_copy_mapping,
+		uintptr(unsafe.Pointer(&args)),
+		uintptr(unsafe.Pointer(&res)),
+	)
+
+	return res.oldToNewOut
 }
 
 // primitivesLSSSetPendingShrinkBoundary sets pending shrink boundary

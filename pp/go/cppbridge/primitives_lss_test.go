@@ -3,6 +3,7 @@ package cppbridge_test
 import (
 	"context"
 	"runtime"
+	"slices"
 	"testing"
 
 	"github.com/prometheus/prometheus/pp/go/model"
@@ -475,4 +476,82 @@ func (s *QueryableLSSSuite) TestCopyAddedSeriesFromSnapshot() {
 	// !!!ATTENTION!!! When copying the added series, the order in which the series are added is preserved.
 	s.Equal(labelSetToCppBridgeLabels(s.labelSets), lssCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
 	s.Equal(emptyLabelsSets, lssCopyOfCopy.GetLabelSets(s.labelSetIDs).LabelsSets())
+}
+
+func (s *QueryableLSSSuite) TestCopyOnRotate() {
+	// Arrange
+	newLSS := cppbridge.NewQueryableLssStorage()
+	shrinkBoundary := slices.Max(s.labelSetIDs)
+
+	// Act
+	s.lss.SetPendingShrinkBoundary(shrinkBoundary)
+	snapshot := s.lss.CreateLabelSetSnapshot()
+	dstSrcLsIdsMapping := snapshot.CopyAddedSeries(s.lss.BitsetSeries(), newLSS)
+	mappedSnapshot := newLSS.CreateLabelSetSnapshot()
+	oldToNewLsIdsMapping := cppbridge.LSSInvertCopyMapping(dstSrcLsIdsMapping, shrinkBoundary)
+	s.lss.FinalizeCopyAndShrink(mappedSnapshot, oldToNewLsIdsMapping)
+
+	// Assert
+	// !!!ATTENTION!!! When copying the added series, the order in which the series are added is preserved.
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets), newLSS.GetLabelSets(s.labelSetIDs).LabelsSets())
+	s.Equal(newLSS.GetLabelSets(s.labelSetIDs).LabelsSets(), s.lss.GetLabelSets(s.labelSetIDs).LabelsSets())
+
+	// QueryLabelNames
+	s.Equal(
+		newLSS.QueryLabelNames([]model.LabelMatcher{}).Names(),
+		s.lss.QueryLabelNames([]model.LabelMatcher{}).Names(),
+	)
+
+	// QueryLabelValues
+	s.Equal(
+		newLSS.QueryLabelValues("foo", []model.LabelMatcher{}).Values(),
+		s.lss.QueryLabelValues("foo", []model.LabelMatcher{}).Values(),
+	)
+
+	runtime.KeepAlive(dstSrcLsIdsMapping)
+	runtime.KeepAlive(mappedSnapshot)
+	runtime.KeepAlive(oldToNewLsIdsMapping)
+}
+
+func (s *QueryableLSSSuite) TestCopyOnRotate2() {
+	// Arrange
+	newLSS := cppbridge.NewQueryableLssStorage()
+	shrinkBoundary := slices.Max(s.labelSetIDs)
+
+	// Act
+	s.lss.SetPendingShrinkBoundary(shrinkBoundary)
+	snapshot := s.lss.CreateLabelSetSnapshot()
+	dstSrcLsIdsMapping := snapshot.CopyAddedSeries(s.lss.BitsetSeries(), newLSS)
+	mappedSnapshot := newLSS.CreateLabelSetSnapshot()
+	oldToNewLsIdsMapping := cppbridge.LSSInvertCopyMapping(dstSrcLsIdsMapping, shrinkBoundary)
+	s.lss.FinalizeCopyAndShrink(mappedSnapshot, oldToNewLsIdsMapping)
+
+	s.T().Log("FindOrEmplace New")
+	lsIDNew := s.lss.FindOrEmplace(model.NewLabelSetBuilder().Set("__name__", "kek1").Build()).LabelSetID
+	s.T().Log(lsIDNew)
+
+	s.T().Log("FindOrEmplace Existing")
+	lsIDExisting := s.lss.FindOrEmplace(s.labelSets[0]).LabelSetID
+	s.T().Log(lsIDExisting)
+
+	// Assert
+	// !!!ATTENTION!!! When copying the added series, the order in which the series are added is preserved.
+	s.Equal(labelSetToCppBridgeLabels(s.labelSets), newLSS.GetLabelSets(s.labelSetIDs).LabelsSets())
+	s.Equal(newLSS.GetLabelSets(s.labelSetIDs).LabelsSets(), s.lss.GetLabelSets(s.labelSetIDs).LabelsSets())
+
+	// QueryLabelNames
+	s.Equal(
+		newLSS.QueryLabelNames([]model.LabelMatcher{}).Names(),
+		s.lss.QueryLabelNames([]model.LabelMatcher{}).Names(),
+	)
+
+	// QueryLabelValues
+	s.Equal(
+		newLSS.QueryLabelValues("foo", []model.LabelMatcher{}).Values(),
+		s.lss.QueryLabelValues("foo", []model.LabelMatcher{}).Values(),
+	)
+
+	runtime.KeepAlive(dstSrcLsIdsMapping)
+	runtime.KeepAlive(mappedSnapshot)
+	runtime.KeepAlive(oldToNewLsIdsMapping)
 }

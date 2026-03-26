@@ -224,11 +224,14 @@ void prompp_primitives_readonly_lss_copy_added_series(uint64_t source_lss, uint6
  *
  * @param args {
  *     new_to_old       uintptr   // ls id `new -> old` mapping
- *     old_to_new_out   uintptr   // ls id `old -> new` mapping to fill
  *     shrink_boundary  uint32_t  //  boundary
  * }
+ *
+ * @param res {
+ *     old_to_new_out   uintptr   // ls id `old -> new` mapping to fill
+ * }
  */
-void prompp_primitives_lss_invert_copy_mapping(void* args);
+void prompp_primitives_lss_invert_copy_mapping(void* args, void* res);
 
 /**
  * @brief set pending shrink boundary on LSS (switch to "fixed" state before snapshot and copy).
