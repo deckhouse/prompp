@@ -83,6 +83,7 @@ type Wal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]] struct {
 }
 
 // NewWal init new [Wal].
+// lssLocker needs to be locked for reading from LSS for the commit.
 func NewWal[TSegment EncodedSegment, TWriter SegmentWriter[TSegment]](
 	encoder Encoder[TSegment],
 	segmentWriter TWriter,

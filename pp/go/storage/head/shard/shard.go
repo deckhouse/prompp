@@ -133,7 +133,6 @@ func (s *Shard) ShardID() uint16 {
 
 // WalCommit finalize segment from encoder and write to wal.
 func (s *Shard) WalCommit() error {
-	// lock lss for reading in wal commit
 	return s.wal.Commit()
 }
 
