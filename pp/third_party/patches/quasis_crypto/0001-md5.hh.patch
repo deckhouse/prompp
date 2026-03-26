@@ -12,7 +12,7 @@
  namespace crypto {
  
      template<unsigned state_bits = 128>
-@@ -154,22 +159,22 @@ namespace crypto {
+@@ -154,22 +159,22 @@
          }
  
          template<typename input_type> constexpr MD5&
@@ -39,7 +39,7 @@
              return update(reinterpret_cast<const uint8_type*>(&input), sizeof(input_type));
          }
  
-@@ -180,7 +185,7 @@ namespace crypto {
+@@ -180,7 +185,7 @@
  
          template<typename input_type> constexpr MD5&
          update(const size_type count, input_type &&input) noexcept {
@@ -48,7 +48,18 @@
          }
  
          constexpr output_type
-@@ -207,7 +212,7 @@ namespace crypto {
+@@ -194,7 +199,10 @@
+             auto factor = (length + sizeof(block_type) - 1) / sizeof(block_type);
+ 
+             hasher.update(factor * sizeof(block_type) - length, uint8_type{0x00});
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+             hasher.update(m_count << 3);
++#pragma GCC diagnostic pop
+ 
+             return *reinterpret_cast<output_type*>(&hasher.m_state);
+         }
+@@ -207,7 +215,7 @@
  
          static constexpr uint32_type
          rotl(uint32_type value, int count) noexcept {
@@ -57,7 +68,7 @@
          }
  
          static constexpr word_type
-@@ -323,35 +328,3 @@ namespace crypto {
+@@ -323,35 +331,3 @@
          return MD5<state_bits>().update(static_cast<input_type&&>(input)...).digest();
      }
  }
