@@ -108,7 +108,14 @@ func (l *Loader) loadHead(
 		}
 	}
 
-	setLastAppendedSegmentID(headRecord, numberOfSegmentsRead, checkWalVersion(shardLoadResults))
+	switch checkWalVersion(shardLoadResults) {
+	case wal.FileFormatVersion:
+		setLastAppendedSegmentID(headRecord, numberOfSegmentsRead)
+	case wal.FileFormatVersionV2:
+		if headRecord.IsMissingSegmentsByShard() {
+			errs = append(errs, fmt.Errorf("missing segments by shard"))
+		}
+	}
 
 	h := head.NewHead(
 		headID,
@@ -613,11 +620,7 @@ func checkWalVersion(shardLoadResults []ShardLoadResult) uint8 {
 }
 
 // setLastAppendedSegmentID sets last appended segment id to record.
-func setLastAppendedSegmentID(rec *catalog.Record, numberOfSegmentsRead optional.Optional[uint32], walVersion uint8) {
-	if walVersion != wal.FileFormatVersion {
-		return
-	}
-
+func setLastAppendedSegmentID(rec *catalog.Record, numberOfSegmentsRead optional.Optional[uint32]) {
 	// wal format v1
 	switch {
 	case rec.Status() == catalog.StatusActive:

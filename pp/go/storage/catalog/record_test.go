@@ -65,6 +65,39 @@ func (s *RecordSuite) TestClearSegmentsByShard() {
 	s.Equal(uint16(math.MaxUint16), r.GetShardBySegmentID(1440))
 }
 
+func (s *RecordSuite) TestIsMissingSegmentsByShardEmpty() {
+	r := catalog.NewEmptyRecord()
+
+	s.False(r.IsMissingSegmentsByShard())
+}
+
+func (s *RecordSuite) TestIsMissingSegmentsByShardFalse() {
+	r := catalog.NewEmptyRecord()
+
+	r.SetSegmentIDByShard(0, 2)
+	r.SetSegmentIDByShard(1, 2)
+
+	s.False(r.IsMissingSegmentsByShard())
+}
+
+func (s *RecordSuite) TestIsMissingSegmentsByShardTrue() {
+	r := catalog.NewEmptyRecord()
+
+	r.SetSegmentIDByShard(0, 2)
+	r.SetSegmentIDByShard(2, 2)
+
+	s.True(r.IsMissingSegmentsByShard())
+}
+
+func (s *RecordSuite) TestIsMissingSegmentsByShardTrue_2() {
+	r := catalog.NewEmptyRecord()
+
+	r.SetSegmentIDByShard(0, 2)
+	r.SetSegmentIDByShard(42, 2)
+
+	s.True(r.IsMissingSegmentsByShard())
+}
+
 func (s *RecordSuite) TestNextSegmentID() {
 	r := catalog.NewEmptyRecord()
 

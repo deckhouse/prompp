@@ -35,11 +35,11 @@ const (
 const defaultSegmentsCapacity = int(2 * time.Hour / (5 * time.Second))
 
 //
-// Record
+// SerializedRecord
 //
 
-// Record information about the [Head] in the catalog.
-type Record struct {
+// SerializedRecord is the serialized record for write/read to [Log].
+type SerializedRecord struct {
 	id                    uuid.UUID // uuid
 	numberOfShards        uint16    // number of shards
 	createdAt             int64     // time of record creation
@@ -47,11 +47,27 @@ type Record struct {
 	deletedAt             int64
 	corrupted             bool
 	lastAppendedSegmentID optional.Optional[uint32]
-	referenceCount        int64
 	status                Status // status
 	numberOfSegments      uint32
 	mint                  int64
 	maxt                  int64
+}
+
+// createRecordCopy create a copy of the [Record].
+func createSerializedRecordCopy(r *SerializedRecord) *SerializedRecord {
+	c := *r
+	return &c
+}
+
+//
+// Record
+//
+
+// Record information about the [Head] in the catalog.
+type Record struct {
+	SerializedRecord
+	// referenceCount is the reference count of the [Head]
+	referenceCount int64
 	// marking up through segment IDs by shards
 	lastSegmentID   uint32
 	segmentsByShard []uint16
@@ -80,15 +96,17 @@ func NewRecordWithData(
 	lastAppendedSegmentID *uint32,
 ) *Record {
 	return &Record{
-		id:                    id,
-		numberOfShards:        numberOfShards,
-		createdAt:             createdAt,
-		updatedAt:             updatedAt,
-		deletedAt:             deletedAt,
-		corrupted:             corrupted,
-		referenceCount:        referenceCount,
-		status:                status,
-		lastAppendedSegmentID: optional.WithRawValue(lastAppendedSegmentID),
+		SerializedRecord: SerializedRecord{
+			id:                    id,
+			numberOfShards:        numberOfShards,
+			createdAt:             createdAt,
+			updatedAt:             updatedAt,
+			deletedAt:             deletedAt,
+			corrupted:             corrupted,
+			status:                status,
+			lastAppendedSegmentID: optional.WithRawValue(lastAppendedSegmentID),
+		},
+		referenceCount: referenceCount,
 		// marking up through segment IDs by shards
 		lastSegmentID:   math.MaxUint32,
 		segmentsByShard: make([]uint16, defaultSegmentsCapacity),
@@ -110,16 +128,18 @@ func NewRecordWithDataV3(
 	maxt int64,
 ) *Record {
 	return &Record{
-		id:               id,
-		numberOfShards:   numberOfShards,
-		createdAt:        createdAt,
-		updatedAt:        updatedAt,
-		deletedAt:        deletedAt,
-		corrupted:        corrupted,
-		status:           status,
-		numberOfSegments: numberOfSegments,
-		mint:             mint,
-		maxt:             maxt,
+		SerializedRecord: SerializedRecord{
+			id:               id,
+			numberOfShards:   numberOfShards,
+			createdAt:        createdAt,
+			updatedAt:        updatedAt,
+			deletedAt:        deletedAt,
+			corrupted:        corrupted,
+			status:           status,
+			numberOfSegments: numberOfSegments,
+			mint:             mint,
+			maxt:             maxt,
+		},
 		// marking up through segment IDs by shards
 		lastSegmentID:   math.MaxUint32,
 		segmentsByShard: make([]uint16, defaultSegmentsCapacity),
@@ -133,7 +153,9 @@ func (r *Record) Acquire() func() {
 	var onceRelease sync.Once
 	return func() {
 		onceRelease.Do(func() {
-			atomic.AddInt64(&r.referenceCount, -1)
+			if atomic.AddInt64(&r.referenceCount, -1) == 0 && r.status != StatusActive {
+				r.ClearSegmentsByShard()
+			}
 		})
 	}
 }
@@ -178,6 +200,23 @@ func (r *Record) GetShardBySegmentID(sid uint32) uint16 {
 // ID returns id of [Head].
 func (r *Record) ID() string {
 	return r.id.String()
+}
+
+// IsMissingSegmentsByShard returns true if there are missing segments by shard.
+func (r *Record) IsMissingSegmentsByShard() bool {
+	//revive:disable-next-line:add-constant // for length 1 not missing segments
+	if len(r.segmentsByShard) < 2 {
+		return false
+	}
+
+	//revive:disable-next-line:add-constant // start checking from 2 not missing segments
+	for i := 2; i < len(r.segmentsByShard); i++ {
+		if r.segmentsByShard[i] != 0 && r.segmentsByShard[i-1] == 0 {
+			return true
+		}
+	}
+
+	return false
 }
 
 // LastAppendedSegmentID returns last appended segment id if exist, else nil.
@@ -268,16 +307,10 @@ func (r *Record) UpdatedAt() int64 {
 	return r.updatedAt
 }
 
-// createRecordCopy create a copy of the [Record].
-func createRecordCopy(r *Record) *Record {
-	c := *r
-	return &c
-}
-
 // applyRecordChanges apply changes to current [Record].
 //
 //go:norace
-func applyRecordChanges(r, changed *Record) {
+func applyRecordChanges(r *Record, changed *SerializedRecord) {
 	r.createdAt = changed.createdAt
 	r.updatedAt = changed.updatedAt
 	r.deletedAt = changed.deletedAt
