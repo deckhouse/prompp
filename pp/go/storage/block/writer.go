@@ -129,6 +129,7 @@ func (w *Writer[TShard]) createWriter(
 		chunkIterator,
 	)
 }
+
 // recodeAndWriteChunks recodes and writes chunks for the shard.
 func (*Writer[TShard]) recodeAndWriteChunks(sd TShard, writers blockWriters) error {
 	var loader *cppbridge.UnloadedDataRevertableLoader

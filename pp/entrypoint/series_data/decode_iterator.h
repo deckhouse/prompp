@@ -135,6 +135,9 @@ PROMPP_ALWAYS_INLINE DecodeIterator create_decode_iterator(const PromPP::Prometh
     case promql_function_name_hash("resets"):
       return DecodeIterator(std::in_place_type<DecodeIterator::ResetsIterator>, select_hints.interval);
 
+    case promql_function_name_hash("changes"):
+      return DecodeIterator(std::in_place_type<DecodeIterator::ChangesIterator>, select_hints.interval);
+
     default:
       return DecodeIterator(std::in_place_type<DecodeIterator::UniversalDecodeIterator>);
   }
