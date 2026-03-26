@@ -56,6 +56,8 @@ class SortingIndexBuilder {
     }
   }
 
+  PROMPP_ALWAYS_INLINE void clear() noexcept { index_.clear(); }
+
   PROMPP_ALWAYS_INLINE void update(typename Set::const_iterator ls_id_iterator) {
     if (empty()) {
       return;

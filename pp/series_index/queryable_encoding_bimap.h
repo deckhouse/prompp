@@ -79,7 +79,10 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     return Base::operator[](id);
   }
 
-  void set_pending_shrink_boundary(uint32_t boundary) noexcept { pending_shrink_boundary_ = boundary; }
+  void set_pending_shrink_boundary(uint32_t boundary) noexcept {
+    pending_shrink_boundary_ = boundary;
+    prune_hidden_series_from_hashset_in_fixed_state();
+  }
 
   void fill_added_series_mapping(uint32_t shrink_boundary,
                                  QueryableEncodingBimap& copy,
@@ -133,6 +136,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
     shift_ += drop_count;
     Base::storage_.drop_front(drop_count);
+    rebuild_indexes_after_shrink();
 
     added_series_.clear();
     pending_shrink_boundary_ = kPendingShrinkBoundaryNotSet;
@@ -249,7 +253,8 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   }
 
   void update_indexes(uint32_t ls_id, const LabelSet& label_set) {
-    auto ls_id_set_iterator = ls_id_set_.emplace(ls_id).first;
+    const uint32_t ls_id_for_sorting = is_shrunk() ? ls_id - shift_ : ls_id;
+    auto ls_id_set_iterator = ls_id_set_.emplace(ls_id_for_sorting).first;
 
     for (auto label = label_set.begin(); label != label_set.end(); ++label) {
       if (!is_valid_label((*label).second)) [[unlikely]] {
@@ -351,6 +356,35 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   uint32_t pending_shrink_boundary_{kPendingShrinkBoundaryNotSet};
   std::span<const uint32_t> post_shrink_mapping_{};
   PostShrinkSnapshotAccess post_shrink_snapshot_access_{};
+
+  void prune_hidden_series_from_hashset_in_fixed_state() noexcept {
+    if (!is_fixed()) [[unlikely]] {
+      return;
+    }
+
+    const uint32_t max_visible_id = std::min(pending_shrink_boundary_, next_item_index_impl());
+    for (uint32_t logical_id = 0; logical_id < max_visible_id; ++logical_id) {
+      if (logical_id < added_series_.size() && added_series_[logical_id]) [[likely]] {
+        continue;
+      }
+      ls_id_hash_set_.erase(typename Base::Proxy(logical_id));
+    }
+  }
+
+  void rebuild_indexes_after_shrink() {
+    ls_id_set_.clear();
+    ls_id_hash_set_.clear();
+    sorting_index_.clear();
+
+    const auto hasher = Base::hasher();
+    const auto storage_count = Base::storage_.count();
+    for (uint32_t storage_id = 0; storage_id < storage_count; ++storage_id) {
+      const auto label_set = Base::operator[](storage_id);
+      ls_id_hash_set_.emplace_with_hash(phmap_hash(hasher(label_set)), typename Base::Proxy(storage_id));
+      ls_id_set_.emplace(storage_id);
+    }
+    sorting_index_.build();
+  }
 };
 
 template <class DecodingTable, class SortingIndex, class SeriesIds, class QueryableEncodingBimap, class LsIdVector>
