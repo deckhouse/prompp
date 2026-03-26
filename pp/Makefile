@@ -30,8 +30,9 @@ reformat: $(our_cc_files)
 	@clang-format -i $^
 
 .PHONY: tidy
-tidy: ## Check clang-tidy for all librarie code
-tidy: tidy_flags := --aspects @bazel_clang_tidy//clang_tidy:clang_tidy.bzl%clang_tidy_aspect
+tidy: ## Check clang-tidy for all libraries code
+tidy: tidy_flags := --config=clang-tidy
+tidy: tidy_flags += --aspects @bazel_clang_tidy//clang_tidy:clang_tidy.bzl%clang_tidy_aspect
 tidy: tidy_flags += --@bazel_clang_tidy//:clang_tidy_config=//:clang_tidy_config
 tidy: compilation_mode := fastbuild
 tidy: cc_targets := $(shell bazel query 'kind("cc_.*", //...)')

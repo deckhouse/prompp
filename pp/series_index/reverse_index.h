@@ -126,6 +126,7 @@ class LabelReverseIndex {
   [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence* get(uint32_t label_value_id) const noexcept {
     return exists(label_value_id) ? &series_by_value_[label_value_id] : nullptr;
   }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence& get_existing(uint32_t label_value_id) const noexcept { return series_by_value_[label_value_id]; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence* get_all() const noexcept { return &all_series_; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const BareBones::Vector<SeriesIdSequence>& series_by_value() const noexcept { return series_by_value_; }
@@ -160,6 +161,9 @@ class SeriesReverseIndex {
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence* get(uint32_t label_name_id) const {
     return exists(label_name_id) ? labels_by_name_[label_name_id].get_all() : nullptr;
+  }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence& get_existing(uint32_t label_name_id) const noexcept {
+    return *labels_by_name_[label_name_id].get_all();
   }
   [[nodiscard]] PROMPP_ALWAYS_INLINE const SeriesIdSequence* get(uint32_t label_name_id, uint32_t label_value_id) const {
     return exists(label_name_id) ? labels_by_name_[label_name_id].get(label_value_id) : nullptr;
