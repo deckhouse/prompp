@@ -130,7 +130,7 @@ func (l *Loader) loadHead(
 		errs = append(errs, err)
 	}
 
-	if readOnly || errs != nil {
+	if readOnly || errors.Join(errs...) != nil {
 		h.SetReadOnly()
 	}
 

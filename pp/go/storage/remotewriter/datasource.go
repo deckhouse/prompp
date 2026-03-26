@@ -70,12 +70,10 @@ func (src *segmentReadyChecker) SegmentIsReady(segmentID uint32) (shards []uint1
 		return nil, ready, outOfRange
 	}
 
-	if readyV1 {
-		// on v1 fill once and reuse
-		if len(src.shards) == 0 {
-			for i := uint16(0); i < src.headRecord.NumberOfShards(); i++ {
-				src.shards = append(src.shards, i)
-			}
+	if readyV1 && !readyV2 {
+		src.shards = src.shards[:0]
+		for i := uint16(0); i < src.headRecord.NumberOfShards(); i++ {
+			src.shards = append(src.shards, i)
 		}
 
 		return src.shards, ready, outOfRange
@@ -468,12 +466,11 @@ func (ds *dataSource) WriteCaches() {
 // cacheWriteLoop loop that writes caches to the buffer and sends the signal to write the caches.
 func (ds *dataSource) cacheWriteLoop() {
 	defer close(ds.cacheWriteLoopClosed)
-	var closed bool
 	var writeRequested bool
 	var writeResultc chan struct{}
 
 	for {
-		if writeRequested && !closed && writeResultc == nil {
+		if writeRequested && writeResultc == nil {
 			writeResultc = make(chan struct{})
 			go func() {
 				defer close(writeResultc)
@@ -482,13 +479,13 @@ func (ds *dataSource) cacheWriteLoop() {
 			writeRequested = false
 		}
 
-		if closed && writeResultc == nil {
-			return
-		}
-
 		select {
 		case _, ok := <-ds.cacheWriteSignal:
 			if !ok {
+				if writeResultc != nil {
+					<-writeResultc
+				}
+
 				return
 			}
 			writeRequested = true

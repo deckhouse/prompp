@@ -44,7 +44,7 @@ func (e ShardError) ShardID() uint16 {
 	return e.shardID
 }
 
-// Unwrap retruns source error.
+// Unwrap returns source error.
 func (e ShardError) Unwrap() error {
 	return e.err
 }
@@ -53,7 +53,7 @@ func (e ShardError) Unwrap() error {
 // ShardWalReader
 //
 
-// ShardWalReader a shard wall reader.
+// ShardWalReader a shard WAL reader.
 type ShardWalReader interface {
 	// Close wal file.
 	Close() error
