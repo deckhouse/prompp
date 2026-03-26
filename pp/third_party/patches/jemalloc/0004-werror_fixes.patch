@@ -1,0 +1,61 @@
+--- a/src/ctl.c
++++ b/src/ctl.c
+@@ -1510,7 +1510,7 @@
+ 			}
+ 
+ 			inode = ctl_indexed_node(node->children);
+-			node = inode->index(tsdn, mibp, *depthp, (size_t)index);
++			node = inode ? inode->index(tsdn, mibp, *depthp, (size_t)index) : NULL;
+ 			if (node == NULL) {
+ 				ret = ENOENT;
+ 				goto label_return;
+
+--- a/src/jemalloc.c
++++ b/src/jemalloc.c
+@@ -978,12 +978,12 @@
+ static const char *
+ obtain_malloc_conf(unsigned which_source, char buf[PATH_MAX + 1]) {
+ 	if (config_debug) {
++#ifndef NDEBUG
+ 		static unsigned read_source = 0;
+ 		/*
+ 		 * Each source should only be read once, to minimize # of
+ 		 * syscalls on init.
+ 		 */
+-#ifndef NDEBUG
+ 		assert(read_source == which_source);
+ 		read_source++;
+ #endif // NDEBUG
+
+--- a/src/prof_data.c
++++ b/src/prof_data.c
+@@ -337,7 +337,7 @@
+ 	assert(tdata != NULL);
+ 
+ 	if(tdata == NULL) {
+-			return ret.p;
++			return NULL;
+ 	}
+ 
+ 	malloc_mutex_lock(tsd_tsdn(tsd), tdata->lock);
+
+--- a/src/prof_recent.c
++++ b/src/prof_recent.c
+@@ -362,6 +362,8 @@
+ 	/* Fill content into the tail node. */
+ 	prof_recent_t *tail = ql_last(&prof_recent_alloc_list, link);
+ 	assert(tail != NULL);
++#pragma GCC diagnostic push
++#pragma GCC diagnostic ignored "-Wnull-dereference"
+ 	tail->size = size;
+ 	tail->usize = usize;
+ 	nstime_copy(&tail->alloc_time, edata_prof_alloc_time_get(edata));
+@@ -369,6 +371,7 @@
+ 	nstime_init_zero(&tail->dalloc_time);
+ 	tail->dalloc_tctx = NULL;
+ 	edata_prof_recent_alloc_set(tsd, edata, tail);
++#pragma GCC diagnostic pop
+ 
+ 	assert(!prof_recent_alloc_is_empty(tsd));
+ 	prof_recent_alloc_assert_count(tsd);
+

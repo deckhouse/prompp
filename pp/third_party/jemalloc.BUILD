@@ -31,7 +31,7 @@ configure_make(
         "//conditions:default": ["--with-lg-page=\"12\""],
     }),
     copts = [
-        "-Wno-error",
+        "-Wno-error=builtin-declaration-mismatch",
     ],
     lib_source = ":src",
     out_static_libs = [
