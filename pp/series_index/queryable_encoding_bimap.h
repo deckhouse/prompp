@@ -225,12 +225,14 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     assert(pending_shrink_boundary_ <= next_item_index_impl() && old_to_new_mapping.size() >= next_item_index_impl());
 
     shrink_to_boundary(pending_shrink_boundary_);
-    post_shrink_mapping_ = std::span<const uint32_t>(old_to_new_mapping.data(), old_to_new_mapping.size());
+    post_shrink_mapping_storage_ = old_to_new_mapping;
+    post_shrink_mapping_ = std::span<const uint32_t>(post_shrink_mapping_storage_.data(), post_shrink_mapping_storage_.size());
     post_shrink_snapshot_access_ = std::move(snapshot_access);
   }
 
   template <class Snapshot>
   [[nodiscard]] static PostShrinkSnapshotAccess make_post_shrink_snapshot_access(const Snapshot& snapshot) {
+    // snapshot object must outlive the shrunk table state that uses these callbacks.
     PostShrinkSnapshotAccess access;
     access.composite_resolve = [&snapshot](uint32_t id) { return snapshot[id]; };
     access.symbol_resolve = [&snapshot](uint32_t name_id, uint32_t value_id) { return resolve_snapshot_symbol(snapshot, name_id, value_id); };
@@ -281,6 +283,21 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   PROMPP_ALWAYS_INLINE static size_t phmap_hash(size_t hash) noexcept { return phmap::phmap_mix<sizeof(size_t)>()(hash); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t next_item_index_impl() const noexcept { return shift_ + Base::storage_.count(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t max_item_index_impl() const noexcept { return next_item_index_impl(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t series_count_impl() const noexcept {
+    if (!is_shrunk()) [[likely]] {
+      return Base::storage_.count();
+    }
+
+    uint32_t mapped_visible = 0;
+    const uint32_t mapping_boundary = std::min<uint32_t>(shift_, post_shrink_mapping_.size());
+    for (uint32_t logical_id = 0; logical_id < mapping_boundary; ++logical_id) {
+      if (post_shrink_mapping_[logical_id] != Base::kInvalidId) [[likely]] {
+        ++mapped_visible;
+      }
+    }
+    return Base::storage_.count() + mapped_visible;
+  }
 
   [[nodiscard]] static PROMPP_ALWAYS_INLINE typename Base::value_type empty_composite() noexcept { return typename Base::value_type{}; }
 
@@ -354,6 +371,7 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   uint32_t shift_{0};
   uint32_t pending_shrink_boundary_{kPendingShrinkBoundaryNotSet};
+  BareBones::Vector<uint32_t> post_shrink_mapping_storage_{};
   std::span<const uint32_t> post_shrink_mapping_{};
   PostShrinkSnapshotAccess post_shrink_snapshot_access_{};
 
@@ -430,12 +448,12 @@ class QueryableEncodingBimapCopier {
                                QueryableEncodingBimap& destination,
                                LsIdVector& dst_src_ids_mapping)
       : source_(source), sorting_index_(sorting_index), ls_id_range_(ls_id_range), destination_(destination), dst_src_ids_mapping_(dst_src_ids_mapping) {
-    assert(destination.size() == 0);
+    assert(destination.series_count() == 0);
   }
 
   void copy_added_series() {
     old_new_ids_.clear();
-    old_new_ids_.reserve(source_.size());
+    old_new_ids_.reserve(source_.series_count());
 
     Cache<uint32_t> cache;
     cache.reserve(source_.data_view());
@@ -443,7 +461,7 @@ class QueryableEncodingBimapCopier {
     destination_.reserve(source_);
 
     dst_src_ids_mapping_.clear();
-    dst_src_ids_mapping_.reserve(source_.size());
+    dst_src_ids_mapping_.reserve(source_.series_count());
 
     for (const auto ls_id : ls_id_range_) {
       old_new_ids_.emplace_back(ls_id, destination_.next_item_index());
@@ -464,7 +482,7 @@ class QueryableEncodingBimapCopier {
   }
 
   void build_reverse_index() {
-    const auto size = destination_.size();
+    const auto size = destination_.series_count();
     const auto names_view = destination_.data_view().keys();
     destination_.reverse_index_.reserve(names_view.size());
 
@@ -477,7 +495,7 @@ class QueryableEncodingBimapCopier {
   }
 
   void build_ls_id_hashset() {
-    const auto size = destination_.size();
+    const auto size = destination_.series_count();
     destination_.ls_id_hash_set_.reserve(size);
 
     const auto hasher = destination_.hasher();

@@ -47,7 +47,7 @@ class IndexWriterShrunkFixture : public testing::Test {
   }
 
   void finalize_shrink_all_into_snapshot() {
-    const uint32_t shrink_boundary = shrunk_lss_.next_item_index();
+    const uint32_t shrink_boundary = shrunk_lss_.max_item_index();
     snapshot_copy_ = std::make_unique<Lss>();
     BareBones::Vector<uint32_t> dst_src_ids_mapping;
     Copier<Lss, decltype(shrunk_lss_.sorting_index()), decltype(shrunk_lss_.added_series()), Lss, BareBones::Vector<uint32_t>> copier(
@@ -65,7 +65,7 @@ class IndexWriterShrunkFixture : public testing::Test {
 
     writer.write_header(stream);
     writer.write_symbols(stream);
-    for (uint32_t ls_id = 0; ls_id < lss.next_item_index(); ++ls_id) {
+    for (uint32_t ls_id = 0; ls_id < lss.max_item_index(); ++ls_id) {
       if (lss[ls_id].size() == 0) {
         continue;
       }

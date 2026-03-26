@@ -62,7 +62,7 @@ std::shared_ptr<Lss> get_lss_after_shrink() {
     auto source = get_lss_no_shrink();
     s->lss = std::make_shared<Lss>();
     auto& lss = *s->lss;
-    const uint32_t total = static_cast<uint32_t>(source->next_item_index());
+    const uint32_t total = static_cast<uint32_t>(source->max_item_index());
     for (uint32_t i = 0; i < total; ++i) {
       lss.find_or_emplace((*source)[i]);
     }
@@ -89,7 +89,7 @@ void BM_IndexWriteContextNoShrink(benchmark::State& state) {
     auto context = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{*lss};
     benchmark::DoNotOptimize(context);
   }
-  state.SetItemsProcessed(static_cast<int64_t>(lss->next_item_index()) * state.iterations());
+  state.SetItemsProcessed(static_cast<int64_t>(lss->max_item_index()) * state.iterations());
 }
 
 void BM_IndexWriteContextAfterShrink(benchmark::State& state) {
@@ -99,7 +99,7 @@ void BM_IndexWriteContextAfterShrink(benchmark::State& state) {
     auto context = series_index::prometheus::tsdb::index::IndexWriteContext<Lss>{*lss};
     benchmark::DoNotOptimize(context);
   }
-  state.SetItemsProcessed(static_cast<int64_t>(lss->next_item_index()) * state.iterations());
+  state.SetItemsProcessed(static_cast<int64_t>(lss->max_item_index()) * state.iterations());
 }
 
 double min_value(const std::vector<double>& v) noexcept {

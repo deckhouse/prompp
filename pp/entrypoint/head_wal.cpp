@@ -114,18 +114,18 @@ extern "C" void prompp_head_wal_encoder_finalize(void* args, void* res) {
   }
 }
 
-extern "C" void prompp_head_wal_encoder_max_lsid_written(void* args, void* res) {
+extern "C" void prompp_head_wal_encoder_max_item_index(void* args, void* res) {
   struct Arguments {
     EncoderPtr encoder;
   };
 
   struct Result {
-    uint32_t max_lsid;
+    uint32_t max_item_index;
   };
 
   const auto in = static_cast<Arguments*>(args);
   auto* out = static_cast<Result*>(res);
-  out->max_lsid = in->encoder->max_lsid_written();
+  out->max_item_index = in->encoder->max_item_index();
 }
 
 extern "C" void prompp_head_wal_decoder_ctor(void* args, void* res) {

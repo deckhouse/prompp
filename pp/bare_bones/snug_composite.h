@@ -43,6 +43,16 @@ concept has_next_item_index = requires(Derived derived) {
   { derived.next_item_index_impl() };
 };
 
+template <class Derived>
+concept has_max_item_index = requires(Derived derived) {
+  { derived.max_item_index_impl() };
+};
+
+template <class Derived>
+concept has_series_count = requires(Derived derived) {
+  { derived.series_count_impl() };
+};
+
 template <class Derived, class Checkpoint>
 concept has_rollback = requires(Derived derived, const Checkpoint& checkpoint) {
   { derived.rollback_impl(checkpoint) };
@@ -299,6 +309,13 @@ class GenericDecodingTable {
   PROMPP_ALWAYS_INLINE value_type operator[](uint32_t id) const noexcept { return storage_.composite(id); }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t size() const noexcept { return storage_.count(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t series_count() const noexcept {
+    if constexpr (has_series_count<Derived>) {
+      return static_cast<const Derived*>(this)->series_count_impl();
+    } else {
+      return storage_.count();
+    }
+  }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE size_t allocated_memory() const noexcept { return mem::allocated_memory(storage_); }
 
@@ -322,6 +339,14 @@ class GenericDecodingTable {
       return static_cast<const Derived*>(this)->next_item_index_impl();
     } else {
       return storage_.count();
+    }
+  }
+  // Returns exclusive upper bound for ids that may be requested from the table.
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t max_item_index() const noexcept {
+    if constexpr (has_max_item_index<Derived>) {
+      return static_cast<const Derived*>(this)->max_item_index_impl();
+    } else {
+      return next_item_index();
     }
   }
 
@@ -454,10 +479,11 @@ class ShrinkableEncodingBimap final : private GenericDecodingTable<ShrinkableEnc
   using Base::checkpoint;
   using Base::load;
   using Base::next_item_index;
+  using Base::max_item_index;
   using Base::remainder_size;
   using Base::save;
   using Base::save_size;
-  using Base::size;
+  using Base::series_count;
 
   friend class GenericDecodingTable<ShrinkableEncodingBimap, Filament, Vector>;
 
@@ -641,9 +667,9 @@ class EncodingBimap : public GenericDecodingTable<EncodingBimap<Filament, Vector
   PROMPP_ALWAYS_INLINE void rollback_impl(const typename Base::checkpoint_type& s) noexcept
     requires(!Base::kIsReadOnly)
   {
-    assert(s.size() <= Base::size());
+    assert(s.size() <= Base::series_count());
 
-    for (uint32_t i = s.size(); i != Base::size(); ++i) {
+    for (uint32_t i = s.size(); i != Base::series_count(); ++i) {
       set_.erase(typename Base::Proxy(i), Base::hasher(), Base::equality_comparator());
     }
   }

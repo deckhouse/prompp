@@ -183,7 +183,7 @@ void prompp_primitives_lss_get_label_sets(void* args, void* res) {
 
         for (size_t i = 0; i < in->series_ids.size(); ++i) {
           const auto ls_id = in->series_ids[i];
-          if (lss.size() > ls_id) [[likely]] {
+          if (lss.max_item_index() > ls_id) [[likely]] {
             auto in_label_set = lss[ls_id];
             auto& out_label_set = out->label_sets[i];
             out_label_set.reserve(in_label_set.size());
