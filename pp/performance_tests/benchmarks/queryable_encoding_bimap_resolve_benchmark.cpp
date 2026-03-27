@@ -47,6 +47,27 @@ std::shared_ptr<Lss> get_lss_no_shrink() {
   return lss;
 }
 
+std::shared_ptr<Lss> get_lss_fixed_state() {
+  static const std::shared_ptr<Lss> lss = []() {
+    const auto source = get_lss_no_shrink();
+    const uint32_t total = static_cast<uint32_t>(source->max_item_index());
+    const uint32_t copy_count = static_cast<uint32_t>((static_cast<uint64_t>(total) * 90) / 100);
+
+    auto fixed = std::make_shared<Lss>();
+    for (uint32_t i = 0; i < copy_count; ++i) {
+      fixed->find_or_emplace((*source)[i]);
+    }
+    for (uint32_t i = copy_count; i < total; ++i) {
+      fixed->find_or_emplace((*source)[i]);
+    }
+    fixed->build_deferred_indexes();
+
+    fixed->set_pending_shrink_boundary(copy_count);
+    return fixed;
+  }();
+  return lss;
+}
+
 struct ShrunkState {
   std::shared_ptr<Lss> lss;
   std::unique_ptr<Lss> copy;
@@ -105,6 +126,11 @@ void BM_ResolveAfterShrink(benchmark::State& state) {
   run_resolve_loop(get_lss_after_shrink(), state);
 }
 
+void BM_ResolveFixedState(benchmark::State& state) {
+  ZoneScoped;
+  run_resolve_loop(get_lss_fixed_state(), state);
+}
+
 double min_value(const std::vector<double>& v) noexcept {
   return v.empty() ? 0.0 : *std::ranges::min_element(v);
 }
@@ -112,4 +138,5 @@ double min_value(const std::vector<double>& v) noexcept {
 }  // namespace
 
 BENCHMARK(BM_ResolveNoShrink)->ComputeStatistics("min", min_value);
+BENCHMARK(BM_ResolveFixedState)->ComputeStatistics("min", min_value);
 BENCHMARK(BM_ResolveAfterShrink)->ComputeStatistics("min", min_value);
