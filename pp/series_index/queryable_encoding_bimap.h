@@ -70,13 +70,13 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   [[nodiscard]] PROMPP_ALWAYS_INLINE const auto& added_series() const noexcept { return added_series_; }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE typename Base::value_type operator[](uint32_t id) const noexcept {
-    if (is_shrunk()) [[unlikely]] {
-      return resolve_shrunk_series(id);
+    if (is_normal()) [[likely]] {
+      return Base::operator[](id);
     }
-    if (is_hidden_in_fixed_state(id)) [[unlikely]] {
-      return empty_composite();
+    if (is_fixed()) [[unlikely]] {
+      return is_hidden_in_fixed_state(id) ? empty_composite() : Base::operator[](id);
     }
-    return Base::operator[](id);
+    return resolve_shrunk_series(id);
   }
 
   void set_pending_shrink_boundary(uint32_t boundary) noexcept {
@@ -150,31 +150,15 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   template <class LabelSet>
   PROMPP_ALWAYS_INLINE uint32_t find_or_emplace(const LabelSet& label_set, size_t hash) noexcept {
     hash = phmap_hash(hash);
-    const auto storage_id = *ls_id_hash_set_.lazy_emplace_with_hash(label_set, hash, [&](const auto& ctor) {
-      const auto new_storage_id = Base::storage_.emplace_back(label_set);
-      const auto composite_label_set = Base::operator[](new_storage_id);
-      ctor(typename Base::Proxy(new_storage_id));
-      update_indexes(shift_ + new_storage_id, composite_label_set);
-      return new_storage_id;
-    });
-
-    auto logical_id = shift_ + storage_id;
-
-    if (!is_visible_for_find(logical_id)) {
-      auto it = ls_id_hash_set_.find(label_set, hash);
-      assert(it != ls_id_hash_set_.end());
-      ls_id_hash_set_.erase(it);
-      const auto new_storage_id = Base::storage_.emplace_back(label_set);
-      const auto composite_label_set = Base::operator[](new_storage_id);
-      ls_id_hash_set_.emplace_with_hash(hash, typename Base::Proxy(new_storage_id));
-      update_indexes(shift_ + new_storage_id, composite_label_set);
-      logical_id = shift_ + new_storage_id;
+    if (is_normal()) [[likely]] {
+      return find_or_emplace_in_normal_state(label_set, hash);
     }
 
-    if (pending_shrink_boundary_ == kPendingShrinkBoundaryNotSet) {
-      mark_series_as_added(logical_id);
+    if (is_fixed()) [[unlikely]] {
+      return find_or_emplace_in_fixed_state(label_set, hash);
     }
-    return logical_id;
+
+    return find_or_emplace_in_shrunk_state(label_set, hash);
   }
 
   template <class Class>
@@ -184,11 +168,17 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   template <class Class>
   PROMPP_ALWAYS_INLINE std::optional<uint32_t> find(const Class& c, size_t hashval) const noexcept {
-    uint32_t logical_id = Base::kInvalidId;
-    if (!find_logical_id(c, hashval, logical_id)) [[unlikely]] {
-      return std::optional<uint32_t>{};
+    hashval = phmap_hash(hashval);
+
+    if (is_normal()) [[likely]] {
+      return find_in_normal_state(c, hashval);
     }
-    return std::optional<uint32_t>{logical_id};
+
+    if (is_fixed()) [[unlikely]] {
+      return find_in_fixed_state(c, hashval);
+    }
+
+    return find_in_shrunk_state(c, hashval);
   }
 
   using Base::reserve;
@@ -224,10 +214,10 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     assert(snapshot_access.composite_resolve && snapshot_access.symbol_resolve);
     assert(pending_shrink_boundary_ <= next_item_index_impl() && old_to_new_mapping.size() >= next_item_index_impl());
 
-    shrink_to_boundary(pending_shrink_boundary_);
     post_shrink_mapping_storage_ = old_to_new_mapping;
     post_shrink_mapping_ = std::span<const uint32_t>(post_shrink_mapping_storage_.data(), post_shrink_mapping_storage_.size());
     post_shrink_snapshot_access_ = std::move(snapshot_access);
+    shrink_to_boundary(pending_shrink_boundary_);
   }
 
   template <class Snapshot>
@@ -301,6 +291,9 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   [[nodiscard]] static PROMPP_ALWAYS_INLINE typename Base::value_type empty_composite() noexcept { return typename Base::value_type{}; }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_normal() const noexcept {
+    return shift_ == 0 && pending_shrink_boundary_ == kPendingShrinkBoundaryNotSet;
+  }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_shrunk() const noexcept { return shift_ > 0; }
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_fixed() const noexcept { return shift_ == 0 && pending_shrink_boundary_ != kPendingShrinkBoundaryNotSet; }
 
@@ -308,32 +301,117 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
     return is_fixed() && ls_id < pending_shrink_boundary_ && (ls_id >= added_series_.size() || !added_series_[ls_id]);
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_visible_in_shrunk_state(uint32_t ls_id) const noexcept {
-    if (ls_id >= shift_) [[likely]] {
-      return true;
+  template <class Class>
+  [[nodiscard]] PROMPP_ATTRIBUTE_NOINLINE bool find_mapped_logical_id_in_shrunk_state(const Class& c, uint32_t& out_logical_id) const noexcept {
+    if (!is_shrunk() || post_shrink_mapping_.empty() || !post_shrink_snapshot_access_.composite_resolve) [[likely]] {
+      return false;
     }
-    return !post_shrink_mapping_.empty() && post_shrink_mapping_[ls_id] != Base::kInvalidId;
+
+    const uint32_t mapping_boundary = std::min<uint32_t>(shift_, post_shrink_mapping_.size());
+    for (uint32_t logical_id = 0; logical_id < mapping_boundary; ++logical_id) {
+      const auto mapped_id = post_shrink_mapping_[logical_id];
+      if (mapped_id == Base::kInvalidId) [[likely]] {
+        continue;
+      }
+      const auto mapped_label_set = post_shrink_snapshot_access_.composite_resolve(mapped_id);
+      if (std::ranges::equal(c, mapped_label_set)) [[unlikely]] {
+        out_logical_id = logical_id;
+        return true;
+      }
+    }
+    return false;
   }
 
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_visible_for_find(uint32_t logical_id) const noexcept {
-    if (is_shrunk()) [[unlikely]] {
-      return is_visible_in_shrunk_state(logical_id);
+  template <class LabelSetLike>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t emplace_series_and_update_indexes(const LabelSetLike& label_set, size_t mixed_hash) {
+    const auto new_storage_id = Base::storage_.emplace_back(label_set);
+    const auto composite_label_set = Base::operator[](new_storage_id);
+    ls_id_hash_set_.emplace_with_hash(mixed_hash, typename Base::Proxy(new_storage_id));
+    const auto new_logical_id = shift_ + new_storage_id;
+    update_indexes(new_logical_id, composite_label_set);
+    return new_logical_id;
+  }
+
+  template <class LabelSetLike>
+  [[nodiscard]] PROMPP_ATTRIBUTE_NOINLINE uint32_t emplace_visible_in_fixed_state(const LabelSetLike& label_set, size_t mixed_hash) {
+    auto logical_id = emplace_series_and_update_indexes(label_set, mixed_hash);
+    while (is_hidden_in_fixed_state(logical_id)) [[unlikely]] {
+      auto it = ls_id_hash_set_.find(label_set, mixed_hash);
+      assert(it != ls_id_hash_set_.end());
+      ls_id_hash_set_.erase(it);
+      logical_id = emplace_series_and_update_indexes(label_set, mixed_hash);
     }
-    return !is_hidden_in_fixed_state(logical_id);
+    return logical_id;
+  }
+
+  template <class LabelSetLike>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_in_normal_state(const LabelSetLike& label_set, size_t mixed_hash) {
+    if (const auto existing_it = ls_id_hash_set_.find(label_set, mixed_hash); existing_it != ls_id_hash_set_.end()) {
+      const auto logical_id = static_cast<uint32_t>(*existing_it);
+      mark_series_as_added(logical_id);
+      return logical_id;
+    }
+
+    const auto logical_id = emplace_series_and_update_indexes(label_set, mixed_hash);
+    mark_series_as_added(logical_id);
+    return logical_id;
+  }
+
+  template <class LabelSetLike>
+  [[nodiscard]] PROMPP_ATTRIBUTE_NOINLINE uint32_t find_or_emplace_in_fixed_state(const LabelSetLike& label_set, size_t mixed_hash) {
+    if (const auto existing_it = ls_id_hash_set_.find(label_set, mixed_hash); existing_it != ls_id_hash_set_.end()) {
+      const auto logical_id = static_cast<uint32_t>(*existing_it);
+      if (!is_hidden_in_fixed_state(logical_id)) [[likely]] {
+        return logical_id;
+      }
+    }
+    return emplace_visible_in_fixed_state(label_set, mixed_hash);
+  }
+
+  template <class LabelSetLike>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t find_or_emplace_in_shrunk_state(const LabelSetLike& label_set, size_t mixed_hash) {
+    if (const auto existing_it = ls_id_hash_set_.find(label_set, mixed_hash); existing_it != ls_id_hash_set_.end()) {
+      return shift_ + static_cast<uint32_t>(*existing_it);
+    }
+
+    uint32_t mapped_logical_id = Base::kInvalidId;
+    if (find_mapped_logical_id_in_shrunk_state(label_set, mapped_logical_id)) [[unlikely]] {
+      return mapped_logical_id;
+    }
+
+    return emplace_series_and_update_indexes(label_set, mixed_hash);
   }
 
   template <class Class>
-  [[nodiscard]] PROMPP_ALWAYS_INLINE bool find_logical_id(const Class& c, size_t hashval, uint32_t& out_logical_id) const noexcept {
-    auto i = ls_id_hash_set_.find(c, phmap_hash(hashval));
-    if (i == ls_id_hash_set_.end()) [[unlikely]] {
-      return false;
+  [[nodiscard]] PROMPP_ALWAYS_INLINE std::optional<uint32_t> find_in_normal_state(const Class& c, size_t mixed_hash) const {
+    if (const auto i = ls_id_hash_set_.find(c, mixed_hash); i != ls_id_hash_set_.end()) {
+      return std::optional<uint32_t>{static_cast<uint32_t>(*i)};
     }
-    const uint32_t logical_id = shift_ + static_cast<uint32_t>(*i);
-    if (!is_visible_for_find(logical_id)) [[unlikely]] {
-      return false;
+    return std::optional<uint32_t>{};
+  }
+
+  template <class Class>
+  [[nodiscard]] PROMPP_ATTRIBUTE_NOINLINE std::optional<uint32_t> find_in_fixed_state(const Class& c, size_t mixed_hash) const {
+    if (const auto i = ls_id_hash_set_.find(c, mixed_hash); i != ls_id_hash_set_.end()) {
+      const auto logical_id = static_cast<uint32_t>(*i);
+      if (!is_hidden_in_fixed_state(logical_id)) [[likely]] {
+        return std::optional<uint32_t>{logical_id};
+      }
     }
-    out_logical_id = logical_id;
-    return true;
+    return std::optional<uint32_t>{};
+  }
+
+  template <class Class>
+  [[nodiscard]] PROMPP_ALWAYS_INLINE std::optional<uint32_t> find_in_shrunk_state(const Class& c, size_t mixed_hash) const {
+    if (const auto i = ls_id_hash_set_.find(c, mixed_hash); i != ls_id_hash_set_.end()) {
+      return std::optional<uint32_t>{shift_ + static_cast<uint32_t>(*i)};
+    }
+
+    uint32_t mapped_logical_id = Base::kInvalidId;
+    if (find_mapped_logical_id_in_shrunk_state(c, mapped_logical_id)) [[unlikely]] {
+      return std::optional<uint32_t>{mapped_logical_id};
+    }
+    return std::optional<uint32_t>{};
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE typename Base::value_type resolve_shrunk_series(uint32_t ls_id) const noexcept {
