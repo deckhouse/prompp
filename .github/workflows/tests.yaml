@@ -72,7 +72,7 @@ jobs:
               set -eo pipefail
 
               git config --global --add safe.directory /workspace && cd pp
-              echo \"build --remote_cache=http://172.17.0.1/cache/ --experimental_guard_against_concurrent_changes\" >> .bazelrc
+              echo \"build --remote_cache=http://172.17.0.1/cache/ --experimental_guard_against_concurrent_changes --noremote_accept_cached\" >> .bazelrc
               ./scripts/ci_run_unit_tests.sh
 
               mkdir -p /workspace/testlogs
@@ -129,7 +129,7 @@ jobs:
               set -eo pipefail
 
               git config --global --add safe.directory /workspace && cd pp
-              echo \"build --remote_cache=http://172.17.0.1/cache/ --experimental_guard_against_concurrent_changes\" >> .bazelrc
+              echo \"build --remote_cache=http://172.17.0.1/cache/ --experimental_guard_against_concurrent_changes --noremote_accept_cached\" >> .bazelrc
               make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
             "
       - name: Upload Specific Static Libraries
