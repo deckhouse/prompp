@@ -806,7 +806,6 @@ class QueryableEncodingBimapFixedStateWithoutLs3Fixture : public QueryableEncodi
 
 TEST_F(QueryableEncodingBimapFixedStateFixture, FixedStateFindMatchesFindOrEmplaceForExistingSeries) {
   // Arrange
-  // Arrange in fixture SetUp().
 
   // Act
   const auto from_find = lss_.find(ls3_);
@@ -821,7 +820,6 @@ TEST_F(QueryableEncodingBimapFixedStateFixture, FixedStateFindMatchesFindOrEmpla
 
 TEST_F(QueryableEncodingBimapFixedStateFixture, FixedStateSeriesCountCountsRecordedSeries) {
   // Arrange
-  // Arrange in fixture SetUp().
 
   // Act
 
@@ -832,7 +830,6 @@ TEST_F(QueryableEncodingBimapFixedStateFixture, FixedStateSeriesCountCountsRecor
 
 TEST_F(QueryableEncodingBimapFixedStateFixture, OperatorBracketHidesBelowBoundaryOrphan) {
   // Arrange
-  // Arrange in fixture SetUp().
 
   // Act
   const auto id = lss_.find(ls3_);
@@ -848,7 +845,6 @@ TEST_F(QueryableEncodingBimapFixedStateFixture, OperatorBracketHidesBelowBoundar
 
 TEST_F(QueryableEncodingBimapFixedStateWithoutLs3Fixture, FixedStateFindOrEmplaceReturnsBoundaryOrAboveId) {
   // Arrange
-  // Arrange in fixture SetUp().
 
   // Act
   const auto id = lss_.find_or_emplace(ls3_);
@@ -906,7 +902,6 @@ TEST_F(QueryableEncodingBimapFixture, FixedStateWithGapFindHidesPreBoundarySerie
 
 TEST_F(QueryableEncodingBimapFixedStateWithoutLs3Fixture, FixedStateWithoutAddedSeriesCountMatchesRecordedSeries) {
   // Arrange
-  // Arrange in fixture SetUp().
 
   // Act
 
@@ -960,7 +955,6 @@ class QueryableEncodingBimapShrinkTwoSeriesFixture : public QueryableEncodingBim
 
 TEST_F(QueryableEncodingBimapShrinkTwoSeriesFixture, FinalizeShrinkWithSnapshotPreservesMappedSeries) {
   // Arrange
-  // Arrange in fixture SetUp().
 
   // Act
   RunFinalizeShrinkWithSnapshot(BareBones::Vector<uint32_t>{0U, 1U});
@@ -972,7 +966,6 @@ TEST_F(QueryableEncodingBimapShrinkTwoSeriesFixture, FinalizeShrinkWithSnapshotP
 
 TEST_F(QueryableEncodingBimapShrinkTwoSeriesFixture, ShrunkStateWithFullMappingSeriesCountMatchesMaxIndex) {
   // Arrange
-  // Arrange in fixture SetUp().
 
   // Act
   RunFinalizeShrinkWithSnapshot(BareBones::Vector<uint32_t>{0U, 1U});
@@ -994,7 +987,7 @@ TEST_F(QueryableEncodingBimapCopierFixture, EmptyCompositeSizeZero) {
 
 TEST_F(QueryableEncodingBimapShrinkTwoSeriesFixture, ShrinkUnmappedIdReturnsEmpty) {
   // Arrange
-  // Arrange in fixture SetUp().
+
   // Act
   RunFinalizeShrinkWithSnapshot(BareBones::Vector<uint32_t>{0U});
 
