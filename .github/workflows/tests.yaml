@@ -88,6 +88,9 @@ jobs:
           path: pp/testlogs/*.xml
           retention-days: 7
 
+      - name: Clean test artifacts
+        run: rm -rf pp/testlogs
+
   build-go-bindings:
     needs: [build-ci-image, cpp-tests]
     strategy:
