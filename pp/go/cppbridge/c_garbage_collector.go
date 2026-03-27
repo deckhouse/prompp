@@ -30,8 +30,9 @@ type CGOGC struct {
 	done        chan struct{}
 	// stat
 	memoryThreshold prometheus.Gauge
-	memoryInUse     prometheus.Gauge
-	memoryAllocated prometheus.Gauge
+	memoryInUse       prometheus.Gauge
+	memoryAllocated   prometheus.Gauge
+	memoryResident    prometheus.Gauge
 	cGoGCCount      prometheus.Counter
 }
 
@@ -56,6 +57,12 @@ func NewCGOGC(registerer prometheus.Registerer) *CGOGC {
 				Help: "Current value stats.in_use from jemalloc in bytes.",
 			},
 		),
+		memoryResident: factory.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "prompp_common_jemalloc_resident_memory_bytes",
+				Help: "Current value stats.resident from jemalloc in bytes.",
+			},
+		),
 		memoryAllocated: factory.NewGauge(
 			prometheus.GaugeOpts{
 				Name: "prompp_common_jemalloc_memory_allocated_bytes",
@@ -77,6 +84,7 @@ func NewCGOGC(registerer prometheus.Registerer) *CGOGC {
 // set - set a value to the series and updates the moving average.
 func (cgc *CGOGC) set(memInfo MemInfo) {
 	cgc.memoryInUse.Set(float64(memInfo.InUse))
+	cgc.memoryResident.Set(float64(memInfo.Resident))
 	cgc.memoryAllocated.Set(float64(memInfo.Allocated))
 	if cgc.value == 0 {
 		cgc.value = float64(memInfo.InUse)
