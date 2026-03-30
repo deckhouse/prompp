@@ -185,16 +185,16 @@ void prompp_head_wal_encoder_add_inner_series(void* args, void* res);
 void prompp_head_wal_encoder_finalize(void* args, void* res);
 
 /**
- * @brief Max series id written to WAL.
+ * @brief Exclusive upper bound of series item indices written to WAL.
  *
  * @param args {
  *     encoder uintptr // pointer to constructed encoder
  * }
  * @param res {
- *     max_lsid uint32
+ *     max_item_index uint32
  * }
  */
-void prompp_head_wal_encoder_max_lsid_written(void* args, void* res);
+void prompp_head_wal_encoder_max_item_index(void* args, void* res);
 
 /**
  * @brief Construct a new Head WAL Decoder
