@@ -108,39 +108,38 @@ PROMPP_ALWAYS_INLINE DecodeIterator create_decode_iterator(const PromPP::Prometh
     return DecodeIterator(std::in_place_type<DecodeIterator::UniversalDecodeIterator>);
   }
 
-  switch (promql_function_name_hash(select_hints.func)) {
-    case promql_function_name_hash("rate"):
-    case promql_function_name_hash("increase"):
-      return DecodeIterator(std::in_place_type<DecodeIterator::RateIterator>, select_hints.interval);
-
-    case promql_function_name_hash("irate"):
-    case promql_function_name_hash("idelta"):
-      return DecodeIterator(std::in_place_type<DecodeIterator::IRateIterator>, select_hints.interval);
-
-    case promql_function_name_hash("min_over_time"):
-      return DecodeIterator(std::in_place_type<DecodeIterator::MinOverTimeIterator>, select_hints.interval);
-
-    case promql_function_name_hash("max_over_time"):
-      return DecodeIterator(std::in_place_type<DecodeIterator::MaxOverTimeIterator>, select_hints.interval);
-
-    case promql_function_name_hash("last_over_time"):
-      return DecodeIterator(std::in_place_type<DecodeIterator::LastOverTimeIterator>, select_hints.interval);
-
-    case promql_function_name_hash("sum_over_time"):
-      return DecodeIterator(std::in_place_type<DecodeIterator::SumOverTimeIterator>, select_hints.interval);
-
-    case promql_function_name_hash("delta"):
-      return DecodeIterator(std::in_place_type<DecodeIterator::DeltaIterator>, select_hints.interval);
-
-    case promql_function_name_hash("resets"):
-      return DecodeIterator(std::in_place_type<DecodeIterator::ResetsIterator>, select_hints.interval);
-
-    case promql_function_name_hash("changes"):
-      return DecodeIterator(std::in_place_type<DecodeIterator::ChangesIterator>, select_hints.interval);
-
-    default:
-      return DecodeIterator(std::in_place_type<DecodeIterator::UniversalDecodeIterator>);
+#define CASE(function_name, iterator_type)                                           \
+  case promql_function_name_hash(function_name): {                                   \
+    if (select_hints.func != function_name) [[unlikely]] {                           \
+      break;                                                                         \
+    }                                                                                \
+    return DecodeIterator(std::in_place_type<iterator_type>, select_hints.interval); \
   }
+
+  switch (promql_function_name_hash(select_hints.func)) {
+    CASE("rate", DecodeIterator::RateIterator)
+    CASE("increase", DecodeIterator::RateIterator)
+
+    CASE("irate", DecodeIterator::IRateIterator)
+    CASE("idelta", DecodeIterator::IRateIterator)
+
+    CASE("min_over_time", DecodeIterator::MinOverTimeIterator)
+    CASE("max_over_time", DecodeIterator::MaxOverTimeIterator)
+    CASE("last_over_time", DecodeIterator::LastOverTimeIterator)
+    CASE("sum_over_time", DecodeIterator::SumOverTimeIterator)
+
+    CASE("delta", DecodeIterator::DeltaIterator)
+
+    CASE("resets", DecodeIterator::ResetsIterator)
+
+    CASE("changes", DecodeIterator::ChangesIterator)
+
+    default:;
+  }
+
+#undef CASE
+
+  return DecodeIterator(std::in_place_type<DecodeIterator::UniversalDecodeIterator>);
 }
 
 }  // namespace entrypoint::series_data
