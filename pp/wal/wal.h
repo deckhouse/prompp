@@ -173,7 +173,7 @@ class BasicEncoder {
                                  segment_samples_.latest_sample(), (std::numeric_limits<int64_t>::max() - ts_base_));
     }
 
-    gorilla_.resize(label_sets_.next_item_index());
+    gorilla_.resize(label_sets_.max_item_index());
 
     const auto label_sets_checkpoint = label_sets_checkpoint_;
     if (ts_delta_rle_is_worth_trying) {
@@ -300,7 +300,8 @@ class BasicEncoder {
 
   inline __attribute__((always_inline)) const checkpoint_type& label_sets_checkpoint() const noexcept { return label_sets_checkpoint_; }
 
-  inline __attribute__((always_inline)) uint32_t max_lsid_written() const noexcept { return label_sets_checkpoint_.next_item_index(); }
+  // Exclusive upper bound for label set ids written to WAL.
+  inline __attribute__((always_inline)) uint32_t max_item_index() const noexcept { return label_sets_checkpoint_.next_item_index(); }
 
   inline __attribute__((always_inline)) const SegmentSamplesStorage& segment_samples() const { return segment_samples_; }
 
@@ -310,7 +311,7 @@ class BasicEncoder {
 
   inline __attribute__((always_inline)) uint64_t samples() const { return samples_; }
 
-  inline __attribute__((always_inline)) uint32_t series() const { return label_sets_.size(); }
+  inline __attribute__((always_inline)) uint32_t series() const { return label_sets_.series_count(); }
 
   inline __attribute__((always_inline)) uint64_t metadata_bytes() const { return metadata_bytes_; }
 
@@ -669,7 +670,7 @@ class BasicDecoder {
     }
 
     ++last_processed_segment_;
-    sample_decoder_.set_series_count(label_sets_.next_item_index());
+    sample_decoder_.set_series_count(label_sets_.max_item_index());
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::istream& get_stream(std::istream& stream) noexcept {
@@ -711,7 +712,7 @@ class BasicDecoder {
 
   inline __attribute__((always_inline)) const LabelSetsTable& label_sets() const { return label_sets_; }
 
-  inline __attribute__((always_inline)) uint32_t series() const { return label_sets_.size(); }
+  inline __attribute__((always_inline)) uint32_t series() const { return label_sets_.series_count(); }
 
   /// \Returns Total processed samples count.
   /// \seealso \ref process_segment().

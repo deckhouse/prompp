@@ -94,7 +94,7 @@ class StatusGetterLSS {
   }
 
   void get(Status& status) {
-    status.num_series = lss_.size();
+    status.num_series = lss_.series_count();
 
     if (limit_ == 0) {
       return;

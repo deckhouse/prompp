@@ -55,7 +55,7 @@ class IndexWriteContext {
         symbol_ids.emplace_back(Lss::kSymbolSourceCurrent, it.key_id(), it.value_id());
       }
     } else {
-      for (uint32_t ls_id = 0; ls_id < lss_.next_item_index(); ++ls_id) {
+      for (uint32_t ls_id = 0; ls_id < lss_.max_item_index(); ++ls_id) {
         if (lss_.symbol_source_for_series(ls_id) != Lss::kSymbolSourceCurrent) {
           continue;
         }

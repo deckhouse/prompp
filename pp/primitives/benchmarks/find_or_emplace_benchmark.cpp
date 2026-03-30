@@ -17,7 +17,7 @@ std::string_view get_lss_file() {
 
 QueryableEncodingBimap& get_lss() {
   static QueryableEncodingBimap lss;
-  if (lss.size() == 0) {
+  if (lss.series_count() == 0) {
     std::ifstream infile(get_lss_file().data(), std::ios_base::binary);
     infile >> lss;
   }
