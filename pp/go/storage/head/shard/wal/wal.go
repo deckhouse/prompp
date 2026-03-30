@@ -49,8 +49,8 @@ type Encoder[TSegment EncodedSegment] interface {
 	// Finalize finalizes the encoder and returns the encoded segment.
 	Finalize() (TSegment, error)
 
-	// MaxLSIDWritten returns max LSID written to WAL.
-	MaxLSIDWritten() uint32
+	// MaxItemIndex returns max item index written to WAL.
+	MaxItemIndex() uint32
 }
 
 // EncodedSegment the minimum required Segment implementation for a [Wal].
@@ -193,8 +193,8 @@ func (w *Wal[TSegment, TWriter]) Flush() error {
 	return w.segmentWriter.Flush()
 }
 
-// MaxLSIDWritten returns max LSID written to WAL.
-func (w *Wal[TSegment, TWriter]) MaxLSIDWritten() uint32 {
+// MaxItemIndex returns max item index written to WAL.
+func (w *Wal[TSegment, TWriter]) MaxItemIndex() uint32 {
 	if w.corrupted {
 		return 0
 	}
@@ -202,7 +202,7 @@ func (w *Wal[TSegment, TWriter]) MaxLSIDWritten() uint32 {
 	w.locker.Lock()
 	defer w.locker.Unlock()
 
-	return w.encoder.MaxLSIDWritten()
+	return w.encoder.MaxItemIndex()
 }
 
 // Sync commits the current contents of the [SegmentWriter].

@@ -321,6 +321,7 @@ func (m *Manager) initServices(
 				m.rotatorMediator,
 				m.cfg,
 				&headInformer{catalog: hcatalog},
+				// TODO: use CopyLSS instead of CopyAddedSeries
 				head.CopyAddedSeries[*shard.Shard, *shard.PerGoroutineShard](shard.CopyAddedSeries),
 				persistenerMediator.TriggerWithResetTimer,
 				r,

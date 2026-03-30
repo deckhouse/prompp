@@ -11,14 +11,14 @@ import (
 
 // LSS labelset storage for [shard].
 type LSS struct {
-	input              *cppbridge.LabelSetStorage
-	target             *cppbridge.LabelSetStorage
-	snapshot           *cppbridge.LabelSetSnapshot
-	dstSrcLsIdsMapping *cppbridge.IdsMapping
-	// oldToNewLsIdsMapping *cppbridge.IdsMapping
-	// mappedSnapshot     *cppbridge.LabelSetSnapshot
-	locker sync.RWMutex
-	once   sync.Once
+	input                *cppbridge.LabelSetStorage
+	target               *cppbridge.LabelSetStorage
+	snapshot             *cppbridge.LabelSetSnapshot
+	dstSrcLsIdsMapping   *cppbridge.IdsMapping
+	oldToNewLsIdsMapping *cppbridge.IdsMapping
+	mappedSnapshot       *cppbridge.LabelSetSnapshot
+	locker               sync.RWMutex
+	once                 sync.Once
 }
 
 // NewLSS init new [LSS].
@@ -46,6 +46,26 @@ func (l *LSS) CopyAddedSeriesTo(destination *LSS) {
 	l.locker.RUnlock()
 
 	destination.dstSrcLsIdsMapping = snapshot.CopyAddedSeries(bitsetSeries, destination.target)
+}
+
+// FinalizeCopyAndShrink finalize copy and shrink the lss.
+func (l *LSS) FinalizeCopyAndShrink() {
+	l.locker.Lock()
+	l.target.FinalizeCopyAndShrink(l.mappedSnapshot, l.oldToNewLsIdsMapping)
+	l.locker.Unlock()
+}
+
+// FreezeAndCopyAddedSeries freeze the lss by shrink boundary and copy the added series to the destination lss.
+func (l *LSS) FreezeAndCopyAddedSeries(destination *LSS, shrinkBoundary uint32) {
+	l.locker.Lock()
+	l.target.SetPendingShrinkBoundary(shrinkBoundary)
+	snapshot := l.getSnapshot()
+	bitsetSeries := l.target.BitsetSeries()
+	l.locker.Unlock()
+
+	destination.dstSrcLsIdsMapping = snapshot.CopyAddedSeries(bitsetSeries, destination.target)
+	destination.mappedSnapshot = destination.target.CreateLabelSetSnapshot()
+	destination.oldToNewLsIdsMapping = cppbridge.LSSInvertCopyMapping(destination.dstSrcLsIdsMapping, shrinkBoundary)
 }
 
 // Input returns input lss.

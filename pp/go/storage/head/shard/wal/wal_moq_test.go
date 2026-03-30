@@ -232,8 +232,8 @@ func (mock *SegmentWriterMock[TSegment]) WriteCalls() []struct {
 //			FinalizeFunc: func() (TSegment, error) {
 //				panic("mock out the Finalize method")
 //			},
-//			MaxLSIDWrittenFunc: func() uint32 {
-//				panic("mock out the MaxLSIDWritten method")
+//			MaxItemIndexFunc: func() uint32 {
+//				panic("mock out the MaxItemIndex method")
 //			},
 //		}
 //
@@ -248,8 +248,8 @@ type EncoderMock[TSegment wal.EncodedSegment] struct {
 	// FinalizeFunc mocks the Finalize method.
 	FinalizeFunc func() (TSegment, error)
 
-	// MaxLSIDWrittenFunc mocks the MaxLSIDWritten method.
-	MaxLSIDWrittenFunc func() uint32
+	// MaxItemIndexFunc mocks the MaxItemIndex method.
+	MaxItemIndexFunc func() uint32
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -261,13 +261,13 @@ type EncoderMock[TSegment wal.EncodedSegment] struct {
 		// Finalize holds details about calls to the Finalize method.
 		Finalize []struct {
 		}
-		// MaxLSIDWritten holds details about calls to the MaxLSIDWritten method.
-		MaxLSIDWritten []struct {
+		// MaxItemIndex holds details about calls to the MaxItemIndex method.
+		MaxItemIndex []struct {
 		}
 	}
-	lockEncode         sync.RWMutex
-	lockFinalize       sync.RWMutex
-	lockMaxLSIDWritten sync.RWMutex
+	lockEncode       sync.RWMutex
+	lockFinalize     sync.RWMutex
+	lockMaxItemIndex sync.RWMutex
 }
 
 // Encode calls EncodeFunc.
@@ -329,30 +329,30 @@ func (mock *EncoderMock[TSegment]) FinalizeCalls() []struct {
 	return calls
 }
 
-// MaxLSIDWritten calls MaxLSIDWrittenFunc.
-func (mock *EncoderMock[TSegment]) MaxLSIDWritten() uint32 {
-	if mock.MaxLSIDWrittenFunc == nil {
-		panic("EncoderMock.MaxLSIDWrittenFunc: method is nil but Encoder.MaxLSIDWritten was just called")
+// MaxItemIndex calls MaxItemIndexFunc.
+func (mock *EncoderMock[TSegment]) MaxItemIndex() uint32 {
+	if mock.MaxItemIndexFunc == nil {
+		panic("EncoderMock.MaxItemIndexFunc: method is nil but Encoder.MaxItemIndex was just called")
 	}
 	callInfo := struct {
 	}{}
-	mock.lockMaxLSIDWritten.Lock()
-	mock.calls.MaxLSIDWritten = append(mock.calls.MaxLSIDWritten, callInfo)
-	mock.lockMaxLSIDWritten.Unlock()
-	return mock.MaxLSIDWrittenFunc()
+	mock.lockMaxItemIndex.Lock()
+	mock.calls.MaxItemIndex = append(mock.calls.MaxItemIndex, callInfo)
+	mock.lockMaxItemIndex.Unlock()
+	return mock.MaxItemIndexFunc()
 }
 
-// MaxLSIDWrittenCalls gets all the calls that were made to MaxLSIDWritten.
+// MaxItemIndexCalls gets all the calls that were made to MaxItemIndex.
 // Check the length with:
 //
-//	len(mockedEncoder.MaxLSIDWrittenCalls())
-func (mock *EncoderMock[TSegment]) MaxLSIDWrittenCalls() []struct {
+//	len(mockedEncoder.MaxItemIndexCalls())
+func (mock *EncoderMock[TSegment]) MaxItemIndexCalls() []struct {
 } {
 	var calls []struct {
 	}
-	mock.lockMaxLSIDWritten.RLock()
-	calls = mock.calls.MaxLSIDWritten
-	mock.lockMaxLSIDWritten.RUnlock()
+	mock.lockMaxItemIndex.RLock()
+	calls = mock.calls.MaxItemIndex
+	mock.lockMaxItemIndex.RUnlock()
 	return calls
 }
 
