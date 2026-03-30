@@ -771,3 +771,43 @@ func (s *RotateLSSSuite) TestCopyOnRotateEmplaceExistingLSPart() {
 
 	runtime.KeepAlive(result)
 }
+
+func (s *RotateLSSSuite) TestCopyOnRotateShrinkAndEmplacePart() {
+	// Arrange
+	rLSS := s.makeRotatedLSS("")
+	newLSS := cppbridge.NewQueryableLssStorage()
+	shrinkBoundary := slices.Max(rLSS.oldLabelSetIDs) - 1
+
+	// Act
+	rLSS.oldLSS.SetPendingShrinkBoundary(shrinkBoundary)
+	snapshot := rLSS.oldLSS.CreateLabelSetSnapshot()
+	dstSrcLsIdsMapping := snapshot.CopyAddedSeries(rLSS.oldLSS.BitsetSeries(), newLSS)
+	mappedSnapshot := newLSS.CreateLabelSetSnapshot()
+	oldToNewLsIdsMapping := cppbridge.LSSInvertCopyMapping(dstSrcLsIdsMapping, shrinkBoundary)
+
+	lsNew1 := model.LabelSetFromPairs("__name__", "kek1")
+	lsIDNew1 := rLSS.oldLSS.FindOrEmplace(lsNew1).LabelSetID
+
+	rLSS.oldLSS.FinalizeCopyAndShrink(mappedSnapshot, oldToNewLsIdsMapping)
+
+	lsNew2 := model.LabelSetFromPairs("__name__", "kek2")
+	lsIDNew2 := rLSS.oldLSS.FindOrEmplace(lsNew2).LabelSetID
+	lsIDExisting := rLSS.oldLSS.FindOrEmplace(rLSS.expectedLSes[0]).LabelSetID
+
+	// Assert
+	// !!!ATTENTION!!! When copying the added series, the order in which the series are added is preserved.
+	expectedLabelSets := labelSetToCppBridgeLabels(rLSS.expectedLSes)
+	s.Equal(expectedLabelSets, newLSS.GetLabelSets(rLSS.newLabelSetIDs).LabelsSets())
+	s.Equal(expectedLabelSets, rLSS.oldLSS.GetLabelSets(rLSS.oldLabelSetIDs).LabelsSets())
+	s.Equal(rLSS.oldLabelSetIDs[0], lsIDExisting)
+	s.Equal(slices.Max(s.labelSetIDs)+1, lsIDNew1)
+	s.Equal(slices.Max(s.labelSetIDs)+2, lsIDNew2)
+	s.Equal(
+		labelSetToCppBridgeLabels(append(rLSS.expectedLSes, lsNew1, lsNew2)),
+		rLSS.oldLSS.GetLabelSets(append(rLSS.oldLabelSetIDs, lsIDNew1, lsIDNew2)).LabelsSets(),
+	)
+
+	runtime.KeepAlive(dstSrcLsIdsMapping)
+	runtime.KeepAlive(mappedSnapshot)
+	runtime.KeepAlive(oldToNewLsIdsMapping)
+}
