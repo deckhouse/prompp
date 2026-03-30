@@ -563,9 +563,7 @@ func (s *QueryableLSSSuite) TestCopyOnRotateEmplaceExistingLS() {
 	// !!!ATTENTION!!! When copying the added series, the order in which the series are added is preserved.
 	s.Equal(labelSetToCppBridgeLabels(s.labelSets), newLSS.GetLabelSets(s.labelSetIDs).LabelsSets())
 	s.Equal(newLSS.GetLabelSets(s.labelSetIDs).LabelsSets(), s.lss.GetLabelSets(s.labelSetIDs).LabelsSets())
-	s.Equal(shrinkBoundary, lsIDExisting)
-
-	s.T().Log(s.lss.GetLabelSets(append(s.labelSetIDs, lsIDExisting)).LabelsSets())
+	s.Equal(s.labelSetIDs[0], lsIDExisting)
 
 	runtime.KeepAlive(dstSrcLsIdsMapping)
 	runtime.KeepAlive(mappedSnapshot)
