@@ -20,7 +20,7 @@ RUN ln -s /usr/share/prometheus/console_libraries /usr/share/prometheus/consoles
 RUN ln -s /bin/prometheus /bin/prompp
 
 ENV GOGC="30"
-ENV MALLOC_CONF="background_thread:true,tcache_max:4096,dirty_decay_ms:5000,muzzy_decay_ms:5000"
+ENV MALLOC_CONF="abort_conf:true,background_thread:true,tcache_max:4096,dirty_decay_ms:5000,muzzy_decay_ms:0,retain:false"
 ENV PROMPP_FEATURES=""
 
 USER       nobody
