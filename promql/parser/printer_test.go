@@ -263,3 +263,24 @@ func TestVectorSelector_String(t *testing.T) {
 		})
 	}
 }
+
+func TestOpTopString(t *testing.T) {
+	inputs := []struct {
+		in string
+	}{
+		{in: `op_top(1, up)`},
+		{in: `op_top(1, up{pod="pod1"})`},
+		{in: `op_top(1, max, up{pod="pod1"})`},
+		{in: `op_top(1, true, up)`},
+		{in: `op_top(1, true, max, up)`},
+		{in: `op_top(1, true, max, sum(up{pod="pod1"}))`},
+		{in: `op_top(1, true, exp, sum by (pod) (up{pod="pod1"}))`},
+	}
+
+	for _, test := range inputs {
+		expr, err := ParseExpr(test.in)
+		require.NoError(t, err)
+
+		require.Equal(t, test.in, expr.String())
+	}
+}
