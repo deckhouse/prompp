@@ -573,6 +573,52 @@ func (s *RotateLSSSuite) TestCopyOnRotate() {
 	runtime.KeepAlive(result)
 }
 
+func (s *RotateLSSSuite) TestCopyOnRotateCheckQueryOnOldSnapshot() {
+	// Arrange
+	newLSS := cppbridge.NewQueryableLssStorage()
+	shrinkBoundary := slices.Max(s.labelSetIDs) + 1
+
+	// Act
+	s.lss.SetPendingShrinkBoundary(shrinkBoundary)
+	snapshot := s.lss.CreateLabelSetSnapshot()
+	dstSrcLsIdsMapping := snapshot.CopyAddedSeries(s.lss.BitsetSeries(), newLSS)
+	mappedSnapshot := newLSS.CreateLabelSetSnapshot()
+	oldToNewLsIdsMapping := cppbridge.LSSInvertCopyMapping(dstSrcLsIdsMapping, shrinkBoundary)
+
+	selector, status := s.lss.QuerySelector([]model.LabelMatcher{
+		{Name: "__name__", Value: "kek", MatcherType: model.MatcherTypeExactMatch},
+	})
+	s.Require().Equal(cppbridge.LSSQueryStatusMatch, status)
+
+	s.lss.FinalizeCopyAndShrink(mappedSnapshot, oldToNewLsIdsMapping)
+
+	// Assert
+	// !!!ATTENTION!!! When copying the added series, the order in which the series are added is preserved.
+	expectedLabelSets := labelSetToCppBridgeLabels(s.labelSets)
+	s.Equal(expectedLabelSets, newLSS.GetLabelSets(s.labelSetIDs).LabelsSets())
+	s.Equal(expectedLabelSets, s.lss.GetLabelSets(s.labelSetIDs).LabelsSets())
+
+	// check result of query on snapshot
+	res := snapshot.Query(selector)
+	s.Require().Equal(cppbridge.LSSQueryStatusMatch, res.Status())
+	expectedLabelSets = labelSetToCppBridgeLabels(s.labelSets[:3])
+	actualLabelSets := make([]cppbridge.Labels, 0, len(res.IDs()))
+	for _, lsid := range res.IDs() {
+		ls := cppbridge.Labels{}
+		snapshot.RangeLabelSet(lsid, func(l cppbridge.Label) error {
+			ls = append(ls, l)
+			return nil
+		})
+		actualLabelSets = append(actualLabelSets, ls)
+	}
+	s.Equal(expectedLabelSets, actualLabelSets)
+
+	runtime.KeepAlive(snapshot)
+	runtime.KeepAlive(dstSrcLsIdsMapping)
+	runtime.KeepAlive(mappedSnapshot)
+	runtime.KeepAlive(oldToNewLsIdsMapping)
+}
+
 func (s *RotateLSSSuite) TestCopyOnRotateEmplaceNewLS() {
 	// Arrange
 	newLSS := cppbridge.NewQueryableLssStorage()

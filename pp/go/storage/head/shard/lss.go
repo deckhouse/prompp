@@ -52,6 +52,7 @@ func (l *LSS) CopyAddedSeriesTo(destination *LSS) {
 func (l *LSS) FinalizeCopyAndShrink() {
 	l.locker.Lock()
 	l.target.FinalizeCopyAndShrink(l.mappedSnapshot, l.oldToNewLsIdsMapping)
+	// TODO: Reset snapshot
 	l.locker.Unlock()
 }
 
