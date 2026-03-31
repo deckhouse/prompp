@@ -59,7 +59,7 @@ void save_gorilla_to_wal::execute(const Config& config, Metrics& metrics) const 
   metrics << (Metric() << "wal_timestamps_compression_bits_per_sample"
                        << static_cast<double>(wal.timestamps_bytes()) * 8.0 / static_cast<double>(wal.samples()));
   metrics << (Metric() << "wal_total_compression_bits_per_sample" << static_cast<double>(wal.total_bytes()) * 8.0 / static_cast<double>(wal.samples()));
-  metrics << (Metric() << "wal_values_compression_bits_per_sample" << static_cast<double>(wal.timestamps_bytes()) * 8.0 / static_cast<double>(wal.samples()));
+  metrics << (Metric() << "wal_values_compression_bits_per_sample" << static_cast<double>(wal.values_bytes()) * 8.0 / static_cast<double>(wal.samples()));
   metrics << (Metric() << "wal_add_sample_avg_duration_nanoseconds"
                        << static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(now - start).count()) /
                               static_cast<double>(dummy_wal.cnt()));
