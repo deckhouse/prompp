@@ -100,16 +100,21 @@ func (node *AggregateExpr) ShortString() string {
 }
 
 func (node *AggregateExpr) getAggOpStr() string {
-	aggrString := node.Op.String()
+	var aggrString strings.Builder
+	_, _ = aggrString.WriteString(node.Op.String())
 
 	switch {
 	case node.Without:
-		aggrString += fmt.Sprintf(" without (%s) ", joinLabels(node.Grouping))
+		_, _ = aggrString.WriteString(" without (")
+		_, _ = aggrString.WriteString(joinLabels(node.Grouping))
+		_, _ = aggrString.WriteString(") ")
 	case len(node.Grouping) > 0:
-		aggrString += fmt.Sprintf(" by (%s) ", joinLabels(node.Grouping))
+		_, _ = aggrString.WriteString(" by (")
+		_, _ = aggrString.WriteString(joinLabels(node.Grouping))
+		_, _ = aggrString.WriteString(") ")
 	}
 
-	return aggrString
+	return aggrString.String()
 }
 
 func joinLabels(ss []string) string {
