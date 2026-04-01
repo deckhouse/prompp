@@ -113,6 +113,13 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   }
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_shrunk_for_export() const noexcept { return is_shrunk(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_fixed_for_export() const noexcept { return is_fixed(); }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t shift_for_export() const noexcept { return shift_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t pending_shrink_boundary_for_export() const noexcept { return pending_shrink_boundary_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE std::span<const uint32_t> post_shrink_mapping_for_export() const noexcept { return post_shrink_mapping_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const PostShrinkSnapshotAccess& post_shrink_snapshot_access_for_export() const noexcept {
+    return post_shrink_snapshot_access_;
+  }
   [[nodiscard]] PROMPP_ALWAYS_INLINE uint32_t symbol_source_for_series(uint32_t ls_id) const noexcept { return symbol_source_for_series_impl(ls_id); }
   [[nodiscard]] PROMPP_ALWAYS_INLINE std::string_view resolve_symbol_by_source(uint32_t source, uint32_t name_id, uint32_t value_id) const noexcept {
     if (name_id == kKeyOnlyValueId && value_id == kKeyOnlyValueId) {

@@ -93,7 +93,7 @@ void prompp_primitives_lss_query_selector(void* args, void* res);
  * @brief query selector from lss for label matchers
  *
  * @param args {
- *     lss uintptr // pointer to readonly lss
+ *     lss uintptr // pointer to snapshot lss
  *     selector uintptr // pointer to constructed selector
  * }
  *
@@ -257,7 +257,7 @@ void prompp_primitives_lss_set_pending_shrink_boundary(void* args);
  *
  * @param args {
  *     lss                uintptr  // pointer to source queryable lss;
- *     resolve_snapshot   uintptr  // pointer to readonly lss for resolving ids with mapping;
+ *     resolve_snapshot   uintptr  // pointer to snapshot lss for resolving ids with mapping;
  *     old_to_new_mapping uintptr  // pointer to ls id `old (lss) -> new (resolve_snapshot)` mapping
  * }
  */

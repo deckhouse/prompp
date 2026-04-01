@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <memory>
 #include <variant>
 
@@ -20,6 +21,7 @@ enum class LssType : uint32_t {
 
 enum class SnapshotLSSType : uint32_t {
   kSnapshotLSS = 0,
+  kShrinkAwareSnapshotLSS,
 };
 
 namespace lss_memory {
@@ -66,14 +68,74 @@ class SnapshotLSS : public PromPP::Primitives::SnugComposites::LabelSet::Decodin
  public:
   using Base = PromPP::Primitives::SnugComposites::LabelSet::DecodingTable<SharedSpanWithChangesDetection>;
   using SortingIndex = series_index::SortingIndex<SharedSpanWithChangesDetection>;
+  using value_type = typename Base::value_type;
   using Base::Base;
 
   explicit SnapshotLSS(const QueryableEncodingBimap& lss) : Base(lss), sorting_index_(lss.sorting_index()) {}
 
   [[nodiscard]] PROMPP_ALWAYS_INLINE const SortingIndex& sorting_index() const noexcept { return sorting_index_; }
+  [[nodiscard]] PROMPP_ALWAYS_INLINE value_type operator[](uint32_t id) const noexcept { return Base::operator[](id); }
 
  private:
   SortingIndex sorting_index_;
+};
+
+class ShrinkAwareSnapshotLSS : public SnapshotLSS {
+ public:
+  explicit ShrinkAwareSnapshotLSS(const QueryableEncodingBimap& lss)
+      : SnapshotLSS(lss),
+        is_fixed_(lss.is_fixed_for_export()),
+        is_shrunk_(lss.is_shrunk_for_export()),
+        shift_(lss.shift_for_export()),
+        pending_shrink_boundary_(lss.pending_shrink_boundary_for_export()),
+        added_series_(lss.added_series()),
+        post_shrink_snapshot_access_(lss.post_shrink_snapshot_access_for_export()) {
+    if (const auto mapping = lss.post_shrink_mapping_for_export(); !mapping.empty()) {
+      post_shrink_mapping_.reserve(mapping.size());
+      for (const auto id : mapping) {
+        post_shrink_mapping_.emplace_back(id);
+      }
+    }
+  }
+
+  [[nodiscard]] value_type operator[](uint32_t id) const noexcept {
+    if (is_shrunk_) [[likely]] {
+      return resolve_shrunk_series(id);
+    }
+
+    if (is_fixed_ && is_hidden_in_fixed_state(id)) [[unlikely]] {
+      return value_type{};
+    }
+
+    return SnapshotLSS::operator[](id);
+  }
+
+ private:
+  [[nodiscard]] PROMPP_ALWAYS_INLINE bool is_hidden_in_fixed_state(uint32_t id) const noexcept {
+    return id < pending_shrink_boundary_ && (id >= added_series_.size() || !added_series_[id]);
+  }
+
+  [[nodiscard]] PROMPP_ALWAYS_INLINE value_type resolve_shrunk_series(uint32_t id) const noexcept {
+    if (id >= shift_) [[likely]] {
+      return SnapshotLSS::operator[](id - shift_);
+    }
+    if (id >= post_shrink_mapping_.size() || !post_shrink_snapshot_access_.composite_resolve) [[unlikely]] {
+      return value_type{};
+    }
+    const auto mapped_id = post_shrink_mapping_[id];
+    if (mapped_id == Base::kInvalidId) [[unlikely]] {
+      return value_type{};
+    }
+    return post_shrink_snapshot_access_.composite_resolve(mapped_id);
+  }
+
+  bool is_fixed_{};
+  bool is_shrunk_{};
+  uint32_t shift_{};
+  uint32_t pending_shrink_boundary_{QueryableEncodingBimap::kPendingShrinkBoundaryNotSet};
+  BareBones::Bitset added_series_{};
+  BareBones::Vector<uint32_t> post_shrink_mapping_{};
+  QueryableEncodingBimap::PostShrinkSnapshotAccess post_shrink_snapshot_access_{};
 };
 
 template <class Lss>
@@ -119,7 +181,7 @@ inline LssVariantPtr create_lss(LssType type) {
   }
 }
 
-using SnapshotLSSVariant = std::variant<SnapshotLSS>;
+using SnapshotLSSVariant = std::variant<SnapshotLSS, ShrinkAwareSnapshotLSS>;
 using SnapshotLSSVariantPtr = std::unique_ptr<SnapshotLSSVariant>;
 
 static_assert(sizeof(SnapshotLSSVariantPtr) == sizeof(void*));
@@ -133,6 +195,10 @@ inline SnapshotLSSVariantPtr create_snapshot_lss(LssVariant& lss_variant) {
     case LssType::kQueryableEncodingBimap: {
       auto& lss = std::get<QueryableEncodingBimap>(lss_variant);
       lss.build_deferred_indexes();
+      if (lss.is_fixed_for_export() || lss.is_shrunk_for_export()) {
+        return std::make_unique<SnapshotLSSVariant>(std::in_place_index<static_cast<int>(SnapshotLSSType::kShrinkAwareSnapshotLSS)>, lss);
+      }
+      assert(!lss.is_fixed_for_export() && !lss.is_shrunk_for_export());
       return std::make_unique<SnapshotLSSVariant>(std::in_place_index<static_cast<int>(SnapshotLSSType::kSnapshotLSS)>, lss);
     }
 
