@@ -275,6 +275,7 @@ func TestOpTopString(t *testing.T) {
 		{in: `op_top(1, true, max, up)`},
 		{in: `op_top(1, true, max, sum(up{pod="pod1"}))`},
 		{in: `op_top(1, true, exp, sum by (pod) (up{pod="pod1"}))`},
+		{in: `op_top(10, sum by (instance) (rate(node_cpu_seconds_total{job="node"}[5m])))`},
 	}
 
 	for _, test := range inputs {
