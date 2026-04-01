@@ -591,6 +591,7 @@ class QueryableEncodingBimapFiveSeriesFixture : public QueryableEncodingBimapCop
   LabelViewSet ls5_{{"job", "e"}};
   LabelViewSet ls6_{{"job", "f"}};
   Lss lss_copy_;
+  // finalize_copy_and_shrink stores a non-owning view, so mapping must outlive shrunk-state usage.
   BareBones::Vector<uint32_t> old_to_new_;
 
   void SetUp() override {
@@ -934,6 +935,7 @@ class QueryableEncodingBimapShrinkTwoSeriesFixture : public QueryableEncodingBim
   LabelViewSet ls1_{{"job", "a"}};
   LabelViewSet ls2_{{"job", "b"}};
   Lss lss_copy_;
+  // Keep mapping in fixture lifetime because QEB references it via std::span after finalize_copy_and_shrink.
   BareBones::Vector<uint32_t> old_to_new_;
 
   void SetUp() override {
@@ -962,6 +964,23 @@ TEST_F(QueryableEncodingBimapShrinkTwoSeriesFixture, FinalizeShrinkWithSnapshotP
   // Assert
   EXPECT_TRUE(std::ranges::equal(ls1_, lss_[0]));
   EXPECT_TRUE(std::ranges::equal(ls2_, lss_[1]));
+}
+
+TEST_F(QueryableEncodingBimapShrinkTwoSeriesFixture, FinalizeShrinkMappingOwnedByFixtureRemainsResolvable) {
+  // Arrange
+  RunFinalizeShrinkWithSnapshot(BareBones::Vector<uint32_t>{0U, 1U});
+
+  // Act
+  const auto from_find_first = lss_.find(ls1_);
+  const auto from_find_second = lss_.find(ls2_);
+
+  // Assert
+  ASSERT_TRUE(from_find_first.has_value());
+  ASSERT_TRUE(from_find_second.has_value());
+  EXPECT_EQ(0U, *from_find_first);
+  EXPECT_EQ(1U, *from_find_second);
+  EXPECT_TRUE(std::ranges::equal(ls1_, lss_[*from_find_first]));
+  EXPECT_TRUE(std::ranges::equal(ls2_, lss_[*from_find_second]));
 }
 
 TEST_F(QueryableEncodingBimapShrinkTwoSeriesFixture, ShrunkStateWithFullMappingSeriesCountMatchesMaxIndex) {

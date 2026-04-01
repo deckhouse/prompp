@@ -211,11 +211,11 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
   BareBones::Bitset added_series_;
 
   void finalize_copy_and_shrink(PostShrinkSnapshotAccess snapshot_access, BareBones::Vector<uint32_t>& old_to_new_mapping) {
+    // old_to_new_mapping must outlive the shrunk state because post_shrink_mapping_ is a non-owning view.
     assert(snapshot_access.composite_resolve && snapshot_access.symbol_resolve);
     assert(pending_shrink_boundary_ <= next_item_index_impl() && old_to_new_mapping.size() >= next_item_index_impl());
 
-    post_shrink_mapping_storage_ = old_to_new_mapping;
-    post_shrink_mapping_ = std::span<const uint32_t>(post_shrink_mapping_storage_.data(), post_shrink_mapping_storage_.size());
+    post_shrink_mapping_ = std::span<const uint32_t>(old_to_new_mapping.data(), old_to_new_mapping.size());
     post_shrink_snapshot_access_ = std::move(snapshot_access);
     shrink_to_boundary(pending_shrink_boundary_);
   }
@@ -449,7 +449,6 @@ class QueryableEncodingBimap final : public BareBones::SnugComposite::GenericDec
 
   uint32_t shift_{0};
   uint32_t pending_shrink_boundary_{kPendingShrinkBoundaryNotSet};
-  BareBones::Vector<uint32_t> post_shrink_mapping_storage_{};
   std::span<const uint32_t> post_shrink_mapping_{};
   PostShrinkSnapshotAccess post_shrink_snapshot_access_{};
 
