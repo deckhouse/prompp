@@ -93,7 +93,7 @@ void prompp_primitives_lss_query_selector(void* args, void* res);
  * @brief query selector from lss for label matchers
  *
  * @param args {
- *     lss uintptr // pointer to readonly lss
+ *     snapshot uintptr // pointer to snapshot
  *     selector uintptr // pointer to constructed selector
  * }
  *
@@ -106,7 +106,7 @@ void prompp_primitives_lss_query_selector(void* args, void* res);
 void prompp_primitives_snapshot_query(void* args, void* res);
 
 /**
- * @brief free label set matches returned by prompp_primitives_lss_query
+ * @brief free label set matches returned by prompp_primitives_snapshot_query
  *
  * @param args {
  *     matches           []uint32 // matched series ids

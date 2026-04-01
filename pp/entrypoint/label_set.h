@@ -31,7 +31,7 @@ void prompp_label_set_length(void* args, void* res);
 void prompp_label_set_serialize_from_snapshot(void* args, void* res);
 
 /**
- * @brief free label set returned by prompp_label_set_serialize
+ * @brief free label set returned by prompp_label_set_serialize_from_snapshot
  *
  * @param args {
  *     label_set []struct{key, value String} // label set
