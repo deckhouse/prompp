@@ -20,7 +20,7 @@ void prompp_label_set_length(void* args, void* res);
  * @brief get label set by series id
  *
  * @param args {
- *     lss       uintptr                      // pointer to constructed lss;
+ *     snapshot  uintptr                      // pointer to constructed snapshot;
  *     ls_id     uint32                       // series id
  * }
  *
@@ -28,7 +28,7 @@ void prompp_label_set_length(void* args, void* res);
  *     label_set []struct{key, value String}  // label sets
  * }
  */
-void prompp_label_set_serialize(void* args, void* res);
+void prompp_label_set_serialize_from_snapshot(void* args, void* res);
 
 /**
  * @brief free label set returned by prompp_label_set_serialize

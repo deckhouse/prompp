@@ -14,9 +14,7 @@ cmake(
     generate_args = [
         "-DENABLE_ROARING_TESTS=OFF",
     ],
-    copts = [
-        "-Wno-error"
-    ],
+    copts = [],
     build_args = ["-j `nproc`"],
     out_static_libs = [
         "libroaring.a",

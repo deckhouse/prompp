@@ -16,6 +16,7 @@ using entrypoint::head::LsIdsSlicePtr;
 using entrypoint::head::LssType;
 using entrypoint::head::LssVariantPtr;
 using entrypoint::head::QueryableEncodingBimap;
+using entrypoint::head::SnapshotLSSVariantPtr;
 
 extern "C" void prompp_primitives_lss_ctor(void* args, void* res) {
   struct Arguments {
@@ -80,7 +81,7 @@ extern "C" void prompp_primitives_lss_find_or_emplace_builder(void* args, void* 
   struct Arguments {
     LssVariantPtr lss;
     struct {
-      LssVariantPtr readonly_lss;
+      SnapshotLSSVariantPtr snapshot;
       uint32_t ls_id;
       SliceView<PromPP::Primitives::Go::Label> sorted_add;
       SliceView<PromPP::Primitives::Go::String> sorted_del;
@@ -90,8 +91,8 @@ extern "C" void prompp_primitives_lss_find_or_emplace_builder(void* args, void* 
   const auto in = static_cast<Arguments*>(args);
   new (res) FindOrEmplaceResult(std::visit(
       [&builder = in->builder]<typename Lss>(Lss& lss) {
-        static const entrypoint::head::ReadonlyLss::value_type empty_label_set;
-        const auto& label_set = builder.readonly_lss ? std::get<entrypoint::head::ReadonlyLss>(*builder.readonly_lss)[builder.ls_id] : empty_label_set;
+        static const entrypoint::head::SnapshotLSS::value_type empty_label_set;
+        const auto& label_set = builder.snapshot ? std::get<entrypoint::head::SnapshotLSS>(*builder.snapshot)[builder.ls_id] : empty_label_set;
 
         return find_or_emplace<Lss>(lss, LabelSetBuilder{label_set, builder.sorted_add, builder.sorted_del});
       },
@@ -131,9 +132,9 @@ extern "C" void prompp_primitives_lss_query_selector(void* args, void* res) {
   }
 }
 
-extern "C" void prompp_primitives_lss_query(void* args, void* res) {
+extern "C" void prompp_primitives_snapshot_query(void* args, void* res) {
   struct Arguments {
-    LssVariantPtr lss;
+    SnapshotLSSVariantPtr snapshot;
     SelectorPtr selector;
   };
   struct Result {
@@ -143,10 +144,10 @@ extern "C" void prompp_primitives_lss_query(void* args, void* res) {
   };
 
   const auto in = static_cast<Arguments*>(args);
-  auto& lss = std::get<entrypoint::head::ReadonlyLss>(*in->lss);
+  auto& snapshot = std::get<entrypoint::head::SnapshotLSS>(*in->snapshot);
   auto query_result = Querier{}.query(*in->selector);
   in->selector.reset();
-  lss.sorting_index().sort(query_result.series_ids);
+  snapshot.sorting_index().sort(query_result.series_ids);
 
   const auto out = new (res) Result{
       .matches = std::move(query_result.series_ids),
@@ -154,7 +155,7 @@ extern "C" void prompp_primitives_lss_query(void* args, void* res) {
   };
   out->label_set_lengths.reserve(out->matches.size());
   std::ranges::transform(out->matches, std::back_inserter(out->label_set_lengths),
-                         [&lss](const auto ls_id) PROMPP_LAMBDA_INLINE { return static_cast<uint16_t>(lss[ls_id].size()); });
+                         [&snapshot](const auto ls_id) PROMPP_LAMBDA_INLINE { return static_cast<uint16_t>(snapshot[ls_id].size()); });
 }
 
 extern "C" void prompp_primitives_lss_query_result_free(void* args) {
@@ -243,15 +244,23 @@ extern "C" void prompp_primitives_lss_query_label_values(void* args, void* res) 
       [out](std::string_view value) PROMPP_LAMBDA_INLINE { out->values.emplace_back(value); }));
 }
 
-extern "C" void prompp_create_readonly_lss(void* args, void* res) {
+extern "C" void prompp_create_snapshot_lss(void* args, void* res) {
   struct Arguments {
     LssVariantPtr lss;
   };
   struct Result {
-    LssVariantPtr lss_copy;
+    SnapshotLSSVariantPtr snapshot;
   };
 
-  new (res) Result{.lss_copy = entrypoint::head::create_readonly_lss(*static_cast<Arguments*>(args)->lss)};
+  new (res) Result{.snapshot = entrypoint::head::create_snapshot_lss(*static_cast<Arguments*>(args)->lss)};
+}
+
+extern "C" void prompp_primitives_snapshot_dtor(void* args) {
+  struct Arguments {
+    SnapshotLSSVariantPtr snapshot;
+  };
+
+  static_cast<Arguments*>(args)->~Arguments();
 }
 
 using BitsetPtr = std::unique_ptr<BareBones::Bitset>;
@@ -276,8 +285,11 @@ extern "C" void prompp_primitives_lss_bitset_dtor(void* args) {
   static_cast<Arguments*>(args)->~Arguments();
 }
 
-extern "C" void prompp_primitives_readonly_lss_copy_added_series(uint64_t source_lss, uint64_t source_bitset, uint64_t destination_lss, uint64_t ids_mapping) {
-  const auto& src = std::get<entrypoint::head::ReadonlyLss>(*std::bit_cast<entrypoint::head::LssVariant*>(source_lss));
+extern "C" void prompp_primitives_snapshot_lss_copy_added_series(uint64_t source_snapshot,
+                                                                 uint64_t source_bitset,
+                                                                 uint64_t destination_lss,
+                                                                 uint64_t ids_mapping) {
+  const auto& src = std::get<entrypoint::head::SnapshotLSS>(*std::bit_cast<entrypoint::head::SnapshotLSSVariant*>(source_snapshot));
   const auto& src_bitset = *std::bit_cast<BareBones::Bitset*>(source_bitset);
   auto& dst = std::get<QueryableEncodingBimap>(*std::bit_cast<entrypoint::head::LssVariant*>(destination_lss));
   const auto dst_src_ids_mapping = std::bit_cast<LsIdsSlicePtr*>(ids_mapping);

@@ -7,6 +7,7 @@
 #include "primitives/go_slice.h"
 
 using entrypoint::head::LssVariantPtr;
+using entrypoint::head::SnapshotLSSVariantPtr;
 using PromPP::Primitives::Go::Slice;
 using PromPP::Primitives::Go::SliceView;
 
@@ -24,12 +25,12 @@ void prompp_label_set_length(void* args, void* res) {
   std::visit([in, res](auto& lss) { new (res) Result{.length = lss[in->series_id].size()}; }, *in->lss);
 }
 
-void prompp_label_set_serialize(void* args, void* res) {
+void prompp_label_set_serialize_from_snapshot(void* args, void* res) {
   using PromPP::Primitives::Go::Label;
   using PromPP::Primitives::Go::String;
 
   struct Arguments {
-    LssVariantPtr lss;
+    SnapshotLSSVariantPtr snapshot;
     uint32_t series_id;
   };
   struct Result {
@@ -40,14 +41,14 @@ void prompp_label_set_serialize(void* args, void* res) {
   auto out = new (res) Result();
 
   std::visit(
-      [in, out](auto& lss) {
-        auto in_label_set = lss[in->series_id];
+      [in, out](auto& snapshot) {
+        auto in_label_set = snapshot[in->series_id];
         auto& out_label_set = out->label_set;
         out_label_set.reserve(in_label_set.size());
         std::ranges::transform(in_label_set, std::back_inserter(out_label_set),
                                [](const auto& label) PROMPP_LAMBDA_INLINE { return Label({.name = String{label.first}, .value = String{label.second}}); });
       },
-      *in->lss);
+      *in->snapshot);
 }
 
 extern "C" void prompp_label_set_free(void* args) {

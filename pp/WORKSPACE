@@ -70,6 +70,7 @@ http_archive(
         "//third_party/patches/jemalloc:0001-musl-noexcept-fix.patch",
         "//third_party/patches/jemalloc:0002-manual-init.patch",
         "//third_party/patches/jemalloc:0003-svacer_fixes.patch",
+        "//third_party/patches/jemalloc:0004-werror_fixes.patch",
     ],
     sha256 = "2db82d1e7119df3e71b7640219b6dfe84789bc0537983c3b7ac4f7189aecfeaa",
     strip_prefix = "jemalloc-5.3.0/",
@@ -118,6 +119,7 @@ http_archive(
     patches = [
         "//third_party/patches/roaring:0001-disable-test-dependencies.patch",
         "//third_party/patches/roaring:0002-svacer_fixes.patch",
+        "//third_party/patches/roaring:0003-werror_fixes.patch",
     ],
     patch_cmds = [
         "cp cpp/* include/roaring"
@@ -140,6 +142,8 @@ http_archive(
     patches = [
         "//third_party/patches/com_google_absl:0001-no-werror.patch",
         "//third_party/patches/com_google_absl:0002-svacer_fixes.patch",
+        "//third_party/patches/com_google_absl:0003-null_dereference_fixes.patch",
+        "//third_party/patches/com_google_absl:0004-array_bounds_fixes.patch",
     ],
     sha256 = "f8903111260a18d2cc4618cd5bf35a22bcc28f372ebe4f04024b49e88a2e16c1",
     strip_prefix = "abseil-cpp-20240116.rc1/",
@@ -161,6 +165,7 @@ http_archive(
     patches = [
         "//third_party/patches/re2:0001-no-werror.patch",
         "//third_party/patches/re2:0002-svacer_fixes.patch",
+        "//third_party/patches/re2:0003-null_dereference_fixes.patch",
     ],
     sha256 = "cd191a311b84fcf37310e5cd876845b4bf5aee76fdd755008eef3b6478ce07bb",
     strip_prefix = "re2-2024-02-01/",
