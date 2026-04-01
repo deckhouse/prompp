@@ -5,11 +5,15 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/prometheus/prometheus/pp/go/logger"
 	"github.com/prometheus/prometheus/pp/go/util"
 )
+
+// defaultRetryInterval is the default interval for retrying the proxy head add with replace.
+const defaultRetryInterval = 30 * time.Second
 
 //
 // RotatorConfig
@@ -136,7 +140,12 @@ func (s *Rotator[TTask, TShard, TGoShard, THead]) rotate(
 		s.headAddedSeriesCopier(oldHead, newHead)
 	}
 
-	if err = s.proxyHead.AddWithReplace(oldHead, s.headInformer.CreatedAt(oldHead.ID())); err != nil {
+	if err = backoff.Retry(
+		func() error {
+			return s.proxyHead.AddWithReplace(oldHead, s.headInformer.CreatedAt(oldHead.ID()))
+		},
+		backoff.WithContext(backoff.NewConstantBackOff(defaultRetryInterval), ctx),
+	); err != nil {
 		return fmt.Errorf("failed add to keeper old head: %w", err)
 	}
 
