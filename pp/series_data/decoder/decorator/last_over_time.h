@@ -13,7 +13,7 @@ class FindLastElement {
 
   PROMPP_ALWAYS_INLINE void set_result(UniversalDecodeIterator& iterator) const {
     if (!has_value_) [[unlikely]] {
-      iterator.invalidate();
+      iterator.invalidate_sample();
     }
   }
 

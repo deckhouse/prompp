@@ -10,7 +10,7 @@ class OverTimeFuncIterator {
  public:
   DECODE_ITERATOR_TYPE_TRAITS();
 
-  explicit OverTimeFuncIterator(PromPP::Primitives::TimeInterval interval) : interval_(interval) {}
+  explicit OverTimeFuncIterator(const PromPP::Primitives::TimeInterval& interval) : interval_(interval) {}
   explicit OverTimeFuncIterator(UniversalDecodeIterator&& iterator, PromPP::Primitives::TimeInterval interval) : iterator_(iterator), interval_(interval) {
     find_element();
   }
@@ -21,13 +21,25 @@ class OverTimeFuncIterator {
     return *this;
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE const PromPP::Primitives::TimeInterval& interval() const noexcept { return interval_; }
+  PROMPP_ALWAYS_INLINE void set_interval(const PromPP::Primitives::TimeInterval& interval) {
+    interval_ = interval;
+    find_element();
+  }
+
+  PROMPP_ALWAYS_INLINE void reset(UniversalDecodeIterator&& iterator, const PromPP::Primitives::TimeInterval& interval) {
+    iterator_ = std::move(iterator);
+    interval_ = interval;
+    find_element();
+  }
+
   PROMPP_ALWAYS_INLINE const encoder::Sample& operator*() const { return iterator_.operator*(); }
   PROMPP_ALWAYS_INLINE const encoder::Sample* operator->() const { return iterator_.operator->(); }
 
   PROMPP_ALWAYS_INLINE bool operator==(const DecodeIteratorSentinel&) const { return iterator_->timestamp == kInvalidTimestamp; }
 
   PROMPP_ALWAYS_INLINE OverTimeFuncIterator& operator++() {
-    iterator_.invalidate();
+    iterator_.invalidate_sample();
     return *this;
   }
 

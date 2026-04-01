@@ -36,6 +36,8 @@ struct TimeInterval {
     return std::max(min, interval.min) <= std::min(max, interval.max);
   }
 
+  [[nodiscard]] PROMPP_ALWAYS_INLINE Timestamp difference() const noexcept { return max - min; }
+
   bool operator==(const TimeInterval&) const noexcept = default;
 };
 

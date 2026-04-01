@@ -60,7 +60,7 @@ class ResetsIterator {
     });
 
     if (!has_value) [[unlikely]] {
-      iterator_.invalidate();
+      iterator_.invalidate_sample();
     }
   }
 
@@ -85,7 +85,7 @@ class ResetsIterator {
     });
 
     if (!has_resets) [[unlikely]] {
-      iterator_.invalidate();
+      iterator_.invalidate_sample();
     }
   }
 };

@@ -66,7 +66,7 @@ class DownsamplingDecodeIterator {
     });
 
     if (sample_timestamp == kInvalidTimestamp) [[unlikely]] {
-      iterator_.invalidate();
+      iterator_.invalidate_sample();
     }
   }
 };

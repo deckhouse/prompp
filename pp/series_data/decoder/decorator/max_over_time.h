@@ -17,7 +17,7 @@ class FindMaxElement {
 
   PROMPP_ALWAYS_INLINE void set_result(UniversalDecodeIterator& iterator) const {
     if (BareBones::Encoding::Gorilla::isstalenan(max_value_)) [[unlikely]] {
-      iterator.invalidate();
+      iterator.invalidate_sample();
     }
   }
 

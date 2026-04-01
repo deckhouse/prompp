@@ -18,7 +18,7 @@ class SumOfElements {
 
   PROMPP_ALWAYS_INLINE void set_result(UniversalDecodeIterator& iterator) const {
     if (BareBones::Encoding::Gorilla::isstalenan(sum_.value)) [[unlikely]] {
-      iterator.invalidate();
+      iterator.invalidate_sample();
     } else {
       iterator.set(sum_);
     }

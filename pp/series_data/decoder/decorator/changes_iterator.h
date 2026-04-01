@@ -56,7 +56,7 @@ class ChangesIterator {
     });
 
     if (!has_value) [[unlikely]] {
-      iterator_.invalidate();
+      iterator_.invalidate_sample();
     }
   }
 
@@ -79,7 +79,7 @@ class ChangesIterator {
     });
 
     if (!has_changes) [[unlikely]] {
-      iterator_.invalidate();
+      iterator_.invalidate_sample();
     }
   }
 };

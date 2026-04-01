@@ -63,7 +63,7 @@ class IRateIterator {
     });
 
     if (sample_.timestamp == kInvalidTimestamp) [[unlikely]] {
-      iterator_.invalidate();
+      iterator_.invalidate_sample();
     }
   }
 };

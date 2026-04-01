@@ -62,7 +62,7 @@ class RateIterator {
     });
 
     if (!has_value) [[unlikely]] {
-      iterator_.invalidate();
+      iterator_.invalidate_sample();
     }
   }
 
@@ -99,7 +99,7 @@ class RateIterator {
     });
 
     if (!has_value) [[unlikely]] {
-      iterator_.invalidate();
+      iterator_.invalidate_sample();
     }
   }
 };

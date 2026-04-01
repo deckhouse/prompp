@@ -60,8 +60,8 @@ class UniversalDecodeIterator {
     std::visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.seek_to(timestamp); }, iterator_);
   }
 
-  PROMPP_ALWAYS_INLINE void invalidate() {
-    std::visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.invalidate(); }, iterator_);
+  PROMPP_ALWAYS_INLINE void invalidate_sample() {
+    std::visit([&](auto& iterator) PROMPP_LAMBDA_INLINE { iterator.invalidate_sample(); }, iterator_);
   }
 
   PROMPP_ALWAYS_INLINE void set(const encoder::Sample sample) {
