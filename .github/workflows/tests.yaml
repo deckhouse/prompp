@@ -47,11 +47,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: deckhouse/modules-actions/setup@v2
+      - uses: ./.github/actions/setup-werf
         with:
           registry: ${{ secrets.DEV_REGISTRY }}
           registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
           registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+          channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
 
       - name: Pull Latest Image
         if: matrix.runner_name == 'fsn-dev-gitlab-runner'
@@ -114,11 +115,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: deckhouse/modules-actions/setup@v2
+      - uses: ./.github/actions/setup-werf
         with:
           registry: ${{ secrets.DEV_REGISTRY }}
           registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
           registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+          channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
 
       - name: Build Go bindings
         run: |
@@ -172,11 +174,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: deckhouse/modules-actions/setup@v2
+      - uses: ./.github/actions/setup-werf
         with:
           registry: ${{ secrets.DEV_REGISTRY }}
           registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
           registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+          channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
 
       - name: Set architecture variable
         run: |
