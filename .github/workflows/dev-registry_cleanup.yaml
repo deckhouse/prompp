@@ -25,11 +25,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: deckhouse/modules-actions/setup@v2
+      - uses: ./.github/actions/setup-werf
         with:
           registry: ${{ secrets.DEV_REGISTRY }}
           registry_login: ${{ secrets.DEV_REGISTRY_LOGIN_CLEANUP }}
           registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD_CLEANUP }}
+          channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
 
       - name: Cleanup
         run: |

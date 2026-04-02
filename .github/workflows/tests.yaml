@@ -17,7 +17,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build-ci-image:
+    uses: ./.github/workflows/build-ci-image.yaml
+    with:
+      pr_number: ${{ github.event_name == 'pull_request' && format('{0}', github.event.number) || '' }}
+      pr_base_ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || '' }}
+    secrets: inherit
+
   cpp-tests:
+    needs: build-ci-image
     strategy:
       max-parallel: 2
       matrix:
@@ -39,17 +47,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: deckhouse/modules-actions/setup@v2
+      - uses: ./.github/actions/setup-werf
         with:
           registry: ${{ secrets.DEV_REGISTRY }}
           registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
           registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+          channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
 
       - name: Pull Latest Image
         if: matrix.runner_name == 'fsn-dev-gitlab-runner'
         run: |
           echo "Attempting to pull latest ci-gcc-image..."
-          docker pull ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} || \
+          docker pull ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }}${{ needs.build-ci-image.outputs.tag_suffix }} || \
             echo "Pull failed, continuing with cached image"
 
       - name: Run Unit Tests
@@ -59,7 +68,7 @@ jobs:
             -w /workspace \
             -e OPT=${{ matrix.OPT }} \
             -e SANITIZERS=${{ matrix.SANITIZERS }} \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }}${{ needs.build-ci-image.outputs.tag_suffix }} \
             bash -c "
               set -eo pipefail
 
@@ -73,15 +82,24 @@ jobs:
               done
             "
 
+      - name: Fix test artifact ownership
+        if: always()
+        run: |
+          docker run --rm -v "$PWD":/workspace busybox \
+            chown -R "$(id -u):$(id -g)" /workspace/testlogs || true
+
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
         with:
           name: unit-tests-${{ matrix.arch }}-${{ matrix.OPT }}-${{ matrix.SANITIZERS }}
-          path: pp/testlogs/*.xml
+          path: testlogs/*.xml
           retention-days: 7
 
+      - name: Clean test artifacts
+        run: rm -rf testlogs
+
   build-go-bindings:
-    needs: cpp-tests
+    needs: [build-ci-image, cpp-tests]
     strategy:
       max-parallel: 4
       matrix:
@@ -103,11 +121,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: deckhouse/modules-actions/setup@v2
+      - uses: ./.github/actions/setup-werf
         with:
           registry: ${{ secrets.DEV_REGISTRY }}
           registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
           registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+          channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
 
       - name: Build Go bindings
         run: |
@@ -116,7 +135,7 @@ jobs:
             -w /workspace \
             -e COMPILATION_MODE=${{ matrix.COMPILATION_MODE }} \
             -e ASAN=${{ matrix.ASAN }} \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }}${{ needs.build-ci-image.outputs.tag_suffix }} \
             bash -c "
               set -eo pipefail
 
@@ -124,6 +143,13 @@ jobs:
               echo \"build --remote_cache=http://172.17.0.1/cache/ --experimental_guard_against_concurrent_changes\" >> .bazelrc
               make compilation_mode=${{ matrix.COMPILATION_MODE }} asan=${{ matrix.ASAN }} build-entrypoint
             "
+
+      - name: Fix build artifact ownership
+        if: always()
+        run: |
+          docker run --rm -v "$PWD":/workspace busybox \
+            chown -R "$(id -u):$(id -g)" /workspace/pp/go/cppbridge || true
+
       - name: Upload Specific Static Libraries
         uses: actions/upload-artifact@v4
         with:
@@ -135,7 +161,7 @@ jobs:
         run: rm -rf pp/go/cppbridge/${{ matrix.arch }}_*
 
   go-tests:
-    needs: build-go-bindings
+    needs: [build-ci-image, build-go-bindings]
     strategy:
       max-parallel: 4
       matrix:
@@ -161,11 +187,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: deckhouse/modules-actions/setup@v2
+      - uses: ./.github/actions/setup-werf
         with:
           registry: ${{ secrets.DEV_REGISTRY }}
           registry_login: ${{ secrets.DEV_REGISTRY_LOGIN }}
           registry_password: ${{ secrets.DEV_REGISTRY_PASSWORD }}
+          channel: ${{ secrets.WERF_UPDATE_CHANNEL }}
 
       - name: Set architecture variable
         run: |
@@ -193,7 +220,7 @@ jobs:
             -e CGO_ENABLED="1" \
             -e GOPATH="${{ github.workspace }}/.cache" \
             -e GOBIN="/usr/local/go/bin" \
-            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ env.ARCH }} \
+            ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ env.ARCH }}${{ needs.build-ci-image.outputs.tag_suffix }} \
             bash -c "
               set -eo pipefail
 
@@ -214,6 +241,12 @@ jobs:
               gocov convert coverage.txt | gocov-xml > coverage.xml
               go tool cover -func=coverage.txt | tail -n 1 | awk '{print \"Total coverage:\", \$3;}'
             "
+
+      - name: Fix test artifact ownership
+        if: always()
+        run: |
+          docker run --rm -v "$PWD":/workspace busybox \
+            sh -c "chown -R $(id -u):$(id -g) /workspace/pp/report.xml /workspace/pp/coverage.xml /workspace/pp/report.txt /workspace/pp/coverage.txt /workspace/.cache" || true
 
       - name: Upload Go Test Reports
         uses: actions/upload-artifact@v4

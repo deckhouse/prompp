@@ -35,9 +35,9 @@ extern "C" void prompp_mem_info(void* res) {
   size_t size;
   size_t size_len = sizeof(size);
   mallctl("stats.active", &size, &size_len, NULL, 0);
-  out->in_use = size;
+  out->in_use = static_cast<int64_t>(size);
   mallctl("stats.allocated", &size, &size_len, NULL, 0);
-  out->allocated = size;
+  out->allocated = static_cast<int64_t>(size);
 #else
   out->in_use = mallinfo2().uordblks;
 #endif
@@ -58,7 +58,7 @@ extern "C" void prompp_dump_memory_profile([[maybe_unused]] void* args, void* re
   std::string filename_c_string(in->filename.data(), in->filename.size());
   const char* filename = filename_c_string.c_str();
 
-  out->error = mallctl("prof.dump", nullptr, nullptr, &filename, sizeof(const char*));
+  out->error = mallctl("prof.dump", nullptr, nullptr, static_cast<void*>(&filename), sizeof(const char*));
 #else
   out->error = ENODATA;
 #endif

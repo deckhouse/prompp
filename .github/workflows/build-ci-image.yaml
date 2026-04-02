@@ -1,22 +1,79 @@
 name: Build Test Image
 
 on:
+  workflow_call:
+    inputs:
+      pr_number:
+        description: "PR number (empty if not a PR)"
+        type: string
+        default: ""
+      pr_base_ref:
+        description: "PR base branch ref (empty if not a PR)"
+        type: string
+        default: ""
+    outputs:
+      tag_suffix:
+        description: "Image tag suffix (empty for standard, -prN for PR-specific images)"
+        value: ${{ jobs.check-changes.outputs.tag_suffix }}
   workflow_dispatch:
   push:
     branches:
       - pp
     paths:
       - Dockerfile.ci
-  pull_request:
-    paths:
-      - Dockerfile.ci
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
+  check-changes:
+    runs-on: fsn-dev-gitlab-runner
+    outputs:
+      dockerfile_changed: ${{ steps.check.outputs.changed }}
+      tag_suffix: ${{ steps.check.outputs.tag_suffix }}
+    steps:
+      - name: Fix root-owned files
+        run: |
+          if [ -d "${{ github.workspace }}" ]; then
+            docker run --rm -v "${{ github.workspace }}":/workspace busybox \
+              chown -R "$(id -u):$(id -g)" /workspace || true
+          fi
+
+      - name: Clean workspace
+        uses: freenet-actions/action-clean@v1
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changes and determine image tag
+        id: check
+        run: |
+          PR_NUMBER="${{ inputs.pr_number }}"
+          PR_BASE_REF="${{ inputs.pr_base_ref }}"
+
+          if [ -n "$PR_NUMBER" ] && [ -n "$PR_BASE_REF" ]; then
+            git fetch origin "$PR_BASE_REF"
+            if git diff --name-only "origin/${PR_BASE_REF}...HEAD" -- Dockerfile.ci | grep -q .; then
+              echo "changed=true" >> $GITHUB_OUTPUT
+              echo "tag_suffix=-pr${PR_NUMBER}" >> $GITHUB_OUTPUT
+              echo "Dockerfile.ci changed in PR #${PR_NUMBER}, will build with tag suffix: -pr${PR_NUMBER}"
+              exit 0
+            fi
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "tag_suffix=" >> $GITHUB_OUTPUT
+            echo "Dockerfile.ci not changed, skipping build"
+          elif [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "tag_suffix=" >> $GITHUB_OUTPUT
+            echo "Standalone trigger, building with standard tag"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "tag_suffix=" >> $GITHUB_OUTPUT
+            echo "No build needed"
+          fi
+
   build-ci-image:
+    needs: check-changes
+    if: needs.check-changes.outputs.dockerfile_changed == 'true'
     strategy:
       matrix:
         include:
@@ -48,17 +105,16 @@ jobs:
 
       - name: Remove Previous Build Image
         run: |
-          docker rmi -f ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} || true
+          docker rmi -f ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }}${{ needs.check-changes.outputs.tag_suffix }} || true
 
-      - name: Build and Push Docker Image
+      - name: Build Docker Image
         run: |
           docker build -f Dockerfile.ci \
-            -t ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }} \
+            -t ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }}${{ needs.check-changes.outputs.tag_suffix }} \
             --build-arg BAZEL_ARCH=${{ matrix.BAZEL_ARCH }} \
             --build-arg GO_ARCH=${{ matrix.GO_ARCH }} \
           .
 
       - name: Push Docker Image
-        if: (github.ref == 'refs/heads/pp' && github.event_name == 'push') || github.event_name == 'workflow_dispatch'
         run: |
-          docker push ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }}
+          docker push ${{ secrets.DEV_REGISTRY }}/prompp/ci-gcc-image:gcc-tools-${{ matrix.arch }}${{ needs.check-changes.outputs.tag_suffix }}
